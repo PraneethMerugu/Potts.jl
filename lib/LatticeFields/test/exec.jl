@@ -2,7 +2,12 @@
 # behavior (the guard, compile reuse, static ndranges) is in exec_device.jl.
 @testset "Exec: capabilities" begin
     @test Exec.ishost(KA.CPU()) && !Exec.ishost(MockDevice())
-    @test Exec.supports_float64(KA.CPU()) && !Exec.supports_float64(MockDevice())
+    # capability: the host runs every type; a device Float32, Float64 where KA says so
+    @test Exec.supports(KA.CPU(), Float64) && Exec.supports(KA.CPU(), BigFloat)
+    @test Exec.supports(MockDevice(), Float32) && !Exec.supports(MockDevice(), BigFloat)
+    @test Exec.supports(MockDevice(), Float64) == KA.supports_float64(MockDevice())
+    # policy: Float64 on the host, Float32 on every device whatever the hardware has
+    @test Exec.default_float(KA.CPU()) === Float64 && Exec.default_float(MockDevice()) === Float32
 end
 
 @testset "Exec: host executor visits each index once" begin

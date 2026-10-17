@@ -15,7 +15,7 @@ integrated variable (each field and each cell or model ODE unknown) by name to i
 and `canonical` is the canonical string of that map that the problem fingerprint hashes.
 """
 struct SolverSpec
-    field_solver::Union{Nothing, ExplicitEuler}
+    field_solver::Any                                  # `nothing` or one of `_FIELD_SOLVERS`
     ode_solver::_ODESolver
     solvers::Vector{Pair{Any, Any}}
     resolved::Dict{Symbol, Any}
@@ -23,6 +23,13 @@ struct SolverSpec
 end
 
 _solver_name(x) = info(x).name
+
+# The field solvers (one place, cutover C8): the solver types a field takes as its
+# `field_solver` or `solvers` entry. Each is lowered by the field compiler (`_field_groups`);
+# the implicit steppers join this set when the field compiler gains them.
+const _FIELD_SOLVERS = (ExplicitEuler,)
+_is_field_solver(s) = any(S -> s isa S, _FIELD_SOLVERS)
+_field_solver_names() = join(("`$(nameof(S))(…)`" for S in _FIELD_SOLVERS), ", ")
 
 """
     _resolve_solvers(c; field_solver = nothing, ode_solver = ExplicitEuler(), solvers = ())
@@ -34,8 +41,8 @@ Resolve the solver keywords against compiled model `c`:
   and model ODE that `solvers` does not name;
 - `solvers = [x => solver, …]` keys integrated variables (the Potts variable, the MTK
   component variable `comp.x`, or the name `:x`/`Symbol("comp₊x")`), or a component
-  system (all its integrated unknowns): an ODE unknown takes any `ode_solver`, a field an
-  `ExplicitEuler`.
+  system (all its integrated unknowns): an ODE unknown takes any `ode_solver`, a field one
+  of the field solvers `_FIELD_SOLVERS`.
 
 An ODE's `ExplicitEuler(substeps = nothing)` is one step, the same as `substeps = 1`
 (`_ode_solver`): both resolve, group and fingerprint alike.
@@ -52,8 +59,8 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
             "model `$(nameof(sys))` has the field$(length(fields) == 1 ? "" : "s") " *
             "$(join(("`$n`" for n in fields), ", ")), so `PottsProblem` needs `field_solver = ExplicitEuler(; substeps, lower)` " *
             "(no default; a published model's docstring gives its value)"))
-        field_solver isa ExplicitEuler || throw(ArgumentError(
-            "`field_solver` takes an `ExplicitEuler(; substeps, lower)`; got $(repr(field_solver))"))
+        _is_field_solver(field_solver) || throw(ArgumentError(
+            "`field_solver` takes a field solver ($(_field_solver_names())); got $(repr(field_solver))"))
     end
     ode_solver isa _ODESolver || throw(ArgumentError(
         "`ode_solver` takes `ExplicitEuler(; substeps)`, `RK4(; substeps)` or `Adaptive(alg; …)`; got $(repr(ode_solver))"))
@@ -67,8 +74,8 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
                                           (k isa ModelingToolkitBase.AbstractSystem ? " (once through component `$(nameof(k))`)" : "")))
         push!(named, n)
         if n in fields
-            s isa ExplicitEuler || throw(ArgumentError(
-                "`solvers`: the field `$n` takes an `ExplicitEuler(; substeps, lower)`; got $(repr(s))"))
+            _is_field_solver(s) || throw(ArgumentError(
+                "`solvers`: the field `$n` takes a field solver ($(_field_solver_names())); got $(repr(s))"))
         elseif n in odes
             s isa _ODESolver || throw(ArgumentError(
                 "`solvers`: `$n` takes `ExplicitEuler(; substeps)`, `RK4(; substeps)` or `Adaptive(alg; …)`; got $(repr(s))"))

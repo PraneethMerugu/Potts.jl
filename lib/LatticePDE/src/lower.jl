@@ -33,9 +33,11 @@ struct Env{N, B, L}
     offset::NTuple{N, Int}
     policy::Bpolicy
     leaf::L
+    hex::Bool                          # hexagonal grid (axial coordinates, 2D)
+    domain::Int32                      # field id of the domain's Bool input, 0 for the box
 end
 _shift(e::Env{N}, o) where {N} = Env(e.kb, e.fields, e.params, e.tables, e.spacing, e.t, e.xs, e.lo, e.h, e.map,
-                                     ntuple(d -> e.offset[d] + o[d], N), CLAMP, e.leaf)
+                                     ntuple(d -> e.offset[d] + o[d], N), CLAMP, e.leaf, e.hex, e.domain)
 _unit(::Env{N}, d, s) where {N} = ntuple(i -> i == d ? s : 0, N)
 _lerr(x, msg) = throw(ArgumentError("cannot lower `$x`: $msg"))
 _type(e::Env, i) = e.kb.nodes[i].type
@@ -117,6 +119,29 @@ function _secdiff(e::Env, d, K, c, mean)
     end
     return _op(e, MUL, constant!(e.kb, 1 / e.h[d]^2), _op(e, ADD, terms...))
 end
+# the six neighbors of a hexagonal site in axial coordinates
+const HEX6 = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1))
+
+"""Hexagonal `Δc ≈ 2/(3h²) Σₙ (cₙ − c)`: a neighbor outside a closed face or the domain reads `c`."""
+function _hexlap(e::Env{N}, c) where {N}
+    any(!iszero, e.offset) && _lerr(c, "a spatial operator inside an operator coefficient")
+    u, comp = _fieldarg(e, c)
+    e.fields[operation(u)][2] in (U8, I32, U32) && _lerr(c, "a spatial operator of an integer input")
+    ids, lane = e.fields[operation(u)]
+    f = ids[max(comp, 1)]
+    c0 = load!(e.kb, f, lane; offset = (0, 0), policy = INSIDE)
+    inside(fid, o) = node!(e.kb, INSIDE_OP, BOOL, Int32[], access!(e.kb, Access{N}(
+        fid, Int8(0), Sel(Int16(1)), Sel(NTuple{N, Int16}(o)), Int8(0), INSIDE)))
+    indom(o) = _indomain(e.kb, e.domain, N, o)
+    terms = map(HEX6) do o
+        ok = inside(f, o)
+        e.domain == 0 || (ok = node!(e.kb, AND, BOOL, Int32[ok, indom(o), indom((0, 0))]))
+        nb = select!(e.kb, ok, load!(e.kb, f, lane; offset = o, policy = CLAMP), c0)
+        _op(e, ADD, nb, arith!(e.kb, NEG, c0))
+    end
+    return _op(e, MUL, constant!(e.kb, 2 / (3 * e.h[1]^2)), _op(e, ADD, terms...))
+end
+
 _axis(e::Env, x) = (d = findfirst(v -> isequal(v, x), e.xs); d === nothing ? _lerr(x, "not a spatial variable") : d)
 
 """First-order upwind `∇⋅(u c)`; a closed face carries no advective flux."""
@@ -182,6 +207,9 @@ function lower(x, e::Env{N}) where {N}
     end
     (f isa Shift || f isa Hold || f isa Sample || f isa Pre) &&
         _lerr(u, "`$f` has no meaning on the right side; $SHIFT_HINT")
+    e.hex && (f isa DivKGrad || f isa Differential || f isa Advect) &&
+        _lerr(u, "only `Δ(c)` is defined on a hexagonal grid")
+    f === Δ && e.hex && return _hexlap(e, a[1])
     f === Δ && return _op(e, ADD, (_secdiff(e, d, nothing, a[1], :harmonic) for d in 1:N)...)
     f isa DivKGrad && return _op(e, ADD, (_secdiff(e, d, a[1], a[2], f.mean) for d in 1:N)...)
     if f isa Differential

@@ -371,7 +371,7 @@ struct LifecycleCache{E, C, D, R, NM, B, DL}
 end
 
 function LifecycleCache(backend, N::Int, capacity::Int, st = nothing, device::Bool = false)
-    T = Exec.supports_float64(backend) ? Float64 : Float32
+    T = Exec.default_float(backend)
     return LifecycleCache(KernelAbstractions.zeros(backend, Int32, capacity),
         KernelAbstractions.zeros(backend, Int32, 2), zeros(Int32, 1), Ref(0),
         KernelAbstractions.zeros(backend, Int32, capacity),

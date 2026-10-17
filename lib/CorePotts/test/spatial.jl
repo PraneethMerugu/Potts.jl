@@ -78,22 +78,6 @@
         @test all(issorted(neighbors(g, c)) for c in eachindex(kinds))
     end
 
-    @testset "per-face Dirichlet reaches the linear steady profile" begin
-        lat1 = Lattice((40, 4); boundary = (Closed(), Periodic()))
-        bc = ((1.0, 0.0), (nothing, nothing))
-        rate(st, p, ctx, key, mcs, i, c) = p.D * laplacian(c, ctx, i; bc = p.bc)
-        σ1 = zeros(Int32, 40, 4)
-        st = initial_state(σ1, Int32[]; site = (; c = zeros(40, 4), c_next = zeros(40, 4)))
-        ph = Phases(after_mcs = (FieldStep((:site, :c) => (:site, :c_next), rate; substeps = 4),))
-        f = CPMFunction(gg_delta_H; temperature = gg_temperature, phases = ph)
-        c = solve(PottsProblem(f, st, lat1, (0, 8000), merge(gg_params(), (; D = 0.4, bc))),
-            SequentialCPM()).u[end].site.c
-        exact = [1 - (x - 0.5) / 40 for x in 1:40]          # faces at x = 0.5 and 40.5
-        @test maximum(abs.(c[:, 1] .- exact)) < 1e-6
-        # zero flux on both faces conserves mass instead
-        @test laplacian(fill(3.0, 40, 4), (; lattice = lat1), 1) == 0
-    end
-
     @testset "device contact table equals the host contact graph" begin
         σ, kinds = blocks((24, 24), 5; gap = 0)
         σ[σ .== 5] .= 0                                         # some medium contact

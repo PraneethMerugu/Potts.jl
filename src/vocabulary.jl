@@ -189,7 +189,7 @@ outside `SCOPES` names a relationship: `rest(bond)` is an edge variable of `@rel
 bond` (option `relationship = :bond`; `mtkcompile` checks the name). `rest(edge)` belongs
 to the model's only relationship.
 """
-const _VARIABLE_OPTIONS = (:clear_on_ownership_change, :vector, :index, :relationship, :reference)
+const _VARIABLE_OPTIONS = (:clear_on_ownership_change, :vector, :index, :relationship, :reference, :lattice_storage)
 
 # `default` when no value was written (`x(cell)`, D-170): the variable starts at 0.0 as
 # before, and is marked `PottsNoValue`, so that initialization solves for it when its
@@ -229,6 +229,11 @@ function variable(x, scope::Symbol; default = _NO_VALUE, unit = nothing, guess =
                                                       "(options: `unit`, `guess`, `clear_on_ownership_change`)"))
         k === :clear_on_ownership_change && v === true && !(scope in (:site, :field)) &&
             throw(ArgumentError("variable `$name`: `clear_on_ownership_change` applies to site variables"))
+        # `[lattice_storage = Float16]` (P5 role model): a field stored narrower than the state
+        # type `T` (computed in `T`, rounded once per substep to Float16)
+        k === :lattice_storage && !(scope === :field && v === Float16) &&
+            throw(ArgumentError("variable `$name`: `lattice_storage` applies to fields and is `Float16` " *
+                                "(the state type `T` is the default storage; a field stored narrower than `T`)"))
     end
     v = _with_unit(_tag(x, Entity(scope, name, default, options)), unit)
     written || (v = _with_metadata(v, PottsNoValue, true))
@@ -734,26 +739,6 @@ function _ismember_or(x, ks::Tuple)
         r = r | (Num(x) == ks[i])
     end
     return r
-end
-
-"""
-`x` with every kind-set term `ismember(k, (k₁, …))` replaced by its `|` of equalities
-(`_ismember_or`): the form host-side analysis (substep bounds, `∂f/∂x`) reads, where a
-registered term is opaque (Symbolics cannot differentiate it, and it bounds nothing).
-"""
-function _expand_ismember(x)
-    u = _unwrap(x)
-    u isa SymbolicUtils.BasicSymbolic || return x
-    sub = Dict{Any, Any}()
-    _walk_all(u) do y
-        if iscall(y) && operation(y) === ismember && !haskey(sub, y)
-            a = arguments(y)
-            sub[y] = _unwrap(_ismember_or(Symbolics.wrap(a[1]), SymbolicUtils.unwrap_const(a[2])))
-        end
-    end
-    isempty(sub) && return x
-    r = Symbolics.substitute(u, sub; fold = Val(false))
-    return x isa Num ? Symbolics.wrap(r) : r
 end
 
 """Build the class `name` from its members' names and values (kind numbers or classes)."""
@@ -1322,12 +1307,15 @@ Base.hash(l::LatticeSpec, h::UInt) = hash((l.dims, l.boundary, l.spacing, l.neig
 Explicit Euler over one MCS in `substeps` steps, clipping the result at `lower` after every
 step if given (legacy Potts clips concentrations at 0). As a `field_solver` (a
 `PottsProblem` keyword), `substeps = nothing` takes the smallest count `n` with
-`mcs_duration / n · (D · Σ_d 4/h_d² + k) ≤ 1.8` (`CorePotts.stable_substeps`), from the
-current parameters: `D` is the diffusion coefficient and `k` bounds the reaction's
-`|∂f/∂c|` (for a reaction linear in the field, the size of its coefficient, indicators such
-as `(kind == medium)` and `rand()` counting as 1 and a kind table `δ[kind]` as its largest
-entry; a reaction nonlinear in the field is not counted, with a warning).
-An explicit `n` is a minimum. As an `ode_solver` (the default), `nothing` is one step.
+`mcs_duration / n · ρ ≤ 1.8`, where `ρ` is the field compiler's Gershgorin bound on the
+spectral radius of the discrete right-hand side at the current parameters (diffusion
+`D · Σ_d 4/h_d²` plus the size of each reaction coefficient). A group whose rate gives no
+bound from the parameters (a kind table, `÷`, a reaction nonlinear in the field, a rate
+reading another field whose Jacobian row is not diagonally dominant) needs an explicit
+`substeps`; without one, `PottsProblem` throws an `ArgumentError`. An explicit `n` is a
+minimum: the count is at least the bound of the terms the bound sees (a warning names the
+others). A negative diffusion coefficient is an `ArgumentError`. As an `ode_solver` (the
+default), `nothing` is one step.
 """
 Base.@kwdef struct ExplicitEuler
     substeps::Union{Nothing, Int} = nothing
@@ -1563,6 +1551,68 @@ end
 const SCHEDULE_PHASES = (:before_mcs, :sweep, :after_mcs, :fields, :components, :operators, :lifecycle, :end_mcs)
 
 """
+    ScheduleRepeat(n, names)
+
+`repeat(n, sweep(fraction = 1//n), names…)` of `@schedule`: the sub-MCS interleave. The phases
+`names` (in order, the sweep among them) run `n` times in one MCS; each pass sweeps `1/n` of
+the MCS (`CorePotts.Repeat`), and fields inside step `mcs_duration / n` per pass.
+"""
+struct ScheduleRepeat
+    n::Int
+    names::Vector{Symbol}
+end
+Base.:(==)(a::ScheduleRepeat, b::ScheduleRepeat) = a.n == b.n && a.names == b.names
+Base.hash(a::ScheduleRepeat, h::UInt) = hash((a.n, a.names), hash(:ScheduleRepeat, h))
+Base.show(io::IO, r::ScheduleRepeat) =
+    print(io, "repeat(", r.n, ", ", join((n === :sweep ? "sweep(fraction = 1//$(r.n))" : string(n) for n in r.names), ", "), ")")
+
+# the phases a sub-MCS repeat may hold: the sweep, the fields, the after-MCS updates, the
+# operators and the `@convert` passes (one step of a cell ODE spans a whole MCS)
+const _REPEAT_REFUSED = (:before_mcs, :components, :lifecycle, :end_mcs)
+
+"""`repeat(n, sweep(fraction = 1//n), names…)` of `@schedule` (macro time)."""
+function schedule_repeat(ex::Expr)
+    args = ex.args[2:end]
+    (length(args) >= 2 && args[1] isa Integer && args[1] >= 2) || throw(ArgumentError(
+        "@schedule: `repeat(n, sweep(fraction = 1//n), …)` takes a literal count n ≥ 2 first; got `$ex`"))
+    n = Int(args[1])
+    names = Symbol[]
+    for a in args[2:end]
+        if a isa Expr && a.head === :call && a.args[1] === :sweep
+            q = length(a.args) == 2 && a.args[2] isa Expr && a.args[2].head === :parameters && length(a.args[2].args) == 1 ?
+                a.args[2].args[1] : (length(a.args) == 2 ? a.args[2] : nothing)
+            kw = q isa Expr && q.head in (:kw, :(=)) && q.args[1] === :fraction ? q.args[2] : nothing
+            frac = kw isa Expr && kw.head === :call && kw.args[1] === :// && length(kw.args) == 3 &&
+                   all(x -> x isa Integer, kw.args[2:3]) ? kw.args[2] // kw.args[3] : nothing
+            frac == 1 // n || throw(ArgumentError(
+                "@schedule: in `repeat($n, …)` the sweep is `sweep(fraction = 1//$n)` (each pass sweeps 1/$n of the MCS); got `$a`"))
+            push!(names, :sweep)
+        elseif a isa Symbol
+            a === :sweep && throw(ArgumentError(
+                "@schedule: in `repeat($n, …)` write the sweep as `sweep(fraction = 1//$n)`"))
+            a in _REPEAT_REFUSED && throw(ArgumentError(
+                "@schedule: `$a` cannot be repeated within an MCS (`repeat` holds the sweep, `fields`, `after_mcs`, " *
+                "`operators` and `@convert` passes)"))
+            push!(names, a)
+        else
+            throw(ArgumentError("@schedule: `repeat` lists phase names and `sweep(fraction = 1//$n)`; got `$a`"))
+        end
+    end
+    :sweep in names || throw(ArgumentError("@schedule: `repeat($n, …)` holds the sweep, `sweep(fraction = 1//$n)`"))
+    return ScheduleRepeat(n, names)
+end
+
+# the names of `@schedule`'s list, a repeat's in its place
+_schedule_flat(listed) = Symbol[x for y in listed for x in (y isa ScheduleRepeat ? y.names : (y,))]
+
+"""The sub-MCS repeat of a `@schedule` list, or `nothing`."""
+function _schedule_repeat(listed)
+    rs = [x for x in listed if x isa ScheduleRepeat]
+    length(rs) <= 1 || throw(ArgumentError("@schedule: at most one `repeat(…)`"))
+    return isempty(rs) ? nothing : only(rs)
+end
+
+"""
     _placed_schedule(listed, converts = Symbol[]) -> Vector{Symbol}
 
 The full phase order of `@schedule listed…` (D-145): the listed phases in the listed order;
@@ -1574,6 +1624,7 @@ order rules, naming the offender.
 function _placed_schedule(listed, converts = Symbol[])
     default = _default_order(converts)
     seen = _schedule_names(listed)
+    r = _schedule_repeat(listed)
     for n in seen
         n in default || throw(ArgumentError(
             "@schedule: unknown phase `$n`; the phases are $(join(default, ", "))" *
@@ -1585,6 +1636,11 @@ function _placed_schedule(listed, converts = Symbol[])
     for (j, ph) in enumerate(default)
         ph in seq && continue
         pos = maximum((findfirst(==(q), seq) for q in default[1:(j - 1)] if q in seq); init = 0)
+        # an unlisted phase never lands inside the repeat: it goes right after it
+        if r !== nothing
+            lo, hi = findfirst(==(first(r.names)), seq), findfirst(==(last(r.names)), seq)
+            lo <= pos < hi && (pos = hi)
+        end
         insert!(seq, pos + 1, ph)
     end
     at(n) = findfirst(==(n), seq)
@@ -1592,6 +1648,14 @@ function _placed_schedule(listed, converts = Symbol[])
         "@schedule: `before_mcs` must come before `sweep` (the before-MCS updates precede the copy sweep, D-042)"))
     at(:after_mcs) > at(:sweep) || throw(ArgumentError(
         "@schedule: `after_mcs` must come after `sweep` (the after-MCS updates follow the copy sweep, D-042)"))
+    if r !== nothing
+        for n in r.names
+            n in _REPEAT_REFUSED && throw(ArgumentError("@schedule: `$n` cannot be repeated within an MCS"))
+        end
+        k = at(first(r.names))
+        seq[k:(k + length(r.names) - 1)] == r.names || throw(ArgumentError(
+            "@schedule: an unlisted phase falls inside `$r` in the default placement; list it before or after the repeat"))
+    end
     return seq
 end
 
@@ -1605,7 +1669,8 @@ end
 # `@schedule`'s list as names, each once
 function _schedule_names(listed)
     seen = Symbol[]
-    for n in listed
+    _schedule_repeat(listed)
+    for n in _schedule_flat(listed)
         n isa Symbol || throw(ArgumentError("@schedule lists phase names; got `$n`"))
         n in seen && throw(ArgumentError("@schedule: phase `$n` is listed twice"))
         push!(seen, n)

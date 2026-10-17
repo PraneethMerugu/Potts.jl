@@ -53,7 +53,7 @@ Each is `(args…) -> body` and can be `eval`'d into a plain function (e.g. for 
 """
 function generated_code(sys; T::Type = Float64, field_solver = nothing, ode_solver = ExplicitEuler(), solvers = ())
     c = sys isa CompiledPottsSystem ? sys : ModelingToolkitBase.mtkcompile(sys)
-    return _with_faces(() -> _generated_code(c, T, field_solver, ode_solver, solvers), c)
+    return _with_model_scope(() -> _generated_code(c, T, field_solver, ode_solver, solvers), c)
 end
 function _generated_code(c, T, field_solver, ode_solver, solvers)
     spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
@@ -74,7 +74,7 @@ function _generated_code(c, T, field_solver, ode_solver, solvers)
 end
 """
     PottsProblem(sys, op, tspan; field_solver, ode_solver = ExplicitEuler(), solvers = [],
-                 T = Float64, capacity, seed = 0, replica = 0, repeat = 0, track = (),
+                 backend = nothing, T, capacity, seed = 0, replica = 0, repeat = 0, track = (),
                  expression = Val(false))
 
 Build the numerical problem from a `PottsSystem` (compiled with `mtkcompile` if
@@ -86,8 +86,10 @@ name to its initial links (`:bond => [(1, 2)]`). An edge variable takes one numb
 a parameter expression, evaluated at construction: a later `remake` of parameters does not
 re-seed it), its initial value on every initial link of its relationship (both ends;
 default: its declared default); links made later by `@link` start at the declared default. `T` is the scalar
-type of the generated code and state (use `Float32` on Metal). The generated code is
-`Potts.generated_code(sys; T)`.
+type of the generated code and state: by default `Float64`, or the default float type of
+`backend` when one is given (`Float32` on a device, `LatticeFields.Exec.default_float`; pass
+the same backend to `init`/`solve`). A field declared `c(field) = …, [lattice_storage = Float16]`
+is stored in Float16 and computed in `T`. The generated code is `Potts.generated_code(sys; T)`.
 
 How fields and ODEs are integrated is part of the problem, compiled into its code:
 - `field_solver = ExplicitEuler(; substeps, lower)` is required when the model has a field
@@ -121,7 +123,8 @@ function CorePotts.PottsProblem(sys::PottsSystem, op, tspan; kwargs...)
     return CorePotts.PottsProblem(ModelingToolkitBase.mtkcompile(sys), op, tspan; kwargs...)
 end
 
-function CorePotts.PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capacity = nothing,
+function CorePotts.PottsProblem(c::CompiledPottsSystem, op, tspan; backend = nothing,
+        T::Type = backend === nothing ? Float64 : LatticeFields.Exec.default_float(backend), capacity = nothing,
         seed = 0, replica = 0, repeat = 0, expression = Val(false), field_solver = nothing,
         ode_solver = ExplicitEuler(), solvers = (), track = ())
     sys = c.sys
@@ -145,6 +148,7 @@ function CorePotts.PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Flo
         map(r -> CorePotts.relation(r, lat), relations)...,
         (spacing === nothing ? (;) : (; spacing))...)
     f = _problem_function(c, T, spec, values, hctx, Dict{Any, Any}(); track)
+    _check_field_substeps(f, p)
     frozen = _frozen_mask(sys, st)
     _host_init!(f, st, p, hctx, seed, replica, repeat)
     return CorePotts.PottsProblem(f, st, lat, tspan, p; contact = c.contact_spec, proposal = c.proposal_spec, relations,
@@ -166,7 +170,7 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
     slots = :references in track ? _ref_count_slots(c) : nothing
     fns, generated = Base.ScopedValues.with(_REF_SLOTS => slots) do
         _recording() do
-        _with_faces(c) do
+        _with_model_scope(c) do
         # the build order is the fingerprint's (D-016); the log ranges mark the copy-step code
         glog = _GENERATED[]
         i0 = length(glog)
@@ -215,7 +219,7 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
     order = _phase_order(sys)
     order == collect(SCHEDULE_PHASES) || push!(cad, "schedule=$(join(order, ","))")
     lifecycle === nothing || lifecycle.every == 1 || push!(cad, "lifecycle($(lifecycle.every))")
-    # the MCS length, which solvers keep as data (`Adaptive`'s dt, an explicit-substeps `FieldStep.dt`)
+    # the MCS length, which solvers keep as data (`Adaptive`'s dt, a field phase's `dt`)
     _p(sys, :sweep).mcs_duration == 1 || push!(cad, "mcs_duration=$(repr(_p(sys, :sweep).mcs_duration))")
     # the acceptance law and its offset, solver data in `CPMFunction.acceptance` (D-121); only
     # non-default values (Metropolis, offset 0), so the default keeps its fingerprint. The
@@ -642,11 +646,25 @@ function _param_value(T, v, i::Entity)
     if i.role === :kindtable
         v isa Number && throw(ArgumentError("kind table `$(i.name)` takes a vector (one value per kind) or a matrix; got $v"))
         A = Matrix(v isa AbstractVector ? reshape(v, :, 1) : v)
-        v isa AbstractVector && return SVector{length(v), T}(T.(v))
-        return SMatrix{size(A, 1), size(A, 2), T}(T.(A))
+        v isa AbstractVector && return SVector{length(v), T}(_cpm_scalar.(T, v, Ref(i)))
+        return SMatrix{size(A, 1), size(A, 2), T}(_cpm_scalar.(T, A, Ref(i)))
     end
-    return T(v)
+    return _cpm_scalar(T, v, i)
 end
+
+# A CPM parameter converted to the problem's scalar type `T`, with a named error for a value
+# that does not convert (a Dual, P5 C3/4-1): the CPM takes plain numbers. Metropolis
+# acceptance is piecewise constant in `p`, so a derivative of a CPM run in `p` is zero
+# almost everywhere; CPM parameters belong to likelihood-free inference on the counter RNG
+_cpm_scalar(::Type{T}, v, i::Entity) where {T} = v isa Union{AbstractFloat, Integer, Rational, AbstractIrrational} ? T(v) :
+    try
+        T(v)
+    catch e
+        e isa Union{MethodError, InexactError, ArgumentError} || rethrow()
+        throw(ArgumentError("parameter `$(i.name)` = $v (a $(typeof(v))) does not convert to the CPM scalar type $T: " *
+            "CPM parameters are plain numbers (no Duals; the acceptance of a copy is piecewise constant in the " *
+            "parameters, so their derivative is zero almost everywhere)"))
+    end
 
 function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{Any, Any}())
     sys = c.sys
@@ -675,7 +693,8 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
             [_evaluate(_substitute_kind(i.default, k), pvals, "the default of `$(i.name)` for kind $k") for k in kinds] :
             _evaluate(get(opd, _unwrap(x), i.default), pvals, "the default of `$(i.name)`")
         if i.role === :site || i.role === :field
-            a = v isa AbstractArray ? T.(v) : fill(T(v), _p(sys, :lattice).dims)
+            S = get(i.options, :lattice_storage, T)                  # a field's own storage (Float16)
+            a = v isa AbstractArray ? S.(v) : fill(S(v), _p(sys, :lattice).dims)
             push!(site, i.name => a)
             i.name in c.scratch && push!(site, Symbol(i.name, :__next) => copy(a))
         elseif i.role === :cell
@@ -691,6 +710,14 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
             v === nothing && throw(ArgumentError("model variable `$(i.name)` has no initial value; give it in the operating point"))
             push!(model, i.name => fill(T(v), 1))
         end
+    end
+    # the fields' CPM inputs and masks (written every MCS by the field phases, fields.jl)
+    if !isempty(c.fields)
+        dims = _p(sys, :lattice).dims
+        for (name, _, E) in _field_inputs(sys, T)
+            push!(site, name => zeros(E === Bool ? UInt8 : E, dims))
+        end
+        foreach(n -> push!(site, Symbol(n, :__mask) => zeros(UInt8, dims)), _masked_fields(sys))
     end
     # `@initialization_equations` and operating-point values of algebraic variables (D-170)
     _initialize!(c, opd, σ, kinds, ncell, cell, model, pvals)
@@ -821,6 +848,7 @@ end
 # consistent before `init` (e.g. `total_energy(prob)`).
 function _host_init!(f, st, p, ctx, seed, replica, repeat)
     key = CorePotts.RNGKey(seed, replica, repeat)
+    ctx = merge(ctx, CorePotts.phase_contexts(f.phases, st, p, CorePotts.CPU()))
     CorePotts._run_phases(f.phases.at_init, st, p, ctx, key, 0, CorePotts.CPU())
     return st
 end

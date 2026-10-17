@@ -246,6 +246,9 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     # --- Potts -> Base: no public equivalent
     Symbol("@__doc__"),   # attaching docstrings to macro-generated components
     :setindex,            # non-mutating tuple `setindex`
+    # --- Potts -> SymbolicUtils: the type of a symbolic function `c(t, x, y)` (field
+    # variables of the field compiler's PDESystem, D-C8); no public constructor takes it
+    :FnType,
     # --- Potts -> Symbolics
     :rename,              # Symbolics.rename: renames a component system (`k.x` is `k₊x`)
     # --- PottsDynamicQuantitiesExt -> Potts: the extension is part of Potts and gives
@@ -298,6 +301,7 @@ const RAW_TRANSFER_ALLOW = Dict(
     # (D-177)
     "lib/CorePotts/src/boundary_site.jl" => 2,
     "lib/CorePotts/src/checkpoint.jl" => 1,  # `reinit!`'s `_copy_state!` (setup; the counters are reset after it)
+    "lib/CorePotts/src/fields.jl" => 1,      # `_table_array`: a field phase's kind tables to the backend when it binds (setup and rebinding, never per MCS)
     # `_device_copy!` on the CPU backend (host arrays); on a device it is a kernel, since
     # Metal.jl's device→device `copyto!` waits for the GPU twice (P6.0v3, D-101)
     "lib/CorePotts/src/phases.jl" => 1,

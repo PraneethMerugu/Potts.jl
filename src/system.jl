@@ -74,7 +74,7 @@ Base.@kwdef struct PottsPart
     sweep::SweepSpec
     boundaries::Vector{BoundaryEntry} = BoundaryEntry[]   # `@boundary` faces and site masks (D-145)
     bcs::Vector{Equation} = Equation[]         # `@bcs`: raw MTK boundary conditions, stored and printed
-    schedule::Vector{Symbol} = Symbol[]        # `@schedule` as listed; empty: the default phase order
+    schedule::Vector{Any} = Any[]              # `@schedule` as listed (names, a `ScheduleRepeat`); empty: the default order
     structural::NamedTuple = (;)
     sources::IdDict{Any, LineNumberNode} = IdDict{Any, LineNumberNode}()   # term → where it was written
     # Potts' own build record (`_BuiltFeatures`, draws.jl); never MTK metadata, never in code
@@ -365,7 +365,7 @@ end
 # declared name ending in one would collide with them. Every declared name is checked
 # (D-130): scalar and vector variables and parameters and `@observed` names here, component
 # names when components are bound (`_bind_components`, and the rebuilt system's names).
-const _INTERNAL_SUFFIXES = ("__ode", "__tick", "__next")
+const _INTERNAL_SUFFIXES = ("__ode", "__tick", "__next", "__in", "__mask")
 function _check_internal_suffix(what, n::Symbol)
     for suf in _INTERNAL_SUFFIXES
         endswith(String(n), suf) && throw(ArgumentError(

@@ -7,7 +7,7 @@
 struct FiniteVolume end
 
 """
-    LatticeDiscretization(grid; methods = Dict(), T = nothing, backend = nothing, problem = :auto)
+    LatticeDiscretization(grid; methods = Dict(), T = nothing, backend = nothing, problem = :auto, domain = nothing)
 
 How a `PDESystem` is put on a lattice. `grid = Grid(dims)` gives only the site counts: the
 spacing is derived from the system's domain (`extent ./ dims`) and periodicity from its
@@ -19,6 +19,18 @@ or `u`; keys are normalized by operation) to its method; a field without an entr
 `Float64`, or `BigFloat` on the host (stored in F64 lanes that hold BigFloat). `nothing` (the
 default) means Float64 on the host and Float32 on a device. Any other type is refused. After
 `discretize`, the eltype of `u0` (and Dual parameters) decide; see `remake`.
+
+A hexagonal grid (`Grid(dims; geometry = HEX)`, 2D, axial coordinates: the neighbors of
+`(q, r)` are `(q ± 1, r)`, `(q, r ± 1)`, `(q + 1, r − 1)` and `(q − 1, r + 1)`) lowers `Δ(c)` to
+`2/(3h²) Σₙ (cₙ − c)` over the six neighbors (`h` the spacing of axis 1; the axes must have
+equal spacing). A neighbor outside a closed face, or outside the domain, reads the site
+itself (zero flux). Only `Δ` is defined there, and face conditions are refused.
+
+`domain` names a `Bool` input field (by key) that marks an irregular domain inside the box.
+The fields live in the domain: a site outside keeps its value (its rate is 0, its masked
+conditions do not hold), and neighbor reads across the domain's edge read the site itself
+(zero flux; `LatticeFields.IR.DomainEdgeRule`). Face conditions still apply at the faces of
+the box.
 """
 struct LatticeDiscretization{N, M, B} <: AbstractDiscretization
     grid::Grid{N}
@@ -26,13 +38,16 @@ struct LatticeDiscretization{N, M, B} <: AbstractDiscretization
     T::Union{Type, Nothing}
     backend::B
     problem::Symbol
+    domain::Union{Nothing, String}
 end
 function LatticeDiscretization(grid::Grid; methods = Dict(), T::Union{Type, Nothing} = nothing,
                                backend = nothing,
-                               problem::Symbol = :auto)
+                               problem::Symbol = :auto, domain::Union{Nothing, AbstractString} = nothing)
     problem in (:auto, :owned, :ode, :linear) ||
         throw(ArgumentError("problem must be :auto, :owned, :ode or :linear; got $(repr(problem))"))
-    return LatticeDiscretization(grid, methods, T, backend, problem)
+    grid.domain == 0 || throw(ArgumentError("give an irregular domain as `domain = key` (a Bool input field), not in the grid"))
+    grid.geometry == HEX && length(grid.dims) != 2 && throw(ArgumentError("a hexagonal grid is 2D"))
+    return LatticeDiscretization(grid, methods, T, backend, problem, domain === nothing ? nothing : String(domain))
 end
 
 """
@@ -71,7 +86,7 @@ end
 # the state type: `disc.T`, else Float64 on a host backend and Float32 on a device
 function _statetype(disc::LatticeDiscretization)
     disc.T === nothing || return disc.T
-    return disc.backend === nothing || Exec.supports_float64(disc.backend) ? Float64 : Float32
+    return disc.backend === nothing ? Float64 : Exec.default_float(disc.backend)
 end
 _default(p) = ModelingToolkitBase.hasdefault(p) ? Float64(unwrap_const(ModelingToolkitBase.getdefault(p))) : NaN
 
@@ -89,6 +104,10 @@ function _coef(v, params, scale = 1.0)
     end
     _dverr("the boundary value `$v` must be a number, a parameter, or a number times a parameter")
 end
+
+# whether the site is in the irregular domain (its Bool input, field id `dom`)
+_indomain(kb, dom, N, o = ntuple(_ -> 0, N)) = node!(kb, NOT, BOOL, Int32[compare!(kb, EQ,
+    cast!(kb, load!(kb, dom, U8; offset = o, policy = all(iszero, o) ? INSIDE : CLAMP), I32), constant!(kb, 0, I32))])
 
 """Kind of an equation: (:rate | :map | :aux, field read on the left at `(t, x, …)`)."""
 function _eqkind(eq, fields, ivs)
@@ -217,7 +236,8 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
                                              for p in arrays)
     fids = Dict{Any, Tuple{Vector{Int32}, Scalar}}()
     for (op, v) in dvs
-        lane = _lane(eltype(SymbolicUtils.symtype(v)), T)
+        S = get_lattice_storage(v)             # `lattice_storage` (v3 §5.1): the field's own storage
+        lane = _lane(eltype(SymbolicUtils.symtype(v)), S === nothing ? T : S)
         fids[op] = (map(keys[op]) do k
                         isin[op] && return field!(pb, k; storage = lane, role = :input, epoch = PERSIGMA)
                         kind = eqs[k][1]
@@ -225,14 +245,33 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
                                buffers = kind == :map || (kind == :rate && update !== nothing) ? 2 : 1)
                     end, lane)
     end
+    hex = disc.grid.geometry == HEX
+    hex && !(h[2] ≈ h[1]) && _dverr("a hexagonal grid needs equal spacing on both axes; the domain gives $h")
+    # the irregular domain: a mask over its Bool input, and a zero-flux edge rule per rate field
+    dom = Int32(0)
+    if disc.domain !== nothing
+        dop = findfirst(op -> keys[op] == [disc.domain], collect(Base.keys(dvs)))
+        dop === nothing && _dverr("`domain = \"$(disc.domain)\"` names no dependent variable")
+        dop = collect(Base.keys(dvs))[dop]
+        (isin[dop] && fids[dop][2] == U8) || _dverr("`domain = \"$(disc.domain)\"` must name a `Bool` input field")
+        dom = fids[dop][1][1]
+        push!(pb.masks, MaskDecl("domain", dom, STATIC))
+        g = disc.grid
+        pb.hierarchy[1] = Level(Grid(g.dims; geometry = g.geometry, domain = length(pb.masks)))
+        for (k, (kind, op, comp, _)) in eqs
+            kind == :rate && rule!(pb, DomainEdgeRule(fids[op][1][max(comp, 1)], :mirror))
+        end
+    end
     env(mapmode, kb) = Env(kb, fids, params, tables, spacing, ivs[1], ivs[2:end], lo, h, mapmode,
-                           ntuple(_ -> 0, N), RESOLVE, leaf)
+                           ntuple(_ -> 0, N), RESOLVE, leaf, hex, dom)
     # face rules: α c + β ∂c/∂n = g in lattice units (outward normal; ∂/∂n = side · h ∂/∂x)
     for (k, (kind, op, comp, _)) in eqs
         kind == :rate || continue
         f = fids[op][1][max(comp, 1)]
         for d in 1:N, s in (-1, 1)
             periodic[d] && continue
+            hex && any(b -> b.kind in (:dirichlet, :neumann, :robin) && key(b.op, b.comp) == k, bcs) &&
+                _dverr("field `$k`: face conditions are not defined on a hexagonal grid (its faces are zero flux)")
             b = findfirst(b -> b.kind in (:dirichlet, :neumann, :robin) && key(b.op, b.comp) == k &&
                                    b.axis == d && b.side == s, bcs)
             b === nothing && (rule!(pb, FaceRule(f, Int8(d), Int8(s), Coef(0.0), Coef(1.0), Coef(0.0))); continue)
@@ -251,7 +290,9 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         mf = field!(pb, "mask:$k"; storage = U8, role = :aux, epoch = PERSIGMA)
         push!(pb.masks, MaskDecl("mask:$k", mf, PERSIGMA))
         kb = kernel(pb)
-        store!(kb, mf, U8, cast!(kb, _bool(env(false, kb), lower(b.pred, env(false, kb))), U8))
+        pred = _bool(env(false, kb), lower(b.pred, env(false, kb)))
+        dom == 0 || (pred = node!(kb, AND, BOOL, Int32[pred, _indomain(kb, dom, N)]))   # the field lives in the domain
+        store!(kb, mf, U8, cast!(kb, pred, U8))
         add!(pb, kb, "mask:$k")
         rule!(pb, NodeValueRule(fids[b.op][1][max(b.comp, 1)], Int32(length(pb.masks)), _coef(b.value, params), :harmonic))
     end
@@ -266,15 +307,22 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         if kind == :rate
             lin[k] = linearity(rhs, dvs[op], states; inputs = [o for o in Base.keys(dvs) if isin[o]],
                                aux = unique([v[2] for v in values(eqs) if v[1] == :aux]))
+            # with a domain the field lives in it: a site outside keeps its value
             if update === nothing
                 g = field!(pb, "∂$k"; storage = lane, role = :scratch)
-                store!(kb, g, lane, _real(e, r))
+                v = _real(e, r)
+                dom == 0 || (v = select!(kb, _indomain(kb, dom, N), v, constant!(kb, 0.0)))
+                store!(kb, g, lane, v)
             else
                 c = load!(kb, f, lane)
-                store!(kb, f, lane, update(kb, Ex(kb, c), Ex(kb, _real(e, r))).id)
+                v = update(kb, Ex(kb, c), Ex(kb, _real(e, r))).id
+                dom == 0 || (v = select!(kb, _indomain(kb, dom, N), v, c))
+                store!(kb, f, lane, v)
             end
         else
-            store!(kb, f, lane, isfloat(lane) ? _real(e, r) : cast!(kb, _num(e, [r])[1], lane))
+            v = isfloat(lane) ? _real(e, r) : cast!(kb, _num(e, [r])[1], lane)
+            dom == 0 || kind != :map || (v = select!(kb, _indomain(kb, dom, N), v, load!(kb, f, lane)))
+            store!(kb, f, lane, v)
         end
         add!(pb, kb, "$kind:$k")
     end

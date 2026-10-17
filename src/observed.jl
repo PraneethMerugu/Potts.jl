@@ -69,7 +69,7 @@ function _observed_function_unlocked(info::PottsModelInfo, x)
     get!(info.cache, _unwrap(x)) do
         c = info.csys
         T = info.T
-        _with_faces(() -> _observed_build(info, c, T, x), c)
+        _with_model_scope(() -> _observed_build(info, c, T, x), c)
     end
 end
 

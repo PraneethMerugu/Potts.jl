@@ -205,7 +205,12 @@ function _resolve_load!(b::KernelBuilder{N}, p::Program{N}, a::Access{N}) where 
         ma = Access{N}(p.masks[m].field, 0, Sel(Int16(1)), Sel(off),
             0, CLAMP)
         hit = _ne0!(b, _loadacc!(b, p, ma))
-        r isa DomainEdgeRule && (hit = node!(b, NOT, BOOL, Int32[hit]))
+        if r isa DomainEdgeRule
+            # across the domain edge, from either side: a neighbor outside, or a site outside
+            # (which then exchanges nothing; the CPM's pairs need both sites in the domain)
+            mc = Access{N}(p.masks[m].field, 0, Sel(Int16(1)), Sel(ntuple(_ -> Int16(0), N)), 0, INSIDE)
+            hit = node!(b, NOT, BOOL, Int32[node!(b, AND, BOOL, Int32[hit, _ne0!(b, _loadacc!(b, p, mc))])])
+        end
         isempty(axes) ||
             (hit = node!(b, AND, BOOL, Int32[_inside!(b, _with(a, off, INSIDE)), hit]))
         alt = r isa DomainEdgeRule && r.kind == :zero ? constant!(b, 0.0) : center

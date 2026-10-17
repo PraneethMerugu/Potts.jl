@@ -128,7 +128,8 @@ function lower(x, env::LowerEnv)
     op === gather && return _lower_gather(args, env)
     op === _connected && return _lower_connected(args, env)
     op === population && return _lower_population(args, env)
-    op === Δ && return _lower_laplacian(args[1], env)
+    op === Δ && error("`Δ` is a field operator: the field compiler lowers it in field equations (`D(c) ~ … Δ(c) …`); " *
+                      "it is not available in $(_MODE_NAMES[env.mode])")
     # cell references (R6, D-066 item 5): liveness, sources, the enclosing cell of a fold
     op === cell_alive && return :(Potts._alive_slot($(_refst(env)).cell.volume, $(lower(args[1], env))))
     if op === cluster_sibling
@@ -838,28 +839,6 @@ function _lower_population(args, env)
             $fin
         end
     end
-end
-
-function _lower_laplacian(c, env)
-    i = info(c)
-    (i !== nothing && i.role === :field) || error("`Δ` applies to field variables")
-    haskey(env.bind, :__site) || error("`Δ($(i.name))` needs a site")
-    faces = get(env.bind, :__bc, _FACES[])
-    (faces === nothing || !haskey(faces, i.name)) &&
-        return :(CorePotts.laplacian(st.site.$(i.name), ctx, $(env.bind[:__site])))
-    return :(CorePotts.laplacian(st.site.$(i.name), ctx, $(env.bind[:__site]); bc = $(_bc_code(faces[i.name], env))))
-end
-
-# The `bc` of a field's `@boundary` faces (D-145): one `(low, high)` pair of `GhostFace`s per
-# axis (homogeneous, so kernels index it per axis without a union); an axis without an entry
-# is zero flux. Values are lowered here, so a parameter value is read from `p` (a `remake`
-# keeps the code).
-function _bc_code(axes, env)
-    T = env.T
-    side(::Nothing) = :(CorePotts.GhostFace(false, zero($T)))
-    side(::NoFlux) = side(nothing)
-    side(d::Dirichlet) = :(CorePotts.GhostFace(true, $T($(lower(d.value, env)))))
-    return Expr(:tuple, (Expr(:tuple, side(a === nothing ? nothing : a[1]), side(a === nothing ? nothing : a[2])) for a in axes)...)
 end
 
 function _lower_gather(args, env)

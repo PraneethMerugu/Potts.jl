@@ -232,7 +232,7 @@ const P60VX_STATS = Ref{Any}(nothing)
             PottsDevices.device_sync()
             for _ in 1:3
                 waits, d = p60vx_waits(() -> step!(integ))
-                @test waits == d[1] + 2 * d[2]    # Merks too: FieldStep copies by kernel (P6.0v3, D-101)
+                @test waits == d[1] + 2 * d[2]    # Merks too: the field phase copies by kernel (P6.0v3, D-101)
             end
         end
         # the event MCS of the division fixture: planned on the device (P6.0v1, D-089), no

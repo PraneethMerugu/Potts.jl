@@ -87,3 +87,19 @@ end
         @test k == h[1] && maximum(abs, u .- h[2]) <= 2eps(Float32) * maximum(abs, h[2])
     end
 end
+
+@testset "Exec as the solver executor on $gpu: capability, not policy (P5 C2-1)" begin
+    # `Schedule.supports(DEV, Float64)` is the hardware capability (`Exec.supports`), never the
+    # Float32 default-float policy: on ROCm `:auto` keeps the periodic Float64 solve
+    case = named_case("per256", 5.5e-6)
+    k, u, sc, sv = dev_solved(case, DEV)
+    if gpu == "metal"
+        @test !Schedule.supports(DEV, Float64) && sv.T == Float32 && sc.status === :floor
+    else
+        @test Schedule.supports(DEV, Float64) && LatticeFields.Exec.default_float(DEV) === Float32
+        @test sv.T == Float64 && sv.state == Float32 && eltype(u) == Float32
+        @test sc.status === :done && sc.rnorm <= 1e-6 * sc.bnorm
+        h = dev_solved(case, DevExec())
+        @test k == h[1] && maximum(abs, u .- h[2]) <= 2eps(Float32) * maximum(abs, h[2])
+    end
+end

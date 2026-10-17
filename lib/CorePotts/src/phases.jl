@@ -165,6 +165,32 @@ sweep (`SequentialCPM` or `CheckerboardCPM`) where the order lists it.
 struct SweepPhase end
 
 """
+    Repeat(n, entries)
+
+An entry of an MCS order (`Phases(; mcs)`) that runs `entries` (a tuple of phase tuples and
+at most one [`SweepPhase`](@ref)`()`) `n` times in one MCS: the sub-MCS interleave. The sweep
+inside runs `1/n` of the MCS per pass. Pass `j` of `n` makes these copy attempts:
+
+- `SequentialCPM`: attempts `(j-1)·N÷n+1 : j·N÷n` of the MCS's `N`, with their own draws.
+- `CheckerboardCPM`: the phases `(j-1)·P÷n+1 : j·P÷n` of the MCS's `P` block phases. `n` must
+  divide the phase count `P`.
+
+With nothing else in `entries`, the `n` passes make exactly the copies of one plain sweep.
+`SequentialCPM(; skip_interior = true)` takes no `Repeat` with `n > 1`.
+"""
+struct Repeat{E}
+    n::Int
+    entries::E
+    function Repeat(n::Integer, entries::Tuple)
+        n >= 1 || throw(ArgumentError("Repeat: the count must be ≥ 1; got $n"))
+        all(x -> x isa Union{Tuple, SweepPhase}, entries) || throw(ArgumentError(
+            "Repeat: the entries are tuples of phases and at most one SweepPhase() (no lifecycle, no nested Repeat)"))
+        count(x -> x isa SweepPhase, entries) <= 1 || throw(ArgumentError("Repeat: at most one SweepPhase()"))
+        return new{typeof(entries)}(Int(n), entries)
+    end
+end
+
+"""
     LifecyclePhase()
 
 The lifecycle (divisions, removals, transitions; `CPMFunction(…; lifecycle)`) as an entry of
@@ -178,10 +204,11 @@ struct LifecyclePhase end
 Phases of every MCS: `before_mcs` before the copy sweep, `after_mcs` after it, `end_mcs`
 after the lifecycle (the state at the MCS boundary: history pushes, derived quantities);
 `at_init` once when an integrator is created (derived quantities of the initial state; a
-[`FieldClamp`](@ref) in it runs only on a fresh state, not on `init` from a checkpoint).
+[`FieldPhase`](@ref) clamp in it runs only on a fresh state, not on `init` from a checkpoint).
 
 `mcs` is the order `step!` runs, one static tuple whose entries are tuples of phases and the
-sentinels [`SweepPhase`](@ref)`()` and [`LifecyclePhase`](@ref)`()` (each exactly once).
+sentinels [`SweepPhase`](@ref)`()` and [`LifecyclePhase`](@ref)`()` (each exactly once; the
+sweep may sit in a [`Repeat`](@ref)).
 Without it the order is today's, `(before_mcs, SweepPhase(), after_mcs, LifecyclePhase(),
 end_mcs)`; the positional form `Phases(before_mcs, after_mcs, end_mcs, at_init)` means the
 same. With an explicit `mcs`, `before_mcs`, `after_mcs` and `end_mcs` name the phases by role
@@ -212,11 +239,12 @@ default_order(before_mcs, after_mcs, end_mcs) = (before_mcs, SweepPhase(), after
 
 function _check_order(mcs)
     mcs isa Tuple || throw(ArgumentError("Phases: `mcs` is a tuple of phase tuples and the sentinels SweepPhase(), LifecyclePhase()"))
-    for (k, S) in ((:sweep, SweepPhase), (:lifecycle, LifecyclePhase))
-        count(x -> x isa S, mcs) == 1 || throw(ArgumentError("Phases: the MCS order `mcs` must list $(nameof(S))() exactly once"))
-    end
-    all(x -> x isa Union{Tuple, SweepPhase, LifecyclePhase}, mcs) || throw(ArgumentError(
-        "Phases: each entry of the MCS order `mcs` is a tuple of phases, SweepPhase() or LifecyclePhase()"))
+    nsweep = count(x -> x isa SweepPhase, mcs) + sum(r -> r isa Repeat ? count(x -> x isa SweepPhase, r.entries) : 0, mcs; init = 0)
+    nsweep == 1 || throw(ArgumentError("Phases: the MCS order `mcs` must list SweepPhase() exactly once"))
+    count(x -> x isa LifecyclePhase, mcs) == 1 ||
+        throw(ArgumentError("Phases: the MCS order `mcs` must list LifecyclePhase() exactly once"))
+    all(x -> x isa Union{Tuple, SweepPhase, LifecyclePhase, Repeat}, mcs) || throw(ArgumentError(
+        "Phases: each entry of the MCS order `mcs` is a tuple of phases, SweepPhase(), LifecyclePhase() or a Repeat"))
     # `_run_mcs!` folds the order with `Base.afoldl`, which unrolls (one call specialized per
     # entry) only up to 31 entries
     length(mcs) <= 31 || throw(ArgumentError("Phases: the MCS order `mcs` has $(length(mcs)) entries; " *

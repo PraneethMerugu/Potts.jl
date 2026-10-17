@@ -559,12 +559,13 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     _dry_lower(sys, gather_names, fields, cell_odes)
     _check_algebraic_lowering(sys, gather_names)
     _check_boundaries(sys, fields, gather_names)
+    fieldsys = _check_fields(sys, gather_names)
     isempty(_p(sys, :schedule)) || _placed_schedule(_p(sys, :schedule), _convert_names(sys))
     _check_units(sys)
 
     # the lowered model's inner System is rebuilt from its lowered payload, so MTK's accessors
     # on `csys.sys` list what the lowering kept (an eliminated algebraic variable is observed)
-    sys = _wrap_payload(nameof(sys), getfield(sys, :fields), getfield(sys, :part))
+    sys = _wrap_payload(nameof(sys), something(fieldsys, getfield(sys, :fields), Some(nothing)), getfield(sys, :part))
     return CompiledPottsSystem(sys, cell_terms, cluster_terms, contact_terms, site_terms, drive,
         _p(sys, :constraints), updates, fields, cell_odes, model_odes, _p(sys, :divisions), relationships, edge_terms, edge_vars,
         _p(sys, :link_rules), uses_surface, uses_clusters, uses_cluster_surface, uses_euler, uses_euler_full,
@@ -742,6 +743,20 @@ function _check_boundaries(sys::PottsSystem, fields, rn)
         end
     end
     return nothing
+end
+
+# The field equations and `@boundary` entries as a `PDESystem`, lowered once through
+# LatticePDE (in Float64) so that a term the field compiler cannot lower is an error here, with
+# the CPM inputs dry-lowered in site scope. `nothing` for a model without fields.
+function _check_fields(sys::PottsSystem, rn)
+    eqs = _field_equations(sys)
+    isempty(eqs) && return nothing
+    pdesys, cv = _located(() -> _field_system(sys), sys, first(_p(sys, :equations)))
+    env = _site_env(Float64, :i, rn; mcs = :mcs, key = :key)
+    foreach(e -> _fill_value(e[2], env), cv.filled)
+    disc = _field_disc(sys, Float64)
+    LatticePDE.symbolic_discretize(pdesys, disc; update = _EulerUpdate(nothing))
+    return pdesys
 end
 
 # A slot of a discrete component is written by its ticks only.
@@ -1146,9 +1161,9 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
         _located(sys, eq) do
             x = arguments(_unwrap(eq.lhs))[1]
             r = info(x).role
+            r in (:field, :site) && return        # the field compiler lowers these (`_check_fields`)
             lower(eq.rhs, r === :cell ? _cell_env(T, :c, rn; mcs = :mcs, key = :key, extra = (:time => :tt,)) :
-                          r === :model ? _model_env(T, rn; key = :key, extra = (:time => :tt,)) :
-                          _site_env(T, :i, rn; mcs = :mcs, key = :key))
+                          _model_env(T, rn; key = :key, extra = (:time => :tt,)))
         end
     end
     for d in _p(sys, :divisions)

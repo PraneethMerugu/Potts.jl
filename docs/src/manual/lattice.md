@@ -49,7 +49,9 @@ The gray region outside the disk is outside the domain.
 in axial coordinates. `Hex(k)` is the ball of hex distance `k` (6, 18, 36 neighbors);
 `Moore(k)` and `VonNeumann(k)` mean `Hex(k)` on this geometry. The 12 *second-nearest*
 neighbors of a hexagonal site (in Euclidean distance shells) are `NeighborOrder(2)`, not
-`Hex(2)`, which has 18. Centroids, distances and the Laplacian are Cartesian.
+`Hex(2)`, which has 18. Centroids and distances are Cartesian. On a hexagonal lattice,
+`Δ(c)` is the six-neighbor Laplacian `2/(3h²) Σ (cₙ − c)`. A missing neighbor reads the
+site itself (zero flux). Face conditions (`x => (…)`) are an error there.
 
 ```@example lattice
 @potts_model HexSorting begin

@@ -17,6 +17,7 @@ using CorePotts: CorePotts, Footprint, Lattice, embed, PottsProblem, Periodic, C
 using CorePotts: Metropolis, RandomPlane
 using JumpProcesses: JumpProcesses
 using KernelAbstractions: KernelAbstractions
+using LatticeFields: LatticeFields
 using LatticePDE: LatticePDE, PottsEntity, Δ, at, at2, ismember
 using LinearAlgebra: Symmetric, eigen, svdvals
 using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile, complete
@@ -56,6 +57,7 @@ include("compile.jl")
 include("sweep_spec.jl")
 include("contact_folds.jl")
 include("solvers.jl")
+include("fields.jl")
 include("codegen.jl")
 include("problem.jl")
 include("analysis.jl")

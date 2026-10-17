@@ -40,7 +40,7 @@ else
 end
 devsync() = KA.synchronize(DEV)
 dev(x) = copyto!(KA.allocate(DEV, eltype(x), length(x)), x)
-opts() = CompileOptions(; T = Float32, float64_ok = Exec.supports_float64(DEV))
+opts() = CompileOptions(; T = Float32, float64_ok = Exec.default_float(DEV) === Float64)
 S2, S3 = SMOKE ? (256, 32) : (4096, 256)
 println("C7a gates on $WHICH; KA $(pkgversion(KA)); threads $(Threads.nthreads()); smoke $SMOKE")
 

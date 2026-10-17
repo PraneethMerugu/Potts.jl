@@ -118,19 +118,34 @@ sol[:x][end], sol[:g][end]
 | `solvers` | `[x => solver, …]`, per variable or component | — |
 
 - `substeps = nothing` in a field solver takes the smallest count `n` with
-  `mcs_duration / n · (D · Σ_d 4/h_d² + k) ≤ 1.8`, where `k` bounds the reaction's
-  `|∂f/∂c|` (the coefficient of `c` in a linear reaction, indicators such as
-  `(kind == medium)` and `rand()` counting as 1, a kind table `δ[kind]` as its largest
-  entry), recomputed when parameters change; a number is a minimum. A reaction that is not
-  linear in `c`, or whose coefficient of `c` reads other state, is not counted (the problem
-  warns): give `substeps` yourself.
-- Fields are stepped one after another within an MCS, each seeing the others' values from
-  the start of its own step. A strong coupling between two fields is therefore split per
-  MCS, and it can be unstable however many substeps each field takes; keep such couplings
-  weak relative to `1 / mcs_duration`. For the same reason another field's Laplacian
-  (`- Dx * Δ(u)` in `D(c)`) is a source term for `c` and does not change its substep count.
+  `mcs_duration / n · ρ ≤ 1.8`, where `ρ` bounds the rate's spectral radius: `D · Σ_d 4/h_d²`
+  for diffusion plus the size of the coefficient of `c` in a linear reaction. Indicators
+  such as `(kind == medium)` and `ismember(kind, g)` are evaluated at 0 and 1, and a rate
+  gated by `ifelse(mcs >= t₀, …, 0)` (a condition that reads no field) is bounded branch
+  by branch (the worst branch counts). The count is
+  recomputed when parameters change; a number is a minimum. A rate the bound cannot see
+  needs `substeps`, and the problem throws an error naming the term without it: a
+  reaction that is not linear in `c`, a coefficient that reads a kind table or other state,
+  and a diffusion multiplier that varies by site (`ismember(kind, g) * Δ(c)`). So does a
+  rate that reads another field (`- Dx * Δ(u)`, `- k * u`) when its row of the Jacobian is
+  not diagonally dominant. With `substeps = n` in these cases the count is the larger of
+  `n` and the bound of the terms the bound sees (diffusion at least), and the problem warns
+  once, naming the terms it does not cover.
+- Fields with the same solver step together, substep by substep: a field reads the fields
+  it depends on after their update, and fields that depend on each other read each other's
+  values from the start of the substep. Fields with different solvers (`solvers = [u =>
+  ExplicitEuler(substeps = 4)]`) step one group after another, each reading the others'
+  arrays. A strong coupling between two groups is split per MCS and can be unstable however
+  many substeps each takes; keep it weak relative to `1 / mcs_duration`.
+- The CPM quantities in a field equation (`kind`, cell reads, neighbor counts) are evaluated
+  once per MCS, before the fields step, and held over the substeps; so is `mcs`. `rand()`
+  cannot appear in a field equation: draw in a site update and read its variable.
+- On a hexagonal lattice, `Δ` is the only spatial operator. On a lattice with a `domain`,
+  the fields live in the domain: a site outside it keeps its value, and the domain's edge
+  has zero flux. Face values still apply at the faces of the box.
 - A diffusion coefficient must not be negative: that is anti-diffusion, an ill-posed problem
-  whose shortest wavelengths grow without bound under any step (the problem warns).
+  whose shortest wavelengths grow without bound under any step. The problem throws an
+  error at build, or at the next MCS after a parameter change makes it negative.
 - `Adaptive(alg; reltol, abstol, …)` integrates cell and model ODEs on the host with any
   SciML ODE algorithm (load its package, e.g. OrdinaryDiffEqTsit5). Equations with
   `rand()` cannot be integrated adaptively. Its keywords and the algorithm's fields are
@@ -188,22 +203,22 @@ u = solve(prob, SequentialCPM()).u[end]
   the edge site and the face; `NoFlux()` mirrors the edge site. A closed axis without an entry
   is zero flux. An entry on a periodic axis, on an axis the lattice lacks, on a hexagonal
   lattice, or on a field whose equation has no `Δ` of it is an error naming it.
-- **Site masks.** `sites(condition) => Dirichlet(v)` is a node value: after every explicit
-  substep (after the write and the `lower` clip, before the next rate evaluation) every site
-  where the condition holds is set to `v`, and a fresh initial state (the problem's `u0`,
-  `init`, `reinit!`) is clamped too; a state restored from a checkpoint is not (it continues
-  the run exactly), nor does `Potts.anneal` clamp. The condition is a site expression
-  (`kind`, `owner`, site and field variables), evaluated from the state the substep reads,
-  so a mask on a kind moves with its cells. It cannot read the field it clamps, or a field
-  stepped after it (in the order of `@equations`): that is an error naming it. A clamp costs
-  no extra kernel launch. A mask value below `lower` wins.
+- **Site masks.** `sites(condition) => Dirichlet(v)` is a node value: every explicit
+  substep writes `v` at every site where the condition holds (after the `lower` clip, so a
+  mask value below `lower` wins), and a fresh initial state (the problem's `u0`, `init`,
+  `reinit!`) is clamped too; a state restored from a checkpoint is not (it continues the run
+  exactly), nor does `Potts.anneal` clamp. The condition is a site expression (`kind`,
+  `owner`, site and field variables), evaluated once per MCS before the substeps, so a mask
+  on a kind moves with its cells. It cannot read the field it clamps, or a field stepped
+  after it (in the order of `@equations`): that is an error naming it. The masks of a field
+  group cost one kernel launch per MCS.
 - **Values** are numbers, parameters or parameter expressions; `remake(prob; p = [:S => 2.0])`
   changes a value without regenerating code. The conditions themselves are part of the
   model's identity (the fingerprint): a checkpoint does not cross them.
 - In an extension, a field's `@boundary` replaces the base's for that field.
 
-`Δ(c)` reads the faces wherever the model uses it: equations, site updates, site energies,
-drives, constraints and `@observed`.
+`Δ(c)` is a field operator: it appears in field equations (`D(c) ~ …`), where it reads the
+faces. Anywhere else (site updates, energies, drives, `@observed`) it is an error.
 
 `@bcs` takes raw MTK boundary conditions, one per line (for example
 `c ~ masked(kind == border, 0.0)`). In this release they are stored in the model and printed

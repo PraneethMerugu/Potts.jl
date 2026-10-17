@@ -77,6 +77,19 @@ the cells move (`@schedule fields, sweep`):
   phases. A phase that runs on the host (an `Adaptive` ODE solver) costs one device↔host
   round trip per MCS wherever the schedule puts it.
 
+`repeat(n, sweep(fraction = 1//n), …)` in `@schedule` interleaves phases within an MCS:
+`@schedule repeat(4, sweep(fraction = 1//4), fields)` runs a quarter of the copy attempts,
+then the fields over a quarter of the MCS, four times.
+
+- Each pass makes its own share of the MCS's copy attempts: with `SequentialCPM` the
+  attempts `(j−1)·N÷n+1 … j·N÷n` of the `N`, with `CheckerboardCPM` the block phases
+  `(j−1)·P÷n+1 … j·P÷n` of the MCS's `P` (so `n` must divide `P`: `parts^d · switches`,
+  64 by default in 2D and 3D). With nothing between the passes, the copies are exactly those
+  of one plain sweep (on the CPU when the phases run inline).
+- Fields inside the repeat step `mcs_duration / n` per pass (their substep count follows).
+- A repeat holds the sweep, `fields`, `after_mcs`, `operators` and `@convert` passes; at most
+  one repeat. `SequentialCPM(; skip_interior = true)` cannot split a sweep.
+
 ```@example sweep
 using Potts
 

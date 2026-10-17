@@ -63,20 +63,6 @@
         @test g.history.u ≈ c.history.u rtol = 1e-5
     end
 
-    @testset "fields on the device" begin
-        σf, kf = blocks((64, 32), 6)
-        latf = Lattice((64, 32))
-        c0 = Float32[exp(-((i - 20)^2 + (j - 10)^2) / 30) for i in 1:64, j in 1:32]
-        pf = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0,
-            D = 0.1f0)
-        prob = field_problem(σf, kf, latf, c0, diffuse, pf; dt = 1.0f0, spacing = (1.0f0, 0.8f0),
-            tspan = (0, 20))
-        g = solve(prob, CheckerboardCPM(); backend).u[end].site.c
-        c = solve(prob, CheckerboardCPM()).u[end].site.c
-        @test g ≈ c rtol = 1e-4
-        @test sum(g) ≈ sum(c0) rtol = 1e-4
-    end
-
     @testset "frozen sites and cell reductions on the device" begin
         σz, kz = blocks((32, 32), 5; gap = 0)
         latz = Lattice((32, 32))
@@ -432,19 +418,14 @@
         disk(x) = (x[1] - 20.5)^2 + (x[2] - 20.5)^2 <= 18^2
         lat = Lattice((40, 40); boundary = Closed(), domain = disk)
         σ = zeros(Int32, 40, 40); σ[16:25, 16:25] .= 1; σ[5:10, 18:23] .= 2
-        rate(st, p, ctx, key, mcs, i, c) = 0.2f0 * laplacian(c, ctx, i)
-        c0 = zeros(Float32, 40, 40); c0[18:23, 18:23] .= 1
         # a division at MCS 5 rebuilds trackers on the host from the device context
         tr(st, p, ctx, key, mcs, c) = mcs == 5 && c == 1 ? EVENT_DIVIDE : EVENT_NONE
-        f = CPMFunction(gg_delta_H; temperature = gg_temperature, lifecycle = Lifecycle(tr; normal = AlongMinorAxis{Float32}()),
-            phases = Phases(after_mcs = (FieldStep((:site, :c) => (:site, :c_next), rate),)))
-        st = with_capacity(initial_state(σ, Int32[1, 2]; cell = init_moments(σ, lat, 2),
-            site = (; c = c0, c_next = copy(c0))), 4)
+        f = CPMFunction(gg_delta_H; temperature = gg_temperature, lifecycle = Lifecycle(tr; normal = AlongMinorAxis{Float32}()))
+        st = with_capacity(initial_state(σ, Int32[1, 2]; cell = init_moments(σ, lat, 2)), 4)
         p = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 60.0f0, T = 10.0f0)
         u = solve(PottsProblem(f, st, lat, (0, 40), p), CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
         @test all(u.σ[.!lat.mask] .== 0)
         @test u.cell.volume == [count(==(c), u.σ) for c in 1:4] && u.cell.volume[3] > 0
-        @test sum(u.site.c[lat.mask]) ≈ 36 rtol = 1e-4
     end
     @testset "a chain of two relationships on the device" begin
         # P6.0b4: a chain of two relationships: 1–2 a

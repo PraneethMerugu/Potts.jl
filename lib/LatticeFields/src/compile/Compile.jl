@@ -30,7 +30,7 @@ using ..IR: IR, Access, BOOL, CALL, CAST, CLAMP, COND, CONST, COORD, Coef, DIV,
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
-public CompileOptions, lanecast, valtype, primal, withvaltype, promote_dual, lanetype
+public CompileOptions, semantic, fingerprint_text, lanecast, valtype, primal, withvaltype, promote_dual, lanetype
 
 include("numbers.jl")
 include("semantic.jl")

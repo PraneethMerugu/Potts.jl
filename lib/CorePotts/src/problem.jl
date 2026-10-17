@@ -338,10 +338,13 @@ function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, save
     _custom_frozen(prob.f.sys) && _frozen_reads(prob.f.sys, prob.u0)
     state = _to_backend(backend, deepcopy(prob.u0))
     p = _to_backend(backend, prob.p)
+    # the trajectory's launch state of its phases (field steps bind to the state's arrays)
+    ctx = merge(ctx, phase_contexts(prob.f.phases, state, p, backend))
     cache = alg isa CheckerboardCPM ?
             CheckerboardCache(backend, lat, prob.f, relation(_proposal(alg, prob), lat); alg.region, alg.parts, alg.switches,
                 alg.threads, min_read = _copy_step_reach(prob, ctx)) :
             _skips_interior(alg) ? BoundaryCache(state.σ, ctx.mobility, ctx.lattice, ctx.proposal) : nothing
+    _check_repeat(prob.f.phases, alg, cache)
     key = RNGKey(prob.seed, prob.replica, prob.repeat)
     lcache = prob.f.lifecycle === nothing ? nothing :
              LifecycleCache(backend, ndims(lat), ncells(prob.u0), state, _device_planned(backend, alg, prob.f))
@@ -509,13 +512,13 @@ end
 # `Base.afoldl`, not `_each`: the MCS order is compiler-built and short (`Phases` caps it at 31, afoldl's unrolled limit)
 _run_mcs!(integ, t::Tuple) = (Base.afoldl((_, e) -> (_run_entry!(integ, e); nothing), nothing, t...); nothing)
 
-function _sequential_sweep!(integ::PottsIntegrator, ctx)
+function _sequential_sweep!(integ::PottsIntegrator, ctx, part::NTuple{2, Int})
     if _skips_interior(integ.alg)
         acc, status, tracked = boundary_site_mcs!(integ.state, integ.kf, integ.p, ctx,
             integ.law, integ.key, integ.t, integ.cache, integ.f.track)
     else
         acc, status, tracked = sequential_mcs!(integ.state, integ.kf, integ.p, ctx,
-            integ.law, integ.key, integ.t, integ.f.track)
+            integ.law, integ.key, integ.t, integ.f.track, part)
     end
     integ.stats.accepted = max(integ.stats.accepted, 0) + acc
     tracked === nothing || (integ.stats.accepted_ΔH += tracked)
@@ -523,24 +526,49 @@ function _sequential_sweep!(integ::PottsIntegrator, ctx)
     return nothing
 end
 
-# One entry of the MCS order: a tuple of phases, the sweep or the lifecycle.
-function _run_entry!(integ::PottsIntegrator, phases::Tuple)
+# One entry of the MCS order: a tuple of phases, the sweep, the lifecycle or a `Repeat`.
+function _run_entry!(integ::PottsIntegrator, phases::Tuple, part::NTuple{2, Int} = (1, 1))
     integ.stats.launches += _run_phases(phases, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, integ.stats)
     return nothing
 end
-function _run_entry!(integ::PottsIntegrator, ::SweepPhase)
+# `part = (j, n)`: pass `j` of the `n` passes of a `Repeat` (the whole MCS is `(1, 1)`)
+function _run_entry!(integ::PottsIntegrator, ::SweepPhase, part::NTuple{2, Int} = (1, 1))
     # the copy functions see the number of completed MCS as `ctx.mcs` (the copy-scope `mcs`,
     # D-188): n − 1 during the n-th MCS, as the phases' `mcs`
     ctx = sweep_ctx(integ.ctx, integ.t)
     if integ.alg isa SequentialCPM
         # the site-pick regime is fixed per sweep in the context's type (D-247): two static
         # calls, so the one-word sweep compiles exactly as before
-        _two_word_pick(integ.nmobile) ? _sequential_sweep!(integ, _with_two_word_pick(ctx)) :
-        _sequential_sweep!(integ, ctx)
+        _two_word_pick(integ.nmobile) ? _sequential_sweep!(integ, _with_two_word_pick(ctx), part) :
+        _sequential_sweep!(integ, ctx, part)
     else
         integ.stats.launches += checkerboard_mcs!(integ.state, integ.cache, integ.kf,
-            integ.p, ctx, integ.law, integ.key, integ.t)
+            integ.p, ctx, integ.law, integ.key, integ.t, part)
+    end
+    return nothing
+end
+function _run_entry!(integ::PottsIntegrator, r::Repeat)
+    n = r.n
+    for j in 1:n
+        Base.afoldl((_, e) -> (_run_entry!(integ, e, (j, n)); nothing), nothing, r.entries...)
+    end
+    return nothing
+end
+
+# A `Repeat` of `n > 1` passes needs a sweep that splits: refused at `init` otherwise
+function _check_repeat(phases::Phases, alg, cache)
+    for r in phases.mcs
+        (r isa Repeat && r.n > 1 && any(x -> x isa SweepPhase, r.entries)) || continue
+        _skips_interior(alg) && throw(ArgumentError(
+            "the MCS order repeats a 1/$(r.n) sweep, which `SequentialCPM(; skip_interior = true)` cannot split " *
+            "(its attempts are geometric skips); use `SequentialCPM()` or `CheckerboardCPM()`"))
+        if cache isa CheckerboardCache
+            C = length(cache.order)
+            C % r.n == 0 || throw(ArgumentError(
+                "the MCS order repeats a 1/$(r.n) sweep; `CheckerboardCPM` splits an MCS into its $C phases, " *
+                "so the count must divide $C"))
+        end
     end
     return nothing
 end

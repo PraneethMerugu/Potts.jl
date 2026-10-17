@@ -126,9 +126,14 @@ end
 # the compile options of value type `V` on `backend`
 function _options(o::CompileOptions, ::Type{V}, backend) where {V}
     return CompileOptions(; T = V, I = o.I,
-        float64_ok = o.float64_ok && Exec.supports_float64(backend), debug = o.debug,
+        float64_ok = o.float64_ok && _float64_ok(V, backend), debug = o.debug,
         index = o.index, lanes = :state)
 end
+
+# Float64 in device code: allowed on the host, and for a Float64 problem on hardware that has
+# it (`Exec.supports`); a Float32 problem on a device keeps the D-157 double scan (P5 C2-1)
+_float64_ok(::Type{V}, backend) where {V} =
+    Exec.default_float(backend) === Float64 || (V === Float64 && Exec.supports(backend, Float64))
 
 # the init and step plans of value type `V` (planned and emitted once per family)
 function _plans!(plans, s::Program, initkeys, o::CompileOptions, ::Type{V}, backend) where {V}
@@ -146,7 +151,7 @@ function _check_eltype(::Type{E}, backend) where {E}
         throw(ArgumentError("the state value type must be a float type; got $V (from $E)"))
     isbitstype(E) || Exec.ishost(backend) || throw(ArgumentError(string("element type ", E,
         " is not isbits: it runs on the host backend only (use T = Float32 or Float64 on a device)")))
-    V <: Union{Float16, Float32} || Exec.supports_float64(backend) || throw(ArgumentError(
+    V <: Union{Float16, Float32} || Exec.supports(backend, Float64) || throw(ArgumentError(
         string("the backend has no Float64 compute (value type ", V, " from ", E,
             "); use T = Float32")))
     return nothing

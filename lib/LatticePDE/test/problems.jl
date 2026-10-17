@@ -193,6 +193,36 @@ end
                       [c(0, x, y) ~ 1.0; o(0, x, y) ~ 0.0; per2], [a, ee]; T = 0.1, dvs = [ce, oe, ke]), 4)
     @test isnan(grot.stability(grot.p))
     @test_throws ArgumentError solve(grot, ExplicitEuler(; dt = 0.01))
+    # an `ifelse` gate that reads no field is bounded arm by arm (C8 review round 2): the
+    # decaying arm never certifies the rotation of the other, never active at the same time
+    @parameters t0 = 1000.0 kr = 4.0
+    gr = owned(psys([D(ce) ~ ifelse(t >= t0, -10 * ce, -kr * oe), D(oe) ~ ifelse(t >= t0, -10 * oe, kr * ce)],
+                    [c(0, x, y) ~ 1.0, o(0, x, y) ~ 0.0], [t0, kr]; T = 0.1, dvs = [ce, oe]), 4)
+    @test isnan(gr.stability(gr.p))
+    @test_throws ArgumentError solve(gr, ExplicitEuler(; dt = 0.01))
+    # control: both arms dominant: accepted, and the bound is the worst arm (10 + 1)
+    gd = owned(psys([D(ce) ~ ifelse(t >= t0, -10 * ce - oe, -10 * ce + oe), D(oe) ~ ifelse(t >= t0, -10 * oe, -5 * oe)],
+                    [c(0, x, y) ~ 1.0, o(0, x, y) ~ 1.0], [t0]; T = 0.1, dvs = [ce, oe]), 4)
+    @test gd.stability(gd.p) ≈ 11
+    @test SciMLBase.successful_retcode(solve(gd, ExplicitEuler(; dt = 0.01)))
+    # an aux field in an arm (C8 review round 3): `K ~ −1000 c` is an unknown of the states,
+    # so the arm's term `K` is not a source; the switch has no bound and automatic substeps
+    # are refused (before: ρ = Dr·Σ4/h², one substep, silent divergence)
+    # (`K ~ −1000 c` closes a read cycle with c, so an owned problem needs two buffers: the
+    # bound is checked on the symbolic form; the owned problem reads K of another field)
+    sa = psys([D(ce) ~ Dr * Δ(ce) + ifelse(t >= t0, Ke, 0.0), Ke ~ -1000 * ce], [c(0, x, y) ~ 1.0; per], [Dr, t0];
+              T = 0.1, dvs = [ce, Ke])
+    cfa = symbolic_discretize(sa, LatticeDiscretization(Grid((4, 4)); T = Float64); update = LatticePDE.euler_update)
+    @test isnan(stability_bound(cfa, sa)([1.0, 0.0]))
+    ga = owned(psys([D(ce) ~ Dr * Δ(ce) + ifelse(t >= t0, Ke, 0.0), D(oe) ~ -oe, Ke ~ -1000 * oe],
+                    [c(0, x, y) ~ 1.0; o(0, x, y) ~ 1.0; per2], [Dr, t0]; T = 0.1, dvs = [ce, oe, Ke]), 4)
+    ga = remake(ga; p = [t0 => 0.0])
+    @test isnan(ga.stability(ga.p))
+    @test_throws ArgumentError solve(ga, ExplicitEuler(; dt = 0.01))
+    # … and a condition reading an aux field is not a gate
+    gc = owned(psys([D(ce) ~ Dr * Δ(ce) + ifelse(Ke >= 0, -ce, 0.0), D(oe) ~ -oe, Ke ~ oe - 1],
+                    [c(0, x, y) ~ 1.0; o(0, x, y) ~ 1.0; per2], [Dr]; T = 0.1, dvs = [ce, oe, Ke]), 4)
+    @test isnan(gc.stability(gc.p))
     # array-element coefficients are refused (documented); tables `at(Dk, kind)` as a source are fine
     ae = owned(psys([D(ce) ~ Dk[2] * Δ(ce)], [c(0, x, y) ~ 1.0; per], [Dk]; T = 0.1), 8)
     @test isnan(ae.stability(ae.p))

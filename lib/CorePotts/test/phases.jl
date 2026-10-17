@@ -142,20 +142,6 @@ end
         changed = sol.u[end - 1].σ .!= sol.u[end].σ
         @test any(changed) && all(sol.u[end].site.age[changed] .== fresh)
     end
-
-    # a clamp after every substep's write, and on the initial state (`FieldClamp`)
-    one_rate(st, p, ctx, key, mcs, i, c) = 1.0
-    zero_low(st, p, ctx, key, mcs, i, v) = i <= 24 ? zero(v) : v          # the first column
-    for alg in (SequentialCPM(), CheckerboardCPM())
-        st = initial_state(σ, kinds; site = (; c = fill(5.0, 24, 24), c_next = zeros(24, 24)))
-        step = FieldStep((:site, :c) => (:site, :c_next), one_rate; substeps = 4, clamp = zero_low)
-        f = CPMFunction(gg_delta_H; temperature = gg_temperature,
-            phases = Phases(; after_mcs = (step,), at_init = (FieldClamp((:site, :c), zero_low),)))
-        sol = solve(PottsProblem(f, st, lat, (0, 3), gg_params()), alg; saveat = 1)
-        @test all(u -> all(==(0.0), u.site.c[:, 1]), sol.u)                       # the initial state too
-        @test all(==(8.0), sol.u[end].site.c[:, 2:end])
-        @test sol.stats.launches >= 3 * 2 * 4
-    end
 end
 
 # P6.0v (D-085): the counted transfer helpers. On host arrays they copy as before and count

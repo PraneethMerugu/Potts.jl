@@ -14,6 +14,8 @@ using ..Compile: CompiledKernel, CompileOptions, LOWERING, compile_kernel, legal
                  writes, zero_offset
 using KernelAbstractions: KernelAbstractions, @index, @kernel, @localmem, @synchronize
 
+public plan
+
 include("contract.jl")
 include("cost.jl")
 include("plan.jl")

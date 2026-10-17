@@ -10,6 +10,9 @@
 Host copy of the state at MCS `t`, with the RNG key tuple, parameters, statistics (with
 `accepted_ΔH`, exact here) and the model fingerprint. Continue with `init(prob, alg; checkpoint = ck)`; the continuation uses
 the problem's `p` (so parameters may change at a restart; `ck.p` records the old ones).
+
+`format` is the checkpoint format ([`CHECKPOINT_FORMAT`](@ref) when written). A checkpoint
+of another format is refused at `init`.
 """
 struct PottsCheckpoint{S, P}
     state::S
@@ -20,7 +23,19 @@ struct PottsCheckpoint{S, P}
     p::P
     fingerprint::UInt64
     stats::PottsStats
+    format::Int
 end
+PottsCheckpoint(state, t, seed, replica, repeat, p, fingerprint, stats) =
+    PottsCheckpoint(state, t, seed, replica, repeat, p, fingerprint, stats, CHECKPOINT_FORMAT)
+
+"""
+    CHECKPOINT_FORMAT
+
+The checkpoint format of this version. Format 2 starts at the field-compiler cutover (C8):
+the fields of a state are stepped by the field compiler, so a checkpoint of format 1 (the
+`FieldStep` path, without a `format` field) is not continued.
+"""
+const CHECKPOINT_FORMAT = 2
 
 """Checkpoint the integrator (synchronizes)."""
 function checkpoint(integ::PottsIntegrator)
@@ -35,9 +50,24 @@ end
 save_checkpoint(path::AbstractString, ck::PottsCheckpoint) =
     open(io -> Serialization.serialize(io, ck), path, "w")
 """Read a checkpoint written by `save_checkpoint`."""
-load_checkpoint(path::AbstractString) = open(Serialization.deserialize, path)
+function load_checkpoint(path::AbstractString)
+    # opening the file is outside the `try`: a missing file is a `SystemError`, not a format error
+    ck = open(path) do io
+        try
+            Serialization.deserialize(io)
+        catch e
+            throw(ArgumentError("$path is not a checkpoint of format $CHECKPOINT_FORMAT: a checkpoint written before " *
+                "the field-compiler cutover (format 1) or by other package versions cannot be read ($(sprint(showerror, e)))"))
+        end
+    end
+    ck isa PottsCheckpoint || throw(ArgumentError("$path holds a $(typeof(ck)), not a checkpoint of format $CHECKPOINT_FORMAT"))
+    return ck
+end
 
 function _from_checkpoint(prob::PottsProblem, ck::PottsCheckpoint)
+    ck.format == CHECKPOINT_FORMAT || throw(ArgumentError(
+        "checkpoint format $(ck.format) is not this version's format $CHECKPOINT_FORMAT: a checkpoint written " *
+        "before the field-compiler cutover cannot be continued; finish that run on the version that wrote it"))
     ck.fingerprint == prob.f.fingerprint || throw(ArgumentError(
         "checkpoint fingerprint $(ck.fingerprint) does not match the model's $(prob.f.fingerprint)"))
     prob.tspan[1] <= ck.t <= prob.tspan[2] ||

@@ -10,14 +10,6 @@
     @test_throws ArgumentError relation(Hex(1), Lattice((8, 8)))
     @test_throws ArgumentError Lattice((4, 4, 4); geometry = Hexagonal())
     @test L != Lattice((24, 24)) && hash(L) != hash(Lattice((24, 24)))
-    # fields: the 6-point stencils are exact for quadratics (Δ) and linear functions (∇)
-    pos(i) = embed(L, Float64.(CorePotts.coordinates(L, i)))
-    f = [sum(abs2, pos(i)) for i in 1:nsites(L)]
-    g = [2.0 * pos(i)[1] - 3.0 * pos(i)[2] for i in 1:nsites(L)]
-    ctx = (; lattice = L)
-    i = CorePotts.linear_index(L, (10, 12))
-    @test laplacian(reshape(f, 24, 24), ctx, i) ≈ 4.0
-    @test all(gradient(reshape(g, 24, 24), ctx, i) .≈ (2.0, -3.0))
     # a hexagonal disc: centroid, isotropic shape, even division
     σ = zeros(Int32, 24, 24)
     centre = (12, 12)

@@ -6,7 +6,7 @@ using LatticeFields.Problems: FieldStore, FieldProblem, ExplicitEuler, ode_probl
                               LatticeIndex, FieldSlot
 using CommonSolve: solve, init, step!
 
-devopts() = CompileOptions(; T = Float32, float64_ok = Exec.supports_float64(DEV))
+devopts() = CompileOptions(; T = Float32, float64_ok = Exec.default_float(DEV) === Float64)
 
 """
 One step of program `s`/`sp` from inputs `X` (one per field `u1…uK`) on `backend`.
@@ -83,13 +83,20 @@ end
     Jdev(prob) = D -> sum(abs2, Array(solve(SciMLBase.remake(prob; p = [D]), alg).u[end]))
     dd, dh = ForwardDiff.derivative(Jdev(mk(DEV)), 0.05), ForwardDiff.derivative(Jdev(mk(KA.CPU())), 0.05)
     @test dd isa Float32 && isapprox(dd, dh; rtol = 1e-5) && dd != 0
-    # Float64 and Dual{Float64} values are refused on a backend without Float64 (by policy)
-    Exec.supports_float64(DEV) || @test_throws ArgumentError FieldProblem(euler2(dims), Float64.(u0),
+    # Float64 values are refused on a backend without Float64 hardware (Metal); where the
+    # hardware has it (ROCm) a Float64 problem runs on the device (capability, P5 C2-1)
+    Exec.supports(DEV, Float64) || @test_throws ArgumentError FieldProblem(euler2(dims), Float64.(u0),
         (0.0, 0.2), [0.05]; state = ["u"], kind = :rate, index = ix, backend = DEV)
+    if Exec.supports(DEV, Float64)
+        p64(backend) = FieldProblem(euler2(dims), Float64.(u0), (0.0, 0.2), [0.05]; state = ["u"],
+            kind = :rate, index = ix, backend)
+        ud, uh = Array(solve(p64(DEV), alg).u[end]), solve(p64(KA.CPU()), alg).u[end]
+        @test eltype(ud) == Float64 && isapprox(ud, uh; rtol = 1e-13)
+    end
 end
 
 @testset "Dual{Float64} into a Float32 ODE on $gpu: the message names the fix (review round 5)" begin
-    if !Exec.supports_float64(DEV)
+    if !Exec.supports(DEV, Float64)
         dims = (8, 6)
         od = ode_problem(euler2(dims; rate = true), zeros(Float32, prod(dims)), (0.0, 1.0), [0.5];
             state = ["u"], rates = Dict("u" => "∂u"), backend = DEV, options = devopts())

@@ -468,7 +468,6 @@ end
 
 include("geometry.jl")
 include("phases.jl")
-include("fields.jl")
 include("drives.jl")
 include("spatial.jl")
 include("lifecycle.jl")

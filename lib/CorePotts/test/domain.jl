@@ -47,24 +47,5 @@
     end
     @test worst < 1e-9
 
-    # diffusion conserves mass inside the domain (zero flux at its edge)
-    rate(st, p, ctx, key, mcs, i, c) = 0.2 * laplacian(c, ctx, i)
-    ph = Phases(after_mcs = (FieldStep((:site, :c) => (:site, :c_next), rate; substeps = 2),))
-    c0 = zeros(40, 40); c0[18:23, 18:23] .= 1.0; c0[1, 1] = 7.0              # (1, 1) is outside
-    sf = initial_state(zeros(Int32, 40, 40), Int32[]; site = (; c = c0, c_next = copy(c0)))
-    fp = PottsProblem(CPMFunction(gg_delta_H; temperature = gg_temperature, phases = ph), sf, lat, (0, 200), gg_params())
-    uf = solve(fp, SequentialCPM()).u[end]
-    @test sum(uf.site.c[lat.mask]) ≈ 36.0
-    @test uf.site.c[1, 1] == 7.0
-    @test maximum(uf.site.c[lat.mask]) - minimum(uf.site.c[lat.mask]) < 0.05    # equilibrates inside
 end
 
-@testset "field faces vs domain edges" begin
-    stripe = Lattice((9, 9); boundary = Closed(), domain = x -> 3 <= x[1] <= 7)
-    c = zeros(9, 9)
-    ctx = (; lattice = stripe)
-    i = linear_index(stripe, (7, 5))
-    @test laplacian(c, ctx, i; bc = ((0.0, 100.0), (nothing, nothing))) == 0.0     # domain edge: zero flux
-    full = Lattice((9, 9); boundary = Closed())
-    @test laplacian(c, (; lattice = full), linear_index(full, (9, 5)); bc = ((0.0, 100.0), (nothing, nothing))) == 200.0
-end

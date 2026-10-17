@@ -15,16 +15,18 @@ device wrapper for every device kernel. A kernel is a body `body(i, args...)` ru
   one size); [`Plan`](@ref) for a zero-allocation walk over a tuple of launches.
 - **Compile before enqueue**: [`compile!`](@ref) compiles a kernel by a launch with `n = 0`
   (no work item passes the guard); [`compile_all!`](@ref) compiles a set on host tasks.
-- **Capabilities**: [`supports_float64`](@ref), [`ishost`](@ref).
+- **Capabilities and policy**: [`supports`](@ref) (what the hardware runs),
+  [`default_float`](@ref) (the float type CorePotts emits by default), [`ishost`](@ref).
 """
 module Exec
 
 using KernelAbstractions: KernelAbstractions, @kernel, @index
 using RuntimeGeneratedFunctions: RuntimeGeneratedFunctions, @RuntimeGeneratedFunction
+using Polyester: @batch
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
-public HOST_GRAIN, ishost, supports_float64, host_launch!, launch!, compile!, compile_all!, Launch, Plan, walker
+public HOST_GRAIN, ishost, supports, default_float, host_launch!, launch!, compile!, compile_all!, Launch, Plan, walker
 
 # ---------------------------------------------------------------------------------------
 # Capabilities
@@ -39,14 +41,27 @@ ishost(::KernelAbstractions.CPU) = true
 ishost(backend) = false
 
 """
-    supports_float64(backend) -> Bool
+    supports(backend, ::Type{T}) -> Bool
 
-Whether kernels on `backend` may compute in `Float64`. True on the host executor. False on
-every device backend: device code stays `Float32`, so it runs unchanged on backends without
-doubles (Metal) and gives the same results on every device. This is a policy on the code
-CorePotts emits, not a query of the hardware (ROCm has doubles; D-157 scans for them).
+Capability: can kernels on `backend` compute in and store number type `T`? The host
+executor runs every type. A device runs `Float32`, and `Float64` where the hardware has it
+(`KernelAbstractions.supports_float64`: true on ROCm and CUDA, false on Metal). Callers ask
+only when a choice depends on the hardware (a Float64 solver group, an explicit Float64
+problem); the type device code gets by default is [`default_float`](@ref).
 """
-supports_float64(backend) = ishost(backend)
+supports(backend, ::Type{T}) where {T} =
+    ishost(backend) || T === Float32 || (T === Float64 && KernelAbstractions.supports_float64(backend))
+
+"""
+    default_float(backend) -> Type
+
+Policy: the float type of code emitted for `backend` when the caller names none. `Float64`
+on the host executor, `Float32` on every device: default device code stays `Float32`, so it
+runs unchanged on backends without doubles (Metal) and gives the same results on every
+device (D-157 scans production Float32 paths for doubles). This is not a query of the
+hardware; ask [`supports`](@ref) for that.
+"""
+default_float(backend) = ishost(backend) ? Float64 : Float32
 
 # ---------------------------------------------------------------------------------------
 # Host executor
@@ -63,8 +78,10 @@ const HOST_GRAIN = 8192
 
 Run `body(i, args...)` for `i in 1:n` on the host: a plain loop when `n ≤ HOST_GRAIN` or
 with one thread, else `ceil(n / chunk)` chunks of `chunk = max(cld(n, nthreads), HOST_GRAIN)`
-items on tasks (`Threads.@threads :dynamic`, which may nest, e.g. under `EnsembleThreads`).
-The loop allocates nothing; a threaded launch allocates its tasks. Returns `nothing`.
+items on Polyester's persistent workers (`@batch`: no task is created, so a warm launch
+allocates nothing; nested under busy workers, e.g. inside `EnsembleThreads`, the chunks run
+serially). Under `@batch`, Polyester passes top-level `Array`s in `args` as `PtrArray`s, so a
+body compiles for both array types. Returns `nothing`.
 """
 function host_launch!(body::B, n::Integer, args::A) where {B, A}
     nt = Threads.nthreads()
@@ -86,10 +103,15 @@ function _host_loop!(body::B, n::Integer, args::A) where {B, A}
 end
 
 @noinline function _host_threaded!(body::B, n::Integer, chunk::Integer, args::A) where {B, A}
-    Threads.@threads :dynamic for c in 1:cld(n, chunk)
-        for i in ((c - 1) * chunk + 1):min(c * chunk, n)
-            body(i, args...)
-        end
+    nc = cld(n, chunk)
+    @batch per = thread for c in 1:nc
+        _host_chunk!(body, n, chunk, c, args)
+    end
+    return nothing
+end
+function _host_chunk!(body::B, n::Integer, chunk::Integer, c::Integer, args::A) where {B, A}
+    for i in ((c - 1) * chunk + 1):min(c * chunk, n)
+        body(i, args...)
     end
     return nothing
 end
@@ -223,9 +245,35 @@ function (l::LinearLaunch{HostExec})()
 end
 function (l::CartesianLaunch{HostExec})()
     body, args, nd = l.params
-    for I in CartesianIndices(nd)
+    nt = Threads.nthreads()
+    if nt == 1 || prod(nd) <= HOST_GRAIN || last(nd) < 2
+        _host_cartesian!(body, CartesianIndices(nd), args)
+    else
+        _host_cartesian_threaded!(body, nd, cld(last(nd), min(nt, last(nd))), args)
+    end
+    return nothing
+end
+
+# the plain Cartesian loop (allocates nothing)
+function _host_cartesian!(body::B, R::CartesianIndices, args::A) where {B, A}
+    for I in R
         body(Tuple(I), args...)
     end
+    return nothing
+end
+
+# chunks of the last axis on Polyester's persistent workers (`@batch`: no task is created, so
+# a warm launch allocates nothing; nested under busy workers it runs the chunks serially)
+@noinline function _host_cartesian_threaded!(body::B, nd::NTuple{N}, chunk::Integer, args::A) where {B, N, A}
+    nc = cld(last(nd), chunk)
+    @batch per = thread for c in 1:nc
+        _host_cartesian_chunk!(body, nd, chunk, c, args)
+    end
+    return nothing
+end
+function _host_cartesian_chunk!(body::B, nd::NTuple{N}, chunk::Integer, c::Integer, args::A) where {B, N, A}
+    lo, hi = (c - 1) * chunk + 1, min(c * chunk, last(nd))
+    _host_cartesian!(body, CartesianIndices(ntuple(d -> d == N ? (lo:hi) : (1:nd[d]), Val(N))), args)
     return nothing
 end
 function (l::CartesianLaunch)()

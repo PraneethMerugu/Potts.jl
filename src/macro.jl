@@ -161,7 +161,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         __observed = $P.Equation[]
         __lattice = nothing
         __sweep = nothing
-        $(bsched ? :(__boundaries = $P.BoundaryEntry[]; __schedule = Symbol[]) : nothing)
+        $(bsched ? :(__boundaries = $P.BoundaryEntry[]; __schedule = Any[]) : nothing)
         $(inits ? :(__init_eqs = $P.Equation[]) : nothing)
         $(convs ? :(__converts = $P.ConvertSpec[]) : nothing)
         $(bcs ? :(__bcs = $P.Equation[]) : nothing)
@@ -670,17 +670,23 @@ function _section!(parts, sec, args, ln = nothing)
     elseif sec === Symbol("@schedule")
         # `@schedule fields, sweep`: the phases of one MCS in order (D-145), checked here
         names = length(args) == 1 && args[1] isa Expr && args[1].head === :tuple ? args[1].args : args
-        listed = Symbol[]
+        listed = Any[]
         for n in names
-            n isa Symbol || throw(ArgumentError("@schedule lists phase names, e.g. `@schedule fields, sweep`; got `$n`"))
-            push!(listed, n)
+            if n isa Expr && n.head === :call && n.args[1] === :repeat
+                push!(listed, schedule_repeat(n))
+            else
+                n isa Symbol || throw(ArgumentError("@schedule lists phase names, e.g. `@schedule fields, sweep`, " *
+                                                    "and at most one `repeat(n, sweep(fraction = 1//n), …)`; got `$n`"))
+                push!(listed, n)
+            end
         end
         isempty(listed) && throw(ArgumentError("@schedule lists at least one phase"))
         # the canonical phases are checked here; a name that is none of them may be a
         # `@convert` pass (this model's or a base's), checked when the model is compiled
-        all(n -> n in SCHEDULE_PHASES, listed) ? _placed_schedule(listed) : _schedule_names(listed)
+        all(n -> n in SCHEDULE_PHASES, _schedule_flat(listed)) ? _placed_schedule(listed) : _schedule_names(listed)
+        items = map(x -> x isa Symbol ? QuoteNode(x) : :($P.ScheduleRepeat($(x.n), Symbol[$(map(QuoteNode, x.names)...)])), listed)
         push!(code, :(isempty(__schedule) || throw(ArgumentError("@schedule is given twice; list the phases once"))),
-            :(append!(__schedule, Symbol[$(map(QuoteNode, listed)...)])))
+            :(append!(__schedule, Any[$(items...)])))
     elseif sec === Symbol("@convert")
         push!(code, _convert_section(args, ln))
     elseif sec === Symbol("@sweep")

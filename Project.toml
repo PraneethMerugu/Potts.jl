@@ -9,6 +9,7 @@ CorePotts = "047998c1-3edd-4edf-b561-cee99549c5a6"
 GeometryBasics = "5c1252a2-5f33-56bf-86c9-59e7332b4326"
 JumpProcesses = "ccbc3e58-028d-4f4c-8cd5-9ae44345cda5"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
+LatticeFields = "27141c10-c94d-4a11-8a68-94c33ddb5bc4"
 LatticePDE = "8c13e429-a5cc-4e77-8f91-d2d1c866aeb6"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 ModelingToolkitBase = "7771a370-6774-4173-bd38-47e70ca0b839"
@@ -23,22 +24,27 @@ SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 
 [weakdeps]
+AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
 DynamicQuantities = "06fc5a27-2a28-4c7c-a15d-362465fb6821"
 TermInterface = "8ea1fca8-c5ef-4a55-8b96-4e9afe9c9a3c"
 
 [extensions]
+PottsAMDGPUExt = "AMDGPU"
 PottsDynamicQuantitiesExt = ["DynamicQuantities", "TermInterface"]
 
 [sources]
 CorePotts = {path = "lib/CorePotts"}
+LatticeFields = {path = "lib/LatticeFields"}
 LatticePDE = {path = "lib/LatticePDE"}
 
 [compat]
+AMDGPU = "2"
 ADTypes = "1"
 CorePotts = "0.3"
 GeometryBasics = "0.5"
 JumpProcesses = "9.33"
 KernelAbstractions = "0.9.42"
+LatticeFields = "0.1"
 LatticePDE = "0.1"
 LinearAlgebra = "1"
 SciMLBase = "3"

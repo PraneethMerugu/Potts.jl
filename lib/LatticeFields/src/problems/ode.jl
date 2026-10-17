@@ -114,7 +114,7 @@ function _variant(f::LatticeRHS, ::Type{C}) where {C}
     v = get(ctx.variants, C, nothing)
     if v === nothing
         V = valtype(C)
-        V <: Union{Float16, Float32} || Exec.supports_float64(ctx.backend) || throw(ArgumentError(
+        V <: Union{Float16, Float32} || Exec.supports(ctx.backend, Float64) || throw(ArgumentError(
             string("the solver passed values of type ", C, " (SciMLBase promotes u0 to the ",
                 "parameters' value type for ForwardDiff); this backend has no Float64: ",
                 "differentiate with respect to Float32 parameters (θ::Vector{Float32}) here")))

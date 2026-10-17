@@ -26,7 +26,7 @@ using LatticeFields.IR: F16, Grid, Program, ProgramBuilder, Coef, FaceRule, Node
                         compare!, select!, cond!, load!, access!, store!, isfloat, CALLS,
                         F32, F64, I32, U8, U32, REAL, BOOL, RESOLVE, CLAMP, INSIDE, ZERO, PERSIGMA,
                         ADD, MUL, NEG, DIV, MIN, MAX, ABS, SQRT, EXP, LOG, POWI, EQ, LT, LE,
-                        NOT, AND, OR, INSIDE_OP
+                        NOT, AND, OR, INSIDE_OP, HEX, DomainEdgeRule, Level, STATIC
 using CommonSolve: solve, init, step!, solve!
 using KernelAbstractions: KernelAbstractions
 using LatticeFields: Exec, Problems
@@ -41,6 +41,7 @@ using Symbolics: Symbolics, Differential, Equation, Num, VarDomainPairing, @regi
                  unwrap, substitute
 using SymbolicUtils: SymbolicUtils, arguments, iscall, operation, unwrap_const
 
+public euler_update, bound_parts, StabilityBound
 export Δ, DivKGrad, Advect, AdvectionScheme, Upwind1, at, at2, ismember, masked
 export LatticePlacement, LatticeStorage, LatticeLevel, LatticeSpacing, PottsEntity
 export get_lattice_placement, get_lattice_storage, get_lattice_level, get_lattice_spacing,

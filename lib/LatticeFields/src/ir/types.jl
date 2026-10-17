@@ -225,7 +225,9 @@ struct FaceRule <: BRule
     g::Coef
 end
 """
-The irregular domain edge (`Grid.domain`): `:mirror` (zero flux) or `:zero`.
+The irregular domain edge (`Grid.domain`): `:mirror` (zero flux) or `:zero`. The edge is
+crossed from either side: a read of a neighbor outside the domain, or any neighbor read of a
+site outside it, takes the rule's value (`:mirror`: the site's own value).
 """
 struct DomainEdgeRule <: BRule
     field::Int32

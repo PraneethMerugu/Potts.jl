@@ -21,8 +21,20 @@ function merks_commit!(st, p, prop, ctx)
     commit_volume!(st, p, prop, ctx)
     commit_moments!(st.cell, ctx.lattice, prop)
 end
-merks_rate(st, p, ctx, key, mcs, i, c) =
-    p.D * laplacian(c, ctx, i) - p.k * @inbounds(c[i]) * (owner_kind(st, i) == 0) + p.s * (owner_kind(st, i) == 1)
+# the field (zero flux on the closed box): one explicit Euler substep of length 1/2 into
+# `c_next`, clipped at 0, then a publish
+function port_laplacian(c, lat, i)
+    x, acc = CorePotts.coordinates(lat, i), zero(eltype(c))
+    for d in 1:2, s in (-1, 1)
+        inside, y = CorePotts.shift(lat, x, ntuple(k -> Int32(k == d ? s : 0), 2))
+        acc += (inside ? c[CorePotts.linear_index(lat, y)] : c[i]) - c[i]
+    end
+    return acc
+end
+merks_rate(st, p, ctx, i, c) =
+    p.D * port_laplacian(c, ctx.lattice, i) - p.k * @inbounds(c[i]) * (owner_kind(st, i) == 0) + p.s * (owner_kind(st, i) == 1)
+merks_substep!(st, p, ctx, key, mcs, i) =
+    (@inbounds st.site.c_next[i] = max(st.site.c[i] + 0.5 * merks_rate(st, p, ctx, i, st.site.c), 0.0); nothing)
 merks_temperature(st, p, prop, ctx) = p.T
 
 const MERKS_PORT_P = (; J = SMatrix{2, 2}(0.0, 5.0, 5.0, 8.0), λ = 2.0, V0 = 9.0, λL = 1.0, L = 5.0, χ = 50.0,
@@ -33,8 +45,8 @@ function merks_problem(; tspan = (0, 40), seed = 0)
     lat = Lattice((12, 12); boundary = Closed())
     c = zeros(12, 12)
     st = initial_state(σ, [1, 1]; cell = init_moments(σ, lat, 2), site = (; c, c_next = zero(c)))
-    ph = Phases(after_mcs = (FieldStep((:site, :c) => (:site, :c_next), merks_rate;
-        dt = 1.0, substeps = 2, lower = 0.0),))
+    sub = (SitePhase(merks_substep!), CopyPhase((:site, :c) => (:site, :c_next)))
+    ph = Phases(after_mcs = (sub..., sub...))
     f = CPMFunction(merks_delta_H; commit! = merks_commit!, temperature = merks_temperature,
         constraint = one_arc_connectivity, phases = ph)
     return PottsProblem(f, st, lat, tspan, MERKS_PORT_P; contact = Moore(1), proposal = Moore(1), seed)

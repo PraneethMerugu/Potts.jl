@@ -128,6 +128,35 @@ PottsDevices.device_name() == "rocm" && include("device_ir.jl")
     σhh = Array(uh.σ)
     @test Array(uh.cell.volume) == [count(==(k), σhh) for k in 1:nh]
     @test Array(uh.cell.surface) ≈ CorePotts.recompute_surface(σhh, ph.lattice, ph.relations.surface, nh; T = Float32)
+    # the hexagonal field equals the host run (Float32)
+    @test Array(uh.site.c) == solve(ph, CheckerboardCPM(proposal = Hex(1))).u[end].site.c
+    # a field on an irregular domain (the domain mask is a filled input); the state type
+    # follows the backend (P5 C3/4-2: Float32 on a device)
+    σd = zeros(Int32, 40, 40); σd[9:32, 9:32] .= first(two_kind_blocks())
+    pd = PottsProblem(DiskSorting(; name = :disk), [ownership => σd, kind => last(two_kind_blocks())], (0, 10);
+        backend, field_solver = ExplicitEuler())
+    @test eltype(pd.u0.site.c) == Float32
+    ud = solve(pd, CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
+    uc = solve(pd, CheckerboardCPM(; proposal = Moore(1))).u[end]
+    @test Array(ud.σ) == uc.σ && Array(ud.site.c) == uc.site.c && sum(uc.site.c) > 0
+    # a copy taken before the first step, while the field kernels still compile on a host task
+    # in the run context: each integrator steps its own launches, both equal the plain run
+    hold = Base.Event()
+    CorePotts._COMPILE_HOLD[] = hold                     # the compile task waits until the copy is taken
+    i1, i2 = try
+        i = init(pd, CheckerboardCPM(; proposal = Moore(1)); backend)
+        t = CorePotts._runtime(i.ctx.__fields1).pending
+        @test t isa Task && !istaskdone(t)
+        i, deepcopy(i)
+    finally
+        CorePotts._COMPILE_HOLD[] = nothing
+        notify(hold)
+    end
+    foreach(_ -> step!(i2), 1:10)
+    foreach(_ -> step!(i1), 1:10)
+    for i in (i1, i2)
+        @test Array(current_state(i).σ) == Array(ud.σ) && Array(current_state(i).site.c) == Array(ud.site.c)
+    end
 end
 
 # P6.0b: two relationships, each with its own store, law and shared read claims, on the device

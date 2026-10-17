@@ -153,7 +153,7 @@ end
         @equations $eq
         @sweep Metropolis(; temperature = 2.0)
     end)
-    code(M) = (g = generated_code(Base.invokelatest(() -> getfield(@__MODULE__, M)(; name = :m)); field_solver = ExplicitEuler());
+    code(M) = (g = generated_code(Base.invokelatest(() -> getfield(@__MODULE__, M)(; name = :m)); field_solver = ExplicitEuler(substeps = 2));
                string(Base.remove_linenums!(deepcopy(Any[g.delta_H, g.commit!, g.phases...]))))
     for (tag, im, sp) in (("reaction", :(D(c) ~ 0.1 * Δ(c) - 0.3 * c * ismember(kind, endothelial)),
                                        :(D(c) ~ 0.1 * Δ(c) - 0.3 * c * ((kind == tip) | (kind == stalk)))),

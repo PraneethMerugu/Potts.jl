@@ -11,7 +11,7 @@ using Adapt: Adapt
 using Atomix: Atomix
 using CommonSolve: CommonSolve, init, solve, solve!, step!
 using KernelAbstractions: KernelAbstractions, @kernel, @index, @localmem, @synchronize, CPU
-using LatticeFields: Exec
+using LatticeFields: LatticeFields, Exec, Problems
 using SciMLBase: SciMLBase, remake, reinit!, u_modified!, EnsembleProblem, EnsembleSerial, EnsembleThreads,
     DiscreteCallback, CallbackSet, terminate!
 using Base.ScopedValues: ScopedValue, @with
@@ -31,7 +31,7 @@ export ContactCount, ContactCounts, commit_contact_count!, recompute_contact_cou
 export init_moments, commit_moments!, centroid, centroid_shift, covariance,
     principal_moments, shape, major_length, major_length_after, min_image
 export commit_site_sum!, recompute_site_sum, commit_site_min!, recompute_site_min!
-export Phases, SweepPhase, LifecyclePhase, SitePhase, CellPhase, ModelPhase, CopyPhase, HistoryPush, history_buffer, history_slot,
+export Phases, SweepPhase, LifecyclePhase, Repeat, SitePhase, CellPhase, ModelPhase, CopyPhase, HistoryPush, history_buffer, history_slot,
     clear_on_copy!
 export is_extension, is_retraction, chemotaxis_delta, saturating, saturating_linear,
     neighborhood_mean, MeanFold, ArithmeticMean, GeometricMean, Log1pGeometricMean,
@@ -46,7 +46,7 @@ export empty_links, linked, link_count, link_slot, add_link!, remove_link!, remo
 export cluster_of, same_cluster, init_clusters, recompute_cluster_volume,
     recompute_cluster_surface, commit_cluster_volume!, cluster_volume_delta,
     cluster_surface_change, cluster_surface_delta, commit_cluster_surface!
-export FieldStep, FieldClamp, laplacian, gradient, owner_kind, stable_substeps
+export FieldPhase, owner_kind
 export Metropolis, Barker, SequentialCPM, CheckerboardCPM
 export PottsProblem, PottsIntegrator, PottsSolution, current_state, refresh_frozen!, frozen_sites, StateIndex, getu, setu, getp, setp
 export init, solve, solve!, step!, remake, CPU
@@ -57,8 +57,8 @@ export read_piff, write_piff
 # Public but not exported: generic lattice and randomness primitives for hand-written models
 # and generated code, and the frozen-mask hooks a model system extends (ExplicitImports
 # checks qualified accesses against this list).
-public coordinates, shift, interior, neighbor_index, linear_index, draw, cell_entity, uniform, normal, bounded_normal, radius, weight, RNGKey, frozen_varies, frozen_kinds, frozen_reads,
-    TrackDeltaH, track_eltype, GhostFace,
+public CHECKPOINT_FORMAT, Part, coordinates, shift, interior, neighbor_index, linear_index, draw, cell_entity, uniform, normal, bounded_normal, radius, weight, RNGKey, frozen_varies, frozen_kinds, frozen_reads,
+    TrackDeltaH, track_eltype, phase_context, phase_contexts, field_clamp,
     shell_offsets, shell_owners, shell_mask, shell_pieces, local_rule, arc_or_pair, simple_point, ShellRead, read_shell, check_shell_lattice,
     ConnectivityHooks, GlobalExact, GlobalBoard, GlobalLocal, GlobalSearch, global_keeps, global_gains, global_defer,
     pieces_after!, pieces_defer, commit_pieces!, connectivity_ctx, NEXT_BIRTH, oncopy_cell!,

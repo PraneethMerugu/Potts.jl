@@ -86,34 +86,16 @@ _cluster_env(T, r, relname; δ = nothing) =
         :cluster_surface => :(@inbounds st.cell.cluster_surface[$r]), :kind => :(Potts._cellkind(st, $r)),
         :id => r, :__cell => r, (δ === nothing ? () : (:δcluster_surface => δ,))...), relname)
 
-# `bc`: field name → per-axis `@boundary` faces (`_face_bcs`), or `nothing`
-_site_env(T, i, relname; mcs = nothing, key = nothing, bc = nothing) =
+_site_env(T, i, relname; mcs = nothing, key = nothing) =
     LowerEnv(T, :site, Dict{Symbol, Any}(_draws(key, mcs, i)..., :owner => :(@inbounds st.σ[$i]),
         :kind => :(CorePotts.owner_kind(st, $i)), :__site => i,
         :position => :(Potts._position($T, ctx, $i)), :site => i,
-        (mcs === nothing ? () : (:mcs => mcs,))..., (bc === nothing ? () : (:__bc => bc,))...), relname)
+        (mcs === nothing ? () : (:mcs => mcs,))...), relname)
 
-# The `@boundary` faces of every field that has some: name → one entry per lattice axis,
-# `nothing` or `(low, high)` (each `Dirichlet` or `NoFlux`); `nothing` without faces, so the
-# generated code of a model without them is today's.
-function _face_bcs(c::CompiledPottsSystem)
-    faces = [b for b in _p(c.sys, :boundaries) if b.axis != 0]
-    isempty(faces) && return nothing
-    N = length(_p(c.sys, :lattice).dims)
-    out = Dict{Symbol, Vector{Any}}()
-    for b in faces
-        axes = get!(() -> Any[nothing for _ in 1:N], out, info(b.field).name)
-        axes[b.axis] = b.sides
-    end
-    return out
-end
-
-# The faces of the model being generated: every `Δ` of a field with faces sees them, wherever
-# it is lowered (the field step, site updates, site energies, drives, constraints, `@observed`,
-# folds), unless its env binds `:__bc` itself
-const _FACES = Base.ScopedValues.ScopedValue{Any}(nothing)
-_with_faces(f, c::CompiledPottsSystem) =
-    Base.ScopedValues.with(f, _FACES => _face_bcs(c), _EULER_FULL => c.euler_full_column, _PIECES_HEX => c.pieces_hex,
+# The lattice of the model being generated, for the lowering: the Euler and pieces columns
+# its adjacency reads and its lattice size
+_with_model_scope(f, c::CompiledPottsSystem) =
+    Base.ScopedValues.with(f, _EULER_FULL => c.euler_full_column, _PIECES_HEX => c.pieces_hex,
         _LATTICE_DIMS => Tuple(_p(c.sys, :lattice).dims))
 
 # The column `euler(; adjacency = :full)` reads in the model being generated: `:euler` on a
@@ -128,17 +110,6 @@ const _PIECES_HEX = Base.ScopedValues.ScopedValue{Bool}(false)
 const _LATTICE_DIMS = Base.ScopedValues.ScopedValue{Tuple}(())
 _pieces_column(name::Symbol) = !_PIECES_HEX[] ? name : name === :pieces_full ? :pieces :
                                name === :largest_piece_full ? :largest_piece : name
-
-# The masked clamp of field `name` (D-145): `(st, p, ctx, key, mcs, i, v) -> v′`, `v` replaced
-# by each `sites(pred) => Dirichlet(value)` whose `pred` holds at `i` (a later entry wins), or
-# `nothing` when the field has no mask.
-function _clamp_function(c::CompiledPottsSystem, T, name::Symbol)
-    masks = [b for b in _p(c.sys, :boundaries) if b.axis == 0 && info(b.field).name === name]
-    isempty(masks) && return nothing
-    env = _site_env(T, :i, c.gather_names; mcs = :mcs, key = :key)
-    body = [:($(lower(b.mask, env)) && (v = $T($(lower(b.value, env))))) for b in masks]
-    return _rgf(:((st, p, ctx, key, mcs, i, v) -> $(Expr(:block, body..., :(return v)))))
-end
 
 _proposal_env(T, relname) = LowerEnv(T, :proposal, Dict{Symbol, Any}(:source => :source,
     :target => :target, :old => :old, :new => :new, :__kind_of => (:old => :k_old, :new => :k_new),
@@ -869,19 +840,11 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     end
     # energy snapshots (D-041): after the before-MCS updates, constant during the sweep
     snapshots = isempty(c.energy_snapshots) ? () : (_slots_phase(T, c.energy_snapshots, rn),)
-    # fields after the synchronous updates (MTK equations advance with the MCS clock)
+    # fields after the synchronous updates (MTK equations advance with the MCS clock): the CPM
+    # inputs, then one field phase per solver group (fields.jl)
     dt = _p(c.sys, :sweep).mcs_duration
-    bcs = _face_bcs(c)
-    for (x, rate) in c.fields
-        name = info(x).name
-        f = _rgf(:((st, p, ctx, key, mcs, i, c) -> $(lower(rate, _site_env(T, :i, rn; mcs = :mcs, key = :key, bc = bcs)))))
-        solver = spec.resolved[name]
-        sub = _auto_substeps(x, rate, values, dt, _p(c.sys, :lattice), solver.substeps)
-        lowerclip = solver.lower
-        push!(groups[:fields], CorePotts.FieldStep((:site, name) => (:site, Symbol(name, :__next)), f;
-            dt = T(dt), substeps = sub, lower = lowerclip === nothing ? nothing : T(lowerclip),
-            clamp = _clamp_function(c, T, name)))
-    end
+    fsteps, clamps = _field_phases(c, T, spec)
+    append!(groups[:fields], fsteps)
     # cell then model ODEs (model ODEs see the cells' new values; D-077 N3), one phase per
     # solver (`_ode_groups`; one group unless `solvers` sets a variable apart), after the
     # population folds their rates read. Several groups in a scope, or cell ODEs that read
@@ -924,12 +887,15 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     prerefresh = Dict{Symbol, Vector{Any}}(n => refresh(js) for (n, js) in pre if !isempty(js))
     postlife = haskey(post, :lifecycle) && !isempty(post[:lifecycle]) ? refresh(post[:lifecycle]) : Any[]
     postconv = Dict{Symbol, Vector{Any}}(n => (haskey(post, n) && !isempty(post[n]) ? refresh(post[n]) : Any[]) for n in keys(convs))
-    # masked clamps hold on a fresh initial state (D-145), before its derived quantities (a
-    # checkpoint restore and `anneal` run `at_init` without them: `CorePotts._derived`)
-    clamps = Any[CorePotts.FieldClamp(ph.field, ph.clamp) for ph in groups[:fields] if ph.clamp !== nothing]
+    # masked clamps hold on a fresh initial state (D-145), after its inputs and before its
+    # derived quantities (a checkpoint restore and `anneal` run `at_init` without them:
+    # `CorePotts._derived`)
     # the MCS order: entries of adjacent groups merged into one tuple
     entries = Any[]
+    rsched = _schedule_repeat(_p(s, :schedule))
+    rspan = 0:-1
     for n in order
+        rsched !== nothing && n === first(rsched.names) && (rspan = (length(entries) + 1):0)
         append!(entries, get(prerefresh, n, Any[]))
         if n === :sweep
             append!(entries, snapshots)
@@ -944,11 +910,24 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
         else
             append!(entries, groups[n])
         end
+        rsched !== nothing && n === last(rsched.names) && (rspan = first(rspan):length(entries))
+    end
+    # the sub-MCS repeat (`@schedule repeat(n, sweep(fraction = 1//n), …)`): its entries, with the
+    # refreshes they carry, become one `CorePotts.Repeat` entry
+    if rsched !== nothing
+        inner, run = Any[], Any[]
+        for e in entries[rspan]
+            e isa CorePotts.SweepPhase ? (push!(inner, Tuple(run), e); run = Any[]) : push!(run, e)
+        end
+        push!(inner, Tuple(run))
+        log = _GENERATED[]
+        log === nothing || push!(log, Expr(:schedule_repeat, rsched.n, rsched.names...))
+        entries = Any[entries[1:(first(rspan) - 1)]; CorePotts.Repeat(rsched.n, Tuple(inner)); entries[(last(rspan) + 1):end]]
     end
     mcs = Any[]
     run = Any[]
     for e in entries
-        if e isa Union{CorePotts.SweepPhase, CorePotts.LifecyclePhase}
+        if e isa Union{CorePotts.SweepPhase, CorePotts.LifecyclePhase, CorePotts.Repeat}
             push!(mcs, Tuple(run), e)
             run = Any[]
         else
@@ -1505,7 +1484,7 @@ end
 
 
 function _site_update_phases(c, T, us, every, rn)
-    env = _site_env(T, :i, rn; mcs = :mcs, key = :key, bc = _face_bcs(c))
+    env = _site_env(T, :i, rn; mcs = :mcs, key = :key)
     names = [info(_unwrap(u.eq.lhs)).name for u in us]
     buffered = any(in(c.scratch), names)
     vals = [:($(Symbol(:v_, j)) = $(_with_ref_term(() -> lower(u.eq.rhs, env), _update_label(u)))) for (j, u) in enumerate(us)]
@@ -1601,104 +1580,6 @@ function _edge_update_expr(c, T, r::Symbol, us, every, rn)
         :(return nothing))))
 end
 
-# Explicit-Euler substeps from a bound on the diffusion coefficient D (the factor multiplying
-# Δ(x)) and a bound k on the reaction's |∂f/∂x| (`_abs_bound`), `CorePotts.stable_substeps`,
-# computed from the current parameters every MCS (a `remake(p = …)` keeps the step stable).
-# An explicit `substeps = n` is a minimum: an unstable step silently diverges, so the stable
-# count wins when it is larger. A coefficient with no bound from the parameters needs `n`.
-# Only the field's own `Δ(x)` is its diffusion: `Δ(u)` of another field `u` is a source
-# term here (fields are stepped one after another, so `u` is fixed during this step), with
-# no part in ∂f/∂x.
-function _auto_substeps(x, rate, values, dt, lattice, n = nothing)
-    rate = _expand_ismember(rate)       # bounds and ∂f/∂x see the spelled-out `|` of equalities
-    L = _unwrap(Symbolics.variable(:__Lap))
-    lap = Dict{Any, Any}()
-    xu = _unwrap(x)
-    _walk(y -> (iscall(y) && operation(y) === Δ && isequal(_unwrap(arguments(y)[1]), xu) && (lap[y] = L)), rate)
-    rate_L = _unwrap(Symbolics.substitute(rate, lap; fold = Val(false)))
-    coef = isempty(lap) ? 0 : _table_derivative(rate_L, L)
-    _warn_negative_diffusion(x, coef, values)
-    h = something(lattice.spacing, ntuple(_ -> 1.0, length(lattice.dims)))
-    env = _model_env(Float64, Dict{Any, Symbol}())
-    db = _abs_bound(coef, env)
-    if db !== nothing
-        reaction = isempty(lap) ? rate_L : Symbolics.substitute(rate_L, Dict{Any, Any}(L => 0); fold = Val(false))
-        kb = _rate_bound(x, reaction, env)
-        if kb === nothing
-            nm = info(x).name
-            n === nothing && @warn "the substep count of the field `$nm` counts diffusion only: no bound on the " *
-                                   "reaction's rate ∂f/∂$nm follows from the parameters (it is not linear in `$nm`, " *
-                                   "or its coefficient of `$nm` reads other state such as variables or `mcs`). If the " *
-                                   "reaction is fast, give `ExplicitEuler(; substeps = n)` with " *
-                                   "`n ≥ mcs_duration · (D · Σ 4/h² + max|∂f/∂$nm|) / 1.8`."
-            kb = 0.0
-        end
-        least = something(n, 1)
-        return _rgf(:(p -> max($least, CorePotts.stable_substeps($db, $(Float64(dt)), $h, $kb))))
-    end
-    n === nothing || return n
-    throw(ArgumentError("the diffusion coefficient of `$(info(x).name)` ($coef) is not bounded by the parameters; " *
-                        "give `PottsProblem` `field_solver = ExplicitEuler(; substeps = n)` " *
-                        "(or `solvers = [$(info(x).name) => ExplicitEuler(; substeps = n)]`)"))
-end
-
-# A diffusion coefficient below zero is anti-diffusion: the continuum problem is ill-posed
-# (every short wavelength grows), whatever the step. Warned at build time from the values the
-# problem is built with, for a parameter expression or a kind table `D[kind]`.
-function _warn_negative_diffusion(x, coef, values)
-    values === nothing && return
-    neg = false
-    if _param_only(coef)
-        w = _unwrap(Symbolics.substitute(coef, values; fold = Val(true)))
-        w = SymbolicUtils.isconst(w) ? SymbolicUtils.unwrap_const(w) : w
-        neg = w isa Real && w < 0
-    elseif iscall(coef) && (operation(coef) === at || operation(coef) === at2)
-        i = info(_unwrap(arguments(coef)[1]))
-        if i !== nothing && i.role === :kindtable
-            v = get(values, _unwrap(arguments(coef)[1]), nothing)
-            neg = v isa AbstractArray{<:Real} && any(<(0), v)
-        end
-    end
-    neg && @warn "the diffusion coefficient of the field `$(info(x).name)` ($coef) is negative: that is " *
-                 "anti-diffusion, an ill-posed problem whose short wavelengths grow without bound; " *
-                 "no substep count makes it stable"
-    return
-end
-
-# `∂f/∂x`, with each kind-table read (`at(Dk, kind)`, `at2(J, kind, kind′)`) a constant:
-# Symbolics differentiates through a registered call's arguments, and a table is an array
-# parameter, which it cannot differentiate.
-function _table_derivative(f, x)
-    hide, show = Dict{Any, Any}(), Dict{Any, Any}()
-    _walk(f) do y
-        if iscall(y) && (operation(y) === at || operation(y) === at2) && role(arguments(y)[1]) === :kindtable &&
-           !haskey(hide, y)
-            p = _sym(Symbol(:__table_, length(hide) + 1))
-            hide[y] = p
-            show[p] = y
-        end
-    end
-    g = isempty(hide) ? f : _unwrap(Symbolics.substitute(f, hide; fold = Val(false)))
-    d = _unwrap(Symbolics.derivative(Symbolics.wrap(g), Symbolics.wrap(x)))
-    return isempty(show) ? d : _unwrap(Symbolics.substitute(d, show; fold = Val(false)))
-end
-
-# A host expression (in `p`) bounding |∂f/∂x| over every site and state, for the field's
-# reaction `f` (the rate without its diffusion term), or `nothing` when no bound follows from
-# the parameters alone (a reaction nonlinear in `x`, or a rate scaled by other state). For a
-# reaction linear in `x` the derivative is a parameter expression, possibly weighted by
-# indicators (`kind == medium`, `position[1] > 75`, each in {0, 1}), draws (`rand()`, in
-# (0, 1)) and kind-table entries (`δ[kind]`, bounded by the largest |entry|): `−k x`,
-# `−k x (kind == medium)` and `−k x rand()` are bounded by |k|.
-function _rate_bound(x, reaction, env)
-    d = try
-        _table_derivative(reaction, x)
-    catch
-        return nothing
-    end
-    return _abs_bound(d, env)
-end
-
 const _INDICATOR_OPS = (==, !=, <, <=, >, >=, !, &, |, xor)
 # operations a parameter-only expression may use (evaluated on the host from `p`)
 const _HOST_OPS = (_FLOAT_OPS..., +, -, *, ^, abs, min, max, ifelse, _intdiv, _INDICATOR_OPS...)
@@ -1718,39 +1599,6 @@ function _param_only(x; kind = false)
         end
     end
     return ok[]
-end
-
-function _abs_bound(d, env)
-    d = _unwrap(d)
-    d isa SymbolicUtils.BasicSymbolic || return d isa Real ? Float64(abs(d)) : nothing
-    SymbolicUtils.isconst(d) && return _abs_bound(SymbolicUtils.unwrap_const(d), env)
-    _param_only(d) && return :(abs(Float64($(lower(d, env)))))
-    iscall(d) || return nothing
-    op, args = operation(d), arguments(d)
-    op in _INDICATOR_OPS && return 1.0
-    op === random_uniform && return 1.0                       # a draw, uniform in (0, 1)
-    if op === at || op === at2                                # a kind-table entry: the largest |entry|
-        i = info(_unwrap(args[1]))
-        return i !== nothing && i.role === :kindtable ? :(Float64(maximum(abs, p.$(i.name)))) : nothing
-    end
-    if op === ifelse
-        a, b = _abs_bound(args[2], env), _abs_bound(args[3], env)
-        return a === nothing || b === nothing ? nothing : :(max($a, $b))
-    end
-    if op === (/) && _param_only(args[2])
-        a = _abs_bound(args[1], env)
-        return a === nothing ? nothing : :($a / abs(Float64($(lower(args[2], env)))))
-    end
-    if op === (^) && SymbolicUtils.isconst(_unwrap(args[2]))
-        e = SymbolicUtils.unwrap_const(_unwrap(args[2]))
-        (e isa Real && isinteger(e) && e >= 0) || return nothing
-        a = _abs_bound(args[1], env)
-        return a === nothing ? nothing : :($a^$(Int(e)))
-    end
-    (op === (+) || op === (-) || op === (*)) || return nothing
-    bs = map(a -> _abs_bound(a, env), args)
-    any(isnothing, bs) && return nothing
-    return Expr(:call, op === (*) ? :* : :+, bs[sortperm(map(_code_key, bs))]...)   # canonical order (D-107)
 end
 
 # ---------------------------------------------------------------------------------------

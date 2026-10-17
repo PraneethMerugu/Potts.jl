@@ -290,8 +290,10 @@ _window(h::ConnectivityHooks) = h.window
 _serial_pass(::Nothing, f) = false
 _serial_pass(sl, f) = has_defer(f) || (has_post(f) && sl.exact)
 
+# `part = (j, n)`: pass `j` of `n` of a sub-MCS `Repeat`, the phases `(j-1)·P÷n+1 : j·P÷n` of the
+# MCS's `P` (the whole MCS is `(1, 1)`); each pass ends with the moments re-centered
 function checkerboard_mcs!(st, cache::CheckerboardCache{N}, f::F, p, ctx, law::L, key::RNGKey,
-        mcs::Integer) where {N, F, L}
+        mcs::Integer, part::NTuple{2, Int} = (1, 1)) where {N, F, L}
     order = cache.order
     for q in eachindex(order)
         r, _, _, _ = draw(key, mcs, q, STREAM_COLOR_ORDER, 2)
@@ -300,7 +302,10 @@ function checkerboard_mcs!(st, cache::CheckerboardCache{N}, f::F, p, ctx, law::L
     l, s, sl = cache.layout, cache.switches, cache.serial
     serial = _serial_pass(sl, f)
     launches = 0
-    for (q, ph) in enumerate(order)
+    j, np = part
+    P = length(order)
+    for q in ((j - 1) * P ÷ np + 1):(j * P ÷ np)
+        ph = @inbounds order[q]                      # q ∈ 1:P (the range above)
         off = phase_offset(l, ph)
         launches += 1                                # an inline phase counts as one, like a one-workgroup launch
         if cache.inline

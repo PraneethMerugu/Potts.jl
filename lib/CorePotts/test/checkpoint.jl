@@ -14,14 +14,24 @@ function everything_problem()
                (is_extension(prop) ? chemotaxis_delta(st.site.c, prop, 3.0) : 0.0)
     end
     commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
-    rate(st, p, ctx, key, mcs, i, c) = 0.1 * laplacian(c, ctx, i) + 0.05 * (owner_kind(st, i) == 1) - 0.01c[i]
+    # a hand-written double-buffered field (zero flux): a site phase into `c_next`, then a publish
+    function lap(c, lat, i)
+        x, acc = CorePotts.coordinates(lat, i), 0.0
+        for d in 1:2, s in (-1, 1)
+            inside, y = CorePotts.shift(lat, x, ntuple(k -> Int32(k == d ? s : 0), 2))
+            acc += (inside ? c[CorePotts.linear_index(lat, y)] : c[i]) - c[i]
+        end
+        return acc
+    end
+    diffuse!(st, p, ctx, key, mcs, i) = (@inbounds st.site.c_next[i] = st.site.c[i] + 0.1 * lap(st.site.c, ctx.lattice, i) +
+                                                                      0.05 * (owner_kind(st, i) == 1) - 0.01 * st.site.c[i]; nothing)
     noise!(st, p, ctx, key, mcs, i) = (@inbounds st.site.n[i] = CorePotts.uniform(Float64,
         CorePotts.draw(key, mcs, i, CorePotts.stream_id("test.noise"))[1]); nothing)
     st = with_capacity(initial_state(σ, [1, 2]; cell = merge(init_moments(σ, lat, 2), (; target = [64.0, 36.0])),
         site = (; c = zeros(40, 40), c_next = zeros(40, 40), n = zeros(40, 40))), 32)
     f = CPMFunction(dH; commit!, temperature = gg_temperature, fingerprint = 0xabc,
         phases = Phases(before_mcs = (CellPhase(grow!),), after_mcs = (
-            FieldStep((:site, :c) => (:site, :c_next), rate; substeps = 2), SitePhase(noise!))),
+            SitePhase(diffuse!), CopyPhase((:site, :c) => (:site, :c_next)), SitePhase(noise!))),
         lifecycle = Lifecycle(big; divide! = reset!))
     return PottsProblem(f, st, lat, (0, 30), gg_params(); seed = 5)
 end
@@ -56,4 +66,30 @@ end
     reinit!(integ)
     @test integ.t == 0 && integ.retcode == SciMLBase.ReturnCode.Default
     @test solve!(integ).u[end].σ == a.σ
+end
+
+@testset "checkpoint format: a pre-cutover checkpoint is refused by name" begin
+    prob = everything_problem()
+    integ = init(prob, SequentialCPM())
+    step!(integ)
+    ck = checkpoint(integ)
+    @test ck.format == CorePotts.CHECKPOINT_FORMAT == 2
+    @test init(prob, SequentialCPM(); checkpoint = ck).t == 1                         # control: current format
+    old = PottsCheckpoint(ck.state, ck.t, ck.seed, ck.replica, ck.repeat, ck.p, ck.fingerprint, ck.stats, 1)
+    err = try
+        init(prob, SequentialCPM(); checkpoint = old); nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError && occursin("format 1", err.msg) && occursin("cutover", err.msg)
+    # a file that does not deserialize to a checkpoint of this format: a named error
+    path = tempname()
+    write(path, "not a checkpoint")
+    err = try
+        load_checkpoint(path); nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError && occursin("format $(CorePotts.CHECKPOINT_FORMAT)", err.msg)
+    @test_throws SystemError load_checkpoint(tempname())                              # a missing file is not a format error
 end

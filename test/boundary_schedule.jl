@@ -47,9 +47,9 @@ bs_problem(sys; kw...) = PottsProblem(sys, bs_op(), (0, 2); field_solver = Expli
     # the schedule `fields, sweep`: the field step sits before the sweep, its clamp on it
     ph = bs_problem(BSBase(; name = :b)).f.phases
     k = findfirst(e -> e isa CorePotts.SweepPhase, ph.mcs)
-    @test any(x -> x isa CorePotts.FieldStep && x.clamp !== nothing, ph.mcs[k - 1])
-    @test any(x -> x isa CorePotts.FieldStep, ph.after_mcs)                     # by role, for inspection
-    @test any(x -> x isa CorePotts.FieldClamp, ph.at_init)
+    @test any(x -> x isa CorePotts.FieldPhase && !x.init && !isempty(x.masks.launches), ph.mcs[k - 1])
+    @test any(x -> x isa CorePotts.FieldPhase, ph.after_mcs)                    # by role, for inspection
+    @test any(x -> x isa CorePotts.FieldPhase && x.init, ph.at_init)            # the clamp of a fresh state
     # the masked clamp holds on the initial state, wall sites at 0 after every MCS
     sol = solve(bs_problem(BSBase(; name = :b)), SequentialCPM(); saveat = 1)
     wall = bs_op()[1].second .== 2
@@ -256,7 +256,7 @@ end
     @test Potts.anneal(prob, u; mcs = 2).site.c == u.site.c
 end
 
-# `Δ` of a field with faces sees them wherever it is lowered (here `@observed`)
+# `Δ` is lowered by the field compiler in field equations only (cutover C8)
 @potts_model BSFaceObs begin
     @kinds medium A
     @variables c(field) = 0.0
@@ -270,12 +270,11 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
-@testset "@boundary: faces in Δ outside the field step" begin
+@testset "@boundary: Δ outside a field equation is refused" begin
     prob = PottsProblem(BSFaceObs(; name = :o), [ownership => zeros(Int32, 8, 4), kind => Symbol[], :c => zeros(8, 4)], (0, 0);
         field_solver = ExplicitEuler(substeps = 1))
-    lap = solve(prob, SequentialCPM())[:lap][1]
-    @test lap[1, :] == fill(2.0, 4)                      # the ghost 2·1 − 0 at the Dirichlet face
-    @test all(iszero, lap[2:end, :])                     # interior and the zero-flux face
+    err = bs_error(() -> solve(prob, SequentialCPM())[:lap])
+    @test occursin("`Δ` is a field operator", something(err, ""))
 end
 
 bs_model(:BSMaskSelf, :(@variables c(field) = 0.0), :(@equations D(c) ~ 0.1 * Δ(c)), :(@boundary c begin

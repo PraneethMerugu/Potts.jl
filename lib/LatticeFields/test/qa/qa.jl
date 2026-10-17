@@ -11,7 +11,8 @@ const LF_NONPUBLIC = (
     :RuntimeGeneratedFunction, :drop_expr,  # RGF's documented API; the package declares no `public`
     :remove_linenums!,                     # Base.remove_linenums!: canonical body text for hashing
     :Dual, :Partials, :partials, :value,   # ForwardDiff's documented Dual API (extension); no `public`
-    :Compile                               # the extension extends LatticeFields.Compile (declared public with the module list at C2/C7a)
+    :Compile,                              # the extension extends LatticeFields.Compile (declared public with the module list at C2/C7a)
+    :supports_float64                      # KernelAbstractions' Float64 capability query (Metal: false); KA declares no `public`
 )
 
 @testset "ExplicitImports" begin

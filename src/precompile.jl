@@ -61,36 +61,49 @@
     @divide cells(cell) when = volume >= 2V₀, along = RandomPlane(), V_target => V₀
     @sweep Metropolis(; temperature = T)
 end
+# The workload: also run by the AMDGPU extension (PottsAMDGPUExt), since loading AMDGPU
+# invalidates much of this cache (Symbolics, GPUArrays and BFloat16s methods; PG-11)
+function _precompile_workload()
+    (; volume, surface, kind, kind′, owner, source, target, old, new) = B
+    λ = parameter(:λ, 1.0)
+    V₀ = parameter(:V₀, 20.0)
+    T = parameter(:T, 10.0)
+    J = kind_parameter(:J, [0 16; 16 2])
+    c = variable(only(Symbolics.@variables c(t)), :field; default = 0.0)
+    mark = variable(only(Symbolics.@variables mark(t)), :site; default = 0.0)
+    sys = PottsSystem(; name = :precompile, kinds = [:medium, :cell],
+        lattice = lattice_spec((16, 16); neighborhood = Moore(1)), parameters = Any[λ, V₀, T, J],
+        variables = Any[c, mark],
+        energies = [energy(cells(1) => λ * (volume - V₀)^2 + λ * (surface - V₀)^2),
+            energy(contacts => _index(J, kind, kind′))],
+        drives = [drive(COPY => ifelse(_index(kind, new) == 1, -λ * (_index(c, target) - _index(c, source)), 0.0))],
+        constraints = [connectivity(1)],
+        updates = [update(:after_mcs, mark ~ max(Pre(mark) - 1, 0)), update(:on_copy, _index(mark, target) ~ λ)],
+        equations = [D(c) ~ λ * Δ(c) - λ * c],
+        sweep = sweep_spec(:metropolis; temperature = T))
+    csys = ModelingToolkitBase.mtkcompile(sys)
+    σ = zeros(Int32, 16, 16)
+    σ[4:8, 4:8] .= 1
+    for S in (Float64, Float32)
+        generated_code(csys; T = S, field_solver = ExplicitEuler())
+        PottsProblem(csys, [CorePotts.ownership => σ, B.kind => [1]], (0, 1); T = S, field_solver = ExplicitEuler())
+    end
+    prob = PottsProblem(mtkcompile(_PrecompileModel(; name = :precompile)), [CorePotts.ownership => σ, B.kind => [:cell]],
+        (0, 1); field_solver = ExplicitEuler(), capacity = 8)
+    step!(init(prob, CorePotts.SequentialCPM(); save_start = false))
+    # Float32 on a 3D lattice under CheckerboardCPM (the device configuration, run here on
+    # the host): the field compiler's 3D Float32 lowering and the checkerboard sweep
+    σ3 = zeros(Int32, 8, 8, 8)
+    σ3[3:5, 3:5, 3:5] .= 1
+    prob3 = PottsProblem(mtkcompile(_PrecompileModel(; name = :precompile, lattice = (8, 8, 8))),
+        [CorePotts.ownership => σ3, B.kind => [:cell]], (0, 1); T = Float32, field_solver = ExplicitEuler(), capacity = 8)
+    step!(init(prob3, CorePotts.CheckerboardCPM(); save_start = false))
+    PottsProblem(mtkcompile(_PrecompileModel(; name = :precompile, explicit_init = true)),
+        [CorePotts.ownership => σ, B.kind => [:cell]], (0, 1); field_solver = ExplicitEuler(), capacity = 8)
+    return nothing
+end
 PrecompileTools.@setup_workload begin
     PrecompileTools.@compile_workload begin
-        (; volume, surface, kind, kind′, owner, source, target, old, new) = B
-        λ = parameter(:λ, 1.0)
-        V₀ = parameter(:V₀, 20.0)
-        T = parameter(:T, 10.0)
-        J = kind_parameter(:J, [0 16; 16 2])
-        c = variable(only(Symbolics.@variables c(t)), :field; default = 0.0)
-        mark = variable(only(Symbolics.@variables mark(t)), :site; default = 0.0)
-        sys = PottsSystem(; name = :precompile, kinds = [:medium, :cell],
-            lattice = lattice_spec((16, 16); neighborhood = Moore(1)), parameters = Any[λ, V₀, T, J],
-            variables = Any[c, mark],
-            energies = [energy(cells(1) => λ * (volume - V₀)^2 + λ * (surface - V₀)^2),
-                energy(contacts => _index(J, kind, kind′))],
-            drives = [drive(COPY => ifelse(_index(kind, new) == 1, -λ * (_index(c, target) - _index(c, source)), 0.0))],
-            constraints = [connectivity(1)],
-            updates = [update(:after_mcs, mark ~ max(Pre(mark) - 1, 0)), update(:on_copy, _index(mark, target) ~ λ)],
-            equations = [D(c) ~ λ * Δ(c) - λ * c],
-            sweep = sweep_spec(:metropolis; temperature = T))
-        csys = ModelingToolkitBase.mtkcompile(sys)
-        σ = zeros(Int32, 16, 16)
-        σ[4:8, 4:8] .= 1
-        for S in (Float64, Float32)
-            generated_code(csys; T = S, field_solver = ExplicitEuler())
-            PottsProblem(csys, [CorePotts.ownership => σ, B.kind => [1]], (0, 1); T = S, field_solver = ExplicitEuler())
-        end
-        prob = PottsProblem(mtkcompile(_PrecompileModel(; name = :precompile)), [CorePotts.ownership => σ, B.kind => [:cell]],
-            (0, 1); field_solver = ExplicitEuler(), capacity = 8)
-        step!(init(prob, CorePotts.SequentialCPM(); save_start = false))
-        PottsProblem(mtkcompile(_PrecompileModel(; name = :precompile, explicit_init = true)),
-            [CorePotts.ownership => σ, B.kind => [:cell]], (0, 1); field_solver = ExplicitEuler(), capacity = 8)
+        _precompile_workload()
     end
 end
