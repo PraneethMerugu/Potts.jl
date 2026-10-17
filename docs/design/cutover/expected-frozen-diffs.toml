@@ -699,3 +699,10 @@ commit = "PENDING"
 fixup_of = "C8"
 decision = "D-C8-R1"
 why = "CorePotts.FieldStep is deleted: the fixture's substep is a SitePhase into the scratch plus a CopyPhase (same operations, same order); Merks c digests move by roundoff only (σ digest unchanged)"
+
+[[edits]]
+path = "acceptance/p6_3b_boundary_schedule.jl"
+commit = "PENDING"
+fixup_of = "C8"
+decision = "D-C8-R2"
+why = "CorePotts.laplacian and FieldStep are deleted: the controls' oracle is a hand-written 5-point Laplacian with the per-face ghost rule, one SitePhase + CopyPhase per substep"

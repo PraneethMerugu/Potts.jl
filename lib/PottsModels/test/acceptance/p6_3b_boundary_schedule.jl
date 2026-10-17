@@ -460,14 +460,33 @@ function p63b_bad(body::Expr, op, tspan; kw...)
 end
 
 # =======================================================================================
-# Controls on the base: the oracle reproduces CorePotts' own field step and per-face rule
+# Controls on the base: the oracle reproduces a hand-written explicit Euler step with the
+# per-face ghost rule (since the field-compiler cutover, C8, CorePotts has no field step of
+# its own: D-C8 refreeze)
 # =======================================================================================
+# the 5-point Laplacian (h = 1) at site i: a missing neighbor across a face is the ghost
+# 2v − c_i for `Dirichlet(v)` (`bc[axis][side] = v`), else c_i (zero flux)
+function p63b_hand_lap(c, lat, i, bc)
+    x = CorePotts.coordinates(lat, i)
+    N = length(x)
+    acc = 0.0
+    for d in 1:N, (s, side) in ((-1, 1), (1, 2))
+        inside, y = CorePotts.shift(lat, x, ntuple(k -> Int32(k == d ? s : 0), N))
+        v = bc === nothing ? nothing : bc[d][side]
+        acc += (inside ? c[CorePotts.linear_index(lat, y)] : v === nothing ? c[i] : 2 * v - c[i]) - c[i]
+    end
+    return acc
+end
+# one explicit Euler substep of length h into the scratch `c__next`
 struct P63bHandRate{B}
     D::Float64
     src::Float64
     bc::B
+    h::Float64
 end
-(r::P63bHandRate)(st, p, ctx, key, mcs, i, c) = r.D * CorePotts.laplacian(c, ctx, i; bc = r.bc) + r.src
+(r::P63bHandRate)(st, p, ctx, key, mcs, i) =
+    (c = st.site.c; st.site.c__next[i] = c[i] + r.h * (r.D * p63b_hand_lap(c, ctx.lattice, i, r.bc) + r.src); nothing)
+p63b_hand_substep(r) = (CorePotts.SitePhase(r), CorePotts.CopyPhase((:site, :c) => (:site, :c__next)))
 struct P63bHandClamp
     sites::Vector{Int}
 end
@@ -480,10 +499,10 @@ function p63b_with_phases(prob, phases)
 end
 
 @testset "P6.3b control: the oracle is CorePotts' explicit Euler, per-face rule and clamp (base)" begin
-    # per-face ghost values through CorePotts.laplacian(…; bc) on today's code
+    # per-face ghost values through the hand step
     prob = p63b_problem(:P63bFace2Free, p63b_face2_op(), (0, 2); field_solver = ExplicitEuler(substeps = 3), seed = 1)
-    hand = CorePotts.Phases(; after_mcs = (CorePotts.FieldStep((:site, :c) => (:site, :c__next),
-        P63bHandRate(0.2, 0.0, ((0.0, nothing), (nothing, nothing))); dt = 1.0, substeps = 3),))
+    hand = CorePotts.Phases(; after_mcs = Tuple(Iterators.flatten(
+        p63b_hand_substep(P63bHandRate(0.2, 0.0, ((0.0, nothing), (nothing, nothing)), 1.0 / 3)) for _ in 1:3)))
     u = solve(p63b_with_phases(prob, hand), SequentialCPM()).u[end]
     @test maximum(abs, p63b_c(u) .- p63b_ftcs(P63B_FACE2_C0, 3, 2; D = 0.2, axes = P63B_FACE2_AXES)) < 1e-12
     # the ring clamp after every substep, as n single-substep steps each followed by a clamp
@@ -491,8 +510,8 @@ end
     n = 4
     prob = p63b_problem(:P63bRingFree, op, (0, 3); field_solver = ExplicitEuler(substeps = n), seed = 1)
     ring = findall(vec(p63b_ring_mask()))
-    one = CorePotts.FieldStep((:site, :c) => (:site, :c__next), P63bHandRate(0.2, 0.05, nothing); dt = 1.0 / n, substeps = 1)
-    hand = CorePotts.Phases(; after_mcs = Tuple(Iterators.flatten((one, P63bHandClamp(ring)) for _ in 1:n)))
+    one = p63b_hand_substep(P63bHandRate(0.2, 0.05, nothing, 1.0 / n))
+    hand = CorePotts.Phases(; after_mcs = Tuple(Iterators.flatten((one..., P63bHandClamp(ring)) for _ in 1:n)))
     sol = solve(p63b_with_phases(prob, hand), SequentialCPM(); saveat = 1)
     for k in 1:3
         @test maximum(abs, p63b_c(sol.u[k + 1]) .- p63b_ring_oracle(c0, n, k)) < 1e-12
