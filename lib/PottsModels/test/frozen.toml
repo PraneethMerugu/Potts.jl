@@ -169,8 +169,8 @@ decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0y_stable_substeps.jl"
-sha256 = "f848f9258851b83a92c064ff57c8b531446d967499d37306a83678af891efe8e"
-decision = "D-102"
+sha256 = "c797a6c93cc9aa000bdcaf1ff1f6e32ee904f29066095e1b2ec8ea9118b51c0f"
+decision = "D-C8-R4"
 
 [[file]]
 path = "acceptance/p6_0ag_ode_expand_all.jl"

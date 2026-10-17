@@ -713,3 +713,10 @@ commit = "PENDING"
 fixup_of = "C8"
 decision = "D-C8-R3"
 why = "CorePotts.stable_substeps is deleted (C8): the two controls assert the live substep count of an integrator built with the automatic count (expected 1, as before)"
+
+[[edits]]
+path = "acceptance/p6_0y_stable_substeps.jl"
+commit = "PENDING"
+fixup_of = "C8"
+decision = "D-C8-R4"
+why = "the field compiler orders the update's floating-point operations differently: two bit-pattern pins are re-pinned (each changed word moves 1 ulp); the FTCS oracle at rtol 1e-13 stays"
