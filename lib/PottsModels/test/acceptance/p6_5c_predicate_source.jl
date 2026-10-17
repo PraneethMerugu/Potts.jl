@@ -115,6 +115,10 @@ function p65cb_problem(name = :P65cbAny; σ = p65cb_sigma(), tspan = (0, 5), T =
 end
 p65cb_fields(sol) = [Array(u.site.F) for u in sol.u]
 p65cb_run(args...; alg = SequentialCPM(), kw...) = p65cb_fields(solve(p65cb_problem(args...; kw...), alg; saveat = 1))
+# the substep count of the field step of a running integrator with the automatic count
+# (`ExplicitEuler()`), at parameters `p` (D-C8: LatticePDE's stability bound)
+p65cb_live_n(; p = ()) = CorePotts._runtime(getfield(init(p65cb_problem(; p, solver = ExplicitEuler()), SequentialCPM()).ctx,
+    :__fields1)).n
 
 # The source sites of a σ: `lam` sites with a VonNeumann(1) neighbour in the substrate,
 # x, y periodic, z closed unless `zper` (independent of the code under test)
@@ -202,7 +206,7 @@ end
 @testset "P6.5c predicate source: mass balance and the 7-point oracle (D_F = 1/16)" begin
     D = 0.0625
     # the automatic count is 1: ceil((D·12 + k_d)/1.8) = ceil(1.25/1.8) = 1
-    @test CorePotts.stable_substeps(D, 1.0, (1.0, 1.0, 1.0), 0.5) == 1                # control
+    @test p65cb_live_n(; p = (:D_F => D,)) == 1                                    # control (the live count, D-C8)
     Fs = p65cb_run(; p = (:D_F => D,))
     auto = p65cb_run(; p = (:D_F => D,), solver = ExplicitEuler())
     @test auto == Fs                                             # control: the automatic count is the requested 1
@@ -264,7 +268,7 @@ end
 
 @testset "P6.5c predicate source: Fortuna's values (one substep, F → 0.9, 0.99, 0.999)" begin
     # the automatic count with the reaction bound: ceil((1e-4·12 + 0.9)/1.8) = 1
-    @test CorePotts.stable_substeps(1e-4, 1.0, (1.0, 1.0, 1.0), 0.9) == 1            # control
+    @test p65cb_live_n(; p = (:D_F => 1e-4, :k_d => 0.9, :k_s => 0.9)) == 1        # control (the live count, D-C8)
     fortuna = (:k_d => 0.9, :k_s => 0.9)
     # a site that becomes a source with all-zero neighbours holds 0.9 after one MCS (two
     # substeps would give 1 − 0.55² = 0.6975): the requested `substeps = 1` is honoured

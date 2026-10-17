@@ -605,8 +605,8 @@ decision = "D-244"
 
 [[file]]
 path = "acceptance/p6_5c_predicate_source.jl"
-sha256 = "41200996bd94fc6386f5b9c8a3b2c9c0e6754aa02c4011bee4e79013e6763cb2"
-decision = "D-244"
+sha256 = "34384da76a90ab50c9c90715049281642ffe6671bdbbfed68824cba99d558a9b"
+decision = "D-C8-R3"
 
 [[file]]
 path = "acceptance/p6_5c_msd_furth.jl"

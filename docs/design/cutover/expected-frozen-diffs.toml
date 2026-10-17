@@ -706,3 +706,10 @@ commit = "PENDING"
 fixup_of = "C8"
 decision = "D-C8-R2"
 why = "CorePotts.laplacian and FieldStep are deleted: the controls' oracle is a hand-written 5-point Laplacian with the per-face ghost rule, one SitePhase + CopyPhase per substep"
+
+[[edits]]
+path = "acceptance/p6_5c_predicate_source.jl"
+commit = "PENDING"
+fixup_of = "C8"
+decision = "D-C8-R3"
+why = "CorePotts.stable_substeps is deleted (C8): the two controls assert the live substep count of an integrator built with the automatic count (expected 1, as before)"
