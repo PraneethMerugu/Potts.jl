@@ -159,8 +159,8 @@ decision = "D-254"
 
 [[file]]
 path = "acceptance/p6_0v3_launch_fusion.jl"
-sha256 = "b6d11438584b56c7b6bbcacb9438c8d2e420bd9cab0eccf01c7c49be3860038b"
-decision = "D-271"
+sha256 = "4d2facf4eea403f00051865d3f097d05a78eaa69e408577e3bd32f5f3bae2820"
+decision = "D-C8-R1"
 
 [[file]]
 path = "acceptance/p6_0x_gather_ode_alloc.jl"

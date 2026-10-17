@@ -692,3 +692,10 @@ commit = "(see refreeze(list-A) commit on lp/c4)"
 fixup_of = "C4"
 decision = "D-265"
 why = "p60aj_binders walks getfield(getfield(sys, :part), f): the statement fields moved into the payload"
+
+[[edits]]
+path = "acceptance/p6_0v3_launch_fusion.jl"
+commit = "PENDING"
+fixup_of = "C8"
+decision = "D-C8-R1"
+why = "CorePotts.FieldStep is deleted: the fixture's substep is a SitePhase into the scratch plus a CopyPhase (same operations, same order); Merks c digests move by roundoff only (σ digest unchanged)"

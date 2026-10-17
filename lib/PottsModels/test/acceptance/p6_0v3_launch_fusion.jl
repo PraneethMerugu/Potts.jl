@@ -99,14 +99,22 @@ const P60V3_LAUNCHES = Dict(
 )
 
 # ---------------------------------------------------------------------------------------
-# FieldStep fixture (CorePotts level). One 5×5 cell at its target volume, T = 0: every copy
+# Field fixture (CorePotts level). One 5×5 cell at its target volume, T = 0: every copy
 # raises the energy and is rejected, so σ never changes and the field's source is known.
 # rate(c)_i = D (c_{i-1} + c_{i+1} − 2 c_i) + s [σ_i ≠ 0] − k c_i over the linear index
-# (periodic), explicit Euler in N substeps per MCS, clipped below at 0.
+# (periodic), explicit Euler in N substeps per MCS, clipped below at 0. Since the
+# field-compiler cutover (C8, CorePotts.FieldStep deleted) each substep is a site phase into
+# the scratch and a device copy back (D-C8 refreeze): the same operations, the same order.
 
 const P60V3_FDIMS = (16, 16)
 p60v3_field_rate(st, p, ctx, key, mcs, i, c) = (n = length(c); l = i == 1 ? n : i - 1; r = i == n ? 1 : i + 1;
     p.D * (c[l] + c[r] - 2 * c[i]) + p.s * (st.σ[i] != 0) - p.k * c[i])
+"""One explicit-Euler substep of length `h` into `c__next`, clipped below at 0."""
+struct P60v3FieldSubstep{T}
+    h::T
+end
+(f::P60v3FieldSubstep)(st, p, ctx, key, mcs, i) = (c = vec(st.site.c);
+    @inbounds st.site.c__next[i] = max(c[i] + f.h * p60v3_field_rate(st, p, ctx, key, mcs, i, c), zero(f.h)); nothing)
 p60v3_field_c0(T) = T[sin(Float64(i))^2 for i in 1:prod(P60V3_FDIMS)]
 function p60v3_field_σ()
     σ = zeros(Int32, P60V3_FDIMS)
@@ -118,7 +126,8 @@ function p60v3_field_problem(; T = Float64, N = 3, nmcs = 4)
     site = (; c = reshape(p60v3_field_c0(T), P60V3_FDIMS), c__next = zeros(T, P60V3_FDIMS))
     u0 = CorePotts.initial_state(p60v3_field_σ(), Int32[1]; site)
     dH(st, p, prop, ctx) = CorePotts.volume_delta(st.cell.volume, prop, (v, c) -> p.λ * (v - p.V0)^2)
-    ph = (CorePotts.FieldStep((:site, :c) => (:site, :c__next), p60v3_field_rate; dt = T(1), substeps = N, lower = T(0)),)
+    sub = (CorePotts.SitePhase(P60v3FieldSubstep(T(T(1) / N))), CorePotts.CopyPhase((:site, :c) => (:site, :c__next)))
+    ph = Tuple(Iterators.flatten(ntuple(_ -> sub, N)))
     f = CorePotts.CPMFunction(dH; temperature = (st, p, prop, ctx) -> p.T, phases = CorePotts.Phases(; after_mcs = ph))
     return CorePotts.PottsProblem(f, u0, CorePotts.Lattice(P60V3_FDIMS), (0, nmcs), p60v3_field_params(T))
 end
@@ -215,6 +224,8 @@ p60v3_digest(a) = foldl((h, x) -> (h ⊻ p60v3_bits(x)) * 0x00000100000001b3, ve
 # after 6 MCS with `CheckerboardCPM()`: (σ, field c). Metal (Float32) equals the CPU's.
 # Re-pinned under D-153: the D-087 `merks_state` port (Scattered's StableRNG stream) changes
 # the start; recorded on the PC from feat/p6-3d 6e28cbd4. Metal re-verification is P6.0bi.
+# Re-pinned for the C8 field compiler (draft D-C8-R1): the field c moves by roundoff only
+# (max |Δc| 6.9e-18 at Float64, 3.7e-9 at Float32; σ unchanged); recorded on the PC from lp/c8.
 const P60V3_MERKS_DIGESTS = Dict(
     Float64 => (0x8d559e566e2b2299, 0xdbb3738a30de1555),
     Float32 => (0x8d559e566e2b2299, 0x90d7a36f526b1880),
@@ -402,7 +413,7 @@ end
             waits[N] = maximum(o -> o[2], out)
             launches[N] = minimum(o -> o[3], out)
         end
-        @info "P6.0v8 FieldStep fixture: GPU waits and launches per MCS by substeps" waits launches
+        @info "P6.0v8 field fixture: GPU waits and launches per MCS by substeps" waits launches
         @test launches[15] > launches[3] > launches[1]                  # control: the substeps ran
         @test waits[1] == waits[3] == waits[15]                         # independent of N
         @test all(==(0), values(waits))
