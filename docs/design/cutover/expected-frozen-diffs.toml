@@ -1120,12 +1120,39 @@ assertion = "p6_0y_stable_substeps.jl:266 p60y_bits(c) == p60y_MERKS_BITS"
 old = "p60y_MERKS_BITS"
 new = "patterns equal in the leading digits, differing in the last bits"
 
-# C9 (components rebuilt from `Potts.compose`, PottsCatalystExt, SciMLStructures on
-# PottsParameters): no frozen edit and no new frozen failure. Measured on the PC on lp/c9 (on
-# lp/c8 1680c718), three PottsModels shards (CPU): only the bulk-less OpenVT package files
-# (15_openvt_package.jl, 15_openvt_d213.jl; unchanged baseline) and frozen.jl fail. frozen.jl
-# fails only on the sha256 of p6_0g_kind_classes.jl, from the lp/c8 re-pin c0144504 (frozen.toml
-# still records the D-C8-R5 hash), not from C9. The 20 frozen files that use @components,
-# Potts.wrap, Potts.extend/@extend, the MTK container or PottsParameters remake/setters
-# (p6_0k, k2, e2, aj, al, am, p, av, b2, c2, u, o, g, bm, bp, bs, bn, an, ap, p6_5b) also pass
-# run on their own. No entry.
+# C9 (components rebuilt from `Potts.compose`, SciMLStructures on PottsParameters; review round 1
+# fixes): measured on the PC on lp/c9 (on lp/c8 with the p6_0g frozen.toml re-pin), three
+# PottsModels shards (CPU). Besides the bulk-less OpenVT package files (15_openvt_package.jl,
+# 15_openvt_d213.jl; unchanged baseline), only p6_0bk2's two IR pins fail before the refreeze
+# below: the parameter object's type gains a type parameter (`PottsParameters{NT, D}`, the
+# computed-parameter list), and the printed IR differs from lp/c8 by exactly `…}}` → `…}, ()}`
+# (diffed on the PC in both cases). frozen.jl passes 369/369 after the refreeze.
+
+[[failures]]
+path = "acceptance/p6_0bk2_skip_interior.jl"
+testset = "P6.0bk2: SequentialCPM()'s loop compiles to the base code (GG 72²)"
+since = "C9"
+list = "A"
+category = "auto-repin"
+why = "PottsParameters gains its computed-parameter list as a type parameter (D-C9 item 5): the argument type in the printed IR changes (`, ()` inserted), nothing else (fixed by D-C9-R1)"
+assertion = "p6_0bk2_skip_interior.jl:287 p60bk2_ir_hash(mk()) == P60BK2_IR[label]"
+old = "a390240e…e3e0"
+new = "d1f7ef6e…d11e"
+
+[[failures]]
+path = "acceptance/p6_0bk2_skip_interior.jl"
+testset = "P6.0bk2: SequentialCPM()'s loop compiles to the base code (cubes 16³)"
+since = "C9"
+list = "A"
+category = "auto-repin"
+why = "as above (fixed by D-C9-R1)"
+assertion = "p6_0bk2_skip_interior.jl:287 p60bk2_ir_hash(mk()) == P60BK2_IR[label]"
+old = "7ba4a1c4…e5bc"
+new = "7dc82291…2789"
+
+[[edits]]
+path = "acceptance/p6_0bk2_skip_interior.jl"
+commit = "fa383e57"
+fixup_of = "C9"
+decision = "D-C9-R1"
+why = "D-250 AUTO re-pin: the parameter object's type gains a type parameter (`PottsParameters{NT, D}`), which changes the pinned IR text by one inserted `, ()`"
