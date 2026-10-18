@@ -12,7 +12,9 @@ const LF_NONPUBLIC = (
     :remove_linenums!,                     # Base.remove_linenums!: canonical body text for hashing
     :Dual, :Partials, :partials, :value,   # ForwardDiff's documented Dual API (extension); no `public`
     :Compile,                              # the extension extends LatticeFields.Compile (declared public with the module list at C2/C7a)
-    :supports_float64                      # KernelAbstractions' Float64 capability query (Metal: false); KA declares no `public`
+    :supports_float64,                     # KernelAbstractions' Float64 capability query (Metal: false); KA declares no `public`
+    :deepcopy_internal,                    # Base's documented hook for a type's own `deepcopy` (LatticeRHS: a copy has no owner task, SX-37)
+    :dotview                               # Base's hook for `a[i] .= v` (FieldIntegrator: an error, not a write into a copy)
 )
 
 @testset "ExplicitImports" begin
@@ -28,6 +30,17 @@ end
 @testset "Aqua" begin
     using Aqua: Aqua
     Aqua.test_all(LatticeFields)
+end
+
+# Aqua's ambiguity check loads only LatticeFields' own dependencies. A user's session also
+# loads array and polynomial packages whose generic methods (`==` on any AbstractArray) can be
+# ambiguous with LatticeFields' own (f2d9c774 had 8 such, with these three loaded): load them
+# here and require LatticeFields to add none (a guard).
+@testset "no ambiguities with common array packages loaded" begin
+    @eval using ArrayLayouts: ArrayLayouts
+    @eval using DynamicPolynomials: DynamicPolynomials
+    @eval using SparseArrays: SparseArrays
+    @test isempty(Test.detect_ambiguities(LatticeFields; recursive = true))
 end
 
 @testset "source rules" begin

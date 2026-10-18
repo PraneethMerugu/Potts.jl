@@ -357,7 +357,7 @@ end
     @test_throws ArgumentError Potts.compose(wtop, cpm)
 end
 
-@testset "W-lite: @bcs is stored and printed" begin
+@testset "W-lite: @bcs is stored and printed, and refused at compile (F1, V4)" begin
     @potts_model WLiteBcs begin
         @kinds medium cell border
         @parameters T = 1.0 Dc = 1.0
@@ -371,6 +371,25 @@ end
     bcs = Potts.getfield(Potts.getfield(sys, :part), :bcs)
     @test length(bcs) == 1 && occursin("masked", string(bcs[1]))
     @test occursin("bc      ", sprint(show, MIME"text/plain"(), sys))
+    # F1: not lowered in this version, so compiling refuses it by name. Negative control: on
+    # f9a77dd3 the same model with `@bcs c ~ masked(kind == border, 5.0)` ran bitwise equal to
+    # the model without it (the condition was dropped)
+    e = try
+        mtkcompile(sys); nothing
+    catch err
+        err
+    end
+    @test e isa ArgumentError && occursin("@bcs", e.msg) && occursin("masked", e.msg) && occursin("@boundary", e.msg)
+    @test occursin("masked(kind == border, 0.0)", e.msg) && !occursin("kind(t)", e.msg)   # (round 0: `kind(t) == 2`)
+    @test_throws ArgumentError PottsProblem(sys, [ownership => zeros(Int32, 8, 8)], (0, 1);
+        field_solver = ExplicitEuler(substeps = 1))
+    # … and so does `Potts.fields` (base, round 0: its PDESystem dropped the condition)
+    e = try
+        Potts.fields(sys); nothing
+    catch err
+        err
+    end
+    @test e isa ArgumentError && occursin("@bcs", e.msg) && occursin("masked", e.msg)
     @potts_model WLiteNoBcs begin
         @kinds medium cell
         @parameters T = 1.0

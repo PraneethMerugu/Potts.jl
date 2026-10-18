@@ -18,8 +18,9 @@ of one substep (each state field written into its scratch buffer, the buffers sw
 σ). `arrays[f]` binds program field `f` to state arrays: `(Part, nothing)` for a one-buffer
 field (an input or a mask), `(Part, Part)` for a state field and its scratch. `tables` binds
 table ids to kind tables of the parameters and `params` the parameter slots to parameter
-names. `substeps(praw)` is the substep count at raw parameter values `praw` (a host
-function, evaluated when the parameters change, never per MCS).
+names. `substeps(praw)` is the substep count at raw parameter values `praw`, with the
+phase's tables (`LatticeFields.Problems.with_tables`) when it has any (a host function,
+evaluated when the parameters change, never per MCS).
 
 `K` names the entry of the run context that holds the trajectory's bound launches
 ([`phase_context`](@ref)). The field ends every MCS in its `st.site` array: after an odd
@@ -115,6 +116,10 @@ function _same_tables(ph::FieldPhase, rt, p)
     return true
 end
 
+# the phase's tables at `p` by their program keys (the substep bound reads them: a table
+# coefficient, F1)
+_table_values(ph::FieldPhase, p) = Pair{String, Vector{Float64}}[ph.program.tables[i].key => Float64.(vec(collect(getproperty(p, name))))
+                                                                 for (i, name) in ph.tables]
 # The launches of a field phase bound to the state's arrays at parameters `p`, with the step's
 # substep count and length (also when `ph` is the at-init clamp, which runs one substep of
 # length zero from the same launches: the binding is the step's, D-C8 item 8). `tables`
@@ -132,7 +137,7 @@ function _field_bind(ph::FieldPhase, st, p, backend; tables = nothing)
     end
     store = Problems.FieldStore(backend, bufs, ones(Int, length(bufs)), tables)
     praw = Tuple(getproperty(p, n) for n in ph.params)
-    n = ph.substeps(Float64[praw...])
+    n = ph.substeps(Problems.with_tables(Float64[praw...], _table_values(ph, p)))
     n >= 1 || throw(ArgumentError("a field group needs at least one substep; got $n"))
     odd = [length(b) == 2 ? 2 : 1 for b in bufs]
     even = Problems.BoundStep(backend, s, ph.step, store, praw; cur = ones(Int, length(bufs)))

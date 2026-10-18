@@ -316,6 +316,31 @@ function CommonSolve.init(prob::PottsProblem; backend = CPU(), kwargs...)
 end
 CommonSolve.solve(prob::PottsProblem; kwargs...) = CommonSolve.solve!(CommonSolve.init(prob; kwargs...))
 
+# A problem built in Float64 that runs on a device backend (V11): the backend given only to
+# `solve`/`init`, not to the symbolic layer's problem constructor (which would build in the
+# backend's default float, Float32 on a device). A notice, not an error: Float64 on a device
+# that has it (ROCm, CUDA) is a valid, slower run, and a backend without Float64 refuses at
+# compile with its own message. Once per session.
+_holds_float64(x::AbstractArray) = eltype(x) === Float64
+_holds_float64(x::Float64) = true
+_holds_float64(x::NamedTuple) = any(_holds_float64, values(x))
+_holds_float64(x) = false
+_parameter_tuple(p::NamedTuple) = p
+_parameter_tuple(p) = applicable(NamedTuple, p) ? NamedTuple(p) : (;)
+function _float64_problem(prob::PottsProblem)
+    u = prob.u0
+    return _holds_float64(u.cell) || _holds_float64(u.site) || _holds_float64(u.model) ||
+           _holds_float64(_parameter_tuple(prob.p))
+end
+function _device_float_notice(prob::PottsProblem, backend)
+    (Exec.ishost(backend) || !_float64_problem(prob)) && return false
+    @warn string("this problem was built in Float64 and runs on the ", nameof(typeof(backend)),
+        " backend: Float64 device code is several times slower than Float32 on most GPUs. Give the ",
+        "backend to the problem as well (`PottsProblem(sys, op, tspan; backend)` builds in the ",
+        "backend's float type, Float32 on a device). The run itself is unchanged; this notice shows once") maxlog = 1
+    return true
+end
+
 function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, saveat, save_start, save_end, callback)
     alg isa SequentialCPM && !(backend isa CPU) &&
         throw(ArgumentError("SequentialCPM runs on the host; use CheckerboardCPM on $(typeof(backend))"))
@@ -325,6 +350,7 @@ function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, save
     outside = filter(t -> !(t0 <= t <= t1), collect(Int, saveat))
     isempty(outside) || @warn "saveat times outside tspan $(prob.tspan) are never reached: $outside"
     lat = prob.lattice
+    _device_float_notice(prob, backend)
     _check_convert_atomics(backend, prob.u0)
     ctx = (; lattice = _to_backend(backend, lat), proposal = relation(_proposal(alg, prob), lat), contact = prob.contact,
         mobility = _backend_mobility(backend, mobility(prob.frozen, lat)), prob.relations...)

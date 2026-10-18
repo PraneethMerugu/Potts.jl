@@ -9,7 +9,8 @@ using SciMLBase: SciMLBase, ODEProblem, remake
 @parameters kr = 0.0 Dr = 1.0 gr = 0.0 βr = -0.5
 pdom(T = 1.0) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
 psys(eqs, bcs, ps; T = 1.0, dvs = [ce]) = PDESystem(eqs, bcs, pdom(T), [t, x, y], dvs, ps; name = :p)
-owned(sys, n, m = n; T = Float64, kw...) = discretize(sys, LatticeDiscretization(Grid((n, m)); T, problem = :owned, kw...))
+owned(sys, n, m = n; T = Float64, inputs = (), kw...) =
+    discretize(sys, LatticeDiscretization(Grid((n, m)); T, problem = :owned, kw...); inputs)
 fgrid(v, n, m) = reshape(v, n, m)
 
 @testset "Fourier mode decay through solve (owned and ODE)" begin
@@ -85,8 +86,10 @@ end
     prob = remake(base, p = [kr => 3.0])
     @test prob.stability(prob.p) ≈ 8n^2 + 3                       # recomputed at the new values
     @test S(prob, ExplicitEuler(; dt = 0.01)) == ceil(Int, 0.01 * (8n^2 + 3) / 1.8)
-    @test S(prob, ExplicitEuler(; dt = 0.01, substeps = 100)) == 100   # a user count is used as given
-    @test S(prob, ExplicitEuler(; dt = 0.01, substeps = 1)) == 1       # … also below the bound
+    @test S(prob, ExplicitEuler(; dt = 0.01, substeps = 100)) == 100   # a user count above the bound is kept
+    # a user count is a minimum (ruling Q2, F1): below the bound, the bound's count (on
+    # f9a77dd3 the count 1 was used as given)
+    @test S(prob, ExplicitEuler(; dt = 0.01, substeps = 1)) == ceil(Int, 0.01 * (8n^2 + 3) / 1.8)
     sol = solve(prob, ExplicitEuler(; dt = 0.01))
     @test SciMLBase.successful_retcode(sol)
     @test all(isfinite, sol[:c][end]) && 0 <= minimum(sol[:c][end]) && maximum(sol[:c][end]) < 1
@@ -102,7 +105,8 @@ end
     @test integ.substeps == s4.substeps > m1
     si = solve!(integ)
     @test SciMLBase.successful_retcode(si) && all(isfinite, si[:c][end])
-    # negative control: one substep per dt (the bound ignored) blows up, and the retcode says so
+    # negative control: one substep per dt (the bound ignored, forced on the integrator) blows
+    # up, and the retcode says so
     integ = init(remake(prob; tspan = (0.0, 4.0)), ExplicitEuler(; dt = 0.01); saveat = 0.1)
     integ.substeps = 1
     bad = solve!(integ)
@@ -121,7 +125,8 @@ end
     @test_throws ArgumentError solve(nl, ExplicitEuler(; dt = 0.01))
     @test SciMLBase.successful_retcode(solve(nl, ExplicitEuler(; dt = 0.01, substeps = 4)))
     adv = discretize(psys([D(ce) ~ -Advect(Upwind1())(ve, ce)], [c(0, x, y) ~ x; c(t, x, 0) ~ c(t, x, 1)], Num[];
-                          dvs = [ce, ve]), LatticeDiscretization(Grid((8, 4)); T = Float64, problem = :owned))
+                          dvs = [ce, ve]), LatticeDiscretization(Grid((8, 4)); T = Float64, problem = :owned);
+                     inputs = ["vel[1]" => 1.0, "vel[2]" => 0.0])
     @test_throws ArgumentError solve(adv, ExplicitEuler(; dt = 0.01))
     @test SciMLBase.successful_retcode(solve(adv, ExplicitEuler(; dt = 0.01, substeps = 2)))
 end
@@ -137,7 +142,7 @@ end
     # indicator is bounded by 1
     for gate in (ismember(ke, (1,)), ke == 1)
         g = owned(psys([D(ce) ~ Dr * Δ(ce) + α * ismember(ke, (2,)) - ε * ce * gate], [c(0, x, y) ~ 1.0; per],
-                       [Dr, ε, α]; T = 0.1, dvs = [ce, ke]), n)
+                       [Dr, ε, α]; T = 0.1, dvs = [ce, ke]), n; inputs = [ke => 0])
         @test g.stability(g.p) ≈ s4 + 0.5
         @test S(g, ExplicitEuler(; dt = 0.01)) == ceil(Int, 0.01 * (s4 + 0.5) / 1.8)
     end
@@ -152,8 +157,11 @@ end
                     [Dr, D2]; T = 0.1, dvs = [ce, oe]), n)
     @test isnan(xd.stability(xd.p))
     @test_throws ArgumentError solve(xd, ExplicitEuler(; dt = 0.01))
-    sx = solve(remake(xd; p = [D2 => 50.0]), ExplicitEuler(; dt = 0.01, substeps = 50))
-    @test SciMLBase.successful_retcode(sx) && sx.substeps == 50
+    px = remake(xd; p = [D2 => 50.0])
+    sx = solve(px, ExplicitEuler(; dt = 0.01, substeps = 50))
+    # the count is a minimum (Q2): raised to the bound over the terms it sees (Gershgorin row sum)
+    @test SciMLBase.successful_retcode(sx) &&
+          sx.substeps == max(50, ceil(Int, 0.01 * LatticePDE.bound_parts(px.stability, px.p).ρ / 1.8)) > 50
     # … with a decay strong enough for dominance the bound is the Gershgorin row sum:
     # |Dr| s4 + |k| + |D2| s4 for the c row
     xk = owned(psys([D(ce) ~ Dr * Δ(ce) + D2 * Δ(oe) - kc * ce, D(oe) ~ Δ(oe)],
@@ -181,7 +189,7 @@ end
                      (Dr * Δ(ce) - (kk - bb * ismember(ke, (1,))) * ce, 512 + 1000),
                      (Dr * Δ(ce) - (kk - bb * (ke == 1)) * ce, 512 + 1000),
                      (Dr * Δ(ce) - kk * ce, 512 + 1000))                 # control: no indicator
-        g = owned(psys([D(ce) ~ rhs], [c(0, x, y) ~ 1.0; per], [Dr, kk, bb]; T = 0.1, dvs = [ce, ke]), 8)
+        g = owned(psys([D(ce) ~ rhs], [c(0, x, y) ~ 1.0; per], [Dr, kk, bb]; T = 0.1, dvs = [ce, ke]), 8; inputs = [ke => 0])
         @test g.stability(g.p) ≈ ρ
         sg = solve(g, ExplicitEuler(; dt = 0.01); saveat = 0.05)
         @test SciMLBase.successful_retcode(sg) && maximum(abs, sg.u[end]) <= 1
@@ -190,7 +198,7 @@ end
     # dominant and automatic substeps are refused
     grot = owned(psys([D(ce) ~ -a * ce + ee * (1 - ismember(ke, (1,))) * oe,
                        D(oe) ~ -a * oe - ee * (1 - ismember(ke, (1,))) * ce],
-                      [c(0, x, y) ~ 1.0; o(0, x, y) ~ 0.0; per2], [a, ee]; T = 0.1, dvs = [ce, oe, ke]), 4)
+                      [c(0, x, y) ~ 1.0; o(0, x, y) ~ 0.0; per2], [a, ee]; T = 0.1, dvs = [ce, oe, ke]), 4; inputs = [ke => 0])
     @test isnan(grot.stability(grot.p))
     @test_throws ArgumentError solve(grot, ExplicitEuler(; dt = 0.01))
     # an `ifelse` gate that reads no field is bounded arm by arm (C8 review round 2): the
@@ -223,10 +231,13 @@ end
     gc = owned(psys([D(ce) ~ Dr * Δ(ce) + ifelse(Ke >= 0, -ce, 0.0), D(oe) ~ -oe, Ke ~ oe - 1],
                     [c(0, x, y) ~ 1.0; o(0, x, y) ~ 1.0; per2], [Dr]; T = 0.1, dvs = [ce, oe, Ke]), 4)
     @test isnan(gc.stability(gc.p))
-    # array-element coefficients are refused (documented); tables `at(Dk, kind)` as a source are fine
+    # an array-element coefficient is bounded at its entry (F1 round 6; it was refused):
+    # ρ = Dk[2] · 4 Σ_d 1/h² = 2 · 512 on 8×8 (h = 1/8); with no tables given there is no bound
     ae = owned(psys([D(ce) ~ Dk[2] * Δ(ce)], [c(0, x, y) ~ 1.0; per], [Dk]; T = 0.1), 8)
+    @test ae.stability(LatticePDE.Problems.with_tables(ae.p, ae.tables)) ≈ 1024
     @test isnan(ae.stability(ae.p))
-    @test SciMLBase.successful_retcode(solve(ae, ExplicitEuler(; dt = 0.01, substeps = 20)))
+    s_ae = solve(ae, ExplicitEuler(; dt = 0.01))                     # the automatic count
+    @test SciMLBase.successful_retcode(s_ae) && s_ae.substeps == ceil(Int, 0.01 * 1024 / 1.8)
 end
 
 @testset "setp is atomic; init checks the faces (review round 2)" begin

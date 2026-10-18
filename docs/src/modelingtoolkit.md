@@ -109,7 +109,7 @@ cell variable, a built-in, …) is its `potts_entity` metadata:
 the declared symbol `k`. Ask `Potts.inner(sys)` for any other MTK accessor (`iscomplete`,
 `full_equations`, the metadata, …). Potts models merge with `Potts.extend` (`@extend`) and
 compose with `Potts.compose`: each component (an MTK `System` wrapped with the model's own payload,
-`Potts.wrap(name, system, nothing, getfield(model, :part))`; for a Catalyst reaction network the
+`Potts.wrap(name, system, nothing, Potts.part(model))`; for a Catalyst reaction network the
 system is `Catalyst.ode_model(complete(rn))`) joins as a model-scope component, as with
 `@components model name = system`. A problem's `p` implements SciMLStructures: `Tunable` is
 the floating-point scalar parameters, `Constants` the kind tables (and integer scalars), and CPM
@@ -126,6 +126,11 @@ using Potts.SymbolicIndexingInterface: getp, getu
 sol = solve(prob, SequentialCPM(); saveat = 1)
 (k = getp(prob, :k)(prob), x = getu(sol, :x)(sol)[end], excess = sol[:excess][end])
 ```
+
+On the integrator of a field problem (`LatticePDE.discretize(Potts.fields(sys), disc;
+problem = :owned)`), `integ[c]` returns a copy of the field's values, on the problem's device.
+Writing into the copy, `integ[c][1, 1] = v`, changes nothing; to change the field, assign it:
+`integ[c] = values`.
 
 ## The Hamiltonian as Symbolics expressions [C3]
 

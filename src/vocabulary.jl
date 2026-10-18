@@ -1473,7 +1473,9 @@ A fixed value `v` of a field, in `@boundary`: on a face (`x => (Dirichlet(v), â€
 value, the missing neighbor set to `2v âˆ’ c` so that the face value `v` is reached midway
 between the edge site and its ghost; on a site mask (`sites(pred) => Dirichlet(v)`) a node
 value, every site where `pred` holds set to `v` after every explicit substep. `v` is a
-number, a parameter or a parameter expression (a `remake` of the parameter keeps the code).
+number, a parameter, or a number times a parameter (a `remake` of the parameter keeps the
+code). For an expression of parameters, declare a computed parameter
+(`@parameters g = g1 + g2`) and write `Dirichlet(g)`.
 """
 struct Dirichlet{V}
     value::V
@@ -1512,18 +1514,31 @@ end
 _boundary_side(s::Union{Dirichlet, NoFlux}, field, axis, what) = s isa Dirichlet ? Dirichlet(_boundary_value(s.value, field, "`$axis` $what face")) : s
 _boundary_side(s, field, axis, what) = throw(ArgumentError(
     "@boundary $(info(field).name): the $what side of axis `$axis` is `$s`; each side is `Dirichlet(value)` or `NoFlux()`"))
+const _BOUNDARY_VALUE_FORMS = "a boundary value is a number, a parameter, or a number times a parameter"
 function _boundary_value(v, field, what)
     u = _unwrap(v)
     u isa Real && return Float64(u)                  # a number (`Num` is a `Real` too: unwrapped first)
     u isa SymbolicUtils.BasicSymbolic || throw(ArgumentError(
-        "@boundary $(info(field).name): the $what value is `$v`; give a number, a parameter or a parameter expression"))
+        "@boundary $(info(field).name): the $what value is `$v`; $_BOUNDARY_VALUE_FORMS"))
     for y in _leaves(u)
         j = info(y)
         (j === nothing || j.role === :param) || throw(ArgumentError(
-            "@boundary $(info(field).name): the $what value `$v` reads `$(j.name)`; a boundary value is a number, a " *
-            "parameter or a parameter expression"))
+            "@boundary $(info(field).name): the $what value `$v` reads `$(j.name)`; $_BOUNDARY_VALUE_FORMS"))
     end
+    # the field compiler binds one parameter per value (LatticePDE's face and mask values): an
+    # expression of parameters is refused here, at the model, with the computed-parameter route
+    _param_or_scaled(u) || throw(ArgumentError(
+        "@boundary $(info(field).name): the $what value `$v` is an expression of parameters; " *
+        "$_BOUNDARY_VALUE_FORMS. Declare a computed parameter (`@parameters g = $v`) and write `Dirichlet(g)`"))
     return v
+end
+_bv_param(y) = (j = info(y); j !== nothing && j.role === :param)
+_bv_number(y) = (c = SymbolicUtils.isconst(y) ? SymbolicUtils.unwrap_const(y) : y; c isa Real)
+function _param_or_scaled(u)
+    _bv_param(u) && return true
+    (iscall(u) && operation(u) === (*)) || return false
+    a = arguments(u)
+    return count(_bv_param, a) == 1 && all(y -> _bv_param(y) || _bv_number(y), a)
 end
 
 """`x => (low, high)` of `@boundary field` (axis named `name`)."""

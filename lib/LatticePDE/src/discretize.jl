@@ -26,7 +26,8 @@ A hexagonal grid (`Grid(dims; geometry = HEX)`, 2D, axial coordinates: the neigh
 equal spacing). A neighbor outside a closed face, or outside the domain, reads the site
 itself (zero flux). Only `Δ` is defined there, and face conditions are refused.
 
-`domain` names a `Bool` input field (by key) that marks an irregular domain inside the box.
+`domain` names a `Bool` input field (the variable `dom`, or its key `"dom"` or `:dom`) that marks an
+irregular domain inside the box; give its values like any input (`discretize(…; inputs)`).
 The fields live in the domain: a site outside keeps its value (its rate is 0, its masked
 conditions do not hold), and neighbor reads across the domain's edge read the site itself
 (zero flux; `LatticeFields.IR.DomainEdgeRule`). Face conditions still apply at the faces of
@@ -41,13 +42,13 @@ struct LatticeDiscretization{N, M, B} <: AbstractDiscretization
     domain::Union{Nothing, String}
 end
 function LatticeDiscretization(grid::Grid; methods = Dict(), T::Union{Type, Nothing} = nothing,
-                               backend = nothing,
-                               problem::Symbol = :auto, domain::Union{Nothing, AbstractString} = nothing)
+                               backend = nothing, problem::Symbol = :auto, domain = nothing)
     problem in (:auto, :owned, :ode, :linear) ||
         throw(ArgumentError("problem must be :auto, :owned, :ode or :linear; got $(repr(problem))"))
-    grid.domain == 0 || throw(ArgumentError("give an irregular domain as `domain = key` (a Bool input field), not in the grid"))
+    grid.domain == 0 || throw(ArgumentError("give an irregular domain as `domain = dom` (a Bool input field), not in the grid"))
     grid.geometry == HEX && length(grid.dims) != 2 && throw(ArgumentError("a hexagonal grid is 2D"))
-    return LatticeDiscretization(grid, methods, T, backend, problem, domain === nothing ? nothing : String(domain))
+    key = domain === nothing ? nothing : domain isa Union{AbstractString, Symbol} ? String(domain) : _name(_opof(domain))
+    return LatticeDiscretization(grid, methods, T, backend, problem, key)
 end
 
 """
@@ -88,7 +89,39 @@ function _statetype(disc::LatticeDiscretization)
     disc.T === nothing || return disc.T
     return disc.backend === nothing ? Float64 : Exec.default_float(disc.backend)
 end
-_default(p) = ModelingToolkitBase.hasdefault(p) ? Float64(unwrap_const(ModelingToolkitBase.getdefault(p))) : NaN
+# The parts of a `PDESystem` beyond its six lowered fields (SX-21): `ps = NullParameters()`
+# (MTKBase's default) is no parameters; `initial_conditions` give parameter values (over the
+# variable defaults) and field initial values (where no `c(0, …) ~ v` condition gives one);
+# subsystems and analytic solutions are refused by name, never ignored
+_params(sys::PDESystem) = sys.ps isa NullParameters ? Any[] : collect(sys.ps)
+_ics(sys::PDESystem) = getfield(sys, :initial_conditions)
+function _check_parts(sys::PDESystem)
+    sy = getfield(sys, :systems)
+    isempty(sy) || _dverr("`$(nameof(sys))` has subsystems ($(join(("`$(nameof(x))`" for x in sy), ", "))); " *
+                          "`discretize` lowers one flat PDESystem: write their equations into it")
+    (getfield(sys, :analytic) === nothing && getfield(sys, :analytic_func) === nothing) ||
+        _dverr("`$(nameof(sys))` has analytic solutions, which `discretize` does not use in this version " *
+               "(no solution carries them); compare against them yourself and leave `analytic` out")
+    # every `initial_conditions` key is a parameter or a dependent variable (a typo is not ignored)
+    known = Any[unwrap.(_params(sys)); unwrap.(sys.dvs); [_opof(v) for v in sys.dvs]]
+    for k in keys(_ics(sys))
+        any(q -> isequal(q, unwrap(k)), known) && continue
+        _dverr("`initial_conditions` gives `$k` a value, but `$k` is neither a parameter nor a dependent variable " *
+               "of `$(nameof(sys))`")
+    end
+    return nothing
+end
+# the value given for `x` in the system's `initial_conditions`, else `nothing`
+_icvalue(ic, x) = (u = unwrap(x); haskey(ic, u) ? ic[u] : nothing)
+
+# a parameter's numeric value: its `initial_conditions` entry, else its default, else NaN
+# (none, or a computed value such as `2a`, which `discretize` folds into the equations)
+function _default(p, ic = Dict())
+    d = _icvalue(ic, p)
+    d === nothing && !ModelingToolkitBase.hasdefault(p) && return NaN
+    v = unwrap_const(unwrap(d === nothing ? ModelingToolkitBase.getdefault(p) : d))
+    return v isa Real ? Float64(v) : NaN
+end
 
 # a face or mask value: a number, a parameter, or a number times a parameter
 function _coef(v, params, scale = 1.0)
@@ -131,7 +164,8 @@ function _eqkind(eq, fields, ivs)
         plain(l) || bad("a field read `c($(join(ivs, ", ")))`")
         return :aux, l
     end
-    _iszero(l) && _dverr("equation `$eq`: quasi-steady `0 ~ rhs` fields are lowered by the solver group, not by `symbolic_discretize`")
+    _iszero(l) && _dverr("equation `$eq`: a steady equation `0 ~ rhs` is not lowered in this version (a steady " *
+                         "solver is planned); step it to its steady state as a rate `D(c) ~ rhs`")
     _dverr("equation `$eq`: the left side must be `D(c)`, `Shift(t, 1)(c)` or a field `c`")
 end
 
@@ -158,9 +192,14 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
                              update::U = nothing, leaf::L = nothing) where {N, U, L}
     check_vocabulary(sys)
     _scan_clock(sys)
-    any(p -> p isa Pair, sys.ps) && _dverr("parameters are declared natively, `@parameters Dc = 1e-3`; " *
-                                           "the `ps` entry `$(first(filter(p -> p isa Pair, sys.ps)))` is a `Pair`")
+    _check_parts(sys)
+    ps, ic = _params(sys), _ics(sys)
+    any(p -> p isa Pair, ps) && _dverr("parameters are declared natively, `@parameters Dc = 1e-3`; " *
+                                       "the `ps` entry `$(first(filter(p -> p isa Pair, ps)))` is a `Pair`")
     ivs = unwrap.(sys.ivs)
+    length(ivs) == N && _dverr("the system's variables $(Tuple(ivs)) have no time: the first variable is time, and the " *
+                               "grid has $N axes; a steady system (no `t`) is not supported in this version: add `t` " *
+                               "and step the equations as rates `D(c) ~ rhs` to their steady state")
     length(ivs) == N + 1 || _dverr("the grid has $N axes but the system has $(length(ivs) - 1) spatial variables (the first variable is time)")
     ends = map(ivs) do v
         k = findfirst(d -> isequal(unwrap(d.variables), v), sys.domain)
@@ -177,6 +216,13 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     keys = Dict{Any, Vector{String}}(op => (n = ncomp(v); n == 0 ? [_name(op)] : ["$(_name(op))[$i]" for i in 1:n])
                                      for (op, v) in dvs)
     key(op, comp) = keys[op][max(comp, 1)]
+    for v in sys.dvs                     # metadata nothing lowers yet is refused, never ignored
+        for (getm, what) in ((get_lattice_level, "lattice_level"), (get_lattice_placement, "lattice_placement"))
+            m = getm(v)
+            m === nothing || _dverr("`$v` has `$what = $m`, which this version does not lower (every field lives on " *
+                                    "the fine grid, at the cell centers); remove the metadata (coarse levels are planned)")
+        end
+    end
     for (k, m) in disc.methods
         op = _opof(k)
         haskey(dvs, op) || _dverr("the `methods` key `$k` matches no dependent variable")
@@ -214,6 +260,17 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         _reads(b.value, allops) && _dverr("`$(b.eq)`: an initial value cannot read a field")
     end
     initial = Dict{String, Any}(key(b.op, b.comp) => something(_cval(b.value), b.value) for b in bcs if b.kind == :initial)
+    for (op, v) in dvs                   # `initial_conditions` entries of the fields (SX-21)
+        d = something(_icvalue(ic, v), _icvalue(ic, op), Some(nothing))
+        d === nothing && continue
+        isin[op] && _dverr("`initial_conditions` gives the input `$(_name(op))` a value; give input values to `discretize(…; inputs)`")
+        ncomp(v) == 0 || _dverr("`initial_conditions` gives the array field `$(_name(op))` a value; give each component a condition `$(_name(op))(0, …)[i] ~ v`")
+        k = key(op, 0)
+        haskey(initial, k) && _dverr("field `$k` has an initial value in `initial_conditions` and a condition `$k(0, …) ~ v`; give one")
+        eqs[k][1] in (:rate, :map) || _dverr("`initial_conditions` gives `$k` a value, but only rate and map fields take an initial value")
+        _reads(d, allops) && _dverr("the initial value of `$k` in `initial_conditions` reads a field")
+        initial[k] = something(_cval(d), d)
+    end
     for b in bcs
         b.kind in (:dirichlet, :neumann, :robin) || continue
         periodic[b.axis] && _dverr("`$(b.eq)` sets a face of axis $(b.axis), which a periodic pair makes periodic")
@@ -225,11 +282,11 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
             _dverr("axis $d is periodic for `$k` but `$k2` has no periodic pair on it; periodicity is per axis")
     end
     # parameters: scalars by sorted name, spacing parameters valued from the grid; arrays → tables
-    plist = sort!([unwrap(p) for p in sys.ps if !(SymbolicUtils.symtype(unwrap(p)) <: AbstractArray)]; by = string)
+    plist = sort!([unwrap(p) for p in ps if !(SymbolicUtils.symtype(unwrap(p)) <: AbstractArray)]; by = string)
     params = Dict{Any, Int}(p => i for (i, p) in enumerate(plist))
     spacing = Dict{Any, Int}(p => get_lattice_spacing(p) for p in plist if get_lattice_spacing(p) !== nothing)
-    defaults = [haskey(spacing, p) ? h[spacing[p]] : _default(p) for p in plist]
-    arrays = sort!([unwrap(p) for p in sys.ps if SymbolicUtils.symtype(unwrap(p)) <: AbstractArray]; by = string)
+    defaults = [haskey(spacing, p) ? h[spacing[p]] : _default(p, ic) for p in plist]
+    arrays = sort!([unwrap(p) for p in ps if SymbolicUtils.symtype(unwrap(p)) <: AbstractArray]; by = string)
 
     pb = ProgramBuilder(disc.grid; periodic, spacing = h, nparams = length(plist))
     tables = Dict{Any, Tuple{Int32, Scalar}}(p => (table!(pb, string(p); storage = _lane(Float64, T)), _lane(Float64, T))
@@ -326,7 +383,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         end
         add!(pb, kb, "$kind:$k")
     end
-    tvals = [string(p) => (d = ModelingToolkitBase.hasdefault(p) ? ModelingToolkitBase.getdefault(p) : Float64[];
+    tvals = [string(p) => (d = something(_icvalue(ic, p), Some(ModelingToolkitBase.hasdefault(p) ? ModelingToolkitBase.getdefault(p) : Float64[]));
                            Float64.(collect(unwrap_const.(unwrap.(d))))) for p in arrays]
     return CompiledField{N}(program(pb), keys, plist, defaults, tvals, initial, lin)
 end

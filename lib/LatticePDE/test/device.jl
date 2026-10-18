@@ -61,3 +61,71 @@ end
     rh = solve(host, Rodas5P(); abstol = 1e-4, reltol = 1e-4)
     @test SciMLBase.successful_retcode(r) && isapprox(Array(r.u[end]), rh.u[end]; rtol = 1e-3)
 end
+
+@testset "integ[c] is a device array on $pgpu (F1 round 5)" begin
+    # rounds 2–4: a read-only wrapper (`FieldValues`) failed or hung on device operations
+    # (scalar indexing; `v[1:2, 1]`, then `v[v .> 0]`, `vcat`, `hcat` hung); round 5 returns
+    # the copy itself, a device array, as SciML does
+    fs = PDESystem([D(ce) ~ -ce], [c(0, x, y) ~ 1.0], [t ∈ Interval(0, 1), x ∈ Interval(0, 1), y ∈ Interval(0, 1)],
+        [t, x, y], [ce], Num[]; name = :fv)
+    ig = init(discretize(fs, LatticeDiscretization(Grid((8, 8)); T = Float32, problem = :owned, backend = PDEV)),
+        ExplicitEuler(; dt = 0.1f0))
+    v = ig[ce]
+    @test KernelAbstractions.get_backend(v) == PDEV && size(v) == (8, 8)
+    h = Array(v)
+    # each device operation runs on another task under a timeout, so a hang fails fast
+    function within(f, s = 120.0)
+        r = Threads.@spawn f()
+        timedwait(() -> istaskdone(r), s) === :ok || return false
+        return fetch(r)
+    end
+    @test within(() -> Array(v[v .> 0]) == vec(h))
+    @test within(() -> Array(vcat(v, v)) == vcat(h, h) && Array(hcat(v, v)) == hcat(h, h))
+    @test within(() -> v == v && Array(v) == h && h ≈ Array(v) && isapprox(v, v))
+    @test within(() -> Array(v[1:2, 1]) == h[1:2, 1] && Array(v[:, 2]) == h[:, 2] && Array(v[2:3, 4:5]) == h[2:3, 4:5])
+    @test within(() -> sum(view(v, :, 1)) == 8 && sum(vec(v)) == 64 && Array(vec(v) .+ 1) == fill(2.0f0, 64))
+    @test within(() -> sum(v) == 64 && maximum(v) == 1 && minimum(v) == 1 && Array(v .+ 1) == fill(2.0f0, 8, 8))
+    @test within(() -> convert(Matrix{Float32}, Array(v)) == h && Matrix(Array(v)) isa Matrix{Float32} &&
+                       Array{Float64}(Array(v)) == ones(8, 8))
+    @test within(() -> (hh = zeros(Float32, 8, 8); copyto!(hh, v); hh == h))
+    @test within(() -> !isempty(sprint(show, MIME"text/plain"(), v)))
+    # a write into the copy changes nothing; `.=` is named
+    @test within(() -> (v .= 3.0f0; Array(ig[ce]) == h))
+    @test occursin("integ[c] = values", emsg(() -> (ig[ce] .= 2.0f0)))
+end
+
+@testset "an integer input given as a device array (F1 round 4)" begin
+    # round 3: the integer check indexed the device array in a kernel ("KernelError")
+    n = 8
+    msys = ssys([D(ce) ~ ifelse(qe == 1, 1.0, 0.0)], [c(0, x, y) ~ 0.0], [ce, qe], Num[])
+    dk(vals) = (a = KernelAbstractions.allocate(PDEV, Int32, n, n); copyto!(a, vals); a)
+    K = Int32[i <= 4 ? 1 : 0 for i in 1:n, j in 1:n]
+    mk(k) = discretize(msys, LatticeDiscretization(Grid((n, n)); T = Float32, problem = :owned, backend = PDEV);
+        inputs = [qe => k])
+    s = solve(mk(dk(K)), ExplicitEuler(; dt = 0.1f0))
+    @test Array(s[:c][end]) ≈ Float32.(K)
+    ig = init(mk(dk(K)), ExplicitEuler(; dt = 0.1f0))
+    ig[qe] = dk(zeros(Int32, n, n))
+    @test Array(ig[qe]) == zeros(Int32, n, n)
+    # a value outside Int32 is named, from a device array of a wider type
+    w = KernelAbstractions.allocate(PDEV, Int64, n, n)
+    copyto!(w, fill(Int64(3)^30, n, n))
+    err = emsg(() -> mk(w))
+    @test occursin("`kq` holds integer values", err) && !occursin("KernelError", err)
+end
+
+@testset "a Bool input given as a device array (F1 round 5)" begin
+    # round 4: scalar indexing
+    n = 8
+    dsys = ssys([D(ce) ~ 1.0], [c(0, x, y) ~ 0.0], [ce, de], Num[])
+    half = [i <= 4 for i in 1:n, j in 1:n]
+    db = KernelAbstractions.allocate(PDEV, Bool, n, n)
+    copyto!(db, half)
+    mk(m) = discretize(dsys, LatticeDiscretization(Grid((n, n)); T = Float32, problem = :owned, backend = PDEV,
+        domain = dm); inputs = [dm => m])
+    r = Threads.@spawn Array(solve(mk(db), ExplicitEuler(; dt = 0.1f0))[:c][end])
+    @test timedwait(() -> istaskdone(r), 300.0) === :ok && fetch(r) ≈ Float32.(half)
+    d2 = KernelAbstractions.allocate(PDEV, Int32, n, n)
+    copyto!(d2, fill(Int32(2), n, n))
+    @test occursin("`dm` holds a Bool mask", emsg(() -> mk(d2)))
+end

@@ -720,9 +720,11 @@ _cpm_scalar(::Type{T}, v, i::Entity) where {T} = v isa Union{AbstractFloat, Inte
         T(v)
     catch e
         e isa Union{MethodError, InexactError, ArgumentError} || rethrow()
-        throw(ArgumentError("parameter `$(i.name)` = $v (a $(typeof(v))) does not convert to the CPM scalar type $T: " *
-            "CPM parameters are plain numbers (no Duals; the acceptance of a copy is piecewise constant in the " *
-            "parameters, so their derivative is zero almost everywhere)"))
+        throw(ArgumentError("parameter `$(i.name)` = $v (a $(typeof(v))) does not convert to the problem's scalar type $T: " *
+            "a PottsProblem holds plain numbers for every parameter in this version (no Duals). Derivatives " *
+            "through field and ODE parameters are planned; a parameter the CPM reads has a derivative that is zero " *
+            "almost everywhere (the acceptance of a copy is piecewise constant in it), so it belongs to " *
+            "likelihood-free inference"))
     end
 
 function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{Any, Any}())

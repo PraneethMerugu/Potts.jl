@@ -145,11 +145,80 @@ The complete (flattened) ModelingToolkitBase `System` of a model: its parameters
 inner(sys::PottsSystem) = getfield(sys, :inner)
 
 """
-    Potts.fields(sys::PottsSystem)
+    Potts.part(sys::PottsSystem) -> PottsPart
 
-The `PDESystem` of a model's fields, or `nothing`.
+The Potts payload of a model (kinds, lattice, energies, sweep, …). `Potts.wrap(name, system,
+nothing, Potts.part(model))` builds a component with the model's kinds and lattice, which
+`Potts.compose` requires.
 """
-fields(sys::PottsSystem) = getfield(sys, :fields)
+part(sys::PottsSystem) = getfield(sys, :part)
+
+"""
+    Potts.fields(sys::PottsSystem)
+    Potts.fields(c::CompiledPottsSystem)
+
+The `PDESystem` of a model's fields, or `nothing` for a model without fields. A model built
+by `@potts_model` (or `PottsSystem(; …)`) has its PDESystem built from its field variables,
+`@equations` and `@boundary` entries; a compiled model returns the one `mtkcompile` built.
+Either carries the model's defaults as `initial_conditions` (each field's initial value and
+each parameter's value), so LatticePDE's `discretize` takes it as a plain PDE system. Its CPM
+couplings are `input = true` dependent variables, each named by the word the model uses
+(`lattice_input_name`): `kind` for the kind of each site, `domain` for an irregular domain,
+the CPM term as written (`volume`) for the others; give their values by that name,
+`discretize(…; inputs = [:kind => K, :volume => V])` (`K` the kind number of each site, 0 for
+the medium). A hand-wrapped
+PDESystem (`Potts.wrap`) is returned as given. A model with `@bcs` entries is an
+`ArgumentError` naming them, as at `mtkcompile`: `@bcs` is not lowered in this version.
+"""
+function fields(sys::PottsSystem)
+    _refuse_bcs(sys)
+    f = _stored_fields(sys)
+    eqs = _field_equations(sys)
+    f === nothing && isempty(eqs) && return nothing
+    f === nothing && (f = first(_field_system(sys)))
+    isempty(eqs) && return f                        # a hand-wrapped PDESystem, as given
+    return _with_defaults(f, eqs)
+end
+
+# the PDESystem `f` of a model's fields with the model's defaults added to its
+# `initial_conditions` (a value already there is kept): the initial value of each field
+# (`@variables c(field) = v`) and the value of each parameter (`@parameters k = v`, an
+# expression of parameters for a computed one). Its parameters are the model's own symbols,
+# whose defaults the payload holds (F1, V13)
+function _with_defaults(f::ModelingToolkitBase.PDESystem, eqs)
+    ic = Dict{Any, Any}(getfield(f, :initial_conditions))
+    put!(k, v) = (v === nothing || any(x -> isequal(x, k), keys(ic)) || (ic[k] = v); nothing)
+    byname = Dict{Symbol, Any}(info(x).name => info(x).default for (x, _) in eqs)
+    for dv in getfield(f, :dvs)
+        u = _unwrap(dv)
+        n = iscall(u) ? nameof(operation(u)) : nothing
+        n isa Symbol && haskey(byname, n) && put!(u, byname[n])
+    end
+    ps0 = getfield(f, :ps)
+    ps = Any[(ps0 isa SciMLBase.NullParameters ? () : ps0)...]
+    # a computed default (`k2 = 2k`) reads parameters the equations may not: they join the
+    # system's parameters with their own defaults, so `discretize` can fold it (F1)
+    k = 1
+    while k <= length(ps)
+        q = ps[k]
+        i = info(q)
+        if i !== nothing
+            put!(_unwrap(q), i.default)
+            if _is_symbolic(i.default)
+                for v in Symbolics.get_variables(_unwrap(i.default))
+                    j = info(v)
+                    j !== nothing && j.role in (:param, :kindtable) && !any(x -> isequal(_unwrap(x), v), ps) &&
+                        push!(ps, v)
+                end
+            end
+        end
+        k += 1
+    end
+    return ModelingToolkitBase.PDESystem(getfield(f, :eqs), getfield(f, :bcs), getfield(f, :domain), getfield(f, :ivs),
+        getfield(f, :dvs), ps; name = nameof(f), initial_conditions = ic)
+end
+# the PDESystem slot of a wrap (a hand-wrapped or compiled one), without building it
+_stored_fields(sys::PottsSystem) = getfield(sys, :fields)
 
 """
     Potts.wrap(name, sys::System, fields, part::PottsPart) -> PottsSystem
@@ -396,13 +465,27 @@ function compose(p::PottsSystem, cs::PottsSystem...; name::Symbol = nameof(p))
 end
 
 function _merge_fields(name, p, cs)
-    fs = [f for f in (fields(p), map(fields, cs)...) if f !== nothing]
+    fs = [f for f in (_stored_fields(p), map(_stored_fields, cs)...) if f !== nothing]
     isempty(fs) && return nothing
     merged(get) = unique(reduce(vcat, [collect(get(f)) for f in fs]))
     # read with `getfield`: MTKBase has no public accessor for a PDESystem's `bcs` or
-    # `domain`, and the merge keeps the six stored fields exactly (friction register, HANDOFF §2)
+    # `domain`, and the merge keeps the six stored fields exactly (friction register, HANDOFF §2);
+    # `initial_conditions` are merged (one value per key), and the parts a merge cannot keep
+    # (subsystems, analytic solutions) are refused, never dropped (SX-21)
+    for f in fs
+        isempty(getfield(f, :systems)) && getfield(f, :analytic) === nothing && getfield(f, :analytic_func) === nothing ||
+            throw(ArgumentError("Potts.compose: the PDESystem `$(nameof(f))` has subsystems or analytic solutions, " *
+                                "which a composed model's PDESystem does not carry; leave them out"))
+    end
+    ic = Dict{Any, Any}()
+    for f in fs, (k, v) in getfield(f, :initial_conditions)
+        haskey(ic, k) && !isequal(ic[k], v) && throw(ArgumentError(
+            "Potts.compose: two PDESystems give `$k` different initial conditions ($(ic[k]) and $v)"))
+        ic[k] = v
+    end
+    ps(f) = (x = getfield(f, :ps); x isa SciMLBase.NullParameters ? Any[] : x)
     return ModelingToolkitBase.PDESystem(merged(f -> getfield(f, :eqs)), merged(f -> getfield(f, :bcs)), merged(f -> getfield(f, :domain)), merged(f -> getfield(f, :ivs)),
-        merged(f -> getfield(f, :dvs)), merged(f -> getfield(f, :ps)); name)
+        merged(f -> getfield(f, :dvs)), merged(ps); name, initial_conditions = ic)
 end
 
 const _STATEMENT_FIELDS = (:energies, :drives, :constraints, :updates, :divisions, :converts, :relationships, :link_rules,
@@ -436,11 +519,11 @@ function _merge_part(p, cs)
         # a component's folds read kinds by number and the lattice's sites: they must be the model's
         _p(c, :kinds) == _p(p, :kinds) || throw(ArgumentError(
             "Potts.compose: component `$(nameof(c))` has the kinds $(_p(c, :kinds)), the model `$(nameof(p))` " *
-            "$(_p(p, :kinds)); a component is built with the model's kinds (pass the model's `Potts.PottsPart` to `Potts.wrap`)"))
+            "$(_p(p, :kinds)); a component is built with the model's kinds (`Potts.wrap(name, system, nothing, Potts.part(model))`)"))
         _same_lattice(_p(c, :lattice), _p(p, :lattice)) || throw(ArgumentError(
             "Potts.compose: component `$(nameof(c))` has another lattice than the model `$(nameof(p))`; a component is " *
-            "built with the model's lattice (pass the model's `Potts.PottsPart` to `Potts.wrap`)"))
-        fields(c) === nothing || throw(ArgumentError(
+            "built with the model's lattice (`Potts.wrap(name, system, nothing, Potts.part(model))`)"))
+        _stored_fields(c) === nothing || throw(ArgumentError(
             "Potts.compose: component `$(nameof(c))` has a PDESystem; a component's fields are not compiled " *
             "(declare the fields in the model: `@variables c(field)`, `@equations D(c) ~ …`)"))
         append!(bindings, (FieldBinding([nameof(c); b.path], b.name, b.source) for b in _p(c, :bindings)))
@@ -731,7 +814,7 @@ function Base.show(io::IO, ::MIME"text/plain", sys::PottsSystem)
     print(io, "  inner: System ", nameof(s), " with ", _count_string(length(_MTKB.equations(s)), "equation"), ", ",
         _count_string(length(_MTKB.unknowns(s)), "unknown"), ", ", _count_string(length(_MTKB.parameters(s)), "parameter"))
     isempty(_MTKB.unknowns(s)) || print(io, "\n    unknowns: ", join(_MTKB.unknowns(s), ", "))
-    f = fields(sys)    # counts read with `getfield`, as in `_merge_fields`
+    f = _stored_fields(sys)    # the stored slot (not built here); counts read with `getfield`, as in `_merge_fields`
     f === nothing || print(io, "\n  fields: PDESystem with ", _count_string(length(getfield(f, :eqs)), "equation"), ", ",
         _count_string(length(getfield(f, :bcs)), "bc"), ", ", _count_string(length(getfield(f, :dvs)), "dependent variable"))
 end

@@ -35,7 +35,8 @@ using LatticeFields.IR: fieldid
 using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
                               ExplicitEuler, ExplicitMap, ode_problem, RT_DT
 using ModelingToolkitBase: ModelingToolkitBase, PDESystem, Pre, ShiftIndex, Shift, Hold, Sample
-using SciMLBase: AbstractDiscretization
+using SciMLBase: AbstractDiscretization, NullParameters, remake
+using SymbolicIndexingInterface: getp, getu, setp
 import SciMLBase: discretize, symbolic_discretize
 using Symbolics: Symbolics, Differential, Equation, Num, VarDomainPairing, @register_symbolic,
                  unwrap, substitute
@@ -43,13 +44,14 @@ using SymbolicUtils: SymbolicUtils, arguments, iscall, operation, unwrap_const
 
 public euler_update, bound_parts, StabilityBound
 export Δ, DivKGrad, Advect, AdvectionScheme, Upwind1, at, at2, ismember, masked
-export LatticePlacement, LatticeStorage, LatticeLevel, LatticeSpacing, PottsEntity
+export LatticePlacement, LatticeStorage, LatticeLevel, LatticeSpacing, PottsEntity, LatticeInputName
 export get_lattice_placement, get_lattice_storage, get_lattice_level, get_lattice_spacing,
-       get_potts_entity
+       get_potts_entity, get_lattice_input_name
 export vocabulary_issues, check_vocabulary
 export LatticeDiscretization, FiniteVolume, CompiledField, discretize, symbolic_discretize,
        parse_bcs, linearity, Grid, Interval
 export ExplicitEuler, ExplicitMap, FieldProblem, solve, init, step!, solve!, stability_bound
+export remake, getp, getu, setp            # the routes its messages give (SciMLBase, SymbolicIndexingInterface)
 
 # ---------------------------------------------------------------------------------------
 # Field operators: opaque terms, lowered by the discretizer and never evaluated here
@@ -112,16 +114,23 @@ end
 explicit site or cell `s` (`at(c, target)`). Never index an array parameter with a symbolic
 input (`Dk[kindₛ]`): `mtkcompile(; inputs)` then keeps the input as an unknown.
 
+A table read follows the lattice kernel: index 0 reads 0 (a kind map value 0 reads no entry),
+and any other index is clamped into `1:length(T)` (an index above the table reads its last
+entry). The stability bound evaluates a coefficient at every index a read can take, index 0
+included; declare an index input's bounds (`[input = true, bounds = (1, n)]`) when it is
+never 0, and its values are checked against them.
+
 With two or more integer inputs (for example the two kinds of [`at2`](@ref)),
 `mtkcompile(sys; inputs = [a, b])` can fail with `AssertionError: last_idx <= idx` in
 ModelingToolkitBase `complete` (FR-36, MTKBase 1.77): it requires the inputs in its own
 parameter order, which is hash order and so depends on the names and the machine. Give the
 inputs in the reverse order (`inputs = [b, a]`).
 """
-at(T::AbstractArray{<:Union{Integer, AbstractFloat}}, k::Union{Integer, AbstractFloat}) = T[Int(k)]
+at(T::AbstractArray{<:Union{Integer, AbstractFloat}}, k::Union{Integer, AbstractFloat}) =
+    k == 0 ? zero(eltype(T)) : T[clamp(Int(k), 1, length(T))]
 # One registration for the table and the site forms (see `Advect`). The index is any `Real`
 # term: a kind or a cell id may be a `Real`-typed input (a CPM built-in), and an integer
-# literal is a kind code (`at(Dk, 0)`, the medium's entry).
+# literal reads that entry (`at(Dk, 2)`; `at(Dk, 0)` reads 0, as in the kernel).
 @register_symbolic at(T::Union{Real, AbstractVector}, k::Real)
 # literal indices into symbolic tables and site values (the registration covers a symbolic
 # index only)
@@ -201,12 +210,20 @@ Metadata key `potts_entity`: what a coupling input of a field system reads from 
 (`kindₛ(t, x, y)::Int32 [input = true, potts_entity = …]`).
 """
 struct PottsEntity end
+"""
+Metadata key `lattice_input_name`: the name a user gives an input field by
+(`kind__in(t, x, y)::Int32 [input = true, lattice_input_name = "kind"]`). `discretize(…;
+inputs = [:kind => K])` takes it as well as the variable, and messages print it; a front end
+that generates its input variables (Potts' `kind__in`) sets it to the user's word.
+"""
+struct LatticeInputName end
 
 Symbolics.option_to_metadata_type(::Val{:lattice_placement}) = LatticePlacement
 Symbolics.option_to_metadata_type(::Val{:lattice_storage}) = LatticeStorage
 Symbolics.option_to_metadata_type(::Val{:lattice_level}) = LatticeLevel
 Symbolics.option_to_metadata_type(::Val{:lattice_spacing}) = LatticeSpacing
 Symbolics.option_to_metadata_type(::Val{:potts_entity}) = PottsEntity
+Symbolics.option_to_metadata_type(::Val{:lattice_input_name}) = LatticeInputName
 
 _meta(x, key) = Symbolics.getmetadata(Symbolics.unwrap(x), key, nothing)
 """`get_lattice_placement(x)`: the `lattice_placement` of `x`, or `nothing`."""
@@ -219,6 +236,15 @@ get_lattice_level(x) = _meta(x, LatticeLevel)
 get_lattice_spacing(x) = _meta(x, LatticeSpacing)
 """`get_potts_entity(x)`: the `potts_entity` of `x`, or `nothing`."""
 get_potts_entity(x) = _meta(x, PottsEntity)
+"""`get_lattice_input_name(x)`: the `lattice_input_name` of the input `x` (or of its operation), or `nothing`."""
+function get_lattice_input_name(x)
+    n = _meta(x, LatticeInputName)
+    n === nothing || return String(n)
+    u = Symbolics.unwrap(x)
+    SymbolicUtils.iscall(u) || return nothing
+    n = _meta(SymbolicUtils.operation(u), LatticeInputName)
+    return n === nothing ? nothing : String(n)
+end
 
 # ---------------------------------------------------------------------------------------
 # Scans: spellings MTK builds without complaint that are wrong or meaningless here

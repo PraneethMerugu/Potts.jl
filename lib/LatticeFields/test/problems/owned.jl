@@ -60,11 +60,11 @@ end
     integ = init(prob, ExplicitEuler(; dt = 0.05))
     LatticeFields.Problems.SII.setp(integ, :D)(integ, 100.0)
     @test integ.substeps == ceil(Int, 0.05 * 800 / 1.8)
-    # a user count bypasses the bound: it is not evaluated (a bound that throws is not reached)
-    throws = FieldProblem(euler2(dims), zeros(64), (0.0, 0.1), [0.5]; state = ["u"], kind = :rate,
-        index = ix, stability = p -> error("bound evaluated"))
-    @test S(throws, ExplicitEuler(; dt = 0.05, substeps = 2)) == 2
-    @test_throws ErrorException S(throws, ExplicitEuler(; dt = 0.05))
+    # a user count is a minimum (ruling Q2, F1): raised to the bound's count, kept above it, and
+    # used as given when there is no bound (`unknown` above). On f9a77dd3 the count was used
+    # as given below the bound too: substeps = 1 gave 1 here, not 2
+    @test S(prob, ExplicitEuler(; dt = 0.5, substeps = 1)) == ceil(Int, 0.5 * 4 / 1.8) == 2
+    @test S(prob, ExplicitEuler(; dt = 0.5, substeps = 5)) == 5
 end
 
 @testset "PG-13: a plan of more than 32 launches allocates nothing" begin
@@ -122,4 +122,27 @@ end
          circshift(v, (0, -1))
     @test maximum(abs, du .- vec(0.5 .* (nb .- 4v))) < 1e-12
     @test (@allocated ode.f(du, ode.u0, ode.p, 0.0)) == 0
+end
+
+@testset "a U8 input takes 0…255 unless declared Bool (F1 round 5)" begin
+    # round 4: every U8 input was held to 0/1, so a raw U8 IR input refused 7
+    pb = ProgramBuilder(Grid((3, 3)); nparams = 0)
+    k8 = field!(pb, "k"; storage = U8, role = :input)
+    x = field!(pb, "x")
+    kb = kernel(pb)
+    store(kb, x, load(kb, x) + load(kb, k8))
+    add!(pb, kb, "k")
+    prog = program(pb)
+    cv(v; bool) = try
+        LatticeFields.Problems._check_integer(prog, "k", "k", v; bool); ""
+    catch e
+        sprint(showerror, e)
+    end
+    @test cv(fill(7, 9); bool = false) == "" && cv(fill(255, 9); bool = false) == ""
+    w = fill(0, 9); w[5] = 300
+    err = cv(w; bool = false)
+    @test occursin("integer values (a kind map: UInt8)", err) && occursin("at site (2, 2)", err)
+    err = cv(fill(7, 9); bool = true)
+    @test occursin("a Bool mask", err) && occursin("got 7 at site (1, 1)", err)
+    @test cv([true, false, 1, 0, 1, 0, 1, 0, 1]; bool = true) == ""
 end

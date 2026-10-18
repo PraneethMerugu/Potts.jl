@@ -70,6 +70,7 @@ struct CompiledPottsSystem
 end
 
 Base.nameof(c::CompiledPottsSystem) = nameof(c.sys)
+fields(c::CompiledPottsSystem) = fields(c.sys)
 
 const _CELL_ENERGY_BUILTINS = (:volume, :surface, :kind, :id, :generation, :cluster, :major_length, :euler, :euler_full,
     :pieces, :pieces_full, :largest_piece, :largest_piece_full, :birth)
@@ -203,11 +204,34 @@ per scalar type by `PottsProblem`).
 """
 function ModelingToolkitBase.mtkcompile(authored::PottsSystem)
     authored = _lower_inner(authored, "mtkcompile")
+    _refuse_bcs(authored)
     # the model's own cell and model ODEs through MTK's `mtkcompile` first (odes.jl)
     routed, ode_systems, origin = _compile_odes(authored)
     # entity-local initialization through MTK's `InitializationProblem` (initialization.jl)
     initialization = _compile_initialization(routed)
     return _via_algebraic(() -> _compile_bound(authored, _bind_components(routed), ode_systems, initialization), routed, origin)
+end
+
+# `@bcs` is stored and printed but not lowered in this version: compiling a model with any
+# entry is an error naming each condition, so no condition is dropped from a run (F1, V4)
+function _refuse_bcs(sys::PottsSystem)
+    bcs = _p(sys, :bcs)
+    isempty(bcs) && return nothing
+    throw(ArgumentError("@bcs: the condition$(length(bcs) == 1 ? "" : "s") " * join(("`$(_bc_text(b, _p(sys, :kinds)))`" for b in bcs), ", ") *
+                        " of `$(nameof(sys))` $(length(bcs) == 1 ? "is" : "are") not lowered in this version and would " *
+                        "not change the run; write field conditions with `@boundary` (`@boundary c begin " *
+                        "sites(kind == border) => Dirichlet(v); x => (Dirichlet(v), NoFlux()) end`), or remove `@bcs`"))
+end
+
+# a `@bcs` condition as written: built-ins without their time argument (`kind`, not `kind(t)`),
+# and a kind by its name (`kind == border`, not the number `kind == 2`)
+function _bc_text(b, kinds)
+    s = _builtin_text(string(b))
+    return replace(s, r"kind (==|!=|≠) (\d+)" => m -> begin
+        op, n = match(r"kind (==|!=|≠) (\d+)", m).captures
+        k = parse(Int, n)
+        "kind $op " * (0 <= k < length(kinds) ? string(kinds[k + 1]) : n)
+    end)
 end
 
 # `mtkcompile` of the model with its ODEs simplified and its components bound (`sys`)

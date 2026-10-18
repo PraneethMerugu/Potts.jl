@@ -17,10 +17,13 @@
 const _FIELD_X = Tuple(Symbolics.unwrap(only(ModelingToolkitBase.@parameters $n)) for n in (:x, :y, :z))
 
 # a callable dependent variable `name(..)` of element type `E`, applied to the ivs
-function _field_var(name::Symbol, ::Type{E}, ivs; input::Bool = false, entity = nothing, storage = nothing) where {E}
+function _field_var(name::Symbol, ::Type{E}, ivs; input::Bool = false, entity = nothing, storage = nothing,
+        username = nothing, bounds = nothing) where {E}
     f = Symbolics.unwrap(Symbolics.variable(name; T = SymbolicUtils.FnType{Tuple, E, Nothing}))
     v = f(ivs...)
+    bounds === nothing || (v = SymbolicUtils.setmetadata(v, ModelingToolkitBase.VariableBounds, bounds))
     input && (v = SymbolicUtils.setmetadata(v, ModelingToolkitBase.VariableInput, true))
+    username === nothing || (v = SymbolicUtils.setmetadata(v, LatticePDE.LatticeInputName, username))
     entity === nothing || (v = SymbolicUtils.setmetadata(v, PottsEntity, entity))
     S = storage === nothing && entity isa Entity ? get(entity.options, :lattice_storage, nothing) : storage
     S === nothing || (v = SymbolicUtils.setmetadata(v, LatticePDE.LatticeStorage, S))
@@ -104,6 +107,16 @@ function _field_term(x, cv)
         f === ifelse && !_reads_fieldvar(u) && _has_cpm_fill(u) && return _filled_or_refuse(cv, u)
         return f === ifelse ? _unwrap(ifelse(map(y -> Symbolics.wrap(_field_term(y, cv)), a)...)) :
                _unwrap(f(map(y -> Symbolics.wrap(_field_term(y, cv)), a)...))
+    elseif f isa LatticePDE.DivKGrad || f isa LatticePDE.Advect || f isa Differential ||
+           f isa ModelingToolkitBase.Shift
+        # LatticePDE vocabulary that `@equations` does not lower yet (F1, PO02): named as such,
+        # not diagnosed as a CPM read
+        nopkg(x) = replace(string(x), "LatticePDE." => "")         # as the model writes it
+        throw(ArgumentError("the term `$(nopkg(_builtin_text(string(u))))` of a field equation uses `$(nopkg(f))`, an operator " *
+                            "that `@equations` does not lower in this version (field equations take `Δ`, " *
+                            "`ismember`, `ifelse`, arithmetic and kind tables; the other LatticePDE operators " *
+                            "are planned); write it with `Δ`, or write the fields as a `PDESystem` and " *
+                            "discretize it with LatticePDE"))
     end
     return _filled_or_refuse(cv, u)
 end
@@ -152,8 +165,35 @@ end
 
 function _filled_input!(cv, u, name, E)
     any(e -> e[1] === name, cv.filled) || push!(cv.filled, (name, u, E))
+    # a kind is never negative: a kind table read `at(δ, kind + 1)` never takes index 0 (which
+    # reads 0), and the stability bound leaves it out
     return get!(() -> _field_var(name, E === Bool ? Bool : E <: Integer ? Int32 : Real, cv.ivs; input = true,
-            entity = Entity(:cpm_read, name, u, (;))), cv.inputs, name)
+            entity = Entity(:cpm_read, name, u, (;)), username = _input_word(name, u),
+            bounds = name === :kind__in ? (0, Inf) : nothing), cv.inputs, name)
+end
+# the user's word for a generated input: `kind`, `domain`, or the CPM read as written (`volume`)
+_input_word(name::Symbol, ex) = name === :kind__in ? "kind" : name === :domain__in ? "domain" :
+                                _builtin_text(string(ex))
+
+# a generated input goes by its word (`domain`, `kind`, a CPM read as written), and the field
+# compiler routes reads and writes by name: a field, site variable or parameter with the same
+# name is refused here, in the model's words (LatticeIndex would name the generated input)
+function _refuse_input_words(cv, names, ps)
+    taken = Dict{String, String}()
+    foreach(n -> taken[string(n)] = "a field", names)
+    foreach(k -> taken[string(k)] = "a site variable", keys(cv.direct))
+    foreach(q -> taken[_builtin_text(string(q))] = "a parameter", ps)
+    for e in cv.filled
+        haskey(cv.inputs, e[1]) || continue
+        w = _input_word(e[1], e[2])
+        what = get(taken, w, nothing)
+        what === nothing && continue
+        src = e[1] === :domain__in ? "the lattice's domain mask" : e[1] === :kind__in ? "the site's kind" :
+              "the CPM read `$w`"
+        throw(ArgumentError("the field equations read `$w` ($src), and `$w` is also $what of the model; " *
+                            "give the $(what[3:end]) another name"))
+    end
+    return nothing
 end
 
 _field_conv(ivs, states, T, known) = (; ivs, states, direct = Dict{Symbol, Any}(),
@@ -213,6 +253,7 @@ function _field_system(sys::PottsSystem, names = Symbol[info(x).name for (x, _) 
     dvs = Any[[states[n] for n in names]; [cv.direct[k] for k in sort!(collect(keys(cv.direct)))];
               [cv.inputs[e[1]] for e in cv.filled if haskey(cv.inputs, e[1])]]
     ps = sort!(collect(cv.params); by = string)
+    _refuse_input_words(cv, names, ps)
     domain = [Symbolics.wrap(tt) ∈ LatticePDE.Interval(0.0, 1.0);
               [Symbolics.wrap(xs[d]) ∈ LatticePDE.Interval(0.0, ext[d]) for d in 1:N]]
     pdesys = ModelingToolkitBase.PDESystem(eqs, bcs, domain, ivs, dvs, ps; name = nameof(sys))
@@ -277,14 +318,16 @@ The substep count of a group at raw parameters `praw`: the smallest `n` with
 `dt/n · ρ(p) ≤ 1.8` (`ρ` the Gershgorin bound of the rate Jacobian, LatticePDE's
 `stability_bound`), and at least the requested `substeps` (D-C8 item 1).
 
-With an explicit count, a term the bound cannot see (a table, a nonlinear reaction) or a
+With an explicit count, a term the bound cannot see (a nonlinear reaction) or a
 coupled row that is not diagonally dominant does not lower the count: `n` is the largest of
 the request and the bound over the terms it sees (diffusion at least, also inside an
 `ifelse` gate whose condition reads no field, bounded arm by arm); the problem warns
 at build (`_check_substeps`), once per group program and session. With no count, neither has a bound and the problem
 throws (unseen terms at build in `_field_groups`, coupled rows here, at build and at every
 parameter change). A negative diffusion coefficient (anti-diffusion: unstable at any step)
-is refused.
+is refused. A coefficient that is not finite at a kind table entry it reads (`1 / τ[kind]`
+with a zero entry, the medium's included) is refused with or without a count, naming the
+entry; past the bound's evaluation cap an explicit count runs as given.
 """
 struct _Substeps{B}
     bound::B
@@ -293,13 +336,17 @@ struct _Substeps{B}
     explicit::Bool
     names::Vector{Symbol}
     key::String                    # the group's fingerprint text (the warning's once-key)
+    unseen::Vector{String}         # the terms the bound cannot see, in the model's words
+    cv::NamedTuple                 # the generated inputs (`filled`), to print a term in the model's words
 end
 _fieldlist(ks) = join(("`$k`" for k in ks), ", ")
 function (s::_Substeps)(praw)
     r = LatticePDE.bound_parts(s.bound, praw)
     isempty(r.negative) || throw(ArgumentError(
         "the diffusion coefficient of the field$(length(r.negative) == 1 ? "" : "s") $(_fieldlist(r.negative)) " *
-        "is negative at the current parameters (anti-diffusion: explicit Euler is unstable at any step)"))
+        "is negative at the current parameters (anti-diffusion: an ill-posed equation, unstable at any step and " *
+        "with any solver); write the term with a coefficient ≥ 0 (`D * Δ(c)` with `D ≥ 0`; a decay is a reaction " *
+        "term `-k * c`), or give the parameters values that make it ≥ 0"))
     if !s.explicit && !isempty(r.coupled)
         throw(ArgumentError(
             "the substep count of the field$(length(s.names) == 1 ? "" : "s") $(_fieldlist(s.names)) has no bound " *
@@ -307,9 +354,53 @@ function (s::_Substeps)(praw)
             "(terms that read another field) $(length(r.coupled) == 1 ? "is" : "are") not diagonally dominant; give " *
             "`PottsProblem` `field_solver = ExplicitEuler(; substeps = n)` with `n ≥ mcs_duration · ρ / 1.8`"))
     end
-    isfinite(r.ρ) || throw(ArgumentError("the substep bound of the field$(length(s.names) == 1 ? "" : "s") " *
-                                         "$(_fieldlist(s.names)) is not finite at the current parameters ($(r.ρ))"))
+    if !isfinite(r.ρ)
+        # over the evaluation cap only: an explicit count is raised by the bound over every
+        # term with a bound (`r.seen`: diffusion, the other terms and fields), and a warning
+        # (once per group and session) names the terms it does not cover; a value that is not
+        # finite at an entry the field reads is refused
+        if s.explicit && !isempty(r.nonfinite) && all(x -> x[3] === :cap, r.nonfinite)
+            n = isfinite(r.seen) ? max(s.least, ceil(Int, s.dt * r.seen / 1.8)) : s.least
+            if ccall(:jl_generating_output, Cint, ()) == 0 &&
+               lock(() -> (k = s.key * "#cap"; k in _SUBSTEP_WARNED ? false : (push!(_SUBSTEP_WARNED, k); true)),
+                   _SUBSTEP_WARNED_LOCK)
+                @warn "field$(length(s.names) == 1 ? "" : "s") $(_fieldlist(s.names)): $n substeps per field step " *
+                      "(the requested $(s.least), or more for the terms the bound sees); the stability bound does not " *
+                      "cover " * join((_nonfinite_text(text, w, s.cv) for (_, text, w) in r.nonfinite), ", ") *
+                      ": the count is the user's"
+            end
+            return n
+        end
+        throw(ArgumentError(string("the substep bound of the field$(length(s.names) == 1 ? "" : "s") ",
+            _fieldlist(s.names), " is not finite at the current parameters: ",
+            isempty(r.nonfinite) ? "a coefficient is not finite" :
+            join((_nonfinite_text(text, w, s.cv) for (_, text, w) in r.nonfinite), "; "))))
+    end
     return max(s.least, ceil(Int, s.dt * r.ρ / 1.8))
+end
+
+# why a coefficient has no finite bound, in the model's words: a kind table entry `e` is
+# kind `e - 1` (entry 1 is the medium's), with the route
+function _nonfinite_text(text, w, cv)
+    # a kind table read `at(τ, 1 + kind)` as the model writes it, `τ[kind]`
+    u = replace(_user_text(text, cv), r"at\((\w+), (?:1 \+ kind|kind \+ 1)\)" => s"\1[kind]")
+    t = "`" * u * "`"
+    w === :cap && return string(t, " (it reads more than 4096 kind table index combinations; with no count, give ",
+        "`PottsProblem` `field_solver = ExplicitEuler(; substeps = n)` with `n ≥ mcs_duration · ρ / 1.8`)")
+    w isa Tuple || return string(t, " is not finite at the current parameters")
+    combos, more = w
+    all(isempty, combos) && return string(t, " is not finite; give its parameters values that make it finite")
+    ent(tb, i) = i == 0 ? "index 0 of `$tb` (which reads 0)" :
+                 i == 1 ? "the medium's entry of `$tb` (kind 0)" : "the entry of kind $(i - 1) of `$tb`"
+    # the route by cause: a zero under a division, a negative value under `sqrt` or `log`
+    fix(v) = v == 0 ? "make it nonzero (a zero entry: a division by it is not finite)" :
+             v < 0 ? "make it ≥ 0 (a negative entry under `sqrt` or `log` is not finite)" :
+             "give it a value where the coefficient is finite"
+    rd = unique(reduce(vcat, combos))
+    return string(t, " is not finite at ", join((join((ent(tb, i) for (tb, i, _) in c), " with ") for c in combos), ", at "),
+        more > 0 ? " (and $more more)" : "", "; ",
+        join(("$(ent(tb, i)) is $v: $(fix(v))" for (tb, i, v) in rd if i != 0), "; "),
+        " (every kind's entry is read, the medium's too)")
 end
 
 # At build: the count at the problem's parameters (throws as above), and one warning when an
@@ -323,7 +414,7 @@ function _check_substeps(s::_Substeps, praw, key::AbstractString)
     if s.explicit && ccall(:jl_generating_output, Cint, ()) == 0 &&
        lock(() -> key in _SUBSTEP_WARNED ? false : (push!(_SUBSTEP_WARNED, key); true), _SUBSTEP_WARNED_LOCK)
         r = LatticePDE.bound_parts(s.bound, praw)
-        unseen = s.bound.terms
+        unseen = s.unseen
         if !isempty(unseen) || !isempty(r.coupled)
             @warn "field$(length(s.names) == 1 ? "" : "s") $(_fieldlist(s.names)): $n substeps per field step " *
                   "(the requested $(s.least), or more for the terms the bound sees); the stability bound does not " *
@@ -333,6 +424,20 @@ function _check_substeps(s::_Substeps, praw, key::AbstractString)
         end
     end
     return n
+end
+
+# A term of the field system in the model's words (F1, PO06): a generated input
+# (`kind__in(t, x, y)`, `field1__in(…)`) prints as the CPM read it holds, a field read
+# `c(t, x, y)` as `c`; the key's `"c: "` prefix is dropped
+function _user_text(term::AbstractString, cv)
+    out = replace(term, r"^[^:]+: " => "")
+    for (name, ex, _) in cv.filled
+        user = _input_word(name, ex)
+        out = replace(out, Regex(string(name) * raw"\(t(, [xyz])*\)") => user)
+    end
+    out = replace(out, r"Potts\._intdiv\(([^,()]+), ([^()]+)\)" => s"(\1 ÷ \2)")   # the model's `÷`
+    out = replace(out, "LatticePDE." => "")                              # `Δ(c)`, `at(δ, …)` as written
+    return replace(out, r"(\w+)\(t(, [xyz])*\)" => s"\1")
 end
 
 # The model time of one field phase: the MCS, or `1/n` of it inside a sub-MCS `repeat(n, …)`
@@ -397,14 +502,16 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
         if !isempty(stab.unbounded) && solver.substeps === nothing
             throw(ArgumentError("the substep count of the field$(length(names) == 1 ? "" : "s") " *
                                 "$(_fieldlist(names)) has no bound from the parameters (the term" *
-                                "$(length(stab.terms) == 1 ? "" : "s") $(join(("`$t`" for t in stab.terms), ", ")), " *
-                                "which the stability bound cannot see: a nonlinear or advection term, a coefficient that " *
-                                "reads the state, `mcs` or a table); give `PottsProblem` " *
+                                "$(length(stab.terms) == 1 ? "" : "s") $(join(("`$(_user_text(t, cv))`" for t in stab.terms), ", ")), " *
+                                "which the stability bound cannot see: a nonlinear or advection term, a diffusion multiplier " *
+                                "that varies by site (`δ[kind] * Δ(c)`, `ismember(kind, g) * Δ(c)`), or a coefficient that " *
+                                "reads the state or `mcs`); give `PottsProblem` " *
                                 "`field_solver = ExplicitEuler(; substeps = n)` with `n ≥ mcs_duration · ρ / 1.8`"))
         end
         fp = LatticeFields.Compile.fingerprint_text(cf.program; T)
         push!(groups, _FieldGroup(names, pdesys, prog, mplan, splan, arrays, tables, params,
-            _Substeps(stab, dt, least, solver.substeps !== nothing, names, fp), fp))
+            _Substeps(stab, dt, least, solver.substeps !== nothing, names, fp, String[_user_text(t, cv) for t in stab.terms],
+                (; filled = copy(cv.filled))), fp))
     end
     return groups
 end
@@ -453,7 +560,10 @@ function _check_field_substeps(f, p)
         t isa Tuple || continue
         for ph in t
             ph isa CorePotts.FieldPhase && !ph.init && ph.substeps isa _Substeps || continue
-            _check_substeps(ph.substeps, Float64[getproperty(p, n) for n in ph.params], ph.substeps.key)
+            tabs = Pair{String, Vector{Float64}}[ph.program.tables[i].key => Float64.(vec(collect(getproperty(p, name))))
+                                                 for (i, name) in ph.tables]
+            praw = LatticeFields.Problems.with_tables(Float64[getproperty(p, n) for n in ph.params], tabs)
+            _check_substeps(ph.substeps, praw, ph.substeps.key)
         end
     end
     return nothing

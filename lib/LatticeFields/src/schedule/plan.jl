@@ -44,8 +44,10 @@ function step_order(p::Program, ids::Vector{Int})
     foreach(v -> haskey(index, v) || strong(v), sort(ids; by = i -> ks[i].key))
     for c in comps, i in c, f in reads(ks[i])
         length(c) > 1 && haskey(w, f) && w[f] in c && p.fields[f].buffers == 1 &&
-            irerror("field `", p.fields[f].key, "` closes a read cycle (Jacobi group ",
-                [ks[j].key for j in c], ") and needs buffers = 2")
+            irerror("the fields ", join(sort!(unique!([p.fields[g].key for j in c for g in writes(ks[j])])), ", "),
+                " define each other within one step (a read cycle: each reads another's new value); an ",
+                "algebraic field cannot depend on itself through other fields: break the cycle ",
+                "(in the IR, field `", p.fields[f].key, "` would need buffers = 2)")
     end
     return comps   # writers precede readers: Tarjan emits sinks of reader->writer edges first
 end

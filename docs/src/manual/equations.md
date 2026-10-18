@@ -125,12 +125,17 @@ sol[:x][end], sol[:g][end]
   by branch (the worst branch counts). The count is
   recomputed when parameters change; a number is a minimum. A rate the bound cannot see
   needs `substeps`, and the problem throws an error naming the term without it: a
-  reaction that is not linear in `c`, a coefficient that reads a kind table or other state,
-  and a diffusion multiplier that varies by site (`ismember(kind, g) * Δ(c)`). So does a
+  reaction that is not linear in `c`, a coefficient that reads other state (a field, `mcs`),
+  and a diffusion multiplier that varies by site (`ismember(kind, g) * Δ(c)`,
+  `δ[kind] * Δ(c)`). So does a
   rate that reads another field (`- Dx * Δ(u)`, `- k * u`) when its row of the Jacobian is
   not diagonally dominant. With `substeps = n` in these cases the count is the larger of
   `n` and the bound of the terms the bound sees (diffusion at least), and the problem warns
-  once, naming the terms it does not cover.
+  once, naming the terms it does not cover. A reaction coefficient that reads a kind table
+  (`- δ[kind] * c`) is bounded at every entry of the table, the medium's entry included, and
+  the count follows the table's values. A coefficient that is not finite at an entry
+  (`- c / τ[kind]` with a zero entry) is refused, naming the entry, even with
+  `substeps = n`: make the entry finite and nonzero.
 - Fields with the same solver step together, substep by substep: a field reads the fields
   it depends on after their update, and fields that depend on each other read each other's
   values from the start of the substep. Fields with different solvers (`solvers = [u =>
@@ -212,8 +217,10 @@ u = solve(prob, SequentialCPM()).u[end]
   on a kind moves with its cells. It cannot read the field it clamps, or a field stepped
   after it (in the order of `@equations`): that is an error naming it. The masks of a field
   group cost one kernel launch per MCS.
-- **Values** are numbers, parameters or parameter expressions; `remake(prob; p = [:S => 2.0])`
-  changes a value without regenerating code. The conditions themselves are part of the
+- **Values** are numbers, parameters, or a number times a parameter; `remake(prob; p = [:S => 2.0])`
+  changes a value without regenerating code. For an expression of parameters, declare a
+  computed parameter (`@parameters S = S1 + S2`) and write `Dirichlet(S)`; an expression in
+  `Dirichlet(…)` is an error that names this route. The conditions themselves are part of the
   model's identity (the fingerprint): a checkpoint does not cross them.
 - In an extension, a field's `@boundary` replaces the base's for that field.
 
@@ -222,7 +229,9 @@ faces. Anywhere else (site updates, energies, drives, `@observed`) it is an erro
 
 `@bcs` takes raw MTK boundary conditions, one per line (for example
 `c ~ masked(kind == border, 0.0)`). In this release they are stored in the model and printed
-with it; they do not change the run. The field compiler reads them in a later release.
+with it, but `mtkcompile` and `PottsProblem` refuse a model with any `@bcs` entry, naming each
+condition: the field compiler does not lower them yet, and a condition must never be dropped
+from a run. Write field conditions with `@boundary` (the entries above).
 
 ## Components
 

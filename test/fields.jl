@@ -52,6 +52,42 @@ end
     @equations D(c) ~ Dc * Δ(c) - k * c
     @sweep Metropolis(; temperature = 1.0)
 end
+# defaults that are not zero, for the PDESystem of `Potts.fields` (F1, V13)
+@potts_model FdDefaults begin
+    @kinds medium A
+    @parameters begin
+        Dc = 1.0
+        k = 0.5
+    end
+    @variables c(field) = 2.0
+    @lattice Lattice((6, 4); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations D(c) ~ Dc * Δ(c) - k * c
+    @sweep Metropolis(; temperature = 1.0)
+end
+# a computed parameter, read through `Potts.fields` (F1)
+@potts_model FdComputedRate begin
+    @kinds medium A
+    @parameters begin
+        Dc = 1.0
+        k = 0.5
+        k2 = 2k
+    end
+    @variables c(field) = 1.0
+    @lattice Lattice((6, 4); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations D(c) ~ Dc * Δ(c) - k2 * c
+    @sweep Metropolis(; temperature = 1.0)
+end
+# a CPM read other than `kind` in a field equation (an input named `volume`, F1)
+@potts_model FdVolumeRead begin
+    @kinds medium A
+    @variables c(field) = 0.0
+    @lattice Lattice((6, 4); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations D(c) ~ 0.01 * volume
+    @sweep Metropolis(; temperature = 1.0)
+end
 # a frozen kind is a fixed source: σ never moves, so the field has an exact hand oracle
 @potts_model FdSource begin
     @kinds medium A[frozen]
@@ -152,6 +188,15 @@ end
     @lattice Lattice((8, 6); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
     @equations D(c) ~ 0.1 * Δ(c) + 0.01 * rand()
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@potts_model FdDomainWord begin
+    @kinds medium A
+    @variables domain(field) = 0.0
+    @lattice Lattice((9, 9); boundary = Closed(), domain = x -> 3 <= x[1] <= 7)
+    @energy cells(A) => (volume - 4.0)^2
+    @equations D(domain) ~ 0.1 * Δ(domain)
     @sweep Metropolis(; temperature = 1.0)
 end
 
@@ -551,12 +596,16 @@ end
     @test (@allocated step!(integ)) == 0
 end
 
-# P5 C3/4-1: a CPM parameter that does not convert to the CPM scalar type is a named error
+# P5 C3/4-1: a parameter that does not convert to the problem's scalar type is a named error.
+# F1 (PO41): the field parameter `Dc` is not told the CPM reason (on f9a77dd3 the message said
+# "CPM parameters are plain numbers … derivative is zero almost everywhere" for `Dc`)
 struct FdNotANumber <: Real end
-@testset "CPM parameters: a value that does not convert is named" begin
+@testset "parameters: a value that does not convert is named, with a role-neutral reason" begin
     err = fd_err(() -> PottsProblem(FdClosed(; name = :f), [fd_empty((12, 10)); :Dc => FdNotANumber()], (0, 1);
         field_solver = ExplicitEuler()))
-    @test occursin("`Dc`", something(err, "")) && occursin("CPM scalar type", something(err, ""))
+    @test occursin("`Dc`", something(err, "")) && occursin("scalar type", something(err, ""))
+    @test occursin("field and ODE parameters are planned", something(err, ""))
+    @test !occursin("CPM parameters are plain numbers", something(err, ""))
 end
 
 # ---------------------------------------------------------------------------------------
@@ -700,4 +749,160 @@ end
     # the default state type follows the backend (host: Float64)
     @test eltype(PottsProblem(FdClosed(; name = :f), fd_empty((12, 10)), (0, 1);
         backend = CorePotts.KernelAbstractions.CPU(), field_solver = ExplicitEuler()).u0.site.c) == Float64
+end
+
+# ---------------------------------------------------------------------------------------
+# F1: no silent wrongs, and messages in the model's words (refusal inventory)
+using Potts.LatticePDE: DivKGrad
+@potts_model FdExprFace begin
+    @kinds medium A
+    @parameters begin
+        Dc = 0.2
+        g1 = 1.0
+        g2 = 2.0
+    end
+    @variables c(field) = 0.0
+    @lattice Lattice((8, 8); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ Dc * Δ(c)
+    @boundary c begin
+        x => (Dirichlet(g1 + g2), NoFlux())
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FdComputedFace begin
+    @kinds medium A
+    @parameters begin
+        Dc = 0.2
+        g1 = 1.0
+        g2 = 2.0
+        g = g1 + g2
+    end
+    @variables c(field) = 0.0
+    @lattice Lattice((8, 8); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ Dc * Δ(c)
+    @boundary c begin
+        x => (Dirichlet(g), NoFlux())
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FdKindNonlinear begin
+    @kinds medium A
+    @parameters Dc = 0.2
+    @variables c(field) = 0.0
+    @lattice Lattice((8, 8); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ Dc * Δ(c) - c^2 * ifelse(kind == 1, 1.0, 0.0)
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FdDivK begin
+    @kinds medium A
+    @parameters Dc = 0.2
+    @variables c(field) = 0.0
+    @lattice Lattice((8, 8); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ DivKGrad(:harmonic)(Dc, c)
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "F1 SD-14: a boundary value is a number, a parameter or a number times one" begin
+    # base: accepted by `@boundary`, then refused by LatticePDE in its own words ("the boundary
+    # value `g1 + g2` must be a number, …"); now one message at the model, with the route
+    err = fd_err(() -> FdExprFace(; name = :f))
+    @test occursin("@boundary c", something(err, "")) && occursin("@parameters g = g1 + g2", something(err, ""))
+    # the route: a computed parameter runs, and follows its parameters
+    prob = PottsProblem(FdComputedFace(; name = :f), fd_empty((8, 8)), (0, 2); field_solver = ExplicitEuler())
+    a = solve(prob).u[end].site.c
+    b = solve(Potts.remake(prob; p = [:g1 => 3.0])).u[end].site.c
+    @test maximum(a) > 0 && maximum(b) > maximum(a)
+end
+
+@testset "F1 V13: Potts.fields returns the model's PDESystem" begin
+    # base: `Potts.fields(model) === nothing` on a model with fields
+    @test Potts.fields(FdClosed(; name = :f)) isa Potts.ModelingToolkitBase.PDESystem
+    @test Potts.fields(mtkcompile(FdClosed(; name = :f))) isa Potts.ModelingToolkitBase.PDESystem
+    @test isequal(Potts.ModelingToolkitBase.equations(Potts.fields(FdClosed(; name = :f))),
+                  Potts.ModelingToolkitBase.equations(Potts.fields(mtkcompile(FdClosed(; name = :f)))))
+    # … with the model's defaults, so `discretize` takes it as it is (base, round 0: the field
+    # and the parameters had no value, "no initial condition" / NaN): c(1) = 2 (1 − 0.05)^10
+    LP = Potts.LatticePDE
+    for m in (FdDefaults(; name = :f), mtkcompile(FdDefaults(; name = :f)))
+        prob = LP.discretize(Potts.fields(m), LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64, problem = :owned))
+        s = LP.solve(prob, LP.ExplicitEuler(; dt = 0.1, substeps = 1))
+        @test s.retcode == Potts.SciMLBase.ReturnCode.Success && all(≈(2 * 0.95^10), s[:c][end])
+        o = LP.discretize(Potts.fields(m), LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64))
+        @test o isa Potts.SciMLBase.ODEProblem && o.p == [1.0, 0.5] && all(==(2.0), o.u0)
+    end
+    # a computed parameter folds and reads (round 1: reading threw): c(1) = (1 − 0.1)^10
+    prob = LP.discretize(Potts.fields(FdComputedRate(; name = :f)), LP.LatticeDiscretization(LP.Grid((6, 4));
+        T = Float64, problem = :owned))
+    @test LP.getp(prob, :k2)(prob) == 1.0
+    @test all(≈(0.9^10), LP.solve(prob, LP.ExplicitEuler(; dt = 0.1, substeps = 1))[:c][end])
+    @test LP.getp(LP.remake(prob; p = [:k => 1.0]), :k2)(LP.remake(prob; p = [:k => 1.0])) == 2.0
+    # a kind table on the ODE path is the table (round 2: the right side read the state for
+    # it); c = 1 on medium sites: dc/dt = −δ[medium] = −0.5
+    o = LP.discretize(Potts.fields(FdTab(; name = :f)), LP.LatticeDiscretization(LP.Grid((10, 8)); T = Float64);
+        inputs = [:kind => zeros(Int32, 10, 8)])
+    du = similar(o.u0)
+    o.f(du, o.u0, o.p, 0.0)
+    @test all(≈(-0.5), du)
+    # a field named like a generated input is refused in the model's words (round 4 via A:
+    # "the input field `domain__in` has the name `domain`")
+    err = something(fd_err(() -> Potts.fields(FdDomainWord(; name = :f))), "(no error)")
+    @test occursin("`domain` (the lattice's domain mask)", err) && occursin("also a field", err) && !occursin("__in", err)
+    # … and reads back on the owned path (round 3: "`:δ` names nothing of this problem")
+    po = LP.discretize(Potts.fields(FdTab(; name = :f)), LP.LatticeDiscretization(LP.Grid((10, 8)); T = Float64,
+        problem = :owned); inputs = [:kind => zeros(Int32, 10, 8)])
+    ig = LP.init(po, LP.ExplicitEuler(; dt = 0.1, substeps = 1))
+    @test ig[:δ] == [0.5, 0.0] && LP.getp(po, :δ)(po) == [0.5, 0.0]
+    @test occursin("`δ` is a table", something(fd_err(() -> LP.setp(ig, :δ)(ig, [1.0, 0.0])), ""))
+    # a CPM coupling is an input given by its key: one step of `s · (kind == A)` from c = 0
+    K = zeros(Int32, 12, 10); K[3:5, 4:6] .= 1
+    prob = LP.discretize(Potts.fields(FdSource(; name = :f)), LP.LatticeDiscretization(LP.Grid((12, 10)); T = Float64,
+        problem = :owned); inputs = [:kind => K])
+    s = LP.solve(prob, LP.ExplicitEuler(; dt = 0.1, substeps = 1); saveat = 0.1)
+    @test s[:c][2] ≈ 0.1 * 0.05 .* (K .== 1)
+    # … by the model's word (round 1: only the generated key "kind__in"); "kind" too, and the
+    # messages print routes that run, never `__in`
+    fe(f) = something(fd_err(f), "(no error)")
+    fsrc = Potts.fields(FdSource(; name = :f))
+    disc = LP.LatticeDiscretization(LP.Grid((12, 10)); T = Float64, problem = :owned)
+    @test LP.discretize(fsrc, disc; inputs = ["kind" => K]).inputs == prob.inputs
+    err = fe(() -> LP.solve(LP.discretize(fsrc, disc), LP.ExplicitEuler(; dt = 0.1)))
+    @test occursin("`kind`", err) && occursin(":kind => values", err) && !occursin("__in", err)
+    err = fe(() -> LP.discretize(fsrc, LP.LatticeDiscretization(LP.Grid((12, 10)); T = Float64)))
+    @test occursin(":kind => values", err) && !occursin("__in", err)
+    err = fe(() -> LP.discretize(fsrc, disc; inputs = [:kd => K]))
+    @test occursin("`kind`", err) && !occursin("__in", err)
+    fvol = Potts.fields(FdVolumeRead(; name = :f))
+    V = fill(2.0, 6, 4)
+    s = LP.solve(LP.discretize(fvol, LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64, problem = :owned);
+        inputs = [:volume => V]), LP.ExplicitEuler(; dt = 0.1, substeps = 1); saveat = 0.1)
+    @test all(≈(0.1 * 0.01 * 2.0), s[:c][2])
+    err = fe(() -> LP.solve(LP.discretize(fvol, LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64,
+        problem = :owned)), LP.ExplicitEuler(; dt = 0.1)))
+    @test occursin("`volume`", err) && occursin(":volume => values", err) && !occursin("__in", err)
+end
+
+@testset "F1 messages: field terms in the model's words (PO02, PO06)" begin
+    # PO06: the substep refusal names `kind`, not the generated input `kind__in(t, x, y)`
+    err = something(fd_err(() -> PottsProblem(FdKindNonlinear(; name = :f), fd_empty((8, 8)), (0, 1);
+        field_solver = ExplicitEuler())), "")
+    @test occursin("kind", err) && !occursin("kind__in", err) && occursin("substeps = n", err)
+    # PO02: a LatticePDE operator `@equations` does not lower is named as such (base: "reads a
+    # field or site variable inside a CPM read")
+    err = something(fd_err(() -> mtkcompile(FdDivK(; name = :f))), "")
+    @test occursin("does not lower", err) && !occursin("inside a CPM read", err)
+    @test occursin("DivKGrad", err) && !occursin("LatticePDE.DivKGrad", err)          # (round 0: the package prefix)
+end
+
+struct FdFakeDevice <: Potts.KernelAbstractions.GPU end
+@testset "F1 V11: a Float64 problem on a device backend gives a notice" begin
+    prob = PottsProblem(FdClosed(; name = :f), fd_empty((12, 10)), (0, 1); field_solver = ExplicitEuler())
+    @test_logs (:warn, r"built in Float64") CorePotts._device_float_notice(prob, FdFakeDevice())
+    # controls: the host backend, and a Float32 problem (base: no notice anywhere)
+    @test_logs CorePotts._device_float_notice(prob, Potts.KernelAbstractions.CPU()) == false
+    p32 = PottsProblem(FdClosed(; name = :f), fd_empty((12, 10)), (0, 1); field_solver = ExplicitEuler(), T = Float32)
+    @test_logs CorePotts._device_float_notice(p32, FdFakeDevice()) == false
 end

@@ -3,7 +3,7 @@
 #           ExplicitEuler (rates) or ExplicitMap (maps) through prebuilt launches.
 #   :ode    ODEProblem: the rate kernels (`∂c = rhs`) as `LatticeRHS`, for SciML solvers.
 #   :auto   ODEProblem for transient FV, FieldProblem when a discrete map is present.
-#   :linear LinearProblem for steady systems: the solvers commit (C7b).
+#   :linear LinearProblem for steady systems: not lowered in this version (refused).
 
 """The explicit Euler update `c + dt · r` of the owned stepper (`dt = G.rt[2]`)."""
 euler_update(kb, c, r) = c + Ex(kb, runtime!(kb, RT_DT)) * r
@@ -23,35 +23,157 @@ end
 # a coefficient expression as a function of the raw parameter vector, over every 0/1
 # assignment of its indicator terms (kind sets, comparisons): an indicator is 0 or 1 at each
 # site, and the coefficient is not monotone in it (`k (1 − χ)` is largest at χ = 0), so each
-# assignment is evaluated. `c(p)` is the largest magnitude, `_hi`/`_lo` the largest and
-# smallest signed values. `nothing` when the expression reads anything but scalar parameters
-# (array elements such as `Dk[2]` included), keeps a call that is not plain arithmetic (a
-# registered operator such as `Δ`), or has more than `_MAXIND` distinct indicators.
+# assignment is evaluated. A table read is evaluated at every index it can read, as the
+# kernel reads it: index 0 reads 0 and any other index is clamped into `1:length` (the
+# table's last entry above it, its first below 1). `Dk[2]` and `at(Dk, 2)` read their own
+# entry; the `at` reads with one index expression `k` (the same site's kind) take one index
+# together, `0` and `1:L` with `L` the longest table of the group (`at(Da, k) - at(Db, k)`
+# per kind), and a read that appears twice is one read. Index 0 is left out when the index
+# cannot be 0: an input `q` or `q + n` (`n` an integer literal) whose declared lower bound
+# (`bounds = (lo, hi)` metadata, which the input values are checked against) plus `n` is at
+# least 1. This covers every value the coefficient takes at a site, for any expression of
+# the reads (`at(Dq, k) (20 − at(Dq, k))`, `sin(at(Ds, k))`, `1 / at(Dv, k)`), with the
+# indicators taken independently of the entries (a superset). A non-finite value (`1 / 0`)
+# gives a non-finite bound, which is no bound. `c(p)` is the largest magnitude, `_hi`/`_lo`
+# the largest and smallest signed values; `p` carries the tables (`Problems.ParamsTables`),
+# and with table reads but no tables the values are `NaN`. `nothing` when the expression
+# reads anything but scalar parameters and tables, keeps a call that is not plain arithmetic
+# (a registered operator such as `Δ`), or has more than `_MAXIND` distinct indicators; more
+# than `_MAXEVALS` evaluations (assignments × indices) give `NaN`, no bound.
 struct CoefBound
-    fs::Vector{Any}                     # one compiled function of the parameters per assignment
+    fs::Vector{Any}                         # one compiled function of the parameters per assignment
+    reads::Vector{Tuple{String, Int, Int}}  # per read, in argument order: table, literal index, group (0: literal)
+    zero::Vector{Bool}                      # per group: whether its index can be 0
+    text::String                            # the coefficient, for messages
 end
-(c::CoefBound)(p) = maximum(f -> abs(Float64(f(p...))), c.fs)
-_hi(c::CoefBound, p) = maximum(f -> Float64(f(p...)), c.fs)
-_lo(c::CoefBound, p) = minimum(f -> Float64(f(p...)), c.fs)
+_pv(p) = p isa Problems.ParamsTables ? p.p : p
+# a table read as the kernel does it (emit.jl TABLE, `oob = :zero_at_0`)
+_tabread(v, i::Integer) = i == 0 ? 0.0 : Float64(v[clamp(i, 1, length(v))])
+# a value of the coefficient; a domain error (`sqrt` of a negative entry) is `NaN`
+function _val(f, args)
+    try
+        return Float64(f(args...))
+    catch e
+        e isa DomainError && return NaN
+        rethrow()
+    end
+end
+# the table values per read, and the index ranges per group (`nothing`: over the cap or no
+# tables)
+function _ranges(c::CoefBound, p)
+    p isa Problems.ParamsTables || return nothing
+    tv = [last(p.tables[findfirst(x -> first(x) == k, p.tables)]) for (k, _, _) in c.reads]
+    any(isempty, tv) && return nothing
+    maxl = [maximum((length(tv[j]) for j in eachindex(c.reads) if c.reads[j][3] == g); init = 0) for g in eachindex(c.zero)]
+    rs = [(c.zero[g] ? 0 : 1):maxl[g] for g in eachindex(c.zero)]
+    # in Float64: an integer product of many lengths overflows (16^16 == 0)
+    length(c.fs) * prod(Float64 ∘ length, rs; init = 1.0) <= _MAXEVALS || return nothing
+    return tv, rs
+end
+_indices(c::CoefBound, is) = (((_, e, g),) -> g == 0 ? e : is[g]).(c.reads)
+function _vals(c::CoefBound, p)
+    isempty(c.reads) && return (_val(f, p) for f in c.fs)
+    r = _ranges(c, p)
+    r === nothing && return (NaN,)
+    tv, rs = r
+    q = _pv(p)
+    return (_val(f, (q..., (_tabread(tv[j], i) for (j, i) in enumerate(_indices(c, is)))...))
+            for f in c.fs for is in Iterators.product(rs...))
+end
+(c::CoefBound)(p) = maximum(abs, _vals(c, p))
+# the largest finite magnitude: the bound over the values that are finite (0 over the cap or
+# with no tables), which an explicit count must still meet
+_seen(c::CoefBound, p) = maximum((abs(v) for v in _vals(c, p) if isfinite(v)); init = 0.0)
+_hi(c::CoefBound, p) = maximum(_vals(c, p))
+_lo(c::CoefBound, p) = minimum(_vals(c, p))
+"""
+    _why(c::CoefBound, p) -> nothing | :cap | :tables | (combos, more)
+
+Why `c` has no finite bound at `p`: `nothing` when it has one; `:cap` over the evaluation
+cap; `:tables` table reads with no tables; else the distinct read combinations with a value
+that is not finite, each a vector of `(table, index, value read)` (index 0 reads 0; empty when
+no table is read), at most `_MAXWHY` of them, and how many more there are.
+"""
+function _why(c::CoefBound, p)
+    all(isfinite, _vals(c, p)) && return nothing
+    isempty(c.reads) && return ([Tuple{String, Int, Float64}[]], 0)
+    p isa Problems.ParamsTables || return :tables
+    r = _ranges(c, p)
+    r === nothing && return :cap
+    tv, rs = r
+    q = _pv(p)
+    combos = Vector{Tuple{String, Int, Float64}}[]
+    for f in c.fs, is in Iterators.product(rs...)
+        ix = _indices(c, is)
+        isfinite(_val(f, (q..., (_tabread(tv[j], i) for (j, i) in enumerate(ix))...))) && continue
+        # the index each read takes, clamped as the kernel clamps it
+        w = unique!([(c.reads[j][1], i == 0 ? 0 : clamp(i, 1, length(tv[j])), _tabread(tv[j], i)) for (j, i) in enumerate(ix)])
+        w in combos || push!(combos, w)
+    end
+    return (combos[1:min(end, _MAXWHY)], max(0, length(combos) - _MAXWHY))
+end
+const _MAXWHY = 4
 const _MAXIND = 6
+const _MAXEVALS = 4096
 const _PLAIN = (+, -, *, /, ^, inv, abs, sqrt, cbrt, exp, log, sin, cos, tan, tanh, min, max)
 _plainop(f) = any(g -> f === g, _PLAIN)
-function _coef_bound(x, params)
+# the smallest value of index expression `i` from the declared lower bounds `lows` of the
+# inputs: `q`, `q + n` or `n + q` (`n` an integer literal); `-Inf` for any other form
+function _lowest(i, lows)
+    for (k, lo) in lows
+        isequal(k, i) && return lo
+    end
+    (iscall(i) && operation(i) === +) || return -Inf
+    a = arguments(i)
+    consts = [unwrap_const(x) for x in a if unwrap_const(x) isa Integer]
+    rest = [x for x in a if !(unwrap_const(x) isa Integer)]
+    length(rest) == 1 || return -Inf
+    return _lowest(rest[1], lows) + sum(consts; init = 0)
+end
+function _coef_bound(x, params, tabs = Dict{Any, String}(), lows = ())
     u0 = unwrap(x)
+    # the table reads, each a fresh variable; the `at` reads grouped by index expression: a
+    # group takes one index for all its reads
+    reads, tvars, reps = Tuple{String, Int, Int}[], Any[], Dict{Any, Any}()
+    gkeys = Any[]
+    function walkt(y)
+        iscall(y) || return nothing
+        f, a = operation(y), arguments(y)
+        if (f === getindex || f === at) && length(a) == 2 && haskey(tabs, unwrap(a[1]))
+            any(k -> isequal(k, y), keys(reps)) && return nothing
+            k = tabs[unwrap(a[1])]
+            i = unwrap_const(unwrap(a[2]))
+            if i isa Integer || (i isa AbstractFloat && isinteger(i))   # a literal index reads its own entry
+                push!(reads, (k, Int(i), 0))
+            else
+                g = findfirst(j -> isequal(gkeys[j], unwrap(a[2])), eachindex(gkeys))
+                g === nothing && (push!(gkeys, unwrap(a[2])); g = length(gkeys))
+                push!(reads, (k, 0, g))
+            end
+            v = unwrap(Symbolics.variable(:__table_read, length(reads)))
+            push!(tvars, v)
+            reps[y] = v
+            return nothing
+        end
+        foreach(walkt, a)
+    end
+    walkt(u0)
+    isempty(reps) || (u0 = unwrap(substitute(u0, reps; fold = Val(false))))
     inds = Any[]
     walk(y) = iscall(y) && ((operation(y) === ismember || operation(y) in (==, <, <=, >, >=)) ?
                             (any(z -> isequal(z, y), inds) || push!(inds, y)) : foreach(walk, arguments(y)))
     walk(u0)
     length(inds) <= _MAXIND || return nothing
     plain(y) = !iscall(y) || (_plainop(operation(y)) && all(plain, arguments(y)))
+    args = Any[params; tvars]
     fs = Any[]
     for bits in Iterators.product(ntuple(_ -> (0, 1), length(inds))...)
         u = isempty(inds) ? u0 : unwrap(substitute(u0, Dict{Any, Any}(zip(inds, bits)); fold = Val(true)))
         plain(u) || return nothing
-        all(v -> any(q -> isequal(q, v), params), Symbolics.get_variables(u)) || return nothing
-        push!(fs, Symbolics.build_function(u, params...; expression = Val(false)))
+        all(v -> any(q -> isequal(q, v), args), Symbolics.get_variables(u)) || return nothing
+        push!(fs, Symbolics.build_function(u, args...; expression = Val(false)))
     end
-    return CoefBound(fs)
+    return CoefBound(fs, reads, Bool[!(_lowest(k, lows) >= 1) for k in gkeys], string(x))
 end
 
 # the multiplier of a diffusion term: the operator call replaced by its coefficient (1 for
@@ -81,7 +203,14 @@ table. Per rate field (one Jacobian row):
   `|D₂| (Σ_d 4/h_d² + Robin terms of o)` for cross-diffusion `D₂ Δ(o)`.
 A coefficient with kind sets or comparisons (indicators, 0 or 1 per site) is evaluated at
 every 0/1 assignment of them: the largest magnitude enters `ρ`, the largest signed value
-the diagonal.
+the diagonal. A coefficient that reads a table (`Dk[2] * Δ(c)`, `at(Dk, kind) * Δ(c)`) is
+evaluated at every index each read can take, as the kernel reads it (the entry itself for
+`Dk[2]`; for `at`, index 0, which reads 0 unless the index is an input declared never 0, and
+every entry, clamped into each table; reads with one index take one index together), from
+the tables `p` carries
+(`Problems.ParamsTables`): any expression of the reads is covered, a negative entry is
+negative diffusion, a large one raises the bound, and a non-finite value (`1 / 0`) is no bound
+(F1).
 A switch `ifelse(cond, a, b)` (class `Other`) whose condition reads no unknown field (a
 gate such as `t ≥ t_relax`) is bounded arm by arm: each choice of a row's switch arms is a
 row of its own (at most 64 per row), the bound is the worst, and the dominance test below
@@ -89,9 +218,11 @@ holds for every choice (listed in `expanded`).
 
 `NaN` (no bound) when:
 - a field has a term the bound cannot see (`unbounded`: `Other`, `Advection`,
-  `LaggedSwitch`, or a coefficient that reads more than scalar parameters, such as an array
-  element `Dk[2] * Δ(c)` or a table `at(Dk, kind)`, or a coefficient with more than 6
-  distinct kind sets and comparisons, whose 2⁶ indicator assignments are the evaluation cap);
+  `LaggedSwitch`, or a coefficient that reads more than scalar parameters and tables, or a
+  coefficient with more than 6 distinct kind sets and comparisons);
+- a coefficient takes a non-finite value at some index or assignment, or its indicator
+  assignments times table indices exceed 4096, the evaluation cap (the bound is `Inf` or
+  `NaN`; `bound_parts` says which, and where);
 - a needed parameter has no value;
 - a row with `CrossLinear` terms is not diagonally dominant with a nonpositive diagonal. The
   step limit `dt ρ ≤ 1.8` holds for real, dissipative spectra only; coupled rows such as
@@ -137,17 +268,23 @@ function (b::StabilityBound)(p)
 end
 
 """
-    bound_parts(b::StabilityBound, p) -> (; ρ, coupled, negative)
+    bound_parts(b::StabilityBound, p) -> (; ρ, seen, coupled, negative, nonfinite)
 
 The parts of `b(p)`: `ρ`, the Gershgorin bound over the terms `b` sees (a term in
-`b.terms` is left out); `coupled`, the keys of the rows with cross terms that are not
+`b.terms` is left out); `seen`, the same bound over the finite values of each coefficient
+only (a coefficient over the evaluation cap counts 0; `seen == ρ` when `ρ` is finite), which
+raises an explicit count; `coupled`, the keys of the rows with cross terms that are not
 diagonally dominant with a nonpositive diagonal (`b(p)` is `NaN` for them); `negative`, the
 keys of the rows with a diffusion coefficient below zero at `p` (at some indicator
-assignment). `b(p) == ρ` when `b.unbounded` and `coupled` are empty.
+assignment); `nonfinite`, when `ρ` is not finite, a `(key, coefficient, why)` per coefficient
+with no finite bound (`why`: `:cap` over the evaluation cap, `:tables` no tables given, or
+`(combos, more)`: up to 4 distinct read combinations `[(table, index, value), …]` with a value that is
+not finite, index 0 reading 0, and how many more). `b(p) == ρ`
+when `b.unbounded` and `coupled` are empty.
 """
 function bound_parts(b::StabilityBound, p)
     s4 = 4 * sum(b.invh2)
-    ρ = 0.0
+    ρ = seen = 0.0
     coupled, negative = String[], String[]
     for i in eachindex(b.keys)
         # each choice of the row's switch arms is a row of its own: the bound is the worst,
@@ -167,9 +304,64 @@ function bound_parts(b::StabilityBound, p)
                 diag <= 0 && -diag >= offd || push!(coupled, b.keys[i])
             end
             ρ = max(ρ, own + lin + cross)
+            # the same over the finite values only (a term over the cap counts 0): every row,
+            # term and field that has a bound still raises an explicit count
+            Ds = sum(_seen(f, p) for f in r.diffusion; init = 0.0)
+            sv = Ds * (s4 + _face_excess(b, i, p)) + sum(_seen(f, p) for f in r.linear; init = 0.0) +
+                 sum(_seen(f, p) for f in r.crosslinear; init = 0.0) +
+                 sum(_seen(f, p) * (s4 + _face_excess(b, j, p)) for (f, j) in r.crossdiffusion; init = 0.0)
+            seen = max(seen, isfinite(sv) ? sv : 0.0)
         end
     end
-    return (; ρ, coupled = unique!(coupled), negative = unique!(negative))
+    nonfinite = Tuple{String, String, Any}[]
+    if !isfinite(ρ)
+        for i in eachindex(b.keys), r in b.rows[i]
+            for f in Iterators.flatten((r.diffusion, r.linear, r.crosslinear, first.(r.crossdiffusion)))
+                w = _why(f, p)
+                w === nothing || any(x -> x[1] == b.keys[i] && x[2] == f.text, nonfinite) ||
+                    push!(nonfinite, (b.keys[i], f.text, w))
+            end
+        end
+    end
+    return (; ρ, seen, coupled = unique!(coupled), negative = unique!(negative), nonfinite)
+end
+
+# the declared bounds `(lo, hi)` of a scalar input (`bounds` metadata); `(-Inf, Inf)` without
+# them or for an array input
+function _input_bounds(v)
+    b = ModelingToolkitBase.getbounds(v)
+    return b[1] isa Real && b[2] isa Real ? (Float64(b[1]), Float64(b[2])) : (-Inf, Inf)
+end
+_input_lower(v) = first(_input_bounds(v))
+
+# why a coefficient has no finite bound, in words (`_why`)
+function _why_text(text, w)
+    w === :cap && return "`$text` reads more than $(_MAXEVALS) table index combinations"
+    w === :tables && return "`$text` reads tables that were not given"
+    combos, more = w
+    all(isempty, combos) && return "`$text` is not finite at these parameters"
+    read(t, i) = i == 0 ? "index 0 of `$t`" : "`$t[$i]`"
+    return string("`$text` is not finite at ", join((join((read(t, i) for (t, i, _) in c), " with ") for c in combos), ", at "),
+        more > 0 ? " (and $more more)" : "")
+end
+# what to change about an entry that makes a coefficient not finite, by its value
+_entry_fix(v) = v == 0 ? "make it nonzero (a zero entry: a division by it is not finite)" :
+                v < 0 ? "make it ≥ 0 (a negative entry under `sqrt` or `log` is not finite)" :
+                "give it a value where the coefficient is finite"
+# the route for a coefficient that is not finite: fix each entry it names, keep 0 out of an
+# index that reaches 0
+function _why_route(w)
+    w isa Tuple || return ""
+    rd = unique(reduce(vcat, w[1]; init = Tuple{String, Int, Float64}[]))
+    isempty(rd) && return "; give its parameters values that make it finite"
+    parts = String[]
+    any(x -> x[2] == 0, rd) && push!(parts, "index 0 reads 0 (a kind map value 0, or a literal 0), and the " *
+                                            "coefficient is not finite there: keep 0 out of the index (declare " *
+                                            "the input `bounds = (1, n)`)")
+    for (t, i, v) in rd
+        i == 0 || push!(parts, "for `$t[$i]` ($v), $(_entry_fix(v))")
+    end
+    return "; " * join(parts, "; ")
 end
 
 """
@@ -195,6 +387,12 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
     unknownops = [stateops; auxops]
     rows = Vector{RowTerms}[]
     faces, unbounded, terms, expanded = Vector{Tuple{Int, Coef, Coef}}[], String[], String[], String[]
+    # the array parameters (tables) by their symbols: a coefficient may read them
+    tabs = Dict{Any, String}(unwrap(q) => string(unwrap(q)) for q in _params(sys)
+                             if string(unwrap(q)) in first.(cf.tables))
+    # the declared lower bounds of the scalar inputs (an index that cannot be 0 reads no 0)
+    lows = Tuple{Any, Float64}[(v, Float64(_input_lower(v))) for v in unwrap.(sys.dvs)
+                               if ModelingToolkitBase.isinput(v) && isfinite(_input_lower(v))]
     for k in ks
         # one term added to every alternative of the row: `false` when the bound cannot see
         # it. A switch `ifelse(cond, a, b)` whose condition reads no unknown field (a gate
@@ -204,7 +402,7 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
         function add!(alts, term, class, depth)
             fs = [kk for (kk, v) in dvs if _reads(term, (_opof(v),))]
             if class == :Diffusion
-                c = _coef_bound(_diffusion_coefficient(term), cf.params)
+                c = _coef_bound(_diffusion_coefficient(term), cf.params, tabs, lows)
                 c === nothing && return false
                 foreach(r -> push!(r.diffusion, c), alts)
             elseif class == :LinearLocal || class == :CrossLinear
@@ -212,11 +410,11 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
                 if class == :CrossLinear &&
                    _linclass(unwrap(term), _opof(dvs[fs[1]]), stateops, inputops) == :Diffusion
                     j = findfirst(==(fs[1]), ks)
-                    c = j === nothing ? nothing : _coef_bound(_diffusion_coefficient(term), cf.params)
+                    c = j === nothing ? nothing : _coef_bound(_diffusion_coefficient(term), cf.params, tabs, lows)
                     c === nothing && return false
                     foreach(r -> push!(r.crossdiffusion, (c, j)), alts)
                 else
-                    c = _coef_bound(substitute(term, Dict(dvs[fs[1]] => 1); fold = Val(false)), cf.params)
+                    c = _coef_bound(substitute(term, Dict(dvs[fs[1]] => 1); fold = Val(false)), cf.params, tabs, lows)
                     c === nothing && return false
                     foreach(r -> push!(class == :CrossLinear ? r.crosslinear : r.linear, c), alts)
                 end
@@ -288,22 +486,175 @@ function _initial(cf::CompiledField{N}, sys::PDESystem, state, ::Type{T}) where 
     return out
 end
 
-function _index(cf::CompiledField, sys::PDESystem, s, state)
+function _index(cf::CompiledField, sys::PDESystem, s, state; derived = Pair[], computed = Pair[])
     slots = Problems.state_layout(s, [fieldid(s, k) for k in state])
     dims = Int.(cf.program.hierarchy[1].grid.dims)
-    vars = Pair[]
+    vars, inputs, inputnames, boolinputs, inputbounds = Pair[], Pair[], Pair[], String[], Pair[]
     for v in sys.dvs, (op, ks) in cf.keys
         isequal(_opof(v), op) || continue
         for (i, k) in enumerate(ks)
-            k in state || continue
             term = length(ks) == 1 ? unwrap(v) : unwrap(Symbolics.wrap(unwrap(v))[i])
-            push!(vars, (term, Symbol(k)) => FieldSlot(slots[fieldid(s, k)], dims))
+            if ModelingToolkitBase.isinput(unwrap(v))
+                # an input: its term, its key and (one component) the variable itself
+                # … and its user-facing name (`lattice_input_name`), which messages print
+                n = get_lattice_input_name(unwrap(v))
+                n === nothing || (n = length(ks) == 1 ? n : "$n[$i]"; push!(inputnames, k => n))
+                syms = length(ks) == 1 ? Any[term, Symbol(k), op] : Any[term, Symbol(k)]
+                n === nothing || push!(syms, Symbol(n))
+                push!(inputs, Tuple(syms) => k)
+                eltype(SymbolicUtils.symtype(unwrap(v))) <: Bool && push!(boolinputs, k)
+                b = _input_bounds(unwrap(v))
+                b == (-Inf, Inf) || push!(inputbounds, k => b)
+            elseif k in state
+                push!(vars, (term, Symbol(k)) => FieldSlot(slots[fieldid(s, k)], dims))
+            end
         end
     end
     params = [(p, Symbol(string(p))) => i for (i, p) in enumerate(cf.params)]
     defaults = Dict{Any, Any}(p => d for (p, d) in zip(cf.params, cf.defaults))
+    # a computed parameter reads as its folded expression of the parameter slots (SII observed)
+    ps, tt = Any[unwrap(q) for q in cf.params], unwrap(sys.ivs[1])
+    observed = Pair[syms => Symbolics.build_function(unwrap(e), ps, tt; expression = Val(true)) for (syms, e) in computed]
     return LatticeIndex(; key = _symkey, variables = vars, parameters = params,
-        independent_variables = [unwrap(sys.ivs[1])], defaults)
+        independent_variables = [unwrap(sys.ivs[1])], defaults, inputs, inputnames, boolinputs, inputbounds, derived,
+        observed,
+        tables = Pair[[Any[unwrap(q), Symbol(k)] => k for (k, _) in cf.tables for q in _params(sys) if string(unwrap(q)) == k];
+                      [e => (k, i) for (k, _) in cf.tables for q in _params(sys) if string(unwrap(q)) == k
+                       for (i, e) in enumerate(Symbolics.scalarize(unwrap(q)))]])
+end
+
+# the declared defaults of the input fields (`dom(..)::Bool = true [input = true]`), as
+# `key => value` pairs; an input without one has no value until it is given
+function _input_defaults(cf::CompiledField, sys::PDESystem)
+    out = Pair{String, Any}[]
+    for v in sys.dvs
+        u = unwrap(v)
+        ModelingToolkitBase.isinput(u) || continue
+        op = _opof(u)
+        d = ModelingToolkitBase.hasdefault(u) ? ModelingToolkitBase.getdefault(u) :
+            ModelingToolkitBase.hasdefault(op) ? ModelingToolkitBase.getdefault(op) : nothing
+        d === nothing && continue
+        d = unwrap_const(unwrap(d))
+        d isa Number || _dverr("input `$(_name(op))`: its default `$d` is not a number (one value for every site)")
+        foreach(k -> push!(out, k => d), cf.keys[op])
+    end
+    return out
+end
+
+# Computed parameter defaults (`@parameters k2 = 2a`): the parameter is folded into the
+# equations and conditions as its expression, so it follows the parameters it reads at every
+# `remake`/`setp`; it is then not a parameter of the problem (its symbol says why). Returns
+# the system with the folded parameters removed and the `derived` notes of the index.
+function _fold_computed(sys::PDESystem)
+    scalar(p) = !(SymbolicUtils.symtype(unwrap(p)) <: AbstractArray)
+    comp = Dict{Any, Any}()
+    ps, ic = _params(sys), _ics(sys)
+    for p in ps
+        u = unwrap(p)
+        g = _icvalue(ic, u)
+        scalar(u) && (g !== nothing || ModelingToolkitBase.hasdefault(u)) || continue
+        d = unwrap_const(unwrap(g === nothing ? ModelingToolkitBase.getdefault(u) : g))
+        d isa Number || (comp[u] = d)
+    end
+    isempty(comp) && return sys, Pair[], Pair[]
+    # resolve chains (`k3 = 2k2`, `k2 = 3a`) to expressions of plain parameters
+    resolved = Dict{Any, Any}()
+    for (k, e) in comp
+        x = e
+        for _ in 1:(length(comp) + 1)
+            any(c -> _reads_term(x, c), keys(comp)) || break
+            x = substitute(x, comp; fold = Val(false))
+        end
+        any(c -> _reads_term(x, c), keys(comp)) && _dverr("the computed parameter `$k = $e` depends on itself")
+        resolved[k] = x
+    end
+    plain = Set(unwrap(p) for p in ps if !haskey(comp, unwrap(p)))
+    for (k, e) in resolved
+        free = [v for v in Symbolics.get_variables(e) if !(v in plain) && !any(iv -> isequal(iv, v), unwrap.(sys.ivs))]
+        isempty(free) || _dverr("the computed parameter `$k = $(comp[k])` reads $(join(("`$f`" for f in free), ", ")), " *
+                                "which $(length(free) == 1 ? "is not a parameter" : "are not parameters") of the system")
+    end
+    sub(x) = substitute(x, resolved; fold = Val(false))
+    for b in sys.bcs                        # a face or mask value takes one parameter (or a number times one)
+        r = unwrap(b.rhs)
+        value = iscall(r) && operation(r) === masked ? arguments(r)[2] : r
+        for (k, e) in resolved
+            _reads_term(value, k) || continue
+            ok = unwrap(e) in plain ||
+                 (iscall(e) && operation(e) === (*) && count(a -> unwrap(a) in plain, arguments(e)) == 1 &&
+                  all(a -> unwrap(a) in plain || unwrap_const(unwrap(a)) isa Number, arguments(e)))
+            ok || _dverr("`$(b)`: the boundary value reads the computed parameter `$k = $(comp[k])`; a boundary value " *
+                         "is a number, a parameter, or a number times a parameter (an expression of parameters as a " *
+                         "boundary value is planned): give `$k` a number")
+        end
+    end
+    eqs = [sub(eq.lhs) ~ sub(eq.rhs) for eq in sys.eqs]
+    bcs = [sub(b.lhs) ~ sub(b.rhs) for b in sys.bcs]
+    keep = [p for p in ps if !haskey(comp, unwrap(p))]
+    symb(v) = v isa Union{Num, SymbolicUtils.BasicSymbolic}
+    ic2 = Dict(k => (symb(v) ? sub(v) : v) for (k, v) in ic if !haskey(comp, k))   # field values read them too
+    derived = Pair[(k, Symbol(string(k))) => "it is computed from its default `$k = $(comp[k])` (change the parameters it reads)"
+                   for k in keys(comp)]
+    new = PDESystem(eqs, bcs, getfield(sys, :domain), sys.ivs, sys.dvs, keep; name = nameof(sys),
+        initial_conditions = ic2)
+    computed = Pair[(k, Symbol(string(k))) => e for (k, e) in resolved]
+    return new, derived, computed
+end
+_reads_term(x, v) = any(y -> isequal(y, v), Symbolics.get_variables(x))
+
+# Values every problem needs before it runs: array parameters (tables) with a value of their
+# declared size. Scalar parameters with no value are refused where the problem is stepped.
+function _check_tables(cf::CompiledField, sys::PDESystem)
+    for (k, vals) in cf.tables
+        p = only(q for q in _params(sys) if string(unwrap(q)) == k)
+        n = length(Symbolics.scalarize(unwrap(p)))
+        isempty(vals) && _dverr("the array parameter `$k` has no value (a table is not read as zeros): give it a " *
+                                "default, `@parameters $k[1:$n] = [v₁, …]`")
+        length(vals) == n || _dverr("the array parameter `$k` is declared with $n entries; its default has $(length(vals))")
+    end
+end
+
+# The parameter checks of LatticePDE's stability bound (LatticeFields hooks, F1): negative
+# diffusion is refused at every parameter value a problem steps with; an explicit substep
+# count is raised to the bound over the terms the bound sees; the substep error names the
+# terms the bound cannot see.
+function Problems.check_parameters(b::StabilityBound, p)
+    neg = bound_parts(b, p).negative
+    isempty(neg) && return nothing
+    _dverr("the diffusion coefficient of the field$(length(neg) == 1 ? "" : "s") $(join(("`$k`" for k in neg), ", ")) " *
+           "is negative at these parameters (anti-diffusion: an ill-posed equation, unstable at any step and with any " *
+           "solver); write the term with a coefficient ≥ 0 (`D * Δ(c)` with `D ≥ 0`; a decay is a reaction term `-k * c`)")
+end
+Problems.seen_bound(b::StabilityBound, p) = bound_parts(b, p).seen
+function Problems.unbounded_reason(b::StabilityBound, p)
+    parts = String[]
+    isempty(b.terms) || push!(parts, "the term$(length(b.terms) == 1 ? "" : "s") " *
+                                     join((_term_text(t) for t in b.terms), ", ") * ", which the bound cannot see")
+    isempty(b.unbounded) || return join(parts, "; ")
+    any(isnan, p) && push!(parts, "a parameter without a value")
+    r = bound_parts(b, p)
+    if !any(isnan, p) && !isfinite(r.ρ)
+        for (k, text, w) in r.nonfinite
+            push!(parts, string("a coefficient with no finite bound: ", _why_text(_coef_text(text), w), " (in the rate of `$k`)",
+                _why_route(w)))
+        end
+        isempty(r.nonfinite) && push!(parts, "a coefficient with no finite bound")
+    end
+    c = r.coupled
+    isempty(c) || push!(parts, "the coupled rows of $(join(("`$k`" for k in c), ", ")), which are not diagonally " *
+                               "dominant (their spectrum may be complex)")
+    return isempty(parts) ? nothing : join(parts, "; ")
+end
+
+# a `"key: term"` entry of the bound as the user wrote it: the term, a field read `c(t, x, y)`
+# as `c`, and the field whose rate holds it
+# a coefficient as the user wrote it: a field read `c(t, x, y)` as `c`
+_coef_text(t::AbstractString) = replace(t, r"(\w+)\(t(, \w+)*\)" => s"\1", "LatticePDE." => "")
+function _term_text(t::AbstractString)
+    i = findfirst(": ", t)
+    i === nothing && return "`$t`"
+    term = replace(t[(last(i) + 1):end], r"(\w+)\(t(, \w+)*\)" => s"\1")
+    return "`$term` (in the rate of `$(t[1:(first(i) - 1)])`)"
 end
 
 _states(p) = [f.key for f in p.fields if f.role == :state]
@@ -316,35 +667,72 @@ The problem of `pdesys` on the lattice (`disc.problem`):
   substeps)` for rate equations or `ExplicitMap()` for maps;
 - `:ode`: an `ODEProblem` whose function is the compiled right side (`LatticeRHS`) with the
   symbol table as `sys`, for SciML solvers;
-- `:auto`: `:ode` for rate equations, `:owned` when a discrete map is present;
-- `:linear`: not in this version (the steady solvers).
+- `:auto`: `:ode` for rate equations, `:owned` when a discrete map or a masked condition
+  (`c ~ masked(pred, v)`, which only the owned path lowers) is present;
+- `:linear`: not in this version (a steady solver is planned); refused.
 
 The time span is the domain of the first variable. Fields index solutions and integrators
 by symbol (`sol[c(t, x, y)]`, `sol[:c]`) as grid-shaped arrays.
+
+**Inputs.** Input fields (`kindₛ(..)::Int32 [input = true]`, a `domain` mask) are read and
+never written by the equations. Give their values with `inputs = [kindₛ => K, dom => M]`
+(an array with one value per site, or a number); on the owned path, also later with
+`remake(prob; inputs = …)` or `integ[kindₛ] = K` during a run (the masks follow). An input
+with a declared default (`dom(..)::Bool = true [input = true]`) needs no value; any other
+unset input is an error naming it (at `init` on the owned path, here on the ODE path). An
+input is never read as zero.
+
+**Parameters.** A parameter with a default that reads other parameters (`@parameters k2 =
+2a`) is computed: it is folded into the equations, so it follows `a` at every `remake` and
+`setp`, and it is not a parameter of the problem. An array parameter needs a default of its
+declared size. A scalar parameter with no value is an error naming it before the problem
+steps (at `init` on the owned path, here on the ODE path, which has no `init`); on the owned
+path `remake(prob; p = [k => v])` gives it one. A negative diffusion coefficient, or a NaN
+value, is refused at every parameter value a problem steps with: on the ODE path at the first
+call of the right side with new values (`remake`, `setp` on an integrator), so `solve` or
+`step!` throws and never runs them.
+
+A system mixes no rate equations (`D(c) ~ …`) and maps (`Shift(t, 1)(m) ~ …`) in this
+version: one problem steps one kind (split stepping is planned).
 """
-function discretize(sys::PDESystem, disc::LatticeDiscretization{N}) where {N}
+function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = ()) where {N}
+    _check_parts(sys)
     kind = disc.problem
-    kind == :linear && _dverr("problem = :linear (steady systems) needs the solvers of the next commit (C7b)")
+    kind == :linear && _dverr("problem = :linear (steady systems) is not lowered in this version (a steady solver " *
+                              "is planned); step the equations as rates `D(c) ~ rhs` to their steady state")
+    sys, derived, computed = _fold_computed(sys)
     hasmap = any(eq -> iscall(unwrap(eq.lhs)) && operation(unwrap(eq.lhs)) isa Shift, sys.eqs)
-    kind == :auto && (kind = hasmap ? :owned : :ode)
+    if hasmap
+        name(eq) = (r = unwrap(eq.lhs); a = iscall(r) ? arguments(r)[1] : r; string(_name(_opof(a))))
+        rate = [name(eq) for eq in sys.eqs if iscall(unwrap(eq.lhs)) && operation(unwrap(eq.lhs)) isa Differential]
+        maps = [name(eq) for eq in sys.eqs if iscall(unwrap(eq.lhs)) && operation(unwrap(eq.lhs)) isa Shift]
+        isempty(rate) || _dverr("the system mixes rate equations (of $(join(("`$f`" for f in rate), ", "))) and maps " *
+                                "(of $(join(("`$f`" for f in maps), ", "))); one problem steps one kind in this version " *
+                                "(a map steps at dt = 1, which would step the rates with no bound): discretize them as " *
+                                "two systems (split stepping is planned)")
+    end
+    hasmask = any(b -> (r = unwrap(b.rhs); iscall(r) && operation(r) === masked), sys.bcs)
+    kind == :auto && (kind = hasmap || hasmask ? :owned : :ode)
     kind == :ode && hasmap && _dverr("discrete maps have no ODE form; use problem = :owned")
     backend = disc.backend === nothing ? KernelAbstractions.CPU() : disc.backend
     T = _statetype(disc)
     options = CompileOptions(; T)
     tspan = _domain_ends(sys)[1]
     cf = symbolic_discretize(sys, disc; update = kind == :owned ? euler_update : nothing)
+    _check_tables(cf, sys)
     s = cf.program
     state = _states(s)
     init = [k.key for k in s.kernels if startswith(k.key, "mask:")]
     u0 = _initial(cf, sys, state, T)
-    index = _index(cf, sys, s, state)
+    index = _index(cf, sys, s, state; derived, computed)
+    ins = Pair[_input_defaults(cf, sys); collect(inputs)]
     if kind == :owned
         stab = hasmap ? (p -> NaN) : stability_bound(cf, sys)
         return FieldProblem(s, u0, tspan, cf.defaults; state, kind = hasmap ? :map : :rate,
-            init, index, tables = cf.tables, backend, options, stability = stab)
+            init, index, tables = cf.tables, inputs = ins, backend, options, stability = stab)
     end
     isempty(init) || _dverr("masked conditions (`c ~ masked(pred, v)`) need problem = :owned in this version")
     rates = Dict(k => "∂$k" for k in state)
     return ode_problem(s, u0, tspan, cf.defaults; state, rates, init, index,
-        tables = cf.tables, backend, options)
+        tables = cf.tables, inputs = ins, stability = stability_bound(cf, sys), backend, options)
 end

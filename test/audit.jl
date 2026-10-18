@@ -230,19 +230,20 @@ end
     @test occursin("^2", err.msg)                                       # the term is named
     # an explicit count is kept (at least the bound of the diffusion, 0.1·8/1.8 → 1), with one
     # warning naming the term the bound does not cover
-    prob = @test_logs (:warn, r"field `c`: 4 substeps.*does not cover `c: ") PottsProblem(AuditNonlinearField(; name = :n),
+    # (in the model's words: the term, not the key-prefixed `c: …` of round 0)
+    prob = @test_logs (:warn, r"field `c`: 4 substeps.*does not cover `(?!c: )[^`]*c\^2[^`]*`") PottsProblem(AuditNonlinearField(; name = :n),
         op, (0, 1); field_solver = ExplicitEuler(substeps = 4))
     @test audit_n(init(prob, SequentialCPM())) == 4
 end
 
-# a kind table in a rate: the bound cannot see it (D-C8 item 6). With no count the problem
-# throws naming the term; an explicit count stays a minimum: the count is the largest of the
-# request and the bound of the terms the bound sees (here the diffusion, as the old path)
+# a kind table in a rate: the bound reads the table (F1 round 6; D-C8 item 6 refused it): the
+# automatic count covers `δ[kind] c` (here ρ = Dc·8 + max δ = 13, ⌈13/1.8⌉ = 8; the old bound,
+# diffusion only, gave 5), and an explicit count stays a minimum
 @potts_model AuditBoundedField begin
     @kinds medium A
     @parameters begin
         Dc = 1.0
-        δ[kind] = [0.5, 0.0]
+        δ[kind] = [5.0, 0.0]
     end
     @variables c(field) = 0.0
     @lattice Lattice((16, 16))
@@ -251,20 +252,95 @@ end
     @sweep Metropolis(; temperature = 5.0)
 end
 
-@testset "a kind table in a rate: refused without a count; an explicit count is a minimum" begin
+@testset "a kind table in a rate: the bound reads it; an explicit count is a minimum" begin
     cb = [iseven(i + j) ? 1.0 : -1.0 for i in 1:16, j in 1:16]
     op = [ownership => zeros(Int32, 16, 16), kind => Symbol[], :c => cb]
-    err = audit_err(() -> PottsProblem(AuditBoundedField(; name = :b), op, (0, 30); field_solver = ExplicitEuler()))
-    @test err isa ArgumentError && occursin("no bound from the parameters", err.msg) && occursin("δ", err.msg)
-    prob = @test_logs (:warn, r"field `c`: 5 substeps.*does not cover") PottsProblem(AuditBoundedField(; name = :b), op,
-        (0, 30); field_solver = ExplicitEuler(substeps = 1))
-    integ = init(prob, SequentialCPM())
-    @test audit_n(integ) == 5                                       # max(1, ceil(1.0·8 / 1.8))
-    c = Array(solve(prob, SequentialCPM()).u[end].site.c)
-    @test all(isfinite, c) && maximum(abs, c) < 1e-3               # stable at 5 (8.5 · 1/5 ≤ 2)
+    prob = PottsProblem(AuditBoundedField(; name = :b), op, (0, 30); field_solver = ExplicitEuler())
+    @test audit_n(init(prob, SequentialCPM())) == 8                  # (round 5: refused, "no bound")
+    prob1 = @test_logs PottsProblem(AuditBoundedField(; name = :b), op, (0, 30); field_solver = ExplicitEuler(substeps = 1))
+    @test audit_n(init(prob1, SequentialCPM())) == 8                 # raised (round 5: 5, the diffusion only)
+    c = Array(solve(prob1, SequentialCPM()).u[end].site.c)
+    @test all(isfinite, c) && maximum(abs, c) < 1e-3               # stable at 8 (13 · 1/8 ≤ 2)
     # control: a request above the bound is kept
-    @test audit_n(init(PottsProblem(AuditBoundedField(; name = :b), op, (0, 1); field_solver = ExplicitEuler(substeps = 7)),
-        SequentialCPM())) == 7
+    @test audit_n(init(PottsProblem(AuditBoundedField(; name = :b), op, (0, 1); field_solver = ExplicitEuler(substeps = 9)),
+        SequentialCPM())) == 9
+end
+
+# a diffusion multiplier read from a kind table varies by site: refused without a count, the
+# message names that reason and prints the term as written (F1 round 7: no reason given,
+# `LatticePDE.at(…)`, `LatticePDE.Δ(…)`)
+@potts_model AuditKindDiffusion begin
+    @kinds medium A
+    @parameters δ[kind] = [0.1, 0.2]
+    @variables c(field) = 0.0
+    @lattice Lattice((16, 16))
+    @energy cells(A) => (volume - 9)^2
+    @equations D(c) ~ δ[kind] * Δ(c)
+    @sweep Metropolis(; temperature = 5.0)
+end
+
+@testset "a kind-table diffusion multiplier: refused with its reason, in the model's words" begin
+    op = [ownership => zeros(Int32, 16, 16), kind => Symbol[]]
+    err = audit_err(() -> PottsProblem(AuditKindDiffusion(; name = :k), op, (0, 1); field_solver = ExplicitEuler()))
+    @test err isa ArgumentError && occursin("varies by site", err.msg) && !occursin("LatticePDE.", err.msg)
+end
+
+# a kind table under `1 / …` (F1 round 8): the bound reads every kind's entry, the medium's
+# too, and never index 0 (a kind is never negative, so `τ[kind]` reads entry kind + 1): with
+# every entry nonzero the automatic count holds (ρ = 0.1·8 + 1/0.5 = 2.8, ⌈2.8/1.8⌉ = 2); a
+# zero entry is refused with or without a count, naming the entry and the route (round 7:
+# "the substep bound of the field `c` is not finite at the current parameters (Inf)", for
+# both); over the evaluation cap an explicit count runs as given (round 7: refused)
+@potts_model AuditInvTable begin
+    @kinds medium A
+    @parameters begin
+        Dc = 0.1
+        τ[kind] = [2.0, 0.5]
+    end
+    @variables c(field) = 0.0
+    @lattice Lattice((16, 16))
+    @energy cells(A) => (volume - 9)^2
+    @equations D(c) ~ Dc * Δ(c) - (1 / τ[kind]) * c
+    @sweep Metropolis(; temperature = 5.0)
+end
+
+# the field phase of a problem
+function audit_phase(prob)
+    for e in prob.f.phases.mcs, t in (e isa CorePotts.Repeat ? e.entries : (e,))
+        t isa Tuple || continue
+        for ph in t
+            ph isa CorePotts.FieldPhase && !ph.init && return ph
+        end
+    end
+end
+
+@testset "a kind table under `1 / …`: every kind's entry, never index 0; a zero entry is named" begin
+    op = [ownership => zeros(Int32, 16, 16), kind => Symbol[]]
+    prob = PottsProblem(AuditInvTable(; name = :v), op, (0, 1); field_solver = ExplicitEuler())
+    @test audit_n(init(prob, SequentialCPM())) == 2
+    for fs in (ExplicitEuler(), ExplicitEuler(substeps = 3)), τ in ([0.0, 0.5], [2.0, 0.0])
+        err = audit_err(() -> PottsProblem(AuditInvTable(; name = :v), [op; :τ => τ], (0, 1); field_solver = fs))
+        @test err isa ArgumentError && occursin("make it nonzero", err.msg) && occursin("`τ`", err.msg)
+        @test occursin(τ[1] == 0 ? "the medium's entry of `τ` (kind 0)" : "the entry of kind 1 of `τ`", err.msg)
+        @test !occursin("index 0", err.msg) && !occursin("LatticePDE.", err.msg) && !occursin("__in", err.msg)
+    end
+    # over the evaluation cap (a 5000-entry table): an explicit count runs as given, and no
+    # count is refused with the route
+    p3 = PottsProblem(AuditInvTable(; name = :v), op, (0, 1); field_solver = ExplicitEuler(substeps = 3))
+    big(prob) = (ph = audit_phase(prob);
+                 (ph.substeps, CorePotts.Problems.with_tables(Float64[getproperty(prob.p, n) for n in ph.params],
+                      Pair{String, Vector{Float64}}[ph.program.tables[i].key => fill(1.0, 5000) for (i, _) in ph.tables])))
+    s3, b3 = big(p3)
+    @test (@test_logs (:warn, r"3 substeps.*does not cover.*4096") s3(b3)) == 3   # warned once per group
+    # … raised by the bound over the terms it sees (round 9: Dc = 4.5 with 3 stayed at 3 past
+    # the cap, against 22 with the 2-entry table; now 4.5·8/1.8 = 20; the group has warned)
+    p45 = PottsProblem(AuditInvTable(; name = :v), [op; :Dc => 4.5], (0, 1); field_solver = ExplicitEuler(substeps = 3))
+    @test audit_n(init(p45, SequentialCPM())) == 22                                    # control: 2 entries
+    s45, b45 = big(p45)
+    @test (@test_logs s45(b45)) == 20
+    s0, b0 = big(prob)
+    err = audit_err(() -> s0(b0))
+    @test err isa ArgumentError && occursin("4096", err.msg) && occursin("substeps = n", err.msg)
 end
 
 # an integer division of parameters in a rate: the bound cannot see `÷` (D-C8 item 6)
@@ -284,7 +360,10 @@ end
 @testset "÷ of parameters in a field rate has no bound: refused without a count" begin
     op = [ownership => zeros(Int32, 16), kind => Symbol[], :c => [isodd(i) ? 1.0 : -1.0 for i in 1:16]]
     err = audit_err(() -> PottsProblem(AuditIntDivField(; name = :b), op, (0, 30); field_solver = ExplicitEuler()))
-    @test err isa ArgumentError && occursin("no bound from the parameters", err.msg) && occursin("`c: ", err.msg)   # `k₀ ÷ 2` is a filled input
+    # the term is printed in the model's words (F1, PO06: on f9a77dd3 the message printed the
+    # key prefix and the internal `Potts._intdiv(k₀, 2)`)
+    @test err isa ArgumentError && occursin("no bound from the parameters", err.msg) && occursin("k₀ ÷ 2", err.msg) &&
+          !occursin("_intdiv", err.msg) && !occursin("`c: ", err.msg)
     # with a count: kept as a minimum over the diffusion bound (0.25·4 / 1.8 → 1)
     prob = @test_logs (:warn, r"does not cover") PottsProblem(AuditIntDivField(; name = :b), op, (0, 30);
         field_solver = ExplicitEuler(substeps = 3))
@@ -409,6 +488,7 @@ end
         err = audit_err(() -> PottsProblem(AuditOneField(; name = :o), [ownership => zeros(Int32, 8, 8), kind => Symbol[],
             :c => cb, :Dc => -0.1], (0, 1); field_solver = fs))
         @test err isa ArgumentError && occursin("negative", err.msg) && occursin("`c`", err.msg)
+        @test occursin("coefficient ≥ 0", err.msg)                  # the route (round 0: none)
     end
     integ = init(one, SequentialCPM())
     integ.p = remake(one; p = [:Dc => -0.1]).p
