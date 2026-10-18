@@ -5096,3 +5096,8 @@ The problem fingerprint hashes the generated code. C8 replaces the field code of
 ## D-C8-R6 Re-freeze (list A, C8): p6_0bk2's IR pins (D-250 AUTO) (2026-10-17; provisional — taken under the maintainer's 2026-10-16 grant, awaiting the list-A OK; D-256, D-C8; the number is provisional)
 
 `lib/PottsModels/test/acceptance/p6_0bk2_skip_interior.jl` pins the sha256 of the sweep's code (`"GG 72²"`, `"cubes 16³"`). C8's sub-MCS repeat (D-C8 item 14) gives the sweeps a pass argument: the loop runs over the pass's attempt or color range, `(1, 1)` for a whole MCS. The IR text changes; the trajectories do not (the repeat oracle in `test/fields.jl` checks split = plain). Re-pinned under D-250 AUTO (declared `String` pins only): `a390240e…e3e0` and `7ba4a1c4…e5bc`, recorded on the PC from lp/c8. The new sha256 is in `frozen.toml`.
+
+## D-C9-R1 Re-freeze (list A, C9): p6_0bk2's IR pins (D-250 AUTO) (2026-10-17; provisional — taken under the maintainer's 2026-10-16 grant, extended overnight; D-256, D-C9; the number is provisional)
+
+`lib/PottsModels/test/acceptance/p6_0bk2_skip_interior.jl` pins the sha256 of the printed typed IR of `sequential_mcs!` (`"GG 72²"`, `"cubes 16³"`). C9 gives the parameter object a second type parameter, the names of its computed parameters (`PottsParameters{NT, D}`, so SciMLStructures can leave them out of its portions; D-C9 item 5). The printed IR changes in exactly one place, the argument type `…}}` → `…}, ()}`, measured on the PC by diffing the IR text of lp/c8 against lp/c9 (both cases: a single insertion of `, ()`). Nothing else in the code changes. Re-pinned under D-250 AUTO (declared `String` pins only): `d1f7ef6e…d11e` and `7dc82291…2789`, recorded on the PC from lp/c9. The new sha256 is in `frozen.toml`.
+
