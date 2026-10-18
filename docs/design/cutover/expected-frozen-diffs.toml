@@ -1119,3 +1119,13 @@ why = "as above, for Merks' field (fixed by D-C8-R4)"
 assertion = "p6_0y_stable_substeps.jl:266 p60y_bits(c) == p60y_MERKS_BITS"
 old = "p60y_MERKS_BITS"
 new = "patterns equal in the leading digits, differing in the last bits"
+
+# C9 (components rebuilt from `Potts.compose`, PottsCatalystExt, SciMLStructures on
+# PottsParameters): no frozen edit and no new frozen failure. Measured on the PC on lp/c9 (on
+# lp/c8 1680c718), three PottsModels shards (CPU): only the bulk-less OpenVT package files
+# (15_openvt_package.jl, 15_openvt_d213.jl; unchanged baseline) and frozen.jl fail. frozen.jl
+# fails only on the sha256 of p6_0g_kind_classes.jl, from the lp/c8 re-pin c0144504 (frozen.toml
+# still records the D-C8-R5 hash), not from C9. The 20 frozen files that use @components,
+# Potts.wrap, Potts.extend/@extend, the MTK container or PottsParameters remake/setters
+# (p6_0k, k2, e2, aj, al, am, p, av, b2, c2, u, o, g, bm, bp, bs, bn, an, ap, p6_5b) also pass
+# run on their own. No entry.

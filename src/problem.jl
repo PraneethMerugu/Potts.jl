@@ -132,7 +132,9 @@ function CorePotts.PottsProblem(c::CompiledPottsSystem, op, tspan; backend = not
     track = _track(track)
     opd = _operating_point(sys, op)
     values = _parameter_values(c, opd)
-    p = PottsParameters(NamedTuple(info(x).name => _param_value(T, values[_unwrap(x)], info(x)) for x in _p(sys, :parameters)))
+    p = PottsParameters(NamedTuple(info(x).name => _param_value(T, values[_unwrap(x)], info(x)) for x in _p(sys, :parameters)),
+        _computed_tag(_p(sys, :parameters)))
+    _register_derivation!(_p(sys, :parameters), T, p)
     for name in _contact_tables(c)
         J = getproperty(p, name)
         J == transpose(J) || throw(ArgumentError("kind table `$name` is used in a contact energy and must be symmetric"))
@@ -506,8 +508,8 @@ in the change and one of its inputs is named in the change or is itself re-deriv
 (transitively): `b = 3a` follows a new `a`. Every other parameter keeps its value in `p`, so
 an explicit value survives every change that touches none of its inputs.
 """
-function _derived_parameters(c::CompiledPottsSystem, p, changed)
-    ps = _p(c.sys, :parameters)
+_derived_parameters(c::CompiledPottsSystem, p, changed) = _derived_values(_p(c.sys, :parameters), p, changed)
+function _derived_values(ps, p, changed)
     values = Dict{Any, Any}()
     redo = _rederived(ps, changed)
     for x in ps
@@ -516,6 +518,63 @@ function _derived_parameters(c::CompiledPottsSystem, p, changed)
     end
     isempty(redo) && return values
     return _resolve_defaults!(values)
+end
+
+# `()` or `(names, fp)` for a parameter object's type (`PottsParameters{NT, D}`): the computed
+# parameters (D-112) and a fingerprint of their `(name, default)` pairs (C9). Only computed
+# parameters are fingerprinted: a constructor keyword that overrides another default (a sweep
+# `Model(; T = t)`) keeps one type, so nothing recompiles.
+_computed_params(ps) = [x for x in ps if _is_symbolic(info(x).default)]
+# the fingerprint's text of a default: numbers as Float64 (`0` and `0.0` are one derivation: the
+# Pairs and matrix forms of a kind table give one type), arrays element by element with their size
+_canon_default(d::AbstractArray) = string(size(d)) * "[" * join(map(_canon_default, d), ", ") * "]"
+function _canon_default(d)
+    u = _const_value(d)
+    return u isa Real ? repr(Float64(u)) : string(u)
+end
+_const_value(d) = (u = _unwrap(d); u isa SymbolicUtils.BasicSymbolic && SymbolicUtils.isconst(u) ? SymbolicUtils.unwrap_const(u) : u)
+function _computed_tag(ps)
+    cs = _computed_params(ps)
+    isempty(cs) && return ()
+    return (Tuple(info(x).name for x in cs), hash([(info(x).name, _canon_default(info(x).default)) for x in cs]))
+end
+
+# the raw computed defaults, compared exactly (`isequal`, arrays element by element with their
+# size): `0` and `0.0` agree, `1//3` and `0.333…`, `big"0.1"` and `0.1`, or `A.f(λ)` and
+# `B.f(λ)` do not, although the fingerprint's text cannot tell them apart
+_raw_defaults(ps) = [(info(x).name, info(x).default) for x in _computed_params(ps)]
+_same_default(a::AbstractArray, b::AbstractArray) = size(a) == size(b) && all(_same_default(x, y) for (x, y) in zip(a, b))
+_same_default(a::AbstractArray, b) = false
+_same_default(a, b::AbstractArray) = false
+_same_default(a, b) = isequal(_const_value(a), _const_value(b))
+_same_defaults(a, b) = length(a) == length(b) && all(x[1] === y[1] && _same_default(x[2], y[2]) for (x, y) in zip(a, b))
+
+# register the derivation of `p`'s computed parameters (D-112) for `SciMLStructures.replace`:
+# one per exact type; a second model with the same type but other computed defaults (a
+# fingerprint collision) is an error, never a silent replacement
+function _register_derivation!(ps, T, p::PottsParameters)
+    isempty(_computed(p)) && return nothing
+    defaults = _raw_defaults(ps)
+    lock(_DERIVATIONS_LOCK) do
+        old = get(_DERIVATIONS, typeof(p), nothing)
+        if old === nothing
+            _DERIVATIONS[typeof(p)] = (; derive = (o, n) -> _rederive(ps, T, o, n), defaults)
+        elseif !_same_defaults(old.defaults, defaults)
+            throw(ArgumentError("two models share a parameter type but derive $(_computed(p)) from other defaults " *
+                                "(a fingerprint collision: equal as text, e.g. `1//3` and `0.333…`, or two functions " *
+                                "named alike); rename a parameter of one of them"))
+        end
+    end
+    return nothing
+end
+
+# `new` with the computed parameters that read a value changed from `old` re-derived (D-112)
+function _rederive(ps, T, old::PottsParameters, new::PottsParameters)
+    o = NamedTuple(old)
+    changed = Set(k for (k, v) in pairs(NamedTuple(new)) if !isequal(v, o[k]))
+    isempty(changed) && return new
+    derived = _derived_values(ps, new, changed)
+    return _with_values(new, NamedTuple(info(x).name => _param_value(T, derived[_unwrap(x)], info(x)) for x in ps))
 end
 
 # The names of the computed parameters a change naming `changed` re-derives (D-112): a fixed
@@ -933,7 +992,7 @@ function _set_parameter_map(info::PottsModelInfo, old::PottsParameters, p)
         i = names[key]
         new[i.name] = _param_value(info.T, v, i)
     end
-    out = PottsParameters(NamedTuple(k => get(new, k, v) for (k, v) in pairs(NamedTuple(old))))
+    out = _with_values(old, NamedTuple(k => get(new, k, v) for (k, v) in pairs(NamedTuple(old))))
     return _finish_parameters(info, old, out, Set(keys(new)))
 end
 
@@ -954,11 +1013,13 @@ _model_info(x) = throw(ArgumentError("remake_buffer: `$(nameof(typeof(x)))` does
 CorePotts.remake_parameters(info::PottsModelInfo, prob, p::NamedTuple) =
     CorePotts.remake_parameters(info, prob, _field_pairs(p))
 
-# a whole parameter object of this problem's type is taken as given (`remake(prob; p = ck.p)`);
-# one of another type must have the same names and sets every value, converted to the
-# problem's scalar type (a Float32 problem's `p` does not make a Float64 problem Float32)
+# a whole parameter object is taken as given, computed parameters included (D-115: a checkpoint's
+# `p` restores verbatim; a SciMLStructures `replace` has already re-derived them; D-C9 item 7);
+# the kind tables are checked either way. One of this problem's type is used as is; one of another
+# type must have the same names and sets every value, converted to the problem's scalar type (a
+# Float32 problem's `p` does not make a Float64 problem Float32)
 function CorePotts.remake_parameters(info::PottsModelInfo, prob, p::PottsParameters)
-    typeof(p) === typeof(prob.p) && return p
+    typeof(p) === typeof(prob.p) && return _check_parameter_tables(info.csys, p)
     new, old = keys(NamedTuple(p)), keys(NamedTuple(prob.p))
     if Set(new) != Set(old)
         extra, absent = setdiff(new, old), setdiff(old, new)
@@ -987,9 +1048,14 @@ _is_pairs(p) = (p isa AbstractVector || p isa Tuple) && all(x -> x isa Pair, p)
 function _finish_parameters(mi::PottsModelInfo, old, out, explicit)
     c = mi.csys
     derived = _derived_parameters(c, out, explicit)
-    out = PottsParameters(NamedTuple(info(x).name => _param_value(mi.T, derived[_unwrap(x)], info(x))
+    out = _with_values(old, NamedTuple(info(x).name => _param_value(mi.T, derived[_unwrap(x)], info(x))
                                      for x in _p(c.sys, :parameters)))
     typeof(out) === typeof(old) || throw(ArgumentError("parameter types changed; kind tables keep their size"))
+    return _check_parameter_tables(c, out)
+end
+
+# the kind tables of a parameter object: their checks, and contact tables symmetric
+function _check_parameter_tables(c::CompiledPottsSystem, out)
     _check_kind_tables(c.sys, out)
     for name in _contact_tables(c)
         J = getproperty(out, name)
@@ -1002,7 +1068,7 @@ end
 function CorePotts.set_parameter(info::PottsModelInfo, p::PottsParameters, v, i::Symbol)
     x = findfirst(x -> Potts.info(x).name === i, _p(info.csys.sys, :parameters))
     x === nothing && throw(ArgumentError("`$i` is not a parameter of $(nameof(info.csys))"))
-    q = PottsParameters(merge(NamedTuple(p), NamedTuple{(i,)}((_param_value(info.T, v, Potts.info(_p(info.csys.sys, :parameters)[x])),))))
+    q = _with_values(p, merge(NamedTuple(p), NamedTuple{(i,)}((_param_value(info.T, v, Potts.info(_p(info.csys.sys, :parameters)[x])),))))
     return _finish_parameters(info, p, q, Set([i]))
 end
 
@@ -1021,7 +1087,7 @@ function CorePotts.set_parameters(info::PottsModelInfo, p::PottsParameters, vals
         x === nothing && throw(ArgumentError("`$i` is not a parameter of $(nameof(info.csys))"))
         new[i] = _param_value(info.T, v, Potts.info(params[x]))
     end
-    q = PottsParameters(NamedTuple(k => get(new, k, v) for (k, v) in pairs(NamedTuple(p))))
+    q = _with_values(p, NamedTuple(k => get(new, k, v) for (k, v) in pairs(NamedTuple(p))))
     return _finish_parameters(info, p, q, Set(keys(new)))
 end
 

@@ -1889,15 +1889,98 @@ const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivit
 The parameter object of a generated problem: an isbits wrapper of a `NamedTuple` of
 scalars and kind tables in the model's scalar type. `p.λ` reads a parameter (generated code
 does this); `remake(prob; p = [λ => 2.0])` changes values without changing the type, so
-nothing recompiles.
+nothing recompiles. The second type parameter is `()` or `(names, fp)`: the computed parameters
+(D-112: a default that is an expression of other parameters) and a fingerprint of their
+names and defaults. SciMLStructures leaves the computed parameters out of its portions
+and `SciMLStructures.replace` re-derives them through the derivation registered for this exact
+type when a problem of the model is built in the process.
 """
-struct PottsParameters{NT <: NamedTuple}
+struct PottsParameters{NT <: NamedTuple, D}
     values::NT
+    PottsParameters{NT, D}(values::NT) where {NT <: NamedTuple, D} = new{NT, D}(values)
 end
+PottsParameters(values::NamedTuple, tag::Union{Tuple{}, Tuple{Tuple{Vararg{Symbol}}, UInt64}} = ()) =
+    PottsParameters{typeof(values), tag}(values)
+_computed(::PottsParameters{NT, D}) where {NT, D} = D === () ? () : D[1]
+"""`p`'s parameter object with the values `nt` (the same computed parameters)."""
+_with_values(::PottsParameters{NT, D}, nt::NamedTuple) where {NT, D} = PottsParameters{typeof(nt), D}(nt)
 @inline Base.getproperty(p::PottsParameters, s::Symbol) = getfield(getfield(p, :values), s)
 Base.propertynames(p::PottsParameters) = propertynames(getfield(p, :values))
 Base.getindex(p::PottsParameters, s::Symbol) = getfield(getfield(p, :values), s)
 Base.NamedTuple(p::PottsParameters) = getfield(p, :values)
-CorePotts.set_parameter(p::PottsParameters, v, i::Symbol) = PottsParameters(CorePotts.set_parameter(NamedTuple(p), v, i))
+CorePotts.set_parameter(p::PottsParameters, v, i::Symbol) = _with_values(p, CorePotts.set_parameter(NamedTuple(p), v, i))
 Base.:(==)(a::PottsParameters, b::PottsParameters) = NamedTuple(a) == NamedTuple(b)
 Base.show(io::IO, p::PottsParameters) = print(io, "PottsParameters", NamedTuple(p))
+
+# SciMLStructures (cutover C9, P5 C7a-11): `Tunable` is the floating-point scalar parameters in
+# declaration order; `Constants` the kind tables (each flattened, column-major) and any integer or
+# Bool scalars; computed parameters (D-112) are in neither, and `replace` re-derives the ones that
+# read a replaced value. `PottsParameters` is immutable: `replace` returns a new object of the
+# same type. Values convert to each entry's own type and are never promoted: a Dual is an
+# `ArgumentError` (the object holds plain numbers in the problem's scalar type), and so is a value
+# an integer entry cannot hold exactly; a wider float (a BigFloat into a Float64 entry) rounds to
+# the entry's type. `remake(prob; p = obj)` takes the object as given (D-115, D-C9 item 7).
+SciMLStructures.isscimlstructure(::PottsParameters) = true
+SciMLStructures.ismutablescimlstructure(::PottsParameters) = false
+SciMLStructures.hasportion(::SciMLStructures.Tunable, ::PottsParameters) = true
+SciMLStructures.hasportion(::SciMLStructures.Constants, ::PottsParameters) = true
+SciMLStructures.hasportion(::SciMLStructures.AbstractPortion, ::PottsParameters) = false
+
+_portion_keys(::SciMLStructures.Tunable, p) =
+    (nt = NamedTuple(p); Tuple(k for k in keys(nt) if nt[k] isa AbstractFloat && !(k in _computed(p))))
+_portion_keys(::SciMLStructures.Constants, p) =
+    (nt = NamedTuple(p); Tuple(k for k in keys(nt) if (nt[k] isa StaticArrays.StaticArray ||
+                                                       (nt[k] isa Number && !(nt[k] isa AbstractFloat))) && !(k in _computed(p))))
+_flat(x::Number) = (x,)
+_flat(x) = Tuple(x)
+
+# an absent portion (Caches, Discrete, Initials, Input): SciMLStructures' `(nothing, nothing, nothing)`
+SciMLStructures.canonicalize(::SciMLStructures.AbstractPortion, ::PottsParameters) = (nothing, nothing, nothing)
+function SciMLStructures.canonicalize(portion::Union{SciMLStructures.Tunable, SciMLStructures.Constants}, p::PottsParameters)
+    nt = NamedTuple(p)
+    vals = collect(Iterators.flatten(_flat(nt[k]) for k in _portion_keys(portion, p)))
+    T = isempty(vals) ? Float64 : mapreduce(typeof, promote_type, vals)
+    buf = T[x for x in vals]
+    repack(v) = SciMLStructures.replace(portion, p, v)
+    return buf, repack, false
+end
+
+function _cpm_value(::Type{T}, v, k::Symbol) where {T}
+    v isa Union{AbstractFloat, Integer, Rational, AbstractIrrational} ||
+        throw(ArgumentError("SciMLStructures.replace: parameter `$k` = $v (a $(typeof(v))) is not a plain number: " *
+                            "a problem's parameter object holds plain numbers in its scalar type (no Duals); " *
+                            "differentiating through a Potts problem is not supported in this version"))
+    try
+        return T(v)
+    catch e
+        e isa InexactError || rethrow()
+        throw(ArgumentError("SciMLStructures.replace: parameter `$k` is a $T; $v does not convert to it"))
+    end
+end
+_rebuild(old::Number, k, it) = _cpm_value(typeof(old), popfirst!(it), k)
+_rebuild(old::A, k, it) where {A <: StaticArrays.StaticArray} = A(ntuple(_ -> _cpm_value(eltype(A), popfirst!(it), k), length(old)))
+
+function SciMLStructures.replace(portion::Union{SciMLStructures.Tunable, SciMLStructures.Constants}, p::PottsParameters,
+        v::AbstractVector)
+    nt = NamedTuple(p)
+    ks = _portion_keys(portion, p)
+    n = sum((length(_flat(nt[k])) for k in ks); init = 0)
+    length(v) == n || throw(ArgumentError("SciMLStructures.replace: $(nameof(typeof(portion))) has $n values; got $(length(v))"))
+    it = collect(Any, v)
+    vals = map(k -> k in ks ? _rebuild(nt[k], k, it) : nt[k], keys(nt))
+    q = _with_values(p, NamedTuple{keys(nt)}(Tuple(vals)))
+    isempty(_computed(p)) && return q
+    f = lock(() -> get(_DERIVATIONS, typeof(p), nothing), _DERIVATIONS_LOCK)
+    f === nothing && throw(ArgumentError("SciMLStructures.replace: the computed parameters $(_computed(p)) are " *
+                                         "re-derived by their model; build the problem in this process (each worker) " *
+                                         "first, or set the values with `remake(prob; p = [name => value])`"))
+    return f.derive(p, q)
+end
+
+# the derivation of computed parameters (D-112) per exact parameter-object type (its `D` holds a
+# fingerprint of the computed parameters' names and defaults): `(derive, defaults)` with
+# `derive(old, new)` the object `new` with the computed parameters that read a changed value
+# re-derived, and `defaults` the raw `(name, default)` list of the computed parameters, compared
+# exactly at registration (the collision guard)
+const _DERIVATIONS = Dict{Any, Any}()
+const _DERIVATIONS_LOCK = ReentrantLock()

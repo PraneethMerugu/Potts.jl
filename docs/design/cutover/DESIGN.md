@@ -133,7 +133,7 @@ More than 15% over a v3 module cap during implementation is a stop-and-report it
 | C7b | MG (rule M), PCG, stationary path | PG-4, PG-5; rule-M negative control |
 | C7c | Tangent pass, IMEX, lagged switch, maps | dot-product test; T-ports |
 | C8 | The switch; old field code and its non-frozen tests deleted | PG-3, PG-11 (ROCm), PG-12, PG-13; frozen = expected set |
-| C9 | Components by `Potts.compose`; `PottsCatalystExt` (Catalyst 16.4) | AGPL scan |
+| C9 | Components by `Potts.compose`; SciMLStructures on `PottsParameters`; `PottsCatalystExt` dropped by the user's ruling (2026-10-17: Catalyst 16 → Latexify → Ghostscript_jll, an AGPL-3.0 binary) | AGPL scan |
 | C10 | Docs and D-entries (supersede D-137; amend D-159, D-016/D-107, D-145, D-051, …) | docs build |
 
 Every commit builds and passes the non-frozen suites. The frozen suite runs on C2, C3, C8 and the

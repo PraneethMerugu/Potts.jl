@@ -148,8 +148,9 @@ end
 # compile entry (it returns a `CompiledPottsSystem`, not a problem), so it builds by design, and
 # so does MTKBase's deprecated `structural_simplify(sys) = mtkcompile(sys)`. `flatten(W)` is W.
 # On the probe models (a hand-built System wrapped with a payload that does not build it) the
-# compile entries are loud instead: until C9 the compiler reads the payload only, so a model
-# whose inner System holds more is refused rather than compiled without it (C4 review B1).
+# compile entries are loud instead: the compiler reads the payload, and lowers only subsystems
+# into it (C9), so a model whose inner System holds top-level content its payload does not
+# build is refused rather than compiled without it (C4 review B1).
 const WL_BY_DESIGN = ["flatten(W)", "mtkcompile(W)", "structural_simplify(W)"]
 const WL_BY_DESIGN_RAW = ["flatten(W)"]
 const WL_LOUD_REQUIRED = ["compose(W, [System])", "compose(W, W)", "rename(W, :q)", "complete(W)", "extend(W, W)",
@@ -167,7 +168,7 @@ const WL_PUBLISHED = (:GranerGlazier, :WortelAct, :MerksVasculogenesis, :OpenVTG
         @test sort(WLiteMatrix.built(m)) == sort(WL_BY_DESIGN_RAW)                                 # F2
         @test all(l -> Dict(m)[l] === :LOUD, WL_LOUD_REQUIRED)                                     # F3: no hang, loud
         @test WLiteMatrix.tally(m) == Dict(:REFUSED => 80, :LOUD => 18, :BUILT => 1)
-        @test occursin("C9", sprint(showerror, try mtkcompile(W) catch e e end))
+        @test occursin("payload cannot build", sprint(showerror, try mtkcompile(W) catch e e end))
     end
 end
 
@@ -330,20 +331,24 @@ end
     @test occursin("binding model.cell.cbar ← c_mean", sprint(show, MIME"text/plain"(), Wn))
     # the resolved terms are template-compile inputs
     @test Potts.ModelingToolkitBase.mtkcompile(Potts.inner(Wn); inputs) isa System
-    # C4 review B1: the compiler reads the payload only until C9, so compiling, solving or
-    # extending a composed model is refused (naming C9), never built without its components
-    c9(f) = try
+    # C4 review B1 / C9: subsystems are lowered into the payload as model-scope components;
+    # top-level content of a hand-built System (wmodel's `D(w)`) and component inputs (wcell's
+    # `cbar`, `vol`) are refused by name, never dropped
+    loud(f, what) = try
         f()
         false
     catch e
-        e isa ArgumentError && occursin("C9", sprint(showerror, e))
+        e isa ArgumentError && occursin(what, sprint(showerror, e))
     end
+    refused = r"payload cannot build|has the input"     # wmodel's top level; wcell's inputs
     for W in (Wb, Wn, wcell)
-        @test c9(() -> mtkcompile(W))
-        @test c9(() -> Potts.ModelingToolkitBase.structural_simplify(W))
-        @test c9(() -> PottsProblem(W, [], (0, 1)))
-        @test c9(() -> Potts.extend(W, wtop)) && c9(() -> Potts.extend(PottsModels.GranerGlazier(; name = :gg), W))
+        @test loud(() -> mtkcompile(W), refused)
+        @test loud(() -> Potts.ModelingToolkitBase.structural_simplify(W), refused)
+        @test loud(() -> PottsProblem(W, [], (0, 1)), refused)
+        @test loud(() -> Potts.extend(W, wtop), refused) &&
+              loud(() -> Potts.extend(PottsModels.GranerGlazier(; name = :gg), W), refused)
     end
+    gg = PottsModels.GranerGlazier(; name = :gg)
     # control: a model built from its payload compiles and extends
     gg = PottsModels.GranerGlazier(; name = :gg)
     @test mtkcompile(gg) isa CompiledPottsSystem && Potts.extend(gg, gg) isa PottsSystem
@@ -402,7 +407,7 @@ end
         f()
         false
     catch e
-        e isa ArgumentError && occursin("C9", sprint(showerror, e))
+        e isa ArgumentError && occursin("payload cannot build", sprint(showerror, e))
     end
     # control: the same System rebuilt by hand (no marker) passes the full comparison
     @test mtkcompile(Potts.wrap(:g, rebuilt(), nothing, part)) isa CompiledPottsSystem
@@ -418,8 +423,7 @@ end
     @variables yd(Potts.t)
     dsys = System([WL_MTKB.Differential(Potts.t)(yd) ~ -yd], Potts.t; name = :dsys)
     par = WL_MTKB.get_parent(Potts.inner(g))
-    for derived in (complete(WL_MTKB.extend(dsys, par; name = :g)), complete(WL_MTKB.extend(par, dsys)),
-                    complete(WL_MTKB.compose(WL_MTKB.toggle_namespacing(par, true), [dsys])))
+    for derived in (complete(WL_MTKB.extend(dsys, par; name = :g)), complete(WL_MTKB.extend(par, dsys)))
         @test WL_MTKB.getmetadata(derived, Potts._BuiltFrom, nothing) !== nothing  # marker copied
         msg = try
             mtkcompile(Potts.wrap(:g, derived, nothing, part))
@@ -427,6 +431,230 @@ end
         catch e
             sprint(showerror, e)
         end
-        @test occursin("C9", msg)
+        @test occursin("payload cannot build", msg) && occursin("yd", msg)
     end
+    # C9: a subsystem composed into the marked inner one is lowered as a model-scope component
+    composed = complete(WL_MTKB.compose(WL_MTKB.toggle_namespacing(par, true), [dsys]))
+    @test WL_MTKB.getmetadata(composed, Potts._BuiltFrom, nothing) !== nothing
+    c = mtkcompile(Potts.wrap(:g, composed, nothing, part))
+    @test c isa CompiledPottsSystem && any(v -> occursin("dsys₊yd", string(v)), unknowns(c.sys))
+end
+
+# C9: components rebuilt from `Potts.compose`. A hand-built MTK System, wrapped and composed
+# into a model built by `@potts_model`, compiles as a model-scope component and is advanced:
+# oracle y(t) = y0·exp(−k t) (RK4, 4 substeps per MCS), and the model's own ODE alongside.
+module WLiteC9
+using Potts
+using Potts.ModelingToolkitBase: System, @variables, @parameters
+const t = Potts.t
+const D = Potts.ModelingToolkitBase.D_nounits
+@variables yd(t) = 2.0
+@parameters kd = 0.3
+decay() = System([D(yd) ~ -kd * yd], t; name = :decay)
+@variables zz(t) = 1.0
+@parameters kz = 0.1
+inner2() = System([D(zz) ~ -kz * zz], t; name = :inner2)
+end
+
+@potts_model WLiteC9Cell begin
+    @kinds medium cell
+    @variables y(cell) = 1.0
+    @equations D(y) ~ -y
+    @lattice Lattice((8, 8))
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "W-lite C9: Potts.compose results compile, solve and extend" begin
+    part = WLiteModels.part
+    wdec = Potts.wrap(:decay, WLiteC9.decay(), nothing, part())
+    W = Potts.compose(WLiteGuard(; name = :g), wdec)
+    @test any(isequal(unwrap(W.decay.yd)), unknowns(W))
+    c = mtkcompile(W)
+    @test c isa CompiledPottsSystem
+    σ = zeros(Int32, 8, 8); σ[2:4, 2:4] .= 1
+    p = PottsProblem(W, [Potts.ownership => σ, Potts.kind => [1]], (0, 10); ode_solver = RK4(substeps = 4))
+    @test :decay₊yd in propertynames(p.u0.model) && :decay₊kd in propertynames(p.p)
+    rk4(h) = 1 - h + h^2 / 2 - h^3 / 6 + h^4 / 24
+    u = solve(p, SequentialCPM()).u[end]
+    @test u.model.decay₊yd[1] ≈ 2.0 * rk4(0.3 / 4)^40 rtol = 1e-12
+    @test u.model.decay₊yd[1] ≈ 2.0 * exp(-0.3 * 10) rtol = 1e-5
+    @test u.model.x[1] ≈ rk4(2.0 / 4)^40 rtol = 1e-12                      # the model's own ODE
+    # negative control: without the component the quantity does not exist
+    p0 = PottsProblem(WLiteGuard(; name = :g), [Potts.ownership => σ, Potts.kind => [1]], (0, 1))
+    @test !(:decay₊yd in propertynames(p0.u0.model))
+    # nested: (model ∘ decay) ∘ inner2, and through a wrapped compose of a composed component
+    w2 = Potts.wrap(:inner2, WLiteC9.inner2(), nothing, part())
+    Wn = Potts.compose(W, w2)
+    pn = PottsProblem(Wn, [Potts.ownership => σ, Potts.kind => [1]], (0, 10); ode_solver = RK4(substeps = 4))
+    un = solve(pn, SequentialCPM()).u[end]
+    @test un.model.decay₊yd[1] ≈ u.model.decay₊yd[1] rtol = 1e-12
+    @test un.model.inner2₊zz[1] ≈ rk4(0.1 / 4)^40 rtol = 1e-12
+    Wd = Potts.compose(WLiteGuard(; name = :g), Potts.compose(wdec, w2))
+    @test any(isequal(unwrap(Wd.decay.inner2.zz)), unknowns(Wd))
+    pd = PottsProblem(Wd, [Potts.ownership => σ, Potts.kind => [1]], (0, 10); ode_solver = RK4(substeps = 4))
+    @test solve(pd, SequentialCPM()).u[end].model.decay₊inner2₊zz[1] ≈ rk4(0.1 / 4)^40 rtol = 1e-12
+    # a composed component's quantities are operating-point keys (`W.c.x`)
+    pk = PottsProblem(W, [Potts.ownership => σ, Potts.kind => [1], W.decay.yd => 5.0], (0, 1))
+    @test pk.u0.model.decay₊yd[1] == 5.0
+    # a composed Potts model with per-cell quantities is refused by name (a composed component is
+    # one instance for the model; it never silently becomes model-wide)
+    @test occursin("per cell", sprint(showerror, try mtkcompile(Potts.compose(WLiteGuard(; name = :g), WLiteC9Cell(; name = :cc)))
+    catch e
+        e
+    end))
+    # extend: the composed model as base and as extension keeps the component, and solves
+    for E in (Potts.extend(WLiteGuard(; name = :g), W), Potts.extend(W, WLiteGuard(; name = :g)))
+        pe = PottsProblem(E, [Potts.ownership => σ, Potts.kind => [1]], (0, 10); ode_solver = RK4(substeps = 4))
+        @test :decay₊kd in propertynames(pe.p) && pe.p.decay₊kd == 0.3
+        @test solve(pe, SequentialCPM()).u[end].model.decay₊yd[1] ≈ 2.0 * rk4(0.3 / 4)^40 rtol = 1e-12
+    end
+end
+
+# C9 review: what a composed component cannot carry is refused by name, never dropped
+module WLiteC9Neg
+using Potts
+using Potts.ModelingToolkitBase: System, @variables, @parameters
+const t = Potts.t
+const D = Potts.ModelingToolkitBase.D_nounits
+@variables cy(t) = 1.0
+@parameters ck = 0.5
+clock() = System([D(cy) ~ -ck * cy], t; name = :clock)
+xsys() = System([D(cy) ~ -ck * cy], t; name = :x)                       # named like the host's `x`
+vsys() = System([D(cy) ~ -ck * cy * Potts.B.volume], t; name = :vv)      # reads `volume` (an input)
+# MTK features Potts would drop: refused at the top level and in a component (review round 3)
+using Potts.ModelingToolkitBase: @poissonians
+@variables hy(t) = 1.0
+@parameters hk = 0.1
+noisy(name; kw...) = System([D(hy) ~ -hk * hy], t, [hy], [hk]; name, noise_eqs = [0.1 * hy], kw...)
+constrained(name; kw...) = System([D(hy) ~ -hk * hy], t; name, constraints = [hy ~ 1.0], kw...)
+costly(name; kw...) = System([D(hy) ~ -hk * hy], t; name, costs = [2.0], kw...)
+poisson(name; kw...) = (P = only(@poissonians P(hk)); System([D(hy) ~ -hk * hy + P], t; name, kw...))
+end
+
+@potts_model WLiteC9Field begin                 # a model with a field (its PDESystem built by mtkcompile)
+    @kinds medium cell
+    @parameters Dc = 0.1
+    @variables c(field) = 0.0
+    @equations D(c) ~ Dc * Δ(c)
+    @lattice Lattice((8, 8))
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@potts_model WLiteC9FoldOther begin             # kinds other than the host's, a population fold
+    @kinds medium ka kb
+    @variables n(model) = 0.0
+    @equations D(n) ~ count(true for c in cells(kb)) - n
+    @lattice Lattice((8, 8))
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@potts_model WLiteC9FoldSame begin              # the host's kinds, a population fold
+    @kinds medium cell
+    @variables n(model) = 0.0
+    @equations D(n) ~ count(true for c in cells(cell)) - n
+    @lattice Lattice((8, 8))
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@potts_model WLiteC9PerCellComp begin           # a per-cell `@components` (review B2)
+    @kinds medium cell
+    @components cells(cell) clock = WLiteC9Neg.clock()
+    @lattice Lattice((8, 8))
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@potts_model WLiteC9ModelComp begin             # a model `@components` named `decay`
+    @kinds medium cell
+    @parameters T = 1.0
+    @components model decay = WLiteC9.decay()
+    @lattice Lattice((8, 8))
+    @sweep Metropolis(; temperature = T)
+end
+
+@potts_model WLiteC9Table begin                 # a kind table (review S3)
+    @kinds medium cell
+    @parameters J[kind, kind] = [0 1; 1 0]
+    @variables z(model) = 1.0
+    @equations D(z) ~ -z
+    @lattice Lattice((8, 8))
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "W-lite C9: composed content that cannot be compiled is refused by name" begin
+    part = WLiteModels.part
+    M = WL_MTKB
+    msg(f) = try
+        f()
+        "built"
+    catch e
+        e isa ArgumentError ? sprint(showerror, e) : "not an ArgumentError: " * sprint(showerror, e)
+    end
+    g = WLiteGuard(; name = :g)
+    wdec = Potts.wrap(:decay, WLiteC9.decay(), nothing, part())
+    # B2: a per-cell component inside a composed model (it would become model-wide)
+    @test occursin("@components", msg(() -> Potts.compose(g, WLiteC9PerCellComp(; name = :pc))))
+    # control: the same model composes when it carries no component
+    @test msg(() -> mtkcompile(Potts.compose(g, wdec))) == "built"
+    # S3: a kind table in a composed Potts model
+    @test occursin("kind table", msg(() -> mtkcompile(Potts.compose(g, WLiteC9Table(; name = :tab)))))
+    # S3: name collisions: a second `decay`, and a composed name equal to a declared component
+    W = Potts.compose(g, wdec)
+    @test occursin("already has a component named `decay`", msg(() -> Potts.compose(W, wdec)))
+    @test occursin("already has a component named `decay`", msg(() -> Potts.compose(WLiteC9ModelComp(; name = :mc), wdec)))
+    two = msg(() -> mtkcompile(Potts.wrap(:g, complete(M.compose(M.toggle_namespacing(M.get_parent(Potts.inner(g)), true),
+        [WLiteC9.decay(), WLiteC9.decay()])), nothing, Potts.getfield(g, :part))))
+    @test occursin("two components named `decay`", two)
+    # B1: top-level events, tstops and the like of a hand-built System are refused, not dropped
+    dec = WLiteC9.decay()
+    yd = dec.yd
+    with(; kw...) = Potts.wrap(:h, System(Potts.Equation[], Potts.t; name = :h, systems = [WLiteC9.decay()], kw...), nothing, part())
+    @test msg(() -> mtkcompile(with())) == "built"                                   # control
+    @test occursin("continuous events", msg(() -> mtkcompile(with(; continuous_events = [[yd ~ 1.0] => [yd ~ M.Pre(yd) + 1.0]]))))
+    @test occursin("discrete events", msg(() -> mtkcompile(with(; discrete_events = [1.0 => [yd ~ M.Pre(yd) + 1.0]]))))
+    @test occursin("tstops", msg(() -> mtkcompile(with(; tstops = [0.5]))))
+    par = M.get_parent(Potts.inner(g))
+    xg = only(filter(v -> occursin("x", string(v)), unknowns(Potts.inner(g))))
+    ev = System(Potts.Equation[], Potts.t; name = :ev, discrete_events = [1.0 => [xg ~ M.Pre(xg) + 1.0]])
+    @test occursin("discrete events", msg(() -> mtkcompile(Potts.wrap(:g, complete(M.extend(ev, par; name = :g)), nothing,
+        Potts.getfield(g, :part)))))
+    # guard lists (review rounds 2, 3): MTK costs, constraints, noise equations and poissonians
+    # are refused, not dropped, at the top level and in a composed component
+    @test occursin("costs", msg(() -> mtkcompile(with(; costs = [2.0]))))
+    for (f, what) in ((WLiteC9Neg.noisy, "noise equations"), (WLiteC9Neg.constrained, "constraints"),
+            (WLiteC9Neg.costly, "costs"), (WLiteC9Neg.poisson, "poissonians"))
+        top = msg(() -> mtkcompile(Potts.wrap(:h, f(:h; systems = [WLiteC9.decay()]), nothing, part())))
+        comp = msg(() -> mtkcompile(Potts.compose(g, Potts.wrap(:hz, f(:hz), nothing, part()))))
+        @test occursin(what, top)
+        @test occursin(what, comp)
+        occursin(what, top) && occursin(what, comp) || @info "C9 guard" what top comp
+    end
+    # a non-System is not wrapped
+    @test_throws MethodError Potts.wrap(:x, 1.0, nothing, part())
+    # B1′: a component's PDESystem is refused (its fields would not be compiled); so is a host
+    # PDESystem that the payload does not build
+    @test occursin("has a PDESystem", msg(() -> Potts.compose(g, Potts.wrap(:decay, WLiteC9.decay(), WLiteModels.pde(:decay), part()))))
+    @test occursin("PDESystem", msg(() -> mtkcompile(Potts.wrap(:h, System(Potts.Equation[], Potts.t; name = :h,
+        systems = [WLiteC9.decay()]), WLiteModels.pde(:h), part()))))
+    # a compiled model's `sys` (its PDESystem built from its payload) composes and compiles again
+    fsys = mtkcompile(WLiteC9Field(; name = :wf)).sys
+    @test Potts.fields(fsys) !== nothing
+    @test msg(() -> mtkcompile(Potts.compose(fsys, Potts.wrap(:decay, WLiteC9.decay(), nothing, part())))) == "built"
+    # kinds and lattice must be the model's (a fold reads kinds by number and the model's sites)
+    @test occursin("has the kinds", msg(() -> Potts.compose(g, Potts.wrap(:decay, WLiteC9.decay(), nothing,
+        part(; kinds = [:medium, :ka, :kb])))))
+    @test occursin("has the kinds", msg(() -> Potts.compose(g, WLiteC9FoldOther(; name = :pf))))
+    @test occursin("another lattice", msg(() -> Potts.compose(g, Potts.wrap(:decay, WLiteC9.decay(), nothing,
+        part(; lattice = Potts.lattice_spec((6, 6)))))))
+    # a population fold in a composed component is refused by name (it would not be lowered:
+    # measured before the refusal, n(10) = 1.368 where counting the two cells gives 2.000)
+    @test occursin("population fold", msg(() -> mtkcompile(Potts.compose(g, WLiteC9FoldSame(; name = :pf)))))
+    # B2 through a hand-built wrap: a subsystem built from a payload with `@components`
+    pc = WLiteC9PerCellComp(; name = :pc)
+    hand = Potts.wrap(:g, complete(M.compose(M.toggle_namespacing(M.get_parent(Potts.inner(g)), true),
+        [M.toggle_namespacing(M.get_parent(Potts.inner(pc)), true)])), nothing, Potts.getfield(g, :part))
+    @test occursin("@components", msg(() -> mtkcompile(hand)))
+    # a component named like a host quantity; a component reading `volume` (an input)
+    @test occursin("has a quantity named `x`", msg(() -> Potts.compose(g, Potts.wrap(:x, WLiteC9Neg.xsys(), nothing, part()))))
+    @test occursin("has the input", msg(() -> mtkcompile(Potts.compose(g, Potts.wrap(:vv, WLiteC9Neg.vsys(), nothing, part())))))
+    @test occursin("has the input", msg(() -> mtkcompile(Potts.compose(g, Potts.wrap(:cell, WLiteCompose.cell(), nothing, part())))))
 end

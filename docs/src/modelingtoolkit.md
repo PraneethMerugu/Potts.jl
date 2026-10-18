@@ -108,7 +108,16 @@ cell variable, a built-in, …) is its `potts_entity` metadata:
 `MTK.unknowns`, `MTK.observed`, `MTK.initial_conditions` and `nameof` work too, and `sys.k` is
 the declared symbol `k`. Ask `Potts.inner(sys)` for any other MTK accessor (`iscomplete`,
 `full_equations`, the metadata, …). Potts models merge with `Potts.extend` (`@extend`) and
-compose with `Potts.compose`.
+compose with `Potts.compose`: each component (an MTK `System` wrapped with the model's own payload,
+`Potts.wrap(name, system, nothing, getfield(model, :part))`; for a Catalyst reaction network the
+system is `Catalyst.ode_model(complete(rn))`) joins as a model-scope component, as with
+`@components model name = system`. A problem's `p` implements SciMLStructures: `Tunable` is
+the floating-point scalar parameters, `Constants` the kind tables (and integer scalars), and CPM
+parameters stay plain numbers. Computed parameters (a default such as `λ2 = 2λ`) are in neither
+portion: `SciMLStructures.replace` and `repack` re-derive them, through the model's derivation,
+which is registered when a problem of the model is built in the process. Distributed workers
+must therefore build the problem themselves before they `repack`; each `repack` of a model with
+computed parameters costs one `Symbolics.substitute`.
 SymbolicIndexingInterface (SII) indexes a problem, a solution and an integrator by name,
 including an algebraic variable that is not stored:
 

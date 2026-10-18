@@ -114,8 +114,16 @@ function _bind_components(sys::PottsSystem)
         _reject_bindings(comp, cs, discrete, unread)
         ics = ModelingToolkitBase.initial_conditions(cs)
         # a missing value stays `nothing`: the operating point must give it (checked there)
-        value(x) = (v = get(ics, _unwrap(x), nothing); v === nothing ? nothing :
-                                                        (w = _unwrap(v); SymbolicUtils.isconst(w) ? Float64(SymbolicUtils.unwrap_const(w)) : w))
+        # an MTK value; else, for a quantity of a composed Potts model (C9), its written numeric default
+        function value(x)
+            v = get(ics, _unwrap(x), nothing)
+            if v === nothing
+                i = info(x)
+                return i !== nothing && _written(x) && i.default isa Real ? Float64(i.default) : nothing
+            end
+            w = _unwrap(v)
+            return SymbolicUtils.isconst(w) ? Float64(SymbolicUtils.unwrap_const(w)) : w
+        end
         local_sub = Dict{Any, Any}(_unwrap(t) => time)
         scope = comp.domain === :model ? :model : :cell
         plan = discrete ? _discrete_plan(comp, cs, _p(sys, :sweep).mcs_duration) : nothing
@@ -132,7 +140,7 @@ function _bind_components(sys::PottsSystem)
         else
             for u in ModelingToolkitBase.unknowns(cs)
                 nm = Symbol(comp.name, :₊, SymbolicIndexingInterface.getname(u))
-                v = variable(only(Symbolics.@variables $nm(t)), scope; default = value(u))
+                v = variable(only(Symbolics.@variables $nm(t)), scope; default = value(u), unit = _unit_of(u), guess = _guess_of(u))
                 push!(vars, v)
                 names[nm] = _unwrap(v)
                 local_sub[_unwrap(u)] = _unwrap(v)
@@ -144,7 +152,7 @@ function _bind_components(sys::PottsSystem)
             if haskey(couplings, nm)
                 names[nm] = _unwrap(couplings[nm])
             else
-                q = parameter(nm, value(p))
+                q = parameter(nm, value(p); unit = _unit_of(p))
                 push!(params, q)
                 names[nm] = _unwrap(q)
             end
@@ -211,6 +219,10 @@ function _bind_components(sys::PottsSystem)
     return _check_primed_names(_check_name_categories(_check_reserved_names(bound)))
 end
 
+# a component quantity's MTK unit and guess, kept on the Potts quantity that stands for it (C9 review S3)
+_unit_of(x) = SymbolicUtils.getmetadata(_unwrap(x), ModelingToolkitBase.VariableUnit, nothing)
+_guess_of(x) = ModelingToolkitBase.hasguess(x) ? ModelingToolkitBase.getguess(x) : nothing
+
 # What an MTK System can carry that Potts would otherwise drop silently (P6.0k2 F7). MTK
 # `guesses` only seed MTK's initialisation, which Potts does not run (G8): they are ignored.
 function _reject_ignored_features(comp)
@@ -227,6 +239,14 @@ function _reject_ignored_features(comp)
                 "write the jump as a Potts update with `rand()`"),
             ("brownians", ModelingToolkitBase.brownians(sys),
                 "Potts integrates cell ODEs deterministically; write the noise as a Potts update with `rand()`"),
+            ("poissonians", _all_poissonians(sys),
+                "write the event count as a Potts update with `rand()`"),
+            ("noise equations", _all_noise_eqs(sys),
+                "Potts integrates cell ODEs deterministically; write the noise as a Potts update with `rand()`"),
+            ("constraints", ModelingToolkitBase.constraints(sys),
+                "Potts does not solve MTK constraints; write the condition as a Potts constraint or update"),
+            ("costs", _nonzero_costs(sys),
+                "Potts does not optimize MTK costs"),
             ("tstops", _all_tstops(sys),
                 "Potts advances cell ODEs once per MCS and never stops inside a step; write the stop as a Potts update (`@after_mcs`)"),
             ("assertions", collect(keys(ModelingToolkitBase.assertions(sys))),
@@ -236,6 +256,16 @@ function _reject_ignored_features(comp)
     end
     return nothing
 end
+
+# MTK's costs, without its zero placeholder (a system with no cost reports `0`)
+_nonzero_costs(sys) = filter(c -> !(SymbolicUtils.unwrap_const(_unwrap(c)) isa Number && iszero(SymbolicUtils.unwrap_const(_unwrap(c)))),
+    collect(ModelingToolkitBase.costs(sys)))
+
+# the poissonians and noise equations of a system and its subsystems (MTKBase has no recursive
+# accessor for either; `get_*` read the system's own)
+_all_poissonians(sys) = Any[ModelingToolkitBase.get_poissonians(sys); (x for s in ModelingToolkitBase.get_systems(sys) for x in _all_poissonians(s))...]
+_all_noise_eqs(sys) = (n = ModelingToolkitBase.get_noise_eqs(sys);
+                       Any[(n === nothing ? () : n)...; (x for s in ModelingToolkitBase.get_systems(sys) for x in _all_noise_eqs(s))...])
 
 # the tstops of a system and its subsystems (`get_tstops` is the system's own)
 _all_tstops(sys) = Any[ModelingToolkitBase.get_tstops(sys); (x for s in ModelingToolkitBase.get_systems(sys) for x in _all_tstops(s))...]

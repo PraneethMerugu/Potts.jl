@@ -24,9 +24,10 @@ using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @na
 using PrecompileTools: PrecompileTools
 using RuntimeGeneratedFunctions: RuntimeGeneratedFunctions
 using SciMLBase: SciMLBase
+using SciMLStructures: SciMLStructures
 using SimpleNonlinearSolve: SimpleNonlinearSolve, SimpleNewtonRaphson
 using StableRNGs: StableRNG
-using StaticArrays: SMatrix, SVector
+using StaticArrays: StaticArrays, SMatrix, SVector
 using SymbolicUtils: SymbolicUtils
 using Symbolics: Symbolics, Num
 using SymbolicIndexingInterface: SymbolicIndexingInterface

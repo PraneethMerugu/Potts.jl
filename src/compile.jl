@@ -202,7 +202,7 @@ Validate and analyze a Potts model (the symbolic half of compilation; code is ge
 per scalar type by `PottsProblem`).
 """
 function ModelingToolkitBase.mtkcompile(authored::PottsSystem)
-    _check_inner_matches_part(authored, "mtkcompile")
+    authored = _lower_inner(authored, "mtkcompile")
     # the model's own cell and model ODEs through MTK's `mtkcompile` first (odes.jl)
     routed, ode_systems, origin = _compile_odes(authored)
     # entity-local initialization through MTK's `InitializationProblem` (initialization.jl)
@@ -565,7 +565,10 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
 
     # the lowered model's inner System is rebuilt from its lowered payload, so MTK's accessors
     # on `csys.sys` list what the lowering kept (an eliminated algebraic variable is observed)
-    sys = _wrap_payload(nameof(sys), something(fieldsys, getfield(sys, :fields), Some(nothing)), getfield(sys, :part))
+    fsys = something(fieldsys, getfield(sys, :fields), Some(nothing))
+    # the PDESystem's digest is recorded in the payload, so the compiled `sys` composes again (C9)
+    fsys === nothing || (sys = _replace(sys; metadata = Base.ImmutableDict(_p(sys, :metadata), _FieldsFrom => _pde_digest(fsys))))
+    sys = _wrap_payload(nameof(sys), fsys, getfield(sys, :part))
     return CompiledPottsSystem(sys, cell_terms, cluster_terms, contact_terms, site_terms, drive,
         _p(sys, :constraints), updates, fields, cell_odes, model_odes, _p(sys, :divisions), relationships, edge_terms, edge_vars,
         _p(sys, :link_rules), uses_surface, uses_clusters, uses_cluster_surface, uses_euler, uses_euler_full,

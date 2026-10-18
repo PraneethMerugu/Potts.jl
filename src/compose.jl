@@ -22,11 +22,13 @@ name as a whole (in the base's place). A name keeps its category: a name that is
 is an `ArgumentError` naming both. An edge variable keeps its relationship too: an edge
 variable of `sys` that re-declares one of `base` (to change its default) is the base
 relationship's (an unscoped `x(edge)` takes it), and one scoped to another relationship is an
-`ArgumentError` naming the variable and both relationships.
+`ArgumentError` naming the variable and both relationships. Components (`@components`, and
+the components of a [`Potts.compose`](@ref) result) are merged by name: a component of `sys`
+replaces the base's component of the same name as a whole.
 """
 function extend(sys::PottsSystem, base::PottsSystem; name::Symbol = nameof(sys))
-    _check_inner_matches_part(sys, "Potts.extend")
-    _check_inner_matches_part(base, "Potts.extend")
+    sys = _lower_inner(sys, "Potts.extend")
+    base = _lower_inner(base, "Potts.extend")
     length(_p(sys, :kinds)) >= length(_p(base, :kinds)) && _p(sys, :kinds)[1:length(_p(base, :kinds))] == _p(base, :kinds) ||
         throw(ArgumentError("extend: the kinds of $(nameof(base)) $(_p(base, :kinds)) must come first in $(nameof(sys)) $(_p(sys, :kinds))"))
     sys = _renumber_draws(sys, base)

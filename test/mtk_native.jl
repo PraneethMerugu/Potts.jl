@@ -174,3 +174,214 @@ end
     @test Potts._builtin_text("kind′(t) == 0 and cluster_volume(t) and x(t)") == "kind′ == 0 and cluster_volume and x(t)"
 end
 end
+
+# SciMLStructures on `PottsParameters` (cutover C9; P5 C7a-11, C3/4-1): `Tunable` = the scalar
+# parameters, `Constants` = the kind tables; `replace` converts to each entry's type and refuses
+# a Dual by name (CPM parameters are plain numbers), never promoting.
+module PottsParametersStructures
+using Potts, Test, PottsModels
+using SciMLStructures: SciMLStructures as SS
+using ForwardDiff: ForwardDiff
+@testset "SciMLStructures on PottsParameters" begin
+    σ = zeros(Int32, 12, 12); σ[2:5, 2:5] .= 1; σ[7:10, 7:10] .= 2
+    prob = PottsProblem(GranerGlazier(; name = :gg, lattice = (12, 12)), [ownership => σ, kind => [1, 2]], (0, 2))
+    p = prob.p
+    @test p isa Potts.PottsParameters
+    @test SS.isscimlstructure(p) && !SS.ismutablescimlstructure(p)
+    @test SS.hasportion(SS.Tunable(), p) && SS.hasportion(SS.Constants(), p) && !SS.hasportion(SS.Caches(), p)
+    nt = NamedTuple(p)
+    scal = [k for k in keys(nt) if nt[k] isa Number]
+    tabs = [k for k in keys(nt) if !(nt[k] isa Number)]
+    @test !isempty(scal) && !isempty(tabs)
+    v, repack, alias = SS.canonicalize(SS.Tunable(), p)
+    @test !alias && v == [Float64(nt[k]) for k in scal]
+    @test repack(v) == p && typeof(repack(v)) === typeof(p)                     # round trip, same type
+    w = 2 .* v
+    q = SS.replace(SS.Tunable(), p, w)
+    @test typeof(q) === typeof(p) && [getproperty(q, k) for k in scal] == w
+    @test all(getproperty(q, k) == getproperty(p, k) for k in tabs)              # tables untouched
+    c, crepack, _ = SS.canonicalize(SS.Constants(), p)
+    @test length(c) == sum(length(nt[k]) for k in tabs)
+    @test crepack(c) == p
+    @test_throws ArgumentError SS.replace(SS.Tunable(), p, w[1:end-1])          # wrong length
+    # a Dual is refused by name, never promoted (P5 C3/4-1)
+    d = ForwardDiff.Dual.(v, 1.0)
+    e = try
+        SS.replace(SS.Tunable(), p, d)
+    catch err
+        err
+    end
+    @test e isa ArgumentError && occursin("no Duals", sprint(showerror, e))
+    @test SS.canonicalize(SS.Caches(), p) === (nothing, nothing, nothing)        # absent portions
+    @test SS.canonicalize(SS.Discrete(), p) === (nothing, nothing, nothing)
+    # remake with the replaced object (same type): the values are taken, the tables checked
+    r = Potts.SciMLBase.remake(prob; p = q)
+    @test typeof(r.p) === typeof(p) && [getproperty(r.p, k) for k in scal] == w
+    @test Symbol(solve(r, SequentialCPM()).retcode) === :Success
+    # an asymmetric contact table through `Constants` is refused when it enters the problem
+    asym = collect(Float64, c)
+    asym[2] += 1.0                                       # J[2, 1] ≠ J[1, 2]
+    @test_throws ArgumentError Potts.SciMLBase.remake(prob; p = crepack(asym))
+end
+
+@potts_model C9Computed begin
+    @kinds medium cell
+    @parameters begin
+        T = 1.0
+        λ = 2.0
+        λ2 = 2λ
+    end
+    @energy cells => λ2 * (volume - 9.0)^2
+    @lattice Lattice((12, 12))
+    @sweep Metropolis(; temperature = T)
+end
+
+@potts_model C9Computed3 begin
+    @kinds medium cell
+    @parameters begin
+        T = 1.0
+        λ = 2.0
+        λ2 = 3λ
+    end
+    @energy cells => λ2 * (volume - 9.0)^2
+    @lattice Lattice((12, 12))
+    @sweep Metropolis(; temperature = T)
+end
+
+module C9ModA
+using Potts.Symbolics: Symbolics, @register_symbolic
+f(x) = 2x
+@register_symbolic f(x)
+end
+module C9ModB
+using Potts.Symbolics: Symbolics, @register_symbolic
+f(x) = 3x
+@register_symbolic f(x)
+end
+@potts_model C9FA begin
+    @kinds medium cell
+    @parameters begin
+        T = 1.0
+        λ = 2.0
+        λ2 = C9ModA.f(λ)
+    end
+    @energy cells => λ2 * (volume - 9.0)^2
+    @lattice Lattice((12, 12))
+    @sweep Metropolis(; temperature = T)
+end
+@potts_model C9FB begin
+    @kinds medium cell
+    @parameters begin
+        T = 1.0
+        λ = 2.0
+        λ2 = C9ModB.f(λ)
+    end
+    @energy cells => λ2 * (volume - 9.0)^2
+    @lattice Lattice((12, 12))
+    @sweep Metropolis(; temperature = T)
+end
+
+@potts_model C9Sweep begin
+    @structural_parameters begin
+        s = 2
+    end
+    @kinds medium cell
+    @parameters begin
+        T = 1.0
+        λ = 2.0
+        λ2 = s * λ
+    end
+    @energy cells => λ2 * (volume - 9.0)^2
+    @lattice Lattice((12, 12))
+    @sweep Metropolis(; temperature = T)
+end
+
+@testset "SciMLStructures: computed parameters are re-derived by replace; remake takes an object as given" begin
+    σ = zeros(Int32, 12, 12); σ[2:5, 2:5] .= 1
+    prob = PottsProblem(C9Computed(; name = :c), [ownership => σ, kind => [1]], (0, 2))
+    p = prob.p
+    v, repack, _ = SS.canonicalize(SS.Tunable(), p)
+    @test v == [1.0, 2.0]                                # T, λ; not the computed λ2
+    q = repack([1.0, 3.0])
+    @test q.λ == 3.0 && q.λ2 == 6.0                      # replace re-derives λ2 = 2λ
+    @test SS.replace(SS.Tunable(), p, [1.0, 3.0]) == q
+    r = Potts.SciMLBase.remake(prob; p = q)
+    @test r.p == q && typeof(r.p) === typeof(p)
+    # D-115: a checkpoint's object restores verbatim (an explicit λ2 = 7 is not re-derived)
+    ck = Potts.SciMLBase.remake(prob; p = [:λ => 3.0, :λ2 => 7.0]).p
+    @test ck.λ == 3.0 && ck.λ2 == 7.0
+    @test Potts.SciMLBase.remake(prob; p = ck).p.λ2 == 7.0
+    # a Float32 problem: a Float64 vector repacks like a Float32 one; an object of the Float64
+    # problem is taken as given, converted (different-type path), the same as same-type
+    p32 = PottsProblem(C9Computed(; name = :c), [ownership => σ, kind => [1]], (0, 2); T = Float32)
+    _, repack32, _ = SS.canonicalize(SS.Tunable(), p32.p)
+    q1, q2 = repack32([1.0, 3.0]), repack32(Float32[1, 3])
+    @test q1 == q2 && typeof(q1) === typeof(q2) === typeof(p32.p) && q1.λ2 === 6.0f0
+    @test Potts.SciMLBase.remake(p32; p = q).p == q1
+    @test Potts.SciMLBase.remake(p32; p = ck).p.λ2 === 7.0f0
+    # entries that are not floats are Constants; an entry that cannot hold a value exactly is a
+    # named ArgumentError, not an InexactError; a BigFloat rounds to the entry's type
+    pi_ = Potts.PottsParameters((n = 3, x = 1.0))
+    @test SS.canonicalize(SS.Tunable(), pi_)[1] == [1.0] && SS.canonicalize(SS.Constants(), pi_)[1] == [3]
+    e = try
+        SS.replace(SS.Constants(), pi_, [2.5])
+    catch err
+        err
+    end
+    @test e isa ArgumentError && occursin("does not convert", sprint(showerror, e))
+    @test SS.replace(SS.Tunable(), pi_, [big"0.1"]).x === 0.1
+    # models with other defaults (λ2 = 2λ, λ2 = 3λ) have other parameter types (the type carries a
+    # fingerprint of the defaults): each `repack` re-derives its own value, whatever else was built
+    prob3 = PottsProblem(C9Computed3(; name = :c), [ownership => σ, kind => [1]], (0, 2))
+    @test typeof(prob3.p) !== typeof(p)
+    @test SS.canonicalize(SS.Tunable(), prob3.p)[2]([1.0, 3.0]).λ2 == 9.0
+    @test SS.canonicalize(SS.Tunable(), p)[2]([1.0, 3.0]).λ2 == 6.0
+    # remake with the other model's object takes the different-type path (values as given)
+    rb = Potts.SciMLBase.remake(prob; p = prob3.p)
+    @test typeof(rb.p) === typeof(p) && rb.p.λ2 == prob3.p.λ2 == 6.0
+    # an object of a type no problem in this process was built with: refused by name
+    stray = Potts.PottsParameters((T = 1.0, λ = 2.0, λ2 = 4.0), ((:λ2,), UInt64(0x1234)))
+    e = try
+        SS.replace(SS.Tunable(), stray, [1.0, 3.0])
+    catch err
+        err
+    end
+    @test e isa ArgumentError && occursin("build the problem in this process", sprint(showerror, e))
+    # a constructor keyword overriding a non-computed default keeps one type (no recompile)
+    @test typeof(PottsProblem(C9Computed(; name = :c, T = 2.0), [ownership => σ, kind => [1]], (0, 2)).p) === typeof(p)
+    # the collision guard: one type, other raw computed defaults (forged: B's parameters under A's type)
+    ps3 = Potts._p(Potts.ModelingToolkitBase.mtkcompile(C9Computed3(; name = :c)).sys, :parameters)
+    e = try
+        Potts._register_derivation!(ps3, Float64, p)
+    catch err
+        err
+    end
+    @test e isa ArgumentError && occursin("fingerprint collision", sprint(showerror, e))
+    # the guard itself: a pair whose fingerprint text is equal but whose values are not `isequal`
+    N_ = Potts.Symbolics.Num
+    a13, f13 = [(:a, N_(1 // 3))], [(:a, N_(1 / 3))]
+    @test Potts._canon_default(a13[1][2]) == Potts._canon_default(f13[1][2])     # alike as text
+    @test !Potts._same_defaults(a13, f13)
+    @test Potts._same_defaults(a13, [(:a, N_(1 // 3))]) && Potts._same_defaults([(:a, N_(0))], [(:a, N_(0.0))])   # controls
+    # two functions named `f` in two modules (2x, 3x): never a silent wrong derivation. Either
+    # their types differ and each re-derives its own value, or the second model is refused by name
+    pb = PottsProblem(C9FB(; name = :c), [ownership => σ, kind => [1]], (0, 2))
+    pa = try
+        PottsProblem(C9FA(; name = :c), [ownership => σ, kind => [1]], (0, 2))
+    catch err
+        err
+    end
+    rep(q) = SS.canonicalize(SS.Tunable(), q.p)[2]([1.0, 3.0]).λ2
+    refused = pa isa ArgumentError && occursin("fingerprint collision", sprint(showerror, pa))
+    distinct = pa isa Potts.CorePotts.PottsProblem && typeof(pa.p) !== typeof(pb.p) && rep(pa) == 6.0 && rep(pb) == 9.0
+    @info "C9 A.f/B.f" refused distinct (pa isa Exception ? sprint(showerror, pa) : typeof(pa.p).parameters[2]) typeof(pb.p).parameters[2]
+    @test refused || distinct
+    @test rep(pb) == 9.0                       # the model built first keeps its own derivation either way
+    # a structural sweep (λ2 = s·λ with s = 2, then s = 3, in one process)
+    for (sv, want) in ((2, 6.0), (3, 9.0))
+        ps = PottsProblem(C9Sweep(; name = :sw, s = sv), [ownership => σ, kind => [1]], (0, 2))
+        @test SS.canonicalize(SS.Tunable(), ps.p)[2]([1.0, 3.0]).λ2 == want
+    end
+end
+end
+

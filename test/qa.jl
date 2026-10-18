@@ -268,6 +268,13 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     # `is_parameter(::AbstractSystem, ::ParameterIndex)` answers `is_split` of the container,
     # which has no index cache; the owned method forwards it to the inner System instead.
     :ParameterIndex,
+    # --- Potts -> SciMLStructures (C9): the interface `PottsParameters` implements; the
+    # package declares its API public only in a comment (no `public` statement)
+    :isscimlstructure, :ismutablescimlstructure, :hasportion, :canonicalize, :replace,
+    :Tunable, :Constants, :AbstractPortion,
+    # --- Potts -> MTKBase (C9): a system's own poissonians and noise equations; MTKBase has no
+    # public (or recursive) accessor for either, and Potts refuses them rather than drop them
+    :get_poissonians, :get_noise_eqs,
 )
 # Names imported with `using M: x` that are not public in `M`.
 const POTTS_NONPUBLIC_EXPLICIT = (
