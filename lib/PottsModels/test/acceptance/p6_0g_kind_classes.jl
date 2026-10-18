@@ -629,7 +629,7 @@ const P60G_CLASS_FIXTURES = (:P60gC, :P60gCTip, :P60gXSpare, :P60gLifeC, :P60gCl
     @test collect(Potts.lookup(sys, :ecm)) == [1, 2]
     @test collect(Potts.lookup(sys, :mix)) == [1, 2, 3]
     @test Potts.lookup(sys, :tip) == 3                                  # kind numbers unchanged by class lines
-    @test getfield(sys, :kinds) == [:medium, :fluid, :matrix, :tip, :stalk]
+    @test getfield(getfield(sys, :part), :kinds) == [:medium, :fluid, :matrix, :tip, :stalk]   # W-lite container (D-259): kinds live on the part
 end
 
 const P60G_X_PIN = 0x4ccf59c87e80b7b5                    # P60gX on 462b012a; re-pinned under P6.3g (D-193): fingerprint only; re-pinned under D-C8 (fields on the field compiler)

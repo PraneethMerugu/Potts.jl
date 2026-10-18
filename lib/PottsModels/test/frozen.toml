@@ -319,7 +319,7 @@ decision = "D-C8-R5"
 
 [[file]]
 path = "acceptance/p6_0g_kind_classes.jl"
-sha256 = "4b8c06ccccfa67530eace31ed5a96f5063a2d88cfb7bf72650b3357af3fa202a"
+sha256 = "b30b32ae757c3b7708f81740b48b82c06980c9e91ab97663ff64b8ae8ad8f4a0"
 decision = "D-C8-R5"
 
 [[file]]
