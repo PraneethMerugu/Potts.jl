@@ -205,9 +205,8 @@ commit = "3236178d"
 fixup_of = "C3"
 decision = "D-258"
 why = "lines 207-208, 319-320: `(kind ∈ endothelial)` -> `ismember(kind, endothelial)` in @equations; lowers to the same code"
-# PENDING (integration dry run lp/int): with this edit on top of C4, line 632 `getfield(sys, :kinds)`
-# fails (FieldError; see the C4 note below). The C4 form `getfield(getfield(sys, :part), :kinds)` is
-# not yet prepared as a refreeze(list-A) commit; it needs the maintainer's go-ahead.
+# DONE (maintainer OK 2026-10-17): line 632 now reads `getfield(getfield(sys, :part), :kinds)`
+# (refreeze(list-A) c0144504, D-259); before it, `getfield(sys, :kinds)` failed at C4 (FieldError).
 
 # C4 (W-lite LA container, D-259): the container's fields, metadata and MTK's complete/extend change.
 # Measured on this Mac on the C4 code (frozen files p6_0o, bs, bm, bp, bv, bn, bo, al, av, merks_2006_defaults,
@@ -831,7 +830,7 @@ why = "D-250 AUTO re-pin: the sweeps take the attempt/color range of a sub-MCS p
 
 # C8: measured on the PC (three PottsModels shards, CPU) at C8 on top of the C4 refreeze tail (the
 # former 5c01b6fd, before the review follow-ups; C8 is now 5fc74be9 and sits before the C4 refreezes).
-# Besides p6_0g line 632 (listed above, pending) and the bulk-less OpenVT package files (unchanged
+# Besides p6_0g line 632 (re-pinned in c0144504) and the bulk-less OpenVT package files (unchanged
 # baseline), these fail there and pass after the six C8 refreeze(list-A) commits. Re-measured at the
 # manifest commit's parent 26438bee (same tree as lp/c8 head): only p6_0g:632 and the OpenVT package files fail.
 
