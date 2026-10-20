@@ -28,10 +28,14 @@ end
 # table's last entry above it, its first below 1). `Dk[2]` and `at(Dk, 2)` read their own
 # entry; the `at` reads with one index expression `k` (the same site's kind) take one index
 # together, `0` and `1:L` with `L` the longest table of the group (`at(Da, k) - at(Db, k)`
-# per kind), and a read that appears twice is one read. Index 0 is left out when the index
-# cannot be 0: an input `q` or `q + n` (`n` an integer literal) whose declared lower bound
-# (`bounds = (lo, hi)` metadata, which the input values are checked against) plus `n` is at
-# least 1. This covers every value the coefficient takes at a site, for any expression of
+# per kind), and a read that appears twice is one read. A group takes the indices of the
+# integer interval of its index expression (`+ − * min max abs`, `ifelse` as the hull of its
+# arms, parameters at their values), over the declared bounds of its inputs (`bounds = (lo,
+# hi)` metadata, which the input values are checked against) and, when `p` carries them, the
+# current values of host-written inputs (`ParamsTables.inputs`): index 0 only when the
+# interval holds 0 and, where it does, the index's values at the sites (when the host arrays
+# give them) say whether a site reaches it; the entries are those the nonzero values clamp
+# to (F2 records (h), (m)). This covers every value the coefficient takes at a site, for any expression of
 # the reads (`at(Dq, k) (20 − at(Dq, k))`, `sin(at(Ds, k))`, `1 / at(Dv, k)`), with the
 # indicators taken independently of the entries (a superset). A non-finite value (`1 / 0`)
 # gives a non-finite bound, which is no bound. `c(p)` is the largest magnitude, `_hi`/`_lo`
@@ -43,10 +47,153 @@ end
 struct CoefBound
     fs::Vector{Any}                         # one compiled function of the parameters per assignment
     reads::Vector{Tuple{String, Int, Int}}  # per read, in argument order: table, literal index, group (0: literal)
-    zero::Vector{Bool}                      # per group: whether its index can be 0
+    groups::Vector{Any}                     # per group: its index expression as an interval tree (`_ivtree`)
     text::String                            # the coefficient, for messages
 end
 _pv(p) = p isa Problems.ParamsTables ? p.p : p
+
+# ---- the interval of an integer index expression (F2 records (h), (m))
+# A tree of the index expression: `(:c, v)` a literal, `(:p, i)` parameter `i`, `(:in, key,
+# (lo, hi))` an input with its declared bounds, `(op, args...)` for `+ * neg min max abs`,
+# `(:ifelse, cond, a, b)` (its interval is the hull of the arms; `cond` is `(:cmp, f, x, y)`
+# for a comparison, else `(:anycond,)`), `(:any,)` anything else (any integer). Only forms
+# that lower are here (`÷` and `clamp` of an index do not lower today, so they are `:any`).
+function _ivtree(u, params, ivars)
+    u = unwrap(u)
+    v = unwrap_const(u)
+    v isa Real && return (:c, Float64(v))
+    for (x, k, b) in ivars
+        isequal(x, u) && return (:in, k, b)
+    end
+    for (i, q) in enumerate(params)
+        isequal(unwrap(q), u) && return (:p, i)
+    end
+    iscall(u) || return (:any,)
+    f, a = operation(u), arguments(u)
+    t(y) = _ivtree(y, params, ivars)
+    f === (+) && return (:+, map(t, a)...)
+    f === (*) && return (:*, map(t, a)...)
+    f === (-) && return length(a) == 1 ? (:neg, t(a[1])) : (:+, t(a[1]), (:neg, t(a[2])))
+    f === min && return (:min, map(t, a)...)
+    f === max && return (:max, map(t, a)...)
+    f === abs && return (:abs, t(a[1]))
+    f === ifelse && return (:ifelse, _condtree(a[1], params, ivars), t(a[2]), t(a[3]))
+    return (:any,)
+end
+const _CMPS = (==, !=, <, <=, >, >=)
+function _condtree(c, params, ivars)
+    u = unwrap(c)
+    if iscall(u) && any(g -> operation(u) === g, _CMPS) && length(arguments(u)) == 2
+        return (:cmp, operation(u), _ivtree(arguments(u)[1], params, ivars), _ivtree(arguments(u)[2], params, ivars))
+    end
+    return (:anycond,)
+end
+const _IVANY = (-Inf, Inf)
+_ivmul(a, b) = (q = (a[1] * b[1], a[1] * b[2], a[2] * b[1], a[2] * b[2]);
+                any(isnan, q) ? _IVANY : (minimum(q), maximum(q)))
+# the current values of input `k` that `p` carries (`Problems.ParamsTables` inputs), or nothing
+function _input_now(p, k)
+    p isa Problems.ParamsTables || return nothing
+    j = findfirst(x -> first(x) == k, p.inputs)
+    j === nothing && return nothing
+    v = last(p.inputs[j])
+    v isa Number && return (Float64(v), Float64(v))
+    isempty(v) && return nothing
+    lo, hi = extrema(v)
+    return (Float64(lo), Float64(hi))
+end
+function _ival(t, p)
+    h = t[1]
+    h === :c && return (t[2], t[2])
+    h === :p && (v = Float64(_pv(p)[t[2]]); return isnan(v) ? _IVANY : (v, v))
+    if h === :in
+        b = t[3]
+        now = _input_now(p, t[2])
+        now === nothing && return b
+        return (max(b[1], now[1]), min(b[2], now[2]))       # the values hold their bounds (checked)
+    end
+    h === :any && return _IVANY
+    h === :ifelse && (a = (_ival(t[3], p), _ival(t[4], p)); return (min(a[1][1], a[2][1]), max(a[1][2], a[2][2])))
+    a = map(x -> _ival(x, p), t[2:end])
+    h === :+ && return (sum(first, a), sum(last, a))
+    h === :* && return foldl(_ivmul, a)
+    h === :neg && return (-a[1][2], -a[1][1])
+    h === :min && return (minimum(first, a), minimum(last, a))
+    h === :max && return (maximum(first, a), maximum(last, a))
+    if h === :abs
+        lo, hi = a[1]
+        return lo >= 0 ? (lo, hi) : hi <= 0 ? (-hi, -lo) : (0.0, max(-lo, hi))
+    end
+    return _IVANY
+end
+# the indices a read group takes, as the kernel reads them: 0 when the index can be 0, and
+# the entries `1:L` the nonzero values clamp to (`L` the longest table of the group). The
+# interval decides; where it holds 0, the index's values at the sites decide when the host
+# input arrays give them (an `ifelse` hull is conservative: `ifelse(k == 1, 0, k)` with no
+# site of kind 1 never reads index 0)
+function _group_indices(t, p, L)
+    lo, hi = _ival(t, p)
+    lo, hi = floor(lo), ceil(hi)
+    if lo <= 0 <= hi
+        v = _site_vals(t, p)
+        if v !== nothing && all(isfinite, v)
+            out = sort!(unique!([x == 0 ? 0 : clamp(round(Int, x), 1, max(L, 1)) for x in v]))
+            return out
+        end
+    end
+    out = Int[]
+    lo <= 0 <= hi && push!(out, 0)
+    if lo <= -1 || hi >= 1
+        a = lo >= 1 ? Int(min(lo, L)) : 1
+        b = hi >= 1 ? Int(min(hi, L)) : 1
+        append!(out, a:b)
+    end
+    return out
+end
+# the value of an index expression at every site (a vector over the sites, or a number when it
+# reads no input array), from the host input arrays `p` carries; `nothing` when an input has
+# no host value or a part has no value per site (`:any`, a condition that is not a comparison).
+# Whole-array operations: a few arrays per call, never one allocation per site
+function _site_vals(t, p)
+    h = t[1]
+    h === :c && return t[2]
+    h === :p && return Float64(_pv(p)[t[2]])
+    if h === :in
+        p isa Problems.ParamsTables || return nothing
+        j = findfirst(x -> first(x) == t[2], p.inputs)
+        j === nothing && return nothing
+        v = last(p.inputs[j])
+        return v isa Number ? Float64(v) : Float64.(vec(v))
+    end
+    if h === :ifelse
+        c = t[2]
+        c[1] === :cmp || return nothing
+        x, y, a, b = _site_vals(c[3], p), _site_vals(c[4], p), _site_vals(t[3], p), _site_vals(t[4], p)
+        any(isnothing, (x, y, a, b)) && return nothing
+        return ifelse.(c[2].(x, y), a, b)
+    end
+    h in (:+, :*, :neg, :min, :max, :abs) || return nothing
+    a = Any[_site_vals(x, p) for x in t[2:end]]
+    any(isnothing, a) && return nothing
+    h === :+ && return reduce((x, y) -> x .+ y, a)
+    h === :* && return reduce((x, y) -> x .* y, a)
+    h === :neg && return .-(a[1])
+    h === :min && return reduce((x, y) -> min.(x, y), a)
+    h === :max && return reduce((x, y) -> max.(x, y), a)
+    return abs.(a[1])
+end
+# the first site (a tuple, from the shape of an input array `p` carries) where the index of
+# group `t` is `i`, or nothing
+function _site_of(t, p, i)
+    p isa Problems.ParamsTables || return nothing
+    k = findfirst(x -> last(x) isa AbstractArray, p.inputs)
+    k === nothing && return nothing
+    sz = size(last(p.inputs[k]))
+    v = _site_vals(t, p)
+    v === nothing && return nothing
+    s = v isa Number ? (v == i ? 1 : nothing) : findfirst(==(i), v)
+    return s === nothing ? nothing : Tuple(CartesianIndices(sz)[s])
+end
 # a table read as the kernel does it (emit.jl TABLE, `oob = :zero_at_0`)
 _tabread(v, i::Integer) = i == 0 ? 0.0 : Float64(v[clamp(i, 1, length(v))])
 # a value of the coefficient; a domain error (`sqrt` of a negative entry) is `NaN`
@@ -64,8 +211,8 @@ function _ranges(c::CoefBound, p)
     p isa Problems.ParamsTables || return nothing
     tv = [last(p.tables[findfirst(x -> first(x) == k, p.tables)]) for (k, _, _) in c.reads]
     any(isempty, tv) && return nothing
-    maxl = [maximum((length(tv[j]) for j in eachindex(c.reads) if c.reads[j][3] == g); init = 0) for g in eachindex(c.zero)]
-    rs = [(c.zero[g] ? 0 : 1):maxl[g] for g in eachindex(c.zero)]
+    maxl = [maximum((length(tv[j]) for j in eachindex(c.reads) if c.reads[j][3] == g); init = 0) for g in eachindex(c.groups)]
+    rs = [_group_indices(c.groups[g], p, maxl[g]) for g in eachindex(c.groups)]
     # in Float64: an integer product of many lengths overflows (16^16 == 0)
     length(c.fs) * prod(Float64 ∘ length, rs; init = 1.0) <= _MAXEVALS || return nothing
     return tv, rs
@@ -112,25 +259,20 @@ function _why(c::CoefBound, p)
     end
     return (combos[1:min(end, _MAXWHY)], max(0, length(combos) - _MAXWHY))
 end
+# a site where a read of `c` takes index 0 (from the input arrays `p` carries), for messages
+function _zero_site(c::CoefBound, p)
+    for g in eachindex(c.groups)
+        s = _site_of(c.groups[g], p, 0)
+        s === nothing || return s
+    end
+    return nothing
+end
 const _MAXWHY = 4
 const _MAXIND = 6
 const _MAXEVALS = 4096
 const _PLAIN = (+, -, *, /, ^, inv, abs, sqrt, cbrt, exp, log, sin, cos, tan, tanh, min, max)
 _plainop(f) = any(g -> f === g, _PLAIN)
-# the smallest value of index expression `i` from the declared lower bounds `lows` of the
-# inputs: `q`, `q + n` or `n + q` (`n` an integer literal); `-Inf` for any other form
-function _lowest(i, lows)
-    for (k, lo) in lows
-        isequal(k, i) && return lo
-    end
-    (iscall(i) && operation(i) === +) || return -Inf
-    a = arguments(i)
-    consts = [unwrap_const(x) for x in a if unwrap_const(x) isa Integer]
-    rest = [x for x in a if !(unwrap_const(x) isa Integer)]
-    length(rest) == 1 || return -Inf
-    return _lowest(rest[1], lows) + sum(consts; init = 0)
-end
-function _coef_bound(x, params, tabs = Dict{Any, String}(), lows = ())
+function _coef_bound(x, params, tabs = Dict{Any, String}(), ivars = ())
     u0 = unwrap(x)
     # the table reads, each a fresh variable; the `at` reads grouped by index expression: a
     # group takes one index for all its reads
@@ -168,12 +310,36 @@ function _coef_bound(x, params, tabs = Dict{Any, String}(), lows = ())
     args = Any[params; tvars]
     fs = Any[]
     for bits in Iterators.product(ntuple(_ -> (0, 1), length(inds))...)
-        u = isempty(inds) ? u0 : unwrap(substitute(u0, Dict{Any, Any}(zip(inds, bits)); fold = Val(true)))
+        # an `ifelse` whose condition the indicators decide takes its arm (the condition is a
+        # Bool); every other indicator is an arithmetic factor, 0 or 1 (F2 record (j))
+        u = isempty(inds) ? u0 : _arms(u0, inds, bits)
+        u = isempty(inds) ? u : unwrap(substitute(u, Dict{Any, Any}(zip(inds, bits)); fold = Val(true)))
         plain(u) || return nothing
         all(v -> any(q -> isequal(q, v), args), Symbolics.get_variables(u)) || return nothing
         push!(fs, Symbolics.build_function(u, args...; expression = Val(false)))
     end
-    return CoefBound(fs, reads, Bool[!(_lowest(k, lows) >= 1) for k in gkeys], string(x))
+    return CoefBound(fs, reads, Any[_ivtree(k, params, ivars) for k in gkeys], string(x))
+end
+
+# `u` with every `ifelse` whose condition the indicator values `bits` decide replaced by its
+# arm (the indicators as Bools in the condition), nested switches included
+function _arms(u, inds, bits)
+    vals = Dict{Any, Any}(zip(inds, Bool.(bits)))
+    reps = Dict{Any, Any}()
+    function walk(y)
+        iscall(y) || return nothing
+        if operation(y) === ifelse
+            c = unwrap_const(unwrap(substitute(arguments(y)[1], vals; fold = Val(true))))
+            if c isa Bool
+                reps[y] = arguments(y)[c ? 2 : 3]
+                return nothing
+            end
+        end
+        foreach(walk, arguments(y))
+    end
+    walk(u)
+    isempty(reps) && return u
+    return _arms(unwrap(substitute(u, reps; fold = Val(false))), inds, bits)
 end
 
 # the multiplier of a diffusion term: the operator call replaced by its coefficient (1 for
@@ -189,6 +355,22 @@ function _diffusion_coefficient(term)
     return substitute(term, reps; fold = Val(false))
 end
 
+# a site-varying diffusion term `m Op(c)` (`:SiteDiffusion`): the center multiplier `m` (the
+# operator replaced by 1), read at the row's own site, and the face coefficient `K` (1 for
+# `Δ`, `K` of `DivKGrad(K, c)` or of `Dx(K Dx(c))`), read through face means of two sites
+function _site_parts(term)
+    reps, K = Dict{Any, Any}(), Any[]
+    walk(y) = iscall(y) && (f = operation(y);
+                            f === Δ ? (reps[y] = 1; push!(K, 1)) :
+                            f isa DivKGrad ? (reps[y] = 1; push!(K, arguments(y)[1])) :
+                            f isa Differential ? (r = _raw_flux(y); reps[y] = 1;
+                                                  push!(K, r === nothing || r[1] === nothing ? 1 : r[1])) :
+                            foreach(walk, arguments(y)))
+    walk(unwrap(term))
+    length(K) == 1 || return nothing
+    return substitute(term, reps; fold = Val(false)), only(K)
+end
+
 """
     StabilityBound
 
@@ -201,9 +383,15 @@ table. Per rate field (one Jacobian row):
 - `LinearLocal` terms (`k c`) add `|k|`;
 - `CrossLinear` terms add their off-diagonal row sum: `|k|` for `k o`, and
   `|D₂| (Σ_d 4/h_d² + Robin terms of o)` for cross-diffusion `D₂ Δ(o)`.
+- `SiteDiffusion` terms `m Op(c)` (a multiplier `m` that reads inputs through table reads
+  and indicators only, F2 record (g)) give `max|m| · max K` times `Σ_d 4/h_d²` (and the Robin
+  terms): the center multiplier `m` is evaluated jointly over its reads (one site), the face
+  coefficient `K` (1 for `Δ`) independently, because a face mixes two sites' indices. For
+  `M = diag(m) ≥ 0` and the symmetric `A`, `M A` is similar to `M^½ A M^½` on the rows with
+  `m > 0`, so its spectrum is real and bounded by `max m · ρ(A)`.
 A coefficient with kind sets or comparisons (indicators, 0 or 1 per site) is evaluated at
 every 0/1 assignment of them: the largest magnitude enters `ρ`, the largest signed value
-the diagonal. A coefficient that reads a table (`Dk[2] * Δ(c)`, `at(Dk, kind) * Δ(c)`) is
+the diagonal. An `ifelse` whose condition the indicators decide takes its arm. A coefficient that reads a table (`Dk[2] * Δ(c)`, `at(Dk, kind) * Δ(c)`) is
 evaluated at every index each read can take, as the kernel reads it (the entry itself for
 `Dk[2]`; for `at`, index 0, which reads 0 unless the index is an input declared never 0, and
 every entry, clamped into each table; reads with one index take one index together), from
@@ -236,12 +424,18 @@ interval evaluator replace it (C7c), this is the stability analysis of the expli
 # The terms of one row of the Jacobian under one choice of the arms of its `ifelse` switches
 struct RowTerms
     diffusion::Vector{CoefBound}
+    sitediffusion::Vector{Tuple{CoefBound, CoefBound}}   # center multiplier m, face coefficient K
     linear::Vector{CoefBound}
     crosslinear::Vector{CoefBound}
     crossdiffusion::Vector{Tuple{CoefBound, Int}}   # coefficient, index of the other field
 end
-RowTerms() = RowTerms(CoefBound[], CoefBound[], CoefBound[], Tuple{CoefBound, Int}[])
-Base.copy(r::RowTerms) = RowTerms(copy(r.diffusion), copy(r.linear), copy(r.crosslinear), copy(r.crossdiffusion))
+RowTerms() = RowTerms(CoefBound[], Tuple{CoefBound, CoefBound}[], CoefBound[], CoefBound[], Tuple{CoefBound, Int}[])
+Base.copy(r::RowTerms) = RowTerms(copy(r.diffusion), copy(r.sitediffusion), copy(r.linear), copy(r.crosslinear),
+    copy(r.crossdiffusion))
+# a site-diffusion term's parts at `p`: max|m| max|K| (the independent bound) and the seen
+# product
+_sd(f, p) = f[1](p) * f[2](p)
+_sdseen(f, p) = _seen(f[1], p) * _seen(f[2], p)
 const _MAXARMS = 64                       # row alternatives (arm choices) before giving up
 
 struct StabilityBound
@@ -252,7 +446,28 @@ struct StabilityBound
     unbounded::Vector{String}
     terms::Vector{String}                 # the terms it cannot see, as `"key: term"`
     expanded::Vector{String}              # the `ifelse` terms bounded arm by arm
+    inputs::Vector{String}                # the inputs an index reads (`Problems.bound_inputs`)
 end
+# the input keys of an interval tree
+function _tree_inputs!(acc, t)
+    h = t[1]
+    h === :in && return push!(acc, t[2])
+    h in (:c, :p, :any, :anycond) && return acc
+    h === :cmp && (_tree_inputs!(acc, t[3]); _tree_inputs!(acc, t[4]); return acc)
+    foreach(x -> _tree_inputs!(acc, x), t[2:end])         # `:ifelse` holds its condition first
+    return acc
+end
+function _row_inputs(rows)
+    acc = String[]
+    for alts in rows, r in alts
+        for f in Iterators.flatten((r.diffusion, first.(r.sitediffusion), last.(r.sitediffusion), r.linear,
+                r.crosslinear, first.(r.crossdiffusion))), t in f.groups
+            _tree_inputs!(acc, t)
+        end
+    end
+    return sort!(unique!(acc))
+end
+Problems.bound_inputs(b::StabilityBound) = b.inputs
 _cv(c::Coef, p) = c.param == 0 ? c.value : c.value * Float64(p[c.param])
 # Σ_d max(0, |r| − 1)/h_d², the worst Robin face of each axis of field `i`
 function _face_excess(b::StabilityBound, i, p)
@@ -299,15 +514,22 @@ function bound_parts(b::StabilityBound, p)
         # each choice of the row's switch arms is a row of its own: the bound is the worst,
         # and the row is coupled when any choice is not diagonally dominant
         for r in b.rows[i]
-            any(f -> _lo(f, p) < 0, r.diffusion) && push!(negative, b.keys[i])
-            Dmag = sum(f(p) for f in r.diffusion; init = 0.0)
+            (any(f -> _lo(f, p) < 0, r.diffusion) || any(f -> _lo(f[1], p) < 0 || _lo(f[2], p) < 0, r.sitediffusion)) &&
+                push!(negative, b.keys[i])
+            # a site-varying multiplier m and a face coefficient K are bounded independently,
+            # max|m| · max K: a face mixes two sites' indices (F2 record (g))
+            Dmag = sum(f(p) for f in r.diffusion; init = 0.0) + sum(_sd(f, p) for f in r.sitediffusion; init = 0.0)
             own = Dmag * (s4 + _face_excess(b, i, p))
             lin = sum(f(p) for f in r.linear; init = 0.0)
             cross = sum(f(p) for f in r.crosslinear; init = 0.0) +
                     sum(f(p) * (s4 + _face_excess(b, j, p)) for (f, j) in r.crossdiffusion; init = 0.0)
             if !isempty(r.crosslinear) || !isempty(r.crossdiffusion)
-                # the diagonal at its largest over the indicator assignments
-                diag = -2 * sum(b.invh2) * sum(_lo(f, p) for f in r.diffusion; init = 0.0) +
+                # the diagonal at its largest over the indicator assignments. A row of `M A` (site
+                # diffusion) is balanced: its diagonal m_i Σ K / h² equals its off-diagonal sum,
+                # so the same bound enters both sides and cancels (the row test is the rest of
+                # the row: the reaction against the cross terms and the Robin faces)
+                diag = -2 * sum(b.invh2) * (sum(_lo(f, p) for f in r.diffusion; init = 0.0) +
+                                            sum(_sd(f, p) for f in r.sitediffusion; init = 0.0)) +
                        sum(_hi(f, p) for f in r.linear; init = 0.0)
                 offd = Dmag * (s4 / 2 + _face_excess(b, i, p)) + cross
                 diag <= 0 && -diag >= offd || push!(coupled, b.keys[i])
@@ -317,7 +539,7 @@ function bound_parts(b::StabilityBound, p)
             # face excess is not finite counts 0): every row, term and field that has a bound
             # still raises an explicit count, and a part that is not finite never drops the rest
             # of its row
-            Ds = sum(_seen(f, p) for f in r.diffusion; init = 0.0)
+            Ds = sum(_seen(f, p) for f in r.diffusion; init = 0.0) + sum(_sdseen(f, p) for f in r.sitediffusion; init = 0.0)
             sv = Ds * (s4 + _face_excess_seen(b, i, p)) + sum(_seen(f, p) for f in r.linear; init = 0.0) +
                  sum(_seen(f, p) for f in r.crosslinear; init = 0.0) +
                  sum(_seen(f, p) * (s4 + _face_excess_seen(b, j, p)) for (f, j) in r.crossdiffusion; init = 0.0)
@@ -327,8 +549,11 @@ function bound_parts(b::StabilityBound, p)
     nonfinite = Tuple{String, String, Any}[]
     if !isfinite(ρ)
         for i in eachindex(b.keys), r in b.rows[i]
-            for f in Iterators.flatten((r.diffusion, r.linear, r.crosslinear, first.(r.crossdiffusion)))
+            for f in Iterators.flatten((r.diffusion, first.(r.sitediffusion), last.(r.sitediffusion), r.linear,
+                    r.crosslinear, first.(r.crossdiffusion)))
                 w = _why(f, p)
+                # a read at index 0: the first site where it is (from the host input arrays)
+                w isa Tuple && any(c -> any(x -> x[2] == 0, c), w[1]) && (w = (w..., _zero_site(f, p)))
                 w === nothing || any(x -> x[1] == b.keys[i] && x[2] == f.text, nonfinite) ||
                     push!(nonfinite, (b.keys[i], f.text, w))
             end
@@ -351,7 +576,11 @@ function _why_text(text, w)
     w === :tables && return "`$text` reads tables that were not given"
     combos, more = w
     all(isempty, combos) && return "`$text` is not finite at these parameters"
-    read(t, i) = i == 0 ? "index 0 of `$t`" : "`$t[$i]`"
+    site = length(w) >= 3 ? w[3] : nothing
+    # with no site, the index's interval (its declared bounds, an `ifelse` hull) holds 0 and no
+    # site value says otherwise: the bound is conservative there
+    read(t, i) = i == 0 ? (site === nothing ? "index 0 of `$t` (the index's interval holds 0; no site value is known, so this is conservative)" :
+                           "index 0 of `$t` (at site $site)") : "`$t[$i]`"
     return string("`$text` is not finite at ", join((join((read(t, i) for (t, i, _) in c), " with ") for c in combos), ", at "),
         more > 0 ? " (and $more more)" : "")
 end
@@ -367,8 +596,8 @@ function _why_route(w)
     isempty(rd) && return "; give its parameters values that make it finite"
     parts = String[]
     any(x -> x[2] == 0, rd) && push!(parts, "index 0 reads 0 (an input value 0, or a literal 0), and the " *
-                                            "coefficient is not finite there: keep 0 out of the index (declare " *
-                                            "the input `bounds = (1, n)`)")
+                                            "coefficient is not finite there: keep 0 out of the index (write no 0 " *
+                                            "into the input, or declare it `bounds = (1, n)`)")
     for (t, i, v) in rd
         i == 0 || push!(parts, "for `$t[$i]` ($v), $(_entry_fix(v))")
     end
@@ -401,9 +630,15 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
     # the array parameters (tables) by their symbols: a coefficient may read them
     tabs = Dict{Any, String}(unwrap(q) => string(unwrap(q)) for q in _params(sys)
                              if string(unwrap(q)) in first.(cf.tables))
-    # the declared lower bounds of the scalar inputs (an index that cannot be 0 reads no 0)
-    lows = Tuple{Any, Float64}[(v, Float64(_input_lower(v))) for v in unwrap.(sys.dvs)
-                               if ModelingToolkitBase.isinput(v) && isfinite(_input_lower(v))]
+    # the scalar inputs with their keys and declared bounds: an index expression's interval is
+    # taken over these and over the current values a host-written input carries
+    ivars = Tuple{Any, String, Tuple{Float64, Float64}}[]
+    for v in unwrap.(sys.dvs)
+        ModelingToolkitBase.isinput(v) || continue
+        op = _opof(v)
+        vk = get(cf.keys, op, nothing)
+        vk === nothing || length(vk) != 1 || push!(ivars, (v, only(vk), _input_bounds(v)))
+    end
     for k in ks
         # one term added to every alternative of the row: `false` when the bound cannot see
         # it. A switch `ifelse(cond, a, b)` whose condition reads no unknown field (a gate
@@ -413,19 +648,26 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
         function add!(alts, term, class, depth)
             fs = [kk for (kk, v) in dvs if _reads(term, (_opof(v),))]
             if class == :Diffusion
-                c = _coef_bound(_diffusion_coefficient(term), cf.params, tabs, lows)
+                c = _coef_bound(_diffusion_coefficient(term), cf.params, tabs, ivars)
                 c === nothing && return false
                 foreach(r -> push!(r.diffusion, c), alts)
+            elseif class == :SiteDiffusion
+                parts = _site_parts(term)
+                parts === nothing && return false
+                cm = _coef_bound(parts[1], cf.params, tabs, ivars)
+                cK = _coef_bound(parts[2], cf.params, tabs, ivars)
+                (cm === nothing || cK === nothing) && return false
+                foreach(r -> push!(r.sitediffusion, (cm, cK)), alts)
             elseif class == :LinearLocal || class == :CrossLinear
                 length(fs) == 1 || return false
                 if class == :CrossLinear &&
                    _linclass(unwrap(term), _opof(dvs[fs[1]]), stateops, inputops) == :Diffusion
                     j = findfirst(==(fs[1]), ks)
-                    c = j === nothing ? nothing : _coef_bound(_diffusion_coefficient(term), cf.params, tabs, lows)
+                    c = j === nothing ? nothing : _coef_bound(_diffusion_coefficient(term), cf.params, tabs, ivars)
                     c === nothing && return false
                     foreach(r -> push!(r.crossdiffusion, (c, j)), alts)
                 else
-                    c = _coef_bound(substitute(term, Dict(dvs[fs[1]] => 1); fold = Val(false)), cf.params, tabs, lows)
+                    c = _coef_bound(substitute(term, Dict(dvs[fs[1]] => 1); fold = Val(false)), cf.params, tabs, ivars)
                     c === nothing && return false
                     foreach(r -> push!(class == :CrossLinear ? r.crosslinear : r.linear, c), alts)
                 end
@@ -465,7 +707,7 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
                       if r isa FaceRule && cf.program.fields[r.field].key == k])
     end
     return StabilityBound([1 / h^2 for h in cf.program.spacing], ks, rows, faces,
-        sort!(unique!(unbounded)), unique!(terms), unique!(expanded))
+        sort!(unique!(unbounded)), unique!(terms), unique!(expanded), _row_inputs(rows))
 end
 
 # initial values of the state fields, flat in `state` order, evaluated at cell centers in
@@ -630,11 +872,24 @@ end
 # count is raised to the bound over the terms the bound sees; the substep error names the
 # terms the bound cannot see.
 function Problems.check_parameters(b::StabilityBound, p)
-    neg = bound_parts(b, p).negative
-    isempty(neg) && return nothing
+    r = bound_parts(b, p)
+    neg = r.negative
+    isempty(neg) && return _check_finite(r)
     _dverr("the diffusion coefficient of the field$(length(neg) == 1 ? "" : "s") $(join(("`$k`" for k in neg), ", ")) " *
            "is negative at these parameters (anti-diffusion: an ill-posed equation, unstable at any step and with any " *
            "solver); write the term with a coefficient ≥ 0 (`D * Δ(c)` with `D ≥ 0`; a decay is a reaction term `-k * c`)")
+end
+# A coefficient that is not finite at an entry the inputs reach (a zero under a division, a
+# negative entry under `sqrt`, a parameter that makes it infinite) gives a rate that is not
+# finite there, whatever the substep count or the solver: refused on every path, the owned
+# one (count or not) and the ODE one (F2 record (i)). Over the evaluation cap, or without
+# tables, there is no value to refuse.
+function _check_finite(r)
+    bad = [(k, text, w) for (k, text, w) in r.nonfinite if w isa Tuple]
+    isempty(bad) && return nothing
+    _dverr(string("a rate is not finite where the inputs reach (whatever the substep count or the solver): ",
+        join((string(_why_text(_coef_text(text), w), " (in the rate of `", k, "`)", _why_route(w)) for (k, text, w) in bad),
+            "; ")))
 end
 Problems.seen_bound(b::StabilityBound, p) = bound_parts(b, p).seen
 function Problems.unbounded_reason(b::StabilityBound, p)

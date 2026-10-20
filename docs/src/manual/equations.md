@@ -126,10 +126,12 @@ sol[:x][end], sol[:g][end]
   recomputed when parameters change; a number is a minimum. A rate the bound cannot see
   needs `substeps`, and the problem throws an error naming the term without it: a
   reaction that is not linear in `c`, a coefficient that reads other state (a field, `mcs`),
-  and a diffusion multiplier that varies by site (`ismember(kind, g) * Δ(c)`,
-  `δ[kind] * Δ(c)`). So does a
+  and a diffusion multiplier that reads a CPM value directly (`volume[owner] * Δ(c)`). So does a
   rate that reads another field (`- Dx * Δ(u)`, `- k * u`) when its row of the Jacobian is
-  not diagonally dominant. With `substeps = n` in these cases the count is the larger of
+  not diagonally dominant. A diffusion multiplier that varies by site through a kind table
+  or a kind set (`δ[kind] * Δ(c)`, `ismember(kind, g) * Δ(c)`) is bounded: the bound takes
+  the largest multiplier times the largest diffusion coefficient. With `substeps = n` in the
+  cases the bound cannot see, the count is the larger of
   `n` and the bound of the terms the bound sees (diffusion at least), and the problem warns
   once, naming the terms it does not cover. A reaction coefficient that reads a kind table
   (`- δ[kind] * c`) is bounded at every entry of the table, the medium's entry included, and

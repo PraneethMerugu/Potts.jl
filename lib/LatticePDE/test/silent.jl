@@ -516,24 +516,29 @@ end
         @test sol.substeps == ceil(Int, 0.025 * k / 1.8)
         @test SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c][end]) < 1e-20
     end
-    # a zero entry under `1 / at(…)` has no finite bound: refused, naming the entry and
-    # saying to fix it (round 7: only "give an explicit count")
+    # a zero entry under `1 / at(…)` that the inputs reach (a kind 1 at site (3, 2)) is not
+    # finite: refused, naming the entry and saying to fix it (round 7: only "give an explicit
+    # count"; F2 record (i): refused with or without a count). The entries the inputs do not
+    # reach are not read (F2 record (h)): with kind 2 everywhere it runs
     @parameters Dz[1:3] = [0.0, 0.01, 1.0]
+    K1 = copy(K); K1[3, 2] = 1
     sys = ssys([D(ce) ~ -(1 / at(Dz, qb)) * ce], [c(0, x, y) ~ 1.0], [ce, qb], [Dz])
-    err = emsg(() -> solve(sown(sys; inputs = [qb => K]), ExplicitEuler(; dt = 0.025)))
-    @test occursin("no automatic substeps", err) && occursin("not finite", err)
+    err = emsg(() -> solve(sown(sys; inputs = [qb => K1]), ExplicitEuler(; dt = 0.025)))
+    @test occursin("not finite where the inputs reach", err)
     @test occursin("`Dz[1]`", err) && occursin("make it nonzero", err) && !occursin("index 0", err)
-    @test count("explicit count", err) == 1                       # (round 8: said twice)
-    # … and with an index that can be 0 the message names both, with both routes (49a986f1
-    # named index 0 only and said "make the coefficient finite")
+    @test count("make it nonzero", err) == 1                      # (round 8: said twice)
+    @test solve(sown(sys; inputs = [qb => K]), ExplicitEuler(; dt = 0.025)).substeps == 2
+    # … and with an index that is 0 at a site the message names both, with both routes
+    # (49a986f1 named index 0 only and said "make the coefficient finite")
     sys = ssys([D(ce) ~ -(1 / at(Dz, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dz])
-    err = emsg(() -> solve(sown(sys; inputs = [qe => K]), ExplicitEuler(; dt = 0.025)))
+    K10 = copy(K1); K10[1, 1] = 0
+    err = emsg(() -> solve(sown(sys; inputs = [qe => K10]), ExplicitEuler(; dt = 0.025)))
     @test occursin("index 0", err) && occursin("`Dz[1]`", err) && occursin("make it nonzero", err) &&
           occursin("bounds = (1, n)", err) && occursin("index 0 reads 0", err)
     # a negative entry under `sqrt`: the route says so (round 8: "finite and nonzero")
     @parameters Dn9[1:3] = [-1.0, 1.0, 1.0]
     sys = ssys([D(ce) ~ -sqrt(at(Dn9, qb)) * ce], [c(0, x, y) ~ 1.0], [ce, qb], [Dn9])
-    err = emsg(() -> solve(sown(sys; inputs = [qb => K]), ExplicitEuler(; dt = 0.025)))
+    err = emsg(() -> solve(sown(sys; inputs = [qb => K1]), ExplicitEuler(; dt = 0.025)))
     @test occursin("`Dn9[1]`", err) && occursin("≥ 0", err) && occursin("sqrt", err) && !occursin("nonzero", err)
 end
 
@@ -558,17 +563,20 @@ end
     # the CPU `at` reads as the kernel does (round 7: `T[Int(k)]`, a BoundsError at 0)
     @test at([1.0, 2.0, 3.0], 0) == 0.0 && at([1.0, 2.0, 3.0], 5) == 3.0 && at([1.0, 2.0, 3.0], -1) == 1.0
     @test at([1.0, 2.0, 3.0], 2) == 2.0                                           # control
-    # `1 / at(T, k)` with an index that can be 0 has no finite bound: refused, saying so, with
-    # the routes (declare the index's bounds, or give a count); a count runs
+    # `1 / at(T, k)` with an index that is 0 at a site is not finite there: refused, saying so,
+    # with the route (keep 0 out of the index); a count does not help (F2 record (i): 1fb097f2
+    # ran a count). With no 0 in the map it takes an automatic count (F2 record (h))
     @parameters Dv8[1:3] = [-1.0, 0.01, 1.0]
     sys = ssys([D(ce) ~ -(1 / at(Dv8, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dv8])
-    err = emsg(() -> solve(sown(sys; inputs = [qe => fill(Int32(2), 4, 4)]), ExplicitEuler(; dt = 0.025)))
-    @test occursin("index 0", err) && occursin("bounds = (1, n)", err) && occursin("substeps = n", err)
-    sol = solve(sown(sys; inputs = [qe => fill(Int32(2), 4, 4)]), ExplicitEuler(; dt = 0.025, substeps = 2))
+    Kz = fill(Int32(2), 4, 4); Kz[3, 2] = 0
+    for alg in (ExplicitEuler(; dt = 0.025), ExplicitEuler(; dt = 0.025, substeps = 2))
+        err = emsg(() -> solve(sown(sys; inputs = [qe => Kz]), alg))
+        @test occursin("index 0", err) && occursin("(3, 2)", err) && occursin("bounds = (1, n)", err)
+    end
+    sol = solve(sown(sys; inputs = [qe => fill(Int32(2), 4, 4)]), ExplicitEuler(; dt = 0.025))
     @test sol.substeps == 2 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c][end]) < 1e-20
     # a declared index range is checked: a 0 in a map declared (1, 3) is refused, naming the site
     sys = ssys([D(ce) ~ -(1 / at(Dv8, qb)) * ce], [c(0, x, y) ~ 1.0], [ce, qb], [Dv8])
-    Kz = fill(Int32(2), 4, 4); Kz[3, 2] = 0
     err = emsg(() -> sown(sys; inputs = [qb => Kz]))
     @test occursin("bounds (1, 3)", err) && occursin("(3, 2)", err)
     p8 = sown(sys; inputs = [qb => fill(Int32(2), 4, 4)])                          # control
@@ -576,66 +584,266 @@ end
     @test occursin("bounds (1, 3)", emsg(() -> (i8[qb] = Kz)))
     @test (i8[qb] = fill(Int32(3), 4, 4); true)                                     # control
     # many index expressions: the evaluation count is a Float64 product (round 7: an Int
-    # product, 16^16 == 0, passed the cap and the bound never finished)
+    # product, 16^16 == 0, passed the cap and the bound never finished). The index map holds
+    # 0 … 15, so each read takes up to 16 entries
     @parameters T16[1:16] = collect(1.0:16.0)
     rate = -sum(at(T16, qe + i) for i in 1:16) * ce
     sys = ssys([D(ce) ~ rate], [c(0, x, y) ~ 1.0], [ce, qe], [T16]; T = 0.025)
-    err = emsg(() -> solve(sown(sys; inputs = [qe => K0]), ExplicitEuler(; dt = 0.025)))
+    K015 = reshape(Int32.(0:15), 4, 4)
+    err = emsg(() -> solve(sown(sys; inputs = [qe => K015]), ExplicitEuler(; dt = 0.025)))
     @test occursin("4096", err) && occursin("substeps = n", err)
-    @test solve(sown(sys; inputs = [qe => K0]), ExplicitEuler(; dt = 0.025, substeps = 2)).substeps == 2
+    @test solve(sown(sys; inputs = [qe => K015]), ExplicitEuler(; dt = 0.025, substeps = 2)).substeps == 2
+    # the interval of the index is over the current values: with 0 everywhere each read takes
+    # one entry, under the cap (F2 record (m))
+    @test solve(sown(sys; inputs = [qe => K0]), ExplicitEuler(; dt = 0.025)).substeps == ceil(Int, 0.025 * 136 / 1.8)
 end
 
 @testset "an explicit count is raised by every term with a bound (F1 round 9)" begin
     # 1fb097f2: a coefficient with a non-finite value (index 0) or over the cap made the whole
-    # bound NaN, and an explicit count stayed as given: each run below ended Success and blew up
+    # bound NaN, and an explicit count stayed as given: each run below ended Success and blew up.
+    # Since F2 record (i) a value that is not finite where the inputs reach is refused with or
+    # without a count (the new bound-coverage testset); over the cap is the case left
     K = fill(Int32(2), 4, 4)
-    # P1: `1 / at(Dv, k)` at every entry 200, index 0 Inf (1fb097f2: n = 2, Success, 1.2e14)
+    K16 = reshape(Int32.(mod.(0:255, 16)), 16, 16)               # index values 0 … 15
+    # P1: `1 / at(Dv, k)` at every entry 200 (1fb097f2: n = 2, Success, 1.2e14): raised to 3,
+    # with no warning (no 0 in the map: the bound is finite, F2 record (h))
     @parameters Dv9[1:3] = fill(0.005, 3)
     sys = ssys([D(ce) ~ -(1 / at(Dv9, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dv9])
-    sol = @test_logs (:warn, r"3 substeps.*does not cover.*index 0") solve(sown(sys; inputs = [qe => K]),
-        ExplicitEuler(; dt = 0.025, substeps = 2))
+    sol = @test_logs solve(sown(sys; inputs = [qe => K]), ExplicitEuler(; dt = 0.025, substeps = 2))
     @test sol.substeps == 3 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c][end]) < 1e-20
-    @test occursin("no automatic substeps", emsg(() -> solve(sown(sys; inputs = [qe => K]), ExplicitEuler(; dt = 0.025))))
-    # P1x: diffusion of c on 16² needs 4; an unrelated field's index-0 term kept 2 (1fb097f2: 5.2e30)
-    @parameters Dd9 = 0.125 Dw9[1:3] = fill(1.0, 3)
-    sys = ssys([D(ce) ~ Dd9 * Δ(ce), D(oe) ~ -(1 / at(Dw9, qe)) * oe], [c(0, x, y) ~ 1.0 + sin(1000x + 700y), o(0, x, y) ~ 1.0],
-        [ce, oe, qe], [Dd9, Dw9])
-    sol = @test_logs (:warn,) match_mode = :any solve(sown(sys; n = 16, inputs = [qe => fill(Int32(2), 16, 16)]),
+    @test solve(sown(sys; inputs = [qe => K]), ExplicitEuler(; dt = 0.025)).substeps == 3
+    # P1x: diffusion of c on 16² needs 4; an unrelated field's term over the cap kept 2
+    # (1fb097f2: 5.2e30)
+    @parameters Dd9 = 0.125 Tw9[1:16] = zeros(16)
+    sys = ssys([D(ce) ~ Dd9 * Δ(ce), D(oe) ~ -sum(at(Tw9, qe + i) for i in 1:4) * oe],
+        [c(0, x, y) ~ 1.0 + sin(1000x + 700y), o(0, x, y) ~ 1.0], [ce, oe, qe], [Dd9, Tw9])
+    sol = @test_logs (:warn, r"4096") match_mode = :any solve(sown(sys; n = 16, inputs = [qe => K16]),
         ExplicitEuler(; dt = 0.025, substeps = 2))
     @test sol.substeps == 4 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c][end]) < 3
     # P2: over the cap, the diffusion still raises the count (1fb097f2: n = 2, 5.2e30)
     @parameters Tz9[1:16] = zeros(16)
     sys = ssys([D(ce) ~ Dd9 * Δ(ce) - sum(at(Tz9, qe + i) for i in 1:4) * ce], [c(0, x, y) ~ 1.0 + sin(1000x + 700y)], [ce, qe], [Dd9, Tz9])
-    sol = @test_logs (:warn, r"4096") match_mode = :any solve(sown(sys; n = 16, inputs = [qe => fill(Int32(0), 16, 16)]),
+    sol = @test_logs (:warn, r"4096") match_mode = :any solve(sown(sys; n = 16, inputs = [qe => K16]),
         ExplicitEuler(; dt = 0.025, substeps = 2))
     @test sol.substeps == 4 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c][end]) < 3
 end
 
 @testset "warnings once per term and cause; messages name every cause (F2 records (a), (b), (e))" begin
-    # (a) a sweep over the value of an entry the bound does not cover warns once: the key is
-    # the program, the term and the cause, never the value (bda31989: one warning per value,
-    # three here, and the set grew with every value)
+    # (a) a sweep over the value of an entry the bound does not cover warned once per value
+    # (bda31989: three here, and the set grew with every value). Since F2 record (i) such an
+    # entry is refused at each value; a sweep past the cap (the cause left to warn) warns once:
+    # the key is the program, the term and the cause, never a value
     K1 = fill(Int32(1), 4, 4)
     @parameters Ds2[1:3] = [-1.0, 1.0, 1.0]
     sys = ssys([D(ce) ~ -sqrt(at(Ds2, qb)) * ce], [c(0, x, y) ~ 1.0], [ce, qb], [Ds2])
     prob = sown(sys; inputs = [qb => K1])
+    @test all(v -> occursin("`Ds2[1]` ($v)", emsg(() -> solve(remake(prob; p = [Ds2 => [v, 1.0, 1.0]]),
+        ExplicitEuler(; dt = 0.025, substeps = 2)))), (-1.0, -2.0, -3.0))
+    @parameters Dd2 = 0.125 Tc2[1:16] = zeros(16)
+    sys = ssys([D(ce) ~ Dd2 * Δ(ce) - sum(at(Tc2, qe + i) for i in 1:4) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dd2, Tc2])
+    prob = sown(sys; inputs = [qe => reshape(Int32.(0:15), 4, 4)])
     logs, _ = Test.collect_test_logs() do
-        for v in (-1.0, -2.0, -3.0)
-            solve(remake(prob; p = [Ds2 => [v, 1.0, 1.0]]), ExplicitEuler(; dt = 0.025, substeps = 2))
+        for v in (0.125, 0.25, 0.5)
+            solve(remake(prob; p = [Dd2 => v]), ExplicitEuler(; dt = 0.025, substeps = 2))
         end
     end
-    @test count(l -> l.level == Base.CoreLogging.Warn && occursin("Ds2", string(l.message)), logs) == 1
+    @test count(l -> l.level == Base.CoreLogging.Warn && occursin("4096", string(l.message)), logs) == 1
     # (b) an unseen term and a coefficient with no finite bound in one rate: both are named
-    # (bda31989: only the unseen term `-(c^3)`)
-    @parameters Dz2[1:3] = [0.0, 1.0, 1.0]
-    sys = ssys([D(ce) ~ -ce^3 - (1 / at(Dz2, qb)) * ce], [c(0, x, y) ~ 1.0], [ce, qb], [Dz2])
-    err = emsg(() -> solve(sown(sys; inputs = [qb => K1]), ExplicitEuler(; dt = 0.025)))
-    @test occursin("c^3", err) && occursin("`Dz2[1]`", err) && occursin("make it nonzero", err)
+    # (bda31989: only the unseen term `-(c^3)`). A coefficient not finite where the inputs
+    # reach is refused before (F2 record (i)); past the cap is the cause left here
+    @parameters Tz2[1:16] = zeros(16)
+    sys = ssys([D(ce) ~ -ce^3 - sum(at(Tz2, qe + i) for i in 1:4) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Tz2])
+    err = emsg(() -> solve(sown(sys; inputs = [qe => reshape(Int32.(0:15), 4, 4)]), ExplicitEuler(; dt = 0.025)))
+    @test occursin("c^3", err) && occursin("4096", err) && occursin("Tz2", err)
     # (e) index 0 is an input value 0, not a "kind map" value (a LatticePDE input is any map)
     @parameters Dz3[1:3] = [1.0, 1.0, 1.0]
     sys = ssys([D(ce) ~ -(1 / at(Dz3, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dz3])
-    err = emsg(() -> solve(sown(sys; inputs = [qe => fill(Int32(2), 4, 4)]), ExplicitEuler(; dt = 0.025)))
+    Ke0 = fill(Int32(2), 4, 4); Ke0[2, 2] = 0
+    err = emsg(() -> solve(sown(sys; inputs = [qe => Ke0]), ExplicitEuler(; dt = 0.025)))
     @test occursin("index 0 reads 0 (an input value 0", err) && !occursin("kind map", err)
+end
+
+# the spectral radius of a linear rate's Jacobian, by power iteration on the assembled
+# operator (the ODE form's right side, column by column)
+function sradius(sys, n, inputs; iters = 4000)
+    o = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64); inputs)
+    N = length(o.u0)
+    J = zeros(N, N)
+    e, du = zero(o.u0), similar(o.u0)
+    for j in 1:N
+        fill!(e, 0); e[j] = 1
+        o.f(du, e, o.p, 0.0)
+        J[:, j] .= vec(du)
+    end
+    v = [1.0 + 0.1 * sin(3.7j) for j in 1:N]
+    λ = 0.0
+    for _ in 1:iters
+        w = J * v
+        λ = sqrt(sum(abs2, w)) / sqrt(sum(abs2, v))
+        v = w ./ sqrt(sum(abs2, w))
+    end
+    return λ
+end
+checker(n, a, b) = [Int32(isodd(i + j) ? a : b) for i in 1:n, j in 1:n]
+
+sok(sol) = SciMLBase.successful_retcode(sol) && all(isfinite, sol[:c][end])
+# a run that grew without bound: not finite, or a million times its start (the owned path's
+# `Unstable` fires on Inf/NaN only: a run at dt ρ / n = 2.1 reaches 2e130 and reports Success)
+sgrew(sol) = (u = sol[:c][end]; !all(isfinite, u) || maximum(abs, u) > 1e6 * maximum(abs, sol[:c][1]))
+
+@testset "F2 (g): a table-read diffusion multiplier takes an automatic count" begin
+    # (g) a multiplier read from tables is site diffusion with a bound (bda31989: refused, "no
+    # automatic substeps"); the count is within 10 % of the true one (8², every site kind 2)
+    @parameters Da[1:2] = [1.0, 3.0] Db[1:2] = [0.5, 0.0]
+    sys = ssys([D(ce) ~ (at(Da, qe) - at(Db, qe) + 2) * Δ(ce)], [c(0, x, y) ~ 1.0 + sin(1000x + 700y)], [ce, qe], [Da, Db];
+        T = 0.02)
+    K2 = fill(Int32(2), 8, 8)
+    ρt = sradius(sys, 8, [qe => K2])
+    sol = solve(sown(sys; n = 8, inputs = [qe => K2]), ExplicitEuler(; dt = 0.01))
+    @test ceil(Int, 0.01 * ρt / 1.8) <= sol.substeps <= ceil(Int, 1.1 * 0.01 * ρt / 1.8) && sok(sol)
+end
+
+@testset "F2 (g): the anti-correlated multiplier and face coefficient are bounded independently" begin
+    Dxs, Dys = Differential(x), Differential(y)
+    # the anti-correlated case: m = 1/Dw at the site, K = the face mean of Dw over two sites; a
+    # checkerboard puts m = 100 next to K ≈ 0.5 (row factor ≈ 50). One index for m and K would
+    # give max_k Dw[k]/Dw[k] = 1, a count of 3 here; the bound takes max|m| · max K = 100
+    @parameters Dw[1:2] = [0.01, 1.0]
+    Kc = checker(8, 1, 2)
+    grouped = ceil(Int, 0.01 * 1.0 * 4 * 2 * 64 / 1.8)
+    for (name, rate) in (("DivKGrad", (1 / at(Dw, qe)) * DivKGrad(:arithmetic)(at(Dw, qe), ce)),
+                         ("raw flux", (1 / at(Dw, qe)) * Dxs(at(Dw, qe) * Dxs(ce)) + (1 / at(Dw, qe)) * Dys(at(Dw, qe) * Dys(ce))))
+        sys = ssys([D(ce) ~ rate], [c(0, x, y) ~ 1.0 + sin(1000x + 700y)], [ce, qe], [Dw]; T = 0.02)
+        ρt = sradius(sys, 8, [qe => Kc])
+        p = sown(sys; n = 8, inputs = [qe => Kc])
+        sol = solve(p, ExplicitEuler(; dt = 0.01))
+        @test grouped == 3 && sol.substeps >= ceil(Int, 0.01 * ρt / 1.8) && sol.substeps > grouped && sok(sol)
+        # negative control: a count under the true limit (dt ρ / n = 3 > 2) grows without bound,
+        # where the bound's count stays within the start's range. (Half the bound's count is
+        # stable here: on these checkerboards the Gershgorin bound is about twice the true
+        # radius.)
+        nb = floor(Int, 0.01 * ρt / 3)
+        pl = remake(p; tspan = (0.0, 0.01 * cld(2000, nb)))                                     # 2000 substeps
+        ig = init(pl, ExplicitEuler(; dt = 0.01))
+        ig.substeps = nb
+        @test sgrew(solve!(ig)) && !sgrew(solve(pl, ExplicitEuler(; dt = 0.01)))
+    end
+end
+
+@testset "F2 (g): an explicit count under a site-diffusion bound is raised" begin
+    # an explicit count under the bound is raised (bda31989: n = 2 kept, 1.7e75, Success), and
+    # the solution stays within its initial range
+    @parameters Dw3[1:3] = [0.01, 1.0, 1.0]
+    sys = ssys([D(ce) ~ (1 / at(Dw3, qb)) * Δ(ce)], [c(0, x, y) ~ 1.0 + sin(1000x + 700y)], [ce, qb], [Dw3])
+    Kb = checker(4, 1, 2)
+    p = sown(sys; inputs = [qb => Kb])
+    sol = solve(p, ExplicitEuler(; dt = 0.025, substeps = 2))
+    m0 = maximum(abs, sol[:c][1])
+    @test sol.substeps == ceil(Int, 0.025 * 100 * 128 / 1.8) && sok(sol) && maximum(abs, sol[:c][end]) <= m0
+    ρt = sradius(sys, 4, [qb => Kb])
+    @test sol.substeps >= ceil(Int, 0.025 * ρt / 1.8)
+    ig = init(p, ExplicitEuler(; dt = 0.025))
+    ig.substeps = floor(Int, 0.025 * ρt / 3)                 # negative control: under the limit
+    @test sgrew(solve!(ig)) && !sgrew(sol)
+    # a negative entry is negative diffusion, refused
+    @parameters Dwn[1:2] = [-0.01, 1.0]
+    sys = ssys([D(ce) ~ (1 / at(Dwn, qe)) * Δ(ce)], [c(0, x, y) ~ 1.0], [ce, qe], [Dwn])
+    @test occursin("is negative at these parameters", emsg(() -> solve(sown(sys; inputs = [qe => checker(4, 1, 2)]),
+        ExplicitEuler(; dt = 0.025))))
+    # a row of `M A` is balanced, so site diffusion with a cross term is checked by the rest of
+    # its row (305be9ad: the diagonal took min m · min K against max m · max K, refused as
+    # coupled whenever m varies); a constant multiplier is the control
+    @parameters Dk2[1:2] = [0.01, 1.0]
+    for m in (at(Dk2, qe), 1.0)
+        sys = ssys([D(ce) ~ m * Δ(ce) - 0.2ce - 0.1oe, D(oe) ~ -oe], [c(0, x, y) ~ 1.0, o(0, x, y) ~ 1.0], [ce, oe, qe], [Dk2])
+        @test sok(solve(sown(sys; inputs = [qe => checker(4, 1, 2)]), ExplicitEuler(; dt = 0.025)))
+    end
+    # … and a row that is not dominant (the cross term outweighs the reaction) is still refused
+    sys = ssys([D(ce) ~ at(Dk2, qe) * Δ(ce) - 0.05ce - 0.1oe, D(oe) ~ -oe], [c(0, x, y) ~ 1.0, o(0, x, y) ~ 1.0], [ce, oe, qe], [Dk2])
+    @test occursin("coupled", emsg(() -> solve(sown(sys; inputs = [qe => checker(4, 1, 2)]), ExplicitEuler(; dt = 0.025))))
+end
+
+@testset "F2 (j): an `ifelse` on an indicator takes its arm" begin
+    # (j) an `ifelse` on an indicator takes its arm (bda31989: "Condition of `ifelse` must be a
+    # `Bool`")
+    @parameters kf = 100.0
+    sys = ssys([D(ce) ~ -ifelse(qe == 2, kf, 0) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [kf])
+    sol = solve(sown(sys; inputs = [qe => checker(4, 1, 2)]), ExplicitEuler(; dt = 0.025))
+    @test sol.substeps >= ceil(Int, 0.025 * 100 / 1.8) && sok(sol)
+    @test sradius(sys, 4, [qe => checker(4, 1, 2)]) ≈ 100                      # (the true radius)
+end
+
+@testset "F2 (m): index forms take intervals" begin
+    # (m) index forms: `2kb` and `max(k, 1)` never read index 0 or entry 1 here (bda31989:
+    # refused at index 0); a wrong interval would read the zero entry `Dz4[1]`
+    @parameters Dz4[1:3] = [0.0, 1.0, 2.0] Dy4[1:2] = [1.0, 2.0]
+    for (rate, q, K, tab) in ((-(1 / at(Dz4, 2qb)) * ce, qb, checker(4, 1, 2), Dz4),
+                              (-(1 / at(Dy4, max(qe, 1))) * ce, qe, checker(4, 0, 2), Dy4))
+        sys = ssys([D(ce) ~ rate], [c(0, x, y) ~ 1.0], [ce, q], [tab])
+        sol = solve(sown(sys; inputs = [q => K]), ExplicitEuler(; dt = 0.025))
+        @test sol.substeps == 1 && sok(sol)
+    end
+end
+
+@testset "F2 (h): index intervals over the current input values; writes are rechecked" begin
+    # (h) the interval of an index is over the current input values: an undeclared index map
+    # with no 0 takes an automatic count (bda31989: refused at index 0) …
+    @parameters Tq[1:2] = [0.01, 1.0]
+    sys = ssys([D(ce) ~ -(1 / at(Tq, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Tq])
+    p = sown(sys; inputs = [qe => checker(4, 1, 2)])
+    sol = solve(p, ExplicitEuler(; dt = 0.025))
+    @test sol.substeps == ceil(Int, 0.025 * 100 / 1.8) && sok(sol)
+    # … and a write that brings index 0 is refused, naming the site; the run is unchanged
+    ig, ref = init(p, ExplicitEuler(; dt = 0.025)), init(p, ExplicitEuler(; dt = 0.025))
+    step!(ig); step!(ref)
+    K0 = checker(4, 1, 2); K0[3, 2] = 0
+    err = emsg(() -> (ig[qe] = K0))
+    @test occursin("index 0", err) && occursin("(3, 2)", err) && ig[qe] == checker(4, 1, 2)
+    step!(ig); step!(ref)
+    @test ig.substeps == ref.substeps && ig[ce] == ref[ce]
+end
+
+@testset "F2 (h): `kb - 1` reaches index 0 where `kb` holds a 1" begin
+    # `kb − 1` reaches index 0 where `kb` holds a 1, though `kb` never holds 0
+    @parameters Tb[1:3] = [1.0, 1.0, 1.0]
+    sys = ssys([D(ce) ~ -(1 / at(Tb, qb - 1)) * ce], [c(0, x, y) ~ 1.0], [ce, qb], [Tb])
+    err = emsg(() -> solve(sown(sys; inputs = [qb => checker(4, 1, 2)]), ExplicitEuler(; dt = 0.025)))
+    @test occursin("index 0", err) && occursin("at site", err)
+    p = sown(sys; inputs = [qb => checker(4, 2, 3)])                              # control: kb ≥ 2
+    @test sok(solve(p, ExplicitEuler(; dt = 0.025)))
+    ig = init(p, ExplicitEuler(; dt = 0.025))
+    err = emsg(() -> (ig[qb] = checker(4, 1, 2)))
+    @test occursin("index 0", err) && occursin("(2, 1)", err) && ig[qb] == checker(4, 2, 3)
+    # an `ifelse` index is decided at the sites where the host values give it: with no kind 1,
+    # `ifelse(k == 1, 0, k)` never reads index 0 (305be9ad: refused, no site named, by the hull)
+    @parameters Tz[1:2] = [1.0, 1.0]
+    sys = ssys([D(ce) ~ -(1 / at(Tz, ifelse(qe == 1, 0, qe))) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Tz])
+    @test sok(solve(sown(sys; inputs = [qe => fill(Int32(2), 4, 4)]), ExplicitEuler(; dt = 0.025)))
+    K1 = fill(Int32(2), 4, 4); K1[3, 2] = 1
+    err = emsg(() -> solve(sown(sys; inputs = [qe => K1]), ExplicitEuler(; dt = 0.025)))
+    @test occursin("index 0", err) && occursin("(at site (3, 2))", err)
+end
+
+@testset "F2 (i): a coefficient not finite where the inputs reach is refused on every path" begin
+    # (i) a coefficient that is not finite where the inputs reach is refused on every path:
+    # the ODE form at discretize (bda31989: accepted, a rate of Inf) …
+    @parameters Dz5[1:2] = [0.0, 1.0]
+    sys = ssys([D(ce) ~ -(1 / at(Dz5, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dz5])
+    err = emsg(() -> discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64); inputs = [qe => checker(4, 1, 2)]))
+    @test occursin("not finite", err) && occursin("`Dz5[1]`", err)
+    @test discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64);              # control: no kind 1
+        inputs = [qe => fill(Int32(2), 4, 4)]) isa SciMLBase.ODEProblem
+    # … and the owned form with an explicit count (bda31989: warned and ran, probe P10)
+    err = emsg(() -> solve(sown(sys; inputs = [qe => checker(4, 1, 2)]), ExplicitEuler(; dt = 0.025, substeps = 2)))
+    @test occursin("not finite", err) && occursin("whatever the substep count", err)
+end
+
+@testset "F2 (l): the CPU `at2` reads as `at` does" begin
+    # (l) the CPU `at2` reads as `at` does: index 0 reads 0, each index clamps into its axis
+    # (bda31989: BoundsError)
+    J3 = reshape(collect(1.0:9.0), 3, 3)
+    @test at2(J3, 0, 1) == 0.0 && at2(J3, 1, 0) == 0.0 && at2(J3, 9, 1) == J3[end, 1] && at2(J3, -1, 9) == J3[1, end]
+    @test at2(J3, 2, 3) == J3[2, 3]                                                  # control
 end
 
 @testset "SX-37: trajectories on other tasks never share a right side's store" begin

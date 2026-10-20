@@ -119,8 +119,14 @@ end
     # the conservative rule (review): a coefficient that reads an unknown field makes the term
     # Other, and a diffusion multiplier reads no field at all
     for (rhs, want) in [DivKGrad(:harmonic)(Ke, ce) => :Other,    # K ~ c^2 would make it nonlinear
-        Ke * ce => :Other, ce * oe => :Other, oe * Δ(ce) => :Other, at(Dk, ke) * Δ(ce) => :Other,
-        ifelse(ke == 2, Δ(ce), 0) => :Other, Dc * Δ(ce) => :Diffusion, ismember(ke, (2,)) * ce => :LinearLocal]
+        Ke * ce => :Other, ce * oe => :Other, oe * Δ(ce) => :Other,
+        ifelse(ke == 2, Δ(ce), 0) => :Other, Dc * Δ(ce) => :Diffusion, ismember(ke, (2,)) * ce => :LinearLocal,
+        # a multiplier that reads inputs through table reads and indicators only varies by
+        # site and is bounded (F2 record (g)); one that reads an input directly is Other
+        at(Dk, ke) * Δ(ce) => :SiteDiffusion, ismember(ke, (2,)) * Δ(ce) => :SiteDiffusion,
+        (at(Dk, ke) - at(Dk, ke + 1) + 2) * Δ(ce) => :SiteDiffusion,
+        (1 / at(Dk, ke)) * DivKGrad(:arithmetic)(at(Dk, ke), ce) => :SiteDiffusion,
+        ifelse(ke == 2, Dc, 2Dc) * Δ(ce) => :SiteDiffusion, ke * Δ(ce) => :Other, (ke + at(Dk, ke)) * Δ(ce) => :Other]
         @test only(last.(LatticePDE.linearity(rhs, ce, states; inputs))) == want
     end
     # the system table uses the same rule: an aux coefficient that depends on c

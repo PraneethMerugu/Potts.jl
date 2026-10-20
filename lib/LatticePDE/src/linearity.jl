@@ -4,6 +4,11 @@
 #
 #   Diffusion     Δ(c), DivKGrad(K, c), raw Dx(Dx(c)), Dx(K * Dx(c)), times a constant or
 #                 parameter
+#   SiteDiffusion the same times a multiplier `m` that reads inputs only through table reads
+#                 (`at(T, k)`, `T[k]`, `at2`) and indicators (kind sets, comparisons):
+#                 `at(Dk, k) * Δ(c)`, `ifelse(k == 2, Da, Db) * Δ(c)`. `m A` is not
+#                 conservative (not symmetric), so it is not plain Diffusion; the stability
+#                 bound takes max|m| over the site and max K over the faces independently
 #   LinearLocal   coefficient × c
 #   LaggedSwitch  coefficient × max(a, 0) or ifelse(·, a, 0), a affine in c (a LinearLocal
 #                 term whose switch the implicit solvers lag, §5.2)
@@ -17,12 +22,31 @@
 # constants, parameters and inputs. Unknowns are every non-input field, aux fields included
 # (`K ~ c^2` makes `DivKGrad(K, c)` Other), because the solve groups are not known here. A
 # multiplier of a diffusion or advection term must also read no input: `kind * Δ(c)` is not
-# conservative. A term that reads an aux field at all is Other (its dependence is hidden).
+# conservative (the one exception is SiteDiffusion, a diffusion multiplier that reads inputs
+# through table reads and indicators only). A term that reads an aux field at all is Other
+# (its dependence is hidden).
 #
 # Operator classes match with `isa` on the struct's UnionAll (`Advect{S}` is parametric), and
 # literals are read through `unwrap_const` (SymbolicUtils 4 wraps them in `Const`).
 
 _reads(x, ops) = (u = unwrap(x); iscall(u) && (any(o -> isequal(o, operation(u)), ops) || any(a -> _reads(a, ops), arguments(u))))
+# whether `x` reads the inputs `I` only inside a table read's index (`at(T, k)`, `T[k]`,
+# `at2(J, a, b)`) or an indicator (a comparison or `ismember`): a site factor whose values a
+# table-aware bound can enumerate
+function _site_factor(x, I)
+    function ok(u, inside)
+        iscall(u) || return true
+        f, a = operation(u), arguments(u)
+        any(o -> isequal(o, f), I) && return inside
+        if f === at || f === getindex || f === at2
+            return ok(unwrap(a[1]), inside) && all(y -> ok(unwrap(y), true), a[2:end])
+        elseif f === ismember || f in (==, <, <=, >, >=, !=)
+            return all(y -> ok(unwrap(y), true), a)
+        end
+        return all(y -> ok(unwrap(y), inside), a)
+    end
+    return ok(unwrap(x), false)
+end
 _iszero(x) = (v = unwrap_const(unwrap(x)); v isa Number && iszero(v))
 _isread(x, op) = (u = unwrap(x); iscall(u) && isequal(operation(u), op))
 
@@ -58,7 +82,11 @@ function _linclass(u, op, S, I)
         k = _linclass(unwrap(a[dep[1]]), op, S, I)
         rest = a[setdiff(eachindex(a), dep)]
         all(free, rest) || return :Other
-        k in (:Diffusion, :Advection) && any(x -> _reads(x, I), rest) && return :Other
+        # a diffusion multiplier that reads inputs through tables and indicators only
+        if k in (:Diffusion, :SiteDiffusion) && any(x -> _reads(x, I), rest)
+            return all(x -> _site_factor(x, I), rest) ? :SiteDiffusion : :Other
+        end
+        k == :Advection && any(x -> _reads(x, I), rest) && return :Other
         return k
     elseif f === max || f === min || f === ifelse
         arms = f === ifelse ? a[2:3] : a

@@ -339,17 +339,22 @@ const GD_RECORDS = Dict{String, String}(
     "GdAuditInvTable|Float64|groups" => "1",
     "GdAuditInvTable|Float64|n" => "[2]",
     "GdAuditInvTable|Float64|route" => "auto",
-    "GdAuditKindDiffusion|Float64|canonical" => "c=ExplicitEuler(substeps=3,lower=nothing)",
-    "GdAuditKindDiffusion|Float64|fingerprint" => "0xda29469437e1041d",
+    # F2-03 (listed): `δ[kind] * Δ(c)` is site diffusion with a bound (record (g)). The group was
+    # refused without a count, so the guard took `substeps = 3` (route explicit, n = 3, bounded
+    # false, fingerprint 0xda29469437e1041d); now the automatic count builds: route auto,
+    # bounded true, least 1, n = 1 (ρ = 0.2 · 8 = 1.6), and the canonical string and
+    # fingerprint follow the solver.
+    "GdAuditKindDiffusion|Float64|canonical" => "c=ExplicitEuler(substeps=nothing,lower=nothing)",
+    "GdAuditKindDiffusion|Float64|fingerprint" => "0x8e3540a70a62666b",
     "GdAuditKindDiffusion|Float64|g1|arrays" => "((CorePotts.Part{:site, :c}(), CorePotts.Part{:site, :c__next}()), (CorePotts.Part{:site, :kind__in}(), nothing))",
-    "GdAuditKindDiffusion|Float64|g1|bounded" => "false",
+    "GdAuditKindDiffusion|Float64|g1|bounded" => "true",
     "GdAuditKindDiffusion|Float64|g1|fingerprint_text" => "c1b44d839037746f",
-    "GdAuditKindDiffusion|Float64|g1|least" => "Int64:3",
+    "GdAuditKindDiffusion|Float64|g1|least" => "Int64:1",
     "GdAuditKindDiffusion|Float64|g1|params" => "Symbol[]",
     "GdAuditKindDiffusion|Float64|g1|tables" => "[1 => :δ]",
     "GdAuditKindDiffusion|Float64|groups" => "1",
-    "GdAuditKindDiffusion|Float64|n" => "[3]",
-    "GdAuditKindDiffusion|Float64|route" => "explicit",
+    "GdAuditKindDiffusion|Float64|n" => "[1]",
+    "GdAuditKindDiffusion|Float64|route" => "auto",
     "GdAuditNonlinearField|Float64|canonical" => "c=ExplicitEuler(substeps=3,lower=nothing)",
     "GdAuditNonlinearField|Float64|fingerprint" => "0x92bf5f98c092b0b5",
     "GdAuditNonlinearField|Float64|g1|arrays" => "((CorePotts.Part{:site, :c}(), CorePotts.Part{:site, :c__next}()),)",
@@ -362,11 +367,8 @@ const GD_RECORDS = Dict{String, String}(
     "GdAuditNonlinearField|Float64|n" => "[3]",
     "GdAuditNonlinearField|Float64|route" => "explicit",
     "GdP65cbAny|Float64|canonical" => "F=ExplicitEuler(substeps=nothing,lower=nothing)",
-    # F2-02 (was 0x751992f009046ddf): the fill phase writes `field1__in` before `kind__in`.
-    # The fill order follows the order the converter meets the CPM reads in the symbolic rate,
-    # a hash order that changes with the package code; the two writes are independent (the
-    # digests and `n` do not move). Not a model change: a fingerprint fragility, reported.
-    "GdP65cbAny|Float64|fingerprint" => "0xacc2455ac0651043",
+    # one of two values (`GD_ALTERNATES` below): F2-02 moved it, F2-03 moved it back
+    "GdP65cbAny|Float64|fingerprint" => "0x751992f009046ddf",
     "GdP65cbAny|Float64|g1|arrays" => "((CorePotts.Part{:site, :F}(), CorePotts.Part{:site, :F__next}()), (CorePotts.Part{:site, :field1__in}(), nothing), (CorePotts.Part{:site, :kind__in}(), nothing))",
     "GdP65cbAny|Float64|g1|bounded" => "true",
     "GdP65cbAny|Float64|g1|fingerprint_text" => "2989953babfb5baa",
@@ -584,4 +586,16 @@ const GD_RECORDS = Dict{String, String}(
     "fixture field|Float64|g1|tables" => "Pair{Int64, Symbol}[]",
     "fixture field|Float64|groups" => "1",
     "fixture field|Float64|n" => "[2]",
+)
+
+# Records with more than one accepted value, each with its cause. GdP65cbAny's problem
+# fingerprint takes one of two values with no change to its model or its code's meaning: the
+# fill phase writes `kind__in` and `field1__in` in the order the converter meets the CPM reads
+# in the symbolic rate, a hash order that changes with the package code (F2-02 gave
+# 0xacc2455ac0651043, F2-03 the bda31989 value again; measured on the PC by diffing the
+# generated code: the two writes swap, nothing else). The writes are independent, so its
+# digests and `n` do not move. A fingerprint fragility, reported for a ruling; the record
+# accepts exactly these two values.
+const GD_ALTERNATES = Dict{String, Vector{String}}(
+    "GdP65cbAny|Float64|fingerprint" => ["0x751992f009046ddf", "0xacc2455ac0651043"],
 )

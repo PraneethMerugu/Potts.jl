@@ -134,27 +134,42 @@ function _set_input!(st::FieldStore, p::Program, key::AbstractString, v)
 end
 
 """
-    ParamsTables(p, tables)
+    ParamsTables(p, tables, inputs = [])
 
-The raw parameters `p` with the problem's tables (`key => values`), as the stability hooks
-receive them when a problem has tables ([`with_tables`](@ref)): indexed like `p`, so a bound
-that reads only scalars needs no change; a front end's bound reads the table values from
-`tables` (a coefficient `Dk[i]` or `at(Dk, kind)`).
+The raw parameters `p` with the problem's tables (`key => values`) and the current host
+values of the inputs the bound reads in an index (`key => array shaped by site`, or a
+number; [`bound_inputs`](@ref)), as the stability hooks receive them ([`with_tables`](@ref)):
+indexed like `p`, so a bound that reads only scalars needs no change; a front end's bound
+reads the table values from `tables` (a coefficient `Dk[i]` or `at(Dk, kind)`) and the index
+values from `inputs`. An input the front end fills on the device every step is not passed
+(its declared bounds hold).
 """
 struct ParamsTables{P}
     p::P
     tables::Vector{Pair{String, Vector{Float64}}}
+    inputs::Vector{Pair{String, Any}}
 end
+ParamsTables(p, tables) = ParamsTables(p, tables, Pair{String, Any}[])
 Base.getindex(w::ParamsTables, i...) = w.p[i...]
 Base.length(w::ParamsTables) = length(w.p)
 Base.iterate(w::ParamsTables, s...) = iterate(w.p, s...)
 Base.eltype(::Type{ParamsTables{P}}) where {P} = eltype(P)
 """
-    with_tables(p, tables)
+    with_tables(p, tables; inputs = [])
 
-`p` as the stability hooks take it: `ParamsTables(p, tables)` when there are tables, else `p`.
+`p` as the stability hooks take it: `ParamsTables(p, tables, inputs)` when there are tables
+or inputs, else `p`.
 """
-with_tables(p, tables) = isempty(tables) ? p : ParamsTables(p, tables)
+with_tables(p, tables; inputs = ()) = isempty(tables) && isempty(inputs) ? p :
+                                      ParamsTables(p, Pair{String, Vector{Float64}}[tables...], Pair{String, Any}[inputs...])
+
+"""
+    bound_inputs(stability) -> Vector{String}
+
+The keys of the inputs whose current values the stability bound reads (an index of a table
+read: the bound evaluates index 0 only where the values reach it). The default is none.
+"""
+bound_inputs(stability) = String[]
 
 """
     check_parameters(stability, p)

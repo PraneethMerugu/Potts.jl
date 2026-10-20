@@ -49,6 +49,7 @@ struct RHSContext{N, B}
     plans::Dict{Type, Tuple{StepPlan{N}, StepPlan{N}}}
     index::Any                                 # for the parameter checks (names)
     stability::Any                             # … and the front end's `check_parameters`
+    binputs::Vector{Pair{String, Any}}         # … with the inputs it reads in an index (host, by site)
 end
 const MAX_VARIANTS = 8
 
@@ -138,7 +139,7 @@ _checked(f::LatticeRHS, p) = f.checkp[1] === p && length(f.checkv) == length(p) 
                              all(i -> f.checkv[i] == Float64(primal(p[i])), eachindex(f.checkv))
 function _check!(f::LatticeRHS, p)
     check_values(p, f.ctx.index)
-    check_parameters(f.ctx.stability, with_tables(map(primal, p), f.ctx.tables))
+    check_parameters(f.ctx.stability, with_tables(map(primal, p), f.ctx.tables; inputs = f.ctx.binputs))
     f.checkp[1] = p
     resize!(f.checkv, length(p))
     f.checkv .= [Float64(primal(x)) for x in p]
@@ -302,10 +303,14 @@ function ode_problem(prog::Program, u0, tspan, p; state, rates, init = String[],
     faces = face_checks(prog)
     check_faces(faces, p)
     check_values(p, index; built = false)
-    check_parameters(stability, with_tables(map(primal, collect(p)), Pair{String, Vector{Float64}}[tables...]))
     s = semantic(prog)
     ins = resolve_inputs(s, index, inputs)
     check_inputs_set(ins; built = false, index)
+    # the inputs are fixed here (the ODE path takes them at `discretize` only): the checks see
+    # their values, so a rate that is not finite where they reach is refused now
+    bks = bound_inputs(stability)
+    binputs = Pair{String, Any}[k => _site_shaped(s, k, v) for (k, v) in ins if k in bks && v !== nothing]
+    check_parameters(stability, with_tables(map(primal, collect(p)), Pair{String, Vector{Float64}}[tables...]; inputs = binputs))
     N = _ndims(s)
     E = problem_eltype(u0, p)
     _check_eltype(E, backend)
@@ -313,7 +318,7 @@ function ode_problem(prog::Program, u0, tspan, p; state, rates, init = String[],
     ctx = RHSContext{N, typeof(backend)}(s, backend, collect(String, state),
         Dict{String, String}(rates), collect(String, init), options,
         Pair{String, Vector{Float64}}[tables...], faces, Float64(tspan[1]),
-        Dict{Type, Tuple{StepPlan{N}, StepPlan{N}}}(), index, stability)
+        Dict{Type, Tuple{StepPlan{N}, StepPlan{N}}}(), index, stability, binputs)
     ids = Int[fieldid(s, k) for k in state]
     slots = state_layout(s, ids)
     n = isempty(ids) ? 0 : maximum(last, slots[ids])

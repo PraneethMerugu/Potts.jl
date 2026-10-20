@@ -448,7 +448,11 @@ function _user_text(term::AbstractString, cv)
     end
     out = replace(out, r"Potts\._intdiv\(([^,()]+), ([^()]+)\)" => s"(\1 ÷ \2)")   # the model's `÷`
     out = replace(out, "LatticePDE." => "")                              # `Δ(c)`, `at(δ, …)` as written
-    return replace(out, r"(\w+)\(t(, [xyz])*\)" => s"\1")
+    out = replace(out, r"(\w+)\(t(, [xyz])*\)" => s"\1")
+    # a kind table read `at(δ, 1 + kind)` as the model writes it, `δ[kind]`; the time `t` is `mcs`
+    out = replace(out, r"at\((\w+), (?:1 \+ kind|kind \+ 1)\)" => s"\1[kind]")
+    out = replace(out, r"at\((\w+), (\w+)\)" => s"\1[\2]")             # a CPM read `volume[owner]`
+    return replace(out, r"\bt\b" => "mcs")
 end
 
 # The model time of one field phase: the MCS, or `1/n` of it inside a sub-MCS `repeat(n, …)`
@@ -515,8 +519,9 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
                                 "$(_fieldlist(names)) has no bound from the parameters (the term" *
                                 "$(length(stab.terms) == 1 ? "" : "s") $(join(("`$(_user_text(t, cv))`" for t in stab.terms), ", ")), " *
                                 "which the stability bound cannot see: a nonlinear or advection term, a diffusion multiplier " *
-                                "that varies by site (`δ[kind] * Δ(c)`, `ismember(kind, g) * Δ(c)`), or a coefficient that " *
-                                "reads the state or `mcs`); give `PottsProblem` " *
+                                "that varies by site through a CPM value read directly (`volume[owner] * Δ(c)`; a kind table " *
+                                "`δ[kind] * Δ(c)` or a kind set `ismember(kind, g) * Δ(c)` is bounded), or a coefficient " *
+                                "that reads the state or `mcs`); give `PottsProblem` " *
                                 "`field_solver = ExplicitEuler(; substeps = n)` with `n ≥ mcs_duration · ρ / 1.8`"))
         end
         fp = LatticeFields.Compile.fingerprint_text(cf.program; T)

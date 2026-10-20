@@ -266,23 +266,54 @@ end
         SequentialCPM())) == 9
 end
 
-# a diffusion multiplier read from a kind table varies by site: refused without a count, the
-# message names that reason and prints the term as written (F1 round 7: no reason given,
-# `LatticePDE.at(…)`, `LatticePDE.Δ(…)`)
+# a diffusion multiplier read from a kind table varies by site, and the bound reads it (F2
+# record (g): F1 refused it, "varies by site"): ρ = max δ · 8 = 16 (h = 1, 2D), ⌈16/1.8⌉ = 9.
+# A multiplier that reads a CPM value directly (`volume`) is not bounded: refused without a
+# count, with that reason, in the model's words (F1 round 7: `LatticePDE.at(…)`)
 @potts_model AuditKindDiffusion begin
     @kinds medium A
-    @parameters δ[kind] = [0.1, 0.2]
+    @parameters δ[kind] = [0.1, 2.0]
     @variables c(field) = 0.0
     @lattice Lattice((16, 16))
     @energy cells(A) => (volume - 9)^2
     @equations D(c) ~ δ[kind] * Δ(c)
     @sweep Metropolis(; temperature = 5.0)
 end
+@potts_model AuditVolumeDiffusion begin
+    @kinds medium A
+    @variables c(field) = 0.0
+    @lattice Lattice((16, 16))
+    @energy cells(A) => (volume - 9)^2
+    @equations D(c) ~ 0.01 * volume[owner] * Δ(c)
+    @sweep Metropolis(; temperature = 5.0)
+end
 
-@testset "a kind-table diffusion multiplier: refused with its reason, in the model's words" begin
-    op = [ownership => zeros(Int32, 16, 16), kind => Symbol[]]
-    err = audit_err(() -> PottsProblem(AuditKindDiffusion(; name = :k), op, (0, 1); field_solver = ExplicitEuler()))
-    @test err isa ArgumentError && occursin("varies by site", err.msg) && !occursin("LatticePDE.", err.msg)
+# a multiplier that reads `mcs` is not bounded; the refusal prints the model's own words
+# (305be9ad: `at(δ, 1 + kind)*(1 + t)`)
+@potts_model AuditMcsDiffusion begin
+    @kinds medium A
+    @parameters δ[kind] = [0.1, 0.2]
+    @variables c(field) = 0.0
+    @lattice Lattice((16, 16))
+    @energy cells(A) => (volume - 9)^2
+    @equations D(c) ~ δ[kind] * (1 + mcs) * Δ(c)
+    @sweep Metropolis(; temperature = 5.0)
+end
+
+@testset "a kind-table diffusion multiplier is bounded; a CPM value read directly is refused" begin
+    σ = zeros(Int32, 16, 16); σ[4:6, 4:6] .= 1
+    op = [ownership => σ, kind => [:A]]
+    cb = [iseven(i + j) ? 1.0 : 0.0 for i in 1:16, j in 1:16]
+    prob = PottsProblem(AuditKindDiffusion(; name = :k), [op; :c => cb], (0, 5); field_solver = ExplicitEuler())
+    @test audit_n(init(prob, SequentialCPM())) == 9
+    c = Array(solve(prob, SequentialCPM()).u[end].site.c)
+    @test all(isfinite, c) && maximum(c) <= 1 + 1e-12 && minimum(c) >= -1e-12     # a monotone step at n = 9
+    err = audit_err(() -> PottsProblem(AuditVolumeDiffusion(; name = :k), op, (0, 1); field_solver = ExplicitEuler()))
+    @test err isa ArgumentError && occursin("varies by site", err.msg) && occursin("volume[owner]", err.msg) &&
+          !occursin("LatticePDE.", err.msg) && !occursin("at(volume", err.msg)
+    err = audit_err(() -> PottsProblem(AuditMcsDiffusion(; name = :k), op, (0, 1); field_solver = ExplicitEuler()))
+    @test err isa ArgumentError && occursin("δ[kind]", err.msg) && occursin("mcs", err.msg) &&
+          !occursin("at(δ", err.msg) && !occursin("(1 + t)", err.msg)
 end
 
 # a kind table under `1 / …` (F1 round 8): the bound reads every kind's entry, the medium's

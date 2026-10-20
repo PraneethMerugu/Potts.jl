@@ -114,11 +114,13 @@ end
 explicit site or cell `s` (`at(c, target)`). Never index an array parameter with a symbolic
 input (`Dk[kindₛ]`): `mtkcompile(; inputs)` then keeps the input as an unknown.
 
-A table read follows the lattice kernel: index 0 reads 0 (a kind map value 0 reads no entry),
+A table read follows the lattice kernel: index 0 reads 0 (an input value 0 reads no entry),
 and any other index is clamped into `1:length(T)` (an index above the table reads its last
-entry). The stability bound evaluates a coefficient at every index a read can take, index 0
-included; declare an index input's bounds (`[input = true, bounds = (1, n)]`) when it is
-never 0, and its values are checked against them.
+entry). The stability bound evaluates a coefficient at every index a read can take: the
+interval of the index expression over the declared bounds of its inputs
+(`[input = true, bounds = (1, n)]`, which their values are checked against) and, for an
+input the host writes (`discretize(…; inputs)`, `remake(prob; inputs)`, `integ[k] = K`),
+over its current values. Index 0 is evaluated only when that interval holds 0.
 
 With two or more integer inputs (for example the two kinds of [`at2`](@ref)),
 `mtkcompile(sys; inputs = [a, b])` can fail with `AssertionError: last_idx <= idx` in
@@ -137,14 +139,16 @@ at(T::AbstractArray{<:Union{Integer, AbstractFloat}}, k::Union{Integer, Abstract
 at(T::Union{Num, Symbolics.Arr}, k::Union{Integer, AbstractFloat}) = at(T, Num(k))
 
 """
-`at2(J, a, b)`: entry `(a, b)` of the pair table `J` (`at2(J, kindₛ, kindₛ′)`).
+`at2(J, a, b)`: entry `(a, b)` of the pair table `J` (`at2(J, kindₛ, kindₛ′)`). It reads as
+[`at`](@ref) does along each axis: index 0 in either argument reads 0, and each index is
+clamped into its axis (`1:size(J, 1)`, `1:size(J, 2)`).
 
 The two kinds are two integer inputs, so `mtkcompile(sys; inputs = [kindₛ, kindₛ′])` can
 fail with `AssertionError: last_idx <= idx` (FR-36, see [`at`](@ref)); then give
 `inputs = [kindₛ′, kindₛ]`.
 """
 at2(T::AbstractArray{<:Union{Integer, AbstractFloat}}, k::Union{Integer, AbstractFloat}, kp::Union{Integer, AbstractFloat}) =
-    T[Int(k), Int(kp)]
+    k == 0 || kp == 0 ? zero(eltype(T)) : T[clamp(Int(k), 1, size(T, 1)), clamp(Int(kp), 1, size(T, 2))]
 @register_symbolic at2(T::AbstractMatrix, k::Real, kp::Real)
 at2(T::Symbolics.Arr, k::Union{Integer, AbstractFloat}, kp::Union{Integer, AbstractFloat}) = at2(T, Num(k), Num(kp))
 

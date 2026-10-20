@@ -322,13 +322,33 @@ count is the user's for the terms it does not cover, and a warning names them, o
 program, term and cause in a session ([`unbounded_key`](@ref): never once per value). An unknown bound with no user count is an `ArgumentError` that names the
 terms the bound cannot see.
 """
-substeps(::FieldProblem, ::ExplicitMap, p = nothing; tables = nothing) = 1
+substeps(::FieldProblem, ::ExplicitMap, p = nothing; tables = nothing, inputs = nothing) = 1
+
+# the host values of the inputs the stability bound reads in an index (`bound_inputs`), each
+# shaped by site (a number stays a number): from the problem, or from an integrator's store
+_site_shaped(prog, k, v) = v isa Number ? v : reshape(collect(v), _input_dims(prog, prog.fields[fieldid(prog, k)]))
+function _bound_inputs(prob::FieldProblem)
+    ks = bound_inputs(prob.stability)
+    out = Pair{String, Any}[]
+    isempty(ks) && return out
+    for (k, v) in prob.inputs
+        k in ks && v !== nothing && push!(out, k => _site_shaped(prob.program, k, v))
+    end
+    return out
+end
+function _bound_inputs(i::FieldIntegrator; set = nothing)
+    ks = bound_inputs(i.prob.stability)
+    prog = i.prob.program
+    return Pair{String, Any}[k => _site_shaped(prog, k, set !== nothing && first(set) == k ? last(set) :
+                                                         Array(array(i.store, fieldid(prog, k), :cur))) for k in ks]
+end
 const _SEEN_WARNED = Set{String}()
 const _SEEN_WARNED_LOCK = ReentrantLock()
 # the warning's once-key: the program (its printed text, hashed) and the value-free reason
 _warn_key(prob::FieldProblem, why) = string(hash(sprint(print_program, prob.program)); base = 16) * "|" * string(why)
-function substeps(prob::FieldProblem, alg::ExplicitEuler, p = prob.p; tables = prob.tables)
-    pp = with_tables(map(primal, p), tables)        # a policy: on the primal values
+function substeps(prob::FieldProblem, alg::ExplicitEuler, p = prob.p; tables = prob.tables,
+        inputs = _bound_inputs(prob))
+    pp = with_tables(map(primal, p), tables; inputs)        # a policy: on the primal values
     if alg.substeps >= 1
         ρ = seen_bound(prob.stability, pp)
         n = isfinite(ρ) && ρ >= 0 ? max(alg.substeps, ceil(Int, alg.dt * ρ / 1.8)) : alg.substeps
@@ -378,7 +398,7 @@ function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; saveat = (),
         alg)))
     check_faces(prob.faces, prob.p)
     check_values(prob.p, prob.index)
-    check_parameters(prob.stability, with_tables(map(primal, prob.p), prob.tables))
+    check_parameters(prob.stability, with_tables(map(primal, prob.p), prob.tables; inputs = _bound_inputs(prob)))
     t0, tf = prob.tspan
     nsteps = _count(tf - t0, _dt(alg), "the time span")
     dt = (tf - t0) / max(nsteps, 1)                 # the step that lands on tf exactly
@@ -572,8 +592,19 @@ function Base.setindex!(i::FieldIntegrator, v, sym)
     _write_table!(i, v, sym) && return i
     k = i.prob.index isa LatticeIndex ? input_key(i.prob.index, sym) : nothing
     k === nothing && (_check_symbol(i, sym; write = true); SII.setsym(i, sym)(i, v); return i)
-    _set_input!(i.store, i.prob.program, k, _input_value(i.prob.program, k, v, input_name(i.prob.index, k);
-        bool = is_bool_input(i.prob.index, k), bounds = input_bounds(i.prob.index, k)))
+    w = _input_value(i.prob.program, k, v, input_name(i.prob.index, k);
+        bool = is_bool_input(i.prob.index, k), bounds = input_bounds(i.prob.index, k))
+    # an input the bound reads in an index: the checks (a rate that is not finite where the
+    # new values reach, naming the site) and the substep count at the new values, before
+    # anything changes
+    m = i.substeps
+    if k in bound_inputs(i.prob.stability)
+        ins = _bound_inputs(i; set = k => w)
+        check_parameters(i.prob.stability, with_tables(map(primal, i.pgood), i.tables; inputs = ins))
+        m = substeps(i.prob, i.alg, i.pgood; tables = i.tables, inputs = ins)
+    end
+    _set_input!(i.store, i.prob.program, k, w)
+    i.substeps = m
     _rerun_init!(i, i.pgood)                       # the parameters the steps are bound to
     return i
 end
@@ -604,8 +635,9 @@ function _write_table!(i::FieldIntegrator, v, sym)
     # the checks and the substep count at the new values, before anything changes
     tables = copy(i.tables)
     tables[j] = t => vals
-    check_parameters(i.prob.stability, with_tables(map(primal, i.pgood), tables))
-    m = substeps(i.prob, i.alg, i.pgood; tables)
+    ins = _bound_inputs(i)
+    check_parameters(i.prob.stability, with_tables(map(primal, i.pgood), tables; inputs = ins))
+    m = substeps(i.prob, i.alg, i.pgood; tables, inputs = ins)
     a = i.store.tables[findfirst(x -> x.key == t, i.prob.program.tables)]
     copyto!(a, convert(Vector{eltype(a)}, vals))
     i.tables[j] = t => vals
@@ -670,8 +702,9 @@ function SII.finalize_parameters_hook!(integ::FieldIntegrator, _)
     try
         check_faces(integ.prob.faces, integ.p)
         check_values(integ.p, integ.prob.index)
-        check_parameters(integ.prob.stability, with_tables(map(primal, integ.p), integ.tables))
-        m = substeps(integ.prob, integ.alg, integ.p; tables = integ.tables)
+        ins = _bound_inputs(integ)
+        check_parameters(integ.prob.stability, with_tables(map(primal, integ.p), integ.tables; inputs = ins))
+        m = substeps(integ.prob, integ.alg, integ.p; tables = integ.tables, inputs = ins)
         steps = (_bound(integ.prob, integ.store, integ.p, 1),
             _bound(integ.prob, integ.store, integ.p, 2))
         masks = _masks(integ.prob, integ.store, integ.p)
