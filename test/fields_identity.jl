@@ -485,8 +485,7 @@ function gd_compare(got, want, keys)
     bad = String[]
     for k in keys
         g = get(got, k, "<missing>")
-        # a record with more than one accepted value lists them, with the cause, in the records
-        g == get(want, k, "<missing>") || g in get(GD_ALTERNATES, k, String[]) ||
+        g == get(want, k, "<missing>") ||
             push!(bad, "$k: recorded $(repr(get(want, k, "<missing>"))), now $(repr(g))")
     end
     return bad

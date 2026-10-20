@@ -906,3 +906,14 @@ struct FdFakeDevice <: Potts.KernelAbstractions.GPU end
     p32 = PottsProblem(FdClosed(; name = :f), fd_empty((12, 10)), (0, 1); field_solver = ExplicitEuler(), T = Float32)
     @test_logs CorePotts._device_float_notice(p32, FdFakeDevice()) == false
 end
+
+# R-F2b (2026-10-20): the filled inputs take one canonical order, whatever order the converter
+# meets the CPM reads in (the hash order of a term's arguments): `kind__in` first, the CPM
+# reads by expression text (`field1__in`, `field2__in`, … in that order), `domain__in` last
+@testset "R-F2b: the filled inputs take a canonical order" begin
+    raw = Tuple{Symbol, Any, Type}[(:kind__in, :kind, Int32), (:field1__in, :zz, Float64),
+        (:field2__in, :aa, Float64), (:domain__in, :dom, Bool)]
+    a, b = Potts._canonical_filled(raw), Potts._canonical_filled(reverse(raw))
+    @test a == b                                                   # the met order does not matter
+    @test first.(a) == [:kind__in, :field1__in, :field2__in, :domain__in] && a[2][2] === :aa && a[3][2] === :zz
+end

@@ -367,7 +367,8 @@ const GD_RECORDS = Dict{String, String}(
     "GdAuditNonlinearField|Float64|n" => "[3]",
     "GdAuditNonlinearField|Float64|route" => "explicit",
     "GdP65cbAny|Float64|canonical" => "F=ExplicitEuler(substeps=nothing,lower=nothing)",
-    # one of two values (`GD_ALTERNATES` below): F2-02 moved it, F2-03 moved it back
+    # canonical fill order (R-F2b): `kind__in` first, so this is the bda31989 value again (F2-02
+    # had moved it with the hash order of the CPM reads, F2-03 back)
     "GdP65cbAny|Float64|fingerprint" => "0x751992f009046ddf",
     "GdP65cbAny|Float64|g1|arrays" => "((CorePotts.Part{:site, :F}(), CorePotts.Part{:site, :F__next}()), (CorePotts.Part{:site, :field1__in}(), nothing), (CorePotts.Part{:site, :kind__in}(), nothing))",
     "GdP65cbAny|Float64|g1|bounded" => "true",
@@ -713,16 +714,4 @@ const GD_RECORDS = Dict{String, String}(
     "Merks2008 t_relax = 2.5|Float64|g1|tables" => "Pair{Int64, Symbol}[]",
     "Merks2008 t_relax = 2.5|Float64|groups" => "1",
     "Merks2008 t_relax = 2.5|Float64|n" => "[15]",
-)
-
-# Records with more than one accepted value, each with its cause. GdP65cbAny's problem
-# fingerprint takes one of two values with no change to its model or its code's meaning: the
-# fill phase writes `kind__in` and `field1__in` in the order the converter meets the CPM reads
-# in the symbolic rate, a hash order that changes with the package code (F2-02 gave
-# 0xacc2455ac0651043, F2-03 the bda31989 value again; measured on the PC by diffing the
-# generated code: the two writes swap, nothing else). The writes are independent, so its
-# digests and `n` do not move. A fingerprint fragility, reported for a ruling; the record
-# accepts exactly these two values.
-const GD_ALTERNATES = Dict{String, Vector{String}}(
-    "GdP65cbAny|Float64|fingerprint" => ["0x751992f009046ddf", "0xacc2455ac0651043"],
 )

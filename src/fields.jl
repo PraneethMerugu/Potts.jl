@@ -40,8 +40,9 @@ const _FIELD_OPS = (+, -, *, /, ^, min, max, abs, sqrt, exp, log, ifelse, ==, !=
 _field_op(f) = any(g -> g === f, _FIELD_OPS)
 
 """
-The CPM inputs of a model's fields: `(name, expr, eltype)` per filled input, in order of first
-appearance over the field equations and then the `@boundary` entries (`kind` is `kind__in`).
+The CPM inputs of a model's fields: `(name, expr, eltype)` per filled input, in the canonical
+order (`_canonical_filled`): `kind__in` first, then the CPM reads by their expression text
+(`field1__in`, `field2__in`, … in that order), then `domain__in`.
 """
 struct _FieldInputs
     filled::Vector{Tuple{Symbol, Any, Type}}
@@ -196,6 +197,19 @@ function _refuse_input_words(cv, names, ps)
     return nothing
 end
 
+# The canonical order of the filled inputs (R-F2b, 2026-10-20): `kind__in` first, then the CPM
+# reads sorted by their expression text and numbered `field1__in`, `field2__in`, … in that
+# order, then `domain__in`. The converter meets the reads in the hash order of a term's
+# arguments (`*`, `+`), which changes with the package code; this order does not.
+function _canonical_filled(raw)
+    first_in = [e for e in raw if e[1] === :kind__in]
+    last_in = [e for e in raw if e[1] === :domain__in]
+    reads = sort!([e for e in raw if !(e[1] in (:kind__in, :domain__in))]; by = e -> string(e[2]))
+    return Tuple{Symbol, Any, Type}[first_in;
+                                    [(Symbol(:field, j, :__in), e[2], e[3]) for (j, e) in enumerate(reads)];
+                                    last_in]
+end
+
 _field_conv(ivs, states, T, known) = (; ivs, states, direct = Dict{Symbol, Any}(),
     filled = Tuple{Symbol, Any, Type}[known...], inputs = Dict{Symbol, Any}(), params = Set{Any}(), T)
 
@@ -214,7 +228,11 @@ lattice as the domain (axis `d` spans `dims[d] · h[d]`). `cv` is the conversion
 inputs and parameters).
 """
 function _field_system(sys::PottsSystem, names = Symbol[info(x).name for (x, _) in _field_equations(sys)]; T::Type = Float64,
-        known = Tuple{Symbol, Any, Type}[])
+        known = nothing)
+    # the model-wide filled inputs in their canonical order: lowering finds each CPM read in
+    # `known` by its expression, so the names and the order (the dvs, the fill phase) do not
+    # depend on the order in which the converter meets the reads (R-F2b)
+    known === nothing && (known = _canonical_filled(_field_system(sys; T, known = Tuple{Symbol, Any, Type}[])[2].filled))
     lat = _p(sys, :lattice)
     N = length(lat.dims)
     h = something(lat.spacing, ntuple(_ -> 1.0, N))
