@@ -14,6 +14,9 @@
 #   prefixed `Gd`) and the p6_5c Fortuna-like model (a copy), at Float64: the route (automatic
 #   count or explicit), the problem fingerprint, the `:field_program` entries and `n`. A move
 #   must be listed by the commit that makes it, which updates the record with its cause.
+# - Front end B (`GD_B`, F2 batch 2): owned `FieldProblem`s and an ODE right side, Float64:
+#   a digest of the final state and the substep count. Hard, as the hard set's behavior.
+# - ROCm (F2 batch 2, with `POTTS_GPU=rocm`): the hard set on the device against the CPU run.
 #
 # `POTTS_GUARD_RECORD=<path>` writes the computed records to `<path>` (one `"key" => "value",`
 # per line) for a new recording; the checks run as well.
@@ -319,6 +322,8 @@ function gd_fingerprints!(out, pre, sys, prob, T, kw)
 end
 
 const GD_MERKS_OP = [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]]
+# FdMask: a frozen wall column (Dirichlet v = 3) and one cell
+gd_opmask() = (σ = zeros(Int32, 10, 8); σ[1, :] .= 1; σ[5:6, 4:5] .= 2; [ownership => σ, kind => [:wall, :A]])
 # a one-site frozen border (cell 1) and two endothelial cells
 function gd_op2006()
     σ = zeros(Int32, 16, 16)
@@ -354,6 +359,16 @@ const GD_HARD = [
     # two solver groups; `u` reads `c` from its array (test/fields.jl FdTwo)
     ("FdTwo", () -> FdTwo(; name = :t), fd_source_op((12, 10)),
         (; field_solver = ExplicitEuler(substeps = 2), solvers = [:u => ExplicitEuler(substeps = 3)]), false),
+    # F2 batch 2 (recorded at the batch-1 fixups): a sub-MCS `repeat(4, …)` field with n = 2,
+    # the Merks2008 gate crossed between MCS boundaries, and the mask and domain lowerings (DivK
+    # does not lower in `@equations` (FdDivK is refused): its digest is front end B's, `GdB`)
+    ("FdChemoInter repeat(4)", () -> FdChemoInter(; name = :m), fd_chemo_op(),
+        (; field_solver = ExplicitEuler(substeps = 2)), false),
+    ("Merks2008 t_relax = 2.5", () -> Merks2008(; name = :m, lattice = (20, 20)), [gd_op2008(); :t_relax => 2.5],
+        (; field_solver = ExplicitEuler(substeps = 15)), false),
+    ("FdMask digest", () -> FdMask(; name = :m), gd_opmask(), (; field_solver = ExplicitEuler()), false),
+    ("FdDomain digest", () -> FdDomain(; name = :m), [fd_empty((40, 40)); :c => [0.01 * (i + 2j) for i in 1:40, j in 1:40]],
+        (; field_solver = ExplicitEuler()), false),
 ]
 
 function gd_hard!(out)
@@ -412,6 +427,55 @@ function gd_soft!(out)
 end
 
 # ---------------------------------------------------------------------------------------
+# Front end B (F2 batch 2): owned `FieldProblem`s (a rate with a Robin face, a site-diffusion
+# rate with a host input, a DivK rate, a map) and the ODE right side, Float64: the substep count and a
+# digest of the final state. F2-06 ports B onto the shared group layer; these must not move.
+module GdB
+using Potts: LatticePDE
+using Potts.ModelingToolkitBase: @parameters, @variables, PDESystem, Differential, Shift, t_nounits as t,
+                                 D_nounits as D
+using .LatticePDE: Interval, discretize, LatticeDiscretization, Grid, Δ, at, DivKGrad, ExplicitEuler, ExplicitMap, solve
+function cases()
+    @parameters x y βr = -0.5 Dk[1:2] = [0.2, 1.0] dx [lattice_spacing = 1]
+    @variables c(..) kq(..)::Int32 [input = true] N(..)
+    ce, qe, Ne = c(t, x, y), kq(t, x, y), N(t, x, y)
+    dom(T) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    own(sys, n; inputs = ()) = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64, problem = :owned); inputs)
+    out = Tuple{String, Any, Int}[]                     # label, final state, substep count (0: none)
+    sr = PDESystem([D(ce) ~ Δ(ce)], [c(0, x, y) ~ x * y, c(t, 0, y) + βr * Differential(x)(c(t, 0, y)) ~ 1.0,
+                                     c(t, x, 0) ~ c(t, x, 1)], dom(0.1), [t, x, y], [ce], [βr]; name = :r)
+    s = solve(own(sr, 8), ExplicitEuler(; dt = 1e-2))
+    push!(out, ("B Robin owned", s.u[end], s.substeps))
+    o = discretize(sr, LatticeDiscretization(Grid((8, 8)); T = Float64))
+    du = similar(o.u0)
+    o.f(du, o.u0, o.p, 0.0)
+    push!(out, ("B Robin ODE rhs", du, 0))
+    ss = PDESystem([D(ce) ~ at(Dk, qe) * Δ(ce) - 0.1 * ce], [c(0, x, y) ~ 1.0 + sin(7x) * cos(5y)], dom(0.1),
+        [t, x, y], [ce, qe], [Dk]; name = :s)
+    K = [Int32(isodd(i + j) ? 1 : 2) for i in 1:8, j in 1:8]
+    s = solve(own(ss, 8; inputs = [qe => K]), ExplicitEuler(; dt = 1e-2))
+    push!(out, ("B site diffusion owned", s.u[end], s.substeps))
+    sk = PDESystem([D(ce) ~ DivKGrad(:harmonic)(at(Dk, qe), ce)], [c(0, x, y) ~ 1.0 + x * y], dom(0.1),
+        [t, x, y], [ce, qe], [Dk]; name = :k)
+    s = solve(own(sk, 8; inputs = [qe => K]), ExplicitEuler(; dt = 1e-2, substeps = 4))
+    push!(out, ("B DivK owned", s.u[end], s.substeps))
+    sm = PDESystem([Shift(t, 1)(Ne) ~ (N(t, x + dx, y) + N(t, x - dx, y)) / 2], [N(0, x, y) ~ x], dom(3.0), [t, x, y],
+        [Ne], [dx]; name = :m)
+    s = solve(discretize(sm, LatticeDiscretization(Grid((8, 2)); T = Float64)), ExplicitMap())
+    push!(out, ("B map owned", s.u[end], 0))
+    return out
+end
+end
+const GD_B = ["B Robin owned", "B Robin ODE rhs", "B site diffusion owned", "B DivK owned", "B map owned"]
+function gd_b!(out)
+    for (label, u, n) in GdB.cases()
+        out["$label|Float64|digest|state"] = gd_digest(u)
+        n > 0 && (out["$label|Float64|n"] = string([n]))
+    end
+    return out
+end
+
+# ---------------------------------------------------------------------------------------
 # The recorded values (lp/f1 bda31989, Julia 1.12.6, the PC). A listed move updates its entry
 # here with the commit and the cause.
 
@@ -427,10 +491,11 @@ function gd_compare(got, want, keys)
     end
     return bad
 end
-gd_hard_model(k) = (l = first(split(k, '|')); only(g for g in GD_HARD if g[1] == l))
+gd_label(k) = first(split(k, '|'))
+gd_pinned(k) = any(g -> g[1] == gd_label(k) && g[5], GD_HARD)
 
 @testset "F2 guard: the field pipeline's behavior and fingerprints" begin
-    got = gd_soft!(gd_hard!(Dict{String, String}()))
+    got = gd_b!(gd_soft!(gd_hard!(Dict{String, String}())))
     path = get(ENV, "POTTS_GUARD_RECORD", "")
     isempty(path) || open(path, "w") do io
         for k in sort!(collect(keys(got)))
@@ -441,10 +506,10 @@ gd_hard_model(k) = (l = first(split(k, '|')); only(g for g in GD_HARD if g[1] ==
     for (k, v) in GD_PINS
         @test got["$k|fingerprint"] == repr(v)
     end
-    hk = [k for k in keys(GD_RECORDS) if any(g -> startswith(k, g[1] * "|"), GD_HARD)]
+    hk = [k for k in keys(GD_RECORDS) if gd_label(k) in [first.(GD_HARD); GD_B]]
     sk = setdiff(collect(keys(GD_RECORDS)), hk)
     behavior = [k for k in hk if occursin("|n", k) || occursin("|digest|", k)]
-    pinned = [k for k in setdiff(hk, behavior) if gd_hard_model(k)[5]]
+    pinned = [k for k in setdiff(hk, behavior) if gd_pinned(k)]
     unpinned = setdiff(hk, behavior, pinned)
     for (what, ks) in (("behavior (hard)", behavior), ("pinned fingerprints (hard)", pinned),
             ("unpinned fingerprints (listed moves only)", unpinned), ("soft set (listed moves only)", sk))
@@ -455,4 +520,29 @@ gd_hard_model(k) = (l = first(split(k, '|')); only(g for g in GD_HARD if g[1] ==
     end
     # no record appears or disappears unlisted
     @test sort!(collect(keys(got))) == sort!(collect(keys(GD_RECORDS)))
+end
+
+# ROCm (F2 batch 2): with `POTTS_GPU=rocm`, the hard set on the device (CheckerboardCPM) against
+# the same run on the CPU: σ equal, every site array within a relative 1e-5 (Float32) or 1e-12
+# (Float64) of its largest value
+isdefined(Main, :PottsDevices) || include(joinpath(@__DIR__, "shared", "devices.jl"))
+if Main.PottsDevices.on_device() && Main.PottsDevices.device_name() == "rocm"
+    @testset "F2 guard (ROCm): the hard set on the device matches the CPU" begin
+        backend = Main.PottsDevices.device_backend()
+        # Float32 only: the Potts device suite ends with a scan that no kernel it compiled holds
+        # a `double` (D-157, Metal stands in), and a Float64 problem's kernels do
+        for (label, build, op, kw, _) in GD_HARD, T in (Float32,)
+            prob = PottsProblem(build(), op, (0, 5); T, seed = 7, kw...)
+            cpu = solve(prob, CheckerboardCPM()).u[end]
+            dev = solve(prob, CheckerboardCPM(); backend).u[end]
+            ok = Array(dev.σ) == Array(cpu.σ)
+            tol = T === Float32 ? 1e-5 : 1e-12
+            for k in keys(cpu.site)
+                a, b = Float64.(Array(getproperty(cpu.site, k))), Float64.(Array(getproperty(dev.site, k)))
+                ok &= maximum(abs, a .- b; init = 0.0) <= tol * max(1.0, maximum(abs, a; init = 0.0))
+            end
+            ok || println(stderr, "  GUARD ROCm differs: $label|$T")
+            @test ok
+        end
+    end
 end
