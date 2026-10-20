@@ -142,8 +142,18 @@ sol[:x][end], sol[:g][end]
   it depends on after their update, and fields that depend on each other read each other's
   values from the start of the substep. Fields with different solvers (`solvers = [u =>
   ExplicitEuler(substeps = 4)]`) step one group after another, each reading the others'
-  arrays. A strong coupling between two groups is split per MCS and can be unstable however
-  many substeps each takes; keep it weak relative to `1 / mcs_duration`.
+  arrays. Groups that read one another in a loop (`c` reads `o` and `o` reads `c`) can grow
+  without bound at any substep count, because each holds the others' values over the field
+  window. For each group in such a loop, the window times the largest sum, over the group's
+  fields, of the largest coefficient magnitudes of the terms that read other groups of the
+  same loop must be at most 1. Reads of groups outside the loop do not count. Past it the problem is refused, naming the fields of the loop. The routes: give
+  those fields one solver (with an explicit `substeps = n` when their coupled rates have no
+  automatic count), or step the fields over a shorter window (`repeat(n, …)` of the fields, or
+  a smaller `mcs_duration`). A one-way chain (`u` reads `c`, `c` does not read `u`) is not
+  limited: each group is stable under its own count, and the split adds only a first-order
+  error. A group with a term that the stability bound cannot see and that reads another
+  field counts as reading every other group. A term that reads only its own field
+  (`- 0.1 * c^2`) does not.
 - The CPM quantities in a field equation (`kind`, cell reads, neighbor counts) are evaluated
   once per MCS, before the fields step, and held over the substeps; so is `mcs`. `rand()`
   cannot appear in a field equation: draw in a site update and read its variable.

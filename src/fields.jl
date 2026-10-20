@@ -362,9 +362,79 @@ struct _Substeps{B}
     key::String                    # the group's fingerprint text (the warning's once-key)
     unseen::Vector{String}         # the terms the bound cannot see, in the model's words
     cv::NamedTuple                 # the generated inputs (`filled`), to print a term in the model's words
+    coupling::Any                  # with several groups: the whole field system's bound and the partition
 end
 _fieldlist(ks) = join(("`$k`" for k in ks), ", ")
 function (s::_Substeps)(praw)
+    n = _substep_count(s, praw)
+    s.coupling === nothing || _check_group_coupling(s, praw)
+    return n
+end
+
+# The coupling of a group to the other field groups (review of F2-06, ruling K-unsafe; round
+# 2: loops only; the criterion and its reasoning are LatticeFields' `_check_coupling`): a group
+# reads the fields of the others from their arrays, held over its window `dt` (the MCS, or its
+# part in a `repeat`). A group in no loop of the group read graph (`group_loops`: a one-way
+# chain) is not checked: the split system is block triangular. A group in a loop needs
+# `κ = dt · max over the group's rows of Σ max|cross coefficient|` over the terms that read
+# other groups' fields ≤ 1, at any substep count; a coefficient with no finite bound is refused
+# with an automatic count and warns (once) with an explicit one. κ sums only the reads of groups
+# in the same loop. A group with a term the bound cannot see that reads another field counts as
+# reading every other group (a term on its own field alone couples nothing). The bound is the whole field system's
+# (`coupling.bound`), at the parameters of the group mapped by name (a parameter the group does
+# not read is `NaN`: no cross coefficient of its rows reads it; the read graph is the
+# structure, so it needs no value).
+function _check_group_coupling(s::_Substeps, praw)
+    c = s.coupling
+    pv = praw isa LatticeFields.Problems.ParamsTables ? praw.p : praw
+    tabs = praw isa LatticeFields.Problems.ParamsTables ? praw.tables : Pair{String, Vector{Float64}}[]
+    wp = Float64[(j = findfirst(==(n), c.pnames)) === nothing ? NaN : Float64(pv[j]) for n in c.wnames]
+    pp = LatticeFields.Problems.with_tables(wp, tabs)
+    parts = LatticeFields.Problems.lagged_coupling(c.bound, c.groups, pp)
+    loops = LatticeFields.Problems.group_loops(parts)
+    loop = loops[c.index]
+    isempty(loop) && return nothing
+    # only the reads inside the loop (a group outside it cannot feed growth back; round 3)
+    parts = LatticeFields.Problems.lagged_coupling(c.bound, c.groups, pp; within = loops)
+    q = parts[c.index]
+    κ = s.dt * q.rate
+    u(k) = string("`", k, "`")
+    lf = reduce(vcat, c.groups[loop])                   # the fields of the loop
+    if !isfinite(κ)
+        s.explicit || throw(ArgumentError(string("the field", length(s.names) == 1 ? " " : "s ", _fieldlist(s.names),
+            " read", length(s.names) == 1 ? "s " : " ", u(q.other), " of another solver group, in a loop of groups that ",
+            "read one another (", _fieldlist(lf), "), and the coefficient `", _user_text(q.raw, s.cv), "` of that read ",
+            "has no bound at these parameters; give ", _fieldlist(lf), " one solver (one group), or give `solvers` an ",
+            "explicit `ExplicitEuler(; substeps = n)` for the group")))
+        k = string(s.key, "#coupling#", q.row, "#", q.raw)
+        if ccall(:jl_generating_output, Cint, ()) == 0 &&
+           lock(() -> k in _SUBSTEP_WARNED ? false : (push!(_SUBSTEP_WARNED, k); true), _SUBSTEP_WARNED_LOCK)
+            @warn "field$(length(s.names) == 1 ? "" : "s") $(_fieldlist(s.names)): the coupling to $(u(q.other)) of " *
+                  "another solver group, in the loop of $(_fieldlist(lf)), has no bound (the coefficient " *
+                  "`$(_user_text(q.raw, s.cv))`): the count is the user's"
+        end
+    elseif κ > 1 + 1e-12
+        unseen = [k for h in loop if parts[h].unseen for k in c.groups[h]]
+        # one solver for the loop: an automatic count needs dominant rows (a parameter of
+        # another group has no value here: then the explicit route, which always holds)
+        ρ = Float64(LatticeFields.Problems.restrict_bound(c.bound, lf)(pp))
+        one = isfinite(ρ) && ρ >= 0 ? string("Give ", _fieldlist(lf), " one solver (one group; `solvers`)") :
+              string("Give ", _fieldlist(lf), " one solver with an explicit count (one group, `ExplicitEuler(; ",
+                     "substeps = n)`; their coupled rows have no automatic count)")
+        throw(ArgumentError(string("the fields ", _fieldlist(lf), " are in solver groups that read one another in a ",
+            "loop, each holding the others' values over each field window (", s.dt, " MCS): the terms of ", u(q.row),
+            " that read other groups of the loop (the largest: the coefficient `", _user_text(q.raw, s.cv), "` of ", u(q.other),
+            ") give window · Σ max|coefficient| = ", round(κ; sigdigits = 4), " > 1, and the loop can then grow ",
+            "without bound at any substep count",
+            isempty(unseen) ? "" : string(" (the terms of ", _fieldlist(unseen), " that the stability bound cannot ",
+                                          "see and that read another field count as reading every other group)"),
+            ". ", one, ", or step the fields over a shorter window (`repeat(n, …)` of the fields, or a smaller ",
+            "`mcs_duration`; window ≤ ", floor(1 / q.rate; sigdigits = 4), ")")))
+    end
+    return nothing
+end
+
+function _substep_count(s::_Substeps, praw)
     r = LatticePDE.bound_parts(s.bound, praw)
     isempty(r.negative) || throw(ArgumentError(
         "the diffusion coefficient of the field$(length(r.negative) == 1 ? "" : "s") $(_fieldlist(r.negative)) " *
@@ -502,7 +572,16 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
     masked = _masked_fields(sys)
     groups = _FieldGroup[]
     known = _field_inputs(sys, T)
-    for (_, solver, names) in order
+    # with several groups, the coupling between them (`_check_group_coupling`): the bound of
+    # the whole field system, in rate form, and the partition
+    coupling = nothing
+    if length(order) > 1
+        wsys, _ = _field_system(sys; T, known)
+        wcf = LatticePDE.symbolic_discretize(wsys, _field_disc(sys, T))
+        coupling = (; bound = LatticePDE.stability_bound(wcf, wsys), groups = [String[string(n) for n in g[3]] for g in order],
+            wnames = Symbol[info(q).name for q in wcf.params])
+    end
+    for (gi, (_, solver, names)) in enumerate(order)
         pdesys, cv = _field_system(sys, names; T, known)
         disc = _field_disc(sys, T)
         cf = LatticePDE.symbolic_discretize(pdesys, disc; update = _EulerUpdate(solver.lower))
@@ -545,7 +624,8 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
         fp = LatticeFields.Compile.fingerprint_text(cf.program; T)
         push!(groups, _FieldGroup(names, pdesys, prog, mplan, splan, arrays, tables, params,
             _Substeps(stab, dt, least, solver.substeps !== nothing, names, fp, String[_user_text(t, cv) for t in stab.terms],
-                (; filled = copy(cv.filled))), fp))
+                (; filled = copy(cv.filled)),
+                coupling === nothing ? nothing : (; coupling..., index = gi, pnames = params)), fp))
     end
     return groups
 end

@@ -348,6 +348,282 @@ end
     @test maximum(abs.(one.u[end].site.u .- u)) > 1e-6
 end
 
+# the rotation c' = −k o, o' = k c over the MCS window (dt = 1)
+@potts_model FdRot begin
+    @kinds medium A[frozen]
+    @parameters k = 0.5
+    @variables begin
+        c(field) = 1.0
+        o(field) = 0.0
+    end
+    @lattice Lattice((6, 6); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations begin
+        D(c) ~ -k * o
+        D(o) ~ k * c
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "fields: the coupling between solver groups is bounded (F2-06 review, K-unsafe)" begin
+    sys = FdRot(; name = :r)
+    ovar = only(filter(x -> string(x) in ("o", "o(t)"), Potts.variables(sys)))
+    two(k; n = 1) = PottsProblem(sys, [fd_empty((6, 6)); :k => k], (0, 4); field_solver = ExplicitEuler(substeps = n),
+        solvers = [ovar => ExplicitEuler(substeps = 2)])
+    # k · window = 3 in two groups: refused, explicit counts or not (base: built and run)
+    for n in (1, 40)
+        e = try
+            two(3.0; n); ""
+        catch err
+            err isa ArgumentError || rethrow()
+            sprint(showerror, err)
+        end
+        @test occursin("window · Σ max|coefficient| = 3.0 > 1", e) && occursin("one solver", e) && occursin("`o`", e) &&
+              occursin("(1.0 MCS)", e)
+    end
+    # weak coupling (k = 0.5, read through the parameter): the groups step one after the other
+    sol = solve(two(0.5), SequentialCPM())
+    c, o = 1.0, 0.0
+    for _ in 1:4
+        c = c - 0.5 * o                                           # the c group: o held over the MCS
+        for _ in 1:2
+            o = o + 0.5 * c / 2                                   # the o group (2 substeps) reads the new c
+        end
+    end
+    @test all(≈(c; rtol = 1e-12), sol.u[end].site.c) && all(≈(o; rtol = 1e-12), sol.u[end].site.o)
+    @test abs(c - cos(2.0)) < 0.5 && abs(o - sin(2.0)) < 0.5      # the splitting's truncation at k dt = 0.5
+    # FieldGroups belongs to a FieldProblem: an ArgumentError in a PottsProblem (base: MethodError)
+    fg = Potts.LatticeFields.Problems.FieldGroups(ovar => ExplicitEuler(); default = ExplicitEuler())
+    @test_throws ArgumentError PottsProblem(sys, fd_empty((6, 6)), (0, 1); field_solver = fg)
+end
+
+# Round 2 of the F2-06 review: only solver groups in a loop of the group read graph are limited
+# (`u` reads `c`, `c` does not read `u`: a one-way chain, block triangular)
+@potts_model FdOneWay begin
+    @kinds medium A[frozen]
+    @parameters k = 3.0
+    @variables begin
+        c(field) = 1.0
+        u(field) = 0.0
+    end
+    @lattice Lattice((6, 6); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations begin
+        D(c) ~ -0.1 * c
+        D(u) ~ k * c - u
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+# a 3-group loop (c reads o, o reads v, v reads c)
+@potts_model FdLoop3 begin
+    @kinds medium A[frozen]
+    @parameters k = 3.0
+    @variables begin
+        c(field) = 1.0
+        o(field) = 0.0
+        v(field) = 0.0
+    end
+    @lattice Lattice((6, 6); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations begin
+        D(c) ~ -k * o
+        D(o) ~ -k * v
+        D(v) ~ k * c
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+# a loop (the rotation of c and o at r) with a chain out of it (u reads c at k)
+@potts_model FdLoopChain begin
+    @kinds medium A[frozen]
+    @parameters begin
+        k = 30.0
+        r = 0.5
+    end
+    @variables begin
+        c(field) = 1.0
+        o(field) = 0.0
+        u(field) = 0.0
+    end
+    @lattice Lattice((6, 6); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations begin
+        D(c) ~ -r * o
+        D(o) ~ r * c
+        D(u) ~ k * c - u
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+# a would-be chain z → c → u whose middle has a term the bound cannot see that reads z
+@potts_model FdUnseenChain begin
+    @kinds medium A[frozen]
+    @parameters k = 3.0
+    @variables begin
+        c(field) = 1.0
+        u(field) = 0.0
+        z(field) = 1.0
+    end
+    @lattice Lattice((6, 6); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations begin
+        D(c) ~ -0.1 * c - 1.0e-9 * c * z^2
+        D(u) ~ k * c - u
+        D(z) ~ -0.5 * z
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+# a chain whose source has a term on its own field only (`s1^2`: couples no group; round 3)
+@potts_model FdSelfSrc begin
+    @kinds medium A[frozen]
+    @parameters k = 3.0
+    @variables begin
+        s1(field) = 1.0
+        u(field) = 0.0
+    end
+    @lattice Lattice((6, 6); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations begin
+        D(s1) ~ -0.1 * s1^2
+        D(u) ~ k * s1 - u
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+# a one-way source s1 of the loop s2 ⇄ c (round 3)
+@potts_model FdChainLoop begin
+    @kinds medium A[frozen]
+    @parameters begin
+        k = 3.0
+        w = 0.05
+    end
+    @variables begin
+        s1(field) = 1.0
+        s2(field) = 0.0
+        c(field) = 0.5
+    end
+    @lattice Lattice((6, 6); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations begin
+        D(s1) ~ -0.1 * s1
+        D(s2) ~ k * s1 - w * c
+        D(c) ~ w * s2
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+# the rotation over a window `md`
+function fd_rot_md(md)
+    @potts_model FdRotMd begin
+        @kinds medium A[frozen]
+        @parameters k = 0.5
+        @variables begin
+            c(field) = 1.0
+            o(field) = 0.0
+        end
+        @lattice Lattice((6, 6); boundary = Closed())
+        @energy cells(A) => (volume - 4.0)^2
+        @equations begin
+            D(c) ~ -k * o
+            D(o) ~ k * c
+        end
+        @sweep Metropolis(; temperature = 1.0, mcs_duration = md)
+    end
+    FdRotMd(; name = :rmd)
+end
+fdvar(sys, n) = only(filter(x -> string(x) in (n, n * "(t)"), Potts.variables(sys)))
+fdargerr(f) = try
+    f(); ""
+catch err
+    err isa ArgumentError || rethrow()
+    replace(sprint(showerror, err), r"\s+" => " ")
+end
+
+@testset "fields: a one-way chain of solver groups is not limited (F2-06 round 2)" begin
+    sys = FdOneWay(; name = :w)
+    # the values at 2c91f854, before the coupling check (u at k = 3 and 30)
+    base = Dict(3.0 => 0.4039093699527255, 30.0 => 4.039093699527256)
+    for k in (3.0, 30.0)                                          # window · k = 3 and 30
+        sol = solve(PottsProblem(sys, [fd_empty((6, 6)); :k => k], (0, 20); field_solver = ExplicitEuler(substeps = 2),
+            solvers = [fdvar(sys, "u") => ExplicitEuler(substeps = 3)]), SequentialCPM())
+        @test Symbol(sol.retcode) === :Success
+        c, u = 1.0, 0.0
+        for _ in 1:20
+            for _ in 1:2; c -= 0.5 * 0.1 * c; end                 # the c group (2 substeps)
+            for _ in 1:3; u += (k * c - u) / 3; end               # the u group reads the new c (3 substeps)
+        end
+        @test all(≈(c; rtol = 1e-12), sol.u[end].site.c) && all(≈(u; rtol = 1e-12), sol.u[end].site.u)
+        @test sol.u[end].site.u[1] ≈ base[k] rtol = 1e-12
+        @test sol.u[end].site.c[1] ≈ 0.12851215656510334 rtol = 1e-12
+    end
+end
+
+@testset "fields: loops of solver groups are limited, chains next to them are not (F2-06 round 2)" begin
+    s3 = FdLoop3(; name = :l3)
+    three(k) = PottsProblem(s3, [fd_empty((6, 6)); :k => k], (0, 2); field_solver = ExplicitEuler(substeps = 1),
+        solvers = [fdvar(s3, "o") => ExplicitEuler(substeps = 2), fdvar(s3, "v") => ExplicitEuler(substeps = 3)])
+    e = fdargerr(() -> three(3.0))
+    @test occursin("the fields `c`, `o`, `v` are in solver groups that read one another in a loop", e) &&
+          occursin("window · Σ max|coefficient| = 3.0 > 1", e)
+    @test Symbol(solve(three(0.5), SequentialCPM()).retcode) === :Success
+    sc = FdLoopChain(; name = :lc)
+    lc(; k, r) = PottsProblem(sc, [fd_empty((6, 6)); :k => k; :r => r], (0, 2); field_solver = ExplicitEuler(substeps = 1),
+        solvers = [fdvar(sc, "o") => ExplicitEuler(substeps = 2), fdvar(sc, "u") => ExplicitEuler(substeps = 3)])
+    # u's window · k = 30 (u is in no loop), the loop's 0.5: accepted
+    @test Symbol(solve(lc(; k = 30.0, r = 0.5), SequentialCPM()).retcode) === :Success
+    # the loop past the limit: refused, naming the loop's fields only
+    e = fdargerr(() -> lc(; k = 30.0, r = 3.0))
+    @test occursin("the fields `c`, `o` are in solver groups", e) && !occursin("`u`", e)
+end
+
+@testset "fields: an unseen term that reads another field counts as reading every group (F2-06 round 3)" begin
+    sys = FdUnseenChain(; name = :uc)
+    three(k) = PottsProblem(sys, [fd_empty((6, 6)); :k => k], (0, 2); field_solver = ExplicitEuler(substeps = 2),
+        solvers = [fdvar(sys, "u") => ExplicitEuler(substeps = 3), fdvar(sys, "z") => ExplicitEuler(substeps = 1)])
+    e = fdargerr(() -> three(3.0))
+    @test occursin("the fields `c`, `u` are in solver groups that read one another in a loop", e) &&
+          occursin("window · Σ max|coefficient| = 3.0", e) &&
+          occursin("the terms of `c` that the stability bound cannot see and that read another field count as reading every other group", e)
+    @test Symbol(solve(three(0.5), SequentialCPM()).retcode) === :Success
+end
+
+@testset "fields: an unseen term on its own field couples no group (F2-06 round 3)" begin
+    sys = FdSelfSrc(; name = :ss)
+    sol = solve(PottsProblem(sys, fd_empty((6, 6)), (0, 10); field_solver = ExplicitEuler(substeps = 2),
+        solvers = [fdvar(sys, "u") => ExplicitEuler(substeps = 3)]), SequentialCPM())
+    @test Symbol(sol.retcode) === :Success
+    @test sol.u[end].site.u[1] ≈ 1.5079357331026704 rtol = 1e-12          # the value at 2c91f854
+end
+
+@testset "fields: a loop of solver groups counts only the reads inside it (F2-06 round 3)" begin
+    sys = FdChainLoop(; name = :cl)
+    cl(w) = PottsProblem(sys, [fd_empty((6, 6)); :w => w], (0, 10); field_solver = ExplicitEuler(substeps = 1),
+        solvers = [fdvar(sys, "s2") => ExplicitEuler(substeps = 2), fdvar(sys, "c") => ExplicitEuler(substeps = 3)])
+    sol = solve(cl(0.05), SequentialCPM())                        # s1 → weak loop (0.05): accepted
+    @test Symbol(sol.retcode) === :Success
+    @test sol.u[end].site.s2[1] ≈ 16.438457412956836 rtol = 1e-12 # the values at 2c91f854
+    @test sol.u[end].site.c[1] ≈ 5.8773343382071435 rtol = 1e-12
+    e = fdargerr(() -> cl(3.0))                                   # a strong loop: refused, s1 not named
+    @test occursin("the fields `s2`, `c` are in solver groups", e) && occursin("window · Σ max|coefficient| = 3.0 >", e) &&
+          !occursin("s1", e)
+end
+
+@testset "fields: following the printed window limit is accepted (F2-06 round 2)" begin
+    sys = FdRot(; name = :r)
+    for k in (150.0, 1 / 0.0033335, 300.0, 7.0e3 / 3, 1234.5)
+        e = fdargerr(() -> PottsProblem(sys, [fd_empty((6, 6)); :k => k], (0, 1); field_solver = ExplicitEuler(substeps = 1),
+            solvers = [fdvar(sys, "o") => ExplicitEuler(substeps = 2)]))
+        @test occursin("> 1", e)
+        # the window limit, verbatim (rounded down)
+        lim = parse(Float64, match(r"window ≤ ([0-9.eE+-]+)\)", e).captures[1])
+        @test lim * k <= 1
+        sm = fd_rot_md(lim)
+        prob = PottsProblem(sm, [fd_empty((6, 6)); :k => k], (0, 2); field_solver = ExplicitEuler(substeps = 1),
+            solvers = [fdvar(sm, "o") => ExplicitEuler(substeps = 2)])
+        @test Symbol(solve(prob, SequentialCPM()).retcode) === :Success
+        # route 1: one solver with an explicit count (the rotation's rows are not dominant)
+        @test occursin("one solver with an explicit count", e)
+        @test PottsProblem(sys, [fd_empty((6, 6)); :k => k], (0, 1); field_solver = ExplicitEuler(substeps = 4000)) isa
+              PottsProblem
+    end
+end
+
 @testset "fields: lower clip, also at init" begin
     op = fd_empty((6, 6))
     clip = solve(PottsProblem(FdDecay(; name = :d), op, (0, 1); field_solver = ExplicitEuler(substeps = 1, lower = 0.0)),

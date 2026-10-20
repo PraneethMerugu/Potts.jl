@@ -426,10 +426,10 @@ struct RowTerms
     diffusion::Vector{CoefBound}
     sitediffusion::Vector{Tuple{CoefBound, CoefBound}}   # center multiplier m, face coefficient K
     linear::Vector{CoefBound}
-    crosslinear::Vector{CoefBound}
+    crosslinear::Vector{Tuple{CoefBound, Int}}      # coefficient, index of the other field (0: not a row)
     crossdiffusion::Vector{Tuple{CoefBound, Int}}   # coefficient, index of the other field
 end
-RowTerms() = RowTerms(CoefBound[], Tuple{CoefBound, CoefBound}[], CoefBound[], CoefBound[], Tuple{CoefBound, Int}[])
+RowTerms() = RowTerms(CoefBound[], Tuple{CoefBound, CoefBound}[], CoefBound[], Tuple{CoefBound, Int}[], Tuple{CoefBound, Int}[])
 Base.copy(r::RowTerms) = RowTerms(copy(r.diffusion), copy(r.sitediffusion), copy(r.linear), copy(r.crosslinear),
     copy(r.crossdiffusion))
 # a site-diffusion term's parts at `p`: max|m| max|K| (the independent bound) and the seen
@@ -447,6 +447,7 @@ struct StabilityBound
     terms::Vector{String}                 # the terms it cannot see, as `"key: term"`
     expanded::Vector{String}              # the `ifelse` terms bounded arm by arm
     inputs::Vector{String}                # the inputs an index reads (`Problems.bound_inputs`)
+    crossunseen::Vector{String}           # the rows with an unseen term that reads another unknown field
 end
 # the input keys of an interval tree
 function _tree_inputs!(acc, t)
@@ -461,7 +462,7 @@ function _row_inputs(rows)
     acc = String[]
     for alts in rows, r in alts
         for f in Iterators.flatten((r.diffusion, first.(r.sitediffusion), last.(r.sitediffusion), r.linear,
-                r.crosslinear, first.(r.crossdiffusion))), t in f.groups
+                first.(r.crosslinear), first.(r.crossdiffusion))), t in f.groups
             _tree_inputs!(acc, t)
         end
     end
@@ -489,6 +490,71 @@ function (b::StabilityBound)(p)
     isempty(b.unbounded) || return NaN
     r = bound_parts(b, p)
     return isempty(r.coupled) ? r.ρ : NaN
+end
+
+# The bound of the rows `keep` alone (a field group, F2 design §2.6): a cross term that reads a
+# field outside the group reads its array, which does not change during the group's step (a
+# source, as front end A's group sees it); the other terms are the row's own
+function Problems.restrict_bound(b::StabilityBound, keep)
+    idx = [i for i in eachindex(b.keys) if b.keys[i] in keep]
+    length(idx) == length(b.keys) && return b
+    new = Dict(i => j for (j, i) in enumerate(idx))
+    cut(ts) = [(f, j == 0 ? 0 : new[j]) for (f, j) in ts if j == 0 || haskey(new, j)]
+    rows = [[RowTerms(r.diffusion, r.sitediffusion, r.linear, cut(r.crosslinear), cut(r.crossdiffusion))
+             for r in b.rows[i]] for i in idx]
+    ks = b.keys[idx]
+    mine(t) = any(k -> startswith(t, "$k: "), ks)
+    return StabilityBound(b.invh2, ks, rows, b.faces[idx], [k for k in b.unbounded if k in ks],
+        filter(mine, b.terms), filter(mine, b.expanded), _row_inputs(rows), [k for k in b.crossunseen if k in ks])
+end
+
+# The lagged coupling of field groups (`Problems.lagged_coupling`; review of F2-06): per
+# group, the largest over its rows (and their switch arms) of Σ max|coefficient| over the
+# cross terms that read a field of another group (a cross diffusion `a Δ(o)` with its
+# `4 Σ 1/h²` and Robin parts, as in the row bound), with the worst term. A coefficient with no
+# finite bound makes the rate `NaN` (or `Inf`), kept over any finite row. The group read graph
+# (round 2): `reads`, the groups whose fields a seen cross term reads, whatever its value (the
+# structure, so the graph does not change with the parameters); `unseen`, a row of the group
+# has a term the bound cannot see that reads another unknown field (a state of another row, or
+# an aux field, which may carry any state; round 3: a term on the row's own field alone, such
+# as `-a^3`, couples no group). `within` (round 3): per group, the groups whose reads the rate
+# sums (the group's loop); `nothing`, every other group.
+# `text` is the coefficient as the user wrote it (`at(Kt, q)`), `raw` the bound's text (front
+# end A prints it in the model's words).
+function Problems.lagged_coupling(b::StabilityBound, groups, p; within = nothing)
+    gof = Dict{String, Int}(k => g for (g, ks) in enumerate(groups) for k in ks)
+    s4 = 4 * sum(b.invh2)
+    out = [(; rate = 0.0, row = "", other = "", text = "", raw = "", reads = Int[],
+              unseen = any(k -> k in b.crossunseen, ks)) for ks in groups]
+    for i in eachindex(b.keys)
+        g = get(gof, b.keys[i], 0)
+        g == 0 && continue
+        for r in b.rows[i]
+            for (_, j) in Iterators.flatten((r.crosslinear, r.crossdiffusion))
+                h = j == 0 ? 0 : get(gof, b.keys[j], 0)
+                (h == 0 || h == g || h in out[g].reads) || push!(out[g].reads, h)
+            end
+            tot, worst, wj, wt = 0.0, -Inf, 0, ""
+            terms = Iterators.flatten((((f, j, f(p)) for (f, j) in r.crosslinear if j != 0),
+                                       ((f, j, f(p) * (s4 + _face_excess(b, j, p))) for (f, j) in r.crossdiffusion if j != 0)))
+            for (f, j, v) in terms
+                h = get(gof, b.keys[j], 0)
+                (h == 0 || h == g || (within !== nothing && !(h in within[g]))) && continue
+                tot += v
+                # the worst term: the largest, or the first whose bound is not finite
+                if wj == 0 || (isfinite(worst) && !(v <= worst))
+                    worst, wj, wt = v, j, f.text
+                end
+            end
+            wj == 0 && continue
+            cur = out[g].rate
+            # a rate that is not finite stays; else the larger
+            (isfinite(cur) && !(tot <= cur)) &&
+                (out[g] = (; out[g]..., rate = tot, row = b.keys[i], other = b.keys[wj], text = _coef_text(wt), raw = wt))
+        end
+    end
+    foreach(q -> sort!(q.reads), out)
+    return out
 end
 
 """
@@ -521,7 +587,7 @@ function bound_parts(b::StabilityBound, p)
             Dmag = sum(f(p) for f in r.diffusion; init = 0.0) + sum(_sd(f, p) for f in r.sitediffusion; init = 0.0)
             own = Dmag * (s4 + _face_excess(b, i, p))
             lin = sum(f(p) for f in r.linear; init = 0.0)
-            cross = sum(f(p) for f in r.crosslinear; init = 0.0) +
+            cross = sum(f(p) for (f, _) in r.crosslinear; init = 0.0) +
                     sum(f(p) * (s4 + _face_excess(b, j, p)) for (f, j) in r.crossdiffusion; init = 0.0)
             if !isempty(r.crosslinear) || !isempty(r.crossdiffusion)
                 # the diagonal at its largest over the indicator assignments. A row of `M A` (site
@@ -541,7 +607,7 @@ function bound_parts(b::StabilityBound, p)
             # of its row
             Ds = sum(_seen(f, p) for f in r.diffusion; init = 0.0) + sum(_sdseen(f, p) for f in r.sitediffusion; init = 0.0)
             sv = Ds * (s4 + _face_excess_seen(b, i, p)) + sum(_seen(f, p) for f in r.linear; init = 0.0) +
-                 sum(_seen(f, p) for f in r.crosslinear; init = 0.0) +
+                 sum(_seen(f, p) for (f, _) in r.crosslinear; init = 0.0) +
                  sum(_seen(f, p) * (s4 + _face_excess_seen(b, j, p)) for (f, j) in r.crossdiffusion; init = 0.0)
             seen = max(seen, sv)
         end
@@ -550,7 +616,7 @@ function bound_parts(b::StabilityBound, p)
     if !isfinite(ρ)
         for i in eachindex(b.keys), r in b.rows[i]
             for f in Iterators.flatten((r.diffusion, first.(r.sitediffusion), last.(r.sitediffusion), r.linear,
-                    r.crosslinear, first.(r.crossdiffusion)))
+                    first.(r.crosslinear), first.(r.crossdiffusion)))
                 w = _why(f, p)
                 # a read at index 0: the first site where it is (from the host input arrays)
                 w isa Tuple && any(c -> any(x -> x[2] == 0, c), w[1]) && (w = (w..., _zero_site(f, p)))
@@ -627,6 +693,7 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
     unknownops = [stateops; auxops]
     rows = Vector{RowTerms}[]
     faces, unbounded, terms, expanded = Vector{Tuple{Int, Coef, Coef}}[], String[], String[], String[]
+    crossunseen = String[]
     # the array parameters (tables) by their symbols: a coefficient may read them
     tabs = Dict{Any, String}(unwrap(q) => string(unwrap(q)) for q in _params(sys)
                              if string(unwrap(q)) in first.(cf.tables))
@@ -669,7 +736,12 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
                 else
                     c = _coef_bound(substitute(term, Dict(dvs[fs[1]] => 1); fold = Val(false)), cf.params, tabs, ivars)
                     c === nothing && return false
-                    foreach(r -> push!(class == :CrossLinear ? r.crosslinear : r.linear, c), alts)
+                    if class == :CrossLinear
+                        j = something(findfirst(==(fs[1]), ks), 0)
+                        foreach(r -> push!(r.crosslinear, (c, j)), alts)
+                    else
+                        foreach(r -> push!(r.linear, c), alts)
+                    end
                 end
             elseif class == :Source
                 return true
@@ -700,6 +772,10 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
                 alts = trial
             else
                 push!(unbounded, k); push!(terms, "$k: $(term)")
+                # an unseen term that reads another unknown field (a state of another row, or
+                # any aux field, which may carry any state) can couple field groups
+                own = _opof(dvs[k])
+                _reads(term, [op for op in unknownops if !isequal(op, own)]) && push!(crossunseen, k)
             end
         end
         push!(rows, alts)
@@ -707,7 +783,7 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
                       if r isa FaceRule && cf.program.fields[r.field].key == k])
     end
     return StabilityBound([1 / h^2 for h in cf.program.spacing], ks, rows, faces,
-        sort!(unique!(unbounded)), unique!(terms), unique!(expanded), _row_inputs(rows))
+        sort!(unique!(unbounded)), unique!(terms), unique!(expanded), _row_inputs(rows), sort!(unique!(crossunseen)))
 end
 
 # initial values of the state fields, flat in `state` order, evaluated at cell centers in

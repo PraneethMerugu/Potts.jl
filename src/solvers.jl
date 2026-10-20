@@ -33,6 +33,10 @@ _field_solver_names() = "`ExplicitEuler(…)`"
 # A field solver as given: the window of a `PottsProblem` is the MCS (`mcs_duration`), so a
 # `dt` is refused, and a rate group refuses `ExplicitMap` (F2-04)
 function _check_field_solver(s, what)
+    s isa LatticeFields.Problems.FieldGroups && throw(ArgumentError(string(
+        what, ": `FieldGroups(…)` assigns algorithms to the fields of a LatticePDE `FieldProblem`; in a ",
+        "`PottsProblem` give each field its solver with `solvers = [c => ExplicitEuler(…), …]` ",
+        "(`FieldGroups` in a `PottsProblem` is planned)")))
     s isa ExplicitMap && throw(ArgumentError(
         "$what: `ExplicitMap()` steps discrete maps; a `PottsProblem` field is a rate, stepped by `ExplicitEuler(…)`"))
     s isa ExplicitEuler && s.dt !== nothing && throw(ArgumentError(string(

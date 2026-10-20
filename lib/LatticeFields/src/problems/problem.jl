@@ -4,70 +4,6 @@
 # host executor). `solve`, `init`, `step!` and `solve!` follow CommonSolve.
 
 """
-Field stepping algorithms of the owned path.
-"""
-abstract type FieldAlgorithm end
-
-"""
-    ExplicitEuler(; dt = nothing, substeps = nothing, lower = nothing)
-
-Forward Euler: each window `dt` runs `n` substeps of `dt / n`. One type for both front ends
-(`Potts` and `LatticePDE` export this binding). `substeps = nothing` takes the automatic
-count `n = ⌈dt ρ(p) / 1.8⌉` from the problem's stability bound `ρ` at the current parameters
-(§6.2); an unknown bound (a rate term it cannot see, a parameter without a value, or coupled
-rows that are not diagonally dominant) is refused. A count `substeps = n ≥ 1` is a minimum:
-the count is the larger of `n` and the bound over the terms the bound sees; when no term is
-seen, `n` is used. `lower` clips each substep's result at `max(v, lower)`.
-
-- On a `FieldProblem` (`LatticePDE.discretize(…; problem = :owned)`), `dt` is the step and
-  is required; `lower` is not supported yet (an `ArgumentError`).
-- As a `PottsProblem` `field_solver`, the window is the MCS (`mcs_duration`): `dt` must be
-  left out. As an `ode_solver`, `substeps = nothing` is one step per MCS.
-
-`dt` must be finite and > 0, and `substeps` ≥ 1: `substeps = 0` is an `ArgumentError` (leave
-`substeps` out for the automatic count).
-"""
-struct ExplicitEuler <: FieldAlgorithm
-    dt::Union{Nothing, Float64}
-    substeps::Union{Nothing, Int}
-    lower::Union{Nothing, Float64}
-    function ExplicitEuler(dt, substeps, lower)
-        dt === nothing || (dt isa Real && isfinite(dt) && dt > 0) ||
-            throw(ArgumentError("ExplicitEuler: dt = $(repr(dt)) must be finite and > 0"))
-        substeps isa Integer && substeps == 0 && throw(ArgumentError(
-            "ExplicitEuler: `substeps = 0` is not a count; leave `substeps` out for the automatic count"))
-        substeps === nothing || (substeps isa Integer && substeps >= 1) ||
-            throw(ArgumentError("ExplicitEuler: substeps = $(repr(substeps)) must be an integer ≥ 1 (or left out: automatic)"))
-        lower === nothing || lower isa Real ||
-            throw(ArgumentError("ExplicitEuler: lower = $(repr(lower)) must be a number"))
-        return new(dt === nothing ? nothing : Float64(dt), substeps === nothing ? nothing : Int(substeps),
-            lower === nothing ? nothing : Float64(lower))
-    end
-end
-ExplicitEuler(; dt = nothing, substeps = nothing, lower = nothing) = ExplicitEuler(dt, substeps, lower)
-# the state buffers a step of the algorithm needs per field (`c`, `c__next`)
-nbuffers(::ExplicitEuler) = 2
-
-"""
-    ExplicitMap()
-
-Discrete maps `Shift(t, 1)(c) ~ rhs` (§5.5): one application per unit of time.
-"""
-struct ExplicitMap <: FieldAlgorithm end
-nbuffers(::ExplicitMap) = 2
-
-# the keywords a `FieldProblem` steps with: a step `dt`, and no clip yet (F2-07 brings `lower`
-# to the update pass)
-function _check_owned(alg::ExplicitEuler)
-    alg.dt === nothing && throw(ArgumentError(
-        "`ExplicitEuler` on a `FieldProblem` needs `dt` (the step): give `ExplicitEuler(; dt)`"))
-    alg.lower === nothing || throw(ArgumentError(string("`ExplicitEuler(; lower = ", alg.lower,
-        ")`: a `FieldProblem` has no clip yet; leave `lower` out (a clip is a `PottsProblem` `field_solver` option)")))
-    return alg
-end
-_check_owned(alg::ExplicitMap) = alg
-
-"""
     FieldProblem(program, u0, tspan, p; state, kind, init = String[], index, tables = [],
                  inputs = [], backend = CPU(), options = CompileOptions(), stability = p -> NaN)
 
@@ -114,7 +50,7 @@ struct FieldProblem{N, B, X, R, U, PV, E} <: SciMLBase.AbstractSciMLProblem
     kind::Symbol
     initkeys::Vector{String}
     options::CompileOptions
-    plans::Dict{Type, Tuple{StepPlan{N}, StepPlan{N}}}    # by value type, shared by remakes
+    group::FieldGroup{N}               # the group: its spec and plans, shared by remakes
 end
 function FieldProblem(prog::Program, u0, tspan, p; state, kind::Symbol,
         init = String[], index = LatticeIndex(), tables = Pair{String, Vector{Float64}}[],
@@ -125,11 +61,15 @@ function FieldProblem(prog::Program, u0, tspan, p; state, kind::Symbol,
     faces = face_checks(prog)
     check_faces(faces, p)
     s = semantic(prog)
-    plans = Dict{Type, Tuple{StepPlan{_ndims(s)}, StepPlan{_ndims(s)}}}()
     pv = collect(p)
-    prob = _field_problem(s, collect(String, state), u0, tspan, pv,
-        Pair{String, Vector{Float64}}[tables...], resolve_inputs(s, index, inputs), backend, index, faces, stability, kind,
-        collect(String, init), _state_options(options, problem_eltype(u0, pv)), plans)
+    ins = resolve_inputs(s, index, inputs)
+    tabs = Pair{String, Vector{Float64}}[tables...]
+    # the group's description (F2 design §2.2): B's problem is one group of every state field
+    spec = GroupSpec(prog; state, kind, init, stability, tables = String[first(t) for t in tabs],
+        params = String[index isa LatticeIndex ? parameter_name(index, i) : "#$i" for i in eachindex(pv)],
+        inputs = String[first(x) for x in ins])
+    prob = _field_problem(s, collect(String, state), u0, tspan, pv, tabs, ins, backend, index, faces, stability, kind,
+        collect(String, init), _state_options(options, problem_eltype(u0, pv)), FieldGroup(spec; program = s))
     ids = sort!([fieldid(s, k) for k in state])
     sort(prob.step.swaps) == ids ||
         throw(ArgumentError(string("every state field must be written ",
@@ -172,7 +112,8 @@ end
 _float64_ok(::Type{V}, backend) where {V} =
     Exec.default_float(backend) === Float64 || (V === Float64 && Exec.supports(backend, Float64))
 
-# the init and step plans of value type `V` (planned and emitted once per family)
+# the init and step plans of value type `V` (planned and emitted once per family; the ODE
+# path's, `ode.jl`: the owned path's are the group's, `group_plans`)
 function _plans!(plans, s::Program, initkeys, o::CompileOptions, ::Type{V}, backend) where {V}
     return get!(plans, V) do
         keys = [k.key for k in s.kernels]
@@ -195,15 +136,15 @@ function _check_eltype(::Type{E}, backend) where {E}
 end
 
 function _field_problem(s::Program, state, u0, tspan, p, tables, inputs, backend, index, faces,
-        stability, kind, initkeys, options, plans)
+        stability, kind, initkeys, options, group)
     E = problem_eltype(u0, p)
     _check_eltype(E, backend)
     # the plans cache is shared by a problem's remakes, which threads may build at once
-    ip, sp = lock(() -> _plans!(plans, s, initkeys, options, valtype(E), backend), _PLANS_LOCK)
+    ip, sp = group_plans(group, kind == :map ? ExplicitMap() : ExplicitEuler(), valtype(E), backend, options)
     return FieldProblem{_ndims(s), typeof(backend), typeof(index),
         typeof(stability), typeof(u0), typeof(p), E}(s, ip, sp, state, u0,
         (Float64(tspan[1]), Float64(tspan[2])), p, tables, inputs, backend, index, faces, stability,
-        kind, initkeys, options, plans)
+        kind, initkeys, options, group)
 end
 
 _ndims(::Program{N}) where {N} = N
@@ -236,7 +177,7 @@ function SciMLBase.remake(prob::FieldProblem; u0 = prob.u0, tspan = prob.tspan, 
     ins = isempty(inputs) ? prob.inputs : resolve_inputs(prob.program, prob.index, inputs, prob.inputs)
     return _field_problem(prob.program, prob.state, collect(u0), tspan, pv, tables,
         ins, prob.backend, prob.index, prob.faces, prob.stability, prob.kind, prob.initkeys,
-        prob.options, prob.plans)
+        prob.options, prob.group)
 end
 # the table pairs of `p` (`Dk => values`, array parameters) as the problem's new tables, and
 # the other pairs
@@ -280,8 +221,10 @@ end
     FieldSolution
 
 Saved states of an owned solve: `t`, `u` (flat host vectors), `retcode`, and the substep
-count used. Indexed by symbol through SymbolicIndexingInterface: `sol[c]` is a vector of
-grid-shaped arrays, `sol[c, i]` one of them.
+counts used: `substeps` the first group's (the only one's for one group), `counts` every
+group's, in group order ([`substep_counts`](@ref)). Indexed by symbol through
+SymbolicIndexingInterface: `sol[c]` is a vector of grid-shaped arrays, `sol[c, i]` one of
+them.
 """
 struct FieldSolution{P, U}
     prob::P
@@ -289,6 +232,7 @@ struct FieldSolution{P, U}
     u::Vector{U}
     retcode::SciMLBase.ReturnCode.T
     substeps::Int
+    counts::Vector{Int}
 end
 SciMLBase.successful_retcode(s::FieldSolution) = SciMLBase.successful_retcode(s.retcode)
 
@@ -304,22 +248,22 @@ Base.length(s::FieldSolution) = length(s.t)
 """
     FieldIntegrator
 
-The state of an owned solve: the store, the two bound steps (one per slot parity), time,
-step, substep count and the saved states. `step!` advances one step of `dt`; indexing by
-symbol reads (and sets) fields of the current state.
+The state of an owned solve: the store, the runtime of each field group
+([`GroupRuntime`](@ref): its bound launches, clamps and algorithm cache), time, step,
+substep count (the first group's) and the saved states. `step!` advances one step of `dt`
+([`advance!`](@ref) of each group, in group order); indexing by symbol reads (and sets)
+fields of the current state.
 
 Parameters change only through `setp(integ, sym)(integ, v)` (SymbolicIndexingInterface),
 which checks the faces, recomputes the substeps and rebinds the steps, or else leaves the
 integrator unchanged. Writing `integ.p[i] = v` directly has no effect on the run: the steps
 keep the values they were bound to.
 """
-mutable struct FieldIntegrator{P <: FieldProblem, A, S <: FieldStore, B, M, T, PV, CL}
+mutable struct FieldIntegrator{P <: FieldProblem, A, S <: FieldStore, RT <: Tuple, T, PV}
     prob::P
     alg::A
     store::S
-    steps::NTuple{2, B}
-    masks::M                            # the mask launches at both slot parities, or nothing
-    clamps::CL                          # the masked fields' arrays and values (`_clamps`)
+    runtimes::RT                        # one `GroupRuntime` per field group, in group order
     p::PV
     pgood::PV                           # the parameters the steps are bound to
     tables::Vector{Pair{String, Vector{Float64}}}   # its own copy (`integ[Dk] = values`)
@@ -334,12 +278,6 @@ mutable struct FieldIntegrator{P <: FieldProblem, A, S <: FieldStore, B, M, T, P
     retcode::SciMLBase.ReturnCode.T
 end
 
-function _bound(prob::FieldProblem, st::FieldStore, p, parity, sp = prob.step)
-    BoundStep(prob.backend,
-        prob.program, sp, st, p; cur = fill(parity, length(st.cur)), c = zero(eltype(prob)))
-end
-_masks(prob::FieldProblem, st, p) = isempty(prob.init.launches) ? nothing :
-                                    (_bound(prob, st, p, 1, prob.init), _bound(prob, st, p, 2, prob.init))
 
 """
     substeps(prob, alg, p = prob.p) -> Int
@@ -376,18 +314,18 @@ const _SEEN_WARNED_LOCK = ReentrantLock()
 # the warning's once-key: the program (its printed text, hashed) and the value-free reason
 _warn_key(prob::FieldProblem, why) = string(hash(sprint(print_program, prob.program)); base = 16) * "|" * string(why)
 function substeps(prob::FieldProblem, alg::ExplicitEuler, p = prob.p; tables = prob.tables,
-        inputs = _bound_inputs(prob))
+        inputs = _bound_inputs(prob), stability = prob.stability)
     _check_owned(alg)
     pp = with_tables(map(primal, p), tables; inputs)        # a policy: on the primal values
     if alg.substeps !== nothing
-        ρ = seen_bound(prob.stability, pp)
+        ρ = seen_bound(stability, pp)
         n = isfinite(ρ) && ρ >= 0 ? max(alg.substeps, ceil(Int, alg.dt * ρ / 1.8)) : alg.substeps
-        full = Float64(prob.stability(pp))
+        full = Float64(stability(pp))
         if !(isfinite(full) && full >= 0) && ccall(:jl_generating_output, Cint, ()) == 0
-            why = unbounded_reason(prob.stability, pp)
+            why = unbounded_reason(stability, pp)
             # once per (program, term, cause) and session: the key holds no value, so a sweep
             # over entries or parameters warns once and the set stays bounded
-            key = why === nothing ? nothing : _warn_key(prob, unbounded_key(prob.stability, pp))
+            key = why === nothing ? nothing : _warn_key(prob, unbounded_key(stability, pp))
             why === nothing || !lock(() -> key in _SEEN_WARNED ? false : (push!(_SEEN_WARNED, key); true),
                                      _SEEN_WARNED_LOCK) ||
                 @warn string("ExplicitEuler(substeps = ", alg.substeps, "): ", n, " substeps (the request, or more for ",
@@ -395,9 +333,9 @@ function substeps(prob::FieldProblem, alg::ExplicitEuler, p = prob.p; tables = p
         end
         return n
     end
-    ρ = Float64(prob.stability(pp))
+    ρ = Float64(stability(pp))
     isfinite(ρ) && ρ >= 0 && return max(1, ceil(Int, alg.dt * ρ / 1.8))
-    why = unbounded_reason(prob.stability, pp)
+    why = unbounded_reason(stability, pp)
     throw(ArgumentError(string("no automatic substeps: no stability bound for these parameters (",
         why === nothing ? string("a rate term the bound cannot see, such as advection, a nonlinear rate, ",
             "or a coefficient with more than 6 kind sets and ",
@@ -406,9 +344,6 @@ function substeps(prob::FieldProblem, alg::ExplicitEuler, p = prob.p; tables = p
         "). Give an explicit count: ExplicitEuler(; dt, substeps = n) (a minimum; the bound over ",
         "the terms it sees can raise it)")))
 end
-
-_dt(::ExplicitMap) = 1.0
-_dt(a::ExplicitEuler) = a.dt
 
 # whole number of `dt` in `span` (to a relative 1e-5, so `dt = 1f-2` counts 0.01), else an
 # error
@@ -419,19 +354,64 @@ function _count(span, dt, what)
     return n
 end
 
+# the field groups of `alg` on `prob`: `(algorithm, state keys)` in state order (one group
+# of every state field for a single algorithm)
+_groups(prob::FieldProblem, alg::FieldAlgorithm) = Tuple{FieldAlgorithm, Vector{String}}[(alg, prob.state)]
+function _groups(prob::FieldProblem, g::FieldGroups)
+    assigned = Dict{String, FieldAlgorithm}()
+    for (k, a) in g.pairs
+        key = _state_key(prob, k)
+        haskey(assigned, key) && throw(ArgumentError("FieldGroups: the field `$key` has two algorithms"))
+        assigned[key] = a
+    end
+    out = Tuple{FieldAlgorithm, Vector{String}}[]
+    for k in prob.state
+        a = get(assigned, k, g.default)
+        a === nothing && throw(ArgumentError(string("FieldGroups: the field `", k, "` has no algorithm; ",
+            "pair it with one (`", k, " => alg`) or give `default`")))
+        j = findfirst(x -> isequal(x[1], a), out)
+        j === nothing ? push!(out, (a, [k])) : push!(out[j][2], k)
+    end
+    length(unique(alg_family(a) for (a, _) in out)) == 1 || throw(ArgumentError(string(
+        "FieldGroups: a rate algorithm and a map algorithm are never mixed in one problem ",
+        "(split stepping is planned); got ", join((_algtext(a) for (a, _) in out), ", "))))
+    dts = unique(_dt(a) for (a, _) in out)
+    length(dts) == 1 || throw(ArgumentError(string("FieldGroups: every group steps the same window; ",
+        "the algorithms give dt = ", join(dts, ", "), ": give them one `dt`")))
+    return out
+end
+# the state key of field `k` (a symbol of the index, or the key itself)
+function _state_key(prob::FieldProblem, k)
+    k isa Union{AbstractString, Symbol} && String(k) in prob.state && return String(k)
+    ix = prob.index
+    slot = ix isa LatticeIndex ? _slot(ix, k) : nothing
+    if slot !== nothing
+        prog = prob.program
+        ranges = state_layout(prog, [fieldid(prog, s) for s in prob.state])
+        for s in prob.state
+            ranges[fieldid(prog, s)] == slot.range && return s
+        end
+    end
+    throw(ArgumentError(string("FieldGroups: `", _symtext(k), "` is not a state field of the problem; its fields: ",
+        join(("`$s`" for s in prob.state), ", "))))
+end
+
 function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; saveat = (),
         save_start::Bool = true, save_end::Bool = true)
-    (alg isa ExplicitMap) == (prob.kind == :map) || throw(ArgumentError(string(
-        "a ", prob.kind == :map ? "map program is stepped by ExplicitMap()" :
-              "rate program is stepped by ExplicitEuler(; dt)",
-        "; got ",
-        alg)))
-    _check_owned(alg)
+    groups = _groups(prob, alg)
+    for (a, _) in groups
+        alg_family(a) == prob.kind || throw(ArgumentError(string(
+            "a ", prob.kind == :map ? "map program is stepped by ExplicitMap()" :
+                  "rate program is stepped by ExplicitEuler(; dt)",
+            "; got ",
+            _algtext(a))))
+        _check_owned(a)
+    end
     check_faces(prob.faces, prob.p)
     check_values(prob.p, prob.index)
     check_parameters(prob.stability, with_tables(map(primal, prob.p), prob.tables; inputs = _bound_inputs(prob)))
     t0, tf = prob.tspan
-    nsteps = _count(tf - t0, _dt(alg), "the time span")
+    nsteps = _count(tf - t0, _dt(first(groups[1])), "the time span")
     dt = (tf - t0) / max(nsteps, 1)                 # the step that lands on tf exactly
     save = Int[]
     save_start && push!(save, 0)
@@ -444,24 +424,33 @@ function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; saveat = (),
     save_end && push!(save, nsteps)
     save = sort!(unique!(filter!(i -> 0 <= i <= nsteps, save)))
     E = eltype(prob)
-    st = FieldStore(prob.backend, prob.program; flat = prob.state, E)
+    # the state buffers the algorithms declare (`nbuffers`: two for the explicit ones)
+    st = FieldStore(prob.backend, prob.program; flat = prob.state, E,
+        nbuf = maximum(nbuffers(a) for (a, _) in groups))
     for (k, v) in prob.tables
         settable!(st, prob.program, k, v)
     end
     upload_inputs!(st, prob.program, prob.inputs; index = prob.index)
-    if !isempty(st.flat)
-        copyto!(st.flat[1], convert(Vector{eltype(st.flat[1])}, prob.u0))
-        copyto!(st.flat[2], st.flat[1])
-    end
-    m = substeps(prob, alg)
+    _load_state!(st, prob.u0)
+    # each group's count from the bound of its own rows (`restrict_bound`; one group: the
+    # problem's bound)
+    ms = [length(groups) == 1 ? substeps(prob, a) :
+          substeps(prob, a, prob.p; tables = prob.tables, inputs = _bound_inputs(prob),
+              stability = restrict_bound(prob.stability, ks)) for (a, ks) in groups]
+    _check_coupling(prob, groups, prob.p; dt)
     run_step!(prob.backend, prob.program, prob.init, st, prob.p; rt = (t0, dt), c = zero(E))
-    clamps = _clamps(prob, st)
-    _clamp!(clamps, st, prob.p)                     # the saved t0 state holds the mask values
-    steps = (_bound(prob, st, prob.p, 1), _bound(prob, st, prob.p, 2))
-    compile!(prob.backend, steps[1])
-    integ = FieldIntegrator(prob, alg, st, steps, _masks(prob, st, prob.p), clamps, copy(prob.p), copy(prob.p),
+    pgood = copy(prob.p)
+    # one group steps in alternating slots; several end each step in slot 1, so the next
+    # group reads current values
+    ends_in = length(groups) == 1 ? :parity : :slot1
+    rts = Tuple(bind_group(prob.group, a, st, pgood; fields = ks, n = m, dt, c = zero(E), ends_in,
+                    backend = prob.backend, options = prob.options, V = valtype(E))
+                for ((a, ks), m) in zip(groups, ms))
+    foreach(clamp_now!, rts)                        # the saved t0 state holds the mask values
+    foreach(rt -> compile!(prob.backend, rt.steps[1]), rts)
+    integ = FieldIntegrator(prob, alg, st, rts, copy(prob.p), pgood,
         Pair{String, Vector{Float64}}[k => copy(v) for (k, v) in prob.tables], t0, 0, dt,
-        m, nsteps, save, Float64[], Vector{_ueltype(st, E)}[],
+        ms[1], nsteps, save, Float64[], Vector{_ueltype(st, E)}[],
         SciMLBase.ReturnCode.Success)
     0 in save && _save!(integ)
     return integ
@@ -473,27 +462,57 @@ function _parity(integ::FieldIntegrator)
 end
 _time(integ::FieldIntegrator) = integ.t0 + integ.iter * integ.dt
 
+# `u0` (flat, host) into every state buffer, the state in slot 1
+function _load_state!(st::FieldStore, u0)
+    isempty(st.flat) && return st
+    copyto!(st.flat[1], convert(Vector{eltype(st.flat[1])}, u0))
+    foreach(b -> copyto!(b, st.flat[1]), st.flat[2:end])
+    return st
+end
+
 """
     step!(integ)
 
-One step of `dt`: the masks at the step's start and the masked values at the sites they mark
-(when the problem has masked conditions), then `substeps` launches of the step plan,
-alternating the slot parity.
+One step of `dt`: [`advance!`](@ref) of each field group in group order (its masks at the
+step's start and the masked values at the sites they mark, when the problem has masked
+conditions, then its substeps, alternating the slot parity). A group's return code other
+than `ReturnCode.Success` becomes `integ.retcode`, and the later groups do not run;
+`solve!` stops on it.
 """
 function CommonSolve.step!(integ::FieldIntegrator)
-    m, dt = integ.substeps, integ.dt
-    h = dt / m
-    t = _time(integ)
-    st, sp = integ.store, integ.prob.step
-    if integ.masks !== nothing
-        integ.masks[_parity(integ)]((t, h))
-        _clamp!(integ.clamps, st, integ.pgood) # the values the masks set now (the bound parameters)
-    end
-    for j in 0:(m - 1)
-        integ.steps[_parity(integ)]((t + j * h, h))
-        swap!(st, sp)
-    end
+    code = _advance_all(integ.runtimes, (_time(integ), integ.iter))
     integ.iter += 1
+    code == SciMLBase.ReturnCode.Success || (integ.retcode = code)
+    return integ
+end
+_advance_all(::Tuple{}, clock) = SciMLBase.ReturnCode.Success
+function _advance_all(rts::Tuple, clock)
+    code = advance!(first(rts), clock)
+    code == SciMLBase.ReturnCode.Success || return code
+    return _advance_all(Base.tail(rts), clock)
+end
+
+"""
+    reinit!(integ, u0 = integ.prob.u0)
+
+Start `integ` again from the flat state `u0` at the problem's start time, with its current
+parameters, tables and inputs: the saved states are dropped, the masks and the clamp run
+again, every group's algorithm history is dropped ([`reset!`](@ref)) and the start state is
+saved when the save times include it.
+"""
+function SciMLBase.reinit!(integ::FieldIntegrator, u0 = integ.prob.u0)
+    length(u0) == length(integ.prob.u0) ||
+        throw(ArgumentError("u0 has $(length(u0)) values; the state has $(length(integ.prob.u0))"))
+    st = integ.store
+    foreach(f -> st.cur[f] = 1, integ.prob.step.swaps)
+    _load_state!(st, u0)
+    integ.iter = 0
+    empty!(integ.t)
+    empty!(integ.u)
+    integ.retcode = SciMLBase.ReturnCode.Success
+    _rerun_init!(integ, integ.pgood)
+    foreach(reset!, integ.runtimes)
+    0 in integ.save && _save!(integ)
     return integ
 end
 
@@ -523,7 +542,7 @@ function CommonSolve.solve!(integ::FieldIntegrator)
     integ.retcode == SciMLBase.ReturnCode.Success && (isempty(integ.save) ||
      integ.save[end] != integ.iter) && !all(isfinite, _current(integ)) &&
         (integ.retcode = SciMLBase.ReturnCode.Unstable)
-    return FieldSolution(integ.prob, integ.t, integ.u, integ.retcode, integ.substeps)
+    return FieldSolution(integ.prob, integ.t, integ.u, integ.retcode, integ.substeps, substep_counts(integ))
 end
 
 function CommonSolve.solve(prob::FieldProblem, alg::FieldAlgorithm; kw...)
@@ -618,25 +637,37 @@ function Base.dotview(i::FieldIntegrator, sym)
     throw(ArgumentError(string("`integ[", sym, "] .= …` would write a copy (indexing an integrator ",
         "returns the field's values): assign the field, `integ[", sym, "] = values`")))
 end
+# a state written through `setu(integ, c)(integ, v)` drops every group's algorithm history, as
+# `integ[c] = v` does
+function SII.set_state!(i::FieldIntegrator, val, idx)
+    SII.state_values(i)[idx] = val
+    foreach(reset!, i.runtimes)
+    return val
+end
 # an input symbol writes the input's array (the masks run again); any other goes to SII
 function Base.setindex!(i::FieldIntegrator, v, sym)
     _write_table!(i, v, sym) && return i
     k = i.prob.index isa LatticeIndex ? input_key(i.prob.index, sym) : nothing
-    k === nothing && (_check_symbol(i, sym; write = true); SII.setsym(i, sym)(i, v); return i)
+    if k === nothing
+        _check_symbol(i, sym; write = true)
+        SII.setsym(i, sym)(i, v)                   # a state write resets (`set_state!`); a parameter's rebinds
+        return i
+    end
     w = _input_value(i.prob.program, k, v, input_name(i.prob.index, k);
         bool = is_bool_input(i.prob.index, k), bounds = input_bounds(i.prob.index, k))
     # an input the bound reads in an index: the checks (a rate that is not finite where the
     # new values reach, naming the site) and the substep count at the new values, before
     # anything changes
-    m = i.substeps
+    ms = nothing
     if k in bound_inputs(i.prob.stability)
         ins = _bound_inputs(i; set = k => w)
         check_parameters(i.prob.stability, with_tables(map(primal, i.pgood), i.tables; inputs = ins))
-        m = substeps(i.prob, i.alg, i.pgood; tables = i.tables, inputs = ins)
+        ms = _counts(i, i.pgood; tables = i.tables, inputs = ins)
     end
     _set_input!(i.store, i.prob.program, k, w)
-    i.substeps = m
+    ms === nothing || _set_counts!(i, ms)
     _rerun_init!(i, i.pgood)                       # the parameters the steps are bound to
+    foreach(reset!, i.runtimes)                    # the masked values may have moved
     return i
 end
 
@@ -668,12 +699,13 @@ function _write_table!(i::FieldIntegrator, v, sym)
     tables[j] = t => vals
     ins = _bound_inputs(i)
     check_parameters(i.prob.stability, with_tables(map(primal, i.pgood), tables; inputs = ins))
-    m = substeps(i.prob, i.alg, i.pgood; tables, inputs = ins)
+    ms = _counts(i, i.pgood; tables, inputs = ins)
     a = i.store.tables[findfirst(x -> x.key == t, i.prob.program.tables)]
     copyto!(a, convert(Vector{eltype(a)}, vals))
     i.tables[j] = t => vals
-    i.substeps = m
+    _set_counts!(i, ms)
     _rerun_init!(i, i.pgood)
+    foreach(reset!, i.runtimes)
     return true
 end
 
@@ -686,48 +718,141 @@ function _rerun_init!(integ::FieldIntegrator, p)
     isempty(prob.init.launches) && return nothing
     run_step!(prob.backend, prob.program, prob.init, integ.store, p;
         rt = (_time(integ), integ.dt), c = zero(eltype(prob)))
-    _clamp!(integ.clamps, integ.store, p)
+    foreach(rt -> _clamp!(rt.clamps, integ.store, p), integ.runtimes)
     return nothing
 end
 
-# The node-value clamp, now: each masked field (`NodeValueRule`) takes its value at the sites
-# its mask marks, `u = ifelse(mask, v, u)` on the current slot, and nothing else changes (no
-# launch of the step plan, no slot swap). It runs after init (before the t0 save), after every
-# input write and parameter change, and after the masks at the start of every step, so a
-# step's first fluxes read the clamped values, for rate and map programs alike (F1). The step
-# kernels still store the value at masked sites (the store-side rule).
-# The masked fields of `prob` on store `st`, as a tuple (one entry per `NodeValueRule`: the
-# field's buffers, its id, its mask array and the value), so the clamp is type-stable and
-# allocation-free on the host (the store's own arrays are untyped)
-function _clamps(prob::FieldProblem, st::FieldStore)
-    prog = prob.program
-    return Tuple((Tuple(st.bufs[r.field]), Int(r.field), array(st, prog.masks[r.mask].field, :cur), r.value)
-                 for r in prog.rules if r isa NodeValueRule)
+# the substep count of each group at parameters `p` (checked, nothing changes yet), and
+# setting them
+function _counts(i::FieldIntegrator, p; tables, inputs)
+    ms = map(rt -> rt.all_state ? substeps(i.prob, rt.alg, p; tables, inputs) :
+                   substeps(i.prob, rt.alg, p; tables, inputs, stability = rt.stability), i.runtimes)
+    _check_coupling(i.prob, [(rt.alg, rt.keys) for rt in i.runtimes], p; tables, inputs, dt = i.dt)
+    return ms
 end
-_clamp!(clamps::Tuple, st::FieldStore, p) = (foreach(c -> _clamp_one!(c, st, p), clamps); nothing)
-function _clamp_one!((bufs, id, m, c), st::FieldStore, p)
-    u = length(bufs) == 1 ? bufs[1] : bufs[st.cur[id]]
-    v = convert(eltype(u), c.param == 0 ? c.value : c.value * p[c.param])
-    KA.get_backend(u) isa KA.CPU ? _clamp_host!(u, m, v) : _clamp_device!(u, m, v)
+# `integ.substeps = n` sets the count of every group (a test forces a count this way)
+function Base.setproperty!(i::FieldIntegrator, f::Symbol, v)
+    f === :substeps && foreach(rt -> rt.n = v, getfield(i, :runtimes))
+    return setfield!(i, f, convert(fieldtype(typeof(i), f), v))
+end
+# (`setfield!`: the `substeps` property above would write the first count into every group)
+function _set_counts!(i::FieldIntegrator, ms)
+    foreach((rt, m) -> rt.n = m, i.runtimes, ms)
+    setfield!(i, :substeps, first(ms))
     return nothing
 end
-function _clamp_host!(u, m, v)                        # host: a loop, no allocation
-    n = length(m)
-    length(u) % n == 0 || throw(DimensionMismatch("a masked field has $(length(u)) values for $n mask sites"))
-    for j in 0:(div(length(u), n) - 1), i in 1:n
-        m[i] != 0 && (u[j * n + i] = v)
+
+"""
+    substep_counts(integ) -> Vector{Int}
+    substep_counts(sol) -> Vector{Int}
+
+The substep count of each field group of an integrator or a solution, in group order (the
+order of each group's first state). A count is the algorithm's `substeps` (a minimum) or more,
+as the stability bound of the group's own rows needs at the current parameters, so it follows
+`setp`, input and table writes. `integ.substeps` and `sol.substeps` are the first group's.
+
+```julia
+ig = init(prob, FieldGroups(o => ExplicitEuler(; dt = 0.01); default = ExplicitEuler(; dt = 0.01, substeps = 1)))
+substep_counts(ig)        # [1, 4]: c takes 1, o (diffusion) 4
+```
+"""
+substep_counts(i::FieldIntegrator) = Int[rt.n for rt in i.runtimes]
+substep_counts(s::FieldSolution) = copy(s.counts)
+
+# The coupling between field groups (review of F2-06, ruling K-unsafe; round 2: loops only).
+# A group reads the fields of the other groups from their arrays: over its window `dt` they
+# are held (the groups step one after the other, in state order), so a cross term `a o` in the
+# rate of `c` is a lagged source of `c`'s step that no substep count of `c`'s group reaches.
+# When the group read graph (`lagged_coupling`'s `reads`; `group_loops`) has no loop, the split
+# system is block triangular: each group is stable under its own count and the lag adds only
+# an O(dt) source error, so such groups are not checked (a one-way chain runs as before the
+# check). In a loop, only the reads of groups in the same loop count: a group outside it is
+# upstream (a bounded source) or downstream (not read), so it cannot feed growth back. In a loop the lag can feed back: with `c' = −k o`, `o' = k c` in two groups stepped
+# one after the other (each exactly), the window map is symplectic Euler, whose amplification
+# stays 1 only while `κ_c κ_o ≤ 4` (`κ = k dt`), and grows without bound past it. The
+# criterion is conservative and per group in a loop: `κ_g = dt · max over the group's rows of
+# Σ max|coefficient|` over the terms that read fields of other groups (a cross diffusion with
+# its `4 Σ 1/h²` and Robin parts), and `κ_g ≤ 1` (a margin to the skew pair's 2, as 1.8 to 2
+# for the substep count; it is not a proof for every coupling; a relative 1e-12 absorbs the
+# rounding of `dt · rate` at a limit the message prints). A group with a term the bound cannot
+# see and that reads another field (of another row, or an aux field) may read any group, so it
+# counts as reading every other group; one on the row's own field alone couples nothing. Above the limit the
+# problem is refused with the routes (the loop's fields in one group, with an explicit count
+# when their rows are not diagonally dominant; or a smaller `dt` that divides the time span);
+# a cross coefficient in a loop with no finite bound (past the evaluation cap; a value that is
+# not finite is refused by `check_parameters`) is refused with an automatic count and runs with
+# a warning (once per program, group and term) with an explicit one. A bound that does not know
+# the cross terms (`lagged_coupling` returns `nothing`) is the same as an unseen term for every
+# group. Maps step as the user wrote them: not checked.
+_explicit_count(a) = hasproperty(a, :substeps) && getproperty(a, :substeps) !== nothing
+_num(x) = round(x; sigdigits = 6)                  # a value in a message (`dt = 0.003334`)
+const _COUPLING_RTOL = 1e-12
+function _check_coupling(prob::FieldProblem, groups, p; tables = prob.tables, inputs = _bound_inputs(prob), dt::Real)
+    length(groups) > 1 && prob.kind != :map || return nothing
+    pp = with_tables(map(primal, p), tables; inputs)
+    keys = [collect(String, ks) for (_, ks) in groups]
+    parts = lagged_coupling(prob.stability, keys, pp)
+    warn(key, msg) = ccall(:jl_generating_output, Cint, ()) == 0 &&
+        lock(() -> key in _SEEN_WARNED ? false : (push!(_SEEN_WARNED, key); true), _SEEN_WARNED_LOCK) && @warn msg
+    if parts === nothing
+        all(g -> _explicit_count(first(g)), groups) || throw(ArgumentError(string(
+            "FieldGroups: the problem's stability bound does not see the terms that couple its groups (each group ",
+            "reads the fields of the others from their arrays, held over the window); step the fields in one group, ",
+            "or give every group an explicit count (`ExplicitEuler(; dt, substeps = n)`)")))
+        warn(_warn_key(prob, "coupling#unknown"), string("FieldGroups: the stability bound does not see the coupling ",
+            "between the groups ", join((_fieldlist(k) for k in keys), " and "), ": the counts are the user's"))
+        return nothing
+    end
+    loops = group_loops(parts)
+    all(isempty, loops) && return nothing
+    # the rates over the reads inside each group's loop: a read of a group outside it is a
+    # one-way source of the loop, which cannot feed growth back (round 3)
+    parts = lagged_coupling(prob.stability, keys, pp; within = loops)
+    for (g, ((a, _), ks, q)) in enumerate(zip(groups, keys, parts))
+        isempty(loops[g]) && continue
+        κ = dt * q.rate
+        lf = reduce(vcat, keys[loops[g]])           # the fields of the loop
+        if !isfinite(κ)
+            _explicit_count(a) || throw(ArgumentError(string("FieldGroups: the group of ", _fieldlist(ks),
+                " is in a loop of groups that read one another (", _fieldlist(lf), "), and its coupling to the ",
+                "other groups has no bound at these parameters (the coefficient `", q.text, "` of `", q.other,
+                "` in the rate of `", q.row, "` reads more table entries than the bound evaluates); step ",
+                _fieldlist(lf), " in one group, or give the group an explicit count (`ExplicitEuler(; dt, substeps = n)`)")))
+            warn(_warn_key(prob, string("coupling#", join(ks, ","), "#", q.row, "#", q.raw)), string(
+                "FieldGroups: the coupling of the group of ", _fieldlist(ks), " in the loop of ", _fieldlist(lf),
+                " has no bound (the coefficient `", q.text, "` of `", q.other, "` in the rate of `", q.row,
+                "`): the count is the user's"))
+        elseif κ > 1 + _COUPLING_RTOL
+            throw(ArgumentError(_loop_message(prob, parts, keys, loops[g], q, dt, pp)))
+        end
     end
     return nothing
 end
-function _clamp_device!(u, m, v)                      # a device: one broadcast per field
-    if length(u) == length(m)
-        u .= ifelse.(m .!= 0, v, u)
-    else                                        # components: the mask holds for each one
-        U = reshape(u, length(m), :)
-        U .= ifelse.(m .!= 0, v, U)
-    end
-    return nothing
+# the refusal of a loop past the limit, with its routes
+function _loop_message(prob, parts, keys, loop, q, dt, pp)
+    κ = dt * q.rate
+    lf = reduce(vcat, keys[loop])
+    unseen = [k for h in loop if parts[h].unseen for k in keys[h]]
+    # route 1: the loop's fields in one group; an automatic count needs dominant rows
+    ρ = Float64(restrict_bound(prob.stability, lf)(pp))
+    one = isfinite(ρ) && ρ >= 0 ? string("Step ", _fieldlist(lf), " in one group (one algorithm; its count can be automatic)") :
+          string("Step ", _fieldlist(lf), " in one group with an explicit count (`ExplicitEuler(; dt, substeps = n)`: ",
+                 "their rows are not diagonally dominant, so no automatic count bounds them)")
+    # route 2: a dt that divides the time span (`init` refuses any other)
+    span = prob.tspan[2] - prob.tspan[1]
+    lim = floor(1 / q.rate; sigdigits = 4)
+    n = max(1, ceil(Int, span * q.rate * (1 - _COUPLING_RTOL)))
+    return string("FieldGroups: the groups of ", _fieldlist(lf), " read one another in a loop, each from the ",
+        "others' arrays, held over each window dt = ", _num(dt),
+        ": the terms in the rate of `", q.row, "` that read other groups of the loop (the largest: the coefficient `", q.text,
+        "` of `", q.other, "`) give dt · Σ max|coefficient| = ", round(κ; sigdigits = 4), " > 1, and the loop can then ",
+        "grow without bound at any substep count",
+        isempty(unseen) ? "" : string(" (the terms of ", _fieldlist(unseen), " that the bound cannot see and that read ",
+                                      "another field count as reading every other group)"),
+        ". ", one, ", or use a smaller dt that divides the time span ", _num(span), ": dt ≤ ", lim,
+        ", such as dt = ", _num(span), "/", n)
 end
+_fieldlist(ks) = join(("`$k`" for k in ks), ", ")
 
 function SII.finalize_parameters_hook!(integ::FieldIntegrator, _)
     try
@@ -735,12 +860,11 @@ function SII.finalize_parameters_hook!(integ::FieldIntegrator, _)
         check_values(integ.p, integ.prob.index)
         ins = _bound_inputs(integ)
         check_parameters(integ.prob.stability, with_tables(map(primal, integ.p), integ.tables; inputs = ins))
-        m = substeps(integ.prob, integ.alg, integ.p; tables = integ.tables, inputs = ins)
-        steps = (_bound(integ.prob, integ.store, integ.p, 1),
-            _bound(integ.prob, integ.store, integ.p, 2))
-        masks = _masks(integ.prob, integ.store, integ.p)
+        ms = _counts(integ, integ.p; tables = integ.tables, inputs = ins)
+        launches = map(rt -> rebind_launches(rt, integ.p), integ.runtimes)
         _rerun_init!(integ, integ.p)                  # init kernels read the parameters too
-        integ.substeps, integ.steps, integ.masks = m, steps, masks
+        foreach(install_launches!, integ.runtimes, launches)    # (and `reset!`)
+        _set_counts!(integ, ms)
         copyto!(integ.pgood, integ.p)
     catch
         copyto!(integ.p, integ.pgood)

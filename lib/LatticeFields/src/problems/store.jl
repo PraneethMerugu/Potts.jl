@@ -2,7 +2,7 @@
 # one array per table. A two-buffer field has a current slot; a step's slot swaps flip it.
 
 """
-    FieldStore(backend, p::Program; flat = String[], E = nothing)
+    FieldStore(backend, p::Program; flat = String[], E = nothing, nbuf = nothing)
 
 Zero-filled arrays for every field of `p` on `backend` (KernelAbstractions allocation), one
 per buffer, `nsites × ncomp` elements of the field's storage lane; and an empty slot per
@@ -18,7 +18,9 @@ lane's own Julia type.
 The fields named in `flat` (the state, in that order) are packed: each buffer slot is one
 flat array per slot (`st.flat[slot]`), and the field's buffers are contiguous views of it at
 `st.slots[f]`. The packed fields share one lane and one buffer count, so they swap together
-and `st.flat[st.cur[f]]` is the whole current state.
+and `st.flat[st.cur[f]]` is the whole current state. `nbuf` is the buffer count an algorithm
+declares for them (`nbuffers(alg)`): with more than the program's two, the extra buffers are
+the algorithm's (history, `c__prev`); the steps use the first two.
 """
 struct FieldStore{B}
     backend::B
@@ -35,7 +37,7 @@ function _eltype(lane, ::Type{E}) where {E}
 end
 _tabletype(lane, ::Nothing) = juliatype(lane)
 _tabletype(lane, ::Type{E}) where {E} = isfloat(lane) ? lanetype(lane, valtype(E), :state) : juliatype(lane)
-function FieldStore(backend, p::Program; flat = String[], E = nothing)
+function FieldStore(backend, p::Program; flat = String[], E = nothing, nbuf = nothing)
     ids = Int[fieldid(p, k) for k in flat]
     slots, flatbufs = state_layout(p, ids), Any[]
     if !isempty(ids)
@@ -44,7 +46,7 @@ function FieldStore(backend, p::Program; flat = String[], E = nothing)
             throw(ArgumentError("packed fields need one storage lane and one buffer count"))
         n = maximum(last, slots[ids])
         flatbufs = Any[_zeros(backend, _eltype(fs[1].storage, E), n)
-                       for _ in 1:(fs[1].buffers)]
+                       for _ in 1:(nbuf === nothing ? fs[1].buffers : max(fs[1].buffers, nbuf))]
     end
     bufs = map(enumerate(p.fields)) do (i, f)
         i in ids && return Any[view(a, slots[i]) for a in flatbufs]

@@ -33,7 +33,7 @@ using LatticeFields: Exec, Problems
 using LatticeFields.Compile: CompileOptions
 using LatticeFields.IR: fieldid
 using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
-                              ExplicitEuler, ExplicitMap, ode_problem, RT_DT
+                              ExplicitEuler, ExplicitMap, FieldGroups, ode_problem, RT_DT, substep_counts
 using ModelingToolkitBase: ModelingToolkitBase, PDESystem, Pre, ShiftIndex, Shift, Hold, Sample
 using SciMLBase: AbstractDiscretization, NullParameters, remake
 using SymbolicIndexingInterface: getp, getu, setp
@@ -50,7 +50,8 @@ export get_lattice_placement, get_lattice_storage, get_lattice_level, get_lattic
 export vocabulary_issues, check_vocabulary
 export LatticeDiscretization, FiniteVolume, CompiledField, discretize, symbolic_discretize,
        parse_bcs, linearity, Grid, Interval
-export ExplicitEuler, ExplicitMap, FieldProblem, solve, init, step!, solve!, stability_bound
+export ExplicitEuler, ExplicitMap, FieldGroups, FieldProblem, solve, init, step!, solve!, stability_bound,
+       substep_counts
 export remake, getp, getu, setp            # the routes its messages give (SciMLBase, SymbolicIndexingInterface)
 
 # ---------------------------------------------------------------------------------------

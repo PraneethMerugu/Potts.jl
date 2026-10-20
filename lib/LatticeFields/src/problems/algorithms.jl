@@ -1,0 +1,181 @@
+# The field algorithms (F2 design §2.3, §2.6): `ExplicitEuler`, `ExplicitMap`, the group
+# assignment `FieldGroups`, and the hooks an algorithm defines for the group layer
+# (`group.jl`): its update (`update_key`), its family (`alg_family`), its buffer count
+# (`nbuffers`) and its cache (`alg_cache`, `reset_cache!`, `step_retcode!`).
+
+"""
+Field stepping algorithms of the owned path.
+"""
+abstract type FieldAlgorithm end
+
+"""
+    ExplicitEuler(; dt = nothing, substeps = nothing, lower = nothing)
+
+Forward Euler: each window `dt` runs `n` substeps of `dt / n`. One type for both front ends
+(`Potts` and `LatticePDE` export this binding). `substeps = nothing` takes the automatic
+count `n = ⌈dt ρ(p) / 1.8⌉` from the problem's stability bound `ρ` at the current parameters
+(§6.2); an unknown bound (a rate term it cannot see, a parameter without a value, or coupled
+rows that are not diagonally dominant) is refused. A count `substeps = n ≥ 1` is a minimum:
+the count is the larger of `n` and the bound over the terms the bound sees; when no term is
+seen, `n` is used. `lower` clips each substep's result at `max(v, lower)`.
+
+- On a `FieldProblem` (`LatticePDE.discretize(…; problem = :owned)`), `dt` is the step and
+  is required; `lower` is not supported yet (an `ArgumentError`).
+- As a `PottsProblem` `field_solver`, the window is the MCS (`mcs_duration`): `dt` must be
+  left out. As an `ode_solver`, `substeps = nothing` is one step per MCS.
+
+`dt` must be finite and > 0, and `substeps` ≥ 1: `substeps = 0` is an `ArgumentError` (leave
+`substeps` out for the automatic count).
+"""
+struct ExplicitEuler <: FieldAlgorithm
+    dt::Union{Nothing, Float64}
+    substeps::Union{Nothing, Int}
+    lower::Union{Nothing, Float64}
+    function ExplicitEuler(dt, substeps, lower)
+        dt === nothing || (dt isa Real && isfinite(dt) && dt > 0) ||
+            throw(ArgumentError("ExplicitEuler: dt = $(repr(dt)) must be finite and > 0"))
+        substeps isa Integer && substeps == 0 && throw(ArgumentError(
+            "ExplicitEuler: `substeps = 0` is not a count; leave `substeps` out for the automatic count"))
+        substeps === nothing || (substeps isa Integer && substeps >= 1) ||
+            throw(ArgumentError("ExplicitEuler: substeps = $(repr(substeps)) must be an integer ≥ 1 (or left out: automatic)"))
+        lower === nothing || lower isa Real && isfinite(lower) ||
+            throw(ArgumentError("ExplicitEuler: lower = $(repr(lower)) must be a finite number (a clip at ±Inf or NaN " *
+                                "clips nothing or every value; leave `lower` out for no clip)"))
+        return new(dt === nothing ? nothing : Float64(dt), substeps === nothing ? nothing : Int(substeps),
+            lower === nothing ? nothing : Float64(lower))
+    end
+end
+ExplicitEuler(; dt = nothing, substeps = nothing, lower = nothing) = ExplicitEuler(dt, substeps, lower)
+# the state buffers a step of the algorithm needs per field (`c`, `c__next`)
+nbuffers(::ExplicitEuler) = 2
+
+"""
+    ExplicitMap()
+
+Discrete maps `Shift(t, 1)(c) ~ rhs` (§5.5): one application per unit of time.
+"""
+struct ExplicitMap <: FieldAlgorithm end
+nbuffers(::ExplicitMap) = 2
+
+# the keywords a `FieldProblem` steps with: a step `dt`, and no clip yet (F2-07 brings `lower`
+# to the update pass)
+function _check_owned(alg::ExplicitEuler)
+    alg.dt === nothing && throw(ArgumentError(
+        "`ExplicitEuler` on a `FieldProblem` needs `dt` (the step): give `ExplicitEuler(; dt)`"))
+    alg.lower === nothing || throw(ArgumentError(string("`ExplicitEuler(; lower = ", alg.lower,
+        ")`: a `FieldProblem` has no clip yet; leave `lower` out (a clip is a `PottsProblem` `field_solver` option)")))
+    return alg
+end
+_check_owned(alg::ExplicitMap) = alg
+
+"""
+    update_key(alg) -> Symbol
+
+The update that algorithm `alg` fuses into a group's rate program; a group's plans are
+cached by `(update_key(alg), valtype)`, so two algorithms with one update share them
+(`ExplicitEuler(; dt = 0.1)` and `ExplicitEuler(; dt = 0.2, substeps = 4)`: `:euler`).
+"""
+update_key(::ExplicitEuler) = :euler
+update_key(::ExplicitMap) = :map
+
+"""
+    alg_family(alg) -> Symbol
+
+`:rate` for an algorithm that steps rates `D(c) ~ rhs`, `:map` for one that applies maps
+`Shift(t, 1)(c) ~ rhs`. A problem steps one family (split stepping is planned).
+"""
+alg_family(::FieldAlgorithm) = :rate
+alg_family(::ExplicitMap) = :map
+
+"""
+    alg_cache(alg, group, store) -> cache
+
+The algorithm's own state for one group on `store` (`nothing` for `ExplicitEuler` and
+`ExplicitMap`): the workspaces and history of an implicit or multistep method. It lives in the
+group's [`GroupRuntime`](@ref); [`reset!`](@ref) drops its history (`reset_cache!`), and
+after each step [`advance!`](@ref) returns its `step_retcode!`.
+"""
+alg_cache(::FieldAlgorithm, group, store) = nothing
+
+"""
+    reset_cache!(cache)
+
+Drop the history of an algorithm's cache: the state was written (`integ[c] = values`,
+`reinit!`), or the parameters or inputs changed. Nothing for `nothing`.
+"""
+reset_cache!(::Nothing) = nothing
+
+"""
+    step_retcode!(cache, rt) -> ReturnCode.T
+
+The return code of the step that runtime `rt` just took: `ReturnCode.Success` for an
+explicit algorithm (`nothing` cache); an implicit solver returns its failure code
+(`ConvergenceFailure`, …), and the driver stops with it.
+"""
+step_retcode!(::Nothing, rt) = SciMLBase.ReturnCode.Success
+
+# the window of a step of `alg` (its `dt`)
+_dt(::ExplicitMap) = 1.0
+_dt(a::FieldAlgorithm) = a.dt
+# an algorithm with its own keywords checks them itself
+_check_owned(alg::FieldAlgorithm) = alg
+
+"""
+    FieldGroups(field => alg, …; default = nothing)
+
+An algorithm that steps the fields of a problem in groups (F2 design §2.6): each field takes
+the algorithm of its pair (a field symbol, or a state key), the others `default`. Fields with
+`isequal` algorithms form one group (the comparison covers the whole value, `dt` included).
+Groups run in state order (the order of their first field), each step of `dt`: a group reads
+the fields of the other groups from their arrays, as they are when it runs (A's field phases
+do the same, v3 §6.1), and ends each step in slot 1, so the next group reads the current
+values.
+
+Groups that read one another in a loop (`c` reads `o` and `o` reads `c`, directly or through
+other groups) can grow without bound at any substep count, because each holds the others'
+values over the window. For each group in such a loop, `dt` times the largest sum, over the
+group's rows, of the largest coefficient magnitudes of the terms that read other groups of
+the same loop must be at most 1 (a conservative limit). Reads of groups outside the loop do
+not count. Past it the problem is refused, naming the fields of the
+loop. The routes: step those fields in one group (with an explicit `substeps = n` when their
+rows are not diagonally dominant), or use a smaller `dt` that divides the time span. A
+one-way chain (`u` reads `c`, `c` does not read `u`) has no loop and is not limited: each group
+is stable under its own count. A group with a term that the stability bound cannot see and
+that reads another field counts as reading every other group. A term that reads only its own
+field (`-a^3`) does not. [`substep_counts`](@ref) gives each group's count.
+
+Every group has the same window: two algorithms with different `dt` are an `ArgumentError`.
+A rate algorithm and a map algorithm are never mixed (split stepping is planned). A field
+without a pair and with no `default` is an error naming it.
+
+```julia
+solve(prob, FieldGroups(o => ExplicitEuler(; dt = 0.1, substeps = 4); default = ExplicitEuler(; dt = 0.1)))
+```
+"""
+struct FieldGroups <: FieldAlgorithm
+    pairs::Vector{Pair{Any, FieldAlgorithm}}
+    default::Union{Nothing, FieldAlgorithm}
+    function FieldGroups(pairs::Vector{Pair{Any, FieldAlgorithm}}, default)
+        for (k, a) in pairs
+            a isa FieldGroups && throw(ArgumentError("FieldGroups: the algorithm of `$k` is a `FieldGroups`; give one algorithm per field"))
+        end
+        default isa FieldGroups && throw(ArgumentError("FieldGroups: `default` is a `FieldGroups`; give one algorithm"))
+        return new(pairs, default)
+    end
+end
+function FieldGroups(pairs::Pair...; default = nothing)
+    for (k, a) in pairs
+        a isa FieldAlgorithm || throw(ArgumentError("FieldGroups: `$k => $(repr(a))` is not a field algorithm"))
+    end
+    default === nothing || default isa FieldAlgorithm ||
+        throw(ArgumentError("FieldGroups: default = $(repr(default)) is not a field algorithm"))
+    return FieldGroups(Pair{Any, FieldAlgorithm}[k => a for (k, a) in pairs], default)
+end
+nbuffers(g::FieldGroups) = maximum(nbuffers, [last.(g.pairs); g.default === nothing ? FieldAlgorithm[] : [g.default]])
+
+# an algorithm in messages, in its keyword form (`ExplicitEuler(; dt = 0.01, substeps = 2)`)
+function _algtext(a::ExplicitEuler)
+    kw = [string(k, " = ", getfield(a, k)) for k in (:dt, :substeps, :lower) if getfield(a, k) !== nothing]
+    return isempty(kw) ? "ExplicitEuler()" : string("ExplicitEuler(; ", join(kw, ", "), ")")
+end
+_algtext(a) = repr(a)
