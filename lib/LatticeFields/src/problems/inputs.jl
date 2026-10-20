@@ -181,6 +181,15 @@ default gives none.
 """
 unbounded_reason(stability, p) = nothing
 
+"""
+    unbounded_key(stability, p) -> Union{Nothing, String}
+
+The same reason as [`unbounded_reason`](@ref) without values: the terms and the causes
+only (no entry, no parameter value), so a warning keyed on it is given once per program,
+term and cause, however many values a sweep sets. The default is `unbounded_reason`.
+"""
+unbounded_key(stability, p) = unbounded_reason(stability, p)
+
 # a parameter whose value is NaN (no value given) is an error naming it; `built` as for
 # `check_inputs_set` (a problem being built has no `remake` yet)
 function check_values(p, index; built::Bool = true)

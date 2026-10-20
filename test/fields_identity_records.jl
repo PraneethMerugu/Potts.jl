@@ -362,7 +362,11 @@ const GD_RECORDS = Dict{String, String}(
     "GdAuditNonlinearField|Float64|n" => "[3]",
     "GdAuditNonlinearField|Float64|route" => "explicit",
     "GdP65cbAny|Float64|canonical" => "F=ExplicitEuler(substeps=nothing,lower=nothing)",
-    "GdP65cbAny|Float64|fingerprint" => "0x751992f009046ddf",
+    # F2-02 (was 0x751992f009046ddf): the fill phase writes `field1__in` before `kind__in`.
+    # The fill order follows the order the converter meets the CPM reads in the symbolic rate,
+    # a hash order that changes with the package code; the two writes are independent (the
+    # digests and `n` do not move). Not a model change: a fingerprint fragility, reported.
+    "GdP65cbAny|Float64|fingerprint" => "0xacc2455ac0651043",
     "GdP65cbAny|Float64|g1|arrays" => "((CorePotts.Part{:site, :F}(), CorePotts.Part{:site, :F__next}()), (CorePotts.Part{:site, :field1__in}(), nothing), (CorePotts.Part{:site, :kind__in}(), nothing))",
     "GdP65cbAny|Float64|g1|bounded" => "true",
     "GdP65cbAny|Float64|g1|fingerprint_text" => "2989953babfb5baa",

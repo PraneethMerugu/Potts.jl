@@ -306,6 +306,12 @@ end
     ode = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64))
     @test_throws ArgumentError ode.f(similar(ode.u0), ode.u0, [0.125], 0.0)
     ode.f(similar(ode.u0), ode.u0, [0.25], 0.0)                   # negative control: fine
+    # F2 record (f): a part of a row that is not finite (the degenerate face's excess) never
+    # drops the row from the seen bound, which keeps the diffusion Σ 4/h² = 128 (bda31989: the
+    # row summed to Inf and counted 0, so an explicit count stayed as given)
+    r = LatticePDE.bound_parts(prob.stability, [0.125])
+    @test !isfinite(r.ρ) && r.seen >= 128
+    @test LatticePDE.bound_parts(prob.stability, [0.25]).seen >= 128          # control: a finite face
 end
 
 @testset "discrete maps: ExplicitMap" begin

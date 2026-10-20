@@ -327,7 +327,13 @@ throws (unseen terms at build in `_field_groups`, coupled rows here, at build an
 parameter change). A negative diffusion coefficient (anti-diffusion: unstable at any step)
 is refused. A coefficient that is not finite at a kind table entry it reads (`1 / τ[kind]`
 with a zero entry, the medium's included) is refused with or without a count, naming the
-entry; past the bound's evaluation cap an explicit count runs as given.
+entry. Past the bound's evaluation cap (more than 4096 kind table index combinations), a
+group with no count is refused; an explicit count is raised by the bound over every term the
+bound sees (`seen`: diffusion, the other terms and fields), and a warning names the terms past
+the cap: the count is the user's for them.
+
+A warning is given once per group, term and cause in a session (the group's fingerprint
+text, the terms and the cause; never a value).
 """
 struct _Substeps{B}
     bound::B
@@ -361,12 +367,13 @@ function (s::_Substeps)(praw)
         # finite at an entry the field reads is refused
         if s.explicit && !isempty(r.nonfinite) && all(x -> x[3] === :cap, r.nonfinite)
             n = isfinite(r.seen) ? max(s.least, ceil(Int, s.dt * r.seen / 1.8)) : s.least
+            # once per group, term and cause (`:cap`) in a session: the key holds no value
+            k = string(s.key, "#cap#", join(sort!([text for (_, text, _) in r.nonfinite]), "#"))
             if ccall(:jl_generating_output, Cint, ()) == 0 &&
-               lock(() -> (k = s.key * "#cap"; k in _SUBSTEP_WARNED ? false : (push!(_SUBSTEP_WARNED, k); true)),
-                   _SUBSTEP_WARNED_LOCK)
+               lock(() -> k in _SUBSTEP_WARNED ? false : (push!(_SUBSTEP_WARNED, k); true), _SUBSTEP_WARNED_LOCK)
                 @warn "field$(length(s.names) == 1 ? "" : "s") $(_fieldlist(s.names)): $n substeps per field step " *
                       "(the requested $(s.least), or more for the terms the bound sees); the stability bound does not " *
-                      "cover " * join((_nonfinite_text(text, w, s.cv) for (_, text, w) in r.nonfinite), ", ") *
+                      "cover " * join((_nonfinite_text(text, w, s.cv; warning = true) for (_, text, w) in r.nonfinite), ", ") *
                       ": the count is the user's"
             end
             return n
@@ -381,10 +388,12 @@ end
 
 # why a coefficient has no finite bound, in the model's words: a kind table entry `e` is
 # kind `e - 1` (entry 1 is the medium's), with the route
-function _nonfinite_text(text, w, cv)
+function _nonfinite_text(text, w, cv; warning::Bool = false)
     # a kind table read `at(τ, 1 + kind)` as the model writes it, `τ[kind]`
     u = replace(_user_text(text, cv), r"at\((\w+), (?:1 \+ kind|kind \+ 1)\)" => s"\1[kind]")
     t = "`" * u * "`"
+    # past the cap: the error gives the route (a count), the warning (a count was given) none
+    w === :cap && warning && return string(t, " (it reads more than 4096 kind table index combinations)")
     w === :cap && return string(t, " (it reads more than 4096 kind table index combinations; with no count, give ",
         "`PottsProblem` `field_solver = ExplicitEuler(; substeps = n)` with `n ≥ mcs_duration · ρ / 1.8`)")
     w isa Tuple || return string(t, " is not finite at the current parameters")
@@ -409,12 +418,14 @@ const _SUBSTEP_WARNED = Set{String}()
 const _SUBSTEP_WARNED_LOCK = ReentrantLock()
 function _check_substeps(s::_Substeps, praw, key::AbstractString)
     n = s(praw)
-    # once per group program and session (`key`, the group's fingerprint text), and not
-    # while precompiling (a package's workload)
-    if s.explicit && ccall(:jl_generating_output, Cint, ()) == 0 &&
-       lock(() -> key in _SUBSTEP_WARNED ? false : (push!(_SUBSTEP_WARNED, key); true), _SUBSTEP_WARNED_LOCK)
-        r = LatticePDE.bound_parts(s.bound, praw)
-        unseen = s.unseen
+    # once per group, term and cause in a session (`key`, the group's fingerprint text, with
+    # the unseen terms and the coupled rows; no value), and not while precompiling (a
+    # package's workload)
+    s.explicit && ccall(:jl_generating_output, Cint, ()) == 0 || return n
+    r = LatticePDE.bound_parts(s.bound, praw)
+    unseen = s.unseen
+    k = string(key, "#unseen#", join(sort(unseen), "#"), "#coupled#", join(sort(r.coupled), "#"))
+    if lock(() -> k in _SUBSTEP_WARNED ? false : (push!(_SUBSTEP_WARNED, k); true), _SUBSTEP_WARNED_LOCK)
         if !isempty(unseen) || !isempty(r.coupled)
             @warn "field$(length(s.names) == 1 ? "" : "s") $(_fieldlist(s.names)): $n substeps per field step " *
                   "(the requested $(s.least), or more for the terms the bound sees); the stability bound does not " *

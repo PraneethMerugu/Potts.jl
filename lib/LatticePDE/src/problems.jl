@@ -261,6 +261,15 @@ function _face_excess(b::StabilityBound, i, p)
                               for (ax, α, β) in b.faces[i] if ax == d); init = 0.0)
     end
 end
+# the same over the axes whose excess is finite (an axis with a degenerate Robin face, a ratio
+# that is not finite, counts 0): the seen bound keeps every finite part of a row (F2 record (f))
+function _face_excess_seen(b::StabilityBound, i, p)
+    return sum(eachindex(b.invh2); init = 0.0) do d
+        x = b.invh2[d] * maximum((max(0.0, abs(Problems.face_ratio(_cv(α, p), _cv(β, p))) - 1)
+                                  for (ax, α, β) in b.faces[i] if ax == d); init = 0.0)
+        isfinite(x) ? x : 0.0
+    end
+end
 function (b::StabilityBound)(p)
     isempty(b.unbounded) || return NaN
     r = bound_parts(b, p)
@@ -304,13 +313,15 @@ function bound_parts(b::StabilityBound, p)
                 diag <= 0 && -diag >= offd || push!(coupled, b.keys[i])
             end
             ρ = max(ρ, own + lin + cross)
-            # the same over the finite values only (a term over the cap counts 0): every row,
-            # term and field that has a bound still raises an explicit count
+            # the same over the finite values only (a term over the cap counts 0, an axis whose
+            # face excess is not finite counts 0): every row, term and field that has a bound
+            # still raises an explicit count, and a part that is not finite never drops the rest
+            # of its row
             Ds = sum(_seen(f, p) for f in r.diffusion; init = 0.0)
-            sv = Ds * (s4 + _face_excess(b, i, p)) + sum(_seen(f, p) for f in r.linear; init = 0.0) +
+            sv = Ds * (s4 + _face_excess_seen(b, i, p)) + sum(_seen(f, p) for f in r.linear; init = 0.0) +
                  sum(_seen(f, p) for f in r.crosslinear; init = 0.0) +
-                 sum(_seen(f, p) * (s4 + _face_excess(b, j, p)) for (f, j) in r.crossdiffusion; init = 0.0)
-            seen = max(seen, isfinite(sv) ? sv : 0.0)
+                 sum(_seen(f, p) * (s4 + _face_excess_seen(b, j, p)) for (f, j) in r.crossdiffusion; init = 0.0)
+            seen = max(seen, sv)
         end
     end
     nonfinite = Tuple{String, String, Any}[]
@@ -355,7 +366,7 @@ function _why_route(w)
     rd = unique(reduce(vcat, w[1]; init = Tuple{String, Int, Float64}[]))
     isempty(rd) && return "; give its parameters values that make it finite"
     parts = String[]
-    any(x -> x[2] == 0, rd) && push!(parts, "index 0 reads 0 (a kind map value 0, or a literal 0), and the " *
+    any(x -> x[2] == 0, rd) && push!(parts, "index 0 reads 0 (an input value 0, or a literal 0), and the " *
                                             "coefficient is not finite there: keep 0 out of the index (declare " *
                                             "the input `bounds = (1, n)`)")
     for (t, i, v) in rd
@@ -630,7 +641,6 @@ function Problems.unbounded_reason(b::StabilityBound, p)
     parts = String[]
     isempty(b.terms) || push!(parts, "the term$(length(b.terms) == 1 ? "" : "s") " *
                                      join((_term_text(t) for t in b.terms), ", ") * ", which the bound cannot see")
-    isempty(b.unbounded) || return join(parts, "; ")
     any(isnan, p) && push!(parts, "a parameter without a value")
     r = bound_parts(b, p)
     if !any(isnan, p) && !isfinite(r.ρ)
@@ -644,6 +654,22 @@ function Problems.unbounded_reason(b::StabilityBound, p)
     isempty(c) || push!(parts, "the coupled rows of $(join(("`$k`" for k in c), ", ")), which are not diagonally " *
                                "dominant (their spectrum may be complex)")
     return isempty(parts) ? nothing : join(parts, "; ")
+end
+
+# the reason without values, the warning's once-key (`Problems.unbounded_key`): the terms the
+# bound cannot see, and per coefficient with no finite bound its rate, its text and the cause
+# (`:cap`, `:tables`, or not finite at some entry), never an entry or a parameter value
+function Problems.unbounded_key(b::StabilityBound, p)
+    parts = String["unseen: " * t for t in b.terms]
+    any(isnan, p) && push!(parts, "a parameter without a value")
+    if !any(isnan, p)
+        r = bound_parts(b, p)
+        for (k, text, w) in r.nonfinite
+            push!(parts, string("nonfinite: ", k, ": ", text, " (", w isa Symbol ? w : :entries, ")"))
+        end
+        isempty(r.coupled) || push!(parts, "coupled: " * join(r.coupled, ", "))
+    end
+    return isempty(parts) ? nothing : join(sort!(parts), "; ")
 end
 
 # a `"key: term"` entry of the bound as the user wrote it: the term, a field read `c(t, x, y)`

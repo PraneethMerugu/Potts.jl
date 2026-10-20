@@ -318,13 +318,15 @@ _masks(prob::FieldProblem, st, p) = isempty(prob.init.launches) ? nothing :
 The substep count of `alg` on `prob` at parameters `p`: `⌈dt ρ(p) / 1.8⌉`; with a user
 count `n`, the larger of `n` and the count of the bound over the terms the bound sees
 ([`seen_bound`](@ref)), or `n` when that is not finite; when the full bound is unknown the
-count is the user's for the terms it does not cover, and a warning (once per reason and
-session) names them. An unknown bound with no user count is an `ArgumentError` that names the
+count is the user's for the terms it does not cover, and a warning names them, once per
+program, term and cause in a session ([`unbounded_key`](@ref): never once per value). An unknown bound with no user count is an `ArgumentError` that names the
 terms the bound cannot see.
 """
 substeps(::FieldProblem, ::ExplicitMap, p = nothing; tables = nothing) = 1
 const _SEEN_WARNED = Set{String}()
 const _SEEN_WARNED_LOCK = ReentrantLock()
+# the warning's once-key: the program (its printed text, hashed) and the value-free reason
+_warn_key(prob::FieldProblem, why) = string(hash(sprint(print_program, prob.program)); base = 16) * "|" * string(why)
 function substeps(prob::FieldProblem, alg::ExplicitEuler, p = prob.p; tables = prob.tables)
     pp = with_tables(map(primal, p), tables)        # a policy: on the primal values
     if alg.substeps >= 1
@@ -333,7 +335,10 @@ function substeps(prob::FieldProblem, alg::ExplicitEuler, p = prob.p; tables = p
         full = Float64(prob.stability(pp))
         if !(isfinite(full) && full >= 0) && ccall(:jl_generating_output, Cint, ()) == 0
             why = unbounded_reason(prob.stability, pp)
-            why === nothing || !lock(() -> why in _SEEN_WARNED ? false : (push!(_SEEN_WARNED, why); true),
+            # once per (program, term, cause) and session: the key holds no value, so a sweep
+            # over entries or parameters warns once and the set stays bounded
+            key = why === nothing ? nothing : _warn_key(prob, unbounded_key(prob.stability, pp))
+            why === nothing || !lock(() -> key in _SEEN_WARNED ? false : (push!(_SEEN_WARNED, key); true),
                                      _SEEN_WARNED_LOCK) ||
                 @warn string("ExplicitEuler(substeps = ", alg.substeps, "): ", n, " substeps (the request, or more for ",
                              "the terms the bound sees); the stability bound does not cover ", why, ": the count is the user's")

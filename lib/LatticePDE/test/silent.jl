@@ -546,7 +546,7 @@ end
     sys = ssys([D(ce) ~ -(at(Db, qe) - at(Da, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Da, Db])
     sol = solve(sown(sys; inputs = [qe => K5]), ExplicitEuler(; dt = 0.025))
     @test sol.substeps == 2 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c][end]) < 1e-20
-    # index 0 (a kind map value 0, or a literal 0) reads 0, so `100 − at(T3, k)` is 100 there
+    # index 0 (an input value 0, or a literal 0) reads 0, so `100 − at(T3, k)` is 100 there
     # (round 7 and f8f98e43: index 0 was not evaluated; n = 1, Success, max|c(1)| = 1.1e7 where
     # the exact value is exp(−100) = 3.7e-44)
     @parameters T3[1:3] = [100.0, 100.0, 100.0]
@@ -609,6 +609,33 @@ end
     sol = @test_logs (:warn, r"4096") match_mode = :any solve(sown(sys; n = 16, inputs = [qe => fill(Int32(0), 16, 16)]),
         ExplicitEuler(; dt = 0.025, substeps = 2))
     @test sol.substeps == 4 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c][end]) < 3
+end
+
+@testset "warnings once per term and cause; messages name every cause (F2 records (a), (b), (e))" begin
+    # (a) a sweep over the value of an entry the bound does not cover warns once: the key is
+    # the program, the term and the cause, never the value (bda31989: one warning per value,
+    # three here, and the set grew with every value)
+    K1 = fill(Int32(1), 4, 4)
+    @parameters Ds2[1:3] = [-1.0, 1.0, 1.0]
+    sys = ssys([D(ce) ~ -sqrt(at(Ds2, qb)) * ce], [c(0, x, y) ~ 1.0], [ce, qb], [Ds2])
+    prob = sown(sys; inputs = [qb => K1])
+    logs, _ = Test.collect_test_logs() do
+        for v in (-1.0, -2.0, -3.0)
+            solve(remake(prob; p = [Ds2 => [v, 1.0, 1.0]]), ExplicitEuler(; dt = 0.025, substeps = 2))
+        end
+    end
+    @test count(l -> l.level == Base.CoreLogging.Warn && occursin("Ds2", string(l.message)), logs) == 1
+    # (b) an unseen term and a coefficient with no finite bound in one rate: both are named
+    # (bda31989: only the unseen term `-(c^3)`)
+    @parameters Dz2[1:3] = [0.0, 1.0, 1.0]
+    sys = ssys([D(ce) ~ -ce^3 - (1 / at(Dz2, qb)) * ce], [c(0, x, y) ~ 1.0], [ce, qb], [Dz2])
+    err = emsg(() -> solve(sown(sys; inputs = [qb => K1]), ExplicitEuler(; dt = 0.025)))
+    @test occursin("c^3", err) && occursin("`Dz2[1]`", err) && occursin("make it nonzero", err)
+    # (e) index 0 is an input value 0, not a "kind map" value (a LatticePDE input is any map)
+    @parameters Dz3[1:3] = [1.0, 1.0, 1.0]
+    sys = ssys([D(ce) ~ -(1 / at(Dz3, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dz3])
+    err = emsg(() -> solve(sown(sys; inputs = [qe => fill(Int32(2), 4, 4)]), ExplicitEuler(; dt = 0.025)))
+    @test occursin("index 0 reads 0 (an input value 0", err) && !occursin("kind map", err)
 end
 
 @testset "SX-37: trajectories on other tasks never share a right side's store" begin

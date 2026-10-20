@@ -17,7 +17,7 @@ using RuntimeGeneratedFunctions: RuntimeGeneratedFunctions, RuntimeGeneratedFunc
 using SciMLBase: SciMLBase
 using SymbolicIndexingInterface: SymbolicIndexingInterface as SII
 using ..Exec: Exec
-using ..IR: Coef, FaceRule, NodeValueRule, Program, fieldid, isfloat, juliatype, leveldims, ncomp, nsites
+using ..IR: Coef, FaceRule, NodeValueRule, Program, fieldid, print_program, isfloat, juliatype, leveldims, ncomp, nsites
 using ..Compile: CompiledKernel, CompileOptions, body_function, derive_function, lanecast, lanetype,
                  primal, promote_dual, semantic, valtype, withvaltype
 using ..Schedule: LaunchSpec, StepPlan, plan
@@ -33,7 +33,7 @@ public Geom, RT_T, RT_DT, launch_geometry, launch_parameters, bind, rebind, reti
        FieldSolution,
        FieldIntegrator, substeps, StateView, RHSLaunch, LatticeRHS, ode_problem,
        input_key, input_name, table_key, table_entry, parameter_name, resolve_inputs, check_inputs_set, upload_inputs!, check_parameters,
-       seen_bound, unbounded_reason, check_values, ParamsTables, with_tables,
+       seen_bound, unbounded_reason, unbounded_key, check_values, ParamsTables, with_tables,
        typewith, check_setp, LatticeODEFunction
 
 include("bind.jl")

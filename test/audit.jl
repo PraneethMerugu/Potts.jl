@@ -331,7 +331,11 @@ end
                  (ph.substeps, CorePotts.Problems.with_tables(Float64[getproperty(prob.p, n) for n in ph.params],
                       Pair{String, Vector{Float64}}[ph.program.tables[i].key => fill(1.0, 5000) for (i, _) in ph.tables])))
     s3, b3 = big(p3)
-    @test (@test_logs (:warn, r"3 substeps.*does not cover.*4096") s3(b3)) == 3   # warned once per group
+    # warned once per group, term and cause; the warning has no error route (F2 record (c):
+    # bda31989 printed "with no count, give `PottsProblem` `field_solver = …`" inside it)
+    logs, n3 = Test.collect_test_logs(() -> s3(b3))
+    @test n3 == 3 && length(logs) == 1 && occursin(r"3 substeps.*does not cover.*4096", string(logs[1].message))
+    @test !occursin("with no count", string(logs[1].message))
     # … raised by the bound over the terms it sees (round 9: Dc = 4.5 with 3 stayed at 3 past
     # the cap, against 22 with the 2-entry table; now 4.5·8/1.8 = 20; the group has warned)
     p45 = PottsProblem(AuditInvTable(; name = :v), [op; :Dc => 4.5], (0, 1); field_solver = ExplicitEuler(substeps = 3))
