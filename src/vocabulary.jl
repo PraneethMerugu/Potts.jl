@@ -1301,26 +1301,9 @@ Base.:(==)(a::LatticeSpec, b::LatticeSpec) = a.dims == b.dims && a.boundary == b
     a.spacing == b.spacing && a.neighborhood == b.neighborhood && a.domain == b.domain && a.geometry == b.geometry
 Base.hash(l::LatticeSpec, h::UInt) = hash((l.dims, l.boundary, l.spacing, l.neighborhood, l.domain, l.geometry), h)
 
-"""
-    ExplicitEuler(; substeps = nothing, lower = nothing)
-
-Explicit Euler over one MCS in `substeps` steps, clipping the result at `lower` after every
-step if given (legacy Potts clips concentrations at 0). As a `field_solver` (a
-`PottsProblem` keyword), `substeps = nothing` takes the smallest count `n` with
-`mcs_duration / n · ρ ≤ 1.8`, where `ρ` is the field compiler's Gershgorin bound on the
-spectral radius of the discrete right-hand side at the current parameters (diffusion
-`D · Σ_d 4/h_d²` plus the size of each reaction coefficient). A group whose rate gives no
-bound from the parameters (a kind table, `÷`, a reaction nonlinear in the field, a rate
-reading another field whose Jacobian row is not diagonally dominant) needs an explicit
-`substeps`; without one, `PottsProblem` throws an `ArgumentError`. An explicit `n` is a
-minimum: the count is at least the bound of the terms the bound sees (a warning names the
-others). A negative diffusion coefficient is an `ArgumentError`. As an `ode_solver` (the
-default), `nothing` is one step.
-"""
-Base.@kwdef struct ExplicitEuler
-    substeps::Union{Nothing, Int} = nothing
-    lower::Union{Nothing, Float64} = nothing
-end
+# `ExplicitEuler` is LatticeFields' (`LatticeFields.Problems.ExplicitEuler`, F2-04): one type
+# for both front ends. As a `field_solver` the window is the MCS (`dt` is refused); as an
+# `ode_solver`, `substeps = nothing` is one step.
 
 """
     Adaptive(alg; kwargs...)

@@ -94,7 +94,20 @@ is stored in Float16 and computed in `T`. The generated code is `Potts.generated
 How fields and ODEs are integrated is part of the problem, compiled into its code:
 - `field_solver = ExplicitEuler(; substeps, lower)` is required when the model has a field
   and an error otherwise; there is no default (a published model's docstring gives its
-  value, e.g. `ExplicitEuler(substeps = 2, lower = 0.0)` for `MerksVasculogenesis`);
+  value, e.g. `ExplicitEuler(substeps = 2, lower = 0.0)` for `MerksVasculogenesis`).
+  It steps each field over one MCS in `substeps` explicit Euler steps, clipping each result
+  at `lower` if given (legacy Potts clips concentrations at 0); `dt` is refused (the window
+  is the MCS). `substeps = nothing` takes the smallest count `n` with
+  `mcs_duration / n · ρ ≤ 1.8`, where `ρ` is the field compiler's Gershgorin bound on the
+  spectral radius of the discrete right-hand side at the current parameters (diffusion
+  `D · Σ_d 4/h_d²`, a kind-table or kind-set multiplier at its largest, plus the size of each
+  reaction coefficient). A group whose rate gives no bound from the parameters (a reaction
+  nonlinear in the field, a multiplier reading a CPM value or `mcs`, `÷`, a rate reading
+  another field whose Jacobian row is not diagonally dominant) needs an explicit `substeps`;
+  without one, `PottsProblem` throws an `ArgumentError`. An explicit `n` is a minimum: the
+  count is at least the bound of the terms the bound sees, and a warning (once per group,
+  term and cause) names the others. A negative diffusion coefficient, or a coefficient that
+  is not finite at a kind table entry, is an `ArgumentError`;
 - `ode_solver` integrates the cell and model ODEs (`D(x) ~ …`, components): `ExplicitEuler(;
   substeps)` (the default, one step per MCS), `RK4(; substeps)` or `Adaptive(alg; reltol, …)`;
 - `solvers = [x => solver, …]`, keyed by integrated variables (or a component: all its

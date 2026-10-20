@@ -29,7 +29,7 @@ public Geom, RT_T, RT_DT, launch_geometry, launch_parameters, bind, rebind, reti
        FieldStore,
        array, current, settable!, launch_arrays, state_layout, BoundStep, compile!, swap!,
        run_step!, FaceCheck, face_checks, degenerate_face, check_faces, degenerate, face_ratio, FACE_RTOL, FieldSlot,
-       LatticeIndex, FieldAlgorithm, ExplicitEuler, ExplicitMap, FieldProblem,
+       LatticeIndex, FieldAlgorithm, ExplicitEuler, ExplicitMap, nbuffers, FieldProblem,
        FieldSolution,
        FieldIntegrator, substeps, StateView, RHSLaunch, LatticeRHS, ode_problem,
        input_key, input_name, table_key, table_entry, parameter_name, resolve_inputs, check_inputs_set, upload_inputs!, check_parameters,

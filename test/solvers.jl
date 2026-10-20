@@ -680,3 +680,59 @@ end
         temperature = (st, p, prop, ctx) -> 2.0, f.phases, f.lifecycle, f.acceptance, f.footprint, f.fingerprint, f.sys, f.track, f.connectivity)
     @test Potts.CorePotts.copy_step_relations(f.sys, Tswap) === nothing
 end
+
+# F2-04: one `ExplicitEuler` (LatticeFields'), bound by both front ends (F2 design §2.4)
+@potts_model SolverOneField begin
+    @kinds medium A
+    @variables c(field) = 1.0
+    @lattice Lattice((8, 8))
+    @energy cells(A) => (volume - 9)^2
+    @equations D(c) ~ 0.1 * Δ(c) - 0.5 * c
+    @sweep Metropolis(; temperature = 1.0)
+end
+@testset "F2-04: one ExplicitEuler for both front ends" begin
+    # `using Potts, LatticePDE` resolves the name (bda31989: UndefVarError, two bindings)
+    m = Module()
+    Core.eval(m, :(using Potts; using Potts.LatticePDE))
+    @test Core.eval(m, :ExplicitEuler) === Potts.ExplicitEuler === Potts.LatticePDE.ExplicitEuler ===
+          Potts.LatticeFields.Problems.ExplicitEuler
+    @test Core.eval(m, :ExplicitMap) === Potts.LatticePDE.ExplicitMap
+    # `substeps = 0` is no count: an ArgumentError with the route (bda31989: LatticePDE took it
+    # for "automatic", Potts for a count of 0)
+    err = try
+        ExplicitEuler(; substeps = 0); ""
+    catch e
+        sprint(showerror, e)
+    end
+    @test occursin("`substeps = 0` is not a count", err) && occursin("leave `substeps` out", err)
+    @test_throws ArgumentError ExplicitEuler(; dt = -1.0)
+    @test_throws ArgumentError ExplicitEuler(; dt = Inf)
+    @test ExplicitEuler(; substeps = 3).substeps == 3 && ExplicitEuler().dt === nothing   # control
+    # a `PottsProblem` steps over the MCS window: a `dt` is refused, naming it, for a field and
+    # for an ODE; a rate field refuses `ExplicitMap` by name
+    op = [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:A]]
+    ferr(f) = try
+        f(); ""
+    catch e
+        e isa ArgumentError || rethrow()
+        sprint(showerror, e)
+    end
+    err = ferr(() -> PottsProblem(SolverOneField(; name = :f), op, (0, 1); field_solver = ExplicitEuler(; dt = 0.5)))
+    @test occursin("dt = 0.5", err) && occursin("MCS window", err) && occursin("leave `dt` out", err)
+    err = ferr(() -> PottsProblem(SolverOneField(; name = :f), op, (0, 1); field_solver = ExplicitEuler(),
+        solvers = [:c => ExplicitEuler(; dt = 0.5)]))
+    @test occursin("the field `c`", err) && occursin("MCS window", err)
+    err = ferr(() -> PottsProblem(SolverOneField(; name = :f), op, (0, 1); field_solver = ExplicitMap()))
+    @test occursin("`ExplicitMap()` steps discrete maps", err)
+    err = ferr(() -> PottsProblem(SolverPairYS(; name = :p), solver_op(), (0, 1); ode_solver = ExplicitEuler(; dt = 0.5)))
+    @test occursin("`ode_solver`", err) && occursin("MCS window", err)
+    @test PottsProblem(SolverOneField(; name = :f), op, (0, 1); field_solver = ExplicitEuler()) isa PottsProblem   # control
+    # canonical strings: `ExplicitMap` has one (bda31989: MethodError); `ExplicitEuler`'s text
+    # is unchanged (no `dt`), and an ODE's `substeps = nothing` is one step, keyword-built
+    @test Potts._canonical(ExplicitMap()) == "ExplicitMap()"
+    @test Potts._canonical(ExplicitEuler(; substeps = 2, lower = 0.0)) == "ExplicitEuler(substeps=2,lower=0.0)"
+    @test Potts._canonical(Potts._ode_solver(ExplicitEuler(; lower = -1.0))) == "ExplicitEuler(substeps=1,lower=-1.0)"
+    @test Potts._ode_solver(ExplicitEuler()) === ExplicitEuler(; substeps = 1)
+    sol = solve(PottsProblem(SolverPairYS(; name = :p), solver_op(), (0, 1)), SequentialCPM())
+    @test sol.u[end].cell.y[1] == 1.0 && sol.u[end].cell.s[1] == 1.0                # one Euler step: (1, 0) → (1, 1)
+end

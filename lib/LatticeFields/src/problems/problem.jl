@@ -9,27 +9,44 @@ Field stepping algorithms of the owned path.
 abstract type FieldAlgorithm end
 
 """
-    ExplicitEuler(; dt, substeps = 0)
+    ExplicitEuler(; dt = nothing, substeps = nothing, lower = nothing)
 
-Forward Euler on the fused rate + update kernels (FV, §5.6). `dt` is the step; each step
-runs `n` substeps of `dt / n`. With `substeps = 0` (the default, "automatic"),
-`n = ⌈dt ρ(p) / 1.8⌉` from the problem's stability bound `ρ` at the current parameters
-(§6.2), and an unknown bound (a rate term it cannot see, a parameter without a value, or
-coupled rows that are not diagonally dominant) is refused. A user count `substeps = n ≥ 1`
-is a minimum: the count is the larger of `n` and the bound over the terms the bound sees
-(as in `@potts_model`); when no term is seen, `n` is used.
+Forward Euler: each window `dt` runs `n` substeps of `dt / n`. One type for both front ends
+(`Potts` and `LatticePDE` export this binding). `substeps = nothing` takes the automatic
+count `n = ⌈dt ρ(p) / 1.8⌉` from the problem's stability bound `ρ` at the current parameters
+(§6.2); an unknown bound (a rate term it cannot see, a parameter without a value, or coupled
+rows that are not diagonally dominant) is refused. A count `substeps = n ≥ 1` is a minimum:
+the count is the larger of `n` and the bound over the terms the bound sees; when no term is
+seen, `n` is used. `lower` clips each substep's result at `max(v, lower)`.
+
+- On a `FieldProblem` (`LatticePDE.discretize(…; problem = :owned)`), `dt` is the step and
+  is required; `lower` is not supported yet (an `ArgumentError`).
+- As a `PottsProblem` `field_solver`, the window is the MCS (`mcs_duration`): `dt` must be
+  left out. As an `ode_solver`, `substeps = nothing` is one step per MCS.
+
+`dt` must be finite and > 0, and `substeps` ≥ 1: `substeps = 0` is an `ArgumentError` (leave
+`substeps` out for the automatic count).
 """
 struct ExplicitEuler <: FieldAlgorithm
-    dt::Float64
-    substeps::Int
-    function ExplicitEuler(dt::Real, substeps::Integer)
-        dt > 0 && isfinite(dt) ||
-            throw(ArgumentError("ExplicitEuler: dt = $dt must be finite and > 0"))
-        substeps >= 0 || throw(ArgumentError("ExplicitEuler: substeps = $substeps < 0"))
-        return new(Float64(dt), Int(substeps))
+    dt::Union{Nothing, Float64}
+    substeps::Union{Nothing, Int}
+    lower::Union{Nothing, Float64}
+    function ExplicitEuler(dt, substeps, lower)
+        dt === nothing || (dt isa Real && isfinite(dt) && dt > 0) ||
+            throw(ArgumentError("ExplicitEuler: dt = $(repr(dt)) must be finite and > 0"))
+        substeps isa Integer && substeps == 0 && throw(ArgumentError(
+            "ExplicitEuler: `substeps = 0` is not a count; leave `substeps` out for the automatic count"))
+        substeps === nothing || (substeps isa Integer && substeps >= 1) ||
+            throw(ArgumentError("ExplicitEuler: substeps = $(repr(substeps)) must be an integer ≥ 1 (or left out: automatic)"))
+        lower === nothing || lower isa Real ||
+            throw(ArgumentError("ExplicitEuler: lower = $(repr(lower)) must be a number"))
+        return new(dt === nothing ? nothing : Float64(dt), substeps === nothing ? nothing : Int(substeps),
+            lower === nothing ? nothing : Float64(lower))
     end
 end
-ExplicitEuler(; dt::Real, substeps::Integer = 0) = ExplicitEuler(dt, substeps)
+ExplicitEuler(; dt = nothing, substeps = nothing, lower = nothing) = ExplicitEuler(dt, substeps, lower)
+# the state buffers a step of the algorithm needs per field (`c`, `c__next`)
+nbuffers(::ExplicitEuler) = 2
 
 """
     ExplicitMap()
@@ -37,6 +54,18 @@ ExplicitEuler(; dt::Real, substeps::Integer = 0) = ExplicitEuler(dt, substeps)
 Discrete maps `Shift(t, 1)(c) ~ rhs` (§5.5): one application per unit of time.
 """
 struct ExplicitMap <: FieldAlgorithm end
+nbuffers(::ExplicitMap) = 2
+
+# the keywords a `FieldProblem` steps with: a step `dt`, and no clip yet (F2-07 brings `lower`
+# to the update pass)
+function _check_owned(alg::ExplicitEuler)
+    alg.dt === nothing && throw(ArgumentError(
+        "`ExplicitEuler` on a `FieldProblem` needs `dt` (the step): give `ExplicitEuler(; dt)`"))
+    alg.lower === nothing || throw(ArgumentError(string("`ExplicitEuler(; lower = ", alg.lower,
+        ")`: a `FieldProblem` has no clip yet; leave `lower` out (a clip is a `PottsProblem` `field_solver` option)")))
+    return alg
+end
+_check_owned(alg::ExplicitMap) = alg
 
 """
     FieldProblem(program, u0, tspan, p; state, kind, init = String[], index, tables = [],
@@ -348,8 +377,9 @@ const _SEEN_WARNED_LOCK = ReentrantLock()
 _warn_key(prob::FieldProblem, why) = string(hash(sprint(print_program, prob.program)); base = 16) * "|" * string(why)
 function substeps(prob::FieldProblem, alg::ExplicitEuler, p = prob.p; tables = prob.tables,
         inputs = _bound_inputs(prob))
+    _check_owned(alg)
     pp = with_tables(map(primal, p), tables; inputs)        # a policy: on the primal values
-    if alg.substeps >= 1
+    if alg.substeps !== nothing
         ρ = seen_bound(prob.stability, pp)
         n = isfinite(ρ) && ρ >= 0 ? max(alg.substeps, ceil(Int, alg.dt * ρ / 1.8)) : alg.substeps
         full = Float64(prob.stability(pp))
@@ -396,6 +426,7 @@ function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; saveat = (),
               "rate program is stepped by ExplicitEuler(; dt)",
         "; got ",
         alg)))
+    _check_owned(alg)
     check_faces(prob.faces, prob.p)
     check_values(prob.p, prob.index)
     check_parameters(prob.stability, with_tables(map(primal, prob.p), prob.tables; inputs = _bound_inputs(prob)))
