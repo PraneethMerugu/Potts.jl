@@ -846,14 +846,14 @@ end
     @test at2(J3, 2, 3) == J3[2, 3]                                                  # control
 end
 
-@testset "F2-04: one ExplicitEuler; a FieldProblem needs its dt and has no clip yet" begin
+@testset "F2-04: one ExplicitEuler; a FieldProblem needs its dt" begin
     @test ExplicitEuler === LatticePDE.Problems.ExplicitEuler
     @parameters kd = 0.5
     p = sown(ssys([D(ce) ~ -kd * ce], [c(0, x, y) ~ 1.0], [ce], [kd]))
     err = emsg(() -> solve(p, ExplicitEuler()))
     @test occursin("needs `dt`", err)
-    err = emsg(() -> solve(p, ExplicitEuler(; dt = 0.1, lower = 0.0)))
-    @test occursin("no clip yet", err) && occursin("leave `lower` out", err)
+    # (F2-07: `lower` clips in B too; the clip's tests are in groups.jl)
+    @test all(≈(0.95^10), solve(p, ExplicitEuler(; dt = 0.1, substeps = 1, lower = 0.0))[:c][end])
     @test occursin("`substeps = 0` is not a count", emsg(() -> ExplicitEuler(; dt = 0.1, substeps = 0)))
     @test all(≈(0.95^10), solve(p, ExplicitEuler(; dt = 0.1, substeps = 1))[:c][end])           # control
 end

@@ -545,3 +545,39 @@ if Main.PottsDevices.on_device() && Main.PottsDevices.device_name() == "rocm"
         end
     end
 end
+
+# F2-07: the byte-identity gate of the update pass. For every guard model's field system (all
+# its fields, and each field alone with the others read from their arrays), the rate program
+# with the Euler update fused by the IR pass (`fuse_update`) prints the same semantic program
+# as A's symbolic fusion (`_EulerUpdate`), with and without a clip, at Float64 and Float32
+@testset "F2-07 gate: the update pass equals A's symbolic fusion" begin
+    LP, LF = Potts.LatticePDE, Potts.LatticeFields
+    models = Any[[(label, build) for (label, build, _...) in GD_HARD];
+                 [(string(n), () -> getfield(Main, n)(; name = :g)) for n in GD_SOFT]]
+    bad, checked = String[], Ref(0)
+    for (label, build) in models, T in (Float64, Float32)
+        sys = build()
+        names = Symbol[Potts.info(x).name for (x, _) in Potts._field_equations(sys)]
+        isempty(names) && continue
+        known = try
+            Potts._field_inputs(sys, T)
+        catch e
+            e isa ArgumentError || rethrow()
+            continue                                    # a model `@equations` refuses
+        end
+        for ns in unique([[names]; length(names) > 1 ? [[n] for n in names] : Vector{Symbol}[]])
+            pdesys, _ = Potts._field_system(sys, ns; T, known)
+            disc = Potts._field_disc(sys, T)
+            rate = LP.symbolic_discretize(pdesys, disc).program
+            for lower in (nothing, 0.0)
+                sym = LP.symbolic_discretize(pdesys, disc; update = Potts._EulerUpdate(lower)).program
+                pass = LF.Compile.fuse_update(rate, LF.Problems.update_rule(ExplicitEuler(; lower)))
+                checked[] += 1
+                LF.Compile.fingerprint_text(pass; T) == LF.Compile.fingerprint_text(sym; T) ||
+                    push!(bad, "$label|$T|$(join(ns, ","))|lower=$lower")
+            end
+        end
+    end
+    foreach(b -> println(stderr, "  FUSION GATE differs: ", b), bad)
+    @test isempty(bad) && checked[] > 100
+end

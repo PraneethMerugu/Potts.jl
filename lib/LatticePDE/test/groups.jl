@@ -2,9 +2,12 @@
 # through `GroupRuntime`s (`advance!`, one per field group); `FieldGroups` assigns algorithms
 # to fields; an algorithm declares its buffers (`nbuffers`) and keeps a cache (`alg_cache`)
 # that `reset!` and its return code (`step_retcode!`) reach.
+# F2-07: `lower_group` (the rate form and the group cut), the update pass (`fuse_update`) and
+# its byte-identity gate, a clip in B, `dt` required, Cartesian indexing on the host.
 using LatticeFields: Problems as LFP
 using SciMLBase: SciMLBase, remake, reinit!, ReturnCode
 using SymbolicIndexingInterface: setp
+using LatticeFields.Compile: fingerprint_text, fuse_update
 
 # a stub algorithm: Euler with three substeps, three buffers and a counting cache that fails at
 # step `fail_at` (0: never)
@@ -19,6 +22,7 @@ mutable struct GStubCache
 end
 LFP.nbuffers(::GStub) = 3
 LFP.update_key(::GStub) = :euler
+LFP.update_rule(::GStub) = LFP.update_rule(ExplicitEuler())
 LFP.alg_cache(a::GStub, group, store) = GStubCache(0, 0, a.fail_at)
 LFP.reset_cache!(c::GStubCache) = (c.resets += 1; nothing)
 LFP.step_retcode!(c::GStubCache, rt) = (c.steps += 1; c.steps == c.fail_at ? ReturnCode.ConvergenceFailure : ReturnCode.Success)
@@ -149,4 +153,109 @@ end
         init(remake(p; p = [gb => 0.2 + k * 1e-4]), alg)
     end
     @test length(LFP._SEEN_WARNED) == n0
+end
+
+# Hand FTCS on a 2D box (test/fields.jl:10–33, ported): `n` substeps of `dt/n`; periodic or
+# zero-flux faces; `rate(c, i, j)` the reaction; the update clipped below at `lower`
+function g_ftcs(c0, D, h, dt, n; periodic, rate = (c, i, j) -> 0.0, lower = nothing)
+    c = copy(c0)
+    nx, ny = size(c)
+    for _ in 1:n
+        new = similar(c)
+        for j in 1:ny, i in 1:nx
+            lap = 0.0
+            for (di, dj, hd) in ((1, 0, h[1]), (-1, 0, h[1]), (0, 1, h[2]), (0, -1, h[2]))
+                a, b = i + di, j + dj
+                if periodic
+                    a, b = mod1(a, nx), mod1(b, ny)
+                elseif !(1 <= a <= nx && 1 <= b <= ny)
+                    continue                                       # zero flux: the ghost is the site
+                end
+                lap += (c[a, b] - c[i, j]) / hd^2
+            end
+            v = c[i, j] + dt / n * (D * lap + rate(c, i, j))
+            new[i, j] = lower === nothing ? v : max(v, lower)
+        end
+        c = new
+    end
+    return c
+end
+
+@testset "F2-07: the update pass equals the symbolic fusion (byte-identity gate)" begin
+    @variables gm(..) gd(..)::Bool [input = true] gk(..)::Int32 [input = true]
+    gme, gde, gke = gm(t, x, y), gd(t, x, y), gk(t, x, y)
+    @parameters gr = -0.5 Dg[1:2] = [0.3, 1.0]
+    dom = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    systems = [
+        gsys(),                                                       # coupled, periodic
+        PDESystem([D(gme) ~ at(Dg, gke) * Δ(gme) - 0.1gme], [gm(0, x, y) ~ x, gme ~ masked(gke == 2, 1.0)],
+            dom, [t, x, y], [gme, gke], [Dg]; name = :m),             # a masked condition, a site multiplier
+        PDESystem([D(gme) ~ Δ(gme)], [gm(0, x, y) ~ x * y, gm(t, 0, y) + gr * Differential(x)(gm(t, 0, y)) ~ 1.0],
+            dom, [t, x, y], [gme], [gr]; name = :r),                  # a Robin face
+    ]
+    discs = [LatticeDiscretization(Grid((8, 8)); T = Float64), LatticeDiscretization(Grid((8, 8)); T = Float64),
+        LatticeDiscretization(Grid((8, 8)); T = Float64)]
+    # an irregular domain (`select(inside, …)` around the update)
+    push!(systems, PDESystem([D(gme) ~ Δ(gme) - gme], [gm(0, x, y) ~ x], dom, [t, x, y], [gme, gde], Num[]; name = :d))
+    push!(discs, LatticeDiscretization(Grid((8, 8)); T = Float64, domain = gd))
+    for (sys, disc) in zip(systems, discs), lower in (nothing, 0.0), T in (Float64, Float32)
+        rate = symbolic_discretize(sys, disc).program
+        sym = symbolic_discretize(sys, disc; update = (kb, c, r) -> (v = LatticePDE.euler_update(kb, c, r);
+                                                                        lower === nothing ? v : max(v, lower))).program
+        pass = fuse_update(rate, LFP.update_rule(ExplicitEuler(; lower)))
+        @test fingerprint_text(pass; T) == fingerprint_text(sym; T)
+        @test fingerprint_text(rate; T) != fingerprint_text(sym; T)      # control: the rate form is not the step
+    end
+    # the gate inside `discretize` (`LATTICEPDE_CHECK_FUSION=1`: the suites run with it)
+    withenv("LATTICEPDE_CHECK_FUSION" => "1") do
+        @test gown(gsys()) isa FieldProblem
+    end
+end
+
+@testset "F2-07: a clip in B; a second algorithm fuses once, with no LatticePDE call" begin
+    @variables gq(..)
+    gqe = gq(t, x, y)
+    n = 8
+    sys = PDESystem([D(gqe) ~ Δ(gqe) - 3.0], [gq(0, x, y) ~ x * y, gq(t, 0, y) ~ gq(t, 1, y), gq(t, x, 0) ~ gq(t, x, 1)],
+        [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [gqe], Num[]; name = :q)
+    p = gown(sys; n)
+    @test p.options.index === :cartesian                          # the host indexes by coordinates
+    alg = ExplicitEuler(; dt = 0.05, substeps = 4, lower = 0.0)
+    s = solve(p, alg)
+    k = init(p, alg).substeps                                     # 4 is a minimum: the bound raises it
+    @test k == 15                                                 # ⌈0.05 · 512 / 1.8⌉
+    c = s[:gq][1]
+    for _ in 1:4
+        c = g_ftcs(c, 1.0, (1 / n, 1 / n), 0.05, k; periodic = true, rate = (c, i, j) -> -3.0, lower = 0.0)
+    end
+    @test isapprox(s[:gq][end], c; rtol = 1e-12) && minimum(c) == 0.0   # clipped (base: `lower` refused in B)
+    @test minimum(solve(p, ExplicitEuler(; dt = 0.05, substeps = 4))[:gq][end]) < 0   # control: no clip
+    # the clip's program is fused once, in the group (the update pass, no symbolic step)
+    @test haskey(p.group.programs, (:euler, 0.0)) && length(p.group.programs) == 2
+    init(p, ExplicitEuler(; dt = 0.1, substeps = 2, lower = 0.0))   # another window and count: the same update
+    @test length(p.group.programs) == 2
+    q = remake(p; u0 = p.u0)
+    @test q.group === p.group                                     # a remake shares the group
+    pc = gown(sys; n)
+    cold = @allocated init(pc, ExplicitEuler(; dt = 0.05, substeps = 4, lower = 1.0))   # fused, planned, emitted
+    warm = @allocated init(pc, ExplicitEuler(; dt = 0.05, substeps = 4, lower = 1.0))
+    @test warm < cold / 4 && length(pc.group.programs) == 2        # warm: nothing fused, planned or emitted
+end
+
+@testset "F2-07: dt is required; lower_group cuts a group" begin
+    p = gown(gsys())
+    for f in (() -> init(p, ExplicitEuler()), () -> solve(p), () -> solve(p; saveat = 0.05))
+        e = gerr(f)
+        @test occursin("needs `dt`", e) && occursin("saveat", e) && !occursin("clock", e)
+    end
+    disc = LatticeDiscretization(Grid((8, 8)); T = Float64)
+    whole = LatticePDE.lower_group(gsys(), disc)
+    @test whole.state == ["gc", "go"] && isempty(whole.external) && whole.kind === :rate
+    cut = LatticePDE.lower_group(gsys(), disc; fields = [gce])
+    @test cut.state == ["gc"] && cut.external == ["go"] && "go" in cut.inputs
+    # the group's bound sees its own rows: o is a source of c's step (the whole system's rows
+    # are coupled: no bound)
+    @test isnan(whole.stability(LFP.with_tables([0.3, 0.2], Pair{String, Vector{Float64}}[]))) &&
+          cut.stability(LFP.with_tables([0.3, 0.2], Pair{String, Vector{Float64}}[])) ≈ 512
+    @test occursin("not a dependent variable", gerr(() -> LatticePDE.lower_group(gsys(), disc; fields = [x])))
 end

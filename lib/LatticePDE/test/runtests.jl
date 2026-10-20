@@ -9,6 +9,8 @@ using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_var
 using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
 using DomainSets: Interval
 using SciMLBase: SciMLBase
+# the byte-identity gate of the update pass (F2-07) runs in every owned `discretize` of the suite
+get!(ENV, "LATTICEPDE_CHECK_FUSION", "1")
 
 opof(e) = (u = unwrap(e); iscall(u) ? operation(u) : nothing)
 function ops(e)                                     # every operation in the term tree

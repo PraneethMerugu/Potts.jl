@@ -1193,3 +1193,40 @@ end
     @test a == b                                                   # the met order does not matter
     @test first.(a) == [:kind__in, :field1__in, :field2__in, :domain__in] && a[2][2] === :aa && a[3][2] === :zz
 end
+
+# F2-07: front end B's `FieldGroups` steps FdTwo's field system as A's two solver groups do
+# (c with 2 substeps, then u with 3, reading the new c): σ is frozen (`A[frozen]`), so the
+# kind input is the same at every MCS
+@testset "F2-07: B FieldGroups equals A's two groups (FdTwo, σ frozen)" begin
+    LP, Sy, SU, MTKB = Potts.LatticePDE, Potts.Symbolics, Potts.SymbolicUtils, Potts.ModelingToolkitBase
+    sys = FdTwo(; name = :t)
+    op = fd_source_op((12, 10))
+    σ0 = copy(last(op[1]))
+    prob = PottsProblem(sys, op, (0, 3); field_solver = ExplicitEuler(substeps = 2),
+        solvers = [:u => ExplicitEuler(substeps = 3)])
+    integ = init(prob, SequentialCPM())
+    foreach(_ -> step!(integ), 1:3)
+    st = current_state(integ)
+    @test Array(st.σ) == σ0 && fd_n(integ, 1) == 2 && fd_n(integ, 2) == 3
+    # A's field system in front end B: zero initial values, the time span of 3 MCS
+    pdesys, _ = Potts._field_system(sys; T = Float64)
+    ivs = pdesys.ivs
+    isin(v) = MTKB.isinput(Sy.unwrap(v))
+    states = [v for v in pdesys.dvs if !isin(v)]
+    ics = [Sy.wrap(SU.operation(Sy.unwrap(v))(0.0, Sy.unwrap.(ivs[2:end])...)) ~ 0.0 for v in states]
+    dom = [isequal(Sy.unwrap(d.variables), Sy.unwrap(ivs[1])) ? (ivs[1] ∈ LP.Interval(0.0, 3.0)) : d
+           for d in getfield(pdesys, :domain)]
+    bsys = MTKB.PDESystem(pdesys.eqs, [pdesys.bcs; ics], dom, ivs, pdesys.dvs, pdesys.ps; name = :b)
+    kin = only(v for v in pdesys.dvs if isin(v))
+    bp = LP.discretize(bsys, LP.LatticeDiscretization(LP.Grid((12, 10)); T = Float64, problem = :owned);
+        inputs = [kin => Int32.(σ0 .!= 0)])
+    groups = LP.FieldGroups(:c => ExplicitEuler(; dt = 1.0, substeps = 2), :u => ExplicitEuler(; dt = 1.0, substeps = 3))
+    bi = init(bp, groups)
+    @test [r.n for r in bi.runtimes] == [2, 3]
+    s = solve!(bi)
+    @test isapprox(s[:c][end], Array(st.site.c); rtol = 1e-12) && isapprox(s[:u][end], Array(st.site.u); rtol = 1e-12)
+    @test maximum(Array(st.site.u)) > 0                                     # u has grown from c
+    # control: one group steps c and u together (u reads the old c)
+    one = solve(bp, ExplicitEuler(; dt = 1.0, substeps = 3))
+    @test !(one[:u][end] ≈ Array(st.site.u))
+end

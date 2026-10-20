@@ -1057,7 +1057,6 @@ function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = ())
     kind = disc.problem
     kind == :linear && _dverr("problem = :linear (steady systems) is not lowered in this version (a steady solver " *
                               "is planned); step the equations as rates `D(c) ~ rhs` to their steady state")
-    sys, derived, computed = _fold_computed(sys)
     hasmap = any(eq -> iscall(unwrap(eq.lhs)) && operation(unwrap(eq.lhs)) isa Shift, sys.eqs)
     if hasmap
         name(eq) = (r = unwrap(eq.lhs); a = iscall(r) ? arguments(r)[1] : r; string(_name(_opof(a))))
@@ -1073,23 +1072,46 @@ function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = ())
     kind == :ode && hasmap && _dverr("discrete maps have no ODE form; use problem = :owned")
     backend = disc.backend === nothing ? KernelAbstractions.CPU() : disc.backend
     T = _statetype(disc)
-    options = CompileOptions(; T)
+    # Cartesian indexing on the host: the host loop hands each site its coordinates (a linear
+    # launch decodes them with an integer division per site; D5, as front end A); the option
+    # is outside the fingerprint
+    options = CompileOptions(; T, index = Exec.ishost(backend) ? :cartesian : :auto)
     tspan = _domain_ends(sys)[1]
-    cf = symbolic_discretize(sys, disc; update = kind == :owned ? euler_update : nothing)
-    _check_tables(cf, sys)
+    # the group, lowered once in rate form (the update is fused by the group, per algorithm)
+    g = _lower_group(sys, disc)
+    cf, sys, spec = g.cf, g.sys, g.spec
     s = cf.program
-    state = _states(s)
-    init = [k.key for k in s.kernels if startswith(k.key, "mask:")]
+    state = spec.state
     u0 = _initial(cf, sys, state, T)
-    index = _index(cf, sys, s, state; derived, computed)
+    index = _index(cf, sys, s, state; g.derived, g.computed)
     ins = Pair[_input_defaults(cf, sys); collect(inputs)]
     if kind == :owned
-        stab = hasmap ? (p -> NaN) : stability_bound(cf, sys)
-        return FieldProblem(s, u0, tspan, cf.defaults; state, kind = hasmap ? :map : :rate,
-            init, index, tables = cf.tables, inputs = ins, backend, options, stability = stab)
+        _check_fusion(s, sys, disc)
+        return FieldProblem(spec, u0, tspan, cf.defaults; index, tables = cf.tables, inputs = ins, backend, options)
     end
-    isempty(init) || _dverr("masked conditions (`c ~ masked(pred, v)`) need problem = :owned in this version")
+    isempty(spec.init) || _dverr("masked conditions (`c ~ masked(pred, v)`) need problem = :owned in this version")
     rates = Dict(k => "∂$k" for k in state)
-    return ode_problem(s, u0, tspan, cf.defaults; state, rates, init, index,
-        tables = cf.tables, inputs = ins, stability = stability_bound(cf, sys), backend, options)
+    return ode_problem(s, u0, tspan, cf.defaults; state, rates, init = spec.init, index,
+        tables = cf.tables, inputs = ins, stability = spec.stability, backend, options)
+end
+
+# The byte-identity gate of the update pass (F2-07; F2 design §2.5), on request: with
+# `LATTICEPDE_CHECK_FUSION=1` in the environment, every owned problem checks that its rate
+# program with the Euler update fused by the IR pass (`fuse_update`, with and without a clip)
+# prints the same semantic program as the symbolic fusion (`symbolic_discretize(…; update)`),
+# at Float64 and Float32, and throws otherwise (the test suites run with it)
+function _check_fusion(rate::Program, sys::PDESystem, disc)
+    get(ENV, "LATTICEPDE_CHECK_FUSION", "") == "1" || return nothing
+    any(k -> startswith(k.key, "map:"), rate.kernels) && return nothing
+    for lower in (nothing, 0.0)
+        alg = ExplicitEuler(; lower)
+        sym = symbolic_discretize(sys, disc; update = (kb, c, r) -> (v = euler_update(kb, c, r);
+                                                                        lower === nothing ? v : max(v, lower))).program
+        pass = fuse_update(rate, Problems.update_rule(alg))
+        for T in (Float64, Float32)
+            fingerprint_text(pass; T) == fingerprint_text(sym; T) ||
+                error("the update pass differs from the symbolic fusion (`$(nameof(sys))`, lower = $lower, T = $T)")
+        end
+    end
+    return nothing
 end

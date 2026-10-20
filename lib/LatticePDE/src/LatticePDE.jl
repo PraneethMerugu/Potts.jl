@@ -30,7 +30,7 @@ using LatticeFields.IR: F16, Grid, Program, ProgramBuilder, Coef, FaceRule, Node
 using CommonSolve: solve, init, step!, solve!
 using KernelAbstractions: KernelAbstractions
 using LatticeFields: Exec, Problems
-using LatticeFields.Compile: CompileOptions
+using LatticeFields.Compile: CompileOptions, fingerprint_text, fuse_update
 using LatticeFields.IR: fieldid
 using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
                               ExplicitEuler, ExplicitMap, FieldGroups, ode_problem, RT_DT, substep_counts
@@ -42,7 +42,7 @@ using Symbolics: Symbolics, Differential, Equation, Num, VarDomainPairing, @regi
                  unwrap, substitute
 using SymbolicUtils: SymbolicUtils, arguments, iscall, operation, unwrap_const
 
-public euler_update, bound_parts, StabilityBound
+public euler_update, bound_parts, StabilityBound, lower_group
 export Δ, DivKGrad, Advect, AdvectionScheme, Upwind1, at, at2, ismember, masked
 export LatticePlacement, LatticeStorage, LatticeLevel, LatticeSpacing, PottsEntity, LatticeInputName
 export get_lattice_placement, get_lattice_storage, get_lattice_level, get_lattice_spacing,
@@ -353,5 +353,6 @@ include("linearity.jl")
 include("lower.jl")
 include("discretize.jl")
 include("problems.jl")
+include("group.jl")
 
 end # module LatticePDE

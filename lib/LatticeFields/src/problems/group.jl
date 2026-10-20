@@ -9,9 +9,10 @@
 
 The description of one field group, the same for both front ends (F2 design §2.2):
 
-- `rate`: the group's program before the semantic passes (in this version the update is
-  still fused by the front end, so `rate` stores the stepped values; F2-07 makes it the rate
-  form and fuses the update in [`FieldGroup`](@ref));
+- `rate`: the group's rate program before the semantic passes (`rate:c` kernels store the
+  rate in a scratch field `∂c`; `map:`, `aux:` and `mask:` kernels as written): a
+  [`FieldGroup`](@ref) fuses each algorithm's update into it
+  ([`fuse_update`](@ref LatticeFields.Compile.fuse_update));
 - `state`: the keys of the group's state fields, in the PDESystem's dvs order;
 - `external`: the fields of other groups the group reads (from their arrays);
 - `params`, `tables`, `inputs`: the names of the parameter slots, the table keys and the
@@ -49,19 +50,39 @@ function GroupSpec(rate::Program{N}; state, external = String[], params = String
 end
 
 """
-    FieldGroup(spec)
+    FieldGroup(spec; alg)
 
-The numerical group of `spec`: its semantic program, and its plans, planned and emitted once
-per `(update_key(alg), value type, kernels)` and shared by every problem and runtime made
-from it (the plans of `ExplicitEuler(; dt = 0.1)` and `ExplicitEuler(; dt = 0.2)` are one).
+The numerical group of `spec`: for each algorithm, the semantic program of its update fused
+into `spec.rate` ([`group_program`](@ref): `fuse_update(spec.rate, update_rule(alg))`, an IR
+pass with no symbolic step, made once per [`update_key`](@ref)), and its plans, planned and
+emitted once per `(update_key(alg), value type, kernels)` and shared by every problem and
+runtime made from it (the plans of `ExplicitEuler(; dt = 0.1)` and `ExplicitEuler(; dt = 0.2)`
+are one). `program` is the program of `alg` (the default algorithm of the group's kind:
+`ExplicitEuler()` for rates, `ExplicitMap()` for maps); every algorithm's program has the
+same fields, kernels and rules, so one store serves them all.
 """
 struct FieldGroup{N}
     spec::GroupSpec{N}
     program::Program{N}
+    programs::Dict{Any, Program{N}}
     plans::Dict{Tuple{Any, Type, Vector{Int}, Vector{Int}}, Tuple{StepPlan{N}, StepPlan{N}}}
 end
-FieldGroup(spec::GroupSpec{N}; program::Program{N} = semantic(spec.rate)) where {N} =
-    FieldGroup{N}(spec, program, Dict{Tuple{Any, Type, Vector{Int}, Vector{Int}}, Tuple{StepPlan{N}, StepPlan{N}}}())
+function FieldGroup(spec::GroupSpec{N}; alg = spec.kind == :map ? ExplicitMap() : ExplicitEuler(),
+        program::Program{N} = semantic(fuse_update(spec.rate, update_rule(alg)))) where {N}
+    s = program
+    return FieldGroup{N}(spec, s, Dict{Any, Program{N}}(update_key(alg) => s),
+        Dict{Tuple{Any, Type, Vector{Int}, Vector{Int}}, Tuple{StepPlan{N}, StepPlan{N}}}())
+end
+
+"""
+    group_program(g, alg) -> Program
+
+The semantic program of group `g` stepped by `alg`: its update fused into the rate program,
+once per `update_key(alg)` (thread-safe).
+"""
+group_program(g::FieldGroup, alg) =
+    lock(() -> get!(() -> semantic(fuse_update(g.spec.rate, update_rule(alg))), g.programs, update_key(alg)),
+        _PLANS_LOCK)
 
 # the kernels of the group fields `ids` (field ids of state fields), `(init, step)`: the step
 # kernels that write one of them, and those that write no state field (auxiliary values, read
@@ -88,7 +109,7 @@ kernel set; thread-safe).
 """
 function group_plans(g::FieldGroup, alg, ::Type{V}, backend, o::CompileOptions;
         kernels = _group_kernels(g, Set(fieldid(g.program, k) for k in g.spec.state))) where {V}
-    s = g.program
+    s = group_program(g, alg)
     initids, stepids = kernels
     return lock(_PLANS_LOCK) do
         get!(g.plans, (update_key(alg), V, initids, stepids)) do
@@ -219,7 +240,7 @@ them back to slot 1 after an odd count, so a group that runs after it reads curr
 function bind_group(g::FieldGroup, alg, st::FieldStore, p; fields = g.spec.state, n::Integer, dt::Real,
         c, ends_in::Symbol = :parity, backend, options::CompileOptions, V::Type)
     ends_in in (:parity, :slot1) || throw(ArgumentError("ends_in must be :parity or :slot1; got $(repr(ends_in))"))
-    prog = g.program
+    prog = group_program(g, alg)
     ids = Set(fieldid(prog, k) for k in fields)
     all_state = issubset(Set(fieldid(prog, k) for k in g.spec.state), ids)
     ip, sp = group_plans(g, alg, V, backend, options; kernels = _group_kernels(g, ids))

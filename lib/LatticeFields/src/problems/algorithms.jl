@@ -20,7 +20,8 @@ the count is the larger of `n` and the bound over the terms the bound sees; when
 seen, `n` is used. `lower` clips each substep's result at `max(v, lower)`.
 
 - On a `FieldProblem` (`LatticePDE.discretize(…; problem = :owned)`), `dt` is the step and
-  is required; `lower` is not supported yet (an `ArgumentError`).
+  is required (nothing else sets the window: `saveat` does not); `lower`
+  clips as above, fused into the step by the update pass ([`update_rule`](@ref)).
 - As a `PottsProblem` `field_solver`, the window is the MCS (`mcs_duration`): `dt` must be
   left out. As an `ode_solver`, `substeps = nothing` is one step per MCS.
 
@@ -57,26 +58,45 @@ Discrete maps `Shift(t, 1)(c) ~ rhs` (§5.5): one application per unit of time.
 struct ExplicitMap <: FieldAlgorithm end
 nbuffers(::ExplicitMap) = 2
 
-# the keywords a `FieldProblem` steps with: a step `dt`, and no clip yet (F2-07 brings `lower`
-# to the update pass)
+# the keywords a `FieldProblem` steps with: a step `dt` (nothing else sets the window)
 function _check_owned(alg::ExplicitEuler)
-    alg.dt === nothing && throw(ArgumentError(
-        "`ExplicitEuler` on a `FieldProblem` needs `dt` (the step): give `ExplicitEuler(; dt)`"))
-    alg.lower === nothing || throw(ArgumentError(string("`ExplicitEuler(; lower = ", alg.lower,
-        ")`: a `FieldProblem` has no clip yet; leave `lower` out (a clip is a `PottsProblem` `field_solver` option)")))
+    alg.dt === nothing && throw(ArgumentError(string(
+        "`ExplicitEuler` on a `FieldProblem` needs `dt` (the step): nothing else sets the window, and ",
+        "`saveat` never does; give `ExplicitEuler(; dt)`")))
     return alg
 end
 _check_owned(alg::ExplicitMap) = alg
 
 """
-    update_key(alg) -> Symbol
+    update_key(alg)
 
-The update that algorithm `alg` fuses into a group's rate program; a group's plans are
-cached by `(update_key(alg), valtype)`, so two algorithms with one update share them
-(`ExplicitEuler(; dt = 0.1)` and `ExplicitEuler(; dt = 0.2, substeps = 4)`: `:euler`).
+The update that algorithm `alg` fuses into a group's rate program, as a key: a group's fused
+program and plans are cached by it (and the value type), so two algorithms with one update
+share them (`ExplicitEuler(; dt = 0.1)` and `ExplicitEuler(; dt = 0.2, substeps = 4)`:
+`:euler`). It names every part of the algorithm that changes the fused program: a clip
+`lower` is part of it (`(:euler, 0.0)`).
 """
-update_key(::ExplicitEuler) = :euler
+update_key(a::ExplicitEuler) = a.lower === nothing ? :euler : (:euler, a.lower)
 update_key(::ExplicitMap) = :map
+
+"""
+    update_rule(alg) -> rule or nothing
+
+The update of algorithm `alg` for the update pass ([`fuse_update`](@ref
+LatticeFields.Compile.fuse_update)): `rule(kb, c, r)` gives the new value of a field from its
+current value `c` and its rate `r` (IR handles). `ExplicitEuler`: `c + dt · r` with
+`dt = G.rt[2]`, then `max(·, lower)` with a clip; `ExplicitMap`: `nothing` (a map program
+stores its values itself).
+"""
+update_rule(a::ExplicitEuler) = EulerRule(a.lower)
+update_rule(::ExplicitMap) = nothing
+struct EulerRule
+    lower::Union{Nothing, Float64}
+end
+function (u::EulerRule)(kb, c, r)
+    v = c + Ex(kb, runtime!(kb, RT_DT)) * r
+    return u.lower === nothing ? v : max(v, u.lower)
+end
 
 """
     alg_family(alg) -> Symbol

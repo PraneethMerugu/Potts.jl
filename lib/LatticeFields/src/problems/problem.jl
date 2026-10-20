@@ -55,21 +55,37 @@ end
 function FieldProblem(prog::Program, u0, tspan, p; state, kind::Symbol,
         init = String[], index = LatticeIndex(), tables = Pair{String, Vector{Float64}}[],
         inputs = Pair[], backend = KA.CPU(), options::CompileOptions = CompileOptions(),
-        stability::R = p -> NaN) where {R}
+        stability = p -> NaN, route = "ExplicitEuler(; dt, substeps = n)", terms = String[], linearity = nothing)
     kind in (:rate, :map) ||
         throw(ArgumentError("kind must be :rate or :map; got $(repr(kind))"))
+    # the group's description (F2 design §2.2): B's problem is one group of every state field
+    pv = collect(p)
+    spec = GroupSpec(prog; state, kind, init, stability, route, terms, linearity,
+        tables = String[first(t) for t in tables],
+        params = String[index isa LatticeIndex ? parameter_name(index, i) : "#$i" for i in eachindex(pv)],
+        inputs = String[f.key for f in prog.fields if f.role == :input])
+    return FieldProblem(spec, u0, tspan, pv; index, tables, inputs, backend, options)
+end
+"""
+    FieldProblem(spec::GroupSpec, u0, tspan, p; index, tables, inputs, backend, options)
+
+The owned problem of the group `spec` (its rate program, state, kind, masks and stability
+bound): the default algorithm's update (`ExplicitEuler()` for rates, `ExplicitMap()` for
+maps) is fused into the rate program by the update pass; another algorithm's is fused when
+it first steps the problem (once per family, [`group_program`](@ref)).
+"""
+function FieldProblem(spec::GroupSpec, u0, tspan, p; index = LatticeIndex(), tables = Pair{String, Vector{Float64}}[],
+        inputs = Pair[], backend = KA.CPU(), options::CompileOptions = CompileOptions())
+    prog, state, kind, init, stability = spec.rate, spec.state, spec.kind, spec.init, spec.stability
     faces = face_checks(prog)
     check_faces(faces, p)
-    s = semantic(prog)
+    alg = kind == :map ? ExplicitMap() : ExplicitEuler()
+    s = semantic(fuse_update(prog, update_rule(alg)))
     pv = collect(p)
     ins = resolve_inputs(s, index, inputs)
     tabs = Pair{String, Vector{Float64}}[tables...]
-    # the group's description (F2 design §2.2): B's problem is one group of every state field
-    spec = GroupSpec(prog; state, kind, init, stability, tables = String[first(t) for t in tabs],
-        params = String[index isa LatticeIndex ? parameter_name(index, i) : "#$i" for i in eachindex(pv)],
-        inputs = String[first(x) for x in ins])
     prob = _field_problem(s, collect(String, state), u0, tspan, pv, tabs, ins, backend, index, faces, stability, kind,
-        collect(String, init), _state_options(options, problem_eltype(u0, pv)), FieldGroup(spec; program = s))
+        collect(String, init), _state_options(options, problem_eltype(u0, pv)), FieldGroup(spec; alg, program = s))
     ids = sort!([fieldid(s, k) for k in state])
     sort(prob.step.swaps) == ids ||
         throw(ArgumentError(string("every state field must be written ",
@@ -545,6 +561,11 @@ function CommonSolve.solve!(integ::FieldIntegrator)
     return FieldSolution(integ.prob, integ.t, integ.u, integ.retcode, integ.substeps, substep_counts(integ))
 end
 
+# the default algorithm: `ExplicitEuler()` for rates (which needs `dt`: nothing else sets the
+# window, and `saveat` never does), `ExplicitMap()` for maps
+_default_alg(prob::FieldProblem) = prob.kind == :map ? ExplicitMap() : ExplicitEuler()
+CommonSolve.init(prob::FieldProblem; kw...) = CommonSolve.init(prob, _default_alg(prob); kw...)
+CommonSolve.solve(prob::FieldProblem; kw...) = CommonSolve.solve(prob, _default_alg(prob); kw...)
 function CommonSolve.solve(prob::FieldProblem, alg::FieldAlgorithm; kw...)
     CommonSolve.solve!(
         CommonSolve.init(prob, alg; kw...))

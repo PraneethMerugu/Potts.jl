@@ -17,9 +17,10 @@ using RuntimeGeneratedFunctions: RuntimeGeneratedFunctions, RuntimeGeneratedFunc
 using SciMLBase: SciMLBase
 using SymbolicIndexingInterface: SymbolicIndexingInterface as SII
 using ..Exec: Exec
-using ..IR: Coef, FaceRule, NodeValueRule, Program, fieldid, print_program, isfloat, juliatype, leveldims, ncomp, nsites
+using ..IR: Coef, Ex, FaceRule, NodeValueRule, Program, fieldid, print_program, isfloat, juliatype, leveldims, ncomp, nsites,
+            runtime!
 using ..Compile: CompiledKernel, CompileOptions, body_function, derive_function, lanecast, lanetype,
-                 primal, promote_dual, semantic, valtype, withvaltype, writes
+                 primal, promote_dual, semantic, valtype, withvaltype, writes, fuse_update
 using ..Schedule: LaunchSpec, StepPlan, plan
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
@@ -30,8 +31,8 @@ public Geom, RT_T, RT_DT, launch_geometry, launch_parameters, bind, rebind, reti
        array, current, settable!, launch_arrays, state_layout, BoundStep, compile!, swap!,
        run_step!, FaceCheck, face_checks, degenerate_face, check_faces, degenerate, face_ratio, FACE_RTOL, FieldSlot,
        LatticeIndex, FieldAlgorithm, ExplicitEuler, ExplicitMap, nbuffers, FieldProblem,
-       FieldGroups, update_key, alg_family, alg_cache, reset_cache!, step_retcode!, GroupSpec, FieldGroup,
-       group_plans, restrict_bound, GroupRuntime, bind_group, advance!, reset!, rebind!, clamp_now!,
+       FieldGroups, update_key, update_rule, EulerRule, alg_family, alg_cache, reset_cache!, step_retcode!, GroupSpec, FieldGroup,
+       group_program, group_plans, restrict_bound, GroupRuntime, bind_group, advance!, reset!, rebind!, clamp_now!,
        FieldSolution,
        FieldIntegrator, substeps, StateView, RHSLaunch, LatticeRHS, ode_problem,
        input_key, input_name, table_key, table_entry, parameter_name, resolve_inputs, check_inputs_set, upload_inputs!, check_parameters,
