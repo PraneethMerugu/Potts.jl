@@ -73,7 +73,7 @@ function _generated_code(c, T, field_solver, ode_solver, solvers)
         delta_E = _delta_H_expr(c, T; drives = false), phases, lifecycle)
 end
 """
-    PottsProblem(sys, op, tspan; field_solver, ode_solver = ExplicitEuler(), solvers = [],
+    PottsProblem(sys, op, tspan; field_solver = ExplicitEuler(), ode_solver = ExplicitEuler(), solvers = [],
                  backend = nothing, T, capacity, seed = 0, replica = 0, repeat = 0, track = (),
                  expression = Val(false))
 
@@ -92,9 +92,10 @@ the same backend to `init`/`solve`). A field declared `c(field) = …, [lattice_
 is stored in Float16 and computed in `T`. The generated code is `Potts.generated_code(sys; T)`.
 
 How fields and ODEs are integrated is part of the problem, compiled into its code:
-- `field_solver = ExplicitEuler(; substeps, lower)` is required when the model has a field
-  and an error otherwise; there is no default (a published model's docstring gives its
-  value, e.g. `ExplicitEuler(substeps = 2, lower = 0.0)` for `MerksVasculogenesis`).
+- `field_solver = ExplicitEuler(; substeps, lower)` integrates the fields, and is an error
+  when the model has none. The default is `ExplicitEuler()`: the automatic substep count
+  from the stability bound, no clip. A published model's docstring gives the paper's value
+  (e.g. `ExplicitEuler(substeps = 2, lower = 0.0)` for `MerksVasculogenesis`).
   It steps each field over one MCS in `substeps` explicit Euler steps, clipping each result
   at `lower` if given (legacy Potts clips concentrations at 0); `dt` is refused (the window
   is the MCS). `substeps = nothing` takes the smallest count `n` with

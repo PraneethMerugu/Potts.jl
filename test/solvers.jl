@@ -164,8 +164,9 @@ end
     @test solve(keyed, SequentialCPM()).u[end].site.c == solve(plain, SequentialCPM()).u[end].site.c
     two = PottsProblem(fs, op, (0, 3); field_solver = ExplicitEuler(substeps = 2))
     @test two.f.fingerprint != plain.f.fingerprint                                           # negative control
-    # `field_solver` is still required when `solvers` covers every field
-    @test solver_err(() -> PottsProblem(fs, op, (0, 2); solvers = [:c => ExplicitEuler()])) isa ArgumentError
+    # with `solvers` covering every field, `field_solver` takes its default (D-F2-R1)
+    @test PottsProblem(fs, op, (0, 2); solvers = [:c => ExplicitEuler()]).f.fingerprint ==
+          PottsProblem(fs, op, (0, 2); field_solver = ExplicitEuler(), solvers = [:c => ExplicitEuler()]).f.fingerprint
     # components: the system (all its integrated unknowns), `comp.x`, or `Symbol("comp₊x")`
     cs = component_model()
     cop = [ownership => (σ = zeros(Int32, 20, 20); σ[3:7, 3:7] .= 1; σ[12:16, 12:16] .= 2; σ), kind => [:A, :B]]
@@ -735,4 +736,25 @@ end
     @test Potts._ode_solver(ExplicitEuler()) === ExplicitEuler(; substeps = 1)
     sol = solve(PottsProblem(SolverPairYS(; name = :p), solver_op(), (0, 1)), SequentialCPM())
     @test sol.u[end].cell.y[1] == 1.0 && sol.u[end].cell.s[1] == 1.0                # one Euler step: (1, 0) → (1, 1)
+end
+
+# F2-05: the default field solver (D-F2-R1, amends D-075)
+@testset "F2-05: a field takes ExplicitEuler() by default" begin
+    op = [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:A]]
+    # builds with the default (bda31989: "needs `field_solver`", probe P9) …
+    d = PottsProblem(SolverOneField(; name = :f), op, (0, 2))
+    e = PottsProblem(SolverOneField(; name = :f), op, (0, 2); field_solver = ExplicitEuler())
+    @test d.f.sys.solvers.canonical == e.f.sys.solvers.canonical == "c=ExplicitEuler(substeps=nothing,lower=nothing)"
+    @test d.f.fingerprint == e.f.fingerprint                                     # … and fingerprints alike
+    @test solve(d, SequentialCPM()).u[end].site.c == solve(e, SequentialCPM()).u[end].site.c
+    # negative control: another solver changes the fingerprint
+    @test PottsProblem(SolverOneField(; name = :f), op, (0, 2); field_solver = ExplicitEuler(; substeps = 3)).f.fingerprint !=
+          d.f.fingerprint
+    # a field solver given to a model with no field is still an error (PO07)
+    err = try
+        PottsProblem(SolverPairYS(; name = :p), solver_op(), (0, 1); field_solver = ExplicitEuler()); ""
+    catch x
+        sprint(showerror, x)
+    end
+    @test occursin("has no field to integrate", err)
 end

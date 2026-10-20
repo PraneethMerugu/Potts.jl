@@ -113,7 +113,7 @@ sol[:x][end], sol[:g][end]
 
 | Keyword | Values | Default |
 |---|---|---|
-| `field_solver` | `ExplicitEuler(; substeps, lower)`: `substeps` explicit steps per MCS, values clipped at `lower` | none: required when the model has a field |
+| `field_solver` | `ExplicitEuler(; substeps, lower)`: `substeps` explicit steps per MCS, values clipped at `lower` | `ExplicitEuler()`: the automatic count, no clip |
 | `ode_solver` | `ExplicitEuler(; substeps)`, `RK4(; substeps)`, `Adaptive(alg; kwargs...)` | `ExplicitEuler()`, one step per MCS |
 | `solvers` | `[x => solver, …]`, per variable or component | — |
 

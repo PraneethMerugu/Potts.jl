@@ -6,12 +6,12 @@
 #     `@sweep` no longer takes `field_solver` or `ode_solver`: building a model that puts one
 #     there is an error (any exception, at expansion or at build) whose message names the
 #     keyword.
-#  2. `field_solver` is required when the model has a field: a bare
-#     `PottsProblem(model_with_field, op, tspan)` throws an `ArgumentError` naming
-#     `field_solver`. A model without a field needs none, and passing one to it is an
-#     `ArgumentError` naming `field_solver` (a solver for a field that does not exist is a
-#     mistake, as an operating-point key naming nothing is; it also keeps an unused spec out
-#     of the D-016 fingerprint).
+#  2. `field_solver` defaults to `ExplicitEuler()` when the model has a field (D-F2-R1,
+#     amending D-075): a bare `PottsProblem(model_with_field, op, tspan)` builds, with the
+#     fingerprint of `field_solver = ExplicitEuler()`. A model without a field needs none,
+#     and passing one to it is an `ArgumentError` naming `field_solver` (a solver for a
+#     field that does not exist is a mistake, as an operating-point key naming nothing is;
+#     it also keeps an unused spec out of the D-016 fingerprint).
 #  3. `ode_solver` defaults to `ExplicitEuler()` (D-038 as amended by D-075): no keyword and
 #     `ode_solver = ExplicitEuler()` give the same fingerprint and the same trajectory.
 #  4. `solvers = [x => solver]` is keyed by the symbolic variable and overrides `ode_solver`
@@ -192,13 +192,13 @@ end
     @test P60cMixed(; name = :ok) isa PottsSystem
 end
 
-@testset "P6.0c: field_solver is required with a field, rejected without" begin
-    e = p60c_error(() -> PottsProblem(P60cMixed(; name = :m), p60c_op(), (0, 2)))
-    @test e isa ArgumentError
-    @test occursin("field_solver", p60c_message(e))
-    sys = P60cMixed(; name = :m)          # other solver keywords do not stand in for it
-    e = p60c_error(() -> PottsProblem(sys, p60c_op(), (0, 2); solvers = [p60c_var(sys, :s) => p60c_rodas()]))
-    @test e isa ArgumentError && occursin("field_solver", p60c_message(e))
+@testset "P6.0c: field_solver defaults to ExplicitEuler() with a field, rejected without" begin
+    d = PottsProblem(P60cMixed(; name = :m), p60c_op(), (0, 2))      # the default ExplicitEuler() (D-F2-R1)
+    @test d.f.fingerprint == PottsProblem(P60cMixed(; name = :m), p60c_op(), (0, 2); field_solver = p60c_EE()).f.fingerprint
+    sys = P60cMixed(; name = :m)          # with other solver keywords too
+    d = PottsProblem(sys, p60c_op(), (0, 2); solvers = [p60c_var(sys, :s) => p60c_rodas()])
+    @test d.f.fingerprint == PottsProblem(sys, p60c_op(), (0, 2); field_solver = p60c_EE(),
+        solvers = [p60c_var(sys, :s) => p60c_rodas()]).f.fingerprint
     # with the keyword it builds and runs
     prob = PottsProblem(P60cMixed(; name = :m), p60c_op(), (0, 2); field_solver = p60c_EE(substeps = 2))
     @test solve(prob, SequentialCPM()).t[end] == 2
@@ -270,10 +270,9 @@ end
     @test e isa ArgumentError
 end
 
-@testset "P6.0c: Merks needs its field solver explicitly; results unchanged" begin
-    e = p60c_error(() -> PottsProblem(p60c_merks(), p60c_merks_op(), (0, 10)))
-    @test e isa ArgumentError
-    @test occursin("field_solver", p60c_message(e))
+@testset "P6.0c: Merks with its field solver; the bare problem takes the default; results unchanged" begin
+    d = PottsProblem(p60c_merks(), p60c_merks_op(), (0, 10))      # the default ExplicitEuler() (D-F2-R1)
+    @test d.f.fingerprint == PottsProblem(p60c_merks(), p60c_merks_op(), (0, 10); field_solver = p60c_EE()).f.fingerprint
     prob = PottsProblem(p60c_merks(), p60c_merks_op(), (0, 10); field_solver = p60c_MERKS_SOLVER)
     for alg in (SequentialCPM(), CheckerboardCPM())
         u = p60c_final(prob, alg)

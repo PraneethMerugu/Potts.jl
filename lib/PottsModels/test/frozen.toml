@@ -64,8 +64,8 @@ decision = "D-075"
 
 [[file]]
 path = "acceptance/p6_0c_solver_placement.jl"
-sha256 = "60a7af80e929123fc7c5d486abd544a635d9082bf0279230d52a8ea761b0bc6f"
-decision = "D-098"
+sha256 = "16ef091033c5481c3e505051e132f8ad7b781683e0cccedff9f8609bffacc837"
+decision = "D-F2-R1"
 
 [[file]]
 path = "acceptance/p6_0l_link_partner_death.jl"

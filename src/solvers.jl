@@ -49,8 +49,10 @@ _check_ode_dt(s, what) = s isa ExplicitEuler && s.dt !== nothing ? throw(Argumen
     _resolve_solvers(c; field_solver = nothing, ode_solver = ExplicitEuler(), solvers = ())
 
 Resolve the solver keywords against compiled model `c`:
-- `field_solver` is required when the model has a field (no default: a silent default
-  would replace a paper's scheme), and an error without one;
+- `field_solver` (default `ExplicitEuler()`, the automatic substep count; D-075 as amended
+  by D-F2-R1) integrates every field that `solvers` does not name, and is an error when the
+  model has no field. A default resolves, groups and fingerprints alike with the same
+  solver given explicitly;
 - `ode_solver` (default `ExplicitEuler()`, one step per MCS) integrates every cell
   and model ODE that `solvers` does not name;
 - `solvers = [x => solver, …]` keys integrated variables (the Potts variable, the MTK
@@ -69,10 +71,8 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
         field_solver === nothing || throw(ArgumentError(
             "`field_solver`: model `$(nameof(sys))` has no field to integrate; remove the keyword"))
     else
-        field_solver === nothing && throw(ArgumentError(
-            "model `$(nameof(sys))` has the field$(length(fields) == 1 ? "" : "s") " *
-            "$(join(("`$n`" for n in fields), ", ")), so `PottsProblem` needs `field_solver = ExplicitEuler(; substeps, lower)` " *
-            "(no default; a published model's docstring gives its value)"))
+        # the default (D-F2-R1): explicit Euler with the automatic substep count
+        field_solver === nothing && (field_solver = ExplicitEuler())
         _is_field_solver(field_solver) || throw(ArgumentError(
             "`field_solver` takes a field solver ($(_field_solver_names())); got $(repr(field_solver))"))
         _check_field_solver(field_solver, "`field_solver`")

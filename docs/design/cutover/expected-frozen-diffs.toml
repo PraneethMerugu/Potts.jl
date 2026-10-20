@@ -1156,3 +1156,14 @@ commit = "fa383e57"
 fixup_of = "C9"
 decision = "D-C9-R1"
 why = "D-250 AUTO re-pin: the parameter object's type gains a type parameter (`PottsParameters{NT, D}`), which changes the pinned IR text by one inserted `, ()`"
+
+# F2-05 (lp/f2): the approved list-A edit of p6_0c (user ruling 2026-10-19, F2 design Q1), in
+# the same commit as the default field solver (the ruling asks for one commit). The commit is
+# F2-05's hash on lp/f2 before integration; squashing the F2-03 and F2-04 fixups (which come
+# before it) changes it, and the integration updates this field.
+[[edits]]
+path = "acceptance/p6_0c_solver_placement.jl"
+commit = "cea16497"
+fixup_of = "F2-05"
+decision = "D-F2-R1"
+why = "lines 196-201 and 273-276 (R-F2a): `field_solver` has a default (`ExplicitEuler()`): the three 'required' assertions flip to 'builds, and its fingerprint equals the explicit one'; the header comment (9-11, with 12-14 rewrapped) and the titles at 195 and 273 follow"

@@ -275,8 +275,9 @@ clusters, and the clusters grow by collecting more cells.
     - a kind-indexed parameter `δ[kind]` gives each kind its own decay;
     - several fields can be declared and coupled in one `@equations` block.
 
-    Each field needs the problem's `field_solver`. To give a field its own scheme, add an
-    entry of `solvers = [c => ExplicitEuler(...)]`. See
+    Every field takes the problem's `field_solver` (default `ExplicitEuler()`, the
+    automatic substep count). To give a field its own scheme, add an entry of
+    `solvers = [c => ExplicitEuler(...)]`. See
     [Equations and solvers](@ref manual-equations).
 
 ## What you learned
