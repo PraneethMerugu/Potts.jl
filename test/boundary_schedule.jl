@@ -303,8 +303,11 @@ bs_model(:BSFaceNoLap, :(@variables c(field) = 0.0), :(@equations D(c) ~ 0.1 - 0
 end))
 
 @testset "@boundary: masks and faces that cannot hold" begin
-    @test occursin("reads `c`, the field it clamps", something(bs_error(() -> mtkcompile(Base.invokelatest(BSMaskSelf; name = :m))), ""))
-    @test occursin("reads `u`, a field stepped with or after `c`", something(bs_error(() -> mtkcompile(Base.invokelatest(BSMaskLater; name = :m))), ""))
+    # a mask that reads the field it clamps is accepted (F2-11 review (a); before: refused)
+    @test bs_error(() -> mtkcompile(Base.invokelatest(BSMaskSelf; name = :m))) === nothing
+    # a mask that reads a field stepped after its own reads it at the window start (round 2 of
+    # F2 batch 4; before: refused "a field stepped with or after `c`")
+    @test bs_error(() -> mtkcompile(Base.invokelatest(BSMaskLater; name = :m))) === nothing
     @test bs_error(() -> mtkcompile(Base.invokelatest(BSMaskEarlier; name = :m))) === nothing
     @test occursin("has no `Δ(c)`", something(bs_error(() -> mtkcompile(Base.invokelatest(BSFaceNoLap; name = :f))), ""))
 end

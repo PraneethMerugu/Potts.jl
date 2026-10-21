@@ -161,7 +161,9 @@ const DSL_NAMES = [:Adaptive, :Adhesion, :Chemotaxis, :Dirichlet, :Every, :Expli
     # `over = cluster`, the maintainer's spelling of the cluster sum)
     :Pairs, :minimum_image, :separation,
     # D-257 item 5 (cutover C3): `ismember(kind, g)`, the kind-set term of `@equations`
-    :ismember]
+    :ismember,
+    # F2-11 (F2 design §2.12): the `@boundary` sides `Flux(q)` and `Robin(α, β, g)`
+    :Flux, :Robin]
 const DSL_KEYWORDS = Dict(:connectivity => [:penalty, :rule], :connected => [:rule], :Volume => [:strength, :target],
     :Surface => [:strength, :target], :Chemotaxis => [:kinds, :response, :strength, :when], :randn => [:lower],
     :transfer => [:per_site], :integral => [:over])

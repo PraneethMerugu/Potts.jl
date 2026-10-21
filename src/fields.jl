@@ -28,6 +28,22 @@ const FIELD_NAMES = (; x = Symbolics.wrap(_FIELD_X[1]), y = Symbolics.wrap(_FIEL
     Differential = Differential, Shift = ModelingToolkitBase.Shift)
 _coordinate(u) = any(v -> v === u || isequal(v, u), _FIELD_X)
 
+# A field read at a face in `@bcs`, `c(t, 0, y)` (F2 design §2.12): the macro sends every plain
+# call of a `@bcs` line through `_bcs_call`, which builds the read when the callee is a field
+# variable (a call of a callable symbol named as the field, tagged `_FieldAt`, printed as
+# written) and calls the callee otherwise
+struct _FieldAt end
+function _bcs_call(f, args...)
+    u = _unwrap(f)
+    i = u isa SymbolicUtils.BasicSymbolic ? info(u) : nothing
+    (i !== nothing && i.role === :field) || return f(args...)
+    g = SymbolicUtils.setmetadata(Symbolics.unwrap(Symbolics.variable(i.name; T = SymbolicUtils.FnType{Tuple, Real, Nothing})),
+        _FieldAt, true)
+    return Symbolics.wrap(g(map(_unwrap, args)...))
+end
+_is_field_at(f) = f isa SymbolicUtils.BasicSymbolic && SymbolicUtils.hasmetadata(f, _FieldAt)
+_field_at_name(u) = Symbol(nameof(operation(u)))
+
 # a callable dependent variable `name(..)` of element type `E`, applied to the ivs
 function _field_var(name::Symbol, ::Type{E}, ivs; input::Bool = false, entity = nothing, storage = nothing,
         username = nothing, bounds = nothing) where {E}
@@ -108,7 +124,10 @@ function _field_term(x, cv)
     _coordinate(u) && return u                  # a lattice coordinate `x`, `y`, `z`
     iscall(u) || return _filled_or_refuse(cv, u)
     f, a = operation(u), arguments(u)
-    if _spatial_op(f)
+    _is_field_at(f) && return _field_at_term(u, cv)
+    if f === LatticePDE.masked                   # a masked condition of `@bcs`
+        return _unwrap(LatticePDE.masked(Symbolics.wrap(_field_term(a[1], cv)), Symbolics.wrap(_field_term(a[2], cv))))
+    elseif _spatial_op(f)
         # the operand of a spatial operator is a field (its last argument; `DivKGrad(K, c)`,
         # `Advect(u, c)`); the coefficient and the velocity are any lowered term
         _check_operand(u, f, a[end], cv)
@@ -194,6 +213,7 @@ function _has_cpm_fill(x)
     _coordinate(u) && return false
     iscall(u) || return true
     f, a = operation(u), arguments(u)
+    _is_field_at(f) && return false
     _spatial_op(f) && return any(_has_cpm_fill, a)
     f === SymbolicUtils.array_literal && return any(_has_cpm_fill, something(LatticePDE.velocity_terms(u), a))
     f === ismember && return _has_cpm_fill(a[1])
@@ -266,7 +286,8 @@ function _canonical_filled(raw)
 end
 
 _field_conv(ivs, states, T, known) = (; ivs, states, direct = Dict{Symbol, Any}(),
-    filled = Tuple{Symbol, Any, Type}[known...], inputs = Dict{Symbol, Any}(), params = Set{Any}(), T)
+    filled = Tuple{Symbol, Any, Type}[known...], inputs = Dict{Symbol, Any}(), params = Set{Any}(), T,
+    bcsrc = Pair{Any, Any}[])           # each translated `@bcs` condition => the condition as written
 
 # The field equations of a model (F2 design §2.11): `(x, kind, op)` for a rate `D(c) ~ rhs`
 # (`:rate`) or a map `Shift(t, 1)(m) ~ rhs` (`:map`, one application per MCS) of a field or
@@ -291,6 +312,118 @@ _field_equations(sys::PottsSystem) = [(f[1], eq.rhs, f[3]) for eq in _p(sys, :eq
 # the aux fields of a model, `(x, rhs)`: each group that steps fields computes them
 _field_aux(sys::PottsSystem) = [(f[1], eq.rhs) for eq in _p(sys, :equations) for f in (_field_lhs(eq),)
                                 if f !== nothing && f[2] === :aux]
+
+# a `@bcs` field read `c(t, 0, y)` as the group's state read: its arguments are the time `t`,
+# the coordinates or numbers (a face)
+function _field_at_term(u, cv)
+    n = _field_at_name(u)
+    haskey(cv.states, n) || throw(ArgumentError(string("@bcs: `", _builtin_text(string(u)), "` reads the field `", n,
+        "` of another solver group; a condition reads the field it sets (give the fields one solver)")))
+    args = map(arguments(u)) do y
+        w = _unwrap(y)
+        isequal(w, cv.ivs[1]) && return cv.ivs[1]
+        _coordinate(w) && return w
+        v = SymbolicUtils.isconst(w) ? SymbolicUtils.unwrap_const(w) : w
+        v isa Real && return v
+        throw(ArgumentError(string("@bcs: `", _builtin_text(string(u)), "` reads `", n, "` at `", y, "`; a field is read ",
+            "at `t` and the coordinates, a face fixing one of them to a number (`", n, "(t, 0, y)`)")))
+    end
+    return operation(cv.states[n])(args...)
+end
+
+# The `@bcs` conditions of the fields `names` as PDESystem conditions (F2 design §2.12), after
+# the checks that need the model's words: an initial condition is refused (a field's initial
+# value is its default); a face or mask that `@boundary` sets already is refused, printing the
+# condition as written; a face on an axis the lattice makes periodic, or a periodic pair on an
+# axis it closes, is refused (per-field periodicity is planned, FE-20); a periodic pair on an
+# axis the lattice makes periodic is the lattice's own and is dropped
+function _bcs_equations(sys, names, cv, core, ext)
+    out = Equation[]
+    kinds = _p(sys, :kinds)
+    N = length(ext)
+    stepped = Symbol[info(x).name for (x, _) in _field_equations(sys)]
+    for b in _p(sys, :bcs)
+        eq = _located(() -> _bcs_equation(sys, b, names, cv, core, ext, kinds, N, stepped), sys, _BcsLine(b))
+        eq === nothing && continue
+        push!(out, eq)
+        push!(cv.bcsrc, eq => b)
+    end
+    return out
+end
+# one condition's checks and its translation (`nothing`: another group's, or the lattice's own pair)
+function _bcs_equation(sys, b, names, cv, core, ext, kinds, N, stepped)
+    text = "`" * _bc_text(b, kinds) * "`"
+    fields, pins = _bcs_reads(b, ext)
+    isempty(fields) && throw(ArgumentError("@bcs: the condition $text reads no field: a condition sets a field (`c(t, 0, y) ~ v`, " *
+                                           "`c ~ masked(pred, v)`)"))
+    n = first(fields)
+    n in stepped || throw(ArgumentError("@bcs: the condition $text sets `$n`, which has no equation `D($n) ~ …` " *
+        "(or map); a condition applies to a field the model steps"))
+    n in names || return nothing                 # a field of another group: its own system
+    any(p -> p[1] == 1, pins) && throw(ArgumentError("@bcs: the condition $text sets an initial value; a field's " *
+        "initial value is its `@variables` default (`$n(field) = v`) or the operating point (`:$n => values`): " *
+        "remove it from `@bcs`"))
+    axes = unique(p[1] - 1 for p in pins)
+    r = _unwrap(b.rhs)
+    periodic = iscall(r) && _is_field_at(operation(r))
+    masked = iscall(r) && operation(r) === LatticePDE.masked
+    drop = false
+    for d in axes
+        d <= N || continue                       # LatticePDE names the missing axis
+        ax = _AXIS_NAMES[d]
+        if periodic
+            core.periodic[d] && (drop = true; break)    # the lattice's own pair
+            throw(ArgumentError("@bcs: the condition $text makes axis `$ax` of `$n` periodic, but the lattice closes " *
+                "`$ax`; periodicity is the lattice's, for every field (per-field periodicity is planned, FE-20): make " *
+                "the lattice periodic on `$ax`, or remove the condition"))
+        end
+        core.periodic[d] && throw(ArgumentError("@bcs: the condition $text sets a face of axis `$ax`, which the " *
+            "lattice makes periodic (per-field periodicity is planned, FE-20); close `$ax` on the lattice, or remove " *
+            "the condition"))
+        side = only(p[2] for p in pins if p[1] == d + 1)
+        for e in _p(sys, :boundaries)
+            e.axis == d && info(e.field).name === n || continue
+            throw(ArgumentError("@bcs: field `$n` already has a condition there: the condition $text sets the " *
+                "$(side < 0 ? "low" : "high") side of `$ax`, which `@boundary $n` sets too (`$ax => …` sets both sides); " *
+                "give each face one condition: to set one side in `@bcs`, move the whole axis there (remove `$ax => …` " *
+                "from `@boundary` and write the other side as a `@bcs` condition at `$ax = $(side < 0 ? _extent_text(ext[d]) : "0")`; " *
+                "a face with no condition is zero flux)"))
+        end
+    end
+    if masked
+        for e in _p(sys, :boundaries)
+            e.axis == 0 && info(e.field).name === n || continue
+            throw(ArgumentError("@bcs: field `$n` already has a condition there: the masked condition $text and " *
+                "`@boundary $n` (`sites(…) => Dirichlet(…)`) both hold its sites; give one masked condition"))
+        end
+    end
+    drop && return nothing
+    return Symbolics.wrap(_field_term(b.lhs, cv)) ~ Symbolics.wrap(_field_term(b.rhs, cv))
+end
+# the fields a `@bcs` condition reads (its face reads `c(t, 0, y)` and its bare field
+# variables) and the pinned arguments of its face reads: `(argument index, -1 | +1)`, by
+# comparing each number with the low end 0
+_extent_text(v) = isinteger(v) ? string(Int(v)) : string(v)
+function _bcs_reads(b, ext)
+    fields, pins = Symbol[], Tuple{Int, Int}[]
+    _walk_all(y -> begin
+                  if iscall(y) && _is_field_at(operation(y))
+                      push!(fields, _field_at_name(y))
+                      for (k, a) in enumerate(arguments(y))
+                          w = _unwrap(a)
+                          v = SymbolicUtils.isconst(w) ? SymbolicUtils.unwrap_const(w) : w
+                          # a face only at 0 or the extent; another number is `parse_bcs`'s to name
+                          v isa Real || continue
+                          k == 1 ? push!(pins, (1, -1)) : iszero(v) ? push!(pins, (k, -1)) :
+                          k - 1 <= length(ext) && isapprox(v, ext[k - 1]) && push!(pins, (k, 1))
+                      end
+                  else
+                      i = info(y)
+                      i !== nothing && i.role === :field && push!(fields, i.name)
+                  end
+              end, _unwrap(b.lhs))
+    return unique!(fields), unique!(pins)
+end
 
 """
     _field_system(sys, names; T = Float64) -> (pdesys, cv)
@@ -341,12 +474,25 @@ function _field_system(sys::PottsSystem, names = Symbol[info(x).name for (x, _) 
             push!(bcs, Symbolics.wrap(states[n]) ~ LatticePDE.masked(Symbolics.wrap(_field_term(b.mask, cv)),
                 Symbolics.wrap(_field_term(b.value, cv))))
         else
-            for (side, s) in zip((0.0, ext[b.axis]), b.sides)
-                s isa Dirichlet || continue
-                push!(bcs, Symbolics.wrap(at_face(n, b.axis, side)) ~ Symbolics.wrap(_field_term(s.value, cv)))
+            # B's face equations (F2 design §2.12): `α c + β ∂c/∂n = g` with the outward normal,
+            # `∂c/∂n = ∓∂c/∂x` on the low and high side; `NoFlux()` is the default face (no entry)
+            Dx = Differential(xs[b.axis])
+            for (side, sg, s) in zip((0.0, ext[b.axis]), (-1, 1), b.sides)
+                c = Symbolics.wrap(at_face(n, b.axis, side))
+                v(x) = Symbolics.wrap(_field_term(x, cv))
+                if s isa Dirichlet
+                    push!(bcs, c ~ v(s.value))
+                elseif s isa Flux
+                    push!(bcs, Dx(c) ~ sg * v(s.q))
+                elseif s isa Robin
+                    push!(bcs, v(s.α) * c + sg * v(s.β) * Dx(c) ~ v(s.g))
+                end
             end
         end
     end
+    # `@bcs` (F2 design §2.12): each condition of a field of this group, translated as the
+    # equations are and appended, so `lower_group` parses it with `parse_bcs` as in front end B
+    append!(bcs, _bcs_equations(sys, names, cv, core, ext))
     _has_domain(lat) && _filled_input!(cv, _DOMAIN_FILL, :domain__in, Bool)
     dvs = Any[[states[n] for n in [names; auxnames]]; [cv.direct[k] for k in sort!(collect(keys(cv.direct)))];
               [cv.inputs[e[1]] for e in cv.filled if haskey(cv.inputs, e[1])]]
@@ -369,8 +515,18 @@ _field_inputs(sys::PottsSystem, T::Type = Float64) =
 _field_inputs(c::CompiledPottsSystem, T::Type = Float64) =
     _field_cached(() -> _field_inputs(c.sys, T), c, (:inputs, T))
 
-"""The masked fields of `sys` (each has a mask site array `name__mask`)."""
-_masked_fields(sys::PottsSystem) = unique!(Symbol[info(b.field).name for b in _p(sys, :boundaries) if b.axis == 0])
+"""The masked fields of `sys` (each has a mask site array `name__mask`): `@boundary` site masks
+and `@bcs` masked conditions (`c ~ masked(pred, v)`)."""
+function _masked_fields(sys::PottsSystem)
+    out = Symbol[info(b.field).name for b in _p(sys, :boundaries) if b.axis == 0]
+    for b in _p(sys, :bcs)
+        r, l = _unwrap(b.rhs), _unwrap(b.lhs)
+        iscall(r) && operation(r) === LatticePDE.masked || continue
+        i = info(l)
+        i !== nothing && i.role === :field && push!(out, i.name)
+    end
+    return unique!(out)
+end
 
 # The lattice of the fields: a hexagonal lattice is a hexagonal grid (LatticePDE's six-neighbor
 # `Δ`), and an irregular `domain` is the Bool input `domain__in` (written by the fill phase
@@ -453,7 +609,16 @@ function _lower_field_group(sys::PottsSystem, names::Vector{Symbol}, T::Type; kn
     LatticePDE.check_one_kind(pdesys; route = "write each map as a site update that runs once per MCS (a site " *
                                                "variable `m(site)` with `@after_mcs m ~ rhs`)")
     Threads.atomic_add!(_LOWER_GROUP_CALLS, 1)
-    spec = LatticePDE.lower_group(pdesys, _field_disc(sys, T); values = false, bound)
+    spec = try
+        LatticePDE.lower_group(pdesys, _field_disc(sys, T); values = false, bound)
+    catch e
+        # an error about a `@bcs` condition (`parse_bcs`, a second condition on a face) names
+        # its `@bcs` line (review R4 of F2 batch 4)
+        e isa ArgumentError || rethrow()
+        i = findfirst(p -> occursin("`$(p[1])`", e.msg), cv.bcsrc)
+        i === nothing && rethrow()
+        _located(() -> throw(e), sys, _BcsLine(cv.bcsrc[i][2]))
+    end
     # the model's parameter of each slot and table (the spec names them as the PDESystem prints
     # them); the clock's slot keeps its reserved name (the phase writes the MCS number there)
     pname(k) = k == LatticeFields.Problems.CLOCK_KEY ? Symbol(k) : info(only(q for q in getfield(pdesys, :ps) if string(q) == k)).name

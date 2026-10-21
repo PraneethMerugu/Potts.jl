@@ -449,6 +449,18 @@ _push_located!(list, sources, xs::AbstractVector, ln) = foreach(x -> _push_locat
 _rewrite_eq(l) = l isa Expr && l.head === :call && l.args[1] === :~ && length(l.args) == 3 ?
                  :(Potts._eq($(rewrite(l.args[2])), $(rewrite(l.args[3])))) : rewrite(l)
 _is_range(ex) = ex isa Expr && ex.head === :call && ex.args[1] === :(:)
+# `@bcs` lines read a field at a face, `c(t, 0, y)` (F2 design §2.12): every plain call
+# `f(args…)` there goes through `Potts._bcs_call`, which builds the field read when `f` is a
+# field variable of the model and calls `f` otherwise
+function _bcs_calls(ex)
+    ex isa Expr || return ex
+    args = map(_bcs_calls, ex.args)
+    if ex.head === :call && ex.args[1] isa Symbol && !Base.isoperator(ex.args[1]) &&
+       !any(a -> a isa Expr && a.head in (:parameters, :kw), ex.args[2:end])
+        return Expr(:call, :(Potts._bcs_call), ex.args[1], args[2:end]...)
+    end
+    return Expr(ex.head, args...)
+end
 
 # `@equations` lines are MTK equations (D-257 item 5, V3-3): a kind set is the positional
 # term `ismember(kind, g)`. `∈` has an MTK meaning of its own (a domain pairing; `∈ Set(…)`
@@ -740,7 +752,7 @@ function _section!(parts, sec, args, ln = nothing)
     elseif sec === Symbol("@initialization_equations")
         foreach(((l, lln),) -> push!(code, _located_push(:__init_eqs, _rewrite_eq(l), lln)), _lines_ln(args, ln))
     elseif sec === Symbol("@bcs")
-        foreach(((l, lln),) -> push!(code, _located_push(:__bcs, _rewrite_eq(l), lln)), _lines_ln(args, ln))
+        foreach(((l, lln),) -> push!(code, _located_push(:__bcs, _bcs_calls(_rewrite_eq(l)), lln)), _lines_ln(args, ln))
     elseif sec === Symbol("@divide")
         domain = args[1]
         opts, rules = _options(args[2:end])

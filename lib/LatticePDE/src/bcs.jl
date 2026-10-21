@@ -50,7 +50,8 @@ function _pins(eq, args, ivs, ends)
         v === nothing && _bcerr(eq, "the argument `$a` is neither `$(ivs[i])` nor a number")
         lo, hi = ends[i]
         v == lo ? push!(pins, (i, -1)) : v == hi ? push!(pins, (i, 1)) :
-        _bcerr(eq, "`$(ivs[i]) = $v` is not on a face of $lo .. $hi")
+        _bcerr(eq, "`$(ivs[i]) = $v` is not on a face of $lo .. $hi: the low face is `$(ivs[i]) = $lo` and the high face is " *
+                   "`$(ivs[i]) = $hi` (the domain's extent)")
     end
     return pins
 end

@@ -1473,9 +1473,38 @@ edge site. A closed axis without an entry is zero flux already.
 struct NoFlux end
 
 """
+    Flux(q)
+
+A face with the outward normal derivative `∂c/∂n = q` in `@boundary` (`x => (Flux(q), …)`):
+the missing neighbor of an edge site is `c + q h`, so the gradient across the face is `q`
+(positive `q`: the field grows toward the face). On the low side of `x` it is LatticePDE's
+`Differential(x)(c(t, 0, y)) ~ -q`, on the high side `Differential(x)(c(t, L, y)) ~ q`.
+`Flux(0)` is `NoFlux()`. `q` is a number, a parameter, or a number times a parameter.
+"""
+struct Flux{V}
+    q::V
+end
+
+"""
+    Robin(α, β, g)
+
+A face with `α c + β ∂c/∂n = g` in `@boundary` (`x => (…, Robin(α, β, g))`), with the outward
+normal `n`: the ghost value of an edge site makes the face value and the gradient across the
+face meet the condition. On the low side of `x` it is LatticePDE's `α c(t, 0, y) -
+β Differential(x)(c(t, 0, y)) ~ g`, on the high side `α c(t, L, y) + β Differential(x)(c(t, L, y))
+~ g`. Each of `α`, `β`, `g` is a number, a parameter, or a number times a parameter. `β = 0`
+is a fixed value (write `Dirichlet(g / α)`) and `α = 0` a flux (write `Flux(g / β)`).
+"""
+struct Robin{A, B, G}
+    α::A
+    β::B
+    g::G
+end
+
+"""
 One entry of a `@boundary` block of field `field`: a face pair on axis `axis` (1, 2, 3 for
-`x`, `y`, `z`) with `sides = (low, high)`, each `Dirichlet` or `NoFlux`; or, with `axis = 0`,
-a site mask `sites(mask) => Dirichlet(value)`.
+`x`, `y`, `z`) with `sides = (low, high)`, each `Dirichlet`, `NoFlux`, `Flux` or `Robin`; or,
+with `axis = 0`, a site mask `sites(mask) => Dirichlet(value)`.
 """
 struct BoundaryEntry
     field::Any                 # the field variable (symbolic)
@@ -1495,8 +1524,30 @@ function _boundary_field(x)
     return x
 end
 _boundary_side(s::Union{Dirichlet, NoFlux}, field, axis, what) = s isa Dirichlet ? Dirichlet(_boundary_value(s.value, field, "`$axis` $what face")) : s
+_boundary_side(s::Flux, field, axis, what) = Flux(_boundary_value(s.q, field, "`$axis` $what face flux"))
+function _boundary_side(s::Robin, field, axis, what)
+    α, β, g = (_boundary_value(v, field, "`$axis` $what face Robin `$k`") for (v, k) in ((s.α, "α"), (s.β, "β"), (s.g, "g")))
+    n = info(field).name
+    # a zero coefficient is another side (LatticePDE classifies the face equation the same way)
+    _iszero_value(β) && throw(ArgumentError(string("@boundary $n: the $what side of axis `$axis` is `Robin(", α, ", 0, ", g,
+        ")`, a fixed value with no gradient term; ", _ratio_route("Dirichlet", g, α, "$(n)_$(axis)_$what"))))
+    _iszero_value(α) && throw(ArgumentError(string("@boundary $n: the $what side of axis `$axis` is `Robin(0, ", β, ", ", g,
+        ")`, a flux with no value term; ", _ratio_route("Flux", g, β, "$(n)_$(axis)_$what"))))
+    return Robin(α, β, g)
+end
+# a number given as a side's value (a parameter is a `Num`, a `Real` too)
+_isnumber(v) = !(_unwrap(v) isa SymbolicUtils.BasicSymbolic) && _unwrap(v) isa Real
+_iszero_value(v) = _isnumber(v) && iszero(_unwrap(v))
+# the side to write instead, with the value `a / b`: the number when both are numbers; else a
+# computed parameter named by its face (`c_x_low`), so two faces get two names (review R6 of F2
+# batch 4) (a side's value is a number, a parameter or a number times one)
+_ratio_route(side, a, b, name) = _isnumber(a) && _isnumber(b) ? string("write it as `", side, "(", _unwrap(a) / _unwrap(b), ")`") :
+                                 string("declare a computed parameter, `@parameters ", name, " = ", _ratio_expr(a, b), "`, and ",
+                                        "write it as `", side, "(", name, ")`")
+_ratio_expr(a, b) = string(_builtin_text(string(a)), " / ", _builtin_text(string(b)))
 _boundary_side(s, field, axis, what) = throw(ArgumentError(
-    "@boundary $(info(field).name): the $what side of axis `$axis` is `$s`; each side is `Dirichlet(value)` or `NoFlux()`"))
+    "@boundary $(info(field).name): the $what side of axis `$axis` is `$s`; each side is `Dirichlet(value)`, `NoFlux()`, " *
+    "`Flux(q)` or `Robin(α, β, g)`"))
 const _BOUNDARY_VALUE_FORMS = "a boundary value is a number, a parameter, or a number times a parameter"
 function _boundary_value(v, field, what)
     u = _unwrap(v)
@@ -1530,7 +1581,8 @@ function boundary_face(field, name::Symbol, sides)
     axis = findfirst(==(name), _AXIS_NAMES)
     axis === nothing && throw(ArgumentError("@boundary $(info(field).name): unknown axis `$name`; the axes are x, y, z"))
     (sides isa Tuple && length(sides) == 2) || throw(ArgumentError(
-        "@boundary $(info(field).name): `$name => …` takes a pair of sides `(low, high)`, each `Dirichlet(value)` or `NoFlux()`"))
+        "@boundary $(info(field).name): `$name => …` takes a pair of sides `(low, high)`, each `Dirichlet(value)`, " *
+        "`NoFlux()`, `Flux(q)` or `Robin(α, β, g)`"))
     return BoundaryEntry(field, axis, (_boundary_side(sides[1], field, name, "low"), _boundary_side(sides[2], field, name, "high")),
         nothing, nothing)
 end
@@ -1874,7 +1926,7 @@ const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivit
     principal_axis = _principal_axis, major_axis = _major_axis, minor_axis = _minor_axis,
     RandomPlane = _random_plane, Split, ExplicitEuler, RK4, Adaptive, Every, rand = _rand, randn = _randn, count = _Count(),
     centroid = _centroid, displacement = _displacement, integral = _integral,
-    dot = _dot, norm = _norm, normalize = _normalize, geomean, log1p_geomean, mean, Δ, Dirichlet, NoFlux,
+    dot = _dot, norm = _norm, normalize = _normalize, geomean, log1p_geomean, mean, Δ, Dirichlet, NoFlux, Flux, Robin,
     CellRef, alive, sibling, root, members, Fresh, created = CONVERT_CREATED, transfer,
     Pairs, minimum_image = _minimum_image, separation = _separation, ismember)
 

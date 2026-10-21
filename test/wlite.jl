@@ -357,13 +357,25 @@ end
     @test_throws ArgumentError Potts.compose(wtop, cpm)
 end
 
-@testset "W-lite: @bcs is stored and printed, and refused at compile (F1, V4)" begin
+@testset "W-lite: @bcs is stored, printed and lowered (F1, V4; F2-11)" begin
     @potts_model WLiteBcs begin
         @kinds medium cell border
         @parameters T = 1.0 Dc = 1.0
         @variables c(field) = 0.0
         @equations D(c) ~ Dc * Δ(c)
-        @bcs c ~ masked(kind == border, 0.0)
+        @bcs c ~ masked(kind == border, 5.0)
+        @lattice Lattice((8, 8))
+        @sweep Metropolis(; temperature = T)
+    end
+    # the same condition as a `@boundary` site mask
+    @potts_model WLiteMask begin
+        @kinds medium cell border
+        @parameters T = 1.0 Dc = 1.0
+        @variables c(field) = 0.0
+        @equations D(c) ~ Dc * Δ(c)
+        @boundary c begin
+            sites(kind == border) => Dirichlet(5.0)
+        end
         @lattice Lattice((8, 8))
         @sweep Metropolis(; temperature = T)
     end
@@ -371,25 +383,16 @@ end
     bcs = Potts.getfield(Potts.getfield(sys, :part), :bcs)
     @test length(bcs) == 1 && occursin("masked", string(bcs[1]))
     @test occursin("bc      ", sprint(show, MIME"text/plain"(), sys))
-    # F1: not lowered in this version, so compiling refuses it by name. Negative control: on
-    # f9a77dd3 the same model with `@bcs c ~ masked(kind == border, 5.0)` ran bitwise equal to
-    # the model without it (the condition was dropped)
-    e = try
-        mtkcompile(sys); nothing
-    catch err
-        err
-    end
-    @test e isa ArgumentError && occursin("@bcs", e.msg) && occursin("masked", e.msg) && occursin("@boundary", e.msg)
-    @test occursin("masked(kind == border, 0.0)", e.msg) && !occursin("kind(t)", e.msg)   # (round 0: `kind(t) == 2`)
-    @test_throws ArgumentError PottsProblem(sys, [ownership => zeros(Int32, 8, 8)], (0, 1);
-        field_solver = ExplicitEuler(substeps = 1))
-    # … and so does `Potts.fields` (base, round 0: its PDESystem dropped the condition)
-    e = try
-        Potts.fields(sys); nothing
-    catch err
-        err
-    end
-    @test e isa ArgumentError && occursin("@bcs", e.msg) && occursin("masked", e.msg)
+    # F2-11: lowered (`masked` is bound in the model body), the same run as the `@boundary`
+    # mask. Base: refused at compile (F1); on f9a77dd3 it was dropped (the run bitwise equal
+    # to the model without it)
+    σ = zeros(Int32, 8, 8); σ[1, :] .= 1
+    op = [ownership => σ, kind => [:border]]
+    run(m) = solve(PottsProblem(m, op, (0, 2); field_solver = ExplicitEuler(substeps = 1)), SequentialCPM()).u[end].site.c
+    a = run(sys)
+    @test a == run(WLiteMask(; name = :m)) && maximum(a) == 5.0
+    # … and `Potts.fields` carries it (base, round 0: its PDESystem dropped the condition)
+    @test any(b -> occursin("masked", string(b)), getfield(Potts.fields(sys), :bcs))
     @potts_model WLiteNoBcs begin
         @kinds medium cell
         @parameters T = 1.0

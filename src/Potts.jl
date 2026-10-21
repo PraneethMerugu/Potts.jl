@@ -96,7 +96,7 @@ public boundary_lengths, anneal
 # a named set of kinds declared in `@kinds` (`g = (k, …)`); for programmatic `PottsSystem(; kind_classes)`
 public KindClass
 # `@boundary` conditions (D-145), bound inside model bodies like the rest of `Potts.DSL`
-public Dirichlet, NoFlux
+public Dirichlet, NoFlux, Flux, Robin
 # the sweep as MTK-visible metadata (D-160): the Hamiltonian terms, the drives and the payload
 # read with `ModelingToolkitBase.getmetadata(Potts.inner(sys), Potts.PottsSweepSpec, default)`
 public hamiltonian, drives, PottsSweepSpec

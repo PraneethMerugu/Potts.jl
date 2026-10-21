@@ -207,23 +207,11 @@ per scalar type by `PottsProblem`).
 """
 function ModelingToolkitBase.mtkcompile(authored::PottsSystem)
     authored = _lower_inner(authored, "mtkcompile")
-    _refuse_bcs(authored)
     # the model's own cell and model ODEs through MTK's `mtkcompile` first (odes.jl)
     routed, ode_systems, origin = _compile_odes(authored)
     # entity-local initialization through MTK's `InitializationProblem` (initialization.jl)
     initialization = _compile_initialization(routed)
     return _via_algebraic(() -> _compile_bound(authored, _bind_components(routed), ode_systems, initialization), routed, origin)
-end
-
-# `@bcs` is stored and printed but not lowered in this version: compiling a model with any
-# entry is an error naming each condition, so no condition is dropped from a run (F1, V4)
-function _refuse_bcs(sys::PottsSystem)
-    bcs = _p(sys, :bcs)
-    isempty(bcs) && return nothing
-    throw(ArgumentError("@bcs: the condition$(length(bcs) == 1 ? "" : "s") " * join(("`$(_bc_text(b, _p(sys, :kinds)))`" for b in bcs), ", ") *
-                        " of `$(nameof(sys))` $(length(bcs) == 1 ? "is" : "are") not lowered in this version and would " *
-                        "not change the run; write field conditions with `@boundary` (`@boundary c begin " *
-                        "sites(kind == border) => Dirichlet(v); x => (Dirichlet(v), NoFlux()) end`), or remove `@bcs`"))
 end
 
 # a `@bcs` condition as written: built-ins without their time argument (`kind`, not `kind(t)`),
@@ -757,7 +745,6 @@ function _check_boundaries(sys::PottsSystem, fields, rn)
     lat = core_lattice(_p(sys, :lattice))
     N = ndims(lat)
     stepped = Set{Symbol}(info(x).name for (x, _) in fields)
-    steporder = Symbol[info(x).name for (x, _) in fields]
     seen = Set{Tuple{Symbol, Int}}()
     for b in bs
         _located(sys, b) do
@@ -772,17 +759,9 @@ function _check_boundaries(sys::PottsSystem, fields, rn)
                 _check_names(b.mask, _SITE_BUILTINS, "a boundary site mask"; between_copies = true)
                 _has_op(b.mask, random_uniform) && throw(ArgumentError("@boundary $n: a site mask cannot draw `rand()`"))
                 lower(b.mask, _site_env(Float64, :i, rn; mcs = :mcs))
-                # the clamp runs in the field's step kernel: a mask reading that field, or one
-                # stepped after it in the same phase, would see a value mid-step
-                k = findfirst(==(n), steporder)
-                for (m, _, _) in _reads(b.mask)
-                    j = findfirst(==(m), steporder)
-                    (j === nothing || j < k) && continue
-                    throw(ArgumentError(m === n ?
-                        "@boundary $n: the site mask reads `$n`, the field it clamps; a mask cannot depend on the field it holds" :
-                        "@boundary $n: the site mask reads `$m`, a field stepped with or after `$n` in the same phase " *
-                        "(it would see `$m` before its step); a mask reads fields stepped before `$n`, or other variables"))
-                end
+                # a mask reads the state at its group's window start, whatever it reads (`n` itself,
+                # a field stepped after `n`), as `@bcs` and LatticePDE do; a field of a solver group
+                # stepped earlier in the MCS reads as stepped (review (a) and round 2 of F2 batch 4)
             else
                 ax = _AXIS_NAMES[b.axis]
                 lat.geometry isa CorePotts.Hexagonal && throw(ArgumentError(
@@ -821,6 +800,11 @@ end
 function _check_fields(sys::PottsSystem, rn)
     specs = Dict{Any, Any}()
     eqs = _field_equations(sys)
+    # a `@bcs` condition sets a stepped field (never dropped; F2 design §2.12)
+    isempty(eqs) && !isempty(_p(sys, :bcs)) && _located(sys, _BcsLine(first(_p(sys, :bcs)))) do
+        throw(ArgumentError(string("@bcs: the condition `", _bc_text(first(_p(sys, :bcs)), _p(sys, :kinds)), "` of `",
+            nameof(sys), "`: the model has no field equation (`D(c) ~ …`); a condition applies to a field the model steps")))
+    end
     isempty(eqs) && return nothing, specs
     known = _located(() -> _field_inputs(sys, Float64), sys, first(_p(sys, :equations)))
     names = Symbol[info(x).name for (x, _) in eqs]
@@ -1164,12 +1148,21 @@ function _located(f, sys::PottsSystem, x)
     catch e
         e isa Union{ArgumentError, ErrorException} || rethrow()
         occursin("\n  in ", e.msg) && rethrow()
-        ln = get(_p(sys, :sources), x, nothing)
+        ln = get(_p(sys, :sources), _source_key(x), nothing)
         loc = ln === nothing ? "" : " at $(ln.file):$(ln.line)"
         msg = _builtin_text(e.msg)
         throw(ArgumentError("$msg$(_algebraic_note(x, msg))\n  in $(_describe(x, _p(sys, :kinds)))$loc"))
     end
 end
+
+# a `@bcs` condition as a located statement (its line is the `@bcs` line; review R4 of F2
+# batch 4: the error named the first `@equations` line)
+struct _BcsLine
+    eq::Any
+end
+_source_key(x) = x
+_source_key(b::_BcsLine) = b.eq
+_describe_text(b::_BcsLine, kinds = nothing) = "@bcs " * (kinds === nothing ? _builtin_text(string(b.eq)) : _bc_text(b.eq, kinds))
 
 # descriptions are built only when reporting (printing symbolic expressions is slow); a
 # built-in shows as written (`volume`, not the input `volume(t)`), and an operator of the field

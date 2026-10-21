@@ -258,11 +258,21 @@ u = solve(prob, SequentialCPM()).u[end]
 ```
 
 - **Faces.** `x => (low, high)` (and `y`, `z`: axes 1, 2, 3) sets both faces of a closed
-  axis, each `Dirichlet(v)` or `NoFlux()`. A face value is a ghost value: `Dirichlet(v)` sets
-  the missing neighbor of an edge site to `2v − c`, so the field reaches `v` midway between
-  the edge site and the face; `NoFlux()` mirrors the edge site. A closed axis without an entry
-  is zero flux. An entry on a periodic axis, on an axis the lattice lacks, on a hexagonal
-  lattice, or on a field whose equation has no `Δ` of it is an error naming it.
+  axis. A face value is a ghost value, the missing neighbor of an edge site:
+
+  | Side | Meaning | Ghost value |
+  |---|---|---|
+  | `Dirichlet(v)` | `c = v` at the face | `2v − c`: the field reaches `v` midway between the edge site and the face |
+  | `NoFlux()` | `∂c/∂n = 0` | `c`: it mirrors the edge site |
+  | `Flux(q)` | `∂c/∂n = q`, with the outward normal `n` | `c + q h` |
+  | `Robin(α, β, g)` | `α c + β ∂c/∂n = g` | the value that meets the condition at the face |
+
+  These are the face equations of a LatticePDE system: `Flux(q)` on the low side of `x` is
+  `Differential(x)(c(t, 0, y)) ~ -q`, on the high side `Differential(x)(c(t, L, y)) ~ q`.
+  `Robin(α, 0, g)` is an error that gives `Dirichlet(g / α)`, and `Robin(0, β, g)` one that
+  gives `Flux(g / β)`. A closed axis without an entry is zero flux. An entry on a periodic
+  axis, on an axis the lattice lacks, on a hexagonal lattice, or on a field whose equation
+  has no spatial operator of it is an error naming it.
 - **Site masks.** `sites(condition) => Dirichlet(v)` is a node value: every explicit
   substep writes `v` at every site where the condition holds (after the `lower` clip, so a
   mask value below `lower` wins), and a fresh initial state (the problem's `u0`, `init`,
@@ -270,9 +280,15 @@ u = solve(prob, SequentialCPM()).u[end]
   exactly), nor does `Potts.anneal` clamp. The condition is a site expression (`kind`,
   `owner`, site and field variables), evaluated once per MCS before the substeps, so a mask
   on a kind moves with its cells. The masked sites then take their value before the first
-  substep, so a site a cell has just reached holds `v` when its neighbors read it. It cannot read the field it clamps, or a field stepped
-  after it (in the order of `@equations`): that is an error naming it. The masks of a field
-  group cost one kernel launch per MCS.
+  substep, so a site a cell has just reached holds `v` when its neighbors read it. The
+  condition reads the state at the start of its field group's window: it is evaluated
+  once, on the clamped values, and held over the MCS. This holds for every field it reads,
+  the field it clamps and a field stepped after it included. With several solver groups, a
+  field of a group stepped earlier in the MCS reads as stepped, as a rate reads another
+  group's field. Write a condition on the field it clamps with `>=`, as in
+  `sites(c >= 0.8) => Dirichlet(0.8)`. With `>`, the clamp sets `c = 0.8`, `0.8 > 0.8` is
+  false, and the next MCS releases the sites. The masks of a field group cost one kernel
+  launch per MCS.
 - **Values** are numbers, parameters, or a number times a parameter; `remake(prob; p = [:S => 2.0])`
   changes a value without regenerating code. For an expression of parameters, declare a
   computed parameter (`@parameters S = S1 + S2`) and write `Dirichlet(S)`; an expression in
@@ -283,11 +299,21 @@ u = solve(prob, SequentialCPM()).u[end]
 `Δ(c)` is a field operator: it appears in field equations (`D(c) ~ …`), where it reads the
 faces. Anywhere else (site updates, energies, drives, `@observed`) it is an error.
 
-`@bcs` takes raw MTK boundary conditions, one per line (for example
-`c ~ masked(kind == border, 0.0)`). In this release they are stored in the model and printed
-with it, but `mtkcompile` and `PottsProblem` refuse a model with any `@bcs` entry, naming each
-condition: the field compiler does not lower them yet, and a condition must never be dropped
-from a run. Write field conditions with `@boundary` (the entries above).
+`@bcs` takes the boundary conditions of a LatticePDE system, one per line. A field is read
+at a face by its coordinates, with one of them fixed: `c(t, 0, y)` is the low face of `x`,
+and `c(t, L, y)` the high face, with `L` the lattice's extent along `x` (its size times the
+spacing). The field compiler lowers them as it lowers a `PDESystem`:
+
+- `c(t, 0, y) ~ v`: a fixed value, the same as `Dirichlet(v)`;
+- `Differential(x)(c(t, L, y)) ~ q`: a gradient across the face (Neumann);
+- `α * c(t, 0, y) - β * Differential(x)(c(t, 0, y)) ~ g`: a Robin face;
+- `c ~ masked(kind == border, v)`: a node value, the same as `sites(kind == border) => Dirichlet(v)`.
+
+A value is a number, a parameter, or a number times a parameter. A face or mask that
+`@boundary` sets too is an error that prints the condition. So is an initial value
+(`c(0, x, y) ~ v`: the field's `@variables` default is its initial value), and a periodic
+pair on an axis the lattice closes (periodicity is the lattice's, for every field).
+`Potts.fields(model)` holds the conditions, so `discretize` runs them as written.
 
 ## Components
 

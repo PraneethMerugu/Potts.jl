@@ -166,12 +166,11 @@ couplings are `input = true` dependent variables, each named by the word the mod
 (`lattice_input_name`): `kind` for the kind of each site, `domain` for an irregular domain,
 the CPM term as written (`volume`) for the others; give their values by that name,
 `discretize(…; inputs = [:kind => K, :volume => V])` (`K` the kind number of each site, 0 for
-the medium). A hand-wrapped
-PDESystem (`Potts.wrap`) is returned as given. A model with `@bcs` entries is an
-`ArgumentError` naming them, as at `mtkcompile`: `@bcs` is not lowered in this version.
+the medium). Its conditions are the model's `@boundary` entries (`Flux(q)` and `Robin(α, β, g)`
+faces as LatticePDE's face equations) and its `@bcs` conditions, as `discretize` takes them.
+A hand-wrapped PDESystem (`Potts.wrap`) is returned as given.
 """
 function fields(sys::PottsSystem)
-    _refuse_bcs(sys)
     f = _stored_fields(sys)
     eqs = _field_equations(sys)
     f === nothing && isempty(eqs) && return nothing

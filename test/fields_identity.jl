@@ -394,7 +394,10 @@ const GD_SOFT = [:FdPeriodic, :FdClosed, :FdDefaults, :FdComputedRate, :FdVolume
     :FdHex, :FdHalf, :FdDomain, :FdStripe, :FdRand, :FdDomainWord, :FdTab, :FdGate, :FdChemo, :FdChemoInter,
     :FdSourceInter, :FdComputedFace, :FdKindNonlinear, :FdDivK, :GdAuditDiffusion, :GdAuditNonlinearField,
     :GdAuditBoundedField, :GdAuditKindDiffusion, :GdAuditInvTable, :GdAuditIntDivField, :GdAuditCrossField,
-    :GdAuditCrossLinear, :GdAuditGateRotation, :GdAuditGateDominant, :GdP65cbAny]
+    :GdAuditCrossLinear, :GdAuditGateRotation, :GdAuditGateDominant, :GdP65cbAny,
+    # F2 batch 4 (review (d)): the operators, aux fields and maps of `@equations` (F2-10) and the
+    # `@bcs` and `Flux`/`Robin` faces (F2-11), recorded at F2-11
+    :FpDivK, :FpRaw, :FpAdvect, :FpAux, :FpMap, :FbBcsFace, :FbFluxRobin, :FbFluxRobinBcs, :FbBcsNR]
 
 gd_try(f) = try
     (f(), nothing)
@@ -411,7 +414,7 @@ function gd_soft!(out)
         op = name === :GdP65cbAny ? gd_p65cb_op() :
              [ownership => zeros(Int32, Potts._p(sys, :lattice).dims...), kind => Symbol[]]
         pre = "$name|Float64"
-        kw = (; field_solver = ExplicitEuler())
+        kw = name === :FpMap ? (; field_solver = ExplicitMap()) : (; field_solver = ExplicitEuler())
         prob, e = gd_try(() -> PottsProblem(sys, op, (0, 2); kw...))
         route = "auto"
         if prob === nothing
