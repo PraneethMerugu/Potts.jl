@@ -10,8 +10,10 @@
 #   - any other term that reads the CPM and no field (an owner's cell variable, `position`, a
 #     helper over the neighbourhood, …) is one input `fieldₖ__in`, the term's value at each
 #     site, written by one site phase before the field step every MCS.
-# `mcs` is the time `t` of the PDESystem: one MCS is one unit of `t` (the step length is
-# `mcs_duration`), and `t` holds the MCS number during the whole step.
+# The clock (F2 design §2.6): the discretization's clock is `mcs_duration`. `mcs` is its step
+# index, `LatticePDE.step_index(t)` (the reserved slot `clock__tick`, the MCS number at every
+# substep), and `time` is the PDESystem's time `t`: the CPM's time at the start of the field
+# window, advancing by `h` per substep.
 
 # the spatial independent variables, one per lattice axis
 const _FIELD_X = Tuple(Symbolics.unwrap(only(ModelingToolkitBase.@parameters $n)) for n in (:x, :y, :z))
@@ -86,6 +88,8 @@ function _field_term(x, cv)
             push!(cv.params, u)
             return u
         elseif i.role === :builtin && i.name === :mcs
+            return _unwrap(LatticePDE.step_index(Symbolics.wrap(cv.ivs[1])))
+        elseif i.role === :builtin && i.name === :time
             return cv.ivs[1]
         elseif i.role === :builtin && i.name === :kind
             return _filled_input!(cv, u, :kind__in, Int32)
@@ -138,7 +142,7 @@ function _has_cpm_fill(x)
     u isa SymbolicUtils.BasicSymbolic || return false
     SymbolicUtils.isconst(u) && return false
     i = info(u)
-    i === nothing || return !(i.role in (:field, :site, :param, :kindtable) || (i.role === :builtin && i.name in (:mcs, :kind)))
+    i === nothing || return !(i.role in (:field, :site, :param, :kindtable) || (i.role === :builtin && i.name in (:mcs, :time, :kind)))
     iscall(u) || return true
     f, a = operation(u), arguments(u)
     (f === Δ || f === ismember) && return _has_cpm_fill(a[1])
@@ -302,8 +306,9 @@ _fill_value(ex, env) = ex === _DOMAIN_FILL ? :(CorePotts.in_domain(ctx.lattice, 
 function _field_disc(sys::PottsSystem, T)
     lat = _p(sys, :lattice)
     geometry = lat.geometry isa CorePotts.Hexagonal ? LatticeFields.IR.HEX : LatticeFields.IR.CUBIC
+    # the clock is the MCS: `mcs` reads its step index (F2 design §2.6)
     return LatticePDE.LatticeDiscretization(LatticePDE.Grid(lat.dims; geometry); T,
-        domain = _has_domain(lat) ? "domain__in" : nothing)
+        domain = _has_domain(lat) ? "domain__in" : nothing, clock = Float64(_p(sys, :sweep).mcs_duration))
 end
 
 # ---------------------------------------------------------------------------------------
@@ -362,8 +367,9 @@ function _lower_field_group(sys::PottsSystem, names::Vector{Symbol}, T::Type; kn
     pdesys, cv = _field_system(sys, names; T, known)
     Threads.atomic_add!(_LOWER_GROUP_CALLS, 1)
     spec = LatticePDE.lower_group(pdesys, _field_disc(sys, T); values = false, bound)
-    # the model's parameter of each slot and table (the spec names them as the PDESystem prints them)
-    pname(k) = info(only(q for q in getfield(pdesys, :ps) if string(q) == k)).name
+    # the model's parameter of each slot and table (the spec names them as the PDESystem prints
+    # them); the clock's slot keeps its reserved name (the phase writes the MCS number there)
+    pname(k) = k == LatticeFields.Problems.CLOCK_KEY ? Symbol(k) : info(only(q for q in getfield(pdesys, :ps) if string(q) == k)).name
     params = Symbol[pname(k) for k in spec.params]
     tables = Pair{Int, Symbol}[i => pname(tb.key) for (i, tb) in enumerate(spec.rate.tables)]
     return (; spec, params, tables, filled = copy(cv.filled), pdesys)
@@ -583,11 +589,12 @@ function _user_text(term::AbstractString, cv)
     end
     out = replace(out, r"Potts\._intdiv\(([^,()]+), ([^()]+)\)" => s"(\1 ÷ \2)")   # the model's `÷`
     out = replace(out, "LatticePDE." => "")                              # `Δ(c)`, `at(δ, …)` as written
+    out = replace(out, r"\bstep_index\(t\)" => "mcs", r"\bclock__tick\b" => "mcs")   # the clock's step index
     out = replace(out, r"(\w+)\(t(, [xyz])*\)" => s"\1")
-    # a kind table read `at(δ, 1 + kind)` as the model writes it, `δ[kind]`; the time `t` is `mcs`
+    # a kind table read `at(δ, 1 + kind)` as the model writes it, `δ[kind]`; the time `t` is `time`
     out = replace(out, r"at\((\w+), (?:1 \+ kind|kind \+ 1)\)" => s"\1[kind]")
     out = replace(out, r"at\((\w+), (\w+)\)" => s"\1[\2]")             # a CPM read `volume[owner]`
-    return replace(out, r"\bt\b" => "mcs")
+    return replace(out, r"\bt\b" => "time")
 end
 
 # The model time of one field phase: the MCS, or `1/n` of it inside a sub-MCS `repeat(n, …)`
@@ -700,7 +707,7 @@ function _field_phases(c::CompiledPottsSystem, T, spec::SolverSpec)
         log === nothing || push!(log, Expr(:field_program, g.fingerprint, string(g.arrays), string(g.params),
             string(g.tables), _canonical_value(g.substeps.least), string(isempty(g.substeps.bound.unbounded) && isempty(g.substeps.bound.expanded))))
         ph = CorePotts.FieldPhase{Symbol(:__fields, j)}(g.group, g.alg, g.arrays; g.tables, g.params,
-            substeps = g.substeps, dt, g.options, T)
+            substeps = g.substeps, dt, period = Float64(_p(c.sys, :sweep).mcs_duration), g.options, T)
         push!(steps, ph)
         isempty(g.masks.launches) || push!(clamps, CorePotts.field_clamp(ph))
     end
@@ -716,7 +723,7 @@ function _check_field_substeps(f, p)
             ph isa CorePotts.FieldPhase && !ph.init && ph.substeps isa _Substeps || continue
             tabs = Pair{String, Vector{Float64}}[ph.program.tables[i].key => Float64.(vec(collect(getproperty(p, name))))
                                                  for (i, name) in ph.tables]
-            praw = LatticeFields.Problems.with_tables(Float64[getproperty(p, n) for n in ph.params], tabs)
+            praw = LatticeFields.Problems.with_tables(Float64[CorePotts._praw(ph, p)...], tabs)
             _check_substeps(ph.substeps, praw, ph.substeps.key)
         end
     end

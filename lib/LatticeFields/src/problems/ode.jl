@@ -29,7 +29,7 @@ end
 function (r::RHSLaunch)(args)
     du, u, p, t = args
     S = map(lane -> map(a -> _resolve(a, u, du), lane), r.S0)
-    P = r.derive(ntuple(i -> p[i], r.np), r.c, t)
+    P = r.derive(ntuple(i -> p[i], r.np), r.c, t, nothing)
     G = r.launch.params[2][3]
     rebind(r.launch, (S, P, typeof(G)(G.n, G.dims, (t, zero(t)))))()
     return nothing

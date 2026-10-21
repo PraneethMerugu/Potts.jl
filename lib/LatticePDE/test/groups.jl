@@ -246,7 +246,7 @@ end
     p = gown(gsys())
     for f in (() -> init(p, ExplicitEuler()), () -> solve(p), () -> solve(p; saveat = 0.05))
         e = gerr(f)
-        @test occursin("needs `dt`", e) && occursin("saveat", e) && !occursin("clock", e)
+        @test occursin("needs `dt`", e) && occursin("saveat", e) && occursin("clock", e)       # F2-08c: the clock exists
     end
     disc = LatticeDiscretization(Grid((8, 8)); T = Float64)
     whole = LatticePDE.lower_group(gsys(), disc)

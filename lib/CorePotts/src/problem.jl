@@ -555,7 +555,7 @@ end
 # One entry of the MCS order: a tuple of phases, the sweep, the lifecycle or a `Repeat`.
 function _run_entry!(integ::PottsIntegrator, phases::Tuple, part::NTuple{2, Int} = (1, 1))
     integ.stats.launches += _run_phases(phases, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend, integ.stats)
+        integ.key, integ.t, integ.backend, integ.stats, part)
     return nothing
 end
 # `part = (j, n)`: pass `j` of the `n` passes of a `Repeat` (the whole MCS is `(1, 1)`)

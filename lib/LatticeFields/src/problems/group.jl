@@ -75,6 +75,24 @@ function FieldGroup(spec::GroupSpec{N}; alg = spec.kind == :map ? ExplicitMap() 
 end
 
 """
+    CLOCK_KEY
+
+The name of the clock's parameter slot, `"clock__tick"` (F2 design §2.6): a group whose
+kernels read the clock's step index (`mcs` in front end A, `LatticePDE.step_index(t)` in
+front end B) has this slot among its parameters, and its launches write the step index into
+it at every launch. The `__tick` suffix is reserved, so no user parameter takes the name.
+"""
+const CLOCK_KEY = "clock__tick"
+
+"""
+    clock_slot(spec) -> Int
+
+The parameter slot of the clock in group `spec` ([`CLOCK_KEY`](@ref)), or 0 when its kernels
+do not read the step index.
+"""
+clock_slot(spec::GroupSpec) = something(findfirst(==(CLOCK_KEY), spec.params), 0)
+
+"""
     group_program(g, alg) -> Program
 
 The semantic program of group `g` stepped by `alg`: its update fused into the rate program,
@@ -113,7 +131,7 @@ function group_plans(g::FieldGroup, alg, ::Type{V}, backend, o::CompileOptions;
     initids, stepids = kernels
     return lock(_PLANS_LOCK) do
         get!(g.plans, (update_key(alg), V, initids, stepids)) do
-            opts = _options(o, V, backend)
+            opts = _options(o, V, backend; clock = clock_slot(g.spec))
             (plan(s, initids; options = opts), plan(s, stepids; options = opts))
         end
     end
@@ -221,7 +239,6 @@ mutable struct GroupRuntime{ST <: FieldStore, A, B, M, CL, SC, CP, PV, S, H}
     status::SciMLBase.ReturnCode.T
     pending::Union{Nothing, Task}
     host::H
-    fixed_time::Bool                    # F2-08a: front end A holds `t` over its substeps
 end
 
 # the current slots a launch of the group binds at slot parity `parity`: the group's fields
@@ -251,8 +268,7 @@ fields in the slot their last substep wrote (one group: the slots alternate); `:
 them back to slot 1 after an odd count, so a group that runs after it reads current values.
 """
 function bind_group(g::FieldGroup, alg, st::FieldStore, p; fields = g.spec.state, n::Integer, dt::Real,
-        c, ends_in::Symbol = :parity, backend, options::CompileOptions, V::Type, host = nothing,
-        fixed_time::Bool = false)
+        c, ends_in::Symbol = :parity, backend, options::CompileOptions, V::Type, host = nothing)
     ends_in in (:parity, :slot1) || throw(ArgumentError("ends_in must be :parity or :slot1; got $(repr(ends_in))"))
     prog = group_program(g, alg)
     ids = Set(fieldid(prog, k) for k in fields)
@@ -267,8 +283,7 @@ function bind_group(g::FieldGroup, alg, st::FieldStore, p; fields = g.spec.state
     copies = Tuple((st.bufs[f][1], st.bufs[f][2]) for f in swaps)
     stab = all_state ? g.spec.stability : restrict_bound(g.spec.stability, collect(String, fields))
     return GroupRuntime(st, alg, ip, sp, steps, masks, clamps, stepclamps, swaps, copies, ends_in, all_state, collect(String, fields), Int(n),
-        Float64(dt), stab, p, c, prog, backend, alg_cache(alg, g, st), SciMLBase.ReturnCode.Success, nothing, host,
-        fixed_time)
+        Float64(dt), stab, p, c, prog, backend, alg_cache(alg, g, st), SciMLBase.ReturnCode.Success, nothing, host)
 end
 
 """
@@ -306,25 +321,27 @@ clamp_now!(rt::GroupRuntime) = (_clamp!(rt.clamps, rt.store, rt.p); nothing)
 """
     advance!(rt, clock, n = rt.n, window = rt.dt) -> ReturnCode.T
 
-One window of the group: with `clock = (t0, k)` (the window's start time and step index),
-the masks and the clamp at the window's start (when the group has masked conditions), then
-`n` substeps of `h = window / n` at `t0 + j h`, alternating the slot parity; with
-`ends_in = :slot1` the fields go back to slot 1 after an odd count. Returns the algorithm's
-code for the step (`ReturnCode.Success` for the explicit algorithms), also kept in
-`rt.status`. No allocation on the host executor.
+One window of the group: with `clock = (t0, k)` (the window's start time and the clock's step
+index), the masks and the clamp at the window's start (when the group has masked
+conditions), then `n` substeps of `h = window / n` at `t0 + j h`, alternating the slot
+parity; with `ends_in = :slot1` the fields go back to slot 1 after an odd count. A kernel that
+reads the clock slot (`clock__tick`: `mcs` in front end A, `step_index(t)` in front end B)
+reads `k` at every substep. Returns the algorithm's code for the step (`ReturnCode.Success`
+for the explicit algorithms), also kept in `rt.status`. No allocation on the host executor.
 """
 function advance!(rt::GroupRuntime, clock::Tuple{Real, Integer}, n::Integer = rt.n, window::Real = rt.dt)
     t = Float64(clock[1])
+    k = Int(clock[2])
     h = Float64(window) / n
     st = rt.store
     if rt.masks !== nothing
-        rt.masks[_parity(rt)]((t, h))
+        rt.masks[_parity(rt)]((t, h, k))
         # the values the masks set now (the bound parameters): on a device the mask launches
         # clamp the sites they mark themselves (one launch, `_mask_fuse`), so none is left here
         _clamp!(rt.stepclamps, rt.store, rt.p)
     end
     for j in 0:(n - 1)
-        rt.steps[_parity(rt)]((rt.fixed_time ? t : t + j * h, h))
+        rt.steps[_parity(rt)]((t + j * h, h, k))
         _swap!(st.cur, rt.swaps)
     end
     rt.ends_in === :slot1 && _slot1!(rt.copies, st.cur, rt.swaps, 1)

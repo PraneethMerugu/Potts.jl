@@ -199,7 +199,7 @@ function FieldSolver(exec, op::CellOperator{N}; inner = :auto, T::Type = Float32
         d = derive_function(ck)
         ck.timed && irerror("solver kernel `", k.key, "` derives parameters from t")
         # compute type sv.T; t is never read (check_no_time), so its value is irrelevant
-        bodies[k.key] = (ck, body_function(ck), d(praw, zero(T), 0.0), d)
+        bodies[k.key] = (ck, body_function(ck), d(praw, zero(T), 0.0, nothing), d)
     end
     bufs, slot = Dict{Int32, Vector{Any}}(), Dict{Int32, Int}()
     for (i, f) in enumerate(s.fields)
@@ -307,7 +307,7 @@ end
 function _set_values!(sv::FieldSolver, op::CellOperator)
     praw = coef_values(op)
     for (k, (ck, fn, _, d)) in sv.bodies
-        sv.bodies[k] = (ck, fn, d(praw, zero(sv.T), 0.0), d)
+        sv.bodies[k] = (ck, fn, d(praw, zero(sv.T), 0.0, nothing), d)
     end
     sv.op = op
     return sv

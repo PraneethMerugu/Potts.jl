@@ -1368,3 +1368,130 @@ end
     late = fd_ftcs(c0, 0.2, (1, 1), 1.0, 1; periodic = false); late[m] .= 1.0     # control: not clamped first
     @test maximum(abs.(c1 .- late)) > 1e-3
 end
+
+# F2-08c: the clock in front end A (F2 design §2.6). `mcs` reads the step index (the reserved
+# slot `clock__tick`: the MCS number at every substep, also in hoisted REAL forms), and
+# `time` reads the PDESystem's time `t`: the window's start `(mcs + (r − 1)/R) · mcs_duration`
+# plus `j h` at substep `j`
+@potts_model FdMcsSource begin
+    @kinds medium A
+    @parameters η = 0.5
+    @variables c(field) = 1.0
+    @lattice Lattice((6, 6); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations D(c) ~ -c + η * mcs
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FdMcsDiff begin
+    @kinds medium A
+    @parameters ε = 0.5
+    @variables c(field) = 0.0
+    @lattice Lattice((6, 6); boundary = Periodic())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations D(c) ~ (1 + ε * mcs) * Δ(c)
+    @sweep Metropolis(; temperature = 1.0)
+end
+@testset "F2-08c: REAL forms of mcs over several MCS (front end A)" begin
+    # `η mcs` is hoisted into a derived parameter: derived again at each launch with the MCS number
+    integ = init(PottsProblem(FdMcsSource(; name = :s), fd_empty((6, 6)), (0, 4); field_solver = ExplicitEuler(substeps = 4)),
+        SequentialCPM())
+    hand = 1.0
+    for k in 0:3
+        step!(integ)
+        for _ in 1:4
+            hand += 0.25 * (-hand + 0.5 * k)
+        end
+        @test all(v -> isapprox(v, hand; rtol = 1e-13), Array(current_state(integ).site.c))
+    end
+    # `(1 + ε mcs)` multiplies the diffusion (a term the bound cannot see: an explicit count);
+    # a slow Fourier mode, so each MCS's factor shows
+    c0 = [1.0 + cos(π * (i - 1) / 3) for i in 1:6, j in 1:6]
+    prob = PottsProblem(FdMcsDiff(; name = :d), [fd_empty((6, 6)); :c => c0], (0, 3); field_solver = ExplicitEuler(substeps = 16))
+    integ = init(prob, SequentialCPM())
+    want = copy(c0)
+    for k in 0:2
+        step!(integ)
+        want = fd_ftcs(want, 1 + 0.5 * k, (1, 1), 1.0, 16; periodic = true)
+        @test isapprox(Array(current_state(integ).site.c), want; rtol = 1e-12)
+    end
+end
+
+# under `repeat(4, …, fields)` the four field passes of an MCS read one step index, and their
+# windows start `mcs_duration / 4` apart
+@potts_model FdClockRepeat begin
+    @kinds medium A
+    @variables begin
+        c(field) = 0.0
+        u(field) = 0.0
+    end
+    @lattice Lattice((4, 4); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations begin
+        D(c) ~ mcs
+        D(u) ~ time
+    end
+    @sweep Metropolis(; temperature = 1.0)
+    @schedule repeat(4, sweep(fraction = 1//4), fields)
+end
+@testset "F2-08c: repeat(4, fields): one step index per MCS, windows mcs_duration/4 apart (A)" begin
+    sol = solve(PottsProblem(FdClockRepeat(; name = :r), fd_empty((4, 4)), (0, 3); field_solver = ExplicitEuler(substeps = 1)),
+        SequentialCPM())
+    u = sol.u[end]
+    @test all(≈(0 + 1 + 2), u.site.c)                                  # four passes of 1/4 at k = 0, 1, 2
+    @test all(≈(0.25 * sum(0.25 * i for i in 0:11)), u.site.u)          # windows at t0 = 0, 0.25, …, 2.75
+end
+
+# `time` in a field equation reads `t0 + j h` per substep (base: a filled input, the CPM's time
+# once per MCS, constant over the substeps)
+@potts_model FdTimeRead begin
+    @kinds medium A
+    @variables c(field) = 0.3
+    @lattice Lattice((4, 4); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations D(c) ~ -c + sin(time)
+    @sweep Metropolis(; temperature = 1.0)
+end
+@testset "F2-08c: time in a field reads t0 + j h per substep (A)" begin
+    integ = init(PottsProblem(FdTimeRead(; name = :t), fd_empty((4, 4)), (0, 3); field_solver = ExplicitEuler(substeps = 4)),
+        SequentialCPM())
+    hand = 0.3
+    for m in 0:2
+        step!(integ)
+        for j in 0:3
+            hand += 0.25 * (-hand + sin(m + 0.25 * j))
+        end
+        @test all(v -> isapprox(v, hand; atol = 1e-13), Array(current_state(integ).site.c))
+    end
+end
+
+# Review round 1 of F2 batch 3 (S3 (b)): `mcs` and `time` under `repeat(4, …)` with
+# `mcs_duration = 0.5` and a span that starts at MCS 2 (hand: window 0.125, t0 = (m + r/4) · 0.5)
+@potts_model FdClockHalf begin
+    @kinds medium A
+    @parameters η = 0.5
+    @variables begin
+        c(field) = 0.0
+        u(field) = 0.0
+        w(field) = 1.0
+    end
+    @lattice Lattice((4, 4); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations begin
+        D(c) ~ mcs
+        D(u) ~ time
+        D(w) ~ -w + η * mcs
+    end
+    @sweep Metropolis(; temperature = 1.0, mcs_duration = 0.5)
+    @schedule repeat(4, sweep(fraction = 1//4), fields)
+end
+@testset "F2-08c: repeat(4, fields) with mcs_duration = 0.5 from MCS 2 (A)" begin
+    u = solve(PottsProblem(FdClockHalf(; name = :h), fd_empty((4, 4)), (2, 5); field_solver = ExplicitEuler(substeps = 1)),
+        SequentialCPM()).u[end]
+    c, uu, w = 0.0, 0.0, 1.0
+    for m in 2:4, r in 0:3
+        c += 0.125 * m
+        uu += 0.125 * (m + r / 4) * 0.5
+        w += 0.125 * (-w + 0.5 * m)
+    end
+    @test all(≈(c; rtol = 1e-13), u.site.c) && all(≈(uu; rtol = 1e-13), u.site.u) && all(≈(w; rtol = 1e-13), u.site.w)
+end

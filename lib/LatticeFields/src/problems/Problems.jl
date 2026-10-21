@@ -52,5 +52,7 @@ include("ode.jl")
 
 # the coupling between field groups and the per-group counts (review of F2-06)
 public substep_counts, lagged_coupling, group_loops
+# the clock (F2-08c)
+public CLOCK_KEY, clock_slot
 
 end # module Problems

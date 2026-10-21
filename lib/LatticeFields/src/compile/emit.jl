@@ -12,6 +12,9 @@ automatically when an array has more than 2³¹ − 1 elements);
 lane holds ([`lanetype`](@ref)): `:fixed` (its own type) or `:state` (problems: the F32/F64
 lanes hold `T`). `T = nothing` (the default) compiles raw IR in Float32; problems take the
 value type from their state (`eltype(u0)`) and refuse an explicit `T` that differs.
+`clock`: the parameter slot of the clock's step index (`clock__tick`, F2 design §2.6), or 0
+for none: a kernel that reads it derives its parameters again at each launch, with the step
+index written into the slot (`derive(Praw, c, t, k)`).
 """
 Base.@kwdef struct CompileOptions
     T::Union{Type, Nothing} = nothing
@@ -20,6 +23,7 @@ Base.@kwdef struct CompileOptions
     debug::Bool = false
     index::Symbol = :auto
     lanes::Symbol = :fixed
+    clock::Int = 0
 end
 debug_options() = CompileOptions(; T = Float64, I = Int, debug = true)
 

@@ -677,6 +677,10 @@ The [`StabilityBound`](@ref) of the rate fields of `cf`; call it with a paramete
 """
 function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
     ks = sort!(collect(keys(cf.linearity)))
+    # the clock's slot is not a value fixed at bind (F2 design §2.6, rule 3): as the time `t`,
+    # a coefficient that reads it is a term the bound cannot see, and an `ifelse` gate on it
+    # is bounded through both arms; a stand-in that no coefficient can read keeps the slots
+    params = Any[_isclock(q) ? unwrap(Symbolics.variable(:__clock_slot)) : q for q in cf.params]
     states = Set(_states(cf.program))
     dvs = Dict{String, Any}()            # state key → its term (inputs and aux are not rows)
     for v in sys.dvs, (op, kk) in cf.keys
@@ -715,14 +719,14 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
         function add!(alts, term, class, depth)
             fs = [kk for (kk, v) in dvs if _reads(term, (_opof(v),))]
             if class == :Diffusion
-                c = _coef_bound(_diffusion_coefficient(term), cf.params, tabs, ivars)
+                c = _coef_bound(_diffusion_coefficient(term), params, tabs, ivars)
                 c === nothing && return false
                 foreach(r -> push!(r.diffusion, c), alts)
             elseif class == :SiteDiffusion
                 parts = _site_parts(term)
                 parts === nothing && return false
-                cm = _coef_bound(parts[1], cf.params, tabs, ivars)
-                cK = _coef_bound(parts[2], cf.params, tabs, ivars)
+                cm = _coef_bound(parts[1], params, tabs, ivars)
+                cK = _coef_bound(parts[2], params, tabs, ivars)
                 (cm === nothing || cK === nothing) && return false
                 foreach(r -> push!(r.sitediffusion, (cm, cK)), alts)
             elseif class == :LinearLocal || class == :CrossLinear
@@ -730,11 +734,11 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
                 if class == :CrossLinear &&
                    _linclass(unwrap(term), _opof(dvs[fs[1]]), stateops, inputops) == :Diffusion
                     j = findfirst(==(fs[1]), ks)
-                    c = j === nothing ? nothing : _coef_bound(_diffusion_coefficient(term), cf.params, tabs, ivars)
+                    c = j === nothing ? nothing : _coef_bound(_diffusion_coefficient(term), params, tabs, ivars)
                     c === nothing && return false
                     foreach(r -> push!(r.crossdiffusion, (c, j)), alts)
                 else
-                    c = _coef_bound(substitute(term, Dict(dvs[fs[1]] => 1); fold = Val(false)), cf.params, tabs, ivars)
+                    c = _coef_bound(substitute(term, Dict(dvs[fs[1]] => 1); fold = Val(false)), params, tabs, ivars)
                     c === nothing && return false
                     if class == :CrossLinear
                         j = something(findfirst(==(fs[1]), ks), 0)
@@ -839,7 +843,8 @@ function _index(cf::CompiledField, sys::PDESystem, s, state; derived = Pair[], c
             end
         end
     end
-    params = [(p, Symbol(string(p))) => i for (i, p) in enumerate(cf.params)]
+    # (the clock's slot is the stepper's, not a parameter of the problem)
+    params = [(p, Symbol(string(p))) => i for (i, p) in enumerate(cf.params) if !_isclock(p)]
     defaults = Dict{Any, Any}(p => d for (p, d) in zip(cf.params, cf.defaults))
     # a computed parameter reads as its folded expression of the parameter slots (SII observed)
     ps, tt = Any[unwrap(q) for q in cf.params], unwrap(sys.ivs[1])
@@ -1006,11 +1011,11 @@ end
 # a `"key: term"` entry of the bound as the user wrote it: the term, a field read `c(t, x, y)`
 # as `c`, and the field whose rate holds it
 # a coefficient as the user wrote it: a field read `c(t, x, y)` as `c`
-_coef_text(t::AbstractString) = replace(t, r"(\w+)\(t(, \w+)*\)" => s"\1", "LatticePDE." => "")
+_coef_text(t::AbstractString) = _clocktext(replace(t, r"(\w+)\(t(, \w+)*\)" => s"\1", "LatticePDE." => ""))
 function _term_text(t::AbstractString)
     i = findfirst(": ", t)
     i === nothing && return "`$t`"
-    term = replace(t[(last(i) + 1):end], r"(\w+)\(t(, \w+)*\)" => s"\1")
+    term = _clocktext(replace(t[(last(i) + 1):end], r"(\w+)\(t(, \w+)*\)" => s"\1"))
     return "`$term` (in the rate of `$(t[1:(first(i) - 1)])`)"
 end
 
@@ -1068,7 +1073,12 @@ function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = ())
                                 "two systems (split stepping is planned)")
     end
     hasmask = any(b -> (r = unwrap(b.rhs); iscall(r) && operation(r) === masked), sys.bcs)
-    kind == :auto && (kind = hasmap || hasmask ? :owned : :ode)
+    # the clock's step index needs the owned steppers, which land on its boundaries
+    hasclock = _reads_step_index(sys)
+    kind == :auto && (kind = hasmap || hasmask || hasclock ? :owned : :ode)
+    kind == :ode && hasclock && _dverr("`step_index(t)` needs problem = :owned in this version: an ODE solver does not " *
+                                       "land on the clock's boundaries (a discrete parameter updated at them, with " *
+                                       "`tstops`, is planned: F4); use problem = :owned or leave `problem` out")
     kind == :ode && hasmap && _dverr("discrete maps have no ODE form; use problem = :owned")
     backend = disc.backend === nothing ? KernelAbstractions.CPU() : disc.backend
     T = _statetype(disc)
@@ -1093,6 +1103,12 @@ function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = ())
     rates = Dict(k => "∂$k" for k in state)
     return ode_problem(s, u0, tspan, cf.defaults; state, rates, init = spec.init, index,
         tables = cf.tables, inputs = ins, stability = spec.stability, backend, options)
+end
+
+# whether an equation or condition of `sys` reads the clock's step index
+function _reads_step_index(sys::PDESystem)
+    hit(u) = iscall(u) && (operation(u) === step_index || any(hit, arguments(u)))
+    return any(eq -> hit(unwrap(eq.lhs)) || hit(unwrap(eq.rhs)), [sys.eqs; sys.bcs])
 end
 
 # The byte-identity gate of the update pass (F2-07; F2 design §2.5), on request: with

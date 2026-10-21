@@ -42,7 +42,7 @@ on the host) followed by the hoisted ones, all in the type of `c` (the compute e
 the value type, or a Dual of it). Hoisted values that read the time use `t`.
 """
 function launch_parameters(ck::CompiledKernel, Praw, c = zero(ck.T), t = 0.0)
-    return derive_function(ck)(Tuple(Praw), c, t)
+    return derive_function(ck)(Tuple(Praw), c, t, nothing)
 end
 
 """

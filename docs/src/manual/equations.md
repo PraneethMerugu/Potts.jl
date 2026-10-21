@@ -16,7 +16,11 @@ an equation is:
 The right side of a field equation is a site expression: `kind`, `owner`, `position`,
 other fields, kind tables (`δ[kind]`). A cell ODE reads cell quantities (`volume`, cell
 variables, `integral(c)`) and can read other cells' values (`y[j]`); every ODE step reads
-the state at the start of the step. `time` is the current time.
+the state at the start of the step. `time` is the current time. In a field equation, `mcs`
+is the MCS number at every substep, and `time` is the time of the substep: the time at the
+start of the field step plus `j h` at substep `j` (`h` the substep length). `mcs` is the
+absolute MCS number: a problem whose span starts at MCS 2 reads 2 first. The step index of a
+LatticePDE system, `step_index(t)`, counts from the start of its own time span instead.
 
 **A source on a site predicate.** A term of a field rate can be switched on by any
 predicate of the site: its `kind`, a fold over a relation of `site` (the neighbors), site
@@ -159,7 +163,8 @@ sol[:x][end], sol[:g][end]
   field counts as reading every other group. A term that reads only its own field
   (`- 0.1 * c^2`) does not.
 - The CPM quantities in a field equation (`kind`, cell reads, neighbor counts) are evaluated
-  once per MCS, before the fields step, and held over the substeps; so is `mcs`. `rand()`
+  once per MCS, before the fields step, and held over the substeps; so is `mcs`. `time`
+  advances with the substeps. `rand()`
   cannot appear in a field equation: draw in a site update and read its variable.
 - On a hexagonal lattice, `Δ` is the only spatial operator. On a lattice with a `domain`,
   the fields live in the domain: a site outside it keeps its value, and the domain's edge

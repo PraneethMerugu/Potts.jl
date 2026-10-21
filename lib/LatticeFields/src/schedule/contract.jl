@@ -16,11 +16,13 @@
 #    `spec.bind[l][j] = (id, role)`: role `:cur` / `:next` select the current or next slot
 #    of a two-buffer field (`:cur` only for a one-buffer field), `:table` a table array.
 #    Lanes are `spec.kernel.lanes[l]`. Multi-component fields are one array of planes.
-# 3. Parameters. `P = derive_function(spec.kernel)(Praw, c, t)`: `Praw::NTuple{nparams}` of
-#    any `Real` eltype on the host, `c` a value of the compute element type, `t` the time;
+# 3. Parameters. `P = derive_function(spec.kernel)(Praw, c, t, k)`: `Praw::NTuple{nparams}` of
+#    any `Real` eltype on the host, `c` a value of the compute element type, `t` the time, `k`
+#    the clock's step index written into the clock slot (`nothing`: the slot keeps its value);
 #    `P::NTuple{NP, typeof(c)}` reaches the device (no Float64 on Metal), with
 #    `NP = nparams + length(spec.kernel.derived)` (the hoisted parameters follow the raw ones;
-#    a kernel with `timed` hoisted values is derived again at each launch).
+#    a `timed` kernel (hoisted values that read `t`, or a read of the clock slot) is derived
+#    again at each launch).
 # 4. Geometry `G`, any isbits object with fields
 #      n::I                          sites of the launch space (`spec.ndrange`)
 #      dims::NTuple{L,NTuple{N,I32}} per level in `spec.kernel.levels` order

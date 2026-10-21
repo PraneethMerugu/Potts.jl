@@ -7,7 +7,8 @@
 struct FiniteVolume end
 
 """
-    LatticeDiscretization(grid; methods = Dict(), T = nothing, backend = nothing, problem = :auto, domain = nothing)
+    LatticeDiscretization(grid; methods = Dict(), T = nothing, backend = nothing, problem = :auto, domain = nothing,
+                          clock = nothing)
 
 How a `PDESystem` is put on a lattice. `grid = Grid(dims)` gives only the site counts: the
 spacing is derived from the system's domain (`extent ./ dims`) and periodicity from its
@@ -32,6 +33,13 @@ The fields live in the domain: a site outside keeps its value (its rate is 0, it
 conditions do not hold), and neighbor reads across the domain's edge read the site itself
 (zero flux; `LatticeFields.IR.DomainEdgeRule`). Face conditions still apply at the faces of
 the box.
+
+`clock = τ` declares the discretization's clock (F2 design §2.6), of period `τ` (finite,
+> 0). It sets the window of the owned steppers (`ExplicitEuler()` with no `dt` steps windows
+of `τ`; a given `dt` must divide `τ`) and the step index `k` that an equation reads as
+[`step_index(t)`](@ref): `k = 0` over the first period from the start of the time span,
+then `1`, `2`, …, kept as an integer by the stepper (never computed from a float time).
+Without a clock, `ExplicitEuler` needs `dt`, and `step_index` is refused.
 """
 struct LatticeDiscretization{N, M, B} <: AbstractDiscretization
     grid::Grid{N}
@@ -40,15 +48,18 @@ struct LatticeDiscretization{N, M, B} <: AbstractDiscretization
     backend::B
     problem::Symbol
     domain::Union{Nothing, String}
+    clock::Union{Nothing, Float64}
 end
 function LatticeDiscretization(grid::Grid; methods = Dict(), T::Union{Type, Nothing} = nothing,
-                               backend = nothing, problem::Symbol = :auto, domain = nothing)
+                               backend = nothing, problem::Symbol = :auto, domain = nothing, clock = nothing)
+    clock === nothing || (clock isa Real && isfinite(clock) && clock > 0) ||
+        throw(ArgumentError("clock = $(repr(clock)) must be a finite period > 0 (or left out: no clock)"))
     problem in (:auto, :owned, :ode, :linear) ||
         throw(ArgumentError("problem must be :auto, :owned, :ode or :linear; got $(repr(problem))"))
     grid.domain == 0 || throw(ArgumentError("give an irregular domain as `domain = dom` (a Bool input field), not in the grid"))
     grid.geometry == HEX && length(grid.dims) != 2 && throw(ArgumentError("a hexagonal grid is 2D"))
     key = domain === nothing ? nothing : domain isa Union{AbstractString, Symbol} ? String(domain) : _name(_opof(domain))
-    return LatticeDiscretization(grid, methods, T, backend, problem, key)
+    return LatticeDiscretization(grid, methods, T, backend, problem, key, clock === nothing ? nothing : Float64(clock))
 end
 
 """
@@ -72,7 +83,9 @@ end
 """Launch-varying slot of the time `t` (`G.rt[RUNTIME_T]`)."""
 const RUNTIME_T = 1
 
-_dverr(msg) = throw(ArgumentError(msg))
+_dverr(msg) = throw(ArgumentError(_clocktext(msg)))
+# the clock's slot as the user wrote it (`step_index(t)`), in every message of a lowered system
+_clocktext(s::AbstractString) = replace(s, r"\bclock__tick\b" => "step_index(t)")
 _name(op) = string(nameof(op))
 _opof(x) = (u = unwrap(x); iscall(u) ? (operation(u) === getindex ? _opof(arguments(u)[1]) : operation(u)) : u)
 function _lane(st, T)
@@ -169,6 +182,34 @@ function _eqkind(eq, fields, ivs)
     _dverr("equation `$eq`: the left side must be `D(c)`, `Shift(t, 1)(c)` or a field `c`")
 end
 
+# The clock's step index (F2 design §2.6): every `step_index(t)` of the equations and
+# conditions becomes the reserved parameter slot `clock__tick` (appended to the parameters),
+# which the steppers write at every launch; refused without a declared clock, with an argument
+# other than the time, or when the system already has a parameter of that name
+const _CLOCK_TICK = unwrap(only(ModelingToolkitBase.@parameters clock__tick = 0.0))
+_isclock(p) = string(unwrap(p)) == Problems.CLOCK_KEY
+function _clock_slot(sys::PDESystem, disc::LatticeDiscretization)
+    ps = _params(sys)
+    any(_isclock, ps) && throw(ArgumentError("`$(Problems.CLOCK_KEY)` is the reserved name of the clock's slot (the " *
+                                             "`__tick` suffix is reserved); give the parameter another name"))
+    tt = unwrap(sys.ivs[1])
+    calls = Any[]
+    walk(u) = iscall(u) && (operation(u) === step_index ? push!(calls, u) : foreach(walk, arguments(u)))
+    foreach(eq -> (walk(unwrap(eq.lhs)); walk(unwrap(eq.rhs))), [sys.eqs; sys.bcs])
+    isempty(calls) && return sys
+    for u in calls
+        isequal(unwrap(only(arguments(u))), tt) ||
+            _dverr("`$u`: the argument of `step_index` is the time `$tt` (the clock's step index at the current time)")
+    end
+    disc.clock === nothing && _dverr("`step_index($tt)` reads the discretization's clock, and the `LatticeDiscretization` " *
+                                     "declares none; give `LatticeDiscretization(…; clock = τ)` (the period of one step index)")
+    rule = Dict{Any, Any}(u => _CLOCK_TICK for u in unique(calls))
+    sub(x) = substitute(x, rule; fold = Val(false))
+    return PDESystem([sub(eq.lhs) ~ sub(eq.rhs) for eq in sys.eqs], [sub(b.lhs) ~ sub(b.rhs) for b in sys.bcs],
+        getfield(sys, :domain), sys.ivs, sys.dvs, Any[ps; _CLOCK_TICK]; name = nameof(sys),
+        initial_conditions = _ics(sys))
+end
+
 function _scan_clock(sys)
     walk(u, eq) = iscall(u) && ((operation(u) isa Hold || operation(u) isa Sample ||
                                  (operation(u) isa Shift && operation(u).steps != 1)) &&
@@ -193,6 +234,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     check_vocabulary(sys)
     _scan_clock(sys)
     _check_parts(sys)
+    sys = _clock_slot(sys, disc)
     ps, ic = _params(sys), _ics(sys)
     any(p -> p isa Pair, ps) && _dverr("parameters are declared natively, `@parameters Dc = 1e-3`; " *
                                        "the `ps` entry `$(first(filter(p -> p isa Pair, ps)))` is a `Pair`")

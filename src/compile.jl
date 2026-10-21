@@ -370,7 +370,8 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
             "`D($(i.name))` is already given by `$(derivatives[i.name])`; one equation per variable (add the terms)"))
         derivatives[i.name] = eq
         if i.role === :field || i.role === :site
-            _check_names(eq.rhs, _SITE_BUILTINS, "a field equation"; between_copies = true)
+            # `time` reads the field's own time `t` (the window's start plus `j h` per substep, F2-08c)
+            _check_names(eq.rhs, (_SITE_BUILTINS..., :time), "a field equation"; between_copies = true)
             push!(fields, (x, eq.rhs))
         elseif i.role === :cell
             _check_names(eq.rhs, (_CELL_BUILTINS..., :time), "a cell equation"; between_copies = true)

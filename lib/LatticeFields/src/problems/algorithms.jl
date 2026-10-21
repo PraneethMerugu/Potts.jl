@@ -58,14 +58,39 @@ Discrete maps `Shift(t, 1)(c) ~ rhs` (§5.5): one application per unit of time.
 struct ExplicitMap <: FieldAlgorithm end
 nbuffers(::ExplicitMap) = 2
 
-# the keywords a `FieldProblem` steps with: a step `dt` (nothing else sets the window)
-function _check_owned(alg::ExplicitEuler)
-    alg.dt === nothing && throw(ArgumentError(string(
-        "`ExplicitEuler` on a `FieldProblem` needs `dt` (the step): nothing else sets the window, and ",
-        "`saveat` never does; give `ExplicitEuler(; dt)`")))
-    return alg
+# The window of a step of `alg` on a problem whose discretization declares the clock of period
+# `clock` (`nothing`: none; F2 design §2.4, §2.6): the algorithm's `dt`, or the clock's period
+# when `dt` is left out; without a clock `dt` is required (nothing else sets the window:
+# `saveat` never does). A given `dt` must divide the period to a relative 1e-12: the stepper
+# lands on every clock boundary, so a period holds a whole number of windows (`_per`).
+function _window(alg::FieldAlgorithm, clock)
+    dt = alg.dt
+    if dt === nothing
+        clock === nothing && throw(ArgumentError(string(
+            "`", nameof(typeof(alg)), "` on a `FieldProblem` needs `dt` (the window) when the discretization declares no ",
+            "`clock`: nothing else sets the window, and `saveat` never does; give `", nameof(typeof(alg)), "(; dt)` or ",
+            "`LatticeDiscretization(…; clock = τ)`")))
+        return Float64(clock)
+    end
+    clock === nothing || _per(dt, clock)
+    return Float64(dt)
 end
-_check_owned(alg::ExplicitMap) = alg
+# a map steps one unit of time: a clock is a whole number of map steps
+function _window(::ExplicitMap, clock)
+    clock === nothing || (clock >= 1 && abs(round(clock) - clock) <= 1e-12 * clock) || throw(ArgumentError(string(
+        "the clock's period ", clock, " is not a whole number of map steps (a map steps one unit of time, and ",
+        "`step_index(t)` counts whole periods): give `clock = n` with an integer n ≥ 1, or no clock")))
+    return 1.0
+end
+# the number of windows `dt` in one period of the clock
+function _per(dt, clock)
+    m = round(Int, clock / dt)
+    m >= 1 && abs(m * dt - clock) <= 1e-12 * clock || throw(ArgumentError(string(
+        "dt = ", dt, " does not divide the clock's period ", clock, " (to a relative 1e-12): the stepper lands on every ",
+        "boundary of the clock, so a period holds a whole number of windows; give dt = ", clock, "/n, or leave `dt` out ",
+        "to step windows of ", clock)))
+    return m
+end
 
 """
     update_key(alg)
@@ -133,12 +158,6 @@ explicit algorithm (`nothing` cache); an implicit solver returns its failure cod
 (`ConvergenceFailure`, …), and the driver stops with it.
 """
 step_retcode!(::Nothing, rt) = SciMLBase.ReturnCode.Success
-
-# the window of a step of `alg` (its `dt`)
-_dt(::ExplicitMap) = 1.0
-_dt(a::FieldAlgorithm) = a.dt
-# an algorithm with its own keywords checks them itself
-_check_owned(alg::FieldAlgorithm) = alg
 
 """
     FieldGroups(field => alg, …; default = nothing)

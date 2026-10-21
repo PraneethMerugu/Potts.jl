@@ -43,7 +43,7 @@ using Symbolics: Symbolics, Differential, Equation, Num, VarDomainPairing, @regi
 using SymbolicUtils: SymbolicUtils, arguments, iscall, operation, unwrap_const
 
 public euler_update, bound_parts, StabilityBound, lower_group, DeferredBound, resolve_bound
-export Δ, DivKGrad, Advect, AdvectionScheme, Upwind1, at, at2, ismember, masked
+export Δ, DivKGrad, Advect, AdvectionScheme, Upwind1, at, at2, ismember, masked, step_index
 export LatticePlacement, LatticeStorage, LatticeLevel, LatticeSpacing, PottsEntity, LatticeInputName
 export get_lattice_placement, get_lattice_storage, get_lattice_level, get_lattice_spacing,
        get_potts_entity, get_lattice_input_name
@@ -175,6 +175,32 @@ masked(p, v) = error("`masked(pred, v)` is a symbolic boundary-condition marker;
                      "written with `∈` (`kindₛ ∈ (2, 3)`, `kindₛ ∈ Set(…)`) is not a term: use `ismember`.")
 @register_symbolic masked(p::Bool, v::Real)
 
+"""
+    step_index(t)
+
+The step index of the discretization's clock (`LatticeDiscretization(…; clock = τ)`), read in
+an equation of a system discretized with it: `k = 0` over the first period `τ` from the start
+of the time span, then `1`, `2`, … (`k` counts from `tspan[1]`, also after a `remake` of the
+span; a Potts model's `mcs` is the absolute MCS number instead: a span `(2, 5)` reads 2
+first). The owned steppers keep `k` as an integer and never step
+across a clock boundary, so `k` does not depend on `dt` or on the save times. A gate such as
+`ifelse(step_index(t) >= 3, a, b)` is bounded through both arms; a factor that reads it
+(`(1 + ε * step_index(t)) * Δ(c)`) is a term the stability bound cannot see (give
+`ExplicitEuler(; substeps = n)`). Refused without a declared clock, and on the ODE path
+(`problem = :ode`: an ODE solver does not land on the clock's boundaries; planned).
+
+```julia
+@parameters x y
+@variables c(..)
+eqs = [D(c(t, x, y)) ~ -c(t, x, y) + 0.1 * step_index(t)]
+prob = discretize(sys, LatticeDiscretization(Grid((16, 16)); clock = 1.0))   # `sys`: a PDESystem of `eqs`
+sol = solve(prob, ExplicitEuler(; dt = 0.25))       # 4 windows per step index
+```
+"""
+step_index(t::Real) = throw(ArgumentError("`step_index(t)` is the step index of a discretization's clock: it has a " *
+                                          "value only in an equation discretized with `LatticeDiscretization(…; clock = τ)`"))
+@register_symbolic step_index(t::Real)
+
 # No operator here has a symbolic derivative: the field operators are lowered, never
 # expanded, and the CPM reads are piecewise constant in their kind arguments. A derivative
 # that reaches one of them is an error, not the unevaluated `D(op(…))` Symbolics returns by
@@ -189,6 +215,7 @@ Symbolics.@register_derivative at(T, k) I _no_derivative(at)
 Symbolics.@register_derivative at2(T, k, kp) I _no_derivative(at2)
 Symbolics.@register_derivative ismember(k, s) I _no_derivative(ismember)
 Symbolics.@register_derivative masked(p, v) I _no_derivative(masked)
+Symbolics.@register_derivative step_index(t) I _no_derivative(step_index)
 
 # the registered operators of this vocabulary (the scans check their arguments)
 _isvocabulary(f) = f === Δ || f isa DivKGrad || f isa Advect || f === at || f === at2 || f === ismember ||

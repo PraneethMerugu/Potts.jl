@@ -73,7 +73,7 @@ function _lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = noth
     s = cf.program
     hasmap = any(k -> startswith(k.key, "map:"), s.kernels)
     stab = hasmap ? (p -> NaN) : bound ? stability_bound(cf, sys) : DeferredBound(cf, sys)
-    spec = Problems.GroupSpec(s; state = _states(s), external, kind = hasmap ? :map : :rate,
+    spec = Problems.GroupSpec(s; state = _states(s), external, kind = hasmap ? :map : :rate, clock = disc.clock,
         init = [k.key for k in s.kernels if startswith(k.key, "mask:")], stability = stab,
         params = String[string(p) for p in cf.params], tables = String[first(t) for t in cf.tables],
         inputs = String[f.key for f in s.fields if f.role == :input],

@@ -667,3 +667,15 @@ end
     integ = init(prob, SequentialCPM(); save_start = false, save_end = false)
     @test gd_warm(integ) == 0
 end
+
+# F2-08c: Merks2008 reads `mcs` (its `mcs ≥ t_relax` gate) through the clock's slot, whose
+# launches derive their parameters at each launch with the MCS number: a warm MCS at 500²
+# still allocates nothing on the CPU
+@testset "F2-08c: the Merks2008 500² warm MCS (mcs read) allocates nothing (CPU)" begin
+    σ = zeros(Int32, 500, 500); σ[1:2, :] .= 1; σ[(end - 1):end, :] .= 1; σ[:, 1:2] .= 1; σ[:, (end - 1):end] .= 1
+    σ[200:215, 200:215] .= 2; σ[300:312, 280:300] .= 3
+    prob = PottsProblem(Merks2008(; name = :m, lattice = (500, 500)), [ownership => σ, kind => [:border, :endothelial, :endothelial],
+        :t_relax => 1.0], (0, 100); field_solver = ExplicitEuler(substeps = 15))
+    integ = init(prob, SequentialCPM(); save_start = false, save_end = false)
+    @test gd_warm(integ) == 0
+end

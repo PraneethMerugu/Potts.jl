@@ -113,14 +113,14 @@ function _state_options(o::CompileOptions, ::Type{E}) where {E}
     o.T === nothing || o.T == valtype(E) || throw(ArgumentError(string("options.T = ", o.T,
         " differs from the state's value type ", valtype(E), " (from ", E, "): the eltype of ",
         "u0 decides; pass u0 in ", o.T, " or leave T out of the options")))
-    return CompileOptions(nothing, o.I, o.float64_ok, o.debug, o.index, o.lanes)
+    return CompileOptions(nothing, o.I, o.float64_ok, o.debug, o.index, o.lanes, o.clock)
 end
 
 # the compile options of value type `V` on `backend`
-function _options(o::CompileOptions, ::Type{V}, backend) where {V}
+function _options(o::CompileOptions, ::Type{V}, backend; clock::Int = o.clock) where {V}
     return CompileOptions(; T = V, I = o.I,
         float64_ok = o.float64_ok && _float64_ok(V, backend), debug = o.debug,
-        index = o.index, lanes = :state)
+        index = o.index, lanes = :state, clock)
 end
 
 # Float64 in device code: allowed on the host, and for a Float64 problem on hardware that has
@@ -164,6 +164,8 @@ function _field_problem(s::Program, state, u0, tspan, p, tables, inputs, backend
 end
 
 _ndims(::Program{N}) where {N} = N
+# the period of the discretization's clock (`nothing`: none)
+_clock(prob::FieldProblem) = prob.group.spec.clock
 
 Base.eltype(::FieldProblem{N, B, X, R, U, PV, E}) where {N, B, X, R, U, PV, E} = E
 
@@ -288,6 +290,7 @@ mutable struct FieldIntegrator{P <: FieldProblem, A, S <: FieldStore, RT <: Tupl
     dt::Float64
     substeps::Int
     nsteps::Int
+    per::Int                            # windows per period of the clock (0: no clock)
     save::Vector{Int}
     t::Vector{Float64}
     u::Vector{Vector{T}}
@@ -331,11 +334,11 @@ const _SEEN_WARNED_LOCK = ReentrantLock()
 _warn_key(prob::FieldProblem, why) = string(hash(sprint(print_program, prob.program)); base = 16) * "|" * string(why)
 function substeps(prob::FieldProblem, alg::ExplicitEuler, p = prob.p; tables = prob.tables,
         inputs = _bound_inputs(prob), stability = prob.stability)
-    _check_owned(alg)
+    dt = _window(alg, _clock(prob))
     pp = with_tables(map(primal, p), tables; inputs)        # a policy: on the primal values
     if alg.substeps !== nothing
         ρ = seen_bound(stability, pp)
-        n = isfinite(ρ) && ρ >= 0 ? max(alg.substeps, ceil(Int, alg.dt * ρ / 1.8)) : alg.substeps
+        n = isfinite(ρ) && ρ >= 0 ? max(alg.substeps, ceil(Int, dt * ρ / 1.8)) : alg.substeps
         full = Float64(stability(pp))
         if !(isfinite(full) && full >= 0) && ccall(:jl_generating_output, Cint, ()) == 0
             why = unbounded_reason(stability, pp)
@@ -350,7 +353,7 @@ function substeps(prob::FieldProblem, alg::ExplicitEuler, p = prob.p; tables = p
         return n
     end
     ρ = Float64(stability(pp))
-    isfinite(ρ) && ρ >= 0 && return max(1, ceil(Int, alg.dt * ρ / 1.8))
+    isfinite(ρ) && ρ >= 0 && return max(1, ceil(Int, dt * ρ / 1.8))
     why = unbounded_reason(stability, pp)
     throw(ArgumentError(string("no automatic substeps: no stability bound for these parameters (",
         why === nothing ? string("a rate term the bound cannot see, such as advection, a nonlinear rate, ",
@@ -362,12 +365,34 @@ function substeps(prob::FieldProblem, alg::ExplicitEuler, p = prob.p; tables = p
 end
 
 # whole number of `dt` in `span` (to a relative 1e-5, so `dt = 1f-2` counts 0.01), else an
-# error
-function _count(span, dt, what)
-    n = round(Int, span / dt)
-    abs(n * dt - span) <= 1e-5 * max(dt, abs(span)) ||
-        throw(ArgumentError("$what = $span is not a whole number of steps dt = $dt"))
-    return n
+# error that names the window as it was set (`window`: the text of `_wtext`) and a route
+_whole(span, dt) = (n = round(Int, span / dt); abs(n * dt - span) <= 1e-5 * max(dt, abs(span)))
+function _count(span, dt, what; window = string("dt = ", dt), route = "")
+    _whole(span, dt) || throw(ArgumentError(string(what, " = ", span, " is not a whole number of windows (",
+        window, ")", route)))
+    return round(Int, span / dt)
+end
+# the window of `alg` in messages: its `dt` as given, or the clock's period when `dt` is left out
+_wtext(::ExplicitMap, clock, dt) = "one map step, 1"
+_wtext(a::FieldAlgorithm, clock, dt) = a.dt === nothing ? string("the window ", dt, ": the clock's period, no `dt` given") :
+                                       string("dt = ", dt)
+# the largest `clock / n` (n ≤ 10⁴) that divides `span`, else `nothing`: a `dt` that lands on
+# both (a route in the messages)
+function _divider(span, clock)
+    for n in 1:10_000
+        d = clock / n
+        _whole(span, d) && return d
+    end
+    return nothing
+end
+# the route of a span or save interval `span` that the window `dt` of `alg` does not divide
+function _count_route(alg, clock, dt, span, what)
+    alg isa ExplicitMap && return string("; give ", what, " a whole number of map steps")
+    d = clock === nothing ? nothing : _divider(span, clock)
+    give = d === nothing ? string(what, " a multiple of ", dt) :
+           string(what, " a multiple of ", dt, ", or `", nameof(typeof(alg)), "(; dt = ", d, ")` (it divides both ", what,
+                  " and the clock's period ", clock, ")")
+    return string("; give ", give)
 end
 
 # the field groups of `alg` on `prob`: `(algorithm, state keys)` in state order (one group
@@ -391,9 +416,11 @@ function _groups(prob::FieldProblem, g::FieldGroups)
     length(unique(alg_family(a) for (a, _) in out)) == 1 || throw(ArgumentError(string(
         "FieldGroups: a rate algorithm and a map algorithm are never mixed in one problem ",
         "(split stepping is planned); got ", join((_algtext(a) for (a, _) in out), ", "))))
-    dts = unique(_dt(a) for (a, _) in out)
+    ws = [(a, _window(a, _clock(prob))) for (a, _) in out]
+    dts = unique(last.(ws))
     length(dts) == 1 || throw(ArgumentError(string("FieldGroups: every group steps the same window; ",
-        "the algorithms give dt = ", join(dts, ", "), ": give them one `dt`")))
+        "the algorithms give ", join(unique(_wtext(a, _clock(prob), d) for (a, d) in ws), ", "),
+        ": give every algorithm one `dt`, such as `dt = ", minimum(dts), "`")))
     return out
 end
 # the state key of field `k` (a symbol of the index, or the key itself)
@@ -421,21 +448,25 @@ function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; saveat = (),
                   "rate program is stepped by ExplicitEuler(; dt)",
             "; got ",
             _algtext(a))))
-        _check_owned(a)
+        _window(a, _clock(prob))
     end
     check_faces(prob.faces, prob.p)
     check_values(prob.p, prob.index)
     check_parameters(prob.stability, with_tables(map(primal, prob.p), prob.tables; inputs = _bound_inputs(prob)))
     t0, tf = prob.tspan
-    nsteps = _count(tf - t0, _dt(first(groups[1])), "the time span")
+    a1, clock = first(groups[1]), _clock(prob)
+    w = _window(a1, clock)
+    nsteps = _count(tf - t0, w, "the time span"; window = _wtext(a1, clock, w),
+        route = _count_route(a1, clock, w, tf - t0, "the time span"))
     dt = (tf - t0) / max(nsteps, 1)                 # the step that lands on tf exactly
     save = Int[]
     save_start && push!(save, 0)
     if saveat isa Real
-        k = _count(saveat, dt, "saveat")
+        k = _count(saveat, dt, "saveat"; window = _wtext(a1, clock, dt), route = _count_route(a1, clock, dt, saveat, "saveat"))
         k >= 1 && append!(save, k:k:nsteps)
     else
-        append!(save, (_count(s - t0, dt, "a saveat time") for s in saveat))
+        append!(save, (_count(s - t0, dt, "a saveat time"; window = _wtext(a1, clock, dt),
+                           route = _count_route(a1, clock, dt, s - t0, "the saveat times")) for s in saveat))
     end
     save_end && push!(save, nsteps)
     save = sort!(unique!(filter!(i -> 0 <= i <= nsteps, save)))
@@ -454,7 +485,7 @@ function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; saveat = (),
           substeps(prob, a, prob.p; tables = prob.tables, inputs = _bound_inputs(prob),
               stability = restrict_bound(prob.stability, ks)) for (a, ks) in groups]
     _check_coupling(prob, groups, prob.p; dt)
-    run_step!(prob.backend, prob.program, prob.init, st, prob.p; rt = (t0, dt), c = zero(E))
+    run_step!(prob.backend, prob.program, prob.init, st, prob.p; rt = (t0, dt, 0), c = zero(E))
     pgood = copy(prob.p)
     # one group steps in alternating slots; several end each step in slot 1, so the next
     # group reads current values
@@ -466,7 +497,7 @@ function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; saveat = (),
     foreach(rt -> compile!(prob.backend, rt), rts)
     integ = FieldIntegrator(prob, alg, st, rts, copy(prob.p), pgood,
         Pair{String, Vector{Float64}}[k => copy(v) for (k, v) in prob.tables], t0, 0, dt,
-        ms[1], nsteps, save, Float64[], Vector{_ueltype(st, E)}[],
+        ms[1], nsteps, _clock(prob) === nothing ? 0 : _per(dt, _clock(prob)), save, Float64[], Vector{_ueltype(st, E)}[],
         SciMLBase.ReturnCode.Success)
     0 in save && _save!(integ)
     return integ
@@ -477,6 +508,10 @@ function _parity(integ::FieldIntegrator)
     integ.store.cur[integ.prob.step.swaps[1]]
 end
 _time(integ::FieldIntegrator) = integ.t0 + integ.iter * integ.dt
+# The clock's step index of the current window: the clock boundaries reached since the start
+# of the time span, by integer bookkeeping (each period holds `per` windows, and no window
+# crosses a boundary), never from a float time; the window count without a clock
+_tick(integ::FieldIntegrator) = integ.per == 0 ? integ.iter : div(integ.iter, integ.per)
 
 # `u0` (flat, host) into every state buffer, the state in slot 1
 function _load_state!(st::FieldStore, u0)
@@ -491,12 +526,14 @@ end
 
 One step of `dt`: [`advance!`](@ref) of each field group in group order (its masks at the
 step's start and the masked values at the sites they mark, when the problem has masked
-conditions, then its substeps, alternating the slot parity). A group's return code other
-than `ReturnCode.Success` becomes `integ.retcode`, and the later groups do not run;
-`solve!` stops on it.
+conditions, then its substeps, alternating the slot parity). With a clock (`clock = τ` on the
+discretization), the step index `k` that `step_index(t)` reads is the number of clock
+boundaries reached since the start of the time span, kept as an integer. A group's return
+code other than `ReturnCode.Success` becomes `integ.retcode`, and the later groups do not
+run; `solve!` stops on it.
 """
 function CommonSolve.step!(integ::FieldIntegrator)
-    code = _advance_all(integ.runtimes, (_time(integ), integ.iter))
+    code = _advance_all(integ.runtimes, (_time(integ), _tick(integ)))
     integ.iter += 1
     code == SciMLBase.ReturnCode.Success || (integ.retcode = code)
     return integ
@@ -616,6 +653,10 @@ _has_table(ix, sym) = sym isa Union{AbstractVector, Tuple} && table_key(ix, sym)
 function SII.getp(sys::Union{FieldProblem, FieldIntegrator, FieldSolution}, sym)
     prob = sys isa FieldProblem ? sys : sys.prob
     ix = prob.index
+    # the clock's slot is the stepper's, not a parameter (review N6 of F2 batch 3)
+    sym isa Union{Symbol, AbstractString} && String(sym) == CLOCK_KEY && throw(ArgumentError(string(
+        "`", CLOCK_KEY, "` is the clock's slot, which the stepper writes at every launch, not a parameter of the ",
+        "problem: an equation reads the step index as `step_index(t)`")))
     if ix isa LatticeIndex && _has_table(ix, sym)
         table_key(ix, sym) === nothing || return x -> _read_table(x, sym)
         gs = map(s -> SII.getp(sys, s), sym isa Tuple ? sym : collect(sym))
@@ -738,7 +779,7 @@ function _rerun_init!(integ::FieldIntegrator, p)
     prob = integ.prob
     isempty(prob.init.launches) && return nothing
     run_step!(prob.backend, prob.program, prob.init, integ.store, p;
-        rt = (_time(integ), integ.dt), c = zero(eltype(prob)))
+        rt = (_time(integ), integ.dt, _tick(integ)), c = zero(eltype(prob)))
     foreach(rt -> _clamp!(rt.clamps, integ.store, p), integ.runtimes)
     return nothing
 end

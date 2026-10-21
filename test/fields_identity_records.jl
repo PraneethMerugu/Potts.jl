@@ -1,5 +1,9 @@
 # The F2 guard records (test/fields_identity.jl): recorded on lp/f1 bda31989 (F1 accepted),
 # Julia 1.12.6, on the PC. A listed move updates its entry with the commit and the cause.
+# F2-08c (listed moves, F2 design §5.1): the models that read `mcs` in a field (Merks2008 and its
+# `t_relax` variants, FdGate, GdAuditGateDominant, GdAuditGateRotation) move their fingerprint,
+# fingerprint text and `params` (`t` becomes the clock slot `clock__tick`); their `n` and digests
+# do not move.
 #
 # Routes of the soft set at bda31989: `refused` (no count and `substeps = 3` both refused at
 # build) for FdRand (`rand()` in a rate), FdVolumeRead, FdDomainWord and FdDivK, which the
@@ -96,12 +100,12 @@ const GD_RECORDS = Dict{String, String}(
     "FdDomain|Float64|n" => "[1]",
     "FdDomain|Float64|route" => "auto",
     "FdGate|Float64|canonical" => "c=ExplicitEuler(substeps=nothing,lower=nothing)",
-    "FdGate|Float64|fingerprint" => "0xdef72a61ebfcfa42",
+    "FdGate|Float64|fingerprint" => "0xeab642bfe882bb5a",   # F2-08c: `mcs` reads the clock slot
     "FdGate|Float64|g1|arrays" => "((CorePotts.Part{:site, :c}(), CorePotts.Part{:site, :c__next}()),)",
     "FdGate|Float64|g1|bounded" => "false",
-    "FdGate|Float64|g1|fingerprint_text" => "d73a3333ea2af519",
+    "FdGate|Float64|g1|fingerprint_text" => "512c96a9a139d49f",   # F2-08c: `mcs` reads the clock slot
     "FdGate|Float64|g1|least" => "Int64:1",
-    "FdGate|Float64|g1|params" => "[:Dc, :t0]",
+    "FdGate|Float64|g1|params" => "[:Dc, :clock__tick, :t0]",   # F2-08c: `mcs` reads the clock slot
     "FdGate|Float64|g1|tables" => "Pair{Int64, Symbol}[]",
     "FdGate|Float64|groups" => "1",
     "FdGate|Float64|n" => "[5]",
@@ -296,23 +300,23 @@ const GD_RECORDS = Dict{String, String}(
     "GdAuditDiffusion|Float64|n" => "[1]",
     "GdAuditDiffusion|Float64|route" => "auto",
     "GdAuditGateDominant|Float64|canonical" => "c=ExplicitEuler(substeps=nothing,lower=nothing);u=ExplicitEuler(substeps=nothing,lower=nothing)",
-    "GdAuditGateDominant|Float64|fingerprint" => "0x534cdb2ddf9a5675",
+    "GdAuditGateDominant|Float64|fingerprint" => "0x52927fbc8344938b",   # F2-08c: `mcs` reads the clock slot
     "GdAuditGateDominant|Float64|g1|arrays" => "((CorePotts.Part{:site, :c}(), CorePotts.Part{:site, :c__next}()), (CorePotts.Part{:site, :u}(), CorePotts.Part{:site, :u__next}()))",
     "GdAuditGateDominant|Float64|g1|bounded" => "false",
-    "GdAuditGateDominant|Float64|g1|fingerprint_text" => "5f83af2cd0c0f209",
+    "GdAuditGateDominant|Float64|g1|fingerprint_text" => "5b749d0452c565e2",   # F2-08c: `mcs` reads the clock slot
     "GdAuditGateDominant|Float64|g1|least" => "Int64:1",
-    "GdAuditGateDominant|Float64|g1|params" => "[:t0]",
+    "GdAuditGateDominant|Float64|g1|params" => "[:clock__tick, :t0]",   # F2-08c: `mcs` reads the clock slot
     "GdAuditGateDominant|Float64|g1|tables" => "Pair{Int64, Symbol}[]",
     "GdAuditGateDominant|Float64|groups" => "1",
     "GdAuditGateDominant|Float64|n" => "[7]",
     "GdAuditGateDominant|Float64|route" => "auto",
     "GdAuditGateRotation|Float64|canonical" => "c=ExplicitEuler(substeps=3,lower=nothing);u=ExplicitEuler(substeps=3,lower=nothing)",
-    "GdAuditGateRotation|Float64|fingerprint" => "0x61cca218979fc683",
+    "GdAuditGateRotation|Float64|fingerprint" => "0x552517daf3fd3ffa",   # F2-08c: `mcs` reads the clock slot
     "GdAuditGateRotation|Float64|g1|arrays" => "((CorePotts.Part{:site, :c}(), CorePotts.Part{:site, :c__next}()), (CorePotts.Part{:site, :u}(), CorePotts.Part{:site, :u__next}()))",
     "GdAuditGateRotation|Float64|g1|bounded" => "false",
-    "GdAuditGateRotation|Float64|g1|fingerprint_text" => "f7df95798f648200",
+    "GdAuditGateRotation|Float64|g1|fingerprint_text" => "1eafa847bc5855b3",   # F2-08c: `mcs` reads the clock slot
     "GdAuditGateRotation|Float64|g1|least" => "Int64:3",
-    "GdAuditGateRotation|Float64|g1|params" => "[:k, :t0]",
+    "GdAuditGateRotation|Float64|g1|params" => "[:clock__tick, :k, :t0]",   # F2-08c: `mcs` reads the clock slot
     "GdAuditGateRotation|Float64|g1|tables" => "Pair{Int64, Symbol}[]",
     "GdAuditGateRotation|Float64|groups" => "1",
     "GdAuditGateRotation|Float64|n" => "[6]",
@@ -415,12 +419,12 @@ const GD_RECORDS = Dict{String, String}(
     "Merks2008 t_relax = 3|Float32|digest|site.c__next" => "6d8279f0b5e7724c",
     "Merks2008 t_relax = 3|Float32|digest|site.kind__in" => "b485e061fc9786a5",
     "Merks2008 t_relax = 3|Float32|digest|σ" => "af3f3b4471e4d467",
-    "Merks2008 t_relax = 3|Float32|fingerprint" => "0x2033bac1f3d43b90",
+    "Merks2008 t_relax = 3|Float32|fingerprint" => "0xffd7b85b1017547f",   # F2-08c: `mcs` reads the clock slot
     "Merks2008 t_relax = 3|Float32|g1|arrays" => "((CorePotts.Part{:site, :c}(), CorePotts.Part{:site, :c__next}()), (CorePotts.Part{:site, :kind__in}(), nothing), (CorePotts.Part{:site, :c__mask}(), nothing))",
     "Merks2008 t_relax = 3|Float32|g1|bounded" => "false",
-    "Merks2008 t_relax = 3|Float32|g1|fingerprint_text" => "25669f28ce1e9c81",
+    "Merks2008 t_relax = 3|Float32|g1|fingerprint_text" => "314702688c2da227",   # F2-08c: `mcs` reads the clock slot
     "Merks2008 t_relax = 3|Float32|g1|least" => "Int64:15",
-    "Merks2008 t_relax = 3|Float32|g1|params" => "[:Dc, :t_relax, :α, :ε]",
+    "Merks2008 t_relax = 3|Float32|g1|params" => "[:Dc, :clock__tick, :t_relax, :α, :ε]",   # F2-08c: `mcs` reads the clock slot
     "Merks2008 t_relax = 3|Float32|g1|tables" => "Pair{Int64, Symbol}[]",
     "Merks2008 t_relax = 3|Float32|groups" => "1",
     "Merks2008 t_relax = 3|Float32|n" => "[15]",
@@ -430,12 +434,12 @@ const GD_RECORDS = Dict{String, String}(
     "Merks2008 t_relax = 3|Float64|digest|site.c__next" => "e502585440fdeed4",
     "Merks2008 t_relax = 3|Float64|digest|site.kind__in" => "b485e061fc9786a5",
     "Merks2008 t_relax = 3|Float64|digest|σ" => "af3f3b4471e4d467",
-    "Merks2008 t_relax = 3|Float64|fingerprint" => "0x21f9433a87a79985",
+    "Merks2008 t_relax = 3|Float64|fingerprint" => "0x83a22353e86ec6e1",   # F2-08c: `mcs` reads the clock slot
     "Merks2008 t_relax = 3|Float64|g1|arrays" => "((CorePotts.Part{:site, :c}(), CorePotts.Part{:site, :c__next}()), (CorePotts.Part{:site, :kind__in}(), nothing), (CorePotts.Part{:site, :c__mask}(), nothing))",
     "Merks2008 t_relax = 3|Float64|g1|bounded" => "false",
-    "Merks2008 t_relax = 3|Float64|g1|fingerprint_text" => "916ecb582a982a45",
+    "Merks2008 t_relax = 3|Float64|g1|fingerprint_text" => "1ef8b11d69b348df",   # F2-08c: `mcs` reads the clock slot
     "Merks2008 t_relax = 3|Float64|g1|least" => "Int64:15",
-    "Merks2008 t_relax = 3|Float64|g1|params" => "[:Dc, :t_relax, :α, :ε]",
+    "Merks2008 t_relax = 3|Float64|g1|params" => "[:Dc, :clock__tick, :t_relax, :α, :ε]",   # F2-08c: `mcs` reads the clock slot
     "Merks2008 t_relax = 3|Float64|g1|tables" => "Pair{Int64, Symbol}[]",
     "Merks2008 t_relax = 3|Float64|groups" => "1",
     "Merks2008 t_relax = 3|Float64|n" => "[15]",
@@ -445,12 +449,12 @@ const GD_RECORDS = Dict{String, String}(
     "Merks2008|Float32|digest|site.c__next" => "a947e50590de8025",
     "Merks2008|Float32|digest|site.kind__in" => "b485e061fc9786a5",
     "Merks2008|Float32|digest|σ" => "af3f3b4471e4d467",
-    "Merks2008|Float32|fingerprint" => "0x2033bac1f3d43b90",
+    "Merks2008|Float32|fingerprint" => "0xffd7b85b1017547f",   # F2-08c: `mcs` reads the clock slot
     "Merks2008|Float32|g1|arrays" => "((CorePotts.Part{:site, :c}(), CorePotts.Part{:site, :c__next}()), (CorePotts.Part{:site, :kind__in}(), nothing), (CorePotts.Part{:site, :c__mask}(), nothing))",
     "Merks2008|Float32|g1|bounded" => "false",
-    "Merks2008|Float32|g1|fingerprint_text" => "25669f28ce1e9c81",
+    "Merks2008|Float32|g1|fingerprint_text" => "314702688c2da227",   # F2-08c: `mcs` reads the clock slot
     "Merks2008|Float32|g1|least" => "Int64:15",
-    "Merks2008|Float32|g1|params" => "[:Dc, :t_relax, :α, :ε]",
+    "Merks2008|Float32|g1|params" => "[:Dc, :clock__tick, :t_relax, :α, :ε]",   # F2-08c: `mcs` reads the clock slot
     "Merks2008|Float32|g1|tables" => "Pair{Int64, Symbol}[]",
     "Merks2008|Float32|groups" => "1",
     "Merks2008|Float32|n" => "[15]",
@@ -460,12 +464,12 @@ const GD_RECORDS = Dict{String, String}(
     "Merks2008|Float64|digest|site.c__next" => "13f631ef6a6fdd25",
     "Merks2008|Float64|digest|site.kind__in" => "b485e061fc9786a5",
     "Merks2008|Float64|digest|σ" => "af3f3b4471e4d467",
-    "Merks2008|Float64|fingerprint" => "0x21f9433a87a79985",
+    "Merks2008|Float64|fingerprint" => "0x83a22353e86ec6e1",   # F2-08c: `mcs` reads the clock slot
     "Merks2008|Float64|g1|arrays" => "((CorePotts.Part{:site, :c}(), CorePotts.Part{:site, :c__next}()), (CorePotts.Part{:site, :kind__in}(), nothing), (CorePotts.Part{:site, :c__mask}(), nothing))",
     "Merks2008|Float64|g1|bounded" => "false",
-    "Merks2008|Float64|g1|fingerprint_text" => "916ecb582a982a45",
+    "Merks2008|Float64|g1|fingerprint_text" => "1ef8b11d69b348df",   # F2-08c: `mcs` reads the clock slot
     "Merks2008|Float64|g1|least" => "Int64:15",
-    "Merks2008|Float64|g1|params" => "[:Dc, :t_relax, :α, :ε]",
+    "Merks2008|Float64|g1|params" => "[:Dc, :clock__tick, :t_relax, :α, :ε]",   # F2-08c: `mcs` reads the clock slot
     "Merks2008|Float64|g1|tables" => "Pair{Int64, Symbol}[]",
     "Merks2008|Float64|groups" => "1",
     "Merks2008|Float64|n" => "[15]",
@@ -690,12 +694,12 @@ const GD_RECORDS = Dict{String, String}(
     "Merks2008 t_relax = 2.5|Float32|digest|site.c__next" => "6d8279f0b5e7724c",
     "Merks2008 t_relax = 2.5|Float32|digest|site.kind__in" => "b485e061fc9786a5",
     "Merks2008 t_relax = 2.5|Float32|digest|σ" => "af3f3b4471e4d467",
-    "Merks2008 t_relax = 2.5|Float32|fingerprint" => "0x2033bac1f3d43b90",
+    "Merks2008 t_relax = 2.5|Float32|fingerprint" => "0xffd7b85b1017547f",   # F2-08c: `mcs` reads the clock slot
     "Merks2008 t_relax = 2.5|Float32|g1|arrays" => "((CorePotts.Part{:site, :c}(), CorePotts.Part{:site, :c__next}()), (CorePotts.Part{:site, :kind__in}(), nothing), (CorePotts.Part{:site, :c__mask}(), nothing))",
     "Merks2008 t_relax = 2.5|Float32|g1|bounded" => "false",
-    "Merks2008 t_relax = 2.5|Float32|g1|fingerprint_text" => "25669f28ce1e9c81",
+    "Merks2008 t_relax = 2.5|Float32|g1|fingerprint_text" => "314702688c2da227",   # F2-08c: `mcs` reads the clock slot
     "Merks2008 t_relax = 2.5|Float32|g1|least" => "Int64:15",
-    "Merks2008 t_relax = 2.5|Float32|g1|params" => "[:Dc, :t_relax, :α, :ε]",
+    "Merks2008 t_relax = 2.5|Float32|g1|params" => "[:Dc, :clock__tick, :t_relax, :α, :ε]",   # F2-08c: `mcs` reads the clock slot
     "Merks2008 t_relax = 2.5|Float32|g1|tables" => "Pair{Int64, Symbol}[]",
     "Merks2008 t_relax = 2.5|Float32|groups" => "1",
     "Merks2008 t_relax = 2.5|Float32|n" => "[15]",
@@ -705,12 +709,12 @@ const GD_RECORDS = Dict{String, String}(
     "Merks2008 t_relax = 2.5|Float64|digest|site.c__next" => "e502585440fdeed4",
     "Merks2008 t_relax = 2.5|Float64|digest|site.kind__in" => "b485e061fc9786a5",
     "Merks2008 t_relax = 2.5|Float64|digest|σ" => "af3f3b4471e4d467",
-    "Merks2008 t_relax = 2.5|Float64|fingerprint" => "0x21f9433a87a79985",
+    "Merks2008 t_relax = 2.5|Float64|fingerprint" => "0x83a22353e86ec6e1",   # F2-08c: `mcs` reads the clock slot
     "Merks2008 t_relax = 2.5|Float64|g1|arrays" => "((CorePotts.Part{:site, :c}(), CorePotts.Part{:site, :c__next}()), (CorePotts.Part{:site, :kind__in}(), nothing), (CorePotts.Part{:site, :c__mask}(), nothing))",
     "Merks2008 t_relax = 2.5|Float64|g1|bounded" => "false",
-    "Merks2008 t_relax = 2.5|Float64|g1|fingerprint_text" => "916ecb582a982a45",
+    "Merks2008 t_relax = 2.5|Float64|g1|fingerprint_text" => "1ef8b11d69b348df",   # F2-08c: `mcs` reads the clock slot
     "Merks2008 t_relax = 2.5|Float64|g1|least" => "Int64:15",
-    "Merks2008 t_relax = 2.5|Float64|g1|params" => "[:Dc, :t_relax, :α, :ε]",
+    "Merks2008 t_relax = 2.5|Float64|g1|params" => "[:Dc, :clock__tick, :t_relax, :α, :ε]",   # F2-08c: `mcs` reads the clock slot
     "Merks2008 t_relax = 2.5|Float64|g1|tables" => "Pair{Int64, Symbol}[]",
     "Merks2008 t_relax = 2.5|Float64|groups" => "1",
     "Merks2008 t_relax = 2.5|Float64|n" => "[15]",

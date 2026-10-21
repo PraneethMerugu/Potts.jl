@@ -3,16 +3,19 @@
 # swap alternates between two such bindings (even and odd parity).
 
 """
-A prebuilt launch whose `G.rt` is set at each call: `l(rt)` enqueues it.
+A prebuilt launch whose `G.rt` is set at each call: `l(rt)` enqueues it. `rt = (t, dt)`, or
+`(t, dt, k)` with the clock's step index `k`, which this launch does not read.
 """
 struct Timed{L}
     launch::L
 end
-(x::Timed)(rt) = (retime(x.launch, rt)(); nothing)
+(x::Timed)(rt) = (retime(x.launch, (rt[1], rt[2]))(); nothing)
 
 """
-A prebuilt launch whose hoisted parameters read the time: `l(rt)` derives `P` again on the
-host at `t = rt[1]` (no allocation), sets `G.rt` and enqueues it.
+A prebuilt launch whose parameters are derived again at each launch (a hoisted value reads the
+time, or the kernel reads the clock slot): `l(rt)` derives `P` on the host at `t = rt[1]` and,
+with `rt = (t, dt, k)`, with the step index `k` in the clock slot (no allocation), sets `G.rt`
+and enqueues it.
 """
 struct TimedDerived{L, D, P, C}
     launch::L
@@ -22,7 +25,8 @@ struct TimedDerived{L, D, P, C}
 end
 function (x::TimedDerived)(rt)
     S, _, G = x.launch.params[2]
-    rebind(x.launch, (S, x.derive(x.Praw, x.c, rt[1]), typeof(G)(G.n, G.dims, rt)))()
+    k = length(rt) >= 3 ? rt[3] : nothing
+    rebind(x.launch, (S, x.derive(x.Praw, x.c, rt[1], k), typeof(G)(G.n, G.dims, (rt[1], rt[2]))))()
     return nothing
 end
 

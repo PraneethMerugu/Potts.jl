@@ -9,7 +9,7 @@
 @inline owner_kind(st, i) = (c = @inbounds st.σ[i]; c == 0 ? Int32(0) : @inbounds st.cell.kind[c])
 
 """
-    FieldPhase{K}(group, alg, arrays; tables, params, substeps, dt, options, T, init = false)
+    FieldPhase{K}(group, alg, arrays; tables, params, substeps, dt, period = dt, options, T, init = false)
 
 A group of fields stepped by algorithm `alg` (`ExplicitEuler`) over one MCS of length `dt`,
 in `n` substeps of `dt / n`: `group` is the group's `LatticeFields.Problems.FieldGroup` (its
@@ -24,6 +24,9 @@ the parameters and `params` the parameter slots to parameter names. `substeps(pr
 substep count at raw parameter values `praw`, with the phase's tables
 (`LatticeFields.Problems.with_tables`) when it has any (a host function, evaluated when the
 parameters change, never per MCS).
+
+`period` is the MCS (`mcs_duration`), the clock's period: a window starts at
+`mcs · period`, plus `(r − 1) dt` in pass `r` of a sub-MCS `repeat`.
 
 `K` names the entry of the run context that holds the trajectory's runtime
 ([`phase_context`](@ref)). The field ends every MCS in its `st.site` array: after an odd
@@ -43,22 +46,24 @@ struct FieldPhase{K, G, AL, A, F, PR, SP}
     params::Vector{Symbol}
     substeps::F
     dt::Float64
+    period::Float64                      # the MCS (`mcs_duration`): the clock's period
     init::Bool
     options::Any                         # the compile options of the plans (host)
     T::Type                              # the value type of the plans
 end
 function FieldPhase{K}(group, alg, arrays::Tuple; tables = Pair{Int, Symbol}[], params = Symbol[], substeps,
-        dt::Real, options, T::Type, init::Bool = false) where {K}
+        dt::Real, period::Real = dt, options, T::Type, init::Bool = false) where {K}
     program = Problems.group_program(group, alg)
     # the plans of value type `T`, made once per group (shared by every trajectory; the host
     # backend only decides the Float64 check here, which `options` already holds)
     masks, step = Problems.group_plans(group, alg, T, KernelAbstractions.CPU(), options)
     return FieldPhase{K, typeof(group), typeof(alg), typeof(arrays), typeof(substeps), typeof(program), typeof(step)}(
-        group, alg, program, masks, step, arrays, tables, params, substeps, Float64(dt), init, options, T)
+        group, alg, program, masks, step, arrays, tables, params, substeps, Float64(dt), Float64(period), init, options, T)
 end
 """The masked-condition clamp of field phase `ph` (its at-init form)."""
 field_clamp(ph::FieldPhase{K}) where {K} =
-    FieldPhase{K}(ph.group, ph.alg, ph.arrays; ph.tables, ph.params, ph.substeps, ph.dt, ph.options, ph.T, init = true)
+    FieldPhase{K}(ph.group, ph.alg, ph.arrays; ph.tables, ph.params, ph.substeps, ph.dt, ph.period, ph.options, ph.T,
+        init = true)
 
 """
 The front end's record of a field runtime's binding (`Problems.GroupRuntime`'s `host`): the
@@ -91,15 +96,20 @@ function _table_array(backend, ::Type{E}, v) where {E}
     return a
 end
 
+# The value of parameter slot `n` at `p`: the clock's slot (`clock__tick`, F2 design §2.6) is
+# not a parameter of the model; its launches write the step index (the MCS number) into it
+const _CLOCK = Symbol(Problems.CLOCK_KEY)
+_param(p, n::Symbol) = n === _CLOCK ? 0.0 : getproperty(p, n)
+
 # the parameter values and table contents a binding depends on (copies: a table written in
 # place is a change)
-_bound_values(ph::FieldPhase, p) = (Any[getproperty(p, n) for n in ph.params],
+_bound_values(ph::FieldPhase, p) = (Any[_param(p, n) for n in ph.params],
                                     Any[copy(vec(collect(getproperty(p, name)))) for (_, name) in ph.tables])
 
 # whether the phase's parameters and tables at `p` equal those of the binding `b` (no copies)
 function _same_params(ph::FieldPhase, b::FieldBinding, p)
     for (k, n) in enumerate(ph.params)
-        isequal(getproperty(p, n), b.pvals[k]) || return false
+        isequal(_param(p, n), b.pvals[k]) || return false
     end
     return true
 end
@@ -120,7 +130,7 @@ end
 _table_values(ph::FieldPhase, p) = Pair{String, Vector{Float64}}[ph.program.tables[i].key => Float64.(vec(collect(getproperty(p, name))))
                                                                  for (i, name) in ph.tables]
 # the raw parameter values of the phase's slots at `p`
-_praw(ph::FieldPhase, p) = Tuple(getproperty(p, n) for n in ph.params)
+_praw(ph::FieldPhase, p) = Tuple(_param(p, n) for n in ph.params)
 
 """
     field_substeps(ph, p) -> Int
@@ -156,7 +166,7 @@ function _field_bind(ph::FieldPhase, st, p, backend; tables = nothing)
     n = field_substeps(ph, p)
     host = FieldBinding(p, arrs, _bound_values(ph, p)...)
     return Problems.bind_group(ph.group, ph.alg, store, _praw(ph, p); n, dt = ph.dt, c = nothing, ends_in = :slot1,
-        backend, options = ph.options, V = ph.T, host, fixed_time = true)
+        backend, options = ph.options, V = ph.T, host)
 end
 
 """
@@ -263,7 +273,11 @@ function _rebind!(rt::Problems.GroupRuntime, ph::FieldPhase, st, p, backend)
     return rt
 end
 
-function (ph::FieldPhase{K})(st, p, ctx, key, mcs, backend) where {K}
+# The phase runs one window of the fields: pass `part = (r, R)` of the `R` passes of a sub-MCS
+# `repeat(R, …)` (`(1, 1)` for the whole MCS). The clock (F2 design §2.6): the step index is
+# the MCS number `mcs` (the same in every pass), and the window starts at the time
+# `t0 = (mcs + (r − 1)/R) · mcs_duration`; substep `j` runs at `t0 + j h`.
+function (ph::FieldPhase{K})(st, p, ctx, key, mcs, backend, part::NTuple{2, Int} = (1, 1)) where {K}
     rt = _runtime(getfield(ctx, K))
     rt.pending === nothing || Base.invokelatest(_await!, rt)
     # the rebinding is cold host work (the substep bound, new launches): called past an
@@ -271,7 +285,9 @@ function (ph::FieldPhase{K})(st, p, ctx, key, mcs, backend) where {K}
     (rt.host.p === p && rt.host.arrays === _arrays(ph.arrays, st)) || Base.invokelatest(_rebind!, rt, ph, st, p, backend)
     # the at-init clamp: one substep of length zero from the step's launches
     n = ph.init ? 1 : rt.n
-    Problems.advance!(rt, (Float64(mcs), mcs), n, ph.init ? 0.0 : rt.dt)
+    # (the at-init clamp runs outside the passes: `part = (1, 1)`, its window starts at `mcs · period`)
+    t0 = mcs * ph.period + (part[1] - 1) * ph.dt          # ph.dt = mcs_duration / R
+    Problems.advance!(rt, (t0, mcs), n, ph.init ? 0.0 : rt.dt)
     launches = n * length(rt.steps[1].launches)
     # the masks (on a device they clamp the sites they mark; a clamp they cannot take is one
     # more kernel)
@@ -279,6 +295,9 @@ function (ph::FieldPhase{K})(st, p, ctx, key, mcs, backend) where {K}
     isodd(n) && (launches += length(rt.copies))
     return launches
 end
+
+# a field phase takes the pass of a sub-MCS `repeat` (`_run_phases`); other phases do not
+_run_phase(ph::FieldPhase, st, p, ctx, key, mcs, backend, stats, part) = ph(st, p, ctx, key, mcs, backend, part)
 
 # The at-init phases of a state that is not fresh (a checkpoint restore, `Potts.anneal`'s
 # per-MCS refresh): the derived refreshes without the field clamps, which hold on a fresh
