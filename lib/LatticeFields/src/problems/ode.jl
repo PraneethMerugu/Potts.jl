@@ -43,7 +43,7 @@ struct RHSContext{N, B}
     rates::Dict{String, String}
     initkeys::Vector{String}
     options::CompileOptions
-    tables::Vector{Pair{String, Vector{Float64}}}
+    tables::Vector                             # `key => values`, as given (`_table_list`)
     faces::Vector{FaceCheck}
     t0::Float64
     plans::Dict{Type, Tuple{StepPlan{N}, StepPlan{N}}}
@@ -241,7 +241,7 @@ function _lattice_rhs(ctx::RHSContext, ::Type{E}, base, Pinit = nothing, inputs 
         marks[Int32(i)] = StateView(slots[i], false)
         marks[fieldid(s, ctx.rates[k])] = StateView(slots[i], true)
     end
-    st = FieldStore(backend, s; E)
+    st = FieldStore(backend, s; E, TE = _tabeltype(ctx.tables))
     for (k, v) in ctx.tables                   # in this build's value type, from the source
         settable!(st, s, k, v)
     end
@@ -310,14 +310,15 @@ function ode_problem(prog::Program, u0, tspan, p; state, rates, init = String[],
     # their values, so a rate that is not finite where they reach is refused now
     bks = bound_inputs(stability)
     binputs = Pair{String, Any}[k => _site_shaped(s, k, v) for (k, v) in ins if k in bks && v !== nothing]
-    check_parameters(stability, with_tables(map(primal, collect(p)), Pair{String, Vector{Float64}}[tables...]; inputs = binputs))
+    tabs = _table_list(tables)
+    check_parameters(stability, with_tables(map(primal, collect(p)), tabs; inputs = binputs))
     N = _ndims(s)
-    E = problem_eltype(u0, p)
+    E = problem_eltype(u0, p, tabs)
     _check_eltype(E, backend)
     options = _state_options(options, E)
     ctx = RHSContext{N, typeof(backend)}(s, backend, collect(String, state),
         Dict{String, String}(rates), collect(String, init), options,
-        Pair{String, Vector{Float64}}[tables...], faces, Float64(tspan[1]),
+        tabs, faces, Float64(tspan[1]),
         Dict{Type, Tuple{StepPlan{N}, StepPlan{N}}}(), index, stability, binputs)
     ids = Int[fieldid(s, k) for k in state]
     slots = state_layout(s, ids)

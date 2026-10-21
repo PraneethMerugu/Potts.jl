@@ -2,7 +2,7 @@
 # one array per table. A two-buffer field has a current slot; a step's slot swaps flip it.
 
 """
-    FieldStore(backend, p::Program; flat = String[], E = nothing, nbuf = nothing)
+    FieldStore(backend, p::Program; flat = String[], E = nothing, nbuf = nothing, TE = nothing)
 
 Zero-filled arrays for every field of `p` on `backend` (KernelAbstractions allocation), one
 per buffer, `nsites × ncomp` elements of the field's storage lane; and an empty slot per
@@ -12,8 +12,9 @@ table (set with [`settable!`](@ref)). `cur[f]` is the current slot of field `f` 
 [`lanetype`](@ref LatticeFields.Compile.lanetype)`(lane, valtype(E), :state)` wrapped like `E`
 (a Dual of it when `E` is a Dual): the state lanes hold the problem's value type (BigFloat
 under `T = BigFloat`, Float64 after a Float64 `u0`), and Dual parameters give Dual fields.
-Integer lanes keep their type; tables take the value type, never a Dual. `nothing`: each
-lane's own Julia type.
+Integer lanes keep their type; tables take the value type, and a Dual of it only when the
+tables themselves carry derivative parts (`TE`, the element type of the problem's table
+values, is a Dual; then `E` is one too). `nothing`: each lane's own Julia type.
 
 The fields named in `flat` (the state, in that order) are packed: each buffer slot is one
 flat array per slot (`st.flat[slot]`), and the field's buffers are contiguous views of it at
@@ -35,9 +36,13 @@ function _eltype(lane, ::Type{E}) where {E}
     isfloat(lane) || return juliatype(lane)
     return withvaltype(E, lanetype(lane, valtype(E), :state))
 end
-_tabletype(lane, ::Nothing) = juliatype(lane)
-_tabletype(lane, ::Type{E}) where {E} = isfloat(lane) ? lanetype(lane, valtype(E), :state) : juliatype(lane)
-function FieldStore(backend, p::Program; flat = String[], E = nothing, nbuf = nothing)
+_tabletype(lane, ::Nothing, _) = juliatype(lane)
+function _tabletype(lane, ::Type{E}, TE) where {E}
+    isfloat(lane) || return juliatype(lane)
+    V = lanetype(lane, valtype(E), :state)
+    return TE === nothing || valtype(TE) === TE ? V : withvaltype(E, V)
+end
+function FieldStore(backend, p::Program; flat = String[], E = nothing, nbuf = nothing, TE = nothing)
     ids = Int[fieldid(p, k) for k in flat]
     slots, flatbufs = state_layout(p, ids), Any[]
     if !isempty(ids)
@@ -53,7 +58,7 @@ function FieldStore(backend, p::Program; flat = String[], E = nothing, nbuf = no
         n = nsites(p, f.levels[1]) * ncomp(f)
         Any[_zeros(backend, _eltype(f.storage, E), n) for _ in 1:(f.buffers)]
     end
-    tables = Any[_zeros(backend, _tabletype(t.storage, E), 1) for t in p.tables]
+    tables = Any[_zeros(backend, _tabletype(t.storage, E, TE), 1) for t in p.tables]
     return FieldStore(backend, bufs, ones(Int, length(p.fields)), tables, flatbufs, slots)
 end
 function FieldStore(backend, bufs, cur, tables)

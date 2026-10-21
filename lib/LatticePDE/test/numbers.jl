@@ -144,3 +144,85 @@ end
     # control: `sin(ω t)` evaluated with `t` in Float32 is off by more than 1e-3 at these times
     @test abs(sin(3.0f0 * Float32(T0 + 0.01)) - sin(3.0 * (T0 + 0.01))) > 1e-3
 end
+
+# F2-09 (F2 design §2.9): number types per role. Tables keep their element type (a BigFloat
+# table stays BigFloat, a Dual table promotes the problem as a Dual `p` does), BigFloat
+# defaults are kept, a Bool input reads back as Bool, and a pair-keyed `remake` infers. The
+# comments give the base (c2583722) value of each.
+@testset "F2-09: number types per role" begin
+    @parameters Dt[1:2] = [0.5, 1.0] Dq = 0.1
+    tsys = ssys([D(ce) ~ Dq * Δ(ce) - at(Dt, qe) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dq, Dt])
+    K = Int32[i <= 2 ? 1 : 2 for i in 1:4, j in 1:4]
+    p = sown(tsys; inputs = [qe => K])
+    alg = ExplicitEuler(; dt = 0.1)
+    third = big"1" / 3
+    @testset "a BigFloat table survives remake" begin
+        # base: the table became a Vector{Float64} (Float64(1/3))
+        rb = remake(p; p = [Dt => [third, big"1.0"]])
+        @test eltype(last(only(rb.tables))) == BigFloat && last(only(rb.tables))[1] == third
+        @test getp(rb, Dt)(rb)[1] == third
+        @test eltype(rb) == Float64                   # rounded once to the compute type of a Float64 state
+        @test isapprox(solve(rb, alg).u[end], solve(remake(p; p = [Dt => [1 / 3, 1.0]]), alg).u[end]; rtol = 1e-14)
+        # on a BigFloat state the store's table holds the value exactly (base: Float64(1/3))
+        pb = discretize(tsys, LatticeDiscretization(Grid((4, 4)); T = BigFloat, problem = :owned); inputs = [qe => K])
+        ib = init(remake(pb; p = [Dt => [third, big"1.0"]]), alg)
+        @test eltype(ib.store.tables[1]) == BigFloat && ib.store.tables[1][1] == third
+        @test ib[Dt][1] == third                      # the integrator's own copy keeps it
+        # an integrator table write converts into the integrator's table type
+        ig = init(p, alg)
+        ig[Dt] = [third, 1]
+        @test ig[Dt] == [Float64(third), 1.0] && eltype(ig[Dt]) == Float64
+    end
+    @testset "a Dual table promotes the problem; ForwardDiff through remake and solve" begin
+        # base: `Float64.(…)` of a Dual table threw (MethodError)
+        dv = ForwardDiff.Dual(0.5, 1.0)
+        rd = remake(p; p = [Dt => [dv, one(dv)]])
+        @test eltype(rd) <: ForwardDiff.Dual && eltype(last(only(rd.tables))) <: ForwardDiff.Dual
+        J(v) = sum(solve(remake(p; p = [Dt => [v, one(v)]]), alg).u[end])
+        d = ForwardDiff.derivative(J, 0.5)
+        @test d isa Float64 && d != 0 && isapprox(d, fd(J, 0.5); rtol = 1e-6)
+        # control: the derivative of the entry that no site reads is 0
+        J2(v) = sum(solve(remake(p; p = [Dt => [0.5, v]]), alg).u[end])
+        @test ForwardDiff.derivative(J2, 1.0) != 0                       # kind 2 is read
+        Jn(v) = sum(solve(remake(sown(tsys; inputs = [qe => fill(Int32(1), 4, 4)]); p = [Dt => [0.5, v]]), alg).u[end])
+        @test ForwardDiff.derivative(Jn, 1.0) == 0                       # no site of kind 2
+        # a Dual written into a Float64 integrator's table is refused with the route
+        ig = init(p, alg)
+        err = emsg(() -> (ig[Dt] = [dv, one(dv)]))
+        @test occursin("`Dt` of this integrator holds Float64", err) && occursin("remake(prob; p = [Dt => values])", err)
+        @test ig[Dt] == [0.5, 1.0]                                       # unchanged
+    end
+    @testset "a Bool input reads back as Bool" begin
+        # base: a `UInt8` array (`any`/`count` threw a non-boolean TypeError, `.!` a MethodError)
+        dsys = ssys([D(ce) ~ 1.0], [c(0, x, y) ~ 0.0], [ce, de], Num[])
+        half = [i <= 2 for i in 1:4, j in 1:4]
+        ig = init(sown(dsys; domain = dm, inputs = [dm => half]), alg)
+        m = ig[dm]
+        @test eltype(m) == Bool && m == half
+        @test any(m) && !all(m) && count(m) == 8 && (.!m) == .!half
+        # an integer input keeps its type
+        @test eltype(init(p, alg)[qe]) == Int32
+    end
+    @testset "a pair-keyed remake infers" begin
+        # base: an abstract `FieldProblem` (`rest = Pair[]`, a promotion over the values)
+        r1 = @inferred remake(p; p = [Dt => [0.25, 1.0]])
+        r2 = @inferred remake(p; p = [Dq => 2.0])
+        @test getp(r1, Dt)(r1) == [0.25, 1.0] && r2.p[pidx(r2, Dq)] == 2.0
+        # a plain value is written into the problem's parameter type; a Dual promotes it
+        @test eltype(remake(p; p = [Dq => big"2.0"]).p) == Float64 && eltype(remake(p; p = [Dq => 2]).p) == Float64
+        @test eltype(remake(p; p = [Dq => ForwardDiff.Dual(2.0, 1.0)]).p) <: ForwardDiff.Dual
+        # a mixed list (abstract pair type) still works, decided by the values
+        r3 = remake(p; p = Pair[Dt => [0.25, 1.0], Dq => 2.0])
+        @test getp(r3, Dt)(r3) == [0.25, 1.0] && r3.p[pidx(r3, Dq)] == 2.0
+    end
+    @testset "BigFloat defaults are kept (SD-03)" begin
+        # base: `_default` returned Float64(v): p = [0.3333333333333333]
+        @parameters Db = big"1" / 3
+        bsys = ssys([D(ce) ~ Db * Δ(ce)], [c(0, x, y) ~ 1.0], [ce], [Db])
+        pbb = discretize(bsys, LatticeDiscretization(Grid((4, 4)); T = BigFloat, problem = :owned))
+        @test eltype(pbb.p) == BigFloat && pbb.p[1] == big"1" / 3
+        @test eltype(solve(pbb, ExplicitEuler(; dt = 0.01)).u[end]) == BigFloat
+        # Float64 defaults stay a Float64 vector
+        @test eltype(sown(tsys; inputs = [qe => K]).p) == Float64
+    end
+end

@@ -128,4 +128,9 @@ end
     d2 = KernelAbstractions.allocate(PDEV, Int32, n, n)
     copyto!(d2, fill(Int32(2), n, n))
     @test occursin("`dm` holds a Bool mask", emsg(() -> mk(d2)))
+    # F2-09: the input reads back as a Bool array on the device (base: UInt8; `count` and `any`
+    # threw a non-boolean TypeError, `.!` a MethodError)
+    m = init(mk(db), ExplicitEuler(; dt = 0.1f0))[dm]
+    @test eltype(m) == Bool && typeof(KernelAbstractions.get_backend(m)) == typeof(PDEV)
+    @test Array(m) == half && count(m) == 4n && any(m) && !all(m) && Array(.!m) == .!half
 end

@@ -158,10 +158,15 @@ Base.eltype(::Type{ParamsTables{P}}) where {P} = eltype(P)
     with_tables(p, tables; inputs = [])
 
 `p` as the stability hooks take it: `ParamsTables(p, tables, inputs)` when there are tables
-or inputs, else `p`.
+or inputs, else `p`. The hooks read the tables in Float64 on their primal values (a policy, as
+for the parameters: a BigFloat table is rounded and a Dual table drops its derivative parts
+here only; the problem keeps the values as given).
 """
 with_tables(p, tables; inputs = ()) = isempty(tables) && isempty(inputs) ? p :
-                                      ParamsTables(p, Pair{String, Vector{Float64}}[tables...], Pair{String, Any}[inputs...])
+                                      ParamsTables(p, Pair{String, Vector{Float64}}[k => _primal64(v) for (k, v) in tables],
+                                          Pair{String, Any}[inputs...])
+_primal64(v::Vector{Float64}) = v
+_primal64(v) = Float64[Float64(primal(x)) for x in v]
 
 """
     bound_inputs(stability) -> Vector{String}

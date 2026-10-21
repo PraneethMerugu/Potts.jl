@@ -68,14 +68,16 @@ passes); `keys[op]` are the field keys of each dependent variable (one per compo
 `params[i]` is the parameter of slot `i` with its value `defaults[i]` (`lattice_spacing`
 parameters take the grid spacing; `NaN` when there is no default); `tables` the array
 parameters with their values; `initial` the initial-condition right sides by field key;
-`linearity` the class of every rate term by field key.
+`linearity` the class of every rate term by field key. The defaults and the table values keep
+the number type they are declared in (a `big"1"/3` default stays BigFloat; the vector is the
+promotion of Float64 with every value's type), as a problem's parameters do.
 """
 struct CompiledField{N}
     program::Program{N}
     keys::Dict{Any, Vector{String}}
     params::Vector{Any}
-    defaults::Vector{Float64}
-    tables::Vector{Pair{String, Vector{Float64}}}
+    defaults::Vector
+    tables::Vector
     initial::Dict{String, Any}
     linearity::Dict{String, Vector{Pair{Any, Symbol}}}
 end
@@ -127,14 +129,17 @@ end
 # the value given for `x` in the system's `initial_conditions`, else `nothing`
 _icvalue(ic, x) = (u = unwrap(x); haskey(ic, u) ? ic[u] : nothing)
 
-# a parameter's numeric value: its `initial_conditions` entry, else its default, else NaN
-# (none, or a computed value such as `2a`, which `discretize` folds into the equations)
+# a parameter's numeric value, in the type it is given in (a BigFloat default stays BigFloat):
+# its `initial_conditions` entry, else its default, else NaN (none, or a computed value such as
+# `2a`, which `discretize` folds into the equations)
 function _default(p, ic = Dict())
     d = _icvalue(ic, p)
     d === nothing && !ModelingToolkitBase.hasdefault(p) && return NaN
     v = unwrap_const(unwrap(d === nothing ? ModelingToolkitBase.getdefault(p) : d))
-    return v isa Real ? Float64(v) : NaN
+    return v isa Real && !(v isa Bool) ? v : v isa Bool ? Float64(v) : NaN
 end
+# values as one vector: the promotion of Float64 with each value's type (an integer is a Float64)
+_promoted(vs) = (T = mapreduce(typeof, promote_type, vs; init = Float64); T.(vs))
 
 # a face or mask value: a number, a parameter, or a number times a parameter
 function _coef(v, params, scale = 1.0)
@@ -327,7 +332,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     plist = sort!([unwrap(p) for p in ps if !(SymbolicUtils.symtype(unwrap(p)) <: AbstractArray)]; by = string)
     params = Dict{Any, Int}(p => i for (i, p) in enumerate(plist))
     spacing = Dict{Any, Int}(p => get_lattice_spacing(p) for p in plist if get_lattice_spacing(p) !== nothing)
-    defaults = [haskey(spacing, p) ? h[spacing[p]] : _default(p, ic) for p in plist]
+    defaults = _promoted(Any[haskey(spacing, p) ? h[spacing[p]] : _default(p, ic) for p in plist])
     arrays = sort!([unwrap(p) for p in ps if SymbolicUtils.symtype(unwrap(p)) <: AbstractArray]; by = string)
 
     pb = ProgramBuilder(disc.grid; periodic, spacing = h, nparams = length(plist))
@@ -426,6 +431,6 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         add!(pb, kb, "$kind:$k")
     end
     tvals = [string(p) => (d = something(_icvalue(ic, p), Some(ModelingToolkitBase.hasdefault(p) ? ModelingToolkitBase.getdefault(p) : Float64[]));
-                           Float64.(collect(unwrap_const.(unwrap.(d))))) for p in arrays]
+                           _promoted(collect(unwrap_const.(unwrap.(d))))) for p in arrays]
     return CompiledField{N}(program(pb), keys, plist, defaults, tvals, initial, lin)
 end

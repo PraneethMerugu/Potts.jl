@@ -33,7 +33,7 @@ Float64 are refused. `p` is a plain vector, so it is a SciMLStructures structure
 `Tunable` portion is every scalar parameter (`replace` promotes its eltype); kind tables are
 constants outside `p` (not tunable in this version).
 """
-struct FieldProblem{N, B, X, R, U, PV, E} <: SciMLBase.AbstractSciMLProblem
+struct FieldProblem{N, B, X, R, U, PV, E, TB} <: SciMLBase.AbstractSciMLProblem
     program::Program{N}
     init::StepPlan{N}
     step::StepPlan{N}
@@ -41,7 +41,7 @@ struct FieldProblem{N, B, X, R, U, PV, E} <: SciMLBase.AbstractSciMLProblem
     u0::U
     tspan::Tuple{Float64, Float64}
     p::PV
-    tables::Vector{Pair{String, Vector{Float64}}}
+    tables::TB                         # `key => values`, each in the tables' element type (`_table_list`)
     inputs::Vector{Pair{String, Any}}
     backend::B
     index::X
@@ -83,9 +83,9 @@ function FieldProblem(spec::GroupSpec, u0, tspan, p; index = LatticeIndex(), tab
     s = semantic(fuse_update(prog, update_rule(alg)))
     pv = collect(p)
     ins = resolve_inputs(s, index, inputs)
-    tabs = Pair{String, Vector{Float64}}[tables...]
+    tabs = _table_list(tables)
     prob = _field_problem(s, collect(String, state), u0, tspan, pv, tabs, ins, backend, index, faces, stability, kind,
-        collect(String, init), _state_options(options, problem_eltype(u0, pv)), FieldGroup(spec; alg, program = s))
+        collect(String, init), _state_options(options, problem_eltype(u0, pv, tabs)), FieldGroup(spec; alg, program = s))
     ids = sort!([fieldid(s, k) for k in state])
     sort(prob.step.swaps) == ids ||
         throw(ArgumentError(string("every state field must be written ",
@@ -100,12 +100,27 @@ function FieldProblem(spec::GroupSpec, u0, tspan, p; index = LatticeIndex(), tab
 end
 
 """
-    problem_eltype(u0, p) -> Type
+    problem_eltype(u0, p[, tables]) -> Type
 
-The element type of a problem with initial state `u0` and parameters `p`: `eltype(u0)`
-promoted with `eltype(p)` only when the parameters carry derivative parts.
+The element type of a problem with initial state `u0`, parameters `p` and tables `tables`
+(`key => values`): `eltype(u0)` promoted with the element type of `p` and of the tables only
+when they carry derivative parts (a Dual table promotes the state as a Dual `p` does; a
+BigFloat table on a Float64 state is rounded once to the compute type).
 """
 problem_eltype(u0, p) = promote_dual(eltype(u0), eltype(p))
+problem_eltype(u0, p, tables) = promote_dual(problem_eltype(u0, p), _tabeltype(tables))
+
+# The tables of a problem (number types per role, F2 design §2.9): each `key => values` keeps
+# its element type (a BigFloat table stays BigFloat, a Dual table stays Dual), in one vector
+# type for all, the promotion of Float64 with every table's element type (an integer table is
+# a Float64 one)
+function _table_list(tables)
+    TT = foldl((T, x) -> promote_type(T, _tabelt(last(x))), tables; init = Float64)
+    return Pair{String, Vector{TT}}[String(first(x)) => Vector{TT}(vec(collect(last(x)))) for x in tables]
+end
+_tabelt(v) = isconcretetype(eltype(v)) ? eltype(v) : mapreduce(typeof, promote_type, v; init = Float64)
+_tabeltype(::AbstractVector{Pair{String, Vector{T}}}) where {T} = T
+_tabeltype(tables) = isempty(tables) ? Float64 : _tabeltype(_table_list(tables))
 
 # the options a problem keeps: an explicit `T` must be the state's value type (`eltype(u0)`
 # decides); it is then dropped, so a `remake` to another value type plans for that type
@@ -153,12 +168,12 @@ end
 
 function _field_problem(s::Program, state, u0, tspan, p, tables, inputs, backend, index, faces,
         stability, kind, initkeys, options, group)
-    E = problem_eltype(u0, p)
+    E = problem_eltype(u0, p, tables)
     _check_eltype(E, backend)
     # the plans cache is shared by a problem's remakes, which threads may build at once
     ip, sp = group_plans(group, kind == :map ? ExplicitMap() : ExplicitEuler(), valtype(E), backend, options)
     return FieldProblem{_ndims(s), typeof(backend), typeof(index),
-        typeof(stability), typeof(u0), typeof(p), E}(s, ip, sp, state, u0,
+        typeof(stability), typeof(u0), typeof(p), E, typeof(tables)}(s, ip, sp, state, u0,
         (Float64(tspan[1]), Float64(tspan[2])), p, tables, inputs, backend, index, faces, stability,
         kind, initkeys, options, group)
 end
@@ -178,12 +193,17 @@ SII.current_time(p::FieldProblem) = p.tspan[1]
     remake(prob::FieldProblem; u0, tspan, p, inputs)
 
 A copy with new initial state, time span, parameters (`p` a vector, or `symbol => value`
-pairs looked up in the index) or input values (`symbol => values` pairs; the others keep
-theirs). Element types are kept as given: Dual parameters promote the
-state, BigFloat parameters stay BigFloat. A new value type plans once (cached on the
-problem family); a value-only change reuses the plans. New parameters are checked again
-(degenerate Robin faces); the stability bound is a function of the parameters, evaluated
-again when solved.
+pairs looked up in the index; a table as `Dk => values`) or input values (`symbol => values`
+pairs; the others keep theirs). Element types are kept as given: a parameter vector keeps its
+element type (Dual parameters promote the state, BigFloat parameters stay BigFloat); a pair's
+plain value is written into the problem's parameter type, and a Dual value promotes it (so
+under `T = BigFloat` with Float64 defaults, `p = [k => big"0.1"]` rounds to Float64: declare
+BigFloat defaults or give a BigFloat vector); a
+table keeps its values' element type (a BigFloat table stays BigFloat, a Dual table promotes
+the state). The result's type follows from the argument types (a `Vector` of pairs with one
+value type infers). A new value type plans once (cached on the problem family); a value-only
+change reuses the plans. New parameters are checked again (degenerate Robin faces); the
+stability bound is a function of the parameters, evaluated again when solved.
 """
 function SciMLBase.remake(prob::FieldProblem; u0 = prob.u0, tspan = prob.tspan, p = prob.p,
         inputs = ())
@@ -198,34 +218,51 @@ function SciMLBase.remake(prob::FieldProblem; u0 = prob.u0, tspan = prob.tspan, 
         prob.options, prob.group)
 end
 # the table pairs of `p` (`Dk => values`, array parameters) as the problem's new tables, and
-# the other pairs
+# the other pairs (in the caller's container type, so a `Vector` of pairs infers). The tables'
+# element type is the promotion of the problem's with the given values' (`_newtab`: from the
+# pair type when it is concrete, else from the values)
 _tables(prob::FieldProblem, p) = prob.tables, p
 function _tables(prob::FieldProblem, p::Union{AbstractVector{<:Pair}, Tuple, AbstractDict})
     ix = prob.index
     ix isa LatticeIndex || return prob.tables, p
-    tables = copy(prob.tables)
-    rest = Pair[]
-    for (k, v) in p
+    TT = _tabeltype(prob.tables)
+    TN = _newtab(TT, eltype(typeof(p)), ix, p)
+    istab(x) = table_key(ix, first(x)) !== nothing
+    TN === TT && !any(istab, p) && return prob.tables, p
+    tables = Pair{String, Vector{TN}}[k => Vector{TN}(v) for (k, v) in prob.tables]
+    for x in p
+        k, v = first(x), last(x)
         t = table_key(ix, k)
-        t === nothing && (push!(rest, k => v); continue)
+        t === nothing && continue
         e = table_entry(ix, k)
         e == 0 || throw(ArgumentError("`$k` is entry $e of the table `$t`: give the whole table, `$t => values`"))
         j = findfirst(x -> first(x) == t, tables)
         n = length(last(tables[j]))
         v isa AbstractArray && length(v) == n || throw(ArgumentError(
             "the table `$k` has $n entries; give $n values (got $(v isa AbstractArray ? length(v) : v))"))
-        w = Float64.(vec(collect(v)))
+        w = Vector{TN}(vec(collect(v)))
         all(isfinite, w) || throw(ArgumentError("the table `$t` must hold finite values (got $w)"))
         tables[j] = t => w
     end
-    return tables, rest
+    return tables, filter(!istab, p)
 end
+_newtab(::Type{TT}, ::Type{Pair{K, V}}, ix, p) where {TT, K, V <: AbstractArray} =
+    isconcretetype(eltype(V)) ? promote_type(TT, eltype(V)) : _newtab(TT, Any, ix, p)
+_newtab(::Type{TT}, ::Type{Pair{K, V}}, ix, p) where {TT, K, V <: Real} =
+    isconcretetype(V) ? TT : _newtab(TT, Any, ix, p)
+_newtab(::Type{TT}, _, ix, p) where {TT} =
+    foldl((T, x) -> table_key(ix, first(x)) !== nothing && last(x) isa AbstractArray ? promote_type(T, _tabelt(last(x))) : T,
+        p; init = TT)
 _parameter_vector(::FieldProblem, p::AbstractVector{<:Real}) = collect(p)
-_parameter_vector(prob::FieldProblem, p::AbstractVector{Pair}) = isempty(p) ? copy(prob.p) :
-                                                               _pairs_vector(prob, p)
 _parameter_vector(prob::FieldProblem, p) = _pairs_vector(prob, p)
+# the parameter type after pairs `p`: the problem's, promoted only by a Dual value (a plain
+# value is written into the problem's type: plain parameters never promote, P5); from the
+# pair type when its value type is concrete, else from the values
+_pairtype(::Type{E}, ::Type{Pair{K, V}}, p) where {E, K, V} =
+    isconcretetype(V) ? (V <: Real ? promote_dual(E, V) : E) : _pairtype(E, Any, p)
+_pairtype(::Type{E}, _, p) where {E} = foldl((T, x) -> last(x) isa Real ? promote_dual(T, typeof(last(x))) : T, p; init = E)
 function _pairs_vector(prob::FieldProblem, p)
-    pv = Vector{promote_type(eltype(prob.p), map(x -> typeof(last(x)), collect(p))...)}(prob.p)
+    pv = Vector{_pairtype(eltype(prob.p), eltype(typeof(p)), p)}(prob.p)
     prob.index isa LatticeIndex && check_parameter_keys(prob.index, (first(x) for x in p))
     for (k, v) in p
         i = SII.parameter_index(prob.index, k)      # (a computed parameter is an error naming it)
@@ -277,14 +314,14 @@ which checks the faces, recomputes the substeps and rebinds the steps, or else l
 integrator unchanged. Writing `integ.p[i] = v` directly has no effect on the run: the steps
 keep the values they were bound to.
 """
-mutable struct FieldIntegrator{P <: FieldProblem, A, S <: FieldStore, RT <: Tuple, T, PV}
+mutable struct FieldIntegrator{P <: FieldProblem, A, S <: FieldStore, RT <: Tuple, T, PV, TB}
     prob::P
     alg::A
     store::S
     runtimes::RT                        # one `GroupRuntime` per field group, in group order
     p::PV
     pgood::PV                           # the parameters the steps are bound to
-    tables::Vector{Pair{String, Vector{Float64}}}   # its own copy (`integ[Dk] = values`)
+    tables::TB                          # its own copy (`integ[Dk] = values`), as the problem's
     t0::Float64
     iter::Int
     dt::Float64
@@ -473,7 +510,7 @@ function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; saveat = (),
     E = eltype(prob)
     # the state buffers the algorithms declare (`nbuffers`: two for the explicit ones)
     st = FieldStore(prob.backend, prob.program; flat = prob.state, E,
-        nbuf = maximum(nbuffers(a) for (a, _) in groups))
+        nbuf = maximum(nbuffers(a) for (a, _) in groups), TE = _tabeltype(prob.tables))
     for (k, v) in prob.tables
         settable!(st, prob.program, k, v)
     end
@@ -496,7 +533,7 @@ function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; saveat = (),
     foreach(clamp_now!, rts)                        # the saved t0 state holds the mask values
     foreach(rt -> compile!(prob.backend, rt), rts)
     integ = FieldIntegrator(prob, alg, st, rts, copy(prob.p), pgood,
-        Pair{String, Vector{Float64}}[k => copy(v) for (k, v) in prob.tables], t0, 0, dt,
+        eltype(prob.tables)[k => copy(v) for (k, v) in prob.tables], t0, 0, dt,
         ms[1], nsteps, _clock(prob) === nothing ? 0 : _per(dt, _clock(prob)), save, Float64[], Vector{_ueltype(st, E)}[],
         SciMLBase.ReturnCode.Success)
     0 in save && _save!(integ)
@@ -630,8 +667,11 @@ function Base.getindex(i::FieldIntegrator, sym)
     k = i.prob.index isa LatticeIndex ? input_key(i.prob.index, sym) : nothing
     k === nothing && (_check_symbol(i, sym); return SII.getsym(i, sym)(i))
     f = i.prob.program.fields[fieldid(i.prob.program, k)]
-    return reshape(copy(array(i.store, fieldid(i.prob.program, k), :cur)),
-        ncomp(f) == 1 ? leveldims(i.prob.program, f.levels[1]) : (leveldims(i.prob.program, f.levels[1])..., ncomp(f)))
+    a = copy(array(i.store, fieldid(i.prob.program, k), :cur))
+    # a Bool-declared input (stored as 0/1 bytes) reads back as Bool, on the problem's device
+    is_bool_input(i.prob.index, k) && (a = map(!iszero, a))
+    return reshape(a, ncomp(f) == 1 ? leveldims(i.prob.program, f.levels[1]) :
+                      (leveldims(i.prob.program, f.levels[1])..., ncomp(f)))
 end
 
 # the values of the table (or the entry of one) that `sym` names, else `nothing`; a list of
@@ -750,10 +790,10 @@ function _write_table!(i::FieldIntegrator, v, sym)
         v isa Union{AbstractArray, Tuple} && length(v) == n && all(num, v) || throw(ArgumentError(string(
             "the table `", t, "` has ", n, " entries; give a vector of ", n, " numbers (got ",
             v isa Union{AbstractArray, Tuple} ? (length(v) == n ? "a non-number" : "$(length(v))") : repr(v), ")")))
-        vals .= Float64.(collect(v))
+        vals .= [_table_value(eltype(vals), t, x) for x in v]
     else
         num(v) || throw(ArgumentError("`$(_symtext(sym))` is entry $e of the table `$t`: give one number (got $(repr(v)))"))
-        vals[e] = Float64(v)
+        vals[e] = _table_value(eltype(vals), t, v)
     end
     all(isfinite, vals) || throw(ArgumentError("the table `$t` must hold finite values (got $vals)"))
     # the checks and the substep count at the new values, before anything changes
@@ -769,6 +809,16 @@ function _write_table!(i::FieldIntegrator, v, sym)
     _rerun_init!(i, i.pgood)
     foreach(reset!, i.runtimes)
     return true
+end
+
+# a value written into an integrator's table of element type `T` (the problem's): converted;
+# derivative parts into a table without them are refused with the route (the problem's type
+# is fixed for its integrator)
+function _table_value(::Type{T}, t, x) where {T}
+    valtype(typeof(x)) === typeof(x) || valtype(T) !== T || throw(ArgumentError(string("the table `", t,
+        "` of this integrator holds ", T, " values; a value with derivative parts (", typeof(x), ") needs a problem ",
+        "whose table holds them: `remake(prob; p = [", t, " => values])`, then `init`")))
+    return convert(T, x)
 end
 
 # a parameter set through `setp` checks the faces, recomputes the substep count from the
