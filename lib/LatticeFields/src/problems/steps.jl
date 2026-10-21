@@ -27,25 +27,29 @@ function (x::TimedDerived)(rt)
 end
 
 """
-    BoundStep(backend, p, sp, st, Praw; cur = st.cur, c = nothing)
+    BoundStep(backend, p, sp, st, Praw; cur = st.cur, c = nothing, fuse = nothing)
 
 The launches of step plan `sp` on store `st` with the current slots `cur`, parameters
 `Praw` (raw, host, any `Real` eltype) in the compute element type of `c` (default: each
 kernel's value type), and `rt = (t, dt)`. `bs(rt)` enqueues them in order (no sync, no
-allocation on the host executor).
+allocation on the host executor). `fuse(spec, cur)` may return `(lane, wrap)` for a launch:
+its arrays gain the lane `lane` and its body is `wrap(body)` (the clamp fused into the mask
+launch on a device, group.jl); `nothing` leaves the launch as planned.
 """
 struct BoundStep{L <: Tuple, W}
     launches::L
     walk::W
 end
 function BoundStep(backend, p::Program, sp::StepPlan, st::FieldStore, Praw; cur = st.cur,
-        c = nothing)
+        c = nothing, fuse = nothing)
     P0 = Tuple(Praw)
     ls = Tuple(begin
                    ck = l.kernel
                    cc = c === nothing ? zero(ck.T) : c
-                   b = bind(backend, p, l, launch_arrays(st, l, cur),
-                       launch_parameters(ck, P0, cc), (0, 0))
+                   S = launch_arrays(st, l, cur)
+                   f = fuse === nothing ? nothing : fuse(l, cur)
+                   b = f === nothing ? bind(backend, p, l, S, launch_parameters(ck, P0, cc), (0, 0)) :
+                       bind(backend, p, l, (S..., f[1]), launch_parameters(ck, P0, cc), (0, 0); wrap = f[2])
                    ck.timed ? TimedDerived(b, derive_function(ck), P0, cc) : Timed(b)
                end
     for l in sp.launches)

@@ -156,7 +156,7 @@ function _field_bind(ph::FieldPhase, st, p, backend; tables = nothing)
     n = field_substeps(ph, p)
     host = FieldBinding(p, arrs, _bound_values(ph, p)...)
     return Problems.bind_group(ph.group, ph.alg, store, _praw(ph, p); n, dt = ph.dt, c = nothing, ends_in = :slot1,
-        backend, options = ph.options, V = ph.T, host, clamp_at_start = false, fixed_time = true)
+        backend, options = ph.options, V = ph.T, host, fixed_time = true)
 end
 
 """
@@ -171,9 +171,9 @@ phase_context(ph, st, p, backend) = (;)
 function phase_context(ph::FieldPhase{K}, st, p, backend) where {K}
     ph.init && return (;)
     rt = _field_bind(ph, st, p, backend)
-    # on a device the launches compile on host tasks, awaited before the first enqueue
-    Exec.ishost(backend) || (rt.pending = Threads.@spawn _field_compile!(backend, rt.steps[1],
-                                                                         rt.masks === nothing ? nothing : rt.masks[1]))
+    # on a device the kernels of a step (its launches, the masks, the clamp at the step's start
+    # and the slot-1 copies) compile on host tasks, awaited before the first enqueue
+    Exec.ishost(backend) || (rt.pending = Threads.@spawn _field_compile!(backend, rt))
     return NamedTuple{(K,)}((FieldHandle(rt),))
 end
 
@@ -225,18 +225,11 @@ end
 # A test hook: an event the field compile tasks wait on before compiling (`nothing`: none),
 # so a test can act while a compile is certainly pending
 const _COMPILE_HOLD = Ref{Union{Nothing, Base.Event}}(nothing)
-function _field_compile!(backend, even, masks)
+function _field_compile!(backend, rt)
     hold = _COMPILE_HOLD[]
     hold === nothing || wait(hold)
-    return Problems.compile!(backend, masks === nothing ? even : _Both(even, masks))
+    return Problems.compile!(backend, rt)
 end
-# one compile set of the substep and the mask launches (`Problems.compile!` takes one step)
-struct _Both{A, B}
-    a::A
-    b::B
-end
-Problems.compile!(backend, s::_Both) = Exec.compile_all!(backend,
-    Any[[x.launch for x in s.a.launches]; [x.launch for x in s.b.launches]])
 
 # wait for the compile task of `rt` (cold: the first run after `init`); a failed compile
 # rethrows here, before anything is enqueued
@@ -280,7 +273,9 @@ function (ph::FieldPhase{K})(st, p, ctx, key, mcs, backend) where {K}
     n = ph.init ? 1 : rt.n
     Problems.advance!(rt, (Float64(mcs), mcs), n, ph.init ? 0.0 : rt.dt)
     launches = n * length(rt.steps[1].launches)
-    rt.masks === nothing || (launches += length(rt.masks[1].launches))
+    # the masks (on a device they clamp the sites they mark; a clamp they cannot take is one
+    # more kernel)
+    rt.masks === nothing || (launches += length(rt.masks[1].launches) + (Exec.ishost(backend) ? 0 : length(rt.stepclamps)))
     isodd(n) && (launches += length(rt.copies))
     return launches
 end

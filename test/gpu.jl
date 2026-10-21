@@ -547,6 +547,37 @@ end
 # update its formulas)
 include("transfer_counts.jl")
 
+# F2-08b: front end A's field kernels compile in the field phase's pending task
+# (`rt.pending`): the step and the mask launches, whose bodies clamp the sites they mark (the
+# clamp at the step start fused into the mask launch on a device: no separate clamp launch),
+# and the slot-1 copy. Once the task is done, the first MCS adds no LatticeFields kernel to
+# AMDGPU's kernel cache (counted), and the device run equals the host run.
+if PottsDevices.device_name() == "rocm"
+    @testset "F2-08b: the field kernels compile in the pending task, the clamp fused into the masks (ROCm)" begin
+        AM = PottsDevices.device_package()
+        lfkernels() = Set(s for s in (string(typeof(k)) for k in collect(values(AM.Compiler._kernel_instances)))
+                          if occursin("LatticeFields.Problems", s) || occursin("LatticeFields.Compile", s))
+        backend = PottsDevices.device_backend()
+        σ = zeros(Int32, 12, 12); σ[5:7, 5:7] .= 1
+        prob = PottsProblem(FdMovingMask(; name = :m), [ownership => σ, kind => [:A]], (0, 4); backend, seed = 5,
+            field_solver = ExplicitEuler(substeps = 3))
+        # from a host checkpoint: a fresh state's at-init clamp would await the task inside `init`
+        ck = checkpoint(init(prob, CheckerboardCPM()))
+        integ = init(prob, CheckerboardCPM(); backend, checkpoint = ck)
+        t = CorePotts._runtime(integ.ctx.__fields1).pending
+        @test t isa Task
+        wait(t)
+        before = lfkernels()
+        @test any(s -> occursin("_MaskClamp", s), before)              # the masks, clamp fused, compiled by the task
+        @test isempty(CorePotts._runtime(integ.ctx.__fields1).stepclamps)   # no separate clamp launch
+        step!(integ)
+        PottsDevices.device_sync()
+        @test isempty(setdiff(lfkernels(), before))                     # the first MCS compiled none
+        host = init(prob, CheckerboardCPM(); checkpoint = ck); step!(host)
+        @test Array(current_state(integ).site.c) == current_state(host).site.c   # and equals the host run
+    end
+end
+
 # ROCm, last: no `double` in any kernel this suite compiled (full scan of the kernel cache)
 if PottsDevices.device_name() == "rocm"
     include(joinpath(@__DIR__, "shared", "device_ir_scan.jl"))

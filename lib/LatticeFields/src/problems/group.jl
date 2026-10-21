@@ -195,7 +195,7 @@ the algorithm's cache (`alg_cache`) and the status of its last step. Made by
 none): a front end awaits it before the first step. `host` is the front end's own record of
 the binding (front end A: the parameter object and the state arrays it was bound from).
 """
-mutable struct GroupRuntime{ST <: FieldStore, A, B, M, CL, CP, PV, S, H}
+mutable struct GroupRuntime{ST <: FieldStore, A, B, M, CL, SC, CP, PV, S, H}
     store::ST
     alg::A
     init::Any                           # the init plan (masks), for `rebind!`
@@ -203,6 +203,8 @@ mutable struct GroupRuntime{ST <: FieldStore, A, B, M, CL, CP, PV, S, H}
     steps::NTuple{2, B}
     masks::M                            # the mask launches at both slot parities, or nothing
     clamps::CL                          # the masked fields' arrays and values (`_clamps`)
+    stepclamps::SC                      # those a step runs after its masks (on a device the
+                                        # mask launches clamp themselves: `_mask_fuse`)
     swaps::Vector{Int32}                # the group's two-buffer fields
     copies::CP                          # (slot 1, slot 2) of each, for `ends_in = :slot1`
     ends_in::Symbol
@@ -219,7 +221,6 @@ mutable struct GroupRuntime{ST <: FieldStore, A, B, M, CL, CP, PV, S, H}
     status::SciMLBase.ReturnCode.T
     pending::Union{Nothing, Task}
     host::H
-    clamp_at_start::Bool                # F2-08a: front end A keeps its step without the clamp
     fixed_time::Bool                    # F2-08a: front end A holds `t` over its substeps
 end
 
@@ -232,8 +233,12 @@ function _bind_steps(backend, prog, sp::StepPlan, st, p, swaps, all_state, c)
     return (BoundStep(backend, prog, sp, st, p; cur = _cur(st, swaps, 1, all_state), c),
         BoundStep(backend, prog, sp, st, p; cur = _cur(st, swaps, 2, all_state), c))
 end
-_bind_masks(backend, prog, ip::StepPlan, st, p, swaps, all_state, c) =
-    isempty(ip.launches) ? nothing : _bind_steps(backend, prog, ip, st, p, swaps, all_state, c)
+function _bind_masks(backend, prog, ip::StepPlan, st, p, swaps, all_state, c, ids)
+    isempty(ip.launches) && return nothing
+    fuse = Exec.ishost(backend) ? nothing : _mask_fuse(prog, st, p, ids)
+    return (BoundStep(backend, prog, ip, st, p; cur = _cur(st, swaps, 1, all_state), c, fuse),
+        BoundStep(backend, prog, ip, st, p; cur = _cur(st, swaps, 2, all_state), c, fuse))
+end
 
 """
     bind_group(g, alg, store, p; fields = g.spec.state, n, dt, c, ends_in = :parity, backend,
@@ -247,7 +252,7 @@ them back to slot 1 after an odd count, so a group that runs after it reads curr
 """
 function bind_group(g::FieldGroup, alg, st::FieldStore, p; fields = g.spec.state, n::Integer, dt::Real,
         c, ends_in::Symbol = :parity, backend, options::CompileOptions, V::Type, host = nothing,
-        clamp_at_start::Bool = true, fixed_time::Bool = false)
+        fixed_time::Bool = false)
     ends_in in (:parity, :slot1) || throw(ArgumentError("ends_in must be :parity or :slot1; got $(repr(ends_in))"))
     prog = group_program(g, alg)
     ids = Set(fieldid(prog, k) for k in fields)
@@ -255,13 +260,15 @@ function bind_group(g::FieldGroup, alg, st::FieldStore, p; fields = g.spec.state
     ip, sp = group_plans(g, alg, V, backend, options; kernels = _group_kernels(g, ids))
     swaps = all_state ? copy(sp.swaps) : Int32[f for f in sp.swaps if f in ids]
     steps = _bind_steps(backend, prog, sp, st, p, swaps, all_state, c)
-    masks = _bind_masks(backend, prog, ip, st, p, swaps, all_state, c)
+    masks = _bind_masks(backend, prog, ip, st, p, swaps, all_state, c, ids)
     clamps = _clamps(prog, st, ids)
+    fused = masks === nothing || Exec.ishost(backend) ? Int[] : _fused_rules(prog, ip, st, ids)
+    stepclamps = Tuple(cl for (j, cl) in enumerate(clamps) if !(j in fused))
     copies = Tuple((st.bufs[f][1], st.bufs[f][2]) for f in swaps)
     stab = all_state ? g.spec.stability : restrict_bound(g.spec.stability, collect(String, fields))
-    return GroupRuntime(st, alg, ip, sp, steps, masks, clamps, swaps, copies, ends_in, all_state, collect(String, fields), Int(n),
+    return GroupRuntime(st, alg, ip, sp, steps, masks, clamps, stepclamps, swaps, copies, ends_in, all_state, collect(String, fields), Int(n),
         Float64(dt), stab, p, c, prog, backend, alg_cache(alg, g, st), SciMLBase.ReturnCode.Success, nothing, host,
-        clamp_at_start, fixed_time)
+        fixed_time)
 end
 
 """
@@ -275,7 +282,8 @@ parts for an atomic update of several groups: `rebind_launches(rt, p)` binds (an
 rebind!(rt::GroupRuntime, p) = install_launches!(rt, rebind_launches(rt, p))
 rebind_launches(rt::GroupRuntime, p) =
     (_bind_steps(rt.backend, rt.program, rt.step, rt.store, p, rt.swaps, rt.all_state, rt.c),
-     _bind_masks(rt.backend, rt.program, rt.init, rt.store, p, rt.swaps, rt.all_state, rt.c))
+     _bind_masks(rt.backend, rt.program, rt.init, rt.store, p, rt.swaps, rt.all_state, rt.c,
+         Set(fieldid(rt.program, k) for k in rt.keys)))
 function install_launches!(rt::GroupRuntime, (steps, masks))
     rt.steps, rt.masks = steps, masks
     reset!(rt)
@@ -311,7 +319,9 @@ function advance!(rt::GroupRuntime, clock::Tuple{Real, Integer}, n::Integer = rt
     st = rt.store
     if rt.masks !== nothing
         rt.masks[_parity(rt)]((t, h))
-        rt.clamp_at_start && clamp_now!(rt)     # the values the masks set now (the bound parameters)
+        # the values the masks set now (the bound parameters): on a device the mask launches
+        # clamp the sites they mark themselves (one launch, `_mask_fuse`), so none is left here
+        _clamp!(rt.stepclamps, rt.store, rt.p)
     end
     for j in 0:(n - 1)
         rt.steps[_parity(rt)]((rt.fixed_time ? t : t + j * h, h))
@@ -360,7 +370,12 @@ function _clamps(prog::Program, st::FieldStore, ids = Set(eachindex(prog.fields)
     return Tuple((Tuple(st.bufs[r.field]), Int(r.field), array(st, prog.masks[r.mask].field, :cur), r.value)
                  for r in prog.rules if r isa NodeValueRule && r.field in ids)
 end
-_clamp!(clamps::Tuple, st::FieldStore, p) = (foreach(c -> _clamp_one!(c, st, p), clamps); nothing)
+function _clamp!(clamps::Tuple, st::FieldStore, p)
+    for c in clamps                             # (a homogeneous tuple: one masked field type)
+        _clamp_one!(c, st, p)
+    end
+    return nothing
+end
 function _clamp_one!((bufs, id, m, c), st::FieldStore, p)
     u = length(bufs) == 1 ? bufs[1] : bufs[st.cur[id]]
     v = convert(eltype(u), c.param == 0 ? c.value : c.value * p[c.param])
@@ -375,12 +390,123 @@ function _clamp_host!(u, m, v)                        # host: a loop, no allocat
     end
     return nothing
 end
-function _clamp_device!(u, m, v)                      # a device: one broadcast per field
-    if length(u) == length(m)
-        u .= ifelse.(m .!= 0, v, u)
-    else                                        # components: the mask holds for each one
-        U = reshape(u, length(m), :)
-        U .= ifelse.(m .!= 0, v, U)
+# The clamp fused into the mask launch on a device (F2 design §2.6, the fallback of the F2-08b
+# gate): a separate clamp kernel was one more launch per step, about 4 % of a warm Merks2006
+# MCS at 100² on ROCm (paired A/B). A mask launch that writes the mask of a masked field gets
+# the field's current buffer and the mask as an extra lane of its arrays, and its body, after
+# it has stored the masks of a site, stores the masked value at that site where the mask
+# holds (`_MaskClamp`): the same values as the separate clamp (the mask kernels read neither
+# field, and each work item clamps only its own site), with no launch and no IR change.
+struct _MaskClamp{F, V}
+    body::F
+    vals::V                     # the masked value of each fused clamp, in its field's element type
+end
+function (w::_MaskClamp)(x, S, P, G)
+    w.body(x, S, P, G)
+    i = _site(x, G.dims[1])
+    i == 0 || _clamp_site!(last(S), w.vals, i)
+    return nothing
+end
+# the site of a work item: a linear item is its site (the linear wrapper guards `i ≤ n`); a
+# Cartesian item `x` (1-based) is its site in column-major order, 0 past an axis (padding)
+_site(x::Integer, dims) = Int(x)
+function _site(x::NTuple{N, Int}, dims) where {N}
+    i, s = 0, 1
+    for d in 1:N
+        x[d] > dims[d] && return 0
+        i += (x[d] - 1) * s
+        s *= Int(dims[d])
     end
+    return i + 1
+end
+# the fused clamps at site `i` (one masked value per clamp; each component of a field)
+function _clamp_site!(lane, vals, i)
+    for j in 1:length(lane)
+        u, m = lane[j]
+        n = length(m)
+        @inbounds if m[i] != 0                  # i ≤ n = length(m) (the launch covers the sites)
+            for q in 0:(div(length(u), n) - 1)
+                u[q * n + i] = vals[j]          # q * n + i ≤ length(u)
+            end
+        end
+    end
+    return nothing
+end
+# The masked-field rules of the group's fields `ids` (the order of `_clamps`), with the mask
+# launch of plan `ip` that writes each one's mask (0: none)
+function _mask_rules(prog::Program, ip::StepPlan, ids)
+    rs = [r for r in prog.rules if r isa NodeValueRule && r.field in ids]
+    return [(r, something(findfirst(l -> prog.masks[r.mask].field in writes(l.kernel.kernel), ip.launches), 0)) for r in rs]
+end
+# the rules a device fuses: those whose mask a launch of the plan writes over the site space,
+# when every clamp of that launch has the same array and value types (a homogeneous lane)
+function _fused_rules(prog::Program, ip::StepPlan, st::FieldStore, ids)
+    rl = _mask_rules(prog, ip, ids)
+    out = Int[]
+    for (li, l) in enumerate(ip.launches)
+        js = [j for (j, (_, w)) in enumerate(rl) if w == li]
+        isempty(js) && continue
+        m1 = array(st, prog.masks[rl[js[1]][1].mask].field, :cur)
+        prod(leveldims(prog, l.kernel.space.level)) == length(m1) || continue
+        typ(j) = (typeof(st.bufs[rl[j][1].field][1]), typeof(array(st, prog.masks[rl[j][1].mask].field, :cur)))
+        all(j -> typ(j) == typ(js[1]), js) && append!(out, js)
+    end
+    return out
+end
+# `fuse(spec, cur)` of `BoundStep` for the mask plan: the lane and the body wrapper of a launch
+# that writes fused masks, at the slots `cur` and the masked values at parameters `p`
+function _mask_fuse(prog::Program, st::FieldStore, p, ids)
+    return function (l, cur)
+        rs = [r for r in prog.rules if r isa NodeValueRule && r.field in ids &&
+                                       prog.masks[r.mask].field in writes(l.kernel.kernel)]
+        isempty(rs) && return nothing
+        m1 = array(st, prog.masks[rs[1].mask].field, :cur)
+        prod(leveldims(prog, l.kernel.space.level)) == length(m1) || return nothing
+        cell(r) = (b = st.bufs[r.field]; (length(b) == 1 ? b[1] : b[cur[r.field]], array(st, prog.masks[r.mask].field, :cur)))
+        lane = Tuple(cell(r) for r in rs)
+        all(c -> typeof(c) == typeof(lane[1]), lane) || return nothing
+        vals = Tuple(convert(eltype(c[1]), r.value.param == 0 ? r.value.value : r.value.value * p[r.value.param])
+                     for (c, r) in zip(lane, rs))
+        return (lane, f -> _MaskClamp(f, vals))
+    end
+end
+
+# a device: one kernel per field (components: the mask holds for each one), compiled with the
+# group's launches (`compile!` of the runtime: a front end that compiles on a host task, as
+# front end A on a device, compiles it there, not at the first step)
+function _clamp_body!(i, u, m, v, n)
+    @inbounds if m[(i - 1) % n + 1] != 0            # i ≤ length(u), and (i - 1) % n + 1 ≤ n = length(m)
+        u[i] = v
+    end
+    return nothing
+end
+function _clamp_device!(u, m, v)
+    length(u) % length(m) == 0 || throw(DimensionMismatch("a masked field has $(length(u)) values for $(length(m)) mask sites"))
+    Exec.launch!(KA.get_backend(u), _clamp_body!, length(u), (u, m, v, length(m)))
+    return nothing
+end
+
+"""
+    compile!(backend, rt::GroupRuntime)
+
+Compile every device kernel a step of `rt` launches before its first step: the step launches,
+the mask launches, the clamp of each masked field and the slot-1 copies (`Exec.compile!`:
+compile-only launches, which write nothing). Nothing on the host executor.
+"""
+function compile!(backend, rt::GroupRuntime)
+    Exec.ishost(backend) && return nothing
+    # one parallel set (a host task per kernel, `Exec.compile_all!`): the launches, then the
+    # clamps and the copies as compile jobs
+    jobs = Any[x.launch for x in rt.steps[1].launches]
+    rt.masks === nothing || append!(jobs, Any[x.launch for x in rt.masks[1].launches])
+    for (bufs, _, m, c) in rt.stepclamps
+        u = bufs[1]
+        v = convert(eltype(u), c.param == 0 ? c.value : c.value * rt.p[c.param])
+        push!(jobs, () -> Exec.compile!(backend, _clamp_body!, (u, m, v, length(m))))
+    end
+    for (d, s) in rt.copies
+        push!(jobs, () -> Exec.compile!(backend, _copy_body!, (d, s)))
+    end
+    Exec.compile_all!(backend, jobs)
     return nothing
 end

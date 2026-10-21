@@ -655,3 +655,15 @@ gd_warm(integ) = (step!(integ); step!(integ); @allocated step!(integ))
     integ = init(prob, SequentialCPM(); save_start = false, save_end = false)
     @test gd_warm(integ) == 0
 end
+
+# F2-08b: Merks2006 has a masked field (its `kind == border` frame): the clamp at the step start
+# runs every MCS, and a warm MCS at 500² still allocates nothing on the CPU (a `foreach` closure
+# over the clamps allocated 176 B per MCS on front end A's runtime)
+@testset "F2-08b: the Merks2006 500² warm MCS (masked, clamped) allocates nothing (CPU)" begin
+    σ = zeros(Int32, 500, 500); σ[1, :] .= 1; σ[end, :] .= 1; σ[:, 1] .= 1; σ[:, end] .= 1
+    σ[200:215, 200:215] .= 2; σ[300:312, 280:300] .= 3
+    prob = PottsProblem(Merks2006(; name = :m, lattice = (500, 500)), [ownership => σ, kind => [:border, :endothelial, :endothelial]],
+        (0, 100); field_solver = ExplicitEuler(substeps = 15))
+    integ = init(prob, SequentialCPM(); save_start = false, save_end = false)
+    @test gd_warm(integ) == 0
+end

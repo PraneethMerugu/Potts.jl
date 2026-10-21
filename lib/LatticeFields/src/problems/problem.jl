@@ -463,7 +463,7 @@ function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; saveat = (),
                     backend = prob.backend, options = prob.options, V = valtype(E))
                 for ((a, ks), m) in zip(groups, ms))
     foreach(clamp_now!, rts)                        # the saved t0 state holds the mask values
-    foreach(rt -> compile!(prob.backend, rt.steps[1]), rts)
+    foreach(rt -> compile!(prob.backend, rt), rts)
     integ = FieldIntegrator(prob, alg, st, rts, copy(prob.p), pgood,
         Pair{String, Vector{Float64}}[k => copy(v) for (k, v) in prob.tables], t0, 0, dt,
         ms[1], nsteps, save, Float64[], Vector{_ueltype(st, E)}[],

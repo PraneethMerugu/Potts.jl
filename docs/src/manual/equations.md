@@ -232,7 +232,8 @@ u = solve(prob, SequentialCPM()).u[end]
   `reinit!`) is clamped too; a state restored from a checkpoint is not (it continues the run
   exactly), nor does `Potts.anneal` clamp. The condition is a site expression (`kind`,
   `owner`, site and field variables), evaluated once per MCS before the substeps, so a mask
-  on a kind moves with its cells. It cannot read the field it clamps, or a field stepped
+  on a kind moves with its cells. The masked sites then take their value before the first
+  substep, so a site a cell has just reached holds `v` when its neighbors read it. It cannot read the field it clamps, or a field stepped
   after it (in the order of `@equations`): that is an error naming it. The masks of a field
   group cost one kernel launch per MCS.
 - **Values** are numbers, parameters, or a number times a parameter; `remake(prob; p = [:S => 2.0])`

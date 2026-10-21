@@ -1330,3 +1330,41 @@ end
         solvers = [:u => ExplicitEuler(substeps = 3)])
     @test calls() == m0 + 2                                       # a split: one per group (the whole group is cached)
 end
+
+# F2-08b: the clamp at the step start in front end A (D7; as front end B since F1). The masks
+# run after the sweep, then the masked sites take their value, then the substeps: a site the
+# cell has just reached holds `v` when the first substep's neighbors read it (base: the old
+# value until the substep's store wrote `v`)
+@potts_model FdMovingMask begin
+    @kinds medium A
+    @parameters v = 1.0
+    @variables c(field) = 0.0
+    @lattice Lattice((12, 12); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ 0.2 * Δ(c)
+    @boundary c begin
+        sites(kind == A) => Dirichlet(v)
+    end
+    @sweep Metropolis(; temperature = 20.0)
+end
+@testset "F2-08b: a moving mask is clamped at the step start (front end A)" begin
+    σ = zeros(Int32, 12, 12); σ[5:7, 5:7] .= 1
+    prob = PottsProblem(FdMovingMask(; name = :m), [ownership => σ, kind => [:A]], (0, 40); seed = 5,
+        field_solver = ExplicitEuler(substeps = 1))
+    integ = init(prob, SequentialCPM())
+    c0, m, moved = nothing, nothing, false
+    for _ in 1:30                                   # until the cell reaches a site that does not hold `v`
+        c0 = copy(Array(current_state(integ).site.c))
+        step!(integ)
+        m = Array(current_state(integ).σ) .!= 0
+        moved = any(m .& (c0 .!= 1.0))
+        moved && break
+    end
+    @test moved
+    c1 = Array(current_state(integ).site.c)
+    clamped = copy(c0); clamped[m] .= 1.0
+    hand = fd_ftcs(clamped, 0.2, (1, 1), 1.0, 1; periodic = false); hand[m] .= 1.0
+    @test maximum(abs.(c1 .- hand)) < 1e-14
+    late = fd_ftcs(c0, 0.2, (1, 1), 1.0, 1; periodic = false); late[m] .= 1.0     # control: not clamped first
+    @test maximum(abs.(c1 .- late)) > 1e-3
+end
