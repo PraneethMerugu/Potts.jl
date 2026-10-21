@@ -17,6 +17,16 @@
 
 # the spatial independent variables, one per lattice axis
 const _FIELD_X = Tuple(Symbolics.unwrap(only(ModelingToolkitBase.@parameters $n)) for n in (:x, :y, :z))
+# the names a model body binds for its field equations (F2 design §2.11): the lattice
+# coordinates `x`, `y`, `z` (the PDESystem's spatial variables: `D(c) ~ x`, a raw flux
+# `Differential(x)(K * Differential(x)(c))`), LatticePDE's `masked` and operators (`DivKGrad`,
+# `Advect`, `Upwind1`; `Δ` is in `DSL`), and MTK's `Differential` and `Shift` (a map
+# `Shift(t, 1)(m) ~ rhs`), so a model needs no import for them. A model that declares a
+# quantity of one of these names keeps its own.
+const FIELD_NAMES = (; x = Symbolics.wrap(_FIELD_X[1]), y = Symbolics.wrap(_FIELD_X[2]), z = Symbolics.wrap(_FIELD_X[3]),
+    masked = LatticePDE.masked, DivKGrad = LatticePDE.DivKGrad, Advect = LatticePDE.Advect, Upwind1 = LatticePDE.Upwind1,
+    Differential = Differential, Shift = ModelingToolkitBase.Shift)
+_coordinate(u) = any(v -> v === u || isequal(v, u), _FIELD_X)
 
 # a callable dependent variable `name(..)` of element type `E`, applied to the ivs
 function _field_var(name::Symbol, ::Type{E}, ivs; input::Bool = false, entity = nothing, storage = nothing,
@@ -35,11 +45,11 @@ end
 _field_storage(sys, name) = (x = only(x for x in _p(sys, :variables) if info(x) !== nothing && info(x).name === name);
                              get(info(x).options, :lattice_storage, nothing))
 
-# operations the lattice compiler lowers (arithmetic, comparisons, `ifelse`, its whitelist of
-# calls) and LatticePDE's own vocabulary; matched with `===` (D-107)
-const _FIELD_OPS = (+, -, *, /, ^, min, max, abs, sqrt, exp, log, ifelse, ==, !=, <, <=, >, >=, !, &, |,
-    sin, cos, tan, tanh, sinh, cosh, cbrt, exp2, log2, log10, expm1, log1p, atan, floor, ceil, round)
-_field_op(f) = any(g -> g === f, _FIELD_OPS)
+# the calls the lattice compiler lowers: LatticePDE's one allowlist (F2 design §2.11), so a
+# call lowers in `@equations` exactly when it lowers in a PDESystem
+_field_op(f) = LatticePDE.lowers_call(f)
+# LatticePDE's spatial operators, passed through to the PDESystem (F2 design §2.11)
+_spatial_op(f) = f === Δ || f isa LatticePDE.DivKGrad || f isa LatticePDE.Advect || f isa Differential
 
 """
 The CPM inputs of a model's fields: `(name, expr, eltype)` per filled input, in the canonical
@@ -95,10 +105,19 @@ function _field_term(x, cv)
             return _filled_input!(cv, u, :kind__in, Int32)
         end
     end
+    _coordinate(u) && return u                  # a lattice coordinate `x`, `y`, `z`
     iscall(u) || return _filled_or_refuse(cv, u)
     f, a = operation(u), arguments(u)
-    if f === Δ
-        return _unwrap(Δ(Symbolics.wrap(_field_term(a[1], cv))))
+    if _spatial_op(f)
+        # the operand of a spatial operator is a field (its last argument; `DivKGrad(K, c)`,
+        # `Advect(u, c)`); the coefficient and the velocity are any lowered term
+        _check_operand(u, f, a[end], cv)
+        f isa Differential && _check_axis(u, f, cv)
+        # a velocity written as a vector (`Advect(Upwind1())([ux, uy], c)`, a vector quantity)
+        # converts per component
+        conv(y) = (v = LatticePDE.velocity_terms(_unwrap(y));
+                   v === nothing ? Symbolics.wrap(_field_term(y, cv)) : [Symbolics.wrap(_field_term(z, cv)) for z in v])
+        return _unwrap(f(map(conv, a)...))
     elseif f === ismember
         return _unwrap(ismember(Symbolics.wrap(_field_term(a[1], cv)), SymbolicUtils.unwrap_const(a[2])))
     elseif f === at && info(a[1]) !== nothing && info(a[1]).role === :kindtable && length(a) == 2
@@ -112,18 +131,47 @@ function _field_term(x, cv)
         f === ifelse && !_reads_fieldvar(u) && _has_cpm_fill(u) && return _filled_or_refuse(cv, u)
         return f === ifelse ? _unwrap(ifelse(map(y -> Symbolics.wrap(_field_term(y, cv)), a)...)) :
                _unwrap(f(map(y -> Symbolics.wrap(_field_term(y, cv)), a)...))
-    elseif f isa LatticePDE.DivKGrad || f isa LatticePDE.Advect || f isa Differential ||
-           f isa ModelingToolkitBase.Shift
-        # LatticePDE vocabulary that `@equations` does not lower yet (F1, PO02): named as such,
-        # not diagnosed as a CPM read
-        nopkg(x) = replace(string(x), "LatticePDE." => "")         # as the model writes it
-        throw(ArgumentError("the term `$(nopkg(_builtin_text(string(u))))` of a field equation uses `$(nopkg(f))`, an operator " *
-                            "that `@equations` does not lower in this version (field equations take `Δ`, " *
-                            "`ismember`, `ifelse`, arithmetic and kind tables; the other LatticePDE operators " *
-                            "are planned); write it with `Δ`, or write the fields as a `PDESystem` and " *
-                            "discretize it with LatticePDE"))
+    elseif f isa ModelingToolkitBase.Shift
+        # a map's own left side (`Shift(t, 1)(m) ~ rhs`); on a right side it has no meaning
+        throw(ArgumentError("the term `$(_nopkg(_builtin_text(string(u))))` of a field equation reads `$(_nopkg(f))`: a " *
+                            "`Shift` is the left side of a map, `Shift(t, 1)(m) ~ rhs` (the right side reads `m`, " *
+                            "its value before the step)"))
     end
     return _filled_or_refuse(cv, u)
+end
+_nopkg(x) = LatticePDE.as_written(replace(string(x), "LatticePDE." => ""))   # as the model writes it
+
+# The operand of a spatial operator (`Δ(c)`, `DivKGrad(K, c)`, `Advect(u, c)`, the inner end of a
+# raw flux `Differential(x)(K * Differential(x)(c))`) is a field or site variable: an operator of
+# a value the CPM writes once per MCS (a CPM read, `volume`) is refused, naming the operator
+function _check_operand(u, f, y, cv)
+    v = _unwrap(y)
+    f isa Differential && iscall(v) && _has_operator(v, Differential) && return nothing   # the outer end of a flux
+    _has_cpm_fill(v) && !_reads_fieldvar(v) || return nothing
+    op = f isa Differential ? "Differential($(f.x))" : _nopkg(f)
+    throw(ArgumentError("the term `$(_nopkg(_builtin_text(string(u))))` of a field equation applies `$op` to " *
+                        "`$(_builtin_text(string(v)))`, a CPM read (a value the CPM writes once per MCS, not a field); " *
+                        "a spatial operator applies to a field or site variable: hold the value in one " *
+                        "(`@variables v(site)`, `@after_mcs v ~ $(_builtin_text(string(v)))`) and apply `$op` to it"))
+end
+
+# A raw derivative `Differential(x)` differentiates along a lattice axis: `x`, `y` or `z` of
+# the model body (the PDESystem's spatial variables). A model that declares its own `x` keeps
+# it, so `Differential(x)` there names that quantity, which is refused naming the clash
+function _check_axis(u, f, cv)
+    w = _unwrap(f.x)
+    i = info(w)                                 # a quantity of the model (its own `x`) prints as `x` too
+    i === nothing && any(v -> isequal(v, w), cv.ivs[2:end]) && return nothing
+    name = i === nothing ? string(w) : string(i.name)
+    clash = i !== nothing                       # the model's own quantity, else not an axis (`z` in 2D)
+    axes = join(("`$(string(v))`" for v in cv.ivs[2:end]), ", ")
+    throw(ArgumentError(clash ?
+        "the term `$(_nopkg(_builtin_text(string(u))))` of a field equation differentiates along `$name`, but the model " *
+        "declares its own `$name` (a $(i === nothing ? "quantity" : i.role === :param ? "parameter" : string(i.role, " variable"))), " *
+        "which hides the lattice coordinate " *
+        "`$name` inside the model; rename the model's `$name` (the lattice axes are $axes)" :
+        "the term `$(_nopkg(_builtin_text(string(u))))` of a field equation differentiates along `$name`, which is not a " *
+        "lattice axis; `Differential` takes an axis of the lattice: $axes"))
 end
 
 # whether `u` reads a field or site variable
@@ -143,9 +191,12 @@ function _has_cpm_fill(x)
     SymbolicUtils.isconst(u) && return false
     i = info(u)
     i === nothing || return !(i.role in (:field, :site, :param, :kindtable) || (i.role === :builtin && i.name in (:mcs, :time, :kind)))
+    _coordinate(u) && return false
     iscall(u) || return true
     f, a = operation(u), arguments(u)
-    (f === Δ || f === ismember) && return _has_cpm_fill(a[1])
+    _spatial_op(f) && return any(_has_cpm_fill, a)
+    f === SymbolicUtils.array_literal && return any(_has_cpm_fill, something(LatticePDE.velocity_terms(u), a))
+    f === ismember && return _has_cpm_fill(a[1])
     f === at && info(a[1]) !== nothing && info(a[1]).role === :kindtable && length(a) == 2 && return _has_cpm_fill(a[2])
     return _field_op(f) ? any(_has_cpm_fill, a) : true
 end
@@ -217,11 +268,29 @@ end
 _field_conv(ivs, states, T, known) = (; ivs, states, direct = Dict{Symbol, Any}(),
     filled = Tuple{Symbol, Any, Type}[known...], inputs = Dict{Symbol, Any}(), params = Set{Any}(), T)
 
-# the field and site-ODE equations of a model, `(x, rate)`
-_field_equations(sys::PottsSystem) = [(arguments(_unwrap(eq.lhs))[1], eq.rhs) for eq in _p(sys, :equations)
-                                      if iscall(_unwrap(eq.lhs)) && operation(_unwrap(eq.lhs)) isa Differential &&
-                                         info(arguments(_unwrap(eq.lhs))[1]) !== nothing &&
-                                         info(arguments(_unwrap(eq.lhs))[1]).role in (:field, :site)]
+# The field equations of a model (F2 design §2.11): `(x, kind, op)` for a rate `D(c) ~ rhs`
+# (`:rate`) or a map `Shift(t, 1)(m) ~ rhs` (`:map`, one application per MCS) of a field or
+# site variable, or an aux definition `K ~ rhs` of a field variable (`:aux`, its value at every
+# substep from the others); `op` is the left side's operator (`nothing` for aux); else `nothing`
+function _field_lhs(eq)
+    l = _unwrap(eq.lhs)
+    if iscall(l) && (operation(l) isa Differential || operation(l) isa ModelingToolkitBase.Shift)
+        x = arguments(l)[1]
+        i = info(x)
+        (i !== nothing && i.role in (:field, :site)) || return nothing
+        return (x, operation(l) isa Differential ? :rate : :map, operation(l))
+    end
+    l isa SymbolicUtils.BasicSymbolic || return nothing
+    i = info(l)                                 # a field variable `K(t)` itself
+    return i !== nothing && i.role === :field ? (l, :aux, nothing) : nothing
+end
+# the stepped fields of a model, `(x, rhs, op)`: its rates and maps (`op` the `Differential` or
+# the `Shift` of the left side)
+_field_equations(sys::PottsSystem) = [(f[1], eq.rhs, f[3]) for eq in _p(sys, :equations)
+                                      for f in (_field_lhs(eq),) if f !== nothing && f[2] !== :aux]
+# the aux fields of a model, `(x, rhs)`: each group that steps fields computes them
+_field_aux(sys::PottsSystem) = [(f[1], eq.rhs) for eq in _p(sys, :equations) for f in (_field_lhs(eq),)
+                                if f !== nothing && f[2] === :aux]
 
 """
     _field_system(sys, names; T = Float64) -> (pdesys, cv)
@@ -243,13 +312,20 @@ function _field_system(sys::PottsSystem, names = Symbol[info(x).name for (x, _) 
     tt = _unwrap(t)
     xs = collect(_FIELD_X[1:N])
     ivs = Any[tt; xs]
-    states = Dict{Symbol, Any}(n => _field_var(n, Real, ivs; storage = _field_storage(sys, n)) for n in names)
+    aux = _field_aux(sys)
+    auxnames = Symbol[info(x).name for (x, _) in aux]
+    states = Dict{Symbol, Any}(n => _field_var(n, Real, ivs; storage = _field_storage(sys, n)) for n in [names; auxnames])
     cv = _field_conv(ivs, states, T, known)
     eqs = Equation[]
-    for (x, rate) in _field_equations(sys)
+    for (x, rate, op) in _field_equations(sys)
         n = info(x).name
         n in names || continue
-        push!(eqs, Differential(tt)(Symbolics.wrap(states[n])) ~ Symbolics.wrap(_field_term(rate, cv)))
+        lhs = op isa ModelingToolkitBase.Shift ? op(Symbolics.wrap(states[n])) : Differential(tt)(Symbolics.wrap(states[n]))
+        push!(eqs, lhs ~ Symbolics.wrap(_field_term(rate, cv)))
+    end
+    # every group computes the aux fields from the values it reads (F2 design §2.11)
+    for (x, rhs) in aux
+        push!(eqs, Symbolics.wrap(states[info(x).name]) ~ Symbolics.wrap(_field_term(rhs, cv)))
     end
     core = core_lattice(lat)
     ext = ntuple(d -> lat.dims[d] * Float64(h[d]), N)
@@ -272,7 +348,7 @@ function _field_system(sys::PottsSystem, names = Symbol[info(x).name for (x, _) 
         end
     end
     _has_domain(lat) && _filled_input!(cv, _DOMAIN_FILL, :domain__in, Bool)
-    dvs = Any[[states[n] for n in names]; [cv.direct[k] for k in sort!(collect(keys(cv.direct)))];
+    dvs = Any[[states[n] for n in [names; auxnames]]; [cv.direct[k] for k in sort!(collect(keys(cv.direct)))];
               [cv.inputs[e[1]] for e in cv.filled if haskey(cv.inputs, e[1])]]
     ps = sort!(collect(cv.params); by = string)
     _refuse_input_words(cv, names, ps)
@@ -335,6 +411,14 @@ struct _FieldGroup
     options::Any
 end
 
+# The substep rule of a map group (F2 design §2.11): one application per field window (the
+# MCS), whatever the parameters; a map has no stability bound
+struct _MapSteps end
+(::_MapSteps)(praw) = 1
+# the least count and the bounded flag of a group's rule, as the fingerprint records them
+_least(s) = s isa _MapSteps ? 1 : s.least
+_bounded(s) = s isa _MapSteps || (isempty(s.bound.unbounded) && isempty(s.bound.expanded))
+
 # the explicit Euler update of a substep, clipped below at `lower`, fused symbolically (the
 # oracle of the update pass's byte-identity gate, test/fields_identity.jl)
 struct _EulerUpdate
@@ -365,6 +449,9 @@ the group, read from their arrays (`_field_system`).
 """
 function _lower_field_group(sys::PottsSystem, names::Vector{Symbol}, T::Type; known, bound::Bool = true)
     pdesys, cv = _field_system(sys, names; T, known)
+    # rates and maps in one model are refused on both front ends (F1's message, with A's route)
+    LatticePDE.check_one_kind(pdesys; route = "write each map as a site update that runs once per MCS (a site " *
+                                               "variable `m(site)` with `@after_mcs m ~ rhs`)")
     Threads.atomic_add!(_LOWER_GROUP_CALLS, 1)
     spec = LatticePDE.lower_group(pdesys, _field_disc(sys, T); values = false, bound)
     # the model's parameter of each slot and table (the spec names them as the PDESystem prints
@@ -588,7 +675,7 @@ function _user_text(term::AbstractString, cv)
         out = replace(out, Regex(string(name) * raw"\(t(, [xyz])*\)") => user)
     end
     out = replace(out, r"Potts\._intdiv\(([^,()]+), ([^()]+)\)" => s"(\1 ÷ \2)")   # the model's `÷`
-    out = replace(out, "LatticePDE." => "")                              # `Δ(c)`, `at(δ, …)` as written
+    out = LatticePDE.as_written(replace(out, "LatticePDE." => ""))    # `Δ(c)`, `at(δ, …)`, `[ux, uy]` as written
     out = replace(out, r"\bstep_index\(t\)" => "mcs", r"\bclock__tick\b" => "mcs")   # the clock's step index
     out = replace(out, r"(\w+)\(t(, [xyz])*\)" => s"\1")
     # a kind table read `at(δ, 1 + kind)` as the model writes it, `δ[kind]`; the time `t` is `time`
@@ -657,6 +744,13 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
                        end for f in prog.fields)
         cv = (; filled = lg.filled)
         stab = gspec.stability
+        if gspec.kind === :map
+            # a map steps once per window: no substep count, no bound
+            fp = LatticeFields.Compile.fingerprint_text(fused; T)
+            push!(groups, _FieldGroup(names, group, solver, prog, mplan, splan, arrays, lg.tables, lg.params, _MapSteps(),
+                fp, opts))
+            continue
+        end
         least = something(solver.substeps, 1)
         if !isempty(stab.unbounded) && solver.substeps === nothing
             throw(ArgumentError("the substep count of the field$(length(names) == 1 ? "" : "s") " *
@@ -705,7 +799,7 @@ function _field_phases(c::CompiledPottsSystem, T, spec::SolverSpec)
         # the fingerprint hashes the semantic program of each group with its bindings (D-016)
         # (the last entry: no term outside the linearity classes, `ifelse` arms not expanded)
         log === nothing || push!(log, Expr(:field_program, g.fingerprint, string(g.arrays), string(g.params),
-            string(g.tables), _canonical_value(g.substeps.least), string(isempty(g.substeps.bound.unbounded) && isempty(g.substeps.bound.expanded))))
+            string(g.tables), _canonical_value(_least(g.substeps)), string(_bounded(g.substeps))))
         ph = CorePotts.FieldPhase{Symbol(:__fields, j)}(g.group, g.alg, g.arrays; g.tables, g.params,
             substeps = g.substeps, dt, period = Float64(_p(c.sys, :sweep).mcs_duration), g.options, T)
         push!(steps, ph)

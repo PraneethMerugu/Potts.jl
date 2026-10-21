@@ -39,7 +39,7 @@ end
 _shift(e::Env{N}, o) where {N} = Env(e.kb, e.fields, e.params, e.tables, e.spacing, e.t, e.xs, e.lo, e.h, e.map,
                                      ntuple(d -> e.offset[d] + o[d], N), CLAMP, e.leaf, e.hex, e.domain)
 _unit(::Env{N}, d, s) where {N} = ntuple(i -> i == d ? s : 0, N)
-_lerr(x, msg) = throw(ArgumentError("cannot lower `$x`: $msg"))
+_lerr(x, msg) = throw(ArgumentError(as_written("cannot lower `$x`: $msg")))   # the term as written (review R3)
 _type(e::Env, i) = e.kb.nodes[i].type
 
 # numeric operands: a Bool counts as 0/1 (I32, or REAL next to a float)
@@ -144,13 +144,25 @@ end
 
 _axis(e::Env, x) = (d = findfirst(v -> isequal(v, x), e.xs); d === nothing ? _lerr(x, "not a spatial variable") : d)
 
-"""First-order upwind `∇⋅(u c)`; a closed face carries no advective flux."""
+"""
+First-order upwind `∇⋅(u c)`; a closed face carries no advective flux. The velocity is an
+array field `u(t, x, y)` with one component per axis, or a vector of one term per axis
+(`[ux, uy]`: parameters, fields, any lowered term), each evaluated at the site and at its
+neighbor as an operator coefficient is.
+"""
 function _advect(e::Env{N}, uvel, c) where {N}
     v = unwrap(uvel)
-    _isfield(e, v) && length(e.fields[operation(v)][1]) == N ||
-        _lerr(uvel, "`Advect` takes the velocity array field `u(t, x, y)` with $N components")
-    vel(d, o) = _real(e, load!(e.kb, e.fields[operation(v)][1][d], e.fields[operation(v)][2];
-                               offset = o, policy = CLAMP))
+    comps = velocity_terms(v)
+    if comps === nothing
+        _isfield(e, v) && length(e.fields[operation(v)][1]) == N ||
+            _lerr(uvel, "`Advect` takes the velocity array field `u(t, x, y)` with $N components, or a vector of " *
+                        "$N terms (`[ux, uy]`)")
+    else
+        length(comps) == N || _lerr(uvel, "`Advect` takes a velocity of $N components (one per axis); got $(length(comps))")
+    end
+    vel(d, o) = comps === nothing ?
+                _real(e, load!(e.kb, e.fields[operation(v)][1][d], e.fields[operation(v)][2]; offset = o, policy = CLAMP)) :
+                _real(e, lower(comps[d], _shift(e, o)))
     u, comp = _fieldarg(e, c)
     cl(o) = load!(e.kb, e.fields[operation(u)][1][max(comp, 1)], e.fields[operation(u)][2];
                   offset = o, policy = RESOLVE)
@@ -171,9 +183,41 @@ function _advect(e::Env{N}, uvel, c) where {N}
     return _op(e, ADD, divs...)
 end
 
+"""
+    velocity_terms(v) -> Vector or nothing
+
+The terms of a velocity written as a vector, one per axis: a symbolic array literal
+(`Advect(Upwind1())([ux, uy], c)`) or a vector of numbers (`[0.3, 0.0]`, a constant); else
+`nothing` (an array field `u(t, x, y)`).
+"""
+function velocity_terms(v)
+    w = unwrap_const(unwrap(v))
+    w isa AbstractVector{<:Number} && return collect(w)          # a constant velocity
+    iscall(v) && operation(v) === SymbolicUtils.array_literal || return nothing
+    # (the literal's shape, a tuple, comes first)
+    return [y for y in arguments(v) if !(unwrap_const(y) isa Tuple)]
+end
+
 # matched with `===`, never through a hash (D-107: another build hashes functions differently)
 const _UNARY = ((sqrt, SQRT), (exp, EXP), (log, LOG), (abs, ABS))
 const _CMP = (((<), LT, false), ((<=), LE, false), ((>), LT, true), ((>=), LE, true), ((==), EQ, false))
+# the other calls `lower` takes by identity: arithmetic, `ifelse` and the logic of conditions
+const _OPS = (+, -, *, /, ^, min, max, ifelse, !=, !, &, |)
+
+"""
+    lowers_call(f) -> Bool
+
+Whether the lattice lowering takes a call of `f` inside a term: arithmetic (`+ - * / ^`,
+`min`, `max`), comparisons and logic (`== != < <= > >= ! & |`), `ifelse`, `sqrt`, `exp`,
+`log`, `abs` and the calls of the IR (`sin`, `cos`, `tan`, `tanh`, `sinh`, `cosh`, `cbrt`,
+`exp2`, `log2`, `log10`, `expm1`, `log1p`, `atan`, `floor`, `ceil`, `round`). It is the one
+allowlist of both front ends (F2 design §2.11): a front end that converts its own terms (Potts
+`@equations`) asks it, so a call lowers in one front end exactly when it lowers in the other.
+The operators (`Δ`, `DivKGrad`, `Advect`, `Differential`), the reads (`at`, `ismember`) and
+the field reads are terms of their own, not calls in this sense.
+"""
+lowers_call(f) = any(g -> g === f, _OPS) || any(r -> r[1] === f, _CMP) || any(r -> r[1] === f, _UNARY) ||
+                 (f isa Function && nameof(f) in CALLS)
 
 """
     lower(x, env) -> node id

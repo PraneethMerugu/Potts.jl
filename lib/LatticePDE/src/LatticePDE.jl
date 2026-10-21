@@ -42,7 +42,7 @@ using Symbolics: Symbolics, Differential, Equation, Num, VarDomainPairing, @regi
                  unwrap, substitute
 using SymbolicUtils: SymbolicUtils, arguments, iscall, operation, unwrap_const
 
-public euler_update, bound_parts, StabilityBound, lower_group, DeferredBound, resolve_bound
+public euler_update, bound_parts, StabilityBound, lower_group, DeferredBound, resolve_bound, lowers_call, check_one_kind, velocity_terms, as_written
 export Δ, DivKGrad, Advect, AdvectionScheme, Upwind1, at, at2, ismember, masked, step_index
 export LatticePlacement, LatticeStorage, LatticeLevel, LatticeSpacing, PottsEntity, LatticeInputName
 export get_lattice_placement, get_lattice_storage, get_lattice_level, get_lattice_spacing,

@@ -361,7 +361,8 @@ const GD_HARD = [
         (; field_solver = ExplicitEuler(substeps = 2), solvers = [:u => ExplicitEuler(substeps = 3)]), false),
     # F2 batch 2 (recorded at the batch-1 fixups): a sub-MCS `repeat(4, …)` field with n = 2,
     # the Merks2008 gate crossed between MCS boundaries, and the mask and domain lowerings (DivK
-    # does not lower in `@equations` (FdDivK is refused): its digest is front end B's, `GdB`)
+    # did not lower in `@equations` then (FdDivK was refused until F2-10): its digest is front
+    # end B's, `GdB`)
     ("FdChemoInter repeat(4)", () -> FdChemoInter(; name = :m), fd_chemo_op(),
         (; field_solver = ExplicitEuler(substeps = 2)), false),
     ("Merks2008 t_relax = 2.5", () -> Merks2008(; name = :m, lattice = (20, 20)), [gd_op2008(); :t_relax => 2.5],

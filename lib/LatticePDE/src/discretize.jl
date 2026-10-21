@@ -86,8 +86,32 @@ end
 const RUNTIME_T = 1
 
 _dverr(msg) = throw(ArgumentError(_clocktext(msg)))
-# the clock's slot as the user wrote it (`step_index(t)`), in every message of a lowered system
-_clocktext(s::AbstractString) = replace(s, r"\bclock__tick\b" => "step_index(t)")
+# the clock's slot as the user wrote it (`step_index(t)`), in every message of a lowered system;
+# a velocity vector as written (`[ux, 0.0]`, not its symbolic literal) and `Advect(Upwind1())`
+_clocktext(s::AbstractString) = as_written(replace(s, r"\bclock__tick\b" => "step_index(t)"))
+"""
+    as_written(text) -> String
+
+A lowered term's text as the user wrote it: a velocity vector `[ux, uy]` (not its symbolic
+array literal) and `Advect(Upwind1())` (not `LatticePDE.Advect{LatticePDE.Upwind1}(…)`). For a
+front end that prints lowered terms in its messages (Potts); LatticePDE's own messages print
+through it too.
+"""
+function as_written(s::AbstractString)
+    s = replace(s, r"(?:LatticePDE\.)?Advect\{[\w.]+\}\(" => "Advect(", r"LatticePDE\.Upwind1\(" => "Upwind1(")
+    key = "SymbolicUtils.array_literal("
+    while (r = findfirst(key, s)) !== nothing
+        j = last(r)                                   # its `(`
+        depth, k = 1, j
+        while depth > 0 && k < lastindex(s)
+            k = nextind(s, k)
+            s[k] == '(' ? (depth += 1) : s[k] == ')' && (depth -= 1)
+        end
+        inner = replace(s[nextind(s, j):prevind(s, k)], r"^\(\d+(, \d+)*,?\), " => "")   # the shape first
+        s = string(s[1:prevind(s, first(r))], "[", inner, "]", s[nextind(s, k):end])
+    end
+    return s
+end
 _name(op) = string(nameof(op))
 _opof(x) = (u = unwrap(x); iscall(u) ? (operation(u) === getindex ? _opof(arguments(u)[1]) : operation(u)) : u)
 function _lane(st, T)

@@ -1166,11 +1166,9 @@ end
     err = something(fd_err(() -> PottsProblem(FdKindNonlinear(; name = :f), fd_empty((8, 8)), (0, 1);
         field_solver = ExplicitEuler())), "")
     @test occursin("kind", err) && !occursin("kind__in", err) && occursin("substeps = n", err)
-    # PO02: a LatticePDE operator `@equations` does not lower is named as such (base: "reads a
-    # field or site variable inside a CPM read")
-    err = something(fd_err(() -> mtkcompile(FdDivK(; name = :f))), "")
-    @test occursin("does not lower", err) && !occursin("inside a CPM read", err)
-    @test occursin("DivKGrad", err) && !occursin("LatticePDE.DivKGrad", err)          # (round 0: the package prefix)
+    # PO02: LatticePDE's operators lower in `@equations` (F2-10; F1 named them "does not lower",
+    # base f9a77dd3: "reads a field or site variable inside a CPM read")
+    @test fd_err(() -> mtkcompile(FdDivK(; name = :f))) === nothing
 end
 
 struct FdFakeDevice <: Potts.KernelAbstractions.GPU end
@@ -1494,4 +1492,331 @@ end
         w += 0.125 * (-w + 0.5 * m)
     end
     @test all(≈(c; rtol = 1e-13), u.site.c) && all(≈(uu; rtol = 1e-13), u.site.u) && all(≈(w; rtol = 1e-13), u.site.w)
+end
+
+# F2-10 (F2 design §2.11): `@equations` takes LatticePDE's operators (`DivKGrad`, `Advect`, a raw
+# flux `Differential(x)(K * Differential(x)(c))`), aux fields `K ~ rhs`, maps `Shift(t, 1)(m) ~
+# rhs` and the lattice coordinates `x`, `y`, `z`, all bound in the model body (no import). Each
+# written in A and in B gives bitwise-equal arrays (σ frozen: no cell). Base (c2583722): every
+# operator refused ("does not lower", PO02), the aux and the map refused (PO42, "equations are
+# `D(x) ~ rhs`"), and `x` was a CPM read.
+@potts_model FpDivK begin
+    @kinds medium A
+    @parameters begin
+        K0 = 0.4
+        s = 0.01
+    end
+    @variables c(field) = 0.0
+    @lattice Lattice((8, 6); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ DivKGrad(:harmonic)(K0, c) + s * x
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FpRaw begin
+    @kinds medium A
+    @parameters begin
+        K0 = 0.4
+        s = 0.01
+    end
+    @variables c(field) = 0.0
+    @lattice Lattice((8, 6); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ Differential(x)(K0 * Differential(x)(c)) + Differential(y)(K0 * Differential(y)(c)) + s * x
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FpAdvect begin
+    @kinds medium A
+    @parameters begin
+        ux = 0.3
+        s = 0.01
+    end
+    @variables c(field) = 0.0
+    @lattice Lattice((8, 6); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ -Advect(Upwind1())([ux, 0.0], c) + s * y
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FpAux begin
+    @kinds medium A
+    @parameters begin
+        K0 = 0.4
+        s = 0.01
+    end
+    @variables begin
+        c(field) = 0.0
+        K(field) = 0.0
+    end
+    @lattice Lattice((8, 6); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations begin
+        K ~ K0 * (1 + 0.05 * x)
+        D(c) ~ DivKGrad(:arithmetic)(K, c) + s * x
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FpMap begin
+    @kinds medium A
+    @parameters g = 0.5
+    @variables m(field) = 0.0
+    @lattice Lattice((6, 4); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations Shift(t, 1)(m) ~ g * m + x
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FpMixed begin
+    @kinds medium A
+    @variables begin
+        c(field) = 0.0
+        m(field) = 0.0
+    end
+    @lattice Lattice((6, 4); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations begin
+        D(c) ~ -c
+        Shift(t, 1)(m) ~ m + 1
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FpZ begin
+    @kinds medium A
+    @variables c(field) = 0.0
+    @lattice Lattice((4, 4, 3); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ 0.1 * z
+    @sweep Metropolis(; temperature = 1.0)
+end
+# a model with its own `x` keeps it (`-x * c` reads the parameter); a `Differential(x)` there is
+# refused naming the clash
+@potts_model FpOwnX begin
+    @kinds medium A
+    @parameters x = 0.5
+    @variables c(field) = 1.0
+    @lattice Lattice((6, 4); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ -x * c
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FpOwnXFlux begin
+    @kinds medium A
+    @parameters x = 2.0
+    @variables c(field) = 1.0
+    @lattice Lattice((6, 4); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ Differential(x)(Differential(x)(c))
+    @sweep Metropolis(; temperature = 1.0)
+end
+# negative control: a spatial operator of a CPM read is refused, naming the operator
+@potts_model FpOpCPM begin
+    @kinds medium A
+    @variables c(field) = 0.0
+    @lattice Lattice((6, 4); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ Δ(volume[owner])
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "F2-10: `@equations` operators and aux fields equal B's, bitwise" begin
+    LP, MTKB = Potts.LatticePDE, Potts.ModelingToolkitBase
+    tt, DD = MTKB.t_nounits, MTKB.D_nounits
+    dims, k, n = (8, 6), 3, 4
+    c0 = rand(StableRNG(3), dims...)
+    Potts.ModelingToolkitBase.@parameters x y K0 = 0.4 s = 0.01 ux = 0.3
+    Potts.ModelingToolkitBase.@variables c(..) K(..)
+    ce, Ke = c(tt, x, y), K(tt, x, y)
+    dom = [tt ∈ LP.Interval(0.0, Float64(k)), x ∈ LP.Interval(0.0, 8.0), y ∈ LP.Interval(0.0, 6.0)]
+    Dx, Dy = MTKB.Differential(x), MTKB.Differential(y)
+    b(eqs, dvs, ps) = MTKB.PDESystem(eqs, [c(0, x, y) ~ 0.0], dom, [tt, x, y], dvs, ps; name = :b)
+    bsys = Dict(:FpDivK => b([DD(ce) ~ LP.DivKGrad(:harmonic)(K0, ce) + s * x], [ce], [K0, s]),
+        :FpRaw => b([DD(ce) ~ Dx(K0 * Dx(ce)) + Dy(K0 * Dy(ce)) + s * x], [ce], [K0, s]),
+        :FpAdvect => b([DD(ce) ~ -LP.Advect(LP.Upwind1())([ux, 0.0], ce) + s * y], [ce], [ux, s]),
+        :FpAux => b([Ke ~ K0 * (1 + 0.05 * x), DD(ce) ~ LP.DivKGrad(:arithmetic)(Ke, ce) + s * x], [ce, Ke], [K0, s]))
+    for (name, M) in ((:FpDivK, FpDivK), (:FpRaw, FpRaw), (:FpAdvect, FpAdvect), (:FpAux, FpAux))
+        prob = PottsProblem(M(; name = :f), [fd_empty(dims); :c => c0], (0, k); field_solver = ExplicitEuler(; substeps = n))
+        integ = init(prob, SequentialCPM())
+        foreach(_ -> step!(integ), 1:k)
+        a = Array(current_state(integ).site.c)
+        bp = LP.discretize(bsys[name], LP.LatticeDiscretization(LP.Grid(dims); T = Float64, problem = :owned))
+        bb = LP.solve(LP.remake(bp; u0 = vec(c0)), LP.ExplicitEuler(; dt = 1.0, substeps = n))[:c][end]
+        @test a == bb
+        @test maximum(abs, a .- c0) > 1e-3                 # the operator moved the field
+    end
+    # the raw flux form is the `DivKGrad` form (B's rule, now in A too)
+    rawdiv = [Array(solve(PottsProblem(M(; name = :f), [fd_empty(dims); :c => c0], (0, k);
+                  field_solver = ExplicitEuler(; substeps = n)), SequentialCPM()).u[end].site.c) for M in (FpRaw, FpDivK)]
+    @test rawdiv[1] == rawdiv[2]
+end
+
+# review M1–M3, S4 of F2 batch 4: a map under `repeat(4, …)` steps once per MCS; a constant
+# velocity vector; a global `x`/`y`/`z` hidden by the coordinate binding warns; `Differential(z)`
+# in 2D is not a clash
+@potts_model FpMapRepeat begin
+    @kinds medium A
+    @variables m(field) = 0.0
+    @lattice Lattice((6, 4); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations Shift(t, 1)(m) ~ 0.5 * m + 1
+    @sweep Metropolis(; temperature = 1.0)
+    @schedule repeat(4, sweep(fraction = 1 // 4), fields)
+end
+@potts_model FpAdvectConst begin
+    @kinds medium A
+    @parameters s = 0.01
+    @variables c(field) = 0.0
+    @lattice Lattice((8, 6); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ -Advect(Upwind1())([0.3, 0.0], c) + s * y
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FpAdvectShort begin
+    @kinds medium A
+    @variables c(field) = 0.0
+    @lattice Lattice((8, 6); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ -Advect(Upwind1())([0.3], c) + 0.1 * Δ(c)
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FpZ2D begin
+    @kinds medium A
+    @variables c(field) = 0.0
+    @lattice Lattice((6, 4); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ Differential(z)(Differential(z)(c))
+    @sweep Metropolis(; temperature = 1.0)
+end
+@testset "F2-10 review: map under repeat, constant velocity, global coordinates, z in 2D" begin
+    # M1: one map per MCS under `repeat(4, fields)` (base, before the fix: 1.875, 1.9921875, …:
+    # one map per pass)
+    integ = init(PottsProblem(FpMapRepeat(; name = :f), fd_empty((6, 4)), (0, 3)), SequentialCPM())
+    vals = [(step!(integ); Array(current_state(integ).site.m)[1]) for _ in 1:3]
+    @test vals == [1.0, 1.5, 1.75]
+    # M2: the old refusal's route followed verbatim, `[0.3, 0.0]`, equals the parameter form
+    # bitwise (base: "`Advect` takes … or a vector of 2 terms (`[ux, uy]`)")
+    c0 = rand(StableRNG(3), 8, 6)
+    run(M) = solve(PottsProblem(M(; name = :f), [fd_empty((8, 6)); :c => c0], (0, 2);
+        field_solver = ExplicitEuler(; substeps = 4)), SequentialCPM()).u[end].site.c
+    @test run(FpAdvectConst) == run(FpAdvect)
+    # M3: a module global `y` read in a body warns (base: the coordinate replaced it silently);
+    # a declared `x` does not
+    m = Module(:FpGlobals)
+    Core.eval(m, :(using Potts; const y = 3.0; const x = 1.0))
+    @test_logs (:warn, r"`y` in the model body is the lattice coordinate") match_mode = :any Core.eval(m, quote
+        @potts_model GlobY begin
+            @kinds medium A
+            @variables c(field) = 0.0
+            @lattice Lattice((4, 4); boundary = Closed())
+            @energy cells(A) => (volume - 9.0)^2
+            @equations D(c) ~ y
+            @sweep Metropolis(; temperature = 1.0)
+        end
+    end)
+    @test_logs min_level = Base.CoreLogging.Warn Core.eval(m, quote
+        @potts_model DeclX begin
+            @kinds medium A
+            @parameters x = 0.5
+            @variables c(field) = 1.0
+            @lattice Lattice((4, 4); boundary = Closed())
+            @energy cells(A) => (volume - 9.0)^2
+            @equations D(c) ~ -x * c
+            @sweep Metropolis(; temperature = 1.0)
+        end
+    end)
+    # R1 (batch 4 round 2): a helper argument `x` binds `x` in the helper only, so the rate's
+    # `x` (the coordinate) still warns (base: the helper silenced the warning for the body)
+    @test_logs (:warn, r"`x` in the model body is the lattice coordinate") match_mode = :any Core.eval(m, quote
+        @potts_model GlobXHelper begin
+            @kinds medium A
+            @variables c(field) = 0.0
+            @lattice Lattice((4, 4); boundary = Closed())
+            g(x) = 2x
+            @energy cells(A) => (volume - 9.0)^2
+            @equations D(c) ~ g(1.0) * x
+            @sweep Metropolis(; temperature = 1.0)
+        end
+    end)
+    # controls: reads of `x` only inside binders (a helper, its keyword, a generator) and the
+    # face syntax of `@bcs` (R2) do not warn
+    @test_logs min_level = Base.CoreLogging.Warn Core.eval(m, quote
+        @potts_model LocalXOnly begin
+            @kinds medium A
+            @variables c(field) = 0.0
+            @lattice Lattice((4, 4); boundary = Closed())
+            g(x) = 2x
+            h(; x = 1.0) = 3x
+            w = sum(x for x in 1:3)
+            @energy cells(A) => (volume - 9.0)^2
+            @equations D(c) ~ g(1.0) + h(x = 0.5) + w + Δ(c)
+            @bcs c(t, x, 0) ~ 1.0
+            @sweep Metropolis(; temperature = 1.0)
+        end
+    end)
+    # R2 alone: a `@bcs` face read and a keyword name in a body with no binder of `x` (base: both
+    # warned)
+    @test_logs min_level = Base.CoreLogging.Warn Core.eval(m, quote
+        @potts_model BcsXOnly begin
+            @kinds medium A
+            @variables c(field) = 0.0
+            @lattice Lattice((4, 4); boundary = Closed())
+            @energy cells(A) => (volume - 9.0)^2
+            @equations D(c) ~ Δ(c) + hk(x = 0.5)
+            @bcs c(t, x, 0) ~ 1.0
+            @sweep Metropolis(; temperature = 1.0)
+        end
+    end)
+    # a read on the right side of a `@bcs` line still counts
+    @test_logs (:warn, r"`x` in the model body is the lattice coordinate") match_mode = :any Core.eval(m, quote
+        @potts_model BcsXRhs begin
+            @kinds medium A
+            @variables c(field) = 0.0
+            @lattice Lattice((4, 4); boundary = Closed())
+            @energy cells(A) => (volume - 9.0)^2
+            @equations D(c) ~ Δ(c)
+            @bcs c(t, x, 0) ~ x / 8
+            @sweep Metropolis(; temperature = 1.0)
+        end
+    end)
+    # R3: a wrong-length velocity prints the vector and the operators as written, in the reason
+    # and the location line (base: `SymbolicUtils.array_literal((1,), 0.3)`, `LatticePDE.Advect{…}`,
+    # `LatticePDE.Δ`)
+    err = something(fd_err(() -> mtkcompile(FpAdvectShort(; name = :f))), "")
+    @test occursin("cannot lower `[0.3]`", err) && occursin("got 1", err)
+    @test occursin("in @equations", err) && occursin("Advect(Upwind1())([0.3], c", err) && occursin("Δ(c", err)
+    @test !occursin("array_literal", err) && !occursin("LatticePDE.", err)
+    # S4: `Differential(z)` on a 2D lattice is not an axis (base: "the model declares its own `z`")
+    err = something(fd_err(() -> mtkcompile(FpZ2D(; name = :f))), "")
+    @test occursin("not a lattice axis", err) && !occursin("declares its own", err)
+end
+
+@testset "F2-10: maps, one kind per model, coordinates, the clash, a CPM read" begin
+    LP = Potts.LatticePDE
+    # a map steps once per MCS (`ExplicitMap()` by default): m₁ = x, m₂ = 0.5 m₁ + x, …
+    integ = init(PottsProblem(FpMap(; name = :f), fd_empty((6, 4)), (0, 3)), SequentialCPM())
+    vals = [(step!(integ); copy(Array(current_state(integ).site.m))) for _ in 1:3]
+    xs = [i - 0.5 for i in 1:6, j in 1:4]                  # the cell centers along x
+    @test vals[1] == xs && vals[2] == 0.5 .* xs .+ xs && vals[3] == 0.5 .* vals[2] .+ xs
+    # `solvers` takes `ExplicitMap()` for it; a rate algorithm is refused naming `ExplicitMap()`
+    sm = solve(PottsProblem(FpMap(; name = :f), fd_empty((6, 4)), (0, 3); solvers = [:m => ExplicitMap()]), SequentialCPM())
+    @test Array(sm.u[end].site.m) == vals[3]
+    err = something(fd_err(() -> PottsProblem(FpMap(; name = :f), fd_empty((6, 4)), (0, 3); field_solver = ExplicitEuler())), "")
+    @test occursin("`ExplicitMap()`", err) && occursin("map field", err)
+    # B steps the model's map the same way
+    bm = LP.solve(LP.discretize(Potts.fields(FpMap(; name = :f)), LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64,
+        problem = :owned)), ExplicitMap())
+    @test bm[:m][2] == vals[1] && bm[:m][end] == vals[1]  # B's span is the PDESystem's (0, 1): one map step
+    # a rate and a map in one model: refused on both front ends with F1's message
+    err = something(fd_err(() -> mtkcompile(FpMixed(; name = :f))), "")
+    @test occursin("mixes rate equations (of `c`) and maps (of `m`)", err) && occursin("@after_mcs", err)
+    err = something(fd_err(() -> LP.discretize(Potts.fields(FpMixed(; name = :f)),
+        LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64))), "")
+    @test occursin("mixes rate equations (of `c`) and maps (of `m`)", err) && occursin("two systems", err)
+    # `z` is the third coordinate: one substep of 0.1 z (cell centers 0.5, 1.5, 2.5)
+    uz = solve(PottsProblem(FpZ(; name = :f), fd_empty((4, 4, 3)), (0, 1)), SequentialCPM()).u[end].site.c
+    @test all(kk -> all(≈(0.1 * (kk - 0.5); rtol = 1e-14), uz[:, :, kk]), 1:3)
+    # a model's own `x` is kept; `Differential(x)` there is refused naming the clash
+    so = solve(PottsProblem(FpOwnX(; name = :f), fd_empty((6, 4)), (0, 1)), SequentialCPM())
+    @test all(==(0.5), so.u[end].site.c)                  # one substep of −0.5 c from 1
+    err = something(fd_err(() -> mtkcompile(FpOwnXFlux(; name = :f))), "")
+    @test occursin("declares its own `x`", err) && occursin("rename the model's `x`", err)
+    # negative control: an operator of a CPM read is still refused, now naming the operator
+    err = something(fd_err(() -> mtkcompile(FpOpCPM(; name = :f))), "")
+    @test occursin("applies `Δ` to", err) && occursin("a CPM read", err) && occursin("@after_mcs", err)
 end

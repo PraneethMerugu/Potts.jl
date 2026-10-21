@@ -77,6 +77,7 @@ function _compile_odes(sys::PottsSystem)
             continue
         end
         _is_coupling(l) && continue
+        _field_lhs(eq) === nothing || continue         # a field's map or aux (the field compiler's)
         _located(sys, eq) do
             i = info(l)
             i === nothing && throw(ArgumentError(
@@ -117,7 +118,7 @@ function _compile_odes(sys::PottsSystem)
         x = _is_derivative(l) ? info(arguments(l)[1]) : nothing
         if x !== nothing && haskey(rates, x.name)
             push!(equations, keep(eq, eq.lhs ~ Symbolics.wrap(expand(rates[x.name]))))
-        elseif !_is_derivative(l) && !_is_coupling(l)
+        elseif !_is_derivative(l) && !_is_coupling(l) && _field_lhs(eq) === nothing
             continue                                   # an algebraic equation: eliminated
         else
             push!(equations, m === nothing ? eq : keep(eq, m.equations[j]))

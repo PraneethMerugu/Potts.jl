@@ -355,14 +355,29 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
 
     # differential equations: fields (lattice PDEs) and per-cell ODEs
     fields = Tuple{Any, Any}[]
+    field_aux = Tuple{Any, Any}[]                  # aux fields `K ~ rhs` (not stepped; F2-10)
     cell_odes = Tuple{Any, Any}[]
     model_odes = Tuple{Any, Any}[]
     derivatives = Dict{Symbol, Any}()
     for eq in _p(sys, :equations)
         _located(sys, eq) do
         lhs = _unwrap(eq.lhs)
+        # a map `Shift(t, 1)(m) ~ rhs` or an aux `K ~ rhs` of a field (F2 design §2.11)
+        fl = _field_lhs(eq)
+        if fl !== nothing && fl[2] !== :rate
+            x, kind = fl
+            n = info(x).name
+            haskey(derivatives, n) && throw(ArgumentError(
+                "`$n` is already given by `$(derivatives[n])`; one equation per field"))
+            derivatives[n] = eq
+            _check_names(eq.rhs, (_SITE_BUILTINS..., :time), kind === :map ? "a map" : "a field definition";
+                between_copies = true)
+            push!(kind === :map ? fields : field_aux, (x, eq.rhs))
+            return
+        end
         (iscall(lhs) && operation(lhs) isa Differential) ||
-            throw(ArgumentError("equations are `D(x) ~ rhs`; got $eq"))
+            throw(ArgumentError("equations are `D(x) ~ rhs` (a rate), `Shift(t, 1)(m) ~ rhs` (a map of a field) or " *
+                                "`K ~ rhs` (a field defined by its value); got $eq"))
         x = arguments(lhs)[1]
         i = info(x)
         i === nothing && throw(ArgumentError("`$x` is not a declared variable"))
@@ -382,6 +397,21 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         else
             throw(ArgumentError("equations are for field, site, cell and model variables; `$x` is $(i.role)"))
         end
+        end
+    end
+    # an aux field is computed by the field groups: with no stepped field there is none, and the
+    # definition would never run (refused, never dropped; F2-10)
+    if !isempty(field_aux) && isempty(fields)
+        x, rhs = first(field_aux)
+        eq = only(e for e in _p(sys, :equations) if _field_lhs(e) !== nothing && isequal(_field_lhs(e)[1], x))
+        _located(sys, eq) do
+            n = info(x).name
+            throw(ArgumentError("`$n ~ $(_builtin_text(string(rhs)))` is an algebraic equation of the field `$n` (an aux " *
+                "field, computed at every substep by the field groups), and the model steps no field (`D(c) ~ …`), so " *
+                "it would never be computed; give a field an equation (`D(c) ~ …`: the field groups then compute it), " *
+                "or make `$n` a site variable written by a site update (`@after_mcs $n ~ …`; a site update reads the " *
+                "site's `position`, not the coordinates `x`, `y`, `z`, which field equations read: `position` is the " *
+                "site's corner and `x` its center, `x = position[1] - h/2` with `h` the spacing)"))
         end
     end
     for d in _p(sys, :divisions)
@@ -464,7 +494,8 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     gather_names = Dict{Any, Symbol}()
     all_exprs = Any[last.(cell_terms)..., last.(cluster_terms)..., values(contact_terms)..., site_terms...,
         (drive === nothing ? () : (drive,))..., (c.expr for c in _p(sys, :constraints) if c.kind === :expr)...,
-        (u.eq.rhs for u in _p(sys, :updates))..., (last(f) for f in fields)..., (last(f) for f in cell_odes)..., (last(f) for f in model_odes)...,
+        (u.eq.rhs for u in _p(sys, :updates))..., (last(f) for f in fields)..., (last(f) for f in field_aux)...,
+        (last(f) for f in cell_odes)..., (last(f) for f in model_odes)...,
         _p(sys, :sweep).temperature, tick_exprs...]
     # everything evaluated against the state: the copy-step expressions, then the sites
     # evaluated outside the copy step (division conditions and rules, link rules, edge
@@ -763,12 +794,17 @@ function _check_boundaries(sys::PottsSystem, fields, rn)
                     "@boundary $n: axis `$ax` is periodic; a face condition needs a closed axis (`Closed()` on axis $(b.axis))"))
                 (n, b.axis) in seen && throw(ArgumentError("@boundary $n: axis `$ax` is given twice"))
                 rate = last(fields[findfirst(f -> info(first(f)).name === n, fields)])
+                # any spatial operator of the field sets ghost values (`Δ`, `DivKGrad`, `Advect`, a raw
+                # flux `Differential(x)(K * Differential(x)(c))`; F2 design §2.11)
                 lap = Ref(false)
-                _walk(y -> (iscall(y) && operation(y) === Δ && info(arguments(y)[1]) !== nothing &&
-                            info(arguments(y)[1]).name === n && (lap[] = true)), rate)
+                isop(y) = iscall(y) && _spatial_op(operation(y)) && (o = _unwrap(arguments(y)[end]);
+                                                                     info(o) !== nothing && info(o).name === n)
+                _walk_all(y -> isop(y) && (lap[] = true), rate)
                 lap[] || throw(ArgumentError(
-                    "@boundary $n: a face condition (`$ax => …`) sets the ghost values of `Δ($n)`, but the equation " *
-                    "`D($n) ~ …` has no `Δ($n)`; drop the face entry, or use a site mask `sites(…) => Dirichlet(v)`"))
+                    "@boundary $n: a face condition (`$ax => …`) sets the ghost values of a spatial operator of `$n`, " *
+                    "but the equation `D($n) ~ …` has no `Δ($n)` nor another spatial operator of `$n` " *
+                    "(`DivKGrad(…)(K, $n)`, `Advect(…)(u, $n)`, a raw flux `Differential(x)(K * Differential(x)($n))`); " *
+                    "drop the face entry, or use a site mask `sites(…) => Dirichlet(v)`"))
                 push!(seen, (n, b.axis))
             end
         end
@@ -1136,8 +1172,9 @@ function _located(f, sys::PottsSystem, x)
 end
 
 # descriptions are built only when reporting (printing symbolic expressions is slow); a
-# built-in shows as written (`volume`, not the input `volume(t)`)
-_describe(x, kinds...) = _builtin_text(_describe_text(x, kinds...))
+# built-in shows as written (`volume`, not the input `volume(t)`), and an operator of the field
+# compiler as the model writes it (`Δ(c)`, `Advect(Upwind1())`, `[ux, 0.0]`; review R3)
+_describe(x, kinds...) = _nopkg(_builtin_text(_describe_text(x, kinds...)))
 _describe_text(e::EnergyTerm, kinds = nothing) = "@energy $(_domain_string(e.domain, kinds)) => $(e.expr)"
 _describe_text(d::Drive) = "@drive copy => $(d.expr)"
 _describe_text(c::Constraint) = "@constraint $(c.expr)"
@@ -1197,9 +1234,9 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
     end
     for eq in _p(sys, :equations)
         _located(sys, eq) do
+            _field_lhs(eq) === nothing || return   # the field compiler lowers these (`_check_fields`)
             x = arguments(_unwrap(eq.lhs))[1]
             r = info(x).role
-            r in (:field, :site) && return        # the field compiler lowers these (`_check_fields`)
             lower(eq.rhs, r === :cell ? _cell_env(T, :c, rn; mcs = :mcs, key = :key, extra = (:time => :tt,)) :
                           _model_env(T, rn; key = :key, extra = (:time => :tt,)))
         end

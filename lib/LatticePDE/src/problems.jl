@@ -1062,16 +1062,7 @@ function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = ())
     kind = disc.problem
     kind == :linear && _dverr("problem = :linear (steady systems) is not lowered in this version (a steady solver " *
                               "is planned); step the equations as rates `D(c) ~ rhs` to their steady state")
-    hasmap = any(eq -> iscall(unwrap(eq.lhs)) && operation(unwrap(eq.lhs)) isa Shift, sys.eqs)
-    if hasmap
-        name(eq) = (r = unwrap(eq.lhs); a = iscall(r) ? arguments(r)[1] : r; string(_name(_opof(a))))
-        rate = [name(eq) for eq in sys.eqs if iscall(unwrap(eq.lhs)) && operation(unwrap(eq.lhs)) isa Differential]
-        maps = [name(eq) for eq in sys.eqs if iscall(unwrap(eq.lhs)) && operation(unwrap(eq.lhs)) isa Shift]
-        isempty(rate) || _dverr("the system mixes rate equations (of $(join(("`$f`" for f in rate), ", "))) and maps " *
-                                "(of $(join(("`$f`" for f in maps), ", "))); one problem steps one kind in this version " *
-                                "(a map steps at dt = 1, which would step the rates with no bound): discretize them as " *
-                                "two systems (split stepping is planned)")
-    end
+    hasmap = check_one_kind(sys)
     hasmask = any(b -> (r = unwrap(b.rhs); iscall(r) && operation(r) === masked), sys.bcs)
     # the clock's step index needs the owned steppers, which land on its boundaries
     hasclock = _reads_step_index(sys)
@@ -1103,6 +1094,28 @@ function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = ())
     rates = Dict(k => "∂$k" for k in state)
     return ode_problem(s, u0, tspan, cf.defaults; state, rates, init = spec.init, index,
         tables = cf.tables, inputs = ins, stability = spec.stability, backend, options)
+end
+
+"""
+    check_one_kind(sys; route) -> Bool
+
+Whether `sys` has maps (`Shift(t, 1)(m) ~ rhs`); a system with rate equations and maps both is
+refused, naming the fields of each (F1; F2 design §2.11), with the front end's route
+(`route`; LatticePDE's: two systems). One problem steps one kind in this version, in both front
+ends and however its fields are grouped: a map steps one unit of time, which would step the
+rates with no bound, and separate groups would be split stepping (planned, FE-04).
+"""
+function check_one_kind(sys::PDESystem; route = "discretize them as two systems")
+    lhs(eq) = unwrap(eq.lhs)
+    name(eq) = (r = lhs(eq); a = iscall(r) ? arguments(r)[1] : r; string(_name(_opof(a))))
+    maps = [name(eq) for eq in sys.eqs if iscall(lhs(eq)) && operation(lhs(eq)) isa Shift]
+    isempty(maps) && return false
+    rate = [name(eq) for eq in sys.eqs if iscall(lhs(eq)) && operation(lhs(eq)) isa Differential]
+    isempty(rate) || _dverr("the system mixes rate equations (of $(join(("`$f`" for f in rate), ", "))) and maps " *
+                            "(of $(join(("`$f`" for f in maps), ", "))); one problem steps one kind in this version " *
+                            "(a map steps at dt = 1, which would step the rates with no bound): $route (split " *
+                            "stepping is planned)")
+    return true
 end
 
 # whether an equation or condition of `sys` reads the clock's step index

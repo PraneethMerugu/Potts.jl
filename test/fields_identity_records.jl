@@ -8,6 +8,9 @@
 # Routes of the soft set at bda31989: `refused` (no count and `substeps = 3` both refused at
 # build) for FdRand (`rand()` in a rate), FdVolumeRead, FdDomainWord and FdDivK, which the
 # guard then records by route only.
+# F2-10 (listed move, F2 design §4 F2-10: only models refused before get new code): FdDivK
+# (`DivKGrad(:harmonic)(Dc, c)`) now lowers in `@equations`: its route is `auto` and its
+# fingerprint, program entries and `n` are recorded.
 const GD_RECORDS = Dict{String, String}(
     "FdChemoInter|Float64|canonical" => "c=ExplicitEuler(substeps=nothing,lower=nothing)",
     "FdChemoInter|Float64|fingerprint" => "0xe09af99e9a034fc7",
@@ -86,7 +89,17 @@ const GD_RECORDS = Dict{String, String}(
     "FdDefaults|Float64|groups" => "1",
     "FdDefaults|Float64|n" => "[5]",
     "FdDefaults|Float64|route" => "auto",
-    "FdDivK|Float64|route" => "refused",
+    "FdDivK|Float64|canonical" => "c=ExplicitEuler(substeps=nothing,lower=nothing)",   # F2-10: `@equations` lowers `DivKGrad`
+    "FdDivK|Float64|fingerprint" => "0x30b729873ba2a2db",   # F2-10: `@equations` lowers `DivKGrad`
+    "FdDivK|Float64|g1|arrays" => "((CorePotts.Part{:site, :c}(), CorePotts.Part{:site, :c__next}()),)",   # F2-10: `@equations` lowers `DivKGrad`
+    "FdDivK|Float64|g1|bounded" => "true",   # F2-10: `@equations` lowers `DivKGrad`
+    "FdDivK|Float64|g1|fingerprint_text" => "335cc22a5c74405b",   # F2-10: `@equations` lowers `DivKGrad`
+    "FdDivK|Float64|g1|least" => "Int64:1",   # F2-10: `@equations` lowers `DivKGrad`
+    "FdDivK|Float64|g1|params" => "[:Dc]",   # F2-10: `@equations` lowers `DivKGrad`
+    "FdDivK|Float64|g1|tables" => "Pair{Int64, Symbol}[]",   # F2-10: `@equations` lowers `DivKGrad`
+    "FdDivK|Float64|groups" => "1",   # F2-10: `@equations` lowers `DivKGrad`
+    "FdDivK|Float64|n" => "[1]",   # F2-10: `@equations` lowers `DivKGrad`
+    "FdDivK|Float64|route" => "auto",   # F2-10: `@equations` lowers `DivKGrad`
     "FdDomainWord|Float64|route" => "refused",
     "FdDomain|Float64|canonical" => "c=ExplicitEuler(substeps=nothing,lower=nothing)",
     "FdDomain|Float64|fingerprint" => "0xb07e006cff983648",

@@ -274,10 +274,13 @@ function _rebind!(rt::Problems.GroupRuntime, ph::FieldPhase, st, p, backend)
 end
 
 # The phase runs one window of the fields: pass `part = (r, R)` of the `R` passes of a sub-MCS
-# `repeat(R, …)` (`(1, 1)` for the whole MCS). The clock (F2 design §2.6): the step index is
+# `repeat(R, …)` (`(1, 1)` for the whole MCS); a map group (`ExplicitMap`) steps in pass 1 only.
+# The clock (F2 design §2.6): the step index is
 # the MCS number `mcs` (the same in every pass), and the window starts at the time
 # `t0 = (mcs + (r − 1)/R) · mcs_duration`; substep `j` runs at `t0 + j h`.
 function (ph::FieldPhase{K})(st, p, ctx, key, mcs, backend, part::NTuple{2, Int} = (1, 1)) where {K}
+    # a map steps once per MCS (the clock's period), in the first pass of a sub-MCS `repeat`
+    ph.alg isa Problems.ExplicitMap && !ph.init && part[1] != 1 && return 0
     rt = _runtime(getfield(ctx, K))
     rt.pending === nothing || Base.invokelatest(_await!, rt)
     # the rebinding is cold host work (the substep bound, new launches): called past an

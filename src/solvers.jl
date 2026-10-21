@@ -26,19 +26,25 @@ _solver_name(x) = info(x).name
 
 # The field solvers (one place, cutover C8): a field takes a LatticeFields field algorithm as
 # its `field_solver` or `solvers` entry, lowered by the field compiler (`_field_groups`); a new
-# `FieldAlgorithm` (the implicit steppers) joins with no edit here. A rate group takes
-# `ExplicitEuler` (the field compiler steps rates only; `ExplicitMap` is refused by name).
+# `FieldAlgorithm` (the implicit steppers) joins with no edit here. A rate field takes a rate
+# algorithm (`ExplicitEuler`), a map field (`Shift(t, 1)(m) ~ rhs`) `ExplicitMap()`; each refuses
+# the other family by name.
 _is_field_solver(s) = s isa FieldAlgorithm
-_field_solver_names() = "`ExplicitEuler(…)`"
+_field_solver_names() = "`ExplicitEuler(…)`, or `ExplicitMap()` for a map"
 # A field solver as given: the window of a `PottsProblem` is the MCS (`mcs_duration`), so a
-# `dt` is refused, and a rate group refuses `ExplicitMap` (F2-04)
-function _check_field_solver(s, what)
+# `dt` is refused; a rate field refuses `ExplicitMap` (F2-04), a map field (`map = true`) a
+# rate algorithm (F2-10)
+function _check_field_solver(s, what; map::Bool = false)
+    map && !(s isa ExplicitMap) && !(s isa LatticeFields.Problems.FieldGroups) && throw(ArgumentError(string(
+        what, ": `", nameof(typeof(s)), "(…)` steps rates `D(c) ~ rhs`; a map field ",
+        "(`Shift(t, 1)(m) ~ rhs`) is stepped by `ExplicitMap()`, once per MCS (or leave the keyword out)")))
     s isa LatticeFields.Problems.FieldGroups && throw(ArgumentError(string(
         what, ": `FieldGroups(…)` assigns algorithms to the fields of a LatticePDE `FieldProblem`; in a ",
         "`PottsProblem` give each field its solver with `solvers = [c => ExplicitEuler(…), …]` ",
         "(`FieldGroups` in a `PottsProblem` is planned)")))
-    s isa ExplicitMap && throw(ArgumentError(
-        "$what: `ExplicitMap()` steps discrete maps; a `PottsProblem` field is a rate, stepped by `ExplicitEuler(…)`"))
+    s isa ExplicitMap && !map && throw(ArgumentError(
+        "$what: `ExplicitMap()` steps discrete maps `Shift(t, 1)(m) ~ rhs`; a rate field `D(c) ~ rhs` is stepped by " *
+        "`ExplicitEuler(…)`"))
     s isa ExplicitEuler && s.dt !== nothing && throw(ArgumentError(string(
         "$what: `ExplicitEuler(; dt = ", s.dt, ")`: a `PottsProblem` field steps over the MCS window (`mcs_duration`, ",
         "split into `substeps`); leave `dt` out")))
@@ -70,16 +76,19 @@ An ODE's `ExplicitEuler(substeps = nothing)` is one step, the same as `substeps 
 function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_solver = ExplicitEuler(), solvers = ())
     sys = c.sys
     fields = [_solver_name(x) for (x, _) in c.fields]
+    # the map fields (`Shift(t, 1)(m) ~ rhs`; a model has rates or maps, F2-10)
+    maps = Set{Symbol}(info(x).name for (x, _, op) in _field_equations(sys) if op isa ModelingToolkitBase.Shift)
     odes = [_solver_name(x) for (x, _) in Iterators.flatten((c.cell_odes, c.model_odes))]
     if isempty(fields)
         field_solver === nothing || throw(ArgumentError(
             "`field_solver`: model `$(nameof(sys))` has no field to integrate; remove the keyword"))
     else
-        # the default (D-F2-R1): explicit Euler with the automatic substep count
-        field_solver === nothing && (field_solver = ExplicitEuler())
+        # the default (D-F2-R1): explicit Euler with the automatic substep count; for maps
+        # `ExplicitMap()`, one application per MCS
+        field_solver === nothing && (field_solver = isempty(maps) ? ExplicitEuler() : ExplicitMap())
         _is_field_solver(field_solver) || throw(ArgumentError(
             "`field_solver` takes a field solver ($(_field_solver_names())); got $(repr(field_solver))"))
-        _check_field_solver(field_solver, "`field_solver`")
+        _check_field_solver(field_solver, "`field_solver`"; map = !isempty(maps))
     end
     ode_solver isa _ODESolver || throw(ArgumentError(
         "`ode_solver` takes `ExplicitEuler(; substeps)`, `RK4(; substeps)` or `Adaptive(alg; …)`; got $(repr(ode_solver))"))
@@ -96,7 +105,7 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
         if n in fields
             _is_field_solver(s) || throw(ArgumentError(
                 "`solvers`: the field `$n` takes a field solver ($(_field_solver_names())); got $(repr(s))"))
-            _check_field_solver(s, "`solvers`: the field `$n`")
+            _check_field_solver(s, "`solvers`: the field `$n`"; map = n in maps)
         elseif n in odes
             s isa _ODESolver || throw(ArgumentError(
                 "`solvers`: `$n` takes `ExplicitEuler(; substeps)`, `RK4(; substeps)` or `Adaptive(alg; …)`; got $(repr(s))"))

@@ -98,7 +98,7 @@ function _bind_components(sys::PottsSystem)
     rest = Equation[]
     for eq in _p(sys, :equations)
         lhs = _unwrap(eq.lhs)
-        n = iscall(lhs) && operation(lhs) isa Differential ? nothing : _mtkname(lhs)
+        n = (iscall(lhs) && operation(lhs) isa Differential) || _field_lhs(eq) !== nothing ? nothing : _mtkname(lhs)
         n === nothing ? push!(rest, eq) : (couplings[n] = eq.rhs)
     end
     time = _unwrap(B.time)

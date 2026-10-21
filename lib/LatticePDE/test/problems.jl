@@ -341,3 +341,28 @@ end
     @test_throws ArgumentError discretize(psys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0, ce ~ masked(ke == 3, 0.0)], Num[];
         dvs = [ce, ke]), LatticeDiscretization(Grid((4, 4)); T = Float64, problem = :ode))
 end
+
+# F2-10 (F2 design §2.11): the one operator allowlist (`lowers_call`, which Potts `@equations`
+# asks too), and `Advect` with a velocity written as a vector of terms (`[ux, 0.0]`), equal to
+# the same velocity given as an array input. Base (c2583722): no `lowers_call`; the vector
+# velocity refused ("`Advect` takes the velocity array field").
+@testset "F2-10: one allowlist; Advect with a vector velocity" begin
+    for f in (+, -, *, /, ^, min, max, abs, sqrt, exp, log, ifelse, ==, !=, <, <=, >, >=, !, &, |,
+        sin, cos, tan, tanh, sinh, cosh, cbrt, exp2, log2, log10, expm1, log1p, atan, floor, ceil, round)
+        @test LatticePDE.lowers_call(f)
+    end
+    @test !any(LatticePDE.lowers_call, (Δ, at, ismember, masked, sum, getindex))       # control: terms of their own
+    @parameters uxv = 0.3
+    vsys = psys([D(ce) ~ -Advect(Upwind1())([uxv, 0.0], ce)], [c(0, x, y) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)], [uxv])
+    asys = psys([D(ce) ~ -Advect(Upwind1())(ve, ce)], [c(0, x, y) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)], Num[]; dvs = [ce, ve])
+    u0 = vec([sin(π * i / 8) for i in 1:8, j in 1:4])
+    alg = ExplicitEuler(; dt = 0.1, substeps = 2)
+    sv = solve(remake(owned(vsys, 8, 4); u0), alg)
+    sa = solve(remake(owned(asys, 8, 4; inputs = [ve[1] => 0.3, ve[2] => 0.0]); u0), alg)
+    @test sv.u[end] == sa.u[end] && sv.u[end] != u0
+    # a constant velocity vector (review M2 of F2 batch 4; base: refused, its route `[ux, uy]`)
+    csys = psys([D(ce) ~ -Advect(Upwind1())([0.3, 0.0], ce)], [c(0, x, y) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)], Num[])
+    @test solve(remake(owned(csys, 8, 4); u0), alg).u[end] == sv.u[end]
+    # the velocity's length is checked against the grid's axes
+    @test_throws ArgumentError owned(psys([D(ce) ~ -Advect(Upwind1())([uxv], ce)], [c(0, x, y) ~ 0.0], [uxv]), 8, 4)
+end

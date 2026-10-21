@@ -64,6 +64,7 @@ end
 # folded (`_fold_computed`) nor checked (`_check_tables`)
 function _lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = nothing, values::Bool = true, bound::Bool = true)
     _check_parts(sys)
+    check_one_kind(sys)                                 # (the whole system, before any cut)
     derived, computed = Pair[], Pair[]
     values && ((sys, derived, computed) = _fold_computed(sys))
     external = String[]

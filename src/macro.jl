@@ -97,6 +97,102 @@ end
 
 # the DSL names bound in a model body: all but those its structural parameters shadow
 _dsl_bound(parts) = [k for k in keys(DSL) if !any(p -> first(p) === k, parts.structural)]
+_field_bound(parts) = [k for k in keys(FIELD_NAMES) if !any(p -> first(p) === k, parts.structural)]
+
+# The model body binds the lattice coordinates `x`, `y`, `z` (F2 design §2.11), which hide a
+# global of the model's module with that name. When the module defines one, the body reads the
+# name where no local binding of it is in scope and the model does not declare it, warn once at
+# expansion, naming the binding and how to keep the global (review M3 of F2 batch 4: before, the
+# coordinate replaced it silently)
+function _warn_coordinate_globals(name, body, parts)
+    for s in (:x, :y, :z)
+        isdefined(parts.mod, s) && !haskey(parts.declared, s) && !(s in parts.bound) &&
+            !any(p -> first(p) === s, parts.structural) || continue
+        _reads_free(body, s) && !_binds_top(body, s) || continue
+        @warn string("@potts_model ", name, ": `", s, "` in the model body is the lattice coordinate (bound in model ",
+            "bodies for field equations); the global `", parts.mod, ".", s, "` is not read there. To use the global's ",
+            "value, declare it, `@parameters ", s, " = …` (the model's own `", s, "` hides the coordinate), or rename ",
+            "the global") _module = parts.mod
+    end
+    return nothing
+end
+# Whether `ex` reads `s` outside every scope that binds `s` itself (review R1 of F2 batch 4: a
+# helper `g(x) = 2x` binds `x` in its own body only, so `D(c) ~ g(1.0) * x` still reads the
+# coordinate). Scopes: a function definition (its arguments, keywords included), an anonymous
+# function, `let`, a `for` loop and a generator or comprehension. Syntax that is not a read: the
+# axis keys of `@boundary`, the axis of `Differential(x)`, the face arguments of a field read in
+# `@bcs` (`c(t, x, 0)`; the right side still counts) and a keyword name (`h(x = 0.5)`).
+function _reads_free(ex, s; bcs = false)
+    ex === s && return true
+    ex isa Expr || return false
+    h = ex.head
+    if h === :macrocall
+        ex.args[1] === Symbol("@boundary") && return false
+        bcs = bcs || ex.args[1] === Symbol("@bcs")
+    end
+    h === :kw && return _reads_free(ex.args[2], s; bcs)
+    if _is_fundef(ex)
+        sig = ex.args[1]
+        s in _sig_binders(sig) && return false
+        return any(a -> _reads_free(a, s; bcs), _sig_defaults(sig)) || _reads_free(ex.args[2], s; bcs)
+    end
+    if h === :->
+        s in _sig_binders(ex.args[1]) && return false
+        return _reads_free(ex.args[2], s; bcs)
+    end
+    if h === :let || h === :for
+        binds = ex.args[1]
+        bs = binds isa Expr && binds.head === :block ? binds.args : Any[binds]
+        any(b -> _assigns(b, s), bs) && return false
+        return any(a -> _reads_free(a, s; bcs), ex.args)
+    end
+    if h === :generator
+        any(b -> _assigns(b, s), _gen_binders(ex)) && return false
+    end
+    # a field read at a face inside `@bcs`: `c(t, x, 0)`, its arguments are face syntax; so is
+    # the axis of `Differential(x)`
+    bcs && h === :call && length(ex.args) ≥ 2 && ex.args[2] === :t && return false
+    h === :call && ex.args[1] === :Differential && return false
+    return any(a -> _reads_free(a, s; bcs), ex.args)
+end
+_is_fundef(ex) = ex isa Expr && (ex.head === :function || ex.head === :(=)) && length(ex.args) == 2 &&
+                 _sig_call(ex.args[1]) !== nothing
+function _sig_call(sig)
+    sig isa Expr || return nothing
+    sig.head === :call && return sig
+    sig.head in (:where, :(::)) && return _sig_call(sig.args[1])
+    return nothing
+end
+# the names a signature binds: positional and keyword arguments, `x::T`, `x = v`, `x...`, tuples
+function _sig_binders(sig)
+    c = _sig_call(sig)
+    args = c === nothing ? (sig isa Expr && sig.head === :tuple ? sig.args : Any[sig]) : c.args[2:end]
+    out = Symbol[]
+    foreach(a -> _arg_names!(out, a), args)
+    return out
+end
+function _arg_names!(out, a)
+    a isa Symbol && return push!(out, a)
+    a isa Expr || return out
+    a.head in (:kw, :(=), :(::), :..., :meta) && return _arg_names!(out, a.args[1])
+    a.head in (:parameters, :tuple) && foreach(b -> _arg_names!(out, b), a.args)
+    return out
+end
+# the default values in a signature (they are read where the function is defined)
+function _sig_defaults(sig)
+    c = _sig_call(sig)
+    c === nothing && return Any[]
+    out = Any[]
+    walk(a) = a isa Expr && (a.head === :kw ? push!(out, a.args[2]) : a.head === :parameters ? foreach(walk, a.args) : nothing)
+    foreach(walk, c.args[2:end])
+    return out
+end
+_gen_binders(ex) = Any[a.head === :filter ? a.args[2:end] : a for a in ex.args[2:end] if a isa Expr] |>
+                   v -> reduce(vcat, (b isa Vector ? b : Any[b] for b in v); init = Any[])
+_assigns(b, s) = b isa Expr && b.head === :(=) && (b.args[1] === s || s in _sig_binders(b.args[1]))
+# whether a top-level statement of the body assigns `s` (`x = 2.0` or `x, y = …`): it hides
+# the coordinate in the whole body
+_binds_top(body, s) = any(ex -> ex isa Expr && ex.head === :(=) && !_is_fundef(ex) && _assigns(ex, s), body.args)
 
 function _potts_model(name::Symbol, body::Expr, mod)
     body.head === :block || throw(ArgumentError("@potts_model $name expects a begin … end block"))
@@ -115,6 +211,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
             push!(parts.code, rewrite(ex))        # helper functions, local definitions
         end
     end
+    _warn_coordinate_globals(name, body, parts)
     kws = Any[Expr(:kw, :name, QuoteNode(name))]
     for (k, v) in parts.structural
         k in parts.params && throw(ArgumentError("`$k` is both a structural parameter and a parameter"))
@@ -144,6 +241,8 @@ function _potts_model(name::Symbol, body::Expr, mod)
         D = $P._D
         Pre = $P._pre
         $(Expr(:(=), Expr(:tuple, Expr(:parameters, _dsl_bound(parts)...)), :($P.DSL)))
+        # the field equations' names (F2 design §2.11): the lattice coordinates and `masked`
+        $(Expr(:(=), Expr(:tuple, Expr(:parameters, _field_bound(parts)...)), :($P.FIELD_NAMES)))
         __kinds = Symbol[]
         __frozen = Int[]
         __classes = $P.KindClass[]

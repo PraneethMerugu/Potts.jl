@@ -728,7 +728,7 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     s = c.sys
     ints = _integrals(s)
     all_ints = Set{Int}(eachindex(ints))
-    pde(eq) = info(arguments(_unwrap(eq.lhs))[1]).role in (:field, :site)
+    pde(eq) = _field_lhs(eq) !== nothing
     hasdiv = !isempty(_p(s, :divisions))
     # what each non-block entry reads (the uncompiled ticks: the compiled ones read their
     # population folds through slots)

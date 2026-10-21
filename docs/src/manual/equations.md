@@ -10,6 +10,8 @@ an equation is:
 | `D(c) ~ Dc * Δ(c) + s * (kind == k) - δ * c` | `c(field)` | a reaction–diffusion PDE on the lattice | `field_solver` |
 | `D(x) ~ k₁ - k₂ * x` | `x(cell)` | one ODE per live cell | `ode_solver` |
 | `D(g) ~ -g + count(true for c in cells)` | `g(model)` | one ODE for the model | `ode_solver` |
+| `Shift(t, 1)(m) ~ g * m + x` | `m(field)` | a map: one application per MCS | `field_solver` (`ExplicitMap()`) |
+| `K ~ K₀ * (1 + 0.05 * x)` | `K(field)` | an aux field: its value from the others at every substep | — |
 | `y ~ volume / V₀` | `y(cell)` or `y(model)` | an algebraic variable (see below) | — |
 | `comp.p ~ volume / V₀` | a component parameter | a coupling (see below) | — |
 
@@ -79,6 +81,35 @@ An algebraic equation `y ~ expr` defines a cell or model variable `y` by an expr
 end
 ```
 
+**The operators of a PDESystem.** A field equation takes every operator of a LatticePDE
+`PDESystem`. A model needs no import for them:
+
+- `DivKGrad(:harmonic)(K, c)` and `DivKGrad(:arithmetic)(K, c)`: the conservative diffusion
+  `∇⋅(K ∇c)`, with the face mean of `K`;
+- `Advect(Upwind1())([ux, uy], c)`: first-order upwind advection, with one velocity term per
+  axis (parameters, fields or any lowered term);
+- a raw flux `Differential(x)(K * Differential(x)(c))`, the same as `DivKGrad` along `x`;
+- the lattice coordinates `x`, `y` and `z` (cell centers, from 0 at the low face), such as a
+  source `s * x`.
+
+A model that declares its own `x` keeps it, and `Differential(x)` in that model is an error
+that names the clash. The binding hides a global of the same name: a model body reads `x`
+as the coordinate even when its module defines `x`. When that happens, `@potts_model` warns
+once, naming the global; declare the value as a parameter (`@parameters x = 3.0`) to use it.
+The coordinates are read by field equations; a site update reads the site's `position`
+instead. `position` is the site's corner and `x` its center: `x = position[1] - h/2`, with
+`h` the spacing. An operator applies to a field or a site variable. An operator of a CPM
+read (`Δ(volume[owner])`) is an error: hold the value in a site variable and apply the
+operator to it.
+
+**Aux fields and maps.** `K ~ expr` defines the field `K` by its value: every field group
+computes it from the values it reads, at every substep. `Shift(t, 1)(m) ~ rhs` is a map: one
+application per MCS, stepped by `ExplicitMap()` (the default for a map). Under
+`repeat(R, sweep(…), fields)`, a map steps in the first pass only, so it reads the CPM state
+after the first part of the sweep. A model has rate
+equations or maps, not both: split stepping is planned. The error gives the route, a site
+update `@after_mcs m ~ rhs` on a site variable.
+
 ## Solvers are part of the problem
 
 The model states the equations; the problem states how to integrate them:
@@ -146,26 +177,27 @@ sol[:x][end], sol[:g][end]
   order of each group's first field). It follows the parameter writes. `substep_counts(prob)`
   gives the counts at the problem's parameters. The same function gives the counts of a
   LatticePDE problem.
-- Fields with the same solver step together, substep by substep: a field reads the fields
-  it depends on after their update, and fields that depend on each other read each other's
+- Fields with the same solver step together, substep by substep: a field reads the fields it
+  depends on after their update, and fields that depend on each other read each other's
   values from the start of the substep. Fields with different solvers (`solvers = [u =>
   ExplicitEuler(substeps = 4)]`) step one group after another, each reading the others'
   arrays. Groups that read one another in a loop (`c` reads `o` and `o` reads `c`) can grow
   without bound at any substep count, because each holds the others' values over the field
   window. For each group in such a loop, the window times the largest sum, over the group's
   fields, of the largest coefficient magnitudes of the terms that read other groups of the
-  same loop must be at most 1. Reads of groups outside the loop do not count. Past it the problem is refused, naming the fields of the loop. The routes: give
-  those fields one solver (with an explicit `substeps = n` when their coupled rates have no
-  automatic count), or step the fields over a shorter window (`repeat(n, …)` of the fields, or
-  a smaller `mcs_duration`). A one-way chain (`u` reads `c`, `c` does not read `u`) is not
-  limited: each group is stable under its own count, and the split adds only a first-order
-  error. A group with a term that the stability bound cannot see and that reads another
-  field counts as reading every other group. A term that reads only its own field
-  (`- 0.1 * c^2`) does not.
+  same loop must be at most 1. Reads of groups outside the loop do not count. Past it the
+  problem is refused, naming the fields of the loop. The routes: give those fields one
+  solver (with an explicit `substeps = n` when their coupled rates have no automatic count),
+  or step the fields over a shorter window (`repeat(n, …)` of the fields, or a smaller
+  `mcs_duration`). A one-way chain (`u` reads `c`, `c` does not read `u`) is not limited:
+  each group is stable under its own count, and the split adds only a first-order error. A
+  group with a term that the stability bound cannot see and that reads another field counts
+  as reading every other group. A term that reads only its own field (`- 0.1 * c^2`) does
+  not.
 - The CPM quantities in a field equation (`kind`, cell reads, neighbor counts) are evaluated
   once per MCS, before the fields step, and held over the substeps; so is `mcs`. `time`
-  advances with the substeps. `rand()`
-  cannot appear in a field equation: draw in a site update and read its variable.
+  advances with the substeps. `rand()` cannot appear in a field equation: draw in a site
+  update and read its variable.
 - On a hexagonal lattice, `Δ` is the only spatial operator. On a lattice with a `domain`,
   the fields live in the domain: a site outside it keeps its value, and the domain's edge
   has zero flux. Face values still apply at the faces of the box.

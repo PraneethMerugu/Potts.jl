@@ -265,8 +265,15 @@ _empty_inner(name) = ModelingToolkitBase.System(Equation[], _unwrap(t); name)
 # The inner System of a model: its quantities, equations, observed equations and components.
 # MTK's component checks run; its unit check does not (`mtkcompile` runs Potts' own, which
 # names the statement: a built-in such as `volume` carries the lattice's units there).
+# A field equation with a raw spatial derivative (`Differential(x)(K * Differential(x)(c))`, F2
+# design §2.11) stays out of it: an MTK `System` has one independent variable, the time; the
+# model's PDESystem (`Potts.fields`) holds it.
 function _inner_system(sys::PottsSystem)
-    return ModelingToolkitBase.System(_p(sys, :equations), _unwrap(t), _p(sys, :variables), _p(sys, :parameters);
+    spatial(eq) = (u = _unwrap(eq.rhs); found = Ref(false);
+                   _walk_all(y -> iscall(y) && operation(y) isa Differential && !isequal(operation(y).x, _unwrap(t)) &&
+                                  (found[] = true), u); found[])
+    eqs = [eq for eq in _p(sys, :equations) if !spatial(eq)]
+    return ModelingToolkitBase.System(eqs, _unwrap(t), _p(sys, :variables), _p(sys, :parameters);
         name = nameof(sys), observed = _p(sys, :observed), initialization_eqs = _p(sys, :initialization_eqs),
         systems = _component_systems(_p(sys, :components)), checks = ModelingToolkitBase.CheckComponents)
 end
