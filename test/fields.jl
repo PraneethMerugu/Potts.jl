@@ -708,25 +708,25 @@ end
     prob = PottsProblem(FdMask(; name = :m), [ownership => σ, kind => [:wall]], (0, 4); field_solver = ExplicitEuler(substeps = 2))
     integ = init(prob, SequentialCPM()); step!(integ)
     rt = CorePotts._runtime(integ.ctx.__fields1)
-    even = rt.even
+    even = rt.steps[1]
     setp(integ, :v)(integ, 3.0)                          # a new parameter object, equal values
     step!(integ)
-    @test rt.even === even && rt.p === integ.p           # kept: nothing the field reads changed
+    @test rt.steps[1] === even && rt.host.p === integ.p           # kept: nothing the field reads changed
     setp(integ, :v)(integ, 4.0)
     step!(integ)
-    @test rt.even !== even                               # control: the mask value changed, rebound
+    @test rt.steps[1] !== even                               # control: the mask value changed, rebound
     @test all(==(4.0), Array(current_state(integ).site.c)[σ .== 1])
     # a kind table: an equal table keeps the launches, a new one rebinds and is read
     tp = PottsProblem(FdTab(; name = :t), [ownership => σ, kind => [:A]], (0, 2); field_solver = ExplicitEuler(substeps = 1))
     a = init(tp, SequentialCPM()); step!(a)
-    rt = CorePotts._runtime(a.ctx.__fields1); even = rt.even
+    rt = CorePotts._runtime(a.ctx.__fields1); even = rt.steps[1]
     setp(a, :δ)(a, [0.5, 0.0])
     step!(a)
-    @test rt.even === even
+    @test rt.steps[1] === even
     s1 = deepcopy(current_state(a))
     setp(a, :δ)(a, [2.0, 0.0])
     step!(a)
-    @test rt.even !== even
+    @test rt.steps[1] !== even
     b = init(remake(tp; u0 = s1, tspan = (2, 3), p = [:δ => [2.0, 0.0]]), SequentialCPM()); step!(b)
     @test Array(current_state(a).site.c) == Array(current_state(b).site.c)
     @test Array(current_state(a).site.c) != Array(s1.site.c)              # control
@@ -1229,4 +1229,104 @@ end
     # control: one group steps c and u together (u reads the old c)
     one = solve(bp, ExplicitEuler(; dt = 1.0, substeps = 3))
     @test !(one[:u][end] ≈ Array(st.site.u))
+end
+
+# F2-08a (review S1 of F2-06): a parameter write that the field phases refuse (a coupling past
+# the limit, a negative diffusion coefficient) is refused before anything changes: by `setp`,
+# `integ.ps[x] = v` and `remake` themselves, not by the next `step!` after its CPM sweep (base:
+# `setp` returned, and the next `step!` threw after σ had moved, leaving a half step)
+@potts_model FdRotCells begin
+    @kinds medium A
+    @parameters begin
+        k = 0.5
+        Dc = 0.1
+        κ[kind] = [0.0, 0.0]
+    end
+    @variables begin
+        c(field) = 1.0
+        o(field) = 0.0
+    end
+    @lattice Lattice((6, 6); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations begin
+        D(c) ~ Dc * Δ(c) - k * o - κ[kind] * o
+        D(o) ~ k * c
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@testset "F2-08a: a refused parameter write changes nothing (S1)" begin
+    sys = FdRotCells(; name = :r)
+    σ = zeros(Int32, 6, 6); σ[2:3, 2:3] .= 1
+    pw = PottsProblem(sys, [ownership => σ, kind => [:A]], (0, 40); seed = 3, field_solver = ExplicitEuler(substeps = 1),
+        solvers = [fdvar(sys, "o") => ExplicitEuler(substeps = 2)])
+    ig = init(pw, SequentialCPM())
+    step!(ig)
+    snap(i) = (i.t, copy(Array(current_state(i).σ)), copy(Array(current_state(i).site.c)), copy(Array(current_state(i).site.o)))
+    s1, p1 = snap(ig), ig.p
+    for (what, write) in (("setp", () -> setp(ig, :k)(ig, 3.0)), ("integ.ps", () -> (ig.ps[:k] = 3.0)),
+            ("setp of two", () -> setp(ig, [:k, :Dc])(ig, [3.0, 0.1])))
+        e = fdargerr(write)
+        @test occursin("window · Σ max|coefficient| = 3.0 > 1", e)
+        @test ig.p === p1 && getp(ig, :k)(ig) == 0.5 && snap(ig) == s1        # nothing changed
+    end
+    @test occursin("negative", fdargerr(() -> setp(ig, :Dc)(ig, -1.0)))       # the other refusal, the same way
+    @test getp(ig, :Dc)(ig) == 0.1 && snap(ig) == s1
+    # a kind table past the limit (kind A's entry 5: the coupling 5.5), by setp and by `ps`
+    for write in (() -> setp(ig, :κ)(ig, [0.0, 5.0]), () -> (ig.ps[:κ] = [0.0, 5.0]))
+        @test occursin("window · Σ max|coefficient| = 5.5 > 1", fdargerr(write))
+        @test ig.p === p1 && getp(ig, :κ)(ig) == [0.0, 0.0] && snap(ig) == s1
+    end
+    @test occursin("window · Σ max|coefficient| = 3.0 > 1", fdargerr(() -> remake(pw; p = [:k => 3.0])))
+    # the run goes on, and a write the check accepts takes effect (control)
+    step!(ig)
+    @test ig.t == s1[1] + 1 && Array(current_state(ig).site.c) != s1[3]
+    setp(ig, :k)(ig, 0.4)
+    step!(ig)
+    @test getp(ig, :k)(ig) == 0.4 && ig.t == s1[1] + 2
+end
+
+# F2-08a: the substep count of each field group of a Potts problem or integrator, in group
+# order (as front end B's `substep_counts`; base: only the internal `CorePotts._runtime(…).n`)
+@testset "F2-08a: substep_counts per field group in front end A" begin
+    sys = FdTwo(; name = :t)
+    prob = PottsProblem(sys, fd_source_op((12, 10)), (0, 3); field_solver = ExplicitEuler(substeps = 2),
+        solvers = [:u => ExplicitEuler(substeps = 3)])
+    integ = init(prob, SequentialCPM())
+    @test substep_counts(integ) == [fd_n(integ, 1), fd_n(integ, 2)] == [2, 3]
+    @test substep_counts(prob) == [2, 3]
+    @test Potts.substep_counts === Potts.LatticePDE.substep_counts                # one function for both front ends
+    # it follows a parameter write: diffusion 4× raises the automatic part of the count
+    p1 = PottsProblem(FdClosed(; name = :c), fd_empty((12, 10)), (0, 2); field_solver = ExplicitEuler())
+    i1 = init(p1, SequentialCPM())
+    n1 = only(substep_counts(i1))
+    setp(i1, :Dc)(i1, 4.0)
+    # right after the write, before any step: the count of a fresh integrator at the new value
+    # (review M2 of batch 3; base: the last step's count until the next step)
+    fresh = substep_counts(init(remake(p1; p = [:Dc => 4.0]), SequentialCPM()))
+    @test substep_counts(i1) == fresh && only(fresh) > n1
+    step!(i1)
+    @test only(substep_counts(i1)) == fd_n(i1) > n1
+end
+
+# F2-08a: the field groups of front end A are lowered by `LatticePDE.lower_group`, and
+# `mtkcompile`'s lowering of the group of all fields is reused by a one-group `PottsProblem`
+# (one `lower_group` call for the model); another state type or a split lowers again
+@testset "F2-08a: mtkcompile's GroupSpec is reused (one lower_group call)" begin
+    calls() = Potts._LOWER_GROUP_CALLS[]
+    n0 = calls()
+    c = mtkcompile(FdClosed(; name = :c))
+    @test calls() == n0 + 1
+    prob = PottsProblem(c, fd_empty((12, 10)), (0, 2); field_solver = ExplicitEuler())
+    @test calls() == n0 + 1                                       # reused
+    @test only(substep_counts(init(prob, SequentialCPM()))) >= 1
+    PottsProblem(c, fd_empty((12, 10)), (0, 2); field_solver = ExplicitEuler(substeps = 4))
+    @test calls() == n0 + 1                                       # another algorithm: the same group
+    PottsProblem(c, fd_empty((12, 10)), (0, 2); T = Float32, field_solver = ExplicitEuler())
+    @test calls() == n0 + 2                                       # control: Float32 lowers once more
+    sys2 = FdTwo(; name = :t)
+    c2 = mtkcompile(sys2)
+    m0 = calls()
+    PottsProblem(c2, fd_source_op((12, 10)), (0, 2); field_solver = ExplicitEuler(substeps = 2),
+        solvers = [:u => ExplicitEuler(substeps = 3)])
+    @test calls() == m0 + 2                                       # a split: one per group (the whole group is cached)
 end

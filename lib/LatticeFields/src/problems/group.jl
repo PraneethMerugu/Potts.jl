@@ -2,7 +2,7 @@
 # `GroupSpec` (the IR boundary: plain data and compiled functions, no Symbolics), made
 # numerical by a `FieldGroup` (its semantic program and its plans, by update and value type),
 # and stepped by a `GroupRuntime` bound to a store's arrays (`bind_group`, `advance!`).
-# Front end B (`FieldProblem`) steps through it; front end A follows in F2-08a.
+# Both front ends step through it: B's `FieldProblem` and A's `CorePotts.FieldPhase`.
 
 """
     GroupSpec
@@ -190,8 +190,12 @@ and the step launches at both slot parities, the clamps of its masked fields, th
 bring its fields back to slot 1 (`ends_in = :slot1`), its substep count `n` and window `dt`,
 the algorithm's cache (`alg_cache`) and the status of its last step. Made by
 [`bind_group`](@ref), stepped by [`advance!`](@ref).
+
+`pending` is the host task that compiles the launches on a device (`nothing` when there is
+none): a front end awaits it before the first step. `host` is the front end's own record of
+the binding (front end A: the parameter object and the state arrays it was bound from).
 """
-mutable struct GroupRuntime{ST <: FieldStore, A, B, M, CL, CP, PV, S}
+mutable struct GroupRuntime{ST <: FieldStore, A, B, M, CL, CP, PV, S, H}
     store::ST
     alg::A
     init::Any                           # the init plan (masks), for `rebind!`
@@ -213,6 +217,10 @@ mutable struct GroupRuntime{ST <: FieldStore, A, B, M, CL, CP, PV, S}
     backend::Any
     cache::S
     status::SciMLBase.ReturnCode.T
+    pending::Union{Nothing, Task}
+    host::H
+    clamp_at_start::Bool                # F2-08a: front end A keeps its step without the clamp
+    fixed_time::Bool                    # F2-08a: front end A holds `t` over its substeps
 end
 
 # the current slots a launch of the group binds at slot parity `parity`: the group's fields
@@ -238,7 +246,8 @@ fields in the slot their last substep wrote (one group: the slots alternate); `:
 them back to slot 1 after an odd count, so a group that runs after it reads current values.
 """
 function bind_group(g::FieldGroup, alg, st::FieldStore, p; fields = g.spec.state, n::Integer, dt::Real,
-        c, ends_in::Symbol = :parity, backend, options::CompileOptions, V::Type)
+        c, ends_in::Symbol = :parity, backend, options::CompileOptions, V::Type, host = nothing,
+        clamp_at_start::Bool = true, fixed_time::Bool = false)
     ends_in in (:parity, :slot1) || throw(ArgumentError("ends_in must be :parity or :slot1; got $(repr(ends_in))"))
     prog = group_program(g, alg)
     ids = Set(fieldid(prog, k) for k in fields)
@@ -251,7 +260,8 @@ function bind_group(g::FieldGroup, alg, st::FieldStore, p; fields = g.spec.state
     copies = Tuple((st.bufs[f][1], st.bufs[f][2]) for f in swaps)
     stab = all_state ? g.spec.stability : restrict_bound(g.spec.stability, collect(String, fields))
     return GroupRuntime(st, alg, ip, sp, steps, masks, clamps, swaps, copies, ends_in, all_state, collect(String, fields), Int(n),
-        Float64(dt), stab, p, c, prog, backend, alg_cache(alg, g, st), SciMLBase.ReturnCode.Success)
+        Float64(dt), stab, p, c, prog, backend, alg_cache(alg, g, st), SciMLBase.ReturnCode.Success, nothing, host,
+        clamp_at_start, fixed_time)
 end
 
 """
@@ -286,25 +296,25 @@ _parity(rt::GroupRuntime) = isempty(rt.swaps) ? 1 : rt.store.cur[rt.swaps[1]]
 clamp_now!(rt::GroupRuntime) = (_clamp!(rt.clamps, rt.store, rt.p); nothing)
 
 """
-    advance!(rt, clock, n = rt.n) -> ReturnCode.T
+    advance!(rt, clock, n = rt.n, window = rt.dt) -> ReturnCode.T
 
 One window of the group: with `clock = (t0, k)` (the window's start time and step index),
 the masks and the clamp at the window's start (when the group has masked conditions), then
-`n` substeps of `h = dt / n` at `t0 + j h`, alternating the slot parity; with
+`n` substeps of `h = window / n` at `t0 + j h`, alternating the slot parity; with
 `ends_in = :slot1` the fields go back to slot 1 after an odd count. Returns the algorithm's
 code for the step (`ReturnCode.Success` for the explicit algorithms), also kept in
 `rt.status`. No allocation on the host executor.
 """
-function advance!(rt::GroupRuntime, clock::Tuple{Real, Integer}, n::Integer = rt.n)
+function advance!(rt::GroupRuntime, clock::Tuple{Real, Integer}, n::Integer = rt.n, window::Real = rt.dt)
     t = Float64(clock[1])
-    h = rt.dt / n
+    h = Float64(window) / n
     st = rt.store
     if rt.masks !== nothing
         rt.masks[_parity(rt)]((t, h))
-        clamp_now!(rt)                  # the values the masks set now (the bound parameters)
+        rt.clamp_at_start && clamp_now!(rt)     # the values the masks set now (the bound parameters)
     end
     for j in 0:(n - 1)
-        rt.steps[_parity(rt)]((t + j * h, h))
+        rt.steps[_parity(rt)]((rt.fixed_time ? t : t + j * h, h))
         _swap!(st.cur, rt.swaps)
     end
     rt.ends_in === :slot1 && _slot1!(rt.copies, st.cur, rt.swaps, 1)
@@ -322,8 +332,14 @@ function _slot1!(copies::Tuple, cur, swaps, i)
     return _slot1!(Base.tail(copies), cur, swaps, i + 1)
 end
 # slot 2 into slot 1: the two slots of a field never alias, so a host copy is a loop (Base's
-# `copyto!` of a view checks aliasing and may copy the source first); a device copy is a copy
-_copy!(d::AbstractArray, s::AbstractArray) = copyto!(d, s)
+# `copyto!` of a view checks aliasing and may copy the source first); a device copy is one
+# kernel (a device `copyto!` may wait for the device)
+_copy_body!(i, d, s) = (@inbounds d[i] = s[i]; nothing)       # i ≤ length(s) == length(d)
+function _copy!(d::AbstractArray, s::AbstractArray)
+    length(d) == length(s) || throw(DimensionMismatch("slot 1 has $(length(d)) values, slot 2 $(length(s))"))
+    Exec.launch!(KA.get_backend(d), _copy_body!, length(s), (d, s))
+    return d
+end
 function _copy!(d::Union{Array, SubArray{<:Any, 1, <:Array}}, s::Union{Array, SubArray{<:Any, 1, <:Array}})
     @inbounds for i in eachindex(d, s)
         d[i] = s[i]

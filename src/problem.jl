@@ -789,7 +789,7 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     # the fields' CPM inputs and masks (written every MCS by the field phases, fields.jl)
     if !isempty(c.fields)
         dims = _p(sys, :lattice).dims
-        for (name, _, E) in _field_inputs(sys, T)
+        for (name, _, E) in _field_inputs(c, T)
             push!(site, name => zeros(E === Bool ? UInt8 : E, dims))
         end
         foreach(n -> push!(site, Symbol(n, :__mask) => zeros(UInt8, dims)), _masked_fields(sys))

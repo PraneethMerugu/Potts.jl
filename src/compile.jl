@@ -67,6 +67,9 @@ struct CompiledPottsSystem
     # pass (whose `from`/`to` default to `sibling(k)`). A dividing model that reads none of
     # them carries no `birth` column, so neither planner runs the serial pass (`_tracks_births`)
     uses_birth::Bool
+    # the lowered field groups (`GroupSpec`s, fields.jl), by partition and state type: the group
+    # of all fields in Float64 is lowered here, and problems reuse it; never read by codegen
+    field_specs::Dict{Any, Any}
 end
 
 Base.nameof(c::CompiledPottsSystem) = nameof(c.sys)
@@ -583,7 +586,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     _dry_lower(sys, gather_names, fields, cell_odes)
     _check_algebraic_lowering(sys, gather_names)
     _check_boundaries(sys, fields, gather_names)
-    fieldsys = _check_fields(sys, gather_names)
+    fieldsys, field_specs = _check_fields(sys, gather_names)
     isempty(_p(sys, :schedule)) || _placed_schedule(_p(sys, :schedule), _convert_names(sys))
     _check_units(sys)
 
@@ -600,7 +603,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         needs_moments, relations, contact_spec, proposal_spec, gather_names,
         Footprint(; read = radius_read, source_read, source_write),
         scratch, schedule, pre_snapshots, update_pops, energy_snapshots, cell_ode_pops, discrete, discrete_pops,
-        contact_trackers, authored, ode_systems, initialization, uses_pieces, uses_pieces_full, hex, uses_birth)
+        contact_trackers, authored, ode_systems, initialization, uses_pieces, uses_pieces_full, hex, uses_birth, field_specs)
 end
 
 # ---------------------------------------------------------------------------------------
@@ -773,17 +776,24 @@ function _check_boundaries(sys::PottsSystem, fields, rn)
 end
 
 # The field equations and `@boundary` entries as a `PDESystem`, lowered once through
-# LatticePDE (in Float64) so that a term the field compiler cannot lower is an error here, with
-# the CPM inputs dry-lowered in site scope. `nothing` for a model without fields.
+# LatticePDE's `lower_group` (in Float64) so that a term the field compiler cannot lower is an
+# error here, with the CPM inputs dry-lowered in site scope. Returns the PDESystem and the
+# cache of lowered groups (`CompiledPottsSystem.field_specs`) holding the group of all fields,
+# which a `PottsProblem` with one group in Float64 reuses (F2 design §2.5); `nothing` and an
+# empty cache for a model without fields.
 function _check_fields(sys::PottsSystem, rn)
+    specs = Dict{Any, Any}()
     eqs = _field_equations(sys)
-    isempty(eqs) && return nothing
-    pdesys, cv = _located(() -> _field_system(sys), sys, first(_p(sys, :equations)))
+    isempty(eqs) && return nothing, specs
+    known = _located(() -> _field_inputs(sys, Float64), sys, first(_p(sys, :equations)))
+    names = Symbol[info(x).name for (x, _) in eqs]
+    # (the stability bound is built at the first problem: `mtkcompile` only checks the lowering)
+    g = _located(() -> _lower_field_group(sys, names, Float64; known, bound = false), sys, first(_p(sys, :equations)))
     env = _site_env(Float64, :i, rn; mcs = :mcs, key = :key)
-    foreach(e -> _fill_value(e[2], env), cv.filled)
-    disc = _field_disc(sys, Float64)
-    LatticePDE.symbolic_discretize(pdesys, disc; update = _EulerUpdate(nothing))
-    return pdesys
+    foreach(e -> _fill_value(e[2], env), g.filled)
+    specs[(:inputs, Float64)] = known
+    specs[(names, Float64)] = g
+    return g.pdesys, specs
 end
 
 # A slot of a discrete component is written by its ticks only.

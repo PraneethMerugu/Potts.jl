@@ -138,6 +138,10 @@ sol[:x][end], sol[:g][end]
   the count follows the table's values. A coefficient that is not finite at an entry
   (`- c / τ[kind]` with a zero entry) is refused, naming the entry, even with
   `substeps = n`: make the entry finite and nonzero.
+- `substep_counts(integ)` gives the substep count of each field group, in group order (the
+  order of each group's first field). It follows the parameter writes. `substep_counts(prob)`
+  gives the counts at the problem's parameters. The same function gives the counts of a
+  LatticePDE problem.
 - Fields with the same solver step together, substep by substep: a field reads the fields
   it depends on after their update, and fields that depend on each other read each other's
   values from the start of the substep. Fields with different solvers (`solvers = [u =>
@@ -162,7 +166,9 @@ sol[:x][end], sol[:g][end]
   has zero flux. Face values still apply at the faces of the box.
 - A diffusion coefficient must not be negative: that is anti-diffusion, an ill-posed problem
   whose shortest wavelengths grow without bound under any step. The problem throws an
-  error at build, or at the next MCS after a parameter change makes it negative.
+  error at build. A parameter write that makes it negative (`setp`, `integ.ps[x] = v`,
+  `remake`) throws the error itself and changes nothing. A write past the loop limit of
+  solver groups (above) does the same.
 - `Adaptive(alg; reltol, abstol, …)` integrates cell and model ODEs on the host with any
   SciML ODE algorithm (load its package, e.g. OrdinaryDiffEqTsit5). Equations with
   `rand()` cannot be integrated adaptively. Its keywords and the algorithm's fields are

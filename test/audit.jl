@@ -525,9 +525,14 @@ end
         @test err isa ArgumentError && occursin("negative", err.msg) && occursin("`c`", err.msg)
         @test occursin("coefficient ≥ 0", err.msg)                  # the route (round 0: none)
     end
+    # after a parameter change: refused by the write itself, which changes nothing (F2-08a)
+    @test audit_err(() -> remake(one; p = [:Dc => -0.1])) isa ArgumentError
     integ = init(one, SequentialCPM())
-    integ.p = remake(one; p = [:Dc => -0.1]).p
-    @test audit_err(() -> step!(integ)) isa ArgumentError
+    p0 = integ.p
+    @test audit_err(() -> setp(integ, :Dc)(integ, -0.1)) isa ArgumentError
+    @test integ.p === p0
+    step!(integ)
+    @test integ.t == 1
 end
 
 @potts_model AuditClear begin

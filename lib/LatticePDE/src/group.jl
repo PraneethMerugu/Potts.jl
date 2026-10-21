@@ -4,7 +4,7 @@
 # the stability bound and the texts of the terms the bound does not see.
 
 """
-    lower_group(pdesys, disc; fields = nothing) -> GroupSpec
+    lower_group(pdesys, disc; fields = nothing, values = true, bound = true) -> GroupSpec
 
 The field group of the state variables `fields` of `pdesys` (all of them by default),
 lowered on the lattice `disc` to its [`GroupSpec`](@ref LatticeFields.Problems.GroupSpec):
@@ -17,19 +17,62 @@ it becomes an input of the group (its key in `spec.external`), and its equations
 and initial values leave the group. Its terms in the group's rates are then sources of the
 group's step (the bound of the group's rows does not count them), as a front end with two
 field groups steps them (one after the other, each reading the other's current values).
-"""
-lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = nothing) = _lower_group(sys, disc; fields).spec
 
-function _lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = nothing)
+**Values.** With `values = false` the caller binds the parameter and table values itself (a
+front end with its own parameter object, such as Potts): the system's defaults are not read,
+so a parameter whose default reads other parameters is not folded into the equations (it
+stays a slot) and an array parameter needs no default.
+
+**Bound.** With `bound = false` the stability bound is not built yet: the spec's `stability`
+is a [`DeferredBound`](@ref), and [`resolve_bound`](@ref) builds it when the group is first
+stepped (a front end that lowers a group to check it, before any problem exists, does not pay
+for the bound).
+"""
+lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = nothing, values::Bool = true, bound::Bool = true) =
+    _lower_group(sys, disc; fields, values, bound).spec
+
+"""
+    DeferredBound
+
+The stability bound of a group lowered with `lower_group(…; bound = false)`, not built yet: it
+holds the lowered system that [`resolve_bound`](@ref) builds the bound from. Calling it is an
+error that names `resolve_bound`.
+"""
+struct DeferredBound
+    cf::Any
+    sys::Any
+end
+(::DeferredBound)(p) = throw(ArgumentError("the group's stability bound is not built yet (`lower_group(…; bound = false)`); " *
+                                           "build it with `LatticePDE.resolve_bound(spec)`"))
+
+"""
+    resolve_bound(spec) -> GroupSpec
+
+`spec` with its stability bound built (and the terms the bound cannot see in `texts.terms`)
+when it was lowered with `bound = false`; else `spec` itself.
+"""
+function resolve_bound(spec::Problems.GroupSpec)
+    d = spec.stability
+    d isa DeferredBound || return spec
+    stab = stability_bound(d.cf, d.sys)
+    return Problems.GroupSpec(spec.rate; spec.state, spec.external, spec.params, spec.tables, spec.inputs, spec.init,
+        spec.kind, spec.clock, stability = stab, route = spec.texts.route, terms = copy(stab.terms), spec.linearity)
+end
+
+# `values = false`: the front end binds the parameter and table values itself (Potts: its
+# parameter object, with its own computed parameters), so the system's defaults are neither
+# folded (`_fold_computed`) nor checked (`_check_tables`)
+function _lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = nothing, values::Bool = true, bound::Bool = true)
     _check_parts(sys)
-    sys, derived, computed = _fold_computed(sys)
+    derived, computed = Pair[], Pair[]
+    values && ((sys, derived, computed) = _fold_computed(sys))
     external = String[]
     fields === nothing || ((sys, external) = _group_cut(sys, fields))
     cf = symbolic_discretize(sys, disc)                 # the rate form: no update
-    _check_tables(cf, sys)
+    values && _check_tables(cf, sys)
     s = cf.program
     hasmap = any(k -> startswith(k.key, "map:"), s.kernels)
-    stab = hasmap ? (p -> NaN) : stability_bound(cf, sys)
+    stab = hasmap ? (p -> NaN) : bound ? stability_bound(cf, sys) : DeferredBound(cf, sys)
     spec = Problems.GroupSpec(s; state = _states(s), external, kind = hasmap ? :map : :rate,
         init = [k.key for k in s.kernels if startswith(k.key, "mask:")], stability = stab,
         params = String[string(p) for p in cf.params], tables = String[first(t) for t in cf.tables],

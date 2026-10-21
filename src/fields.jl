@@ -283,7 +283,11 @@ The filled inputs of model `sys`: `(name, expr, eltype)`, the site arrays the CP
 the fields every MCS (`T` is the state type).
 """
 _field_inputs(sys::PottsSystem, T::Type = Float64) =
-    isempty(_field_equations(sys)) ? Tuple{Symbol, Any, Type}[] : _field_system(sys; T)[2].filled
+    isempty(_field_equations(sys)) ? Tuple{Symbol, Any, Type}[] :
+    _canonical_filled(_field_system(sys; T, known = Tuple{Symbol, Any, Type}[])[2].filled)
+# those of compiled model `c`, made once per state type (cached on `c`)
+_field_inputs(c::CompiledPottsSystem, T::Type = Float64) =
+    _field_cached(() -> _field_inputs(c.sys, T), c, (:inputs, T))
 
 """The masked fields of `sys` (each has a mask site array `name__mask`)."""
 _masked_fields(sys::PottsSystem) = unique!(Symbol[info(b.field).name for b in _p(sys, :boundaries) if b.axis == 0])
@@ -303,15 +307,18 @@ function _field_disc(sys::PottsSystem, T)
 end
 
 # ---------------------------------------------------------------------------------------
-# Field groups of a problem: one LatticeFields program per solver group
+# Field groups of a problem: one LatticeFields group (`GroupSpec`, `FieldGroup`) per solver group
 
 """
-One stepped group: its fields, the lowered program (semantic form), the mask and step plans,
-the array bindings, the parameter and table bindings and the substep rule.
+One stepped group: its fields, its `FieldGroup` (the `GroupSpec` from `LatticePDE.lower_group`,
+the update of its algorithm fused by the IR pass, the plans), the algorithm, the semantic
+program and the mask and step plans, the array bindings, the parameter and table bindings,
+the substep rule, the fingerprint text and the compile options.
 """
 struct _FieldGroup
     names::Vector{Symbol}
-    pdesys::Any
+    group::Any
+    alg::Any
     program::Any
     masks::Any
     step::Any
@@ -320,15 +327,55 @@ struct _FieldGroup
     params::Vector{Symbol}
     substeps::Any
     fingerprint::String
+    options::Any
 end
 
-# the explicit Euler update of a substep, clipped below at `lower` (legacy Potts clips at 0)
+# the explicit Euler update of a substep, clipped below at `lower`, fused symbolically (the
+# oracle of the update pass's byte-identity gate, test/fields_identity.jl)
 struct _EulerUpdate
     lower::Union{Nothing, Float64}
 end
 function (u::_EulerUpdate)(kb, c, r)
     v = LatticePDE.euler_update(kb, c, r)
     return u.lower === nothing ? v : max(v, u.lower)
+end
+
+# The cache of the lowered field groups of a compiled model (`CompiledPottsSystem.field_specs`):
+# `mtkcompile` lowers the group of all fields once, in Float64, and a `PottsProblem` whose
+# partition and state type match reuses it (F2 design §2.5)
+const _FIELD_SPEC_LOCK = ReentrantLock()
+_field_cached(f, c::CompiledPottsSystem, key) = lock(() -> get!(f, c.field_specs, key), _FIELD_SPEC_LOCK)
+
+# the number of `lower_group` calls of this session (a test counts them)
+const _LOWER_GROUP_CALLS = Threads.Atomic{Int}(0)
+
+"""
+    _lower_field_group(sys, names, T; known) -> NamedTuple
+
+The field group of the fields `names` of model `sys` in state type `T`, lowered once by
+`LatticePDE.lower_group` to its `GroupSpec` (`spec`), with what front end A binds: the
+parameter names of its slots (`params`), its tables by id (`tables`) and the generated inputs
+(`filled`, to print a term in the model's words). The fields of other groups are inputs of
+the group, read from their arrays (`_field_system`).
+"""
+function _lower_field_group(sys::PottsSystem, names::Vector{Symbol}, T::Type; known, bound::Bool = true)
+    pdesys, cv = _field_system(sys, names; T, known)
+    Threads.atomic_add!(_LOWER_GROUP_CALLS, 1)
+    spec = LatticePDE.lower_group(pdesys, _field_disc(sys, T); values = false, bound)
+    # the model's parameter of each slot and table (the spec names them as the PDESystem prints them)
+    pname(k) = info(only(q for q in getfield(pdesys, :ps) if string(q) == k)).name
+    params = Symbol[pname(k) for k in spec.params]
+    tables = Pair{Int, Symbol}[i => pname(tb.key) for (i, tb) in enumerate(spec.rate.tables)]
+    return (; spec, params, tables, filled = copy(cv.filled), pdesys)
+end
+# cached on compiled model `c` by partition and state type; `mtkcompile`'s entry has its
+# stability bound deferred (`LatticePDE.resolve_bound`), built here once, at the first problem
+function _field_group_spec(c::CompiledPottsSystem, names::Vector{Symbol}, T::Type)
+    return lock(_FIELD_SPEC_LOCK) do
+        g = get!(() -> _lower_field_group(c.sys, names, T; known = _field_inputs(c, T)), c.field_specs, (names, T))
+        g.spec.stability isa LatticePDE.DeferredBound || return g
+        c.field_specs[(names, T)] = (; g..., spec = LatticePDE.resolve_bound(g.spec))
+    end
 end
 
 """
@@ -555,7 +602,9 @@ end
 The field groups of compiled model `c` for state type `T` and solvers `spec`: fields with
 equal solvers (canonical form) form one group, in order of first appearance; inside a group
 the plan orders the fields topologically by what they read (strongly connected fields step
-together, Jacobi; v3 §6.1). A field of another group is read from its own array.
+together, Jacobi; v3 §6.1). A field of another group is read from its own array. Each group
+is lowered once by `LatticePDE.lower_group` (cached on `c`: the group of all fields comes from
+`mtkcompile`), and its algorithm's update is fused by the IR pass (`fuse_update`).
 """
 function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
     sys = c.sys
@@ -567,34 +616,28 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
         j = findfirst(g -> g[1] == k, order)
         j === nothing ? push!(order, (k, s, Symbol[n])) : push!(order[j][3], n)
     end
-    dims = _p(sys, :lattice).dims
     dt = _field_dt(sys)
-    masked = _masked_fields(sys)
     groups = _FieldGroup[]
-    known = _field_inputs(sys, T)
+    allnames = Symbol[info(x).name for (x, _) in _field_equations(sys)]
     # with several groups, the coupling between them (`_check_group_coupling`): the bound of
-    # the whole field system, in rate form, and the partition
+    # the whole field system (the group of all fields, in rate form), and the partition
     coupling = nothing
     if length(order) > 1
-        wsys, _ = _field_system(sys; T, known)
-        wcf = LatticePDE.symbolic_discretize(wsys, _field_disc(sys, T))
-        coupling = (; bound = LatticePDE.stability_bound(wcf, wsys), groups = [String[string(n) for n in g[3]] for g in order],
-            wnames = Symbol[info(q).name for q in wcf.params])
+        whole = _field_group_spec(c, allnames, T)
+        coupling = (; bound = whole.spec.stability, groups = [String[string(n) for n in g[3]] for g in order],
+            wnames = whole.params)
     end
+    # Cartesian indexing: the host loop hands each site its coordinates (a linear launch
+    # decodes them with an integer division per site, about 3x slower on the CPU; PG-3)
+    opts = LatticeFields.Compile.CompileOptions(; T, float64_ok = !(T <: Union{Float16, Float32}), lanes = :state,
+        index = :cartesian)
     for (gi, (_, solver, names)) in enumerate(order)
-        pdesys, cv = _field_system(sys, names; T, known)
-        disc = _field_disc(sys, T)
-        cf = LatticePDE.symbolic_discretize(pdesys, disc; update = _EulerUpdate(solver.lower))
-        prog = LatticeFields.Compile.semantic(cf.program)
-        keys = [k.key for k in prog.kernels]
-        maskids = [i for (i, k) in enumerate(keys) if startswith(k, "mask:")]
-        stepids = setdiff(eachindex(keys), maskids)
-        # Cartesian indexing: the host loop hands each site its coordinates (a linear launch
-        # decodes them with an integer division per site, about 3x slower on the CPU; PG-3)
-        opts = LatticeFields.Compile.CompileOptions(; T, float64_ok = !(T <: Union{Float16, Float32}), lanes = :state,
-            index = :cartesian)
-        mplan = LatticeFields.Schedule.plan(prog, maskids; options = opts)
-        splan = LatticeFields.Schedule.plan(prog, stepids; options = opts)
+        lg = _field_group_spec(c, names, T)
+        gspec = lg.spec
+        fused = LatticeFields.Compile.fuse_update(gspec.rate, LatticeFields.Problems.update_rule(solver))
+        group = LatticeFields.Problems.FieldGroup(gspec; alg = solver, program = LatticeFields.Compile.semantic(fused))
+        prog = group.program
+        mplan, splan = LatticeFields.Problems.group_plans(group, solver, T, KernelAbstractions.CPU(), opts)
         arrays = Tuple(begin
                            k = f.key
                            if startswith(k, "mask:")
@@ -605,11 +648,8 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
                                (CorePotts.Part((:site, Symbol(k))), nothing)
                            end
                        end for f in prog.fields)
-        pname(q) = info(q).name
-        params = Symbol[pname(q) for q in cf.params]
-        tables = Pair{Int, Symbol}[i => pname(only(q for q in getfield(pdesys, :ps) if string(q) == tb.key))
-                                   for (i, tb) in enumerate(prog.tables)]
-        stab = LatticePDE.stability_bound(cf, pdesys)
+        cv = (; filled = lg.filled)
+        stab = gspec.stability
         least = something(solver.substeps, 1)
         if !isempty(stab.unbounded) && solver.substeps === nothing
             throw(ArgumentError("the substep count of the field$(length(names) == 1 ? "" : "s") " *
@@ -621,18 +661,18 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
                                 "that reads the state or `mcs`); give `PottsProblem` " *
                                 "`field_solver = ExplicitEuler(; substeps = n)` with `n ≥ mcs_duration · ρ / 1.8`"))
         end
-        fp = LatticeFields.Compile.fingerprint_text(cf.program; T)
-        push!(groups, _FieldGroup(names, pdesys, prog, mplan, splan, arrays, tables, params,
+        fp = LatticeFields.Compile.fingerprint_text(fused; T)
+        push!(groups, _FieldGroup(names, group, solver, prog, mplan, splan, arrays, lg.tables, lg.params,
             _Substeps(stab, dt, least, solver.substeps !== nothing, names, fp, String[_user_text(t, cv) for t in stab.terms],
                 (; filled = copy(cv.filled)),
-                coupling === nothing ? nothing : (; coupling..., index = gi, pnames = params)), fp))
+                coupling === nothing ? nothing : (; coupling..., index = gi, pnames = lg.params)), fp, opts))
     end
     return groups
 end
 
 # The site phase writing every filled input of the fields (one launch per MCS)
 function _field_fill_phase(c::CompiledPottsSystem, T)
-    filled = _field_inputs(c.sys, T)
+    filled = _field_inputs(c, T)
     isempty(filled) && return nothing
     env = _site_env(T, :i, c.gather_names; mcs = :mcs, key = :key)
     body = map(filled) do (name, ex, E)
@@ -659,8 +699,8 @@ function _field_phases(c::CompiledPottsSystem, T, spec::SolverSpec)
         # (the last entry: no term outside the linearity classes, `ifelse` arms not expanded)
         log === nothing || push!(log, Expr(:field_program, g.fingerprint, string(g.arrays), string(g.params),
             string(g.tables), _canonical_value(g.substeps.least), string(isempty(g.substeps.bound.unbounded) && isempty(g.substeps.bound.expanded))))
-        ph = CorePotts.FieldPhase{Symbol(:__fields, j)}(g.program, g.masks, g.step, g.arrays; g.tables, g.params,
-            substeps = g.substeps, dt)
+        ph = CorePotts.FieldPhase{Symbol(:__fields, j)}(g.group, g.alg, g.arrays; g.tables, g.params,
+            substeps = g.substeps, dt, g.options, T)
         push!(steps, ph)
         isempty(g.masks.launches) || push!(clamps, CorePotts.field_clamp(ph))
     end

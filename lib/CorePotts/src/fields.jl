@@ -9,26 +9,32 @@
 @inline owner_kind(st, i) = (c = @inbounds st.σ[i]; c == 0 ? Int32(0) : @inbounds st.cell.kind[c])
 
 """
-    FieldPhase{K}(program, masks, step, arrays; tables, params, substeps, dt, init = false)
+    FieldPhase{K}(group, alg, arrays; tables, params, substeps, dt, options, T, init = false)
 
-A group of fields stepped by explicit Euler over one MCS of length `dt`, in `n` substeps of
-`dt / n`: `program` is the semantic LatticeFields `Program` of the group, `step` the step plan
-of one substep (each state field written into its scratch buffer, the buffers swapped) and
-`masks` the plan of the mask kernels (run once per MCS, before the substeps: the masks follow
-σ). `arrays[f]` binds program field `f` to state arrays: `(Part, nothing)` for a one-buffer
-field (an input or a mask), `(Part, Part)` for a state field and its scratch. `tables` binds
-table ids to kind tables of the parameters and `params` the parameter slots to parameter
-names. `substeps(praw)` is the substep count at raw parameter values `praw`, with the
-phase's tables (`LatticeFields.Problems.with_tables`) when it has any (a host function,
-evaluated when the parameters change, never per MCS).
+A group of fields stepped by algorithm `alg` (`ExplicitEuler`) over one MCS of length `dt`,
+in `n` substeps of `dt / n`: `group` is the group's `LatticeFields.Problems.FieldGroup` (its
+`GroupSpec`, its fused program and its plans), stepped through the shared runtime
+(`Problems.GroupRuntime`, [`phase_context`](@ref)), as front end B steps its groups.
+`program`, `masks` and `step` are the group's semantic program of `alg` and its plans (the
+masks of masked conditions, run once per MCS before the substeps: the masks follow σ; and
+one substep), planned once for value type `T` with `options`. `arrays[f]` binds program field
+`f` to state arrays: `(Part, nothing)` for a one-buffer field (an input or a mask),
+`(Part, Part)` for a state field and its scratch. `tables` binds table ids to kind tables of
+the parameters and `params` the parameter slots to parameter names. `substeps(praw)` is the
+substep count at raw parameter values `praw`, with the phase's tables
+(`LatticeFields.Problems.with_tables`) when it has any (a host function, evaluated when the
+parameters change, never per MCS).
 
-`K` names the entry of the run context that holds the trajectory's bound launches
+`K` names the entry of the run context that holds the trajectory's runtime
 ([`phase_context`](@ref)). The field ends every MCS in its `st.site` array: after an odd
-number of substeps one copy brings the scratch buffer back. With `init = true` the phase is
-the masked-condition clamp of a fresh initial state (one substep of length zero: each masked
-site takes its value, every other site keeps its own); `init` from a checkpoint skips it.
+number of substeps one copy brings the scratch buffer back (`ends_in = :slot1`). With
+`init = true` the phase is the masked-condition clamp of a fresh initial state (one substep
+of length zero: each masked site takes its value, every other site keeps its own); `init`
+from a checkpoint skips it.
 """
-struct FieldPhase{K, A, F, PR, SP}
+struct FieldPhase{K, G, AL, A, F, PR, SP}
+    group::G
+    alg::AL
     program::PR
     masks::SP
     step::SP
@@ -38,41 +44,34 @@ struct FieldPhase{K, A, F, PR, SP}
     substeps::F
     dt::Float64
     init::Bool
+    options::Any                         # the compile options of the plans (host)
+    T::Type                              # the value type of the plans
 end
-function FieldPhase{K}(program, masks, step, arrays::Tuple; tables = Pair{Int, Symbol}[],
-        params = Symbol[], substeps, dt::Real, init::Bool = false) where {K}
-    return FieldPhase{K, typeof(arrays), typeof(substeps), typeof(program), typeof(step)}(program, masks, step,
-        arrays, tables, params, substeps, Float64(dt), init)
+function FieldPhase{K}(group, alg, arrays::Tuple; tables = Pair{Int, Symbol}[], params = Symbol[], substeps,
+        dt::Real, options, T::Type, init::Bool = false) where {K}
+    program = Problems.group_program(group, alg)
+    # the plans of value type `T`, made once per group (shared by every trajectory; the host
+    # backend only decides the Float64 check here, which `options` already holds)
+    masks, step = Problems.group_plans(group, alg, T, KernelAbstractions.CPU(), options)
+    return FieldPhase{K, typeof(group), typeof(alg), typeof(arrays), typeof(substeps), typeof(program), typeof(step)}(
+        group, alg, program, masks, step, arrays, tables, params, substeps, Float64(dt), init, options, T)
 end
 """The masked-condition clamp of field phase `ph` (its at-init form)."""
 field_clamp(ph::FieldPhase{K}) where {K} =
-    FieldPhase{K}(ph.program, ph.masks, ph.step, ph.arrays; ph.tables, ph.params, ph.substeps, ph.dt, init = true)
+    FieldPhase{K}(ph.group, ph.alg, ph.arrays; ph.tables, ph.params, ph.substeps, ph.dt, ph.options, ph.T, init = true)
 
 """
-The bound launches of one field phase for one trajectory: the store over the state arrays,
-the mask plan, the substep plan at both slot parities, the parameters they were bound with,
-the substep count `n` and length `h`, and the `(field, scratch)` pairs copied back after an
-odd count. Rebound when the parameters or the state arrays change. On a device, `pending` is
-the host task compiling the launches (started when the integrator is created, awaited at the
-phase's first run), so the field kernels compile while the rest of `init` and the first MCS
-compile theirs (v3 §4.4: host-parallel compile).
+The front end's record of a field runtime's binding (`Problems.GroupRuntime`'s `host`): the
+parameter object and the state arrays the launches were bound from, and the parameter and
+table values they depend on. The runtime is bound again when the parameters or the state
+arrays change.
 """
-mutable struct FieldRuntime{S, M, B, P, A, C}
-    store::S
-    masks::M
-    even::B
-    odd::B
+mutable struct FieldBinding{P, A}
     p::P
     arrays::A
-    n::Int
-    h::Float64
-    copies::C
-    pending::Union{Nothing, Task}
     pvals::Vector{Any}                  # the parameter and table values the launches were bound with
     tvals::Vector{Any}
 end
-# device kernels never see the runtime (it is host-side launch state in the run context)
-Adapt.adapt_structure(to, ::FieldRuntime) = nothing
 
 # The run-context entry of a field phase: the runtime behind an untyped reference, so the
 # context's type (what kernels receive, adapted to `nothing` here) carries none of the
@@ -97,16 +96,16 @@ end
 _bound_values(ph::FieldPhase, p) = (Any[getproperty(p, n) for n in ph.params],
                                     Any[copy(vec(collect(getproperty(p, name)))) for (_, name) in ph.tables])
 
-# whether the phase's parameters and tables at `p` equal those of the binding (no copies)
-function _same_params(ph::FieldPhase, rt, p)
+# whether the phase's parameters and tables at `p` equal those of the binding `b` (no copies)
+function _same_params(ph::FieldPhase, b::FieldBinding, p)
     for (k, n) in enumerate(ph.params)
-        isequal(getproperty(p, n), rt.pvals[k]) || return false
+        isequal(getproperty(p, n), b.pvals[k]) || return false
     end
     return true
 end
-function _same_tables(ph::FieldPhase, rt, p)
+function _same_tables(ph::FieldPhase, b::FieldBinding, p)
     for (k, (_, name)) in enumerate(ph.tables)
-        t, v = getproperty(p, name), rt.tvals[k]
+        t, v = getproperty(p, name), b.tvals[k]
         t isa Array || (t = collect(t))             # a device table: read on the host
         length(t) == length(v) || return false
         for (x, y) in zip(t, v)
@@ -120,10 +119,28 @@ end
 # coefficient, F1)
 _table_values(ph::FieldPhase, p) = Pair{String, Vector{Float64}}[ph.program.tables[i].key => Float64.(vec(collect(getproperty(p, name))))
                                                                  for (i, name) in ph.tables]
-# The launches of a field phase bound to the state's arrays at parameters `p`, with the step's
-# substep count and length (also when `ph` is the at-init clamp, which runs one substep of
-# length zero from the same launches: the binding is the step's, D-C8 item 8). `tables`
-# reuses the device tables of an earlier binding when their contents are unchanged.
+# the raw parameter values of the phase's slots at `p`
+_praw(ph::FieldPhase, p) = Tuple(getproperty(p, n) for n in ph.params)
+
+"""
+    field_substeps(ph, p) -> Int
+
+The substep count of field phase `ph` at parameters `p`: its `substeps` rule at the phase's
+parameter and table values. The rule throws (an `ArgumentError`) for parameters it refuses
+(negative diffusion, a coupling past the limit, a coefficient with no finite bound), so a
+caller that checks before it changes anything keeps the run atomic.
+"""
+function field_substeps(ph::FieldPhase, p)
+    n = ph.substeps(Problems.with_tables(Float64[_praw(ph, p)...], _table_values(ph, p)))
+    n >= 1 || throw(ArgumentError("a field group needs at least one substep; got $n"))
+    return n
+end
+
+# The runtime of a field phase bound to the state's arrays at parameters `p` (front end A on
+# the shared group runtime: `ends_in = :slot1`, the field back in its `st.site` array after an
+# odd count), with the step's substep count (also when `ph` is the at-init clamp, which runs
+# one substep of length zero from the same launches: the binding is the step's, D-C8 item 8).
+# `tables` reuses the device tables of an earlier binding when their contents are unchanged.
 function _field_bind(ph::FieldPhase, st, p, backend; tables = nothing)
     s = ph.program
     arrs = _arrays(ph.arrays, st)
@@ -136,15 +153,10 @@ function _field_bind(ph::FieldPhase, st, p, backend; tables = nothing)
         end
     end
     store = Problems.FieldStore(backend, bufs, ones(Int, length(bufs)), tables)
-    praw = Tuple(getproperty(p, n) for n in ph.params)
-    n = ph.substeps(Problems.with_tables(Float64[praw...], _table_values(ph, p)))
-    n >= 1 || throw(ArgumentError("a field group needs at least one substep; got $n"))
-    odd = [length(b) == 2 ? 2 : 1 for b in bufs]
-    even = Problems.BoundStep(backend, s, ph.step, store, praw; cur = ones(Int, length(bufs)))
-    oddb = Problems.BoundStep(backend, s, ph.step, store, praw; cur = odd)
-    masks = isempty(ph.masks.launches) ? nothing : Problems.BoundStep(backend, s, ph.masks, store, praw)
-    copies = Tuple((a[1], a[2]) for a in arrs if a[2] !== nothing)
-    return store, masks, even, oddb, arrs, n, ph.dt / n, copies
+    n = field_substeps(ph, p)
+    host = FieldBinding(p, arrs, _bound_values(ph, p)...)
+    return Problems.bind_group(ph.group, ph.alg, store, _praw(ph, p); n, dt = ph.dt, c = nothing, ends_in = :slot1,
+        backend, options = ph.options, V = ph.T, host, clamp_at_start = false, fixed_time = true)
 end
 
 """
@@ -152,15 +164,16 @@ end
 
 The run-context entries a phase needs for one trajectory, built once when an integrator is
 created (after the state and parameters are on `backend`): a [`FieldPhase`](@ref) binds its
-launches to the state's arrays and compiles them. Other phases need none (`(;)`).
+group's runtime to the state's arrays and compiles its launches. Other phases need none
+(`(;)`).
 """
 phase_context(ph, st, p, backend) = (;)
 function phase_context(ph::FieldPhase{K}, st, p, backend) where {K}
     ph.init && return (;)
-    store, masks, even, odd, arrs, n, h, copies = _field_bind(ph, st, p, backend)
+    rt = _field_bind(ph, st, p, backend)
     # on a device the launches compile on host tasks, awaited before the first enqueue
-    pending = Exec.ishost(backend) ? nothing : Threads.@spawn _field_compile!(backend, even, masks)
-    rt = FieldRuntime(store, masks, even, odd, p, arrs, n, h, copies, pending, _bound_values(ph, p)...)
+    Exec.ishost(backend) || (rt.pending = Threads.@spawn _field_compile!(backend, rt.steps[1],
+                                                                         rt.masks === nothing ? nothing : rt.masks[1]))
     return NamedTuple{(K,)}((FieldHandle(rt),))
 end
 
@@ -176,6 +189,37 @@ function phase_contexts(phases::Phases, st, p, backend)
         end
     end
     return ctx
+end
+
+# every field phase of the MCS order of `phases` (the steps, not the at-init clamps), each once
+function _field_phases(phases::Phases)
+    out = FieldPhase[]
+    for e in phases.mcs, t in (e isa Repeat ? e.entries : (e,))
+        t isa Tuple || continue
+        for ph in t
+            ph isa FieldPhase && !ph.init && !any(q -> q === ph, out) && push!(out, ph)
+        end
+    end
+    return out
+end
+
+"""
+    check_field_parameters(f, p)
+    check_field_parameters(integ, p)
+
+Check the field phases of problem function `f` (or of integrator `integ`) at new parameters
+`p` before anything changes: each phase's substep rule ([`field_substeps`](@ref)) refuses
+parameters that make its step unsafe (negative diffusion, a coupling between field groups past
+its limit, a coefficient with no finite bound) with an `ArgumentError`. A parameter write on an
+integrator (`setp`, `integ.ps[x] = v`) and `remake` run it first, so a refused value changes
+nothing: the parameters, the state and the time stay as they were. On an integrator only the
+phases whose own parameters or tables change are checked.
+"""
+function check_field_parameters(f, p)
+    for ph in _field_phases(f.phases)
+        field_substeps(ph, p)
+    end
+    return nothing
 end
 
 # A test hook: an event the field compile tasks wait on before compiling (`nothing`: none),
@@ -196,7 +240,7 @@ Problems.compile!(backend, s::_Both) = Exec.compile_all!(backend,
 
 # wait for the compile task of `rt` (cold: the first run after `init`); a failed compile
 # rethrows here, before anything is enqueued
-function _await!(rt::FieldRuntime)
+function _await!(rt::Problems.GroupRuntime)
     t = rt.pending
     rt.pending = nothing
     t === nothing || fetch(t)
@@ -208,20 +252,21 @@ end
 # the phase's own parameters and tables only: when those values are unchanged the binding is
 # kept (a temperature change each MCS rebinds nothing); unchanged tables are reused. The
 # binding is always the step's (the at-init clamp reads its launches with one substep of
-# length zero), so the clamp of `reinit!` never leaves the step with the clamp's count.
-function _rebind!(rt::FieldRuntime, ph::FieldPhase, st, p, backend)
+# length zero), so the clamp of `reinit!` never leaves the step with the clamp's count. The
+# runtime is updated in place (its handle and every reference to it stay valid).
+function _rebind!(rt::Problems.GroupRuntime, ph::FieldPhase, st, p, backend)
     _await!(rt)
-    same_arrays = rt.arrays === _arrays(ph.arrays, st)
-    same_tables = _same_tables(ph, rt, p)
-    if same_arrays && same_tables && _same_params(ph, rt, p)
-        rt.p = p
+    b = rt.host
+    same_arrays = b.arrays === _arrays(ph.arrays, st)
+    same_tables = _same_tables(ph, b, p)
+    if same_arrays && same_tables && _same_params(ph, b, p)
+        b.p = p
         return rt
     end
-    pv, tv = _bound_values(ph, p)
-    store, masks, even, odd, arrs, n, h, copies =
-        _field_bind(ph, st, p, backend; tables = same_tables ? rt.store.tables : nothing)
-    rt.store, rt.masks, rt.even, rt.odd, rt.p, rt.arrays, rt.n, rt.h, rt.copies, rt.pvals, rt.tvals =
-        store, masks, even, odd, p, arrs, n, h, copies, pv, tv
+    new = _field_bind(ph, st, p, backend; tables = same_tables ? rt.store.tables : nothing)
+    for f in fieldnames(typeof(rt))
+        setfield!(rt, f, getfield(new, f))
+    end
     return rt
 end
 
@@ -230,24 +275,13 @@ function (ph::FieldPhase{K})(st, p, ctx, key, mcs, backend) where {K}
     rt.pending === nothing || Base.invokelatest(_await!, rt)
     # the rebinding is cold host work (the substep bound, new launches): called past an
     # inference barrier, so the warm path compiles without it
-    (rt.p === p && rt.arrays === _arrays(ph.arrays, st)) || Base.invokelatest(_rebind!, rt, ph, st, p, backend)
-    rtime = (Float64(mcs), ph.init ? 0.0 : rt.h)
-    launches = 0
-    if rt.masks !== nothing
-        rt.masks(rtime)
-        launches += length(rt.masks.launches)
-    end
+    (rt.host.p === p && rt.host.arrays === _arrays(ph.arrays, st)) || Base.invokelatest(_rebind!, rt, ph, st, p, backend)
+    # the at-init clamp: one substep of length zero from the step's launches
     n = ph.init ? 1 : rt.n
-    for k in 1:n
-        isodd(k) ? rt.even(rtime) : rt.odd(rtime)
-    end
-    launches += n * length(rt.even.launches)
-    if isodd(n)
-        for (c, cn) in rt.copies
-            _device_copy!(backend, c, cn)            # a kernel: no GPU wait (P6.0v8)
-        end
-        launches += length(rt.copies)
-    end
+    Problems.advance!(rt, (Float64(mcs), mcs), n, ph.init ? 0.0 : rt.dt)
+    launches = n * length(rt.steps[1].launches)
+    rt.masks === nothing || (launches += length(rt.masks[1].launches))
+    isodd(n) && (launches += length(rt.copies))
     return launches
 end
 

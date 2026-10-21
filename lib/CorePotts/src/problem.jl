@@ -180,7 +180,7 @@ function SciMLBase.remake(prob::PottsProblem; f = prob.f, u0 = prob.u0, tspan = 
                                             "($(join(("`$k`" for k in keys(kwargs)), ", "))), not both"))
         f, relaid = remake_function(f.sys, prob; kwargs...)
     end
-    p === prob.p || (p = remake_parameters(f.sys, prob, p))
+    p === prob.p || (p = remake_parameters(f.sys, prob, p); check_field_parameters(f, p))
     frozen = prob.frozen
     if u0 !== prob.u0
         u0 = remake_state(f.sys, prob, u0)
@@ -975,7 +975,9 @@ function SymbolicIndexingInterface.set_state!(integ::PottsIntegrator, v, i::Stat
     return v
 end
 function SymbolicIndexingInterface.set_parameter!(integ::PottsIntegrator, v, i)
-    integ.p = set_parameter(integ.f.sys, integ.p, v, i)
+    p = set_parameter(integ.f.sys, integ.p, v, i)
+    check_field_parameters(integ, p)               # a refused value changes nothing
+    integ.p = p
     return nothing
 end
 
@@ -1011,7 +1013,9 @@ end
 function (s::ParameterSetter)(integ::PottsIntegrator, vals)
     length(vals) == length(s.idxs) ||
         throw(DimensionMismatch("setp: $(length(s.idxs)) parameters, $(length(vals)) values"))
-    integ.p = set_parameters(integ.f.sys, integ.p, vals, s.idxs)
+    p = set_parameters(integ.f.sys, integ.p, vals, s.idxs)
+    check_field_parameters(integ, p)               # a refused value changes nothing
+    integ.p = p
     s.run_hook && SymbolicIndexingInterface.finalize_parameters_hook!(integ, s.original)
     return nothing
 end
@@ -1202,3 +1206,39 @@ SymbolicIndexingInterface.state_values(prob::PottsProblem) = prob.u0
 SymbolicIndexingInterface.parameter_values(prob::PottsProblem) = prob.p
 SymbolicIndexingInterface.current_time(prob::PottsProblem) = prob.tspan[1]
 SymbolicIndexingInterface.is_time_dependent(::PottsProblem) = true
+
+# Field phases on an integrator (fields.jl): the parameter check before a write, and the
+# per-group substep counts
+function check_field_parameters(integ::PottsIntegrator, p)
+    for ph in _field_phases(integ.f.phases)
+        b = _runtime(getfield(integ.ctx, _ctxkey(ph))).host
+        _same_tables(ph, b, p) && _same_params(ph, b, p) && continue
+        field_substeps(ph, p)
+    end
+    return nothing
+end
+_ctxkey(::FieldPhase{K}) where {K} = K
+
+"""
+    substep_counts(integ::PottsIntegrator) -> Vector{Int}
+    substep_counts(prob::PottsProblem) -> Vector{Int}
+
+The substep count of each field group of a Potts integrator or problem, in group order (the
+order of each group's first field; one group per `field_solver`/`solvers` algorithm). A count
+is the algorithm's `substeps` (a minimum) or more, as the stability bound of the group's own
+rows needs at the current parameters (`mcs_duration`, or its part in a `repeat(n, …)` of the
+fields, is the window). On an integrator it is the count at the integrator's current
+parameters, right after a parameter write (`setp`, `integ.ps[x] = v`), before the next step;
+on a problem it is the count at the problem's parameters. Empty for a
+model with no fields. The same function gives the counts of a LatticePDE `FieldProblem`'s
+integrator and solution.
+
+```julia
+integ = init(PottsProblem(sys, op, tspan; field_solver = ExplicitEuler(), solvers = [o => ExplicitEuler(substeps = 2)]),
+             SequentialCPM())
+substep_counts(integ)        # [3, 2]: the group of c takes 3 substeps per MCS, o 2
+```
+"""
+# (from the parameters, not the runtimes: a runtime rebinds at its next step)
+Problems.substep_counts(integ::PottsIntegrator) = Int[field_substeps(ph, integ.p) for ph in _field_phases(integ.f.phases)]
+Problems.substep_counts(prob::PottsProblem) = Int[field_substeps(ph, prob.p) for ph in _field_phases(prob.f.phases)]

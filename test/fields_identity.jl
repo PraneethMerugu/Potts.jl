@@ -581,3 +581,77 @@ end
     foreach(b -> println(stderr, "  FUSION GATE differs: ", b), bad)
     @test isempty(bad) && checked[] > 100
 end
+
+# F2-08a: front end A steps through the shared group runtime (`lower_group`, `FieldGroup`,
+# `GroupRuntime`). Merks, Merks2006 and Merks2008 (its `mcs ≥ t_relax` gate crossed at MCS 7)
+# over 20 MCS on 32² lattices are bitwise equal to the parent a73ded80: σ and every site array,
+# at Float64 and Float32, on the CPU (SequentialCPM) and on ROCm (CheckerboardCPM). The clamp
+# at the step start (F2-08b; static masks) and the clock (F2-08c; `mcs` reads the same
+# integer) keep these values.
+function gd_op2006_32()
+    σ = zeros(Int32, 32, 32); σ[1, :] .= 1; σ[end, :] .= 1; σ[:, 1] .= 1; σ[:, end] .= 1
+    σ[6:11, 6:11] .= 2; σ[18:23, 16:21] .= 3
+    return [ownership => σ, kind => [:border, :endothelial, :endothelial]]
+end
+function gd_op2008_32()
+    σ = zeros(Int32, 32, 32); σ[1:2, :] .= 1; σ[(end - 1):end, :] .= 1; σ[:, 1:2] .= 1; σ[:, (end - 1):end] .= 1
+    σ[6:11, 6:11] .= 2; σ[18:23, 16:21] .= 3
+    return [ownership => σ, kind => [:border, :endothelial, :endothelial]]
+end
+const GD_M20 = [
+    ("Merks", () -> MerksVasculogenesis(; name = :m, lattice = (32, 32)),
+        () -> [ownership => (s = zeros(Int32, 32, 32); s[10:16, 10:16] .= 1; s[20:25, 18:24] .= 2; s),
+               kind => [:endothelial, :endothelial]], (; field_solver = ExplicitEuler(substeps = 15, lower = 0.0))),
+    ("Merks2006", () -> Merks2006(; name = :m, lattice = (32, 32)), gd_op2006_32, (; field_solver = ExplicitEuler(substeps = 15))),
+    ("Merks2008", () -> Merks2008(; name = :m, lattice = (32, 32)), () -> [gd_op2008_32(); :t_relax => 7.0],
+        (; field_solver = ExplicitEuler(substeps = 15)))]
+const GD_M20_CPU = [
+    "Merks|Float64|σ f58f6b1732c69db4 c de8341b36f6d6366 c__next de8341b36f6d6366 kind__in 514f7f4c15f8cb24",
+    "Merks|Float32|σ f58f6b1732c69db4 c 7e3ae9191a6939b6 c__next 7e3ae9191a6939b6 kind__in 514f7f4c15f8cb24",
+    "Merks2006|Float64|σ 7cda8d980d95b467 c 3a43587e58aa375a c__next 3a43587e58aa375a kind__in 3bf7cef411929a54 c__mask 006d1e48a8ec6841",
+    "Merks2006|Float32|σ 7cda8d980d95b467 c a28e9c950fa7d25e c__next a28e9c950fa7d25e kind__in 3bf7cef411929a54 c__mask 006d1e48a8ec6841",
+    "Merks2008|Float64|σ 039c9a8fab0e6fe6 c e5811b68a7ed436f c__next e5811b68a7ed436f kind__in 8916a0a7186b1c34 c__mask ca3b9f0899d80415",
+    "Merks2008|Float32|σ 039c9a8fab0e6fe6 c ec274dd29b2c30bc c__next ec274dd29b2c30bc kind__in 8916a0a7186b1c34 c__mask ca3b9f0899d80415",
+]
+# (ROCm at Float32 only: the device suite's no-`double` scan; the Float64 device digests at
+# a73ded80 were cbc7f7cf…/1ee0a004…, 73a96910…/1df109d0…, 9908b3e8…/626bfabe…, also unchanged)
+const GD_M20_ROCM = [
+    "Merks|Float32|σ cbc7f7cfb7cabb55 c 1b789dc265fc9cb4 c__next 1b789dc265fc9cb4 kind__in 8dff107e067c7db5",
+    "Merks2006|Float32|σ 73a96910f6820396 c ee7bf6f111df0646 c__next ee7bf6f111df0646 kind__in 1de0fc3fda4fb414 c__mask 006d1e48a8ec6841",
+    "Merks2008|Float32|σ 9908b3e850d4d4e4 c f519632ad6f8ad6f c__next f519632ad6f8ad6f kind__in 096d8a98c6289d35 c__mask ca3b9f0899d80415",
+]
+gd_m20_text(label, T, u) = string(label, "|", T, "|σ ", gd_digest(u.σ), " ",
+    join(("$k " * gd_digest(getproperty(u.site, k)) for k in keys(u.site)), " "))
+function gd_m20(; backend = nothing, types = (Float64, Float32))
+    out = String[]
+    for (label, build, op, kw) in GD_M20, T in types
+        prob = PottsProblem(build(), op(), (0, 20); T, seed = 11, kw...)
+        u = backend === nothing ? solve(prob, SequentialCPM(); save_start = false).u[end] :
+            solve(prob, CheckerboardCPM(); backend, save_start = false).u[end]
+        push!(out, gd_m20_text(label, T, u))
+    end
+    return out
+end
+@testset "F2-08a: 20 MCS of the Merks models equal the parent bitwise (CPU)" begin
+    got = gd_m20()
+    foreach(((g, w),) -> g == w || println(stderr, "  M20 MOVED (CPU): ", w, " → ", g), zip(got, GD_M20_CPU))
+    @test got == GD_M20_CPU
+end
+if Main.PottsDevices.on_device() && Main.PottsDevices.device_name() == "rocm"
+    @testset "F2-08a: 20 MCS of the Merks models equal the parent bitwise (ROCm)" begin
+        got = gd_m20(; backend = Main.PottsDevices.device_backend(), types = (Float32,))
+        foreach(((g, w),) -> g == w || println(stderr, "  M20 MOVED (ROCm): ", w, " → ", g), zip(got, GD_M20_ROCM))
+        @test got == GD_M20_ROCM
+    end
+end
+
+# F2-08a: a warm MCS of Merks at 500² (15 substeps, the field read by the CPM) allocates
+# nothing on the CPU (measured inside a function)
+gd_warm(integ) = (step!(integ); step!(integ); @allocated step!(integ))
+@testset "F2-08a: the Merks 500² warm MCS allocates nothing (CPU)" begin
+    σ = zeros(Int32, 500, 500); σ[200:215, 200:215] .= 1; σ[300:312, 280:300] .= 2
+    prob = PottsProblem(MerksVasculogenesis(; name = :m, lattice = (500, 500)), [ownership => σ, kind => [:endothelial, :endothelial]],
+        (0, 100); field_solver = ExplicitEuler(substeps = 15, lower = 0.0))
+    integ = init(prob, SequentialCPM(); save_start = false, save_end = false)
+    @test gd_warm(integ) == 0
+end
