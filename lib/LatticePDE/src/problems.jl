@@ -1022,7 +1022,7 @@ end
 _states(p) = [f.key for f in p.fields if f.role == :state]
 
 """
-    discretize(pdesys, disc::LatticeDiscretization)
+    discretize(pdesys, disc::LatticeDiscretization; inputs = (), u0 = nothing, p = nothing, tspan = nothing)
 
 The problem of `pdesys` on the lattice (`disc.problem`):
 - `:owned`: a `FieldProblem` (the owned fast path), solved with `ExplicitEuler(; dt,
@@ -1035,6 +1035,20 @@ The problem of `pdesys` on the lattice (`disc.problem`):
 
 The time span is the domain of the first variable. Fields index solutions and integrators
 by symbol (`sol[c(t, x, y)]`, `sol[:c]`) as grid-shaped arrays.
+
+**Keywords** (SciML's `discretize`; the same set on both problem kinds; F2 design §2.8):
+- `u0`: the initial values, a flat vector of the state, or `field => values` pairs (an array
+  with one value per site, or a number) that override the fields they name;
+- `p`: the parameter values, a vector of every parameter, or `parameter => value` pairs (a
+  table as `Dk => values`), with `remake`'s rule (a plain value is written into the
+  parameter type, a Dual promotes it; under `T = BigFloat` with Float64 defaults a pair's
+  BigFloat value rounds to Float64, so declare BigFloat defaults or give a BigFloat vector); a
+  computed parameter is refused, naming why;
+- `tspan`: the time span `(t₀, t₁)`, over the domain of the first variable;
+- `inputs`: the input values (below).
+Any other keyword is an `ArgumentError` naming it (the `ODEFunction` keywords `jac` and
+`sparse` are planned). `discretize(sys, disc; p = [k => 2.0])` is `remake(discretize(sys,
+disc); p = [k => 2.0])`, with no second problem built.
 
 **Inputs.** Input fields (`kindₛ(..)::Int32 [input = true]`, a `domain` mask) are read and
 never written by the equations. Give their values with `inputs = [kindₛ => K, dom => M]`
@@ -1057,7 +1071,11 @@ call of the right side with new values (`remake`, `setp` on an integrator), so `
 A system mixes no rate equations (`D(c) ~ …`) and maps (`Shift(t, 1)(m) ~ …`) in this
 version: one problem steps one kind (split stepping is planned).
 """
-function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = ()) where {N}
+function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = (), u0 = nothing, p = nothing,
+        tspan = nothing, kw...) where {N}
+    isempty(kw) || _dverr(string("`discretize` takes `inputs`, `u0`, `p`, `tspan`; got ", join(("`$k`" for k in keys(kw)), ", "),
+        any(k -> k in (:jac, :sparse), keys(kw)) ? " (the `ODEFunction` keywords `jac` and `sparse` are planned)" : "",
+        ": give the other settings to the discretization (`LatticeDiscretization(…; T, problem, clock)`) or to `solve`"))
     _check_parts(sys)
     kind = disc.problem
     kind == :linear && _dverr("problem = :linear (steady systems) is not lowered in this version (a steady solver " *
@@ -1077,23 +1095,24 @@ function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = ())
     # launch decodes them with an integer division per site; D5, as front end A); the option
     # is outside the fingerprint
     options = CompileOptions(; T, index = Exec.ishost(backend) ? :cartesian : :auto)
-    tspan = _domain_ends(sys)[1]
+    span = tspan === nothing ? _domain_ends(sys)[1] : _given_tspan(tspan)
     # the group, lowered once in rate form (the update is fused by the group, per algorithm)
     g = _lower_group(sys, disc)
     cf, sys, spec = g.cf, g.sys, g.spec
     s = cf.program
     state = spec.state
-    u0 = _initial(cf, sys, state, T)
     index = _index(cf, sys, s, state; g.derived, g.computed)
+    x0 = _given_u0(_initial(cf, sys, state, T), index, u0)
+    pv, tables = _given_p(cf.defaults, cf.tables, index, p)
     ins = Pair[_input_defaults(cf, sys); collect(inputs)]
     if kind == :owned
         _check_fusion(s, sys, disc)
-        return FieldProblem(spec, u0, tspan, cf.defaults; index, tables = cf.tables, inputs = ins, backend, options)
+        return FieldProblem(spec, x0, span, pv; index, tables, inputs = ins, backend, options)
     end
     isempty(spec.init) || _dverr("masked conditions (`c ~ masked(pred, v)`) need problem = :owned in this version")
     rates = Dict(k => "∂$k" for k in state)
-    return ode_problem(s, u0, tspan, cf.defaults; state, rates, init = spec.init, index,
-        tables = cf.tables, inputs = ins, stability = spec.stability, backend, options)
+    return ode_problem(s, x0, span, pv; state, rates, init = spec.init, index,
+        tables, inputs = ins, stability = spec.stability, backend, options)
 end
 
 """
@@ -1117,6 +1136,75 @@ function check_one_kind(sys::PDESystem; route = "discretize them as two systems"
                             "stepping is planned)")
     return true
 end
+
+# `discretize`'s keywords (SX-03, F2 design §2.8): the time span, the initial values and the
+# parameter values, given as `remake` takes them
+function _given_tspan(ts)
+    ts isa Union{Tuple, AbstractVector} && length(ts) == 2 && all(v -> v isa Real, ts) ||
+        _dverr("`tspan` is `(t₀, t₁)`, two numbers; got $(repr(ts))")
+    return (Float64(ts[1]), Float64(ts[2]))
+end
+function _given_u0(x0, index, u0)
+    u0 === nothing && return x0
+    if u0 isa AbstractVector{<:Real}
+        length(u0) == length(x0) || _dverr("`u0` has $(length(u0)) values; the state has $(length(x0))")
+        return collect(u0)
+    end
+    u0 isa Union{AbstractVector{<:Pair}, Tuple, AbstractDict} ||
+        _dverr("`u0` is a flat vector of the state or `field => values` pairs; got a $(typeof(u0))")
+    # a Dual value promotes the state, as a Dual parameter does
+    E = foldl((T, x) -> last(x) isa Real ? promote_dual(T, typeof(last(x))) :
+                        last(x) isa AbstractArray ? promote_dual(T, eltype(last(x))) : T, u0; init = eltype(x0))
+    out = Vector{E}(x0)
+    for (k, v) in u0
+        slot = get(index.vars, index.key(k), nothing)
+        Problems.input_key(index, k) === nothing ||
+            _dverr("`u0`: `$(_keytext(k))` is an input, not a field of the state: give it with `inputs = [$(_keytext(k)) => values]`")
+        slot === nothing && _dverr("`u0`: `$(_keytext(k))` is not a field of the state; its fields: " *
+                                   join(("`$(_keytext(f))`" for f in index.varsyms), ", "))
+        if v isa Real
+            out[slot.range] .= v
+        elseif v isa AbstractArray && length(v) == length(slot.range)
+            out[slot.range] .= vec(collect(v))
+        else
+            _dverr("`u0`: give `$k` one value per site ($(length(slot.range))) or a number; got " *
+                   (v isa AbstractArray ? "$(length(v)) values" : repr(v)))
+        end
+    end
+    return out
+end
+function _given_p(defaults, tables, index, p)
+    p === nothing && return defaults, tables
+    if p isa AbstractVector{<:Real}
+        length(p) == length(defaults) || _dverr("`p` has $(length(p)) values; the system has $(length(defaults)) parameters")
+        return collect(p), tables
+    end
+    p isa Union{AbstractVector{<:Pair}, Tuple, AbstractDict} ||
+        _dverr("`p` is a vector of every parameter or `parameter => value` pairs; got a $(typeof(p))")
+    # a plain value is written into the parameter type, a Dual promotes it (`remake`'s rule)
+    P = foldl((T, x) -> last(x) isa Real ? promote_dual(T, typeof(last(x))) : T, p; init = eltype(defaults))
+    pv = Vector{P}(defaults)
+    tabs = Pair{String, Any}[k => v for (k, v) in tables]
+    for (k, v) in p
+        t = Problems.table_key(index, k)
+        if t !== nothing
+            e = Problems.table_entry(index, k)
+            e == 0 || _dverr("`p`: `$k` is entry $e of the table `$t`: give the whole table, `$t => values`")
+            j = findfirst(x -> first(x) == t, tabs)
+            n = length(last(tabs[j]))
+            v isa AbstractArray && length(v) == n || _dverr("`p`: the table `$t` has $n entries; give $n values")
+            tabs[j] = t => vec(collect(v))
+            continue
+        end
+        i = parameter_index(index, k)                    # a computed parameter, or an unknown name, is an error naming it
+        i === nothing && _dverr("`p`: `$(_keytext(k))` is not a parameter of the system")
+        pv[i] = v
+    end
+    return pv, tabs
+end
+
+# a key as the user wrote it (`c`, not `c(t, x, y)`; `:c` as `c`)
+_keytext(k) = replace(string(k), r"\(t(, \w+)*\)" => "", "⋆" => "")
 
 # whether an equation or condition of `sys` reads the clock's step index
 function _reads_step_index(sys::PDESystem)

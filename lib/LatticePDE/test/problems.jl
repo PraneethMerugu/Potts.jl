@@ -3,6 +3,7 @@
 # profiles, conservation), symbolic indexing of solutions and integrators, the stability
 # bound, the parameter checks of `remake`/`setp`, and negative controls for each claim.
 using OrdinaryDiffEqTsit5: Tsit5
+using ForwardDiff: ForwardDiff
 using SymbolicIndexingInterface: getp, setp, getsym
 using SciMLBase: SciMLBase, ODEProblem, remake
 
@@ -365,4 +366,60 @@ end
     @test solve(remake(owned(csys, 8, 4); u0), alg).u[end] == sv.u[end]
     # the velocity's length is checked against the grid's axes
     @test_throws ArgumentError owned(psys([D(ce) ~ -Advect(Upwind1())([uxv], ce)], [c(0, x, y) ~ 0.0], [uxv]), 8, 4)
+end
+
+# F2-12 (F2 design §2.8, SX-03): `discretize(…; u0, p, tspan)` on both problem kinds equals the
+# `remake` route; any other keyword is an `ArgumentError` naming it. Base (c2583722): the
+# keywords were a `MethodError` (`discretize` took `inputs` only).
+@testset "F2-12: discretize keywords" begin
+    pidx(prob, s) = LatticePDE.Problems.SII.parameter_index(prob, s)
+    withp(p, i, v) = (q = collect(promote_type(eltype(p), typeof(v)), p); q[i] = v; q)
+    emsg(f) = try
+        f(); ""
+    catch e
+        sprint(showerror, e)
+    end
+    @parameters kd = 1.0 Dd = 0.1
+    @parameters Td[1:2] = [0.5, 1.0]
+    sys = psys([D(ce) ~ Dd * Δ(ce) - kd * ce - at(Td, ke) * ce], [c(0, x, y) ~ 1.0], [kd, Dd, Td]; dvs = [ce, ke])
+    K = fill(Int32(1), 4, 4)
+    for problem in (:owned, :ode)
+        disc = LatticeDiscretization(Grid((4, 4)); T = Float64, problem)
+        base = discretize(sys, disc; inputs = [ke => K])
+        i = pidx(problem == :owned ? base : base.f.sys, kd)
+        a = discretize(sys, disc; inputs = [ke => K], p = [kd => 2], u0 = [ce => 0.5], tspan = (0, 2))
+        r = remake(base; p = withp(base.p, i, 2.0), u0 = fill(0.5, 16), tspan = (0.0, 2.0))
+        @test a.p == r.p && collect(a.u0) == collect(r.u0) && a.tspan == r.tspan == (0.0, 2.0)
+        sa, sr = problem == :owned ? (solve(a, ExplicitEuler(; dt = 0.1)), solve(r, ExplicitEuler(; dt = 0.1))) :
+                 (solve(a, Tsit5(); abstol = 1e-10, reltol = 1e-10), solve(r, Tsit5(); abstol = 1e-10, reltol = 1e-10))
+        @test sa.u[end] == sr.u[end] && sa.t[end] == 2.0
+        # a flat `u0`, a parameter vector and an array `u0` per field
+        v = discretize(sys, disc; inputs = [ke => K], p = collect(a.p), u0 = fill(0.5, 16), tspan = (0, 2))
+        @test v.p == a.p && collect(v.u0) == collect(a.u0)
+        @test collect(discretize(sys, disc; inputs = [ke => K], u0 = [ce => fill(0.25, 4, 4)]).u0) == fill(0.25, 16)
+    end
+    # a table through `p` (the owned problem keeps it; `remake` gives the same)
+    disc = LatticeDiscretization(Grid((4, 4)); T = Float64, problem = :owned)
+    pt = discretize(sys, disc; inputs = [ke => K], p = [Td => [0.25, 1.0]])
+    @test getp(pt, Td)(pt) == [0.25, 1.0] && getp(pt, Td)(pt) == getp(remake(discretize(sys, disc; inputs = [ke => K]);
+        p = [Td => [0.25, 1.0]]), Td)(pt)
+    # … and the ODE problem takes a table where it is built (the route its table refusal gives)
+    o = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64, problem = :ode); inputs = [ke => K],
+        p = [Td => [0.25, 1.0]])
+    @test last(only(o.f.f.ctx.tables)) == [0.25, 1.0]
+    @test occursin("discretize(…; p = [Td => values])", emsg(() -> remake(o; p = [Td => [0.5, 1.0]])))
+    # review S7: a Dual in `u0` promotes the state (base: `MethodError: no method matching
+    # Float64(::Dual)`); an input in `u0` says it is an input and prints its name as written
+    dU = discretize(sys, disc; inputs = [ke => K], u0 = [ce => ForwardDiff.Dual(0.5, 1.0)])
+    @test eltype(dU) <: ForwardDiff.Dual && ForwardDiff.value(dU.u0[1]) == 0.5
+    err = emsg(() -> discretize(sys, disc; inputs = [ke => K], u0 = [ke => 1]))
+    @test occursin("`kindₛ` is an input", err) && occursin("inputs = [kindₛ => values]", err) && !occursin("⋆", err)
+    # any other keyword names itself (base: a `MethodError`)
+    err = emsg(() -> discretize(sys, disc; inputs = [ke => K], jac = true))
+    @test occursin("`discretize` takes `inputs`, `u0`, `p`, `tspan`; got `jac`", err) && occursin("planned", err)
+    @test occursin("got `saveat`", emsg(() -> discretize(sys, disc; inputs = [ke => K], saveat = 0.1)))
+    # misshapen values are named
+    @test occursin("`u0` has 3 values; the state has 16", emsg(() -> discretize(sys, disc; inputs = [ke => K], u0 = [1.0, 2, 3])))
+    @test occursin("`u0`: `nope` is not a field", emsg(() -> discretize(sys, disc; inputs = [ke => K], u0 = [:nope => 1.0])))
+    @test occursin("`tspan` is `(t₀, t₁)`", emsg(() -> discretize(sys, disc; inputs = [ke => K], tspan = 3)))
 end

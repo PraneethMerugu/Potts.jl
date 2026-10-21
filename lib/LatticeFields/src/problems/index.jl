@@ -162,8 +162,8 @@ function SII.parameter_index(ix::LatticeIndex, sym)
         t = first(ix.tables[k])
         throw(ArgumentError(string("`", t, "` is a table (an array parameter), set where the problem is built: ",
             "on an owned problem (a FieldProblem), `remake(prob; p = [", t, " => values])` gives it new values, ",
-            "and on its integrator `integ[", t, "] = values`; an ODE problem's tables are fixed (give the table a ",
-            "new default and discretize again)")))
+            "and on its integrator `integ[", t, "] = values`; an ODE problem's tables are fixed (give them to ",
+            "`discretize(…; p = [", t, " => values])`)")))
     end
     _scalar(sym) || return nothing
     i = get(ix.params, k, nothing)

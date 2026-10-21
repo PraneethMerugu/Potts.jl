@@ -2382,3 +2382,14 @@ end
     err = something(fd_err(() -> mtkcompile(FbInitBcs(; name = :f))), "")
     @test occursin("initial value", err) && occursin("default", err)
 end
+
+# F2-12 (F2 design §2.8): `Potts.fields(model)` → `discretize(…; p = [:k => 2.0])` runs with no
+# `remake` (base: a `MethodError`, the keyword did not exist)
+@testset "F2-12: Potts.fields then discretize with keywords" begin
+    LP = Potts.LatticePDE
+    disc = LP.LatticeDiscretization(LP.Grid((12, 10)); T = Float64, problem = :owned)
+    prob = LP.discretize(Potts.fields(FdClosed(; name = :f)), disc; p = [:k => 0.5], u0 = [:c => 1.0], tspan = (0, 1))
+    @test LP.getp(prob, :k)(prob) == 0.5 && all(==(1.0), prob.u0)
+    # a uniform field decays by (1 − 0.1 k) per step: 0.95^10 (control: the default k = 0 keeps 1)
+    @test all(≈(0.95^10; rtol = 1e-13), LP.solve(prob, LP.ExplicitEuler(; dt = 0.1, substeps = 1))[:c][end])
+end

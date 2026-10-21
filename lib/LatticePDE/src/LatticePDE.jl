@@ -30,13 +30,13 @@ using LatticeFields.IR: F16, Grid, Program, ProgramBuilder, Coef, FaceRule, Node
 using CommonSolve: solve, init, step!, solve!
 using KernelAbstractions: KernelAbstractions
 using LatticeFields: Exec, Problems
-using LatticeFields.Compile: CompileOptions, fingerprint_text, fuse_update
+using LatticeFields.Compile: CompileOptions, fingerprint_text, fuse_update, promote_dual
 using LatticeFields.IR: fieldid
 using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
                               ExplicitEuler, ExplicitMap, FieldGroups, ode_problem, RT_DT, substep_counts
 using ModelingToolkitBase: ModelingToolkitBase, PDESystem, Pre, ShiftIndex, Shift, Hold, Sample
 using SciMLBase: AbstractDiscretization, NullParameters, remake
-using SymbolicIndexingInterface: getp, getu, setp
+using SymbolicIndexingInterface: getp, getu, setp, parameter_index
 import SciMLBase: discretize, symbolic_discretize
 using Symbolics: Symbolics, Differential, Equation, Num, VarDomainPairing, @register_symbolic,
                  unwrap, substitute
