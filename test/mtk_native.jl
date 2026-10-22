@@ -307,10 +307,14 @@ end
     @test SS.replace(SS.Tunable(), p, [1.0, 3.0]) == q
     r = Potts.SciMLBase.remake(prob; p = q)
     @test r.p == q && typeof(r.p) === typeof(p)
-    # D-115: a checkpoint's object restores verbatim (an explicit λ2 = 7 is not re-derived)
-    ck = Potts.SciMLBase.remake(prob; p = [:λ => 3.0, :λ2 => 7.0]).p
-    @test ck.λ == 3.0 && ck.λ2 == 7.0
-    @test Potts.SciMLBase.remake(prob; p = ck).p.λ2 == 7.0
+    # D-F2-1 (amends D-115): an object gives its base values and λ2 is derived again; a
+    # checkpoint restores bitwise, and a hand-edited λ2 = 7 gets the consistent 6 (no silent mix)
+    ck = Potts.SciMLBase.remake(prob; p = [:λ => 3.0]).p
+    @test ck.λ == 3.0 && ck.λ2 == 6.0
+    @test Potts.SciMLBase.remake(prob; p = ck).p === ck
+    hand = Potts._with_values(ck, merge(NamedTuple(ck), (λ2 = 7.0,)))
+    @test Potts.SciMLBase.remake(prob; p = hand).p.λ2 == 6.0
+    @test_throws ArgumentError Potts.SciMLBase.remake(prob; p = [:λ => 3.0, :λ2 => 7.0])
     # a Float32 problem: a Float64 vector repacks like a Float32 one; an object of the Float64
     # problem is taken as given, converted (different-type path), the same as same-type
     p32 = PottsProblem(C9Computed(; name = :c), [ownership => σ, kind => [1]], (0, 2); T = Float32)
@@ -318,7 +322,7 @@ end
     q1, q2 = repack32([1.0, 3.0]), repack32(Float32[1, 3])
     @test q1 == q2 && typeof(q1) === typeof(q2) === typeof(p32.p) && q1.λ2 === 6.0f0
     @test Potts.SciMLBase.remake(p32; p = q).p == q1
-    @test Potts.SciMLBase.remake(p32; p = ck).p.λ2 === 7.0f0
+    @test Potts.SciMLBase.remake(p32; p = ck).p.λ2 === 6.0f0
     # entries that are not floats are Constants; an entry that cannot hold a value exactly is a
     # named ArgumentError, not an InexactError; a BigFloat rounds to the entry's type
     pi_ = Potts.PottsParameters((n = 3, x = 1.0))
@@ -336,9 +340,10 @@ end
     @test typeof(prob3.p) !== typeof(p)
     @test SS.canonicalize(SS.Tunable(), prob3.p)[2]([1.0, 3.0]).λ2 == 9.0
     @test SS.canonicalize(SS.Tunable(), p)[2]([1.0, 3.0]).λ2 == 6.0
-    # remake with the other model's object takes the different-type path (values as given)
+    # remake with the other model's object takes the different-type path: its base values, and
+    # λ2 derived by this model's rule (2λ = 4, not the other model's 3λ = 6; D-F2-1)
     rb = Potts.SciMLBase.remake(prob; p = prob3.p)
-    @test typeof(rb.p) === typeof(p) && rb.p.λ2 == prob3.p.λ2 == 6.0
+    @test typeof(rb.p) === typeof(p) && rb.p.λ2 == 4.0 && prob3.p.λ2 == 6.0
     # an object of a type no problem in this process was built with: refused by name
     stray = Potts.PottsParameters((T = 1.0, λ = 2.0, λ2 = 4.0), ((:λ2,), UInt64(0x1234)))
     e = try
@@ -506,5 +511,88 @@ end
         sprint(showerror, err)
     end
     @test occursin("component `comp`", e) && occursin("more than the component's parameters", e)
+end
+end
+
+# F2-15: no paper model has a computed parameter (Foam's `ω = 2π / 4000` is a number when the
+# macro evaluates it), so D-F2-1 changes none of them
+module F2ComputedPaper
+using Potts, Test, PottsModels
+@testset "F2-15: Foam has no computed parameter" begin
+    c = Potts.ModelingToolkitBase.mtkcompile(ShearedFoam(; name = :f, lattice = (32, 32)))
+    @test isempty(Potts._computed_params(Potts._p(c.sys, :parameters)))
+end
+end
+
+# Review of batch 5 (F2-15): a component's computed parameter gives a route that works (M1),
+# `integ[β] = v` of a computed β is the read-only message (M3), a discrete binding prints as
+# written (S3), and a bound on a computed parameter names the inputs to change (S4)
+module F2ComputedReview
+using Potts, Test
+using Potts.ModelingToolkitBase: ModelingToolkitBase as MTKB
+using Potts.SymbolicIndexingInterface: getp, setp
+@potts_model F2BoundChain begin
+    @kinds medium cell
+    @parameters begin
+        α = 0.3
+        β = 2α
+        γ = β + 0.05, [bounds = (0, 1)]
+    end
+    @energy cells => γ * (volume - 9.0)^2
+    @lattice Lattice((12, 12))
+    @sweep Metropolis(; temperature = 1.0)
+end
+emsg(f) = try
+    f(); ""
+catch e
+    e isa ArgumentError || return "not an ArgumentError: " * sprint(showerror, e)
+    sprint(showerror, e)
+end
+function compmodel(sys; scope = :(cells(A)))
+    decl = Expr(:macrocall, Symbol("@components"), LineNumberNode(@__LINE__, Symbol(@__FILE__)), scope, :(comp = $sys))
+    m = Base.invokelatest(Core.eval, @__MODULE__, quote
+        @potts_model F2CompRoute begin
+            @kinds medium A
+            $decl
+            @lattice Lattice((10, 10))
+            @energy cells => (volume - 9.0)^2
+            @sweep Metropolis(; temperature = 1.0e-6)
+        end
+        F2CompRoute(; name = :cr)
+    end)
+    σ = zeros(Int32, 10, 10); σ[3:5, 3:5] .= 1
+    return PottsProblem(m, [ownership => σ, kind => [:A]], (0, 2))
+end
+@testset "F2-15 review: routes and messages of computed parameters" begin
+    σ = zeros(Int32, 12, 12); σ[2:5, 2:5] .= 1
+    prob = PottsProblem(F2BoundChain(; name = :b), [ownership => σ, kind => [1]], (0, 2))
+    # S4: γ = 2α + 0.05 out of its bound names α (base: "give a value in them, or change `bounds`")
+    e = emsg(() -> Potts.SciMLBase.remake(prob; p = [:α => 1.0]))
+    @test occursin("parameter `γ` = 2.05 is outside its declared bounds (0, 1): `γ` is computed from `α`", e) &&
+          occursin("set `α`", e)
+    # M3: a write of a computed parameter through `integ[…]` (base: SII's "Invalid symbol β")
+    ig = init(prob, SequentialCPM())
+    e = emsg(() -> (ig[:β] = 1.0))
+    @test occursin("`β` is computed from `α`", e) && !occursin("Invalid symbol", e)
+    @test ig[:β] == 0.6                                           # a computed read is observed
+    # M1: a component's bound parameter routes into the component, and the route works
+    t = Potts.t
+    MTKB.@parameters k = 0.3
+    MTKB.@parameters k2 = 2k
+    MTKB.@variables y(t) = 1.0
+    pb = compmodel(MTKB.System([Potts.D(y) ~ -k2 * y], t, [y], [k, k2]; name = :comp))
+    e = emsg(() -> Potts.SciMLBase.remake(pb; p = [:comp₊k2 => 1.0]))
+    @test occursin("`comp₊k2` is computed from `comp₊k`", e) && occursin("give `k2` a number in `comp`'s parameters", e)
+    MTKB.@parameters k2n = 1.0
+    pr = compmodel(MTKB.System([Potts.D(y) ~ -k2n * y], t, [y], [k, k2n]; name = :comp))   # the route followed
+    @test getp(Potts.SciMLBase.remake(pr; p = [:comp₊k2n => 0.5]), :comp₊k2n)(Potts.SciMLBase.remake(pr; p = [:comp₊k2n => 0.5])) == 0.5
+    # S3: a discrete binding prints as written (base: `!Potts._nonzero(comp₊s)`)
+    kk = MTKB.ShiftIndex(t, 0)
+    MTKB.@parameters s::Bool = false
+    MTKB.@parameters s2::Bool = !s
+    MTKB.@variables X(t)::Bool = false
+    pd = compmodel(MTKB.System([X(kk) ~ s2], t; name = :comp))
+    e = emsg(() -> Potts.SciMLBase.remake(pd; p = [:comp₊s2 => true]))
+    @test occursin("`comp₊s2 = !comp₊s`", e) && !occursin("_nonzero", e)
 end
 end

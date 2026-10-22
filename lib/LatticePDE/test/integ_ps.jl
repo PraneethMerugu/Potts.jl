@@ -89,3 +89,24 @@ end
     setp(oi, kb2)(oi, 1.0)
     @test oi.ps[kb2] == 1.0
 end
+
+# Review M2/S4 of batch 5: a bound message names the user's parameter (never a slot `#i`) and
+# blames the parameter written: base parameters are checked first, then computed ones, and a
+# computed parameter's message names the inputs to change (base: "parameter `#2` = 6.0 …" for
+# a write of `k = 3.0`)
+@testset "F2-15: bound messages name the parameter written, then the computed ones" begin
+    @parameters kbd = 0.5 [bounds = (0, 2)]
+    @parameters kbd2 = 2kbd [bounds = (0, 3)]
+    pdom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    sys = PDESystem([D(ce) ~ -kbd2 * ce], [c(0, x, y) ~ 1.0], pdom, [t, x, y], [ce], [kbd, kbd2]; name = :pq)
+    p = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64, problem = :owned))
+    ig = init(p, ExplicitEuler(; dt = 0.1, substeps = 1))
+    e = psmsg(() -> (ig.ps[kbd] = 3.0))
+    @test occursin("parameter `kbd` = 3.0 is outside its declared bounds (0, 2)", e) && !occursin("#", e)
+    e = psmsg(() -> (ig.ps[kbd] = 1.8))                        # kbd is in; kbd2 = 3.6 is not
+    @test occursin("parameter `kbd2` = 3.6 is outside its declared bounds (0, 3): `kbd2` is computed from `kbd`", e)
+    @test ig.ps[kbd] == 0.5 && ig.ps[kbd2] == 1.0               # nothing changed
+    @test occursin("`kbd2` is computed from `kbd`", psmsg(() -> remake(p; p = [kbd => 1.8])))
+    o = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64))
+    @test occursin("`kbd2` = 3.6", psmsg(() -> remake(o; p = [kbd => 1.8])))
+end

@@ -97,6 +97,8 @@ p60ab_J(x) = [0 x x; x 2 x-5; x x-5 14]
 @testset "P6.0ab: small API defects" begin
 
 @testset "P6.0ab defect 1: a kind table computed from parameters" begin
+    # (re-frozen under D-F2-1, F2-15, list A, user OK 2026-10-22: the explicit-table case uses
+    # the constructor keyword)
     prob = PottsProblem(P60abTable(; name = :kt), p60ab_blocks(), (0, 5); seed = 3)
     J = getp(prob, :J)(prob)
     V = getp(prob, :V₀)(prob)
@@ -120,10 +122,17 @@ p60ab_J(x) = [0 x x; x 2 x-5; x x-5 14]
     @test getp(p2, :Jx)(p2) == 30.0
     @test total_energy(p2) == 737.0
     @test typeof(p2.p) === typeof(prob.p)                       # nothing recompiles
-    # an explicit table wins over its expression
+    # a fixed table is declared with a number (D-F2-1: the computed J is read-only, so a write
+    # of it is refused, naming its input Jx)
     M = [0 5 5; 5 1 3; 5 3 1]
-    p3 = remake(prob; p = [:J => M])
+    p3 = PottsProblem(P60abTable(; name = :kt, J = M), p60ab_blocks(), (0, 5); seed = 3)
     @test getp(p3, :J)(p3) == M
+    e3 = try
+        remake(prob; p = [:J => M]); nothing
+    catch err
+        err
+    end
+    @test e3 isa ArgumentError && occursin("`J` is computed from `Jx`", sprint(showerror, e3))
 
     # a constructor keyword gives a new default; the table follows it
     p4 = PottsProblem(P60abTable(; name = :kt, Jx = 20.0), p60ab_blocks(), (0, 5); seed = 3)

@@ -146,7 +146,8 @@ function CorePotts.PottsProblem(c::CompiledPottsSystem, op, tspan; backend = not
     track = _track(track)
     opd = _operating_point(sys, op)
     values = _parameter_values(c, opd)
-    p = PottsParameters(NamedTuple(info(x).name => _param_value(T, values[_unwrap(x)], info(x)) for x in _p(sys, :parameters)),
+    p = PottsParameters(NamedTuple(info(x).name => _param_value(T, values[_unwrap(x)], info(x); ps = _p(sys, :parameters))
+                                   for x in _p(sys, :parameters)),
         _computed_tag(_p(sys, :parameters)))
     _register_derivation!(_p(sys, :parameters), T, p)
     for name in _contact_tables(c)
@@ -326,7 +327,7 @@ function CorePotts.remake_function(mi::PottsModelInfo, prob; field_solver = mi.s
                                            "$(join(("`$k`" for k in keys(kwargs)), ", "))"))
     c = mi.csys
     spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
-    values = _derived_parameters(c, prob.p, Set(info(x).name for x in _p(c.sys, :parameters)))
+    values = _parameter_dict(c, prob.p)
     track = _track(track)
     return _problem_function(c, mi.T, spec, values, mi.ctx, mi.cache; track), _track_layout(_ode_layout(prob.u0, c, spec), c, track)
 end
@@ -490,15 +491,37 @@ end
 _opkey(k::typeof(CorePotts.ownership)) = k
 _opkey(k) = (u = _unwrap(k); u)
 
+# The parameter values of a problem being built (raw, before the conversion to the scalar type):
+# a base parameter's operating-point value or default, and every computed parameter derived from
+# them (D-F2-1; F2 design §2.7). An operating-point entry for a computed parameter is a write,
+# refused naming its inputs; an operating-point value written as an expression of parameters is
+# evaluated once (D-117).
 function _parameter_values(c::CompiledPottsSystem, opd)
+    ps = _p(c.sys, :parameters)
     values = Dict{Any, Any}()
-    for x in _p(c.sys, :parameters)
-        u = _unwrap(x)
-        v = haskey(opd, u) ? opd[u] : info(x).default
-        v === nothing && throw(ArgumentError("parameter `$(info(x).name)` has no default; give it in the operating point"))
+    for x in ps
+        u, i = _unwrap(x), info(x)
+        if _is_symbolic(i.default)
+            haskey(opd, u) && throw(ArgumentError(_computed_message(ps, i)))
+            continue
+        end
+        v = haskey(opd, u) ? opd[u] : i.default
+        v === nothing && throw(ArgumentError("parameter `$(i.name)` has no default; give it in the operating point"))
         values[u] = v
     end
-    return _resolve_defaults!(values)
+    any(_is_symbolic, values) && _resolve_defaults!(values)
+    return _derive_values!(values, ps)
+end
+# `values` (keyed by the parameters' variables) with the computed parameters derived from the base ones
+function _derive_values!(values, ps)
+    isempty(_computed_params(ps)) && return values
+    d = _derivation(ps)
+    byname = Dict{Symbol, Any}(info(x).name => _unwrap(x) for x in ps)
+    out = d(Tuple(values[byname[b]] for b in d.base))
+    for (n, v) in zip(d.computed, out)
+        values[byname[n]] = v
+    end
+    return values
 end
 
 # a scalar expression, or a kind table (vector/matrix) with an expression among its entries
@@ -514,28 +537,90 @@ function _evaluate(v, values, who = "`$v`")
     return w
 end
 
-"""
-The parameters as a `Dict` (symbol → value) after a change naming the parameters `changed`
-(names), with values `p`. A computed parameter (its default an expression of parameters, or
-a kind table with expression entries) is re-derived from its expression iff it is not named
-in the change and one of its inputs is named in the change or is itself re-derived by it
-(transitively): `b = 3a` follows a new `a`. Every other parameter keeps its value in `p`, so
-an explicit value survives every change that touches none of its inputs.
-"""
-_derived_parameters(c::CompiledPottsSystem, p, changed) = _derived_values(_p(c.sys, :parameters), p, changed)
-function _derived_values(ps, p, changed)
-    values = Dict{Any, Any}()
-    redo = _rederived(ps, changed)
-    for x in ps
-        i = info(x)
-        values[_unwrap(x)] = i.name in redo ? i.default : getproperty(p, i.name)
+# the parameters of `p` as a `Dict` (variable → value), for evaluating defaults of state
+_parameter_dict(c::CompiledPottsSystem, p) = Dict{Any, Any}(_unwrap(x) => getproperty(p, info(x).name) for x in _p(c.sys, :parameters))
+
+# The computed parameters (D-F2-1, F2 design §2.7): read-only and derived from the base
+# parameters through one compiled derivation (`LatticePDE.derivation`, D-117's rules), built
+# once per model's parameter list. Its structural checks name the parameter: a default that
+# reads a variable or built-in, or draws `rand()`.
+# (keyed by the list's identity: symbolic parameters compare equal by name, so two models with
+# the same names and other defaults must not share an entry; a dead list's entry is replaced)
+const _DERIVATION_CACHE = Dict{UInt, Tuple{WeakRef, Any}}()
+const _DERIVATION_CACHE_LOCK = ReentrantLock()
+function _derivation(ps)
+    return lock(_DERIVATION_CACHE_LOCK) do
+        k = objectid(ps)
+        e = get(_DERIVATION_CACHE, k, nothing)
+        e !== nothing && e[1].value === ps && return e[2]
+        d = _build_derivation(ps)
+        _DERIVATION_CACHE[k] = (WeakRef(ps), d)
+        return d
     end
-    isempty(redo) && return values
-    return _resolve_defaults!(values)
+end
+function _build_derivation(ps)
+    cs = _computed_params(ps)
+    for x in cs
+        i = info(x)
+        for e in (i.default isa AbstractArray ? i.default : (i.default,))
+            _is_symbolic(e) || continue
+            _has_op(e, random_uniform) && throw(ArgumentError("parameter `$(i.name)` draws a random number " *
+                "(`rand()`); a default is evaluated once per build and must be deterministic"))
+            m = _non_parameters(e)
+            isempty(m) || throw(ArgumentError("parameter `$(i.name)` = `$(i.default)` does not reduce to " *
+                                              "numbers with the parameter values" * m))
+        end
+    end
+    return LatticePDE.derivation(Symbol[info(x).name for x in ps if !_is_symbolic(info(x).default)],
+        Pair{Symbol, Any}[info(x).name => info(x).default for x in cs])
+end
+# `p` with every computed parameter derived again from its base values, in scalar type `T`
+function _derive(ps, T, p::PottsParameters)
+    isempty(_computed(p)) && return p
+    d = _derivation(ps)
+    nt = NamedTuple(p)
+    out = Dict{Symbol, Any}(zip(d.computed, d(Tuple(nt[b] for b in d.base))))
+    return _with_values(p, NamedTuple(info(x).name => (haskey(out, info(x).name) ? _param_value(T, out[info(x).name], info(x); ps) :
+                                                       nt[info(x).name]) for x in ps))
+end
+# the refusal of a write of computed parameter `i` (D-F2-1): its expression, its base inputs
+# (through chains) and the routes
+function _computed_message(ps, i::Entity)
+    byvar = Dict{Any, Entity}(_unwrap(x) => info(x) for x in ps)
+    base, seen, todo = Symbol[], Set{Symbol}(), Any[i]
+    while !isempty(todo)
+        j = pop!(todo)
+        j.name in seen && continue
+        push!(seen, j.name)
+        for u in _default_inputs(j.default)
+            k = get(byvar, _unwrap(u), nothing)
+            k === nothing && continue
+            _is_symbolic(k.default) ? push!(todo, k) : (k.name in base || push!(base, k.name))
+        end
+    end
+    sort!(base; by = string)
+    ins = join(("`$b`" for b in base), ", ")
+    # a component's binding (`k2 = 2k` in `comp`): the number goes into the component (review M1)
+    o = get(i.options, :origin, nothing)
+    route = o === nothing ? string("(the model constructor's keyword `", i.name, " = v` does)") :
+            string("in the component: give `", o[2], "` a number in `", o[1], "`'s parameters, in place of its binding")
+    return string("`", i.name, "` is computed from ", ins, " (`", i.name, " = ", _builtin_text(_default_text(i.default)),
+        "`): set ", length(base) == 1 ? ins : "its inputs", "; for a fixed `", i.name, "`, declare it with a number ", route)
+end
+_default_text(d::AbstractArray) = "[" * join((join(map(_default_text, d[r, :]), " ") for r in axes(d, 1)), "; ") * "]"
+# (as written: no package prefixes, a discrete Bool read `!comp₊s`, not `!Potts._nonzero(comp₊s)`)
+_default_text(d) = replace(string(d), "LatticePDE." => "", r"Potts\._nonzero\(([^()]*)\)" => s"\1")
+# the computed parameter that `x` names in model `c`, or `nothing`
+function _computed_entity(ps, x)
+    for q in ps
+        i = info(q)
+        (x isa Symbol ? i.name === x : isequal(_unwrap(q), _unwrap(x))) && return _is_symbolic(i.default) ? i : nothing
+    end
+    return nothing
 end
 
 # `()` or `(names, fp)` for a parameter object's type (`PottsParameters{NT, D}`): the computed
-# parameters (D-112) and a fingerprint of their `(name, default)` pairs (C9). Only computed
+# parameters (D-F2-1) and a fingerprint of their `(name, default)` pairs (C9). Only computed
 # parameters are fingerprinted: a constructor keyword that overrides another default (a sweep
 # `Model(; T = t)`) keeps one type, so nothing recompiles.
 _computed_params(ps) = [x for x in ps if _is_symbolic(info(x).default)]
@@ -568,7 +653,7 @@ _same_default(a, b::AbstractArray) = false
 _same_default(a, b) = isequal(_const_value(a), _const_value(b))
 _same_defaults(a, b) = length(a) == length(b) && all(x[1] === y[1] && _same_default(x[2], y[2]) for (x, y) in zip(a, b))
 
-# register the derivation of `p`'s computed parameters (D-112) for `SciMLStructures.replace`:
+# register the derivation of `p`'s computed parameters (D-F2-1) for `SciMLStructures.replace`:
 # one per exact type; a second model with the same type but other computed defaults (a
 # fingerprint collision) is an error, never a silent replacement
 function _register_derivation!(ps, T, p::PottsParameters)
@@ -577,7 +662,7 @@ function _register_derivation!(ps, T, p::PottsParameters)
     lock(_DERIVATIONS_LOCK) do
         old = get(_DERIVATIONS, typeof(p), nothing)
         if old === nothing
-            _DERIVATIONS[typeof(p)] = (; derive = (o, n) -> _rederive(ps, T, o, n), defaults)
+            _DERIVATIONS[typeof(p)] = (; derive = (o, n) -> _derive(ps, T, n), defaults)
         elseif !_same_defaults(old.defaults, defaults)
             throw(ArgumentError("two models share a parameter type but derive $(_computed(p)) from other defaults " *
                                 "(a fingerprint collision: equal as text, e.g. `1//3` and `0.333…`, or two functions " *
@@ -585,38 +670,6 @@ function _register_derivation!(ps, T, p::PottsParameters)
         end
     end
     return nothing
-end
-
-# `new` with the computed parameters that read a value changed from `old` re-derived (D-112)
-function _rederive(ps, T, old::PottsParameters, new::PottsParameters)
-    o = NamedTuple(old)
-    changed = Set(k for (k, v) in pairs(NamedTuple(new)) if !isequal(v, o[k]))
-    isempty(changed) && return new
-    derived = _derived_values(ps, new, changed)
-    return _with_values(new, NamedTuple(info(x).name => _param_value(T, derived[_unwrap(x)], info(x)) for x in ps))
-end
-
-# The names of the computed parameters a change naming `changed` re-derives (D-112): a fixed
-# point over the inputs of the computed defaults. Empty when every parameter is named.
-function _rederived(ps, changed)
-    redo = Set{Symbol}()
-    computed = [x for x in ps if _is_symbolic(info(x).default) && !(info(x).name in changed)]
-    isempty(computed) && return redo
-    byvar = Dict{Any, Symbol}(_unwrap(x) => info(x).name for x in ps)
-    inputs = [Set{Symbol}(byvar[u] for u in _default_inputs(info(x).default) if haskey(byvar, u)) for x in computed]
-    grew = true
-    while grew
-        grew = false
-        for (x, ins) in zip(computed, inputs)
-            n = info(x).name
-            n in redo && continue
-            if any(d -> d in changed || d in redo, ins)
-                push!(redo, n)
-                grew = true
-            end
-        end
-    end
-    return redo
 end
 
 # the parameters an expression default (scalar, or kind-table entries) reads, unwrapped
@@ -718,7 +771,7 @@ function _non_parameters(v)
            "a default is an expression of parameters, numbers and functions"
 end
 
-_param_value(T, v, i::Entity) = _check_bounds(i, _param_value_unchecked(T, v, i))
+_param_value(T, v, i::Entity; ps = nothing) = _check_bounds(i, _param_value_unchecked(T, v, i), ps)
 function _param_value_unchecked(T, v, i::Entity)
     _is_symbolic(v) && throw(ArgumentError("parameter `$(i.name)` = `$(_is_symbolic(i.default) ? i.default : v)` does not " *
                                            "reduce to numbers with the parameter values" * _non_parameters(v)))
@@ -998,7 +1051,8 @@ const _SymbolicMap = Union{AbstractVector{<:Pair}, AbstractDict}
 
 CorePotts.remake_parameters(info::PottsModelInfo, prob, p::_SymbolicMap) = _set_parameter_map(info, prob.p, p)
 
-# parameter object `old` with the parameter map `p` applied as one change (D-112)
+# parameter object `old` with the parameter map `p` applied as one change, then every computed
+# parameter derived again (D-F2-1)
 function _set_parameter_map(info::PottsModelInfo, old::PottsParameters, p)
     p = _expand_vectors(info.csys.sys, Pair{Any, Any}[_localize(info.csys.sys, k; strict = true) => v for (k, v) in p])
     names = Dict{Any, Entity}()
@@ -1012,6 +1066,8 @@ function _set_parameter_map(info::PottsModelInfo, old::PottsParameters, p)
         key = k isa Symbol ? k : _unwrap(k)
         haskey(names, key) || throw(ArgumentError("`$k` is not a parameter of $(nameof(info.csys))"))
         i = names[key]
+        # a computed parameter is read-only (D-F2-1): the whole change is refused, nothing is set
+        _is_symbolic(i.default) && throw(ArgumentError(_computed_message(_p(info.csys.sys, :parameters), i)))
         new[i.name] = _param_value(info.T, v, i)
     end
     out = _with_values(old, NamedTuple(k => get(new, k, v) for (k, v) in pairs(NamedTuple(old))))
@@ -1035,13 +1091,14 @@ _model_info(x) = throw(ArgumentError("remake_buffer: `$(nameof(typeof(x)))` does
 CorePotts.remake_parameters(info::PottsModelInfo, prob, p::NamedTuple) =
     CorePotts.remake_parameters(info, prob, _field_pairs(p))
 
-# a whole parameter object is taken as given, computed parameters included (D-115: a checkpoint's
-# `p` restores verbatim; a SciMLStructures `replace` has already re-derived them; D-C9 item 7);
-# the kind tables are checked either way. One of this problem's type is used as is; one of another
-# type must have the same names and sets every value, converted to the problem's scalar type (a
-# Float32 problem's `p` does not make a Float64 problem Float32)
+# a whole parameter object gives its base values, and the computed parameters are derived again
+# from them (D-F2-1 amends D-115: a checkpoint's object restores bitwise, as the derivation is
+# deterministic; a hand-edited object gets consistent computed values, never a silent mix); the
+# kind tables are checked either way. One of this problem's type is used as is; one of another
+# type must have the same names and sets every base value, converted to the problem's scalar type
+# (a Float32 problem's `p` does not make a Float64 problem Float32)
 function CorePotts.remake_parameters(info::PottsModelInfo, prob, p::PottsParameters)
-    typeof(p) === typeof(prob.p) && return _check_parameter_tables(info.csys, p)
+    typeof(p) === typeof(prob.p) && return _finish_parameters(info, p, p, nothing)
     new, old = keys(NamedTuple(p)), keys(NamedTuple(prob.p))
     if Set(new) != Set(old)
         extra, absent = setdiff(new, old), setdiff(old, new)
@@ -1049,7 +1106,9 @@ function CorePotts.remake_parameters(info::PottsModelInfo, prob, p::PottsParamet
                             (isempty(extra) ? "" : "; not its parameters: $(join(extra, ", "))") *
                             (isempty(absent) ? "" : "; missing: $(join(absent, ", "))")))
     end
-    return CorePotts.remake_parameters(info, prob, NamedTuple(p))
+    ps = _p(info.csys.sys, :parameters)
+    base = Pair{Symbol, Any}[k => v for (k, v) in pairs(NamedTuple(p)) if _computed_entity(ps, k) === nothing]
+    return CorePotts.remake_parameters(info, prob, base)
 end
 
 # SciML's keep sentinels: `p = missing` (SciMLBase's generic `remake`) or `nothing` keeps `prob.p`
@@ -1066,12 +1125,10 @@ end
 _field_pairs(nt::NamedTuple) = Pair{Symbol, Any}[k => v for (k, v) in pairs(nt)]
 _is_pairs(p) = (p isa AbstractVector || p isa Tuple) && all(x -> x isa Pair, p)
 
-# Re-derive the expression-defined parameters not set in this change, and check the tables.
-function _finish_parameters(mi::PottsModelInfo, old, out, explicit)
+# Derive every computed parameter again from the base values (D-F2-1), and check the tables.
+function _finish_parameters(mi::PottsModelInfo, old, out, _)
     c = mi.csys
-    derived = _derived_parameters(c, out, explicit)
-    out = _with_values(old, NamedTuple(info(x).name => _param_value(mi.T, derived[_unwrap(x)], info(x))
-                                     for x in _p(c.sys, :parameters)))
+    out = _derive(_p(c.sys, :parameters), mi.T, out)
     typeof(out) === typeof(old) || throw(ArgumentError("parameter types changed; kind tables keep their size"))
     return _check_parameter_tables(c, out)
 end
@@ -1090,6 +1147,8 @@ end
 function CorePotts.set_parameter(info::PottsModelInfo, p::PottsParameters, v, i::Symbol)
     x = findfirst(x -> Potts.info(x).name === i, _p(info.csys.sys, :parameters))
     x === nothing && throw(ArgumentError("`$i` is not a parameter of $(nameof(info.csys))"))
+    e = Potts.info(_p(info.csys.sys, :parameters)[x])
+    _is_symbolic(e.default) && throw(ArgumentError(_computed_message(_p(info.csys.sys, :parameters), e)))
     q = _with_values(p, merge(NamedTuple(p), NamedTuple{(i,)}((_param_value(info.T, v, Potts.info(_p(info.csys.sys, :parameters)[x])),))))
     return _finish_parameters(info, p, q, Set([i]))
 end
@@ -1107,7 +1166,9 @@ function CorePotts.set_parameters(info::PottsModelInfo, p::PottsParameters, vals
     for (v, i) in zip(vals, names)
         x = findfirst(x -> Potts.info(x).name === i, params)
         x === nothing && throw(ArgumentError("`$i` is not a parameter of $(nameof(info.csys))"))
-        new[i] = _param_value(info.T, v, Potts.info(params[x]))
+        e = Potts.info(params[x])
+        _is_symbolic(e.default) && throw(ArgumentError(_computed_message(params, e)))
+        new[i] = _param_value(info.T, v, e)
     end
     q = _with_values(p, NamedTuple(k => get(new, k, v) for (k, v) in pairs(NamedTuple(p))))
     return _finish_parameters(info, p, q, Set(keys(new)))
@@ -1171,7 +1232,7 @@ function CorePotts.remake_state(info::PottsModelInfo, prob, u0::_SymbolicMap)
     old = length(prob.u0.cell.kind)
     free = count(iszero, prob.u0.cell.volume)
     ncell = maximum(Int32.(get(opd, ownership, Int32[])); init = Int32(0))
-    values = _derived_parameters(info.csys, prob.p, Set(Potts.info(x).name for x in _p(info.csys.sys, :parameters)))
+    values = _parameter_dict(info.csys, prob.p)
     st = _ode_layout(_initial_state(info.csys, opd, info.T, max(old, ncell + free), values), info.csys, info.solvers)
     return _host_init!(prob.f, st, prob.p, info.ctx, prob.seed, prob.replica, prob.repeat)
 end

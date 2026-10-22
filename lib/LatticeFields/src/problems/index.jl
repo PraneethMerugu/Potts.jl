@@ -56,11 +56,12 @@ struct LatticeIndex{F}
     observed::Dict{Any, Any}
     tables::Dict{Any, Tuple{String, Int}}       # symbol → (table key, entry; 0 for the whole table)
     parambounds::Dict{Int, Tuple{Float64, Float64}}   # slot → declared `bounds` (F2-14), checked at every write
+    derive::Any                                 # `nothing`, or `(Derivation, sources, slots)`: the computed slots (F2-15)
 end
 function LatticeIndex(; key::F = identity, variables = Pair[], parameters = Pair[],
         independent_variables = Any[], defaults = Dict{Any, Any}(), inputs = Pair[],
         inputnames = Pair[], boolinputs = String[], inputbounds = Pair[], derived = Pair[], observed = Pair[],
-        tables = Pair[], parambounds = Pair[]) where {F}
+        tables = Pair[], parambounds = Pair[], derive = nothing) where {F}
     syms(x) = x isa Union{Tuple, AbstractVector} ? x : (x,)
     vars, varsyms = Dict{Any, FieldSlot}(), Any[]
     for (ss, slot) in variables
@@ -100,7 +101,7 @@ function LatticeIndex(; key::F = identity, variables = Pair[], parameters = Pair
         names, Set{String}(String.(boolinputs)),
         Dict{String, Tuple{Float64, Float64}}(String(k) => Float64.((b[1], b[2])) for (k, b) in inputbounds), der, obs, Dict{Any, Tuple{String, Int}}(key(s) => (k isa Tuple ? (String(k[1]), Int(k[2])) : (String(k), 0))
                                                        for (ss, k) in tables for s in syms(ss)),
-        Dict{Int, Tuple{Float64, Float64}}(Int(i) => Float64.((b[1], b[2])) for (i, b) in parambounds))
+        Dict{Int, Tuple{Float64, Float64}}(Int(i) => Float64.((b[1], b[2])) for (i, b) in parambounds), derive)
 end
 
 """
@@ -116,7 +117,16 @@ function parameter_name(ix::LatticeIndex, i::Integer)
     for s in ix.paramsyms
         get(ix.params, ix.key(s), 0) == i && return string(s)
     end
+    k = computed_slot(ix, i)                     # a computed parameter's slot (F2-15): its name
+    k === nothing || return string(k)
     return "#$i"
+end
+# the computed parameter that slot `i` holds (F2-15), or `nothing`
+function computed_slot(ix::LatticeIndex, i::Integer)
+    ix.derive === nothing && return nothing
+    d, _, slots = ix.derive
+    k = findfirst(==(i), slots)
+    return k === nothing ? nothing : d.computed[k]
 end
 
 _slot(ix::LatticeIndex, sym) = get(ix.vars, ix.key(sym), nothing)
@@ -171,7 +181,7 @@ function SII.parameter_index(ix::LatticeIndex, sym)
     _scalar(sym) || return nothing
     i = get(ix.params, k, nothing)
     i === nothing || return i
-    haskey(ix.derived, k) && throw(ArgumentError("`$sym` is not a parameter of the problem: $(ix.derived[k])"))
+    haskey(ix.derived, k) && throw(ArgumentError(ix.derived[k]))     # a computed parameter (D-F2-1): read-only
     # a variable, an input or the time is not a parameter (`nothing`); any other symbol is a
     # typo, an error rather than a key `remake` would skip
     (haskey(ix.vars, k) || haskey(ix.inputs, k) || SII.is_independent_variable(ix, sym)) && return nothing

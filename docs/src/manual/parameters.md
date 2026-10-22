@@ -73,19 +73,20 @@ prob3 = remake(prob; p = [:A₀ => 30.0])
 getp(prob3, :V_big)(prob3), getp(prob3, :V₀)(prob3)
 ```
 
-A computed parameter is evaluated when the problem is built, from the operating point and
-the other defaults. A value given explicitly (in the operating point of `PottsProblem`, by
-`remake(prob; p = …)` or by a setter of a running integrator, `integ.ps[:A₀] = 25.0`)
-replaces the expression and is kept until one of the expression's inputs changes. Each
-`remake` and each setter is one change: it re-evaluates a computed parameter only if the
-parameter is not given in that change and one of its inputs is given in it or is itself
-re-evaluated by it. So after `remake(prob; p = [:V₀ => [0.0, 30.0, 30.0]])`, a later change
-of `λ` keeps those numbers, while a change of an input of `V₀` evaluates `V₀` from its
-expression again (give `V₀` in the same change to keep it). Chains follow their inputs: with
-`β = 2α` and `γ = β + 1`, changing `α` re-evaluates `β` and `γ` even if `β` was set, and
-changing `β` re-evaluates `γ`. The same holds for scalar computed defaults such as `V_big`.
-A parameter object given whole (`remake(prob; p = checkpoint.p)`) sets every value, converted
-to the problem's number type; one with other parameter names is an `ArgumentError`.
+A computed parameter is read-only, as in ModelingToolkit. It is evaluated when the problem is
+built, from the operating point and the other defaults, and evaluated again from the base
+parameters after every change: `remake`, a setter (`integ.ps[:A₀] = 25.0`), `setp` or
+`SciMLStructures.replace`. Chains follow their inputs: with `β = 2α` and `γ = β + 1`, a new
+`α` moves `β` and `γ`. Reads work everywhere (`getp(prob, :V_big)`, `integ.ps[:V_big]`,
+`sol.ps[:V_big]`). A write of a computed parameter, in the operating point, `remake`, `setp`,
+`integ.ps[x] = v` or `setsym`, is an `ArgumentError` that names its expression and its
+inputs, and nothing is set; a list that names one is refused whole. For a fixed value,
+declare the parameter with a number through the constructor keyword: `Params(; V_big = 50.0)`
+makes `V_big` a base parameter (a new parameter type, so the model compiles once more).
+A parameter object given whole (`remake(prob; p = checkpoint.p)`) gives its base values, and
+the computed ones are evaluated again, so a checkpoint restores exactly. One with other
+parameter names is an `ArgumentError`. Computed parameters are evaluated through one compiled
+function, the same in a LatticePDE problem.
 
 A computed default, scalar or table entry, is evaluated as a number. It may use Julia's
 functions (`sqrt`, `exp`, `log`, `min`, `max`, `floor`, `mod`, `div` or `÷`, and so on),

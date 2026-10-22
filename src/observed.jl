@@ -120,12 +120,25 @@ end
 
 _potts_quantity(x) = (u = _unwrap(x); u isa SymbolicUtils.BasicSymbolic)
 
+# a base parameter (a computed one is not a parameter for SII: it is observed, D-F2-1)
 function _param_info(sys::PottsModelInfo, x)
     x = _localize(sys.csys.sys, x; strict = true)       # another model's `other₊λ` is an error (D-137)
-    x isa Symbol && return findfirst(p -> info(p).name === x, _p(sys.csys.sys, :parameters))
+    ps = _p(sys.csys.sys, :parameters)
+    if x isa Symbol
+        k = findfirst(p -> info(p).name === x, ps)
+        return k === nothing || _is_symbolic(info(ps[k]).default) ? nothing : k
+    end
     _potts_quantity(x) || return nothing
     i = info(x)
-    return i !== nothing && i.role in (:param, :kindtable) ? i.name : nothing
+    i !== nothing && i.role in (:param, :kindtable) || return nothing
+    return _computed_entity(ps, i.name) === nothing ? i.name : nothing
+end
+# the computed parameter `x` names (D-F2-1), or `nothing`
+function _computed_info(sys::PottsModelInfo, x)
+    x isa Union{AbstractArray, Tuple} && return nothing
+    x = _localize(sys.csys.sys, x; strict = true)
+    x isa Symbol || _potts_quantity(x) || return nothing
+    return _computed_entity(_p(sys.csys.sys, :parameters), x isa Symbol ? x : (i = info(x); i === nothing ? x : i.name))
 end
 
 # Declared state variables are SII variables (settable with `setu`/`integ[x] = v`); built-ins
@@ -149,10 +162,34 @@ SII.variable_symbols(sys::PottsModelInfo) = filter(_state_var, _p(sys.csys.sys, 
 SII.all_variable_symbols(sys::PottsModelInfo) = [SII.variable_symbols(sys); [o.lhs for o in _p(sys.csys.sys, :observed)]]
 SII.is_parameter(sys::PottsModelInfo, x) = _param_info(sys, x) !== nothing
 function SII.parameter_index(sys::PottsModelInfo, x)
+    # a computed parameter is read-only (D-F2-1): its index (asked by `setp`, `integ.ps[x] = v`,
+    # `remake`) is an error naming its inputs
+    ci = _computed_info(sys, x)
+    ci === nothing || throw(ArgumentError(_computed_message(_p(sys.csys.sys, :parameters), ci)))
     i = _param_info(sys, x)
     return i isa Integer ? info(_p(sys.csys.sys, :parameters)[i]).name : i
 end
-SII.parameter_symbols(sys::PottsModelInfo) = _p(sys.csys.sys, :parameters)
+# a list setter (`setp(integ, [:k2, …])`, `setsym`) names a computed parameter with its route
+CorePotts.readonly_message(sys::PottsModelInfo, x) =
+    (ci = _computed_info(sys, x); ci === nothing ? nothing : _computed_message(_p(sys.csys.sys, :parameters), ci))
+SII.parameter_symbols(sys::PottsModelInfo) = filter(x -> !_is_symbolic(info(x).default), _p(sys.csys.sys, :parameters))
+# a computed parameter reads as observed from the parameter object (`getp`, `integ.ps[k2]`, `sol.ps[k2]`)
+function SII.parameter_observed(sys::PottsModelInfo, x)
+    if x isa Union{AbstractArray, Tuple}
+        fs = map(y -> SII.parameter_observed(sys, y), x isa Tuple ? x : collect(x))
+        any(isnothing, fs) && return nothing
+        return x isa Tuple ? ((p, t) -> map(f -> f(p, t), fs)) : ((p, t) -> [f(p, t) for f in fs])
+    end
+    ci = _computed_info(sys, x)
+    if ci === nothing
+        i = _param_info(sys, x)
+        i === nothing && return nothing
+        n = i isa Integer ? info(_p(sys.csys.sys, :parameters)[i]).name : i
+        return (p, t) -> getproperty(p, n)
+    end
+    n = ci.name
+    return (p, t) -> getproperty(p, n)
+end
 SII.is_timeseries_parameter(::PottsModelInfo, x) = false
 SII.is_independent_variable(::PottsModelInfo, x) = _potts_quantity(x) && isequal(_unwrap(x), _unwrap(t))
 SII.independent_variable_symbols(::PottsModelInfo) = [t]
@@ -162,7 +199,11 @@ SII.all_symbols(sys::PottsModelInfo) = vcat(SII.all_variable_symbols(sys), _p(sy
 SII.default_values(::PottsModelInfo) = Dict()
 SII.is_observed(sys::PottsModelInfo, x) = _potts_quantity(x) && !SII.is_parameter(sys, x) &&
                                           !SII.is_variable(sys, x) && !SII.is_independent_variable(sys, x)
-SII.observed(sys::PottsModelInfo, x) = _observed_function(sys, _localize(sys.csys.sys, x; strict = true))
+function SII.observed(sys::PottsModelInfo, x)
+    ci = _computed_info(sys, x)
+    ci === nothing || (n = ci.name; return (u, p, t) -> getproperty(p, n))
+    return _observed_function(sys, _localize(sys.csys.sys, x; strict = true))
+end
 # by name: `sol[:volume]`, `sol[:act]`, `sol[:mean_excess]`
 function _named_quantity(sys::PottsModelInfo, x::Symbol)
     m = sys.csys.sys
@@ -172,8 +213,13 @@ function _named_quantity(sys::PottsModelInfo, x::Symbol)
     return x in BUILTIN_NAMES ? getfield(B, x) : nothing
 end
 SII.is_observed(sys::PottsModelInfo, x::Symbol) = !SII.is_parameter(sys, x) && !SII.is_variable(sys, x) &&
-                                                  _named_quantity(sys, _localize(sys.csys.sys, x)) !== nothing
-SII.observed(sys::PottsModelInfo, x::Symbol) = _observed_function(sys, _named_quantity(sys, _localize(sys.csys.sys, x)))
+                                                  (_named_quantity(sys, _localize(sys.csys.sys, x)) !== nothing ||
+                                                   _computed_info(sys, x) !== nothing)
+function SII.observed(sys::PottsModelInfo, x::Symbol)
+    ci = _computed_info(sys, x)
+    ci === nothing || (n = ci.name; return (u, p, t) -> getproperty(p, n))
+    return _observed_function(sys, _named_quantity(sys, _localize(sys.csys.sys, x)))
+end
 
 """
     observe(prob_or_sol, x[, u])

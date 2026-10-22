@@ -1,5 +1,7 @@
 # P6.0ao (ROADMAP Phase 6, step 0): computed parameter defaults that call functions or read
-# a kind-table entry. Frozen (AUTONOMY §7.2).
+# a kind-table entry. Frozen (AUTONOMY §7.2). Re-frozen under D-F2-1 (F2-15, list A, user OK
+# 2026-10-20): the explicit-value sub-tests flip to refusals; every evaluation value stays (the
+# oracle of the one derivation, `LatticePDE.derivation`).
 #
 # Today (e006198b) a computed default is evaluated by substituting the parameter values
 # (`_resolve_defaults!`, src/problem.jl) and is accepted only if the substitution folds to a
@@ -20,9 +22,10 @@
 # `V₀[k]` / `J[k, l]` takes kind numbers as everywhere in a model (medium = 0, the kinds in
 # `@kinds` order; a kind's name is its number), so with `@kinds medium P Q`, `V₀[2]` is
 # `V₀[Q]`, the third entry. The value is converted to the problem's scalar type (Float32
-# problems stay Float32). The input graph of D-112 sees through calls and table reads: a
-# computed parameter is re-derived by a change iff one of the parameters its expression
-# reads (inside any call or index) is in the change or is re-derived by it.
+# problems stay Float32). After every change of base parameters every computed parameter is
+# derived again (D-F2-1), through calls and table reads; a computed parameter is read-only (a
+# write is an `ArgumentError` naming it), and a fixed value is declared with the constructor
+# keyword (`P60aoFns(; u = 4.0)`).
 # A default that cannot be a number — it reads a variable or built-in (`volume`, `kind`), or
 # draws a random number (`rand()`: a default is evaluated once per build and must be
 # deterministic) — or that reads a kind table outside its kinds, is an `ArgumentError` that
@@ -199,9 +202,7 @@ p60ao_names(e, name) = e isa ArgumentError && occursin("`$name`", sprint(showerr
         @test total_energy(pt) == 1 + 49                     # 50
         qt = remake(pt; p = [:V₀ => [0.0, 5.0, 3.0]])
         @test Vector(getp(qt, :R)(qt)) == [0.0, 4.0, 6.0]
-        qe = remake(pt; p = [:R => [0.0, 7.0, 7.0]])
-        @test Vector(getp(remake(qe; p = [:λ => 2.0]), :R)(remake(qe; p = [:λ => 2.0]))) == [0.0, 7.0, 7.0]
-        @test Vector(getp(remake(qe; p = [:V₀ => [0.0, 5.0, 3.0]]), :R)(remake(qe; p = [:V₀ => [0.0, 5.0, 3.0]]))) == [0.0, 4.0, 6.0]
+        @test p60ao_names(p60ao_error(() -> remake(pt; p = [:R => [0.0, 7.0, 7.0]])), :R)   # read-only
         p32 = PottsProblem(st, op, (0, 5); T = Float32)
         @test getp(p32, :R)(p32) isa AbstractVector{Float32}
         @test Vector(getp(p32, :R)(p32)) == Float32[0, 8, 16]
@@ -241,7 +242,7 @@ p60ao_names(e, name) = e isa ArgumentError && occursin("`$name`", sprint(showerr
             @test v.c₂ == 2.0
             @test v.c₃ == 10.0
             @test v.h == 5.0
-            @test typeof(prob.p) === typeof(PottsProblem(sys, [op; :w => 0.0], (0, 5)).p)
+            @test p60ao_names(p60ao_error(() -> PottsProblem(sys, [op; :w => 0.0], (0, 5))), :w)   # read-only
             @test all(k -> getp(prob, k)(prob) isa Float64, P60AO_SCALARS)
         end
 
@@ -270,10 +271,11 @@ p60ao_names(e, name) = e isa ArgumentError && occursin("`$name`", sprint(showerr
             vV = p60ao_vals(pV)
             @test (vV.u, vV.u_P, vV.V₁, vV.z) == (16.0, 6.0, [0.0, 4.0, 4.0], 8.0)
             @test total_energy(pV) == 105 + 2 * (9 - 4)^2       # 155
-            pw = PottsProblem(sys, [op; [:w => 1.0, :u => 4.0]], (0, 5); seed = 7)
+            @test p60ao_names(p60ao_error(() -> PottsProblem(sys, [op; [:w => 1.0, :u => 4.0]], (0, 5); seed = 7)), :w)
+            # the fixed-value route: u declared with a number; V₁ and z follow it
+            pw = PottsProblem(P60aoFns(; name = :fns, u = 4.0), op, (0, 5); seed = 7)
             vw = p60ao_vals(pw)
-            @test vw.w == 1.0 && vw.u == 4.0
-            @test vw.V₁ == [0.0, 8.0, 2.0] && vw.z == 4.0       # follow the explicit u
+            @test vw.u == 4.0 && vw.V₁ == [0.0, 8.0, 2.0] && vw.z == 4.0
         end
 
         @testset "remake: computed defaults follow their inputs (D-112 through calls and reads)" begin
@@ -305,46 +307,23 @@ p60ao_names(e, name) = e isa ArgumentError && occursin("`$name`", sprint(showerr
             @test total_energy(s) == 9 * 5 + 9 * 5 + 3 * 20 + 37   # 187
         end
 
-        @testset "remake: explicit values survive changes that touch none of their inputs" begin
-            # w = sqrt(a₀) + π
-            q1 = remake(prob; p = [:w => 1.0])
-            @test getp(q1, :w)(q1) == 1.0
-            @test getp(remake(q1; p = [:λ => 2.0]), :w)(remake(q1; p = [:λ => 2.0])) == 1.0
-            q1j = remake(q1; p = [:Jx => 25.0])
-            @test getp(q1j, :w)(q1j) == 1.0 && getp(q1j, :j)(q1j) == 25.0
-            q1a = remake(q1; p = [:a₀ => 16.0])                  # its input: re-derived
-            @test getp(q1a, :w)(q1a) ≈ 4 + π atol = 1e-12
-            # m = p60ao_twice_plus_one(a₀): the registered call is seen through
-            q2 = remake(prob; p = [:m => 0.5])
-            @test getp(remake(q2; p = [:λ => 2.0]), :m)(remake(q2; p = [:λ => 2.0])) == 0.5
-            @test getp(remake(q2; p = [:a₀ => 5.0]), :m)(remake(q2; p = [:a₀ => 5.0])) == 11.0
-            # c = ifelse(a₀ > 1, 2a₀, 3): inputs in the condition and the branches
-            q3 = remake(prob; p = [:c => -1.0])
-            @test getp(remake(q3; p = [:Jx => 20.0]), :c)(remake(q3; p = [:Jx => 20.0])) == -1.0
-            @test getp(remake(q3; p = [:a₀ => 5.0]), :c)(remake(q3; p = [:a₀ => 5.0])) == 10.0
-            # u = V₀[2] + 1: kept under a₀, re-derived under V₀; its dependants follow
-            q4 = remake(prob; p = [:u => 4.0])                   # u named: V₁, z re-derived
-            v4 = p60ao_vals(q4)
-            @test (v4.u, v4.V₁, v4.z) == (4.0, [0.0, 8.0, 2.0], 4.0)
-            v4a = p60ao_vals(remake(q4; p = [:a₀ => 9.0]))
+        @testset "remake: computed parameters are read-only; fixed values are declared" begin
+            # each write of a computed parameter is refused, naming it (D-F2-1)
+            for (k, v) in ((:w, 1.0), (:m, 0.5), (:c, -1.0), (:u, 4.0), (:V₁, [0.0, 7.0, 7.0]), (:J, [0 5 5; 5 1 3; 5 3 1]))
+                @test p60ao_names(p60ao_error(() -> remake(prob; p = [k => v])), k)
+            end
+            # u declared with a number: V₁ and z follow it, a₀ does not move it, V₀ does not either
+            pu = PottsProblem(P60aoFns(; name = :fns, u = 4.0), op, (0, 5); seed = 7)
+            v4a = p60ao_vals(remake(pu; p = [:a₀ => 9.0]))
             @test (v4a.u, v4a.V₁, v4a.z) == (4.0, [0.0, 8.0, 2.0], 4.0)
-            @test total_energy(remake(q4; p = [:a₀ => 9.0])) == 105 + 1 + 49   # 155
-            v4V = p60ao_vals(remake(q4; p = [:V₀ => [0.0, 5.0, 15.0]]))
-            @test (v4V.u, v4V.V₁, v4V.z) == (16.0, [0.0, 4.0, 4.0], 8.0)
-            # V₁ (a table reading a table entry and a computed scalar)
-            q5 = remake(prob; p = [:V₁ => [0.0, 7.0, 7.0]])
-            @test p60ao_vals(remake(q5; p = [:a₀ => 9.0])).V₁ == [0.0, 7.0, 7.0]
-            @test p60ao_vals(remake(q5; p = [:Jx => 20.0])).V₁ == [0.0, 7.0, 7.0]
-            @test total_energy(remake(q5; p = [:a₀ => 9.0])) == 105 + 2 * 4   # 113
-            @test p60ao_vals(remake(q5; p = [:V₀ => [0.0, 5.0, 15.0]])).V₁ == [0.0, 4.0, 4.0]
-            # J with function entries: explicit numbers kept under a₀, re-derived under Jx
+            @test total_energy(remake(pu; p = [:a₀ => 9.0])) == 105 + 1 + 49   # 155
+            v4V = p60ao_vals(remake(pu; p = [:V₀ => [0.0, 5.0, 15.0]]))
+            @test (v4V.u, v4V.u_P, v4V.V₁, v4V.z) == (4.0, 6.0, [0.0, 4.0, 2.0], 4.0)
+            # J declared with a number: j follows it
             M = [0 5 5; 5 1 3; 5 3 1]
-            q6 = remake(prob; p = [:J => M])
-            @test p60ao_vals(q6).j == 3.0 + 5.0                  # j follows J: M[P,Q] + M[0,1]
-            v6 = p60ao_vals(remake(q6; p = [:a₀ => 9.0]))
-            @test v6.J == M && v6.j == 8.0
-            v6J = p60ao_vals(remake(q6; p = [:Jx => 25.0]))
-            @test v6J.J == p60ao_Jf(5.0, 25.0) && v6J.j == 25.0
+            pJ = PottsProblem(P60aoFns(; name = :fns, J = M), op, (0, 5); seed = 7)
+            @test p60ao_vals(pJ).j == 3.0 + 5.0                 # M[P,Q] + M[0,1]
+            @test p60ao_vals(remake(pJ; p = [:Jx => 25.0])).J == M
         end
 
         @testset "integrator setters" begin
@@ -353,12 +332,12 @@ p60ao_names(e, name) = e isa ArgumentError && occursin("`$name`", sprint(showerr
             integ.ps[:a₀] = 9.0
             @test integ.ps[:w] ≈ 3 + π atol = 1e-12
             @test integ.ps[:m] == 19.0 && integ.ps[:c] == 18.0
-            integ.ps[:w] = 1.0
+            @test p60ao_names(p60ao_error(() -> (integ.ps[:w] = 1.0)), :w)   # read-only
             integ.ps[:λ] = 2.0
-            @test integ.ps[:w] == 1.0
+            @test integ.ps[:w] ≈ 3 + π atol = 1e-12
             setp(integ, :V₀)(integ, [0.0, 5.0, 15.0])
             iv = p60ao_ivals(integ)
-            @test (iv.u, iv.u_P, iv.V₁, iv.z, iv.w) == (16.0, 6.0, [0.0, 4.0, 4.0], 8.0, 1.0)
+            @test (iv.u, iv.u_P, iv.V₁, iv.z) == (16.0, 6.0, [0.0, 4.0, 4.0], 8.0)
             integ.ps[:Jx] = 25.0
             @test p60ao_ivals(integ).J == p60ao_Jf(5.0, 25.0) && integ.ps[:j] == 25.0
             @test typeof(integ.p) === typeof(prob.p)
@@ -392,10 +371,14 @@ p60ao_names(e, name) = e isa ArgumentError && occursin("`$name`", sprint(showerr
             # a function that fails on the values raises, at build and on remake (no NaN)
             @test p60ao_error(() -> PottsProblem(sys, [op; :a₀ => -1.0], (0, 5))) isa Exception
             @test p60ao_error(() -> remake(prob; p = [:a₀ => -1.0])) isa Exception
-            @test p60ao_error(() -> remake(prob; p = [:u => -1.0])) isa Exception    # sqrt(u) in V₁
+            # sqrt(u) in V₁ fails on u = -1 (u declared with a number, so the value reaches the evaluation)
+            pu = PottsProblem(P60aoFns(; name = :fns, u = 4.0), op, (0, 5))
+            @test p60ao_error(() -> remake(pu; p = [:u => -1.0])) isa Exception
             # unknown names and asymmetric contact tables are still rejected
             @test p60ao_error(() -> remake(prob; p = [:nosuch => 1.0])) isa ArgumentError
-            err = p60ao_error(() -> remake(prob; p = [:J => [0 1 2; 1 0 0; 3 0 0]]))
+            # (J declared with a number, so that the table itself is set and checked)
+            pJ = PottsProblem(P60aoFns(; name = :fns, J = [0 5 5; 5 1 3; 5 3 1]), op, (0, 5))
+            err = p60ao_error(() -> remake(pJ; p = [:J => [0 1 2; 1 0 0; 3 0 0]]))
             @test err isa ArgumentError && occursin("symmetric", sprint(showerror, err))
             # the source problem is unchanged by every remake above
             v0 = p60ao_vals(prob)

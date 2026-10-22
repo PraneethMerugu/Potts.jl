@@ -1,5 +1,6 @@
 # P6.0ap (ROADMAP Phase 6, step 0): parameter-setter loose ends (P6.0ak review). Frozen
-# (AUTONOMY §7.2).
+# (AUTONOMY §7.2). Re-frozen under D-F2-1 (F2-15, list A, user OK 2026-10-20): a list naming
+# a computed parameter (β) is refused whole; lists of base parameters are one change.
 #
 # Today (e006198b):
 #   1. `setp(integ, [:λ, :w])` (a parameter and a state) builds SII's generic setter, which
@@ -19,7 +20,8 @@
 #   * `setp(x, list)` (x an integrator, problem, function or model description) whose list
 #     names a state (as well as parameters) is an `ArgumentError` when the setter is built,
 #     pointing to `setu` / `setsym`; nothing is set.
-#   * `SII.setsym(integ, list)`: the parameters of the list are set as one change (D-112),
+#   * `SII.setsym(integ, list)`: the parameters of the list are set as one change (D-F2-1:
+#     then every computed parameter is derived again; a list naming one is refused whole),
 #     the same as `setp(integ, those parameters)`; its states are set as by `setu`. A list of
 #     states only works as today; a list of parameters only ≡ `setp`; a mixed list sets the
 #     states and the parameters, the parameters as one change. A single name is unchanged.
@@ -42,8 +44,7 @@
 #   contacts = 9 J[M,P] + 9 J[M,Q] + 3 J[P,Q] = 21 Jx − 15 = 321 at Jx = 16;
 #   cells = λ ((9 − V₀[P] + w)² + (9 − V₀[Q] + w)²), V₀ = [0, γ, β], α = 4 → β = 8 → γ = 9.
 #   Defaults: 321 + 1 = 322. λ = 3: 324. α = 5 (β = 10, γ = 11): 321 + 4 + 1 = 326.
-#   One change {β = 5, α = 5} (γ = 6): 321 + 9 + 16 = 346; one name at a time (β, then α)
-#   gives β = 10, γ = 11 (326) instead.
+#   One change {λ = 2, α = 5} (β = 10, γ = 11): 321 + 2 (4 + 1) = 331.
 using Test, Potts, PottsModels
 using Potts: CorePotts
 const P60AP_SII = CorePotts.SymbolicIndexingInterface
@@ -134,10 +135,13 @@ const P60AP_HWT = CorePotts.CPMFunction(p60ap_hwt_dH; temperature = p60ap_hwt_T)
         @test total_energy(prob) == 322.0
         i = fresh()
         @test p60ap_w(i) == [0.0, 0.0]
-        # setp with a list is one change (D-112); one name at a time would give β = 10
-        setp(i, [:β, :α])(i, [5.0, 5.0])
+        # setp with a list naming the computed β is refused whole (D-F2-1); a list of base
+        # parameters is one change, then β, γ, V₀ follow α
+        @test p60ap_error(() -> setp(i, [:β, :α])(i, [5.0, 5.0])) isa ArgumentError
+        @test p60ap_ivals(i).α == 4.0
+        setp(i, [:λ, :α])(i, [2.0, 5.0])
         v = p60ap_ivals(i)
-        @test (v.α, v.β, v.γ, v.V₀) == (5.0, 5.0, 6.0, [0.0, 6.0, 5.0])
+        @test (v.α, v.β, v.γ, v.V₀, v.λ) == (5.0, 10.0, 11.0, [0.0, 11.0, 10.0], 2.0)
         # setu with a list of states works
         i = fresh()
         setu(i, [:w])(i, [[0.5, 0.5]])
@@ -166,38 +170,43 @@ const P60AP_HWT = CorePotts.CPMFunction(p60ap_hwt_dH; temperature = p60ap_hwt_T)
     end
 
     @testset "setsym with a list: the parameters are one change" begin
-        # parameters only: the same as setp (β = 5 kept, γ re-derived from β)
+        # parameters only: the same as setp (β, γ derived from the new α)
         i = fresh()
-        P60AP_SII.setsym(i, [:β, :α])(i, [5.0, 5.0])
+        P60AP_SII.setsym(i, [:λ, :α])(i, [2.0, 5.0])
         v = p60ap_ivals(i)
-        @test (v.α, v.β, v.γ, v.V₀) == (5.0, 5.0, 6.0, [0.0, 6.0, 5.0])
-        @test v.λ == 1.0 && v.J == p60ap_Jf(16.0)
+        @test (v.α, v.β, v.γ, v.V₀, v.λ) == (5.0, 10.0, 11.0, [0.0, 11.0, 10.0], 2.0)
+        @test v.J == p60ap_Jf(16.0)
         # order does not matter
         i = fresh()
-        P60AP_SII.setsym(i, [:α, :β])(i, [5.0, 5.0])
-        @test (i.ps[:α], i.ps[:β], i.ps[:γ]) == (5.0, 5.0, 6.0)
+        P60AP_SII.setsym(i, [:α, :λ])(i, [5.0, 2.0])
+        @test (i.ps[:α], i.ps[:β], i.ps[:γ], i.ps[:λ]) == (5.0, 10.0, 11.0, 2.0)
         # a tuple of names, symbolic names
         i = fresh()
-        P60AP_SII.setsym(i, (:β, :α))(i, (5.0, 5.0))
-        @test (i.ps[:α], i.ps[:β], i.ps[:γ]) == (5.0, 5.0, 6.0)
+        P60AP_SII.setsym(i, (:λ, :α))(i, (2.0, 5.0))
+        @test (i.ps[:α], i.ps[:β], i.ps[:γ]) == (5.0, 10.0, 11.0)
         i = fresh()
-        P60AP_SII.setsym(i, [Potts.lookup(sys, :β), Potts.lookup(sys, :α)])(i, [5.0, 5.0])
-        @test (i.ps[:α], i.ps[:β], i.ps[:γ]) == (5.0, 5.0, 6.0)
-        # an explicit table survives an unrelated change in the same list
+        P60AP_SII.setsym(i, [Potts.lookup(sys, :λ), Potts.lookup(sys, :α)])(i, [2.0, 5.0])
+        @test (i.ps[:α], i.ps[:β], i.ps[:γ]) == (5.0, 10.0, 11.0)
+        # a list naming a computed parameter (β, the table J) is refused whole, when built
+        for names in ([:β, :α], [:α, :β], [:J, :Jx, :λ], [:β, :α, :w])
+            i = fresh()
+            @test p60ap_error(() -> P60AP_SII.setsym(i, names)) isa ArgumentError
+            @test (i.ps[:α], i.ps[:β], i.ps[:λ]) == (4.0, 8.0, 1.0)
+        end
+        # a table's input in a list: the table follows it
         i = fresh()
-        M = [0 5 5; 5 1 3; 5 3 1]
-        P60AP_SII.setsym(i, [:J, :Jx, :λ])(i, [M, 20.0, 2.0])
+        P60AP_SII.setsym(i, [:Jx, :λ])(i, [20.0, 2.0])
         v = p60ap_ivals(i)
-        @test (v.J, v.Jx, v.λ) == (M, 20.0, 2.0)
+        @test (v.J, v.Jx, v.λ) == (p60ap_Jf(20.0), 20.0, 2.0)
         # mixed: states set, the parameters as one change
         i = fresh()
-        P60AP_SII.setsym(i, [:β, :α, :w])(i, [5.0, 5.0, [0.5, 0.5]])
+        P60AP_SII.setsym(i, [:λ, :α, :w])(i, [2.0, 5.0, [0.5, 0.5]])
         v = p60ap_ivals(i)
-        @test (v.α, v.β, v.γ, v.V₀) == (5.0, 5.0, 6.0, [0.0, 6.0, 5.0])
+        @test (v.α, v.β, v.γ, v.V₀) == (5.0, 10.0, 11.0, [0.0, 11.0, 10.0])
         @test p60ap_w(i) == [0.5, 0.5]
         i = fresh()
-        P60AP_SII.setsym(i, [:w, :β, :α])(i, [[0.5, 0.25], 5.0, 5.0])
-        @test (i.ps[:α], i.ps[:β], i.ps[:γ]) == (5.0, 5.0, 6.0)
+        P60AP_SII.setsym(i, [:w, :λ, :α])(i, [[0.5, 0.25], 2.0, 5.0])
+        @test (i.ps[:α], i.ps[:β], i.ps[:γ]) == (5.0, 10.0, 11.0)
         @test p60ap_w(i) == [0.5, 0.25]
         # states only: as today
         i = fresh()
@@ -210,13 +219,13 @@ const P60AP_HWT = CorePotts.CPMFunction(p60ap_hwt_dH; temperature = p60ap_hwt_T)
         @test (i.ps[:α], i.ps[:β], i.ps[:γ]) == (5.0, 10.0, 11.0)
         # the integrator runs on after the change
         i = fresh()
-        P60AP_SII.setsym(i, [:β, :α])(i, [5.0, 5.0])
+        P60AP_SII.setsym(i, [:λ, :α])(i, [2.0, 5.0])
         step!(i)
-        @test i.t == 1 && (i.ps[:β], i.ps[:γ]) == (5.0, 6.0)
-        # negative controls: an unknown name; a rejected table leaves the parameters as they were
-        @test p60ap_error(() -> P60AP_SII.setsym(fresh(), [:β, :zz])) isa ArgumentError
+        @test i.t == 1 && (i.ps[:β], i.ps[:γ]) == (10.0, 11.0)
+        # negative controls: an unknown name; a rejected value leaves the parameters as they were
+        @test p60ap_error(() -> P60AP_SII.setsym(fresh(), [:λ, :zz])) isa ArgumentError
         i = fresh()
-        e = p60ap_error(() -> P60AP_SII.setsym(i, [:α, :J])(i, [5.0, [0 9 9; 8 1 1; 9 1 1]]))
+        e = p60ap_error(() -> P60AP_SII.setsym(i, [:α, :Jx])(i, [5.0, [1.0, 2.0]]))   # Jx is a number
         @test e isa ArgumentError
         @test (i.ps[:α], i.ps[:β], i.ps[:J]) == (4.0, 8.0, p60ap_Jf(16.0))
     end
@@ -239,15 +248,17 @@ const P60AP_HWT = CorePotts.CPMFunction(p60ap_hwt_dH; temperature = p60ap_hwt_T)
             @test total_energy(q) == 326.0
         end
         # several keys: one change, in either order
-        for (ks, vs) in (([:β, :α], [5.0, 5.0]), ([:α, :β], [5.0, 5.0]))
+        for (ks, vs) in (([:λ, :α], [2.0, 5.0]), ([:α, :λ], [5.0, 2.0]))
             r = p60ap_remake_buffer(prob, prob.p, ks, vs)
             @test !(r isa Exception)
             r isa Exception && continue
             @test r == remake(prob; p = Dict(ks .=> vs)).p
             q = remake(prob; p = r)
-            @test (p60ap_pvals(q).β, p60ap_pvals(q).γ) == (5.0, 6.0)
-            @test total_energy(q) == 346.0
+            @test (p60ap_pvals(q).β, p60ap_pvals(q).γ) == (10.0, 11.0)
+            @test total_energy(q) == 331.0
         end
+        # keys naming the computed β: refused whole (D-F2-1)
+        @test p60ap_remake_buffer(prob, prob.p, [:β, :α], [5.0, 5.0]) isa ArgumentError
         # values take the problem's scalar type; symbolic keys
         r = p60ap_remake_buffer(prob, prob.p, [:λ], [3])
         @test !(r isa Exception) && typeof(r) === typeof(prob.p)

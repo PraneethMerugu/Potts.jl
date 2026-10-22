@@ -219,18 +219,26 @@ bounds as front end A prints them (`(0, 2)`). Every write checks it before anyth
 """
 function check_bounds(p, index)
     index isa LatticeIndex || return nothing
-    for i in sort!(collect(keys(index.parambounds)))
+    # base parameters first (a write names the parameter written), then computed ones (F2-15)
+    for i in sort!(collect(keys(index.parambounds)); by = i -> (computed_slot(index, i) !== nothing, i))
         lo, hi = index.parambounds[i]
         v = primal(p[i])
         isnan(v) || lo <= v <= hi || throw(ArgumentError(_bounds_message(index, i, v, lo, hi)))
     end
     return nothing
 end
-_bounds_message(index, i, v, lo, hi) = string("parameter `", parameter_name(index, i), "` = ", v,
-    " is outside its declared bounds (", _bnum(lo), ", ", _bnum(hi), "): give a value in them, or change `bounds` in its declaration")
+function _bounds_message(index, i, v, lo, hi)
+    head = string("parameter `", parameter_name(index, i), "` = ", v, " is outside its declared bounds (", _bnum(lo), ", ",
+        _bnum(hi), ")")
+    # a computed parameter: the inputs to change (review S4 of batch 5)
+    k = computed_slot(index, i)
+    why = k === nothing ? nothing : get(index.derived, index.key(k), nothing)
+    why === nothing || return string(head, ": ", why)
+    return string(head, ": give a value in them, or change `bounds` in its declaration")
+end
 # the values `p` with the pairs `kv` (parameter → value) written, within their bounds (a write
 # of the ODE path, refused before it happens)
-function check_bounds(p, index, kv)
+function check_bounds(p, index, kv; tables = nothing)
     index isa LatticeIndex && !isempty(index.parambounds) || return nothing
     q = Vector{Any}(collect(p))
     for (k, v) in kv
@@ -238,6 +246,7 @@ function check_bounds(p, index, kv)
         i = SII.parameter_index(index, k)
         i isa Integer && v isa Real && (q[i] = v)
     end
+    tables === nothing || derive!(q, tables, index)    # the computed slots follow (F2-15)
     return check_bounds(q, index)
 end
 

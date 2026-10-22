@@ -41,8 +41,10 @@ import SciMLBase: discretize, symbolic_discretize
 using Symbolics: Symbolics, Differential, Equation, Num, VarDomainPairing, @register_symbolic,
                  unwrap, substitute
 using SymbolicUtils: SymbolicUtils, arguments, iscall, operation, unwrap_const
+using SymbolicUtils.Code: toexpr
 
-public euler_update, bound_parts, StabilityBound, lower_group, DeferredBound, resolve_bound, lowers_call, check_one_kind, velocity_terms, as_written
+public euler_update, bound_parts, StabilityBound, lower_group, DeferredBound, resolve_bound, lowers_call, check_one_kind, velocity_terms, as_written,
+       derivation
 export Δ, DivKGrad, Advect, AdvectionScheme, Upwind1, at, at2, ismember, masked, step_index
 export LatticePlacement, LatticeStorage, LatticeLevel, LatticeSpacing, PottsEntity, LatticeInputName
 export get_lattice_placement, get_lattice_storage, get_lattice_level, get_lattice_spacing,
@@ -381,5 +383,6 @@ include("lower.jl")
 include("discretize.jl")
 include("problems.jl")
 include("group.jl")
+include("derivation.jl")
 
 end # module LatticePDE

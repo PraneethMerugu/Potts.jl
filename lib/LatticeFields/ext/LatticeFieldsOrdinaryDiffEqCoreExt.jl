@@ -15,7 +15,7 @@ function SII.setp(sys::LatticeODEIntegrator, sym; kw...)
     s = invoke(SII.setp, Tuple{Any, Any}, sys, sym; kw...)
     return function (integ, v)
         kv = sym isa Union{AbstractArray, Tuple} ? collect(zip(sym, v)) : [sym => v]
-        Problems.check_bounds(integ.p, SII.symbolic_container(integ.f), kv)   # (the function holds the index)
+        Problems.check_bounds(integ.p, SII.symbolic_container(integ.f), kv; tables = Problems.rhs_tables(integ.f))   # (the function holds the index)
         return s(integ, v)
     end
 end

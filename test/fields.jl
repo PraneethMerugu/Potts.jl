@@ -2425,3 +2425,76 @@ end
     # a uniform field decays by (1 − 0.1 k) per step: 0.95^10 (control: the default k = 0 keeps 1)
     @test all(≈(0.95^10; rtol = 1e-13), LP.solve(prob, LP.ExplicitEuler(; dt = 0.1, substeps = 1))[:c][end])
 end
+
+# F2-15 (F2 design §2.7, D-F2-1): computed parameters are read-only and derived again from the
+# base parameters after every write, in both front ends, through one derivation
+# (`LatticePDE.derivation`). B keeps them as parameter slots, so a face value may read one.
+# Base (244d58e7): A's computed parameters were settable (D-112) and `Potts.fields(FdComputedFace)`
+# was refused by `discretize` ("a boundary value is a number, a parameter, or a number times a
+# parameter").
+@potts_model FdChainK begin
+    @kinds medium A
+    @parameters begin
+        α = 0.1
+        β = 2α
+        γ = β + 0.05
+        Dc = 0.2
+    end
+    @variables c(field) = 1.0
+    @lattice Lattice((8, 6); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ Dc * Δ(c) - γ * c
+    @sweep Metropolis(; temperature = 1.0)
+end
+@testset "F2-15: computed parameters read-only and derived, A and B" begin
+    LP, SII = Potts.LatticePDE, Potts.SymbolicIndexingInterface
+    err(f) = something(fd_err(f), "")
+    c0 = rand(StableRNG(15), 8, 6)
+    # A computed face value through `Potts.fields`: B's owned run equals A's field (σ frozen,
+    # no cell), bitwise, and both follow `g1`
+    prob = PottsProblem(FdComputedFace(; name = :f), [fd_empty((8, 8)); :c => rand(StableRNG(4), 8, 8)], (0, 2);
+        field_solver = ExplicitEuler(; substeps = 2))
+    a = solve(prob, SequentialCPM()).u[end].site.c
+    bp = LP.discretize(Potts.fields(FdComputedFace(; name = :f)), LP.LatticeDiscretization(LP.Grid((8, 8)); T = Float64,
+        problem = :owned); u0 = [:c => prob.u0.site.c], tspan = (0, 2))
+    @test LP.solve(bp, LP.ExplicitEuler(; dt = 1.0, substeps = 2))[:c][end] == a
+    a3 = solve(Potts.remake(prob; p = [:g1 => 3.0]), SequentialCPM()).u[end].site.c
+    @test LP.solve(LP.remake(bp; p = [:g1 => 3.0]), LP.ExplicitEuler(; dt = 1.0, substeps = 2))[:c][end] == a3 != a
+    # one table of writes against A, B owned and B ODE: equal values, equal refusals
+    pa = PottsProblem(FdChainK(; name = :k), [fd_empty((8, 6)); :c => c0], (0, 1))
+    sysb = Potts.fields(FdChainK(; name = :k))
+    disc(kind) = LP.LatticeDiscretization(LP.Grid((8, 6)); T = Float64, problem = kind)
+    po, pd = LP.discretize(sysb, disc(:owned)), LP.discretize(sysb, disc(:ode))
+    reads(q) = (getp(q, :β)(q), getp(q, :γ)(q))
+    for (write, want) in (([:α => 0.2], (0.4, 0.45)), ([:α => 0.0], (0.0, 0.05)), ([:Dc => 0.3], (0.2, 0.25)))
+        @test reads(Potts.remake(pa; p = write)) == reads(LP.remake(po; p = write)) == reads(LP.remake(pd; p = write)) == want
+    end
+    for write in ([:β => 1.0], [:γ => 1.0], [:α => 0.2, :γ => 1.0])
+        ea, eo, ed = err(() -> Potts.remake(pa; p = write)), err(() -> LP.remake(po; p = write)), err(() -> LP.remake(pd; p = write))
+        n = String(first(last(write)))
+        for e in (ea, eo, ed)
+            @test occursin("`$n` is computed from `α`", e) && occursin("set `α`", e)
+        end
+    end
+    # the derivation is transitive: α → β → γ moves γ, and the run reads it (A equals B's ODE
+    # right side at the new values)
+    ia = init(Potts.remake(pa; p = [:α => 0.3]), SequentialCPM())
+    @test ia.ps[:γ] == 0.65 && !SII.is_parameter(ia, :γ) && SII.is_observed(ia, :γ)
+    ib = LP.init(po, LP.ExplicitEuler(; dt = 1.0))
+    ib.ps[:α] = 0.3
+    @test ib.ps[:γ] == 0.65
+    step!(ib)
+    @test ib[:c] == LP.solve(LP.remake(po; p = [:α => 0.3]), LP.ExplicitEuler(; dt = 1.0))[:c][end]   # the step reads γ
+    @test occursin("`γ` is computed from `α`", err(() -> (ib.ps[:γ] = 1.0))) && ib.ps[:γ] == 0.65
+    # SciMLStructures: A's `replace` derives again; B's parameter vector, replaced whole with a
+    # stale computed slot, is derived again by `remake`
+    SS = Potts.SciMLStructures
+    q = SS.replace(SS.Tunable(), pa.p, [0.3, 0.2])
+    @test (q.α, q.β, q.γ) == (0.3, 0.6, 0.65)
+    v = copy(po.p)
+    v[SII.parameter_index(po, :α)] = 0.3
+    v[findfirst(==(0.25), v)] = 99.0                    # γ's slot, stale
+    r = LP.remake(po; p = v)
+    @test getp(r, :γ)(r) == 0.65 && !(99.0 in r.p)
+    @test LP.solve(r, LP.ExplicitEuler(; dt = 1.0))[:c][end] == LP.solve(LP.remake(po; p = [:α => 0.3]), LP.ExplicitEuler(; dt = 1.0))[:c][end]
+end

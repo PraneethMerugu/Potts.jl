@@ -653,7 +653,8 @@ end
     @test PottsProblem(AuditDerived(; name = :d, V₀ = 4.0), op, (0, 2)).p.V2 == 8
     q = remake(p; p = [:pa => 10.0])
     @test (q.p.pa, q.p.pb) == (10, 30)                                     # pb follows pa (MTK)
-    @test remake(p; p = [:pa => 10.0, :pb => 1.0]).p.pb == 1                 # unless given
+    # pb is computed, so read-only (D-F2-1; before: a given value was kept)
+    @test_throws ArgumentError remake(p; p = [:pa => 10.0, :pb => 1.0])
     integ = init(p, SequentialCPM())
     setp(integ, :pa)(integ, 7.0)
     @test integ.p.pb == 21

@@ -1,4 +1,5 @@
 # P6.0an (ROADMAP Phase 6, step 0): `remake` with a NamedTuple. Frozen (AUTONOMY §7.2).
+# Re-frozen under D-F2-1 (F2-15, list A, user OK 2026-10-20): computed parameters are read-only.
 #
 # Today (a1c3ed57) `remake(prob; p = (λ = 3.0,))` on a model's problem falls back to
 # CorePotts' default `remake_parameters` (identity, for hand-written problems), so `prob.p`
@@ -11,14 +12,15 @@
 #
 # Rule (D-115). On a problem of a Potts model:
 #   * a NamedTuple given as `p` is a parameter map, the same as the pairs of its fields:
-#     `remake(prob; p = (λ = 3.0, J = M))` ≡ `remake(prob; p = [:λ => 3.0, :J => M])`. It is
-#     one change (D-112): the parameters it names are set, a computed parameter is re-derived
-#     iff one of its inputs is named (transitively), the rest keep their values; values take
-#     the problem's scalar type, tables keep their size and are checked (symmetry); a field
-#     that is not a parameter is an `ArgumentError` naming it. A NamedTuple naming every
-#     parameter sets every value (nothing re-derived); the empty NamedTuple changes nothing.
+#     `remake(prob; p = (λ = 3.0, Jx = 20.0))` ≡ `remake(prob; p = [:λ => 3.0, :Jx => 20.0])`.
+#     It is one change (D-F2-1): the parameters it names are set, then every computed
+#     parameter is derived again from the base values; values take the problem's scalar type,
+#     tables keep their size and are checked (symmetry); a field that is not a parameter is
+#     an `ArgumentError` naming it, and so is a computed parameter (read-only: the whole
+#     NamedTuple is refused, nothing is set). The empty NamedTuple changes nothing.
 #   * a vector or tuple whose elements are all `Pair`s (`Any[:λ => 3.0]`, `(:λ => 3.0,)`) is
-#     a parameter map too; a `PottsParameters` is a whole parameter object (as today);
+#     a parameter map too; a `PottsParameters` is a whole parameter object (its base values,
+#     the computed ones derived again);
 #     anything else (a number, a tuple or vector of numbers) is an `ArgumentError`
 #     mentioning parameters, never a silent replacement.
 #   * a NamedTuple given as `u0` (to `remake` or `reinit!`) is an operating point, the same
@@ -120,8 +122,7 @@ const P60AN_HW = CorePotts.CPMFunction(p60an_hw_dH; temperature = p60an_hw_T)
         @test (v.λ, v.Jx, v.J) == (2.0, 20.0, p60an_Jf(20.0))
         @test total_energy(q2) == 405 + 2                       # 407
         # same result as the pairs and the Dict of its fields
-        for nt in ((λ = 3.0,), (α = 5.0,), (β = 5.0, λ = 2.0), (J = M,), (Jx = 20.0, J = M),
-                   (V₀ = [0.0, 9.0, 9.0],), (α = 5.0, β = 3.0))
+        for nt in ((λ = 3.0,), (α = 5.0,), (λ = 2.0, Jx = 20.0), (α = 5.0, Jx = 20.0))
             a = remake(prob; p = nt)
             b = remake(prob; p = [k => v for (k, v) in pairs(nt)])
             c = remake(prob; p = Dict(pairs(nt)))
@@ -129,61 +130,62 @@ const P60AN_HW = CorePotts.CPMFunction(p60an_hw_dH; temperature = p60an_hw_T)
             @test typeof(a.p) === typeof(b.p)
             @test total_energy(a) == total_energy(b)
         end
+        # a NamedTuple naming a computed parameter is refused whole, in each form (D-F2-1)
+        for nt in ((β = 5.0, λ = 2.0), (J = M,), (Jx = 20.0, J = M), (V₀ = [0.0, 9.0, 9.0],), (α = 5.0, β = 3.0))
+            for form in (nt, [k => v for (k, v) in pairs(nt)], Dict(pairs(nt)))
+                err = p60an_error(() -> remake(prob; p = form))
+                @test err isa ArgumentError && occursin("is computed from", p60an_msg(err))
+            end
+        end
     end
 
-    @testset "D-112 semantics through a NamedTuple" begin
-        # a computed scalar follows its input
+    @testset "D-F2-1 semantics through a NamedTuple" begin
+        # a computed scalar follows its input, along the chain
         q = remake(prob; p = (α = 5.0,))
         v = p60an_vals(q)
         @test (v.β, v.γ, v.V₀) == (10.0, 11.0, [0.0, 11.0, 10.0])
         @test total_energy(q) == 321 + 4 + 1                    # 326
-        # an explicit computed scalar: what reads it follows it
-        s1 = remake(prob; p = (β = 5.0,))
-        v = p60an_vals(s1)
-        @test (v.α, v.β, v.γ, v.V₀) == (4.0, 5.0, 6.0, [0.0, 6.0, 5.0])
-        @test total_energy(s1) == 321 + 9 + 16                  # 346
-        # ... and survives an unrelated NamedTuple change
-        s2 = remake(s1; p = (λ = 2.0,))
-        v = p60an_vals(s2)
-        @test (v.β, v.γ, v.V₀) == (5.0, 6.0, [0.0, 6.0, 5.0])
-        @test total_energy(s2) == 321 + 2 * 25                  # 371
-        # ... until its input changes
-        @test p60an_vals(remake(s1; p = (α = 5.0,))).β == 10.0
-        # a value given with its input in one NamedTuple wins
-        s5 = remake(prob; p = (α = 5.0, β = 3.0))
-        v = p60an_vals(s5)
-        @test (v.α, v.β, v.γ) == (5.0, 3.0, 4.0)
+        # and keeps following it through unrelated changes
+        v = p60an_vals(remake(q; p = (λ = 2.0,)))
+        @test (v.β, v.γ, v.V₀) == (10.0, 11.0, [0.0, 11.0, 10.0])
+        @test total_energy(remake(q; p = (λ = 2.0,))) == 321 + 2 * 5    # 331
+        # a computed scalar is read-only: refused, naming its input
+        for nt in ((β = 5.0,), (α = 5.0, β = 3.0))
+            err = p60an_error(() -> remake(prob; p = nt))
+            @test err isa ArgumentError && occursin("`β` is computed from `α`", p60an_msg(err))
+        end
     end
 
     @testset "a whole kind table as a NamedTuple value" begin
-        q1 = remake(prob; p = (J = M,))
-        @test p60an_vals(q1).J == M
-        @test typeof(q1.p) === typeof(prob.p)
-        @test total_energy(q1) == 99 + 1                        # 100
-        q2 = remake(q1; p = (λ = 3.0,))                         # unrelated: M kept
-        @test p60an_vals(q2).J == M
-        @test total_energy(q2) == 99 + 3                        # 102
-        r1 = remake(q1; p = (Jx = 20.0,))                       # an input: re-derived
+        # a computed table is read-only; its input re-derives it
+        @test occursin("`J` is computed from `Jx`", p60an_msg(p60an_error(() -> remake(prob; p = (J = M,)))))
+        r1 = remake(prob; p = (Jx = 20.0,))
         @test p60an_vals(r1).J == p60an_Jf(20.0)
         @test total_energy(r1) == 405 + 1                       # 406
-        r3 = remake(q1; p = (Jx = 20.0, J = M))                 # given with its input: kept
-        @test p60an_vals(r3).J == M && p60an_vals(r3).Jx == 20.0
-        @test total_energy(r3) == 100.0
-        u1 = remake(prob; p = (V₀ = [0.0, 9.0, 9.0],))
-        @test p60an_vals(u1).V₀ == [0.0, 9.0, 9.0]
-        @test total_energy(u1) == 321.0
+        # a table declared with a number (the constructor keyword) is a base parameter
+        pM = PottsProblem(P60anChain(; name = :chain, J = M), op, (0, 5); seed = 7)
+        q1 = remake(pM; p = (λ = 1.0,))
+        @test p60an_vals(q1).J == M
+        @test total_energy(q1) == 99 + 1                        # 100
+        q2 = remake(q1; p = (λ = 3.0,))
+        @test p60an_vals(q2).J == M
+        @test total_energy(q2) == 99 + 3                        # 102
+        q3 = remake(pM; p = (J = p60an_Jf(20.0),))
+        @test typeof(q3.p) === typeof(pM.p) && total_energy(q3) == 406.0
     end
 
-    @testset "a NamedTuple naming every parameter; the empty NamedTuple" begin
-        # every parameter named: nothing re-derived (α = 5 with β = 8 kept as given)
-        full = merge(NamedTuple(prob.p), (α = 5.0,))
+    @testset "a NamedTuple naming every base parameter; the empty NamedTuple" begin
+        # every base parameter named: the computed ones are derived from them
+        full = (α = 5.0, λ = 1.0, Jx = 16.0)
         q = remake(prob; p = full)
         v = p60an_vals(q)
-        @test (v.α, v.β, v.γ, v.V₀) == (5.0, 8.0, 9.0, [0.0, 9.0, 8.0])
+        @test (v.α, v.β, v.γ, v.V₀) == (5.0, 10.0, 11.0, [0.0, 11.0, 10.0])
         @test typeof(q.p) === typeof(prob.p)
-        @test total_energy(q) == 322.0
-        # the NamedTuple of the parameter object round-trips
-        @test remake(prob; p = NamedTuple(prob.p)).p == prob.p
+        @test total_energy(q) == 326.0
+        # the NamedTuple of the parameter object names computed parameters: refused; the object
+        # itself round-trips
+        @test p60an_error(() -> remake(prob; p = NamedTuple(prob.p))) isa ArgumentError
+        @test remake(prob; p = prob.p).p == prob.p
         # the empty NamedTuple changes nothing
         e = remake(prob; p = (;))
         @test e.p == prob.p && typeof(e.p) === typeof(prob.p)
@@ -218,7 +220,10 @@ const P60AN_HW = CorePotts.CPMFunction(p60an_hw_dH; temperature = p60an_hw_T)
         @test err isa ArgumentError && occursin("volume", p60an_msg(err))
         # a kind table keeps its size; a contact table is symmetric
         @test p60an_error(() -> remake(prob; p = (J = [0 1; 1 0],))) isa ArgumentError
-        err = p60an_error(() -> remake(prob; p = (J = [0 1 2; 1 0 0; 3 0 0],)))
+        # (J declared with a number, so that the table itself is set and checked)
+        pM = PottsProblem(P60anChain(; name = :chain, J = M), op, (0, 5); seed = 7)
+        @test p60an_error(() -> remake(pM; p = (J = [0 1; 1 0],))) isa ArgumentError
+        err = p60an_error(() -> remake(pM; p = (J = [0 1 2; 1 0 0; 3 0 0],)))
         @test err isa ArgumentError && occursin("symmetric", p60an_msg(err))
         # the problem is untouched by the failed calls
         @test p60an_vals(prob).λ == 1.0 && p60an_vals(prob).J == p60an_Jf(16.0)
@@ -230,14 +235,14 @@ const P60AN_HW = CorePotts.CPMFunction(p60an_hw_dH; temperature = p60an_hw_T)
         @test typeof(q.p) === typeof(p32.p)
         @test getp(q, :λ)(q) === 3.0f0
         @test total_energy(q) == 324.0f0
-        r = remake(remake(p32; p = (J = M,)); p = (λ = 3.0,))
+        r = remake(remake(p32; p = (Jx = 20.0,)); p = (λ = 3.0,))
         J = getp(r, :J)(r)
-        @test eltype(J) === Float32 && Matrix(J) == Float32.(M)
+        @test eltype(J) === Float32 && Matrix(J) == Float32.(p60an_Jf(20.0))
         @test typeof(r.p) === typeof(p32.p)
-        @test total_energy(r) == 102.0f0
-        s = remake(p32; p = (β = 5,))
-        @test getp(s, :β)(s) === 5.0f0 && getp(s, :γ)(s) === 6.0f0
-        f = remake(p32; p = NamedTuple(prob.p))                 # Float64 values, every name
+        @test total_energy(r) == 408.0f0
+        s = remake(p32; p = (α = 5,))
+        @test getp(s, :β)(s) === 10.0f0 && getp(s, :γ)(s) === 11.0f0
+        f = remake(p32; p = (α = 4.0, λ = 1.0, Jx = 16.0))     # Float64 values, every base name
         @test typeof(f.p) === typeof(p32.p)
         @test total_energy(f) == 322.0f0
     end
@@ -267,13 +272,13 @@ const P60AN_HW = CorePotts.CPMFunction(p60an_hw_dH; temperature = p60an_hw_T)
         @test Array(integ.state.cell.kind)[1:2] == Int32[2, 1]
         @test integ.t == 0
         # a problem remade with a NamedTuple, then run and changed by setters
-        i2 = init(remake(prob; p = (J = M,)), SequentialCPM())
+        i2 = init(remake(prob; p = (Jx = 20.0,)), SequentialCPM())
         @test typeof(i2.p) === typeof(prob.p)
         step!(i2)
         i2.ps[:λ] = 3.0
-        @test p60an_ivals(i2).J == M
-        i2.ps[:Jx] = 20.0
         @test p60an_ivals(i2).J == p60an_Jf(20.0)
+        i2.ps[:Jx] = 16.0
+        @test p60an_ivals(i2).J == p60an_Jf(16.0)
     end
 
     @testset "EnsembleProblem prob_func with a NamedTuple" begin
@@ -287,10 +292,10 @@ const P60AN_HW = CorePotts.CPMFunction(p60an_hw_dH; temperature = p60an_hw_T)
             @test v.λ == 3.0 && v.J == p60an_Jf(16.0) && v.V₀ == [0.0, 9.0, 8.0]
         end
         @test ens.u[1].u[end].σ != ens.u[2].u[end].σ             # still distinct replicas
-        pj(q, ctx) = remake(q; p = (J = M,))
+        pj(q, ctx) = remake(q; p = (Jx = 20.0,))
         e2 = solve(EnsembleProblem(prob; prob_func = pj), SequentialCPM(), EnsembleSerial();
             trajectories = 2)
-        @test all(s -> p60an_vals(s.prob).J == M, e2.u)
+        @test all(s -> p60an_vals(s.prob).J == p60an_Jf(20.0), e2.u)
     end
 
     @testset "hand-written CorePotts problems: p is replaced as given (unchanged)" begin

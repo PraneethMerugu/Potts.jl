@@ -60,13 +60,13 @@ function resolve_bound(spec::Problems.GroupSpec)
 end
 
 # `values = false`: the front end binds the parameter and table values itself (Potts: its
-# parameter object, with its own computed parameters), so the system's defaults are neither
-# folded (`_fold_computed`) nor checked (`_check_tables`)
+# parameter object, with its own computed parameters), so the system's computed defaults are
+# not read (`_fold_computed`) and its tables not checked (`_check_tables`)
 function _lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = nothing, values::Bool = true, bound::Bool = true)
     _check_parts(sys)
     check_one_kind(sys)                                 # (the whole system, before any cut)
-    derived, computed = Pair[], Pair[]
-    values && ((sys, derived, computed) = _fold_computed(sys))
+    derived, computed, defaults = Pair[], Pair[], Pair[]
+    values && ((sys, derived, computed, defaults) = _fold_computed(sys))
     external = String[]
     fields === nothing || ((sys, external) = _group_cut(sys, fields))
     cf = symbolic_discretize(sys, disc)                 # the rate form: no update
@@ -79,7 +79,7 @@ function _lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = noth
         params = String[string(p) for p in cf.params], tables = String[first(t) for t in cf.tables],
         inputs = String[f.key for f in s.fields if f.role == :input],
         terms = stab isa StabilityBound ? copy(stab.terms) : String[], linearity = cf.linearity)
-    return (; spec, cf, sys, derived, computed)
+    return (; spec, cf, sys, derived, computed, defaults)
 end
 
 # The system of the group of `fields`: every other state variable an input (read from its

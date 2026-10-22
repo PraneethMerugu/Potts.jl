@@ -184,6 +184,7 @@ end
         @test builds(sys, :comp7)
         prob = problem(sys, :comp7)
         @test getp(prob, :comp7₊k2)(prob) ≈ 0.6
+        @test p60u_rejection(() -> remake(prob; p = [:comp7₊k2 => 1.0]), "comp7₊k2") === :ok
     end
     # a variable bound to another variable (today: "… `comp7₊y` has no initial value")
     let

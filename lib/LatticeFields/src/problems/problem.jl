@@ -168,6 +168,7 @@ end
 
 function _field_problem(s::Program, state, u0, tspan, p, tables, inputs, backend, index, faces,
         stability, kind, initkeys, options, group)
+    derive!(p, tables, index)                       # the computed slots from the base values (F2-15)
     E = problem_eltype(u0, p, tables)
     _check_eltype(E, backend)
     # the plans cache is shared by a problem's remakes, which threads may build at once
@@ -210,6 +211,7 @@ function SciMLBase.remake(prob::FieldProblem; u0 = prob.u0, tspan = prob.tspan, 
     tables, p = _tables(prob, p)
     pv = _parameter_vector(prob, p)
     check_faces(prob.faces, pv)
+    derive!(pv, tables, prob.index)                 # (the computed slots, before their bounds: F2-15)
     check_bounds(pv, prob.index)                    # a declared bound, at the write (F2-14)
     length(u0) == length(prob.u0) ||
         throw(ArgumentError("u0 has $(length(u0)) values; the state has $(length(prob.u0))"))
@@ -833,15 +835,24 @@ function _write_table!(i::FieldIntegrator, v, sym)
         vals[e] = _table_value(eltype(vals), t, v)
     end
     all(isfinite, vals) || throw(ArgumentError("the table `$t` must hold finite values (got $vals)"))
-    # the checks and the substep count at the new values, before anything changes
+    # the checks and the substep count at the new values, before anything changes (with the
+    # computed parameters that read the table derived again, F2-15)
     tables = copy(i.tables)
     tables[j] = t => vals
+    pc = derive!(copy(i.pgood), tables, ix)
     ins = _bound_inputs(i)
-    check_parameters(i.prob.stability, with_tables(map(primal, i.pgood), tables; inputs = ins))
-    ms = _counts(i, i.pgood; tables, inputs = ins)
+    check_faces(i.prob.faces, pc)
+    check_values(pc, ix)
+    check_parameters(i.prob.stability, with_tables(map(primal, pc), tables; inputs = ins))
+    ms = _counts(i, pc; tables, inputs = ins)
     a = i.store.tables[findfirst(x -> x.key == t, i.prob.program.tables)]
     copyto!(a, convert(Vector{eltype(a)}, vals))
     i.tables[j] = t => vals
+    if pc != i.pgood                                 # a computed parameter moved: rebind the steps
+        copyto!(i.p, pc)
+        SII.finalize_parameters_hook!(i, nothing)
+        return true
+    end
     _set_counts!(i, ms)
     _rerun_init!(i, i.pgood)
     foreach(reset!, i.runtimes)
@@ -1005,6 +1016,7 @@ _fieldlist(ks) = join(("`$k`" for k in ks), ", ")
 
 function SII.finalize_parameters_hook!(integ::FieldIntegrator, _)
     try
+        derive!(integ.p, integ.tables, integ.prob.index)   # the computed slots follow (F2-15)
         check_faces(integ.prob.faces, integ.p)
         check_values(integ.p, integ.prob.index)
         ins = _bound_inputs(integ)

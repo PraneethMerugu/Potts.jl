@@ -89,11 +89,23 @@ end
     # … and refuses a remake of k2 by name (round 0: a silent no-op, the run kept k2 = 2)
     err = emsg(() -> remake(o; p = [k2 => 5.0]))
     @test occursin("`k2`", err) && occursin("computed", err)
-    # a computed boundary value that is an expression is named (one parameter per face value)
+    # a face value may read a computed parameter (F2-15: a slot; before: refused, "`gs = g1 +
+    # g2` … give `gs` a number"), equal to the number, and it follows its inputs
     @parameters g1 = 1.0 g2 = 2.0
     @parameters gs = g1 + g2
-    err = emsg(() -> sown(ssys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0, c(t, 0, y) ~ gs], [ce], [g1, g2, gs])))
-    @test occursin("`gs", err) && occursin("computed", err)
+    pg = sown(ssys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0, c(t, 0, y) ~ gs], [ce], [g1, g2, gs]))
+    @parameters g3 = 3.0 g4 = 5.0
+    p3 = sown(ssys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0, c(t, 0, y) ~ g3], [ce], [g3]))
+    p5 = sown(ssys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0, c(t, 0, y) ~ g4], [ce], [g4]))
+    @test solve(pg, alg)[:c][end] == solve(p3, alg)[:c][end]
+    @test solve(remake(pg; p = [g1 => 3.0]), alg)[:c][end] == solve(p5, alg)[:c][end]
+    # the ODE integrator's `setp` of an input moves k2 at the next step (the right side derives it)
+    oi = SciMLBase.init(o, Tsit5(); abstol = 1e-10, reltol = 1e-10)
+    setp(oi, a0)(oi, 3.0)
+    SciMLBase.step!(oi, 0.5, true)
+    @test isapprox(oi.u[1], exp(-3); rtol = 1e-6) && oi.ps[k2] == 6.0
+    # the message names the inputs and the route (D-F2-1)
+    @test occursin("`k2` is computed from `a0` (`k2 = 2a0`): set `a0`", emsg(() -> remake(p; p = [k2 => 5.0])))
 end
 
 @testset "SD-09: negative diffusion is refused, with the route" begin

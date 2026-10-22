@@ -199,13 +199,13 @@ decision = "D-265"
 
 [[file]]
 path = "acceptance/p6_0ab_api_defects.jl"
-sha256 = "7aca73bda09aabd0954e42ba7cdd723f212137f9661e2ab2dd1bab217783f785"
-decision = "D-111"
+sha256 = "d32adc1d50598d8600c29af67ba66c20ae0fa91ab165b92ea47b04e8b45f46e7"
+decision = "D-F2-1"
 
 [[file]]
 path = "acceptance/p6_0ak_explicit_parameters.jl"
-sha256 = "0658a32e951c5c3d91720967f443c536ad45005c2e32a3330c7e8f92f6f75424"
-decision = "D-112"
+sha256 = "91b2edecd3befe202636c0f2108648051bdf5faaab9e6315f5c5045f15495312"
+decision = "D-F2-1"
 
 [[file]]
 path = "acceptance/p6_0al_name_categories.jl"
@@ -224,18 +224,18 @@ decision = "D-137"
 
 [[file]]
 path = "acceptance/p6_0an_remake_namedtuple.jl"
-sha256 = "eee0703a97d96d7ec2acd8691dafdb8206163e9053d4efec0a8a633fec30df06"
-decision = "D-115"
+sha256 = "ddde5ac15774beae1d03c69882e244cb8e96aac0493e90948db7ce5bf7289944"
+decision = "D-F2-1"
 
 [[file]]
 path = "acceptance/p6_0ap_setter_loose_ends.jl"
-sha256 = "85bb3e08904b1d2df905a0befdaddfe1a2a2e2f1b233bf6defbfd2b995cf3b75"
-decision = "D-116"
+sha256 = "83daa90d64bc435f2f6e0081d4a60ba5a1dbe470e16cac7ff978ccff071155e5"
+decision = "D-F2-1"
 
 [[file]]
 path = "acceptance/p6_0ao_computed_defaults.jl"
-sha256 = "42c5b60d1869e9d765c163eb0b9d949b0034acc3776e3237883d285639723846"
-decision = "D-117"
+sha256 = "766d387f0199a36e121d069ebeedbfdea58aa4de81ab47977b51fbfb3d92a0e4"
+decision = "D-F2-1"
 
 [[file]]
 path = "acceptance/p6_0p_cadence_fingerprint.jl"
@@ -309,7 +309,7 @@ decision = "D-C8-R5"
 
 [[file]]
 path = "acceptance/p6_0u_components_gaps.jl"
-sha256 = "07a4fbfb7e1931d5da9f23e3e11cb3c6f68df0aaeeabf862f858ddb0911f37b2"
+sha256 = "618979fa234953313e72bf1b73e35f974b2e09742993c68b545cfb9a6b401a55"
 decision = "D-F2-2"
 
 [[file]]

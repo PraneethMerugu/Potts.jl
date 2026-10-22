@@ -819,7 +819,7 @@ function _initial(cf::CompiledField{N}, sys::PDESystem, state, ::Type{T}) where 
     return out
 end
 
-function _index(cf::CompiledField, sys::PDESystem, s, state; derived = Pair[], computed = Pair[])
+function _index(cf::CompiledField, sys::PDESystem, s, state; derived = Pair[], computed = Pair[], cdefaults = Pair[])
     slots = Problems.state_layout(s, [fieldid(s, k) for k in state])
     dims = Int.(cf.program.hierarchy[1].grid.dims)
     vars, inputs, inputnames, boolinputs, inputbounds = Pair[], Pair[], Pair[], String[], Pair[]
@@ -844,7 +844,9 @@ function _index(cf::CompiledField, sys::PDESystem, s, state; derived = Pair[], c
         end
     end
     # (the clock's slot is the stepper's, not a parameter of the problem)
-    params = [(p, Symbol(string(p))) => i for (i, p) in enumerate(cf.params) if !_isclock(p)]
+    # (a computed parameter holds a slot but is not a parameter: it is read-only, D-F2-1)
+    iscomp(p) = any(k -> isequal(unwrap(first(k)), unwrap(p)), cdefaults)
+    params = [(p, Symbol(string(p))) => i for (i, p) in enumerate(cf.params) if !_isclock(p) && !iscomp(p)]
     # a parameter's declared `bounds` (MTK metadata), checked at every write (F2-14)
     parambounds = Pair[i => b for (i, p) in enumerate(cf.params) if !_isclock(p)
                        for b in (_input_bounds(unwrap(p)),) if b != (-Inf, Inf)]
@@ -852,9 +854,22 @@ function _index(cf::CompiledField, sys::PDESystem, s, state; derived = Pair[], c
     # a computed parameter reads as its folded expression of the parameter slots (SII observed)
     ps, tt = Any[unwrap(q) for q in cf.params], unwrap(sys.ivs[1])
     observed = Pair[syms => Symbolics.build_function(unwrap(e), ps, tt; expression = Val(true)) for (syms, e) in computed]
+    # the computed slots (F2-15): a derivation from the base slots and the tables
+    # (every computed parameter is derived, so a chain through one without a slot evaluates;
+    # slot 0: none)
+    comp = Dict{Any, Any}(unwrap(k) => d for (k, d) in cdefaults)
+    derive = nothing
+    if any(q -> haskey(comp, unwrap(q)), cf.params)
+        base = [(Symbol(string(q)), i) for (i, q) in enumerate(cf.params) if !haskey(comp, unwrap(q)) && !_isclock(q)]
+        tabs = [(Symbol(k), String(k)) for (k, _) in cf.tables]
+        cks = collect(keys(comp))
+        d = derivation(Symbol[first(b) for b in [base; tabs]], Pair[Symbol(string(k)) => comp[k] for k in cks])
+        slot(k) = (i = findfirst(q -> isequal(unwrap(q), k), cf.params); i === nothing ? 0 : i)
+        derive = (d, Any[last(b) for b in [base; tabs]], Int[slot(k) for k in cks])
+    end
     return LatticeIndex(; key = _symkey, variables = vars, parameters = params,
         independent_variables = [unwrap(sys.ivs[1])], defaults, inputs, inputnames, boolinputs, inputbounds, derived,
-        observed, parambounds,
+        observed, parambounds, derive,
         tables = Pair[[Any[unwrap(q), Symbol(k)] => k for (k, _) in cf.tables for q in _params(sys) if string(unwrap(q)) == k];
                       [e => (k, i) for (k, _) in cf.tables for q in _params(sys) if string(unwrap(q)) == k
                        for (i, e) in enumerate(Symbolics.scalarize(unwrap(q)))]])
@@ -878,10 +893,13 @@ function _input_defaults(cf::CompiledField, sys::PDESystem)
     return out
 end
 
-# Computed parameter defaults (`@parameters k2 = 2a`): the parameter is folded into the
-# equations and conditions as its expression, so it follows the parameters it reads at every
-# `remake`/`setp`; it is then not a parameter of the problem (its symbol says why). Returns
-# the system with the folded parameters removed and the `derived` notes of the index.
+# Computed parameter defaults (`@parameters k2 = 2a`; F2 design §2.7, D-F2-1): the parameter
+# stays a parameter slot of the program, read-only, and the problem's derivation
+# (`derivation`, `_index`) fills it from the base parameters after every write. So a face or
+# mask value may read it (`Dirichlet(g)` with `g = g1 + g2`). Returns the system (its field
+# initial values that read a computed parameter take its expression), the `derived` messages of
+# the index, `computed` (each computed parameter with its expression of base parameters, for
+# reads) and the raw defaults (for the derivation).
 function _fold_computed(sys::PDESystem)
     scalar(p) = !(SymbolicUtils.symtype(unwrap(p)) <: AbstractArray)
     comp = Dict{Any, Any}()
@@ -893,7 +911,7 @@ function _fold_computed(sys::PDESystem)
         d = unwrap_const(unwrap(g === nothing ? ModelingToolkitBase.getdefault(u) : g))
         d isa Number || (comp[u] = d)
     end
-    isempty(comp) && return sys, Pair[], Pair[]
+    isempty(comp) && return sys, Pair[], Pair[], Pair[]
     # resolve chains (`k3 = 2k2`, `k2 = 3a`) to expressions of plain parameters
     resolved = Dict{Any, Any}()
     for (k, e) in comp
@@ -906,36 +924,29 @@ function _fold_computed(sys::PDESystem)
         resolved[k] = x
     end
     plain = Set(unwrap(p) for p in ps if !haskey(comp, unwrap(p)))
+    tabs = Set(unwrap(p) for p in ps if !scalar(p))
     for (k, e) in resolved
-        free = [v for v in Symbolics.get_variables(e) if !(v in plain) && !any(iv -> isequal(iv, v), unwrap.(sys.ivs))]
+        free = [v for v in Symbolics.get_variables(e) if !(v in plain) && !(_tabof(v) in tabs) &&
+                                                          !any(iv -> isequal(iv, v), unwrap.(sys.ivs))]
         isempty(free) || _dverr("the computed parameter `$k = $(comp[k])` reads $(join(("`$f`" for f in free), ", ")), " *
                                 "which $(length(free) == 1 ? "is not a parameter" : "are not parameters") of the system")
     end
     sub(x) = substitute(x, resolved; fold = Val(false))
-    for b in sys.bcs                        # a face or mask value takes one parameter (or a number times one)
-        r = unwrap(b.rhs)
-        value = iscall(r) && operation(r) === masked ? arguments(r)[2] : r
-        for (k, e) in resolved
-            _reads_term(value, k) || continue
-            ok = unwrap(e) in plain ||
-                 (iscall(e) && operation(e) === (*) && count(a -> unwrap(a) in plain, arguments(e)) == 1 &&
-                  all(a -> unwrap(a) in plain || unwrap_const(unwrap(a)) isa Number, arguments(e)))
-            ok || _dverr("`$(b)`: the boundary value reads the computed parameter `$k = $(comp[k])`; a boundary value " *
-                         "is a number, a parameter, or a number times a parameter (an expression of parameters as a " *
-                         "boundary value is planned): give `$k` a number")
-        end
-    end
-    eqs = [sub(eq.lhs) ~ sub(eq.rhs) for eq in sys.eqs]
-    bcs = [sub(b.lhs) ~ sub(b.rhs) for b in sys.bcs]
-    keep = [p for p in ps if !haskey(comp, unwrap(p))]
     symb(v) = v isa Union{Num, SymbolicUtils.BasicSymbolic}
     ic2 = Dict(k => (symb(v) ? sub(v) : v) for (k, v) in ic if !haskey(comp, k))   # field values read them too
-    derived = Pair[(k, Symbol(string(k))) => "it is computed from its default `$k = $(comp[k])` (change the parameters it reads)"
-                   for k in keys(comp)]
-    new = PDESystem(eqs, bcs, getfield(sys, :domain), sys.ivs, sys.dvs, keep; name = nameof(sys),
-        initial_conditions = ic2)
+    derived = Pair[(k, Symbol(string(k))) => _computed_message(k, comp[k], resolved[k], plain) for k in keys(comp)]
+    new = PDESystem(sys.eqs, sys.bcs, getfield(sys, :domain), sys.ivs, sys.dvs, ps; name = nameof(sys),
+        initial_conditions = merge(ic2, Dict(k => v for (k, v) in ic if haskey(comp, k))))
     computed = Pair[(k, Symbol(string(k))) => e for (k, e) in resolved]
-    return new, derived, computed
+    return new, derived, computed, Pair[k => comp[k] for k in keys(comp)]
+end
+_tabof(v) = (u = unwrap(v); iscall(u) && operation(u) === getindex ? unwrap(arguments(u)[1]) : u)
+# the refusal of a write of computed parameter `k` (D-F2-1): its expression and inputs, the route
+function _computed_message(k, e, resolved, _)
+    ins = sort!(unique!(String[string(_tabof(v)) for v in Symbolics.get_variables(resolved)]))
+    return string("`", k, "` is computed from ", join(("`$i`" for i in ins), ", "), " (`", k, " = ", e,
+        "`): set ", length(ins) == 1 ? "`$(only(ins))`" : "its inputs", "; for a fixed `", k,
+        "`, declare it with a number (`@parameters ", k, " = v`)")
 end
 _reads_term(x, v) = any(y -> isequal(y, v), Symbolics.get_variables(x))
 
@@ -1062,8 +1073,10 @@ unset input is an error naming it (at `init` on the owned path, here on the ODE 
 input is never read as zero.
 
 **Parameters.** A parameter with a default that reads other parameters (`@parameters k2 =
-2a`) is computed: it is folded into the equations, so it follows `a` at every `remake` and
-`setp`, and it is not a parameter of the problem. An array parameter needs a default of its
+2a`) is computed (D-F2-1): it is read-only and follows `a` at every `remake` and `setp`
+(evaluated again from the base parameters, through one compiled [`derivation`](@ref)). Reads
+work (`getp(prob, k2)`, `integ.ps[k2]`, `sol.ps[k2]`); a write is an error naming its inputs,
+and a face or mask value may read it (`c(t, 0, y) ~ g` with `g = g1 + g2`). An array parameter needs a default of its
 declared size. A scalar parameter with no value is an error naming it before the problem
 steps (at `init` on the owned path, here on the ODE path, which has no `init`); on the owned
 path `remake(prob; p = [k => v])` gives it one. A negative diffusion coefficient, or a NaN
@@ -1104,9 +1117,11 @@ function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = (),
     cf, sys, spec = g.cf, g.sys, g.spec
     s = cf.program
     state = spec.state
-    index = _index(cf, sys, s, state; g.derived, g.computed)
+    index = _index(cf, sys, s, state; g.derived, g.computed, cdefaults = g.defaults)
     x0 = _given_u0(_initial(cf, sys, state, T), index, u0)
     pv, tables = _given_p(cf.defaults, cf.tables, index, p)
+    Problems.derive!(pv, tables, index)                  # the computed slots (F2-15)
+    Problems.check_bounds(pv, index)                     # … within their bounds too
     ins = Pair[_input_defaults(cf, sys); collect(inputs)]
     if kind == :owned
         _check_fusion(s, sys, disc)

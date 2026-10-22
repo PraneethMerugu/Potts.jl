@@ -107,9 +107,12 @@ MTK's metadata (F2-14, FE-18): `unit` (`VariableUnit`), `tunable = false` (out o
 write) and `description` (shown with the model). The metadata is MTK's own, so
 `ModelingToolkitBase.istunable`, `getbounds` and `getdescription` read it.
 """
-parameter(name::Symbol, default; unit = nothing, tunable = true, bounds = nothing, description = nothing) =
+parameter(name::Symbol, default; unit = nothing, tunable = true, bounds = nothing, description = nothing, origin = nothing) =
     _with_meta(_tag(_param(name; tunable = _tunable(name, tunable)), Entity(:param, name, default,
-        _meta_options(name, tunable, bounds, description))), unit, bounds, description)
+        _origin(_meta_options(name, tunable, bounds, description), origin))), unit, bounds, description)
+# a component's bound parameter keeps where it was bound, `(component, name)`, for its messages (F2-15)
+_origin(opts, ::Nothing) = opts
+_origin(opts, o) = (; opts..., origin = o)
 # (`tunable = false` through MTK's own declaration: its metadata key is not public)
 _param(name::Symbol; tunable::Bool = true) = Symbolics.unwrap(tunable ? only(ModelingToolkitBase.@parameters $name) :
                                                               only(ModelingToolkitBase.@parameters $name [tunable = false]))
@@ -138,14 +141,17 @@ function _meta_options(name, tunable, bounds, description)
                                                    "lo ≤ hi (`bounds = (0, 2)`); got $(repr(bounds))"))
     return (; opts..., bounds = (Float64(bounds[1]), Float64(bounds[2])))
 end
-# a value of parameter `i` outside its declared bounds (every entry of a kind table)
-function _check_bounds(i::Entity, v)
+# a value of parameter `i` outside its declared bounds (every entry of a kind table); `ps`, the
+# model's parameters, lets a computed parameter name the inputs to change (review S4 of batch 5)
+function _check_bounds(i::Entity, v, ps = nothing)
     b = get(i.options, :bounds, nothing)
     b === nothing && return v
     for x in (v isa AbstractArray ? v : (v,))
-        b[1] <= x <= b[2] || throw(ArgumentError(string("parameter `", i.name, "` = ", v isa AbstractArray ? "$v (entry $x)" : x,
-            " is outside its declared bounds (", _bnum(b[1]), ", ", _bnum(b[2]), "): give a value in them, or change ",
-            "`bounds` in its declaration")))
+        b[1] <= x <= b[2] && continue
+        head = string("parameter `", i.name, "` = ", v isa AbstractArray ? "$v (entry $x)" : x,
+            " is outside its declared bounds (", _bnum(b[1]), ", ", _bnum(b[2]), ")")
+        ps !== nothing && _is_symbolic(i.default) && throw(ArgumentError(string(head, ": ", _computed_message(ps, i))))
+        throw(ArgumentError(string(head, ": give a value in them, or change `bounds` in its declaration")))
     end
     return v
 end

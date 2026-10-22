@@ -113,11 +113,12 @@ compose with `Potts.compose`: each component (an MTK `System` wrapped with the m
 system is `Catalyst.ode_model(complete(rn))`) joins as a model-scope component, as with
 `@components model name = system`. A problem's `p` implements SciMLStructures: `Tunable` is
 the floating-point scalar parameters, `Constants` the kind tables (and integer scalars), and CPM
-parameters stay plain numbers. Computed parameters (a default such as `λ2 = 2λ`) are in neither
-portion: `SciMLStructures.replace` and `repack` re-derive them, through the model's derivation,
+parameters stay plain numbers. A `tunable = false` parameter is in `Constants`. Computed
+parameters (a default such as `λ2 = 2λ`) are in neither portion: they are read-only (D-F2-1),
+and `SciMLStructures.replace` and `repack` derive them again through the model's derivation,
 which is registered when a problem of the model is built in the process. Distributed workers
 must therefore build the problem themselves before they `repack`; each `repack` of a model with
-computed parameters costs one `Symbolics.substitute`.
+computed parameters costs one call of one compiled function (`LatticePDE.derivation`).
 SymbolicIndexingInterface (SII) indexes a problem, a solution and an integrator by name,
 including an algebraic variable that is not stored:
 

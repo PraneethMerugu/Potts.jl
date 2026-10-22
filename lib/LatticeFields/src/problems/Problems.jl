@@ -44,6 +44,7 @@ include("store.jl")
 include("steps.jl")
 include("faces.jl")
 include("index.jl")
+include("derivation.jl")
 include("inputs.jl")
 include("algorithms.jl")
 include("group.jl")
@@ -54,5 +55,7 @@ include("ode.jl")
 public substep_counts, lagged_coupling, group_loops
 # the clock (F2-08c)
 public CLOCK_KEY, clock_slot
+# computed parameters (F2-15, D-F2-1)
+public Derivation, derive_at, derive_fail, derive!, rgf, computed_slot, rhs_tables
 
 end # module Problems

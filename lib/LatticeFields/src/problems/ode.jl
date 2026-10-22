@@ -108,11 +108,23 @@ function (f::LatticeRHS{L, W, E})(du, u, p, t) where {L, W, E}
     degenerate_face(f.faces, p) == 0 || check_faces(f.faces, p)
     C = _rhs_eltype(du, u, p, t)
     C === E || return _variant(f, C)(du, u, p, t)
+    # the computed slots (F2-15): derived again when the values change, and on every call for
+    # parameters with derivative parts (a reseeded Dual vector keeps its primal values)
+    _derives(f) && (_plainp(p) && _checked(f, p) || derive!(p, f.ctx.tables, f.ctx.index))
     _checked(f, p) || _check!(f, p)
     isempty(f.init.launches) || _same_params(f, p) || _init!(f, p)
     f.walk(f.launches, (du, u, p, t))
     return nothing
 end
+
+# the tables of the right side under a SciML function (an ODEFunction, or one wrapping it), or
+# `nothing` (then the computed slots are not derived for a bound check)
+rhs_tables(f::LatticeRHS) = f.ctx.tables
+rhs_tables(f) = hasproperty(f, :f) ? rhs_tables(getproperty(f, :f)) : nothing
+_derives(f::LatticeRHS) = _hasderive(f.ctx.index)
+_hasderive(ix) = false
+_hasderive(ix::LatticeIndex) = ix.derive !== nothing
+_plainp(p) = p isa AbstractVector{<:Union{Float32, Float64}}
 
 # Init is skipped only for plain Float32/Float64 parameters that are the same object with the
 # same values (exact in Float64). Any other type re-runs init on every call: ForwardDiff's
@@ -301,6 +313,7 @@ function ode_problem(prog::Program, u0, tspan, p; state, rates, init = String[],
         backend = KA.CPU(),
         options::CompileOptions = CompileOptions())
     faces = face_checks(prog)
+    derive!(p, tables, index)                       # the computed slots (F2-15)
     check_faces(faces, p)
     check_values(p, index; built = false)
     s = semantic(prog)
@@ -371,12 +384,14 @@ function _check_map_keys(prob, p)
     ismap = p isa AbstractDict || (p isa Union{AbstractVector, Tuple} && !isempty(p) && all(x -> x isa Pair, p))
     ismap || return p
     check_parameter_keys(ix, (first(x) for x in p))
-    check_bounds(prob.p, ix, p)
+    check_bounds(prob.p, ix, p; tables = rhs_tables(prob.f))
     return p isa AbstractVector && !(eltype(p) <: Pair) ? Pair[x for x in p] : p
 end
 function SciMLBase.remake(prob::LatticeODEProblem; p = missing, kw...)
     p = _check_map_keys(prob, p)
-    return invoke(SciMLBase.remake, Tuple{SciMLBase.ODEProblem}, prob; p, kw...)
+    q = invoke(SciMLBase.remake, Tuple{SciMLBase.ODEProblem}, prob; p, kw...)
+    q.p === prob.p || derive!(q.p, q.f.f.ctx.tables, q.f.f.ctx.index)     # the computed slots follow (F2-15)
+    return q
 end
 function SciMLBase.remake(prob::LatticeSteadyStateProblem; p = missing, kw...)
     p = _check_map_keys(prob, p)

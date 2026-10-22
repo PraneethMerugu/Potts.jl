@@ -498,6 +498,8 @@ function _parameter_route(integ::PottsIntegrator, sym, write::Bool)
         foreach(s -> _parameter_route(integ, s, write), sym)
         return nothing
     end
+    # a computed parameter (D-F2-1) reads as observed; a write names it with its routes
+    write && (m = _readonly(integ, sym); m === nothing || throw(ArgumentError(m)))
     SII.is_parameter(integ, sym) || return nothing
     t = sym isa Symbol ? repr(sym) : string(sym)
     throw(ArgumentError(string("`", lstrip(t, ':'), "` is a parameter: ", write ? "write `integ.ps[$t] = v`" :
@@ -1092,11 +1094,28 @@ function _check_settable(sys, x)
 end
 
 function _unknown_name(sys, x, fn)
+    m = _readonly(sys, x)
+    m === nothing || return ArgumentError(m)
     SymbolicIndexingInterface.is_observed(sys, x) &&
         return ArgumentError("$fn: `$x` is read-only (a built-in or observed quantity) and cannot be set")
     return ArgumentError("$fn: `$x` is neither a parameter nor a state variable" * _names_hint(sys))
 end
 _names_hint(sys) = ""
+"""
+    readonly_message(container, x) -> String or nothing
+
+Why `x` cannot be set, when a symbolic layer knows (a computed parameter: its expression, its
+inputs and the routes, D-F2-1); `nothing` otherwise.
+"""
+readonly_message(container, x) = nothing
+# through the containers (an integrator's function, the function's model description)
+function _readonly(sys, x)
+    m = readonly_message(sys, x)
+    m === nothing || return m
+    applicable(SymbolicIndexingInterface.symbolic_container, sys) || return nothing
+    c = SymbolicIndexingInterface.symbolic_container(sys)
+    return c === sys ? nothing : _readonly(c, x)
+end
 _names_hint(x::Union{PottsIntegrator, PottsProblem, CPMFunction}) = _names_hint(SymbolicIndexingInterface.symbolic_container(x))
 
 # `setsym(integ, [x, y, w])`: the parameters of the list are set as one change (as `setp`),
