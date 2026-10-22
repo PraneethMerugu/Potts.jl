@@ -167,11 +167,11 @@ end
         pb = discretize(tsys, LatticeDiscretization(Grid((4, 4)); T = BigFloat, problem = :owned); inputs = [qe => K])
         ib = init(remake(pb; p = [Dt => [third, big"1.0"]]), alg)
         @test eltype(ib.store.tables[1]) == BigFloat && ib.store.tables[1][1] == third
-        @test ib[Dt][1] == third                      # the integrator's own copy keeps it
+        @test ib.ps[Dt][1] == third                      # the integrator's own copy keeps it
         # an integrator table write converts into the integrator's table type
         ig = init(p, alg)
-        ig[Dt] = [third, 1]
-        @test ig[Dt] == [Float64(third), 1.0] && eltype(ig[Dt]) == Float64
+        ig.ps[Dt] = [third, 1]
+        @test ig.ps[Dt] == [Float64(third), 1.0] && eltype(ig.ps[Dt]) == Float64
     end
     @testset "a Dual table promotes the problem; ForwardDiff through remake and solve" begin
         # base: `Float64.(…)` of a Dual table threw (MethodError)
@@ -188,9 +188,9 @@ end
         @test ForwardDiff.derivative(Jn, 1.0) == 0                       # no site of kind 2
         # a Dual written into a Float64 integrator's table is refused with the route
         ig = init(p, alg)
-        err = emsg(() -> (ig[Dt] = [dv, one(dv)]))
+        err = emsg(() -> (ig.ps[Dt] = [dv, one(dv)]))
         @test occursin("`Dt` of this integrator holds Float64", err) && occursin("remake(prob; p = [Dt => values])", err)
-        @test ig[Dt] == [0.5, 1.0]                                       # unchanged
+        @test ig.ps[Dt] == [0.5, 1.0]                                       # unchanged
     end
     @testset "a Bool input reads back as Bool" begin
         # base: a `UInt8` array (`any`/`count` threw a non-boolean TypeError, `.!` a MethodError)

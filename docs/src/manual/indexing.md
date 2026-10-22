@@ -14,6 +14,10 @@ problem or an integrator.
 | `integ.ps[:λ]`, `integ.ps[:λ] = v` | read or write a parameter of a running integrator |
 | `setu(integ, :x)(integ, v)`, `setp(integ, :λ)(integ, v)` | setter functions |
 
+An integrator indexes states and `integ.ps` its parameters (SciML's convention).
+`integ[:λ]` and `integ[:λ] = v` of a parameter, a kind table included, are errors that give
+the route `integ.ps[:λ]`.
+
 The shape of a value follows the scope of the quantity: a vector over cells for cell
 quantities (dead cells and free slots included; filter with `volume > 0`), an array over
 the lattice for site and field quantities, and a number for model quantities.

@@ -364,7 +364,10 @@ end
     # setp "invalid index: nothing")
     @test occursin("is a table", emsg(() -> remake(o; p = [Dq => [1.0, 5.0]])))
     ig = init(p, alg)
-    @test occursin("table", emsg(() -> setp(ig, Dq)(ig, [1.0, 5.0])))
+    @test occursin("table", emsg(() -> setp(p, Dq)(p, [1.0, 5.0])))
+    # an integrator's table is set through `setp` (and `integ.ps`, F2-13)
+    setp(ig, Dq)(ig, [1.0, 5.0])
+    @test ig.ps[Dq] == [1.0, 5.0]
     # a typo is named on the ODE path too (round 2: ignored)
     err = emsg(() -> remake(o; p = [:typo => 3.0]))
     @test occursin("`typo` is not a parameter", err)
@@ -385,14 +388,14 @@ end
     # the table refusal names the table and the owned route (round 3: "`Dq[1]` is a table …
     # `remake(prob::FieldProblem; p = [Dq[1] => values])`", a route that fails)
     ig = init(p, ExplicitEuler(; dt = 0.1, substeps = 1))
-    err = emsg(() -> setp(ig, Dq)(ig, [1.0, 5.0]))
+    err = emsg(() -> setp(p, Dq)(p, [1.0, 5.0]))
     @test occursin("`Dq` is a table", err) && occursin("remake(prob; p = [Dq => values])", err) && !occursin("Dq[1]", err)
     # an entry as a key is refused, not a whole table set from one value (round 3: "the table
     # `Dq[2]` has 2 entries")
     err = emsg(() -> remake(p; p = [Dq[2] => 5.0]))
     @test occursin("entry 2 of the table `Dq`", err) && occursin("Dq => values", err)
     # tables read back (round 3: "`:Dq` names nothing of this problem"; getp "Invalid symbol")
-    @test ig[:Dq] == [1.0, 2.0] && ig[Dq] == [1.0, 2.0] && ig[Dq[2]] == 2.0
+    @test ig.ps[:Dq] == [1.0, 2.0] && ig.ps[Dq] == [1.0, 2.0] && ig.ps[Dq[2]] == 2.0
     @test getp(p, Dq)(p) == [1.0, 2.0] && getp(ig, Dq[1])(ig) == 1.0
     p5 = remake(p; p = [Dq => [1.0, 5.0]])
     @test getp(p5, Dq)(p5) == [1.0, 5.0] && getp(p, Dq)(p5) == [1.0, 5.0]
@@ -444,14 +447,14 @@ end
     @test occursin("got 2.5 at site (3, 2)", emsg(() -> sown(sys; inputs = [qe => K])))
     # an integrator's table is written (round 4: "`Dq` names nothing of this problem"), and the
     # step reads it: c(0.1) = 1 − 0.1 (Dq[2] + kr)
-    ig[Dq[2]] = 4.0
-    @test ig[:Dq] == [1.0, 4.0] && p.tables == ["Dq" => [1.0, 2.0]]
+    ig.ps[Dq[2]] = 4.0
+    @test ig.ps[:Dq] == [1.0, 4.0] && p.tables == ["Dq" => [1.0, 2.0]]
     step!(ig)
     @test all(≈(1 - 0.1 * 4.5), ig[ce])
-    ig[Dq] = [1.0, 0.0]
+    ig.ps[Dq] = [1.0, 0.0]
     step!(ig)
     @test all(≈((1 - 0.45) * (1 - 0.05)), ig[ce])
-    @test occursin("has 2 entries", emsg(() -> (ig[Dq] = [1.0])))
+    @test occursin("has 2 entries", emsg(() -> (ig.ps[Dq] = [1.0])))
 end
 
 @testset "table coefficients in the bound; problems built from ours (F1 round 6)" begin
@@ -467,19 +470,20 @@ end
     p = sown(sys)
     @test neg(emsg(() -> solve(remake(p; p = [Dn => [-1.0, 2.0]]), alg)))
     ig = init(p, alg)
-    @test neg(emsg(() -> (ig[Dn] = [-1.0, 2.0]))) && ig[Dn] == [1.0, 2.0]   # refused, nothing changed
+    @test neg(emsg(() -> (ig.ps[Dn] = [-1.0, 2.0]))) && ig.ps[Dn] == [1.0, 2.0]   # refused, nothing changed
     # the automatic count follows the table: ρ = Dn[1] · 4 Σ_d 1/h² = 128 Dn[1] (h = 1/4)
     n(D) = ceil(Int, 0.01 * 128 * D / 1.8)
     @test init(p, ExplicitEuler(; dt = 0.01)).substeps == n(1.0) == 1
     @test init(remake(p; p = [Dn => [1000.0, 2.0]]), ExplicitEuler(; dt = 0.01)).substeps == n(1000.0) == 712
-    @test (ig[Dn] = [1000.0, 2.0]; ig.substeps == 712)                  # an explicit 1 is raised
-    @test (ig[Dn[1]] = 1.0; ig.substeps == 1)
+    @test (ig.ps[Dn] = [1000.0, 2.0]; ig.substeps == 712)               # an explicit 1 is raised
+    @test (ig.ps[Dn[1]] = 1.0; ig.substeps == 1)
     @test occursin("finite", emsg(() -> remake(p; p = [Dn => [NaN, 2.0]])))   # (round 5: taken)
     # writes: a Bool is no value, a tuple is a vector, `.=` names the table
-    @test occursin("give one number", emsg(() -> (ig[Dn[1]] = true)))
-    @test (ig[Dn] = (1.0, 3.0); ig[Dn] == [1.0, 3.0])
+    @test occursin("give one number", emsg(() -> (ig.ps[Dn[1]] = true)))
+    @test (ig.ps[Dn] = (1.0, 3.0); ig.ps[Dn] == [1.0, 3.0])
     err = emsg(() -> (ig[Dn] .= 2.0))
-    @test occursin("integ[Dn] = values", err) && occursin("table", err) && !occursin("field", err)
+    @test occursin("integ.ps[Dn] = values", err) && occursin("table", err) && !occursin("field", err)
+    @test occursin("integ.ps[Dn] = values", emsg(() -> (ig.ps[Dn] .= 2.0)))
     # problems built from the ODE form refuse a key that names no parameter too (round 5: a
     # SteadyStateProblem and a NonlinearProblem of it kept the old value silently)
     @parameters k6 = 0.5

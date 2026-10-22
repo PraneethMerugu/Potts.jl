@@ -309,9 +309,9 @@ substep count (the first group's) and the saved states. `step!` advances one ste
 ([`advance!`](@ref) of each group, in group order); indexing by symbol reads (and sets)
 fields of the current state.
 
-Parameters change only through `setp(integ, sym)(integ, v)` (SymbolicIndexingInterface),
-which checks the faces, recomputes the substeps and rebinds the steps, or else leaves the
-integrator unchanged. Writing `integ.p[i] = v` directly has no effect on the run: the steps
+Parameters and tables change only through `integ.ps[sym] = v` or `setp(integ, sym)(integ, v)`
+(SymbolicIndexingInterface), which checks the faces, recomputes the substeps and rebinds the
+steps, or else leaves the integrator unchanged. Writing `integ.p[i] = v` directly has no effect on the run: the steps
 keep the values they were bound to.
 """
 mutable struct FieldIntegrator{P <: FieldProblem, A, S <: FieldStore, RT <: Tuple, T, PV, TB}
@@ -321,7 +321,7 @@ mutable struct FieldIntegrator{P <: FieldProblem, A, S <: FieldStore, RT <: Tupl
     runtimes::RT                        # one `GroupRuntime` per field group, in group order
     p::PV
     pgood::PV                           # the parameters the steps are bound to
-    tables::TB                          # its own copy (`integ[Dk] = values`), as the problem's
+    tables::TB                          # its own copy (`integ.ps[Dk] = values`), as the problem's
     t0::Float64
     iter::Int
     dt::Float64
@@ -652,17 +652,19 @@ SII.current_time(i::FieldIntegrator) = _time(i)
 """
     integ[sym]
 
-The values of the field, input, parameter or table `sym` at the integrator's current step; a
+The values of the field, input or observed quantity `sym` at the integrator's current step; a
 list of symbols gives a list. A field or input comes back as a new array (on the problem's
 device), a copy: writing into it, `integ[c][1, 1] = v`, changes nothing (SciML's convention);
 assign the field, `integ[c] = values`. On a device the copy is a device array: compare it with
 a device array, or take `Array(integ[c])` and compare host arrays.
+
+Parameters and tables are read and written through `integ.ps` (SciML's convention, F2 design
+§2.13): `integ.ps[k]`, `integ.ps[k] = v`, `integ.ps[Dk] = values`, `integ.ps[Dk[2]] = v`.
+`integ[k]` and `integ[k] = v` of a parameter or table are errors that give that route.
 """
 function Base.getindex(i::FieldIntegrator, sym)
-    # a table first (a symbolic array is an AbstractVector too); then a list reads each of its
-    # names (fields, inputs, parameters, tables alike)
-    t = _read_table(i, sym)
-    t === nothing || return t
+    _parameter_route(i, sym, false)
+    # a list reads each of its names (fields, inputs alike)
     sym isa Union{AbstractVector, Tuple} && i.prob.index isa LatticeIndex && return map(s -> i[s], sym isa Tuple ? sym : collect(sym))
     k = i.prob.index isa LatticeIndex ? input_key(i.prob.index, sym) : nothing
     k === nothing && (_check_symbol(i, sym); return SII.getsym(i, sym)(i))
@@ -707,6 +709,14 @@ end
 # a symbol as the user wrote it: `:kind`, `"kind"`, or a variable without `⋆` and `(t, x, y)`
 _symtext(sym::Union{Symbol, AbstractString}) = repr(sym)
 _symtext(sym) = replace(string(sym), "⋆" => "", r"\(t(, \w+)*\)" => "")
+# a parameter or table as written: a symbolic table by its key (`Dq`, not `Dq[1:2]`), an entry `Dq[2]`
+function _ptext(ix, sym)
+    sym isa Union{Symbol, AbstractString} && return _symtext(sym)
+    t = ix isa LatticeIndex ? table_key(ix, sym) : nothing
+    t === nothing && return _symtext(sym)
+    e = table_entry(ix, sym)
+    return e == 0 ? t : "$t[$e]"
+end
 
 # a symbol the integrator does not know is an error listing the names it does (rather than
 # SII's "Invalid symbol"); a computed parameter says it is computed
@@ -730,14 +740,16 @@ end
 # `integ[sym] .= v` would broadcast into the copy `getindex` returns and change nothing: it is
 # an error that gives the assignment (F1)
 function Base.dotview(i::FieldIntegrator, sym)
-    ix = i.prob.index
-    t = ix isa LatticeIndex ? table_key(ix, sym) : nothing
-    t === nothing || table_entry(ix, sym) != 0 ||
-        throw(ArgumentError(string("`integ[", t, "] .= …` would write a copy (indexing an integrator returns the ",
-            "table's values): assign the table, `integ[", t, "] = values`")))
+    _parameter_route(i, sym, true)
     sym = _symtext(sym)                            # as written (no `⋆`, no `(t, x, y)`)
     throw(ArgumentError(string("`integ[", sym, "] .= …` would write a copy (indexing an integrator ",
         "returns the field's values): assign the field, `integ[", sym, "] = values`")))
+end
+# `integ.ps[Dk] .= …` would broadcast into the copy `getp` returns: an error giving the assignment
+function Base.dotview(p::SII.ParameterIndexingProxy{<:FieldIntegrator}, sym)
+    t = _ptext(p.wrapped.prob.index, sym)
+    throw(ArgumentError(string("`integ.ps[", t, "] .= …` would write a copy (`integ.ps[", t, "]` returns the ",
+        "values): assign it, `integ.ps[", t, "] = values`")))
 end
 # a state written through `setu(integ, c)(integ, v)` drops every group's algorithm history, as
 # `integ[c] = v` does
@@ -746,9 +758,33 @@ function SII.set_state!(i::FieldIntegrator, val, idx)
     foreach(reset!, i.runtimes)
     return val
 end
-# an input symbol writes the input's array (the masks run again); any other goes to SII
+# `integ[k]` or `integ[k] = v` of a parameter or table (a list naming one too): an error with
+# SciML's route, `integ.ps[k]` (F2 design §2.13; before: read and written in place)
+function _parameter_route(i::FieldIntegrator, sym, write::Bool)
+    ix = i.prob.index
+    ix isa LatticeIndex || return nothing
+    if sym isa Union{AbstractVector, Tuple} && table_key(ix, sym) === nothing
+        foreach(s -> _parameter_route(i, s, write), sym)
+        return nothing
+    end
+    istable = table_key(ix, sym) !== nothing
+    (istable || haskey(ix.params, ix.key(sym))) || return nothing
+    t = _ptext(ix, sym)
+    throw(ArgumentError(string("`", lstrip(t, ':'), "` is a ", istable ? "table" : "parameter", ": ",
+        write ? "write `integ.ps[$t] = $(istable && table_entry(ix, sym) == 0 ? "values" : "v")`" : "read `integ.ps[$t]`",
+        " (SciML's convention: an integrator indexes states, `integ.ps` its parameters)")))
+end
+# `integ.ps`: SciML's parameter proxy (`getp`/`setp`; a table write goes through `setp` too)
+function Base.getproperty(i::FieldIntegrator, f::Symbol)
+    f === :ps && return SII.ParameterIndexingProxy(i)
+    return getfield(i, f)
+end
+Base.propertynames(i::FieldIntegrator) = (fieldnames(typeof(i))..., :ps)
+
+# an input symbol writes the input's array (the masks run again); a parameter or table is an
+# error naming `integ.ps`; any other goes to SII
 function Base.setindex!(i::FieldIntegrator, v, sym)
-    _write_table!(i, v, sym) && return i
+    _parameter_route(i, sym, true)
     k = i.prob.index isa LatticeIndex ? input_key(i.prob.index, sym) : nothing
     if k === nothing
         _check_symbol(i, sym; write = true)
@@ -773,9 +809,9 @@ function Base.setindex!(i::FieldIntegrator, v, sym)
     return i
 end
 
-# `integ[Dk] = values` (or `integ[Dk[i]] = value`) sets the integrator's table: the store's
-# array in place (the bound steps read it), then the masks and clamps run again; false if
-# `sym` is no table
+# `integ.ps[Dk] = values` (or `integ.ps[Dk[i]] = value`, `setp(integ, Dk)`) sets the
+# integrator's table: the store's array in place (the bound steps read it), then the masks and
+# clamps run again; false if `sym` is no table
 function _write_table!(i::FieldIntegrator, v, sym)
     ix = i.prob.index
     ix isa LatticeIndex || return false

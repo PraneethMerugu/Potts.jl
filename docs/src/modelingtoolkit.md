@@ -131,6 +131,10 @@ On the integrator of a field problem (`LatticePDE.discretize(Potts.fields(sys), 
 problem = :owned)`), `integ[c]` returns a copy of the field's values, on the problem's device.
 Writing into the copy, `integ[c][1, 1] = v`, changes nothing; to change the field, assign it:
 `integ[c] = values`.
+Parameters and tables go through `integ.ps`, as in SciML: `integ.ps[:k] = 2.0`,
+`integ.ps[:δ] = values` and `integ.ps[δ[2]] = v`. Each write runs the checks of `setp`, the
+substep count and the masks again, or changes nothing. `integ[:k]` of a parameter is an error
+that gives this route.
 `discretize` takes SciML's keywords `u0`, `p` and `tspan` on both problem kinds, with the
 rule of `remake`: `discretize(Potts.fields(sys), disc; p = [:k => 2.0], u0 = [:c => 0.5],
 tspan = (0, 10))` builds the problem at those values, with no `remake`. Any other keyword is

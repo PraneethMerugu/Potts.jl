@@ -1131,8 +1131,10 @@ end
     po = LP.discretize(Potts.fields(FdTab(; name = :f)), LP.LatticeDiscretization(LP.Grid((10, 8)); T = Float64,
         problem = :owned); inputs = [:kind => zeros(Int32, 10, 8)])
     ig = LP.init(po, LP.ExplicitEuler(; dt = 0.1, substeps = 1))
-    @test ig[:δ] == [0.5, 0.0] && LP.getp(po, :δ)(po) == [0.5, 0.0]
-    @test occursin("`δ` is a table", something(fd_err(() -> LP.setp(ig, :δ)(ig, [1.0, 0.0])), ""))
+    @test ig.ps[:δ] == [0.5, 0.0] && LP.getp(po, :δ)(po) == [0.5, 0.0]
+    @test occursin("`δ` is a table", something(fd_err(() -> LP.setp(po, :δ)(po, [1.0, 0.0])), ""))
+    LP.setp(ig, :δ)(ig, [1.0, 0.0])                     # an integrator's table is set (F2-13)
+    @test ig.ps[:δ] == [1.0, 0.0] && LP.getp(po, :δ)(po) == [0.5, 0.0]
     # a CPM coupling is an input given by its key: one step of `s · (kind == A)` from c = 0
     K = zeros(Int32, 12, 10); K[3:5, 4:6] .= 1
     prob = LP.discretize(Potts.fields(FdSource(; name = :f)), LP.LatticeDiscretization(LP.Grid((12, 10)); T = Float64,
@@ -1281,6 +1283,36 @@ end
     setp(ig, :k)(ig, 0.4)
     step!(ig)
     @test getp(ig, :k)(ig) == 0.4 && ig.t == s1[1] + 2
+end
+
+# F2-13 (F2 design §2.13): `integ.ps[x] = v` writes a scalar or a kind table of a Potts
+# integrator, with the checks of `setp`; `integ[p]` and `integ[p] = v` of a parameter are
+# errors with the `integ.ps` route (base: SciMLBase's "Indexing with parameters is deprecated"
+# ErrorException); states index as before
+@testset "F2-13: integ.ps in front end A; integ[p] gives the route" begin
+    sys = FdRotCells(; name = :r)
+    σ = zeros(Int32, 6, 6); σ[2:3, 2:3] .= 1
+    ig = init(PottsProblem(sys, [ownership => σ, kind => [:A]], (0, 4); seed = 3, field_solver = ExplicitEuler(substeps = 2)),
+        SequentialCPM())
+    ig.ps[:κ] = [0.0, 0.25]
+    ig.ps[:k] = 0.4
+    @test ig.ps[:κ] == [0.0, 0.25] && getp(ig, :κ)(ig) == [0.0, 0.25] && ig.ps[:k] == 0.4
+    # the run reads the new values: equal to a problem built with them
+    ref = init(PottsProblem(sys, [ownership => σ, kind => [:A], :κ => [0.0, 0.25], :k => 0.4], (0, 4); seed = 3,
+        field_solver = ExplicitEuler(substeps = 2)), SequentialCPM())
+    step!(ig); step!(ref)
+    @test Array(current_state(ig).site.o) == Array(current_state(ref).site.o)
+    for (f, want) in ((() -> ig[:κ], "`κ` is a parameter: read `integ.ps[:κ]`"),
+            (() -> (ig[:κ] = [0.0, 1.0]), "`κ` is a parameter: write `integ.ps[:κ] = v`"),
+            (() -> ig[:k], "read `integ.ps[:k]`"), (() -> (ig[:k] = 1.0), "write `integ.ps[:k] = v`"),
+            (() -> ig[[:c, :k]], "`k` is a parameter"))
+        err = fdargerr(f)
+        @test occursin(want, err) && !occursin("deprecated", err)
+    end
+    @test ig.ps[:κ] == [0.0, 0.25] && ig.ps[:k] == 0.4              # nothing was set
+    # a field reads and writes as before
+    ig[:c] = fill(2.0, 6, 6)
+    @test all(==(2.0), Array(ig[:c]))
 end
 
 # F2-08a: the substep count of each field group of a Potts problem or integrator, in group

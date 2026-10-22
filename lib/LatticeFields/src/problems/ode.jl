@@ -392,6 +392,10 @@ function check_setp(sys, sym)
     return nothing
 end
 function SII.setp(sys::Union{FieldProblem, FieldIntegrator, LatticeSciMLProblem}, sym; kw...)
+    # a table (or an entry of one) of an integrator: its write, with the checks (`integ.ps[Dk] = values`)
+    if sys isa FieldIntegrator && sys.prob.index isa LatticeIndex && table_key(sys.prob.index, sym) !== nothing
+        return (i, v) -> (_write_table!(i, v, sym); v)
+    end
     check_setp(sys, sym)
     return invoke(SII.setp, Tuple{Any, Any}, sys, sym; kw...)
 end

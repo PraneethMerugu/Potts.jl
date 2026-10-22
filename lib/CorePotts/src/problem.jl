@@ -489,6 +489,37 @@ function Base.getproperty(integ::PottsIntegrator, name::Symbol)
     return getfield(integ, name)
 end
 
+# `integ[p]` and `integ[p] = v` of a parameter (a kind table too; a list naming one): an error
+# with SciML's route, `integ.ps[p]` (F2 design §2.13; before: SciMLBase's "Indexing with
+# parameters is deprecated" error). States, fields, inputs and observed quantities index as before.
+function _parameter_route(integ::PottsIntegrator, sym, write::Bool)
+    SII = SymbolicIndexingInterface
+    if sym isa Union{AbstractArray, Tuple} && SII.symbolic_type(sym) === SII.NotSymbolic()
+        foreach(s -> _parameter_route(integ, s, write), sym)
+        return nothing
+    end
+    SII.is_parameter(integ, sym) || return nothing
+    t = sym isa Symbol ? repr(sym) : string(sym)
+    throw(ArgumentError(string("`", lstrip(t, ':'), "` is a parameter: ", write ? "write `integ.ps[$t] = v`" :
+        "read `integ.ps[$t]`", " (SciML's convention: an integrator indexes states, `integ.ps` its parameters)")))
+end
+function Base.getindex(integ::PottsIntegrator, sym)
+    _parameter_route(integ, sym, false)
+    return invoke(Base.getindex, Tuple{SciMLBase.DEIntegrator, Any}, integ, sym)
+end
+function Base.getindex(integ::PottsIntegrator, sym::Union{AbstractArray, Tuple})
+    _parameter_route(integ, sym, false)
+    return invoke(Base.getindex, Tuple{SciMLBase.DEIntegrator, Union{AbstractArray, Tuple}}, integ, sym)
+end
+function Base.setindex!(integ::PottsIntegrator, v, sym)
+    _parameter_route(integ, sym, true)
+    return invoke(Base.setindex!, Tuple{SciMLBase.DEIntegrator, Any, Any}, integ, v, sym)
+end
+function Base.setindex!(integ::PottsIntegrator, v, sym::Union{AbstractArray, Tuple})
+    _parameter_route(integ, sym, true)
+    return invoke(Base.setindex!, Tuple{SciMLBase.DEIntegrator, Any, Union{AbstractArray, Tuple}}, integ, v, sym)
+end
+
 function _save!(integ::PottsIntegrator)
     push!(integ.saved_t, integ.t)
     push!(integ.saved_u, current_state(integ))

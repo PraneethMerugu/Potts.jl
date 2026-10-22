@@ -33,11 +33,12 @@ them: a bound such as `lo ≥ 1` tells the stability bound that a table index is
 `derived` maps the symbols of quantities that are not parameters of the problem (a computed
 parameter, folded into the equations) to the sentence that says why; `observed` maps such
 symbols to how they read, `(p, t) -> value` from the raw parameters (a function, or an `Expr`
-compiled here), so `getp(sol, k2)`, `sol.ps[k2]` and `integ[k2]` read them while `remake` and
+compiled here), so `getp(sol, k2)`, `sol.ps[k2]` and `integ.ps[k2]` read them while `remake` and
 `setp` refuse them (their `parameter_index` throws); `tables` maps the symbols of array
 parameters to their table keys, or an entry's symbol to `(key, i)` (`remake(prob::FieldProblem;
-p = [Dk => values])` gives new values; `integ[Dk]`, `getp(prob, Dk)` read them). Any other symbol given as a parameter is an error naming the parameters. Every symbol
-is looked up as `key(sym)`.
+p = [Dk => values])` gives new values; `integ.ps[Dk]`, `getp(prob, Dk)` read them). Any other
+symbol given as a parameter is an error naming the parameters. Every symbol is looked up as
+`key(sym)`.
 """
 struct LatticeIndex{F}
     key::F
@@ -162,7 +163,7 @@ function SII.parameter_index(ix::LatticeIndex, sym)
         t = first(ix.tables[k])
         throw(ArgumentError(string("`", t, "` is a table (an array parameter), set where the problem is built: ",
             "on an owned problem (a FieldProblem), `remake(prob; p = [", t, " => values])` gives it new values, ",
-            "and on its integrator `integ[", t, "] = values`; an ODE problem's tables are fixed (give them to ",
+            "and on its integrator `integ.ps[", t, "] = values`; an ODE problem's tables are fixed (give them to ",
             "`discretize(…; p = [", t, " => values])`)")))
     end
     _scalar(sym) || return nothing

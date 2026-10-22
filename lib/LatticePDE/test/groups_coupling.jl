@@ -25,7 +25,7 @@ pce, poe, pqe = gpc(t, x, y), gpo(t, x, y), gpq(t, x, y)
     @test LFP.substep_counts(ig) == c0 && ig.substeps == 1
     ig[pqe] = fill(Int32(2), 16, 16)                              # a bound input
     @test LFP.substep_counts(ig) == c0
-    ig[gKt] = [1.5, 2.5]                                          # a table
+    ig.ps[gKt] = [1.5, 2.5]                                          # a table
     @test LFP.substep_counts(ig) == c0
     for _ in 1:5
         step!(ig)
@@ -258,7 +258,7 @@ end
     p = discretize(sys, gwdisc(); inputs = [qe => fill(Int32(1), 4, 4)])
     dt = 0.1 / 30
     ig = init(p, FieldGroups(wce => ExplicitEuler(; dt, substeps = 1), woe => ExplicitEuler(; dt, substeps = 2)))
-    e = gwerr(() -> (ig[gwKt] = [500.0, 2.0]))
+    e = gwerr(() -> (ig.ps[gwKt] = [500.0, 2.0]))
     @test occursin("the coefficient `-at(gwKt, gwq)` of `gwo`", e) && !occursin("LatticePDE.", e) && !occursin("(t, x, y)", e)
     @test occursin("dt = 0.00333333:", e)
     @test substep_counts(ig) == [1, 2]                            # exported from LatticePDE
