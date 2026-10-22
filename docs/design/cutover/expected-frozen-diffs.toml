@@ -1157,6 +1157,15 @@ fixup_of = "C9"
 decision = "D-C9-R1"
 why = "D-250 AUTO re-pin: the parameter object's type gains a type parameter (`PottsParameters{NT, D}`), which changes the pinned IR text by one inserted `, ()`"
 
+# F2-14 (lp/f2): the approved list-A edit of p6_0u (user ruling 2026-10-22, review of batch 5),
+# in a fixup of F2-14 (FE-18). The commit is F2-14's hash on lp/f2 before integration.
+[[edits]]
+path = "acceptance/p6_0u_components_gaps.jl"
+commit = "b7b29a31"
+fixup_of = "F2-14"
+decision = "D-F2-2"
+why = "part 2: the four parameter-binding cases (y(t) = 2k :161, initial_conditions [y => 2k] :167, k2 = 2k :174, discrete s2 = !s :194) flip from 'rejected' to 'builds' with their values (y0 = 0.6; comp7₊k2 = 0.6 and read-only; net7₊s2 = true), in both scopes; the unknown bindings y(t) = 2z and X(t) = !Y stay rejected naming the component; testset title and header item 2 follow"
+
 # F2-05 (lp/f2): the approved list-A edit of p6_0c (user ruling 2026-10-19, F2 design Q1), in
 # the same commit as the default field solver (the ruling asks for one commit). The commit is
 # F2-05's hash on lp/f2 before integration; squashing the F2-03 and F2-04 fixups (which come

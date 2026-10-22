@@ -55,11 +55,12 @@ struct LatticeIndex{F}
     derived::Dict{Any, String}
     observed::Dict{Any, Any}
     tables::Dict{Any, Tuple{String, Int}}       # symbol → (table key, entry; 0 for the whole table)
+    parambounds::Dict{Int, Tuple{Float64, Float64}}   # slot → declared `bounds` (F2-14), checked at every write
 end
 function LatticeIndex(; key::F = identity, variables = Pair[], parameters = Pair[],
         independent_variables = Any[], defaults = Dict{Any, Any}(), inputs = Pair[],
         inputnames = Pair[], boolinputs = String[], inputbounds = Pair[], derived = Pair[], observed = Pair[],
-        tables = Pair[]) where {F}
+        tables = Pair[], parambounds = Pair[]) where {F}
     syms(x) = x isa Union{Tuple, AbstractVector} ? x : (x,)
     vars, varsyms = Dict{Any, FieldSlot}(), Any[]
     for (ss, slot) in variables
@@ -98,7 +99,8 @@ function LatticeIndex(; key::F = identity, variables = Pair[], parameters = Pair
         Any[independent_variables...], Dict{Any, Any}(defaults), ins,
         names, Set{String}(String.(boolinputs)),
         Dict{String, Tuple{Float64, Float64}}(String(k) => Float64.((b[1], b[2])) for (k, b) in inputbounds), der, obs, Dict{Any, Tuple{String, Int}}(key(s) => (k isa Tuple ? (String(k[1]), Int(k[2])) : (String(k), 0))
-                                                       for (ss, k) in tables for s in syms(ss)))
+                                                       for (ss, k) in tables for s in syms(ss)),
+        Dict{Int, Tuple{Float64, Float64}}(Int(i) => Float64.((b[1], b[2])) for (i, b) in parambounds))
 end
 
 """

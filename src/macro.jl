@@ -572,11 +572,19 @@ function _section!(parts, sec, args, ln = nothing)
     elseif sec === Symbol("@parameters")
         for l in _lines(args)
             lhs, val = l isa Expr && l.head === :(=) ? (l.args[1], _strip(l.args[2])) : (l, nothing)
-            # `λ = 1.0, [unit = u"…"]` (MTK metadata)
+            # `λ = 1.0, [unit = u"…", tunable = false, bounds = (0, 2), description = "…"]` (MTK
+            # metadata; F2-14, FE-18)
             val, opts = val isa Expr && val.head === :tuple && length(val.args) == 2 && val.args[2] isa Expr &&
                         val.args[2].head === :vect ? (val.args[1], val.args[2]) : (val, nothing)
+            all(o -> o isa Expr && o.head === :(=) && o.args[1] isa Symbol, opts === nothing ? () : opts.args) ||
+                throw(ArgumentError("@parameters $(lhs isa Expr ? lhs.args[1] : lhs): options are `[key = value, …]` " *
+                                    "with the keys `unit`, `tunable`, `bounds`, `description`"))
             kw = opts === nothing ? Any[] : [Expr(:kw, o.args[1], o.args[2]) for o in opts.args]
-            all(k -> k.args[1] === :unit, kw) || throw(ArgumentError("parameter options: only `unit` is supported"))
+            for k in kw
+                k.args[1] in (:unit, :tunable, :bounds, :description) || throw(ArgumentError(
+                    "@parameters $(lhs isa Expr ? lhs.args[1] : lhs): option `$(k.args[1])`; a parameter takes MTK's " *
+                    "`unit`, `tunable`, `bounds` and `description`"))
+            end
             if lhs isa Expr && lhs.head === :ref && _is_range(lhs.args[2])     # `d[1:n]`: a vector
                 k = lhs.args[1]
                 _declare!(parts, k, "parameter")

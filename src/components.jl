@@ -113,20 +113,57 @@ function _bind_components(sys::PottsSystem)
         _reject_coupled_bindings(comp, cs, couplings)
         _reject_bindings(comp, cs, discrete, unread)
         ics = ModelingToolkitBase.initial_conditions(cs)
+        bnd = Dict{Any, Any}(_unwrap(x) => _unwrap(v) for (x, v) in ModelingToolkitBase.bindings(cs))
+        local_sub = Dict{Any, Any}(_unwrap(t) => time)
         # a missing value stays `nothing`: the operating point must give it (checked there)
-        # an MTK value; else, for a quantity of a composed Potts model (C9), its written numeric default
+        # an MTK value; else, for a quantity of a composed Potts model (C9), its written numeric default;
+        # an expression of the component's parameters (an initial value `y => 2k` or a binding
+        # `y(t) = 2k`; F2-14, FE-18) is the default `2 comp₊k`, evaluated when a problem is built
         function value(x)
             v = get(ics, _unwrap(x), nothing)
+            v === nothing && (v = get(bnd, _unwrap(x), nothing))
             if v === nothing
                 i = info(x)
                 return i !== nothing && _written(x) && i.default isa Real ? Float64(i.default) : nothing
             end
             w = _unwrap(v)
-            return SymbolicUtils.isconst(w) ? Float64(SymbolicUtils.unwrap_const(w)) : w
+            SymbolicUtils.isconst(w) && return Float64(SymbolicUtils.unwrap_const(w))
+            return _reads_params_only(w) ? _unwrap(Symbolics.substitute(w, local_sub; fold = Val(false))) : w
         end
-        local_sub = Dict{Any, Any}(_unwrap(t) => time)
         scope = comp.domain === :model ? :model : :cell
         plan = discrete ? _discrete_plan(comp, cs, _p(sys, :sweep).mcs_duration) : nothing
+        # the parameters first (an initial value may read them): each a model parameter, unless coupled
+        for p in ModelingToolkitBase.parameters(cs)
+            nm = Symbol(comp.name, :₊, SymbolicIndexingInterface.getname(p))
+            push!(coupleable, nm)
+            if haskey(couplings, nm)
+                names[nm] = _unwrap(couplings[nm])
+            else
+                q = parameter(nm, value(p); unit = _unit_of(p), _meta_of(p)...)
+                push!(params, q)
+                names[nm] = _unwrap(q)
+            end
+            # a `Bool` parameter of a discrete component reads its stored 0/1 (or a Real
+            # coupling) as a Bool; a Real one reads a Bool coupling as 0/1
+            discrete && (names[nm] = _as_symtype(names[nm], SymbolicUtils.symtype(_unwrap(p))))
+            local_sub[_unwrap(p)] = names[nm]
+        end
+        # a bound parameter (`k2 = 2k`, an MTK binding; F2-14, FE-18) is a computed model
+        # parameter `comp₊k2 = 2 comp₊k`, in the order its inputs allow (`k3 = 3k2` after `k2`)
+        pending = [(x, v) for (x, v) in bnd if ModelingToolkitBase.isparameter(x) && _reads_params_only(v)]
+        while !isempty(pending)
+            k = findfirst(((x, v),) -> all(u -> haskey(local_sub, u), _unwrap.(Symbolics.get_variables(v))), pending)
+            k === nothing && throw(ArgumentError("component `$(comp.name)`: the bindings " *
+                join(("`$x = $v`" for (x, v) in pending), ", ") * " read one another in a cycle"))
+            x, v = popat!(pending, k)
+            nm = Symbol(comp.name, :₊, SymbolicIndexingInterface.getname(x))
+            push!(coupleable, nm)
+            q = parameter(nm, _unwrap(Symbolics.substitute(v, local_sub; fold = Val(false))); unit = _unit_of(x), _meta_of(x)...)
+            push!(params, q)
+            names[nm] = _unwrap(q)
+            discrete && (names[nm] = _as_symtype(names[nm], SymbolicUtils.symtype(x)))
+            local_sub[x] = names[nm]
+        end
         if discrete
             # one slot per discrete variable (and per older lag): the value of its latest tick
             for (x, standin) in zip(plan.slots, plan.standins)
@@ -145,21 +182,6 @@ function _bind_components(sys::PottsSystem)
                 names[nm] = _unwrap(v)
                 local_sub[_unwrap(u)] = _unwrap(v)
             end
-        end
-        for p in ModelingToolkitBase.parameters(cs)
-            nm = Symbol(comp.name, :₊, SymbolicIndexingInterface.getname(p))
-            push!(coupleable, nm)
-            if haskey(couplings, nm)
-                names[nm] = _unwrap(couplings[nm])
-            else
-                q = parameter(nm, value(p); unit = _unit_of(p))
-                push!(params, q)
-                names[nm] = _unwrap(q)
-            end
-            # a `Bool` parameter of a discrete component reads its stored 0/1 (or a Real
-            # coupling) as a Bool; a Real one reads a Bool coupling as 0/1
-            discrete && (names[nm] = _as_symtype(names[nm], SymbolicUtils.symtype(_unwrap(p))))
-            local_sub[_unwrap(p)] = names[nm]
         end
         if discrete
             # lags read the pre-tick slot of their source; rules become the tick's new values
@@ -222,6 +244,14 @@ end
 # a component quantity's MTK unit and guess, kept on the Potts quantity that stands for it (C9 review S3)
 _unit_of(x) = SymbolicUtils.getmetadata(_unwrap(x), ModelingToolkitBase.VariableUnit, nothing)
 _guess_of(x) = ModelingToolkitBase.hasguess(x) ? ModelingToolkitBase.getguess(x) : nothing
+# … and a component parameter's MTK `tunable`, `bounds` and `description` (F2-14, FE-18)
+function _meta_of(x)
+    u = _unwrap(x)
+    d = ModelingToolkitBase.getdescription(u)
+    return (; tunable = ModelingToolkitBase.istunable(u, true),
+        bounds = ModelingToolkitBase.hasbounds(u) ? ModelingToolkitBase.getbounds(u) : nothing,
+        description = d isa AbstractString && !isempty(d) ? d : nothing)
+end
 
 # What an MTK System can carry that Potts would otherwise drop silently (P6.0k2 F7). MTK
 # `guesses` only seed MTK's initialisation, which Potts does not run (G8): they are ignored.
@@ -273,7 +303,7 @@ _all_tstops(sys) = Any[ModelingToolkitBase.get_tstops(sys); (x for s in Modeling
 # An MTK binding (a variable's or parameter's value given as an expression, `y(t) = 2k`,
 # `k2 = 2k`) is evaluated by MTK against the parameter's own value; a coupled parameter has no
 # value of its own (it is a per-cell or model expression), so such a binding would be wrong or
-# dropped (P6.0k2 F7). Other bindings are not supported either (`_reject_bindings`).
+# dropped (P6.0k2 F7). Bindings of parameters alone are evaluated (`_reject_bindings`).
 function _reject_coupled_bindings(comp, cs, couplings)
     namespaced(y) = Symbol(comp.name, :₊, SymbolicIndexingInterface.getname(y))
     leafname(y) = (SymbolicUtils.issym(y) || (iscall(y) && SymbolicUtils.issym(operation(y)))) ? namespaced(y) : nothing
@@ -295,10 +325,12 @@ function _reject_coupled_bindings(comp, cs, couplings)
     return nothing
 end
 
-# Any other binding Potts reads (D-133): Potts takes a component's values as plain numbers
-# (it does not run MTK initialisation), so a value given as an expression (`y(t) = 2k`,
-# `k2 = 2k`, `initial_conditions = [y => 2k]`, a discrete `X(t) = !Y`) is rejected here, naming
-# the component, instead of failing later as a missing value or an unknown symbol. Only
+# Any other binding Potts reads (D-133): Potts does not run MTK initialization, so it evaluates
+# a value given as an expression of the component's parameters itself (`k2 = 2k`, a computed
+# parameter; `y(t) = 2k` or `initial_conditions = [y => 2k]`, a continuous unknown's default;
+# F2-14, FE-18), and rejects any other expression (one that reads an unknown, a discrete
+# `X(t) = !Y`) here, naming the component, instead of failing later as a missing value or an
+# unknown symbol. Only
 # bindings of what Potts reads count: unknowns, parameters, symbols the equations or observed
 # expressions read, and (discrete) the nodes, which are observed. A binding of a continuous
 # observed variable (its equation gives its value) or of an unused parameter stays ignored,
@@ -324,21 +356,28 @@ function _reject_bindings(comp, cs, discrete::Bool, unread = Dict{Symbol, String
     end
     reads(x) = (u = _unwrap(x); u in used && !(u in observed))
     for (x, v) in ModelingToolkitBase.bindings(cs)
-        msg = "component `$(comp.name)`: `$x` is bound to the expression `$v` (an MTK binding); " *
-              "Potts takes a component's values as plain numbers: give `$x` a value, or write " *
+        u = _unwrap(x)
+        # an expression of the component's parameters: a computed parameter (`k2 = 2k`) or the
+        # initial value of a continuous unknown (`y(t) = 2k`), evaluated at build (F2-14, FE-18)
+        _reads_params_only(v) && (ModelingToolkitBase.isparameter(u) || !discrete && !(u in observed)) && continue
+        msg = "component `$(comp.name)`: `$x` is bound to the expression `$v` (an MTK binding), which reads " *
+              "more than the component's parameters; Potts evaluates a binding of parameters (`k2 = 2k`, " *
+              "`y(t) = 2k`) when a problem is built: give `$x` a value or an expression of parameters, or write " *
               "the expression inline in the component's equations"
         reads(x) && throw(ArgumentError(msg))
-        u = _unwrap(x)
         u in observed || (unread[Symbol(comp.name, :₊, _slot_name(u))] = msg)
     end
     for (x, v) in ModelingToolkitBase.initial_conditions(cs)
         w = _unwrap(v)
-        w isa SymbolicUtils.BasicSymbolic && !SymbolicUtils.isconst(w) && reads(x) &&
-            throw(ArgumentError("component `$(comp.name)`: the initial value `$x => $v` is an expression; " *
-                                "Potts takes a component's values as plain numbers (it does not run MTK initialization)"))
+        w isa SymbolicUtils.BasicSymbolic && !SymbolicUtils.isconst(w) && !(_reads_params_only(w) && !discrete) && reads(x) &&
+            throw(ArgumentError("component `$(comp.name)`: the initial value `$x => $v` is an expression that reads " *
+                                "more than the component's parameters; Potts evaluates an initial value of parameters " *
+                                "(`y => 2k`) when a problem is built (it does not run MTK initialization)"))
     end
     return nothing
 end
+# whether an MTK expression reads parameters only (no unknown, no time)
+_reads_params_only(v) = (vs = Symbolics.get_variables(_unwrap(v)); all(u -> ModelingToolkitBase.isparameter(_unwrap(u)), vs))
 
 _kind_in(kinds) = foldl(|, [B.kind == k for k in kinds])
 

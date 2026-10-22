@@ -100,12 +100,56 @@ _largest_piece(args...; kwargs...) = throw(ArgumentError(
 # ---------------------------------------------------------------------------------------
 # Declarations
 
-"""`parameter(name, default; unit)`: a scalar model parameter (`unit`: MTK `VariableUnit`)."""
-parameter(name::Symbol, default; unit = nothing) = _with_unit(_tag(_param(name), Entity(:param, name, default, (;))), unit)
-_param(name::Symbol) = Symbolics.unwrap(only(ModelingToolkitBase.@parameters $name))
+"""
+`parameter(name, default; unit, tunable, bounds, description)`: a scalar model parameter, with
+MTK's metadata (F2-14, FE-18): `unit` (`VariableUnit`), `tunable = false` (out of
+`SciMLStructures.Tunable`, into `Constants`), `bounds = (lo, hi)` (checked at build and at every
+write) and `description` (shown with the model). The metadata is MTK's own, so
+`ModelingToolkitBase.istunable`, `getbounds` and `getdescription` read it.
+"""
+parameter(name::Symbol, default; unit = nothing, tunable = true, bounds = nothing, description = nothing) =
+    _with_meta(_tag(_param(name; tunable = _tunable(name, tunable)), Entity(:param, name, default,
+        _meta_options(name, tunable, bounds, description))), unit, bounds, description)
+# (`tunable = false` through MTK's own declaration: its metadata key is not public)
+_param(name::Symbol; tunable::Bool = true) = Symbolics.unwrap(tunable ? only(ModelingToolkitBase.@parameters $name) :
+                                                              only(ModelingToolkitBase.@parameters $name [tunable = false]))
+_tunable(name, t) = t isa Bool ? t : throw(ArgumentError("parameter `$name`: `tunable` is `true` or `false`; got $(repr(t))"))
 
 _with_unit(x, ::Nothing) = x
 _with_unit(x, u) = Symbolics.wrap(SymbolicUtils.setmetadata(Symbolics.unwrap(x), ModelingToolkitBase.VariableUnit, u))
+# MTK's metadata on a parameter's symbol (only what is given: a parameter without metadata is
+# the symbol it was before F2-14)
+function _with_meta(x, unit, bounds, description)
+    x = _with_unit(x, unit)
+    u = Symbolics.unwrap(x)
+    bounds === nothing || (u = SymbolicUtils.setmetadata(u, ModelingToolkitBase.VariableBounds, bounds))
+    description === nothing || (u = SymbolicUtils.setmetadata(u, ModelingToolkitBase.VariableDescription, description))
+    return Symbolics.wrap(u)
+end
+# the metadata a parameter's entity keeps (`tunable`, `bounds` as Float64), checked here
+function _meta_options(name, tunable, bounds, description)
+    tunable isa Bool || throw(ArgumentError("parameter `$name`: `tunable` is `true` or `false`; got $(repr(tunable))"))
+    description === nothing || description isa AbstractString ||
+        throw(ArgumentError("parameter `$name`: `description` is a string; got $(repr(description))"))
+    opts = tunable ? (;) : (; tunable)
+    bounds === nothing && return opts
+    (bounds isa Tuple && length(bounds) == 2 && all(b -> b isa Real, bounds) && !any(isnan, bounds) &&
+     bounds[1] <= bounds[2]) || throw(ArgumentError("parameter `$name`: `bounds` is a pair `(lo, hi)` of numbers with " *
+                                                   "lo ≤ hi (`bounds = (0, 2)`); got $(repr(bounds))"))
+    return (; opts..., bounds = (Float64(bounds[1]), Float64(bounds[2])))
+end
+# a value of parameter `i` outside its declared bounds (every entry of a kind table)
+function _check_bounds(i::Entity, v)
+    b = get(i.options, :bounds, nothing)
+    b === nothing && return v
+    for x in (v isa AbstractArray ? v : (v,))
+        b[1] <= x <= b[2] || throw(ArgumentError(string("parameter `", i.name, "` = ", v isa AbstractArray ? "$v (entry $x)" : x,
+            " is outside its declared bounds (", _bnum(b[1]), ", ", _bnum(b[2]), "): give a value in them, or change ",
+            "`bounds` in its declaration")))
+    end
+    return v
+end
+_bnum(x) = isinteger(x) && isfinite(x) ? string(Int(x)) : string(x)
 
 """
 `kind_parameter(name, values)`: a parameter indexed by kind (medium included), the array
@@ -113,12 +157,18 @@ parameter `name[1:n]` or `name[1:n, 1:m]` of `values`' shape. It is read through
 `at`/`at2` (`J[kind, kind′]` in a model), never MTK's `getindex`, which a compiled template
 cannot take with an input index (S-4).
 """
-function kind_parameter(name::Symbol, values; unit = nothing)
+function kind_parameter(name::Symbol, values; unit = nothing, tunable = true, bounds = nothing, description = nothing)
     (values isa AbstractArray && ndims(values) in (1, 2)) ||
         throw(ArgumentError("kind table `$name` takes a vector (one value per kind) or a matrix; got $(repr(values))"))
     n = size(values)
-    x = length(n) == 1 ? only(ModelingToolkitBase.@parameters $name[1:n[1]]) : only(ModelingToolkitBase.@parameters $name[1:n[1], 1:n[2]])
-    return _with_unit(_tag(x, Entity(:kindtable, name, values, (;))), unit)
+    x = if _tunable(name, tunable)
+        length(n) == 1 ? only(ModelingToolkitBase.@parameters $name[1:n[1]]) : only(ModelingToolkitBase.@parameters $name[1:n[1], 1:n[2]])
+    else
+        length(n) == 1 ? only(ModelingToolkitBase.@parameters $name[1:n[1]] [tunable = false]) :
+        only(ModelingToolkitBase.@parameters $name[1:n[1], 1:n[2]] [tunable = false])
+    end
+    return _with_meta(_tag(x, Entity(:kindtable, name, values, _meta_options(name, tunable, bounds, description))),
+        unit, bounds, description)
 end
 
 """
@@ -284,13 +334,15 @@ function vector_variable(name::Symbol, r, scope::Symbol; default = _NO_VALUE, un
                                      default = _component(default, i), unit = _component(unit, i),
                                      guess = _component(guess, i), vector = name, index = i, options...) for i in 1:n])
 end
-"""`vector_parameter(name, 1:n, default; unit)`: components `name_i` of a vector parameter."""
-function vector_parameter(name::Symbol, r, default; unit = nothing)
+"""`vector_parameter(name, 1:n, default; unit, tunable, bounds, description)`: components `name_i`
+of a vector parameter (the metadata applies to every component)."""
+function vector_parameter(name::Symbol, r, default; unit = nothing, tunable = true, bounds = nothing, description = nothing)
     n = _vector_length(r)
     _check_components(name, default, n)
-    return QuantityVector(name, [_with_unit(_tag(_param(_component_name(name, i)),
-                                                 Entity(:param, _component_name(name, i), _component(default, i), (; vector = name, index = i))),
-                                            _component(unit, i)) for i in 1:n])
+    return QuantityVector(name, [_with_meta(_tag(_param(_component_name(name, i); tunable = _tunable(name, tunable)),
+                                                 Entity(:param, _component_name(name, i), _component(default, i),
+                                                     (; vector = name, index = i, _meta_options(name, tunable, bounds, description)...))),
+                                            _component(unit, i), bounds, description) for i in 1:n])
 end
 
 """`lhs ~ rhs` in updates and equations: component-wise for vectors."""
@@ -1949,9 +2001,14 @@ struct PottsParameters{NT <: NamedTuple, D}
     values::NT
     PottsParameters{NT, D}(values::NT) where {NT <: NamedTuple, D} = new{NT, D}(values)
 end
-PottsParameters(values::NamedTuple, tag::Union{Tuple{}, Tuple{Tuple{Vararg{Symbol}}, UInt64}} = ()) =
+PottsParameters(values::NamedTuple, tag::Union{Tuple{}, Tuple{Tuple{Vararg{Symbol}}, UInt64},
+        Tuple{Tuple{Vararg{Symbol}}, UInt64, Tuple{Tuple{Vararg{Symbol}}, Tuple}}} = ()) =
     PottsParameters{typeof(values), tag}(values)
 _computed(::PottsParameters{NT, D}) where {NT, D} = D === () ? () : D[1]
+# the MTK metadata in the type (F2-14), only when a parameter has some: the names declared
+# `tunable = false`, and `(name, lo, hi)` of each declared `bounds`
+_nontunable(::PottsParameters{NT, D}) where {NT, D} = length(D) == 3 ? D[3][1] : ()
+_declared_bounds(::PottsParameters{NT, D}) where {NT, D} = length(D) == 3 ? D[3][2] : ()
 """`p`'s parameter object with the values `nt` (the same computed parameters)."""
 _with_values(::PottsParameters{NT, D}, nt::NamedTuple) where {NT, D} = PottsParameters{typeof(nt), D}(nt)
 @inline Base.getproperty(p::PottsParameters, s::Symbol) = getfield(getfield(p, :values), s)
@@ -1977,10 +2034,11 @@ SciMLStructures.hasportion(::SciMLStructures.Constants, ::PottsParameters) = tru
 SciMLStructures.hasportion(::SciMLStructures.AbstractPortion, ::PottsParameters) = false
 
 _portion_keys(::SciMLStructures.Tunable, p) =
-    (nt = NamedTuple(p); Tuple(k for k in keys(nt) if nt[k] isa AbstractFloat && !(k in _computed(p))))
+    (nt = NamedTuple(p); Tuple(k for k in keys(nt) if nt[k] isa AbstractFloat && !(k in _computed(p)) && !(k in _nontunable(p))))
 _portion_keys(::SciMLStructures.Constants, p) =
     (nt = NamedTuple(p); Tuple(k for k in keys(nt) if (nt[k] isa StaticArrays.StaticArray ||
-                                                       (nt[k] isa Number && !(nt[k] isa AbstractFloat))) && !(k in _computed(p))))
+                                                       (nt[k] isa Number && !(nt[k] isa AbstractFloat)) ||
+                                                       (nt[k] isa AbstractFloat && k in _nontunable(p))) && !(k in _computed(p))))
 _flat(x::Number) = (x,)
 _flat(x) = Tuple(x)
 
@@ -2019,6 +2077,9 @@ function SciMLStructures.replace(portion::Union{SciMLStructures.Tunable, SciMLSt
     it = collect(Any, v)
     vals = map(k -> k in ks ? _rebuild(nt[k], k, it) : nt[k], keys(nt))
     q = _with_values(p, NamedTuple{keys(nt)}(Tuple(vals)))
+    for (k, lo, hi) in _declared_bounds(p)            # a declared bound holds here too (F2-14)
+        k in ks && _check_bounds(Entity(:param, k, nothing, (; bounds = (lo, hi))), NamedTuple(q)[k])
+    end
     isempty(_computed(p)) && return q
     f = lock(() -> get(_DERIVATIONS, typeof(p), nothing), _DERIVATIONS_LOCK)
     f === nothing && throw(ArgumentError("SciMLStructures.replace: the computed parameters $(_computed(p)) are " *

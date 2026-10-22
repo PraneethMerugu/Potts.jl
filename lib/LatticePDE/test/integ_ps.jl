@@ -63,3 +63,29 @@ end
     igs.ps[kp] = 0.1
     @test cs.resets == 2
 end
+
+# F2-14 (FE-18) in front end B: a parameter's declared `bounds` (MTK metadata) holds at every
+# write, refused at the write as in front end A: `setp`, `integ.ps`, owned `remake`,
+# `discretize(…; p)`, ODE `remake` and the ODE integrator's `setp` (nothing changes). The bound
+# prints as A prints it. Base: the metadata was ignored (a write of 3 ran); review S1 of batch 5:
+# `remake` and the ODE paths took the value and refused it only at `init`/`solve`/`step!`.
+@testset "F2-14: a parameter's declared bounds hold in B" begin
+    @parameters kb2 = 0.5 [bounds = (0, 2)]
+    pdom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    sys = PDESystem([D(ce) ~ -kb2 * ce], [c(0, x, y) ~ 1.0], pdom, [t, x, y], [ce], [kb2]; name = :pb)
+    p = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64, problem = :owned))
+    ig = init(p, ExplicitEuler(; dt = 0.1, substeps = 1))
+    out(e) = occursin("parameter `kb2` = 3.0 is outside its declared bounds (0, 2)", e)
+    @test out(psmsg(() -> (ig.ps[kb2] = 3.0))) && ig.ps[kb2] == 0.5
+    @test out(psmsg(() -> setp(ig, kb2)(ig, 3.0))) && ig.ps[kb2] == 0.5
+    @test out(psmsg(() -> remake(p; p = [kb2 => 3.0])))
+    @test out(psmsg(() -> discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64, problem = :owned); p = [kb2 => 3.0])))
+    o = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64))
+    @test out(psmsg(() -> remake(o; p = [kb2 => 3.0]))) && out(psmsg(() -> remake(o; p = [3.0])))
+    oi = SciMLBase.init(o, Tsit5())
+    @test out(psmsg(() -> setp(oi, kb2)(oi, 3.0))) && oi.ps[kb2] == 0.5
+    ig.ps[kb2] = 2.0                                       # the bound itself is in
+    @test ig.ps[kb2] == 2.0
+    setp(oi, kb2)(oi, 1.0)
+    @test oi.ps[kb2] == 1.0
+end

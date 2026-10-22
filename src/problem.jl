@@ -549,8 +549,13 @@ end
 _const_value(d) = (u = _unwrap(d); u isa SymbolicUtils.BasicSymbolic && SymbolicUtils.isconst(u) ? SymbolicUtils.unwrap_const(u) : u)
 function _computed_tag(ps)
     cs = _computed_params(ps)
-    isempty(cs) && return ()
-    return (Tuple(info(x).name for x in cs), hash([(info(x).name, _canon_default(info(x).default)) for x in cs]))
+    # MTK metadata (F2-14): `tunable = false` names and declared bounds, in the type only when present
+    nt = Tuple(info(x).name for x in ps if get(info(x).options, :tunable, true) === false)
+    bs = Tuple((info(x).name, info(x).options.bounds...) for x in ps if haskey(info(x).options, :bounds))
+    tag = isempty(cs) ? ((), UInt64(0)) :
+          (Tuple(info(x).name for x in cs), hash([(info(x).name, _canon_default(info(x).default)) for x in cs]))
+    isempty(nt) && isempty(bs) && return isempty(cs) ? () : tag
+    return (tag..., (nt, bs))
 end
 
 # the raw computed defaults, compared exactly (`isequal`, arrays element by element with their
@@ -713,7 +718,8 @@ function _non_parameters(v)
            "a default is an expression of parameters, numbers and functions"
 end
 
-function _param_value(T, v, i::Entity)
+_param_value(T, v, i::Entity) = _check_bounds(i, _param_value_unchecked(T, v, i))
+function _param_value_unchecked(T, v, i::Entity)
     _is_symbolic(v) && throw(ArgumentError("parameter `$(i.name)` = `$(_is_symbolic(i.default) ? i.default : v)` does not " *
                                            "reduce to numbers with the parameter values" * _non_parameters(v)))
     if i.role === :kindtable

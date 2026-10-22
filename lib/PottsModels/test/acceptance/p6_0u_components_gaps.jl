@@ -1,14 +1,15 @@
 # P6.0u (ROADMAP Phase 6, step 0; D-084, D-088, D-081, D-080 follow-ups): the remaining
-# `@components` gaps and three review nits. Frozen (AUTONOMY §7.3; D-133).
+# `@components` gaps and three review nits. Frozen (AUTONOMY §7.3; D-133). Re-frozen under
+# FE-18 (F2-14, list A, user OK 2026-10-22; FE-18 amends D-133): bindings of parameters build.
 #
 #  1. MTK `tstops` and `assertions` of a component System are rejected by name at
 #     `mtkcompile`, like the F7 fields (D-084): today they are accepted and ignored.
-#  2. A component binding that Potts rejects (a variable's or parameter's value given as an
-#     MTK expression: `y(t) = 2k`, `y(t) = 2z`, `k2 = 2k`, `initial_conditions = [y => 2k]`,
-#     a discrete `X(t) = !Y`) names the component: `component \`comp7\`` (the F7 form) or the
-#     location `@components cells comp7` (the form discrete ticks already carry). Today:
-#     "cell variable `comp7₊y` has no initial value", "unknown symbol `k2` in …",
-#     "`2k` does not reduce to a number …", without the component.
+#  2. A component binding of parameters builds (FE-18): `y(t) = 2k` and
+#     `initial_conditions = [y => 2k]` give the initial value 2k, `k2 = 2k` is the computed
+#     (read-only) parameter `comp7₊k2`, a discrete `s2 = !s` the computed `net7₊s2`. A binding
+#     that reads an unknown (`y(t) = 2z`, a discrete `X(t) = !Y`) is rejected, naming the
+#     component: `component \`comp7\`` (the F7 form) or the location `@components cells comp7`
+#     (the form discrete ticks already carry). Before FE-18 every one of these was rejected.
 #  3. An `x′` `UndefVarError` raised inside a hand-written (non-`@potts_model`) `@extend` base
 #     propagates unchanged; the extension does not relabel it with its own (or another
 #     base's) description of `x` (D-088 residual). Today it becomes "`x′`: primes exist only
@@ -140,12 +141,14 @@ end
 # ---------------------------------------------------------------------------------------
 # 2. Binding rejections name the component
 
-@testset "P6.0u 2: binding rejections name the component ($scope)" for scope in (:(cells(A)), :model)
+@testset "P6.0u 2: bindings of parameters build; bindings of unknowns are rejected, naming the component ($scope)" for scope in (:(cells(A)), :model)
     t = Potts.t
     D = Potts.D
     rejected(sys, comp, words...) = p60u_rejection(() -> p60u_full(p60u_model(sys, comp; scope)),
         p60u_names(String(comp)), words...)
     builds(sys, comp) = p60u_builds(p60u_model(sys, comp; scope))
+    problem(sys, comp) = (m = p60u_model(sys, comp; scope); mtkcompile(m); PottsProblem(m, P60U_OP, (0, 1)))
+    first_value(prob, name) = first(vcat(Potts.observe(prob, name)))
     # positive controls: plain values, and plain values given as MTK initial conditions
     let
         @parameters k = 0.3
@@ -154,24 +157,33 @@ end
         @variables y(t)
         @test builds(System([D(y) ~ -k * y, D(z) ~ -z], t; name = :comp7, initial_conditions = [y => 2.0]), :comp7)
     end
-    # a variable's value bound to a parameter (today: "… `comp7₊y` has no initial value")
+    # a variable's value bound to a parameter: its initial value 2k = 0.6 (FE-18; before:
+    # rejected, "… `comp7₊y` has no initial value")
     let
         @parameters k = 0.3
         @variables y(t) = 2k z(t) = 0.0
-        @test rejected(System([D(y) ~ -k * y, D(z) ~ -z], t; name = :comp7), :comp7, r"\by\b") === :ok
+        sys = System([D(y) ~ -k * y, D(z) ~ -z], t; name = :comp7)
+        @test builds(sys, :comp7)
+        @test first_value(problem(sys, :comp7), :comp7₊y) ≈ 0.6
     end
-    # the same binding as an MTK initial condition (today: "`2k` does not reduce …")
+    # the same binding as an MTK initial condition (before: "`2k` does not reduce …")
     let
         @parameters k = 0.3
         @variables y(t) z(t) = 0.0
-        @test rejected(System([D(y) ~ -k * y, D(z) ~ -z], t; name = :comp7, initial_conditions = [y => 2k]), :comp7, "2k") === :ok
+        sys = System([D(y) ~ -k * y, D(z) ~ -z], t; name = :comp7, initial_conditions = [y => 2k])
+        @test builds(sys, :comp7)
+        @test first_value(problem(sys, :comp7), :comp7₊y) ≈ 0.6
     end
-    # a parameter bound to another (today: "unknown symbol `k2` in …")
+    # a parameter bound to another: the computed, read-only `comp7₊k2 = 0.6` (before: "unknown
+    # symbol `k2` in …")
     let
         @parameters k = 0.3
         @parameters k2 = 2k
         @variables y(t) = 1.0 z(t) = 0.0
-        @test rejected(System([D(y) ~ -k2 * y, D(z) ~ -k * z], t; name = :comp7), :comp7, "k2") === :ok
+        sys = System([D(y) ~ -k2 * y, D(z) ~ -k * z], t; name = :comp7)
+        @test builds(sys, :comp7)
+        prob = problem(sys, :comp7)
+        @test getp(prob, :comp7₊k2)(prob) ≈ 0.6
     end
     # a variable bound to another variable (today: "… `comp7₊y` has no initial value")
     let
@@ -186,12 +198,16 @@ end
         @variables X(t)::Bool = !Y
         @test rejected(System([X(kk) ~ !X(kk - 1), Y(kk) ~ X(kk - 1)], t; name = :net7), :net7, r"\bX\b") === :ok
     end
-    # discrete: a parameter bound to another (named by its tick location today: unchanged)
+    # discrete: a parameter bound to another: the computed `net7₊s2 = !s = true` (before:
+    # rejected, named by its tick location)
     let kk = ShiftIndex(t, 0)
         @parameters s::Bool = false
         @parameters s2::Bool = !s
         @variables X(t)::Bool = false
-        @test rejected(System([X(kk) ~ s2], t; name = :net7), :net7, "s2") === :ok
+        sys = System([X(kk) ~ s2], t; name = :net7)
+        @test builds(sys, :net7)
+        prob = problem(sys, :net7)
+        @test getp(prob, :net7₊s2)(prob) == true
     end
 end
 

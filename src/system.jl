@@ -772,7 +772,7 @@ end
 function Base.show(io::IO, ::MIME"text/plain", sys::PottsSystem)
     println(io, "PottsSystem ", getfield(sys, :name), " on ", join(_p(sys, :lattice).dims, "×"), " (", length(_p(sys, :lattice).dims), "D)")
     println(io, "  kinds: ", join(_p(sys, :kinds), ", "))
-    isempty(_p(sys, :parameters)) || println(io, "  parameters: ", join(map(p -> info(p).name, _p(sys, :parameters)), ", "))
+    isempty(_p(sys, :parameters)) || println(io, "  parameters: ", join(map(_param_show, _p(sys, :parameters)), ", "))
     isempty(_p(sys, :variables)) || println(io, "  variables: ",
         join(map(v -> string(info(v).name, "(", info(v).role, ")"), _p(sys, :variables)), ", "))
     for e in _p(sys, :energies)
@@ -825,6 +825,9 @@ function Base.show(io::IO, ::MIME"text/plain", sys::PottsSystem)
         _count_string(length(getfield(f, :bcs)), "bc"), ", ", _count_string(length(getfield(f, :dvs)), "dependent variable"))
 end
 
+# a parameter with its MTK description (F2-14): `Dc ("diffusion of c")`
+_param_show(p) = (d = SymbolicUtils.getmetadata(_unwrap(p), ModelingToolkitBase.VariableDescription, nothing);
+                  d === nothing ? string(info(p).name) : string(info(p).name, " (", repr(d), ")"))
 _side_string(s::Dirichlet) = "Dirichlet($(s.value))"
 _side_string(::NoFlux) = "NoFlux()"
 

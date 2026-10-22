@@ -845,13 +845,16 @@ function _index(cf::CompiledField, sys::PDESystem, s, state; derived = Pair[], c
     end
     # (the clock's slot is the stepper's, not a parameter of the problem)
     params = [(p, Symbol(string(p))) => i for (i, p) in enumerate(cf.params) if !_isclock(p)]
+    # a parameter's declared `bounds` (MTK metadata), checked at every write (F2-14)
+    parambounds = Pair[i => b for (i, p) in enumerate(cf.params) if !_isclock(p)
+                       for b in (_input_bounds(unwrap(p)),) if b != (-Inf, Inf)]
     defaults = Dict{Any, Any}(p => d for (p, d) in zip(cf.params, cf.defaults))
     # a computed parameter reads as its folded expression of the parameter slots (SII observed)
     ps, tt = Any[unwrap(q) for q in cf.params], unwrap(sys.ivs[1])
     observed = Pair[syms => Symbolics.build_function(unwrap(e), ps, tt; expression = Val(true)) for (syms, e) in computed]
     return LatticeIndex(; key = _symkey, variables = vars, parameters = params,
         independent_variables = [unwrap(sys.ivs[1])], defaults, inputs, inputnames, boolinputs, inputbounds, derived,
-        observed,
+        observed, parambounds,
         tables = Pair[[Any[unwrap(q), Symbol(k)] => k for (k, _) in cf.tables for q in _params(sys) if string(unwrap(q)) == k];
                       [e => (k, i) for (k, _) in cf.tables for q in _params(sys) if string(unwrap(q)) == k
                        for (i, e) in enumerate(Symbolics.scalarize(unwrap(q)))]])
@@ -1177,6 +1180,7 @@ function _given_p(defaults, tables, index, p)
     p === nothing && return defaults, tables
     if p isa AbstractVector{<:Real}
         length(p) == length(defaults) || _dverr("`p` has $(length(p)) values; the system has $(length(defaults)) parameters")
+        Problems.check_bounds(p, index)              # a declared bound, at the write (F2-14)
         return collect(p), tables
     end
     p isa Union{AbstractVector{<:Pair}, Tuple, AbstractDict} ||
@@ -1200,6 +1204,7 @@ function _given_p(defaults, tables, index, p)
         i === nothing && _dverr("`p`: `$(_keytext(k))` is not a parameter of the system")
         pv[i] = v
     end
+    Problems.check_bounds(pv, index)                 # a declared bound, at the write (F2-14)
     return pv, tabs
 end
 

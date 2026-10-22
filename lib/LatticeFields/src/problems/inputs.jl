@@ -100,7 +100,7 @@ input_name(_, key::AbstractString) = String(key)
 input_bounds(ix::LatticeIndex, key::AbstractString) = get(ix.inputbounds, key, (-Inf, Inf))
 input_bounds(_, ::AbstractString) = (-Inf, Inf)
 _input_dims(p, f) = ncomp(f) == 1 ? leveldims(p, f.levels[1]) : (leveldims(p, f.levels[1])..., ncomp(f))
-_bnum(x) = isinteger(x) ? string(Int(x)) : string(x)
+_bnum(x) = isinteger(x) && isfinite(x) ? string(Int(x)) : string(x)   # a bound or value as A prints it (`0`, not `0.0`)
 # whether input `key` is declared Bool (a 0/1 mask), as the index records
 is_bool_input(ix::LatticeIndex, key::AbstractString) = key in ix.boolinputs
 is_bool_input(_, ::AbstractString) = false
@@ -210,9 +210,41 @@ term and cause, however many values a sweep sets. The default is `unbounded_reas
 """
 unbounded_key(stability, p) = unbounded_reason(stability, p)
 
+"""
+    check_bounds(p, index)
+
+The declared `bounds = (lo, hi)` of each parameter of `index` hold for the values `p` (F2-14,
+FE-18): an `ArgumentError` names the first parameter outside them, in slot order, with its
+bounds as front end A prints them (`(0, 2)`). Every write checks it before anything changes.
+"""
+function check_bounds(p, index)
+    index isa LatticeIndex || return nothing
+    for i in sort!(collect(keys(index.parambounds)))
+        lo, hi = index.parambounds[i]
+        v = primal(p[i])
+        isnan(v) || lo <= v <= hi || throw(ArgumentError(_bounds_message(index, i, v, lo, hi)))
+    end
+    return nothing
+end
+_bounds_message(index, i, v, lo, hi) = string("parameter `", parameter_name(index, i), "` = ", v,
+    " is outside its declared bounds (", _bnum(lo), ", ", _bnum(hi), "): give a value in them, or change `bounds` in its declaration")
+# the values `p` with the pairs `kv` (parameter → value) written, within their bounds (a write
+# of the ODE path, refused before it happens)
+function check_bounds(p, index, kv)
+    index isa LatticeIndex && !isempty(index.parambounds) || return nothing
+    q = Vector{Any}(collect(p))
+    for (k, v) in kv
+        table_key(index, k) === nothing || continue
+        i = SII.parameter_index(index, k)
+        i isa Integer && v isa Real && (q[i] = v)
+    end
+    return check_bounds(q, index)
+end
+
 # a parameter whose value is NaN (no value given) is an error naming it; `built` as for
 # `check_inputs_set` (a problem being built has no `remake` yet)
 function check_values(p, index; built::Bool = true)
+    check_bounds(p, index)          # a declared `bounds = (lo, hi)` holds at every write (F2-14, FE-18)
     for i in eachindex(p)
         isnan(primal(p[i])) || continue
         name = index isa LatticeIndex ? parameter_name(index, i) : "#$i"

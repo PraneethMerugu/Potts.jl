@@ -367,9 +367,11 @@ const LatticeSciMLProblem = Union{LatticeODEProblem, LatticeSteadyStateProblem, 
 function _check_map_keys(prob, p)
     ix = SII.symbolic_container(prob.f)
     ix isa LatticeIndex || return p
+    p isa AbstractVector{<:Real} && check_bounds(p, ix)            # a declared bound, at the write (F2-14)
     ismap = p isa AbstractDict || (p isa Union{AbstractVector, Tuple} && !isempty(p) && all(x -> x isa Pair, p))
     ismap || return p
     check_parameter_keys(ix, (first(x) for x in p))
+    check_bounds(prob.p, ix, p)
     return p isa AbstractVector && !(eltype(p) <: Pair) ? Pair[x for x in p] : p
 end
 function SciMLBase.remake(prob::LatticeODEProblem; p = missing, kw...)

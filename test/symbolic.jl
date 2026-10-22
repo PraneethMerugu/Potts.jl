@@ -2657,9 +2657,10 @@ end
     @test rejects(quote @parameters q = 1.0; @extend b = PrimeBase(; λ = q′) end, "q′", "`q` is a parameter")
 end
 
-# Component bindings (an MTK value given as an expression) are rejected by name only where
-# Potts reads them; a binding of a continuous observed variable (its equation gives its
-# value) or of a parameter the system does not use stays ignored
+# Component bindings (an MTK value given as an expression): an expression of the component's
+# parameters is evaluated at build (F2-14, test/mtk_native.jl); any other binding is rejected by
+# name only where Potts reads it; a binding of a continuous observed variable (its equation
+# gives its value) stays ignored
 @testset "component bindings Potts does not read" begin
     t = Potts.t
     σ = zeros(Int32, 10, 10); σ[3:5, 3:5] .= 1
@@ -2692,15 +2693,13 @@ end
     # an unused bound parameter
     sol = run(System([Potts.D(y) ~ -k * y], t, [y], [k, k2]; name = :comp))
     @test sol.u[end].cell.comp₊y[1] ≈ (1 - 0.3)^2
-    # negative controls: the same parameter used by the component, or read by the model, is rejected
-    @test rejected(System([Potts.D(y) ~ -k2 * y], t, [y], [k, k2]; name = :comp), "k2")
-    @test rejected(System([Potts.D(y) ~ -k * y], t, [y], [k, k2]; name = :comp), "k2";
-        stmts = (:(@energy cells => comp.k2 * volume),))
-    @test rejected(System([Potts.D(y) ~ -k * y], t, [y], [k, k2]; name = :comp), "k2"; scope = :model,
-        stmts = (:(@energy cells => comp.k2 * volume),))
-    @test rejected(System([Potts.D(y) ~ -k * y], t, [y], [k, k2]; name = :comp), "k2";
-        stmts = (:(@observed ok2(cell) ~ comp.k2),))
-    # control: at model scope, with nothing reading `comp.k2`, it builds
+    # the same parameter used by the component, or read by the model, is the computed parameter
+    # `comp₊k2 = 2 comp₊k` (F2-14; before: rejected naming `k2`)
+    sol = run(System([Potts.D(y) ~ -k2 * y], t, [y], [k, k2]; name = :comp))
+    @test sol.u[end].cell.comp₊y[1] ≈ (1 - 0.6)^2
+    sol = run(System([Potts.D(y) ~ -k * y], t, [y], [k, k2]; name = :comp); stmts = (:(@observed ok2(cell) ~ comp.k2),))
+    @test Potts.observe(sol, :ok2)[end][1] ≈ 0.6
+    # at model scope, with nothing reading `comp.k2`, it builds
     sol = run(System([Potts.D(y) ~ -k * y], t, [y], [k, k2]; name = :comp); scope = :model)
     @test Symbol(sol.retcode) === :Success
     # an observed variable bound (or given an initial value) consistent with its equation
@@ -2709,8 +2708,12 @@ end
     @test sol.u[end].cell.comp₊y[1] ≈ (1 - 0.6)^2
     sol = run(System([o ~ 2y, Potts.D(y) ~ -k * o], t; name = :comp, initial_conditions = [o => 2y]))
     @test sol.u[end].cell.comp₊y[1] ≈ (1 - 0.6)^2
-    # negative control: an unknown's initial value given as an expression is rejected
-    @test rejected(System([o ~ 2y, Potts.D(y) ~ -k * o], t; name = :comp, initial_conditions = [y => 2k]), "2k")
+    # an unknown's initial value given as an expression of parameters is evaluated (F2-14);
+    # negative control: one that reads an unknown is rejected
+    sol = run(System([o ~ 2y, Potts.D(y) ~ -k * o], t; name = :comp, initial_conditions = [y => 2k]))
+    @test sol.u[end].cell.comp₊y[1] ≈ 0.6 * (1 - 0.6)^2
+    Potts.ModelingToolkitBase.@variables q(t)
+    @test rejected(System([o ~ 2y, Potts.D(y) ~ -k * o, Potts.D(q) ~ -q], t; name = :comp, initial_conditions = [y => 2q, q => 1.0]), "2q")
 end
 
 # ---------------------------------------------------------------------------------------

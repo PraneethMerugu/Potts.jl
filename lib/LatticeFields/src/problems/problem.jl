@@ -210,6 +210,7 @@ function SciMLBase.remake(prob::FieldProblem; u0 = prob.u0, tspan = prob.tspan, 
     tables, p = _tables(prob, p)
     pv = _parameter_vector(prob, p)
     check_faces(prob.faces, pv)
+    check_bounds(pv, prob.index)                    # a declared bound, at the write (F2-14)
     length(u0) == length(prob.u0) ||
         throw(ArgumentError("u0 has $(length(u0)) values; the state has $(length(prob.u0))"))
     ins = isempty(inputs) ? prob.inputs : resolve_inputs(prob.program, prob.index, inputs, prob.inputs)

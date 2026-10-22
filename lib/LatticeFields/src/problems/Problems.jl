@@ -37,7 +37,7 @@ public Geom, RT_T, RT_DT, launch_geometry, launch_parameters, bind, rebind, reti
        FieldIntegrator, substeps, StateView, RHSLaunch, LatticeRHS, ode_problem,
        input_key, input_name, table_key, table_entry, parameter_name, resolve_inputs, check_inputs_set, upload_inputs!, check_parameters,
        seen_bound, unbounded_reason, unbounded_key, bound_inputs, check_values, ParamsTables, with_tables,
-       typewith, check_setp, LatticeODEFunction
+       typewith, check_setp, LatticeODEFunction, check_bounds
 
 include("bind.jl")
 include("store.jl")

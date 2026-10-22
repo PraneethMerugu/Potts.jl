@@ -14,6 +14,7 @@ callback) and per trajectory of an ensemble, without regenerating code.
 | `J[kind, kind] = Pairs((medium, cell) => 16, …; default = 0)` | a two-kind table written by its named entries (below) |
 | `d[1:2] = [1.0, 0.5]` | a vector; its components are `d_1`, `d_2` |
 | `λ = 1.0, [unit = u"J"]` | a parameter with a unit (see below) |
+| `T = 1.0, [tunable = false, bounds = (0, 10), description = "…"]` | a parameter with ModelingToolkit's other metadata (see below) |
 
 Every parameter is a ModelingToolkit parameter (`ModelingToolkitBase.isparameter` is true). A
 kind table is an array parameter, `J[1:n, 1:n]` for `n` kinds with the medium. A model reads a
@@ -137,6 +138,21 @@ end
   - a pair given twice. With symmetric fill, (k₂, k₁) after (k₁, k₂) counts as given twice.
 
 ## Units
+
+A parameter takes ModelingToolkit's metadata `tunable`, `bounds` and `description` too, and
+`ModelingToolkitBase.istunable`, `getbounds` and `getdescription` read it:
+
+- `tunable = false` moves the parameter from `SciMLStructures.Tunable` to `Constants`.
+- `bounds = (lo, hi)` holds at every value the parameter takes: a value outside it, at
+  build, in `remake`, in a setter or in `SciMLStructures.replace`, is an `ArgumentError` that
+  names the bound, and nothing changes. A LatticePDE problem checks the bounds of a
+  `PDESystem`'s parameters the same way.
+- `description` is a string that `show` prints with the model's parameters.
+
+A component's parameters keep their metadata. A component's ModelingToolkit binding of
+parameters, `k2 = 2k`, is the computed parameter `comp₊k2` (see below), and an initial value
+of parameters, `y(t) = 2k` or `initial_conditions = [y => 2k]`, is the cell variable's
+default. An initial value that reads an unknown is an error that names the component.
 
 Parameters, variables and fields can carry units as ModelingToolkit metadata,
 `λ = 1.0, [unit = u"J"]`. When the package DynamicQuantities is loaded, compiling the model
