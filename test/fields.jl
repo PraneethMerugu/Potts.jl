@@ -2825,3 +2825,70 @@ end
     end
     @test all(≈(w; rtol = 1e-14), s2.u[end].site.w) && all(≈(c; rtol = 1e-14), s2.u[end].site.c)
 end
+
+# F3-04 (F3 design §3.3, §3.4; HANDOFF record "wire the read before an implicit solver lands in
+# A"): A reads its field groups' status words (on the host after each window, on a device at
+# `saveat` and the end). A stub with a solve (`AStub`) steps as Euler and writes into its word
+# what an implicit solver would. Base (f8510fe8): A ignored the word, the run ended `Success`.
+struct AStub <: Potts.LatticeFields.Problems.FieldAlgorithm
+    code::UInt32
+    at::Int
+    need::Int
+    budget::Int
+end
+AStub(; code = 0, at = 0, need = 0, budget = 8) = AStub(UInt32(code), at, need, budget)
+mutable struct AStubCache
+    word::Vector{UInt32}
+    steps::Int
+    a::AStub
+end
+Potts.LatticeFields.Problems.nbuffers(::AStub) = 2
+Potts.LatticeFields.Problems.update_key(::AStub) = :euler
+Potts.LatticeFields.Problems.update_rule(::AStub) = Potts.LatticeFields.Problems.update_rule(ExplicitEuler())
+Potts.LatticeFields.Problems.alg_cache(a::AStub, group, store) = AStubCache(zeros(UInt32, 8), 0, a)
+Potts.LatticeFields.Problems.status_word(c::AStubCache) = c.word
+Potts.LatticeFields.Problems.substeps(::Potts.LatticeFields.Problems.GroupSpec, ::AStub, dt, pp; kw...) = 1
+function Potts.LatticeFields.Problems.step_retcode!(c::AStubCache, rt)
+    LFP = Potts.LatticeFields.Problems
+    c.steps += 1
+    c.word[LFP.STATUS_SOLVES] += 1
+    c.a.need > c.a.budget && (c.word[LFP.STATUS_BUDGET] += 1)
+    if c.a.code > 0 && c.steps == c.a.at
+        c.word[LFP.STATUS_CODE] = c.a.code
+        # the window, as a solver writes it: the runtime's window count (review r1 S3)
+        c.a.code >= 2 && (c.word[LFP.STATUS_WINDOW] = rt.totals.windows; c.word[LFP.STATUS_CAUSE] = 0x2)
+    end
+    return Potts.SciMLBase.ReturnCode.Success
+end
+@testset "F3-04: A reads the status word (host: after every window)" begin
+    RC = Potts.SciMLBase.ReturnCode
+    op = fd_source_op((12, 10))
+    sys = FdTwo(; name = :t)
+    prob(alg) = PottsProblem(sys, op, (0, 6); field_solver = alg)
+    integ = init(prob(AStub(; code = 2, at = 3)), SequentialCPM())
+    s = @test_logs (:warn, r"fields `c`, `u`: the solve failed in the field step of MCS 3 \(t = 2\.0\) \(the Newton iteration diverged\).*ConvergenceFailure") solve!(integ)
+    @test s.retcode == RC.ConvergenceFailure && integ.t == 3 && integ.stats.fields.solves == 3
+    @test s.t[end] == 3                                   # the state it stopped at is saved
+    # `reinit!` starts a clean run (review r1 M2): the word, the totals, the code and the counters
+    # are cleared; the stub fails at its 3rd step only, so the new run succeeds. Control: without
+    # the clearing the word's failure is read again at the first window and the run stops at MCS 1
+    reinit!(integ)
+    @test integ.stats.fields.code == RC.Success && integ.stats.fields.solves == 0
+    s = @test_logs solve!(integ)
+    @test s.retcode == RC.Success && integ.t == 6 && integ.stats.fields.solves == 6
+    @test startswith(repr(integ.stats.fields), "FieldStats(solves = 6, budget = 0, floor = 0, newton_budget = 0, code = ")
+    # a rounding floor survives to the end
+    s = solve(prob(AStub(; code = 1, at = 3)), SequentialCPM())
+    @test s.retcode == RC.StalledSuccess && s.t[end] == 6
+    # a budget count warns once with the route and stays `Success`; the route removes it
+    integ = init(prob(AStub(; need = 10, budget = 8)), SequentialCPM())
+    s = @test_logs (:warn, r"fields `c`, `u`: the linear solve reached its budget 1 time so far.*budget = n") solve!(integ)
+    @test s.retcode == RC.Success && integ.stats.fields.budget == 6
+    integ = init(prob(AStub(; need = 10, budget = 16)), SequentialCPM())
+    s = @test_logs solve!(integ)
+    @test s.retcode == RC.Success && integ.stats.fields.budget == 0 && integ.stats.fields.solves == 6
+    # explicit groups read nothing: no counters; a warm MCS allocates nothing (above)
+    integ = init(prob(ExplicitEuler(substeps = 2)), SequentialCPM(); save_start = false, save_end = false)
+    step!(integ)
+    @test (@allocated step!(integ)) == 0 && integ.stats.fields.solves == 0
+end

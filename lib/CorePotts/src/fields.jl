@@ -198,10 +198,28 @@ phase_context(ph, st, p, backend) = (;)
 function phase_context(ph::FieldPhase{K}, st, p, backend) where {K}
     ph.init && return (;)
     rt = _field_bind(ph, st, p, backend)
+    # the status word's window in the front end's words: "MCS n" (a rate group takes `R` windows
+    # per MCS in a sub-MCS `repeat(R, …)`; a map group and a group with no state take one)
+    per = ph.alg isa Problems.ExplicitMap || _stateless(ph) ? 1 : max(round(Int, ph.period / ph.dt), 1)
+    rt.totals.where = _MCSWindow(ph.period, per)
     # on a device the kernels of a step (its launches, the masks, the clamp at the step's start
     # and the slot-1 copies) compile on host tasks, awaited before the first enqueue
     Exec.ishost(backend) || (rt.pending = Threads.@spawn _field_compile!(backend, rt))
     return NamedTuple{(K,)}((FieldHandle(rt),))
+end
+
+# window `w` of a field runtime as the MCS it ran in (window 1 starts at MCS time `t1`; the
+# `n`-th MCS starts at time `(n − 1) · period`)
+struct _MCSWindow
+    period::Float64
+    per::Int                            # the windows of one MCS
+end
+function (m::_MCSWindow)(w::Integer, t1::Real)
+    n = round(Int, t1 / m.period) + cld(w, m.per)
+    r = mod1(w, m.per)
+    t = round((n - 1) * m.period + (r - 1) * m.period / m.per; sigdigits = 6)
+    return m.per == 1 ? string("the field step of MCS ", n, " (t = ", t, ")") :
+           string("the field step of MCS ", n, " (pass ", r, " of ", m.per, ", t = ", t, ")")
 end
 
 """The merged [`phase_context`](@ref) of every phase of `phases` (each once)."""
@@ -285,6 +303,8 @@ function _rebind!(rt::Problems.GroupRuntime, ph::FieldPhase, st, p, backend)
     end
     new = _field_bind(ph, st, p, backend; tables = same_tables ? rt.store.tables : nothing)
     for f in fieldnames(typeof(rt))
+        # the status word's totals and the worst code stay the run's (cleared by `reinit!`)
+        (f === :totals || f === :status) && continue
         setfield!(rt, f, getfield(new, f))
     end
     return rt
@@ -318,8 +338,46 @@ function (ph::FieldPhase{K})(st, p, ctx, key, mcs, backend, part::NTuple{2, Int}
     return launches
 end
 
-# a field phase takes the pass of a sub-MCS `repeat` (`_run_phases`); other phases do not
-_run_phase(ph::FieldPhase, st, p, ctx, key, mcs, backend, stats, part) = ph(st, p, ctx, key, mcs, backend, part)
+# a field phase takes the pass of a sub-MCS `repeat` (`_run_phases`); other phases do not.
+# On the host its group's status word is read after its window (F3 design §3.4: a plain read;
+# nothing for the explicit algorithms, whose caches have no word)
+function _run_phase(ph::FieldPhase{K}, st, p, ctx, key, mcs, backend, stats, part) where {K}
+    n = ph(st, p, ctx, key, mcs, backend, part)
+    stats === nothing || ph.init || !Exec.ishost(backend) || _read_status!(stats, _runtime(getfield(ctx, K)))
+    return n
+end
+
+"""
+    FieldStats
+
+The field solvers' counters of a run (`integ.stats.fields`, F3 design §3.3), summed over the
+status words of its field groups: `solves`, `budget` (linear budget hits), `floor` (rounding
+floors), `newton_budget` (Newton budget hits), and `code`, the worst code read so far
+(`Success`, `StalledSuccess` or `ConvergenceFailure`). All zero for the explicit algorithms.
+"""
+Base.@kwdef mutable struct FieldStats
+    solves::Int64 = 0
+    budget::Int64 = 0
+    floor::Int64 = 0
+    newton_budget::Int64 = 0
+    code::SciMLBase.ReturnCode.T = SciMLBase.ReturnCode.Success
+end
+Base.show(io::IO, s::FieldStats) = print(io, "FieldStats(solves = ", s.solves, ", budget = ", s.budget, ", floor = ",
+    s.floor, ", newton_budget = ", s.newton_budget, ", code = ", s.code, ")")
+_rank(c::SciMLBase.ReturnCode.T) = c == SciMLBase.ReturnCode.Success ? 0 : c == SciMLBase.ReturnCode.StalledSuccess ? 1 : 2
+# one group's status word into the run's counters and code (`Problems.check_status!`)
+function _read_status!(stats, rt::Problems.GroupRuntime)
+    c = Problems.check_status!(rt, stats.fields)
+    _rank(c) > _rank(stats.fields.code) && (stats.fields.code = c)
+    return nothing
+end
+# every field group's word (the read points on a device: `saveat` and the end; cold)
+function _read_statuses!(stats, ctx)
+    for h in values(ctx)
+        h isa FieldHandle && _read_status!(stats, _runtime(h))
+    end
+    return nothing
+end
 
 # The at-init phases of a state that is not fresh (a checkpoint restore, `Potts.anneal`'s
 # per-MCS refresh): the derived refreshes without the field clamps, which hold on a fresh

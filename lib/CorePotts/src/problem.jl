@@ -206,6 +206,7 @@ Base.@kwdef mutable struct PottsStats
     transfers::Int = 0
     transfer_bytes::Int = 0
     lifecycle::LifecycleStats = LifecycleStats()
+    fields::FieldStats = FieldStats()       # the field solvers' counters (status words, F3)
     # Σ `f.track` over the committed copies (`CPMFunction(…; track)`, Potts `track = (:ΔH,)`):
     # `nothing` without a track. Exact after every step under `SequentialCPM`; under
     # `CheckerboardCPM` brought up to date at the host read points (D-140)
@@ -262,12 +263,15 @@ end
 # Ensemble statistics: totals over trajectories.
 function Base.merge(a::PottsStats, b::PottsStats)
     l = LifecycleStats(; (f => getfield(a.lifecycle, f) + getfield(b.lifecycle, f) for f in fieldnames(LifecycleStats))...)
+    fs = FieldStats(; solves = a.fields.solves + b.fields.solves, budget = a.fields.budget + b.fields.budget,
+        floor = a.fields.floor + b.fields.floor, newton_budget = a.fields.newton_budget + b.fields.newton_budget,
+        code = _rank(b.fields.code) > _rank(a.fields.code) ? b.fields.code : a.fields.code)
     return PottsStats(; mcs = a.mcs + b.mcs, attempts = a.attempts + b.attempts,
         accepted = (a.accepted < 0 || b.accepted < 0) ? -1 : a.accepted + b.accepted,
         committed = (a.committed < 0 || b.committed < 0) ? -1 : a.committed + b.committed,
         launches = a.launches + b.launches, refreshes = a.refreshes + b.refreshes,
         syncs = a.syncs + b.syncs, transfers = a.transfers + b.transfers,
-        transfer_bytes = a.transfer_bytes + b.transfer_bytes, lifecycle = l,
+        transfer_bytes = a.transfer_bytes + b.transfer_bytes, lifecycle = l, fields = fs,
         accepted_ΔH = (a.accepted_ΔH === nothing || b.accepted_ΔH === nothing) ? nothing : a.accepted_ΔH + b.accepted_ΔH,
         connectivity_deferred = (a.connectivity_deferred === nothing || b.connectivity_deferred === nothing) ? nothing :
                                 a.connectivity_deferred + b.connectivity_deferred)
@@ -530,6 +534,10 @@ end
 
 function _check_status!(integ::PottsIntegrator)
     _status_failure!(integ, _model_status(integ.stats, integ.state.model))
+    # the field groups' status words (on the host they are read after every window already)
+    Exec.ishost(integ.backend) || _read_statuses!(integ.stats, integ.ctx)
+    integ.stats.fields.code == SciMLBase.ReturnCode.ConvergenceFailure && integ.retcode == SciMLBase.ReturnCode.Default &&
+        (integ.retcode = SciMLBase.ReturnCode.ConvergenceFailure)
     integ.alg isa CheckerboardCPM || return integ.retcode
     st = _readback(integ.stats, integ.cache.status)
     _status_failure!(integ, st)
@@ -560,6 +568,8 @@ function CommonSolve.step!(integ::PottsIntegrator)
     # recursion here; zero allocations, where `sum` and `foldl` with a closure allocated on
     # SequentialCPM)
     _run_mcs!(integ, integ.f.phases.mcs)
+    # a field solve that failed (its status word, read on the host after each window) ends the run
+    integ.stats.fields.code == SciMLBase.ReturnCode.ConvergenceFailure && (integ.retcode = SciMLBase.ReturnCode.ConvergenceFailure)
     integ.t += 1
     integ.stats.mcs += 1
     integ.stats.attempts += attempts
@@ -836,7 +846,9 @@ function CommonSolve.solve!(integ::PottsIntegrator)
     _check_status!(integ)
     report_run(integ.f.sys, integ)
     if integ.retcode == SciMLBase.ReturnCode.Default
-        integ.retcode = SciMLBase.ReturnCode.Success
+        # a rounding floor of a field solve is kept as the final code (the run went on)
+        integ.retcode = integ.stats.fields.code == SciMLBase.ReturnCode.StalledSuccess ? SciMLBase.ReturnCode.StalledSuccess :
+                        SciMLBase.ReturnCode.Success
     end
     integ.save_end && (isempty(integ.saved_t) || last(integ.saved_t) != integ.t) &&
         _save!(integ)
@@ -900,6 +912,9 @@ function _restore_stats!(dst::PottsStats, src::PottsStats)
     dst.connectivity_deferred = src.connectivity_deferred
     for f in fieldnames(LifecycleStats)
         setfield!(dst.lifecycle, f, getfield(src.lifecycle, f))
+    end
+    for f in fieldnames(FieldStats)
+        setfield!(dst.fields, f, getfield(src.fields, f))
     end
     return dst
 end

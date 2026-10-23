@@ -106,11 +106,20 @@ function SciMLBase.reinit!(integ::PottsIntegrator, u0 = integ.prob.u0;
     empty!(integ.saved_t); empty!(integ.saved_u)
     _restore_stats!(integ.stats, _initial_stats(integ.f))      # `accepted_ΔH`: 0.0 when tracked
     _reset_cache!(integ.cache, integ)
+    _clear_field_status!(integ.ctx)          # a new run: the field groups' failures and counters go
     integ.stats.launches += _run_phases(integ.f.phases.at_init, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, integ.stats)
     _each(cb -> cb.initialize(cb, integ.state, integ.t, integ), integ.callbacks)
     integ.save_start && _save!(integ)
     return integ
+end
+
+# every field group's status word, totals and code (cold: a dynamic loop over the context)
+function _clear_field_status!(ctx)
+    for h in values(ctx)
+        h isa FieldHandle && Problems.clear_status!(_runtime(h))
+    end
+    return nothing
 end
 
 # the algorithm's scratch for the new run: nothing (SequentialCPM), the checkerboard's status,

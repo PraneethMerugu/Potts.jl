@@ -362,3 +362,83 @@ end
     @test all(≈(a; rtol = 1e-14), s2[ae][end]) && all(≈(c; rtol = 1e-14), s2[cl][end])
     # (aux fields that define each other stay refused, naming them: silent.jl LF48)
 end
+
+# F3-04 (F3 design §3.3, §3.4): the status word and its readers. A stub with a solve (`WStub`)
+# steps as Euler and writes into its cache's word what an implicit solver would: a solve per
+# window, a linear budget hit per window when `need > budget`, and code `code` from window `at`
+# (sticky, with the window and a cause bit). B reads the word on the host after every step,
+# and at the saves and the end. Base (f8510fe8): no reader; the run ended `Success`.
+struct WStub <: LFP.FieldAlgorithm
+    dt::Float64
+    code::UInt32
+    at::Int
+    need::Int
+    budget::Int
+end
+WStub(dt; code = 0, at = 0, need = 0, budget = 8) = WStub(dt, UInt32(code), at, need, budget)
+mutable struct WStubCache{W}
+    word::W
+    steps::Int
+    a::WStub
+end
+LFP.nbuffers(::WStub) = 2
+LFP.update_key(::WStub) = :euler
+LFP.update_rule(::WStub) = LFP.update_rule(ExplicitEuler())
+LFP.alg_cache(a::WStub, group, store) = WStubCache(fill!(similar(store.flat[1], UInt32, 8), 0), 0, a)
+LFP.status_word(c::WStubCache) = c.word
+LFP.reset_cache!(::WStubCache) = nothing                  # (no history; a write keeps the word)
+LFP.substeps(::LFP.FieldProblem, ::WStub, p = nothing; tables = nothing, inputs = nothing) = 1
+wbump!(w, i, x) = (v = view(w, i:i); v .+= UInt32(x); nothing)
+wset!(w, i, x) = (v = view(w, i:i); v .= UInt32(x); nothing)
+function LFP.step_retcode!(c::WStubCache, rt)
+    c.steps += 1
+    wbump!(c.word, LFP.STATUS_SOLVES, 1)
+    c.a.need > c.a.budget && wbump!(c.word, LFP.STATUS_BUDGET, 1)
+    if c.a.code > 0 && c.steps == c.a.at
+        wset!(c.word, LFP.STATUS_CODE, c.a.code)
+        # the window, as a solver writes it: the runtime's window count (review r1 S3)
+        c.a.code >= 2 && (wset!(c.word, LFP.STATUS_WINDOW, rt.totals.windows); wset!(c.word, LFP.STATUS_CAUSE, 1))
+    end
+    return ReturnCode.Success
+end
+
+@testset "F3-04: B reads the status word (host: after every step)" begin
+    p = gown(gsys())                                      # 10 windows of 0.01
+    ig = init(p, WStub(0.01; code = 2, at = 3); saveat = 0.05)
+    s = @test_logs (:warn, r"fields `gc`, `go`: the solve failed in window 3 \(t = 0\.02\) \(the linear solve diverged\).*ConvergenceFailure.*substeps = n") solve!(ig)
+    @test s.retcode == ReturnCode.ConvergenceFailure && ig.iter == 3          # after window 3
+    @test s.stats.solves == 3
+    # a rounding floor survives to the end
+    s = solve(p, WStub(0.01; code = 1, at = 3); saveat = 0.05)
+    @test s.retcode == ReturnCode.StalledSuccess && s.t[end] ≈ 0.1
+    # a linear budget count warns once with the route, stays `Success`; the route removes it
+    s = @test_logs (:warn, r"the linear solve reached its budget 1 time so far.*Success.*`inner = DevicePCG\(; budget = n\)`") solve(p,
+        WStub(0.01; need = 10, budget = 8))
+    @test s.retcode == ReturnCode.Success && s.stats.budget == 10 && s.stats.solves == 10
+    s = @test_logs solve(p, WStub(0.01; need = 10, budget = 16))
+    @test s.retcode == ReturnCode.Success && s.stats.budget == 0
+    # explicit groups read nothing: no counters, and a warm step allocates nothing
+    @test solve(p, ExplicitEuler(; dt = 0.01, substeps = 2)).stats == (; solves = 0, budget = 0, floor = 0, newton_budget = 0)
+    @test gwarm(init(p, ExplicitEuler(; dt = 0.01, substeps = 2))) == 0
+end
+
+# F3-04 review r1: M2 `reinit!` starts a clean run (the word, the totals and `rt.status`
+# cleared); S5 a write (`reset!`) keeps the failure; S4 a failure saves the state it stopped at;
+# S3 the window's number and start time. The stub fails at its 3rd step only (its own count, not
+# cleared), so the run after `reinit!` succeeds. Base (8f658abd): `reinit!` kept the totals and
+# the failing window (the new run warned nothing and ended `ConvergenceFailure` at its first
+# read); a write set `rt.status = Success`; the saves ended at 0.0.
+@testset "F3-04: reinit! starts a clean run; a write keeps the failure; the stop is saved" begin
+    p = gown(gsys())
+    ig = init(p, WStub(0.01; code = 2, at = 3); saveat = 0.05)
+    s = @test_logs (:warn, r"window 3 \(t = 0\.02\)") solve!(ig)
+    @test s.retcode == ReturnCode.ConvergenceFailure && s.t ≈ [0.0, 0.03] && s.u[end] == Array(ig.store.flat[LFP._parity(ig)])
+    rt = only(ig.runtimes)
+    ig.ps[ga] = 1.5                                               # a write: `reset!`
+    @test rt.status == ReturnCode.ConvergenceFailure && LFP.check_status!(rt) == ReturnCode.ConvergenceFailure
+    reinit!(ig)
+    @test rt.status == ReturnCode.Success && all(iszero, LFP.status_word(rt.cache)) && rt.totals.windows == 0 &&
+          rt.totals.window == 0 && rt.totals.solves == 0
+    s = @test_logs solve!(ig)
+    @test s.retcode == ReturnCode.Success && s.t ≈ [0.0, 0.05, 0.1] && s.stats.solves == 10
+end

@@ -409,21 +409,27 @@ check of group `index` ([`check_coupling`](@ref)) at `whole(pp)`, the parameters
 field system. Front end A's field phases hold one (a host function, evaluated at build and
 when the parameters change, never per MCS). `key` is the group's once-key text.
 """
-struct GroupSubsteps{S, T, C}
+struct GroupSubsteps{S, A <: FieldAlgorithm, T, C}
     spec::S
-    alg::ExplicitEuler
+    alg::A
     dt::Float64
     key::String
     texts::T
     coupling::C
 end
-GroupSubsteps(spec::GroupSpec, alg::ExplicitEuler, dt::Real; key::AbstractString, texts::PolicyTexts, coupling = nothing) =
+GroupSubsteps(spec::GroupSpec, alg::FieldAlgorithm, dt::Real; key::AbstractString, texts::PolicyTexts, coupling = nothing) =
     GroupSubsteps(spec, alg, Float64(dt), String(key), texts, coupling)
+# a group's once-key for one cause `why` (a type, not a closure per call)
+struct _OnceKey
+    key::String
+end
+(k::_OnceKey)(why) = string(k.key, "#", why)
 function (s::GroupSubsteps)(pp)
-    n = substeps(s.spec, s.alg, s.dt, pp; key = why -> string(s.key, "#", why), texts = s.texts)
+    key = _OnceKey(s.key)
+    n = substeps(s.spec, s.alg, s.dt, pp; key, texts = s.texts)
     c = s.coupling
     c === nothing || check_coupling(c.stability, c.groups, c.explicit, c.whole(pp), s.dt; check = (c.index,),
-        key = why -> string(s.key, "#", why), texts = s.texts)
+        key, texts = s.texts)
     return n
 end
 
@@ -492,6 +498,76 @@ function loop_text(t::ProblemTexts, c)
         ", such as dt = ", _num(span), "/", n)
 end
 
+# The status word (F3 design §3.3, S9): an algorithm with a solve keeps a sticky device word
+# `UInt32[8]` in its cache, and the drivers read it where they synchronize anyway.
+
+"""
+    STATUS_CODE, STATUS_WINDOW, STATUS_CAUSE, STATUS_SOLVES, STATUS_BUDGET, STATUS_FLOOR,
+    STATUS_NEWTON_BUDGET
+
+The entries of the status word (`UInt32[8]`, F3 design §3.3): [1] the worst code (0
+`Success`, 1 `StalledSuccess`, 2 `ConvergenceFailure`), [2] the first failing window (1-based:
+the `rt.totals.windows`-th window since the bind or `clear_status!`, which a cache reads when it
+writes the word), [3] the
+cause bits ([`STATUS_CAUSES`](@ref)), [4] solves, [5] linear budget hits, [6] floors, [7]
+Newton budget hits ([8] is spare). A read ([`check_status!`](@ref)) adds [4]–[7] to the
+runtime's host totals and zeroes them on the device; [1]–[3] are sticky.
+"""
+const STATUS_CODE, STATUS_WINDOW, STATUS_CAUSE, STATUS_SOLVES, STATUS_BUDGET, STATUS_FLOOR, STATUS_NEWTON_BUDGET = 1, 2, 3, 4, 5, 6, 7
+
+"""
+    STATUS_CAUSES
+
+The cause bits of the status word's entry [3], in words: 1 the linear solve diverged, 2 the
+Newton iteration diverged, 4 a residual was not finite, 8 the shift was clamped.
+"""
+const STATUS_CAUSES = (0x00000001 => "the linear solve diverged", 0x00000002 => "the Newton iteration diverged",
+    0x00000004 => "a residual was not finite", 0x00000008 => "the shift was clamped")
+
+"""
+    status_word(cache) -> word or nothing
+
+The device status word of an algorithm's cache ([`STATUS_CODE`](@ref)), or `nothing` for an
+algorithm with no solve (`ExplicitEuler`, `ExplicitMap`): then [`check_status!`](@ref) reads
+nothing and costs nothing.
+"""
+status_word(::Any) = nothing
+
+"""
+    status_route(alg, which) -> String
+
+The route a warning or failure of `alg`'s status word names: `which` is `:budget` (the
+linear solve reached its budget), `:newton_budget` (the Newton iteration did) or `:failure`.
+"""
+status_route(alg, which::Symbol) = which === :budget ? "a larger linear budget (`inner = DevicePCG(; budget = n)`)" :
+                                   which === :newton_budget ? "more Newton iterations (`newton = k`)" :
+                                   "more substeps (`substeps = n`) or a larger linear budget (`inner = DevicePCG(; budget = n)`)"
+
+"""
+    StatusTotals
+
+The host totals of a runtime's status word (F3 design §3.3): `solves`, `budget` (linear
+budget hits), `floor` (rounding floors), `newton_budget` (Newton budget hits), the first
+failing `window` (0: none) with its `cause` bits, and whether the budget warning was given
+(once per runtime). `windows` counts the windows [`advance!`](@ref) has run since the bind or
+the last [`clear_status!`](@ref) (a window of length 0, the at-init clamp, is not counted),
+and `t1` is the first one's start time: entry [2] of the word is a window of this count, so
+window `w` starts at `t1 + (w - 1) dt`. `where` words a window in a front end's terms
+(`(w, t) -> "the field step of MCS n (t = …)"` in Potts), or `nothing`: "window w (t = …)".
+"""
+Base.@kwdef mutable struct StatusTotals
+    solves::Int64 = 0
+    budget::Int64 = 0
+    floor::Int64 = 0
+    newton_budget::Int64 = 0
+    window::Int64 = 0
+    cause::UInt32 = 0
+    warned::Bool = false
+    windows::Int64 = 0                  # the windows advanced since the bind or `clear_status!`
+    t1::Float64 = NaN                   # … the start time of the first of them
+    where::Any = nothing                # a front end's `(window, t1) -> text` for messages, or nothing
+end
+
 """
     GroupRuntime
 
@@ -531,6 +607,7 @@ mutable struct GroupRuntime{ST <: FieldStore, A, B, M, CL, SC, CP, PV, S, H}
     status::SciMLBase.ReturnCode.T
     pending::Union{Nothing, Task}
     host::H
+    totals::StatusTotals                # the status word's host totals (`check_status!`)
 end
 
 # the current slots a launch of the group binds at slot parity `parity`: the group's fields
@@ -578,7 +655,8 @@ function bind_group(g::FieldGroup, alg, st::FieldStore, p; fields = g.spec.state
     copies = Tuple((st.bufs[f][1], st.bufs[f][2]) for f in swaps)
     stab = all_state ? g.spec.stability : restrict_bound(g.spec.stability, collect(String, fields))
     return GroupRuntime(st, alg, ip, sp, steps, masks, clamps, stepclamps, swaps, copies, ends_in, all_state, collect(String, fields), Int(n),
-        Float64(dt), stab, p, c, prog, backend, alg_cache(alg, g, st), SciMLBase.ReturnCode.Success, nothing, host)
+        Float64(dt), stab, p, c, prog, backend, alg_cache(alg, g, st), SciMLBase.ReturnCode.Success, nothing, host,
+        StatusTotals())
 end
 
 """
@@ -604,9 +682,27 @@ end
     reset!(rt)
 
 Drop the algorithm's history ([`reset_cache!`](@ref) of its cache): called after a state
-write (`integ[c] = values`, an input or table write, `reinit!`) and after a rebind.
+write (`integ[c] = values`, an input or table write, `reinit!`) and after a rebind. A stored
+status (`rt.status`, the word) is kept: a failure ends the run; `reinit!` clears it
+([`clear_status!`](@ref)).
 """
-reset!(rt::GroupRuntime) = (reset_cache!(rt.cache); rt.status = SciMLBase.ReturnCode.Success; nothing)
+reset!(rt::GroupRuntime) = (reset_cache!(rt.cache); nothing)
+
+"""
+    clear_status!(rt)
+
+Start a new run of runtime `rt` (`reinit!`): its status word is zeroed, its totals (counters,
+the failing window and causes, the warning flag, the window count) and `rt.status` cleared. A
+[`reset!`](@ref) (a write, a rebind) keeps them: a failure ends its run.
+"""
+function clear_status!(rt::GroupRuntime)
+    w = status_word(rt.cache)
+    w === nothing || fill!(w, zero(eltype(w)))
+    where = rt.totals.where
+    rt.totals = StatusTotals(; where)
+    rt.status = SciMLBase.ReturnCode.Success
+    return nothing
+end
 
 _parity(rt::GroupRuntime) = isempty(rt.swaps) ? 1 : rt.store.cur[rt.swaps[1]]
 
@@ -622,7 +718,8 @@ conditions), then `n` substeps of `h = window / n` at `t0 + j h`, alternating th
 parity; with `ends_in = :slot1` the fields go back to slot 1 after an odd count. A kernel that
 reads the clock slot (`clock__tick`: `mcs` in front end A, `step_index(t)` in front end B)
 reads `k` at every substep. Returns the algorithm's code for the step (`ReturnCode.Success`
-for the explicit algorithms), also kept in `rt.status`. No allocation on the host executor.
+for the explicit algorithms); `rt.status` keeps the worst code since the bind or the last
+[`clear_status!`](@ref) (a [`reset!`](@ref) keeps it). No allocation on the host executor.
 
 A group with no state (aux fields `K ~ rhs` only, F3 design §3.12) takes `n = 0`: its kernels
 run once, at the window's start `(t0, k)`, with the window as their step length.
@@ -632,6 +729,12 @@ function advance!(rt::GroupRuntime, clock::Tuple{Real, Integer}, n::Integer = rt
     k = Int(clock[2])
     h = n == 0 ? Float64(window) : Float64(window) / n
     st = rt.store
+    # the window count of the status word's entry [2] (a window of length 0 is not one)
+    if window > 0
+        tot = rt.totals
+        tot.windows += 1
+        tot.windows == 1 && (tot.t1 = t)
+    end
     if rt.masks !== nothing
         rt.masks[_parity(rt)]((t, h, k))
         # the values the masks set now (the bound parameters): on a device the mask launches
@@ -645,9 +748,91 @@ function advance!(rt::GroupRuntime, clock::Tuple{Real, Integer}, n::Integer = rt
         _swap!(st.cur, rt.swaps)
     end
     rt.ends_in === :slot1 && _slot1!(rt.copies, st.cur, rt.swaps, 1)
-    rt.status = step_retcode!(rt.cache, rt)
+    code = step_retcode!(rt.cache, rt)
+    rt.status = _worse(rt.status, code)      # (sticky: the worst so far, until `clear_status!`)
+    return code
+end
+
+"""
+    check_status!(rt, acc = nothing) -> ReturnCode.T
+
+Read the status word of runtime `rt`'s algorithm ([`status_word`](@ref); a synchronization on
+a device, a plain read on the host) and return the worst code so far, also kept in
+`rt.status`: `ConvergenceFailure` (the first failing window and its causes are kept, and a
+warning names the fields, the window, the causes and the route, once), `StalledSuccess` (a
+rounding floor: the run goes on) or `Success`. The counters [4]–[7] go to `rt.totals` (and to
+`acc`, a front end's counters with the same fields, when given) and are zeroed on the device;
+a linear or Newton budget hit warns once per runtime, naming the fields, the count and the
+route, and stays `Success`. An algorithm with no word reads nothing (no launch, no copy).
+"""
+check_status!(rt::GroupRuntime, acc = nothing) = _check_status!(status_word(rt.cache), rt, acc)
+_check_status!(::Nothing, rt::GroupRuntime, acc) = rt.status
+function _check_status!(w, rt::GroupRuntime, acc)
+    h = w isa Array ? w : Array(w)
+    tot = rt.totals
+    d = (h[STATUS_SOLVES], h[STATUS_BUDGET], h[STATUS_FLOOR], h[STATUS_NEWTON_BUDGET])
+    if any(!iszero, d)
+        _add_counts!(tot, d)
+        acc === nothing || _add_counts!(acc, d)
+        w isa Array ? (w[STATUS_SOLVES:STATUS_NEWTON_BUDGET] .= 0) : (view(w, STATUS_SOLVES:STATUS_NEWTON_BUDGET) .= 0)
+    end
+    code = h[STATUS_CODE] == 0 ? SciMLBase.ReturnCode.Success :
+           h[STATUS_CODE] == 1 ? SciMLBase.ReturnCode.StalledSuccess : SciMLBase.ReturnCode.ConvergenceFailure
+    if (!tot.warned && (tot.budget > 0 || tot.newton_budget > 0)) ||
+       (code == SciMLBase.ReturnCode.ConvergenceFailure && tot.window == 0)
+        _status_warn(rt, h[STATUS_WINDOW], h[STATUS_CAUSE], code)
+    end
+    rt.status = _worse(rt.status, code)
     return rt.status
 end
+function _add_counts!(acc, d)
+    acc.solves += d[1]
+    acc.budget += d[2]
+    acc.floor += d[3]
+    acc.newton_budget += d[4]
+    return nothing
+end
+# the warnings of a read (cold: once per runtime and run); a function barrier, compiled once
+# for every runtime type
+@noinline function _status_warn(@nospecialize(rt), window, cause, code)
+    tot = rt.totals
+    fs = join(("`$k`" for k in rt.keys), ", ")
+    s = length(rt.keys) == 1 ? "" : "s"
+    if !tot.warned && (tot.budget > 0 || tot.newton_budget > 0)
+        tot.warned = true
+        what = tot.budget > 0 ? ("the linear solve reached its budget $(tot.budget) time$(tot.budget == 1 ? "" : "s")",
+                                 status_route(rt.alg, :budget)) :
+               ("the Newton iteration reached its budget $(tot.newton_budget) time$(tot.newton_budget == 1 ? "" : "s")",
+                status_route(rt.alg, :newton_budget))
+        @warn "field$s $fs: $(what[1]) so far (the result is accepted, `ReturnCode.Success`, and counted in `stats`); " *
+              "$(what[2]) removes this warning"
+    end
+    if code == SciMLBase.ReturnCode.ConvergenceFailure && tot.window == 0
+        tot.window, tot.cause = max(Int64(window), 1), cause
+        why = [r for (bit, r) in STATUS_CAUSES if tot.cause & bit != 0]
+        @warn "field$s $fs: the solve failed in $(window_text(rt, tot.window))$(isempty(why) ? "" : " (" * join(why, "; ") * ")"), " *
+              "`ReturnCode.ConvergenceFailure`: the run stops; $(status_route(rt.alg, :failure))"
+    end
+    return nothing
+end
+"""
+    window_text(rt, w) -> String
+
+Window `w` of runtime `rt` (the status word's entry [2]: the `w`-th window since the bind or
+the last [`clear_status!`](@ref)) in words: `rt.totals.where(w, t1)` when the front end set it
+(`t1` the start time of the first window), else "window w (t = …)", `t` the window's start
+time.
+"""
+function window_text(rt::GroupRuntime, w::Integer)
+    rt.totals.where === nothing || return rt.totals.where(w, rt.totals.t1)
+    t = rt.totals.t1 + (w - 1) * rt.dt
+    return string("window ", w, " (t = ", round(t; sigdigits = 6), ")")
+end
+
+# the worse of two codes: a failure over `StalledSuccess` over `Success`
+_rank(c::SciMLBase.ReturnCode.T) = c == SciMLBase.ReturnCode.Success ? 0 : c == SciMLBase.ReturnCode.StalledSuccess ? 1 : 2
+_worse(a::SciMLBase.ReturnCode.T, b::SciMLBase.ReturnCode.T) = _rank(b) > _rank(a) ? b : a
+
 _swap!(cur, swaps) = (foreach(f -> cur[f] = 3 - cur[f], swaps); nothing)
 _slot1!(::Tuple{}, cur, swaps, i) = nothing
 function _slot1!(copies::Tuple, cur, swaps, i)

@@ -153,3 +153,12 @@ end
     @test eltype(m) == Bool && typeof(KernelAbstractions.get_backend(m)) == typeof(PDEV)
     @test Array(m) == half && count(m) == 4n && any(m) && !all(m) && Array(.!m) == .!half
 end
+
+@testset "F3-04: B reads the status word at the saves on $pgpu" begin
+    p = discretize(gsys(), LatticeDiscretization(Grid((8, 8)); T = Float32, problem = :owned, backend = PDEV))
+    ig = init(p, WStub(0.01; code = 2, at = 3); saveat = 0.05)
+    s = @test_logs (:warn, r"the solve failed in window 3") solve!(ig)
+    @test s.retcode == ReturnCode.ConvergenceFailure && ig.iter == 5           # the first save after window 3
+    s = solve(p, WStub(0.01; code = 1, at = 3); saveat = 0.05)
+    @test s.retcode == ReturnCode.StalledSuccess && s.stats.solves == 10
+end

@@ -283,7 +283,8 @@ counts used: `substeps` the first group's (the only one's for one group), `count
 group's, in group order ([`substep_counts`](@ref)). Indexed by symbol through
 SymbolicIndexingInterface: `sol[c]` is a vector of grid-shaped arrays, `sol[c, i]` one of
 them. An aux field `K ~ rhs` (F3 design §3.12) is not in `u`: `aux` holds its values at each
-save, evaluated from the saved state at the save time, and `sol[K]` reads them.
+save, evaluated from the saved state at the save time, and `sol[K]` reads them. `stats` holds
+the solver counters of the groups' status words ([`field_stats`](@ref)).
 """
 struct FieldSolution{P, U}
     prob::P
@@ -293,6 +294,7 @@ struct FieldSolution{P, U}
     substeps::Int
     counts::Vector{Int}
     aux::Vector{U}                      # the aux fields at each save (flat, `_aux_layout`), or empty
+    stats::@NamedTuple{solves::Int64, budget::Int64, floor::Int64, newton_budget::Int64}   # (`field_stats`)
 end
 SciMLBase.successful_retcode(s::FieldSolution) = SciMLBase.successful_retcode(s.retcode)
 
@@ -613,14 +615,29 @@ conditions, then its substeps, alternating the slot parity). With a clock (`cloc
 discretization), the step index `k` that `step_index(t)` reads is the number of clock
 boundaries reached since the start of the time span, kept as an integer. A group's return
 code other than `ReturnCode.Success` becomes `integ.retcode`, and the later groups do not
-run; `solve!` stops on it.
+run; `solve!` stops on it. On the host the groups' status words are read after the step
+([`check_status!`](@ref)): a `ConvergenceFailure` stops the run, a `StalledSuccess` is kept as
+the code and the run goes on. On a device they are read at the saves and at the end.
 """
 function CommonSolve.step!(integ::FieldIntegrator)
     code = _advance_all(integ.runtimes, (_time(integ), _tick(integ)))
     integ.iter += 1
     code == SciMLBase.ReturnCode.Success || (integ.retcode = code)
+    # the status words: on the host after every step (a plain read; nothing for explicit groups)
+    Exec.ishost(integ.prob.backend) && _check_statuses!(integ)
     return integ
 end
+# the status words of every group (F3 design §3.3): a failure becomes `integ.retcode` (the run
+# stops), `StalledSuccess` too unless something worse happened (the run goes on)
+function _check_statuses!(integ::FieldIntegrator)
+    code = _check_all(integ.runtimes, SciMLBase.ReturnCode.Success)
+    code == SciMLBase.ReturnCode.Success || !_running(integ.retcode) || (integ.retcode = code)
+    return nothing
+end
+_check_all(::Tuple{}, code) = code
+_check_all(rts::Tuple, code) = _check_all(Base.tail(rts), _worse(code, check_status!(first(rts))))
+# a run goes on while its code is `Success` or `StalledSuccess` (a rounding floor, accepted)
+_running(c::SciMLBase.ReturnCode.T) = c == SciMLBase.ReturnCode.Success || c == SciMLBase.ReturnCode.StalledSuccess
 _advance_all(::Tuple{}, clock) = SciMLBase.ReturnCode.Success
 function _advance_all(rts::Tuple, clock)
     code = advance!(first(rts), clock)
@@ -649,6 +666,7 @@ function SciMLBase.reinit!(integ::FieldIntegrator, u0 = integ.prob.u0)
     integ.retcode = SciMLBase.ReturnCode.Success
     _rerun_init!(integ, integ.pgood)
     foreach(reset!, integ.runtimes)
+    foreach(clear_status!, integ.runtimes)          # a new run: no failure, no counters
     0 in integ.save && _save!(integ)
     return integ
 end
@@ -660,6 +678,7 @@ _current(integ::FieldIntegrator) = isempty(integ.store.flat) ? eltype(integ.prob
 # a saved state that is not finite ends the solve with `ReturnCode.Unstable`; the aux fields
 # are evaluated at the save (one aux launch) and saved with it
 function _save!(integ::FieldIntegrator)
+    _check_statuses!(integ)                      # (a save synchronizes anyway)
     u = _current(integ)
     push!(integ.t, _time(integ))
     push!(integ.u, u)
@@ -667,13 +686,13 @@ function _save!(integ::FieldIntegrator)
         _eval_aux!(integ)
         push!(integ.auxu, _aux_values(integ))
     end
-    all(isfinite, u) || (integ.retcode = SciMLBase.ReturnCode.Unstable)
+    _running(integ.retcode) && !all(isfinite, u) && (integ.retcode = SciMLBase.ReturnCode.Unstable)
     return nothing
 end
 
 function CommonSolve.solve!(integ::FieldIntegrator)
     k = searchsortedfirst(integ.save, integ.iter + 1)
-    while integ.iter < integ.nsteps && integ.retcode == SciMLBase.ReturnCode.Success
+    while integ.iter < integ.nsteps && _running(integ.retcode)
         CommonSolve.step!(integ)
         if k <= length(integ.save) && integ.save[k] == integ.iter
             _save!(integ)
@@ -681,10 +700,26 @@ function CommonSolve.solve!(integ::FieldIntegrator)
         end
     end
     KA.synchronize(integ.prob.backend)
-    integ.retcode == SciMLBase.ReturnCode.Success && (isempty(integ.save) ||
+    _check_statuses!(integ)
+    _running(integ.retcode) && (isempty(integ.save) ||
      integ.save[end] != integ.iter) && !all(isfinite, _current(integ)) &&
         (integ.retcode = SciMLBase.ReturnCode.Unstable)
-    return FieldSolution(integ.prob, integ.t, integ.u, integ.retcode, integ.substeps, substep_counts(integ), integ.auxu)
+    # a failure stops the run: the state it stopped at is saved (as front end A does)
+    !_running(integ.retcode) && (isempty(integ.t) || integ.t[end] != _time(integ)) && _save!(integ)
+    return FieldSolution(integ.prob, integ.t, integ.u, integ.retcode, integ.substeps, substep_counts(integ), integ.auxu,
+        field_stats(integ))
+end
+
+"""
+    field_stats(integ) -> NamedTuple
+
+The solver counters of an owned run (F3 design §3.3), summed over its groups' status words:
+`solves`, `budget` (linear budget hits), `floor` (rounding floors), `newton_budget` (Newton
+budget hits). All zero for the explicit algorithms.
+"""
+function field_stats(integ::FieldIntegrator)
+    tot(f) = sum((getfield(rt.totals, f) for rt in integ.runtimes); init = Int64(0))
+    return (; solves = tot(:solves), budget = tot(:budget), floor = tot(:floor), newton_budget = tot(:newton_budget))
 end
 
 # the default algorithm: `ExplicitEuler()` for rates (which needs `dt`: nothing else sets the

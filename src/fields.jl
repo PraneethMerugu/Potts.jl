@@ -577,7 +577,9 @@ struct _MapSteps end
 struct _AuxSteps end
 (::_AuxSteps)(praw) = 0
 # the least count and the bounded flag of a group's rule, as the fingerprint records them
-_least(s) = s isa _MapSteps ? 1 : s isa _AuxSteps ? 0 : something(s.alg.substeps, 1)
+_least(s) = s isa _MapSteps ? 1 : s isa _AuxSteps ? 0 : something(_given_count(s.alg), 1)
+# the count an algorithm was given (`substeps = n`), or `nothing` (automatic, or no such keyword)
+_given_count(a) = hasproperty(a, :substeps) ? a.substeps : nothing
 _bounded(s) = s isa Union{_MapSteps, _AuxSteps} || (isempty(s.spec.stability.unbounded) && isempty(s.spec.stability.expanded))
 # whether compiled model `c` has fields: stepped ones, or aux fields only (one group with no state)
 _has_fields(c::CompiledPottsSystem) = !isempty(c.fields) || !isempty(_field_aux(c.sys))
@@ -851,7 +853,7 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
         # coefficient of its rows reads it; the read graph is the structure, so it needs no value)
         fp = LatticeFields.Compile.fingerprint_text(fused; T)
         cp = coupling === nothing ? nothing :
-             (; stability = coupling.bound, coupling.groups, explicit = [i == gi && solver.substeps !== nothing for i in eachindex(order)],
+             (; stability = coupling.bound, coupling.groups, explicit = [i == gi && _given_count(solver) !== nothing for i in eachindex(order)],
                 index = gi, whole = _WholeParams(coupling.wnames, lg.params))
         rule = LatticeFields.Problems.GroupSubsteps(gspec, solver, dt; key = fp, texts = _PottsTexts(names, (; filled = copy(cv.filled))),
             coupling = cp)
