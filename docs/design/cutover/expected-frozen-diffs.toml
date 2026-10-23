@@ -1215,3 +1215,13 @@ commit = "1f2070b1"
 fixup_of = "F2-15"
 decision = "D-F2-2"
 why = "part 2's k2 = 2k case also asserts that comp7₊k2 is read-only (remake refused naming it), which holds from F2-15 on; the rest of the edit is F2-14's (entry above)"
+
+# F3-00 (lp/f3): the approved list-A edit of p6_0bn (user ruling 2026-10-23, F3 design §3.12,
+# §10), in the same commit as the aux-only groups. The commit is F3-00's hash on lp/f3 before
+# integration; squashing its fixups changes it, and the integration updates this field.
+[[edits]]
+path = "acceptance/p6_0bn_ode_mtkcompile.jl"
+commit = "3d0ba21b"
+fixup_of = "F3-00"
+decision = "D-F3-R1"
+why = "line 559: P60bnFieldAlg (`cfield ~ 1.0`, a model whose only field is an aux field) flips from 'rejected, algebraic, cfield' to 'builds, cfield = 1.0 at every site after one MCS' (its field phase evaluates the aux field once per MCS); the other six rejections of the testset are unchanged"

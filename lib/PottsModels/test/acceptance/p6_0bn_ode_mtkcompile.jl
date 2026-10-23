@@ -556,7 +556,13 @@ end
 
 @testset "P6.0bn R: rejected algebraic equations" begin
     @test p60bn_clear(() -> mtkcompile(P60bnImplicit(; name = :r)), "algebraic")
-    @test p60bn_clear(() -> mtkcompile(P60bnFieldAlg(; name = :r)), "algebraic", "cfield")
+    # an aux-only field model builds (F3-00, D-F3-R1): its field phase evaluates `cfield ~ 1.0`
+    let s = zeros(Int32, 12, 8)
+        s[3:6, 3:6] .= 1
+        u = solve(PottsProblem(P60bnFieldAlg(; name = :r), [ownership => s, kind => [:A]], (0, 1); seed = 1),
+            SequentialCPM()).u[end]
+        @test all(==(1.0), Array(u.site.cfield))
+    end
     @test p60bn_clear(() -> mtkcompile(P60bnBoth(; name = :r)), "algebraic", "xalias")
     @test p60bn_clear(() -> mtkcompile(P60bnTwice(; name = :r)), "algebraic", "xalias")
     @test p60bn_clear(() -> mtkcompile(P60bnSelf(; name = :r)), "algebraic", "xalias")

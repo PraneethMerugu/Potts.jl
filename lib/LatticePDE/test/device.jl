@@ -37,6 +37,25 @@ end
     @info "§7.4 verbatim size on $pgpu: 512², 1000 steps × 12 substeps in $(round(t512; digits = 2)) s (incl. compile)"
 end
 
+# F3-00 review r1 S7: the aux fields are evaluated at each save on the device (one aux launch on
+# device arrays, before the copy) and at `integ[K]`: `K ~ 2c + t` holds at every save and
+# equals the host executor's run
+@testset "F3-00: B evaluates the aux fields at the saves on $pgpu" begin
+    @parameters Da7 = 0.1 ka7 = 1.0
+    sys = psys([D(ce) ~ Da7 * Δ(ce) - ka7 * ce, Ke ~ 2ce + t], [c(0, x, y) ~ 1.0 + x], [Da7, ka7]; dvs = [ce, Ke])
+    mk(be) = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float32, problem = :owned, backend = be))
+    sd = solve(mk(PDEV), ExplicitEuler(; dt = 0.25f0); saveat = 0.5)
+    sh = solve(mk(KernelAbstractions.CPU()), ExplicitEuler(; dt = 0.25f0); saveat = 0.5)
+    @test sd.retcode == ReturnCode.Success && sd.t == sh.t == [0.0, 0.5, 1.0]
+    for i in eachindex(sd.t)
+        @test Array(sd[Ke][i]) ≈ 2 .* Array(sd[ce][i]) .+ Float32(sd.t[i]) rtol = 1.0f-6
+        @test Array(sd[Ke][i]) ≈ Array(sh[Ke][i]) rtol = 1.0f-5
+    end
+    ig = init(mk(PDEV), ExplicitEuler(; dt = 0.25f0))
+    step!(ig)
+    @test Array(ig[Ke]) ≈ 2 .* Array(ig[ce]) .+ 0.25f0 rtol = 1.0f-6
+end
+
 @testset "number types on $pgpu (P5)" begin
     # Dual{Float32} through the owned path on the device equals the host derivative
     sys = nsys()

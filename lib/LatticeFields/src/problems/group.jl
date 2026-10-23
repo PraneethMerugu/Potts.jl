@@ -259,21 +259,24 @@ end
 
 """
     bind_group(g, alg, store, p; fields = g.spec.state, n, dt, c, ends_in = :parity, backend,
-               options) -> GroupRuntime
+               options, kernels = nothing) -> GroupRuntime
 
 Bind the fields `fields` of group `g` (all of its state by default) to the arrays of `store`
 at parameters `p` (the vector is shared: the driver updates it in place before `rebind!`), to
 step with algorithm `alg` in `n` substeps per window `dt`. `ends_in = :parity` leaves the
 fields in the slot their last substep wrote (one group: the slots alternate); `:slot1` copies
 them back to slot 1 after an odd count, so a group that runs after it reads current values.
+`kernels = (initids, stepids)` binds those kernels of the group's program alone (front end A's
+at-init evaluation of the `aux:` kernels, `n = 0`); by default the fields' own kernels.
 """
 function bind_group(g::FieldGroup, alg, st::FieldStore, p; fields = g.spec.state, n::Integer, dt::Real,
-        c, ends_in::Symbol = :parity, backend, options::CompileOptions, V::Type, host = nothing)
+        c, ends_in::Symbol = :parity, backend, options::CompileOptions, V::Type, host = nothing, kernels = nothing)
     ends_in in (:parity, :slot1) || throw(ArgumentError("ends_in must be :parity or :slot1; got $(repr(ends_in))"))
     prog = group_program(g, alg)
     ids = Set(fieldid(prog, k) for k in fields)
     all_state = issubset(Set(fieldid(prog, k) for k in g.spec.state), ids)
-    ip, sp = group_plans(g, alg, V, backend, options; kernels = _group_kernels(g, ids))
+    # (`kernels = (initids, stepids)`: those kernels alone, e.g. a group's `aux:` kernels)
+    ip, sp = group_plans(g, alg, V, backend, options; kernels = something(kernels, _group_kernels(g, ids)))
     swaps = all_state ? copy(sp.swaps) : Int32[f for f in sp.swaps if f in ids]
     steps = _bind_steps(backend, prog, sp, st, p, swaps, all_state, c)
     masks = _bind_masks(backend, prog, ip, st, p, swaps, all_state, c, ids)
@@ -328,11 +331,14 @@ parity; with `ends_in = :slot1` the fields go back to slot 1 after an odd count.
 reads the clock slot (`clock__tick`: `mcs` in front end A, `step_index(t)` in front end B)
 reads `k` at every substep. Returns the algorithm's code for the step (`ReturnCode.Success`
 for the explicit algorithms), also kept in `rt.status`. No allocation on the host executor.
+
+A group with no state (aux fields `K ~ rhs` only, F3 design §3.12) takes `n = 0`: its kernels
+run once, at the window's start `(t0, k)`, with the window as their step length.
 """
 function advance!(rt::GroupRuntime, clock::Tuple{Real, Integer}, n::Integer = rt.n, window::Real = rt.dt)
     t = Float64(clock[1])
     k = Int(clock[2])
-    h = Float64(window) / n
+    h = n == 0 ? Float64(window) : Float64(window) / n
     st = rt.store
     if rt.masks !== nothing
         rt.masks[_parity(rt)]((t, h, k))
@@ -340,6 +346,8 @@ function advance!(rt::GroupRuntime, clock::Tuple{Real, Integer}, n::Integer = rt
         # clamp the sites they mark themselves (one launch, `_mask_fuse`), so none is left here
         _clamp!(rt.stepclamps, rt.store, rt.p)
     end
+    # a group with no state: its aux kernels once (no slot to swap)
+    n == 0 && rt.steps[_parity(rt)]((t, h, k))
     for j in 0:(n - 1)
         rt.steps[_parity(rt)]((t + j * h, h, k))
         _swap!(st.cur, rt.swaps)

@@ -387,21 +387,6 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         end
         end
     end
-    # an aux field is computed by the field groups: with no stepped field there is none, and the
-    # definition would never run (refused, never dropped; F2-10)
-    if !isempty(field_aux) && isempty(fields)
-        x, rhs = first(field_aux)
-        eq = only(e for e in _p(sys, :equations) if _field_lhs(e) !== nothing && isequal(_field_lhs(e)[1], x))
-        _located(sys, eq) do
-            n = info(x).name
-            throw(ArgumentError("`$n ~ $(_builtin_text(string(rhs)))` is an algebraic equation of the field `$n` (an aux " *
-                "field, computed at every substep by the field groups), and the model steps no field (`D(c) ~ …`), so " *
-                "it would never be computed; give a field an equation (`D(c) ~ …`: the field groups then compute it), " *
-                "or make `$n` a site variable written by a site update (`@after_mcs $n ~ …`; a site update reads the " *
-                "site's `position`, not the coordinates `x`, `y`, `z`, which field equations read: `position` is the " *
-                "site's corner and `x` its center, `x = position[1] - h/2` with `h` the spacing)"))
-        end
-    end
     for d in _p(sys, :divisions)
         _located(sys, d) do
             _check_names(d.when, _CELL_BUILTINS, "a division condition"; between_copies = true)
@@ -805,7 +790,9 @@ function _check_fields(sys::PottsSystem, rn)
         throw(ArgumentError(string("@bcs: the condition `", _bc_text(first(_p(sys, :bcs)), _p(sys, :kinds)), "` of `",
             nameof(sys), "`: the model has no field equation (`D(c) ~ …`); a condition applies to a field the model steps")))
     end
-    isempty(eqs) && return nothing, specs
+    # a model whose only fields are aux fields `K ~ rhs` has one group with no state, which
+    # evaluates them once per MCS (F3 design §3.12)
+    isempty(eqs) && isempty(_field_aux(sys)) && return nothing, specs
     known = _located(() -> _field_inputs(sys, Float64), sys, first(_p(sys, :equations)))
     names = Symbol[info(x).name for (x, _) in eqs]
     # (the stability bound is built at the first problem: `mtkcompile` only checks the lowering)

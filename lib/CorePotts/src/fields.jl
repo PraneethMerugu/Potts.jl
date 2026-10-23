@@ -9,7 +9,7 @@
 @inline owner_kind(st, i) = (c = @inbounds st.σ[i]; c == 0 ? Int32(0) : @inbounds st.cell.kind[c])
 
 """
-    FieldPhase{K}(group, alg, arrays; tables, params, substeps, dt, period = dt, options, T, init = false)
+    FieldPhase{K}(group, alg, arrays; tables, params, substeps, dt, period = dt, options, T, init = false, aux_only = false)
 
 A group of fields stepped by algorithm `alg` (`ExplicitEuler`) over one MCS of length `dt`,
 in `n` substeps of `dt / n`: `group` is the group's `LatticeFields.Problems.FieldGroup` (its
@@ -34,6 +34,11 @@ number of substeps one copy brings the scratch buffer back (`ends_in = :slot1`).
 `init = true` the phase is the masked-condition clamp of a fresh initial state (one substep
 of length zero: each masked site takes its value, every other site keeps its own); `init`
 from a checkpoint skips it.
+
+With `aux_only = true` the phase is bound to the group's `aux:` kernels alone (aux fields
+`K ~ rhs`, F3 design §3.12) and takes no substep: one launch evaluates them from the state as
+it is, which it never writes. Front end A runs one at init for a group with state and aux
+fields (F3 review S1, r2 N1: no update rule, so no `lower` clip, touches the state).
 """
 struct FieldPhase{K, G, AL, A, F, PR, SP}
     group::G
@@ -48,22 +53,29 @@ struct FieldPhase{K, G, AL, A, F, PR, SP}
     dt::Float64
     period::Float64                      # the MCS (`mcs_duration`): the clock's period
     init::Bool
+    aux_only::Bool                       # the `aux:` kernels alone, no substep (an at-init evaluation)
     options::Any                         # the compile options of the plans (host)
     T::Type                              # the value type of the plans
 end
 function FieldPhase{K}(group, alg, arrays::Tuple; tables = Pair{Int, Symbol}[], params = Symbol[], substeps,
-        dt::Real, period::Real = dt, options, T::Type, init::Bool = false) where {K}
+        dt::Real, period::Real = dt, options, T::Type, init::Bool = false, aux_only::Bool = false) where {K}
     program = Problems.group_program(group, alg)
     # the plans of value type `T`, made once per group (shared by every trajectory; the host
     # backend only decides the Float64 check here, which `options` already holds)
-    masks, step = Problems.group_plans(group, alg, T, KernelAbstractions.CPU(), options)
+    masks, step = aux_only ?
+        Problems.group_plans(group, alg, T, KernelAbstractions.CPU(), options; kernels = (Int[], _aux_ids(program))) :
+        Problems.group_plans(group, alg, T, KernelAbstractions.CPU(), options)
     return FieldPhase{K, typeof(group), typeof(alg), typeof(arrays), typeof(substeps), typeof(program), typeof(step)}(
-        group, alg, program, masks, step, arrays, tables, params, substeps, Float64(dt), Float64(period), init, options, T)
+        group, alg, program, masks, step, arrays, tables, params, substeps, Float64(dt), Float64(period), init, aux_only,
+        options, T)
 end
+# the ids of a program's `aux:` kernels (an `aux_only` phase binds them alone)
+_aux_ids(prog) = [i for (i, k) in enumerate(prog.kernels) if startswith(k.key, "aux:")]
+_aux_ids(ph::FieldPhase) = _aux_ids(ph.program)
 """The masked-condition clamp of field phase `ph` (its at-init form)."""
 field_clamp(ph::FieldPhase{K}) where {K} =
     FieldPhase{K}(ph.group, ph.alg, ph.arrays; ph.tables, ph.params, ph.substeps, ph.dt, ph.period, ph.options, ph.T,
-        init = true)
+        init = true, ph.aux_only)
 
 """
 The front end's record of a field runtime's binding (`Problems.GroupRuntime`'s `host`): the
@@ -138,13 +150,18 @@ _praw(ph::FieldPhase, p) = Tuple(_param(p, n) for n in ph.params)
 The substep count of field phase `ph` at parameters `p`: its `substeps` rule at the phase's
 parameter and table values. The rule throws (an `ArgumentError`) for parameters it refuses
 (negative diffusion, a coupling past the limit, a coefficient with no finite bound), so a
-caller that checks before it changes anything keeps the run atomic.
+caller that checks before it changes anything keeps the run atomic. A group with state needs
+at least one substep; a group with no state (aux fields only, F3 design §3.12) takes 0: its
+window evaluates them once.
 """
 function field_substeps(ph::FieldPhase, p)
     n = ph.substeps(Problems.with_tables(Float64[_praw(ph, p)...], _table_values(ph, p)))
+    _stateless(ph) && return n
     n >= 1 || throw(ArgumentError("a field group needs at least one substep; got $n"))
     return n
 end
+# a group with no state field (aux fields `K ~ rhs` only), or a phase of its aux kernels alone
+_stateless(ph::FieldPhase) = ph.aux_only || isempty(ph.group.spec.state)
 
 # The runtime of a field phase bound to the state's arrays at parameters `p` (front end A on
 # the shared group runtime: `ends_in = :slot1`, the field back in its `st.site` array after an
@@ -166,7 +183,7 @@ function _field_bind(ph::FieldPhase, st, p, backend; tables = nothing)
     n = field_substeps(ph, p)
     host = FieldBinding(p, arrs, _bound_values(ph, p)...)
     return Problems.bind_group(ph.group, ph.alg, store, _praw(ph, p); n, dt = ph.dt, c = nothing, ends_in = :slot1,
-        backend, options = ph.options, V = ph.T, host)
+        backend, options = ph.options, V = ph.T, host, kernels = ph.aux_only ? (Int[], _aux_ids(ph)) : nothing)
 end
 
 """
@@ -274,13 +291,14 @@ function _rebind!(rt::Problems.GroupRuntime, ph::FieldPhase, st, p, backend)
 end
 
 # The phase runs one window of the fields: pass `part = (r, R)` of the `R` passes of a sub-MCS
-# `repeat(R, …)` (`(1, 1)` for the whole MCS); a map group (`ExplicitMap`) steps in pass 1 only.
+# `repeat(R, …)` (`(1, 1)` for the whole MCS); a map group (`ExplicitMap`) steps in pass 1 only,
+# and so does a group with no state (aux fields only, F3 design §3.12: once per MCS).
 # The clock (F2 design §2.6): the step index is
 # the MCS number `mcs` (the same in every pass), and the window starts at the time
 # `t0 = (mcs + (r − 1)/R) · mcs_duration`; substep `j` runs at `t0 + j h`.
 function (ph::FieldPhase{K})(st, p, ctx, key, mcs, backend, part::NTuple{2, Int} = (1, 1)) where {K}
     # a map steps once per MCS (the clock's period), in the first pass of a sub-MCS `repeat`
-    ph.alg isa Problems.ExplicitMap && !ph.init && part[1] != 1 && return 0
+    (ph.alg isa Problems.ExplicitMap || _stateless(ph)) && !ph.init && part[1] != 1 && return 0
     rt = _runtime(getfield(ctx, K))
     rt.pending === nothing || Base.invokelatest(_await!, rt)
     # the rebinding is cold host work (the substep bound, new launches): called past an
@@ -291,7 +309,8 @@ function (ph::FieldPhase{K})(st, p, ctx, key, mcs, backend, part::NTuple{2, Int}
     # (the at-init clamp runs outside the passes: `part = (1, 1)`, its window starts at `mcs · period`)
     t0 = mcs * ph.period + (part[1] - 1) * ph.dt          # ph.dt = mcs_duration / R
     Problems.advance!(rt, (t0, mcs), n, ph.init ? 0.0 : rt.dt)
-    launches = n * length(rt.steps[1].launches)
+    # (a group with no state: `n = 0`, its kernels once)
+    launches = max(n, 1) * length(rt.steps[1].launches)
     # the masks (on a device they clamp the sites they mark; a clamp they cannot take is one
     # more kernel)
     rt.masks === nothing || (launches += length(rt.masks[1].launches) + (Exec.ishost(backend) ? 0 : length(rt.stepclamps)))

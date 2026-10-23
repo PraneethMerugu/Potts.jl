@@ -2498,3 +2498,156 @@ end
     @test getp(r, :γ)(r) == 0.65 && !(99.0 in r.p)
     @test LP.solve(r, LP.ExplicitEuler(; dt = 1.0))[:c][end] == LP.solve(LP.remake(po; p = [:α => 0.3]), LP.ExplicitEuler(; dt = 1.0))[:c][end]
 end
+
+# F3-00 review r1 S1: a model with states and aux fields evaluates its aux fields at init too
+# (the at-init phase runs for every group with aux kernels), so the first sweep and `u[1]` hold
+# `rhs` of the initial state, not the declared value. Base (8f658abd): `K = -5` at init.
+@potts_model FaState begin
+    @kinds medium A
+    @variables begin
+        c(field) = 1.0
+        K(field) = -5.0
+    end
+    @lattice Lattice((8, 8))
+    @energy cells => (volume - 9.0)^2
+    @equations begin
+        D(c) ~ 0.1 * Δ(c) - 0.2 * c
+        K ~ 2c + 1
+    end
+    @sweep Metropolis(; temperature = 5.0)
+end
+# review r2 N1: the at-init evaluation runs the `aux:` kernels alone, so it never writes the
+# state: a `lower` bound does not clip `c = -1` at init. Base (e0347d1a, a zero-length step of the
+# whole update): `c = 0.0` at init with the aux field, `-1.0` without it
+@potts_model FaLower begin
+    @kinds medium A
+    @variables begin
+        c(field) = -1.0
+        K(field) = 7.0
+    end
+    @lattice Lattice((8, 8))
+    @energy cells => (volume - 9.0)^2
+    @equations begin
+        D(c) ~ 0.1 * Δ(c) + 0.2 * (kind == A)
+        K ~ 2c + 1
+    end
+    @sweep Metropolis(; temperature = 5.0)
+end
+@testset "F3-00: aux fields with states start at rhs (A)" begin
+    σ0 = zeros(Int32, 8, 8)
+    σ0[3:5, 3:5] .= 1
+    c0 = [0.1 * i + 0.01 * j for i in 1:8, j in 1:8]
+    integ = init(PottsProblem(FaState(; name = :s), [ownership => σ0, kind => [:A], :c => c0], (0, 2);
+        field_solver = ExplicitEuler(substeps = 2)), SequentialCPM())
+    st0 = CorePotts.current_state(integ)
+    @test Array(st0.site.c) == c0                                   # the zero-length step moves no state
+    @test Array(st0.site.K) ≈ 2 .* c0 .+ 1 rtol = 1e-14
+    @test Array(integ.saved_u[1].site.K) ≈ 2 .* c0 .+ 1 rtol = 1e-14  # the saved start
+    # N1: `c` keeps its initial value bitwise under `lower = 0.0`; `K = rhs(u0)`
+    ig = init(PottsProblem(FaLower(; name = :l), [ownership => σ0, kind => [:A]], (0, 2);
+        field_solver = ExplicitEuler(substeps = 2, lower = 0.0)), SequentialCPM())
+    sl = CorePotts.current_state(ig)
+    @test all(==(-1.0), Array(sl.site.c)) && all(==(-1.0), Array(sl.site.K))
+    @test all(==(-1.0), Array(ig.saved_u[1].site.c))
+    step!(ig)                                                       # (the step clips: `lower` holds)
+    @test minimum(Array(CorePotts.current_state(ig).site.c)) >= 0.0
+end
+
+# F3-00 (F3 design §3.12; user ruling 2026-10-23): a model whose only fields are aux fields
+# `K ~ rhs` builds. One field phase with no state evaluates them once per MCS, in the field
+# phase's place (in pass 1 of a `repeat`), and once at init, so the first sweep reads `rhs`, not
+# the declared value; clock reads take the window's start. Base (743ab0a0): `mtkcompile` refused
+# every model here ("`cfield ~ 1.0` is an algebraic equation of the field `cfield` … the model
+# steps no field").
+@potts_model FaOne begin
+    @kinds medium A
+    @variables cfield(field) = 0.0
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @equations cfield ~ 1.0
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FaClock begin
+    @kinds medium A
+    @variables K(field) = -1.0
+    @lattice Lattice((6, 4))
+    @energy cells => (volume - 4.0)^2
+    @equations K ~ mcs + 0.5 * time
+    @sweep Metropolis(; temperature = 1.0)
+    @schedule repeat(4, sweep(fraction = 1 // 4), fields)
+end
+@potts_model FaKind begin
+    @kinds medium A B
+    @variables K(field) = 0.0
+    @lattice Lattice((12, 12))
+    @energy cells => (volume - 16.0)^2
+    @equations K ~ ismember(kind, (2,))
+    @sweep Metropolis(; temperature = 20.0)
+end
+# a drive that forbids every copy into a site where `K > 0.5`: σ freezes from the first sweep
+# that reads `K = 1`
+@potts_model FaBlock begin
+    @kinds medium A
+    @parameters m0 = 0.0
+    @variables K(field) = 0.0
+    @lattice Lattice((12, 12))
+    @energy cells => (volume - 16.0)^2
+    @drive copy => ifelse(K[target] > 0.5, 1.0e9, 0.0)
+    @equations K ~ ifelse(mcs >= m0, 1.0, 0.0)
+    @sweep Metropolis(; temperature = 50.0)
+end
+@testset "F3-00: aux-only models in A" begin
+    st(integ) = CorePotts.current_state(integ)
+    σ0 = zeros(Int32, 12, 8)
+    σ0[3:6, 3:6] .= 1
+    # P60bnFieldAlg's shape: builds; `cfield = 1` at init (declared 0) and after each MCS; no substep
+    integ = init(PottsProblem(FaOne(; name = :a), [ownership => σ0, kind => [:A]], (0, 3)), SequentialCPM())
+    @test all(==(1.0), Array(st(integ).site.cfield)) && substep_counts(integ) == [0]
+    step!(integ)
+    @test all(==(1.0), Array(st(integ).site.cfield))
+    # PO07: a `field_solver` names the aux field
+    err = try
+        PottsProblem(FaOne(; name = :a), [ownership => σ0, kind => [:A]], (0, 1); field_solver = ExplicitEuler()); ""
+    catch e
+        sprint(showerror, e)
+    end
+    @test occursin("has no field to integrate: `cfield ~ …` is an aux field, evaluated once per MCS with no solver", err)
+    # the clock: once per MCS under `repeat(4, …)`, in pass 1 (`time` at the MCS start, `mcs`
+    # its number), one launch per MCS; at init `K = 0` (mcs 0, time 0; declared -1)
+    s1 = zeros(Int32, 6, 4)
+    s1[2:3, 2:3] .= 1
+    integ = init(PottsProblem(FaClock(; name = :a), [ownership => s1, kind => [:A]], (0, 3)), SequentialCPM())
+    @test all(==(0.0), Array(st(integ).site.K))
+    for j in 1:3
+        l0 = integ.stats.launches
+        step!(integ)
+        @test all(==(1.5 * (j - 1)), Array(st(integ).site.K)) && integ.stats.launches - l0 == 1
+    end
+    # a CPM read: `K` follows the kinds after each sweep (the phase runs after the sweep)
+    s2 = zeros(Int32, 12, 12)
+    s2[2:5, 2:5] .= 1
+    s2[7:10, 7:10] .= 2
+    integ = init(PottsProblem(FaKind(; name = :a), [ownership => s2, kind => [:A, :B]], (0, 4); seed = 3), SequentialCPM())
+    owner(s) = (σ = Array(s.σ); [i == 0 ? 0 : (i == 1 ? 1 : 2) for i in σ])
+    @test Array(st(integ).site.K) == Float64.(owner(st(integ)) .== 2)
+    moved = false
+    for _ in 1:4
+        σb = Array(st(integ).σ)
+        step!(integ)
+        moved |= Array(st(integ).σ) != σb
+        @test Array(st(integ).site.K) == Float64.(owner(st(integ)) .== 2)
+    end
+    @test moved                                     # the sweep moved the cells
+    # a drive that reads `K`: the first sweep reads the init value (`K = 1`), so nothing moves;
+    # control: with `K = 0` until the phase of MCS 3 (mcs 2), the sweeps move σ until then, and
+    # the sweep after that phase sees `K = 1` and moves nothing
+    s3 = zeros(Int32, 12, 12)
+    s3[4:7, 4:7] .= 1
+    run(m0, n) = (ig = init(PottsProblem(FaBlock(; name = :a), [ownership => s3, kind => [:A], :m0 => m0], (0, n); seed = 5),
+                      SequentialCPM());
+                  [(step!(ig); Array(st(ig).σ)) for _ in 1:n])
+    @test all(==(s3), run(0.0, 2))
+    late = run(2.0, 5)
+    @test late[1] != s3 && late[2] != late[1] && late[3] != late[2]   # K = 0 in the sweeps of MCS 1–3
+    @test late[4] == late[3] && late[5] == late[3]                    # K = 1 from the sweep of MCS 4
+end

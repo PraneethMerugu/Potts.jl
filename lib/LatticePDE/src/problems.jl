@@ -822,7 +822,7 @@ end
 function _index(cf::CompiledField, sys::PDESystem, s, state; derived = Pair[], computed = Pair[], cdefaults = Pair[])
     slots = Problems.state_layout(s, [fieldid(s, k) for k in state])
     dims = Int.(cf.program.hierarchy[1].grid.dims)
-    vars, inputs, inputnames, boolinputs, inputbounds = Pair[], Pair[], Pair[], String[], Pair[]
+    vars, inputs, inputnames, boolinputs, inputbounds, aux = Pair[], Pair[], Pair[], String[], Pair[], Pair[]
     for v in sys.dvs, (op, ks) in cf.keys
         isequal(_opof(v), op) || continue
         for (i, k) in enumerate(ks)
@@ -840,6 +840,9 @@ function _index(cf::CompiledField, sys::PDESystem, s, state; derived = Pair[], c
                 b == (-Inf, Inf) || push!(inputbounds, k => b)
             elseif k in state
                 push!(vars, (term, Symbol(k)) => FieldSlot(slots[fieldid(s, k)], dims))
+            elseif any(q -> q.key == "aux:$k", s.kernels)
+                # an aux field `K ~ rhs` (F3 design §3.12): read by `sol[K]` and `integ[K]`
+                push!(aux, (term, Symbol(k)) => k)
             end
         end
     end
@@ -869,7 +872,7 @@ function _index(cf::CompiledField, sys::PDESystem, s, state; derived = Pair[], c
     end
     return LatticeIndex(; key = _symkey, variables = vars, parameters = params,
         independent_variables = [unwrap(sys.ivs[1])], defaults, inputs, inputnames, boolinputs, inputbounds, derived,
-        observed, parambounds, derive,
+        observed, parambounds, derive, aux,
         tables = Pair[[Any[unwrap(q), Symbol(k)] => k for (k, _) in cf.tables for q in _params(sys) if string(unwrap(q)) == k];
                       [e => (k, i) for (k, _) in cf.tables for q in _params(sys) if string(unwrap(q)) == k
                        for (i, e) in enumerate(Symbolics.scalarize(unwrap(q)))]])
@@ -1044,7 +1047,9 @@ The problem of `pdesys` on the lattice (`disc.problem`):
 - `:ode`: an `ODEProblem` whose function is the compiled right side (`LatticeRHS`) with the
   symbol table as `sys`, for SciML solvers;
 - `:auto`: `:ode` for rate equations, `:owned` when a discrete map or a masked condition
-  (`c ~ masked(pred, v)`, which only the owned path lowers) is present;
+  (`c ~ masked(pred, v)`, which only the owned path lowers) is present, or when the system has
+  only aux equations `K ~ rhs` (no state: the owned path evaluates them once per window and
+  `sol[K]`, `integ[K]` read them, F3 design §3.12);
 - `:linear`: not in this version (a steady solver is planned); refused.
 
 The time span is the domain of the first variable. Fields index solutions and integrators
@@ -1100,7 +1105,9 @@ function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = (),
     hasmask = any(b -> (r = unwrap(b.rhs); iscall(r) && operation(r) === masked), sys.bcs)
     # the clock's step index needs the owned steppers, which land on its boundaries
     hasclock = _reads_step_index(sys)
-    kind == :auto && (kind = hasmap || hasmask || hasclock ? :owned : :ode)
+    # aux equations only (`K ~ rhs`, no state): the owned path evaluates them once per window
+    auxonly = !isempty(sys.eqs) && all(eq -> (l = unwrap(eq.lhs); !(iscall(l) && operation(l) isa Union{Differential, Shift})), sys.eqs)
+    kind == :auto && (kind = hasmap || hasmask || hasclock || auxonly ? :owned : :ode)
     kind == :ode && hasclock && _dverr("`step_index(t)` needs problem = :owned in this version: an ODE solver does not " *
                                        "land on the clock's boundaries (a discrete parameter updated at them, with " *
                                        "`tstops`, is planned: F4); use problem = :owned or leave `problem` out")

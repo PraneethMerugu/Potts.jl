@@ -80,8 +80,14 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
     maps = Set{Symbol}(info(x).name for (x, _, op) in _field_equations(sys) if op isa ModelingToolkitBase.Shift)
     odes = [_solver_name(x) for (x, _) in Iterators.flatten((c.cell_odes, c.model_odes))]
     if isempty(fields)
-        field_solver === nothing || throw(ArgumentError(
-            "`field_solver`: model `$(nameof(sys))` has no field to integrate; remove the keyword"))
+        # a model whose only fields are aux fields (`K ~ rhs`) evaluates them once per MCS, with
+        # no solver (F3 design §3.12)
+        aux = _field_aux(sys)
+        field_solver === nothing || throw(ArgumentError(isempty(aux) ?
+            "`field_solver`: model `$(nameof(sys))` has no field to integrate; remove the keyword" :
+            "`field_solver`: model `$(nameof(sys))` has no field to integrate: " *
+            "$(join(("`$(info(x).name) ~ …`" for (x, _) in aux), ", ")) $(length(aux) == 1 ? "is an aux field" : "are aux fields"), " *
+            "evaluated once per MCS with no solver; remove the keyword"))
     else
         # the default (D-F2-R1): explicit Euler with the automatic substep count; for maps
         # `ExplicitMap()`, one application per MCS

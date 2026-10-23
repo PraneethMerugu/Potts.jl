@@ -13,7 +13,20 @@
 # fingerprint, program entries and `n` are recorded.
 # F2 batch 4 review (d): the soft set adds the F2-10 and F2-11 models (FpDivK, FpRaw, FpAdvect,
 # FpAux, FpMap, FbBcsFace, FbFluxRobin, FbFluxRobinBcs, FbBcsNR), recorded at the review fixups.
+# F3-00: the soft set adds the aux-only model FaOne (no stepped field: no `field_solver`, 0
+# substeps), recorded at F3-00 (new records; no record moved).
 const GD_RECORDS = Dict{String, String}(
+    "FaOne|Float64|canonical" => "",
+    "FaOne|Float64|fingerprint" => "0xe32442533683c230",
+    "FaOne|Float64|g1|arrays" => "((CorePotts.Part{:site, :cfield}(), nothing),)",
+    "FaOne|Float64|g1|bounded" => "true",
+    "FaOne|Float64|g1|fingerprint_text" => "4c9f150f9d42dd1e",
+    "FaOne|Float64|g1|least" => "Int64:0",
+    "FaOne|Float64|g1|params" => "Symbol[]",
+    "FaOne|Float64|g1|tables" => "Pair{Int64, Symbol}[]",
+    "FaOne|Float64|groups" => "1",
+    "FaOne|Float64|n" => "[0]",
+    "FaOne|Float64|route" => "auto",
     "FbBcsFace|Float64|canonical" => "c=ExplicitEuler(substeps=nothing,lower=nothing)",
     "FbBcsFace|Float64|fingerprint" => "0x3ea249edfc841684",
     "FbBcsFace|Float64|g1|arrays" => "((CorePotts.Part{:site, :c}(), CorePotts.Part{:site, :c__next}()),)",

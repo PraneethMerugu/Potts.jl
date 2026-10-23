@@ -1,7 +1,8 @@
 # `setp` on an OrdinaryDiffEq integrator of a field program's ODE form names a symbol that is
 # no parameter (an expression such as `2k`), as `setp` on the problem does (F1), instead of
 # SII's "invalid index: nothing" when the setter runs; a value outside a parameter's declared
-# bounds is refused when the setter runs, before it is written (F2-14).
+# bounds is refused when the setter runs, before it is written (F2-14). A write of an aux field
+# is refused in the user's words (F3-00).
 module LatticeFieldsOrdinaryDiffEqCoreExt
 
 using OrdinaryDiffEqCore: ODEIntegrator
@@ -18,6 +19,13 @@ function SII.setp(sys::LatticeODEIntegrator, sym; kw...)
         Problems.check_bounds(integ.p, SII.symbolic_container(integ.f), kv; tables = Problems.rhs_tables(integ.f))   # (the function holds the index)
         return s(integ, v)
     end
+end
+
+# `integ[K] = v` of an aux field (`K ~ rhs`, observed on the ODE path) is refused in the user's
+# words, as on the owned path (SII: "Invalid symbol … for `setsym`")
+function SII.setsym(sys::LatticeODEIntegrator, sym)
+    Problems.check_aux_write(SII.symbolic_container(sys.f), sym)
+    return invoke(SII.setsym, Tuple{Any, Any}, sys, sym)
 end
 
 end # module LatticeFieldsOrdinaryDiffEqCoreExt

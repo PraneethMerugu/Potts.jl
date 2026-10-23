@@ -293,6 +293,33 @@ function _lattice_rhs(ctx::RHSContext, ::Type{E}, base, Pinit = nothing, inputs 
 end
 
 """
+    ODEAux(f, program)
+
+The aux fields of an ODE problem as observed quantities (F3 design §3.12): `a(u, p, t, key)` is
+aux field `key` at state `u`, parameters `p` and time `t`, `rhs(u, t)`, grid-shaped on the
+problem's backend. One call of the right side `f` at `(u, p, t)` runs the aux kernels on the
+store of the build this task runs (the rates it writes into a scratch `du` are dropped).
+"""
+struct ODEAux{F, P}
+    f::F
+    program::P
+end
+_build_eltype(::LatticeRHS{L, W, E}) where {L, W, E} = E
+function (a::ODEAux)(u, p, t, key)
+    f = a.f
+    g = f.owner[1] === current_task() ? f : _for_task(f)
+    C = _rhs_eltype(u, u, p, t)
+    C === _build_eltype(g) || (g = _variant(g, C))
+    du = similar(u)
+    g(du, u, p, t)
+    prog = a.program
+    id = fieldid(prog, key)
+    fd = prog.fields[id]
+    d = leveldims(prog, fd.levels[1])
+    return reshape(copy(array(g.store, id, :cur)), ncomp(fd) == 1 ? d : (d..., ncomp(fd)))
+end
+
+"""
     ode_problem(program, u0, tspan, p; state, rates, init = String[], index, tables = [],
                 inputs = [], stability = p -> NaN, backend = CPU(), options = CompileOptions())
 
@@ -340,6 +367,8 @@ function ode_problem(prog::Program, u0, tspan, p; state, rates, init = String[],
     pv = collect(p)
     f = _lattice_rhs(ctx, E, nothing, pv, ins)
     U = copyto!(KA.allocate(backend, E, n), convert(Vector{E}, collect(u0)))
+    # aux fields `K ~ rhs` read as observed quantities (`sol[K]`, `integ[K]`: F3-00 review M1)
+    index isa LatticeIndex && !isempty(index.aux) && (index.auxeval[] = ODEAux(f, s))
     fun = SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize}(f; sys = index)
     return SciMLBase.ODEProblem(fun, U, (Float64(tspan[1]), Float64(tspan[2])), pv)
 end

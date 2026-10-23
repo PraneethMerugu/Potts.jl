@@ -103,7 +103,10 @@ read (`Δ(volume[owner])`) is an error: hold the value in a site variable and ap
 operator to it.
 
 **Aux fields and maps.** `K ~ expr` defines the field `K` by its value: every field group
-computes it from the values it reads, at every substep. `Shift(t, 1)(m) ~ rhs` is a map: one
+computes it from the values it reads, at every substep. A model whose only fields are aux
+fields has no field to step: its field phase computes them once per MCS, in its place in the
+schedule (in the first pass of a `repeat`), and once at the start, so the first sweep reads
+`expr`, not the declared value. Such a model takes no `field_solver`. `Shift(t, 1)(m) ~ rhs` is a map: one
 application per MCS, stepped by `ExplicitMap()` (the default for a map). Under
 `repeat(R, sweep(…), fields)`, a map steps in the first pass only, so it reads the CPM state
 after the first part of the sweep. A model has rate

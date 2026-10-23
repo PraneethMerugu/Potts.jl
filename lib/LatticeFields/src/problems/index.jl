@@ -18,7 +18,7 @@ indices(s::FieldSlot) = reshape(s.range, s.dims)
 """
     LatticeIndex(; key = identity, variables, parameters, independent_variables, defaults,
                  inputs = [], inputnames = [], boolinputs = [], inputbounds = [], derived = [], observed = [],
-                 tables = [])
+                 tables = [], aux = [])
 
 The symbol table of a field problem (the `sys` of its `ODEFunction`, and the symbolic
 container of `FieldProblem`, `FieldSolution` and `FieldIntegrator`). `variables` is a vector
@@ -36,9 +36,12 @@ symbols to how they read, `(p, t) -> value` from the raw parameters (a function,
 compiled here), so `getp(sol, k2)`, `sol.ps[k2]` and `integ.ps[k2]` read them while `remake` and
 `setp` refuse them (their `parameter_index` throws); `tables` maps the symbols of array
 parameters to their table keys, or an entry's symbol to `(key, i)` (`remake(prob::FieldProblem;
-p = [Dk => values])` gives new values; `integ.ps[Dk]`, `getp(prob, Dk)` read them). Any other
-symbol given as a parameter is an error naming the parameters. Every symbol is looked up as
-`key(sym)`.
+p = [Dk => values])` gives new values; `integ.ps[Dk]`, `getp(prob, Dk)` read them); `aux` maps
+`symbols => key`, the aux fields of the program (`K ~ rhs`, F3 design §3.12): not part of the
+state, they are evaluated from it and read by `sol[K]` and `integ[K]` ([`aux_key`](@ref); on the
+ODE path they are observed, `rhs(u(t), t)`, through the evaluator `ode_problem` sets). Any
+other symbol given as a parameter is an error naming the parameters. Every symbol is looked up
+as `key(sym)`.
 """
 struct LatticeIndex{F}
     key::F
@@ -57,11 +60,14 @@ struct LatticeIndex{F}
     tables::Dict{Any, Tuple{String, Int}}       # symbol → (table key, entry; 0 for the whole table)
     parambounds::Dict{Int, Tuple{Float64, Float64}}   # slot → declared `bounds` (F2-14), checked at every write
     derive::Any                                 # `nothing`, or `(Derivation, sources, slots)`: the computed slots (F2-15)
+    aux::Dict{Any, String}                      # symbol → aux field key (F3-00)
+    auxsyms::Vector{Any}                        # the canonical symbol of each aux field
+    auxeval::Ref{Any}                           # the ODE path's aux evaluator `(u, p, t, key)`, or nothing
 end
 function LatticeIndex(; key::F = identity, variables = Pair[], parameters = Pair[],
         independent_variables = Any[], defaults = Dict{Any, Any}(), inputs = Pair[],
         inputnames = Pair[], boolinputs = String[], inputbounds = Pair[], derived = Pair[], observed = Pair[],
-        tables = Pair[], parambounds = Pair[], derive = nothing) where {F}
+        tables = Pair[], parambounds = Pair[], derive = nothing, aux = Pair[]) where {F}
     syms(x) = x isa Union{Tuple, AbstractVector} ? x : (x,)
     vars, varsyms = Dict{Any, FieldSlot}(), Any[]
     for (ss, slot) in variables
@@ -101,8 +107,40 @@ function LatticeIndex(; key::F = identity, variables = Pair[], parameters = Pair
         names, Set{String}(String.(boolinputs)),
         Dict{String, Tuple{Float64, Float64}}(String(k) => Float64.((b[1], b[2])) for (k, b) in inputbounds), der, obs, Dict{Any, Tuple{String, Int}}(key(s) => (k isa Tuple ? (String(k[1]), Int(k[2])) : (String(k), 0))
                                                        for (ss, k) in tables for s in syms(ss)),
-        Dict{Int, Tuple{Float64, Float64}}(Int(i) => Float64.((b[1], b[2])) for (i, b) in parambounds), derive)
+        Dict{Int, Tuple{Float64, Float64}}(Int(i) => Float64.((b[1], b[2])) for (i, b) in parambounds), derive,
+        Dict{Any, String}(key(s) => String(k) for (ss, k) in aux for s in syms(ss)), Any[first(syms(ss)) for (ss, _) in aux],
+        Ref{Any}(nothing))
 end
+
+# `ix.K` for a name that is not a field of the index: its canonical symbol, as an MTK system
+# gives `sys.K` (SciMLBase looks an observed name up this way: `sol[:K]` on the ODE path)
+@inline Base.getproperty(ix::LatticeIndex, s::Symbol) = hasfield(LatticeIndex, s) ? getfield(ix, s) : _symbol_of(ix, s)
+function _symbol_of(ix::LatticeIndex, s::Symbol)
+    k = aux_key(ix, s)
+    if k !== nothing
+        for a in getfield(ix, :auxsyms)
+            aux_key(ix, a) == k && return a
+        end
+    end
+    obs = getfield(ix, :observed)
+    f = get(obs, getfield(ix, :key)(s), nothing)
+    if f !== nothing
+        for (q, g) in obs
+            q isa Symbol || g !== f || return q
+        end
+    end
+    throw(ArgumentError("`$s` is not an aux field or observed quantity of the problem"))
+end
+Base.propertynames(::LatticeIndex) = fieldnames(LatticeIndex)
+
+"""
+    aux_key(ix, sym) -> String or nothing
+
+The aux field key of `sym` (a symbol of `ix`, or the key itself), else `nothing`.
+"""
+aux_key(ix::LatticeIndex, sym::AbstractString) = sym in values(ix.aux) ? String(sym) : get(ix.aux, ix.key(sym), nothing)
+aux_key(ix::LatticeIndex, sym) = (sym isa Union{AbstractArray, Tuple} || sym isa Integer) ? nothing : get(ix.aux, ix.key(sym), nothing)
+aux_key(ix, sym) = nothing
 
 """
     input_key(ix, sym) -> String or nothing
@@ -142,10 +180,17 @@ SII.variable_symbols(ix::LatticeIndex) = ix.varsyms
 # (SciMLBase's `fill_p` asks `parameter_index` for every key) or `setp` of it is refused (F1)
 _scalar(sym) = !(sym isa Union{AbstractArray, Tuple})
 SII.is_parameter(ix::LatticeIndex, sym) = _scalar(sym) && haskey(ix.params, ix.key(sym))
-SII.is_observed(ix::LatticeIndex, sym) = _scalar(sym) && haskey(ix.observed, ix.key(sym))
+SII.is_observed(ix::LatticeIndex, sym) = _scalar(sym) && (haskey(ix.observed, ix.key(sym)) || _ode_aux(ix, sym) !== nothing)
+# an aux field on the ODE path (F3-00 review M1): observed, `rhs(u(t), t)` from the solver's state
+_ode_aux(ix::LatticeIndex, sym) = ix.auxeval[] === nothing ? nothing : aux_key(ix, sym)
 SII.parameter_observed(ix::LatticeIndex, sym) = _scalar(sym) ? get(ix.observed, ix.key(sym), nothing) :
                                                _observed_list(ix, sym)
 function SII.observed(ix::LatticeIndex, sym)
+    k = _scalar(sym) ? _ode_aux(ix, sym) : nothing
+    if k !== nothing
+        ev = ix.auxeval[]
+        return (u, p, t) -> ev(u, p, t, k)
+    end
     f = SII.parameter_observed(ix, sym)
     f === nothing && throw(ArgumentError("`$sym` is not observed"))
     return (u, p, t) -> f(p, t)

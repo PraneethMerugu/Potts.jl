@@ -173,9 +173,11 @@ A hand-wrapped PDESystem (`Potts.wrap`) is returned as given.
 function fields(sys::PottsSystem)
     f = _stored_fields(sys)
     eqs = _field_equations(sys)
-    f === nothing && isempty(eqs) && return nothing
+    # a model whose only fields are aux fields `K ~ rhs` has a PDESystem of aux equations (F3-00)
+    none = isempty(eqs) && isempty(_field_aux(sys))
+    f === nothing && none && return nothing
     f === nothing && (f = first(_field_system(sys)))
-    isempty(eqs) && return f                        # a hand-wrapped PDESystem, as given
+    none && return f                                # a hand-wrapped PDESystem, as given
     return _with_defaults(f, eqs)
 end
 

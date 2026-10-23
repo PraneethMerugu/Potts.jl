@@ -35,9 +35,9 @@ public Geom, RT_T, RT_DT, launch_geometry, launch_parameters, bind, rebind, reti
        group_program, group_plans, restrict_bound, GroupRuntime, bind_group, advance!, reset!, rebind!, clamp_now!,
        FieldSolution,
        FieldIntegrator, substeps, StateView, RHSLaunch, LatticeRHS, ode_problem,
-       input_key, input_name, table_key, table_entry, parameter_name, resolve_inputs, check_inputs_set, upload_inputs!, check_parameters,
+       input_key, aux_key, input_name, table_key, table_entry, parameter_name, resolve_inputs, check_inputs_set, upload_inputs!, check_parameters,
        seen_bound, unbounded_reason, unbounded_key, bound_inputs, check_values, ParamsTables, with_tables,
-       typewith, check_setp, LatticeODEFunction, check_bounds
+       typewith, check_setp, LatticeODEFunction, check_bounds, check_aux_write
 
 include("bind.jl")
 include("store.jl")

@@ -509,7 +509,7 @@ The filled inputs of model `sys`: `(name, expr, eltype)`, the site arrays the CP
 the fields every MCS (`T` is the state type).
 """
 _field_inputs(sys::PottsSystem, T::Type = Float64) =
-    isempty(_field_equations(sys)) ? Tuple{Symbol, Any, Type}[] :
+    isempty(_field_equations(sys)) && isempty(_field_aux(sys)) ? Tuple{Symbol, Any, Type}[] :
     _canonical_filled(_field_system(sys; T, known = Tuple{Symbol, Any, Type}[])[2].filled)
 # those of compiled model `c`, made once per state type (cached on `c`)
 _field_inputs(c::CompiledPottsSystem, T::Type = Float64) =
@@ -552,6 +552,7 @@ the update of its algorithm fused by the IR pass, the plans), the algorithm, the
 program and the mask and step plans, the array bindings, the parameter and table bindings,
 the substep rule, the fingerprint text and the compile options.
 """
+_has_aux(g) = any(k -> startswith(k.key, "aux:"), g.program.kernels)
 struct _FieldGroup
     names::Vector{Symbol}
     group::Any
@@ -571,9 +572,15 @@ end
 # MCS), whatever the parameters; a map has no stability bound
 struct _MapSteps end
 (::_MapSteps)(praw) = 1
+# The substep rule of the group of a model whose only fields are aux fields `K ~ rhs` (F3
+# design §3.12): no state, so no substep; the phase evaluates them once per MCS
+struct _AuxSteps end
+(::_AuxSteps)(praw) = 0
 # the least count and the bounded flag of a group's rule, as the fingerprint records them
-_least(s) = s isa _MapSteps ? 1 : s.least
-_bounded(s) = s isa _MapSteps || (isempty(s.bound.unbounded) && isempty(s.bound.expanded))
+_least(s) = s isa _MapSteps ? 1 : s isa _AuxSteps ? 0 : s.least
+_bounded(s) = s isa Union{_MapSteps, _AuxSteps} || (isempty(s.bound.unbounded) && isempty(s.bound.expanded))
+# whether compiled model `c` has fields: stepped ones, or aux fields only (one group with no state)
+_has_fields(c::CompiledPottsSystem) = !isempty(c.fields) || !isempty(_field_aux(c.sys))
 
 # the explicit Euler update of a substep, clipped below at `lower`, fused symbolically (the
 # oracle of the update pass's byte-identity gate, test/fields_identity.jl)
@@ -877,6 +884,9 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
     end
     dt = _field_dt(sys)
     groups = _FieldGroup[]
+    # aux fields only (F3 design §3.12): one group with no state, stepped by the default
+    # algorithm (no `field_solver` applies: PO07), with no substep
+    isempty(order) && return [_aux_group(c, T, dt)]
     allnames = Symbol[info(x).name for (x, _) in _field_equations(sys)]
     # with several groups, the coupling between them (`_check_group_coupling`): the bound of
     # the whole field system (the group of all fields, in rate form), and the partition
@@ -936,6 +946,23 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
     return groups
 end
 
+# The group of a model whose only fields are aux fields `K ~ rhs` (F3 design §3.12): no state
+# field, only `aux:` kernels; its phase evaluates them once per MCS (`_AuxSteps`: 0 substeps)
+function _aux_group(c::CompiledPottsSystem, T::Type, dt)
+    solver = ExplicitEuler()
+    lg = _field_group_spec(c, Symbol[], T)
+    gspec = lg.spec
+    opts = LatticeFields.Compile.CompileOptions(; T, float64_ok = !(T <: Union{Float16, Float32}), lanes = :state,
+        index = :cartesian)
+    fused = LatticeFields.Compile.fuse_update(gspec.rate, LatticeFields.Problems.update_rule(solver))
+    group = LatticeFields.Problems.FieldGroup(gspec; alg = solver, program = LatticeFields.Compile.semantic(fused))
+    prog = group.program
+    mplan, splan = LatticeFields.Problems.group_plans(group, solver, T, KernelAbstractions.CPU(), opts)
+    arrays = Tuple((CorePotts.Part((:site, Symbol(f.key))), nothing) for f in prog.fields)
+    fp = LatticeFields.Compile.fingerprint_text(fused; T)
+    return _FieldGroup(Symbol[], group, solver, prog, mplan, splan, arrays, lg.tables, lg.params, _AuxSteps(), fp, opts)
+end
+
 # The site phase writing every filled input of the fields (one launch per MCS)
 function _field_fill_phase(c::CompiledPottsSystem, T)
     filled = _field_inputs(c, T)
@@ -953,7 +980,7 @@ end
 
 # the field phases of a problem (in group order) and their at-init clamps
 function _field_phases(c::CompiledPottsSystem, T, spec::SolverSpec)
-    isempty(c.fields) && return Any[], Any[]
+    _has_fields(c) || return Any[], Any[]
     groups = _field_groups(c, T, spec)
     dt = _field_dt(c.sys)
     steps, clamps = Any[], Any[]
@@ -968,7 +995,19 @@ function _field_phases(c::CompiledPottsSystem, T, spec::SolverSpec)
         ph = CorePotts.FieldPhase{Symbol(:__fields, j)}(g.group, g.alg, g.arrays; g.tables, g.params,
             substeps = g.substeps, dt, period = Float64(_p(c.sys, :sweep).mcs_duration), g.options, T)
         push!(steps, ph)
-        isempty(g.masks.launches) || push!(clamps, CorePotts.field_clamp(ph))
+        # the at-init phase: the masked-condition clamp (one substep of length zero; it also
+        # evaluates the group's aux fields). For a group with aux fields (`K ~ rhs`) and no
+        # mask, the aux fields evaluated at t0, so the first sweep reads `rhs`, not the declared
+        # value (§3.12, F3 review S1): a group with no state takes its own step (0 substeps); a
+        # rate group with state its `aux:` kernels alone, which never write the state (review r2
+        # N1: no update rule, no `lower` clip); a map group none (it would apply the map)
+        if !isempty(g.masks.launches) || g.substeps isa _AuxSteps
+            push!(clamps, CorePotts.field_clamp(ph))
+        elseif _has_aux(g) && !(g.substeps isa _MapSteps)
+            push!(clamps, CorePotts.FieldPhase{Symbol(:__fields, j, :_aux)}(g.group, ExplicitEuler(), g.arrays; g.tables,
+                g.params, substeps = _AuxSteps(), dt, period = Float64(_p(c.sys, :sweep).mcs_duration), g.options, T,
+                aux_only = true))
+        end
     end
     return steps, (fill === nothing ? clamps : Any[fill; clamps])
 end

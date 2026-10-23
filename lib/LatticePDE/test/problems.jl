@@ -423,3 +423,77 @@ end
     @test occursin("`u0`: `nope` is not a field", emsg(() -> discretize(sys, disc; inputs = [ke => K], u0 = [:nope => 1.0])))
     @test occursin("`tspan` is `(t₀, t₁)`", emsg(() -> discretize(sys, disc; inputs = [ke => K], tspan = 3)))
 end
+
+# F3-00 (F3 design §3.12, review r1 M1 and R2-M2): a system whose only equations are aux fields
+# `K ~ rhs` has one group with no state, evaluated once per window (0 substeps); the aux fields
+# of any system are evaluated at each save, before the copy, and at each `integ[K]` read, so a
+# saved or read `K` is `rhs` of the state at that time. Base (743ab0a0): `sol[K]` was "Invalid
+# symbol K(t, x, y) for `getsym`" and an aux-only solve saved empty states (reviewer probe
+# `r1_auxonly_b`); `integ[K]` failed the same way, also for a system with states.
+@testset "F3-00: aux fields in B (aux-only systems, sol[K], integ[K])" begin
+    emsg(f) = try
+        f(); ""
+    catch e
+        sprint(showerror, e)
+    end
+    @parameters Kb = 2.0 Da = 0.1 ka = 1.0
+    xc = ((1:4) .- 0.5) ./ 4
+    # aux only: `:auto` gives the owned problem; `K` at every save (saves every second window)
+    sys = psys([Ke ~ Kb + t + x], Equation[], [Kb]; dvs = [Ke])
+    p = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64))
+    @test p isa FieldProblem
+    sol = solve(p, ExplicitEuler(; dt = 0.25); saveat = 0.5)
+    @test sol.retcode == SciMLBase.ReturnCode.Success && sol.t == [0.0, 0.5, 1.0]
+    @test LatticePDE.Problems.substep_counts(sol) == [0]          # no state: no substep
+    @test all(isempty, sol.u)                                        # the aux field is not state
+    for (i, ti) in enumerate(sol.t)
+        @test sol[Ke][i] ≈ [2.0 + ti + a for a in xc, _ in 1:4] && sol[Ke, i] == sol[Ke][i]
+    end
+    @test sol[:K] == sol[Ke]                                         # by name too
+    ig = init(p, ExplicitEuler(; dt = 0.25))
+    step!(ig)
+    @test ig[Ke] ≈ [2.25 + a for a in xc, _ in 1:4]                  # read at t = 0.25
+    # FieldGroups: `default` sets the window (a pair names no state field: refused naming it)
+    @test solve(p, FieldGroups(; default = ExplicitEuler(; dt = 0.25)); saveat = 0.5)[Ke] == sol[Ke]
+    @test occursin("FieldGroups: `K", emsg(() -> solve(p, FieldGroups(Ke => ExplicitEuler(; dt = 0.25)))))
+    # with states: `K ~ 2c + t` is saved from the saved state at the save time (two substeps per
+    # window, so the substep's own aux value, computed from the state before it, would lag)
+    sys2 = psys([D(ce) ~ Da * Δ(ce) - ka * ce, Ke ~ 2ce + t], [c(0, x, y) ~ 1.0 + x], [Da, ka]; dvs = [ce, Ke])
+    p2 = owned(sys2, 4)
+    s2 = solve(p2, ExplicitEuler(; dt = 0.25); saveat = 0.5)
+    @test s2.substeps == 2 && s2.t == [0.0, 0.5, 1.0]
+    for i in eachindex(s2.t)
+        @test s2[Ke][i] ≈ 2 .* s2[ce][i] .+ s2.t[i] rtol = 1e-14
+    end
+    ig2 = init(p2, ExplicitEuler(; dt = 0.25))
+    step!(ig2)
+    @test ig2[Ke] ≈ 2 .* ig2[ce] .+ 0.25 rtol = 1e-14
+    # an aux field is not written: the error names it (base: "Invalid symbol")
+    @test occursin("`K` is an aux field", emsg(() -> (ig2[Ke] = zeros(4, 4))))
+    # … and an unknown name lists it among the names
+    @test occursin("`K`", emsg(() -> ig2[:nope]))
+    # the `:ode` path (review r1 M1): `:auto` gives the ODEProblem for a system with states, and
+    # `K` is an observed quantity, `rhs` at the state and time read: `sol[K]` at every save and
+    # `integ[K]`, equal to the owned path at t0 (base 8f658abd: "Invalid symbol K(t, x, y)", reviewer
+    # probe u2_b)
+    po = discretize(sys2, LatticeDiscretization(Grid((4, 4)); T = Float64))
+    @test po isa ODEProblem
+    so = SciMLBase.solve(po, Tsit5(); abstol = 1e-10, reltol = 1e-10, saveat = 0.5)
+    @test so.t == [0.0, 0.5, 1.0]
+    for i in eachindex(so.t)
+        @test so[Ke][i] ≈ 2 .* so[ce][i] .+ so.t[i] rtol = 1e-14
+        @test so[Ke, i] == so[Ke][i] && size(so[:K][i]) == (4, 4)
+    end
+    @test so[ce][1] == s2[ce][1]
+    @test so[Ke][1] ≈ s2[Ke][1] rtol = 1e-14                         # the owned path at t0
+    io = init(po, Tsit5(); abstol = 1e-10, reltol = 1e-10)
+    # a write of `K` on the ODE path is refused in the user's words (review r2 nit; base
+    # e0347d1a: "Invalid symbol K(t, x, y) for `setsym`")
+    e = emsg(() -> (io[Ke] = zeros(16)))
+    @test occursin("`K` is an aux field (`K ~ rhs`)", e) && occursin("cannot be written", e) && !occursin("Invalid symbol", e)
+    @test io[Ke] ≈ 2 .* io[ce] .+ io.t rtol = 1e-14                 # at t0
+    step!(io)
+    @test io.t > 0
+    @test io[Ke] ≈ 2 .* io[ce] .+ io.t rtol = 1e-14
+    @test SciMLBase.successful_retcode(SciMLBase.solve!(io))
+end

@@ -282,7 +282,8 @@ Saved states of an owned solve: `t`, `u` (flat host vectors), `retcode`, and the
 counts used: `substeps` the first group's (the only one's for one group), `counts` every
 group's, in group order ([`substep_counts`](@ref)). Indexed by symbol through
 SymbolicIndexingInterface: `sol[c]` is a vector of grid-shaped arrays, `sol[c, i]` one of
-them.
+them. An aux field `K ~ rhs` (F3 design §3.12) is not in `u`: `aux` holds its values at each
+save, evaluated from the saved state at the save time, and `sol[K]` reads them.
 """
 struct FieldSolution{P, U}
     prob::P
@@ -291,6 +292,7 @@ struct FieldSolution{P, U}
     retcode::SciMLBase.ReturnCode.T
     substeps::Int
     counts::Vector{Int}
+    aux::Vector{U}                      # the aux fields at each save (flat, `_aux_layout`), or empty
 end
 SciMLBase.successful_retcode(s::FieldSolution) = SciMLBase.successful_retcode(s.retcode)
 
@@ -299,8 +301,28 @@ SII.symbolic_container(s::FieldSolution) = s.prob.index
 SII.state_values(s::FieldSolution) = s.u
 SII.current_time(s::FieldSolution) = s.t
 SII.parameter_values(s::FieldSolution) = s.prob.p
-Base.getindex(s::FieldSolution, sym) = SII.getsym(s, sym)(s)
-Base.getindex(s::FieldSolution, sym, i) = SII.getsym(s, sym)(s, i)
+function Base.getindex(s::FieldSolution, sym)
+    k = aux_key(s.prob.index, sym)
+    k === nothing || return [_aux_read(s.prob.program, a, k) for a in s.aux]
+    return SII.getsym(s, sym)(s)
+end
+function Base.getindex(s::FieldSolution, sym, i)
+    k = aux_key(s.prob.index, sym)
+    k === nothing || return _aux_read(s.prob.program, s.aux[i], k)
+    return SII.getsym(s, sym)(s, i)
+end
+
+# The aux fields of a program (`K ~ rhs`: the fields its `aux:` kernels write, F3 design
+# §3.12): their keys, and their ranges in a flat vector of saved aux values
+_aux_keys(prog::Program) = String[k.key[(ncodeunits("aux:") + 1):end] for k in prog.kernels if startswith(k.key, "aux:")]
+_aux_layout(prog::Program) = state_layout(prog, [fieldid(prog, k) for k in _aux_keys(prog)])
+# aux field `k` in the flat saved values `flat`, grid-shaped
+function _aux_read(prog::Program, flat, k)
+    id = fieldid(prog, k)
+    f = prog.fields[id]
+    d = leveldims(prog, f.levels[1])
+    return reshape(flat[_aux_layout(prog)[id]], ncomp(f) == 1 ? d : (d..., ncomp(f)))
+end
 Base.length(s::FieldSolution) = length(s.t)
 
 """
@@ -335,6 +357,8 @@ mutable struct FieldIntegrator{P <: FieldProblem, A, S <: FieldStore, RT <: Tupl
     t::Vector{Float64}
     u::Vector{Vector{T}}
     retcode::SciMLBase.ReturnCode.T
+    aux::Any                            # the aux kernels bound at both parities, or nothing (F3-00)
+    auxu::Vector{Vector{T}}             # the aux fields at each save (flat, `_aux_layout`)
 end
 
 
@@ -346,7 +370,8 @@ count `n`, the larger of `n` and the count of the bound over the terms the bound
 ([`seen_bound`](@ref)), or `n` when that is not finite; when the full bound is unknown the
 count is the user's for the terms it does not cover, and a warning names them, once per
 program, term and cause in a session ([`unbounded_key`](@ref): never once per value). An unknown bound with no user count is an `ArgumentError` that names the
-terms the bound cannot see.
+terms the bound cannot see. A problem with no state (aux fields `K ~ rhs` only, F3 design
+§3.12) takes 0 substeps: its window evaluates the aux fields once.
 """
 substeps(::FieldProblem, ::ExplicitMap, p = nothing; tables = nothing, inputs = nothing) = 1
 
@@ -375,6 +400,7 @@ _warn_key(prob::FieldProblem, why) = string(hash(sprint(print_program, prob.prog
 function substeps(prob::FieldProblem, alg::ExplicitEuler, p = prob.p; tables = prob.tables,
         inputs = _bound_inputs(prob), stability = prob.stability)
     dt = _window(alg, _clock(prob))
+    isempty(prob.state) && return 0                 # aux fields only: one evaluation per window
     pp = with_tables(map(primal, p), tables; inputs)        # a policy: on the primal values
     if alg.substeps !== nothing
         ρ = seen_bound(stability, pp)
@@ -439,6 +465,18 @@ end
 # of every state field for a single algorithm)
 _groups(prob::FieldProblem, alg::FieldAlgorithm) = Tuple{FieldAlgorithm, Vector{String}}[(alg, prob.state)]
 function _groups(prob::FieldProblem, g::FieldGroups)
+    # aux fields only (no state, F3 design §3.12): one group with no field, which evaluates them
+    # once per window; `default` (or any pair's algorithm) sets the window
+    if isempty(prob.state)
+        why = "the problem has no state field (its fields are aux fields `K ~ rhs`, evaluated once per window)"
+        for (k, _) in g.pairs
+            throw(ArgumentError(string("FieldGroups: `", _symtext(k), "` is not a state field: ", why,
+                "; give only `default`, an algorithm whose `dt` sets the window")))
+        end
+        g.default === nothing && throw(ArgumentError(string("FieldGroups: ", why,
+            "; give `default`, an algorithm whose `dt` sets the window")))
+        return Tuple{FieldAlgorithm, Vector{String}}[(g.default, String[])]
+    end
     assigned = Dict{String, FieldAlgorithm}()
     for (k, a) in g.pairs
         key = _state_key(prob, k)
@@ -535,12 +573,39 @@ function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; saveat = (),
                 for ((a, ks), m) in zip(groups, ms))
     foreach(clamp_now!, rts)                        # the saved t0 state holds the mask values
     foreach(rt -> compile!(prob.backend, rt), rts)
+    aux = _bind_aux(prob, st, pgood)
+    aux === nothing || compile!(prob.backend, aux[1])
     integ = FieldIntegrator(prob, alg, st, rts, copy(prob.p), pgood,
         eltype(prob.tables)[k => copy(v) for (k, v) in prob.tables], t0, 0, dt,
         ms[1], nsteps, _clock(prob) === nothing ? 0 : _per(dt, _clock(prob)), save, Float64[], Vector{_ueltype(st, E)}[],
-        SciMLBase.ReturnCode.Success)
+        SciMLBase.ReturnCode.Success, aux, Vector{_ueltype(st, E)}[])
     0 in save && _save!(integ)
     return integ
+end
+
+# The aux kernels of a problem alone (`K ~ rhs`, F3 design §3.12), bound at both slot parities
+# to the parameters `p`, or `nothing` when it has none. They run before each save and each
+# read of an aux field, so a saved or read `K` is `rhs` of the state at that time (inside a
+# step each substep computes them from the state before it, one substep behind a save)
+function _bind_aux(prob::FieldProblem, st::FieldStore, p)
+    s = prob.program
+    ids = [i for (i, k) in enumerate(s.kernels) if startswith(k.key, "aux:")]
+    isempty(ids) && return nothing
+    E = eltype(prob)
+    _, sp = group_plans(prob.group, _default_alg(prob), valtype(E), prob.backend, prob.options; kernels = (Int[], ids))
+    return _bind_steps(prob.backend, s, sp, st, p, prob.step.swaps, true, zero(E))
+end
+# evaluate the aux fields now, from the current state at the current time and step index
+_eval_aux!(integ::FieldIntegrator) =
+    (integ.aux === nothing || integ.aux[_parity(integ)]((_time(integ), integ.dt, _tick(integ))); nothing)
+# the aux fields' current values, flat (`_aux_layout`), on the host
+function _aux_values(integ::FieldIntegrator)
+    prog = integ.prob.program
+    out = eltype(integ.auxu)()
+    for k in _aux_keys(prog)
+        append!(out, Array(array(integ.store, fieldid(prog, k), :cur)))
+    end
+    return out
 end
 
 function _parity(integ::FieldIntegrator)
@@ -602,6 +667,7 @@ function SciMLBase.reinit!(integ::FieldIntegrator, u0 = integ.prob.u0)
     integ.iter = 0
     empty!(integ.t)
     empty!(integ.u)
+    empty!(integ.auxu)
     integ.retcode = SciMLBase.ReturnCode.Success
     _rerun_init!(integ, integ.pgood)
     foreach(reset!, integ.runtimes)
@@ -613,11 +679,16 @@ _ueltype(st::FieldStore, ::Type{E}) where {E} = isempty(st.flat) ? E : eltype(st
 _current(integ::FieldIntegrator) = isempty(integ.store.flat) ? eltype(integ.prob)[] :
                                    Array(integ.store.flat[_parity(integ)])
 
-# a saved state that is not finite ends the solve with `ReturnCode.Unstable`
+# a saved state that is not finite ends the solve with `ReturnCode.Unstable`; the aux fields
+# are evaluated at the save (one aux launch) and saved with it
 function _save!(integ::FieldIntegrator)
     u = _current(integ)
     push!(integ.t, _time(integ))
     push!(integ.u, u)
+    if integ.aux !== nothing
+        _eval_aux!(integ)
+        push!(integ.auxu, _aux_values(integ))
+    end
     all(isfinite, u) || (integ.retcode = SciMLBase.ReturnCode.Unstable)
     return nothing
 end
@@ -635,7 +706,7 @@ function CommonSolve.solve!(integ::FieldIntegrator)
     integ.retcode == SciMLBase.ReturnCode.Success && (isempty(integ.save) ||
      integ.save[end] != integ.iter) && !all(isfinite, _current(integ)) &&
         (integ.retcode = SciMLBase.ReturnCode.Unstable)
-    return FieldSolution(integ.prob, integ.t, integ.u, integ.retcode, integ.substeps, substep_counts(integ))
+    return FieldSolution(integ.prob, integ.t, integ.u, integ.retcode, integ.substeps, substep_counts(integ), integ.auxu)
 end
 
 # the default algorithm: `ExplicitEuler()` for rates (which needs `dt`: nothing else sets the
@@ -655,8 +726,9 @@ SII.current_time(i::FieldIntegrator) = _time(i)
 """
     integ[sym]
 
-The values of the field, input or observed quantity `sym` at the integrator's current step; a
-list of symbols gives a list. A field or input comes back as a new array (on the problem's
+The values of the field, input, aux field or observed quantity `sym` at the integrator's
+current step; a list of symbols gives a list. An aux field (`K ~ rhs`) is evaluated from the
+current state at the current time when read. A field or input comes back as a new array (on the problem's
 device), a copy: writing into it, `integ[c][1, 1] = v`, changes nothing (SciML's convention);
 assign the field, `integ[c] = values`. On a device the copy is a device array: compare it with
 a device array, or take `Array(integ[c])` and compare host arrays.
@@ -669,6 +741,14 @@ function Base.getindex(i::FieldIntegrator, sym)
     _parameter_route(i, sym, false)
     # a list reads each of its names (fields, inputs alike)
     sym isa Union{AbstractVector, Tuple} && i.prob.index isa LatticeIndex && return map(s -> i[s], sym isa Tuple ? sym : collect(sym))
+    ka = aux_key(i.prob.index, sym)
+    if ka !== nothing
+        _eval_aux!(i)
+        f = i.prob.program.fields[fieldid(i.prob.program, ka)]
+        a = copy(array(i.store, fieldid(i.prob.program, ka), :cur))
+        return reshape(a, ncomp(f) == 1 ? leveldims(i.prob.program, f.levels[1]) :
+                          (leveldims(i.prob.program, f.levels[1])..., ncomp(f)))
+    end
     k = i.prob.index isa LatticeIndex ? input_key(i.prob.index, sym) : nothing
     k === nothing && (_check_symbol(i, sym); return SII.getsym(i, sym)(i))
     f = i.prob.program.fields[fieldid(i.prob.program, k)]
@@ -721,6 +801,23 @@ function _ptext(ix, sym)
     return e == 0 ? t : "$t[$e]"
 end
 
+# a write of an aux field (`integ[K] = v`): refused in the user's words, on the owned path
+# (`_check_symbol`) and on the ODE path (`setsym` on an OrdinaryDiffEq integrator, the
+# OrdinaryDiffEqCore extension; SII would say "Invalid symbol … for `setsym`")
+_aux_write_text(sym) = string("`", _symtext(sym), "` is an aux field (`", _symtext(sym), " ~ rhs`), ",
+    "evaluated from the state at each read and save; it cannot be written: write the fields it reads")
+"""
+    check_aux_write(ix, sym)
+
+Throw an `ArgumentError` in the user's words when `sym` (or an entry of a list) is an aux field
+of index `ix` (`K ~ rhs`: computed, never written); else nothing.
+"""
+function check_aux_write(ix, sym)
+    sym isa Union{AbstractArray, Tuple} && (foreach(s -> check_aux_write(ix, s), sym); return nothing)
+    ix isa LatticeIndex && aux_key(ix, sym) !== nothing && throw(ArgumentError(_aux_write_text(sym)))
+    return nothing
+end
+
 # a symbol the integrator does not know is an error listing the names it does (rather than
 # SII's "Invalid symbol"); a computed parameter says it is computed
 function _check_symbol(i::FieldIntegrator, sym; write::Bool = false)
@@ -728,12 +825,16 @@ function _check_symbol(i::FieldIntegrator, sym; write::Bool = false)
     ix isa LatticeIndex || return nothing
     sym isa Union{AbstractArray, Tuple} && (foreach(s -> _check_symbol(i, s; write), sym); return nothing)
     k = ix.key(sym)
+    if haskey(ix.aux, k)
+        write && throw(ArgumentError(_aux_write_text(sym)))
+        return nothing
+    end
     (haskey(ix.vars, k) || haskey(ix.params, k) || SII.is_independent_variable(ix, sym)) && return nothing
     if haskey(ix.observed, k) || haskey(ix.derived, k)
         write && SII.parameter_index(ix, sym)          # throws: it is computed
         return nothing
     end
-    names = String[_symtext(s) for s in Iterators.flatten((ix.varsyms, ix.paramsyms))]
+    names = String[_symtext(s) for s in Iterators.flatten((ix.varsyms, ix.auxsyms, ix.paramsyms))]
     append!(names, values(ix.inputnames))
     append!(names, [k for k in values(ix.inputs) if !haskey(ix.inputnames, k)])
     append!(names, [first(v) for v in values(ix.tables) if last(v) == 0])
@@ -1025,6 +1126,7 @@ function SII.finalize_parameters_hook!(integ::FieldIntegrator, _)
         launches = map(rt -> rebind_launches(rt, integ.p), integ.runtimes)
         _rerun_init!(integ, integ.p)                  # init kernels read the parameters too
         foreach(install_launches!, integ.runtimes, launches)    # (and `reset!`)
+        integ.aux === nothing || (integ.aux = _bind_aux(integ.prob, integ.store, integ.p))
         _set_counts!(integ, ms)
         copyto!(integ.pgood, integ.p)
     catch
