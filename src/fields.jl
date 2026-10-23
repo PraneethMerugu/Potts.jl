@@ -577,8 +577,8 @@ struct _MapSteps end
 struct _AuxSteps end
 (::_AuxSteps)(praw) = 0
 # the least count and the bounded flag of a group's rule, as the fingerprint records them
-_least(s) = s isa _MapSteps ? 1 : s isa _AuxSteps ? 0 : s.least
-_bounded(s) = s isa Union{_MapSteps, _AuxSteps} || (isempty(s.bound.unbounded) && isempty(s.bound.expanded))
+_least(s) = s isa _MapSteps ? 1 : s isa _AuxSteps ? 0 : something(s.alg.substeps, 1)
+_bounded(s) = s isa Union{_MapSteps, _AuxSteps} || (isempty(s.spec.stability.unbounded) && isempty(s.spec.stability.expanded))
 # whether compiled model `c` has fields: stepped ones, or aux fields only (one group with no state)
 _has_fields(c::CompiledPottsSystem) = !isempty(c.fields) || !isempty(_field_aux(c.sys))
 
@@ -643,147 +643,91 @@ function _field_group_spec(c::CompiledPottsSystem, names::Vector{Symbol}, T::Typ
     end
 end
 
-"""
-The substep count of a group at raw parameters `praw`: the smallest `n` with
-`dt/n · ρ(p) ≤ 1.8` (`ρ` the Gershgorin bound of the rate Jacobian, LatticePDE's
-`stability_bound`), and at least the requested `substeps` (D-C8 item 1).
-
-With an explicit count, a term the bound cannot see (a nonlinear reaction) or a
-coupled row that is not diagonally dominant does not lower the count: `n` is the largest of
-the request and the bound over the terms it sees (diffusion at least, also inside an
-`ifelse` gate whose condition reads no field, bounded arm by arm); the problem warns
-at build (`_check_substeps`), once per group program and session. With no count, neither has a bound and the problem
-throws (unseen terms at build in `_field_groups`, coupled rows here, at build and at every
-parameter change). A negative diffusion coefficient (anti-diffusion: unstable at any step)
-is refused. A coefficient that is not finite at a kind table entry it reads (`1 / τ[kind]`
-with a zero entry, the medium's included) is refused with or without a count, naming the
-entry. Past the bound's evaluation cap (more than 4096 kind table index combinations), a
-group with no count is refused; an explicit count is raised by the bound over every term the
-bound sees (`seen`: diffusion, the other terms and fields), and a warning names the terms past
-the cap: the count is the user's for them.
-
-A warning is given once per group, term and cause in a session (the group's fingerprint
-text, the terms and the cause; never a value).
-"""
-struct _Substeps{B}
-    bound::B
-    dt::Float64
-    least::Int
-    explicit::Bool
+# The substep rule of a group is LatticeFields' one policy (`Problems.GroupSubsteps`: the
+# count, the refusals, the warnings and the coupling between groups; F3-01). Front end A gives
+# its words (`_PottsTexts`): the fields of the group, its route (`PottsProblem` `field_solver`,
+# the MCS as the window) and its terms in the model's words (`_user_text`). A warning is given
+# once per group, term and cause in a session (the group's fingerprint text with the policy's
+# value-free reason).
+struct _PottsTexts <: LatticeFields.Problems.PolicyTexts
     names::Vector{Symbol}
-    key::String                    # the group's fingerprint text (the warning's once-key)
-    unseen::Vector{String}         # the terms the bound cannot see, in the model's words
     cv::NamedTuple                 # the generated inputs (`filled`), to print a term in the model's words
-    coupling::Any                  # with several groups: the whole field system's bound and the partition
 end
 _fieldlist(ks) = join(("`$k`" for k in ks), ", ")
-function (s::_Substeps)(praw)
-    n = _substep_count(s, praw)
-    s.coupling === nothing || _check_group_coupling(s, praw)
-    return n
-end
-
-# The coupling of a group to the other field groups (review of F2-06, ruling K-unsafe; round
-# 2: loops only; the criterion and its reasoning are LatticeFields' `_check_coupling`): a group
-# reads the fields of the others from their arrays, held over its window `dt` (the MCS, or its
-# part in a `repeat`). A group in no loop of the group read graph (`group_loops`: a one-way
-# chain) is not checked: the split system is block triangular. A group in a loop needs
-# `κ = dt · max over the group's rows of Σ max|cross coefficient|` over the terms that read
-# other groups' fields ≤ 1, at any substep count; a coefficient with no finite bound is refused
-# with an automatic count and warns (once) with an explicit one. κ sums only the reads of groups
-# in the same loop. A group with a term the bound cannot see that reads another field counts as
-# reading every other group (a term on its own field alone couples nothing). The bound is the whole field system's
-# (`coupling.bound`), at the parameters of the group mapped by name (a parameter the group does
-# not read is `NaN`: no cross coefficient of its rows reads it; the read graph is the
-# structure, so it needs no value).
-function _check_group_coupling(s::_Substeps, praw)
-    c = s.coupling
-    pv = praw isa LatticeFields.Problems.ParamsTables ? praw.p : praw
-    tabs = praw isa LatticeFields.Problems.ParamsTables ? praw.tables : Pair{String, Vector{Float64}}[]
-    wp = Float64[(j = findfirst(==(n), c.pnames)) === nothing ? NaN : Float64(pv[j]) for n in c.wnames]
-    pp = LatticeFields.Problems.with_tables(wp, tabs)
-    parts = LatticeFields.Problems.lagged_coupling(c.bound, c.groups, pp)
-    loops = LatticeFields.Problems.group_loops(parts)
-    loop = loops[c.index]
-    isempty(loop) && return nothing
-    # only the reads inside the loop (a group outside it cannot feed growth back; round 3)
-    parts = LatticeFields.Problems.lagged_coupling(c.bound, c.groups, pp; within = loops)
-    q = parts[c.index]
-    κ = s.dt * q.rate
-    u(k) = string("`", k, "`")
-    lf = reduce(vcat, c.groups[loop])                   # the fields of the loop
-    if !isfinite(κ)
-        s.explicit || throw(ArgumentError(string("the field", length(s.names) == 1 ? " " : "s ", _fieldlist(s.names),
-            " read", length(s.names) == 1 ? "s " : " ", u(q.other), " of another solver group, in a loop of groups that ",
-            "read one another (", _fieldlist(lf), "), and the coefficient `", _user_text(q.raw, s.cv), "` of that read ",
-            "has no bound at these parameters; give ", _fieldlist(lf), " one solver (one group), or give `solvers` an ",
-            "explicit `ExplicitEuler(; substeps = n)` for the group")))
-        k = string(s.key, "#coupling#", q.row, "#", q.raw)
-        if ccall(:jl_generating_output, Cint, ()) == 0 &&
-           lock(() -> k in _SUBSTEP_WARNED ? false : (push!(_SUBSTEP_WARNED, k); true), _SUBSTEP_WARNED_LOCK)
-            @warn "field$(length(s.names) == 1 ? "" : "s") $(_fieldlist(s.names)): the coupling to $(u(q.other)) of " *
-                  "another solver group, in the loop of $(_fieldlist(lf)), has no bound (the coefficient " *
-                  "`$(_user_text(q.raw, s.cv))`): the count is the user's"
-        end
-    elseif κ > 1 + 1e-12
-        unseen = [k for h in loop if parts[h].unseen for k in c.groups[h]]
-        # one solver for the loop: an automatic count needs dominant rows (a parameter of
-        # another group has no value here: then the explicit route, which always holds)
-        ρ = Float64(LatticeFields.Problems.restrict_bound(c.bound, lf)(pp))
-        one = isfinite(ρ) && ρ >= 0 ? string("Give ", _fieldlist(lf), " one solver (one group; `solvers`)") :
-              string("Give ", _fieldlist(lf), " one solver with an explicit count (one group, `ExplicitEuler(; ",
-                     "substeps = n)`; their coupled rows have no automatic count)")
-        throw(ArgumentError(string("the fields ", _fieldlist(lf), " are in solver groups that read one another in a ",
-            "loop, each holding the others' values over each field window (", s.dt, " MCS): the terms of ", u(q.row),
-            " that read other groups of the loop (the largest: the coefficient `", _user_text(q.raw, s.cv), "` of ", u(q.other),
-            ") give window · Σ max|coefficient| = ", round(κ; sigdigits = 4), " > 1, and the loop can then grow ",
-            "without bound at any substep count",
-            isempty(unseen) ? "" : string(" (the terms of ", _fieldlist(unseen), " that the stability bound cannot ",
-                                          "see and that read another field count as reading every other group)"),
-            ". ", one, ", or step the fields over a shorter window (`repeat(n, …)` of the fields, or a smaller ",
-            "`mcs_duration`; window ≤ ", floor(1 / q.rate; sigdigits = 4), ")")))
+_fs(t::_PottsTexts) = length(t.names) == 1 ? "" : "s"
+const _A_ROUTE = "`PottsProblem` `field_solver = ExplicitEuler(; substeps = n)` with `n ≥ mcs_duration · ρ / 1.8`"
+function LatticeFields.Problems.unbounded_text(t::_PottsTexts, c)
+    r = c.r
+    if !isempty(r.terms)
+        return "the substep count of the field$(_fs(t)) $(_fieldlist(t.names)) has no bound from the parameters (the term" *
+               "$(length(r.terms) == 1 ? "" : "s") $(join(("`$(_user_text(x, t.cv))`" for x in r.terms), ", ")), " *
+               "which the stability bound cannot see: a nonlinear or advection term, a diffusion multiplier " *
+               "that varies by site through a CPM value read directly (`volume[owner] * Δ(c)`; a kind table " *
+               "`δ[kind] * Δ(c)` or a kind set `ismember(kind, g) * Δ(c)` is bounded), or a coefficient " *
+               "that reads the state or `mcs`); give " * _A_ROUTE
+    elseif !isempty(r.coupled)
+        return "the substep count of the field$(_fs(t)) $(_fieldlist(t.names)) has no bound " *
+               "from the parameters: the coupled rate$(length(r.coupled) == 1 ? "" : "s") of $(_fieldlist(r.coupled)) " *
+               "(terms that read another field) $(length(r.coupled) == 1 ? "is" : "are") not diagonally dominant; give " *
+               _A_ROUTE
     end
-    return nothing
+    return string("the substep bound of the field$(_fs(t)) ", _fieldlist(t.names), " is not finite at the current parameters: ",
+        isempty(r.nonfinite) ? "a coefficient is not finite" :
+        join((_nonfinite_text(text, w, t.cv) for (_, text, w) in r.nonfinite), "; "))
 end
-
-function _substep_count(s::_Substeps, praw)
-    r = LatticePDE.bound_parts(s.bound, praw)
+function LatticeFields.Problems.uncovered_text(t::_PottsTexts, c)
+    r = c.r
+    what = String[["`" * _user_text(x, t.cv) * "`" for x in r.terms];
+                  (isempty(r.coupled) ? String[] : ["the coupled rates of $(_fieldlist(r.coupled))"]);
+                  [_nonfinite_text(text, w, t.cv; warning = true) for (_, text, w) in r.nonfinite]]
+    return "field$(_fs(t)) $(_fieldlist(t.names)): $(c.n) substeps per field step (the requested $(c.least), or more " *
+           "for the terms the bound sees); the stability bound does not cover " * join(what, ", ") * ": the count is the user's"
+end
+function LatticeFields.Problems.refuse_parameters(t::_PottsTexts, c)
+    r = c.r
     isempty(r.negative) || throw(ArgumentError(
         "the diffusion coefficient of the field$(length(r.negative) == 1 ? "" : "s") $(_fieldlist(r.negative)) " *
         "is negative at the current parameters (anti-diffusion: an ill-posed equation, unstable at any step and " *
         "with any solver); write the term with a coefficient ≥ 0 (`D * Δ(c)` with `D ≥ 0`; a decay is a reaction " *
         "term `-k * c`), or give the parameters values that make it ≥ 0"))
-    if !s.explicit && !isempty(r.coupled)
-        throw(ArgumentError(
-            "the substep count of the field$(length(s.names) == 1 ? "" : "s") $(_fieldlist(s.names)) has no bound " *
-            "from the parameters: the coupled rate$(length(r.coupled) == 1 ? "" : "s") of $(_fieldlist(r.coupled)) " *
-            "(terms that read another field) $(length(r.coupled) == 1 ? "is" : "are") not diagonally dominant; give " *
-            "`PottsProblem` `field_solver = ExplicitEuler(; substeps = n)` with `n ≥ mcs_duration · ρ / 1.8`"))
-    end
-    if !isfinite(r.ρ)
-        # over the evaluation cap only: an explicit count is raised by the bound over every
-        # term with a bound (`r.seen`: diffusion, the other terms and fields), and a warning
-        # (once per group and session) names the terms it does not cover; a value that is not
-        # finite at an entry the field reads is refused
-        if s.explicit && !isempty(r.nonfinite) && all(x -> x[3] === :cap, r.nonfinite)
-            n = isfinite(r.seen) ? max(s.least, ceil(Int, s.dt * r.seen / 1.8)) : s.least
-            # once per group, term and cause (`:cap`) in a session: the key holds no value
-            k = string(s.key, "#cap#", join(sort!([text for (_, text, _) in r.nonfinite]), "#"))
-            if ccall(:jl_generating_output, Cint, ()) == 0 &&
-               lock(() -> k in _SUBSTEP_WARNED ? false : (push!(_SUBSTEP_WARNED, k); true), _SUBSTEP_WARNED_LOCK)
-                @warn "field$(length(s.names) == 1 ? "" : "s") $(_fieldlist(s.names)): $n substeps per field step " *
-                      "(the requested $(s.least), or more for the terms the bound sees); the stability bound does not " *
-                      "cover " * join((_nonfinite_text(text, w, s.cv; warning = true) for (_, text, w) in r.nonfinite), ", ") *
-                      ": the count is the user's"
-            end
-            return n
-        end
-        throw(ArgumentError(string("the substep bound of the field$(length(s.names) == 1 ? "" : "s") ",
-            _fieldlist(s.names), " is not finite at the current parameters: ",
-            isempty(r.nonfinite) ? "a coefficient is not finite" :
-            join((_nonfinite_text(text, w, s.cv) for (_, text, w) in r.nonfinite), "; "))))
-    end
-    return max(s.least, ceil(Int, s.dt * r.ρ / 1.8))
+    throw(ArgumentError(LatticeFields.Problems.unbounded_text(_PottsTexts(t.names, t.cv), (; c..., r = (; r..., terms = String[],
+        coupled = String[])))))
+end
+# (a front end A bound always knows the cross terms: LatticePDE's `StabilityBound`)
+LatticeFields.Problems.coupling_unknown_text(t::_PottsTexts, c; refuse::Bool) =
+    "the stability bound of the fields $(_fieldlist(t.names)) does not see their coupling to the other solver groups" *
+    (refuse ? "; give `solvers` an explicit `ExplicitEuler(; substeps = n)` for the group" : ": the count is the user's")
+function LatticeFields.Problems.coupling_unbounded_text(t::_PottsTexts, c; refuse::Bool)
+    q, lf, n = c.q, c.lf, length(t.names)
+    u(k) = string("`", k, "`")
+    refuse && return string("the field", n == 1 ? " " : "s ", _fieldlist(t.names),
+        " read", n == 1 ? "s " : " ", u(q.other), " of another solver group, in a loop of groups that ",
+        "read one another (", _fieldlist(lf), "), and the coefficient `", _user_text(q.raw, t.cv), "` of that read ",
+        "has no bound at these parameters; give ", _fieldlist(lf), " one solver (one group), or give `solvers` an ",
+        "explicit `ExplicitEuler(; substeps = n)` for the group")
+    return "field$(n == 1 ? "" : "s") $(_fieldlist(t.names)): the coupling to $(u(q.other)) of " *
+           "another solver group, in the loop of $(_fieldlist(lf)), has no bound (the coefficient " *
+           "`$(_user_text(q.raw, t.cv))`): the count is the user's"
+end
+function LatticeFields.Problems.loop_text(t::_PottsTexts, c)
+    q, κ, lf = c.q, c.κ, c.lf
+    u(k) = string("`", k, "`")
+    unseen = [k for h in c.loops[c.g] if c.parts[h].unseen for k in c.keys[h]]
+    # one solver for the loop: an automatic count needs dominant rows (a parameter of
+    # another group has no value here: then the explicit route, which always holds)
+    ρ = Float64(LatticeFields.Problems.restrict_bound(c.stability, lf)(c.pp))
+    one = isfinite(ρ) && ρ >= 0 ? string("Give ", _fieldlist(lf), " one solver (one group; `solvers`)") :
+          string("Give ", _fieldlist(lf), " one solver with an explicit count (one group, `ExplicitEuler(; ",
+                 "substeps = n)`; their coupled rows have no automatic count)")
+    return string("the fields ", _fieldlist(lf), " are in solver groups that read one another in a ",
+        "loop, each holding the others' values over each field window (", c.dt, " MCS): the terms of ", u(q.row),
+        " that read other groups of the loop (the largest: the coefficient `", _user_text(q.raw, t.cv), "` of ", u(q.other),
+        ") give window · Σ max|coefficient| = ", round(κ; sigdigits = 4), " > 1, and the loop can then grow ",
+        "without bound at any substep count",
+        isempty(unseen) ? "" : string(" (the terms of ", _fieldlist(unseen), " that the stability bound cannot ",
+                                      "see and that read another field count as reading every other group)"),
+        ". ", one, ", or step the fields over a shorter window (`repeat(n, …)` of the fields, or a smaller ",
+        "`mcs_duration`; window ≤ ", floor(1 / q.rate; sigdigits = 4), ")")
 end
 
 # why a coefficient has no finite bound, in the model's words: a kind table entry `e` is
@@ -810,31 +754,6 @@ function _nonfinite_text(text, w, cv; warning::Bool = false)
         more > 0 ? " (and $more more)" : "", "; ",
         join(("$(ent(tb, i)) is $v: $(fix(v))" for (tb, i, v) in rd if i != 0), "; "),
         " (every kind's entry is read, the medium's too)")
-end
-
-# At build: the count at the problem's parameters (throws as above), and one warning when an
-# explicit count is kept against terms the bound cannot see or coupled rows
-const _SUBSTEP_WARNED = Set{String}()
-const _SUBSTEP_WARNED_LOCK = ReentrantLock()
-function _check_substeps(s::_Substeps, praw, key::AbstractString)
-    n = s(praw)
-    # once per group, term and cause in a session (`key`, the group's fingerprint text, with
-    # the unseen terms and the coupled rows; no value), and not while precompiling (a
-    # package's workload)
-    s.explicit && ccall(:jl_generating_output, Cint, ()) == 0 || return n
-    r = LatticePDE.bound_parts(s.bound, praw)
-    unseen = s.unseen
-    k = string(key, "#unseen#", join(sort(unseen), "#"), "#coupled#", join(sort(r.coupled), "#"))
-    if lock(() -> k in _SUBSTEP_WARNED ? false : (push!(_SUBSTEP_WARNED, k); true), _SUBSTEP_WARNED_LOCK)
-        if !isempty(unseen) || !isempty(r.coupled)
-            @warn "field$(length(s.names) == 1 ? "" : "s") $(_fieldlist(s.names)): $n substeps per field step " *
-                  "(the requested $(s.least), or more for the terms the bound sees); the stability bound does not " *
-                  "cover " * join([("`" * t * "`" for t in unseen)...;
-                                   (isempty(r.coupled) ? String[] : ["the coupled rates of $(_fieldlist(r.coupled))"])],
-                                  ", ") * ": the count is the user's"
-        end
-    end
-    return n
 end
 
 # A term of the field system in the model's words (F1, PO06): a generated input
@@ -888,7 +807,7 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
     # algorithm (no `field_solver` applies: PO07), with no substep
     isempty(order) && return [_aux_group(c, T, dt)]
     allnames = Symbol[info(x).name for (x, _) in _field_equations(sys)]
-    # with several groups, the coupling between them (`_check_group_coupling`): the bound of
+    # with several groups, the coupling between them (`Problems.check_coupling`): the bound of
     # the whole field system (the group of all fields, in rate form), and the partition
     coupling = nothing
     if length(order) > 1
@@ -926,22 +845,17 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
                 fp, opts))
             continue
         end
-        least = something(solver.substeps, 1)
-        if !isempty(stab.unbounded) && solver.substeps === nothing
-            throw(ArgumentError("the substep count of the field$(length(names) == 1 ? "" : "s") " *
-                                "$(_fieldlist(names)) has no bound from the parameters (the term" *
-                                "$(length(stab.terms) == 1 ? "" : "s") $(join(("`$(_user_text(t, cv))`" for t in stab.terms), ", ")), " *
-                                "which the stability bound cannot see: a nonlinear or advection term, a diffusion multiplier " *
-                                "that varies by site through a CPM value read directly (`volume[owner] * Δ(c)`; a kind table " *
-                                "`δ[kind] * Δ(c)` or a kind set `ismember(kind, g) * Δ(c)` is bounded), or a coefficient " *
-                                "that reads the state or `mcs`); give `PottsProblem` " *
-                                "`field_solver = ExplicitEuler(; substeps = n)` with `n ≥ mcs_duration · ρ / 1.8`"))
-        end
+        # the substep rule: LatticeFields' one policy in front end A's words (F3-01); with
+        # several groups, the coupling of this group to the others at the whole system's
+        # parameters, mapped by name (a parameter the group does not read is `NaN`: no cross
+        # coefficient of its rows reads it; the read graph is the structure, so it needs no value)
         fp = LatticeFields.Compile.fingerprint_text(fused; T)
-        push!(groups, _FieldGroup(names, group, solver, prog, mplan, splan, arrays, lg.tables, lg.params,
-            _Substeps(stab, dt, least, solver.substeps !== nothing, names, fp, String[_user_text(t, cv) for t in stab.terms],
-                (; filled = copy(cv.filled)),
-                coupling === nothing ? nothing : (; coupling..., index = gi, pnames = lg.params)), fp, opts))
+        cp = coupling === nothing ? nothing :
+             (; stability = coupling.bound, coupling.groups, explicit = [i == gi && solver.substeps !== nothing for i in eachindex(order)],
+                index = gi, whole = _WholeParams(coupling.wnames, lg.params))
+        rule = LatticeFields.Problems.GroupSubsteps(gspec, solver, dt; key = fp, texts = _PottsTexts(names, (; filled = copy(cv.filled))),
+            coupling = cp)
+        push!(groups, _FieldGroup(names, group, solver, prog, mplan, splan, arrays, lg.tables, lg.params, rule, fp, opts))
     end
     return groups
 end
@@ -961,6 +875,19 @@ function _aux_group(c::CompiledPottsSystem, T::Type, dt)
     arrays = Tuple((CorePotts.Part((:site, Symbol(f.key))), nothing) for f in prog.fields)
     fp = LatticeFields.Compile.fingerprint_text(fused; T)
     return _FieldGroup(Symbol[], group, solver, prog, mplan, splan, arrays, lg.tables, lg.params, _AuxSteps(), fp, opts)
+end
+
+# The parameters of the whole field system from a group's raw parameters (`praw`, with its
+# tables), by name: a parameter the group does not read is `NaN`
+struct _WholeParams
+    wnames::Vector{Symbol}
+    pnames::Vector{Symbol}
+end
+function (w::_WholeParams)(praw)
+    pv = praw isa LatticeFields.Problems.ParamsTables ? praw.p : praw
+    tabs = praw isa LatticeFields.Problems.ParamsTables ? praw.tables : Pair{String, Vector{Float64}}[]
+    wp = Float64[(j = findfirst(==(n), w.pnames)) === nothing ? NaN : Float64(pv[j]) for n in w.wnames]
+    return LatticeFields.Problems.with_tables(wp, tabs)
 end
 
 # The site phase writing every filled input of the fields (one launch per MCS)
@@ -1012,17 +939,16 @@ function _field_phases(c::CompiledPottsSystem, T, spec::SolverSpec)
     return steps, (fill === nothing ? clamps : Any[fill; clamps])
 end
 
-# At build: each field phase's substep count at the problem's parameters (`_check_substeps`:
-# the refusals, and the warning for an explicit count the bound does not cover)
+# At build: each field phase's substep count at the problem's parameters (the policy's
+# refusals, and its warning for an explicit count the bound does not cover)
 function _check_field_substeps(f, p)
     for e in f.phases.mcs, t in (e isa CorePotts.Repeat ? e.entries : (e,))
         t isa Tuple || continue
         for ph in t
-            ph isa CorePotts.FieldPhase && !ph.init && ph.substeps isa _Substeps || continue
+            ph isa CorePotts.FieldPhase && !ph.init && ph.substeps isa LatticeFields.Problems.GroupSubsteps || continue
             tabs = Pair{String, Vector{Float64}}[ph.program.tables[i].key => Float64.(vec(collect(getproperty(p, name))))
                                                  for (i, name) in ph.tables]
-            praw = LatticeFields.Problems.with_tables(Float64[CorePotts._praw(ph, p)...], tabs)
-            _check_substeps(ph.substeps, praw, ph.substeps.key)
+            ph.substeps(LatticeFields.Problems.with_tables(Float64[CorePotts._praw(ph, p)...], tabs))
         end
     end
     return nothing

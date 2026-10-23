@@ -527,6 +527,30 @@ gd_pinned(k) = any(g -> g[1] == gd_label(k) && g[5], GD_HARD)
     @test sort!(collect(keys(got))) == sort!(collect(keys(GD_RECORDS)))
 end
 
+# F3-01 (R-F2b record 3; F3 design §3.11): the canonical fill order of every guard model's
+# filled inputs (`kind__in` first, then the CPM reads sorted by their expression text, then
+# `domain__in`). The sort key is `string(expr)`: a SymbolicUtils printing change that reorders
+# the fills fails here before it moves a fingerprint silently. Recorded at F3-01; `nothing`: the
+# model's `@equations` are refused.
+include(joinpath(@__DIR__, "fields_identity_fill.jl"))
+@testset "F3-01 guard: the canonical fill order of every guard model" begin
+    models = Any[[(label, build) for (label, build, _...) in GD_HARD];
+                 [(string(n), () -> getfield(Main, n)(; name = :g)) for n in GD_SOFT]]
+    got = Dict{String, Any}()
+    for (label, build) in models
+        f = try
+            Potts._field_inputs(build(), Float64)
+        catch e
+            e isa ArgumentError || rethrow()
+            nothing
+        end
+        got[label] = f === nothing ? nothing : join(("$(e[1]) = $(e[2])" for e in f), "; ")
+    end
+    bad = [k for k in keys(got) if !isequal(got[k], get(GD_FILL, k, missing))]
+    foreach(k -> println(stderr, "  FILL ORDER MOVED ", k, ": recorded ", repr(get(GD_FILL, k, missing)), ", now ", repr(got[k])), bad)
+    @test isempty(bad) && sort!(collect(keys(got))) == sort!(collect(keys(GD_FILL)))
+end
+
 # ROCm (F2 batch 2): with `POTTS_GPU=rocm`, the hard set on the device (CheckerboardCPM) against
 # the same run on the CPU: σ equal, every site array within a relative 1e-5 (Float32) or 1e-12
 # (Float64) of its largest value

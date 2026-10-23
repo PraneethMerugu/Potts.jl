@@ -53,6 +53,9 @@ include("ode.jl")
 
 # the coupling between field groups and the per-group counts (review of F2-06)
 public substep_counts, lagged_coupling, group_loops
+# the one substep policy of both front ends and its words (F3-01)
+public PolicyTexts, ProblemTexts, GroupSubsteps, check_coupling, bound_report, unbounded_text, uncovered_text,
+       refuse_parameters, coupling_unknown_text, coupling_unbounded_text, loop_text
 # the clock (F2-08c)
 public CLOCK_KEY, clock_slot
 # computed parameters (F2-15, D-F2-1)

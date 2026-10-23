@@ -194,6 +194,19 @@ explicit substep count (`NaN` when there is none). The default is `stability(p)`
 seen_bound(stability, p) = Float64(stability(p))
 
 """
+    bound_report(stability, p) -> NamedTuple
+
+The parts of the stability bound at raw parameters `p` that the substep policy decides on
+([`substeps`](@ref)), `(; negative, coupled, nonfinite, terms)`: the keys of the rows with a
+diffusion coefficient below zero, the keys of the coupled rows that are not diagonally
+dominant, a `(key, coefficient, why)` per coefficient with no finite bound (`why`: `:cap`,
+`:tables`, or a `Tuple` of the entries where it is not finite), and the terms the bound cannot
+see (`"key: term"`). The default reports none (LatticePDE's `StabilityBound` reports them).
+"""
+bound_report(stability, p) = (; negative = String[], coupled = String[], nonfinite = Tuple{String, String, Any}[],
+    terms = String[])
+
+"""
     unbounded_reason(stability, p) -> Union{Nothing, String}
 
 Why `stability(p)` has no value (the terms it cannot see, by name), for the substep error; the

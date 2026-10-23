@@ -329,7 +329,9 @@ function CorePotts.remake_function(mi::PottsModelInfo, prob; field_solver = mi.s
     spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
     values = _parameter_dict(c, prob.p)
     track = _track(track)
-    return _problem_function(c, mi.T, spec, values, mi.ctx, mi.cache; track), _track_layout(_ode_layout(prob.u0, c, spec), c, track)
+    f = _problem_function(c, mi.T, spec, values, mi.ctx, mi.cache; track)
+    _check_field_substeps(f, prob.p)               # the policy's refusals at `remake`, as at the build
+    return f, _track_layout(_ode_layout(prob.u0, c, spec), c, track)
 end
 
 # `track` (D-140): the quantities a run accumulates into its statistics. Only `:ΔH` (each

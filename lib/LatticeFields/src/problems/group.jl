@@ -200,6 +200,228 @@ function group_loops(parts)
     end
 end
 
+# ---------------------------------------------------------------------------------------
+# The substep policy (F3 design §1.2 item 1, §3.6, §3.7; F3-01): one function for both front
+# ends. Its decisions (the count, when a count is refused or warned, the coupling limit
+# between groups, the once-keys of the warnings) are made here; the front end gives only the
+# words of its messages (`PolicyTexts`: its route and how it prints a term), so each front end
+# keeps its messages.
+
+"""
+    PolicyTexts
+
+The words of a front end's substep and coupling messages (F3 design §3.7). The policy
+([`substeps`](@ref), [`check_coupling`](@ref)) decides; a front end's texts word the decision
+in the user's terms: front end B's are [`ProblemTexts`](@ref), front end A (Potts) gives its
+own. A subtype defines `unbounded_text`, `uncovered_text`, `refuse_parameters`,
+`coupling_unknown_text`, `coupling_unbounded_text` and `loop_text`, each of a context
+`NamedTuple` of the decision's facts.
+"""
+abstract type PolicyTexts end
+
+"""
+    ProblemTexts(route = "ExplicitEuler(; dt, substeps = n)")
+
+Front end B's words (a `FieldProblem`): `route` is how a count is given.
+"""
+struct ProblemTexts <: PolicyTexts
+    route::String
+end
+ProblemTexts() = ProblemTexts("ExplicitEuler(; dt, substeps = n)")
+
+# the warnings of the policy, once per key in a session (the key holds no value: a sweep warns
+# once), for both front ends
+const _SEEN_WARNED = Set{String}()
+const _SEEN_WARNED_LOCK = ReentrantLock()
+_warn_once(key) = ccall(:jl_generating_output, Cint, ()) == 0 &&
+                  lock(() -> key in _SEEN_WARNED ? false : (push!(_SEEN_WARNED, key); true), _SEEN_WARNED_LOCK)
+
+"""
+    substeps(spec::GroupSpec, alg::ExplicitEuler, dt, pp; fields = spec.state, stability = spec.stability,
+             key = identity, texts = ProblemTexts(spec.texts.route)) -> Int
+
+The substep count of the group `spec` (its fields `fields`, whose rows' bound is `stability`)
+stepped by `alg` over a window `dt` at the raw parameters `pp` (with the tables and the bound's
+inputs: [`with_tables`](@ref), primal values). The one policy of both front ends:
+
+- a diffusion coefficient below zero, or a coefficient that is not finite at an entry the
+  inputs reach, is refused at any count (`refuse_parameters`);
+- with no count, `n = max(1, ⌈dt ρ / 1.8⌉)` with `ρ = stability(pp)`; an unknown bound (a term
+  it cannot see, coupled rows that are not diagonally dominant, a coefficient past the
+  evaluation cap) is refused, naming why (`unbounded_text`);
+- with a count `m`, `n = max(m, ⌈dt ρₛ / 1.8⌉)` with `ρₛ` the bound over the terms it sees
+  ([`seen_bound`](@ref); `m` when that is not finite); when the full bound is unknown, a warning
+  names what it does not cover (`uncovered_text`), once per `key(why)` in a session (`why`:
+  [`unbounded_key`](@ref), no value);
+- a group with no field (aux fields only, F3 design §3.12) takes 0.
+
+`key` makes the warning's once-key from the value-free reason (front end B: the program's
+text, hashed; front end A: the group's fingerprint text); `texts` words the messages.
+"""
+function substeps(spec::GroupSpec, alg::ExplicitEuler, dt::Real, pp; fields = spec.state, stability = spec.stability,
+        key = identity, texts::PolicyTexts = ProblemTexts(spec.texts.route))
+    isempty(fields) && return 0                     # aux fields only: one evaluation per window
+    dt = Float64(dt)
+    r = bound_report(stability, pp)
+    ctx = (; stability, pp, r, fields = collect(String, fields), dt, least = alg.substeps)
+    (isempty(r.negative) && !any(x -> x[3] isa Tuple, r.nonfinite)) || refuse_parameters(texts, ctx)
+    full = Float64(stability(pp))
+    if alg.substeps !== nothing
+        ρ = seen_bound(stability, pp)
+        n = isfinite(ρ) && ρ >= 0 ? max(alg.substeps, ceil(Int, dt * ρ / 1.8)) : alg.substeps
+        if !(isfinite(full) && full >= 0)
+            why = unbounded_key(stability, pp)
+            why === nothing || !_warn_once(key(why)) || @warn uncovered_text(texts, (; ctx..., n))
+        end
+        return n
+    end
+    isfinite(full) && full >= 0 && return max(1, ceil(Int, dt * full / 1.8))
+    throw(ArgumentError(unbounded_text(texts, ctx)))
+end
+substeps(g::FieldGroup, alg::ExplicitEuler, dt::Real, pp; kw...) = substeps(g.spec, alg, dt, pp; kw...)
+
+const _COUPLING_RTOL = 1e-12
+_explicit_count(a) = hasproperty(a, :substeps) && getproperty(a, :substeps) !== nothing
+
+"""
+    check_coupling(stability, groups, explicit, pp, dt; check = eachindex(groups), key = identity,
+                   texts = ProblemTexts(), span = nothing)
+
+The coupling between field groups (review of F2-06, ruling K-unsafe; round 2: loops only),
+one rule for both front ends. `groups` are the groups' state keys in stepping order,
+`explicit[g]` whether group `g` has an explicit count, `stability` the bound of the whole
+field system at the raw parameters `pp`, `dt` the window. Each group in `check` that is in a
+loop of the group read graph ([`group_loops`](@ref)) needs `κ = dt · rate ≤ 1` over the reads
+of groups in its loop ([`lagged_coupling`](@ref)); past it the problem is refused with the
+routes (`loop_text`). A cross coefficient in a loop with no finite bound is refused with an
+automatic count and warns once (`key(why)`) with an explicit one; a bound that does not know
+the cross terms is the same for every group. `span` is the time span (front end B's route).
+"""
+function check_coupling(stability, groups, explicit, pp, dt::Real; check = eachindex(groups), key = identity,
+        texts::PolicyTexts = ProblemTexts(), span = nothing)
+    length(groups) > 1 || return nothing
+    keys = [collect(String, ks) for ks in groups]
+    parts = lagged_coupling(stability, keys, pp)
+    ctx = (; stability, pp, keys, dt = Float64(dt), span)
+    if parts === nothing
+        all(g -> explicit[g], check) || throw(ArgumentError(coupling_unknown_text(texts, ctx; refuse = true)))
+        _warn_once(key("coupling#unknown")) && @warn coupling_unknown_text(texts, ctx; refuse = false)
+        return nothing
+    end
+    loops = group_loops(parts)
+    all(g -> isempty(loops[g]), check) && return nothing
+    # the rates over the reads inside each group's loop: a read of a group outside it is a
+    # one-way source of the loop, which cannot feed growth back (round 3)
+    parts = lagged_coupling(stability, keys, pp; within = loops)
+    for g in check
+        isempty(loops[g]) && continue
+        q = parts[g]
+        κ = dt * q.rate
+        c = (; ctx..., parts, loops, g, q, κ, lf = reduce(vcat, keys[loops[g]]))
+        if !isfinite(κ)
+            explicit[g] || throw(ArgumentError(coupling_unbounded_text(texts, c; refuse = true)))
+            _warn_once(key(string("coupling#", join(keys[g], ","), "#", q.row, "#", q.raw))) &&
+                @warn coupling_unbounded_text(texts, c; refuse = false)
+        elseif κ > 1 + _COUPLING_RTOL
+            throw(ArgumentError(loop_text(texts, c)))
+        end
+    end
+    return nothing
+end
+
+"""
+    GroupSubsteps(spec, alg, dt; key, texts, coupling = nothing)
+
+The substep rule of one group, a callable of the raw parameters (with the tables, as
+[`with_tables`](@ref) gives them): `rule(pp)` is [`substeps`](@ref)`(spec, alg, dt, pp; key,
+texts)`, then, with `coupling = (; stability, groups, explicit, index, whole)`, the coupling
+check of group `index` ([`check_coupling`](@ref)) at `whole(pp)`, the parameters of the whole
+field system. Front end A's field phases hold one (a host function, evaluated at build and
+when the parameters change, never per MCS). `key` is the group's once-key text.
+"""
+struct GroupSubsteps{S, T, C}
+    spec::S
+    alg::ExplicitEuler
+    dt::Float64
+    key::String
+    texts::T
+    coupling::C
+end
+GroupSubsteps(spec::GroupSpec, alg::ExplicitEuler, dt::Real; key::AbstractString, texts::PolicyTexts, coupling = nothing) =
+    GroupSubsteps(spec, alg, Float64(dt), String(key), texts, coupling)
+function (s::GroupSubsteps)(pp)
+    n = substeps(s.spec, s.alg, s.dt, pp; key = why -> string(s.key, "#", why), texts = s.texts)
+    c = s.coupling
+    c === nothing || check_coupling(c.stability, c.groups, c.explicit, c.whole(pp), s.dt; check = (c.index,),
+        key = why -> string(s.key, "#", why), texts = s.texts)
+    return n
+end
+
+# --- front end B's words (`ProblemTexts`) ---
+_fieldlist(ks) = join(("`$k`" for k in ks), ", ")
+_num(x) = round(x; sigdigits = 6)                  # a value in a message (`dt = 0.003334`)
+function unbounded_text(t::ProblemTexts, c)
+    why = unbounded_reason(c.stability, c.pp)
+    return string("no automatic substeps: no stability bound for these parameters (",
+        why === nothing ? string("a rate term the bound cannot see, such as advection, a nonlinear rate, ",
+            "or a coefficient with more than 6 kind sets and ",
+            "comparisons; a parameter without a value; or coupled rows that ",
+            "are not diagonally dominant, whose spectrum may be complex") : why,
+        "). Give an explicit count: ", t.route, " (a minimum; the bound over ",
+        "the terms it sees can raise it)")
+end
+uncovered_text(::ProblemTexts, c) = string("ExplicitEuler(substeps = ", c.least, "): ", c.n, " substeps (the request, or more for ",
+    "the terms the bound sees); the stability bound does not cover ", unbounded_reason(c.stability, c.pp),
+    ": the count is the user's")
+# the parameter check of the bound (LatticePDE: negative diffusion, a coefficient not finite
+# at an entry), with its own words
+function refuse_parameters(::ProblemTexts, c)
+    check_parameters(c.stability, c.pp)
+    throw(ArgumentError(string("the stability bound of ", _fieldlist(c.fields), " refuses these parameters: ",
+        isempty(c.r.negative) ? "a coefficient is not finite where the inputs reach" :
+        string("the diffusion coefficient of ", _fieldlist(c.r.negative), " is negative"))))
+end
+coupling_unknown_text(t::ProblemTexts, c; refuse::Bool) = refuse ?
+    string("FieldGroups: the problem's stability bound does not see the terms that couple its groups (each group ",
+        "reads the fields of the others from their arrays, held over the window); step the fields in one group, ",
+        "or give every group an explicit count (`", t.route, "`)") :
+    string("FieldGroups: the stability bound does not see the coupling between the groups ",
+        join((_fieldlist(k) for k in c.keys), " and "), ": the counts are the user's")
+function coupling_unbounded_text(t::ProblemTexts, c; refuse::Bool)
+    ks, q, lf = c.keys[c.g], c.q, c.lf
+    refuse && return string("FieldGroups: the group of ", _fieldlist(ks),
+        " is in a loop of groups that read one another (", _fieldlist(lf), "), and its coupling to the ",
+        "other groups has no bound at these parameters (the coefficient `", q.text, "` of `", q.other,
+        "` in the rate of `", q.row, "` reads more table entries than the bound evaluates); step ",
+        _fieldlist(lf), " in one group, or give the group an explicit count (`", t.route, "`)")
+    return string("FieldGroups: the coupling of the group of ", _fieldlist(ks), " in the loop of ", _fieldlist(lf),
+        " has no bound (the coefficient `", q.text, "` of `", q.other, "` in the rate of `", q.row,
+        "`): the count is the user's")
+end
+# the refusal of a loop past the limit, with its routes
+function loop_text(t::ProblemTexts, c)
+    q, κ, lf, dt, pp = c.q, c.κ, c.lf, c.dt, c.pp
+    unseen = [k for h in c.loops[c.g] if c.parts[h].unseen for k in c.keys[h]]
+    # route 1: the loop's fields in one group; an automatic count needs dominant rows
+    ρ = Float64(restrict_bound(c.stability, lf)(pp))
+    one = isfinite(ρ) && ρ >= 0 ? string("Step ", _fieldlist(lf), " in one group (one algorithm; its count can be automatic)") :
+          string("Step ", _fieldlist(lf), " in one group with an explicit count (`", t.route, "`: ",
+                 "their rows are not diagonally dominant, so no automatic count bounds them)")
+    # route 2: a dt that divides the time span (`init` refuses any other)
+    span = c.span
+    lim = floor(1 / q.rate; sigdigits = 4)
+    n = max(1, ceil(Int, span * q.rate * (1 - _COUPLING_RTOL)))
+    return string("FieldGroups: the groups of ", _fieldlist(lf), " read one another in a loop, each from the ",
+        "others' arrays, held over each window dt = ", _num(dt),
+        ": the terms in the rate of `", q.row, "` that read other groups of the loop (the largest: the coefficient `", q.text,
+        "` of `", q.other, "`) give dt · Σ max|coefficient| = ", round(κ; sigdigits = 4), " > 1, and the loop can then ",
+        "grow without bound at any substep count",
+        isempty(unseen) ? "" : string(" (the terms of ", _fieldlist(unseen), " that the bound cannot see and that read ",
+                                      "another field count as reading every other group)"),
+        ". ", one, ", or use a smaller dt that divides the time span ", _num(span), ": dt ≤ ", lim,
+        ", such as dt = ", _num(span), "/", n)
+end
+
 """
     GroupRuntime
 

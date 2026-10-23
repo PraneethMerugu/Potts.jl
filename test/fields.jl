@@ -2651,3 +2651,58 @@ end
     @test late[1] != s3 && late[2] != late[1] && late[3] != late[2]   # K = 0 in the sweeps of MCS 1–3
     @test late[4] == late[3] && late[5] == late[3]                    # K = 1 from the sweep of MCS 4
 end
+
+# F3-01 (F3 design §1.2 item 1, §3.7): one substep policy for both front ends. Front end A's
+# rule is LatticeFields' `GroupSubsteps` (its `substeps` and `check_coupling`), in A's words;
+# its warnings go to the one warning set, once per group, term and cause. An A sweep and a B
+# sweep over the same term warn once each. Base (3d0ba21b): A kept its own policy
+# (`_Substeps`) and its own set (`_SUBSTEP_WARNED`), so the shared set did not grow.
+@potts_model FwNonlinear begin
+    @kinds medium A
+    @parameters begin
+        Dc = 0.1
+        kw = 0.5
+    end
+    @variables c(field) = 0.0
+    @lattice Lattice((8, 8))
+    @energy cells(A) => (volume - 9)^2
+    @equations D(c) ~ Dc * Δ(c) - kw * c^2
+    @sweep Metropolis(; temperature = 5.0)
+end
+@testset "F3-01: one substep policy, one warning set" begin
+    LP, LFP, MTKB = Potts.LatticePDE, Potts.LatticeFields.Problems, Potts.ModelingToolkitBase
+    warns(logs) = count(l -> l.level == Base.CoreLogging.Warn && occursin("does not cover", string(l.message)), logs)
+    n0 = length(LFP._SEEN_WARNED)
+    op = fd_empty((8, 8))
+    # A: a sweep over `kw` with an explicit count warns once, in A's words (the A route kept)
+    logs, probs = Test.collect_test_logs() do
+        [PottsProblem(FwNonlinear(; name = :w), [op; :kw => k], (0, 1); field_solver = ExplicitEuler(substeps = 4))
+         for k in (0.5, 0.7, 0.9)]
+    end
+    @test warns(logs) == 1 && occursin(r"field `c`: 4 substeps per field step.*does not cover `[^`]*c\^2", string(logs[end].message))
+    @test length(LFP._SEEN_WARNED) == n0 + 1                       # the one set
+    rule = only(ph.substeps for e in probs[1].f.phases.mcs for t in (e isa CorePotts.Repeat ? e.entries : (e,))
+                if t isa Tuple for ph in t if ph isa CorePotts.FieldPhase && !ph.init)
+    @test rule isa LFP.GroupSubsteps
+    # B: the same term in a PDESystem, a sweep over `kw` warns once more (its own program), in B's words
+    Potts.ModelingToolkitBase.@parameters x y Dc = 0.1 kw = 0.5
+    Potts.ModelingToolkitBase.@variables c(..)
+    ce = c(MTKB.t_nounits, x, y)
+    dom = [MTKB.t_nounits ∈ LP.Interval(0.0, 1.0), x ∈ LP.Interval(0.0, 8.0), y ∈ LP.Interval(0.0, 8.0)]
+    sys = MTKB.PDESystem([MTKB.D_nounits(ce) ~ Dc * LP.Δ(ce) - kw * ce^2], [c(0, x, y) ~ 0.0], dom, [MTKB.t_nounits, x, y],
+        [ce], [Dc, kw]; name = :w)
+    bp = LP.discretize(sys, LP.LatticeDiscretization(LP.Grid((8, 8)); T = Float64, problem = :owned))
+    logs, _ = Test.collect_test_logs() do
+        [LP.init(LP.remake(bp; p = [kw => k]), LP.ExplicitEuler(; dt = 1.0, substeps = 4)) for k in (0.5, 0.7, 0.9)]
+    end
+    @test warns(logs) == 1 && occursin("ExplicitEuler(substeps = 4): 4 substeps", string(logs[end].message))
+    @test length(LFP._SEEN_WARNED) == n0 + 2
+    # review r1 S2: the automatic count's refusal of the unseen term comes at `remake`, as before
+    # F3-01 (743ab0a0); at 8f658abd `remake` returned and `init` refused (u1_a §4)
+    err = try
+        remake(probs[1]; field_solver = ExplicitEuler()); ""
+    catch e
+        sprint(showerror, e)
+    end
+    @test occursin("c^2", err) && occursin("substeps", err)
+end

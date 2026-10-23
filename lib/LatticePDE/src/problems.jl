@@ -990,6 +990,11 @@ function _check_finite(r)
             "; ")))
 end
 Problems.seen_bound(b::StabilityBound, p) = bound_parts(b, p).seen
+# the parts the one substep policy decides on (F3-01): the bound's parts and its unseen terms
+function Problems.bound_report(b::StabilityBound, p)
+    r = bound_parts(b, p)
+    return (; r.negative, r.coupled, r.nonfinite, terms = b.terms, r.seen, r.ρ)
+end
 function Problems.unbounded_reason(b::StabilityBound, p)
     parts = String[]
     isempty(b.terms) || push!(parts, "the term$(length(b.terms) == 1 ? "" : "s") " *

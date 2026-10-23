@@ -371,7 +371,10 @@ count `n`, the larger of `n` and the count of the bound over the terms the bound
 count is the user's for the terms it does not cover, and a warning names them, once per
 program, term and cause in a session ([`unbounded_key`](@ref): never once per value). An unknown bound with no user count is an `ArgumentError` that names the
 terms the bound cannot see. A problem with no state (aux fields `K ~ rhs` only, F3 design
-§3.12) takes 0 substeps: its window evaluates the aux fields once.
+§3.12) takes 0 substeps: its window evaluates the aux fields once, and a count `substeps = n`
+(a minimum) has nothing to step, so it changes nothing. This is the one policy of
+both front ends, [`substeps`](@ref)`(spec, alg, dt, pp)` of the problem's group, in front end
+B's words ([`ProblemTexts`](@ref)).
 """
 substeps(::FieldProblem, ::ExplicitMap, p = nothing; tables = nothing, inputs = nothing) = 1
 
@@ -393,8 +396,6 @@ function _bound_inputs(i::FieldIntegrator; set = nothing)
     return Pair{String, Any}[k => _site_shaped(prog, k, set !== nothing && first(set) == k ? last(set) :
                                                          Array(array(i.store, fieldid(prog, k), :cur))) for k in ks]
 end
-const _SEEN_WARNED = Set{String}()
-const _SEEN_WARNED_LOCK = ReentrantLock()
 # the warning's once-key: the program (its printed text, hashed) and the value-free reason
 _warn_key(prob::FieldProblem, why) = string(hash(sprint(print_program, prob.program)); base = 16) * "|" * string(why)
 function substeps(prob::FieldProblem, alg::ExplicitEuler, p = prob.p; tables = prob.tables,
@@ -402,32 +403,9 @@ function substeps(prob::FieldProblem, alg::ExplicitEuler, p = prob.p; tables = p
     dt = _window(alg, _clock(prob))
     isempty(prob.state) && return 0                 # aux fields only: one evaluation per window
     pp = with_tables(map(primal, p), tables; inputs)        # a policy: on the primal values
-    if alg.substeps !== nothing
-        ρ = seen_bound(stability, pp)
-        n = isfinite(ρ) && ρ >= 0 ? max(alg.substeps, ceil(Int, dt * ρ / 1.8)) : alg.substeps
-        full = Float64(stability(pp))
-        if !(isfinite(full) && full >= 0) && ccall(:jl_generating_output, Cint, ()) == 0
-            why = unbounded_reason(stability, pp)
-            # once per (program, term, cause) and session: the key holds no value, so a sweep
-            # over entries or parameters warns once and the set stays bounded
-            key = why === nothing ? nothing : _warn_key(prob, unbounded_key(stability, pp))
-            why === nothing || !lock(() -> key in _SEEN_WARNED ? false : (push!(_SEEN_WARNED, key); true),
-                                     _SEEN_WARNED_LOCK) ||
-                @warn string("ExplicitEuler(substeps = ", alg.substeps, "): ", n, " substeps (the request, or more for ",
-                             "the terms the bound sees); the stability bound does not cover ", why, ": the count is the user's")
-        end
-        return n
-    end
-    ρ = Float64(stability(pp))
-    isfinite(ρ) && ρ >= 0 && return max(1, ceil(Int, dt * ρ / 1.8))
-    why = unbounded_reason(stability, pp)
-    throw(ArgumentError(string("no automatic substeps: no stability bound for these parameters (",
-        why === nothing ? string("a rate term the bound cannot see, such as advection, a nonlinear rate, ",
-            "or a coefficient with more than 6 kind sets and ",
-            "comparisons; a parameter without a value; or coupled rows that ",
-            "are not diagonally dominant, whose spectrum may be complex") : why,
-        "). Give an explicit count: ExplicitEuler(; dt, substeps = n) (a minimum; the bound over ",
-        "the terms it sees can raise it)")))
+    # the one policy of both front ends (F3-01), in front end B's words
+    return substeps(prob.group.spec, alg, dt, pp; stability, key = why -> _warn_key(prob, why),
+        texts = ProblemTexts(prob.group.spec.texts.route))
 end
 
 # whole number of `dt` in `span` (to a relative 1e-5, so `dt = 1f-2` counts 0.01), else an
@@ -1045,75 +1023,14 @@ substep_counts(s::FieldSolution) = copy(s.counts)
 # a warning (once per program, group and term) with an explicit one. A bound that does not know
 # the cross terms (`lagged_coupling` returns `nothing`) is the same as an unseen term for every
 # group. Maps step as the user wrote them: not checked.
-_explicit_count(a) = hasproperty(a, :substeps) && getproperty(a, :substeps) !== nothing
-_num(x) = round(x; sigdigits = 6)                  # a value in a message (`dt = 0.003334`)
-const _COUPLING_RTOL = 1e-12
 function _check_coupling(prob::FieldProblem, groups, p; tables = prob.tables, inputs = _bound_inputs(prob), dt::Real)
     length(groups) > 1 && prob.kind != :map || return nothing
     pp = with_tables(map(primal, p), tables; inputs)
-    keys = [collect(String, ks) for (_, ks) in groups]
-    parts = lagged_coupling(prob.stability, keys, pp)
-    warn(key, msg) = ccall(:jl_generating_output, Cint, ()) == 0 &&
-        lock(() -> key in _SEEN_WARNED ? false : (push!(_SEEN_WARNED, key); true), _SEEN_WARNED_LOCK) && @warn msg
-    if parts === nothing
-        all(g -> _explicit_count(first(g)), groups) || throw(ArgumentError(string(
-            "FieldGroups: the problem's stability bound does not see the terms that couple its groups (each group ",
-            "reads the fields of the others from their arrays, held over the window); step the fields in one group, ",
-            "or give every group an explicit count (`ExplicitEuler(; dt, substeps = n)`)")))
-        warn(_warn_key(prob, "coupling#unknown"), string("FieldGroups: the stability bound does not see the coupling ",
-            "between the groups ", join((_fieldlist(k) for k in keys), " and "), ": the counts are the user's"))
-        return nothing
-    end
-    loops = group_loops(parts)
-    all(isempty, loops) && return nothing
-    # the rates over the reads inside each group's loop: a read of a group outside it is a
-    # one-way source of the loop, which cannot feed growth back (round 3)
-    parts = lagged_coupling(prob.stability, keys, pp; within = loops)
-    for (g, ((a, _), ks, q)) in enumerate(zip(groups, keys, parts))
-        isempty(loops[g]) && continue
-        κ = dt * q.rate
-        lf = reduce(vcat, keys[loops[g]])           # the fields of the loop
-        if !isfinite(κ)
-            _explicit_count(a) || throw(ArgumentError(string("FieldGroups: the group of ", _fieldlist(ks),
-                " is in a loop of groups that read one another (", _fieldlist(lf), "), and its coupling to the ",
-                "other groups has no bound at these parameters (the coefficient `", q.text, "` of `", q.other,
-                "` in the rate of `", q.row, "` reads more table entries than the bound evaluates); step ",
-                _fieldlist(lf), " in one group, or give the group an explicit count (`ExplicitEuler(; dt, substeps = n)`)")))
-            warn(_warn_key(prob, string("coupling#", join(ks, ","), "#", q.row, "#", q.raw)), string(
-                "FieldGroups: the coupling of the group of ", _fieldlist(ks), " in the loop of ", _fieldlist(lf),
-                " has no bound (the coefficient `", q.text, "` of `", q.other, "` in the rate of `", q.row,
-                "`): the count is the user's"))
-        elseif κ > 1 + _COUPLING_RTOL
-            throw(ArgumentError(_loop_message(prob, parts, keys, loops[g], q, dt, pp)))
-        end
-    end
-    return nothing
+    # the one coupling rule of both front ends (F3-01), in front end B's words
+    return check_coupling(prob.stability, [collect(String, ks) for (_, ks) in groups], [_explicit_count(a) for (a, _) in groups],
+        pp, dt; key = why -> _warn_key(prob, why), texts = ProblemTexts(prob.group.spec.texts.route),
+        span = prob.tspan[2] - prob.tspan[1])
 end
-# the refusal of a loop past the limit, with its routes
-function _loop_message(prob, parts, keys, loop, q, dt, pp)
-    κ = dt * q.rate
-    lf = reduce(vcat, keys[loop])
-    unseen = [k for h in loop if parts[h].unseen for k in keys[h]]
-    # route 1: the loop's fields in one group; an automatic count needs dominant rows
-    ρ = Float64(restrict_bound(prob.stability, lf)(pp))
-    one = isfinite(ρ) && ρ >= 0 ? string("Step ", _fieldlist(lf), " in one group (one algorithm; its count can be automatic)") :
-          string("Step ", _fieldlist(lf), " in one group with an explicit count (`ExplicitEuler(; dt, substeps = n)`: ",
-                 "their rows are not diagonally dominant, so no automatic count bounds them)")
-    # route 2: a dt that divides the time span (`init` refuses any other)
-    span = prob.tspan[2] - prob.tspan[1]
-    lim = floor(1 / q.rate; sigdigits = 4)
-    n = max(1, ceil(Int, span * q.rate * (1 - _COUPLING_RTOL)))
-    return string("FieldGroups: the groups of ", _fieldlist(lf), " read one another in a loop, each from the ",
-        "others' arrays, held over each window dt = ", _num(dt),
-        ": the terms in the rate of `", q.row, "` that read other groups of the loop (the largest: the coefficient `", q.text,
-        "` of `", q.other, "`) give dt · Σ max|coefficient| = ", round(κ; sigdigits = 4), " > 1, and the loop can then ",
-        "grow without bound at any substep count",
-        isempty(unseen) ? "" : string(" (the terms of ", _fieldlist(unseen), " that the bound cannot see and that read ",
-                                      "another field count as reading every other group)"),
-        ". ", one, ", or use a smaller dt that divides the time span ", _num(span), ": dt ≤ ", lim,
-        ", such as dt = ", _num(span), "/", n)
-end
-_fieldlist(ks) = join(("`$k`" for k in ks), ", ")
 
 function SII.finalize_parameters_hook!(integ::FieldIntegrator, _)
     try
