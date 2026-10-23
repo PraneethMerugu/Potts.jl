@@ -221,6 +221,66 @@ end
     @test_throws IR.IRError step_order(cycle(1), [1, 2])
 end
 
+@testset "F3-02: a one-buffer field inside a Jacobi group is read new (its writer first)" begin
+    # x, y two-buffer, K one-buffer: `z_K` (K ← x) sorts last by key, but `fy` reads K's new
+    # value, so `z_K` runs before it; x and y keep the Jacobi rule (old values)
+    function auxloop(off)
+        pb = ProgramBuilder(Grid((5, 4)); periodic = (true, true))
+        x = field!(pb, "x"; buffers = 2)
+        y = field!(pb, "y"; buffers = 2)
+        K = field!(pb, "K"; role = :aux)
+        k1 = kernel(pb)
+        store(k1, x, load(k1, y) + 1)
+        add!(pb, k1, "fx")
+        k2 = kernel(pb)
+        store(k2, y, load(k2, K; offset = off) * 2)
+        add!(pb, k2, "fy")
+        k3 = kernel(pb)
+        store(k3, K, load(k3, x) - 3)
+        add!(pb, k3, "z_K")
+        return semantic(program(pb))
+    end
+    x0, y0 = rand(Xoshiro(21), Float32, 5, 4), rand(Xoshiro(22), Float32, 5, 4)
+    for off in ((0, 0), (1, 0))
+        s = auxloop(off)
+        order = only(step_order(s, [1, 2, 3]))
+        @test [s.kernels[i].key for i in order] == ["fx", "z_K", "fy"]   # (fx reads no one-buffer field)
+        for fuse in (true, false)
+            st = HostStore(s)
+            copyto!(current(st, s, "x"), x0)
+            copyto!(current(st, s, "y"), y0)
+            sp = plan(s; fuse)
+            run_step!(s, sp, st, ())
+            @test reshape(current(st, s, "K"), 5, 4) == x0 .- 3
+            @test reshape(current(st, s, "y"), 5, 4) == circshift(x0 .- 3, .-off) .* 2
+            @test reshape(current(st, s, "x"), 5, 4) == y0 .+ 1
+            # an offset read of K is not fused with its writer (it would read other sites' old K)
+            fuse && off != (0, 0) && @test !any(l -> "z_K" in l.members && "fy" in l.members, sp.launches)
+        end
+    end
+    # control: one-buffer fields that define each other are refused, naming only them
+    pb = ProgramBuilder(Grid((5, 4)); periodic = (true, true))
+    x = field!(pb, "x"; buffers = 2)
+    K = field!(pb, "K"; role = :aux)
+    L = field!(pb, "L"; role = :aux)
+    for (f, g, key) in ((K, L, "aK"), (L, K, "aL"))
+        kb = kernel(pb)
+        store(kb, f, load(kb, g) + load(kb, x))
+        add!(pb, kb, key)
+    end
+    kb = kernel(pb)
+    store(kb, x, load(kb, K) + 1)
+    add!(pb, kb, "fx")
+    s = semantic(program(pb))
+    err = try
+        step_order(s, [1, 2, 3]); ""
+    catch e
+        e isa IR.IRError || rethrow()
+        sprint(showerror, e)
+    end
+    @test occursin("the fields K, L define each other", err) && occursin("read cycle", err)
+end
+
 @testset "fused execution is bit-exact with split execution" begin
     s = producer_consumer((0, 0, 0); dims = (7, 5, 3))
     exec(sp) = (

@@ -252,10 +252,113 @@ end
     whole = LatticePDE.lower_group(gsys(), disc)
     @test whole.state == ["gc", "go"] && isempty(whole.external) && whole.kind === :rate
     cut = LatticePDE.lower_group(gsys(), disc; fields = [gce])
-    @test cut.state == ["gc"] && cut.external == ["go"] && "go" in cut.inputs
+    @test cut.state == ["gc"] && cut.external == ["go"] && "go" in string.(cut.inputs)
     # the group's bound sees its own rows: o is a source of c's step (the whole system's rows
     # are coupled: no bound)
     @test isnan(whole.stability(LFP.with_tables([0.3, 0.2], Pair{String, Vector{Float64}}[]))) &&
           cut.stability(LFP.with_tables([0.3, 0.2], Pair{String, Vector{Float64}}[])) ≈ 512
     @test occursin("not a dependent variable", gerr(() -> LatticePDE.lower_group(gsys(), disc; fields = [x])))
+end
+
+# F3-02 (F2 design §2.2): the group's slots are specs, not names. A parameter slot holds its
+# default and role (a computed default: `:computed` with its expression), a table its values, an
+# input its element type, declared bounds, default and whether a front end fills it at every
+# step (`filled`: front end A's CPM reads; none in B). `string` of each is its key, so the
+# names in order are unchanged.
+@parameters gk = 2ga
+@variables gin(..) [input = true, bounds = (0.0, 2.0)] gki(..)::Int32 [input = true]
+@testset "F3-02: ParamSlot, TableSpec and InputSpec in the GroupSpec" begin
+    disc = LatticeDiscretization(Grid((8, 8)); T = Float64)
+    whole = LatticePDE.lower_group(gsys(), disc)
+    @test string.(whole.params) == ["ga", "gb"] && all(q -> q isa LFP.ParamSlot && q.role === :base, whole.params)
+    @test [q.default for q in whole.params] == [0.3, 0.2] && [q.text for q in whole.params] == ["ga", "gb"]
+    @test all(q -> q.default === nothing, LatticePDE.lower_group(gsys(), disc; values = false).params)
+    cut = LatticePDE.lower_group(gsys(), disc; fields = [gce])
+    go_in = only(i for i in cut.inputs if i.key == "go")
+    @test go_in isa LFP.InputSpec && !go_in.filled && go_in.eltype === Real   # another group's field: not filled
+    # inputs: element type, declared bounds; none filled in B, the keys a front end names filled
+    gie, gke = gin(t, x, y), gki(t, x, y)
+    isys = PDESystem([D(gce) ~ Δ(gce) + ga * gie + gb * gke], [gc(0, x, y) ~ 0.0, gc(t, 0, y) ~ gc(t, 1, y), gc(t, x, 0) ~ gc(t, x, 1)],
+        [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [gce, gie, gke], [ga, gb]; name = :gi)
+    ispec = LatticePDE.lower_group(isys, disc)
+    @test length(ispec.inputs) == 2 && !any(i -> i.filled, ispec.inputs)
+    bi = only(i for i in ispec.inputs if i.eltype === Real)
+    ki = only(i for i in ispec.inputs if i.eltype === Int32)
+    @test bi.bounds == (0.0, 2.0) && ki.bounds == (-Inf, Inf) && string(bi) == bi.key
+    fspec = LatticePDE.lower_group(isys, disc; filled = [ki.key])
+    @test [i.filled for i in fspec.inputs] == [i.key == ki.key for i in fspec.inputs]
+    # a computed default: its role and expression; a table keeps its values
+    csys = PDESystem([D(gce) ~ Δ(gce) - gk * gce + Dk[2] * gce], [gc(0, x, y) ~ 0.0, gc(t, 0, y) ~ gc(t, 1, y), gc(t, x, 0) ~ gc(t, x, 1)],
+        [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [gce], [ga, gk, Dk]; name = :gk)
+    cspec = LatticePDE.lower_group(csys, disc)
+    k2 = only(q for q in cspec.params if q.name == "gk")
+    @test k2.role === :computed && occursin("ga", k2.derivation)
+    tb = only(cspec.tables)
+    @test tb isa LFP.TableSpec && string(tb) == "Dk" && tb.values == [1.0, 2.0, 3.0]
+end
+
+# F3-02 review r1 S6: an aux field read at neighbor sites by a rate (`K ~ k c`, `D(c) ~ Δ(K)`)
+# has no value beyond a closed face: refused in the equation's words with the route (`k Δ(c)`),
+# which builds and gives the same run on a periodic box. A face condition on an aux field is
+# refused naming it. Base (8f658abd): "IRError: field `K` has no boundary rule on axis 1 side -";
+# a face on `K`: "face conditions apply to rate fields (a map's offset …)" (reviewer probe u3_b §5b).
+@variables gsc(..) gsK(..)
+@testset "F3-02: an aux field read at neighbor sites (closed box: refused with the route)" begin
+    ce, Ke = gsc(t, x, y), gsK(t, x, y)
+    dom = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    mk(rate, bcs) = PDESystem([D(ce) ~ rate, Ke ~ 0.5 * ce], [gsc(0, x, y) ~ x * y, bcs...], dom, [t, x, y], [ce, Ke],
+        Num[]; name = :gs)
+    nf = [Differential(x)(gsc(t, 0, y)) ~ 0.0, Differential(x)(gsc(t, 1, y)) ~ 0.0,
+          Differential(y)(gsc(t, x, 0)) ~ 0.0, Differential(y)(gsc(t, x, 1)) ~ 0.0]
+    e = gerr(() -> gown(mk(Δ(Ke), nf); n = 4))
+    @test occursin("the rate of `gsc` reads the aux field `gsK` at a neighbor site across a closed face of axis 1 (`Δ(gsK)`)", e)
+    @test occursin("`Δ(K)` is `k * Δ(c)`", e) && !occursin("IRError", e) && !occursin("LatticePDE.", e)
+    # a face condition on the aux field names it
+    e = gerr(() -> gown(mk(0.5 * Δ(ce), [nf; Differential(x)(gsK(t, 0, y)) ~ 0.0]); n = 4))
+    @test occursin("`gsK` is an aux field", e) && occursin("takes no face condition", e)
+    # an aux field as a `DivKGrad` coefficient needs no value beyond the face: it builds (control)
+    @test gown(mk(DivKGrad(:harmonic)(Ke, ce), nf); n = 4) isa LFP.FieldProblem
+    # the route builds and runs
+    s = solve(gown(mk(0.5 * Δ(ce), nf); n = 4), ExplicitEuler(; dt = 0.01, substeps = 1))
+    @test s.retcode == ReturnCode.Success
+    @test s[Ke][end] ≈ 0.5 .* s[ce][end] rtol = 1e-14
+    # periodic: no face, so `Δ(K)` runs (with an explicit count) and equals the route
+    per = [gsc(t, 0, y) ~ gsc(t, 1, y), gsc(t, x, 0) ~ gsc(t, x, 1)]
+    a = solve(gown(mk(Δ(Ke), per); n = 4), ExplicitEuler(; dt = 0.01, substeps = 1))
+    b = solve(gown(mk(0.5 * Δ(ce), per); n = 4), ExplicitEuler(; dt = 0.01, substeps = 1))
+    @test a.retcode == ReturnCode.Success
+    @test a[ce][end] ≈ b[ce][end] rtol = 1e-12
+end
+
+# F3-02 (F3 design §3.11): an aux field that carries one state into another's rate (`K ~ c`,
+# `D(a) ~ -k K`, `D(c) ~ k a`) is a one-buffer field read new inside the group's Jacobi step:
+# its kernel runs first. One group equals the hand-stepped Jacobi step; two groups the split
+# (a's group, holding c, then c's group reading the new a). Base (eb2efb60): `discretize`
+# refused it ("the fields K, a, c define each other within one step (a read cycle …)").
+@parameters gkl = 1.0
+@variables gla(..) glc(..) glK(..)
+@testset "F3-02: an aux-carried loop runs (Jacobi in a group, the split across groups)" begin
+    ae, cl, Kl = gla(t, x, y), glc(t, x, y), glK(t, x, y)
+    per = [gla(t, 0, y) ~ gla(t, 1, y), gla(t, x, 0) ~ gla(t, x, 1), glc(t, 0, y) ~ glc(t, 1, y), glc(t, x, 0) ~ glc(t, x, 1)]
+    sys = PDESystem([D(ae) ~ -gkl * Kl, D(cl) ~ gkl * ae, Kl ~ cl], [gla(0, x, y) ~ 1.0, glc(0, x, y) ~ 0.0, per...],
+        [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [ae, cl, Kl], [gkl]; name = :gl)
+    p = gown(sys; n = 4)
+    h = 0.01
+    s = solve(p, ExplicitEuler(; dt = h, substeps = 1))
+    a, c = 1.0, 0.0
+    for _ in 1:10
+        a, c = a - h * c, c + h * a                    # K = c at the substep's start
+    end
+    @test s.retcode == ReturnCode.Success
+    @test all(≈(a; rtol = 1e-14), s[ae][end]) && all(≈(c; rtol = 1e-14), s[cl][end]) && s[Kl][end] == s[cl][end]
+    s2 = solve(p, FieldGroups(ae => ExplicitEuler(; dt = h, substeps = 1), cl => ExplicitEuler(; dt = h, substeps = 2)))
+    a, c = 1.0, 0.0
+    for _ in 1:10
+        a = a - h * c
+        for _ in 1:2
+            c = c + h / 2 * a                           # c's group reads the new a
+        end
+    end
+    @test all(≈(a; rtol = 1e-14), s2[ae][end]) && all(≈(c; rtol = 1e-14), s2[cl][end])
+    # (aux fields that define each other stay refused, naming them: silent.jl LF48)
 end

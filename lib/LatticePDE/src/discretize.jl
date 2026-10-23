@@ -93,12 +93,14 @@ _clocktext(s::AbstractString) = as_written(replace(s, r"\bclock__tick\b" => "ste
     as_written(text) -> String
 
 A lowered term's text as the user wrote it: a velocity vector `[ux, uy]` (not its symbolic
-array literal) and `Advect(Upwind1())` (not `LatticePDE.Advect{LatticePDE.Upwind1}(…)`). For a
+array literal), `Advect(Upwind1())` (not `LatticePDE.Advect{LatticePDE.Upwind1}(…)`) and `Δ(K)`
+(not `LatticePDE.Δ(K)`). For a
 front end that prints lowered terms in its messages (Potts); LatticePDE's own messages print
 through it too.
 """
 function as_written(s::AbstractString)
     s = replace(s, r"(?:LatticePDE\.)?Advect\{[\w.]+\}\(" => "Advect(", r"LatticePDE\.Upwind1\(" => "Upwind1(")
+    s = replace(s, r"LatticePDE\.(Δ|DivKGrad)\(" => s"\1(")      # (`Δ(K)`, not `LatticePDE.Δ(K)`)
     key = "SymbolicUtils.array_literal("
     while (r = findfirst(key, s)) !== nothing
         j = last(r)                                   # its `(`
@@ -345,7 +347,10 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     for b in bcs
         b.kind in (:dirichlet, :neumann, :robin) || continue
         periodic[b.axis] && _dverr("`$(b.eq)` sets a face of axis $(b.axis), which a periodic pair makes periodic")
-        eqs[key(b.op, b.comp)][1] == :rate ||
+        kb = eqs[key(b.op, b.comp)][1]
+        kb == :aux && _dverr("`$(b.eq)`: `$(key(b.op, b.comp))` is an aux field (`$(key(b.op, b.comp)) ~ rhs`), whose values " *
+                             "follow its expression: it takes no face condition; give the faces to the fields its expression reads")
+        kb == :rate ||
             _dverr("`$(b.eq)`: face conditions apply to rate fields (a map's offset reads outside the box read 0)")
     end
     for (k, d) in pairs, (k2, (kind, _...)) in eqs
@@ -457,4 +462,55 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     tvals = [string(p) => (d = something(_icvalue(ic, p), Some(ModelingToolkitBase.hasdefault(p) ? ModelingToolkitBase.getdefault(p) : Float64[]));
                            _promoted(collect(unwrap_const.(unwrap.(d))))) for p in arrays]
     return CompiledField{N}(program(pb), keys, plist, defaults, tvals, initial, lin)
+end
+
+# An aux field read at a neighbor site across a closed face (`Δ(K)`, F3-02 review S6) has no
+# value there: an aux field takes no face rule (its values follow its expression), so the IR
+# would find no ghost value. Refused at the build (`discretize`, `lower_group`; the symbolic
+# form stays readable) in the equation's words, with the route. A read that needs no ghost (a
+# `DivKGrad` coefficient, a periodic axis) is not refused.
+function _check_aux_offsets(prog::Program{N}, sys::PDESystem) where {N}
+    aux = Set(k.key[5:end] for k in prog.kernels if startswith(k.key, "aux:"))
+    isempty(aux) && return nothing
+    for kern in prog.kernels, a in kern.accesses
+        K = prog.fields[a.field].key
+        (a.policy == RESOLVE && K in aux && a.offset.cond == 0) || continue
+        d = findfirst(e -> a.offset.a[e] != 0 && !prog.periodic[e], 1:N)
+        d === nothing && continue
+        kind, k = split(kern.key, ":"; limit = 2)
+        ops = Any[o for o in (_opof(v) for v in sys.dvs) if o !== nothing && string(nameof(o)) == K]
+        r = nothing
+        for eq in sys.eqs
+            r = _neighbor_read(eq.rhs, ops, sys.ivs, prog.periodic)
+            r === nothing || break
+        end
+        what = kind == "aux" ? "the expression of the aux field" : kind == "map" ? "the map of" : "the rate of"
+        _dverr(string(what, " `", k, "` reads the aux field `", K, "` at a neighbor site across a closed face of axis ", d,
+            r === nothing ? "" : string(" (`", replace(as_written(string(r[1])), r"\(t(, \w+)*\)" => ""), "`)"),
+            ": an aux field has no value beyond a ",
+            "closed face (it takes no face condition). Write the term with the fields its expression reads (with ",
+            "`K ~ k * c`, `Δ(K)` is `k * Δ(c)`), or make the axis periodic"))
+    end
+    return nothing
+end
+
+# the first term of `x` that reads one of `ops` at neighbor sites across a closed axis, and that
+# axis: a spatial operator (`Δ`, `DivKGrad`, `Advect`: every axis; a `Differential` in a space
+# variable: its axis) whose arguments read it; else `nothing`
+function _neighbor_read(x, ops, ivs, periodic)
+    u = unwrap(x)
+    iscall(u) || return nothing
+    f = operation(u)
+    d = if f === Δ || f isa DivKGrad || f isa Advect
+        findfirst(!, periodic)
+    elseif f isa Differential
+        j = findfirst(v -> isequal(unwrap(f.x), unwrap(v)), ivs)
+        j === nothing || j == 1 || periodic[j - 1] ? nothing : j - 1
+    end
+    d !== nothing && any(a -> _reads(a, ops), arguments(u)) && return (u, d)
+    for a in arguments(u)
+        r = _neighbor_read(a, ops, ivs, periodic)
+        r === nothing || return r
+    end
+    return nothing
 end

@@ -23,13 +23,19 @@ front end with its own parameter object, such as Potts): the system's defaults a
 so a parameter whose default reads other parameters is not folded into the equations (it
 stays a slot) and an array parameter needs no default.
 
+**Slots.** The spec's parameter slots, tables and inputs keep the program's order (`string`
+of each is its key). A slot holds its default when `values` (else `nothing`) and its role
+(`:computed` with its expression for a computed default, `:clock` for the clock's slot); an
+input holds its element type, its declared bounds, its default and whether it is `filled`:
+the input keys in `filled` are written by the front end at every step (Potts' CPM reads).
+
 **Bound.** With `bound = false` the stability bound is not built yet: the spec's `stability`
 is a [`DeferredBound`](@ref), and [`resolve_bound`](@ref) builds it when the group is first
 stepped (a front end that lowers a group to check it, before any problem exists, does not pay
 for the bound).
 """
-lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = nothing, values::Bool = true, bound::Bool = true) =
-    _lower_group(sys, disc; fields, values, bound).spec
+lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = nothing, values::Bool = true, bound::Bool = true,
+    filled = ()) = _lower_group(sys, disc; fields, values, bound, filled).spec
 
 """
     DeferredBound
@@ -62,7 +68,8 @@ end
 # `values = false`: the front end binds the parameter and table values itself (Potts: its
 # parameter object, with its own computed parameters), so the system's computed defaults are
 # not read (`_fold_computed`) and its tables not checked (`_check_tables`)
-function _lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = nothing, values::Bool = true, bound::Bool = true)
+function _lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = nothing, values::Bool = true, bound::Bool = true,
+        filled = ())
     _check_parts(sys)
     check_one_kind(sys)                                 # (the whole system, before any cut)
     derived, computed, defaults = Pair[], Pair[], Pair[]
@@ -70,14 +77,15 @@ function _lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = noth
     external = String[]
     fields === nothing || ((sys, external) = _group_cut(sys, fields))
     cf = symbolic_discretize(sys, disc)                 # the rate form: no update
+    _check_aux_offsets(cf.program, sys)                 # (an aux field read across a closed face)
     values && _check_tables(cf, sys)
     s = cf.program
     hasmap = any(k -> startswith(k.key, "map:"), s.kernels)
     stab = hasmap ? (p -> NaN) : bound ? stability_bound(cf, sys) : DeferredBound(cf, sys)
     spec = Problems.GroupSpec(s; state = _states(s), external, kind = hasmap ? :map : :rate, clock = disc.clock,
         init = [k.key for k in s.kernels if startswith(k.key, "mask:")], stability = stab,
-        params = String[string(p) for p in cf.params], tables = String[first(t) for t in cf.tables],
-        inputs = String[f.key for f in s.fields if f.role == :input],
+        params = _param_slots(cf, defaults, values), tables = _table_specs(cf, values),
+        inputs = _input_specs(cf, sys, s, filled),
         terms = stab isa StabilityBound ? copy(stab.terms) : String[], linearity = cf.linearity)
     return (; spec, cf, sys, derived, computed, defaults)
 end
@@ -106,4 +114,51 @@ function _group_cut(sys::PDESystem, fields)
     out = PDESystem(filter(mine, sys.eqs), filter(mine, sys.bcs), getfield(sys, :domain), sys.ivs, dvs, _params(sys);
         name = nameof(sys), initial_conditions = ic2)
     return out, external
+end
+
+# The spec's slots (F2 design §2.2, F3-02), in the program's order: the parameter slots (the
+# default as given when `values`; a computed parameter's expression as written), the tables
+# (their values when `values`) and the inputs (element type, declared bounds, default, filled)
+function _param_slots(cf::CompiledField, computed, values::Bool)
+    comp = Dict{String, String}(string(first(c)) => as_written(string(last(c))) for c in computed)
+    out = Problems.ParamSlot[]
+    for (i, q) in enumerate(cf.params)
+        k = string(q)
+        d = values && i <= length(cf.defaults) ? cf.defaults[i] : nothing
+        d isa AbstractFloat && isnan(d) && (d = nothing)
+        role = _isclock(q) ? :clock : haskey(comp, k) ? :computed : :base
+        push!(out, Problems.ParamSlot(k; text = _clocktext(k), default = d, role, derivation = get(comp, k, nothing)))
+    end
+    return out
+end
+_table_specs(cf::CompiledField, values::Bool) =
+    Problems.TableSpec[Problems.TableSpec(String(first(t)); values = values ? last(t) : nothing) for t in cf.tables]
+function _input_specs(cf::CompiledField, sys::PDESystem, s, filled)
+    fills = Set{String}(string(f) for f in filled)
+    vars = Dict{String, Any}()
+    for v in unwrap.(sys.dvs)
+        ModelingToolkitBase.isinput(v) || continue
+        ks = get(cf.keys, _opof(v), String[])
+        for (i, k) in enumerate(ks)
+            vars[k] = (v, length(ks) == 1 ? 0 : i)
+        end
+    end
+    defaults = Dict{String, Any}(_input_defaults(cf, sys))
+    out = Problems.InputSpec[]
+    for f in s.fields
+        f.role == :input || continue
+        vi = get(vars, f.key, nothing)
+        E, b, name = Real, (-Inf, Inf), f.key
+        if vi !== nothing
+            v, i = vi
+            E = eltype(SymbolicUtils.symtype(v))
+            E <: Bool || E <: Integer || (E = Real)
+            i == 0 && (b = _input_bounds(v))
+            n = get_lattice_input_name(v)
+            n === nothing || (name = i == 0 ? n : "$n[$i]")
+        end
+        push!(out, Problems.InputSpec(f.key; name, eltype = E, bounds = b, default = get(defaults, f.key, nothing),
+            filled = f.key in fills))
+    end
+    return out
 end

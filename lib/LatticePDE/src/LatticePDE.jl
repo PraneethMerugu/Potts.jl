@@ -31,7 +31,7 @@ using CommonSolve: solve, init, step!, solve!
 using KernelAbstractions: KernelAbstractions
 using LatticeFields: Exec, Problems
 using LatticeFields.Compile: CompileOptions, fingerprint_text, fuse_update, promote_dual
-using LatticeFields.IR: fieldid
+using LatticeFields.IR: fieldid, RESOLVE
 using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
                               ExplicitEuler, ExplicitMap, FieldGroups, ode_problem, RT_DT, substep_counts
 using ModelingToolkitBase: ModelingToolkitBase, PDESystem, Pre, ShiftIndex, Shift, Hold, Sample

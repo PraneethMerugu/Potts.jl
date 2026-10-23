@@ -217,8 +217,8 @@ end
     # an aux field in an arm (C8 review round 3): `K ~ −1000 c` is an unknown of the states,
     # so the arm's term `K` is not a source; the switch has no bound and automatic substeps
     # are refused (before: ρ = Dr·Σ4/h², one substep, silent divergence)
-    # (`K ~ −1000 c` closes a read cycle with c, so an owned problem needs two buffers: the
-    # bound is checked on the symbolic form; the owned problem reads K of another field)
+    # (the bound is checked on the symbolic form; the owned problem reads K of another field.
+    # Before F3-02 an owned `K ~ −1000 c` read in c's rate was refused as a read cycle)
     sa = psys([D(ce) ~ Dr * Δ(ce) + ifelse(t >= t0, Ke, 0.0), Ke ~ -1000 * ce], [c(0, x, y) ~ 1.0; per], [Dr, t0];
               T = 0.1, dvs = [ce, Ke])
     cfa = symbolic_discretize(sa, LatticeDiscretization(Grid((4, 4)); T = Float64); update = LatticePDE.euler_update)

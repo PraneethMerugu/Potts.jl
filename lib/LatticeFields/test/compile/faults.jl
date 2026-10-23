@@ -60,8 +60,9 @@ end
     s, sp = build(chain2())
     @test length(sp.launches) == 1                     # fused, so forwarding matters
     @test differential(chain2(), (0.5,))
-    noforward = (p, ids, scc) -> Schedule.merge_kernels(p, ids, Dict(k => 1
-    for k in keys(scc)))
+    # (one Jacobi group for every kernel no longer drops the forwarding of a one-buffer field,
+    # F3-02: the fault drops it outright)
+    noforward = (p, ids, scc) -> Schedule.merge_kernels(p, ids, scc; forward = false)
     @test !differential(chain2(), (0.5,); merge = noforward)
 end
 

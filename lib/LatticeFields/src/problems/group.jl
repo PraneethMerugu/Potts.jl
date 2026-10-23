@@ -5,6 +5,75 @@
 # Both front ends step through it: B's `FieldProblem` and A's `CorePotts.FieldPhase`.
 
 """
+    ParamSlot(name; text = name, default = nothing, role = :base, derivation = nothing)
+
+A parameter slot of a group (F2 design §2.2): its `name` (the slot's key), the parameter as
+the user wrote it (`text`), its default as given (any `Real`, or `nothing` when the front end
+binds the values itself), its `role` (`:base`, `:computed`, or `:clock` for
+[`CLOCK_KEY`](@ref)) and, for `:computed`, its `derivation`: the expression of the base
+parameters as written (the compiled derivation of a problem's computed slots is its index's,
+`LatticeIndex.derive`). `string(slot)` is its name.
+"""
+struct ParamSlot
+    name::String
+    text::String
+    default::Any
+    role::Symbol
+    derivation::Any
+end
+function ParamSlot(name::AbstractString; text = name, default = nothing, role::Symbol = name == CLOCK_KEY ? :clock : :base,
+        derivation = nothing)
+    role in (:base, :computed, :clock) ||
+        throw(ArgumentError("a parameter slot's role must be :base, :computed or :clock; got $(repr(role))"))
+    return ParamSlot(String(name), String(text), default, role, derivation)
+end
+ParamSlot(s::ParamSlot) = s
+Base.string(s::ParamSlot) = s.name
+Base.show(io::IO, s::ParamSlot) = print(io, s.name)
+
+"""
+    TableSpec(key; name = key, values = nothing)
+
+A table of a group (F2 design §2.2): its `key`, its user `name` and its values as given (the
+element type kept), or `nothing` when the front end binds them itself. `string(t)` is its key.
+"""
+struct TableSpec
+    key::String
+    name::String
+    values::Any
+end
+TableSpec(key::AbstractString; name = key, values = nothing) = TableSpec(String(key), String(name), values)
+TableSpec(t::TableSpec) = t
+Base.string(t::TableSpec) = t.key
+Base.show(io::IO, t::TableSpec) = print(io, t.key)
+
+"""
+    InputSpec(key; name = key, eltype = Real, bounds = (-Inf, Inf), default = nothing, filled = false)
+
+An input field of a group (F2 design §2.2): its `key`, its user `name`, its element type
+(`Bool`, `Int32` or a real type), its declared `bounds`, its `default` (or `nothing`) and
+whether it is `filled`: a front end writes it on the device at every step (front end A's CPM
+reads), so no host check of its values runs between steps and an implicit algorithm treats it
+as moving data (F3). The fields of other groups (`spec.external`) are inputs too, not filled.
+`string(i)` is its key.
+"""
+struct InputSpec
+    key::String
+    name::String
+    eltype::Type
+    bounds::Tuple{Float64, Float64}
+    default::Any
+    filled::Bool
+end
+function InputSpec(key::AbstractString; name = key, eltype::Type = Real, bounds = (-Inf, Inf), default = nothing,
+        filled::Bool = false)
+    return InputSpec(String(key), String(name), eltype, (Float64(bounds[1]), Float64(bounds[2])), default, filled)
+end
+InputSpec(i::InputSpec) = i
+Base.string(i::InputSpec) = i.key
+Base.show(io::IO, i::InputSpec) = print(io, i.key)
+
+"""
     GroupSpec
 
 The description of one field group, the same for both front ends (F2 design §2.2):
@@ -15,8 +84,9 @@ The description of one field group, the same for both front ends (F2 design §2.
   ([`fuse_update`](@ref LatticeFields.Compile.fuse_update));
 - `state`: the keys of the group's state fields, in the PDESystem's dvs order;
 - `external`: the fields of other groups the group reads (from their arrays);
-- `params`, `tables`, `inputs`: the names of the parameter slots, the table keys and the
-  input keys of the program;
+- `params`, `tables`, `inputs`: the parameter slots ([`ParamSlot`](@ref)), the tables
+  ([`TableSpec`](@ref)) and the inputs ([`InputSpec`](@ref)) of the program, in its order
+  (`string(slot)` is the slot's name, so `string.(spec.params)` are the names of the slots);
 - `init`: the kernels that run at a step's start (the masks of masked conditions);
 - `kind`: `:rate` or `:map`;
 - `clock`: the period of the discretization's clock, or `nothing` (F2-08c);
@@ -29,9 +99,9 @@ struct GroupSpec{N}
     rate::Program{N}
     state::Vector{String}
     external::Vector{String}
-    params::Vector{String}
-    tables::Vector{String}
-    inputs::Vector{String}
+    params::Vector{ParamSlot}
+    tables::Vector{TableSpec}
+    inputs::Vector{InputSpec}
     init::Vector{String}
     kind::Symbol
     clock::Union{Nothing, Float64}
@@ -43,8 +113,8 @@ function GroupSpec(rate::Program{N}; state, external = String[], params = String
         inputs = String[], init = String[], kind::Symbol, clock = nothing, stability = p -> NaN,
         route = "ExplicitEuler(; dt, substeps = n)", terms = String[], linearity = nothing) where {N}
     kind in (:rate, :map) || throw(ArgumentError("kind must be :rate or :map; got $(repr(kind))"))
-    return GroupSpec{N}(rate, collect(String, state), collect(String, external), collect(String, params),
-        collect(String, tables), collect(String, inputs), collect(String, init), kind,
+    return GroupSpec{N}(rate, collect(String, state), collect(String, external), ParamSlot[ParamSlot(q) for q in params],
+        TableSpec[TableSpec(q) for q in tables], InputSpec[InputSpec(q) for q in inputs], collect(String, init), kind,
         clock === nothing ? nothing : Float64(clock), stability, (; route = String(route), terms = collect(String, terms)),
         linearity)
 end
@@ -90,7 +160,7 @@ const CLOCK_KEY = "clock__tick"
 The parameter slot of the clock in group `spec` ([`CLOCK_KEY`](@ref)), or 0 when its kernels
 do not read the step index.
 """
-clock_slot(spec::GroupSpec) = something(findfirst(==(CLOCK_KEY), spec.params), 0)
+clock_slot(spec::GroupSpec) = something(findfirst(q -> q.name == CLOCK_KEY, spec.params), 0)
 
 """
     group_program(g, alg) -> Program

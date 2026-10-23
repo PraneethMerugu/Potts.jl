@@ -2706,3 +2706,62 @@ end
     end
     @test occursin("c^2", err) && occursin("substeps", err)
 end
+
+# F3-02 (F2 design §2.2): the group's inputs are specs. Front end A's CPM inputs are filled (A
+# writes them on the device every MCS), another group's field read from its array is not.
+@testset "F3-02: InputSpec.filled: A's CPM inputs are filled, another group's field is not" begin
+    op = fd_source_op((12, 10))
+    sys = FdTwo(; name = :t)
+    uvar = only(filter(x -> string(x) in ("u", "u(t)"), Potts.variables(sys)))
+    prob = PottsProblem(sys, op, (0, 2); field_solver = ExplicitEuler(substeps = 2), solvers = [uvar => ExplicitEuler(substeps = 3)])
+    phs = [ph for ph in prob.f.phases.after_mcs if ph isa CorePotts.FieldPhase]
+    cin, uin = (ph.group.spec.inputs for ph in phs)
+    @test all(i -> i isa Potts.LatticeFields.Problems.InputSpec, [cin; uin])
+    @test !isempty(cin) && all(i -> i.filled, cin) && any(i -> occursin("kind", i.key), cin)   # `kind == A`
+    @test [(i.key, i.filled) for i in uin] == [("c", false)]                                     # c's array
+end
+
+# F3-02 (F3 design §3.11): the aux-carried loop in A (`K ~ c`, `D(w) ~ -k K`, `D(c) ~ k w`): one
+# group is the Jacobi step, two groups (`solvers`) the split; K is read new (its kernel first).
+# Base (eb2efb60): refused at build ("the fields K, c, w define each other within one step").
+@potts_model FxLoop begin
+    @kinds medium A[frozen]
+    @parameters kx = 1.0
+    @variables begin
+        w(field) = 1.0
+        c(field) = 0.0
+        K(field) = 0.0
+    end
+    @lattice Lattice((6, 4))
+    @energy cells(A) => (volume - 4.0)^2
+    @equations begin
+        K ~ c
+        D(w) ~ -kx * K
+        D(c) ~ kx * w
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@testset "F3-02: an aux-carried loop runs in A (Jacobi in a group, the split across groups)" begin
+    σ = zeros(Int32, 6, 4)
+    σ[2:3, 2:3] .= 1
+    op = [ownership => σ, kind => [:A]]
+    sys = FxLoop(; name = :x)
+    cv = only(filter(x -> string(x) in ("c", "c(t)"), Potts.variables(sys)))
+    s = solve(PottsProblem(sys, op, (0, 3); field_solver = ExplicitEuler(substeps = 2)), SequentialCPM())
+    w, c = 1.0, 0.0
+    for _ in 1:6
+        w, c = w - 0.5 * c, c + 0.5 * w
+    end
+    @test s.retcode == Potts.SciMLBase.ReturnCode.Success
+    @test all(≈(w; rtol = 1e-14), s.u[end].site.w) && all(≈(c; rtol = 1e-14), s.u[end].site.c)
+    s2 = solve(PottsProblem(sys, op, (0, 3); field_solver = ExplicitEuler(substeps = 1), solvers = [cv => ExplicitEuler(substeps = 2)]),
+        SequentialCPM())
+    w, c = 1.0, 0.0
+    for _ in 1:3
+        w = w - c                                       # w's group: K = c, held over the MCS
+        for _ in 1:2
+            c = c + 0.5 * w                             # c's group reads the new w
+        end
+    end
+    @test all(≈(w; rtol = 1e-14), s2.u[end].site.w) && all(≈(c; rtol = 1e-14), s2.u[end].site.c)
+end

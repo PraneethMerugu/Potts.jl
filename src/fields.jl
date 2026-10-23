@@ -617,7 +617,7 @@ function _lower_field_group(sys::PottsSystem, names::Vector{Symbol}, T::Type; kn
                                                "variable `m(site)` with `@after_mcs m ~ rhs`)")
     Threads.atomic_add!(_LOWER_GROUP_CALLS, 1)
     spec = try
-        LatticePDE.lower_group(pdesys, _field_disc(sys, T); values = false, bound)
+        LatticePDE.lower_group(pdesys, _field_disc(sys, T); values = false, bound, filled = (string(e[1]) for e in cv.filled))
     catch e
         # an error about a `@bcs` condition (`parse_bcs`, a second condition on a face) names
         # its `@bcs` line (review R4 of F2 batch 4)
@@ -629,7 +629,7 @@ function _lower_field_group(sys::PottsSystem, names::Vector{Symbol}, T::Type; kn
     # the model's parameter of each slot and table (the spec names them as the PDESystem prints
     # them); the clock's slot keeps its reserved name (the phase writes the MCS number there)
     pname(k) = k == LatticeFields.Problems.CLOCK_KEY ? Symbol(k) : info(only(q for q in getfield(pdesys, :ps) if string(q) == k)).name
-    params = Symbol[pname(k) for k in spec.params]
+    params = Symbol[pname(k.name) for k in spec.params]
     tables = Pair{Int, Symbol}[i => pname(tb.key) for (i, tb) in enumerate(spec.rate.tables)]
     return (; spec, params, tables, filled = copy(cv.filled), pdesys)
 end

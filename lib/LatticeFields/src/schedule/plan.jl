@@ -4,8 +4,13 @@
     step_order(p, ids) -> Vector{Vector{Int}}
 
 Topological order over the cross-read graph (A before B when B reads a field A writes);
-strongly connected components are Jacobi groups (every member reads the old values).
-Ties break by kernel key, so the order is canonical.
+strongly connected components are Jacobi groups (every member reads the old values of the
+two-buffer fields). Ties break by kernel key, so the order is canonical.
+
+A one-buffer field (an aux field `K ~ rhs`) has no old value: inside a Jacobi group its
+readers run after its writer (they read the new value, F3-02). The members of a group are
+ordered by these reads (ties by key); only a cycle of one-buffer reads (fields that define each
+other within one step) is a read cycle, refused.
 """
 function step_order(p::Program, ids::Vector{Int})
     ks = p.kernels
@@ -42,14 +47,39 @@ function step_order(p::Program, ids::Vector{Int})
         push!(comps, sort!(c; by = i -> ks[i].key))
     end
     foreach(v -> haskey(index, v) || strong(v), sort(ids; by = i -> ks[i].key))
-    for c in comps, i in c, f in reads(ks[i])
-        length(c) > 1 && haskey(w, f) && w[f] in c && p.fields[f].buffers == 1 &&
-            irerror("the fields ", join(sort!(unique!([p.fields[g].key for j in c for g in writes(ks[j])])), ", "),
+    for (n, c) in enumerate(comps)
+        length(c) > 1 && (comps[n] = _one_buffer_order(p, c, w))
+    end
+    return comps   # writers precede readers: Tarjan emits sinks of reader->writer edges first
+end
+
+# The members `c` (sorted by key) of a Jacobi group in the order of their one-buffer reads: a
+# reader of a one-buffer field after its writer, ties by key (Kahn's algorithm); a cycle of
+# one-buffer reads is refused, naming the fields on it
+function _one_buffer_order(p::Program, c::Vector{Int}, w::Dict{Int32, Int})
+    ks = p.kernels
+    deps = Dict(i => sort!(unique!([w[f] for f in reads(ks[i])
+                                    if haskey(w, f) && w[f] != i && w[f] in c && p.fields[f].buffers == 1])) for i in c)
+    isempty(Iterators.flatten(values(deps))) && return c
+    out, left = Int[], copy(c)
+    while !isempty(left)
+        j = findfirst(i -> all(d -> d in out, deps[i]), left)
+        if j === nothing
+            # the cycle: drop the readers no member left depends on, until none is dropped
+            cyc = copy(left)
+            while (k = findfirst(i -> !any(m -> i in deps[m], cyc), cyc)) !== nothing
+                deleteat!(cyc, k)
+            end
+            f = first(f for i in cyc for f in reads(ks[i])
+                      if haskey(w, f) && w[f] in cyc && w[f] != i && p.fields[f].buffers == 1)
+            irerror("the fields ", join(sort!(unique!([p.fields[g].key for j in cyc for g in writes(ks[j])])), ", "),
                 " define each other within one step (a read cycle: each reads another's new value); an ",
                 "algebraic field cannot depend on itself through other fields: break the cycle ",
                 "(in the IR, field `", p.fields[f].key, "` would need buffers = 2)")
+        end
+        push!(out, popat!(left, j))
     end
-    return comps   # writers precede readers: Tarjan emits sinks of reader->writer edges first
+    return out
 end
 
 """
@@ -76,7 +106,10 @@ function fusion_blocker(p::Program, group::Vector{Int}, k::Int, scc)
     for g in group
         wg = writes(ks[g])
         for a in ks[k].accesses
-            a.field in wg && scc[g] != scc[k] && !(zero_offset(a) && a.comp.cond == 0) &&
+            # (a one-buffer field written earlier in the same Jacobi group is read new, as
+            # across groups: forwarded at offset 0, else a split)
+            a.field in wg && (scc[g] != scc[k] || p.fields[a.field].buffers == 1) &&
+                !(zero_offset(a) && a.comp.cond == 0) &&
                 return (:illegal,
                     string("`", ks[k].key, "` reads `", p.fields[a.field].key,
                         "` written by `", ks[g].key, "` at offset ", a.offset.a))
@@ -101,9 +134,10 @@ end
 
 """
 Merge kernels `ids` (in order) into one; an offset-0 read of an earlier member's output
-outside its Jacobi group is forwarded from the stored value.
+outside its Jacobi group, or of a one-buffer output inside it, is forwarded from the stored
+value (`forward = false` drops the forwarding: a fault the tests inject).
 """
-function merge_kernels(p::Program{N}, ids::Vector{Int}, scc) where {N}
+function merge_kernels(p::Program{N}, ids::Vector{Int}, scc; forward::Bool = true) where {N}
     length(ids) == 1 && return p.kernels[ids[1]]
     b = KernelBuilder{N}(buildkeys(p)..., p.kernels[ids[1]].space)
     out = Dict{Tuple{Int32, Int16}, Tuple{Int32, Int}}()
@@ -114,7 +148,7 @@ function merge_kernels(p::Program{N}, ids::Vector{Int}, scc) where {N}
             n = k.nodes[j]
             a = n.op == LOAD ? k.accesses[n.imm] : nothing
             src = a === nothing ? nothing : get(out, (a.field, a.comp.a), nothing)
-            new[j] = src !== nothing && scc[src[2]] != scc[i] && zero_offset(a) &&
+            new[j] = forward && src !== nothing && (scc[src[2]] != scc[i] || p.fields[a.field].buffers == 1) && zero_offset(a) &&
                      a.comp.cond == 0 ? _rounded!(b, p, a.field, src[1]) :
                      copy_node!(
                 b, k, j, Int32[new[x] for x in args(k, n)], (new, identity, identity))
