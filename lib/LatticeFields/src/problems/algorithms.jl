@@ -212,6 +212,34 @@ function FieldGroups(pairs::Pair...; default = nothing)
 end
 nbuffers(g::FieldGroups) = maximum(nbuffers, [last.(g.pairs); g.default === nothing ? FieldAlgorithm[] : [g.default]])
 
+"""
+    canonical(alg) -> String
+
+The one canonical text of a field algorithm (or of a solver part: `DevicePCG`, `Multigrid`,
+`V`, `:auto`, a number), the text both front ends' fingerprints hash (F3 design §3.7): what
+the algorithm is, not the host object, so equal specifications built afresh print alike.
+`ExplicitEuler` prints `ExplicitEuler(substeps=…,lower=…)` (its window `dt` is the
+problem's, not part of the scheme); another algorithm prints every field but `dt`, sorted by
+name, each by `canonical`; `:auto` prints as given (`:auto`, unresolved, so a CPU and a
+device problem print alike). A `FieldGroups` prints its pairs as given (a front end that
+resolves it per field, front end A, prints the per-field map instead).
+"""
+canonical(s::ExplicitEuler) = "ExplicitEuler(substeps=$(repr(s.substeps)),lower=$(repr(s.lower)))"
+canonical(::ExplicitMap) = "ExplicitMap()"
+canonical(g::FieldGroups) = string("FieldGroups(", join((string(k, "=", canonical(a)) for (k, a) in g.pairs), ","),
+    ";default=", g.default === nothing ? "nothing" : canonical(g.default), ")")
+canonical(a::FieldAlgorithm) = _canonical_fields(a)
+canonical(s::Union{Solvers.DevicePCG, Solvers.Multigrid}) = _canonical_fields(s)
+canonical(v::Solvers.V) = "V($(v.nu1),$(v.nu2))"
+canonical(s::Symbol) = repr(s)
+canonical(::Nothing) = "nothing"
+canonical(x::Union{Number, AbstractString}) = repr(x)
+canonical(::Type{T}) where {T} = string(T)
+canonical(x) = throw(ArgumentError("no canonical text for $(repr(x)) (a `$(typeof(x))`): a field algorithm's " *
+                                   "keywords are numbers, symbols, types or solver parts"))
+_canonical_fields(s) = string(nameof(typeof(s)), "(",
+    join((string(f, "=", canonical(getfield(s, f))) for f in sort!(collect(fieldnames(typeof(s)))) if f !== :dt), ","), ")")
+
 # an algorithm in messages, in its keyword form (`ExplicitEuler(; dt = 0.01, substeps = 2)`)
 function _algtext(a::ExplicitEuler)
     kw = [string(k, " = ", getfield(a, k)) for k in (:dt, :substeps, :lower) if getfield(a, k) !== nothing]

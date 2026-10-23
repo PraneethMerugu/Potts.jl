@@ -322,11 +322,12 @@ _fingerprint_seed(sys::PottsSystem, T) = string("lattice=", _canonical_value(cor
 # out for its ODE scratch (values kept; CorePotts keeps p, the seed and the frozen mask).
 # Never reached by `remake(prob; p | u0 | seed)`.
 function CorePotts.remake_function(mi::PottsModelInfo, prob; field_solver = mi.solvers.field_solver,
-        ode_solver = mi.solvers.ode_solver, solvers = mi.solvers.solvers, track = _track_names(prob), kwargs...)
+        ode_solver = mi.solvers.ode_solver, solvers = nothing, track = _track_names(prob), kwargs...)
     isempty(kwargs) || throw(ArgumentError("remake: unknown keyword$(length(kwargs) == 1 ? "" : "s") " *
                                            "$(join(("`$k`" for k in keys(kwargs)), ", "))"))
     c = mi.csys
-    spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
+    kept = solvers === nothing                      # the problem's `solvers` (named in a clash)
+    spec = _resolve_solvers(c; field_solver, ode_solver, solvers = kept ? mi.solvers.solvers : solvers, kept)
     values = _parameter_dict(c, prob.p)
     track = _track(track)
     f = _problem_function(c, mi.T, spec, values, mi.ctx, mi.cache; track)

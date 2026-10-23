@@ -22,6 +22,7 @@ using ..IR: Coef, Ex, FaceRule, NodeValueRule, Program, fieldid, print_program, 
 using ..Compile: CompiledKernel, CompileOptions, body_function, derive_function, lanecast, lanetype,
                  primal, promote_dual, semantic, valtype, withvaltype, writes, fuse_update
 using ..Schedule: LaunchSpec, StepPlan, plan
+using ..Solvers: Solvers
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 rgf(ex::Expr) = drop_expr(RuntimeGeneratedFunction(@__MODULE__, @__MODULE__, ex))
@@ -32,7 +33,7 @@ public Geom, RT_T, RT_DT, launch_geometry, launch_parameters, bind, rebind, reti
        run_step!, FaceCheck, face_checks, degenerate_face, check_faces, degenerate, face_ratio, FACE_RTOL, FieldSlot,
        LatticeIndex, FieldAlgorithm, ExplicitEuler, ExplicitMap, nbuffers, FieldProblem,
        FieldGroups, update_key, update_rule, EulerRule, alg_family, alg_cache, reset_cache!, step_retcode!, GroupSpec, FieldGroup,
-       ParamSlot, TableSpec, InputSpec,
+       ParamSlot, TableSpec, InputSpec, canonical,
        group_program, group_plans, restrict_bound, GroupRuntime, bind_group, advance!, reset!, rebind!, clamp_now!,
        FieldSolution,
        FieldIntegrator, substeps, StateView, RHSLaunch, LatticeRHS, ode_problem,

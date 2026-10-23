@@ -392,9 +392,10 @@ end
     end
     @test all(≈(c; rtol = 1e-12), sol.u[end].site.c) && all(≈(o; rtol = 1e-12), sol.u[end].site.o)
     @test abs(c - cos(2.0)) < 0.5 && abs(o - sin(2.0)) < 0.5      # the splitting's truncation at k dt = 0.5
-    # FieldGroups belongs to a FieldProblem: an ArgumentError in a PottsProblem (base: MethodError)
-    fg = Potts.LatticeFields.Problems.FieldGroups(ovar => ExplicitEuler(); default = ExplicitEuler())
-    @test_throws ArgumentError PottsProblem(sys, fd_empty((6, 6)), (0, 1); field_solver = fg)
+    # `FieldGroups` as A's `field_solver` (F3-03): the same two groups as the `solvers` spelling
+    fg = FieldGroups(ovar => ExplicitEuler(substeps = 2); default = ExplicitEuler(substeps = 1))
+    sg = solve(PottsProblem(sys, [fd_empty((6, 6)); :k => 0.5], (0, 4); field_solver = fg), SequentialCPM())
+    @test sg.u[end].site.c == sol.u[end].site.c && sg.u[end].site.o == sol.u[end].site.o
 end
 
 # Round 2 of the F2-06 review: only solver groups in a loop of the group read graph are limited
@@ -2719,6 +2720,65 @@ end
     @test all(i -> i isa Potts.LatticeFields.Problems.InputSpec, [cin; uin])
     @test !isempty(cin) && all(i -> i.filled, cin) && any(i -> occursin("kind", i.key), cin)   # `kind == A`
     @test [(i.key, i.filled) for i in uin] == [("c", false)]                                     # c's array
+end
+
+# F3-03 (F3 design §3.7): `FieldGroups` is A's `field_solver` too (its pairs as `solvers`
+# entries of fields, its `default` the other fields' solver), so it resolves and fingerprints
+# as the `solvers` spelling; both front ends print an algorithm by LatticeFields' one canonical
+# text (`Problems.canonical`). Base (eb2efb60): `field_solver = FieldGroups(…)` was an
+# ArgumentError ("`FieldGroups` in a `PottsProblem` is planned").
+@testset "F3-03: FieldGroups in A; one canonical text" begin
+    LFP, LP = Potts.LatticeFields.Problems, Potts.LatticePDE
+    msg(f) = try
+        f(); ""
+    catch e
+        e isa ArgumentError || rethrow()
+        sprint(showerror, e)
+    end
+    op = fd_source_op((12, 10))
+    sys = FdTwo(; name = :t)
+    cvar = only(filter(x -> string(x) in ("c", "c(t)"), Potts.variables(sys)))
+    uvar = only(filter(x -> string(x) in ("u", "u(t)"), Potts.variables(sys)))
+    fg = PottsProblem(sys, op, (0, 2); field_solver = FieldGroups(uvar => ExplicitEuler(substeps = 3); default = ExplicitEuler(substeps = 2)))
+    sp = PottsProblem(sys, op, (0, 2); field_solver = ExplicitEuler(substeps = 2), solvers = [uvar => ExplicitEuler(substeps = 3)])
+    @test fg.f.fingerprint == sp.f.fingerprint
+    s1, s2 = solve(fg, SequentialCPM()), solve(sp, SequentialCPM())
+    @test s1.u[end].site.c == s2.u[end].site.c && s1.u[end].site.u == s2.u[end].site.u
+    # no `default`: the others take the default solver; a name key works as in `solvers`
+    nd = PottsProblem(sys, op, (0, 2); field_solver = FieldGroups(:u => ExplicitEuler(substeps = 3)))
+    @test nd.f.fingerprint == PottsProblem(sys, op, (0, 2); solvers = [uvar => ExplicitEuler(substeps = 3)]).f.fingerprint
+    # control: another count is another fingerprint
+    @test PottsProblem(sys, op, (0, 2); field_solver = FieldGroups(uvar => ExplicitEuler(substeps = 4);
+        default = ExplicitEuler(substeps = 2))).f.fingerprint != sp.f.fingerprint
+    # refusals in the user's words: a field given twice, a key that is not a field
+    e = msg(() -> PottsProblem(sys, op, (0, 2); field_solver = FieldGroups(uvar => ExplicitEuler(substeps = 3)),
+        solvers = [uvar => ExplicitEuler(substeps = 2)]))
+    @test occursin("`u` is given twice (once in `field_solver = FieldGroups(…)`)", e)
+    # at `remake` the problem's `solvers` are kept, and the clash says so with the route (review r1
+    # nit); the route works
+    e = msg(() -> remake(sp; field_solver = FieldGroups(:u => ExplicitEuler(substeps = 3))))
+    @test occursin("`u` is given twice (once in `field_solver = FieldGroups(…)`; `solvers` is kept from the problem: pass `solvers = []`)", e)
+    @test remake(sp; field_solver = FieldGroups(:u => ExplicitEuler(substeps = 3); default = ExplicitEuler(substeps = 2)),
+        solvers = []).f.fingerprint == sp.f.fingerprint
+    @test occursin("`FieldGroups`: `zz` is not a field", msg(() -> PottsProblem(sys, op, (0, 2);
+        field_solver = FieldGroups(:zz => ExplicitEuler()))))
+    @test occursin("give it as `field_solver = FieldGroups(", msg(() -> PottsProblem(sys, op, (0, 2);
+        solvers = [cvar => FieldGroups(uvar => ExplicitEuler())])))
+    # one canonical text: today's `ExplicitEuler` text byte for byte, through A's `_canonical`
+    @test LFP.canonical(ExplicitEuler(substeps = 15, lower = 0.0)) == "ExplicitEuler(substeps=15,lower=0.0)" ==
+          Potts._canonical(ExplicitEuler(substeps = 15, lower = 0.0))
+    @test LFP.canonical(ExplicitEuler()) == "ExplicitEuler(substeps=nothing,lower=nothing)" &&
+          LFP.canonical(ExplicitEuler(; dt = 0.5, substeps = 2)) == LFP.canonical(ExplicitEuler(substeps = 2))   # no dt
+    @test LFP.canonical(ExplicitMap()) == "ExplicitMap()"
+    S = Potts.LatticeFields.Solvers
+    @test LFP.canonical(S.DevicePCG()) ==
+          "DevicePCG(budget=8,precond=Multigrid(budget=nothing,cycle=V(2,2),cycles=nothing,rtol=1.0e-6,warn_tol=1.0e-6),rtol=1.0e-6)"
+    @test LFP.canonical(S.Multigrid()) == "Multigrid(budget=nothing,cycle=V(2,2),cycles=nothing,rtol=1.0e-6,warn_tol=1.0e-6)"
+    @test LFP.canonical(:auto) == ":auto"
+    # the same objects: every algorithm LatticePDE exports is Potts' own
+    algs = [n for n in names(LP) if (v = getfield(LP, n); v isa Type && v <: LFP.FieldAlgorithm)]
+    @test Set(algs) ⊇ Set([:ExplicitEuler, :ExplicitMap, :FieldGroups])
+    @test all(n -> isdefined(Potts, n) && Base.isexported(Potts, n) && getfield(Potts, n) === getfield(LP, n), algs)
 end
 
 # F3-02 (F3 design §3.11): the aux-carried loop in A (`K ~ c`, `D(w) ~ -k K`, `D(c) ~ k w`): one

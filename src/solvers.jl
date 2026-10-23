@@ -39,9 +39,8 @@ function _check_field_solver(s, what; map::Bool = false)
         what, ": `", nameof(typeof(s)), "(…)` steps rates `D(c) ~ rhs`; a map field ",
         "(`Shift(t, 1)(m) ~ rhs`) is stepped by `ExplicitMap()`, once per MCS (or leave the keyword out)")))
     s isa LatticeFields.Problems.FieldGroups && throw(ArgumentError(string(
-        what, ": `FieldGroups(…)` assigns algorithms to the fields of a LatticePDE `FieldProblem`; in a ",
-        "`PottsProblem` give each field its solver with `solvers = [c => ExplicitEuler(…), …]` ",
-        "(`FieldGroups` in a `PottsProblem` is planned)")))
+        what, ": `FieldGroups(…)` assigns algorithms to fields: give it as `field_solver = FieldGroups(c => …; ",
+        "default = …)`, or give this field one algorithm")))
     s isa ExplicitMap && !map && throw(ArgumentError(
         "$what: `ExplicitMap()` steps discrete maps `Shift(t, 1)(m) ~ rhs`; a rate field `D(c) ~ rhs` is stepped by " *
         "`ExplicitEuler(…)`"))
@@ -73,12 +72,14 @@ Resolve the solver keywords against compiled model `c`:
 An ODE's `ExplicitEuler(substeps = nothing)` is one step, the same as `substeps = 1`
 (`_ode_solver`): both resolve, group and fingerprint alike.
 """
-function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_solver = ExplicitEuler(), solvers = ())
+function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_solver = ExplicitEuler(), solvers = (),
+        kept::Bool = false)
     sys = c.sys
     fields = [_solver_name(x) for (x, _) in c.fields]
     # the map fields (`Shift(t, 1)(m) ~ rhs`; a model has rates or maps, F2-10)
     maps = Set{Symbol}(info(x).name for (x, _, op) in _field_equations(sys) if op isa ModelingToolkitBase.Shift)
     odes = [_solver_name(x) for (x, _) in Iterators.flatten((c.cell_odes, c.model_odes))]
+    fgpairs, fsolver = Pair{Any, Any}[], field_solver
     if isempty(fields)
         # a model whose only fields are aux fields (`K ~ rhs`) evaluates them once per MCS, with
         # no solver (F3 design §3.12)
@@ -91,20 +92,44 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
     else
         # the default (D-F2-R1): explicit Euler with the automatic substep count; for maps
         # `ExplicitMap()`, one application per MCS
-        field_solver === nothing && (field_solver = isempty(maps) ? ExplicitEuler() : ExplicitMap())
-        _is_field_solver(field_solver) || throw(ArgumentError(
-            "`field_solver` takes a field solver ($(_field_solver_names())); got $(repr(field_solver))"))
-        _check_field_solver(field_solver, "`field_solver`"; map = !isempty(maps))
+        # `FieldGroups(c => alg, …; default)` (F3-03): its pairs as `solvers` entries of fields,
+        # its `default` the field solver of the others, so it resolves (and fingerprints) as the
+        # `solvers` spelling
+        if field_solver isa LatticeFields.Problems.FieldGroups
+            fgpairs = Pair{Any, Any}[k => a for (k, a) in field_solver.pairs]
+            fsolver = field_solver.default
+        else
+            fsolver = field_solver
+        end
+        fsolver === nothing && (fsolver = isempty(maps) ? ExplicitEuler() : ExplicitMap())
+        _is_field_solver(fsolver) || throw(ArgumentError(
+            "`field_solver` takes a field solver ($(_field_solver_names())); got $(repr(fsolver))"))
+        _check_field_solver(fsolver, field_solver isa LatticeFields.Problems.FieldGroups ? "`FieldGroups`: `default`" :
+                                     "`field_solver`"; map = !isempty(maps))
     end
     ode_solver isa _ODESolver || throw(ArgumentError(
         "`ode_solver` takes `ExplicitEuler(; substeps)`, `RK4(; substeps)` or `Adaptive(alg; …)`; got $(repr(ode_solver))"))
     _check_ode_dt(ode_solver, "`ode_solver`")
     resolved = Dict{Symbol, Any}()
-    foreach(n -> resolved[n] = field_solver, fields)
+    foreach(n -> resolved[n] = fsolver, fields)
     foreach(n -> resolved[n] = _ode_solver(ode_solver), odes)
     given = Pair{Any, Any}[k => v for (k, v) in (solvers isa AbstractDict ? pairs(solvers) : solvers)]
     named = Set{Symbol}()
+    for (k, s) in fgpairs, n in _solver_keys(_localize(sys, k; strict = true), [fields; odes], nameof(sys))
+        n in fields || throw(ArgumentError("`FieldGroups`: `$n` is not a field of model `$(nameof(sys))` (no " *
+                                           "`D($n) ~ …` field equation); its fields are $(join(("`$m`" for m in sort(fields)), ", "))" *
+                                           (n in odes ? "; an ODE takes its solver in `solvers` or `ode_solver`" : "")))
+        n in named && throw(ArgumentError("`FieldGroups`: `$n` is given twice"))
+        push!(named, n)
+        _is_field_solver(s) || throw(ArgumentError(
+            "`FieldGroups`: the field `$n` takes a field solver ($(_field_solver_names())); got $(repr(s))"))
+        _check_field_solver(s, "`FieldGroups`: the field `$n`"; map = n in maps)
+        resolved[n] = s
+    end
+    fgnamed = copy(named)
     for (k, s) in given, n in _solver_keys(_localize(sys, k; strict = true), [fields; odes], nameof(sys))
+        n in fgnamed && throw(ArgumentError("`solvers`: `$n` is given twice (once in `field_solver = FieldGroups(…)`" *
+                                            (kept ? "; `solvers` is kept from the problem: pass `solvers = []`)" : ")")))
         n in named && throw(ArgumentError("`solvers`: `$n` is given twice" *
                                           (k isa ModelingToolkitBase.AbstractSystem ? " (once through component `$(nameof(k))`)" : "")))
         push!(named, n)
@@ -124,7 +149,8 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
     end
     _check_adaptive_draws(c, resolved)
     canonical = join(("$n=$(_canonical(resolved[n]))" for n in sort!(collect(keys(resolved)))), ";")
-    return SolverSpec(field_solver, ode_solver, given, resolved, canonical)
+    return SolverSpec(field_solver isa LatticeFields.Problems.FieldGroups ? field_solver : fsolver, ode_solver, given, resolved,
+        canonical)
 end
 
 # As an ODE solver, explicit Euler with `substeps = nothing` is one step per MCS.
@@ -239,8 +265,8 @@ _ode_scratch_name(n::Symbol) = Symbol(n, :__ode)
 # not the host object, so equal specifications built afresh hash equally. Types print fully
 # qualified (independent of what the session has imported); keyword bundles are sorted.
 
-_canonical(s::ExplicitEuler) = "ExplicitEuler(substeps=$(repr(s.substeps)),lower=$(repr(s.lower)))"
-_canonical(::ExplicitMap) = "ExplicitMap()"
+# a field algorithm (and explicit Euler as an ODE solver): LatticeFields' one canonical text
+_canonical(s::FieldAlgorithm) = LatticeFields.Problems.canonical(s)
 _canonical(s::RK4) = "RK4(substeps=$(s.substeps))"
 function _canonical(s::Adaptive)
     alg = _canonical_solver_part(s.alg, "the algorithm")

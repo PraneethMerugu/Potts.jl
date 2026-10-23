@@ -184,7 +184,9 @@ sol[:x][end], sol[:g][end]
   depends on after their update, and fields that depend on each other read each other's
   values from the start of the substep. Fields with different solvers (`solvers = [u =>
   ExplicitEuler(substeps = 4)]`) step one group after another, each reading the others'
-  arrays. Groups that read one another in a loop (`c` reads `o` and `o` reads `c`) can grow
+  arrays. `field_solver = FieldGroups(u => ExplicitEuler(substeps = 4); default =
+  ExplicitEuler())` is the same problem in the form a LatticePDE problem takes: each pair
+  gives a field its solver, and `default` solves the other fields. Groups that read one another in a loop (`c` reads `o` and `o` reads `c`) can grow
   without bound at any substep count, because each holds the others' values over the field
   window. For each group in such a loop, the window times the largest sum, over the group's
   fields, of the largest coefficient magnitudes of the terms that read other groups of the
