@@ -1158,61 +1158,60 @@ decision = "D-C9-R1"
 why = "D-250 AUTO re-pin: the parameter object's type gains a type parameter (`PottsParameters{NT, D}`), which changes the pinned IR text by one inserted `, ()`"
 
 # F2-14 (lp/f2): the approved list-A edit of p6_0u (user ruling 2026-10-22, review of batch 5),
-# in a fixup of F2-14 (FE-18). The commit is F2-14's hash on lp/f2 before integration.
+# in a fixup of F2-14 (FE-18). The commit is F2-14's hash on feat/lattice-pde (integrated 2026-10-23).
 [[edits]]
 path = "acceptance/p6_0u_components_gaps.jl"
-commit = "b7b29a31"
+commit = "eaa439a6"
 fixup_of = "F2-14"
 decision = "D-F2-2"
 why = "part 2: the four parameter-binding cases (y(t) = 2k :161, initial_conditions [y => 2k] :167, k2 = 2k :174, discrete s2 = !s :194) flip from 'rejected' to 'builds' with their values (y0 = 0.6; comp7₊k2 = 0.6 and read-only; net7₊s2 = true), in both scopes; the unknown bindings y(t) = 2z and X(t) = !Y stay rejected naming the component; testset title and header item 2 follow"
 
 # F2-05 (lp/f2): the approved list-A edit of p6_0c (user ruling 2026-10-19, F2 design Q1), in
 # the same commit as the default field solver (the ruling asks for one commit). The commit is
-# F2-05's hash on lp/f2 before integration; squashing the F2-03 and F2-04 fixups (which come
-# before it) changes it, and the integration updates this field.
+# F2-05's hash on feat/lattice-pde (integrated 2026-10-23).
 [[edits]]
 path = "acceptance/p6_0c_solver_placement.jl"
-commit = "cea16497"
+commit = "c2c9c43c"
 fixup_of = "F2-05"
 decision = "D-F2-R1"
 why = "lines 196-201 and 273-276 (R-F2a): `field_solver` has a default (`ExplicitEuler()`): the three 'required' assertions flip to 'builds, and its fingerprint equals the explicit one'; the header comment (9-11, with 12-14 rewrapped) and the titles at 195 and 273 follow"
 
 # F2-15 (lp/f2): the approved list-A edits of p6_0ak, p6_0an, p6_0ao and p6_0ap (user OK
 # 2026-10-20, F2 design §8 item 1), in the same commit as the read-only rule (D-F2-1). The
-# commit is F2-15's hash on lp/f2 before integration; the integration updates this field.
+# commit is F2-15's hash on feat/lattice-pde (integrated 2026-10-23).
 [[edits]]
 path = "acceptance/p6_0ak_explicit_parameters.jl"
-commit = "0615b96b"
+commit = "1f2070b1"
 fixup_of = "F2-15"
 decision = "D-F2-1"
 why = "the file's premise (an explicit value of a computed parameter survives unrelated changes, D-112) is withdrawn: each write of β, γ, J or V₀ asserts the ArgumentError naming its base inputs (remake, the operating point, setters, setp lists); the re-derivation and chain cases stay; the fixed values (J = M, β = 5) use the constructor keyword, with the same hand energies (100, 102, 104; 346, 371, 430), except the checkpoint case, which moved from J = M, β = 5 (124, 174) to Jx = 20, β = 5 (430, 480 by hand); the checkpoint restores bitwise and a hand-edited object is derived again; header and testset titles follow"
 [[edits]]
 path = "acceptance/p6_0an_remake_namedtuple.jl"
-commit = "0615b96b"
+commit = "1f2070b1"
 fixup_of = "F2-15"
 decision = "D-F2-1"
 why = "NamedTuples naming β, J or V₀ (and their pair and Dict forms) are refused whole; the 'every parameter' case names every base parameter (the computed ones derived); `NamedTuple(prob.p)` is refused and the object itself round-trips; the Float32, integrator and ensemble cases use Jx/α instead of J/β; the fixed table uses the constructor keyword; header rule text follows"
 [[edits]]
 path = "acceptance/p6_0ao_computed_defaults.jl"
-commit = "0615b96b"
+commit = "1f2070b1"
 fixup_of = "F2-15"
 decision = "D-F2-1"
 why = "the explicit-value survival sub-tests flip: writes of w, m, c, u, V₁, J, R (remake, operating point, integ.ps) assert the refusal naming the parameter; the fixed u and J use the constructor keyword with the same values (V₁, z, j, energies); every evaluation value stays (the oracle of LatticePDE.derivation), and the `sqrt(u)` failure at remake now runs on the keyword model `u = 4` (review S5 of batch 5); header rule text follows"
 [[edits]]
 path = "acceptance/p6_0ap_setter_loose_ends.jl"
-commit = "0615b96b"
+commit = "1f2070b1"
 fixup_of = "F2-15"
 decision = "D-F2-1"
 why = "setp, setsym and remake_buffer lists naming β (or the table J) are refused whole, nothing set; the one-change cases use base-only lists {λ, α} (β, γ, V₀ derived: 331 by hand); the rejected-value control uses a vector for the scalar Jx; header text follows"
 [[edits]]
 path = "acceptance/p6_0ab_api_defects.jl"
-commit = "0615b96b"
+commit = "1f2070b1"
 fixup_of = "F2-15"
 decision = "D-F2-1"
 why = "defect 1 (user OK 2026-10-22): the explicit table J = M is given by the constructor keyword P60abTable(; J = M), and remake(prob; p = [:J => M]) asserts the refusal naming Jx (the computed J is read-only); a comment line follows"
 [[edits]]
 path = "acceptance/p6_0u_components_gaps.jl"
-commit = "0615b96b"
+commit = "1f2070b1"
 fixup_of = "F2-15"
 decision = "D-F2-2"
 why = "part 2's k2 = 2k case also asserts that comp7₊k2 is read-only (remake refused naming it), which holds from F2-15 on; the rest of the edit is F2-14's (entry above)"
