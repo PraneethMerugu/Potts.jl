@@ -8,6 +8,7 @@
 # errors); the negative controls below are mutations of this tree (~/lpwork/f3b3-nc-*.log).
 using LinearAlgebra: I, norm
 using OrdinaryDiffEqSDIRK: ImplicitEuler
+using OrdinaryDiffEqTsit5: Tsit5
 using LatticeFields: Problems as LFB, Solvers as LSB
 using LatticeFields.IR: fieldid
 
@@ -351,4 +352,92 @@ LFP.substeps(::LFP.FieldProblem, ::StallStub, p = nothing; tables = nothing, inp
         step!(ig)
         @test (ig[goe] != o0) == moves && ig.retcode == code
     end
+end
+
+# F3-09a (F3 design §3.4): a local nonlinear term `f(c)` (offset 0, its own field only) enters
+# the operator as `−∂f/∂c` at the iterate (`Symbolics.derivative`), so one Newton step per
+# substep keeps order 1; a switch `a max(c − c_T, 0)` takes `newton = 2` (one flip pass, S1);
+# a growth the count rule cannot see is clamped (the status word's cause bit 8), not a failure.
+# Base (f078eb2e, ~/lpwork/f3b3-nc-09a-base.log): these terms are left in the residual (a
+# defect correction, `newton = 4`), and the cache has no `iterate` (the testsets error).
+# Negative control (mutation, ~/lpwork/f3b3-nc-09a-noderiv.log): the derivative left out of the
+# shift (`push!(jterms, dj)` dropped in LatticePDE's `_build_operator`; the row stays exact, one
+# Newton step) fails the stiff Michaelis–Menten case (an explicit `h ∂f/∂c` up to 32).
+# The orders against the semi-discrete solution (the `:ode` path, Tsit5 at 1e-12), `n²` sites
+function nl_orders(rhs, ic; T, dts, newton = nothing, n = 16)
+    sys = PDESystem([D(bce) ~ rhs], [bc(0, x, y) ~ ic], bdom(T), [t, x, y], [bce], Any[]; name = :nl)
+    ref = solve(discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64, problem = :ode)), Tsit5();
+        reltol = 1e-12, abstol = 1e-12).u[end]
+    pb = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64, problem = :owned))
+    us = [vec(blast(solve(pb, BackwardEuler(; dt, inner = BTIGHT, newton)))) for dt in dts]
+    es = [maximum(abs, u .- ref) for u in us]
+    return es, log2.(es[1:(end - 1)] ./ es[2:end]), pb, us
+end
+const NLIC = 0.2 + 0.6 * x * y
+
+@testset "F3-09a: local nonlinear rows: one Newton step keeps order 1" begin
+    dts = [0.02 / 2^k for k in 0:3]
+    # logistic growth `3 c (1 − c)`
+    es, o, pb, _ = nl_orders(0.05 * Δ(bce) + 3 * bce * (1 - bce), NLIC; T = 0.5, dts)
+    @test all(q -> abs(q - 1) < 0.1, o)                 # (measured 1.06, 1.03, 1.02)
+    ig = init(pb, BackwardEuler(; dt = 0.02, inner = BTIGHT))
+    c = only(ig.runtimes).cache
+    @test c.newton == 1 && c.iterate && c.exact && only(c.rows).op.iterate && !only(c.rows).op.switch
+    @test bwarm(ig) == 0
+    # Michaelis–Menten uptake `−V c/(K + c)` with a time-dependent source (read at tⁿ⁺¹)
+    es, o, _, _ = nl_orders(0.05 * Δ(bce) - 2 * bce / (0.5 + bce) + 1 + 0.5 * sin(10t), NLIC; T = 0.5, dts)
+    @test all(q -> abs(q - 1) < 0.1, o)                 # (measured 1.00, 1.00, 1.00)
+    # … stiff: V/K = 1600, `h |∂f/∂c|` up to 32; the errors fall at least linearly and stay small
+    # (without the derivative the uptake is explicit and unstable at these steps)
+    es, o, _, _ = nl_orders(0.05 * Δ(bce) - 40 * bce / (0.025 + bce) + 20 + 10 * sin(10t), NLIC; T = 0.3, dts)
+    @test all(q -> q > 0.9, o) && maximum(es) < 1e-3     # (measured 5.7e-4 … 7.9e-7)
+end
+
+@testset "F3-09a: the switch: newton = 2 by default keeps order 1" begin
+    sw = 0.05 * Δ(bce) - 8 * max(bce - 0.4, 0) / 0.6 + 2 + 2 * sin(6t)
+    dts = [0.05 / 2^k for k in 0:3]
+    e2, o2, pb, u2 = nl_orders(sw, NLIC; T = 0.3, dts)
+    e1, o1, _, u1 = nl_orders(sw, NLIC; T = 0.3, dts, newton = 1)
+    _, _, _, u8 = nl_orders(sw, NLIC; T = 0.3, dts, newton = 8)
+    c = only(init(pb, BackwardEuler(; dt = 0.05)).runtimes).cache
+    @test c.newton == 2 && c.exact && only(c.rows).op.switch
+    # newton = 2 keeps order 1 (measured 1.02, 0.98, 0.99); one Newton step, the switch lagged
+    # at the substep's start, does not (0.48 at the first pair)
+    @test all(q -> abs(q - 1) < 0.1, o2) && abs(o1[1] - 0.48) < 0.05
+    # … and is close to the converged Backward Euler step (eight iterations; three are exact):
+    # 3.5e-6 off at dt = 0.05, where one iteration is 5.7e-3 off
+    @test maximum(abs, u2[1] .- u8[1]) < 1e-5 && maximum(abs, u1[1] .- u8[1]) > 1e-3
+end
+
+@testset "F3-09a: the switch's flip pass counts no budget hit (review r1, M7)" begin
+    # the default count's second iteration fixes the switch state: no convergence test, so a
+    # default user sees no warning (base 2d213237, ~/lpwork/f3r1-nc-base.log: 2 hits and the
+    # budget warning in Float32 and Float64); a given `newton = 2` checks as before
+    sys = PDESystem([D(bce) ~ 0.05 * Δ(bce) - 8 * max(bce - 0.4, 0) / 0.6 + 2 + 2 * sin(6t)], [bc(0, x, y) ~ NLIC], bdom(3.0),
+        [t, x, y], [bce], Any[]; name = :sw)
+    for T in (Float32, Float64)
+        p = discretize(sys, LatticeDiscretization(Grid((32, 32)); T, problem = :owned))
+        s = @test_logs min_level = Base.CoreLogging.Warn solve(p, BackwardEuler(; dt = 0.05))
+        @test s.retcode == ReturnCode.Success && s.stats.newton_budget == 0
+    end
+    p = discretize(sys, LatticeDiscretization(Grid((32, 32)); T = Float64, problem = :owned))
+    s = @test_logs (:warn, r"the Newton iteration \(`newton = 2`\) reached its budget") solve(p, BackwardEuler(; dt = 0.05, newton = 2))
+    @test s.stats.newton_budget > 0
+end
+
+@testset "F3-09a: an unseen growth is clamped (the cause bit), not a failure" begin
+    # `20 c² − 20 c` from c = 0.75: `∂f/∂c = 10` at the start, `h = 0.1`: the shift `1/h − 10`
+    # is clamped at `1/(2h)`; the rest stays in the residual and the field decays
+    sys = PDESystem([D(bce) ~ 0.05 * Δ(bce) + 20 * bce^2 - 20 * bce], [bc(0, x, y) ~ 0.75], bdom(0.3), [t, x, y], [bce], Any[];
+        name = :clamp)
+    pb = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
+    ig = init(pb, BackwardEuler(; dt = 0.1))
+    solve!(ig)
+    rt = only(ig.runtimes)
+    @test ig.retcode == ReturnCode.Success && rt.totals.cause & 0x08 != 0 && maximum(ig[bce]) < 1e-3
+    # a decay with no clamp leaves the bit clear
+    ig = init(discretize(PDESystem([D(bce) ~ 0.05 * Δ(bce) - 20 * bce], [bc(0, x, y) ~ 0.75], bdom(0.3), [t, x, y], [bce], Any[];
+        name = :noclamp), LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned)), BackwardEuler(; dt = 0.1))
+    solve!(ig)
+    @test ig.retcode == ReturnCode.Success && only(ig.runtimes).totals.cause == 0
 end

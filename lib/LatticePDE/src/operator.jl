@@ -50,6 +50,31 @@ function _diffusion_parts(term, xs)
 end
 
 _freeof(x, ops) = !_reads(x, ops)
+
+# whether `term` is local in the field `c` (F3-09a): it reads `c` at the site only (offset 0),
+# the inputs `I` at the site only, no other field (`others`), and no spatial operator
+function _local_term(term, c, I, ivs, others)
+    _reads(term, others) && return false
+    cop = operation(c)
+    function ok(u)
+        iscall(u) || return true
+        f = operation(u)
+        isequal(f, cop) && return isequal(u, c)
+        any(o -> isequal(f, o), I) && return isequal(collect(arguments(u)), collect(ivs))
+        (f === Δ || !(f isa Function)) && return false        # Δ, DivKGrad, Advect, Differential, Shift, …
+        return all(a -> ok(unwrap(a)), arguments(u))
+    end
+    return ok(unwrap(term))
+end
+# `∂term/∂c` of a local term, by `Symbolics.derivative` (`c` replaced by a plain variable), or
+# nothing when a derivative stays unexpanded (a registered function of `c` with no rule)
+function _local_derivative(term, c)
+    v = Symbolics.variable(:__f3_u)
+    d = Symbolics.derivative(substitute(term, Dict(c => v); fold = Val(false)), v)
+    _hasdiff(unwrap(d)) && return nothing
+    return substitute(d, Dict(unwrap(v) => c); fold = Val(false))
+end
+_hasdiff(u) = iscall(u) && (operation(u) isa Differential || any(a -> _hasdiff(unwrap(a)), arguments(u)))
 # a coefficient as a `Coef` (a number, a parameter, a number times a parameter), or nothing
 _coefof(x, params) = (x isa Number ? Coef(Float64(x)) : _coef(x, params; strict = false))
 
@@ -67,13 +92,37 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
             k in states && (dvs[k] = length(kk) == 1 ? u : unwrap(Symbolics.wrap(u)[i]))
         end
     end
-    hex = s.hierarchy[1].grid.geometry == HEX
+    # the solver's operator is the Cartesian cell operator: the six faces of a hexagonal
+    # lattice's Laplacian are not in it yet, so an implicit step would treat the diffusion as a
+    # defect correction, which diverges at any step an implicit method is for (M4)
+    if s.hierarchy[1].grid.geometry == HEX
+        ks = [k for k in _states(s) if haskey(cf.linearity, k)]
+        throw(ArgumentError(string("BackwardEuler: field", length(ks) == 1 ? " " : "s ", join(("`$k`" for k in ks), ", "),
+            ": a hexagonal lattice has no implicit solve yet (the solver's operator has no hexagonal faces); step ",
+            length(ks) == 1 ? "it" : "them", " with `ExplicitEuler`")))
+    end
     domain = s.hierarchy[1].grid.domain != 0
     # the coordinates and the inputs: a coefficient that reads them varies by site
     inputops = unique([_opof(v) for v in unwrap.(sys.dvs) if ModelingToolkitBase.isinput(v)])
     siteops = Any[inputops; xs]
     tabs = Set(unwrap(q) for q in _params(sys) if SymbolicUtils.symtype(unwrap(q)) <: AbstractArray)
     bysite(x) = _reads(x, siteops) || _reads(x, collect(tabs)) || any(v -> any(y -> isequal(y, v), xs), Symbolics.get_variables(x))
+    # the fields a term may read besides the row's own: the states (an array field by its
+    # components) and the aux fields
+    # the bounds of a diffusion term left out of a scaled row's operator: the parameters by
+    # slot, the tables by key, the coordinates over the box and one spacing past it (the
+    # ghost sites), and the defaults that choose the term kept
+    tabset = Dict{Any, String}(u => string(u) for u in tabs if string(u) in first.(cf.tables))
+    box = map(xs) do v
+        kk = findfirst(d -> isequal(unwrap(d.variables), v), sys.domain)
+        a = findfirst(isequal(v), xs)
+        v => (Float64(leftendpoint(sys.domain[kk].domain)) - s.spacing[a], Float64(rightendpoint(sys.domain[kk].domain)) + s.spacing[a])
+    end
+    pp0 = Problems.ParamsTables(collect(Any, cf.defaults),
+        Pair{String, Vector{Float64}}[first(q) => Float64.(collect(last(q))) for q in cf.tables])
+    allops = Any[unique([_ref(v) for v in values(dvs)]);
+                 unique([_opof(v) for v in unwrap.(sys.dvs) if !haskey(cf.keys, _opof(v)) ||
+                                                               !any(k -> k in states, cf.keys[_opof(v)])])]
     rows = Problems.RowOperator[]
     plans = Dict{String, Any}()                 # field rows: what their `jac:` kernel writes
     for k in _states(s)
@@ -86,6 +135,8 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
         inexact = String[]
         scaled = false
         field = domain
+        iterate = switch = false                # a local Jacobian at the iterate; a switch term
+        others = [o for o in allops if !isequal(o, operation(c)) && !any(i -> isequal(i, o), inputops)]
         for (term, class) in cf.linearity[k]
             if class in (:Diffusion, :SiteDiffusion)
                 p = _diffusion_parts(term, xs)
@@ -99,6 +150,13 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
                 push!(jterms, substitute(term, Dict(c => 1); fold = Val(false)))
             elseif class in (:Source, :CrossLinear)
                 continue                        # residual only, exact (CrossLinear: solve order)
+            elseif class in (:LaggedSwitch, :Other) && !hex && _local_term(term, c, inputops, ivs, others) &&
+                   (dj = _local_derivative(term, c)) !== nothing
+                # a local nonlinear term `f(c)` or a switch: `∂f/∂c` at the iterate (F3-09a),
+                # exact as a Newton step; the `jac:` kernel runs at every Newton iteration
+                push!(jterms, dj)
+                iterate = true
+                switch |= class == :LaggedSwitch
             else
                 push!(inexact, _term_text(string(term)))
             end
@@ -132,7 +190,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
             cj = bysite(j) ? nothing : _coefof(unwrap(j), params)
             cj === nothing ? (field = true) : push!(jloc, cj)
         end
-        field |= scaled
+        field |= scaled | iterate
         # a numeric row needs a face on every axis that has neighbors (a raw `Dx(Dx(c))` in 2D
         # has none on `y`): such a row writes its faces per site (zero faces are allowed there)
         hasdiff = !isempty(diff)
@@ -143,7 +201,8 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
         if field
             plans[k] = (; diff, jterms, scaled, local_only)
         end
-        push!(rows, Problems.RowOperator(k, faces, jloc, field, scaled, domain, local_only, isempty(inexact), inexact))
+        push!(rows, Problems.RowOperator(k, faces, jloc, field, scaled, domain, local_only, isempty(inexact), inexact,
+            iterate, switch))
     end
     jac = isempty(plans) ? nothing : _jac_program(cf, sys, disc, plans, params, xs)
     return Problems.OperatorSpec{N}(rows, jac)

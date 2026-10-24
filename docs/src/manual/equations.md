@@ -166,8 +166,11 @@ route.
 substep's end time, so a stiff field (fast diffusion, fast decay) needs no small substeps.
 Its substep count is 1 unless a growth term in the rate (`+ g c`) needs more. Diffusion,
 linear decay, kind-dependent diffusion multipliers, masks and face conditions are part of
-its linear solve, so one Newton iteration is exact; other terms are corrected by more Newton
-iterations (`newton = k`).
+its linear solve, so one Newton iteration is exact. A local nonlinear term of the field
+itself (logistic growth `r c (1 − c)`, uptake `−V c/(K + c)`) enters the solve through its
+derivative at the current iterate, so one Newton iteration keeps the method's order. A
+switch `−a max(c − c_T, 0)` takes two Newton iterations by default. Other terms are
+corrected by more Newton iterations (`newton = k`).
 
 - `substeps = nothing` in a field solver takes the smallest count `n` with
   `mcs_duration / n · ρ ≤ 1.8`, where `ρ` bounds the rate's spectral radius: `D · Σ_d 4/h_d²`

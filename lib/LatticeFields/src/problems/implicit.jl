@@ -107,11 +107,19 @@ end
 
 # The shift of a row whose operator varies by site (`OperatorSpec` field mode): `s =
 # max(1/(γh) − J, 1/(2γh))/m + d` (the clamp keeps the solve positive definite where the
-# local Jacobian grows faster than the step: F3 design §3.4 Positivity), and the solver's mask:
-# a masked site, a site outside the domain, a site with multiplier `m = 0` (solved on its own)
-function _be_shift_body!(i, s, j, d, m, smask, rmask, dom, ih, ih2)
-    @inbounds begin
-        base = max(ih - _jat(j, i, ih), ih2)
+# local Jacobian grows faster than the step: F3 design §3.4 Positivity; it sets the status
+# word's cause bit 8, counted, not a failure), and the solver's mask: a masked site, a site
+# outside the domain, a site with multiplier `m = 0` (solved on its own)
+function _be_shift_body!(i, s, j, d, m, smask, rmask, dom, ih, ih2, w, window)
+    @inbounds begin                             # (w has 9 entries: STATUS_CAUSE = 3, STATUS_CLAMP = 9)
+        s0 = ih - _jat(j, i, ih)
+        # (every site that clamps writes the same bit and window, and no other launch writes
+        # the word meanwhile: the race is benign)
+        if s0 < ih2
+            w[STATUS_CAUSE] |= UInt32(8)
+            w[STATUS_CLAMP] == 0 && (w[STATUS_CLAMP] = UInt32(window))
+        end
+        base = max(s0, ih2)
         scaled = m === nothing ? base : (m[i] > 0 ? base / m[i] : ih)
         s[i] = d === nothing ? scaled : scaled + d[i]
         if smask !== nothing
@@ -180,8 +188,11 @@ The cache of an implicit runtime (F3 design §3.3): its rows in solve order
 ([`ImplicitRow`](@ref)), the operator program's launches per slot parity (or `nothing`), the
 Newton count, the step `h` the coefficients hold, the `stale` flag (the hierarchy is rebuilt
 before the next window: set at bind and by [`reset!`](@ref)), the `moving` flag (the
-operator reads data that change every window: it is rebuilt each window), the status word and
-the operator spec.
+operator reads data that change every window: it is rebuilt each window), the `timed` flag
+(the operator reads the time: it is rebuilt at each substep's end time), the `iterate` flag
+(a row's local Jacobian reads its own field, a local nonlinear term or a switch: that row's
+operator is rebuilt at every Newton iteration, at the iterate), the status word and the
+operator spec.
 """
 mutable struct ImplicitCache{RS, WK, JL, W, BK}
     rows::RS
@@ -194,6 +205,7 @@ mutable struct ImplicitCache{RS, WK, JL, W, BK}
     word::W
     op::OperatorSpec
     exact::Bool
+    iterate::Bool                       # a row's operator reads its iterate: rebuilt every Newton iteration
     rebuilds::Int                       # hierarchy rebuilds so far (a test reads it)
     rebind::Any                         # `p -> (residual launches per row, operator launches)` (a rebind)
     backend::BK
@@ -369,9 +381,12 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
         jst = _alias_store(st, s, jp; own, byid = false)
         jids = collect(eachindex(jp.kernels))
         jplan = _implicit_plan(g, jp, :jac, jids, V, backend, options)
-        jcur(par) = [(k = findfirst(x -> x.key == f.key, s.fields)) === nothing ? 1 : k in swaps ? par : st.cur[k] for f in jp.fields]
-        jcurs = (jcur(1), jcur(2))
-        mkjac = q -> (BoundStep(backend, jp, jplan, jst, q; cur = jcurs[1], c), BoundStep(backend, jp, jplan, jst, q; cur = jcurs[2], c))
+        # per slot parity and Newton iteration (first: the iterate is the substep's start, slot
+        # `par`; later: the other slot), as the residual's
+        jcur(par, first) = [(k = findfirst(x -> x.key == f.key, s.fields)) === nothing ? 1 :
+                            k in swaps ? (first ? par : 3 - par) : st.cur[k] for f in jp.fields]
+        jcurs = (jcur(1, true), jcur(2, true), jcur(1, false), jcur(2, false))
+        mkjac = q -> ntuple(i -> BoundStep(backend, jp, jplan, jst, q; cur = jcurs[i], c), 4)
         jac = mkjac(p)
     end
     # the residual store: the stepped program's arrays by id, the residuals and the histories
@@ -457,7 +472,11 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
     end
     # a Robin face with a negative diagonal leaves its part out of the operator (a defect correction)
     exact &= !any(r -> _negative_robin(s, fieldid(s, r.key), p), rows)
-    newton = alg.newton !== nothing ? alg.newton : exact ? 1 : 4
+    # one Newton step for an exact operator, two with a switch (one flip pass, S1), four for a
+    # defect correction (F3-09b sets it from the bound)
+    switch = any(r -> r.op.switch, rows)
+    newton = alg.newton !== nothing ? alg.newton : exact ? (switch ? 2 : 1) : 4
+    iterate = any(r -> r.op.iterate, rows)
     # the operator moves when it reads the time, the clock, a filled input or a field of the state
     # (rebuilt each window), or the solver reads a mask that moves
     moving = _jac_moving(jp, g.spec) || any(r -> r.mask !== nothing || r.dom !== nothing, rows) && _masks_moving(s, g.spec)
@@ -465,7 +484,7 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
     rt = Tuple(rows)
     mkjac0 = jp === nothing ? (q -> nothing) : mkjac
     rebind = q -> ([m(q) for m in mkres], mkjac0(q))
-    return ImplicitCache(rt, each(length(rt)), jac, newton, h, true, moving, word, op, exact, 0, rebind, backend)
+    return ImplicitCache(rt, each(length(rt)), jac, newton, h, true, moving, word, op, exact, iterate, 0, rebind, backend)
 end
 
 # whether the kernels of program `p` read data that change every window: the time, the clock's
@@ -521,22 +540,32 @@ end
 # substep's end time, each field row's shift and solver mask, then each solver's hierarchy
 function _rebuild!(c::ImplicitCache, rt::GroupRuntime, par::Int, t1::Float64, h::Float64, k::Int)
     c.jac === nothing || c.jac[par]((t1, h, k))
-    c.walk(c.rows, _Rebuild(c.backend, h, _gamma(rt.alg)))     # (each row: the rows' types differ)
+    c.walk(c.rows, _Rebuild(c.backend, h, _gamma(rt.alg), c.word, false, rt.totals.windows % Int32))     # (each row: the rows' types differ)
     c.stale = false
     c.rebuilds += 1
     return nothing
 end
-struct _Rebuild{B}
+# … and at a Newton iteration of a group whose operator reads the iterate (`c.iterate`): the
+# operator program at the iterate (slot `par` at the first iteration, the other slot after),
+# then the rows that read it
+function _rebuild_iterate!(c::ImplicitCache, rt::GroupRuntime, par::Int, first::Bool, t1::Float64, h::Float64, k::Int)
+    c.jac[(first ? 0 : 2) + par]((t1, h, k))
+    c.walk(c.rows, _Rebuild(c.backend, h, _gamma(rt.alg), c.word, true, rt.totals.windows % Int32))
+    return nothing
+end
+struct _Rebuild{B, W}
     backend::B
     h::Float64
     γ::Float64
+    word::W
+    iterate::Bool                       # only the rows whose operator reads the iterate
 end
-(r::ImplicitRow)(a::_Rebuild) = _rebuild_row!(r, a.backend, a.h, a.γ)
-function _rebuild_row!(r::ImplicitRow, backend, h, γ)
+(r::ImplicitRow)(a::_Rebuild) = (a.iterate && !r.op.iterate) ? nothing : _rebuild_row!(r, a.backend, a.h, a.γ, a.word)
+function _rebuild_row!(r::ImplicitRow, backend, h, γ, word)
     if r.s isa AbstractArray
         T = eltype(r.s)
         Exec.launch!(backend, _be_shift_body!, length(r.s), (r.s, r.j, r.d, r.m, r.smask, r.rmask, r.dom,
-            T(1 / (γ * h)), T(1 / (2γ * h))))
+            T(1 / (γ * h)), T(1 / (2γ * h)), word))
     end
     r.solver === nothing || Solvers.rebuild!(r.solver)
     return nothing
@@ -582,13 +611,16 @@ function _substeps!(c::ImplicitCache, rt::GroupRuntime, t::Float64, h::Float64, 
     (n == 0 || h == 0) && return _substeps!(nothing, rt, t, h, k, n)
     st = rt.store
     h == c.h || _set_step!(c, rt, h)
-    (c.stale || c.moving) && _rebuild!(c, rt, _parity(rt), t + h, h, k)
+    fresh = c.stale || c.moving
+    fresh && _rebuild!(c, rt, _parity(rt), t + h, h, k)
     γ = _gamma(rt.alg)
     w = rt.totals.windows % Int32
     for j in 1:n
         par = _parity(rt)
         t1 = t + j * h
         for it in 1:(c.newton)
+            # (the window's rebuild is the first iteration's of its first substep)
+            c.iterate && !(fresh && j == 1 && it == 1) && _rebuild_iterate!(c, rt, par, it == 1, t1, h, k)
             c.walk(c.rows, (par, it == 1, t1, h, k, it == c.newton, w, c.backend, γ, c.word))
         end
         _swap!(st.cur, rt.swaps)

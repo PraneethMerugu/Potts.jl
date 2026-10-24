@@ -26,7 +26,12 @@ Jacobian that the linear solve sees:
 - `local_only`: the row has no diffusion: each site is solved on its own, `δ = G/(1/h − J_loc)`;
 - `exact`: every term of the row is in `J̃` (one Newton step is the Backward Euler step of a
   linear rate), else `inexact` lists the terms left in the residual (a defect correction), in
-  the user's words.
+  the user's words;
+- `iterate`: the local Jacobian reads the row's own field (a local nonlinear term `f(c)`,
+  `−∂f/∂c` at the iterate, or a switch): the `jac:` kernel runs at every Newton iteration
+  (F3-09a);
+- `switch`: the row has a switch term `a max(c − c_T, 0)` (`LaggedSwitch`): its Jacobian
+  flips with the iterate, and a group with one takes `newton = 2` by default (S1).
 """
 struct RowOperator
     key::String
@@ -38,6 +43,8 @@ struct RowOperator
     local_only::Bool
     exact::Bool
     inexact::Vector{String}
+    iterate::Bool
+    switch::Bool
 end
 
 """

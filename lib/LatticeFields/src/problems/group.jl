@@ -552,7 +552,8 @@ status_route(alg, which::Symbol) = which === :budget ? "a larger linear budget (
 
 The host totals of a runtime's status word (F3 design §3.3): `solves`, `budget` (linear
 budget hits), `floor` (rounding floors), `newton_budget` (Newton budget hits), the first
-failing `window` (0: none) with its `cause` bits, and whether the budget warning was given
+failing `window` (0: none), the `cause` bits seen so far (a failure's, and the shift clamp's,
+which is not one), and whether the budget warning was given
 (once per runtime). `windows` counts the windows [`advance!`](@ref) has run since the bind or
 the last [`clear_status!`](@ref) (a window of length 0, the at-init clamp, is not counted),
 and `t1` is the first one's start time: entry [2] of the word is a window of this count, so
@@ -778,6 +779,10 @@ function _check_status!(w, rt::GroupRuntime, acc)
         acc === nothing || _add_counts!(acc, d)
         w isa Array ? (w[STATUS_SOLVES:STATUS_NEWTON_BUDGET] .= 0) : (view(w, STATUS_SOLVES:STATUS_NEWTON_BUDGET) .= 0)
     end
+    tot.cause |= h[STATUS_CAUSE]                # (the causes so far: a clamp is recorded, not a failure)
+    # a clamped shift with one Newton step and no check: the step is not the Backward Euler step,
+    # and nothing else tells (S2)
+    !tot.clamped && h[STATUS_CAUSE] & 0x8 != 0 && newton_count(rt.cache) == 1 && _clamp_warn(rt, h)
     code = h[STATUS_CODE] == 0 ? SciMLBase.ReturnCode.Success :
            h[STATUS_CODE] == 1 ? SciMLBase.ReturnCode.StalledSuccess : SciMLBase.ReturnCode.ConvergenceFailure
     if (!tot.warned && (tot.budget > 0 || tot.newton_budget > 0)) ||
@@ -821,10 +826,10 @@ end
               "$(what[2]) removes this warning"
     end
     if code == SciMLBase.ReturnCode.ConvergenceFailure && tot.window == 0
-        tot.window, tot.cause = max(Int64(window), 1), cause
+        tot.window = max(Int64(window), 1)
         why = [r for (bit, r) in STATUS_CAUSES if tot.cause & bit != 0]
         @warn "field$s $fs: the solve failed in $(window_text(rt, tot.window))$(isempty(why) ? "" : " (" * join(why, "; ") * ")"), " *
-              "`ReturnCode.ConvergenceFailure`: the run stops; $(status_route(rt.alg, :failure))"
+              "`ReturnCode.ConvergenceFailure`: the run stops; $(status_route(rt.alg, :failure, tot.cause))"
     end
     return nothing
 end
