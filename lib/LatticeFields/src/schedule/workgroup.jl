@@ -43,6 +43,55 @@ function host_workgroups!(body::F, ngroups, wg, phases, lds, S, P, G;
     return nothing
 end
 
+"""
+    host_reduce!(body, ngroups, wg, lds, ldslen, S, P, G; chunks = 1)
+
+The host fast path of a reducing kernel's workgroup form (`REDUCE_PHASES` phases: the site
+phase, then the halving tree, contract item 5), bitwise equal to `host_workgroups!`: per
+block, phase 1 for every item, then in phase `ph` only the items `t ≤ wg >> (ph − 1)` (the
+others are idle in the tree: they read and write nothing), in the same order. Blocks are
+independent, so `chunks > 1` runs contiguous ranges of blocks on Polyester's persistent
+workers (`@batch`: no task is created, a warm launch allocates nothing), chunk `c` in region
+`c` of `lds` (`chunks · ldslen` elements). Every block computes the same values in the same
+order whatever the chunk, so the result does not depend on `chunks` or the thread count.
+"""
+function host_reduce!(body::F, ngroups, wg, lds, ldslen, S, P, G; chunks::Integer = 1) where {F}
+    if chunks <= 1
+        _reduce_blocks!(body, 1, Int(ngroups), wg, lds, S, P, G)
+    else
+        _host_reduce_threaded!(body, Int(ngroups), Int(chunks), wg, lds, Int(ldslen), S, P, G)
+    end
+    return nothing
+end
+
+@noinline function _host_reduce_threaded!(body::F, ngroups, nc, wg, lds, ldslen, S, P, G) where {F}
+    per = cld(ngroups, nc)
+    @batch per = thread for c in 1:nc
+        _reduce_chunk!(body, c, per, ngroups, wg, lds, ldslen, S, P, G)
+    end
+    return nothing
+end
+function _reduce_chunk!(body::F, c, per, ngroups, wg, lds, ldslen, S, P, G) where {F}
+    r = view(lds, ((c - 1) * ldslen + 1):(c * ldslen))
+    _reduce_blocks!(body, (c - 1) * per + 1, min(c * per, ngroups), wg, r, S, P, G)
+    return nothing
+end
+function _reduce_blocks!(body::F, g0, g1, wg, lds, S, P, G) where {F}
+    for g in Int32(g0):Int32(g1)
+        for t in Int32(1):Int32(wg)
+            body(Int32(1), g, t, lds, S, P, G)
+        end
+        stride = Int32(wg)
+        for ph in Int32(2):Int32(REDUCE_PHASES)
+            stride >>= one(Int32)
+            for t in Int32(1):stride
+                body(ph, g, t, lds, S, P, G)
+            end
+        end
+    end
+    return nothing
+end
+
 # The device wrapper: one workgroup per `g`, `@synchronize` after every phase.
 @kernel unsafe_indices = true function _workgroups!(
         body, S, P, G, phases, ::Type{T}, ::Val{M}) where {T, M}

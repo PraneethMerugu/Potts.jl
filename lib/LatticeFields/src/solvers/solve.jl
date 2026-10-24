@@ -168,6 +168,9 @@ end
 """
 One prepared launch: body, size, arrays, parameters and geometry (built once per plan);
 `wg > 0` marks a workgroup launch of `n` groups (`phases`, `ldslen`, host memory `lds`).
+`tree`: the body is a reducing kernel's workgroup form (site phase, then the halving tree:
+`Schedule.host_reduce!` may run it); `lds` then holds `lds_regions(exec)` regions of
+`ldslen` elements, one per host chunk.
 """
 struct Launch{B, S, P, G, A}
     body::B
@@ -180,11 +183,21 @@ struct Launch{B, S, P, G, A}
     phases::Int
     ldslen::Int
     lds::A
+    tree::Bool
 end
-Launch(body, n, S, P, G, key) = Launch(body, n, S, P, G, key, 0, 0, 0, nothing)
-function Launch(exec, T, body, ngroups, S, P, G, key; phases, ldslen)
-    Launch(body, ngroups, S, P, G, key, WG, phases, ldslen, alloc(exec, T, ldslen))
+Launch(body, n, S, P, G, key) = Launch(body, n, S, P, G, key, 0, 0, 0, nothing, false)
+function Launch(exec, T, body, ngroups, S, P, G, key; phases, ldslen, tree::Bool = false)
+    nl = tree ? ldslen * lds_regions(exec) : ldslen
+    Launch(body, ngroups, S, P, G, key, WG, phases, ldslen, alloc(exec, T, nl), tree)
 end
+
+"""
+    lds_regions(exec)
+
+Workgroup-memory regions a tree launch allocates on `exec`: one per host chunk of the host
+reduction (`Schedule.host_reduce!`, the threads of a host executor), else 1.
+"""
+lds_regions(exec) = 1
 
 """
 A solve plan: segments of launches (setup, then one per cycle or iteration), the
@@ -212,7 +225,8 @@ mutable struct FieldSolver{N, E}
     slot::Dict{Int32, Int}
     tables::Dict{Int32, Any}
     bodies::Dict{String, Any}
-    plans::Dict{Any, SolvePlan}
+    plans::Dict{Tuple{Symbol, Int, UInt64}, SolvePlan}   # (kind, budget or flag, rotation)
+    rot::Vector{Int32}                    # the two-buffer fields, in id order (the rotation)
     vals::Tuple                           # the coefficient slot values the bodies hold
     auto::Bool                            # solver_T was :auto
     warned::Bool                          # the set_coefficients! solver_T warning was given
@@ -284,7 +298,14 @@ function FieldSolver(exec, op::CellOperator{N}; inner = :auto, T = Float32,
     for (i, t) in enumerate(s.tables))
     return FieldSolver{N, typeof(exec)}(
         exec, op, alg, dfl, s, ctx, T, state, rule, bufs, slot, tables, bodies,
-        Dict{Any, SolvePlan}(), praw, solver_T === :auto, false)
+        Dict{Tuple{Symbol, Int, UInt64}, SolvePlan}(), _rotation_fields(bufs), praw,
+        solver_T === :auto, false)
+end
+
+function _rotation_fields(bufs)
+    r = sort!([id for (id, b) in bufs if length(b) == 2])
+    length(r) <= 64 || irerror("more than 64 two-buffer solver fields")
+    return r
 end
 
 """
@@ -397,8 +418,9 @@ working_key(sv::FieldSolver) = sv.alg isa DevicePCG ? "pcg.x" : lkey(0, "x")
 
 Replace the numeric coefficients of the group (face, shift, value, Dirichlet values) by
 those of `op`, which must have the same structure (dims, periodicity, mask, field keys, the
-same coefficients numeric): new parameter values for every body, no recompile. The cached
-plans are dropped; the next `rebuild!`/`lift!` (or `steady!`) uses the new values. The solver
+same coefficients numeric): new parameter values for every body, no recompile. The held
+plans are dropped and rebuilt at their next use (the set keeps its size: one plan per
+kind, budget and rotation); the next `rebuild!`/`lift!` (or `steady!`) uses the new values. The solver
 number type (`solver_T = :auto`) stays as resolved at build.
 """
 function set_coefficients!(sv::FieldSolver, op::CellOperator)
@@ -419,8 +441,7 @@ function set_coefficients!(sv::FieldSolver, op::CellOperator)
             " (resolved at build; changing it recompiles). Pass solver_T explicitly or ",
             "rebuild the FieldSolver to change it.")
     end
-    empty!(sv.plans)                      # bound the cache: plans are keyed by values
-    return _set_values!(sv, op)
+    return _set_values!(sv, op)          # drops the held plans (`_set_raw!`)
 end
 function _set_values!(sv::FieldSolver, op::CellOperator)
     _set_raw!(sv, coef_values(op))
@@ -436,6 +457,7 @@ function _set_raw!(sv::FieldSolver, praw)
         sv.bodies[k] = (ck, fn, d(praw, zero(sv.T), 0.0, nothing), d)
     end
     sv.vals = Tuple(praw)
+    empty!(sv.plans)                      # the held plans' parameters are rebuilt on next use
     return sv
 end
 
@@ -626,7 +648,7 @@ function gen!(pl::PlanBuilder, key; rt = (0.0, 0.0))
         G = SolverGeom(ck.I(WG * nb), dims, _rt(sv.T, rt))
         push!(pl.segments[end],
             Launch(sv.exec, sv.T, fn, nb, S, P, G, key; phases = REDUCE_PHASES,
-                ldslen = reduce_lds(ck)))
+                ldslen = reduce_lds(ck), tree = true))
     end
     for s in k.stores
         f = s.access.field
@@ -657,7 +679,7 @@ function fin!(pl::PlanBuilder, op)
         diverge = alg isa Multigrid)
     push!(pl.segments[end],
         Launch(sv.exec, T, finish!, 1, S, (), G, "finish.$op"; phases = REDUCE_PHASES,
-            ldslen = NCOMBO * WG))
+            ldslen = NCOMBO * WG, tree = true))
     return pl
 end
 
@@ -768,7 +790,7 @@ function rebuild_plan(sv::FieldSolver)
     G = (; dims = Int32.(Tuple(ctx.dims[ctx.L + 1])), per = sv.op.periodic, wg = Int32(WG))
     push!(pl.segments[end],
         Launch(sv.exec, sv.T, gershgorin!, 1, S, (), G, "gershgorin";
-            phases = REDUCE_PHASES, ldslen = 2WG))
+            phases = REDUCE_PHASES, ldslen = 2WG, tree = true))
     return SolvePlan(pl)
 end
 
@@ -820,9 +842,33 @@ function precond_plan(sv::FieldSolver)
     return SolvePlan(pl)
 end
 
+"""
+The held plan `name` (`:rebuild`, `:lift`, `(:solve, budget)`, `(kernel key, rt)`) for the
+current rotation (the slots of the two-buffer fields), built by `f(sv)` at its first use.
+Plans are held per kind, budget and rotation: no values in the key (a value change drops
+the set, `_set_raw!`), and the warm lookup builds no heap key.
+"""
 function _plan(f::F, sv::FieldSolver, name) where {F}
-    key = (name, sort!(collect(sv.slot)), sv.vals)   # P and G hold the values
-    return get!(() -> f(sv), sv.plans, key)
+    key = (_kind(name)..., _rotation(sv))
+    p = get(sv.plans, key, nothing)
+    p === nothing || return p
+    p = f(sv)
+    sv.plans[key] = p
+    return p
+end
+_kind(name::Symbol) = (name, 0)
+_kind(name::Tuple{Symbol, Int}) = name
+_kind(name::Tuple{String, NTuple{2, Float64}}) = (Symbol(name[1]), name[2] == (0.0, 0.0) ? 0 : 1 + _rtcode(name[2]))
+_rtcode(rt) = rt == (1.0, 0.0) ? 0 : irerror("solver run with runtime values ", rt)
+"""
+The rotation: bit `i` set when the `i`-th two-buffer field's current slot is 2.
+"""
+function _rotation(sv::FieldSolver)
+    m = zero(UInt64)
+    for (i, id) in enumerate(sv.rot)
+        sv.slot[id] == 2 && (m |= one(UInt64) << (i - 1))
+    end
+    return m
 end
 
 """
@@ -830,18 +876,27 @@ Run plan `sp`; with `host = true` read the `done` flag after every segment and s
 is set (a declared host pass). Returns the number of segments run.
 """
 function run!(sv::FieldSolver, sp::SolvePlan; host::Bool = false)
-    scal = sv.tables[tid(sv, "solve.scal")]
+    scal = host ? sv.tables[tid(sv, "solve.scal")] : nothing   # device mode reads nothing
     nseg = length(sp.segments)
     for (k, seg) in enumerate(sp.segments)
-        foreach(l -> launch!(sv.exec, l), seg)
+        _run_seg!(sv, seg)
         if host && k < nseg && fetch(sv.exec, scal)[DONE] != 0
             nseg = k
             break
         end
     end
-    foreach(l -> launch!(sv.exec, l), sp.epilogue[nseg])
+    _run_seg!(sv, sp.epilogue[nseg])
     merge!(sv.slot, sp.slots[nseg])
     return nseg
+end
+# The launches of a plan are untyped (`Vector{Any}`): the dynamic call takes the solver (a heap
+# object), not its executor, which an isbits executor would box (16 B per launch).
+_launch!(sv::FieldSolver, l::Launch) = launch!(sv.exec, l)
+function _run_seg!(sv::FieldSolver, seg::Vector{Any})
+    for l in seg
+        _launch!(sv, l)
+    end
+    return nothing
 end
 
 """
