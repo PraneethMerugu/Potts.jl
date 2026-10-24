@@ -619,7 +619,8 @@ function _lower_field_group(sys::PottsSystem, names::Vector{Symbol}, T::Type; kn
                                                "variable `m(site)` with `@after_mcs m ~ rhs`)")
     Threads.atomic_add!(_LOWER_GROUP_CALLS, 1)
     spec = try
-        LatticePDE.lower_group(pdesys, _field_disc(sys, T); values = false, bound, filled = (string(e[1]) for e in cv.filled))
+        LatticePDE.lower_group(pdesys, _field_disc(sys, T); values = false, bound, filled = (string(e[1]) for e in cv.filled),
+            explicit_route = "`field_solver = ExplicitEuler()`")
     catch e
         # an error about a `@bcs` condition (`parse_bcs`, a second condition on a face) names
         # its `@bcs` line (review R4 of F2 batch 4)

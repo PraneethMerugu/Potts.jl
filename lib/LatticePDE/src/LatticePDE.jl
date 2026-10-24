@@ -389,4 +389,7 @@ include("operator.jl")
 include("derivation.jl")
 include("precompile.jl")
 
+# the operator builds of this session: the precompile workload's is in the package image (R2-N1)
+__init__() = (OPERATOR_BUILDS[] = 0; nothing)
+
 end # module LatticePDE

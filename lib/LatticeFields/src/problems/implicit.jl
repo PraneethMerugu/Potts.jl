@@ -82,6 +82,65 @@ function _be_status_body!(i, w, scal, window)
     return nothing
 end
 _zero_body!(i, a) = (@inbounds a[i] = zero(eltype(a)); nothing)      # i ≤ length(a)
+_clip_body!(i, a, lower) = (@inbounds a[i] = max(a[i], lower); nothing)  # i ≤ length(a)
+
+# The Newton check (F3 design §3.4, M5, R2-M1): after each iteration's update, the norms of
+# the row's correction ‖δ_k‖∞, increment ‖u_k − uⁿ‖∞ and value ‖u_k‖∞ over its unmasked
+# sites, as partials of `NB`-site blocks (`_be_norms_body!`, one item per block), then one item
+# combines them and decides (`_be_newton_body!`): a correction that is not finite or that grew
+# by more than 2× in each of the last two iterations is a divergence (`ConvergenceFailure`,
+# cause bits 4 and 2); at the last iteration, ‖δ_k‖∞ > ε_N ‖u_k − uⁿ‖∞ + 10 eps(T) ‖u_k‖∞ is a
+# Newton budget hit (counted, `Success`; not in the flip pass of a switch under the automatic
+# count, whose second iteration fixes the switch state and tests nothing, M7). A row that meets the tolerance adds 1 to the word's
+# entry [8], which a host executor reads after each iteration to stop early under the automatic
+# count (`newton = nothing`: every row converged, so the later iterations would change the
+# field by less than the tolerance; a given `newton = k` runs k). A group with one Newton step
+# runs neither.
+const NB = 256
+const NEWTON_EPS = 1e-3
+const STATUS_CONVERGED = 8
+const STATUS_CLAMP = 9                  # the first window whose shift was clamped (0: none)
+# the larger of two norms; a NaN stays
+_nanmax(a, b) = (isnan(b) | (b > a)) ? b : a
+function _be_norms_body!(b, part, dst, un, x, smask, v, res, s, mask, n)
+    @inbounds begin                             # b ≤ cld(n, NB), 3b ≤ length(part); every array has n sites
+        T = eltype(part)
+        dm, im, um = zero(T), zero(T), zero(T)
+        for i in ((b - 1) * NB + 1):min(b * NB, n)
+            (mask !== nothing && mask[i] != 0) && continue
+            δ = res !== nothing ? res[i] / _at(s, i) : (v !== nothing && smask[i] != 0) ? v[i] : x[i]
+            dm = _nanmax(dm, abs(T(δ)))
+            im = _nanmax(im, abs(T(dst[i] - un[i])))
+            um = _nanmax(um, abs(T(dst[i])))
+        end
+        part[3b - 2], part[3b - 1], part[3b] = dm, im, um
+    end
+    return nothing
+end
+function _be_newton_body!(i, w, part, nb, hist, it, last, epsn, fl, window)
+    @inbounds begin                             # i = 1; 3nb ≤ length(part), hist has 2 entries, w 8
+        T = eltype(part)
+        dk, inc, un = zero(T), zero(T), zero(T)
+        for b in 1:nb
+            dk = _nanmax(dk, part[3b - 2])
+            inc = _nanmax(inc, part[3b - 1])
+            un = _nanmax(un, part[3b])
+        end
+        d1, d2 = it == 1 ? (zero(T), zero(T)) : (hist[2], hist[1])      # ‖δ_{k−1}‖, ‖δ_{k−2}‖
+        fail = !isfinite(dk) ? UInt32(4) : (it >= 3 && dk > 2d1 && d1 > 2d2) ? UInt32(2) : UInt32(0)
+        conv = dk <= epsn * inc + fl * un
+        if fail != 0
+            w[STATUS_CODE] = UInt32(2)
+            w[STATUS_CAUSE] |= fail
+            w[STATUS_WINDOW] == 0 && (w[STATUS_WINDOW] = UInt32(window))
+        elseif last && !conv
+            w[STATUS_NEWTON_BUDGET] += UInt32(1)
+        end
+        conv && (w[STATUS_CONVERGED] += UInt32(1))      # (wraps harmlessly where no host reads it)
+        hist[1], hist[2] = d1, dk
+    end
+    return nothing
+end
 
 _at(x::Number, i) = x
 _at(x::AbstractArray, i) = @inbounds x[i]                              # i ≤ length(x) (one value per site)
@@ -154,7 +213,7 @@ One row of an implicit runtime: its residual launches per slot parity and iterat
 state buffers, its solver (or `nothing`: a row with no diffusion, solved site by site) with
 the arrays its solve reads and writes, and its update's mask and clip.
 """
-mutable struct ImplicitRow{R, U, A, SV, X, W, SC, SM, V, S, MK, MV, MF, LO, F, J, M, D, RM, DM}
+mutable struct ImplicitRow{R, U, A, SV, X, W, SC, SM, V, S, MK, MV, MF, LO, F, J, M, D, RM, DM, P}
     key::String
     res::NTuple{4, R}                   # (parity 1 first iteration, parity 2 first, parity 1 later, parity 2 later)
     bufs::NTuple{2, U}                  # the row's two state slots
@@ -179,6 +238,8 @@ mutable struct ImplicitRow{R, U, A, SV, X, W, SC, SM, V, S, MK, MV, MF, LO, F, J
     dom::DM
     op::RowOperator
     numeric::Union{Nothing, Solvers.CellOperator}   # the numeric operator the solver holds (numeric rows)
+    part::P                             # the Newton check's block partials (3 per block) and
+    hist::P                             #   the last two correction norms, in the state type
 end
 
 """
@@ -202,15 +263,28 @@ mutable struct ImplicitCache{RS, WK, JL, W, BK}
     h::Float64
     stale::Bool
     moving::Bool
+    timed::Bool                         # the operator reads the time: rebuilt at every substep's end time
     word::W
     op::OperatorSpec
-    exact::Bool
+    exact0::Bool                        # the operator is exact apart from the Robin faces' signs
+    exact::Bool                         # … and every Robin face's diagonal is positive at the parameters
     iterate::Bool                       # a row's operator reads its iterate: rebuilt every Newton iteration
+    check::Bool                         # the Newton check runs (more than one iteration)
+    flip::Bool                          # the automatic count of an exact switch group: its second
+                                        #   iteration is a flip pass, not a convergence test (no budget hit)
+    auto::Bool                          # `newton = nothing`: the count follows the step (`_newton_count`)
+    switch::Bool
+    seen::Bool                          # every term out of the operator has a bound
+    ρin::Float64                        # … their bound `ρ_adv + κ_in + ρ_rob` at the bound parameters
+    θ::Float64                          # … the face-wise ratio of the diffusion left out of a scaled row (R2-M1)
+    keys::Vector{String}
+    cyclic::Bool
     rebuilds::Int                       # hierarchy rebuilds so far (a test reads it)
     rebind::Any                         # `p -> (residual launches per row, operator launches)` (a rebind)
     backend::BK
 end
 status_word(c::ImplicitCache) = c.word
+newton_count(c::ImplicitCache) = c.newton
 reset_cache!(c::ImplicitCache) = (c.stale = true; nothing)
 step_retcode!(::ImplicitCache, rt) = SciMLBase.ReturnCode.Success   # (the status word carries the code)
 
@@ -262,23 +336,26 @@ function _numeric_operator(s::Program{N}, r::RowOperator, id, p, h, γ, mask::Bo
         dirichlet = dir, robin = rob, name = r.key)
     return op, shift > s0
 end
-# the parameters the bounds of `inexact_bounds` read: with the store's tables when a row has a
-# bound that reads them (`bounds`), else `p` itself (no copy)
+# the parameters the bounds of `inexact_bounds` and `_robin_bounds` read: with the store's
+# tables when a row has a bound that may read them (`bounds`, `facemax`), else `p` itself (no copy)
 function _bound_params(st::FieldStore, s::Program, op::OperatorSpec, keys, p)
-    any(r -> r.key in keys && !isempty(r.bounds), op.rows) || return p
+    isempty(s.tables) && return p
+    any(r -> r.key in keys && (!isempty(r.bounds) || r.facemax !== nothing), op.rows) || return p
     return ParamsTables(p, Pair{String, Vector{Float64}}[s.tables[j].key => _primal64(Array(st.tables[j])) for j in eachindex(s.tables)])
 end
 # The Robin faces with a negative diagonal of the rows `keys` at `p` (their part `w_a d⁻` stays
 # out of the operator: a defect correction, S1): whether there is one (`neg`), the bound of the
-# part left out, `ρ = Σ_a max_side w_a |d⁻|` over the numeric rows (`w_a` the row's face
-# coefficient `K/h_a²`), and whether a field row has one (`unseen`: its face coefficient varies
-# by site, no bound sees it)
+# part left out, `ρ = Σ_a max_side w_a |d⁻|` (`w_a` the row's face coefficient `K/h_a²`; a
+# field row's largest over the sites, `facemax`, R2-S1), and the faces no bound sees
+# (`unseen`, with their texts: a field row whose face coefficient has no interval bound)
 function _robin_bounds(s::Program{N}, op::OperatorSpec, keys, p) where {N}
-    neg, unseen, ρ = false, false, 0.0
+    neg, ρ = false, 0.0
+    texts = String[]
     for r in op.rows
         r.key in keys || continue
         id = fieldid(s, r.key)
         q = 0.0
+        fm = nothing
         for a in 1:N
             m = 0.0
             for k in 1:2
@@ -287,13 +364,21 @@ function _robin_bounds(s::Program{N}, op::OperatorSpec, keys, p) where {N}
                 dm = Solvers.robin_parts(f[2], f[3], 0.0)[2]
                 dm < 0 || continue
                 neg = true
-                r.field ? (unseen = true) : (m = max(m, abs(_coefsum(r.faces[a], p)) * abs(dm)))
+                if r.field
+                    r.facemax !== nothing && fm === nothing && (fm = r.facemax(p))
+                    w = fm === nothing ? NaN : Float64(fm[a])
+                    isfinite(w) ? (m = max(m, w * abs(dm))) :
+                    push!(texts, string("the Robin face of `", r.key, "` on axis ", a, " (", k == 1 ? "low" : "high",
+                        " side), whose diagonal is negative at these parameters,"))
+                else
+                    m = max(m, abs(_coefsum(r.faces[a], p)) * abs(dm))
+                end
             end
             q += m
         end
         ρ = max(ρ, q)
     end
-    return (; neg, ρ, unseen)
+    return (; neg, ρ, unseen = !isempty(texts), texts)
 end
 
 # the rows of the group's fields `keys` in solve order: topological in the reads among them
@@ -426,12 +511,13 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
         lo = alg.lower === nothing ? nothing : T(alg.lower)
         jarr(k) = haskey(own, "jac:$key.$k") ? own["jac:$key.$k"][1] : nothing
         nsite = length(u[1])
+        part, hist = _zeros(st.backend, T, 3 * cld(nsite, NB)), _zeros(st.backend, T, 2)
         if r.local_only
             sv, numeric = nothing, nothing
             sh = r.field ? _zeros(st.backend, T, nsite) : T(max(1 / (γ * h) - _coefsum(r.jloc, p), 1 / (2γ * h)))
             row = ImplicitRow(key, res, (u[1], u[2]), resarr, nothing, (u[1], u[1]), Int32(0), typeof(u[1])[], nothing,
                 nothing, nothing, sh, mask, mval, mvf, lo, nothing, jarr("j"), nothing, nothing, nothing, r.field && r.domain ? jarr("dom") : nothing,
-                r, nothing)
+                r, nothing, part, hist)
             push!(rows, row)
             continue
         end
@@ -467,24 +553,70 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
         wid = Solvers.fid(sv, Solvers.working_key(sv))
         work = [w for w in sv.bufs[wid]]
         row = ImplicitRow(key, res, (u[1], u[2]), resarr, sv, (xb[1], xb[end]), xid, work,
-            sv.tables[Solvers.tid(sv, "solve.scal")], smask, v, sh, mask, mval, mvf, lo, f, jj, mm, dd, mask, dm, r, numeric)
+            sv.tables[Solvers.tid(sv, "solve.scal")], smask, v, sh, mask, mval, mvf, lo, f, jj, mm, dd, mask, dm, r, numeric,
+            part, hist)
         push!(rows, row)
     end
-    # a Robin face with a negative diagonal leaves its part out of the operator (a defect correction)
-    exact &= !any(r -> _negative_robin(s, fieldid(s, r.key), p), rows)
-    # one Newton step for an exact operator, two with a switch (one flip pass, S1), four for a
-    # defect correction (F3-09b sets it from the bound)
+    # a Robin face with a negative diagonal leaves its part out of the operator (a defect
+    # correction): the classification at `p` (again at each rebind, `install_launches!`)
+    exact0 = exact
     switch = any(r -> r.op.switch, rows)
-    newton = alg.newton !== nothing ? alg.newton : exact ? (switch ? 2 : 1) : 4
+    bp = _bound_params(st, s, op, keys, p)
+    b, rb = inexact_bounds(op, keys, cyclic, bp), _robin_bounds(s, op, keys, bp)
+    exact = exact0 && !rb.neg
+    seen = isempty(b.unseen) && !rb.unseen
+    ρin = b.ρ + b.κ + rb.ρ
+    exact || seen || alg.newton !== nothing || _warn_unseen(keys, [b.unseen; rb.texts])
+    newton = alg.newton !== nothing ? alg.newton : _newton_count(exact, switch, seen, ρin, γ, h, b.θ)
     iterate = any(r -> r.op.iterate, rows)
     # the operator moves when it reads the time, the clock, a filled input or a field of the state
     # (rebuilt each window), or the solver reads a mask that moves
     moving = _jac_moving(jp, g.spec) || any(r -> r.mask !== nothing || r.dom !== nothing, rows) && _masks_moving(s, g.spec)
-    word = _zeros(st.backend, UInt32, 8)
+    word = _zeros(st.backend, UInt32, 9)
     rt = Tuple(rows)
     mkjac0 = jp === nothing ? (q -> nothing) : mkjac
     rebind = q -> ([m(q) for m in mkres], mkjac0(q))
-    return ImplicitCache(rt, each(length(rt)), jac, newton, h, true, moving, word, op, exact, iterate, 0, rebind, backend)
+    timed = jp !== nothing && _reads_time(jp)
+    return ImplicitCache(rt, each(length(rt)), jac, newton, h, true, moving, timed, word, op, exact0, exact, iterate,
+        newton > 1, alg.newton === nothing && exact && switch, alg.newton === nothing, switch, seen, ρin, b.θ, keys, cyclic, 0,
+        rebind, backend)
+end
+
+# The Newton count of `newton = nothing` (F3 design §3.4): 1 for an exact operator, 2 with a
+# switch (one flip pass, S1); a defect correction whose terms have bounds takes
+# `clamp(⌈log ε_N / log ρ_c⌉ + [θ > 0], 2, cap)` from its contraction `ρ_c = γ h ρ_in + θ` (`θ`
+# the face-wise ratio of the diffusion left out of a scaled row, which no step size changes,
+# R2-M1; with `θ > 0` one more iteration, since the ratio bound is close to the actual
+# contraction and the Newton check measures the last correction against the step:
+# `θ^(k−1) ≤ ε_N`), else 4. The cap: rule 2 keeps `γ h ρ_in ≤ (1 − θ)/2`, so `ρ_c ≤ (1 + θ)/2`:
+# at most 1/2 with no left-out diffusion (k ≤ 10, cap 12), at most 3/4 with one
+# (`⌈log 1e-3 / log ¾⌉ + 1 = 26`, cap 26: a lower cap could not meet ε_N where both bounds are
+# tight, batch 3 review r3 N3). Raising the cap, not the substeps, keeps the cost bounded: the
+# alternative rule `n ≥ ⌈2γ dt ρ / (1 − 2θ)⌉` grows without bound as θ → 1/2, while the cap
+# costs at most 26 iterations, only where a left-out diffusion and another out-of-operator
+# term meet, and a host executor stops once the tolerance holds.
+const NEWTON_CAP = 12
+const NEWTON_CAP_THETA = 26
+function _newton_count(exact::Bool, switch::Bool, seen::Bool, ρin::Float64, γ::Float64, h::Float64, θ::Float64 = 0.0)
+    exact && return switch ? 2 : 1
+    seen || return 4
+    ρc = γ * h * ρin + θ
+    cap = θ > 0 ? NEWTON_CAP_THETA : NEWTON_CAP
+    k = ρc <= 0 ? 2 : ρc >= 1 ? cap : clamp(ceil(Int, log(NEWTON_EPS) / log(ρc)) + (θ > 0), 2, cap)
+    return switch ? max(k, 2) : k
+end
+# once per group and term (the F2 key): a term no bound sees is corrected by Newton iterations,
+# checked on the device
+function _warn_unseen(keys, unseen)
+    fs = join(("`$k`" for k in keys), ", ")
+    for u in unique(unseen)
+        _warn_once(string("implicit-unseen#", join(keys, ","), "#", u)) || continue
+        @warn string("BackwardEuler: field", length(keys) == 1 ? " " : "s ", fs, ": ", u, " is not in the implicit ",
+            "operator and no bound sees it, so it is corrected by Newton iterations (`newton = 4`), checked on the ",
+            "device at every substep: a budget hit is counted and warned with its route, a divergence ends the run with ",
+            "`ReturnCode.ConvergenceFailure`. Give `newton = k` to choose the count")
+    end
+    return nothing
 end
 
 # whether the kernels of program `p` read data that change every window: the time, the clock's
@@ -520,6 +652,21 @@ function _set_step!(c::ImplicitCache, rt::GroupRuntime, h::Float64)
     end
     c.h = h
     c.stale = true
+    _set_newton!(c, rt.alg)
+    return nothing
+end
+# a new count (a parameter write's recount): the step and the Newton count follow at once (R2-N3)
+function _count_set!(c::ImplicitCache, rt::GroupRuntime)
+    rt.n == 0 && return nothing
+    h = rt.dt / rt.n
+    h == c.h || _set_step!(c, rt, h)
+    return nothing
+end
+function _set_newton!(c::ImplicitCache, alg)
+    c.auto || return nothing
+    c.newton = _newton_count(c.exact, c.switch, c.seen, c.ρin, _gamma(alg), c.h, c.θ)
+    c.check = c.newton > 1
+    c.flip = c.exact && c.switch
     return nothing
 end
 group_program_of(rt::GroupRuntime) = rt.program
@@ -559,22 +706,24 @@ struct _Rebuild{B, W}
     γ::Float64
     word::W
     iterate::Bool                       # only the rows whose operator reads the iterate
+    window::Int32
 end
-(r::ImplicitRow)(a::_Rebuild) = (a.iterate && !r.op.iterate) ? nothing : _rebuild_row!(r, a.backend, a.h, a.γ, a.word)
-function _rebuild_row!(r::ImplicitRow, backend, h, γ, word)
+(r::ImplicitRow)(a::_Rebuild) = (a.iterate && !r.op.iterate) ? nothing : _rebuild_row!(r, a.backend, a.h, a.γ, a.word, a.window)
+function _rebuild_row!(r::ImplicitRow, backend, h, γ, word, window)
     if r.s isa AbstractArray
         T = eltype(r.s)
         Exec.launch!(backend, _be_shift_body!, length(r.s), (r.s, r.j, r.d, r.m, r.smask, r.rmask, r.dom,
-            T(1 / (γ * h)), T(1 / (2γ * h)), word))
+            T(1 / (γ * h)), T(1 / (2γ * h)), word, window))
     end
     r.solver === nothing || Solvers.rebuild!(r.solver)
     return nothing
 end
 
-# One Newton iteration of one row (`a = (parity, first, t1, h, k, last, window, backend, γ, word)`):
-# the residual at `tⁿ⁺¹`, the solve, the status, the update into the other slot
+# One Newton iteration of one row (`a = (parity, first, t1, h, k, last, window, backend, γ, word,
+# it, check, hits)`, `hits`: the check counts a budget hit at this iteration): the residual at `tⁿ⁺¹`, the solve, the status, the update into the other slot,
+# and with `check` the Newton check of iteration `it`
 function (r::ImplicitRow)(a)
-    par, first, t1, h, k, last, window, backend, γ, word = a
+    par, first, t1, h, k, last, window, backend, γ, word, it, check, hits = a
     r.res[(first ? 0 : 2) + par]((t1, h, k))
     dst = r.bufs[3 - par]
     src = first ? r.bufs[par] : dst
@@ -582,6 +731,7 @@ function (r::ImplicitRow)(a)
     if r.solver === nothing
         Exec.launch!(backend, _be_update_body!, n, (dst, src, nothing, nothing, nothing, r.resarr, r.s, r.mask, r.mval,
             r.mvf, r.lo, last))
+        check && _newton_check!(r, backend, word, dst, r.bufs[par], nothing, it, hits, window)
         return nothing
     end
     sv = r.solver
@@ -599,11 +749,35 @@ function (r::ImplicitRow)(a)
     x = sv.slot[r.xid] == 1 ? r.xs[1] : r.xs[2]
     Exec.launch!(backend, _be_update_body!, n, (dst, src, x, r.smask, r.v, nothing, nothing, r.mask, r.mval, r.mvf,
         r.lo, last))
+    check && _newton_check!(r, backend, word, dst, r.bufs[par], x, it, hits, window)
+    return nothing
+end
+struct _Clip{B}
+    backend::B
+    par::Int
+end
+function (r::ImplicitRow)(a::_Clip)
+    r.lo === nothing && return nothing
+    dst = r.bufs[3 - a.par]
+    Exec.launch!(a.backend, _clip_body!, length(dst), (dst, r.lo))
+    return nothing
+end
+function _newton_check!(r::ImplicitRow, backend, word, dst, un, x, it, last, window)
+    n = length(dst)
+    nb = cld(n, NB)
+    T = eltype(r.part)
+    if x === nothing
+        Exec.launch!(backend, _be_norms_body!, nb, (r.part, dst, un, nothing, nothing, nothing, r.resarr, r.s, r.mask, n))
+    else
+        Exec.launch!(backend, _be_norms_body!, nb, (r.part, dst, un, x, r.smask, r.v, nothing, nothing, r.mask, n))
+    end
+    Exec.launch!(backend, _be_newton_body!, 1, (word, r.part, Int32(nb), r.hist, Int32(it), last, T(NEWTON_EPS),
+        T(10 * eps(T)), window))
     return nothing
 end
 
-# The substeps of a window (F3 design §3.3): the operator rebuilt when stale or moving, then per
-# substep the Newton iterations over the rows in solve order, the slot swap at the end
+# The substeps of a window (F3 design §3.3): the operator rebuilt when stale or moving (and at
+# each later substep's end time when it reads the time), then per substep the Newton iterations over the rows in solve order, the slot swap at the end
 function _substeps!(c::ImplicitCache, rt::GroupRuntime, t::Float64, h::Float64, k::Int, n::Integer)
     # a window of length 0 (front end A's at-init clamp: the masks, and the aux fields of the
     # state as it is) and a group with no state step as the explicit program does (`h = 0`
@@ -618,10 +792,24 @@ function _substeps!(c::ImplicitCache, rt::GroupRuntime, t::Float64, h::Float64, 
     for j in 1:n
         par = _parity(rt)
         t1 = t + j * h
+        # an operator that reads the time: each later substep's at its end time (the window's
+        # rebuild is the first substep's)
+        timed = c.timed && j > 1
+        timed && _rebuild!(c, rt, par, t1, h, k)
         for it in 1:(c.newton)
-            # (the window's rebuild is the first iteration's of its first substep)
-            c.iterate && !(fresh && j == 1 && it == 1) && _rebuild_iterate!(c, rt, par, it == 1, t1, h, k)
-            c.walk(c.rows, (par, it == 1, t1, h, k, it == c.newton, w, c.backend, γ, c.word))
+            # (a substep's rebuild is the first iteration's)
+            c.iterate && !((fresh && j == 1 || timed) && it == 1) && _rebuild_iterate!(c, rt, par, it == 1, t1, h, k)
+            host = c.check && c.auto && c.word isa Array
+            host && (@inbounds c.word[STATUS_CONVERGED] = 0)     # (the word has 9 entries)
+            # (the automatic count's flip pass of a switch counts no budget hit, M7)
+            c.walk(c.rows, (par, it == 1, t1, h, k, it == c.newton, w, c.backend, γ, c.word, it, c.check,
+                it == c.newton && !c.flip))
+            # under the automatic count a host executor stops when every row converged (a plain
+            # read); the clip of the last iteration then runs on its own
+            if host && it < c.newton && @inbounds(c.word[STATUS_CONVERGED]) == length(c.rows)
+                c.walk(c.rows, _Clip(c.backend, par))
+                break
+            end
         end
         _swap!(st.cur, rt.swaps)
     end
@@ -643,9 +831,9 @@ function rebind_launches(rt::GroupRuntime{<:FieldStore, <:ImplicitAlgorithm}, p)
               for r in c.rows]
     shifts = Any[r.solver === nothing && r.s isa Number ? oftype(r.s, max(1 / (γ * c.h) - _coefsum(r.op.jloc, p), 1 / (2γ * c.h))) :
                  nothing for r in c.rows]
-    return (steps[1], steps[2], (res, jac, ops, shifts))
+    return (steps[1], steps[2], (res, jac, ops, shifts, p))
 end
-function install_launches!(rt::GroupRuntime{<:FieldStore, <:ImplicitAlgorithm}, (steps, masks, (res, jac, ops, shifts)))
+function install_launches!(rt::GroupRuntime{<:FieldStore, <:ImplicitAlgorithm}, (steps, masks, (res, jac, ops, shifts, p)))
     rt.steps, rt.masks = steps, masks
     c = rt.cache::ImplicitCache
     for (i, r) in enumerate(c.rows)
@@ -658,6 +846,17 @@ function install_launches!(rt::GroupRuntime{<:FieldStore, <:ImplicitAlgorithm}, 
         shifts[i] === nothing || (r.s = shifts[i])
     end
     c.jac = jac
+    # (here, not in `rebind_launches`: front end A writes the tables between the two)
+    bp = _bound_params(rt.store, rt.program, c.op, c.keys, p)
+    b, rb = inexact_bounds(c.op, c.keys, c.cyclic, bp), _robin_bounds(rt.program, c.op, c.keys, bp)
+    # the classification at the new parameters (a write may turn a Robin face negative), as a
+    # fresh problem's (M2)
+    c.exact = c.exact0 && !rb.neg
+    c.seen = isempty(b.unseen) && !rb.unseen
+    c.ρin = b.ρ + b.κ + rb.ρ
+    c.θ = b.θ
+    c.exact || c.seen || rt.alg.newton !== nothing || _warn_unseen(c.keys, [b.unseen; rb.texts])
+    _set_newton!(c, rt.alg)
     reset!(rt)
     return rt
 end
@@ -667,11 +866,19 @@ end
              key = identity, texts = ProblemTexts(spec.texts.route)) -> Int
 
 The substep count of an implicit algorithm (F3 design §3.7), the same policy as the explicit
-one with the implicit rule: the parameter refusals first (a negative diffusion coefficient, a
-coefficient that is not finite where the inputs reach), then `n = max(m, ⌈2 dt g⌉)`, `m` the
-user's count (1 when left out) and `g` the largest positive local derivative the operator sees
-([`growth`](@ref)): the shift `1/h − g` stays at least half of `1/h`. No stability bound is
-needed: an unknown bound is no refusal.
+one with the implicit rule (§3.6): the parameter refusals first (a negative diffusion
+coefficient, a coefficient that is not finite where the inputs reach), then
+`n = max(m, ⌈2 dt g⌉, ⌈2γ dt (ρ_adv + κ_in + ρ_rob) / (1 − θ)⌉)`: `m` the user's count (1 when
+left out); rule 1, `g` the largest positive local derivative the operator sees
+([`growth`](@ref)), so the shift `1/h − g` stays at least half of `1/h`; rule 2, the defect
+correction converges with a contraction `ρ_c ≤ (1 + θ)/2`: `ρ_adv` the upwind bound of the
+advection terms, `κ_in` the cross sum of a cycle among the group's fields
+([`inexact_bounds`](@ref)), `ρ_rob` the part `w |d⁻|` of a Robin face with a negative diagonal,
+and `θ ≤ 1/2` the face-wise ratio of a diffusion term left out of a scaled row to the one kept,
+which contracts at any step size (a ratio above 1/2, or unknown, puts the term's Gershgorin
+bound in the sum instead). No stability bound is needed: an unknown bound is no refusal (the
+device check decides). When a rule raises the user's count, a warning says which, once per
+cause (`key`).
 """
 function substeps(spec::GroupSpec, alg::ImplicitAlgorithm, dt::Real, pp; fields = spec.state, stability = spec.stability,
         key = identity, texts::PolicyTexts = ProblemTexts(spec.texts.route))
@@ -680,7 +887,34 @@ function substeps(spec::GroupSpec, alg::ImplicitAlgorithm, dt::Real, pp; fields 
     r = bound_report(stability, pp)
     ctx = (; stability, pp, r, fields = collect(String, fields), dt, least = alg.substeps)
     (isempty(r.negative) && !any(x -> x[3] isa Tuple, r.nonfinite)) || refuse_parameters(texts, ctx)
-    g = growth(operator_spec(spec), collect(String, fields), pp)
-    return max(something(alg.substeps, 1), ceil(Int, 2 * dt * g))
+    op = operator_spec(spec)
+    keys = collect(String, fields)
+    g = growth(op, keys, pp)
+    b = inexact_bounds(op, keys, last(_solve_order(spec.rate, keys)), pp)
+    ρrob = _robin_bounds(spec.rate, op, keys, pp).ρ
+    γ = _gamma(alg)
+    # (rule 2 on the sum: the parts out of the operator add in one correction)
+    n1, n2 = ceil(Int, 2 * dt * g), ceil(Int, 2γ * dt * (b.ρ + b.κ + ρrob) / (1 - b.θ))
+    m = something(alg.substeps, 1)
+    if alg.substeps !== nothing && max(n1, n2) > m
+        rule = n2 >= n1 ? 2 : 1
+        _warn_once(key(string("implicit-raise#", rule))) && @warn _raise_text(op, keys, alg, max(n1, n2), rule, b.κ > 0, ρrob > 0)
+    end
+    return max(m, n1, n2)
+end
+# why an implicit count is above the user's (`substeps = m` is a minimum), in the manual's words
+# (the growth rule, the convergence rule of the Newton correction)
+function _raise_text(op::OperatorSpec, keys, alg, n, rule, cycle, robin)
+    fs = join(("`$k`" for k in keys), ", ")
+    head = string(nameof(typeof(alg)), "(substeps = ", alg.substeps, "): field", length(keys) == 1 ? " " : "s ", fs,
+        length(keys) == 1 ? " takes " : " take ", n, " substeps, more than the ", alg.substeps, " requested: ")
+    rule == 1 && return string(head, "a local growth `∂f/∂c` that the operator sees needs `1/h` at least twice ",
+        "it, so the shift `1/h − ∂f/∂c` keeps the step stable; fewer substeps are not stable")
+    terms = unique([t for r in op.rows if r.key in keys for t in r.inexact])
+    cycle && push!(terms, "the cycle among the group's fields")
+    robin && push!(terms, "the negative part of a Robin face")
+    return string(head, "the terms out of the implicit operator (", join(terms, ", "), ") are corrected by Newton ",
+        "iterations, which converge only when the substep keeps their contraction at most 1/2; fewer substeps would ",
+        "not converge")
 end
 substeps(g::FieldGroup, alg::ImplicitAlgorithm, dt::Real, pp; kw...) = substeps(g.spec, alg, dt, pp; kw...)

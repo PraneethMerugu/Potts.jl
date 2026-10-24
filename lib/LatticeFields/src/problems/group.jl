@@ -354,6 +354,10 @@ function substeps(spec::GroupSpec, alg::ExplicitEuler, dt::Real, pp; fields = sp
 end
 substeps(g::FieldGroup, alg::ExplicitEuler, dt::Real, pp; kw...) = substeps(g.spec, alg, dt, pp; kw...)
 
+# a new substep count of a runtime (`_set_counts!`): an algorithm's cache may follow it (the
+# implicit one's step and Newton count)
+_count_set!(::Any, rt) = nothing
+
 const _COUPLING_RTOL = 1e-12
 _explicit_count(a) = hasproperty(a, :substeps) && getproperty(a, :substeps) !== nothing
 
@@ -514,7 +518,8 @@ The entries of the status word (`UInt32[8]`, F3 design §3.3): [1] the worst cod
 the `rt.totals.windows`-th window since the bind or `clear_status!`, which a cache reads when it
 writes the word), [3] the
 cause bits ([`STATUS_CAUSES`](@ref)), [4] solves, [5] linear budget hits, [6] floors, [7]
-Newton budget hits ([8] is spare). A read ([`check_status!`](@ref)) adds [4]–[7] to the
+Newton budget hits, [8] the rows that met the Newton tolerance in the last iteration (a host
+executor reads it to stop early). A read ([`check_status!`](@ref)) adds [4]–[7] to the
 runtime's host totals and zeroes them on the device; [1]–[3] are sticky.
 """
 const STATUS_CODE, STATUS_WINDOW, STATUS_CAUSE, STATUS_SOLVES, STATUS_BUDGET, STATUS_FLOOR, STATUS_NEWTON_BUDGET = 1, 2, 3, 4, 5, 6, 7
@@ -536,16 +541,26 @@ algorithm with no solve (`ExplicitEuler`, `ExplicitMap`): then [`check_status!`]
 nothing and costs nothing.
 """
 status_word(::Any) = nothing
+# the Newton count of an algorithm's cache (its budget warning names it), or nothing
+newton_count(::Any) = nothing
 
 """
-    status_route(alg, which) -> String
+    status_route(alg, which, cause = 0) -> String
 
 The route a warning or failure of `alg`'s status word names: `which` is `:budget` (the
-linear solve reached its budget), `:newton_budget` (the Newton iteration did) or `:failure`.
+linear solve reached its budget), `:newton_budget` (the Newton iteration did) or `:failure`,
+whose route follows its `cause` bits ([`STATUS_CAUSES`](@ref)): a linear divergence takes more
+substeps or a larger linear budget; a Newton divergence or a residual that is not finite takes
+more substeps only (a smaller step brings the iteration into its contraction; neither more
+iterations nor a larger linear budget does).
 """
-status_route(alg, which::Symbol) = which === :budget ? "a larger linear budget (`inner = DevicePCG(; budget = n)`)" :
-                                   which === :newton_budget ? "more Newton iterations (`newton = k`)" :
-                                   "more substeps (`substeps = n`) or a larger linear budget (`inner = DevicePCG(; budget = n)`)"
+function status_route(alg, which::Symbol, cause::Integer = 0)
+    which === :budget && return "a larger linear budget (`inner = DevicePCG(; budget = n)`)"
+    which === :newton_budget && return "more Newton iterations (a larger `newton = k`) or more substeps (`substeps = n`)"
+    cause & 0x1 != 0 && return "more substeps (`substeps = n`) or a larger linear budget (`inner = DevicePCG(; budget = n)`)"
+    cause & 0x6 != 0 && return "more substeps (`substeps = n`): a smaller step brings the Newton iteration into its contraction"
+    return "more substeps (`substeps = n`) or a larger linear budget (`inner = DevicePCG(; budget = n)`)"
+end
 
 """
     StatusTotals
@@ -820,7 +835,8 @@ end
         tot.warned = true
         what = tot.budget > 0 ? ("the linear solve reached its budget $(tot.budget) time$(tot.budget == 1 ? "" : "s")",
                                  status_route(rt.alg, :budget)) :
-               ("the Newton iteration reached its budget $(tot.newton_budget) time$(tot.newton_budget == 1 ? "" : "s")",
+               (string("the Newton iteration", (k = newton_count(rt.cache)) === nothing ? "" : " (`newton = $k`)",
+                    " reached its budget $(tot.newton_budget) time$(tot.newton_budget == 1 ? "" : "s")"),
                 status_route(rt.alg, :newton_budget))
         @warn "field$s $fs: $(what[1]) so far (the result is accepted, `ReturnCode.Success`, and counted in `stats`); " *
               "$(what[2]) removes this warning"

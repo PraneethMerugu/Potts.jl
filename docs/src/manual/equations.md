@@ -163,14 +163,40 @@ solvers themselves: `field_solver`, `solvers` and `FieldGroups` refuse them and 
 route.
 
 `BackwardEuler()` steps a field implicitly: each substep solves `(u − uⁿ)/h = rhs(u)` at the
-substep's end time, so a stiff field (fast diffusion, fast decay) needs no small substeps.
-Its substep count is 1 unless a growth term in the rate (`+ g c`) needs more. Diffusion,
-linear decay, kind-dependent diffusion multipliers, masks and face conditions are part of
-its linear solve, so one Newton iteration is exact. A local nonlinear term of the field
-itself (logistic growth `r c (1 − c)`, uptake `−V c/(K + c)`) enters the solve through its
-derivative at the current iterate, so one Newton iteration keeps the method's order. A
-switch `−a max(c − c_T, 0)` takes two Newton iterations by default. Other terms are
-corrected by more Newton iterations (`newton = k`).
+substep's end time (an operator that reads the time is built at each substep's end time), so
+a stiff field (fast diffusion, fast decay) needs no small substeps. Its substep count is 1
+unless a growth term in the rate (`+ g c`) needs more. Diffusion, linear decay, kind-dependent
+diffusion multipliers, masks and face conditions are part of its linear solve, so one Newton
+iteration is exact. A Robin face whose diagonal is negative (`α c + β ∂c/∂n = g` with
+`|β| > α/2` and `β` of the opposite sign) is the exception: that part is corrected by Newton
+iterations. A local nonlinear term of the field itself (logistic growth `r c (1 − c)`, uptake
+`−V c/(K + c)`) enters the solve through its derivative at the current iterate, so one Newton
+iteration keeps the method's order. A switch `−a max(c − c_T, 0)` takes two Newton iterations
+by default: the second is a flip pass that takes the switch state at the first one's result,
+not a convergence test. Other terms, such as advection, fields of one group that read one
+another in a loop, or a second face coefficient next to a kind-dependent multiplier
+(`δ[kind] * Δ(c) + DivKGrad(K, c)`: the term with the larger bound is in the solve), are
+corrected by more Newton iterations. Their substep count keeps the correction converging (for
+the sum of their bounds; advection with a constant velocity: `substeps ≥ 2 · mcs_duration ·
+Σ_a 2|u_a|/h_a`), and `newton` defaults to the iterations that this bound needs. A second
+diffusion term that is at most half the one in the solve, face by face (with a multiplier in
+the solve that is positive everywhere), needs no extra substeps at all, only a few more
+Newton iterations. When these rules raise a `substeps = n` you gave, a warning says which
+rule and which terms. Each substep
+checks the Newton correction: a correction that does not reach the tolerance in `newton`
+iterations is counted in `integ.stats` and warned once with the route (a larger `newton = k`,
+or more substeps). A correction that diverges ends the run with
+`ReturnCode.ConvergenceFailure`, and the warning gives more substeps as the route. Under the
+automatic count, a CPU run stops a substep's Newton iterations once the correction meets the
+tolerance; a GPU runs them all, so CPU and GPU results agree to the tolerance, not bitwise. A
+hexagonal lattice has no implicit solve yet: `BackwardEuler` refuses it, and
+`field_solver = ExplicitEuler()` steps it.
+
+`BackwardEuler` pays a linear solve per substep. It is the faster choice when the explicit
+count is large (fast diffusion, a stiff decay); for a field whose explicit count is a few
+substeps, `ExplicitEuler` is cheaper. Merks' model on 100² takes about 4.9 ms per MCS with
+`BackwardEuler(; lower = 0.0)` against 0.8 ms with `ExplicitEuler(; substeps = 15)` (4 CPU
+threads).
 
 - `substeps = nothing` in a field solver takes the smallest count `n` with
   `mcs_duration / n · ρ ≤ 1.8`, where `ρ` bounds the rate's spectral radius: `D · Σ_d 4/h_d²`

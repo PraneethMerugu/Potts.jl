@@ -344,7 +344,7 @@ end
     σ = zeros(Int32, 16, 16); σ[4:6, 4:6] .= 1
     mk(fs) = PottsProblem(FiHex(; name = :f), [ownership => σ, kind => [:A]], (0, 3); field_solver = fs)
     # base: `ConvergenceFailure` at MCS 1 with the route "more substeps … or a larger linear budget"
-    @test_throws "a hexagonal lattice has no implicit solve yet (the solver's operator has no hexagonal faces); step it with `ExplicitEuler`" solve(
+    @test_throws "a hexagonal lattice has no implicit solve yet (the solver's operator has no hexagonal faces); step it with `field_solver = ExplicitEuler()`" solve(
         mk(BackwardEuler()), SequentialCPM())
     @test solve(mk(ExplicitEuler()), SequentialCPM()).retcode == FiRC.Success
 end

@@ -10,16 +10,19 @@
     DeferredOperator
 
 The operator of a group, not built yet: the lowered system that `build_operator` extracts the
-`OperatorSpec` from at the group's first implicit use (once: the result is kept). `builds`
-counts the builds of this session (a test reads it: an explicit group builds none).
+`OperatorSpec` from at the group's first implicit use (once: the result is kept), with the
+front end's spelling of the explicit route (`route`, for a lattice with no implicit solve).
+`OPERATOR_BUILDS` counts the builds of this session (a test reads it: an explicit group builds
+none; it starts at 0, the precompile workload's build not counted).
 """
 mutable struct DeferredOperator
     cf::Any
     sys::Any
     disc::Any
+    route::String
     built::Any
 end
-DeferredOperator(cf, sys, disc) = DeferredOperator(cf, sys, disc, nothing)
+DeferredOperator(cf, sys, disc; route = "`ExplicitEuler`") = DeferredOperator(cf, sys, disc, route, nothing)
 const OPERATOR_BUILDS = Threads.Atomic{Int}(0)
 const _OPERATOR_LOCK = ReentrantLock()
 
@@ -27,13 +30,13 @@ function Problems.build_operator(d::DeferredOperator, spec::Problems.GroupSpec)
     return lock(_OPERATOR_LOCK) do
         d.built === nothing || return d.built
         Threads.atomic_add!(OPERATOR_BUILDS, 1)
-        d.built = _build_operator(d.cf, d.sys, d.disc)
+        d.built = _build_operator(d.cf, d.sys, d.disc; d.route)
     end
 end
 
 # a diffusion term `m Op(c)` in parts: the multiplier `m` (the operator replaced by 1), the face
 # coefficient `K` (1 for `Δ`), the axes it acts on (every axis for `Δ` and `DivKGrad`, its own
-# for a raw `Dx(K Dx(c))`) and the face mean; `nothing` for more than one operator
+# for a raw `Dx(K Dx(c))`), the face mean and the term itself; `nothing` for more than one operator
 function _diffusion_parts(term, xs)
     reps, parts = Dict{Any, Any}(), Any[]
     walk(y) = iscall(y) && (f = operation(y);
@@ -46,20 +49,37 @@ function _diffusion_parts(term, xs)
     walk(unwrap(term))
     length(parts) == 1 || return nothing
     K, ax, mean = only(parts)
-    return (m = substitute(term, reps; fold = Val(false)), K, axes = ax, mean)
+    return (m = substitute(term, reps; fold = Val(false)), K, axes = ax, mean, term)
 end
 
 _freeof(x, ops) = !_reads(x, ops)
+# a term of the rate of `k` in the user's words (`_term_text`), with `Advect`'s scheme type and
+# a velocity literal as written (`Advect(Upwind1())([ux, uy], c)`)
+function _optext(k, term)
+    t = replace(string(term), r"Advect\{\w+\}\(" => "Advect(", "LatticePDE." => "")
+    while (i = findfirst("SymbolicUtils.array_literal(", t)) !== nothing
+        j = last(i) + 1                                     # past the opening parenthesis
+        depth, q = 1, j
+        while depth > 0 && q <= lastindex(t)
+            t[q] == '(' && (depth += 1)
+            t[q] == ')' && (depth -= 1)
+            depth > 0 && (q = nextind(t, q))
+        end
+        inner = replace(t[j:prevind(t, q)], r"^\(\d+,\), " => "")    # (the shape first)
+        t = string(t[1:prevind(t, first(i))], "[", inner, "]", t[nextind(t, q):end])
+    end
+    return _term_text(string(k, ": ", t))
+end
 
 # whether `term` is local in the field `c` (F3-09a): it reads `c` at the site only (offset 0),
 # the inputs `I` at the site only, no other field (`others`), and no spatial operator
 function _local_term(term, c, I, ivs, others)
     _reads(term, others) && return false
-    cop = operation(c)
+    cref = _ref(c)                              # (a component `u[i]`: its own reads only)
     function ok(u)
         iscall(u) || return true
         f = operation(u)
-        isequal(f, cop) && return isequal(u, c)
+        _hit(cref, u) && return isequal(u, c)
         any(o -> isequal(f, o), I) && return isequal(collect(arguments(u)), collect(ivs))
         (f === Δ || !(f isa Function)) && return false        # Δ, DivKGrad, Advect, Differential, Shift, …
         return all(a -> ok(unwrap(a)), arguments(u))
@@ -75,10 +95,178 @@ function _local_derivative(term, c)
     return substitute(d, Dict(unwrap(v) => c); fold = Val(false))
 end
 _hasdiff(u) = iscall(u) && (operation(u) isa Differential || any(a -> _hasdiff(unwrap(a)), arguments(u)))
+
+# The bound of an advection term `m Advect(u, c)` for the defect correction (F3-09b, FE-11): the
+# upwind Gershgorin bound `Σ_a 2 |m u_a| / h_a` as one `Coef` per axis (`2 m u_a / h_a`; its
+# absolute value counts), when the multiplier and each velocity component are numbers or a
+# number times a parameter; else nothing (a velocity field or an expression: no bound sees it)
+function _advection_bound(term, params, h)
+    found = Any[]
+    walk(y) = iscall(y) && (operation(y) isa Advect ? push!(found, y) : foreach(a -> walk(unwrap(a)), arguments(y)))
+    walk(unwrap(term))
+    length(found) == 1 || return nothing
+    adv = only(found)
+    comps = velocity_terms(unwrap(arguments(adv)[1]))
+    (comps === nothing || length(comps) != length(h)) && return nothing
+    m = substitute(term, Dict(adv => 1); fold = Val(false))
+    out = Coef[]
+    for (a, ua) in enumerate(comps)
+        cu = _coefof(unwrap(substitute(m * ua, Dict(); fold = Val(true))), params)
+        cu === nothing && return nothing
+        push!(out, Coef(2 * cu.value / h[a], cu.param))
+    end
+    return out
+end
+# whether `u` applies a spatial operator to a read of `o`
+_operator_of(u, o) = iscall(u) && ((f = operation(u); (f === Δ || f isa DivKGrad || f isa Advect || f isa Differential) &&
+                                    _reads(u, (o,))) || any(a -> _operator_of(unwrap(a), o), arguments(u)))
+# a cross term `a · o` (`CrossLinear`, `o` another field) as (the field's key, `a` as a `Coef`
+# or `Coef(NaN)` when it is not a number or a number times a parameter, its text)
+function _cross_bound(k, term, others, cf, params, bysite)
+    for o in others
+        _reads(term, (o,)) || continue
+        kk = o isa _Comp ? (ks = get(cf.keys, o.op, nothing); ks === nothing ? nothing : [ks[o.i]]) : get(cf.keys, o, nothing)
+        (kk === nothing || length(kk) != 1) && return ("", Coef(NaN), _optext(k, term))
+        c = nothing
+        u = unwrap(term)
+        # an operator of the other field (`D Δ(o)`, cross-diffusion): no coefficient bounds it
+        # here; it stays in the residual (a defect term the Newton check covers, r3 N1)
+        _operator_of(u, o) && return (only(kk), Coef(NaN), _optext(k, term))
+        # `a · o(t, x, y)`: the coefficient is the term with the read replaced by 1
+        reads = Any[]
+        w(y) = iscall(y) && (_hit(o, y) ? push!(reads, y) : foreach(a -> w(unwrap(a)), arguments(y)))
+        w(u)
+        if length(reads) == 1
+            a = substitute(term, Dict(only(reads) => 1); fold = Val(false))
+            c = bysite(a) || _reads(a, (o,)) ? nothing : _coefof(unwrap(substitute(a, Dict(); fold = Val(true))), params)
+        end
+        return (only(kk), c === nothing ? Coef(NaN) : c, _optext(k, term))
+    end
+    return ("", Coef(NaN), _optext(k, term))
+end
+# An interval bound of a coefficient (M3): a function `pp -> (lo, hi)` of the parameters (a
+# `Problems.ParamsTables`, or the raw vector: a table read is then unbounded), with a parameter
+# at its value, a coordinate over the box, a table read over the table's entries (and the 0 an
+# index 0 reads), an indicator in [0, 1] and a switch over both arms; `nothing` when the
+# coefficient reads anything else (the time, a field, an input outside a table read) or keeps
+# a call with no interval rule
+_ihull(a, b) = (min(a[1], b[1]), max(a[2], b[2]))
+_iabs(a) = a[1] >= 0 ? a : a[2] <= 0 ? (-a[2], -a[1]) : (0.0, max(-a[1], a[2]))
+function _imul(a, b)
+    v = (a[1] * b[1], a[1] * b[2], a[2] * b[1], a[2] * b[2])
+    any(isnan, v) && return (-Inf, Inf)
+    return (minimum(v), maximum(v))
+end
+_iinv(a) = a[1] > 0 || a[2] < 0 ? (1 / a[2], 1 / a[1]) : (-Inf, Inf)
+function _ipow(a, n)
+    if n isa Integer || (n isa AbstractFloat && isinteger(n))
+        k = Int(n)
+        k == 0 && return (1.0, 1.0)
+        k < 0 && return _ipow(_iinv(a), -k)
+        iseven(k) && return (b = _iabs(a); (b[1]^k, b[2]^k))
+        return (a[1]^k, a[2]^k)
+    end
+    a[1] >= 0 || return (-Inf, Inf)
+    return n >= 0 ? (a[1]^n, a[2]^n) : (a[2]^n, a[1]^n)
+end
+function _interval(x, params::Dict{Any, Int}, tabs, box)
+    u = unwrap(x)
+    v = unwrap_const(_unid(u))
+    v isa Real && return _ -> (Float64(v), Float64(v))
+    haskey(params, u) && return (i = params[u]; pp -> (v = Float64(primal(pp[i])); (v, v)))
+    for (xv, b) in box
+        isequal(xv, u) && return _ -> b
+    end
+    iscall(u) || return nothing
+    f, a = operation(u), arguments(u)
+    if (f === at || f === getindex) && length(a) == 2 && haskey(tabs, unwrap(a[1]))
+        k = tabs[unwrap(a[1])]
+        return pp -> begin
+            pp isa Problems.ParamsTables || return (-Inf, Inf)
+            j = findfirst(q -> first(q) == k, pp.tables)
+            (j === nothing || isempty(last(pp.tables[j]))) && return (-Inf, Inf)
+            w = last(pp.tables[j])
+            (min(0.0, Float64(minimum(w))), max(0.0, Float64(maximum(w))))
+        end
+    end
+    (f === ismember || f in (==, <, <=, >, >=, !=)) && return _ -> (0.0, 1.0)
+    f === identity && length(a) == 1 && return _interval(a[1], params, tabs, box)
+    if f === ifelse
+        b2, b3 = _interval(a[2], params, tabs, box), _interval(a[3], params, tabs, box)
+        (b2 === nothing || b3 === nothing) && return nothing
+        return pp -> _ihull(b2(pp), b3(pp))
+    end
+    bs = [_interval(y, params, tabs, box) for y in a]
+    any(isnothing, bs) && return nothing
+    f === (+) && return pp -> foldl((r, b) -> (q = b(pp); (r[1] + q[1], r[2] + q[2])), bs; init = (0.0, 0.0))
+    f === (*) && return pp -> foldl((r, b) -> _imul(r, b(pp)), bs; init = (1.0, 1.0))
+    f === (-) && length(bs) == 1 && return pp -> (q = bs[1](pp); (-q[2], -q[1]))
+    f === (-) && return pp -> (q = bs[1](pp); w = bs[2](pp); (q[1] - w[2], q[2] - w[1]))
+    f === (/) && return pp -> _imul(bs[1](pp), _iinv(bs[2](pp)))
+    if f === (^)
+        n = unwrap_const(_unid(unwrap(a[2])))
+        n isa Real && return pp -> _ipow(bs[1](pp), n)
+        return nothing
+    end
+    f === abs && return pp -> _iabs(bs[1](pp))
+    f === exp && return pp -> (q = bs[1](pp); (exp(q[1]), exp(q[2])))
+    f === sqrt && return pp -> (q = bs[1](pp); q[1] >= 0 ? (sqrt(q[1]), sqrt(q[2])) : (-Inf, Inf))
+    f === min && return pp -> (qs = map(b -> b(pp), bs); (minimum(first, qs), minimum(last, qs)))
+    f === max && return pp -> (qs = map(b -> b(pp), bs); (maximum(first, qs), maximum(last, qs)))
+    (f === sin || f === cos) && return _ -> (-1.0, 1.0)
+    return nothing
+end
+# the Gershgorin bound of a diffusion term out of the operator, `4 max|m| max|K| Σ_a 1/h_a²`
+# over its axes, as a function of the parameters (NaN when it is not finite); nothing when its
+# multiplier or face coefficient has no interval bound
+function _diffusion_bound(p, params, tabs, box, h)
+    bm, bK = _interval(p.m, params, tabs, box), _interval(p.K, params, tabs, box)
+    (bm === nothing || bK === nothing) && return nothing
+    s = p.axes === :all ? sum(1 / x^2 for x in h) : 1 / h[p.axes]^2
+    return pp -> (v = 4 * s * _iabs(bm(pp))[2] * _iabs(bK(pp))[2]; isfinite(v) ? v : NaN)
+end
+# The face-wise ratio θ of a diffusion term `p` left out of a scaled row to the row's kept
+# term `q` (R2-M1): `max|m_p| max|K_p| / (min m_q min K_q)` over the box, as a function of the
+# parameters (NaN when the kept term's multiplier or face coefficient is not bounded below by
+# a positive value there, or the ratio is not finite); nothing when the left-out term acts on
+# an axis the kept one does not, or a coefficient has no interval bound. With
+# `L_out ≼ θ L_kept`, the defect correction contracts by `θ` at any step size
+function _diffusion_ratio(p, q, params, tabs, box)
+    q.axes === :all || p.axes == q.axes || return nothing
+    bm, bK = _interval(p.m, params, tabs, box), _interval(p.K, params, tabs, box)
+    qm, qK = _interval(q.m, params, tabs, box), _interval(q.K, params, tabs, box)
+    any(isnothing, (bm, bK, qm, qK)) && return nothing
+    return pp -> begin
+        lm, lK = qm(pp)[1], qK(pp)[1]
+        (lm > 0 && lK > 0) || return NaN
+        v = _iabs(bm(pp))[2] * _iabs(bK(pp))[2] / (lm * lK)
+        isfinite(v) ? v : NaN
+    end
+end
+# The largest face coefficient of a field row on each axis (rate units: `Σ max|m| max|K| / h_a²`
+# over the row's operator terms), as a function of the parameters (NaN entries when not finite),
+# or nothing when a coefficient has no interval bound: it bounds the part `w |d⁻|` of a Robin
+# face with a negative diagonal left out of the operator (R2-S1)
+function _face_max(diff, params, tabs, box, h, N)
+    parts = Any[]
+    for p in diff
+        bm, bK = _interval(p.m, params, tabs, box), _interval(p.K, params, tabs, box)
+        (bm === nothing || bK === nothing) && return nothing
+        push!(parts, (bm, bK, p.axes))
+    end
+    return pp -> ntuple(N) do a
+        v = 0.0
+        for (bm, bK, ax) in parts
+            (ax === :all || ax == a) || continue
+            v += _iabs(bm(pp))[2] * _iabs(bK(pp))[2] / h[a]^2
+        end
+        isfinite(v) ? v : NaN
+    end
+end
 # a coefficient as a `Coef` (a number, a parameter, a number times a parameter), or nothing
 _coefof(x, params) = (x isa Number ? Coef(Float64(x)) : _coef(x, params; strict = false))
 
-function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscretization) where {N}
+function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscretization; route = "`ExplicitEuler`") where {N}
     s = cf.program
     ivs = unwrap.(sys.ivs)
     xs = ivs[2:end]
@@ -99,7 +287,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
         ks = [k for k in _states(s) if haskey(cf.linearity, k)]
         throw(ArgumentError(string("BackwardEuler: field", length(ks) == 1 ? " " : "s ", join(("`$k`" for k in ks), ", "),
             ": a hexagonal lattice has no implicit solve yet (the solver's operator has no hexagonal faces); step ",
-            length(ks) == 1 ? "it" : "them", " with `ExplicitEuler`")))
+            length(ks) == 1 ? "it" : "them", " with ", route)))
     end
     domain = s.hierarchy[1].grid.domain != 0
     # the coordinates and the inputs: a coefficient that reads them varies by site
@@ -120,6 +308,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
     end
     pp0 = Problems.ParamsTables(collect(Any, cf.defaults),
         Pair{String, Vector{Float64}}[first(q) => Float64.(collect(last(q))) for q in cf.tables])
+    staterefs = unique([_ref(v) for v in values(dvs)])     # the group's own states (no aux field, no input)
     allops = Any[unique([_ref(v) for v in values(dvs)]);
                  unique([_opof(v) for v in unwrap.(sys.dvs) if !haskey(cf.keys, _opof(v)) ||
                                                                !any(k -> k in states, cf.keys[_opof(v)])])]
@@ -136,45 +325,76 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
         scaled = false
         field = domain
         iterate = switch = false                # a local Jacobian at the iterate; a switch term
-        others = [o for o in allops if !isequal(o, operation(c)) && !any(i -> isequal(i, o), inputops)]
+        others = [o for o in allops if !isequal(o, _ref(c)) && !any(i -> isequal(i, o), inputops)]
+        adv = Coef[]                            # the advection bound (F3-09b), per term and axis
+        cross = Tuple{String, Coef, String}[]   # the cross terms: (field, coefficient, text)
+        unseen = String[]                       # terms out of the operator that no bound sees
         for (term, class) in cf.linearity[k]
             if class in (:Diffusion, :SiteDiffusion)
                 p = _diffusion_parts(term, xs)
-                if p === nothing || hex
-                    push!(inexact, _term_text(string(term)))
+                if p === nothing
+                    push!(inexact, _optext(k, term))
+                    push!(unseen, _optext(k, term))
                     continue
                 end
                 class == :SiteDiffusion && (scaled = true)
                 push!(diff, p)
             elseif class == :LinearLocal
                 push!(jterms, substitute(term, Dict(c => 1); fold = Val(false)))
-            elseif class in (:Source, :CrossLinear)
-                continue                        # residual only, exact (CrossLinear: solve order)
-            elseif class in (:LaggedSwitch, :Other) && !hex && _local_term(term, c, inputops, ivs, others) &&
+            elseif class == :Source
+                continue                        # residual only, exact
+            elseif class == :CrossLinear
+                # residual only, exact in solve order; its coefficient bounds a cycle's correction
+                push!(cross, _cross_bound(k, term, others, cf, params, bysite))
+            elseif class == :Advection && (ab = _advection_bound(term, params, s.spacing)) !== nothing
+                # out of the operator (a defect correction) with a bound: the count rule 2
+                push!(inexact, _optext(k, term))
+                append!(adv, ab)
+            elseif class in (:LaggedSwitch, :Other) && _local_term(term, c, inputops, ivs, others) &&
                    (dj = _local_derivative(term, c)) !== nothing
                 # a local nonlinear term `f(c)` or a switch: `∂f/∂c` at the iterate (F3-09a),
                 # exact as a Newton step; the `jac:` kernel runs at every Newton iteration
                 push!(jterms, dj)
                 iterate = true
                 switch |= class == :LaggedSwitch
+            elseif class in (:LaggedSwitch, :Other) && !_reads(term, (_ref(c),)) &&
+                   (rd = [o for o in others if _reads(term, (o,))]; !isempty(rd) && all(o -> any(r -> isequal(r, o), staterefs), rd))
+                # a term of other rows' fields only, whatever its form (design §3.4, review r1 M3):
+                # a source when the row is solved after them (exact in an acyclic group); one
+                # cross entry per field it reads, with no coefficient (a cycle leaves it unseen)
+                for o in rd
+                    push!(cross, (first(_cross_bound(k, term, (o,), cf, params, bysite)), Coef(NaN), _optext(k, term)))
+                end
             else
-                push!(inexact, _term_text(string(term)))
+                push!(inexact, _optext(k, term))
+                push!(unseen, _optext(k, term))
             end
         end
         # a scaled row (`m Δ(c)`): one face operator; terms with the same face coefficient
-        # combine (`m Δ(c) + D Δ(c)` is `(m + D) Δ(c)`), another face coefficient stays out
+        # combine (`m Δ(c) + D Δ(c)` is `(m + D) Δ(c)`). The face coefficient kept is the one
+        # whose terms have the largest bound at the defaults (a term with no bound counts as
+        # the largest: no bound could cover it out of the operator); the others stay out with
+        # their Gershgorin bound (count rule 2), or unseen when they have none (M3), and their
+        # face-wise ratio θ to the kept term (R2-M1: with a kept multiplier bounded below, the
+        # correction contracts by θ at any step, and the bound is used only when θ > 1/2)
+        bounds = Tuple{Any, String, Any}[]
         if scaled
-            K0, ax0, mean0 = diff[1].K, diff[1].axes, diff[1].mean
-            keep = Any[]
-            for p in diff
-                if isequal(unwrap(p.K), unwrap(K0)) && p.axes == ax0 && p.mean == mean0
-                    push!(keep, p)
-                else
-                    push!(inexact, _term_text(string(p.m * p.K)))
-                end
+            same(p, q) = isequal(unwrap(p.K), unwrap(q.K)) && p.axes == q.axes && p.mean == q.mean
+            bs = [_diffusion_bound(p, params, tabset, box, s.spacing) for p in diff]
+            size_(i) = (b = bs[i]; b === nothing ? Inf : (v = b(pp0); isnan(v) ? Inf : v))
+            heads = unique(i -> findfirst(j -> same(diff[j], diff[i]), eachindex(diff)), eachindex(diff))
+            groupsize(i) = sum(size_(j) for j in eachindex(diff) if same(diff[j], diff[i]))
+            best = heads[argmax([groupsize(i) for i in heads])]
+            keep = [p for p in diff if same(p, diff[best])]
+            b0 = diff[best]
+            kept = (m = sum(p.m for p in keep), K = b0.K, axes = b0.axes, mean = b0.mean, term = keep[1].term)
+            for (i, p) in enumerate(diff)
+                same(p, diff[best]) && continue
+                push!(inexact, _optext(k, p.term))
+                bs[i] === nothing ? push!(unseen, _optext(k, p.term)) :
+                push!(bounds, (bs[i], _optext(k, p.term), _diffusion_ratio(p, kept, params, tabset, box)))
             end
-            m = sum(p.m for p in keep)
-            diff = Any[(m = m, K = K0, axes = ax0, mean = mean0)]
+            diff = Any[kept]
         end
         for p in diff
             mK = scaled ? nothing : _coefof(unwrap(substitute(p.m * p.K, Dict(); fold = Val(true))), params)
@@ -198,11 +418,12 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
             field = true
         end
         local_only = !hasdiff
+        facemax = field && hasdiff ? _face_max(diff, params, tabset, box, s.spacing, N) : nothing
         if field
             plans[k] = (; diff, jterms, scaled, local_only)
         end
         push!(rows, Problems.RowOperator(k, faces, jloc, field, scaled, domain, local_only, isempty(inexact), inexact,
-            iterate, switch))
+            iterate, switch, adv, cross, unseen, bounds, facemax))
     end
     jac = isempty(plans) ? nothing : _jac_program(cf, sys, disc, plans, params, xs)
     return Problems.OperatorSpec{N}(rows, jac)

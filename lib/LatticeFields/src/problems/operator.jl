@@ -31,7 +31,24 @@ Jacobian that the linear solve sees:
   `−∂f/∂c` at the iterate, or a switch): the `jac:` kernel runs at every Newton iteration
   (F3-09a);
 - `switch`: the row has a switch term `a max(c − c_T, 0)` (`LaggedSwitch`): its Jacobian
-  flips with the iterate, and a group with one takes `newton = 2` by default (S1).
+  flips with the iterate, and a group with one takes `newton = 2` by default (S1);
+- `adv`: the bound of the row's advection terms (F3-09b): `Coef`s whose absolute values sum
+  to the upwind bound `Σ_a 2 |u_a| / h_a` (a velocity of numbers and parameters);
+- `cross`: the row's cross terms `a · o` (`CrossLinear`): the other field's key, `a` as a
+  `Coef` (`NaN` when no number or parameter bounds it), the term's text;
+- `unseen`: the terms left out of `J̃` that no bound sees (a defect correction whose
+  convergence only the device check decides), in the user's words;
+- `bounds`: the diffusion terms left out of a scaled row's `J̃` (another face coefficient,
+  M3), each `(bound, text, ratio)`: `bound` a function of the parameters (a
+  [`ParamsTables`](@ref), the tables included) giving its Gershgorin bound (a bound that is not
+  finite at the parameters makes the term unseen), and `ratio` its face-wise ratio θ to the
+  kept term, `max|m K|` of the term over the smallest `m K` kept (R2-M1; NaN when the kept
+  multiplier is not bounded below by a positive value, `nothing` when no interval bounds it):
+  with `L_out ≼ θ L_kept` the correction contracts by θ at any step size, so when the row's θ
+  sum is at most 1/2 the term counts in the Newton count only, not in the substeps;
+- `facemax`: for a field row with diffusion, a function of the parameters giving the largest
+  face coefficient per axis (`Σ max|m| max|K| / h_a²`, NaN when not finite), or `nothing`: it
+  bounds the part of a Robin face with a negative diagonal left out of the operator (R2-S1).
 """
 struct RowOperator
     key::String
@@ -45,7 +62,13 @@ struct RowOperator
     inexact::Vector{String}
     iterate::Bool
     switch::Bool
+    adv::Vector{Coef}
+    cross::Vector{Tuple{String, Coef, String}}
+    unseen::Vector{String}
+    bounds::Vector{Tuple{Any, String, Any}}
+    facemax::Any
 end
+
 
 """
     OperatorSpec
@@ -101,4 +124,46 @@ function growth(op::OperatorSpec, keys, p)
         g = max(g, _coefsum(r.jloc, p))
     end
     return g
+end
+
+"""
+    inexact_bounds(op, keys, cyclic, p) -> (; ρ, κ, θ, unseen)
+
+The bounds of the terms outside the operator `op` of the rows `keys` at raw parameters `p`
+(F3 design §3.4, §3.6): the largest bound `ρ` (`ρ_adv`) of a row's advection terms and the
+diffusion terms out of a scaled row's operator (`bounds`, read with the tables when `p` is a
+[`ParamsTables`](@ref)) whose face-wise ratio sum to the kept term is unknown or above 1/2,
+the largest such ratio sum `θ` of a row where it is at most 1/2 (those terms then contract by
+`θ` at any step size and add nothing to `ρ`, R2-M1), the largest in-group cross
+sum `κ` (`κ_in`) when the rows read one another in a cycle (`cyclic`), and the terms no bound
+sees (`unseen`, in the user's words; an unknown cross coefficient in a cycle counts).
+"""
+function inexact_bounds(op::OperatorSpec, keys, cyclic::Bool, p)
+    ρ, κ, θ = 0.0, 0.0, 0.0
+    unseen = String[]
+    for r in op.rows
+        r.key in keys || continue
+        q = sum((abs(_coefsum(Coef[c], p)) for c in r.adv); init = 0.0)
+        ts = [g === nothing ? NaN : Float64(g(p)) for (_, _, g) in r.bounds]
+        tr = sum(ts; init = 0.0)
+        if !isempty(ts) && isfinite(tr) && tr <= 0.5
+            θ = max(θ, tr)
+        else
+            for (f, text, _) in r.bounds
+                v = f(p)
+                isfinite(v) ? (q += v) : push!(unseen, text)
+            end
+        end
+        ρ = max(ρ, q)
+        append!(unseen, r.unseen)
+        cyclic || continue
+        k = 0.0
+        for (o, c, text) in r.cross
+            o == "" || o in keys || continue
+            v = isnan(c.value) ? NaN : abs(_coefsum(Coef[c], p))
+            isfinite(v) ? (k += v) : push!(unseen, text)
+        end
+        κ = max(κ, k)
+    end
+    return (; ρ, κ, θ, unseen)
 end

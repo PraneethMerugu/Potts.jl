@@ -1020,7 +1020,7 @@ function Base.setproperty!(i::FieldIntegrator, f::Symbol, v)
 end
 # (`setfield!`: the `substeps` property above would write the first count into every group)
 function _set_counts!(i::FieldIntegrator, ms)
-    foreach((rt, m) -> rt.n = m, i.runtimes, ms)
+    foreach((rt, m) -> (rt.n = m; _count_set!(rt.cache, rt)), i.runtimes, ms)
     setfield!(i, :substeps, first(ms))
     return nothing
 end
@@ -1095,8 +1095,9 @@ function SII.finalize_parameters_hook!(integ::FieldIntegrator, _)
         _rerun_init!(integ, integ.p)                  # init kernels read the parameters too
         foreach(install_launches!, integ.runtimes, launches)    # (and `reset!`)
         integ.aux === nothing || (integ.aux = _bind_aux(integ.prob, integ.store, integ.p))
-        _set_counts!(integ, ms)
+        # (the bound parameters first: a new count sets an implicit group's step from them)
         copyto!(integ.pgood, integ.p)
+        _set_counts!(integ, ms)
     catch
         copyto!(integ.p, integ.pgood)
         _rerun_init!(integ, integ.pgood)

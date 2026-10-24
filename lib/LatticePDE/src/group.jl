@@ -4,7 +4,8 @@
 # the stability bound and the texts of the terms the bound does not see.
 
 """
-    lower_group(pdesys, disc; fields = nothing, values = true, bound = true) -> GroupSpec
+    lower_group(pdesys, disc; fields = nothing, values = true, bound = true, filled = (),
+                explicit_route = "`ExplicitEuler`") -> GroupSpec
 
 The field group of the state variables `fields` of `pdesys` (all of them by default),
 lowered on the lattice `disc` to its [`GroupSpec`](@ref LatticeFields.Problems.GroupSpec):
@@ -33,9 +34,12 @@ the input keys in `filled` are written by the front end at every step (Potts' CP
 is a [`DeferredBound`](@ref), and [`resolve_bound`](@ref) builds it when the group is first
 stepped (a front end that lowers a group to check it, before any problem exists, does not pay
 for the bound).
+
+**Routes.** `explicit_route` is the front end's spelling of the explicit algorithm, which an
+implicit refusal names (a hexagonal lattice has no implicit solve yet, F3-20).
 """
 lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = nothing, values::Bool = true, bound::Bool = true,
-    filled = ()) = _lower_group(sys, disc; fields, values, bound, filled).spec
+    filled = (), explicit_route = "`ExplicitEuler`") = _lower_group(sys, disc; fields, values, bound, filled, explicit_route).spec
 
 """
     DeferredBound
@@ -70,7 +74,7 @@ end
 # parameter object, with its own computed parameters), so the system's computed defaults are
 # not read (`_fold_computed`) and its tables not checked (`_check_tables`)
 function _lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = nothing, values::Bool = true, bound::Bool = true,
-        filled = ())
+        filled = (), explicit_route = "`ExplicitEuler`")
     _check_parts(sys)
     check_one_kind(sys)                                 # (the whole system, before any cut)
     derived, computed, defaults = Pair[], Pair[], Pair[]
@@ -88,7 +92,7 @@ function _lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = noth
         params = _param_slots(cf, defaults, values), tables = _table_specs(cf, values),
         inputs = _input_specs(cf, sys, s, filled),
         terms = stab isa StabilityBound ? copy(stab.terms) : String[], linearity = cf.linearity,
-        operator = hasmap ? nothing : DeferredOperator(cf, sys, disc))
+        operator = hasmap ? nothing : DeferredOperator(cf, sys, disc; route = explicit_route))
     return (; spec, cf, sys, derived, computed, defaults)
 end
 
