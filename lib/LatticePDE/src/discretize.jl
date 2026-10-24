@@ -167,8 +167,9 @@ end
 # values as one vector: the promotion of Float64 with each value's type (an integer is a Float64)
 _promoted(vs) = (T = mapreduce(typeof, promote_type, vs; init = Float64); T.(vs))
 
-# a face or mask value: a number, a parameter, or a number times a parameter
-function _coef(v, params, scale = 1.0)
+# a face or mask value: a number, a parameter, or a number times a parameter (else `nothing`
+# with `strict = false`: a value field, F3-07)
+function _coef(v, params, scale = 1.0; strict::Bool = true)
     u = unwrap(v)
     c = _cval(u)
     c !== nothing && return Coef(Float64(c) * scale + 0.0)          # no -0.0 in the printed rule
@@ -176,10 +177,21 @@ function _coef(v, params, scale = 1.0)
     if iscall(u) && operation(u) === (*)
         a = arguments(u)
         k = findfirst(y -> haskey(params, unwrap(y)), a)
-        rest = _cval(prod(a[setdiff(eachindex(a), [k])]))
+        rest = k === nothing ? nothing : _cval(prod(a[setdiff(eachindex(a), [k])]))
         k !== nothing && rest !== nothing && return Coef(Float64(rest) * scale, Int32(params[unwrap(a[k])]))
     end
+    strict || return nothing
     _dverr("the boundary value `$v` must be a number, a parameter, or a number times a parameter")
+end
+# A face value or a masked value that is an expression (F3-07): of the time, the coordinates,
+# the parameters and the inputs, never of a field of the state (the condition would be another
+# equation). It is lowered into a value field the kernels read (`FaceRule.gfield`,
+# `NodeValueRule.vfield`).
+function _value_reads_state(v, eq, states, what)
+    _reads(v, states) && _dverr(string("`", eq, "`: the ", what, " `", v, "` reads a field of the state; a ", what,
+        " may read the time, the coordinates, the parameters and the inputs (a condition that reads the field ",
+        "itself is a Robin condition `α c + β ∂c/∂n = g`, with α and β numbers or parameters)"))
+    return nothing
 end
 
 # whether the site is in the irregular domain (its Bool input, field id `dom`)
@@ -413,7 +425,23 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
             val(c) = c.param == 0 ? c.value : c.value * defaults[c.param]     # parameter defaults bind here
             degenerate(val(α), val(β)) &&
                 _dverr("`$(bc.eq)`: α/2 + β/h = 0 on this face leaves the ghost value undefined")
-            rule!(pb, FaceRule(f, Int8(d), Int8(s), α, β, _coef(bc.value, params)))
+            g = _coef(bc.value, params; strict = false)
+            if g === nothing
+                # a value of the time, the coordinates, parameters or inputs: a value field,
+                # computed at each site by a kernel at the step's time (the boundary sites read it)
+                _value_reads_state(bc.value, bc.eq, [o for o in allops if !isin[o]], "face value")
+                gk = string("face:", k, ":", d, s > 0 ? "+" : "-")
+                gf = field!(pb, gk; storage = fids[op][2], role = :aux)
+                kb = kernel(pb)
+                e = env(false, kb)
+                # the face's own coordinate where the condition pins it
+                gx = substitute(bc.value, Dict(ivs[d + 1] => ends[d + 1][s > 0 ? 2 : 1]); fold = Val(false))
+                store!(kb, gf, fids[op][2], _real(e, lower(gx, e)))
+                add!(pb, kb, gk)
+                rule!(pb, FaceRule(f, Int8(d), Int8(s), α, β, Coef(1.0), gf))
+            else
+                rule!(pb, FaceRule(f, Int8(d), Int8(s), α, β, g))
+            end
         end
     end
     for b in bcs
@@ -422,15 +450,30 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         isin[b.op] && _dverr("`$(b.eq)`: an input cannot carry a condition")
         mf = field!(pb, "mask:$k"; storage = U8, role = :aux, epoch = PERSIGMA)
         push!(pb.masks, MaskDecl("mask:$k", mf, PERSIGMA))
+        mv = _coef(b.value, params; strict = false)
+        vf = Int32(0)
+        if mv === nothing
+            # a value of the time, the coordinates, parameters or inputs: a value field, which
+            # the mask's kernel computes with the mask (each masked site takes its own value)
+            _value_reads_state(b.value, b.eq, [o for o in allops if !isin[o]], "masked value")
+            vf = field!(pb, "maskvalue:$k"; storage = fids[b.op][2], role = :aux, epoch = PERSIGMA)
+        end
         kb = kernel(pb)
         pred = _bool(env(false, kb), lower(b.pred, env(false, kb)))
         dom == 0 || (pred = node!(kb, AND, BOOL, Int32[pred, _indomain(kb, dom, N)]))   # the field lives in the domain
         store!(kb, mf, U8, cast!(kb, pred, U8))
+        if mv === nothing
+            store!(kb, vf, fids[b.op][2], _real(env(false, kb), lower(b.value, env(false, kb))))
+            mv = Coef(1.0)
+        end
         add!(pb, kb, "mask:$k")
-        rule!(pb, NodeValueRule(fids[b.op][1][max(b.comp, 1)], Int32(length(pb.masks)), _coef(b.value, params), :harmonic))
+        rule!(pb, NodeValueRule(fids[b.op][1][max(b.comp, 1)], Int32(length(pb.masks)), mv, :harmonic, vf))
     end
     lin = Dict{String, Vector{Pair{Any, Symbol}}}()
     states = [op for op in Base.keys(dvs) if !isin[op]]
+    # the unknown fields of the linearity table: an array field by its components
+    staterefs = Any[r for op in states for r in (SymbolicUtils.symtype(dvs[op]) <: AbstractArray ?
+                                                 [_Comp(op, i) for i in eachindex(fids[op][1])] : [op])]
     for k in sort!(collect(Base.keys(eqs)))
         kind, op, comp, rhs = eqs[k]
         f, lane = fids[op][1][max(comp, 1)], fids[op][2]
@@ -438,7 +481,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         e = env(kind == :map, kb)
         r = lower(rhs, e)
         if kind == :rate
-            lin[k] = linearity(rhs, dvs[op], states; inputs = [o for o in Base.keys(dvs) if isin[o]],
+            lin[k] = linearity(rhs, comp == 0 ? dvs[op] : _Comp(op, comp), staterefs; inputs = [o for o in Base.keys(dvs) if isin[o]],
                                aux = unique([v[2] for v in values(eqs) if v[1] == :aux]))
             # with a domain the field lives in it: a site outside keeps its value
             if update === nothing

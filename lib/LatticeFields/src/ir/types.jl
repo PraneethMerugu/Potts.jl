@@ -215,6 +215,9 @@ Coef(v::Real) = Coef(Float64(v), Int32(0))
 """
 `α c + β ∂c/∂n = g` on the face (`axis`, `side = ±1`) of a cell-centered field. Dirichlet:
 α = 1, β = 0. No flux: α = 0, β = 1, g = 0. `β` is in lattice units (the front end divides by h).
+`gfield` (0: none) is a field holding the value at each boundary site (a value that reads the
+time, the coordinates or an input, F3-07): then `g` is that field's value times the
+coefficient `g` (a kernel of the program computes the field at the step's time).
 """
 struct FaceRule <: BRule
     field::Int32
@@ -223,7 +226,9 @@ struct FaceRule <: BRule
     alpha::Coef
     beta::Coef
     g::Coef
+    gfield::Int32
 end
+FaceRule(field, axis, side, alpha::Coef, beta::Coef, g::Coef) = FaceRule(field, axis, side, alpha, beta, g, Int32(0))
 
 """Relative tolerance of the degenerate-face test: `|α/2 + β| ≤ tol (|α|/2 + |β|)`."""
 const FACE_RTOL = 1e-6
@@ -255,14 +260,19 @@ struct ImmersedRule <: BRule
     kind::Symbol
 end
 """
-Masked node value: stores at masked sites write `value` (identity row).
+Masked node value: stores at masked sites write `value` (identity row). `vfield` (0: none) is
+a field holding the value at each site (a value that reads the time, the coordinates or an
+input, F3-07): the value is then that field's value times the coefficient `value` (the mask's
+kernel computes the field with the mask).
 """
 struct NodeValueRule <: BRule
     field::Int32
     mask::Int32
     value::Coef
     face::Symbol                     # :harmonic | :active
+    vfield::Int32
 end
+NodeValueRule(field, mask, value::Coef, face::Symbol) = NodeValueRule(field, mask, value, face, Int32(0))
 
 struct Program{N}
     hierarchy::Vector{Level{N}}

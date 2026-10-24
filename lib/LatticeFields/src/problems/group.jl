@@ -93,7 +93,10 @@ The description of one field group, the same for both front ends (F2 design §2.
 - `stability`: the front end's stability bound (a function of the raw parameters);
 - `texts`: `route`, how to give a count in this front end, and `terms`, the terms the bound
   does not see in the user's words;
-- `linearity`: the front end's linearity classes, carried for operator extraction (F3).
+- `linearity`: the front end's linearity classes, carried for operator extraction (F3);
+- `operator`: the front end's builder of the group's [`OperatorSpec`](@ref) for the implicit
+  algorithms (`operator_spec(spec)` builds it once, at the first implicit use; `nothing`: the
+  front end extracts no operator, and an implicit algorithm is refused).
 """
 struct GroupSpec{N}
     rate::Program{N}
@@ -108,15 +111,16 @@ struct GroupSpec{N}
     stability::Any
     texts::@NamedTuple{route::String, terms::Vector{String}}
     linearity::Any
+    operator::Any
 end
 function GroupSpec(rate::Program{N}; state, external = String[], params = String[], tables = String[],
         inputs = String[], init = String[], kind::Symbol, clock = nothing, stability = p -> NaN,
-        route = "ExplicitEuler(; dt, substeps = n)", terms = String[], linearity = nothing) where {N}
+        route = "ExplicitEuler(; dt, substeps = n)", terms = String[], linearity = nothing, operator = nothing) where {N}
     kind in (:rate, :map) || throw(ArgumentError("kind must be :rate or :map; got $(repr(kind))"))
     return GroupSpec{N}(rate, collect(String, state), collect(String, external), ParamSlot[ParamSlot(q) for q in params],
         TableSpec[TableSpec(q) for q in tables], InputSpec[InputSpec(q) for q in inputs], collect(String, init), kind,
         clock === nothing ? nothing : Float64(clock), stability, (; route = String(route), terms = collect(String, terms)),
-        linearity)
+        linearity, operator)
 end
 
 """
@@ -563,6 +567,7 @@ Base.@kwdef mutable struct StatusTotals
     window::Int64 = 0
     cause::UInt32 = 0
     warned::Bool = false
+    clamped::Bool = false               # the shift clamp's warning was given (S2)
     windows::Int64 = 0                  # the windows advanced since the bind or `clear_status!`
     t1::Float64 = NaN                   # … the start time of the first of them
     where::Any = nothing                # a front end's `(window, t1) -> text` for messages, or nothing
@@ -655,7 +660,9 @@ function bind_group(g::FieldGroup, alg, st::FieldStore, p; fields = g.spec.state
     copies = Tuple((st.bufs[f][1], st.bufs[f][2]) for f in swaps)
     stab = all_state ? g.spec.stability : restrict_bound(g.spec.stability, collect(String, fields))
     return GroupRuntime(st, alg, ip, sp, steps, masks, clamps, stepclamps, swaps, copies, ends_in, all_state, collect(String, fields), Int(n),
-        Float64(dt), stab, p, c, prog, backend, alg_cache(alg, g, st), SciMLBase.ReturnCode.Success, nothing, host,
+        Float64(dt), stab, p, c, prog, backend,
+        bind_cache(alg, g, st, p; fields = collect(String, fields), n, dt, c, backend, options, V), SciMLBase.ReturnCode.Success,
+        nothing, host,
         StatusTotals())
 end
 
@@ -741,12 +748,7 @@ function advance!(rt::GroupRuntime, clock::Tuple{Real, Integer}, n::Integer = rt
         # clamp the sites they mark themselves (one launch, `_mask_fuse`), so none is left here
         _clamp!(rt.stepclamps, rt.store, rt.p)
     end
-    # a group with no state: its aux kernels once (no slot to swap)
-    n == 0 && rt.steps[_parity(rt)]((t, h, k))
-    for j in 0:(n - 1)
-        rt.steps[_parity(rt)]((t + j * h, h, k))
-        _swap!(st.cur, rt.swaps)
-    end
+    _substeps!(rt.cache, rt, t, h, k, n)
     rt.ends_in === :slot1 && _slot1!(rt.copies, st.cur, rt.swaps, 1)
     code = step_retcode!(rt.cache, rt)
     rt.status = _worse(rt.status, code)      # (sticky: the worst so far, until `clear_status!`)
@@ -792,6 +794,17 @@ function _add_counts!(acc, d)
     acc.newton_budget += d[4]
     return nothing
 end
+@noinline function _clamp_warn(@nospecialize(rt), h)
+    tot = rt.totals
+    tot.clamped = true
+    s = length(rt.keys) == 1 ? "" : "s"
+    w = length(h) >= 9 && h[9] != 0 ? Int(h[9]) : tot.windows
+    @warn string("field", s, " ", join(("`$k`" for k in rt.keys), ", "), ": the implicit shift was clamped in ",
+        window_text(rt, max(w, 1)), " (a local growth `∂f/∂c` above `1/(2h)` that the substep count did not see), so ",
+        "its one Newton step is not the Backward Euler step; a larger `newton = k` checks the step at every substep, or ",
+        "more substeps (`substeps = n`) keep the growth below the shift")
+    return nothing
+end
 # the warnings of a read (cold: once per runtime and run); a function barrier, compiled once
 # for every runtime type
 @noinline function _status_warn(@nospecialize(rt), window, cause, code)
@@ -833,6 +846,17 @@ end
 _rank(c::SciMLBase.ReturnCode.T) = c == SciMLBase.ReturnCode.Success ? 0 : c == SciMLBase.ReturnCode.StalledSuccess ? 1 : 2
 _worse(a::SciMLBase.ReturnCode.T, b::SciMLBase.ReturnCode.T) = _rank(b) > _rank(a) ? b : a
 
+# the substeps of a window: the explicit step launches, one per substep (a group with no state:
+# its aux kernels once, no slot to swap); an implicit cache runs its own (implicit.jl)
+function _substeps!(::Any, rt::GroupRuntime, t::Float64, h::Float64, k::Int, n::Integer)
+    st = rt.store
+    n == 0 && rt.steps[_parity(rt)]((t, h, k))
+    for j in 0:(n - 1)
+        rt.steps[_parity(rt)]((t + j * h, h, k))
+        _swap!(st.cur, rt.swaps)
+    end
+    return nothing
+end
 _swap!(cur, swaps) = (foreach(f -> cur[f] = 3 - cur[f], swaps); nothing)
 _slot1!(::Tuple{}, cur, swaps, i) = nothing
 function _slot1!(copies::Tuple, cur, swaps, i)
@@ -868,8 +892,11 @@ end
 # The masked fields of program `prog` among the field ids `ids` on store `st`, as a tuple (one
 # entry per `NodeValueRule`: the field's buffers, its id, its mask array and the value), so the
 # clamp is type-stable and allocation-free on the host (the store's own arrays are untyped)
+# (a rule whose value is a field, `vfield`, carries that field's array: each masked site takes
+# its own value, F3-07)
 function _clamps(prog::Program, st::FieldStore, ids = Set(eachindex(prog.fields)))
-    return Tuple((Tuple(st.bufs[r.field]), Int(r.field), array(st, prog.masks[r.mask].field, :cur), r.value)
+    return Tuple((Tuple(st.bufs[r.field]), Int(r.field), array(st, prog.masks[r.mask].field, :cur), r.value,
+                  r.vfield == 0 ? nothing : array(st, r.vfield, :cur))
                  for r in prog.rules if r isa NodeValueRule && r.field in ids)
 end
 function _clamp!(clamps::Tuple, st::FieldStore, p)
@@ -878,10 +905,14 @@ function _clamp!(clamps::Tuple, st::FieldStore, p)
     end
     return nothing
 end
-function _clamp_one!((bufs, id, m, c), st::FieldStore, p)
+function _clamp_one!((bufs, id, m, c, vf), st::FieldStore, p)
     u = length(bufs) == 1 ? bufs[1] : bufs[st.cur[id]]
     v = convert(eltype(u), c.param == 0 ? c.value : c.value * p[c.param])
-    KA.get_backend(u) isa KA.CPU ? _clamp_host!(u, m, v) : _clamp_device!(u, m, v)
+    if vf === nothing
+        KA.get_backend(u) isa KA.CPU ? _clamp_host!(u, m, v) : _clamp_device!(u, m, v)
+    else
+        KA.get_backend(u) isa KA.CPU ? _clamp_host!(u, m, v, vf) : _clamp_device!(u, m, v, vf)
+    end
     return nothing
 end
 function _clamp_host!(u, m, v)                        # host: a loop, no allocation
@@ -889,6 +920,15 @@ function _clamp_host!(u, m, v)                        # host: a loop, no allocat
     length(u) % n == 0 || throw(DimensionMismatch("a masked field has $(length(u)) values for $n mask sites"))
     for j in 0:(div(length(u), n) - 1), i in 1:n
         m[i] != 0 && (u[j * n + i] = v)
+    end
+    return nothing
+end
+# a value field: each masked site takes `v` times its own value (one value per site)
+function _clamp_host!(u, m, v, vf)
+    n = length(m)
+    length(u) % n == 0 && length(vf) == n || throw(DimensionMismatch("a masked field has $(length(u)) values for $n mask sites"))
+    for j in 0:(div(length(u), n) - 1), i in 1:n
+        m[i] != 0 && (u[j * n + i] = v * vf[i])
     end
     return nothing
 end
@@ -936,6 +976,7 @@ function _clamp_site!(lane, vals, i)
 end
 # The masked-field rules of the group's fields `ids` (the order of `_clamps`), with the mask
 # launch of plan `ip` that writes each one's mask (0: none)
+# (a rule with a value field is not fused: its clamp reads the value field, a kernel of its own)
 function _mask_rules(prog::Program, ip::StepPlan, ids)
     rs = [r for r in prog.rules if r isa NodeValueRule && r.field in ids]
     return [(r, something(findfirst(l -> prog.masks[r.mask].field in writes(l.kernel.kernel), ip.launches), 0)) for r in rs]
@@ -946,7 +987,7 @@ function _fused_rules(prog::Program, ip::StepPlan, st::FieldStore, ids)
     rl = _mask_rules(prog, ip, ids)
     out = Int[]
     for (li, l) in enumerate(ip.launches)
-        js = [j for (j, (_, w)) in enumerate(rl) if w == li]
+        js = [j for (j, (r, w)) in enumerate(rl) if w == li && r.vfield == 0]
         isempty(js) && continue
         m1 = array(st, prog.masks[rl[js[1]][1].mask].field, :cur)
         prod(leveldims(prog, l.kernel.space.level)) == length(m1) || continue
@@ -959,7 +1000,7 @@ end
 # that writes fused masks, at the slots `cur` and the masked values at parameters `p`
 function _mask_fuse(prog::Program, st::FieldStore, p, ids)
     return function (l, cur)
-        rs = [r for r in prog.rules if r isa NodeValueRule && r.field in ids &&
+        rs = [r for r in prog.rules if r isa NodeValueRule && r.field in ids && r.vfield == 0 &&
                                        prog.masks[r.mask].field in writes(l.kernel.kernel)]
         isempty(rs) && return nothing
         m1 = array(st, prog.masks[rs[1].mask].field, :cur)
@@ -987,6 +1028,19 @@ function _clamp_device!(u, m, v)
     Exec.launch!(KA.get_backend(u), _clamp_body!, length(u), (u, m, v, length(m)))
     return nothing
 end
+function _clamp_field_body!(i, u, m, v, vf, n)
+    j = (i - 1) % n + 1
+    @inbounds if m[j] != 0                          # i ≤ length(u), and j ≤ n = length(m) = length(vf)
+        u[i] = v * vf[j]
+    end
+    return nothing
+end
+function _clamp_device!(u, m, v, vf)
+    length(u) % length(m) == 0 && length(vf) == length(m) ||
+        throw(DimensionMismatch("a masked field has $(length(u)) values for $(length(m)) mask sites"))
+    Exec.launch!(KA.get_backend(u), _clamp_field_body!, length(u), (u, m, v, vf, length(m)))
+    return nothing
+end
 
 """
     compile!(backend, rt::GroupRuntime)
@@ -1001,10 +1055,11 @@ function compile!(backend, rt::GroupRuntime)
     # clamps and the copies as compile jobs
     jobs = Any[x.launch for x in rt.steps[1].launches]
     rt.masks === nothing || append!(jobs, Any[x.launch for x in rt.masks[1].launches])
-    for (bufs, _, m, c) in rt.stepclamps
+    for (bufs, _, m, c, vf) in rt.stepclamps
         u = bufs[1]
         v = convert(eltype(u), c.param == 0 ? c.value : c.value * rt.p[c.param])
-        push!(jobs, () -> Exec.compile!(backend, _clamp_body!, (u, m, v, length(m))))
+        push!(jobs, vf === nothing ? () -> Exec.compile!(backend, _clamp_body!, (u, m, v, length(m))) :
+                    () -> Exec.compile!(backend, _clamp_field_body!, (u, m, v, vf, length(m))))
     end
     for (d, s) in rt.copies
         push!(jobs, () -> Exec.compile!(backend, _copy_body!, (d, s)))

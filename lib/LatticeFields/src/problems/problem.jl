@@ -400,7 +400,7 @@ function _bound_inputs(i::FieldIntegrator; set = nothing)
 end
 # the warning's once-key: the program (its printed text, hashed) and the value-free reason
 _warn_key(prob::FieldProblem, why) = string(hash(sprint(print_program, prob.program)); base = 16) * "|" * string(why)
-function substeps(prob::FieldProblem, alg::ExplicitEuler, p = prob.p; tables = prob.tables,
+function substeps(prob::FieldProblem, alg::Union{ExplicitEuler, ImplicitAlgorithm}, p = prob.p; tables = prob.tables,
         inputs = _bound_inputs(prob), stability = prob.stability)
     dt = _window(alg, _clock(prob))
     isempty(prob.state) && return 0                 # aux fields only: one evaluation per window
@@ -551,8 +551,11 @@ function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; saveat = (),
     # one group steps in alternating slots; several end each step in slot 1, so the next
     # group reads current values
     ends_in = length(groups) == 1 ? :parity : :slot1
-    rts = Tuple(bind_group(prob.group, a, st, pgood; fields = ks, n = m, dt, c = zero(E), ends_in,
-                    backend = prob.backend, options = prob.options, V = valtype(E))
+    # (`groups` holds abstract `FieldAlgorithm`s: through the barrier each group binds at its
+    # own algorithm's type, and inference of an explicit `init` does not walk `bind_cache`'s
+    # implicit method, the operator build and the solver; F3 review round 2)
+    rts = Tuple(Base.inferencebarrier(bind_group)(prob.group, a, st, pgood; fields = ks, n = m, dt,
+                    c = zero(E), ends_in, backend = prob.backend, options = prob.options, V = valtype(E))
                 for ((a, ks), m) in zip(groups, ms))
     foreach(clamp_now!, rts)                        # the saved t0 state holds the mask values
     foreach(rt -> compile!(prob.backend, rt), rts)
@@ -617,8 +620,9 @@ step's start and the masked values at the sites they mark, when the problem has 
 conditions, then its substeps, alternating the slot parity). With a clock (`clock = τ` on the
 discretization), the step index `k` that `step_index(t)` reads is the number of clock
 boundaries reached since the start of the time span, kept as an integer. A group's return
-code other than `ReturnCode.Success` becomes `integ.retcode`, and the later groups do not
-run; `solve!` stops on it. On the host the groups' status words are read after the step
+code other than `ReturnCode.Success` becomes `integ.retcode`; a failure (a code other than
+`StalledSuccess`) also stops the step, so the later groups do not run, and `solve!` stops on
+it. On the host the groups' status words are read after the step
 ([`check_status!`](@ref)): a `ConvergenceFailure` stops the run, a `StalledSuccess` is kept as
 the code and the run goes on. On a device they are read at the saves and at the end.
 """
@@ -642,10 +646,12 @@ _check_all(rts::Tuple, code) = _check_all(Base.tail(rts), _worse(code, check_sta
 # a run goes on while its code is `Success` or `StalledSuccess` (a rounding floor, accepted)
 _running(c::SciMLBase.ReturnCode.T) = c == SciMLBase.ReturnCode.Success || c == SciMLBase.ReturnCode.StalledSuccess
 _advance_all(::Tuple{}, clock) = SciMLBase.ReturnCode.Success
+# the groups in order; a failing group stops the step (the later groups do not run), a
+# `StalledSuccess` (a rounding floor, accepted) does not: the step returns the worst code
 function _advance_all(rts::Tuple, clock)
     code = advance!(first(rts), clock)
-    code == SciMLBase.ReturnCode.Success || return code
-    return _advance_all(Base.tail(rts), clock)
+    _running(code) || return code
+    return _worse(code, _advance_all(Base.tail(rts), clock))
 end
 
 """
@@ -1061,8 +1067,15 @@ substep_counts(s::FieldSolution) = copy(s.counts)
 # a warning (once per program, group and term) with an explicit one. A bound that does not know
 # the cross terms (`lagged_coupling` returns `nothing`) is the same as an unseen term for every
 # group. Maps step as the user wrote them: not checked.
-function _check_coupling(prob::FieldProblem, groups, p; tables = prob.tables, inputs = _bound_inputs(prob), dt::Real)
+# One group (or a map) returns before any work; the check itself is behind a barrier, so a
+# one-group `init` does not compile it.
+function _check_coupling(prob::FieldProblem, groups, p; tables = prob.tables, inputs = nothing, dt::Real)
     length(groups) > 1 && prob.kind != :map || return nothing
+    ins = inputs === nothing ? _bound_inputs(prob) : inputs
+    return Base.inferencebarrier(_check_coupling_loops)(prob, groups, p, tables, ins, dt)
+end
+
+function _check_coupling_loops(prob::FieldProblem, groups, p, tables, inputs, dt::Real)
     pp = with_tables(map(primal, p), tables; inputs)
     # the one coupling rule of both front ends (F3-01), in front end B's words
     return check_coupling(prob.stability, [collect(String, ks) for (_, ks) in groups], [_explicit_count(a) for (a, _) in groups],

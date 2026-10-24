@@ -270,7 +270,7 @@ end
 const _MAXWHY = 4
 const _MAXIND = 6
 const _MAXEVALS = 4096
-const _PLAIN = (+, -, *, /, ^, inv, abs, sqrt, cbrt, exp, log, sin, cos, tan, tanh, min, max)
+const _PLAIN = (+, -, *, /, ^, inv, abs, sqrt, cbrt, exp, log, sin, cos, tan, tanh, min, max, identity)   # (`identity`: an irrational, `identity(Const(π))`)
 _plainop(f) = any(g -> f === g, _PLAIN)
 function _coef_bound(x, params, tabs = Dict{Any, String}(), ivars = ())
     u0 = unwrap(x)
@@ -691,10 +691,11 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
         end
     end
     stateops = unique([_opof(v) for v in values(dvs)])
+    staterefs = unique([_ref(v) for v in values(dvs)])          # (an array field by its components)
     others = [v for v in unwrap.(sys.dvs) if !any(o -> isequal(o, _opof(v)), stateops)]
     inputops = unique([_opof(v) for v in others if ModelingToolkitBase.isinput(v)])
     auxops = unique([_opof(v) for v in others if !ModelingToolkitBase.isinput(v)])   # `K ~ expr` fields
-    unknownops = [stateops; auxops]
+    unknownops = [staterefs; auxops]
     rows = Vector{RowTerms}[]
     faces, unbounded, terms, expanded = Vector{Tuple{Int, Coef, Coef}}[], String[], String[], String[]
     crossunseen = String[]
@@ -717,7 +718,7 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
         # those of `b` (each choice checked on its own: a decaying arm never certifies a
         # rotation in the other)
         function add!(alts, term, class, depth)
-            fs = [kk for (kk, v) in dvs if _reads(term, (_opof(v),))]
+            fs = [kk for (kk, v) in dvs if _reads(term, (_ref(v),))]
             if class == :Diffusion
                 c = _coef_bound(_diffusion_coefficient(term), params, tabs, ivars)
                 c === nothing && return false
@@ -732,7 +733,7 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
             elseif class == :LinearLocal || class == :CrossLinear
                 length(fs) == 1 || return false
                 if class == :CrossLinear &&
-                   _linclass(unwrap(term), _opof(dvs[fs[1]]), stateops, inputops) == :Diffusion
+                   _linclass(unwrap(term), _ref(dvs[fs[1]]), staterefs, inputops) == :Diffusion
                     j = findfirst(==(fs[1]), ks)
                     c = j === nothing ? nothing : _coef_bound(_diffusion_coefficient(term), params, tabs, ivars)
                     c === nothing && return false
@@ -757,7 +758,7 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
                 for arm in arguments(u)[2:3]
                     branch = map(copy, alts)
                     # classified as the rate's own terms: a term reading an aux field is Other
-                    for (t2, c2) in linearity(arm, _opof(dvs[k]), unknownops; inputs = inputops, aux = auxops)
+                    for (t2, c2) in linearity(arm, _ref(dvs[k]), unknownops; inputs = inputops, aux = auxops)
                         add!(branch, t2, c2, depth + 1) || return false
                     end
                     append!(out, branch)
@@ -778,7 +779,7 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
                 push!(unbounded, k); push!(terms, "$k: $(term)")
                 # an unseen term that reads another unknown field (a state of another row, or
                 # any aux field, which may carry any state) can couple field groups
-                own = _opof(dvs[k])
+                own = _ref(dvs[k])
                 _reads(term, [op for op in unknownops if !isequal(op, own)]) && push!(crossunseen, k)
             end
         end
@@ -1033,11 +1034,13 @@ end
 # a `"key: term"` entry of the bound as the user wrote it: the term, a field read `c(t, x, y)`
 # as `c`, and the field whose rate holds it
 # a coefficient as the user wrote it: a field read `c(t, x, y)` as `c`
-_coef_text(t::AbstractString) = _clocktext(replace(t, r"(\w+)\(t(, \w+)*\)" => s"\1", "LatticePDE." => ""))
+_coef_text(t::AbstractString) = _clocktext(_comptext(replace(t, r"(\w+)\(t(, \w+)*\)" => s"\1", "LatticePDE." => "")))
+# a component read `(u(t, x, y))[1]` (once `u(t, x, y)` is `u`) as the user writes it: `u[1]`
+_comptext(t) = replace(t, r"\((\w+)\)\[" => s"\1[")
 function _term_text(t::AbstractString)
     i = findfirst(": ", t)
     i === nothing && return "`$t`"
-    term = _clocktext(replace(t[(last(i) + 1):end], r"(\w+)\(t(, \w+)*\)" => s"\1"))
+    term = _clocktext(_comptext(replace(t[(last(i) + 1):end], r"(\w+)\(t(, \w+)*\)" => s"\1")))
     return "`$term` (in the rate of `$(t[1:(first(i) - 1)])`)"
 end
 

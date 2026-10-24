@@ -135,10 +135,21 @@ function _ne0!(b, x)
     node!(b, NOT, BOOL, Int32[compare!(b, EQ, x, constant!(b, 0.0, b.nodes[x].type))])
 end
 
+# a rule's value: its coefficient, times the value field at access `at` when it has one (a
+# face or mask value that reads the time, the coordinates or an input, F3-07)
+function _rulevalue!(b, p::Program{N}, c::Coef, vf::Integer, at::Access{N}) where {N}
+    vf == 0 && return _coef!(b, c)
+    a = Access{N}(Int32(vf), 0, Sel(Int16(1)), at.offset, at.level, all(iszero, at.offset.a) ? INSIDE : CLAMP)
+    v = cast!(b, _loadacc!(b, p, a), REAL)
+    c.param == 0 && c.value == 1 && return v
+    return arith!(b, MUL, _coef!(b, c), v)
+end
+
 """
-Ghost value of `center` across the face (`axis`, `side`) of field `f`, from its rule.
+Ghost value of `center` across the face (`axis`, `side`) of field `f`, from its rule; `at` is
+the access of the boundary site (where a value field is read).
 """
-function _ghost!(b, p::Program, f, axis, side, center)
+function _ghost!(b, p::Program, f, axis, side, center, at)
     k = findfirst(r -> r isa FaceRule && r.field == f && r.axis == axis && r.side == side, p.rules)
     k === nothing &&
         irerror("field `", p.fields[f].key, "` has no boundary rule on axis ", axis,
@@ -148,17 +159,18 @@ function _ghost!(b, p::Program, f, axis, side, center)
     α.value == 0 && β.value == 0 &&
         irerror("field `", p.fields[f].key, "`: face rule on axis ",
             axis, " has α = β = 0")
+    g() = _rulevalue!(b, p, r.g, r.gfield, at)
     if α.param == 0 && β.param == 0 && β.value == 0       # Dirichlet: ghost = (2/α) g − c
-        return arith!(b, ADD, arith!(b, MUL, constant!(b, 2 / α.value), _coef!(b, r.g)),
+        return arith!(b, ADD, arith!(b, MUL, constant!(b, 2 / α.value), g()),
             arith!(b, NEG, center))
     elseif α.param == 0 && α.value == 0                   # flux: ghost = c + g/β
-        r.g.param == 0 && r.g.value == 0 && return center
-        return arith!(b, ADD, center, arith!(b, DIV, _coef!(b, r.g), _coef!(b, β)))
+        r.gfield == 0 && r.g.param == 0 && r.g.value == 0 && return center
+        return arith!(b, ADD, center, arith!(b, DIV, g(), _coef!(b, β)))
     end                                                   # Robin: (g − (α/2 − β) c)/(α/2 + β)
     h = arith!(b, MUL, constant!(b, 0.5), _coef!(b, α))
     num = arith!(b,
         ADD,
-        _coef!(b, r.g),
+        g(),
         arith!(b, NEG,
             arith!(b, MUL, arith!(b, ADD, h, arith!(b, NEG, _coef!(b, β))), center)))
     return arith!(b, DIV, num, arith!(b, ADD, h, _coef!(b, β)))
@@ -180,7 +192,7 @@ function _resolve!(b, p::Program{N}, a::Access{N}, axes) where {N}
     inner = _resolve!(b, p, a, axes[2:end])
     c0 = ntuple(e -> e == d ? Int16(0) : off[e], N)
     center = _resolve!(b, p, _with(a, c0, a.policy), axes[2:end])
-    ghost = _ghost!(b, p, a.field, d, sign(off[d]), center)
+    ghost = _ghost!(b, p, a.field, d, sign(off[d]), center, _with(a, c0, CLAMP))
     dacc = _with(a, ntuple(e -> e == d ? off[d] : Int16(0), N), INSIDE)
     return select!(b, _inside!(b, dacc), inner, ghost)
 end
@@ -242,7 +254,7 @@ function _node_values(p::Program{N}, k::Kernel{N}) where {N}
                 r.field == s.access.field || continue
                 ma = Access{N}(p.masks[r.mask].field, 0, Sel(Int16(1)),
                     Sel(ntuple(_ -> Int16(0), N)), 0, INSIDE)
-                v = select!(b, _ne0!(b, _loadacc!(b, p, ma)), _coef!(b, r.value), v)
+                v = select!(b, _ne0!(b, _loadacc!(b, p, ma)), _rulevalue!(b, p, r.value, r.vfield, ma), v)
             end
             return v
         end)

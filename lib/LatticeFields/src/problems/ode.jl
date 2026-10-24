@@ -445,3 +445,17 @@ function SII.setp(sys::Union{FieldProblem, FieldIntegrator, LatticeSciMLProblem}
     check_setp(sys, sym)
     return invoke(SII.setp, Tuple{Any, Any}, sys, sym; kw...)
 end
+
+# A field solver or a linear solver given to an `ODEProblem` (the `:ode` path): the route to
+# an OrdinaryDiffEq solver, or to the owned problem that the field solvers step
+function _ode_refusal(alg)
+    name = alg isa LinearSolver ? string("`", repr(alg), "` is a linear solver, the `inner` of an implicit field solver") :
+           string("`", _algtext(alg), "` is a field solver: it steps a `FieldProblem`")
+    own = alg isa LinearSolver ? string("`solve(prob, BackwardEuler(; dt, inner = ", repr(alg), "))`") :
+          string("`solve(prob, ", _algtext(alg), ")`")
+    return ArgumentError(string("`solve`/`init` of an `ODEProblem`: ", name, ". An `ODEProblem` takes an OrdinaryDiffEq ",
+        "solver (`ImplicitEuler()` is Backward Euler); or discretize with `LatticeDiscretization(…; problem = :owned)` ",
+        "and give ", own))
+end
+CommonSolve.solve(::SciMLBase.AbstractODEProblem, alg::Union{FieldAlgorithm, LinearSolver}; kw...) = throw(_ode_refusal(alg))
+CommonSolve.init(::SciMLBase.AbstractODEProblem, alg::Union{FieldAlgorithm, LinearSolver}; kw...) = throw(_ode_refusal(alg))

@@ -5,21 +5,29 @@
 """
     V(nu1, nu2)
 
-A V-cycle with `nu1` pre- and `nu2` post-smoothing Chebyshev steps; both must be ≥ 1.
+A V-cycle with `nu1` pre- and `nu2` post-smoothing Chebyshev steps, integers ≥ 1. A
+`Multigrid`'s `cycle` also takes the pair `(nu1, nu2)`, which is how it prints.
 """
 struct V
     nu1::Int
     nu2::Int
     function V(nu1::Integer, nu2::Integer)
-        (nu1 >= 1 && nu2 >= 1) || throw(ArgumentError(string("`V(", nu1, ", ", nu2,
+        (nu1 >= 1 && nu2 >= 1 && !(nu1 isa Bool) && !(nu2 isa Bool)) || throw(ArgumentError(string("`V(", nu1, ", ", nu2,
             ")`: a V-cycle (the `cycle` of a `Multigrid`) needs ν₁, ν₂ ≥ 1 smoothing steps, pre and post; ",
             "for example `V(2, 2)`")))
         return new(nu1, nu2)
     end
 end
+V(nu1, nu2) = throw(ArgumentError(string("`V(", repr(nu1), ", ", repr(nu2), ")`: a V-cycle's smoothing steps ν₁, ν₂ ",
+    "(pre and post) are integers ≥ 1; for example `V(2, 2)`")))
 
-_positive(x) = x isa Real && isfinite(x) && x > 0
-_count(x) = x isa Integer && x >= 1
+_positive(x) = x isa Real && !(x isa Bool) && isfinite(x) && x > 0
+_count(x) = x isa Integer && !(x isa Bool) && x >= 1
+# a `cycle` keyword: a `V`, or the pair `(ν₁, ν₂)`
+_cycle(c::V) = c
+_cycle(c::Tuple{Any, Any}) = V(c...)
+_cycle(c) = throw(ArgumentError(string("`Multigrid(; cycle = ", repr(c), ")`: `cycle` is the V-cycle's smoothing ",
+    "steps, `(ν₁, ν₂)` or `V(ν₁, ν₂)` (integers ≥ 1); for example `cycle = (2, 2)`")))
 
 """
     Multigrid(; cycle = V(2, 2), cycles = nothing, rtol = 1e-6, budget = nothing, warn_tol)
@@ -27,8 +35,8 @@ _count(x) = x isa Integer && x >= 1
 Stationary multigrid. `cycles = k` runs exactly k cycles (no early exit; the sentinel warns
 above `warn_tol`, default 1e-3); otherwise cycles stop on device when
 `‖r‖∞ ≤ rtol·max(‖b‖∞, floor)`, within `budget` (default 8, 12 on a masked group).
-`cycles` and `budget` are integers ≥ 1 (or left out), `rtol` and `warn_tol` finite and > 0;
-any other value is an `ArgumentError` naming the keyword.
+`cycle` is `(ν₁, ν₂)` or `V(ν₁, ν₂)`, `cycles` and `budget` are integers ≥ 1 (or left out),
+`rtol` and `warn_tol` finite and > 0; any other value is an `ArgumentError` naming the keyword.
 """
 struct Multigrid
     cycle::V
@@ -48,9 +56,9 @@ struct Multigrid
             budget === nothing ? nothing : Int(budget), Float64(warn_tol))
     end
 end
-function Multigrid(; cycle::V = V(2, 2), cycles = nothing, rtol = 1e-6, budget = nothing,
+function Multigrid(; cycle = V(2, 2), cycles = nothing, rtol = 1e-6, budget = nothing,
         warn_tol = cycles === nothing ? rtol : 1e-3)
-    Multigrid(cycle, cycles, rtol, budget, warn_tol)
+    Multigrid(_cycle(cycle), cycles, rtol, budget, warn_tol)
 end
 
 """
@@ -73,10 +81,16 @@ struct DevicePCG
         return new(precond, Int(budget), Float64(rtol))
     end
 end
-DevicePCG(; precond::Multigrid = Multigrid(), budget = 8, rtol = 1e-6) = DevicePCG(precond, budget, rtol)
+function DevicePCG(; precond = Multigrid(), budget = 8, rtol = 1e-6)
+    precond isa Multigrid || throw(ArgumentError(string("`DevicePCG(; precond = ", repr(precond), ")`: `precond` is ",
+        "the preconditioner's cycle, a `Multigrid(…)` (for example `Multigrid(; cycle = (3, 3))`)")))
+    return DevicePCG(precond, budget, rtol)
+end
 
 # Keyword display (no module path; only the keywords that differ from their defaults), so a
-# message that quotes a solver reads as the user wrote it. `canonical` is the hashed text.
+# message that quotes a solver reads as the user wrote it, and the text runs where the solvers
+# are bound (`using Potts` or `using LatticePDE`: a cycle prints as the pair `(ν₁, ν₂)`).
+# `canonical` is the hashed text.
 Base.show(io::IO, v::V) = print(io, "V(", v.nu1, ", ", v.nu2, ")")
 function _show_kw(io::IO, name, kws)
     print(io, name, "(")
@@ -85,7 +99,7 @@ function _show_kw(io::IO, name, kws)
 end
 function Base.show(io::IO, m::Multigrid)
     kws = Pair{Symbol, Any}[]
-    m.cycle.nu1 == 2 && m.cycle.nu2 == 2 || push!(kws, :cycle => m.cycle)
+    m.cycle.nu1 == 2 && m.cycle.nu2 == 2 || push!(kws, :cycle => (m.cycle.nu1, m.cycle.nu2))
     m.cycles === nothing || push!(kws, :cycles => m.cycles)
     m.rtol == 1e-6 || push!(kws, :rtol => m.rtol)
     m.budget === nothing || push!(kws, :budget => m.budget)
@@ -112,10 +126,10 @@ function resolve_inner(op::CellOperator, inner)
     if inner isa DevicePCG
         c = inner.precond
         c.cycle.nu1 == c.cycle.nu2 ||
-            _refuse(op, "`DevicePCG` needs a symmetric preconditioner `V(ν, ν)`; got `V(",
-                c.cycle.nu1, ", ", c.cycle.nu2, ")`: use `DevicePCG(; precond = Multigrid(; cycle = V(",
+            _refuse(op, "`DevicePCG` needs a symmetric preconditioner cycle `(ν, ν)`; got `(",
+                c.cycle.nu1, ", ", c.cycle.nu2, ")`: use `DevicePCG(; precond = Multigrid(; cycle = (",
                 max(c.cycle.nu1, c.cycle.nu2), ", ", max(c.cycle.nu1, c.cycle.nu2),
-                ")))`, or the stationary `Multigrid(; cycle = V(", c.cycle.nu1, ", ", c.cycle.nu2, "))`")
+                ")))`, or the stationary `Multigrid(; cycle = (", c.cycle.nu1, ", ", c.cycle.nu2, "))`")
         c.cycles === nothing || c.cycles == 1 ||
             _refuse(op, "`DevicePCG` applies one preconditioner cycle per iteration; got `cycles = ",
                 c.cycles, "` in its `precond`: drop `cycles`, or use the stationary `Multigrid(; cycles = ",
@@ -202,13 +216,17 @@ lds_regions(exec) = 1
 """
 A solve plan: segments of launches (setup, then one per cycle or iteration), the
 two-buffer slots after each segment, and per segment the epilogue run after it when it is
-the last segment that ran (bound to that segment's slots).
+the last segment that ran (bound to that segment's slots). `stop[k]`: the host executor may
+stop after segment `k` when the solve is done (its slots are the last segment's, so the held
+plans see one rotation however many iterations ran).
 """
 struct SolvePlan
     segments::Vector{Vector{Any}}
     slots::Vector{Dict{Int32, Int}}
     epilogue::Vector{Vector{Any}}
+    stop::Vector{Bool}
 end
+SolvePlan(segments, slots, epilogue) = SolvePlan(segments, slots, epilogue, [s == slots[end] for s in slots])
 nlaunches(sp::SolvePlan, seg) = length(sp.segments[seg])
 
 mutable struct FieldSolver{N, E}
@@ -817,6 +835,8 @@ function solve_plan(sv::FieldSolver, budget::Int)
         end
         gen!(pl, "pcg.true")
         fin!(pl, SETUP)
+        # (a segment of its own: a solve converged at its setup stops before the first cycle)
+        segment!(pl)
         vcycle!(pl, ν; zero_fine = true, rz = true)
         fin!(pl, FIN_RZ)
         for _ in 1:budget
@@ -873,14 +893,23 @@ end
 
 """
 Run plan `sp`; with `host = true` read the `done` flag after every segment and stop when it
-is set (a declared host pass). Returns the number of segments run.
+is set (a declared host pass). On a host executor (`host_scalars`) the device mode stops there
+too, after the segments whose slots are the plan's last (`sp.stop`): its scalars are host
+memory, so the read is free (R1 of the F3-06 review: a solve that is done, at its setup or
+after an iteration, skips the gated launches that would follow, about 4.9 ms of a
+0-iteration solve at 256² on 8 threads); the result is the same, every later launch being
+gated off, and the solve ends in the plan's last rotation. Returns the number of segments run.
 """
 function run!(sv::FieldSolver, sp::SolvePlan; host::Bool = false)
-    scal = host ? sv.tables[tid(sv, "solve.scal")] : nothing   # device mode reads nothing
+    scal = sv.tables[tid(sv, "solve.scal")]
+    free = host_scalars(sv.exec, scal)           # a plain read: no sync, no copy
     nseg = length(sp.segments)
     for (k, seg) in enumerate(sp.segments)
         _run_seg!(sv, seg)
-        if host && k < nseg && fetch(sv.exec, scal)[DONE] != 0
+        k < nseg || break
+        if free
+            @inbounds sp.stop[k] && _isdone(scal) && (nseg = k; break)     # (k ≤ nseg = length(sp.stop))
+        elseif host && fetch(sv.exec, scal)[DONE] != 0
             nseg = k
             break
         end
@@ -889,6 +918,16 @@ function run!(sv::FieldSolver, sp::SolvePlan; host::Bool = false)
     merge!(sv.slot, sp.slots[nseg])
     return nseg
 end
+"""
+    host_scalars(exec, scal) -> Bool
+
+Whether the solver's scalars `scal` are host memory that the driver reads for free (the host
+executors: a plain `Array`), so `run!` stops at `done` with no sync.
+"""
+host_scalars(exec, scal) = false
+# (a function barrier: `scal` is untyped in the solver's tables)
+_isdone(scal::Array) = @inbounds scal[DONE] != 0          # DONE ≤ SCALARS = length(scal)
+host_scalars(b::KA.Backend, scal) = Exec.ishost(b) && scal isa Array
 # The launches of a plan are untyped (`Vector{Any}`): the dynamic call takes the solver (a heap
 # object), not its executor, which an isbits executor would box (16 B per launch).
 _launch!(sv::FieldSolver, l::Launch) = launch!(sv.exec, l)

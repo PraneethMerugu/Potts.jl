@@ -246,7 +246,7 @@ end
     op = CellOperator((16, 16); shift = 0.1, mask = "in.mask", NM...)
     for (e, want) in (
         (msg(() -> FieldSolver(HostExec(), op; inner = DevicePCG(; precond = Multigrid(; cycle = V(2, 1))))),
-            "`DevicePCG` needs a symmetric preconditioner `V(ν, ν)`; got `V(2, 1)`"),
+            "`DevicePCG` needs a symmetric preconditioner cycle `(ν, ν)`; got `(2, 1)`: use `DevicePCG(; precond = Multigrid(; cycle = (2, 2)))`"),
         (msg(() -> FieldSolver(HostExec(), op; inner = DevicePCG(; precond = Multigrid(; cycles = 2)))),
             "applies one preconditioner cycle per iteration"),
         (msg(() -> FieldSolver(HostExec(), op; inner = :pcg)), "`inner` takes `:auto`, a `DevicePCG(…)` or a `Multigrid(…)`; got :pcg"),
@@ -332,11 +332,43 @@ end
     @test DevicePCG(; budget = 1, rtol = 1e-12).budget == 1 && Multigrid(; cycle = V(1, 1), cycles = 1, budget = 1).cycles == 1
     @test repr(DevicePCG()) == "DevicePCG()" && repr(Multigrid()) == "Multigrid()" && repr(V(2, 3)) == "V(2, 3)"
     @test repr(DevicePCG(; precond = Multigrid(; cycle = V(3, 3)), budget = 12)) ==
-          "DevicePCG(; precond = Multigrid(; cycle = V(3, 3)), budget = 12)"
+          "DevicePCG(; precond = Multigrid(; cycle = (3, 3)), budget = 12)"
     @test repr(Multigrid(; cycles = 3, rtol = 1e-8)) == "Multigrid(; cycles = 3, rtol = 1.0e-8)"
     @test repr(Multigrid(; warn_tol = 0.5)) == "Multigrid(; warn_tol = 0.5)"
     # the display round-trips, and `canonical` (the hashed text) is unchanged
     for s in (DevicePCG(; precond = Multigrid(; cycle = V(3, 3)), budget = 12), Multigrid(; cycles = 3, rtol = 1e-8))
         @test eval(Meta.parse(repr(s))) == s
     end
+end
+
+# F3-06 review nits (batch 2): a cycle prints as the pair `(ν₁, ν₂)`, so the display runs where
+# only `DevicePCG` and `Multigrid` are bound (`V` is public, not exported); a `V` of non-integers,
+# a `cycle` that is not a cycle, a `precond` that is not a `Multigrid` and a `Bool` count each get
+# a message naming the keyword and a working value. Base (437a84ef, ~/lpwork/f3b3-nc-nits.log):
+# `repr` prints `cycle = V(3, 3)` (an `UndefVarError` where `V` is not bound); `V(2.0, 2)` and
+# `Multigrid(; cycle = (2, 2))` are MethodErrors; `precond = :mg` builds; `budget = true` builds.
+@testset "inner solver keywords: cycles, preconditioners and Bool counts" begin
+    e(f) = try
+        f(); ""
+    catch err
+        err isa ArgumentError ? err.msg : sprint(showerror, err)
+    end
+    m = Module()
+    Core.eval(m, :(using LatticeFields.Solvers: DevicePCG, Multigrid))    # no `V` in scope
+    s = DevicePCG(; precond = Multigrid(; cycle = V(3, 3)), budget = 12)
+    @test Core.eval(m, Meta.parse(repr(s))) == s
+    @test Multigrid(; cycle = (3, 1)) == Multigrid(; cycle = V(3, 1))
+    for (f, want) in (
+        (() -> V(2.0, 2), "`V(2.0, 2)`: a V-cycle's smoothing steps ν₁, ν₂ (pre and post) are integers ≥ 1; for example `V(2, 2)`"),
+        (() -> V(true, 2), "`V(true, 2)`: a V-cycle (the `cycle` of a `Multigrid`) needs ν₁, ν₂ ≥ 1"),
+        (() -> Multigrid(; cycle = :w), "`Multigrid(; cycle = :w)`: `cycle` is the V-cycle's smoothing steps, `(ν₁, ν₂)` or `V(ν₁, ν₂)`"),
+        (() -> Multigrid(; cycle = (2, 0)), "`V(2, 0)`: a V-cycle"),
+        (() -> DevicePCG(; precond = :mg), "`DevicePCG(; precond = :mg)`: `precond` is the preconditioner's cycle, a `Multigrid(…)`"),
+        (() -> DevicePCG(; budget = true), "`DevicePCG(; budget = true)`: `budget` is the most CG iterations per solve, an integer ≥ 1"),
+        (() -> Multigrid(; cycles = true), "`Multigrid(; cycles = true)`: `cycles`"),
+        (() -> Multigrid(; budget = false), "`Multigrid(; budget = false)`: `budget`"))
+        @test startswith(e(f), want) || (println("MSG: ", e(f)); false)
+    end
+    # the values the messages name build
+    @test DevicePCG(; precond = Multigrid(; cycle = (3, 3))).precond.cycle == V(3, 3)
 end

@@ -62,7 +62,8 @@ function resolve_bound(spec::Problems.GroupSpec)
     d isa DeferredBound || return spec
     stab = stability_bound(d.cf, d.sys)
     return Problems.GroupSpec(spec.rate; spec.state, spec.external, spec.params, spec.tables, spec.inputs, spec.init,
-        spec.kind, spec.clock, stability = stab, route = spec.texts.route, terms = copy(stab.terms), spec.linearity)
+        spec.kind, spec.clock, stability = stab, route = spec.texts.route, terms = copy(stab.terms), spec.linearity,
+        spec.operator)
 end
 
 # `values = false`: the front end binds the parameter and table values itself (Potts: its
@@ -86,7 +87,8 @@ function _lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = noth
         init = [k.key for k in s.kernels if startswith(k.key, "mask:")], stability = stab,
         params = _param_slots(cf, defaults, values), tables = _table_specs(cf, values),
         inputs = _input_specs(cf, sys, s, filled),
-        terms = stab isa StabilityBound ? copy(stab.terms) : String[], linearity = cf.linearity)
+        terms = stab isa StabilityBound ? copy(stab.terms) : String[], linearity = cf.linearity,
+        operator = hasmap ? nothing : DeferredOperator(cf, sys, disc))
     return (; spec, cf, sys, derived, computed, defaults)
 end
 

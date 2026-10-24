@@ -92,10 +92,10 @@ end
 
 _perm(keys) = (p = sortperm(keys); inv = similar(p); inv[p] = 1:length(p); (p, inv))
 
-_rulemap(r::FaceRule, fm, mm) = FaceRule(fm(r.field), r.axis, r.side, r.alpha, r.beta, r.g)
+_rulemap(r::FaceRule, fm, mm) = FaceRule(fm(r.field), r.axis, r.side, r.alpha, r.beta, r.g, fm(r.gfield))
 _rulemap(r::DomainEdgeRule, fm, mm) = DomainEdgeRule(fm(r.field), r.kind)
 _rulemap(r::ImmersedRule, fm, mm) = ImmersedRule(fm(r.field), mm(r.mask), r.kind)
-_rulemap(r::NodeValueRule, fm, mm) = NodeValueRule(fm(r.field), mm(r.mask), r.value, r.face)
+_rulemap(r::NodeValueRule, fm, mm) = NodeValueRule(fm(r.field), mm(r.mask), r.value, r.face, fm(r.vfield))
 
 """
 Sort fields, masks, tables, rules and kernels by key and rebuild every kernel canonically.

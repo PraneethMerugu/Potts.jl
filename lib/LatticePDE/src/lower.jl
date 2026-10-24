@@ -210,13 +210,14 @@ const _OPS = (+, -, *, /, ^, min, max, ifelse, !=, !, &, |)
 Whether the lattice lowering takes a call of `f` inside a term: arithmetic (`+ - * / ^`,
 `min`, `max`), comparisons and logic (`== != < <= > >= ! & |`), `ifelse`, `sqrt`, `exp`,
 `log`, `abs` and the calls of the IR (`sin`, `cos`, `tan`, `tanh`, `sinh`, `cosh`, `cbrt`,
-`exp2`, `log2`, `log10`, `expm1`, `log1p`, `atan`, `floor`, `ceil`, `round`). It is the one
+`exp2`, `log2`, `log10`, `expm1`, `log1p`, `atan`, `floor`, `ceil`, `round`), and `identity`
+(SymbolicUtils keeps `π` and `ℯ` as `identity(π)`). It is the one
 allowlist of both front ends (F2 design §2.11): a front end that converts its own terms (Potts
 `@equations`) asks it, so a call lowers in one front end exactly when it lowers in the other.
 The operators (`Δ`, `DivKGrad`, `Advect`, `Differential`), the reads (`at`, `ismember`) and
 the field reads are terms of their own, not calls in this sense.
 """
-lowers_call(f) = any(g -> g === f, _OPS) || any(r -> r[1] === f, _CMP) || any(r -> r[1] === f, _UNARY) ||
+lowers_call(f) = f === identity || any(g -> g === f, _OPS) || any(r -> r[1] === f, _CMP) || any(r -> r[1] === f, _UNARY) ||
                  (f isa Function && nameof(f) in CALLS)
 
 """
@@ -243,6 +244,8 @@ function lower(x, e::Env{N}) where {N}
     end
     f, a = operation(u), arguments(u)
     _isfield(e, u) && return _load(e, u, 0)
+    # an irrational kept symbolically (`identity(Const(π))`, SymbolicUtils 4): its value
+    f === identity && length(a) == 1 && return lower(a[1], e)
     if f === getindex
         b = unwrap(a[1])
         _isfield(e, b) && return _load(e, b, Int(unwrap_const(a[2])))

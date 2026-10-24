@@ -37,7 +37,7 @@ struct ExplicitEuler <: FieldAlgorithm
             throw(ArgumentError("ExplicitEuler: dt = $(repr(dt)) must be finite and > 0"))
         substeps isa Integer && substeps == 0 && throw(ArgumentError(
             "ExplicitEuler: `substeps = 0` is not a count; leave `substeps` out for the automatic count"))
-        substeps === nothing || (substeps isa Integer && substeps >= 1) ||
+        substeps === nothing || (substeps isa Integer && !(substeps isa Bool) && substeps >= 1) ||
             throw(ArgumentError("ExplicitEuler: substeps = $(repr(substeps)) must be an integer ≥ 1 (or left out: automatic)"))
         lower === nothing || lower isa Real && isfinite(lower) ||
             throw(ArgumentError("ExplicitEuler: lower = $(repr(lower)) must be a finite number (a clip at ±Inf or NaN " *
@@ -50,12 +50,99 @@ function ExplicitEuler(; dt = nothing, substeps = nothing, lower = nothing, kw..
     isempty(kw) || throw(ArgumentError(string("ExplicitEuler: ",
         haskey(kw, :inner) ? string("`inner = ", repr(kw[:inner]), "`: `inner` is a keyword of the implicit field ",
                                    "solvers (the linear solver of each implicit step), and `ExplicitEuler` solves no ",
-                                   "linear system; leave `inner` out") :
+                                   "linear system; give it to an implicit field solver, `BackwardEuler(; inner = ",
+                                   repr(kw[:inner]), ")`, or leave `inner` out") :
         string("no keyword ", join(("`$k`" for k in keys(kw)), ", "), "; its keywords are `dt`, `substeps` and `lower`"))))
     return ExplicitEuler(dt, substeps, lower)
 end
 # the state buffers a step of the algorithm needs per field (`c`, `c__next`)
 nbuffers(::ExplicitEuler) = 2
+
+"""
+The implicit field algorithms (F3 design §3.2): each substep solves the Newton form
+`(I/(γh) − J̃) δ = G(u_k)` with a linear solver (`inner`), `G` the group's rate program as a
+residual and `J̃` the symmetric operator its front end extracts (`OperatorSpec`).
+"""
+abstract type ImplicitAlgorithm <: FieldAlgorithm end
+
+"""
+    BackwardEuler(; dt = nothing, substeps = nothing, newton = nothing, lower = nothing,
+                    inner = :auto, solver_T = :auto)
+
+Backward Euler: each window `dt` runs `n` substeps of `h = dt / n`, each solving
+`(u − uⁿ)/h = r(u)` at the substep's end time `tⁿ⁺¹` (the rate, the face values and the inputs
+are read there) by Newton iterations on the form `(I/h − J̃) δ = G(u_k)`, `G(u_k) = (uⁿ − u_k)/h +
+r(u_k)`, `J̃` the group's operator (diffusion faces, linear local terms, face and mask
+conditions; a front end extracts it: `OperatorSpec`), each a linear solve with `inner`, and
+`u_{k+1} = u_k + δ`. An operator that reads the time is built at each substep's end time. One
+type for both front ends (Potts and LatticePDE export this binding). A hexagonal lattice has
+no implicit solve yet (the solver's operator has no hexagonal faces): step it with
+[`ExplicitEuler`](@ref).
+
+- `dt`: the window, as for [`ExplicitEuler`](@ref) (required on a `FieldProblem` without a
+  clock; left out in a `PottsProblem`, whose window is the MCS).
+- `substeps`: `nothing` is automatic: 1, raised only where the operator needs it (a positive
+  local derivative `g` the operator sees takes `n ≥ ⌈2 dt g⌉`, so the operator's shift stays
+  ≥ half its `1/h` part; the terms out of the operator, with their bound `ρ_in`, take
+  `n ≥ ⌈2 dt ρ_in⌉`, so their correction contracts by `≤ 1/2` per iteration); `n ≥ 1` is a
+  minimum.
+- `newton`: the Newton iterations per substep; `nothing` is automatic: 1 when the operator is
+  exact (one solve is the Backward Euler step of a linear rate), 2 with a switch
+  `max(c − c_T, 0)` (a flip pass: the second iteration takes the switch state at the first's
+  result; it is no convergence test, so it counts no budget hit), more when a term stays out
+  of the operator (a defect correction, `OperatorSpec`: advection, a cycle among the group's
+  fields, a Robin face whose diagonal is negative, a second face coefficient of a scaled row),
+  enough for the bound of those terms, 4 when no bound sees one. Under the automatic count a
+  host (CPU) executor stops a substep's iterations once every row meets the Newton tolerance,
+  while a device runs all of them, so CPU and GPU results agree to that tolerance, not
+  bitwise. `k ≥ 1` runs exactly `k`.
+- `lower`: the clip `max(v, lower)` after each substep (a positivity route; Backward Euler
+  keeps nonnegative data nonnegative on M-matrix rows, so it is rarely needed).
+- `inner`: the linear solver: `:auto` (`DevicePCG()` with one V(2,2) cycle, budget 8), a
+  `DevicePCG(…)` or a `Multigrid(…)`.
+- `solver_T`: the solver's number type, `:auto` (the state's), `Float32` or `Float64`.
+
+Every value is checked here; a wrong one is an `ArgumentError` naming the keyword.
+"""
+struct BackwardEuler <: ImplicitAlgorithm
+    dt::Union{Nothing, Float64}
+    substeps::Union{Nothing, Int}
+    newton::Union{Nothing, Int}
+    lower::Union{Nothing, Float64}
+    inner::Any
+    solver_T::Any
+    function BackwardEuler(dt, substeps, newton, lower, inner, solver_T)
+        w = "BackwardEuler"
+        dt === nothing || (dt isa Real && !(dt isa Bool) && isfinite(dt) && dt > 0) ||
+            throw(ArgumentError("$w: dt = $(repr(dt)) must be finite and > 0"))
+        substeps isa Integer && !(substeps isa Bool) && substeps == 0 && throw(ArgumentError(
+            "$w: `substeps = 0` is not a count; leave `substeps` out for the automatic count"))
+        substeps === nothing || (substeps isa Integer && !(substeps isa Bool) && substeps >= 1) ||
+            throw(ArgumentError("$w: substeps = $(repr(substeps)) must be an integer ≥ 1 (or left out: automatic)"))
+        newton === nothing || (newton isa Integer && !(newton isa Bool) && newton >= 1) ||
+            throw(ArgumentError("$w: newton = $(repr(newton)) is the Newton iterations per substep, an integer ≥ 1 " *
+                                "(or left out: automatic)"))
+        lower === nothing || lower isa Real && !(lower isa Bool) && isfinite(lower) ||
+            throw(ArgumentError("$w: lower = $(repr(lower)) must be a finite number (a clip at ±Inf or NaN " *
+                                "clips nothing or every value; leave `lower` out for no clip)"))
+        inner === :auto || inner isa Solvers.DevicePCG || inner isa Solvers.Multigrid ||
+            throw(ArgumentError("$w: `inner` takes `:auto`, a `DevicePCG(…)` or a `Multigrid(…)` (the linear solver of " *
+                                "each implicit step); got $(repr(inner))"))
+        solver_T === :auto || solver_T === Float32 || solver_T === Float64 || throw(ArgumentError(string(w,
+            ": `solver_T` takes `:auto` (the state's number type), `Float32` or `Float64`; got ", repr(solver_T),
+            solver_T isa Type && !(solver_T <: AbstractFloat && isbitstype(solver_T)) ? "" :
+            solver_T isa Type ? " (a Dual or BigFloat implicit solve is planned after the paper, FE-26)" : "")))
+        return new(dt === nothing ? nothing : Float64(dt), substeps === nothing ? nothing : Int(substeps),
+            newton === nothing ? nothing : Int(newton), lower === nothing ? nothing : Float64(lower), inner, solver_T)
+    end
+end
+function BackwardEuler(; dt = nothing, substeps = nothing, newton = nothing, lower = nothing, inner = :auto,
+        solver_T = :auto, kw...)
+    isempty(kw) || throw(ArgumentError(string("BackwardEuler: no keyword ", join(("`$k`" for k in keys(kw)), ", "),
+        "; its keywords are `dt`, `substeps`, `newton`, `lower`, `inner` and `solver_T`")))
+    return BackwardEuler(dt, substeps, newton, lower, inner, solver_T)
+end
+nbuffers(::BackwardEuler) = 2
 
 """
     ExplicitMap()
@@ -110,6 +197,9 @@ share them (`ExplicitEuler(; dt = 0.1)` and `ExplicitEuler(; dt = 0.2, substeps 
 """
 update_key(a::ExplicitEuler) = a.lower === nothing ? :euler : (:euler, a.lower)
 update_key(::ExplicitMap) = :map
+# an implicit group's store holds the arrays of the explicit program (the same fields, rules and
+# kernels), and its own residual and operator programs alias them (`implicit.jl`)
+update_key(::ImplicitAlgorithm) = :euler
 
 """
     update_rule(alg) -> rule or nothing
@@ -122,6 +212,7 @@ stores its values itself).
 """
 update_rule(a::ExplicitEuler) = EulerRule(a.lower)
 update_rule(::ExplicitMap) = nothing
+update_rule(::ImplicitAlgorithm) = EulerRule(nothing)
 struct EulerRule
     lower::Union{Nothing, Float64}
 end
@@ -179,9 +270,9 @@ const LinearSolver = Union{Solvers.DevicePCG, Solvers.Multigrid}
 The refusal of a linear solver `s` given where a field algorithm goes (`what` names the
 place), with `route` the working spelling. Both front ends and `init` use it.
 """
-linear_solver_refusal(what, s, route) = ArgumentError(string(what, ": `", repr(s), "` is a linear solver: it is ",
-    "the `inner` of an implicit field solver, not a field solver; no implicit field solver is in this version, so step ",
-    "the field with an explicit field algorithm: give ", route))
+linear_solver_refusal(what, s, route; implicit = "`BackwardEuler(; inner = $(repr(s)))`") = ArgumentError(string(what,
+    ": `", repr(s), "` is a linear solver: it is the `inner` of an implicit field solver, not a field solver; give it to ",
+    "one, ", implicit, ", or step the field with an explicit field algorithm: give ", route))
 
 """
     FieldGroups(field => alg, …; default = nothing)
@@ -271,4 +362,11 @@ function _algtext(a::ExplicitEuler)
     kw = [string(k, " = ", getfield(a, k)) for k in (:dt, :substeps, :lower) if getfield(a, k) !== nothing]
     return isempty(kw) ? "ExplicitEuler()" : string("ExplicitEuler(; ", join(kw, ", "), ")")
 end
+function _algtext(a::BackwardEuler)
+    kw = [string(k, " = ", repr(getfield(a, k))) for k in (:dt, :substeps, :newton, :lower) if getfield(a, k) !== nothing]
+    a.inner === :auto || push!(kw, string("inner = ", repr(a.inner)))
+    a.solver_T === :auto || push!(kw, string("solver_T = ", a.solver_T))
+    return isempty(kw) ? "BackwardEuler()" : string("BackwardEuler(; ", join(kw, ", "), ")")
+end
+Base.show(io::IO, a::Union{ExplicitEuler, BackwardEuler}) = print(io, _algtext(a))
 _algtext(a) = repr(a)

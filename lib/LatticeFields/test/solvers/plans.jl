@@ -140,7 +140,10 @@ end
           nlaunches(solve_plan(sv, 2), 2) ==
           nlaunches(solve_plan(case_solver(per, Float32; deflate = false), 2), 2)
     sv = case_solver(named_case("sphere42", 0.022), Float32)
-    @test nlaunches(solve_plan(sv, 2), 2) == 15        # V 11 + K1, α, K2 (true residual), finish
+    # (segment 1: the setup; 2: the first V-cycle, its own segment since F3-07, so a solve done
+    # at its setup stops before it on the host; 3: the first iteration)
+    @test nlaunches(solve_plan(sv, 2), 2) == 12        # V 11 + finish
+    @test nlaunches(solve_plan(sv, 2), 3) == 15        # V 11 + K1, α, K2 (true residual), finish
 end
 
 @testset "Float32 launches: no Float64 in any device code (Metal)" begin

@@ -11,6 +11,7 @@ function print_rule(io::IO, p::Program, r::FaceRule)
     print(io, "rule face ", p.fields[r.field].key, " axis=",
         r.axis, " side=", r.side > 0 ? "+" : "-",
         " alpha=", _fmt(r.alpha), " beta=", _fmt(r.beta), " g=", _fmt(r.g))
+    r.gfield == 0 || print(io, " gfield=", p.fields[r.gfield].key)      # (printed only when set)
 end
 function print_rule(io::IO, p::Program, r::DomainEdgeRule)
     print(io, "rule domain_edge ",
@@ -23,6 +24,7 @@ end
 function print_rule(io::IO, p::Program, r::NodeValueRule)
     print(io, "rule node_value ", p.fields[r.field].key,
         " mask=", p.masks[r.mask].key, " value=", _fmt(r.value), " face=", r.face)
+    r.vfield == 0 || print(io, " vfield=", p.fields[r.vfield].key)      # (printed only when set)
 end
 
 """

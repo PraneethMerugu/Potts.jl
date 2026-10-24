@@ -70,3 +70,87 @@ function _fused_store(b::KernelBuilder, s::Store, v, rule, dom::Bool)
     inside == 0 || (u = select!(b, inside, u, c))
     return isfloat(lane) ? cast!(b, u, REAL) : u
 end
+
+"""
+    fuse_residual(rate::Program, rule) -> Program
+
+The residual program of an implicit stepper (F3 design §3.2, §3.4): the fields of
+`fuse_update(rate, …)` in the same order and at the same ids (the state fields with two
+buffers, no scratch `∂c`), so a runtime's store of the stepped program serves it, followed by
+one residual field `res:c` and one history field `c__n` (a one-buffer input: the state at the
+substep's start, `uⁿ`) per rate field `c`, in the order of the `rate:c` kernels. Each `rate:c`
+kernel stores `rule(kb, c, r, cn)` into `res:c` (`c` the load of the field, the iterate `u_k`;
+`r` the rate; `cn` the load of `c__n`; IR handles), and nothing into `c`: the state is read,
+never written. With an irregular domain a site outside stores 0. The other kernels and the
+rules pass through, renumbered (as `fuse_update`).
+"""
+function fuse_residual(p::Program{N}, rule) where {N}
+    keys = [f.key for f in p.fields]
+    step = Dict{Int32, Int32}()                     # ∂c → c
+    order = String[]
+    for k in p.kernels
+        startswith(k.key, "rate:") || continue
+        c = k.key[(ncodeunits("rate:") + 1):end]
+        s = findfirst(==("∂" * c), keys)
+        j = findfirst(==(c), keys)
+        (s === nothing || j === nothing) && continue
+        step[Int32(s)] = Int32(j)
+        push!(order, c)
+    end
+    keep = [i for i in eachindex(p.fields) if !haskey(step, Int32(i))]
+    newid = zeros(Int32, length(p.fields))
+    newid[keep] .= Int32.(1:length(keep))
+    stepped = Set(values(step))
+    fields = [i in stepped ? FieldDecl{N}(f.key, f.classes, f.shape, f.symmetric, f.storage, f.levels, f.epoch,
+                                             Int8(2), f.role) : f
+              for (i, f) in enumerate(p.fields) if i in keep]
+    nk = length(fields)
+    # the residual and history fields, appended: `res:c` at `nk + j`, `c__n` at `nk + n + j`
+    res = Dict{String, Int32}()
+    hist = Dict{String, Int32}()
+    for (j, c) in enumerate(order)
+        f = p.fields[findfirst(==(c), keys)]
+        push!(fields, FieldDecl{N}("res:" * c, f.classes, f.shape, f.symmetric, f.storage, f.levels, f.epoch, Int8(1), :scratch))
+        res[c] = Int32(nk + j)
+    end
+    for (j, c) in enumerate(order)
+        f = p.fields[findfirst(==(c), keys)]
+        push!(fields, FieldDecl{N}(c * "__n", f.classes, f.shape, f.symmetric, f.storage, f.levels, f.epoch, Int8(1), :input))
+        hist[c] = Int32(nk + length(order) + j)
+    end
+    fm(i) = i == 0 ? Int32(0) : haskey(step, Int32(i)) ? res[keys[step[Int32(i)]]] : newid[i]
+    bk = ([f.key for f in fields], [f.storage for f in fields], [t.key for t in p.tables])
+    dom = p.hierarchy[1].grid.domain != 0
+    kernels = map(p.kernels) do k
+        startswith(k.key, "rate:") || return rebuild(copy_node!, k, bk; fieldmap = fm)
+        c = k.key[(ncodeunits("rate:") + 1):end]
+        haskey(res, c) || return rebuild(copy_node!, k, bk; fieldmap = fm)
+        cid, hid = newid[findfirst(==(c), keys)], hist[c]
+        rebuild(copy_node!, k, bk; fieldmap = fm, storefn = (b, s, v) -> _residual_store(b, s, v, rule, dom, cid, hid))
+    end
+    # (a rule never names a scratch field: `fm` maps the others to their new ids)
+    masks = [MaskDecl(m.key, fm(m.field), m.epoch) for m in p.masks]
+    flags = [FlagDecl(g.key, fm(g.field), g.bits, g.epoch) for g in p.flags]
+    rules = BRule[_rulemap(r, fm, identity) for r in p.rules]
+    return Program{N}(p.hierarchy, fields, p.tables, masks, flags, rules, kernels, p.periodic, p.spacing, p.nparams)
+end
+
+# the store of a residual kernel: `rule(c, r, cn)` into `res:c` (the store's field), 0 outside the
+# domain when there is one
+function _residual_store(b::KernelBuilder, s::Store, v, rule, dom::Bool, cid, hid)
+    lane = b.fieldlanes[s.access.field]
+    x, inside = v, Int32(0)
+    if dom
+        n = b.nodes[v]
+        a = nodeargs(b, v)
+        z = n.op == SELECT ? b.nodes[a[3]] : nothing
+        if z !== nothing && z.op == CONST && b.consts[z.imm] == 0.0
+            inside, x = a[1], a[2]
+        end
+    end
+    c = load!(b, cid, b.fieldlanes[cid])
+    cn = load!(b, hid, b.fieldlanes[hid])
+    u = rule(b, Ex(b, c), Ex(b, x), Ex(b, cn)).id
+    inside == 0 || (u = select!(b, inside, u, constant!(b, 0.0)))
+    return isfloat(lane) ? cast!(b, u, REAL) : u
+end

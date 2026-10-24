@@ -22,7 +22,21 @@ struct BC
 end
 
 _bcerr(eq, msg) = throw(ArgumentError("boundary condition `$eq`: $msg"))
-_cval(x) = (v = unwrap_const(unwrap(x)); v isa Number ? v : nothing)
+_cval(x) = (v = _numval(unwrap(x)); v isa Number ? v : nothing)
+# the value of an expression of numbers alone (`2π`, `π / 2 + ℯ`, kept symbolically as
+# `identity(Const(π))` terms), or nothing
+function _numval(u)
+    v = unwrap_const(_unid(u))
+    v isa Number && return v
+    iscall(v) || return nothing
+    f = operation(v)
+    any(g -> f === g, (+, -, *, /, ^)) || return nothing
+    a = map(y -> _numval(unwrap(y)), arguments(v))
+    any(isnothing, a) && return nothing
+    return f(a...)
+end
+# SymbolicUtils keeps an irrational as `identity(Const(π))` (`π * x`, `x + ℯ`): its value
+_unid(u) = iscall(u) && operation(u) === identity && length(arguments(u)) == 1 ? _unid(unwrap(arguments(u)[1])) : u
 
 """A read `c(args…)` or `u(args…)[i]` of a dependent variable: `(op, args, comp)`."""
 function _fieldread(u, fields)

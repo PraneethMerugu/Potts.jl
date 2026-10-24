@@ -1,0 +1,354 @@
+# F3-07 (F3 design §3.3, §3.4): `BackwardEuler` in front end B for linear groups. The rate
+# program is the residual (`fuse_residual`), the operator `J̃` comes from the linearity table
+# (`OperatorSpec`, built at the first implicit use only), and each substep solves
+# `(I/h − J̃) δ = G(uⁿ)`, `u = uⁿ + δ` at `tⁿ⁺¹`. The tests compare one window with the hand BE
+# matrix of the same stencil (faces, ghosts, masks), the order with the exact semi-discrete
+# solution, a manufactured solution, a stiff case and OrdinaryDiffEq's `ImplicitEuler`.
+# Base (437a84ef, ~/lpwork/f3b3-nc-base.log): `BackwardEuler` is not defined (every testset
+# errors); the negative controls below are mutations of this tree (~/lpwork/f3b3-nc-*.log).
+using LinearAlgebra: I, norm
+using OrdinaryDiffEqSDIRK: ImplicitEuler
+using LatticeFields: Problems as LFB, Solvers as LSB
+using LatticeFields.IR: fieldid
+
+@parameters bD = 0.3 bk = 2.0 bW[1:2] = [0.5, 2.0] bg = 0.5
+@variables bc(..) bq(..)::Int32 [input = true] bo(..)
+bce, bqe, boe = bc(t, x, y), bq(t, x, y), bo(t, x, y)
+const BDIMS = (8, 6)
+const BKIND = Int32[(i + j) % 3 for i in 1:8, j in 1:6]
+bdom(T = 1.0) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+bsys(eqs, bcs, ps; T = 1.0, dvs = [bce, bqe]) = PDESystem(eqs, bcs, bdom(T), [t, x, y], dvs, ps; name = :be)
+bown(sys; dims = BDIMS, T = Float64, kw...) =
+    discretize(sys, LatticeDiscretization(Grid(dims); T, problem = :owned, kw...); inputs = [bqe => BKIND])
+const BTIGHT = DevicePCG(; rtol = 1e-12, budget = 64)
+bwarm(ig) = (step!(ig); @allocated step!(ig))              # (a function barrier)
+blast(s) = s[bce, length(s.t)]                             # the last save
+
+# The hand BE matrix of a cell-centered grid on [0, 1]² (`dims` sites, cell centers
+# `(i − ½) h`): the rate `r(u)_i = m_i Σ_a Σ_± w (u_nb − u_i)/h_a² − k_i u_i + f_i`, with the
+# harmonic face `w = 2K_i K_nb/(K_i + K_nb)` (`K` at the neighbor's center, a ghost center at a
+# face of the box). A box face takes `faces[(a, side)]`: `(:dir, g)` (ghost `2g − u_i`) or
+# `(:robin, α, β, g)` for `α u + β ∂u/∂x_a = g` as written (ghost from `α (u_g + u_i)/2 +
+# β side (u_g − u_i)/h = g`), `g` a number or a function of the face point; no entry is zero
+# flux. `hand_rate` returns the rate `(L, b)`; `be_hand` `u` of `(I − h L) u = u0 + h b`, the
+# masked sites holding `mval`.
+function be_hand(u0, h; mask = nothing, mval = nothing, kw...)
+    L, b = hand_rate(; kw...)
+    A = I - h * L
+    rhs = u0 .+ h .* b
+    if mask !== nothing
+        for r in eachindex(rhs)
+            mask[r] || continue
+            A[r, :] .= 0
+            A[r, r] = 1
+            rhs[r] = mval[r]
+        end
+    end
+    return A \ rhs
+end
+function hand_rate(; dims = BDIMS, K = (x, y) -> 1.0, m = (i, j) -> 1.0, k = (x, y) -> 0.0, f = (x, y) -> 0.0, faces = Dict())
+    nx, ny = dims
+    hs = (1 / nx, 1 / ny)
+    lin(i, j) = i + (j - 1) * nx
+    ctr(i, j) = ((i - 0.5) * hs[1], (j - 0.5) * hs[2])
+    n = nx * ny
+    L = zeros(n, n)
+    b = zeros(n)
+    for j in 1:ny, i in 1:nx
+        r = lin(i, j)
+        xi, yi = ctr(i, j)
+        for a in 1:2, s in (-1, 1)
+            ii, jj = a == 1 ? (i + s, j) : (i, j + s)
+            Kn = K(ctr(ii, jj)...)
+            Ki = K(xi, yi)
+            w = Ki + Kn == 0 ? 0.0 : 2Ki * Kn / (Ki + Kn)
+            c = m(i, j) * w / hs[a]^2
+            if 1 <= ii <= nx && 1 <= jj <= ny
+                L[r, lin(ii, jj)] += c
+                L[r, r] -= c
+            elseif haskey(faces, (a, s))
+                fc = faces[(a, s)]
+                # the face point, and the ghost u_g = p u_i + q
+                fp = a == 1 ? (s < 0 ? 0.0 : 1.0, yi) : (xi, s < 0 ? 0.0 : 1.0)
+                g = fc[end] isa Function ? fc[end](fp...) : fc[end]
+                p, q = fc[1] === :dir ? (-1.0, 2g) :
+                       (bl = fc[3] * s / hs[a]; den = fc[2] / 2 + bl; ((bl - fc[2] / 2) / den, g / den))
+                L[r, r] += c * (p - 1)
+                b[r] += c * q
+            end
+        end
+        L[r, r] -= k(xi, yi)
+        b[r] += f(xi, yi)
+    end
+    return L, b
+end
+bxs() = [(i - 0.5) / BDIMS[1] for i in 1:BDIMS[1], j in 1:BDIMS[2]]
+bys() = [(j - 0.5) / BDIMS[2] for i in 1:BDIMS[1], j in 1:BDIMS[2]]
+# one window of `alg` from the problem's start state
+function be_window(prob, alg)
+    ig = init(prob, alg)
+    u0 = copy(vec(ig[bce]))
+    step!(ig)
+    return ig, u0, vec(ig[bce])
+end
+
+@testset "F3-07: one BackwardEuler window equals the hand BE matrix" begin
+    h = 0.05
+    alg = BackwardEuler(; dt = h, inner = BTIGHT)
+    # a numeric operator: diffusion, decay, a source, a Dirichlet face, a mask with its value
+    p = bown(bsys([D(bce) ~ bD * Δ(bce) - bk * bce + x], [bc(0, x, y) ~ x * y, bc(t, 0, y) ~ 1.0,
+        bce ~ masked(bqe == 2, 1.5)], [bD, bk]))
+    ig, u0, u = be_window(p, alg)
+    want = be_hand(u0, h; K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces = Dict((1, -1) => (:dir, 1.0)),
+        mask = vec(BKIND .== 2), mval = fill(1.5, 48))
+    @test maximum(abs, u .- want) < 1e-9
+    rt = only(ig.runtimes)
+    @test rt.cache.newton == 1 && rt.cache.exact && ig.retcode == ReturnCode.Success
+    @test all(u[vec(BKIND .== 2)] .== 1.5)                     # the mask value written back (SD-11)
+    @test rt.totals.solves == 1                                # one solve per substep (exact operator)
+end
+
+@testset "F3-07: the solver capabilities in a BackwardEuler group (F3-05 in B)" begin
+    h = 0.05
+    xs, ys = bxs(), bys()
+    # a Robin face, positive part (α and β of the same sign with the outward normal)
+    p = bown(bsys([D(bce) ~ bD * Δ(bce) - bk * bce + x], [bc(0, x, y) ~ 0.0, 2.0 * bc(t, x, 0) - Differential(y)(bc(t, x, 0)) ~ bg],
+        [bD, bk, bg]))
+    ig, u0, u = be_window(p, BackwardEuler(; dt = h, inner = BTIGHT))
+    want = be_hand(u0, h; K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces = Dict((2, -1) => (:robin, 2.0, -1.0, 0.5)))
+    @test maximum(abs, u .- want) < 1e-10 && only(ig.runtimes).cache.newton == 1
+    # opposite signs: the negative part stays in the residual (a defect correction), so the
+    # automatic Newton count is more than one (from its bound `w |d⁻|`, S1: 5 here); `newton = k`
+    # converges it to the hand matrix
+    p = bown(bsys([D(bce) ~ bD * Δ(bce) - bk * bce + x], [bc(0, x, y) ~ 0.0, 2.0 * bc(t, x, 0) + Differential(y)(bc(t, x, 0)) ~ bg],
+        [bD, bk, bg]))
+    want = be_hand(zeros(48), h; K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces = Dict((2, -1) => (:robin, 2.0, 1.0, 0.5)))
+    ig, _, u4 = be_window(p, BackwardEuler(; dt = h, inner = BTIGHT))
+    @test only(ig.runtimes).cache.newton == 5 && only(ig.runtimes).cache.seen && maximum(abs, u4 .- want) < 1e-3
+    ig, _, u = be_window(p, BackwardEuler(; dt = h, newton = 30, inner = BTIGHT))
+    @test maximum(abs, u .- want) < 1e-10 && only(ig.runtimes).totals.solves == 30
+    # a field face coefficient (`DivKGrad(k(x, y), c)`) with a face-Dirichlet value that varies along the face
+    p = bown(bsys([D(bce) ~ DivKGrad(:harmonic)(1 + x * y, bce) - bk * bce], [bc(0, x, y) ~ 0.0, bc(t, 0, y) ~ 1.0 + y], [bk]))
+    ig, u0, u = be_window(p, BackwardEuler(; dt = h, inner = BTIGHT))
+    rt = only(ig.runtimes)
+    @test rt.cache.rows[1].op.field && rt.cache.op.jac !== nothing
+    want = be_hand(u0, h; K = (x, y) -> 1 + x * y, k = (x, y) -> 2.0, faces = Dict((1, -1) => (:dir, (x, y) -> 1.0 + y)))
+    @test maximum(abs, u .- want) < 1e-10
+    # a mask whose value is a field (`masked(pred, 1 + x)`): each masked site takes its own value
+    p = bown(bsys([D(bce) ~ bD * Δ(bce) - bk * bce], [bc(0, x, y) ~ 0.0, bce ~ masked(bqe == 2, 1 + x)], [bD, bk]))
+    ig, u0, u = be_window(p, BackwardEuler(; dt = h, inner = BTIGHT))
+    mk = vec(BKIND .== 2)
+    want = be_hand(u0, h; K = (x, y) -> 0.3, k = (x, y) -> 2.0, mask = mk, mval = vec(1 .+ xs))
+    @test maximum(abs, u .- want) < 1e-10 && all(u[mk] .== vec(1 .+ xs)[mk])
+    # the face and mask value fields stepped explicitly too: one ExplicitEuler window is
+    # `u0 + h r(u0)` off the mask, the mask value on it
+    p = bown(bsys([D(bce) ~ DivKGrad(:harmonic)(1 + x * y, bce) - bk * bce],
+        [bc(0, x, y) ~ x, bc(t, 0, y) ~ 1.0 + y, bce ~ masked(bqe == 2, 1 + x)], [bk]))
+    ig = init(p, ExplicitEuler(; dt = 1e-3, substeps = 1))
+    u0 = copy(vec(ig[bce]))
+    step!(ig)
+    L, bb = hand_rate(; K = (x, y) -> 1 + x * y, k = (x, y) -> 2.0, faces = Dict((1, -1) => (:dir, (x, y) -> 1.0 + y)))
+    want = ifelse.(mk, vec(1 .+ xs), u0 .+ 1e-3 .* (L * u0 .+ bb))
+    @test u0[mk] == vec(1 .+ xs)[mk] && maximum(abs, vec(ig[bce]) .- want) < 1e-12
+    # an input bound by aliasing: the operator reads the problem's own input array, and a write
+    # of the input between windows changes the next solve (no copy; the warm window 0 B)
+    p = bown(bsys([D(bce) ~ at(bW, bqe) * Δ(bce) - bk * bce + 1], [bc(0, x, y) ~ 0.0], [bW, bk]))
+    ig = init(p, BackwardEuler(; dt = h, inner = BTIGHT))
+    rt = only(ig.runtimes)
+    r = rt.cache.rows[1]
+    qid = fieldid(rt.program, "bq")
+    jst = rt.cache.jac[1].launches                      # (the operator's launches read the store's array)
+    @test LSB.field(r.solver, "in.f") === r.f && LSB.field(r.solver, "s") === r.s && r.f !== nothing
+    @test any(l -> any(a -> a === rt.store.bufs[qid][1], Iterators.flatten(l.launch.params[2][1])), jst)
+    step!(ig); step!(ig)
+    @test bwarm(ig) == 0
+    K2 = Int32[(i * j) % 2 for i in 1:8, j in 1:6]
+    u1 = copy(vec(ig[bce]))
+    ig[bqe] = K2
+    step!(ig)
+    want = be_hand(u1, h; K = (x, y) -> 1.0, m = (i, j) -> (0.0, 0.5, 2.0)[K2[i, j] + 1], k = (x, y) -> 2.0, f = (x, y) -> 1.0)
+    @test maximum(abs, vec(ig[bce]) .- want) < 1e-10
+    @test bwarm(ig) == 0
+end
+@testset "F3-07: SiteDiffusion rows (row scaling; m = 0 rows in two stages)" begin
+    h = 0.05
+    # `at(W, q) Δ(c)`: the row scaled by 1/m keeps the faces symmetric (q = 0 reads 0: m = 0 rows)
+    p = bown(bsys([D(bce) ~ at(bW, bqe) * Δ(bce) - bk * bce + 1], [bc(0, x, y) ~ x], [bW, bk]))
+    ig, u0, u = be_window(p, BackwardEuler(; dt = h, inner = BTIGHT))
+    mm = (i, j) -> (0.0, 0.5, 2.0)[BKIND[i, j] + 1]
+    want = be_hand(u0, h; m = mm, k = (x, y) -> 2.0, f = (x, y) -> 1.0)
+    @test maximum(abs, u .- want) < 1e-12
+    @test only(ig.runtimes).cache.rows[1].op.scaled && only(ig.runtimes).cache.exact
+    # a multiplier that is 0 on some rows (`ifelse(kind == 1, 0, D)`): the two-stage solve
+    p = bown(bsys([D(bce) ~ ifelse(bqe == 1, 0.0, 0.7) * Δ(bce) - 50.0 * bce], [bc(0, x, y) ~ 1.0 + x], Any[]))
+    ig, u0, u = be_window(p, BackwardEuler(; dt = 0.1, inner = BTIGHT))
+    want = be_hand(u0, 0.1; m = (i, j) -> BKIND[i, j] == 1 ? 0.0 : 0.7, k = (x, y) -> 50.0)
+    @test maximum(abs, u .- want) < 1e-12
+    # (the pinned-row rule `δ = G h` is a forward Euler step there: off by about 4 at decay 50)
+    @test maximum(abs, u[vec(BKIND .== 1)] .- (u0[vec(BKIND .== 1)] ./ (1 + 0.1 * 50))) < 1e-12
+    # `m Δ(c) + D Δ(c)` is `(m + D) Δ(c)`, exact
+    p = bown(bsys([D(bce) ~ at(bW, bqe) * Δ(bce) + bD * Δ(bce) - bk * bce], [bc(0, x, y) ~ x], [bW, bD, bk]))
+    ig, u0, u = be_window(p, BackwardEuler(; dt = h, inner = BTIGHT))
+    want = be_hand(u0, h; m = (i, j) -> mm(i, j) + 0.3, k = (x, y) -> 2.0)
+    @test maximum(abs, u .- want) < 1e-12 && only(ig.runtimes).cache.exact
+    # two face coefficients: one stays in the residual with its bound, the operator is inexact
+    # (more Newton iterations, from the bound, which converge to the BE step)
+    p = bown(bsys([D(bce) ~ at(bW, bqe) * Δ(bce) + bD * DivKGrad(:harmonic)(1 + x, bce) - bk * bce], [bc(0, x, y) ~ x], [bW, bD, bk]))
+    ig = init(p, BackwardEuler(; dt = h, newton = 40, inner = BTIGHT))
+    rt = only(ig.runtimes)
+    @test !rt.cache.op.rows[1].exact && !isempty(rt.cache.op.rows[1].inexact)
+    @test init(p, BackwardEuler(; dt = h)).runtimes[1].cache.newton == 10 && init(p, BackwardEuler(; dt = h)).runtimes[1].cache.seen
+end
+
+@testset "F3-07: order 1, the manufactured solution, the stage tⁿ⁺¹" begin
+    # the discrete sine is an eigenvector of the lattice Laplacian with Dirichlet 0 faces: the
+    # semi-discrete solution is `e^{D λ t} u0`, so the BE error is the time error alone
+    n = 16
+    λ = 2 * (2cos(π / n) - 2) * n^2
+    dirs = [bc(t, 0, y) ~ 0.0, bc(t, 1, y) ~ 0.0, bc(t, x, 0) ~ 0.0, bc(t, x, 1) ~ 0.0]
+    sys = bsys([D(bce) ~ bD * Δ(bce)], [bc(0, x, y) ~ sin(π * x) * sin(π * y); dirs], [bD]; T = 0.4, dvs = [bce])
+    p = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64, problem = :owned))
+    u0 = [sin(π * (i - 0.5) / n) * sin(π * (j - 0.5) / n) for i in 1:n, j in 1:n]
+    err(dt) = maximum(abs, blast(solve(p, BackwardEuler(; dt, inner = BTIGHT))) .- exp(0.3λ * 0.4) .* u0)
+    es = [err(0.4 / 2^k) for k in 2:5]
+    ord = log2.(es[1:(end - 1)] ./ es[2:end])
+    @test all(o -> abs(o - 1) < 0.1, ord)
+    # exactly the BE map: (1 − h D λ)^{-m}
+    @test maximum(abs, blast(solve(p, BackwardEuler(; dt = 0.05, inner = BTIGHT))) .- (1 - 0.05 * 0.3λ)^-8 .* u0) < 1e-12
+    # a manufactured solution `u = e^{−t} sin(πx) sin(πy) + t`: its source and the face value `t`
+    # are read at tⁿ⁺¹; observed order 1 over four dt (the space error is below the time error)
+    m = 64
+    src = -exp(-t) * sin(π * x) * sin(π * y) + 1 + 2π^2 * 0.1 * exp(-t) * sin(π * x) * sin(π * y)
+    faces = [bc(t, 0, y) ~ t, bc(t, 1, y) ~ t, bc(t, x, 0) ~ t, bc(t, x, 1) ~ t]
+    ms = bsys([D(bce) ~ 0.1 * Δ(bce) + src], [bc(0, x, y) ~ sin(π * x) * sin(π * y); faces], Any[]; T = 1.0, dvs = [bce])
+    pm = discretize(ms, LatticeDiscretization(Grid((m, m)); T = Float64, problem = :owned))
+    exact = [exp(-1.0) * sin(π * (i - 0.5) / m) * sin(π * (j - 0.5) / m) + 1.0 for i in 1:m, j in 1:m]
+    em = [maximum(abs, blast(solve(pm, BackwardEuler(; dt = 0.1 / 2^k, inner = BTIGHT))) .- exact) for k in 0:3]
+    om = log2.(em[1:(end - 1)] ./ em[2:end])
+    @test all(o -> abs(o - 1) < 0.1, om)
+    # one window at the stage tⁿ⁺¹: the time-dependent source and face value of the hand matrix
+    # at t = h (at t = 0, the wrong stage, it is off by about h)
+    h = 0.1
+    pm8 = discretize(ms, LatticeDiscretization(Grid(BDIMS); T = Float64, problem = :owned))
+    ig, u0, u = be_window(pm8, BackwardEuler(; dt = h, inner = BTIGHT))
+    s1(xx, yy, tt) = -exp(-tt) * sin(π * xx) * sin(π * yy) + 1 + 2π^2 * 0.1 * exp(-tt) * sin(π * xx) * sin(π * yy)
+    fc(tt) = Dict((a, s) => (:dir, tt) for a in 1:2, s in (-1, 1))
+    want = be_hand(u0, h; K = (x, y) -> 0.1, f = (xx, yy) -> s1(xx, yy, h), faces = fc(h))
+    wrong = be_hand(u0, h; K = (x, y) -> 0.1, f = (xx, yy) -> s1(xx, yy, 0.0), faces = fc(0.0))
+    @test maximum(abs, u .- want) < 1e-9 && maximum(abs, u .- wrong) > 1e-2
+end
+
+@testset "F3-07: a stiff case, OrdinaryDiffEq's ImplicitEuler (SX-18)" begin
+    # D h/dx² = 10⁴: BackwardEuler stays bounded and monotone; ExplicitEuler with one substep
+    # (forced) blows up (`Unstable`)
+    n = 16
+    step0 = PDESystem([D(bce) ~ bD * Δ(bce)], [bc(0, x, y) ~ ifelse(x < 0.5, 1.0, 0.0)], bdom(80 * 1e4 / (0.3 * n^2)),
+        [t, x, y], [bce], [bD]; name = :stiff)
+    p = discretize(step0, LatticeDiscretization(Grid((n, n)); T = Float64, problem = :owned))
+    hs = 1e4 / (0.3 * n^2)
+    s = solve(p, BackwardEuler(; dt = hs); saveat = 8hs)
+    @test s.retcode == ReturnCode.Success && all(u -> all(v -> -1e-6 <= v <= 1 + 1e-6, u), s.u)
+    @test all(k -> maximum(s.u[k + 1]) <= maximum(s.u[k]) + 1e-6 && minimum(s.u[k + 1]) >= minimum(s.u[k]) - 1e-6, 1:(length(s.u) - 1))
+    ig = init(p, ExplicitEuler(; dt = hs))
+    ig.substeps = 1
+    solve!(ig)
+    @test ig.retcode == ReturnCode.Unstable
+    # the `:ode` path with OrdinaryDiffEq's ImplicitEuler (fixed steps, tight Newton) at equal dt
+    sx = bsys([D(bce) ~ bD * Δ(bce) - bk * bce + sin(3t) * x], [bc(0, x, y) ~ x * y, bc(t, 0, y) ~ 1.0], [bD, bk];
+        T = 0.4, dvs = [bce])
+    po = discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :ode))
+    # (the Newton tolerance follows abstol and reltol, 1e-12; the rate is linear, so a Newton step is exact)
+    so = solve(po, ImplicitEuler(); dt = 0.05, adaptive = false, abstol = 1e-12, reltol = 1e-12)
+    sb = solve(discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned)),
+        BackwardEuler(; dt = 0.05, inner = BTIGHT))
+    @test maximum(abs, vec(blast(sb)) .- so.u[end]) < 1e-8
+end
+
+@testset "F3-07: newton = nothing, the operator built only for implicit groups (S12)" begin
+    p = bown(bsys([D(bce) ~ bD * Δ(bce) - bk * bce], [bc(0, x, y) ~ x], [bD, bk]))
+    b0 = LatticePDE.OPERATOR_BUILDS[]
+    solve(p, ExplicitEuler(; dt = 0.01))
+    @test LatticePDE.OPERATOR_BUILDS[] == b0                   # an explicit group builds none
+    ig = init(p, BackwardEuler(; dt = 0.01))
+    @test LatticePDE.OPERATOR_BUILDS[] == b0 + 1 && only(ig.runtimes).cache.newton == 1
+    init(p, BackwardEuler(; dt = 0.02))
+    @test LatticePDE.OPERATOR_BUILDS[] == b0 + 1               # once per group
+    # an acyclic pair in one group (c reads o): one Newton step in topological order is exact
+    p2 = discretize(bsys([D(bce) ~ bD * Δ(bce) - bk * bce + 0.7 * boe, D(boe) ~ 0.5 * Δ(boe) - boe + x],
+        [bc(0, x, y) ~ 0.0, bo(0, x, y) ~ 0.0], [bD, bk]; dvs = [bce, boe]), LatticeDiscretization(Grid(BDIMS); T = Float64, problem = :owned))
+    ig = init(p2, BackwardEuler(; dt = 0.1, inner = BTIGHT))
+    @test only(ig.runtimes).cache.newton == 1 && [r.key for r in only(ig.runtimes).cache.rows] == ["bo", "bc"]
+    step!(ig)
+    o1 = be_hand(zeros(48), 0.1; K = (x, y) -> 0.5, k = (x, y) -> 1.0, f = (x, y) -> x)
+    c1 = be_hand(zeros(48), 0.1; K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = let o = reshape(o1, BDIMS)
+        (xx, yy) -> 0.7 * o[round(Int, xx * 8 + 0.5), round(Int, yy * 6 + 0.5)]
+    end)
+    @test maximum(abs, vec(ig[boe]) .- o1) < 1e-10 && maximum(abs, vec(ig[bce]) .- c1) < 1e-10
+    # the substep count: 1, raised only by a positive local derivative (`+ g c`: n ≥ ⌈2 dt g⌉)
+    @test init(p, BackwardEuler(; dt = 0.5)).substeps == 1
+    pg = bown(bsys([D(bce) ~ bD * Δ(bce) + bk * bce], [bc(0, x, y) ~ x], [bD, bk]))
+    @test init(pg, BackwardEuler(; dt = 0.5)).substeps == 2 && init(pg, BackwardEuler(; dt = 0.5, substeps = 5)).substeps == 5
+end
+
+@testset "F3-07: messages, the `:ode` path, `show`" begin
+    e(f) = try
+        f(); ""
+    catch err
+        err isa ArgumentError ? err.msg : sprint(showerror, err)
+    end
+    p = bown(bsys([D(bce) ~ bD * Δ(bce)], [bc(0, x, y) ~ x], [bD]))
+    # M1: a linear solver where a field solver goes names `BackwardEuler(; inner = …)`, which works
+    m = e(() -> solve(p, DevicePCG(; budget = 12)))
+    @test occursin("give it to one, `BackwardEuler(; inner = DevicePCG(; budget = 12))`", m)
+    @test solve(p, BackwardEuler(; dt = 0.01, inner = DevicePCG(; budget = 12))).retcode == ReturnCode.Success
+    m = e(() -> ExplicitEuler(; dt = 0.01, inner = Multigrid()))
+    @test occursin("give it to an implicit field solver, `BackwardEuler(; inner = Multigrid())`", m)
+    @test solve(p, BackwardEuler(; dt = 0.01, inner = Multigrid())).retcode == ReturnCode.Success
+    # the `:ode` path: a field or linear solver given to an `ODEProblem`
+    po = discretize(bsys([D(bce) ~ bD * Δ(bce)], [bc(0, x, y) ~ x], [bD]; dvs = [bce]),
+        LatticeDiscretization(Grid(BDIMS); T = Float64, problem = :ode))
+    m = e(() -> solve(po, DevicePCG()))
+    @test startswith(m, "`solve`/`init` of an `ODEProblem`: `DevicePCG()` is a linear solver, the `inner` of an implicit field solver") &&
+          occursin("`ImplicitEuler()` is Backward Euler", m) && occursin("`solve(prob, BackwardEuler(; dt, inner = DevicePCG()))`", m)
+    m = e(() -> init(po, BackwardEuler(; dt = 0.1)))
+    @test startswith(m, "`solve`/`init` of an `ODEProblem`: `BackwardEuler(; dt = 0.1)` is a field solver") &&
+          occursin("problem = :owned", m)
+    @test solve(po, ImplicitEuler(); dt = 0.01, adaptive = false).retcode == ReturnCode.Success   # the route
+    # the keywords
+    for (f, want) in ((() -> BackwardEuler(; dt = 0.1, newton = 0), "BackwardEuler: newton = 0 is the Newton iterations"),
+            (() -> BackwardEuler(; substeps = true), "BackwardEuler: substeps = true must be an integer ≥ 1"),
+            (() -> BackwardEuler(; inner = :pcg), "BackwardEuler: `inner` takes `:auto`, a `DevicePCG(…)` or a `Multigrid(…)`"),
+            (() -> BackwardEuler(; solver_T = BigFloat), "BackwardEuler: `solver_T` takes `:auto`"),
+            (() -> BackwardEuler(; theta = 1), "BackwardEuler: no keyword `theta`; its keywords are `dt`, `substeps`, `newton`, `lower`, `inner` and `solver_T`"))
+        @test startswith(e(f), want) || (println("MSG: ", e(f)); false)
+    end
+    a = BackwardEuler(; dt = 0.1, newton = 2, inner = DevicePCG(; budget = 12))
+    @test eval(Meta.parse(repr(a))) == a
+    # a map group has no implicit operator
+    pm = discretize(PDESystem([Shift(t, 1)(bce) ~ 0.5 * bce], [bc(0, x, y) ~ x], bdom(), [t, x, y], [bce], Any[]; name = :m),
+        LatticeDiscretization(Grid(BDIMS); T = Float64, problem = :owned))
+    @test occursin("a map program is stepped by ExplicitMap()", e(() -> init(pm, BackwardEuler(; dt = 1.0))))
+end
+
+# R1 (F3-06 review): a group whose step ends `StalledSuccess` (a rounding floor, accepted) does
+# not stop the step: the later groups run. A failure still stops it. Base (437a84ef,
+# ~/lpwork/f3b3-nc-r1.log): `go` does not move after a stalled `gc` step.
+struct StallStub <: LFP.FieldAlgorithm
+    dt::Float64
+    code::ReturnCode.T
+end
+LFP.nbuffers(::StallStub) = 2
+LFP.update_key(::StallStub) = :euler
+LFP.update_rule(::StallStub) = LFP.update_rule(ExplicitEuler())
+LFP.alg_cache(a::StallStub, group, store) = Ref(a.code)
+LFP.step_retcode!(c::Base.RefValue{ReturnCode.T}, rt) = c[]
+LFP.substeps(::LFP.FieldProblem, ::StallStub, p = nothing; tables = nothing, inputs = nothing, stability = nothing) = 1
+@testset "R1: StalledSuccess does not skip the later groups" begin
+    p = gown(gsys())
+    for (code, moves) in ((ReturnCode.StalledSuccess, true), (ReturnCode.ConvergenceFailure, false))
+        ig = init(p, FieldGroups(gce => StallStub(0.01, code); default = ExplicitEuler(; dt = 0.01)))
+        o0 = copy(ig[goe])
+        step!(ig)
+        @test (ig[goe] != o0) == moves && ig.retcode == code
+    end
+end

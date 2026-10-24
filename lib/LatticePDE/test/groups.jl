@@ -442,3 +442,20 @@ end
     s = @test_logs solve!(ig)
     @test s.retcode == ReturnCode.Success && s.t ≈ [0.0, 0.05, 0.1] && s.stats.solves == 10
 end
+
+@testset "F3 r2: init's barriers: one group skips the coupling check; step! and solve! stay inferred" begin
+    p = gown(gsys())
+    a4 = ExplicitEuler(; dt = 0.01, substeps = 4)
+    # one group returns before any work: `nothing` is no parameter vector, and it is not read
+    @test LFP._check_coupling(p, [(a4, collect(String, p.state))], nothing; dt = 0.01) === nothing
+    # control: two groups reach the check, which reads the parameters
+    two = [(a4, [String(p.state[1])]), (a4, [String(p.state[2])])]
+    @test_throws MethodError LFP._check_coupling(p, two, nothing; dt = 0.01)
+    # `init` binds the groups behind a barrier (its return type is not inferred); the
+    # integrator it returns steps and solves with inferred types, explicit and implicit
+    for alg in (a4, BackwardEuler(; dt = 0.01, newton = 30, inner = DevicePCG(; rtol = 1e-12, budget = 64)))
+        ig = init(p, alg)
+        @inferred step!(ig)
+        @test (@inferred solve!(ig)).retcode == ReturnCode.Success
+    end
+end
