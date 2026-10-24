@@ -31,6 +31,12 @@ PottsDevices.device_name() == "rocm" && include("device_ir.jl")
         v = solve(p, CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
         @test v.cell.volume == [count(==(c), v.σ) for c in eachindex(v.cell.volume)]
     end
+    # F3-08: Merks with `BackwardEuler` on the device (the implicit runtime's launches, the
+    # status word read at the saves), 20 MCS
+    sb = solve(PottsProblem(MERKS, [ownership => merks_state(), kind => [1, 1]], (0, 20); T = Float32,
+        field_solver = BackwardEuler(lower = 0.0)), CheckerboardCPM(; proposal = Moore(1)); backend)
+    cb = Array(sb.u[end].site.c)
+    @test sb.retcode == Potts.SciMLBase.ReturnCode.Success && all(isfinite, cb) && minimum(cb) >= 0 && maximum(cb) > 0
     σs = zeros(Int32, 60, 30); σs[5:10, 12:17] .= 1; σs[40:45, 12:17] .= 2
     sp = PottsProblem(Spring(; name = :spring), [ownership => σs, kind => [:blob, :blob], :bond => [(1, 2)]], (0, 1000); T = Float32)
     ds = [CorePotts.centroid_distance(Float64, solve(remake(sp; seed), CheckerboardCPM(); backend).u[end].cell, sp.lattice, 1, 2) for seed in 1:4]

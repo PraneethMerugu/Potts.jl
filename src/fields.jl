@@ -832,6 +832,8 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
                            k = f.key
                            if startswith(k, "mask:")
                                (CorePotts.Part((:site, Symbol(k[6:end], :__mask))), nothing)
+                           elseif startswith(k, "face:") || startswith(k, "maskvalue:")
+                               (CorePotts.BindingScratch(), nothing)     # a value field: the binding's own
                            elseif Symbol(k) in names
                                (CorePotts.Part((:site, Symbol(k))), CorePotts.Part((:site, Symbol(k, :__next))))
                            else
@@ -850,8 +852,12 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
         # the substep rule: LatticeFields' one policy in front end A's words (F3-01); with
         # several groups, the coupling of this group to the others at the whole system's
         # parameters, mapped by name (a parameter the group does not read is `NaN`: no cross
-        # coefficient of its rows reads it; the read graph is the structure, so it needs no value)
-        fp = LatticeFields.Compile.fingerprint_text(fused; T)
+        # coefficient of its rows reads it; the read graph is the structure, so it needs no value).
+        # An implicit group's fingerprint is its residual program's (the program it runs)
+        fp = solver isa LatticeFields.Problems.ImplicitAlgorithm ?
+             LatticeFields.Compile.fingerprint_text(LatticeFields.Compile.fuse_residual(gspec.rate,
+                 LatticeFields.Problems.residual_rule(solver)); T) :
+             LatticeFields.Compile.fingerprint_text(fused; T)
         cp = coupling === nothing ? nothing :
              (; stability = coupling.bound, coupling.groups, explicit = [i == gi && _given_count(solver) !== nothing for i in eachindex(order)],
                 index = gi, whole = _WholeParams(coupling.wnames, lg.params))

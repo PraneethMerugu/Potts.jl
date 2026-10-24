@@ -151,15 +151,23 @@ sol[:x][end], sol[:g][end]
 
 | Keyword | Values | Default |
 |---|---|---|
-| `field_solver` | `ExplicitEuler(; substeps, lower)`: `substeps` explicit steps per MCS, values clipped at `lower` | `ExplicitEuler()`: the automatic count, no clip |
+| `field_solver` | `ExplicitEuler(; substeps, lower)`: `substeps` explicit steps per MCS, values clipped at `lower`; `BackwardEuler(; substeps, newton, lower, inner, solver_T)`: implicit steps, each a linear solve with `inner` | `ExplicitEuler()`: the automatic count, no clip |
 | `ode_solver` | `ExplicitEuler(; substeps)`, `RK4(; substeps)`, `Adaptive(alg; kwargs...)` | `ExplicitEuler()`, one step per MCS |
 | `solvers` | `[x => solver, …]`, per variable or component | — |
 
-The linear solvers `DevicePCG(; budget, rtol, precond)` and `Multigrid(; cycle = Potts.V(2, 2), cycles, rtol, budget)`
-are the `LatticeFields.Solvers` objects, the same in Potts and LatticePDE. They become the
-`inner` linear solver of the implicit field solvers from `BackwardEuler` on. They are not
-field solvers: in this version, `field_solver`, `solvers` and `FieldGroups` refuse them, and
-the fields step with `ExplicitEuler` or `ExplicitMap`.
+The linear solvers `DevicePCG(; budget, rtol, precond)` and `Multigrid(; cycle = (2, 2), cycles, rtol, budget)`
+are the `LatticeFields.Solvers` objects, the same in Potts and LatticePDE. They are the
+`inner` linear solver of the implicit field solvers:
+`field_solver = BackwardEuler(; inner = DevicePCG(; budget = 12))`. They are not field
+solvers themselves: `field_solver`, `solvers` and `FieldGroups` refuse them and give that
+route.
+
+`BackwardEuler()` steps a field implicitly: each substep solves `(u − uⁿ)/h = rhs(u)` at the
+substep's end time, so a stiff field (fast diffusion, fast decay) needs no small substeps.
+Its substep count is 1 unless a growth term in the rate (`+ g c`) needs more. Diffusion,
+linear decay, kind-dependent diffusion multipliers, masks and face conditions are part of
+its linear solve, so one Newton iteration is exact; other terms are corrected by more Newton
+iterations (`newton = k`).
 
 - `substeps = nothing` in a field solver takes the smallest count `n` with
   `mcs_duration / n · ρ ≤ 1.8`, where `ρ` bounds the rate's spectral radius: `D · Σ_d 4/h_d²`

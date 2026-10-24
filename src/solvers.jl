@@ -30,7 +30,7 @@ _solver_name(x) = info(x).name
 # algorithm (`ExplicitEuler`), a map field (`Shift(t, 1)(m) ~ rhs`) `ExplicitMap()`; each refuses
 # the other family by name.
 _is_field_solver(s) = s isa FieldAlgorithm
-_field_solver_names() = "`ExplicitEuler(…)`, or `ExplicitMap()` for a map"
+_field_solver_names() = "`ExplicitEuler(…)`, `BackwardEuler(…)`, or `ExplicitMap()` for a map"
 # A field solver as given: the window of a `PottsProblem` is the MCS (`mcs_duration`), so a
 # `dt` is refused; a rate field refuses `ExplicitMap` (F2-04), a map field (`map = true`) a
 # rate algorithm (F2-10)
@@ -43,9 +43,9 @@ function _check_field_solver(s, what; map::Bool = false)
         "default = …)`, or give this field one algorithm")))
     s isa ExplicitMap && !map && throw(ArgumentError(
         "$what: `ExplicitMap()` steps discrete maps `Shift(t, 1)(m) ~ rhs`; a rate field `D(c) ~ rhs` is stepped by " *
-        "`ExplicitEuler(…)`"))
-    s isa ExplicitEuler && s.dt !== nothing && throw(ArgumentError(string(
-        "$what: `ExplicitEuler(; dt = ", s.dt, ")`: a `PottsProblem` field steps over the MCS window (`mcs_duration`, ",
+        "`ExplicitEuler(…)` or `BackwardEuler(…)`"))
+    s isa Union{ExplicitEuler, BackwardEuler} && s.dt !== nothing && throw(ArgumentError(string(
+        "$what: `", nameof(typeof(s)), "(; dt = ", s.dt, ")`: a `PottsProblem` field steps over the MCS window (`mcs_duration`, ",
         "split into `substeps`); leave `dt` out")))
     return s
 end
@@ -103,7 +103,8 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
         end
         fsolver === nothing && (fsolver = isempty(maps) ? ExplicitEuler() : ExplicitMap())
         fsolver isa LatticeFields.Problems.LinearSolver && throw(LatticeFields.Problems.linear_solver_refusal(
-            "`field_solver`", fsolver, "`field_solver = ExplicitEuler()` (or `ExplicitMap()` for a map)"))
+            "`field_solver`", fsolver, "`field_solver = ExplicitEuler()` (or `ExplicitMap()` for a map)";
+            implicit = "`field_solver = BackwardEuler(; inner = $(repr(fsolver)))`"))
         _is_field_solver(fsolver) || throw(ArgumentError(
             "`field_solver` takes a field solver ($(_field_solver_names())); got $(repr(fsolver))"))
         _check_field_solver(fsolver, field_solver isa LatticeFields.Problems.FieldGroups ? "`FieldGroups`: `default`" :
@@ -137,7 +138,8 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
         push!(named, n)
         if n in fields
             s isa LatticeFields.Problems.LinearSolver && throw(LatticeFields.Problems.linear_solver_refusal(
-                "`solvers`: the field `$n`", s, "`solvers = [$n => ExplicitEuler()]`"))
+                "`solvers`: the field `$n`", s, "`solvers = [$n => ExplicitEuler()]`";
+                implicit = "`solvers = [$n => BackwardEuler(; inner = $(repr(s)))]`"))
             _is_field_solver(s) || throw(ArgumentError(
                 "`solvers`: the field `$n` takes a field solver ($(_field_solver_names())); got $(repr(s))"))
             _check_field_solver(s, "`solvers`: the field `$n`"; map = n in maps)

@@ -102,11 +102,27 @@ Adapt.adapt_structure(to, ::FieldHandle) = nothing
 
 _arrays(arrays::Tuple, st) = map(a -> (a[1](st), a[2] === nothing ? nothing : a[2](st)), arrays)
 
+"""
+    BindingScratch()
+
+The `arrays` entry of a program field that no state array holds: a face value or a masked
+value that varies by site (`face:c:…`, `maskvalue:c`), which its own kernel computes every
+window. The binding allocates it ([`FieldPhase`](@ref)); it is not part of the state (not
+saved, not in a checkpoint).
+"""
+struct BindingScratch end
+(::BindingScratch)(st) = nothing
+
+_scratch(backend, ::Type{E}, n) where {E} = fill!(KernelAbstractions.allocate(backend, E, n), zero(E))
 function _table_array(backend, ::Type{E}, v) where {E}
     a = KernelAbstractions.allocate(backend, E, length(v))
-    copyto!(a, E[E(x) for x in v])
+    _bind_copy!(a, E[E(x) for x in v])
     return a
 end
+# the one raw copy of a field binding (D-085 allowlist): a phase's tables to the backend when it
+# binds, and at a rebind the new table values and the status word (setup and rebinding, never
+# per MCS)
+_bind_copy!(dst, src) = copyto!(dst, src)
 
 # The value of parameter slot `n` at `p`: the clock's slot (`clock__tick`, F2 design §2.6) is
 # not a parameter of the model; its launches write the step index (the MCS number) into it
@@ -171,7 +187,9 @@ _stateless(ph::FieldPhase) = ph.aux_only || isempty(ph.group.spec.state)
 function _field_bind(ph::FieldPhase, st, p, backend; tables = nothing)
     s = ph.program
     arrs = _arrays(ph.arrays, st)
-    bufs = [a[2] === nothing ? Any[vec(a[1])] : Any[vec(a[1]), vec(a[2])] for a in arrs]
+    n0 = LatticeFields.IR.nsites(s, 0)
+    bufs = [a[1] === nothing ? Any[_scratch(backend, LatticeFields.IR.juliatype(s.fields[i].storage), n0)] :
+            a[2] === nothing ? Any[vec(a[1])] : Any[vec(a[1]), vec(a[2])] for (i, a) in enumerate(arrs)]
     if tables === nothing
         tables = Any[nothing for _ in s.tables]
         for (i, name) in ph.tables
@@ -301,13 +319,42 @@ function _rebind!(rt::Problems.GroupRuntime, ph::FieldPhase, st, p, backend)
         b.p = p
         return rt
     end
+    # an implicit group on the same arrays: in place (its solvers take the new coefficients;
+    # building them again would compile their kernels), the tables written into their arrays,
+    # and `reset!` (the hierarchy is rebuilt before the next window)
+    if same_arrays && rt.cache isa Problems.ImplicitCache && _tables_fit(ph, rt, p) && _praw(ph, p) isa typeof(rt.p)
+        n = field_substeps(ph, p)                   # (the policy's refusals first: nothing changed yet)
+        praw = _praw(ph, p)
+        launches = Problems.rebind_launches(rt, praw)
+        same_tables || _write_tables!(ph, rt, p)
+        rt.p = praw
+        Problems.install_launches!(rt, launches)
+        rt.n = n
+        b.p = p
+        b.pvals, b.tvals = _bound_values(ph, p)
+        return rt
+    end
     new = _field_bind(ph, st, p, backend; tables = same_tables ? rt.store.tables : nothing)
+    # the status word's counts not read yet stay the run's (the new runtime's word starts there)
+    wo, wn = Problems.status_word(rt.cache), Problems.status_word(new.cache)
+    wo === nothing || wn === nothing || _bind_copy!(wn, wo)
     for f in fieldnames(typeof(rt))
         # the status word's totals and the worst code stay the run's (cleared by `reinit!`)
         (f === :totals || f === :status) && continue
         setfield!(rt, f, getfield(new, f))
     end
     return rt
+end
+
+# whether the phase's tables at `p` fit the runtime's table arrays (the same lengths), and
+# their values written into them (host or device: a copy)
+_tables_fit(ph::FieldPhase, rt, p) = all(((i, name),) -> length(rt.store.tables[i]) == length(getproperty(p, name)), ph.tables)
+function _write_tables!(ph::FieldPhase, rt, p)
+    for (i, name) in ph.tables
+        a = rt.store.tables[i]
+        _bind_copy!(a, eltype(a)[eltype(a)(x) for x in vec(collect(getproperty(p, name)))])
+    end
+    return nothing
 end
 
 # The phase runs one window of the fields: pass `part = (r, R)` of the `R` passes of a sub-MCS
