@@ -497,6 +497,9 @@ function _state_key(prob::FieldProblem, k)
         join(("`$s`" for s in prob.state), ", "))))
 end
 
+CommonSolve.init(::FieldProblem, alg::LinearSolver; kw...) =
+    throw(linear_solver_refusal("`solve`/`init`", alg, "`solve(prob, ExplicitEuler(; dt))`"))
+
 function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; saveat = (),
         save_start::Bool = true, save_end::Bool = true)
     groups = _groups(prob, alg)

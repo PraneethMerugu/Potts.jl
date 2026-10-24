@@ -3,12 +3,23 @@
 # below (`alloc`, `launch!`, `fetch`); the CPU host runner of the tests and Exec implement it.
 
 """
-A V-cycle with `nu1` pre- and `nu2` post-smoothing Chebyshev steps.
+    V(nu1, nu2)
+
+A V-cycle with `nu1` pre- and `nu2` post-smoothing Chebyshev steps; both must be ≥ 1.
 """
 struct V
     nu1::Int
     nu2::Int
+    function V(nu1::Integer, nu2::Integer)
+        (nu1 >= 1 && nu2 >= 1) || throw(ArgumentError(string("`V(", nu1, ", ", nu2,
+            ")`: a V-cycle (the `cycle` of a `Multigrid`) needs ν₁, ν₂ ≥ 1 smoothing steps, pre and post; ",
+            "for example `V(2, 2)`")))
+        return new(nu1, nu2)
+    end
 end
+
+_positive(x) = x isa Real && isfinite(x) && x > 0
+_count(x) = x isa Integer && x >= 1
 
 """
     Multigrid(; cycle = V(2, 2), cycles = nothing, rtol = 1e-6, budget = nothing, warn_tol)
@@ -16,6 +27,8 @@ end
 Stationary multigrid. `cycles = k` runs exactly k cycles (no early exit; the sentinel warns
 above `warn_tol`, default 1e-3); otherwise cycles stop on device when
 `‖r‖∞ ≤ rtol·max(‖b‖∞, floor)`, within `budget` (default 8, 12 on a masked group).
+`cycles` and `budget` are integers ≥ 1 (or left out), `rtol` and `warn_tol` finite and > 0;
+any other value is an `ArgumentError` naming the keyword.
 """
 struct Multigrid
     cycle::V
@@ -23,8 +36,19 @@ struct Multigrid
     rtol::Float64
     budget::Union{Nothing, Int}
     warn_tol::Float64
+    function Multigrid(cycle::V, cycles, rtol, budget, warn_tol)
+        bad(k, v, want) = throw(ArgumentError(string("`Multigrid(; ", k, " = ", repr(v), ")`: `", k, "` ", want)))
+        cycles === nothing || _count(cycles) ||
+            bad(:cycles, cycles, "is the exact number of cycles, an integer ≥ 1 (leave it out to stop on `rtol`)")
+        _positive(rtol) || bad(:rtol, rtol, "is the relative residual a solve stops at, finite and > 0")
+        budget === nothing || _count(budget) ||
+            bad(:budget, budget, "is the most cycles per solve, an integer ≥ 1 (leave it out for the default)")
+        _positive(warn_tol) || bad(:warn_tol, warn_tol, "is the residual the sentinel warns above, finite and > 0")
+        return new(cycle, cycles === nothing ? nothing : Int(cycles), Float64(rtol),
+            budget === nothing ? nothing : Int(budget), Float64(warn_tol))
+    end
 end
-function Multigrid(; cycle = V(2, 2), cycles = nothing, rtol = 1e-6, budget = nothing,
+function Multigrid(; cycle::V = V(2, 2), cycles = nothing, rtol = 1e-6, budget = nothing,
         warn_tol = cycles === nothing ? rtol : 1e-3)
     Multigrid(cycle, cycles, rtol, budget, warn_tol)
 end
@@ -34,12 +58,46 @@ end
 
 Preconditioned CG on device scalars; the preconditioner is one fixed V-cycle from zero
 (a fixed linear SPD operator). K2 computes the true residual every iteration (fused with
-`x += αp`), and `done` is set on it (N-13).
+`x += αp`), and `done` is set on it (N-13). `budget` is an integer ≥ 1 and `rtol` finite and
+> 0; any other value is an `ArgumentError` naming the keyword.
 """
-Base.@kwdef struct DevicePCG
-    precond::Multigrid = Multigrid()
-    budget::Int = 8
-    rtol::Float64 = 1e-6
+struct DevicePCG
+    precond::Multigrid
+    budget::Int
+    rtol::Float64
+    function DevicePCG(precond::Multigrid, budget, rtol)
+        _count(budget) || throw(ArgumentError(string("`DevicePCG(; budget = ", repr(budget),
+            ")`: `budget` is the most CG iterations per solve, an integer ≥ 1")))
+        _positive(rtol) || throw(ArgumentError(string("`DevicePCG(; rtol = ", repr(rtol),
+            ")`: `rtol` is the relative residual a solve stops at, finite and > 0")))
+        return new(precond, Int(budget), Float64(rtol))
+    end
+end
+DevicePCG(; precond::Multigrid = Multigrid(), budget = 8, rtol = 1e-6) = DevicePCG(precond, budget, rtol)
+
+# Keyword display (no module path; only the keywords that differ from their defaults), so a
+# message that quotes a solver reads as the user wrote it. `canonical` is the hashed text.
+Base.show(io::IO, v::V) = print(io, "V(", v.nu1, ", ", v.nu2, ")")
+function _show_kw(io::IO, name, kws)
+    print(io, name, "(")
+    isempty(kws) || print(io, "; ", join((string(k, " = ", repr(v)) for (k, v) in kws), ", "))
+    print(io, ")")
+end
+function Base.show(io::IO, m::Multigrid)
+    kws = Pair{Symbol, Any}[]
+    m.cycle.nu1 == 2 && m.cycle.nu2 == 2 || push!(kws, :cycle => m.cycle)
+    m.cycles === nothing || push!(kws, :cycles => m.cycles)
+    m.rtol == 1e-6 || push!(kws, :rtol => m.rtol)
+    m.budget === nothing || push!(kws, :budget => m.budget)
+    m.warn_tol == (m.cycles === nothing ? m.rtol : 1e-3) || push!(kws, :warn_tol => m.warn_tol)
+    _show_kw(io, "Multigrid", kws)
+end
+function Base.show(io::IO, d::DevicePCG)
+    kws = Pair{Symbol, Any}[]
+    d.precond == Multigrid() || push!(kws, :precond => d.precond)
+    d.budget == 8 || push!(kws, :budget => d.budget)
+    d.rtol == 1e-6 || push!(kws, :rtol => d.rtol)
+    _show_kw(io, "DevicePCG", kws)
 end
 
 """
@@ -54,13 +112,18 @@ function resolve_inner(op::CellOperator, inner)
     if inner isa DevicePCG
         c = inner.precond
         c.cycle.nu1 == c.cycle.nu2 ||
-            irerror("DevicePCG needs a symmetric preconditioner V(ν, ν), not V(",
-                c.cycle.nu1, ", ", c.cycle.nu2, ")")
+            _refuse(op, "`DevicePCG` needs a symmetric preconditioner `V(ν, ν)`; got `V(",
+                c.cycle.nu1, ", ", c.cycle.nu2, ")`: use `DevicePCG(; precond = Multigrid(; cycle = V(",
+                max(c.cycle.nu1, c.cycle.nu2), ", ", max(c.cycle.nu1, c.cycle.nu2),
+                ")))`, or the stationary `Multigrid(; cycle = V(", c.cycle.nu1, ", ", c.cycle.nu2, "))`")
         c.cycles === nothing || c.cycles == 1 ||
-            irerror("DevicePCG applies one preconditioner cycle; got cycles = ", c.cycles)
+            _refuse(op, "`DevicePCG` applies one preconditioner cycle per iteration; got `cycles = ",
+                c.cycles, "` in its `precond`: drop `cycles`, or use the stationary `Multigrid(; cycles = ",
+                c.cycles, ")`")
         return inner
     end
-    inner isa Multigrid || irerror("unknown inner solver ", inner)
+    inner isa Multigrid || _refuse(op, "`inner` takes `:auto`, a `DevicePCG(…)` or a `Multigrid(…)`; got ",
+        repr(inner))
     b = inner.cycles !== nothing ? inner.cycles :
         inner.budget !== nothing ? inner.budget : jumpy(op) ? 12 : 8
     return Multigrid(inner.cycle, inner.cycles, inner.rtol, b, inner.warn_tol)
@@ -150,15 +213,24 @@ mutable struct FieldSolver{N, E}
     tables::Dict{Int32, Any}
     bodies::Dict{String, Any}
     plans::Dict{Any, SolvePlan}
+    vals::Tuple                           # the coefficient slot values the bodies hold
     auto::Bool                            # solver_T was :auto
     warned::Bool                          # the set_coefficients! solver_T warning was given
 end
 
 """
     FieldSolver(exec, op::CellOperator; inner = :auto, T = Float32, solver_T = :auto,
-        rule = RULE_M, stages, deflate = :auto)
+        rule = RULE_M, stages, deflate = :auto, inputs = ())
 
 Build the solver group of `op`: the program, its compiled bodies and its arrays on `exec`.
+
+`inputs` binds input fields to the caller's arrays, with no copy: `key => A` for the
+right-hand side `"in.f"` and for each input key of `op` (mask, mask value, shift, faces). The
+solver then reads `A` itself: a write into `A` enters the next `lift!` (the right-hand side,
+mask values) or `rebuild!` (mask, shift, faces). `A` holds one value per site, in the
+lattice's linear order (axis 1 fastest; a `Vector` or an array of size `op.dims`), of the
+state type `T` (`UInt8` for the mask), on the executor's device. An input not bound is
+allocated by the solver (zeros) and reached by `field(sv, key)`.
 
 Number types, one per role (`*_T`, `:auto` by default; a later `precond_T` would join them):
 
@@ -178,14 +250,12 @@ solution `pcg.x − mean(pcg.x) + c` is written to `pcg.u` after every solve.
 true residual (upper bound `eps(Float32)·|c|·‖A‖∞` relative to ‖b‖∞, D-C7b), whatever the
 solver precision.
 """
-function FieldSolver(exec, op::CellOperator{N}; inner = :auto, T::Type = Float32,
+function FieldSolver(exec, op::CellOperator{N}; inner = :auto, T = Float32,
         solver_T = :auto, rule::RuleWeights = RULE_M, stages = LOWERING,
-        deflate = :auto) where {N}
-    state = lowered_type(exec, T, "state")
+        deflate = :auto, inputs = ()) where {N}
+    state = lowered_type(exec, T, "state"; op)
     T = resolve_solver_T(exec, op, state, solver_T)
     alg = resolve_inner(op, inner)
-    cyc = alg isa DevicePCG ? alg.precond.cycle : alg.cycle
-    (cyc.nu1 >= 1 && cyc.nu2 >= 1) || irerror("a V-cycle needs ν₁, ν₂ ≥ 1")
     dfl = deflate === :auto ? alg isa DevicePCG && deflatable(op) : Bool(deflate)
     lane(t) = t == Float64 ? F64 : F32
     p, ctx = solver_program(op, alg isa DevicePCG; lane = lane(T), state = lane(state),
@@ -207,14 +277,46 @@ function FieldSolver(exec, op::CellOperator{N}; inner = :auto, T::Type = Float32
         bufs[Int32(i)] = [alloc(exec, juliatype(f.storage), n) for _ in 1:(f.buffers)]
         slot[Int32(i)] = 1
     end
+    _bind_inputs!(bufs, exec, op, s, inputs)
     nb = reduction_blocks(nsites(s, 0))
     tlen(k) = k == "solve.scal" ? SCALARS : k == "solve.gb" ? 2 : nb
     tables = Dict{Int32, Any}(Int32(i) => alloc(exec, T, tlen(t.key))
     for (i, t) in enumerate(s.tables))
     return FieldSolver{N, typeof(exec)}(
         exec, op, alg, dfl, s, ctx, T, state, rule, bufs, slot, tables, bodies,
-        Dict{Any, SolvePlan}(), solver_T === :auto, false)
+        Dict{Any, SolvePlan}(), praw, solver_T === :auto, false)
 end
+
+"""
+Bind the caller's arrays to input fields (`FieldSolver(…; inputs)`): each `key => A` replaces
+the solver's own array of input `key`, after the checks (an input key of the program, one
+value per site of the field's number type, on the executor's device).
+"""
+function _bind_inputs!(bufs, exec, op, p, inputs)
+    keys_in = [f.key for f in p.fields if f.role === :input]
+    for (k, A) in inputs
+        key = string(k)
+        key in keys_in || _refuse(op, "`inputs`: `", key, "` is not an input of this solver; its inputs are ",
+            join(("`" * x * "`" for x in sort(keys_in)), ", "))
+        id = fieldid(p, key)
+        f = p.fields[id]
+        S, n = juliatype(f.storage), nsites(p, f.levels[1])
+        A isa AbstractArray || _refuse(op, "`inputs`: `", key, "` takes an array; got ", typeof(A))
+        eltype(A) === S || _refuse(op, "`inputs`: `", key, "` holds ", eltype(A), " values; this solver's ",
+            key == op.mask ? "mask is `UInt8`" : string("state type is `", S, "` (`T = ", S, "`)"),
+            ": pass an array of ", S, key == op.mask ? "" : string(", or build the solver with `T = ", eltype(A), "`"),
+            inputs isa AbstractVector ? " (a vector `[k => A, …]` converts its arrays to one element type: pass the pairs as a tuple or a `Dict`)" : "")
+        (length(A) == n && (ndims(A) == 1 || size(A) == op.dims)) ||
+            _refuse(op, "`inputs`: `", key, "` has size ", size(A), "; this solver needs one value per site: ",
+                "a vector of ", n, " or an array of size ", op.dims)
+        _same_device(exec, A) || _refuse(op, "`inputs`: `", key, "` is not on the solver's device (",
+            exec, "): allocate it there (`KernelAbstractions.allocate(backend, ", S, ", ", n, ")`)")
+        bufs[id] = Any[vec(A)]
+    end
+    return bufs
+end
+_same_device(exec, A) = true
+_same_device(exec::KA.Backend, A) = KA.get_backend(A) == exec
 
 """
 The number types the solver lowers (lanes): any other is refused, naming the type and the
@@ -228,15 +330,18 @@ const LOWERED_TYPES = (Float32, Float64)
 `S` if the solver lowers it and the executor supports it (`supports(exec, S)`, asked only
 for types other than Float32), else an error naming `S`.
 """
-function lowered_type(exec, S, role)
-    S isa Type || irerror(role, " expects ", role == "solver_T" ? ":auto or " : "",
+function lowered_type(exec, S, role; op = nothing)
+    who = op === nothing ? "the solver group" : _who(op)
+    bad(msg...) = throw(ArgumentError(string(who, ": ", msg...)))
+    S isa Type || bad(role, " expects ", role == "solver_T" ? ":auto or " : "",
         "a number type; got ", repr(S))
     S in LOWERED_TYPES ||
-        irerror("number type ", S, " (", role, ") is not lowered for this solver; ",
-            "lowered: ", join(LOWERED_TYPES, ", "))
+        bad("number type ", S, " (", role, ") is not lowered for this solver; ",
+            "lowered: ", join(LOWERED_TYPES, ", "),
+            S <: AbstractFloat ? "" : " (a Dual or BigFloat implicit solve is planned after the paper, FE-26)")
     S === Float32 || supports(exec, S) ||
-        irerror("number type ", S, " (", role, ") is not supported by this executor ",
-            "(supports(exec, ", S, ") is false)")
+        bad("number type ", S, " (", role, ") is not supported by this executor ",
+            "(supports(exec, ", S, ") is false: the device has no ", S, "); use Float32")
     return S
 end
 
@@ -249,20 +354,31 @@ then), else the state type; on a backend without Float64 such a group stays in F
 ends `:floor` and the sentinel names it. A type is checked by `lowered_type`.
 """
 function resolve_solver_T(exec, op::CellOperator, state::Type, solver_T)
-    solver_T === :auto || return lowered_type(exec, solver_T, "solver_T")
+    solver_T === :auto || return lowered_type(exec, solver_T, "solver_T"; op)
     state === Float32 && floor_regime(op) && supports(exec, Float64) && return Float64
     return state
 end
 
-fid(sv::FieldSolver, key) = fieldid(sv.prog, key)
+function fid(sv::FieldSolver, key)
+    i = findfirst(f -> f.key == key, sv.prog.fields)
+    i === nothing && _refuse(sv.op, "`", key, "` is not a field of this solver; its inputs are ",
+        join(("`" * f.key * "`" for f in sv.prog.fields if f.role === :input), ", "),
+        " and its solution is `", solution_key(sv), "`")
+    return fieldid(sv.prog, key)
+end
 tid(sv::FieldSolver, key) = Int32(findfirst(t -> t.key == key, sv.prog.tables))
 """
-The current array of field `key` (two-buffer fields: the current slot).
+    field(sv, key)
+
+The current array of the solver's field `key` (two-buffer fields: the current slot): an
+input (`"in.f"`, the operator's input keys) or the solution (`solution_key(sv)`).
 """
 function field(sv::FieldSolver, key)
     (id = fid(sv, key); sv.bufs[id][sv.slot[id]])
 end
 """
+    solution_key(sv)
+
 The solution field, an array of the state type: `pcg.u` under deflation, `out.u` when the
 solver type differs from the state type, else `pcg.x` under PCG or the finest level's `x`.
 """
@@ -287,16 +403,18 @@ number type (`solver_T = :auto`) stays as resolved at build.
 """
 function set_coefficients!(sv::FieldSolver, op::CellOperator)
     o = sv.op
-    same = op.dims == o.dims && op.periodic == o.periodic && op.mask == o.mask &&
-           coef_slots(op) == coef_slots(o) &&
-           all(map((x, y) -> x isa Real || x == y, op.face, o.face)) &&
-           (op.shift isa Real || op.shift == o.shift) &&
-           (op.value isa Real || op.value == o.value)
-    same || irerror("set_coefficients!: the operator's structure differs from the group's")
-    check_coefficients(op.face, op.shift, op.value, op.dirichlet)
+    diff = op.dims != o.dims ? "the lattice size" : op.periodic != o.periodic ? "the periodic axes" :
+           op.mask != o.mask ? "the mask" : op.name != o.name ? "the field name" :
+           coef_slots(op) != coef_slots(o) ? "which coefficients are numbers, fields or absent" :
+           !all(map((x, y) -> x isa Real || x == y, op.face, o.face)) ? "a face coefficient field" :
+           !(op.shift isa Real || op.shift == o.shift) ? "the shift field" :
+           !(op.value isa Real || op.value == o.value) ? "the mask value field" : nothing
+    diff === nothing || _refuse(o, "set_coefficients! takes new values for the same structure; ",
+        diff, " differs: build a new FieldSolver for the new structure")
+    check_coefficients(op)
     if sv.auto && !sv.warned && resolve_solver_T(sv.exec, op, sv.state, :auto) != sv.T
         sv.warned = true
-        @warn string("set_coefficients!: solver_T = :auto would now resolve to ",
+        @warn string(_who(op), ": set_coefficients!: solver_T = :auto would now resolve to ",
             resolve_solver_T(sv.exec, op, sv.state, :auto), ", but the group keeps ", sv.T,
             " (resolved at build; changing it recompiles). Pass solver_T explicitly or ",
             "rebuild the FieldSolver to change it.")
@@ -305,11 +423,19 @@ function set_coefficients!(sv::FieldSolver, op::CellOperator)
     return _set_values!(sv, op)
 end
 function _set_values!(sv::FieldSolver, op::CellOperator)
-    praw = coef_values(op)
+    _set_raw!(sv, coef_values(op))
+    sv.op = op
+    return sv
+end
+"""
+The bodies' parameter values from the slot values `praw` (`coef_slots` order); `sv.op` is
+not changed (the tangent solves perturb slots this way).
+"""
+function _set_raw!(sv::FieldSolver, praw)
     for (k, (ck, fn, _, d)) in sv.bodies
         sv.bodies[k] = (ck, fn, d(praw, zero(sv.T), 0.0, nothing), d)
     end
-    sv.op = op
+    sv.vals = Tuple(praw)
     return sv
 end
 
@@ -317,25 +443,25 @@ end
     tangent!(sv, u, coef; homogeneous = true, maxiter = 64) -> u̇
 
 The derivative of the solution `u` of the group's operator `A(θ) u = b(θ)` with respect to
-one numeric coefficient `θ` (`coef`: `:shift`, `:value`, `(:face, a)` or
-`(:dirichlet, a, k)`), by a tangent solve with the same solver (no Dual enters PCG or
-multigrid, P5 §3.4): `A u̇ = ∂b/∂θ − (∂A/∂θ) u` with homogeneous boundary values. `u` is the
-primal solution in solver precision (`solver_solution`). The right-hand side is exact
-because `A` and `b` are affine in each coefficient: `r(θ + 1, u) − r(θ, u)`, both residuals
-computed on the device by the `tangent.*` kernels after rebuilding the operator, and
-written straight into the solver's right-hand side (the boundary data of `lift` is left
-out: homogeneous). The coefficients, the right-hand side, the working field and the
-solution array are restored afterwards, so a warm re-solve continues from the primal
-state; `u̇` is only returned (a host copy). `homogeneous = false` keeps the primal boundary
-values (the negative control of the tests).
+one numeric coefficient `θ` (`coef`: `:shift`, `:value`, `(:face, a)`, `(:dirichlet, a, k)`
+or `(:robin, a, k, :alpha | :beta | :g)`), by a tangent solve with the same solver (no Dual
+enters PCG or multigrid, P5 §3.4): `A u̇ = ∂b/∂θ − (∂A/∂θ) u` with homogeneous boundary
+values. `u` is the primal solution in solver precision (`solver_solution`). The right-hand
+side is exact because `A` and `b` are affine in each coefficient slot: `r(θ + v, u) − r(θ, u)`
+with `v` the slots' derivative in `θ` (one slot, or a Robin face's `(d⁺, d⁻, q)`, which are
+affine together), both residuals computed on the device by the `tangent.*` kernels after
+rebuilding the operator, and written straight into the solver's right-hand side (the
+boundary data of `lift` is left out: homogeneous). A Robin face's negative part is iterated
+as in `steady!`. The coefficients, the right-hand side, the working field and the solution
+array are restored afterwards, so a warm re-solve continues from the primal state; `u̇` is
+only returned (a host copy). `homogeneous = false` keeps the primal boundary values (the
+negative control of the tests).
 """
 function tangent!(sv::FieldSolver, u::AbstractVector, coef; homogeneous::Bool = true,
         maxiter::Int = 64)
     op = sv.op
-    θ1 = collect(coef_values(op))
-    j = _coef_slot(coef_slots(op), coef)
-    j == 0 && irerror("tangent!: ", coef, " is not a numeric coefficient of the group")
-    θ1[j] += 1
+    θ = collect(coef_values(op))
+    v = _direction(op, coef)
     slot0 = copy(sv.slot)                 # the primal working state (warm starts)
     wid, sk = fid(sv, working_key(sv)), solution_key(sv)
     w = sv.bufs[wid][sv.slot[wid]]
@@ -345,16 +471,17 @@ function tangent!(sv::FieldSolver, u::AbstractVector, coef; homogeneous::Bool = 
     rebuild!(sv)                          # r(θ, u) into d
     lift!(sv)
     _run_one!(sv, "tangent.r0")
-    _set_values!(sv, _with_values(op, θ1))
-    rebuild!(sv)                          # r(θ + 1, u) − r(θ, u) into d
+    _set_raw!(sv, θ .+ v)
+    rebuild!(sv)                          # r(θ + v, u) − r(θ, u) into d
     lift!(sv)
     _run_one!(sv, "tangent.dr")
-    _set_values!(sv, op)
+    _set_raw!(sv, θ)
     rebuild!(sv)
     lift!(sv)
     _run_one!(sv, "tangent.rhs"; rt = (homogeneous ? 0.0 : 1.0, 0.0))
     foreach(A -> fill!(A, zero(eltype(A))), sv.bufs[wid])
-    solve!(sv; host = true, budget = maxiter)
+    has_robin(op) && _run_one!(sv, "robin.b")     # the defect term at x = 0
+    _defect_solve!(sv, maxiter)
     du = solver_solution(sv)
     lift!(sv)                             # restore b, the working state and the solution
     merge!(sv.slot, slot0)
@@ -373,29 +500,49 @@ function _run_one!(sv::FieldSolver, key; rt = (0.0, 0.0))
     return sv
 end
 
-function _coef_slot(cs, coef)
+"""
+The derivative of the slot values (`coef_values` order) in coefficient `coef` (`tangent!`).
+"""
+function _direction(op::CellOperator, coef)
+    cs = coef_slots(op)
+    v = zeros(cs.n)
+    j = _coef_slot(op, cs, coef)
+    if j isa Integer
+        j == 0 && _refuse(op, "tangent!: ", repr(coef), " is not a numeric coefficient of the group ",
+            "(it is an input field or absent)")
+        v[j] = 1
+        return v
+    end
+    a, k, which = j
+    α, β, g = op.robin[a][k]
+    den = α / 2 + β
+    dd, dq = which === :alpha ? (β / den^2, -g / (2den^2)) :
+             which === :beta ? (-α / den^2, -g / den^2) : (0.0, 1 / den)
+    s = cs.robin[a][k]
+    v[α / den >= 0 ? s[1] : s[2]] = dd     # d's sign picks its part (one-sided at d = 0)
+    v[s[3]] = dq
+    return v
+end
+
+function _coef_slot(op, cs, coef)
     coef === :shift && return cs.shift
     coef === :value && return cs.value
     coef isa Tuple && length(coef) == 2 && coef[1] === :face && return cs.face[coef[2]]
     coef isa Tuple && length(coef) == 3 && coef[1] === :dirichlet &&
         return cs.dirichlet[coef[2]][coef[3]]
-    irerror("tangent!: unknown coefficient ", coef)
+    if coef isa Tuple && length(coef) == 4 && coef[1] === :robin && coef[4] in (:alpha, :beta, :g)
+        a, k = coef[2], coef[3]
+        op.robin[a][k] === nothing && _refuse(op, "tangent!: ", _face_words(op, a, k),
+            " has no Robin condition")
+        return (a, k, coef[4])
+    end
+    _refuse(op, "tangent!: unknown coefficient ", repr(coef), "; give `:shift`, `:value`, `(:face, a)`, ",
+        "`(:dirichlet, a, k)` or `(:robin, a, k, :alpha | :beta | :g)` (axis `a`, side `k` = 1 low, 2 high)")
 end
 
 """
-`op` with its numeric coefficients replaced by `v` (slot order, `coef_slots`).
-"""
-function _with_values(op::CellOperator{N}, v) where {N}
-    cs = coef_slots(op)
-    pick(x, s) = s > 0 ? v[s] : x
-    face = ntuple(a -> pick(op.face[a], cs.face[a]), N)
-    dir = ntuple(a -> ntuple(k -> pick(op.dirichlet[a][k], cs.dirichlet[a][k]), 2), N)
-    return CellOperator(op.dims; periodic = op.periodic, face,
-        shift = pick(op.shift, cs.shift), mask = op.mask,
-        value = pick(op.value, cs.value), dirichlet = dir)
-end
+    solver_solution(sv)
 
-"""
 The group's solution in the solver's own precision on the host (a sync): under deflation
 `pcg.x − mean(pcg.x) + c`, else the working field.
 """
@@ -674,7 +821,7 @@ function precond_plan(sv::FieldSolver)
 end
 
 function _plan(f::F, sv::FieldSolver, name) where {F}
-    key = (name, sort!(collect(sv.slot)), coef_values(sv.op))   # P and G hold the values
+    key = (name, sort!(collect(sv.slot)), sv.vals)   # P and G hold the values
     return get!(() -> f(sv), sv.plans, key)
 end
 
@@ -697,9 +844,28 @@ function run!(sv::FieldSolver, sp::SolvePlan; host::Bool = false)
     return nseg
 end
 
+"""
+    rebuild!(sv)
+
+Fill the finest level's coefficients from the operator and its input fields (mask, shift,
+faces) and rebuild the hierarchy (rule M). Run it after any of these changes. Device mode:
+no sync.
+"""
 rebuild!(sv::FieldSolver) = (run!(sv, _plan(rebuild_plan, sv, :rebuild)); sv)
+"""
+    lift!(sv)
+
+The solve's right-hand side from `"in.f"`, the mask values and the face conditions; with a
+Robin face whose diagonal is negative, its defect term at the current iterate. Run it after
+a change of any of these. Device mode: no sync.
+"""
 lift!(sv::FieldSolver) = (run!(sv, _plan(s -> lift_plan(s), sv, :lift)); sv)
-lift_plan(sv) = (pl = PlanBuilder(sv); gen!(pl, "lift"); SolvePlan(pl))
+function lift_plan(sv)
+    pl = PlanBuilder(sv)
+    gen!(pl, "lift")
+    has_robin(sv.op) && gen!(pl, "robin.b")   # the defect term at the current iterate
+    return SolvePlan(pl)
+end
 
 """
     solve!(sv; host = false, budget)
@@ -715,6 +881,8 @@ function solve!(sv::FieldSolver; host::Bool = false,
 end
 
 """
+    scalars(sv)
+
 Device scalars on the host (a sync): `(; status, done, iter, rnorm, bnorm, tol, warn, mean, best, scale)` (`best`: the best true residual; `scale`: the rounding scale max(|b| + |A||x|)
 of the last check). `status` is `:done` (converged), `:floor` (stagnated at rounding level
 above the tolerance), `:diverged` (the residual grew) or `:budget`.
@@ -727,9 +895,16 @@ function scalars(sv::FieldSolver)
         warn = s[WARN] != 0, mean = Float64(s[MEAN]), best = Float64(s[BEST]),
         scale = Float64(s[SCALE]))
 end
+"""
+    iterations(sv)
+
+The iteration (or cycle) count of the last solve (a sync).
+"""
 iterations(sv::FieldSolver) = scalars(sv).iter
 
 """
+    sentinel(sv)
+
 The residual sentinel, read at an existing sync: warns (once per call) when the last
 budgeted solve ended above its tolerance; returns whether it fired.
 """
@@ -743,8 +918,8 @@ function sentinel(sv::FieldSolver)
            ""
     what = s.status === :floor ? "stagnated (floor)" :
            s.status === :diverged ? "diverged" : "ended"
-    @warn string("field solve ", what, " at ‖r‖∞ = ", s.rnorm, " > tolerance after ",
-        s.iter, " iterations.", hint)
+    @warn string(_who(sv.op), ": the field solve ", what, " at ‖r‖∞ = ", s.rnorm,
+        " > tolerance after ", s.iter, " iterations.", hint)
     return true
 end
 
@@ -759,8 +934,34 @@ function steady!(sv::FieldSolver; maxiter::Int = 64)
     lift!(sv)
     id = fid(sv, working_key(sv))
     foreach(A -> fill!(A, zero(eltype(A))), sv.bufs[id])
+    has_robin(sv.op) && _run_one!(sv, "robin.b")   # the defect term at x = 0
+    return _defect_solve!(sv, maxiter)
+end
+
+"""
+The host-checked solve of `steady!` and `tangent!`; with a Robin face's negative part (the
+sign rule, `CellOperator`), the defect correction around it: `robin.b` takes the right-hand
+side at the new iterate and the inner solve runs again from it, until a solve is converged
+at its setup (then the full operator's residual is at the tolerance), within `maxiter` outer
+passes. A correction that does not converge warns, naming the field, the faces and the route.
+Returns the total inner iteration count.
+"""
+function _defect_solve!(sv::FieldSolver, maxiter::Int)
     fixed = sv.alg isa Multigrid && sv.alg.cycles !== nothing
-    return solve!(sv; host = true, budget = fixed ? sv.alg.cycles : maxiter)
+    budget = fixed ? sv.alg.cycles : maxiter
+    k = solve!(sv; host = true, budget)
+    has_defect(sv.op) || return k
+    for _ in 1:maxiter
+        _run_one!(sv, "robin.b")
+        j = solve!(sv; host = true, budget)
+        k += j
+        (j == 0 && scalars(sv).done) && return k
+    end
+    @warn string(_who(sv.op), ": the defect correction of the Robin faces with a negative diagonal ",
+        "(α and β of opposite sign, |β| > α/2) did not converge in ", maxiter, " passes: the face ",
+        "condition is too strong for this operator; a larger `α/2 + β`, or a larger shift or face ",
+        "coefficient, makes it converge")
+    return k
 end
 
 # ---- the finishing pass (device scalars; one workgroup) -------------------------------------

@@ -78,7 +78,7 @@ end
     if gpu == "metal"                      # no Float64: documented Float32 fallback, refusal
         k, _, sc, sv = dev_solved(case, DevExec())
         @test sv.T == Float32 && sc.status === :floor
-        @test_throws LatticeFields.IR.IRError FieldSolver(DevExec(), case[1]; solver_T = Float64)
+        @test_throws ArgumentError FieldSolver(DevExec(), case[1]; solver_T = Float64)
     else
         k, u, sc, sv = dev_solved(case, DevExec())
         h = dev_solved(case, HostExec())

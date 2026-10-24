@@ -27,18 +27,6 @@ end
 # on the primal value: a face check is a policy, constant across a derivative
 _coefval(c::Coef, P) = c.param == 0 ? c.value : c.value * Float64(primal(P[c.param]))
 
-"""Relative tolerance of the degenerate-face test: `|α/2 + β| ≤ tol (|α|/2 + |β|)`."""
-const FACE_RTOL = 1e-6
-
-"""
-    degenerate(α, β) -> Bool
-
-Whether a face with lattice coefficients `α`, `β` has `α/2 + β` zero to a relative
-[`FACE_RTOL`](@ref) (the ghost value `(g − (α/2 − β) c)/(α/2 + β)` is then undefined or
-amplified past any stable step).
-"""
-degenerate(a::Real, b::Real) = abs(a / 2 + b) <= FACE_RTOL * (abs(a) / 2 + abs(b))
-
 """
     face_ratio(α, β) -> Float64
 

@@ -264,22 +264,34 @@ end
 end
 
 @testset "coefficients are validated; set_coefficients! warns once about solver_T" begin
-    @test_throws r"shift must be finite and ≥ 0" CellOperator((8, 8); shift = -1.0)
-    @test_throws r"shift must be finite" CellOperator((8, 8); shift = Inf)
-    @test_throws r"face\[1\] must be finite and > 0" CellOperator((8, 8); face = (0.0, 1.0))
-    @test_throws r"face\[2\] must be finite and > 0" CellOperator((8, 8); face = (
-        1.0, -2.0))
-    @test_throws r"face\[1\] must be finite" CellOperator((8, 8); face = (Inf, 1.0))
-    @test_throws r"face\[2\] must be finite" CellOperator((8, 8); face = (1.0, NaN))
-    @test_throws r"value must be finite" CellOperator((8, 8); mask = "m", value = Inf)
-    @test_throws r"dirichlet\[1\] values must be finite" CellOperator((8, 8);
-        dirichlet = ((0.0, Inf), (nothing, nothing)))
+    # refusals in the user's words (F3-05): an ArgumentError naming the field and the axis
+    E(f) = try
+        f(); ""
+    catch e
+        e isa ArgumentError || rethrow()
+        sprint(showerror, e)
+    end
+    nm = (; name = "c", axes = ("x", "y"))
+    e = E(() -> CellOperator((8, 8); shift = -1.0, nm...))
+    @test occursin("field `c`: the shift", e) && occursin("must be ≥ 0; got -1.0", e) &&
+          occursin("step the field with an explicit method (`ExplicitEuler`)", e)
+    @test occursin("field `c`: the shift", E(() -> CellOperator((8, 8); shift = Inf, nm...)))
+    @test occursin("field `c`: the face coefficient of axis `x` must be > 0; got 0.0",
+        E(() -> CellOperator((8, 8); face = (0.0, 1.0), nm...)))
+    @test occursin("the face coefficient of axis `y` must be > 0; got -2.0",
+        E(() -> CellOperator((8, 8); face = (1.0, -2.0), nm...)))
+    @test occursin("the face coefficient of axis `x` must be finite", E(() -> CellOperator((8, 8); face = (Inf, 1.0), nm...)))
+    @test occursin("the face coefficient of axis `y` must be finite", E(() -> CellOperator((8, 8); face = (1.0, NaN), nm...)))
+    @test occursin("field `c`: the mask value must be finite", E(() -> CellOperator((8, 8); mask = "m", value = Inf, nm...)))
+    @test occursin("the Dirichlet value on the high face of axis `x` must be finite",
+        E(() -> CellOperator((8, 8); dirichlet = ((0.0, Inf), (nothing, nothing)), nm...)))
+    @test occursin("the solver group: the shift", E(() -> CellOperator((8, 8); shift = -1.0)))   # no name given
     op, inputs = named_case("per256", 1.0)               # :auto resolves to Float32
     sv = case_solver((op, inputs), Float32)
     @test sv.T == Float32
     bad = CellOperator{2}(op.dims, op.periodic, op.face, -1.0, op.mask, op.value,
-        op.dirichlet)                                     # bypasses the constructor
-    @test_throws r"shift must be finite and ≥ 0" Solvers.set_coefficients!(sv, bad)
+        op.dirichlet, op.robin, op.name, op.axes)        # bypasses the constructor
+    @test_throws r"shift .* must be ≥ 0" Solvers.set_coefficients!(sv, bad)
     weak = CellOperator(op.dims; periodic = op.periodic, shift = 1e-3)
     @test_logs (:warn, r"solver_T = :auto would now resolve to Float64") Solvers.set_coefficients!(
         sv, weak)

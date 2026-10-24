@@ -46,7 +46,14 @@ struct ExplicitEuler <: FieldAlgorithm
             lower === nothing ? nothing : Float64(lower))
     end
 end
-ExplicitEuler(; dt = nothing, substeps = nothing, lower = nothing) = ExplicitEuler(dt, substeps, lower)
+function ExplicitEuler(; dt = nothing, substeps = nothing, lower = nothing, kw...)
+    isempty(kw) || throw(ArgumentError(string("ExplicitEuler: ",
+        haskey(kw, :inner) ? string("`inner = ", repr(kw[:inner]), "`: `inner` is a keyword of the implicit field ",
+                                   "solvers (the linear solver of each implicit step), and `ExplicitEuler` solves no ",
+                                   "linear system; leave `inner` out") :
+        string("no keyword ", join(("`$k`" for k in keys(kw)), ", "), "; its keywords are `dt`, `substeps` and `lower`"))))
+    return ExplicitEuler(dt, substeps, lower)
+end
 # the state buffers a step of the algorithm needs per field (`c`, `c__next`)
 nbuffers(::ExplicitEuler) = 2
 
@@ -159,6 +166,23 @@ explicit algorithm (`nothing` cache); an implicit solver returns its failure cod
 """
 step_retcode!(::Nothing, rt) = SciMLBase.ReturnCode.Success
 
+
+"""
+The linear solvers (`Solvers.DevicePCG`, `Solvers.Multigrid`): the `inner` of an implicit
+field solver, never a field algorithm themselves.
+"""
+const LinearSolver = Union{Solvers.DevicePCG, Solvers.Multigrid}
+
+"""
+    linear_solver_refusal(what, s, route) -> ArgumentError
+
+The refusal of a linear solver `s` given where a field algorithm goes (`what` names the
+place), with `route` the working spelling. Both front ends and `init` use it.
+"""
+linear_solver_refusal(what, s, route) = ArgumentError(string(what, ": `", repr(s), "` is a linear solver: it is ",
+    "the `inner` of an implicit field solver, not a field solver; no implicit field solver is in this version, so step ",
+    "the field with an explicit field algorithm: give ", route))
+
 """
     FieldGroups(field => alg, …; default = nothing)
 
@@ -204,8 +228,10 @@ struct FieldGroups <: FieldAlgorithm
 end
 function FieldGroups(pairs::Pair...; default = nothing)
     for (k, a) in pairs
+        a isa LinearSolver && throw(linear_solver_refusal("FieldGroups: the field `$k`", a, "`$k => ExplicitEuler(…)`"))
         a isa FieldAlgorithm || throw(ArgumentError("FieldGroups: `$k => $(repr(a))` is not a field algorithm"))
     end
+    default isa LinearSolver && throw(linear_solver_refusal("FieldGroups: `default`", default, "`default = ExplicitEuler(…)`"))
     default === nothing || default isa FieldAlgorithm ||
         throw(ArgumentError("FieldGroups: default = $(repr(default)) is not a field algorithm"))
     return FieldGroups(Pair{Any, FieldAlgorithm}[k => a for (k, a) in pairs], default)

@@ -224,6 +224,19 @@ struct FaceRule <: BRule
     beta::Coef
     g::Coef
 end
+
+"""Relative tolerance of the degenerate-face test: `|α/2 + β| ≤ tol (|α|/2 + |β|)`."""
+const FACE_RTOL = 1e-6
+
+"""
+    degenerate(α, β) -> Bool
+
+Whether a face with lattice coefficients `α`, `β` has `α/2 + β` zero to a relative
+[`FACE_RTOL`](@ref) (the ghost value `(g − (α/2 − β) c)/(α/2 + β)` is then undefined or
+amplified past any stable step). The explicit path (`Problems.check_faces`, LatticePDE's
+`discretize`) and the solvers' Robin faces (`Solvers.CellOperator`) share this test.
+"""
+degenerate(a::Real, b::Real) = abs(a / 2 + b) <= FACE_RTOL * (abs(a) / 2 + abs(b))
 """
 The irregular domain edge (`Grid.domain`): `:mirror` (zero flux) or `:zero`. The edge is
 crossed from either side: a read of a neighbor outside the domain, or any neighbor read of a

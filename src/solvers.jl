@@ -102,6 +102,8 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
             fsolver = field_solver
         end
         fsolver === nothing && (fsolver = isempty(maps) ? ExplicitEuler() : ExplicitMap())
+        fsolver isa LatticeFields.Problems.LinearSolver && throw(LatticeFields.Problems.linear_solver_refusal(
+            "`field_solver`", fsolver, "`field_solver = ExplicitEuler()` (or `ExplicitMap()` for a map)"))
         _is_field_solver(fsolver) || throw(ArgumentError(
             "`field_solver` takes a field solver ($(_field_solver_names())); got $(repr(fsolver))"))
         _check_field_solver(fsolver, field_solver isa LatticeFields.Problems.FieldGroups ? "`FieldGroups`: `default`" :
@@ -134,6 +136,8 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
                                           (k isa ModelingToolkitBase.AbstractSystem ? " (once through component `$(nameof(k))`)" : "")))
         push!(named, n)
         if n in fields
+            s isa LatticeFields.Problems.LinearSolver && throw(LatticeFields.Problems.linear_solver_refusal(
+                "`solvers`: the field `$n`", s, "`solvers = [$n => ExplicitEuler()]`"))
             _is_field_solver(s) || throw(ArgumentError(
                 "`solvers`: the field `$n` takes a field solver ($(_field_solver_names())); got $(repr(s))"))
             _check_field_solver(s, "`solvers`: the field `$n`"; map = n in maps)

@@ -924,3 +924,45 @@ end
         @test all(i -> a.u[i].u[end] == b.u[i].u[end], 1:8)
     end
 end
+
+# F3-05 (F3 design §3.2): the solvers' inner algorithms reach B by name, the same objects as
+# A's (test/fields.jl): `DevicePCG`, `Multigrid` exported, `LatticePDE.V` public.
+# Base (1079c4ff): `UndefVarError: DevicePCG`.
+@testset "F3-05: the inner solvers in B" begin
+    @test parentmodule(DevicePCG) === LatticePDE.Problems.Solvers && Multigrid === LatticePDE.Problems.Solvers.Multigrid
+    @test DevicePCG(; precond = Multigrid(; cycle = LatticePDE.V(3, 3))).precond.cycle == LatticePDE.V(3, 3)
+    @test Base.ispublic(LatticePDE, :V) && !Base.isexported(LatticePDE, :V)
+end
+
+# F3-05 review r1 M1: a linear solver given where a field algorithm goes is refused in B's
+# words, naming it a linear solver (the `inner` of an implicit field solver), and the route
+# works when followed. Base (9db10886, ~/lpwork/f3b2r1-nc-b.log, 6 of 8 fail;
+# the 2 that pass are the followed routes): `solve(p, DevicePCG())`
+# is "MethodError: no method matching init(::FieldProblem…, ::DevicePCG)", `FieldGroups` says
+# "`c(t, x, y) => DevicePCG(Multigrid(LatticeFields.Solvers.V(2, 2), …` is not a field
+# algorithm", and `ExplicitEuler(; dt, inner)` is a MethodError.
+@testset "F3-05: a linear solver where B takes a field algorithm" begin
+    @parameters Dm1 = 0.1
+    p = discretize(psys([D(ce) ~ Dm1 * Δ(ce)], [c(0, x, y) ~ x], [Dm1]),
+        LatticeDiscretization(Grid((8, 8)); T = Float32, problem = :owned))
+    e(f) = try
+        f(); ""
+    catch err
+        err isa ArgumentError ? err.msg : sprint(showerror, err)
+    end
+    lin = "is a linear solver: it is the `inner` of an implicit field solver, not a field solver"
+    m = e(() -> solve(p, DevicePCG()))
+    @test startswith(m, "`solve`/`init`: `DevicePCG()` " * lin) && occursin("give `solve(prob, ExplicitEuler(; dt))`", m)
+    @test startswith(e(() -> init(p, Multigrid(; cycles = 3))), "`solve`/`init`: `Multigrid(; cycles = 3)` " * lin)
+    @test solve(p, ExplicitEuler(; dt = 0.01)).retcode == SciMLBase.ReturnCode.Success           # the route
+    m = e(() -> FieldGroups(ce => DevicePCG(; budget = 12)))
+    @test startswith(m, "FieldGroups: the field `c(t, x, y)`: `DevicePCG(; budget = 12)` " * lin) &&
+          occursin("give `c(t, x, y) => ExplicitEuler(…)`", m)
+    @test startswith(e(() -> FieldGroups(; default = Multigrid())), "FieldGroups: `default`: `Multigrid()` " * lin)
+    @test solve(p, FieldGroups(ce => ExplicitEuler(; dt = 0.01))).retcode == SciMLBase.ReturnCode.Success
+    m = e(() -> ExplicitEuler(; dt = 0.01, inner = DevicePCG()))
+    @test startswith(m, "ExplicitEuler: `inner = DevicePCG()`: `inner` is a keyword of the implicit field solvers") &&
+          occursin("leave `inner` out", m)
+    @test e(() -> ExplicitEuler(; dt = 0.01, step = 2)) ==
+          "ExplicitEuler: no keyword `step`; its keywords are `dt`, `substeps` and `lower`"
+end

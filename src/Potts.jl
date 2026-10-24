@@ -19,6 +19,7 @@ using JumpProcesses: JumpProcesses
 using KernelAbstractions: KernelAbstractions
 using LatticeFields: LatticeFields
 using LatticeFields.Problems: ExplicitEuler, ExplicitMap, FieldGroups, FieldAlgorithm, substep_counts
+using LatticeFields.Solvers: DevicePCG, Multigrid, V
 using LatticePDE: LatticePDE, PottsEntity, Δ, at, at2, ismember
 using LinearAlgebra: Symmetric, eigen, svdvals
 using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile, complete
@@ -47,7 +48,8 @@ for name in names(CorePotts)
 end
 export @potts_model, @named, PottsSystem, CompiledPottsSystem, mtkcompile,
     total_energy, energy_change, generated_code, parameters, variables, observe, Adaptive, ExplicitEuler, ExplicitMap,
-    FieldGroups, RK4, substep_counts
+    FieldGroups, RK4, substep_counts, DevicePCG, Multigrid
+public V                                   # `Multigrid(; cycle = V(ν₁, ν₂))` (not exported: a short name)
 
 include("seeds.jl")
 include("draws.jl")

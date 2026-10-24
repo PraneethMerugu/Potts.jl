@@ -30,8 +30,9 @@ using LatticeFields.IR: F16, Grid, Program, ProgramBuilder, Coef, FaceRule, Node
 using CommonSolve: solve, init, step!, solve!
 using KernelAbstractions: KernelAbstractions
 using LatticeFields: Exec, Problems
+using LatticeFields.Solvers: DevicePCG, Multigrid, V
 using LatticeFields.Compile: CompileOptions, fingerprint_text, fuse_update, promote_dual
-using LatticeFields.IR: fieldid, RESOLVE
+using LatticeFields.IR: fieldid, RESOLVE, degenerate
 using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
                               ExplicitEuler, ExplicitMap, FieldGroups, ode_problem, RT_DT, substep_counts
 using ModelingToolkitBase: ModelingToolkitBase, PDESystem, Pre, ShiftIndex, Shift, Hold, Sample
@@ -44,7 +45,7 @@ using SymbolicUtils: SymbolicUtils, arguments, iscall, operation, unwrap_const
 using SymbolicUtils.Code: toexpr
 
 public euler_update, bound_parts, StabilityBound, lower_group, DeferredBound, resolve_bound, lowers_call, check_one_kind, velocity_terms, as_written,
-       derivation
+       derivation, V
 export Δ, DivKGrad, Advect, AdvectionScheme, Upwind1, at, at2, ismember, masked, step_index
 export LatticePlacement, LatticeStorage, LatticeLevel, LatticeSpacing, PottsEntity, LatticeInputName
 export get_lattice_placement, get_lattice_storage, get_lattice_level, get_lattice_spacing,
@@ -54,6 +55,7 @@ export LatticeDiscretization, FiniteVolume, CompiledField, discretize, symbolic_
        parse_bcs, linearity, Grid, Interval
 export ExplicitEuler, ExplicitMap, FieldGroups, FieldProblem, solve, init, step!, solve!, stability_bound,
        substep_counts
+export DevicePCG, Multigrid                 # the inner solvers (`inner = …`); `V` is public
 export remake, getp, getu, setp            # the routes its messages give (SciMLBase, SymbolicIndexingInterface)
 
 # ---------------------------------------------------------------------------------------

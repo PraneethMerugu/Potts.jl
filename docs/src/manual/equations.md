@@ -155,6 +155,12 @@ sol[:x][end], sol[:g][end]
 | `ode_solver` | `ExplicitEuler(; substeps)`, `RK4(; substeps)`, `Adaptive(alg; kwargs...)` | `ExplicitEuler()`, one step per MCS |
 | `solvers` | `[x => solver, …]`, per variable or component | — |
 
+The linear solvers `DevicePCG(; budget, rtol, precond)` and `Multigrid(; cycle = Potts.V(2, 2), cycles, rtol, budget)`
+are the `LatticeFields.Solvers` objects, the same in Potts and LatticePDE. They become the
+`inner` linear solver of the implicit field solvers from `BackwardEuler` on. They are not
+field solvers: in this version, `field_solver`, `solvers` and `FieldGroups` refuse them, and
+the fields step with `ExplicitEuler` or `ExplicitMap`.
+
 - `substeps = nothing` in a field solver takes the smallest count `n` with
   `mcs_duration / n · ρ ≤ 1.8`, where `ρ` bounds the rate's spectral radius: `D · Σ_d 4/h_d²`
   for diffusion plus the size of the coefficient of `c` in a linear reaction. Indicators

@@ -10,6 +10,7 @@ module IR
 # The front-end contract (LatticePDE lowers through these): the data model, the program
 # builder and the interning kernel builder.
 public Grid, Program, fieldid, ProgramBuilder, KernelBuilder, Space, Access, Sel, Coef, FaceRule,
+       degenerate, FACE_RTOL,
        NodeValueRule, MaskDecl, Scalar, Bpolicy, Op, Epoch, field!, rule!, kernel, add!,
        program, node!, Ex, constant!, param!, runtime!, coord!, table!, call!, cast!, arith!,
        compare!, select!, cond!, load!, access!, store!, isfloat, juliatype, print_program, CALLS,

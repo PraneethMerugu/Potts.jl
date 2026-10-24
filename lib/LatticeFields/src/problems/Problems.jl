@@ -18,7 +18,7 @@ using SciMLBase: SciMLBase
 using SymbolicIndexingInterface: SymbolicIndexingInterface as SII
 using ..Exec: Exec
 using ..IR: Coef, Ex, FaceRule, NodeValueRule, Program, fieldid, print_program, isfloat, juliatype, leveldims, ncomp, nsites,
-            runtime!
+            runtime!, degenerate, FACE_RTOL
 using ..Compile: CompiledKernel, CompileOptions, body_function, derive_function, lanecast, lanetype,
                  primal, promote_dual, semantic, valtype, withvaltype, writes, fuse_update
 using ..Schedule: LaunchSpec, StepPlan, plan
@@ -30,8 +30,8 @@ rgf(ex::Expr) = drop_expr(RuntimeGeneratedFunction(@__MODULE__, @__MODULE__, ex)
 public Geom, RT_T, RT_DT, launch_geometry, launch_parameters, bind, rebind, retime, each,
        FieldStore,
        array, current, settable!, launch_arrays, state_layout, BoundStep, compile!, swap!,
-       run_step!, FaceCheck, face_checks, degenerate_face, check_faces, degenerate, face_ratio, FACE_RTOL, FieldSlot,
-       LatticeIndex, FieldAlgorithm, ExplicitEuler, ExplicitMap, nbuffers, FieldProblem,
+       run_step!, FaceCheck, face_checks, degenerate_face, check_faces, face_ratio, FieldSlot,
+       LatticeIndex, FieldAlgorithm, LinearSolver, linear_solver_refusal, ExplicitEuler, ExplicitMap, nbuffers, FieldProblem,
        FieldGroups, update_key, update_rule, EulerRule, alg_family, alg_cache, reset_cache!, step_retcode!, GroupSpec, FieldGroup,
        ParamSlot, TableSpec, InputSpec, canonical, check_status!, status_word, status_route, StatusTotals, STATUS_CODE,
        STATUS_WINDOW, STATUS_CAUSE, STATUS_SOLVES, STATUS_BUDGET, STATUS_FLOOR, STATUS_NEWTON_BUDGET, STATUS_CAUSES, field_stats,

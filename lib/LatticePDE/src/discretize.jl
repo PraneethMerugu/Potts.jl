@@ -411,7 +411,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
             bc = bcs[b]
             α, β = _coef(bc.alpha, params), _coef(bc.beta, params, s / h[d])
             val(c) = c.param == 0 ? c.value : c.value * defaults[c.param]     # parameter defaults bind here
-            Problems.degenerate(val(α), val(β)) &&
+            degenerate(val(α), val(β)) &&
                 _dverr("`$(bc.eq)`: α/2 + β/h = 0 on this face leaves the ghost value undefined")
             rule!(pb, FaceRule(f, Int8(d), Int8(s), α, β, _coef(bc.value, params)))
         end
