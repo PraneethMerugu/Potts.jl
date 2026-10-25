@@ -471,8 +471,53 @@ function cases()
     push!(out, ("B map owned", s.u[end], 0))
     return out
 end
+# F3 batch 4 (user OK 2026-10-25): one owned system under each implicit algorithm (soft set)
+function implicit_cases()
+    @parameters x y Dc = 0.3 k = 2.0
+    @variables c(..)
+    ce = c(t, x, y)
+    sys = PDESystem([D(ce) ~ Dc * Δ(ce) - k * ce + x], [c(0, x, y) ~ x * y, c(t, 0, y) ~ 1.0],
+        [t ∈ Interval(0.0, 0.4), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [ce], [Dc, k]; name = :i)
+    prob = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
+    out = Tuple{String, Any, Int}[]
+    for alg in (LatticePDE.BackwardEuler(; dt = 0.1), LatticePDE.CrankNicolson(; dt = 0.1), LatticePDE.BDF2(; dt = 0.1))
+        s = solve(prob, alg)
+        push!(out, ("GiB " * string(nameof(typeof(alg))), s.u[end], s.substeps))
+    end
+    return out
+end
 end
 const GD_B = ["B Robin owned", "B Robin ODE rhs", "B site diffusion owned", "B DivK owned", "B map owned"]
+
+# F3 batch 4 (user OK 2026-10-25): the implicit algorithms in the soft set. Merks (A, 8², the
+# hard set's operating point) under BackwardEuler, CrankNicolson and BDF2 (`lower = 0`): the
+# fingerprints, `n` and the digests after 5 MCS; and one owned B system under each (`GdB`):
+# the final state's digest and the substep count. Recorded at the guard commit (new records;
+# no record moved).
+const GD_IMPLICIT = [("GiMerks BackwardEuler", BackwardEuler(lower = 0.0)), ("GiMerks CrankNicolson", CrankNicolson(lower = 0.0)),
+    ("GiMerks BDF2", BDF2(lower = 0.0))]
+function gd_implicit!(out)
+    for (label, fs) in GD_IMPLICIT
+        pre = "$label|Float64"
+        sys = MerksVasculogenesis(; name = :merks, lattice = (8, 8))
+        kw = (; field_solver = fs)
+        prob = PottsProblem(sys, GD_MERKS_OP, (0, 5); seed = 7, kw...)
+        gd_fingerprints!(out, pre, sys, prob, Float64, kw)
+        integ = init(prob, SequentialCPM())
+        out["$pre|n"] = string(gd_ns(integ))
+        foreach(_ -> step!(integ), 1:5)
+        st = current_state(integ)
+        out["$pre|digest|σ"] = gd_digest(st.σ)
+        for k in keys(st.site)
+            out["$pre|digest|site.$k"] = gd_digest(getproperty(st.site, k))
+        end
+    end
+    for (label, u, n) in GdB.implicit_cases()
+        out["$label|Float64|digest|state"] = gd_digest(u)
+        out["$label|Float64|n"] = string([n])
+    end
+    return out
+end
 function gd_b!(out)
     for (label, u, n) in GdB.cases()
         out["$label|Float64|digest|state"] = gd_digest(u)
@@ -500,7 +545,7 @@ gd_label(k) = first(split(k, '|'))
 gd_pinned(k) = any(g -> g[1] == gd_label(k) && g[5], GD_HARD)
 
 @testset "F2 guard: the field pipeline's behavior and fingerprints" begin
-    got = gd_b!(gd_soft!(gd_hard!(Dict{String, String}())))
+    got = gd_implicit!(gd_b!(gd_soft!(gd_hard!(Dict{String, String}()))))
     path = get(ENV, "POTTS_GUARD_RECORD", "")
     isempty(path) || open(path, "w") do io
         for k in sort!(collect(keys(got)))
