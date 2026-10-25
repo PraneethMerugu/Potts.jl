@@ -37,8 +37,8 @@ PottsDevices.device_name() == "rocm" && include("device_ir.jl")
         field_solver = BackwardEuler(lower = 0.0)), CheckerboardCPM(; proposal = Moore(1)); backend)
     cb = Array(sb.u[end].site.c)
     @test sb.retcode == Potts.SciMLBase.ReturnCode.Success && all(isfinite, cb) && minimum(cb) >= 0 && maximum(cb) > 0
-    # F3-10: Crank–Nicolson (its right-side launches), 20 MCS
-    for fs in (CrankNicolson(lower = 0.0),)
+    # F3-10, F3-11: Crank–Nicolson and BDF2 (their right-side and history launches), 20 MCS
+    for fs in (CrankNicolson(lower = 0.0), BDF2(lower = 0.0))
         sx = solve(PottsProblem(MERKS, [ownership => merks_state(), kind => [1, 1]], (0, 20); T = Float32,
             field_solver = fs), CheckerboardCPM(; proposal = Moore(1)); backend)
         cx = Array(sx.u[end].site.c)

@@ -34,7 +34,7 @@ using LatticeFields.Solvers: DevicePCG, Multigrid, V
 using LatticeFields.Compile: CompileOptions, fingerprint_text, fuse_update, promote_dual, primal
 using LatticeFields.IR: fieldid, RESOLVE, degenerate
 using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
-                              ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, FieldGroups, ode_problem, RT_DT,
+                              ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, FieldGroups, ode_problem, RT_DT,
                               substep_counts
 using ModelingToolkitBase: ModelingToolkitBase, PDESystem, Pre, ShiftIndex, Shift, Hold, Sample
 using SciMLBase: AbstractDiscretization, NullParameters, remake
@@ -54,7 +54,7 @@ export get_lattice_placement, get_lattice_storage, get_lattice_level, get_lattic
 export vocabulary_issues, check_vocabulary
 export LatticeDiscretization, FiniteVolume, CompiledField, discretize, symbolic_discretize,
        parse_bcs, linearity, Grid, Interval
-export ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, FieldGroups, FieldProblem, solve, init, step!, solve!, stability_bound,
+export ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, FieldGroups, FieldProblem, solve, init, step!, solve!, stability_bound,
        substep_counts
 export DevicePCG, Multigrid                 # the inner solvers (`inner = …`); `V` is public
 export remake, getp, getu, setp            # the routes its messages give (SciMLBase, SymbolicIndexingInterface)

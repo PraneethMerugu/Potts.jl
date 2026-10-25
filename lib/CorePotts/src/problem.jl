@@ -427,7 +427,7 @@ end
 SciMLBase.derivative_discontinuity!(::PottsIntegrator, ::Bool) = nothing
 # `u_modified!(integ, true)` after writing the state: the frozen mask follows (D-081)
 # and the field groups' algorithms take the state as a start (`reset!`: Crank–Nicolson damps its
-# next substep)
+# next substep, BDF2 restarts with a Backward Euler substep)
 SciMLBase.u_modified!(integ::PottsIntegrator, modified::Bool) =
     (modified && (refresh_frozen!(integ); reset_fields!(integ.ctx)); nothing)
 

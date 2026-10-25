@@ -163,9 +163,10 @@ So the first substep after a start (at `init`, and after every [`reset!`](@ref):
 input, table or parameter write) is damped (Rannacher): two Backward Euler steps of `h/2`, at
 `tⁿ + h/2` and `tⁿ + h`, which use the same operator (no extra rebuild). A group whose data can
 jump every window (it reads an input the CPM fills, a field of another group or the clock's
-step index, or has a mask that moves) damps the first substep of every window: with
-`substeps = 1` such a window is Backward Euler in two halves (first order); `substeps = 2` or
-more keeps the later substeps second order. Crank–Nicolson does not keep nonnegative data
+step index, or has a mask that moves) damps the first substep of every window, so its
+automatic count is at least 2: one damped substep, then Crank–Nicolson substeps (the window's
+error falls as `1/n²` with the count `n`). With `substeps = 1` such a window is Backward Euler
+in two halves (first order, at twice Backward Euler's cost). Crank–Nicolson does not keep nonnegative data
 nonnegative (a stiff decay overshoots below 0): `lower` clips each substep (for a consumption
 field, [`BackwardEuler`](@ref) needs no clip). The keywords are those of
 [`BackwardEuler`](@ref), with the same meanings and checks; the automatic counts use the shift
@@ -188,6 +189,42 @@ function CrankNicolson(; dt = nothing, substeps = nothing, newton = nothing, low
 end
 nbuffers(::CrankNicolson) = 2
 
+"""
+    BDF2(; dt = nothing, substeps = nothing, newton = nothing, lower = nothing,
+           inner = :auto, solver_T = :auto)
+
+The two-step backward differentiation formula (second order, L-stable): each substep of
+`h = dt / n` solves `(u − (4uⁿ − uⁿ⁻¹)/3)/(2h/3) = r(u)` at its end time `tⁿ⁺¹`, by the Newton
+iterations of [`BackwardEuler`](@ref) with the shift `3/(2h)`. It needs the state one substep
+back, `uⁿ⁻¹`, which the runtime keeps (not in the problem's state: never saved, never in a
+checkpoint). The first substep after a start (at `init`, after every [`reset!`](@ref): a
+state, input, table or parameter write, a restored checkpoint) has none: it is one Backward
+Euler substep (with the Backward Euler operator, then the BDF2 operator again: two extra
+rebuilds). The formula holds for a constant `h` only, so every change of `h` (a new automatic
+count after a parameter, input or table write; a new `substeps`) restarts it the same way.
+Moving data (a mask, the CPM's inputs) do not restart it. BDF2 does not keep nonnegative data
+nonnegative (its right side `(4uⁿ − uⁿ⁻¹)/3` is negative where `uⁿ⁻¹ > 4uⁿ`): `lower` clips
+each substep; for a consumption field, [`BackwardEuler`](@ref) needs no clip. The keywords are
+those of [`BackwardEuler`](@ref), with the same meanings and checks; the automatic counts are
+those of the Backward Euler start (shift `1/h`), so they hold for every substep. One type for
+both front ends.
+"""
+struct BDF2 <: ImplicitAlgorithm
+    dt::Union{Nothing, Float64}
+    substeps::Union{Nothing, Int}
+    newton::Union{Nothing, Int}
+    lower::Union{Nothing, Float64}
+    inner::Any
+    solver_T::Any
+    BDF2(dt, substeps, newton, lower, inner, solver_T) =
+        new(_implicit_keywords("BDF2", dt, substeps, newton, lower, inner, solver_T)...)
+end
+function BDF2(; dt = nothing, substeps = nothing, newton = nothing, lower = nothing, inner = :auto,
+        solver_T = :auto, kw...)
+    isempty(kw) || throw(_implicit_kwerror("BDF2", kw))
+    return BDF2(dt, substeps, newton, lower, inner, solver_T)
+end
+nbuffers(::BDF2) = 2
 
 """
     ExplicitMap()
@@ -408,12 +445,12 @@ function _algtext(a::ExplicitEuler)
     kw = [string(k, " = ", getfield(a, k)) for k in (:dt, :substeps, :lower) if getfield(a, k) !== nothing]
     return isempty(kw) ? "ExplicitEuler()" : string("ExplicitEuler(; ", join(kw, ", "), ")")
 end
-function _algtext(a::Union{BackwardEuler, CrankNicolson})
+function _algtext(a::Union{BackwardEuler, CrankNicolson, BDF2})
     kw = [string(k, " = ", repr(getfield(a, k))) for k in (:dt, :substeps, :newton, :lower) if getfield(a, k) !== nothing]
     a.inner === :auto || push!(kw, string("inner = ", repr(a.inner)))
     a.solver_T === :auto || push!(kw, string("solver_T = ", a.solver_T))
     w = nameof(typeof(a))
     return isempty(kw) ? string(w, "()") : string(w, "(; ", join(kw, ", "), ")")
 end
-Base.show(io::IO, a::Union{ExplicitEuler, BackwardEuler, CrankNicolson}) = print(io, _algtext(a))
+Base.show(io::IO, a::Union{ExplicitEuler, BackwardEuler, CrankNicolson, BDF2}) = print(io, _algtext(a))
 _algtext(a) = repr(a)

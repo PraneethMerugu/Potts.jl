@@ -151,7 +151,7 @@ sol[:x][end], sol[:g][end]
 
 | Keyword | Values | Default |
 |---|---|---|
-| `field_solver` | `ExplicitEuler(; substeps, lower)`: `substeps` explicit steps per MCS, values clipped at `lower`; `BackwardEuler(; substeps, newton, lower, inner, solver_T)`: implicit steps, each a linear solve with `inner`; `CrankNicolson(…)`: second-order implicit steps, the same keywords | `ExplicitEuler()`: the automatic count, no clip |
+| `field_solver` | `ExplicitEuler(; substeps, lower)`: `substeps` explicit steps per MCS, values clipped at `lower`; `BackwardEuler(; substeps, newton, lower, inner, solver_T)`: implicit steps, each a linear solve with `inner`; `CrankNicolson(…)`, `BDF2(…)`: second-order implicit steps, the same keywords | `ExplicitEuler()`: the automatic count, no clip |
 | `ode_solver` | `ExplicitEuler(; substeps)`, `RK4(; substeps)`, `Adaptive(alg; kwargs...)` | `ExplicitEuler()`, one step per MCS |
 | `solvers` | `[x => solver, …]`, per variable or component | — |
 
@@ -192,17 +192,27 @@ tolerance; a GPU runs them all, so CPU and GPU results agree to the tolerance, n
 hexagonal lattice has no implicit solve yet: the implicit solvers refuse it, and
 `field_solver = ExplicitEuler()` steps it.
 
-`CrankNicolson()` is a second-order implicit solver. It takes the keywords of
-`BackwardEuler`, with the same meanings, and its substeps cost one linear solve each, as
-Backward Euler's do. It solves `(u − uⁿ)/h = (rhs(uⁿ) + rhs(u))/2`, with `rhs(uⁿ)` at the
-substep's start time and `rhs(u)` at its end time. Data that jump ring under Crank–Nicolson,
-so its first substep after a start is damped: two Backward Euler steps of `h/2`. A start is the
-first MCS and every write (a state, parameter or table write, `reinit!`). A field whose data
-can jump every MCS damps the first substep of every MCS. Such a field reads the CPM (`kind`,
-`ismember`), another field group or `mcs`, or has a mask that moves. With one substep per MCS
-such a field is first order; `substeps = 2` or more keeps the later substeps second order.
-Crank–Nicolson does not keep nonnegative values nonnegative: a stiff decay overshoots below 0.
-Give `lower = 0.0` for a concentration, or use `BackwardEuler`, which needs no clip on a
+`CrankNicolson()` and `BDF2()` are the second-order implicit solvers. They take the keywords
+of `BackwardEuler`, with the same meanings, and their substeps cost one linear solve each,
+as Backward Euler's do. Both start with Backward Euler steps:
+
+- `CrankNicolson` solves `(u − uⁿ)/h = (rhs(uⁿ) + rhs(u))/2`, with `rhs(uⁿ)` at the substep's
+  start time and `rhs(u)` at its end time. Data that jump ring under Crank–Nicolson, so its
+  first substep after a start is damped: two Backward Euler steps of `h/2`. A start is the
+  first MCS and every write (a state, parameter or table write, `reinit!`). A field whose data
+  can jump every MCS damps the first substep of every MCS. Such a field reads the CPM (`kind`,
+  `ismember`), another field group or `mcs`, or has a mask that moves. Such a field takes at
+  least 2 substeps per MCS by default: the damped one, then Crank–Nicolson substeps, so the
+  error of an MCS falls as `1/n²` with the count `n`. With `substeps = 1` it is Backward Euler
+  in two halves: first order, at twice Backward Euler's cost.
+- `BDF2` solves `(u − (4uⁿ − uⁿ⁻¹)/3)/(2h/3) = rhs(u)` at the substep's end time. It needs
+  the field one substep back, which it keeps itself: it is not part of the state, so it is not
+  saved and not in a checkpoint. The first substep after a start is one Backward Euler
+  substep. A start is the first MCS, every write, a restored checkpoint, and every change of
+  the substep count (the formula needs one step length). A move of the cells is no start.
+
+Neither keeps nonnegative values nonnegative: a stiff decay overshoots below 0. Give
+`lower = 0.0` for a concentration, or use `BackwardEuler`, which needs no clip on a
 consumption field. A clip changes the equation solved slightly.
 
 `BackwardEuler` pays a linear solve per substep. It is the faster choice when the explicit

@@ -288,6 +288,7 @@ bcs = [ce ~ masked(ke == 3, 0.0), oe ~ masked(ismember(ke, (2, 3)), 1.0)]
     include("groups_coupling.jl")
     include("implicit.jl")
     include("cranknicolson.jl")
+    include("bdf2.jl")
     include("clock.jl")
     include("numbers.jl")
     include("example.jl")

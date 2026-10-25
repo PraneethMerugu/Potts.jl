@@ -423,9 +423,10 @@ end
 
 Drop the algorithm history of every field group of run context `ctx`
 (`LatticeFields.Problems.reset!`): the state was written (`integ[c] = values`, `setu`, a
-callback with `u_modified!(integ, true)`, `reinit!`), so Crank–Nicolson damps its next
-substep; the hierarchy of an implicit group is rebuilt. Nothing for the explicit algorithms. A
-move of σ by the CPM is no write.
+callback with `u_modified!(integ, true)`, `reinit!`), so Crank–Nicolson damps its next substep
+and BDF2 restarts with a Backward Euler substep; the hierarchy of an implicit group is rebuilt.
+Nothing for the explicit algorithms. A move of σ by the CPM is no write: the fields' history
+survives it.
 """
 function reset_fields!(ctx)
     for h in values(ctx)

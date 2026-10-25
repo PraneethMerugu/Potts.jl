@@ -378,7 +378,7 @@ terms the bound cannot see. A problem with no state (aux fields `K ~ rhs` only, 
 both front ends, [`substeps`](@ref)`(spec, alg, dt, pp)` of the problem's group, in front end
 B's words ([`ProblemTexts`](@ref)).
 """
-substeps(::FieldProblem, ::ExplicitMap, p = nothing; tables = nothing, inputs = nothing) = 1
+substeps(::FieldProblem, ::ExplicitMap, p = nothing; tables = nothing, inputs = nothing, stability = nothing, fields = nothing) = 1
 
 # the host values of the inputs the stability bound reads in an index (`bound_inputs`), each
 # shaped by site (a number stays a number): from the problem, or from an integrator's store
@@ -401,12 +401,12 @@ end
 # the warning's once-key: the program (its printed text, hashed) and the value-free reason
 _warn_key(prob::FieldProblem, why) = string(hash(sprint(print_program, prob.program)); base = 16) * "|" * string(why)
 function substeps(prob::FieldProblem, alg::Union{ExplicitEuler, ImplicitAlgorithm}, p = prob.p; tables = prob.tables,
-        inputs = _bound_inputs(prob), stability = prob.stability)
+        inputs = _bound_inputs(prob), stability = prob.stability, fields = prob.group.spec.state)
     dt = _window(alg, _clock(prob))
     isempty(prob.state) && return 0                 # aux fields only: one evaluation per window
     pp = with_tables(map(primal, p), tables; inputs)        # a policy: on the primal values
     # the one policy of both front ends (F3-01), in front end B's words
-    return substeps(prob.group.spec, alg, dt, pp; stability, key = why -> _warn_key(prob, why),
+    return substeps(prob.group.spec, alg, dt, pp; fields, stability, key = why -> _warn_key(prob, why),
         texts = ProblemTexts(prob.group.spec.texts.route))
 end
 
@@ -544,7 +544,7 @@ function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; saveat = (),
     # problem's bound)
     ms = [length(groups) == 1 ? substeps(prob, a) :
           substeps(prob, a, prob.p; tables = prob.tables, inputs = _bound_inputs(prob),
-              stability = restrict_bound(prob.stability, ks)) for (a, ks) in groups]
+              stability = restrict_bound(prob.stability, ks), fields = ks) for (a, ks) in groups]
     _check_coupling(prob, groups, prob.p; dt)
     run_step!(prob.backend, prob.program, prob.init, st, prob.p; rt = (t0, dt, 0), c = zero(E))
     pgood = copy(prob.p)
@@ -1009,7 +1009,7 @@ end
 # setting them
 function _counts(i::FieldIntegrator, p; tables, inputs)
     ms = map(rt -> rt.all_state ? substeps(i.prob, rt.alg, p; tables, inputs) :
-                   substeps(i.prob, rt.alg, p; tables, inputs, stability = rt.stability), i.runtimes)
+                   substeps(i.prob, rt.alg, p; tables, inputs, stability = rt.stability, fields = rt.keys), i.runtimes)
     _check_coupling(i.prob, [(rt.alg, rt.keys) for rt in i.runtimes], p; tables, inputs, dt = i.dt)
     return ms
 end

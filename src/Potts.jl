@@ -18,7 +18,7 @@ using CorePotts: Metropolis, RandomPlane
 using JumpProcesses: JumpProcesses
 using KernelAbstractions: KernelAbstractions
 using LatticeFields: LatticeFields
-using LatticeFields.Problems: ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, FieldGroups, FieldAlgorithm,
+using LatticeFields.Problems: ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, FieldGroups, FieldAlgorithm,
                              substep_counts
 using LatticeFields.Solvers: DevicePCG, Multigrid, V
 using LatticePDE: LatticePDE, PottsEntity, Δ, at, at2, ismember
@@ -49,7 +49,7 @@ for name in names(CorePotts)
 end
 export @potts_model, @named, PottsSystem, CompiledPottsSystem, mtkcompile,
     total_energy, energy_change, generated_code, parameters, variables, observe, Adaptive, ExplicitEuler, ExplicitMap,
-    BackwardEuler, CrankNicolson, FieldGroups, RK4, substep_counts, DevicePCG, Multigrid
+    BackwardEuler, CrankNicolson, BDF2, FieldGroups, RK4, substep_counts, DevicePCG, Multigrid
 public V                                   # `Multigrid(; cycle = V(ν₁, ν₂))` (not exported: a short name)
 
 include("seeds.jl")

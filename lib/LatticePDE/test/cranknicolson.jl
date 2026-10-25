@@ -188,3 +188,23 @@ end
         LatticeDiscretization(Grid(BDIMS); T = Float16, problem = :owned))
     @test startswith(e(() -> init(p16, CrankNicolson(; dt = 0.1))), "CrankNicolson: the field `bc` is stored as Float16")
 end
+
+# Review r2 S2: in front end B a group's count reads the group's own fields: the damped start
+# rule of CrankNicolson sees another group's field (it moves between windows, so the group's
+# data jump) and the growth rule sees only the group's rows. Base (773f0957,
+# ~/lpwork/f3b5-nc-r2-s2.log): the other-group read counts 1 (the jump missed) and the growth
+# of `bo` raises both groups' counts to 2.
+@testset "F3-10/11 (r2 S2): B counts read the group's own fields" begin
+    rd = bsys([D(bce) ~ 0.3 * Δ(bce) - bce + boe, D(boe) ~ 0.3 * Δ(boe) - boe], [bc(0, x, y) ~ 0.0, bo(0, x, y) ~ 1.0], Any[];
+        T = 0.4, dvs = [bce, boe])
+    p = discretize(rd, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
+    @test [r.n for r in init(p, FieldGroups(bce => CrankNicolson(; dt = 0.1), boe => BackwardEuler(; dt = 0.1))).runtimes] == [2, 1]
+    @test only(init(p, CrankNicolson(; dt = 0.1)).runtimes).n == 1          # (the same group: no jump)
+    gr = bsys([D(bce) ~ 0.3 * Δ(bce) - bce + x, D(boe) ~ 0.3 * Δ(boe) + bk * boe], [bc(0, x, y) ~ 0.0, bo(0, x, y) ~ x], [bk];
+        T = 1.0, dvs = [bce, boe])
+    p = discretize(gr, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
+    ig = init(p, FieldGroups(bce => BackwardEuler(; dt = 0.5), boe => BackwardEuler(; dt = 0.5, inner = BTIGHT)))
+    @test [r.n for r in ig.runtimes] == [1, 2]
+    ig.ps[bk] = 4.0                                    # (a write: the counts again, `⌈2 · 0.5 · 4⌉`)
+    @test [r.n for r in ig.runtimes] == [1, 4]
+end

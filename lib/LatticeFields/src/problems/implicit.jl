@@ -1,12 +1,13 @@
 # The implicit runtime (F3 design §3.3, §3.4): the substep loop of the implicit algorithms
-# (`BackwardEuler`, `CrankNicolson`) on the group layer, for both front ends. A group's
+# (`BackwardEuler`, `CrankNicolson`, `BDF2`) on the group layer, for both front ends. A group's
 # store holds the arrays of its stepped program (the state's two slots, the inputs, the masks);
 # the runtime's own programs alias them:
 #
 # - the residual program (`fuse_residual`): each `rate:c` kernel stores
 #   `G = (q − u_k)/(γh) + r(u_k)` into `res:c`, `u_k` the iterate (slot `p` at the first Newton
 #   iteration, the other slot after it), `q` the stage's right side (`c__n`: the substep's start
-#   `uⁿ` for Backward Euler; Crank–Nicolson's `uⁿ + (h/2) r(uⁿ)`, in a cache array), at the stage's end time, `γh` the launch's step argument;
+#   `uⁿ` for Backward Euler; Crank–Nicolson's `uⁿ + (h/2) r(uⁿ)`, BDF2's `(4uⁿ − uⁿ⁻¹)/3`, both
+#   in a cache array), at the stage's end time, `γh` the launch's step argument;
 # - the operator program (the front end's `jac:` kernels, `OperatorSpec.jac`), for the rows
 #   whose operator varies by site;
 # - one `Solvers.FieldSolver` per row with diffusion, its inputs bound to these arrays (no
@@ -19,7 +20,8 @@
 #
 # A stage is one such solve from slot `p` into the other slot. Backward Euler takes one stage
 # per substep (γ = 1); Crank–Nicolson one (γ = 1/2: the shift `2/h` of a Backward Euler step of
-# `h/2`), or two Backward Euler stages of `h/2` for its damped start, with the same operator.
+# `h/2`), or two Backward Euler stages of `h/2` for its damped start, with the same operator;
+# BDF2 one (γ = 2/3), or one Backward Euler stage (γ = 1) at its start.
 
 """
     residual_rule(alg)
@@ -27,7 +29,7 @@
 The residual of implicit algorithm `alg` for [`fuse_residual`](@ref
 LatticeFields.Compile.fuse_residual): `rule(kb, c, r, cn)` from the iterate `c`, the rate `r`
 and the stage's right side `cn`: `(cn − c)/(γh) + r`, `γh = G.rt[2]` (the launch's step
-argument: `h` for Backward Euler, `h/2` for Crank–Nicolson). One residual for
+argument: `h` for Backward Euler, `h/2` for Crank–Nicolson, `2h/3` for BDF2). One residual for
 every implicit algorithm; they differ in `cn` and `γ` (the runtime's stages).
 """
 residual_rule(::ImplicitAlgorithm) = BERule()
@@ -38,13 +40,15 @@ residual_key(::ImplicitAlgorithm) = :be
 # substep's start `uⁿ`, at its start time `tⁿ`): one program for the group's rows at once
 struct QRule end
 (::QRule)(kb, c, r, cn) = c + Ex(kb, runtime!(kb, RT_DT)) * r
-# the γ of the algorithm's shift `1/(γh)` (Backward Euler 1, Crank–Nicolson 1/2)
+# the γ of the algorithm's shift `1/(γh)` (Backward Euler 1, Crank–Nicolson 1/2, BDF2 2/3)
 _gamma(::BackwardEuler) = 1.0
 _gamma(::CrankNicolson) = 0.5
-# … of its operator at a start (an algorithm whose start is another method's step)
+_gamma(::BDF2) = 2 / 3
+# … of its operator at a start (BDF2's Backward Euler substep)
 _gamma_start(a::ImplicitAlgorithm) = _gamma(a)
+_gamma_start(::BDF2) = 1.0
 # … of the automatic counts (the substeps' rules 1 and 2 and the Newton count), which hold for
-# every stage, the start's too
+# every stage: BDF2 counts as its Backward Euler start
 _gamma_count(a::ImplicitAlgorithm) = max(_gamma(a), _gamma_start(a))
 _algname(a) = string(nameof(typeof(a)))
 
@@ -104,6 +108,9 @@ function _be_status_body!(i, w, scal, window)
 end
 _zero_body!(i, a) = (@inbounds a[i] = zero(eltype(a)); nothing)      # i ≤ length(a)
 _clip_body!(i, a, lower) = (@inbounds a[i] = max(a[i], lower); nothing)  # i ≤ length(a)
+# BDF2's right side `q = (4uⁿ − uⁿ⁻¹)/3` (i ≤ length(q) == length(un) == length(prev))
+_bdf2_q_body!(i, q, un, prev) =
+    (@inbounds q[i] = (4 * un[i] - prev[i]) / 3; nothing)
 
 # The Newton check (F3 design §3.4, M5, R2-M1): after each iteration's update, the norms of
 # the row's correction ‖δ_k‖∞, increment ‖u_k − uⁿ‖∞ and value ‖u_k‖∞ over its unmasked
@@ -234,7 +241,7 @@ One row of an implicit runtime: its residual launches per slot parity and iterat
 state buffers, its solver (or `nothing`: a row with no diffusion, solved site by site) with
 the arrays its solve reads and writes, and its update's mask and clip.
 """
-mutable struct ImplicitRow{R, U, A, SV, X, W, SC, SM, V, S, MK, MV, MF, LO, F, J, M, D, RM, DM, P, Q}
+mutable struct ImplicitRow{R, U, A, SV, X, W, SC, SM, V, S, MK, MV, MF, LO, F, J, M, D, RM, DM, P, Q, H}
     key::String
     res::NTuple{4, R}                   # (parity 1 first iteration, parity 2 first, parity 1 later, parity 2 later)
     bufs::NTuple{2, U}                  # the row's two state slots
@@ -261,7 +268,8 @@ mutable struct ImplicitRow{R, U, A, SV, X, W, SC, SM, V, S, MK, MV, MF, LO, F, J
     numeric::Union{Nothing, Solvers.CellOperator}   # the numeric operator the solver holds (numeric rows)
     part::P                             # the Newton check's block partials (3 per block) and
     hist::P                             #   the last two correction norms, in the state type
-    q::Q                                # the stage's right side `c__n` (Crank–Nicolson), or nothing (BE: `uⁿ`)
+    q::Q                                # the stage's right side `c__n` (Crank–Nicolson, BDF2), or nothing (BE: `uⁿ`)
+    prev::H                             # BDF2: the state one substep back, `uⁿ⁻¹` (not in the problem's state), or nothing
 end
 
 """
@@ -272,7 +280,7 @@ The cache of an implicit runtime (F3 design §3.3): its rows in solve order
 Newton count, the step `h` and the `γ` the coefficients hold (the shift `1/(γh)`), the `stale`
 flag (the hierarchy is rebuilt before the next stage: set at bind, by [`reset!`](@ref) and by a
 change of `h` or `γ`), the `start` flag (the next substep is a start: Crank–Nicolson's damped
-substep; set at bind, by `reset!` and by a change of `h`), the
+substep, BDF2's Backward Euler substep; set at bind, by `reset!` and by a change of `h`), the
 `jumps` flag (Crank–Nicolson: the group's data can jump at every window, so the first substep
 of every window is damped), the `moving` flag (the operator reads data that change every
 window: it is rebuilt each window), the `timed` flag (the operator reads the time: it is
@@ -506,7 +514,7 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
         jac = mkjac(p)
     end
     # the stage's right side: Backward Euler's is the substep's start (`c__n` bound to the
-    # state's slots); Crank–Nicolson's a cache array per row (`c__n` bound to it)
+    # state's slots); Crank–Nicolson's and BDF2's a cache array per row (`c__n` bound to it)
     qs = Dict{String, Any}()
     if !(alg isa BackwardEuler)
         for k in keys
@@ -557,12 +565,13 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
         nsite = length(u[1])
         part, hist = _zeros(st.backend, T, 3 * cld(nsite, NB)), _zeros(st.backend, T, 2)
         q = get(qs, key, nothing)
+        prev = alg isa BDF2 ? _zeros(st.backend, T, nsite) : nothing
         if r.local_only
             sv, numeric = nothing, nothing
             sh = r.field ? _zeros(st.backend, T, nsite) : T(max(1 / hγ - _coefsum(r.jloc, p), 1 / (2hγ)))
             row = ImplicitRow(key, res, (u[1], u[2]), resarr, nothing, (u[1], u[1]), Int32(0), typeof(u[1])[], nothing,
                 nothing, nothing, sh, mask, mval, mvf, lo, nothing, jarr("j"), nothing, nothing, nothing, r.field && r.domain ? jarr("dom") : nothing,
-                r, nothing, part, hist, q)
+                r, nothing, part, hist, q, prev)
             push!(rows, row)
             continue
         end
@@ -599,7 +608,7 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
         work = [w for w in sv.bufs[wid]]
         row = ImplicitRow(key, res, (u[1], u[2]), resarr, sv, (xb[1], xb[end]), xid, work,
             sv.tables[Solvers.tid(sv, "solve.scal")], smask, v, sh, mask, mval, mvf, lo, f, jj, mm, dd, mask, dm, r, numeric,
-            part, hist, q)
+            part, hist, q, prev)
         push!(rows, row)
     end
     # Crank–Nicolson's right side `uⁿ + (h/2) r(uⁿ)` of every row at once, from the substep's
@@ -732,8 +741,8 @@ _jac_moving(jp::Program, spec) = _reads_moving(jp, jp.kernels, spec)
 _masks_moving(s::Program, spec) = _reads_moving(s, [k for k in s.kernels if k.key in spec.init], spec)
 
 # the step `h` of the coefficients (a count change, a rebind): the numeric shifts follow; the
-# hierarchy is rebuilt before the next stage, and the next substep is a start (F3 design §3.3
-# Step changes)
+# hierarchy is rebuilt before the next stage, and the next substep is a start (BDF2's formula
+# holds for one `h`: every change of `h` restarts it, F3 design §3.3 Step changes)
 function _set_step!(c::ImplicitCache, rt::GroupRuntime, h::Float64)
     c.h = h
     c.start = true
@@ -741,7 +750,7 @@ function _set_step!(c::ImplicitCache, rt::GroupRuntime, h::Float64)
     _set_newton!(c, rt.alg)
     return nothing
 end
-# the operator's γ (the shift `1/(γh)`)
+# the operator's γ (the shift `1/(γh)`): BDF2's start takes 1, its other substeps 2/3
 function _set_shift!(c::ImplicitCache, rt::GroupRuntime, γ::Float64; force::Bool = false)
     (force || γ != c.γ) || return nothing
     s = group_program_of(rt)
@@ -910,13 +919,39 @@ function _substep!(::CrankNicolson, c, rt, t0, h, k, w, first)
     _stage!(c, rt, t0 + h, 0.5, h, k, w, first)
     return nothing
 end
-# each row's `q` at slot parity `par`: the stage's start `uⁿ`
-_set_q!(c::ImplicitCache, rt::GroupRuntime, _) = (c.walk(c.rows, _SetQ(c.backend, _parity(rt))); nothing)
+# BDF2: one stage at `tⁿ⁺¹` from `q = (4uⁿ − uⁿ⁻¹)/3` (γ = 2/3), or at a start one Backward Euler
+# stage from `q = uⁿ` (γ = 1: the Backward Euler operator); the state it started from is kept
+# as the next substep's `uⁿ⁻¹`
+function _substep!(a::BDF2, c, rt, t0, h, k, w, first)
+    γ = c.start ? 1.0 : _gamma(a)
+    _set_q!(c, rt, !c.start)
+    _keep_prev!(c, rt)
+    _stage!(c, rt, t0 + h, γ, h, k, w, first)
+    c.start = false
+    return nothing
+end
+# each row's `q` at slot parity `par`: the start `uⁿ` (`bdf = false` or nothing), or BDF2's
+# `(4uⁿ − uⁿ⁻¹)/3` (`bdf = true`)
+_set_q!(c::ImplicitCache, rt::GroupRuntime, bdf) = (c.walk(c.rows, _SetQ(c.backend, _parity(rt), bdf === true)); nothing)
 struct _SetQ{B}
     backend::B
     par::Int
+    bdf::Bool
 end
-(r::ImplicitRow)(a::_SetQ) = (Exec.launch!(a.backend, _copy_body!, length(r.q), (r.q, r.bufs[a.par])); nothing)
+function (r::ImplicitRow)(a::_SetQ)
+    un = r.bufs[a.par]
+    a.bdf ? Exec.launch!(a.backend, _bdf2_q_body!, length(r.q), (r.q, un, r.prev)) :
+            Exec.launch!(a.backend, _copy_body!, length(r.q), (r.q, un))
+    return nothing
+end
+# BDF2: `uⁿ` (slot `par`, the stage's start) into each row's `uⁿ⁻¹` for the next substep (its
+# `q` holds what this stage reads already)
+_keep_prev!(c::ImplicitCache, rt::GroupRuntime) = (c.walk(c.rows, _KeepPrev(c.backend, _parity(rt))); nothing)
+struct _KeepPrev{B}
+    backend::B
+    par::Int
+end
+(r::ImplicitRow)(a::_KeepPrev) = (Exec.launch!(a.backend, _copy_body!, length(r.prev), (r.prev, r.bufs[a.par])); nothing)
 
 # One stage: the Newton iterations from slot `par` (the current parity) into the other slot at
 # its end time `t1`, with the operator's `γ` (the shift `1/(γh)`; the residual's launches take
@@ -1000,8 +1035,10 @@ end
 The substep count of an implicit algorithm (F3 design §3.7), the same policy as the explicit
 one with the implicit rule (§3.6): the parameter refusals first (a negative diffusion
 coefficient, a coefficient that is not finite where the inputs reach), then
-`n = max(m, ⌈2γ dt g⌉, ⌈2γ dt (ρ_adv + κ_in + ρ_rob) / (1 − θ)⌉)`: `m` the user's count (1 when
-left out); `γ` the algorithm's (the shift `1/(γh)`: Backward Euler 1, Crank–Nicolson 1/2); the growth rule, `g` the largest positive local derivative the
+`n = max(m, ⌈2γ dt g⌉, ⌈2γ dt (ρ_adv + κ_in + ρ_rob) / (1 − θ)⌉)`: `m` the user's count (when
+left out 1, and 2 for Crank–Nicolson on data that can jump every window, so that a window is
+not only its damped substep); `γ` the algorithm's (the shift `1/(γh)`: Backward Euler 1, Crank–Nicolson 1/2, BDF2
+1, as its Backward Euler start); the growth rule, `g` the largest positive local derivative the
 operator sees ([`growth`](@ref)), so the shift `1/(γh) − g` stays at least half of `1/(γh)`;
 the convergence rule of the Newton correction, which converges with a contraction
 `ρ_c ≤ (1 + θ)/2`: `ρ_adv` the upwind bound of the advection terms, `κ_in` the cross sum of a
@@ -1027,7 +1064,7 @@ function substeps(spec::GroupSpec, alg::ImplicitAlgorithm, dt::Real, pp; fields 
     γ = _gamma_count(alg)
     # (the convergence rule on the sum: the parts out of the operator add in one correction)
     n1, n2 = ceil(Int, 2γ * dt * g), ceil(Int, 2γ * dt * (b.ρ + b.κ + ρrob) / (1 - b.θ))
-    m = something(alg.substeps, 1)
+    m = something(alg.substeps, _least_count(spec, alg, keys))
     if alg.substeps !== nothing && max(n1, n2) > m
         rule = n2 >= n1 ? 2 : 1
         _warn_once(key(string("implicit-raise#", rule))) && @warn _raise_text(op, keys, alg, max(n1, n2), rule, b.κ > 0, ρrob > 0)
@@ -1051,3 +1088,8 @@ function _raise_text(op::OperatorSpec, keys, alg, n, rule, cycle, robin)
         "not converge")
 end
 substeps(g::FieldGroup, alg::ImplicitAlgorithm, dt::Real, pp; kw...) = substeps(g.spec, alg, dt, pp; kw...)
+# the least automatic count: 1; Crank–Nicolson on data that can jump every window takes 2, so
+# that each window has one Crank–Nicolson substep after its damped one (with one substep the
+# window is Backward Euler in two halves: first order at twice the cost, batch 4 review r1 S1)
+_least_count(spec::GroupSpec, alg::ImplicitAlgorithm, keys) = 1
+_least_count(spec::GroupSpec, alg::CrankNicolson, keys) = _jumps(spec.rate, spec.rate, keys, spec, true) ? 2 : 1

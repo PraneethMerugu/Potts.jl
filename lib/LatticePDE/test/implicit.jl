@@ -343,7 +343,7 @@ LFP.update_key(::StallStub) = :euler
 LFP.update_rule(::StallStub) = LFP.update_rule(ExplicitEuler())
 LFP.alg_cache(a::StallStub, group, store) = Ref(a.code)
 LFP.step_retcode!(c::Base.RefValue{ReturnCode.T}, rt) = c[]
-LFP.substeps(::LFP.FieldProblem, ::StallStub, p = nothing; tables = nothing, inputs = nothing, stability = nothing) = 1
+LFP.substeps(::LFP.FieldProblem, ::StallStub, p = nothing; tables = nothing, inputs = nothing, stability = nothing, fields = nothing) = 1
 @testset "R1: StalledSuccess does not skip the later groups" begin
     p = gown(gsys())
     for (code, moves) in ((ReturnCode.StalledSuccess, true), (ReturnCode.ConvergenceFailure, false))
