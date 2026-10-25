@@ -426,7 +426,10 @@ end
 # No derivative to reset: a callback's changes take effect at the next MCS.
 SciMLBase.derivative_discontinuity!(::PottsIntegrator, ::Bool) = nothing
 # `u_modified!(integ, true)` after writing the state: the frozen mask follows (D-081)
-SciMLBase.u_modified!(integ::PottsIntegrator, modified::Bool) = (modified && refresh_frozen!(integ); nothing)
+# and the field groups' algorithms take the state as a start (`reset!`: Crank–Nicolson damps its
+# next substep)
+SciMLBase.u_modified!(integ::PottsIntegrator, modified::Bool) =
+    (modified && (refresh_frozen!(integ); reset_fields!(integ.ctx)); nothing)
 
 """
     copy_step_relations(sys, f::CPMFunction) -> collection of Symbols or nothing
@@ -1020,6 +1023,8 @@ function SymbolicIndexingInterface.set_state!(integ::PottsIntegrator, v, i::Stat
     _set_state_array!(integ.stats, integ.state, v, i)
     # the owner or kind decides which sites are frozen
     (i.scope === :cell && i.name === :kind) && refresh_frozen!(integ)
+    # a field written: its group's algorithm takes the new values as a start (`reset!`)
+    i.scope === :site && reset_fields!(integ.ctx)
     return v
 end
 function SymbolicIndexingInterface.set_parameter!(integ::PottsIntegrator, v, i)

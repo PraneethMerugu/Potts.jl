@@ -821,10 +821,12 @@ end
     w = length(h) >= 9 && h[9] != 0 ? Int(h[9]) : tot.windows
     @warn string("field", s, " ", join(("`$k`" for k in rt.keys), ", "), ": the implicit shift was clamped in ",
         window_text(rt, max(w, 1)), " (a local growth `∂f/∂c` above `1/(2h)` that the substep count did not see), so ",
-        "its one Newton step is not the Backward Euler step; a larger `newton = k` checks the step at every substep, or ",
+        "its one Newton step is not the ", _stepname(rt.alg), " step; a larger `newton = k` checks the step at every substep, or ",
         "more substeps (`substeps = n`) keep the growth below the shift")
     return nothing
 end
+# the method's step in messages ("Backward Euler", "Crank–Nicolson"; another by its name)
+_stepname(a) = a isa BackwardEuler ? "Backward Euler" : a isa CrankNicolson ? "Crank–Nicolson" : string(nameof(typeof(a)))
 # the warnings of a read (cold: once per runtime and run); a function barrier, compiled once
 # for every runtime type
 @noinline function _status_warn(@nospecialize(rt), window, cause, code)

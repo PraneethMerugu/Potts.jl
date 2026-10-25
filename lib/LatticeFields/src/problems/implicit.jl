@@ -1,34 +1,52 @@
-# The implicit runtime (F3 design §3.3, §3.4): the substep loop of `BackwardEuler` on the
-# group layer, for both front ends. A group's store holds the arrays of its stepped program
-# (the state's two slots, the inputs, the masks); the runtime's own programs alias them:
+# The implicit runtime (F3 design §3.3, §3.4): the substep loop of the implicit algorithms
+# (`BackwardEuler`, `CrankNicolson`) on the group layer, for both front ends. A group's
+# store holds the arrays of its stepped program (the state's two slots, the inputs, the masks);
+# the runtime's own programs alias them:
 #
 # - the residual program (`fuse_residual`): each `rate:c` kernel stores
-#   `G = (uⁿ − u_k)/h + r(u_k)` into `res:c`, `u_k` the iterate (slot `p` at the first Newton
-#   iteration, the other slot after it), `uⁿ` the substep's start (slot `p`, `c__n`), at the
-#   substep's end time `tⁿ⁺¹`;
+#   `G = (q − u_k)/(γh) + r(u_k)` into `res:c`, `u_k` the iterate (slot `p` at the first Newton
+#   iteration, the other slot after it), `q` the stage's right side (`c__n`: the substep's start
+#   `uⁿ` for Backward Euler; Crank–Nicolson's `uⁿ + (h/2) r(uⁿ)`, in a cache array), at the stage's end time, `γh` the launch's step argument;
 # - the operator program (the front end's `jac:` kernels, `OperatorSpec.jac`), for the rows
 #   whose operator varies by site;
 # - one `Solvers.FieldSolver` per row with diffusion, its inputs bound to these arrays (no
-#   copy): `(I/h − J̃) δ = G`, δ from 0, homogeneous face values;
+#   copy): `(I/(γh) − J̃) δ = G`, δ from 0, homogeneous face values;
 #
 # then the update `u_{k+1} = u_k + δ` into the other slot (masked sites take their value; the
 # clip `lower` after the last iteration) and the status word. Rows (the group's fields) are
 # solved in the topological order of the reads among them, each from the residual at the
 # fields solved before it (exact for an acyclic group; a cycle is block Gauss–Seidel).
+#
+# A stage is one such solve from slot `p` into the other slot. Backward Euler takes one stage
+# per substep (γ = 1); Crank–Nicolson one (γ = 1/2: the shift `2/h` of a Backward Euler step of
+# `h/2`), or two Backward Euler stages of `h/2` for its damped start, with the same operator.
 
 """
     residual_rule(alg)
 
 The residual of implicit algorithm `alg` for [`fuse_residual`](@ref
 LatticeFields.Compile.fuse_residual): `rule(kb, c, r, cn)` from the iterate `c`, the rate `r`
-and the substep's start `cn`. `BackwardEuler`: `(cn − c)/h + r`, `h = G.rt[2]`.
+and the stage's right side `cn`: `(cn − c)/(γh) + r`, `γh = G.rt[2]` (the launch's step
+argument: `h` for Backward Euler, `h/2` for Crank–Nicolson). One residual for
+every implicit algorithm; they differ in `cn` and `γ` (the runtime's stages).
 """
-residual_rule(::BackwardEuler) = BERule()
+residual_rule(::ImplicitAlgorithm) = BERule()
 struct BERule end
 (::BERule)(kb, c, r, cn) = (cn - c) / Ex(kb, runtime!(kb, RT_DT)) + r
-residual_key(::BackwardEuler) = :be
-# the γ of the algorithm's shift `1/(γh)` (Backward Euler: 1)
+residual_key(::ImplicitAlgorithm) = :be
+# Crank–Nicolson's right side `q = uⁿ + (h/2) r(uⁿ)` (`G.rt[2] = h/2`, the iterate `c` the
+# substep's start `uⁿ`, at its start time `tⁿ`): one program for the group's rows at once
+struct QRule end
+(::QRule)(kb, c, r, cn) = c + Ex(kb, runtime!(kb, RT_DT)) * r
+# the γ of the algorithm's shift `1/(γh)` (Backward Euler 1, Crank–Nicolson 1/2)
 _gamma(::BackwardEuler) = 1.0
+_gamma(::CrankNicolson) = 0.5
+# … of its operator at a start (an algorithm whose start is another method's step)
+_gamma_start(a::ImplicitAlgorithm) = _gamma(a)
+# … of the automatic counts (the substeps' rules 1 and 2 and the Newton count), which hold for
+# every stage, the start's too
+_gamma_count(a::ImplicitAlgorithm) = max(_gamma(a), _gamma_start(a))
+_algname(a) = string(nameof(typeof(a)))
 
 """
     residual_program(g, alg) -> Program
@@ -39,6 +57,9 @@ its rate program, once per residual key; thread-safe).
 residual_program(g::FieldGroup, alg::ImplicitAlgorithm) =
     lock(() -> get!(() -> semantic(fuse_residual(g.spec.rate, residual_rule(alg))), g.programs, (:residual, residual_key(alg))),
         _PLANS_LOCK)
+# … of Crank–Nicolson's right side (`QRule`)
+_q_program(g::FieldGroup) =
+    lock(() -> get!(() -> semantic(fuse_residual(g.spec.rate, QRule())), g.programs, (:residual, :q)), _PLANS_LOCK)
 # the semantic operator program of `g` (`nothing`: every row numeric)
 function _jac_program(g::FieldGroup, op::OperatorSpec)
     op.jac === nothing && return nothing
@@ -213,7 +234,7 @@ One row of an implicit runtime: its residual launches per slot parity and iterat
 state buffers, its solver (or `nothing`: a row with no diffusion, solved site by site) with
 the arrays its solve reads and writes, and its update's mask and clip.
 """
-mutable struct ImplicitRow{R, U, A, SV, X, W, SC, SM, V, S, MK, MV, MF, LO, F, J, M, D, RM, DM, P}
+mutable struct ImplicitRow{R, U, A, SV, X, W, SC, SM, V, S, MK, MV, MF, LO, F, J, M, D, RM, DM, P, Q}
     key::String
     res::NTuple{4, R}                   # (parity 1 first iteration, parity 2 first, parity 1 later, parity 2 later)
     bufs::NTuple{2, U}                  # the row's two state slots
@@ -240,6 +261,7 @@ mutable struct ImplicitRow{R, U, A, SV, X, W, SC, SM, V, S, MK, MV, MF, LO, F, J
     numeric::Union{Nothing, Solvers.CellOperator}   # the numeric operator the solver holds (numeric rows)
     part::P                             # the Newton check's block partials (3 per block) and
     hist::P                             #   the last two correction norms, in the state type
+    q::Q                                # the stage's right side `c__n` (Crank–Nicolson), or nothing (BE: `uⁿ`)
 end
 
 """
@@ -247,23 +269,30 @@ end
 
 The cache of an implicit runtime (F3 design §3.3): its rows in solve order
 ([`ImplicitRow`](@ref)), the operator program's launches per slot parity (or `nothing`), the
-Newton count, the step `h` the coefficients hold, the `stale` flag (the hierarchy is rebuilt
-before the next window: set at bind and by [`reset!`](@ref)), the `moving` flag (the
-operator reads data that change every window: it is rebuilt each window), the `timed` flag
-(the operator reads the time: it is rebuilt at each substep's end time), the `iterate` flag
-(a row's local Jacobian reads its own field, a local nonlinear term or a switch: that row's
-operator is rebuilt at every Newton iteration, at the iterate), the status word and the
-operator spec.
+Newton count, the step `h` and the `γ` the coefficients hold (the shift `1/(γh)`), the `stale`
+flag (the hierarchy is rebuilt before the next stage: set at bind, by [`reset!`](@ref) and by a
+change of `h` or `γ`), the `start` flag (the next substep is a start: Crank–Nicolson's damped
+substep; set at bind, by `reset!` and by a change of `h`), the
+`jumps` flag (Crank–Nicolson: the group's data can jump at every window, so the first substep
+of every window is damped), the `moving` flag (the operator reads data that change every
+window: it is rebuilt each window), the `timed` flag (the operator reads the time: it is
+rebuilt at each stage's end time), the `iterate` flag (a row's local Jacobian reads its own
+field, a local nonlinear term or a switch: that row's operator is rebuilt at every Newton
+iteration, at the iterate), Crank–Nicolson's right-side launches (`qres`, per slot parity, or
+nothing), the status word and the operator spec.
 """
-mutable struct ImplicitCache{RS, WK, JL, W, BK}
+mutable struct ImplicitCache{RS, WK, JL, W, BK, QL}
     rows::RS
     walk::WK
     jac::JL
     newton::Int
     h::Float64
+    γ::Float64                          # the γ of the operator's shift `1/(γh)` now
     stale::Bool
+    start::Bool                         # the next substep is a start (damped, or Backward Euler)
+    jumps::Bool                         # Crank–Nicolson: damp the first substep of every window
     moving::Bool
-    timed::Bool                         # the operator reads the time: rebuilt at every substep's end time
+    timed::Bool                         # the operator reads the time: rebuilt at every stage's end time
     word::W
     op::OperatorSpec
     exact0::Bool                        # the operator is exact apart from the Robin faces' signs
@@ -280,12 +309,13 @@ mutable struct ImplicitCache{RS, WK, JL, W, BK}
     keys::Vector{String}
     cyclic::Bool
     rebuilds::Int                       # hierarchy rebuilds so far (a test reads it)
-    rebind::Any                         # `p -> (residual launches per row, operator launches)` (a rebind)
+    rebind::Any                         # `p -> (residual launches per row, operator launches, q launches)` (a rebind)
     backend::BK
+    qres::QL                            # Crank–Nicolson's right-side launches per slot parity, or nothing
 end
 status_word(c::ImplicitCache) = c.word
 newton_count(c::ImplicitCache) = c.newton
-reset_cache!(c::ImplicitCache) = (c.stale = true; nothing)
+reset_cache!(c::ImplicitCache) = (c.stale = true; c.start = true; nothing)
 step_retcode!(::ImplicitCache, rt) = SciMLBase.ReturnCode.Success   # (the status word carries the code)
 
 """
@@ -298,9 +328,9 @@ bind_cache(alg, g, st, p; kw...) = alg_cache(alg, g, st)
 
 # the state type of a row's arrays (a lowered float type for the solver), with the refusal of
 # the others (FE-26, R-F3f)
-function _implicit_eltype(u, key)
+function _implicit_eltype(u, key, alg)
     T = eltype(u)
-    T in (Float32, Float64) || throw(ArgumentError(string("BackwardEuler: the field `", key, "` is stored as ", T,
+    T in (Float32, Float64) || throw(ArgumentError(string(_algname(alg), ": the field `", key, "` is stored as ", T,
         "; an implicit solve runs in Float32 or Float64 (a Dual or BigFloat implicit solve is planned after the ",
         "paper, FE-26): give the field a Float32 or Float64 state, or step it with `ExplicitEuler`")))
     return T
@@ -445,15 +475,16 @@ end
 # The `ImplicitCache` of the implicit algorithm `alg` for the fields `fields` of group `g` on
 # store `st` at raw parameters `p`, `n` substeps of `dt / n`
 function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fields, n, dt, c, backend, options, V)
-    op = operator_spec(g.spec)
+    op = _operator(g.spec, alg)
     s = group_program(g, alg)                       # the stepped program: the store's
     rs = residual_program(g, alg)
     keys = collect(String, fields)
     order, cyclic = _solve_order(s, keys)
     swaps = Set(fieldid(s, k) for k in keys)
     all_state = issubset(Set(fieldid(s, k) for k in g.spec.state), swaps)
-    γ = _gamma(alg)
+    γ = _gamma_start(alg)                           # the operator's γ at the first substep
     h = n == 0 ? Float64(dt) : Float64(dt) / n
+    hγ = γ * h
     # the operator program, bound to the store and to the `jac:` outputs it owns
     jp = _jac_program(g, op)
     own = Dict{String, Vector{Any}}()
@@ -474,31 +505,44 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
         mkjac = q -> ntuple(i -> BoundStep(backend, jp, jplan, jst, q; cur = jcurs[i], c), 4)
         jac = mkjac(p)
     end
+    # the stage's right side: Backward Euler's is the substep's start (`c__n` bound to the
+    # state's slots); Crank–Nicolson's a cache array per row (`c__n` bound to it)
+    qs = Dict{String, Any}()
+    if !(alg isa BackwardEuler)
+        for k in keys
+            u = st.bufs[fieldid(s, k)][1]
+            qs[k] = _zeros(st.backend, eltype(u), length(u))
+        end
+    end
+    qown = Dict{String, Vector{Any}}(k * "__n" => Any[q, q] for (k, q) in qs)
     # the residual store: the stepped program's arrays by id, the residuals and the histories
-    rst = _alias_store(st, s, rs; byid = true)
+    rst = _alias_store(st, s, rs; own = qown, byid = true)
     rows = Any[]
     mkres = Any[]
     exact = !cyclic
+    # the current slots of a launch of the residual program `prog` for a row solved after the
+    # rows `before`, at slot parity `par` (the first Newton iteration: the iterate is the stage's
+    # start, slot `par`, for the rows not solved yet; later, the other slot)
+    function rcur(prog, before, par, first)
+        cur = ones(Int, length(prog.fields))
+        for (i, f) in enumerate(prog.fields)
+            if i <= length(s.fields)
+                cur[i] = i in swaps ? (first && !(i in before) ? par : 3 - par) : (all_state ? par : st.cur[i])
+            elseif endswith(f.key, "__n")
+                cur[i] = par
+            end
+        end
+        return cur
+    end
     for (ri, key) in enumerate(order)
         r = op.rows[findfirst(x -> x.key == key, op.rows)]
         exact &= r.exact
         id = fieldid(s, key)
         u = st.bufs[id]
-        T = _implicit_eltype(u[1], key)
+        T = _implicit_eltype(u[1], key, alg)
         sp = _implicit_plan(g, rs, (:residual, residual_key(alg), key), _row_kernels(rs, key, g.spec.init), V, backend, options)
         before = Set(fieldid(s, q) for q in order[1:(ri - 1)])
-        function rcur(par, first)
-            cur = ones(Int, length(rs.fields))
-            for (i, f) in enumerate(rs.fields)
-                if i <= length(s.fields)
-                    cur[i] = i in swaps ? (first && !(i in before) ? par : 3 - par) : (all_state ? par : st.cur[i])
-                elseif endswith(f.key, "__n")
-                    cur[i] = par
-                end
-            end
-            return cur
-        end
-        rcurs = (rcur(1, true), rcur(2, true), rcur(1, false), rcur(2, false))
+        rcurs = (rcur(rs, before, 1, true), rcur(rs, before, 2, true), rcur(rs, before, 1, false), rcur(rs, before, 2, false))
         mk = q -> ntuple(i -> BoundStep(backend, rs, sp, rst, q; cur = rcurs[i], c), 4)
         push!(mkres, mk)
         res = mk(p)
@@ -512,19 +556,20 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
         jarr(k) = haskey(own, "jac:$key.$k") ? own["jac:$key.$k"][1] : nothing
         nsite = length(u[1])
         part, hist = _zeros(st.backend, T, 3 * cld(nsite, NB)), _zeros(st.backend, T, 2)
+        q = get(qs, key, nothing)
         if r.local_only
             sv, numeric = nothing, nothing
-            sh = r.field ? _zeros(st.backend, T, nsite) : T(max(1 / (γ * h) - _coefsum(r.jloc, p), 1 / (2γ * h)))
+            sh = r.field ? _zeros(st.backend, T, nsite) : T(max(1 / hγ - _coefsum(r.jloc, p), 1 / (2hγ)))
             row = ImplicitRow(key, res, (u[1], u[2]), resarr, nothing, (u[1], u[1]), Int32(0), typeof(u[1])[], nothing,
                 nothing, nothing, sh, mask, mval, mvf, lo, nothing, jarr("j"), nothing, nothing, nothing, r.field && r.domain ? jarr("dom") : nothing,
-                r, nothing, part, hist)
+                r, nothing, part, hist, q)
             push!(rows, row)
             continue
         end
         inner = alg.inner
         solver_T = alg.solver_T === :auto ? T : alg.solver_T
         if !r.field
-            numeric, _ = _numeric_operator(s, r, id, p, h, γ, mask !== nothing)
+            numeric, _ = _numeric_operator(s, r, id, p, hγ, 1.0, mask !== nothing)
             ins = mask === nothing ? ("in.f" => resarr,) : ("in.f" => resarr, "mask" => mask)
             sv = Solvers.FieldSolver(backend, numeric; inner, T, solver_T, inputs = ins)
             smask, v, f, sh, jj, mm, dd, dm = nothing, nothing, nothing, numeric.shift, nothing, nothing, nothing, nothing
@@ -554,8 +599,20 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
         work = [w for w in sv.bufs[wid]]
         row = ImplicitRow(key, res, (u[1], u[2]), resarr, sv, (xb[1], xb[end]), xid, work,
             sv.tables[Solvers.tid(sv, "solve.scal")], smask, v, sh, mask, mval, mvf, lo, f, jj, mm, dd, mask, dm, r, numeric,
-            part, hist)
+            part, hist, q)
         push!(rows, row)
+    end
+    # Crank–Nicolson's right side `uⁿ + (h/2) r(uⁿ)` of every row at once, from the substep's
+    # start (every row at slot `par`) at its start time; its `res:c` are the rows' `q` arrays
+    qres, mkq = nothing, q -> nothing
+    if alg isa CrankNicolson
+        qp = _q_program(g)
+        qst = _alias_store(st, s, qp; own = Dict{String, Vector{Any}}("res:" * k => Any[q] for (k, q) in qs), byid = true)
+        qids = sort!(unique!(reduce(vcat, (_row_kernels(qp, k, g.spec.init) for k in keys); init = Int[])))
+        qplan = _implicit_plan(g, qp, (:residual, :q, keys), qids, V, backend, options)
+        qcurs = (rcur(qp, Set{Int}(), 1, true), rcur(qp, Set{Int}(), 2, true))
+        mkq = q -> ntuple(i -> BoundStep(backend, qp, qplan, qst, q; cur = qcurs[i], c), 2)
+        qres = mkq(p)
     end
     # a Robin face with a negative diagonal leaves its part out of the operator (a defect
     # correction): the classification at `p` (again at each rebind, `install_launches!`)
@@ -566,20 +623,52 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
     exact = exact0 && !rb.neg
     seen = isempty(b.unseen) && !rb.unseen
     ρin = b.ρ + b.κ + rb.ρ
-    exact || seen || alg.newton !== nothing || _warn_unseen(keys, [b.unseen; rb.texts])
-    newton = alg.newton !== nothing ? alg.newton : _newton_count(exact, switch, seen, ρin, γ, h, b.θ)
+    exact || seen || alg.newton !== nothing || _warn_unseen(keys, [b.unseen; rb.texts], alg)
+    newton = alg.newton !== nothing ? alg.newton : _newton_count(exact, switch, seen, ρin, _gamma_count(alg), h, b.θ)
     iterate = any(r -> r.op.iterate, rows)
     # the operator moves when it reads the time, the clock, a filled input or a field of the state
     # (rebuilt each window), or the solver reads a mask that moves
     moving = _jac_moving(jp, g.spec) || any(r -> r.mask !== nothing || r.dom !== nothing, rows) && _masks_moving(s, g.spec)
+    # Crank–Nicolson damps every window when the group's data can jump between windows
+    jumps = alg isa CrankNicolson && _jumps(s, rs, keys, g.spec, any(r -> r.mask !== nothing || r.dom !== nothing, rows))
     word = _zeros(st.backend, UInt32, 9)
     rt = Tuple(rows)
     mkjac0 = jp === nothing ? (q -> nothing) : mkjac
-    rebind = q -> ([m(q) for m in mkres], mkjac0(q))
+    rebind = q -> ([m(q) for m in mkres], mkjac0(q), mkq(q))
     timed = jp !== nothing && _reads_time(jp)
-    return ImplicitCache(rt, each(length(rt)), jac, newton, h, true, moving, timed, word, op, exact0, exact, iterate,
-        newton > 1, alg.newton === nothing && exact && switch, alg.newton === nothing, switch, seen, ρin, b.θ, keys, cyclic, 0,
-        rebind, backend)
+    return ImplicitCache(rt, each(length(rt)), jac, newton, h, γ, true, true, jumps, moving, timed, word, op, exact0, exact,
+        iterate, newton > 1, alg.newton === nothing && exact && switch, alg.newton === nothing, switch, seen, ρin, b.θ, keys,
+        cyclic, 0, rebind, backend, qres)
+end
+
+# the operator of `spec` for algorithm `alg`: a front end's refusal (a hexagonal lattice, a
+# map) names the algorithm
+function _operator(spec::GroupSpec, alg)
+    try
+        return operator_spec(spec)
+    catch e
+        e isa ArgumentError || rethrow()
+        throw(ArgumentError(string(_algname(alg), ": ", e.msg)))
+    end
+end
+
+# whether the data of a Crank–Nicolson group can jump between its windows (F3 design §3.3): its
+# residual kernels (the rows' `rate:` kernels and the aux kernels they read) load an input the
+# CPM fills, a field of another group or the clock's step index, or it has a mask (a row's own,
+# or the domain's) that moves
+function _jumps(s::Program, rs::Program, keys, spec::GroupSpec, masked::Bool)
+    masked && _masks_moving(s, spec) && return true
+    ks = [rs.kernels[i] for k in keys for i in _row_kernels(rs, k, spec.init)]
+    filled = Set(i.key for i in spec.inputs if i.filled)
+    others = Set(k for k in [spec.state; spec.external] if !(k in keys))
+    cs = clock_slot(spec)
+    for k in ks, n in k.nodes
+        n.op == PARAM && cs != 0 && n.imm == cs && return true
+        n.op == LOAD || continue
+        f = rs.fields[k.accesses[n.imm].field]
+        (f.key in filled || f.key in others) && return true
+    end
+    return false
 end
 
 # The Newton count of `newton = nothing` (F3 design §3.4): 1 for an exact operator, 2 with a
@@ -607,11 +696,11 @@ function _newton_count(exact::Bool, switch::Bool, seen::Bool, ρin::Float64, γ:
 end
 # once per group and term (the F2 key): a term no bound sees is corrected by Newton iterations,
 # checked on the device
-function _warn_unseen(keys, unseen)
+function _warn_unseen(keys, unseen, alg)
     fs = join(("`$k`" for k in keys), ", ")
     for u in unique(unseen)
         _warn_once(string("implicit-unseen#", join(keys, ","), "#", u)) || continue
-        @warn string("BackwardEuler: field", length(keys) == 1 ? " " : "s ", fs, ": ", u, " is not in the implicit ",
+        @warn string(_algname(alg), ": field", length(keys) == 1 ? " " : "s ", fs, ": ", u, " is not in the implicit ",
             "operator and no bound sees it, so it is corrected by Newton iterations (`newton = 4`), checked on the ",
             "device at every substep: a budget hit is counted and warned with its route, a divergence ends the run with ",
             "`ReturnCode.ConvergenceFailure`. Give `newton = k` to choose the count")
@@ -643,16 +732,24 @@ _jac_moving(jp::Program, spec) = _reads_moving(jp, jp.kernels, spec)
 _masks_moving(s::Program, spec) = _reads_moving(s, [k for k in s.kernels if k.key in spec.init], spec)
 
 # the step `h` of the coefficients (a count change, a rebind): the numeric shifts follow; the
-# hierarchy is rebuilt before the next solve
+# hierarchy is rebuilt before the next stage, and the next substep is a start (F3 design §3.3
+# Step changes)
 function _set_step!(c::ImplicitCache, rt::GroupRuntime, h::Float64)
-    γ = _gamma(rt.alg)
+    c.h = h
+    c.start = true
+    _set_shift!(c, rt, _gamma_start(rt.alg); force = true)
+    _set_newton!(c, rt.alg)
+    return nothing
+end
+# the operator's γ (the shift `1/(γh)`)
+function _set_shift!(c::ImplicitCache, rt::GroupRuntime, γ::Float64; force::Bool = false)
+    (force || γ != c.γ) || return nothing
     s = group_program_of(rt)
     for r in c.rows
-        _set_row_step!(r, s, rt.p, h, γ)
+        _set_row_step!(r, s, rt.p, γ * c.h)
     end
-    c.h = h
+    c.γ = γ
     c.stale = true
-    _set_newton!(c, rt.alg)
     return nothing
 end
 # a new count (a parameter write's recount): the step and the Newton count follow at once (R2-N3)
@@ -664,30 +761,32 @@ function _count_set!(c::ImplicitCache, rt::GroupRuntime)
 end
 function _set_newton!(c::ImplicitCache, alg)
     c.auto || return nothing
-    c.newton = _newton_count(c.exact, c.switch, c.seen, c.ρin, _gamma(alg), c.h, c.θ)
+    c.newton = _newton_count(c.exact, c.switch, c.seen, c.ρin, _gamma_count(alg), c.h, c.θ)
     c.check = c.newton > 1
     c.flip = c.exact && c.switch
     return nothing
 end
 group_program_of(rt::GroupRuntime) = rt.program
-function _set_row_step!(r::ImplicitRow, s, p, h, γ)
+# the shift of a row at the stage step `hγ = γh` (`1/hγ`)
+function _set_row_step!(r::ImplicitRow, s, p, hγ)
     if r.solver === nothing
-        r.s isa Number && (r.s = oftype(r.s, max(1 / (γ * h) - _coefsum(r.op.jloc, p), 1 / (2γ * h))))
+        r.s isa Number && (r.s = oftype(r.s, max(1 / hγ - _coefsum(r.op.jloc, p), 1 / (2hγ))))
         return nothing
     end
     r.numeric === nothing && return nothing
-    op, _ = _numeric_operator(s, r.op, fieldid(s, r.key), p, h, γ, r.mask !== nothing)
+    op, _ = _numeric_operator(s, r.op, fieldid(s, r.key), p, hγ, 1.0, r.mask !== nothing)
     Solvers.set_coefficients!(r.solver, op)
     r.numeric = op
     r.s = op.shift
     return nothing
 end
 
-# Rebuild the operator before a window's solves (stale or moving): the operator program at the
-# substep's end time, each field row's shift and solver mask, then each solver's hierarchy
-function _rebuild!(c::ImplicitCache, rt::GroupRuntime, par::Int, t1::Float64, h::Float64, k::Int)
-    c.jac === nothing || c.jac[par]((t1, h, k))
-    c.walk(c.rows, _Rebuild(c.backend, h, _gamma(rt.alg), c.word, false, rt.totals.windows % Int32))     # (each row: the rows' types differ)
+# Rebuild the operator before a stage's solves (stale, moving or timed): the operator program at
+# the stage's end time `t1`, each field row's shift (`1/hγ`) and solver mask, then each solver's
+# hierarchy
+function _rebuild!(c::ImplicitCache, rt::GroupRuntime, par::Int, t1::Float64, hγ::Float64, k::Int)
+    c.jac === nothing || c.jac[par]((t1, hγ, k))
+    c.walk(c.rows, _Rebuild(c.backend, hγ, 1.0, c.word, false, rt.totals.windows % Int32))     # (each row: the rows' types differ)
     c.stale = false
     c.rebuilds += 1
     return nothing
@@ -695,9 +794,9 @@ end
 # … and at a Newton iteration of a group whose operator reads the iterate (`c.iterate`): the
 # operator program at the iterate (slot `par` at the first iteration, the other slot after),
 # then the rows that read it
-function _rebuild_iterate!(c::ImplicitCache, rt::GroupRuntime, par::Int, first::Bool, t1::Float64, h::Float64, k::Int)
-    c.jac[(first ? 0 : 2) + par]((t1, h, k))
-    c.walk(c.rows, _Rebuild(c.backend, h, _gamma(rt.alg), c.word, true, rt.totals.windows % Int32))
+function _rebuild_iterate!(c::ImplicitCache, rt::GroupRuntime, par::Int, first::Bool, t1::Float64, hγ::Float64, k::Int)
+    c.jac[(first ? 0 : 2) + par]((t1, hγ, k))
+    c.walk(c.rows, _Rebuild(c.backend, hγ, 1.0, c.word, true, rt.totals.windows % Int32))
     return nothing
 end
 struct _Rebuild{B, W}
@@ -776,43 +875,75 @@ function _newton_check!(r::ImplicitRow, backend, word, dst, un, x, it, last, win
     return nothing
 end
 
-# The substeps of a window (F3 design §3.3): the operator rebuilt when stale or moving (and at
-# each later substep's end time when it reads the time), then per substep the Newton iterations over the rows in solve order, the slot swap at the end
+# The substeps of a window (F3 design §3.3): per substep the algorithm's stages (`_substep!`),
+# each the Newton iterations over the rows in solve order from slot `par` into the other slot,
+# then the slot swap. The operator is rebuilt at a stage when stale (bind, `reset!`, a new `h`
+# or `γ`), at the window's first stage when it moves, and at every stage's end time when it
+# reads the time.
 function _substeps!(c::ImplicitCache, rt::GroupRuntime, t::Float64, h::Float64, k::Int, n::Integer)
     # a window of length 0 (front end A's at-init clamp: the masks, and the aux fields of the
     # state as it is) and a group with no state step as the explicit program does (`h = 0`
     # leaves the state unchanged)
     (n == 0 || h == 0) && return _substeps!(nothing, rt, t, h, k, n)
-    st = rt.store
     h == c.h || _set_step!(c, rt, h)
-    fresh = c.stale || c.moving
-    fresh && _rebuild!(c, rt, _parity(rt), t + h, h, k)
-    γ = _gamma(rt.alg)
     w = rt.totals.windows % Int32
     for j in 1:n
-        par = _parity(rt)
-        t1 = t + j * h
-        # an operator that reads the time: each later substep's at its end time (the window's
-        # rebuild is the first substep's)
-        timed = c.timed && j > 1
-        timed && _rebuild!(c, rt, par, t1, h, k)
-        for it in 1:(c.newton)
-            # (a substep's rebuild is the first iteration's)
-            c.iterate && !((fresh && j == 1 || timed) && it == 1) && _rebuild_iterate!(c, rt, par, it == 1, t1, h, k)
-            host = c.check && c.auto && c.word isa Array
-            host && (@inbounds c.word[STATUS_CONVERGED] = 0)     # (the word has 9 entries)
-            # (the automatic count's flip pass of a switch counts no budget hit, M7)
-            c.walk(c.rows, (par, it == 1, t1, h, k, it == c.newton, w, c.backend, γ, c.word, it, c.check,
-                it == c.newton && !c.flip))
-            # under the automatic count a host executor stops when every row converged (a plain
-            # read); the clip of the last iteration then runs on its own
-            if host && it < c.newton && @inbounds(c.word[STATUS_CONVERGED]) == length(c.rows)
-                c.walk(c.rows, _Clip(c.backend, par))
-                break
-            end
-        end
-        _swap!(st.cur, rt.swaps)
+        _substep!(rt.alg, c, rt, t + (j - 1) * h, h, k, w, j == 1)
     end
+    return nothing
+end
+# Backward Euler: one stage at `tⁿ⁺¹`
+_substep!(::BackwardEuler, c, rt, t0, h, k, w, first) = _stage!(c, rt, t0 + h, 1.0, h, k, w, first)
+# Crank–Nicolson: one stage at `tⁿ⁺¹` from `q = uⁿ + (h/2) r(uⁿ)` (`r` at `tⁿ`), or at a start (or
+# the first substep of a window whose data can jump) two Backward Euler stages of `h/2` from
+# `q = uⁿ` and then `q = uⁿ⁺¹ᐟ²`, with the same operator (the shift `2/h`)
+function _substep!(::CrankNicolson, c, rt, t0, h, k, w, first)
+    if c.start || (first && c.jumps)
+        _set_q!(c, rt, nothing)
+        _stage!(c, rt, t0 + h / 2, 0.5, h, k, w, first)
+        _set_q!(c, rt, nothing)
+        _stage!(c, rt, t0 + h, 0.5, h, k, w, false)
+        c.start = false
+        return nothing
+    end
+    c.qres[_parity(rt)]((t0, 0.5 * h, k))
+    _stage!(c, rt, t0 + h, 0.5, h, k, w, first)
+    return nothing
+end
+# each row's `q` at slot parity `par`: the stage's start `uⁿ`
+_set_q!(c::ImplicitCache, rt::GroupRuntime, _) = (c.walk(c.rows, _SetQ(c.backend, _parity(rt))); nothing)
+struct _SetQ{B}
+    backend::B
+    par::Int
+end
+(r::ImplicitRow)(a::_SetQ) = (Exec.launch!(a.backend, _copy_body!, length(r.q), (r.q, r.bufs[a.par])); nothing)
+
+# One stage: the Newton iterations from slot `par` (the current parity) into the other slot at
+# its end time `t1`, with the operator's `γ` (the shift `1/(γh)`; the residual's launches take
+# `γh` as their step), then the swap. `first`: the window's first stage (a moving operator is
+# rebuilt there).
+function _stage!(c::ImplicitCache, rt::GroupRuntime, t1::Float64, γ::Float64, h::Float64, k::Int, w::Int32, first::Bool)
+    γ == c.γ || _set_shift!(c, rt, γ)
+    hγ = γ * h
+    par = _parity(rt)
+    rebuilt = c.stale || (first && c.moving) || c.timed
+    rebuilt && _rebuild!(c, rt, par, t1, hγ, k)
+    for it in 1:(c.newton)
+        # (a stage's rebuild is its first iteration's)
+        c.iterate && !(rebuilt && it == 1) && _rebuild_iterate!(c, rt, par, it == 1, t1, hγ, k)
+        host = c.check && c.auto && c.word isa Array
+        host && (@inbounds c.word[STATUS_CONVERGED] = 0)     # (the word has 9 entries)
+        # (the automatic count's flip pass of a switch counts no budget hit, M7)
+        c.walk(c.rows, (par, it == 1, t1, hγ, k, it == c.newton, w, c.backend, 1.0, c.word, it, c.check,
+            it == c.newton && !c.flip))
+        # under the automatic count a host executor stops when every row converged (a plain
+        # read); the clip of the last iteration then runs on its own
+        if host && it < c.newton && @inbounds(c.word[STATUS_CONVERGED]) == length(c.rows)
+            c.walk(c.rows, _Clip(c.backend, par))
+            break
+        end
+    end
+    _swap!(rt.store.cur, rt.swaps)
     return nothing
 end
 
@@ -824,16 +955,16 @@ function rebind_launches(rt::GroupRuntime{<:FieldStore, <:ImplicitAlgorithm}, p)
         _bind_masks(rt.backend, rt.program, rt.init, rt.store, p, rt.swaps, rt.all_state, rt.c,
             Set(fieldid(rt.program, k) for k in rt.keys)))
     c = rt.cache::ImplicitCache
-    res, jac = c.rebind(p)
-    γ = _gamma(rt.alg)
+    res, jac, qres = c.rebind(p)
+    hγ = c.γ * c.h
     ops = Any[r.numeric === nothing ? nothing :
-              first(_numeric_operator(rt.program, r.op, fieldid(rt.program, r.key), p, c.h, γ, r.mask !== nothing))
+              first(_numeric_operator(rt.program, r.op, fieldid(rt.program, r.key), p, hγ, 1.0, r.mask !== nothing))
               for r in c.rows]
-    shifts = Any[r.solver === nothing && r.s isa Number ? oftype(r.s, max(1 / (γ * c.h) - _coefsum(r.op.jloc, p), 1 / (2γ * c.h))) :
+    shifts = Any[r.solver === nothing && r.s isa Number ? oftype(r.s, max(1 / hγ - _coefsum(r.op.jloc, p), 1 / (2hγ))) :
                  nothing for r in c.rows]
-    return (steps[1], steps[2], (res, jac, ops, shifts, p))
+    return (steps[1], steps[2], (res, jac, ops, shifts, p, qres))
 end
-function install_launches!(rt::GroupRuntime{<:FieldStore, <:ImplicitAlgorithm}, (steps, masks, (res, jac, ops, shifts, p)))
+function install_launches!(rt::GroupRuntime{<:FieldStore, <:ImplicitAlgorithm}, (steps, masks, (res, jac, ops, shifts, p, qres)))
     rt.steps, rt.masks = steps, masks
     c = rt.cache::ImplicitCache
     for (i, r) in enumerate(c.rows)
@@ -846,6 +977,7 @@ function install_launches!(rt::GroupRuntime{<:FieldStore, <:ImplicitAlgorithm}, 
         shifts[i] === nothing || (r.s = shifts[i])
     end
     c.jac = jac
+    c.qres = qres
     # (here, not in `rebind_launches`: front end A writes the tables between the two)
     bp = _bound_params(rt.store, rt.program, c.op, c.keys, p)
     b, rb = inexact_bounds(c.op, c.keys, c.cyclic, bp), _robin_bounds(rt.program, c.op, c.keys, bp)
@@ -855,7 +987,7 @@ function install_launches!(rt::GroupRuntime{<:FieldStore, <:ImplicitAlgorithm}, 
     c.seen = isempty(b.unseen) && !rb.unseen
     c.ρin = b.ρ + b.κ + rb.ρ
     c.θ = b.θ
-    c.exact || c.seen || rt.alg.newton !== nothing || _warn_unseen(c.keys, [b.unseen; rb.texts])
+    c.exact || c.seen || rt.alg.newton !== nothing || _warn_unseen(c.keys, [b.unseen; rb.texts], rt.alg)
     _set_newton!(c, rt.alg)
     reset!(rt)
     return rt
@@ -868,17 +1000,17 @@ end
 The substep count of an implicit algorithm (F3 design §3.7), the same policy as the explicit
 one with the implicit rule (§3.6): the parameter refusals first (a negative diffusion
 coefficient, a coefficient that is not finite where the inputs reach), then
-`n = max(m, ⌈2 dt g⌉, ⌈2γ dt (ρ_adv + κ_in + ρ_rob) / (1 − θ)⌉)`: `m` the user's count (1 when
-left out); rule 1, `g` the largest positive local derivative the operator sees
-([`growth`](@ref)), so the shift `1/h − g` stays at least half of `1/h`; rule 2, the defect
-correction converges with a contraction `ρ_c ≤ (1 + θ)/2`: `ρ_adv` the upwind bound of the
-advection terms, `κ_in` the cross sum of a cycle among the group's fields
-([`inexact_bounds`](@ref)), `ρ_rob` the part `w |d⁻|` of a Robin face with a negative diagonal,
-and `θ ≤ 1/2` the face-wise ratio of a diffusion term left out of a scaled row to the one kept,
-which contracts at any step size (a ratio above 1/2, or unknown, puts the term's Gershgorin
-bound in the sum instead). No stability bound is needed: an unknown bound is no refusal (the
-device check decides). When a rule raises the user's count, a warning says which, once per
-cause (`key`).
+`n = max(m, ⌈2γ dt g⌉, ⌈2γ dt (ρ_adv + κ_in + ρ_rob) / (1 − θ)⌉)`: `m` the user's count (1 when
+left out); `γ` the algorithm's (the shift `1/(γh)`: Backward Euler 1, Crank–Nicolson 1/2); the growth rule, `g` the largest positive local derivative the
+operator sees ([`growth`](@ref)), so the shift `1/(γh) − g` stays at least half of `1/(γh)`;
+the convergence rule of the Newton correction, which converges with a contraction
+`ρ_c ≤ (1 + θ)/2`: `ρ_adv` the upwind bound of the advection terms, `κ_in` the cross sum of a
+cycle among the group's fields ([`inexact_bounds`](@ref)), `ρ_rob` the part `w |d⁻|` of a
+Robin face with a negative diagonal, and `θ ≤ 1/2` the face-wise ratio of a diffusion term
+left out of a scaled row to the one kept, which contracts at any step size (a ratio above 1/2,
+or unknown, puts the term's Gershgorin bound in the sum instead). No stability bound is
+needed: an unknown bound is no refusal (the device check decides). When a rule raises the
+user's count, a warning says which, once per cause (`key`).
 """
 function substeps(spec::GroupSpec, alg::ImplicitAlgorithm, dt::Real, pp; fields = spec.state, stability = spec.stability,
         key = identity, texts::PolicyTexts = ProblemTexts(spec.texts.route))
@@ -887,14 +1019,14 @@ function substeps(spec::GroupSpec, alg::ImplicitAlgorithm, dt::Real, pp; fields 
     r = bound_report(stability, pp)
     ctx = (; stability, pp, r, fields = collect(String, fields), dt, least = alg.substeps)
     (isempty(r.negative) && !any(x -> x[3] isa Tuple, r.nonfinite)) || refuse_parameters(texts, ctx)
-    op = operator_spec(spec)
+    op = _operator(spec, alg)
     keys = collect(String, fields)
     g = growth(op, keys, pp)
     b = inexact_bounds(op, keys, last(_solve_order(spec.rate, keys)), pp)
     ρrob = _robin_bounds(spec.rate, op, keys, pp).ρ
-    γ = _gamma(alg)
-    # (rule 2 on the sum: the parts out of the operator add in one correction)
-    n1, n2 = ceil(Int, 2 * dt * g), ceil(Int, 2γ * dt * (b.ρ + b.κ + ρrob) / (1 - b.θ))
+    γ = _gamma_count(alg)
+    # (the convergence rule on the sum: the parts out of the operator add in one correction)
+    n1, n2 = ceil(Int, 2γ * dt * g), ceil(Int, 2γ * dt * (b.ρ + b.κ + ρrob) / (1 - b.θ))
     m = something(alg.substeps, 1)
     if alg.substeps !== nothing && max(n1, n2) > m
         rule = n2 >= n1 ? 2 : 1
@@ -906,10 +1038,11 @@ end
 # (the growth rule, the convergence rule of the Newton correction)
 function _raise_text(op::OperatorSpec, keys, alg, n, rule, cycle, robin)
     fs = join(("`$k`" for k in keys), ", ")
-    head = string(nameof(typeof(alg)), "(substeps = ", alg.substeps, "): field", length(keys) == 1 ? " " : "s ", fs,
+    sh = alg isa CrankNicolson ? "2/h" : "1/h"
+    head = string(_algname(alg), "(substeps = ", alg.substeps, "): field", length(keys) == 1 ? " " : "s ", fs,
         length(keys) == 1 ? " takes " : " take ", n, " substeps, more than the ", alg.substeps, " requested: ")
-    rule == 1 && return string(head, "a local growth `∂f/∂c` that the operator sees needs `1/h` at least twice ",
-        "it, so the shift `1/h − ∂f/∂c` keeps the step stable; fewer substeps are not stable")
+    rule == 1 && return string(head, "a local growth `∂f/∂c` that the operator sees needs `", sh, "` at least twice it, so the shift `",
+        sh, " − ∂f/∂c` keeps the step stable; fewer substeps are not stable")
     terms = unique([t for r in op.rows if r.key in keys for t in r.inexact])
     cycle && push!(terms, "the cycle among the group's fields")
     robin && push!(terms, "the negative part of a Robin face")

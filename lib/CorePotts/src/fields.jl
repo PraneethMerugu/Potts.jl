@@ -418,6 +418,21 @@ function _read_status!(stats, rt::Problems.GroupRuntime)
     _rank(c) > _rank(stats.fields.code) && (stats.fields.code = c)
     return nothing
 end
+"""
+    reset_fields!(ctx)
+
+Drop the algorithm history of every field group of run context `ctx`
+(`LatticeFields.Problems.reset!`): the state was written (`integ[c] = values`, `setu`, a
+callback with `u_modified!(integ, true)`, `reinit!`), so Crank–Nicolson damps its next
+substep; the hierarchy of an implicit group is rebuilt. Nothing for the explicit algorithms. A
+move of σ by the CPM is no write.
+"""
+function reset_fields!(ctx)
+    for h in values(ctx)
+        h isa FieldHandle && Problems.reset!(_runtime(h))
+    end
+    return nothing
+end
 # every field group's word (the read points on a device: `saveat` and the end; cold)
 function _read_statuses!(stats, ctx)
     for h in values(ctx)

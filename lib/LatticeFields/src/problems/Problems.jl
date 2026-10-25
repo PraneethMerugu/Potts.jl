@@ -3,7 +3,7 @@
 
 Running compiled programs (v3 §8): the arrays of a program on a backend (`FieldStore`), the
 binding of a step plan's launch descriptions to `Exec` launches (`bind`, `BoundStep`), the
-owned `FieldProblem` with its steppers (`ExplicitEuler`, `ExplicitMap`, `BackwardEuler`), the SciML
+owned `FieldProblem` with its steppers (`ExplicitEuler`, `ExplicitMap`, the implicit ones), the SciML
 `ODEProblem` of a program's ODE form (`ode_problem`, `LatticeRHS`), and symbolic indexing of
 problems, solutions and integrators (`LatticeIndex`, `FieldSlot`).
 """
@@ -62,7 +62,7 @@ public substep_counts, lagged_coupling, group_loops
 public PolicyTexts, ProblemTexts, GroupSubsteps, check_coupling, bound_report, unbounded_text, uncovered_text,
        refuse_parameters, coupling_unknown_text, coupling_unbounded_text, loop_text
 # the implicit algorithms (F3-07)
-public ImplicitAlgorithm, BackwardEuler, OperatorSpec, RowOperator, operator_spec, build_operator, growth, inexact_bounds, ImplicitCache,
+public ImplicitAlgorithm, BackwardEuler, CrankNicolson, OperatorSpec, RowOperator, operator_spec, build_operator, growth, inexact_bounds, ImplicitCache,
        ImplicitRow, bind_cache, residual_program, residual_rule
 # the clock (F2-08c)
 public CLOCK_KEY, clock_slot

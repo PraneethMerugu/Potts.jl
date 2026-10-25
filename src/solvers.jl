@@ -30,7 +30,7 @@ _solver_name(x) = info(x).name
 # algorithm (`ExplicitEuler`), a map field (`Shift(t, 1)(m) ~ rhs`) `ExplicitMap()`; each refuses
 # the other family by name.
 _is_field_solver(s) = s isa FieldAlgorithm
-_field_solver_names() = "`ExplicitEuler(…)`, `BackwardEuler(…)`, or `ExplicitMap()` for a map"
+_field_solver_names() = "`ExplicitEuler(…)`, `BackwardEuler(…)`, `CrankNicolson(…)`, or `ExplicitMap()` for a map"
 # A field solver as given: the window of a `PottsProblem` is the MCS (`mcs_duration`), so a
 # `dt` is refused; a rate field refuses `ExplicitMap` (F2-04), a map field (`map = true`) a
 # rate algorithm (F2-10)
@@ -43,8 +43,8 @@ function _check_field_solver(s, what; map::Bool = false)
         "default = …)`, or give this field one algorithm")))
     s isa ExplicitMap && !map && throw(ArgumentError(
         "$what: `ExplicitMap()` steps discrete maps `Shift(t, 1)(m) ~ rhs`; a rate field `D(c) ~ rhs` is stepped by " *
-        "`ExplicitEuler(…)` or `BackwardEuler(…)`"))
-    s isa Union{ExplicitEuler, BackwardEuler} && s.dt !== nothing && throw(ArgumentError(string(
+        "`ExplicitEuler(…)`, `BackwardEuler(…)` or `CrankNicolson(…)`"))
+    s isa Union{ExplicitEuler, LatticeFields.Problems.ImplicitAlgorithm} && s.dt !== nothing && throw(ArgumentError(string(
         "$what: `", nameof(typeof(s)), "(; dt = ", s.dt, ")`: a `PottsProblem` field steps over the MCS window (`mcs_duration`, ",
         "split into `substeps`); leave `dt` out")))
     return s

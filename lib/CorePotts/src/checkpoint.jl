@@ -114,10 +114,13 @@ function SciMLBase.reinit!(integ::PottsIntegrator, u0 = integ.prob.u0;
     return integ
 end
 
-# every field group's status word, totals and code (cold: a dynamic loop over the context)
+# every field group's status word, totals and code, and its algorithm's history (`reset!`: the
+# new state is a start; cold: a dynamic loop over the context)
 function _clear_field_status!(ctx)
     for h in values(ctx)
-        h isa FieldHandle && Problems.clear_status!(_runtime(h))
+        h isa FieldHandle || continue
+        Problems.clear_status!(_runtime(h))
+        Problems.reset!(_runtime(h))
     end
     return nothing
 end

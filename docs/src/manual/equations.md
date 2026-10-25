@@ -151,7 +151,7 @@ sol[:x][end], sol[:g][end]
 
 | Keyword | Values | Default |
 |---|---|---|
-| `field_solver` | `ExplicitEuler(; substeps, lower)`: `substeps` explicit steps per MCS, values clipped at `lower`; `BackwardEuler(; substeps, newton, lower, inner, solver_T)`: implicit steps, each a linear solve with `inner` | `ExplicitEuler()`: the automatic count, no clip |
+| `field_solver` | `ExplicitEuler(; substeps, lower)`: `substeps` explicit steps per MCS, values clipped at `lower`; `BackwardEuler(; substeps, newton, lower, inner, solver_T)`: implicit steps, each a linear solve with `inner`; `CrankNicolson(…)`: second-order implicit steps, the same keywords | `ExplicitEuler()`: the automatic count, no clip |
 | `ode_solver` | `ExplicitEuler(; substeps)`, `RK4(; substeps)`, `Adaptive(alg; kwargs...)` | `ExplicitEuler()`, one step per MCS |
 | `solvers` | `[x => solver, …]`, per variable or component | — |
 
@@ -189,8 +189,21 @@ or more substeps). A correction that diverges ends the run with
 `ReturnCode.ConvergenceFailure`, and the warning gives more substeps as the route. Under the
 automatic count, a CPU run stops a substep's Newton iterations once the correction meets the
 tolerance; a GPU runs them all, so CPU and GPU results agree to the tolerance, not bitwise. A
-hexagonal lattice has no implicit solve yet: `BackwardEuler` refuses it, and
+hexagonal lattice has no implicit solve yet: the implicit solvers refuse it, and
 `field_solver = ExplicitEuler()` steps it.
+
+`CrankNicolson()` is a second-order implicit solver. It takes the keywords of
+`BackwardEuler`, with the same meanings, and its substeps cost one linear solve each, as
+Backward Euler's do. It solves `(u − uⁿ)/h = (rhs(uⁿ) + rhs(u))/2`, with `rhs(uⁿ)` at the
+substep's start time and `rhs(u)` at its end time. Data that jump ring under Crank–Nicolson,
+so its first substep after a start is damped: two Backward Euler steps of `h/2`. A start is the
+first MCS and every write (a state, parameter or table write, `reinit!`). A field whose data
+can jump every MCS damps the first substep of every MCS. Such a field reads the CPM (`kind`,
+`ismember`), another field group or `mcs`, or has a mask that moves. With one substep per MCS
+such a field is first order; `substeps = 2` or more keeps the later substeps second order.
+Crank–Nicolson does not keep nonnegative values nonnegative: a stiff decay overshoots below 0.
+Give `lower = 0.0` for a concentration, or use `BackwardEuler`, which needs no clip on a
+consumption field. A clip changes the equation solved slightly.
 
 `BackwardEuler` pays a linear solve per substep. It is the faster choice when the explicit
 count is large (fast diffusion, a stiff decay); for a field whose explicit count is a few

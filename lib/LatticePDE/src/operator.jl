@@ -285,7 +285,8 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
     # defect correction, which diverges at any step an implicit method is for (M4)
     if s.hierarchy[1].grid.geometry == HEX
         ks = [k for k in _states(s) if haskey(cf.linearity, k)]
-        throw(ArgumentError(string("BackwardEuler: field", length(ks) == 1 ? " " : "s ", join(("`$k`" for k in ks), ", "),
+        # (the caller names the implicit algorithm: "BackwardEuler: field `c`: …")
+        throw(ArgumentError(string("field", length(ks) == 1 ? " " : "s ", join(("`$k`" for k in ks), ", "),
             ": a hexagonal lattice has no implicit solve yet (the solver's operator has no hexagonal faces); step ",
             length(ks) == 1 ? "it" : "them", " with ", route)))
     end

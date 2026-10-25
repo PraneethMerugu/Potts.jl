@@ -111,38 +111,83 @@ struct BackwardEuler <: ImplicitAlgorithm
     lower::Union{Nothing, Float64}
     inner::Any
     solver_T::Any
-    function BackwardEuler(dt, substeps, newton, lower, inner, solver_T)
-        w = "BackwardEuler"
-        dt === nothing || (dt isa Real && !(dt isa Bool) && isfinite(dt) && dt > 0) ||
-            throw(ArgumentError("$w: dt = $(repr(dt)) must be finite and > 0"))
-        substeps isa Integer && !(substeps isa Bool) && substeps == 0 && throw(ArgumentError(
-            "$w: `substeps = 0` is not a count; leave `substeps` out for the automatic count"))
-        substeps === nothing || (substeps isa Integer && !(substeps isa Bool) && substeps >= 1) ||
-            throw(ArgumentError("$w: substeps = $(repr(substeps)) must be an integer ≥ 1 (or left out: automatic)"))
-        newton === nothing || (newton isa Integer && !(newton isa Bool) && newton >= 1) ||
-            throw(ArgumentError("$w: newton = $(repr(newton)) is the Newton iterations per substep, an integer ≥ 1 " *
-                                "(or left out: automatic)"))
-        lower === nothing || lower isa Real && !(lower isa Bool) && isfinite(lower) ||
-            throw(ArgumentError("$w: lower = $(repr(lower)) must be a finite number (a clip at ±Inf or NaN " *
-                                "clips nothing or every value; leave `lower` out for no clip)"))
-        inner === :auto || inner isa Solvers.DevicePCG || inner isa Solvers.Multigrid ||
-            throw(ArgumentError("$w: `inner` takes `:auto`, a `DevicePCG(…)` or a `Multigrid(…)` (the linear solver of " *
-                                "each implicit step); got $(repr(inner))"))
-        solver_T === :auto || solver_T === Float32 || solver_T === Float64 || throw(ArgumentError(string(w,
-            ": `solver_T` takes `:auto` (the state's number type), `Float32` or `Float64`; got ", repr(solver_T),
-            solver_T isa Type && !(solver_T <: AbstractFloat && isbitstype(solver_T)) ? "" :
-            solver_T isa Type ? " (a Dual or BigFloat implicit solve is planned after the paper, FE-26)" : "")))
-        return new(dt === nothing ? nothing : Float64(dt), substeps === nothing ? nothing : Int(substeps),
-            newton === nothing ? nothing : Int(newton), lower === nothing ? nothing : Float64(lower), inner, solver_T)
-    end
+    BackwardEuler(dt, substeps, newton, lower, inner, solver_T) =
+        new(_implicit_keywords("BackwardEuler", dt, substeps, newton, lower, inner, solver_T)...)
+end
+# The keywords of a time-stepping implicit algorithm, each checked (an `ArgumentError` naming
+# the keyword) and converted (`w` names the algorithm in the messages)
+function _implicit_keywords(w, dt, substeps, newton, lower, inner, solver_T)
+    dt === nothing || (dt isa Real && !(dt isa Bool) && isfinite(dt) && dt > 0) ||
+        throw(ArgumentError("$w: dt = $(repr(dt)) must be finite and > 0"))
+    substeps isa Integer && !(substeps isa Bool) && substeps == 0 && throw(ArgumentError(
+        "$w: `substeps = 0` is not a count; leave `substeps` out for the automatic count"))
+    substeps === nothing || (substeps isa Integer && !(substeps isa Bool) && substeps >= 1) ||
+        throw(ArgumentError("$w: substeps = $(repr(substeps)) must be an integer ≥ 1 (or left out: automatic)"))
+    newton === nothing || (newton isa Integer && !(newton isa Bool) && newton >= 1) ||
+        throw(ArgumentError("$w: newton = $(repr(newton)) is the Newton iterations per substep, an integer ≥ 1 " *
+                            "(or left out: automatic)"))
+    lower === nothing || lower isa Real && !(lower isa Bool) && isfinite(lower) ||
+        throw(ArgumentError("$w: lower = $(repr(lower)) must be a finite number (a clip at ±Inf or NaN " *
+                            "clips nothing or every value; leave `lower` out for no clip)"))
+    inner === :auto || inner isa Solvers.DevicePCG || inner isa Solvers.Multigrid ||
+        throw(ArgumentError("$w: `inner` takes `:auto`, a `DevicePCG(…)` or a `Multigrid(…)` (the linear solver of " *
+                            "each implicit step); got $(repr(inner))"))
+    solver_T === :auto || solver_T === Float32 || solver_T === Float64 || throw(ArgumentError(string(w,
+        ": `solver_T` takes `:auto` (the state's number type), `Float32` or `Float64`; got ", repr(solver_T),
+        solver_T isa Type && !(solver_T <: AbstractFloat && isbitstype(solver_T)) ? "" :
+        solver_T isa Type ? " (a Dual or BigFloat implicit solve is planned after the paper, FE-26)" : "")))
+    return (dt === nothing ? nothing : Float64(dt), substeps === nothing ? nothing : Int(substeps),
+        newton === nothing ? nothing : Int(newton), lower === nothing ? nothing : Float64(lower), inner, solver_T)
+end
+function _implicit_kwerror(w, kw)
+    return ArgumentError(string(w, ": no keyword ", join(("`$k`" for k in keys(kw)), ", "),
+        "; its keywords are `dt`, `substeps`, `newton`, `lower`, `inner` and `solver_T`"))
 end
 function BackwardEuler(; dt = nothing, substeps = nothing, newton = nothing, lower = nothing, inner = :auto,
         solver_T = :auto, kw...)
-    isempty(kw) || throw(ArgumentError(string("BackwardEuler: no keyword ", join(("`$k`" for k in keys(kw)), ", "),
-        "; its keywords are `dt`, `substeps`, `newton`, `lower`, `inner` and `solver_T`")))
+    isempty(kw) || throw(_implicit_kwerror("BackwardEuler", kw))
     return BackwardEuler(dt, substeps, newton, lower, inner, solver_T)
 end
 nbuffers(::BackwardEuler) = 2
+
+"""
+    CrankNicolson(; dt = nothing, substeps = nothing, newton = nothing, lower = nothing,
+                    inner = :auto, solver_T = :auto)
+
+Crank–Nicolson (the trapezoidal rule, second order): each substep of `h = dt / n` solves
+`(u − uⁿ)/h = (r(uⁿ) + r(u))/2`, `r(uⁿ)` at the substep's start time `tⁿ` and `r(u)` at its end
+time `tⁿ⁺¹`, by the Newton iterations of [`BackwardEuler`](@ref) with the shift `2/h` (the
+operator of a Backward Euler step of `h/2`). It is not L-stable: data that jump (a step, a mask
+that moves, an input that changes) ring with the factor `−1` per substep in the stiff modes.
+So the first substep after a start (at `init`, and after every [`reset!`](@ref): a state,
+input, table or parameter write) is damped (Rannacher): two Backward Euler steps of `h/2`, at
+`tⁿ + h/2` and `tⁿ + h`, which use the same operator (no extra rebuild). A group whose data can
+jump every window (it reads an input the CPM fills, a field of another group or the clock's
+step index, or has a mask that moves) damps the first substep of every window: with
+`substeps = 1` such a window is Backward Euler in two halves (first order); `substeps = 2` or
+more keeps the later substeps second order. Crank–Nicolson does not keep nonnegative data
+nonnegative (a stiff decay overshoots below 0): `lower` clips each substep (for a consumption
+field, [`BackwardEuler`](@ref) needs no clip). The keywords are those of
+[`BackwardEuler`](@ref), with the same meanings and checks; the automatic counts use the shift
+`2/h`. One type for both front ends.
+"""
+struct CrankNicolson <: ImplicitAlgorithm
+    dt::Union{Nothing, Float64}
+    substeps::Union{Nothing, Int}
+    newton::Union{Nothing, Int}
+    lower::Union{Nothing, Float64}
+    inner::Any
+    solver_T::Any
+    CrankNicolson(dt, substeps, newton, lower, inner, solver_T) =
+        new(_implicit_keywords("CrankNicolson", dt, substeps, newton, lower, inner, solver_T)...)
+end
+function CrankNicolson(; dt = nothing, substeps = nothing, newton = nothing, lower = nothing, inner = :auto,
+        solver_T = :auto, kw...)
+    isempty(kw) || throw(_implicit_kwerror("CrankNicolson", kw))
+    return CrankNicolson(dt, substeps, newton, lower, inner, solver_T)
+end
+nbuffers(::CrankNicolson) = 2
+
 
 """
     ExplicitMap()
@@ -244,9 +289,10 @@ alg_cache(::FieldAlgorithm, group, store) = nothing
     reset_cache!(cache)
 
 Drop the history of an algorithm's cache: the state was written (`integ[c] = values`,
-`reinit!`), or the parameters or inputs changed. Nothing for `nothing`.
+`reinit!`), or the parameters or inputs changed. The default does nothing: a cache with no
+history (`nothing`, or an algorithm's own workspace) needs no method.
 """
-reset_cache!(::Nothing) = nothing
+reset_cache!(cache) = nothing
 
 """
     step_retcode!(cache, rt) -> ReturnCode.T
@@ -362,11 +408,12 @@ function _algtext(a::ExplicitEuler)
     kw = [string(k, " = ", getfield(a, k)) for k in (:dt, :substeps, :lower) if getfield(a, k) !== nothing]
     return isempty(kw) ? "ExplicitEuler()" : string("ExplicitEuler(; ", join(kw, ", "), ")")
 end
-function _algtext(a::BackwardEuler)
+function _algtext(a::Union{BackwardEuler, CrankNicolson})
     kw = [string(k, " = ", repr(getfield(a, k))) for k in (:dt, :substeps, :newton, :lower) if getfield(a, k) !== nothing]
     a.inner === :auto || push!(kw, string("inner = ", repr(a.inner)))
     a.solver_T === :auto || push!(kw, string("solver_T = ", a.solver_T))
-    return isempty(kw) ? "BackwardEuler()" : string("BackwardEuler(; ", join(kw, ", "), ")")
+    w = nameof(typeof(a))
+    return isempty(kw) ? string(w, "()") : string(w, "(; ", join(kw, ", "), ")")
 end
-Base.show(io::IO, a::Union{ExplicitEuler, BackwardEuler}) = print(io, _algtext(a))
+Base.show(io::IO, a::Union{ExplicitEuler, BackwardEuler, CrankNicolson}) = print(io, _algtext(a))
 _algtext(a) = repr(a)

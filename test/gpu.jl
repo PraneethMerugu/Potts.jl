@@ -37,6 +37,13 @@ PottsDevices.device_name() == "rocm" && include("device_ir.jl")
         field_solver = BackwardEuler(lower = 0.0)), CheckerboardCPM(; proposal = Moore(1)); backend)
     cb = Array(sb.u[end].site.c)
     @test sb.retcode == Potts.SciMLBase.ReturnCode.Success && all(isfinite, cb) && minimum(cb) >= 0 && maximum(cb) > 0
+    # F3-10: Crank–Nicolson (its right-side launches), 20 MCS
+    for fs in (CrankNicolson(lower = 0.0),)
+        sx = solve(PottsProblem(MERKS, [ownership => merks_state(), kind => [1, 1]], (0, 20); T = Float32,
+            field_solver = fs), CheckerboardCPM(; proposal = Moore(1)); backend)
+        cx = Array(sx.u[end].site.c)
+        @test sx.retcode == Potts.SciMLBase.ReturnCode.Success && all(isfinite, cx) && minimum(cx) >= 0 && maximum(cx) > 0
+    end
     σs = zeros(Int32, 60, 30); σs[5:10, 12:17] .= 1; σs[40:45, 12:17] .= 2
     sp = PottsProblem(Spring(; name = :spring), [ownership => σs, kind => [:blob, :blob], :bond => [(1, 2)]], (0, 1000); T = Float32)
     ds = [CorePotts.centroid_distance(Float64, solve(remake(sp; seed), CheckerboardCPM(); backend).u[end].cell, sp.lattice, 1, 2) for seed in 1:4]
