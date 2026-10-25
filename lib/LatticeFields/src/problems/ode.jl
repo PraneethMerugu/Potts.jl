@@ -333,12 +333,13 @@ and integrators index fields by symbol. `inputs` are `symbol => values` for ever
 (an unset one, or a parameter that is NaN, is an error here: an ODE problem has no `init`).
 `stability` is the front end's stability bound, whose [`check_parameters`](@ref) runs here and
 at every call of the right side with new parameter values (`remake`, `setp`): a refused value
-is an error from `solve` or `step!`, never a run.
+is an error from `solve` or `step!`, never a run. With `steady = true` (a system with no time)
+it is the `SteadyStateProblem` of the right side.
 """
 function ode_problem(prog::Program, u0, tspan, p; state, rates, init = String[],
         index = LatticeIndex(), tables = Pair{String, Vector{Float64}}[], inputs = Pair[], stability = p -> NaN,
         backend = KA.CPU(),
-        options::CompileOptions = CompileOptions())
+        options::CompileOptions = CompileOptions(), steady::Bool = false)
     faces = face_checks(prog)
     derive!(p, tables, index)                       # the computed slots (F2-15)
     check_faces(faces, p)
@@ -370,6 +371,9 @@ function ode_problem(prog::Program, u0, tspan, p; state, rates, init = String[],
     # aux fields `K ~ rhs` read as observed quantities (`sol[K]`, `integ[K]`: F3-00 review M1)
     index isa LatticeIndex && !isempty(index.aux) && (index.auxeval[] = ODEAux(f, s))
     fun = SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize}(f; sys = index)
+    # a system with no time (F3-12b): the steady state of the right side, for SciML's steady
+    # solvers (`DynamicSS`, a nonlinear solver)
+    steady && return SciMLBase.SteadyStateProblem(fun, U, pv)
     return SciMLBase.ODEProblem(fun, U, (Float64(tspan[1]), Float64(tspan[2])), pv)
 end
 

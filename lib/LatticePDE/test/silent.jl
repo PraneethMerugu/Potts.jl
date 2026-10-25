@@ -279,15 +279,18 @@ end
     # LP67: no "next commit (C7b)"
     err = emsg(() -> discretize(ssys([D(ce) ~ -ce], [c(0, x, y) ~ 1.0], [ce], Num[]),
         LatticeDiscretization(Grid((4, 4)); problem = :linear)))
-    @test occursin("not lowered in this version", err) && !occursin("C7b", err)
-    # LP45: a system with no time is diagnosed as such
+    @test occursin("is planned (F4)", err) && occursin("solve(prob)", err) && !occursin("C7b", err)
+    # LP45: a system with no time is a steady system (F3-12b); this one (no decay, no fixed
+    # value) has no unique steady state, which its solve names (base 6b6bf089: "no time …
+    # not supported in this version")
     st = PDESystem([0 ~ Δ(c(x, y))], Equation[], [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [x, y], [c(x, y)],
         Num[]; name = :st)
-    err = emsg(() -> discretize(st, LatticeDiscretization(Grid((4, 4)))))
-    @test occursin("no time", err) && !occursin("1 spatial variables", err)
-    # LP41: a steady equation is not sent to a "solver group"
-    err = emsg(() -> discretize(ssys([0 ~ Δ(ce) - ce], [c(0, x, y) ~ 1.0], [ce], Num[]), LatticeDiscretization(Grid((4, 4)))))
-    @test occursin("steady", err) && !occursin("solver group", err)
+    err = emsg(() -> solve(discretize(st, LatticeDiscretization(Grid((4, 4))))))
+    @test occursin("has no unique steady state", err) && !occursin("1 spatial variables", err)
+    # LP41: a steady equation is solved by `QuasiSteady`, never sent to a "solver group" (F3-12b)
+    r = solve(discretize(ssys([0 ~ Δ(ce) - ce], [c(0, x, y) ~ 1.0], [ce], Num[]), LatticeDiscretization(Grid((4, 4)))),
+        QuasiSteady(; dt = 0.1))
+    @test r.retcode == SciMLBase.ReturnCode.Success
     # LF13: the substep refusal names the term the bound cannot see
     err = emsg(() -> solve(sown(ssys([D(ce) ~ Δ(ce) - ce^3], [c(0, x, y) ~ 0.0], [ce], Num[])), ExplicitEuler(; dt = 0.01)))
     @test occursin("^3", err) && occursin("cannot see", err)

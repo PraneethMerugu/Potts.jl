@@ -96,7 +96,10 @@ The description of one field group, the same for both front ends (F2 design §2.
 - `linearity`: the front end's linearity classes, carried for operator extraction (F3);
 - `operator`: the front end's builder of the group's [`OperatorSpec`](@ref) for the implicit
   algorithms (`operator_spec(spec)` builds it once, at the first implicit use; `nothing`: the
-  front end extracts no operator, and an implicit algorithm is refused).
+  front end extracts no operator, and an implicit algorithm is refused);
+- `steady`: the state fields written as steady rows `0 ~ rhs` (their rate rows hold `rhs`):
+  their groups take [`QuasiSteady`](@ref) only (F3-12b);
+- `timefree`: the system has no time (every row steady): a problem of it is solved once.
 """
 struct GroupSpec{N}
     rate::Program{N}
@@ -112,15 +115,18 @@ struct GroupSpec{N}
     texts::@NamedTuple{route::String, terms::Vector{String}}
     linearity::Any
     operator::Any
+    steady::Vector{String}
+    timefree::Bool
 end
 function GroupSpec(rate::Program{N}; state, external = String[], params = String[], tables = String[],
         inputs = String[], init = String[], kind::Symbol, clock = nothing, stability = p -> NaN,
-        route = "ExplicitEuler(; dt, substeps = n)", terms = String[], linearity = nothing, operator = nothing) where {N}
+        route = "ExplicitEuler(; dt, substeps = n)", terms = String[], linearity = nothing, operator = nothing,
+        steady = String[], timefree::Bool = false) where {N}
     kind in (:rate, :map) || throw(ArgumentError("kind must be :rate or :map; got $(repr(kind))"))
     return GroupSpec{N}(rate, collect(String, state), collect(String, external), ParamSlot[ParamSlot(q) for q in params],
         TableSpec[TableSpec(q) for q in tables], InputSpec[InputSpec(q) for q in inputs], collect(String, init), kind,
         clock === nothing ? nothing : Float64(clock), stability, (; route = String(route), terms = collect(String, terms)),
-        linearity, operator)
+        linearity, operator, collect(String, steady), timefree)
 end
 
 """

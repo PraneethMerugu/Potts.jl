@@ -217,7 +217,12 @@ consumption field. A clip changes the equation solved slightly.
 
 `QuasiSteady()` solves a field's steady state `0 = rhs` in each MCS, at the cells of that
 MCS: a field that relaxes much faster than the cells move. Each MCS starts from the last
-solution. It takes `newton`, `inner` and `solver_T` with the meanings above, and has no
+solution. Write such a field's equation as a steady row, `0 ~ Dc * Δ(c) - kd * c + s`: it is
+solved for a field it reads that has no other equation, the one under its operator first,
+with `QuasiSteady` by default (another solver for it is an error). Its sign does not matter:
+`0 ~ kd * c - Dc * Δ(c) - s` is the same row. A local row such as `0 ~ -2c + 0.5e`, with
+`D(e) ~ …`, is `c`'s. Steady fields are solved first in each MCS, so the other fields read their
+values of that MCS. `QuasiSteady` also solves a rate row `D(c) ~ rhs` as `0 = rhs`. It takes `newton`, `inner` and `solver_T` with the meanings above, and has no
 `substeps` and no `lower`. A linear field takes one linear solve per MCS; a nonlinear or
 switched one takes up to 8 Newton iterations, checked as above. When a term stays out of the
 operator (advection, the coupling between the fields of one group), the count comes from the

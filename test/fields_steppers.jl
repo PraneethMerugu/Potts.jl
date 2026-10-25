@@ -284,3 +284,104 @@ end
         SequentialCPM())
     @test s.retcode == Potts.SciMLBase.ReturnCode.Success
 end
+
+# F3-12b (F3 design §3.5): steady rows `0 ~ rhs` in A. A steady row is solved by `QuasiSteady`
+# for the field its operator acts on, by default too; another solver for it is refused; the
+# QuasiSteady groups step first. Base (6b6bf089, ~/lpwork/f3b5-nc-12b-a-base.log): `0 ~ rhs` is
+# refused ("equations are `D(x) ~ rhs` …"; every testset errors).
+@potts_model FiSteady0 begin
+    @kinds medium A[frozen]
+    @parameters begin
+        Dc = 0.4
+        kd = 0.3
+        s = 0.5
+    end
+    @variables c(field) = 0.0
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations 0 ~ Dc * Δ(c) - kd * c + s * (kind == A)
+    @sweep Metropolis(; temperature = 1.0)
+end
+# a transient field `e` (declared and written first) that reads the steady `c`
+@potts_model FiSteadyMix begin
+    @kinds medium A[frozen]
+    @variables begin
+        e(field) = 0.0
+        c(field) = 0.0
+    end
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations begin
+        D(e) ~ 0.1 * Δ(e) - e + c
+        0 ~ 0.4 * Δ(c) - 0.3 * c + 0.5 * (kind == A)
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@testset "F3-12b: steady rows `0 ~ rhs` in A: QuasiSteady by default, equal to the rate row and to B" begin
+    dims, k = (12, 10), 3
+    a0, integ = fi_runA(FiSteady0, fi_op(dims), k; field_solver = nothing)
+    a1, _ = fi_runA(FiSteady, fi_op(dims), k; field_solver = QuasiSteady())
+    @test a0 == a1 && substep_counts(integ) == [1]
+    # B reads the model's steady row as `0 ~ rhs` (`Potts.fields`) and steps it the same
+    @test a0 == fi_runB(FiSteady0, dims, k; u0 = [:c => zeros(dims)], alg = QuasiSteady(; dt = 1.0))
+    @test any(eq -> startswith(string(eq), "0 ~"), Potts.fields(FiSteady0(; name = :f)).eqs)
+    # another solver for a steady row is refused; `QuasiSteady` given is the default
+    @test_throws "`field_solver = BackwardEuler()`: every field of model `f` has a steady equation `0 ~ rhs` (`c`), which `QuasiSteady` solves" PottsProblem(
+        FiSteady0(; name = :f), fi_op(dims), (0, 2); field_solver = BackwardEuler())
+    @test_throws "`solvers`: the field `c` has a steady equation `0 ~ rhs`, which `QuasiSteady` solves" PottsProblem(
+        FiSteady0(; name = :f), fi_op(dims), (0, 2); solvers = [:c => BackwardEuler()])
+    b0, _ = fi_runA(FiSteady0, fi_op(dims), k; field_solver = QuasiSteady())
+    @test b0 == a0
+    # mixed: `c` steady (QuasiSteady), `e` with the field solver; the steady group first
+    for fs in (nothing, BackwardEuler())
+        p = PottsProblem(FiSteadyMix(; name = :f), fi_op(dims), (0, k); field_solver = fs)
+        integ = init(p, SequentialCPM())
+        @test solve!(integ).retcode == Potts.SciMLBase.ReturnCode.Success
+        @test first(substep_counts(integ)) == 1 && length(substep_counts(integ)) == 2
+    end
+    @test_throws "`FieldGroups`: the field `c` has a steady equation `0 ~ rhs`" PottsProblem(FiSteadyMix(; name = :f),
+        fi_op(dims), (0, 2); field_solver = FieldGroups(:c => ExplicitEuler()))
+end
+
+# Review r3 S3, S4: a steady row's sign does not matter (the elliptic form `0 ~ k c − D Δ(c) −
+# s`), and its field follows the one rule of both front ends (`LatticePDE.steady_choice`): a
+# field with no other equation, so a local row that reads a transient field (`0 ~ −2c + 0.5e`)
+# is `c`'s, equal to B. Base (e7068add, ~/lpwork/f3b6-nc-r3-a.log): "the diffusion coefficient …
+# is negative", and "this row's operators apply to `c` and `e`".
+@potts_model FiSteadyNeg begin
+    @kinds medium A[frozen]
+    @parameters begin
+        Dc = 0.4
+        kd = 0.3
+        s = 0.5
+    end
+    @variables c(field) = 0.0
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations 0 ~ kd * c - Dc * Δ(c) - s * (kind == A)
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FiLocal begin
+    @kinds medium A[frozen]
+    @variables begin
+        c(field) = 0.0
+        e(field) = 0.0
+    end
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations begin
+        0 ~ -2.0 * c + 0.5 * e
+        D(e) ~ 0.1 * Δ(e) - e + 0.5 * (kind == A)
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@testset "F3-12b (r3 S3, S4): a steady row's sign; its field by the rule of both front ends" begin
+    dims, k = (12, 10), 3
+    an, _ = fi_runA(FiSteadyNeg, fi_op(dims), k; field_solver = QuasiSteady(; inner = DevicePCG(; rtol = 1e-12, budget = 64)))
+    a0, _ = fi_runA(FiSteady0, fi_op(dims), k; field_solver = QuasiSteady(; inner = DevicePCG(; rtol = 1e-12, budget = 64)))
+    @test maximum(abs, an[end] .- a0[end]) < 1e-10
+    al, integ = fi_runA(FiLocal, fi_op(dims), k)
+    @test substep_counts(integ)[1] == 1 && maximum(al[end]) > 0
+    @test al == fi_runB(FiLocal, dims, k; u0 = [:c => zeros(dims), :e => zeros(dims)])
+    @test only(steady_fields(FiLocal(; name = :f))) == ("0 ~ -2.0c(t) + 0.5e(t)" => :c)      # (r3 N2)
+end

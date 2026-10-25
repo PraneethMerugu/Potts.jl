@@ -276,3 +276,170 @@ end
     rs = solve(p1, QuasiSteady(; dt = 0.1, inner = BTIGHT))                     # (the steady field alone)
     @test maximum(abs, r[qae, length(r.t)] .- rs[qae, length(rs.t)]) < 1e-12
 end
+
+# F3-12b (F3 design §3.5): steady rows `0 ~ rhs` in B, time-free systems through the steady
+# solve, the QuasiSteady groups first. A steady row is lowered as the rate row of the field it
+# determines (`steady_rows`) and takes `QuasiSteady` only, by default too; a system with no
+# time is solved once (`solve(prob)`, the inner solver to rtol 1e-6 within 64 iterations).
+# Base (6b6bf089, ~/lpwork/f3b5-nc-12b-base.log): `0 ~ rhs` is refused ("not lowered in this
+# version") and a system with no time too (every testset errors).
+qown(sys; dims = BDIMS) = discretize(sys, LatticeDiscretization(Grid(dims); T = Float64, problem = :owned))
+@testset "F3-12b: steady rows `0 ~ rhs`: the rate row's solve, QuasiSteady only, the steady groups first" begin
+    alg = QuasiSteady(; dt = 0.1, inner = BTIGHT)
+    s0 = bsys([0 ~ bD * Δ(bce) - bk * bce + x + t], [bc(t, 0, y) ~ 1.0], [bD, bk]; T = 0.3)
+    s1 = bsys([D(bce) ~ bD * Δ(bce) - bk * bce + x + t], [bc(0, x, y) ~ 0.0, bc(t, 0, y) ~ 1.0], [bD, bk]; T = 0.3)
+    p0, p1 = bown(s0), bown(s1)
+    @test p0.group.spec.steady == ["bc"] && !p0.group.spec.timefree && p1.group.spec.steady == String[]
+    # the choice shown (r3 N2): an accessor and the problem's display
+    @test steady_fields(p0) == ["bc"] && steady_fields(p1) == String[]
+    @test occursin("steady rows `0 ~ rhs` (`QuasiSteady`), solved for `bc`", sprint(show, MIME"text/plain"(), p0))
+    r0 = solve(p0, alg)
+    @test r0.u == solve(p1, alg).u && r0.retcode == ReturnCode.Success          # (the cold start: 0)
+    @test solve(p0, QuasiSteady(; dt = 0.1, inner = BTIGHT)).u == r0.u           # (`QuasiSteady` by default)
+    m = qmsg(() -> solve(p0, BackwardEuler(; dt = 0.1)))
+    @test startswith(m, "BackwardEuler(; dt = 0.1): every field of the problem has a steady equation `0 ~ rhs` (`bc`), which `QuasiSteady` solves")
+    # a transient field `bo` (first in dvs) reads the steady `bc`: `bc` takes `QuasiSteady` at the
+    # window of the given algorithm and steps first; a pair for it must be `QuasiSteady`
+    sm = bsys([D(boe) ~ 0.1 * Δ(boe) - boe + bce, 0 ~ bD * Δ(bce) - bk * bce + x], [bc(t, 0, y) ~ 1.0, bo(0, x, y) ~ 0.0],
+        [bD, bk]; T = 0.3, dvs = [boe, bce])
+    pm = qown(sm)
+    for a in (BackwardEuler(; dt = 0.1), FieldGroups(boe => BackwardEuler(; dt = 0.1)),
+              FieldGroups(bce => QuasiSteady(; dt = 0.1), boe => BackwardEuler(; dt = 0.1)))
+        ig = init(pm, a)
+        @test [(typeof(r.alg), r.keys) for r in ig.runtimes] == [(QuasiSteady, ["bc"]), (BackwardEuler, ["bo"])]
+    end
+    m = qmsg(() -> init(pm, FieldGroups(bce => BackwardEuler(; dt = 0.1), boe => BackwardEuler(; dt = 0.1))))
+    @test startswith(m, "FieldGroups: the field `bc` has a steady equation `0 ~ rhs`, which `QuasiSteady` solves") &&
+          occursin("give `bc => QuasiSteady()` or leave it out", m)
+    # the steady field is solved first in each window: `bo` reads this window's `bc`
+    ig = init(pm, BackwardEuler(; dt = 0.1, inner = BTIGHT))
+    step!(ig)
+    want = qs_hand(; K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces = Dict((1, -1) => (:dir, 1.0)))
+    @test maximum(abs, vec(ig[bce]) .- want) < 1e-9
+    @test maximum(abs, vec(ig[boe])) > 0
+    # the field a row is solved for: the one its operator acts on; a row that reads no free field
+    @variables qf(..)
+    qfe = qf(t, x, y)
+    sw = PDESystem([0 ~ 0.1 * Δ(qfe) - qfe + bce, 0 ~ bD * Δ(bce) - bk * bce + x], [bc(t, 0, y) ~ 1.0], bdom(0.3), [t, x, y],
+        [bce, qfe], [bD, bk]; name = :which)
+    @test last(LatticePDE.steady_rows(sw)) == ["qf", "bc"] && qown(sw).group.spec.steady == ["bc", "qf"]   # (rows; state order)
+    m = qmsg(() -> qown(bsys([0 ~ x - 1, D(bce) ~ -bce], [bc(0, x, y) ~ 0.0], Any[]; dvs = [bce])))
+    @test startswith(m, "equation `0 ~ -1 + x`: a steady equation `0 ~ rhs` is solved for a field that it reads and that has no other equation, and it reads none")
+    # a row's sign does not matter (r3 S3): the elliptic form `0 ~ k c − D Δ(c) − s` is the row
+    # with its operator a diffusion, and a local row `0 ~ qf − c²` (for `qf`) is `0 ~ c² − qf`; a
+    # row whose operator and local term disagree is refused as indefinite. Base (e7068add,
+    # ~/lpwork/f3b6-nc-r3.log): "the diffusion coefficient … is negative", and the growth refusal
+    se = bsys([0 ~ bk * bce - bD * Δ(bce) - x], [bc(t, 0, y) ~ 1.0], [bD, bk]; T = 0.3)
+    re = solve(bown(se), alg)
+    want = qs_hand(; K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces = Dict((1, -1) => (:dir, 1.0)))
+    @test re.retcode == ReturnCode.Success && maximum(abs, re[bce, 2] .- reshape(want, BDIMS)) < 1e-9
+    @test LatticePDE.steady_sign(unwrap(bk * bce - bD * Δ(bce) - x), unwrap(bce)) == -1 &&
+          LatticePDE.steady_sign(unwrap(bD * Δ(bce) - bk * bce + x), unwrap(bce)) == 1
+    @variables qf2(..)
+    qe2 = qf2(t, x, y)
+    sq = PDESystem([D(bce) ~ 0.1 * Δ(bce) - bce + 1, 0 ~ qe2 - bce^2], [bc(0, x, y) ~ 0.5], bdom(0.3), [t, x, y], [bce, qe2],
+        Any[]; name = :sq)
+    rq = solve(qown(sq), BackwardEuler(; dt = 0.1, inner = BTIGHT); saveat = 0.1)
+    @test rq.retcode == ReturnCode.Success
+    # (`qf2` is solved at each window's start, from the `bc` of that start: the window before the end)
+    @test maximum(abs, rq[qe2, length(rq.t)] .- rq[bce, length(rq.t) - 1] .^ 2) < 1e-6
+    m = qmsg(() -> init(bown(bsys([0 ~ -bD * Δ(bce) - bk * bce + x], [bc(t, 0, y) ~ 1.0], [bD, bk])), alg))
+    @test startswith(m, "QuasiSteady: field `bc`: its local derivative `∂f/∂c` = 2.0 is positive")
+    # the ODE path: a steady row makes a DAE (planned); `:auto` takes the owned path
+    m = qmsg(() -> discretize(sm, LatticeDiscretization(Grid(BDIMS); T = Float64, problem = :ode)))
+    @test startswith(m, "problem = :ode: the steady rows of `bc` make the system a DAE")
+    @test discretize(sm, LatticeDiscretization(Grid(BDIMS); T = Float64)) isa FieldProblem
+end
+
+@testset "F3-12b: a steady row's time source is read at the window's start" begin
+    # `0 = 0.1 Δu − u + f(t)` with `u = (1 + t) sin(πx) sin(πy)` (zero faces) on 32²: window k
+    # solves at its start time t_{k−1}, so the field is the solution at t_{k−1}, not at t_k
+    n = 32
+    f = (1 + t) * (0.1 * 2π^2 + 1) * sin(π * x) * sin(π * y)
+    faces = [bc(t, 0, y) ~ 0.0, bc(t, 1, y) ~ 0.0, bc(t, x, 0) ~ 0.0, bc(t, x, 1) ~ 0.0]
+    p = discretize(bsys([0 ~ 0.1 * Δ(bce) - bce + f], faces, Any[]; T = 1.0, dvs = [bce]),
+        LatticeDiscretization(Grid((n, n)); T = Float64, problem = :owned))
+    ig = init(p, QuasiSteady(; dt = 0.5, inner = DevicePCG(; rtol = 1e-12, budget = 200)))
+    xs = [(i - 0.5) / n for i in 1:n, j in 1:n]
+    ys = [(j - 0.5) / n for i in 1:n, j in 1:n]
+    u(tt) = (1 + tt) .* sin.(π .* xs) .* sin.(π .* ys)
+    for k in 1:2
+        step!(ig)
+        e0, e1 = maximum(abs, ig[bce] .- u(0.5(k - 1))), maximum(abs, ig[bce] .- u(0.5k))
+        @test e0 < 2e-3 && e1 > 0.4 || (println("12b start-time read ", (k, e0, e1)); false)
+    end
+end
+
+@testset "F3-12b: a system with no time: one steady solve from a cold start; Helmholtz is order 2" begin
+    @variables fc(..)
+    fce = fc(x, y)
+    fdom = [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    sf = PDESystem([0 ~ bD * Δ(fce) - bk * fce + x], [fc(0, y) ~ 1.0], fdom, [x, y], [fce], [bD, bk]; name = :free)
+    pf = qown(sf)
+    @test pf isa FieldProblem && pf.tspan == (0.0, 0.0) && pf.group.spec.timefree && pf.group.spec.steady == ["fc"]
+    @test all(iszero, pf.u0)                                                     # (the cold start)
+    s = solve(pf)
+    want = qs_hand(; K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces = Dict((1, -1) => (:dir, 1.0)))
+    @test s.retcode == ReturnCode.Success && s.t == [0.0] && length(s.u) == 1 && s.stats.solves == 1
+    @test maximum(abs, s.u[1] .- want) < 1e-5 * maximum(abs, want)
+    @test s[fce][1] == s[:fc][1] == reshape(s.u[1], BDIMS)                       # (the time-free symbol reads)
+    @test maximum(abs, solve(pf, QuasiSteady(; inner = BTIGHT)).u[1] .- want) < 1e-9
+    # what a steady system refuses: stepping, a window, a time span, save keywords, a time stepper
+    @test startswith(qmsg(() -> init(pf)), "`init`: the system has no time (a steady system), so there is nothing to step")
+    @test qmsg(() -> solve(pf, QuasiSteady(; dt = 0.1))) == "QuasiSteady(; dt = 0.1): the system has no time, so there is no window; leave `dt` out"
+    @test startswith(qmsg(() -> solve(pf; saveat = 0.1)), "`solve` of a system with no time takes no `saveat`")
+    @test startswith(qmsg(() -> solve(pf, BackwardEuler(; dt = 0.1))), "BackwardEuler(; dt = 0.1): the system has no time")
+    @test startswith(qmsg(() -> discretize(sf, LatticeDiscretization(Grid(BDIMS); T = Float64); tspan = (0, 1))),
+        "`tspan`: the system has no time")
+    # the ODE path: the `SteadyStateProblem` of the right side, zero at the steady state
+    ps = discretize(sf, LatticeDiscretization(Grid(BDIMS); T = Float64, problem = :ode))
+    @test ps isa SciMLBase.SteadyStateProblem
+    du = similar(want)
+    ps.f(du, want, ps.p, 0.0)
+    @test maximum(abs, du) < 1e-10
+    # Helmholtz `0 = Δu − 4u + (2π² + 4) sin(πx) sin(πy)` with zero faces: order 2 over three grids
+    errs = map((16, 32, 64)) do n
+        sh = PDESystem([0 ~ Δ(fce) - 4 * fce + (2π^2 + 4) * sin(π * x) * sin(π * y)],
+            [fc(0, y) ~ 0.0, fc(1, y) ~ 0.0, fc(x, 0) ~ 0.0, fc(x, 1) ~ 0.0], fdom, [x, y], [fce], Any[]; name = :helm)
+        r = solve(discretize(sh, LatticeDiscretization(Grid((n, n)); T = Float64)),
+            QuasiSteady(; inner = DevicePCG(; rtol = 1e-12, budget = 200)))
+        xs = [(i - 0.5) / n for i in 1:n, j in 1:n]
+        ys = [(j - 0.5) / n for i in 1:n, j in 1:n]
+        maximum(abs, r[fce][1] .- sin.(π .* xs) .* sin.(π .* ys))
+    end
+    ord = log2.(errs[1:(end - 1)] ./ errs[2:end])
+    @test all(o -> abs(o - 2) < 0.1, ord) || (println("Helmholtz orders ", ord, " errors ", errs); false)  # (1.99, 2.00)
+end
+
+# F3-12b (design §5; review r4 N4): the F3-05 capabilities through the steady solve of a system
+# with no time, each against the hand steady matrix to 1e-9: a Robin face of each sign, a field
+# face with a face-Dirichlet value, a mask value field, an input bound by aliasing (a new input
+# changes the next solve)
+@testset "F3-12b: the solver capabilities in a system with no time (F3-05)" begin
+    @variables zc(..) zq(..)::Int32 [input = true]
+    zce, zqe = zc(x, y), zq(x, y)
+    fdom = [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    free(eqs, bcs, ps; q = false) = discretize(PDESystem(eqs, bcs, fdom, [x, y], q ? [zce, zqe] : [zce], ps; name = :free2),
+        LatticeDiscretization(Grid(BDIMS); T = Float64, problem = :owned); (q ? (; inputs = [zqe => BKIND]) : (;))...)
+    alg = QuasiSteady(; inner = BTIGHT)
+    xs = bxs()
+    for β in (-1.0, 1.0)
+        pf = free([0 ~ bD * Δ(zce) - bk * zce + x], [2.0 * zc(x, 0) + β * Differential(y)(zc(x, 0)) ~ bg], [bD, bk, bg])
+        want = qs_hand(; K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces = Dict((2, -1) => (:robin, 2.0, β, 0.5)))
+        s = solve(pf, alg)
+        @test s.retcode == ReturnCode.Success && maximum(abs, s.u[1] .- want) < 1e-9 || (println("r4 N4 free robin ", β); false)
+    end
+    pf = free([0 ~ DivKGrad(:harmonic)(1 + x * y, zce) - bk * zce], [zc(0, y) ~ 1.0 + y], [bk])
+    want = qs_hand(; K = (x, y) -> 1 + x * y, k = (x, y) -> 2.0, faces = Dict((1, -1) => (:dir, (x, y) -> 1.0 + y)))
+    @test maximum(abs, solve(pf, alg).u[1] .- want) < 1e-9
+    pf = free([0 ~ bD * Δ(zce) - bk * zce], [zce ~ masked(zqe == 2, 1 + x)], [bD, bk]; q = true)
+    mk = vec(BKIND .== 2)
+    u = solve(pf, alg).u[1]
+    want = qs_hand(; K = (x, y) -> 0.3, k = (x, y) -> 2.0, mask = mk, mval = vec(1 .+ xs))
+    @test maximum(abs, u .- want) < 1e-9 && all(u[mk] .== vec(1 .+ xs)[mk])
+    pf = free([0 ~ at(bW, zqe) * Δ(zce) - bk * zce + 1], Equation[], [bW, bk]; q = true)
+    hand(Kq) = qs_hand(; K = (x, y) -> 1.0, m = (i, j) -> (0.0, 0.5, 2.0)[Kq[i, j] + 1], k = (x, y) -> 2.0, f = (x, y) -> 1.0)
+    @test maximum(abs, solve(pf, alg).u[1] .- hand(BKIND)) < 1e-9
+    K2 = Int32[(i * j) % 2 for i in 1:8, j in 1:6]
+    @test maximum(abs, solve(remake(pf; inputs = [zqe => K2]), alg).u[1] .- hand(K2)) < 1e-9
+end

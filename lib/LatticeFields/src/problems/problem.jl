@@ -441,9 +441,38 @@ function _count_route(alg, clock, dt, span, what)
     return string("; give ", give)
 end
 
-# the field groups of `alg` on `prob`: `(algorithm, state keys)` in state order (one group
-# of every state field for a single algorithm)
-_groups(prob::FieldProblem, alg::FieldAlgorithm) = Tuple{FieldAlgorithm, Vector{String}}[(alg, prob.state)]
+# the field groups of `alg` on `prob`: `(algorithm, state keys)`, the QuasiSteady groups first
+# and each kind in state order (F3 design §3.5: a steady field is solved before the transient
+# fields that read it, from their window-start values). A single algorithm steps every state
+# field, except the steady rows `0 ~ rhs` (F3-12b), which take `QuasiSteady` at its window
+function _groups(prob::FieldProblem, alg::FieldAlgorithm)
+    st = prob.group.spec.steady
+    (isempty(st) || alg isa QuasiSteady) && return Tuple{FieldAlgorithm, Vector{String}}[(alg, prob.state)]
+    rest = String[k for k in prob.state if !(k in st)]
+    isempty(rest) && throw(ArgumentError(string(_algtext(alg), ": every field of the problem has a steady equation ",
+        "`0 ~ rhs` (", join(("`$k`" for k in st), ", "), "), which `QuasiSteady` solves (a steady row's one algorithm); ",
+        "solve it with `QuasiSteady(; dt)`, or write the rows as rates `D(c) ~ rhs` to step them")))
+    return Tuple{FieldAlgorithm, Vector{String}}[(steady_alg(alg), String[k for k in prob.state if k in st]), (alg, rest)]
+end
+_alg_dt(a::FieldAlgorithm) = hasproperty(a, :dt) ? getproperty(a, :dt) : nothing
+"""
+    steady_alg(alg) -> QuasiSteady
+
+The algorithm of a steady row `0 ~ rhs` that no pair names, beside `alg` (F3-12b, both front
+ends): `QuasiSteady` at `alg`'s window, with its `inner` and `solver_T` when it has them.
+"""
+steady_alg(a) = a isa QuasiSteady ? a :
+                QuasiSteady(; dt = _alg_dt(a), inner = a isa ImplicitAlgorithm ? a.inner : :auto,
+                    solver_T = a isa ImplicitAlgorithm ? a.solver_T : :auto)
+# a steady row's algorithm: `QuasiSteady` only (F3-12b)
+function _check_steady(prob::FieldProblem, key, a)
+    a isa QuasiSteady && return nothing
+    throw(ArgumentError(string("FieldGroups: the field `", key, "` has a steady equation `0 ~ rhs`, which `QuasiSteady` ",
+        "solves (a steady row's one algorithm); got `", key, " => ", _algtext(a), "`: give `", key, " => QuasiSteady()` ",
+        "or leave it out (a steady field takes `QuasiSteady` by default), or write its row as a rate `D(", key,
+        ") ~ rhs` to step it")))
+end
+_qs_first(out) = [filter(x -> x[1] isa QuasiSteady, out); filter(x -> !(x[1] isa QuasiSteady), out)]
 function _groups(prob::FieldProblem, g::FieldGroups)
     # aux fields only (no state, F3 design §3.12): one group with no field, which evaluates them
     # once per window; `default` (or any pair's algorithm) sets the window
@@ -464,8 +493,16 @@ function _groups(prob::FieldProblem, g::FieldGroups)
         assigned[key] = a
     end
     out = Tuple{FieldAlgorithm, Vector{String}}[]
+    st = prob.group.spec.steady
+    for (k, a) in assigned
+        k in st && _check_steady(prob, k, a)
+    end
+    # a steady field with no pair takes `QuasiSteady` beside the default (or, with none, at the
+    # window of the pairs)
+    wdt = something((_alg_dt(a) for (_, a) in g.pairs)..., Some(nothing))
+    sa = g.default === nothing ? QuasiSteady(; dt = wdt) : steady_alg(g.default)
     for k in prob.state
-        a = get(assigned, k, g.default)
+        a = haskey(assigned, k) ? assigned[k] : k in st ? sa : g.default
         a === nothing && throw(ArgumentError(string("FieldGroups: the field `", k, "` has no algorithm; ",
             "pair it with one (`", k, " => alg`) or give `default`")))
         j = findfirst(x -> isequal(x[1], a), out)
@@ -479,7 +516,7 @@ function _groups(prob::FieldProblem, g::FieldGroups)
     length(dts) == 1 || throw(ArgumentError(string("FieldGroups: every group steps the same window; ",
         "the algorithms give ", join(unique(_wtext(a, _clock(prob), d) for (a, d) in ws), ", "),
         ": give every algorithm one `dt`, such as `dt = ", minimum(dts), "`")))
-    return out
+    return _qs_first(out)
 end
 # the state key of field `k` (a symbol of the index, or the key itself)
 function _state_key(prob::FieldProblem, k)
@@ -502,6 +539,8 @@ CommonSolve.init(::FieldProblem, alg::LinearSolver; kw...) =
 
 function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; saveat = (),
         save_start::Bool = true, save_end::Bool = true)
+    prob.group.spec.timefree && prob.tspan == (0.0, 0.0) && throw(ArgumentError(string("`init`: the system has no time ",
+        "(a steady system), so there is nothing to step; `solve(prob)` solves it once")))
     groups = _groups(prob, alg)
     for (a, _) in groups
         alg_family(a) == prob.kind || throw(ArgumentError(string(
@@ -732,13 +771,52 @@ function field_stats(integ::FieldIntegrator)
 end
 
 # the default algorithm: `ExplicitEuler()` for rates (which needs `dt`: nothing else sets the
-# window, and `saveat` never does), `ExplicitMap()` for maps
-_default_alg(prob::FieldProblem) = prob.kind == :map ? ExplicitMap() : ExplicitEuler()
+# window, and `saveat` never does; steady rows take `QuasiSteady`, `_groups`), `QuasiSteady()`
+# when every row is steady, `ExplicitMap()` for maps
+function _default_alg(prob::FieldProblem)
+    prob.kind == :map && return ExplicitMap()
+    st = prob.group.spec.steady
+    return !isempty(prob.state) && all(k -> k in st, prob.state) ? QuasiSteady() : ExplicitEuler()
+end
 CommonSolve.init(prob::FieldProblem; kw...) = CommonSolve.init(prob, _default_alg(prob); kw...)
 CommonSolve.solve(prob::FieldProblem; kw...) = CommonSolve.solve(prob, _default_alg(prob); kw...)
 function CommonSolve.solve(prob::FieldProblem, alg::FieldAlgorithm; kw...)
+    prob.group.spec.timefree && return _steady_solve(prob, alg; kw...)
     CommonSolve.solve!(
         CommonSolve.init(prob, alg; kw...))
+end
+
+"""
+    steady_fields(prob) -> Vector{String}
+
+The state fields of `prob` written as steady rows `0 ~ rhs` (each row's field by the rule of
+`LatticePDE.steady_choice`), which `QuasiSteady` solves (F3-12b; review r3 N2).
+"""
+steady_fields(prob::FieldProblem) = copy(prob.group.spec.steady)
+function Base.show(io::IO, ::MIME"text/plain", prob::FieldProblem)
+    st = prob.group.spec.steady
+    print(io, "FieldProblem (", prob.kind, ", ", join(Int.(leveldims(prob.program, 0)), "×"), " sites) of ",
+        join(("`$k`" for k in prob.state), ", "))
+    prob.group.spec.timefree ? print(io, "; no time (a steady system, solved once)") : print(io, "; tspan ", prob.tspan)
+    isempty(st) || print(io, "\n  steady rows `0 ~ rhs` (`QuasiSteady`), solved for ", join(("`$k`" for k in st), ", "))
+end
+
+# A system with no time (F3 design §3.5, F3-12b): one steady solve from the cold `u0`, the
+# host-checked path of `init = :steady` (the inner solver to `rtol = 1e-6` within 64
+# iterations unless `inner` is given), returned as a one-state solution at t = 0
+const STEADY_INNER = Solvers.DevicePCG(; budget = 64)
+function _steady_solve(prob::FieldProblem, alg::FieldAlgorithm; kw...)
+    alg isa QuasiSteady || throw(ArgumentError(string(_algtext(alg), ": the system has no time (a steady system, ",
+        "solved once by `QuasiSteady`): `solve(prob)` or `solve(prob, QuasiSteady(; inner, newton))`")))
+    alg.dt === nothing || throw(ArgumentError(string("QuasiSteady(; dt = ", alg.dt, "): the system has no time, ",
+        "so there is no window; leave `dt` out")))
+    isempty(kw) || throw(ArgumentError(string("`solve` of a system with no time takes no ",
+        join(("`$k`" for k in keys(kw)), ", "), ": it is solved once and returns that one state")))
+    a = QuasiSteady(; dt = 1.0, newton = alg.newton, inner = alg.inner === :auto ? STEADY_INNER : alg.inner,
+        solver_T = alg.solver_T)
+    s = CommonSolve.solve!(CommonSolve.init(SciMLBase.remake(prob; tspan = (0.0, 1.0)), a; save_start = false))
+    return FieldSolution(prob, [0.0], s.u[end:end], s.retcode, s.substeps, s.counts, isempty(s.aux) ? s.aux : s.aux[end:end],
+        s.stats)
 end
 
 SII.symbolic_container(i::FieldIntegrator) = i.prob.index

@@ -351,7 +351,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         _located(sys, eq) do
         lhs = _unwrap(eq.lhs)
         # a map `Shift(t, 1)(m) ~ rhs` or an aux `K ~ rhs` of a field (F2 design §2.11)
-        fl = _field_lhs(eq)
+        fl = _field_lhs(eq, sys)
         if fl !== nothing && fl[2] !== :rate
             x, kind = fl
             n = info(x).name
@@ -363,10 +363,11 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
             push!(kind === :map ? fields : field_aux, (x, eq.rhs))
             return
         end
-        (iscall(lhs) && operation(lhs) isa Differential) ||
-            throw(ArgumentError("equations are `D(x) ~ rhs` (a rate), `Shift(t, 1)(m) ~ rhs` (a map of a field) or " *
-                                "`K ~ rhs` (a field defined by its value); got $eq"))
-        x = arguments(lhs)[1]
+        steady = fl !== nothing && fl[3] === :steady
+        steady || (iscall(lhs) && operation(lhs) isa Differential) ||
+            throw(ArgumentError("equations are `D(x) ~ rhs` (a rate), `Shift(t, 1)(m) ~ rhs` (a map of a field), " *
+                                "`K ~ rhs` (a field defined by its value) or `0 ~ rhs` (a steady field); got $eq"))
+        x = steady ? fl[1] : arguments(lhs)[1]
         i = info(x)
         i === nothing && throw(ArgumentError("`$x` is not a declared variable"))
         haskey(derivatives, i.name) && throw(ArgumentError(

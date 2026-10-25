@@ -220,9 +220,7 @@ function _eqkind(eq, fields, ivs)
         plain(l) || bad("a field read `c($(join(ivs, ", ")))`")
         return :aux, l
     end
-    _iszero(l) && _dverr("equation `$eq`: a steady equation `0 ~ rhs` is not lowered in this version (a steady " *
-                         "solver is planned); step it to its steady state as a rate `D(c) ~ rhs`")
-    _dverr("equation `$eq`: the left side must be `D(c)`, `Shift(t, 1)(c)` or a field `c`")
+    _dverr("equation `$eq`: the left side must be `D(c)`, `Shift(t, 1)(c)`, a field `c` or `0` (a steady row)")
 end
 
 # The clock's step index (F2 design §2.6): every `step_index(t)` of the equations and
@@ -277,14 +275,12 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     check_vocabulary(sys)
     _scan_clock(sys)
     _check_parts(sys)
+    sys = first(steady_form(sys, N))                # steady rows as rates; a time-free system timed (F3-12b)
     sys = _clock_slot(sys, disc)
     ps, ic = _params(sys), _ics(sys)
     any(p -> p isa Pair, ps) && _dverr("parameters are declared natively, `@parameters Dc = 1e-3`; " *
                                        "the `ps` entry `$(first(filter(p -> p isa Pair, ps)))` is a `Pair`")
     ivs = unwrap.(sys.ivs)
-    length(ivs) == N && _dverr("the system's variables $(Tuple(ivs)) have no time: the first variable is time, and the " *
-                               "grid has $N axes; a steady system (no `t`) is not supported in this version: add `t` " *
-                               "and step the equations as rates `D(c) ~ rhs` to their steady state")
     length(ivs) == N + 1 || _dverr("the grid has $N axes but the system has $(length(ivs) - 1) spatial variables (the first variable is time)")
     ends = map(ivs) do v
         k = findfirst(d -> isequal(unwrap(d.variables), v), sys.domain)

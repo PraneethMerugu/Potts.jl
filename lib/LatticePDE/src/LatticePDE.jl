@@ -35,7 +35,7 @@ using LatticeFields.Compile: CompileOptions, fingerprint_text, fuse_update, prom
 using LatticeFields.IR: fieldid, RESOLVE, degenerate
 using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
                               ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, ode_problem, RT_DT,
-                              substep_counts
+                              substep_counts, steady_fields
 using ModelingToolkitBase: ModelingToolkitBase, PDESystem, Pre, ShiftIndex, Shift, Hold, Sample
 using SciMLBase: AbstractDiscretization, NullParameters, remake
 using SymbolicIndexingInterface: getp, getu, setp, parameter_index
@@ -46,7 +46,7 @@ using SymbolicUtils: SymbolicUtils, arguments, iscall, operation, unwrap_const
 using SymbolicUtils.Code: toexpr
 
 public euler_update, bound_parts, StabilityBound, lower_group, DeferredBound, DeferredOperator, OPERATOR_BUILDS, resolve_bound, lowers_call, check_one_kind, velocity_terms, as_written,
-       derivation, V
+       derivation, V, steady_rows, steady_form, steady_choice, steady_sign
 export Δ, DivKGrad, Advect, AdvectionScheme, Upwind1, at, at2, ismember, masked, step_index
 export LatticePlacement, LatticeStorage, LatticeLevel, LatticeSpacing, PottsEntity, LatticeInputName
 export get_lattice_placement, get_lattice_storage, get_lattice_level, get_lattice_spacing,
@@ -55,7 +55,7 @@ export vocabulary_issues, check_vocabulary
 export LatticeDiscretization, FiniteVolume, CompiledField, discretize, symbolic_discretize,
        parse_bcs, linearity, Grid, Interval
 export ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, FieldProblem, solve, init, step!, solve!, stability_bound,
-       substep_counts
+       substep_counts, steady_fields
 export DevicePCG, Multigrid                 # the inner solvers (`inner = …`); `V` is public
 export remake, getp, getu, setp            # the routes its messages give (SciMLBase, SymbolicIndexingInterface)
 
@@ -384,6 +384,7 @@ include("bcs.jl")
 include("linearity.jl")
 include("lower.jl")
 include("discretize.jl")
+include("steady.jl")
 include("problems.jl")
 include("group.jl")
 include("operator.jl")

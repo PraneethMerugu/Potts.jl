@@ -230,8 +230,12 @@ end
         # the CPM compile entry and MTK's `extend` refused with a D-039 message (C4 review S3);
         # not among the 15, pinned here so a new owned method is never hidden
         "ModelingToolkitBase.mtkcompile()", "ModelingToolkitBase.extend(ModelingToolkitBase.AbstractSystem)",
-        "ModelingToolkitBase.extend(PottsSystem)", "ModelingToolkitBase.extend(PottsSystem)"])
-    @test count(n -> !startswith(n, "ModelingToolkitBase.mtkcompile") && !startswith(n, "ModelingToolkitBase.extend"), names) == 15
+        "ModelingToolkitBase.extend(PottsSystem)", "ModelingToolkitBase.extend(PottsSystem)",
+        # the field library's accessor of the steady rows' fields (F3 batch 4 review r3 N2), no
+        # MTK container method: not among the 15
+        "LatticeFields.Problems.steady_fields()"])
+    @test count(n -> !startswith(n, "ModelingToolkitBase.mtkcompile") && !startswith(n, "ModelingToolkitBase.extend") &&
+                     !startswith(n, "LatticeFields."), names) == 15
     # `methodswith` skips `where` signatures: the MTK functions a container could reach for,
     # scanned directly (the probe's G inventory plus the old container's methods)
     M, S = WL_MTKB, WL_SII

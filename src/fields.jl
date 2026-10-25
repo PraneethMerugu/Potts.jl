@@ -291,10 +291,20 @@ _field_conv(ivs, states, T, known) = (; ivs, states, direct = Dict{Symbol, Any}(
 
 # The field equations of a model (F2 design §2.11): `(x, kind, op)` for a rate `D(c) ~ rhs`
 # (`:rate`) or a map `Shift(t, 1)(m) ~ rhs` (`:map`, one application per MCS) of a field or
-# site variable, or an aux definition `K ~ rhs` of a field variable (`:aux`, its value at every
-# substep from the others); `op` is the left side's operator (`nothing` for aux); else `nothing`
-function _field_lhs(eq)
+# site variable, an aux definition `K ~ rhs` of a field variable (`:aux`, its value at every
+# substep from the others), or a steady row `0 ~ rhs` (`:rate` with `op = :steady`, solved by
+# `QuasiSteady` for the field its operator acts on, F3-12b); `op` is the left side's operator
+# (`nothing` for aux); else `nothing`
+function _field_lhs(eq, sys = nothing)
     l = _unwrap(eq.lhs)
+    if _zero_lhs(eq)
+        isempty(_steady_reads(eq).all) && return nothing        # (no field read: not a field equation)
+        # the field: the model's one rule with B (`LatticePDE.steady_choice`, r3 S4); with no
+        # model at hand, the row is a field row (its field unknown here)
+        sys === nothing && return (nothing, :rate, :steady)
+        k = findfirst(p -> p[1] === eq || isequal(p[1], eq), _steady_assign(sys))
+        return (_steady_assign(sys)[k][2], :rate, :steady)
+    end
     if iscall(l) && (operation(l) isa Differential || operation(l) isa ModelingToolkitBase.Shift)
         x = arguments(l)[1]
         i = info(x)
@@ -305,10 +315,68 @@ function _field_lhs(eq)
     i = info(l)                                 # a field variable `K(t)` itself
     return i !== nothing && i.role === :field ? (l, :aux, nothing) : nothing
 end
-# the stepped fields of a model, `(x, rhs, op)`: its rates and maps (`op` the `Differential` or
-# the `Shift` of the left side)
+_zero_lhs(eq) = (v = SymbolicUtils.unwrap_const(_unwrap(eq.lhs)); v isa Number && iszero(v))
+# The field variables a steady row reads (`all`), and those under a spatial operator (`ops`:
+# `Δ(c)`, the last argument of `DivKGrad` and `Advect`, a `Differential`)
+function _steady_reads(eq)
+    all, ops = Any[], Any[]
+    function walk(u, under)
+        u = _unwrap(u)
+        i = u isa SymbolicUtils.BasicSymbolic ? info(u) : nothing
+        if i !== nothing && i.role === :field
+            any(y -> isequal(y, u), all) || push!(all, u)
+            under && !any(y -> isequal(y, u), ops) && push!(ops, u)
+            return nothing
+        end
+        iscall(u) || return nothing
+        f, a = operation(u), arguments(u)
+        if f isa LatticePDE.DivKGrad || f isa LatticePDE.Advect
+            foreach(y -> walk(y, under), a[1:(end - 1)])
+            walk(a[end], true)
+        else
+            foreach(y -> walk(y, under || _spatial_op(f)), a)
+        end
+        return nothing
+    end
+    walk(eq.rhs, false)
+    return (; all, ops)
+end
+# The field of each steady row of model `sys` (`row => x`, in equation order), by the rule of
+# both front ends (`LatticePDE.steady_choice`): a field variable with no other equation that
+# the row reads, preferably under a spatial operator; ties in declaration order
+function _steady_assign(sys::PottsSystem)
+    eqs = _p(sys, :equations)
+    rows = [eq for eq in eqs if _zero_lhs(eq) && !isempty(_steady_reads(eq).all)]
+    isempty(rows) && return Pair{Any, Any}[]
+    taken = Any[f[1] for eq in eqs if !_zero_lhs(eq) for f in (_field_lhs(eq),) if f !== nothing]
+    free = Any[x for x in _p(sys, :variables) if (i = info(x); i !== nothing && i.role === :field) &&
+                                                !any(y -> isequal(y, x), taken)]
+    idx(list) = Int[k for (k, x) in enumerate(free) if any(y -> isequal(y, x), list)]
+    reads = [_steady_reads(eq) for eq in rows]
+    picks, bad = LatticePDE.steady_choice([idx(r.ops) for r in reads], [idx(r.all) for r in reads], length(free))
+    if bad != 0
+        left = [info(free[k]).name for k in eachindex(free) if !(k in picks)]
+        throw(ArgumentError(string("`", rows[bad], "`: a steady row `0 ~ rhs` is solved for a field that it reads and that ",
+            "has no other equation, and it reads none", isempty(left) ? " (every field has an equation)" :
+            string(" of the fields with no equation (", join(("`$n`" for n in left), ", "), ")"),
+            "; write the field's operator into the row (`0 ~ D * Δ(c) - k * c + …` for `c`)")))
+    end
+    return Pair{Any, Any}[rows[q] => free[picks[q]] for q in eachindex(rows)]
+end
+# the stepped fields of a model, `(x, rhs, op)`: its rates, maps and steady rows (`op` the
+# `Differential` or the `Shift` of the left side, or `:steady`)
 _field_equations(sys::PottsSystem) = [(f[1], eq.rhs, f[3]) for eq in _p(sys, :equations)
-                                      for f in (_field_lhs(eq),) if f !== nothing && f[2] !== :aux]
+                                      for f in (_field_lhs(eq, sys),) if f !== nothing && f[2] !== :aux]
+"""
+    steady_fields(model) -> Vector{Pair{String, Symbol}}
+
+The steady rows `0 ~ rhs` of `model` and the field each is solved for (`row => field`), by the
+rule of both front ends (`LatticePDE.steady_choice`; review r3 N2).
+"""
+LatticeFields.Problems.steady_fields(sys::PottsSystem) = Pair{String, Symbol}[string(eq) => info(x).name for (eq, x) in _steady_assign(sys)]
+# the steady fields (`0 ~ rhs`) among `names`, as the group's state keys
+_steady_names(sys::PottsSystem, names) = String[string(info(x).name) for (x, _, op) in _field_equations(sys)
+                                                if op === :steady && info(x).name in names]
 # the aux fields of a model, `(x, rhs)`: each group that steps fields computes them
 _field_aux(sys::PottsSystem) = [(f[1], eq.rhs) for eq in _p(sys, :equations) for f in (_field_lhs(eq),)
                                 if f !== nothing && f[2] === :aux]
@@ -453,8 +521,12 @@ function _field_system(sys::PottsSystem, names = Symbol[info(x).name for (x, _) 
     for (x, rate, op) in _field_equations(sys)
         n = info(x).name
         n in names || continue
+        r = Symbolics.wrap(_field_term(rate, cv))
+        # (a steady row stays `0 ~ rhs`: LatticePDE solves it for the same field, the one free field
+        # its operator acts on in the group, F3-12b)
+        op === :steady && (push!(eqs, 0 ~ r); continue)
         lhs = op isa ModelingToolkitBase.Shift ? op(Symbolics.wrap(states[n])) : Differential(tt)(Symbolics.wrap(states[n]))
-        push!(eqs, lhs ~ Symbolics.wrap(_field_term(rate, cv)))
+        push!(eqs, lhs ~ r)
     end
     # every group computes the aux fields from the values it reads (F2 design §2.11)
     for (x, rhs) in aux
@@ -620,7 +692,7 @@ function _lower_field_group(sys::PottsSystem, names::Vector{Symbol}, T::Type; kn
     Threads.atomic_add!(_LOWER_GROUP_CALLS, 1)
     spec = try
         LatticePDE.lower_group(pdesys, _field_disc(sys, T); values = false, bound, filled = (string(e[1]) for e in cv.filled),
-            explicit_route = "`field_solver = ExplicitEuler()`")
+            explicit_route = "`field_solver = ExplicitEuler()`", steady = _steady_names(sys, names))
     catch e
         # an error about a `@bcs` condition (`parse_bcs`, a second condition on a face) names
         # its `@bcs` line (review R4 of F2 batch 4)
@@ -812,6 +884,10 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
         j = findfirst(g -> g[1] == k, order)
         j === nothing ? push!(order, (k, s, Symbol[n])) : push!(order[j][3], n)
     end
+    # the QuasiSteady groups first (F3 design §3.5): a steady field is solved before the
+    # transient fields that read it, from their MCS-start values
+    qs(g) = g[2] isa LatticeFields.Problems.QuasiSteady
+    order = [filter(qs, order); filter(!qs, order)]
     dt = _field_dt(sys)
     groups = _FieldGroup[]
     # aux fields only (F3 design §3.12): one group with no state, stepped by the default

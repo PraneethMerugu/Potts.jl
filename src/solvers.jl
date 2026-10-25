@@ -78,6 +78,15 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
     fields = [_solver_name(x) for (x, _) in c.fields]
     # the map fields (`Shift(t, 1)(m) ~ rhs`; a model has rates or maps, F2-10)
     maps = Set{Symbol}(info(x).name for (x, _, op) in _field_equations(sys) if op isa ModelingToolkitBase.Shift)
+    # the steady fields (`0 ~ rhs`, F3-12b): `QuasiSteady` only, by default too
+    steady = Set{Symbol}(info(x).name for (x, _, op) in _field_equations(sys) if op === :steady)
+    QS = LatticeFields.Problems.QuasiSteady
+    function steady_only(n, s, where)
+        (n in steady && !(s isa QS)) || return nothing
+        throw(ArgumentError(string(where, ": the field `", n, "` has a steady equation `0 ~ rhs`, which `QuasiSteady` ",
+            "solves (a steady row's one solver); got ", repr(s), ": give `", n, " => QuasiSteady()` or leave it out (a ",
+            "steady field takes `QuasiSteady` by default), or write its row as a rate `D(", n, ") ~ rhs` to step it")))
+    end
     odes = [_solver_name(x) for (x, _) in Iterators.flatten((c.cell_odes, c.model_odes))]
     fgpairs, fsolver = Pair{Any, Any}[], field_solver
     if isempty(fields)
@@ -114,7 +123,13 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
         "`ode_solver` takes `ExplicitEuler(; substeps)`, `RK4(; substeps)` or `Adaptive(alg; …)`; got $(repr(ode_solver))"))
     _check_ode_dt(ode_solver, "`ode_solver`")
     resolved = Dict{Symbol, Any}()
-    foreach(n -> resolved[n] = fsolver, fields)
+    if !isempty(fields) && all(n -> n in steady, fields) && field_solver !== nothing &&
+       !(field_solver isa LatticeFields.Problems.FieldGroups) && !(fsolver isa QS)
+        throw(ArgumentError(string("`field_solver = ", repr(fsolver), "`: every field of model `", nameof(sys), "` has a ",
+            "steady equation `0 ~ rhs` (", join(("`$n`" for n in sort!(collect(steady))), ", "), "), which `QuasiSteady` ",
+            "solves; give `field_solver = QuasiSteady()` or leave it out, or write the rows as rates `D(c) ~ rhs`")))
+    end
+    foreach(n -> resolved[n] = n in steady ? LatticeFields.Problems.steady_alg(fsolver) : fsolver, fields)
     foreach(n -> resolved[n] = _ode_solver(ode_solver), odes)
     given = Pair{Any, Any}[k => v for (k, v) in (solvers isa AbstractDict ? pairs(solvers) : solvers)]
     named = Set{Symbol}()
@@ -127,6 +142,7 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
         _is_field_solver(s) || throw(ArgumentError(
             "`FieldGroups`: the field `$n` takes a field solver ($(_field_solver_names())); got $(repr(s))"))
         _check_field_solver(s, "`FieldGroups`: the field `$n`"; map = n in maps)
+        steady_only(n, s, "`FieldGroups`")
         resolved[n] = s
     end
     fgnamed = copy(named)
@@ -143,6 +159,7 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
             _is_field_solver(s) || throw(ArgumentError(
                 "`solvers`: the field `$n` takes a field solver ($(_field_solver_names())); got $(repr(s))"))
             _check_field_solver(s, "`solvers`: the field `$n`"; map = n in maps)
+            steady_only(n, s, "`solvers`")
         elseif n in odes
             s isa _ODESolver || throw(ArgumentError(
                 "`solvers`: `$n` takes `ExplicitEuler(; substeps)`, `RK4(; substeps)` or `Adaptive(alg; …)`; got $(repr(s))"))

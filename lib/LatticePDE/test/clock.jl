@@ -104,9 +104,11 @@ end
         [kce], [kη]; name = :f)
     e = kerr(() -> solve(discretize(sysf, kdisc()), ExplicitEuler()))
     @test occursin("step_index(t)", e) && !occursin("clock__tick", e)
-    sys0 = PDESystem([0 ~ -kce + step_index(t)], [kc(0, x, y) ~ 0.0; kperiodic], kdom(2.0), [t, x, y], [kce], [kη]; name = :z)
+    # (a steady row that reads no free field: `0 ~ -kc + step_index(t)` is a steady row since F3-12b)
+    sys0 = PDESystem([D(kce) ~ -kce, 0 ~ -1 + step_index(t)], [kc(0, x, y) ~ 0.0; kperiodic], kdom(2.0), [t, x, y], [kce], [kη];
+        name = :z)
     e = kerr(() -> discretize(sys0, kdisc()))
-    @test occursin("step_index(t)", e) && !occursin("clock__tick", e)
+    @test occursin("step_index(t)", e) && !occursin("clock__tick", e) && occursin("reads none", e)
     # whole names only: a user parameter ending in `clock__tick` keeps its name
     @test LatticePDE._clocktext("`myclock__tick` and clock__tick") == "`myclock__tick` and step_index(t)"
     # S2: saveat against a window from the clock; the route works

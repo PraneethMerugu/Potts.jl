@@ -3,7 +3,8 @@
 #           ExplicitEuler (rates) or ExplicitMap (maps) through prebuilt launches.
 #   :ode    ODEProblem: the rate kernels (`∂c = rhs`) as `LatticeRHS`, for SciML solvers.
 #   :auto   ODEProblem for transient FV, FieldProblem when a discrete map is present.
-#   :linear LinearProblem for steady systems: not lowered in this version (refused).
+#   :linear LinearProblem for steady systems: planned (F4; refused). A steady system (`0 ~ rhs`
+#           rows, no time) is a FieldProblem solved once (F3-12b).
 
 """The explicit Euler update `c + dt · r` of the owned stepper (`dt = G.rt[2]`)."""
 euler_update(kb, c, r) = c + Ex(kb, runtime!(kb, RT_DT)) * r
@@ -820,8 +821,12 @@ function _initial(cf::CompiledField{N}, sys::PDESystem, state, ::Type{T}) where 
     return out
 end
 
-function _index(cf::CompiledField, sys::PDESystem, s, state; derived = Pair[], computed = Pair[], cdefaults = Pair[])
+function _index(cf::CompiledField, sys::PDESystem, s, state; derived = Pair[], computed = Pair[], cdefaults = Pair[],
+        free = nothing)
     slots = Problems.state_layout(s, [fieldid(s, k) for k in state])
+    # a system with no time (F3-12b): each field also reads by its time-free term `c(x, y)`
+    alias(v, i, n) = free === nothing ? () : (o = free[findfirst(w -> isequal(unwrap(w), unwrap(v)), sys.dvs)];
+                                             (n == 1 ? unwrap(o) : unwrap(Symbolics.wrap(unwrap(o))[i]),))
     dims = Int.(cf.program.hierarchy[1].grid.dims)
     vars, inputs, inputnames, boolinputs, inputbounds, aux = Pair[], Pair[], Pair[], String[], Pair[], Pair[]
     for v in sys.dvs, (op, ks) in cf.keys
@@ -833,17 +838,17 @@ function _index(cf::CompiledField, sys::PDESystem, s, state; derived = Pair[], c
                 # … and its user-facing name (`lattice_input_name`), which messages print
                 n = get_lattice_input_name(unwrap(v))
                 n === nothing || (n = length(ks) == 1 ? n : "$n[$i]"; push!(inputnames, k => n))
-                syms = length(ks) == 1 ? Any[term, Symbol(k), op] : Any[term, Symbol(k)]
+                syms = length(ks) == 1 ? Any[term, alias(v, i, 1)..., Symbol(k), op] : Any[term, alias(v, i, 2)..., Symbol(k)]
                 n === nothing || push!(syms, Symbol(n))
                 push!(inputs, Tuple(syms) => k)
                 eltype(SymbolicUtils.symtype(unwrap(v))) <: Bool && push!(boolinputs, k)
                 b = _input_bounds(unwrap(v))
                 b == (-Inf, Inf) || push!(inputbounds, k => b)
             elseif k in state
-                push!(vars, (term, Symbol(k)) => FieldSlot(slots[fieldid(s, k)], dims))
+                push!(vars, (term, alias(v, i, length(ks))..., Symbol(k)) => FieldSlot(slots[fieldid(s, k)], dims))
             elseif any(q -> q.key == "aux:$k", s.kernels)
                 # an aux field `K ~ rhs` (F3 design §3.12): read by `sol[K]` and `integ[K]`
-                push!(aux, (term, Symbol(k)) => k)
+                push!(aux, (term, alias(v, i, length(ks))..., Symbol(k)) => k)
             end
         end
     end
@@ -1054,11 +1059,25 @@ The problem of `pdesys` on the lattice (`disc.problem`):
   substeps)` for rate equations or `ExplicitMap()` for maps;
 - `:ode`: an `ODEProblem` whose function is the compiled right side (`LatticeRHS`) with the
   symbol table as `sys`, for SciML solvers;
-- `:auto`: `:ode` for rate equations, `:owned` when a discrete map or a masked condition
-  (`c ~ masked(pred, v)`, which only the owned path lowers) is present, or when the system has
-  only aux equations `K ~ rhs` (no state: the owned path evaluates them once per window and
-  `sol[K]`, `integ[K]` read them, F3 design §3.12);
-- `:linear`: not in this version (a steady solver is planned); refused.
+- `:auto`: `:ode` for rate equations, `:owned` when a discrete map, a masked condition
+  (`c ~ masked(pred, v)`, which only the owned path lowers) or a steady row `0 ~ rhs` is
+  present, or when the system has only aux equations `K ~ rhs` (no state: the owned path
+  evaluates them once per window and `sol[K]`, `integ[K]` read them, F3 design §3.12);
+- `:linear`: planned (a `LinearProblem`, F4); refused.
+
+**Steady rows** (F3-12b). `0 ~ rhs` is solved for the field it determines: a state field with
+no other equation that the row reads, preferably under a spatial operator (`0 ~ D * Δ(c) - k * c
++ s` is `c`'s); see `steady_rows`. Its group takes `QuasiSteady` only, by default too:
+`solve(prob, BackwardEuler(; dt))` steps the other fields with `BackwardEuler` and the steady
+ones with `QuasiSteady` at the same window, solved first in each window. A steady field with no
+initial value starts at 0. On `:ode` a steady row (a DAE) is planned (F4) and refused.
+
+**Systems with no time** (F3-12b). A system whose variables are the axes only (`[x, y]`, every
+row `0 ~ rhs` or an aux field) is a steady system: the problem has `tspan = (0, 0)`, and
+`solve(prob)` (or `solve(prob, QuasiSteady(; inner, newton))`) solves it once from the cold
+`u0`, with the inner solver to `rtol = 1e-6` within 64 iterations unless `inner` is given. It
+returns a one-state solution at t = 0, read by the time-free symbol (`sol[c(x, y)]`). On `:ode`
+it is the `SteadyStateProblem` of the right side.
 
 The time span is the domain of the first variable. Fields index solutions and integrators
 by symbol (`sol[c(t, x, y)]`, `sol[:c]`) as grid-shaped arrays.
@@ -1107,15 +1126,20 @@ function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = (),
         ": give the other settings to the discretization (`LatticeDiscretization(…; T, problem, clock)`) or to `solve`"))
     _check_parts(sys)
     kind = disc.problem
-    kind == :linear && _dverr("problem = :linear (steady systems) is not lowered in this version (a steady solver " *
-                              "is planned); step the equations as rates `D(c) ~ rhs` to their steady state")
+    kind == :linear && _dverr("problem = :linear (a `LinearProblem` of a steady system) is planned (F4); a steady " *
+                              "system (`0 ~ rhs` rows, no time) is solved on the owned path: leave `problem` out and " *
+                              "`solve(prob)`")
+    # steady rows `0 ~ rhs` as rates of their fields, a system with no time timed (F3-12b)
+    free = sys.dvs
+    sys, steady, timefree = steady_form(sys, N)
+    timefree && tspan !== nothing && _dverr("`tspan`: the system has no time (a steady system, solved once); leave `tspan` out")
     hasmap = check_one_kind(sys)
     hasmask = any(b -> (r = unwrap(b.rhs); iscall(r) && operation(r) === masked), sys.bcs)
     # the clock's step index needs the owned steppers, which land on its boundaries
     hasclock = _reads_step_index(sys)
     # aux equations only (`K ~ rhs`, no state): the owned path evaluates them once per window
     auxonly = !isempty(sys.eqs) && all(eq -> (l = unwrap(eq.lhs); !(iscall(l) && operation(l) isa Union{Differential, Shift})), sys.eqs)
-    kind == :auto && (kind = hasmap || hasmask || hasclock || auxonly ? :owned : :ode)
+    kind == :auto && (kind = hasmap || hasmask || hasclock || auxonly || !isempty(steady) ? :owned : :ode)
     kind == :ode && hasclock && _dverr("`step_index(t)` needs problem = :owned in this version: an ODE solver does not " *
                                        "land on the clock's boundaries (a discrete parameter updated at them, with " *
                                        "`tstops`, is planned: F4); use problem = :owned or leave `problem` out")
@@ -1128,11 +1152,11 @@ function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = (),
     options = CompileOptions(; T, index = Exec.ishost(backend) ? :cartesian : :auto)
     span = tspan === nothing ? _domain_ends(sys)[1] : _given_tspan(tspan)
     # the group, lowered once in rate form (the update is fused by the group, per algorithm)
-    g = _lower_group(sys, disc)
+    g = _lower_group(sys, disc; steady, timefree)
     cf, sys, spec = g.cf, g.sys, g.spec
     s = cf.program
     state = spec.state
-    index = _index(cf, sys, s, state; g.derived, g.computed, cdefaults = g.defaults)
+    index = _index(cf, sys, s, state; g.derived, g.computed, cdefaults = g.defaults, free = timefree ? free : nothing)
     x0 = _given_u0(_initial(cf, sys, state, T), index, u0)
     pv, tables = _given_p(cf.defaults, cf.tables, index, p)
     Problems.derive!(pv, tables, index)                  # the computed slots (F2-15)
@@ -1143,9 +1167,13 @@ function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = (),
         return FieldProblem(spec, x0, span, pv; index, tables, inputs = ins, backend, options)
     end
     isempty(spec.init) || _dverr("masked conditions (`c ~ masked(pred, v)`) need problem = :owned in this version")
+    !timefree && !isempty(spec.steady) && _dverr(string("problem = :ode: the steady rows of ",
+        join(("`$k`" for k in spec.steady), ", "), " make the system a DAE (a mass matrix with zero rows), which is ",
+        "planned (F4); solve it on the owned path: leave `problem` out (`QuasiSteady` steps the steady fields), or write ",
+        "the rows as rates `D(c) ~ rhs`"))
     rates = Dict(k => "∂$k" for k in state)
     return ode_problem(s, x0, span, pv; state, rates, init = spec.init, index,
-        tables, inputs = ins, stability = spec.stability, backend, options)
+        tables, inputs = ins, stability = spec.stability, backend, options, steady = timefree)
 end
 
 """

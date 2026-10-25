@@ -64,6 +64,8 @@ public PolicyTexts, ProblemTexts, GroupSubsteps, check_coupling, bound_report, u
 # the implicit algorithms (F3-07)
 public ImplicitAlgorithm, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, OperatorSpec, RowOperator, operator_spec, build_operator, growth, inexact_bounds, ImplicitCache,
        ImplicitRow, bind_cache, residual_program, residual_rule
+# steady rows `0 ~ rhs` (F3-12b)
+public steady_alg, steady_fields
 # the clock (F2-08c)
 public CLOCK_KEY, clock_slot
 # computed parameters (F2-15, D-F2-1)
