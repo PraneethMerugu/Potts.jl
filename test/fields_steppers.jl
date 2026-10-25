@@ -167,3 +167,120 @@ end
     a, b = restored(BDF2())
     @test a != b                                             # (a Backward Euler substep, then BDF2 again)
 end
+
+# F3-12a (F3 design §3.5): `QuasiSteady` in front end A, through the runtime of B. With σ
+# frozen A equals B bitwise; the refusals name the route; an island the cells' kinds leave
+# with no decay ends the run with `ConvergenceFailure`. Base (b32d9112,
+# ~/lpwork/f3b5-nc-12a-a-base.log): `QuasiSteady` is not defined in Potts (every testset errors).
+@potts_model FiSteady begin
+    @kinds medium A[frozen]
+    @parameters begin
+        Dc = 0.4
+        kd = 0.3
+        s = 0.5
+    end
+    @variables c(field) = 0.0
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations D(c) ~ Dc * Δ(c) - kd * c + s * (kind == A)
+    @sweep Metropolis(; temperature = 1.0)
+end
+# two discs (the field's domain), a decay only inside the cells: the disc with no cell is an
+# island with no decay and no fixed value
+@potts_model FiIsland begin
+    @structural_parameters begin
+        domain = x -> (x[1] - 6.5)^2 + (x[2] - 6.5)^2 <= 25 || (x[1] - 18.5)^2 + (x[2] - 6.5)^2 <= 25
+    end
+    @kinds medium A
+    @parameters kd = 1.0
+    @variables c(field) = 0.0
+    @lattice Lattice((24, 12); boundary = Closed(), domain)
+    @energy cells(A) => (volume - 16.0)^2
+    @equations D(c) ~ 0.5 * Δ(c) - kd * (kind == A) * c + 1.0
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FiNoIsland begin
+    @structural_parameters begin
+        domain = x -> (x[1] - 6.5)^2 + (x[2] - 6.5)^2 <= 25 || (x[1] - 18.5)^2 + (x[2] - 6.5)^2 <= 25
+    end
+    @kinds medium A
+    @variables c(field) = 0.0
+    @lattice Lattice((24, 12); boundary = Closed(), domain)
+    @energy cells(A) => (volume - 16.0)^2
+    @equations D(c) ~ 0.5 * Δ(c) - 0.1 * c + 1.0
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FiGrow begin
+    @kinds medium A[frozen]
+    @parameters g = -0.5
+    @variables c(field) = 0.0
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations D(c) ~ 0.4 * Δ(c) - g * c + 0.1 * (kind == A)
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "F3-12a: QuasiSteady in A equals B bitwise (σ frozen); one solve per MCS" begin
+    dims, k = (12, 10), 4
+    for M in (FiStill, FiSteady)
+        a, integ = fi_runA(M, fi_op(dims), k; field_solver = QuasiSteady())
+        @test a == fi_runB(M, dims, k; u0 = [:c => zeros(dims)], inputs = M === FiSteady ? [:kind => fi_kin(dims)] : [],
+            alg = QuasiSteady(; dt = 1.0))
+        @test substep_counts(integ) == [1] && integ.stats.fields.solves == k && fi_warm(integ) == 0
+    end
+    # the steady state: an MCS later the field is unchanged to the solver's tolerance
+    a, _ = fi_runA(FiSteady, fi_op(dims), 3; field_solver = QuasiSteady(; inner = DevicePCG(; rtol = 1e-12, budget = 64)))
+    @test maximum(abs, a[3] .- a[2]) < 1e-10 && maximum(a[3]) > 0
+    @test_throws "`QuasiSteady(; dt = 0.1)`: a `PottsProblem` field steps over the MCS window (`mcs_duration`); leave `dt` out" PottsProblem(FiSteady(; name = :f),
+        fi_op(dims), (0, 2); field_solver = QuasiSteady(; dt = 0.1))
+    m = Module()
+    Core.eval(m, :(using Potts; using Potts.LatticePDE))
+    @test Core.eval(m, :QuasiSteady) === Potts.LatticePDE.QuasiSteady === Potts.LatticeFields.Problems.QuasiSteady
+end
+
+# Review r2 M1 in A: a steady field in a loop of solver groups is refused until F3-12c bounds
+# its gain; the routes (one `BackwardEuler` solver; `BackwardEuler` for the steady field) run.
+# Base (773f0957, ~/lpwork/f3b5-nc-r2-m1-a.log): the loop is accepted (the refusal test fails).
+@potts_model FiLoop begin
+    @kinds medium A[frozen]
+    @variables begin
+        u(field) = 0.0
+        w(field) = 1.0
+    end
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations begin
+        D(u) ~ 0.1 * Δ(u) - 0.1 * u + 0.5 * w
+        D(w) ~ 0.1 * Δ(w) - w - 0.5 * u
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@testset "F3-12a (r2 M1): QuasiSteady in a loop of solver groups in A is refused, with its routes" begin
+    dims = (12, 10)
+    @test_throws "the fields `u`, `w` are in solver groups that read one another in a loop, and `u` is solved with `QuasiSteady`" PottsProblem(
+        FiLoop(; name = :f), fi_op(dims), (0, 3); field_solver = FieldGroups(:u => QuasiSteady(), :w => BackwardEuler()))
+    for fs in (BackwardEuler(), FieldGroups(:u => BackwardEuler(), :w => BackwardEuler()))
+        s = solve(PottsProblem(FiLoop(; name = :f), fi_op(dims), (0, 3); field_solver = fs), SequentialCPM())
+        @test s.retcode == Potts.SciMLBase.ReturnCode.Success
+    end
+end
+
+@testset "F3-12a: QuasiSteady in A: the refusals; an island ends the run" begin
+    dims = (12, 10)
+    # a growth the operator sees (`g < 0` makes `- g c` a growth): at build and at a write
+    @test_throws "QuasiSteady: field `c`: its local derivative `∂f/∂c` = 0.5 is positive" PottsProblem(FiGrow(; name = :f),
+        fi_op(dims), (0, 3); field_solver = QuasiSteady())
+    integ = init(PottsProblem(FiSteady(; name = :f), fi_op(dims), (0, 3); field_solver = QuasiSteady()), SequentialCPM())
+    step!(integ)
+    @test_throws "is positive (a growth the operator sees)" (integ.ps[:kd] = -1.0)
+    # an island: the cell sits in one disc; the other has no decay and no fixed value
+    σ = zeros(Int32, 24, 12); σ[5:8, 5:8] .= 1
+    p = PottsProblem(FiIsland(; name = :f), [ownership => σ, kind => [:A]], (0, 3); field_solver = QuasiSteady())
+    integ = init(p, SequentialCPM())
+    s = @test_logs (:warn, r"field `c`: the solve failed in the field step of MCS 1 .*\(the steady solve made no real reduction.*`ReturnCode.ConvergenceFailure`: the run stops; give that region a decay or a fixed value, or step the field with `BackwardEuler`") match_mode = :any solve!(integ)
+    @test s.retcode == Potts.SciMLBase.ReturnCode.ConvergenceFailure && integ.t == 1
+    # with a decay everywhere, solved
+    s = solve(PottsProblem(FiNoIsland(; name = :f), [ownership => σ, kind => [:A]], (0, 3); field_solver = QuasiSteady()),
+        SequentialCPM())
+    @test s.retcode == Potts.SciMLBase.ReturnCode.Success
+end

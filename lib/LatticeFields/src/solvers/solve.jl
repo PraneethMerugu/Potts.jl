@@ -445,6 +445,7 @@ function set_coefficients!(sv::FieldSolver, op::CellOperator)
     o = sv.op
     diff = op.dims != o.dims ? "the lattice size" : op.periodic != o.periodic ? "the periodic axes" :
            op.mask != o.mask ? "the mask" : op.name != o.name ? "the field name" :
+           op.robin_full != o.robin_full ? "where a Robin face's negative part goes (`robin_full`)" :
            coef_slots(op) != coef_slots(o) ? "which coefficients are numbers, fields or absent" :
            !all(map((x, y) -> x isa Real || x == y, op.face, o.face)) ? "a face coefficient field" :
            !(op.shift isa Real || op.shift == o.shift) ? "the shift field" :
@@ -559,7 +560,7 @@ function _direction(op::CellOperator, coef)
     dd, dq = which === :alpha ? (β / den^2, -g / (2den^2)) :
              which === :beta ? (-α / den^2, -g / den^2) : (0.0, 1 / den)
     s = cs.robin[a][k]
-    v[α / den >= 0 ? s[1] : s[2]] = dd     # d's sign picks its part (one-sided at d = 0)
+    v[op.robin_full || α / den >= 0 ? s[1] : s[2]] = dd     # d's sign picks its part (one-sided at d = 0)
     v[s[3]] = dq
     return v
 end

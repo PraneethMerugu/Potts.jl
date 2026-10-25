@@ -44,6 +44,12 @@ PottsDevices.device_name() == "rocm" && include("device_ir.jl")
         cx = Array(sx.u[end].site.c)
         @test sx.retcode == Potts.SciMLBase.ReturnCode.Success && all(isfinite, cx) && minimum(cx) >= 0 && maximum(cx) > 0
     end
+    # F3-12a: QuasiSteady (the steady stage, its status checks), 20 MCS; no clip: the steady
+    # solve's nonnegativity holds to the solver's tolerance
+    sq = solve(PottsProblem(MERKS, [ownership => merks_state(), kind => [1, 1]], (0, 20); T = Float32,
+        field_solver = QuasiSteady()), CheckerboardCPM(; proposal = Moore(1)); backend)
+    cq = Array(sq.u[end].site.c)
+    @test sq.retcode == Potts.SciMLBase.ReturnCode.Success && all(isfinite, cq) && minimum(cq) >= -1e-4 * maximum(cq) && maximum(cq) > 0
     σs = zeros(Int32, 60, 30); σs[5:10, 12:17] .= 1; σs[40:45, 12:17] .= 2
     sp = PottsProblem(Spring(; name = :spring), [ownership => σs, kind => [:blob, :blob], :bond => [(1, 2)]], (0, 1000); T = Float32)
     ds = [CorePotts.centroid_distance(Float64, solve(remake(sp; seed), CheckerboardCPM(); backend).u[end].cell, sp.lattice, 1, 2) for seed in 1:4]

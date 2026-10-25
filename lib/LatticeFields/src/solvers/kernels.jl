@@ -28,6 +28,9 @@ A cell-centered Helmholtz operator in coefficient form, the input of a solver gr
     right-hand side as `−d·w·x` at the current iterate `x` (a defect correction): each
     `lift!` takes it at the current `x`, and `steady!` iterates lift and solve until the
     full operator's residual is at the tolerance;
+    With `robin_full = true` the whole `d` enters the operator, either sign (a steady solve,
+    whose operator has no time-step shift to keep dominant: it stays symmetric, and it is
+    positive definite exactly when the steady problem is well posed; F3 batch 4 r3 S1);
   - `name`: the user's field, which every message names (`nothing`: "the solver group");
     `axes`: the axis names for messages (default `"1"`, `"2"`, …).
 
@@ -48,12 +51,13 @@ struct CellOperator{N}
     robin::NTuple{N, NTuple{2, Union{Nothing, NTuple{3, Float64}}}}
     name::Union{Nothing, String}
     axes::NTuple{N, String}
+    robin_full::Bool
 end
 function CellOperator(dims::NTuple{N, Integer}; periodic = ntuple(_ -> false, N),
         face = ntuple(_ -> 1.0, N), shift = 0.0, mask = nothing, value = 0.0,
         dirichlet = ntuple(_ -> (nothing, nothing), N),
         robin = ntuple(_ -> (nothing, nothing), N), name = nothing,
-        axes = ntuple(a -> string(a), N)) where {N}
+        axes = ntuple(a -> string(a), N), robin_full::Bool = false) where {N}
     num(x) = x isa Real ? Float64(x) : String(x)
     function rob(r)
         r === nothing && return nothing
@@ -66,7 +70,7 @@ function CellOperator(dims::NTuple{N, Integer}; periodic = ntuple(_ -> false, N)
         mask === nothing ? nothing : String(mask), num(value),
         map(d -> map(g -> g === nothing ? nothing : Float64(g), Tuple(d)), Tuple(dirichlet)),
         map(d -> map(rob, Tuple(d)), Tuple(robin)),
-        name === nothing ? nothing : string(name), map(string, Tuple(axes)))
+        name === nothing ? nothing : string(name), map(string, Tuple(axes)), robin_full)
     check_coefficients(op)
     return op
 end
@@ -109,7 +113,9 @@ has_robin(op::CellOperator) = any(d -> any(!isnothing, d), op.robin)
 """
 Does a Robin face currently have a negative diagonal (the defect part, `robin_parts`)?
 """
-has_defect(op::CellOperator) = any(d -> any(r -> r !== nothing && robin_parts(r...)[2] < 0, d), op.robin)
+has_defect(op::CellOperator) = !op.robin_full && any(d -> any(r -> r !== nothing && robin_parts(r...)[2] < 0, d), op.robin)
+# a face's three slots: the parts of `robin_parts`, or `(d, 0, q)` with the whole `d` in the operator
+_robin_slots(op::CellOperator, r) = op.robin_full ? (r[1] / (r[1] / 2 + r[2]), 0.0, r[3] / (r[1] / 2 + r[2])) : robin_parts(r...)
 """
 Can the solve deflate the constant mode: no anchor, no Robin face and a constant shift (then
 `A·1 = s·1` and `A` maps zero-mean vectors to zero-mean vectors)?
@@ -224,7 +230,7 @@ function coef_values(op::CellOperator{N}) where {N}
     end
     for d in op.robin, r in d
 
-        r === nothing || append!(v, robin_parts(r...))
+        r === nothing || append!(v, _robin_slots(op, r))
     end
     return Tuple(v)
 end

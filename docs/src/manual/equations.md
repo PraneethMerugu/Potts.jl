@@ -151,7 +151,7 @@ sol[:x][end], sol[:g][end]
 
 | Keyword | Values | Default |
 |---|---|---|
-| `field_solver` | `ExplicitEuler(; substeps, lower)`: `substeps` explicit steps per MCS, values clipped at `lower`; `BackwardEuler(; substeps, newton, lower, inner, solver_T)`: implicit steps, each a linear solve with `inner`; `CrankNicolson(…)`, `BDF2(…)`: second-order implicit steps, the same keywords | `ExplicitEuler()`: the automatic count, no clip |
+| `field_solver` | `ExplicitEuler(; substeps, lower)`: `substeps` explicit steps per MCS, values clipped at `lower`; `BackwardEuler(; substeps, newton, lower, inner, solver_T)`: implicit steps, each a linear solve with `inner`; `CrankNicolson(…)`, `BDF2(…)`: second-order implicit steps, the same keywords; `QuasiSteady(; newton, inner, solver_T)`: the steady state in each MCS | `ExplicitEuler()`: the automatic count, no clip |
 | `ode_solver` | `ExplicitEuler(; substeps)`, `RK4(; substeps)`, `Adaptive(alg; kwargs...)` | `ExplicitEuler()`, one step per MCS |
 | `solvers` | `[x => solver, …]`, per variable or component | — |
 
@@ -214,6 +214,34 @@ as Backward Euler's do. Both start with Backward Euler steps:
 Neither keeps nonnegative values nonnegative: a stiff decay overshoots below 0. Give
 `lower = 0.0` for a concentration, or use `BackwardEuler`, which needs no clip on a
 consumption field. A clip changes the equation solved slightly.
+
+`QuasiSteady()` solves a field's steady state `0 = rhs` in each MCS, at the cells of that
+MCS: a field that relaxes much faster than the cells move. Each MCS starts from the last
+solution. It takes `newton`, `inner` and `solver_T` with the meanings above, and has no
+`substeps` and no `lower`. A linear field takes one linear solve per MCS; a nonlinear or
+switched one takes up to 8 Newton iterations, checked as above. When a term stays out of the
+operator (advection, the coupling between the fields of one group), the count comes from the
+bound on that term against the decay, from 8 to at most 40 iterations; give `newton = k` if
+the warning says the budget is hit. A Robin face of either sign is in the operator, so a
+linear field with one is still one solve. The steady state must exist and be unique, so `QuasiSteady` refuses
+four kinds of field, at the start and at every parameter write:
+
+- a growth that the operator sees (`+ g c`): its steady state is unstable or not unique; step
+  it with `BackwardEuler`;
+- a Robin face `α c + β ∂c/∂n = g` with α and β of opposite signs that feeds the field more
+  than its diffusion and decay remove (the steady operator is indefinite): step it with
+  `BackwardEuler`, or give the face a smaller |β|;
+- a field with no decay and no fixed value (no Dirichlet or Robin face, no mask): `0 = rhs`
+  then has no solution or many. Add a decay or a fixed value;
+- a field whose solver group reads another group that reads it back (a loop of groups): the
+  steady field answers its inputs at once, and the lag of one MCS between the groups can grow
+  without bound. Give the fields one `BackwardEuler` solver, or step the steady field with
+  `BackwardEuler`. A steady field that other groups only read is accepted.
+
+A region that the cells cut off with neither a decay nor a fixed value (a decay only inside
+the cells, say, and a medium pocket with none) cannot be solved either. The solve finds it at
+run time: the run stops with `ReturnCode.ConvergenceFailure`, and the warning names the field,
+the MCS and the route.
 
 `BackwardEuler` pays a linear solve per substep. It is the faster choice when the explicit
 count is large (fast diffusion, a stiff decay); for a field whose explicit count is a few

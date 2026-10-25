@@ -21,7 +21,9 @@
 # A stage is one such solve from slot `p` into the other slot. Backward Euler takes one stage
 # per substep (γ = 1); Crank–Nicolson one (γ = 1/2: the shift `2/h` of a Backward Euler step of
 # `h/2`), or two Backward Euler stages of `h/2` for its damped start, with the same operator;
-# BDF2 one (γ = 2/3), or one Backward Euler stage (γ = 1) at its start.
+# BDF2 one (γ = 2/3), or one Backward Euler stage (γ = 1) at its start. QuasiSteady takes one
+# stage per window with no time-step term (γh = ∞: the residual is `r(u_k)`, the shift 0) at the
+# window's start time.
 
 """
     residual_rule(alg)
@@ -44,6 +46,7 @@ struct QRule end
 _gamma(::BackwardEuler) = 1.0
 _gamma(::CrankNicolson) = 0.5
 _gamma(::BDF2) = 2 / 3
+_gamma(::QuasiSteady) = Inf             # (no time-step term: `1/(γh) = 0`)
 # … of its operator at a start (BDF2's Backward Euler substep)
 _gamma_start(a::ImplicitAlgorithm) = _gamma(a)
 _gamma_start(::BDF2) = 1.0
@@ -81,10 +84,10 @@ end
 
 # The status word's update after one solve (one work item; F3 design §3.3): [4] solves, [5]
 # budget hits (`done` still 0), [6] floors (`done` 2: `StalledSuccess`), and a failure
-# (`done` 3, diverged; or a residual that is not finite) into [1] code 2, [3] its cause and [2]
-# the window when none is recorded yet
-function _be_status_body!(i, w, scal, window)
-    @inbounds begin                             # i = 1; w has 8 entries, scal SCALARS ≥ 6
+# (`done` 3, diverged; a residual that is not finite; a steady solve's budget hit with no real
+# reduction) into [1] code 2, [3] its cause and [2] the window when none is recorded yet
+function _be_status_body!(i, w, scal, window, steady)
+    @inbounds begin                             # i = 1; w has 8 entries, scal SCALARS ≥ 7
         d, rn = scal[Solvers.DONE], scal[Solvers.RNORM]
         w[STATUS_SOLVES] += UInt32(1)
         fail = UInt32(0)
@@ -92,11 +95,15 @@ function _be_status_body!(i, w, scal, window)
             fail = UInt32(4)
         elseif d == 0
             w[STATUS_BUDGET] += UInt32(1)
+            # a steady solve that did not halve its residual (δ from 0: the setup residual is
+            # ‖b‖): a singular region, F3 design §3.5 S-a
+            steady && rn > scal[Solvers.BNORM] / 2 && (fail = UInt32(16))
         elseif d == 2
             w[STATUS_FLOOR] += UInt32(1)
             w[STATUS_CODE] = max(w[STATUS_CODE], UInt32(1))
+            steady && rn > scal[Solvers.BNORM] / 2 && (fail = UInt32(16))     # (a stall above the tolerance, the same)
         elseif d == 3
-            fail = UInt32(1)
+            fail = steady ? UInt32(1 | 32) : UInt32(1)    # (a steady divergence: indefinite, or an island; r3 S2)
         end
         if fail != 0
             w[STATUS_CODE] = UInt32(2)
@@ -117,8 +124,9 @@ _bdf2_q_body!(i, q, un, prev) =
 # sites, as partials of `NB`-site blocks (`_be_norms_body!`, one item per block), then one item
 # combines them and decides (`_be_newton_body!`): a correction that is not finite or that grew
 # by more than 2× in each of the last two iterations is a divergence (`ConvergenceFailure`,
-# cause bits 4 and 2); at the last iteration, ‖δ_k‖∞ > ε_N ‖u_k − uⁿ‖∞ + 10 eps(T) ‖u_k‖∞ is a
-# Newton budget hit (counted, `Success`; not in the flip pass of a switch under the automatic
+# cause bits 4 and 2); at the last iteration, ‖δ_k‖∞ > ε_N ‖u_k − uⁿ‖∞ + 10 eps(T) ‖u_k‖∞ (a
+# steady solve: ‖δ_k‖∞ > (ε_N + 10 eps(T)) ‖u_k‖∞, and with ‖δ_k‖∞ ≥ ‖δ_1‖∞/2 a failure, cause
+# bit 16: no real reduction) is a Newton budget hit (counted, `Success`; not in the flip pass of a switch under the automatic
 # count, whose second iteration fixes the switch state and tests nothing, M7). A row that meets the tolerance adds 1 to the word's
 # entry [8], which a host executor reads after each iteration to stop early under the automatic
 # count (`newton = nothing`: every row converged, so the later iterations would change the
@@ -145,8 +153,8 @@ function _be_norms_body!(b, part, dst, un, x, smask, v, res, s, mask, n)
     end
     return nothing
 end
-function _be_newton_body!(i, w, part, nb, hist, it, last, epsn, fl, window)
-    @inbounds begin                             # i = 1; 3nb ≤ length(part), hist has 2 entries, w 8
+function _be_newton_body!(i, w, part, nb, hist, it, last, epsn, fl, window, steady)
+    @inbounds begin                             # i = 1; 3nb ≤ length(part), hist has 3 entries, w 8
         T = eltype(part)
         dk, inc, un = zero(T), zero(T), zero(T)
         for b in 1:nb
@@ -156,7 +164,12 @@ function _be_newton_body!(i, w, part, nb, hist, it, last, epsn, fl, window)
         end
         d1, d2 = it == 1 ? (zero(T), zero(T)) : (hist[2], hist[1])      # ‖δ_{k−1}‖, ‖δ_{k−2}‖
         fail = !isfinite(dk) ? UInt32(4) : (it >= 3 && dk > 2d1 && d1 > 2d2) ? UInt32(2) : UInt32(0)
-        conv = dk <= epsn * inc + fl * un
+        # (a steady solve has no increment over a step: the field-relative form)
+        conv = steady ? dk <= (epsn + fl) * un : dk <= epsn * inc + fl * un
+        it == 1 && (hist[3] = dk)
+        # a steady solve's budget hit whose correction did not halve from the first: no real
+        # reduction (a singular region, S-a)
+        (fail == 0 && last && !conv && steady && !(dk < hist[3] / 2)) && (fail = UInt32(16))
         if fail != 0
             w[STATUS_CODE] = UInt32(2)
             w[STATUS_CAUSE] |= fail
@@ -267,7 +280,7 @@ mutable struct ImplicitRow{R, U, A, SV, X, W, SC, SM, V, S, MK, MV, MF, LO, F, J
     op::RowOperator
     numeric::Union{Nothing, Solvers.CellOperator}   # the numeric operator the solver holds (numeric rows)
     part::P                             # the Newton check's block partials (3 per block) and
-    hist::P                             #   the last two correction norms, in the state type
+    hist::P                             #   the last two correction norms and the first, in the state type
     q::Q                                # the stage's right side `c__n` (Crank–Nicolson, BDF2), or nothing (BE: `uⁿ`)
     prev::H                             # BDF2: the state one substep back, `uⁿ⁻¹` (not in the problem's state), or nothing
 end
@@ -314,6 +327,8 @@ mutable struct ImplicitCache{RS, WK, JL, W, BK, QL}
     seen::Bool                          # every term out of the operator has a bound
     ρin::Float64                        # … their bound `ρ_adv + κ_in + ρ_rob` at the bound parameters
     θ::Float64                          # … the face-wise ratio of the diffusion left out of a scaled row (R2-M1)
+    smin::Float64                       # the smallest shift the operator keeps with no time-step term (the
+                                        #   decay; NaN when a row varies by site): QuasiSteady's count
     keys::Vector{String}
     cyclic::Bool
     rebuilds::Int                       # hierarchy rebuilds so far (a test reads it)
@@ -370,8 +385,10 @@ function _numeric_operator(s::Program{N}, r::RowOperator, id, p, h, γ, mask::Bo
                       ntuple(k -> _face_kind(s, id, a, k, p)[1] === :dirichlet ? 0.0 : nothing, 2), N)
     rob = ntuple(a -> s.periodic[a] ? (nothing, nothing) :
                       ntuple(k -> (f = _face_kind(s, id, a, k, p); f[1] === :robin ? (f[2], f[3], 0.0) : nothing), 2), N)
+    # a steady solve (γh = ∞) takes a Robin face's negative part into its operator too: with no
+    # time-step shift to keep dominant, it stays symmetric and exact (batch 4 review r3 S1)
     op = Solvers.CellOperator(dims; periodic = s.periodic, face, shift, mask = mask ? "mask" : nothing, value = 0.0,
-        dirichlet = dir, robin = rob, name = r.key)
+        dirichlet = dir, robin = rob, name = r.key, robin_full = isinf(γ * h))
     return op, shift > s0
 end
 # the parameters the bounds of `inexact_bounds` and `_robin_bounds` read: with the store's
@@ -381,6 +398,15 @@ function _bound_params(st::FieldStore, s::Program, op::OperatorSpec, keys, p)
     any(r -> r.key in keys && (!isempty(r.bounds) || r.facemax !== nothing), op.rows) || return p
     return ParamsTables(p, Pair{String, Vector{Float64}}[s.tables[j].key => _primal64(Array(st.tables[j])) for j in eachindex(s.tables)])
 end
+# the rows whose Robin faces' negative part stays out of the operator: every row of a time
+# stepper; a steady solve takes it into a numeric row's operator (`robin_full`), so only its
+# field rows (whose operator varies by site) keep the defect correction
+function steady_coupling(c::ImplicitCache, keys)
+    isinf(c.γ) || return nothing
+    cp = String[r.key for r in c.op.rows if r.key in keys && any(x -> x[1] in keys, r.cross)]
+    return length(cp) >= 2 ? cp : nothing
+end
+_robin_keys(alg, op::OperatorSpec, keys) = alg isa QuasiSteady ? String[r.key for r in op.rows if r.key in keys && r.field] : keys
 # The Robin faces with a negative diagonal of the rows `keys` at `p` (their part `w_a d⁻` stays
 # out of the operator: a defect correction, S1): whether there is one (`neg`), the bound of the
 # part left out, `ρ = Σ_a max_side w_a |d⁻|` (`w_a` the row's face coefficient `K/h_a²`; a
@@ -516,7 +542,7 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
     # the stage's right side: Backward Euler's is the substep's start (`c__n` bound to the
     # state's slots); Crank–Nicolson's and BDF2's a cache array per row (`c__n` bound to it)
     qs = Dict{String, Any}()
-    if !(alg isa BackwardEuler)
+    if alg isa Union{CrankNicolson, BDF2}
         for k in keys
             u = st.bufs[fieldid(s, k)][1]
             qs[k] = _zeros(st.backend, eltype(u), length(u))
@@ -563,7 +589,7 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
         lo = alg.lower === nothing ? nothing : T(alg.lower)
         jarr(k) = haskey(own, "jac:$key.$k") ? own["jac:$key.$k"][1] : nothing
         nsite = length(u[1])
-        part, hist = _zeros(st.backend, T, 3 * cld(nsite, NB)), _zeros(st.backend, T, 2)
+        part, hist = _zeros(st.backend, T, 3 * cld(nsite, NB)), _zeros(st.backend, T, 3)
         q = get(qs, key, nothing)
         prev = alg isa BDF2 ? _zeros(st.backend, T, nsite) : nothing
         if r.local_only
@@ -628,13 +654,14 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
     exact0 = exact
     switch = any(r -> r.op.switch, rows)
     bp = _bound_params(st, s, op, keys, p)
-    b, rb = inexact_bounds(op, keys, cyclic, bp), _robin_bounds(s, op, keys, bp)
+    b, rb = inexact_bounds(op, keys, cyclic, bp), _robin_bounds(s, op, _robin_keys(alg, op, keys), bp)
     exact = exact0 && !rb.neg
     seen = isempty(b.unseen) && !rb.unseen
     ρin = b.ρ + b.κ + rb.ρ
     exact || seen || alg.newton !== nothing || _warn_unseen(keys, [b.unseen; rb.texts], alg)
-    newton = alg.newton !== nothing ? alg.newton : _newton_count(exact, switch, seen, ρin, _gamma_count(alg), h, b.θ)
     iterate = any(r -> r.op.iterate, rows)
+    smin = _steady_shift(op, keys, p)
+    newton = alg.newton !== nothing ? alg.newton : _auto_newton(alg, exact, switch, iterate, seen, ρin, h, b.θ, smin)
     # the operator moves when it reads the time, the clock, a filled input or a field of the state
     # (rebuilt each window), or the solver reads a mask that moves
     moving = _jac_moving(jp, g.spec) || any(r -> r.mask !== nothing || r.dom !== nothing, rows) && _masks_moving(s, g.spec)
@@ -646,7 +673,7 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
     rebind = q -> ([m(q) for m in mkres], mkjac0(q), mkq(q))
     timed = jp !== nothing && _reads_time(jp)
     return ImplicitCache(rt, each(length(rt)), jac, newton, h, γ, true, true, jumps, moving, timed, word, op, exact0, exact,
-        iterate, newton > 1, alg.newton === nothing && exact && switch, alg.newton === nothing, switch, seen, ρin, b.θ, keys,
+        iterate, newton > 1, _flips(alg, exact, switch), alg.newton === nothing, switch, seen, ρin, b.θ, smin, keys,
         cyclic, 0, rebind, backend, qres)
 end
 
@@ -695,6 +722,32 @@ end
 # term meet, and a host executor stops once the tolerance holds.
 const NEWTON_CAP = 12
 const NEWTON_CAP_THETA = 26
+# the automatic Newton count of `alg`: the time steppers' contraction count. A steady solve has
+# no `1/(γh)` term to bound the contraction: one iteration for a linear exact group; at least
+# `QS_NEWTON` with nonlinear or switched rows; with terms out of the operator, the count from
+# their contraction bound `ρ̂ = ρ_in / s_min + θ` (`s_min` the smallest shift the operator
+# keeps: the decay), `clamp(⌈log ε_N / log ρ̂⌉ + 1, QS_NEWTON, QS_NEWTON_CAP)`, and the cap
+# when `ρ̂ ≥ 1` or no bound sees a term (F3 design §3.5; batch 4 review r2 S1). Each is checked
+# on the device; a host executor stops at the tolerance.
+const QS_NEWTON = 8
+const QS_NEWTON_CAP = 40
+_auto_newton(alg::ImplicitAlgorithm, exact, switch, iterate, seen, ρin, h, θ, smin) =
+    _newton_count(exact, switch, seen, ρin, _gamma_count(alg), h, θ)
+function _auto_newton(::QuasiSteady, exact, switch, iterate, seen, ρin, h, θ, smin)
+    exact && return switch || iterate ? QS_NEWTON : 1
+    seen || return QS_NEWTON_CAP
+    ρ = ρin == 0 ? θ : smin > 0 ? ρin / smin + θ : Inf
+    ρ < 1 || return QS_NEWTON_CAP
+    return clamp(ceil(Int, log(NEWTON_EPS) / log(ρ)) + 1, QS_NEWTON, QS_NEWTON_CAP)
+end
+# the smallest shift the operator of the rows `keys` keeps with no time-step term at `p` (the
+# decay `−J_loc`); NaN when a row's operator varies by site (no number bounds it)
+_steady_shift(op::OperatorSpec, keys, p) =
+    minimum((r.field ? NaN : max(-_coefsum(r.jloc, p), 0.0) for r in op.rows if r.key in keys); init = Inf)
+# whether the automatic count's second iteration is a switch's flip pass (no budget hit): the
+# time steppers' exact switch groups; a steady solve's iterations are all checked
+_flips(alg::ImplicitAlgorithm, exact, switch) = alg.newton === nothing && exact && switch
+_flips(::QuasiSteady, exact, switch) = false
 function _newton_count(exact::Bool, switch::Bool, seen::Bool, ρin::Float64, γ::Float64, h::Float64, θ::Float64 = 0.0)
     exact && return switch ? 2 : 1
     seen || return 4
@@ -710,8 +763,9 @@ function _warn_unseen(keys, unseen, alg)
     for u in unique(unseen)
         _warn_once(string("implicit-unseen#", join(keys, ","), "#", u)) || continue
         @warn string(_algname(alg), ": field", length(keys) == 1 ? " " : "s ", fs, ": ", u, " is not in the implicit ",
-            "operator and no bound sees it, so it is corrected by Newton iterations (`newton = 4`), checked on the ",
-            "device at every substep: a budget hit is counted and warned with its route, a divergence ends the run with ",
+            "operator and no bound sees it, so it is corrected by Newton iterations (`newton = ",
+            alg isa QuasiSteady ? QS_NEWTON_CAP : 4, "`), checked on the device at every ",
+            alg isa QuasiSteady ? "window" : "substep", ": a budget hit is counted and warned with its route, a divergence ends the run with ",
             "`ReturnCode.ConvergenceFailure`. Give `newton = k` to choose the count")
     end
     return nothing
@@ -770,9 +824,9 @@ function _count_set!(c::ImplicitCache, rt::GroupRuntime)
 end
 function _set_newton!(c::ImplicitCache, alg)
     c.auto || return nothing
-    c.newton = _newton_count(c.exact, c.switch, c.seen, c.ρin, _gamma_count(alg), c.h, c.θ)
+    c.newton = _auto_newton(alg, c.exact, c.switch, c.iterate, c.seen, c.ρin, c.h, c.θ, c.smin)
     c.check = c.newton > 1
-    c.flip = c.exact && c.switch
+    c.flip = _flips(alg, c.exact, c.switch)
     return nothing
 end
 group_program_of(rt::GroupRuntime) = rt.program
@@ -839,7 +893,7 @@ function (r::ImplicitRow)(a)
     if r.solver === nothing
         Exec.launch!(backend, _be_update_body!, n, (dst, src, nothing, nothing, nothing, r.resarr, r.s, r.mask, r.mval,
             r.mvf, r.lo, last))
-        check && _newton_check!(r, backend, word, dst, r.bufs[par], nothing, it, hits, window)
+        check && _newton_check!(r, backend, word, dst, r.bufs[par], nothing, it, hits, window, isinf(h))
         return nothing
     end
     sv = r.solver
@@ -853,11 +907,11 @@ function (r::ImplicitRow)(a)
     end
     Solvers.lift!(sv)
     Solvers.solve!(sv)
-    Exec.launch!(backend, _be_status_body!, 1, (word, r.scal, Int32(window)))
+    Exec.launch!(backend, _be_status_body!, 1, (word, r.scal, Int32(window), isinf(h)))
     x = sv.slot[r.xid] == 1 ? r.xs[1] : r.xs[2]
     Exec.launch!(backend, _be_update_body!, n, (dst, src, x, r.smask, r.v, nothing, nothing, r.mask, r.mval, r.mvf,
         r.lo, last))
-    check && _newton_check!(r, backend, word, dst, r.bufs[par], x, it, hits, window)
+    check && _newton_check!(r, backend, word, dst, r.bufs[par], x, it, hits, window, isinf(h))
     return nothing
 end
 struct _Clip{B}
@@ -870,7 +924,7 @@ function (r::ImplicitRow)(a::_Clip)
     Exec.launch!(a.backend, _clip_body!, length(dst), (dst, r.lo))
     return nothing
 end
-function _newton_check!(r::ImplicitRow, backend, word, dst, un, x, it, last, window)
+function _newton_check!(r::ImplicitRow, backend, word, dst, un, x, it, last, window, steady::Bool)
     n = length(dst)
     nb = cld(n, NB)
     T = eltype(r.part)
@@ -880,7 +934,7 @@ function _newton_check!(r::ImplicitRow, backend, word, dst, un, x, it, last, win
         Exec.launch!(backend, _be_norms_body!, nb, (r.part, dst, un, x, r.smask, r.v, nothing, nothing, r.mask, n))
     end
     Exec.launch!(backend, _be_newton_body!, 1, (word, r.part, Int32(nb), r.hist, Int32(it), last, T(NEWTON_EPS),
-        T(10 * eps(T)), window))
+        T(10 * eps(T)), window, steady))
     return nothing
 end
 
@@ -930,6 +984,8 @@ function _substep!(a::BDF2, c, rt, t0, h, k, w, first)
     c.start = false
     return nothing
 end
+# QuasiSteady: one stage per window with no time-step term (γh = ∞), at the window's start time
+_substep!(::QuasiSteady, c, rt, t0, h, k, w, first) = _stage!(c, rt, t0, Inf, h, k, w, first)
 # each row's `q` at slot parity `par`: the start `uⁿ` (`bdf = false` or nothing), or BDF2's
 # `(4uⁿ − uⁿ⁻¹)/3` (`bdf = true`)
 _set_q!(c::ImplicitCache, rt::GroupRuntime, bdf) = (c.walk(c.rows, _SetQ(c.backend, _parity(rt), bdf === true)); nothing)
@@ -1015,13 +1071,14 @@ function install_launches!(rt::GroupRuntime{<:FieldStore, <:ImplicitAlgorithm}, 
     c.qres = qres
     # (here, not in `rebind_launches`: front end A writes the tables between the two)
     bp = _bound_params(rt.store, rt.program, c.op, c.keys, p)
-    b, rb = inexact_bounds(c.op, c.keys, c.cyclic, bp), _robin_bounds(rt.program, c.op, c.keys, bp)
+    b, rb = inexact_bounds(c.op, c.keys, c.cyclic, bp), _robin_bounds(rt.program, c.op, _robin_keys(rt.alg, c.op, c.keys), bp)
     # the classification at the new parameters (a write may turn a Robin face negative), as a
     # fresh problem's (M2)
     c.exact = c.exact0 && !rb.neg
     c.seen = isempty(b.unseen) && !rb.unseen
     c.ρin = b.ρ + b.κ + rb.ρ
     c.θ = b.θ
+    c.smin = _steady_shift(c.op, c.keys, p)
     c.exact || c.seen || rt.alg.newton !== nothing || _warn_unseen(c.keys, [b.unseen; rb.texts], rt.alg)
     _set_newton!(c, rt.alg)
     reset!(rt)
@@ -1088,6 +1145,90 @@ function _raise_text(op::OperatorSpec, keys, alg, n, rule, cycle, robin)
         "not converge")
 end
 substeps(g::FieldGroup, alg::ImplicitAlgorithm, dt::Real, pp; kw...) = substeps(g.spec, alg, dt, pp; kw...)
+# QuasiSteady: one solve per window (no count), after the parameter refusals and the steady
+# refusals (F3 design §3.5), at build and at every parameter write
+function substeps(spec::GroupSpec, alg::QuasiSteady, dt::Real, pp; fields = spec.state, stability = spec.stability,
+        key = identity, texts::PolicyTexts = ProblemTexts(spec.texts.route))
+    isempty(fields) && return 0
+    r = bound_report(stability, pp)
+    ctx = (; stability, pp, r, fields = collect(String, fields), dt = Float64(dt), least = nothing)
+    (isempty(r.negative) && !any(x -> x[3] isa Tuple, r.nonfinite)) || refuse_parameters(texts, ctx)
+    _steady_refusals(spec, _operator(spec, alg), collect(String, fields), pp)
+    return 1
+end
+# The steady refusals of the rows `keys` at raw parameters `p` (invalid input, F3 design §3.5):
+# a positive local derivative the operator sees (a growth: the steady solve is indefinite and a
+# growing row's steady state unstable or not unique), and a row with no shift (no decay, no
+# nonlinear or switched local term) and no anchor (no Dirichlet or Robin face, no mask), whose
+# `0 = rhs` has no solution or many. A row whose operator varies by site, or that reads another
+# field of the group, is decided on the device (an island: no real reduction, S-a).
+function _steady_refusals(spec::GroupSpec, op::OperatorSpec, keys, p)
+    s = spec.rate
+    for r in op.rows
+        r.key in keys || continue
+        r.field && continue
+        g = _coefsum(r.jloc, p)
+        g > 0 && throw(ArgumentError(string("QuasiSteady: field `", r.key, "`: its local derivative `∂f/∂c` = ", g,
+            " is positive (a growth the operator sees): a growing field's steady state is unstable or not unique, and ",
+            "its steady solve is indefinite; step the field with `BackwardEuler`")))
+        id = fieldid(s, r.key)
+        _steady_indefinite(s, r, id, -g, p)
+        (g < 0 || r.iterate || r.switch || !isempty(r.cross)) && continue
+        any(x -> x isa NodeValueRule && x.field == id, s.rules) && continue
+        any(a -> !s.periodic[a] && any(k -> _face_kind(s, id, a, k, p)[1] !== :none, 1:2), eachindex(s.periodic)) && continue
+        throw(ArgumentError(string("QuasiSteady: field `", r.key, "` has no unique steady state: it has no decay (a ",
+            "local term `−k c` with k > 0) and no fixed value (a Dirichlet or Robin face, a mask), so `0 = rhs` has no ",
+            "solution or many (a constant added to one is another); add a decay or a fixed value, or step it with ",
+            "`BackwardEuler`")))
+    end
+    return nothing
+end
+# A numeric row with a Robin face whose diagonal is negative: the steady operator (which takes
+# that part, `robin_full`) is `s + Σ_a A_a`, one symmetric tridiagonal `A_a` per axis (faces
+# `w_a`, the boundary rows' face terms), so its smallest eigenvalue is `s + Σ_a λ_min(A_a)`.
+# Not positive: the steady state is unstable or not unique, as with a growth (r3 S1; a mask only
+# raises it, so a masked row is checked without its mask, and accepted when that passes)
+function _steady_indefinite(s::Program{N}, r::RowOperator, id, shift, p) where {N}
+    kinds = [ntuple(k -> s.periodic[a] ? (:none, 0.0, 0.0) : _face_kind(s, id, a, k, p), 2) for a in 1:N]
+    any(ks -> any(f -> f[1] === :robin && Solvers.robin_parts(f[2], f[3], 0.0)[2] < 0, ks), kinds) || return nothing
+    any(x -> x isa NodeValueRule && x.field == id, s.rules) && return nothing
+    r.domain && return nothing
+    dims = Tuple(Int.(leveldims(s, 0)))
+    λ, scale = shift, abs(shift)
+    for a in 1:N
+        w = _coefsum(r.faces[a], p)
+        scale += 4abs(w)
+        s.periodic[a] && continue                   # (a periodic axis: its smallest is 0)
+        n = dims[a]
+        d = fill(2w, n)
+        for (k, i) in ((1, 1), (2, n))
+            f = kinds[a][k]
+            d[i] += f[1] === :dirichlet ? w : f[1] === :robin ? w * (f[2] / (f[2] / 2 + f[3])) - w : -w
+        end
+        λ += _tridiag_min(d, w)
+    end
+    λ > 1e-10 * scale && return nothing
+    throw(ArgumentError(string("QuasiSteady: field `", r.key, "`: its steady operator is indefinite (smallest ",
+        "eigenvalue ", round(λ; sigdigits = 3), "): a Robin face `α c + β ∂c/∂n = g` with α and β of opposite signs ",
+        "feeds the field more than its diffusion and decay remove, so the steady state is unstable or not unique; ",
+        "step the field with `BackwardEuler`, or give the face a smaller |β| (or a larger decay)")))
+end
+# the smallest eigenvalue of the symmetric tridiagonal with diagonal `d` and off-diagonal `−w`
+# (Sturm counts by bisection)
+function _tridiag_min(d::Vector{Float64}, w::Float64)
+    n = length(d)
+    n == 1 && return d[1]
+    lo, hi = minimum(d) - 2abs(w), maximum(d) + 2abs(w)
+    below(x) = (q = d[1] - x; c = Int(q < 0); for i in 2:n
+                    q = d[i] - x - w^2 / (q == 0 ? eps() : q); c += q < 0
+                end; c)
+    for _ in 1:200
+        m = (lo + hi) / 2
+        below(m) >= 1 ? (hi = m) : (lo = m)
+        hi - lo <= 1e-14 * max(1.0, abs(hi)) && break
+    end
+    return (lo + hi) / 2
+end
 # the least automatic count: 1; Crank–Nicolson on data that can jump every window takes 2, so
 # that each window has one Crank–Nicolson substep after its damped one (with one substep the
 # window is Backward Euler in two halves: first order at twice the cost, batch 4 review r1 S1)

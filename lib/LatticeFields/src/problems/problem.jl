@@ -1080,7 +1080,7 @@ function _check_coupling_loops(prob::FieldProblem, groups, p, tables, inputs, dt
     # the one coupling rule of both front ends (F3-01), in front end B's words
     return check_coupling(prob.stability, [collect(String, ks) for (_, ks) in groups], [_explicit_count(a) for (a, _) in groups],
         pp, dt; key = why -> _warn_key(prob, why), texts = ProblemTexts(prob.group.spec.texts.route),
-        span = prob.tspan[2] - prob.tspan[1])
+        span = prob.tspan[2] - prob.tspan[1], steady = [a isa QuasiSteady for (a, _) in groups])
 end
 
 function SII.finalize_parameters_hook!(integ::FieldIntegrator, _)

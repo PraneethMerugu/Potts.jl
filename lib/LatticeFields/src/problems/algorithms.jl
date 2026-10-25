@@ -227,6 +227,58 @@ end
 nbuffers(::BDF2) = 2
 
 """
+    QuasiSteady(; dt = nothing, newton = nothing, inner = :auto, solver_T = :auto)
+
+The steady state of a group in each window (F3 design §3.5): `0 = r(u)`, solved once per
+window at the window's start time (A: at the σ of that MCS; B: at the integrator's inputs) by
+the Newton iterations of [`BackwardEuler`](@ref) with no time-step term, `−J̃ δ = r(u_k)`, from
+the field's current values (the previous window's solution: a warm start). A field stepped
+this way follows the inputs at once, as a steady field does.
+
+- `dt`: the window, as for [`BackwardEuler`](@ref).
+- `newton`: the Newton iterations per window; `nothing` is automatic: 1 for a linear group
+  whose operator is exact (one linear solve is the steady state), else 8 (a nonlinear or
+  switched row, a term out of the operator), each checked on the device: the run stops early
+  on a CPU once the correction is below `10⁻³` of the field, and a budget hit is counted and
+  warned. `k ≥ 1` runs exactly `k`.
+- `inner`, `solver_T`: as for [`BackwardEuler`](@ref).
+
+There is no `substeps` (one solve per window; `newton` sets the work) and no `lower` (a steady
+solve has no substep to clip). The steady state must exist and be unique: a positive local
+derivative the operator sees (a growth `+ g c`) is refused at build and at every parameter
+write (a growing row's steady state is unstable or not unique: step it with
+[`BackwardEuler`](@ref)), and so is a field with no decay and no fixed value (no Dirichlet or
+Robin face, no mask: `0 = rhs` then has no solution or many). A region that the CPM's inputs
+or a mask cut off with neither (an island) is found on the device: its solve cannot reduce the
+residual there, and a budget hit with no real reduction ends the run with
+`ReturnCode.ConvergenceFailure`, naming the field, the window and the route (a decay or a fixed
+value in that region). One type for both front ends.
+"""
+struct QuasiSteady <: ImplicitAlgorithm
+    dt::Union{Nothing, Float64}
+    substeps::Nothing                   # (none: one solve per window)
+    newton::Union{Nothing, Int}
+    lower::Nothing                      # (none: no substep to clip)
+    inner::Any
+    solver_T::Any
+    function QuasiSteady(dt, newton, inner, solver_T)
+        d, _, k, _, i, T = _implicit_keywords("QuasiSteady", dt, nothing, newton, nothing, inner, solver_T)
+        return new(d, nothing, k, nothing, i, T)
+    end
+end
+function QuasiSteady(; dt = nothing, newton = nothing, inner = :auto, solver_T = :auto, kw...)
+    haskey(kw, :substeps) && throw(ArgumentError(string("QuasiSteady: no keyword `substeps`: a steady field is solved ",
+        "once per window; give `newton = k` for more Newton iterations per window")))
+    haskey(kw, :lower) && throw(ArgumentError(string("QuasiSteady: no keyword `lower`: a steady solve has no substep to ",
+        "clip (a steady state below a bound means the equation allows it; `BackwardEuler` keeps nonnegative data ",
+        "nonnegative)")))
+    isempty(kw) || throw(ArgumentError(string("QuasiSteady: no keyword ", join(("`$k`" for k in keys(kw)), ", "),
+        "; its keywords are `dt`, `newton`, `inner` and `solver_T`")))
+    return QuasiSteady(dt, newton, inner, solver_T)
+end
+nbuffers(::QuasiSteady) = 2
+
+"""
     ExplicitMap()
 
 Discrete maps `Shift(t, 1)(c) ~ rhs` (§5.5): one application per unit of time.
@@ -445,12 +497,12 @@ function _algtext(a::ExplicitEuler)
     kw = [string(k, " = ", getfield(a, k)) for k in (:dt, :substeps, :lower) if getfield(a, k) !== nothing]
     return isempty(kw) ? "ExplicitEuler()" : string("ExplicitEuler(; ", join(kw, ", "), ")")
 end
-function _algtext(a::Union{BackwardEuler, CrankNicolson, BDF2})
+function _algtext(a::Union{BackwardEuler, CrankNicolson, BDF2, QuasiSteady})
     kw = [string(k, " = ", repr(getfield(a, k))) for k in (:dt, :substeps, :newton, :lower) if getfield(a, k) !== nothing]
     a.inner === :auto || push!(kw, string("inner = ", repr(a.inner)))
     a.solver_T === :auto || push!(kw, string("solver_T = ", a.solver_T))
     w = nameof(typeof(a))
     return isempty(kw) ? string(w, "()") : string(w, "(; ", join(kw, ", "), ")")
 end
-Base.show(io::IO, a::Union{ExplicitEuler, BackwardEuler, CrankNicolson, BDF2}) = print(io, _algtext(a))
+Base.show(io::IO, a::Union{ExplicitEuler, BackwardEuler, CrankNicolson, BDF2, QuasiSteady}) = print(io, _algtext(a))
 _algtext(a) = repr(a)

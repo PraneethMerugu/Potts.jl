@@ -288,7 +288,7 @@ The words of a front end's substep and coupling messages (F3 design §3.7). The 
 ([`substeps`](@ref), [`check_coupling`](@ref)) decides; a front end's texts word the decision
 in the user's terms: front end B's are [`ProblemTexts`](@ref), front end A (Potts) gives its
 own. A subtype defines `unbounded_text`, `uncovered_text`, `refuse_parameters`,
-`coupling_unknown_text`, `coupling_unbounded_text` and `loop_text`, each of a context
+`coupling_unknown_text`, `coupling_unbounded_text`, `loop_text` and `steady_loop_text`, each of a context
 `NamedTuple` of the decision's facts.
 """
 abstract type PolicyTexts end
@@ -373,10 +373,12 @@ loop of the group read graph ([`group_loops`](@ref)) needs `κ = dt · rate ≤ 
 of groups in its loop ([`lagged_coupling`](@ref)); past it the problem is refused with the
 routes (`loop_text`). A cross coefficient in a loop with no finite bound is refused with an
 automatic count and warns once (`key(why)`) with an explicit one; a bound that does not know
-the cross terms is the same for every group. `span` is the time span (front end B's route).
+the cross terms is the same for every group. `span` is the time span (front end B's route). `steady[g]`: group `g` is solved by
+`QuasiSteady`; a loop with such a group is refused (`steady_loop_text`) until the rule bounds
+a steady group's gain.
 """
 function check_coupling(stability, groups, explicit, pp, dt::Real; check = eachindex(groups), key = identity,
-        texts::PolicyTexts = ProblemTexts(), span = nothing)
+        texts::PolicyTexts = ProblemTexts(), span = nothing, steady = nothing)
     length(groups) > 1 || return nothing
     keys = [collect(String, ks) for ks in groups]
     parts = lagged_coupling(stability, keys, pp)
@@ -388,6 +390,17 @@ function check_coupling(stability, groups, explicit, pp, dt::Real; check = eachi
     end
     loops = group_loops(parts)
     all(g -> isempty(loops[g]), check) && return nothing
+    # a QuasiSteady group answers its inputs at once, with the gain of its steady solve, which
+    # `κ = dt · rate` does not bound: a loop with one is refused until the rule takes that gain
+    # (F3-12c: `κ_QS = dt · Σ k_in k_out / s_min`; batch 4 review r2 M1)
+    if steady !== nothing
+        for g in check
+            l = loops[g]
+            (isempty(l) || !any(h -> steady[h], l)) && continue
+            c = (; ctx..., loops, g, lf = reduce(vcat, keys[l]), qs = reduce(vcat, keys[[h for h in l if steady[h]]]))
+            throw(ArgumentError(steady_loop_text(texts, c)))
+        end
+    end
     # the rates over the reads inside each group's loop: a read of a group outside it is a
     # one-way source of the loop, which cannot feed growth back (round 3)
     parts = lagged_coupling(stability, keys, pp; within = loops)
@@ -412,7 +425,7 @@ end
 
 The substep rule of one group, a callable of the raw parameters (with the tables, as
 [`with_tables`](@ref) gives them): `rule(pp)` is [`substeps`](@ref)`(spec, alg, dt, pp; key,
-texts)`, then, with `coupling = (; stability, groups, explicit, index, whole)`, the coupling
+texts)`, then, with `coupling = (; stability, groups, explicit, index, whole, steady)`, the coupling
 check of group `index` ([`check_coupling`](@ref)) at `whole(pp)`, the parameters of the whole
 field system. Front end A's field phases hold one (a host function, evaluated at build and
 when the parameters change, never per MCS). `key` is the group's once-key text.
@@ -437,7 +450,7 @@ function (s::GroupSubsteps)(pp)
     n = substeps(s.spec, s.alg, s.dt, pp; key, texts = s.texts)
     c = s.coupling
     c === nothing || check_coupling(c.stability, c.groups, c.explicit, c.whole(pp), s.dt; check = (c.index,),
-        key, texts = s.texts)
+        key, texts = s.texts, steady = c.steady)
     return n
 end
 
@@ -481,6 +494,15 @@ function coupling_unbounded_text(t::ProblemTexts, c; refuse::Bool)
     return string("FieldGroups: the coupling of the group of ", _fieldlist(ks), " in the loop of ", _fieldlist(lf),
         " has no bound (the coefficient `", q.text, "` of `", q.other, "` in the rate of `", q.row,
         "`): the count is the user's")
+end
+# the refusal of a loop with a QuasiSteady group, with its routes
+function steady_loop_text(t::ProblemTexts, c)
+    return string("FieldGroups: the QuasiSteady group", length(c.qs) == 1 ? " of " : "s of ", _fieldlist(c.qs),
+        " is in a loop of groups that read one another (", _fieldlist(c.lf), "): a steady field answers its inputs at ",
+        "once, with the gain of its steady solve, so the lag of one window between the groups can grow without bound, ",
+        "and the coupling rule does not bound that gain yet. Step ", _fieldlist(c.lf), " in one `BackwardEuler` group, ",
+        "or step ", _fieldlist(c.qs), " with `BackwardEuler` (a fast field relaxes to its steady state within a few ",
+        "windows)")
 end
 # the refusal of a loop past the limit, with its routes
 function loop_text(t::ProblemTexts, c)
@@ -528,10 +550,15 @@ const STATUS_CODE, STATUS_WINDOW, STATUS_CAUSE, STATUS_SOLVES, STATUS_BUDGET, ST
     STATUS_CAUSES
 
 The cause bits of the status word's entry [3], in words: 1 the linear solve diverged, 2 the
-Newton iteration diverged, 4 a residual was not finite, 8 the shift was clamped.
+Newton iteration diverged, 4 a residual was not finite, 8 the shift was clamped, 16 a steady
+solve's budget hit made no real reduction (`QuasiSteady`: a singular region), 32 a steady
+linear solve diverged (an indefinite steady problem, or an island).
 """
 const STATUS_CAUSES = (0x00000001 => "the linear solve diverged", 0x00000002 => "the Newton iteration diverged",
-    0x00000004 => "a residual was not finite", 0x00000008 => "the shift was clamped")
+    0x00000004 => "a residual was not finite", 0x00000008 => "the shift was clamped",
+    0x00000010 => "the steady solve made no real reduction: a region has no decay and no fixed value, so its steady state is not unique",
+    0x00000020 => "the steady solve diverged: the steady problem may be indefinite (a growth, or a Robin face whose α and β " *
+                  "have opposite signs) or have an island (a region with no decay and no fixed value)")
 
 """
     status_word(cache) -> word or nothing
@@ -541,6 +568,9 @@ algorithm with no solve (`ExplicitEuler`, `ExplicitMap`): then [`check_status!`]
 nothing and costs nothing.
 """
 status_word(::Any) = nothing
+# the fields of a steady group whose cross terms (one reads another) stay out of its operator,
+# or nothing: a Newton divergence there is the coupling's (`QuasiSteady`, r3 S2)
+steady_coupling(::Any, keys) = nothing
 # the Newton count of an algorithm's cache (its budget warning names it), or nothing
 newton_count(::Any) = nothing
 
@@ -560,6 +590,16 @@ function status_route(alg, which::Symbol, cause::Integer = 0)
     cause & 0x1 != 0 && return "more substeps (`substeps = n`) or a larger linear budget (`inner = DevicePCG(; budget = n)`)"
     cause & 0x6 != 0 && return "more substeps (`substeps = n`): a smaller step brings the Newton iteration into its contraction"
     return "more substeps (`substeps = n`) or a larger linear budget (`inner = DevicePCG(; budget = n)`)"
+end
+# a steady solve has no substeps: its routes are the budgets, a fixed value or decay, or a
+# transient solver
+function status_route(::QuasiSteady, which::Symbol, cause::Integer = 0)
+    which === :budget && return "a larger linear budget (`inner = DevicePCG(; budget = n)`)"
+    which === :newton_budget && return "more Newton iterations (a larger `newton = k`)"
+    cause & 0x20 != 0 && return "step the field with `BackwardEuler`, or give each region a decay or a fixed value"
+    cause & 0x10 != 0 && return "give that region a decay or a fixed value, or step the field with `BackwardEuler`"
+    cause & 0x1 != 0 && return "a larger linear budget (`inner = DevicePCG(; budget = n)`), or step the field with `BackwardEuler`"
+    return "step the field with `BackwardEuler` (a transient solve converges where the steady Newton iteration does not)"
 end
 
 """
@@ -819,6 +859,9 @@ end
     tot.clamped = true
     s = length(rt.keys) == 1 ? "" : "s"
     w = length(h) >= 9 && h[9] != 0 ? Int(h[9]) : tot.windows
+    rt.alg isa QuasiSteady && return @warn string("field", s, " ", join(("`$k`" for k in rt.keys), ", "),
+        ": a local growth `∂f/∂c > 0` in ", window_text(rt, max(w, 1)), " makes the steady solve indefinite, so it was ",
+        "left out of the operator; a growing field's steady state is unstable or not unique: step it with `BackwardEuler`")
     @warn string("field", s, " ", join(("`$k`" for k in rt.keys), ", "), ": the implicit shift was clamped in ",
         window_text(rt, max(w, 1)), " (a local growth `∂f/∂c` above `1/(2h)` that the substep count did not see), so ",
         "its one Newton step is not the ", _stepname(rt.alg), " step; a larger `newton = k` checks the step at every substep, or ",
@@ -846,8 +889,13 @@ _stepname(a) = a isa BackwardEuler ? "Backward Euler" : a isa CrankNicolson ? "C
     if code == SciMLBase.ReturnCode.ConvergenceFailure && tot.window == 0
         tot.window = max(Int64(window), 1)
         why = [r for (bit, r) in STATUS_CAUSES if tot.cause & bit != 0]
+        cp = tot.cause & 0x6 != 0 ? steady_coupling(rt.cache, rt.keys) : nothing
+        route = cp === nothing ? status_route(rt.alg, :failure, tot.cause) :
+                string("the coupling between ", join(("`$k`" for k in cp), " and "), " in one steady group does not ",
+                    "contract (its cross terms are out of the steady operator, and a steady solve has no time step to ",
+                    "damp them); step them with `BackwardEuler`")
         @warn "field$s $fs: the solve failed in $(window_text(rt, tot.window))$(isempty(why) ? "" : " (" * join(why, "; ") * ")"), " *
-              "`ReturnCode.ConvergenceFailure`: the run stops; $(status_route(rt.alg, :failure, tot.cause))"
+              "`ReturnCode.ConvergenceFailure`: the run stops; $route"
     end
     return nothing
 end

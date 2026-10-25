@@ -712,6 +712,14 @@ function LatticeFields.Problems.coupling_unbounded_text(t::_PottsTexts, c; refus
            "another solver group, in the loop of $(_fieldlist(lf)), has no bound (the coefficient " *
            "`$(_user_text(q.raw, t.cv))`): the count is the user's"
 end
+function LatticeFields.Problems.steady_loop_text(t::_PottsTexts, c)
+    return string("the fields ", _fieldlist(c.lf), " are in solver groups that read one another in a loop, and ",
+        _fieldlist(c.qs), length(c.qs) == 1 ? " is" : " are", " solved with `QuasiSteady`: a steady field answers its ",
+        "inputs at once, with the gain of its steady solve, so the lag of one field window between the groups can grow ",
+        "without bound, and the coupling rule does not bound that gain yet. Give ", _fieldlist(c.lf), " one ",
+        "`BackwardEuler` solver (one group), or step ", _fieldlist(c.qs), " with `BackwardEuler` (a fast field relaxes to its ",
+        "steady state within a few MCS)")
+end
 function LatticeFields.Problems.loop_text(t::_PottsTexts, c)
     q, κ, lf = c.q, c.κ, c.lf
     u(k) = string("`", k, "`")
@@ -861,7 +869,8 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
              LatticeFields.Compile.fingerprint_text(fused; T)
         cp = coupling === nothing ? nothing :
              (; stability = coupling.bound, coupling.groups, explicit = [i == gi && _given_count(solver) !== nothing for i in eachindex(order)],
-                index = gi, whole = _WholeParams(coupling.wnames, lg.params))
+                index = gi, whole = _WholeParams(coupling.wnames, lg.params),
+                steady = [order[i][2] isa LatticeFields.Problems.QuasiSteady for i in eachindex(order)])
         rule = LatticeFields.Problems.GroupSubsteps(gspec, solver, dt; key = fp, texts = _PottsTexts(names, (; filled = copy(cv.filled))),
             coupling = cp)
         push!(groups, _FieldGroup(names, group, solver, prog, mplan, splan, arrays, lg.tables, lg.params, rule, fp, opts))
