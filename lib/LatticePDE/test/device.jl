@@ -2,6 +2,7 @@
 # device arrays equals the host executor's bit for bit on normal-range values (128²; the
 # device flushes subnormals), and the verbatim 512² run completes with automatic substeps.
 using KernelAbstractions: KernelAbstractions
+using LatticeFields: LatticeFields
 const pgpu = lowercase(get(ENV, "LATTICEPDE_GPU", ""))
 if pgpu == "metal"
     using Metal: Metal
@@ -161,4 +162,75 @@ end
     @test s.retcode == ReturnCode.ConvergenceFailure && ig.iter == 5           # the first save after window 3
     s = solve(p, WStub(0.01; code = 1, at = 3); saveat = 0.05)
     @test s.retcode == ReturnCode.StalledSuccess && s.stats.solves == 10
+end
+
+# F3-15: the implicit algorithms of F3-07…F3-12 on the device in Float32 against the host form
+# of the same problem (the host executor, the same Float32 program; a fixed `newton`, so the
+# host's early stop does not enter): field and numeric rows, advection (a defect correction), a
+# switch, a Robin face, Crank–Nicolson's and BDF2's stages, a QuasiSteady window and a steady
+# start. The device and the host run the same reduction trees (the host's emulated form), so
+# they agree to the D-158 tolerance (`rtol = 1e-12` of the field's scale; measured below).
+@testset "F3-15: implicit algorithms on $pgpu equal the host form (Float32)" begin
+    @parameters Di = 0.05 ki = 1.0 vi = 0.5
+    per = [c(t, x, 0) ~ c(t, x, 1), c(t, 0, y) ~ c(t, 1, y)]
+    field = psys([D(ce) ~ DivKGrad(:harmonic)(Di * (1 + x), ce) - ki * ce + 1], [c(0, x, y) ~ x * y], [Di, ki])
+    adv = psys([D(ce) ~ Di * Δ(ce) - Advect(Upwind1())([vi, 0.0], ce) - ki * ce + 1], [c(0, x, y) ~ x * y; per], [Di, ki, vi])
+    sw = psys([D(ce) ~ Di * Δ(ce) - ki * max(ce - 0.3, 0) + 0.5], [c(0, x, y) ~ x * y], [Di, ki])
+    rob = psys([D(ce) ~ Di * Δ(ce) - ki * ce + 1], [c(0, x, y) ~ x * y, 1.5 * c(t, 1, y) + Differential(x)(c(t, 1, y)) ~ 0.2], [Di, ki])
+    cases = [("BackwardEuler, field row", field, BackwardEuler(; dt = 0.1, newton = 1)),
+             ("BackwardEuler, advection", adv, BackwardEuler(; dt = 0.1, newton = 6)),
+             ("BackwardEuler, switch", sw, BackwardEuler(; dt = 0.1, newton = 2)),
+             ("BackwardEuler, Robin face", rob, BackwardEuler(; dt = 0.1, newton = 1)),
+             ("CrankNicolson", field, CrankNicolson(; dt = 0.1, newton = 1)),
+             ("BDF2", field, BDF2(; dt = 0.1, newton = 1)),
+             ("QuasiSteady", field, QuasiSteady(; dt = 0.1, newton = 1)),
+             ("BackwardEuler, steady start", field, BackwardEuler(; dt = 0.1, newton = 1, init = :steady))]
+    mk(sys, be) = discretize(sys, LatticeDiscretization(Grid((32, 32)); T = Float32, problem = :owned, backend = be))
+    for (name, sys, alg) in cases
+        sd = solve(mk(sys, PDEV), alg; saveat = 0.5)
+        sh = solve(mk(sys, KernelAbstractions.CPU()), alg; saveat = 0.5)
+        @info "F3-15 $name: retcodes $(sd.retcode) (device), $(sh.retcode) (host); saves $(sd.t), $(sh.t)"
+        @test sd.retcode == sh.retcode && sd.t ≈ sh.t
+        rel = maximum(i -> maximum(abs, Array(sd[ce][i]) .- sh[ce][i]) / maximum(abs, sh[ce][i]), eachindex(sd.t))
+        @info "F3-15 $name: device vs host (Float32) max relative difference $rel"
+        @test rel <= 1e-12
+    end
+    # control: the comparison sees a change of one Newton iteration (the advection case)
+    sd = solve(mk(adv, PDEV), BackwardEuler(; dt = 0.1, newton = 5); saveat = 0.5)
+    sh = solve(mk(adv, KernelAbstractions.CPU()), BackwardEuler(; dt = 0.1, newton = 6); saveat = 0.5)
+    @test maximum(abs, Array(sd[ce][end]) .- sh[ce][end]) / maximum(abs, sh[ce][end]) > 1e-12
+end
+
+# F3-15, batch 3 review R1: under the automatic Newton count the device closes a gate once every
+# row met the tolerance (the later iterations' residuals are zeroed, so their solves are done at
+# setup and the update adds 0): the device's field is the host's early-stop form, and the gated
+# iterations cost launches only. The advection case of R1 (a site-varying velocity, `newton`
+# from rule 2). Base f5641ce1: no gate, the device ran every iteration (measured below).
+@testset "F3-15 (R1): the device stops correcting once every row converged ($pgpu)" begin
+    @parameters Dg = 0.01
+    sys = psys([D(ce) ~ Dg * Δ(ce) - Advect(Upwind1())([2 * (1 + x), 0.0], ce)], [c(0, x, y) ~ x * y], [Dg]; T = 0.1)
+    mk(be, n) = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float32, problem = :owned, backend = be))
+    alg = BackwardEuler(; dt = 0.05)
+    sd, sh = solve(mk(PDEV, 32), alg), solve(mk(KernelAbstractions.CPU(), 32), alg)
+    ig = init(mk(PDEV, 32), alg)
+    cc = only(ig.runtimes).cache
+    @test cc.gate !== nothing && cc.newton > 2               # the gate is on (automatic count, several iterations)
+    rel = maximum(abs, Array(sd[ce][end]) .- sh[ce][end]) / maximum(abs, sh[ce][end])
+    @info "F3-15 R1: device vs host (early stop) max relative difference $rel; newton $(cc.newton)"
+    @test sd.retcode == sh.retcode == ReturnCode.Success && rel <= 1e-5
+    # the device counts the solves that ran, as the host (batch 5 review N3; 97045a1b counted the
+    # gated ones too: 630 against 237 in the review's case)
+    @test sd.stats.solves == sh.stats.solves
+    # `field_stats` in the middle of a run reads the device's status words first (a device reads
+    # them only at the saves and the end; 97045a1b gave 0 solves after 24 `step!` calls, the
+    # timing's 75³ window): after two windows it gives the host's counts
+    igd, igh = init(mk(PDEV, 32), alg), init(mk(KernelAbstractions.CPU(), 32), alg)
+    foreach(_ -> (step!(igd); step!(igh)), 1:2)
+    @test LatticeFields.Problems.field_stats(igd).solves == LatticeFields.Problems.field_stats(igh).solves > 0
+    # the time of two windows at 128² with the gate and with every iteration run (`newton = k`)
+    p = mk(PDEV, 128)
+    run(a) = (solve(p, a); KernelAbstractions.synchronize(PDEV); @elapsed (solve(p, a); KernelAbstractions.synchronize(PDEV)))
+    k = only(init(p, alg).runtimes).cache.newton
+    tg, tk = minimum(_ -> run(alg), 1:3), minimum(_ -> run(BackwardEuler(; dt = 0.05, newton = k)), 1:3)
+    @info "F3-15 R1 at 128² ($pgpu), $(init(p, alg).substeps) substeps per window: the gated run $(round(tg; digits = 3)) s, every iteration ($k) $(round(tk; digits = 3)) s"
 end

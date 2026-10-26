@@ -87,9 +87,12 @@ end
 # The status word's update after one solve (one work item; F3 design §3.3): [4] solves, [5]
 # budget hits (`done` still 0), [6] floors (`done` 2: `StalledSuccess`), and a failure
 # (`done` 3, diverged; a residual that is not finite; a steady solve's budget hit with no real
-# reduction) into [1] code 2, [3] its cause and [2] the window when none is recorded yet
-function _be_status_body!(i, w, scal, window, steady)
-    @inbounds begin                             # i = 1; w has 8 entries, scal SCALARS ≥ 7
+# reduction) into [1] code 2, [3] its cause and [2] the window when none is recorded yet. A
+# solve the device's convergence gate closed (`gate[1] ≠ 0`: done at its setup, nothing ran) is
+# not counted (batch 5 review N3: the device counts the solves the host runs)
+function _be_status_body!(i, w, scal, window, steady, gate)
+    @inbounds begin                             # i = 1; w has 8 entries, scal SCALARS ≥ 7, gate 1
+        (gate !== nothing && gate[1] != 0) && return nothing
         d, rn = scal[Solvers.DONE], scal[Solvers.RNORM]
         w[STATUS_SOLVES] += UInt32(1)
         fail = UInt32(0)
@@ -185,6 +188,22 @@ function _be_newton_body!(i, w, part, nb, hist, it, last, epsn, fl, window, stea
     return nothing
 end
 
+# The device's convergence gate (batch 3 R1, F3-15): at each Newton iteration's start, the gate
+# closes once the previous iteration's check counted every row converged (`w[8] = nrows`), and
+# the count restarts; a closed gate zeroes each row's residual (`_be_gate_body!`), so the solve
+# is done at its setup and the update adds 0 (the host's early stop, on the device)
+function _be_gate_iter_body!(i, w, gate, nrows, first)
+    @inbounds begin                             # i = 1; w has 9 entries, gate 1
+        if first
+            gate[1] = UInt32(0)
+        elseif w[STATUS_CONVERGED] == nrows
+            gate[1] = UInt32(1)
+        end
+        w[STATUS_CONVERGED] = UInt32(0)
+    end
+    return nothing
+end
+_be_gate_body!(i, res, gate) = (@inbounds (gate[1] != 0 && (res[i] = zero(eltype(res)))); nothing)   # i ≤ length(res)
 _at(x::Number, i) = x
 _at(x::AbstractArray, i) = @inbounds x[i]                              # i ≤ length(x) (one value per site)
 _at(::Nothing, i) = false
@@ -304,7 +323,7 @@ field, a local nonlinear term or a switch: that row's operator is rebuilt at eve
 iteration, at the iterate), Crank–Nicolson's right-side launches (`qres`, per slot parity, or
 nothing), the status word and the operator spec.
 """
-mutable struct ImplicitCache{RS, WK, JL, W, BK, QL}
+mutable struct ImplicitCache{RS, WK, JL, W, BK, QL, GT}
     rows::RS
     walk::WK
     jac::JL
@@ -337,6 +356,7 @@ mutable struct ImplicitCache{RS, WK, JL, W, BK, QL}
     rebind::Any                         # `p -> (residual launches per row, operator launches, q launches)` (a rebind)
     backend::BK
     qres::QL                            # Crank–Nicolson's right-side launches per slot parity, or nothing
+    gate::GT                            # a device's convergence gate (batch 3 R1, F3-15), or nothing
 end
 status_word(c::ImplicitCache) = c.word
 newton_count(c::ImplicitCache) = c.newton
@@ -688,9 +708,15 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
     mkjac0 = jp === nothing ? (q -> nothing) : mkjac
     rebind = q -> ([m(q) for m in mkres], mkjac0(q), mkq(q))
     timed = jp !== nothing && _reads_time(jp)
+    # the device's convergence gate (batch 3 R1): under the automatic count, once every row met
+    # the Newton tolerance the later iterations' residuals are zeroed, so their solves are done
+    # at setup (the solver's gated launches do nothing) and the field is the host's early-stop
+    # form. Not with a Robin face's defect term (the solve's right side is not the residual alone)
+    gate = !Exec.ishost(backend) && newton > 1 && alg.newton === nothing &&
+           !any(r -> r.solver !== nothing && Solvers.has_robin(r.solver.op), rows) ? _zeros(st.backend, UInt32, 1) : nothing
     return ImplicitCache(rt, each(length(rt)), jac, newton, h, γ, true, true, jumps, moving, timed, word, op, exact0, exact,
         iterate, newton > 1, _flips(alg, exact, switch), alg.newton === nothing, switch, seen, ρin, b.θ, smin, keys,
-        cyclic, 0, rebind, backend, qres)
+        cyclic, 0, rebind, backend, qres, gate)
 end
 
 # the operator of `spec` for algorithm `alg`: a front end's refusal (a hexagonal lattice, a
@@ -901,8 +927,9 @@ end
 # it, check, hits)`, `hits`: the check counts a budget hit at this iteration): the residual at `tⁿ⁺¹`, the solve, the status, the update into the other slot,
 # and with `check` the Newton check of iteration `it`
 function (r::ImplicitRow)(a)
-    par, first, t1, h, k, last, window, backend, γ, word, it, check, hits = a
+    par, first, t1, h, k, last, window, backend, γ, word, it, check, hits, gate = a
     r.res[(first ? 0 : 2) + par]((t1, h, k))
+    gate === nothing || Exec.launch!(backend, _be_gate_body!, length(r.resarr), (r.resarr, gate))
     dst = r.bufs[3 - par]
     src = first ? r.bufs[par] : dst
     n = length(dst)
@@ -923,7 +950,7 @@ function (r::ImplicitRow)(a)
     end
     Solvers.lift!(sv)
     Solvers.solve!(sv)
-    Exec.launch!(backend, _be_status_body!, 1, (word, r.scal, Int32(window), isinf(h)))
+    Exec.launch!(backend, _be_status_body!, 1, (word, r.scal, Int32(window), isinf(h), gate))
     x = sv.slot[r.xid] == 1 ? r.xs[1] : r.xs[2]
     Exec.launch!(backend, _be_update_body!, n, (dst, src, x, r.smask, r.v, nothing, nothing, r.mask, r.mval, r.mvf,
         r.lo, last))
@@ -1043,8 +1070,10 @@ function _stage!(c::ImplicitCache, rt::GroupRuntime, t1::Float64, γ::Float64, h
         host = c.check && c.auto && c.word isa Array
         host && (@inbounds c.word[STATUS_CONVERGED] = 0)     # (the word has 9 entries)
         # (the automatic count's flip pass of a switch counts no budget hit, M7)
+        c.gate === nothing ||
+            Exec.launch!(c.backend, _be_gate_iter_body!, 1, (c.word, c.gate, UInt32(length(c.rows)), it == 1))
         c.walk(c.rows, (par, it == 1, t1, hγ, k, it == c.newton, w, c.backend, 1.0, c.word, it, c.check,
-            it == c.newton && !c.flip))
+            it == c.newton && !c.flip, c.gate))
         # under the automatic count a host executor stops when every row converged (a plain
         # read); the clip of the last iteration then runs on its own
         if host && it < c.newton && @inbounds(c.word[STATUS_CONVERGED]) == length(c.rows)
@@ -1053,6 +1082,44 @@ function _stage!(c::ImplicitCache, rt::GroupRuntime, t1::Float64, γ::Float64, h
         end
     end
     _swap!(rt.store.cur, rt.swaps)
+    return nothing
+end
+
+"""
+    compile_cache!(c::ImplicitCache, rt)
+
+Compile the device kernels of an implicit runtime's substeps ahead of its first step (F3-15):
+its launch sequence walked once per slot parity in compile mode (`Exec.COMPILE_ONLY`: each
+device launch compiles its kernel and runs no work item): the operator program, each row's
+rebuild (shift, solver hierarchy), a Newton iteration from the stage's start and after it
+(the residual, the right side, the solve's lift and solve plans, the status, the update, the
+Newton check), the clip, and Crank–Nicolson's and BDF2's right sides and history copy. The
+solvers' plans it builds are the ones the steps use; their slots are restored (the walk runs
+nothing). Host state is otherwise untouched.
+"""
+function compile_cache!(c::ImplicitCache, rt::GroupRuntime)
+    h = isfinite(c.h) && c.h > 0 ? c.h : 1.0
+    slots = Any[r.solver === nothing ? nothing : copy(r.solver.slot) for r in c.rows]
+    w = Int32(0)
+    Base.ScopedValues.with(Exec.COMPILE_ONLY => true) do
+        for par in 1:2
+            c.jac === nothing || foreach(j -> j((0.0, h, 0)), c.jac)
+            c.walk(c.rows, _Rebuild(c.backend, h, 1.0, c.word, false, w))
+            c.gate === nothing || Exec.launch!(c.backend, _be_gate_iter_body!, 1, (c.word, c.gate, UInt32(length(c.rows)), true))
+            for first in (true, false)
+                c.walk(c.rows, (par, first, 0.0, h, 0, true, w, c.backend, 1.0, c.word, 1, c.check, false, c.gate))
+            end
+            c.walk(c.rows, _Clip(c.backend, par))
+            if c.rows[1].q !== nothing
+                c.walk(c.rows, _SetQ(c.backend, par, false))
+                rt.alg isa BDF2 && (c.walk(c.rows, _SetQ(c.backend, par, true)); c.walk(c.rows, _KeepPrev(c.backend, par)))
+            end
+            c.qres === nothing || c.qres[par]((0.0, h / 2, 0))
+        end
+    end
+    for (r, s) in zip(c.rows, slots)
+        s === nothing || merge!(r.solver.slot, s)
+    end
     return nothing
 end
 

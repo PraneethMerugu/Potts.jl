@@ -1316,7 +1316,10 @@ end
 
 Compile every device kernel a step of `rt` launches before its first step: the step launches,
 the mask launches, the clamp of each masked field and the slot-1 copies (`Exec.compile!`:
-compile-only launches, which write nothing). Nothing on the host executor.
+compile-only launches, which write nothing), and an implicit runtime's launches (F3-15: the
+operator program, the residuals, the shift, update, status and Newton-check bodies, the
+right sides and history copies, and the solver's rebuild, lift and solve plans, by
+[`compile_cache!`](@ref) in compile mode). Nothing on the host executor.
 """
 function compile!(backend, rt::GroupRuntime)
     Exec.ishost(backend) && return nothing
@@ -1333,6 +1336,7 @@ function compile!(backend, rt::GroupRuntime)
     for (d, s) in rt.copies
         push!(jobs, () -> Exec.compile!(backend, _copy_body!, (d, s)))
     end
+    rt.cache isa ImplicitCache && push!(jobs, () -> compile_cache!(rt.cache, rt))
     Exec.compile_all!(backend, jobs)
     return nothing
 end

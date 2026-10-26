@@ -623,6 +623,40 @@ if PottsDevices.device_name() == "rocm"
     end
 end
 
+# F3-15: an implicit runtime's launches (the operator program, the residuals, the shift,
+# update, status and Newton-check bodies, the solver's rebuild, lift and solve plans) compile
+# in the field phase's pending task: once it is done, the first MCS adds no LatticeFields
+# kernel to AMDGPU's kernel cache, and the device run equals the host run to the Newton and
+# solver tolerances. Base f5641ce1: the task compiled the explicit step only (the first MCS
+# compiled the implicit kernels: the set grows).
+if PottsDevices.device_name() == "rocm"
+    @testset "F3-15: the implicit kernels compile in the pending task (ROCm)" begin
+        AM = PottsDevices.device_package()
+        lfkernels() = Set(s for s in (string(typeof(k)) for k in collect(values(AM.Compiler._kernel_instances)))
+                          if occursin("LatticeFields.", s))
+        backend = PottsDevices.device_backend()
+        for fs in (BackwardEuler(lower = 0.0), CrankNicolson(lower = 0.0), BDF2(lower = 0.0), QuasiSteady())
+            prob = PottsProblem(MERKS, [ownership => merks_state(), kind => [1, 1]], (0, 4); T = Float32, seed = 5,
+                field_solver = fs)
+            ck = checkpoint(init(prob, CheckerboardCPM(; proposal = Moore(1))))
+            integ = init(prob, CheckerboardCPM(; proposal = Moore(1)); backend, checkpoint = ck)
+            t = CorePotts._runtime(getfield(integ.ctx, :__fields1)).pending
+            @test t isa Task
+            wait(t)
+            before = lfkernels()
+            step!(integ); step!(integ)
+            PottsDevices.device_sync()
+            new = setdiff(lfkernels(), before)
+            isempty(new) || @info "F3-15: kernels the first MCS compiled ($(nameof(typeof(fs))))" new = first.(collect(new), 300)
+            @test isempty(new)
+            host = init(prob, CheckerboardCPM(; proposal = Moore(1)); checkpoint = ck)
+            step!(host); step!(host)
+            cd, ch = Array(current_state(integ).site.c), current_state(host).site.c
+            @test maximum(abs, cd .- ch) <= 1e-4 * maximum(abs, ch)
+        end
+    end
+end
+
 # ROCm, last: no `double` in any kernel this suite compiled (full scan of the kernel cache)
 if PottsDevices.device_name() == "rocm"
     include(joinpath(@__DIR__, "shared", "device_ir_scan.jl"))

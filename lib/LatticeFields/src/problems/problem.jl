@@ -900,9 +900,12 @@ end
 
 The solver counters of an owned run (F3 design §3.3), summed over its groups' status words:
 `solves`, `budget` (linear budget hits), `floor` (rounding floors), `newton_budget` (Newton
-budget hits). All zero for the explicit algorithms.
+budget hits). All zero for the explicit algorithms. On a device, where a run reads the status
+words only at the saves and at the end, it reads them first (one copy per group), so the counts
+are current in the middle of a run too; a failure found there becomes `integ.retcode`, as at a save.
 """
 function field_stats(integ::FieldIntegrator)
+    Exec.ishost(integ.prob.backend) || _check_statuses!(integ)
     tot(f) = sum((getfield(rt.totals, f) for rt in Iterators.flatten((integ.runtimes, integ.starts))); init = Int64(0))
     return (; solves = tot(:solves), budget = tot(:budget), floor = tot(:floor), newton_budget = tot(:newton_budget))
 end

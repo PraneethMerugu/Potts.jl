@@ -26,7 +26,7 @@ using Polyester: @batch
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
-public HOST_GRAIN, ishost, supports, default_float, register_float64!, float64_registered, FLOAT64_KERNELS, host_launch!, launch!, compile!, compile_all!, Launch, Plan, walker
+public HOST_GRAIN, COMPILE_ONLY, compiling, ishost, supports, default_float, register_float64!, float64_registered, FLOAT64_KERNELS, FLOAT64_ARRAY, host_launch!, launch!, compile!, compile_all!, Launch, Plan, walker
 
 # ---------------------------------------------------------------------------------------
 # Capabilities
@@ -87,7 +87,15 @@ const _FLOAT64_LOCK = ReentrantLock()
 Whether a kernel signature text holds every part of a [`register_float64!`](@ref) entry.
 """
 float64_registered(sig::AbstractString) =
-    lock(() -> any(e -> all(q -> occursin(q, sig), e), FLOAT64_KERNELS), _FLOAT64_LOCK)
+    lock(() -> any(e -> all(q -> _holds(sig, q), e), FLOAT64_KERNELS), _FLOAT64_LOCK)
+"""
+The part of a [`register_float64!`](@ref) entry that stands for a Float64 device array in the
+signature, whatever its dimension: Julia prints a 1D or 2D device array by its alias
+(`ROCDeviceVector{Float64, 1}`, `ROCDeviceMatrix{Float64, 1}`), a 3D one as
+`ROCDeviceArray{Float64, 3, 1}`.
+"""
+const FLOAT64_ARRAY = "a Float64 device array"
+_holds(sig, q) = q == FLOAT64_ARRAY ? occursin(r"Device(Array|Vector|Matrix)\{Float64[,}]", sig) : occursin(q, sig)
 
 # ---------------------------------------------------------------------------------------
 # Host executor
@@ -166,11 +174,26 @@ workgroup size (one compile per body and argument types, whatever `n`). Nothing 
 function launch!(backend, body::B, n::Integer, args::A) where {B, A}
     if ishost(backend)
         host_launch!(body, n, args)
+    elseif compiling()
+        compile!(backend, body, args)
     elseif n > 0
         _kernel!(backend)(body, args, Int(n); ndrange = Int(n))
     end
     return nothing
 end
+
+"""
+    compiling() -> Bool
+
+Whether the current task runs in compile mode ([`COMPILE_ONLY`](@ref)): every device launch
+of [`launch!`](@ref), of a prebuilt [`Launch`](@ref) and of a solver's workgroup launch
+compiles its kernel instead (a launch that runs no work item), so a host task can walk a
+runtime's launch sequence to compile it ahead of the first step (F3-15: the implicit
+launches in the pending compile task). The host executor ignores it.
+"""
+compiling() = COMPILE_ONLY[]
+"""Compile mode, task-scoped (`Base.ScopedValues.with(Exec.COMPILE_ONLY => true) do … end`)."""
+const COMPILE_ONLY = Base.ScopedValues.ScopedValue(false)
 
 """
     compile!(backend, body, args)
@@ -303,11 +326,13 @@ function _host_cartesian_chunk!(body::B, nd::NTuple{N}, chunk::Integer, c::Integ
     return nothing
 end
 function (l::CartesianLaunch)()
+    compiling() && return compile!(l)
     body, args, _ = l.params
     l.kernel(body, args, true)
     return nothing
 end
 function (l::LinearLaunch)()
+    compiling() && return compile!(l)
     body, args, n = l.params
     if l.ndrange == 0
         l.kernel(body, args, n)

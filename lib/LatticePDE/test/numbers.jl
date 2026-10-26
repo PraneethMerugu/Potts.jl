@@ -422,7 +422,11 @@ LatticeFields.Exec.KernelAbstractions.supports_float64(::NoF64Backend) = false
     empty!(Ex.FLOAT64_KERNELS)
     LFP._register_float64_store!(nb, [Any[zeros(Float64, 4)]])
     clip = string(typeof(LFP._clip_body!))
-    @test Ex.float64_registered("Tuple{kernel, $clip, ROCDeviceArray{Float64, 1, 1}, Float64}")
+    # (the signature text as the scan prints it: a 1D device array by its alias, GROUP=GPU at c319fdba
+    # flagged 9 registered bodies keyed on `DeviceArray{Float64,`)
+    @test Ex.float64_registered("Tuple{kernel, $clip, AMDGPU.Device.ROCDeviceVector{Float64, 1}, Float64}")
+    @test Ex.float64_registered("Tuple{kernel, $clip, ROCDeviceArray{Float64, 3, 1}, Float64}")
+    @test !Ex.float64_registered("Tuple{kernel, $clip, AMDGPU.Device.ROCDeviceVector{Float32, 1}, Float64}")
     @test !Ex.float64_registered("Tuple{kernel, $clip, ROCDeviceArray{Float32, 1, 1}, Float64}")
     empty!(Ex.FLOAT64_KERNELS)
     union!(Ex.FLOAT64_KERNELS, saved)

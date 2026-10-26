@@ -47,6 +47,21 @@ function _tabletype(lane, ::Type{E}, TE) where {E}
     V = lanetype(lane, valtype(E), :state)
     return TE === nothing || valtype(TE) === TE ? V : withvaltype(E, V)
 end
+# The front ends' generic device bodies (copies, clamps, the implicit steps' bodies) and
+# GPUArrays' fill, registered for the D-157 scan once a store on a device whose default float
+# is Float32 holds Float64 (a declared `lattice_storage`, or a declared T = Float64: R-F3c)
+_generic_bodies() = (_copy_body!, _clamp_body!, _clamp_field_body!, _zero_body!, _clip_body!, _be_norms_body!,
+    _be_newton_body!, _be_gate_iter_body!, _be_gate_body!, _be_update_body!, _be_shift_body!, _be_rhs_body!,
+    _be_status_body!, _bdf2_q_body!)
+function _register_float64_store!(backend, bufs)
+    (Exec.ishost(backend) || Exec.default_float(backend) === Float64) && return nothing
+    any(b -> any(a -> eltype(a) <: AbstractFloat && valtype(eltype(a)) === Float64, b), bufs) || return nothing
+    # keyed on a Float64 device array in the signature (batch 5 review N4): an instance of these
+    # bodies over Float32 arrays that reaches a Float64 scalar is still flagged
+    foreach(f -> Exec.register_float64!(string(typeof(f)), Exec.FLOAT64_ARRAY), _generic_bodies())
+    Exec.register_float64!("gpu_fill_kernel", Exec.FLOAT64_ARRAY)
+    return nothing
+end
 function FieldStore(backend, p::Program; flat = String[], E = nothing, nbuf = nothing, TE = nothing)
     ids = Int[fieldid(p, k) for k in flat]
     slots, flatbufs = state_layout(p, ids), Any[]
@@ -70,9 +85,11 @@ function FieldStore(backend, p::Program; flat = String[], E = nothing, nbuf = no
         Any[_zeros(backend, _eltype(f.storage, E, f.fixed), n) for _ in 1:nb]
     end
     tables = Any[_zeros(backend, _tabletype(t.storage, E, TE), 1) for t in p.tables]
+    _register_float64_store!(backend, bufs)
     return FieldStore(backend, bufs, ones(Int, length(p.fields)), tables, flatbufs, slots)
 end
 function FieldStore(backend, bufs, cur, tables)
+    _register_float64_store!(backend, bufs)
     FieldStore(backend, bufs, cur, tables, Any[],
         fill(1:0, length(bufs)))
 end

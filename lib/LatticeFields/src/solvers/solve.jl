@@ -297,7 +297,7 @@ function FieldSolver(exec, op::CellOperator{N}; inner = :auto, T = Float32,
     # `:auto` in the floor regime, D-C7b): its kernels are registered (D-157 carve-out, R-F3c)
     declared = T === Float64 && Exec.default_float(exec) !== Float64
     o = CompileOptions(; T, declared)
-    declared && foreach(f -> Exec.register_float64!(string(typeof(f)), "Float64"), (finish!, bottom!, gershgorin!))
+    declared && foreach(f -> Exec.register_float64!(string(typeof(f)), Exec.FLOAT64_ARRAY), (finish!, bottom!, gershgorin!, build_site!))
     bodies = Dict{String, Any}()
     praw = coef_values(op)                # coefficients are runtime parameters (P5 C7b-2)
     for k in s.kernels
