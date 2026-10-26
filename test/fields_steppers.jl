@@ -385,3 +385,180 @@ end
     @test al == fi_runB(FiLocal, dims, k; u0 = [:c => zeros(dims), :e => zeros(dims)])
     @test only(steady_fields(FiLocal(; name = :f))) == ("0 ~ -2.0c(t) + 0.5e(t)" => :c)      # (r3 N2)
 end
+
+# F3-12c in A: the QuasiSteady gain in the coupling rule, and `init = :steady`. `FiLoopK` is
+# FiLoop with the decay `kd` and the coupling `kc` as parameters: at kd = 1, kc = 0.5 the gain
+# is 1 and κ = 1 · 0.5 · 1 · 0.5 = 0.25, accepted; uniform data stay uniform (no flux faces), so
+# each MCS is u = (kc/kd) w, then w⁺ = (w − kc u)/2. A write to kd = 0.1 (κ = 2.5) is refused:
+# the transient group's rule reads the steady row's decay (every group holds the system's
+# parameters). Base (932c12ce, ~/lpwork/f3b7-nc-12c-a-base.log): the loop is refused ("does not
+# bound that gain yet") and `init` is no keyword (both testsets error).
+@potts_model FiLoopK begin
+    @kinds medium A[frozen]
+    @parameters begin
+        kd = 1.0
+        kc = 0.5
+    end
+    @variables begin
+        u(field) = 0.0
+        w(field) = 1.0
+    end
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations begin
+        D(u) ~ 0.1 * Δ(u) - kd * u + kc * w
+        D(w) ~ 0.1 * Δ(w) - w - kc * u
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+# the decay a kind table: the transient group's rule reads that table too (its phase holds the
+# system's tables after its own). Control (a327e38f, ~/lpwork/f3b7-a2.log before the fix): the
+# table was missing from the rule, its decay read 0, and the loop was refused ("`u` has no decay").
+@potts_model FiLoopT begin
+    @kinds medium A[frozen]
+    @parameters begin
+        δ[kind] = [2.0, 1.0]
+        kc = 0.5
+    end
+    @variables begin
+        u(field) = 0.0
+        w(field) = 1.0
+    end
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations begin
+        D(u) ~ 0.1 * Δ(u) - δ[kind] * u + kc * w
+        D(w) ~ 0.1 * Δ(w) - w - kc * u
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+# the cross coefficients kind tables (review r4 N3; reviewer probe ~/lpwork/f3rev9/a4.jl): the
+# steady row's `ko[kind]` (k_out) and the reader's `ki[kind]` (k_in), each read by the rule
+# from the whole system's tables; at 0.5 κ = 0.25, at 3 in one kind κ = 1.5
+@potts_model FiLoopX begin
+    @kinds medium A[frozen]
+    @parameters begin
+        ko[kind] = [0.5, 0.5]
+        ki[kind] = [0.5, 0.5]
+    end
+    @variables begin
+        u(field) = 0.0
+        w(field) = 1.0
+    end
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations begin
+        D(u) ~ 0.1 * Δ(u) - 1.0 * u + ko[kind] * w
+        D(w) ~ 0.1 * Δ(w) - w - ki[kind] * u
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@testset "F3-12c: the QuasiSteady gain in A: an accepted loop is the split recursion; a write past it is refused" begin
+    dims = (12, 10)
+    tight = DevicePCG(; rtol = 1e-12, budget = 64)
+    fs = FieldGroups(:u => QuasiSteady(; inner = tight), :w => BackwardEuler(; inner = tight))
+    integ = init(PottsProblem(FiLoopK(; name = :f), fi_op(dims), (0, 3); field_solver = fs), SequentialCPM())
+    for n in 1:3
+        step!(integ)
+        st = current_state(integ).site
+        @test maximum(abs, Array(st.w) .- 0.375^n) < 1e-9 && maximum(abs, Array(st.u) .- 0.5 * 0.375^(n - 1)) < 1e-9
+    end
+    @test_throws "window · Σ k_in · gain · k_out = 2.5 > 1" (integ.ps[:kd] = 0.1)
+    @test integ.ps[:kd] == 1.0
+    # a kind-table decay (smallest 1: κ = 0.25): accepted; a table write to 0.1 is refused
+    integ = init(PottsProblem(FiLoopT(; name = :f), fi_op(dims), (0, 3); field_solver = fs), SequentialCPM())
+    @test solve!(integ).retcode == FiRC.Success
+    @test_throws "window · Σ k_in · gain · k_out = 2.5 > 1" (integ.ps[:δ] = [0.1, 0.1])
+    # the cross coefficients in kind tables: either one past the limit is refused at build and
+    # at a write (the values unchanged); within it the loop runs
+    for (k, v) in ((:ko, [0.5, 3.0]), (:ki, [3.0, 0.5]))
+        @test_throws "window · Σ k_in · gain · k_out = 1.5 > 1" PottsProblem(FiLoopX(; name = :f, k => v), fi_op(dims), (0, 3);
+            field_solver = fs)
+    end
+    integ = init(PottsProblem(FiLoopX(; name = :f), fi_op(dims), (0, 3); field_solver = fs), SequentialCPM())
+    for k in (:ko, :ki)
+        @test_throws "> 1" (integ.ps[k] = [3.0, 3.0])
+        @test integ.ps[k] == [0.5, 0.5]
+    end
+    @test solve!(integ).retcode == FiRC.Success
+    # FiLoop (gain 10, κ = 2.5) stays refused, now with the gain
+    @test_throws "(`u` answers at once with a gain up to 10.0, from its smallest decay and its faces, times 0.5" PottsProblem(
+        FiLoop(; name = :f), fi_op(dims), (0, 3); field_solver = FieldGroups(:u => QuasiSteady(), :w => BackwardEuler()))
+end
+
+@testset "F3-12c: `init = :steady` in A: the field starts at its steady state; refusals name `init`" begin
+    dims = (12, 10)
+    tight = DevicePCG(; rtol = 1e-12, budget = 64)
+    # the steady state: one QuasiSteady MCS (σ frozen: the same inputs)
+    ref, _ = fi_runA(FiSteady, fi_op(dims), 1; field_solver = QuasiSteady(; inner = tight))
+    for fs in (BackwardEuler(; init = :steady, inner = tight), ExplicitEuler(; init = :steady), CrankNicolson(; init = :steady),
+               BDF2(; init = :steady), QuasiSteady(; init = :steady))
+        integ = init(PottsProblem(FiSteady(; name = :f), fi_op(dims), (0, 3); field_solver = fs), SequentialCPM())
+        c0 = copy(Array(current_state(integ).site.c))
+        @test maximum(abs, c0 .- ref[1]) < (fs isa BackwardEuler ? 1e-9 : 1e-5) || (println("12c A init ", fs); false)
+        @test integ.stats.fields.solves >= 1 && integ.retcode == FiRC.Default
+        s = solve!(integ)
+        @test s.retcode == FiRC.Success && maximum(abs, Array(current_state(integ).site.c) .- ref[1]) < 1e-5
+        reinit!(integ)
+        @test maximum(abs, Array(current_state(integ).site.c) .- c0) < 1e-12
+    end
+    # without it the start is the initial value
+    integ = init(PottsProblem(FiSteady(; name = :f), fi_op(dims), (0, 3); field_solver = BackwardEuler()), SequentialCPM())
+    @test all(iszero, Array(current_state(integ).site.c))
+    # a growth has no stable steady state: refused at build, naming `init`; the step alone runs
+    @test_throws "`init = :steady` of `c`: QuasiSteady: field `c`: its local derivative `∂f/∂c` = 0.5 is positive" PottsProblem(
+        FiGrow(; name = :f), fi_op(dims), (0, 3); field_solver = BackwardEuler(; init = :steady))
+    @test PottsProblem(FiGrow(; name = :f), fi_op(dims), (0, 3); field_solver = BackwardEuler()) isa PottsProblem
+    # an ODE starts from its initial values
+    @test_throws "`ode_solver`: `ExplicitEuler(; init = :steady)`: `init = :steady` starts a field group at its steady state" Potts._check_ode_dt(
+        ExplicitEuler(; init = :steady), "`ode_solver`")
+    # the canonical text keeps the default's (the guard's fingerprints), and names `init` when set
+    @test Potts._canonical(BackwardEuler()) == "BackwardEuler(inner=:auto,lower=nothing,newton=nothing,solver_T=:auto,substeps=nothing)"
+    # the PCG count of `ExplicitEuler(init = :steady)` from zero (design §5; review r4 N4): one
+    # solve, 5 iterations of the default inner (rtol 1e-6) on the CPU (the design's "6, as C7b":
+    # at most 6)
+    integ = init(PottsProblem(FiSteady(; name = :f), fi_op(dims), (0, 3); field_solver = ExplicitEuler(; init = :steady)), SequentialCPM())
+    rt = CorePotts._runtime(getfield(integ.ctx, :__fields1_start))
+    ne = Potts.LatticeFields.Solvers.iterations(rt.cache.rows[1].solver)
+    @test rt.totals.solves == 1 && 1 <= ne <= 6 || (println("r4 N4 A EE start PCG ", ne); false)
+end
+
+# a Robin face of opposite signs with a definite steady operator (decay 1 > the face's 0.8)
+@potts_model FiRobinQ begin
+    @kinds medium A[frozen]
+    @variables c(field) = 0.0
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations D(c) ~ 0.4 * Δ(c) - 1.0 * c + 0.1 * x
+    @bcs 1.0 * c(t, x, 0) + Differential(y)(c(t, x, 0)) ~ 0.5
+    @sweep Metropolis(; temperature = 1.0)
+end
+# F3-12a (design §5; review r4 N4): the F3-05 capabilities in a QuasiSteady group in A, each
+# equal to B bitwise (σ frozen): a Robin face of each sign, a field face, a mask value field;
+# and an input bound by aliasing, the CPM's moving σ, read by the next window's steady solve
+@testset "F3-12a: the solver capabilities in a QuasiSteady group in A (F3-05), equal to B bitwise" begin
+    dims, k = (12, 10), 2
+    # FiRobinN's face (α 1, β 1 at unit spacing: +0.8 on the diagonal against the decay 0.3) makes
+    # the steady operator indefinite: refused, as in B; FiRobinQ's decay 1 keeps it definite
+    @test_throws "its steady operator is indefinite (smallest eigenvalue -0.233)" PottsProblem(FiRobinN(; name = :f), fi_op(dims),
+        (0, 3); field_solver = QuasiSteady())
+    for M in (FiRobinP, FiRobinQ, FiFieldFace, FiMaskField)
+        a, integ = fi_runA(M, fi_op(dims), k; field_solver = QuasiSteady())
+        b = fi_runB(M, dims, k; u0 = [:c => zeros(dims)], inputs = M === FiMaskField ? [:kind => fi_kin(dims)] : [],
+            alg = QuasiSteady(; dt = 1.0))
+        @test a == b || (println("r4 N4 A ", M, " ", maximum(abs, a[end] .- b[end])); false)
+        @test integ.stats.fields.solves >= k && integ.retcode == FiRC.Default
+    end
+    σ = zeros(Int32, 16, 16); σ[4:7, 4:7] .= 1; σ[10:13, 9:12] .= 2
+    integ = init(PottsProblem(FiMoving(; name = :f), [ownership => σ, kind => [:A, :A]], (0, 20);
+        field_solver = QuasiSteady(), seed = 3), SequentialCPM(); save_start = false)
+    foreach(_ -> step!(integ), 1:3)
+    c3, σ3 = copy(Array(current_state(integ).site.c)), copy(Array(current_state(integ).σ))
+    step!(integ)
+    st = current_state(integ)
+    @test Array(st.σ) != σ3
+    K4 = Int32.(Array(st.σ) .!= 0)
+    @test Array(st.site.c) == fi_runB(FiMoving, (16, 16), 1; u0 = [:c => c3], inputs = [:kind => K4], alg = QuasiSteady(; dt = 1.0))[1]
+    @test Array(st.site.c) != fi_runB(FiMoving, (16, 16), 1; u0 = [:c => c3], inputs = [:kind => Int32.(σ3 .!= 0)],
+        alg = QuasiSteady(; dt = 1.0))[1]
+end

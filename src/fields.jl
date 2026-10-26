@@ -638,7 +638,11 @@ struct _FieldGroup
     substeps::Any
     fingerprint::String
     options::Any
+    rule_tables::Vector{Pair{String, Symbol}}   # the whole system's tables the substep rule reads
 end
+_FieldGroup(names, group, alg, program, masks, step, arrays, tables, params, substeps, fingerprint, options) =
+    _FieldGroup(names, group, alg, program, masks, step, arrays, tables, params, substeps, fingerprint, options,
+        Pair{String, Symbol}[])
 
 # The substep rule of a map group (F2 design §2.11): one application per field window (the
 # MCS), whatever the parameters; a map has no stability bound
@@ -788,9 +792,22 @@ function LatticeFields.Problems.steady_loop_text(t::_PottsTexts, c)
     return string("the fields ", _fieldlist(c.lf), " are in solver groups that read one another in a loop, and ",
         _fieldlist(c.qs), length(c.qs) == 1 ? " is" : " are", " solved with `QuasiSteady`: a steady field answers its ",
         "inputs at once, with the gain of its steady solve, so the lag of one field window between the groups can grow ",
-        "without bound, and the coupling rule does not bound that gain yet. Give ", _fieldlist(c.lf), " one ",
-        "`BackwardEuler` solver (one group), or step ", _fieldlist(c.qs), " with `BackwardEuler` (a fast field relaxes to its ",
-        "steady state within a few MCS)")
+        "without bound, and here the coupling rule has no bound for that gain: ", LatticeFields.Problems.steady_why_text(c.why),
+        ". Give ", _fieldlist(c.lf), " one `BackwardEuler` solver (one group), or step ", _fieldlist(c.qs), " with ",
+        "`BackwardEuler` (a fast field relaxes to its steady state within a few MCS)")
+end
+function LatticeFields.Problems.steady_gain_text(t::_PottsTexts, c)
+    x = c.x
+    via = isempty(x.qs) ? "" : string(" (`", x.qs, "` answers at once with a gain up to ", round(x.gain; sigdigits = 6),
+        ", from its smallest decay and its faces, times ", round(x.kout; sigdigits = 6), ", the sum of its reads of the loop)")
+    return string("the fields ", _fieldlist(c.lf), " are in solver groups that read one another in a loop, and ",
+        _fieldlist(c.qs), length(c.qs) == 1 ? " is" : " are", " solved with `QuasiSteady`, each group holding the others' ",
+        "values over each field window (", c.dt, " MCS): the terms of `", x.row, "` that read other groups of the loop (the ",
+        "largest: the coefficient `", _user_text(x.raw, t.cv), "` of `", x.other, "`", via, ") give window · Σ k_in · gain · ",
+        "k_out = ", round(c.κ; sigdigits = 4), " > 1, and the loop can then grow without bound. Give ", _fieldlist(c.lf),
+        " one `BackwardEuler` solver (one group), or step ", _fieldlist(c.qs), " with `BackwardEuler`, or step the fields ",
+        "over a shorter window (`repeat(n, …)` of the fields, or a smaller `mcs_duration`; window ≤ ",
+        floor(1 / x.rate; sigdigits = 4), ")")
 end
 function LatticeFields.Problems.loop_text(t::_PottsTexts, c)
     q, κ, lf = c.q, c.κ, c.lf
@@ -900,7 +917,7 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
     if length(order) > 1
         whole = _field_group_spec(c, allnames, T)
         coupling = (; bound = whole.spec.stability, groups = [String[string(n) for n in g[3]] for g in order],
-            wnames = whole.params)
+            wnames = whole.params, wtables = Pair{String, Symbol}[whole.spec.rate.tables[i].key => n for (i, n) in whole.tables])
     end
     # Cartesian indexing: the host loop hands each site its coordinates (a linear launch
     # decodes them with an integer division per site, about 3x slower on the CPU; PG-3)
@@ -943,13 +960,21 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
              LatticeFields.Compile.fingerprint_text(LatticeFields.Compile.fuse_residual(gspec.rate,
                  LatticeFields.Problems.residual_rule(solver)); T) :
              LatticeFields.Compile.fingerprint_text(fused; T)
+        # with a QuasiSteady group among several, every group's phase holds the whole system's
+        # parameters (after its own, which its launches read by slot): the steady gain in the
+        # coupling rule reads the steady rows' decay and faces, which another group's rule
+        # needs (F3-12c)
+        withqs = coupling !== nothing && any(o -> o[2] isa LatticeFields.Problems.QuasiSteady, order)
+        params = withqs ? [lg.params; [n for n in coupling.wnames if !(n in lg.params)]] : lg.params
+        rtabs = withqs ? Pair{String, Symbol}[k => n for (k, n) in coupling.wtables if !(n in last.(lg.tables))] :
+                Pair{String, Symbol}[]
         cp = coupling === nothing ? nothing :
              (; stability = coupling.bound, coupling.groups, explicit = [i == gi && _given_count(solver) !== nothing for i in eachindex(order)],
-                index = gi, whole = _WholeParams(coupling.wnames, lg.params),
+                index = gi, whole = _WholeParams(coupling.wnames, params),
                 steady = [order[i][2] isa LatticeFields.Problems.QuasiSteady for i in eachindex(order)])
         rule = LatticeFields.Problems.GroupSubsteps(gspec, solver, dt; key = fp, texts = _PottsTexts(names, (; filled = copy(cv.filled))),
             coupling = cp)
-        push!(groups, _FieldGroup(names, group, solver, prog, mplan, splan, arrays, lg.tables, lg.params, rule, fp, opts))
+        push!(groups, _FieldGroup(names, group, solver, prog, mplan, splan, arrays, lg.tables, params, rule, fp, opts, rtabs))
     end
     return groups
 end
@@ -1014,7 +1039,7 @@ function _field_phases(c::CompiledPottsSystem, T, spec::SolverSpec)
         log === nothing || push!(log, Expr(:field_program, g.fingerprint, string(g.arrays), string(g.params),
             string(g.tables), _canonical_value(_least(g.substeps)), string(_bounded(g.substeps))))
         ph = CorePotts.FieldPhase{Symbol(:__fields, j)}(g.group, g.alg, g.arrays; g.tables, g.params,
-            substeps = g.substeps, dt, period = Float64(_p(c.sys, :sweep).mcs_duration), g.options, T)
+            substeps = g.substeps, dt, period = Float64(_p(c.sys, :sweep).mcs_duration), g.options, T, g.rule_tables)
         push!(steps, ph)
         # the at-init phase: the masked-condition clamp (one substep of length zero; it also
         # evaluates the group's aux fields). For a group with aux fields (`K ~ rhs`) and no
@@ -1022,12 +1047,25 @@ function _field_phases(c::CompiledPottsSystem, T, spec::SolverSpec)
         # value (§3.12, F3 review S1): a group with no state takes its own step (0 substeps); a
         # rate group with state its `aux:` kernels alone, which never write the state (review r2
         # N1: no update rule, no `lower` clip); a map group none (it would apply the map)
+        mcs = Float64(_p(c.sys, :sweep).mcs_duration)
+        start = LatticeFields.Problems.starts_steady(g.alg)
         if !isempty(g.masks.launches) || g.substeps isa _AuxSteps
             push!(clamps, CorePotts.field_clamp(ph))
-        elseif _has_aux(g) && !(g.substeps isa _MapSteps)
+        end
+        # the steady start (`init = :steady`, F3-12c): the group's steady state solved once by
+        # `QuasiSteady` on the step's arrays, after the clamp (the masked values hold), then its
+        # aux fields evaluated from it
+        if start
+            qa = LatticeFields.Problems.steady_start(g.alg, dt)
+            rule = LatticeFields.Problems.StartSubsteps(LatticeFields.Problems.GroupSubsteps(g.group.spec, qa, dt;
+                key = g.fingerprint, texts = g.substeps.texts), String[string(n) for n in g.names])
+            push!(clamps, CorePotts.FieldPhase{Symbol(:__fields, j, :_start)}(g.group, qa, g.arrays; g.tables, g.params,
+                substeps = rule, dt, period = mcs, g.options, T, start = true))
+        end
+        if _has_aux(g) && !(g.substeps isa _MapSteps) && !(g.substeps isa _AuxSteps) &&
+           (start || isempty(g.masks.launches))
             push!(clamps, CorePotts.FieldPhase{Symbol(:__fields, j, :_aux)}(g.group, ExplicitEuler(), g.arrays; g.tables,
-                g.params, substeps = _AuxSteps(), dt, period = Float64(_p(c.sys, :sweep).mcs_duration), g.options, T,
-                aux_only = true))
+                g.params, substeps = _AuxSteps(), dt, period = mcs, g.options, T, aux_only = true))
         end
     end
     return steps, (fill === nothing ? clamps : Any[fill; clamps])
@@ -1036,13 +1074,13 @@ end
 # At build: each field phase's substep count at the problem's parameters (the policy's
 # refusals, and its warning for an explicit count the bound does not cover)
 function _check_field_substeps(f, p)
-    for e in f.phases.mcs, t in (e isa CorePotts.Repeat ? e.entries : (e,))
+    # (the steady starts too, `init = :steady`: their steady refusals, F3-12c)
+    for e in (f.phases.mcs..., f.phases.at_init), t in (e isa CorePotts.Repeat ? e.entries : (e,))
         t isa Tuple || continue
         for ph in t
-            ph isa CorePotts.FieldPhase && !ph.init && ph.substeps isa LatticeFields.Problems.GroupSubsteps || continue
-            tabs = Pair{String, Vector{Float64}}[ph.program.tables[i].key => Float64.(vec(collect(getproperty(p, name))))
-                                                 for (i, name) in ph.tables]
-            ph.substeps(LatticeFields.Problems.with_tables(Float64[CorePotts._praw(ph, p)...], tabs))
+            ph isa CorePotts.FieldPhase && !ph.init &&
+                ph.substeps isa Union{LatticeFields.Problems.GroupSubsteps, LatticeFields.Problems.StartSubsteps} || continue
+            ph.substeps(LatticeFields.Problems.with_tables(Float64[CorePotts._praw(ph, p)...], CorePotts._table_values(ph, p)))
         end
     end
     return nothing

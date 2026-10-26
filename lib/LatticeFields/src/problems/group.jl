@@ -251,6 +251,28 @@ bound does not know the cross terms.
 lagged_coupling(stability, groups, p; within = nothing) = nothing
 
 """
+    steady_loop_rates(stability, groups, p, steady, loops) -> Union{Nothing, Vector}
+
+The QuasiSteady gain in the coupling rule (F3-12c, F3 design §3.6): for the field groups
+`groups` at parameters `p`, with `steady[g]` (group `g` is solved by `QuasiSteady`) and the
+loops of the read graph (`group_loops`), per group `(; rate, row, other, text, raw, gain, kout,
+qs, why)`. A steady group answers its lagged inputs at once with gain `G` (a bound on the norm
+of its steady solve, from its smallest decay and its Dirichlet and Robin faces; a mask does not
+count) times `kout`, the largest row sum of its reads of the loop's other groups. For a group
+of a loop with a steady group that is not steady itself, `rate` is the largest over its rows
+of `Σ k_in · G · kout` over its reads of steady groups plus `Σ |a|` over its reads of the
+loop's other groups (`κ_QS = dt · Σ k_in · k_out / s_min` when the decay sets the gain), with
+the worst term (`row`, `other`, `text`, `raw`, and `qs`, `gain`, `kout` when it reads a steady
+field). `why` is `nothing` or why the rule has no bound: `(:island, k, _)` no decay and no face
+anchor, `(:robin, k, _)` a Robin face with a negative diagonal, `(:steady, k, o)` a steady row
+that reads a steady field of the loop, `(:unseen, k, _)` a term the bound cannot see,
+`(:coef, k, o)` a coefficient with no finite bound, `(:steady_only, _, _)` a loop of steady
+groups only. `nothing` (the default): the bound does not know the gain (every such loop is
+refused).
+"""
+steady_loop_rates(stability, groups, p, steady, loops) = nothing
+
+"""
     group_loops(parts) -> Vector{Vector{Int}}
 
 The loops of the group read graph of `parts` (from [`lagged_coupling`](@ref)): per group, the
@@ -379,9 +401,11 @@ loop of the group read graph ([`group_loops`](@ref)) needs `κ = dt · rate ≤ 
 of groups in its loop ([`lagged_coupling`](@ref)); past it the problem is refused with the
 routes (`loop_text`). A cross coefficient in a loop with no finite bound is refused with an
 automatic count and warns once (`key(why)`) with an explicit one; a bound that does not know
-the cross terms is the same for every group. `span` is the time span (front end B's route). `steady[g]`: group `g` is solved by
-`QuasiSteady`; a loop with such a group is refused (`steady_loop_text`) until the rule bounds
-a steady group's gain.
+the cross terms is the same for every group. `span` is the time span (front end B's route).
+`steady[g]`: group `g` is solved by `QuasiSteady`. A loop with such a group takes its gain
+([`steady_loop_rates`](@ref), F3-12c): each group of the loop that is not steady needs
+`κ = dt · rate ≤ 1` with the steady reads through the gain (`steady_gain_text` past it), and a
+loop whose gain the rule does not bound is refused (`steady_loop_text`).
 """
 function check_coupling(stability, groups, explicit, pp, dt::Real; check = eachindex(groups), key = identity,
         texts::PolicyTexts = ProblemTexts(), span = nothing, steady = nothing)
@@ -396,22 +420,29 @@ function check_coupling(stability, groups, explicit, pp, dt::Real; check = eachi
     end
     loops = group_loops(parts)
     all(g -> isempty(loops[g]), check) && return nothing
-    # a QuasiSteady group answers its inputs at once, with the gain of its steady solve, which
-    # `κ = dt · rate` does not bound: a loop with one is refused until the rule takes that gain
-    # (F3-12c: `κ_QS = dt · Σ k_in k_out / s_min`; batch 4 review r2 M1)
-    if steady !== nothing
+    # a QuasiSteady group answers its inputs at once, with the gain of its steady solve: its
+    # loop takes that gain, `κ_QS = dt · Σ k_in · G · k_out` (F3-12c; batch 4 review r2 M1), and
+    # is refused when the rule has no bound for it
+    withqs(g) = steady !== nothing && !isempty(loops[g]) && any(h -> steady[h], loops[g])
+    if any(withqs, check)
+        sr = steady_loop_rates(stability, keys, pp, steady, loops)
         for g in check
+            withqs(g) || continue
             l = loops[g]
-            (isempty(l) || !any(h -> steady[h], l)) && continue
             c = (; ctx..., loops, g, lf = reduce(vcat, keys[l]), qs = reduce(vcat, keys[[h for h in l if steady[h]]]))
-            throw(ArgumentError(steady_loop_text(texts, c)))
+            sr === nothing && throw(ArgumentError(steady_loop_text(texts, (; c..., why = (:unknown, "", "")))))
+            x = sr[g]
+            x.why === nothing || throw(ArgumentError(steady_loop_text(texts, (; c..., why = x.why))))
+            steady[g] && continue                   # (checked through the groups that read it)
+            κ = dt * x.rate
+            κ > 1 + _COUPLING_RTOL && throw(ArgumentError(steady_gain_text(texts, (; c..., x, κ))))
         end
     end
     # the rates over the reads inside each group's loop: a read of a group outside it is a
     # one-way source of the loop, which cannot feed growth back (round 3)
     parts = lagged_coupling(stability, keys, pp; within = loops)
     for g in check
-        isempty(loops[g]) && continue
+        (isempty(loops[g]) || withqs(g)) && continue
         q = parts[g]
         κ = dt * q.rate
         c = (; ctx..., parts, loops, g, q, κ, lf = reduce(vcat, keys[loops[g]]))
@@ -501,14 +532,51 @@ function coupling_unbounded_text(t::ProblemTexts, c; refuse::Bool)
         " has no bound (the coefficient `", q.text, "` of `", q.other, "` in the rate of `", q.row,
         "`): the count is the user's")
 end
-# the refusal of a loop with a QuasiSteady group, with its routes
+# why the coupling rule has no bound for a loop with a QuasiSteady group (`steady_loop_rates`'s
+# `why`), in words both front ends share
+function steady_why_text(why)
+    w, k, o = why
+    w === :island && return string("`", k, "` has no decay and no Dirichlet or Robin face, so its steady solve has no ",
+        "bounded gain (a mask's fixed value moves with the inputs, so it does not bound it)")
+    w === :robin && return string("`", k, "` has a Robin face whose α and β have opposite signs, whose gain the rule ",
+        "does not bound")
+    w === :steady && return string("the steady row of `", k, "` reads the steady field `", o, "` of the loop, and the ",
+        "rule bounds the gain of a steady field that reads only fields that step")
+    w === :unseen && return string("the rate of `", k, "` has a term the stability bound cannot see, so the gain of ",
+        "the loop has no bound")
+    w === :coef && return string("a coefficient in the rate of `", k, "` has no finite bound at these parameters")
+    w === :steady_only && return "every group of the loop is steady, so no window damps the lag"
+    return "the stability bound does not know the gain of a steady solve"
+end
+# the refusal of a loop with a QuasiSteady group whose gain the rule does not bound, with its routes
 function steady_loop_text(t::ProblemTexts, c)
     return string("FieldGroups: the QuasiSteady group", length(c.qs) == 1 ? " of " : "s of ", _fieldlist(c.qs),
-        " is in a loop of groups that read one another (", _fieldlist(c.lf), "): a steady field answers its inputs at ",
+        length(c.qs) == 1 ? " is" : " are", " in a loop of groups that read one another (", _fieldlist(c.lf), "): a steady field answers its inputs at ",
         "once, with the gain of its steady solve, so the lag of one window between the groups can grow without bound, ",
-        "and the coupling rule does not bound that gain yet. Step ", _fieldlist(c.lf), " in one `BackwardEuler` group, ",
-        "or step ", _fieldlist(c.qs), " with `BackwardEuler` (a fast field relaxes to its steady state within a few ",
-        "windows)")
+        "and here the coupling rule has no bound for that gain: ", steady_why_text(c.why), ". Step ", _fieldlist(c.lf),
+        " in one `BackwardEuler` group, or step ", _fieldlist(c.qs), " with `BackwardEuler` (a fast field relaxes to its ",
+        "steady state within a few windows)")
+end
+# the gain of a loop with a QuasiSteady group in words: the worst term and the gain it reads through
+function steady_gain_words(c)
+    x = c.x
+    via = isempty(x.qs) ? "" : string(" (`", x.qs, "` answers at once with a gain up to ", _num(x.gain),
+        ", from its smallest decay and its faces, times ", _num(x.kout), ", the sum of its reads of the loop)")
+    return string("the terms in the rate of `", x.row, "` that read other groups of the loop (the largest: the ",
+        "coefficient `", x.text, "` of `", x.other, "`", via, ") give κ = dt · Σ k_in · gain · k_out = ",
+        round(c.κ; sigdigits = 4), " > 1")
+end
+# the refusal of a loop with a QuasiSteady group past the limit, with its routes
+function steady_gain_text(t::ProblemTexts, c)
+    lim = floor(1 / c.x.rate; sigdigits = 4)
+    span = c.span
+    n = span === nothing ? 0 : max(1, ceil(Int, span * c.x.rate * (1 - _COUPLING_RTOL)))
+    return string("FieldGroups: the QuasiSteady group", length(c.qs) == 1 ? " of " : "s of ", _fieldlist(c.qs),
+        length(c.qs) == 1 ? " is" : " are", " in a loop of groups that read one another (", _fieldlist(c.lf), "), each from the others' arrays, held ",
+        "over each window dt = ", _num(c.dt), ": ", steady_gain_words(c), ", and the loop can then grow without bound. ",
+        "Step ", _fieldlist(c.lf), " in one `BackwardEuler` group, or step ", _fieldlist(c.qs), " with `BackwardEuler`, ",
+        "or use a smaller dt", span === nothing ? "" : string(" that divides the time span ", _num(span)), ": dt ≤ ", lim,
+        span === nothing ? "" : string(", such as dt = ", _num(span), "/", n))
 end
 # the refusal of a loop past the limit, with its routes
 function loop_text(t::ProblemTexts, c)

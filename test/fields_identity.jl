@@ -480,7 +480,8 @@ function implicit_cases()
         [t ∈ Interval(0.0, 0.4), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [ce], [Dc, k]; name = :i)
     prob = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
     out = Tuple{String, Any, Int}[]
-    for alg in (LatticePDE.BackwardEuler(; dt = 0.1), LatticePDE.CrankNicolson(; dt = 0.1), LatticePDE.BDF2(; dt = 0.1))
+    for alg in (LatticePDE.BackwardEuler(; dt = 0.1), LatticePDE.CrankNicolson(; dt = 0.1), LatticePDE.BDF2(; dt = 0.1),
+                LatticePDE.QuasiSteady(; dt = 0.1))
         s = solve(prob, alg)
         push!(out, ("GiB " * string(nameof(typeof(alg))), s.u[end], s.substeps))
     end
@@ -493,9 +494,9 @@ const GD_B = ["B Robin owned", "B Robin ODE rhs", "B site diffusion owned", "B D
 # hard set's operating point) under BackwardEuler, CrankNicolson and BDF2 (`lower = 0`): the
 # fingerprints, `n` and the digests after 5 MCS; and one owned B system under each (`GdB`):
 # the final state's digest and the substep count. Recorded at the guard commit (new records;
-# no record moved).
+# no record moved). F3-12c (review r2 N3, the same OK): `QuasiSteady` in both (new records).
 const GD_IMPLICIT = [("GiMerks BackwardEuler", BackwardEuler(lower = 0.0)), ("GiMerks CrankNicolson", CrankNicolson(lower = 0.0)),
-    ("GiMerks BDF2", BDF2(lower = 0.0))]
+    ("GiMerks BDF2", BDF2(lower = 0.0)), ("GiMerks QuasiSteady", QuasiSteady())]
 function gd_implicit!(out)
     for (label, fs) in GD_IMPLICIT
         pre = "$label|Float64"

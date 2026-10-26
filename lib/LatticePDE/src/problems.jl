@@ -449,6 +449,9 @@ struct StabilityBound
     expanded::Vector{String}              # the `ifelse` terms bounded arm by arm
     inputs::Vector{String}                # the inputs an index reads (`Problems.bound_inputs`)
     crossunseen::Vector{String}           # the rows with an unseen term that reads another unknown field
+    dims::Vector{Int}                     # the lattice's sites per axis (the steady gain, F3-12c)
+    anchors::Vector{Any}                  # per row, its faces `(axis, side, α, β)`, or `nothing` on an
+                                          # irregular domain (whose edges may cut a face off)
 end
 # the input keys of an interval tree
 function _tree_inputs!(acc, t)
@@ -506,7 +509,8 @@ function Problems.restrict_bound(b::StabilityBound, keep)
     ks = b.keys[idx]
     mine(t) = any(k -> startswith(t, "$k: "), ks)
     return StabilityBound(b.invh2, ks, rows, b.faces[idx], [k for k in b.unbounded if k in ks],
-        filter(mine, b.terms), filter(mine, b.expanded), _row_inputs(rows), [k for k in b.crossunseen if k in ks])
+        filter(mine, b.terms), filter(mine, b.expanded), _row_inputs(rows), [k for k in b.crossunseen if k in ks], b.dims,
+        b.anchors[idx])
 end
 
 # The lagged coupling of field groups (`Problems.lagged_coupling`; review of F2-06): per
@@ -555,6 +559,137 @@ function Problems.lagged_coupling(b::StabilityBound, groups, p; within = nothing
         end
     end
     foreach(q -> sort!(q.reads), out)
+    return out
+end
+
+# The steady gain of row `i` (F3-12c; F3 design §3.6, S4 and S-b): a bound on ‖A⁻¹‖∞ of its
+# steady operator `A = s − ∇·(D ∇)` at the worst case, the smallest shift `s` (decay) over the
+# reachable values, the smallest diffusion `D`, its Dirichlet and Robin faces, and no mask (a
+# mask moves with σ, and an anchor left out only raises the gain). `A` is an M-matrix, so
+# ‖A⁻¹‖∞ = max A⁻¹1. For an axis `a` with a face anchor, `w_a = (s + A_a)⁻¹ 1` (one tridiagonal
+# along `a`) is constant along the other axes, whose faces only add a diagonal ≥ 0 there, so
+# `A w_a ≥ 1` and `A⁻¹1 ≤ w_a`: the gain is at most the smallest `max w_a`, and `1/s` with a
+# shift. `Inf` when nothing bounds it (no decay and no face anchor: a mask anchor does not
+# count); `nothing` when a Robin face has a negative diagonal (`A` is no M-matrix there).
+function _steady_gain(b::StabilityBound, i, p)
+    an = b.anchors[i]
+    g = 0.0
+    for r in b.rows[i]
+        s = max(0.0, -sum((_hi(f, p) for f in r.linear); init = 0.0))
+        D = sum((_lo(f, p) for f in r.diffusion); init = 0.0) +
+            sum((max(_lo(f[1], p), 0.0) * max(_lo(f[2], p), 0.0) for f in r.sitediffusion); init = 0.0)
+        best = s > 0 ? 1 / s : Inf
+        if an !== nothing && D > 0
+            for a in unique(first.(an))
+                w, n = D * b.invh2[a], b.dims[a]
+                d = fill(s + 2w, n)
+                anchored = false
+                for (side, k) in ((-1, 1), (1, n))
+                    j = findfirst(x -> x[1] == a && x[2] == side, an)
+                    α, β = j === nothing ? (0.0, 0.0) : (_cv(an[j][3], p), _cv(an[j][4], p))
+                    q = α == 0 ? 0.0 : α / (α / 2 + β)      # the ghost rule's diagonal (Dirichlet 2, no flux 0)
+                    q < 0 && return nothing
+                    anchored |= q > 0
+                    d[k] += w * q - w
+                end
+                anchored && (best = min(best, maximum(_tridiag_ones(d, w))))
+            end
+        end
+        g = max(g, best)
+    end
+    return g
+end
+# the solution of the tridiagonal system with diagonal `d`, off-diagonal `−w` and right side 1
+function _tridiag_ones(d::Vector{Float64}, w::Float64)
+    n = length(d)
+    c, x = zeros(n), ones(n)
+    c[1], x[1] = -w / d[1], 1 / d[1]
+    for k in 2:n
+        m = d[k] + w * c[k - 1]
+        k < n && (c[k] = -w / m)
+        x[k] = (1 + w * x[k - 1]) / m
+    end
+    for k in (n - 1):-1:1
+        x[k] -= c[k] * x[k + 1]
+    end
+    return x
+end
+
+# The QuasiSteady gain in the coupling rule (`Problems.steady_loop_rates`, F3-12c; design
+# §3.6): a steady group `q` answers its lagged inputs at once, `δq ≤ G_q K_q δu` with `G_q` its
+# gain (`_steady_gain`, the worst row) and `K_q` the largest row sum of its reads of the loop's
+# other groups. A group `g` of the loop that is not steady reads `q` with coefficients `k_in`,
+# so its lagged rate is `Σ k_in G_q K_q` over its reads of steady groups plus its own reads of
+# the other groups (`κ_QS = dt Σ k_in k_out / s_min` when the gain is the decay's). The rule
+# does not bound a steady group that reads a steady field of the loop (its own group's, or
+# another steady group's), nor a term it cannot see: `why` names that, and the loop is refused.
+function Problems.steady_loop_rates(b::StabilityBound, groups, p, steady, loops)
+    n = length(groups)
+    gof = Dict{String, Int}(k => g for (g, ks) in enumerate(groups) for k in ks)
+    s4 = 4 * sum(b.invh2)
+    rowof = Dict{String, Int}(k => i for (i, k) in enumerate(b.keys))
+    terms(r) = Iterators.flatten((((f, j, f(p)) for (f, j) in r.crosslinear if j != 0),
+                                  ((f, j, f(p) * (s4 + _face_excess(b, j, p))) for (f, j) in r.crossdiffusion if j != 0)))
+    G, K = zeros(n), zeros(n)
+    why = Any[nothing for _ in 1:n]
+    for h in 1:n
+        steady[h] && !isempty(loops[h]) || continue
+        for k in groups[h]
+            i = get(rowof, k, 0)
+            i == 0 && (why[h] = (:unseen, k, ""); continue)
+            k in b.crossunseen && why[h] === nothing && (why[h] = (:unseen, k, ""))
+            gi = _steady_gain(b, i, p)
+            gi === nothing && why[h] === nothing && (why[h] = (:robin, k, ""))
+            gi === nothing || (G[h] = max(G[h], gi))
+            for r in b.rows[i]
+                tot = 0.0
+                for (f, j, v) in terms(r)
+                    hj = get(gof, b.keys[j], 0)
+                    (hj == 0 || !(hj in loops[h])) && continue
+                    if steady[hj]
+                        why[h] === nothing && (why[h] = (:steady, k, b.keys[j]))
+                    else
+                        tot += v
+                    end
+                end
+                isfinite(tot) || why[h] !== nothing || (why[h] = (:coef, k, ""))
+                K[h] = max(K[h], tot)
+            end
+        end
+        isfinite(G[h]) || why[h] !== nothing || (why[h] = (:island, first(groups[h]), ""))
+    end
+    out = map(1:n) do g
+        l = loops[g]
+        base = (; rate = 0.0, row = "", other = "", text = "", raw = "", gain = 0.0, kout = 0.0, qs = "", why = nothing)
+        (isempty(l) || !any(h -> steady[h], l)) && return base
+        all(h -> steady[h], l) && return (; base..., why = (:steady_only, "", ""))
+        w = something((why[h] for h in l if steady[h] && why[h] !== nothing)..., Some(nothing))
+        w === nothing || return (; base..., why = w)
+        steady[g] && return base
+        any(k -> k in b.crossunseen, groups[g]) && return (; base..., why = (:unseen, first(k for k in groups[g] if k in b.crossunseen), ""))
+        q = base
+        for k in groups[g]
+            i = get(rowof, k, 0)
+            i == 0 && continue
+            for r in b.rows[i]
+                tot, worst, best = 0.0, -Inf, nothing
+                for (f, j, v) in terms(r)
+                    hj = get(gof, b.keys[j], 0)
+                    (hj == 0 || hj == g || !(hj in l)) && continue
+                    c = steady[hj] ? v * G[hj] * K[hj] : v
+                    tot += c
+                    (best === nothing || (isfinite(worst) && !(c <= worst))) && (worst = c; best = (f, j, hj))
+                end
+                best === nothing && continue
+                isfinite(q.rate) && !(tot <= q.rate) || continue
+                f, j, hj = best
+                q = (; q..., rate = tot, row = k, other = b.keys[j], text = _coef_text(f.text), raw = f.text,
+                     gain = steady[hj] ? G[hj] : 0.0, kout = steady[hj] ? K[hj] : 0.0, qs = steady[hj] ? b.keys[j] : "")
+            end
+        end
+        isfinite(q.rate) || return (; q..., why = (:coef, q.row, q.other))
+        return q
+    end
     return out
 end
 
@@ -699,6 +834,7 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
     unknownops = [staterefs; auxops]
     rows = Vector{RowTerms}[]
     faces, unbounded, terms, expanded = Vector{Tuple{Int, Coef, Coef}}[], String[], String[], String[]
+    anchors = Any[]
     crossunseen = String[]
     # the array parameters (tables) by their symbols: a coefficient may read them
     tabs = Dict{Any, String}(unwrap(q) => string(unwrap(q)) for q in _params(sys)
@@ -787,9 +923,13 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
         push!(rows, alts)
         push!(faces, [(Int(r.axis), r.alpha, r.beta) for r in cf.program.rules
                       if r isa FaceRule && cf.program.fields[r.field].key == k])
+        mine(r) = cf.program.fields[r.field].key == k
+        push!(anchors, any(r -> r isa DomainEdgeRule && mine(r), cf.program.rules) ? nothing :
+                       [(Int(r.axis), Int(r.side), r.alpha, r.beta) for r in cf.program.rules if r isa FaceRule && mine(r)])
     end
     return StabilityBound([1 / h^2 for h in cf.program.spacing], ks, rows, faces,
-        sort!(unique!(unbounded)), unique!(terms), unique!(expanded), _row_inputs(rows), sort!(unique!(crossunseen)))
+        sort!(unique!(unbounded)), unique!(terms), unique!(expanded), _row_inputs(rows), sort!(unique!(crossunseen)),
+        collect(Int, cf.program.hierarchy[1].grid.dims), anchors)
 end
 
 # initial values of the state fields, flat in `state` order, evaluated at cell centers in

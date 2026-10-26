@@ -361,6 +361,7 @@ mutable struct FieldIntegrator{P <: FieldProblem, A, S <: FieldStore, RT <: Tupl
     retcode::SciMLBase.ReturnCode.T
     aux::Any                            # the aux kernels bound at both parities, or nothing (F3-00)
     auxu::Vector{Vector{T}}             # the aux fields at each save (flat, `_aux_layout`)
+    starts::Vector{Any}                 # the steady starts of the groups with `init = :steady` (F3-12c)
 end
 
 
@@ -463,7 +464,13 @@ ends): `QuasiSteady` at `alg`'s window, with its `inner` and `solver_T` when it 
 """
 steady_alg(a) = a isa QuasiSteady ? a :
                 QuasiSteady(; dt = _alg_dt(a), inner = a isa ImplicitAlgorithm ? a.inner : :auto,
-                    solver_T = a isa ImplicitAlgorithm ? a.solver_T : :auto)
+                    solver_T = a isa ImplicitAlgorithm ? a.solver_T : :auto, init = starts_steady(a) ? :steady : nothing)
+"""
+    starts_steady(alg) -> Bool
+
+Whether `alg` has `init = :steady`: its group starts at its steady state ([`steady_start`](@ref)).
+"""
+starts_steady(a) = hasproperty(a, :init) && getproperty(a, :init) === :steady
 # a steady row's algorithm: `QuasiSteady` only (F3-12b)
 function _check_steady(prob::FieldProblem, key, a)
     a isa QuasiSteady && return nothing
@@ -603,10 +610,80 @@ function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; saveat = (),
     integ = FieldIntegrator(prob, alg, st, rts, copy(prob.p), pgood,
         eltype(prob.tables)[k => copy(v) for (k, v) in prob.tables], t0, 0, dt,
         ms[1], nsteps, _clock(prob) === nothing ? 0 : _per(dt, _clock(prob)), save, Float64[], Vector{_ueltype(st, E)}[],
-        SciMLBase.ReturnCode.Success, aux, Vector{_ueltype(st, E)}[])
+        SciMLBase.ReturnCode.Success, aux, Vector{_ueltype(st, E)}[], Any[])
+    # (behind a barrier: an `init` with no steady start does not compile the steady policy)
+    any(g -> starts_steady(g[1]), groups) && Base.inferencebarrier(_steady_starts!)(integ, groups)
     0 in save && _save!(integ)
     return integ
 end
+
+# The steady starts (`init = :steady` on a group's algorithm, F3-12c): before the first window
+# each such group's steady state `0 = r(u)` is solved once by `QuasiSteady` (`steady_start`),
+# in group order (the QuasiSteady groups first), at the start time from the state as it is, on
+# a runtime of its own bound to the same arrays (`ends_in = :slot1`: the fields in slot 1,
+# where the steps start). Its status is read at once: a failure becomes `integ.retcode` and
+# the run does not step. Bound again at each `reinit!` (the parameters may have changed).
+function _steady_starts!(integ::FieldIntegrator, groups)
+    prob, st, E = integ.prob, integ.store, eltype(integ.prob)
+    empty!(integ.starts)
+    for (a, ks) in groups
+        starts_steady(a) || continue
+        qa = steady_start(a, integ.dt)
+        rt = _start_bind(ks) do
+            # (the steady refusals first: a growth, no unique steady state)
+            substeps(prob, qa, integ.pgood; tables = integ.tables, inputs = _bound_inputs(integ),
+                stability = restrict_bound(prob.stability, ks), fields = ks)
+            Base.inferencebarrier(bind_group)(prob.group, qa, st, integ.pgood; fields = ks, n = 1,
+                dt = integ.dt, c = zero(E), ends_in = :slot1, backend = prob.backend, options = prob.options, V = valtype(E))
+        end
+        rt.totals.where = StartText()
+        compile!(prob.backend, rt)
+        push!(integ.starts, rt)
+        code = _worse(advance!(rt, (_time(integ), _tick(integ))), check_status!(rt))
+        code == SciMLBase.ReturnCode.Success || !_running(integ.retcode) || (integ.retcode = code)
+        _running(code) || break
+    end
+    return nothing
+end
+"""
+    steady_start(alg, dt) -> QuasiSteady
+
+The steady solve of `alg`'s `init = :steady` (F3-12c, both front ends): `QuasiSteady` at the
+window `dt` with `alg`'s `inner` and `solver_T` (and `newton` for a `QuasiSteady` group);
+`inner = :auto` takes `DevicePCG` to `rtol = 1e-6` within 64 iterations (`STEADY_INNER`), the
+host-checked steady solve of a system with no time.
+"""
+steady_start(a, dt) = QuasiSteady(; dt, newton = a isa QuasiSteady ? a.newton : nothing,
+    inner = a isa ImplicitAlgorithm && a.inner !== :auto ? a.inner : STEADY_INNER,
+    solver_T = a isa ImplicitAlgorithm ? a.solver_T : :auto)
+"""
+    StartSubsteps(rule, keys)
+
+The substep rule of a steady start in front end A (`init = :steady`, F3-12c): `rule(pp)` (the
+`QuasiSteady` policy: its steady refusals), whose refusal names `init` and its route.
+"""
+struct StartSubsteps{R}
+    rule::R
+    keys::Vector{String}
+end
+(s::StartSubsteps)(pp) = _start_bind(() -> s.rule(pp), s.keys)
+# a steady start's refusal (a growth, no unique steady state) names `init` and its route
+function _start_bind(f, ks)
+    try
+        return f()
+    catch err
+        err isa ArgumentError || rethrow()
+        throw(ArgumentError(string("`init = :steady` of ", _fieldlist(ks), ": ", err.msg, "; or leave `init` out (the ",
+            "run starts from the initial state)")))
+    end
+end
+"""
+    StartText()
+
+The steady start in a runtime's messages (`totals.where`): "the steady start (`init = :steady`, t = …)".
+"""
+struct StartText end
+(::StartText)(w, t1) = string("the steady start (`init = :steady`, t = ", round(t1; sigdigits = 6), ")")
 
 # The aux kernels of a problem alone (`K ~ rhs`, F3 design §3.12), bound at both slot parities
 # to the parameters `p`, or `nothing` when it has none. They run before each save and each
@@ -715,6 +792,8 @@ function SciMLBase.reinit!(integ::FieldIntegrator, u0 = integ.prob.u0)
     _rerun_init!(integ, integ.pgood)
     foreach(reset!, integ.runtimes)
     foreach(clear_status!, integ.runtimes)          # a new run: no failure, no counters
+    # the steady starts again, at the current parameters
+    isempty(integ.starts) || Base.inferencebarrier(_steady_starts!)(integ, [(rt.alg, rt.keys) for rt in integ.runtimes])
     0 in integ.save && _save!(integ)
     return integ
 end
@@ -766,7 +845,7 @@ The solver counters of an owned run (F3 design §3.3), summed over its groups' s
 budget hits). All zero for the explicit algorithms.
 """
 function field_stats(integ::FieldIntegrator)
-    tot(f) = sum((getfield(rt.totals, f) for rt in integ.runtimes); init = Int64(0))
+    tot(f) = sum((getfield(rt.totals, f) for rt in Iterators.flatten((integ.runtimes, integ.starts))); init = Int64(0))
     return (; solves = tot(:solves), budget = tot(:budget), floor = tot(:floor), newton_budget = tot(:newton_budget))
 end
 

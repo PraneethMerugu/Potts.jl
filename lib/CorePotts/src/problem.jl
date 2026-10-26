@@ -388,6 +388,7 @@ function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, save
     _each(e -> precompile(_run_entry!, (typeof(integ), typeof(e))), prob.f.phases.mcs)
     integ.stats.launches += _run_phases(fresh ? prob.f.phases.at_init : _derived(prob.f.phases.at_init), integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, integ.stats)
+    _start_failed!(integ)
     _each(cb -> cb.initialize(cb, integ.state, integ.t, integ), integ.callbacks)
     save_start && _save!(integ)
     return integ
@@ -535,6 +536,9 @@ function _save!(integ::PottsIntegrator)
     return nothing
 end
 
+# a steady start (`init = :steady`, F3-12c) that failed ends the run before its first MCS
+_start_failed!(integ) = (integ.stats.fields.code == SciMLBase.ReturnCode.ConvergenceFailure &&
+    (integ.retcode = SciMLBase.ReturnCode.ConvergenceFailure); nothing)
 function _check_status!(integ::PottsIntegrator)
     _status_failure!(integ, _model_status(integ.stats, integ.state.model))
     # the field groups' status words (on the host they are read after every window already)

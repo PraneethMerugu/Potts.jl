@@ -49,10 +49,17 @@ function _check_field_solver(s, what; map::Bool = false)
         s isa LatticeFields.Problems.QuasiSteady ? "" : ", split into `substeps`", "); leave `dt` out")))
     return s
 end
-# an ODE's explicit Euler steps over the MCS window too: a `dt` is refused
-_check_ode_dt(s, what) = s isa ExplicitEuler && s.dt !== nothing ? throw(ArgumentError(string(
-    "$what: `ExplicitEuler(; dt = ", s.dt, ")`: an ODE steps over the MCS window (`mcs_duration`, split into ",
-    "`substeps`); leave `dt` out"))) : s
+# an ODE's explicit Euler steps over the MCS window too: a `dt` is refused; `init = :steady`
+# is a field group's steady start (F3-12c): an ODE starts from its initial values
+function _check_ode_dt(s, what)
+    s isa ExplicitEuler && s.dt !== nothing && throw(ArgumentError(string(
+        "$what: `ExplicitEuler(; dt = ", s.dt, ")`: an ODE steps over the MCS window (`mcs_duration`, split into ",
+        "`substeps`); leave `dt` out")))
+    s isa ExplicitEuler && s.init !== nothing && throw(ArgumentError(string(
+        "$what: `ExplicitEuler(; init = ", repr(s.init), ")`: `init = :steady` starts a field group at its steady state; ",
+        "an ODE starts from its initial values (`@variables x(t) = x0`); leave `init` out")))
+    return s
+end
 
 """
     _resolve_solvers(c; field_solver = nothing, ode_solver = ExplicitEuler(), solvers = ())

@@ -18,6 +18,8 @@
 # F3 batch 4 (user OK 2026-10-25): the implicit fixtures `GiMerks BackwardEuler`, `… CrankNicolson`,
 # `… BDF2` (Merks 8² in A, `lower = 0`) and `GiB …` (one owned B system each), recorded at the
 # guard commit on lp/f3 (new records; no record moved).
+# F3-12c (review r2 N3, the same OK): `GiMerks QuasiSteady` and `GiB QuasiSteady`, recorded at the
+# F3-12c commit (new records; no record moved).
 const GD_RECORDS = Dict{String, String}(
     "GiB BDF2|Float64|digest|state" => "624905f7ab2e7815",
     "GiB BDF2|Float64|n" => "[1]",
@@ -25,6 +27,8 @@ const GD_RECORDS = Dict{String, String}(
     "GiB BackwardEuler|Float64|n" => "[1]",
     "GiB CrankNicolson|Float64|digest|state" => "965b331678912313",
     "GiB CrankNicolson|Float64|n" => "[1]",
+    "GiB QuasiSteady|Float64|digest|state" => "8f1d0e5dd351c855",
+    "GiB QuasiSteady|Float64|n" => "[1]",
     "GiMerks BDF2|Float64|canonical" => "c=BDF2(inner=:auto,lower=0.0,newton=nothing,solver_T=:auto,substeps=nothing)",
     "GiMerks BDF2|Float64|digest|site.c" => "1d9207d5601c51c9",
     "GiMerks BDF2|Float64|digest|site.c__next" => "1d9207d5601c51c9",
@@ -67,6 +71,20 @@ const GD_RECORDS = Dict{String, String}(
     "GiMerks CrankNicolson|Float64|g1|tables" => "Pair{Int64, Symbol}[]",
     "GiMerks CrankNicolson|Float64|groups" => "1",
     "GiMerks CrankNicolson|Float64|n" => "[2]",
+    "GiMerks QuasiSteady|Float64|canonical" => "c=QuasiSteady(inner=:auto,lower=nothing,newton=nothing,solver_T=:auto,substeps=nothing)",
+    "GiMerks QuasiSteady|Float64|digest|site.c" => "42906d6e1926ef22",
+    "GiMerks QuasiSteady|Float64|digest|site.c__next" => "42906d6e1926ef22",
+    "GiMerks QuasiSteady|Float64|digest|site.kind__in" => "699b5f251432b825",
+    "GiMerks QuasiSteady|Float64|digest|σ" => "699b5f251432b825",
+    "GiMerks QuasiSteady|Float64|fingerprint" => "0x78ceac30ceb824a2",
+    "GiMerks QuasiSteady|Float64|g1|arrays" => "((CorePotts.Part{:site, :c}(), CorePotts.Part{:site, :c__next}()), (CorePotts.Part{:site, :kind__in}(), nothing))",
+    "GiMerks QuasiSteady|Float64|g1|bounded" => "true",
+    "GiMerks QuasiSteady|Float64|g1|fingerprint_text" => "1a3bbced51436184",
+    "GiMerks QuasiSteady|Float64|g1|least" => "Int64:1",
+    "GiMerks QuasiSteady|Float64|g1|params" => "[:Dc, :δc, :σc]",
+    "GiMerks QuasiSteady|Float64|g1|tables" => "Pair{Int64, Symbol}[]",
+    "GiMerks QuasiSteady|Float64|groups" => "1",
+    "GiMerks QuasiSteady|Float64|n" => "[1]",
     "FaOne|Float64|canonical" => "",
     "FaOne|Float64|fingerprint" => "0xe32442533683c230",
     "FaOne|Float64|g1|arrays" => "((CorePotts.Part{:site, :cfield}(), nothing),)",

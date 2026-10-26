@@ -170,7 +170,7 @@ end
     # the keywords
     @test startswith(qmsg(() -> QuasiSteady(; substeps = 2)), "QuasiSteady: no keyword `substeps`: a steady field is solved once per window")
     @test startswith(qmsg(() -> QuasiSteady(; lower = 0.0)), "QuasiSteady: no keyword `lower`: a steady solve has no substep to clip")
-    @test qmsg(() -> QuasiSteady(; theta = 1)) == "QuasiSteady: no keyword `theta`; its keywords are `dt`, `newton`, `inner` and `solver_T`"
+    @test qmsg(() -> QuasiSteady(; theta = 1)) == "QuasiSteady: no keyword `theta`; its keywords are `dt`, `newton`, `inner`, `solver_T` and `init`"
     @test startswith(qmsg(() -> QuasiSteady(; newton = 0)), "QuasiSteady: newton = 0 is the Newton iterations per substep")
     a = QuasiSteady(; dt = 0.5, newton = 3)
     @test repr(a) == "QuasiSteady(; dt = 0.5, newton = 3)" && eval(Meta.parse(repr(a))) == a && repr(QuasiSteady()) == "QuasiSteady()"
@@ -229,23 +229,25 @@ end
     @test startswith(qmsg(() -> init(ph, QuasiSteady(; dt = 0.1))), "QuasiSteady: field `bc`: a hexagonal lattice has no implicit solve yet")
 end
 
-# Review r2 M1: until F3-12c bounds a steady group's gain in the coupling rule, a QuasiSteady
-# group in a loop of groups is refused, with the two routes (one Backward Euler group; Backward
-# Euler for the steady field); a steady group another group reads one way stays accepted. The
-# cases are the reviewer's q1 (~/lpwork/f3rev7/q1.jl): `0 = 0.1Δa − δa + s k b` steady,
-# `b' = 0.1Δb − b − k a`, whose lag of one window grew to 1e37 (δ = 0.1, k = 5). Base (773f0957,
+# Review r2 M1, F3-12c: a QuasiSteady group in a loop of groups takes its gain in the coupling
+# rule, κ_QS = dt · Σ k_in · gain · k_out ≤ 1 (gain 1/δ here, the decay's); past it the loop is
+# refused, with the routes (one Backward Euler group; Backward Euler for the steady field; a
+# smaller dt); a steady group another group reads one way stays accepted. The cases are the
+# reviewer's q1 (~/lpwork/f3rev7/q1.jl): `0 = 0.1Δa − δa + s k b` steady, `b' = 0.1Δb − b − k a`,
+# whose lag of one window grew to 1e37 (δ = 0.1, k = 5: κ = 25). Base (773f0957,
 # ~/lpwork/f3b5-nc-r2-m1.log): every loop accepted (the refusal tests fail).
-@testset "F3-12a (r2 M1): a QuasiSteady group in a loop is refused, with its routes" begin
+@testset "F3-12a (r2 M1): a QuasiSteady group in a loop past its gain is refused, with its routes" begin
     @variables qa(..) qb(..)
     qae, qbe = qa(t, x, y), qb(t, x, y)
     loop(δ, k, s) = discretize(PDESystem([D(qae) ~ 0.1 * Δ(qae) - δ * qae + s * k * qbe, D(qbe) ~ 0.1 * Δ(qbe) - qbe - k * qae],
             [qa(0, x, y) ~ 0.0, qb(0, x, y) ~ 1.0], bdom(1.0), [t, x, y], [qae, qbe], Any[]; name = :loop),
         LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
-    for (δ, k, s) in ((0.1, 5.0, 1.0), (0.1, 5.0, -1.0), (1.0, 5.0, 1.0), (0.1, 9.0, 1.0))
+    for (δ, k, s, κ) in ((0.1, 5.0, 1.0, "25.0"), (0.1, 5.0, -1.0, "25.0"), (1.0, 5.0, 1.0, "2.5"), (0.1, 9.0, 1.0, "81.0"))
         p = loop(δ, k, s)
         m = qmsg(() -> init(p, FieldGroups(qae => QuasiSteady(; dt = 0.1), qbe => BackwardEuler(; dt = 0.1))))
         @test startswith(m, "FieldGroups: the QuasiSteady group of `qa` is in a loop of groups that read one another (`qa`, `qb`)") &&
-              occursin("Step `qa`, `qb` in one `BackwardEuler` group, or step `qa` with `BackwardEuler`", m)
+              occursin("Step `qa`, `qb` in one `BackwardEuler` group, or step `qa` with `BackwardEuler`", m) &&
+              occursin("give κ = dt · Σ k_in · gain · k_out = $κ > 1", m) || (println("12c gain ", (δ, k, s), " ", m); false)
         # the routes: one group, or Backward Euler for the steady field
         for alg in (BackwardEuler(; dt = 0.1), FieldGroups(qae => BackwardEuler(; dt = 0.1), qbe => BackwardEuler(; dt = 0.1)))
             r = solve(p, alg)
@@ -275,6 +277,163 @@ end
         name = :alone), LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
     rs = solve(p1, QuasiSteady(; dt = 0.1, inner = BTIGHT))                     # (the steady field alone)
     @test maximum(abs, r[qae, length(r.t)] .- rs[qae, length(rs.t)]) < 1e-12
+end
+
+# F3-12c (F3 design §3.6): the QuasiSteady gain in the coupling rule. A steady group answers its
+# lagged inputs at once with gain G (≤ 1/s_min, and ≤ max (s + A_a)⁻¹1 along an axis with a
+# face anchor; a mask does not count), so a group that reads it sees the rate Σ k_in · G · k_out:
+# accepted when dt times that is ≤ 1, and the run is the split scheme (the hand recursion to
+# 1e-9), which tends to the coupled solution at first order in dt. Base (932c12ce,
+# ~/lpwork/f3b7-nc-12c-base.log): every loop with a QuasiSteady group refused ("does not bound
+# that gain yet"). Negative controls (mutations): the gain left out of the rate (G · k_out = 1,
+# ~/lpwork/f3b7-nc-12c-gain.log): the q1 loops, the face-anchored k = 4 loop and the write past
+# the limit are accepted (6 fail); the face anchors left out of the gain (nc-12c-face): the
+# zero-shift loop has no bound and is refused (1 fails, 1 errors).
+@testset "F3-12c: the QuasiSteady gain in the coupling rule: accepted loops match the coupled solution" begin
+    @variables qa(..) qb(..)
+    qae, qbe = qa(t, x, y), qb(t, x, y)
+    own8(sys) = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
+    gl(dt) = FieldGroups(qae => QuasiSteady(; dt, inner = BTIGHT), qbe => BackwardEuler(; dt, inner = BTIGHT))
+    # the decay sets the gain (1/δ = 1): κ = 0.1 · 0.5 · 1 · 0.5 = 0.025. Uniform data stay
+    # uniform (no flux faces): a = (k/δ) b at the window's start, then b's step,
+    # b⁺ = (b − dt k a)/(1 + dt); the coupled solution b(1) = exp(−(1 + k²/δ))
+    p = own8(PDESystem([D(qae) ~ 0.1 * Δ(qae) - qae + 0.5 * qbe, D(qbe) ~ 0.1 * Δ(qbe) - qbe - 0.5 * qae],
+        [qa(0, x, y) ~ 0.0, qb(0, x, y) ~ 1.0], bdom(1.0), [t, x, y], [qae, qbe], Any[]; name = :g1))
+    err = map((0.1, 0.01)) do dt
+        r = solve(p, gl(dt))
+        @test r.retcode == ReturnCode.Success
+        n = round(Int, 1 / dt)
+        @test maximum(abs, r[qbe, length(r.t)] .- ((1 - dt * 0.25) / (1 + dt))^n) < 1e-9
+        @test maximum(abs, r[qae, length(r.t)] .- 0.5 * ((1 - dt * 0.25) / (1 + dt))^(n - 1)) < 1e-9
+        abs(r[qbe, length(r.t)][1] - exp(-1.25))
+    end
+    @test err[2] < 2e-3 && 8 < err[1] / err[2] < 12 || (println("12c order ", err); false)       # (first order)
+    # a face-anchored steady field with no decay (S4, S-b): `0 = 0.1Δa + k b`, `a = 0` at x = 0, 1;
+    # its gain is max (A_x)⁻¹1 = 1.25 (the cell-centered Dirichlet line, L²/(8D)), finite
+    fa(k) = own8(PDESystem([D(qae) ~ 0.1 * Δ(qae) + k * qbe, D(qbe) ~ 0.1 * Δ(qbe) - qbe - k * qae],
+        [qa(0, x, y) ~ 0.0, qb(0, x, y) ~ 1.0, qa(t, 0, y) ~ 0.0, qa(t, 1, y) ~ 0.0], bdom(1.0), [t, x, y], [qae, qbe], Any[];
+        name = :g2))
+    m = qmsg(() -> init(fa(4.0), gl(0.1)))
+    @test occursin("(`qa` answers at once with a gain up to 1.25, from its smallest decay and its faces, times 4.0", m) &&
+          occursin("give κ = dt · Σ k_in · gain · k_out = 2.0 > 1", m) && occursin("dt ≤ 0.04999, such as dt = 1.0/20", m) ||
+          (println("12c face ", m); false)
+    # k = 1: κ = 0.125, accepted. The hand split (a from b at the window's start, then b's
+    # Backward Euler step) and the coupled solution `b' = (L_b − I + k² L_a⁻¹) b`, `exp`
+    La, _ = hand_rate(; dims = (8, 8), K = (x, y) -> 0.1, faces = Dict((1, -1) => (:dir, 0.0), (1, 1) => (:dir, 0.0)))
+    Lb, _ = hand_rate(; dims = (8, 8), K = (x, y) -> 0.1)
+    Mb = Lb - I
+    coupled = exp(Mb + inv(La)) * ones(64)
+    err = map((0.1, 0.025)) do dt
+        r = solve(fa(1.0), gl(dt))
+        bh = ones(64)
+        for _ in 1:round(Int, 1 / dt)
+            ah = -(La \ bh)
+            bh = (I - dt * Mb) \ (bh - dt * ah)
+        end
+        @test r.retcode == ReturnCode.Success && maximum(abs, vec(r[qbe, length(r.t)]) .- bh) < 1e-9
+        maximum(abs, vec(r[qbe, length(r.t)]) .- coupled) / maximum(abs, coupled)
+    end
+    @test err[2] < 0.02 && 3 < err[1] / err[2] < 5 || (println("12c face order ", err); false)   # (first order)
+    # a steady field anchored only by a mask has no bounded gain (a mask moves with the inputs):
+    # its loop is refused, with the routes
+    @variables qm(..)::Int32 [input = true]
+    qme = qm(t, x, y)
+    sm = PDESystem([D(qae) ~ 0.1 * Δ(qae) + 0.1 * qbe, D(qbe) ~ 0.1 * Δ(qbe) - qbe - 0.1 * qae],
+        [qa(0, x, y) ~ 0.0, qb(0, x, y) ~ 1.0, qae ~ masked(qme == 1, 0.0)], bdom(1.0), [t, x, y], [qae, qbe, qme], Any[];
+        name = :g3)
+    pm = discretize(sm, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned);
+        inputs = [qme => Int32[i == 1 ? 1 : 0 for i in 1:8, j in 1:8]])
+    m = qmsg(() -> init(pm, gl(0.1)))
+    @test startswith(m, "FieldGroups: the QuasiSteady group of `qa` is in a loop of groups that read one another (`qa`, `qb`)") &&
+          occursin("`qa` has no decay and no Dirichlet or Robin face, so its steady solve has no bounded gain", m) &&
+          occursin("Step `qa`, `qb` in one `BackwardEuler` group, or step `qa` with `BackwardEuler`", m) ||
+          (println("12c mask ", m); false)
+    @test solve(pm, BackwardEuler(; dt = 0.1)).retcode == ReturnCode.Success                     # (the route)
+    # two steady groups in a loop with a transient one: a steady field that reads a steady field
+    # of the loop is refused, the groups named (review r4 N1: the verb agrees); one way, the
+    # cascade is accepted (reviewer probe p4b §3)
+    @variables qc(..)
+    qce = qc(t, x, y)
+    cas(k) = own8(PDESystem([0 ~ 0.1 * Δ(qae) - qae + k * qbe, 0 ~ 0.1 * Δ(qce) - qce + 0.5 * qae, D(qbe) ~ 0.1 * Δ(qbe) - qbe - 0.5 * qce],
+        [qa(0, x, y) ~ 0.0, qc(0, x, y) ~ 0.0, qb(0, x, y) ~ 1.0], bdom(1.0), [t, x, y], [qae, qce, qbe], Any[]; name = :cas))
+    m = qmsg(() -> init(cas(0.3), BackwardEuler(; dt = 0.1)))
+    @test startswith(m, "FieldGroups: the QuasiSteady groups of `qa`, `qc` are in a loop of groups that read one another") &&
+          occursin("the steady row of `qc` reads the steady field `qa` of the loop", m) || (println("r4 N1 ", m); false)
+    @test solve(cas(0.0), BackwardEuler(; dt = 0.1)).retcode == ReturnCode.Success
+    # a parameter write is checked again: past the limit it is refused, and nothing changes
+    @parameters gk = 0.5
+    pg = own8(PDESystem([D(qae) ~ 0.1 * Δ(qae) - qae + gk * qbe, D(qbe) ~ 0.1 * Δ(qbe) - qbe - gk * qae],
+        [qa(0, x, y) ~ 0.0, qb(0, x, y) ~ 1.0], bdom(1.0), [t, x, y], [qae, qbe], [gk]; name = :g4))
+    ig = init(pg, gl(0.1))
+    @test occursin("give κ = dt · Σ k_in · gain · k_out = 1.6 > 1", qmsg(() -> (ig.ps[gk] = 4.0))) && ig.ps[gk] == 0.5
+end
+
+# F3-12c (F3 design §3.2): `init = :steady` on every algorithm. Before the first window (and at
+# `reinit!`) each such group's steady state is solved once by `QuasiSteady`, with the algorithm's
+# `inner` (`:auto`: DevicePCG to rtol 1e-6 within 64 iterations); its refusals name `init`; a
+# failed steady start ends the run. Base (932c12ce, ~/lpwork/f3b7-nc-12c-base.log): `init` is no
+# keyword (the testset errors). Negative control (mutation, nc-12c-reinit): `reinit!` without
+# the steady starts keeps the zero start (1 fails).
+@testset "F3-12c: `init = :steady`: every algorithm starts at the steady state" begin
+    sys = bsys([D(bce) ~ bD * Δ(bce) - bk * bce + x], [bc(0, x, y) ~ 0.0, bc(t, 0, y) ~ 1.0], [bD, bk]; T = 0.3)
+    p = bown(sys)
+    want = qs_hand(; K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces = Dict((1, -1) => (:dir, 1.0)))
+    for alg in (ExplicitEuler(; dt = 0.01, init = :steady), BackwardEuler(; dt = 0.1, init = :steady),
+                CrankNicolson(; dt = 0.1, init = :steady), BDF2(; dt = 0.1, init = :steady), QuasiSteady(; dt = 0.1, init = :steady))
+        ig = init(p, alg)
+        # (the default inner solver: rtol 1e-6; one solve, the group's operator being exact)
+        @test maximum(abs, ig.u[1] .- want) < 1e-5 && ig.retcode == ReturnCode.Success || (println("12c init ", alg); false)
+        @test LFB.field_stats(ig).solves == 1
+        s = solve!(ig)
+        @test s.retcode == ReturnCode.Success && maximum(abs, s.u[end] .- want) < 1e-5     # (it stays there)
+    end
+    # without it, the start is the initial state; with a tight `inner` the start is the hand
+    # steady state to 1e-9 (the algorithm's own `inner`)
+    @test init(p, BackwardEuler(; dt = 0.1)).u[1] == zeros(48)
+    @test maximum(abs, init(p, BackwardEuler(; dt = 0.1, init = :steady, inner = BTIGHT)).u[1] .- want) < 1e-9
+    # the PCG count of `ExplicitEuler(init = :steady)` from zero (design §5; review r4 N4): one
+    # solve on the start's own runtime, 5 iterations of the default inner (rtol 1e-6) on the CPU
+    # (the design's "6, as C7b": at most 6)
+    ig = init(p, ExplicitEuler(; dt = 0.01, init = :steady))
+    ne = LSB.iterations(only(ig.starts).cache.rows[1].solver)
+    @test only(ig.starts).totals.solves == 1 && 1 <= ne <= 6 || (println("r4 N4 EE start PCG ", ne); false)
+    # `reinit!` solves again, at the current parameters
+    ig = init(p, BackwardEuler(; dt = 0.1, init = :steady, inner = BTIGHT))
+    solve!(ig)
+    ig.ps[bk] = 3.0
+    reinit!(ig)
+    w3 = qs_hand(; K = (x, y) -> 0.3, k = (x, y) -> 3.0, f = (x, y) -> x, faces = Dict((1, -1) => (:dir, 1.0)))
+    @test maximum(abs, ig.u[1] .- w3) < 1e-9 && length(ig.u) == 1
+    # a steady row beside it starts at the steady state too (its `QuasiSteady` takes `init`)
+    ps = bown(bsys([0 ~ bD * Δ(bce) - bk * bce + x], [bc(t, 0, y) ~ 1.0], [bD, bk]; T = 0.3))
+    @test maximum(abs, init(ps, QuasiSteady(; dt = 0.1, init = :steady, inner = BTIGHT)).u[1] .- want) < 1e-9
+    # the refusals: a growth has no stable steady state (named with `init` and its route); the
+    # step alone is accepted
+    pg = bown(bsys([D(bce) ~ bD * Δ(bce) + 0.5 * bce], [bc(0, x, y) ~ 0.0, bc(t, 0, y) ~ 1.0], [bD]; T = 0.3))
+    m = qmsg(() -> init(pg, BackwardEuler(; dt = 0.1, init = :steady)))
+    @test startswith(m, "`init = :steady` of `bc`: QuasiSteady: field `bc`: its local derivative `∂f/∂c` = 0.5 is positive") &&
+          endswith(m, "; or leave `init` out (the run starts from the initial state)") || (println("12c growth ", m); false)
+    @test init(pg, BackwardEuler(; dt = 0.1)) isa Any
+    @test startswith(qmsg(() -> BackwardEuler(; init = :cold)), "BackwardEuler: init = :cold is not a start; give `init = :steady`")
+    # the canonical text: `init` only when set (a default keeps every fingerprint)
+    @test LFB.canonical(BackwardEuler()) == "BackwardEuler(inner=:auto,lower=nothing,newton=nothing,solver_T=:auto,substeps=nothing)"
+    @test LFB.canonical(BackwardEuler(; init = :steady)) ==
+          "BackwardEuler(init=:steady,inner=:auto,lower=nothing,newton=nothing,solver_T=:auto,substeps=nothing)"
+    @test LFB.canonical(ExplicitEuler()) == "ExplicitEuler(substeps=nothing,lower=nothing)" &&
+          LFB.canonical(ExplicitEuler(; init = :steady)) == "ExplicitEuler(substeps=nothing,lower=nothing,init=:steady)"
+    # a steady start that fails (an island: the high strip has no decay and no fixed value) ends
+    # the run before its first window, named
+    @variables bdm(..)::Bool [input = true]
+    bdme = bdm(t, x, y)
+    dm = [j <= 2 || j >= 5 for i in 1:8, j in 1:6]
+    si = PDESystem([D(bce) ~ bD * Δ(bce) + 1.0], [bc(0, x, y) ~ 0.0, bc(t, x, 0) ~ 0.0], bdom(1.0), [t, x, y], [bce, bdme], [bD];
+        name = :island)
+    pi = discretize(si, LatticeDiscretization(Grid(BDIMS); T = Float64, problem = :owned, domain = bdm); inputs = [bdme => dm])
+    ig = @test_logs (:warn, r"field `bc`: the solve failed in the steady start \(`init = :steady`, t = 0\.0\)") match_mode = :any init(pi,
+        BackwardEuler(; dt = 0.1, init = :steady, inner = DevicePCG(; budget = 16)))
+    @test ig.retcode == ReturnCode.ConvergenceFailure
+    s = solve!(ig)
+    @test s.retcode == ReturnCode.ConvergenceFailure && s.t == [0.0]
 end
 
 # F3-12b (F3 design §3.5): steady rows `0 ~ rhs` in B, time-free systems through the steady

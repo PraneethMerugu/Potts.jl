@@ -151,7 +151,7 @@ sol[:x][end], sol[:g][end]
 
 | Keyword | Values | Default |
 |---|---|---|
-| `field_solver` | `ExplicitEuler(; substeps, lower)`: `substeps` explicit steps per MCS, values clipped at `lower`; `BackwardEuler(; substeps, newton, lower, inner, solver_T)`: implicit steps, each a linear solve with `inner`; `CrankNicolson(…)`, `BDF2(…)`: second-order implicit steps, the same keywords; `QuasiSteady(; newton, inner, solver_T)`: the steady state in each MCS | `ExplicitEuler()`: the automatic count, no clip |
+| `field_solver` | `ExplicitEuler(; substeps, lower)`: `substeps` explicit steps per MCS, values clipped at `lower`; `BackwardEuler(; substeps, newton, lower, inner, solver_T)`: implicit steps, each a linear solve with `inner`; `CrankNicolson(…)`, `BDF2(…)`: second-order implicit steps, the same keywords; `QuasiSteady(; newton, inner, solver_T)`: the steady state in each MCS; each takes `init = :steady` (a steady start) | `ExplicitEuler()`: the automatic count, no clip |
 | `ode_solver` | `ExplicitEuler(; substeps)`, `RK4(; substeps)`, `Adaptive(alg; kwargs...)` | `ExplicitEuler()`, one step per MCS |
 | `solvers` | `[x => solver, …]`, per variable or component | — |
 
@@ -229,7 +229,7 @@ operator (advection, the coupling between the fields of one group), the count co
 bound on that term against the decay, from 8 to at most 40 iterations; give `newton = k` if
 the warning says the budget is hit. A Robin face of either sign is in the operator, so a
 linear field with one is still one solve. The steady state must exist and be unique, so `QuasiSteady` refuses
-four kinds of field, at the start and at every parameter write:
+three kinds of field, at the start and at every parameter write:
 
 - a growth that the operator sees (`+ g c`): its steady state is unstable or not unique; step
   it with `BackwardEuler`;
@@ -237,16 +237,35 @@ four kinds of field, at the start and at every parameter write:
   than its diffusion and decay remove (the steady operator is indefinite): step it with
   `BackwardEuler`, or give the face a smaller |β|;
 - a field with no decay and no fixed value (no Dirichlet or Robin face, no mask): `0 = rhs`
-  then has no solution or many. Add a decay or a fixed value;
-- a field whose solver group reads another group that reads it back (a loop of groups): the
-  steady field answers its inputs at once, and the lag of one MCS between the groups can grow
-  without bound. Give the fields one `BackwardEuler` solver, or step the steady field with
-  `BackwardEuler`. A steady field that other groups only read is accepted.
+  then has no solution or many. Add a decay or a fixed value.
+
+A steady field whose solver group reads another group that reads it back (a loop of groups)
+answers its inputs at once, with the gain of its steady solve, so the lag of one MCS between
+the groups can grow. The coupling rule takes that gain: at most `1/k` for a decay `k`, less
+with a Dirichlet or Robin face (a mask does not count, since it moves with the cells). A loop
+is accepted when `mcs_duration · Σ k_in · gain · k_out ≤ 1`, with `k_in` the coefficients by
+which the other group reads the steady field and `k_out` those by which the steady field reads
+it back. Past that limit, or when the rule has no bound for the gain (no decay and no face, a
+steady field that reads another steady field of the loop), it is refused, with the routes: one
+`BackwardEuler` solver for the fields, `BackwardEuler` for the steady field, or a shorter
+window. An accepted loop is first order in the window: the steady field reads the other field's
+values at the start of the MCS. The limit `κ ≤ 1` is a stability rule, not an accuracy rule: an
+excitatory loop (one that grows) can lag far behind its true growth even below the limit, so
+give it a smaller `mcs_duration` or step its fields in one solver group. A steady field that
+other groups only read is accepted.
 
 A region that the cells cut off with neither a decay nor a fixed value (a decay only inside
 the cells, say, and a medium pocket with none) cannot be solved either. The solve finds it at
 run time: the run stops with `ReturnCode.ConvergenceFailure`, and the warning names the field,
 the MCS and the route.
+
+Every field solver takes `init = :steady`: before the first MCS (and at `reinit!`) the group's
+steady state is solved once, as `QuasiSteady` would, then the solver steps from it:
+`field_solver = BackwardEuler(; init = :steady)`. The steady solve uses the solver's `inner`
+(by default a conjugate gradient solve to a relative 1e-6), and the steady state must exist and
+be unique, as for `QuasiSteady`: a growth is refused, with the route of leaving `init` out. A
+steady start that fails stops the run before its first MCS. A state restored from a checkpoint
+is not solved again.
 
 `BackwardEuler` pays a linear solve per substep. It is the faster choice when the explicit
 count is large (fast diffusion, a stiff decay); for a field whose explicit count is a few

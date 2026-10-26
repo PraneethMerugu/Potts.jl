@@ -245,6 +245,7 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     :symbol_setter,       # `setsym` with a list on a model description (its parameters as one change, D-116)
     :stream_id,           # named RNG stream for `draw` in generated code
     :_praw,               # a field phase's raw parameter values, the clock's slot included (F2-08c), for its build-time count
+    :_table_values,       # a field phase's table values for its build-time count, the rule's whole-system tables included (F3-12c)
     # --- Potts -> Base: no public equivalent
     Symbol("@__doc__"),   # attaching docstrings to macro-generated components
     :setindex,            # non-mutating tuple `setindex`

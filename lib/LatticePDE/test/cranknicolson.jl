@@ -174,7 +174,7 @@ end
     end
     @test startswith(e(() -> CrankNicolson(; newton = 0)), "CrankNicolson: newton = 0 is the Newton iterations")
     @test e(() -> CrankNicolson(; theta = 0.5)) ==
-          "CrankNicolson: no keyword `theta`; its keywords are `dt`, `substeps`, `newton`, `lower`, `inner` and `solver_T`"
+          "CrankNicolson: no keyword `theta`; its keywords are `dt`, `substeps`, `newton`, `lower`, `inner`, `solver_T` and `init`"
     a = CrankNicolson(; dt = 0.1, newton = 2, inner = DevicePCG(; budget = 12))
     @test repr(a) == "CrankNicolson(; dt = 0.1, newton = 2, inner = DevicePCG(; budget = 12))"
     @test eval(Meta.parse(repr(a))) == a

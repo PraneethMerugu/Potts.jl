@@ -9,7 +9,8 @@
 @inline owner_kind(st, i) = (c = @inbounds st.σ[i]; c == 0 ? Int32(0) : @inbounds st.cell.kind[c])
 
 """
-    FieldPhase{K}(group, alg, arrays; tables, params, substeps, dt, period = dt, options, T, init = false, aux_only = false)
+    FieldPhase{K}(group, alg, arrays; tables, params, substeps, dt, period = dt, options, T, init = false, aux_only = false,
+                  start = false)
 
 A group of fields stepped by algorithm `alg` (`ExplicitEuler`) over one MCS of length `dt`,
 in `n` substeps of `dt / n`: `group` is the group's `LatticeFields.Problems.FieldGroup` (its
@@ -39,6 +40,11 @@ With `aux_only = true` the phase is bound to the group's `aux:` kernels alone (a
 `K ~ rhs`, F3 design §3.12) and takes no substep: one launch evaluates them from the state as
 it is, which it never writes. Front end A runs one at init for a group with state and aux
 fields (F3 review S1, r2 N1: no update rule, so no `lower` clip, touches the state).
+
+With `start = true` the phase is a group's steady start (`init = :steady` on its algorithm,
+F3-12c): `alg` is the `QuasiSteady` of `LatticeFields.Problems.steady_start`, bound to the same
+arrays as the step and run once, at init on a fresh state (after the masked-condition clamp),
+never per MCS and not from a checkpoint.
 """
 struct FieldPhase{K, G, AL, A, F, PR, SP}
     group::G
@@ -54,11 +60,14 @@ struct FieldPhase{K, G, AL, A, F, PR, SP}
     period::Float64                      # the MCS (`mcs_duration`): the clock's period
     init::Bool
     aux_only::Bool                       # the `aux:` kernels alone, no substep (an at-init evaluation)
+    start::Bool                          # a steady start (`init = :steady`, at init on a fresh state)
+    rule_tables::Vector{Pair{String, Symbol}}   # tables only the substep rule reads (key => name)
     options::Any                         # the compile options of the plans (host)
     T::Type                              # the value type of the plans
 end
 function FieldPhase{K}(group, alg, arrays::Tuple; tables = Pair{Int, Symbol}[], params = Symbol[], substeps,
-        dt::Real, period::Real = dt, options, T::Type, init::Bool = false, aux_only::Bool = false) where {K}
+        dt::Real, period::Real = dt, options, T::Type, init::Bool = false, aux_only::Bool = false,
+        start::Bool = false, rule_tables = Pair{String, Symbol}[]) where {K}
     program = Problems.group_program(group, alg)
     # the plans of value type `T`, made once per group (shared by every trajectory; the host
     # backend only decides the Float64 check here, which `options` already holds)
@@ -67,7 +76,7 @@ function FieldPhase{K}(group, alg, arrays::Tuple; tables = Pair{Int, Symbol}[], 
         Problems.group_plans(group, alg, T, KernelAbstractions.CPU(), options)
     return FieldPhase{K, typeof(group), typeof(alg), typeof(arrays), typeof(substeps), typeof(program), typeof(step)}(
         group, alg, program, masks, step, arrays, tables, params, substeps, Float64(dt), Float64(period), init, aux_only,
-        options, T)
+        start, collect(Pair{String, Symbol}, rule_tables), options, T)
 end
 # the ids of a program's `aux:` kernels (an `aux_only` phase binds them alone)
 _aux_ids(prog) = [i for (i, k) in enumerate(prog.kernels) if startswith(k.key, "aux:")]
@@ -75,7 +84,7 @@ _aux_ids(ph::FieldPhase) = _aux_ids(ph.program)
 """The masked-condition clamp of field phase `ph` (its at-init form)."""
 field_clamp(ph::FieldPhase{K}) where {K} =
     FieldPhase{K}(ph.group, ph.alg, ph.arrays; ph.tables, ph.params, ph.substeps, ph.dt, ph.period, ph.options, ph.T,
-        init = true, ph.aux_only)
+        init = true, ph.aux_only, ph.rule_tables)
 
 """
 The front end's record of a field runtime's binding (`Problems.GroupRuntime`'s `host`): the
@@ -132,7 +141,9 @@ _param(p, n::Symbol) = n === _CLOCK ? 0.0 : getproperty(p, n)
 # the parameter values and table contents a binding depends on (copies: a table written in
 # place is a change)
 _bound_values(ph::FieldPhase, p) = (Any[_param(p, n) for n in ph.params],
-                                    Any[copy(vec(collect(getproperty(p, name)))) for (_, name) in ph.tables])
+                                    Any[copy(vec(collect(getproperty(p, name)))) for name in _table_names(ph)])
+# the tables a phase depends on: its program's, then those only its substep rule reads
+_table_names(ph::FieldPhase) = Iterators.flatten((last.(ph.tables), last.(ph.rule_tables)))
 
 # whether the phase's parameters and tables at `p` equal those of the binding `b` (no copies)
 function _same_params(ph::FieldPhase, b::FieldBinding, p)
@@ -142,7 +153,7 @@ function _same_params(ph::FieldPhase, b::FieldBinding, p)
     return true
 end
 function _same_tables(ph::FieldPhase, b::FieldBinding, p)
-    for (k, (_, name)) in enumerate(ph.tables)
+    for (k, name) in enumerate(_table_names(ph))
         t, v = getproperty(p, name), b.tvals[k]
         t isa Array || (t = collect(t))             # a device table: read on the host
         length(t) == length(v) || return false
@@ -155,8 +166,10 @@ end
 
 # the phase's tables at `p` by their program keys (the substep bound reads them: a table
 # coefficient, F1)
-_table_values(ph::FieldPhase, p) = Pair{String, Vector{Float64}}[ph.program.tables[i].key => Float64.(vec(collect(getproperty(p, name))))
-                                                                 for (i, name) in ph.tables]
+# (and the tables only the rule reads: the steady gain of another group, F3-12c)
+_table_values(ph::FieldPhase, p) = Pair{String, Vector{Float64}}[
+    [ph.program.tables[i].key => Float64.(vec(collect(getproperty(p, name)))) for (i, name) in ph.tables];
+    [k => Float64.(vec(collect(getproperty(p, name)))) for (k, name) in ph.rule_tables]]
 # the raw parameter values of the phase's slots at `p`
 _praw(ph::FieldPhase, p) = Tuple(_param(p, n) for n in ph.params)
 
@@ -219,7 +232,7 @@ function phase_context(ph::FieldPhase{K}, st, p, backend) where {K}
     # the status word's window in the front end's words: "MCS n" (a rate group takes `R` windows
     # per MCS in a sub-MCS `repeat(R, …)`; a map group and a group with no state take one)
     per = ph.alg isa Problems.ExplicitMap || _stateless(ph) ? 1 : max(round(Int, ph.period / ph.dt), 1)
-    rt.totals.where = _MCSWindow(ph.period, per)
+    rt.totals.where = ph.start ? Problems.StartText() : _MCSWindow(ph.period, per)
     # on a device the kernels of a step (its launches, the masks, the clamp at the step's start
     # and the slot-1 copies) compile on host tasks, awaited before the first enqueue
     Exec.ishost(backend) || (rt.pending = Threads.@spawn _field_compile!(backend, rt))
@@ -390,7 +403,8 @@ end
 # nothing for the explicit algorithms, whose caches have no word)
 function _run_phase(ph::FieldPhase{K}, st, p, ctx, key, mcs, backend, stats, part) where {K}
     n = ph(st, p, ctx, key, mcs, backend, part)
-    stats === nothing || ph.init || !Exec.ishost(backend) || _read_status!(stats, _runtime(getfield(ctx, K)))
+    # (a steady start's word is read at once on a device too: one read at init, cold)
+    stats === nothing || ph.init || !(ph.start || Exec.ishost(backend)) || _read_status!(stats, _runtime(getfield(ctx, K)))
     return n
 end
 
@@ -443,6 +457,6 @@ function _read_statuses!(stats, ctx)
 end
 
 # The at-init phases of a state that is not fresh (a checkpoint restore, `Potts.anneal`'s
-# per-MCS refresh): the derived refreshes without the field clamps, which hold on a fresh
-# initial state only (D-145)
-_derived(t::Tuple) = filter(ph -> !(ph isa FieldPhase && ph.init), t)
+# per-MCS refresh): the derived refreshes without the field clamps and the steady starts,
+# which hold on a fresh initial state only (D-145)
+_derived(t::Tuple) = filter(ph -> !(ph isa FieldPhase && (ph.init || ph.start)), t)
