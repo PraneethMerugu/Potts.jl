@@ -174,7 +174,7 @@ end
     end
     @test startswith(e(() -> CrankNicolson(; newton = 0)), "CrankNicolson: newton = 0 is the Newton iterations")
     @test e(() -> CrankNicolson(; theta = 0.5)) ==
-          "CrankNicolson: no keyword `theta`; its keywords are `dt`, `substeps`, `newton`, `lower`, `inner`, `solver_T` and `init`"
+          "CrankNicolson: no keyword `theta`; its keywords are `dt`, `substeps`, `newton`, `lower`, `inner`, `solver_T`, `init` and `compute_T`"
     a = CrankNicolson(; dt = 0.1, newton = 2, inner = DevicePCG(; budget = 12))
     @test repr(a) == "CrankNicolson(; dt = 0.1, newton = 2, inner = DevicePCG(; budget = 12))"
     @test eval(Meta.parse(repr(a))) == a
@@ -186,7 +186,7 @@ end
         "CrankNicolson: field `bc`: a hexagonal lattice has no implicit solve yet")
     p16 = discretize(bsys([D(bce) ~ bD * Δ(bce)], [bc(0, x, y) ~ x], [bD]; dvs = [bce]),
         LatticeDiscretization(Grid(BDIMS); T = Float16, problem = :owned))
-    @test startswith(e(() -> init(p16, CrankNicolson(; dt = 0.1))), "CrankNicolson: the field `bc` is stored as Float16")
+    @test startswith(e(() -> init(p16, CrankNicolson(; dt = 0.1))), "CrankNicolson: the field `bc` holds Float16 and the problem's value type is Float16")
 end
 
 # Review r2 S2: in front end B a group's count reads the group's own fields: the damped start

@@ -951,10 +951,9 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
     end
     # Cartesian indexing: the host loop hands each site its coordinates (a linear launch
     # decodes them with an integer division per site, about 3x slower on the CPU; PG-3)
-    opts = LatticeFields.Compile.CompileOptions(; T, float64_ok = !(T <: Union{Float16, Float32}), lanes = :state,
-        index = :cartesian)
     for (gi, (_, solver, names)) in enumerate(order)
         lg = _field_group_spec(c, names, T)
+        opts = _field_options(c, T, solver, lg.spec.rate)
         gspec = lg.spec
         fused = LatticeFields.Compile.fuse_update(gspec.rate, LatticeFields.Problems.update_rule(solver))
         group = LatticeFields.Problems.FieldGroup(gspec; alg = solver, program = LatticeFields.Compile.semantic(fused))
@@ -988,7 +987,7 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
         # An implicit group's fingerprint is its residual program's (the program it runs)
         fp = solver isa LatticeFields.Problems.ImplicitAlgorithm ?
              LatticeFields.Compile.fingerprint_text(LatticeFields.Compile.fuse_residual(gspec.rate,
-                 LatticeFields.Problems.residual_rule(solver)); T) :
+                 LatticeFields.Problems.residual_rule(solver); widen16 = true); T) :
              LatticeFields.Compile.fingerprint_text(fused; T)
         # with a QuasiSteady group among several, every group's phase holds the whole system's
         # parameters (after its own, which its launches read by slot): the steady gain in the
@@ -1024,12 +1023,26 @@ end
 
 # The group of a model whose only fields are aux fields `K ~ rhs` (F3 design §3.12): no state
 # field, only `aux:` kernels; its phase evaluates them once per MCS (`_AuxSteps`: 0 substeps)
+# The compile options of a field group (planned on the host for every backend): Float64 in its
+# kernels only for a Float64 state, or when the group declares it (FE-17: a `compute_T` or a
+# field's `lattice_storage` of Float64), and then its kernels are registered as declared Float64
+# (the D-157 carve-out of the device scan). Cartesian indexing: the host loop hands each site
+# its coordinates (a linear launch decodes them with an integer division per site, about 3x
+# slower on the CPU; PG-3)
+function _field_options(c::CompiledPottsSystem, T::Type, solver, rate)
+    narrow = T <: Union{Float16, Float32}
+    # the group's own program: its fields (its own and those it reads) declared Float64 (batch 5
+    # review N4: not every group of the model when one field declares it)
+    wide = LatticeFields.Problems.compute_type(solver, T) === Float64 ||
+           any(f -> f.fixed && f.storage == LatticeFields.IR.F64, rate.fields)
+    return LatticeFields.Compile.CompileOptions(; T, float64_ok = !narrow || wide, lanes = :state, index = :cartesian,
+        declared = narrow && wide)
+end
 function _aux_group(c::CompiledPottsSystem, T::Type, dt)
     solver = ExplicitEuler()
     lg = _field_group_spec(c, Symbol[], T)
     gspec = lg.spec
-    opts = LatticeFields.Compile.CompileOptions(; T, float64_ok = !(T <: Union{Float16, Float32}), lanes = :state,
-        index = :cartesian)
+    opts = _field_options(c, T, solver, gspec.rate)
     fused = LatticeFields.Compile.fuse_update(gspec.rate, LatticeFields.Problems.update_rule(solver))
     group = LatticeFields.Problems.FieldGroup(gspec; alg = solver, program = LatticeFields.Compile.semantic(fused))
     prog = group.program

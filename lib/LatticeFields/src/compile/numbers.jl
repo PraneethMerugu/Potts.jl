@@ -48,17 +48,18 @@ stays Float32); a Dual `P` does.
 promote_dual(::Type{E}, ::Type{P}) where {E, P} = E
 
 """
-    lanetype(lane, V, lanes = :fixed)
+    lanetype(lane, V, lanes = :fixed, fixed = false)
 
 The Julia value type a float storage lane holds under value type `V`. `lanes = :fixed` (raw
 IR, the default): `juliatype(lane)`. `lanes = :state` (problems, P5 role model): the IR is
 closed, so lanes are value classes; the state lanes `F32` and `F64` hold the problem's value
 type `V` (Float32, Float64, BigFloat on the host), and only the explicitly narrow `F16`
 (`lattice_storage`) stays Float16. Float64 IR constants and spacing bound a BigFloat
-reference near 1e-16 relative in geometry.
+reference near 1e-16 relative in geometry. `fixed = true` (a field with a declared storage,
+`lattice_storage`, FE-17): the lane holds its own type under `:state` too.
 """
-function lanetype(lane::Scalar, ::Type{V}, lanes::Symbol = :fixed) where {V}
-    lanes == :state && lane != F16 && return V
+function lanetype(lane::Scalar, ::Type{V}, lanes::Symbol = :fixed, fixed::Bool = false) where {V}
+    lanes == :state && !fixed && lane != F16 && return V
     return juliatype(lane)
 end
 

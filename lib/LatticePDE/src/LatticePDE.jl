@@ -32,7 +32,7 @@ using KernelAbstractions: KernelAbstractions
 using LatticeFields: Exec, Problems
 using LatticeFields.Solvers: DevicePCG, Multigrid, V
 using LatticeFields.Compile: CompileOptions, fingerprint_text, fuse_update, promote_dual, primal
-using LatticeFields.IR: fieldid, RESOLVE, degenerate
+using LatticeFields.IR: fieldid, RESOLVE, degenerate, juliatype
 using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
                               ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, ode_problem, RT_DT,
                               substep_counts, steady_fields

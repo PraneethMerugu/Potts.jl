@@ -14,7 +14,11 @@ lanes hold `T`). `T = nothing` (the default) compiles raw IR in Float32; problem
 value type from their state (`eltype(u0)`) and refuse an explicit `T` that differs.
 `clock`: the parameter slot of the clock's step index (`clock__tick`, F2 design §2.6), or 0
 for none: a kernel that reads it derives its parameters again at each launch, with the step
-index written into the slot (`derive(Praw, c, t, k)`).
+index written into the slot (`derive(Praw, c, t, k)`). `S`: the value type the state lanes
+hold under `lanes = :state` (`nothing`: `T`); a group's `compute_T` wider than its storage
+compiles in `T` and loads and stores through `lanecast` (FE-17). `declared`: the group
+declared its Float64 (`compute_T`, `lattice_storage`): a kernel that computes in or touches
+Float64 is registered in Exec's D-157 registry ([`Exec.register_float64!`](@ref)).
 """
 Base.@kwdef struct CompileOptions
     T::Union{Type, Nothing} = nothing
@@ -24,7 +28,11 @@ Base.@kwdef struct CompileOptions
     index::Symbol = :auto
     lanes::Symbol = :fixed
     clock::Int = 0
+    S::Union{Type, Nothing} = nothing
+    declared::Bool = false
 end
+# the value type a float lane of field `f` holds under options `o`
+_lane_holds(f, o::CompileOptions) = lanetype(f.storage, something(o.S, o.T), o.lanes, f.fixed)
 debug_options() = CompileOptions(; T = Float64, I = Int, debug = true)
 
 # ---- pass 4: types ------------------------------------------------------------------------
@@ -267,7 +275,7 @@ function _nodeexpr(c::Ctx, i)
         acc = k.accesses[n.imm]
         f = c.p.fields[acc.field]
         x = _ref(c, c.names[(acc.field, :cur)], c.index(c, acc))
-        isfloat(f.storage) && lanetype(f.storage, T, c.o.lanes) != T && (x = :(lanecast($T, $x)))
+        isfloat(f.storage) && _lane_holds(f, c.o) != T && (x = :(lanecast($T, $x)))
         acc.policy == ZERO && (x = :(let y = $x
             ifelse($(_inside(c, acc)), y, zero(y))
         end))
@@ -374,7 +382,7 @@ function _store(c::Ctx, s::Store)
     f = c.p.fields[s.access.field]
     A = c.names[(s.access.field, f.buffers == 2 ? :next : :cur)]
     v = vname(c, s.value)
-    L = lanetype(f.storage, c.o.T, c.o.lanes)
+    L = _lane_holds(f, c.o)
     idx = c.index(c, s.access)
     if s.law == :accumulate
         cur = _ref(c, c.names[(s.access.field, :cur)], idx)

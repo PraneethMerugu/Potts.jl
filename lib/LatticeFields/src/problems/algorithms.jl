@@ -9,7 +9,7 @@ Field stepping algorithms of the owned path.
 abstract type FieldAlgorithm end
 
 """
-    ExplicitEuler(; dt = nothing, substeps = nothing, lower = nothing, init = nothing)
+    ExplicitEuler(; dt = nothing, substeps = nothing, lower = nothing, init = nothing, compute_T = :auto)
 
 Forward Euler: each window `dt` runs `n` substeps of `dt / n`. One type for both front ends
 (`Potts` and `LatticePDE` export this binding). `substeps = nothing` takes the automatic
@@ -18,7 +18,9 @@ count `n = ⌈dt ρ(p) / 1.8⌉` from the problem's stability bound `ρ` at the 
 rows that are not diagonally dominant) is refused. A count `substeps = n ≥ 1` is a minimum:
 the count is the larger of `n` and the bound over the terms the bound sees; when no term is
 seen, `n` is used. `lower` clips each substep's result at `max(v, lower)`. `init = :steady`
-starts at the group's steady state (see [`BackwardEuler`](@ref)).
+starts at the group's steady state (see [`BackwardEuler`](@ref)). `compute_T`: the number type
+the group's kernels compute in, `:auto` (the problem's value type), `Float32` or `Float64`
+(see [`BackwardEuler`](@ref)).
 
 - On a `FieldProblem` (`LatticePDE.discretize(…; problem = :owned)`), `dt` is the step and
   is required (nothing else sets the window: `saveat` does not); `lower`
@@ -34,7 +36,8 @@ struct ExplicitEuler <: FieldAlgorithm
     substeps::Union{Nothing, Int}
     lower::Union{Nothing, Float64}
     init::Union{Nothing, Symbol}
-    function ExplicitEuler(dt, substeps, lower, init = nothing)
+    compute_T::Any
+    function ExplicitEuler(dt, substeps, lower, init = nothing, compute_T = :auto)
         dt === nothing || (dt isa Real && isfinite(dt) && dt > 0) ||
             throw(ArgumentError("ExplicitEuler: dt = $(repr(dt)) must be finite and > 0"))
         substeps isa Integer && substeps == 0 && throw(ArgumentError(
@@ -45,7 +48,8 @@ struct ExplicitEuler <: FieldAlgorithm
             throw(ArgumentError("ExplicitEuler: lower = $(repr(lower)) must be a finite number (a clip at ±Inf or NaN " *
                                 "clips nothing or every value; leave `lower` out for no clip)"))
         return new(dt === nothing ? nothing : Float64(dt), substeps === nothing ? nothing : Int(substeps),
-            lower === nothing ? nothing : Float64(lower), _init_keyword("ExplicitEuler", init))
+            lower === nothing ? nothing : Float64(lower), _init_keyword("ExplicitEuler", init),
+            _compute_keyword("ExplicitEuler", compute_T))
     end
 end
 # `init`: `nothing` (start from the initial state) or `:steady` (F3-12c)
@@ -55,14 +59,30 @@ function _init_keyword(w, init)
         "the initial state)")))
     return init
 end
-function ExplicitEuler(; dt = nothing, substeps = nothing, lower = nothing, init = nothing, kw...)
+# `compute_T` (FE-17, F3 design §3.8): `:auto` (the problem's value type), `Float32` or `Float64`
+function _compute_keyword(w, c)
+    c === :auto || c === Float32 || c === Float64 || throw(ArgumentError(string(w, ": `compute_T` takes `:auto` (the ",
+        "problem's value type), `Float32` or `Float64` (the number type the group's kernels compute in; its fields keep ",
+        "their storage, converted at each load and store); got ", repr(c))))
+    return c
+end
+"""
+    compute_type(alg, V) -> Type
+
+The value type the kernels of a group stepped by `alg` compute in, for problem value type `V`:
+`V` under `compute_T = :auto`, else `compute_T` (FE-17).
+"""
+compute_type(a, ::Type{V}) where {V} = (c = hasfield(typeof(a), :compute_T) ? getfield(a, :compute_T) : :auto;
+                                         c === :auto ? V : c)
+function ExplicitEuler(; dt = nothing, substeps = nothing, lower = nothing, init = nothing, compute_T = :auto, kw...)
     isempty(kw) || throw(ArgumentError(string("ExplicitEuler: ",
         haskey(kw, :inner) ? string("`inner = ", repr(kw[:inner]), "`: `inner` is a keyword of the implicit field ",
                                    "solvers (the linear solver of each implicit step), and `ExplicitEuler` solves no ",
                                    "linear system; give it to an implicit field solver, `BackwardEuler(; inner = ",
                                    repr(kw[:inner]), ")`, or leave `inner` out") :
-        string("no keyword ", join(("`$k`" for k in keys(kw)), ", "), "; its keywords are `dt`, `substeps`, `lower` and `init`"))))
-    return ExplicitEuler(dt, substeps, lower, init)
+        string("no keyword ", join(("`$k`" for k in keys(kw)), ", "), "; its keywords are `dt`, `substeps`, `lower`, `init` ",
+               "and `compute_T`"))))
+    return ExplicitEuler(dt, substeps, lower, init, compute_T)
 end
 # the state buffers a step of the algorithm needs per field (`c`, `c__next`)
 nbuffers(::ExplicitEuler) = 2
@@ -76,7 +96,7 @@ abstract type ImplicitAlgorithm <: FieldAlgorithm end
 
 """
     BackwardEuler(; dt = nothing, substeps = nothing, newton = nothing, lower = nothing,
-                    inner = :auto, solver_T = :auto, init = nothing)
+                    inner = :auto, solver_T = :auto, init = nothing, compute_T = :auto)
 
 Backward Euler: each window `dt` runs `n` substeps of `h = dt / n`, each solving
 `(u − uⁿ)/h = r(u)` at the substep's end time `tⁿ⁺¹` (the rate, the face values and the inputs
@@ -110,6 +130,13 @@ no implicit solve yet (the solver's operator has no hexagonal faces): step it wi
 - `inner`: the linear solver: `:auto` (`DevicePCG()` with one V(2,2) cycle, budget 8), a
   `DevicePCG(…)` or a `Multigrid(…)`.
 - `solver_T`: the solver's number type, `:auto` (the state's), `Float32` or `Float64`.
+- `compute_T`: the number type the group's kernels (rate, residual, operator, update) compute
+  in, `:auto` (the problem's value type), `Float32` or `Float64`. A wider type than the
+  storage (`Float64` on a Float32 problem) loads each field value into it and rounds once at
+  each store; on a device with Float64 (ROCm, CUDA) its kernels are registered as declared
+  Float64 (D-157), and a device without Float64 (Metal) refuses it when the group is bound
+  (`init`, in both front ends; so do `solver_T = Float64` and a field declared
+  `lattice_storage = Float64`), naming the field and the routes.
 - `init = :steady`: before the first window (at `init`, and again at `reinit!`), solve the
   group's steady state `0 = r(u)` once with [`QuasiSteady`](@ref), from the initial state at the
   start time and with this algorithm's `inner` and `solver_T` (`:auto` takes `DevicePCG` to
@@ -128,8 +155,10 @@ struct BackwardEuler <: ImplicitAlgorithm
     inner::Any
     solver_T::Any
     init::Union{Nothing, Symbol}
-    BackwardEuler(dt, substeps, newton, lower, inner, solver_T, init = nothing) =
-        new(_implicit_keywords("BackwardEuler", dt, substeps, newton, lower, inner, solver_T)..., _init_keyword("BackwardEuler", init))
+    compute_T::Any
+    BackwardEuler(dt, substeps, newton, lower, inner, solver_T, init = nothing, compute_T = :auto) =
+        new(_implicit_keywords("BackwardEuler", dt, substeps, newton, lower, inner, solver_T)..., _init_keyword("BackwardEuler", init),
+            _compute_keyword("BackwardEuler", compute_T))
 end
 # The keywords of a time-stepping implicit algorithm, each checked (an `ArgumentError` naming
 # the keyword) and converted (`w` names the algorithm in the messages)
@@ -158,18 +187,18 @@ function _implicit_keywords(w, dt, substeps, newton, lower, inner, solver_T)
 end
 function _implicit_kwerror(w, kw)
     return ArgumentError(string(w, ": no keyword ", join(("`$k`" for k in keys(kw)), ", "),
-        "; its keywords are `dt`, `substeps`, `newton`, `lower`, `inner`, `solver_T` and `init`"))
+        "; its keywords are `dt`, `substeps`, `newton`, `lower`, `inner`, `solver_T`, `init` and `compute_T`"))
 end
 function BackwardEuler(; dt = nothing, substeps = nothing, newton = nothing, lower = nothing, inner = :auto,
-        solver_T = :auto, init = nothing, kw...)
+        solver_T = :auto, init = nothing, compute_T = :auto, kw...)
     isempty(kw) || throw(_implicit_kwerror("BackwardEuler", kw))
-    return BackwardEuler(dt, substeps, newton, lower, inner, solver_T, init)
+    return BackwardEuler(dt, substeps, newton, lower, inner, solver_T, init, compute_T)
 end
 nbuffers(::BackwardEuler) = 2
 
 """
     CrankNicolson(; dt = nothing, substeps = nothing, newton = nothing, lower = nothing,
-                    inner = :auto, solver_T = :auto, init = nothing)
+                    inner = :auto, solver_T = :auto, init = nothing, compute_T = :auto)
 
 Crank–Nicolson (the trapezoidal rule, second order): each substep of `h = dt / n` solves
 `(u − uⁿ)/h = (r(uⁿ) + r(u))/2`, `r(uⁿ)` at the substep's start time `tⁿ` and `r(u)` at its end
@@ -197,19 +226,21 @@ struct CrankNicolson <: ImplicitAlgorithm
     inner::Any
     solver_T::Any
     init::Union{Nothing, Symbol}
-    CrankNicolson(dt, substeps, newton, lower, inner, solver_T, init = nothing) =
-        new(_implicit_keywords("CrankNicolson", dt, substeps, newton, lower, inner, solver_T)..., _init_keyword("CrankNicolson", init))
+    compute_T::Any
+    CrankNicolson(dt, substeps, newton, lower, inner, solver_T, init = nothing, compute_T = :auto) =
+        new(_implicit_keywords("CrankNicolson", dt, substeps, newton, lower, inner, solver_T)..., _init_keyword("CrankNicolson", init),
+            _compute_keyword("CrankNicolson", compute_T))
 end
 function CrankNicolson(; dt = nothing, substeps = nothing, newton = nothing, lower = nothing, inner = :auto,
-        solver_T = :auto, init = nothing, kw...)
+        solver_T = :auto, init = nothing, compute_T = :auto, kw...)
     isempty(kw) || throw(_implicit_kwerror("CrankNicolson", kw))
-    return CrankNicolson(dt, substeps, newton, lower, inner, solver_T, init)
+    return CrankNicolson(dt, substeps, newton, lower, inner, solver_T, init, compute_T)
 end
 nbuffers(::CrankNicolson) = 2
 
 """
     BDF2(; dt = nothing, substeps = nothing, newton = nothing, lower = nothing,
-           inner = :auto, solver_T = :auto, init = nothing)
+           inner = :auto, solver_T = :auto, init = nothing, compute_T = :auto)
 
 The two-step backward differentiation formula (second order, L-stable): each substep of
 `h = dt / n` solves `(u − (4uⁿ − uⁿ⁻¹)/3)/(2h/3) = r(u)` at its end time `tⁿ⁺¹`, by the Newton
@@ -235,18 +266,20 @@ struct BDF2 <: ImplicitAlgorithm
     inner::Any
     solver_T::Any
     init::Union{Nothing, Symbol}
-    BDF2(dt, substeps, newton, lower, inner, solver_T, init = nothing) =
-        new(_implicit_keywords("BDF2", dt, substeps, newton, lower, inner, solver_T)..., _init_keyword("BDF2", init))
+    compute_T::Any
+    BDF2(dt, substeps, newton, lower, inner, solver_T, init = nothing, compute_T = :auto) =
+        new(_implicit_keywords("BDF2", dt, substeps, newton, lower, inner, solver_T)..., _init_keyword("BDF2", init),
+            _compute_keyword("BDF2", compute_T))
 end
 function BDF2(; dt = nothing, substeps = nothing, newton = nothing, lower = nothing, inner = :auto,
-        solver_T = :auto, init = nothing, kw...)
+        solver_T = :auto, init = nothing, compute_T = :auto, kw...)
     isempty(kw) || throw(_implicit_kwerror("BDF2", kw))
-    return BDF2(dt, substeps, newton, lower, inner, solver_T, init)
+    return BDF2(dt, substeps, newton, lower, inner, solver_T, init, compute_T)
 end
 nbuffers(::BDF2) = 2
 
 """
-    QuasiSteady(; dt = nothing, newton = nothing, inner = :auto, solver_T = :auto, init = nothing)
+    QuasiSteady(; dt = nothing, newton = nothing, inner = :auto, solver_T = :auto, init = nothing, compute_T = :auto)
 
 The steady state of a group in each window (F3 design §3.5): `0 = r(u)`, solved once per
 window at the window's start time (A: at the σ of that MCS; B: at the integrator's inputs) by
@@ -260,7 +293,7 @@ this way follows the inputs at once, as a steady field does.
   switched row, a term out of the operator), each checked on the device: the run stops early
   on a CPU once the correction is below `10⁻³` of the field, and a budget hit is counted and
   warned. `k ≥ 1` runs exactly `k`.
-- `inner`, `solver_T`: as for [`BackwardEuler`](@ref).
+- `inner`, `solver_T`, `compute_T`: as for [`BackwardEuler`](@ref).
 - `init = :steady`: the initial state too is the steady state (one more solve before the first
   window, as for [`BackwardEuler`](@ref)); without it the state at the start time is the initial
   state, and the first window solves.
@@ -284,29 +317,35 @@ struct QuasiSteady <: ImplicitAlgorithm
     inner::Any
     solver_T::Any
     init::Union{Nothing, Symbol}
-    function QuasiSteady(dt, newton, inner, solver_T, init = nothing)
+    compute_T::Any
+    function QuasiSteady(dt, newton, inner, solver_T, init = nothing, compute_T = :auto)
         d, _, k, _, i, T = _implicit_keywords("QuasiSteady", dt, nothing, newton, nothing, inner, solver_T)
-        return new(d, nothing, k, nothing, i, T, _init_keyword("QuasiSteady", init))
+        return new(d, nothing, k, nothing, i, T, _init_keyword("QuasiSteady", init), _compute_keyword("QuasiSteady", compute_T))
     end
 end
-function QuasiSteady(; dt = nothing, newton = nothing, inner = :auto, solver_T = :auto, init = nothing, kw...)
+function QuasiSteady(; dt = nothing, newton = nothing, inner = :auto, solver_T = :auto, init = nothing, compute_T = :auto, kw...)
     haskey(kw, :substeps) && throw(ArgumentError(string("QuasiSteady: no keyword `substeps`: a steady field is solved ",
         "once per window; give `newton = k` for more Newton iterations per window")))
     haskey(kw, :lower) && throw(ArgumentError(string("QuasiSteady: no keyword `lower`: a steady solve has no substep to ",
         "clip (a steady state below a bound means the equation allows it; `BackwardEuler` keeps nonnegative data ",
         "nonnegative)")))
     isempty(kw) || throw(ArgumentError(string("QuasiSteady: no keyword ", join(("`$k`" for k in keys(kw)), ", "),
-        "; its keywords are `dt`, `newton`, `inner`, `solver_T` and `init`")))
-    return QuasiSteady(dt, newton, inner, solver_T, init)
+        "; its keywords are `dt`, `newton`, `inner`, `solver_T`, `init` and `compute_T`")))
+    return QuasiSteady(dt, newton, inner, solver_T, init, compute_T)
 end
 nbuffers(::QuasiSteady) = 2
 
 """
-    ExplicitMap()
+    ExplicitMap(; compute_T = :auto)
 
-Discrete maps `Shift(t, 1)(c) ~ rhs` (§5.5): one application per unit of time.
+Discrete maps `Shift(t, 1)(c) ~ rhs` (§5.5): one application per unit of time. `compute_T`:
+as for [`BackwardEuler`](@ref).
 """
-struct ExplicitMap <: FieldAlgorithm end
+struct ExplicitMap <: FieldAlgorithm
+    compute_T::Any
+    ExplicitMap(compute_T) = new(_compute_keyword("ExplicitMap", compute_T))
+end
+ExplicitMap(; compute_T = :auto) = ExplicitMap(compute_T)
 nbuffers(::ExplicitMap) = 2
 
 # The window of a step of `alg` on a problem whose discretization declares the clock of period
@@ -496,12 +535,13 @@ the algorithm is, not the host object, so equal specifications built afresh prin
 `ExplicitEuler` prints `ExplicitEuler(substeps=…,lower=…)` (its window `dt` is the
 problem's, not part of the scheme); another algorithm prints every field but `dt`, sorted by
 name, each by `canonical`; `:auto` prints as given (`:auto`, unresolved, so a CPU and a
-device problem print alike). A `FieldGroups` prints its pairs as given (a front end that
+device problem print alike). `init = nothing` and `compute_T = :auto` (the defaults added
+in F3) are left out, so the texts recorded before them stay. A `FieldGroups` prints its pairs as given (a front end that
 resolves it per field, front end A, prints the per-field map instead).
 """
 canonical(s::ExplicitEuler) = string("ExplicitEuler(substeps=", repr(s.substeps), ",lower=", repr(s.lower),
-    s.init === nothing ? "" : string(",init=", repr(s.init)), ")")
-canonical(::ExplicitMap) = "ExplicitMap()"
+    s.init === nothing ? "" : string(",init=", repr(s.init)), s.compute_T === :auto ? "" : string(",compute_T=", s.compute_T), ")")
+canonical(m::ExplicitMap) = m.compute_T === :auto ? "ExplicitMap()" : string("ExplicitMap(compute_T=", m.compute_T, ")")
 canonical(g::FieldGroups) = string("FieldGroups(", join((string(k, "=", canonical(a)) for (k, a) in g.pairs), ","),
     ";default=", g.default === nothing ? "nothing" : canonical(g.default), ")")
 canonical(a::FieldAlgorithm) = _canonical_fields(a)
@@ -515,11 +555,12 @@ canonical(x) = throw(ArgumentError("no canonical text for $(repr(x)) (a `$(typeo
                                    "keywords are numbers, symbols, types or solver parts"))
 _canonical_fields(s) = string(nameof(typeof(s)), "(",
     join((string(f, "=", canonical(getfield(s, f))) for f in sort!(collect(fieldnames(typeof(s))))
-          if f !== :dt && !(f === :init && getfield(s, f) === nothing)), ","), ")")
+          if f !== :dt && !(f === :init && getfield(s, f) === nothing) && !(f === :compute_T && getfield(s, f) === :auto)), ","), ")")
 
 # an algorithm in messages, in its keyword form (`ExplicitEuler(; dt = 0.01, substeps = 2)`)
 function _algtext(a::ExplicitEuler)
     kw = [string(k, " = ", repr(getfield(a, k))) for k in (:dt, :substeps, :lower, :init) if getfield(a, k) !== nothing]
+    a.compute_T === :auto || push!(kw, string("compute_T = ", a.compute_T))
     return isempty(kw) ? "ExplicitEuler()" : string("ExplicitEuler(; ", join(kw, ", "), ")")
 end
 function _algtext(a::Union{BackwardEuler, CrankNicolson, BDF2, QuasiSteady})
@@ -527,6 +568,7 @@ function _algtext(a::Union{BackwardEuler, CrankNicolson, BDF2, QuasiSteady})
     a.inner === :auto || push!(kw, string("inner = ", repr(a.inner)))
     a.solver_T === :auto || push!(kw, string("solver_T = ", a.solver_T))
     a.init === nothing || push!(kw, string("init = ", repr(a.init)))
+    a.compute_T === :auto || push!(kw, string("compute_T = ", a.compute_T))
     w = nameof(typeof(a))
     return isempty(kw) ? string(w, "()") : string(w, "(; ", join(kw, ", "), ")")
 end

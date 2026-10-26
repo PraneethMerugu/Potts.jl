@@ -88,8 +88,9 @@ re-seed it), its initial value on every initial link of its relationship (both e
 default: its declared default); links made later by `@link` start at the declared default. `T` is the scalar
 type of the generated code and state: by default `Float64`, or the default float type of
 `backend` when one is given (`Float32` on a device, `LatticeFields.Exec.default_float`; pass
-the same backend to `init`/`solve`). A field declared `c(field) = …, [lattice_storage = Float16]`
-is stored in Float16 and computed in `T`. The generated code is `Potts.generated_code(sys; T)`.
+the same backend to `init`/`solve`). A field declared `c(field) = …, [lattice_storage = S]`
+(`Float16`, `Float32` or `Float64`) is stored in `S` and computed in its field solver's
+`compute_T` (default `T`). The generated code is `Potts.generated_code(sys; T)`.
 
 How fields and ODEs are integrated is part of the problem, compiled into its code:
 - `field_solver = ExplicitEuler(; substeps, lower)` integrates the fields, and is an error
@@ -796,12 +797,23 @@ _cpm_scalar(::Type{T}, v, i::Entity) where {T} = v isa Union{AbstractFloat, Inte
         T(v)
     catch e
         e isa Union{MethodError, InexactError, ArgumentError} || rethrow()
-        throw(ArgumentError("parameter `$(i.name)` = $v (a $(typeof(v))) does not convert to the problem's scalar type $T: " *
+        throw(ArgumentError("parameter `$(i.name)` = $(_valtext(v)) does not convert to the problem's scalar type $T: " *
             "a PottsProblem holds plain numbers for every parameter in this version (no Duals). Derivatives " *
-            "through field and ODE parameters are planned; a parameter the CPM reads has a derivative that is zero " *
+            "through field and ODE parameters are planned; meanwhile take finite differences of the run, or " *
+            "differentiate the fields alone in a `FieldProblem` (`Potts.fields(model)`, then `discretize`: " *
+            "ForwardDiff runs through `ExplicitEuler` there). A parameter the CPM reads has a derivative that is zero " *
             "almost everywhere (the acceptance of a copy is piecewise constant in it), so it belongs to " *
             "likelihood-free inference"))
     end
+
+# a value in a message: a ForwardDiff Dual by its value and value type, not its type (whose tag
+# can embed the whole problem's type: several KB; batch 5 review S4)
+function _valtext(v)
+    T = typeof(v)
+    V = LatticeFields.Compile.valtype(T)
+    T <: Real && V !== T && return string("a ForwardDiff `Dual` of ", V, " (value ", LatticeFields.Compile.primal(v), ")")
+    return string(v, " (a ", T, ")")
+end
 
 function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{Any, Any}())
     sys = c.sys

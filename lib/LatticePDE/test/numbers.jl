@@ -4,7 +4,7 @@
 # and hoisted time. Each row has a negative control.
 using ForwardDiff: ForwardDiff
 using OrdinaryDiffEqRosenbrock: Rodas5P
-using LatticeFields: Compile
+using LatticeFields: LatticeFields, Compile
 using SciMLStructures: SciMLStructures, Tunable
 
 @parameters Dn = 0.5 kn = 0.3 gn = 1.0 ωn = 3.0 K0n = 0.2
@@ -225,4 +225,205 @@ end
         # Float64 defaults stay a Float64 vector
         @test eltype(sown(tsys; inputs = [qe => K]).p) == Float64
     end
+end
+
+# F3-14 (FE-17, F3 design §3.8): number types per role. A field's declared `lattice_storage`
+# holds its own type whatever the problem's (an aux field here: a `FieldProblem`'s state is
+# one vector, so its state fields are stored in T and a different declared storage is refused
+# in words); `compute_T` compiles a group's kernels in a wider type than its storage; Duals
+# keep their partials through a declared storage. Base f5641ce1: `compute_T` is no keyword, a
+# declared Float64 storage holds the problem's Float32, so every test fails or errors.
+@testset "F3-14: lattice_storage, compute_T and solver_T in B (FE-17)" begin
+    @parameters kw = 0.25
+    @variables wu(..) wK(..) [lattice_storage = Float64] wh(..) [lattice_storage = Float16] wc(..) [lattice_storage = Float64]
+    wue, wKe, whe, wce = wu(t, x, y), wK(t, x, y), wh(t, x, y), wc(t, x, y)
+    wdom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    wsys = PDESystem([wKe ~ 2 * wue, whe ~ wue / 2, D(wue) ~ 0.0625 * Δ(wue) - kw * wKe], [wu(0, x, y) ~ x * y], wdom, [t, x, y],
+        [wue, wKe, whe], [kw]; name = :w)
+    wd(T) = discretize(wsys, LatticeDiscretization(Grid((16, 16)); T, problem = :owned))
+    run(T, alg) = (i = init(wd(T), alg); step!(i); i)
+    # the stores have the declared types: the state in T, the aux fields in their own
+    for T in (Float32, Float64)
+        i = run(T, ExplicitEuler(; dt = 0.05))
+        @test eltype(i[wue]) == T && eltype(i[wKe]) == Float64 && eltype(i[whe]) == Float16
+    end
+    # a state field whose declared storage differs from T keeps it on the owned path (batch 5
+    # review S2: each state field its own arrays, as A's), and equals the all-Float64 run: a
+    # Float64 field on a Float32 problem; a Float16 and a Float64 field beside a T field
+    csys = PDESystem([D(wce) ~ 0.0625 * Δ(wce) - 0.125 * wce], [wc(0, x, y) ~ x], wdom, [t, x, y], [wce], Any[]; name = :w)
+    c32 = solve(discretize(csys, LatticeDiscretization(Grid((8, 8)); T = Float32, problem = :owned)),
+        ExplicitEuler(; dt = 0.05, compute_T = Float64))
+    @variables wc64(..)
+    c64 = solve(discretize(PDESystem([D(wc64(t, x, y)) ~ 0.0625 * Δ(wc64(t, x, y)) - 0.125 * wc64(t, x, y)], [wc64(0, x, y) ~ x],
+        wdom, [t, x, y], [wc64(t, x, y)], Any[]; name = :w), LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned)),
+        ExplicitEuler(; dt = 0.05))
+    @test eltype(c32.u[end]) == Float64 && c32.u[end] == c64.u[end]
+    msys = PDESystem([D(wue) ~ 0.0625 * Δ(wue) - 0.5 * wue + 0.25 * wce, D(whe) ~ 0.0625 * Δ(whe) - 0.125 * whe,
+            D(wce) ~ 0.0625 * Δ(wce) - 0.125 * wce], [wu(0, x, y) ~ 0.0, wh(0, x, y) ~ x, wc(0, x, y) ~ y], wdom, [t, x, y],
+        [wue, whe, wce], Any[]; name = :m)
+    pm = discretize(msys, LatticeDiscretization(Grid((8, 8)); T = Float32, problem = :owned))
+    im = init(pm, ExplicitEuler(; dt = 0.05))
+    step!(im)
+    @test eltype(im[wue]) == Float32 && eltype(im[whe]) == Float16 && eltype(im[wce]) == Float64
+    sm = solve(pm, BackwardEuler(; dt = 0.05))
+    @test SciMLBase.successful_retcode(sm.retcode) && eltype(sm.u[end]) == Float64     # (the saves: their promotion)
+    @test sm[wce][end] ≈ solve(remake(pm), ExplicitEuler(; dt = 0.05))[wce][end] rtol = 1e-2
+    # a write and `reinit!` reach each field in its own type
+    im[wce] = fill(0.25, 8, 8)
+    @test im[wce] == fill(0.25, 8, 8) && eltype(im[wce]) == Float64
+    SciMLBase.reinit!(im)
+    i0 = init(pm, ExplicitEuler(; dt = 0.05))
+    @test im[whe] == i0[whe] && im[wce] == i0[wce] && im[wue] == i0[wue]
+    # on problem = :ode the solver's state is one vector of T: refused there, with the route
+    e = try
+        discretize(csys, LatticeDiscretization(Grid((8, 8)); T = Float32, problem = :ode))
+        ""
+    catch err
+        sprint(showerror, err)
+    end
+    @test occursin("`lattice_storage = Float64` differs from the problem's number type T = Float32", e) &&
+          occursin("problem = :owned", e)
+    # compute_T: a rate `max(a, u) − b` with `a = 1 + 2⁻²⁵`, `b = 1` is 0 in Float32 (`a` rounds
+    # to 1; `max` keeps the host from deriving `a − b` in Float64) and 2⁻²⁵ in Float64: computed in Float64, a Float32 problem follows the Float64 run (to its
+    # storage's rounding); computed in Float32 (the control) it stays at 0
+    @parameters za = 1 + 2.0^-25 zb = 1.0
+    @variables zu(..)
+    zue = zu(t, x, y)
+    zsys = PDESystem([D(zue) ~ max(za, zue) - zb], [zu(0, x, y) ~ 0.0], wdom, [t, x, y], [zue], [za, zb]; name = :z)
+    zrun(T, alg) = (i = init(discretize(zsys, LatticeDiscretization(Grid((4, 4)); T, problem = :owned)), alg); step!(i); i[zue])
+    for (a32, a64) in ((ExplicitEuler(; dt = 0.5), ExplicitEuler(; dt = 0.5, compute_T = Float64)),
+                       (BackwardEuler(; dt = 0.5), BackwardEuler(; dt = 0.5, compute_T = Float64, solver_T = Float64)))
+        ref = zrun(Float64, a32)
+        lo, hi = zrun(Float32, a32), zrun(Float32, a64)
+        @test all(iszero, lo) && eltype(hi) == Float32                 # the storage stays T
+        @test all(>(0), ref) && maximum(abs, Float64.(hi) .- ref) <= 1e-7 * maximum(ref)
+    end
+    # solver_T: the solver's own type, whatever compute_T
+    ig = init(wd(Float32), BackwardEuler(; dt = 0.05, solver_T = Float64))
+    @test only(only(ig.runtimes).cache.rows).solver.T == Float64
+    # Duals flow through a declared storage: an aux field stored in Float32 on a Float64
+    # problem holds Dual{…, Float32} under a Dual parameter, and ∂J/∂k agrees with differences
+    @variables wK32(..) [lattice_storage = Float32]
+    wK32e = wK32(t, x, y)
+    dsys = PDESystem([wK32e ~ 2 * wue, D(wue) ~ 0.0625 * Δ(wue) - kw * wK32e], [wu(0, x, y) ~ x * y], wdom, [t, x, y],
+        [wue, wK32e], [kw]; name = :d)
+    pd = discretize(dsys, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
+    @variables wK64(..)
+    wK64e = wK64(t, x, y)
+    pr = discretize(PDESystem([wK64e ~ 2 * wue, D(wue) ~ 0.0625 * Δ(wue) - kw * wK64e], [wu(0, x, y) ~ x * y], wdom, [t, x, y],
+        [wue, wK64e], [kw]; name = :d), LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
+    J(q, v) = sum(solve(remake(q; p = [kw => v]), ExplicitEuler(; dt = 0.05)).u[end])
+    d, dref = ForwardDiff.derivative(v -> J(pd, v), 0.25), ForwardDiff.derivative(v -> J(pr, v), 0.25)
+    @test d != 0 && d != dref && isapprox(d, dref; rtol = 1e-5)     # (the aux field's Float32 rounding)
+    iz = init(remake(pd; p = [kw => ForwardDiff.Dual(0.25, 1.0)]), ExplicitEuler(; dt = 0.05))
+    @test ForwardDiff.valtype(eltype(iz[wK32e])) == Float32
+    # the canonical text: `compute_T = :auto` is left out (recorded texts stay), a type is printed
+    LFP = LatticePDE.Problems
+    @test LFP.canonical(ExplicitEuler()) == "ExplicitEuler(substeps=nothing,lower=nothing)"
+    @test LFP.canonical(ExplicitEuler(; compute_T = Float64)) == "ExplicitEuler(substeps=nothing,lower=nothing,compute_T=Float64)"
+    @test occursin("compute_T=Float64", LFP.canonical(BackwardEuler(; compute_T = Float64))) &&
+          !occursin("compute_T", LFP.canonical(BackwardEuler()))
+    # a compute type that is not one is refused, naming the keyword
+    e = try
+        ExplicitEuler(; compute_T = Int)
+        ""
+    catch err
+        sprint(showerror, err)
+    end
+    @test occursin("`compute_T` takes `:auto` (the problem's value type), `Float32` or `Float64`", e)
+end
+
+# Batch 5 review S1: a field stored in Float16 under the implicit algorithms is solved in the
+# state's value type (its residual held there; each update rounds once to Float16), with any
+# `compute_T`; accurate to its storage against the Float64 run. Base 97045a1b
+# (~/lpwork/b5r1-nc-s1.log): refused, "an implicit solve runs in Float32 or Float64".
+@testset "F3-14 S1: Float16 storage under the implicit algorithms" begin
+    @variables sh(..) [lattice_storage = Float16] s64(..)
+    she, s64e = sh(t, x, y), s64(t, x, y)
+    sdom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    mk(v, T) = (f = v === she ? sh : s64;
+                discretize(PDESystem([D(v) ~ 0.0625 * Δ(v) - 0.5 * v], [f(0, x, y) ~ x * y + 0.5],
+                    sdom, [t, x, y], [v], Any[]; name = :s), LatticeDiscretization(Grid((16, 16)); T, problem = :owned)))
+    ref = solve(mk(s64e, Float64), BackwardEuler(; dt = 0.1)).u[end]
+    for T in (Float32, Float64), alg in (BackwardEuler(; dt = 0.1), BackwardEuler(; dt = 0.1, compute_T = Float64),
+                                         CrankNicolson(; dt = 0.1), BDF2(; dt = 0.1))
+        T == Float64 && alg isa BackwardEuler && alg.compute_T === Float64 && continue
+        s = solve(mk(she, T), alg)
+        @test SciMLBase.successful_retcode(s.retcode) && eltype(s.u[end]) == Float16
+        r = alg isa BackwardEuler ? ref : solve(mk(s64e, Float64), typeof(alg).name.wrapper(; dt = 0.1)).u[end]
+        @test maximum(abs, Float64.(s.u[end]) .- r) <= 4e-3 * maximum(abs, r)      # (Float16: eps 9.8e-4)
+    end
+    @test SciMLBase.successful_retcode(solve(mk(she, Float32), QuasiSteady(; dt = 0.1)).retcode)
+    # a Dual state under an implicit solve: the refusal names the ForwardDiff route, not the tag
+    e = try
+        solve(remake(mk(s64e, Float64); u0 = ForwardDiff.Dual.(mk(s64e, Float64).u0, 1.0)), BackwardEuler(; dt = 0.1))
+        ""
+    catch err
+        sprint(showerror, err)
+    end
+    @test occursin("holds ForwardDiff Duals of Float64", e) && occursin("step the field with `ExplicitEuler`", e) &&
+          !occursin("Tag", e)
+end
+
+# A declared storage on a row whose operator varies by site (a field row: a face coefficient of
+# the coordinates). Its `jac:` site values are in the row's solve type: a declared Float32 or
+# Float64 storage's own, a Float16 field's the problem's type (found while building F3-16).
+# Base 85794414 (~/lpwork/f3b6-nc-f314.log): every case errors ("`inputs`: `w1` holds Float64
+# values; this solver's state type is `Float32`", and the Float16 and Float64 forms).
+@testset "F3-14: a declared storage on a field row under the implicit algorithms" begin
+    @variables sfr(..) sfr32(..) [lattice_storage = Float32] sfr16(..) [lattice_storage = Float16] sfr64(..) [lattice_storage = Float64]
+    sdom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    mk(f, T) = discretize(PDESystem([D(f(t, x, y)) ~ 0.02 * DivKGrad(:harmonic)(1 + x, f(t, x, y)) - f(t, x, y) + 0.5 * y],
+        [f(0, x, y) ~ x * y + 0.5], sdom, [t, x, y], [f(t, x, y)], Any[]; name = :s), LatticeDiscretization(Grid((8, 8)); T, problem = :owned))
+    for (f, S, T, tol) in ((sfr32, Float32, Float64, 1e-5), (sfr16, Float16, Float32, 4e-3), (sfr64, Float64, Float32, 1e-5))
+        for alg in (BackwardEuler(; dt = 0.05), CrankNicolson(; dt = 0.05), BDF2(; dt = 0.05), QuasiSteady(; dt = 0.05))
+            r = solve(mk(sfr, Float64), alg)[sfr(t, x, y), 2]
+            s = solve(mk(f, T), alg)
+            @test SciMLBase.successful_retcode(s.retcode) && eltype(s[f(t, x, y), 2]) == S
+            @test maximum(abs, Float64.(s[f(t, x, y), 2]) .- r) <= tol * maximum(abs, r)
+        end
+    end
+end
+
+# Batch 5 review S3 and N4: a group that declares Float64 on a backend without it (Metal) is
+# refused at the bind in words; a stub backend whose `supports_float64` is false stands in.
+# The D-157 registry of a store's generic bodies is keyed on a Float64 device array.
+struct NoF64Backend <: LatticeFields.Exec.KernelAbstractions.GPU end
+LatticeFields.Exec.KernelAbstractions.supports_float64(::NoF64Backend) = false
+@testset "F3-14 S3, N4: Float64 on a backend without it; the registry's keys" begin
+    LFP = LatticePDE.Problems
+    @variables nw(..) [lattice_storage = Float64] nv(..)
+    nwe, nve = nw(t, x, y), nv(t, x, y)
+    ndom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    emsg(f) = try
+        f(); ""
+    catch err
+        sprint(showerror, err)
+    end
+    pw = discretize(PDESystem([D(nwe) ~ Δ(nwe)], [nw(0, x, y) ~ x], ndom, [t, x, y], [nwe], Any[]; name = :n),
+        LatticeDiscretization(Grid((8, 8)); T = Float32, problem = :owned))
+    pv = discretize(PDESystem([D(nve) ~ Δ(nve)], [nv(0, x, y) ~ x], ndom, [t, x, y], [nve], Any[]; name = :n),
+        LatticeDiscretization(Grid((8, 8)); T = Float32, problem = :owned))
+    nb = NoF64Backend()
+    m = emsg(() -> LFP.check_backend_float64(pw.program, ExplicitEuler(), nb, Float32; fields = ["nw"]))
+    @test occursin("field `nw`: the field `nw` is declared `lattice_storage = Float64`, which needs Float64 on the device", m) &&
+          occursin("`lattice_storage = Float32`", m)
+    m = emsg(() -> LFP.check_backend_float64(pv.program, BackwardEuler(; compute_T = Float64), nb, Float32; fields = ["nv"]))
+    @test occursin("`compute_T = Float64` needs Float64 on the device", m) && occursin("give `compute_T = Float32`", m)
+    m = emsg(() -> LFP.check_backend_float64(pv.program, BackwardEuler(; solver_T = Float64), nb, Float32; fields = ["nv"]))
+    @test occursin("`solver_T = Float64` needs Float64 on the device", m)
+    # nothing declared, or a backend with Float64: no refusal
+    @test LFP.check_backend_float64(pv.program, BackwardEuler(), nb, Float32; fields = ["nv"]) === nothing
+    @test LFP.check_backend_float64(pw.program, ExplicitEuler(), LatticeFields.Exec.KernelAbstractions.CPU(), Float32) === nothing
+    # N4: a store holding Float64 on such a backend registers its generic bodies by a Float64
+    # device array; the same body over Float32 arrays with a Float64 scalar is not skipped
+    Ex = LatticeFields.Exec
+    saved = copy(Ex.FLOAT64_KERNELS)
+    empty!(Ex.FLOAT64_KERNELS)
+    LFP._register_float64_store!(nb, [Any[zeros(Float64, 4)]])
+    clip = string(typeof(LFP._clip_body!))
+    @test Ex.float64_registered("Tuple{kernel, $clip, ROCDeviceArray{Float64, 1, 1}, Float64}")
+    @test !Ex.float64_registered("Tuple{kernel, $clip, ROCDeviceArray{Float32, 1, 1}, Float64}")
+    empty!(Ex.FLOAT64_KERNELS)
+    union!(Ex.FLOAT64_KERNELS, saved)
 end

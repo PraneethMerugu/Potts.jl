@@ -967,5 +967,5 @@ end
     @test startswith(m, "ExplicitEuler: `inner = DevicePCG()`: `inner` is a keyword of the implicit field solvers") &&
           occursin("leave `inner` out", m)
     @test e(() -> ExplicitEuler(; dt = 0.01, step = 2)) ==
-          "ExplicitEuler: no keyword `step`; its keywords are `dt`, `substeps`, `lower` and `init`"
+          "ExplicitEuler: no keyword `step`; its keywords are `dt`, `substeps`, `lower`, `init` and `compute_T`"
 end

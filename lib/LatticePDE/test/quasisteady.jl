@@ -170,7 +170,7 @@ end
     # the keywords
     @test startswith(qmsg(() -> QuasiSteady(; substeps = 2)), "QuasiSteady: no keyword `substeps`: a steady field is solved once per window")
     @test startswith(qmsg(() -> QuasiSteady(; lower = 0.0)), "QuasiSteady: no keyword `lower`: a steady solve has no substep to clip")
-    @test qmsg(() -> QuasiSteady(; theta = 1)) == "QuasiSteady: no keyword `theta`; its keywords are `dt`, `newton`, `inner`, `solver_T` and `init`"
+    @test qmsg(() -> QuasiSteady(; theta = 1)) == "QuasiSteady: no keyword `theta`; its keywords are `dt`, `newton`, `inner`, `solver_T`, `init` and `compute_T`"
     @test startswith(qmsg(() -> QuasiSteady(; newton = 0)), "QuasiSteady: newton = 0 is the Newton iterations per substep")
     a = QuasiSteady(; dt = 0.5, newton = 3)
     @test repr(a) == "QuasiSteady(; dt = 0.5, newton = 3)" && eval(Meta.parse(repr(a))) == a && repr(QuasiSteady()) == "QuasiSteady()"

@@ -18,7 +18,7 @@ using SciMLBase: SciMLBase
 using SymbolicIndexingInterface: SymbolicIndexingInterface as SII
 using ..Exec: Exec
 using ..IR: Coef, Ex, FaceRule, NodeValueRule, Program, RUNTIME, PARAM, LOAD, fieldid, print_program, isfloat, juliatype, leveldims, ncomp, nsites,
-            runtime!, degenerate, FACE_RTOL
+            runtime!, degenerate, FACE_RTOL, F64, F16
 using ..Compile: CompiledKernel, CompileOptions, body_function, derive_function, lanecast, lanetype,
                  primal, promote_dual, semantic, valtype, withvaltype, writes, fuse_update, fuse_residual
 using ..Schedule: LaunchSpec, StepPlan, plan
@@ -33,7 +33,7 @@ public Geom, RT_T, RT_DT, launch_geometry, launch_parameters, bind, rebind, reti
        run_step!, FaceCheck, face_checks, degenerate_face, check_faces, face_ratio, FieldSlot,
        LatticeIndex, FieldAlgorithm, LinearSolver, linear_solver_refusal, ExplicitEuler, ExplicitMap, nbuffers, FieldProblem,
        FieldGroups, update_key, update_rule, EulerRule, alg_family, alg_cache, reset_cache!, step_retcode!, GroupSpec, FieldGroup,
-       ParamSlot, TableSpec, InputSpec, canonical, check_status!, check_declared!, check_declared_state, status_word, status_route, StatusTotals, STATUS_CODE,
+       ParamSlot, TableSpec, InputSpec, canonical, check_status!, check_declared!, check_declared_state, check_backend_float64, status_word, status_route, StatusTotals, STATUS_CODE,
        STATUS_WINDOW, STATUS_CAUSE, STATUS_SOLVES, STATUS_BUDGET, STATUS_FLOOR, STATUS_NEWTON_BUDGET, STATUS_CAUSES, field_stats,
        group_program, group_plans, restrict_bound, GroupRuntime, bind_group, advance!, reset!, clear_status!, window_text, rebind!, clamp_now!,
        FieldSolution,
@@ -57,7 +57,7 @@ include("implicit.jl")
 include("ode.jl")
 
 # the coupling between field groups and the per-group counts (review of F2-06)
-public substep_counts, lagged_coupling, group_loops, steady_loop_rates, steady_start, starts_steady, StartText, StartSubsteps
+public compute_type, substep_counts, lagged_coupling, group_loops, steady_loop_rates, steady_start, starts_steady, StartText, StartSubsteps
 # the one substep policy of both front ends and its words (F3-01)
 public PolicyTexts, ProblemTexts, GroupSubsteps, check_coupling, bound_report, unbounded_text, uncovered_text,
        refuse_parameters, coupling_unknown_text, coupling_unbounded_text, loop_text, steady_loop_text, steady_gain_text,

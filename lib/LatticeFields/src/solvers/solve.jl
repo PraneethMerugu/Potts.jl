@@ -293,7 +293,11 @@ function FieldSolver(exec, op::CellOperator{N}; inner = :auto, T = Float32,
     p, ctx = solver_program(op, alg isa DevicePCG; lane = lane(T), state = lane(state),
         deflate = dfl)
     s = semantic(p)
-    o = CompileOptions(; T)
+    # a Float64 solver on a device whose default float is Float32 (an explicit `solver_T`, or
+    # `:auto` in the floor regime, D-C7b): its kernels are registered (D-157 carve-out, R-F3c)
+    declared = T === Float64 && Exec.default_float(exec) !== Float64
+    o = CompileOptions(; T, declared)
+    declared && foreach(f -> Exec.register_float64!(string(typeof(f)), "Float64"), (finish!, bottom!, gershgorin!))
     bodies = Dict{String, Any}()
     praw = coef_values(op)                # coefficients are runtime parameters (P5 C7b-2)
     for k in s.kernels

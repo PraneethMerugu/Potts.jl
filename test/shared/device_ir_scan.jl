@@ -64,6 +64,15 @@ end
 # the deliberate controls: this file's and the hook-based ones of test/device_ir.jl (Potts)
 iscontrol(sig) = occursin("DeviceIRScan.gpu_scan_", sig) || occursin("DeviceIR.gpu_devir_", sig)
 
+# The D-157 carve-out (F3 design §3.8, R-F3c): kernels whose Float64 a user declared (a group's
+# `compute_T` or `solver_T`, a field's `lattice_storage` of Float64) are registered in
+# LatticeFields' Exec registry, and the scan skips exactly those
+function _exec()
+    k = findfirst(id -> id.name == "LatticeFields", collect(keys(Base.loaded_modules)))
+    return k === nothing ? nothing : Base.loaded_modules[collect(keys(Base.loaded_modules))[k]].Exec
+end
+registered(sig) = (E = _exec(); E !== nothing && E.float64_registered(sig))
+
 """Run the controls, scan the cache, test; record the signatures for the coverage check."""
 function check(suite::AbstractString)
     @testset "device IR: no `double` in any kernel this suite compiled ($suite, full scan)" begin
@@ -73,8 +82,21 @@ function check(suite::AbstractString)
         @test count(r -> occursin("DeviceIRScan.gpu_scan_", r[1]), ctl) == 3   # control: all three cached
         @test count(r -> !isempty(r[2]), ctl) == count(r -> occursin("f64", r[1]), ctl) >= 2
         @test all(r -> occursin("f64", r[1]) == !isempty(r[2]), ctl)      # flagged ⇔ Float64
-        real = filter(r -> !iscontrol(r[1]), res)
+        reg = filter(r -> !iscontrol(r[1]) && registered(r[1]), res)
+        real = filter(r -> !iscontrol(r[1]) && !registered(r[1]), res)
         @test length(real) > 0
+        if !isempty(reg)
+            # the carve-out is used (a registered kernel holds `double`), and without the registry
+            # those kernels are flagged (negative control: the registry entries removed)
+            @test any(r -> !isempty(r[2]), reg)
+            E = _exec()
+            saved = copy(E.FLOAT64_KERNELS)
+            empty!(E.FLOAT64_KERNELS)
+            flagged = count(r -> !isempty(r[2]) && !registered(r[1]), reg)
+            union!(E.FLOAT64_KERNELS, saved)
+            @test flagged > 0
+            @info "device IR: declared Float64 kernels skipped ($suite)" kernels = length(reg) with_double = count(r -> !isempty(r[2]), reg)
+        end
         for (sig, d) in real
             @test isempty(d)
             isempty(d) || @error "device IR: `double` in a kernel" kernel = first(sig, 2000) lines = first(d, 8)

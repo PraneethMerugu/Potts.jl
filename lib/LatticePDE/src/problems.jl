@@ -1651,6 +1651,19 @@ function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = (),
     cf, sys, spec = g.cf, g.sys, g.spec
     s = cf.program
     state = spec.state
+    # on the owned path each state field is stored in its own `lattice_storage` (u0 in T; the
+    # saves in the promotion of the storage types; batch 5 review S2). An ODE solver's state is
+    # its one vector of T, so there a declared storage other than T is refused (FE-17)
+    if kind == :ode
+        for k in state
+            f = s.fields[fieldid(s, k)]
+            f.fixed && juliatype(f.storage) !== T &&
+                _dverr(string("field `", k, "`: `lattice_storage = ", juliatype(f.storage), "` differs from the ",
+                    "problem's number type T = ", T, "; on problem = :ode the ODE solver's state is one vector of T, so ",
+                    "its fields are stored in T. Discretize with T = ", juliatype(f.storage), ", or use problem = :owned ",
+                    "(each field stored in its own type)"))
+        end
+    end
     index = _index(cf, sys, s, state; g.derived, g.computed, cdefaults = g.defaults, free = timefree ? free : nothing)
     x0 = _given_u0(_initial(cf, sys, state, T), index, u0)
     _check_state_bounds(x0, cf, sys, index)

@@ -597,6 +597,32 @@ if PottsDevices.device_name() == "rocm"
     end
 end
 
+# F3-14 (FE-17, D-157 carve-out R-F3c): a Float32 problem with a Float64 field computed in
+# Float64 on ROCm equals the host run to 1e-12; its kernels hold `double` and are registered in
+# LatticeFields' Exec registry, which the full scan below skips (and, with the registry entries
+# removed, flags: the scan's own negative control). Base f5641ce1: no registry, the model fails
+# to build (`lattice_storage = Float64`).
+if PottsDevices.device_name() == "rocm"
+    @testset "F3-14: a declared Float64 field group on ROCm (registered for the D-157 scan)" begin
+        backend = PottsDevices.device_backend()
+        σ = zeros(Int32, 12, 10); σ[3:5, 3:5] .= 1
+        c0 = rand(StableRNG(14), 12, 10)
+        before = length(Potts.LatticeFields.Exec.FLOAT64_KERNELS)
+        for alg in (ExplicitEuler(substeps = 8, compute_T = Float64), BackwardEuler(compute_T = Float64, solver_T = Float64))
+            prob = PottsProblem(FwWide(; name = :w), [ownership => σ, kind => [:A], :c => c0], (0, 2);
+                T = Float32, backend, seed = 3, field_solver = alg)
+            dev = init(prob, CheckerboardCPM(); backend)
+            host = init(PottsProblem(FwWide(; name = :w), [ownership => σ, kind => [:A], :c => c0], (0, 2);
+                T = Float32, seed = 3, field_solver = alg), CheckerboardCPM())
+            step!(dev); step!(host)
+            PottsDevices.device_sync()
+            @test eltype(current_state(dev).site.c) == Float64
+            @test maximum(abs, Array(current_state(dev).site.c) .- current_state(host).site.c) < 1e-12
+        end
+        @test length(Potts.LatticeFields.Exec.FLOAT64_KERNELS) > before       # registered
+    end
+end
+
 # ROCm, last: no `double` in any kernel this suite compiled (full scan of the kernel cache)
 if PottsDevices.device_name() == "rocm"
     include(joinpath(@__DIR__, "shared", "device_ir_scan.jl"))

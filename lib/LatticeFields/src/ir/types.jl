@@ -86,7 +86,11 @@ struct FieldDecl{N}
     epoch::Epoch
     buffers::Int8                    # 1, or 2 for host ping-pong
     role::Symbol                     # :state | :aux | :input | :output | :scratch
+    fixed::Bool                      # a declared storage (`lattice_storage`, FE-17): the float lane
+                                     # holds its own type under `lanes = :state` (`lanetype`)
 end
+FieldDecl{N}(key, classes, shape, symmetric, storage, levels, epoch, buffers, role) where {N} =
+    FieldDecl{N}(key, classes, shape, symmetric, storage, levels, epoch, buffers, role, false)
 ncomp(f::FieldDecl) = isempty(f.shape) ? 1 : Int(prod(f.shape))
 
 """

@@ -509,7 +509,11 @@ function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscret
     for (k, pl) in sort!(collect(plans); by = first)
         id = fieldid_in(pb, k)
         lane = pb.fields[id].storage
-        out(name; storage = lane) = field!(pb, "jac:$k.$name"; storage, role = :aux)
+        # the operator's site values in the row's solve type: a declared Float32 or Float64
+        # storage's own (`fixed`), a Float16 field's the problem's value type (it is solved in it)
+        fx = pb.fields[id].fixed
+        lane == F16 && (lane = F32)
+        out(name; storage = lane) = field!(pb, "jac:$k.$name"; storage, role = :aux, fixed = fx && storage != U8)
         wids = pl.local_only ? Int32[] : Int32[out("w$a") for a in 1:N]
         jid = isempty(pl.jterms) ? Int32(0) : out("j")
         did = pl.local_only ? Int32(0) : out("d")

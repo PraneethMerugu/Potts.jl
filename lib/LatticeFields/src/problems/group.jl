@@ -145,13 +145,13 @@ struct FieldGroup{N}
     spec::GroupSpec{N}
     program::Program{N}
     programs::Dict{Any, Program{N}}
-    plans::Dict{Tuple{Any, Type, Vector{Int}, Vector{Int}}, Tuple{StepPlan{N}, StepPlan{N}}}
+    plans::Dict{Tuple{Any, Type, Type, Vector{Int}, Vector{Int}}, Tuple{StepPlan{N}, StepPlan{N}}}
 end
 function FieldGroup(spec::GroupSpec{N}; alg = spec.kind == :map ? ExplicitMap() : ExplicitEuler(),
         program::Program{N} = semantic(fuse_update(spec.rate, update_rule(alg)))) where {N}
     s = program
     return FieldGroup{N}(spec, s, Dict{Any, Program{N}}(update_key(alg) => s),
-        Dict{Tuple{Any, Type, Vector{Int}, Vector{Int}}, Tuple{StepPlan{N}, StepPlan{N}}}())
+        Dict{Tuple{Any, Type, Type, Vector{Int}, Vector{Int}}, Tuple{StepPlan{N}, StepPlan{N}}}())
 end
 
 """
@@ -210,8 +210,8 @@ function group_plans(g::FieldGroup, alg, ::Type{V}, backend, o::CompileOptions;
     s = group_program(g, alg)
     initids, stepids = kernels
     return lock(_PLANS_LOCK) do
-        get!(g.plans, (update_key(alg), V, initids, stepids)) do
-            opts = _options(o, V, backend; clock = clock_slot(g.spec))
+        get!(g.plans, (update_key(alg), V, compute_type(alg, V), initids, stepids)) do
+            opts = _options(o, V, backend; clock = clock_slot(g.spec), C = compute_type(alg, V), s)
             (plan(s, initids; options = opts), plan(s, stepids; options = opts))
         end
     end
@@ -783,6 +783,7 @@ function bind_group(g::FieldGroup, alg, st::FieldStore, p; fields = g.spec.state
         c, ends_in::Symbol = :parity, backend, options::CompileOptions, V::Type, host = nothing, kernels = nothing)
     ends_in in (:parity, :slot1) || throw(ArgumentError("ends_in must be :parity or :slot1; got $(repr(ends_in))"))
     prog = group_program(g, alg)
+    check_backend_float64(prog, alg, backend, V; fields)
     ids = Set(fieldid(prog, k) for k in fields)
     all_state = issubset(Set(fieldid(prog, k) for k in g.spec.state), ids)
     # (`kernels = (initids, stepids)`: those kernels alone, e.g. a group's `aux:` kernels)
@@ -800,6 +801,32 @@ function bind_group(g::FieldGroup, alg, st::FieldStore, p; fields = g.spec.state
         bind_cache(alg, g, st, p; fields = collect(String, fields), n, dt, c, backend, options, V), SciMLBase.ReturnCode.Success,
         nothing, host,
         StatusTotals(), _declared_checks(stab, st, prog, fields))
+end
+"""
+    check_backend_float64(prog, alg, backend, V; fields)
+
+A group that declares Float64 on a backend without it (`Exec.supports(backend, Float64)` false:
+Metal) is refused at the bind, in the user's words (batch 5 review S3): a `compute_T` or
+`solver_T` of Float64, or a field of its program declared `lattice_storage = Float64` (the
+group's own, or one it reads). Without the check the kernel compiler would refuse it in its own
+terms. A Float64 state type `V` is the front ends' own check.
+"""
+function check_backend_float64(prog, alg, backend, V::Type; fields = String[])
+    Exec.supports(backend, Float64) && return nothing
+    fs = join(("`$k`" for k in fields), ", ")
+    head = string("field", length(fields) == 1 ? " " : "s ", fs, ": ")
+    tail = " needs Float64 on the device, and this backend has no Float64 (`supports_float64` is false: Metal)"
+    compute_type(alg, V) === Float64 && valtype(V) !== Float64 && throw(ArgumentError(string(head, _algtext(alg),
+        ": `compute_T = Float64`", tail, "; leave `compute_T` out (`:auto`, the problem's type) or give `compute_T = Float32`")))
+    hasfield(typeof(alg), :solver_T) && getfield(alg, :solver_T) === Float64 && valtype(V) !== Float64 &&
+        throw(ArgumentError(string(head, _algtext(alg), ": `solver_T = Float64`", tail, "; leave `solver_T` out (`:auto`) ",
+            "or give `solver_T = Float32`")))
+    for f in prog.fields
+        f.fixed && f.storage == F64 || continue
+        throw(ArgumentError(string(head, "the field `", f.key, "` is declared `lattice_storage = Float64`, which", tail,
+            "; declare it `lattice_storage = Float32`, or run on a backend with Float64 (the CPU, ROCm, CUDA)")))
+    end
+    return nothing
 end
 
 # The fields of a runtime whose declared interval a coefficient bound read (batch 5 review M2):

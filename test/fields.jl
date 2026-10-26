@@ -3104,3 +3104,127 @@ end
     @test acount(FbIvAdvect) == [2] ==
           [bcount([DD(ue) ~ 0.1 * LP.Δ(ue) - LP.Advect(LP.Upwind1())([0.05 * (1 + x), 0.0], ue)], [ue], Any[], [u(0, x, y) ~ 0.5])]
 end
+
+# ---------------------------------------------------------------------------------------
+# F3-14 (FE-17, F3 design §3.8): number types per role in A. A field's `lattice_storage`
+# (Float16, Float32 or Float64) is its array's type whatever the state type `T`; a group's
+# `compute_T` compiles its kernels in a wider type (each store rounds once to the storage);
+# `solver_T` is the implicit solver's. Base f5641ce1: `lattice_storage` is Float16 only and
+# `compute_T` no keyword (the models below fail to build).
+@potts_model FwRoles begin
+    @kinds medium A
+    @parameters Dc = 0.25
+    @variables begin
+        c(field) = 0.0, [lattice_storage = Float64]
+        h(field) = 0.0, [lattice_storage = Float16]
+        s(field) = 0.0, [lattice_storage = Float32]
+        u(field) = 0.0
+    end
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations begin
+        D(c) ~ Dc * Δ(c) - 0.125 * c
+        D(h) ~ Dc * Δ(h) - 0.125 * h
+        D(s) ~ Dc * Δ(s) - 0.125 * s
+        D(u) ~ Dc * Δ(u) + 0.5 * c
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@potts_model FwWide begin
+    @kinds medium A
+    @parameters Dc = 0.25
+    @variables c(field) = 0.0, [lattice_storage = Float64] u(field) = 0.0
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations begin
+        D(c) ~ Dc * Δ(c) - 0.125 * c
+        D(u) ~ Dc * Δ(u) + 0.5 * c
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "F3-14: lattice_storage, compute_T and solver_T in A (FE-17)" begin
+    σ = zeros(Int32, 12, 10)
+    σ[3:5, 3:5] .= 1
+    σ[8:10, 6:8] .= 2
+    c0 = rand(StableRNG(14), 12, 10)
+    prob(T, alg) = PottsProblem(FwRoles(; name = :w), [ownership => σ, kind => [:A, :A], :c => c0, :h => c0, :s => c0], (0, 3);
+        T, seed = 3, field_solver = alg)
+    run(T, alg; M = FwRoles) = (integ = init(M === FwRoles ? prob(T, alg) :
+                                             PottsProblem(FwWide(; name = :w), [ownership => σ, kind => [:A, :A], :c => c0], (0, 3);
+                                                 T, seed = 3, field_solver = alg), SequentialCPM());
+                                foreach(_ -> step!(integ), 1:3); integ)
+    # the stores have the declared types, the undeclared field the state type
+    for T in (Float32, Float64)
+        st = current_state(run(T, ExplicitEuler(substeps = 8)))
+        @test (eltype(st.site.c), eltype(st.site.h), eltype(st.site.s), eltype(st.site.u)) == (Float64, Float16, Float32, T)
+        @test eltype(st.site.c__next) == Float64
+    end
+    # a Float32 CPM with a Float64 field computed in Float64 equals the Float64 reference to
+    # 1e-12 (measured: 0, bitwise); computed in Float32 (the control) it does not (5.7e-8)
+    for (a32, ref) in ((ExplicitEuler(substeps = 8, compute_T = Float64), ExplicitEuler(substeps = 8)),
+                       (BackwardEuler(compute_T = Float64), BackwardEuler()))
+        a, b = run(Float32, a32; M = FwWide), run(Float64, ref; M = FwWide)
+        @test maximum(abs, current_state(a).site.c .- current_state(b).site.c) < 1e-12
+    end
+    ctl = maximum(abs, current_state(run(Float32, ExplicitEuler(substeps = 8); M = FwWide)).site.c .-
+                       current_state(run(Float64, ExplicitEuler(substeps = 8); M = FwWide)).site.c)
+    @test ctl > 1e-9
+    # solver_T from A: the implicit solver's own type
+    integ = init(PottsProblem(FwWide(; name = :w), [ownership => σ, kind => [:A, :A], :c => c0], (0, 3); T = Float32,
+        field_solver = BackwardEuler(solver_T = Float64)), SequentialCPM())
+    rows = CorePotts._runtime(getfield(integ.ctx, :__fields1)).cache.rows
+    @test all(r -> r.solver === nothing || r.solver.T == Float64, rows) && any(r -> r.solver !== nothing, rows)
+    # refusals in the user's words
+    e = something(fd_err(() -> Potts.variable(only(Potts.Symbolics.@variables q(Potts.t)), :field; lattice_storage = BigFloat)), "")
+    @test occursin("`lattice_storage` applies to fields and is `Float16`, `Float32` or `Float64`", e) && occursin("got BigFloat", e)
+    e = something(fd_err(() -> ExplicitEuler(compute_T = Float16)), "")
+    @test occursin("`compute_T` takes `:auto`", e)
+end
+
+# Batch 5 review S1 and S4 in A: a Float16 field under the implicit algorithms (solved in the
+# state's type, each update rounded to Float16), accurate to its storage; a Dual parameter is
+# refused in words (its value type, not its several-KB type). Base 97045a1b
+# (~/lpwork/b5r1-nc-s1.log): every implicit algorithm refused; the Dual message prints the type.
+@potts_model FbHalf begin
+    @kinds medium A
+    @parameters begin
+        Dc = 0.2
+        s = 0.1
+        k = 0.05
+    end
+    @variables c(field) = 0.0, [lattice_storage = Float16]
+    @lattice Lattice((16, 16); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ Dc * Δ(c) + s - k * c
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FbFull begin
+    @kinds medium A
+    @parameters begin
+        Dc = 0.2
+        s = 0.1
+        k = 0.05
+    end
+    @variables c(field) = 0.0
+    @lattice Lattice((16, 16); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ Dc * Δ(c) + s - k * c
+    @sweep Metropolis(; temperature = 1.0)
+end
+using ForwardDiff: ForwardDiff
+@testset "F3-14 S1, S4 in A: Float16 under the implicit algorithms; Dual parameters in words" begin
+    dims = (16, 16)
+    for fs in (BackwardEuler(), BackwardEuler(; compute_T = Float64), CrankNicolson(), BDF2(), QuasiSteady())
+        a = solve(PottsProblem(FbHalf(; name = :h), fd_empty(dims), (0, 10); field_solver = fs, T = Float32), SequentialCPM())
+        b = solve(PottsProblem(FbFull(; name = :f), fd_empty(dims), (0, 10); field_solver = fs), SequentialCPM())
+        ca, cb = a.u[end].site.c, b.u[end].site.c
+        @test a.retcode == Potts.SciMLBase.ReturnCode.Success && eltype(ca) == Float16
+        @test maximum(abs, Float64.(ca) .- cb) <= 4e-3 * maximum(abs, cb)
+    end
+    pf = PottsProblem(FbFull(; name = :f), fd_empty(dims), (0, 2))
+    e = something(fd_err(() -> solve(remake(pf; p = [:k => ForwardDiff.Dual(0.05, 1.0)]), SequentialCPM())), "")
+    @test occursin("parameter `k` = a ForwardDiff `Dual` of Float64 (value 0.05) does not convert", e) &&
+          occursin("finite differences", e) && !occursin("Tag", e) && length(e) < 1200
+end

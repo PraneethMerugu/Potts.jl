@@ -24,19 +24,21 @@ function ProgramBuilder(
 end
 
 """
-Declare a field; returns its provisional id.
+Declare a field; returns its provisional id. `fixed = true` (a declared storage, FE-17): the
+float lane `storage` holds its own type under `lanes = :state` too, where a lane otherwise
+holds the problem's value type ([`lanetype`](@ref LatticeFields.Compile.lanetype)).
 """
 function field!(
         pb::ProgramBuilder{N}, key; storage = F32, shape = Int16[], symmetric = false,
         buffers = 1, role = :state, epoch = PERSTEP, levels = Int8[0],
-        classes = [Placement{N}()]) where {N}
+        classes = [Placement{N}()], fixed = false) where {N}
     any(f -> f.key == key, pb.fields) && error("field `$key` declared twice")
     role in (:state, :aux, :input, :output, :scratch) ||
         error("field `$key`: unknown role `$role`")
     storage in LANES || error("field `$key`: `$storage` is not a storage lane")
     push!(pb.fields,
         FieldDecl{N}(String(key), classes, Int16.(shape), symmetric, storage,
-            Int8.(levels), epoch, Int8(buffers), role))
+            Int8.(levels), epoch, Int8(buffers), role, fixed))
     return Int32(length(pb.fields))
 end
 

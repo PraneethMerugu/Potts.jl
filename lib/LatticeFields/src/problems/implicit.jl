@@ -62,7 +62,8 @@ The semantic residual program of group `g` for implicit algorithm `alg` (`fuse_r
 its rate program, once per residual key; thread-safe).
 """
 residual_program(g::FieldGroup, alg::ImplicitAlgorithm) =
-    lock(() -> get!(() -> semantic(fuse_residual(g.spec.rate, residual_rule(alg))), g.programs, (:residual, residual_key(alg))),
+    lock(() -> get!(() -> semantic(fuse_residual(g.spec.rate, residual_rule(alg); widen16 = true)), g.programs,
+        (:residual, residual_key(alg))),
         _PLANS_LOCK)
 # … of Crank–Nicolson's right side (`QRule`)
 _q_program(g::FieldGroup) =
@@ -73,10 +74,11 @@ function _jac_program(g::FieldGroup, op::OperatorSpec)
     return lock(() -> get!(() -> semantic(op.jac), g.programs, :jac), _PLANS_LOCK)
 end
 # a plan of the kernels `ids` of program `s` (cached in the group's plans by `tag`)
-function _implicit_plan(g::FieldGroup, s::Program, tag, ids::Vector{Int}, ::Type{V}, backend, o::CompileOptions) where {V}
+function _implicit_plan(g::FieldGroup, s::Program, tag, ids::Vector{Int}, ::Type{V}, backend, o::CompileOptions;
+        C::Type = V) where {V}
     return lock(_PLANS_LOCK) do
-        first(get!(g.plans, (tag, V, Int[], ids)) do
-            p = plan(s, ids; options = _options(o, V, backend; clock = clock_slot(g.spec)))
+        first(get!(g.plans, (tag, V, C, Int[], ids)) do
+            p = plan(s, ids; options = _options(o, V, backend; clock = clock_slot(g.spec), C, s))
             (p, p)
         end)
     end
@@ -349,15 +351,26 @@ algorithms; an [`ImplicitCache`](@ref) for the implicit ones).
 """
 bind_cache(alg, g, st, p; kw...) = alg_cache(alg, g, st)
 
-# the state type of a row's arrays (a lowered float type for the solver), with the refusal of
-# the others (FE-26, R-F3f)
-function _implicit_eltype(u, key, alg)
+# the work type of a row's arrays (a lowered float type for the solver), with the refusal of
+# the others (FE-26, R-F3f). A field stored in Float16 is solved in the state's value type `V`
+# (its residual is held there, `fuse_residual(…; widen16)`; each update rounds once to the
+# storage, batch 5 review S1)
+function _implicit_eltype(u, key, alg, V)
     T = eltype(u)
-    T in (Float32, Float64) || throw(ArgumentError(string(_algname(alg), ": the field `", key, "` is stored as ", T,
-        "; an implicit solve runs in Float32 or Float64 (a Dual or BigFloat implicit solve is planned after the ",
-        "paper, FE-26): give the field a Float32 or Float64 state, or step it with `ExplicitEuler`")))
-    return T
+    T === Float16 && V in (Float32, Float64) && return V
+    T in (Float32, Float64) && return T
+    T === Float16 && throw(ArgumentError(string(_algname(alg), ": the field `", key, "` holds Float16 and the problem's ",
+        "value type is Float16; an implicit solve runs in Float32 or Float64: give the problem T = Float32 and the ",
+        "field `lattice_storage = Float16` (it is then solved in Float32, each update rounded to Float16), or step it ",
+        "with `ExplicitEuler`")))
+    throw(ArgumentError(string(_algname(alg), ": the field `", key, "` holds ", _typetext(T), "; an implicit solve runs in ",
+        "Float32 or Float64 (Duals and BigFloat through the implicit solve are planned after the paper, FE-26). ",
+        T <: AbstractFloat || T <: Integer ? "Give the field `lattice_storage = Float32` or Float64, or step it with `ExplicitEuler`" :
+        string("For derivatives, step the field with `ExplicitEuler` (ForwardDiff runs through it), or take finite ",
+               "differences of the implicit run until then"))))
 end
+# a number type in messages: a ForwardDiff Dual by its value type, not its full tag (batch 5 review S4)
+_typetext(T::Type) = (T <: Real && T !== valtype(T)) ? string("ForwardDiff Duals of ", valtype(T)) : string(T)
 
 # the face conditions of field `id` of program `s` on axis `a` side `k` (1 low, 2 high), at
 # parameters `p`, in the solver's homogeneous form: `(:none,)`, `(:dirichlet,)` or
@@ -469,7 +482,7 @@ end
 # the store of program `prog` whose fields alias the arrays of `st` (the stepped program `s`)
 # by id up to `length(s.fields)` and by key after it: `res:c` gets its own array, `c__n` the
 # two slots of `c`, and the operator program's `jac:` outputs come from `own`
-function _alias_store(st::FieldStore, s::Program, prog::Program; own = Dict{String, Vector{Any}}(), byid::Bool)
+function _alias_store(st::FieldStore, s::Program, prog::Program; own = Dict{String, Vector{Any}}(), byid::Bool, V = nothing)
     bufs = Vector{Vector{Any}}(undef, length(prog.fields))
     for (i, f) in enumerate(prog.fields)
         j = byid && i <= length(s.fields) ? i : findfirst(x -> x.key == f.key, s.fields)
@@ -481,7 +494,9 @@ function _alias_store(st::FieldStore, s::Program, prog::Program; own = Dict{Stri
             bufs[i] = st.bufs[c]
         elseif startswith(f.key, "res:")
             u = st.bufs[fieldid(s, f.key[5:end])][1]
-            bufs[i] = Any[_zeros(st.backend, eltype(u), length(u))]
+            # (a widened residual of a Float16 field, `fuse_residual(…; widen16)`: the value type)
+            E = eltype(u) === Float16 && f.storage != F16 && V !== nothing ? V : eltype(u)
+            bufs[i] = Any[_zeros(st.backend, E, length(u))]
         else
             throw(ArgumentError("the implicit program's field `$(f.key)` has no array in the group's store"))
         end
@@ -527,11 +542,11 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
     if jp !== nothing
         for f in jp.fields
             startswith(f.key, "jac:") || continue
-            own[f.key] = Any[_zeros(st.backend, juliatype(f.storage) === UInt8 ? UInt8 : _eltype(f.storage, eltype(st.bufs[fieldid(s, keys[1])][1])), nsites(jp, 0))]
+            own[f.key] = Any[_zeros(st.backend, juliatype(f.storage) === UInt8 ? UInt8 : _eltype(f.storage, withvaltype(eltype(st.bufs[fieldid(s, keys[1])][1]), V), f.fixed), nsites(jp, 0))]
         end
         jst = _alias_store(st, s, jp; own, byid = false)
         jids = collect(eachindex(jp.kernels))
-        jplan = _implicit_plan(g, jp, :jac, jids, V, backend, options)
+        jplan = _implicit_plan(g, jp, :jac, jids, V, backend, options; C = compute_type(alg, V))
         # per slot parity and Newton iteration (first: the iterate is the substep's start, slot
         # `par`; later: the other slot), as the residual's
         jcur(par, first) = [(k = findfirst(x -> x.key == f.key, s.fields)) === nothing ? 1 :
@@ -551,7 +566,7 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
     end
     qown = Dict{String, Vector{Any}}(k * "__n" => Any[q, q] for (k, q) in qs)
     # the residual store: the stepped program's arrays by id, the residuals and the histories
-    rst = _alias_store(st, s, rs; own = qown, byid = true)
+    rst = _alias_store(st, s, rs; own = qown, byid = true, V)
     rows = Any[]
     mkres = Any[]
     exact = !cyclic
@@ -574,8 +589,8 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
         exact &= r.exact
         id = fieldid(s, key)
         u = st.bufs[id]
-        T = _implicit_eltype(u[1], key, alg)
-        sp = _implicit_plan(g, rs, (:residual, residual_key(alg), key), _row_kernels(rs, key, g.spec.init), V, backend, options)
+        T = _implicit_eltype(u[1], key, alg, V)
+        sp = _implicit_plan(g, rs, (:residual, residual_key(alg), key), _row_kernels(rs, key, g.spec.init), V, backend, options; C = compute_type(alg, V))
         before = Set(fieldid(s, q) for q in order[1:(ri - 1)])
         rcurs = (rcur(rs, before, 1, true), rcur(rs, before, 2, true), rcur(rs, before, 1, false), rcur(rs, before, 2, false))
         mk = q -> ntuple(i -> BoundStep(backend, rs, sp, rst, q; cur = rcurs[i], c), 4)
@@ -645,7 +660,7 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
         qp = _q_program(g)
         qst = _alias_store(st, s, qp; own = Dict{String, Vector{Any}}("res:" * k => Any[q] for (k, q) in qs), byid = true)
         qids = sort!(unique!(reduce(vcat, (_row_kernels(qp, k, g.spec.init) for k in keys); init = Int[])))
-        qplan = _implicit_plan(g, qp, (:residual, :q, keys), qids, V, backend, options)
+        qplan = _implicit_plan(g, qp, (:residual, :q, keys), qids, V, backend, options; C = compute_type(alg, V))
         qcurs = (rcur(qp, Set{Int}(), 1, true), rcur(qp, Set{Int}(), 2, true))
         mkq = q -> ntuple(i -> BoundStep(backend, qp, qplan, qst, q; cur = qcurs[i], c), 2)
         qres = mkq(p)
@@ -934,8 +949,10 @@ function _newton_check!(r::ImplicitRow, backend, word, dst, un, x, it, last, win
     else
         Exec.launch!(backend, _be_norms_body!, nb, (r.part, dst, un, x, r.smask, r.v, nothing, nothing, r.mask, n))
     end
+    # (a field stored in Float16: its rounding at each update is part of the floor, S1)
+    fl = eltype(dst) === Float16 ? T(10 * eps(T) + 2 * eps(Float16)) : T(10 * eps(T))
     Exec.launch!(backend, _be_newton_body!, 1, (word, r.part, Int32(nb), r.hist, Int32(it), last, T(NEWTON_EPS),
-        T(10 * eps(T)), window, steady))
+        fl, window, steady))
     return nothing
 end
 

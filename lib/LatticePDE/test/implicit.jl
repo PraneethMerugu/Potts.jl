@@ -320,7 +320,7 @@ end
             (() -> BackwardEuler(; substeps = true), "BackwardEuler: substeps = true must be an integer ≥ 1"),
             (() -> BackwardEuler(; inner = :pcg), "BackwardEuler: `inner` takes `:auto`, a `DevicePCG(…)` or a `Multigrid(…)`"),
             (() -> BackwardEuler(; solver_T = BigFloat), "BackwardEuler: `solver_T` takes `:auto`"),
-            (() -> BackwardEuler(; theta = 1), "BackwardEuler: no keyword `theta`; its keywords are `dt`, `substeps`, `newton`, `lower`, `inner`, `solver_T` and `init`"))
+            (() -> BackwardEuler(; theta = 1), "BackwardEuler: no keyword `theta`; its keywords are `dt`, `substeps`, `newton`, `lower`, `inner`, `solver_T`, `init` and `compute_T`"))
         @test startswith(e(f), want) || (println("MSG: ", e(f)); false)
     end
     a = BackwardEuler(; dt = 0.1, newton = 2, inner = DevicePCG(; budget = 12))

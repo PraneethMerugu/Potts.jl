@@ -38,7 +38,7 @@ function fuse_update(p::Program{N}, rule) where {N}
     stepped = Set(values(step))
     fm(i) = i == 0 ? Int32(0) : haskey(step, Int32(i)) ? newid[step[Int32(i)]] : newid[i]
     fields = [i in stepped ? FieldDecl{N}(f.key, f.classes, f.shape, f.symmetric, f.storage, f.levels, f.epoch,
-                                             Int8(2), f.role) : f
+                                             Int8(2), f.role, f.fixed) : f
               for (i, f) in enumerate(p.fields) if i in keep]
     bk = ([f.key for f in fields], [f.storage for f in fields], [t.key for t in p.tables])
     dom = p.hierarchy[1].grid.domain != 0
@@ -83,8 +83,12 @@ kernel stores `rule(kb, c, r, cn)` into `res:c` (`c` the load of the field, the 
 `r` the rate; `cn` the load of `c__n`; IR handles), and nothing into `c`: the state is read,
 never written. With an irregular domain a site outside stores 0. The other kernels and the
 rules pass through, renumbered (as `fuse_update`).
+
+`widen16 = true` (the solve's residual, batch 5 review S1): the residual of a field stored in
+Float16 is held in the state's value type (a float lane, not fixed), the type the solver reads,
+so the solve sees no Float16 rounding beyond the state's own.
 """
-function fuse_residual(p::Program{N}, rule) where {N}
+function fuse_residual(p::Program{N}, rule; widen16::Bool = false) where {N}
     keys = [f.key for f in p.fields]
     step = Dict{Int32, Int32}()                     # ∂c → c
     order = String[]
@@ -102,7 +106,7 @@ function fuse_residual(p::Program{N}, rule) where {N}
     newid[keep] .= Int32.(1:length(keep))
     stepped = Set(values(step))
     fields = [i in stepped ? FieldDecl{N}(f.key, f.classes, f.shape, f.symmetric, f.storage, f.levels, f.epoch,
-                                             Int8(2), f.role) : f
+                                             Int8(2), f.role, f.fixed) : f
               for (i, f) in enumerate(p.fields) if i in keep]
     nk = length(fields)
     # the residual and history fields, appended: `res:c` at `nk + j`, `c__n` at `nk + n + j`
@@ -110,12 +114,14 @@ function fuse_residual(p::Program{N}, rule) where {N}
     hist = Dict{String, Int32}()
     for (j, c) in enumerate(order)
         f = p.fields[findfirst(==(c), keys)]
-        push!(fields, FieldDecl{N}("res:" * c, f.classes, f.shape, f.symmetric, f.storage, f.levels, f.epoch, Int8(1), :scratch))
+        wide = widen16 && f.storage == F16
+        push!(fields, FieldDecl{N}("res:" * c, f.classes, f.shape, f.symmetric, wide ? F32 : f.storage, f.levels, f.epoch,
+            Int8(1), :scratch, wide ? false : f.fixed))
         res[c] = Int32(nk + j)
     end
     for (j, c) in enumerate(order)
         f = p.fields[findfirst(==(c), keys)]
-        push!(fields, FieldDecl{N}(c * "__n", f.classes, f.shape, f.symmetric, f.storage, f.levels, f.epoch, Int8(1), :input))
+        push!(fields, FieldDecl{N}(c * "__n", f.classes, f.shape, f.symmetric, f.storage, f.levels, f.epoch, Int8(1), :input, f.fixed))
         hist[c] = Int32(nk + length(order) + j)
     end
     fm(i) = i == 0 ? Int32(0) : haskey(step, Int32(i)) ? res[keys[step[Int32(i)]]] : newid[i]

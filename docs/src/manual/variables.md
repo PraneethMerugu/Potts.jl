@@ -25,7 +25,22 @@ Options go in brackets after the default:
   bound of the field solvers takes it for a coefficient that reads the field
   (`DivKGrad(:harmonic)(c, c)`, a nonlinear reaction), so such a rate gets an automatic
   substep count (see [Equations and solvers](@ref manual-equations)). A field that starts outside
-  its bounds is an error; the run does not check them after the start.
+  its bounds is an error, and so is a constant boundary or masked value outside them. During
+  the run, a field whose bounds the stability bound used is checked after each MCS on the
+  CPU. On a device it is checked at the saves and at the end, so a run stepped with `step!`
+  and no saves finds a leak only at its next save. A field that leaves its bounds gets one
+  warning that names the field, the value and the site. Under `ExplicitEuler` the run ends
+  with `ReturnCode.Unstable`, since its substep count holds only inside the bounds. Under the
+  implicit solvers the run goes on, since the bounds set only the solve's counts and the
+  solve checks its own steps (the Newton check, the shift clamp; both warn). `CrankNicolson` and `BDF2` can undershoot a bound
+  by a few percent; `lower = lo`, the low end of the bounds, clips each substep there.
+- `[lattice_storage = Float16 | Float32 | Float64]` (fields): the field's own array type,
+  whatever the state type `T` of the problem. Its kernels compute in the field solver's
+  `compute_T` (default: `T`) and round once at each store. A Float32 problem with
+  `c(field) = 0.0, [lattice_storage = Float64]` and `field_solver = ExplicitEuler(; compute_T = Float64)`
+  steps `c` exactly as a Float64 problem does, while the CPM stays in Float32. A Float16 field
+  takes every field solver; an implicit solver solves it in `T` and rounds each update to
+  Float16.
 - `[guess = g]` (cell and model variables): the starting point when
   `@initialization_equations` solve for the variable, see below. A variable with a guess and
   no value is written `r(cell), [guess = -1.0]`.

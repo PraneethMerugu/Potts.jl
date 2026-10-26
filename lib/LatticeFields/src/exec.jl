@@ -26,7 +26,7 @@ using Polyester: @batch
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
-public HOST_GRAIN, ishost, supports, default_float, host_launch!, launch!, compile!, compile_all!, Launch, Plan, walker
+public HOST_GRAIN, ishost, supports, default_float, register_float64!, float64_registered, FLOAT64_KERNELS, host_launch!, launch!, compile!, compile_all!, Launch, Plan, walker
 
 # ---------------------------------------------------------------------------------------
 # Capabilities
@@ -62,6 +62,32 @@ device (D-157 scans production Float32 paths for doubles). This is not a query o
 hardware; ask [`supports`](@ref) for that.
 """
 default_float(backend) = ishost(backend) ? Float64 : Float32
+
+"""
+    register_float64!(parts::String...)
+
+The D-157 carve-out (F3 design §3.8, R-F3c): a kernel whose Float64 its user declared (a
+group's `compute_T` or `solver_T` of Float64, or a field's `lattice_storage = Float64`, on a
+device whose default float is Float32) is registered by the parts of its signature text: a
+kernel signature that holds every part is skipped by the no-`double` scan of the device test
+suites, which still flags every other kernel. [`float64_registered`](@ref) asks.
+"""
+function register_float64!(parts::String...)
+    lock(_FLOAT64_LOCK) do
+        push!(FLOAT64_KERNELS, collect(String, parts))
+    end
+    return nothing
+end
+"""The registry of [`register_float64!`](@ref): one vector of signature parts per entry."""
+const FLOAT64_KERNELS = Set{Vector{String}}()
+const _FLOAT64_LOCK = ReentrantLock()
+"""
+    float64_registered(signature::AbstractString) -> Bool
+
+Whether a kernel signature text holds every part of a [`register_float64!`](@ref) entry.
+"""
+float64_registered(sig::AbstractString) =
+    lock(() -> any(e -> all(q -> occursin(q, sig), e), FLOAT64_KERNELS), _FLOAT64_LOCK)
 
 # ---------------------------------------------------------------------------------------
 # Host executor

@@ -41,13 +41,13 @@ Lower semantic kernel `k` of program `p` (passes 3–6).
 """
 function compile_kernel(p::Program{N}, k::Kernel{N}, o::CompileOptions = CompileOptions();
         stages = LOWERING) where {N}
-    o.T === nothing && (o = CompileOptions(Float32, o.I, o.float64_ok, o.debug, o.index, o.lanes, o.clock))
+    o.T === nothing && (o = CompileOptions(Float32, o.I, o.float64_ok, o.debug, o.index, o.lanes, o.clock, o.S, o.declared))
     check_types(p, k, o)
     !isempty(k.reductions) && o.index == :cartesian &&
         irerror("kernel `", k.key, "`: reductions need the linear index strategy")
     big = maximum(nsites(p, l) * ncomp(f) for f in p.fields for l in f.levels)
     big > typemax(Int32) && o.I == Int32 &&
-        (o = CompileOptions(o.T, Int64, o.float64_ok, o.debug, o.index, o.lanes, o.clock))
+        (o = CompileOptions(o.T, Int64, o.float64_ok, o.debug, o.index, o.lanes, o.clock, o.S, o.declared))
     if !o.debug
         k = stages.powi(p, k)
         k, derived = stages.hoist(p, k)
@@ -75,10 +75,16 @@ function compile_kernel(p::Program{N}, k::Kernel{N}, o::CompileOptions = Compile
     timed = any(d -> _reads(d, :t), derived) ||
             (clock != 0 && (_reads_slot(k, clock) || any(d -> _reads_q(d, clock), derived)))
     h = bytes2hex(sha1(string(body)))
+    # a declared Float64 (FE-17) on a device: the body's signature part into the D-157 registry
+    o.declared && _touches_float64(p, k, o) && Exec.register_float64!(string(typeof(rgf(body))))
     return CompiledKernel{N}(k.key, body, L.strategy, k.space, L.levels, L.lanes, L.args,
         p.nparams, derived, derive, timed, T, o.I, h, k)
 end
 
+# whether kernel `k` computes in Float64 or loads or stores a lane that holds Float64
+_touches_float64(p::Program, k::Kernel, o::CompileOptions) = valtype(o.T) === Float64 ||
+    any(a -> isfloat(p.fields[a.field].storage) && valtype(_lane_holds(p.fields[a.field], o)) === Float64, k.accesses) ||
+    any(s -> isfloat(p.fields[s.access.field].storage) && valtype(_lane_holds(p.fields[s.access.field], o)) === Float64, k.stores)
 _reads(ex, s::Symbol) = ex === s || (ex isa Expr && any(a -> _reads(a, s), ex.args))
 # whether kernel `k` reads parameter slot `i` itself, and whether a hoisted value's host
 # expression reads it (`Q[i]`, `hostexpr`)

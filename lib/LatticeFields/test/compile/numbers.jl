@@ -47,3 +47,34 @@ end
     state = compile_kernel(s, k, CompileOptions(; T = Float64, lanes = :state))   # the lane holds Float64
     @test !occursin("lanecast", string(state.body))
 end
+
+# F3-14 (FE-17): a declared storage (`fixed`) holds its own type under the state lanes, a
+# compute type wider than the storage loads and stores through `lanecast` (`S`), and a declared
+# Float64 registers the kernel in Exec's D-157 registry. Base f5641ce1: no `fixed`, no `S`, no
+# registry (every test errors).
+@testset "F3-14: fixed lanes, a compute type wider than the storage, the Float64 registry" begin
+    @test lanetype(F64, Float32, :state, true) == Float64 && lanetype(F32, Float64, :state, true) == Float32
+    @test lanetype(F64, Float32, :state, false) == Float32                         # control: the value class
+    E = Dual{Nothing, Float64, 1}
+    @test LatticeFields.Problems._eltype(F32, E, true) == Dual{Nothing, Float32, 1} &&
+          LatticeFields.Problems._eltype(F32, E, false) == E
+    s = semantic(program(diffusion2()))
+    k = s.kernels[1]
+    # storage Float32 (the state lane holds S = Float32), compute in Float64: casts both ways
+    wide = compile_kernel(s, k, CompileOptions(; T = Float64, lanes = :state, S = Float32))
+    @test occursin("lanecast(Float64", string(wide.body)) && occursin("lanecast(Float32", string(wide.body))
+    @test !occursin("lanecast", string(compile_kernel(s, k, CompileOptions(; T = Float32, lanes = :state)).body))
+    # the registry: a declared Float64 compile registers its body; an undeclared one does not
+    Ex = LatticeFields.Exec
+    saved = copy(Ex.FLOAT64_KERNELS)
+    empty!(Ex.FLOAT64_KERNELS)
+    ck = compile_kernel(s, k, CompileOptions(; T = Float64, lanes = :state, S = Float32, declared = true))
+    sig = string(typeof(LatticeFields.Compile.body_function(ck)))
+    @test Ex.float64_registered("Tuple{kernel, " * sig * ", Int64}")
+    empty!(Ex.FLOAT64_KERNELS)
+    compile_kernel(s, k, CompileOptions(; T = Float64, lanes = :state, S = Float32))
+    @test isempty(Ex.FLOAT64_KERNELS) && !Ex.float64_registered("Tuple{kernel, " * sig * ", Int64}")
+    compile_kernel(s, k, CompileOptions(; T = Float32, lanes = :state, declared = true))   # no Float64: none
+    @test isempty(Ex.FLOAT64_KERNELS)
+    union!(Ex.FLOAT64_KERNELS, saved)
+end

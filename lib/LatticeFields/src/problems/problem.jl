@@ -128,14 +128,21 @@ function _state_options(o::CompileOptions, ::Type{E}) where {E}
     o.T === nothing || o.T == valtype(E) || throw(ArgumentError(string("options.T = ", o.T,
         " differs from the state's value type ", valtype(E), " (from ", E, "): the eltype of ",
         "u0 decides; pass u0 in ", o.T, " or leave T out of the options")))
-    return CompileOptions(nothing, o.I, o.float64_ok, o.debug, o.index, o.lanes, o.clock)
+    return CompileOptions(nothing, o.I, o.float64_ok, o.debug, o.index, o.lanes, o.clock, o.S, o.declared)
 end
 
-# the compile options of value type `V` on `backend`
-function _options(o::CompileOptions, ::Type{V}, backend; clock::Int = o.clock) where {V}
-    return CompileOptions(; T = V, I = o.I,
-        float64_ok = o.float64_ok && _float64_ok(V, backend), debug = o.debug,
-        index = o.index, lanes = :state, clock)
+# the compile options of value type `V` on `backend`; `C`: the compute type (`compute_T`,
+# FE-17; the state lanes hold `V`); `s`: the program, whose fields with a declared Float64
+# storage (`fixed`) need Float64 on the device too. A declared Float64 on a device whose
+# default float is Float32 registers its kernels (D-157 carve-out, `declared`; a front end that
+# plans on the host for every backend, A, sets `o.declared` itself)
+function _options(o::CompileOptions, ::Type{V}, backend; clock::Int = o.clock, C::Type = V, s = nothing) where {V}
+    f64 = s !== nothing && any(f -> f.fixed && f.storage == F64, s.fields)
+    wide = C === Float64 || f64
+    ok = _float64_ok(C, backend) || (f64 && Exec.supports(backend, Float64))
+    return CompileOptions(; T = C, I = o.I, float64_ok = o.float64_ok && ok, debug = o.debug,
+        index = o.index, lanes = :state, clock, S = C === V ? nothing : V,
+        declared = o.declared || (wide && Exec.default_float(backend) !== Float64 && !(V === Float64 && C === Float64 && !f64)))
 end
 
 # Float64 in device code: allowed on the host, and for a Float64 problem on hardware that has
@@ -726,6 +733,13 @@ _tick(integ::FieldIntegrator) = integ.per == 0 ? integ.iter : div(integ.iter, in
 
 # `u0` (flat, host) into every state buffer, the state in slot 1
 function _load_state!(st::FieldStore, u0)
+    if mixed_state(st)                              # (each state field its own arrays, S2)
+        for i in _state_ids(st)
+            v = view(u0, st.slots[i])
+            foreach(b -> copyto!(b, convert(Vector{eltype(b)}, collect(v))), st.bufs[i])
+        end
+        return st
+    end
     isempty(st.flat) && return st
     copyto!(st.flat[1], convert(Vector{eltype(st.flat[1])}, u0))
     foreach(b -> copyto!(b, st.flat[1]), st.flat[2:end])
@@ -803,9 +817,19 @@ function SciMLBase.reinit!(integ::FieldIntegrator, u0 = integ.prob.u0)
     return integ
 end
 
-_ueltype(st::FieldStore, ::Type{E}) where {E} = isempty(st.flat) ? E : eltype(st.flat[1])
-_current(integ::FieldIntegrator) = isempty(integ.store.flat) ? eltype(integ.prob)[] :
-                                   Array(integ.store.flat[_parity(integ)])
+# the saved state's element type: the state's storage (a mixed store: their promotion, so no
+# field loses precision in a save; batch 5 review S2)
+_ueltype(st::FieldStore, ::Type{E}) where {E} =
+    mixed_state(st) ? mapreduce(i -> eltype(st.bufs[i][1]), promote_type, _state_ids(st)) :
+    isempty(st.flat) ? E : eltype(st.flat[1])
+function _current(integ::FieldIntegrator)
+    st = integ.store
+    if mixed_state(st)
+        E = _ueltype(st, eltype(integ.prob))
+        return reduce(vcat, (convert(Vector{E}, Array(array(st, i, :cur))) for i in _state_ids(st)))
+    end
+    return isempty(st.flat) ? eltype(integ.prob)[] : Array(st.flat[_parity(integ)])
+end
 
 # a saved state that is not finite ends the solve with `ReturnCode.Unstable`; the aux fields
 # are evaluated at the save (one aux launch) and saved with it
@@ -933,7 +957,8 @@ function _steady_solve(prob::FieldProblem, alg::FieldAlgorithm; kw...)
 end
 
 SII.symbolic_container(i::FieldIntegrator) = i.prob.index
-SII.state_values(i::FieldIntegrator) = i.store.flat[_parity(i)]
+SII.state_values(i::FieldIntegrator) =
+    mixed_state(i.store) ? MixedState(i.store, _ueltype(i.store, eltype(i.prob))) : i.store.flat[_parity(i)]
 SII.parameter_values(i::FieldIntegrator) = i.p
 SII.current_time(i::FieldIntegrator) = _time(i)
 """

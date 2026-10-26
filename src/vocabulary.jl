@@ -286,11 +286,13 @@ function variable(x, scope::Symbol; default = _NO_VALUE, unit = nothing, guess =
                                                       "takes `lattice_storage` and `bounds`)"))
         k === :clear_on_ownership_change && v === true && !(scope in (:site, :field)) &&
             throw(ArgumentError("variable `$name`: `clear_on_ownership_change` applies to site variables"))
-        # `[lattice_storage = Float16]` (P5 role model): a field stored narrower than the state
-        # type `T` (computed in `T`, rounded once per substep to Float16)
-        k === :lattice_storage && !(scope === :field && v === Float16) &&
-            throw(ArgumentError("variable `$name`: `lattice_storage` applies to fields and is `Float16` " *
-                                "(the state type `T` is the default storage; a field stored narrower than `T`)"))
+        # `[lattice_storage = Float16 | Float32 | Float64]` (P5 role model, FE-17): a field's own
+        # storage type, narrower or wider than the state type `T` (its kernels compute in the
+        # group's `compute_T`, and each store rounds once to the storage)
+        k === :lattice_storage && !(scope === :field && v in (Float16, Float32, Float64)) &&
+            throw(ArgumentError("variable `$name`: `lattice_storage` applies to fields and is `Float16`, `Float32` or " *
+                                "`Float64` (the state type `T` is the default storage; got " *
+                                (v isa Type ? string(v) : repr(v)) * (scope === :field ? ")" : " on a variable that is not a field)")))
         # `[bounds = (lo, hi)]` on a field (F3-13, FE-18 metadata): the interval its values stay
         # in, which the stability bound takes for a coefficient that reads the field
         if k === :bounds

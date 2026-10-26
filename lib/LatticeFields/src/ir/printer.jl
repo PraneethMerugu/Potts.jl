@@ -45,7 +45,8 @@ function print_layout(io::IO, p::Program{N}) where {N}
         println(io, "field ", f.key, " lane=", f.storage,
             " shape=[", join(f.shape, ","), "]", " symmetric=",
             f.symmetric, " buffers=", f.buffers, " role=", f.role, " epoch=", _lc(f.epoch),
-            " classes=", [Int.(c.half) for c in f.classes], " levels=[", join(f.levels, ","), "]")
+            " classes=", [Int.(c.half) for c in f.classes], " levels=[", join(f.levels, ","), "]",
+            f.fixed ? " fixed" : "")
     end
     for t in p.tables
         println(io, "table ", t.key, " lane=", t.storage, " oob=", t.oob)

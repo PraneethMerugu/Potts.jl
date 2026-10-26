@@ -387,12 +387,18 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     fids = Dict{Any, Tuple{Vector{Int32}, Scalar}}()
     for (op, v) in dvs
         S = get_lattice_storage(v)             # `lattice_storage` (v3 §5.1): the field's own storage
+        S === nothing || S in (Float16, Float32, Float64) ||
+            _dverr("field `$(_name(op))`: `lattice_storage = $S` is not a storage type; give Float16, Float32 or Float64 " *
+                   "(a field stored in the problem's own type needs no `lattice_storage`)")
         lane = _lane(eltype(SymbolicUtils.symtype(v)), S === nothing ? T : S)
+        # a declared Float32 or Float64 storage holds its own type whatever the problem's value
+        # type (FE-17: `fixed`; Float16 is always its own)
+        fixed = S === Float32 || S === Float64
         fids[op] = (map(keys[op]) do k
-                        isin[op] && return field!(pb, k; storage = lane, role = :input, epoch = PERSIGMA)
+                        isin[op] && return field!(pb, k; storage = lane, role = :input, epoch = PERSIGMA, fixed)
                         kind = eqs[k][1]
                         field!(pb, k; storage = lane, role = kind == :aux ? :aux : :state,
-                               buffers = kind == :map || (kind == :rate && update !== nothing) ? 2 : 1)
+                               buffers = kind == :map || (kind == :rate && update !== nothing) ? 2 : 1, fixed)
                     end, lane)
     end
     hex = disc.grid.geometry == HEX

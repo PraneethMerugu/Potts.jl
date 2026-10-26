@@ -49,7 +49,9 @@ function BoundStep(backend, p::Program, sp::StepPlan, st::FieldStore, Praw; cur 
     P0 = Tuple(Praw)
     ls = Tuple(begin
                    ck = l.kernel
-                   cc = c === nothing ? zero(ck.T) : c
+                   # the parameters in the kernel's compute type (its `compute_T`, FE-17), wrapped
+                   # like `c` (a Dual of it under Dual parameters)
+                   cc = c === nothing ? zero(ck.T) : zero(withvaltype(typeof(c), valtype(ck.T)))
                    S = launch_arrays(st, l, cur)
                    f = fuse === nothing ? nothing : fuse(l, cur)
                    b = f === nothing ? bind(backend, p, l, S, launch_parameters(ck, P0, cc), (0, 0)) :
