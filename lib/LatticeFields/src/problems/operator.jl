@@ -32,8 +32,11 @@ Jacobian that the linear solve sees:
   (F3-09a);
 - `switch`: the row has a switch term `a max(c − c_T, 0)` (`LaggedSwitch`): its Jacobian
   flips with the iterate, and a group with one takes `newton = 2` by default (S1);
-- `adv`: the bound of the row's advection terms (F3-09b): `Coef`s whose absolute values sum
-  to the upwind bound `Σ_a 2 |u_a| / h_a` (a velocity of numbers and parameters);
+- `adv`: the bound of the row's advection terms (F3-09b): entries whose absolute values sum to
+  the upwind bound `Σ_a 2 max|u_a| / h_a`, each a `Coef` (a velocity of numbers and
+  parameters) or `(; f, text)`, `f` a function of the parameters (a velocity that varies by
+  site, bounded over the box by the interval evaluator, F3-13; NaN when not finite, and the
+  term `text` is then one no bound sees);
 - `cross`: the row's cross terms `a · o` (`CrossLinear`): the other field's key, `a` as a
   `Coef` (`NaN` when no number or parameter bounds it), the term's text;
 - `unseen`: the terms left out of `J̃` that no bound sees (a defect correction whose
@@ -48,7 +51,10 @@ Jacobian that the linear solve sees:
   sum is at most 1/2 the term counts in the Newton count only, not in the substeps;
 - `facemax`: for a field row with diffusion, a function of the parameters giving the largest
   face coefficient per axis (`Σ max|m| max|K| / h_a²`, NaN when not finite), or `nothing`: it
-  bounds the part of a Robin face with a negative diagonal left out of the operator (R2-S1).
+  bounds the part of a Robin face with a negative diagonal left out of the operator (R2-S1);
+- `jmax`: for a field row with local terms, a function of the parameters giving the largest
+  value of its local Jacobian over the sites (the interval evaluator over the box, F3-13; NaN
+  when not finite), or `nothing`: the growth that count rule 1 keeps out of the shift.
 """
 struct RowOperator
     key::String
@@ -62,11 +68,12 @@ struct RowOperator
     inexact::Vector{String}
     iterate::Bool
     switch::Bool
-    adv::Vector{Coef}
+    adv::Vector{Any}
     cross::Vector{Tuple{String, Coef, String}}
     unseen::Vector{String}
     bounds::Vector{Tuple{Any, String, Any}}
     facemax::Any
+    jmax::Any
 end
 
 
@@ -109,19 +116,30 @@ function build_operator end
 
 # a sum of coefficients at the raw parameters `p` (primal values)
 _coefsum(cs::Vector{Coef}, p) = sum((c.param == 0 ? c.value : c.value * Float64(primal(p[c.param])) for c in cs); init = 0.0)
+# an advection bound's entry at `p`: a `Coef`'s magnitude, or the value of a bound function
+# `(; f, text)` (a velocity that varies by site; `text` the term in the user's words)
+_advval(c::Coef, p) = abs(_coefsum(Coef[c], p))
+_advval(c::NamedTuple, p) = Float64(c.f(p))
 
 """
     growth(op, keys, p) -> Float64
 
 The largest positive local derivative the operator `op` sees over the rows `keys` at raw
 parameters `p` (`max(J_loc, 0)` of the numeric rows; a row whose local Jacobian varies by site
+takes its interval bound over the sites, `jmax`, F3-13; with none, or one that is not finite, it
 counts 0: its shift is clamped instead, F3 design §3.4 Positivity).
 """
 function growth(op::OperatorSpec, keys, p)
     g = 0.0
     for r in op.rows
-        r.key in keys && !r.field || continue
-        g = max(g, _coefsum(r.jloc, p))
+        r.key in keys || continue
+        if r.field
+            r.jmax === nothing && continue
+            v = Float64(r.jmax(p))
+            isfinite(v) && (g = max(g, v))
+        else
+            g = max(g, _coefsum(r.jloc, p))
+        end
     end
     return g
 end
@@ -143,7 +161,12 @@ function inexact_bounds(op::OperatorSpec, keys, cyclic::Bool, p)
     unseen = String[]
     for r in op.rows
         r.key in keys || continue
-        q = sum((abs(_coefsum(Coef[c], p)) for c in r.adv); init = 0.0)
+        q = 0.0
+        for c in r.adv
+            v = _advval(c, p)
+            # (a site-varying velocity whose bound is not finite here: no bound sees the term)
+            c isa Coef || isfinite(v) ? (q += v) : push!(unseen, c.text)
+        end
         ts = [g === nothing ? NaN : Float64(g(p)) for (_, _, g) in r.bounds]
         tr = sum(ts; init = 0.0)
         if !isempty(ts) && isfinite(tr) && tr <= 0.5

@@ -395,7 +395,8 @@ end
 # tables when a row has a bound that may read them (`bounds`, `facemax`), else `p` itself (no copy)
 function _bound_params(st::FieldStore, s::Program, op::OperatorSpec, keys, p)
     isempty(s.tables) && return p
-    any(r -> r.key in keys && (!isempty(r.bounds) || r.facemax !== nothing), op.rows) || return p
+    any(r -> r.key in keys && (!isempty(r.bounds) || r.facemax !== nothing || r.jmax !== nothing ||
+                               any(c -> !(c isa Coef), r.adv)), op.rows) || return p
     return ParamsTables(p, Pair{String, Vector{Float64}}[s.tables[j].key => _primal64(Array(st.tables[j])) for j in eachindex(s.tables)])
 end
 # the rows whose Robin faces' negative part stays out of the operator: every row of a time
@@ -1111,6 +1112,7 @@ function substeps(spec::GroupSpec, alg::ImplicitAlgorithm, dt::Real, pp; fields 
     isempty(fields) && return 0
     dt = Float64(dt)
     r = bound_report(stability, pp)
+    check_declared(stability, pp)
     ctx = (; stability, pp, r, fields = collect(String, fields), dt, least = alg.substeps)
     (isempty(r.negative) && !any(x -> x[3] isa Tuple, r.nonfinite)) || refuse_parameters(texts, ctx)
     op = _operator(spec, alg)
@@ -1151,6 +1153,7 @@ function substeps(spec::GroupSpec, alg::QuasiSteady, dt::Real, pp; fields = spec
         key = identity, texts::PolicyTexts = ProblemTexts(spec.texts.route))
     isempty(fields) && return 0
     r = bound_report(stability, pp)
+    check_declared(stability, pp)
     ctx = (; stability, pp, r, fields = collect(String, fields), dt = Float64(dt), least = nothing)
     (isempty(r.negative) && !any(x -> x[3] isa Tuple, r.nonfinite)) || refuse_parameters(texts, ctx)
     _steady_refusals(spec, _operator(spec, alg), collect(String, fields), pp)

@@ -831,6 +831,7 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
             _evaluate(get(opd, _unwrap(x), i.default), pvals, "the default of `$(i.name)`")
         if i.role === :site || i.role === :field
             S = get(i.options, :lattice_storage, T)                  # a field's own storage (Float16)
+            _check_field_bounds(i, v)
             a = v isa AbstractArray ? S.(v) : fill(S(v), _p(sys, :lattice).dims)
             push!(site, i.name => a)
             i.name in c.scratch && push!(site, Symbol(i.name, :__next) => copy(a))
@@ -959,6 +960,20 @@ function _convert_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
 end
 
 # A `CellRef` column (R6): Int32 cell ids, 0 (none) or a labelled cell
+# A field's initial values against its declared `bounds = (lo, hi)` (F3-13): the stability bound
+# takes that interval for the coefficients that read the field, so a field that starts outside
+# it is refused, naming the first site
+function _check_field_bounds(i, v)
+    b = get(i.options, :bounds, nothing)
+    b === nothing && return nothing
+    vals = v isa AbstractArray ? v : (v,)
+    k = findfirst(x -> !(b[1] <= x <= b[2]), vals)
+    k === nothing && return nothing
+    at = v isa AbstractArray ? string(" at site ", Tuple(CartesianIndices(v)[k])) : ""
+    throw(ArgumentError(string("field `", i.name, "` starts at ", vals[k], at, ", outside its declared bounds (",
+        _bnum(b[1]), ", ", _bnum(b[2]), "): the stability bound takes that interval for the coefficients that read `",
+        i.name, "`; give it initial values in its bounds, or change `bounds` in its declaration")))
+end
 function _ref_column(name, v, ncell)
     vals = v isa AbstractArray ? vec(v) : fill(v, ncell)
     length(vals) == ncell || throw(ArgumentError("$(length(vals)) values of reference `$name` for $ncell labeled cells"))

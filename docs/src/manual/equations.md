@@ -279,10 +279,33 @@ threads).
   such as `(kind == medium)` and `ismember(kind, g)` are evaluated at 0 and 1, and a rate
   gated by `ifelse(mcs >= t₀, …, 0)` (a condition that reads no field) is bounded branch
   by branch (the worst branch counts). The count is
-  recomputed when parameters change; a number is a minimum. A rate the bound cannot see
+  recomputed when parameters change; a number is a minimum. The bound also covers, over
+  intervals (the interval bound):
+  - a coefficient that reads the coordinates (`(1 + x) * Δ(c)`, `DivKGrad(:harmonic)(1 + x, c)`,
+    `- k * (1 + x) * c`), over the lattice's cell centers and, for a velocity and for a face
+    coefficient on an axis with a boundary value or flux, one half spacing past the faces;
+  - a coefficient that reads a field with declared bounds (`c(field) = 0.5, [bounds = (0, 1)]`):
+    `DivKGrad(:harmonic)(c, c)` takes the largest `K` over `[0, 1]`, and a nonlinear reaction
+    (`a * c * (1 - c)`) takes the largest `|∂f/∂c|` over it. The bound holds inside the
+    declared interval: a field that starts outside it, or a constant boundary or masked value
+    outside it, is an error, and a field that leaves it during an `ExplicitEuler` run ends the
+    run with `ReturnCode.Unstable` and a warning (`substeps = n` or wider `bounds` are the
+    routes); an implicit run warns and goes on (`lower = lo` or wider `bounds` are the routes);
+  - a switch (`- a * max(c - c_T, 0)`): its derivative is `a` or 0, so it needs no interval;
+  - upwind advection, `Σ_d 2 max|v_d| / h_d` (the CFL limit): a velocity of parameters, of the
+    coordinates (`[50 * (1 + x), 0.0]`) or of other fields with declared bounds. A velocity
+    that reads the field it moves (`Advect([c, 0], c)`, Burgers) is not bounded: its flux
+    Jacobian has a central part, so no step count follows from the velocity alone; it needs
+    `substeps = n` or an implicit solver;
+  - a term that reads an aux field, through the aux field's definition (`K ~ k * c` makes
+    `- K` a decay `k`).
+  A coefficient whose interval holds negative values and positive ones is a diffusion whose
+  sign the bound does not know, and one whose interval is not finite (`c / (x - 0.5)`) has no
+  bound: both need `substeps = n`, and the error names the interval. A rate the bound cannot see
   needs `substeps`, and the problem throws an error naming the term without it: a
-  reaction that is not linear in `c`, a coefficient that reads other state (a field, `mcs`),
-  and a diffusion multiplier that reads a CPM value directly (`volume[owner] * Δ(c)`). So does a
+  reaction that is not linear in `c` (with no declared bounds), a coefficient that reads other
+  state (a field with no declared bounds, `mcs`), and a diffusion multiplier that reads a CPM
+  value directly (`volume[owner] * Δ(c)`). So does a
   rate that reads another field (`- Dx * Δ(u)`, `- k * u`) when its row of the Jacobian is
   not diagonally dominant. A diffusion multiplier that varies by site through a kind table
   or a kind set (`δ[kind] * Δ(c)`, `ismember(kind, g) * Δ(c)`) is bounded: the bound takes

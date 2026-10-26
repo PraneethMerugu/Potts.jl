@@ -60,6 +60,10 @@ end
 # the `lattice_storage` of field `name` of `sys` (`nothing`: the state type)
 _field_storage(sys, name) = (x = only(x for x in _p(sys, :variables) if info(x) !== nothing && info(x).name === name);
                              get(info(x).options, :lattice_storage, nothing))
+# the declared `bounds` of field `name` of `sys` (F3-13; `nothing`: none), MTK's bounds metadata
+# of the PDESystem's field, which the stability bound reads
+_field_bounds(sys, name) = (x = only(x for x in _p(sys, :variables) if info(x) !== nothing && info(x).name === name);
+                            get(info(x).options, :bounds, nothing))
 
 # the calls the lattice compiler lowers: LatticePDE's one allowlist (F2 design §2.11), so a
 # call lowers in `@equations` exactly when it lowers in a PDESystem
@@ -109,7 +113,8 @@ function _field_term(x, cv)
     if i !== nothing
         if i.role in (:field, :site)
             haskey(cv.states, i.name) && return cv.states[i.name]
-            return get!(() -> _field_var(i.name, Real, cv.ivs; input = true, entity = i), cv.direct, i.name)
+            return get!(() -> _field_var(i.name, Real, cv.ivs; input = true, entity = i,
+                bounds = get(i.options, :bounds, nothing)), cv.direct, i.name)
         elseif i.role in (:param, :kindtable)
             push!(cv.params, u)
             return u
@@ -515,7 +520,8 @@ function _field_system(sys::PottsSystem, names = Symbol[info(x).name for (x, _) 
     ivs = Any[tt; xs]
     aux = _field_aux(sys)
     auxnames = Symbol[info(x).name for (x, _) in aux]
-    states = Dict{Symbol, Any}(n => _field_var(n, Real, ivs; storage = _field_storage(sys, n)) for n in [names; auxnames])
+    states = Dict{Symbol, Any}(n => _field_var(n, Real, ivs; storage = _field_storage(sys, n), bounds = _field_bounds(sys, n))
+                               for n in [names; auxnames])
     cv = _field_conv(ivs, states, T, known)
     eqs = Equation[]
     for (x, rate, op) in _field_equations(sys)
@@ -735,15 +741,32 @@ end
 _fieldlist(ks) = join(("`$k`" for k in ks), ", ")
 _fs(t::_PottsTexts) = length(t.names) == 1 ? "" : "s"
 const _A_ROUTE = "`PottsProblem` `field_solver = ExplicitEuler(; substeps = n)` with `n ≥ mcs_duration · ρ / 1.8`"
+# an advection whose velocity reads the field it moves (`Advect(…)([c, 0.0], c)`, Burgers): no
+# interval bounds it (the velocity grows with the field), so `bounds` is not a route for it
+function _self_advection(x::AbstractString)
+    m = match(r"Advect\(.*\)\(\[(.*)\],\s*([^\s\)]+)\)", x)
+    m === nothing && return false
+    return occursin(Regex(string("(?<![\\w₊])", m.captures[2], "(?![\\w₊])")), m.captures[1])
+end
 function LatticeFields.Problems.unbounded_text(t::_PottsTexts, c)
     r = c.r
+    texts = [_user_text(x, t.cv) for x in r.terms]
+    if !isempty(texts) && all(_self_advection, texts)
+        return "the substep count of the field$(_fs(t)) $(_fieldlist(t.names)) has no bound (the term" *
+               "$(length(texts) == 1 ? "" : "s") $(join(("`$x`" for x in texts), ", ")): an advection whose velocity " *
+               "reads the field it moves, which no interval bounds); give " * _A_ROUTE * ", or step the field" *
+               "$(_fs(t)) with `field_solver = BackwardEuler()`"
+    end
     if !isempty(r.terms)
         return "the substep count of the field$(_fs(t)) $(_fieldlist(t.names)) has no bound from the parameters (the term" *
                "$(length(r.terms) == 1 ? "" : "s") $(join(("`$(_user_text(x, t.cv))`" for x in r.terms), ", ")), " *
-               "which the stability bound cannot see: a nonlinear or advection term, a diffusion multiplier " *
-               "that varies by site through a CPM value read directly (`volume[owner] * Δ(c)`; a kind table " *
-               "`δ[kind] * Δ(c)` or a kind set `ismember(kind, g) * Δ(c)` is bounded), or a coefficient " *
-               "that reads the state or `mcs`); give " * _A_ROUTE
+               "which the stability bound cannot see: a nonlinear term or a coefficient that reads a field with no " *
+               "finite declared `bounds`, an advection whose velocity reads the field it moves, a diffusion " *
+               "multiplier that varies by site through a CPM value read directly (`volume[owner] * Δ(c)`; a kind " *
+               "table `δ[kind] * Δ(c)` or a kind set `ismember(kind, g) * Δ(c)` is bounded), or a coefficient " *
+               "that reads `mcs`)" * _infinite_text(t) * "; declare finite `bounds = (lo, hi)` on a field whose " *
+               "values stay in an interval (`c(field) = 0.5, [bounds = (0, 1)]`: the bound then sees its nonlinear " *
+               "terms and coefficients), or give " * _A_ROUTE
     elseif !isempty(r.coupled)
         return "the substep count of the field$(_fs(t)) $(_fieldlist(t.names)) has no bound " *
                "from the parameters: the coupled rate$(length(r.coupled) == 1 ? "" : "s") of $(_fieldlist(r.coupled)) " *
@@ -753,6 +776,13 @@ function LatticeFields.Problems.unbounded_text(t::_PottsTexts, c)
     return string("the substep bound of the field$(_fs(t)) ", _fieldlist(t.names), " is not finite at the current parameters: ",
         isempty(r.nonfinite) ? "a coefficient is not finite" :
         join((_nonfinite_text(text, w, t.cv) for (_, text, w) in r.nonfinite), "; "))
+end
+# the fields of a group whose declared bounds are not finite (`bounds = (0, Inf)`), in words
+function _infinite_text(t::_PottsTexts)
+    inf = get(t.cv, :infinite, Symbol[])
+    isempty(inf) && return ""
+    return string(" (", _fieldlist(inf), length(inf) == 1 ? " declares bounds that are" : " declare bounds that are",
+        " not finite: the bound needs both ends)")
 end
 function LatticeFields.Problems.uncovered_text(t::_PottsTexts, c)
     r = c.r
@@ -972,11 +1002,24 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
              (; stability = coupling.bound, coupling.groups, explicit = [i == gi && _given_count(solver) !== nothing for i in eachindex(order)],
                 index = gi, whole = _WholeParams(coupling.wnames, params),
                 steady = [order[i][2] isa LatticeFields.Problems.QuasiSteady for i in eachindex(order)])
-        rule = LatticeFields.Problems.GroupSubsteps(gspec, solver, dt; key = fp, texts = _PottsTexts(names, (; filled = copy(cv.filled))),
+        rule = LatticeFields.Problems.GroupSubsteps(gspec, solver, dt; key = fp,
+            texts = _PottsTexts(names, (; filled = copy(cv.filled), infinite = _infinite_bounds(c, names))),
             coupling = cp)
         push!(groups, _FieldGroup(names, group, solver, prog, mplan, splan, arrays, lg.tables, params, rule, fp, opts, rtabs))
     end
     return groups
+end
+
+# the fields of `names` whose declared `bounds` are not finite (batch 5 review N1)
+function _infinite_bounds(c::CompiledPottsSystem, names)
+    out = Symbol[]
+    for x in _p(c.sys, :variables)
+        i = info(x)
+        (i === nothing || i.role !== :field || !(i.name in names)) && continue
+        b = get(i.options, :bounds, nothing)
+        b === nothing || all(isfinite, b) || push!(out, i.name)
+    end
+    return out
 end
 
 # The group of a model whose only fields are aux fields `K ~ rhs` (F3 design §3.12): no state

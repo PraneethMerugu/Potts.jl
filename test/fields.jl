@@ -2939,3 +2939,168 @@ end
     step!(integ)
     @test (@allocated step!(integ)) == 0 && integ.stats.fields.solves == 0
 end
+
+# F3-13 (F3 design §3.10, FE-11) in A: a field's declared `bounds`, the coordinates, aux fields and
+# advection reach the stability bound as in B (one bound: LatticePDE's), so these models take an
+# automatic count, equal to B's for the same system. Base (b41b73c1, ~/lpwork/f3b8-nc-a-base.log):
+# `bounds` is an unknown variable option, and every automatic count below is refused.
+@potts_model FbIvDivK begin
+    @kinds medium A
+    @variables c(field) = 0.5, [bounds = (0, 1)]
+    @lattice Lattice((16, 16); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ DivKGrad(:harmonic)(c, c)
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FbIvNoBounds begin
+    @kinds medium A
+    @variables c(field) = 0.5
+    @lattice Lattice((16, 16); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ DivKGrad(:harmonic)(c, c)
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FbIvOut begin
+    @kinds medium A
+    @variables c(field) = 1.5, [bounds = (0, 1)]
+    @lattice Lattice((16, 16); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ DivKGrad(:harmonic)(c, c)
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FbIvAux begin
+    @kinds medium A
+    @parameters k = 2.0
+    @variables begin
+        c(field) = 0.5
+        K(field) = 0.0
+    end
+    @lattice Lattice((16, 16); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations begin
+        K ~ k * c
+        D(c) ~ 0.1 * Δ(c) - K
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+# Batch 5 review M1 in A: a velocity that reads the advected field (Burgers) is not bounded by
+# its frozen velocity; the automatic count is refused in words with its routes. Base 97045a1b
+# (~/lpwork/b5r1-nc-m1.log): the count is [2], the run returns `Success` with c up to 1.129,
+# above the declared bound 1 and the initial maximum 0.9.
+@potts_model FbBurgers begin
+    @kinds medium A
+    @variables c(field) = 0.5, [bounds = (0, 1)]
+    @lattice Lattice((32, 32); boundary = Periodic())
+    @energy cells(A) => (volume - 25.0)^2
+    @equations D(c) ~ -Advect(Upwind1())([c, 0.0], c)
+    @sweep Metropolis(; temperature = 1.0)
+end
+@testset "F3-13 M1: Burgers in A stays unseen (no frozen-velocity count)" begin
+    c0 = [0.5 + 0.4 * sin(2π * (i - 0.5) / 32) for i in 1:32, j in 1:32]
+    op = [ownership => zeros(Int32, 32, 32), kind => Symbol[], :c => c0]
+    e = something(fd_err(() -> PottsProblem(FbBurgers(; name = :b), op, (0, 20); seed = 1, field_solver = ExplicitEuler())), "")
+    @test occursin("Advect", e) && occursin("substeps", e)
+    # (review r2 N1) the routes are a count or BackwardEuler; `bounds` cannot help this term
+    @test occursin("velocity reads the field it moves", e) && occursin("BackwardEuler", e) && !occursin("`bounds", e)
+    # the user's count (h = Δx/8, past the linearized limit Δx/4 at c ≡ 1): bounded, below 1
+    pb = @test_logs (:warn, r"Advect") match_mode = :any PottsProblem(FbBurgers(; name = :b), op, (0, 20); seed = 1,
+        field_solver = ExplicitEuler(; substeps = 8))
+    s = solve(pb, SequentialCPM())
+    @test s.retcode == Potts.SciMLBase.ReturnCode.Success
+    @test 0.1 - 1e-6 <= minimum(s.u[end].site.c) && maximum(s.u[end].site.c) <= 0.91
+end
+
+# Batch 5 review M2 in A: a constant face value outside a field's declared bounds is refused at
+# the build, and a field that leaves the interval its bound used ends the run with
+# `ReturnCode.Unstable` and one warning (read after each MCS on the host). Base 97045a1b
+# (~/lpwork/b5r1-nc-m2.log): the face model builds, and the source run returns `Success` with
+# c up to 5.18 past its bound 3.
+@potts_model FbDir3 begin
+    @kinds medium A
+    @variables c(field) = 0.5, [bounds = (0, 1)]
+    @lattice Lattice((16, 16); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ DivKGrad(:harmonic)(c, c)
+    @bcs c(t, 16, y) ~ 3.0
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FbDrift begin
+    @kinds medium A
+    @parameters begin
+        Dc = 0.2
+        s = 1.0
+        k = 0.05
+    end
+    @variables c(field) = 0.0, [bounds = (0, 3)]
+    @lattice Lattice((16, 16); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ DivKGrad(:harmonic)(Dc * (1 + c), c) + s - k * c
+    @sweep Metropolis(; temperature = 1.0)
+end
+@testset "F3-13 M2: declared intervals after the build in A" begin
+    RC = Potts.SciMLBase.ReturnCode
+    dims = (16, 16)
+    e = something(fd_err(() -> PottsProblem(FbDir3(; name = :f), fd_empty(dims), (0, 2))), "")
+    @test occursin("field `c`: its condition on the face `x = 16.0` holds 3.0, outside the field's declared bounds (0.0, 1.0)", e)
+    # the source drives c past 3 near MCS 3 (s = 1): `Unstable`, the run stops there, one warning
+    pr = PottsProblem(FbDrift(; name = :f), fd_empty(dims), (0, 20))
+    sol = @test_logs (:warn, r"field `c` left its declared bounds \(0\.0, 3\.0\): it holds .* by the end of the field step of MCS \d+") solve(pr,
+        SequentialCPM())
+    @test sol.retcode == RC.Unstable && sol.t[end] < 20 && maximum(sol.u[end].site.c) > 3
+    # with a decay that keeps it inside (s = 0.1: steady 2): no warning, to the end
+    sol = @test_logs solve(remake(pr; p = [:s => 0.1]), SequentialCPM())
+    @test sol.retcode == RC.Success && sol.t[end] == 20
+    # the check reads the field after each MCS on the host and allocates nothing there
+    integ = init(remake(pr; p = [:s => 0.1]), SequentialCPM(); save_start = false, save_end = false)
+    step!(integ); step!(integ)
+    @test (@allocated step!(integ)) == 0
+end
+
+@potts_model FbIvAdvect begin
+    @kinds medium A
+    @variables c(field) = 0.5
+    @lattice Lattice((16, 16); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ 0.1 * Δ(c) - Advect(Upwind1())([0.05 * (1 + x), 0.0], c)
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "F3-13: the interval bound in A (declared bounds, aux fields, coordinates, advection)" begin
+    LP, MTKB = Potts.LatticePDE, Potts.ModelingToolkitBase
+    tt, DD = MTKB.t_nounits, MTKB.D_nounits
+    dims = (16, 16)
+    Potts.ModelingToolkitBase.@parameters x y k = 2.0
+    Potts.ModelingToolkitBase.@variables c(..) [bounds = (0.0, 1.0)] u(..) K(..)
+    ce, ue, Ke = c(tt, x, y), u(tt, x, y), K(tt, x, y)
+    dom = [tt ∈ LP.Interval(0.0, 2.0), x ∈ LP.Interval(0.0, 16.0), y ∈ LP.Interval(0.0, 16.0)]
+    bcount(eqs, dvs, ps, ic) = (p = LP.discretize(MTKB.PDESystem(eqs, ic, dom, [tt, x, y], dvs, ps; name = :b),
+        LP.LatticeDiscretization(LP.Grid(dims); T = Float64, problem = :owned)); LP.Problems.substeps(p, LP.ExplicitEuler(; dt = 1.0)))
+    acount(M; kw...) = substep_counts(init(PottsProblem(M(; name = :f), fd_empty(dims), (0, 2); field_solver = ExplicitEuler(), kw...),
+        SequentialCPM()))
+    # `DivKGrad(c, c)` with c ∈ (0, 1): ρ = 8 max K = 8, n = ⌈8/1.8⌉ = 5, as B
+    @test acount(FbIvDivK) == [5] == [bcount([DD(ce) ~ LP.DivKGrad(:harmonic)(ce, ce)], [ce], Any[], [c(0, x, y) ~ 0.5])]
+    # … and the run equals B's, bitwise (σ frozen: no cells)
+    c0 = rand(StableRNG(13), dims...)
+    a = Array(solve(PottsProblem(FbIvDivK(; name = :f), [fd_empty(dims); :c => c0], (0, 2); field_solver = ExplicitEuler()),
+        SequentialCPM()).u[end].site.c)
+    bp = LP.discretize(MTKB.PDESystem([DD(ce) ~ LP.DivKGrad(:harmonic)(ce, ce)], [c(0, x, y) ~ 0.5], dom, [tt, x, y], [ce], Any[];
+        name = :b), LP.LatticeDiscretization(LP.Grid(dims); T = Float64, problem = :owned))
+    @test a == LP.solve(LP.remake(bp; u0 = vec(c0)), LP.ExplicitEuler(; dt = 1.0))[:c][end]
+    # no declared interval: the term stays one the bound cannot see (the count is refused)
+    e = something(fd_err(() -> PottsProblem(FbIvNoBounds(; name = :f), fd_empty(dims), (0, 2); field_solver = ExplicitEuler())), "")
+    @test occursin("DivKGrad", e) && occursin("cannot see", e)
+    # a field that starts outside its bounds; `bounds` on a variable that is not a field
+    e = something(fd_err(() -> PottsProblem(FbIvOut(; name = :f), fd_empty(dims), (0, 2); field_solver = ExplicitEuler())), "")
+    @test occursin("field `c` starts at 1.5, outside its declared bounds (0, 1)", e)
+    e = something(fd_err(() -> Potts.variable(only(Potts.Symbolics.@variables s(Potts.t)), :site; bounds = (0, 1))), "")
+    @test occursin("variable `s`: `bounds` applies to fields", e)
+    e = something(fd_err(() -> Potts.variable(only(Potts.Symbolics.@variables s(Potts.t)), :field; bounds = (1, 0))), "")
+    @test occursin("`bounds` is a pair `(lo, hi)` of numbers with lo ≤ hi", e)
+    # an aux field through its definition: ρ = 0.1 · 8 + k, n = ⌈2.8/1.8⌉ = 2 (base: refused)
+    @test acount(FbIvAux) == [2] ==
+          [bcount([Ke ~ k * ue, DD(ue) ~ 0.1 * LP.Δ(ue) - Ke], [ue, Ke], Any[k], [u(0, x, y) ~ 0.5])]
+    # a velocity that varies by site: ρ = 0.8 + 2 max|0.05 (1 + x)| over x ∈ [−0.5, 16.5], n = 2
+    @test acount(FbIvAdvect) == [2] ==
+          [bcount([DD(ue) ~ 0.1 * LP.Δ(ue) - LP.Advect(LP.Upwind1())([0.05 * (1 + x), 0.0], ue)], [ue], Any[], [u(0, x, y) ~ 0.5])]
+end

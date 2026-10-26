@@ -245,7 +245,7 @@ outside `SCOPES` names a relationship: `rest(bond)` is an edge variable of `@rel
 bond` (option `relationship = :bond`; `mtkcompile` checks the name). `rest(edge)` belongs
 to the model's only relationship.
 """
-const _VARIABLE_OPTIONS = (:clear_on_ownership_change, :vector, :index, :relationship, :reference, :lattice_storage)
+const _VARIABLE_OPTIONS = (:clear_on_ownership_change, :vector, :index, :relationship, :reference, :lattice_storage, :bounds)
 
 # `default` when no value was written (`x(cell)`, D-170): the variable starts at 0.0 as
 # before, and is marked `PottsNoValue`, so that initialization solves for it when its
@@ -282,7 +282,8 @@ function variable(x, scope::Symbol; default = _NO_VALUE, unit = nothing, guess =
         throw(ArgumentError("variable `$name`: `relationship` applies to edge variables"))
     for (k, v) in pairs(options)
         k in _VARIABLE_OPTIONS || throw(ArgumentError("variable `$name`: unknown option `$k` " *
-                                                      "(options: `unit`, `guess`, `clear_on_ownership_change`)"))
+                                                      "(options: `unit`, `guess`, `clear_on_ownership_change`; a field also " *
+                                                      "takes `lattice_storage` and `bounds`)"))
         k === :clear_on_ownership_change && v === true && !(scope in (:site, :field)) &&
             throw(ArgumentError("variable `$name`: `clear_on_ownership_change` applies to site variables"))
         # `[lattice_storage = Float16]` (P5 role model): a field stored narrower than the state
@@ -290,7 +291,17 @@ function variable(x, scope::Symbol; default = _NO_VALUE, unit = nothing, guess =
         k === :lattice_storage && !(scope === :field && v === Float16) &&
             throw(ArgumentError("variable `$name`: `lattice_storage` applies to fields and is `Float16` " *
                                 "(the state type `T` is the default storage; a field stored narrower than `T`)"))
+        # `[bounds = (lo, hi)]` on a field (F3-13, FE-18 metadata): the interval its values stay
+        # in, which the stability bound takes for a coefficient that reads the field
+        if k === :bounds
+            scope === :field || throw(ArgumentError("variable `$name`: `bounds` applies to fields (`$name(field) = 0.0, " *
+                                                    "[bounds = (0, 1)]`: the interval the field's values stay in)"))
+            (v isa Tuple && length(v) == 2 && all(b -> b isa Real, v) && !any(isnan, v) && v[1] <= v[2]) ||
+                throw(ArgumentError("variable `$name`: `bounds` is a pair `(lo, hi)` of numbers with lo ≤ hi " *
+                                    "(`bounds = (0, 1)`); got $(repr(v))"))
+        end
     end
+    haskey(options, :bounds) && (options = (; options..., bounds = (Float64(options.bounds[1]), Float64(options.bounds[2]))))
     v = _with_unit(_tag(x, Entity(scope, name, default, options)), unit)
     written || (v = _with_metadata(v, PottsNoValue, true))
     # `[guess = g]` (MTK's variable metadata): seeds the variable's initialization solve

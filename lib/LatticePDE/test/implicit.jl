@@ -437,12 +437,13 @@ end
     @test_logs (:warn, r"^field `bc`: the implicit shift was clamped in window 1 \(t = 0\.0\) .*a larger `newton = k` checks the step") solve!(ig)
     rt = only(ig.runtimes)
     @test ig.retcode == ReturnCode.Success && rt.totals.cause & 0x08 != 0 && maximum(ig[bce]) < 1e-3
-    # … once per run, and a site growth that the count rule cannot see (a field row) warns too
-    pg = discretize(PDESystem([D(bce) ~ 0.05 * Δ(bce) + 8 * (1 + x) * bce], [bc(0, x, y) ~ 0.5], bdom(0.3), [t, x, y], [bce], Any[];
-        name = :sitegrowth), LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
+    # … once per run, and a site growth that the count rule cannot see (a field row whose growth
+    # reads the time: no interval bounds it) warns too
+    pg = discretize(PDESystem([D(bce) ~ 0.05 * Δ(bce) + 8 * (1 + x) * (1 + t) * bce], [bc(0, x, y) ~ 0.5], bdom(0.3), [t, x, y],
+        [bce], Any[]; name = :sitegrowth), LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
     @test_logs (:warn, r"the implicit shift was clamped in window 1") solve(pg, BackwardEuler(; dt = 0.1))
-    # the route works: more substeps keep the growth below the shift (`h g = 0.4 < 1/2`): no clamp
-    s = @test_logs min_level = Base.CoreLogging.Warn solve(pg, BackwardEuler(; dt = 0.1, substeps = 4))
+    # the route works: more substeps keep the growth below the shift (`h g ≤ 0.02 · 20.2 < 1/2`): no clamp
+    s = @test_logs min_level = Base.CoreLogging.Warn solve(pg, BackwardEuler(; dt = 0.1, substeps = 5))
     @test s.retcode == ReturnCode.Success
     # a decay with no clamp leaves the bit clear
     ig = init(discretize(PDESystem([D(bce) ~ 0.05 * Δ(bce) - 20 * bce], [bc(0, x, y) ~ 0.75], bdom(0.3), [t, x, y], [bce], Any[];
@@ -560,9 +561,10 @@ end
 end
 
 @testset "F3-09b: a term no bound sees warns once; a divergence ends the run" begin
-    # a velocity that varies by site: no bound, one substep, newton = 4, checked on the device
-    p = nlown(nlsys([D(bce) ~ 0.01 * Δ(bce) - Advect(Upwind1())([50 * (1 + x), 0.0], bce)], [bc(0, x, y) ~ x * y], [bce]; T = 2.0))
-    s = @test_logs (:warn, r"field `bc`: `-Advect\(Upwind1\(\)\)\(\[50\(1 \+ x\), 0\.0\], bc\)` \(in the rate of `bc`\) is not in the implicit operator and no bound sees it") (:warn,
+    # a velocity that varies in time: no bound (the interval bound covers the coordinates, not
+    # the time; F3-13 bounds `50(1 + x)`, below), one substep, newton = 4, checked on the device
+    p = nlown(nlsys([D(bce) ~ 0.01 * Δ(bce) - Advect(Upwind1())([50 * (1 + x) + t, 0.0], bce)], [bc(0, x, y) ~ x * y], [bce]; T = 2.0))
+    s = @test_logs (:warn, r"field `bc`: `-Advect\(Upwind1\(\)\)\(\[.*t.*, 0\.0\], bc\)` \(in the rate of `bc`\) is not in the implicit operator and no bound sees it") (:warn,
         r"field `bc`: the solve failed in window 1 \(t = 0\.0\) \(the Newton iteration diverged\), `ReturnCode.ConvergenceFailure`") solve(p,
         BackwardEuler(; dt = 1.0))
     @test s.retcode == ReturnCode.ConvergenceFailure
@@ -570,6 +572,33 @@ end
     @test ig.substeps == 1 && only(ig.runtimes).cache.newton == 4 && !only(ig.runtimes).cache.seen
     # (once per group and term: a second problem does not warn at its build)
     @test_logs min_level = WARN init(p, BackwardEuler(; dt = 1.0))
+end
+
+@testset "F3-13: a site-varying velocity at the rule-2 count; a site growth at rule 1 (batch 3 review R2, r1 S2)" begin
+    # `50(1 + x)` over the box and one spacing past it (16²: x ≤ 1 + 1/16): ρ_adv = 2 · 50 (2 + 1/16)
+    # · 16 = 3300, n = ⌈2 · 0.01 · 3300⌉ = 66, ρ_c = 1/2: newton = 10, no warning, and the run is
+    # the BE matrix's (base b41b73c1: one substep, newton = 4, the warning; at dt = 1 it diverged)
+    sys = nlsys([D(bce) ~ 0.01 * Δ(bce) - Advect(Upwind1())([50 * (1 + x), 0.0], bce)], [bc(0, x, y) ~ x * y], [bce]; T = 0.05)
+    p = nlown(sys)
+    ig = init(p, BackwardEuler(; dt = 0.01, inner = BTIGHT))
+    c = only(ig.runtimes).cache
+    @test ig.substeps == 66 && c.newton == 10 && c.seen && c.ρin ≈ 3300
+    s = @test_logs min_level = WARN solve(p, BackwardEuler(; dt = 0.01, inner = BTIGHT))
+    @test s.retcode == ReturnCode.Success && s.stats.newton_budget == 0
+    ub = direct_be(sys, (16, 16), 0.01, 0.05, 66)
+    @test maximum(abs, vec(blast(s)) .- ub) / maximum(abs, ub) < 1e-3    # (batch 3 review r1 S2): a site growth the interval bound sees (`8(1 + x) c`, a field
+    # row) raises the count by rule 1 instead: n = ⌈2 · 0.1 · 8 (2 + 1/8)⌉ = 4 (x over the box and
+    # one spacing past it), no clamp and no warning, and the run is the BE matrix's (base
+    # b41b73c1: one substep, the clamp warning)
+    gsys = PDESystem([D(bce) ~ 0.05 * Δ(bce) + 8 * (1 + x) * bce], [bc(0, x, y) ~ 0.5], bdom(0.3), [t, x, y], [bce], Any[];
+        name = :sitegrowth2)
+    pg = discretize(gsys, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
+    ig = init(pg, BackwardEuler(; dt = 0.1, inner = BTIGHT))
+    @test ig.substeps == 4
+    @test_logs min_level = Base.CoreLogging.Warn solve!(ig)
+    @test ig.retcode == ReturnCode.Success && only(ig.runtimes).totals.cause & 0x08 == 0
+    ub = direct_be(gsys, (8, 8), 0.1, 0.3, 4)
+    @test maximum(abs, vec(ig[bce]) .- ub) / maximum(abs, ub) < 1e-9
 end
 
 # F3 batch 3 review r1 (research/field-compiler/f3/reviews/F3-batch3-r1.md). Base 2d213237
@@ -735,9 +764,9 @@ end
     @test a.stats == b.stats && a.stats.solves == 12
     @test a[bue[1], length(a.t)] == b[bce, length(b.t)] && a[bue[2], length(a.t)] == b[boe, length(b.t)]
     # N2: a component read in a message is `u[1]` as written (base: `(bu)[1]`)
-    pv = nlown(nlsys([D(bue[1]) ~ 0.01 * Δ(bue[1]) - Advect(Upwind1())([50 * (1 + x), 0.0], bue[1]), D(bue[2]) ~ -bue[2]],
+    pv = nlown(nlsys([D(bue[1]) ~ 0.01 * Δ(bue[1]) - Advect(Upwind1())([50 * (1 + x) + t, 0.0], bue[1]), D(bue[2]) ~ -bue[2]],
         [bu(0, x, y)[1] ~ x, bu(0, x, y)[2] ~ 0.0], [bue]))
-    @test_logs (:warn, r"`-Advect\(Upwind1\(\)\)\(\[50\(1 \+ x\), 0\.0\], bu\[1\]\)` \(in the rate of `bu\[1\]`\) is not in the implicit operator") match_mode = :any init(pv,
+    @test_logs (:warn, r"`-Advect\(Upwind1\(\)\)\(\[.*, 0\.0\], bu\[1\]\)` \(in the rate of `bu\[1\]`\) is not in the implicit operator") match_mode = :any init(pv,
         BackwardEuler(; dt = 0.1))
 end
 
@@ -747,7 +776,7 @@ end
           "more substeps (`substeps = n`): a smaller step brings the Newton iteration into its contraction"
     @test LFB.status_route(alg, :failure, 0x1) == "more substeps (`substeps = n`) or a larger linear budget (`inner = DevicePCG(; budget = n)`)"
     # a Newton divergence in a run names that route (base: "… or a larger linear budget")
-    p = nlown(nlsys([D(bce) ~ 0.01 * Δ(bce) - Advect(Upwind1())([50 * (1 + x), 0.0], bce)], [bc(0, x, y) ~ x * y], [bce]; T = 2.0))
+    p = nlown(nlsys([D(bce) ~ 0.01 * Δ(bce) - Advect(Upwind1())([50 * (1 + x) + t, 0.0], bce)], [bc(0, x, y) ~ x * y], [bce]; T = 2.0))
     @test_logs (:warn, r"the Newton iteration diverged\), `ReturnCode.ConvergenceFailure`: the run stops; more substeps \(`substeps = n`\): a smaller step brings the Newton iteration into its contraction$") match_mode = :any solve(p,
         BackwardEuler(; dt = 1.0))
     # S6: advection (ρ_adv = 48) and a cycle (κ_in = 2) in one group: n = ⌈2 · 0.25 · 50⌉ = 25,

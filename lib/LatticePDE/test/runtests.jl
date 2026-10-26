@@ -282,6 +282,7 @@ bcs = [ce ~ masked(ke == 3, 0.0), oe ~ masked(ismember(ke, (2, 3)), 1.0)]
 
     include("discretize.jl")
     include("problems.jl")
+    include("bounds.jl")
     include("silent.jl")
     include("groups.jl")
     include("integ_ps.jl")

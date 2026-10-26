@@ -186,6 +186,34 @@ negative diffusion). The default checks nothing.
 check_parameters(stability, p) = nothing
 
 """
+    check_declared(stability, p)
+
+The declared intervals of the stability bound against the constant face and mask values at
+raw parameters `p` (batch 5 review M2): a value outside its field's declared `bounds` drives
+the field out of the interval the bound takes, and is refused in the user's words (LatticePDE).
+Run with [`check_parameters`](@ref)'s policy, before stepping and at every parameter change.
+The default checks nothing.
+"""
+check_declared(stability, p) = nothing
+
+"""
+    declared_intervals(stability) -> Vector{Tuple{String, Tuple{Float64, Float64}}}
+
+The fields (state or aux, by key) with declared finite `bounds = (lo, hi)` (batch 5 review M2):
+a write of a state field outside its interval is refused, as at the start. The default is none.
+"""
+declared_intervals(stability) = Tuple{String, Tuple{Float64, Float64}}[]
+
+"""
+    used_intervals(stability) -> Vector{String}
+
+The keys of [`declared_intervals`](@ref) whose interval a coefficient bound read (batch 5 review
+M2): a run checks that those fields stay in their intervals where it reads its status. The
+default is none.
+"""
+used_intervals(stability) = String[]
+
+"""
     seen_bound(stability, p) -> Float64
 
 A bound on the spectral radius over the terms the stability bound sees, used to raise an

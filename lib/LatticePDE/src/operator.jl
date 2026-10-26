@@ -117,6 +117,28 @@ function _advection_bound(term, params, h)
     end
     return out
 end
+# The same bound for a velocity that varies by site (F3-13; batch 3 review R2: `50(1 + x)`): per
+# axis `(; f, text)`, `f(pp) = 2 max|m u_a| / h_a` over the box by the interval evaluator (NaN
+# when not finite); nothing when a velocity component or the multiplier reads a field (its
+# Jacobian has a cross part the bound does not see) or has no interval rule
+function _advection_ibound(k, term, params, tabs, box, h)
+    found = Any[]
+    walk(y) = iscall(y) && (operation(y) isa Advect ? push!(found, y) : foreach(a -> walk(unwrap(a)), arguments(y)))
+    walk(unwrap(term))
+    length(found) == 1 || return nothing
+    adv = only(found)
+    comps = velocity_terms(unwrap(arguments(adv)[1]))
+    (comps === nothing || length(comps) != length(h)) && return nothing
+    m = substitute(term, Dict(adv => 1); fold = Val(false))
+    text = _optext(k, term)
+    out = Any[]
+    for (a, ua) in enumerate(comps)
+        iv = _interval(unwrap(m * ua), params, tabs, box)
+        iv === nothing && return nothing
+        push!(out, (; f = pp -> (q = iv(pp); v = 2 * max(abs(q[1]), abs(q[2])) / h[a]; isfinite(v) ? v : NaN), text))
+    end
+    return out
+end
 # whether `u` applies a spatial operator to a read of `o`
 _operator_of(u, o) = iscall(u) && ((f = operation(u); (f === Δ || f isa DivKGrad || f isa Advect || f isa Differential) &&
                                     _reads(u, (o,))) || any(a -> _operator_of(unwrap(a), o), arguments(u)))
@@ -327,7 +349,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
         field = domain
         iterate = switch = false                # a local Jacobian at the iterate; a switch term
         others = [o for o in allops if !isequal(o, _ref(c)) && !any(i -> isequal(i, o), inputops)]
-        adv = Coef[]                            # the advection bound (F3-09b), per term and axis
+        adv = Any[]                             # the advection bound (F3-09b, F3-13), per term and axis
         cross = Tuple{String, Coef, String}[]   # the cross terms: (field, coefficient, text)
         unseen = String[]                       # terms out of the operator that no bound sees
         for (term, class) in cf.linearity[k]
@@ -347,8 +369,10 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
             elseif class == :CrossLinear
                 # residual only, exact in solve order; its coefficient bounds a cycle's correction
                 push!(cross, _cross_bound(k, term, others, cf, params, bysite))
-            elseif class == :Advection && (ab = _advection_bound(term, params, s.spacing)) !== nothing
-                # out of the operator (a defect correction) with a bound: the count rule 2
+            elseif class == :Advection && (ab = something(_advection_bound(term, params, s.spacing),
+                                                          _advection_ibound(k, term, params, tabset, box, s.spacing), Some(nothing))) !== nothing
+                # out of the operator (a defect correction) with a bound: the count rule 2 (a
+                # velocity that varies by site, bounded over the box: F3-13, review R2 of batch 3)
                 push!(inexact, _optext(k, term))
                 append!(adv, ab)
             elseif class in (:LaggedSwitch, :Other) && _local_term(term, c, inputops, ivs, others) &&
@@ -420,11 +444,20 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
         end
         local_only = !hasdiff
         facemax = field && hasdiff ? _face_max(diff, params, tabset, box, s.spacing, N) : nothing
+        # a field row's largest local Jacobian over the box (F3-13: `8(1 + x) c`), so count rule 1
+        # keeps its growth out of the shift instead of the clamp
+        jmax = nothing
+        if field && !isempty(jterms)
+            # (the local Jacobian at the iterate reads the field: over its declared interval)
+            fbox = [box; [(q[1], q[2]) for q in _bound_box(cf, sys; ghost = true) if !any(x -> isequal(x, q[1]), xs)]]
+            ij = _interval(sum(jterms), params, tabset, fbox)
+            ij === nothing || (jmax = pp -> (v = ij(pp)[2]; isfinite(v) ? max(v, 0.0) : NaN))
+        end
         if field
             plans[k] = (; diff, jterms, scaled, local_only)
         end
         push!(rows, Problems.RowOperator(k, faces, jloc, field, scaled, domain, local_only, isempty(inexact), inexact,
-            iterate, switch, adv, cross, unseen, bounds, facemax))
+            iterate, switch, adv, cross, unseen, bounds, facemax, jmax))
     end
     jac = isempty(plans) ? nothing : _jac_program(cf, sys, disc, plans, params, xs)
     return Problems.OperatorSpec{N}(rows, jac)

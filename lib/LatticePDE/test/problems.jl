@@ -215,23 +215,26 @@ end
     @test gd.stability(gd.p) ≈ 11
     @test SciMLBase.successful_retcode(solve(gd, ExplicitEuler(; dt = 0.01)))
     # an aux field in an arm (C8 review round 3): `K ~ −1000 c` is an unknown of the states,
-    # so the arm's term `K` is not a source; the switch has no bound and automatic substeps
-    # are refused (before: ρ = Dr·Σ4/h², one substep, silent divergence)
+    # so the arm's term `K` is not a source (before C8: ρ = Dr·Σ4/h², one substep, silent
+    # divergence); F3-13 bounds it through its definition, the arm `−1000 c`: ρ = Dr·Σ4/h² + 1000
+    # (base b41b73c1: no bound)
     # (the bound is checked on the symbolic form; the owned problem reads K of another field.
     # Before F3-02 an owned `K ~ −1000 c` read in c's rate was refused as a read cycle)
     sa = psys([D(ce) ~ Dr * Δ(ce) + ifelse(t >= t0, Ke, 0.0), Ke ~ -1000 * ce], [c(0, x, y) ~ 1.0; per], [Dr, t0];
               T = 0.1, dvs = [ce, Ke])
     cfa = symbolic_discretize(sa, LatticeDiscretization(Grid((4, 4)); T = Float64); update = LatticePDE.euler_update)
-    @test isnan(stability_bound(cfa, sa)([1.0, 0.0]))
+    @test stability_bound(cfa, sa)([1.0, 0.0]) ≈ 4 * 2 * 16 + 1000
     ga = owned(psys([D(ce) ~ Dr * Δ(ce) + ifelse(t >= t0, Ke, 0.0), D(oe) ~ -oe, Ke ~ -1000 * oe],
                     [c(0, x, y) ~ 1.0; o(0, x, y) ~ 1.0; per2], [Dr, t0]; T = 0.1, dvs = [ce, oe, Ke]), 4)
     ga = remake(ga; p = [t0 => 0.0])
     @test isnan(ga.stability(ga.p))
     @test_throws ArgumentError solve(ga, ExplicitEuler(; dt = 0.01))
-    # … and a condition reading an aux field is not a gate
+    # … and a condition reading an aux field is not a gate; F3-13 bounds the switch through K's
+    # definition by its Jacobian entries: `∂/∂c` is −1 or 0, and the condition's `o` enters through
+    # its arms only (0): ρ = Dr·Σ4/h² + 1 (base b41b73c1: no bound)
     gc = owned(psys([D(ce) ~ Dr * Δ(ce) + ifelse(Ke >= 0, -ce, 0.0), D(oe) ~ -oe, Ke ~ oe - 1],
                     [c(0, x, y) ~ 1.0; o(0, x, y) ~ 1.0; per2], [Dr]; T = 0.1, dvs = [ce, oe, Ke]), 4)
-    @test isnan(gc.stability(gc.p))
+    @test gc.stability(gc.p) ≈ 4 * 2 * 16 + 1
     # an array-element coefficient is bounded at its entry (F1 round 6; it was refused):
     # ρ = Dk[2] · 4 Σ_d 1/h² = 2 · 512 on 8×8 (h = 1/8); with no tables given there is no bound
     ae = owned(psys([D(ce) ~ Dk[2] * Δ(ce)], [c(0, x, y) ~ 1.0; per], [Dk]; T = 0.1), 8)

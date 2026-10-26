@@ -537,14 +537,15 @@ function _save!(integ::PottsIntegrator)
 end
 
 # a steady start (`init = :steady`, F3-12c) that failed ends the run before its first MCS
-_start_failed!(integ) = (integ.stats.fields.code == SciMLBase.ReturnCode.ConvergenceFailure &&
-    (integ.retcode = SciMLBase.ReturnCode.ConvergenceFailure); nothing)
+_start_failed!(integ) = (_fields_failed(integ.stats.fields.code) && (integ.retcode = integ.stats.fields.code); nothing)
+# a field code that ends the run: a solve failure, or a field outside its declared bounds (`Unstable`)
+_fields_failed(c::SciMLBase.ReturnCode.T) = c == SciMLBase.ReturnCode.ConvergenceFailure || c == SciMLBase.ReturnCode.Unstable
 function _check_status!(integ::PottsIntegrator)
     _status_failure!(integ, _model_status(integ.stats, integ.state.model))
     # the field groups' status words (on the host they are read after every window already)
     Exec.ishost(integ.backend) || _read_statuses!(integ.stats, integ.ctx)
-    integ.stats.fields.code == SciMLBase.ReturnCode.ConvergenceFailure && integ.retcode == SciMLBase.ReturnCode.Default &&
-        (integ.retcode = SciMLBase.ReturnCode.ConvergenceFailure)
+    _fields_failed(integ.stats.fields.code) && integ.retcode == SciMLBase.ReturnCode.Default &&
+        (integ.retcode = integ.stats.fields.code)
     integ.alg isa CheckerboardCPM || return integ.retcode
     st = _readback(integ.stats, integ.cache.status)
     _status_failure!(integ, st)
@@ -576,7 +577,7 @@ function CommonSolve.step!(integ::PottsIntegrator)
     # SequentialCPM)
     _run_mcs!(integ, integ.f.phases.mcs)
     # a field solve that failed (its status word, read on the host after each window) ends the run
-    integ.stats.fields.code == SciMLBase.ReturnCode.ConvergenceFailure && (integ.retcode = SciMLBase.ReturnCode.ConvergenceFailure)
+    _fields_failed(integ.stats.fields.code) && (integ.retcode = integ.stats.fields.code)
     integ.t += 1
     integ.stats.mcs += 1
     integ.stats.attempts += attempts

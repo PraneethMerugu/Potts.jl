@@ -21,6 +21,11 @@ Options go in brackets after the default:
   0 whenever the site changes owner. This is how the "act" memory of the Act model forgets
   the previous cell.
 - `[unit = u"…"]`: a unit, see [Parameters](@ref manual-parameters).
+- `[bounds = (lo, hi)]` (fields): the interval the field's values stay in. The stability
+  bound of the field solvers takes it for a coefficient that reads the field
+  (`DivKGrad(:harmonic)(c, c)`, a nonlinear reaction), so such a rate gets an automatic
+  substep count (see [Equations and solvers](@ref manual-equations)). A field that starts outside
+  its bounds is an error; the run does not check them after the start.
 - `[guess = g]` (cell and model variables): the starting point when
   `@initialization_equations` solve for the variable, see below. A variable with a guess and
   no value is written `r(cell), [guess = -1.0]`.

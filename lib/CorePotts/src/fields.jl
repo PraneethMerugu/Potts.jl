@@ -414,7 +414,8 @@ end
 The field solvers' counters of a run (`integ.stats.fields`, F3 design §3.3), summed over the
 status words of its field groups: `solves`, `budget` (linear budget hits), `floor` (rounding
 floors), `newton_budget` (Newton budget hits), and `code`, the worst code read so far
-(`Success`, `StalledSuccess` or `ConvergenceFailure`). All zero for the explicit algorithms.
+(`Success`, `StalledSuccess`, `ConvergenceFailure`, or `Unstable` when a field left the declared
+`bounds` its stability bound used). All zero for the explicit algorithms.
 """
 Base.@kwdef mutable struct FieldStats
     solves::Int64 = 0
@@ -429,6 +430,9 @@ _rank(c::SciMLBase.ReturnCode.T) = c == SciMLBase.ReturnCode.Success ? 0 : c == 
 # one group's status word into the run's counters and code (`Problems.check_status!`)
 function _read_status!(stats, rt::Problems.GroupRuntime)
     c = Problems.check_status!(rt, stats.fields)
+    # the fields whose declared bounds the stability bound used, still inside them (batch 5
+    # review M2): `Unstable` past them, with one warning
+    c = Problems.check_declared!(rt)
     _rank(c) > _rank(stats.fields.code) && (stats.fields.code = c)
     return nothing
 end

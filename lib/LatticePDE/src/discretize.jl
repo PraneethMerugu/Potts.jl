@@ -187,6 +187,15 @@ end
 # the parameters and the inputs, never of a field of the state (the condition would be another
 # equation). It is lowered into a value field the kernels read (`FaceRule.gfield`,
 # `NodeValueRule.vfield`).
+function _unpin_face_reads(bc, fids, ivs)
+    reps = Dict{Any, Any}()
+    walk(y) = iscall(y) && (haskey(fids, operation(y)) ? (reps[y] = unwrap(operation(y)(ivs...))) :
+                                                        foreach(a -> walk(unwrap(a)), arguments(y)))
+    walk(unwrap(bc.value))
+    isempty(reps) && return bc
+    return BC(bc.kind, bc.op, bc.comp, bc.axis, bc.side, bc.alpha, bc.beta,
+        substitute(bc.value, reps; fold = Val(false)), bc.pred, bc.eq)
+end
 function _value_reads_state(v, eq, states, what)
     _reads(v, states) && _dverr(string("`", eq, "`: the ", what, " `", v, "` reads a field of the state; a ", what,
         " may read the time, the coordinates, the parameters and the inputs (a condition that reads the field ",
@@ -422,6 +431,9 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
             degenerate(val(α), val(β)) &&
                 _dverr("`$(bc.eq)`: α/2 + β/h = 0 on this face leaves the ghost value undefined")
             g = _coef(bc.value, params; strict = false)
+            # a field read at the face (`G(t, 1, y)`, an input) is read at the boundary site,
+            # where the value field is evaluated (batch 5 review N5)
+            g === nothing && (bc = _unpin_face_reads(bc, fids, ivs))
             if g === nothing
                 # a value of the time, the coordinates, parameters or inputs: a value field,
                 # computed at each site by a kernel at the step's time (the boundary sites read it)

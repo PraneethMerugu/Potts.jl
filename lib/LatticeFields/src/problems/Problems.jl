@@ -33,12 +33,12 @@ public Geom, RT_T, RT_DT, launch_geometry, launch_parameters, bind, rebind, reti
        run_step!, FaceCheck, face_checks, degenerate_face, check_faces, face_ratio, FieldSlot,
        LatticeIndex, FieldAlgorithm, LinearSolver, linear_solver_refusal, ExplicitEuler, ExplicitMap, nbuffers, FieldProblem,
        FieldGroups, update_key, update_rule, EulerRule, alg_family, alg_cache, reset_cache!, step_retcode!, GroupSpec, FieldGroup,
-       ParamSlot, TableSpec, InputSpec, canonical, check_status!, status_word, status_route, StatusTotals, STATUS_CODE,
+       ParamSlot, TableSpec, InputSpec, canonical, check_status!, check_declared!, check_declared_state, status_word, status_route, StatusTotals, STATUS_CODE,
        STATUS_WINDOW, STATUS_CAUSE, STATUS_SOLVES, STATUS_BUDGET, STATUS_FLOOR, STATUS_NEWTON_BUDGET, STATUS_CAUSES, field_stats,
        group_program, group_plans, restrict_bound, GroupRuntime, bind_group, advance!, reset!, clear_status!, window_text, rebind!, clamp_now!,
        FieldSolution,
        FieldIntegrator, substeps, StateView, RHSLaunch, LatticeRHS, ode_problem,
-       input_key, aux_key, input_name, table_key, table_entry, parameter_name, resolve_inputs, check_inputs_set, upload_inputs!, check_parameters,
+       input_key, aux_key, input_name, table_key, table_entry, parameter_name, resolve_inputs, check_inputs_set, upload_inputs!, check_parameters, check_declared, declared_intervals, used_intervals,
        seen_bound, unbounded_reason, unbounded_key, bound_inputs, check_values, ParamsTables, with_tables,
        typewith, check_setp, LatticeODEFunction, check_bounds, check_aux_write
 

@@ -126,20 +126,54 @@ function parse_bcs(bcs, fields, ivs, ends)
             end
         end
         rr = _fieldread(rhs, fields)
-        if rr !== nothing && isequal(β, 0) && isequal(α, 1)
+        # a periodic pair reads the same field on the other face; a read of another field (an
+        # input, an aux field) is a face value (batch 5 review N5: `c(t, 1, y) ~ G(t, 1, y)` was
+        # taken for a pair)
+        if rr !== nothing && isequal(β, 0) && isequal(α, 1) && isequal((rr.op, rr.comp), (r.op, r.comp))
             p2 = _pins(eq, rr.args, ivs, ends)
-            isequal((rr.op, rr.comp), (r.op, r.comp)) && length(p2) == 1 && p2[1][1] == axis &&
+            length(p2) == 1 && p2[1][1] == axis &&
                 p2[1][2] != side || _bcerr(eq, "a periodic pair joins the two opposite faces of one axis")
             axis == 1 && _bcerr(eq, "time cannot be periodic")
             push!(out, BC(:periodic, r.op, r.comp, axis - 1, 0, 1, 0, 0, nothing, eq))
         elseif axis == 1
             (side == -1 && isequal(β, 0)) || _bcerr(eq, "an initial condition pins the start of time")
             (length(terms) == 1 && isequal(α, 1)) || _bcerr(eq, "an initial condition is written `c(0, x, y) ~ value`")
-            push!(out, BC(:initial, r.op, r.comp, 0, 0, α, 0, rhs, nothing, eq))
+            push!(out, BC(:initial, r.op, r.comp, 0, 0, α, 0, _bc_value(eq, rhs, r.op, fields), nothing, eq))
         else
             kind = isequal(β, 0) ? :dirichlet : isequal(α, 0) ? :neumann : :robin
-            push!(out, BC(kind, r.op, r.comp, axis - 1, side, α, β, rhs, nothing, eq))
+            push!(out, BC(kind, r.op, r.comp, axis - 1, side, α, β, _bc_value(eq, rhs, r.op, fields), nothing, eq))
         end
     end
     return out
 end
+
+# The value of a face or initial condition with its derivatives worked out: `Dy(sin(x y))` is
+# `x cos(x y)`. A later substitution of the pinned coordinate (the face's own `x`) does not
+# enter a `Differential`, so none may stay. A derivative of a field read stays unevaluated and
+# is refused in words.
+function _bc_value(eq, v, op = nothing, fields = Dict{Any, Bool}())
+    u = unwrap(v)
+    _hasdiff(u) || return v
+    w = unwrap(Symbolics.expand_derivatives(u))
+    if _hasdiff(w)
+        d = _firstdiff(w)
+        ops = Any[]
+        walk(y) = iscall(y) && (haskey(fields, operation(y)) ? push!(ops, operation(y)) : foreach(a -> walk(unwrap(a)), arguments(y)))
+        walk(unwrap(d))
+        own = op !== nothing && any(o -> isequal(o, op), ops)
+        input = !isempty(ops) && all(o -> fields[o], ops)          # (`fields`: operation → is an input)
+        # the route (batch 5 review N5): an input's derivative is an input of its own; the
+        # condition's own field takes its flux form; another state field has none yet
+        route = own ? "a condition on the field's own normal derivative is its flux form, with the derivative on " *
+                      "the left: `Dx(c) ~ g` (Neumann) or `α c + β Dx(c) ~ g` (Robin); a derivative along the face " *
+                      "has no condition form in this version" :
+                input ? "give the input's derivative as an input field of its own and read that" :
+                "a derivative of another state field in a condition's value is not lowered in this version: write " *
+                "the condition with that field's value, or with a value of the time, the coordinates and parameters"
+        _bcerr(eq, "its value holds `$d`, a derivative of a field; a condition's value may differentiate " *
+                   "expressions of the time, the coordinates and parameters only ($route)")
+    end
+    return w
+end
+# (`_hasdiff` is operator.jl's)
+_firstdiff(u) = operation(u) isa Differential ? u : _firstdiff(unwrap(arguments(u)[findfirst(a -> _hasdiff(unwrap(a)), arguments(u))]))

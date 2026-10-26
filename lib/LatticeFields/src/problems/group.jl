@@ -365,6 +365,7 @@ function substeps(spec::GroupSpec, alg::ExplicitEuler, dt::Real, pp; fields = sp
     isempty(fields) && return 0                     # aux fields only: one evaluation per window
     dt = Float64(dt)
     r = bound_report(stability, pp)
+    check_declared(stability, pp)
     ctx = (; stability, pp, r, fields = collect(String, fields), dt, least = alg.substeps)
     (isempty(r.negative) && !any(x -> x[3] isa Tuple, r.nonfinite)) || refuse_parameters(texts, ctx)
     full = Float64(stability(pp))
@@ -540,6 +541,8 @@ function steady_why_text(why)
         "bounded gain (a mask's fixed value moves with the inputs, so it does not bound it)")
     w === :robin && return string("`", k, "` has a Robin face whose α and β have opposite signs, whose gain the rule ",
         "does not bound")
+    w === :advection && return string("the steady row of `", k, "` has advection with no decay or with a velocity that ",
+        "varies by site, whose gain the rule does not bound")
     w === :steady && return string("the steady row of `", k, "` reads the steady field `", o, "` of the loop, and the ",
         "rule bounds the gain of a steady field that reads only fields that step")
     w === :unseen && return string("the rate of `", k, "` has a term the stability bound cannot see, so the gain of ",
@@ -698,6 +701,7 @@ Base.@kwdef mutable struct StatusTotals
     cause::UInt32 = 0
     warned::Bool = false
     clamped::Bool = false               # the shift clamp's warning was given (S2)
+    leaked::Bool = false                # a field left its declared bounds (`check_declared!`)
     windows::Int64 = 0                  # the windows advanced since the bind or `clear_status!`
     t1::Float64 = NaN                   # … the start time of the first of them
     where::Any = nothing                # a front end's `(window, t1) -> text` for messages, or nothing
@@ -716,7 +720,7 @@ the algorithm's cache (`alg_cache`) and the status of its last step. Made by
 none): a front end awaits it before the first step. `host` is the front end's own record of
 the binding (front end A: the parameter object and the state arrays it was bound from).
 """
-mutable struct GroupRuntime{ST <: FieldStore, A, B, M, CL, SC, CP, PV, S, H}
+mutable struct GroupRuntime{ST <: FieldStore, A, B, M, CL, SC, CP, PV, S, H, DC}
     store::ST
     alg::A
     init::Any                           # the init plan (masks), for `rebind!`
@@ -743,6 +747,8 @@ mutable struct GroupRuntime{ST <: FieldStore, A, B, M, CL, SC, CP, PV, S, H}
     pending::Union{Nothing, Task}
     host::H
     totals::StatusTotals                # the status word's host totals (`check_status!`)
+    declared::DC                        # the fields whose declared interval the bound used, with
+                                        # their buffers (`check_declared!`; batch 5 review M2)
 end
 
 # the current slots a launch of the group binds at slot parity `parity`: the group's fields
@@ -793,7 +799,98 @@ function bind_group(g::FieldGroup, alg, st::FieldStore, p; fields = g.spec.state
         Float64(dt), stab, p, c, prog, backend,
         bind_cache(alg, g, st, p; fields = collect(String, fields), n, dt, c, backend, options, V), SciMLBase.ReturnCode.Success,
         nothing, host,
-        StatusTotals())
+        StatusTotals(), _declared_checks(stab, st, prog, fields))
+end
+
+# The fields of a runtime whose declared interval a coefficient bound read (batch 5 review M2):
+# its state fields and the aux fields of its program, each with its buffers and interval
+function _declared_checks(stab, st::FieldStore, prog, fields)
+    used = used_intervals(stab)
+    isempty(used) && return ()
+    out = Any[]
+    for (k, (lo, hi)) in declared_intervals(stab)
+        k in used || continue
+        f = findfirst(x -> x.key == k, prog.fields)
+        f === nothing && continue
+        (k in fields || prog.fields[f].role == :aux) || continue
+        push!(out, (; bufs = Tuple(st.bufs[f]), fid = Int(f), lo = Float64(lo), hi = Float64(hi), key = String(k)))
+    end
+    return Tuple(out)
+end
+
+"""
+    check_declared!(rt) -> ReturnCode.T
+
+Whether the fields of runtime `rt` whose declared `bounds = (lo, hi)` the stability bound used
+are still inside them (batch 5 review M2): the bound, and so the substep count, holds only
+there. Read where a front end reads its status (front end A: after each window on the host,
+at the saves on a device; front end B: at the saves and at the end): one pass over each such
+field (no allocation on the host). A value outside warns once, naming the field, the value,
+the site and the routes. An explicit group then makes `rt.status` `ReturnCode.Unstable` (the
+run stops: its count holds only inside the interval). An implicit group goes on (batch 5
+review r2 S1): there the interval sets only the counts (substeps, Newton iterations), and a
+growth past what they saw is caught by the solve's own checks. With `newton > 1` the Newton
+check of every substep (the host stop, the device check) counts an iteration that does not
+converge (a budget hit, warned and counted in `field_stats`) or a divergence
+(`ConvergenceFailure`); with one Newton step (an exact local Jacobian) the shift clamp records a
+growth above `1/(2h)` in the status word and warns. Its warning leads with `lower = lo`, since
+CrankNicolson and BDF2 undershoot by a few percent near a bound. A value that is not finite
+stops every group. Returns `rt.status`.
+"""
+function check_declared!(rt::GroupRuntime)
+    (isempty(rt.declared) || rt.totals.leaked) && return rt.status
+    j = _first_leak(rt.declared, rt.store.cur)
+    j == 0 && return rt.status
+    _leak_warn(rt, j) && return rt.status
+    rt.status = _worse(rt.status, SciMLBase.ReturnCode.Unstable)
+    return rt.status
+end
+# the first declared field outside its interval (0: none); one flag per field, unrolled over
+# the tuple's length (no recursion over the heterogeneous tuple)
+function _first_leak(d::Tuple, cur)
+    out = ntuple(i -> _outside(d[i].bufs[min(cur[d[i].fid], length(d[i].bufs))], d[i].lo, d[i].hi), Val(length(d)))
+    j = findfirst(out)
+    return j === nothing ? 0 : j
+end
+function _outside(a::Array, lo::Float64, hi::Float64)
+    @inbounds for i in eachindex(a)                    # (the array's own indices)
+        lo <= a[i] <= hi || return true
+    end
+    return false
+end
+# a device array: one reduction in the array's own type (no Float64 on the device, D-157)
+function _outside(a::AbstractArray, lo::Float64, hi::Float64)
+    E = eltype(a)
+    l, h = convert(E, lo), convert(E, hi)
+    return mapreduce(v -> !(l <= v <= h), |, a; init = false)
+end
+@noinline function _leak_warn(@nospecialize(rt), j)
+    rt.totals.leaked = true
+    x = rt.declared[j]
+    a = Array(x.bufs[min(rt.store.cur[x.fid], length(x.bufs))])
+    i = something(findfirst(v -> !(x.lo <= v <= x.hi), a), 1)
+    f = rt.program.fields[x.fid]
+    site = Tuple(CartesianIndices(Tuple(leveldims(rt.program, f.levels[1])))[i])
+    w = max(rt.totals.windows, 1)
+    v = primal(a[i])
+    head = string("field `", x.key, "` left its declared bounds (", x.lo, ", ", x.hi, "): it holds ", v, " at site ",
+        site, " by the end of ", window_text(rt, w), ". ")
+    # an implicit group goes on: the interval sets only its Newton count, which the Newton check verifies
+    if rt.alg isa ImplicitAlgorithm && isfinite(v)
+        below = v < x.lo
+        route = below && !(rt.alg isa QuasiSteady) ?
+                string("Give `lower = ", x.lo, "` to the algorithm (it clips each substep at ", x.lo, ": ",
+            _algname(rt.alg), " does not keep the values inside the bounds by itself), or widen `bounds`") :
+                "Widen `bounds` in the field's declaration to the range the field takes"
+        @warn string(head, route, ". The interval sets only the implicit solve's counts, and the solve checks its own ",
+            "steps (the Newton check when it iterates, the shift clamp when it takes one step; both warn), so the run goes on")
+        return true
+    end
+    @warn string(head, "The stability bound takes that interval for the coefficients ",
+        "that read `", x.key, "`, so the substep count does not cover the run past it: `ReturnCode.Unstable`, the run ",
+        "stops. Give more substeps (`substeps = n`), or widen `bounds` in the field's declaration to the range the field ",
+        "takes (a source, a boundary flux or an overshoot can carry it out)")
+    return false
 end
 
 """

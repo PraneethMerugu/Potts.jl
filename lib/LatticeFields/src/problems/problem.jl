@@ -215,6 +215,10 @@ function SciMLBase.remake(prob::FieldProblem; u0 = prob.u0, tspan = prob.tspan, 
     check_bounds(pv, prob.index)                    # a declared bound, at the write (F2-14)
     length(u0) == length(prob.u0) ||
         throw(ArgumentError("u0 has $(length(u0)) values; the state has $(length(prob.u0))"))
+    # the declared intervals (batch 5 review M2): the face values at the new parameters, the
+    # new initial values as at the build
+    check_declared(prob.stability, with_tables(map(primal, pv), tables))
+    u0 === prob.u0 || check_declared_state(prob, u0, eachindex(u0), "starts at")
     ins = isempty(inputs) ? prob.inputs : resolve_inputs(prob.program, prob.index, inputs, prob.inputs)
     return _field_problem(prob.program, prob.state, collect(u0), tspan, pv, tables,
         ins, prob.backend, prob.index, prob.faces, prob.stability, prob.kind, prob.initkeys,
@@ -781,6 +785,7 @@ saved when the save times include it.
 function SciMLBase.reinit!(integ::FieldIntegrator, u0 = integ.prob.u0)
     length(u0) == length(integ.prob.u0) ||
         throw(ArgumentError("u0 has $(length(u0)) values; the state has $(length(integ.prob.u0))"))
+    u0 === integ.prob.u0 || check_declared_state(integ.prob, u0, eachindex(u0), "starts at")
     st = integ.store
     foreach(f -> st.cur[f] = 1, integ.prob.step.swaps)
     _load_state!(st, u0)
@@ -813,7 +818,36 @@ function _save!(integ::FieldIntegrator)
         _eval_aux!(integ)
         push!(integ.auxu, _aux_values(integ))
     end
-    _running(integ.retcode) && !all(isfinite, u) && (integ.retcode = SciMLBase.ReturnCode.Unstable)
+    _check_declared!(integ)                      # (the declared intervals: batch 5 review M2)
+    _running(integ.retcode) && !all(isfinite, u) && _unstable!(integ, u)
+    return nothing
+end
+# the declared intervals of every group (`check_declared!`): a field outside its interval ends
+# the run with `ReturnCode.Unstable` (one warning names it)
+function _check_declared!(integ::FieldIntegrator)
+    code = _declared_all(integ.runtimes, SciMLBase.ReturnCode.Success)
+    code == SciMLBase.ReturnCode.Success || !_running(integ.retcode) || (integ.retcode = code)
+    return nothing
+end
+_declared_all(::Tuple{}, code) = code
+_declared_all(rts::Tuple, code) = _declared_all(Base.tail(rts), _worse(code, check_declared!(first(rts))))
+# a state that is not finite (batch 5 review N7): `ReturnCode.Unstable`, with one warning that
+# names the fields and the routes
+@noinline function _unstable!(integ::FieldIntegrator, u)
+    integ.retcode = SciMLBase.ReturnCode.Unstable
+    ix = integ.prob.index
+    bad = String[]
+    if ix isa LatticeIndex
+        for k in integ.prob.state
+            slot = get(ix.vars, ix.key(Symbol(k)), nothing)
+            slot isa FieldSlot && !all(isfinite, view(u, slot.range)) && push!(bad, k)
+        end
+    end
+    isempty(bad) && (bad = copy(integ.prob.state))
+    @warn string("field", length(bad) == 1 ? " " : "s ", _fieldlist(bad), ": the state is not finite at t = ",
+        _num(_time(integ)), " (the step is unstable): `ReturnCode.Unstable`, the run stops. Give more substeps ",
+        "(`substeps = n`), or step the field", length(bad) == 1 ? "" : "s", " with `BackwardEuler`; a term the ",
+        "stability bound cannot see (named when the count was set) is the usual cause")
     return nothing
 end
 
@@ -828,9 +862,9 @@ function CommonSolve.solve!(integ::FieldIntegrator)
     end
     KA.synchronize(integ.prob.backend)
     _check_statuses!(integ)
+    _running(integ.retcode) && _check_declared!(integ)
     _running(integ.retcode) && (isempty(integ.save) ||
-     integ.save[end] != integ.iter) && !all(isfinite, _current(integ)) &&
-        (integ.retcode = SciMLBase.ReturnCode.Unstable)
+     integ.save[end] != integ.iter) && (u = _current(integ); !all(isfinite, u)) && _unstable!(integ, u)
     # a failure stops the run: the state it stopped at is saved (as front end A does)
     !_running(integ.retcode) && (isempty(integ.t) || integ.t[end] != _time(integ)) && _save!(integ)
     return FieldSolution(integ.prob, integ.t, integ.u, integ.retcode, integ.substeps, substep_counts(integ), integ.auxu,
@@ -1034,9 +1068,41 @@ function Base.dotview(p::SII.ParameterIndexingProxy{<:FieldIntegrator}, sym)
     throw(ArgumentError(string("`integ.ps[", t, "] .= …` would write a copy (`integ.ps[", t, "]` returns the ",
         "values): assign it, `integ.ps[", t, "] = values`")))
 end
+"""
+    check_declared_state(prob, vals, idx, what)
+
+The values `vals` written at the flat state indices `idx` of `prob` against the declared
+intervals of its state fields ([`declared_intervals`](@ref); batch 5 review M2): the stability
+bound takes those intervals for the coefficients that read the fields, so a value outside one
+is refused before anything changes, naming the field, the value and the site (`what`: "starts
+at" for `remake(; u0)` and `reinit!`, "is written" for a state write).
+"""
+function check_declared_state(prob::FieldProblem, vals, idx, what::AbstractString)
+    decl = declared_intervals(prob.stability)
+    (isempty(decl) || !(prob.index isa LatticeIndex)) && return nothing
+    is = idx isa Integer ? (idx,) : idx isa Colon ? eachindex(prob.u0) : idx
+    vals isa AbstractArray && !(vals isa Array) && (vals = Array(vals))      # (a device array: one copy, cold)
+    for (k, (lo, hi)) in decl
+        slot = get(prob.index.vars, prob.index.key(Symbol(k)), nothing)
+        slot isa FieldSlot || continue
+        for (j, q) in enumerate(is)
+            q isa Integer && q in slot.range || continue
+            v = primal(vals isa AbstractArray ? vals[firstindex(vals) + j - 1] : vals)
+            lo <= v <= hi && continue
+            site = Tuple(CartesianIndices(Tuple(slot.dims))[q - first(slot.range) + 1])
+            throw(ArgumentError(string("field `", k, "` ", what, " ", v, " at site ", site, ", outside its declared bounds (",
+                lo, ", ", hi, "): the stability bound takes that interval for the coefficients that read `", k, "`; ",
+                what == "is written" ? "write values in its bounds" : "give it initial values in its bounds",
+                ", or change `bounds` in its declaration")))
+        end
+    end
+    return nothing
+end
+
 # a state written through `setu(integ, c)(integ, v)` drops every group's algorithm history, as
 # `integ[c] = v` does
 function SII.set_state!(i::FieldIntegrator, val, idx)
+    check_declared_state(i.prob, val, idx, "is written")
     SII.state_values(i)[idx] = val
     foreach(reset!, i.runtimes)
     return val

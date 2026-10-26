@@ -20,6 +20,10 @@
 # guard commit on lp/f3 (new records; no record moved).
 # F3-12c (review r2 N3, the same OK): `GiMerks QuasiSteady` and `GiB QuasiSteady`, recorded at the
 # F3-12c commit (new records; no record moved).
+# F3-13 (listed move, F3 design §6 "FE-11 reclassifies a term as bounded", OK 2026-10-26): the
+# interval bound sees FpAdvect's advection CFL and FpAux's aux term: both become bounded (route
+# explicit → auto, least 3 → 1, `substeps = nothing`); FpAdvect's count is 1 (was 3), FpAux's
+# stays 3. Their fingerprint and canonical move; their arrays, params and fingerprint text do not.
 const GD_RECORDS = Dict{String, String}(
     "GiB BDF2|Float64|digest|state" => "624905f7ab2e7815",
     "GiB BDF2|Float64|n" => "[1]",
@@ -140,28 +144,28 @@ const GD_RECORDS = Dict{String, String}(
     "FbFluxRobin|Float64|groups" => "1",
     "FbFluxRobin|Float64|n" => "[3]",
     "FbFluxRobin|Float64|route" => "auto",
-    "FpAdvect|Float64|canonical" => "c=ExplicitEuler(substeps=3,lower=nothing)",
-    "FpAdvect|Float64|fingerprint" => "0x0b4d5ae4ac47fdf7",
+    "FpAdvect|Float64|canonical" => "c=ExplicitEuler(substeps=nothing,lower=nothing)",
+    "FpAdvect|Float64|fingerprint" => "0x9c85ea8894c1a21d",
     "FpAdvect|Float64|g1|arrays" => "((CorePotts.Part{:site, :c}(), CorePotts.Part{:site, :c__next}()),)",
-    "FpAdvect|Float64|g1|bounded" => "false",
+    "FpAdvect|Float64|g1|bounded" => "true",
     "FpAdvect|Float64|g1|fingerprint_text" => "f6b8b9b7cf668ad6",
-    "FpAdvect|Float64|g1|least" => "Int64:3",
+    "FpAdvect|Float64|g1|least" => "Int64:1",
     "FpAdvect|Float64|g1|params" => "[:s, :ux]",
     "FpAdvect|Float64|g1|tables" => "Pair{Int64, Symbol}[]",
     "FpAdvect|Float64|groups" => "1",
-    "FpAdvect|Float64|n" => "[3]",
-    "FpAdvect|Float64|route" => "explicit",
-    "FpAux|Float64|canonical" => "c=ExplicitEuler(substeps=3,lower=nothing)",
-    "FpAux|Float64|fingerprint" => "0xdf2825be2314c801",
+    "FpAdvect|Float64|n" => "[1]",
+    "FpAdvect|Float64|route" => "auto",
+    "FpAux|Float64|canonical" => "c=ExplicitEuler(substeps=nothing,lower=nothing)",
+    "FpAux|Float64|fingerprint" => "0xcd13bcd45fc5ceaa",
     "FpAux|Float64|g1|arrays" => "((CorePotts.Part{:site, :K}(), nothing), (CorePotts.Part{:site, :c}(), CorePotts.Part{:site, :c__next}()))",
-    "FpAux|Float64|g1|bounded" => "false",
+    "FpAux|Float64|g1|bounded" => "true",
     "FpAux|Float64|g1|fingerprint_text" => "92fb5b9b68e86bbc",
-    "FpAux|Float64|g1|least" => "Int64:3",
+    "FpAux|Float64|g1|least" => "Int64:1",
     "FpAux|Float64|g1|params" => "[:K0, :s]",
     "FpAux|Float64|g1|tables" => "Pair{Int64, Symbol}[]",
     "FpAux|Float64|groups" => "1",
     "FpAux|Float64|n" => "[3]",
-    "FpAux|Float64|route" => "explicit",
+    "FpAux|Float64|route" => "auto",
     "FpDivK|Float64|canonical" => "c=ExplicitEuler(substeps=nothing,lower=nothing)",
     "FpDivK|Float64|fingerprint" => "0xacca7c089f55570f",
     "FpDivK|Float64|g1|arrays" => "((CorePotts.Part{:site, :c}(), CorePotts.Part{:site, :c__next}()),)",
