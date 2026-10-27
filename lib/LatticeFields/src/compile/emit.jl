@@ -135,7 +135,9 @@ function lower_index(p::Program{N}, k::Kernel{N}, o::CompileOptions) where {N}
 end
 
 # Emission context. `prefix` names the value variables (`v<i>`; a RESTRICT child scope uses
-# its own prefix) and `child` is the child offset that level −1 accesses add inside it.
+# its own prefix) and `child` is the child offset that level −m accesses add inside it, in the
+# frame of the RESTRICT's finest level (`depth` levels below the kernel's; an access `m` levels
+# below reads the child `child >> (depth − m)` of its own level).
 struct Ctx{N, X}
     p::Program{N}
     k::Kernel{N}
@@ -145,9 +147,10 @@ struct Ctx{N, X}
     index::X                         # access -> linear index expression (a lowering stage)
     prefix::Symbol
     child::NTuple{N, Int}
+    depth::Int
 end
 function Ctx(p::Program{N}, k, o, L, names, index) where {N}
-    Ctx(p, k, o, L, names, index, :v, ntuple(_ -> 0, N))
+    Ctx(p, k, o, L, names, index, :v, ntuple(_ -> 0, N), 0)
 end
 vname(c::Ctx, i) = Symbol(c.prefix, i)
 
@@ -159,7 +162,9 @@ Fine-frame coordinate of access `a` along axis `d`, before wrapping, and the fin
 Coarse level convention (contract.jl): a coarse axis has `n ÷ 2` sites; fine sites pair up,
 and the last aggregate of an odd axis takes width 3. A level −1 access reads the child
 `2(x − 1) + 1 + o` (`o` in the fine frame, plus the RESTRICT child offset); a level +1 access
-reads the parent of the fine site `x + o`. An axis of size 1 is never coarsened (identity).
+reads the parent of the fine site `x + o`. A level −m access (`m > 1`, every axis it crosses
+divisible by `2^m`, `legality`) reads the child `2^m (x − 1) + 1 + o` plus its child offset.
+An axis of size 1 is never coarsened (identity).
 """
 function _fine(c::Ctx, a::Access, d)
     o = a.offset.cond == 0 ? _I(c, a.offset.a[d]) :
@@ -168,9 +173,14 @@ function _fine(c::Ctx, a::Access, d)
     a.level >= 0 && return :($x + $o), c.k.space.level
     lev = c.k.space.level + a.level
     leveldims(c.p, lev)[d] == 1 && return :($x + $o), lev
-    ch = _I(c, c.child[d])
-    c.o.debug && return :(2 * ($x - 1) + 1 + $ch + $o), lev
-    return :(($x - $(_I(c, 1))) * $(_I(c, 2)) + $(_I(c, 1)) + $ch + $o), lev
+    m = -Int(a.level)
+    ch = _I(c, c.depth > m ? c.child[d] >> (c.depth - m) : c.child[d])
+    if m == 1
+        c.o.debug && return :(2 * ($x - 1) + 1 + $ch + $o), lev
+        return :(($x - $(_I(c, 1))) * $(_I(c, 2)) + $(_I(c, 1)) + $ch + $o), lev
+    end
+    c.o.debug && return :($(2^m) * ($x - 1) + 1 + $ch + $o), lev
+    return :(($x - $(_I(c, 1))) * $(_I(c, 2^m)) + $(_I(c, 1)) + $ch + $o), lev
 end
 
 """
@@ -178,7 +188,7 @@ Largest |offset| of an access along axis `d` (both `Sel` arms), with the child o
 """
 function _maxoff(c::Ctx, a::Access, d)
     max(abs(Int(a.offset.a[d])), abs(Int(a.offset.b[d]))) +
-    (a.level < 0 ? 2 : 0)
+    (a.level == -1 ? 2 : a.level < 0 ? 2^(-Int(a.level)) - 1 : 0)
 end
 
 """
@@ -203,8 +213,9 @@ function _target(c::Ctx{N}, a::Access{N}; bounded::Bool = true) where {N}
         end
         if bounded && a.level > 0 && leveldims(c.p, fl)[d] != 1
             nc = _dim(c, lev, d)
-            y = c.o.debug ? :(min(fld($y - 1, 2) + 1, $nc)) :
-                :(min((($y - $(_I(c, 1))) >> 1) + $(_I(c, 1)), $nc))
+            m = Int(a.level)
+            y = c.o.debug ? :(min(fld($y - 1, $(2^m)) + 1, $nc)) :
+                :(min((($y - $(_I(c, 1))) >> $m) + $(_I(c, 1)), $nc))
         end
         push!(ys, y)
     end
@@ -335,7 +346,10 @@ end
 """
 The children of a coarse site: 2 per coarsened axis, plus a third at the last site of an odd
 axis (`x == nc` and `n > 2nc`); the operand is re-emitted per child with its level −1
-accesses shifted by the child offset, and combined in a fixed order.
+accesses shifted by the child offset, and combined in a fixed order. An operand that reads
+`m > 1` levels below (a `Coarse` field's fold of fine inputs) runs over the `2^m` children per
+coarsened axis of that level (every such axis divisible by `2^m`, `legality`); its accesses
+`m′ < m` levels below read the child `o >> (m − m′)` of their own level.
 """
 function _restrict(c::Ctx{N}, i) where {N}
     n = c.k.nodes[i]
@@ -343,20 +357,31 @@ function _restrict(c::Ctx{N}, i) where {N}
     lev = c.k.space.level
     lev >= 1 || irerror("kernel `", c.k.key, "`: RESTRICT at level 0")
     root = args(c.k, n)[1]
-    ranges = ntuple(d -> leveldims(c.p, lev - 1)[d] == 1 ? (0:0) : (0:2), N)
+    depth = 1
+    for j in _cone(c.k, root)
+        nj = c.k.nodes[j]
+        nj.op in (LOAD, INSIDE_OP) && (depth = max(depth, -Int(c.k.accesses[nj.imm].level)))
+    end
+    ranges = ntuple(d -> leveldims(c.p, lev - depth)[d] == 1 ? (0:0) : depth == 1 ? (0:2) : (0:(2^depth - 1)), N)
     T = jtype(n.type, c.o.T)
     acc = nothing
+    vals, oks = Any[], Any[]                     # (plurality: each child's value and whether it exists)
     for (m, o) in enumerate(Iterators.product(ranges...))
-        cc = Ctx(c.p, c.k, c.o, c.L, c.names, c.index, Symbol(:r, i, :_, m, :_v), o)
+        cc = Ctx(c.p, c.k, c.o, c.L, c.names, c.index, Symbol(:r, i, :_, m, :_v), o, depth)
         blk = Any[]
         _emit!(blk, cc, root, Set{Int32}())
         term = Expr(:block, blk..., vname(cc, root))
-        tails = [d for d in 1:N if o[d] == 2]
+        tails = depth == 1 ? [d for d in 1:N if o[d] == 2] : Int[]
+        pred = isempty(tails) ? true : foldl((x, y) -> :($x & $y),
+            [:(($(Symbol(:x, d)) == $(_dim(c, lev, d))) &
+               ($(_dim(c, lev - 1, d)) > $(_I(c, 2)) * $(_dim(c, lev, d))))
+             for d in tails])
+        if n.imm == 2
+            push!(vals, term)
+            push!(oks, pred)
+            continue
+        end
         if !isempty(tails)
-            pred = foldl((x, y) -> :($x & $y),
-                [:(($(Symbol(:x, d)) == $(_dim(c, lev, d))) &
-                   ($(_dim(c, lev - 1, d)) > $(_I(c, 2)) * $(_dim(c, lev, d))))
-                 for d in tails])
             term = :(if $pred
                 $term
             else
@@ -365,6 +390,7 @@ function _restrict(c::Ctx{N}, i) where {N}
         end
         acc = acc === nothing ? term : n.imm == 0 ? :($acc + $term) : :(max($acc, $term))
     end
+    n.imm == 2 && return :(plurality(($(vals...),), ($(oks...),)))
     return acc
 end
 function deps_k(k::Kernel, i)

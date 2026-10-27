@@ -76,6 +76,53 @@ end
     end
 end
 
+# F3-16 (`Coarse(k)` fields): an access m > 1 levels away. Base 85794414 (~/lpwork/f3b6-nc-lf.log):
+# `legality` refused every case ("an access shifts more than one level").
+@testset "F3-16: RESTRICT over m > 1 levels, mixed depths, level +m reads, divisibility" begin
+    for (dims, m) in (((8, 4), 2), ((4, 1, 8), 2), ((16,), 3))
+        N = length(dims)
+        pb = ProgramBuilder(Grid(dims); levels = m + 1)
+        r = field!(pb, "r"; role = :input)
+        h = field!(pb, "h"; role = :input, levels = [1])          # one level below the kernel's parent
+        v = field!(pb, "v"; role = :output, levels = [m])
+        kb = kernel(pb, Space{N}(; level = m))
+        # a child's fine value plus the level-1 node holding it (child >> (m − 1) at that level)
+        store(kb, v, IR.restrict(load(kb, r; level = -m) + 100 * load(kb, h; level = 1 - m)))
+        add!(pb, kb, "rs")
+        u0 = Float32.(rand(Xoshiro(7), 1:9, prod(dims)))
+        dh = map(d -> d == 1 ? 1 : d ÷ 2, dims)
+        h0 = Float32.(rand(Xoshiro(8), 1:9, prod(dims) ÷ prod(dims .÷ dh)))
+        A, H = reshape(u0, dims), reshape(h0, dh)
+        nc = map(d -> d == 1 ? 1 : d >> m, dims)
+        want = map(CartesianIndices(nc)) do J
+            sum(A[c] + 100 * H[CartesianIndex(ntuple(d -> dims[d] == 1 ? 1 : (c[d] - 1) ÷ 2 + 1, N))]
+                for c in CartesianIndices(ntuple(d -> dims[d] == 1 ? (1:1) : ((J[d] - 1) * 2^m + 1):(J[d] * 2^m), N)))
+        end
+        for got in ml_modes(pb, ("r" => u0, "h" => h0))
+            @test reshape(got, nc) == want
+        end
+    end
+    # level +2 reads: the node of the block that holds the site x + o (CLAMP in the fine frame)
+    pb = ProgramBuilder(Grid((8,)); levels = 3)
+    e = field!(pb, "e"; role = :input, levels = [2])
+    f = field!(pb, "v"; role = :output)
+    kb = kernel(pb)
+    store(kb, f, load(kb, e; level = 2, offset = (1,), policy = CLAMP))
+    add!(pb, kb, "k")
+    for got in ml_modes(pb, ("e" => Float32[10, 20],))
+        @test got == Float32[10, 10, 10, 20, 20, 20, 20, 20]     # blocks of 2..9, clamped to 8
+    end
+    # an axis that 2^m does not divide is refused, naming it (the front end refuses first, F3-16)
+    pb = ProgramBuilder(Grid((6, 8)); levels = 3)
+    r = field!(pb, "r"; role = :input)
+    v = field!(pb, "v"; role = :output, levels = [2])
+    kb = kernel(pb, Space{2}(; level = 2))
+    store(kb, v, IR.restrict(load(kb, r; level = -2)))
+    add!(pb, kb, "rs")
+    msg = ml_msg(() -> semantic(program(pb)))
+    @test occursin("shifts 2 levels across axis 1 of size 6", msg)
+end
+
 @testset "an axis of size 1 is never coarsened; a level that would is refused" begin
     @test IR.leveldims(IR.Level(Grid((8, 1)), 3)) == (1, 1)
     @test IR.leveldims(IR.Level(Grid((300, 192)), 7)) == (2, 1)

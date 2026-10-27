@@ -195,6 +195,8 @@ function _group_kernels(g::FieldGroup, ids)
     stateids = Set(fieldid(s, k) for k in g.spec.state)
     issubset(stateids, ids) && return initids, stepids
     maskfields = Set(s.masks[r.mask].field for r in s.rules if r isa NodeValueRule && r.field in ids)
+    # (and the domain folded onto a coarse field's level, F3-16)
+    union!(maskfields, (s.masks[r.mask].field for r in s.rules if r isa DomainEdgeRule && r.mask != 0 && r.field in ids))
     return [i for i in initids if any(f -> f in maskfields, writes(s.kernels[i]))],
            [i for i in stepids if (w = writes(s.kernels[i]); any(f -> f in ids, w) || !any(f -> f in stateids, w))]
 end

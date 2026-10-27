@@ -16,7 +16,8 @@ public Grid, Program, fieldid, ProgramBuilder, KernelBuilder, Space, Access, Sel
        compare!, select!, cond!, load!, access!, store!, isfloat, juliatype, print_program, CALLS,
        F16, F32, F64, U8, I32, U32, REAL, BOOL, RESOLVE, INSIDE, ZERO, CLAMP, STATIC, PERSIGMA,
        PERSTEP, INNER, ADD, MUL, NEG, DIV, FMA, MIN, MAX, ABS, POWI, SQRT, EXP, LOG, EQ, LT, LE,
-       AND, OR, NOT, XOR, SELECT, COND, CAST, INSIDE_OP, Geometry, CUBIC, HEX, DomainEdgeRule, Level
+       AND, OR, NOT, XOR, SELECT, COND, CAST, INSIDE_OP, Geometry, CUBIC, HEX, DomainEdgeRule, Level,
+       RESTRICT, FULL, leveldims
 
 include("types.jl")
 include("builder.jl")

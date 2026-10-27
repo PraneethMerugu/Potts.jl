@@ -409,7 +409,7 @@ end
 # (homogeneous: δ has zero boundary data), the row's mask with value 0 (its update writes the
 # value). Whether the shift was clamped (a growth the count rule did not cover) is returned too.
 function _numeric_operator(s::Program{N}, r::RowOperator, id, p, h, γ, mask::Bool) where {N}
-    dims = Tuple(Int.(leveldims(s, 0)))
+    dims = Tuple(Int.(leveldims(s, s.fields[id].levels[1])))      # (a `Coarse` field's grid, F3-16)
     face = ntuple(a -> _coefsum(r.faces[a], p), N)
     ih = 1 / (γ * h)
     s0 = ih - _coefsum(r.jloc, p)
@@ -562,7 +562,7 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
     if jp !== nothing
         for f in jp.fields
             startswith(f.key, "jac:") || continue
-            own[f.key] = Any[_zeros(st.backend, juliatype(f.storage) === UInt8 ? UInt8 : _eltype(f.storage, withvaltype(eltype(st.bufs[fieldid(s, keys[1])][1]), V), f.fixed), nsites(jp, 0))]
+            own[f.key] = Any[_zeros(st.backend, juliatype(f.storage) === UInt8 ? UInt8 : _eltype(f.storage, withvaltype(eltype(st.bufs[fieldid(s, keys[1])][1]), V), f.fixed), nsites(jp, f.levels[1]))]
         end
         jst = _alias_store(st, s, jp; own, byid = false)
         jids = collect(eachindex(jp.kernels))
@@ -647,7 +647,7 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
         else
             numeric = nothing
             N = length(s.periodic)
-            dims = Tuple(Int.(leveldims(s, 0)))
+            dims = Tuple(Int.(leveldims(s, s.fields[id].levels[1])))
             sh = _zeros(st.backend, T, nsite)
             usemask = mask !== nothing || r.domain || r.scaled
             smask = usemask ? _zeros(st.backend, UInt8, nsite) : nothing
@@ -1280,7 +1280,7 @@ function _steady_indefinite(s::Program{N}, r::RowOperator, id, shift, p) where {
     any(ks -> any(f -> f[1] === :robin && Solvers.robin_parts(f[2], f[3], 0.0)[2] < 0, ks), kinds) || return nothing
     any(x -> x isa NodeValueRule && x.field == id, s.rules) && return nothing
     r.domain && return nothing
-    dims = Tuple(Int.(leveldims(s, 0)))
+    dims = Tuple(Int.(leveldims(s, s.fields[id].levels[1])))
     λ, scale = shift, abs(shift)
     for a in 1:N
         w = _coefsum(r.faces[a], p)

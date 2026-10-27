@@ -33,7 +33,8 @@ Boundary policy of an access: `RESOLVE` (pass 2 rewrites out-of-domain reads), `
 # an op never changes an existing program's text (O-2 additivity).
 @enum Op::UInt8 CONST PARAM LOAD TABLE COORD INSIDE_OP BITTEST RUNTIME ADD MUL NEG DIV FMA MIN MAX ABS POWI SQRT EXP LOG CALL EQ LT LE AND OR NOT XOR SELECT COND CAST IDX RESTRICT ELEMENT_SUM
 
-# RESTRICT(x; imm = 0 sum | 1 max) at a coarse site combines `x` over the site's children
+# RESTRICT(x; imm = 0 sum | 1 max | 2 plurality) at a coarse site combines `x` over the site's
+# children (plurality: the most frequent value, ties to the smallest nonzero value, 0 last)
 # (2 per coarsened axis, 3 at the last site of an odd axis): inside `x`, an access at level −1
 # is taken relative to each child in turn (offset in the fine frame).
 opname(op::Op) = op == INSIDE_OP ? "inside" : lowercase(string(op))
@@ -249,12 +250,16 @@ degenerate(a::Real, b::Real) = abs(a / 2 + b) <= FACE_RTOL * (abs(a) / 2 + abs(b
 """
 The irregular domain edge (`Grid.domain`): `:mirror` (zero flux) or `:zero`. The edge is
 crossed from either side: a read of a neighbor outside the domain, or any neighbor read of a
-site outside it, takes the rule's value (`:mirror`: the site's own value).
+site outside it, takes the rule's value (`:mirror`: the site's own value). `mask` names the
+domain's mask on the field's own level (a coarse field's: the domain folded onto its grid);
+0 is `Grid.domain`.
 """
 struct DomainEdgeRule <: BRule
     field::Int32
     kind::Symbol
+    mask::Int32
 end
+DomainEdgeRule(field::Integer, kind::Symbol) = DomainEdgeRule(Int32(field), kind, Int32(0))
 """
 Reads across mask `mask` (into masked sites): `:zero_flux` mirrors the center value.
 """

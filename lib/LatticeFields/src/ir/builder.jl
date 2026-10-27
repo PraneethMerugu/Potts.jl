@@ -251,12 +251,14 @@ cond(c::Ex, x, y) = Ex(c.b, cond!(c.b, c.id, _id(c.b, x), _id(c.b, y)))
 
 """
 `RESTRICT`: combine `x` (built with level −1 accesses relative to a child) over the
-children of the coarse site, `op ∈ (:sum, :max)`.
+children of the coarse site, `op ∈ (:sum, :max, :plurality)`. `:plurality` takes the most
+frequent value of an integer `x` (ties: the smallest nonzero value; 0 only when no nonzero value
+ties).
 """
 function restrict(x::Ex; op::Symbol = :sum)
-    op in (:sum, :max) || error("RESTRICT: op `$op` is not :sum or :max")
+    op in (:sum, :max, :plurality) || error("RESTRICT: op `$op` is not :sum, :max or :plurality")
     t = x.b.nodes[x.id].type
-    return Ex(x.b, node!(x.b, RESTRICT, t, Int32[x.id], op == :sum ? 0 : 1))
+    return Ex(x.b, node!(x.b, RESTRICT, t, Int32[x.id], op == :sum ? 0 : op == :max ? 1 : 2))
 end
 """
 Reduce `x` over the kernel's sites into the partials table `target` (`op ∈ (:sum, :max)`).

@@ -266,13 +266,14 @@ end
     @test occursin("the field has 16 (one per site)", emsg(() -> sown(msys; inputs = [qe => zeros(Int32, 3)])))
 end
 
-@testset "SD-07: lattice_level and lattice_placement are refused" begin
-    # base: `lattice_level = 4` ran at full resolution (16 sites on a 4×4 grid)
+@testset "SD-07: lattice_placement is refused; lattice_level takes a grid (F3-16)" begin
+    # base: `lattice_level = 4` ran at full resolution (16 sites on a 4×4 grid). Since F3-16 a
+    # level is `Coarse(k)` (coarse.jl); a number is not a grid and is refused, naming `Coarse`
     @variables cl(..) [lattice_level = 4] cp(..) [lattice_placement = :node]
-    for (v, key) in ((cl, "lattice_level"), (cp, "lattice_placement"))
-        err = emsg(() -> sown(ssys([D(v(t, x, y)) ~ -v(t, x, y)], [v(0, x, y) ~ 1.0], [v(t, x, y)], Num[])))
-        @test occursin(key, err) && occursin("not lower", err)
-    end
+    err = emsg(() -> sown(ssys([D(cp(t, x, y)) ~ -cp(t, x, y)], [cp(0, x, y) ~ 1.0], [cp(t, x, y)], Num[])))
+    @test occursin("lattice_placement", err) && occursin("not lower", err)
+    err = emsg(() -> sown(ssys([D(cl(t, x, y)) ~ -cl(t, x, y)], [cl(0, x, y) ~ 1.0], [cl(t, x, y)], Num[])))
+    @test occursin("`lattice_level = 4`", err) && occursin("`Coarse(4)`", err)
 end
 
 @testset "messages: no stale or misleading diagnosis (F1, M items)" begin

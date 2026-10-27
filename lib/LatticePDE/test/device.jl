@@ -234,3 +234,79 @@ end
     tg, tk = minimum(_ -> run(alg), 1:3), minimum(_ -> run(BackwardEuler(; dt = 0.05, newton = k)), 1:3)
     @info "F3-15 R1 at 128² ($pgpu), $(init(p, alg).substeps) substeps per window: the gated run $(round(tg; digits = 3)) s, every iteration ($k) $(round(tk; digits = 3)) s"
 end
+
+# F3-16: a `Coarse(4)` field on the device (the features of coarse.jl's `csys`: the Majority
+# and mean folds, the moving masked Dirichlet, Robin and field faces) and a fine field coupled
+# to a `Coarse(2)` field (prolongation and restriction), Float32, against the host executor.
+# Base 85794414: `Coarse` is not defined (the testset errors).
+@testset "F3-16: coarse fields on $pgpu equal the host form (Float32)" begin
+    cd4 = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables cdev(..))), LatticePDE.LatticeLevel, Coarse(4)))
+    q, g = @variables q(..)::Int32 [input = true] g(..) [input = true]
+    mk(be) = cown(csys(cd4, q, g), CDIMS; T = Float32, backend = be, ins = [q(t, x, y) => CQ1, g(t, x, y) => CG])
+    for alg in (ExplicitEuler(; dt = 0.05), BackwardEuler(; dt = 0.05, newton = 2))
+        id, ih = init(mk(PDEV), alg), init(mk(KernelAbstractions.CPU()), alg)
+        for n in 1:6
+            n == 4 && (id[q(t, x, y)] = CQ2; ih[q(t, x, y)] = CQ2)          # the mask moves
+            step!(id); step!(ih)
+        end
+        vd, vh = Array(id[cd4(t, x, y)]), ih[cd4(t, x, y)]
+        @info "F3-16 $(nameof(typeof(alg))) on $pgpu: coarse field $(size(vd)), max |device − host| $(maximum(abs, vd .- vh))"
+        @test size(vd) == (4, 4) && maximum(abs, vd .- vh) / maximum(abs, vh) <= 1e-6
+    end
+    cm = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables cmdev(..))), LatticePDE.LatticeLevel, Coarse(2)))
+    um = first(@variables umdev(..))
+    sys = PDESystem([D(cm(t, x, y)) ~ 0.05 * Δ(cm(t, x, y)) - cm(t, x, y) + 0.7 * um(t, x, y),
+            D(um(t, x, y)) ~ 0.02 * Δ(um(t, x, y)) - um(t, x, y) + 0.4 * cm(t, x, y)],
+        [cm(0, x, y) ~ x, um(0, x, y) ~ y], cdom(), [t, x, y], [cm(t, x, y), um(t, x, y)], Num[]; name = :mixdev)
+    for alg in (ExplicitEuler(; dt = 0.05), BackwardEuler(; dt = 0.1))
+        sd = solve(cown(sys, (32, 32); T = Float32, backend = PDEV), alg)
+        sh = solve(cown(sys, (32, 32); T = Float32, backend = KernelAbstractions.CPU()), alg)
+        for (v, n) in ((cm, 16), (um, 32))
+            a, b = Array(sd[v(t, x, y)][end]), sh[v(t, x, y)][end]
+            @test size(a) == (n, n) && maximum(abs, a .- b) / maximum(abs, b) <= 1e-6
+        end
+    end
+end
+
+# Review r1: CrankNicolson, BDF2, BackwardEuler(init = :steady) and QuasiSteady on a coarse field
+# on the device equal the host form and the hand-coarsened twin (the reviewer's r3, Float32); and
+# the plurality owner (a RESTRICT `:plurality` kernel) on the device, ties included. Control: a
+# stated mutation, the device `plurality` taking the first tied value (~/lpwork/f3b6r-nc-dev.log)
+@testset "review r1: coarse fields under CN, BDF2, QS and the plurality owner on $pgpu" begin
+    for steady in (false, true)
+        algs = steady ? (QuasiSteady(; dt = 0.05),) :
+               (CrankNicolson(; dt = 0.05), BDF2(; dt = 0.05), BackwardEuler(; dt = 0.05, init = :steady))
+        for alg in algs
+            out = map((PDEV, KernelAbstractions.CPU())) do be
+                pc, ph, (c, ch, q, _) = ctwins(; steady, T = Float32, backend = be)
+                ic, ih = init(pc, alg), init(ph, alg)
+                for n in 1:6
+                    n == 4 && (ic[q(t, x, y)] = CQ2; ih[q(t, x, y)] = CQ2c)
+                    step!(ic); step!(ih)
+                end
+                (Array(ic[c(t, x, y)]), Array(ih[ch(t, x, y)]), ic.retcode)
+            end
+            (d, dh, rd), (h, hh, rh) = out
+            @info "review r1 $(nameof(typeof(alg))) on $pgpu: max |device − host| $(maximum(abs, d .- h)), |device − twin| $(maximum(abs, d .- dh))"
+            @test rd == rh == SciMLBase.ReturnCode.Success
+            @test d == dh && maximum(abs, d .- h) / maximum(abs, h) <= 1e-6
+        end
+    end
+    lv(n) = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(Symbolics.variable(n; T = SymbolicUtils.FnType{Tuple, Real, Nothing})),
+        LatticePDE.LatticeLevel, Coarse(CK)))
+    cs, K2, M0 = lv(:csdev), lv(:K2dev), lv(:M0dev)
+    q = first(@variables q(..)::Int32 [input = true])
+    @parameters cRd[1:4] = [0.0, 1.0, 0.5, 0.25]
+    qe = q(t, x, y)
+    sys = PDESystem([D(cs(t, x, y)) ~ 0.05 * Δ(cs(t, x, y)) - cs(t, x, y) + at(cRd, qe + 1), K2(t, x, y) ~ at(cRd, qe + 1),
+            M0(t, x, y) ~ (qe == 0)], [cs(0, x, y) ~ 0.0], cdom(), [t, x, y], [cs(t, x, y), K2(t, x, y), M0(t, x, y), qe], [cRd];
+        name = :pldev)
+    Qc = cowner(CQT)
+    for alg in (ExplicitEuler(; dt = 0.05), BackwardEuler(; dt = 0.05))
+        sd = solve(cown(sys, CDIMS; T = Float32, backend = PDEV, ins = [qe => CQT]), alg)
+        sh = solve(cown(sys, CDIMS; T = Float32, backend = KernelAbstractions.CPU(), ins = [qe => CQT]), alg)
+        @test Array(sd[K2(t, x, y)][end]) == Float32[0.0, 1.0, 0.5, 0.25][Qc .+ 1]
+        @test Array(sd[M0(t, x, y)][end]) == Float32.(Qc .== 0)
+        @test Array(sd[cs(t, x, y)][end]) == sh[cs(t, x, y)][end] || maximum(abs, Array(sd[cs(t, x, y)][end]) .- sh[cs(t, x, y)][end]) <= 1e-6
+    end
+end

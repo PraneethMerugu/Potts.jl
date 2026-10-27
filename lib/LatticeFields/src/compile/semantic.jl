@@ -51,8 +51,18 @@ function legality(p::Program{N}) where {N}
             irerror("kernel `", k.key, "`: masked space without a mask")
         any(n -> n.op == RESTRICT, k.nodes) && k.space.level < 1 &&
             irerror("kernel `", k.key, "`: RESTRICT in a level-0 space")
-        any(a -> abs(a.level) > 1, k.accesses) &&
-            irerror("kernel `", k.key, "`: an access shifts more than one level")
+        # an access more than one level away (a `Coarse(k)` field and its fine reads): every
+        # axis it crosses divisible by 2^m, so each aggregate has 2^m children (no odd tail)
+        for a in k.accesses
+            m = abs(Int(a.level))
+            m > 1 || continue
+            lo = min(k.space.level, k.space.level + a.level)
+            for (d, n) in enumerate(leveldims(p, lo))
+                n == 1 || n % (1 << m) == 0 ||
+                    irerror("kernel `", k.key, "`: an access to `", p.fields[a.field].key, "` shifts ", m,
+                        " levels across axis ", d, " of size ", n, ", which 2^", m, " does not divide")
+            end
+        end
     end
     for l in p.hierarchy
         coarsenable(l) || irerror("level ", l.shift, " coarsens an axis of size 1 (dims ",
@@ -209,7 +219,7 @@ function _resolve_load!(b::KernelBuilder{N}, p::Program{N}, a::Access{N}) where 
     center = _loadacc!(b, p, _with(a, ntuple(_ -> Int16(0), N), INSIDE))
     for r in p.rules
         m = r isa ImmersedRule && r.field == a.field ? r.mask :
-            r isa DomainEdgeRule && r.field == a.field ? p.hierarchy[1].grid.domain : 0
+            r isa DomainEdgeRule && r.field == a.field ? (r.mask == 0 ? p.hierarchy[1].grid.domain : r.mask) : 0
         m == 0 && continue
         r isa ImmersedRule && r.kind != :zero_flux &&
             irerror("immersed rule kind `", r.kind,

@@ -324,10 +324,15 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
     # slot, the tables by key, the coordinates over the box and one spacing past it (the
     # ghost sites), and the defaults that choose the term kept
     tabset = Dict{Any, String}(u => string(u) for u in tabs if string(u) in first.(cf.tables))
+    # each row's grid spacing (a `Coarse` field's `k h`, F3-16); the box reaches one spacing of the
+    # coarsest grid past the domain
+    fdims = Int.(Tuple(s.hierarchy[1].grid.dims))
+    rowh(k) = level_spacing(s.spacing, fdims, s.fields[fieldid(s, k)].levels[1])
+    hg = level_spacing(s.spacing, fdims, length(s.hierarchy) - 1)
     box = map(xs) do v
         kk = findfirst(d -> isequal(unwrap(d.variables), v), sys.domain)
         a = findfirst(isequal(v), xs)
-        v => (Float64(leftendpoint(sys.domain[kk].domain)) - s.spacing[a], Float64(rightendpoint(sys.domain[kk].domain)) + s.spacing[a])
+        v => (Float64(leftendpoint(sys.domain[kk].domain)) - hg[a], Float64(rightendpoint(sys.domain[kk].domain)) + hg[a])
     end
     pp0 = Problems.ParamsTables(collect(Any, cf.defaults),
         Pair{String, Vector{Float64}}[first(q) => Float64.(collect(last(q))) for q in cf.tables])
@@ -340,6 +345,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
     for k in _states(s)
         haskey(cf.linearity, k) || continue
         c = dvs[k]
+        hk = rowh(k)
         faces = [Coef[] for _ in 1:N]
         jloc = Coef[]
         diff = Any[]                            # (multiplier, K, axes, mean) of the row's diffusion terms
@@ -369,8 +375,8 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
             elseif class == :CrossLinear
                 # residual only, exact in solve order; its coefficient bounds a cycle's correction
                 push!(cross, _cross_bound(k, term, others, cf, params, bysite))
-            elseif class == :Advection && (ab = something(_advection_bound(term, params, s.spacing),
-                                                          _advection_ibound(k, term, params, tabset, box, s.spacing), Some(nothing))) !== nothing
+            elseif class == :Advection && (ab = something(_advection_bound(term, params, hk),
+                                                          _advection_ibound(k, term, params, tabset, box, hk), Some(nothing))) !== nothing
                 # out of the operator (a defect correction) with a bound: the count rule 2 (a
                 # velocity that varies by site, bounded over the box: F3-13, review R2 of batch 3)
                 push!(inexact, _optext(k, term))
@@ -405,7 +411,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
         bounds = Tuple{Any, String, Any}[]
         if scaled
             same(p, q) = isequal(unwrap(p.K), unwrap(q.K)) && p.axes == q.axes && p.mean == q.mean
-            bs = [_diffusion_bound(p, params, tabset, box, s.spacing) for p in diff]
+            bs = [_diffusion_bound(p, params, tabset, box, hk) for p in diff]
             size_(i) = (b = bs[i]; b === nothing ? Inf : (v = b(pp0); isnan(v) ? Inf : v))
             heads = unique(i -> findfirst(j -> same(diff[j], diff[i]), eachindex(diff)), eachindex(diff))
             groupsize(i) = sum(size_(j) for j in eachindex(diff) if same(diff[j], diff[i]))
@@ -425,7 +431,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
             mK = scaled ? nothing : _coefof(unwrap(substitute(p.m * p.K, Dict(); fold = Val(true))), params)
             if !scaled && !bysite(p.m) && !bysite(p.K) && mK !== nothing
                 for a in (p.axes === :all ? (1:N) : (p.axes,))
-                    push!(faces[a], Coef(mK.value / s.spacing[a]^2, mK.param))
+                    push!(faces[a], Coef(mK.value / hk[a]^2, mK.param))
                 end
             else
                 field = true
@@ -443,7 +449,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
             field = true
         end
         local_only = !hasdiff
-        facemax = field && hasdiff ? _face_max(diff, params, tabset, box, s.spacing, N) : nothing
+        facemax = field && hasdiff ? _face_max(diff, params, tabset, box, hk, N) : nothing
         # a field row's largest local Jacobian over the box (F3-13: `8(1 + x) c`), so count rule 1
         # keeps its growth out of the shift instead of the clamp
         jmax = nothing
@@ -487,6 +493,11 @@ function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscret
         all(k -> any(f -> f.key == k, pb.fields), ks) || continue
         ids = Int32[fieldid_in(pb, k) for k in ks]
         fids[op] = (ids, pb.fields[ids[1]].storage)
+        # an integer input's plurality owner on a coarse level (review r1 S1)
+        for f in pb.fields
+            length(ks) == 1 && startswith(f.key, string("owner:", ks[1], ":")) || continue
+            fids[(:owner, op, Int(f.levels[1]))] = (Int32[fieldid_in(pb, f.key)], f.storage)
+        end
     end
     tables = Dict{Any, Tuple{Int32, Scalar}}()
     for q in _params(sys)
@@ -504,25 +515,32 @@ function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscret
     lo = ntuple(d -> ends[d], N)
     h = s.spacing
     domid = s.hierarchy[1].grid.domain == 0 ? Int32(0) : fieldid_in(pb, s.fields[s.masks[s.hierarchy[1].grid.domain].field].key)
-    env(kb) = Env(kb, fids, params, tables, spacing, unwrap(sys.ivs[1]), xs, lo, h, false, ntuple(_ -> 0, N), RESOLVE, nothing,
-        false, domid)
+    # a row's kernel runs on its field's grid (a `Coarse` field's, with its spacing, F3-16)
+    fdims = ntuple(d -> Int(s.hierarchy[1].grid.dims[d]), N)
+    flev = Dict{Any, Int}(op => Int(pb.fields[ids[1]].levels[1]) for (op, (ids, _)) in fids if !(op isa Tuple))
+    # the domain on a row's level (a coarse row's: the domain folded onto its grid, F3-16)
+    domat(L) = domid == 0 || L == 0 ? domid : fieldid_in(pb, "domain:$L")
+    env(kb, L) = Env(kb, fids, params, tables, spacing, unwrap(sys.ivs[1]), xs, lo, level_spacing(h, fdims, L), false,
+        ntuple(_ -> 0, N), RESOLVE, nothing, false, domat(L), Int32[], L, flev, fdims, 0)
     for (k, pl) in sort!(collect(plans); by = first)
         id = fieldid_in(pb, k)
         lane = pb.fields[id].storage
+        L = Int(pb.fields[id].levels[1])
+        dlid = domat(L)
         # the operator's site values in the row's solve type: a declared Float32 or Float64
         # storage's own (`fixed`), a Float16 field's the problem's value type (it is solved in it)
         fx = pb.fields[id].fixed
         lane == F16 && (lane = F32)
-        out(name; storage = lane) = field!(pb, "jac:$k.$name"; storage, role = :aux, fixed = fx && storage != U8)
+        out(name; storage = lane) = field!(pb, "jac:$k.$name"; storage, role = :aux, levels = Int8[L], fixed = fx && storage != U8)
         wids = pl.local_only ? Int32[] : Int32[out("w$a") for a in 1:N]
         jid = isempty(pl.jterms) ? Int32(0) : out("j")
         did = pl.local_only ? Int32(0) : out("d")
         mid = pl.scaled ? out("m") : Int32(0)
-        dmid = domid == 0 ? Int32(0) : out("dom"; storage = U8)
-        kb = kernel(pb)
-        e = env(kb)
+        dmid = dlid == 0 ? Int32(0) : out("dom"; storage = U8)
+        kb = L == 0 ? kernel(pb) : kernel(pb, Space{N}(FULL; level = L))
+        e = env(kb, L)
         zero_ = constant!(kb, 0.0)
-        indom(o) = domid == 0 ? nothing : _indomain(kb, domid, N, o)
+        indom(o) = dlid == 0 ? nothing : _indomain(kb, dlid, N, o)
         inside(o) = node!(kb, INSIDE_OP, BOOL, Int32[], access!(kb, Access{N}(id, Int8(0), Sel(Int16(1)),
             Sel(NTuple{N, Int16}(o)), Int8(0), INSIDE)))
         if !pl.local_only
@@ -545,14 +563,14 @@ function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscret
                         face = q.mean === :arithmetic ? _op(e, MUL, constant!(kb, 0.5), sum_) :
                                select!(kb, _cmp(e, EQ, sum_, constant!(kb, 0.0)), constant!(kb, 0.0),
                                    _op(e, DIV, _op(e, MUL, constant!(kb, 2.0), Kc, Kn), sum_))
-                        return _op(e, MUL, constant!(kb, 1 / h[a]^2), mult, face)
+                        return _op(e, MUL, constant!(kb, 1 / e.h[a]^2), mult, face)
                     end
                     w = _op(e, ADD, w, facecoef(o))
                     wb = (_op(e, ADD, wb[1], facecoef(_unit(e, a, -1))), _op(e, ADD, wb[2], facecoef(o)))
                 end
                 # no face across the box (the solver's zero flux) or across the domain's edge
                 s.periodic[a] || (w = select!(kb, inside(o), w, zero_))
-                domid == 0 || (w = select!(kb, node!(kb, AND, BOOL, Int32[indom(ntuple(_ -> 0, N)), indom(o)]), w, zero_))
+                dlid == 0 || (w = select!(kb, node!(kb, AND, BOOL, Int32[indom(ntuple(_ -> 0, N)), indom(o)]), w, zero_))
                 store!(kb, wids[a], lane, w)
                 s.periodic[a] && continue
                 # the face conditions of the box: the ghost rule's diagonal `w_b d⁺`

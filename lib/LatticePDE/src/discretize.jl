@@ -34,6 +34,13 @@ conditions do not hold), and neighbor reads across the domain's edge read the si
 (zero flux; `LatticeFields.IR.DomainEdgeRule`). Face conditions still apply at the faces of
 the box.
 
+A field with `[lattice_level = Coarse(k)]` ([`Coarse`](@ref)) lives on the grid coarsened by
+`k`: the program holds one level per factor, and the field's kernels (rate, conditions, masks,
+operator and residual) run on its level with the spacing `k h`. Its fine reads are folded over
+each node's block, and a fine field reads a coarse one at the node of its block; with a
+`domain`, a node is in it when most of its block is. Every algorithm, the stability bound and
+the number types apply per field, on its own grid.
+
 `clock = τ` declares the discretization's clock (F2 design §2.6), of period `τ` (finite,
 > 0). It sets the window of the owned steppers (`ExplicitEuler()` with no `dt` steps windows
 of `τ`; a given `dt` must divide `τ`) and the step index `k` that an equation reads as
@@ -268,6 +275,38 @@ function _scan_clock(sys)
     foreach(eq -> (walk(unwrap(eq.lhs), eq); walk(unwrap(eq.rhs), eq)), [sys.eqs; sys.bcs])
 end
 
+# The `Coarse` level of each dependent variable (F3-16): `[lattice_level = Coarse(k)]` puts the
+# field on the grid coarsened by `k`; every axis of the lattice but one of size 1 must have a
+# size that `k` divides (a remainder would make the last block wider, where the stencil of
+# spacing `k h` is inconsistent: refused, naming the axis and the route). `lattice_placement`
+# is not lowered yet and is refused, never ignored. Returns `op => level` for the coarse ones.
+function _field_levels(sys::PDESystem, disc::LatticeDiscretization{N}) where {N}
+    lev = Dict{Any, Int}()
+    ivs = unwrap.(sys.ivs)
+    for v in sys.dvs
+        m = get_lattice_placement(v)
+        m === nothing || _dverr("`$v` has `lattice_placement = $m`, which this version does not lower (every field " *
+                                "lives at the cell centers); remove the metadata")
+        L = get_lattice_level(v)
+        L === nothing && continue
+        L isa Coarse || _dverr(string("`", v, "` has `lattice_level = ", repr(L), "`, which is not a grid: give `Coarse(k)`, ",
+            "the grid coarsened by `k` sites per axis (", L isa Integer && L >= 1 && ispow2(L) ? "`Coarse($L)`" : "`Coarse(4)`",
+            "; k a power of two), or leave the metadata out (the lattice itself)"))
+        l = level_of(L)
+        l == 0 && continue
+        for d in 1:N
+            n = Int(disc.grid.dims[d])
+            (n == 1 || n % L.k == 0) && continue
+            _dverr(string("`", _name(_opof(v)), "` has `lattice_level = ", L, "`, which needs every axis of the lattice ",
+                "divisible by ", L.k, "; axis ", d, " (`", length(ivs) == N + 1 ? ivs[d + 1] : d, "`) has ", n, " sites (",
+                n, " = ", L.k, " × ", n ÷ L.k, " + ", n % L.k, "): give the lattice a size divisible by ", L.k,
+                " on that axis (", L.k * cld(n, L.k), " or ", L.k * fld(n, L.k) > 0 ? L.k * fld(n, L.k) : L.k, "), or a smaller factor"))
+        end
+        lev[_opof(v)] = l
+    end
+    return lev
+end
+
 """
     symbolic_discretize(pdesys, disc::LatticeDiscretization; update = nothing, leaf = nothing)
 
@@ -306,13 +345,8 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     keys = Dict{Any, Vector{String}}(op => (n = ncomp(v); n == 0 ? [_name(op)] : ["$(_name(op))[$i]" for i in 1:n])
                                      for (op, v) in dvs)
     key(op, comp) = keys[op][max(comp, 1)]
-    for v in sys.dvs                     # metadata nothing lowers yet is refused, never ignored
-        for (getm, what) in ((get_lattice_level, "lattice_level"), (get_lattice_placement, "lattice_placement"))
-            m = getm(v)
-            m === nothing || _dverr("`$v` has `$what = $m`, which this version does not lower (every field lives on " *
-                                    "the fine grid, at the cell centers); remove the metadata (coarse levels are planned)")
-        end
-    end
+    lev = _field_levels(sys, disc)       # `lattice_level = Coarse(k)` (F3-16): op → level (fine ones absent)
+    maxlev = maximum(values(lev); init = 0)
     for (k, m) in disc.methods
         op = _opof(k)
         haskey(dvs, op) || _dverr("the `methods` key `$k` matches no dependent variable")
@@ -381,7 +415,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     defaults = _promoted(Any[haskey(spacing, p) ? h[spacing[p]] : _default(p, ic) for p in plist])
     arrays = sort!([unwrap(p) for p in ps if SymbolicUtils.symtype(unwrap(p)) <: AbstractArray]; by = string)
 
-    pb = ProgramBuilder(disc.grid; periodic, spacing = h, nparams = length(plist))
+    pb = ProgramBuilder(disc.grid; periodic, spacing = h, nparams = length(plist), levels = maxlev + 1)
     tables = Dict{Any, Tuple{Int32, Scalar}}(p => (table!(pb, string(p); storage = _lane(Float64, T)), _lane(Float64, T))
                                              for p in arrays)
     fids = Dict{Any, Tuple{Vector{Int32}, Scalar}}()
@@ -394,13 +428,17 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         # a declared Float32 or Float64 storage holds its own type whatever the problem's value
         # type (FE-17: `fixed`; Float16 is always its own)
         fixed = S === Float32 || S === Float64
+        levels = Int8[get(lev, op, 0)]
         fids[op] = (map(keys[op]) do k
-                        isin[op] && return field!(pb, k; storage = lane, role = :input, epoch = PERSIGMA, fixed)
+                        isin[op] && return field!(pb, k; storage = lane, role = :input, epoch = PERSIGMA, fixed, levels)
                         kind = eqs[k][1]
                         field!(pb, k; storage = lane, role = kind == :aux ? :aux : :state,
-                               buffers = kind == :map || (kind == :rate && update !== nothing) ? 2 : 1, fixed)
+                               buffers = kind == :map || (kind == :rate && update !== nothing) ? 2 : 1, fixed, levels)
                     end, lane)
     end
+    # each field's level by its operation, and the level of each equation's field (by key)
+    flev = Dict{Any, Int}(op => get(lev, op, 0) for op in Base.keys(dvs))
+    klev(k) = flev[eqs[k][2]]
     hex = disc.grid.geometry == HEX
     hex && !(h[2] ≈ h[1]) && _dverr("a hexagonal grid needs equal spacing on both axes; the domain gives $h")
     # the irregular domain: a mask over its Bool input, and a zero-flux edge rule per rate field
@@ -414,19 +452,61 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         push!(pb.masks, MaskDecl("domain", dom, STATIC))
         g = disc.grid
         pb.hierarchy[1] = Level(Grid(g.dims; geometry = g.geometry, domain = length(pb.masks)))
+    end
+    # a kernel on level `lv` (its field's `Coarse` level) and its environment, with that level's spacing
+    kern(lv) = lv == 0 ? kernel(pb) : kernel(pb, Space{N}(FULL; level = lv))
+    dims = ntuple(d -> Int(disc.grid.dims[d]), N)
+    # the domain on each coarse level (F3-16): a node is in it when most of its block is (the
+    # Majority fold of the Bool input), computed at a window's start with the masks; its mask
+    # is the coarse field's domain edge
+    domlev = Dict{Int, Tuple{Int32, Int32}}(0 => (dom, Int32(dom == 0 ? 0 : length(pb.masks))))
+    if dom != 0
+        for lv in sort!(unique(l for (op, l) in flev if !isin[op] && l > 0))
+            df = field!(pb, "domain:$lv"; storage = U8, role = :aux, epoch = PERSIGMA, levels = Int8[lv])
+            push!(pb.masks, MaskDecl("domain:$lv", df, PERSIGMA))
+            kb = kern(lv)
+            e = Env(kb, fids, params, tables, spacing, ivs[1], ivs[2:end], lo, level_spacing(h, dims, lv), false,
+                ntuple(_ -> 0, N), RESOLVE, leaf, hex, Int32(0), Int32[], lv, flev, dims, 0)
+            store!(kb, df, U8, cast!(kb, _bool(e, lower(dvs[dop], e)), U8))
+            add!(pb, kb, "domain:$lv")
+            domlev[lv] = (df, Int32(length(pb.masks)))
+        end
         for (k, (kind, op, comp, _)) in eqs
-            kind == :rate && rule!(pb, DomainEdgeRule(fids[op][1][max(comp, 1)], :mirror))
+            kind == :rate || continue
+            lv = flev[op]
+            rule!(pb, DomainEdgeRule(fids[op][1][max(comp, 1)], :mirror, lv == 0 ? Int32(0) : domlev[lv][2]))
         end
     end
+    # the plurality owner of each integer input on each coarse level whose terms read it (review
+    # r1 S1): the most frequent value of a node's children (ties to the smallest nonzero value, 0
+    # last), computed at a window's start with the masks; a coarse term reads it for the input
+    # (`_owner_load`) outside a mean fold
+    for lv in sort!(unique(l for (op, l) in flev if !isin[op] && l > 0)),
+        op in sort!([op for op in Base.keys(dvs) if isin[op] && fids[op][2] in (I32, U32)]; by = o -> keys[o][1])
+        rd(x) = x !== nothing && _reads(x, Any[op])
+        any(k -> klev(k) == lv && rd(eqs[k][4]), Base.keys(eqs)) ||
+            any(b -> b.kind != :initial && !isin[b.op] && flev[b.op] == lv && (rd(b.eq.lhs) || rd(b.eq.rhs)), bcs) || continue
+        ok = string("owner:", keys[op][1], ":", lv)
+        of = field!(pb, ok; storage = fids[op][2], role = :aux, epoch = PERSIGMA, levels = Int8[lv])
+        kb = kern(lv)
+        ld = load!(kb, fids[op][1][1], fids[op][2]; offset = ntuple(_ -> 0, N), level = -lv, policy = INSIDE)
+        store!(kb, of, fids[op][2], node!(kb, RESTRICT, kb.nodes[ld].type, Int32[ld], 2))
+        add!(pb, kb, ok)
+        fids[(:owner, op, lv)] = (Int32[of], fids[op][2])
+    end
+    # the domain's field on level `lv` (0: no domain)
+    dl(lv) = dom == 0 ? Int32(0) : domlev[lv][1]
     # the rate fields (each has a face rule on every non-periodic face): a face coefficient reads
     # them at the ghost site with the ghost value (F3-ghost)
     ghosted = Int32[fids[op][1][max(comp, 1)] for (_, (kind, op, comp, _)) in eqs if kind == :rate]
-    env(mapmode, kb) = Env(kb, fids, params, tables, spacing, ivs[1], ivs[2:end], lo, h, mapmode,
-                           ntuple(_ -> 0, N), RESOLVE, leaf, hex, dom, ghosted)
+    env(mapmode, kb, lv = 0) = Env(kb, fids, params, tables, spacing, ivs[1], ivs[2:end], lo, level_spacing(h, dims, lv),
+                                  mapmode, ntuple(_ -> 0, N), RESOLVE, leaf, hex, dl(lv), ghosted, lv, flev, dims, 0)
     # face rules: α c + β ∂c/∂n = g in lattice units (outward normal; ∂/∂n = side · h ∂/∂x)
     for (k, (kind, op, comp, _)) in eqs
         kind == :rate || continue
         f = fids[op][1][max(comp, 1)]
+        lv = klev(k)
+        hL = level_spacing(h, dims, lv)
         for d in 1:N, s in (-1, 1)
             periodic[d] && continue
             hex && any(b -> b.kind in (:dirichlet, :neumann, :robin) && key(b.op, b.comp) == k, bcs) &&
@@ -435,7 +515,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
                                    b.axis == d && b.side == s, bcs)
             b === nothing && (rule!(pb, FaceRule(f, Int8(d), Int8(s), Coef(0.0), Coef(1.0), Coef(0.0))); continue)
             bc = bcs[b]
-            α, β = _coef(bc.alpha, params), _coef(bc.beta, params, s / h[d])
+            α, β = _coef(bc.alpha, params), _coef(bc.beta, params, s / hL[d])
             val(c) = c.param == 0 ? c.value : c.value * defaults[c.param]     # parameter defaults bind here
             degenerate(val(α), val(β)) &&
                 _dverr("`$(bc.eq)`: α/2 + β/h = 0 on this face leaves the ghost value undefined")
@@ -448,9 +528,9 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
                 # computed at each site by a kernel at the step's time (the boundary sites read it)
                 _value_reads_state(bc.value, bc.eq, [o for o in allops if !isin[o]], "face value")
                 gk = string("face:", k, ":", d, s > 0 ? "+" : "-")
-                gf = field!(pb, gk; storage = fids[op][2], role = :aux)
-                kb = kernel(pb)
-                e = env(false, kb)
+                gf = field!(pb, gk; storage = fids[op][2], role = :aux, levels = Int8[lv])
+                kb = kern(lv)
+                e = env(false, kb, lv)
                 # the face's own coordinate where the condition pins it
                 gx = substitute(bc.value, Dict(ivs[d + 1] => ends[d + 1][s > 0 ? 2 : 1]); fold = Val(false))
                 store!(kb, gf, fids[op][2], _real(e, lower(gx, e)))
@@ -465,7 +545,8 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         b.kind == :masked || continue
         k = key(b.op, b.comp)
         isin[b.op] && _dverr("`$(b.eq)`: an input cannot carry a condition")
-        mf = field!(pb, "mask:$k"; storage = U8, role = :aux, epoch = PERSIGMA)
+        lv = flev[b.op]                   # (a coarse field's mask lives on its grid: its fine reads folded)
+        mf = field!(pb, "mask:$k"; storage = U8, role = :aux, epoch = PERSIGMA, levels = Int8[lv])
         push!(pb.masks, MaskDecl("mask:$k", mf, PERSIGMA))
         mv = _coef(b.value, params; strict = false)
         vf = Int32(0)
@@ -473,14 +554,14 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
             # a value of the time, the coordinates, parameters or inputs: a value field, which
             # the mask's kernel computes with the mask (each masked site takes its own value)
             _value_reads_state(b.value, b.eq, [o for o in allops if !isin[o]], "masked value")
-            vf = field!(pb, "maskvalue:$k"; storage = fids[b.op][2], role = :aux, epoch = PERSIGMA)
+            vf = field!(pb, "maskvalue:$k"; storage = fids[b.op][2], role = :aux, epoch = PERSIGMA, levels = Int8[lv])
         end
-        kb = kernel(pb)
-        pred = _bool(env(false, kb), lower(b.pred, env(false, kb)))
-        dom == 0 || (pred = node!(kb, AND, BOOL, Int32[pred, _indomain(kb, dom, N)]))   # the field lives in the domain
+        kb = kern(lv)
+        pred = _bool(env(false, kb, lv), lower(b.pred, env(false, kb, lv)))
+        dom == 0 || (pred = node!(kb, AND, BOOL, Int32[pred, _indomain(kb, dl(lv), N)]))   # the field lives in the domain
         store!(kb, mf, U8, cast!(kb, pred, U8))
         if mv === nothing
-            store!(kb, vf, fids[b.op][2], _real(env(false, kb), lower(b.value, env(false, kb))))
+            store!(kb, vf, fids[b.op][2], _real(env(false, kb, lv), lower(b.value, env(false, kb, lv))))
             mv = Coef(1.0)
         end
         add!(pb, kb, "mask:$k")
@@ -494,27 +575,28 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     for k in sort!(collect(Base.keys(eqs)))
         kind, op, comp, rhs = eqs[k]
         f, lane = fids[op][1][max(comp, 1)], fids[op][2]
-        kb = kernel(pb)
-        e = env(kind == :map, kb)
+        lv = flev[op]
+        kb = kern(lv)
+        e = env(kind == :map, kb, lv)
         r = lower(rhs, e)
         if kind == :rate
             lin[k] = linearity(rhs, comp == 0 ? dvs[op] : _Comp(op, comp), staterefs; inputs = [o for o in Base.keys(dvs) if isin[o]],
                                aux = unique([v[2] for v in values(eqs) if v[1] == :aux]))
             # with a domain the field lives in it: a site outside keeps its value
             if update === nothing
-                g = field!(pb, "∂$k"; storage = lane, role = :scratch)
+                g = field!(pb, "∂$k"; storage = lane, role = :scratch, levels = Int8[lv])
                 v = _real(e, r)
-                dom == 0 || (v = select!(kb, _indomain(kb, dom, N), v, constant!(kb, 0.0)))
+                dom == 0 || (v = select!(kb, _indomain(kb, dl(lv), N), v, constant!(kb, 0.0)))
                 store!(kb, g, lane, v)
             else
                 c = load!(kb, f, lane)
                 v = update(kb, Ex(kb, c), Ex(kb, _real(e, r))).id
-                dom == 0 || (v = select!(kb, _indomain(kb, dom, N), v, c))
+                dom == 0 || (v = select!(kb, _indomain(kb, dl(lv), N), v, c))
                 store!(kb, f, lane, v)
             end
         else
             v = isfloat(lane) ? _real(e, r) : cast!(kb, _num(e, [r])[1], lane)
-            dom == 0 || kind != :map || (v = select!(kb, _indomain(kb, dom, N), v, load!(kb, f, lane)))
+            dom == 0 || kind != :map || (v = select!(kb, _indomain(kb, dl(lv), N), v, load!(kb, f, lane)))
             store!(kb, f, lane, v)
         end
         add!(pb, kb, "$kind:$k")

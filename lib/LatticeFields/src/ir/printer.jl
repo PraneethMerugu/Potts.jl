@@ -16,6 +16,7 @@ end
 function print_rule(io::IO, p::Program, r::DomainEdgeRule)
     print(io, "rule domain_edge ",
         p.fields[r.field].key, " kind=", r.kind)
+    r.mask == 0 || print(io, " mask=", p.masks[r.mask].key)              # (printed only when set)
 end
 function print_rule(io::IO, p::Program, r::ImmersedRule)
     print(io, "rule immersed ", p.fields[r.field].key,

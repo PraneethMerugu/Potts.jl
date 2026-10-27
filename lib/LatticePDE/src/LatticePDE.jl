@@ -26,13 +26,13 @@ using LatticeFields.IR: F16, Grid, Program, ProgramBuilder, Coef, FaceRule, Node
                         compare!, select!, cond!, load!, access!, store!, isfloat, CALLS,
                         F32, F64, I32, U8, U32, REAL, BOOL, RESOLVE, CLAMP, INSIDE, ZERO, PERSIGMA,
                         ADD, MUL, NEG, DIV, MIN, MAX, ABS, SQRT, EXP, LOG, POWI, EQ, LT, LE,
-                        NOT, AND, OR, INSIDE_OP, HEX, DomainEdgeRule, Level, STATIC
+                        NOT, AND, OR, INSIDE_OP, HEX, DomainEdgeRule, Level, STATIC, RESTRICT, Space, FULL
 using CommonSolve: solve, init, step!, solve!
 using KernelAbstractions: KernelAbstractions
 using LatticeFields: Exec, Problems
 using LatticeFields.Solvers: DevicePCG, Multigrid, V
 using LatticeFields.Compile: CompileOptions, fingerprint_text, fuse_update, promote_dual, primal
-using LatticeFields.IR: fieldid, RESOLVE, degenerate, juliatype
+using LatticeFields.IR: fieldid, RESOLVE, degenerate, juliatype, leveldims
 using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
                               ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, ode_problem, RT_DT,
                               substep_counts, steady_fields
@@ -48,7 +48,7 @@ using SymbolicUtils.Code: toexpr
 public euler_update, bound_parts, StabilityBound, lower_group, DeferredBound, DeferredOperator, OPERATOR_BUILDS, resolve_bound, lowers_call, check_one_kind, velocity_terms, as_written,
        derivation, V, steady_rows, steady_form, steady_choice, steady_sign
 export Δ, DivKGrad, Advect, AdvectionScheme, Upwind1, at, at2, ismember, masked, step_index
-export LatticePlacement, LatticeStorage, LatticeLevel, LatticeSpacing, PottsEntity, LatticeInputName
+export LatticePlacement, LatticeStorage, LatticeLevel, Coarse, LatticeSpacing, PottsEntity, LatticeInputName
 export get_lattice_placement, get_lattice_storage, get_lattice_level, get_lattice_spacing,
        get_potts_entity, get_lattice_input_name
 export vocabulary_issues, check_vocabulary
@@ -234,8 +234,51 @@ _isvocabulary(f) = f === Δ || f isa DivKGrad || f isa Advect || f === at || f =
 struct LatticePlacement end
 """Metadata key `lattice_storage`: how a field is stored."""
 struct LatticeStorage end
-"""Metadata key `lattice_level`: the grid level a field lives on."""
+"""Metadata key `lattice_level`: the grid a field lives on, [`Coarse`](@ref)`(k)`."""
 struct LatticeLevel end
+"""
+    Coarse(k)
+
+The grid of a field coarsened by `k` on every axis, `[lattice_level = Coarse(k)]` (`k` a power
+of two; `Coarse(1)` is the lattice itself). Each node of the coarse grid is a block of `k` sites
+per axis, its value the field over that block, with the spacing `k h`. Every axis of the lattice
+must have a size that `k` divides (an axis of size 1 is never coarsened). The field's equation,
+its conditions and its solver run on the coarse grid; the fine reads in its terms (the CPM
+inputs, a field of the lattice) are folded over each node's block:
+
+  - An integer input (`kind`) is read at the block's owner, its most frequent value. A tie goes
+    to the smallest nonzero value, and 0 (the medium) wins only when no nonzero value ties. A
+    part of a term that reads no other fine field is evaluated at the owner, so the node takes
+    the full rate of its owner: `(kind == P) + 0.5 (kind == Q)` and `at(R, kind)` agree, and of
+    `kind == medium` and `kind != medium` exactly one holds.
+  - The largest part of a term that reads a fine real field (a field of the lattice, a real or
+    Bool input) and is not linear in it is replaced by its mean over the block, with the fine
+    reads (an integer input too) at each site of the block. A sum is folded per term, and the
+    factors of a product that read no fine field stay outside. The coarse field then receives
+    the fine integral of the term: `max(g - gT, 0)`, `g / (K + g)` and `at(S, kind) * g` of a
+    fine `g` are restricted exactly. A spatial operator of the coarse field is not folded; its
+    coefficient is, at each face (at a face of the box, the node's own block).
+  - A condition on a fine real field, where a condition is used (a mask, `&`, `|`, `!`), is
+    true when more than half the block is (the Majority fold).
+
+A term of a fine
+field that reads a coarse one reads the node whose block holds the site. A spatial operator
+reads its field on that field's own grid: for the Laplacian of a coarse field in a fine row,
+add an aux field on the coarse grid, `L ~ Δ(c)`, and read `L`. A map's offset read of a coarse
+field moves by a multiple of `k` sites (`k * dx`). With an irregular `domain`, a node is in it
+when most of its block is (the Majority fold), and its edge is the coarse field's zero-flux edge.
+"""
+struct Coarse
+    k::Int
+    function Coarse(k::Integer)
+        (k >= 1 && ispow2(k)) || throw(ArgumentError(string("Coarse(", k, "): the factor is a power of two (1, 2, 4, 8, …), ",
+            "the number of lattice sites per axis in each node of the coarse grid")))
+        return new(Int(k))
+    end
+end
+Base.show(io::IO, c::Coarse) = print(io, "Coarse(", c.k, ")")
+# the level of a factor: k = 2^level
+level_of(c::Coarse) = trailing_zeros(c.k)
 """
 Metadata key `lattice_spacing`: marks a parameter as the grid spacing along axis `a`
 (`@parameters dx [lattice_spacing = 1]`). The discretization supplies its value from the

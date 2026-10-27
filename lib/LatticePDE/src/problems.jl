@@ -511,7 +511,7 @@ _sdseen(f, p) = _seen(f[1], p) * _seen(f[2], p)
 const _MAXARMS = 64                       # row alternatives (arm choices) before giving up
 
 struct StabilityBound
-    invh2::Vector{Float64}
+    invh2::Vector{Vector{Float64}}        # per row, 1/h_a² of its grid (a `Coarse` field's: `k h`, F3-16)
     keys::Vector{String}
     rows::Vector{Vector{RowTerms}}        # per row, one entry per choice of its switches' arms
     faces::Vector{Vector{Tuple{Int, Coef, Coef}}}
@@ -520,7 +520,7 @@ struct StabilityBound
     expanded::Vector{String}              # the `ifelse` terms bounded arm by arm
     inputs::Vector{String}                # the inputs an index reads (`Problems.bound_inputs`)
     crossunseen::Vector{String}           # the rows with an unseen term that reads another unknown field
-    dims::Vector{Int}                     # the lattice's sites per axis (the steady gain, F3-12c)
+    dims::Vector{Vector{Int}}             # per row, its grid's sites per axis (the steady gain, F3-12c)
     anchors::Vector{Any}                  # per row, its faces `(axis, side, α, β)`, or `nothing` on an
                                           # irregular domain (whose edges may cut a face off)
     # (batch 5 review M2) the declared finite bounds of the state and aux fields, the keys whose
@@ -553,16 +553,16 @@ Problems.bound_inputs(b::StabilityBound) = b.inputs
 _cv(c::Coef, p) = c.param == 0 ? c.value : c.value * Float64(p[c.param])
 # Σ_d max(0, |r| − 1)/h_d², the worst Robin face of each axis of field `i`
 function _face_excess(b::StabilityBound, i, p)
-    return sum(eachindex(b.invh2); init = 0.0) do d
-        b.invh2[d] * maximum((max(0.0, abs(Problems.face_ratio(_cv(α, p), _cv(β, p))) - 1)
+    return sum(eachindex(b.invh2[i]); init = 0.0) do d
+        b.invh2[i][d] * maximum((max(0.0, abs(Problems.face_ratio(_cv(α, p), _cv(β, p))) - 1)
                               for (ax, α, β) in b.faces[i] if ax == d); init = 0.0)
     end
 end
 # the same over the axes whose excess is finite (an axis with a degenerate Robin face, a ratio
 # that is not finite, counts 0): the seen bound keeps every finite part of a row (F2 record (f))
 function _face_excess_seen(b::StabilityBound, i, p)
-    return sum(eachindex(b.invh2); init = 0.0) do d
-        x = b.invh2[d] * maximum((max(0.0, abs(Problems.face_ratio(_cv(α, p), _cv(β, p))) - 1)
+    return sum(eachindex(b.invh2[i]); init = 0.0) do d
+        x = b.invh2[i][d] * maximum((max(0.0, abs(Problems.face_ratio(_cv(α, p), _cv(β, p))) - 1)
                                   for (ax, α, β) in b.faces[i] if ax == d); init = 0.0)
         isfinite(x) ? x : 0.0
     end
@@ -585,8 +585,8 @@ function Problems.restrict_bound(b::StabilityBound, keep)
              for r in b.rows[i]] for i in idx]
     ks = b.keys[idx]
     mine(t) = any(k -> startswith(t, "$k: "), ks)
-    return StabilityBound(b.invh2, ks, rows, b.faces[idx], [k for k in b.unbounded if k in ks],
-        filter(mine, b.terms), filter(mine, b.expanded), _row_inputs(rows), [k for k in b.crossunseen if k in ks], b.dims,
+    return StabilityBound(b.invh2[idx], ks, rows, b.faces[idx], [k for k in b.unbounded if k in ks],
+        filter(mine, b.terms), filter(mine, b.expanded), _row_inputs(rows), [k for k in b.crossunseen if k in ks], b.dims[idx],
         b.anchors[idx], b.declared, _used_keys(rows, b.declared), [f for f in b.facevals if f[1] in ks])
 end
 
@@ -605,7 +605,6 @@ end
 # end A prints it in the model's words).
 function Problems.lagged_coupling(b::StabilityBound, groups, p; within = nothing)
     gof = Dict{String, Int}(k => g for (g, ks) in enumerate(groups) for k in ks)
-    s4 = 4 * sum(b.invh2)
     out = [(; rate = 0.0, row = "", other = "", text = "", raw = "", reads = Int[],
               unseen = any(k -> k in b.crossunseen, ks)) for ks in groups]
     for i in eachindex(b.keys)
@@ -618,7 +617,7 @@ function Problems.lagged_coupling(b::StabilityBound, groups, p; within = nothing
             end
             tot, worst, wj, wt = 0.0, -Inf, 0, ""
             terms = Iterators.flatten((((f, j, f(p)) for (f, j) in r.crosslinear if j != 0),
-                                       ((f, j, f(p) * (s4 + _face_excess(b, j, p))) for (f, j) in r.crossdiffusion if j != 0)))
+                                       ((f, j, f(p) * (4 * sum(b.invh2[j]) + _face_excess(b, j, p))) for (f, j) in r.crossdiffusion if j != 0)))
             for (f, j, v) in terms
                 h = get(gof, b.keys[j], 0)
                 (h == 0 || h == g || (within !== nothing && !(h in within[g]))) && continue
@@ -666,7 +665,7 @@ function _steady_gain(b::StabilityBound, i, p)
         end
         if an !== nothing && D > 0
             for a in unique(first.(an))
-                w, n = D * b.invh2[a], b.dims[a]
+                w, n = D * b.invh2[i][a], b.dims[i][a]
                 d = fill(s + 2w, n)
                 anchored = false
                 for (side, k) in ((-1, 1), (1, n))
@@ -711,10 +710,9 @@ end
 function Problems.steady_loop_rates(b::StabilityBound, groups, p, steady, loops)
     n = length(groups)
     gof = Dict{String, Int}(k => g for (g, ks) in enumerate(groups) for k in ks)
-    s4 = 4 * sum(b.invh2)
     rowof = Dict{String, Int}(k => i for (i, k) in enumerate(b.keys))
-    terms(r) = Iterators.flatten((((f, j, f(p)) for (f, j) in r.crosslinear if j != 0),
-                                  ((f, j, f(p) * (s4 + _face_excess(b, j, p))) for (f, j) in r.crossdiffusion if j != 0)))
+    terms(r, i) = Iterators.flatten((((f, j, f(p)) for (f, j) in r.crosslinear if j != 0),
+                                     ((f, j, f(p) * (4 * sum(b.invh2[j]) + _face_excess(b, j, p))) for (f, j) in r.crossdiffusion if j != 0)))
     G, K = zeros(n), zeros(n)
     why = Any[nothing for _ in 1:n]
     for h in 1:n
@@ -729,7 +727,7 @@ function Problems.steady_loop_rates(b::StabilityBound, groups, p, steady, loops)
             gi isa Real && (G[h] = max(G[h], gi))
             for r in b.rows[i]
                 tot = 0.0
-                for (f, j, v) in terms(r)
+                for (f, j, v) in terms(r, i)
                     hj = get(gof, b.keys[j], 0)
                     (hj == 0 || !(hj in loops[h])) && continue
                     if steady[hj]
@@ -759,7 +757,7 @@ function Problems.steady_loop_rates(b::StabilityBound, groups, p, steady, loops)
             i == 0 && continue
             for r in b.rows[i]
                 tot, worst, best = 0.0, -Inf, nothing
-                for (f, j, v) in terms(r)
+                for (f, j, v) in terms(r, i)
                     hj = get(gof, b.keys[j], 0)
                     (hj == 0 || hj == g || !(hj in l)) && continue
                     c = steady[hj] ? v * G[hj] * K[hj] : v
@@ -795,11 +793,12 @@ not finite, index 0 reading 0, and how many more). `b(p) == ρ`
 when `b.unbounded` and `coupled` are empty.
 """
 function bound_parts(b::StabilityBound, p)
-    s4 = 4 * sum(b.invh2)
     ρ = seen = 0.0
     coupled, negative = String[], String[]
     unsure = Tuple{String, String, Any}[]      # interval diffusion coefficients of unknown sign (F3-13)
     for i in eachindex(b.keys)
+        ih2 = b.invh2[i]                        # (the row's grid, F3-16)
+        s4 = 4 * sum(ih2)
         # each choice of the row's switch arms is a row of its own: the bound is the worst,
         # and the row is coupled when any choice is not diagonally dominant
         for r in b.rows[i]
@@ -817,23 +816,23 @@ function bound_parts(b::StabilityBound, p)
             Dmag = sum(f(p) for f in r.diffusion; init = 0.0) + sum(_sd(f, p) for f in r.sitediffusion; init = 0.0)
             # upwind advection (F3-13): each axis's faces give the row `|m v_a| / h_a` twice at
             # most, `Σ_a 2 max|m v_a| / h_a`
-            adv = sum(2 * f(p) * sqrt(b.invh2[a]) for (f, a) in r.advection; init = 0.0)
+            adv = sum(2 * f(p) * sqrt(ih2[a]) for (f, a) in r.advection; init = 0.0)
             own = Dmag * (s4 + _face_excess(b, i, p)) + adv
             lin = sum(f(p) for f in r.linear; init = 0.0)
             cross = sum(f(p) for (f, _) in r.crosslinear; init = 0.0) +
-                    sum(f(p) * (s4 + _face_excess(b, j, p)) for (f, j) in r.crossdiffusion; init = 0.0)
+                    sum(f(p) * (4 * sum(b.invh2[j]) + _face_excess(b, j, p)) for (f, j) in r.crossdiffusion; init = 0.0)
             if !isempty(r.crosslinear) || !isempty(r.crossdiffusion)
                 # the diagonal at its largest over the indicator assignments. A row of `M A` (site
                 # diffusion) is balanced: its diagonal m_i Σ K / h² equals its off-diagonal sum,
                 # so the same bound enters both sides and cancels (the row test is the rest of
                 # the row: the reaction against the cross terms and the Robin faces)
-                diag = -2 * sum(b.invh2) * (sum(_lo(f, p) for f in r.diffusion; init = 0.0) +
+                diag = -2 * sum(ih2) * (sum(_lo(f, p) for f in r.diffusion; init = 0.0) +
                                             sum(_sd(f, p) for f in r.sitediffusion; init = 0.0)) +
                        sum(_hi(f, p) for f in r.linear; init = 0.0)
                 # advection's part of the row test: its off-diagonal sum past its diagonal is the
                 # discrete compression `−∇·v`, at most `max|m v_a| / h_a` per axis for a constant
                 # velocity (a row at a closed face) and `2 max|m v_a| / h_a` otherwise
-                short = sum((_constant(f) ? 1 : 2) * f(p) * sqrt(b.invh2[a]) for (f, a) in r.advection; init = 0.0)
+                short = sum((_constant(f) ? 1 : 2) * f(p) * sqrt(ih2[a]) for (f, a) in r.advection; init = 0.0)
                 offd = Dmag * (s4 / 2 + _face_excess(b, i, p)) + cross + short
                 diag <= 0 && -diag >= offd || push!(coupled, b.keys[i])
             end
@@ -844,9 +843,9 @@ function bound_parts(b::StabilityBound, p)
             # of its row
             Ds = sum(_seen(f, p) for f in r.diffusion; init = 0.0) + sum(_sdseen(f, p) for f in r.sitediffusion; init = 0.0)
             sv = Ds * (s4 + _face_excess_seen(b, i, p)) + sum(_seen(f, p) for f in r.linear; init = 0.0) +
-                 sum(2 * _seen(f, p) * sqrt(b.invh2[a]) for (f, a) in r.advection; init = 0.0) +
+                 sum(2 * _seen(f, p) * sqrt(ih2[a]) for (f, a) in r.advection; init = 0.0) +
                  sum(_seen(f, p) for (f, _) in r.crosslinear; init = 0.0) +
-                 sum(_seen(f, p) * (s4 + _face_excess_seen(b, j, p)) for (f, j) in r.crossdiffusion; init = 0.0)
+                 sum(_seen(f, p) * (4 * sum(b.invh2[j]) + _face_excess_seen(b, j, p)) for (f, j) in r.crossdiffusion; init = 0.0)
             seen = max(seen, sv)
         end
     end
@@ -944,10 +943,13 @@ function _bound_box(cf::CompiledField{N}, sys::PDESystem; ghost::Bool, axes = nt
     ends = _domain_ends(sys)
     ivs = unwrap.(sys.ivs)
     h = cf.program.spacing
+    # the ghost sites lie half a spacing past the box on the coarsest grid a field lives on (a
+    # `Coarse` field's ghost is `k h / 2` out, F3-16); the fine centers enclose every grid's
+    hg = level_spacing(h, Int.(Tuple(cf.program.hierarchy[1].grid.dims)), length(cf.program.hierarchy) - 1)
     for (a, v) in enumerate(ivs[(end - N + 1):end])
         lo, hi = ends[length(ivs) - N + a]
         g = ghost && axes[a]
-        push!(box, (v, g ? (lo - h[a] / 2, hi + h[a] / 2) : (lo + h[a] / 2, hi - h[a] / 2), string(v)))
+        push!(box, (v, g ? (lo - hg[a] / 2, hi + hg[a] / 2) : (lo + h[a] / 2, hi - h[a] / 2), string(v)))
     end
     for v in unwrap.(sys.dvs)
         b = _declared_bounds(v)
@@ -1226,9 +1228,12 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
                        [(Int(r.axis), Int(r.side), r.alpha, r.beta) for r in cf.program.rules if r isa FaceRule && mine(r)])
     end
     declared = _declared_fields(cf, sys)
-    return StabilityBound([1 / h^2 for h in cf.program.spacing], ks, rows, faces,
+    # each row's grid (a `Coarse` field's: spacing `k h`, F3-16)
+    rlev(k) = cf.program.fields[fieldid(cf.program, k)].levels[1]
+    fdims = Int.(Tuple(cf.program.hierarchy[1].grid.dims))
+    return StabilityBound([[1 / h^2 for h in level_spacing(cf.program.spacing, fdims, rlev(k))] for k in ks], ks, rows, faces,
         sort!(unique!(unbounded)), unique!(terms), unique!(expanded), _row_inputs(rows), sort!(unique!(crossunseen)),
-        collect(Int, cf.program.hierarchy[1].grid.dims), anchors, declared, _used_keys(rows, declared),
+        [collect(Int, leveldims(cf.program, rlev(k))) for k in ks], anchors, declared, _used_keys(rows, declared),
         _face_values(cf, sys, declared))
 end
 
@@ -1322,13 +1327,13 @@ end
 function _initial(cf::CompiledField{N}, sys::PDESystem, state, ::Type{T}) where {N, T}
     ends = _domain_ends(sys)
     ivs = unwrap.(sys.ivs)
-    h = cf.program.spacing
-    dims = Int.(cf.program.hierarchy[1].grid.dims)
     vals = Dict{Any, Any}(p => d for (p, d) in zip(cf.params, cf.defaults) if !isnan(d))
     vals[ivs[1]] = ends[1][1]
     out = T[]
     for k in state
         haskey(cf.initial, k) || _dverr("field `$k` has no initial condition `$k(0, …) ~ value`")
+        # (a `Coarse` field at its nodes' centers, F3-16)
+        dims = Int.(leveldims(cf.program, cf.program.fields[fieldid(cf.program, k)].levels[1]))
         v = cf.initial[k]
         if v isa Number
             append!(out, fill(T(v), prod(dims)))
@@ -1352,7 +1357,7 @@ function _index(cf::CompiledField, sys::PDESystem, s, state; derived = Pair[], c
     # a system with no time (F3-12b): each field also reads by its time-free term `c(x, y)`
     alias(v, i, n) = free === nothing ? () : (o = free[findfirst(w -> isequal(unwrap(w), unwrap(v)), sys.dvs)];
                                              (n == 1 ? unwrap(o) : unwrap(Symbolics.wrap(unwrap(o))[i]),))
-    dims = Int.(cf.program.hierarchy[1].grid.dims)
+    dims(k) = Int.(leveldims(s, s.fields[fieldid(s, k)].levels[1]))      # (a `Coarse` field's grid, F3-16)
     vars, inputs, inputnames, boolinputs, inputbounds, aux = Pair[], Pair[], Pair[], String[], Pair[], Pair[]
     for v in sys.dvs, (op, ks) in cf.keys
         isequal(_opof(v), op) || continue
@@ -1370,7 +1375,7 @@ function _index(cf::CompiledField, sys::PDESystem, s, state; derived = Pair[], c
                 b = _input_bounds(unwrap(v))
                 b == (-Inf, Inf) || push!(inputbounds, k => b)
             elseif k in state
-                push!(vars, (term, alias(v, i, length(ks))..., Symbol(k)) => FieldSlot(slots[fieldid(s, k)], dims))
+                push!(vars, (term, alias(v, i, length(ks))..., Symbol(k)) => FieldSlot(slots[fieldid(s, k)], dims(k)))
             elseif any(q -> q.key == "aux:$k", s.kernels)
                 # an aux field `K ~ rhs` (F3 design §3.12): read by `sol[K]` and `integ[K]`
                 push!(aux, (term, alias(v, i, length(ks))..., Symbol(k)) => k)
@@ -1726,7 +1731,9 @@ function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = (),
         _check_fusion(s, sys, disc)
         return FieldProblem(spec, x0, span, pv; index, tables, inputs = ins, backend, options)
     end
-    isempty(spec.init) || _dverr("masked conditions (`c ~ masked(pred, v)`) need problem = :owned in this version")
+    # (a coarse field's owner kernels run on the ODE path too, at its first evaluation)
+    all(k -> startswith(k, "owner:"), spec.init) ||
+        _dverr("masked conditions (`c ~ masked(pred, v)`) need problem = :owned in this version")
     !timefree && !isempty(spec.steady) && _dverr(string("problem = :ode: the steady rows of ",
         join(("`$k`" for k in spec.steady), ", "), " make the system a DAE (a mass matrix with zero rows), which is ",
         "planned (F4); solve it on the owned path: leave `problem` out (`QuasiSteady` steps the steady fields), or write ",

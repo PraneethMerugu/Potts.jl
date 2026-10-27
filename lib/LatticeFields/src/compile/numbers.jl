@@ -14,6 +14,32 @@ primitive of emitted bodies.
 @inline lanecast(::Type{T}, x) where {T} = convert(T, x)
 
 """
+    plurality(vals, oks)
+
+The most frequent of the values `vals[i]` whose `oks[i]` holds (a RESTRICT's `:plurality` over
+a coarse site's children); a tie goes to the smallest nonzero value, and 0 wins only when no
+nonzero value ties. A leaf primitive of emitted bodies.
+"""
+@inline function plurality(vals::Tuple{T, Vararg{T}}, oks::Tuple{Bool, Vararg{Bool}}) where {T}
+    M = length(vals)
+    length(oks) == M || return zero(T)                  # (the emitter passes one flag per value)
+    best, bc = zero(T), 0
+    for j in 1:M
+        # (@inbounds: `i` and `j` run over 1:M, the length of both tuples)
+        @inbounds oks[j] || continue
+        v = @inbounds vals[j]
+        n = 0
+        for i in 1:M
+            n += @inbounds(oks[i] & (vals[i] == v))
+        end
+        if n > bc || (n == bc && v != zero(T) && (best == zero(T) || v < best))
+            best, bc = v, n
+        end
+    end
+    return best
+end
+
+"""
     valtype(T)
 
 The value type of number type `T`: `T` itself for a plain number, `V` for `Dual{tag, V, N}`
