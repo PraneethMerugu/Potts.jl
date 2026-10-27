@@ -367,7 +367,7 @@ function CorePotts.report_run(info::PottsModelInfo, integ)
     model = integ.state.model
     haskey(model, CorePotts.CONVERT_FLAGS) && _report_converts(info, integ)
     haskey(model, REF_COUNTS) || return nothing
-    counts = CorePotts._to_host(integ.stats, getfield(model, REF_COUNTS))
+    counts = CorePotts._to_host(getfield(integ, :stats), getfield(model, REF_COUNTS))
     any(>(0), counts) || return nothing
     labels = _ref_count_labels(info.csys)
     lines = String[]
@@ -1226,7 +1226,7 @@ CorePotts.remake_state(info::PottsModelInfo, prob, u0::CorePotts.CPMState) =
 # skipped for the Int32 moment scratch, read once per solve (as the lifecycle's deferrals)
 function _report_converts(info::PottsModelInfo, integ)
     dev = getfield(integ.state.model, CorePotts.CONVERT_FLAGS)
-    flags = CorePotts._to_host(integ.stats, dev)
+    flags = CorePotts._to_host(getfield(integ, :stats), dev)
     deferred, large = Int(flags[3]), Int(flags[4])
     deferred > 0 && @warn "@convert in $(nameof(info.csys)): $deferred allocation(s) deferred: all " *
                           "$(length(integ.state.cell.kind)) cell slots are in use (the lowest-slot entities " *

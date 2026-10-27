@@ -421,7 +421,9 @@ The field solvers' counters of a run (`integ.stats.fields`, F3 design §3.3), su
 status words of its field groups: `solves`, `budget` (linear budget hits), `floor` (rounding
 floors), `newton_budget` (Newton budget hits), and `code`, the worst code read so far
 (`Success`, `StalledSuccess`, `ConvergenceFailure`, or `Unstable` when a field left the declared
-`bounds` its stability bound used). All zero for the explicit algorithms.
+`bounds` its stability bound used). All zero for the explicit algorithms. On a device, each read
+of `integ.stats` reads the status words first (one synchronization), so the counters include
+every window so far.
 """
 Base.@kwdef mutable struct FieldStats
     solves::Int64 = 0

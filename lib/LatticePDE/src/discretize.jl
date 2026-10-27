@@ -578,7 +578,11 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         lv = flev[op]
         kb = kern(lv)
         e = env(kind == :map, kb, lv)
+        # (the equation being lowered, for a front end that names it at a refusal: A's `@equations`
+        # line, review r1 N2; cleared once it lowers)
+        task_local_storage(:lattice_equation, k)
         r = lower(rhs, e)
+        delete!(task_local_storage(), :lattice_equation)
         if kind == :rate
             lin[k] = linearity(rhs, comp == 0 ? dvs[op] : _Comp(op, comp), staterefs; inputs = [o for o in Base.keys(dvs) if isin[o]],
                                aux = unique([v[2] for v in values(eqs) if v[1] == :aux]))

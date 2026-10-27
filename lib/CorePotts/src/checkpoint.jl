@@ -43,7 +43,7 @@ function checkpoint(integ::PottsIntegrator)
     # `current_state` is the host read point that makes `stats` exact (D-089): it runs
     # before the statistics are copied
     return PottsCheckpoint(current_state(integ), integ.t, prob.seed, prob.replica,
-        prob.repeat, _adapt_host(integ.stats, integ.p), prob.f.fingerprint, deepcopy(integ.stats))
+        prob.repeat, _adapt_host(_stats(integ), integ.p), prob.f.fingerprint, deepcopy(_stats(integ)))
 end
 
 """Write a checkpoint to `path` (Julia `Serialization`; same package versions to read)."""
@@ -91,7 +91,7 @@ allocation of device storage), clearing saved values, statistics and the return 
 """
 function SciMLBase.reinit!(integ::PottsIntegrator, u0 = integ.prob.u0;
         t0::Integer = integ.prob.tspan[1])
-    _sync!(integ.stats, integ.backend)            # reset below with the statistics
+    _sync!(_stats(integ), integ.backend)            # reset below with the statistics
     # symbolic maps; a state is laid out for the model's functions (e.g. Potts' ODE scratch)
     u0 = remake_state(integ.f.sys, integ.prob, u0)
     _same_shape(integ.state, u0) || throw(ArgumentError(
@@ -104,11 +104,11 @@ function SciMLBase.reinit!(integ::PottsIntegrator, u0 = integ.prob.u0;
     integ.t = t0
     integ.retcode = SciMLBase.ReturnCode.Default
     empty!(integ.saved_t); empty!(integ.saved_u)
-    _restore_stats!(integ.stats, _initial_stats(integ.f))      # `accepted_ΔH`: 0.0 when tracked
+    _restore_stats!(_stats(integ), _initial_stats(integ.f))      # `accepted_ΔH`: 0.0 when tracked
     _reset_cache!(integ.cache, integ)
     _clear_field_status!(integ.ctx)          # a new run: the field groups' failures and counters go
-    integ.stats.launches += _run_phases(integ.f.phases.at_init, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend, integ.stats)
+    _stats(integ).launches += _run_phases(integ.f.phases.at_init, integ.state, integ.p, integ.ctx,
+        integ.key, integ.t, integ.backend, _stats(integ))
     _start_failed!(integ)
     _each(cb -> cb.initialize(cb, integ.state, integ.t, integ), integ.callbacks)
     integ.save_start && _save!(integ)

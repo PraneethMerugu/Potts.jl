@@ -163,6 +163,26 @@ end
     σ = zeros(Int32, 8, 8); σ[3:5, 3:5] .= 1
     m = msg(() -> PottsProblem(Base.invokelatest(oc; name = :o), [ownership => σ, kind => [:A]], (0, 1)))
     @test occursin("@on_copy cannot assign `c`", m) && occursin("write the change as a source in its equation", m)
+    # review r1 N2: a refusal of the lowering names the equation it was lowering (not the first),
+    # with a condition's parentheses and the kind's name (base cb20be97, ~/lpwork/f3b6r-nc-n2.log:
+    # `in @equations Differential(t, 1)(c(t)) ~ kind == 1 - c(t) + …`)
+    fw = eval(:(@potts_model _FcWhere begin
+        @kinds medium A
+        @variables begin
+            c(field) = 0.0
+            u(field) = 0.0
+        end
+        @lattice Lattice((8, 8))
+        @energy cells => (volume - 9.0)^2
+        @equations begin
+            D(c) ~ 0.1 * Δ(c) - c
+            D(u) ~ (kind == A) - u + 0.1 * Δ(kind)
+        end
+        @sweep Metropolis(; temperature = 1.0)
+    end))
+    σw = zeros(Int32, 8, 8); σw[3:5, 3:5] .= 1
+    m = msg(() -> PottsProblem(Base.invokelatest(fw; name = :w), [ownership => σw, kind => [:A]], (0, 1)))
+    @test occursin("\n  in @equations Differential(t, 1)(u(t)) ~ ", m) && occursin("(kind == A) - u(t)", m) || (println("N2: ", m); false)
     # Coarse(1) is the lattice itself (no option kept)
     v = Potts.variable(only(Potts.Symbolics.@variables q), :field; lattice_level = Coarse(1))
     @test !haskey(Potts.info(v).options, :lattice_level)

@@ -519,6 +519,30 @@ function gd_implicit!(out)
     end
     return out
 end
+# F3 batch 6 review r1 (add-only, design §6): the Jiang-like model of F3-18 (32³ lattice, five
+# Coarse(4) fields, σ frozen) under the default BackwardEuler, CPU, Float64: the fingerprints,
+# `n` and the digests of σ and the site arrays after 2 MCS, which are the same at `-t 1` and
+# `-t 4` (the host's early Newton stop included; ~/lpwork/f3b6r-guard-t1.rec, -t4.rec). The cell
+# average `ocell` (`integral(o) / volume`) is not recorded: its threaded reduction differs in the
+# last bits between thread counts.
+isdefined(Main, :JiangLike) || include(joinpath(@__DIR__, "fields_jiang_model.jl"))
+function gd_jiang!(out)
+    pre = "GjJiangLike BackwardEuler|Float64"
+    σ, kinds = jiang_state(JG_DIMS)
+    sys = JiangLike(; name = :j)
+    kw = (; field_solver = BackwardEuler())
+    prob = PottsProblem(sys, [ownership => σ, kind => kinds], (0, 2); seed = 7, kw...)
+    gd_fingerprints!(out, pre, sys, prob, Float64, kw)
+    integ = init(prob, SequentialCPM())
+    out["$pre|n"] = string(gd_ns(integ))
+    foreach(_ -> step!(integ), 1:2)
+    st = current_state(integ)
+    out["$pre|digest|σ"] = gd_digest(st.σ)
+    for k in keys(st.site)
+        out["$pre|digest|site.$k"] = gd_digest(getproperty(st.site, k))
+    end
+    return out
+end
 function gd_b!(out)
     for (label, u, n) in GdB.cases()
         out["$label|Float64|digest|state"] = gd_digest(u)
@@ -546,7 +570,7 @@ gd_label(k) = first(split(k, '|'))
 gd_pinned(k) = any(g -> g[1] == gd_label(k) && g[5], GD_HARD)
 
 @testset "F2 guard: the field pipeline's behavior and fingerprints" begin
-    got = gd_implicit!(gd_b!(gd_soft!(gd_hard!(Dict{String, String}()))))
+    got = gd_jiang!(gd_implicit!(gd_b!(gd_soft!(gd_hard!(Dict{String, String}())))))
     path = get(ENV, "POTTS_GUARD_RECORD", "")
     isempty(path) || open(path, "w") do io
         for k in sort!(collect(keys(got)))

@@ -782,8 +782,9 @@ function LatticeFields.Problems.unbounded_text(t::_PottsTexts, c)
     elseif !isempty(r.coupled)
         return "the substep count of the field$(_fs(t)) $(_fieldlist(t.names)) has no bound " *
                "from the parameters: the coupled rate$(length(r.coupled) == 1 ? "" : "s") of $(_fieldlist(r.coupled)) " *
-               "(terms that read another field) $(length(r.coupled) == 1 ? "is" : "are") not diagonally dominant; give " *
-               _A_ROUTE
+               "(terms that read another field) $(length(r.coupled) == 1 ? "is" : "are") not diagonally dominant; step " *
+               "the field$(_fs(t)) with `field_solver = BackwardEuler()` (it solves the fields in the order they read " *
+               "each other, with no substep bound), or give " * _A_ROUTE
     end
     return string("the substep bound of the field$(_fs(t)) ", _fieldlist(t.names), " is not finite at the current parameters: ",
         isempty(r.nonfinite) ? "a coefficient is not finite" :

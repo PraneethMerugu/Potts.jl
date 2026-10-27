@@ -1107,7 +1107,7 @@ are not folded yet: a form fails only at its first launch, and no device form co
 MCS before it (a proven form never fails over). One synchronizing read, once per integrator.
 """
 function _drop_device_counts!(integ, D::DeviceLifecycle)
-    stats = integ.stats
+    stats = _stats(integ)
     _copy!(stats, D.acc, D.dv.acc)
     D.acc_seen .= D.acc
     if integ.mscratch !== nothing
@@ -1129,7 +1129,7 @@ function _fold_lifecycle!(integ; report::Bool = true)
     lc = integ.lcache
     (lc === nothing || lc.device === nothing) && return nothing
     D = lc.device
-    stats = integ.stats
+    stats = _stats(integ)
     _copy!(stats, D.acc, D.dv.acc)
     δ(i) = Int(D.acc[i] - D.acc_seen[i])             # Int32 differences (wrap-safe)
     s = stats.lifecycle

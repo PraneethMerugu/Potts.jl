@@ -298,7 +298,7 @@ function CommonSolve.init(prob::PottsProblem, alg::CPMAlgorithm; backend = CPU()
             "with the same `track`"))
         # a restored state is no fresh one: its at-init phases skip the field clamps (D-145)
         integ = _init(prob, alg, false; backend, saveat, save_start, save_end, callback)
-        _restore_stats!(integ.stats, checkpoint.stats)
+        _restore_stats!(_stats(integ), checkpoint.stats)
         return integ
     end
     return _init(prob, alg, true; backend, saveat, save_start, save_end, callback)
@@ -386,8 +386,8 @@ function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, save
     # a field-step entry's handler is still in an inference cycle, the call stays dynamic and
     # boxes the entry (16 B per MCS, Merks Float32 under CheckerboardCPM, P6.0bl)
     _each(e -> precompile(_run_entry!, (typeof(integ), typeof(e))), prob.f.phases.mcs)
-    integ.stats.launches += _run_phases(fresh ? prob.f.phases.at_init : _derived(prob.f.phases.at_init), integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend, integ.stats)
+    _stats(integ).launches += _run_phases(fresh ? prob.f.phases.at_init : _derived(prob.f.phases.at_init), integ.state, integ.p, integ.ctx,
+        integ.key, integ.t, integ.backend, _stats(integ))
     _start_failed!(integ)
     _each(cb -> cb.initialize(cb, integ.state, integ.t, integ), integ.callbacks)
     save_start && _save!(integ)
@@ -483,19 +483,25 @@ device state is `integ.state`. Counted in `integ.stats`. A host read point:
 the device lifecycle's statistics and frozen-mask counts are folded into `integ.stats`.
 """
 function current_state(integ::PottsIntegrator)
-    _sync!(integ.stats, integ.backend)
+    _sync!(_stats(integ), integ.backend)
     _fold_lifecycle!(integ)
     _fold_track!(integ)
     _fold_deferred!(integ)
     _fold_counts!(integ)
-    return _snapshot(integ.stats, integ.backend, integ.state)
+    return _snapshot(_stats(integ), integ.backend, integ.state)
 end
 
 function Base.getproperty(integ::PottsIntegrator, name::Symbol)
     name === :u && return current_state(integ)
     name === :ps && return SymbolicIndexingInterface.ParameterIndexingProxy(integ)
+    # a read of `integ.stats`: on a device the field groups' status words are read first (one
+    # synchronization), so `integ.stats.fields` counts every window so far, as B's `field_stats`
+    # does (review r1 N1); the solver itself reads `_stats(integ)`
+    name === :stats && !Exec.ishost(getfield(integ, :backend)) && _read_statuses!(_stats(integ), getfield(integ, :ctx))
     return getfield(integ, name)
 end
+# the run's statistics without a status read (every internal use)
+_stats(integ) = getfield(integ, :stats)
 
 # `integ[p]` and `integ[p] = v` of a parameter (a kind table too; a list naming one): an error
 # with SciML's route, `integ.ps[p]` (F2 design §2.13; before: SciMLBase's "Indexing with
@@ -537,17 +543,17 @@ function _save!(integ::PottsIntegrator)
 end
 
 # a steady start (`init = :steady`, F3-12c) that failed ends the run before its first MCS
-_start_failed!(integ) = (_fields_failed(integ.stats.fields.code) && (integ.retcode = integ.stats.fields.code); nothing)
+_start_failed!(integ) = (_fields_failed(_stats(integ).fields.code) && (integ.retcode = _stats(integ).fields.code); nothing)
 # a field code that ends the run: a solve failure, or a field outside its declared bounds (`Unstable`)
 _fields_failed(c::SciMLBase.ReturnCode.T) = c == SciMLBase.ReturnCode.ConvergenceFailure || c == SciMLBase.ReturnCode.Unstable
 function _check_status!(integ::PottsIntegrator)
-    _status_failure!(integ, _model_status(integ.stats, integ.state.model))
+    _status_failure!(integ, _model_status(_stats(integ), integ.state.model))
     # the field groups' status words (on the host they are read after every window already)
-    Exec.ishost(integ.backend) || _read_statuses!(integ.stats, integ.ctx)
-    _fields_failed(integ.stats.fields.code) && integ.retcode == SciMLBase.ReturnCode.Default &&
-        (integ.retcode = integ.stats.fields.code)
+    Exec.ishost(integ.backend) || _read_statuses!(_stats(integ), integ.ctx)
+    _fields_failed(_stats(integ).fields.code) && integ.retcode == SciMLBase.ReturnCode.Default &&
+        (integ.retcode = _stats(integ).fields.code)
     integ.alg isa CheckerboardCPM || return integ.retcode
-    st = _readback(integ.stats, integ.cache.status)
+    st = _readback(_stats(integ), integ.cache.status)
     _status_failure!(integ, st)
     return integ.retcode
 end
@@ -577,10 +583,10 @@ function CommonSolve.step!(integ::PottsIntegrator)
     # SequentialCPM)
     _run_mcs!(integ, integ.f.phases.mcs)
     # a field solve that failed (its status word, read on the host after each window) ends the run
-    _fields_failed(integ.stats.fields.code) && (integ.retcode = integ.stats.fields.code)
+    _fields_failed(_stats(integ).fields.code) && (integ.retcode = _stats(integ).fields.code)
     integ.t += 1
-    integ.stats.mcs += 1
-    integ.stats.attempts += attempts
+    _stats(integ).mcs += 1
+    _stats(integ).attempts += attempts
     isempty(integ.callbacks) || _apply_callbacks!(integ)
     insorted(integ.t, integ.saveat) && (_check_status!(integ); _save!(integ))
     return integ
@@ -597,16 +603,16 @@ function _sequential_sweep!(integ::PottsIntegrator, ctx, part::NTuple{2, Int})
         acc, status, tracked = sequential_mcs!(integ.state, integ.kf, integ.p, ctx,
             integ.law, integ.key, integ.t, integ.f.track, part)
     end
-    integ.stats.accepted = max(integ.stats.accepted, 0) + acc
-    tracked === nothing || (integ.stats.accepted_ΔH += tracked)
+    _stats(integ).accepted = max(_stats(integ).accepted, 0) + acc
+    tracked === nothing || (_stats(integ).accepted_ΔH += tracked)
     status != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
     return nothing
 end
 
 # One entry of the MCS order: a tuple of phases, the sweep, the lifecycle or a `Repeat`.
 function _run_entry!(integ::PottsIntegrator, phases::Tuple, part::NTuple{2, Int} = (1, 1))
-    integ.stats.launches += _run_phases(phases, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend, integ.stats, part)
+    _stats(integ).launches += _run_phases(phases, integ.state, integ.p, integ.ctx,
+        integ.key, integ.t, integ.backend, _stats(integ), part)
     return nothing
 end
 # `part = (j, n)`: pass `j` of the `n` passes of a `Repeat` (the whole MCS is `(1, 1)`)
@@ -620,7 +626,7 @@ function _run_entry!(integ::PottsIntegrator, ::SweepPhase, part::NTuple{2, Int} 
         _two_word_pick(integ.nmobile) ? _sequential_sweep!(integ, _with_two_word_pick(ctx), part) :
         _sequential_sweep!(integ, ctx, part)
     else
-        integ.stats.launches += checkerboard_mcs!(integ.state, integ.cache, integ.kf,
+        _stats(integ).launches += checkerboard_mcs!(integ.state, integ.cache, integ.kf,
             integ.p, ctx, integ.law, integ.key, integ.t, part)
     end
     return nothing
@@ -668,8 +674,8 @@ end
 # the frozen mask follows them at once (D-081; quiet MCS pay nothing)
 function _step_lifecycle!(integ, ::Nothing, before::Bool = true)
     launches, events = run_lifecycle!(integ.f.lifecycle, integ.lcache, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend, integ.stats, before)
-    integ.stats.launches += launches
+        integ.key, integ.t, integ.backend, _stats(integ), before)
+    _stats(integ).launches += launches
     events && _refresh_frozen!(integ)
     return nothing
 end
@@ -683,10 +689,10 @@ function _step_lifecycle!(integ, D::DeviceLifecycle)
         integ.backend, refresh)
     if n < 0                    # handover: the host planner takes this MCS and every later one
         D.before_ran[] && _drop_device_counts!(integ, D)
-        integ.stats.launches += D.enqueued[]        # the failed form's kernels that ran
+        _stats(integ).launches += D.enqueued[]        # the failed form's kernels that ran
         return _step_lifecycle!(integ, nothing, !D.before_ran[])
     end
-    integ.stats.launches += n
+    _stats(integ).launches += n
     return nothing
 end
 
@@ -749,7 +755,7 @@ end
 # is reduced into `stats.accepted_ΔH` (Float64; one counted copy on a device) and zeroed.
 # Nothing without a track or under `SequentialCPM` (with or without `skip_interior`),
 # which adds into the stats every step.
-_fold_track!(integ) = _fold_track!(integ.stats, integ.cache)
+_fold_track!(integ) = _fold_track!(_stats(integ), integ.cache)
 _fold_track!(stats, ::Nothing) = nothing
 _fold_track!(stats, ::BoundaryCache) = nothing
 function _fold_track!(stats, tk::NamedTuple)
@@ -760,7 +766,7 @@ function _fold_track!(stats, tk::NamedTuple)
     return nothing
 end
 
-_fold_counts!(integ) = _fold_counts!(integ.stats, integ.cache)
+_fold_counts!(integ) = _fold_counts!(_stats(integ), integ.cache)
 _fold_counts!(stats, cache) = nothing
 
 # bring the device lifecycle's counts into `integ.stats` (synchronizes; only off the MCS loop)
@@ -793,7 +799,7 @@ refresh_frozen!(integ::PottsIntegrator) = (_refresh_frozen!(integ); integ)
 function _refresh_frozen!(integ::PottsIntegrator)
     m = integ.ctx.mobility
     (m isa AllMobile || !frozen_varies(integ.f.sys)) && return nothing
-    integ.stats.refreshes += 1
+    _stats(integ).refreshes += 1
     _refresh_frozen!(integ, m, frozen_kinds(integ.f.sys))
     return nothing
 end
@@ -804,8 +810,8 @@ function _refresh_frozen!(integ, m::MaskMobility, kinds::Tuple)
     _flush_counts!(integ)                           # earlier device refreshes first
     Exec.launch!(integ.backend, _frozen_body!, length(integ.state.σ),
         (m.frozen, sc.device, integ.state.σ, integ.state.cell.kind, kinds, integ.ctx.lattice))
-    integ.stats.launches += 1
-    _copy!(integ.stats, sc.host, sc.device)         # synchronizes (a no-op copy on the CPU)
+    _stats(integ).launches += 1
+    _copy!(_stats(integ), sc.host, sc.device)         # synchronizes (a no-op copy on the CPU)
     fill!(sc.device, zero(eltype(sc.host)))
     integ.nmobile += sc.host[2]
     sc.host[3] > 0 && m.sites !== nothing && _mobile_sites!(m.sites, m.frozen)
@@ -815,12 +821,12 @@ end
 # of the declared leaves only (D-128; the other leaves stay device arrays)
 function _refresh_frozen!(integ, m::MaskMobility, ::Nothing)
     reads = _frozen_reads(integ.f.sys, integ.state)
-    _sync!(integ.stats, integ.backend)
+    _sync!(_stats(integ), integ.backend)
     u = integ.backend isa CPU ? integ.state :
-        reads === nothing ? _snapshot(integ.stats, integ.backend, integ.state) :
-        _host_leaves(integ.stats, integ.state; σ = :σ in reads, cell = filter(n -> n !== :σ, reads))
+        reads === nothing ? _snapshot(_stats(integ), integ.backend, integ.state) :
+        _host_leaves(_stats(integ), integ.state; σ = :σ in reads, cell = filter(n -> n !== :σ, reads))
     fz = frozen_sites(integ.prob, u)
-    _set_mobility!(integ.stats, m, fz)
+    _set_mobility!(_stats(integ), m, fz)
     integ.nmobile = count(!, fz)
     return nothing
 end
@@ -855,7 +861,7 @@ function CommonSolve.solve!(integ::PottsIntegrator)
     report_run(integ.f.sys, integ)
     if integ.retcode == SciMLBase.ReturnCode.Default
         # a rounding floor of a field solve is kept as the final code (the run went on)
-        integ.retcode = integ.stats.fields.code == SciMLBase.ReturnCode.StalledSuccess ? SciMLBase.ReturnCode.StalledSuccess :
+        integ.retcode = _stats(integ).fields.code == SciMLBase.ReturnCode.StalledSuccess ? SciMLBase.ReturnCode.StalledSuccess :
                         SciMLBase.ReturnCode.Success
     end
     integ.save_end && (isempty(integ.saved_t) || last(integ.saved_t) != integ.t) &&
@@ -885,7 +891,7 @@ end
 function PottsSolution(integ::PottsIntegrator)
     S = isempty(integ.saved_u) ? Any : typeof(first(integ.saved_u))
     return PottsSolution(convert(Vector{S}, integ.saved_u), copy(integ.saved_t),
-        integ.prob, integ.alg, integ.retcode, integ.stats)
+        integ.prob, integ.alg, integ.retcode, _stats(integ))
 end
 
 # Integer indexing is by saved state (`sol[end]` is the final state), not RecursiveArrayTools'
@@ -1024,8 +1030,8 @@ end
 # snapshot) and take effect from the next MCS. A problem's parameters are immutable (isbits):
 # change them with `remake`.
 function SymbolicIndexingInterface.set_state!(integ::PottsIntegrator, v, i::StateIndex)
-    _sync!(integ.stats, integ.backend)
-    _set_state_array!(integ.stats, integ.state, v, i)
+    _sync!(_stats(integ), integ.backend)
+    _set_state_array!(_stats(integ), integ.state, v, i)
     # the owner or kind decides which sites are frozen
     (i.scope === :cell && i.name === :kind) && refresh_frozen!(integ)
     # a field written: its group's algorithm takes the new values as a start (`reset!`)

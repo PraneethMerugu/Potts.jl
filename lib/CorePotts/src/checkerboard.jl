@@ -355,7 +355,7 @@ end
 
 # Read point of the deferred-refusal counter: added into `stats.connectivity_deferred` and
 # zeroed (one counted copy on a device).
-_fold_deferred!(integ) = _fold_deferred!(integ.stats, integ.cache)
+_fold_deferred!(integ) = _fold_deferred!(_stats(integ), integ.cache)
 _fold_deferred!(stats, cache) = nothing
 _fold_deferred!(stats, cache::CheckerboardCache) = _fold_deferred!(stats, cache.serial)
 _fold_deferred!(stats, ::Nothing) = nothing

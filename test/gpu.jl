@@ -677,6 +677,20 @@ if PottsDevices.device_name() == "rocm"
     end
 end
 
+# Review r1 N1: on a device `integ.stats` reads the field groups' status words first, so after
+# `step!` (no save) `integ.stats.fields` counts the solves so far, as B's `field_stats` does.
+# Base cb20be97 (~/lpwork/f3b6r-nc-n1.log): `solves = 0` until a save.
+if PottsDevices.device_name() == "rocm"
+    @testset "review r1 N1: integ.stats.fields counts the device solves after step! (ROCm)" begin
+        dev = init(PottsProblem(FcMix(; name = :f), fc_op(), (0, 3); T = Float32, seed = 2, field_solver = BackwardEuler()),
+            CheckerboardCPM(); backend = PottsDevices.device_backend(), save_start = false)
+        foreach(_ -> step!(dev), 1:2)
+        s1 = dev.stats.fields.solves
+        step!(dev)
+        @test s1 > 0 && dev.stats.fields.solves > s1 && dev.stats.fields.code == Potts.SciMLBase.ReturnCode.Success
+    end
+end
+
 # ROCm, last: no `double` in any kernel this suite compiled (full scan of the kernel cache)
 if PottsDevices.device_name() == "rocm"
     include(joinpath(@__DIR__, "shared", "device_ir_scan.jl"))

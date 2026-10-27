@@ -797,12 +797,31 @@ function _check_fields(sys::PottsSystem, rn)
     known = _located(() -> _field_inputs(sys, Float64), sys, first(_p(sys, :equations)))
     names = Symbol[info(x).name for (x, _) in eqs]
     # (the stability bound is built at the first problem: `mtkcompile` only checks the lowering)
-    g = _located(() -> _lower_field_group(sys, names, Float64; known, bound = false), sys, first(_p(sys, :equations)))
+    # a refusal of the lowering names the equation it was lowering (LatticePDE's note; review r1 N2)
+    delete!(task_local_storage(), :lattice_equation)
+    g = try
+        _lower_field_group(sys, names, Float64; known, bound = false)
+    catch e
+        k = pop!(task_local_storage(), :lattice_equation, nothing)
+        _located(() -> throw(e), sys, _field_equation_of(sys, k))
+    end
     env = _site_env(Float64, :i, rn; mcs = :mcs, key = :key)
     foreach(e -> _fill_value(e[2], env), g.filled)
     specs[(:inputs, Float64)] = known
     specs[(names, Float64)] = g
     return g.pdesys, specs
+end
+
+# the `@equations` entry of the field with key `k` (`"c"`, `"u[1]"`), else the first
+function _field_equation_of(sys::PottsSystem, k)
+    eqs = _p(sys, :equations)
+    k === nothing && return first(eqs)
+    name = first(split(k, '['))
+    i = findfirst(eqs) do eq
+        f = _field_lhs(eq, sys)
+        f !== nothing && string(info(f[1]).name) == name
+    end
+    return i === nothing ? first(eqs) : eqs[i]
 end
 
 # A slot of a discrete component is written by its ticks only.
@@ -1160,7 +1179,28 @@ _describe_text(e::EnergyTerm, kinds = nothing) = "@energy $(_domain_string(e.dom
 _describe_text(d::Drive) = "@drive copy => $(d.expr)"
 _describe_text(c::Constraint) = "@constraint $(c.expr)"
 _describe_text(u::Update) = "@$(u.phase) $(u.eq)"
-_describe_text(eq::Equation) = (i = info(eq.lhs); i !== nothing && i.role === :observed ? "@observed $(eq.lhs) ~ $(eq.rhs)" : "@equations $eq")
+_describe_text(eq::Equation, kinds = nothing) = (i = info(eq.lhs);
+    i !== nothing && i.role === :observed ? "@observed $(eq.lhs) ~ $(eq.rhs)" : "@equations " * _eq_text(eq, kinds))
+# an equation as written (review r1 N2): a condition inside arithmetic keeps its parentheses
+# (Symbolics prints `(kind == 1) - c` as `kind == 1 - c`), and a kind compared by number is named
+function _eq_text(eq::Equation, kinds)
+    s = string(_paren_conditions(eq.lhs), " ~ ", _paren_conditions(eq.rhs))
+    s = replace(s, r"var\"(\([^\"]*\))\"" => s"\1")      # (the condition's stand-in prints quoted)
+    kinds === nothing && return s
+    return replace(s, r"kind(?:\(t\))? (==|!=|≠) (\d+)" => m -> begin
+        op, n = match(r"kind(?:\(t\))? (==|!=|≠) (\d+)", m).captures
+        k = parse(Int, n)
+        "kind $op " * (0 <= k < length(kinds) ? string(kinds[k + 1]) : n)
+    end)
+end
+_iscondition(y) = iscall(y) && any(f -> operation(y) === f, (==, !=, <, <=, >, >=))
+function _paren_conditions(x)
+    reps = Dict{Any, Any}()
+    walk(y, top) = iscall(y) && (_iscondition(y) && !top ? (reps[y] = Symbolics.unwrap(Symbolics.variable(Symbol("(", y, ")")))) :
+                                 foreach(a -> walk(Symbolics.unwrap(a), false), arguments(y)))
+    walk(Symbolics.unwrap(x), true)
+    return isempty(reps) ? x : Symbolics.substitute(x, reps; fold = Val(false))
+end
 _describe_text(v::ConvertSpec, kinds = nothing) = "@convert $(v.name) $(_domain_string(v.domain, kinds))"
 _describe_text(d::DivideRule, kinds = nothing) = "@divide $(_domain_string(d.domain, kinds))$(_cadence_string(d.every)) when = $(d.when)"
 _cadence_string(n) = n == 1 ? "" : " Every($n)"
