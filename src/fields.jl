@@ -46,7 +46,7 @@ _field_at_name(u) = Symbol(nameof(operation(u)))
 
 # a callable dependent variable `name(..)` of element type `E`, applied to the ivs
 function _field_var(name::Symbol, ::Type{E}, ivs; input::Bool = false, entity = nothing, storage = nothing,
-        username = nothing, bounds = nothing) where {E}
+        username = nothing, bounds = nothing, level = nothing) where {E}
     f = Symbolics.unwrap(Symbolics.variable(name; T = SymbolicUtils.FnType{Tuple, E, Nothing}))
     v = f(ivs...)
     bounds === nothing || (v = SymbolicUtils.setmetadata(v, ModelingToolkitBase.VariableBounds, bounds))
@@ -55,8 +55,19 @@ function _field_var(name::Symbol, ::Type{E}, ivs; input::Bool = false, entity = 
     entity === nothing || (v = SymbolicUtils.setmetadata(v, PottsEntity, entity))
     S = storage === nothing && entity isa Entity ? get(entity.options, :lattice_storage, nothing) : storage
     S === nothing || (v = SymbolicUtils.setmetadata(v, LatticePDE.LatticeStorage, S))
+    # `[lattice_level = Coarse(k)]` (F3-17): the field's grid, as in front end B
+    L = level === nothing && entity isa Entity ? get(entity.options, :lattice_level, nothing) : level
+    L === nothing || (v = SymbolicUtils.setmetadata(v, LatticePDE.LatticeLevel, L))
     return v
 end
+# the variable info of field `name` of `sys`
+_field_info(sys, name) = info(only(x for x in _p(sys, :variables) if info(x) !== nothing && info(x).name === name))
+# the `lattice_level` of field `name` of `sys` (`nothing`: the lattice itself)
+_field_level(sys, name) = (x = only(x for x in _p(sys, :variables) if info(x) !== nothing && info(x).name === name);
+                           get(info(x).options, :lattice_level, nothing))
+# the dims of a site array of variable info `i` on lattice dims `dims` (a coarse field's: its grid)
+_site_dims(i, dims) = (L = get(i.options, :lattice_level, nothing);
+                       L === nothing ? dims : map(n -> n == 1 ? 1 : n ÷ L.k, dims))
 # the `lattice_storage` of field `name` of `sys` (`nothing`: the state type)
 _field_storage(sys, name) = (x = only(x for x in _p(sys, :variables) if info(x) !== nothing && info(x).name === name);
                              get(info(x).options, :lattice_storage, nothing))
@@ -520,7 +531,8 @@ function _field_system(sys::PottsSystem, names = Symbol[info(x).name for (x, _) 
     ivs = Any[tt; xs]
     aux = _field_aux(sys)
     auxnames = Symbol[info(x).name for (x, _) in aux]
-    states = Dict{Symbol, Any}(n => _field_var(n, Real, ivs; storage = _field_storage(sys, n), bounds = _field_bounds(sys, n))
+    states = Dict{Symbol, Any}(n => _field_var(n, Real, ivs; storage = _field_storage(sys, n), bounds = _field_bounds(sys, n),
+                                               level = _field_level(sys, n))
                                for n in [names; auxnames])
     cv = _field_conv(ivs, states, T, known)
     eqs = Equation[]
@@ -963,8 +975,9 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
                            k = f.key
                            if startswith(k, "mask:")
                                (CorePotts.Part((:site, Symbol(k[6:end], :__mask))), nothing)
-                           elseif startswith(k, "face:") || startswith(k, "maskvalue:")
-                               (CorePotts.BindingScratch(), nothing)     # a value field: the binding's own
+                           elseif startswith(k, "face:") || startswith(k, "maskvalue:") || startswith(k, "domain:") || startswith(k, "owner:")
+                               # a value field, or the domain on a coarse level: the binding's own
+                               (CorePotts.BindingScratch(), nothing)
                            elseif Symbol(k) in names
                                (CorePotts.Part((:site, Symbol(k))), CorePotts.Part((:site, Symbol(k, :__next))))
                            else
@@ -1047,7 +1060,8 @@ function _aux_group(c::CompiledPottsSystem, T::Type, dt)
     group = LatticeFields.Problems.FieldGroup(gspec; alg = solver, program = LatticeFields.Compile.semantic(fused))
     prog = group.program
     mplan, splan = LatticeFields.Problems.group_plans(group, solver, T, KernelAbstractions.CPU(), opts)
-    arrays = Tuple((CorePotts.Part((:site, Symbol(f.key))), nothing) for f in prog.fields)
+    arrays = Tuple((startswith(f.key, "domain:") || startswith(f.key, "owner:") ? CorePotts.BindingScratch() : CorePotts.Part((:site, Symbol(f.key))), nothing)
+                   for f in prog.fields)
     fp = LatticeFields.Compile.fingerprint_text(fused; T)
     return _FieldGroup(Symbol[], group, solver, prog, mplan, splan, arrays, lg.tables, lg.params, _AuxSteps(), fp, opts)
 end

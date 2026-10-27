@@ -523,6 +523,11 @@ function _write(lhs, v, env)
         a = :(st.cell.$(xi.name))
         return :(($j) != 0 && (@inbounds $a[$j] = convert(eltype($a), $v)))
     elseif xi.role in (:site, :field)
+        # a `Coarse(k)` field's node holds a block of sites (F3-17): one copy cannot set it
+        haskey(xi.options, :lattice_level) &&
+            error("@on_copy cannot assign `$(xi.name)`, which has `lattice_level = $(xi.options.lattice_level)`: a node of " *
+                  "its grid holds a block of sites, so one site's copy has no node of its own; write the change as a " *
+                  "source in its equation (a term of `kind` or another site read, folded over the block)")
         a = :(st.site.$(xi.name))
         return :(@inbounds $a[$j] = convert(eltype($a), $v))
     end

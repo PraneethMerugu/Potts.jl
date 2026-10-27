@@ -833,6 +833,7 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     end
     lat = core_lattice(_p(sys, :lattice))
     site = Pair{Symbol, Any}[]
+    shapes = Pair{Symbol, Any}[]          # the site arrays on a coarse grid (F3-17): their shapes
     cell = Pair{Symbol, Any}[]
     model = Pair{Symbol, Any}[]
     for x in _p(sys, :variables)
@@ -844,9 +845,15 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
         if i.role === :site || i.role === :field
             S = get(i.options, :lattice_storage, T)                  # a field's own storage (Float16)
             _check_field_bounds(i, v)
-            a = v isa AbstractArray ? S.(v) : fill(S(v), _p(sys, :lattice).dims)
+            # (a `Coarse(k)` field's array is its grid's, F3-17)
+            sd = _site_dims(i, _p(sys, :lattice).dims)
+            v isa AbstractArray && sd != _p(sys, :lattice).dims && size(v) != sd &&
+                throw(ArgumentError(string("the operating point gives `", i.name, "` an array of size ", size(v), "; `", i.name,
+                    "` has `lattice_level = ", i.options.lattice_level, "`, so its array is its grid's, of size ", sd)))
+            a = v isa AbstractArray ? S.(v) : fill(S(v), sd)
             push!(site, i.name => a)
             i.name in c.scratch && push!(site, Symbol(i.name, :__next) => copy(a))
+            sd == _p(sys, :lattice).dims || append!(shapes, [i.name => sd, Symbol(i.name, :__next) => sd, Symbol(i.name, :__mask) => sd])
         elseif i.role === :cell
             v === nothing && throw(ArgumentError("cell variable `$(i.name)` has no initial value; give it in the operating point"))
             if get(i.options, :reference, false) === true
@@ -867,7 +874,7 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
         for (name, _, E) in _field_inputs(c, T)
             push!(site, name => zeros(E === Bool ? UInt8 : E, dims))
         end
-        foreach(n -> push!(site, Symbol(n, :__mask) => zeros(UInt8, dims)), _masked_fields(sys))
+        foreach(n -> push!(site, Symbol(n, :__mask) => zeros(UInt8, _site_dims(_field_info(sys, n), dims))), _masked_fields(sys))
     end
     # `@initialization_equations` and operating-point values of algebraic variables (D-170)
     _initialize!(c, opd, σ, kinds, ncell, cell, model, pvals)
@@ -936,7 +943,8 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     sitent, modelnt = NamedTuple(site), NamedTuple(model)
     history = (; (n => CorePotts.history_buffer(haskey(sitent, n) ? sitent[n] : modelnt[n], d)
                   for (n, d) in sort!(collect(_history_depths(sys)); by = first))...)
-    st = CorePotts.initial_state(σ, kinds; cell = NamedTuple(cell), site = sitent, model = modelnt, history)
+    st = CorePotts.initial_state(σ, kinds; cell = NamedTuple(cell), site = sitent, model = modelnt, history,
+        shapes = NamedTuple(shapes))
     cap = capacity === nothing ? (_numbers_cells(c) ? 2ncell + 64 : ncell) : capacity
     st = cap > ncell ? CorePotts.with_capacity(st, cap) : st
     return _convert_layout(st, c)

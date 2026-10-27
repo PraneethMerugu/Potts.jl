@@ -244,8 +244,15 @@ _is_quantity_call(i) = i !== nothing && (i.role in SCOPES || i.role === :builtin
 outside `SCOPES` names a relationship: `rest(bond)` is an edge variable of `@relationship
 bond` (option `relationship = :bond`; `mtkcompile` checks the name). `rest(edge)` belongs
 to the model's only relationship.
+
+A field takes `[lattice_level = Coarse(k)]` (F3-17; LatticePDE's [`Coarse`](@ref)): it lives on
+the lattice coarsened by `k` per axis, its array has one value per node (a block of `k` sites
+per axis), and its equation runs there. Its fine reads (`kind`, other site reads) are folded
+over each block. A CPM read of the field at a site reads the node whose block holds the site,
+so `integral(c) / volume` is the cell's average over its sites. An `@on_copy` write to it and
+`clear_on_ownership_change` are refused (a node holds sites of several owners).
 """
-const _VARIABLE_OPTIONS = (:clear_on_ownership_change, :vector, :index, :relationship, :reference, :lattice_storage, :bounds)
+const _VARIABLE_OPTIONS = (:clear_on_ownership_change, :vector, :index, :relationship, :reference, :lattice_storage, :bounds, :lattice_level)
 
 # `default` when no value was written (`x(cell)`, D-170): the variable starts at 0.0 as
 # before, and is marked `PottsNoValue`, so that initialization solves for it when its
@@ -283,7 +290,7 @@ function variable(x, scope::Symbol; default = _NO_VALUE, unit = nothing, guess =
     for (k, v) in pairs(options)
         k in _VARIABLE_OPTIONS || throw(ArgumentError("variable `$name`: unknown option `$k` " *
                                                       "(options: `unit`, `guess`, `clear_on_ownership_change`; a field also " *
-                                                      "takes `lattice_storage` and `bounds`)"))
+                                                      "takes `lattice_storage`, `bounds` and `lattice_level`)"))
         k === :clear_on_ownership_change && v === true && !(scope in (:site, :field)) &&
             throw(ArgumentError("variable `$name`: `clear_on_ownership_change` applies to site variables"))
         # `[lattice_storage = Float16 | Float32 | Float64]` (P5 role model, FE-17): a field's own
@@ -302,8 +309,24 @@ function variable(x, scope::Symbol; default = _NO_VALUE, unit = nothing, guess =
                 throw(ArgumentError("variable `$name`: `bounds` is a pair `(lo, hi)` of numbers with lo ≤ hi " *
                                     "(`bounds = (0, 1)`); got $(repr(v))"))
         end
+        # `[lattice_level = Coarse(k)]` on a field (F3-17): the grid coarsened by `k` per axis
+        # (LatticePDE's metadata); its CPM reads read the node whose block holds the site
+        if k === :lattice_level
+            scope === :field || throw(ArgumentError("variable `$name`: `lattice_level` applies to fields (`$name(field) = 0.0, " *
+                                                    "[lattice_level = Coarse(4)]`: the field on the grid coarsened by 4)"))
+            v isa Coarse || throw(ArgumentError(string("variable `", name, "`: `lattice_level` is a grid, `Coarse(k)` (k a power ",
+                "of two: the lattice coarsened by k sites per axis); got ", repr(v),
+                v isa Integer && v >= 1 && ispow2(v) ? "; write `lattice_level = Coarse($v)`" : "")))
+            get(options, :clear_on_ownership_change, false) === true && v.k > 1 &&
+                throw(ArgumentError("variable `$name`: `clear_on_ownership_change` with `lattice_level = $v`: a node of the " *
+                                    "coarse grid holds a block of sites of several owners, so one site's change cannot clear " *
+                                    "it; drop one of the two options"))
+        end
     end
     haskey(options, :bounds) && (options = (; options..., bounds = (Float64(options.bounds[1]), Float64(options.bounds[2]))))
+    # `Coarse(1)` is the lattice itself: no level
+    haskey(options, :lattice_level) && options.lattice_level.k == 1 &&
+        (options = NamedTuple(k => v for (k, v) in pairs(options) if k !== :lattice_level))
     v = _with_unit(_tag(x, Entity(scope, name, default, options)), unit)
     written || (v = _with_metadata(v, PottsNoValue, true))
     # `[guess = g]` (MTK's variable metadata): seeds the variable's initialization solve

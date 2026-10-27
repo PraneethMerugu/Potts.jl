@@ -36,13 +36,15 @@ cell_generations(st::CPMState) = st.cell.generation
 volumes(st::CPMState) = st.cell.volume
 
 """
-    initial_state(σ, kinds; cell = (;), site = (;), model = (;))
+    initial_state(σ, kinds; cell = (;), site = (;), model = (;), shapes = (;))
 
 Build a host `CPMState`: `σ` labels sites with ids `1:length(kinds)` (`0` = medium) and
-`kinds[c] ≥ 1` is the kind of cell `c`. Volumes are computed from `σ`.
+`kinds[c] ≥ 1` is the kind of cell `c`. Volumes are computed from `σ`. Every site quantity
+has the lattice's size, except one named in `shapes`, which has that size (a field on a
+coarse grid, F3-17).
 """
 function initial_state(σ::AbstractArray{<:Integer}, kinds::AbstractVector{<:Integer};
-        cell = (;), site = (;), model = (;), history = (;))
+        cell = (;), site = (;), model = (;), history = (;), shapes = (;))
     n = length(kinds)
     volume = zeros(Int32, n)
     for s in σ
@@ -52,8 +54,10 @@ function initial_state(σ::AbstractArray{<:Integer}, kinds::AbstractVector{<:Int
     all(>=(1), kinds) || throw(ArgumentError("cell kinds must be ≥ 1 (0 is the medium)"))
     base = (; kind = Vector{Int32}(kinds), volume, generation = ones(Int32, n))
     for (name, a) in pairs(site)
-        size(a) == size(σ) ||
-            throw(ArgumentError("site quantity `$name` has size $(size(a)), lattice $(size(σ))"))
+        want = haskey(shapes, name) ? Tuple(shapes[name]) : size(σ)
+        size(a) == want && continue
+        throw(ArgumentError(want == size(σ) ? "site quantity `$name` has size $(size(a)), lattice $(size(σ))" :
+                            "site quantity `$name` has size $(size(a)), its grid $want (lattice $(size(σ)))"))
     end
     for (name, a) in pairs(cell)
         size(a, ndims(a)) == n ||

@@ -657,6 +657,26 @@ if PottsDevices.device_name() == "rocm"
     end
 end
 
+# F3-17: a `Coarse(4)` field of A on ROCm (Float32): the field phase on the coarse arrays, the
+# CPM's site reads through the node of each block (`integral(c) / volume`), against the host.
+# Base 392dd404: `lattice_level` is not an option of `variable` (FcMix does not build).
+if PottsDevices.device_name() == "rocm"
+    @testset "F3-17: a Coarse(4) field of A on ROCm equals the host (Float32)" begin
+        backend = PottsDevices.device_backend()
+        for fs in (ExplicitEuler(), BackwardEuler())
+            mk() = PottsProblem(FcMix(; name = :f), fc_op(), (0, 3); T = Float32, seed = 2, field_solver = fs)
+            dev = init(mk(), CheckerboardCPM(); backend)
+            host = init(mk(), CheckerboardCPM())
+            foreach(_ -> (step!(dev); step!(host)), 1:3)
+            PottsDevices.device_sync()
+            cd, ch = Array(current_state(dev).site.c), current_state(host).site.c
+            @test size(cd) == (4, 3) && maximum(abs, cd .- ch) <= 1e-5 * maximum(abs, ch)
+            ad, ah = Array(current_state(dev).cell.avg), current_state(host).cell.avg
+            @test maximum(abs, ad .- ah) <= 1e-5 * maximum(abs, ah)
+        end
+    end
+end
+
 # ROCm, last: no `double` in any kernel this suite compiled (full scan of the kernel cache)
 if PottsDevices.device_name() == "rocm"
     include(joinpath(@__DIR__, "shared", "device_ir_scan.jl"))

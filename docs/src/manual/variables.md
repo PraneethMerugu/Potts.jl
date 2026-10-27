@@ -41,6 +41,23 @@ Options go in brackets after the default:
   steps `c` exactly as a Float64 problem does, while the CPM stays in Float32. A Float16 field
   takes every field solver; an implicit solver solves it in `T` and rounds each update to
   Float16.
+- `[lattice_level = Coarse(k)]` (fields): the field lives on the lattice coarsened by `k` (a
+  power of two) on every axis. Each node of the coarse grid is a block of `k` sites per axis,
+  and the field's array has one value per node. Every axis of the lattice must have a size
+  that `k` divides. The field's equation, its `@bcs` and its solver run on the coarse grid,
+  with the spacing `k h`. A CPM read of the field at a site reads the node of the site's
+  block, so `integral(c) / volume` is the cell's average over its sites. The fine reads in
+  the field's terms are folded over each node's block:
+  - `kind` (and any integer input) is read at the block's owner, the kind on most of the
+    block's sites. A tie goes to the smallest kind number that is not the medium; the medium
+    is the owner only when no cell kind ties with it. A term that reads no other fine value
+    is evaluated at the owner, so the node takes the full rate of its owner:
+    `(kind == P) + 0.5 * (kind == Q)` and `R[kind]` give the same rate, and exactly one of
+    `kind == medium` and `kind != medium` holds.
+  - A term that reads a fine field nonlinearly (`max(g - gT, 0)`, `g / (K + g)`,
+    `R[kind] * g` for a field `g` of the lattice) is replaced by its mean over the block, with
+    each fine value at its own site. The coarse field then receives the fine integral of the
+    term.
 - `[guess = g]` (cell and model variables): the starting point when
   `@initialization_equations` solve for the variable, see below. A variable with a guess and
   no value is written `r(cell), [guess = -1.0]`.

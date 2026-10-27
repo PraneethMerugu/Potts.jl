@@ -234,6 +234,29 @@ function _literal(v, env)
     error("cannot lower constant $v")
 end
 
+# The read of site variable `i` at site `j`. A `Coarse(k)` field (F3-17) holds one value per node
+# of its grid: the site reads the node whose block holds it
+_site_read(i::Entity, j) = (L = get(i.options, :lattice_level, nothing);
+                            L === nothing ? :(@inbounds st.site.$(i.name)[$j]) :
+                            :(@inbounds st.site.$(i.name)[Potts._coarse_site($j, size(st.σ), $(trailing_zeros(L.k)))]))
+"""
+    _coarse_site(j, dims, s) -> Int
+
+The linear index, on the grid coarsened by `2^s` per axis, of the node whose block holds the
+site of linear index `j` of a lattice of size `dims` (an axis of size 1 is not coarsened).
+"""
+@inline function _coarse_site(j::Integer, dims::NTuple{N, Int}, s::Int) where {N}
+    r, out, stride = Int(j) - 1, 0, 1
+    for d in 1:N
+        n = dims[d]
+        c, r = r % n, r ÷ n
+        n == 1 && continue
+        out += (c >> s) * stride
+        stride *= n >> s
+    end
+    return out + 1
+end
+
 function _lower_named(x, i::Entity, env::LowerEnv)
     r = i.role
     r === :param && return :(p.$(i.name))
@@ -249,7 +272,7 @@ function _lower_named(x, i::Entity, env::LowerEnv)
     end
     if r === :site || r === :field
         haskey(env.bind, :__site) || error("site variable `$(i.name)` needs a site: write `$(i.name)[target]` or `$(i.name)[source]`")
-        return :(@inbounds st.site.$(i.name)[$(env.bind[:__site])])
+        return _site_read(i, env.bind[:__site])
     elseif r === :cell
         haskey(env.bind, :__cell) || error("cell variable `$(i.name)` needs a cell: write `$(i.name)[new]` or `$(i.name)[owner[target]]`")
         return :(Potts._cellval(st.cell.$(i.name), $(env.bind[:__cell])))
@@ -728,7 +751,7 @@ function _lower_at(args, env)
     s = _sort(args[2])
     if i.role === :site || i.role === :field
         s === :cell && error("site variable `$(i.name)` indexed by a cell")
-        return :(@inbounds st.site.$(i.name)[$j])
+        return _site_read(i, j)
     elseif i.role === :cell
         s === :site && error("cell variable `$(i.name)` indexed by a site; use `$(i.name)[owner[s]]`")
         return :(Potts._cellval(st.cell.$(i.name), $j))

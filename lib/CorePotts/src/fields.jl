@@ -200,9 +200,15 @@ _stateless(ph::FieldPhase) = ph.aux_only || isempty(ph.group.spec.state)
 function _field_bind(ph::FieldPhase, st, p, backend; tables = nothing)
     s = ph.program
     arrs = _arrays(ph.arrays, st)
-    n0 = LatticeFields.IR.nsites(s, 0)
-    bufs = [a[1] === nothing ? Any[_scratch(backend, LatticeFields.IR.juliatype(s.fields[i].storage), n0)] :
+    # (a scratch field on its own level: a coarse field's face or masked value, F3-17)
+    nf(i) = LatticeFields.IR.nsites(s, s.fields[i].levels[1])
+    bufs = [a[1] === nothing ? Any[_scratch(backend, LatticeFields.IR.juliatype(s.fields[i].storage), nf(i))] :
             a[2] === nothing ? Any[vec(a[1])] : Any[vec(a[1]), vec(a[2])] for (i, a) in enumerate(arrs)]
+    # every bound array holds its field's sites (the kernels index it unchecked)
+    for (i, b) in enumerate(bufs), x in b
+        length(x) == nf(i) || throw(ArgumentError(string("field array `", s.fields[i].key, "` has ", length(x),
+            " values; its grid has ", nf(i), " sites")))
+    end
     if tables === nothing
         tables = Any[nothing for _ in s.tables]
         for (i, name) in ph.tables
