@@ -418,8 +418,11 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
             kind == :rate && rule!(pb, DomainEdgeRule(fids[op][1][max(comp, 1)], :mirror))
         end
     end
+    # the rate fields (each has a face rule on every non-periodic face): a face coefficient reads
+    # them at the ghost site with the ghost value (F3-ghost)
+    ghosted = Int32[fids[op][1][max(comp, 1)] for (_, (kind, op, comp, _)) in eqs if kind == :rate]
     env(mapmode, kb) = Env(kb, fids, params, tables, spacing, ivs[1], ivs[2:end], lo, h, mapmode,
-                           ntuple(_ -> 0, N), RESOLVE, leaf, hex, dom)
+                           ntuple(_ -> 0, N), RESOLVE, leaf, hex, dom, ghosted)
     # face rules: α c + β ∂c/∂n = g in lattice units (outward normal; ∂/∂n = side · h ∂/∂x)
     for (k, (kind, op, comp, _)) in eqs
         kind == :rate || continue

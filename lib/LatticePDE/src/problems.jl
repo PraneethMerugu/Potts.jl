@@ -52,8 +52,10 @@ struct CoefBound
     text::String                            # the coefficient, for messages
     box::Vector{Tuple{String, Tuple{Float64, Float64}}}   # the intervals it reads (F3-13: a coordinate, a
                                             # declared field or input interval), as `(name, (lo, hi))`; empty: exact
+    ghosts::Vector{String}                  # (F3-ghost) the ghost values it is also taken at, in words
 end
 CoefBound(fs, reads, groups, text) = CoefBound(fs, reads, groups, text, Tuple{String, Tuple{Float64, Float64}}[])
+CoefBound(fs, reads, groups, text, box) = CoefBound(fs, reads, groups, text, box, String[])
 # An interval coefficient (F3-13, FE-11; F3 design §3.10): `iv(args)` encloses its values over
 # the intervals it reads (`_interval`, the evaluator of the implicit operator's bounds), so a
 # value is the pair of its ends
@@ -808,7 +810,7 @@ function bound_parts(b::StabilityBound, p)
             (any(neg, r.diffusion) || any(f -> neg(f[1]) || neg(f[2]), r.sitediffusion)) && push!(negative, b.keys[i])
             for f in Iterators.flatten((r.diffusion, first.(r.sitediffusion), last.(r.sitediffusion)))
                 isempty(f.box) || neg(f) || !(_lo(f, p) < 0) || any(x -> x[1] == b.keys[i] && x[2] == f.text, unsure) ||
-                    push!(unsure, (b.keys[i], f.text, _Unsure(f.box, _lo(f, p))))
+                    push!(unsure, (b.keys[i], f.text, _Unsure(f.box, _lo(f, p), f.ghosts)))
             end
             # a site-varying multiplier m and a face coefficient K are bounded independently,
             # max|m| · max K: a face mixes two sites' indices (F2 record (g))
@@ -871,6 +873,7 @@ end
 struct _Unsure
     box::Vector{Tuple{String, Tuple{Float64, Float64}}}
     lo::Float64
+    ghosts::Vector{String}                  # (F3-ghost) the face ghost values the bound also takes
 end
 # why an interval coefficient has no finite bound (`_why`): its enclosure over `box` is not finite
 struct _IntervalWhy
@@ -897,6 +900,8 @@ function _why_text(text, w)
     w === :tables && return "`$text` reads tables that were not given"
     w isa _IntervalWhy && return string("`$text` has no finite bound over ", _box_text(w.box))
     w isa _Unsure && return string("the diffusion coefficient `$text` may be negative over ", _box_text(w.box),
+        isempty(w.ghosts) ? "" : string(" and at the ghost values of the faces with a value or a flux (",
+            join(w.ghosts, ", "), ", where a face coefficient reads the field)"),
         " (its interval bound reaches ", round(w.lo; sigdigits = 4), "), and the bound needs it ≥ 0")
     combos, more = w
     all(isempty, combos) && return "`$text` is not finite at these parameters"
@@ -1052,6 +1057,13 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
     box = _bound_box(cf, sys; ghost = true)      # (a velocity, a cross diffusion)
     cbox = _bound_box(cf, sys; ghost = false)    # (a value at the site: a multiplier, a local coefficient)
     kbox = _bound_box(cf, sys; ghost = true, axes = _ghost_axes(cf))   # (a face coefficient of a row's own diffusion)
+    # a face coefficient at a face with a value or a flux reads the rate fields at their ghost
+    # values (F3-ghost): its bound is over the coefficient at the site and at each face's ghost
+    frules = Dict{Tuple{String, Int, Int}, FaceRule}()
+    for r in cf.program.rules
+        r isa FaceRule && (frules[(cf.program.fields[r.field].key, Int(r.axis), Int(r.side))] = r)
+    end
+    facecoef(K) = _face_coef_bound(K, dvs, frules, params, tabs, ivars, kbox, cf.program.periodic)
     # the aux definitions `K ~ rhs` (F3-13): a term that reads an aux field is bounded through its
     # definition, as the aux kernel evaluates it inside the substep from the state before it
     auxdefs = Dict{Any, Any}()
@@ -1076,7 +1088,7 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
                 parts = _site_parts(term)
                 parts === nothing && return false
                 cm = _coef_bound(parts[1], params, tabs, ivars; box = cbox)
-                cK = _coef_bound(parts[2], params, tabs, ivars; box = kbox)
+                cK = facecoef(parts[2])
                 (cm === nothing || cK === nothing) && return false
                 foreach(r -> push!(r.sitediffusion, (cm, cK)), alts)
             elseif class == :LinearLocal || class == :CrossLinear
@@ -1168,7 +1180,7 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
                 # independently (the face mean mixes two sites), as a site diffusion
                 K = f === Δ ? 1 : f isa DivKGrad ? arguments(opc)[1] : (r = _raw_flux(opc); r[1] === nothing ? 1 : r[1])
                 cm = _coef_bound(m, params, tabs, ivars; box = cbox)
-                cK = _coef_bound(K, params, tabs, ivars; box = kbox)
+                cK = facecoef(K)
                 (cm === nothing || cK === nothing) && return false
                 foreach(r -> push!(r.sitediffusion, (cm, cK)), alts)
                 return true
@@ -1218,6 +1230,43 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
         sort!(unique!(unbounded)), unique!(terms), unique!(expanded), _row_inputs(rows), sort!(unique!(crossunseen)),
         collect(Int, cf.program.hierarchy[1].grid.dims), anchors, declared, _used_keys(rows, declared),
         _face_values(cf, sys, declared))
+end
+
+# The bound of a face coefficient `K` (F3-ghost): at a face with a value or a flux the face
+# mean reads each rate field at its ghost value, `2g/α − c` (Dirichlet), `c + g/β` (a flux) or
+# `(g − (α/2 − β) c)/(α/2 + β)` (Robin), so the bound is over `K` at the site and `K` with those
+# ghosts, each over the box (one `CoefBound` with both sets of values: its magnitude is the
+# larger, its sign the lower). A zero-flux face's ghost is the site value; a face value that
+# reads the time, the coordinates or an input (a value field) has no static ghost: no bound.
+function _face_coef_bound(K, dvs, frules, params, tabs, ivars, box, periodic)
+    c0 = _coef_bound(K, params, tabs, ivars; box)
+    c0 === nothing && return nothing
+    reads = [kk for (kk, v) in dvs if _reads(K, (_ref(v),))]
+    isempty(reads) && return c0
+    sym(c::Coef) = c.param == 0 ? c.value : c.value * params[c.param]
+    out = c0
+    for a in eachindex(periodic), sd in (-1, 1)
+        periodic[a] && continue
+        reps = Dict{Any, Any}()
+        gtext = String[]
+        for kk in reads
+            r = get(frules, (kk, a, sd), nothing)
+            r === nothing && continue
+            (r.alpha.value == 0 && r.g.value == 0 && r.gfield == 0) && continue
+            r.gfield == 0 || return nothing
+            c = dvs[kk]
+            α, β, g = sym(r.alpha), sym(r.beta), sym(r.g)
+            reps[c] = r.beta.value == 0 ? 2g / α - c : r.alpha.value == 0 ? c + g / β : (g - (α / 2 - β) * c) / (α / 2 + β)
+            push!(gtext, string("`", kk, "` → `", replace(as_written(string(reps[c])), r"\(t(, \w+)*\)" => ""), "`"))
+        end
+        isempty(reps) && continue
+        cg = _coef_bound(substitute(K, reps; fold = Val(false)), params, tabs, ivars; box)
+        cg === nothing && return nothing
+        (cg.reads == out.reads && isequal(cg.groups, out.groups)) || return nothing
+        out = CoefBound([out.fs; cg.fs], out.reads, out.groups, out.text, sort!(unique!([out.box; cg.box]); by = first),
+            unique!([out.ghosts; gtext]))
+    end
+    return out
 end
 
 # The state and aux fields with declared finite `bounds = (lo, hi)`, by key (batch 5 review M2)

@@ -1225,3 +1225,8 @@ commit = "3d0ba21b"
 fixup_of = "F3-00"
 decision = "D-F3-R1"
 why = "line 559: P60bnFieldAlg (`cfield ~ 1.0`, a model whose only field is an aux field) flips from 'rejected, algebraic, cfield' to 'builds, cfield = 1.0 at every site after one MCS' (its field phase evaluates the aux field once per MCS); the other six rejections of the testset are unchanged"
+
+# F3-ghost (user OK 2026-10-26: "fix it, and re-pin as needed"): a face coefficient that reads a
+# rate field takes the field's ghost value at a face with a value or a flux. No entry: no frozen
+# pin, sha or record moved (frozen 369/369, guard 513/513, PottsModels shards at the OpenVT
+# baseline). No PottsModels model uses `DivKGrad` or a raw flux.

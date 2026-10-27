@@ -307,3 +307,65 @@ end
         ExplicitEuler(; dt = 0.1, substeps = 1); saveat = 0.1)
     @test s.retcode == RC.Unstable
 end
+
+# F3-ghost (user OK 2026-10-26): at a Dirichlet face, a face coefficient that reads the field
+# takes the field's ghost value `2g − c`, the value the face rule gives the gradient, not the
+# boundary site's value. The porous-medium equation `∂c/∂t = ∇·(c³ ∇c)` from `c = 0` with
+# `c = 1` on the face `x = 0`: with the boundary site's value the face coefficient is
+# `(0³ + 0³)/2 = 0` and nothing enters (base a40ff91b, ~/lpwork/b5r1-nc-ghost.log: c stays 0);
+# with the ghost value the front enters and spreads as a fine 1D reference with the exact face
+# value `K(1)` does. The automatic count bounds the coefficient over the ghost values too.
+@testset "F3-ghost: a Dirichlet face coefficient reads the ghost value" begin
+    RC = SciMLBase.ReturnCode
+    T = 0.05
+    pm = PDESystem([D(fce) ~ DivKGrad(:arithmetic)(fce^3, fce)], [fc(0, x, y) ~ 0.0, fc(t, 0, y) ~ 1.0],
+        fdom(T), [t, x, y], [fce], Any[]; name = :pm)
+    n = 32
+    po = fown(pm, n)
+    # the count covers the ghost values (c ∈ (0, 1): ghosts 2 − c ∈ (1, 2), K up to 8): from
+    # rough data inside the bounds the automatic count's run stays inside them (each explicit
+    # update a convex combination; the run's check would end it `Unstable` otherwise). Also
+    # `exp(3c)` with `c = 0` on the face (ghost −c ∈ (−1, 0)). Review r2 N3: the frozen-form
+    # claim, not the linearized radius, which `K′(c)∇c` terms of rough states exceed (0.80 for
+    # exp(3c)). The mutation that keeps the old bound gives 46 substeps where 114 are needed and
+    # ends `Unstable` (~/lpwork/b5r1-mut-ghostbound.log).
+    rough = vec([isodd(i + j) ? 1.0 : mod(7919i + 104729j, 101) / 100 for i in 1:n, j in 1:n])
+    ex = PDESystem([D(fce) ~ DivKGrad(:arithmetic)(exp(3 * fce), fce)], [fc(0, x, y) ~ 0.5, fc(t, 0, y) ~ 0.0],
+        fdom(T), [t, x, y], [fce], Any[]; name = :ex)
+    for (name, pr) in (("c³, c = 1 on the face", po), ("exp(3c), c = 0 on the face", fown(ex, n)))
+        sr = @test_logs solve(remake(pr; u0 = rough), ExplicitEuler(; dt = 0.01); saveat = T)
+        @test sr.retcode == RC.Success && sr.t[end] == T
+        @test all(u -> -1e-12 <= minimum(u) && maximum(u) <= 1 + 1e-12, sr.u)
+    end
+    # a coefficient that goes negative at the ghost (`c(1 − c) + 0.01`, ghost 2 − c): no bound,
+    # and the reason names the ghost values (review r2 N4), not only c's interval
+    neg = PDESystem([D(fce) ~ DivKGrad(:arithmetic)(fce * (1 - fce) + 0.01, fce)], [fc(0, x, y) ~ 0.5, fc(t, 0, y) ~ 1.0],
+        fdom(T), [t, x, y], [fce], Any[]; name = :neg)
+    mneg = try
+        solve(fown(neg, 16), ExplicitEuler(; dt = 0.01)); ""
+    catch e
+        sprint(showerror, e)
+    end
+    @info "F3-ghost N4" mneg
+    @test occursin("may be negative", mneg) && occursin("ghost values of the faces", mneg) && occursin("`fc` → `", mneg)
+    s = solve(po, ExplicitEuler(; dt = 0.01); saveat = T)
+    @test s.retcode == RC.Success
+    prof = vec(sum(reshape(s.u[end], n, n); dims = 2)) ./ n                 # the x profile
+    # fine 1D reference: finite volumes, 12 cells per coarse cell, the face value K(1) = 1 at x = 0
+    m = 12n
+    h = 1 / m
+    u = zeros(m)
+    dt = 0.2 * h^2
+    flux = zeros(m + 1)
+    for _ in 1:round(Int, T / dt)
+        flux[1] = 2 * (1 - u[1]) / h                              # K(1) (1 − u₁)/(h/2)
+        for i in 2:m
+            flux[i] = 0.5 * (u[i - 1]^3 + u[i]^3) * (u[i - 1] - u[i]) / h
+        end
+        @. u += dt / h * (flux[1:m] - flux[2:(m + 1)])
+    end
+    ref = vec(sum(reshape(u, 12, n); dims = 1)) ./ 12
+    err = sum(abs, prof .- ref) / n
+    @info "F3-ghost" maximum(prof) err ref[1:6] prof[1:6]
+    @test maximum(prof) > 0.3 && err < 0.015                         # (measured 0.0068, max 0.977)
+end

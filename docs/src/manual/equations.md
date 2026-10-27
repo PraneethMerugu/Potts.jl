@@ -416,9 +416,14 @@ u = solve(prob, SequentialCPM()).u[end]
   These are the face equations of a LatticePDE system: `Flux(q)` on the low side of `x` is
   `Differential(x)(c(t, 0, y)) ~ -q`, on the high side `Differential(x)(c(t, L, y)) ~ q`.
   `Robin(α, 0, g)` is an error that gives `Dirichlet(g / α)`, and `Robin(0, β, g)` one that
-  gives `Flux(g / β)`. A closed axis without an entry is zero flux. An entry on a periodic
-  axis, on an axis the lattice lacks, on a hexagonal lattice, or on a field whose equation
-  has no spatial operator of it is an error naming it.
+  gives `Flux(g / β)`. A face coefficient that reads a field (`DivKGrad(:arithmetic)(c^3, c)`)
+  takes the field's ghost value at the face: with `Dirichlet(1.0)` and `c = 0` at the edge
+  site, the face mean is `(0³ + 2³)/2`, so the field enters through the face. The bound of the
+  field solvers covers these ghost values. The harmonic mean of `0³` and `2³` is 0, so
+  `DivKGrad(:harmonic)` keeps a degenerate front (`K = 0` where `c = 0`) from moving; use
+  `DivKGrad(:arithmetic)` for degenerate diffusion. A closed axis without an entry is zero flux. An
+  entry on a periodic axis, on an axis the lattice lacks, on a hexagonal lattice, or on a
+  field whose equation has no spatial operator of it is an error naming it.
 - **Site masks.** `sites(condition) => Dirichlet(v)` is a node value: every explicit
   substep writes `v` at every site where the condition holds (after the `lower` clip, so a
   mask value below `lower` wins), and a fresh initial state (the problem's `u0`, `init`,

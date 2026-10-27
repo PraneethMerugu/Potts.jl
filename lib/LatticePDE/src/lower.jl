@@ -7,8 +7,11 @@
 # Spatial operators lower to the face-flux form (§5.2): one per-axis second difference
 # `(1/h²) Σ± K_face (c± − c)`, summed over axes for `Δ` and `DivKGrad`. A raw `Dx(Dx(c))` or
 # `Dx(K * Dx(c))` lowers through the same primitive, so it gives the same IR (P3-rev item 5).
-# Neighbor values of `c` are `RESOLVE` loads (pass 2 applies the face rules); a coefficient is
-# evaluated at the neighbor with `CLAMP` loads (at a face of the box it takes the inner value).
+# Neighbor values of `c` are `RESOLVE` loads (pass 2 applies the face rules). A face
+# coefficient is evaluated at the neighbor with `RESOLVE` loads of the fields that have face
+# rules (the rate fields: at a face of the box it takes the field's ghost value, the value the
+# face rule gives the gradient; F3-ghost, user OK 2026-10-26) and `CLAMP` loads of the others
+# (an input or aux field takes the inner value).
 
 const RAW_HINT = "write a spatial operator as `Δ(c)`, `DivKGrad(:harmonic)(K, c)`, `Dx(Dx(c))` or `Dx(K * Dx(c))`"
 
@@ -35,9 +38,14 @@ struct Env{N, B, L}
     leaf::L
     hex::Bool                          # hexagonal grid (axial coordinates, 2D)
     domain::Int32                      # field id of the domain's Bool input, 0 for the box
+    ghosted::Vector{Int32}             # the fields whose face-coefficient reads take the ghost value
 end
-_shift(e::Env{N}, o) where {N} = Env(e.kb, e.fields, e.params, e.tables, e.spacing, e.t, e.xs, e.lo, e.h, e.map,
-                                     ntuple(d -> e.offset[d] + o[d], N), CLAMP, e.leaf, e.hex, e.domain)
+Env(kb, fields, params, tables, spacing, t, xs, lo, h, map, offset, policy, leaf, hex, domain) =
+    Env(kb, fields, params, tables, spacing, t, xs, lo, h, map, offset, policy, leaf, hex, domain, Int32[])
+# a coefficient at a neighbor: `face = true` (a face coefficient of a second difference) reads
+# the ghosted fields with `RESOLVE`, the others with `CLAMP`
+_shift(e::Env{N}, o; face::Bool = false) where {N} = Env(e.kb, e.fields, e.params, e.tables, e.spacing, e.t, e.xs, e.lo, e.h,
+    e.map, ntuple(d -> e.offset[d] + o[d], N), face ? RESOLVE : CLAMP, e.leaf, e.hex, e.domain, e.ghosted)
 _unit(::Env{N}, d, s) where {N} = ntuple(i -> i == d ? s : 0, N)
 _lerr(x, msg) = throw(ArgumentError(as_written("cannot lower `$x`: $msg")))   # the term as written (review R3)
 _type(e::Env, i) = e.kb.nodes[i].type
@@ -87,7 +95,7 @@ function _load(e::Env{N}, u, comp) where {N}
     f = ids[max(comp, 1)]
     any(!iszero, o) &&                       # map read: wraps on a periodic axis, else 0 outside
         return load!(e.kb, f, lane; offset = ntuple(d -> o[d] + e.offset[d], N), policy = ZERO)
-    pol = any(!iszero, e.offset) ? CLAMP : e.policy
+    pol = any(!iszero, e.offset) ? (e.policy == RESOLVE && f in e.ghosted ? RESOLVE : CLAMP) : e.policy
     return load!(e.kb, f, lane; offset = e.offset, policy = pol)
 end
 _isfield(e::Env, u) = iscall(u) && haskey(e.fields, operation(u))
@@ -110,7 +118,7 @@ function _secdiff(e::Env, d, K, c, mean)
         o = _unit(e, d, s)
         diff = _op(e, ADD, ld(o), arith!(e.kb, NEG, c0))
         K === nothing && return diff
-        Kn = _real(e, lower(K, _shift(e, o)))
+        Kn = _real(e, lower(K, _shift(e, o; face = true)))
         sum_ = _op(e, ADD, Kc, Kn)
         face = mean === :arithmetic ? _op(e, MUL, constant!(e.kb, 0.5), sum_) :
                select!(e.kb, _cmp(e, EQ, sum_, constant!(e.kb, 0.0)), constant!(e.kb, 0.0),
