@@ -1,0 +1,211 @@
+# F3-23: the models of test/cell_sums.jl, also loaded by its `-t 4` / `-t 8` processes and by
+# the device tests (test/gpu.jl).
+isdefined(Main, :JiangLike) || include(joinpath(@__DIR__, "fields_jiang_model.jl"))
+
+# Merks-like: cells secrete `c`, chemotaxis up its gradient, and the target volume moves when
+# the cell's average of `c` passes θ
+@potts_model CsThreshold begin
+    @kinds medium A
+    @parameters begin
+        θ = 1.2
+        χ = 2.0
+    end
+    @variables begin
+        c(field) = 0.0
+        cavg(cell) = 0.0
+    end
+    @lattice Lattice((200, 200); boundary = Periodic())
+    @energy cells => (volume - 25.0 - 15.0 * (cavg > θ))^2
+    @drive Chemotaxis(c; strength = χ, kinds = (A,))
+    @equations D(c) ~ 0.2 * Δ(c) + 0.05 * (kind == A) - 0.02 * c
+    @after_mcs cavg ~ integral(c) / volume
+    @sweep Metropolis(; temperature = 4.0)
+end
+# 20 × 20 cells of 5 × 5 sites, 5 sites apart; a rough initial field
+function cs_threshold_op(dims = (200, 200))
+    σ = zeros(Int32, dims)
+    k = 0
+    for j in 1:10:(dims[2] - 4), i in 1:10:(dims[1] - 4)
+        k += 1
+        σ[i:(i + 4), j:(j + 4)] .= k
+    end
+    c0 = [1.0 + sin(0.37i) * cos(0.23j) + 0.5 * sin(1.7i + 2.3j) for i in 1:dims[1], j in 1:dims[2]]
+    return [ownership => σ, kind => fill(:A, k), :c => c0]
+end
+cs_digest(x) = string(hash(Array(x)); base = 16)
+
+# [ocell, σ, cavg] of the Jiang-like model (2 MCS, CPU, Float64) and the Merks-like model
+# (8 MCS); `ctl = true` restores the float atomics (negative control). `run = 1` makes the host
+# site passes one site per item, so at these lattice sizes they are threaded (the default run
+# of 256 sites leaves fewer items than `HOST_GRAIN`, a plain loop)
+function cs_digests1(ctl::Bool; run = CorePotts._CR_RUN_HOST[])
+    CorePotts._FLOAT_ATOMICS[] = ctl
+    r0 = CorePotts._CR_RUN_HOST[]
+    CorePotts._CR_RUN_HOST[] = run
+    try
+        σ, kinds = jiang_state(JG_DIMS)
+        j = init(PottsProblem(JiangLike(; name = :j), [ownership => σ, kind => kinds], (0, 2); seed = 7,
+            field_solver = BackwardEuler()), SequentialCPM())
+        foreach(_ -> step!(j), 1:2)
+        m = solve(PottsProblem(CsThreshold(; name = :m), cs_threshold_op(), (0, 8); seed = 7), SequentialCPM();
+            save_start = false).u[end]
+        return [cs_digest(current_state(j).cell.ocell), cs_digest(m.σ), cs_digest(m.cell.cavg)]
+    finally
+        CorePotts._FLOAT_ATOMICS[] = false
+        CorePotts._CR_RUN_HOST[] = r0
+    end
+end
+# fixed point (default runs), fixed point (runs of 1: threaded), float atomics
+cs_digests() = vcat(cs_digests1(false), cs_digests1(false; run = 1), cs_digests1(true))
+
+# A site average over frozen cells (no copy, no field solve): the host and a device read the
+# same site values, so their cell averages must agree bitwise
+@potts_model CsSiteAvg begin
+    @kinds medium A[frozen]
+    @variables begin
+        h(site) = 0.0
+        havg(cell) = 0.0
+    end
+    @lattice Lattice((200, 200); boundary = Periodic())
+    @energy cells => (volume - 25.0)^2
+    @after_mcs havg ~ integral(h) / volume
+    @sweep Metropolis(; temperature = 4.0)
+end
+# values whose float sums depend on the order: magnitudes over 8 decades, both signs
+cs_site_values(dims = (200, 200)) =
+    Float32[(0.5 + sin(1.3i + 0.7j)) * 10.0f0^((3i + 5j) % 9 - 4) for i in 1:dims[1], j in 1:dims[2]]
+cs_site_op() = (op = cs_threshold_op(); [op[1], op[2], :h => cs_site_values()])
+
+# F3-23 review r1: the other sums over sites. Weighted surfaces after divisions (the device
+# lifecycle's recomputes, R-23a), cluster surfaces of a weighted relation, and the compound
+# writes of a `@convert` pass (R-23b). The reviewer's models (~/lpwork/f3rev14/w2.jl, c1.jl).
+const CS_W = Weighted(Moore(1), o -> 1 / sqrt(sum(abs2, o)))
+@potts_model CsWSurf begin
+    @kinds medium A
+    @lattice Lattice((120, 120); boundary = Periodic(), neighborhood = CS_W)
+    @relations contact = CS_W
+    @energy begin
+        cells => (volume - 40.0)^2 + 0.2 * (surface - 70.0)^2
+        contacts => 3.0 * weight * (kind != kind′)
+    end
+    @divide cells(A) when = volume >= 34
+    @sweep Metropolis(; temperature = 6.0)
+end
+function cs_wsurf_op(dims = (120, 120))
+    σ = zeros(Int32, dims)
+    k = 0
+    for j in 1:12:(dims[2] - 5), i in 1:12:(dims[1] - 5)
+        k += 1
+        σ[i:(i + 4), j:(j + 4)] .= k
+    end
+    return [ownership => σ, kind => fill(:A, k)]
+end
+
+# compartments over a weighted neighborhood: a cluster surface energy, clusters that grow and divide
+@potts_model CsWComp begin
+    @kinds medium cytoplasm nucleus
+    @parameters begin
+        J[kind, kind] = [0 16 16; 16 14 30; 16 30 14]
+        V₀[kind] = [0.0, 60.0, 20.0]
+    end
+    @lattice Lattice((60, 60); boundary = Periodic(), neighborhood = CS_W)
+    @energy begin
+        cells => (volume - V₀[kind])^2
+        contacts => ifelse(cluster[owner] == cluster[owner′], 2.0, J[kind, kind′])
+        clusters(cytoplasm) => 0.1 * (cluster_surface - 30.0)^2
+    end
+    @divide clusters(cytoplasm) when = cluster_volume >= 60, along = (1.0, 0.0)
+    @sweep Metropolis(; temperature = 10.0)
+end
+function cs_wcomp_op()
+    σ = zeros(Int32, 60, 60)
+    n = 0
+    for i in 2:15:47, j in 2:15:47
+        n += 1
+        σ[i:(i + 7), j:(j + 7)] .= n
+    end
+    for c in 1:n
+        lo = minimum(findall(==(c), σ))
+        σ[(lo[1] + 2):(lo[1] + 5), (lo[2] + 2):(lo[2] + 5)] .= n + c
+    end
+    return [ownership => σ, kind => vcat(fill(:cytoplasm, n), fill(:nucleus, n)), cluster => vcat(1:n, 1:n)]
+end
+
+# `@convert` compound writes with non-dyadic values over 6 decades, into a model and a cell
+# variable that the energy reads
+@potts_model CsConv begin
+    @kinds medium cytoplasm lamellipodium
+    @parameters J[kind, kind] = [0 16 16; 16 2 0; 16 0 2]
+    @variables begin
+        sub(site) = 0.0
+        V_target(cell) = ifelse(kind == cytoplasm, 400.0, 0.0)
+        tot(model) = 0.0
+    end
+    @lattice Lattice((64, 64); boundary = Closed(), neighborhood = Moore(1))
+    @energy begin
+        cells(cytoplasm, lamellipodium) => (volume - V_target)^2
+        contacts => J[kind, kind′]
+    end
+    @convert protrusion clusters(cytoplasm) begin
+        to = sibling(lamellipodium)
+        at = sub > 0.0
+        p = ifelse(mcs == 3, 1.0, 0.0)
+        V_target[to] += 0.37 * sub
+        tot += sub
+    end
+    @sweep Metropolis(; temperature = 2.0)
+end
+function cs_conv_op()
+    σ = zeros(Int32, 64, 64)
+    σ[13:52, 13:52] .= 1
+    sub = zeros(64, 64)
+    for j in 20:45, i in 20:45                      # 676 sites
+        sub[i, j] = (1.0 + sin(1.3i + 0.7j)) * 10.0^(((3i + 5j) % 7) - 3)
+    end
+    return [ownership => σ, kind => [:cytoplasm], cluster => [1], :sub => sub]
+end
+
+cs_bits(x) = string(hash(reinterpret(UInt32, Float32.(vec(Array(x))))); base = 16)
+# [w σ, w surface, comp σ, comp cluster surface, conv σ, conv tot, conv V_target]
+# in Float32 with CheckerboardCPM on `backend` (on the CPU with the device lifecycle, as a
+# device runs it; the weighted surface model staged, the compartments fused); `ctl = true` restores the float atomics (negative control). Also returns
+# the division counts (checked > 0).
+# `host = true`: on the CPU, the host lifecycle planner instead (review r2: the same unit
+# arithmetic, so the same bits)
+function cs_r1_digests(backend = CorePotts.CPU(); ctl::Bool = false, mcs = 80, host::Bool = false)
+    CorePotts._FLOAT_ATOMICS[] = ctl
+    f0 = CorePotts._FORCE_DEVICE_LIFECYCLE[]
+    CorePotts._FORCE_DEVICE_LIFECYCLE[] = !host
+    try
+        run(m, op, t) = solve(PottsProblem(m, op, (0, t); T = Float32, seed = 7, capacity = 2000), CheckerboardCPM();
+            backend, save_start = false)
+        # the weighted surface in the staged device lifecycle (one kernel per stage), the
+        # compartments in the fused one (one workgroup: `FUSE_SITES`)
+        fs = CorePotts.FUSE_SITES[]
+        CorePotts.FUSE_SITES[] = 0
+        sw = try
+            run(CsWSurf(; name = :w), cs_wsurf_op(), mcs)
+        finally
+            CorePotts.FUSE_SITES[] = fs
+        end
+        sc = run(CsWComp(; name = :c), cs_wcomp_op(), 40)
+        sv = run(CsConv(; name = :v), cs_conv_op(), 30)
+        w, c, v = sw.u[end], sc.u[end], sv.u[end]
+        d = [cs_digest(w.σ), cs_bits(w.cell.surface), cs_digest(c.σ), cs_bits(c.cell.cluster_surface), cs_digest(v.σ), cs_bits(v.model.tot), cs_bits(v.cell.V_target)]
+        return d, (sw.stats.lifecycle.divisions, sc.stats.lifecycle.divisions)
+    finally
+        CorePotts._FLOAT_ATOMICS[] = false
+        CorePotts._FORCE_DEVICE_LIFECYCLE[] = f0
+    end
+end
+# [σ, tot, V_target] of the `@convert` model alone (the five-runs test on a device)
+function cs_conv_digests(backend = CorePotts.CPU(); ctl::Bool = false)
+    CorePotts._FLOAT_ATOMICS[] = ctl
+    try
+        v = solve(PottsProblem(CsConv(; name = :v), cs_conv_op(), (0, 30); T = Float32, seed = 7, capacity = 8),
+            CheckerboardCPM(); backend, save_start = false).u[end]
+        return [cs_digest(v.σ), cs_bits(v.model.tot), cs_bits(v.cell.V_target)]
+    finally
+        CorePotts._FLOAT_ATOMICS[] = false
+    end
+end

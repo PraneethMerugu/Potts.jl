@@ -109,10 +109,12 @@ columns of integrals read only by `@observed` (not stored) are created in `T`.""
 # (observed-only integrals have no cell column, D-120)
 function _fresh_integrals(::Type{T}, u, p, ctx, t, phases, names) where {T}
     fresh(n) = hasproperty(u.cell, n) ? zero(getfield(u.cell, n)) : fill!(similar(u.cell.kind, T), zero(T))
-    cell = merge(u.cell, NamedTuple(n => fresh(n) for n in names))
+    # the cell sums' scratch (F3-23) is made fresh, so the saved state's own is left unchanged
+    sc = CorePotts.reduce_scratch(length(u.cell.kind))
+    cell = merge(u.cell, NamedTuple(n => fresh(n) for n in names), sc.cell)
     # the integrals' hoisted folds write their model slots: copies, so `u` is left unchanged
     model = merge(u.model, NamedTuple(n => copy(getfield(u.model, n)) for n in propertynames(u.model)
-                                      if startswith(String(n), "__ifold_")))
+                                      if startswith(String(n), "__ifold_")), sc.model)
     st = CorePotts.CPMState(u.σ, cell, u.site, model, u.history)
     foreach(ph -> ph(st, p, ctx, CorePotts.RNGKey(0), Int(t), CorePotts.CPU()), phases)
     return st

@@ -920,6 +920,8 @@ const GD_RECORDS = Dict{String, String}(
     "Merks2008 t_relax = 2.5|Float64|n" => "[15]",
     # F3 batch 6 review r1 (add-only, design §6): the Jiang-like model under BackwardEuler (new records)
     "GjJiangLike BackwardEuler|Float64|canonical" => "g=BackwardEuler(inner=:auto,lower=nothing,newton=nothing,solver_T=:auto,substeps=nothing);gf=BackwardEuler(inner=:auto,lower=nothing,newton=nothing,solver_T=:auto,substeps=nothing);inh=BackwardEuler(inner=:auto,lower=nothing,newton=nothing,solver_T=:auto,substeps=nothing);l=BackwardEuler(inner=:auto,lower=nothing,newton=nothing,solver_T=:auto,substeps=nothing);o=BackwardEuler(inner=:auto,lower=nothing,newton=nothing,solver_T=:auto,substeps=nothing)",
+    # F3-23 (add-only): the cell average `ocell`, exact fixed point (the same at -t 1, -t 4 and -t 8)
+    "GjJiangLike BackwardEuler|Float64|digest|cell.ocell" => "6ae57c9762020a66",
     "GjJiangLike BackwardEuler|Float64|digest|site.g" => "801010a53c7a48fe",
     "GjJiangLike BackwardEuler|Float64|digest|site.g__mask" => "e361c241f55adb43",
     "GjJiangLike BackwardEuler|Float64|digest|site.g__next" => "801010a53c7a48fe",

@@ -551,7 +551,7 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
     launches += 1
 
     _has_clusters(st) && _fix_clusters!(pstats, st)
-    _rebuild_trackers!(pstats, st, ctx, backend)
+    _rebuild_trackers!(pstats, st, ctx, backend; division = (daughter, removed))
     lc.rebuild!(st, p, ctx, backend)
     if !isempty(parents)
         v = _to_host(pstats, st.cell.volume)
@@ -584,7 +584,11 @@ lifecycle events and after host edits of `σ`.
 rebuild_trackers!(st, ctx, backend) = _rebuild_trackers!(nothing, st, ctx, backend)
 
 # `stats`: the integrator's `PottsStats` counting the host transfers (D-085), or `nothing`
-function _rebuild_trackers!(stats, st, ctx, backend)
+# `division = (daughter, removed)` (the host lifecycle round): a weighted float `surface` takes
+# the round's changes in integer weight units, added to the tracker, as the device lifecycle
+# does (`_dsurface_body!`, F3-23 r2), so the host and a device agree bitwise; otherwise (and
+# for every other tracker) the trackers are recomputed from σ
+function _rebuild_trackers!(stats, st, ctx, backend; division = nothing)
     _sync!(stats, backend)
     σ = _to_host(stats, st.σ)
     lat = _host_lattice(stats, ctx.lattice)
@@ -596,7 +600,15 @@ function _rebuild_trackers!(stats, st, ctx, backend)
     end
     _copy!(stats, st.cell.volume, volume)
     if haskey(st.cell, :surface) && haskey(ctx, :surface)
-        _copy!(stats, st.cell.surface, _recompute_surface(eltype(st.cell.surface), σ, lat, ctx.surface, cap))
+        T = eltype(st.cell.surface)
+        u = division === nothing ? nothing : _units_for(T, ctx.surface, length(σ), CPU())
+        if u === nothing
+            _copy!(stats, st.cell.surface, _recompute_surface(T, σ, lat, ctx.surface, cap))
+        else
+            surf = _to_host(stats, st.cell.surface)
+            _surface_unit_deltas!(surf, σ, lat, ctx.surface, u, division...)
+            _copy!(stats, st.cell.surface, surf)
+        end
     end
     _rebuild_euler!(stats, st, σ, lat, cap)
     _rebuild_pieces!(stats, st, σ, lat, cap)
@@ -607,6 +619,45 @@ function _rebuild_trackers!(stats, st, ctx, backend)
     _has_clusters(st) && _rebuild_cluster_trackers!(stats, st, σ, ctx)
     _rebuild_contact_counts!(stats, st, σ, lat, _contact_counts(ctx))
     return st
+end
+
+# The surface changes of a lifecycle round in integer weight units, on the host: the
+# arithmetic of the device lifecycle (`_plan_h!` zeroes a daughter's surface,
+# `_dsurface_body!` sums the changes of parents and daughters, `_dfinalize_body!` adds each
+# cell's sum once, then resets a removed cell). σ is after the partition.
+function _surface_unit_deltas!(surf::AbstractVector{T}, σ, lat, rel, u, daughter, removed) where {T}
+    cap = length(surf)
+    parent = zeros(Int32, cap)
+    for c in 1:cap
+        d = daughter[c]
+        d > 0 && (parent[d] = Int32(c); surf[d] = zero(T))
+    end
+    acc = zeros(Int64, cap)
+    for i in eachindex(σ)
+        s = σ[i]
+        s > 0 || continue
+        pc = parent[s]
+        pc > 0 || continue
+        x = coordinates(lat, i)
+        sd = Int64(0)
+        sp = Int64(0)
+        for k in 1:length(rel)
+            inside, y = shift(lat, x, rel.offsets[k])
+            inside || continue
+            n = σ[linear_index(lat, y)]
+            w = u.q[k]
+            n != s && (sd += w)
+            n == pc && (sp += w)
+            (n != pc && n != s) && (sp -= w)
+        end
+        acc[s] += sd
+        acc[pc] += sp
+    end
+    for c in 1:cap
+        acc[c] != 0 && (surf[c] += _wvalue(T, acc[c], u.e))
+        removed[c] && (surf[c] = zero(T))
+    end
+    return surf
 end
 
 """

@@ -931,10 +931,25 @@ parts for an atomic update of several groups: `rebind_launches(rt, p)` binds (an
 `install_launches!(rt, launches)` installs.
 """
 rebind!(rt::GroupRuntime, p) = install_launches!(rt, rebind_launches(rt, p))
+
+"""
+    rebind_launches(rt::GroupRuntime, p) -> launches
+
+The first part of [`rebind!`](@ref): the runtime's launches bound to the parameter values
+`p`, returned and not installed. It may throw (a parameter refused); the runtime is then
+unchanged. Install the result with [`install_launches!`](@ref).
+"""
 rebind_launches(rt::GroupRuntime, p) =
     (_bind_steps(rt.backend, rt.program, rt.step, rt.store, p, rt.swaps, rt.all_state, rt.c),
      _bind_masks(rt.backend, rt.program, rt.init, rt.store, p, rt.swaps, rt.all_state, rt.c,
          Set(fieldid(rt.program, k) for k in rt.keys)))
+"""
+    install_launches!(rt::GroupRuntime, launches)
+
+The second part of [`rebind!`](@ref): installs `launches` from [`rebind_launches`](@ref)
+and drops the algorithm's history. It does not throw, so several groups can be updated
+together after all of their `rebind_launches` calls succeeded.
+"""
 function install_launches!(rt::GroupRuntime, (steps, masks))
     rt.steps, rt.masks = steps, masks
     reset!(rt)

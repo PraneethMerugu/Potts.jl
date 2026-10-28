@@ -947,7 +947,7 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
         shapes = NamedTuple(shapes))
     cap = capacity === nothing ? (_numbers_cells(c) ? 2ncell + 64 : ncell) : capacity
     st = cap > ncell ? CorePotts.with_capacity(st, cap) : st
-    return _convert_layout(st, c)
+    return _reduce_layout(_convert_layout(st, c), c)
 end
 
 # Cell serials and spare slots: a model that divides or allocates by `@convert`
@@ -967,16 +967,38 @@ end
 _substitute_kind(v, k) = Symbolics.substitute(v, Dict(_unwrap(B.kind) => k))
 
 # The scratch of `@convert` passes (`CorePotts.convert_scratch`), made where the state lives;
-# a state that has it, or a model without `@convert`, is returned as is
+# a model without `@convert`, or a state that has all of it, is returned as is. A state saved
+# by an earlier version (with the pass flags but without the compound writes' sum columns, or
+# with fewer rows than the model's writes) gets the missing cell columns (F3-23 r2): they are
+# scratch, zero between passes, so nothing of the run is lost; the flags' counts are kept.
 function _convert_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
-    (isempty(_p(c.sys, :converts)) || haskey(st.model, CorePotts.CONVERT_FLAGS)) && return st
-    sc = CorePotts.convert_scratch(size(st.σ), length(st.cell.kind), ndims(st.σ))
+    isempty(_p(c.sys, :converts)) && return st
+    J = maximum(v -> length(v.writes), _p(c.sys, :converts))
+    sc = CorePotts.convert_scratch(size(st.σ), length(st.cell.kind), ndims(st.σ); writes = J)
     # every scratch array is constant (zeros, or `typemax` for the minima): filled where the
     # state lives, so a device state gets device scratch with no host transfer
-    dev(a) = fill!(similar(st.σ, eltype(a), size(a)), first(a))
+    dev(a) = isempty(a) ? similar(st.σ, eltype(a), size(a)) : fill!(similar(st.σ, eltype(a), size(a)), first(a))
+    if haskey(st.model, CorePotts.CONVERT_FLAGS)
+        fits(n, a) = haskey(st.cell, n) && size(getfield(st.cell, n))[1:(end - 1)] == size(a)[1:(end - 1)]
+        add = [(n, a) for (n, a) in sc.cell if !fits(n, a)]
+        isempty(add) && return st
+        return CorePotts.CPMState(st.σ, merge(st.cell, NamedTuple(n => dev(a) for (n, a) in add)), st.site, st.model,
+            st.history)
+    end
     return CorePotts.CPMState(st.σ, merge(st.cell, NamedTuple(n => dev(a) for (n, a) in sc.cell)),
         merge(st.site, NamedTuple(n => dev(a) for (n, a) in sc.site)),
         merge(st.model, NamedTuple(n => dev(a) for (n, a) in sc.model)), st.history)
+end
+
+# The scratch of the cell sums of stored integrals (`CorePotts.reduce_scratch`, F3-23: exact
+# Int64 fixed-point sums), made where the state lives; a state that has it, or a model without
+# a stored integral, is returned as is
+function _reduce_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
+    (isempty(_integrals(c.sys)) || haskey(st.model, CorePotts.REDUCE_STATUS)) && return st
+    sc = CorePotts.reduce_scratch(length(st.cell.kind))
+    dev(a) = fill!(similar(st.σ, eltype(a), size(a)), zero(eltype(a)))     # zeros, where the state lives
+    return CorePotts.CPMState(st.σ, merge(st.cell, map(dev, sc.cell)), st.site, merge(st.model, map(dev, sc.model)),
+        st.history)
 end
 
 # A `CellRef` column (R6): Int32 cell ids, 0 (none) or a labelled cell
@@ -1220,7 +1242,8 @@ CorePotts.frozen_kinds(info::PottsModelInfo) =
 # a state given as such (`remake(prob; u0 = st)`, `reinit!(integ, st)`, a saved state of another
 # problem of the model): its values, laid out for this problem's ODE scratch
 CorePotts.remake_state(info::PottsModelInfo, prob, u0::CorePotts.CPMState) =
-    _track_layout(_ode_layout(_convert_layout(_check_births(u0, info.csys), info.csys), info.csys, info.solvers), info.csys, _track_names(prob))
+    _track_layout(_ode_layout(_reduce_layout(_convert_layout(_check_births(u0, info.csys), info.csys), info.csys), info.csys,
+        info.solvers), info.csys, _track_names(prob))
 
 # `@convert` (D-233): the allocations deferred for want of a free slot and the entities
 # skipped for the Int32 moment scratch, read once per solve (as the lifecycle's deferrals)

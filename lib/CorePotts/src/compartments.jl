@@ -143,7 +143,11 @@ end
     return dH
 end
 
-"""Apply `δ = cluster_surface_change(…)` to `cell.cluster_surface` (atomic)."""
+"""
+Apply `δ = cluster_surface_change(…)` to `cell.cluster_surface` (atomic). With a weighted
+relation in a float column the adds of two copies into one cluster round in their order, which
+a threaded or device checkerboard phase does not fix (lockless cells, D-271).
+"""
 @inline function commit_cluster_surface!(cell, prop, δ)
     a, b = cluster_of(cell, prop.old), cluster_of(cell, prop.new)
     a == b && return nothing
@@ -171,8 +175,11 @@ function _rebuild_cluster_trackers!(stats, st, σ, ctx)
     cl = _to_host(stats, st.cell.cluster)
     haskey(st.cell, :cluster_volume) && _copy!(stats, st.cell.cluster_volume, recompute_cluster_volume(σ, cl))
     if haskey(st.cell, :cluster_surface) && haskey(ctx, :surface)
-        _copy!(stats, st.cell.cluster_surface, _recompute_cluster_surface(eltype(st.cell.cluster_surface),
-            σ, cl, ctx.lattice, ctx.surface))
+        # in integer weight units for a weighted float column (as the device lifecycle; F3-23 r2)
+        T = eltype(st.cell.cluster_surface)
+        σK = map(s -> s == 0 ? Int32(0) : Int32(cl[s]), σ)
+        _copy!(stats, st.cell.cluster_surface, _recompute_surface(T, σK, ctx.lattice, ctx.surface, length(cl),
+            _units_for(T, ctx.surface, length(σ), CPU())))
     end
     return nothing
 end

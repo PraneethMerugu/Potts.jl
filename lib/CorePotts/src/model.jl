@@ -369,6 +369,26 @@ function _recompute_surface(::Type{T}, σ, lat::Lattice, r::Relation, ncell::Int
     return S
 end
 
+# The same sum in integer weight units `u` (`_units_for`, F3-23 r2): each entry is the exact
+# sum of the quantized weights, converted once, as the device lifecycle's cluster-surface fold
+# writes it (so the host and a device agree bitwise)
+function _recompute_surface(::Type{T}, σ, lat::Lattice, r::Relation, ncell::Integer, u::NamedTuple) where {T}
+    A = zeros(Int64, ncell)
+    for i in 1:nsites(lat)
+        c = σ[i]
+        c == 0 && continue
+        x = coordinates(lat, i)
+        for k in 1:length(r)
+            inside, y = shift(lat, x, r.offsets[k])
+            inside || continue
+            σ[linear_index(lat, y)] != c && (A[c] += u.q[k])
+        end
+    end
+    return [_wvalue(T, a, u.e) for a in A]
+end
+_recompute_surface(::Type{T}, σ, lat::Lattice, r::Relation, ncell::Integer, ::Nothing) where {T} =
+    _recompute_surface(T, σ, lat, r, ncell)
+
 """Change of `Σ_cells E(volume, cell)` when `prop` moves one site from `old` to `new`."""
 @inline function volume_delta(volume, prop, E::F) where {F}
     a, b = prop.old, prop.new

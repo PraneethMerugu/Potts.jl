@@ -35,8 +35,9 @@
     @testset "cell reductions match the host" begin
         v = Float64[i + 2j for i in 1:24, j in 1:24]
         n = length(kinds)
+        sc = CorePotts.reduce_scratch(n)
         st = initial_state(σ, kinds; site = (; v),
-            cell = (; vsum = zeros(n), vmax = zeros(n), rim = zeros(Int32, n)))
+            cell = (; vsum = zeros(n), vmax = zeros(n), rim = zeros(Int32, n), sc.cell...), model = sc.model)
         frz(st, p, prop, ctx) = false
         ph = Phases(after_mcs = (
             CellReduce((:cell, :vsum), (st, p, ctx, key, mcs, i) -> st.site.v[i]),

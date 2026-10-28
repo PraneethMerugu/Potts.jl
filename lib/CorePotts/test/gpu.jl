@@ -69,7 +69,9 @@
         frozen = falses(32, 32); frozen[:, 1:2] .= true
         v = Float32[i + j for i in 1:32, j in 1:32]
         n = length(kz)
-        st = initial_state(σz, kz; site = (; v), cell = (; vsum = zeros(Float32, n), vmax = zeros(Float32, n)))
+        sc = CorePotts.reduce_scratch(n)
+        st = initial_state(σz, kz; site = (; v), cell = (; vsum = zeros(Float32, n), vmax = zeros(Float32, n), sc.cell...),
+            model = sc.model)
         ph = Phases(after_mcs = (
             CellReduce((:cell, :vsum), (st, p, ctx, key, mcs, i) -> st.site.v[i]),
             CellReduce((:cell, :vmax), (st, p, ctx, key, mcs, i) -> st.site.v[i]; op = max)))
@@ -744,6 +746,68 @@ end
     @test allunique([s.u[end].σ for s in runs])
     ens = solve(EnsembleProblem(prob), alg; backend, trajectories = 3)    # EnsembleThreads by default
     @test all(s -> s.u[end].cell.volume == recount(s.u[end]), ens.u) && allunique([s.u[end].σ for s in ens.u])
+end
+
+# F3-23: a float cell sum on the device equals the host bitwise (exact fixed point), in the
+# Int64 form and in the paired 32-bit form of backends without 64-bit atomics (Metal), forced
+# here. Negative control: the float atomics of the code before F3-23 differ from the host.
+@testset "F3-23: float cell sums on the device equal the host bitwise" begin
+    backend = PottsDevices.device_backend()
+    dims = (96, 80)
+    σ = cs_owners(dims)
+    n = Int(maximum(σ))
+    v = Float32.(cs_values(dims))
+    bits(x) = reinterpret(UInt32, Array(x))
+    host = cs_run!(cs_state(σ, v, n; T = Float32))
+    for paired in (false, true)
+        CorePotts._FORCE_PAIRED[] = paired
+        try
+            st = CorePotts._to_backend(backend, cs_state(σ, v, n; T = Float32))
+            @test bits(cs_run!(st; backend)) == bits(host)
+        finally
+            CorePotts._FORCE_PAIRED[] = false
+        end
+    end
+    # non-finite values on the device
+    w = copy(v); w[findfirst(==(1), σ)] = NaN32; w[findfirst(==(2), σ)] = -Inf32
+    d = Array(cs_run!(CorePotts._to_backend(backend, cs_state(σ, w, n; T = Float32)); backend))
+    @test isnan(d[1]) && d[2] == -Inf32 && bits(d[3:n]) == bits(host[3:n])
+    CorePotts._FLOAT_ATOMICS[] = true
+    try
+        host0 = cs_run!(cs_state(σ, v, n; T = Float32))
+        @test bits(cs_run!(CorePotts._to_backend(backend, cs_state(σ, v, n; T = Float32)); backend)) != bits(host0)
+    finally
+        CorePotts._FLOAT_ATOMICS[] = false
+    end
+end
+
+# F3-23 r1 (S2): a weighted contact table on the device equals the host bitwise (integer
+# weight units, Int64 and paired forms)
+@testset "F3-23 r1: weighted contact tables on the device equal the host bitwise" begin
+    backend = PottsDevices.device_backend()
+    dims = (96, 80)
+    σ = cs_owners(dims)
+    n = Int(maximum(σ))
+    lat = Lattice(dims)
+    ctx = (; lattice = lat, touch = relation(Weighted(Moore(1), o -> 1 / sqrt(sum(abs2, o))), lat))
+    run(b) = begin
+        st = initial_state(σ, ones(Int32, n); cell = empty_contacts(12, n; T = Float32))
+        b isa CPU || (st = CorePotts._to_backend(b, st))
+        ContactPhase(:touch)(st, nothing, ctx, RNGKey(0), 0, b)
+        (Array(st.cell.contact_nbr), Array(st.cell.contact_measure), Array(st.cell.contact_medium))
+    end
+    hn, hm, hd = run(CPU())
+    meas(nbr, m, a, b) = (k = findfirst(==(b), view(nbr, :, a)); k === nothing ? 0.0f0 : m[k, a])
+    for paired in (false, true)
+        CorePotts._FORCE_PAIRED[] = paired
+        try
+            dn, dm, dd = run(backend)
+            @test reinterpret(UInt32, dd) == reinterpret(UInt32, hd)
+            @test all(a -> all(b -> meas(dn, dm, a, b) === meas(hn, hm, a, b), 1:n), 1:n)
+        finally
+            CorePotts._FORCE_PAIRED[] = false
+        end
+    end
 end
 
 # ROCm, last: no `double` in any kernel this suite compiled (full scan of the kernel cache,

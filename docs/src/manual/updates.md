@@ -117,6 +117,28 @@ sol = solve(PottsProblem(clocks, op, (0, 20); seed = 1), SequentialCPM(); saveat
   once per recomputation of the integral, not at every site: it costs what
   `integral(w) * mean(volume[c] for c in cells)` costs. Folds that draw `rand()`, and
   folds nested inside a fold that reads the site, stay per site.
+  The sum is exact fixed point: the same seed gives the same `integral(x)` and the same
+  cell averages at every thread count and on every backend, so a rule that thresholds an
+  average (`when = avg > θ`) runs the same way each time. Each term is rounded to about
+  `m * N * 2^-62`, with `m` the largest `abs(x)` in the cell and `N` the lattice sites
+  (1.5e-11 m at 300³), so a cell average is within about that of the exact average. When a
+  cell's sum sits in values far below `m`, the sum's relative error can reach
+  `n_c * N * 2^-62` for a cell of `n_c` sites (3.7e-6 for one cell of 2048² with one site at
+  `m`): coarser than a Float64 sum, and no finer than a sequential Float32 sum. A NaN in `x`
+  makes the cell's sum NaN. A sum beyond the problem's number type is stored as `±Inf`, and
+  the run warns and names the variable. The other sums over sites are exact too, and also
+  the same on the CPU and on a device: `surface` and `cluster_surface` over a weighted
+  lattice neighborhood after a division or a `@convert` pass, and the compound writes of a
+  `@convert` pass. The weighted sums count each weight in integer units, so a weight is held
+  to within `4 * N * W * 2^-62` (with `W` the sum of the weights), and a weight below half a
+  unit counts as 0. Copies still add the weights themselves, so a weighted `surface`
+  tracker matches a recount from the sites only to within that bound per division; compare
+  them with a tolerance, not for equality.
+- **`@convert` compound writes** (`x[to] += e`, `m += e`) add `e` once per converted site,
+  as an exact sum per target. Every `e` reads the state from before the pass's writes: an
+  `e` may not read a variable that the pass writes (refused when the model is built). The
+  writes are evaluated twice (an exponent pass and a sum pass), which is safe for `rand()`,
+  whose draw depends only on the seed, the MCS, the site and the pass.
 - **`@on_copy`** writes the target site of an accepted copy, with the copy names `new`,
   `old`, `source`, `target`: `act[target] ~ ifelse(new != 0, max_act, 0.0)`.
   It runs inside the sweep, while `integral(x)` is refreshed only between sweeps, so an

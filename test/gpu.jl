@@ -97,7 +97,7 @@ PottsDevices.device_name() == "rocm" && include("device_ir.jl")
     ul = solve(PottsProblem(Lags(; name = :l), [ownership => σl, kind => [1]], (0, 7); T = Float32),
         CheckerboardCPM(); backend).u[end]
     @test Array(ul.model.lag3) == Float32[4] && all(==(-1), Array(ul.site.wlag))
-    # integral(x): atomic per-cell reductions on the device
+    # integral(x): exact per-cell reductions on the device (Int64 fixed point, F3-23)
     σi = zeros(Int32, 20, 20); σi[3:6, 3:6] .= 1; σi[12:15, 12:15] .= 2
     wi = [Float32(i + j) / 40 for i in 1:20, j in 1:20]
     ui = solve(PottsProblem(Integrals(; name = :i), [ownership => σi, kind => [1, 1], :w => wi], (0, 5); T = Float32),
@@ -688,6 +688,97 @@ if PottsDevices.device_name() == "rocm"
         s1 = dev.stats.fields.solves
         step!(dev)
         @test s1 > 0 && dev.stats.fields.solves > s1 && dev.stats.fields.code == Potts.SciMLBase.ReturnCode.Success
+    end
+end
+
+# F3-23 (user ruling 2026-10-28): cell averages are exact fixed-point sums, so two device runs
+# with the same seed are bitwise equal (σ and the averages), and a device average equals the
+# host's bitwise when both read the same site values. Models: test/cell_sums_models.jl.
+# Negative control: `CorePotts._FLOAT_ATOMICS` (the float atomics before F3-23); the host and
+# the device then differ, and two device runs may differ (logged: an order race is not certain
+# to show in one pair of runs).
+if PottsDevices.device_name() == "rocm"
+    isdefined(Main, :CsThreshold) || include(joinpath(@__DIR__, "cell_sums_models.jl"))
+    @testset "F3-23: cell averages on ROCm are bitwise reproducible and equal the host" begin
+        backend = PottsDevices.device_backend()
+        bits(x) = reinterpret(UInt32, vec(Array(x)))
+        merks() = solve(PottsProblem(CsThreshold(; name = :m), cs_threshold_op(), (0, 30); T = Float32, seed = 7),
+            CheckerboardCPM(); backend, save_start = false).u[end]
+        σj, kj = jiang_state(JG_DIMS)
+        jiang() = solve(PottsProblem(JiangLike(; name = :j), [ownership => σj, kind => kj], (0, 12); T = Float32, seed = 7,
+            field_solver = BackwardEuler()), CheckerboardCPM(); backend, save_start = false).u[end]
+        site(b) = solve(PottsProblem(CsSiteAvg(; name = :s), cs_site_op(), (0, 2); T = Float32, seed = 7),
+            CheckerboardCPM(); backend = b, save_start = false).u[end]
+        a, b = merks(), merks()
+        @test Array(a.σ) == Array(b.σ) && bits(a.cell.cavg) == bits(b.cell.cavg)
+        @test Array(a.σ) != cs_threshold_op()[1][2]                      # the cells moved
+        ja, jb = jiang(), jiang()
+        @test bits(ja.cell.ocell) == bits(jb.cell.ocell) && bits(ja.site.o) == bits(jb.site.o)
+        host = site(CPU())
+        @test bits(site(backend).cell.havg) == bits(host.cell.havg)
+        CorePotts._FLOAT_ATOMICS[] = true
+        try
+            host0 = site(CPU())
+            @test bits(site(backend).cell.havg) != bits(host0.cell.havg)
+            a0, b0 = merks(), merks()
+            ja0, jb0 = jiang(), jiang()
+            @info "F3-23 negative control (float atomics): two ROCm runs" merks_cavg_equal = bits(a0.cell.cavg) == bits(b0.cell.cavg) merks_σ_equal = Array(a0.σ) == Array(b0.σ) jiang_ocell_equal = bits(ja0.cell.ocell) == bits(jb0.cell.ocell)
+        finally
+            CorePotts._FLOAT_ATOMICS[] = false
+        end
+    end
+end
+
+# F3-23 review r1 (M1, M2): the other sums over sites on ROCm. `surface` over a weighted lattice
+# neighborhood after divisions (the device lifecycle's recompute), `cluster_surface` of
+# weighted compartments that divide, and the compound writes of a `@convert` pass are sums in
+# integer units, so two device runs are bitwise equal (five for `@convert`), and equal the CPU
+# (the device lifecycle forced there) wherever σ is equal. Negative control:
+# `CorePotts._FLOAT_ATOMICS`, the float atomics before r1; logged (an order race is not
+# certain to show in a few runs), and its sums differ from the fixed-point ones.
+if PottsDevices.device_name() == "rocm"
+    isdefined(Main, :CsWSurf) || include(joinpath(@__DIR__, "cell_sums_models.jl"))
+    @testset "F3-23 r1: weighted surfaces and @convert writes on ROCm are bitwise reproducible" begin
+        backend = PottsDevices.device_backend()
+        a, (nw, nc) = cs_r1_digests(backend)
+        b, _ = cs_r1_digests(backend)
+        @test nw > 100 && nc > 10
+        @test a == b
+        conv = [cs_conv_digests(backend) for _ in 1:5]
+        @test allequal(conv)
+        # the compartments in the staged device lifecycle too (its cluster-surface fold launch):
+        # the same bits as the fused form
+        fs = CorePotts.FUSE_SITES[]
+        CorePotts.FUSE_SITES[] = 0
+        staged = try
+            solve(PottsProblem(CsWComp(; name = :c), cs_wcomp_op(), (0, 40); T = Float32, seed = 7, capacity = 2000),
+                CheckerboardCPM(); backend, save_start = false).u[end]
+        finally
+            CorePotts.FUSE_SITES[] = fs
+        end
+        @test cs_digest(staged.σ) == a[3] && cs_bits(staged.cell.cluster_surface) == a[4]
+        # the CPU: σ of each model ([1, 3, 5]) and, where σ is equal, its sums
+        h, _ = cs_r1_digests(CorePotts.CPU())
+        same = (h[1] == a[1], h[3] == a[3], h[5] == a[5])
+        @info "F3-23 r1: CPU and ROCm σ equal (weighted surface, compartments, convert)" same
+        same[1] && @test h[2] == a[2]
+        same[2] && @test h[4] == a[4]
+        same[3] && @test h[6:7] == a[6:7]
+        # review r2 (S1): the CPU's host lifecycle planner (the default on the CPU) too
+        hh, _ = cs_r1_digests(CorePotts.CPU(); host = true)
+        @test hh[1] == a[1] && hh[2] == a[2] && hh[3] == a[3] && hh[4] == a[4]
+        CorePotts._FLOAT_ATOMICS[] = true
+        try
+            a0, _ = cs_r1_digests(backend; ctl = true)
+            b0, _ = cs_r1_digests(backend; ctl = true)
+            conv0 = [cs_conv_digests(backend; ctl = true) for _ in 1:5]
+            @test a0[[2, 4, 6, 7]] != a[[2, 4, 6, 7]]
+            h0, _ = cs_r1_digests(CorePotts.CPU(); ctl = true, host = true)
+            @test h0[2] != a0[2] && h0[2] != a[2]           # the host's float recompute ≠ ROCm
+            @info "F3-23 r1 negative control (float atomics): two ROCm runs" surface_equal = a0[2] == b0[2] cluster_surface_equal = a0[4] == b0[4] conv_distinct_tot = length(unique(c -> c[2], conv0)) conv_distinct_Vt = length(unique(c -> c[3], conv0))
+        finally
+            CorePotts._FLOAT_ATOMICS[] = false
+        end
     end
 end
 

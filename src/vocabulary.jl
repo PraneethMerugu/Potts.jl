@@ -1953,6 +1953,12 @@ for which the site condition `at` holds converts to `to` independently, iff `u <
 `p` and `at` read the state at the start of the pass. Defaults: `from` the entity's member of
 the domain kind (`sibling(k)`), `at = true`, `p = 1`. `to = sibling(k)` (or `… | Fresh(k)`)
 allocates a cell of kind `k` on the entity's first conversion when it has none.
+
+A compound write (`x[to] += e`, `m += e`) adds `e` once per converted site. The adds of one
+pass are an exact fixed-point sum per target (F3-23), so the result is the same for every
+thread count and on every backend. Every `e` reads the state from before the writes: an `e`
+may not read a variable the pass writes (refused at build). The writes are evaluated twice
+(an exponent pass and a sum pass); `rand()` is a counter draw, the same in both.
 """
 struct ConvertSpec
     name::Symbol

@@ -69,6 +69,7 @@ public ImplicitAlgorithm, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, Opera
 public steady_alg, steady_fields
 # the clock (F2-08c)
 public CLOCK_KEY, clock_slot
+public rebind_launches, install_launches!   # the two parts of `rebind!` (an atomic update of several groups)
 # computed parameters (F2-15, D-F2-1)
 public Derivation, derive_at, derive_fail, derive!, rgf, computed_slot, rhs_tables
 

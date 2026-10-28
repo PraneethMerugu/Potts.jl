@@ -33,9 +33,11 @@
 
 const _SCRATCH_PREFIX = "#cv_"
 """
-Whether cell column `name` is conversion scratch (`convert_scratch`): no daughter copies it.
+Whether cell column `name` is scratch (`convert_scratch`, or the cell-sum scratch of
+`reduce_scratch`, the contact sums of `empty_contacts`): no daughter copies it.
 """
-_is_scratch_column(name::Symbol) = startswith(String(name), _SCRATCH_PREFIX)
+_is_scratch_column(name::Symbol) =
+    startswith(String(name), _SCRATCH_PREFIX) || startswith(String(name), "#cr_") || startswith(String(name), "#ct_")
 
 const _CV_FROM = Symbol("#cv_from")        # entity c's `from` (0: c is no entity this pass)
 const _CV_TO = Symbol("#cv_to")            # entity c's `to` (0: none yet; the new slot once allocated)
@@ -50,6 +52,17 @@ const _CV_DM2 = Symbol("#cv_dm2")          # (npairs(N) × capacity)
 const _CV_OKC = Symbol("#cv_okc")          # cluster re-rooting scratch (`_dcluster_*_body!`)
 const _CV_ROOTA = Symbol("#cv_rootA")
 const _CV_ROOTB = Symbol("#cv_rootB")
+const _CV_WACC = Symbol("#cv_wacc")        # weighted surface changes in integer weight units (`_units_for`)
+const _CV_WLO = Symbol("#cv_wlo")          # (the paired 32-bit form of `#cv_wacc`, Metal)
+const _CV_WHI = Symbol("#cv_whi")
+# the compound writes' exact sums (F3-23 r1), rows j = 1:J (the pass's writes) of slot c (the
+# write's target cell; slot 1 for a model variable): the largest biased exponent, the
+# non-finite flags and the Int64 fixed-point sum (paired 32-bit words on Metal), as `CellReduce`
+const _CV_WEXP = Symbol("#cv_wexp")
+const _CV_WFLAG = Symbol("#cv_wflag")
+const _CV_WSUM = Symbol("#cv_wsum")
+const _CV_WSLO = Symbol("#cv_wslo")
+const _CV_WSHI = Symbol("#cv_wshi")
 const _CV_SITE = Symbol("#cv_site")        # the entity converting site i in this pass, or 0
 """
 `st.model` key of the conversion flags (`I[4]`, `I = site_index_type` of the lattice, D-253):
@@ -65,13 +78,14 @@ const _FLAG_DEFERRED = 3
 const _FLAG_LARGE = 4                     # entities skipped: too large for the Int32 moment scratch
 
 """
-    convert_scratch(dims, ncell, N) -> (; cell, site, model)
+    convert_scratch(dims, ncell, N; writes = 0) -> (; cell, site, model)
 
 The state slots a conversion pass needs (`ConvertPass`), as `name => array` pairs for the
 cell, site and model state: cell columns for `ncell` slots (grown with the state by
 `with_capacity`), one site array of size `dims`, the flags. Names start with `#cv_`.
+`writes` is the largest number of compound writes of a pass (rows of the write sums).
 """
-function convert_scratch(dims, ncell::Integer, N::Integer)
+function convert_scratch(dims, ncell::Integer, N::Integer; writes::Integer = 0)
     z(T, d...) = zeros(T, d...)
     big(n) = fill(typemax(Int32), n)
     # site indices and site counts (D-253): `first` and the flags, Int64 above 2³¹ − 1 sites
@@ -81,7 +95,10 @@ function convert_scratch(dims, ncell::Integer, N::Integer)
         _CV_N => z(Int32, ncell), _CV_FIRST => fill(typemax(I), ncell), _CV_NEW => z(Int32, ncell), _CV_HELD => z(
             Int32, ncell),
         _CV_DVOL => z(Int32, ncell), _CV_DM1 => z(Int32, N, ncell), _CV_DM2 => z(Int32, npairs(N), ncell),
-        _CV_OKC => z(Bool, ncell), _CV_ROOTA => big(ncell), _CV_ROOTB => big(ncell)]
+        _CV_OKC => z(Bool, ncell), _CV_ROOTA => big(ncell), _CV_ROOTB => big(ncell),
+        _CV_WACC => z(Int64, ncell), _CV_WLO => z(UInt32, ncell), _CV_WHI => z(Int32, ncell),
+        _CV_WEXP => z(Int32, writes, ncell), _CV_WFLAG => z(Int32, writes, ncell), _CV_WSUM => z(Int64, writes, ncell),
+        _CV_WSLO => z(UInt32, writes, ncell), _CV_WSHI => z(Int32, writes, ncell)]
     return (; cell, site = Pair{Symbol, Any}[_CV_SITE => z(Int32, dims...)],
         model = Pair{Symbol, Any}[CONVERT_FLAGS => z(I, 4)])
 end
@@ -101,9 +118,17 @@ One site conversion pass (R8 `@convert`, D-233), a phase of the MCS order
     for kind `k` (their declared defaults);
   - `transfer!(st, p, ctx, key, mcs, r, from, to, n)` — once per entity `r` with `n`
     conversions, or `nothing`;
-  - `writes!(st, p, ctx, key, mcs, i, from, to, created)` — once per converted site, or
+  - `writes!(st, p, ctx, key, mcs, i, from, to, created, acc)` — once per converted site, or
     `nothing`; `created` is true for exactly one conversion of an entity whose `to` this pass
-    allocated (the lowest such site);
+    allocated (the lowest such site). Each compound write `j` is
+    `_cv_write!(acc, Val(j), dst, idx, w)` (`dst[idx] += w`); `wcols` names the `dst` of each write
+    (a `Part`), in order. A write into a float column is an exact sum (F3-23: the pass runs
+    `writes!` twice, an exponent pass and an Int64 fixed-point pass, as `CellReduce`, then adds
+    each target's sum once), so it does not depend on the order of the sites; every write reads
+    the state at the start of the writes. Because it runs twice, `writes!` must be pure: the
+    same arguments give the same values (a counter draw, `draw(key, mcs, …)`, as `rand()`
+    lowers, is). An integer column takes atomic adds (exact); any
+    other number type adds in site order on the host and is refused on a device;
   - `owner_changed(st, i)` — the ownership hook at every converted site (`Lifecycle`), or
     `nothing`; `release(st, c)` — the reference reset (`Lifecycle`), or `nothing`;
   - `fresh` — the kind of the cell allocated for an entity with conversions and no live `to`
@@ -117,7 +142,7 @@ One site conversion pass (R8 `@convert`, D-233), a phase of the MCS order
 The pass needs the scratch of `convert_scratch` in the state and the moment trackers. It
 makes no host round trip on a device.
 """
-struct ConvertPass{EN, DE, IN, TR, WR, OC, RL, LK <: Tuple}
+struct ConvertPass{EN, DE, IN, TR, WR, OC, RL, LK <: Tuple, WC <: Tuple}
     entity::EN
     decide::DE
     init!::IN
@@ -128,12 +153,13 @@ struct ConvertPass{EN, DE, IN, TR, WR, OC, RL, LK <: Tuple}
     fresh::Int32
     links::LK
     limit::Int64
+    wcols::WC
 end
 function ConvertPass(entity, decide; init!, transfer! = nothing, writes! = nothing,
         owner_changed = nothing, release = nothing,
-        fresh::Integer = 0, links::Tuple = (), limit::Integer = _SCRATCH_LIMIT[])
+        fresh::Integer = 0, links::Tuple = (), limit::Integer = _SCRATCH_LIMIT[], wcols::Tuple = ())
     ConvertPass(entity, decide, init!, transfer!, writes!,
-        owner_changed, release, Int32(fresh), map(n -> Part((:cell, n)), links), Int64(limit))
+        owner_changed, release, Int32(fresh), map(n -> Part((:cell, n)), links), Int64(limit), map(Part, wcols))
 end
 
 # the pass scratch of a state (`convert_scratch`)
@@ -144,6 +170,9 @@ end
         first = getfield(c, _CV_FIRST), new = getfield(c, _CV_NEW), held = getfield(c, _CV_HELD),
         dvol = getfield(c, _CV_DVOL), dm1 = getfield(c, _CV_DM1), dm2 = getfield(c, _CV_DM2),
         okc = getfield(c, _CV_OKC), rootA = getfield(c, _CV_ROOTA), rootB = getfield(c, _CV_ROOTB),
+        wacc = getfield(c, _CV_WACC), wlo = getfield(c, _CV_WLO), whi = getfield(c, _CV_WHI),
+        wexp = getfield(c, _CV_WEXP), wflag = getfield(c, _CV_WFLAG), wsum = getfield(c, _CV_WSUM),
+        wslo = getfield(c, _CV_WSLO), wshi = getfield(c, _CV_WSHI),
         site = getfield(st.site, _CV_SITE), flag = getfield(st.model, CONVERT_FLAGS))
 end
 
@@ -173,8 +202,8 @@ end
 end
 
 @inline _surface_delta!(
-    ::Nothing, rel, lat, σ, i, x, old, new, after::A) where {A} = nothing
-@inline function _surface_delta!(surf, rel, lat, σ, i, x, old, new, after::A) where {A}
+    ::Nothing, rel, lat, σ, i, x, old, new, after::A, sc, u) where {A} = nothing
+@inline function _surface_delta!(surf, rel, lat, σ, i, x, old, new, after::A, sc, u) where {A}
     T = eltype(surf)
     for k in 1:length(rel)
         inside, y = shift(lat, x, @inbounds rel.offsets[k])
@@ -182,38 +211,41 @@ end
         j = linear_index(lat, y)
         a = @inbounds σ[j]                  # the neighbour's owner before the round
         b = after(j)                        # and after
-        w = T(weight(rel, k))
+        w = _wt(u, rel, k, T)               # a weight, or its integer units (F3-23 r1: `_wfold!`)
         # site i's side of the bond
-        (old > 0 && old != a) && Atomix.@atomic surf[old] -= w
-        (new > 0 && new != b) && Atomix.@atomic surf[new] += w
+        (old > 0 && old != a) && _wadd!(u, sc, surf, old, -w)
+        (new > 0 && new != b) && _wadd!(u, sc, surf, new, w)
         # the neighbour's side, when the neighbour keeps its owner
         if a == b && a > 0
-            a != old && Atomix.@atomic surf[a] -= w
-            a != new && Atomix.@atomic surf[a] += w
+            a != old && _wadd!(u, sc, surf, a, -w)
+            a != new && _wadd!(u, sc, surf, a, w)
         end
     end
     return nothing
 end
 
 """
-    _ownership_delta!(cell, sc, surf, rel, lat, σ, i, old, new, after)
+    _ownership_delta!(cell, sc, surf, rel, lat, σ, i, old, new, after, u)
 
 Site `i` changes owner from `old` to `new` (0 is the medium) in a round of simultaneous
-changes: the shared ownership-delta routine (R8). See above.
+changes: the shared ownership-delta routine (R8). See above. `u` are the integer weight
+units of a weighted float surface (`_units_for`, added in `sc.wacc` and folded into `surf` by
+`_ownership_finalize!`), or `nothing` (atomic adds of the weights).
 """
 @inline function _ownership_delta!(
-        cell, sc, surf, rel, lat, σ, i, old, new, after::A) where {A}
+        cell, sc, surf, rel, lat, σ, i, old, new, after::A, u) where {A}
     x = coordinates(lat, i)
     old > 0 && _moment_delta!(sc, cell, lat, x, old, Int32(-1))
     new > 0 && _moment_delta!(sc, cell, lat, x, new, Int32(1))
-    _surface_delta!(surf, rel, lat, σ, i, x, old, new, after)
+    _surface_delta!(surf, rel, lat, σ, i, x, old, new, after, sc, u)
     return nothing
 end
 
 # cell c: the round's volume and moment changes applied, the scratch cleared, re-centred
 # (bounds: c ∈ 1:capacity, every column's length; k ≤ N and q ≤ npairs(N), the row counts
 # of `dm1`/`m1` and `dm2`/`m2`)
-@inline function _ownership_finalize!(c, cell, sc, lat)
+@inline function _ownership_finalize!(c, cell, sc, lat, surf, u)
+    _wfold!(u, sc, surf, c, Val(false))
     N = ndims(lat)
     dv = @inbounds sc.dvol[c]
     any_m = dv != 0
@@ -398,14 +430,128 @@ end
     return nothing
 end
 
-@inline function _cv_writes_body!(i, writes!::F, st, p, ctx, key, mcs, sc) where {F}
+@inline function _cv_writes_body!(i, writes!::F, st, p, ctx, key, mcs, sc, acc::A) where {F, A}
     r = @inbounds sc.site[i]
     r > 0 || return nothing
     t = @inbounds sc.to[r]
     t > 0 || return nothing
     created = @inbounds(sc.new[r]) != 0 && @inbounds(sc.first[r]) == i % eltype(sc.first)
-    writes!(st, p, ctx, key, mcs, i, @inbounds(sc.from[r]), t, created)
+    writes!(st, p, ctx, key, mcs, i, @inbounds(sc.from[r]), t, created, acc)
     return nothing
+end
+
+# The compound writes (F3-23 r1). `writes!` runs in two passes, with `acc` = `_WriteExp` (the
+# largest exponent per write and target) then `_WriteSum` (the fixed-point terms); then
+# `_cv_wfold_body!` adds each target's sum to its column once. `j` is the write's row.
+struct _WriteExp{S}
+    sc::S
+end
+struct _WriteSum{S, P}
+    sc::S
+    L::Int
+    paired::P
+end
+# the scratch follows the kernel arguments to the device (as a NamedTuple would)
+Adapt.@adapt_structure _WriteExp
+Adapt.adapt_structure(to, m::_WriteSum) = _WriteSum(Adapt.adapt(to, m.sc), m.L, m.paired)
+@inline _wrow(sc, j, c) = (c - 1) * size(sc.wexp, 1) + j         # linear index of (j, c)
+@inline _wfloat(::Type{T}) where {T} = T <: Union{Float16, Float32, Float64}
+@inline _wsc_sum(sc) = (; acc = sc.wsum, lo = sc.wslo, hi = sc.wshi)
+
+"""
+    _cv_write!(acc, Val(j), dst, idx, w)
+
+Compound write `j` of a `@convert` pass, `dst[idx] += w` (`ConvertPass`); `idx` outside
+`1:length(dst)` (0, the medium, a stale index) is skipped.
+"""
+@inline function _cv_write!(m::_WriteExp, ::Val{j}, dst, idx, w) where {j}
+    ((0 < idx) & (idx <= length(dst))) || return nothing
+    _wfloat(eltype(dst)) || return nothing
+    v = _cr_work(eltype(dst))(convert(eltype(dst), w))
+    r = _wrow(m.sc, j, idx)                                # j ≤ rows, idx ≤ capacity: in bounds
+    if !isfinite(v)
+        bit = isnan(v) ? Int32(1) : v > 0 ? Int32(2) : Int32(4)
+        Atomix.@atomic m.sc.wflag[r] |= bit
+    elseif !iszero(v)
+        b = _cr_biased(v)
+        b > (Atomix.@atomic :monotonic m.sc.wexp[r]) && Atomix.@atomic m.sc.wexp[r] max b
+    end
+    return nothing
+end
+@inline function _cv_write!(m::_WriteSum, ::Val{j}, dst, idx, w) where {j}
+    ((0 < idx) & (idx <= length(dst))) || return nothing
+    T = eltype(dst)
+    _wfloat(T) || return _atomic_add!(dst, idx, w)        # integer columns: exact in any order
+    W = _cr_work(T)
+    r = _wrow(m.sc, j, idx)
+    e = _cr_shift(W, @inbounds(m.sc.wexp[r]), m.L)
+    _cr_add!(_wsc_sum(m.sc), r, _cr_term(W(convert(T, w)), e), m.paired)
+    return nothing
+end
+struct _WriteAtomic end
+@inline _cv_write!(::_WriteAtomic, ::Val{j}, dst, idx, w) where {j} = _atomic_add!(dst, idx, w)
+# host only (any other number type): the writes in site order
+struct _WriteSeq end
+@inline _cv_write!(::_WriteSeq, ::Val{j}, dst, idx, w) where {j} =
+    (((0 < idx) & (idx <= length(dst))) && (@inbounds dst[idx] += convert(eltype(dst), w)); nothing)
+
+@inline function _cv_wzero_body!(c, sc)
+    for j in 1:size(sc.wexp, 1)
+        r = _wrow(sc, j, c)                                # c ≤ capacity: in bounds
+        @inbounds begin
+            sc.wexp[r] = 0; sc.wflag[r] = 0; sc.wsum[r] = 0; sc.wslo[r] = 0; sc.wshi[r] = 0
+        end
+    end
+    return nothing
+end
+# slot c's sum of write j into `dst`, added once
+@inline function _cw_fold!(dst, j, c, sc, L, paired)
+    c <= length(dst) || return nothing                    # a model variable: slot 1 only
+    T = eltype(dst)
+    _wfloat(T) || return nothing
+    r = _wrow(sc, j, c)
+    fl = @inbounds sc.wflag[r]
+    b = @inbounds sc.wexp[r]
+    if fl != 0
+        @inbounds dst[c] += (fl & Int32(1) != 0 || fl & Int32(6) == Int32(6)) ? T(NaN) :
+                            fl & Int32(2) != 0 ? T(Inf) : T(-Inf)
+    elseif b != 0
+        W = _cr_work(T)
+        @inbounds dst[c] += T(ldexp(W(_cr_acc(_wsc_sum(sc), r, paired)), -_cr_shift(W, b, L)))
+    end
+    return nothing
+end
+@inline function _cv_wfold_body!(c, dsts::D, js::J, sc, L, paired) where {D, J}
+    map((dst, j) -> _cw_fold!(dst, j, c, sc, L, paired), dsts, js)
+    return nothing
+end
+
+function _cv_writes!(ph::ConvertPass, st, p, ctx, key, mcs, sc, backend)
+    dsts = map(P -> P(st), ph.wcols)
+    n = length(st.σ)
+    cap = length(st.cell.kind)
+    if !all(d -> _wfloat(eltype(d)) || eltype(d) <: Integer, dsts)
+        Exec.ishost(backend) || throw(ArgumentError(string(
+            "run on the CPU: the `@convert` compound writes into ", join(unique(string.(eltype.(dsts))), ", "),
+            " columns add in site order on the host, and a device has no atomics for these number types")))
+        foreach(i -> _cv_writes_body!(i, ph.writes!, st, p, ctx, key, mcs, sc, _WriteSeq()), 1:n)
+        return 1
+    end
+    if _FLOAT_ATOMICS[]                                   # negative controls only (tests): float atomics
+        Exec.launch!(backend, _cv_writes_body!, n, (ph.writes!, st, p, ctx, key, mcs, sc, _WriteAtomic()))
+        return 1
+    end
+    J = length(dsts)
+    size(sc.wexp, 1) >= J || throw(ArgumentError(string(
+        "the `@convert` pass has ", J, " compound writes and the state's write scratch holds ", size(sc.wexp, 1),
+        ": build the scratch with `convert_scratch(dims, ncell, N; writes = ", J, ")`")))
+    L = _reduce_bits(n)
+    paired = Val(_paired(backend))
+    Exec.launch!(backend, _cv_wzero_body!, cap, (sc,))
+    Exec.launch!(backend, _cv_writes_body!, n, (ph.writes!, st, p, ctx, key, mcs, sc, _WriteExp(sc)))
+    Exec.launch!(backend, _cv_writes_body!, n, (ph.writes!, st, p, ctx, key, mcs, sc, _WriteSum(sc, L, paired)))
+    Exec.launch!(backend, _cv_wfold_body!, cap, (dsts, ntuple(identity, Val(J)), sc, L, paired))
+    return 4
 end
 
 # the owner of site j after the pass (`_ownership_delta!`'s `after`)
@@ -421,14 +567,14 @@ end
     return t > 0 ? t : @inbounds(a.σ[j])
 end
 
-@inline function _cv_paint_body!(i, st, ctx, sc, surf, rel, hook::H) where {H}
+@inline function _cv_paint_body!(i, st, ctx, sc, surf, rel, hook::H, u) where {H}
     @inbounds(sc.flag[_FLAG_CONVERTED]) == 0 && return nothing
     r = @inbounds sc.site[i]
     r > 0 || return nothing
     t = @inbounds sc.to[r]
     t > 0 || return nothing
     _ownership_delta!(st.cell, sc, surf, rel, ctx.lattice, st.σ, i, @inbounds(st.σ[i]), t,
-        _ConvertAfter(st.σ, sc.site, sc.to))
+        _ConvertAfter(st.σ, sc.site, sc.to), u)
     _owner_changed!(hook, st, i)
     return nothing
 end
@@ -442,9 +588,9 @@ end
     return nothing
 end
 
-@inline function _cv_finalize_body!(c, cell, sc, lat)
+@inline function _cv_finalize_body!(c, cell, sc, lat, surf, u)
     @inbounds(sc.flag[_FLAG_CONVERTED]) == 0 && return nothing
-    _ownership_finalize!(c, cell, sc, lat)
+    _ownership_finalize!(c, cell, sc, lat, surf, u)
     return nothing
 end
 
@@ -466,6 +612,7 @@ function (ph::ConvertPass)(st, p, ctx, key, mcs, backend)
     _quiet(backend, sc.flag, _FLAG_CONVERTED) && return launches
     surf = haskey(st.cell, :surface) && haskey(ctx, :surface) ? st.cell.surface : nothing
     rel = haskey(ctx, :surface) ? ctx.surface : nothing
+    su = surf === nothing ? nothing : _units_for(eltype(surf), rel, n, backend)
     links = map(L -> L(st), ph.links)
     if ph.fresh > 0
         Exec.launch!(backend, _cv_allocate_body!, 1, (
@@ -477,15 +624,14 @@ function (ph::ConvertPass)(st, p, ctx, key, mcs, backend)
         launches += 1
     end
     if ph.writes! !== nothing
-        Exec.launch!(backend, _cv_writes_body!, n, (ph.writes!, st, p, ctx, key, mcs, sc))
-        launches += 1
+        launches += _cv_writes!(ph, st, p, ctx, key, mcs, sc, backend)
     end
-    Exec.launch!(backend, _cv_paint_body!, n, (st, ctx, sc, surf, rel, ph.owner_changed))
+    Exec.launch!(backend, _cv_paint_body!, n, (st, ctx, sc, surf, rel, ph.owner_changed, su))
     Exec.launch!(backend, _cv_write_sigma_body!, n, (st.σ, sc))
-    Exec.launch!(backend, _cv_finalize_body!, cap, (st.cell, sc, lat))
+    Exec.launch!(backend, _cv_finalize_body!, cap, (st.cell, sc, lat, surf, su))
     launches += 3
     # the trackers rebuilt from σ, as the device lifecycle rebuilds them (`lifecycle_device.jl`)
-    dv = (; flag = sc.flag, okc = sc.okc, rootA = sc.rootA, rootB = sc.rootB)
+    dv = (; flag = sc.flag, okc = sc.okc, rootA = sc.rootA, rootB = sc.rootB, sc.wacc, sc.wlo, sc.whi)
     par = Int32(_FLAG_CONVERTED)
     cc = _contact_counts(ctx)
     if cc !== nothing
@@ -512,9 +658,14 @@ function (ph::ConvertPass)(st, p, ctx, key, mcs, backend)
             launches += 1
         end
         if csurf !== nothing
+            cu = _units_for(eltype(csurf), ctx.surface, n, backend)
             Exec.launch!(backend, _dcluster_surface_body!, n, (
-                dv, par, st.σ, st.cell, csurf, ctx.surface, lat))
+                dv, par, st.σ, st.cell, csurf, ctx.surface, lat, cu))
             launches += 1
+            if cu !== nothing
+                Exec.launch!(backend, _dcluster_surface_fold_body!, cap, (dv, par, csurf, cu))
+                launches += 1
+            end
         end
     end
     return launches

@@ -296,5 +296,6 @@ struct Program{N}
     nparams::Int
 end
 leveldims(p::Program, level::Integer) = leveldims(p.hierarchy[level + 1])
+"""`nsites(p, level)`: the number of nodes of program `p` on grid level `level` (0: the lattice)."""
 nsites(p::Program, level::Integer) = Int(prod(leveldims(p, level)))
 fieldid(p::Program, key::AbstractString) = Int32(findfirst(f -> f.key == key, p.fields))

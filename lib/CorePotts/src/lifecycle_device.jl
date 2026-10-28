@@ -77,7 +77,8 @@ function _device_scratch(backend, N::Int, cap::Int, nsite::Int)
         nmem = z(Int32, cap), nlive = z(Int32, cap), coff = z(Int32, cap), freelist = z(Int32, cap),
         dvol = z(Int32, cap), dm1 = z(Int32, N, cap), dm2 = z(Int32, npairs(N), cap),
         rootA = z(Int32, cap), rootB = z(Int32, cap), okc = z(Bool, cap), acc = z(Int32, _NACC),
-        mcnt = z(_atomic64(backend) ? site_index_type(nsite) : Int32, 3), mask = z(Int64, 3), taken = z(Int32, 1), limit = _SCRATCH_LIMIT[])
+        mcnt = z(_atomic64(backend) ? site_index_type(nsite) : Int32, 3), mask = z(Int64, 3), taken = z(Int32, 1),
+        wacc = z(Int64, cap), wlo = z(UInt32, cap), whi = z(Int32, cap), limit = _SCRATCH_LIMIT[])
 end
 
 """Host side of the device lifecycle: the round counter, the kernel objects and the fold
@@ -635,7 +636,7 @@ end
 # its bonds to non-daughter sites; the parent loses the site's old bonds to non-parent
 # sites and gains the bonds of its remaining sites to the site (a symmetric relation)
 
-@inline function _dsurface_body!(i, dv, par, σ, surf, rel, lat)
+@inline function _dsurface_body!(i, dv, par, σ, surf, rel, lat, u)
     _on(dv, par) || return nothing
     s = @inbounds σ[i]
     s > 0 || return nothing
@@ -643,27 +644,49 @@ end
     pc > 0 || return nothing
     x = coordinates(lat, i)
     T = eltype(surf)
-    sd = zero(T)
-    sp = zero(T)
+    sd = _wzero(u, T)
+    sp = _wzero(u, T)
     for k in 1:length(rel)
         inside, y = shift(lat, x, @inbounds rel.offsets[k])
         inside || continue
         n = @inbounds σ[linear_index(lat, y)]
-        w = T(weight(rel, k))
+        w = _wt(u, rel, k, T)
         n != s && (sd += w)
         n == pc && (sp += w)
         (n != pc && n != s) && (sp -= w)
     end
-    Atomix.@atomic surf[s] += sd
-    Atomix.@atomic surf[pc] += sp
+    _wadd!(u, dv, surf, s, sd)
+    _wadd!(u, dv, surf, pc, sp)
+    return nothing
+end
+
+# F3-23 r1: a weighted surface in a float column adds integer weight units (`_units_for`) to
+# `dv.wacc` (an exact, order-free sum); `_wfold!` adds the sum to the column once per cell
+@inline _wadd!(::Nothing, dv, col, c, v) = (Atomix.@atomic col[c] += v; nothing)
+@inline _wadd!(u::NamedTuple, dv, col, c, v) = _cr_add!(_wsc(dv), c, v, u.paired)
+@inline _wsc(dv) = (; acc = dv.wacc, lo = dv.wlo, hi = dv.whi)
+@inline _wfold!(::Nothing, dv, col, c, ::Val) = nothing
+@inline function _wfold!(u::NamedTuple, dv, col, c, ::Val{ASSIGN}) where {ASSIGN}
+    sc = _wsc(dv)
+    a = _cr_acc(sc, c, u.paired)
+    v = _wvalue(eltype(col), a, u.e)
+    if ASSIGN
+        @inbounds col[c] = v                              # c ≤ capacity = length(col)
+    elseif a != 0
+        @inbounds col[c] += v
+    end
+    @inbounds begin
+        sc.acc[c] = 0; sc.lo[c] = 0; sc.hi[c] = 0
+    end
     return nothing
 end
 
 # ---------------------------------------------------------------------------------------
 # Finalize: the trackers of parents, daughters and removed cells
 
-@inline function _dfinalize_body!(c, dv, par, daughter, removed, cell, surf, lat)
+@inline function _dfinalize_body!(c, dv, par, daughter, removed, cell, surf, lat, u)
     _on(dv, par) || return nothing
+    _wfold!(u, dv, surf, c, Val(false))                   # the surface stage's units (before a removal's reset)
     N = ndims(lat)
     if @inbounds(removed[c])
         @inbounds cell.volume[c] = zero(eltype(cell.volume))
@@ -742,20 +765,27 @@ end
     return nothing
 end
 
-@inline function _dcluster_surface_body!(i, dv, par, σ, cell, csurf, rel, lat)
+@inline function _dcluster_surface_body!(i, dv, par, σ, cell, csurf, rel, lat, u)
     _on(dv, par) || return nothing
     s = @inbounds σ[i]
     s > 0 || return nothing
     K = @inbounds cell.cluster[s]
     x = coordinates(lat, i)
     T = eltype(csurf)
-    a = zero(T)
+    a = _wzero(u, T)
     for k in 1:length(rel)
         inside, y = shift(lat, x, @inbounds rel.offsets[k])
         inside || continue
-        cluster_of(cell, @inbounds σ[linear_index(lat, y)]) != K && (a += T(weight(rel, k)))
+        cluster_of(cell, @inbounds σ[linear_index(lat, y)]) != K && (a += _wt(u, rel, k, T))
     end
-    a != zero(T) && Atomix.@atomic csurf[K] += a
+    a != zero(a) && _wadd!(u, dv, csurf, K, a)
+    return nothing
+end
+
+# the cluster surfaces from their units (weighted float columns only)
+@inline function _dcluster_surface_fold_body!(c, dv, par, csurf, u)
+    _on(dv, par) || return nothing
+    _wfold!(u, dv, csurf, c, Val(true))
     return nothing
 end
 
@@ -818,6 +848,10 @@ function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backe
         csurf = _has_clusters(st) && haskey(st.cell, :cluster_surface) && haskey(ctx, :surface) ?
                 st.cell.cluster_surface : nothing,
         rel = haskey(ctx, :surface) ? ctx.surface : nothing, refresh,
+        su = haskey(st.cell, :surface) && haskey(ctx, :surface) ?
+             _units_for(eltype(st.cell.surface), ctx.surface, length(st.σ), backend) : nothing,
+        cu = _has_clusters(st) && haskey(st.cell, :cluster_surface) && haskey(ctx, :surface) ?
+             _units_for(eltype(st.cell.cluster_surface), ctx.surface, length(st.σ), backend) : nothing,
         cc = _contact_counts(ctx), ccols = _count_columns(st, _contact_counts(ctx)), eul = _euler_columns(st.cell),
         births = _births(st))
     CL = Val(_has_clusters(st))
@@ -965,7 +999,7 @@ function _run_staged!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, 
         fns.cluster_divide!, st, p, ctx, key, mcs, ruled))
     launches = 5
     if surf !== nothing
-        _stage!(mode, _dsurface_body!, backend, n, (dv, par, st.σ, surf, ctx.surface, lat))
+        _stage!(mode, _dsurface_body!, backend, n, (dv, par, st.σ, surf, ctx.surface, lat, opt.su))
         launches += 1
     end
     if opt.cc !== nothing          # contact counts: zeroed, then summed from σ (`contact_counts.jl`)
@@ -978,7 +1012,8 @@ function _run_staged!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, 
         _stage!(mode, _deuler_body!, backend, _euler_anchors(lat), (dv, par, st.σ, opt.eul, lat))
         launches += 2
     end
-    _stage!(mode, _dfinalize_body!, backend, cap, (dv, par, buf.daughter, buf.removed, st.cell, surf, lat))
+    _stage!(mode, _dfinalize_body!, backend, cap, (dv, par, buf.daughter, buf.removed, st.cell, surf, lat,
+        surf === nothing ? nothing : opt.su))
     launches += 1
     if _has_clusters(st)
         _stage!(mode, _dcluster_mark_body!, backend, cap, (dv, par, st.cell))
@@ -989,8 +1024,12 @@ function _run_staged!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, 
             launches += 1
         end
         if csurf !== nothing
-            _stage!(mode, _dcluster_surface_body!, backend, n, (dv, par, st.σ, st.cell, csurf, ctx.surface, lat))
+            _stage!(mode, _dcluster_surface_body!, backend, n, (dv, par, st.σ, st.cell, csurf, ctx.surface, lat, opt.cu))
             launches += 1
+            if opt.cu !== nothing
+                _stage!(mode, _dcluster_surface_fold_body!, backend, cap, (dv, par, csurf, opt.cu))
+                launches += 1
+            end
         end
     end
     if refresh !== nothing
@@ -1072,13 +1111,13 @@ end
         fns.cluster_divide!, st, p, ctx, key, mcs, ruled))
     @synchronize
     ts = @index(Local, Linear)
-    _each_if!(_dsurface_body!, ts, length(st.σ), opt.surf, (dv, par, st.σ, opt.surf, opt.rel, ctx.lattice))
+    _each_if!(_dsurface_body!, ts, length(st.σ), opt.surf, (dv, par, st.σ, opt.surf, opt.rel, ctx.lattice, opt.su))
     _each_if!(_dcount_zero_body!, ts, length(buf.events), opt.cc, (dv, par, opt.ccols))
     _each_if!(_deuler_zero_body!, ts, length(buf.events), opt.eul, (dv, par, opt.eul))
     @synchronize
     tz = @index(Local, Linear)
     _each_on!(_dfinalize_body!, tz, length(buf.events),
-        (dv, par, buf.daughter, buf.removed, st.cell, opt.surf, ctx.lattice))
+        (dv, par, buf.daughter, buf.removed, st.cell, opt.surf, ctx.lattice, opt.surf === nothing ? nothing : opt.su))
     _each_if!(_dcount_body!, tz, length(st.σ), opt.cc, (dv, par, st.σ, st.cell.kind, opt.cc, opt.ccols, ctx.lattice))
     _each_if!(_deuler_body!, tz, _euler_anchors(ctx.lattice), opt.eul, (dv, par, st.σ, opt.eul, ctx.lattice))
     @synchronize
@@ -1091,11 +1130,12 @@ end
     tm = @index(Local, Linear)
     _each_if!(_dcluster_volume_body!, tm, length(buf.events), opt.cvol, (dv, par, st.cell, opt.cvol))
     _each_if!(_dcluster_surface_body!, tm, length(st.σ), opt.csurf,
-        (dv, par, st.σ, st.cell, opt.csurf, opt.rel, ctx.lattice))
+        (dv, par, st.σ, st.cell, opt.csurf, opt.rel, ctx.lattice, opt.cu))
     _refresh_each!(_dfrozen_body!, tm, length(st.σ), opt.refresh, dv, par, st, ctx.lattice)
     @synchronize
     tr = @index(Local, Linear)
     _refresh_fold!(tr, opt.refresh, dv, par, mcs)
+    _each_if!(_dcluster_surface_fold_body!, tr, length(buf.events), opt.cu, (dv, par, opt.csurf, opt.cu))
 end
 
 """

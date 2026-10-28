@@ -548,6 +548,7 @@ _start_failed!(integ) = (_fields_failed(_stats(integ).fields.code) && (integ.ret
 _fields_failed(c::SciMLBase.ReturnCode.T) = c == SciMLBase.ReturnCode.ConvergenceFailure || c == SciMLBase.ReturnCode.Unstable
 function _check_status!(integ::PottsIntegrator)
     _status_failure!(integ, _model_status(_stats(integ), integ.state.model))
+    _check_reduce_status!(_stats(integ), integ.state, integ.t, integ.backend)
     # the field groups' status words (on the host they are read after every window already)
     Exec.ishost(integ.backend) || _read_statuses!(_stats(integ), integ.ctx)
     _fields_failed(_stats(integ).fields.code) && integ.retcode == SciMLBase.ReturnCode.Default &&

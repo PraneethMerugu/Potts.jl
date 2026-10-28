@@ -62,7 +62,7 @@ public CHECKPOINT_FORMAT, Part, BindingScratch, coordinates, shift, interior, ne
     shell_offsets, shell_owners, shell_mask, shell_pieces, local_rule, arc_or_pair, simple_point, ShellRead, read_shell, check_shell_lattice,
     ConnectivityHooks, GlobalExact, GlobalBoard, GlobalLocal, GlobalSearch, global_keeps, global_gains, global_defer,
     pieces_after!, pieces_defer, commit_pieces!, connectivity_ctx, NEXT_BIRTH, oncopy_cell!,
-    ConvertPass, convert_scratch, CONVERT_FLAGS
+    ConvertPass, convert_scratch, CONVERT_FLAGS, reduce_scratch, REDUCE_STATUS, STATUS_SUM_RANGE
 
 include("rng.jl")
 include("lattice.jl")

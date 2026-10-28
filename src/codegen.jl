@@ -1746,8 +1746,10 @@ function _convert_pass_fns(c::CompiledPottsSystem, T, v::ConvertSpec)
             return nothing
         end))
     end
-    # the compound writes, once per conversion (their sum over the pass is order-free)
+    # the compound writes, once per conversion: exact sums over the pass (F3-23 r1, CorePotts
+    # runs `writes!` in an exponent and a fixed-point pass), so they do not depend on the order
     writes! = nothing
+    wcols = ()
     if !isempty(v.writes)
         wenv = _site_env(T, :i, rn; mcs = :mcs, key = :key)
         wenv.bind[:from] = :from
@@ -1755,14 +1757,22 @@ function _convert_pass_fns(c::CompiledPottsSystem, T, v::ConvertSpec)
         wenv.bind[:created] = :created
         vals = Any[]
         adds = Any[]
+        cols = Tuple{Symbol, Symbol}[]
         for (j, (lhs, d)) in enumerate(v.writes)
             w = Symbol(:w_, j)
             push!(vals, :($w = $T($(lower(d, wenv)))))
             i = info(lhs)
-            push!(adds, i !== nothing ? :(CorePotts._atomic_add!(st.model.$(i.name), 1, $w)) :
-                        :(CorePotts._atomic_add!(st.cell.$(info(arguments(lhs)[1]).name), $(lower(arguments(lhs)[2], wenv)), $w)))
+            if i !== nothing
+                push!(adds, :(CorePotts._cv_write!(acc, Val($j), st.model.$(i.name), 1, $w)))
+                push!(cols, (:model, i.name))
+            else
+                x = info(arguments(lhs)[1]).name
+                push!(adds, :(CorePotts._cv_write!(acc, Val($j), st.cell.$x, $(lower(arguments(lhs)[2], wenv)), $w)))
+                push!(cols, (:cell, x))
+            end
         end
-        writes! = _rgf(:((st, p, ctx, key, mcs, i, from, to, created) -> begin
+        wcols = Tuple(cols)
+        writes! = _rgf(:((st, p, ctx, key, mcs, i, from, to, created, acc) -> begin
             $(vals...)
             $(adds...)
             return nothing
@@ -1770,7 +1780,7 @@ function _convert_pass_fns(c::CompiledPottsSystem, T, v::ConvertSpec)
     end
     links = Tuple(CorePotts.adjacency_name(r.name) for r in c.relationships)
     return CorePotts.ConvertPass(entity, decide; init!, transfer!, writes!, owner_changed = _ownership_hook(c, T),
-        release = _release(c), fresh = v.fresh, links)
+        release = _release(c), fresh = v.fresh, links, wcols)
 end
 
 # The ownership hook (R8, D-075 clarify): at every site whose owner changes outside a copy

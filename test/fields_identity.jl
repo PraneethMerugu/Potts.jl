@@ -522,9 +522,9 @@ end
 # F3 batch 6 review r1 (add-only, design §6): the Jiang-like model of F3-18 (32³ lattice, five
 # Coarse(4) fields, σ frozen) under the default BackwardEuler, CPU, Float64: the fingerprints,
 # `n` and the digests of σ and the site arrays after 2 MCS, which are the same at `-t 1` and
-# `-t 4` (the host's early Newton stop included; ~/lpwork/f3b6r-guard-t1.rec, -t4.rec). The cell
-# average `ocell` (`integral(o) / volume`) is not recorded: its threaded reduction differs in the
-# last bits between thread counts.
+# `-t 4` (the host's early Newton stop included; ~/lpwork/f3b6r-guard-t1.rec, -t4.rec). F3-23: the
+# cell average `ocell` (`integral(o) / volume`) is recorded as well, since its sum is exact
+# fixed point and so the same at every thread count (batch 6 left it out: float atomics).
 isdefined(Main, :JiangLike) || include(joinpath(@__DIR__, "fields_jiang_model.jl"))
 function gd_jiang!(out)
     pre = "GjJiangLike BackwardEuler|Float64"
@@ -541,6 +541,7 @@ function gd_jiang!(out)
     for k in keys(st.site)
         out["$pre|digest|site.$k"] = gd_digest(getproperty(st.site, k))
     end
+    out["$pre|digest|cell.ocell"] = gd_digest(st.cell.ocell)
     return out
 end
 function gd_b!(out)

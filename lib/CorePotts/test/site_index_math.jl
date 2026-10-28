@@ -31,9 +31,9 @@ Base.setindex!(a::SparseSites, v, i::Int) = (a.d[i] = v; a)
                 CorePotts._cv_decide_body!(i, (st, p, ctx, key, mcs, i, c, t) -> true, st, nothing, ctx, nothing, 0, sc, Int32(0))
             end
             created = Int[]
-            w!(st, p, ctx, key, mcs, i, f, t, c) = (c && push!(created, i); nothing)
+            w!(st, p, ctx, key, mcs, i, f, t, c, acc) = (c && push!(created, i); nothing)
             for i in sites
-                CorePotts._cv_writes_body!(i, w!, st, nothing, ctx, nothing, 0, sc)
+                CorePotts._cv_writes_body!(i, w!, st, nothing, ctx, nothing, 0, sc, nothing)
             end
             return sc.first[1], created, sc.flag[CorePotts._FLAG_CONVERTED]
         end

@@ -95,8 +95,7 @@ function SciMLBase.reinit!(integ::PottsIntegrator, u0 = integ.prob.u0;
     # symbolic maps; a state is laid out for the model's functions (e.g. Potts' ODE scratch)
     u0 = remake_state(integ.f.sys, integ.prob, u0)
     _same_shape(integ.state, u0) || throw(ArgumentError(
-        "reinit!: the new state's arrays differ in shape from the integrator's (cell capacity " *
-        "$(length(integ.state.cell.kind)), got $(length(u0.cell.kind))$(_key_difference(integ.state, u0))); " *
+        "reinit!: the new state's arrays differ in shape from the integrator's ($(_shape_difference(integ.state, u0))); " *
         "use `remake` and `init`"))
     _fold_lifecycle!(integ; report = false)     # device lifecycle counts of the old run: dropped
     _copy_state!(integ.state, u0)
@@ -150,6 +149,27 @@ function _key_difference(a::CPMState, b::CPMState)
     return isempty(parts) ? "" : "; " * join(parts, "; ")
 end
 
+# how two states' arrays differ, in words (`reinit!`'s refusal): the cell capacity when it
+# differs; else arrays missing or extra (their names), arrays in another order (the same names),
+# or the first array of another size
+function _shape_difference(a::CPMState, b::CPMState)
+    na, nb = length(a.cell.kind), length(b.cell.kind)
+    na == nb || return string("cell capacity ", na, ", got ", nb, _key_difference(a, b))
+    k = _key_difference(a, b)
+    isempty(k) || return k[3:end]
+    for f in (:cell, :site, :model)
+        ka, kb = keys(getfield(a, f)), keys(getfield(b, f))
+        ka == kb || return string("the ", f, " arrays are in another order: ", join(ka, ", "), "; got ", join(kb, ", "))
+    end
+    for f in (:cell, :site, :model), q in keys(getfield(a, f))
+        x, y = getfield(a, f)[q], getfield(b, f)[q]
+        _same_shape(x, y) || return string("the ", f, " array `", q, "` has size ", _sizetext(x), ", got ", _sizetext(y))
+    end
+    return string("cell capacity ", na, ", got ", nb)
+end
+_sizetext(x::AbstractArray) = string(size(x))
+_sizetext(x::NamedTuple) = string("(", join(keys(x), ", "), ")")
+_sizetext(x) = string(typeof(x))
 _same_shape(a::AbstractArray, b) = b isa AbstractArray && size(a) == size(b)
 _same_shape(a::NamedTuple, b) = b isa NamedTuple && keys(a) == keys(b) && all(k -> _same_shape(a[k], b[k]), keys(a))
 _same_shape(a::CPMState, b) = false
