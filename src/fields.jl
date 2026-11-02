@@ -832,12 +832,15 @@ function LatticeFields.Problems.coupling_unbounded_text(t::_PottsTexts, c; refus
            "`$(_user_text(q.raw, t.cv))`): the count is the user's"
 end
 function LatticeFields.Problems.steady_loop_text(t::_PottsTexts, c)
+    w = c.why[1]
+    one = w in (:steady_only, :steady) ? string("Give ", _fieldlist(c.qs), " one `QuasiSteady` solver (one group, whose ",
+                                                "steady rows are solved together), or give ") : "Give "
     return string("the fields ", _fieldlist(c.lf), " are in solver groups that read one another in a loop, and ",
         _fieldlist(c.qs), length(c.qs) == 1 ? " is" : " are", " solved with `QuasiSteady`: a steady field answers its ",
         "inputs at once, with the gain of its steady solve, so the lag of one field window between the groups can grow ",
         "without bound, and here the coupling rule has no bound for that gain: ", LatticeFields.Problems.steady_why_text(c.why),
-        ". Give ", _fieldlist(c.lf), " one `BackwardEuler` solver (one group), or step ", _fieldlist(c.qs), " with ",
-        "`BackwardEuler` (a fast field relaxes to its steady state within a few MCS)")
+        ". ", one, _fieldlist(c.lf), " one `BackwardEuler` solver (one group), or step ", _fieldlist(c.qs), " with ",
+        "`BackwardEuler` (a fast field relaxes to its steady state within a few MCS)", LatticeFields.Problems.rows0_route(c))
 end
 function LatticeFields.Problems.steady_gain_text(t::_PottsTexts, c)
     x = c.x
@@ -850,7 +853,7 @@ function LatticeFields.Problems.steady_gain_text(t::_PottsTexts, c)
         "k_out = ", round(c.κ; sigdigits = 4), " > 1, and the loop can then grow without bound. Give ", _fieldlist(c.lf),
         " one `BackwardEuler` solver (one group), or step ", _fieldlist(c.qs), " with `BackwardEuler`, or step the fields ",
         "over a shorter window (`repeat(n, …)` of the fields, or a smaller `mcs_duration`; window ≤ ",
-        floor(1 / x.rate; sigdigits = 4), ")")
+        floor(1 / x.rate; sigdigits = 4), ")", LatticeFields.Problems.rows0_route(c))
 end
 function LatticeFields.Problems.loop_text(t::_PottsTexts, c)
     q, κ, lf = c.q, c.κ, c.lf
@@ -1014,7 +1017,8 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
         cp = coupling === nothing ? nothing :
              (; stability = coupling.bound, coupling.groups, explicit = [i == gi && _given_count(solver) !== nothing for i in eachindex(order)],
                 index = gi, whole = _WholeParams(coupling.wnames, params),
-                steady = [order[i][2] isa LatticeFields.Problems.QuasiSteady for i in eachindex(order)])
+                steady = [order[i][2] isa LatticeFields.Problems.QuasiSteady for i in eachindex(order)],
+                rows0 = _steady_names(sys, allnames))
         rule = LatticeFields.Problems.GroupSubsteps(gspec, solver, dt; key = fp,
             texts = _PottsTexts(names, (; filled = copy(cv.filled), infinite = _infinite_bounds(c, names))),
             coupling = cp)

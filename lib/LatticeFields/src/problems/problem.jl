@@ -1331,10 +1331,12 @@ function _check_coupling_loops(prob::FieldProblem, groups, p, tables, inputs, dt
     # the one coupling rule of both front ends (F3-01), in front end B's words
     return check_coupling(prob.stability, [collect(String, ks) for (_, ks) in groups], [_explicit_count(a) for (a, _) in groups],
         pp, dt; key = why -> _warn_key(prob, why), texts = ProblemTexts(prob.group.spec.texts.route),
-        span = prob.tspan[2] - prob.tspan[1], steady = [a isa QuasiSteady for (a, _) in groups])
+        span = prob.tspan[2] - prob.tspan[1], steady = [a isa QuasiSteady for (a, _) in groups],
+        rows0 = collect(String, prob.group.spec.steady))
 end
 
 function SII.finalize_parameters_hook!(integ::FieldIntegrator, _)
+    installed = false
     try
         derive!(integ.p, integ.tables, integ.prob.index)   # the computed slots follow (F2-15)
         check_faces(integ.prob.faces, integ.p)
@@ -1345,6 +1347,9 @@ function SII.finalize_parameters_hook!(integ::FieldIntegrator, _)
         launches = map(rt -> rebind_launches(rt, integ.p), integ.runtimes)
         _rerun_init!(integ, integ.p)                  # init kernels read the parameters too
         foreach(install_launches!, integ.runtimes, launches)    # (and `reset!`)
+        installed = true
+        # a coupled steady group's growing mode at the new values (F3-12d r1 M2)
+        foreach(rt -> check_coupled_growth(rt, integ.p), integ.runtimes)
         integ.aux === nothing || (integ.aux = _bind_aux(integ.prob, integ.store, integ.p))
         # (the bound parameters first: a new count sets an implicit group's step from them)
         copyto!(integ.pgood, integ.p)
@@ -1352,6 +1357,8 @@ function SII.finalize_parameters_hook!(integ::FieldIntegrator, _)
     catch
         copyto!(integ.p, integ.pgood)
         _rerun_init!(integ, integ.pgood)
+        # (a check after the new launches were installed: the old values' launches again)
+        installed && foreach(install_launches!, integ.runtimes, map(rt -> rebind_launches(rt, integ.p), integ.runtimes))
         rethrow()
     end
     return nothing

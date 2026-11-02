@@ -131,7 +131,7 @@ _bdf2_q_body!(i, q, un, prev) =
 # by more than 2× in each of the last two iterations is a divergence (`ConvergenceFailure`,
 # cause bits 4 and 2); at the last iteration, ‖δ_k‖∞ > ε_N ‖u_k − uⁿ‖∞ + 10 eps(T) ‖u_k‖∞ (a
 # steady solve: ‖δ_k‖∞ > (ε_N + 10 eps(T)) ‖u_k‖∞, and with ‖δ_k‖∞ ≥ ‖δ_1‖∞/2 a failure, cause
-# bit 16: no real reduction) is a Newton budget hit (counted, `Success`; not in the flip pass of a switch under the automatic
+# bit `nobit`: no real reduction, 16 for a row's own solve, 64 for a coupled solve) is a Newton budget hit (counted, `Success`; not in the flip pass of a switch under the automatic
 # count, whose second iteration fixes the switch state and tests nothing, M7). A row that meets the tolerance adds 1 to the word's
 # entry [8], which a host executor reads after each iteration to stop early under the automatic
 # count (`newton = nothing`: every row converged, so the later iterations would change the
@@ -158,7 +158,7 @@ function _be_norms_body!(b, part, dst, un, x, smask, v, res, s, mask, n)
     end
     return nothing
 end
-function _be_newton_body!(i, w, part, nb, hist, it, last, epsn, fl, window, steady)
+function _be_newton_body!(i, w, part, nb, hist, it, last, epsn, fl, window, steady, nobit)
     @inbounds begin                             # i = 1; 3nb ≤ length(part), hist has 3 entries, w 8
         T = eltype(part)
         dk, inc, un = zero(T), zero(T), zero(T)
@@ -174,7 +174,7 @@ function _be_newton_body!(i, w, part, nb, hist, it, last, epsn, fl, window, stea
         it == 1 && (hist[3] = dk)
         # a steady solve's budget hit whose correction did not halve from the first: no real
         # reduction (a singular region, S-a)
-        (fail == 0 && last && !conv && steady && !(dk < hist[3] / 2)) && (fail = UInt32(16))
+        (fail == 0 && last && !conv && steady && !(dk < hist[3] / 2)) && (fail = nobit)
         if fail != 0
             w[STATUS_CODE] = UInt32(2)
             w[STATUS_CAUSE] |= fail
@@ -321,9 +321,10 @@ window: it is rebuilt each window), the `timed` flag (the operator reads the tim
 rebuilt at each stage's end time), the `iterate` flag (a row's local Jacobian reads its own
 field, a local nonlinear term or a switch: that row's operator is rebuilt at every Newton
 iteration, at the iterate), Crank–Nicolson's right-side launches (`qres`, per slot parity, or
-nothing), the status word and the operator spec.
+nothing), the status word, the operator spec and the coupled solve (`cs`: a [`CoupledKrylov`](@ref)
+when the group's rows are solved together, F3-12d; `nothing` when they are solved one by one).
 """
-mutable struct ImplicitCache{RS, WK, JL, W, BK, QL, GT}
+mutable struct ImplicitCache{RS, WK, JL, W, BK, QL, GT, CS}
     rows::RS
     walk::WK
     jac::JL
@@ -357,6 +358,7 @@ mutable struct ImplicitCache{RS, WK, JL, W, BK, QL, GT}
     backend::BK
     qres::QL                            # Crank–Nicolson's right-side launches per slot parity, or nothing
     gate::GT                            # a device's convergence gate (batch 3 R1, F3-15), or nothing
+    cs::CS                              # the coupled solve (F3-12d, `CoupledKrylov`), or nothing: row by row
 end
 status_word(c::ImplicitCache) = c.word
 newton_count(c::ImplicitCache) = c.newton
@@ -408,12 +410,19 @@ end
 # the numeric operator of a row at parameters `p` and step `h`: faces, shift, face conditions
 # (homogeneous: δ has zero boundary data), the row's mask with value 0 (its update writes the
 # value). Whether the shift was clamped (a growth the count rule did not cover) is returned too.
-function _numeric_operator(s::Program{N}, r::RowOperator, id, p, h, γ, mask::Bool) where {N}
+# `coupled`: the row is a block of a coupled solve's preconditioner (F3-12d); a steady row with
+# no positive shift then takes its local block's size `|J_loc| + Σ |cross coefficients|`, so the
+# block is not singular where the coupling, not the row, sets the steady state (a growth or no
+# decay that the coupling damps)
+function _numeric_operator(s::Program{N}, r::RowOperator, id, p, h, γ, mask::Bool; coupled::Bool = false) where {N}
     dims = Tuple(Int.(leveldims(s, s.fields[id].levels[1])))      # (a `Coarse` field's grid, F3-16)
     face = ntuple(a -> _coefsum(r.faces[a], p), N)
     ih = 1 / (γ * h)
     s0 = ih - _coefsum(r.jloc, p)
     shift = max(s0, ih / 2)
+    if coupled && isinf(γ * h) && !(s0 > 0)
+        shift = abs(s0) + sum((abs(_coefsum(Coef[c], p)) for (_, c, _) in r.cross if !isnan(c.value)); init = 0.0)
+    end
     dir = ntuple(a -> s.periodic[a] ? (nothing, nothing) :
                       ntuple(k -> _face_kind(s, id, a, k, p)[1] === :dirichlet ? 0.0 : nothing, 2), N)
     rob = ntuple(a -> s.periodic[a] ? (nothing, nothing) :
@@ -435,11 +444,6 @@ end
 # the rows whose Robin faces' negative part stays out of the operator: every row of a time
 # stepper; a steady solve takes it into a numeric row's operator (`robin_full`), so only its
 # field rows (whose operator varies by site) keep the defect correction
-function steady_coupling(c::ImplicitCache, keys)
-    isinf(c.γ) || return nothing
-    cp = String[r.key for r in c.op.rows if r.key in keys && any(x -> x[1] in keys, r.cross)]
-    return length(cp) >= 2 ? cp : nothing
-end
 _robin_keys(alg, op::OperatorSpec, keys) = alg isa QuasiSteady ? String[r.key for r in op.rows if r.key in keys && r.field] : keys
 # The Robin faces with a negative diagonal of the rows `keys` at `p` (their part `w_a d⁻` stays
 # out of the operator: a defect correction, S1): whether there is one (`neg`), the bound of the
@@ -479,9 +483,8 @@ function _robin_bounds(s::Program{N}, op::OperatorSpec, keys, p) where {N}
     return (; neg, ρ, unseen = !isempty(texts), texts)
 end
 
-# the rows of the group's fields `keys` in solve order: topological in the reads among them
-# (the `rate:` kernels of the stepped program `s`), cycles in state order
-function _solve_order(s::Program, keys::Vector{String})
+# the fields of the group `keys` each row reads (its `rate:` kernel in the stepped program `s`)
+function _group_deps(s::Program, keys)
     ids = Dict(k => fieldid(s, k) for k in keys)
     deps = Dict{String, Set{String}}()
     for k in keys
@@ -489,6 +492,12 @@ function _solve_order(s::Program, keys::Vector{String})
         rd = i === nothing ? Int32[] : unique!([a.field for a in s.kernels[i].accesses])
         deps[k] = Set(q for q in keys if q != k && ids[q] in rd)
     end
+    return deps
+end
+# the rows of the group's fields `keys` in solve order: topological in the reads among them
+# (the `rate:` kernels of the stepped program `s`), cycles in state order
+function _solve_order(s::Program, keys::Vector{String})
+    deps = _group_deps(s, keys)
     out, left = String[], copy(keys)
     while !isempty(left)
         j = findfirst(k -> all(d -> d in out, deps[k]), left)
@@ -550,6 +559,9 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
     rs = residual_program(g, alg)
     keys = collect(String, fields)
     order, cyclic = _solve_order(s, keys)
+    # a coupled solve (F3-12d): the rows solved together, each Newton iteration's residuals all
+    # at the iterate (no row solved before another)
+    coupled = coupled_solve(alg, op, s, keys)
     swaps = Set(fieldid(s, k) for k in keys)
     all_state = issubset(Set(fieldid(s, k) for k in g.spec.state), swaps)
     γ = _gamma_start(alg)                           # the operator's γ at the first substep
@@ -589,6 +601,7 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
     rst = _alias_store(st, s, rs; own = qown, byid = true, V)
     rows = Any[]
     mkres = Any[]
+    sps, rcurss = Any[], Any[]
     exact = !cyclic
     # the current slots of a launch of the residual program `prog` for a row solved after the
     # rows `before`, at slot parity `par` (the first Newton iteration: the iterate is the stage's
@@ -611,8 +624,10 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
         u = st.bufs[id]
         T = _implicit_eltype(u[1], key, alg, V)
         sp = _implicit_plan(g, rs, (:residual, residual_key(alg), key), _row_kernels(rs, key, g.spec.init), V, backend, options; C = compute_type(alg, V))
-        before = Set(fieldid(s, q) for q in order[1:(ri - 1)])
+        before = coupled ? Set{Int}() : Set(fieldid(s, q) for q in order[1:(ri - 1)])
         rcurs = (rcur(rs, before, 1, true), rcur(rs, before, 2, true), rcur(rs, before, 1, false), rcur(rs, before, 2, false))
+        push!(sps, sp)
+        push!(rcurss, rcurs)
         mk = q -> ntuple(i -> BoundStep(backend, rs, sp, rst, q; cur = rcurs[i], c), 4)
         push!(mkres, mk)
         res = mk(p)
@@ -637,10 +652,10 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
             push!(rows, row)
             continue
         end
-        inner = alg.inner
+        inner = _row_inner(alg, coupled)
         solver_T = alg.solver_T === :auto ? T : alg.solver_T
         if !r.field
-            numeric, _ = _numeric_operator(s, r, id, p, hγ, 1.0, mask !== nothing)
+            numeric, _ = _numeric_operator(s, r, id, p, hγ, 1.0, mask !== nothing; coupled)
             ins = mask === nothing ? ("in.f" => resarr,) : ("in.f" => resarr, "mask" => mask)
             sv = Solvers.FieldSolver(backend, numeric; inner, T, solver_T, inputs = ins)
             smask, v, f, sh, jj, mm, dd, dm = nothing, nothing, nothing, numeric.shift, nothing, nothing, nothing, nothing
@@ -694,10 +709,15 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
     exact = exact0 && !rb.neg
     seen = isempty(b.unseen) && !rb.unseen
     ρin = b.ρ + b.κ + rb.ρ
-    exact || seen || alg.newton !== nothing || _warn_unseen(keys, [b.unseen; rb.texts], alg)
+    # (a coupled solve takes every term into its operator: no term is unseen)
+    coupled || exact || seen || alg.newton !== nothing || _warn_unseen(keys, [b.unseen; rb.texts], alg)
     iterate = any(r -> r.op.iterate, rows)
     smin = _steady_shift(op, keys, p)
-    newton = alg.newton !== nothing ? alg.newton : _auto_newton(alg, exact, switch, iterate, seen, ρin, h, b.θ, smin)
+    # (behind a barrier: a group that is not coupled compiles none of it, r1 M1)
+    cs = coupled ? Base.inferencebarrier(_bind_coupled)(rows, _krylov(alg.inner), st, s, rs, rst, sps, rcurss, swaps, keys,
+        g.spec.init, backend, p, c, op, alg) : nothing
+    newton = alg.newton !== nothing ? alg.newton : coupled ? _coupled_newton(alg, cs.linear, switch) :
+             _auto_newton(alg, exact, switch, iterate, seen, ρin, h, b.θ, smin)
     # the operator moves when it reads the time, the clock, a filled input or a field of the state
     # (rebuilt each window), or the solver reads a mask that moves
     moving = _jac_moving(jp, g.spec) || any(r -> r.mask !== nothing || r.dom !== nothing, rows) && _masks_moving(s, g.spec)
@@ -706,17 +726,21 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
     word = _zeros(st.backend, UInt32, 9)
     rt = Tuple(rows)
     mkjac0 = jp === nothing ? (q -> nothing) : mkjac
-    rebind = q -> ([m(q) for m in mkres], mkjac0(q), mkq(q))
+    rebind = q -> ([m(q) for m in mkres], mkjac0(q), mkq(q), cs === nothing ? nothing : cs.mkpres(q))
     timed = jp !== nothing && _reads_time(jp)
     # the device's convergence gate (batch 3 R1): under the automatic count, once every row met
     # the Newton tolerance the later iterations' residuals are zeroed, so their solves are done
     # at setup (the solver's gated launches do nothing) and the field is the host's early-stop
     # form. Not with a Robin face's defect term (the solve's right side is not the residual alone)
+    # (a coupled solve's right side is the residual alone, whatever its rows' faces)
     gate = !Exec.ishost(backend) && newton > 1 && alg.newton === nothing &&
-           !any(r -> r.solver !== nothing && Solvers.has_robin(r.solver.op), rows) ? _zeros(st.backend, UInt32, 1) : nothing
-    return ImplicitCache(rt, each(length(rt)), jac, newton, h, γ, true, true, jumps, moving, timed, word, op, exact0, exact,
+           (coupled || !any(r -> r.solver !== nothing && Solvers.has_robin(r.solver.op), rows)) ? _zeros(st.backend, UInt32, 1) : nothing
+    cache = ImplicitCache(rt, each(length(rt)), jac, newton, h, γ, true, true, jumps, moving, timed, word, op, exact0, exact,
         iterate, newton > 1, _flips(alg, exact, switch), alg.newton === nothing, switch, seen, ρin, b.θ, smin, keys,
-        cyclic, 0, rebind, backend, qres, gate)
+        cyclic, 0, rebind, backend, qres, gate, cs)
+    # a growing mode that the constant-coefficient check cannot see (r1 M2)
+    cs === nothing || Base.inferencebarrier(_check_growth)(cs, alg, s, op, keys, p)
+    return cache
 end
 
 # the operator of `spec` for algorithm `alg`: a front end's refusal (a hexagonal lattice, a
@@ -782,6 +806,12 @@ function _auto_newton(::QuasiSteady, exact, switch, iterate, seen, ρin, h, θ, 
     ρ < 1 || return QS_NEWTON_CAP
     return clamp(ceil(Int, log(NEWTON_EPS) / log(ρ)) + 1, QS_NEWTON, QS_NEWTON_CAP)
 end
+# the automatic Newton count of a coupled solve (F3-12d): its operator is the whole Jacobian, so
+# a group linear in its state takes 1 (the solve is the step, or the steady state); a nonlinear
+# steady group the checked `QS_NEWTON` (8; a host executor stops at the tolerance); a nonlinear
+# time stepper 1, 2 with a switch (one Newton step with the exact Jacobian keeps the method's
+# order, as the local nonlinear rows of the per-row path)
+_coupled_newton(::QuasiSteady, linear::Bool, switch::Bool) = linear ? 1 : QS_NEWTON
 # the smallest shift the operator of the rows `keys` keeps with no time-step term at `p` (the
 # decay `−J_loc`); NaN when a row's operator varies by site (no number bounds it)
 _steady_shift(op::OperatorSpec, keys, p) =
@@ -851,7 +881,7 @@ function _set_shift!(c::ImplicitCache, rt::GroupRuntime, γ::Float64; force::Boo
     (force || γ != c.γ) || return nothing
     s = group_program_of(rt)
     for r in c.rows
-        _set_row_step!(r, s, rt.p, γ * c.h)
+        _set_row_step!(r, s, rt.p, γ * c.h; coupled = c.cs !== nothing)
     end
     c.γ = γ
     c.stale = true
@@ -866,20 +896,21 @@ function _count_set!(c::ImplicitCache, rt::GroupRuntime)
 end
 function _set_newton!(c::ImplicitCache, alg)
     c.auto || return nothing
-    c.newton = _auto_newton(alg, c.exact, c.switch, c.iterate, c.seen, c.ρin, c.h, c.θ, c.smin)
+    c.newton = c.cs !== nothing ? _coupled_newton(alg, c.cs.linear, c.switch) :
+               _auto_newton(alg, c.exact, c.switch, c.iterate, c.seen, c.ρin, c.h, c.θ, c.smin)
     c.check = c.newton > 1
     c.flip = _flips(alg, c.exact, c.switch)
     return nothing
 end
 group_program_of(rt::GroupRuntime) = rt.program
 # the shift of a row at the stage step `hγ = γh` (`1/hγ`)
-function _set_row_step!(r::ImplicitRow, s, p, hγ)
+function _set_row_step!(r::ImplicitRow, s, p, hγ; coupled::Bool = false)
     if r.solver === nothing
         r.s isa Number && (r.s = oftype(r.s, max(1 / hγ - _coefsum(r.op.jloc, p), 1 / (2hγ))))
         return nothing
     end
     r.numeric === nothing && return nothing
-    op, _ = _numeric_operator(s, r.op, fieldid(s, r.key), p, hγ, 1.0, r.mask !== nothing)
+    op, _ = _numeric_operator(s, r.op, fieldid(s, r.key), p, hγ, 1.0, r.mask !== nothing; coupled)
     Solvers.set_coefficients!(r.solver, op)
     r.numeric = op
     r.s = op.shift
@@ -979,7 +1010,7 @@ function _newton_check!(r::ImplicitRow, backend, word, dst, un, x, it, last, win
     # (a field stored in Float16: its rounding at each update is part of the floor, S1)
     fl = eltype(dst) === Float16 ? T(10 * eps(T) + 2 * eps(Float16)) : T(10 * eps(T))
     Exec.launch!(backend, _be_newton_body!, 1, (word, r.part, Int32(nb), r.hist, Int32(it), last, T(NEWTON_EPS),
-        fl, window, steady))
+        fl, window, steady, UInt32(16)))
     return nothing
 end
 
@@ -1072,7 +1103,7 @@ function _stage!(c::ImplicitCache, rt::GroupRuntime, t1::Float64, γ::Float64, h
         # (the automatic count's flip pass of a switch counts no budget hit, M7)
         c.gate === nothing ||
             Exec.launch!(c.backend, _be_gate_iter_body!, 1, (c.word, c.gate, UInt32(length(c.rows)), it == 1))
-        c.walk(c.rows, (par, it == 1, t1, hγ, k, it == c.newton, w, c.backend, 1.0, c.word, it, c.check,
+        _iterate!(c.cs, c, (par, it == 1, t1, hγ, k, it == c.newton, w, c.backend, 1.0, c.word, it, c.check,
             it == c.newton && !c.flip, c.gate))
         # under the automatic count a host executor stops when every row converged (a plain
         # read); the clip of the last iteration then runs on its own
@@ -1082,8 +1113,13 @@ function _stage!(c::ImplicitCache, rt::GroupRuntime, t1::Float64, γ::Float64, h
         end
     end
     _swap!(rt.store.cur, rt.swaps)
+    _after_solve!(c.cs, _parity(rt), t1, hγ)          # (a nonlinear coupled steady group's growth check)
     return nothing
 end
+
+# one Newton iteration of the group's rows: one by one, or coupled (F3-12d)
+_iterate!(::Nothing, c::ImplicitCache, a) = c.walk(c.rows, a)
+_iterate!(cs, c::ImplicitCache, a) = _coupled_iteration!(cs, c, a)
 
 """
     compile_cache!(c::ImplicitCache, rt)
@@ -1107,7 +1143,7 @@ function compile_cache!(c::ImplicitCache, rt::GroupRuntime)
             c.walk(c.rows, _Rebuild(c.backend, h, 1.0, c.word, false, w))
             c.gate === nothing || Exec.launch!(c.backend, _be_gate_iter_body!, 1, (c.word, c.gate, UInt32(length(c.rows)), true))
             for first in (true, false)
-                c.walk(c.rows, (par, first, 0.0, h, 0, true, w, c.backend, 1.0, c.word, 1, c.check, false, c.gate))
+                _iterate!(c.cs, c, (par, first, 0.0, h, 0, true, w, c.backend, 1.0, c.word, 1, c.check, false, c.gate))
             end
             c.walk(c.rows, _Clip(c.backend, par))
             if c.rows[1].q !== nothing
@@ -1131,16 +1167,17 @@ function rebind_launches(rt::GroupRuntime{<:FieldStore, <:ImplicitAlgorithm}, p)
         _bind_masks(rt.backend, rt.program, rt.init, rt.store, p, rt.swaps, rt.all_state, rt.c,
             Set(fieldid(rt.program, k) for k in rt.keys)))
     c = rt.cache::ImplicitCache
-    res, jac, qres = c.rebind(p)
+    res, jac, qres, pres = c.rebind(p)
     hγ = c.γ * c.h
     ops = Any[r.numeric === nothing ? nothing :
-              first(_numeric_operator(rt.program, r.op, fieldid(rt.program, r.key), p, hγ, 1.0, r.mask !== nothing))
+              first(_numeric_operator(rt.program, r.op, fieldid(rt.program, r.key), p, hγ, 1.0, r.mask !== nothing;
+                  coupled = c.cs !== nothing))
               for r in c.rows]
     shifts = Any[r.solver === nothing && r.s isa Number ? oftype(r.s, max(1 / hγ - _coefsum(r.op.jloc, p), 1 / (2hγ))) :
                  nothing for r in c.rows]
-    return (steps[1], steps[2], (res, jac, ops, shifts, p, qres))
+    return (steps[1], steps[2], (res, jac, ops, shifts, p, qres, pres))
 end
-function install_launches!(rt::GroupRuntime{<:FieldStore, <:ImplicitAlgorithm}, (steps, masks, (res, jac, ops, shifts, p, qres)))
+function install_launches!(rt::GroupRuntime{<:FieldStore, <:ImplicitAlgorithm}, (steps, masks, (res, jac, ops, shifts, p, qres, pres)))
     rt.steps, rt.masks = steps, masks
     c = rt.cache::ImplicitCache
     for (i, r) in enumerate(c.rows)
@@ -1154,6 +1191,11 @@ function install_launches!(rt::GroupRuntime{<:FieldStore, <:ImplicitAlgorithm}, 
     end
     c.jac = jac
     c.qres = qres
+    if c.cs !== nothing
+        for (cr, pr) in zip(c.cs.rows, pres)
+            cr.pres = pr
+        end
+    end
     # (here, not in `rebind_launches`: front end A writes the tables between the two)
     bp = _bound_params(rt.store, rt.program, c.op, c.keys, p)
     b, rb = inexact_bounds(c.op, c.keys, c.cyclic, bp), _robin_bounds(rt.program, c.op, _robin_keys(rt.alg, c.op, c.keys), bp)
@@ -1164,7 +1206,7 @@ function install_launches!(rt::GroupRuntime{<:FieldStore, <:ImplicitAlgorithm}, 
     c.ρin = b.ρ + b.κ + rb.ρ
     c.θ = b.θ
     c.smin = _steady_shift(c.op, c.keys, p)
-    c.exact || c.seen || rt.alg.newton !== nothing || _warn_unseen(c.keys, [b.unseen; rb.texts], rt.alg)
+    c.cs !== nothing || c.exact || c.seen || rt.alg.newton !== nothing || _warn_unseen(c.keys, [b.unseen; rb.texts], rt.alg)
     _set_newton!(c, rt.alg)
     reset!(rt)
     return rt
@@ -1206,7 +1248,8 @@ function substeps(spec::GroupSpec, alg::ImplicitAlgorithm, dt::Real, pp; fields 
     ρrob = _robin_bounds(spec.rate, op, keys, pp).ρ
     γ = _gamma_count(alg)
     # (the convergence rule on the sum: the parts out of the operator add in one correction)
-    n1, n2 = ceil(Int, 2γ * dt * g), ceil(Int, 2γ * dt * (b.ρ + b.κ + ρrob) / (1 - b.θ))
+    n1 = ceil(Int, 2γ * dt * g)
+    n2 = ceil(Int, 2γ * dt * (b.ρ + b.κ + ρrob) / (1 - b.θ))
     m = something(alg.substeps, _least_count(spec, alg, keys))
     if alg.substeps !== nothing && max(n1, n2) > m
         rule = n2 >= n1 ? 2 : 1
@@ -1240,7 +1283,16 @@ function substeps(spec::GroupSpec, alg::QuasiSteady, dt::Real, pp; fields = spec
     check_declared(stability, pp)
     ctx = (; stability, pp, r, fields = collect(String, fields), dt = Float64(dt), least = nothing)
     (isempty(r.negative) && !any(x -> x[3] isa Tuple, r.nonfinite)) || refuse_parameters(texts, ctx)
-    _steady_refusals(spec, _operator(spec, alg), collect(String, fields), pp)
+    op = _operator(spec, alg)
+    keys = collect(String, fields)
+    if coupled_solve(alg, op, spec.rate, keys)
+        # the rows solved together: the coupled system decides (its modes, where they are known;
+        # else the device), not each row on its own (a row's growth that the coupling damps is a
+        # well-posed steady system, F3-12d)
+        Base.inferencebarrier(_coupled_refusal)(spec.rate, op, keys, pp)      # (no compile for a single field, r1 M1)
+    else
+        _steady_refusals(spec, op, keys, pp)
+    end
     return 1
 end
 # The steady refusals of the rows `keys` at raw parameters `p` (invalid input, F3 design §3.5):

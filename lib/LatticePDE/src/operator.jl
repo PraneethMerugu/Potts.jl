@@ -166,6 +166,22 @@ function _cross_bound(k, term, others, cf, params, bysite)
     end
     return ("", Coef(NaN), _optext(k, term))
 end
+# a cross diffusion term `m Op(o)` of another field `o` (key `key`) with a numeric face
+# coefficient (a number or a number times a parameter, free of the coordinates and the inputs):
+# its faces per axis `m K / h_a²` as `Coef`s (F3-12d: the coupled steady system's modes);
+# `nothing` otherwise
+function _cross_faces(term, key, xs, params, bysite, h, N)
+    key == "" && return nothing
+    p = _diffusion_parts(term, xs)
+    (p === nothing || bysite(p.m) || bysite(p.K)) && return nothing
+    mK = _coefof(unwrap(substitute(p.m * p.K, Dict(); fold = Val(true))), params)
+    mK === nothing && return nothing
+    faces = [Coef[] for _ in 1:N]
+    for a in (p.axes === :all ? (1:N) : (p.axes,))
+        push!(faces[a], Coef(mK.value / h[a]^2, mK.param))
+    end
+    return faces
+end
 # An interval bound of a coefficient (M3): a function `pp -> (lo, hi)` of the parameters (a
 # `Problems.ParamsTables`, or the raw vector: a table read is then unbounded), with a parameter
 # at its value, a coordinate over the box, a table read over the table's entries (and the 0 an
@@ -357,7 +373,11 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
         others = [o for o in allops if !isequal(o, _ref(c)) && !any(i -> isequal(i, o), inputops)]
         adv = Any[]                             # the advection bound (F3-09b, F3-13), per term and axis
         cross = Tuple{String, Coef, String}[]   # the cross terms: (field, coefficient, text)
+        crossfaces = Tuple{String, Vector{Vector{Coef}}}[]  # a cross diffusion `D Δ(o)`: (field, faces per axis)
         unseen = String[]                       # terms out of the operator that no bound sees
+        # linear in the group's state: every term's class is (F3-12d: the coupled solve's
+        # directional difference is then exact at any step)
+        linear = all(x -> last(x) in (:Diffusion, :SiteDiffusion, :LinearLocal, :Advection, :CrossLinear, :Source), cf.linearity[k])
         for (term, class) in cf.linearity[k]
             if class in (:Diffusion, :SiteDiffusion)
                 p = _diffusion_parts(term, xs)
@@ -374,7 +394,10 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
                 continue                        # residual only, exact
             elseif class == :CrossLinear
                 # residual only, exact in solve order; its coefficient bounds a cycle's correction
-                push!(cross, _cross_bound(k, term, others, cf, params, bysite))
+                cb = _cross_bound(k, term, others, cf, params, bysite)
+                push!(cross, cb)
+                cfc = _cross_faces(term, cb[1], xs, params, bysite, hk, N)
+                cfc === nothing || push!(crossfaces, (cb[1], cfc))
             elseif class == :Advection && (ab = something(_advection_bound(term, params, hk),
                                                           _advection_ibound(k, term, params, tabset, box, hk), Some(nothing))) !== nothing
                 # out of the operator (a defect correction) with a bound: the count rule 2 (a
@@ -463,7 +486,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
             plans[k] = (; diff, jterms, scaled, local_only)
         end
         push!(rows, Problems.RowOperator(k, faces, jloc, field, scaled, domain, local_only, isempty(inexact), inexact,
-            iterate, switch, adv, cross, unseen, bounds, facemax, jmax))
+            iterate, switch, adv, cross, unseen, bounds, facemax, jmax, linear, crossfaces))
     end
     jac = isempty(plans) ? nothing : _jac_program(cf, sys, disc, plans, params, xs)
     return Problems.OperatorSpec{N}(rows, jac)

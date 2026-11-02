@@ -562,3 +562,115 @@ end
     @test Array(st.site.c) != fi_runB(FiMoving, (16, 16), 1; u0 = [:c => c3], inputs = [:kind => Int32.(σ3 .!= 0)],
         alg = QuasiSteady(; dt = 1.0))[1]
 end
+
+# F3-12d: the coupled steady solve in A. Steady rows that read one another are one QuasiSteady
+# group solved together (Krylov.jl FGMRES on the group's whole Jacobian), as in B: with σ frozen
+# A equals B bitwise; components equal scalars; a loop through a transient field composes the
+# steady gains; Float16 storage is refused. Base (c40a68f8, ~/lpwork/f312d/nc-base-potts.log):
+# the strong pair ends `ConvergenceFailure`, the feedback loop is refused.
+@potts_model FcPair begin
+    @kinds medium A[frozen]
+    @variables begin
+        u(field) = 0.0
+        v(field) = 0.0
+    end
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations begin
+        0 ~ 0.1 * Δ(u) - 0.1 * u + 5.0 * v + 0.5 * (kind == A)
+        0 ~ 0.1 * Δ(v) - v - 5.0 * u
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FcComp begin
+    @kinds medium A[frozen]
+    @variables w(field)[1:2] = 0.0
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations begin
+        0 ~ 0.1 * Δ(w[1]) - 0.1 * w[1] + 5.0 * w[2] + 0.5 * (kind == A)
+        0 ~ 0.1 * Δ(w[2]) - w[2] - 5.0 * w[1]
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FcFeed begin
+    @kinds medium A[frozen]
+    @parameters k = 0.5
+    @variables begin
+        e(field) = 0.0
+        u(field) = 0.0
+        v(field) = 0.0
+    end
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations begin
+        D(e) ~ 0.1 * Δ(e) - e + 0.5 * v + 0.5 * (kind == A)
+        0 ~ 0.1 * Δ(u) - u + k * v + 0.2 * e
+        0 ~ 0.1 * Δ(v) - v - k * u
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FcHalf begin
+    @kinds medium A[frozen]
+    @variables begin
+        u(field) = 0.0
+        v(field) = 0.0, [lattice_storage = Float16]
+    end
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations begin
+        0 ~ 0.1 * Δ(u) - u + 0.5 * v + 0.5 * (kind == A)
+        0 ~ 0.1 * Δ(v) - v - 0.5 * u
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+fc_site(integ, names) = [copy(Array(getproperty(current_state(integ).site, n))) for n in names]
+function fc_runA(M, k, names; kw...)
+    integ = init(PottsProblem(M(; name = :f), fi_op((12, 10)), (0, k); kw...), SequentialCPM(); save_start = false)
+    return [(step!(integ); fc_site(integ, names)) for _ in 1:k], integ
+end
+function fc_runB(M, k, names; alg, kw...)
+    bp = Potts.LatticePDE.discretize(Potts.fields(M(; name = :f)),
+        Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((12, 10)); T = Float64, problem = :owned);
+        u0 = [n => zeros(12, 10) for n in names], tspan = (0, k), inputs = [:kind => fi_kin((12, 10))], kw...)
+    s = Potts.LatticePDE.solve(bp, alg; saveat = 1.0)
+    return [[s[n][i] for n in names] for i in 2:(k + 1)], s
+end
+
+@testset "F3-12d: coupled steady rows in A: solved together, equal to B bitwise; components equal scalars" begin
+    a, integ = fc_runA(FcPair, 3, (:u, :v))
+    rt = fi_rt(integ)
+    @test integ.retcode == FiRC.Default && Potts.LatticeFields.Problems.coupled_solve(rt.cache) && rt.cache.newton == 1
+    b, sb = fc_runB(FcPair, 3, (:u, :v); alg = QuasiSteady(; dt = 1.0))
+    @test sb.retcode == FiRC.Success && a == b || (println("12d A=B ", maximum(abs, a[end][1] .- b[end][1])); false)
+    @test fi_warm(integ) == 0
+    # the steady state: the rate is 0 to the solver's tolerance (u is not 0: the cells' source)
+    u, v = a[end]
+    @test maximum(abs, u) > 0.01 && maximum(abs, v) > 0.01
+    # components: the scalar spelling's run, bitwise
+    _, ic = fc_runA(FcComp, 3, ())
+    st = current_state(ic).site
+    @test [Array(st.w_1), Array(st.w_2)] == a[end]
+end
+
+@testset "F3-12d: a coupled steady pair feeding back through a transient field in A, equal to B" begin
+    a, integ = fc_runA(FcFeed, 4, (:e, :u, :v); field_solver = BackwardEuler())
+    @test integ.retcode == FiRC.Default
+    b, sb = fc_runB(FcFeed, 4, (:e, :u, :v); alg = BackwardEuler(; dt = 1.0))
+    @test a == b || (println("12d feed ", maximum(abs, a[end][1] .- b[end][1])); false)
+    # strong (k = 5): the rule's bound on the pair's joint gain does not hold; the routes say that
+    # the steady rows must be rates for `BackwardEuler`
+    m = try
+        PottsProblem(FcFeed(; name = :f, k = 5.0), fi_op((12, 10)), (0, 3)); ""
+    catch err
+        sprint(showerror, err)
+    end
+    @test occursin("the steady fields `u`, `v` of one group read one another", m) &&
+          occursin("for a `BackwardEuler` route, write the steady rows of `u`, `v` as rates `D(c) ~ rhs`", m) ||
+          (println("12d strong A ", m); false)
+end
+
+@testset "F3-12d: a coupled steady group with a Float16 field is refused" begin
+    @test_throws "the field `v` is stored in Float16, whose rounding is too coarse for the coupled solve's difference of the residual; give it `lattice_storage = Float32`" init(
+        PottsProblem(FcHalf(; name = :f), fi_op((12, 10)), (0, 3)), SequentialCPM())
+end

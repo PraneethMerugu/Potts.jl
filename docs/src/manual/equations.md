@@ -155,8 +155,8 @@ sol[:x][end], sol[:g][end]
 | `ode_solver` | `ExplicitEuler(; substeps)`, `RK4(; substeps)`, `Adaptive(alg; kwargs...)` | `ExplicitEuler()`, one step per MCS |
 | `solvers` | `[x => solver, …]`, per variable or component | — |
 
-The linear solvers `DevicePCG(; budget, rtol, precond)` and `Multigrid(; cycle = (2, 2), cycles, rtol, budget)`
-are the `LatticeFields.Solvers` objects, the same in Potts and LatticePDE. They are the
+The linear solvers `DevicePCG(; budget, rtol, precond)`, `Multigrid(; cycle = (2, 2), cycles, rtol, budget)`
+and `DeviceGMRES(; restart, budget, rtol, precond)` are the `LatticeFields.Solvers` objects, the same in Potts and LatticePDE. They are the
 `inner` linear solver of the implicit field solvers:
 `field_solver = BackwardEuler(; inner = DevicePCG(; budget = 12))`. They are not field
 solvers themselves: `field_solver`, `solvers` and `FieldGroups` refuse them and give that
@@ -182,7 +182,9 @@ the sum of their bounds; advection with a constant velocity: `substeps ≥ 2 · 
 diffusion term that is at most half the one in the solve, face by face (with a multiplier in
 the solve that is positive everywhere), needs no extra substeps at all, only a few more
 Newton iterations. When these rules raise a `substeps = n` you gave, a warning says which
-rule and which terms. Each substep
+rule and which terms. `DeviceGMRES` is not a time stepper's `inner` (it is the coupled steady
+solve's, below): on BackwardEuler, CrankNicolson and BDF2 it was slower in every case measured,
+so they refuse it. Each substep
 checks the Newton correction: a correction that does not reach the tolerance in `newton`
 iterations is counted in `integ.stats` and warned once with the route (a larger `newton = k`,
 or more substeps). A correction that diverges ends the run with
@@ -225,9 +227,24 @@ with `QuasiSteady` by default (another solver for it is an error). Its sign does
 values of that MCS. `QuasiSteady` also solves a rate row `D(c) ~ rhs` as `0 = rhs`. It takes `newton`, `inner` and `solver_T` with the meanings above, and has no
 `substeps` and no `lower`. A linear field takes one linear solve per MCS; a nonlinear or
 switched one takes up to 8 Newton iterations, checked as above. When a term stays out of the
-operator (advection, the coupling between the fields of one group), the count comes from the
-bound on that term against the decay, from 8 to at most 40 iterations; give `newton = k` if
-the warning says the budget is hit. A Robin face of either sign is in the operator, so a
+operator (advection), the count comes from the bound on that term against the decay, from 8
+to at most 40 iterations; give `newton = k` if the warning says the budget is hit. Steady
+fields of one `QuasiSteady` that read one another (`0 ~ Δ(a) - a + 0.5b` and
+`0 ~ Δ(b) - b - 0.5a`, a cross diffusion `Δ(b)` in `a`'s row), and a row with a term the
+operator does not see (`c²` in `0 ~ q - c^2`), are solved together: one Newton iteration
+solves all their rows with every cross term in the operator, by a restarted GMRES
+(`DeviceGMRES()`; a `DevicePCG` or `Multigrid` given as `inner` is its preconditioner). There
+is no gain limit inside one group. On a GPU this solve waits for each dot product of its GMRES
+(about 100–250 waits per MCS for a strong pair), where every other field solver waits for none;
+a model whose fields are not coupled this way keeps a GPU step free of waits. A coupled steady system whose slowest mode grows or is
+neutral (an eigenvalue of its Jacobian with nonnegative real part) has no stable steady state:
+it is refused, naming that eigenvalue, with the route `BackwardEuler`. With constant
+coefficients the eigenvalues are exact, mode by mode. With a coefficient that varies by site
+a growing mode is found by a short Arnoldi estimate through the coupled operator and refused
+the same way: for a linear group at the start and at each parameter write, for a nonlinear group
+at the steady state of its first solve after either, or after the steady start (`init = :steady`):
+the run stops with the refusal right after that solve. In Potts a parameter write and a change of the cells' kinds are not checked again (only
+the start is); in LatticePDE every parameter write is. A Robin face of either sign is in the operator, so a
 linear field with one is still one solve. The steady state must exist and be unique, so `QuasiSteady` refuses
 three kinds of field, at the start and at every parameter write:
 
@@ -245,10 +262,13 @@ the groups can grow. The coupling rule takes that gain: at most `1/k` for a deca
 with a Dirichlet or Robin face (a mask does not count, since it moves with the cells). A loop
 is accepted when `mcs_duration · Σ k_in · gain · k_out ≤ 1`, with `k_in` the coefficients by
 which the other group reads the steady field and `k_out` those by which the steady field reads
-it back. Past that limit, or when the rule has no bound for the gain (no decay and no face, a
-steady field that reads another steady field of the loop), it is refused, with the routes: one
+it back. Several steady groups in one loop compose their gains (the rule solves the steady
+responses together), as long as that composition is bounded. Past that limit, or when the rule
+has no bound for the gain (no decay and no face), it is refused, with the routes: one
 `BackwardEuler` solver for the fields, `BackwardEuler` for the steady field, or a shorter
-window. An accepted loop is first order in the window: the steady field reads the other field's
+window. A loop of steady groups only, or a steady group that reads another steady group of its
+loop, is refused with the route of one `QuasiSteady` for those fields, which solves them
+together. An accepted loop is first order in the window: the steady field reads the other field's
 values at the start of the MCS. The limit `κ ≤ 1` is a stability rule, not an accuracy rule: an
 excitatory loop (one that grows) can lag far behind its true growth even below the limit, so
 give it a smaller `mcs_duration` or step its fields in one solver group. A steady field that

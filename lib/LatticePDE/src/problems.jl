@@ -683,6 +683,28 @@ function _steady_gain(b::StabilityBound, i, p)
     end
     return g
 end
+# The response of a steady group's fields to a unit lagged input (F3-12d): `X = (I − M)⁻¹ (G ∘ e)`,
+# `M = diag(G) k` (`k` the group's reads of its own fields), when `I − M` is an M-matrix (every
+# pivot of its elimination without pivoting positive, which for a Z-matrix is `ρ(M) < 1`);
+# `nothing` when it is not (the group's own couplings are too strong for this bound)
+function _steady_response(G::Vector{Float64}, e::Vector{Float64}, k::Matrix{Float64})
+    n = length(G)
+    A = [(i == j ? 1.0 : 0.0) - G[i] * k[i, j] for i in 1:n, j in 1:n]
+    x = G .* e
+    for c in 1:n
+        A[c, c] > 1e-12 || return nothing
+        for r in (c + 1):n
+            m = A[r, c] / A[c, c]
+            m == 0 && continue
+            A[r, c:n] .-= m .* A[c, c:n]
+            x[r] -= m * x[c]
+        end
+    end
+    for r in n:-1:1
+        x[r] = (x[r] - sum((A[r, j] * x[j] for j in (r + 1):n); init = 0.0)) / A[r, r]
+    end
+    return all(v -> isfinite(v) && v >= 0, x) ? x : nothing
+end
 # the solution of the tridiagonal system with diagonal `d`, off-diagonal `−w` and right side 1
 function _tridiag_ones(d::Vector{Float64}, w::Float64)
     n = length(d)
@@ -700,13 +722,18 @@ function _tridiag_ones(d::Vector{Float64}, w::Float64)
 end
 
 # The QuasiSteady gain in the coupling rule (`Problems.steady_loop_rates`, F3-12c; design
-# §3.6): a steady group `q` answers its lagged inputs at once, `δq ≤ G_q K_q δu` with `G_q` its
-# gain (`_steady_gain`, the worst row) and `K_q` the largest row sum of its reads of the loop's
-# other groups. A group `g` of the loop that is not steady reads `q` with coefficients `k_in`,
-# so its lagged rate is `Σ k_in G_q K_q` over its reads of steady groups plus its own reads of
-# the other groups (`κ_QS = dt Σ k_in k_out / s_min` when the gain is the decay's). The rule
-# does not bound a steady group that reads a steady field of the loop (its own group's, or
-# another steady group's), nor a term it cannot see: `why` names that, and the loop is refused.
+# §3.6): a steady group `q` answers its lagged inputs at once. Each of its fields `i` (row
+# gain `G_i`, `_steady_gain`) reads the loop's other groups with a row sum `e_i` and the
+# group's own fields `j` with `k_ij` (F3-12d: the group's rows solved together, or one by one in
+# the order of their reads; either way its steady state), so `|δq_i| ≤ G_i (e_i |δu| + Σ_j k_ij
+# |δq_j|)`: with `M = G k` (`M_ij = G_i k_ij`) of spectral radius below 1 (`I − M` an
+# M-matrix), the response of field `i` is at most `X_i |δu|`, `X = (I − M)⁻¹ (G ∘ e)` (one field
+# reading nothing of its group: `X = G e`). A group `g` of the loop that is not steady reads
+# field `j` of `q` with coefficient `k_in`, so its lagged rate is `Σ k_in X_j` over its reads
+# of steady fields plus its own reads of the other groups (`κ_QS = dt Σ k_in k_out / s_min` when
+# the gain is the decay's). The rule does not bound a steady group that reads a steady field of
+# another steady group of the loop, a group whose own couplings make `ρ(M) ≥ 1`, nor a term it
+# cannot see: `why` names that, and the loop is refused.
 function Problems.steady_loop_rates(b::StabilityBound, groups, p, steady, loops)
     n = length(groups)
     gof = Dict{String, Int}(k => g for (g, ks) in enumerate(groups) for k in ks)
@@ -714,33 +741,49 @@ function Problems.steady_loop_rates(b::StabilityBound, groups, p, steady, loops)
     terms(r, i) = Iterators.flatten((((f, j, f(p)) for (f, j) in r.crosslinear if j != 0),
                                      ((f, j, f(p) * (4 * sum(b.invh2[j]) + _face_excess(b, j, p))) for (f, j) in r.crossdiffusion if j != 0)))
     G, K = zeros(n), zeros(n)
+    X = Dict{String, Float64}()                 # each steady field's response per unit lagged input
     why = Any[nothing for _ in 1:n]
     for h in 1:n
         steady[h] && !isempty(loops[h]) || continue
-        for k in groups[h]
+        ks = groups[h]
+        nk = length(ks)
+        Gi, ei, kin = zeros(nk), zeros(nk), zeros(nk, nk)
+        for (a, k) in enumerate(ks)
             i = get(rowof, k, 0)
             i == 0 && (why[h] = (:unseen, k, ""); continue)
             k in b.crossunseen && why[h] === nothing && (why[h] = (:unseen, k, ""))
             gi = _steady_gain(b, i, p)
             gi === nothing && why[h] === nothing && (why[h] = (:robin, k, ""))
             gi === :advection && why[h] === nothing && (why[h] = (:advection, k, ""))
-            gi isa Real && (G[h] = max(G[h], gi))
+            gi isa Real && (Gi[a] = gi; G[h] = max(G[h], gi))
             for r in b.rows[i]
                 tot = 0.0
+                own = zeros(nk)
                 for (f, j, v) in terms(r, i)
                     hj = get(gof, b.keys[j], 0)
                     (hj == 0 || !(hj in loops[h])) && continue
-                    if steady[hj]
+                    if hj == h                  # (the group's own field: solved with it)
+                        own[findfirst(==(b.keys[j]), ks)] += v
+                    elseif steady[hj]
                         why[h] === nothing && (why[h] = (:steady, k, b.keys[j]))
                     else
                         tot += v
                     end
                 end
-                isfinite(tot) || why[h] !== nothing || (why[h] = (:coef, k, ""))
+                (isfinite(tot) && all(isfinite, own)) || why[h] !== nothing || (why[h] = (:coef, k, ""))
+                ei[a] = max(ei[a], tot)
+                kin[a, :] .= max.(kin[a, :], own)
                 K[h] = max(K[h], tot)
             end
         end
-        isfinite(G[h]) || why[h] !== nothing || (why[h] = (:island, first(groups[h]), ""))
+        isfinite(G[h]) || why[h] !== nothing || (why[h] = (:island, first(ks), ""))
+        why[h] === nothing || continue
+        xs = _steady_response(Gi, ei, kin)
+        xs === nothing && (why[h] = (:coupled, first(ks), join([k for (a, k) in enumerate(ks) if any(!iszero, kin[a, :]) ||
+                                                                     any(!iszero, kin[:, a])], "`, `")); continue)
+        for (a, k) in enumerate(ks)
+            X[k] = xs[a]
+        end
     end
     out = map(1:n) do g
         l = loops[g]
@@ -760,15 +803,17 @@ function Problems.steady_loop_rates(b::StabilityBound, groups, p, steady, loops)
                 for (f, j, v) in terms(r, i)
                     hj = get(gof, b.keys[j], 0)
                     (hj == 0 || hj == g || !(hj in l)) && continue
-                    c = steady[hj] ? v * G[hj] * K[hj] : v
+                    c = steady[hj] ? v * X[b.keys[j]] : v
                     tot += c
                     (best === nothing || (isfinite(worst) && !(c <= worst))) && (worst = c; best = (f, j, hj))
                 end
                 best === nothing && continue
                 isfinite(q.rate) && !(tot <= q.rate) || continue
                 f, j, hj = best
+                # (the message's gain: the field's response over its group's largest read of the loop)
+                kq = steady[hj] ? K[hj] : 0.0
                 q = (; q..., rate = tot, row = k, other = b.keys[j], text = _coef_text(f.text), raw = f.text,
-                     gain = steady[hj] ? G[hj] : 0.0, kout = steady[hj] ? K[hj] : 0.0, qs = steady[hj] ? b.keys[j] : "")
+                     gain = steady[hj] ? (kq > 0 ? X[b.keys[j]] / kq : G[hj]) : 0.0, kout = kq, qs = steady[hj] ? b.keys[j] : "")
             end
         end
         isfinite(q.rate) || return (; q..., why = (:coef, q.row, q.other))

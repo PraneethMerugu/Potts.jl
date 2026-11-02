@@ -128,7 +128,9 @@ no implicit solve yet (the solver's operator has no hexagonal faces): step it wi
 - `lower`: the clip `max(v, lower)` after each substep (a positivity route; Backward Euler
   keeps nonnegative data nonnegative on M-matrix rows, so it is rarely needed).
 - `inner`: the linear solver: `:auto` (`DevicePCG()` with one V(2,2) cycle, budget 8), a
-  `DevicePCG(…)` or a `Multigrid(…)`.
+  `DevicePCG(…)` or a `Multigrid(…)` (each row's own solve, the terms out of its operator
+  corrected by the Newton iterations). `DeviceGMRES(…)` is `QuasiSteady`'s only (the coupled
+  steady solve); a time stepper refuses it.
 - `solver_T`: the solver's number type, `:auto` (the state's), `Float32` or `Float64`.
 - `compute_T`: the number type the group's kernels (rate, residual, operator, update) compute
   in, `:auto` (the problem's value type), `Float32` or `Float64`. A wider type than the
@@ -175,9 +177,15 @@ function _implicit_keywords(w, dt, substeps, newton, lower, inner, solver_T)
     lower === nothing || lower isa Real && !(lower isa Bool) && isfinite(lower) ||
         throw(ArgumentError("$w: lower = $(repr(lower)) must be a finite number (a clip at ±Inf or NaN " *
                             "clips nothing or every value; leave `lower` out for no clip)"))
-    inner === :auto || inner isa Solvers.DevicePCG || inner isa Solvers.Multigrid ||
-        throw(ArgumentError("$w: `inner` takes `:auto`, a `DevicePCG(…)` or a `Multigrid(…)` (the linear solver of " *
-                            "each implicit step); got $(repr(inner))"))
+    # (`DeviceGMRES` is the coupled steady solve's: on a time stepper it was slower in every case
+    # measured, F3-12d r1, user ruling 2026-11-03)
+    inner isa Solvers.DeviceGMRES && w != "QuasiSteady" && throw(ArgumentError(string(w, ": `inner = ", repr(inner),
+        "` is the solver of a coupled steady group (`QuasiSteady`, whose fields read one another); a time stepper ",
+        "solves each field with `DevicePCG(…)` (the default) or `Multigrid(…)`: leave `inner` out, or give ",
+        "`inner = DevicePCG(; budget = n)`")))
+    inner === :auto || inner isa Solvers.DevicePCG || inner isa Solvers.Multigrid || inner isa Solvers.DeviceGMRES ||
+        throw(ArgumentError("$w: `inner` takes `:auto`, a `DevicePCG(…)`" * (w == "QuasiSteady" ? ", a `Multigrid(…)` or a `DeviceGMRES(…)`" : " or a `Multigrid(…)`") * " (the " *
+                            "linear solver of each implicit step); got $(repr(inner))"))
     solver_T === :auto || solver_T === Float32 || solver_T === Float64 || throw(ArgumentError(string(w,
         ": `solver_T` takes `:auto` (the state's number type), `Float32` or `Float64`; got ", repr(solver_T),
         solver_T isa Type && !(solver_T <: AbstractFloat && isbitstype(solver_T)) ? "" :
@@ -297,6 +305,25 @@ this way follows the inputs at once, as a steady field does.
 - `init = :steady`: the initial state too is the steady state (one more solve before the first
   window, as for [`BackwardEuler`](@ref)); without it the state at the start time is the initial
   state, and the first window solves.
+
+Steady rows that read one another (a cycle in the group, a cross diffusion `Δ(b)` in a's row,
+or a term the operator does not see, such as `c²` in `0 ~ q − c²`) are solved together: one
+Newton iteration solves all of them with every cross term in the operator, by a restarted
+flexible GMRES (`inner = DeviceGMRES(; restart = 20, budget = 60, rtol = 1e-6)`
+under `:auto`; a `DevicePCG` or `Multigrid` given here is its preconditioner), with each
+row's own solve as the preconditioner. There is no gain limit: two steady fields in one
+`QuasiSteady` may read each other as strongly as their steady state allows. Give the fields of
+such a loop one `QuasiSteady`: two steady groups that read each other are lagged by a window,
+and a loop whose gain does not contract is refused with that route. A coupled steady system
+whose Jacobian has an eigenvalue with nonnegative real part has no stable steady state and is
+refused, naming the sign and the route `BackwardEuler`: checked mode by mode for linear rows
+with constant coefficients on one grid, else (a linear group whose coefficients vary by site)
+estimated by Arnoldi through the coupled operator at the bind and at each parameter write (a
+nonlinear group right after its first solve after either, or after the steady start). The coupled solve is deterministic (fixed reduction order, no
+atomics): the same backend gives the same bits, and the CPU host form and a device agree
+bitwise. On a GPU it waits for each dot product of its GMRES (Krylov.jl solves the small
+least-squares problem on the host), so a coupled steady group adds about 100–250 GPU waits per
+window, where every other field solve waits for none.
 
 There is no `substeps` (one solve per window; `newton` sets the work) and no `lower` (a steady
 solve has no substep to clip). The steady state must exist and be unique: a positive local
@@ -456,10 +483,10 @@ step_retcode!(::Nothing, rt) = SciMLBase.ReturnCode.Success
 
 
 """
-The linear solvers (`Solvers.DevicePCG`, `Solvers.Multigrid`): the `inner` of an implicit
+The linear solvers (`Solvers.DevicePCG`, `Solvers.Multigrid`, `Solvers.DeviceGMRES`): the `inner` of an implicit
 field solver, never a field algorithm themselves.
 """
-const LinearSolver = Union{Solvers.DevicePCG, Solvers.Multigrid}
+const LinearSolver = Union{Solvers.DevicePCG, Solvers.Multigrid, Solvers.DeviceGMRES}
 
 """
     linear_solver_refusal(what, s, route) -> ArgumentError
@@ -545,7 +572,7 @@ canonical(m::ExplicitMap) = m.compute_T === :auto ? "ExplicitMap()" : string("Ex
 canonical(g::FieldGroups) = string("FieldGroups(", join((string(k, "=", canonical(a)) for (k, a) in g.pairs), ","),
     ";default=", g.default === nothing ? "nothing" : canonical(g.default), ")")
 canonical(a::FieldAlgorithm) = _canonical_fields(a)
-canonical(s::Union{Solvers.DevicePCG, Solvers.Multigrid}) = _canonical_fields(s)
+canonical(s::Union{Solvers.DevicePCG, Solvers.Multigrid, Solvers.DeviceGMRES}) = _canonical_fields(s)
 canonical(v::Solvers.V) = "V($(v.nu1),$(v.nu2))"
 canonical(s::Symbol) = repr(s)
 canonical(::Nothing) = "nothing"

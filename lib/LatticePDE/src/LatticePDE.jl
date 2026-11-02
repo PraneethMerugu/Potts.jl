@@ -30,7 +30,7 @@ using LatticeFields.IR: F16, Grid, Program, ProgramBuilder, Coef, FaceRule, Node
 using CommonSolve: solve, init, step!, solve!
 using KernelAbstractions: KernelAbstractions
 using LatticeFields: Exec, Problems
-using LatticeFields.Solvers: DevicePCG, Multigrid, V
+using LatticeFields.Solvers: DevicePCG, DeviceGMRES, Multigrid, V
 using LatticeFields.Compile: CompileOptions, fingerprint_text, fuse_update, promote_dual, primal
 using LatticeFields.IR: fieldid, RESOLVE, degenerate, juliatype, leveldims
 using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
@@ -56,7 +56,7 @@ export LatticeDiscretization, FiniteVolume, CompiledField, discretize, symbolic_
        parse_bcs, linearity, Grid, Interval
 export ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, FieldProblem, solve, init, step!, solve!, stability_bound,
        substep_counts, steady_fields
-export DevicePCG, Multigrid                 # the inner solvers (`inner = …`); `V` is public
+export DevicePCG, DeviceGMRES, Multigrid    # the inner solvers (`inner = …`); `V` is public
 export remake, getp, getu, setp            # the routes its messages give (SciMLBase, SymbolicIndexingInterface)
 
 # ---------------------------------------------------------------------------------------

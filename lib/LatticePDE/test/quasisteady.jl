@@ -257,12 +257,12 @@ end
         end
     end
     # the loop in one steady group: a well-posed system (max Re λ −0.55) whose block iteration
-    # does not contract (≈ k/√(δμ) = 15.8; reviewer probe s3): the failure names the coupling
-    # and the route (review r3 S2; base e7068add: "step the field with `BackwardEuler` (a
-    # transient solve converges …)", ~/lpwork/f3b6-nc-r3.log)
+    # does not contract (≈ k/√(δμ) = 15.8; reviewer probe s3): solved together since F3-12d
+    # (coupled.jl: against the dense steady solve; until then `ConvergenceFailure`, naming the
+    # coupling, review r3 S2)
     p = loop(0.1, 5.0, 1.0)
-    r = @test_logs (:warn, r"fields `qa`, `qb`: the solve failed in window 1 .*the coupling between `qa` and `qb` in one steady group does not contract .*step them with `BackwardEuler`") match_mode = :any solve(p, QuasiSteady(; dt = 0.1))
-    @test r.retcode == ReturnCode.ConvergenceFailure
+    r = solve(p, QuasiSteady(; dt = 0.1))
+    @test r.retcode == ReturnCode.Success
     # a steady linear divergence has its own cause (32) and words, apart from no reduction (16)
     @test LFP.status_route(QuasiSteady(), :failure, 0x21) == "step the field with `BackwardEuler`, or give each region a decay or a fixed value"
     @test occursin("may be indefinite (a growth, or a Robin face whose α and β have opposite signs) or have an island",
@@ -356,9 +356,14 @@ end
     qce = qc(t, x, y)
     cas(k) = own8(PDESystem([0 ~ 0.1 * Δ(qae) - qae + k * qbe, 0 ~ 0.1 * Δ(qce) - qce + 0.5 * qae, D(qbe) ~ 0.1 * Δ(qbe) - qbe - 0.5 * qce],
         [qa(0, x, y) ~ 0.0, qc(0, x, y) ~ 0.0, qb(0, x, y) ~ 1.0], bdom(1.0), [t, x, y], [qae, qce, qbe], Any[]; name = :cas))
-    m = qmsg(() -> init(cas(0.3), BackwardEuler(; dt = 0.1)))
+    # (F3-12d: by default the steady rows of `qa`, `qc` are one QuasiSteady group, whose gains
+    # compose, so the loop is accepted; as two steady groups it is refused, with the route of one)
+    @test solve(cas(0.3), BackwardEuler(; dt = 0.1)).retcode == ReturnCode.Success
+    two = FieldGroups(qae => QuasiSteady(; dt = 0.1), qce => QuasiSteady(; dt = 0.1, newton = 3); default = BackwardEuler(; dt = 0.1))
+    m = qmsg(() -> init(cas(0.3), two))
     @test startswith(m, "FieldGroups: the QuasiSteady groups of `qa`, `qc` are in a loop of groups that read one another") &&
-          occursin("the steady row of `qc` reads the steady field `qa` of the loop", m) || (println("r4 N1 ", m); false)
+          occursin("the steady row of `qc` reads the steady field `qa` of another steady group of the loop", m) &&
+          occursin("Give `qa`, `qc` one `QuasiSteady` (one group, solved together)", m) || (println("r4 N1 ", m); false)
     @test solve(cas(0.0), BackwardEuler(; dt = 0.1)).retcode == ReturnCode.Success
     # a parameter write is checked again: past the limit it is refused, and nothing changes
     @parameters gk = 0.5

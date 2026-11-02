@@ -10,7 +10,7 @@ The public interface (F3-05; the front ends' `inner = …` vocabulary and the fi
 building block): the operator `CellOperator` (faces, shift, masks with a value or a value
 field, face-Dirichlet and Robin faces), the solver `FieldSolver` with `rebuild!`, `lift!`,
 `solve!`, `steady!`, `tangent!`, `set_coefficients!`, the readers `field`, `solution_key`,
-`solver_solution`, `scalars`, `iterations`, `sentinel`, and the inner solvers `DevicePCG`,
+`solver_solution`, `scalars`, `iterations`, `sentinel`, and the inner solvers `DevicePCG`, `DeviceGMRES`,
 `Multigrid`, `V` (re-exported by Potts and LatticePDE). Messages name the user's field
 (`CellOperator(…; name)`).
 """
@@ -30,7 +30,7 @@ using ..Schedule: Schedule, REDUCE_PHASES, WG, reduce_lds, reduction_blocks, sup
 using ..Exec: Exec
 using KernelAbstractions: KernelAbstractions as KA
 
-public CellOperator, FieldSolver, DevicePCG, Multigrid, V, RuleWeights, robin_parts, rebuild!,
+public CellOperator, FieldSolver, DevicePCG, DeviceGMRES, Multigrid, V, RuleWeights, robin_parts, rebuild!,
        lift!, solve!, steady!, tangent!, set_coefficients!, field, solution_key, solver_solution,
        scalars, iterations, sentinel
 

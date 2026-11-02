@@ -310,3 +310,23 @@ end
         @test Array(sd[cs(t, x, y)][end]) == sh[cs(t, x, y)][end] || maximum(abs, Array(sd[cs(t, x, y)][end]) .- sh[cs(t, x, y)][end]) <= 1e-6
     end
 end
+
+@testset "F3-12d: the coupled steady solve on $pgpu equals the host bitwise" begin
+    # Krylov.jl's FGMRES on `CoupledVector`s: fixed-order dot products on both backends, the
+    # host's least-squares arithmetic shared, so device = host and a device rerun are bitwise.
+    # Control: plain device arrays would reduce through rocBLAS, which differs from the host
+    # (F3 design §5 F3-12d: 1e-15 in Float64)
+    nl = PDESystem([D(cae) ~ 0.1Δ(cae) - 2.0 * cae / (0.5 + cae) + cbe + x, D(cbe) ~ 0.1Δ(cbe) - cbe + 0.5 * cae^2],
+        [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.3), [t, x, y], [cae, cbe], Any[]; name = :nldev)
+    for (lab, s, alg) in (("q1 QS", q1(0.1, 5.0; steady = true), QuasiSteady(; dt = 0.1)), ("nonlinear QS", nl, QuasiSteady(; dt = 0.1)))
+        for T in (Float32, Float64)
+            mk(bk) = discretize(s, LatticeDiscretization(Grid((24, 20)); T, problem = :owned, backend = bk))
+            sd, sd2 = solve(mk(PDEV), alg; saveat = 0.1), solve(mk(PDEV), alg; saveat = 0.1)
+            sh = solve(mk(KernelAbstractions.CPU()), alg; saveat = 0.1)
+            @test sd.retcode == sh.retcode == SciMLBase.ReturnCode.Success
+            same(a, b) = all(i -> Array(a[cae][i]) == Array(b[cae][i]) && Array(a[cbe][i]) == Array(b[cbe][i]), eachindex(sh.t))
+            @test same(sd, sh) || (println("12d dev ", lab, " ", T, " ", maximum(abs, Array(sd[cae][end]) .- sh[cae][end])); false)
+            @test same(sd, sd2)
+        end
+    end
+end

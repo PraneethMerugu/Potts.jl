@@ -411,11 +411,11 @@ the cross terms is the same for every group. `span` is the time span (front end 
 loop whose gain the rule does not bound is refused (`steady_loop_text`).
 """
 function check_coupling(stability, groups, explicit, pp, dt::Real; check = eachindex(groups), key = identity,
-        texts::PolicyTexts = ProblemTexts(), span = nothing, steady = nothing)
+        texts::PolicyTexts = ProblemTexts(), span = nothing, steady = nothing, rows0 = String[])
     length(groups) > 1 || return nothing
     keys = [collect(String, ks) for ks in groups]
     parts = lagged_coupling(stability, keys, pp)
-    ctx = (; stability, pp, keys, dt = Float64(dt), span)
+    ctx = (; stability, pp, keys, dt = Float64(dt), span, rows0)
     if parts === nothing
         all(g -> explicit[g], check) || throw(ArgumentError(coupling_unknown_text(texts, ctx; refuse = true)))
         _warn_once(key("coupling#unknown")) && @warn coupling_unknown_text(texts, ctx; refuse = false)
@@ -490,7 +490,7 @@ function (s::GroupSubsteps)(pp)
     n = substeps(s.spec, s.alg, s.dt, pp; key, texts = s.texts)
     c = s.coupling
     c === nothing || check_coupling(c.stability, c.groups, c.explicit, c.whole(pp), s.dt; check = (c.index,),
-        key, texts = s.texts, steady = c.steady)
+        key, texts = s.texts, steady = c.steady, rows0 = hasproperty(c, :rows0) ? c.rows0 : String[])
     return n
 end
 
@@ -545,22 +545,39 @@ function steady_why_text(why)
         "does not bound")
     w === :advection && return string("the steady row of `", k, "` has advection with no decay or with a velocity that ",
         "varies by site, whose gain the rule does not bound")
-    w === :steady && return string("the steady row of `", k, "` reads the steady field `", o, "` of the loop, and the ",
-        "rule bounds the gain of a steady field that reads only fields that step")
+    w === :steady && return string("the steady row of `", k, "` reads the steady field `", o, "` of another steady group ",
+        "of the loop, and the rule bounds the gain of a steady group that reads only fields that step")
+    w === :coupled && return string("the steady fields `", o, "` of one group read one another, and the rule's bound on ",
+        "their joint gain does not hold: it sums the magnitudes of their couplings times their gains, which reach 1 or more ",
+        "around their loop (it cannot see that a loop of opposite signs damps itself)")
     w === :unseen && return string("the rate of `", k, "` has a term the stability bound cannot see, so the gain of ",
         "the loop has no bound")
     w === :coef && return string("a coefficient in the rate of `", k, "` has no finite bound at these parameters")
-    w === :steady_only && return "every group of the loop is steady, so no window damps the lag"
+    w === :steady_only && return "every group of the loop is steady, so no window damps the lag between them"
     return "the stability bound does not know the gain of a steady solve"
 end
-# the refusal of a loop with a QuasiSteady group whose gain the rule does not bound, with its routes
+# the refusal of a loop with a QuasiSteady group whose gain the rule does not bound, with its routes:
+# steady groups that read one another take one `QuasiSteady` (one group: solved together, F3-12d)
 function steady_loop_text(t::ProblemTexts, c)
+    w = c.why[1]
+    one = w === :steady_only ? string("Give ", _fieldlist(c.qs), " one `QuasiSteady` (the same keywords: one group, whose ",
+                                      "steady rows are solved together), or step ") :
+          w === :steady ? string("Give ", _fieldlist(c.qs), " one `QuasiSteady` (one group, solved together), or step ") :
+          "Step "
     return string("FieldGroups: the QuasiSteady group", length(c.qs) == 1 ? " of " : "s of ", _fieldlist(c.qs),
         length(c.qs) == 1 ? " is" : " are", " in a loop of groups that read one another (", _fieldlist(c.lf), "): a steady field answers its inputs at ",
         "once, with the gain of its steady solve, so the lag of one window between the groups can grow without bound, ",
-        "and here the coupling rule has no bound for that gain: ", steady_why_text(c.why), ". Step ", _fieldlist(c.lf),
+        "and here the coupling rule has no bound for that gain: ", steady_why_text(c.why), ". ", one, _fieldlist(c.lf),
         " in one `BackwardEuler` group, or step ", _fieldlist(c.qs), " with `BackwardEuler` (a fast field relaxes to its ",
-        "steady state within a few windows)")
+        "steady state within a few windows)", rows0_route(c))
+end
+# the `BackwardEuler` routes' condition when steady fields of the loop have steady rows `0 ~ rhs`
+# (which take only `QuasiSteady`): written as rates first (both front ends)
+function rows0_route(c)
+    z = [k for k in c.qs if k in (hasproperty(c, :rows0) ? c.rows0 : String[])]
+    isempty(z) && return ""
+    return string("; for a `BackwardEuler` route, write the steady row", length(z) == 1 ? " of " : "s of ", _fieldlist(z),
+        " as ", length(z) == 1 ? "a rate" : "rates", " `D(c) ~ rhs` (a steady row `0 ~ rhs` takes only `QuasiSteady`)")
 end
 # the gain of a loop with a QuasiSteady group in words: the worst term and the gain it reads through
 function steady_gain_words(c)
@@ -581,7 +598,7 @@ function steady_gain_text(t::ProblemTexts, c)
         "over each window dt = ", _num(c.dt), ": ", steady_gain_words(c), ", and the loop can then grow without bound. ",
         "Step ", _fieldlist(c.lf), " in one `BackwardEuler` group, or step ", _fieldlist(c.qs), " with `BackwardEuler`, ",
         "or use a smaller dt", span === nothing ? "" : string(" that divides the time span ", _num(span)), ": dt ≤ ", lim,
-        span === nothing ? "" : string(", such as dt = ", _num(span), "/", n))
+        span === nothing ? "" : string(", such as dt = ", _num(span), "/", n), rows0_route(c))
 end
 # the refusal of a loop past the limit, with its routes
 function loop_text(t::ProblemTexts, c)
@@ -631,13 +648,20 @@ const STATUS_CODE, STATUS_WINDOW, STATUS_CAUSE, STATUS_SOLVES, STATUS_BUDGET, ST
 The cause bits of the status word's entry [3], in words: 1 the linear solve diverged, 2 the
 Newton iteration diverged, 4 a residual was not finite, 8 the shift was clamped, 16 a steady
 solve's budget hit made no real reduction (`QuasiSteady`: a singular region), 32 a steady
-linear solve diverged (an indefinite steady problem, or an island).
+linear solve diverged (an indefinite steady problem, or an island), 64 a coupled steady solve
+(F3-12d) diverged or made no real reduction (the coupled system has no unique steady state, or
+its budget is short), 128 a coupled solve broke down (its operator is singular on its Krylov steps).
 """
 const STATUS_CAUSES = (0x00000001 => "the linear solve diverged", 0x00000002 => "the Newton iteration diverged",
     0x00000004 => "a residual was not finite", 0x00000008 => "the shift was clamped",
     0x00000010 => "the steady solve made no real reduction: a region has no decay and no fixed value, so its steady state is not unique",
     0x00000020 => "the steady solve diverged: the steady problem may be indefinite (a growth, or a Robin face whose α and β " *
-                  "have opposite signs) or have an island (a region with no decay and no fixed value)")
+                  "have opposite signs) or have an island (a region with no decay and no fixed value)",
+    0x00000040 => "the coupled steady solve of the fields that read one another made no real reduction: their coupled " *
+                  "system may have no unique steady state (a mode of the coupling that grows or stays, or a region with " *
+                  "no decay and no fixed value), or the solve's budget is short",
+    0x00000080 => "the coupled solve broke down: its operator is singular on the steps it built, so the coupled system " *
+                  "may have no unique solution (a mode of the coupling that stays, or a region with no decay and no fixed value)")
 
 """
     status_word(cache) -> word or nothing
@@ -647,23 +671,21 @@ algorithm with no solve (`ExplicitEuler`, `ExplicitMap`): then [`check_status!`]
 nothing and costs nothing.
 """
 status_word(::Any) = nothing
-# the fields of a steady group whose cross terms (one reads another) stay out of its operator,
-# or nothing: a Newton divergence there is the coupling's (`QuasiSteady`, r3 S2)
-steady_coupling(::Any, keys) = nothing
 # the Newton count of an algorithm's cache (its budget warning names it), or nothing
 newton_count(::Any) = nothing
 
 """
-    status_route(alg, which, cause = 0) -> String
+    status_route(alg, which, cause = 0; coupled = false) -> String
 
 The route a warning or failure of `alg`'s status word names: `which` is `:budget` (the
 linear solve reached its budget), `:newton_budget` (the Newton iteration did) or `:failure`,
 whose route follows its `cause` bits ([`STATUS_CAUSES`](@ref)): a linear divergence takes more
 substeps or a larger linear budget; a Newton divergence or a residual that is not finite takes
 more substeps only (a smaller step brings the iteration into its contraction; neither more
-iterations nor a larger linear budget does).
+iterations nor a larger linear budget does). `coupled`: the group is solved together (F3-12d:
+a `QuasiSteady` group only), so its linear budget is the `DeviceGMRES`'s.
 """
-function status_route(alg, which::Symbol, cause::Integer = 0)
+function status_route(alg, which::Symbol, cause::Integer = 0; coupled::Bool = false)
     which === :budget && return "a larger linear budget (`inner = DevicePCG(; budget = n)`)"
     which === :newton_budget && return "more Newton iterations (a larger `newton = k`) or more substeps (`substeps = n`)"
     cause & 0x1 != 0 && return "more substeps (`substeps = n`) or a larger linear budget (`inner = DevicePCG(; budget = n)`)"
@@ -672,9 +694,12 @@ function status_route(alg, which::Symbol, cause::Integer = 0)
 end
 # a steady solve has no substeps: its routes are the budgets, a fixed value or decay, or a
 # transient solver
-function status_route(::QuasiSteady, which::Symbol, cause::Integer = 0)
-    which === :budget && return "a larger linear budget (`inner = DevicePCG(; budget = n)`)"
+function status_route(::QuasiSteady, which::Symbol, cause::Integer = 0; coupled::Bool = false)
+    which === :budget && return coupled ? "a larger linear budget (`inner = DeviceGMRES(; budget = n)`)" :
+                                "a larger linear budget (`inner = DevicePCG(; budget = n)`)"
     which === :newton_budget && return "more Newton iterations (a larger `newton = k`)"
+    cause & 0xc0 != 0 && return string("step the fields with `BackwardEuler` (a transient solve needs no unique steady ",
+        "state), or give the coupled solve a larger budget (`inner = DeviceGMRES(; budget = n)`)")
     cause & 0x20 != 0 && return "step the field with `BackwardEuler`, or give each region a decay or a fixed value"
     cause & 0x10 != 0 && return "give that region a decay or a fixed value, or step the field with `BackwardEuler`"
     cause & 0x1 != 0 && return "a larger linear budget (`inner = DevicePCG(; budget = n)`), or step the field with `BackwardEuler`"
@@ -1094,7 +1119,7 @@ _stepname(a) = a isa BackwardEuler ? "Backward Euler" : a isa CrankNicolson ? "C
     if !tot.warned && (tot.budget > 0 || tot.newton_budget > 0)
         tot.warned = true
         what = tot.budget > 0 ? ("the linear solve reached its budget $(tot.budget) time$(tot.budget == 1 ? "" : "s")",
-                                 status_route(rt.alg, :budget)) :
+                                 status_route(rt.alg, :budget; coupled = coupled_solve(rt.cache))) :
                (string("the Newton iteration", (k = newton_count(rt.cache)) === nothing ? "" : " (`newton = $k`)",
                     " reached its budget $(tot.newton_budget) time$(tot.newton_budget == 1 ? "" : "s")"),
                 status_route(rt.alg, :newton_budget))
@@ -1104,11 +1129,7 @@ _stepname(a) = a isa BackwardEuler ? "Backward Euler" : a isa CrankNicolson ? "C
     if code == SciMLBase.ReturnCode.ConvergenceFailure && tot.window == 0
         tot.window = max(Int64(window), 1)
         why = [r for (bit, r) in STATUS_CAUSES if tot.cause & bit != 0]
-        cp = tot.cause & 0x6 != 0 ? steady_coupling(rt.cache, rt.keys) : nothing
-        route = cp === nothing ? status_route(rt.alg, :failure, tot.cause) :
-                string("the coupling between ", join(("`$k`" for k in cp), " and "), " in one steady group does not ",
-                    "contract (its cross terms are out of the steady operator, and a steady solve has no time step to ",
-                    "damp them); step them with `BackwardEuler`")
+        route = status_route(rt.alg, :failure, tot.cause; coupled = coupled_solve(rt.cache))
         @warn "field$s $fs: the solve failed in $(window_text(rt, tot.window))$(isempty(why) ? "" : " (" * join(why, "; ") * ")"), " *
               "`ReturnCode.ConvergenceFailure`: the run stops; $route"
     end

@@ -54,7 +54,13 @@ Jacobian that the linear solve sees:
   bounds the part of a Robin face with a negative diagonal left out of the operator (R2-S1);
 - `jmax`: for a field row with local terms, a function of the parameters giving the largest
   value of its local Jacobian over the sites (the interval evaluator over the box, F3-13; NaN
-  when not finite), or `nothing`: the growth that count rule 1 keeps out of the shift.
+  when not finite), or `nothing`: the growth that count rule 1 keeps out of the shift;
+- `linear`: every term of the row is linear in the group's state (diffusion, linear local,
+  advection, cross-linear terms and sources; F3-12d: a coupled solve's directional difference
+  of the residual is then exact at any step, and one Newton step is the solve);
+- `crossfaces`: the row's cross diffusion terms `D Δ(o)` with a numeric coefficient, each the
+  other field's key and its faces per axis `D/h_a²` as `Coef`s (the coupled steady system's
+  modes, F3-12d).
 """
 struct RowOperator
     key::String
@@ -74,6 +80,8 @@ struct RowOperator
     bounds::Vector{Tuple{Any, String, Any}}
     facemax::Any
     jmax::Any
+    linear::Bool
+    crossfaces::Vector{Tuple{String, Vector{Vector{Coef}}}}
 end
 
 

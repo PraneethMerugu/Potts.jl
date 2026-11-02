@@ -87,6 +87,50 @@ function DevicePCG(; precond = Multigrid(), budget = 8, rtol = 1e-6)
     return DevicePCG(precond, budget, rtol)
 end
 
+"""
+    DeviceGMRES(; restart = 20, budget = 60, rtol = 1e-6, precond = :auto)
+
+The coupled solve of a `QuasiSteady` group whose fields read one another (F3-12d; the time
+steppers refuse it, their fields take `DevicePCG` or `Multigrid`): restarted
+flexible GMRES (Krylov.jl's `fgmres!`) over all the group's fields at once, its operator the whole
+Jacobian of the group's residual (every term of every row, cross terms included: a directional
+difference of the residual kernels), its preconditioner block-diagonal: each field's own
+operator solved by `precond` (`:auto`: `DevicePCG(; budget = 2)`, one per field, on the
+field's multigrid hierarchy). `restart` is the Krylov basis size (an integer from 2 to 64),
+`budget` the most iterations per solve (an integer ≥ 1; a restart computes the true residual),
+`rtol` the stop `‖r‖₂ ≤ rtol ‖b‖₂` (finite and > 0), `precond` `:auto`, a `DevicePCG(…)` or a
+`Multigrid(…)`. Dot products are block partials summed in a fixed order (no atomics, no BLAS),
+so a run is bitwise repeatable, and the CPU and a GPU give the same bits. Krylov.jl keeps its
+small least-squares problem on the host, so on a GPU each dot product waits for its value
+(about `j + 1` waits at iteration `j` of a cycle; the one exception to the field solvers' rule
+of no GPU wait in a step, user ruling 2026-11-01). Any other value is an `ArgumentError`
+naming the keyword.
+"""
+struct DeviceGMRES
+    restart::Int
+    budget::Int
+    rtol::Float64
+    precond::Union{Symbol, DevicePCG, Multigrid}
+    function DeviceGMRES(restart, budget, rtol, precond)
+        (restart isa Integer && !(restart isa Bool) && 2 <= restart <= 64) || throw(ArgumentError(string(
+            "`DeviceGMRES(; restart = ", repr(restart), ")`: `restart` is the Krylov basis size, an integer from 2 to 64")))
+        _count(budget) || throw(ArgumentError(string("`DeviceGMRES(; budget = ", repr(budget),
+            ")`: `budget` is the most GMRES iterations per solve, an integer ≥ 1")))
+        _positive(rtol) || throw(ArgumentError(string("`DeviceGMRES(; rtol = ", repr(rtol),
+            ")`: `rtol` is the relative residual a solve stops at, finite and > 0")))
+        precond === :auto || precond isa DevicePCG || precond isa Multigrid || throw(ArgumentError(string(
+            "`DeviceGMRES(; precond = ", repr(precond), ")`: `precond` is each field's solve in the block preconditioner, ",
+            "`:auto`, a `DevicePCG(…)` or a `Multigrid(…)` (for example `DevicePCG(; budget = 4)`)")))
+        return new(Int(restart), Int(budget), Float64(rtol), precond)
+    end
+end
+DeviceGMRES(; restart = 20, budget = 60, rtol = 1e-6, precond = :auto) = DeviceGMRES(restart, budget, rtol, precond)
+"""
+The per-field solver of a `DeviceGMRES`'s block preconditioner (`precond = :auto`: two PCG
+iterations with one V(2, 2) cycle each).
+"""
+gmres_precond(g::DeviceGMRES) = g.precond === :auto ? DevicePCG(; budget = 2) : g.precond
+
 # Keyword display (no module path; only the keywords that differ from their defaults), so a
 # message that quotes a solver reads as the user wrote it, and the text runs where the solvers
 # are bound (`using Potts` or `using LatticePDE`: a cycle prints as the pair `(ν₁, ν₂)`).
@@ -113,6 +157,14 @@ function Base.show(io::IO, d::DevicePCG)
     d.rtol == 1e-6 || push!(kws, :rtol => d.rtol)
     _show_kw(io, "DevicePCG", kws)
 end
+function Base.show(io::IO, g::DeviceGMRES)
+    kws = Pair{Symbol, Any}[]
+    g.restart == 20 || push!(kws, :restart => g.restart)
+    g.budget == 60 || push!(kws, :budget => g.budget)
+    g.rtol == 1e-6 || push!(kws, :rtol => g.rtol)
+    g.precond === :auto || push!(kws, :precond => g.precond)
+    _show_kw(io, "DeviceGMRES", kws)
+end
 
 """
 `inner = :auto` (§5.6, provisional D-C7b): every group gets `DevicePCG` (budget 8), with the
@@ -136,6 +188,8 @@ function resolve_inner(op::CellOperator, inner)
                 c.cycles, ")`")
         return inner
     end
+    inner isa DeviceGMRES && _refuse(op, "`inner = ", repr(inner), "` solves an implicit group's fields together (F3-12d); ",
+        "a `FieldSolver` solves one field: give it the `DeviceGMRES`'s per-field solver, `inner = ", repr(gmres_precond(inner)), "`")
     inner isa Multigrid || _refuse(op, "`inner` takes `:auto`, a `DevicePCG(…)` or a `Multigrid(…)`; got ",
         repr(inner))
     b = inner.cycles !== nothing ? inner.cycles :

@@ -11,6 +11,8 @@ module Problems
 
 using CommonSolve: CommonSolve
 using Serialization: Serialization
+using Krylov: Krylov
+using LinearAlgebra: LinearAlgebra
 using KernelAbstractions: KernelAbstractions as KA
 using RuntimeGeneratedFunctions: RuntimeGeneratedFunctions, RuntimeGeneratedFunction,
                                  drop_expr
@@ -54,6 +56,7 @@ include("group.jl")
 include("operator.jl")
 include("problem.jl")
 include("implicit.jl")
+include("coupled.jl")
 include("ode.jl")
 
 # the coupling between field groups and the per-group counts (review of F2-06)
@@ -61,7 +64,7 @@ public compute_type, substep_counts, lagged_coupling, group_loops, steady_loop_r
 # the one substep policy of both front ends and its words (F3-01)
 public PolicyTexts, ProblemTexts, GroupSubsteps, check_coupling, bound_report, unbounded_text, uncovered_text,
        refuse_parameters, coupling_unknown_text, coupling_unbounded_text, loop_text, steady_loop_text, steady_gain_text,
-       steady_why_text, steady_gain_words
+       steady_why_text, steady_gain_words, rows0_route
 # the implicit algorithms (F3-07)
 public ImplicitAlgorithm, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, OperatorSpec, RowOperator, operator_spec, build_operator, growth, inexact_bounds, ImplicitCache,
        ImplicitRow, bind_cache, residual_program, residual_rule
