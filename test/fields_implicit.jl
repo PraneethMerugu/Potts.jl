@@ -289,6 +289,36 @@ end
     @equations D(c) ~ 2.0 * Δ(c) - c + 0.1 * (kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
+@potts_model FiHexF begin
+    @kinds medium A[frozen]
+    @variables c(field) = 0.0
+    @lattice Lattice((12, 10); geometry = Hexagonal(), boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations D(c) ~ 0.4 * Δ(c) - 0.3 * c + 0.1 * x
+    @bcs c ~ masked(kind == A, 1.5)
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FiHexFace begin
+    @kinds medium A[frozen]
+    @variables c(field) = 0.0
+    @lattice Lattice((12, 10); geometry = Hexagonal(), boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations D(c) ~ 0.4 * Δ(c) - 0.3 * c + 0.1 * x
+    @bcs begin
+        c(t, 0, y) ~ 1.0
+        1.5 * c(t, x, 0) - 0.5 * Differential(y)(c(t, x, 0)) ~ 0.2
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+# a three-kind class in a rate (F3-20 r1 M2)
+@potts_model FiKind3 begin
+    @kinds medium A[frozen] B[frozen] C[frozen] cells3 = (A, B, C)
+    @variables c(field) = 0.0
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations D(c) ~ 1.0 * ismember(kind, cells3)
+    @sweep Metropolis(; temperature = 1.0)
+end
 @potts_model FiComp begin
     @kinds medium A[frozen]
     @variables u(field)[1:2] = 0.5
@@ -340,13 +370,71 @@ end
     end
 end
 
-@testset "r1 M4 (A): a hexagonal lattice refuses BackwardEuler in words" begin
+@testset "F3-20 (A): BackwardEuler on a hexagonal lattice, equal to B bitwise (σ frozen)" begin
+    # base (ee577f6e): refused at `init` ("a hexagonal lattice has no implicit solve yet")
+    dims, k = (12, 10), 4
+    a, integ = fi_runA(FiHexF, fi_op(dims), k)
+    bp = Potts.LatticePDE.discretize(Potts.fields(FiHexF(; name = :f)),
+        Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(dims; geometry = Potts.LatticeFields.IR.HEX);
+            T = Float64, problem = :owned); u0 = [:c => zeros(dims)], tspan = (0, k), inputs = [:kind => fi_kin(dims)])
+    @test a == Potts.LatticePDE.solve(bp, BackwardEuler(; dt = 1.0); saveat = 1.0)[:c][2:end]
+    rt = CorePotts._runtime(getfield(integ.ctx, :__fields1))
+    @test rt.cache.newton == 1 && integ.stats.fields.solves == k && all(a[end][fi_kin(dims) .== 1] .== 1.5)
+    # the implicit result is not the explicit one
+    ae, _ = fi_runA(FiHexF, fi_op(dims), k; field_solver = ExplicitEuler())
+    @test maximum(abs, ae[end] .- a[end]) > 1e-3
+    # a moving σ (periodic): the run that was refused
     σ = zeros(Int32, 16, 16); σ[4:6, 4:6] .= 1
-    mk(fs) = PottsProblem(FiHex(; name = :f), [ownership => σ, kind => [:A]], (0, 3); field_solver = fs)
-    # base: `ConvergenceFailure` at MCS 1 with the route "more substeps … or a larger linear budget"
-    @test_throws "a hexagonal lattice has no implicit solve yet (the solver's operator has no hexagonal faces); step it with `field_solver = ExplicitEuler()`" solve(
-        mk(BackwardEuler()), SequentialCPM())
-    @test solve(mk(ExplicitEuler()), SequentialCPM()).retcode == FiRC.Success
+    @test solve(PottsProblem(FiHex(; name = :f), [ownership => σ, kind => [:A]], (0, 3); field_solver = BackwardEuler()),
+        SequentialCPM()).retcode == FiRC.Success
+end
+
+@testset "F3-20 r1 M1 (A): face conditions on a hexagonal lattice: the hand BE matrix, equal to B bitwise" begin
+    # a Dirichlet face (axis 1 low), a Robin face (axis 2 low); a link leaving the box takes its
+    # face's ghost (a diagonal link axis 1's when it leaves along axis 1); base: refused at discretize
+    dims, k = (12, 10), 1
+    tight = BackwardEuler(; inner = DevicePCG(; rtol = 1e-12, budget = 64))
+    a, integ = fi_runA(FiHexFace, fi_op(dims), k; field_solver = tight)
+    bp = Potts.LatticePDE.discretize(Potts.fields(FiHexFace(; name = :f)),
+        Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(dims; geometry = Potts.LatticeFields.IR.HEX);
+            T = Float64, problem = :owned); u0 = [:c => zeros(dims)], tspan = (0, k), inputs = [])
+    @test a == Potts.LatticePDE.solve(bp, BackwardEuler(; dt = 1.0, inner = DevicePCG(; rtol = 1e-12, budget = 64)); saveat = 1.0)[:c][2:end]
+    # the hand BE matrix (h = 1, the site (i, j) at (i − ½, j − ½))
+    n1, n2 = dims
+    lin(i, j) = i + (j - 1) * n1
+    L, b = zeros(n1 * n2, n1 * n2), zeros(n1 * n2)
+    c = 0.4 * 2 / 3
+    for j in 1:n2, i in 1:n1
+        r = lin(i, j)
+        L[r, r] -= 0.3
+        b[r] += 0.1 * (i - 0.5)
+        for (di, dj) in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1))
+            ii, jj = i + di, j + dj
+            if 1 <= ii <= n1 && 1 <= jj <= n2
+                L[r, lin(ii, jj)] += c
+                L[r, r] -= c
+            elseif !(1 <= ii <= n1) && di < 0                # axis 1 low: Dirichlet 1
+                L[r, r] -= 2c
+                b[r] += 2c
+            elseif (1 <= ii <= n1) && dj < 0                 # axis 2 low: 1.5 u − 0.5 ∂u/∂y = 0.2
+                bl = -0.5 * -1
+                den = 0.75 + bl
+                L[r, r] += c * ((bl - 0.75) / den - 1)
+                b[r] += c * 0.2 / den
+            end
+        end
+    end
+    Id = Float64.((1:(n1 * n2)) .== (1:(n1 * n2))')
+    @test maximum(abs, vec(a[1]) .- (Id - L) \ b) < 1e-9
+end
+
+@testset "F3-20 r1 M2 (A): a three-kind class in a rate (ExplicitEuler)" begin
+    # `ismember(kind, cells3)` is one OR of three kinds; before F3-20 the emitter kept two of them
+    dims = (12, 10)
+    σ = zeros(Int32, dims...)
+    σ[2:4, 2:4] .= 1; σ[6:8, 2:4] .= 2; σ[2:4, 6:8] .= 3
+    a, _ = fi_runA(FiKind3, [ownership => σ, kind => [:A, :B, :C]], 1; field_solver = ExplicitEuler())
+    @test a[1] ≈ Float64.(σ .!= 0)
 end
 
 @testset "r1 M6 (A): a component field equals its scalar spelling" begin

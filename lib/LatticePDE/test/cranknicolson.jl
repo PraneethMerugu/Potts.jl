@@ -182,8 +182,7 @@ end
           "CrankNicolson(inner=:auto,lower=nothing,newton=nothing,solver_T=:auto,substeps=nothing)"
     phex = discretize(bsys([D(bce) ~ bD * Δ(bce)], [bc(0, x, y) ~ x], [bD]; dvs = [bce]),
         LatticeDiscretization(Grid((8, 8); geometry = HEX); T = Float64, problem = :owned))
-    @test startswith(e(() -> init(phex, CrankNicolson(; dt = 0.1))),
-        "CrankNicolson: field `bc`: a hexagonal lattice has no implicit solve yet")
+    @test solve(phex, CrankNicolson(; dt = 0.1)).retcode == ReturnCode.Success     # (F3-20: was refused)
     p16 = discretize(bsys([D(bce) ~ bD * Δ(bce)], [bc(0, x, y) ~ x], [bD]; dvs = [bce]),
         LatticeDiscretization(Grid(BDIMS); T = Float16, problem = :owned))
     @test startswith(e(() -> init(p16, CrankNicolson(; dt = 0.1))), "CrankNicolson: the field `bc` holds Float16 and the problem's value type is Float16")

@@ -24,8 +24,10 @@ default) means Float64 on the host and Float32 on a device. Any other type is re
 A hexagonal grid (`Grid(dims; geometry = HEX)`, 2D, axial coordinates: the neighbors of
 `(q, r)` are `(q ± 1, r)`, `(q, r ± 1)`, `(q + 1, r − 1)` and `(q − 1, r + 1)`) lowers `Δ(c)` to
 `2/(3h²) Σₙ (cₙ − c)` over the six neighbors (`h` the spacing of axis 1; the axes must have
-equal spacing). A neighbor outside a closed face, or outside the domain, reads the site
-itself (zero flux). Only `Δ` is defined there, and face conditions are refused.
+equal spacing). A neighbor outside the domain reads the site itself (zero flux); a neighbor
+outside the box reads the ghost of the face condition its link leaves through (a diagonal link
+`±(e₁ − e₂)` takes axis 1's face when it leaves along axis 1, else axis 2's), with the
+condition applied along the link in lattice units. Only `Δ` is defined there.
 
 `domain` names a `Bool` input field (the variable `dom`, or its key `"dom"` or `:dom`) that marks an
 irregular domain inside the box; give its values like any input (`discretize(…; inputs)`).
@@ -499,6 +501,10 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     # the rate fields (each has a face rule on every non-periodic face): a face coefficient reads
     # them at the ghost site with the ghost value (F3-ghost)
     ghosted = Int32[fids[op][1][max(comp, 1)] for (_, (kind, op, comp, _)) in eqs if kind == :rate]
+    # (a hexagonal grid: the fields with a face condition, whose links out of the box read its
+    # ghost, `_hexlap`; the others are zero flux there)
+    hex && filter!(f -> any(b -> b.kind in (:dirichlet, :neumann, :robin) && !isin[b.op] &&
+                                 fids[b.op][1][max(b.comp, 1)] == f, bcs), ghosted)
     env(mapmode, kb, lv = 0) = Env(kb, fids, params, tables, spacing, ivs[1], ivs[2:end], lo, level_spacing(h, dims, lv),
                                   mapmode, ntuple(_ -> 0, N), RESOLVE, leaf, hex, dl(lv), ghosted, lv, flev, dims, 0)
     # face rules: α c + β ∂c/∂n = g in lattice units (outward normal; ∂/∂n = side · h ∂/∂x)
@@ -509,8 +515,6 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         hL = level_spacing(h, dims, lv)
         for d in 1:N, s in (-1, 1)
             periodic[d] && continue
-            hex && any(b -> b.kind in (:dirichlet, :neumann, :robin) && key(b.op, b.comp) == k, bcs) &&
-                _dverr("field `$k`: face conditions are not defined on a hexagonal grid (its faces are zero flux)")
             b = findfirst(b -> b.kind in (:dirichlet, :neumann, :robin) && key(b.op, b.comp) == k &&
                                    b.axis == d && b.side == s, bcs)
             b === nothing && (rule!(pb, FaceRule(f, Int8(d), Int8(s), Coef(0.0), Coef(1.0), Coef(0.0))); continue)

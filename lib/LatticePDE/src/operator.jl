@@ -10,8 +10,7 @@
     DeferredOperator
 
 The operator of a group, not built yet: the lowered system that `build_operator` extracts the
-`OperatorSpec` from at the group's first implicit use (once: the result is kept), with the
-front end's spelling of the explicit route (`route`, for a lattice with no implicit solve).
+`OperatorSpec` from at the group's first implicit use (once: the result is kept).
 `OPERATOR_BUILDS` counts the builds of this session (a test reads it: an explicit group builds
 none; it starts at 0, the precompile workload's build not counted).
 """
@@ -19,10 +18,9 @@ mutable struct DeferredOperator
     cf::Any
     sys::Any
     disc::Any
-    route::String
     built::Any
 end
-DeferredOperator(cf, sys, disc; route = "`ExplicitEuler`") = DeferredOperator(cf, sys, disc, route, nothing)
+DeferredOperator(cf, sys, disc) = DeferredOperator(cf, sys, disc, nothing)
 const OPERATOR_BUILDS = Threads.Atomic{Int}(0)
 const _OPERATOR_LOCK = ReentrantLock()
 
@@ -30,7 +28,7 @@ function Problems.build_operator(d::DeferredOperator, spec::Problems.GroupSpec)
     return lock(_OPERATOR_LOCK) do
         d.built === nothing || return d.built
         Threads.atomic_add!(OPERATOR_BUILDS, 1)
-        d.built = _build_operator(d.cf, d.sys, d.disc; d.route)
+        d.built = _build_operator(d.cf, d.sys, d.disc)
     end
 end
 
@@ -168,17 +166,17 @@ function _cross_bound(k, term, others, cf, params, bysite)
 end
 # a cross diffusion term `m Op(o)` of another field `o` (key `key`) with a numeric face
 # coefficient (a number or a number times a parameter, free of the coordinates and the inputs):
-# its faces per axis `m K / h_a²` as `Coef`s (F3-12d: the coupled steady system's modes);
+# its faces per axis `m K / h_a²` (a hexagonal lattice: per face direction, `2m/(3h²)`) as `Coef`s (F3-12d: the coupled steady system's modes);
 # `nothing` otherwise
-function _cross_faces(term, key, xs, params, bysite, h, N)
+function _cross_faces(term, key, xs, params, bysite, h, N; hex::Bool = false)
     key == "" && return nothing
     p = _diffusion_parts(term, xs)
     (p === nothing || bysite(p.m) || bysite(p.K)) && return nothing
     mK = _coefof(unwrap(substitute(p.m * p.K, Dict(); fold = Val(true))), params)
     mK === nothing && return nothing
-    faces = [Coef[] for _ in 1:N]
-    for a in (p.axes === :all ? (1:N) : (p.axes,))
-        push!(faces[a], Coef(mK.value / h[a]^2, mK.param))
+    faces = [Coef[] for _ in 1:(hex ? 3 : N)]       # (a hexagonal lattice: its three face directions)
+    for a in (hex ? (1:3) : p.axes === :all ? (1:N) : (p.axes,))
+        push!(faces[a], Coef(mK.value * (hex ? 2 / (3 * h[1]^2) : 1 / h[a]^2), mK.param))
     end
     return faces
 end
@@ -304,7 +302,7 @@ end
 # a coefficient as a `Coef` (a number, a parameter, a number times a parameter), or nothing
 _coefof(x, params) = (x isa Number ? Coef(Float64(x)) : _coef(x, params; strict = false))
 
-function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscretization; route = "`ExplicitEuler`") where {N}
+function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscretization) where {N}
     s = cf.program
     ivs = unwrap.(sys.ivs)
     xs = ivs[2:end]
@@ -318,16 +316,10 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
             k in states && (dvs[k] = length(kk) == 1 ? u : unwrap(Symbolics.wrap(u)[i]))
         end
     end
-    # the solver's operator is the Cartesian cell operator: the six faces of a hexagonal
-    # lattice's Laplacian are not in it yet, so an implicit step would treat the diffusion as a
-    # defect correction, which diverges at any step an implicit method is for (M4)
-    if s.hierarchy[1].grid.geometry == HEX
-        ks = [k for k in _states(s) if haskey(cf.linearity, k)]
-        # (the caller names the implicit algorithm: "BackwardEuler: field `c`: …")
-        throw(ArgumentError(string("field", length(ks) == 1 ? " " : "s ", join(("`$k`" for k in ks), ", "),
-            ": a hexagonal lattice has no implicit solve yet (the solver's operator has no hexagonal faces); step ",
-            length(ks) == 1 ? "it" : "them", " with ", route)))
-    end
+    # a hexagonal lattice (F3-20): its Laplacian `2/(3h²) Σₙ (cₙ − c)` has three face directions,
+    # `+e₁`, `+e₂` and `+e₁ − e₂`, each with the face `2/(3h²)` (only `Δ` lowers there)
+    hex = s.hierarchy[1].grid.geometry == HEX
+    NF = hex ? 3 : N
     domain = s.hierarchy[1].grid.domain != 0
     # the coordinates and the inputs: a coefficient that reads them varies by site
     inputops = unique([_opof(v) for v in unwrap.(sys.dvs) if ModelingToolkitBase.isinput(v)])
@@ -362,7 +354,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
         haskey(cf.linearity, k) || continue
         c = dvs[k]
         hk = rowh(k)
-        faces = [Coef[] for _ in 1:N]
+        faces = [Coef[] for _ in 1:NF]
         jloc = Coef[]
         diff = Any[]                            # (multiplier, K, axes, mean) of the row's diffusion terms
         jterms = Any[]                          # the local coefficients
@@ -396,7 +388,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
                 # residual only, exact in solve order; its coefficient bounds a cycle's correction
                 cb = _cross_bound(k, term, others, cf, params, bysite)
                 push!(cross, cb)
-                cfc = _cross_faces(term, cb[1], xs, params, bysite, hk, N)
+                cfc = _cross_faces(term, cb[1], xs, params, bysite, hk, N; hex)
                 cfc === nothing || push!(crossfaces, (cb[1], cfc))
             elseif class == :Advection && (ab = something(_advection_bound(term, params, hk),
                                                           _advection_ibound(k, term, params, tabset, box, hk), Some(nothing))) !== nothing
@@ -453,8 +445,8 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
         for p in diff
             mK = scaled ? nothing : _coefof(unwrap(substitute(p.m * p.K, Dict(); fold = Val(true))), params)
             if !scaled && !bysite(p.m) && !bysite(p.K) && mK !== nothing
-                for a in (p.axes === :all ? (1:N) : (p.axes,))
-                    push!(faces[a], Coef(mK.value / hk[a]^2, mK.param))
+                for a in (hex ? (1:3) : p.axes === :all ? (1:N) : (p.axes,))
+                    push!(faces[a], Coef(mK.value * (hex ? 2 / (3 * hk[1]^2) : 1 / hk[a]^2), mK.param))
                 end
             else
                 field = true
@@ -501,6 +493,7 @@ end
 # multiplier `.m`, and with a domain its indicator `.dom`
 function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscretization, plans, params, xs) where {N}
     s = cf.program
+    hex = s.hierarchy[1].grid.geometry == HEX
     pb = ProgramBuilder(s.hierarchy[1].grid; periodic = s.periodic, spacing = s.spacing, nparams = s.nparams)
     pb.hierarchy = copy(s.hierarchy)
     for f in s.fields
@@ -555,7 +548,7 @@ function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscret
         fx = pb.fields[id].fixed
         lane == F16 && (lane = F32)
         out(name; storage = lane) = field!(pb, "jac:$k.$name"; storage, role = :aux, levels = Int8[L], fixed = fx && storage != U8)
-        wids = pl.local_only ? Int32[] : Int32[out("w$a") for a in 1:N]
+        wids = pl.local_only ? Int32[] : Int32[out("w$a") for a in 1:(hex ? 3 : N)]
         jid = isempty(pl.jterms) ? Int32(0) : out("j")
         did = pl.local_only ? Int32(0) : out("d")
         mid = pl.scaled ? out("m") : Int32(0)
@@ -566,7 +559,50 @@ function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscret
         indom(o) = dlid == 0 ? nothing : _indomain(kb, dlid, N, o)
         inside(o) = node!(kb, INSIDE_OP, BOOL, Int32[], access!(kb, Access{N}(id, Int8(0), Sel(Int16(1)),
             Sel(NTuple{N, Int16}(o)), Int8(0), INSIDE)))
-        if !pl.local_only
+        if !pl.local_only && hex
+            # a hexagonal lattice: the three faces `m · 2/(3h²)` (`Δ` alone lowers there, `K = 1`),
+            # 0 across the box or the domain's edge; the boundary diagonal `w d⁺` of each link that
+            # leaves the box, with the condition of the face it leaves through (axis 1's for a
+            # diagonal link that leaves along axis 1, else axis 2's: `_hexlap`, `Solvers._hexghost`)
+            p = pl.scaled ? only(pl.diff) : nothing
+            wl = zero_
+            for q in pl.diff
+                mult = pl.scaled ? constant!(kb, 1.0) : _real(e, lower(q.m, e))
+                wl = _op(e, ADD, wl, _op(e, MUL, constant!(kb, 2 / (3 * e.h[1]^2)), mult))
+            end
+            for (a, o) in enumerate(((1, 0), (0, 1), (1, -1)))
+                w = wl
+                all(s.periodic) || (w = select!(kb, inside(o), w, zero_))
+                dlid == 0 || (w = select!(kb, node!(kb, AND, BOOL, Int32[indom((0, 0)), indom(o)]), w, zero_))
+                store!(kb, wids[a], lane, w)
+            end
+            function dplus(a, side)            # the ghost rule's `d⁺` of face (a, side), or nothing
+                s.periodic[a] && return nothing
+                r = findfirst(x -> x isa FaceRule && x.field == fieldid(s, k) && x.axis == a && x.side == side, s.rules)
+                r === nothing && return nothing
+                fr = s.rules[r]
+                (fr.alpha.param == 0 && fr.alpha.value == 0) && return nothing
+                α, β = _coefnode(kb, fr.alpha), _coefnode(kb, fr.beta)
+                return _op(e, MAX, _op(e, DIV, α, _op(e, ADD, _op(e, MUL, constant!(kb, 0.5), α), β)), zero_)
+            end
+            dsum = zero_
+            for o in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1))
+                if all(!iszero, o)
+                    d1, d2 = dplus(1, o[1]), dplus(2, o[2])
+                    (d1 === nothing && d2 === nothing) && continue
+                    t2 = d2 === nothing ? zero_ : select!(kb, inside((0, o[2])), zero_, d2)
+                    dd = select!(kb, inside((o[1], 0)), t2, d1 === nothing ? zero_ : d1)
+                else
+                    a = o[1] != 0 ? 1 : 2
+                    d0 = dplus(a, o[a])
+                    d0 === nothing && continue
+                    dd = select!(kb, inside(o), zero_, d0)
+                end
+                dsum = _op(e, ADD, dsum, _op(e, MUL, wl, dd))
+            end
+            store!(kb, did, lane, dsum)
+            pl.scaled && store!(kb, mid, lane, _real(e, lower(p.m, e)))
+        elseif !pl.local_only
             p = pl.scaled ? only(pl.diff) : nothing     # (a scaled row: the combined term)
             dsum = zero_
             for a in 1:N

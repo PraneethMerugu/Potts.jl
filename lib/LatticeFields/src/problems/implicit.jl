@@ -416,7 +416,8 @@ end
 # decay that the coupling damps)
 function _numeric_operator(s::Program{N}, r::RowOperator, id, p, h, γ, mask::Bool; coupled::Bool = false) where {N}
     dims = Tuple(Int.(leveldims(s, s.fields[id].levels[1])))      # (a `Coarse` field's grid, F3-16)
-    face = ntuple(a -> _coefsum(r.faces[a], p), N)
+    # (a hexagonal lattice: three face directions, F3-20)
+    face = _ishex(s) ? ntuple(a -> _coefsum(r.faces[a], p), 3) : ntuple(a -> _coefsum(r.faces[a], p), N)
     ih = 1 / (γ * h)
     s0 = ih - _coefsum(r.jloc, p)
     shift = max(s0, ih / 2)
@@ -430,7 +431,7 @@ function _numeric_operator(s::Program{N}, r::RowOperator, id, p, h, γ, mask::Bo
     # a steady solve (γh = ∞) takes a Robin face's negative part into its operator too: with no
     # time-step shift to keep dominant, it stays symmetric and exact (batch 4 review r3 S1)
     op = Solvers.CellOperator(dims; periodic = s.periodic, face, shift, mask = mask ? "mask" : nothing, value = 0.0,
-        dirichlet = dir, robin = rob, name = r.key, robin_full = isinf(γ * h))
+        dirichlet = dir, robin = rob, name = r.key, robin_full = isinf(γ * h), hex = _ishex(s))
     return op, shift > s0
 end
 # the parameters the bounds of `inexact_bounds` and `_robin_bounds` read: with the store's
@@ -476,7 +477,7 @@ function _robin_bounds(s::Program{N}, op::OperatorSpec, keys, p) where {N}
                     m = max(m, abs(_coefsum(r.faces[a], p)) * abs(dm))
                 end
             end
-            q += m
+            q += _ishex(s) ? 2m : m            # (a hexagonal site has up to two links through one face)
         end
         ρ = max(ρ, q)
     end
@@ -669,10 +670,11 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
             v = r.scaled ? _zeros(st.backend, T, nsite) : nothing
             f = r.scaled ? _zeros(st.backend, T, nsite) : nothing
             jj, mm, dd, dm = jarr("j"), r.scaled ? jarr("m") : nothing, jarr("d"), r.domain ? jarr("dom") : nothing
-            cop = Solvers.CellOperator(dims; periodic = s.periodic, face = ntuple(a -> "w$a", N), shift = "s",
-                mask = usemask ? "mask" : nothing, value = r.scaled ? "v" : 0.0, name = key)
+            nf = _ishex(s) ? 3 : N                   # (a hexagonal lattice: three face directions, F3-20)
+            cop = Solvers.CellOperator(dims; periodic = s.periodic, face = ntuple(a -> "w$a", nf), shift = "s",
+                mask = usemask ? "mask" : nothing, value = r.scaled ? "v" : 0.0, name = key, hex = _ishex(s))
             ins = Any["in.f" => (r.scaled ? f : resarr), "s" => sh]
-            for a in 1:N
+            for a in 1:nf
                 push!(ins, "w$a" => jarr("w$a"))
             end
             usemask && push!(ins, "mask" => smask)
@@ -743,8 +745,9 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
     return cache
 end
 
-# the operator of `spec` for algorithm `alg`: a front end's refusal (a hexagonal lattice, a
-# map) names the algorithm
+# whether program `s` lives on a hexagonal lattice (its operator has three face directions, F3-20)
+_ishex(s::Program) = s.hierarchy[1].grid.geometry == HEX
+# the operator of `spec` for algorithm `alg`: a front end's refusal (a map) names the algorithm
 function _operator(spec::GroupSpec, alg)
     try
         return operator_spec(spec)
@@ -1333,6 +1336,8 @@ function _steady_indefinite(s::Program{N}, r::RowOperator, id, shift, p) where {
     any(x -> x isa NodeValueRule && x.field == id, s.rules) && return nothing
     r.domain && return nothing
     dims = Tuple(Int.(leveldims(s, s.fields[id].levels[1])))
+    # (a hexagonal row: its modes are not per axis; Lanczos on the row's operator, behind a barrier)
+    _ishex(s) && return _steady_refuse(r, Base.inferencebarrier(_hex_steady_min)(r, kinds, dims, s.periodic, shift, p)...)
     λ, scale = shift, abs(shift)
     for a in 1:N
         w = _coefsum(r.faces[a], p)
@@ -1346,11 +1351,75 @@ function _steady_indefinite(s::Program{N}, r::RowOperator, id, shift, p) where {
         end
         λ += _tridiag_min(d, w)
     end
+    return _steady_refuse(r, λ, scale)
+end
+function _steady_refuse(r::RowOperator, λ, scale)
     λ > 1e-10 * scale && return nothing
     throw(ArgumentError(string("QuasiSteady: field `", r.key, "`: its steady operator is indefinite (smallest ",
         "eigenvalue ", round(λ; sigdigits = 3), "): a Robin face `α c + β ∂c/∂n = g` with α and β of opposite signs ",
         "feeds the field more than its diffusion and decay remove, so the steady state is unstable or not unique; ",
         "step the field with `BackwardEuler`, or give the face a smaller |β| (or a larger decay)")))
+end
+# The smallest eigenvalue of a numeric hexagonal row's steady operator (F3-20 r2 M1): `s u + Σ_links
+# w (u − u_n)`, a link that leaves the box taking its face's ghost diagonal `w d` (axis 1's face for a
+# diagonal link that leaves along axis 1, else axis 2's; Dirichlet `d = 2`, Robin `α/(α/2 + β)`,
+# either sign), by Lanczos from a fixed start (the operator is symmetric). A Ritz value θ is never
+# below the smallest eigenvalue, so θ < 0 is a sure refusal; else the run stops when the Ritz
+# residual bound `ρ` (an eigenvalue lies in θ ± ρ) is below θ/100, or after `4(n1 + n2) + 100` steps
+# (the bottom gap is ~ w (π/n)², so convergence takes O(n) steps), and returns θ − ρ (θ when negative).
+# Returns `(λ, scale)` for `_steady_refuse`
+function _hex_steady_min(r::RowOperator, kinds, dims, per, shift, p)
+    w = Float64(_coefsum(r.faces[1], p))
+    n1, n2 = dims
+    n = n1 * n2
+    ghost(f) = f[1] === :dirichlet ? 2.0 : f[1] === :robin ? f[2] / (f[2] / 2 + f[3]) : 0.0
+    dg = fill(Float64(shift), n)                   # the diagonal: shift, faces, ghosts
+    for j in 1:n2, i in 1:n1, (di, dj) in _HEXLINKS
+        in1 = per[1] || 1 <= i + di <= n1
+        in2 = per[2] || 1 <= j + dj <= n2
+        dg[i + (j - 1) * n1] += in1 && in2 ? w :
+            w * (in1 ? ghost(kinds[2][dj < 0 ? 1 : 2]) : ghost(kinds[1][di < 0 ? 1 : 2]))
+    end
+    v = [sin(1.3q) + 0.5cos(0.7q) for q in 1:n]    # (a fixed start: no RNG state)
+    v ./= LinearAlgebra.norm(v)
+    vp, y = zeros(n), zeros(n)
+    α, β = Float64[], Float64[]
+    λ = Inf
+    for k in 1:(4(n1 + n2) + 100)
+        _hex_apply!(y, v, dg, w, n1, n2, (per[1], per[2]))
+        k > 1 && (y .-= β[end] .* vp)
+        a = LinearAlgebra.dot(v, y)
+        push!(α, a)
+        y .-= a .* v
+        b = LinearAlgebra.norm(y)
+        if k % 5 == 0 || b == 0 || k == n
+            E = LinearAlgebra.eigen(LinearAlgebra.SymTridiagonal(α, β), 1:1)
+            θ, ρ = E.values[1], b * abs(E.vectors[end, 1])
+            λ = θ < 0 ? θ : θ - ρ
+            (θ < 0 || ρ <= 1e-2 * θ || b == 0 || k == n) && break
+        end
+        push!(β, b)
+        vp, v = v, y ./ b
+    end
+    return λ, abs(shift) + 12abs(w)
+end
+const _HEXLINKS = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1))
+function _hex_apply!(y, x, dg, w, n1, n2, per::NTuple{2,Bool})
+    @inbounds for j in 1:n2, i in 1:n1
+        q = i + (j - 1) * n1
+        acc = dg[q] * x[q]
+        if 1 < i < n1 && 1 < j < n2                # (inside: no wrap, no ghost)
+            acc -= w * (x[q + 1] + x[q - 1] + x[q + n1] + x[q - n1] + x[q + 1 - n1] + x[q - 1 + n1])
+        else
+            for (di, dj) in _HEXLINKS
+                ii, jj = i + di, j + dj
+                (per[1] || 1 <= ii <= n1) && (per[2] || 1 <= jj <= n2) || continue
+                acc -= w * x[mod1(ii, n1) + (mod1(jj, n2) - 1) * n1]
+            end
+        end
+        y[q] = acc
+    end
+    return y
 end
 # the smallest eigenvalue of the symmetric tridiagonal with diagonal `d` and off-diagonal `−w`
 # (Sturm counts by bisection)

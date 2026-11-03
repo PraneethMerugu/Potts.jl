@@ -104,9 +104,8 @@ are read there) by Newton iterations on the form `(I/h − J̃) δ = G(u_k)`, `G
 r(u_k)`, `J̃` the group's operator (diffusion faces, linear local terms, face and mask
 conditions; a front end extracts it: `OperatorSpec`), each a linear solve with `inner`, and
 `u_{k+1} = u_k + δ`. An operator that reads the time is built at each substep's end time. One
-type for both front ends (Potts and LatticePDE export this binding). A hexagonal lattice has
-no implicit solve yet (the solver's operator has no hexagonal faces): step it with
-[`ExplicitEuler`](@ref).
+type for both front ends (Potts and LatticePDE export this binding). On a hexagonal lattice
+the operator has the lattice's six faces (F3-20).
 
 - `dt`: the window, as for [`ExplicitEuler`](@ref) (required on a `FieldProblem` without a
   clock; left out in a `PottsProblem`, whose window is the MCS).

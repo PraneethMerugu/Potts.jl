@@ -290,7 +290,7 @@ end
     sv = case_solver((op, inputs), Float32)
     @test sv.T == Float32
     bad = CellOperator{2}(op.dims, op.periodic, op.face, -1.0, op.mask, op.value,
-        op.dirichlet, op.robin, op.name, op.axes, op.robin_full)    # bypasses the constructor
+        op.dirichlet, op.robin, op.name, op.axes, op.robin_full, op.diag)    # bypasses the constructor
     @test_throws r"shift .* must be ≥ 0" Solvers.set_coefficients!(sv, bad)
     weak = CellOperator(op.dims; periodic = op.periodic, shift = 1e-3)
     @test_logs (:warn, r"solver_T = :auto would now resolve to Float64") Solvers.set_coefficients!(

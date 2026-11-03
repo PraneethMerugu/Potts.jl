@@ -190,9 +190,11 @@ iterations is counted in `integ.stats` and warned once with the route (a larger 
 or more substeps). A correction that diverges ends the run with
 `ReturnCode.ConvergenceFailure`, and the warning gives more substeps as the route. Under the
 automatic count, a CPU run stops a substep's Newton iterations once the correction meets the
-tolerance; a GPU runs them all, so CPU and GPU results agree to the tolerance, not bitwise. A
-hexagonal lattice has no implicit solve yet: the implicit solvers refuse it, and
-`field_solver = ExplicitEuler()` steps it.
+tolerance; a GPU runs them all, so CPU and GPU results agree to the tolerance, not bitwise. On
+a hexagonal lattice every implicit solver runs on the six-neighbor Laplacian. A face condition
+there applies along each link that leaves the box: a diagonal link takes the condition of
+axis 1's face when it leaves along axis 1, else axis 2's. Explicit and implicit steps use the
+same rule.
 
 `CrankNicolson()` and `BDF2()` are the second-order implicit solvers. They take the keywords
 of `BackwardEuler`, with the same meanings, and their substeps cost one linear solve each,

@@ -30,6 +30,17 @@ Neighbor of `x` along axis `a` by `σ = ±1`: `(x′, exists)`; periodic axes wr
     return ntuple(d -> d == a ? v : x[d], N), ok | per[a]
 end
 """
+Neighbor of `x` by the offset `o` (each entry −1, 0 or 1): `(x′, exists)`; periodic axes wrap.
+"""
+@inline function _nbo(x::NTuple{N, Int32}, o, dims, per) where {N}
+    y = ntuple(N) do d
+        v0 = x[d] + Int32(o[d])
+        ok = one(Int32) <= v0 <= dims[d]
+        ok ? v0 : per[d] ? (v0 < one(Int32) ? dims[d] : one(Int32)) : x[d]
+    end
+    return y, all(ntuple(d -> (one(Int32) <= x[d] + Int32(o[d]) <= dims[d]) | per[d], N))
+end
+"""
 Children of coarse coordinate `X` along one axis: `lo:hi` (a triple at the last site of an
 odd axis; the identity on an axis of size 1).
 """
@@ -52,7 +63,8 @@ below a finest axis of `n0` cells: 2^ℓ, the last cell takes the rest.
 Rule-M weights (P3-mg §3) of the hierarchy build: `inside` for a mask face inside a coarse
 cell, `plane` for a mask face on a plane between two active coarse cells, `inherited` for
 absorption folded on a finer level, `box` for box face-Dirichlet absorption; `majority`
-selects the Majority fold (real child count) instead of Any. Values, not types: the
+selects the Majority fold (real child count) instead of Any; `diagonal` weighs the diagonal
+fine faces of a hexagonal lattice in the coarse faces (`build_hex!`). Values, not types: the
 negative controls of the tests pass other weights.
 """
 Base.@kwdef struct RuleWeights
@@ -61,6 +73,7 @@ Base.@kwdef struct RuleWeights
     inherited::Float64 = 1.0
     box::Float64 = 0.5
     majority::Bool = false
+    diagonal::Float64 = 1.0
 end
 const RULE_M = RuleWeights()
 
@@ -156,6 +169,110 @@ function build_site!(j, S::Tuple{F, C}, P, G) where {F, C}
     return nothing
 end
 
+"""
+    build_hex!(J, S, P, G)
+
+One coarse site of the rule-M build on a hexagonal lattice (axial coordinates; coarsening by 2
+per axis keeps the lattice hexagonal): as `build_site!`, with three face directions `e₁`, `e₂`,
+`e₁ − e₂`. A fine face crosses from the children of `J` to those of `J + Δ`, `Δ` one of
+`±e₁`, `±e₂`, `±(e₁ − e₂)` (a diagonal fine face can cross an axial plane: it then feeds that
+axial coarse face). A coarse face is the mean of the fine faces that cross it, times its
+rediscretized factor (the fine faces of its own direction, with the physical widths as in
+`build_site!`; the one diagonal fine face of a diagonal coarse face takes the sum of its axial
+factors), so a constant coefficient keeps its value on every level and in every direction;
+mask faces fold by rule M. `P = (inside, plane, inherited, box, diagonal)`, `diagonal` the
+weight of the diagonal fine faces in the coarse faces (1; 0 drops them, the negative control).
+"""
+# the tuple `t` with entry `e` replaced by `v`
+@inline _tset(t::NTuple{3, T}, v, e) where {T} = ntuple(q -> q == e ? T(v) : t[q], 3)
+# the factor of a fine face `c → cn` along axis `a` in the coarse face `X → Xn`: fine over
+# coarse center distance, from the physical widths (`build_site!`)
+@inline function _hexfac(::Type{T}, a, c, cn, X, Xn, dimsf, dimsc, n0, ℓ) where {T}
+    T(_width(c[a], dimsf[a], n0[a], ℓ - one(Int32)) + _width(cn[a], dimsf[a], n0[a], ℓ - one(Int32))) /
+    T(_width(X[a], dimsc[a], n0[a], ℓ) + _width(Xn[a], dimsc[a], n0[a], ℓ))
+end
+function build_hex!(j, S::Tuple{F, C}, P, G) where {F, C}
+    (af, wf, sf, bf, if_), (ac, wc, sc, bc, ic) = S
+    T = eltype(sf)
+    dimsf, dimsc, per, n0, ℓ = G.dimsf, G.dimsc, G.per, G.n0, G.level
+    J = Int32(j)
+    X = _coords(J, dimsc)
+    lo = ntuple(d -> _kids(X[d], dimsf[d], dimsc[d])[1], 2)
+    hi = ntuple(d -> _kids(X[d], dimsf[d], dimsc[d])[2], 2)
+    activeJ = _fold(X, af, dimsf, dimsc, G.majority)
+    # the coarse neighbors J + E (E = e₁, e₂, e₁ − e₂) and J − E: active after the fold
+    E = ((Int32(1), Int32(0)), (Int32(0), Int32(1)), (Int32(1), Int32(-1)))
+    actp = ntuple(e -> (Y = _nbo(X, E[e], dimsc, per); Y[2] && _fold(Y[1], af, dimsf, dimsc, G.majority)), 3)
+    actm = ntuple(e -> (Y = _nbo(X, (-E[e][1], -E[e][2]), dimsc, per); Y[2] && _fold(Y[1], af, dimsf, dimsc, G.majority)), 3)
+    s, sb, si = zero(T), zero(T), zero(T)
+    cf = (zero(T), zero(T), zero(T))         # per coarse direction: Σ active–active fine faces,
+    dcf = cf                                 # Σ mask faces, Σ mask faces with an active child of J,
+    dcx = cf
+    nc = (zero(T), zero(T), zero(T))         # the count of crossing faces, the rediscretized factor
+    gf = nc
+    for ci in CartesianIndices((lo[1]:hi[1], lo[2]:hi[2]))
+        c = Int32.(Tuple(ci))
+        i = _lin(c, dimsf)
+        @inbounds active = af[i] != 0
+        if active
+            @inbounds s += sf[i]
+            @inbounds sb += T(P[4]) * bf[i]
+            @inbounds si += T(P[3]) * if_[i]
+        end
+        for d in 1:3, σ in (1, -1)
+            o = (σ * E[d][1], σ * E[d][2])
+            cn, ok = _nbo(c, o, dimsf, per)
+            ok || continue
+            jn = _lin(cn, dimsf)
+            @inbounds w = σ > 0 ? wf[d][i] : wf[d][jn]
+            @inbounds y = af[jn] != 0
+            # the coarse step Δ of the face (an axis of one coarse site: no step)
+            Δ = ntuple(a -> dimsc[a] == one(Int32) ? zero(Int32) :
+                            o[a] == 1 && c[a] == hi[a] ? one(Int32) :
+                            o[a] == -1 && c[a] == lo[a] ? -one(Int32) : zero(Int32), 2)
+            if Δ == (zero(Int32), zero(Int32))           # inside J: once per face
+                σ > 0 && active != y && (si += T(P[1]) * w)
+                continue
+            end
+            e = Δ[2] == zero(Int32) ? 1 : Δ[1] == zero(Int32) ? 2 : 3
+            if Δ == E[e]                                 # J → J + E: the coarse face of J
+                d == 3 && (w *= T(P[5]))
+                x2 = active & y
+                cf = _tset(cf, cf[e] + (x2 ? w : zero(T)), e)
+                dcf = _tset(dcf, dcf[e] + (active != y ? w : zero(T)), e)
+                dcx = _tset(dcx, dcx[e] + (active & !y ? w : zero(T)), e)
+                nc = _tset(nc, nc[e] + one(T), e)
+                if d == e && σ > 0                       # its own direction: the physical widths
+                    Xn = _nbo(X, E[e], dimsc, per)[1]
+                    f1 = _hexfac(T, 1, c, cn, X, Xn, dimsf, dimsc, n0, ℓ)
+                    f2 = _hexfac(T, 2, c, cn, X, Xn, dimsf, dimsc, n0, ℓ)
+                    gf = _tset(gf, gf[e] + (e == 3 ? f1 + f2 : e == 1 ? f1 : f2), e)
+                end
+            elseif activeJ && actm[e] && active && !y    # J − E → J: a mask face on its plane
+                si += T(P[2]) * w
+            end
+        end
+    end
+    for e in 1:3
+        acc = zero(T)
+        if nc[e] > zero(T)
+            m = gf[e] / nc[e]
+            if activeJ & actp[e]
+                acc = m * cf[e]
+                si += T(P[2]) * dcx[e]
+            else
+                acc = m * (cf[e] + dcf[e])
+            end
+        end
+        @inbounds wc[e][J] = acc
+    end
+    @inbounds ac[J] = activeJ ? 0x01 : 0x00
+    @inbounds sc[J] = activeJ ? s : zero(T)
+    @inbounds bc[J] = activeJ ? sb : zero(T)
+    @inbounds ic[J] = activeJ ? si : zero(T)
+    return nothing
+end
+
 # ---- the bottom: one workgroup, barrier-separated phases (contract item 5) -----------------
 """
 `(b − A x)ᵢ` and the diagonal `Dᵢ` of site `i` on a level (0 at masked sites).
@@ -173,6 +290,17 @@ end
             ok || continue
             j = _lin(Y, dims)
             @inbounds wf = σ > 0 ? w[a][i] : w[a][j]
+            @inbounds xj = active[j] != 0 ? x[j] : zero(T)
+            D += wf
+            Ax += wf * (xi - xj)
+        end
+    end
+    if length(w) > length(dims)                     # hexagonal: the faces to ±(e₁ − e₂)
+        for σ in (1, -1)
+            Y, ok = _nbo(X, (σ, -σ), dims, per)
+            ok || continue
+            j = _lin(Y, dims)
+            @inbounds wf = σ > 0 ? w[3][i] : w[3][j]
             @inbounds xj = active[j] != 0 ? x[j] : zero(T)
             D += wf
             Ax += wf * (xi - xj)
@@ -330,6 +458,16 @@ or singular row).
         @inbounds wf = σ > 0 ? w[a][i] : w[a][j]
         D += wf
         @inbounds active[j] != 0 && j != i && (off += wf)
+    end
+    if length(w) > length(dims)                     # hexagonal: the faces to ±(e₁ − e₂)
+        for σ in (1, -1)
+            Y, ok = _nbo(X, (σ, -σ), dims, per)
+            ok || continue
+            j = _lin(Y, dims)
+            @inbounds wf = σ > 0 ? w[3][i] : w[3][j]
+            D += wf
+            @inbounds active[j] != 0 && j != i && (off += wf)
+        end
     end
     D == zero(T) && return floatmax(T), zero(T)
     return one(T) - off / D, one(T) + off / D

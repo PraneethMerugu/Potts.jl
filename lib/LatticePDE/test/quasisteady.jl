@@ -213,7 +213,7 @@ end
     @test solve(pd, QuasiSteady(; dt = 0.1, inner = BTIGHT)).retcode == ReturnCode.Success
 end
 
-@testset "F3-12a: components equal scalars; the hexagonal refusal names QuasiSteady" begin
+@testset "F3-12a: components equal scalars; a hexagonal lattice runs QuasiSteady (F3-20)" begin
     @variables bu(..)[1:2]
     bue = bu(t, x, y)
     comp = nlsys([D(bue[1]) ~ 0.05 * Δ(bue[1]) - 2 * bue[1] + 1, D(bue[2]) ~ 0.05 * Δ(bue[2]) - bue[2] + bue[1]],
@@ -226,7 +226,7 @@ end
     @test a[bue[1], length(a.t)] == b[bce, length(b.t)] && a[bue[2], length(a.t)] == b[boe, length(b.t)]
     hs = PDESystem([D(bce) ~ Δ(bce) - bce], [bc(0, x, y) ~ 0.0], bdom(1.0), [t, x, y], [bce], Any[]; name = :hex)
     ph = discretize(hs, LatticeDiscretization(Grid((6, 6); geometry = HEX); T = Float64, problem = :owned))
-    @test startswith(qmsg(() -> init(ph, QuasiSteady(; dt = 0.1))), "QuasiSteady: field `bc`: a hexagonal lattice has no implicit solve yet")
+    @test solve(ph, QuasiSteady(; dt = 0.1)).retcode == ReturnCode.Success
 end
 
 # Review r2 M1, F3-12c: a QuasiSteady group in a loop of groups takes its gain in the coupling

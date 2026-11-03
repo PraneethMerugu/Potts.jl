@@ -330,3 +330,26 @@ end
         end
     end
 end
+
+@testset "F3-20: implicit algorithms on a hexagonal lattice on $pgpu equal the host form" begin
+    # the six faces in the generated kernels, the bottom and the hex coarse build on the device:
+    # BackwardEuler (numeric with a mask, a field row), CrankNicolson, BDF2, QuasiSteady and the
+    # coupled steady solve, Float32 and Float64, against the host executor
+    loop = PDESystem([0 ~ 0.1Δ(cae) - 1.0 * cae + 2.0 * cbe + x, 0 ~ 0.2Δ(cbe) - 2.0 * cbe - 1.5 * cae + y],
+        [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.3), [t, x, y], [cae, cbe], Any[]; name = :hexdev)
+    num = bsys([D(bce) ~ bD * Δ(bce) - bk * bce + x], [bc(0, x, y) ~ x * y, bce ~ masked(bqe == 2, 1.5)], [bD, bk]; T = 0.3)
+    fld = bsys([D(bce) ~ (1 + x) * Δ(bce) - bk * bce + 1], [bc(0, x, y) ~ x * y], [bk]; T = 0.3)
+    kind = Int32[(i + 2j) % 3 for i in 1:40, j in 1:40]
+    cases = [("BackwardEuler", num, BackwardEuler(; dt = 0.1)), ("BackwardEuler, field row", fld, BackwardEuler(; dt = 0.1)),
+             ("CrankNicolson", num, CrankNicolson(; dt = 0.1)), ("BDF2", fld, BDF2(; dt = 0.1)),
+             ("QuasiSteady", num, QuasiSteady(; dt = 0.1)), ("coupled QuasiSteady", loop, QuasiSteady(; dt = 0.1))]
+    for (name, sys, alg) in cases, T in (Float32, Float64)
+        k = name == "coupled QuasiSteady" ? (cae, cbe) : (bce,)
+        mk(be) = discretize(sys, LatticeDiscretization(Grid((40, 40); geometry = LatticeFields.IR.HEX); T, problem = :owned, backend = be);
+            inputs = name == "coupled QuasiSteady" ? [] : [bqe => kind])
+        sd, sh = solve(mk(PDEV), alg; saveat = 0.1), solve(mk(KernelAbstractions.CPU()), alg; saveat = 0.1)
+        @test sd.retcode == sh.retcode == SciMLBase.ReturnCode.Success
+        same = all(v -> all(i -> Array(sd[v][i]) == Array(sh[v][i]), eachindex(sh.t)), k)
+        @test same || (println("F3-20 hex dev ", name, " ", T, " ", maximum(abs, Array(sd[k[1]][end]) .- sh[k[1]][end])); false)
+    end
+end

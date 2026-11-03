@@ -74,6 +74,8 @@ Julia expression of a value node from its operand expressions (`T`: compute type
 function opexpr(op::Op, a::Vector{Any}, n::Node, k::Kernel, T::Type)
     haskey(_BINOPS, op) && return foldl((x, y) -> Expr(:call, _BINOPS[op], x, y), a)
     haskey(_UNOPS, op) && return Expr(:call, _UNOPS[op], a[1])
+    # (`and`, `or` take every operand: the hexagonal Laplacian's domain test has three, F3-20)
+    op in (AND, OR) && return Expr(:call, _CMPOPS[op], a...)
     haskey(_CMPOPS, op) && return Expr(:call, _CMPOPS[op], a[1], a[2])
     op == DIV && return :($(a[1]) / $(a[2]))
     op == FMA && return :(fma($(a[1]), $(a[2]), $(a[3])))

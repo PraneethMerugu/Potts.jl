@@ -718,14 +718,226 @@ end
     end
 end
 
-@testset "r1 M4: BackwardEuler on a hexagonal lattice is refused in words; ExplicitEuler steps it" begin
-    sys = nlsys([D(bce) ~ 2.0 * Δ(bce) - bce + 1], [bc(0, x, y) ~ x], [bce])
-    p = discretize(sys, LatticeDiscretization(Grid((16, 16); geometry = HEX); T = Float64, problem = :owned))
-    # base: a defect correction that diverges, with the route "more substeps … or a larger linear
-    # budget", which does not work either
-    @test_throws "BackwardEuler: field `bc`: a hexagonal lattice has no implicit solve yet (the solver's operator has no hexagonal faces); step it with `ExplicitEuler`" init(p,
-        BackwardEuler(; dt = 0.1))
-    @test solve(p, ExplicitEuler(; dt = 0.1)).retcode == ReturnCode.Success
+# F3-20: a hexagonal lattice (axial coordinates; `Δ` is `2/(3h²) Σₙ (cₙ − c)` over the six
+# neighbors ±e₁, ±e₂, ±(e₁ − e₂)): the implicit solve's operator has its three face directions.
+# The hand rate on `[0, 1]²` with `n × n` sites (`h = 1/n`, the site `(i, j)` at
+# `((i − ½)h, (j − ½)h)`): `r(u)_i = m_i D 2/(3h²) Σₙ (u_n − u_i) − k u_i + f_i`, a neighbor
+# outside a closed box left out (zero flux), wrapped on a periodic one. `hex_hand` returns the
+# rate `(L, b)`. Base (ee577f6e): `init` refuses every implicit algorithm on a hexagonal lattice.
+# Negative control (F3-20 log in HANDOFF §6): the operator without the diagonal faces fails the
+# one-window tests (the defect correction of the left-out faces does not reach 1e-9).
+const HEXN = 12
+const HEXO = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1))
+function hex_hand(; n = HEXN, D = 1.0, m = (x, y) -> 1.0, k = 0.0, f = (x, y) -> 0.0, periodic = false, faces = Dict())
+    h = 1 / n
+    lin(i, j) = i + (j - 1) * n
+    L, b = zeros(n^2, n^2), zeros(n^2)
+    for j in 1:n, i in 1:n
+        r = lin(i, j)
+        xi, yi = (i - 0.5) * h, (j - 0.5) * h
+        for (di, dj) in HEXO
+            ii, jj = i + di, j + dj
+            c = m(xi, yi) * D * 2 / (3h^2)
+            if !(1 <= ii <= n && 1 <= jj <= n) && !periodic
+                # a link that leaves the box: the face of axis 1 if it leaves along axis 1, else of
+                # axis 2; `(:dir, g)` (ghost `2g − u`) or `(:robin, α, β, g)` for `α u + β ∂u/∂x_a = g`
+                # along the link (ghost from `α (u_g + u)/2 + β s (u_g − u)/h = g`); none: zero flux
+                a = 1 <= ii <= n ? 2 : 1
+                sd = a == 1 ? sign(di) : sign(dj)
+                haskey(faces, (a, sd)) || continue
+                fc = faces[(a, sd)]
+                pg, qg = fc[1] === :dir ? (-1.0, 2fc[2]) :
+                         (bl = fc[3] * sd / h; den = fc[2] / 2 + bl; ((bl - fc[2] / 2) / den, fc[4] / den))
+                L[r, r] += c * (pg - 1)
+                b[r] += c * qg
+                continue
+            end
+            L[r, lin(mod1(ii, n), mod1(jj, n))] += c
+            L[r, r] -= c
+        end
+        L[r, r] -= k
+        b[r] += f(xi, yi)
+    end
+    return L, b
+end
+const HEXKIND = Int32[(i + 2j) % 3 for i in 1:HEXN, j in 1:HEXN]
+hexdisc(sys; T = Float64, inputs = [bqe => HEXKIND], kw...) =
+    discretize(sys, LatticeDiscretization(Grid((HEXN, HEXN); geometry = HEX); T, problem = :owned, kw...); inputs)
+const HEXPER = [bc(t, 0, y) ~ bc(t, 1, y), bc(t, x, 0) ~ bc(t, x, 1)]
+
+@testset "F3-20: one BackwardEuler window on a hexagonal lattice equals the hand BE matrix" begin
+    h = 0.05
+    alg = BackwardEuler(; dt = h, inner = BTIGHT)
+    # numeric rows: closed with a mask and its value, and periodic
+    for (bcs, per, mask) in (([bc(0, x, y) ~ x * y, bce ~ masked(bqe == 2, 1.5)], false, true), ([bc(0, x, y) ~ x * y; HEXPER], true, false))
+        p = hexdisc(bsys([D(bce) ~ bD * Δ(bce) - bk * bce + x], bcs, [bD, bk]))
+        ig, u0, u = be_window(p, alg)
+        L, b = hex_hand(; D = 0.3, k = 2.0, f = (x, y) -> x, periodic = per)
+        A, rhs = I - h * L, u0 .+ h .* b
+        if mask
+            for r in findall(vec(HEXKIND .== 2))
+                A[r, :] .= 0
+                A[r, r], rhs[r] = 1, 1.5
+            end
+        end
+        @test maximum(abs, u .- A \ rhs) < 1e-9
+        rt = only(ig.runtimes)
+        @test rt.cache.exact && rt.cache.newton == 1 && length(rt.cache.rows[1].solver.op.face) == 2 &&
+              rt.cache.rows[1].solver.op.diag ≈ 0.3 * 2 / (3 / HEXN^2)
+    end
+    # field rows (`jac:` writes w1, w2, w3): a site multiplier `at(W, q) Δ(c)` (the row scaled by
+    # 1/m; q = 0 reads 0: m = 0 rows in two stages), and an irregular domain (no face across its
+    # edge, the diagonal included; a site outside keeps its value)
+    mq(xx, yy) = (0.0, 0.5, 2.0)[HEXKIND[round(Int, xx * HEXN + 0.5), round(Int, yy * HEXN + 0.5)] + 1]
+    p = hexdisc(bsys([D(bce) ~ at(bW, bqe) * Δ(bce) - bk * bce + 1], [bc(0, x, y) ~ x * y], [bW, bk]))
+    ig, u0, u = be_window(p, alg)
+    L, b = hex_hand(; m = mq, k = 2.0, f = (x, y) -> 1.0)
+    @test maximum(abs, u .- (I - h * L) \ (u0 .+ h .* b)) < 1e-9
+    rt = only(ig.runtimes)
+    @test rt.cache.rows[1].op.field && rt.cache.rows[1].op.scaled && rt.cache.exact && rt.cache.newton == 1
+    @variables hdm(..)::Bool [input = true]
+    hdme = hdm(t, x, y)
+    dm = [(i - 6.3)^2 + (j - 5.8)^2 + (i - 6.3) * (j - 5.8) < 18 for i in 1:HEXN, j in 1:HEXN]
+    pd = discretize(PDESystem([D(bce) ~ bD * Δ(bce) - bk * bce + x], [bc(0, x, y) ~ x * y], bdom(1.0), [t, x, y], [bce, hdme], [bD, bk];
+            name = :hexdom), LatticeDiscretization(Grid((HEXN, HEXN); geometry = HEX); T = Float64, problem = :owned, domain = hdm);
+        inputs = [hdme => dm])
+    ig, u0, u = be_window(pd, alg)
+    L, b = hex_hand(; D = 0.3, k = 2.0, f = (x, y) -> x)
+    out = findall(.!vec(dm))
+    for r in axes(L, 1), c in axes(L, 2)            # no face across the domain's edge
+        r != c && L[r, c] != 0 && (r in out || c in out) && (L[r, r] += L[r, c]; L[r, c] = 0)
+    end
+    A, rhs = I - h * L, u0 .+ h .* b
+    for r in out
+        A[r, :] .= 0
+        A[r, r], rhs[r] = 1, u0[r]
+    end
+    @test maximum(abs, u .- A \ rhs) < 1e-9 && only(ig.runtimes).cache.rows[1].op.domain
+end
+
+@testset "F3-20 r1 M1: face conditions on a hexagonal lattice (explicit rate, BackwardEuler window)" begin
+    # a Dirichlet face (axis 1 low), a Robin face (axis 2 low), zero flux elsewhere, a mask; each link
+    # that leaves the box takes its face's ghost (a diagonal link axis 1's when it leaves along axis 1)
+    faces = [bc(t, 0, y) ~ 1.0, 1.5 * bc(t, x, 0) - 0.5 * Differential(y)(bc(t, x, 0)) ~ 0.2]
+    hf = Dict((1, -1) => (:dir, 1.0), (2, -1) => (:robin, 1.5, -0.5, 0.2))
+    h = 0.05
+    for (lab, rate, ps, m, mask) in (("numeric", bD * Δ(bce) - bk * bce + x, [bD, bk], (x, y) -> 1.0, true),
+                                     ("field row", at(bW, bqe) * Δ(bce) - bk * bce + x, [bW, bk], nothing, false))
+        mq(xx, yy) = (0.0, 0.5, 2.0)[HEXKIND[round(Int, xx * HEXN + 0.5), round(Int, yy * HEXN + 0.5)] + 1]
+        bcs = [bc(0, x, y) ~ x * y; faces; mask ? [bce ~ masked(bqe == 2, 1.5)] : []]
+        p = hexdisc(bsys([D(bce) ~ rate], bcs, ps))
+        L, b = hex_hand(; D = m === nothing ? 1.0 : 0.3, m = something(m, mq), k = 2.0, f = (x, y) -> x, faces = hf)
+        # the explicit rate at the start: `L u0 + b` (the ghosts of the face conditions)
+        ie = init(p, ExplicitEuler(; dt = 1e-7, substeps = 1))
+        u0 = copy(vec(ie[bce]))
+        step!(ie)
+        r = (vec(ie[bce]) .- u0) ./ 1e-7
+        act = mask ? .!vec(HEXKIND .== 2) : trues(HEXN^2)
+        @test maximum(abs, (r .- (L * u0 .+ b))[act]) < 1e-5 * maximum(abs, L * u0 .+ b) ||
+              (println("hex face rate ", lab, " ", maximum(abs, (r .- (L * u0 .+ b))[act])); false)
+        # one BackwardEuler window: the hand BE matrix
+        ig, u0, u = be_window(p, BackwardEuler(; dt = h, inner = BTIGHT))
+        A, rhs = I - h * L, u0 .+ h .* b
+        for q in findall(.!act)
+            A[q, :] .= 0
+            A[q, q], rhs[q] = 1, 1.5
+        end
+        @test maximum(abs, u .- A \ rhs) < 1e-9 || (println("hex face BE ", lab, " ", maximum(abs, u .- A \ rhs)); false)
+        @test only(ig.runtimes).cache.exact && only(ig.runtimes).cache.newton == 1
+    end
+end
+
+@testset "F3-20 r2 M1: an indefinite steady row on a hexagonal lattice is refused (Lanczos)" begin
+    # `0 ~ 0.01Δc − k c + x` with Robin faces `−2c − ∂c/∂x ~ 0` on x = 0 and y = 0 (α, β of opposite signs).
+    # k = 0.01: the dense max Re λ of the hex :ode Jacobian is +0.176 (cubic +0.076), refused on both
+    # lattices; k = 0.3: −0.114 (cubic −0.214), the steady state is stable and runs on both.
+    # Base (0f206d5c): the hex row skipped the check, and k = 0.01 returned Success
+    for (k, ok) in ((0.01, false), (0.3, true))
+        sys = PDESystem([0 ~ 0.01Δ(bce) - k * bce + x],
+            [bc(0, x, y) ~ 0.0, -2.0 * bc(t, 0, y) - Differential(x)(bc(t, 0, y)) ~ 0.0, -2.0 * bc(t, x, 0) - Differential(y)(bc(t, x, 0)) ~ 0.0],
+            bdom(1.0), [t, x, y], [bce], Any[]; name = :hexind)
+        for geometry in (HEX, LatticeFields.IR.CUBIC)
+            p = discretize(sys, LatticeDiscretization(Grid((12, 12); geometry); T = Float64, problem = :owned))
+            if ok
+                @test solve(p, QuasiSteady(; dt = 0.1, inner = BTIGHT)).retcode == ReturnCode.Success
+            else
+                @test_throws "its steady operator is indefinite" init(p, QuasiSteady(; dt = 0.1))
+            end
+        end
+    end
+end
+
+@testset "F3-20 r1 M2: a kind set of three or more kinds in a rate (Cartesian, ExplicitEuler)" begin
+    # `ismember(q, set)` lowers to one OR node with an operand per kind; before F3-20 the emitter
+    # kept two of them (32 sites instead of 48 for (0, 1, 2) here, all four 32 instead of 64)
+    K = Int32[(i + j) % 4 for i in 1:8, j in 1:8]
+    for set in ((0, 1, 2), (0, 1, 2, 3), (1, 2))
+        sys = PDESystem([D(bce) ~ ismember(bqe, set)], [bc(0, x, y) ~ 0.0], bdom(1.0), [t, x, y], [bce, bqe], Any[]; name = :kset)
+        p = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned); inputs = [bqe => K])
+        ig = init(p, ExplicitEuler(; dt = 0.1))
+        step!(ig)
+        @test ig[bce] ./ 0.1 ≈ Float64.(in.(K, Ref(set)))
+    end
+end
+
+@testset "F3-20: order 1 (BackwardEuler) and 2 (CrankNicolson, BDF2) on a hexagonal lattice; QuasiSteady" begin
+    # the plane wave `cos(2π(x + y))` is an eigenvector of the periodic hexagonal Laplacian with
+    # `λ = −2/(3h²) Σ_d (2 − 2cos θ_d)`, `θ = (2π/n, 2π/n, 0)`: the semi-discrete solution is
+    # `e^{D λ t} u0`, so the error is the time error alone
+    n = HEXN
+    θ = 2π / n
+    λ = -2 / (3 / n^2) * (2 * (2 - 2cos(θ)))
+    sys = bsys([D(bce) ~ bD * Δ(bce)], [bc(0, x, y) ~ cos(2π * (x + y)); HEXPER], [bD]; T = 0.2, dvs = [bce])
+    p = hexdisc(sys; inputs = [])
+    u0 = [cos(2π * ((i - 0.5) + (j - 0.5)) / n) for i in 1:n, j in 1:n]
+    ex = exp(0.3λ * 0.2) .* u0
+    err(alg) = maximum(abs, blast(solve(p, alg)) .- ex)
+    eb = [err(BackwardEuler(; dt = 0.2 / 2^k, inner = BTIGHT)) for k in 2:5]
+    @test all(o -> abs(o - 1) < 0.1, log2.(eb[1:(end - 1)] ./ eb[2:end]))
+    # exactly the BE map (1 − h D λ)^{-m}
+    @test maximum(abs, blast(solve(p, BackwardEuler(; dt = 0.05, inner = BTIGHT))) .- (1 - 0.05 * 0.3λ)^-4 .* u0) < 1e-12
+    # (at h D |λ| ≤ 0.1: measured CN 2.04, 2.01, 2.00 and BDF2 2.11, 2.06, 2.03; larger steps are
+    # not yet asymptotic)
+    for alg in (dt -> CrankNicolson(; dt, inner = BTIGHT), dt -> BDF2(; dt, inner = BTIGHT))
+        ec = [err(alg(0.2 / 2^k)) for k in 4:7]
+        @test all(o -> abs(o - 2) < 0.15, log2.(ec[1:(end - 1)] ./ ec[2:end])) || (println("hex order 2: ", ec); false)
+    end
+    # QuasiSteady: the steady state of `D Δ c − k c + f` (closed, a mask) is the hand solve
+    qs = hexdisc(bsys([D(bce) ~ bD * Δ(bce) - bk * bce + x], [bc(0, x, y) ~ 0.0, bce ~ masked(bqe == 2, 1.5)], [bD, bk]))
+    s = solve(qs, QuasiSteady(; dt = 0.1, inner = BTIGHT))
+    L, b = hex_hand(; D = 0.3, k = 2.0, f = (x, y) -> x)
+    A, rhs = -L, copy(b)
+    for r in findall(vec(HEXKIND .== 2))
+        A[r, :] .= 0
+        A[r, r], rhs[r] = 1, 1.5
+    end
+    @test s.retcode == ReturnCode.Success && maximum(abs, vec(blast(s)) .- A \ rhs) < 1e-9
+end
+
+@testset "F3-20: the coupled steady solve (F3-12d) on a hexagonal lattice" begin
+    # two steady rows that read each other: `DeviceGMRES` with the block preconditioner on the
+    # hexagonal hierarchy equals the hand coupled solve
+    operiodic = [bo(t, 0, y) ~ bo(t, 1, y), bo(t, x, 0) ~ bo(t, x, 1)]
+    for per in (false, true)
+        lp = PDESystem([0 ~ 0.1Δ(bce) - 1.0 * bce + 2.0 * boe + x, 0 ~ 0.2Δ(boe) - 2.0 * boe - 1.5 * bce + y],
+            [[bc(0, x, y) ~ 0.0, bo(0, x, y) ~ 0.0]; per ? [HEXPER; operiodic] : []], bdom(1.0), [t, x, y], [bce, boe], Any[];
+            name = :hexloop)
+        p = discretize(lp, LatticeDiscretization(Grid((HEXN, HEXN); geometry = HEX); T = Float64, problem = :owned))
+        s = solve(p, QuasiSteady(; dt = 0.1, inner = DeviceGMRES(; rtol = 1e-12, budget = 200)))
+        L1, b1 = hex_hand(; D = 0.1, k = 1.0, f = (x, y) -> x, periodic = per)
+        L2, b2 = hex_hand(; D = 0.2, k = 2.0, f = (x, y) -> y, periodic = per)
+        n2 = HEXN^2
+        A = [L1 2.0*I(n2); -1.5*I(n2) L2]
+        want = -A \ [b1; b2]
+        got = [vec(s[bce, length(s.t)]); vec(s[boe, length(s.t)])]
+        @test s.retcode == ReturnCode.Success && maximum(abs, got .- want) < 1e-8
+    end
+    # a growing mode of a hexagonal system is refused in words (by the growth check after the first solve)
+    grow = PDESystem([0 ~ 0.1Δ(bce) + 1.0 * bce + 2.0 * boe, 0 ~ 0.1Δ(boe) - 1.0 * boe + 2.0 * bce],
+        [[bc(0, x, y) ~ 0.0, bo(0, x, y) ~ 0.0]; HEXPER; operiodic], bdom(1.0),
+        [t, x, y], [bce, boe], Any[]; name = :hexgrow)
+    pg = discretize(grow, LatticeDiscretization(Grid((HEXN, HEXN); geometry = HEX); T = Float64, problem = :owned))
+    @test_throws "their coupled steady system has a growing mode" init(pg, QuasiSteady(; dt = 0.1))
 end
 
 @testset "r1 M5: π and ℯ lower in a source, a coefficient and a face value (both paths)" begin

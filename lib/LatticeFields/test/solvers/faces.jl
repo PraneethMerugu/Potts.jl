@@ -150,7 +150,7 @@ end
     op = CellOperator((16, 16); shift = 0.1, robin = (((1.0, 0.5, 0.0), nothing), (nothing, nothing)), NM...)
     sv = FieldSolver(HostExec(), op; T = Float64)
     bad = CellOperator{2}(op.dims, op.periodic, op.face, op.shift, op.mask, op.value, op.dirichlet,
-        deg, op.name, op.axes, op.robin_full)            # bypasses the constructor
+        deg, op.name, op.axes, op.robin_full, op.diag)   # bypasses the constructor
     @test occursin("has α/2 + β = 0", msg(() -> set_coefficients!(sv, bad)))
     @test occursin("has α = β = 0, which is no condition",
         msg(() -> CellOperator((16, 16); robin = (((0.0, 0.0, 1.0), nothing), (nothing, nothing)), NM...)))

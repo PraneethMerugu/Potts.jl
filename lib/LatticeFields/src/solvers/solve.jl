@@ -350,8 +350,10 @@ function FieldSolver(exec, op::CellOperator{N}; inner = :auto, T = Float32,
     # a Float64 solver on a device whose default float is Float32 (an explicit `solver_T`, or
     # `:auto` in the floor regime, D-C7b): its kernels are registered (D-157 carve-out, R-F3c)
     declared = T === Float64 && Exec.default_float(exec) !== Float64
-    o = CompileOptions(; T, declared)
-    declared && foreach(f -> Exec.register_float64!(string(typeof(f)), Exec.FLOAT64_ARRAY), (finish!, bottom!, gershgorin!, build_site!))
+    # (a solver launch passes the linear site index: a hexagonal lattice's diagonal reads would
+    # otherwise select the Cartesian index form)
+    o = ishex(op) ? CompileOptions(; T, declared, index = :linear) : CompileOptions(; T, declared)
+    declared && foreach(f -> Exec.register_float64!(string(typeof(f)), Exec.FLOAT64_ARRAY), (finish!, bottom!, gershgorin!, ishex(op) ? build_hex! : build_site!))
     bodies = Dict{String, Any}()
     praw = coef_values(op)                # coefficients are runtime parameters (P5 C7b-2)
     for k in s.kernels
@@ -502,10 +504,11 @@ number type (`solver_T = :auto`) stays as resolved at build.
 function set_coefficients!(sv::FieldSolver, op::CellOperator)
     o = sv.op
     diff = op.dims != o.dims ? "the lattice size" : op.periodic != o.periodic ? "the periodic axes" :
+           ishex(op) != ishex(o) ? "the lattice geometry (hexagonal or not)" :
            op.mask != o.mask ? "the mask" : op.name != o.name ? "the field name" :
            op.robin_full != o.robin_full ? "where a Robin face's negative part goes (`robin_full`)" :
            coef_slots(op) != coef_slots(o) ? "which coefficients are numbers, fields or absent" :
-           !all(map((x, y) -> x isa Real || x == y, op.face, o.face)) ? "a face coefficient field" :
+           !all(map((x, y) -> x isa Real || x == y, faces(op), faces(o))) ? "a face coefficient field" :
            !(op.shift isa Real || op.shift == o.shift) ? "the shift field" :
            !(op.value isa Real || op.value == o.value) ? "the mask value field" : nothing
     diff === nothing || _refuse(o, "set_coefficients! takes new values for the same structure; ",
@@ -542,7 +545,8 @@ end
     tangent!(sv, u, coef; homogeneous = true, maxiter = 64) -> u̇
 
 The derivative of the solution `u` of the group's operator `A(θ) u = b(θ)` with respect to
-one numeric coefficient `θ` (`coef`: `:shift`, `:value`, `(:face, a)`, `(:dirichlet, a, k)`
+one numeric coefficient `θ` (`coef`: `:shift`, `:value`, `(:face, a)` (`a = 3`: the diagonal face of
+a hexagonal lattice), `(:dirichlet, a, k)`
 or `(:robin, a, k, :alpha | :beta | :g)`), by a tangent solve with the same solver (no Dual
 enters PCG or multigrid, P5 §3.4): `A u̇ = ∂b/∂θ − (∂A/∂θ) u` with homogeneous boundary
 values. `u` is the primal solution in solver precision (`solver_solution`). The right-hand
@@ -790,8 +794,8 @@ function _bottom!(pl::PlanBuilder, ν)
     sv, ctx = pl.sv, pl.sv.ctx
     ls = ctx.lv[(ctx.lb + 1):(ctx.L + 1)]
     get(f) = Tuple(_arr(pl, f(F), :cur) for F in ls)
-    N = length(sv.op.dims)                # faces per axis: `ws[a][l]` (no tuple of tuples)
-    S = (get(F -> F.active), ntuple(a -> Tuple(_arr(pl, F.w[a], :cur) for F in ls), N),
+    nf = length(faces(sv.op))             # faces per direction: `ws[a][l]` (no tuple of tuples)
+    S = (get(F -> F.active), ntuple(a -> Tuple(_arr(pl, F.w[a], :cur) for F in ls), nf),
         get(F -> F.s), get(F -> F.sbox), get(F -> F.sint), get(F -> F.x), get(F -> F.b),
         get(F -> F.r), get(F -> F.d), sv.tables[tid(sv, "solve.scal")],
         sv.tables[tid(sv, "solve.gb")])
@@ -853,14 +857,16 @@ function rebuild_plan(sv::FieldSolver)
     pl = PlanBuilder(sv)
     gen!(pl, "fill")
     ctx, r = sv.ctx, sv.rule
+    hex = ishex(sv.op)
     for l in 1:(ctx.L)
         F, C = ctx.lv[l], ctx.lv[l + 1]
         S = (_levelarrays(pl, F), _levelarrays(pl, C))
-        P = map(sv.T, (r.inside, r.plane, r.inherited, r.box))
         G = (; n = Int32(nsites(sv.prog, l)), dimsf = Int32.(Tuple(ctx.dims[l])),
             dimsc = Int32.(Tuple(ctx.dims[l + 1])), n0 = Int32.(sv.op.dims),
             level = Int32(l), per = sv.op.periodic, majority = r.majority)
-        push!(pl.segments[end], Launch(build_site!, nsites(sv.prog, l), S, P, G, "build"))
+        # (a hexagonal lattice's build behind a barrier: a Cartesian solver never compiles it)
+        push!(pl.segments[end], hex ? Base.inferencebarrier(_hex_build)(sv.T, r, nsites(sv.prog, l), S, G) :
+                                Launch(build_site!, nsites(sv.prog, l), S, map(sv.T, (r.inside, r.plane, r.inherited, r.box)), G, "build"))
     end
     C = ctx.lv[ctx.L + 1]                 # the coarsest Gershgorin interval for the bottom
     S = (_levelarrays(pl, C)..., sv.tables[tid(sv, "solve.gb")])
@@ -870,6 +876,8 @@ function rebuild_plan(sv::FieldSolver)
             phases = REDUCE_PHASES, ldslen = 2WG, tree = true))
     return SolvePlan(pl)
 end
+
+_hex_build(T, r, n, S, G) = Launch(build_hex!, n, S, map(T, (r.inside, r.plane, r.inherited, r.box, r.diagonal)), G, "build")
 
 """
 The budgeted solve: a setup segment, then `budget` segments (cycles or PCG iterations).

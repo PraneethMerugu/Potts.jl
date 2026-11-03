@@ -32,7 +32,13 @@ A cell-centered Helmholtz operator in coefficient form, the input of a solver gr
     whose operator has no time-step shift to keep dominant: it stays symmetric, and it is
     positive definite exactly when the steady problem is well posed; F3 batch 4 r3 S1);
   - `name`: the user's field, which every message names (`nothing`: "the solver group");
-    `axes`: the axis names for messages (default `"1"`, `"2"`, …).
+    `axes`: the axis names for messages (default `"1"`, `"2"`, …);
+  - `hex = true`: a hexagonal lattice in axial coordinates (2D), whose sites have six
+    neighbors `±e₁`, `±e₂`, `±(e₁ − e₂)`: `face` then has three entries, the face to `+e₁`,
+    to `+e₂` and to `+e₁ − e₂` (the hexagonal Laplacian `2/(3h²) Σₙ (uₙ − u)` has the three
+    faces `2/(3h²)`). A diagonal face that leaves the box crosses the face of axis 1 when it
+    leaves along axis 1 (a corner site's included), else that of axis 2, and takes that face's
+    condition with the ghost rule above.
 
 On an axis with a face-Dirichlet value or a Robin face, the boundary face takes the face
 coefficient at the boundary site (for an input field, the field's value at that site: the
@@ -52,13 +58,20 @@ struct CellOperator{N}
     name::Union{Nothing, String}
     axes::NTuple{N, String}
     robin_full::Bool
+    diag::Union{Nothing, Float64, String}  # hex: the face to +e₁ − e₂ (`nothing`: Cartesian)
 end
 function CellOperator(dims::NTuple{N, Integer}; periodic = ntuple(_ -> false, N),
-        face = ntuple(_ -> 1.0, N), shift = 0.0, mask = nothing, value = 0.0,
+        face = nothing, shift = 0.0, mask = nothing, value = 0.0,
         dirichlet = ntuple(_ -> (nothing, nothing), N),
         robin = ntuple(_ -> (nothing, nothing), N), name = nothing,
-        axes = ntuple(a -> string(a), N), robin_full::Bool = false) where {N}
+        axes = ntuple(a -> string(a), N), robin_full::Bool = false, hex::Bool = false) where {N}
     num(x) = x isa Real ? Float64(x) : String(x)
+    who = name === nothing ? "the solver group" : string("field `", name, "`")
+    hex && !(N == 2 && all(>=(2), dims)) && throw(ArgumentError(string(who,
+        ": a hexagonal lattice is 2D with at least two sites per axis; got the dims ", Tuple(dims))))
+    face === nothing && (face = ntuple(_ -> 1.0, hex ? 3 : N))
+    length(face) == (hex ? 3 : N) || throw(ArgumentError(string(who, ": `face` has one coefficient per ",
+        hex ? "face direction of a hexagonal lattice (+e₁, +e₂, +e₁ − e₂): 3" : string("axis: ", N), "; got ", length(face))))
     function rob(r)
         r === nothing && return nothing
         length(r) == 3 || throw(ArgumentError(string(name === nothing ? "the solver group" :
@@ -66,14 +79,33 @@ function CellOperator(dims::NTuple{N, Integer}; periodic = ntuple(_ -> false, N)
             ": a Robin face is `(α, β, g)` or `nothing`; got ", repr(r))))
         return map(Float64, Tuple(r))
     end
-    op = CellOperator{N}(Int.(dims), Tuple(periodic), map(num, Tuple(face)), num(shift),
+    fs = map(num, Tuple(face))
+    op = CellOperator{N}(Int.(dims), Tuple(periodic), ntuple(a -> fs[a], N), num(shift),
         mask === nothing ? nothing : String(mask), num(value),
         map(d -> map(g -> g === nothing ? nothing : Float64(g), Tuple(d)), Tuple(dirichlet)),
         map(d -> map(rob, Tuple(d)), Tuple(robin)),
-        name === nothing ? nothing : string(name), map(string, Tuple(axes)), robin_full)
+        name === nothing ? nothing : string(name), map(string, Tuple(axes)), robin_full,
+        hex ? fs[3] : nothing)
     check_coefficients(op)
     return op
 end
+
+"""
+Is `op` a hexagonal lattice (three face directions, `CellOperator(…; hex = true)`)?
+"""
+ishex(op::CellOperator) = op.diag !== nothing
+"""
+The face coefficients of `op` per face direction: one per axis, and on a hexagonal lattice the
+face to `+e₁ − e₂` third.
+"""
+faces(op::CellOperator) = ishex(op) ? (op.face..., op.diag) : op.face
+"""
+The face directions of a lattice with `N` axes as offsets: the unit vectors, and with `hex`
+the diagonal `e₁ − e₂` third.
+"""
+face_dirs(N, hex::Bool) = hex ? ((1, 0), (0, 1), (1, -1)) : ntuple(a -> _unit(N, a, 1), N)
+_facename(op::CellOperator, a) = a <= length(op.dims) ? string("axis `", op.axes[a], "`") :
+                                 string("the diagonal `", op.axes[1], " − ", op.axes[2], "`")
 
 """
 The subject of a solver message: the user's field, or "the solver group" without a name.
@@ -137,10 +169,10 @@ function check_coefficients(op::CellOperator{N}) where {N}
         _refuse(op, "the shift (the reaction coefficient `s` of `A u = s u + Σ w (u − u_nb)`) must be ≥ 0; got ", s,
             ". A negative shift (growth) makes the operator indefinite, which PCG and multigrid cannot solve: ",
             "step the field with an explicit method (`ExplicitEuler`)")
-    for (a, f) in enumerate(op.face)
-        fin(f) || _refuse(op, "the face coefficient of axis `", op.axes[a], "` must be finite; got ", f)
+    for (a, f) in enumerate(faces(op))
+        fin(f) || _refuse(op, "the face coefficient of ", _facename(op, a), " must be finite; got ", f)
         f isa Real && !(f > 0) &&
-            _refuse(op, "the face coefficient of axis `", op.axes[a], "` must be > 0; got ", f,
+            _refuse(op, "the face coefficient of ", _facename(op, a), " must be > 0; got ", f,
                 ". A face ≤ 0 is anti-diffusion, which the solve cannot converge on: give a positive ",
                 "diffusion coefficient (cut the lattice with a mask instead)")
     end
@@ -186,8 +218,8 @@ range is not known at build time). `solver_T = :auto` solves such groups in Floa
 """
 function floor_regime(op::CellOperator{N}) where {N}
     anchored(op) && return false
-    (op.shift isa Real && all(f -> f isa Real, op.face)) || return true
-    w = maximum((op.face[a] for a in 1:N if op.dims[a] > 1); init = 0.0)
+    (op.shift isa Real && all(f -> f isa Real, faces(op))) || return true
+    w = maximum((f for (a, f) in enumerate(faces(op)) if a > N || op.dims[a] > 1); init = 0.0)
     return op.shift < FLOOR_SHIFT * w
 end
 """
@@ -196,7 +228,7 @@ Does the group have a mask, a Dirichlet or Robin face or a non-constant face coe
 function jumpy(op::CellOperator)
     op.mask !== nothing ||
         any(d -> any(!isnothing, d), op.dirichlet) || has_robin(op) ||
-        any(f -> f isa String, op.face)
+        any(f -> f isa String, faces(op))
 end
 
 """
@@ -209,7 +241,8 @@ parameters, not constants: a change of value never recompiles, and the slot orde
 function coef_slots(op::CellOperator{N}) where {N}
     n = Ref(0)
     next(x) = x isa Real ? (n[] += 1) : 0
-    face = ntuple(a -> next(op.face[a]), N)
+    fs = faces(op)
+    face = ntuple(a -> next(fs[a]), length(fs))
     shift, value = next(op.shift), next(op.value)
     dirichlet = ntuple(a -> map(next, op.dirichlet[a]), N)
     robin = ntuple(a -> map(r -> r === nothing ? (0, 0, 0) : (next(0.0), next(0.0), next(0.0)),
@@ -221,7 +254,7 @@ The numeric coefficients of `op` in slot order (`coef_slots`).
 """
 function coef_values(op::CellOperator{N}) where {N}
     v = Float64[]
-    foreach(f -> f isa Real && push!(v, f), op.face)
+    foreach(f -> f isa Real && push!(v, f), faces(op))
     op.shift isa Real && push!(v, op.shift)
     op.value isa Real && push!(v, op.value)
     for d in op.dirichlet, g in d
@@ -262,9 +295,9 @@ end
 
 lkey(l, name) = string("L", lpad(l, 2, '0'), ".", name)
 
-struct LevelFields{N}
+struct LevelFields{N, F}                  # F faces per site: N, or 3 on a hexagonal lattice
     active::Int32
-    w::NTuple{N, Int32}
+    w::NTuple{F, Int32}
     s::Int32
     sbox::Int32
     sint::Int32
@@ -304,6 +337,14 @@ function _apply(kb::KernelBuilder{N}, F::LevelFields{N}, per, dims, xget; lev = 
         xj = _real(L(F.active; o, pol = IR.CLAMP)) * xget(o)
         D, Ax = D + w, Ax + w * (x0 - xj)
     end
+    if length(F.w) > N && all(>(1), dims)          # hexagonal: the faces to ±(e₁ − e₂)
+        for σ in (1, -1)
+            o = (σ, -σ)
+            w = σ > 0 ? L(F.w[3]) : L(F.w[3]; o, pol = all(per) ? IR.CLAMP : IR.ZERO)
+            xj = _real(L(F.active; o, pol = IR.CLAMP)) * xget(o)
+            D, Ax = D + w, Ax + w * (x0 - xj)
+        end
+    end
     return Ax, D
 end
 
@@ -323,6 +364,13 @@ function _roundscale(kb::KernelBuilder{N}, F::LevelFields{N}, per, dims, b, aget
         w = σ > 0 ? L(F.w[a]) :
             L(F.w[a]; o, pol = per[a] ? IR.CLAMP : IR.ZERO)
         sc = sc + w * (x0 + _real(L(F.active; o, pol = IR.CLAMP)) * abs(aget(o)))
+    end
+    if length(F.w) > N && all(>(1), dims)          # hexagonal: the faces to ±(e₁ − e₂)
+        for σ in (1, -1)
+            o = (σ, -σ)
+            w = σ > 0 ? L(F.w[3]) : L(F.w[3]; o, pol = all(per) ? IR.CLAMP : IR.ZERO)
+            sc = sc + w * (x0 + _real(L(F.active; o, pol = IR.CLAMP)) * abs(aget(o)))
+        end
     end
     return sc
 end
@@ -344,10 +392,11 @@ function solver_program(op::CellOperator{N}, pcg::Bool; lane = F32, state = lane
     cs = coef_slots(op)
     pb = ProgramBuilder(Grid(op.dims); periodic = op.periodic, levels = L + 1,
         nparams = cs.n)
+    nf = length(faces(op))
     lv = map(0:L) do l
         f(name; kw...) = field!(pb, lkey(l, name); levels = [l], storage = lane, kw...)
-        LevelFields{N}(f("active"; storage = U8, role = :aux),
-            ntuple(a -> f("w$a"; role = :aux), N), f("s"; role = :aux),
+        LevelFields{N, nf}(f("active"; storage = U8, role = :aux),
+            ntuple(a -> f("w$a"; role = :aux), nf), f("s"; role = :aux),
             f("sbox"; role = :aux), f("sint"; role = :aux),
             f("x"; buffers = l < lb ? 2 : 1), f("b"; role = :aux), f("d"; role = :scratch),
             l >= lb ? f("r"; role = :scratch) : Int32(0))
@@ -357,7 +406,7 @@ function solver_program(op::CellOperator{N}, pcg::Bool; lane = F32, state = lane
         mask = op.mask === nothing ? Int32(0) : input(op.mask; storage = U8),
         value = op.value isa String ? input(op.value) : Int32(0),
         shift = op.shift isa String ? input(op.shift) : Int32(0),
-        face = map(f -> f isa String ? input(f) : Int32(0), op.face))
+        face = map(f -> f isa String ? input(f) : Int32(0), faces(op)))
     pf = pcg ?
          (; x = field!(pb, "pcg.x"; buffers = 2, storage = lane),
         b = field!(pb, "pcg.b"; role = :aux, storage = lane),
@@ -394,7 +443,7 @@ function solver_program(op::CellOperator{N}, pcg::Bool; lane = F32, state = lane
     end
     p = check_no_time(program(pb))         # renumbers ids by key: remap the handles
     fm(i) = i == 0 ? Int32(0) : fieldid(p, pb.fields[i].key)
-    lvm = [LevelFields{N}(
+    lvm = [LevelFields{N, nf}(
                fm(F.active), map(fm, F.w), fm(F.s), fm(F.sbox), fm(F.sint), fm(F.x),
                fm(F.b), fm(F.d), fm(F.r)) for F in lv]
     return p, (; L, lb, dims = ctx.dims, lv = lvm)
@@ -405,10 +454,28 @@ _masked(kb, F) = eq(load(kb, F.active), 0)
 _sel(kb, F, v) = select(_masked(kb, F), 0.0, v)
 
 function _face_in(kb::KernelBuilder{N}, ctx, a; o = ntuple(_ -> 0, N)) where {N}
-    f = ctx.op.face[a]
+    f = faces(ctx.op)[a]
     f isa Real && return param(kb, ctx.cs.face[a])
-    pol = all(iszero, o) ? IR.RESOLVE : ctx.op.periodic[a] ? IR.CLAMP : IR.ZERO
+    per = a <= N ? ctx.op.periodic[a] : all(ctx.op.periodic)
+    pol = all(iszero, o) ? IR.RESOLVE : per ? IR.CLAMP : IR.ZERO
     return load(kb, ctx.inp.face[a]; offset = o, policy = pol)
+end
+
+"""
+The ghost term of the diagonal face to `σ(e₁ − e₂)` of a hexagonal lattice at a site whose
+neighbor that way is outside the box: `val(a, k, w)` (the term of the condition on the face
+`(a, k)` of the box, `nothing` without one) with `w` the diagonal face coefficient, of the
+face of axis 1 when the neighbor is outside along axis 1, else of axis 2; 0 inside; `nothing`
+when neither face has a term.
+"""
+function _hexghost(kb::KernelBuilder{N}, ctx, σ, val) where {N}
+    w = _face_in(kb, ctx, 3)
+    v1 = ctx.op.periodic[1] ? nothing : val(1, σ > 0 ? 2 : 1, w)
+    v2 = ctx.op.periodic[2] ? nothing : val(2, σ > 0 ? 1 : 2, w)
+    v1 === nothing && v2 === nothing && return nothing
+    in1, in2 = _inside(kb, ctx.inp.f, (σ, 0)), _inside(kb, ctx.inp.f, (0, -σ))
+    t2 = v2 === nothing ? constant(kb, 0.0) : select(in2, 0.0, v2)
+    return v1 === nothing ? select(in1, t2, 0.0) : select(in1, t2, v1)
 end
 _num(kb, v::Real, f, slot; kw...) = param(kb, slot)
 _num(kb, v::String, f, slot; kw...) = load(kb, f; kw...)
@@ -434,6 +501,16 @@ function _fill!(ctx)
                    param(kb, ctx.cs.robin[a][k][1]) * _face_in(kb, ctx, a) : nothing
             diag === nothing && continue                 # the ghost rule's diagonal (d⁺ w)
             sbox = sbox + select(_inside(kb, ctx.inp.f, _unit(N, a, σ)), 0.0, diag)
+        end
+    end
+    if ishex(op)                                         # the diagonal face to +e₁ − e₂
+        w = _face_in(kb, ctx, 3)
+        all(op.periodic) || (w = select(_inside(kb, ctx.inp.f, (1, -1)), w, 0.0))
+        store(kb, F.w[3], w)
+        for σ in (1, -1)
+            g = _hexghost(kb, ctx, σ, (a, k, w) -> op.dirichlet[a][k] !== nothing ? 2 * w :
+                                              op.robin[a][k] !== nothing ? param(kb, ctx.cs.robin[a][k][1]) * w : nothing)
+            g === nothing || (sbox = sbox + g)
         end
     end
     store(kb, F.s, _num(kb, op.shift, ctx.inp.shift, ctx.cs.shift))
@@ -472,6 +549,22 @@ function _lift!(ctx)
         op.robin[a][k] === nothing || (b = b + select(_inside(kb, ctx.inp.f, o), 0.0,
             _face_in(kb, ctx, a) * param(kb, ctx.cs.robin[a][k][3])))
     end
+    if ishex(op)                                         # the diagonal faces to ±(e₁ − e₂)
+        for σ in (1, -1)
+            o = (σ, -σ)
+            if ctx.inp.mask != 0
+                w = σ > 0 ? _face_in(kb, ctx, 3) : _face_in(kb, ctx, 3; o)
+                hit = _not(Ex(kb, compare!(kb, IR.EQ, load(kb, ctx.inp.mask; offset = o, policy = IR.CLAMP).id,
+                    constant!(kb, 0.0, U8))))
+                all(op.periodic) || (hit = _and(hit, _inside(kb, ctx.inp.f, o)))
+                v = _num(kb, op.value, ctx.inp.value, ctx.cs.value; offset = o, policy = IR.CLAMP)
+                b = b + select(hit, w * v, 0.0)
+            end
+            g = _hexghost(kb, ctx, σ, (a, k, w) -> op.dirichlet[a][k] !== nothing ? 2 * w * param(kb, ctx.cs.dirichlet[a][k]) :
+                                              op.robin[a][k] !== nothing ? w * param(kb, ctx.cs.robin[a][k][3]) : nothing)
+            g === nothing || (b = b + g)
+        end
+    end
     mk = ctx.inp.mask == 0 ? b : select(eq(load(kb, ctx.inp.mask), 0), b, 0.0)
     store(kb, ctx.rb == 0 ? _rhs(ctx) : ctx.rb, mk)
     add!(pb, kb, "lift")
@@ -504,6 +597,13 @@ function _robin!(ctx)
         dneg = param(kb, ctx.cs.robin[a][k][2])
         b = b - select(_inside(kb, ctx.inp.f, _unit(N, a, σ)), 0.0,
             dneg * _face_in(kb, ctx, a) * x)
+    end
+    if ishex(op)                                         # the diagonal faces that leave the box
+        for σ in (1, -1)
+            g = _hexghost(kb, ctx, σ, (a, k, w) -> op.robin[a][k] === nothing ? nothing :
+                                              param(kb, ctx.cs.robin[a][k][2]) * w * x)
+            g === nothing || (b = b - g)
+        end
     end
     mk = ctx.inp.mask == 0 ? b : select(eq(load(kb, ctx.inp.mask), 0), b, 0.0)
     store(kb, _rhs(ctx), mk)

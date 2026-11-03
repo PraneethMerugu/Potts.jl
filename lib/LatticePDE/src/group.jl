@@ -5,7 +5,7 @@
 
 """
     lower_group(pdesys, disc; fields = nothing, values = true, bound = true, filled = (),
-                explicit_route = "`ExplicitEuler`") -> GroupSpec
+                steady = String[]) -> GroupSpec
 
 The field group of the state variables `fields` of `pdesys` (all of them by default),
 lowered on the lattice `disc` to its [`GroupSpec`](@ref LatticeFields.Problems.GroupSpec):
@@ -35,17 +35,14 @@ is a [`DeferredBound`](@ref), and [`resolve_bound`](@ref) builds it when the gro
 stepped (a front end that lowers a group to check it, before any problem exists, does not pay
 for the bound).
 
-**Routes.** `explicit_route` is the front end's spelling of the explicit algorithm, which an
-implicit refusal names (a hexagonal lattice has no implicit solve yet, F3-20).
-
 **Steady rows.** A steady equation `0 ~ rhs` is lowered as the rate row of the field it
 determines (`steady_rows`), and the spec's `steady` lists those fields: their groups
 take `QuasiSteady` only. `steady` names more such fields (a front end that writes its steady
 rows as rates itself). A system with no time is a steady system (`spec.timefree`).
 """
 lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = nothing, values::Bool = true, bound::Bool = true,
-    filled = (), explicit_route = "`ExplicitEuler`", steady = String[]) =
-    _lower_group(sys, disc; fields, values, bound, filled, explicit_route, steady).spec
+    filled = (), steady = String[]) =
+    _lower_group(sys, disc; fields, values, bound, filled, steady).spec
 
 """
     DeferredBound
@@ -80,7 +77,7 @@ end
 # parameter object, with its own computed parameters), so the system's computed defaults are
 # not read (`_fold_computed`) and its tables not checked (`_check_tables`)
 function _lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = nothing, values::Bool = true, bound::Bool = true,
-        filled = (), explicit_route = "`ExplicitEuler`", steady = String[], timefree::Bool = false)
+        filled = (), steady = String[], timefree::Bool = false)
     _check_parts(sys)
     sys, rows, tf = steady_form(sys, length(disc.grid.dims))
     steady, timefree = unique!(String[collect(String, steady); rows]), timefree || tf
@@ -100,7 +97,7 @@ function _lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = noth
         params = _param_slots(cf, defaults, values), tables = _table_specs(cf, values),
         inputs = _input_specs(cf, sys, s, filled),
         terms = stab isa StabilityBound ? copy(stab.terms) : String[], linearity = cf.linearity,
-        operator = hasmap ? nothing : DeferredOperator(cf, sys, disc; route = explicit_route),
+        operator = hasmap ? nothing : DeferredOperator(cf, sys, disc),
         steady = String[k for k in _states(s) if k in steady], timefree)
     return (; spec, cf, sys, derived, computed, defaults)
 end

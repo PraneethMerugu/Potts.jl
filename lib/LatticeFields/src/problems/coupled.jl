@@ -563,6 +563,9 @@ function coupled_modes(s::Program{N}, op::OperatorSpec, keys, p) where {N}
     ids = [fieldid(s, r.key) for r in rows]
     dims = Tuple(Int.(leveldims(s, s.fields[ids[1]].levels[1])))
     all(i -> Tuple(Int.(leveldims(s, s.fields[i].levels[1]))) == dims, ids) || return nothing
+    # a hexagonal lattice (F3-20): its modes are not the per-axis ones; the growth check after the
+    # first solve decides (its refusal is tested on a periodic hexagonal pair)
+    _ishex(s) && return nothing
     # the face conditions per axis and side, the same for every row (as the 1D ghost rule's factor)
     ghost(id, a, k) = (f = _face_kind(s, id, a, k, p); f[1] === :none ? 0.0 : f[1] === :dirichlet ? 2.0 : f[2] / (f[2] / 2 + f[3]))
     for a in 1:N, k in 1:2

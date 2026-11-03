@@ -304,7 +304,15 @@ end
 # the six neighbors of a hexagonal site in axial coordinates
 const HEX6 = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1))
 
-"""Hexagonal `Δc ≈ 2/(3h²) Σₙ (cₙ − c)`: a neighbor outside a closed face or the domain reads `c`."""
+"""
+Hexagonal `Δc ≈ 2/(3h²) Σₙ (cₙ − c)`. A neighbor outside the domain reads `c` (zero flux). A
+neighbor outside the box reads the ghost of the face it leaves through (F3-20; a field with no
+face condition, `e.ghosted` without it, reads `c` there: zero flux): an axial
+neighbor its own face's, a diagonal neighbor `±(e₁ − e₂)` axis 1's face when it leaves along
+axis 1 (a corner site's too), else axis 2's; the ghost is the `RESOLVE` read one step along that
+axis, so the face rule (zero flux, Dirichlet, Robin; lattice units along the link) applies with
+the site's own value, as the solver's ghost rule does (`Solvers.CellOperator`, `hex = true`).
+"""
 function _hexlap(e::Env{N}, c) where {N}
     any(!iszero, e.offset) && _lerr(c, "a spatial operator inside an operator coefficient")
     u, comp = _fieldarg(e, c)
@@ -316,11 +324,17 @@ function _hexlap(e::Env{N}, c) where {N}
     inside(fid, o) = node!(e.kb, INSIDE_OP, BOOL, Int32[], access!(e.kb, Access{N}(
         fid, Int8(0), Sel(Int16(1)), Sel(NTuple{N, Int16}(o)), Int8(0), INSIDE)))
     indom(o) = _indomain(e.kb, e.domain, N, o)
+    ghost(o) = load!(e.kb, f, lane; offset = o, policy = RESOLVE)
     terms = map(HEX6) do o
-        ok = inside(f, o)
-        e.domain == 0 || (ok = node!(e.kb, AND, BOOL, Int32[ok, indom(o), indom((0, 0))]))
-        nb = select!(e.kb, ok, load!(e.kb, f, lane; offset = o, policy = CLAMP), c0)
-        _op(e, ADD, nb, arith!(e.kb, NEG, c0))
+        if !(f in e.ghosted)            # no face condition but zero flux: the site's own value
+            ok = inside(f, o)
+            e.domain == 0 || (ok = node!(e.kb, AND, BOOL, Int32[ok, indom(o), indom((0, 0))]))
+            return _op(e, ADD, select!(e.kb, ok, load!(e.kb, f, lane; offset = o, policy = CLAMP), c0), arith!(e.kb, NEG, c0))
+        end
+        nb = load!(e.kb, f, lane; offset = o, policy = CLAMP)
+        e.domain == 0 || (nb = select!(e.kb, node!(e.kb, AND, BOOL, Int32[indom(o), indom((0, 0))]), nb, c0))
+        g = all(!iszero, o) ? select!(e.kb, inside(f, (o[1], 0)), ghost((0, o[2])), ghost((o[1], 0))) : ghost(o)
+        _op(e, ADD, select!(e.kb, inside(f, o), nb, g), arith!(e.kb, NEG, c0))
     end
     return _op(e, MUL, constant!(e.kb, 2 / (3 * e.h[1]^2)), _op(e, ADD, terms...))
 end
