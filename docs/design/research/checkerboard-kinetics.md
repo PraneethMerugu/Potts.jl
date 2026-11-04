@@ -102,6 +102,40 @@ over one MCS (D-220's measure).
   curve lies on the clock control's. On the foam it commits 67%. The gap is larger in the
   denser, more active case, as D-220 found.
 
+### Variant runs (2026-11-03, CPU, 32 seeds per arm, `~/lpwork/cbk/variants{,2,3}-2026-11-03`)
+
+r against SequentialCPM; ✓ pass, ~ undecided, ✗ fail under §4. Retries here are the
+decide-once rule (the first build's rows are in `variants-2026-11-03` and are superseded).
+
+| Arm | foam committed | foam D | foam τ_V | foam vol_sd | sort committed | sort H(1000) |
+|---|---|---|---|---|---|---|
+| stock | 0.670 ✗ | 0.708 ✗ | 1.222 ✗ | 1.006 ✓ | 0.337 ✗ | 1.187 ✗ |
+| s = 3 | 0.972 ✓ | 0.941 ~ | 1.026 ✓ | 1.001 ✓ | 0.617 ✗ | 1.072 ✗ |
+| s = 4 | 1.152 ✗ | 1.051 ~ | 0.966 ✓ | 1.000 ✓ | 0.861 ✗ | 1.033 ~ |
+| colors drawn with replacement | 0.582 ✗ | 0.651 ✗ | 1.323 ✗ | 1.004 ✓ | 0.307 ✗ | 1.201 ✗ |
+| R = 8 | 1.326 ✗ | 1.160 ✗ | 0.946 ~ | 0.998 ✓ | 1.196 ✗ | 0.974 ✓ |
+| R = 16 | 1.370 ✗ | 1.207 ✗ | 0.929 ✗ | 0.998 ✓ | 1.427 ✗ | 0.940 ~ |
+| R = 8, replacement | 1.030 ✓ | 0.997 ✓ | 0.998 ✓ | 1.001 ✓ | 0.933 ✗ | 1.022 ✓ |
+| R = 16, replacement | 1.053 ✗ | 1.008 ✓ | 1.000 ✓ | 1.000 ✓ | 1.062 ✗ | 0.992 ✓ |
+| s = 3, R = 4, replacement | 1.004 ✓ | 0.994 ✓ | 1.003 ✓ | 0.999 ✓ | 0.953 ✓ | 1.006 ✓ |
+| s = 3, R = 8, replacement | 1.024 ✓ | 1.004 ✓ | 0.998 ✓ | 0.998 ✓ | 1.027 ✓ | 0.988 ✓ |
+| s = 4, R = 2, replacement | 0.981 ✓ | 0.976 ✓ | 1.008 ✓ | 0.999 ✓ | 0.925 ✗ | 1.020 ✓ |
+| s = 4, R = 4, replacement | 1.014 ✓ | 1.017 ✓ | 1.002 ✓ | 0.999 ✓ | 1.012 ✓ | 0.999 ✓ |
+
+Findings:
+
+- Drops and the visiting law pull in opposite directions. With drops removed (R ≥ 8) and the
+  colors visited once each, the checkerboard relaxes faster than SequentialCPM (foam D 1.16–1.21):
+  every site gets exactly one decided proposal per MCS, against Poisson(1) picks. Drawing the
+  colors with replacement removes that excess (D 0.997–1.017).
+- Arms that pass without replacement (e.g. s = 4, R = 1 on the sorting case) do so by
+  cancellation: the remaining drops offset the visiting-law excess. That balance depends on the
+  model's conflict rate and is not expected to transfer.
+- s = 3 or 4 with R = 4 and colors drawn with replacement passes every observable on both cases.
+  Every static observable passes in every decide-once arm.
+- Remaining open: the chain (K3) and driven (K4) cases, 3D, and the device cost. Wall times
+  here are single-thread CPU and say nothing about the GPU.
+
 ## 4. Pre-registered criteria
 
 Fixed before any variant is measured.
