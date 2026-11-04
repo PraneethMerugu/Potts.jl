@@ -92,14 +92,21 @@ _lid(v, r) = UInt32(v) << 8 | UInt32(r)                     # r ≤ MAX_RETRIES 
 
 # `ex = (; pass, lost, cnt)`: the pass, and `nothing` or the buffers of `retries` and `counts`
 # (a type-level choice, so the stock kernels are the code from before they existed):
-# - `lost[j]` is 1 after a commit pass where copy `j` was accepted and lost a claim; a retry
-#   pass re-proposes exactly those, with fresh acceptance and priority draws, against the
-#   state the winners left (σ at `j`'s target and source is unchanged: no copy of the color
-#   writes them);
+# - with `lost` (retries), every real proposal claims, accepted or not, and its decision
+#   stands only if it wins every claim: no copy that touches its cells acts before it in the
+#   pass, so it was decided against the state it acts on. `source[j]` is negative for a
+#   rejected one. A proposal that loses a claim is undecided (`lost[j] = 1`); the next pass
+#   proposes it again, with fresh acceptance and priority draws, against the state the
+#   winners left (σ at `j`'s target and source is unchanged: no copy of the color writes
+#   them). Claiming only the accepted copies and retrying those would filter a retried copy
+#   twice and never retry a stale rejection: a steady-state bias (P6.0bl harness, 2026-11-03);
 # - `cnt = (; accepted, committed, dropped)`, per site (one writer per site per pass, as the
-#   track): copies accepted at their first pass, committed at any pass, and lost at the last.
+#   track): copies accepted at their first evaluation, committed at any pass, and proposals
+#   still undecided after the last pass (stock: the accepted copies that lost a claim).
 const MAX_RETRIES = 255
 const STOCK_PASS = (; pass = Pass(0, 0, 0, true), lost = nothing, cnt = nothing)
+@inline _claims_all(::Nothing) = false
+@inline _claims_all(lost) = true
 @inline _skip_retry(::Nothing, pass, j) = false
 @inline _skip_retry(lost, pass, j) = pass.r > 0 && @inbounds(lost[j]) == 0x00     # j ≤ maxsites = length(lost)
 @inline _count!(::Nothing, field, t) = nothing
@@ -147,11 +154,12 @@ const STOCK_PASS = (; pass = Pass(0, 0, 0, true), lost = nothing, cnt = nothing)
                 dH = _effective_dH(f, dH0, temperature, st, p, prop, ctx)
                 if !isfinite(dH)
                     @inbounds Atomix.@atomic status[1] |= STATUS_NONFINITE     # status has 1 entry
-                elseif accept(law, T(dH), temperature, uniform(T, ra))
+                elseif (yes = accept(law, T(dH), temperature, uniform(T, ra))) || _claims_all(ex.lost)
                     won = _priority(rp, j, idbits, key, mcs, lat, color, pass.lid)     # unique and nonzero
-                    pass.r == 0 && _count!(ex.cnt, :accepted, t)
+                    yes || (s = -s)                                  # claimed, rejected
+                    yes && pass.r == 0 && _count!(ex.cnt, :accepted, t)
                     # j ≤ ncolorsites ≤ maxsites = length(tk.dH)
-                    tk === nothing || (@inbounds tk.dH[j] = tk.track(st, p, prop, ctx, dH0))
+                    yes && tk !== nothing && (@inbounds tk.dH[j] = tk.track(st, p, prop, ctx, dH0))
                     _claim!(claim, a, won)
                     _claim!(claim, b, won)
                     writes = f.claims(st, p, prop, ctx)
@@ -191,6 +199,8 @@ end
         x = color_site(color, j)
         t = linear_index(lat, x)
         s = @inbounds source[j]
+        yes = s > 0                                          # accepted (retries: < 0 rejected)
+        s = abs(s)
         a = @inbounds st.σ[t]
         b = @inbounds st.σ[s]
         prop = Proposal(t, s, x, 0, a, b)
@@ -203,13 +213,13 @@ end
                 ok &= _unwritten(wclaim, Int32(r), won)
             end
         end
-        if ok
+        if ok && yes
             @inbounds st.σ[t] = b
             f.commit!(st, p, prop, ctx)
             # t ≤ nsites = length(tk.acc); dH[j] was written by this proposal (won ≠ 0)
             tk === nothing || (@inbounds tk.acc[t] += tk.dH[j])
             _count!(ex.cnt, :committed, t)
-        else
+        elseif !ok
             lost = true
             ex.pass.final && _count!(ex.cnt, :dropped, t)
         end
@@ -511,7 +521,13 @@ end
                 dH = _effective_dH(f, dH0, temperature, st, p, prop, ctx)
                 if !isfinite(dH)
                     @inbounds Atomix.@atomic status[1] |= STATUS_NONFINITE     # status has 1 entry
-                elseif accept(law, T(dH), temperature, uniform(T, ra))
+                elseif !accept(law, T(dH), temperature, uniform(T, ra))
+                    if _claims_all(ex.lost)                          # claimed, rejected (as `propose_body!`)
+                        won = _priority(rp, j, idbits, key, mcs, lat, color, pass.lid)
+                        _raise_claims!(claim, wclaim, st, f, p, prop, ctx, won)
+                        s = -s
+                    end
+                else
                     won = _priority(rp, j, idbits, key, mcs, lat, color, pass.lid)     # as `propose_body!`
                     pass.r == 0 && _count!(ex.cnt, :accepted, t)
                     code = has_post(f) ? _post(f)(st, p, prop, ctx, SERIAL ? GlobalSearch() : GlobalLocal()) : GLOBAL_PASS
