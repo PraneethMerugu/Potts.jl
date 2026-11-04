@@ -192,6 +192,56 @@ run, against 0.24 sequential and 2.31 stock. Case (a) (10⁴ cells) was not run.
 Wall time per run on the GPU: 11.5–11.9 s, against 4.6 s for the stock record (which also ran
 1095-MCS cycles rather than 775).
 
+### Shared cells (2026-11-04, prototype; `cells = :shared`)
+
+The 3D RPE test (rung 6, FP32, 12 seeds paired with sequential) did not pass with retries. With
+s = 5, R = 4 and replacement, the static observables and late roughness matched, but early
+roughening stayed slow (×0.88 at MCS 200, z −4.9) and contact CV high (×1.16, z 8.8). Copy counts
+showed why: about 15,000 proposals per MCS stayed undecided, and more retries barely reduced
+them (R = 4 to 16 at s = 4: 17,700 to 15,200). The claims are per cell, so a cell decides about
+one proposal per pass, and a large 3D cell has dozens of boundary sites in each color.
+
+Shared cells drop the claims, as Sultan et al. (arXiv 2312.09317, atomics instead of the per-cell
+lock) do. Every accepted copy commits; per-cell totals change by integer atomic adds. The
+propose launch reads the state from before the pass's commits, so the run is deterministic. A
+copy does not see the other copies to its cells in the same pass: k copies to one cell with net
+change D change H by λ(D² − k) more than the sum of their ΔH. That identity is the exactness test
+(`checkerboard_passes.jl`). Refused: retries, a whole-cell connectivity veto, `claims`/`reads`
+hooks. Not yet refused but unsupported: moments and pieces trackers, `@on_copy` cell writes.
+
+CPU harness, 32 seeds per arm (`~/lpwork/cbk/shared-2026-11-04`):
+
+| Arm | foam | sort | vol_sd r |
+|---|---|---|---|
+| shared, default s, permutation | committed 1.37, D, τV, vol_sd FAIL | committed 1.43 FAIL | 1.033 |
+| shared, default s, replacement | vol_sd FAIL | committed 1.061 FAIL | 1.034 |
+| shared, s = 3, replacement | all PASS | all PASS | 1.012 |
+| shared, s = 4, replacement | all PASS | all PASS | 1.006 |
+
+The volume spread widens with the number of copies per cell per pass, and a larger stride
+reduces it, as the stale-read estimate (relative error about 2λk/T) predicts.
+
+K3 (100 CPU runs per arm, `~/lpwork/cbk/k3-shared-2026-11-04.tsv`): shared, s = 3, replacement:
+T = 158.0, r = 1.017 [0.989, 1.046], PASS. Shared, s = 4, replacement: T = 159.1, r = 1.024
+[1.000, 1.050], UNDECIDED (the upper bound is at the margin).
+
+3D RPE (rung 6, MODE=A, FP32, ROCm, 4000 MCS, 12 seeds paired with the 36 sequential runs,
+`~/lpwork/cbk/rpe32`): copy counts on seed 1 (500 MCS) show no drops and 13,090 committed copies
+per MCS (s = 4) and 13,056 (s = 5), against 13,043 sequential. Paired ratios:
+
+| Observable | retries, s = 5, R = 4 | shared, s = 4 | shared, s = 5 |
+|---|---|---|---|
+| roughness @200 | 0.877 (z −4.9) | 0.982 (−1.4) | 0.982 (−2.2) |
+| roughness @400 | 0.891 (−3.3) | 0.987 (−1.5) | 0.999 (0.0) |
+| roughness @4000 | 0.995 (−0.2) | 0.989 (−0.9) | 1.014 (0.7) |
+| within-cell height sd | 0.994 (−0.2) | 0.990 (−2.1) | 1.019 (1.1) |
+| contact CV | 1.164 (8.8) | 0.986 (−0.7) | 1.023 (1.8) |
+| S/V | 1.005 (2.0) | 1.001 (0.4) | 1.001 (0.4) |
+
+Every observable of both shared arms is within |z| < 3. The model's `volume_sd` is the spread
+of target volumes across cells, so this run does not measure the per-cell volume fluctuation
+that stale reads widen (the 2D foam does: vol_sd r = 1.006–1.012 at s = 3–4).
+
 ### Gate (2026-11-04, branch head)
 
 - CorePotts with `POTTS_GPU=rocm`: the new tests (74 CPU, 15 device), the device suite (393) and

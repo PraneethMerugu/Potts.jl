@@ -11,7 +11,8 @@ const POINTS = (P1 = (2.0, 24.0, 0.5), P4 = (-2.0, 15.0, 0.5), P5 = (5.0, 3.0, 0
 const METRICS = (:invasive, :infiltrative, :singles, :fingers, :detached, :clusters)
 const ARMS = [("seq", SequentialCPM(; proposal = VonNeumann(1)), false),
     ("cb", CheckerboardCPM(; proposal = VonNeumann(1)), true),
-    ("cb_s3_r4_rep", CheckerboardCPM(; proposal = VonNeumann(1), stride = 3, retries = 4, colors = :replacement), true)]
+    ("cb_s3_r4_rep", CheckerboardCPM(; proposal = VonNeumann(1), stride = 3, retries = 4, colors = :replacement), true),
+    ("cb_sh_s3_rep", CheckerboardCPM(; proposal = VonNeumann(1), stride = 3, cells = :shared, colors = :replacement), true)]
 problem(pt, seed) = (p = POINTS[pt]; PottsProblem(AkeebInvasion(; name = :akeeb, J = akeeb_contacts(p[1]), μ = p[2]),
     akeeb_state(; pp = p[3], seed = 0x5cd2609 + seed), (0, 701); capacity = 4000, seed))
 function run_one(pt, alg, gpu, seed)

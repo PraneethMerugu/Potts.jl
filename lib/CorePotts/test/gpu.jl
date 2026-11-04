@@ -755,6 +755,18 @@ end
         cc = [solve(remake(prob; seed), alg).stats.committed for seed in 11:16]
         @test abs(mean(cg) / mean(cc) - 1) < 0.05
     end
+    # shared cells: concurrent atomic commits keep the trackers exact and the run deterministic
+    # (the exact ΔH accounting is checked on the CPU, checkerboard_passes.jl)
+    alg = CheckerboardCPM(; proposal = Moore(1), counts = true, cells = :shared, colors = :replacement)
+    g = solve(remake(prob; seed = 3), alg; backend)
+    u = g.u[end]
+    @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(kinds)]
+    v = solve(remake(prob; seed = 3), alg; backend).u[end]
+    @test v.σ == u.σ && v.cell.volume == u.cell.volume
+    @test g.stats.committed == g.stats.accepted > 0 && g.stats.dropped == 0
+    cg = [solve(remake(prob; seed), alg; backend).stats.committed for seed in 1:6]
+    cc = [solve(remake(prob; seed), alg).stats.committed for seed in 11:16]
+    @test abs(mean(cg) / mean(cc) - 1) < 0.05
 end
 
 const DEVICE_IR_SCAN = joinpath(@__DIR__, "..", "..", "..", "test", "shared", "device_ir_scan.jl")

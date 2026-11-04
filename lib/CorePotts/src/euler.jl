@@ -87,8 +87,8 @@ end
 """Apply `δ = euler_change(…)` to an Euler tracker (the old and new cells only)."""
 @inline function commit_euler!(euler, prop, δ)
     # bounds: a nonzero owner is a cell id in 1:capacity, the tracker's length (as `commit_surface!`)
-    prop.old != 0 && @inbounds(euler[prop.old] += δ[1])
-    prop.new != 0 && @inbounds(euler[prop.new] += δ[2])
+    prop.old != 0 && @inbounds(Atomix.@atomic euler[prop.old] += δ[1])           # atomic: as `commit_volume!`
+    prop.new != 0 && @inbounds(Atomix.@atomic euler[prop.new] += δ[2])
     return nothing
 end
 

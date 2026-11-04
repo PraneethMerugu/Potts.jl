@@ -34,7 +34,7 @@ const MARGIN = Dict(vcat([o => 0.05 for o in KINETIC], [o => 0.02 for o in STATI
 const CASE_OBS = Dict("sort" => vcat(["committed"], ["H$(t)" for t in CHECKPOINTS]),
     "foam" => vcat(["committed", "D", "tauV"], STATIC))
 
-# checkerboard variants: `cb` plus `_`-separated options, e.g. `cb_r2_rep_s3` (retries = 2,
+# checkerboard variants: `cb` plus `_`-separated options, e.g. `cb_r2_rep_s3` (retries = 2, `sh`: cells = :shared,
 # colors = :replacement, stride = 3)
 function arm_alg(arm)
     arm in ("seq", "seq2", "clock") && return SequentialCPM(; proposal = Moore(1))
@@ -42,7 +42,7 @@ function arm_alg(arm)
     first(tok) == "cb" || throw(ArgumentError("unknown arm $arm"))
     kw = Dict{Symbol, Any}()
     for t in tok[2:end]
-        t == "rep" ? (kw[:colors] = :replacement) :
+        t == "rep" ? (kw[:colors] = :replacement) : t == "sh" ? (kw[:cells] = :shared) :
         startswith(t, "r") ? (kw[:retries] = parse(Int, t[2:end])) :
         startswith(t, "s") ? (kw[:stride] = parse(Int, t[2:end])) :
         throw(ArgumentError("unknown option $t in arm $arm"))

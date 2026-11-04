@@ -121,6 +121,54 @@
         @test_throws ArgumentError init(prob, CheckerboardCPM(; colors = :shuffled))
     end
 
+    @testset "shared cells: exact accounting" begin
+        # Copies of one pass have disjoint footprints, so their contact terms add; their volume
+        # terms do not: k copies to one cell, net change D = Σδ, change H by Σ ΔH_i + λ(D² − k),
+        # each ΔH_i taken against the volume before the pass. A commit hook tallies (pass, cell, δ)
+        # (host loops: a 30² color is one workgroup, so the hooks run one at a time) and a
+        # constraint hook marks a new pass (proposes run before the pass's commits).
+        pass, proposing = Ref(0), Ref(false)
+        tally = Dict{Tuple{Int, Int32}, Vector{Int}}()
+        mark(st, p, prop, ctx) = (proposing[] || (pass[] += 1; proposing[] = true); true)
+        function hook!(st, p, prop, ctx)
+            proposing[] = false
+            prop.old != 0 && push!(get!(tally, (pass[], prop.old), Int[]), -1)
+            prop.new != 0 && push!(get!(tally, (pass[], prop.new), Int[]), 1)
+            return commit_volume!(st, p, prop, ctx)
+        end
+        f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = mark, commit! = hook!,
+            track = CorePotts.TrackDeltaH{Float64}())
+        sprob = PottsProblem(f, initial_state(σ, kinds), lat, (0, 20), gg_params())
+        λ = gg_params().λ
+        for (seed, kw) in ((1, (;)), (2, (; colors = :replacement)), (3, (; stride = 3)))
+            empty!(tally); pass[] = 0; proposing[] = false
+            sol = solve(remake(sprob; seed), CheckerboardCPM(; proposal = Moore(1), cells = :shared, kw...))
+            u0, u = sol.u[1], sol.u[end]
+            cross = sum(λ * (sum(d)^2 - length(d)) for d in values(tally))
+            @test sol.stats.accepted_ΔH + cross ≈ H(u) - H(u0) atol = 1e-6
+            @test cross != 0                                   # copies to one cell did share a pass
+            @test u.cell.volume == recount(u)
+        end
+        # negative control: the exclusive checkerboard never commits two copies to one cell in a
+        # pass, so its correction is zero
+        empty!(tally); pass[] = 0; proposing[] = false
+        solve(remake(sprob; seed = 1), CheckerboardCPM(; proposal = Moore(1)))
+        @test all(d -> length(d) == 1, values(tally))
+    end
+
+    @testset "shared cells: counts, determinism, refusals" begin
+        s = solve(remake(prob; seed = 5), CheckerboardCPM(; cells = :shared, counts = true)).stats
+        @test s.committed == s.accepted > 0 && s.dropped == 0        # nothing dropped
+        a = solve(remake(prob; seed = 9), CheckerboardCPM(; cells = :shared, colors = :replacement)).u[end]
+        b = solve(remake(prob; seed = 9), CheckerboardCPM(; cells = :shared, colors = :replacement)).u[end]
+        @test a.σ == b.σ && a.cell.volume == b.cell.volume
+        @test_throws ArgumentError init(prob, CheckerboardCPM(; cells = :shared, retries = 1))
+        @test_throws ArgumentError init(prob, CheckerboardCPM(; cells = :locked))
+        cl = CPMFunction(gg_delta_H; temperature = gg_temperature, claims = (st, p, prop, ctx) -> (Int32(1),))
+        @test_throws ArgumentError init(PottsProblem(cl, initial_state(σ, kinds), lat, (0, 2), gg_params()),
+            CheckerboardCPM(; cells = :shared))
+    end
+
     @testset "retries with a Global veto" begin
         # the connectivity path (`propose_conn_body!`) with retries: cells stay in one piece
         # and the tracked ΔH stays exact

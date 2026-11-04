@@ -328,6 +328,10 @@ function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, save
             "CheckerboardCPM(; colors = $(repr(alg.colors))): use :permutation or :replacement"))
         0 <= alg.retries <= MAX_RETRIES || throw(ArgumentError(
             "CheckerboardCPM(; retries = $(alg.retries)): use 0 to $MAX_RETRIES"))
+        alg.cells in (:exclusive, :shared) || throw(ArgumentError(
+            "CheckerboardCPM(; cells = $(repr(alg.cells))): use :exclusive or :shared"))
+        alg.cells === :shared && alg.retries > 0 && throw(ArgumentError(
+            "CheckerboardCPM(; cells = :shared): no copy is left undecided, so `retries` does not apply"))
     end
     alg isa CheckerboardCPM && alg.skip_interior && throw(ArgumentError(
         "CheckerboardCPM(; skip_interior = true) is not yet implemented (P6.0bk); use " *
@@ -352,7 +356,7 @@ function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, save
     p = _to_backend(backend, prob.p)
     cache = alg isa CheckerboardCPM ?
             CheckerboardCache(backend, lat, prob.f, ncells(prob.u0), relation(_proposal(alg, prob), lat);
-                alg.stride, alg.retries, alg.counts, replacement = alg.colors === :replacement) :
+                alg.stride, alg.retries, alg.counts, replacement = alg.colors === :replacement, shared = alg.cells === :shared) :
             _skips_interior(alg) ? BoundaryCache(state.σ, ctx.mobility, ctx.lattice, ctx.proposal) : nothing
     key = RNGKey(prob.seed, prob.replica, prob.repeat)
     lcache = prob.f.lifecycle === nothing ? nothing :

@@ -108,7 +108,7 @@ end
 
 """
     CheckerboardCPM(; acceptance = nothing, proposal = nothing, skip_interior = false,
-        stride = nothing, colors = :permutation, retries = 0, counts = false)
+        stride = nothing, colors = :permutation, retries = 0, counts = false, cells = :exclusive)
 
 Parallel dynamics on CPU or GPU (KernelAbstractions). Sites are colored so that same-color
 targets lie outside each other's read/write footprints; each MCS visits every site once in
@@ -136,6 +136,10 @@ Options that bring the kinetics closer to `SequentialCPM` (P6.0bl):
   `SequentialCPM`'s random site picks. `:permutation` (the default) visits each color once.
 - `stride = s`: a coloring stride at least the one the copy footprint needs (the default):
   `s^d` colors, fewer conflicts, more launches.
+- `cells = :shared` (prototype, P6.0bl): no claims. Every accepted copy commits; per-cell
+  totals change by integer atomic adds. A copy's ΔH reads the state from before its pass, so
+  copies to one cell in one pass do not see each other. Deterministic. Not with `retries`, a
+  whole-cell connectivity veto, `claims`/`reads` hooks, or moments/pieces trackers.
 - `counts = true`: count accepted, committed and dropped copies into `stats.accepted`,
   `stats.committed` and `stats.dropped` (brought up to date at the host read points).
 """
@@ -147,6 +151,7 @@ Base.@kwdef struct CheckerboardCPM{A, R} <: CPMAlgorithm
     colors::Symbol = :permutation
     retries::Int = 0
     counts::Bool = false
+    cells::Symbol = :exclusive
 end
 
 # The boundary-site sweep (`SequentialCPM(; skip_interior = true)`), known from the type.

@@ -240,10 +240,11 @@ _hook(h, name) = getfield(h, name)
 """Effective energy change: `ΔH − T·bias` (a bias adds directly to log α)."""
 @inline _effective_dH(f, dH, T, st, p, prop, ctx) = dH - T * f.bias(st, p, prop, ctx)
 
-"""Default `commit!`: maintain `st.cell.volume`."""
+"""Default `commit!`: maintain `st.cell.volume` (atomic adds: shared-cell checkerboard copies
+to one cell commit concurrently)."""
 @inline function commit_volume!(st, p, prop, ctx)
-    prop.old != 0 && @inbounds(st.cell.volume[prop.old] -= Int32(1))
-    prop.new != 0 && @inbounds(st.cell.volume[prop.new] += Int32(1))
+    prop.old != 0 && @inbounds(Atomix.@atomic st.cell.volume[prop.old] -= Int32(1))
+    prop.new != 0 && @inbounds(Atomix.@atomic st.cell.volume[prop.new] += Int32(1))
     return nothing
 end
 
@@ -320,8 +321,8 @@ Apply `δ = surface_change(…)` to a surface tracker. Valid before or after the
 write, because the surface relation excludes the origin (checked at `init`).
 """
 @inline function commit_surface!(surface, prop, δ)
-    prop.old != 0 && @inbounds(surface[prop.old] += δ[1])
-    prop.new != 0 && @inbounds(surface[prop.new] += δ[2])
+    prop.old != 0 && @inbounds(Atomix.@atomic surface[prop.old] += δ[1])         # atomic: as `commit_volume!`
+    prop.new != 0 && @inbounds(Atomix.@atomic surface[prop.new] += δ[2])
     return nothing
 end
 

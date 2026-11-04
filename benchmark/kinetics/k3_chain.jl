@@ -1,4 +1,4 @@
-#     julia --project=lib/PottsModels/test -t 12 benchmark/kinetics/k3_chain.jl <repo> <runs>
+#     julia --project=lib/PottsModels/test -t 12 benchmark/kinetics/k3_chain.jl <repo> <runs> [<variants> <out>]
 # K3 (P6.0bl): the OpenVT P1b chain relaxation time T (D-218/D-224 protocol, λ = 2) for
 # CheckerboardCPM variants on the CPU, against the record's 100 SequentialCPM runs.
 include(joinpath(ARGS[1], "lib/PottsModels/reproductions/data/15/checkerboard-2026-10-10/run_checkerboard.jl"))
@@ -8,17 +8,20 @@ const VARIANTS = [("stock", (;)), ("rep", (; colors = :replacement)),
     ("s3_r4_rep", (; stride = 3, retries = 4, colors = :replacement)),
     ("s4_r2_rep", (; stride = 4, retries = 2, colors = :replacement)),
     ("s4_r4_rep", (; stride = 4, retries = 4, colors = :replacement)),
-    ("r8_rep", (; retries = 8, colors = :replacement))]
+    ("r8_rep", (; retries = 8, colors = :replacement)),
+    ("sh_s3_rep", (; cells = :shared, stride = 3, colors = :replacement)),
+    ("sh_s4_rep", (; cells = :shared, stride = 4, colors = :replacement))]
+const USE = split(get(ARGS, 3, join(first.(VARIANTS), ',')), ',')
 const NRUN = parse(Int, ARGS[2])
 seqT = [parse(Float64, split(l, '\t')[3]) for l in Iterators.drop(eachline(joinpath(CB_DIR, "calibration_sequential_p1b.tsv")), 1)]
 prob = p1b_problem()
 saves = 0:(CAL_BURNIN + CAL_TMAX)
 boot(a, b; rng = Xoshiro(3)) = [mean(rand(rng, a, length(a))) / mean(rand(rng, b, length(b))) for _ in 1:4000]
-out = expanduser("~/lpwork/cbk/k3-2026-11-03.tsv")
+out = expanduser(get(ARGS, 4, "~/lpwork/cbk/k3-2026-11-03.tsv"))
 open(out, "w") do io
     println(io, "arm\tseed\tT_run")
 end
-for (name, kw) in VARIANTS
+for (name, kw) in filter(v -> first(v) in USE, VARIANTS)
     alg = CheckerboardCPM(; proposal = Moore(1), kw...)
     ncol = length(Base.invokelatest(Potts.init, prob, alg).cache.colors)
     W = fill(NaN, length(saves), NRUN)

@@ -106,10 +106,16 @@ _lid(v, r) = UInt32(v) << 8 | UInt32(r)                     # r ≤ MAX_RETRIES 
 #   twice and never retry a stale rejection: a steady-state bias (P6.0bl harness, 2026-11-03);
 # - `cnt = (; accepted, committed, dropped)`, per site (one writer per site per pass, as the
 #   track): copies accepted at their first evaluation, committed at any pass, and proposals
-#   still undecided after the last pass (stock: the accepted copies that lost a claim).
+#   still undecided after the last pass (stock: the accepted copies that lost a claim);
+# - `sh` is `nothing`, or `Val(true)` for shared cells (`cells = :shared`): no claims, every
+#   accepted copy commits. The propose launch reads the state from before the pass's commits,
+#   and the commits change per-cell totals by integer atomic adds, so the outcome does not
+#   depend on their order.
 const MAX_RETRIES = 255
 const STOCK_PASS = (; pass = Pass(0, 0, 0, true), lin = nothing, cin = nothing, lout = nothing,
-    cout = nothing, cnt = nothing)
+    cout = nothing, cnt = nothing, sh = nothing)
+@inline _shared(::Nothing) = false
+@inline _shared(::Val{true}) = true
 @inline _claims_all(::Nothing) = false
 @inline _claims_all(lists) = true
 # the color index work item `i` proposes in this pass: `i`, or in a retry its list entry (0: none)
@@ -147,6 +153,10 @@ end
 # (`propose_kernel!`, `commit_kernel!`): no `tk` argument at all, the same code as before the
 # track existed.
 
+# j ≤ ncolorsites ≤ maxsites = length(tk.dH)
+@inline yes_track!(::Nothing, j, st, p, prop, ctx, dH0) = nothing
+@inline yes_track!(tk, j, st, p, prop, ctx, dH0) = (@inbounds tk.dH[j] = tk.track(st, p, prop, ctx, dH0); nothing)
+
 @inline function propose_body!(j, prio, source, claim, wclaim, status, st, f, p, ctx, law, key,
         mcs, color, idbits, tk = nothing, ex = STOCK_PASS)
     pass = ex.pass
@@ -172,6 +182,12 @@ end
                 dH = _effective_dH(f, dH0, temperature, st, p, prop, ctx)
                 if !isfinite(dH)
                     @inbounds Atomix.@atomic status[1] |= STATUS_NONFINITE     # status has 1 entry
+                elseif _shared(ex.sh)
+                    if accept(law, T(dH), temperature, uniform(T, ra))
+                        won = UInt32(1)                              # accepted: commits
+                        _count!(ex.cnt, :accepted, t)
+                        yes_track!(tk, j, st, p, prop, ctx, dH0)
+                    end
                 elseif (yes = accept(law, T(dH), temperature, uniform(T, ra))) || _claims_all(ex.lin)
                     won = _priority(rp, j, idbits, key, mcs, lat, color, pass.lid)     # unique and nonzero
                     yes || (s = -s)                                  # claimed, rejected
@@ -216,11 +232,11 @@ end
         a = @inbounds st.σ[t]
         b = @inbounds st.σ[s]
         prop = Proposal(t, s, x, 0, a, b)
-        ok = _won(claim, a, won) && _won(claim, b, won)
-        for extra in f.claims(st, p, prop, ctx)
+        ok = _shared(ex.sh) || (_won(claim, a, won) && _won(claim, b, won))
+        _shared(ex.sh) || for extra in f.claims(st, p, prop, ctx)
             ok &= _won(claim, Int32(extra), won)
         end
-        if has_reads(f)
+        if !_shared(ex.sh) && has_reads(f)
             for r in f.reads(st, p, prop, ctx)
                 ok &= _unwritten(wclaim, Int32(r), won)
             end
@@ -259,7 +275,7 @@ end
     return nothing
 end
 
-struct CheckerboardCache{N, P, S, C, W, B, TK, ID, K1, K2, CO, LO, CN}
+struct CheckerboardCache{N, P, S, C, W, B, TK, ID, K1, K2, CO, LO, CN, SH}
     prio::P
     source::S
     claims::NTuple{2, C}
@@ -289,6 +305,7 @@ struct CheckerboardCache{N, P, S, C, W, B, TK, ID, K1, K2, CO, LO, CN}
     cnt::CN
     replacement::Bool
     visits::Vector{Int}
+    sh::SH                            # `ex.sh`: `nothing`, or `Val(true)` for shared cells
 end
 
 # Dedicated kernels for the hot path (`@Const` marks read-only buffers for the device).
@@ -324,7 +341,7 @@ end
 
 function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, ncell::Int,
         proposal = relation(VonNeumann(1), lat); stride = nothing, retries = 0, counts = false,
-        replacement = false) where {N}
+        replacement = false, shared = false) where {N}
     r, w = reach(f.footprint, proposal)
     s = r + w + 1
     if stride !== nothing
@@ -341,6 +358,8 @@ function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, ncell::Int,
         "whole-cell connectivity lists colour sites as Int32; a color class has $maxsites sites (at most 2^31 - 1)"))
     retries == 0 || maxsites <= typemax(Int32) || throw(ArgumentError(
         "retries list colour sites as Int32; a color class has $maxsites sites (at most 2^31 - 1)"))
+    shared && (f.connectivity !== nothing || has_reads(f) || !(f.claims isa typeof(no_claims))) &&
+        throw(ArgumentError("CheckerboardCPM(; cells = :shared) does not support a whole-cell connectivity veto or `claims`/`reads` hooks"))
     idbits = _claim_regime(maxsites, _FORCE_PERMUTED_PRIORITY[])
     zeros_u32(n) = KernelAbstractions.zeros(backend, UInt32, n)
     return CheckerboardCache(zeros_u32(maxsites),
@@ -355,7 +374,7 @@ function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, ncell::Int,
         counts ? (; accepted = KernelAbstractions.zeros(backend, Int32, nsites(lat)),
             committed = KernelAbstractions.zeros(backend, Int32, nsites(lat)),
             dropped = KernelAbstractions.zeros(backend, Int32, nsites(lat))) : nothing,
-        replacement, zeros(Int, length(cs)))
+        replacement, zeros(Int, length(cs)), shared ? Val(true) : nothing)
 end
 
 _track_buffers(backend, ::Nothing, maxsites, n) = nothing
@@ -390,7 +409,7 @@ function checkerboard_mcs!(st, cache::CheckerboardCache, f::F, p, ctx, law::L,
         cache.visits[ci] = v + 1
         for r in 0:cache.retries
             ex = (; pass = Pass(_lid(v, 0), _lid(v, r), r, r == cache.retries), _pass_lists(cache.lists, r)...,
-                cache.cnt)
+                cache.cnt, cache.sh)
             claim, next_claim = cache.claims[buf], cache.claims[3 - buf]
             wclaim, next_wclaim = cache.wclaims[buf], cache.wclaims[3 - buf]
             pargs = (_with_track((cache.prio, cache.source, claim, wclaim, cache.status, st, f, p, ctx, law, key, mcs,
