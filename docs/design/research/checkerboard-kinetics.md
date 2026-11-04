@@ -148,10 +148,49 @@ Stock advances 0.34–0.67 sequential MCS per MCS on the two cases, so per seque
 it costs 0.47–0.94 ms at 1008², against 1.79 ms for s = 3, R = 4 with replacement: about 2–4×.
 SequentialCPM on one CPU thread costs about 23 ms/MCS at that size (scaled from 144²).
 
-The retry passes run over the whole color and skip the decided sites. Each skipped site still
-costs a read, a write of `prio` and the commit's read. Compacting the undecided proposals into a
-list (an atomic append: the list order varies, the outcome does not, since claims decide by
-priority) would make the retry passes proportional to the undecided count. Not built yet.
+The retry passes first ran over the whole color and skipped the decided sites. They now run
+over a compacted list of the undecided proposals (an atomic append: the list order varies, the
+outcome does not, since claims decide by priority; CPU results are bitwise those of the flag
+version). After compaction:
+
+| Lattice | stock | s = 3, R = 4, repl. | s = 4, R = 2, repl. | s = 4, R = 4, repl. | R = 8, repl. |
+|---|---|---|---|---|---|
+| 1008² | 0.32 ms | 1.26 ms | 1.23 ms | 1.79 ms | 1.33 ms |
+| 2016² | 1.16 ms | 3.37 ms | 2.69 ms | 3.40 ms | 4.77 ms |
+
+At 2016² the matching variants cost about what stock costs per sequential-equivalent MCS
+(1.7–3.4 ms). At 1008² launch overhead dominates (90–160 launches per MCS).
+
+### K3 chain and K4 monolayer (2026-11-03; `benchmark/kinetics/k3_chain.jl`, `k4_monolayer.jl`)
+
+K3, the P1b chain at λ = 2 (D-218/D-224 protocol), 100 CPU runs per arm against the record's 100
+SequentialCPM runs (T = 155.3 MCS):
+
+| Arm | colors | T (MCS) | r | verdict |
+|---|---|---|---|---|
+| stock | 4 | 215.3 | 1.386 | FAIL (the record's own value is 216.5) |
+| colors drawn with replacement | 4 | 257.7 | 1.659 | FAIL |
+| s = 3, R = 4, replacement | 9 | 156.3 | 1.006 [0.981, 1.033] | PASS |
+| s = 4, R = 2, replacement | 24 | 155.7 | 1.002 [0.978, 1.029] | PASS |
+| s = 4, R = 4, replacement | 24 | 157.3 | 1.013 [0.987, 1.040] | PASS |
+| R = 8, replacement | 4 | 158.2 | 1.018 [0.990, 1.047] | PASS |
+
+K4, the OpenVT monolayer cases (b) and (f), 100 GPU runs each, s = 3, R = 4 with replacement, run
+at SequentialCPM's own cycle (775 MCS, α = 50/775: no calibration), compared with the
+sequential record by the P6.15m rules (per-seed metrics, crit(ν) = 4.66):
+
+| Case | rows beyond crit, variant | rows beyond crit, stock record (at its calibrated cycle 1095) |
+|---|---|---|
+| (b) stochastic | 0 of 34 | 7 |
+| (f) deterministic | 5 of 34 | 15 |
+
+The five (f) rows are A@8.5, A_stop, r@8.5, r_stop and t_stop, with mean ratios 0.991–1.010.
+Case (f) has σ_X = 0, so its spread is small and sub-percent shifts reach z = 6–14. The stock
+record's (f) deviations reach −9.5% (A@8.5) and z = 127 (t_stop). Cells lost in (b): 0.42 per
+run, against 0.24 sequential and 2.31 stock. Case (a) (10⁴ cells) was not run.
+
+Wall time per run on the GPU: 11.5–11.9 s, against 4.6 s for the stock record (which also ran
+1095-MCS cycles rather than 775).
 
 ## 4. Pre-registered criteria
 
