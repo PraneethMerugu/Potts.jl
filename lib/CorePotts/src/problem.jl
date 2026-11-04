@@ -196,7 +196,11 @@ end
 Base.@kwdef mutable struct PottsStats
     mcs::Int = 0
     attempts::Int = 0
-    accepted::Int = -1          # -1: not counted by this algorithm (checkerboard)
+    accepted::Int = -1          # -1: not counted by this algorithm (checkerboard without `counts`)
+    # `CheckerboardCPM(; counts = true)` only (P6.0bl), else -1: copies committed, and accepted
+    # copies dropped after losing a claim at their color's last pass
+    committed::Int = -1
+    dropped::Int = -1
     launches::Int = 0
     refreshes::Int = 0          # frozen-mask recomputations (`refresh_frozen!`)
     # host↔device traffic (D-085; never counted on the CPU): explicit synchronizations,
@@ -263,6 +267,8 @@ function Base.merge(a::PottsStats, b::PottsStats)
     l = LifecycleStats(; (f => getfield(a.lifecycle, f) + getfield(b.lifecycle, f) for f in fieldnames(LifecycleStats))...)
     return PottsStats(; mcs = a.mcs + b.mcs, attempts = a.attempts + b.attempts,
         accepted = (a.accepted < 0 || b.accepted < 0) ? -1 : a.accepted + b.accepted,
+        committed = (a.committed < 0 || b.committed < 0) ? -1 : a.committed + b.committed,
+        dropped = (a.dropped < 0 || b.dropped < 0) ? -1 : a.dropped + b.dropped,
         launches = a.launches + b.launches, refreshes = a.refreshes + b.refreshes,
         syncs = a.syncs + b.syncs, transfers = a.transfers + b.transfers,
         transfer_bytes = a.transfer_bytes + b.transfer_bytes, lifecycle = l,
@@ -317,6 +323,12 @@ CommonSolve.solve(prob::PottsProblem; kwargs...) = CommonSolve.solve!(CommonSolv
 function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, saveat, save_start, save_end, callback)
     alg isa SequentialCPM && !(backend isa CPU) &&
         throw(ArgumentError("SequentialCPM runs on the host; use CheckerboardCPM on $(typeof(backend))"))
+    if alg isa CheckerboardCPM
+        alg.colors in (:permutation, :replacement) || throw(ArgumentError(
+            "CheckerboardCPM(; colors = $(repr(alg.colors))): use :permutation or :replacement"))
+        0 <= alg.retries <= MAX_RETRIES || throw(ArgumentError(
+            "CheckerboardCPM(; retries = $(alg.retries)): use 0 to $MAX_RETRIES"))
+    end
     alg isa CheckerboardCPM && alg.skip_interior && throw(ArgumentError(
         "CheckerboardCPM(; skip_interior = true) is not yet implemented (P6.0bk); use " *
         "SequentialCPM(; skip_interior = true) on the CPU, or CheckerboardCPM() with " *
@@ -339,7 +351,8 @@ function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, save
     state = _to_backend(backend, deepcopy(prob.u0))
     p = _to_backend(backend, prob.p)
     cache = alg isa CheckerboardCPM ?
-            CheckerboardCache(backend, lat, prob.f, ncells(prob.u0), relation(_proposal(alg, prob), lat)) :
+            CheckerboardCache(backend, lat, prob.f, ncells(prob.u0), relation(_proposal(alg, prob), lat);
+                alg.stride, alg.retries, alg.counts, replacement = alg.colors === :replacement) :
             _skips_interior(alg) ? BoundaryCache(state.σ, ctx.mobility, ctx.lattice, ctx.proposal) : nothing
     key = RNGKey(prob.seed, prob.replica, prob.repeat)
     lcache = prob.f.lifecycle === nothing ? nothing :
@@ -448,6 +461,7 @@ function current_state(integ::PottsIntegrator)
     _fold_lifecycle!(integ)
     _fold_track!(integ)
     _fold_deferred!(integ)
+    _fold_counts!(integ)
     return _snapshot(integ.stats, integ.backend, integ.state)
 end
 
@@ -653,6 +667,20 @@ function _fold_track!(stats, tk::NamedTuple)
     return nothing
 end
 
+# Read point of the checkerboard copy counts (P6.0bl, the track's pattern): the per-site
+# counters are summed into `stats.accepted`, `committed` and `dropped` and zeroed.
+_fold_counts!(integ) = _fold_counts!(integ.stats, integ.cache)
+_fold_counts!(stats, cache) = nothing
+_fold_counts!(stats, cache::CheckerboardCache) = _fold_counts!(stats, cache.cnt)
+_fold_counts!(stats, ::Nothing) = nothing
+function _fold_counts!(stats, cnt::NamedTuple)
+    total(a) = (h = _ondevice(a) ? _to_host(stats, a) : a; s = sum(Int, h); fill!(a, Int32(0)); s)
+    stats.accepted = max(stats.accepted, 0) + total(cnt.accepted)
+    stats.committed = max(stats.committed, 0) + total(cnt.committed)
+    stats.dropped = max(stats.dropped, 0) + total(cnt.dropped)
+    return nothing
+end
+
 # bring the device lifecycle's counts into `integ.stats` (synchronizes; only off the MCS loop)
 _flush_counts!(integ) = _fold_lifecycle!(integ)
 
@@ -740,6 +768,7 @@ function CommonSolve.solve!(integ::PottsIntegrator)
     _flush_counts!(integ)                           # exact `stats` at the end (D-089)
     _fold_track!(integ)
     _fold_deferred!(integ)
+    _fold_counts!(integ)
     _check_status!(integ)
     report_run(integ.f.sys, integ)
     if integ.retcode == SciMLBase.ReturnCode.Default
@@ -800,6 +829,7 @@ end
 
 function _restore_stats!(dst::PottsStats, src::PottsStats)
     dst.mcs, dst.attempts, dst.accepted, dst.launches = src.mcs, src.attempts, src.accepted, src.launches
+    dst.committed, dst.dropped = src.committed, src.dropped
     dst.refreshes = src.refreshes
     dst.syncs, dst.transfers, dst.transfer_bytes = src.syncs, src.transfers, src.transfer_bytes
     dst.accepted_ΔH = src.accepted_ΔH

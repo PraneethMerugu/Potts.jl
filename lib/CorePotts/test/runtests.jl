@@ -600,6 +600,7 @@ include("domain.jl")
 include("piff.jl")
 include("hex.jl")
 include("audit.jl")
+include("checkerboard_passes.jl")
 # device tests (D-157): COREPOTTS_GPU (or POTTS_GPU) = metal | rocm
 # (test/shared/devices.jl is the monorepo's; a standalone CorePotts tree runs on the CPU)
 const COREPOTTS_DEVICES = joinpath(@__DIR__, "..", "..", "..", "test", "shared", "devices.jl")

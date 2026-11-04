@@ -67,15 +67,43 @@ end
     x = _fmix32((j % UInt32) ⊻ k)
     return x == 0 ? _fmix32(k) : x
 end
-# the key of a color in an MCS: addressed by the color's first site, unique per color
-@inline _claim_key(key, mcs, lat, color) =
-    draw(key, mcs, linear_index(lat, color.start), STREAM_CLAIM_ORDER)[1]
-@inline _priority(rp::UInt32, j, idbits::Int, key, mcs, lat, color) =
+# the key of a color in an MCS: addressed by the color's first site, unique per color and pass
+@inline _claim_key(key, mcs, lat, color, lid = UInt32(0)) =
+    draw(key, mcs, linear_index(lat, color.start), STREAM_CLAIM_ORDER, lid)[1]
+@inline _priority(rp::UInt32, j, idbits::Int, key, mcs, lat, color, lid = UInt32(0)) =
     ((rp >> idbits) << idbits) | (j % UInt32)                                            # j < 2^idbits
-@inline _priority(rp::UInt32, j, ::PermutedPriority, key, mcs, lat, color) =
-    _permuted_priority(j, _claim_key(key, mcs, lat, color))                              # j < 2^32
+@inline _priority(rp::UInt32, j, ::PermutedPriority, key, mcs, lat, color, lid = UInt32(0)) =
+    _permuted_priority(j, _claim_key(key, mcs, lat, color, lid))                         # j < 2^32
 # a shared read of `c` survives unless a higher-priority copy writes `c`
 @inline _unwritten(wclaim, c::Int32, won::UInt32) = c <= 0 || @inbounds(wclaim[c]) <= won
+
+# Passes (P6.0bl). A color runs `1 + retries` propose/commit passes. `lid` keys a pass's
+# acceptance and priority draws (`draw`'s `local`: the color's visit in this MCS, `v << 8 | r`
+# for retry `r`); `lid0` keys the direction, so a retry re-proposes the same copy. A first
+# visit's first pass has `lid = lid0 = 0`: the draws are the ones before passes existed.
+# `final` marks the color's last pass.
+struct Pass
+    lid0::UInt32
+    lid::UInt32
+    r::Int
+    final::Bool
+end
+_lid(v, r) = UInt32(v) << 8 | UInt32(r)                     # r ≤ MAX_RETRIES < 2^8
+
+# `ex = (; pass, lost, cnt)`: the pass, and `nothing` or the buffers of `retries` and `counts`
+# (a type-level choice, so the stock kernels are the code from before they existed):
+# - `lost[j]` is 1 after a commit pass where copy `j` was accepted and lost a claim; a retry
+#   pass re-proposes exactly those, with fresh acceptance and priority draws, against the
+#   state the winners left (σ at `j`'s target and source is unchanged: no copy of the color
+#   writes them);
+# - `cnt = (; accepted, committed, dropped)`, per site (one writer per site per pass, as the
+#   track): copies accepted at their first pass, committed at any pass, and lost at the last.
+const MAX_RETRIES = 255
+const STOCK_PASS = (; pass = Pass(0, 0, 0, true), lost = nothing, cnt = nothing)
+@inline _skip_retry(::Nothing, pass, j) = false
+@inline _skip_retry(lost, pass, j) = pass.r > 0 && @inbounds(lost[j]) == 0x00     # j ≤ maxsites = length(lost)
+@inline _count!(::Nothing, field, t) = nothing
+@inline _count!(cnt, field, t) = (@inbounds getfield(cnt, field)[t] += Int32(1); nothing) # t ≤ nsites
 
 # Claims. Every cell a copy touches (old, new, `f.claims`, `f.reads`) takes `claim[c] max won`;
 # the cells it writes (old, new, `f.claims`) also take `wclaim[c] max won`. A copy commits
@@ -91,11 +119,17 @@ end
 # track existed.
 
 @inline function propose_body!(j, prio, source, claim, wclaim, status, st, f, p, ctx, law, key,
-        mcs, color, idbits, tk = nothing)
+        mcs, color, idbits, tk = nothing, ex = STOCK_PASS)
+    pass = ex.pass
+    if _skip_retry(ex.lost, pass, j)
+        @inbounds prio[j] = UInt32(0)
+        return nothing
+    end
     lat = ctx.lattice
     x = color_site(color, j)
     t = linear_index(lat, x)
-    rd, ra, rp, _ = draw(key, mcs, t, STREAM_PROPOSAL)
+    rd, ra, rp, _ = draw(key, mcs, t, STREAM_PROPOSAL, pass.lid0)
+    pass.r > 0 && ((_, ra, rp, _) = draw(key, mcs, t, STREAM_PROPOSAL, pass.lid))
     dir = bounded(rd, length(ctx.proposal)) + 1
     inside, y = shift(lat, x, @inbounds ctx.proposal.offsets[dir])
     won = UInt32(0)
@@ -114,7 +148,8 @@ end
                 if !isfinite(dH)
                     @inbounds Atomix.@atomic status[1] |= STATUS_NONFINITE     # status has 1 entry
                 elseif accept(law, T(dH), temperature, uniform(T, ra))
-                    won = _priority(rp, j, idbits, key, mcs, lat, color)     # unique and nonzero
+                    won = _priority(rp, j, idbits, key, mcs, lat, color, pass.lid)     # unique and nonzero
+                    pass.r == 0 && _count!(ex.cnt, :accepted, t)
                     # j ≤ ncolorsites ≤ maxsites = length(tk.dH)
                     tk === nothing || (@inbounds tk.dH[j] = tk.track(st, p, prop, ctx, dH0))
                     _claim!(claim, a, won)
@@ -142,7 +177,7 @@ end
 end
 
 @inline function commit_body!(j, st, claim, next_claim, wclaim, next_wclaim, prio, source, f, p,
-        ctx, color, nclear, nthreads, tk = nothing)
+        ctx, color, nclear, nthreads, tk = nothing, ex = STOCK_PASS)
     c = j
     while c <= nclear                     # clear the other claim buffers for the next color
         @inbounds next_claim[c] = UInt32(0)
@@ -150,6 +185,7 @@ end
         c += nthreads
     end
     won = @inbounds prio[j]
+    lost = false
     if won != 0
         lat = ctx.lattice
         x = color_site(color, j)
@@ -172,11 +208,17 @@ end
             f.commit!(st, p, prop, ctx)
             # t ≤ nsites = length(tk.acc); dH[j] was written by this proposal (won ≠ 0)
             tk === nothing || (@inbounds tk.acc[t] += tk.dH[j])
+            _count!(ex.cnt, :committed, t)
+        else
+            lost = true
+            ex.pass.final && _count!(ex.cnt, :dropped, t)
         end
     end
+    ex.lost === nothing || (@inbounds ex.lost[j] = UInt8(lost))      # j ≤ maxsites = length(lost)
+    return nothing
 end
 
-struct CheckerboardCache{N, P, S, C, W, B, TK, ID, K1, K2, CO}
+struct CheckerboardCache{N, P, S, C, W, B, TK, ID, K1, K2, CO, LO, CN}
     prio::P
     source::S
     claims::NTuple{2, C}
@@ -197,27 +239,35 @@ struct CheckerboardCache{N, P, S, C, W, B, TK, ID, K1, K2, CO}
     # whole-cell connectivity (P6.9a): `nothing`, or the lists, counter and kernels of
     # `ConnBuffers`; without it the color loop is exactly the one above
     conn::CO
+    # P6.0bl: `retries` passes after each color's first; `lost` (`nothing` without retries) and
+    # `cnt` (`nothing` without `counts`) as in `ex`; `replacement` draws the colors of an MCS
+    # with replacement; `visits[c]` numbers color c's visits in the current MCS
+    retries::Int
+    lost::LO
+    cnt::CN
+    replacement::Bool
+    visits::Vector{Int}
 end
 
 # Dedicated kernels for the hot path (`@Const` marks read-only buffers for the device).
-@kernel function propose_kernel!(prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits)
+@kernel function propose_kernel!(prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits, ex)
     j = @index(Global, Linear)
-    propose_body!(j, prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits)
+    propose_body!(j, prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits, nothing, ex)
 end
 @kernel function commit_kernel!(st, claim, next_claim, wclaim, next_wclaim, @Const(prio), @Const(source), f, p, ctx,
-        color, nclear, nthreads)
+        color, nclear, nthreads, ex)
     j = @index(Global, Linear)
-    commit_body!(j, st, claim, next_claim, wclaim, next_wclaim, prio, source, f, p, ctx, color, nclear, nthreads)
+    commit_body!(j, st, claim, next_claim, wclaim, next_wclaim, prio, source, f, p, ctx, color, nclear, nthreads, nothing, ex)
 end
 # the tracked kernels (D-140): the same bodies with the track buffers
-@kernel function propose_track_kernel!(prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits, tk)
+@kernel function propose_track_kernel!(prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits, tk, ex)
     j = @index(Global, Linear)
-    propose_body!(j, prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits, tk)
+    propose_body!(j, prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits, tk, ex)
 end
 @kernel function commit_track_kernel!(st, claim, next_claim, wclaim, next_wclaim, @Const(prio), @Const(source), f, p, ctx,
-        color, nclear, nthreads, tk)
+        color, nclear, nthreads, tk, ex)
     j = @index(Global, Linear)
-    commit_body!(j, st, claim, next_claim, wclaim, next_wclaim, prio, source, f, p, ctx, color, nclear, nthreads, tk)
+    commit_body!(j, st, claim, next_claim, wclaim, next_wclaim, prio, source, f, p, ctx, color, nclear, nthreads, tk, ex)
 end
 
 # tests: the permuted priorities on a small lattice (read when a cache is built)
@@ -230,9 +280,15 @@ function _claim_regime(maxsites, force::Bool = false)
 end
 
 function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, ncell::Int,
-        proposal = relation(VonNeumann(1), lat)) where {N}
+        proposal = relation(VonNeumann(1), lat); stride = nothing, retries = 0, counts = false,
+        replacement = false) where {N}
     r, w = reach(f.footprint, proposal)
     s = r + w + 1
+    if stride !== nothing
+        stride >= s || throw(ArgumentError(
+            "CheckerboardCPM(; stride = $stride): the model's copy footprint needs a stride of at least $s"))
+        s = stride
+    end
     cs = colors(lat, s)
     maxsites = maximum(ncolorsites, cs)
     maxsites <= typemax(UInt32) || throw(ArgumentError(
@@ -248,7 +304,12 @@ function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, ncell::Int,
         has_reads(f) ? (zeros_u32(max(ncell, 1)), zeros_u32(max(ncell, 1))) : (nothing, nothing),
         zeros_u32(1), _track_buffers(backend, f.track, maxsites, nsites(lat)), Vector{Color{N}}(cs), [_groupsize(backend, ncolorsites(c)) for c in cs],
         collect(1:length(cs)), Ref(1), idbits, _kernels(backend, f.track)...,
-        _conn_buffers(backend, f.connectivity, maxsites))
+        _conn_buffers(backend, f.connectivity, maxsites), retries,
+        retries > 0 ? KernelAbstractions.zeros(backend, UInt8, maxsites) : nothing,
+        counts ? (; accepted = KernelAbstractions.zeros(backend, Int32, nsites(lat)),
+            committed = KernelAbstractions.zeros(backend, Int32, nsites(lat)),
+            dropped = KernelAbstractions.zeros(backend, Int32, nsites(lat))) : nothing,
+        replacement, zeros(Int, length(cs)))
 end
 
 _track_buffers(backend, ::Nothing, maxsites, n) = nothing
@@ -272,42 +333,66 @@ _groupsize(::KernelAbstractions.CPU, n) = max(cld(n, Threads.nthreads()), min(n,
 function checkerboard_mcs!(st, cache::CheckerboardCache, f::F, p, ctx, law::L,
         key::RNGKey, mcs::Integer) where {F, L}
     ncell = length(cache.claims[1])
-    order = _color_order!(cache.order, key, mcs)
+    order = _color_order!(cache.order, key, mcs, cache.replacement)
+    fill!(cache.visits, 0)
     buf = cache.buffer[]
     for ci in order
         color = cache.colors[ci]
         n = ncolorsites(color)
-        claim, next_claim = cache.claims[buf], cache.claims[3 - buf]
-        wclaim, next_wclaim = cache.wclaims[buf], cache.wclaims[3 - buf]
         g = cache.groupsize[ci]
-        pargs = _with_track((cache.prio, cache.source, claim, wclaim, cache.status, st, f, p, ctx, law, key, mcs,
-            color, cache.idbits), cache.track)
-        cargs = _with_track((st, claim, next_claim, wclaim, next_wclaim, cache.prio, cache.source, f, p, ctx, color, ncell, n),
-            cache.track)
-        if cache.conn !== nothing           # whole-cell connectivity (a type-level branch)
-            _conn_color!(cache.conn, g, n, (cache.prio, cache.source, claim, wclaim, cache.status, st, f, p, ctx, law,
-                key, mcs, color, cache.idbits, cache.track), (st, claim, next_claim, wclaim, next_wclaim, cache.prio,
-                cache.source, f, p, ctx, color, ncell, n, cache.track))
-        elseif g >= n                   # CPU, one workgroup: plain loops (see `_launch`)
-            for j in 1:n
-                propose_body!(j, pargs...)
+        v = cache.visits[ci]
+        cache.visits[ci] = v + 1
+        for r in 0:cache.retries
+            ex = (; pass = Pass(_lid(v, 0), _lid(v, r), r, r == cache.retries), cache.lost, cache.cnt)
+            claim, next_claim = cache.claims[buf], cache.claims[3 - buf]
+            wclaim, next_wclaim = cache.wclaims[buf], cache.wclaims[3 - buf]
+            pargs = (_with_track((cache.prio, cache.source, claim, wclaim, cache.status, st, f, p, ctx, law, key, mcs,
+                color, cache.idbits), cache.track)..., ex)
+            cargs = (_with_track((st, claim, next_claim, wclaim, next_wclaim, cache.prio, cache.source, f, p, ctx, color,
+                ncell, n), cache.track)..., ex)
+            if cache.conn !== nothing           # whole-cell connectivity (a type-level branch)
+                _conn_color!(cache.conn, g, n, (cache.prio, cache.source, claim, wclaim, cache.status, st, f, p, ctx, law,
+                    key, mcs, color, cache.idbits, cache.track, ex), (st, claim, next_claim, wclaim, next_wclaim, cache.prio,
+                    cache.source, f, p, ctx, color, ncell, n, cache.track, ex))
+            elseif g >= n                   # CPU, one workgroup: plain loops (see `_launch`)
+                for j in 1:n
+                    _propose_host!(j, cache.track, pargs)
+                end
+                for j in 1:n
+                    _commit_host!(j, cache.track, cargs)
+                end
+            else
+                workgroupsize = g == 0 ? nothing : g
+                cache.propose!(pargs...; ndrange = n, workgroupsize)
+                cache.commit!(cargs...; ndrange = n, workgroupsize)
             end
-            for j in 1:n
-                commit_body!(j, cargs...)
-            end
-        else
-            workgroupsize = g == 0 ? nothing : g
-            cache.propose!(pargs...; ndrange = n, workgroupsize)
-            cache.commit!(cargs...; ndrange = n, workgroupsize)
+            buf = 3 - buf
         end
-        buf = 3 - buf
     end
-    # the next color's buffer was cleared by the last commit; with an odd number of colors
+    # the next color's buffer was cleared by the last commit; with an odd number of passes
     # that is not buffer 1, so the parity persists across MCS
     cache.buffer[] = buf
-    return length(order) * _conn_launches(cache.conn)
+    return length(order) * (1 + cache.retries) * _conn_launches(cache.conn)
 end
 
+# the host loops call the bodies with the kernels' arguments: without a track the kernels
+# have no `tk`, so it is put back as `nothing` in front of `ex`
+_propose_host!(j, ::Nothing, args) = propose_body!(j, Base.front(args)..., nothing, last(args))
+_propose_host!(j, tk, args) = propose_body!(j, args...)
+_commit_host!(j, ::Nothing, args) = commit_body!(j, Base.front(args)..., nothing, last(args))
+_commit_host!(j, tk, args) = commit_body!(j, args...)
+
+# `replacement`: each of the MCS's sub-steps draws its color independently (P6.0bl); else a
+# random permutation, every color once
+function _color_order!(order, key::RNGKey, mcs::Integer, replacement::Bool)
+    replacement || return _color_order!(order, key, mcs)
+    n = length(order)
+    for i in 1:n
+        r, _, _, _ = draw(key, mcs, i, STREAM_COLOR_ORDER, 1)
+        order[i] = bounded(r, n) + 1
+    end
+    return order
+end
 function _color_order!(order, key::RNGKey, mcs::Integer)
     n = length(order)
     order .= 1:n
@@ -396,11 +481,17 @@ end
 # that need the floods are listed, the veto runs its local test and lists undecided copies),
 # `true` in the serial kernel (the floods run, the veto decides at once)
 @inline function propose_conn_body!(j, prio, source, claim, wclaim, status, st, f, p, ctx, law, key,
-        mcs, color, idbits, tk, gl, ::Val{SERIAL}) where {SERIAL}
+        mcs, color, idbits, tk, ex, gl, ::Val{SERIAL}) where {SERIAL}
+    pass = ex.pass
+    if _skip_retry(ex.lost, pass, j)
+        @inbounds prio[j] = UInt32(0)
+        return nothing
+    end
     lat = ctx.lattice
     x = color_site(color, j)
     t = linear_index(lat, x)
-    rd, ra, rp, _ = draw(key, mcs, t, STREAM_PROPOSAL)
+    rd, ra, rp, _ = draw(key, mcs, t, STREAM_PROPOSAL, pass.lid0)
+    pass.r > 0 && ((_, ra, rp, _) = draw(key, mcs, t, STREAM_PROPOSAL, pass.lid))
     dir = bounded(rd, length(ctx.proposal)) + 1
     inside, y = shift(lat, x, @inbounds ctx.proposal.offsets[dir])
     won = UInt32(0)
@@ -421,7 +512,8 @@ end
                 if !isfinite(dH)
                     @inbounds Atomix.@atomic status[1] |= STATUS_NONFINITE     # status has 1 entry
                 elseif accept(law, T(dH), temperature, uniform(T, ra))
-                    won = _priority(rp, j, idbits, key, mcs, lat, color)     # as `propose_body!`
+                    won = _priority(rp, j, idbits, key, mcs, lat, color, pass.lid)     # as `propose_body!`
+                    pass.r == 0 && _count!(ex.cnt, :accepted, t)
                     code = has_post(f) ? _post(f)(st, p, prop, ctx, SERIAL ? GlobalSearch() : GlobalLocal()) : GLOBAL_PASS
                     if code == GLOBAL_PASS || (code == GLOBAL_WINDOW && !SERIAL)
                         # j ≤ ncolorsites ≤ maxsites = length(tk.dH)
@@ -462,16 +554,16 @@ end
     return nothing
 end
 
-@kernel function propose_conn_kernel!(prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits, tk, gl)
+@kernel function propose_conn_kernel!(prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits, tk, ex, gl)
     j = @index(Global, Linear)
-    propose_conn_body!(j, prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits, tk, gl, Val(false))
+    propose_conn_body!(j, prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits, tk, ex, gl, Val(false))
 end
 # one work item: the listed copies in list order, over the flood scratch
-@kernel function serial_conn_kernel!(prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits, tk, gl)
+@kernel function serial_conn_kernel!(prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits, tk, ex, gl)
     _ = @index(Global, Linear)
     for i in 1:Int(@inbounds gl.scount[1])
         propose_conn_body!(Int(@inbounds gl.slist[i]), prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs,
-            color, idbits, tk, gl, Val(true))
+            color, idbits, tk, ex, gl, Val(true))
     end
 end
 @kernel function global_conn_kernel!(prio, @Const(source), claim, wclaim, st, f, p, ctx, color, gl)
@@ -488,9 +580,9 @@ end
     end
 end
 @kernel function commit_conn_kernel!(st, claim, next_claim, wclaim, next_wclaim, @Const(prio), @Const(source), f, p, ctx,
-        color, nclear, nthreads, tk, gl)
+        color, nclear, nthreads, tk, ex, gl)
     j = @index(Global, Linear)
-    commit_body!(j, st, claim, next_claim, wclaim, next_wclaim, prio, source, f, p, ctx, color, nclear, nthreads, tk)
+    commit_body!(j, st, claim, next_claim, wclaim, next_wclaim, prio, source, f, p, ctx, color, nclear, nthreads, tk, ex)
     if j == 1                                        # the lists were consumed: empty them
         @inbounds gl.gcount[1] = UInt32(0)
         @inbounds gl.scount[1] = UInt32(0)
@@ -500,7 +592,7 @@ end
 # One color with the connectivity hooks: propose, the serial list, the deferred list, commit.
 function _conn_color!(c::ConnBuffers, g, n, pargs, cargs)
     gl = c.gl
-    prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits, tk = pargs
+    prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits, tk, ex = pargs
     if g >= n
         for j in 1:n
             propose_conn_body!(j, pargs..., gl, Val(false))

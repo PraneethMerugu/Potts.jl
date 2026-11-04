@@ -15,6 +15,7 @@
 #   seq2   SequentialCPM on disjoint seeds: the positive control
 #   clock  SequentialCPM with 0.3 N attempts per MCS (run 0.3 t, labelled t): the clock control
 #   cb     stock CheckerboardCPM: the negative control
+#   cb_…   a CheckerboardCPM variant (`arm_alg`)
 include("models.jl")
 using Printf, Random, Statistics
 
@@ -33,11 +34,24 @@ const MARGIN = Dict(vcat([o => 0.05 for o in KINETIC], [o => 0.02 for o in STATI
 const CASE_OBS = Dict("sort" => vcat(["committed"], ["H$(t)" for t in CHECKPOINTS]),
     "foam" => vcat(["committed", "D", "tauV"], STATIC))
 
-arm_alg(arm) = arm == "cb" ? CheckerboardCPM(; proposal = Moore(1)) :
-               arm in ("seq", "seq2", "clock") ? SequentialCPM(; proposal = Moore(1)) :
-               throw(ArgumentError("unknown arm $arm"))
+# checkerboard variants: `cb` plus `_`-separated options, e.g. `cb_r2_rep_s3` (retries = 2,
+# colors = :replacement, stride = 3)
+function arm_alg(arm)
+    arm in ("seq", "seq2", "clock") && return SequentialCPM(; proposal = Moore(1))
+    tok = split(arm, '_')
+    first(tok) == "cb" || throw(ArgumentError("unknown arm $arm"))
+    kw = Dict{Symbol, Any}()
+    for t in tok[2:end]
+        t == "rep" ? (kw[:colors] = :replacement) :
+        startswith(t, "r") ? (kw[:retries] = parse(Int, t[2:end])) :
+        startswith(t, "s") ? (kw[:stride] = parse(Int, t[2:end])) :
+        throw(ArgumentError("unknown option $t in arm $arm"))
+    end
+    return CheckerboardCPM(; proposal = Moore(1), kw...)
+end
 arm_clock(arm) = arm == "clock" ? 0.3 : 1.0
-arm_seed(arm, i) = 1_000_000 * ARMS[arm] + i
+# variants draw seeds disjoint from the controls' and from each other's
+arm_seed(arm, i) = 1_000_000 * get(ARMS, arm, 100 + Int(hash(arm) % 1000)) + i
 
 function case_state(case)
     σ, kinds = graner_state(2)

@@ -107,7 +107,8 @@ function Base.show(io::IO, a::SequentialCPM)
 end
 
 """
-    CheckerboardCPM(; acceptance = nothing, proposal = nothing, skip_interior = false)
+    CheckerboardCPM(; acceptance = nothing, proposal = nothing, skip_interior = false,
+        stride = nothing, colors = :permutation, retries = 0, counts = false)
 
 Parallel dynamics on CPU or GPU (KernelAbstractions). Sites are colored so that same-color
 targets lie outside each other's read/write footprints; each MCS visits every site once in
@@ -123,11 +124,29 @@ commit in a crowded monolayer, about 3.6× fewer copies per MCS than `Sequential
 exact; the difference is one of time scale. Calibrate time-dependent parameters (growth
 rates, schedules) with the algorithm you run, e.g. a relaxation time T on a reference
 geometry. See "Choosing an algorithm" in the manual.
+
+Options that bring the kinetics closer to `SequentialCPM` (P6.0bl):
+
+- `retries = R` (0 to 255): after a color's pass, the copies that lost a claim are proposed
+  again against the updated state, with fresh acceptance draws, up to `R` more passes. A copy
+  still losing after the last pass is dropped. Each retry costs one propose and one commit
+  launch per color.
+- `colors = :replacement`: each of an MCS's sub-steps draws its color independently, so a
+  site is proposed 0, 1, 2 or more times per MCS (on average once), as with
+  `SequentialCPM`'s random site picks. `:permutation` (the default) visits each color once.
+- `stride = s`: a coloring stride at least the one the copy footprint needs (the default):
+  `s^d` colors, fewer conflicts, more launches.
+- `counts = true`: count accepted, committed and dropped copies into `stats.accepted`,
+  `stats.committed` and `stats.dropped` (brought up to date at the host read points).
 """
 Base.@kwdef struct CheckerboardCPM{A, R} <: CPMAlgorithm
     acceptance::A = nothing
     proposal::R = nothing
     skip_interior::Bool = false
+    stride::Union{Nothing, Int} = nothing
+    colors::Symbol = :permutation
+    retries::Int = 0
+    counts::Bool = false
 end
 
 # The boundary-site sweep (`SequentialCPM(; skip_interior = true)`), known from the type.
