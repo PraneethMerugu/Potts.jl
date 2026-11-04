@@ -136,6 +136,23 @@ Findings:
 - Remaining open: the chain (K3) and driven (K4) cases, 3D, and the device cost. Wall times
   here are single-thread CPU and say nothing about the GPU.
 
+### Device cost (2026-11-03, ROCm on the PC, Float32, Graner–Glazier tiles, warm, 200 MCS)
+
+| Lattice | stock | s = 3, R = 4, repl. | s = 4, R = 2, repl. | s = 4, R = 4, repl. | R = 8, repl. |
+|---|---|---|---|---|---|
+| 1008² | 0.32 ms | 1.79 ms | 1.40 ms | 1.88 ms | 2.71 ms |
+| 2016² | 1.17 ms | 5.91 ms | 3.97 ms | 5.15 ms | 9.74 ms |
+| launches/MCS | 8 | 90 | 96 | 160 | 72 |
+
+Stock advances 0.34–0.67 sequential MCS per MCS on the two cases, so per sequential-equivalent MCS
+it costs 0.47–0.94 ms at 1008², against 1.79 ms for s = 3, R = 4 with replacement: about 2–4×.
+SequentialCPM on one CPU thread costs about 23 ms/MCS at that size (scaled from 144²).
+
+The retry passes run over the whole color and skip the decided sites. Each skipped site still
+costs a read, a write of `prio` and the commit's read. Compacting the undecided proposals into a
+list (an atomic append: the list order varies, the outcome does not, since claims decide by
+priority) would make the retry passes proportional to the undecided count. Not built yet.
+
 ## 4. Pre-registered criteria
 
 Fixed before any variant is measured.
