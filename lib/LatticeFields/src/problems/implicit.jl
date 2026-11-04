@@ -708,11 +708,13 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
     switch = any(r -> r.op.switch, rows)
     bp = _bound_params(st, s, op, keys, p)
     b, rb = inexact_bounds(op, keys, cyclic, bp), _robin_bounds(s, op, _robin_keys(alg, op, keys), bp)
-    exact = exact0 && !rb.neg
-    seen = isempty(b.unseen) && !rb.unseen
+    sb = _sign_bounds(op, keys, bp)
+    exact = exact0 && !rb.neg && !sb.neg
+    seen = isempty(b.unseen) && !rb.unseen && !sb.neg
     ρin = b.ρ + b.κ + rb.ρ
     # (a coupled solve takes every term into its operator: no term is unseen)
     coupled || exact || seen || alg.newton !== nothing || _warn_unseen(keys, [b.unseen; rb.texts], alg)
+    coupled || _warn_antidiffusion(keys, sb.texts, alg)
     iterate = any(r -> r.op.iterate, rows)
     smin = _steady_shift(op, keys, p)
     # (behind a barrier: a group that is not coupled compiles none of it, r1 M1)
@@ -833,6 +835,33 @@ function _newton_count(exact::Bool, switch::Bool, seen::Bool, ρin::Float64, γ:
 end
 # once per group and term (the F2 key): a term no bound sees is corrected by Newton iterations,
 # checked on the device
+# The rows' diffusion multipliers that read the coordinates and may be negative at a site center
+# at parameters `p` (F3-24): the scaled row drops the diffusion where `m < 0` (anti-diffusion), so
+# the operator is not exact there; `texts` name each term and its multiplier
+function _sign_bounds(op::OperatorSpec, keys, p)
+    texts = Tuple{String, String, Float64}[]
+    for r in op.rows
+        r.key in keys || continue
+        for (f, mtext, text) in r.msign
+            v = Float64(f(p))
+            v >= 0 || push!(texts, (text, mtext, v))
+        end
+    end
+    return (; neg = !isempty(texts), texts)
+end
+function _warn_antidiffusion(keys, texts, alg)
+    fs = join(("`$k`" for k in keys), ", ")
+    for (text, mtext, v) in texts
+        _warn_once(string("implicit-antidiffusion#", join(keys, ","), "#", text, "#", v)) || continue
+        @warn string(_algname(alg), ": field", length(keys) == 1 ? " " : "s ", fs, ": in ", text, " the multiplier ",
+            mtext, " of the diffusion is negative at some site centers (", isnan(v) ? "no bound sees its sign" :
+            string("down to ", round(v; sigdigits = 3)), "): a negative diffusion is anti-diffusion, an ill-posed ",
+            "problem, and the implicit operator leaves it out there, so Newton iterations correct it (a budget hit is ",
+            "warned, a divergence ends the run with `ReturnCode.ConvergenceFailure`); keep the multiplier ≥ 0 at every ",
+            "site, or step an intentionally signed coefficient with `ExplicitEuler`, with care")
+    end
+    return nothing
+end
 function _warn_unseen(keys, unseen, alg)
     fs = join(("`$k`" for k in keys), ", ")
     for u in unique(unseen)
@@ -1204,12 +1233,14 @@ function install_launches!(rt::GroupRuntime{<:FieldStore, <:ImplicitAlgorithm}, 
     b, rb = inexact_bounds(c.op, c.keys, c.cyclic, bp), _robin_bounds(rt.program, c.op, _robin_keys(rt.alg, c.op, c.keys), bp)
     # the classification at the new parameters (a write may turn a Robin face negative), as a
     # fresh problem's (M2)
-    c.exact = c.exact0 && !rb.neg
-    c.seen = isempty(b.unseen) && !rb.unseen
+    sb = _sign_bounds(c.op, c.keys, bp)        # (and a coordinate multiplier turned negative, F3-24 r1 M1)
+    c.exact = c.exact0 && !rb.neg && !sb.neg
+    c.seen = isempty(b.unseen) && !rb.unseen && !sb.neg
     c.ρin = b.ρ + b.κ + rb.ρ
     c.θ = b.θ
     c.smin = _steady_shift(c.op, c.keys, p)
     c.cs !== nothing || c.exact || c.seen || rt.alg.newton !== nothing || _warn_unseen(c.keys, [b.unseen; rb.texts], rt.alg)
+    c.cs !== nothing || _warn_antidiffusion(c.keys, sb.texts, rt.alg)
     _set_newton!(c, rt.alg)
     reset!(rt)
     return rt

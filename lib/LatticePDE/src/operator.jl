@@ -325,6 +325,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
     inputops = unique([_opof(v) for v in unwrap.(sys.dvs) if ModelingToolkitBase.isinput(v)])
     siteops = Any[inputops; xs]
     tabs = Set(unwrap(q) for q in _params(sys) if SymbolicUtils.symtype(unwrap(q)) <: AbstractArray)
+    readsx(x) = any(v -> any(y -> isequal(y, v), xs), Symbolics.get_variables(x))
     bysite(x) = _reads(x, siteops) || _reads(x, collect(tabs)) || any(v -> any(y -> isequal(y, v), xs), Symbolics.get_variables(x))
     # the fields a term may read besides the row's own: the states (an array field by its
     # components) and the aux fields
@@ -341,6 +342,12 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
         kk = findfirst(d -> isequal(unwrap(d.variables), v), sys.domain)
         a = findfirst(isequal(v), xs)
         v => (Float64(leftendpoint(sys.domain[kk].domain)) - hg[a], Float64(rightendpoint(sys.domain[kk].domain)) + hg[a])
+    end
+    # the site centers' box (a multiplier is read at the row's own site; a coarse row's centers lie inside)
+    cbox = map(xs) do v
+        kk = findfirst(d -> isequal(unwrap(d.variables), v), sys.domain)
+        a = findfirst(isequal(v), xs)
+        v => (Float64(leftendpoint(sys.domain[kk].domain)) + s.spacing[a] / 2, Float64(rightendpoint(sys.domain[kk].domain)) - s.spacing[a] / 2)
     end
     pp0 = Problems.ParamsTables(collect(Any, cf.defaults),
         Pair{String, Vector{Float64}}[first(q) => Float64.(collect(last(q))) for q in cf.tables])
@@ -378,7 +385,10 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
                     push!(unseen, _optext(k, term))
                     continue
                 end
-                class == :SiteDiffusion && (scaled = true)
+                # a multiplier that reads the coordinates (`(1 + x) Δ(c)`, a `Diffusion` term) is a
+                # site multiplier as well: its Jacobian row is `m_i Σ_f K_f (c_n − c_i)`, not a
+                # symmetric face `m K` (F3-24), so the row is scaled by `1/m` as `SiteDiffusion`
+                (class == :SiteDiffusion || readsx(p.m)) && (scaled = true)
                 push!(diff, p)
             elseif class == :LinearLocal
                 push!(jterms, substitute(term, Dict(c => 1); fold = Val(false)))
@@ -424,6 +434,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
         # face-wise ratio θ to the kept term (R2-M1: with a kept multiplier bounded below, the
         # correction contracts by θ at any step, and the bound is used only when θ > 1/2)
         bounds = Tuple{Any, String, Any}[]
+        msign = Tuple{Any, String, String}[]
         if scaled
             same(p, q) = isequal(unwrap(p.K), unwrap(q.K)) && p.axes == q.axes && p.mean == q.mean
             bs = [_diffusion_bound(p, params, tabset, box, hk) for p in diff]
@@ -441,6 +452,14 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
                 push!(bounds, (bs[i], _optext(k, p.term), _diffusion_ratio(p, kept, params, tabset, box)))
             end
             diff = Any[kept]
+            # a coordinate multiplier that may be negative over the site centers (F3-24): the
+            # scaled row drops the diffusion at a site with `m < 0`, so the operator is not the
+            # Jacobian there; its smallest value at the parameters, checked at bind and at writes
+            if readsx(kept.m)
+                im = _interval(unwrap(kept.m), params, tabset, cbox)
+                f = im === nothing ? (_ -> NaN) : (pp -> (v = Float64(im(pp)[1]); isnan(v) ? NaN : v))
+                push!(msign, (f, _term_text(string(kept.m)), _optext(k, kept.term)))
+            end
         end
         for p in diff
             mK = scaled ? nothing : _coefof(unwrap(substitute(p.m * p.K, Dict(); fold = Val(true))), params)
@@ -478,7 +497,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
             plans[k] = (; diff, jterms, scaled, local_only)
         end
         push!(rows, Problems.RowOperator(k, faces, jloc, field, scaled, domain, local_only, isempty(inexact), inexact,
-            iterate, switch, adv, cross, unseen, bounds, facemax, jmax, linear, crossfaces))
+            iterate, switch, adv, cross, unseen, bounds, facemax, jmax, linear, crossfaces, msign))
     end
     jac = isempty(plans) ? nothing : _jac_program(cf, sys, disc, plans, params, xs)
     return Problems.OperatorSpec{N}(rows, jac)

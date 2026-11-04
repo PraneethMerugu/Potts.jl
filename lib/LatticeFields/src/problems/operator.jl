@@ -60,7 +60,13 @@ Jacobian that the linear solve sees:
   of the residual is then exact at any step, and one Newton step is the solve);
 - `crossfaces`: the row's cross diffusion terms `D Δ(o)` with a numeric coefficient, each the
   other field's key and its faces per axis `D/h_a²` as `Coef`s (the coupled steady system's
-  modes, F3-12d).
+  modes, F3-12d);
+- `msign`: the row's diffusion multipliers that read the coordinates (F3-24), each
+  `(f, mtext, text)`: `f` a function of the parameters giving the multiplier's smallest value
+  over the site centers (the interval evaluator; NaN when it has none), `mtext` the multiplier
+  and `text` the term in the user's words. Where one may be negative the scaled row drops the
+  diffusion (anti-diffusion), so the operator is not exact at those parameters: checked at
+  bind and at every parameter write.
 """
 struct RowOperator
     key::String
@@ -82,6 +88,7 @@ struct RowOperator
     jmax::Any
     linear::Bool
     crossfaces::Vector{Tuple{String, Vector{Vector{Coef}}}}
+    msign::Vector{Tuple{Any, String, String}}
 end
 
 

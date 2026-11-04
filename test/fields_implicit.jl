@@ -345,6 +345,51 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
+@potts_model FiSiteM begin
+    @kinds medium A[frozen]
+    @variables c(field) = 0.0
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations D(c) ~ 0.04 * (1 + x) * Δ(c) - 0.3 * c + 0.1 * y
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FiSiteK begin
+    @kinds medium A[frozen]
+    @variables c(field) = 0.0
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations D(c) ~ 0.04 * (1 + x) * DivKGrad(:harmonic)(1 + 0.05 * y, c) - 0.3 * c + 0.1 * y
+    @sweep Metropolis(; temperature = 1.0)
+end
+@testset "F3-24 (A): a multiplier that reads the coordinates: the hand BE matrix" begin
+    # the row `m_i Σ_f K_f (c_n − c_i)` (h = 1, the site (i, j) at (i − ½, j − ½), zero flux at the box);
+    # base (7f8001c3): the faces `m_i K_f`, off the BE step
+    dims = (12, 10)
+    n1, n2 = dims
+    lin(i, j) = i + (j - 1) * n1
+    tight = BackwardEuler(; inner = DevicePCG(; rtol = 1e-12, budget = 64))
+    for (M, K) in ((FiSiteM, y -> 1.0), (FiSiteK, y -> 1 + 0.05 * y))
+        a, integ = fi_runA(M, fi_op(dims), 1; field_solver = tight)
+        L, b = zeros(n1 * n2, n1 * n2), zeros(n1 * n2)
+        for j in 1:n2, i in 1:n1
+            r = lin(i, j)
+            L[r, r] -= 0.3
+            b[r] += 0.1 * (j - 0.5)
+            m = 0.04 * (1 + (i - 0.5))
+            for (di, dj) in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                ii, jj = i + di, j + dj
+                (1 <= ii <= n1 && 1 <= jj <= n2) || continue
+                Ki, Kn = K(j - 0.5), K(jj - 0.5)
+                w = m * 2Ki * Kn / (Ki + Kn)
+                L[r, lin(ii, jj)] += w
+                L[r, r] -= w
+            end
+        end
+        Id = Float64.((1:(n1 * n2)) .== (1:(n1 * n2))')
+        @test maximum(abs, vec(a[1]) .- (Id - L) \ b) < 1e-9
+    end
+end
+
 @testset "r1 M1 (A): an operator that reads the time is built at each substep's end time" begin
     # one MCS of length 0.2 in 4 substeps: c = Π_j 1/(1 + h(1 + 20 t_j)) (base: 0.49638, the
     # first substep's operator at every substep)

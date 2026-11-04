@@ -867,6 +867,38 @@ end
     end
 end
 
+@testset "F3-24: a multiplier that reads the coordinates is a site multiplier in J̃ (BackwardEuler, QuasiSteady)" begin
+    # `(1 + x) Δ(c)` and `(1 + x) DivKGrad(1 + y, c)` (`Diffusion` terms whose multiplier varies by
+    # site): the Jacobian row is `m_i Σ_f K_f (c_n − c_i)`, so the row is scaled by `1/m` (symmetric
+    # faces `K_f`). Base (7f8001c3): the faces `m_i K_f` with `newton = 1`, not the BE step
+    h = 0.05
+    xm = (i, j) -> 0.3 * (1 + (i - 0.5) / BDIMS[1])
+    for (rhs, K) in ((0.3 * (1 + x) * Δ(bce), (x, y) -> 1.0), (0.3 * (1 + x) * DivKGrad(:harmonic)(1 + y, bce), (x, y) -> 1 + y))
+        bcs = [bc(0, x, y) ~ sin(3x) * cos(2y), bc(t, 0, y) ~ 1.0]
+        kw = (; m = xm, K, k = (x, y) -> 2.0, f = (x, y) -> y, faces = Dict((1, -1) => (:dir, 1.0)))
+        ig, u0, u = be_window(bown(bsys([D(bce) ~ rhs - bk * bce + y], bcs, [bk])), BackwardEuler(; dt = h, inner = BTIGHT))
+        @test maximum(abs, u .- be_hand(u0, h; kw...)) < 1e-9
+        rt = only(ig.runtimes)
+        @test rt.cache.exact && rt.cache.newton == 1 && rt.cache.op.rows[1].scaled
+        L, b = hand_rate(; kw...)
+        sq = solve(bown(bsys([0 ~ rhs - bk * bce + y], bcs, [bk])), QuasiSteady(; dt = 0.1, inner = BTIGHT))
+        @test maximum(abs, vec(blast(sq)) .- (-L \ b)) < 1e-9
+    end
+    # a multiplier that is negative at some sites (anti-diffusion): the scaled row drops it there,
+    # so the operator is not exact and Newton iterates (warned)
+    # (S1: the warning names the cause and the routes, not the generic unseen text)
+    p = bown(bsys([D(bce) ~ 0.3 * (x - 0.5) * Δ(bce) - bk * bce], [bc(0, x, y) ~ x], [bk]))
+    ig = @test_logs (:warn, r"multiplier .* is negative at some site centers .* anti-diffusion.*keep the multiplier ≥ 0") match_mode = :any init(p, BackwardEuler(; dt = h))
+    @test !only(ig.runtimes).cache.exact && only(ig.runtimes).cache.newton > 1
+    # r1 M1: bound exact (bg = 0.5), then a write that turns `0.3(bg + x)` negative (bg = −0.5) reclassifies
+    # the row at the write, with the warning. Base (27b14031): exact, newton = 1, Success, 0.27 off
+    p = bown(bsys([D(bce) ~ 0.3 * (bg + x) * Δ(bce) - bk * bce], [bc(0, x, y) ~ x], [bg, bk]))
+    ig = init(p, BackwardEuler(; dt = h, inner = BTIGHT))
+    @test only(ig.runtimes).cache.exact && only(ig.runtimes).cache.newton == 1
+    @test_logs (:warn, r"is negative at some site centers \(down to -0.") match_mode = :any (ig.ps[bg] = -0.5; step!(ig))
+    @test !only(ig.runtimes).cache.exact && only(ig.runtimes).cache.newton > 1
+end
+
 @testset "F3-20 r1 M2: a kind set of three or more kinds in a rate (Cartesian, ExplicitEuler)" begin
     # `ismember(q, set)` lowers to one OR node with an operand per kind; before F3-20 the emitter
     # kept two of them (32 sites instead of 48 for (0, 1, 2) here, all four 32 instead of 64)
