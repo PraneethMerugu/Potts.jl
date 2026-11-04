@@ -801,7 +801,7 @@ _cpm_scalar(::Type{T}, v, i::Entity) where {T} = v isa Union{AbstractFloat, Inte
             "a PottsProblem holds plain numbers for every parameter in this version (no Duals). Derivatives " *
             "through field and ODE parameters are planned; meanwhile take finite differences of the run, or " *
             "differentiate the fields alone in a `FieldProblem` (`Potts.fields(model)`, then `discretize`: " *
-            "ForwardDiff runs through `ExplicitEuler` there). A parameter the CPM reads has a derivative that is zero " *
+            "ForwardDiff runs through `ExplicitEuler` and the implicit field solvers there). A parameter the CPM reads has a derivative that is zero " *
             "almost everywhere (the acceptance of a copy is piecewise constant in it), so it belongs to " *
             "likelihood-free inference"))
     end

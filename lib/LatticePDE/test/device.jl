@@ -353,3 +353,29 @@ end
         @test same || (println("F3-20 hex dev ", name, " ", T, " ", maximum(abs, Array(sd[k[1]][end]) .- sh[k[1]][end])); false)
     end
 end
+
+# F3-21a: derivatives through the implicit solve on the device (Float64: ROCm only) equal the
+# host's bit for bit (the primal solve and the tangent solves run the same kernels)
+pgpu == "rocm" && @testset "F3-21a: Dual results on $pgpu equal the host's" begin
+    @parameters kd = 0.7 Dd = 0.3 gd = 0.4
+    @variables da(..) db(..)
+    dae, dbe = da(t, x, y), db(t, x, y)
+    ddom = [t ∈ Interval(0.0, 0.3), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    mr = PDESystem([D(ce) ~ Dd * Δ(ce) - kd * ce + gd * x], [c(0, x, y) ~ x * y, c(t, 0, y) ~ gd,
+        ce ~ masked((x > 0.4) & (x < 0.6) & (y > 0.4) & (y < 0.6), 2 * kd), 1.5 * c(t, x, 0) - kd * Differential(y)(c(t, x, 0)) ~ 0.2],
+        ddom, [t, x, y], [ce], [kd, Dd, gd]; name = :dm)
+    cp = PDESystem([0 ~ Dd * Δ(dae) - dae + kd * dbe + x, 0 ~ 0.1 * Δ(dbe) - dbe - gd * dae + y], [da(0, x, y) ~ 0.0, db(0, x, y) ~ 0.0],
+        ddom, [t, x, y], [dae, dbe], [kd, Dd, gd]; name = :dc)
+    for (sys, alg, v) in ((mr, BackwardEuler(; dt = 0.1), ce), (mr, CrankNicolson(; dt = 0.1), ce),
+                          (cp, QuasiSteady(; dt = 0.1, inner = DeviceGMRES(; rtol = 1e-12)), dae))
+        u = map((KernelAbstractions.CPU(), PDEV)) do be
+            pr = discretize(sys, LatticeDiscretization(Grid((16, 16)); T = Float64, problem = :owned, backend = be))
+            i = LatticePDE.Problems.SII.parameter_index(pr, kd)
+            q = collect(ForwardDiff.Dual{Nothing, Float64, 1}, pr.p)
+            q[i] = ForwardDiff.Dual(pr.p[i], 1.0)
+            Array(solve(remake(pr; p = q), alg)[v][end])
+        end
+        vp(w) = [(ForwardDiff.value(d), ForwardDiff.partials(d, 1)) for d in w]
+        @test vp(u[1]) == vp(u[2]) && any(d -> ForwardDiff.partials(d, 1) != 0, u[1])
+    end
+end

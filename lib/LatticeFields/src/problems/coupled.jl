@@ -333,6 +333,7 @@ function coupled_solve(alg, op::OperatorSpec, s::Program, keys)
     return false
 end
 coupled_solve(c::ImplicitCache) = c.cs !== nothing
+_primal_cache(c) = c
 coupled_solve(::Any) = false
 
 # the Krylov solver of a coupled group from its `inner`: a `DeviceGMRES` as given; `:auto` (and
@@ -737,7 +738,7 @@ function _after_solve!(cs::CoupledKrylov, par, t, h)
 end
 _after_solve!(::Nothing, par, t, h) = nothing
 check_coupled_growth(rt::GroupRuntime{<:FieldStore, <:QuasiSteady}, p) =
-    (c = rt.cache; c isa ImplicitCache && c.cs !== nothing ? _check_growth(c.cs, rt.alg, rt.program, c.op, c.keys, p) : nothing)
+    (c = _primal_cache(rt.cache); c isa ImplicitCache && c.cs !== nothing ? _check_growth(c.cs, rt.alg, rt.program, c.op, c.keys, p) : nothing)
 # the check of a bound coupled solve `cs` (algorithm `alg`, program `s`, operator `op`, fields
 # `keys`) at parameters `p`
 function _check_growth(cs, alg, s::Program, op::OperatorSpec, keys, p)

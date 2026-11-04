@@ -386,10 +386,8 @@ function _implicit_eltype(u, key, alg, V)
         "field `lattice_storage = Float16` (it is then solved in Float32, each update rounded to Float16), or step it ",
         "with `ExplicitEuler`")))
     throw(ArgumentError(string(_algname(alg), ": the field `", key, "` holds ", _typetext(T), "; an implicit solve runs in ",
-        "Float32 or Float64 (Duals and BigFloat through the implicit solve are planned after the paper, FE-26). ",
-        T <: AbstractFloat || T <: Integer ? "Give the field `lattice_storage = Float32` or Float64, or step it with `ExplicitEuler`" :
-        string("For derivatives, step the field with `ExplicitEuler` (ForwardDiff runs through it), or take finite ",
-               "differences of the implicit run until then"))))
+        "Float32 or Float64 (BigFloat through the implicit solve is planned after the paper, FE-26). ",
+        "Give the field `lattice_storage = Float32` or Float64, or step it with `ExplicitEuler`")))
 end
 # a number type in messages: a ForwardDiff Dual by its value type, not its full tag (batch 5 review S4)
 _typetext(T::Type) = (T <: Real && T !== valtype(T)) ? string("ForwardDiff Duals of ", valtype(T)) : string(T)
@@ -555,8 +553,13 @@ end
 # The `ImplicitCache` of the implicit algorithm `alg` for the fields `fields` of group `g` on
 # store `st` at raw parameters `p`, `n` substeps of `dt / n`
 function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fields, n, dt, c, backend, options, V)
-    op = _operator(g.spec, alg)
     s = group_program(g, alg)                       # the stepped program: the store's
+    # a state with derivative parts (Dual parameters or a Dual start): the primal solve on a
+    # primal copy of the store, and the tangent steps after it (F3-21a; behind a barrier: a
+    # primal run compiles none of it)
+    any(k -> npartials(eltype(st.bufs[fieldid(s, k)][1])) > 0, fields) &&
+        return Base.inferencebarrier(_bind_tangent)(alg, g, st, p; fields, n, dt, c, backend, options, V)
+    op = _operator(g.spec, alg)
     rs = residual_program(g, alg)
     keys = collect(String, fields)
     order, cyclic = _solve_order(s, keys)
@@ -1002,10 +1005,21 @@ function (r::ImplicitRow)(a)
         check && _newton_check!(r, backend, word, dst, r.bufs[par], nothing, it, hits, window, isinf(h))
         return nothing
     end
+    x = _row_correction!(r, backend, γ, h)
+    Exec.launch!(backend, _be_status_body!, 1, (word, r.scal, Int32(window), isinf(h), gate))
+    Exec.launch!(backend, _be_update_body!, n, (dst, src, x, r.smask, r.v, nothing, nothing, r.mask, r.mval, r.mvf,
+        r.lo, last))
+    check && _newton_check!(r, backend, word, dst, r.bufs[par], x, it, hits, window, isinf(h))
+    return nothing
+end
+# the solve of a row with a solver from its residual `resarr` (a scaled row: the right side `G/m`
+# and the own rows' δ first): the correction δ, the solver's solution array (also the tangent
+# steps' solve of one derivative part, F3-21a)
+function _row_correction!(r::ImplicitRow, backend, γ, h)
     sv = r.solver
-    if r.f !== nothing                          # a scaled row: the right side `G/m` and the own rows' δ
+    if r.f !== nothing
         T = eltype(r.f)
-        Exec.launch!(backend, _be_rhs_body!, n, (r.f, r.v, r.resarr, r.j, r.m, r.smask, r.rmask, r.dom, T(1 / (γ * h)),
+        Exec.launch!(backend, _be_rhs_body!, length(r.f), (r.f, r.v, r.resarr, r.j, r.m, r.smask, r.rmask, r.dom, T(1 / (γ * h)),
             T(1 / (2γ * h))))
     end
     for w in r.work                             # δ from 0
@@ -1013,12 +1027,7 @@ function (r::ImplicitRow)(a)
     end
     Solvers.lift!(sv)
     Solvers.solve!(sv)
-    Exec.launch!(backend, _be_status_body!, 1, (word, r.scal, Int32(window), isinf(h), gate))
-    x = sv.slot[r.xid] == 1 ? r.xs[1] : r.xs[2]
-    Exec.launch!(backend, _be_update_body!, n, (dst, src, x, r.smask, r.v, nothing, nothing, r.mask, r.mval, r.mvf,
-        r.lo, last))
-    check && _newton_check!(r, backend, word, dst, r.bufs[par], x, it, hits, window, isinf(h))
-    return nothing
+    return sv.slot[r.xid] == 1 ? r.xs[1] : r.xs[2]
 end
 struct _Clip{B}
     backend::B
@@ -1122,6 +1131,13 @@ end
 # `γh` as their step), then the swap. `first`: the window's first stage (a moving operator is
 # rebuilt there).
 function _stage!(c::ImplicitCache, rt::GroupRuntime, t1::Float64, γ::Float64, h::Float64, k::Int, w::Int32, first::Bool)
+    _stage_iterations!(c, rt, t1, γ, h, k, w, first)
+    _swap!(rt.store.cur, rt.swaps)
+    _after_solve!(c.cs, _parity(rt), t1, γ * h)          # (a nonlinear coupled steady group's growth check)
+    return nothing
+end
+# … its Newton iterations (the tangent steps run after them, before the swap: F3-21a)
+function _stage_iterations!(c::ImplicitCache, rt::GroupRuntime, t1::Float64, γ::Float64, h::Float64, k::Int, w::Int32, first::Bool)
     γ == c.γ || _set_shift!(c, rt, γ)
     hγ = γ * h
     par = _parity(rt)
@@ -1144,8 +1160,6 @@ function _stage!(c::ImplicitCache, rt::GroupRuntime, t1::Float64, γ::Float64, h
             break
         end
     end
-    _swap!(rt.store.cur, rt.swaps)
-    _after_solve!(c.cs, _parity(rt), t1, hγ)          # (a nonlinear coupled steady group's growth check)
     return nothing
 end
 
@@ -1198,7 +1212,11 @@ function rebind_launches(rt::GroupRuntime{<:FieldStore, <:ImplicitAlgorithm}, p)
     steps = (_bind_steps(rt.backend, rt.program, rt.step, rt.store, p, rt.swaps, rt.all_state, rt.c),
         _bind_masks(rt.backend, rt.program, rt.init, rt.store, p, rt.swaps, rt.all_state, rt.c,
             Set(fieldid(rt.program, k) for k in rt.keys)))
-    c = rt.cache::ImplicitCache
+    c = rt.cache
+    c isa ImplicitCache || return (steps[1], steps[2], Base.inferencebarrier(_tangent_rebind)(c, rt, p))
+    return (steps[1], steps[2], _rebind_cache(c, rt, p))
+end
+function _rebind_cache(c::ImplicitCache, rt::GroupRuntime, p)
     res, jac, qres, pres = c.rebind(p)
     hγ = c.γ * c.h
     ops = Any[r.numeric === nothing ? nothing :
@@ -1207,13 +1225,25 @@ function rebind_launches(rt::GroupRuntime{<:FieldStore, <:ImplicitAlgorithm}, p)
               for r in c.rows]
     shifts = Any[r.solver === nothing && r.s isa Number ? oftype(r.s, max(1 / hγ - _coefsum(r.op.jloc, p), 1 / (2hγ))) :
                  nothing for r in c.rows]
-    return (steps[1], steps[2], (res, jac, ops, shifts, p, qres, pres))
+    # a row's mask value (`c ~ masked(pred, v)`, `v` may read a parameter): a write changes it
+    mvals = Any[_row_mval(rt.program, r, p) for r in c.rows]
+    return (res, jac, ops, shifts, p, qres, pres, mvals)
 end
-function install_launches!(rt::GroupRuntime{<:FieldStore, <:ImplicitAlgorithm}, (steps, masks, (res, jac, ops, shifts, p, qres, pres)))
+function _row_mval(s::Program, r::ImplicitRow, p)
+    nv = findfirst(x -> x isa NodeValueRule && x.field == fieldid(s, r.key), s.rules)
+    return nv === nothing ? r.mval : convert(typeof(r.mval), _coefval(s.rules[nv].value, p))
+end
+function install_launches!(rt::GroupRuntime{<:FieldStore, <:ImplicitAlgorithm}, (steps, masks, payload))
     rt.steps, rt.masks = steps, masks
-    c = rt.cache::ImplicitCache
+    c = rt.cache
+    c isa ImplicitCache ? _install_cache!(c, rt, rt.store, payload) : Base.inferencebarrier(_tangent_install!)(c, rt, payload)
+    reset!(rt)
+    return rt
+end
+function _install_cache!(c::ImplicitCache, rt::GroupRuntime, store::FieldStore, (res, jac, ops, shifts, p, qres, pres, mvals))
     for (i, r) in enumerate(c.rows)
         r.res = res[i]
+        r.mval = mvals[i]                       # (a coupled row's update reads its row's, F3-21a r1 M1)
         if ops[i] !== nothing
             Solvers.set_coefficients!(r.solver, ops[i])
             r.numeric = ops[i]
@@ -1229,7 +1259,7 @@ function install_launches!(rt::GroupRuntime{<:FieldStore, <:ImplicitAlgorithm}, 
         end
     end
     # (here, not in `rebind_launches`: front end A writes the tables between the two)
-    bp = _bound_params(rt.store, rt.program, c.op, c.keys, p)
+    bp = _bound_params(store, rt.program, c.op, c.keys, p)
     b, rb = inexact_bounds(c.op, c.keys, c.cyclic, bp), _robin_bounds(rt.program, c.op, _robin_keys(rt.alg, c.op, c.keys), bp)
     # the classification at the new parameters (a write may turn a Robin face negative), as a
     # fresh problem's (M2)
@@ -1242,8 +1272,7 @@ function install_launches!(rt::GroupRuntime{<:FieldStore, <:ImplicitAlgorithm}, 
     c.cs !== nothing || c.exact || c.seen || rt.alg.newton !== nothing || _warn_unseen(c.keys, [b.unseen; rb.texts], rt.alg)
     c.cs !== nothing || _warn_antidiffusion(c.keys, sb.texts, rt.alg)
     _set_newton!(c, rt.alg)
-    reset!(rt)
-    return rt
+    return nothing
 end
 
 """

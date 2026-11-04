@@ -361,6 +361,20 @@ end
     @equations D(c) ~ 0.04 * (1 + x) * DivKGrad(:harmonic)(1 + 0.05 * y, c) - 0.3 * c + 0.1 * y
     @sweep Metropolis(; temperature = 1.0)
 end
+@testset "F3-21a r1 M1 (A): a write to a mask's value equals a restart at the write" begin
+    # FiMix's mask `c ~ masked(e ≥ 0.5, v)`: base (79af8c69) the implicit update kept the old `v`
+    dims = (12, 10)
+    integ = init(PottsProblem(FiMix(; name = :f), fi_op(dims), (0, 8); field_solver = BackwardEuler()), SequentialCPM();
+        save_start = false)
+    foreach(_ -> step!(integ), 1:3)
+    st = current_state(integ)
+    c3, e3 = copy(Array(st.site.c)), copy(Array(st.site.e))
+    integ.ps[:v] = 2.5
+    foreach(_ -> step!(integ), 1:3)
+    fresh, _ = fi_runA(FiMix, [fi_op(dims); :c => c3; :e => e3; :v => 2.5], 3)
+    @test any(==(2.5), fresh[end]) && Array(current_state(integ).site.c) == fresh[end]
+end
+
 @testset "F3-24 (A): a multiplier that reads the coordinates: the hand BE matrix" begin
     # the row `m_i Σ_f K_f (c_n − c_i)` (h = 1, the site (i, j) at (i − ½, j − ½), zero flux at the box);
     # base (7f8001c3): the faces `m_i K_f`, off the BE step

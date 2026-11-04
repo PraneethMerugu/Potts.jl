@@ -354,15 +354,99 @@ end
         @test maximum(abs, Float64.(s.u[end]) .- r) <= 4e-3 * maximum(abs, r)      # (Float16: eps 9.8e-4)
     end
     @test SciMLBase.successful_retcode(solve(mk(she, Float32), QuasiSteady(; dt = 0.1)).retcode)
-    # a Dual state under an implicit solve: the refusal names the ForwardDiff route, not the tag
-    e = try
-        solve(remake(mk(s64e, Float64); u0 = ForwardDiff.Dual.(mk(s64e, Float64).u0, 1.0)), BackwardEuler(; dt = 0.1))
-        ""
-    catch err
-        sprint(showerror, err)
+    # a Dual state under an implicit solve (F3-21a: refused before): ∂ sum(u(t))/∂s of the start
+    # `s u0` runs, the tangent against central differences
+    pr = mk(s64e, Float64)
+    Js(v) = sum(solve(remake(pr; u0 = v .* pr.u0), BackwardEuler(; dt = 0.1)).u[end])
+    @test isapprox(ForwardDiff.derivative(Js, 1.0), fd(Js, 1.0); rtol = 1e-7)
+end
+
+# F3-21a: derivatives through the implicit solve. A Dual state runs the primal solve and, after
+# each stage, its tangent step: the derivative parts solve the stage's linearization with the
+# primal operator, one solve per part (no Dual enters a solver). Each case against central
+# differences of the run. Base (57ea1baa): every case is refused ("holds ForwardDiff Duals").
+# Negative controls (mutations, ~/lpwork/f321-nc-*.log): the parameter part of the operator
+# (`(∂A/∂k) u`, the parameters of the face coefficients) dropped from the tangent fails ∂/∂D; the
+# right side's (the parameters of no face and no local term) dropped fails ∂/∂g
+@parameters kt = 0.7 Dt = 0.3 gt = 0.4
+@variables ta(..) tb(..)
+tae, tbe = ta(t, x, y), tb(t, x, y)
+tdom = [t ∈ Interval(0.0, 0.3), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+tsys(eqs, bcs; dvs = [ce]) = PDESystem(eqs, bcs, tdom, [t, x, y], dvs, [kt, Dt, gt]; name = :tg)
+town(sys, dims = (8, 6); geometry = LatticeFields.IR.CUBIC) =
+    discretize(sys, LatticeDiscretization(Grid(dims; geometry); T = Float64, problem = :owned))
+const TTIGHT = DevicePCG(; rtol = 1e-13, budget = 200)
+# AD and central differences of `sum(out(solve))` in parameter `s`
+function tad(prob, alg, s; out = sol -> sol.u[end])
+    i = pidx(prob, s)
+    J(v) = sum(out(solve(remake(prob; p = withp(prob.p, i, v)), alg)))
+    return ForwardDiff.derivative(J, prob.p[i]), fd(J, prob.p[i]; h = 1e-5)
+end
+tok(ad, f) = isapprox(ad, f; rtol = 1e-7) && ad != 0
+
+@testset "F3-21a: ∂u/∂k through BackwardEuler, CrankNicolson, BDF2 and QuasiSteady" begin
+    bcs = [c(0, x, y) ~ x * y, c(t, 0, y) ~ gt]
+    lin = town(tsys([D(ce) ~ Dt * Δ(ce) - kt * ce + gt * x], bcs))
+    for alg in (BackwardEuler(; dt = 0.1, inner = TTIGHT), CrankNicolson(; dt = 0.1, inner = TTIGHT), BDF2(; dt = 0.1, inner = TTIGHT))
+        for s in (kt, Dt, gt)
+            @test tok(tad(lin, alg, s)...)
+        end
     end
-    @test occursin("holds ForwardDiff Duals of Float64", e) && occursin("step the field with `ExplicitEuler`", e) &&
-          !occursin("Tag", e)
+    qs = town(tsys([0 ~ Dt * Δ(ce) - kt * ce + gt * x], bcs))
+    for s in (kt, Dt, gt)
+        @test tok(tad(qs, QuasiSteady(; dt = 0.1, inner = TTIGHT), s)...)
+    end
+    # the values of a Dual run are the primal run's, bit for bit (the primal solve is the run's)
+    i = pidx(lin, Dt)
+    sd = solve(remake(lin; p = withp(lin.p, i, ForwardDiff.Dual(lin.p[i], 1.0))), BackwardEuler(; dt = 0.1))
+    @test ForwardDiff.value.(sd.u[end]) == solve(lin, BackwardEuler(; dt = 0.1)).u[end]
+end
+
+@testset "F3-21a: a mask and a Robin face; a nonlinear term; a hexagonal lattice; the coupled steady solve" begin
+    # the mask's value and the Robin face's β read k
+    mr = town(tsys([D(ce) ~ Dt * Δ(ce) - 0.5 * ce + gt], [c(0, x, y) ~ 0.2 + x,
+        ce ~ masked((x > 0.4) & (x < 0.6) & (y > 0.4) & (y < 0.6), 2 * kt), 1.5 * c(t, x, 0) - kt * Differential(y)(c(t, x, 0)) ~ 0.2]), (10, 10))
+    for s in (kt, Dt, gt)
+        @test tok(tad(mr, BackwardEuler(; dt = 0.1, inner = TTIGHT), s)...)
+    end
+    # `−k c²`: with `newton = k` the run converges each stage, and its derivatives are the tangent's;
+    # by default one unchecked Newton step does not solve the stage, which is warned
+    nl = town(tsys([D(ce) ~ Dt * Δ(ce) - kt * ce^2 + gt], [c(0, x, y) ~ 0.2 + x]), (10, 10))
+    for s in (kt, Dt)
+        @test tok(tad(nl, BackwardEuler(; dt = 0.1, inner = TTIGHT, newton = 8), s)...)
+    end
+    i = pidx(nl, kt)
+    @test_logs (:warn, r"derivative parts are those of each stage's solution") match_mode = :any solve(
+        remake(nl; p = withp(nl.p, i, ForwardDiff.Dual(nl.p[i], 1.0))), BackwardEuler(; dt = 0.1))
+    hx = town(tsys([D(ce) ~ Dt * Δ(ce) - kt * ce + gt * x], [c(0, x, y) ~ x * y, c(t, 0, y) ~ gt]), (8, 8);
+        geometry = LatticeFields.IR.HEX)
+    for s in (kt, Dt)
+        @test tok(tad(hx, BackwardEuler(; dt = 0.1, inner = TTIGHT), s)...)
+    end
+    # r1 M1: a write to the parameter a mask's value reads (`2k`), then windows: equal to a restart
+    # at the write, and the tangent after it against central differences. Base (79af8c69): the
+    # implicit update kept the old value (Σu off), and the tangent disagreed with the run
+    function wrun(v)
+        i = pidx(mr, Dt)
+        ig = init(remake(mr; p = withp(mr.p, i, v)), BackwardEuler(; dt = 0.1, inner = TTIGHT))
+        step!(ig)
+        u1 = copy(vec(ig[ce]))
+        ig.ps[kt] = 0.8
+        step!(ig); step!(ig)
+        return vec(ig[ce]), u1
+    end
+    uw, u1 = wrun(mr.p[pidx(mr, Dt)])
+    ir = init(remake(mr; u0 = u1, p = withp(mr.p, pidx(mr, kt), 0.8)), BackwardEuler(; dt = 0.1, inner = TTIGHT))
+    step!(ir); step!(ir)
+    @test any(==(1.6), uw) && maximum(abs, uw .- vec(ir[ce])) < 1e-12
+    Jw(v) = sum(first(wrun(v)))
+    @test tok(ForwardDiff.derivative(Jw, mr.p[pidx(mr, Dt)]), fd(Jw, mr.p[pidx(mr, Dt)]; h = 1e-5))
+    # a coupled steady pair (F3-12d): one FGMRES per derivative part
+    cp = town(tsys([0 ~ Dt * Δ(tae) - tae + kt * tbe + x, 0 ~ 0.1 * Δ(tbe) - tbe - gt * tae + y],
+        [ta(0, x, y) ~ 0.0, tb(0, x, y) ~ 0.0]; dvs = [tae, tbe]))
+    for s in (kt, Dt, gt)
+        @test tok(tad(cp, QuasiSteady(; dt = 0.1, inner = DeviceGMRES(; rtol = 1e-12)), s; out = sol -> sol[tae][end] .^ 2)...)   # (a sum of `a` alone does not see D: zero flux)
+    end
 end
 
 # A declared storage on a row whose operator varies by site (a field row: a face coefficient of

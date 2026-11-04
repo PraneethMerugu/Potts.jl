@@ -188,7 +188,7 @@ function _implicit_keywords(w, dt, substeps, newton, lower, inner, solver_T)
     solver_T === :auto || solver_T === Float32 || solver_T === Float64 || throw(ArgumentError(string(w,
         ": `solver_T` takes `:auto` (the state's number type), `Float32` or `Float64`; got ", repr(solver_T),
         solver_T isa Type && !(solver_T <: AbstractFloat && isbitstype(solver_T)) ? "" :
-        solver_T isa Type ? " (a Dual or BigFloat implicit solve is planned after the paper, FE-26)" : "")))
+        solver_T isa Type ? " (a BigFloat implicit solve is planned after the paper, FE-26; a Dual state's derivative parts take tangent solves in its value type)" : "")))
     return (dt === nothing ? nothing : Float64(dt), substeps === nothing ? nothing : Int(substeps),
         newton === nothing ? nothing : Int(newton), lower === nothing ? nothing : Float64(lower), inner, solver_T)
 end

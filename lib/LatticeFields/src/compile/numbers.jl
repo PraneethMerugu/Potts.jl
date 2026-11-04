@@ -56,6 +56,26 @@ Values that only drive a policy (substep counts, face checks, float → integer 
 @inline primal(x) = x
 
 """
+    npartials(T) -> Int
+
+The derivative parts of number type `T`: 0 for a plain number, `N` for `Dual{tag, V, N}`
+(extension). With [`dvalue`](@ref), [`dpartial`](@ref), [`dsetpartial`](@ref) and
+[`dreplace`](@ref) it is what the implicit solve's tangent steps read and write (F3-21a): one
+level of derivative parts, each a value of the value type.
+"""
+npartials(::Type) = 0
+"""
+    dvalue(x), dpartial(x, j), dsetpartial(x, j, v), dreplace(x, v)
+
+One level of derivative parts of `x` (extension for Duals): its value, its `j`-th part, `x`
+with its `j`-th part set to `v`, and `x` with its value replaced by `v` (its parts kept).
+"""
+@inline dvalue(x) = x
+@inline dpartial(x, j) = zero(x)
+@inline dsetpartial(x, j, v) = x
+@inline dreplace(x, v) = oftype(x, v)
+
+"""
     withvaltype(E, V)
 
 Element type `E` with its value type replaced by `V`: `V` for a plain `E`,

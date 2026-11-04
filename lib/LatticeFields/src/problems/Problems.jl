@@ -22,7 +22,8 @@ using ..Exec: Exec
 using ..IR: Coef, DomainEdgeRule, HEX, Ex, FaceRule, NodeValueRule, Program, RUNTIME, PARAM, LOAD, fieldid, print_program, isfloat, juliatype, leveldims, ncomp, nsites,
             runtime!, degenerate, FACE_RTOL, F64, F16
 using ..Compile: CompiledKernel, CompileOptions, body_function, derive_function, lanecast, lanetype,
-                 primal, promote_dual, semantic, valtype, withvaltype, writes, fuse_update, fuse_residual
+                 primal, promote_dual, semantic, valtype, withvaltype, writes, fuse_update, fuse_residual,
+                 npartials, dvalue, dpartial, dsetpartial, dreplace
 using ..Schedule: LaunchSpec, StepPlan, plan
 using ..Solvers: Solvers
 
@@ -57,6 +58,7 @@ include("operator.jl")
 include("problem.jl")
 include("implicit.jl")
 include("coupled.jl")
+include("tangent.jl")
 include("ode.jl")
 
 # the coupling between field groups and the per-group counts (review of F2-06)
