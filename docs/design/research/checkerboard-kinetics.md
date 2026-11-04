@@ -242,6 +242,17 @@ Every observable of both shared arms is within |z| < 3. The model's `volume_sd` 
 of target volumes across cells, so this run does not measure the per-cell volume fluctuation
 that stale reads widen (the 2D foam does: vol_sd r = 1.006–1.012 at s = 3–4).
 
+Akeeb (GPU, shared s = 3 with replacement, 48 runs per point, `~/lpwork/cbk/akeeb-shared-2026-11-04`):
+every metric at P1, P4 and P5 within |z| < 3 (largest: P5 singles 0.816, z −2.3).
+
+K4 OpenVT monolayer (b) and (f), shared s = 3 with replacement: **fails**. Cells are lost: 140–195
+per run (divisions + 1 − live), against 0.24 sequential and 0 with retries, so a run needs about
+1,170 divisions to reach 1,000 live cells. The comparison script stopped on a non-finite metric.
+The loss falls with the stride (case b, 4 runs each): s = 4: 50–63; s = 6: 4–8. This fits stale
+reads: copies in one pass each see the cell's volume from before the pass, so together they can
+remove most of a small cell that the volume term would protect in sequential order (the missing
+energy is λ(D² − k)). Not yet confirmed by logging the volumes of the cells that are lost.
+
 ### Gate (2026-11-04, branch head)
 
 - CorePotts with `POTTS_GPU=rocm`: the new tests (74 CPU, 15 device), the device suite (393) and
