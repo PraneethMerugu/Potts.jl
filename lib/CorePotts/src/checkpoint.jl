@@ -91,7 +91,7 @@ function _reset_cache!(cache::CheckerboardCache, integ)
     foreach(c -> c === nothing || fill!(c, 0), (cache.claims..., cache.wclaims...))
     cache.track === nothing || fill!(cache.track.acc, 0)
     cache.cnt === nothing || foreach(c -> fill!(c, 0), cache.cnt)
-    cache.lost === nothing || fill!(cache.lost, 0)
+    cache.lists === nothing || foreach(c -> fill!(c, 0), cache.lists.count)
     # the connectivity lists and the deferred-refusal counter (a refusal of the old run is not
     # the new run's)
     cache.conn === nothing || foreach(c -> fill!(c, 0), (cache.conn.gl.gcount, cache.conn.gl.scount, cache.conn.gl.deferred))
