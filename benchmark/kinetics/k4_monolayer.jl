@@ -1,12 +1,14 @@
-#     julia --project=lib/PottsModels/test -t 4 benchmark/kinetics/k4_monolayer.jl <repo> <runs>   # ROCm
+#     julia --project=lib/PottsModels/test -t 4 benchmark/kinetics/k4_monolayer.jl <repo> <runs> [<cases> <out> <stride,retries>]   # ROCm
 # K4 (P6.0bl): the OpenVT monolayer cases (b) and (f) under a CheckerboardCPM variant on the GPU,
 # at SequentialCPM's own time unit (no calibration), compared with the sequential record by the
 # P6.15m rules (per-seed metrics, crit(ν), PottsModels.openvt_spread_table).
 include(joinpath(ARGS[1], "lib/PottsModels/reproductions/data/15/checkerboard-2026-10-10/run_checkerboard.jl"))
 using Printf
-const K4_ALG = CheckerboardCPM(; proposal = Moore(1), stride = 3, retries = 4, colors = :replacement)
-const K4_OUT = expanduser("~/lpwork/cbk/k4-2026-11-03")
-const K4_CASES = (:b, :f)
+# ARGS[5]: stride,retries (default 3,4); colors are drawn with replacement; copy counts on
+const K4_SR = parse.(Int, split(get(ARGS, 5, "3,4"), ','))
+const K4_ALG = CheckerboardCPM(; proposal = Moore(1), stride = K4_SR[1], retries = K4_SR[2], colors = :replacement, counts = true)
+const K4_OUT = expanduser(get(ARGS, 4, "~/lpwork/cbk/k4-2026-11-03"))
+const K4_CASES = Tuple(Symbol.(split(get(ARGS, 3, "b,f"), ',')))
 const K4_RUNS = parse(Int, ARGS[2])
 mkpath(K4_OUT)
 cycle = P615M_CYCLE_SEQ
@@ -27,12 +29,12 @@ function k4_run(prob, seed, c; backend = cb_backend())
     fr = PottsModels.openvt_frame(u; β = c.beta, γ = c.gamma)
     o1 = (; n_mean = mean(fr.n), n_sd = std(fr.n), n6 = mean(fr.n .== 6), i0 = mean(fr.i .== 0), cells = length(fr.n))
     return (; retcode = Symbol(sol.retcode), mcs = Int(sol.t[end]), rec, divisions = sol.stats.lifecycle.divisions,
-        live = count(>(0), Array(u.cell.volume)), o1)
+        live = count(>(0), Array(u.cell.volume)), o1, committed = sol.stats.committed, dropped = sol.stats.dropped)
 end
 tsf, o1f, rf = joinpath(K4_OUT, "timeseries.tsv"), joinpath(K4_OUT, "o1.tsv"), joinpath(K4_OUT, "runs.tsv")
 open(io -> println(io, join(TS_HEADER, '\t')), tsf, "w")
 open(io -> println(io, join(O1_HEADER, '\t')), o1f, "w")
-open(io -> println(io, join(("case", "k", "seed", "retcode", "mcs", "divisions", "live", "wall_s"), '\t')), rf, "w")
+open(io -> println(io, join(("case", "k", "seed", "retcode", "mcs", "divisions", "live", "wall_s", "committed", "dropped"), '\t')), rf, "w")
 @info "K4" cycle α alg = K4_ALG
 k4_run(cb_problem(400), 1, merge(P615F_CASES.b, (; cells = 2)))           # compile
 for c in K4_CASES, k in 1:K4_RUNS
@@ -46,7 +48,7 @@ for c in K4_CASES, k in 1:K4_RUNS
     end
     open(io -> println(io, join((c, sd, r.mcs, r.o1.cells, cb_f64(r.o1.n_mean), cb_f64(r.o1.n_sd), cb_f64(r.o1.n6),
         cb_f64(r.o1.i0)), '\t')), o1f, "a")
-    open(io -> println(io, join((c, k, sd, r.retcode, r.mcs, r.divisions, r.live, round(wall; digits = 2)), '\t')), rf, "a")
+    open(io -> println(io, join((c, k, sd, r.retcode, r.mcs, r.divisions, r.live, round(wall; digits = 2), r.committed, r.dropped), '\t')), rf, "a")
     k % 10 == 0 && @info "run" c k r.mcs lost = r.divisions + 1 - r.live wall = round(wall; digits = 1)
 end
 # the comparison, as `collect_main` does it
