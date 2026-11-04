@@ -807,7 +807,8 @@ them back to slot 1 after an odd count, so a group that runs after it reads curr
 at-init evaluation of the `aux:` kernels, `n = 0`); by default the fields' own kernels.
 """
 function bind_group(g::FieldGroup, alg, st::FieldStore, p; fields = g.spec.state, n::Integer, dt::Real,
-        c, ends_in::Symbol = :parity, backend, options::CompileOptions, V::Type, host = nothing, kernels = nothing)
+        c, ends_in::Symbol = :parity, backend, options::CompileOptions, V::Type, host = nothing, kernels = nothing,
+        shared = nothing)
     ends_in in (:parity, :slot1) || throw(ArgumentError("ends_in must be :parity or :slot1; got $(repr(ends_in))"))
     prog = group_program(g, alg)
     check_backend_float64(prog, alg, backend, V; fields)
@@ -825,7 +826,8 @@ function bind_group(g::FieldGroup, alg, st::FieldStore, p; fields = g.spec.state
     stab = all_state ? g.spec.stability : restrict_bound(g.spec.stability, collect(String, fields))
     return GroupRuntime(st, alg, ip, sp, steps, masks, clamps, stepclamps, swaps, copies, ends_in, all_state, collect(String, fields), Int(n),
         Float64(dt), stab, p, c, prog, backend,
-        bind_cache(alg, g, st, p; fields = collect(String, fields), n, dt, c, backend, options, V), SciMLBase.ReturnCode.Success,
+        bind_cache(alg, g, st, p; fields = collect(String, fields), n, dt, c, backend, options, V,
+            (shared === nothing ? (;) : (; shared))...), SciMLBase.ReturnCode.Success,
         nothing, host,
         StatusTotals(), _declared_checks(stab, st, prog, fields))
 end

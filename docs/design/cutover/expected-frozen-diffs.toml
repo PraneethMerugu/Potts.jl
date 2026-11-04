@@ -1230,3 +1230,12 @@ why = "line 559: P60bnFieldAlg (`cfield ~ 1.0`, a model whose only field is an a
 # rate field takes the field's ghost value at a face with a value or a flux. No entry: no frozen
 # pin, sha or record moved (frozen 369/369, guard 513/513, PottsModels shards at the OpenVT
 # baseline). No PottsModels model uses `DivKGrad` or a raw flux.
+
+# F3-21b (lp/f3): the approved list-A edit of p6_0af (user ruling 2026-11-05), a fixup of F3-21b.
+# The commit field names the series item until integration records the hash.
+[[edits]]
+path = "acceptance/p6_0af_lifecycle_followups.jl"
+commit = "F3-21b"
+fixup_of = "F3-21b"
+decision = "D-F3-R2"
+why = "line 150: p60af_unfuse builds CorePotts.PottsProblem positionally; F3-21b added the 14th field `tangent`, so the call passes `prob.tangent`; no assertion changes"

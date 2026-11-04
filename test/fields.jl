@@ -881,7 +881,7 @@ struct FdNotANumber <: Real end
     err = fd_err(() -> PottsProblem(FdClosed(; name = :f), [fd_empty((12, 10)); :Dc => FdNotANumber()], (0, 1);
         field_solver = ExplicitEuler()))
     @test occursin("`Dc`", something(err, "")) && occursin("scalar type", something(err, ""))
-    @test occursin("field and ODE parameters are planned", something(err, ""))
+    @test occursin("A Dual goes to the problem", something(err, ""))     # (the route since F3-21b)
     @test !occursin("CPM parameters are plain numbers", something(err, ""))
 end
 
@@ -3185,7 +3185,8 @@ end
 
 # Batch 5 review S1 and S4 in A: a Float16 field under the implicit algorithms (solved in the
 # state's type, each update rounded to Float16), accurate to its storage; a Dual parameter is
-# refused in words (its value type, not its several-KB type). Base 97045a1b
+# refused in words (its value type, not its several-KB type); since F3-21b a Dual given to the
+# problem runs, and an integrator write of one is refused. Base 97045a1b
 # (~/lpwork/b5r1-nc-s1.log): every implicit algorithm refused; the Dual message prints the type.
 @potts_model FbHalf begin
     @kinds medium A
@@ -3223,8 +3224,12 @@ using ForwardDiff: ForwardDiff
         @test a.retcode == Potts.SciMLBase.ReturnCode.Success && eltype(ca) == Float16
         @test maximum(abs, Float64.(ca) .- cb) <= 4e-3 * maximum(abs, cb)
     end
+    # (F3-21b: the Dual runs; its field carries derivative parts, its values are the primal run's)
     pf = PottsProblem(FbFull(; name = :f), fd_empty(dims), (0, 2))
-    e = something(fd_err(() -> solve(remake(pf; p = [:k => ForwardDiff.Dual(0.05, 1.0)]), SequentialCPM())), "")
+    d = solve(remake(pf; p = [:k => ForwardDiff.Dual(0.05, 1.0)]), SequentialCPM()).u[end].site.c
+    @test ForwardDiff.value.(d) == solve(pf, SequentialCPM()).u[end].site.c && all(<(0), ForwardDiff.partials.(d, 1))
+    # an integrator write still takes plain numbers, refused in words (the value type, not the type)
+    e = something(fd_err(() -> (integ = init(pf, SequentialCPM()); integ.ps[:k] = ForwardDiff.Dual(0.05, 1.0))), "")
     @test occursin("parameter `k` = a ForwardDiff `Dual` of Float64 (value 0.05) does not convert", e) &&
-          occursin("finite differences", e) && !occursin("Tag", e) && length(e) < 1200
+          occursin("A Dual goes to the problem", e) && !occursin("Tag", e) && length(e) < 1200
 end

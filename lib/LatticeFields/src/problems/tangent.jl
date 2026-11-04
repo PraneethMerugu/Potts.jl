@@ -97,7 +97,7 @@ coupled_solve(c::TangentCache) = c.pc.cs !== nothing
 _count_set!(c::TangentCache, rt::GroupRuntime) = _count_set!(c.pc, rt)
 _primal_cache(c::TangentCache) = c.pc
 
-_primal_params(p::AbstractVector) = map(primal, p)
+_primal_params(p::Union{AbstractVector, Tuple}) = map(primal, p)
 _primal_params(p) = p
 _isdual(a) = npartials(eltype(a)) > 0
 # a Coef at Dual parameters (a mask's value: its derivative part)
@@ -130,7 +130,8 @@ function _tqcur(prog::Program, s::Program, swaps, all_state, stcur, par)
     return cur
 end
 
-function _bind_tangent(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fields, n, dt, c, backend, options, V)
+function _bind_tangent(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fields, n, dt, c, backend, options, V,
+        shared = nothing)
     s = group_program(g, alg)
     keys = collect(String, fields)
     E = eltype(st.bufs[fieldid(s, keys[1])][1])
@@ -141,13 +142,21 @@ function _bind_tangent(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p;
     # the primal copy of the store: each array with derivative parts has a primal twin (the
     # parity vector is shared, so the primal cache's swaps are the store's), the others alias
     syncs = Tuple{Any, Any}[]
-    twin(a) = _isdual(a) ? (b = _zeros(st.backend, valtype(eltype(a)), length(a)); push!(syncs, (a, b)); b) : a
-    pbufs = Vector{Any}[Any[twin(a) for a in b] for b in st.bufs]
-    ptabs = Any[twin(a) for a in st.tables]
-    pst = FieldStore(st.backend, pbufs, st.cur, ptabs)
-    _tsync!(syncs, st.backend)
-    pp = _primal_params(p)
-    pc = bind_cache(alg, g, pst, pp; fields, n, dt, c = primal(c), backend, options, V)
+    if shared === nothing
+        twin(a) = _isdual(a) ? (b = _zeros(st.backend, valtype(eltype(a)), length(a)); push!(syncs, (a, b)); b) : a
+        pbufs = Vector{Any}[Any[twin(a) for a in b] for b in st.bufs]
+        ptabs = Any[twin(a) for a in st.tables]
+        pst = FieldStore(st.backend, pbufs, st.cur, ptabs)
+        _tsync!(syncs, st.backend)
+        pp = _primal_params(p)
+        pc = bind_cache(alg, g, pst, pp; fields, n, dt, c = primal(c), backend, options, V)
+    else
+        # (front end A, F3-21b r1 S3: the primal runtime's own cache and store, which solve each
+        # stage once; the Dual store shares their slot parity `cur`, and the front end sets the
+        # Dual values from the primal ones before each window, so there is nothing to sync)
+        pc, pst = shared
+        pst.cur === st.cur || throw(ArgumentError("a shared tangent needs the primal store's slot parity"))
+    end
     pc isa ImplicitCache || error("the primal cache of a tangent solve has derivative parts")
     # the Dual side: the residual launches on the store, at the stage's iterate
     rs = residual_program(g, alg)
@@ -371,4 +380,46 @@ function _tangent_install!(c::TangentCache, rt::GroupRuntime, (primal, res, qres
     end
     c.qres = qres
     return nothing
+end
+
+"""
+    advance_shared!(rt, trt, clock, n, window) -> ReturnCode.T
+
+One window of front end A's implicit group `rt` with derivative parts (F3-21b r1 S3): `trt` is
+the group bound to the Dual store with a [`TangentCache`](@ref) on `rt`'s own cache (`bind_group(…;
+shared = (rt.cache, rt.store))`, the stores sharing their slot parity). The masks and clamps of
+both stores, then each stage's primal solve (once, on `rt`'s store) and its tangent step, then the
+slot-1 copies of both. The status is `rt`'s, as [`advance!`](@ref) keeps it.
+"""
+function advance_shared!(rt::GroupRuntime, trt::GroupRuntime, clock::Tuple{Real, Integer}, n::Integer, window::Real)
+    t = Float64(clock[1])
+    k = Int(clock[2])
+    h = n == 0 ? Float64(window) : Float64(window) / n
+    if window > 0
+        tot = rt.totals
+        tot.windows += 1
+        tot.windows == 1 && (tot.t1 = t)
+    end
+    for r in (rt, trt)
+        r.masks === nothing && continue
+        r.masks[_parity(r)]((t, h, k))
+        _clamp!(r.stepclamps, r.store, r.p)
+    end
+    tc = trt.cache
+    if tc isa TangentCache && (n != 0 && h != 0)
+        _substeps!(tc, rt, t, h, k, n)
+    else
+        # (a window of length 0, the at-init clamp: both stores step as the explicit program does)
+        cur = copy(rt.store.cur)
+        _substeps!(nothing, trt, t, h, k, n)
+        copyto!(rt.store.cur, cur)
+        _substeps!(rt.cache, rt, t, h, k, n)
+    end
+    if rt.ends_in === :slot1
+        _slot1!(trt.copies, copy(rt.store.cur), trt.swaps, 1)       # (the Dual store first: the parity is shared)
+        _slot1!(rt.copies, rt.store.cur, rt.swaps, 1)
+    end
+    code = step_retcode!(rt.cache, rt)
+    rt.status = _worse(rt.status, code)
+    return code
 end

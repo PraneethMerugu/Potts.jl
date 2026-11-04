@@ -394,7 +394,8 @@ function (ph::FieldPhase{K})(st, p, ctx, key, mcs, backend, part::NTuple{2, Int}
     n = ph.init ? 1 : rt.n
     # (the at-init clamp runs outside the passes: `part = (1, 1)`, its window starts at `mcs · period`)
     t0 = mcs * ph.period + (part[1] - 1) * ph.dt          # ph.dt = mcs_duration / R
-    Problems.advance!(rt, (t0, mcs), n, ph.init ? 0.0 : rt.dt)
+    # (a run with derivative parts, F3-21b: its shadow runtime too, from the same start)
+    _field_advance!(ctx, ph, st, rt, (t0, mcs), n, ph.init ? 0.0 : rt.dt)
     # (a group with no state: `n = 0`, its kernels once)
     launches = max(n, 1) * length(rt.steps[1].launches)
     # the masks (on a device they clamp the sites they mark; a clamp they cannot take is one
@@ -457,6 +458,7 @@ survives it.
 function reset_fields!(ctx)
     for h in values(ctx)
         h isa FieldHandle && Problems.reset!(_runtime(h))
+        h isa TangentHandle && foreach(Problems.reset!, values(_tangent_run(h).rts))
     end
     return nothing
 end
@@ -472,3 +474,313 @@ end
 # per-MCS refresh): the derived refreshes without the field clamps and the steady starts,
 # which hold on a fresh initial state only (D-145)
 _derived(t::Tuple) = filter(ph -> !(ph isa FieldPhase && (ph.init || ph.start)), t)
+
+# ---------------------------------------------------------------------------------------
+# Derivative parts of the fields (F3-21b): a shadow tangent store. A problem with a
+# `ParameterTangent` runs the primal model unchanged (the CPM, its kernels and the primal field
+# runtimes read and write only primal arrays at the primal parameters), and each field phase has
+# a second runtime, bound to a shadow store at the Dual element type: a Dual twin of every array
+# a field group writes (its state, aux and output fields; one twin per array, shared by every
+# group that reads it), Dual scratch, and the state's own primal arrays for what the group only
+# reads (the CPM inputs, masks, site variables, tables). Before each window the twins take the
+# primal state's values (their derivative parts kept); an explicit group's shadow runtime steps
+# forward mode, then the primal one; an implicit group's primal runtime solves each stage once and
+# F3-21a's tangent step (`TangentCache`, on the primal cache) follows it (`advance_shared!`). The derivative is pathwise at the run's CPM path: σ, the cells
+# and every CPM value are held fixed, and the fields' response to the parameters is
+# differentiated along it.
+
+"""
+    ParameterTangent(p, seeds, u0 = [])
+
+The parameters of a run with derivative parts (F3-21b): `p` is the parameter object with
+ForwardDiff Duals in the entries that carry them (the seeded parameters and the computed ones
+that read them), `seeds` the front end's record of the Dual values given (`name => value`), and
+`u0` the derivative parts of the initial fields (`name => Dual array or Dual number`: a Dual
+initial value, or a default that reads a seeded parameter). The CPM reads the primal object
+(`prob.p`); the field groups step the derivative parts along the CPM path ([`tangent_run`](@ref)).
+"""
+struct ParameterTangent{P}
+    p::P
+    seeds::Vector{Pair{Symbol, Any}}
+    u0::Vector{Pair{Symbol, Any}}
+end
+ParameterTangent(p, seeds) = ParameterTangent(p, seeds, Pair{Symbol, Any}[])
+# the tangent of a problem whose initial state was replaced: the initial parts go (`nothing` when
+# no seed is left)
+without_initial(::Nothing) = nothing
+without_initial(tg::ParameterTangent) = isempty(tg.seeds) ? nothing : ParameterTangent(tg.p, tg.seeds)
+
+"""
+    tangent_parameters(sys, dp, p)
+
+The parameter object with derivative parts after a parameter write on a run with them: `dp` the
+one before, `p` the new primal object. A symbolic layer keeps each entry whose value the write did
+not change (its derivative parts with it), takes the written values as plain numbers, and derives
+the computed entries again. Here: `p` (no derivative parts).
+"""
+tangent_parameters(sys, dp, p) = p
+
+"""
+The run context's entry of a run with derivative parts (`ctx.__tangent`): the host
+[`TangentRun`](@ref) behind an untyped reference; kernels see `nothing`.
+"""
+struct TangentHandle
+    ref::Base.RefValue{Any}
+end
+Adapt.adapt_structure(to, ::TangentHandle) = nothing
+
+"""
+The shadow tangent store of one trajectory: the Dual parameter object and its version (one more
+per parameter write), the twins (primal array ⇒ Dual twin; `names`: a field's name ⇒ the twin of
+its state array, for the reads), each field phase's shadow runtime by its context key, whether it
+shares its primal runtime's solve (an implicit group, F3-21b r1 S3), the primal runtime's store
+and cache and the version it was bound at, and the (twin, primal) pairs whose values are set
+before each window.
+"""
+mutable struct TangentRun
+    p::Any
+    version::Int
+    E::Type
+    twins::IdDict{Any, Any}
+    written::IdDict{Any, Nothing}
+    names::Dict{Symbol, Any}
+    rts::Dict{Symbol, Any}
+    shared::Dict{Symbol, Bool}
+    bound::Dict{Symbol, Tuple{Any, Any, Int}}
+    syncs::Dict{Symbol, Vector{Tuple{Any, Any}}}
+    backend::Any
+end
+_tangent_run(h::TangentHandle) = h.ref[]::TangentRun
+
+# whether run context `ctx` has a shadow tangent store, as a type (`Val(true)` or `Val(false)`):
+# a primal run dispatches to the no-op methods, so it infers none of the tangent code
+@generated tangent_on(::NamedTuple{K}) where {K} = :(Val($(:__tangent in K)))
+
+# the run context with the shadow store of `tg` (none for a primal problem: no entry, so the
+# phases compile no tangent path); `fresh`: the initial state's derivative parts are seeded
+with_tangent(ctx, ::Nothing, phases, st, p, backend, fresh = true) = ctx
+with_tangent(ctx, tg::ParameterTangent, phases, st, p, backend, fresh = true) =
+    merge(ctx, (; __tangent = TangentHandle(Ref{Any}(Base.invokelatest(tangent_run, phases, st, p, tg, backend, ctx, fresh)))))
+
+# One window of field phase `ph` on its primal runtime `rt` (a primal run: `advance!` alone)
+@inline _field_advance!(ctx::NamedTuple, ph, st, rt, tm, n, h) = _field_advance!(tangent_on(ctx), ctx, ph, st, rt, tm, n, h)
+_field_advance!(::Val{false}, ctx, ph, st, rt, tm, n, h) = (Problems.advance!(rt, tm, n, h); nothing)
+_field_advance!(::Val{true}, ctx, ph, st, rt, tm, n, h) =
+    (Base.invokelatest(_tangent_advance!, getfield(ctx, :__tangent), ph, st, rt, tm, n, h); nothing)
+
+_tvalue_body!(i, tw, a) = (@inbounds tw[i] = LatticeFields.Compile.dreplace(tw[i], a[i]); nothing)   # i ≤ length(tw)
+# the window with derivative parts: the twins take the primal values, then an implicit group's
+# primal solve and tangent steps together (one solve per stage), or an explicit group's shadow
+# step and then its primal step
+function _tangent_advance!(h::TangentHandle, ph::FieldPhase{K}, st, rt, tm, n, dt) where {K}
+    run = _tangent_run(h)
+    trt = _shadow!(run, ph, st, rt)
+    for (tw, a) in run.syncs[K]
+        Exec.launch!(run.backend, _tvalue_body!, length(tw), (tw, a))
+    end
+    if run.shared[K]
+        Problems.advance_shared!(rt, trt, tm, n, dt)
+    else
+        Problems.advance!(trt, tm, n, dt)
+        Problems.advance!(rt, tm, n, dt)
+    end
+    return nothing
+end
+
+# the Dual element type of a tangent (one type for every seed: one tag, one count)
+_dualtype(v) = v isa AbstractArray ? eltype(v) : typeof(v)
+function _tangent_eltype(tg::ParameterTangent, T)
+    Es = unique(Any[LatticeFields.Compile.withvaltype(_dualtype(v), T) for (_, v) in Iterators.flatten((tg.seeds, tg.u0))])
+    length(Es) == 1 || throw(ArgumentError(string("the values with derivative parts hold ", length(Es),
+        " different Dual types (", join((LatticeFields.Compile.npartials(E) for E in Es), ", "), " derivative parts, or ",
+        "different tags); give every seed of one run the same Dual type (one `ForwardDiff.derivative`, `gradient` ",
+        "or `jacobian` call)")))
+    return only(Es)
+end
+
+# the field phases of `phases` that bind a runtime (the steps, the steady starts and the aux-only
+# evaluations; the at-init clamps read their step's), each once
+function _bound_phases(phases::Phases)
+    out = FieldPhase[]
+    for e in (phases.mcs..., phases.at_init), t in (e isa Repeat ? e.entries : (e,))
+        t isa Tuple || continue
+        for ph in t
+            ph isa FieldPhase && !ph.init && !any(q -> q === ph, out) && push!(out, ph)
+        end
+    end
+    return out
+end
+
+"""
+    tangent_run(phases, st, p, tg, backend, ctx, fresh = true) -> TangentRun
+
+The shadow tangent store of a trajectory (built at `init`, after the primal runtimes): every
+field phase bound again to Dual twins of the arrays the field groups write, at the Dual
+parameters `tg.p`, with the primal runtimes' substep counts and tables. An implicit group's
+tangent shares its primal runtime's cache (one primal solve per stage). With `fresh`, the twins
+take the initial fields' derivative parts `tg.u0`.
+"""
+function tangent_run(phases::Phases, st, p, tg::ParameterTangent, backend, ctx, fresh::Bool = true)
+    phs = _bound_phases(phases)
+    T = isempty(phs) ? Float64 : phs[1].T
+    E = _tangent_eltype(tg, T)
+    # the arrays the field groups write: their state, aux and output fields
+    written = IdDict{Any, Nothing}()
+    for ph in phs, (i, a) in enumerate(_arrays(ph.arrays, st))
+        ph.program.fields[i].role in (:state, :aux, :output) || continue
+        for x in a
+            x === nothing || (written[x] = nothing)
+        end
+    end
+    run = TangentRun(tg.p, 0, E, IdDict{Any, Any}(), written, Dict{Symbol, Any}(), Dict{Symbol, Any}(), Dict{Symbol, Bool}(),
+        Dict{Symbol, Tuple{Any, Any, Int}}(), Dict{Symbol, Vector{Tuple{Any, Any}}}(), backend)
+    any_seeded = false
+    for ph in phs
+        _shadow!(run, ph, st, _runtime(getfield(ctx, _ctxkey(ph))))
+        any_seeded |= any(x -> LatticeFields.Compile.npartials(typeof(x)) > 0 && !iszero(x - LatticeFields.Compile.primal(x)),
+            _praw(ph, tg.p))
+    end
+    any_seeded || !isempty(tg.u0) || isempty(phs) || @warn string("no field group reads a parameter with derivative parts, ",
+        "so every derivative of the fields is zero: the CPM and the ODEs read the primal values, and the derivative holds ",
+        "the CPM path fixed (F3-21b)") maxlog = 1
+    fresh && _seed_initial!(nothing, run, tg)
+    return run
+end
+
+# The shadow runtime of phase `ph` (its context key `K`), bound again when the primal runtime's
+# store or cache changed (a rebind that made new arrays) or the Dual parameters did (a write)
+function _shadow!(run::TangentRun, ph::FieldPhase{K}, st, prt) where {K}
+    b = get(run.bound, K, nothing)
+    b !== nothing && b[1] === prt.store && b[2] === prt.cache && b[3] == run.version && return run.rts[K]
+    backend = run.backend
+    E = run.E
+    s = ph.program
+    arrs = _arrays(ph.arrays, st)
+    twin(x) = get!(() -> fill!(KernelAbstractions.allocate(backend, LatticeFields.Compile.withvaltype(E, eltype(x)), size(x)),
+                               zero(LatticeFields.Compile.withvaltype(E, eltype(x)))), run.twins, x)
+    nf(i) = LatticeFields.IR.nsites(s, s.fields[i].levels[1])
+    bufs = map(enumerate(arrs)) do (i, a)
+        if a[1] === nothing                 # a face or masked value: Dual scratch for a float
+            S = LatticeFields.IR.juliatype(s.fields[i].storage)
+            return Any[S <: AbstractFloat ? _scratch(backend, LatticeFields.Compile.withvaltype(E, S), nf(i)) :
+                       _scratch(backend, S, nf(i))]
+        end
+        return Any[x isa AbstractArray && eltype(x) <: AbstractFloat && haskey(run.written, x) ? vec(twin(x)) : vec(x)
+                   for x in a if x !== nothing]
+    end
+    # the values of every twin the phase binds (its own fields, and another group's it reads)
+    # from the primal state; a state field's twin is also read back by its name
+    sync = Tuple{Any, Any}[]
+    for a in arrs
+        (a[1] !== nothing && haskey(run.twins, a[1])) || continue
+        push!(sync, (vec(run.twins[a[1]]), vec(a[1])))
+        a[2] === nothing || (run.names[_part_name(ph, a[1], st)] = run.twins[a[1]])
+    end
+    # an implicit group's tangent on its primal runtime's cache: the stores share the slot parity
+    shared = ph.alg isa Problems.ImplicitAlgorithm && !ph.aux_only && prt.cache isa Problems.ImplicitCache
+    store = Problems.FieldStore(backend, bufs, shared ? prt.store.cur : ones(Int, length(bufs)), prt.store.tables)
+    trt = Problems.bind_group(ph.group, ph.alg, store, _praw(ph, run.p); n = prt.n, dt = ph.dt, c = zero(E),
+        ends_in = :slot1, backend, options = ph.options, V = ph.T, host = nothing,
+        kernels = ph.aux_only ? (Int[], _aux_ids(ph)) : nothing,
+        (shared ? (; shared = (prt.cache, prt.store)) : (;))...)
+    trt.totals.where = prt.totals.where
+    Exec.ishost(backend) || Problems.compile!(backend, trt)
+    run.rts[K], run.syncs[K], run.shared[K] = trt, sync, shared
+    run.bound[K] = (prt.store, prt.cache, run.version)
+    return trt
+end
+# the state name of array `x` bound by phase `ph` (its `Part`)
+function _part_name(ph::FieldPhase, x, st)
+    for a in ph.arrays, q in a
+        q === nothing || q isa BindingScratch || q(st) !== x || return _partname(q)
+    end
+    error("no state array of the phase is the twin's")
+end
+_partname(::Part{A, B}) where {A, B} = B
+
+# A host snapshot with the fields' derivative parts (`current_state` of a run with them): each
+# twinned field's array as Duals, the value the primal state's (bitwise) and the derivative parts
+# the twin's; every other array as it is
+tangent_snapshot(stats, ctx, snap) = _tangent_snapshot(tangent_on(ctx), stats, ctx, snap)
+_tangent_snapshot(::Val{false}, stats, ctx, snap) = snap
+function _tangent_snapshot(::Val{true}, stats, ctx, snap::CPMState)
+    run = _tangent_run(getfield(ctx, :__tangent))
+    isempty(run.names) && return snap
+    ks = Tuple(k for k in keys(snap.site) if haskey(run.names, k))
+    vs = map(ks) do k
+        tw = _to_host(stats, run.names[k])
+        v = getfield(snap.site, k)
+        reshape(map((d, x) -> LatticeFields.Compile.dreplace(d, x), vec(tw), vec(v)), size(v))
+    end
+    return CPMState(snap.σ, snap.cell, merge(snap.site, NamedTuple{ks}(vs)), snap.model, snap.history)
+end
+
+_tpart_body!(i, tw, src, j) = (@inbounds tw[i] = LatticeFields.Compile.dsetpartial(tw[i], j, LatticeFields.Compile.dpartial(src[i], j)); nothing)
+_tzero_body!(i, tw) = (@inbounds tw[i] = zero(tw[i]); nothing)
+# the derivative parts of `v` (an array or a number of Duals; 0 for plain values) into twin `tw`
+function _set_parts!(stats, run::TangentRun, tw, v, name)
+    E = eltype(tw)
+    w = v isa AbstractArray ? v : fill(v, size(tw))
+    if LatticeFields.Compile.npartials(eltype(w)) > 0
+        LatticeFields.Compile.npartials(eltype(w)) == LatticeFields.Compile.npartials(E) ||
+            throw(ArgumentError("`$name` holds $(LatticeFields.Compile.npartials(E)) derivative parts in this run; the " *
+                                "written values hold $(LatticeFields.Compile.npartials(eltype(w)))"))
+        size(w) == size(tw) || throw(DimensionMismatch("`$name` has size $(size(tw)); got $(size(w))"))
+        src = similar(tw, E, size(tw))
+        _copy!(stats, src, E[convert(E, x) for x in w])
+        for j in 1:LatticeFields.Compile.npartials(E)
+            Exec.launch!(run.backend, _tpart_body!, length(tw), (vec(tw), vec(src), j))
+        end
+    else
+        Exec.launch!(run.backend, _tzero_body!, length(tw), (vec(tw),))
+    end
+    return nothing
+end
+# a write of field `name` (`integ[c] = v`): the twin's derivative parts from `v` (0 for a plain
+# value or a number); nothing for an array with no twin
+function tangent_write!(stats, ctx, name::Symbol, v)
+    run = _tangent_run(getfield(ctx, :__tangent))
+    tw = get(run.names, name, nothing)
+    tw === nothing || _set_parts!(stats, run, tw, v, name)
+    return nothing
+end
+# the initial fields' derivative parts (a fresh state)
+function _seed_initial!(stats, run::TangentRun, tg::ParameterTangent)
+    for (name, v) in tg.u0
+        tw = get(run.names, name, nothing)
+        tw === nothing && throw(ArgumentError("the initial value of `$name` holds derivative parts, and `$name` is not " *
+                                              "a field a field group steps"))
+        _set_parts!(stats, run, tw, v, name)
+    end
+    return nothing
+end
+# the primal part of written values (an array of Duals: their values)
+tangent_primal(v::AbstractArray) = LatticeFields.Compile.npartials(eltype(v)) > 0 ? map(LatticeFields.Compile.primal, v) : v
+tangent_primal(v) = LatticeFields.Compile.npartials(typeof(v)) > 0 ? LatticeFields.Compile.primal(v) : v
+
+# a new run (`reinit!`): every twin's derivative parts zero, then the initial ones of `tg` (the
+# problem's own initial state; `nothing` for another state), and the shadow runtimes' history and
+# status cleared
+tangent_reinit!(ctx, tg = nothing) = _tangent_reinit!(tangent_on(ctx), ctx, tg)
+_tangent_reinit!(::Val{false}, ctx, tg) = nothing
+function _tangent_reinit!(::Val{true}, ctx, tg)
+    run = _tangent_run(getfield(ctx, :__tangent))
+    for tw in values(run.twins)
+        Exec.launch!(run.backend, _tzero_body!, length(tw), (vec(tw),))
+    end
+    tg === nothing || _seed_initial!(nothing, run, tg)
+    foreach(rt -> (Problems.clear_status!(rt); Problems.reset!(rt)), values(run.rts))
+    return nothing
+end
+
+# A parameter write on a run with derivative parts (F3-21b r1 S1): the Dual parameters follow
+# (`tangent_parameters`: the written values plain, the others keep their derivative parts), and
+# each shadow runtime is bound again at its next window
+tangent_parameters!(integ, p) = _tangent_parameters!(tangent_on(integ.ctx), integ, p)
+_tangent_parameters!(::Val{false}, integ, p) = nothing
+function _tangent_parameters!(::Val{true}, integ, p)
+    run = _tangent_run(getfield(integ.ctx, :__tangent))
+    run.p = tangent_parameters(integ.f.sys, run.p, p)
+    run.version += 1
+    return nothing
+end

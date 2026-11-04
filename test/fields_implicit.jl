@@ -511,3 +511,294 @@ end
     @test [(r.op.exact, r.op.iterate) for r in ra.cache.rows] == [(r.op.exact, r.op.iterate) for r in rb.cache.rows]
     @test a == b
 end
+
+# F3-21b (F3 design §5 F3-21, note research/field-compiler/f3/F3-21b-note.md): a ForwardDiff
+# Dual in an A parameter runs. The CPM runs on the primal parameters (its run is the primal run,
+# bit for bit), and every field group also steps a shadow tangent store (Dual twins of the
+# fields): the derivative is pathwise, at the run's CPM path. Checked against central finite
+# differences at the same seed, with the path (σ at every saved MCS) identical between the ±
+# runs, for an explicit and the implicit field solvers; the model's chemotaxis drive reads the
+# field, so the CPM's reads stay primal. Base 9fccc948: every Dual is refused at `PottsProblem`.
+# Negative controls (lp-f3t mutations, ~/lpwork/f321b/nc-*.log): the twins' derivative parts
+# reset before each window (the operator's propagation of u̇ dropped), and the parameters'
+# derivative parts dropped from the shadow step (the source term `∂f/∂p` dropped).
+using ForwardDiff: ForwardDiff
+@potts_model FiDual begin
+    @kinds medium A
+    @parameters begin
+        χ = 400.0
+        Dc = 0.2
+        s = 0.5
+        kd = 0.1
+        Dh = 0.5 * Dc
+    end
+    @variables c(field) = 0.0
+    @lattice Lattice((24, 20); boundary = Closed())
+    @energy cells(A) => (volume - 16.0)^2
+    @drive Chemotaxis(c; strength = χ, kinds = (A,))
+    @equations D(c) ~ Dh * Δ(c) + Dh * Δ(c) + s * (kind == A) - kd * c
+    @sweep Metropolis(; temperature = 4.0)
+end
+@potts_model FiDualMask begin
+    @kinds medium A[frozen]
+    @parameters begin
+        Dc = 0.4
+        kd = 0.3
+        v = 1.5
+        c0 = 0.2
+    end
+    @variables c(field) = c0
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @equations D(c) ~ Dc * Δ(c) - kd * c
+    @bcs c ~ masked(kind == A, v)
+    @sweep Metropolis(; temperature = 1.0)
+end
+# two groups: `w` (implicit) reads `u` (explicit), so `w`'s derivative runs through `u`'s twin
+@potts_model FiDualTwo begin
+    @kinds medium A
+    @parameters begin
+        ra = 0.3
+        rb = 0.2
+    end
+    @variables begin
+        u(field) = 0.0
+        w(field) = 0.0
+    end
+    @lattice Lattice((24, 20); boundary = Closed())
+    @energy cells(A) => (volume - 16.0)^2
+    @equations begin
+        D(u) ~ 0.2 * Δ(u) + ra * (kind == A) - 0.1 * u
+        D(w) ~ 0.3 * Δ(w) + rb * u - 0.2 * w
+    end
+    @sweep Metropolis(; temperature = 4.0)
+end
+@potts_model FiDualNoField begin
+    @kinds medium A
+    @parameters λ = 1.0
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => λ * (volume - 4.0)^2
+    @sweep Metropolis(; temperature = 1.0)
+end
+# a CPM read filled whole (an `ifelse` of CPM reads) holding a parameter: refused; a CPM read
+# outside it (`volume[owner] - V0`) differentiates in the field program (F3-21b r1 N2)
+@potts_model FiDualFill begin
+    @kinds medium A
+    @parameters begin
+        V0 = 14.0
+        s0 = 0.5
+    end
+    @variables c(field) = 0.0
+    @lattice Lattice((24, 20); boundary = Closed())
+    @energy cells(A) => (volume - 16.0)^2
+    @equations D(c) ~ 0.2 * Δ(c) + ifelse(volume[owner] > 15.0, s0, 0.0) - 0.1 * c
+    @sweep Metropolis(; temperature = 4.0)
+end
+@potts_model FiDualVol begin
+    @kinds medium A
+    @parameters V0 = 14.0
+    @variables c(field) = 0.0
+    @lattice Lattice((24, 20); boundary = Closed())
+    @energy cells(A) => (volume - 16.0)^2
+    @equations D(c) ~ 0.2 * Δ(c) + 0.01 * (kind == A) * (volume[owner] - V0) - 0.1 * c
+    @sweep Metropolis(; temperature = 4.0)
+end
+@potts_model FiDualKind begin
+    @kinds medium A
+    @parameters δk[kind] = [0.0, 0.1]
+    @variables c(field) = 0.0
+    @lattice Lattice((24, 20); boundary = Closed())
+    @energy cells(A) => (volume - 16.0)^2
+    @equations D(c) ~ 0.2 * Δ(c) + δk[kind] - 0.1 * c
+    @sweep Metropolis(; temperature = 4.0)
+end
+fi_dop() = (σ = zeros(Int32, 24, 20); σ[5:8, 5:8] .= 1; σ[14:17, 10:13] .= 2; [ownership => σ, kind => [:A, :A]])
+const FI_DW = [0.01 * (i + 2j) for i in 1:24, j in 1:20]
+fi_dq(sol) = sum(FI_DW .* sol.u[end].site.c)
+fi_drun(fs, ps; M = FiDual, op = fi_dop(), alg = SequentialCPM(), kw...) =
+    solve(PottsProblem(M(; name = :m), [op; ps], (0, 12); field_solver = fs, seed = 3, kw...), alg; saveat = 0:3:12)
+fi_derr(f) = try f(); "" catch err sprint(showerror, err) end
+
+@testset "F3-21b: field derivatives in A against central differences (a fixed CPM path)" begin
+    # (the implicit solves converged far below the default `rtol = 1e-6`: the tangent is the
+    # derivative of the converged stage, F3-21a, and central differences see the solve's tolerance)
+    tight = DevicePCG(; rtol = 1e-11, budget = 60)
+    for fs in (ExplicitEuler(), BackwardEuler(; inner = tight), CrankNicolson(; inner = tight), BDF2(; inner = tight),
+               QuasiSteady(; inner = tight))
+        base = fi_drun(fs, Pair[])
+        for (name, v) in ((:Dc, 0.2), (:s, 0.5), (:kd, 0.1))
+            d = fi_drun(fs, [name => ForwardDiff.Dual(v, 1.0)])
+            # the Dual run is the primal run: its σ and its field values, bit for bit, at every save
+            @test all(d.u[i].σ == base.u[i].σ for i in eachindex(base.u))
+            @test all(ForwardDiff.value.(d.u[i].site.c) == base.u[i].site.c for i in eachindex(base.u))
+            @test eltype(d.u[end].site.c) <: ForwardDiff.Dual && eltype(d.u[end].site.c__next) === Float64
+            h = 1e-4 * v
+            rp, rm = fi_drun(fs, [name => v + h]), fi_drun(fs, [name => v - h])
+            @test all(rp.u[i].σ == base.u[i].σ == rm.u[i].σ for i in eachindex(base.u))       # the path is fixed
+            fd = (fi_dq(rp) - fi_dq(rm)) / 2h
+            @test ForwardDiff.partials(fi_dq(d), 1) ≈ fd rtol = 1e-6
+        end
+    end
+    # several derivative parts at once (one chunk: one run), the computed `Dh` through `Dc`
+    q(x) = fi_dq(fi_drun(BackwardEuler(; inner = tight), [:Dc => x[1], :s => x[2], :kd => x[3]]))
+    g = ForwardDiff.gradient(q, [0.2, 0.5, 0.1])
+    for (i, (name, v)) in enumerate(((:Dc, 0.2), (:s, 0.5), (:kd, 0.1)))
+        h = 1e-4 * v
+        fd = (fi_dq(fi_drun(BackwardEuler(; inner = tight), [name => v + h])) -
+              fi_dq(fi_drun(BackwardEuler(; inner = tight), [name => v - h]))) / 2h
+        @test g[i] ≈ fd rtol = 1e-6
+    end
+    # a group reading another group's field: ∂w/∂ra through `u`'s twin, ∂w/∂rb in `w`'s own group
+    two(ps) = solve(PottsProblem(FiDualTwo(; name = :m), [fi_dop(); ps], (0, 12); field_solver = ExplicitEuler(),
+        solvers = [:w => BackwardEuler(; inner = tight)], seed = 3), SequentialCPM()).u[end].site.w
+    for (name, v) in ((:ra, 0.3), (:rb, 0.2))
+        d = two([name => ForwardDiff.Dual(v, 1.0)])
+        fd = (sum(FI_DW .* two([name => v + 1e-4 * v])) - sum(FI_DW .* two([name => v - 1e-4 * v]))) / (2e-4 * v)
+        @test sum(FI_DW .* ForwardDiff.partials.(d, 1)) ≈ fd rtol = 1e-6
+    end
+    # a masked value's derivative (the masked sites take ∂v/∂v = 1), `remake` with a Dual
+    σ = zeros(Int32, 12, 10); σ[4:6, 3:5] .= 1
+    op = [ownership => σ, kind => [:A], :c => 0.2]
+    for fs in (ExplicitEuler(), BackwardEuler())
+        prob = PottsProblem(FiDualMask(; name = :m), op, (0, 6); field_solver = fs)
+        d = solve(remake(prob; p = [:v => ForwardDiff.Dual(1.5, 1.0)]), SequentialCPM()).u[end].site.c
+        @test all(ForwardDiff.partials.(d[σ .== 1], 1) .== 1.0)
+        fd = (sum(solve(remake(prob; p = [:v => 1.5 + 1e-4]), SequentialCPM()).u[end].site.c) -
+              sum(solve(remake(prob; p = [:v => 1.5 - 1e-4]), SequentialCPM()).u[end].site.c)) / 2e-4
+        @test sum(ForwardDiff.partials.(d, 1)) ≈ fd rtol = 1e-8
+    end
+end
+
+@testset "F3-21b: a Dual run's integrator, remake and refusals" begin
+    # `ForwardDiff.derivative` through `solve`
+    f(k) = fi_dq(fi_drun(ExplicitEuler(), [:kd => k]))
+    @test ForwardDiff.derivative(f, 0.1) ≈ (f(0.1 + 1e-5) - f(0.1 - 1e-5)) / 2e-5 rtol = 1e-6
+    integ = init(PottsProblem(FiDual(; name = :m), [fi_dop(); :kd => ForwardDiff.Dual(0.1, 1.0)], (0, 6)), SequentialCPM())
+    step!(integ)
+    @test eltype(integ[:c]) <: ForwardDiff.Dual && eltype(integ.state.site.c) === Float64     # the live state is primal
+    # a write of the field: the values into the state, plain values zero the derivative parts
+    integ[:c] = fill(0.3, 24, 20)
+    @test integ.state.site.c == fill(0.3, 24, 20) && all(iszero, ForwardDiff.partials.(integ[:c], 1))
+    step!(integ)
+    @test maximum(abs, ForwardDiff.partials.(integ[:c], 1)) > 0
+    # … and Dual values set them
+    integ[:c] = ForwardDiff.Dual.(fill(0.3, 24, 20), 2.0)
+    @test integ.state.site.c == fill(0.3, 24, 20) && all(==(2.0), ForwardDiff.partials.(integ[:c], 1))
+    integ.ps[:χ] = 300.0
+    @test integ.p.χ == 300.0
+    e = fi_derr(() -> (integ.ps[:χ] = ForwardDiff.Dual(300.0, 1.0)))
+    @test occursin("A Dual goes to the problem", e) && !occursin("Tag", e)
+    @test occursin("has no checkpoint", fi_derr(() -> CorePotts.checkpoint(integ)))
+    # remake: a Dual makes a tangent, a plain value of the seeded parameter drops it, another keeps it
+    prob = PottsProblem(FiDual(; name = :m), fi_dop(), (0, 6))
+    @test prob.tangent === nothing
+    r = remake(prob; p = [:kd => ForwardDiff.Dual(0.1, 1.0)])
+    @test r.tangent !== nothing && r.p.kd === 0.1 && r.tangent.p.kd isa ForwardDiff.Dual && r.tangent.p.Dh === r.p.Dh
+    @test remake(r; p = [:kd => 0.2]).tangent === nothing
+    @test remake(r; p = [:s => 0.4]).tangent.p.kd isa ForwardDiff.Dual
+    @test remake(r; p = [:Dc => ForwardDiff.Dual(0.2, 1.0)]).tangent.p.Dh isa ForwardDiff.Dual
+    # refused in words: two Dual types; a model with no fields; a kind table; a Dual `u0` in `remake`
+    σ = zeros(Int32, 12, 10); σ[4:6, 3:5] .= 1
+    e = fi_derr(() -> PottsProblem(FiDual(; name = :m), [fi_dop(); :kd => ForwardDiff.Dual(0.1, 1.0); :s => ForwardDiff.Dual(0.5, 1.0, 0.0)], (0, 2)))
+    @test occursin("2 different Dual types", e)
+    e = fi_derr(() -> PottsProblem(FiDualNoField(; name = :m), [ownership => σ, kind => [:A], :λ => ForwardDiff.Dual(1.0, 1.0)], (0, 2)))
+    @test occursin("has no fields, and derivative parts run through the fields only", e)
+    e = fi_derr(() -> PottsProblem(FiDualKind(; name = :m), [fi_dop(); :δk => ForwardDiff.Dual.([0.0, 0.1], 1.0)], (0, 2)))
+    @test occursin("kind table `δk` holds", e) && occursin("a later feature", e)
+    e = fi_derr(() -> remake(prob; u0 = [:c => ForwardDiff.Dual.(fill(0.1, 24, 20), 1.0)]))
+    @test occursin("takes plain values", e)
+    # a seed no field reads: the derivatives are zero, and a warning says so
+    d = @test_logs (:warn, r"no field group reads a parameter with derivative parts") match_mode = :any fi_drun(ExplicitEuler(), [:χ => ForwardDiff.Dual(400.0, 1.0)])
+    @test all(iszero, ForwardDiff.partials.(d.u[end].site.c, 1))
+end
+
+# F3-21b r1 S1, N2: the initial fields' derivative parts (a Dual initial value; a default that
+# reads a seeded parameter, evaluated in Duals), a mid-run write of a field parameter (the shadow
+# rebound; the written value is plain from then on), and a CPM read beside a seeded parameter.
+# Negative controls (lp-f3t, ~/lpwork/f321b/ncr1-*.log): no initial seeding; defaults not
+# evaluated in Duals; no rebind of the shadow after a write.
+@testset "F3-21b r1: initial values, parameter writes and CPM reads against central differences" begin
+    tight = DevicePCG(; rtol = 1e-11, budget = 60)
+    σ = zeros(Int32, 12, 10); σ[4:6, 3:5] .= 1
+    msum(sol) = sum(FI_DW[1:12, 1:10] .* sol.u[end].site.c)
+    mrun(fs, ops) = solve(PottsProblem(FiDualMask(; name = :m), vcat([ownership => σ, kind => [:A]], ops), (0, 6); field_solver = fs),
+        SequentialCPM())
+    for fs in (ExplicitEuler(), BackwardEuler(; inner = tight), CrankNicolson(; inner = tight))
+        # a Dual initial value: ∂/∂(a uniform shift of c's start)
+        c0 = [0.1 + 0.01 * (i - j) for i in 1:12, j in 1:10]
+        d = mrun(fs, [:c => ForwardDiff.Dual.(c0, 1.0)])
+        @test ForwardDiff.value.(d.u[end].site.c) == mrun(fs, [:c => c0]).u[end].site.c
+        fd = (msum(mrun(fs, [:c => c0 .+ 1e-4])) - msum(mrun(fs, [:c => c0 .- 1e-4]))) / 2e-4
+        @test ForwardDiff.partials(msum(d), 1) ≈ fd rtol = 1e-6
+        # a default that reads a seeded parameter (`c = c0`): ∂u₀/∂c0 = 1 enters
+        d = mrun(fs, [:c0 => ForwardDiff.Dual(0.2, 1.0)])
+        fd = (msum(mrun(fs, [:c0 => 0.2 + 1e-4])) - msum(mrun(fs, [:c0 => 0.2 - 1e-4]))) / 2e-4
+        @test abs(fd) > 1
+        @test ForwardDiff.partials(msum(d), 1) ≈ fd rtol = 1e-6
+        # a write mid-run: of another field parameter (∂/∂Dc keeps running), and of the seeded one
+        # (plain from then on), each against the same write in the ± runs
+        function wrun(pairs, name, v)
+            integ = init(PottsProblem(FiDual(; name = :m), [fi_dop(); pairs], (0, 8); field_solver = fs, seed = 3), SequentialCPM())
+            foreach(_ -> step!(integ), 1:4)
+            integ.ps[name] = v
+            foreach(_ -> step!(integ), 1:4)
+            return sum(FI_DW .* integ[:c])
+        end
+        for (seed, name, v) in ((:Dc, :kd, 0.15), (:kd, :kd, 0.15))
+            x = seed === :Dc ? 0.2 : 0.1
+            ad = ForwardDiff.partials(wrun([seed => ForwardDiff.Dual(x, 1.0)], name, v), 1)
+            fd = (wrun([seed => x + 1e-4 * x], name, v) - wrun([seed => x - 1e-4 * x], name, v)) / (2e-4 * x)
+            @test ad ≈ fd rtol = 1e-6
+        end
+    end
+    # a CPM read beside a seeded parameter differentiates (V0 is read by the field program)
+    vrun(ps) = fi_dq(solve(PottsProblem(FiDualVol(; name = :m), [fi_dop(); ps], (0, 12); seed = 3), SequentialCPM()))
+    @test ForwardDiff.partials(vrun([:V0 => ForwardDiff.Dual(14.0, 1.0)]), 1) ≈
+          (vrun([:V0 => 14.0 + 1e-3]) - vrun([:V0 => 14.0 - 1e-3])) / 2e-3 rtol = 1e-6
+    # … and one the CPM fills whole is refused
+    e = fi_derr(() -> PottsProblem(FiDualFill(; name = :m), [fi_dop(); :s0 => ForwardDiff.Dual(0.5, 1.0)], (0, 2)))
+    @test occursin("which the CPM computes each MCS from `s0`", e)
+    @test PottsProblem(FiDualFill(; name = :m), [fi_dop(); :V0 => 14.0], (0, 2)).tangent === nothing
+    # remake keeps the initial parts with the state, a new state drops them
+    pr = PottsProblem(FiDualMask(; name = :m), [ownership => σ, kind => [:A], :c0 => ForwardDiff.Dual(0.2, 1.0)], (0, 2))
+    @test !isempty(pr.tangent.u0) && !isempty(remake(pr; p = [:kd => 0.2]).tangent.u0)
+    @test isempty(remake(pr; u0 = [ownership => σ, kind => [:A]]).tangent.u0)
+    # `reinit!` seeds them again
+    integ = init(pr, SequentialCPM())
+    a = ForwardDiff.partials.(integ[:c], 1)
+    step!(integ); reinit!(integ)
+    @test ForwardDiff.partials.(integ[:c], 1) == a && maximum(a) == 1.0
+end
+
+@testset "F3-21b: field derivative parts on the device agree with the CPU" begin
+    if isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device() && Main.PottsDevices.device_name() == "rocm"
+        backend = Main.PottsDevices.device_backend()
+        σ = zeros(Int32, 12, 10); σ[4:6, 3:5] .= 1
+        op = [ownership => σ, kind => [:A], :c => 0.2]
+        for fs in (ExplicitEuler(), BackwardEuler())
+            # (Float32, the device's type; σ frozen, so the CPU and the device share the path)
+            prob = PottsProblem(FiDualMask(; name = :m), [op; :kd => ForwardDiff.Dual(0.3, 1.0)], (0, 6); field_solver = fs, T = Float32)
+            a = solve(prob, CheckerboardCPM()).u[end].site.c
+            b = solve(prob, CheckerboardCPM(); backend).u[end].site.c
+            @test eltype(b) <: ForwardDiff.Dual{<:Any, Float32}
+            @test ForwardDiff.value.(a) ≈ ForwardDiff.value.(b) rtol = 1e-5
+            @test ForwardDiff.partials.(a, 1) ≈ ForwardDiff.partials.(b, 1) rtol = 1e-4
+            @test maximum(abs, ForwardDiff.partials.(b, 1)) > 0
+        end
+        # a Dual initial value (its parts set by `_tpart_body!`) and `reinit!` (the parts zeroed by
+        # `_tzero_body!`, then set again): the device equals the CPU (the batch-end gate of
+        # 2026-11-05: GROUP=GPU never launched the two bodies)
+        pr = PottsProblem(FiDualMask(; name = :m), [ownership => σ, kind => [:A], :c0 => ForwardDiff.Dual(0.2, 1.0)], (0, 6); T = Float32)
+        ia, ib = init(pr, CheckerboardCPM()), init(pr, CheckerboardCPM(); backend)
+        for ig in (ia, ib)
+            foreach(_ -> step!(ig), 1:2)
+            reinit!(ig)
+            foreach(_ -> step!(ig), 1:4)
+        end
+        a, b = Array(ia[:c]), Array(ib[:c])
+        @test ForwardDiff.partials.(a, 1) ≈ ForwardDiff.partials.(b, 1) rtol = 1e-4
+        @test maximum(abs, ForwardDiff.partials.(b, 1)) > 0
+    else
+        @test_skip "device (POTTS_GPU=metal|rocm)"
+    end
+end

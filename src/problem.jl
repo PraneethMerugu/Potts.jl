@@ -133,6 +133,10 @@ as the medium) is counted per term (cell energy group, drive, constraint, temper
 update, division), as is every `sibling(k)` scan that found several alive members of kind `k`
 (the lowest `birth` is returned); `solve` reports the counts once, in one warning. Nothing of
 it is compiled into an untracked problem.
+
+A ForwardDiff `Dual` for a parameter, or as a field's initial value, runs: the fields carry
+derivative parts along the run's CPM path, which is held fixed (see
+[Derivatives with ForwardDiff](@ref manual-derivatives)).
 """
 function CorePotts.PottsProblem(sys::PottsSystem, op, tspan; kwargs...)
     return CorePotts.PottsProblem(ModelingToolkitBase.mtkcompile(sys), op, tspan; kwargs...)
@@ -146,6 +150,7 @@ function CorePotts.PottsProblem(c::CompiledPottsSystem, op, tspan; backend = not
     spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
     track = _track(track)
     opd = _operating_point(sys, op)
+    seeds, u0seeds = _split_tangents!(sys, opd)     # Dual values: their primal values in `opd` (F3-21b)
     values = _parameter_values(c, opd)
     p = PottsParameters(NamedTuple(info(x).name => _param_value(T, values[_unwrap(x)], info(x); ps = _p(sys, :parameters))
                                    for x in _p(sys, :parameters)),
@@ -169,8 +174,163 @@ function CorePotts.PottsProblem(c::CompiledPottsSystem, op, tspan; backend = not
     _check_field_substeps(f, p)
     frozen = _frozen_mask(sys, st)
     _host_init!(f, st, p, hctx, seed, replica, repeat)
+    tangent = isempty(seeds) && isempty(u0seeds) ? nothing : _tangent(c, T, p, seeds, opd; u0 = u0seeds)
     return CorePotts.PottsProblem(f, st, lat, tspan, p; contact = c.contact_spec, proposal = c.proposal_spec, relations,
-        spacing, frozen, seed, replica, repeat)
+        spacing, frozen, seed, replica, repeat, tangent)
+end
+
+# ---------------------------------------------------------------------------------------
+# Parameters with derivative parts (F3-21b). A ForwardDiff `Dual` given for a parameter (in the
+# operating point or `remake(prob; p = …)`) runs: the problem's parameter object holds its primal
+# value (the CPM, the ODEs and every kernel read it: the run is the primal run, bit for bit), and
+# `prob.tangent` holds the parameter object with the Duals (the computed parameters that read a
+# seeded one derived again in Duals). The field groups step the derivative parts along the run's
+# CPM path (CorePotts' shadow tangent store): the derivative is pathwise, the CPM path held fixed.
+
+# a value with derivative parts (one level of a ForwardDiff Dual)
+_is_dual(v) = v isa Real && LatticeFields.Compile.npartials(typeof(v)) > 0
+_has_dual(v) = _is_dual(v) || (v isa AbstractArray && (LatticeFields.Compile.npartials(eltype(v)) > 0 || any(_is_dual, v)))
+_tprimal(v) = _is_dual(v) ? LatticeFields.Compile.primal(v) : v
+
+# the Dual parameter values of operating point `opd` (`name => Dual`) and the Dual initial values
+# of its fields (`name => Dual array or number`), each replaced in `opd` by its primal value; a
+# Dual in a kind table or in another variable's initial value is refused in words
+function _split_tangents!(sys::PottsSystem, opd)
+    seeds, u0 = Pair{Symbol, Any}[], Pair{Symbol, Any}[]
+    for (k, v) in collect(opd)
+        _has_dual(v) || continue
+        i = info(k)
+        if i !== nothing && i.role === :param && _is_dual(v)
+            push!(seeds, i.name => v)
+            opd[k] = _tprimal(v)
+        elseif i !== nothing && i.role === :field
+            push!(u0, i.name => v)
+            opd[k] = v isa AbstractArray ? map(_tprimal, v) : _tprimal(v)
+        else
+            _refuse_dual_value(i === nothing ? string(k) : string(i.name), i === nothing ? nothing : i.role, v)
+        end
+    end
+    return seeds, u0
+end
+function _refuse_dual_value(name, role, v)
+    w = v isa AbstractArray ? first(x for x in v if _is_dual(x)) : v
+    what = role === :kindtable ? "kind table `$name` holds" : role === :param ? "parameter `$name` holds" :
+           "the initial value of `$name` holds"
+    throw(ArgumentError(string(what, " ", _valtext(w), ": derivatives run through scalar parameters and the ",
+        "initial values of fields (F3-21b); not through ", role === :kindtable ? "kind tables (a later feature)" :
+        "the initial values of cell, model or site variables (the CPM's state, held fixed)",
+        ". Take finite differences, or give the derivative's direction a scalar parameter")))
+end
+
+# the problem's `ParameterTangent`: the parameter object `p` with the seeds as Duals of the
+# problem's scalar type `T`, the computed parameters that read a seeded one derived again in Duals,
+# and the initial fields' derivative parts: the Dual initial values `u0` given, and the defaults
+# that read a seeded parameter evaluated in Duals (with `opd`, the operating point: a construction)
+function _tangent(c::CompiledPottsSystem, T, p::PottsParameters, seeds, opd = nothing; u0 = Pair{Symbol, Any}[])
+    sys = c.sys
+    ps = _p(sys, :parameters)
+    first_seed = isempty(seeds) ? first(u0) : first(seeds)
+    _has_fields(c) || throw(ArgumentError(string(isempty(seeds) ? "the initial value of `" : "parameter `", first_seed.first,
+        "` holds ", _valtext(first(_dualvals(first_seed.second))), "; model `", nameof(c), "` has no fields, and derivative ",
+        "parts run through the fields only (F3-21b): the CPM and the ODEs take plain numbers. Take finite differences of the run")))
+    Es = unique(Any[LatticeFields.Compile.withvaltype(v isa AbstractArray ? eltype(v) : typeof(v), T)
+                    for (_, v) in Iterators.flatten((seeds, u0))])
+    length(Es) == 1 || throw(ArgumentError(string("the values with derivative parts hold ", length(Es),
+        " different Dual types (different tags or derivative part counts): give every seed of one problem the same ",
+        "Dual type (one `ForwardDiff.derivative`, `gradient` or `jacobian` call)")))
+    nt = NamedTuple(p)
+    vals = Dict{Symbol, Any}(pairs(nt))
+    for (n, v) in seeds
+        nt[n] isa AbstractFloat || throw(ArgumentError(string("parameter `", n, "` holds ", _valtext(v), "; it is ",
+            "a ", typeof(nt[n]), " parameter, and derivative parts run through floating-point parameters only")))
+        vals[n] = LatticeFields.Compile.lanecast(T, v)
+    end
+    dp = _dual_object(c, T, p, vals)
+    dual = Set{Symbol}(k for (k, v) in pairs(NamedTuple(dp)) if _is_dual(v))
+    _check_tangent_reads(c, T, dual)
+    init = collect(Pair{Symbol, Any}, u0)
+    if opd !== nothing && !isempty(dual)
+        # a field's default that reads a parameter with derivative parts: evaluated in Duals
+        dvals = Dict{Any, Any}(_unwrap(x) => getproperty(dp, info(x).name) for x in ps)
+        for x in _p(sys, :variables)
+            i = info(x)
+            (i !== nothing && i.role === :field && !haskey(opd, _unwrap(x))) || continue
+            any(u -> (j = info(u); j !== nothing && j.name in dual), _default_inputs(i.default)) || continue
+            v = _evaluate(i.default, dvals, "the default of `$(i.name)`")
+            _is_dual(v) && push!(init, i.name => LatticeFields.Compile.lanecast(T, v))
+        end
+    end
+    return CorePotts.ParameterTangent(dp, collect(Pair{Symbol, Any}, seeds), init)
+end
+_dualvals(v) = v isa AbstractArray ? [x for x in v if _is_dual(x)] : [v]
+
+# parameter object `p` with the values `vals` (some Duals), the computed parameters that read one
+# derived again in Duals (the others keep `p`'s values)
+function _dual_object(c::CompiledPottsSystem, T, p::PottsParameters, vals::Dict{Symbol, Any})
+    if !isempty(_computed(p))
+        d = _derivation(_p(c.sys, :parameters))
+        for (n, v) in zip(d.computed, d(Tuple(vals[b] for b in d.base)))
+            vals[n] = _is_dual(v) ? LatticeFields.Compile.lanecast(T, v) : getproperty(p, n)
+        end
+    end
+    return _with_values(p, NamedTuple(k => vals[k] for k in keys(NamedTuple(p))))
+end
+
+# a write on a run with derivative parts (F3-21b r1 S1): the base entries the write left unchanged
+# keep their derivative parts, the written ones are plain, the computed ones are derived again
+function CorePotts.tangent_parameters(info::PottsModelInfo, dp::PottsParameters, p::PottsParameters)
+    ps = _p(info.csys.sys, :parameters)
+    nt = NamedTuple(p)
+    vals = Dict{Symbol, Any}(pairs(nt))
+    for (k, v) in pairs(NamedTuple(dp))
+        _computed_entity(ps, k) === nothing && _is_dual(v) && isequal(LatticeFields.Compile.primal(v), nt[k]) && (vals[k] = v)
+    end
+    return _dual_object(info.csys, info.T, p, vals)
+end
+
+# a parameter with derivative parts read where the derivative would be dropped: a field input the
+# CPM fills (computed each MCS in primal values; e.g. an `ifelse` of CPM reads only, filled whole)
+function _check_tangent_reads(c::CompiledPottsSystem, T, dual::Set{Symbol})
+    _has_fields(c) || return nothing
+    reads(e) = [info(u).name for u in _default_inputs(e) if (j = info(u); j !== nothing && j.role === :param && j.name in dual)]
+    for (name, ex, _) in _field_inputs(c, T)
+        r = reads(ex)
+        isempty(r) && continue
+        throw(ArgumentError(string("the field equations read `", _input_word(name, ex), "`, which the CPM computes ",
+            "each MCS from `", first(r), "`, a parameter with derivative parts; the CPM computes in primal values, so ",
+            "that derivative would be lost (F3-21b): write `", first(r), "` outside the CPM read in the field equation ",
+            "(an `ifelse` of CPM reads is filled whole: move the parameter out of its branches), or take finite differences")))
+    end
+    return nothing
+end
+
+# `remake(prob; p = …)`: the seeds of the old problem that the new map does not set, and the Duals
+# of the new map; `nothing` when none is left
+function CorePotts.remake_tangent(info::PottsModelInfo, prob, pgiven, pnew)
+    (pgiven === nothing || pgiven === missing) && return prob.tangent
+    given = _given_names(info, pgiven)
+    old = prob.tangent === nothing ? Pair{Symbol, Any}[] : prob.tangent.seeds
+    seeds = Pair{Symbol, Any}[s for s in old if !haskey(given, s.first)]
+    append!(seeds, [n => v for (n, v) in given if _is_dual(v)])
+    # (the initial fields' derivative parts stay: the state is kept; `remake` drops them with a new one)
+    u0 = prob.tangent === nothing ? Pair{Symbol, Any}[] : prob.tangent.u0
+    isempty(seeds) && isempty(u0) && return nothing
+    return _tangent(info.csys, info.T, pnew, seeds; u0)
+end
+# the names a parameter map sets, with the values as given
+function _given_names(info::PottsModelInfo, p)
+    p isa PottsParameters && return Dict{Symbol, Any}(k => v for (k, v) in pairs(NamedTuple(p)))
+    p isa NamedTuple && return Dict{Symbol, Any}(pairs(p))
+    _is_pairs(p) && (p = Pair[x for x in p])
+    p isa _SymbolicMap || return Dict{Symbol, Any}()
+    sys = info.csys.sys
+    out = Dict{Symbol, Any}()
+    for (k, v) in _expand_vectors(sys, Pair{Any, Any}[_localize(sys, k; strict = true) => v for (k, v) in p])
+        key = k isa Symbol ? k : _unwrap(k)
+        i = key isa Symbol ? nothing : Potts.info(key)
+        out[i === nothing ? key : i.name] = v
+    end
+    return out
 end
 
 # The non-default cadences of phases `x` (a phase, or a tuple or vector of them), appended to
@@ -798,12 +958,11 @@ _cpm_scalar(::Type{T}, v, i::Entity) where {T} = v isa Union{AbstractFloat, Inte
     catch e
         e isa Union{MethodError, InexactError, ArgumentError} || rethrow()
         throw(ArgumentError("parameter `$(i.name)` = $(_valtext(v)) does not convert to the problem's scalar type $T: " *
-            "a PottsProblem holds plain numbers for every parameter in this version (no Duals). Derivatives " *
-            "through field and ODE parameters are planned; meanwhile take finite differences of the run, or " *
-            "differentiate the fields alone in a `FieldProblem` (`Potts.fields(model)`, then `discretize`: " *
-            "ForwardDiff runs through `ExplicitEuler` and the implicit field solvers there). A parameter the CPM reads has a derivative that is zero " *
-            "almost everywhere (the acceptance of a copy is piecewise constant in it), so it belongs to " *
-            "likelihood-free inference"))
+            "a parameter object holds plain numbers (no Duals). A Dual goes to the problem: " *
+            "`PottsProblem(sys, op, tspan)` or `remake(prob; p = [k => Dual])`, whose fields then carry derivative " *
+            "parts along the run's CPM path (F3-21b); an integrator write takes a plain number. A parameter the " *
+            "CPM reads has a derivative that is zero almost everywhere (the acceptance of a copy is piecewise " *
+            "constant in it), so it belongs to likelihood-free inference"))
     end
 
 # a value in a message: a ForwardDiff Dual by its value and value type, not its type (whose tag
@@ -1109,7 +1268,10 @@ end
 # its type and nothing recompiles.
 const _SymbolicMap = Union{AbstractVector{<:Pair}, AbstractDict}
 
-CorePotts.remake_parameters(info::PottsModelInfo, prob, p::_SymbolicMap) = _set_parameter_map(info, prob.p, p)
+# (a Dual value: its primal value here, the Dual in the problem's tangent: `remake_tangent`, F3-21b)
+CorePotts.remake_parameters(info::PottsModelInfo, prob, p::_SymbolicMap) =
+    _set_parameter_map(info, prob.p, Pair{Any, Any}[k => (_is_dual(v) ? _tprimal(v) : _has_dual(v) ?
+        _refuse_dual_value(string(k), :kindtable, v) : v) for (k, v) in p])
 
 # parameter object `old` with the parameter map `p` applied as one change, then every computed
 # parameter derived again (D-F2-1)
@@ -1288,6 +1450,8 @@ function CorePotts.remake_state(info::PottsModelInfo, prob, u0)
 end
 
 function CorePotts.remake_state(info::PottsModelInfo, prob, u0::_SymbolicMap)
+    any(x -> _has_dual(last(x)), u0) && throw(ArgumentError("`remake(prob; u0 = …)` takes plain values: give initial " *
+        "values with derivative parts to the problem (`PottsProblem(sys, op, tspan)`, F3-21b)"))
     opd = _operating_point(info.csys.sys, u0)
     # keep the old capacity and the old number of free slots (room for divisions)
     old = length(prob.u0.cell.kind)

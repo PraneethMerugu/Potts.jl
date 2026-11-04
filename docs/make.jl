@@ -181,6 +181,7 @@ manual = [
     "manual/relationships.md",
     "manual/sweep.md",
     "manual/problems.md",
+    "manual/derivatives.md",
     "manual/algorithms.md",
     "manual/indexing.md",
     "manual/observables.md",

@@ -189,8 +189,8 @@ decision = "D-C8-R5"
 
 [[file]]
 path = "acceptance/p6_0af_lifecycle_followups.jl"
-sha256 = "1a868056850a794a66709d79de91445f8b1b41a7cf41578e1d2866e9831440fd"
-decision = "D-271"
+sha256 = "95f4176aa2d8dd3c3853831b6a7b1238e62738208ab1bb819ea444c3e73080fa"
+decision = "D-F3-R2"
 
 [[file]]
 path = "acceptance/p6_0aj_concurrent_builds.jl"

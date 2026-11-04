@@ -552,13 +552,14 @@ end
 
 # The `ImplicitCache` of the implicit algorithm `alg` for the fields `fields` of group `g` on
 # store `st` at raw parameters `p`, `n` substeps of `dt / n`
-function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fields, n, dt, c, backend, options, V)
+function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fields, n, dt, c, backend, options, V,
+        shared = nothing)
     s = group_program(g, alg)                       # the stepped program: the store's
     # a state with derivative parts (Dual parameters or a Dual start): the primal solve on a
     # primal copy of the store, and the tangent steps after it (F3-21a; behind a barrier: a
     # primal run compiles none of it)
     any(k -> npartials(eltype(st.bufs[fieldid(s, k)][1])) > 0, fields) &&
-        return Base.inferencebarrier(_bind_tangent)(alg, g, st, p; fields, n, dt, c, backend, options, V)
+        return Base.inferencebarrier(_bind_tangent)(alg, g, st, p; fields, n, dt, c, backend, options, V, shared)
     op = _operator(g.spec, alg)
     rs = residual_program(g, alg)
     keys = collect(String, fields)
