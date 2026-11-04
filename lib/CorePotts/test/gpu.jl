@@ -738,14 +738,14 @@ end
     lat = Lattice((96, 96))
     σ, kinds = blocks((96, 96), 6)
     pf = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0)
-    f = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackDeltaH{Float64}())
+    f = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackDeltaH{Float32}())
     prob = PottsProblem(f, initial_state(σ, kinds), lat, (0, 30), pf)
     H(u) = total_H(u, lat, prob.contact, pf)
     for kw in ((; retries = 2), (; retries = 4, colors = :replacement), (; stride = 3, retries = 1))
         alg = CheckerboardCPM(; proposal = Moore(1), counts = true, kw...)
         g = solve(remake(prob; seed = 3), alg; backend)
         u0, u = g.u[1], g.u[end]
-        @test g.stats.accepted_ΔH ≈ H(u) - H(u0) rtol = 1e-5
+        @test g.stats.accepted_ΔH ≈ H(u) - H(u0) rtol = 1e-4                    # Float32 track
         @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(kinds)]
         @test solve(remake(prob; seed = 3), alg; backend).u[end].σ == u.σ        # deterministic
         s = g.stats
