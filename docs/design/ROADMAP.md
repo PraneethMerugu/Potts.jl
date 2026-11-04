@@ -349,6 +349,7 @@ Every item's acceptance also includes the standing checks:
   - Quantify it across the gate models.
   - Decide whether it is expected (the colouring order, proposal law) and document it, or whether it is a defect.
   - This matters for P6.0bj: GPU ensembles are checkerboard-only, and frozen reproductions use SequentialCPM.
+  - (2026-11-03, user) Close the gap with small kernel changes, not exactness: plan, variants and pre-registered criteria in `research/checkerboard-kinetics.md`. Phase 1, the closeness harness `benchmark/kinetics.jl` with its three controls; Phase 2, the variants (counters, `colors = :replacement`, `retries`, `cap`, `stride`), each with its correctness tests; Phase 3, the variant matrix on the PC; Phase 4, defaults in a DECISIONS entry. Branch `feat/cb-kinetics`.
 - [x] (merge 2026-10-07, D-161) **P6.0bd** (D-154, D-156) Deviations tables in the four-column form: our value, the paper's value, suspected cause, author-question status.
   - Apply it to the frozen 09 and 10 pages and the tutorial template, re-freezing under D-154.
   - Retire the 09 V-OS1–V-OS5 rows (Graner–Glazier only, D-156).
