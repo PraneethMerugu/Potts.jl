@@ -29,11 +29,26 @@ Each is a `CheckerboardCPM` keyword. The defaults stay at today's behavior until
 | Variant | Change | Targets | Cost |
 |---|---|---|---|
 | `retries = R` | Losers re-propose against the updated state in up to R extra propose/commit passes per color; what is left after R is dropped and counted | E1 | 2 launches per color per retry, over a compacted loser list |
-| `cap = K` | An atomic commit counter per cell replaces the max-priority claim: a copy commits while both cells' counters stay ≤ K | E1 (E2 grows with K) | None; ΔH of cell-level terms can be up to K − 1 commits stale. `Global` connectivity forces K = 1 |
 | `colors = :replacement` | C independent uniform color draws per MCS instead of a permutation; the sub-step index joins the draw keys | E4 | None |
 | `stride = s` | The color stride, at least the footprint reach | E1–E3 | 2 s^d launches per MCS |
 
-New stats for every variant: accepted, committed, retried and dropped copies per MCS.
+New stats (`counts = true`): accepted, committed and dropped copies.
+
+**Dropped from the plan (2026-11-03): `cap = K`, bounded staleness.** A single pass that lets K
+copies per cell commit must pick K claimants per cell. Atomics give a top-1 (the max claim) or
+an arbitrary order (the first K increments). The arbitrary order is not deterministic on GPUs,
+and keeping free determinism is a project rule. A deterministic top-K needs one more pass per
+K, which costs as much as a retry that re-evaluates ΔH. `retries` therefore dominates `cap`.
+
+**Retries decide each proposal once (2026-11-03).** The first build claimed only accepted copies
+and retried the accepted losers. The harness measured a steady-state bias: on the foam, volume
+and perimeter standard deviations fell by about 11% (r = 0.88–0.91, static FAIL), for every R.
+A retried copy had to pass the acceptance test twice, and a proposal rejected against a stale
+volume was never retried. Under retries every real proposal now claims, accepted or not. Its
+decision stands only if it wins every claim, so no copy touching its cells acts before it in
+that pass; otherwise it is undecided and proposed again. Losing then does not depend on the
+proposal's own acceptance. The cost is more conflicts: about 8 retries recover sequential's
+commit rate at stride 2, against 2–4 for the first build.
 
 ## 3. Closeness harness
 
@@ -107,8 +122,8 @@ Fixed before any variant is measured.
 
 ## 5. Decisions after measurement
 
-The variant matrix (Phase 3) runs on the PC: stock; R ∈ {1, 2, 4}; K ∈ {2, 3, 4}; each with and
-without `colors = :replacement`; s ∈ {2, 3, 4}. The defaults are then set in a DECISIONS entry,
+The variant matrix (Phase 3) runs on the PC: stock; R ∈ {1, 2, 4, 8, 16}; with and without
+`colors = :replacement`; s ∈ {2, 3, 4}, alone and with retries. The defaults are then set in a DECISIONS entry,
 and the `CheckerboardCPM` docstring and the "Choosing an algorithm" page state the remaining
 gap per variant. The D-220 ruling and the OpenVT checkerboard record are not changed.
 
@@ -119,7 +134,6 @@ gap per variant. The D-220 ruling and the OpenVT checkerboard record are not cha
 | Counters | Equal recounts from a logged run |
 | `colors = :replacement` | Visit counts follow Binomial(C, 1/C) (chi-square); two visits of one color in one MCS get different draws (negative control: without the sub-step key the test fails) |
 | `retries` | ΔH of every committed copy equals brute force at commit; volume trackers equal recounts; no cell changes twice in one pass; every loser ends committed, rejected or counted as dropped; negative control: a disabled claim fails these |
-| `cap` | Counters never exceed K; the ΔH error stays within the bound; K = 1 matches today's statistics; `Global` forces K = 1 |
 | `stride` | Coloring valid for every s (the seam tests extended) |
 | All | Same seed, same state: run to run and across workgroup sizes |
 
