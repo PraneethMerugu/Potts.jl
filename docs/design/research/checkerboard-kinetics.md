@@ -192,6 +192,18 @@ run, against 0.24 sequential and 2.31 stock. Case (a) (10⁴ cells) was not run.
 Wall time per run on the GPU: 11.5–11.9 s, against 4.6 s for the stock record (which also ran
 1095-MCS cycles rather than 775).
 
+### Gate (2026-11-04, branch head)
+
+- CorePotts with `POTTS_GPU=rocm`: the new tests (74 CPU, 15 device), the device suite (393) and
+  the device IR scan (129) pass. One error: QA ExplicitImports on
+  `ext/CorePottsAMDGPUExt.jl` (non-public imports), a file this branch does not touch; it fires
+  only with AMDGPU loaded.
+- Potts group: pass.
+- PottsModels group (with `OPENVT_PACKAGE_BULK`, as CI): 41,271 pass, 2 fail, in
+  `acceptance/p6_0ap_setter_loose_ends.jl` (`setp` raises an `ErrorException`, the test wants an
+  `ArgumentError`). The same 2 fail at the base commit without this branch's CorePotts changes.
+  Frozen files unchanged.
+
 ## 4. Pre-registered criteria
 
 Fixed before any variant is measured.
