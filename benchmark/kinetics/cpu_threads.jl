@@ -19,7 +19,8 @@ problem3(L) = (s = cubes(L, 5); PottsProblem(GRANER, initial_state(s...), Lattic
     merge(graner_params(), (; V0 = 64.0)); contact = Moore(1), seed = 5))
 
 function rate(prob, alg; inline = false, threaded = false)
-    CorePotts.BLOCK_GRAIN[] = inline ? typemax(Int) : 2048
+    grain = CorePotts.BLOCK_GRAIN[]
+    CorePotts.BLOCK_GRAIN[] = inline ? typemax(Int) : grain
     CorePotts._FORCE_BLOCK_KERNEL[] = threaded
     try
         integ = init(prob, alg; save_start = false, save_end = false)
@@ -29,7 +30,7 @@ function rate(prob, alg; inline = false, threaded = false)
         end
         return NMCS / t, integ
     finally
-        CorePotts.BLOCK_GRAIN[] = 2048
+        CorePotts.BLOCK_GRAIN[] = grain
         CorePotts._FORCE_BLOCK_KERNEL[] = false
     end
 end

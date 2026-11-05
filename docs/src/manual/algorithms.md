@@ -58,9 +58,14 @@ against 0.2).
 - **Fewer parts, faster, less close.** Fewer parts per axis put more copies in flight
   at once. Copies of one cell in flight together each read the cell's totals from before
   the other's commit, which is the source of the remaining deviation.
-- **Not reproducible on a GPU.** On a device the outcome depends on the timing of the work
-  items, so the same seed does not give the same run. On the CPU the work items run one
-  after another and a run is reproducible.
+- **Not reproducible in parallel.** On a device, or on the CPU with more than one Julia
+  thread and more than 512 blocks, the outcome depends on the timing of the work items, so
+  the same seed does not give the same run. With one thread, or on a small lattice, the
+  work items run one after another and a run is reproducible.
+- **Threads on the CPU.** With several Julia threads, each phase of a large lattice is
+  split across them: 4 threads ran 3.3–3.7× faster than one on 576² and larger (PC, AMD
+  Ryzen AI Max+ 395). Each phase waits for its slowest thread, so start Julia with fewer
+  threads than free CPUs; with one thread per busy core, the speed-up fell below one.
 
 ## Skipping the interior: `skip_interior = true`
 

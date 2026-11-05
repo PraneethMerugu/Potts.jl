@@ -224,9 +224,11 @@ struct CheckerboardCache{N, B, TK, CN, SL, K1, K2, K3, GS}
     host::Bool                        # the CPU backend
 end
 
-# A CPU phase of at most this many work items runs inline: below it the threaded launch costs
-# more than it saves (measured on the PC, `benchmark/kinetics/cpu_threads.jl`)
-const BLOCK_GRAIN = Ref(2048)
+# A CPU phase of at most this many work items runs inline. Measured on the PC
+# (`benchmark/kinetics/cpu_threads.jl`, 2026-11-05): threads gain under 1.3× at 324 blocks and
+# 1.5–2× from 1000 blocks; 4 threads reach 3.3–3.7× at 5000 blocks and above. Each phase ends at a
+# barrier, so a thread per busy core stalls on any other process: leave the OS a spare CPU.
+const BLOCK_GRAIN = Ref(512)
 # tests: the threaded launch on any phase size and thread count
 const _FORCE_BLOCK_KERNEL = Ref(false)
 _block_inline(backend, n) = false
@@ -290,6 +292,7 @@ function checkerboard_mcs!(st, cache::CheckerboardCache{N}, f::F, p, ctx, law::L
     launches = 0
     for (q, ph) in enumerate(order)
         off = phase_offset(l, ph)
+        launches += 1                                # an inline phase counts as one, like a one-workgroup launch
         if cache.inline
             for I in CartesianIndices(l.nblocks)
                 block_stay!(Tuple(I) .- 1, st, f, p, ctx, law, key, mcs, l, off, s, q, cache.track, cache.cnt, cache.status,
@@ -299,7 +302,6 @@ function checkerboard_mcs!(st, cache::CheckerboardCache{N}, f::F, p, ctx, law::L
         end
         cache.kernel(st, f, p, ctx, law, key, mcs, l, off, s, q, cache.track, cache.cnt, cache.status, sl;
             ndrange = l.nblocks, workgroupsize = cache.groupsize)
-        launches += 1
         serial || continue
         if cache.host
             serial_pass!(st, f, p, ctx, law, key, mcs, l, off, cache.track, cache.cnt, cache.status, sl)
