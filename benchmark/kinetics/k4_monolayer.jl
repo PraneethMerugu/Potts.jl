@@ -31,12 +31,12 @@ function k4_run(prob, seed, c; backend = cb_backend())
     fr = PottsModels.openvt_frame(u; β = c.beta, γ = c.gamma)
     o1 = (; n_mean = mean(fr.n), n_sd = std(fr.n), n6 = mean(fr.n .== 6), i0 = mean(fr.i .== 0), cells = length(fr.n))
     return (; retcode = Symbol(sol.retcode), mcs = Int(sol.t[end]), rec, divisions = sol.stats.lifecycle.divisions,
-        live = count(>(0), Array(u.cell.volume)), o1, committed = sol.stats.committed, dropped = sol.stats.dropped)
+        live = count(>(0), Array(u.cell.volume)), o1, committed = sol.stats.committed)
 end
 tsf, o1f, rf = joinpath(K4_OUT, "timeseries.tsv"), joinpath(K4_OUT, "o1.tsv"), joinpath(K4_OUT, "runs.tsv")
 open(io -> println(io, join(TS_HEADER, '\t')), tsf, "w")
 open(io -> println(io, join(O1_HEADER, '\t')), o1f, "w")
-open(io -> println(io, join(("case", "k", "seed", "retcode", "mcs", "divisions", "live", "wall_s", "committed", "dropped"), '\t')), rf, "w")
+open(io -> println(io, join(("case", "k", "seed", "retcode", "mcs", "divisions", "live", "wall_s", "committed"), '\t')), rf, "w")
 @info "K4" cycle α alg = K4_ALG
 k4_run(cb_problem(400), 1, merge(P615F_CASES.b, (; cells = 2)))           # compile
 for c in K4_CASES, k in 1:K4_RUNS
@@ -50,7 +50,7 @@ for c in K4_CASES, k in 1:K4_RUNS
     end
     open(io -> println(io, join((c, sd, r.mcs, r.o1.cells, cb_f64(r.o1.n_mean), cb_f64(r.o1.n_sd), cb_f64(r.o1.n6),
         cb_f64(r.o1.i0)), '\t')), o1f, "a")
-    open(io -> println(io, join((c, k, sd, r.retcode, r.mcs, r.divisions, r.live, round(wall; digits = 2), r.committed, r.dropped), '\t')), rf, "a")
+    open(io -> println(io, join((c, k, sd, r.retcode, r.mcs, r.divisions, r.live, round(wall; digits = 2), r.committed), '\t')), rf, "a")
     k % 10 == 0 && @info "run" c k r.mcs lost = r.divisions + 1 - r.live wall = round(wall; digits = 1)
 end
 # the comparison, as `collect_main` does it
