@@ -67,6 +67,7 @@ stream_id(name::Symbol) = stream_id(String(name))
 const STREAM_PROPOSAL = stream_id("CorePotts.proposal")      # direction, acceptance, priority
 const STREAM_SEQUENTIAL_TARGET = stream_id("CorePotts.sequential_target")
 const STREAM_COLOR_ORDER = stream_id("CorePotts.color_order")
+const STREAM_BLOCK = stream_id("CorePotts.block")                  # block scheme: direction, acceptance, site
 const STREAM_BOUNDARY_SITE = stream_id("CorePotts.boundary_site")  # skip, target, direction, acceptance
 const STREAM_CLAIM_ORDER = stream_id("CorePotts.claim_order")      # permuted claim priorities (> 2^24 sites per color)
 const RESERVED_STREAMS = (STREAM_PROPOSAL, STREAM_SEQUENTIAL_TARGET, STREAM_COLOR_ORDER, STREAM_BOUNDARY_SITE,

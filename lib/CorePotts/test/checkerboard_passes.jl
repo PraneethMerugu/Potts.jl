@@ -169,6 +169,54 @@
             CheckerboardCPM(; cells = :shared))
     end
 
+    @testset "blocks: exact ΔH on the CPU" begin
+        # the CPU runs the work items one after another: every attempt sees every earlier one
+        for kw in ((;), (; block = 3), (; block = 4), (; block = 5, switches = 5), (; block = 3, switches = 3)), seed in 1:2
+            sol = solve(remake(prob; seed), CheckerboardCPM(; proposal = Moore(1), scheme = :blocks, kw...))
+            u0, u = sol.u[1], sol.u[end]
+            @test sol.stats.accepted_ΔH ≈ H(u) - H(u0) atol = 1e-6
+            @test abs(H(u) - H(u0)) > 100
+            @test u.cell.volume == recount(u)
+        end
+        a = solve(remake(prob; seed = 4), CheckerboardCPM(; scheme = :blocks, block = 3)).u[end]
+        b = solve(remake(prob; seed = 4), CheckerboardCPM(; scheme = :blocks, block = 3)).u[end]
+        @test a.σ == b.σ                                   # the CPU is deterministic
+    end
+
+    @testset "blocks: layout covers every site once" begin
+        # each site is (block, phase, u) for exactly one triple, and a draw picks u uniformly
+        for (dims, b) in (((30, 30), 3), ((31, 17), 2), ((12, 8, 6), 2), ((100, 100, 23), 3), ((5, 9), 3))
+            N = length(dims)
+            l = CorePotts.BlockLayout(dims, b)
+            nbox = CorePotts.boxsize(l)
+            hits = zeros(Int, dims)
+            for blk in 1:CorePotts.nblocks(l), ph in 1:(2^N), u in 0:(nbox - 1)
+                inside, x = CorePotts.block_site(l, blk, ph, UInt32(u) * UInt32(cld(2^32, nbox)))
+                inside && (hits[x...] += 1)
+            end
+            @test all(==(1), hits)
+        end
+        l = CorePotts.BlockLayout((30, 30), 3)
+        c = zeros(Int, 30, 30)
+        for blk in 1:25, i in 1:900
+            inside, x = CorePotts.block_site(l, blk, 1, draw(RNGKey(1), 1, blk, CorePotts.STREAM_BLOCK, i)[3])
+            c[x...] += 1
+        end
+        f = filter(>(0), vec(c))
+        @test length(f) == 225 && maximum(abs.(f .- 100)) < 50     # 100 per site of phase 1
+    end
+
+    @testset "blocks: refusals" begin
+        @test_throws ArgumentError init(prob, CheckerboardCPM(; scheme = :blocks, block = 0))       # below the footprint
+        @test_throws ArgumentError init(prob, CheckerboardCPM(; scheme = :blocks, block = 3, switches = 4))
+        @test_throws ArgumentError init(prob, CheckerboardCPM(; scheme = :grid))
+        cl = CPMFunction(gg_delta_H; temperature = gg_temperature, claims = (st, p, prop, ctx) -> (Int32(1),))
+        @test_throws ArgumentError init(PottsProblem(cl, initial_state(σ, kinds), lat, (0, 2), gg_params()),
+            CheckerboardCPM(; scheme = :blocks))
+        s = solve(remake(prob; seed = 5), CheckerboardCPM(; scheme = :blocks, counts = true)).stats
+        @test s.committed == s.accepted > 0 && s.dropped == 0
+    end
+
     @testset "retries with a Global veto" begin
         # the connectivity path (`propose_conn_body!`) with retries: cells stay in one piece
         # and the tracked ΔH stays exact

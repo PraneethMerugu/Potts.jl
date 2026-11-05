@@ -86,6 +86,7 @@ include("algorithms.jl")
 include("sequential.jl")
 include("boundary_site.jl")
 include("checkerboard.jl")
+include("blocks.jl")
 include("problem.jl")
 include("checkpoint.jl")
 

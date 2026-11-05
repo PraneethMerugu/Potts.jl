@@ -767,6 +767,18 @@ end
     cg = [solve(remake(prob; seed), alg; backend).stats.committed for seed in 1:6]
     cc = [solve(remake(prob; seed), alg).stats.committed for seed in 11:16]
     @test abs(mean(cg) / mean(cc) - 1) < 0.05
+    # the block scheme: concurrent live reads and atomic commits keep the trackers exact (the
+    # run is not deterministic on a device); the device commits at the CPU's rate
+    for kw in ((; block = 3), (; block = 4, switches = 4))
+        alg = CheckerboardCPM(; proposal = Moore(1), counts = true, scheme = :blocks, kw...)
+        g = solve(remake(prob; seed = 3), alg; backend)
+        u = g.u[end]
+        @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(kinds)]
+        @test g.stats.committed == g.stats.accepted > 0 && g.stats.dropped == 0
+        cg = [solve(remake(prob; seed), alg; backend).stats.committed for seed in 1:6]
+        cc = [solve(remake(prob; seed), alg).stats.committed for seed in 11:16]
+        @test abs(mean(cg) / mean(cc) - 1) < 0.05
+    end
 end
 
 const DEVICE_IR_SCAN = joinpath(@__DIR__, "..", "..", "..", "test", "shared", "device_ir_scan.jl")

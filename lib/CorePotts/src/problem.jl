@@ -330,6 +330,8 @@ function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, save
             "CheckerboardCPM(; retries = $(alg.retries)): use 0 to $MAX_RETRIES"))
         alg.cells in (:exclusive, :shared) || throw(ArgumentError(
             "CheckerboardCPM(; cells = $(repr(alg.cells))): use :exclusive or :shared"))
+        alg.scheme in (:colors, :blocks) || throw(ArgumentError(
+            "CheckerboardCPM(; scheme = $(repr(alg.scheme))): use :colors or :blocks"))
         alg.cells === :shared && alg.retries > 0 && throw(ArgumentError(
             "CheckerboardCPM(; cells = :shared): no copy is left undecided, so `retries` does not apply"))
     end
@@ -354,7 +356,9 @@ function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, save
     _custom_frozen(prob.f.sys) && _frozen_reads(prob.f.sys, prob.u0)
     state = _to_backend(backend, deepcopy(prob.u0))
     p = _to_backend(backend, prob.p)
-    cache = alg isa CheckerboardCPM ?
+    cache = alg isa CheckerboardCPM && alg.scheme === :blocks ?
+            BlockCache(backend, lat, prob.f, relation(_proposal(alg, prob), lat); alg.block, alg.switches, alg.counts) :
+            alg isa CheckerboardCPM ?
             CheckerboardCache(backend, lat, prob.f, ncells(prob.u0), relation(_proposal(alg, prob), lat);
                 alg.stride, alg.retries, alg.counts, replacement = alg.colors === :replacement, shared = alg.cells === :shared) :
             _skips_interior(alg) ? BoundaryCache(state.σ, ctx.mobility, ctx.lattice, ctx.proposal) : nothing
