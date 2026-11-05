@@ -159,13 +159,13 @@ decision = "D-254"
 
 [[file]]
 path = "acceptance/p6_0v3_launch_fusion.jl"
-sha256 = "d12ca4bae760098b4a42669c82c8dcb3ae84f03c99b809f18fb4d9f53527e99b"
-decision = "D-157"
+sha256 = "7579fa3093605afeccbd01ffd5387f6cda4e358fb158d95a0d82b8d590e1a3e4"
+decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0x_gather_ode_alloc.jl"
-sha256 = "7326f3ab86e14b8a10d69346b47c7ed31b313c6359889ee898270000403b2936"
-decision = "D-196"
+sha256 = "bc1c28a64a30aeadd7a0f99722a3e6f055de27e8c2ae50dfca557bdf91ae3e98"
+decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0y_stable_substeps.jl"
@@ -174,8 +174,8 @@ decision = "D-102"
 
 [[file]]
 path = "acceptance/p6_0ag_ode_expand_all.jl"
-sha256 = "7554625f81339b84834f63f6c26095fed555d7df1ebeb33d8cd222bb3ee7e153"
-decision = "D-196"
+sha256 = "4cf79b11f08d0248f14863df983cecdc579c1edab86a4e4918c927820ad793c0"
+decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_1e_gg_margin.jl"
@@ -184,13 +184,13 @@ decision = "D-106"
 
 [[file]]
 path = "acceptance/p6_0ah_canonical_term_order.jl"
-sha256 = "9081e18f828c2859575aacf960f5657de49fc166b4fa3d2170adbc104d118c61"
-decision = "D-196"
+sha256 = "b271f1dae9f76941868383565ae042df42b608b6ab4ef26c5839a4c01a9a526a"
+decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0af_lifecycle_followups.jl"
-sha256 = "ec48cf524ecb6131870358fb519b173e078900d6ec9c77728c3cac977a1b70df"
-decision = "D-254"
+sha256 = "32037c934035408e9cc28b34f8ed5afaa8982beacc5a23a63b245bfcde97a8b8"
+decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0aj_concurrent_builds.jl"
@@ -239,8 +239,8 @@ decision = "D-117"
 
 [[file]]
 path = "acceptance/p6_0p_cadence_fingerprint.jl"
-sha256 = "7214ca4beb5b57f6f9fc4628e69eec9302f98c41a6186dcabd9348eac8b88a91"
-decision = "D-237"
+sha256 = "81fc963c9e08a08ee8b164e1007cc9c59acc121559212da64d2121f58c19b75b"
+decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0q_time_fold_metal.jl"
@@ -249,48 +249,48 @@ decision = "D-157"
 
 [[file]]
 path = "acceptance/p6_0t_integral_refresh.jl"
-sha256 = "038e71b191c28df6270138e79581eb111a7bde4bbbee35acb8f33024dd4fae71"
-decision = "D-237"
+sha256 = "46f673255638e98e3260e2e7f3ed3afc8f7f991e3d090c6683c135904d750b7a"
+decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0aq_acceptance_fingerprint.jl"
-sha256 = "add062b7128c20dbe204bb65c5a82748a951bff84323b496da8871e6dad7af00"
-decision = "D-237"
+sha256 = "3509f26584d0ba8830c213485a0ce397992c54b86d1000dfd5ef27829a653357"
+decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0ar_neighbourhood_fingerprint.jl"
-sha256 = "0cdc57b4b0ab239a562c8b51044460c482c38fcc3cafd3304a5e8a3ebb3cbd93"
-decision = "D-237"
+sha256 = "02ce009c96fc59a8927a653ff4f18ac549c56c652b68146e84b6d95ba6fac1d2"
+decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0as_sweep_validation.jl"
-sha256 = "43e031d9b85480b2a30408113e129193878a8a30c73de2b8bc97b2a18678ffd3"
-decision = "D-237"
+sha256 = "975f7552f27a6fbc71f4e51466b08b8f41d7c79f00e6f81fdf1dd9f0b36b1498"
+decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0au_integral_readers.jl"
-sha256 = "c5c8c8773e11596ade6f4ffba3700f3cb8bb705c8e3b12695081065af3ab37fd"
-decision = "D-237"
+sha256 = "630044dd623f87bab79bd23ec4de601c7e6e24812fc6d2b10b83ce44d4c30d00"
+decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0at_relation_fingerprint.jl"
-sha256 = "039fe55366c4a1bc2758a7390eb0af4bc8904d3df6186cb10a0f09b69184e5e8"
-decision = "D-237"
+sha256 = "8b7ba76b785721a670e6cfe4730f445fbee5c128d70595b4e67c2448cd3c37d2"
+decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0av_mcs_duration.jl"
-sha256 = "8d84e15e530be1821c7262c500ad0e5720cf9f1097cfae47d0a0174fb6a02975"
-decision = "D-237"
+sha256 = "2a621ed010794fbc62dd2b36a5182750e5f9d586637183b70215a65713be6863"
+decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0ax_gather_scan.jl"
-sha256 = "5bf478c53400514d470dc1f5d0c487c90e27008435b12357fbd411d50fc7a67b"
-decision = "D-237"
+sha256 = "e8a34f164523db02660e60431ac6ca90b66a9e3dd84e4c069a8121a0f5c5161d"
+decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0aw_on_copy_integral.jl"
-sha256 = "fe21125ac6f7080352e8c9ba4081d7f28b88c0412bb399b8d19754945b04c267"
-decision = "D-196"
+sha256 = "53396eb92c855474aa756d813e35b07a5499b8566348c29443bec63a14b72bce"
+decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0v2b_frozen_refresh_bytes.jl"
@@ -299,13 +299,13 @@ decision = "D-157"
 
 [[file]]
 path = "acceptance/p6_0b2_link_followups.jl"
-sha256 = "b2f29c6b87f90566e937bff2b80843dcdfd7f4e25dcf2dfd326a75e31bdaf0e0"
-decision = "D-127"
+sha256 = "193d705e9726c53656dd4f0c09d6e86e030ab235fa5ec03a8093a13a6b9a8b39"
+decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0c2_canonical_followups.jl"
-sha256 = "66d71932b586127a2d7f4b054d09a3c4db46703e95cf67c4d28d4c3d1521f8e3"
-decision = "D-237"
+sha256 = "d609558aad635add53863d277a4c30c5df39dad9ed3f121dcf7aca4e1a81e1ab"
+decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0u_components_gaps.jl"
@@ -314,13 +314,13 @@ decision = "D-133"
 
 [[file]]
 path = "acceptance/p6_0o_abstract_system.jl"
-sha256 = "22555e479529fd824554e033816366beda2b934f925e4bbd06d4e4ae865e6e36"
-decision = "D-237"
+sha256 = "2f06d30f3859f3fe90d77bfd7fff3cddd9201f8e437f5f2e850f17cc07a4f885"
+decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0g_kind_classes.jl"
-sha256 = "aaa5055a040698c95db68b1569b8e490d39b8b830e9b200fa677d1eb0fffa67b"
-decision = "D-237"
+sha256 = "93ffe48837d21b86c56ab2bb17e81aa2c888b1830bf41755263583c69535c8e4"
+decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_1b_boundary_anneal.jl"
@@ -334,8 +334,8 @@ decision = "D-138"
 
 [[file]]
 path = "acceptance/p6_3a_topology_track.jl"
-sha256 = "7e6f29053be634b4f1391d126210460f15e1b4c0d5fca847c75e75883826aa5c"
-decision = "D-254"
+sha256 = "34a7009c952a08b90dda0b88e00e025ca7c96b203297013490cb19c330d35ed1"
+decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_3c_eden_splits.jl"
@@ -369,8 +369,8 @@ decision = "D-157"
 
 [[file]]
 path = "acceptance/p6_15c_openvt_table_s1.jl"
-sha256 = "2d1e76efe22ec63118ab2b41b28392a620306e3832b9cfe4973d03b645f1dc03"
-decision = "D-157"
+sha256 = "3cdd710107339b8758ae638aa7f9ed1f13ada8f1c97f398f3c08b87b7e95edcf"
+decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_3d_merks_split.jl"
@@ -394,8 +394,8 @@ decision = "D-160"
 
 [[file]]
 path = "acceptance/p6_0bn_ode_mtkcompile.jl"
-sha256 = "fd942b5916fc8d06aa558c3b72385225ad1fa2be748fd925917884a93e8c657d"
-decision = "D-165"
+sha256 = "4398453919123ba85e12425c445fe1bc7148587affbcaa4283afad39b6015f61"
+decision = "D-271"
 
 [[file]]
 path = "reproductions/09_cell_sorting.jl"
@@ -494,8 +494,8 @@ decision = "D-254"
 
 [[file]]
 path = "acceptance/p6_4a1_copy_direction.jl"
-sha256 = "a61dd290c76bce65b9ed4b74552ce81b7261e929136b3e7e3434a38d0a181000"
-decision = "D-207"
+sha256 = "ed6b772093fe5cbc8d945ac963b4847bef5889a04391f161fe2b1054f8d05d3d"
+decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_9a_global_connectivity.jl"
@@ -544,8 +544,8 @@ decision = "D-202"
 
 [[file]]
 path = "acceptance/p6_0bk2_skip_interior.jl"
-sha256 = "0af60f5919973c930d7a8d88b02c03c3e97d4b7e47ad55f3a65e3a0f095dce16"
-decision = "D-237"
+sha256 = "b058cc9cef30358369612de566a9a7f353746e640346c1dab6a5cbddc47fc7e5"
+decision = "D-271"
 pins = ["P60BK2_IR"]   # D-250: literals may be re-pinned without the maintainer (code-shape IR hash)
 
 [[file]]
@@ -555,13 +555,13 @@ decision = "D-205"
 
 [[file]]
 path = "acceptance/p6_0ba_boundary_only_reach.jl"
-sha256 = "a559af4ad77db74d9bda4ff4b361fb5a68e27e6ea6fa115cd820220d32da4709"
-decision = "D-209"
+sha256 = "9b6160b61bb205089366dec66672a268f7ebf0b1a71134680fd929c0e8297fb2"
+decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0ca_gather_energy.jl"
-sha256 = "7ff52c90870eb002f89a1c0077294d07842c7567c9d006cdd6e44e11a33221ed"
-decision = "D-209"
+sha256 = "d82232108bfdc446dfb0522c309b470e278264e35e118976858244cd1d9d13bd"
+decision = "D-271"
 
 [[file]]
 path = "reproductions/15_openvt_d211.jl"
@@ -590,8 +590,8 @@ decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_5b_convert.jl"
-sha256 = "682d9477cf92fa044568eb0316a0dac492d56a9113f75cd4a5c7f46de82a347b"
-decision = "D-233"
+sha256 = "28f228a1006b7baa325d30527d404722a074625996453791ef5b49c9792f5304"
+decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_5b_ownership.jl"

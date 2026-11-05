@@ -246,15 +246,15 @@ p60aq_unchanged() = (
 
 # the fixture recorded on 432a0a74; the PottsModels systems are the P6.0p pins (4e81e1eb)
 const P60AQ_FINGERPRINTS = Dict{String, UInt64}(
-    "fixture Metropolis()" => 0x6eb337cf0a174b0e,
-    "fixture Metropolis(offset = 0)" => 0x6eb337cf0a174b0e,
-    "GranerGlazier" => 0x04a4528dcdf3fcb8,   # re-pinned under D-122
-    "WortelAct" => 0xce4f1cec820b20fe,   # re-pinned under D-124
-    "WortelAct connected" => 0x7f27099ea6f348a3,   # re-pinned under D-124; re-pinned under P6.3g (D-193): fingerprint only
-    "MerksVasculogenesis" => 0xe51b575884b86e8d,   # re-pinned under D-122; re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)
-    "SingleDivisionFixture" => 0x13a4ddc2bb677287,
-    "OpenVTGrowingMonolayer" => 0xfcecc4612f387b5e,   # re-pinned under D-122
-    "AkeebInvasion" => 0x45083869c8f05911,   # re-pinned under D-237 (cell draws by id and generation)
+    "fixture Metropolis()" => 0x9b4704d8a49af92f,
+    "fixture Metropolis(offset = 0)" => 0x9b4704d8a49af92f,
+    "GranerGlazier" => 0xe6e09483034b4193,   # re-pinned under D-122
+    "WortelAct" => 0x9a9fcac5fc22b7c5,   # re-pinned under D-124
+    "WortelAct connected" => 0xe1e52da078e581c9,   # re-pinned under D-124; re-pinned under P6.3g (D-193): fingerprint only
+    "MerksVasculogenesis" => 0xeb4c1851b0fe68da,   # re-pinned under D-122; re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)
+    "SingleDivisionFixture" => 0xd2bed53e2590b709,
+    "OpenVTGrowingMonolayer" => 0x34b40af65c56a113,   # re-pinned under D-122
+    "AkeebInvasion" => 0x72ced0fc70498f16,   # re-pinned under D-237 (cell draws by id and generation)
 )
 
 @testset "P6.0aq: fingerprints under the default acceptance law unchanged" begin

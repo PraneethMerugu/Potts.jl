@@ -550,21 +550,21 @@ const P60AX_FINGERPRINTS = Dict{String, UInt64}(
     "at drive Moore(2)/Moore(1)" => 0x31e49234ba0e48d6,
     "at ode Moore(2)(40)" => 0x98d4f6f27d29142c,
     "at update Moore(1)(40)" => 0xc9e3fc7178508f76,
-    "divwhen far=Ball(2.0)" => 0x870daf9ad46577be,
-    "divwhen gather-free" => 0x5329a473752545d4,
-    "divrule far=Moore(1)" => 0xb72c5fc2a24ed15c,
-    "link far=Ball(2.0)" => 0x83e53d1a3a10bb5e,
-    "unlink far=Ball(2.0)" => 0x32e5b92a9482fa19,
-    "edge far=Moore(1)" => 0xe97095c64a5b8680,   # re-pinned under D-209 (P6.0ca): static-value fold (was 0xef5c912facf5e094)
+    "divwhen far=Ball(2.0)" => 0x32743601d701f21d,
+    "divwhen gather-free" => 0x8ac448b1065e9cf8,
+    "divrule far=Moore(1)" => 0x9610345a66da7b1c,
+    "link far=Ball(2.0)" => 0x18b68385523b1eba,
+    "unlink far=Ball(2.0)" => 0x46f234aed2908eec,
+    "edge far=Moore(1)" => 0xd0bfacce83cc07bc,   # re-pinned under D-209 (P6.0ca): static-value fold (was 0xef5c912facf5e094)
     "P60ahAt RK4" => 0x52fad8cebbee12ed,
     "P60ahAt ExplicitEuler" => 0xe41e0c4a682a9697,
-    "GranerGlazier" => 0x04a4528dcdf3fcb8,
-    "WortelAct" => 0xce4f1cec820b20fe,
-    "WortelAct connected" => 0x7f27099ea6f348a3,   # re-pinned under P6.3g (D-193): fingerprint only
-    "MerksVasculogenesis" => 0xe51b575884b86e8d,   # re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)
-    "SingleDivisionFixture" => 0x13a4ddc2bb677287,
-    "OpenVTGrowingMonolayer" => 0xfcecc4612f387b5e,
-    "AkeebInvasion" => 0x45083869c8f05911,   # re-pinned under D-237 (cell draws by id and generation)
+    "GranerGlazier" => 0xe6e09483034b4193,
+    "WortelAct" => 0x9a9fcac5fc22b7c5,
+    "WortelAct connected" => 0xe1e52da078e581c9,   # re-pinned under P6.3g (D-193): fingerprint only
+    "MerksVasculogenesis" => 0xeb4c1851b0fe68da,   # re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)
+    "SingleDivisionFixture" => 0xd2bed53e2590b709,
+    "OpenVTGrowingMonolayer" => 0x34b40af65c56a113,
+    "AkeebInvasion" => 0x72ced0fc70498f16,   # re-pinned under D-237 (cell draws by id and generation)
 )
 
 @testset "P6.0ax: fingerprints of models that built before are unchanged" begin

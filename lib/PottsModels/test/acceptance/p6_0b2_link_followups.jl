@@ -213,9 +213,9 @@ function p60b2_linker_state()
     return σ
 end
 
-const p60b2_FP_SPRING = 0x16701c1f8ce3fa21           # measured on 18861b25 (Float64)
-const p60b2_FP_TWO = 0x71f6f255dc6b2be8              # Two and Explicit alike (no link rule reads a default)
-const p60b2_FP_LINKER = 0xfe75f056748fa0b1
+const p60b2_FP_SPRING = 0xc954027bb6b1a299           # measured on 18861b25 (Float64)
+const p60b2_FP_TWO = 0x015f25c9c79d787a              # Two and Explicit alike (no link rule reads a default)
+const p60b2_FP_LINKER = 0x852d120c19e7d0ec
 
 # ---------------------------------------------------------------------------------------
 # A. a re-declared inherited edge variable keeps its relationship

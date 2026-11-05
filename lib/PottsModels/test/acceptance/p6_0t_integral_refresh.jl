@@ -463,13 +463,13 @@ p60t_published() = (
     (:P60tAfterOnly, () -> PottsProblem(P60tAfterOnly(; name = :m), [ownership => P60T_SIGMA, kind => [:A, :A]], (0, 10))),
 )
 const P60T_FINGERPRINTS = Dict{Symbol, UInt64}(
-    :GranerGlazier => 0x04a4528dcdf3fcb8,  # re-pinned under D-122
-    :WortelAct => 0xce4f1cec820b20fe,   # re-pinned under D-124
-    :WortelActConnected => 0x7f27099ea6f348a3,   # re-pinned under D-124; re-pinned under P6.3g (D-193): fingerprint only
-    :MerksVasculogenesis => 0xe51b575884b86e8d,  # re-pinned under D-122; re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)
-    :SingleDivisionFixture => 0x13a4ddc2bb677287,
-    :OpenVTGrowingMonolayer => 0xfcecc4612f387b5e,  # re-pinned under D-122
-    :AkeebInvasion => 0x792d84f3cf847051,   # re-pinned under D-237 (cell draws by id and generation)
+    :GranerGlazier => 0xe6e09483034b4193,  # re-pinned under D-122
+    :WortelAct => 0x9a9fcac5fc22b7c5,   # re-pinned under D-124
+    :WortelActConnected => 0xe1e52da078e581c9,   # re-pinned under D-124; re-pinned under P6.3g (D-193): fingerprint only
+    :MerksVasculogenesis => 0xeb4c1851b0fe68da,  # re-pinned under D-122; re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)
+    :SingleDivisionFixture => 0xd2bed53e2590b709,
+    :OpenVTGrowingMonolayer => 0x34b40af65c56a113,  # re-pinned under D-122
+    :AkeebInvasion => 0xd301c3168b46d474,   # re-pinned under D-237 (cell draws by id and generation)
     :P60tAfterOnly => 0xa1935accc26c00ef,
 )
 

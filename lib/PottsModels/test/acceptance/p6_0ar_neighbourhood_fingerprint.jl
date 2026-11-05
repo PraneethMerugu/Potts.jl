@@ -367,14 +367,14 @@ p60ar_unchanged() = (
         capacity = 256),
 )
 const P60AR_FINGERPRINTS = Dict{String, UInt64}(
-    "sq" => 0x6eb337cf0a174b0e,
-    "sq proposal=VonNeumann(1)" => 0x6eb337cf0a174b0e,
-    "sq contact=Moore(1)" => 0x6eb337cf0a174b0e,
-    "hex" => 0x30481847bccda4d8,
-    "cube" => 0x42f8b19ae169b688,
-    "sq Float32" => 0x70e73072398309e0,
-    "SingleDivisionFixture" => 0x13a4ddc2bb677287,
-    "AkeebInvasion" => 0x45083869c8f05911,   # re-pinned under D-237 (cell draws by id and generation)
+    "sq" => 0x9b4704d8a49af92f,
+    "sq proposal=VonNeumann(1)" => 0x9b4704d8a49af92f,
+    "sq contact=Moore(1)" => 0x9b4704d8a49af92f,
+    "hex" => 0x7492173f12caaf1d,
+    "cube" => 0x63cb17f263a5059b,
+    "sq Float32" => 0xd3eb28b83d9142c4,
+    "SingleDivisionFixture" => 0xd2bed53e2590b709,
+    "AkeebInvasion" => 0x72ced0fc70498f16,   # re-pinned under D-237 (cell draws by id and generation)
 )
 
 # `proposal = Moore(1)`: the old pins (P6.0p, 4e81e1eb) must move; the new values are

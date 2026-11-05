@@ -704,7 +704,7 @@ end
 # The fingerprint of the convert-free fixture P65bPlain on the freeze base (feat/p6-5a at
 # bd6b647e): the implementation must not change the generated model of a model without
 # `@convert`.
-const P65B_PLAIN_FP = 0x8377d27787d7b4a5
+const P65B_PLAIN_FP = 0xab73ea1b4c6b2031
 
 @testset "P6.5b convert: zero cost when no @convert is declared" begin
     plain = p65b_problem(:P65bPlain)

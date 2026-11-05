@@ -339,13 +339,13 @@ const P60AV_FINGERPRINTS = Dict{String, UInt64}(
     "extension inheriting md = 0.5" => 0xe0b87213e7b75671,
     "field md = 0.5" => 0x0604ff900ded1dcb,
     "clock md = 0.5" => 0x69c263c32c478ae3,
-    "GranerGlazier" => 0x04a4528dcdf3fcb8,
-    "WortelAct" => 0xce4f1cec820b20fe,  # re-pinned under D-124
-    "WortelAct connected" => 0x7f27099ea6f348a3,  # re-pinned under D-124; re-pinned under P6.3g (D-193): fingerprint only
-    "MerksVasculogenesis" => 0xe51b575884b86e8d,   # re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)
-    "SingleDivisionFixture" => 0x13a4ddc2bb677287,
-    "OpenVTGrowingMonolayer" => 0xfcecc4612f387b5e,
-    "AkeebInvasion" => 0x45083869c8f05911,   # re-pinned under D-237 (cell draws by id and generation)
+    "GranerGlazier" => 0xe6e09483034b4193,
+    "WortelAct" => 0x9a9fcac5fc22b7c5,  # re-pinned under D-124
+    "WortelAct connected" => 0xe1e52da078e581c9,  # re-pinned under D-124; re-pinned under P6.3g (D-193): fingerprint only
+    "MerksVasculogenesis" => 0xeb4c1851b0fe68da,   # re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)
+    "SingleDivisionFixture" => 0xd2bed53e2590b709,
+    "OpenVTGrowingMonolayer" => 0x34b40af65c56a113,
+    "AkeebInvasion" => 0x72ced0fc70498f16,   # re-pinned under D-237 (cell draws by id and generation)
 )
 
 @testset "P6.0av: fingerprints unchanged" begin

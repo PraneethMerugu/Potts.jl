@@ -319,11 +319,11 @@ p60aw_pinned() = (
     (:P60awNoIntegral, () -> p60aw_problem(P60awNoIntegral)),
 )
 const P60AW_FINGERPRINTS = Dict{Symbol, UInt64}(
-    :GranerGlazier => 0x04a4528dcdf3fcb8,
-    :WortelAct => 0xce4f1cec820b20fe,  # re-pinned under D-124
-    :WortelActConnected => 0x7f27099ea6f348a3,  # re-pinned under D-124; re-pinned under P6.3g (D-193): fingerprint only
-    :P60awWork => 0x9e008b0ce3f6cd31,
-    :P60awNoIntegral => 0x8d4940ecc79e4f5a,
+    :GranerGlazier => 0xe6e09483034b4193,
+    :WortelAct => 0x9a9fcac5fc22b7c5,  # re-pinned under D-124
+    :WortelActConnected => 0xe1e52da078e581c9,  # re-pinned under D-124; re-pinned under P6.3g (D-193): fingerprint only
+    :P60awWork => 0xf95c476c463565f6,
+    :P60awNoIntegral => 0x3f0a992b94811e57,
 )
 
 @testset "P6.0aw: fingerprints unchanged" begin

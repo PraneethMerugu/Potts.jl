@@ -223,8 +223,8 @@ p60v3_digest(a) = foldl((h, x) -> (h ⊻ p60v3_bits(x)) * 0x00000100000001b3, ve
 # Re-pinned under D-153: the D-087 `merks_state` port (Scattered's StableRNG stream) changes
 # the start; recorded on the PC from feat/p6-3d 6e28cbd4. Metal re-verification is P6.0bi.
 const P60V3_MERKS_DIGESTS = Dict(
-    Float64 => (0x2aba158700292a8c, 0xb15865e4b5748ee9),
-    Float32 => (0x2aba158700292a8c, 0x6529835b3477095c),
+    Float64 => (0x8d559e566e2b2299, 0xdbb3738a30de1555),
+    Float32 => (0x8d559e566e2b2299, 0x90d7a36f526b1880),
 )
 
 # Does a type contain a Float64 leaf (fields, recursively)?

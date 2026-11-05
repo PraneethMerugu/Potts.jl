@@ -175,9 +175,9 @@ end
     # an `@sweep` ArgumentError surfaces from building the system (the channel A and B use)
     p60as_argerror(() -> p60as_sys("unknown keyword"), "ofset")
     # the default law keeps its D-121 fingerprint, and offset 0 / -0.0 are the default
-    @test p60as_problem("Metropolis()").f.fingerprint == 0x6eb337cf0a174b0e
-    @test p60as_problem("Metropolis(offset = 0)").f.fingerprint == 0x6eb337cf0a174b0e
-    @test p60as_problem("Metropolis(offset = -0.0)").f.fingerprint == 0x6eb337cf0a174b0e
+    @test p60as_problem("Metropolis()").f.fingerprint == 0x9b4704d8a49af92f
+    @test p60as_problem("Metropolis(offset = 0)").f.fingerprint == 0x9b4704d8a49af92f
+    @test p60as_problem("Metropolis(offset = -0.0)").f.fingerprint == 0x9b4704d8a49af92f
     # negative control: an anonymous function's printed form is a compiler-generated name,
     # so the `var"#` probe of part C does detect one
     @test occursin("var\"#", string(:($(p60as_anon)(a, b))))
@@ -336,25 +336,25 @@ p60as_unchanged() = (
 
 # the fixtures recorded on b14a81cd; the PottsModels systems are the D-121/D-122 pins
 const P60AS_FINGERPRINTS = Dict{String, UInt64}(
-    "fixture Metropolis()" => 0x6eb337cf0a174b0e,
-    "fixture Metropolis(offset = 2)" => 0x78bb06853bde9a10,
-    "fixture Barker(offset = -1.5)" => 0xf08a29ae32a9efa8,
-    "combine min" => 0x5feb039d56b02a3b,
-    "combine max" => 0xb4eaf9fd061f8301,
-    "combine +" => 0x4df4cfd758dcab1f,
-    "combine p60as_mean" => 0xb7f611fbac07502c,
-    "combine P60asCombine.mix" => 0x5bc25a5e335498f9,
-    "combine P60asMix(0.3)" => 0x4836306c6e61bb70,
-    "combine P60asMix(0.7)" => 0x0d52d586a119fb08,
-    "combine min Float32" => 0x38e017d24b57e251,
-    "combine P60asCombine.mix Float32" => 0x60ffc4e9af6c0abe,
-    "GranerGlazier" => 0x04a4528dcdf3fcb8,
-    "WortelAct" => 0xce4f1cec820b20fe,  # re-pinned under D-124
-    "WortelAct connected" => 0x7f27099ea6f348a3,  # re-pinned under D-124; re-pinned under P6.3g (D-193): fingerprint only
-    "MerksVasculogenesis" => 0xe51b575884b86e8d,   # re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)
-    "SingleDivisionFixture" => 0x13a4ddc2bb677287,
-    "OpenVTGrowingMonolayer" => 0xfcecc4612f387b5e,
-    "AkeebInvasion" => 0x45083869c8f05911,   # re-pinned under D-237 (cell draws by id and generation)
+    "fixture Metropolis()" => 0x9b4704d8a49af92f,
+    "fixture Metropolis(offset = 2)" => 0xe52e49409c0c5d30,
+    "fixture Barker(offset = -1.5)" => 0x06e59b5f488f47c4,
+    "combine min" => 0x4164ff239487ad1d,
+    "combine max" => 0x2e523fe16241dec9,
+    "combine +" => 0x526fba6b48aeffdb,
+    "combine p60as_mean" => 0xadd16ec9cb6664f7,
+    "combine P60asCombine.mix" => 0x6e7770898612231a,
+    "combine P60asMix(0.3)" => 0xad49de4b4c143bef,
+    "combine P60asMix(0.7)" => 0x6cb29156297eae70,
+    "combine min Float32" => 0x0b2c33b2e9a70104,
+    "combine P60asCombine.mix Float32" => 0x7a8e38cd5874b35b,
+    "GranerGlazier" => 0xe6e09483034b4193,
+    "WortelAct" => 0x9a9fcac5fc22b7c5,  # re-pinned under D-124
+    "WortelAct connected" => 0xe1e52da078e581c9,  # re-pinned under D-124; re-pinned under P6.3g (D-193): fingerprint only
+    "MerksVasculogenesis" => 0xeb4c1851b0fe68da,   # re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)
+    "SingleDivisionFixture" => 0xd2bed53e2590b709,
+    "OpenVTGrowingMonolayer" => 0x34b40af65c56a113,
+    "AkeebInvasion" => 0x72ced0fc70498f16,   # re-pinned under D-237 (cell draws by id and generation)
 )
 
 @testset "P6.0as: fingerprints unchanged" begin

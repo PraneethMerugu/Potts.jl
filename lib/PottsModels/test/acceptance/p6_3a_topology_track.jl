@@ -579,7 +579,7 @@ end
 end
 
 # fingerprint of `p63a_track_problem()` without tracking, recorded on the base (6abfd43c)
-const P63A_TRACK_FINGERPRINT = 0xfaf6f0df2f2a1b79
+const P63A_TRACK_FINGERPRINT = 0xab9a80e3b73d2440
 
 const P63A_W = [Float64((3i + 5j) % 5) for i in 1:24, j in 1:24]     # integer weights 0:4
 function p63a_track_σ()

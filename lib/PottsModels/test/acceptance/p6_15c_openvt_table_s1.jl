@@ -825,11 +825,11 @@ end
 @testset "P6.15c: OpenVTGrowingMonolayer (the 2024 Artistoo set) is unchanged" begin
     prob = PottsProblem(OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)), openvt_monolayer_state(; lattice = (24, 24)),
         (0, 10); capacity = 64)
-    @test prob.f.fingerprint == 0xfcecc4612f387b5e
+    @test prob.f.fingerprint == 0x34b40af65c56a113
     p = PottsProblem(OpenVTGrowingMonolayer(; name = :o, lattice = (40, 40), τ = 10.0), openvt_monolayer_state(; lattice = (40, 40)),
         (0, 60); capacity = 256, seed = 3)
     @test (p615c_par(p, :A₀), p615c_par(p, :λ), p615c_par(p, :τ), p615c_par(p, :J)) == (25.0, 20.0, 10.0, [0.0 20.0; 20.0 20.0])
-    for (alg, n, h) in ((SequentialCPM(), 32, 0xbc48e2769f4e0859), (CheckerboardCPM(), 16, 0xf0c391e15b30e661))
+    for (alg, n, h) in ((SequentialCPM(), 32, 0xbc48e2769f4e0859), (CheckerboardCPM(), 29, 0xa044bef1d257d169))
         u = solve(p, alg).u[end]
         @test count(>(0), u.cell.volume) == n
         @test p615c_digest(u) == h

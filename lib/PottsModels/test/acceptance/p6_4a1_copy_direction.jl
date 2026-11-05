@@ -586,7 +586,7 @@ end
 
 # Recorded on the freeze base d7fc5793 (Apple M-series, Julia 1.12.6): `P64a1Ref`, drive (a),
 # SequentialCPM(Moore(1)), seed 11, 8 MCS.
-const P64A1_REF_FINGERPRINT = 0x07162920e1884e03
+const P64A1_REF_FINGERPRINT = 0xaaff5b2ec09da918
 const P64A1_REF_SHA = "303638e662289649e5f884b16fa537d0c70ea7b0182d13040158d694442b7755"
 const P64A1_REF_ACCEPTED = 55
 

@@ -121,37 +121,37 @@ p60x_final_y(M, alg, kw) = Vector{Float64}(Array(solve(p60x_problem(M, (0, p60x_
 
 const p60x_RESULTS = Dict{Tuple{Symbol, String, Symbol}, Vector{Float64}}(
     (:XVol, "ExplicitEuler() (default)", :SequentialCPM) => [8.137206881420001, 8.48588532152],
-    (:XVol, "ExplicitEuler() (default)", :CheckerboardCPM) => [6.112276670769999, 6.4609551108700005],
+    (:XVol, "ExplicitEuler() (default)", :CheckerboardCPM) => [4.60743312414, 4.95611156424],
     (:XVol, "ExplicitEuler(substeps = 4)", :SequentialCPM) => [7.980329464932799, 8.34356190482068],
-    (:XVol, "ExplicitEuler(substeps = 4)", :CheckerboardCPM) => [6.015948275866542, 6.379180715754421],
+    (:XVol, "ExplicitEuler(substeps = 4)", :CheckerboardCPM) => [4.545459699248503, 4.908692139136383],
     (:XVol, "RK4()", :SequentialCPM) => [7.930181178854149, 8.298060953266647],
-    (:XVol, "RK4()", :CheckerboardCPM) => [5.98488730440596, 6.352767078818457],
+    (:XVol, "RK4()", :CheckerboardCPM) => [4.525374264979841, 4.893254039392339],
     (:XVol, "Adaptive(Rodas5P())", :SequentialCPM) => [7.930184775682167, 8.298064216855504],
-    (:XVol, "Adaptive(Rodas5P())", :CheckerboardCPM) => [5.9848895367510275, 6.352768977924103],
+    (:XVol, "Adaptive(Rodas5P())", :CheckerboardCPM) => [4.525375710240825, 4.893255151413498],
     (:XCross, "ExplicitEuler() (default)", :SequentialCPM) => [1.5, 1.5],
     (:XCross, "ExplicitEuler() (default)", :CheckerboardCPM) => [1.125, 1.125],
     (:XCross, "ExplicitEuler(substeps = 4)", :SequentialCPM) => [1.4999999884277573, 1.5000000115722427],
-    (:XCross, "ExplicitEuler(substeps = 4)", :CheckerboardCPM) => [1.1894976762035105, 1.1895921603469648],
+    (:XCross, "ExplicitEuler(substeps = 4)", :CheckerboardCPM) => [1.1890983006682025, 1.1891146284148315],
     (:XCross, "RK4()", :SequentialCPM) => [1.4999999014183043, 1.5000000985816957],
-    (:XCross, "RK4()", :CheckerboardCPM) => [1.2047425646024332, 1.2050048521193004],
+    (:XCross, "RK4()", :CheckerboardCPM) => [1.2040927032644153, 1.2041490104080932],
     (:XCross, "Adaptive(Rodas5P())", :SequentialCPM) => [1.4999999038193916, 1.5000000965925226],
-    (:XCross, "Adaptive(Rodas5P())", :CheckerboardCPM) => [1.2045655353645686, 1.2048250406554117],
+    (:XCross, "Adaptive(Rodas5P())", :CheckerboardCPM) => [1.2039188005970212, 1.2039743829137202],
     (:XRing, "ExplicitEuler() (default)", :SequentialCPM) => [1.3998809088, 1.091872],
-    (:XRing, "ExplicitEuler() (default)", :CheckerboardCPM) => [1.3765118976, 1.6458752],
+    (:XRing, "ExplicitEuler() (default)", :CheckerboardCPM) => [0.48044769280000005, 0.9945815552000001],
     (:XRing, "ExplicitEuler(substeps = 4)", :SequentialCPM) => [1.3885621926204719, 1.1362378903265877],
-    (:XRing, "ExplicitEuler(substeps = 4)", :CheckerboardCPM) => [1.3755967106641473, 1.6513307990510615],
+    (:XRing, "ExplicitEuler(substeps = 4)", :CheckerboardCPM) => [0.5131953040872874, 1.0233177411349452],
     (:XRing, "RK4()", :SequentialCPM) => [1.38505768009323, 1.1496756803180677],
-    (:XRing, "RK4()", :CheckerboardCPM) => [1.3749779223941017, 1.6532931183695632],
+    (:XRing, "RK4()", :CheckerboardCPM) => [0.522982195178112, 1.032389477675049],
     (:XRing, "Adaptive(Rodas5P())", :SequentialCPM) => [1.3850598505220633, 1.149667406146547],
-    (:XRing, "Adaptive(Rodas5P())", :CheckerboardCPM) => [1.3749783522965648, 1.6532918668273324],
+    (:XRing, "Adaptive(Rodas5P())", :CheckerboardCPM) => [0.5229761881528991, 1.0323838383355808],
     (:XPlain, "ExplicitEuler() (default)", :SequentialCPM) => [1.39338704105, 1.73271534504],
-    (:XPlain, "ExplicitEuler() (default)", :CheckerboardCPM) => [1.37812830315, 1.74308137604],
+    (:XPlain, "ExplicitEuler() (default)", :CheckerboardCPM) => [1.41627155083, 1.73107271203],
     (:XPlain, "ExplicitEuler(substeps = 4)", :SequentialCPM) => [1.3845013745124777, 1.7389600150590785],
-    (:XPlain, "ExplicitEuler(substeps = 4)", :CheckerboardCPM) => [1.3699429098652305, 1.7486546320651826],
+    (:XPlain, "ExplicitEuler(substeps = 4)", :CheckerboardCPM) => [1.4069887331695612, 1.7373509721745743],
     (:XPlain, "RK4()", :SequentialCPM) => [1.3816657345723107, 1.7409489801675833],
-    (:XPlain, "RK4()", :CheckerboardCPM) => [1.3673240336725099, 1.7504377583754982],
+    (:XPlain, "RK4()", :CheckerboardCPM) => [1.404024261769511, 1.7393517659267832],
     (:XPlain, "Adaptive(Rodas5P())", :SequentialCPM) => [1.3816659378752223, 1.7409488376324926],
-    (:XPlain, "Adaptive(Rodas5P())", :CheckerboardCPM) => [1.3673242215471366, 1.750437630456749],
+    (:XPlain, "Adaptive(Rodas5P())", :CheckerboardCPM) => [1.4040244743442527, 1.7393516225258678],
     (:XPair, "ExplicitEuler() (default)", :SequentialCPM) => [1.5, 1.5],
     (:XPair, "ExplicitEuler() (default)", :CheckerboardCPM) => [1.5, 1.5],
     (:XPair, "ExplicitEuler(substeps = 4)", :SequentialCPM) => [1.4999999884277573, 1.5000000115722427],
@@ -187,10 +187,10 @@ p60x_published() = (
         openvt_monolayer_state(; lattice = (24, 24)), (0, 10))),
 )
 const p60x_PUBLISHED = Dict{Symbol, UInt64}(
-    :GranerGlazier => 0x04a4528dcdf3fcb8,   # re-pinned under D-122
-    :WortelAct => 0xce4f1cec820b20fe,   # re-pinned under D-124
-    :MerksVasculogenesis => 0xe51b575884b86e8d,   # re-recorded at the P6.0y merge (D-102: substep function); re-pinned under D-122; re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)
-    :OpenVTGrowingMonolayer => 0xfcecc4612f387b5e,   # re-pinned under D-122
+    :GranerGlazier => 0xe6e09483034b4193,   # re-pinned under D-122
+    :WortelAct => 0x9a9fcac5fc22b7c5,   # re-pinned under D-124
+    :MerksVasculogenesis => 0xeb4c1851b0fe68da,   # re-recorded at the P6.0y merge (D-102: substep function); re-pinned under D-122; re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)
+    :OpenVTGrowingMonolayer => 0x34b40af65c56a113,   # re-pinned under D-122
 )
 
 # ---------------------------------------------------------------------------------------

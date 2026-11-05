@@ -459,11 +459,11 @@ const P60AT_FINGERPRINTS = Dict{String, UInt64}(
     "sq Float32" => 0x50c5cd0b28cd4266,
     "hex" => 0x7f64ce1e5b4dfc59,
     "cube" => 0xff2e2fb12cf95e96,
-    "GranerGlazier" => 0x04a4528dcdf3fcb8,
-    "MerksVasculogenesis" => 0xe51b575884b86e8d,   # re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)
-    "OpenVTGrowingMonolayer" => 0xfcecc4612f387b5e,
-    "SingleDivisionFixture" => 0x13a4ddc2bb677287,
-    "AkeebInvasion" => 0x45083869c8f05911,   # re-pinned under D-237 (cell draws by id and generation)
+    "GranerGlazier" => 0xe6e09483034b4193,
+    "MerksVasculogenesis" => 0xeb4c1851b0fe68da,   # re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)
+    "OpenVTGrowingMonolayer" => 0x34b40af65c56a113,
+    "SingleDivisionFixture" => 0xd2bed53e2590b709,
+    "AkeebInvasion" => 0x72ced0fc70498f16,   # re-pinned under D-237 (cell draws by id and generation)
 )
 
 # models that read an inline gather: the old pins (D-122 values, e4b6ab51) must move; the new

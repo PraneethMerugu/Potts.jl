@@ -433,8 +433,8 @@ end
 @testset "P6.0ba: CheckerboardCPM trajectories pinned (bitwise, seed 1)" begin
     # digests recorded on the base (746f5e99); the change must not move them
     pins = [
-        "pin constraint Ball(2.0) + div Moore(1)" => "454cc71e753685b958b160c695244a5dbe804833757c95ce4a97b77b73f7c0ce",
-        "pin drive far=Ball(2.0)" => "95ff11bf42aa82506ae52e1bffd2b7094b19b984ae20d778238835cbaa00de0c",
+        "pin constraint Ball(2.0) + div Moore(1)" => "4dc32701d64d092780fc94627fa752ee159c52a9cc26b771a436612cfb678ce4",
+        "pin drive far=Ball(2.0)" => "ef79db7835dc4a98d28c2baf57ba3b9aa3b9d29d58515b6e97b30ddb87fa3035",
         "divwhen Moore(1)" => "59db9594bd7f19d9ce18eff4e792ae194fcef1be080075faea5dd2442195e4d1",
     ]
     for (label, d) in pins

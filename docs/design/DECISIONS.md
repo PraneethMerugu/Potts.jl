@@ -4850,4 +4850,32 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 
 - **Why.** The lockless scheme (after Sultan et al., arXiv 2312.09317) claims nothing: per-cell totals change by atomic adds and are read live. Research note: `docs/design/research/checkerboard-kinetics.md`.
 - **p6_5a_cell_refs.jl.** The negative control of section 6 built the same problem with `reads`/`claims` stripped and required it to differ from SequentialCPM. Without claims, the stripped problem is the candidate itself (light tier |t| = 1.03 against > 3.89), so the arm is dropped from the light and FULL tiers. The null and the agreement test stay.
-- **Re-pins.** Recorded fingerprints, IR hashes, digests and trajectories of the old checkerboard are re-pinned to the new one; the list follows with the gate.
+- **Re-pins.** Recorded fingerprints, IR hashes, digests and trajectories of the old checkerboard are re-pinned to the new one (values from the PottsModels gate at 7a37a7e2, verified by rerunning each file). No SequentialCPM result changed; the fingerprint and IR-hash changes come from the codegen changes (pair-only hoisting, interior index path).
+  - `p6_0af_lifecycle_followups.jl`: the three fingerprint constants (counter, other, OpenVT).
+  - `p6_0ag_ode_expand_all.jl`: 36 CheckerboardCPM entries of P60AG_RESULTS (Hill, If5, ModelPop, ModelHill, ModelIf5, ModelSum16); GG and Merks in P60AG_PUBLISHED.
+  - `p6_0ah_canonical_term_order.jl`: GG and Merks fingerprints.
+  - `p6_0aq_acceptance_fingerprint.jl`: all 9 fingerprints.
+  - `p6_0ar_neighbourhood_fingerprint.jl`: all 8 fingerprints (header comments left as history).
+  - `p6_0as_sweep_validation.jl`: the 3 inline default-law fingerprints and 19 P60AS_FINGERPRINTS entries.
+  - `p6_0at_relation_fingerprint.jl`: 5 published-model fingerprints.
+  - `p6_0au_integral_readers.jl`: 10 fingerprints.
+  - `p6_0av_mcs_duration.jl`: 7 published-model fingerprints.
+  - `p6_0aw_on_copy_integral.jl`: 5 fingerprints.
+  - `p6_0ax_gather_scan.jl`: 13 fingerprints.
+  - `p6_0b2_link_followups.jl`: p60b2_FP_SPRING, p60b2_FP_TWO, p60b2_FP_LINKER.
+  - `p6_0ba_boundary_only_reach.jl`: 2 checkerboard digests.
+  - `p6_0bk2_skip_interior.jl`: the 2 SequentialCPM IR hashes (interior index path) and the 10 P60BK2_CB trajectories.
+  - `p6_0bn_ode_mtkcompile.jl`: 2 CheckerboardCPM entries of P60BN_RECORDED (P60bnInputsHand).
+  - `p6_0c2_canonical_followups.jl`: 7 published-model fingerprints.
+  - `p6_0ca_gather_energy.jl`: GG and OpenVT fingerprints.
+  - `p6_0g_kind_classes.jl`: P60G_X_PIN and 7 published fingerprints.
+  - `p6_0o_abstract_system.jl`: 22 P60O_PINS entries (fp, raw, canon; n unchanged).
+  - `p6_0p_cadence_fingerprint.jl`: 9 fingerprints (header comments left as history).
+  - `p6_0t_integral_refresh.jl`: 7 fingerprints.
+  - `p6_0v3_launch_fusion.jl`: P60V3_MERKS_DIGESTS (CPU, both T); P60V3_LAUNCHES not re-pinned.
+  - `p6_0x_gather_ode_alloc.jl`: 15 CheckerboardCPM entries of p60x_RESULTS; 4 p60x_PUBLISHED fingerprints.
+  - `p6_15c_openvt_table_s1.jl`: OpenVT fingerprint; CheckerboardCPM cell count (16 → 29) and digest.
+  - `p6_3a_topology_track.jl`: P63A_TRACK_FINGERPRINT.
+  - `p6_4a1_copy_direction.jl`: P64A1_REF_FINGERPRINT.
+  - `p6_5b_convert.jl`: P65B_PLAIN_FP.
+  - Open, not re-pinned (assertions, not recordings): `p6_0au` line 283 (fixture margin under CheckerboardCPM), `p6_0x` line 208 (XRing CheckerboardCPM y no longer > 0.9: 0.48, 0.99), `p6_0v3` P60V3_LAUNCHES (ROCm now 64, 65, 95, 66, 66 launches per quiet MCS) and its device exactness test.

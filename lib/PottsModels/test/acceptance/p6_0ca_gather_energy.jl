@@ -407,8 +407,8 @@ end
     ov = PottsProblem(OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)), openvt_monolayer_state(; lattice = (24, 24)),
         (0, 10); capacity = 64, seed = 3)
     for (name, prob, fp, d) in (
-        ("GranerGlazier", gg, 0x04a4528dcdf3fcb8, "b56febdab144c3496905244070689acf318aac74f87cdd553a1c42e2d86d9d3b"),
-        ("OpenVTGrowingMonolayer", ov, 0xfcecc4612f387b5e, "02a647e303474b2eec56708dd0e729244daf5c4a8351c5c41ebf2c006abf031a"),
+        ("GranerGlazier", gg, 0xe6e09483034b4193, "b56febdab144c3496905244070689acf318aac74f87cdd553a1c42e2d86d9d3b"),
+        ("OpenVTGrowingMonolayer", ov, 0x34b40af65c56a113, "02a647e303474b2eec56708dd0e729244daf5c4a8351c5c41ebf2c006abf031a"),
     )
         @testset "$name" begin
             @test prob.f.fingerprint == fp

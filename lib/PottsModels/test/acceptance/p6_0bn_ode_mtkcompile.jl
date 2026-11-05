@@ -504,9 +504,9 @@ end
 # recorded on 4b81dd79 (the tree before this item), CPU, seed 7, 10 MCS: y after 10 MCS
 const P60BN_RECORDED = Dict{Tuple{Symbol, String, String}, Vector{Float64}}(
     (:P60bnInputsHand, "SequentialCPM", "ExplicitEuler()") => [6.74381984037, 6.75316997648],
-    (:P60bnInputsHand, "CheckerboardCPM", "ExplicitEuler()") => [4.73414836762, 4.71787373483],
+    (:P60bnInputsHand, "CheckerboardCPM", "ExplicitEuler()") => [3.19116157331, 3.2250388522099995],
     (:P60bnInputsHand, "SequentialCPM", "RK4(substeps = 4)") => [6.548518825367238, 6.557115366735856],
-    (:P60bnInputsHand, "CheckerboardCPM", "RK4(substeps = 4)") => [4.617565307710102, 4.602331340036558],
+    (:P60bnInputsHand, "CheckerboardCPM", "RK4(substeps = 4)") => [3.121351231378657, 3.153903524285757],
     (:P60bnPair, "SequentialCPM", "ExplicitEuler()") => [1.5, 1.5],
     (:P60bnPair, "CheckerboardCPM", "ExplicitEuler()") => [1.5, 1.5],
     (:P60bnPair, "SequentialCPM", "RK4(substeps = 4)") => [1.4999999036073224, 1.5000000963926776],

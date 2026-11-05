@@ -226,23 +226,23 @@ const P60BK2_SEQ = Dict(
 
 # Item 5: `CheckerboardCPM(; kw...)` on the base, CPU (`accepted` is −1: not counted).
 const P60BK2_CB = Dict(
-    "GG 72² periodic, problem's proposal, seed 1" => p60bk2_rec("8a303df5c4efc024dc79f05011a1c96b97f71ccb65cac16bc9d1f0ec34b23de7", -1, 103680, 0),
-    "GG 72² periodic, Moore(1), seed 2" => p60bk2_rec("139b0d3d2ce36aa3e6af34d8c8e395a4a1d039e708d0824e37dfa7e1145aa775", -1, 103680, 0),
-    "GG 72² periodic, Barker, seed 3" => p60bk2_rec("150c612f7e2302ac9b0e2a626379b857a0be944bed86cf312d524669cc9b2253", -1, 103680, 0),
-    "foam 64² NeighborOrder(4), T = 3, seed 1" => p60bk2_rec("306f1c79e8b5f0869dfa2d71df2b5d55cb150b424bf1a4b8b9eb7e9966276180", -1, 122880, 0),
-    "foam 64² NeighborOrder(4), T = 1e-6, seed 2" => p60bk2_rec("a407c2fd8aeb166e7bc5302183b94e7fc2d66c8cd013aee3f4d5321a90d9ed1e", -1, 122880, 0),
-    "cubes 16³, VonNeumann(1), seed 1" => p60bk2_rec("7d8296459b096d907d55bf82bd430b997a1eee09394e6260b6cb1626b55afed6", -1, 49152, 0),
-    "cubes 16³, Moore(1) override, seed 2" => p60bk2_rec("459f28a412f1184494afd2307140aff9307940dc3eb66755f3d30b85cd157f27", -1, 49152, 0),
-    "frozen wall 32², seed 1" => p60bk2_rec("3d8f15799de8e75f899c9d0d015f03e13ee80546ac92d50f450255c4056f53b3", -1, 19840, 0),
-    "OpenVT reference 60², Moore(1), divisions, seed 1" => p60bk2_rec("0663dde26392f900705509cd1462514bbcd6592fcf62d76d7f27583d07d4e505", -1, 3600000, 1),
-    "OpenVT reference 60², Moore(1), divisions, seed 2" => p60bk2_rec("797146400d423494e56cc5d9479fddd6ff99c9edadebe36ef036632b45ff778e", -1, 3600000, 1),
+    "GG 72² periodic, problem's proposal, seed 1" => p60bk2_rec("081e64b6e9ff4771f8449bcb1af696dac53001ea5798f459e3747a21f41c4ffd", -1, 103680, 0),
+    "GG 72² periodic, Moore(1), seed 2" => p60bk2_rec("84a3df3590147632f079be356098c35387a58fb4e191dbe2bb031ae228b09df7", -1, 103680, 0),
+    "GG 72² periodic, Barker, seed 3" => p60bk2_rec("9ddf4452f4f54d1c0107c6f6785521da70e02fca3b3780859dc0fc5c4f9ce3b6", -1, 103680, 0),
+    "foam 64² NeighborOrder(4), T = 3, seed 1" => p60bk2_rec("b413a5ffc280870932fd9a47e06dcff85c5597a4332b42ecbe105cb4b4557216", -1, 122880, 0),
+    "foam 64² NeighborOrder(4), T = 1e-6, seed 2" => p60bk2_rec("bd8b5eeb69957c5e96a76db196d690542f3e812c6c212a85930cdd4a8b280392", -1, 122880, 0),
+    "cubes 16³, VonNeumann(1), seed 1" => p60bk2_rec("d99c827ffa23ec67beb9ea9b24829ffbb3cb31bc5afb8371df5772bf1763eadd", -1, 49152, 0),
+    "cubes 16³, Moore(1) override, seed 2" => p60bk2_rec("3d4befab0f271a3c4e18002346124c014f8322f7238284c94be4ffc03a20df7f", -1, 49152, 0),
+    "frozen wall 32², seed 1" => p60bk2_rec("8f166346f42e9d634400e160d007177875fbf633e5ca8eb60a5748221e58a439", -1, 19840, 0),
+    "OpenVT reference 60², Moore(1), divisions, seed 1" => p60bk2_rec("5ac18a2558f25b7fad7610cf97dfdd342c4485fe613d22593f4f34d09c23a293", -1, 3600000, 1),
+    "OpenVT reference 60², Moore(1), divisions, seed 2" => p60bk2_rec("dad3a225d79fe37fcee9a53d3b2ff1e2139e3b5d2e229e3c71f44a70189083c7", -1, 3600000, 1),
 )
 
 # Item 2b: sha256 of the printed optimized typed IR of `sequential_mcs!` (Julia 1.12.6).
 const P60BK2_IR_VERSION = v"1.12.6"
 const P60BK2_IR = Dict(
-    "GG 72²" => "96510374a685d7d7ed6583f2982bf5671193dcc23026a2e6c42aa355db529e38",   # re-pinned under D-237 (64-bit draw entity)
-    "cubes 16³" => "76c7b8163d22be37c66267c4124609a92497322a41f336125d293f46177545d2",   # re-pinned under D-237 (64-bit draw entity)
+    "GG 72²" => "8693673e96e3567e37b5255e66040655dea2b48fbab490791eee191292ac3601",   # re-pinned under D-237 (64-bit draw entity)
+    "cubes 16³" => "2cb839c6162f182caef3653d6a2873a2257d0b9f50a3d3e5a3c0212f42504457",   # re-pinned under D-237 (64-bit draw entity)
 )
 function p60bk2_ir_hash(prob)
     integ = init(prob, SequentialCPM(); save_start = false)
