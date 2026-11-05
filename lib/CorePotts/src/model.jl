@@ -180,7 +180,10 @@ end
 The `track` of `CPMFunction` that sums each committed copy's ΔH (`track = (:ΔH,)` in
 Potts). `T` is the model's scalar type: the checkerboard accumulates per site in `T` (on
 the device) between the host read points, which reduce into the `Float64`
-`stats.accepted_ΔH`; `SequentialCPM` adds into a `Float64` directly.
+`stats.accepted_ΔH`; `SequentialCPM` adds into a `Float64` directly. On a device the
+checkerboard's copies of one cell can be in flight together, each with ΔH taken against the
+cell's totals before the other's commit, so the sum can differ slightly from the change of
+the energy (0.1 % over 20 MCS of a 48² test monolayer); on the CPU it is exact.
 """
 struct TrackDeltaH{T} end
 @inline (::TrackDeltaH)(st, p, prop, ctx, dH) = dH
@@ -232,6 +235,10 @@ _hook(h, name) = getfield(h, name)
 @inline has_defer(f) = !(_defer(f) isa Nothing)
 
 @inline always(st, p, prop, ctx) = true
+"""Whether the context is the lockless checkerboard's (`lockless = true`; a type-level constant):
+commit hooks that would overwrite a cell value add their change atomically instead."""
+@inline _lockless(::NamedTuple{K}) where {K} = :lockless in K
+@inline _lockless(ctx) = false
 @inline no_claims(st, p, prop, ctx) = ()
 """Whether `f` has shared read claims (a type-level constant: no cost without them)."""
 @inline has_reads(f) = !(f.reads isa typeof(no_claims))
@@ -239,6 +246,25 @@ _hook(h, name) = getfield(h, name)
 
 """Effective energy change: `ΔH − T·bias` (a bias adds directly to log α)."""
 @inline _effective_dH(f, dH, T, st, p, prop, ctx) = dH - T * f.bias(st, p, prop, ctx)
+
+"""
+    oncopy_cell!(a, j, v, pre, ctx)
+
+The `@on_copy` write of `v` into cell `j` (0, the medium: nothing) of the cell column `a`, where
+`v` was computed while `a[j] == pre`. On the lockless checkerboard (`ctx.lockless`) a numeric
+column gets the change `v - pre` by an atomic add, so concurrent copies to one cell all count
+(`n[new] ~ n[new] + 1`); otherwise, and for other element types, `v` is stored.
+"""
+@inline function oncopy_cell!(a, j, v, pre, ctx)
+    j == 0 && return nothing
+    T = eltype(a)
+    if _lockless(ctx) && T <: Union{Integer, AbstractFloat} && !(T <: Bool)
+        Atomix.@atomic a[j] += convert(T, v) - convert(T, pre)     # a cell id is in 1:capacity
+    else
+        @inbounds a[j] = convert(T, v)
+    end
+    return nothing
+end
 
 """Default `commit!`: maintain `st.cell.volume` (atomic adds: shared-cell checkerboard copies
 to one cell commit concurrently)."""

@@ -10,7 +10,7 @@ module CorePotts
 using Adapt: Adapt
 using Atomix: Atomix
 using CommonSolve: CommonSolve, init, solve, solve!, step!
-using KernelAbstractions: KernelAbstractions, @kernel, @index, @Const, @localmem, @synchronize, CPU
+using KernelAbstractions: KernelAbstractions, @kernel, @index, @localmem, @synchronize, CPU
 using SciMLBase: SciMLBase, remake, reinit!, u_modified!, EnsembleProblem, EnsembleSerial, EnsembleThreads,
     DiscreteCallback, CallbackSet, terminate!
 using Serialization: Serialization
@@ -59,7 +59,7 @@ public coordinates, shift, interior, neighbor_index, linear_index, draw, cell_en
     TrackDeltaH, track_eltype, GhostFace,
     shell_offsets, shell_owners, shell_mask, shell_pieces, local_rule, arc_or_pair, simple_point, ShellRead, read_shell, check_shell_lattice,
     ConnectivityHooks, GlobalExact, GlobalBoard, GlobalLocal, GlobalSearch, global_keeps, global_gains, global_defer,
-    pieces_after!, pieces_defer, commit_pieces!, connectivity_ctx, NEXT_BIRTH,
+    pieces_after!, pieces_defer, commit_pieces!, connectivity_ctx, NEXT_BIRTH, oncopy_cell!,
     ConvertPass, convert_scratch, CONVERT_FLAGS
 
 include("rng.jl")
@@ -86,7 +86,6 @@ include("algorithms.jl")
 include("sequential.jl")
 include("boundary_site.jl")
 include("checkerboard.jl")
-include("blocks.jl")
 include("problem.jl")
 include("checkpoint.jl")
 

@@ -12,7 +12,7 @@
         (; surface = recompute_surface(σ, lat, relation(sspec, lat), length(kinds); T = Float32)))
     commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx);
         commit_surface!(st.cell.surface, prop, surface_change(st.σ, ctx, prop; T = Float32));
-        commit_moments!(st.cell, ctx.lattice, prop))
+        commit_moments!(st.cell, ctx, prop))
     function delta_H(st, p, prop, ctx)
         J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
         E(v, c) = p.λ * (v - p.V0)^2
@@ -111,7 +111,7 @@
             E(v, c) = p.λ * (v - @inbounds(st.cell.target[c]))^2
             return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E)
         end
-        commitD!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx.lattice, prop))
+        commitD!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
         st = with_capacity(initial_state(σd, [1]; cell = merge(init_moments(σd, latd, 1), (; target = Float32[64]))), 64)
         f = CPMFunction(dH; commit! = commitD!, temperature = gg_temperature,
             phases = Phases(before_mcs = (CellPhase(grow!),)),
@@ -193,7 +193,7 @@
             (; surface = recompute_surface(σ3, lat3, relation(sspec, lat3), n3; T = Float32)))
         commit3!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx);
             commit_surface!(st.cell.surface, prop, surface_change(st.σ, ctx, prop; T = Float32));
-            commit_moments!(st.cell, ctx.lattice, prop))
+            commit_moments!(st.cell, ctx, prop))
         function dH3(st, p, prop, ctx)
             J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
             E(v, c) = p.λ * (v - p.V0)^2
@@ -226,7 +226,7 @@
             return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
                    link_delta(Float32, st.cell, ctx, prop, S)
         end
-        commitL!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx.lattice, prop))
+        commitL!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
         f = CPMFunction(dHL; commit! = commitL!, temperature = gg_temperature,
             claims = (st, p, prop, ctx) -> link_claims(st.cell, prop, Val(1)))
         pL = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0, k = 2.0f0)
@@ -276,7 +276,7 @@
             return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
                    link_delta(Float32, st.cell, ctx, prop, S)
         end
-        commitD!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx.lattice, prop))
+        commitD!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
         f = CPMFunction(dHD; commit! = commitD!, temperature = gg_temperature,
             claims = (st, p, prop, ctx) -> link_claims(st.cell, prop, Val(2)))
         pD = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0, k = 2.0f0)
@@ -307,7 +307,7 @@
             return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
                    link_delta(Float32, st.cell, ctx, prop, S)
         end
-        commitK!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx.lattice, prop))
+        commitK!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
         f = CPMFunction(dHK; commit! = commitK!, temperature = gg_temperature,
             claims = (st, p, prop, ctx) -> link_claims(st.cell, prop, Val(1)))
         pK = (; J = SMatrix{3, 3, Float32}(0, 16, 0, 16, 2, 16, 0, 16, 2), λ = 1.0f0, V0 = 36.0f0, λd = 50.0f0,
@@ -338,17 +338,18 @@
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, fingerprint = 0x7)
         pc = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0)
         prob = PottsProblem(f, initial_state(σc, kc), latc, (0, 20), pc; seed = 3)
-        whole = solve(prob, CheckerboardCPM(); backend).u[end]
-        again = solve(prob, CheckerboardCPM(); backend).u[end]
-        @test whole.σ == again.σ                        # the device run is reproducible
+        # the device run is not reproducible (lockless, P6.0bl): a checkpoint restores the state
+        # it saved, and the continued run keeps its trackers
         integ = init(prob, CheckerboardCPM(); backend)
         for _ in 1:8
             step!(integ)
         end
         ck = checkpoint(integ)
-        rest = solve!(init(prob, CheckerboardCPM(); backend, checkpoint = ck)).u[end]
-        @test rest.σ == whole.σ
-        @test rest.cell.volume == whole.cell.volume
+        u8 = current_state(integ)
+        cont = init(prob, CheckerboardCPM(); backend, checkpoint = ck)
+        @test Array(current_state(cont).σ) == Array(u8.σ) && cont.t == integ.t
+        rest = solve!(cont).u[end]
+        @test rest.cell.volume == [count(==(c), rest.σ) for c in eachindex(kc)]
     end
 
     @testset "transfer counters (D-085): exact counts of the helpers on the device" begin
@@ -466,16 +467,12 @@
                    link_delta(Float32, st.cell, (; links = st.cell.links__bond), ctx, prop, S1) +
                    link_delta(Float32, st.cell, (; links = st.cell.links__tether), ctx, prop, S2)
         end
-        commitR!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx.lattice, prop))
+        commitR!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
         readsR(st, p, prop, ctx) = (link_claims((; links = st.cell.links__bond), prop, Val(1))...,
             link_claims((; links = st.cell.links__tether), prop, Val(1))...)
         f = CPMFunction(dHR; commit! = commitR!, temperature = gg_temperature, reads = readsR)
         pR(k) = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0, k = Float32(k))
         prob(g, k, seed) = PottsProblem(g, initial_state(σR, [1, 1, 1]; cell = deepcopy(cellR)), latR, (0, 1500), pR(k); seed)
-        # write claims are device buffers with reads, ghost `nothing` without (P6.0b3)
-        wc = init(prob(f, 2, 1), CheckerboardCPM(); backend, save_start = false).cache.wclaims
-        @test all(w -> w isa PottsDevices.device_arraytype() && eltype(w) == UInt32 && length(w) == 3, wc)
-        @test init(prob(GG, 2, 1), CheckerboardCPM(); backend, save_start = false).cache.wclaims === (nothing, nothing)
         dist(u) = (centroid_distance(Float64, u.cell, latR, 1, 2), centroid_distance(Float64, u.cell, latR, 2, 3))
         runs(k, dev, seeds) = map(seeds) do seed
             integ = init(prob(f, k, seed), CheckerboardCPM(); save_start = false, (dev ? (; backend) : (;))...)
@@ -501,8 +498,7 @@
         m(x, i) = mean(getindex.(x, i))
         @info "reads on the device: bond, tether distance" device = (m(gpu, 1), m(gpu, 2)) cpu = (m(cpu, 1), m(cpu, 2))
         @test abs(m(gpu, 1) - 12) < 2.5 && abs(m(gpu, 2) - 18) < 2.5             # relaxed toward rest
-        # a consistency smoke check only: claim races are covered by the CPU kernel-mutation
-        # tests in relationships.jl ("claim protocol in the real propose/commit kernels")
+        # a consistency smoke check: the lockless checkerboard reads partners' centroids live
         @test abs(m(gpu, 1) - m(cpu, 1)) < 2.5 && abs(m(gpu, 2) - m(cpu, 2)) < 2.5  # comparable to CPU
         # negative control: without the spring the chain stays far from its rest lengths
         free = dist.(runs(0, true, 1:4))
@@ -544,10 +540,10 @@
         wide(f) = (CorePotts._FORCE_WIDE_SITES[] = true; try f() finally CorePotts._FORCE_WIDE_SITES[] = false end)
         fk32 = fk_problem(rm2; T = Float32)
         if CorePotts._atomic64(backend)
+            # the device run is not reproducible (lockless, P6.0bl): both widths run the event
             a = solve(fk32, CheckerboardCPM(); backend, saveat = 1)
             b = wide(() -> solve(fk32, CheckerboardCPM(); backend, saveat = 1))
-            @test all(i -> Array(a.u[i].σ) == Array(b.u[i].σ), eachindex(a.u))
-            @test a.stats.attempts == b.stats.attempts && b.stats.lifecycle.removals == 1
+            @test a.stats.attempts == b.stats.attempts && a.stats.lifecycle.removals == b.stats.lifecycle.removals == 1
         else
             @test_throws r"Int64 atomics.*D-253" wide(() -> init(fk32, CheckerboardCPM(); backend))
             static = fk_problem(rm2; T = Float32, sys = nothing)
@@ -593,9 +589,10 @@
         H(u) = total_H(u, latt, mk(on).contact, pt)
         @test a.stats.accepted_ΔH === nothing
         @test b.stats.accepted_ΔH isa Float64
-        @test isapprox(b.stats.accepted_ΔH, H(b.u[end]) - H(b.u[1]); atol = 0.5)
+        # concurrent copies of one cell each take ΔH against its totals before the other's commit
+        # (lockless, P6.0bl), so on a device the track is the energy change to within that
+        @test isapprox(b.stats.accepted_ΔH, H(b.u[end]) - H(b.u[1]); rtol = 0.01)
         @test abs(H(b.u[end]) - H(b.u[1])) > 100
-        @test Array(a.u[end].σ) == Array(b.u[end].σ)
         for f in (off, on)
             integ = init(mk(f), CheckerboardCPM(); backend, save_start = false, save_end = false)
             step!(integ)
@@ -705,82 +702,68 @@ p69_penalty_dH(st, p, prop, ctx) = gg_delta_H(st, p, prop, ctx) +
     end
 end
 
-# D-246: the permuted claim regime (above 2^24 sites per color), forced on a small lattice,
-# so its kernels (`_fmix32`, the claim key) compile on the device and reach the IR scan below
-@testset "permuted claim priorities on the device (D-246)" begin
+# The lockless checkerboard on the device (P6.0bl): concurrent copies keep every tracker exact,
+# the serial pass and the windowed search keep vetoed cells whole, and the device commits at
+# the CPU's rate (statistically: D-029; runs are not reproducible on a device)
+@testset "lockless checkerboard on the device ($(PottsDevices.device_name()))" begin
     backend = PottsDevices.device_backend()
-    σ, kinds = blocks((60, 60), 5)
-    lat = Lattice((60, 60))
-    on = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackDeltaH{Float32}())
-    prob = PottsProblem(on, initial_state(σ, kinds), lat, (0, 20), gg_params(Float32))
-    H(u) = total_H(u, lat, prob.contact, gg_params())
-    CorePotts._FORCE_PERMUTED_PRIORITY[] = true
-    try
-        @test init(prob, CheckerboardCPM(); backend).cache.idbits isa CorePotts.PermutedPriority
-        for seed in 1:3
-            sol = solve(remake(prob; seed), CheckerboardCPM(); backend)
-            u0, u = sol.u[1], sol.u[end]
-            @test sol.stats.accepted_ΔH == H(u) - H(u0)                # no two commits conflicted
-            @test abs(H(u) - H(u0)) > 100
-            @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(kinds)]
-        end
-    finally
-        CorePotts._FORCE_PERMUTED_PRIORITY[] = false
+    lat = Lattice((96, 96))
+    σ, kinds = blocks((96, 96), 6)
+    n = length(kinds)
+    pf = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0)
+    recount(u) = [count(==(c), u.σ) for c in 1:n]
+    prob = PottsProblem(CPMFunction(gg_delta_H; temperature = gg_temperature), initial_state(σ, kinds), lat, (0, 30), pf)
+    for kw in ((;), (; block = 3), (; block = 4, switches = 4), (; block = 1, parts = 4))
+        alg = CheckerboardCPM(; proposal = Moore(1), counts = true, kw...)
+        g = solve(remake(prob; seed = 3), alg; backend)
+        @test g.u[end].cell.volume == recount(g.u[end])
+        @test g.stats.committed == g.stats.accepted > 0
+        cg = [solve(remake(prob; seed), alg; backend).stats.committed for seed in 1:6]
+        cc = [solve(remake(prob; seed), alg).stats.committed for seed in 11:16]
+        @test abs(mean(cg) / mean(cc) - 1) < 0.05
+    end
+    # moments (atomic sums, re-centered once per MCS) and on-copy counters that read their own
+    # value (atomic changes): gains minus losses equal each cell's volume change, so no update was lost
+    function commitM!(st, p, prop, ctx)
+        commit_volume!(st, p, prop, ctx)
+        commit_moments!(st.cell, ctx, prop)
+        g = prop.new == 0 ? Int32(0) : st.cell.gain[prop.new]
+        CorePotts.oncopy_cell!(st.cell.gain, prop.new, g + Int32(1), g, ctx)
+        l = prop.old == 0 ? Int32(0) : st.cell.loss[prop.old]
+        CorePotts.oncopy_cell!(st.cell.loss, prop.old, l + Int32(1), l, ctx)
+        return nothing
+    end
+    cell = merge(init_moments(σ, lat, n), (; gain = zeros(Int32, n), loss = zeros(Int32, n)))
+    mprob = PottsProblem(CPMFunction(gg_delta_H; temperature = gg_temperature, commit! = commitM!),
+        initial_state(σ, kinds; cell), lat, (0, 30), pf; seed = 5)
+    u0 = initial_state(σ, kinds)
+    u = solve(mprob, CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
+    @test u.cell.volume == recount(u)
+    @test u.cell.gain .- u.cell.loss == u.cell.volume .- u0.cell.volume
+    @test sum(u.cell.gain) > 1000
+    ref = merge(init_moments(u.σ, lat, n), (; volume = u.cell.volume))
+    @test all(c -> all(isapprox.(centroid(u.cell, lat, c), centroid(ref, lat, c); atol = 1e-6)), 1:n)
+    # a `Global` veto: exact (the serial pass) and in a window of 2 (searched in the phase)
+    post_w(st, p, prop, ctx, stage) = CorePotts.global_gains(st.σ, ctx, prop, Val(false)) ?
+        CorePotts.global_keeps(st.σ, ctx, prop, Val(false), Val(2), Val(25), stage) : Int32(2)
+    post_x(st, p, prop, ctx, stage) = CorePotts.global_gains(st.σ, ctx, prop, Val(false)) ?
+        CorePotts.global_keeps(st.σ, ctx, prop, Val(false), Val(nothing), Val(0), stage) : Int32(2)
+    pieces0 = first(CorePotts.recompute_pieces(σ, lat, Val(false), n))
+    for hooks in (CorePotts.ConnectivityHooks(; post = post_x, uses_global = true, exact_veto = true),
+            CorePotts.ConnectivityHooks(; post = post_w, uses_global = true, window = 2))
+        cprob = PottsProblem(CPMFunction(gg_delta_H; temperature = gg_temperature, connectivity = hooks),
+            initial_state(σ, kinds), lat, (0, 20), pf; seed = 7)
+        sol = solve(cprob, CheckerboardCPM(; proposal = Moore(1), counts = true); backend)
+        uc = sol.u[end]
+        @test uc.cell.volume == recount(uc)
+        @test all(first(CorePotts.recompute_pieces(uc.σ, lat, Val(false), n)) .<= pieces0)   # no cell splits
+        @test sol.stats.committed > 1000
+        @test sol.stats.connectivity_deferred isa Int
     end
 end
 
 # ROCm, last: no `double` in any kernel this suite compiled (full scan of the kernel cache,
 # D-157); the scan lives with the monorepo's shared test helpers
-# CheckerboardCPM's kinetic options on the device (P6.0bl): trackers and the tracked ΔH stay
-# exact, runs are deterministic, the counts add up and agree with the CPU's statistically
-@testset "checkerboard passes on the device ($(PottsDevices.device_name()))" begin
-    backend = PottsDevices.device_backend()
-    lat = Lattice((96, 96))
-    σ, kinds = blocks((96, 96), 6)
-    pf = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0)
-    f = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackDeltaH{Float32}())
-    prob = PottsProblem(f, initial_state(σ, kinds), lat, (0, 30), pf)
-    H(u) = total_H(u, lat, prob.contact, pf)
-    for kw in ((; retries = 2), (; retries = 4, colors = :replacement), (; stride = 3, retries = 1))
-        alg = CheckerboardCPM(; proposal = Moore(1), counts = true, kw...)
-        g = solve(remake(prob; seed = 3), alg; backend)
-        u0, u = g.u[1], g.u[end]
-        @test g.stats.accepted_ΔH ≈ H(u) - H(u0) rtol = 1e-4                    # Float32 track
-        @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(kinds)]
-        @test solve(remake(prob; seed = 3), alg; backend).u[end].σ == u.σ        # deterministic
-        s = g.stats
-        @test s.committed > 0 && s.dropped >= 0
-        # the CPU commits at the same rate (statistically: D-029)
-        cg = [solve(remake(prob; seed), alg; backend).stats.committed for seed in 1:6]
-        cc = [solve(remake(prob; seed), alg).stats.committed for seed in 11:16]
-        @test abs(mean(cg) / mean(cc) - 1) < 0.05
-    end
-    # shared cells: concurrent atomic commits keep the trackers exact and the run deterministic
-    # (the exact ΔH accounting is checked on the CPU, checkerboard_passes.jl)
-    alg = CheckerboardCPM(; proposal = Moore(1), counts = true, cells = :shared, colors = :replacement)
-    g = solve(remake(prob; seed = 3), alg; backend)
-    u = g.u[end]
-    @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(kinds)]
-    v = solve(remake(prob; seed = 3), alg; backend).u[end]
-    @test v.σ == u.σ && v.cell.volume == u.cell.volume
-    @test g.stats.committed == g.stats.accepted > 0 && g.stats.dropped == 0
-    cg = [solve(remake(prob; seed), alg; backend).stats.committed for seed in 1:6]
-    cc = [solve(remake(prob; seed), alg).stats.committed for seed in 11:16]
-    @test abs(mean(cg) / mean(cc) - 1) < 0.05
-    # the block scheme: concurrent live reads and atomic commits keep the trackers exact (the
-    # run is not deterministic on a device); the device commits at the CPU's rate
-    for kw in ((; block = 3), (; block = 4, switches = 4), (; block = 1, parts = 8))
-        alg = CheckerboardCPM(; proposal = Moore(1), counts = true, scheme = :blocks, kw...)
-        g = solve(remake(prob; seed = 3), alg; backend)
-        u = g.u[end]
-        @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(kinds)]
-        @test g.stats.committed == g.stats.accepted > 0 && g.stats.dropped == 0
-        cg = [solve(remake(prob; seed), alg; backend).stats.committed for seed in 1:6]
-        cc = [solve(remake(prob; seed), alg).stats.committed for seed in 11:16]
-        @test abs(mean(cg) / mean(cc) - 1) < 0.05
-    end
-end
-
 const DEVICE_IR_SCAN = joinpath(@__DIR__, "..", "..", "..", "test", "shared", "device_ir_scan.jl")
 if PottsDevices.device_name() == "rocm" && isfile(DEVICE_IR_SCAN)
     include(DEVICE_IR_SCAN)

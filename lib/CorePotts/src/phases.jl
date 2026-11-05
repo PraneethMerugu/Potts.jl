@@ -112,6 +112,12 @@ function (ph::ModelPhase{F})(st, p, ctx, key, mcs, backend) where {F}
     return 1
 end
 
+# On the CPU backend every workgroup beyond the first is a spawned task. Small launches run
+# inline as one workgroup; large ones split into one workgroup per thread of at least
+# CPU_GRAIN sites. (Multithreaded launches of ~1000 sites were 6× slower than inline.)
+const CPU_GRAIN = 8192
+_groupsize(backend, n) = 0
+_groupsize(::KernelAbstractions.CPU, n) = max(cld(n, Threads.nthreads()), min(n, CPU_GRAIN))
 _phase_groupsize(backend, n) = nothing
 _phase_groupsize(backend::KernelAbstractions.CPU, n) = _groupsize(backend, n)
 

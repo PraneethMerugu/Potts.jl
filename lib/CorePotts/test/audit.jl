@@ -32,7 +32,7 @@ end
     st = with_capacity(st, 4)
     rebuild!(st, p, ctx, backend) = copyto!(st.cell.vsum, recompute_site_sum(Array(st.σ), v, length(st.cell.kind)))
     lc = Lifecycle((st, p, ctx, key, mcs, c) -> (mcs == 0 && c == 1) ? EVENT_DIVIDE : EVENT_NONE; rebuild!)
-    commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx.lattice, prop);
+    commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop);
         commit_site_sum!(st.cell.vsum, prop, @inbounds v[prop.target]))
     f = CPMFunction(gg_delta_H; commit!, temperature = (a...) -> 0.0, lifecycle = lc)
     u = solve(PottsProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM()).u[end]
@@ -149,12 +149,8 @@ end
     L = Lattice((48, 48))
     σ, kinds = blocks((48, 48), 6)
     prob = PottsProblem(GG, initial_state(σ, kinds), L, (0, 20), gg_params())
-    alg = CheckerboardCPM(; proposal = Moore(1))
-    a, b = init(prob, alg), init(prob, alg)
-    b.cache.groupsize .= 64                     # several workgroups per color
-    for _ in 1:10
-        step!(a); step!(b)
-    end
-    @test a.state.σ == b.state.σ && a.state.cell.volume == b.state.cell.volume
+    # the checkerboard runs its work items as host loops on the CPU: a warm step allocates nothing
+    a = init(prob, CheckerboardCPM(; proposal = Moore(1)))
+    @test a.cache.host
     @test minimum(_ -> (step!(a); @allocated step!(a)), 1:3) == 0
 end

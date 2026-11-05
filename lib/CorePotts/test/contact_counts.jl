@@ -25,7 +25,7 @@ const CC_MED = UInt64(0b001)          # partner is the medium
 const CC_TWO = UInt64(0b100)          # partner is of kind 2
 function cc_commit!(st, p, prop, ctx)
     commit_volume!(st, p, prop, ctx)
-    commit_moments!(st.cell, ctx.lattice, prop)
+    commit_moments!(st.cell, ctx, prop)
     commit_contact_count!(st.cell.n_med, st.σ, st.cell.kind, ctx.contact, CC_MED, ctx.lattice, prop)
     commit_contact_count!(st.cell.n_two, st.σ, st.cell.kind, ctx.vn, CC_TWO, ctx.lattice, prop)
     return nothing

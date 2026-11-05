@@ -108,62 +108,51 @@ end
 
 """
     CheckerboardCPM(; acceptance = nothing, proposal = nothing, skip_interior = false,
-        stride = nothing, colors = :permutation, retries = 0, counts = false, cells = :exclusive,
-        scheme = :colors, block = nothing, parts = 2, switches = 1)
+        counts = false, block = nothing, parts = nothing, switches = 1)
 
-Parallel dynamics on CPU or GPU (KernelAbstractions). Sites are colored so that same-color
-targets lie outside each other's read/write footprints; each MCS visits every site once in
-a random color order. Accepted proposals claim their cells with a unique priority and
-commit only if they win every claim, so each cell changes at most once per color.
-`acceptance` and `proposal` default to the model's, as for `SequentialCPM`.
-`skip_interior = true` is not yet implemented on the checkerboard (P6.0bk): `init` and
-`solve` raise an `ArgumentError`.
+Parallel dynamics on CPU or GPU (KernelAbstractions), lockless (after Sultan et al., arXiv
+2312.09317). The lattice is cut into blocks of `parts` sub-regions of side `block` along each
+axis. A phase activates the same sub-region in every block; one work item per block makes
+its attempts there one after another, each against the current state, and commits an
+accepted copy at once. Nothing is claimed: per-cell totals change by atomic adds and are read
+as they are. Each MCS draws `parts^d · switches` phases at random, so every site is attempted
+once per MCS on average, as with `SequentialCPM`. `acceptance` and `proposal` default to the
+model's, as for `SequentialCPM`.
 
-One `CheckerboardCPM` MCS is not one `SequentialCPM` MCS. Accepted copies that lose a claim
-are dropped: with Moore(1) proposals in 2D (4 colors), only about 27% of accepted copies
-commit in a crowded monolayer, about 3.6× fewer copies per MCS than `SequentialCPM`. ΔH is
-exact; the difference is one of time scale. Calibrate time-dependent parameters (growth
-rates, schedules) with the algorithm you run, e.g. a relaxation time T on a reference
-geometry. See "Choosing an algorithm" in the manual.
+- `parts`: sub-regions per block along each axis (default: about 64 phases per MCS, 8 in 2D
+  and 4 in 3D). More parts mean fewer copies in flight at once.
+- `block`: the side of a sub-region (default: the smallest with `(parts - 1) · block` at least
+  the copy footprint's read + write distance, and at least the window of a windowed `Global`
+  search).
+- `switches`: phases per sub-region per MCS (default 1); each phase makes 1/`switches` of
+  the sub-region's attempts.
+- `counts = true`: count accepted and committed copies into `stats.accepted` and
+  `stats.committed` (brought up to date at the host read points).
+- `skip_interior = true`: accepted; an attempt at an interior site already ends after two
+  reads, so the dynamics are those of `skip_interior = false`.
 
-Options that bring the kinetics closer to `SequentialCPM` (P6.0bl):
+On a device the outcome depends on the timing of the work items, so runs are not
+reproducible bit for bit. On the CPU the work items run one after another, so each attempt
+sees every earlier one, and a run is reproducible.
 
-- `retries = R` (0 to 255): after a color's pass, the copies that lost a claim are proposed
-  again against the updated state, with fresh acceptance draws, up to `R` more passes. A copy
-  still losing after the last pass is dropped. Each retry costs one propose and one commit
-  launch per color.
-- `colors = :replacement`: each of an MCS's sub-steps draws its color independently, so a
-  site is proposed 0, 1, 2 or more times per MCS (on average once), as with
-  `SequentialCPM`'s random site picks. `:permutation` (the default) visits each color once.
-- `stride = s`: a coloring stride at least the one the copy footprint needs (the default):
-  `s^d` colors, fewer conflicts, more launches.
-- `cells = :shared` (prototype, P6.0bl): no claims. Every accepted copy commits; per-cell
-  totals change by integer atomic adds. A copy's ΔH reads the state from before its pass, so
-  copies to one cell in one pass do not see each other. Deterministic. Not with `retries`, a
-  whole-cell connectivity veto, `claims`/`reads` hooks, or moments/pieces trackers.
-- `scheme = :blocks` (prototype, P6.0bl; after Sultan et al., arXiv 2312.09317): blocks of
-  `parts` sub-regions of side `block` along each axis ((parts - 1)·block ≥ the copy footprint's
-  read + write; default block: the smallest). A phase
-  activates one sub-region per block; one work item per block makes sequential random attempts
-  there and commits at once, with no claims (per-cell totals by atomic adds, read live).
-  `switches` phases per sub-region per MCS, each of 1/`switches` of its sites in attempts. Not deterministic on a
-  device; on the CPU the attempts run one after another. Ignores `stride`, `colors`, `retries`
-  and `cells`; refuses a whole-cell connectivity veto and `claims`/`reads` hooks.
-- `counts = true`: count accepted, committed and dropped copies into `stats.accepted`,
-  `stats.committed` and `stats.dropped` (brought up to date at the host read points).
+Copies to one cell in flight at the same time read its totals before each other's commit.
+Cell trackers stay exact: moments add atomically and re-center once per MCS, pieces trackers
+add their changes, and an `@on_copy` write that reads its own cell value adds the difference.
+A copy whose decision needs a whole-cell search (a `Global` veto without window, pieces off
+their local fast path) is decided after its phase by one work item, with no copy in flight.
+
+The kinetics match `SequentialCPM` within the statistical resolution of the P6.0bl checks
+(foam, cell sorting, the OpenVT chain and monolayer, Akeeb invasion, a 3D RPE sheet), except
+that small cells in a crowded monolayer are lost more often (OpenVT case (b): 1.7 against 0.2
+per run). See `docs/design/research/checkerboard-kinetics.md`.
 """
 Base.@kwdef struct CheckerboardCPM{A, R} <: CPMAlgorithm
     acceptance::A = nothing
     proposal::R = nothing
     skip_interior::Bool = false
-    stride::Union{Nothing, Int} = nothing
-    colors::Symbol = :permutation
-    retries::Int = 0
     counts::Bool = false
-    cells::Symbol = :exclusive
-    scheme::Symbol = :colors
     block::Union{Nothing, Int} = nothing
-    parts::Int = 2
+    parts::Union{Nothing, Int} = nothing
     switches::Int = 1
 end
 

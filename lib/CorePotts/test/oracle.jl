@@ -14,13 +14,13 @@ include("oracle_core.jl")
     p = (; J = SMatrix{3, 3}(Jk), λ = 1.0, V0 = 2.0, T = 4.0)
     prob = PottsProblem(GG, initial_state(reshape(Int32.(σ0), dims), [1, 2]), lat, (0, 2), p)
 
-    @test sort(sort.(Oracle.color_classes(tiny, 2))) ==
-          sort([sort([CorePotts.linear_index(lat, CorePotts.color_site(c, j))
-                      for j in 1:CorePotts.ncolorsites(c)]) for c in colors(lat, 2)])
+    # the checkerboard's layout here: one block of one-site sub-regions, 64 phases per MCS
+    l = init(prob, CheckerboardCPM()).cache.layout
+    @test CorePotts.nblocks(l) == 1 && CorePotts.boxsize(l) == 1 && l.k^2 == 64
 
     R = 40_000
     for (alg, step) in ((SequentialCPM(), Oracle.sequential_mcs),
-            (CheckerboardCPM(), (m, d) -> Oracle.checkerboard_mcs(m, d, 2)))
+            (CheckerboardCPM(), (m, d) -> Oracle.block_mcs(m, d, 64)))
         ex = Oracle.exact(tiny, σ0, 2, step)
         @test sum(values(ex)) ≈ 1
         counts = Dict{Vector{Int8}, Int}()
@@ -36,7 +36,7 @@ include("oracle_core.jl")
     end
 
     # power: the test rejects a mutant (T = 4 → 5) at this sample size
-    ex = Oracle.exact(tiny, σ0, 2, (m, d) -> Oracle.checkerboard_mcs(m, d, 2))
+    ex = Oracle.exact(tiny, σ0, 2, (m, d) -> Oracle.block_mcs(m, d, 64))
     mutant = remake(prob; p = merge(p, (; T = 5.0)))
     counts = Dict{Vector{Int8}, Int}()
     for seed in 1:R

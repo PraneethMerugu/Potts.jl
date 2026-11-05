@@ -15,7 +15,7 @@ upper(C, N) = Tuple(C[d, e] for d in 1:N for e in d:N)
 
 function gm_commit!(st, p, prop, ctx)
     commit_volume!(st, p, prop, ctx)
-    commit_moments!(st.cell, ctx.lattice, prop)
+    commit_moments!(st.cell, ctx, prop)
 end
 const GM = CPMFunction(gg_delta_H; commit! = gm_commit!, temperature = gg_temperature)
 moment_state(σ, kinds, lat) = initial_state(σ, kinds; cell = init_moments(σ, lat, length(kinds)))

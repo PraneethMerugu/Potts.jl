@@ -90,7 +90,7 @@ divide_at(t) = (st, p, ctx, key, mcs, c) -> mcs == t ? EVENT_DIVIDE : EVENT_NONE
             E(v, c) = p.λ * (v - @inbounds(st.cell.target[c]))^2
             return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E)
         end
-        commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx.lattice, prop))
+        commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
         st = lc_state(σ, [1], lat; capacity = 64, cell = (; target = [64.0]))
         f = CPMFunction(dH; commit!, temperature = gg_temperature,
             phases = Phases(before_mcs = (CellPhase(grow!),)),

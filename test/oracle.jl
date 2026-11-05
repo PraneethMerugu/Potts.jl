@@ -16,22 +16,15 @@ include(joinpath(@__DIR__, "..", "lib", "CorePotts", "test", "oracle_core.jl"))
         end
         return counts
     end
-    # periodic axes need length ≥ 3 (shorter ones alias ±1 offsets and are rejected); the
-    # periodic checkerboard needs even axes ≥ 4, too large to enumerate, so the checkerboard
-    # is covered by the closed-lattice oracle in CorePotts, the port equality and the T → 0
-    # monotonicity test in PottsModels
+    # periodic axes need length ≥ 3 (shorter ones alias ±1 offsets and are rejected); on 3 × 3
+    # the checkerboard is one block of one-site sub-regions (64 phases per MCS)
     for (dims, σ0, nmcs, alg, step) in (
-            ((3, 3), Int8[1, 1, 0, 2, 2, 0, 0, 0, 0], 1, SequentialCPM(; proposal = Moore(1)), Oracle.sequential_mcs),)
+            ((3, 3), Int8[1, 1, 0, 2, 2, 0, 0, 0, 0], 1, SequentialCPM(; proposal = Moore(1)), Oracle.sequential_mcs),
+            ((3, 3), Int8[1, 1, 0, 2, 2, 0, 0, 0, 0], 1, CheckerboardCPM(; proposal = Moore(1)), (m, d) -> Oracle.block_mcs(m, d, 64)))
         tiny = Oracle.Tiny(dims, moore, moore, [1, 2], Jk, 1.0, 2.0, 4.0, true)
         prob = PottsProblem(GranerGlazier(; name = :gg, lattice = dims),
             [ownership => reshape(Int32.(σ0), dims), kind => [:dark, :light], :J => Jk, :λ => 1.0, :V₀ => 2.0, :T => 4.0],
             (0, nmcs))
-        if alg isa CheckerboardCPM                  # the oracle's coloring is the production one
-            lat = prob.lattice
-            @test sort(sort.(Oracle.color_classes(tiny, 2))) ==
-                  sort([sort([CorePotts.linear_index(lat, CorePotts.color_site(c, j))
-                              for j in 1:CorePotts.ncolorsites(c)]) for c in CorePotts.colors(lat, 2)])
-        end
         ex = Oracle.exact(tiny, σ0, nmcs, step)
         counts = sample(prob, alg)
         d, noise = Oracle.tv(ex, counts, R)

@@ -30,7 +30,7 @@ function compartment_model(; λc = 1.0, Vc = 64.0, λs = 0.0, Sc = 32.0, Jint = 
         commit_volume!(st, p, prop, ctx)
         commit_cluster_volume!(st.cell, prop)
         commit_cluster_surface!(st.cell, prop, δ)
-        haskey(st.cell, :m1) && commit_moments!(st.cell, ctx.lattice, prop)
+        haskey(st.cell, :m1) && commit_moments!(st.cell, ctx, prop)
         return nothing
     end
     p = (; J = SMatrix{3, 3}(0.0, 16, 30, 16, 14, 30, 30, 30, 14), Jint, λ = 1.0,

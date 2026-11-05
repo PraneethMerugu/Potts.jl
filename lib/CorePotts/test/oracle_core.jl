@@ -8,7 +8,6 @@
 
 module Oracle
 
-using Combinatorics: permutations
 
 const State = Vector{Int8}
 
@@ -76,83 +75,20 @@ end
 sequential_mcs(m, dist) = foldl((d, _) -> attempt(m, d), 1:nsite(m); init = dist)
 
 """
-Color classes for stride `s`: residues mod `s` per axis (every column its own class when
-`s ≥ n`), product over axes. Valid on periodic axes whose length `s` divides.
+One `CheckerboardCPM` MCS on a lattice that is one block of one-site sub-regions (every axis
+shorter than `parts`, block 1): each of the `P` phases activates a uniform offset, which is
+one site (an attempt there) or none, so a phase is an attempt with probability nsite/P and
+no change otherwise.
 """
-function color_classes(m::Tiny, s)
-    axis(n) = s >= n ? [[k] for k in 1:n] : [collect(a:s:n) for a in 1:s]
-    return [[lin(m, x, y) for y in cy for x in cx] for cy in axis(m.dims[2]) for cx in axis(m.dims[1])]
-end
-
-"""
-One color: every site proposes on the pre-color state; accepted proposals claim their
-old and new cells (not the medium); with uniformly random priorities, a proposal commits
-iff it holds the highest priority on every cell it claims. Commits apply simultaneously.
-"""
-function color_step(m::Tiny, dist, sites)
-    out = Dict{State, Float64}()
-    K = length(m.proposal)
-    for (σ, w) in dist
-        h = H(m, σ)
-        # per-site outcome list: (probability, source or 0 for "no accepted proposal")
-        options = map(sites) do t
-            opts = Tuple{Float64, Int}[]
-            rej = 0.0
-            for o in m.proposal
-                s = nbr(m, t, o)
-                if s == 0 || σ[s] == σ[t]
-                    rej += 1 / K
-                    continue
-                end
-                σ′ = copy(σ); σ′[t] = σ[s]
-                a = pacc(m, H(m, σ′) - h)
-                push!(opts, (a / K, s)); rej += (1 - a) / K
-            end
-            push!(opts, (rej, 0))
-            opts
-        end
-        for combo in Iterators.product(options...)
-            q = w * prod(first, combo)
-            q == 0 && continue
-            acc = [(t, c[2]) for (t, c) in zip(sites, combo) if c[2] != 0]
-            if isempty(acc)
-                add!(out, σ, q)
-                continue
-            end
-            perms = collect(permutations(1:length(acc)))
-            for prio in perms                            # prio[i] = rank of proposal i
-                σ′ = copy(σ)
-                for (i, (t, s)) in enumerate(acc)
-                    cells = filter(!=(0), (σ[t], σ[s]))
-                    wins = all(cells) do c
-                        all(enumerate(acc)) do (j, (t2, s2))
-                            j == i || !(c in (σ[t2], σ[s2])) || prio[j] < prio[i]
-                        end
-                    end
-                    wins && (σ′[t] = σ[s])
-                end
-                add!(out, σ′, q / length(perms))
-            end
-        end
+function block_mcs(m::Tiny, dist, P)
+    q = nsite(m) / P
+    function phase(d)
+        out = Dict{State, Float64}()
+        foreach(((σ, w),) -> add!(out, σ, w * (1 - q)), d)
+        foreach(((σ, w),) -> add!(out, σ, w * q), attempt(m, d))
+        return out
     end
-    return out
-end
-
-"""One checkerboard MCS: a uniformly random order of the color classes."""
-function checkerboard_mcs(m::Tiny, dist, stride)
-    classes = color_classes(m, stride)
-    orders = collect(permutations(eachindex(classes)))
-    out = Dict{State, Float64}()
-    for ord in orders
-        d = dist
-        for c in ord
-            d = color_step(m, d, classes[c])
-        end
-        for (σ, w) in d
-            add!(out, σ, w / length(orders))
-        end
-    end
-    return out
+    return foldl((d, _) -> phase(d), 1:P; init = dist)
 end
 
 function exact(m::Tiny, σ0::State, nmcs, step)

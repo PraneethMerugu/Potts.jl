@@ -96,10 +96,13 @@ end
 end
 
 """
+    commit_moments!(cell, ctx, prop)
     commit_moments!(cell, lattice, prop)
 
 Move the target site from `prop.old` to `prop.new` in the moment trackers. Call after
-`commit_volume!` (re-centering uses the updated volumes).
+`commit_volume!` (re-centering uses the updated volumes). In a `commit!`, pass the context
+`ctx`: on `CheckerboardCPM` the sums then move by atomic adds and re-center once per MCS, since
+another copy of the cell may be in flight; the `lattice` form re-centers at every copy.
 """
 @inline function commit_moments!(cell, l::Lattice{N}, prop::Proposal{N}) where {N}
     if prop.old != 0
@@ -114,6 +117,38 @@ Move the target site from `prop.old` to `prop.new` in the moment trackers. Call 
         end
         _accumulate!(cell.m1, cell.m2, prop.new, min_image(l, prop.x, anchor(cell, prop.new, Val(N))), 1)
         _recenter!(cell, l, prop.new, @inbounds cell.volume[prop.new])
+    end
+    return nothing
+end
+
+# `commit_moments!` from a copy function: on the lockless checkerboard (`ctx.lockless`) the sums
+# move by atomic adds and the anchors re-center once per MCS (`recenter_kernel!`), since a
+# re-centering rewrites a cell's sums and another copy of the cell may be in flight
+@inline commit_moments!(cell, ctx::NamedTuple, prop::Proposal) = _lockless(ctx) ?
+                                                                 _commit_moments_atomic!(cell, ctx.lattice, prop) :
+                                                                 commit_moments!(cell, ctx.lattice, prop)
+
+@inline function _commit_moments_atomic!(cell, l::Lattice{N}, prop::Proposal{N}) where {N}
+    if prop.old != 0
+        _accumulate_atomic!(cell.m1, cell.m2, prop.old, min_image(l, prop.x, anchor(cell, prop.old, Val(N))), -1)
+    end
+    if prop.new != 0
+        if @inbounds(cell.volume[prop.new]) == 1   # first site: anchor there
+            for d in 1:N
+                @inbounds cell.anchor[d, prop.new] = prop.x[d]
+            end
+        end
+        _accumulate_atomic!(cell.m1, cell.m2, prop.new, min_image(l, prop.x, anchor(cell, prop.new, Val(N))), 1)
+    end
+    return nothing
+end
+
+@inline function _accumulate_atomic!(m1, m2, c, δ::NTuple{N, Int}, s::Int) where {N}
+    for d in 1:N
+        Atomix.@atomic m1[d, c] += convert(eltype(m1), s * δ[d])
+        for e in d:N
+            Atomix.@atomic m2[_pair(N, d, e), c] += convert(eltype(m2), s * δ[d] * δ[e])
+        end
     end
     return nothing
 end

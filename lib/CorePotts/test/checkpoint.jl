@@ -13,7 +13,7 @@ function everything_problem()
         return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
                (is_extension(prop) ? chemotaxis_delta(st.site.c, prop, 3.0) : 0.0)
     end
-    commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx.lattice, prop))
+    commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
     rate(st, p, ctx, key, mcs, i, c) = 0.1 * laplacian(c, ctx, i) + 0.05 * (owner_kind(st, i) == 1) - 0.01c[i]
     noise!(st, p, ctx, key, mcs, i) = (@inbounds st.site.n[i] = CorePotts.uniform(Float64,
         CorePotts.draw(key, mcs, i, CorePotts.stream_id("test.noise"))[1]); nothing)

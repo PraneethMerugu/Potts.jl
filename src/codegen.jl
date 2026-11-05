@@ -496,7 +496,18 @@ function _commit_expr(c::CompiledPottsSystem, T)
         _reads_global(u.eq.rhs) && throw(ArgumentError("@on_copy: `connected(…; rule = Global())` reads the whole cell; use it in @constraint or @drive"))
         v = Symbol(:v_, j)
         push!(vals, :($v = $(_with_ref_term(() -> lower(u.eq.rhs, env), _update_label(u)))))
-        push!(writes, _write(_unwrap(u.eq.lhs), v, env))
+        x, idx = arguments(_unwrap(u.eq.lhs))
+        xi = info(x)
+        if xi.role === :cell && (:cell, xi.name) in _uses(u.eq.rhs)
+            # a write that reads its own cell value: the lockless checkerboard adds the change
+            # (`CorePotts.oncopy_cell!`), so concurrent copies to one cell all count
+            a, jj, pre = :(st.cell.$(xi.name)), Symbol(:j_, j), Symbol(:pre_, j)
+            push!(vals, :($jj = $(lower(idx, env))))
+            push!(vals, :($pre = $jj == 0 ? zero(eltype($a)) : (@inbounds $a[$jj])))
+            push!(writes, :(CorePotts.oncopy_cell!($a, $jj, $v, $pre, ctx)))
+        else
+            push!(writes, _write(_unwrap(u.eq.lhs), v, env))
+        end
     end
     append!(body, vals)
     c.uses_surface && push!(body, :(δs = CorePotts.surface_change(st.σ, ctx, prop; T = eltype(st.cell.surface))))
@@ -512,7 +523,7 @@ function _commit_expr(c::CompiledPottsSystem, T)
         P, L = full ? (:pieces_full, :largest_piece_full) : (:pieces, :largest_piece)
         push!(body, :(CorePotts.commit_pieces!(st.cell.$P, st.cell.$L, prop, ctx, $slot)))
     end
-    c.needs_moments && push!(body, :(CorePotts.commit_moments!(st.cell, ctx.lattice, prop)))
+    c.needs_moments && push!(body, :(CorePotts.commit_moments!(st.cell, ctx, prop)))
     c.uses_cluster_surface && push!(body, :(CorePotts.commit_cluster_surface!(st.cell, prop,
         CorePotts.cluster_surface_change(st.σ, st.cell, ctx, prop; T = eltype(st.cell.cluster_surface)))))
     c.uses_clusters && push!(body, :(CorePotts.commit_cluster_volume!(st.cell, prop)))
@@ -635,9 +646,12 @@ function _connectivity_hooks(c::CompiledPottsSystem, T)
     isempty(vetoes) && isempty(inline) && slots == 0 && return nothing
     pe = _post_expr(c, T)
     de = _defer_expr(c, T)
+    windows = Int[g.window for g in (Any[_global_rule(_connectivity_code(k)) for k in vetoes]..., last.(inline)...)
+                  if g.window !== nothing]
     return CorePotts.ConnectivityHooks(; post = pe === nothing ? nothing : _rgf(pe), defer = de === nothing ? nothing : _rgf(de),
         uses_global = !isempty(vetoes) || !isempty(inline),
-        exact_veto = any(k -> _global_rule(_connectivity_code(k)).window === nothing, vetoes), after_slots = slots)
+        exact_veto = any(k -> _global_rule(_connectivity_code(k)).window === nothing, vetoes), after_slots = slots,
+        window = isempty(windows) ? 0 : maximum(windows))
 end
 
 # The copy temperature: a copy-scope expression, or a cell-scope one evaluated for the

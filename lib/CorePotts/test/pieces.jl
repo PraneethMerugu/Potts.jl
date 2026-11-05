@@ -75,6 +75,12 @@ const PIECES_LATTICES = [
             P2, L2 = copy(P), copy(L)
             commit_pieces!(P2, L2, prop, ctx, 1)
             bad += prop.old != 0 && (P2[prop.old], L2[prop.old]) != (po, lo)
+            # the lockless checkerboard stores changes and adds them: the same trackers
+            lctx = merge(ctx, (; lockless = true))
+            pieces_after!(σ, lctx, prop, P, L, V, Val(full), 1)
+            P3, L3 = copy(P), copy(L)
+            commit_pieces!(P3, L3, prop, lctx, 1)
+            bad += (P3, L3) != (P2, L2) || (prop.new != 0 && (P3[prop.new], L3[prop.new]) != (pn, ln))
         end
         @test bad == 0
     end

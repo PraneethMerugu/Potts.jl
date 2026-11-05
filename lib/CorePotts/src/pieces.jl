@@ -91,7 +91,9 @@ The whole-cell connectivity parts of a `CPMFunction` (P6.9a):
   - `uses_global`: the model uses `Global` (veto, penalty or `connected`): the integrator
     counts `stats.connectivity_deferred`;
   - `exact_veto`: a veto `Global()` without window (exact search: host only on the checkerboard);
-  - `after_slots`: the cell-scope adjacencies tracked (0, 1 or 2): the after-value buffer.
+  - `after_slots`: the cell-scope adjacencies tracked (0, 1 or 2): the after-value buffer;
+  - `window`: the largest window of the model's windowed `Global` searches (0: none). The
+    checkerboard keeps concurrent copies farther apart than it.
 """
 Base.@kwdef struct ConnectivityHooks{PO, DF}
     post::PO = nothing
@@ -99,6 +101,7 @@ Base.@kwdef struct ConnectivityHooks{PO, DF}
     uses_global::Bool = false
     exact_veto::Bool = false
     after_slots::Int = 0
+    window::Int = 0
 end
 
 """
@@ -380,17 +383,17 @@ Whether `global_keeps` needs the search for this copy (the local test fails).
 # ---------------------------------------------------------------------------------------
 # Cell-scope pieces and largest_piece
 
-# after-values of the losing cell `a`: (pieces, largest piece)
+# after-values of the losing cell `a`: (pieces, largest piece), then the tracker values read
 function _pieces_lose(σ, ctx, prop::Proposal, P, L, V, adj::Val)
     a = prop.old
     v = Int(@inbounds V[a])                 # a nonzero owner is a cell id in 1:capacity
     p0 = Int(@inbounds P[a])
     l0 = Int(@inbounds L[a])
-    v == 1 && return Int32(0), Int32(0)
+    v == 1 && return Int32(0), Int32(0), p0, l0
     lat = ctx.lattice
     _, touch, ok = _losing_shell(σ, lat, prop.x, a, adj)
-    touch == 0 && return Int32(p0 - 1), Int32(l0)          # an isolated site: its piece goes
-    p0 == 1 && ok && return Int32(1), Int32(v - 1)
+    touch == 0 && return Int32(p0 - 1), Int32(l0), p0, l0          # an isolated site: its piece goes
+    p0 == 1 && ok && return Int32(1), Int32(v - 1), p0, l0
     # the pieces of P_x \ {x}, from the touches
     fl = ctx.flood
     S = _stamps!(fl, UInt32(2))
@@ -409,16 +412,16 @@ function _pieces_lose(σ, ctx, prop::Proposal, P, L, V, adj::Val)
         found += 1
         sz, found = _flood!(
             σ, lat, fl, s, a, prop.target, S, adj, found, p0 == 1 && k == 0 ? n : 0)
-        p0 == 1 && k == 0 && found == n && return Int32(1), Int32(v - 1)   # one piece, still connected
+        p0 == 1 && k == 0 && found == n && return Int32(1), Int32(v - 1), p0, l0   # one piece, still connected
         k += 1
         total += sz
         maxc = max(maxc, sz)
     end
     size_x = total + 1
-    size_x < l0 && return Int32(p0 - 1 + k), Int32(l0)
-    p0 == 1 && return Int32(k), Int32(maxc)
+    size_x < l0 && return Int32(p0 - 1 + k), Int32(l0), p0, l0
+    p0 == 1 && return Int32(k), Int32(maxc), p0, l0
     rest = v - size_x
-    maxc >= rest && return Int32(p0 - 1 + k), Int32(maxc)
+    maxc >= rest && return Int32(p0 - 1 + k), Int32(maxc), p0, l0
     # x's piece was a largest one and the rest may hold a larger new largest: flood the rest
     for r in 1:nsites(lat)
         (r == prop.target || @inbounds(σ[r]) != a || @inbounds(fl.mark[r]) == S) && continue
@@ -426,7 +429,7 @@ function _pieces_lose(σ, ctx, prop::Proposal, P, L, V, adj::Val)
         sz, _ = _flood!(σ, lat, fl, r, a, prop.target, S, adj, 0, 0)
         maxc = max(maxc, sz)
     end
-    return Int32(p0 - 1 + k), Int32(maxc)
+    return Int32(p0 - 1 + k), Int32(maxc), p0, l0
 end
 
 # after-values of the gaining cell `b`
@@ -437,8 +440,8 @@ function _pieces_gain(σ, ctx, prop::Proposal, P, L, V, adj::Val)
     l0 = Int(@inbounds L[b])
     lat = ctx.lattice
     touch = shell_mask(read_shell(σ, ctx, prop).owners, b) & _touch_bits(lat, adj)
-    touch == 0 && return Int32(p0 + 1), Int32(max(l0, 1))
-    p0 == 1 && return Int32(1), Int32(v + 1)
+    touch == 0 && return Int32(p0 + 1), Int32(max(l0, 1)), p0, l0
+    p0 == 1 && return Int32(1), Int32(v + 1), p0, l0
     fl = ctx.flood
     S = _stamps!(fl, UInt32(2))
     _mark_touches!(lat, fl, prop.x, touch, S)
@@ -455,7 +458,7 @@ function _pieces_gain(σ, ctx, prop::Proposal, P, L, V, adj::Val)
         merged += sz
         joined += 1
     end
-    return Int32(p0 - joined + 1), Int32(max(l0, merged + 1))
+    return Int32(p0 - joined + 1), Int32(max(l0, merged + 1)), p0, l0
 end
 
 """
@@ -464,24 +467,38 @@ end
 The exact pieces and largest piece of the old and new cells after the copy (0 for the
 medium), from the trackers `P`, `L` (this adjacency) and the volumes `V`. The values are
 also stored for the target in `ctx.flood.after` (rows `4(slot − 1) + 1:4`) for
-[`commit_pieces!`](@ref).
+[`commit_pieces!`](@ref): on the lockless checkerboard (`ctx.lockless`) as the changes from the
+values read. A cell in one piece that stays in one piece changes its largest piece by ∓1 (its
+volume's change), not by a difference of two reads that a concurrent copy of the cell may
+separate; every other change is local (the copy's own site) or comes from the floods, which
+run with nothing in flight.
 """
 @inline function pieces_after!(σ, ctx, prop::Proposal, P, L, V, adj::Val, slot::Int)
-    po, lo = prop.old == 0 ? (Int32(0), Int32(0)) : _pieces_lose(σ, ctx, prop, P, L, V, adj)
-    pn, ln = prop.new == 0 ? (Int32(0), Int32(0)) : _pieces_gain(σ, ctx, prop, P, L, V, adj)
+    po, lo, p0, l0 = prop.old == 0 ? (Int32(0), Int32(0), 0, 0) : _pieces_lose(σ, ctx, prop, P, L, V, adj)
+    pn, ln, q0, m0 = prop.new == 0 ? (Int32(0), Int32(0), 0, 0) : _pieces_gain(σ, ctx, prop, P, L, V, adj)
     a = ctx.flood.after
     r = 4 * (slot - 1)
     t = prop.target
     # rows 4·slot ≤ size(after, 1); t in 1:nsites = size(after, 2)
-    @inbounds a[r + 1, t] = po
-    @inbounds a[r + 2, t] = lo
-    @inbounds a[r + 3, t] = pn
-    @inbounds a[r + 4, t] = ln
+    if _lockless(ctx)
+        @inbounds a[r + 1, t] = po - Int32(p0)
+        @inbounds a[r + 2, t] = p0 == 1 && po == 1 ? Int32(-1) : lo - Int32(l0)
+        @inbounds a[r + 3, t] = pn - Int32(q0)
+        @inbounds a[r + 4, t] = q0 == 1 && pn == 1 ? Int32(1) : ln - Int32(m0)
+    else
+        @inbounds a[r + 1, t] = po
+        @inbounds a[r + 2, t] = lo
+        @inbounds a[r + 3, t] = pn
+        @inbounds a[r + 4, t] = ln
+    end
     return po, lo, pn, ln
 end
 
 """
-Whether `pieces_after!` needs the floods for this copy (the checkerboard defers it).
+Whether `pieces_after!` needs the floods for this copy (the checkerboard defers it). A gain
+that does not touch the gaining cell adds a piece; it is deferred too, so in a checkerboard
+phase piece counts only fall, and a copy found fast here stays fast in `pieces_after!` while
+other copies of its cells are in flight (no flood runs outside the serial pass).
 """
 @inline function pieces_defer(σ, ctx, prop::Proposal, P, V, adj::Val)
     lat = ctx.lattice
@@ -496,18 +513,30 @@ Whether `pieces_after!` needs the floods for this copy (the checkerboard defers 
     end
     if prop.new != 0
         touch = shell_mask(owners, prop.new) & _touch_bits(lat, adj)
-        (touch == 0 || @inbounds(P[prop.new]) == 1) || return true
+        (touch != 0 && @inbounds(P[prop.new]) == 1) || return true
     end
     return false
 end
 
 """
-Apply the after-values `pieces_after!` stored for the target to the trackers `P`, `L`.
+Apply the after-values `pieces_after!` stored for the target to the trackers `P`, `L` (on the
+lockless checkerboard, add the stored changes atomically).
 """
 @inline function commit_pieces!(P, L, prop::Proposal, ctx, slot::Int)
     a = ctx.flood.after
     r = 4 * (slot - 1)
     t = prop.target
+    if _lockless(ctx)
+        if prop.old != 0                       # a nonzero owner is a cell id in 1:capacity
+            Atomix.@atomic P[prop.old] += @inbounds(a[r + 1, t])
+            Atomix.@atomic L[prop.old] += @inbounds(a[r + 2, t])
+        end
+        if prop.new != 0
+            Atomix.@atomic P[prop.new] += @inbounds(a[r + 3, t])
+            Atomix.@atomic L[prop.new] += @inbounds(a[r + 4, t])
+        end
+        return nothing
+    end
     if prop.old != 0                           # a nonzero owner is a cell id in 1:capacity
         @inbounds P[prop.old] = a[r + 1, t]
         @inbounds L[prop.old] = a[r + 2, t]

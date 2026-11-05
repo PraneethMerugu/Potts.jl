@@ -84,23 +84,13 @@ function SciMLBase.reinit!(integ::PottsIntegrator, u0 = integ.prob.u0;
 end
 
 # the algorithm's scratch for the new run: nothing (SequentialCPM), the checkerboard's status,
-# claims, track and connectivity counters, or the boundary set of the new state (rebuilt)
+# track, counts and serial list, or the boundary set of the new state (rebuilt)
 _reset_cache!(::Nothing, integ) = nothing
-function _reset_cache!(cache::BlockCache, integ)
-    fill!(cache.status, 0)
-    cache.track === nothing || fill!(cache.track.acc, 0)
-    cache.cnt === nothing || foreach(c -> fill!(c, 0), cache.cnt)
-    return nothing
-end
 function _reset_cache!(cache::CheckerboardCache, integ)
     fill!(cache.status, 0)
-    foreach(c -> c === nothing || fill!(c, 0), (cache.claims..., cache.wclaims...))
     cache.track === nothing || fill!(cache.track.acc, 0)
     cache.cnt === nothing || foreach(c -> fill!(c, 0), cache.cnt)
-    cache.lists === nothing || foreach(c -> fill!(c, 0), cache.lists.count)
-    # the connectivity lists and the deferred-refusal counter (a refusal of the old run is not
-    # the new run's)
-    cache.conn === nothing || foreach(c -> fill!(c, 0), (cache.conn.gl.gcount, cache.conn.gl.scount, cache.conn.gl.deferred))
+    cache.serial === nothing || (fill!(cache.serial.count, 0); fill!(cache.serial.deferred, 0))
     return nothing
 end
 _reset_cache!(B::BoundaryCache, integ) =

@@ -44,7 +44,7 @@ end
 # divide (cutting holed and fragmented cells) and the columns equal the recount
 function eu_commit!(st, p, prop, ctx)
     commit_volume!(st, p, prop, ctx)
-    commit_moments!(st.cell, ctx.lattice, prop)
+    commit_moments!(st.cell, ctx, prop)
     commit_euler!(st.cell.euler, prop, euler_change(st.σ, ctx, prop, Val(:face)))
     commit_euler!(st.cell.euler_full, prop, euler_change(st.σ, ctx, prop, Val(:full)))
     return nothing
