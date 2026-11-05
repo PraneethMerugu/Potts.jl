@@ -151,6 +151,7 @@ does a pair with either site outside the lattice domain.
     end
     return inside && _in_domain(l.mask, l, x, w), w
 end
+
 # a pair interacts only if both sites are in the domain (symmetric, so brute-force sums
 # over all sites agree with per-copy deltas)
 """`true` if `x + off` stays within the lattice faces (ignoring the domain mask)."""
@@ -177,6 +178,29 @@ Base.length(::Relation{N, K}) where {N, K} = K
 @inline weight(::Relation{N, K, Nothing}, k) where {N, K} = Int32(1)
 @inline weight(r::Relation, k) = @inbounds r.weights[k]
 radius(r::Relation) = maximum(o -> maximum(abs, o; init = 0), r.offsets; init = 0)
+
+"""
+    interior(lattice, x, relation) -> Bool
+    neighbor_index(lattice, x, t, relation, k, interior) -> (inside, index)
+
+`neighbor_index` is `shift` then `linear_index` for neighbor `k` of site `t` (coordinates
+`x`); when `interior` (`x` at least the relation's radius from every face, no domain mask) it
+is `t + linear offset`, without the wrap arithmetic (P6.0bl kernel profile).
+"""
+@inline function interior(l::Lattice{N, Nothing}, x, rel::Relation{N, K}) where {N, K}
+    r = foldl(max, ntuple(k -> foldl(max, ntuple(d -> abs(Int(@inbounds rel.offsets[k][d])), Val(N))), Val(K)))
+    return all(ntuple(d -> r < x[d] <= l.dims[d] - r, Val(N)))
+end
+@inline interior(l::Lattice, x, rel) = false
+@inline function neighbor_index(l::Lattice{N}, x, t::Int, rel::Relation{N}, k, inner::Bool) where {N}
+    inner && return true, t + _linear_offset(l, @inbounds rel.offsets[k])
+    inside, y = shift(l, x, @inbounds rel.offsets[k])
+    return inside, inside ? linear_index(l, y) : t
+end
+@inline function _linear_offset(l::Lattice{N}, o::NTuple{N, Int32}) where {N}
+    return foldl(+, ntuple(d -> Int(o[d]) * prod(ntuple(e -> e < d ? l.dims[e] : 1, Val(N))), Val(N)))
+end
+
 
 abstract type RelationSpec end
 

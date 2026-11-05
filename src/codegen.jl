@@ -261,11 +261,14 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
             δs_old += ifelse(n == old, ws, -ws)
             δs_new += ifelse(n == new, -ws, ws)
         end : nothing
+        # a target at least the relation's radius from every face takes its neighbors as
+        # `target + linear offset`, without the wrap arithmetic (P6.0bl kernel profile)
+        inner = gensym(:interior)
         push!(body, quote
+            $inner = CorePotts.interior(ctx.lattice, prop.x, $R)
             for kk in 1:length($R)
-                ins, y = CorePotts.shift(ctx.lattice, prop.x, @inbounds $R.offsets[kk])
+                ins, sn = CorePotts.neighbor_index(ctx.lattice, prop.x, prop.target, $R, kk, $inner)
                 if ins
-                    sn = CorePotts.linear_index(ctx.lattice, y)
                     n = @inbounds st.σ[sn]
                     w = CorePotts.weight($R, kk)
                     k_n = Potts._cellkind(st, n)

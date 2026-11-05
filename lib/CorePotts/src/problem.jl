@@ -357,7 +357,7 @@ function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, save
     state = _to_backend(backend, deepcopy(prob.u0))
     p = _to_backend(backend, prob.p)
     cache = alg isa CheckerboardCPM && alg.scheme === :blocks ?
-            BlockCache(backend, lat, prob.f, relation(_proposal(alg, prob), lat); alg.block, alg.switches, alg.counts) :
+            BlockCache(backend, lat, prob.f, relation(_proposal(alg, prob), lat); alg.block, alg.parts, alg.switches, alg.counts) :
             alg isa CheckerboardCPM ?
             CheckerboardCache(backend, lat, prob.f, ncells(prob.u0), relation(_proposal(alg, prob), lat);
                 alg.stride, alg.retries, alg.counts, replacement = alg.colors === :replacement, shared = alg.cells === :shared) :

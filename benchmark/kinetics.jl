@@ -44,6 +44,7 @@ function arm_alg(arm)
     for t in tok[2:end]
         t == "rep" ? (kw[:colors] = :replacement) : t == "sh" ? (kw[:cells] = :shared) : t == "blk" ? (kw[:scheme] = :blocks) :
         startswith(t, "b") ? (kw[:block] = parse(Int, t[2:end])) : startswith(t, "w") ? (kw[:switches] = parse(Int, t[2:end])) :
+        startswith(t, "k") ? (kw[:parts] = parse(Int, t[2:end])) :
         startswith(t, "r") ? (kw[:retries] = parse(Int, t[2:end])) :
         startswith(t, "s") ? (kw[:stride] = parse(Int, t[2:end])) :
         throw(ArgumentError("unknown option $t in arm $arm"))

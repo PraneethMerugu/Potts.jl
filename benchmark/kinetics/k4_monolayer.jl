@@ -4,11 +4,12 @@
 # P6.15m rules (per-seed metrics, crit(ν), PottsModels.openvt_spread_table).
 include(joinpath(ARGS[1], "lib/PottsModels/reproductions/data/15/checkerboard-2026-10-10/run_checkerboard.jl"))
 using Printf
-# ARGS[5]: stride,retries (default 3,4), sh,stride (cells = :shared) or blk,block,switches; colors are drawn with
+# ARGS[5]: stride,retries (default 3,4), sh,stride (cells = :shared) or blk,block,switches[,parts]; colors are drawn with
 # replacement; copy counts on
 const K4_SR = split(get(ARGS, 5, "3,4"), ',')
 const K4_ALG = first(K4_SR) == "blk" ?
-               CheckerboardCPM(; proposal = Moore(1), scheme = :blocks, block = parse(Int, K4_SR[2]), switches = parse(Int, K4_SR[3]), counts = true) :
+               CheckerboardCPM(; proposal = Moore(1), scheme = :blocks, block = parse(Int, K4_SR[2]), switches = parse(Int, K4_SR[3]),
+                   parts = parse(Int, get(K4_SR, 4, "2")), counts = true) :
                first(K4_SR) == "sh" ?
                CheckerboardCPM(; proposal = Moore(1), stride = parse(Int, K4_SR[2]), cells = :shared, colors = :replacement, counts = true) :
                CheckerboardCPM(; proposal = Moore(1), stride = parse(Int, K4_SR[1]), retries = parse(Int, K4_SR[2]), colors = :replacement, counts = true)

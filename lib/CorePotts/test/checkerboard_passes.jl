@@ -171,7 +171,8 @@
 
     @testset "blocks: exact ΔH on the CPU" begin
         # the CPU runs the work items one after another: every attempt sees every earlier one
-        for kw in ((;), (; block = 3), (; block = 4), (; block = 5, switches = 5), (; block = 3, switches = 3)), seed in 1:2
+        for kw in ((;), (; block = 3), (; block = 4), (; block = 5, switches = 5), (; block = 3, switches = 3),
+                (; block = 1, parts = 3), (; block = 2, parts = 3, switches = 2)), seed in 1:2
             sol = solve(remake(prob; seed), CheckerboardCPM(; proposal = Moore(1), scheme = :blocks, kw...))
             u0, u = sol.u[1], sol.u[end]
             @test sol.stats.accepted_ΔH ≈ H(u) - H(u0) atol = 1e-6
@@ -185,13 +186,14 @@
 
     @testset "blocks: layout covers every site once" begin
         # each site is (block, phase, u) for exactly one triple, and a draw picks u uniformly
-        for (dims, b) in (((30, 30), 3), ((31, 17), 2), ((12, 8, 6), 2), ((100, 100, 23), 3), ((5, 9), 3))
+        for (dims, b, k) in (((30, 30), 3, 2), ((31, 17), 2, 2), ((12, 8, 6), 2, 2), ((100, 100, 23), 3, 2), ((5, 9), 3, 2),
+            ((30, 30), 1, 4), ((31, 17), 1, 3), ((100, 100, 36), 1, 4), ((13, 11, 7), 2, 3))
             N = length(dims)
-            l = CorePotts.BlockLayout(dims, b)
+            l = CorePotts.BlockLayout(dims, b, k)
             nbox = CorePotts.boxsize(l)
             hits = zeros(Int, dims)
-            for blk in 1:CorePotts.nblocks(l), ph in 1:(2^N), u in 0:(nbox - 1)
-                inside, x = CorePotts.block_site(l, blk, ph, UInt32(u) * UInt32(cld(2^32, nbox)))
+            for blk in 1:CorePotts.nblocks(l), ph in 1:(k^N), u in 0:(nbox - 1)
+                inside, x = CorePotts.block_site(l, blk, ph, UInt32(u * cld(2^32, nbox)))
                 inside && (hits[x...] += 1)
             end
             @test all(==(1), hits)
@@ -208,6 +210,7 @@
 
     @testset "blocks: refusals" begin
         @test_throws ArgumentError init(prob, CheckerboardCPM(; scheme = :blocks, block = 0))       # below the footprint
+        @test_throws ArgumentError init(prob, CheckerboardCPM(; scheme = :blocks, parts = 1))
         @test_throws ArgumentError init(prob, CheckerboardCPM(; scheme = :blocks, block = 3, switches = 4))
         @test_throws ArgumentError init(prob, CheckerboardCPM(; scheme = :grid))
         cl = CPMFunction(gg_delta_H; temperature = gg_temperature, claims = (st, p, prop, ctx) -> (Int32(1),))

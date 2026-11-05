@@ -109,7 +109,7 @@ end
 """
     CheckerboardCPM(; acceptance = nothing, proposal = nothing, skip_interior = false,
         stride = nothing, colors = :permutation, retries = 0, counts = false, cells = :exclusive,
-        scheme = :colors, block = nothing, switches = 1)
+        scheme = :colors, block = nothing, parts = 2, switches = 1)
 
 Parallel dynamics on CPU or GPU (KernelAbstractions). Sites are colored so that same-color
 targets lie outside each other's read/write footprints; each MCS visits every site once in
@@ -141,11 +141,12 @@ Options that bring the kinetics closer to `SequentialCPM` (P6.0bl):
   totals change by integer atomic adds. A copy's ΔH reads the state from before its pass, so
   copies to one cell in one pass do not see each other. Deterministic. Not with `retries`, a
   whole-cell connectivity veto, `claims`/`reads` hooks, or moments/pieces trackers.
-- `scheme = :blocks` (prototype, P6.0bl; after Sultan et al., arXiv 2312.09317): blocks of side
-  2·`block` (default: the copy footprint's read + write), each with 2^d sub-regions. A phase
+- `scheme = :blocks` (prototype, P6.0bl; after Sultan et al., arXiv 2312.09317): blocks of
+  `parts` sub-regions of side `block` along each axis ((parts - 1)·block ≥ the copy footprint's
+  read + write; default block: the smallest). A phase
   activates one sub-region per block; one work item per block makes sequential random attempts
   there and commits at once, with no claims (per-cell totals by atomic adds, read live).
-  `switches` phases per sub-region per MCS (a divisor of block^d). Not deterministic on a
+  `switches` phases per sub-region per MCS (a divisor of the sub-region box). Not deterministic on a
   device; on the CPU the attempts run one after another. Ignores `stride`, `colors`, `retries`
   and `cells`; refuses a whole-cell connectivity veto and `claims`/`reads` hooks.
 - `counts = true`: count accepted, committed and dropped copies into `stats.accepted`,
@@ -162,6 +163,7 @@ Base.@kwdef struct CheckerboardCPM{A, R} <: CPMAlgorithm
     cells::Symbol = :exclusive
     scheme::Symbol = :colors
     block::Union{Nothing, Int} = nothing
+    parts::Int = 2
     switches::Int = 1
 end
 
