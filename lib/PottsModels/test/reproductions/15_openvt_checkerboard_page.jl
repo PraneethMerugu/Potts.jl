@@ -25,10 +25,12 @@
 # ---------------------------------------------------------------------------------------------
 #   T_lambda2 (T_cb, MCS), T_seq (the sequential P1 record's 156), T_seq_p1b (the sequential
 #   T on the same P1b chain), z (against P1), z_p1b (like with like), cycle_mcs, alpha_text
-#   ("50/<cycle>"), colours_chain and colours_monolayer (Int; equal, D-224); comparison.tsv
-#   (beyond = true|false per row); entry/deviations.tsv; ablation.tsv (its `colours` column:
-#   the contrast arm, 64 under D-221). Optional: meta [dH_check] with `copies` (Int) and
-#   `mismatches` (Int); when present, the page must quote both.
+#   ("50/<cycle>"), phases_chain and phases_monolayer (Int, phases per MCS; equal, D-224;
+#   D-271: the lockless block checkerboard has phases, not colours); comparison.tsv
+#   (beyond = true|false per row); entry/deviations.tsv (header only when no row is beyond);
+#   with flagged rows also ablation.tsv (its `colours` column: the contrast arm). Optional:
+#   meta [dH_check] with `copies` (Int) and `mismatches` (Int); when present, the page must
+#   quote both.
 #
 # ---------------------------------------------------------------------------------------------
 # Page 15 (the Literate source; read, not run)
@@ -45,17 +47,18 @@
 #      colour (0,109,44), banner, `implementations/` or `results/Potts…` path, and says
 #      neither "second entry", "two entries" nor "submitted".
 # (P3) The time scale, from meta [time]: T_lambda2, T_seq_p1b, T_seq, "<cycle_mcs> MCS",
-#      alpha_text, z and z_p1b to two decimals; the calibration colour counts:
-#      "<colours_chain> colours" on the chain and "<colours_monolayer>" on the monolayer, in one
+#      alpha_text, z and z_p1b to two decimals; the calibration phase counts:
+#      "<phases_chain> phases" on the chain and "<phases_monolayer>" on the monolayer, in one
 #      paragraph that says "chain" and "monolayer".
-# (P4) The comparison summary "<flagged> of <rows>" from comparison.tsv, and a deviations table
+# (P4) The comparison summary "<flagged> of <rows>" from comparison.tsv, and, when a row is
+#      flagged (D-271), a deviations table
 #      (header with "Ours", a "Potts.jl"/"sequential" reference column, "cause" and "Author
 #      question") with one row per entry/deviations.tsv row: the first cell holds the metric id
 #      and "(<case>)"; the row holds the first decimal number of `ours` and of `paper`, the
 #      cause's leading clause (before ':'), and a last cell starting "not an author question",
 #      "not asked" or "resolved" (and "not an author question" when the record's does).
 #      Backslashes and backticks are ignored when matching.
-# (P5) The cause and its evidence: "thinning", "claim", "D-008", "D-220", "not a bug", the
+# (P5) When a row is flagged (D-271), the cause and its evidence: "thinning", "claim", "D-008", "D-220", "not a bug", the
 #      ablation's contrast arm "<max colours of ablation.tsv> colours", and the ΔH brute-force
 #      check ("ΔH" and "brute force"/"brute-force", with "0 mismatches" or "no mismatch"; with
 #      meta [dH_check], its copies count, digits possibly grouped by "," or a space).
@@ -154,7 +157,7 @@ p615p_rec(f...) = joinpath(P615P_DATA, something(P615P_REC, "?"), f...)
 const P615P_META = P615P_REC === nothing ? Dict{String, Any}() : TOML.parsefile(p615p_rec("meta.toml"))
 const P615P_PROV = P615P_REC === nothing ? Dict{String, Any}() : TOML.parsefile(p615p_rec("provenance.toml"))
 const P615P_TIME = get(P615P_META, "time", Dict{String, Any}())
-const P615P_TIME_KEYS = ["T_lambda2", "T_seq", "T_seq_p1b", "z", "z_p1b", "cycle_mcs", "alpha_text", "colours_chain", "colours_monolayer"]
+const P615P_TIME_KEYS = ["T_lambda2", "T_seq", "T_seq_p1b", "z", "z_p1b", "cycle_mcs", "alpha_text", "phases_chain", "phases_monolayer"]
 const P615P_COMMIT8 = first(string(get(P615P_PROV, "commit", "")), 8)
 const P615P_MACHINE = lowercase(strip(first(split(string(get(P615P_PROV, "cpu", "")), " w/"))))
 p615p_flagged() = (rows = isfile(p615p_rec("comparison.tsv")) ? p615p_tsv(p615p_rec("comparison.tsv")) : Dict{String, String}[];
@@ -214,11 +217,12 @@ end
         ok || @info "P6.15m m4: meta.toml [time] of $(P615P_REC) lacks $k (the D-224 re-run writes it)"
         @test ok
     end
-    @test get(P615P_TIME, "colours_chain", -1) == get(P615P_TIME, "colours_monolayer", -2)          # D-224
+    @test get(P615P_TIME, "phases_chain", -1) == get(P615P_TIME, "phases_monolayer", -2)            # D-224
     @test get(P615P_TIME, "alpha_text", "") == "50/$(get(P615P_TIME, "cycle_mcs", "?"))"
     nf, nt = p615p_flagged()
     @test nt > 0
-    @test !isempty(p615p_devs()) && p615p_maxcolours() !== nothing
+    @test isfile(p615p_rec("entry", "deviations.tsv"))
+    nf > 0 && @test !isempty(p615p_devs()) && p615p_maxcolours() !== nothing   # flagged rows need causes
     dh = get(P615P_META, "dH_check", nothing)
     dh === nothing || @test get(dh, "copies", 0) isa Integer && get(dh, "mismatches", -1) isa Integer
 end
@@ -255,25 +259,26 @@ end
                 ok || @info "P6.15m m4 page: the checkerboard section lacks" s
                 @test ok
             end
-            cc, cm = t["colours_chain"], t["colours_monolayer"]
-            @test any(p -> occursin(r"chain"i, p) && occursin(r"monolayer"i, p) && occursin(Regex("\\b$cc colors"), p) &&
+            cc, cm = t["phases_chain"], t["phases_monolayer"]
+            @test any(p -> occursin(r"chain"i, p) && occursin(r"monolayer"i, p) && occursin(Regex("\\b$cc phases"), p) &&
                            occursin(Regex("\\b$cm\\b"), p), p615p_paras(prose))
         end
         # (P4) the comparison summary and the deviations table
         nf, nt = p615p_flagged()
         @test nt > 0 && occursin("$nf of $nt", flat)
-        f = p615p_dev_findings(sec)
-        isempty(f) || @info "P6.15m m4 page deviations" first(f, 10)
-        @test isempty(f)
-        # (P5) the cause and the evidence
-        for re in (r"thinning"i, r"claim"i, r"D-008", r"D-220", r"not a bug"i, r"ΔH", r"brute[- ]force"i,
-            r"\b0 mismatches\b|\bno mismatch"i)
-            ok = occursin(re, flat)
-            ok || @info "P6.15m m4 page: the cause text lacks" re
-            @test ok
+        if nf > 0                                    # (P4, P5) only with flagged rows (D-271)
+            f = p615p_dev_findings(sec)
+            isempty(f) || @info "P6.15m m4 page deviations" first(f, 10)
+            @test isempty(f)
+            for re in (r"thinning"i, r"claim"i, r"D-008", r"D-220", r"not a bug"i, r"ΔH", r"brute[- ]force"i,
+                r"\b0 mismatches\b|\bno mismatch"i)
+                ok = occursin(re, flat)
+                ok || @info "P6.15m m4 page: the cause text lacks" re
+                @test ok
+            end
+            mc = p615p_maxcolours()
+            @test mc !== nothing && occursin("$mc colors", flat)
         end
-        mc = p615p_maxcolours()
-        @test mc !== nothing && occursin("$mc colors", flat)
         dh = get(P615P_META, "dH_check", nothing)
         dh === nothing || @test occursin(p615p_numre(dh["copies"]), flat) && occursin(Regex("\\b$(dh["mismatches"]) mismatch"), flat)
     end

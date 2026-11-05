@@ -575,8 +575,8 @@ decision = "D-218"
 
 [[file]]
 path = "reproductions/15_openvt_checkerboard_page.jl"
-sha256 = "ae87f6dab3a2445b9e61983036399a0ff2327a97170bb6a370a009a10ad26ee0"
-decision = "D-249"
+sha256 = "796f05c4db5c57874539bfb5cacd8ad60666156d902144ad25a73e2999a28670"
+decision = "D-271"
 
 [[file]]
 path = "reproductions/15_openvt_d213.jl"
