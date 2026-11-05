@@ -4878,4 +4878,8 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - `p6_3a_topology_track.jl`: P63A_TRACK_FINGERPRINT.
   - `p6_4a1_copy_direction.jl`: P64A1_REF_FINGERPRINT.
   - `p6_5b_convert.jl`: P65B_PLAIN_FP.
-  - Open, not re-pinned (assertions, not recordings): `p6_0au` line 283 (fixture margin under CheckerboardCPM), `p6_0x` line 208 (XRing CheckerboardCPM y no longer > 0.9: 0.48, 0.99), `p6_0v3` P60V3_LAUNCHES (ROCm now 64, 65, 95, 66, 66 launches per quiet MCS) and its device exactness test.
+- **Assertions changed** (maintainer-approved 2026-11-05: "apply all 4").
+  - `p6_0x` XRing `y > 0.9`: SequentialCPM only. Over 64 seeds either algorithm passes it in 78 % (mean y₁: checkerboard 1.31 ± 0.04, sequential 1.23 ± 0.04); seed 7 of the checkerboard gives 0.48.
+  - `p6_0au` fixture margin: SequentialCPM only. The checkerboard's cell 2 holds a hot site for one MCS (MCS 10); the veto and its control still run for both algorithms.
+  - `p6_0v3` launch bounds re-derived: 64 phases + model phases + one moment re-centering (Merks, OpenVT, Akeeb). Pins GG (64, 64), Wortel (64, 65), Merks (80, 95), OpenVT (66, 66), Akeeb (66, 66), as measured on ROCm.
+  - `p6_0v3` device Merks: no longer bitwise equal to the CPU (device runs are not reproducible, user ruling 2026-11-04); it runs, its labels stay in range, the CPU run's cells are alive and the field is finite.

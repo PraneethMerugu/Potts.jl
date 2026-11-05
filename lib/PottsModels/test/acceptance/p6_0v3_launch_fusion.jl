@@ -19,30 +19,22 @@
 #      per MCS are the same for every N, and 0. Control: the launches grow with N (the
 #      substeps ran).
 #  (3) Launches. `stats.launches` of a quiet MCS of each gate model (gate sizes) lies in
-#      [floor, bound], from the audit's §8.1 table and §11 after the fusions §10 assigns to
-#      P6.0v3 (F1, F2, F3, T3; F5 is illegal and F6 is unassigned). Measured today on Metal
-#      (and the same on the CPU): GG 8, Wortel 33, Merks 38, OpenVT 10, Akeeb 14.
-#        Graner–Glazier 72  bound 8  = 4 colors × (propose + commit). No fusion applies (F5
-#                           illegal: commit needs every proposal of its color, Metal has
-#                           no grid barrier). Floor 8.
-#        Wortel Act 100     bound 33 = 16 colors × 2 (F5) + the `act` decay `SitePhase`
-#                           (F6: necessary as the model is written, not assigned). Floor 32.
-#        Merks 100          bound 38 = 4 colors × 2 + 15 substeps × (field kernel + copy).
-#                           F2 replaces Metal's waiting `copyto!` blit (counted as a launch
-#                           today) by a KA copy kernel: one launch for one, the count stays;
-#                           a ping-pong buffer may go lower. Floor 8 + 15 (one field kernel
-#                           per substep).
-#        OpenVT mono. 100   bound 9  = 4 colors × 2 + one launch for the `V_target`
-#                           `CellPhase` and the lifecycle together (F1: the after-MCS cell
-#                           phase fused with the trigger; legal, the trigger reads `volume`,
-#                           which the phase does not write; T3's `fill!` is already gone
-#                           under D-089, §11). Today 10 (phase + fused lifecycle kernel).
-#                           Floor 9.
-#        Akeeb 99×60        bound 13 = 6 colors × 2 + one launch for the `V_target`/`clock`
-#                           `CellPhase` and the lifecycle (F1; legal, the trigger reads the
-#                           cell's own `clock`, `volume` and parameters only). Today 14.
-#                           Floor 13.
-#      The floors keep the launch counter honest: every color still needs its two kernels.
+#      [floor, bound]. Re-derived for the lockless block checkerboard (D-271): an MCS is 64
+#      phase launches (2D default, 8 parts per axis; no serial pass in these models), plus
+#      the model's own phases, plus one moment re-centering (`recenter_kernel!`) for models
+#      that track moments. Measured on ROCm 2026-11-05 (5 quiet MCS, constant): GG 64,
+#      Wortel 65, Merks 95, OpenVT 66, Akeeb 66.
+#        Graner–Glazier 72  64 phases. Floor = bound = 64.
+#        Wortel Act 100     64 + the `act` decay `SitePhase` (F6, not assigned). Floor 64,
+#                           bound 65.
+#        Merks 100          64 + 15 substeps × (field kernel + copy) + 1 re-centering
+#                           (`major_length`). Floor 64 + 15 + 1 (one field kernel per
+#                           substep), bound 95.
+#        OpenVT mono. 100   64 + one launch for the `V_target` `CellPhase` and the lifecycle
+#                           together (F1) + 1 re-centering. Floor = bound = 66.
+#        Akeeb 99×60        64 + one launch for the `V_target`/`clock` `CellPhase` and the
+#                           lifecycle (F1) + 1 re-centering. Floor = bound = 66.
+#      The floors keep the launch counter honest: every phase still needs its kernel.
 #  (4) P6.0v2 review: an MCS with two consecutive adaptive-ODE host phases (a cell and a
 #      model ODE, both `Adaptive`) makes exactly one counted sync (today two; the second
 #      waits on an idle queue). Controls: a single adaptive phase makes one sync (the
@@ -53,9 +45,10 @@
 #      fixture equals its exact oracle (k = 1: the two cells swap their values every MCS);
 #      Merks (32², 6 cells, 15 substeps, seed 7, 6 MCS) equals the digests of σ and the field
 #      recorded here from the current code (and differs for another seed: the digest is
-#      sensitive). On Metal, bitwise too (the current code is: the field step is per-site
-#      and the checkerboard sweep's draws are counter-based): the fixtures equal the same
-#      oracles, and Merks equals the CPU Float32 run and the recorded Float32 digests.
+#      sensitive). On the device, the fixtures equal the same oracles bitwise (σ is frozen,
+#      so the sweep's timing does not matter). Merks on the device is not reproducible
+#      (D-271): it runs and keeps its invariants (labels in range, the CPU run's cells
+#      alive, a finite field).
 #  (6) No Float64 reaches a Metal kernel for the gate models. Practical form: the types of
 #      everything the integrator hands to its kernels (`integ.p`, `integ.state`,
 #      `integ.ctx`, the sweep's kernel function `integ.kf`) contain no `Float64` leaf when
@@ -98,11 +91,11 @@ function p60v3_gate_cases(T)
 end
 # (floor, bound) of `stats.launches` per quiet MCS; derivations in the header, (3)
 const P60V3_LAUNCHES = Dict(
-    "graner_glazier_72" => (8, 8),
-    "wortel_act_100" => (32, 33),
-    "merks_100" => (8 + 15, 8 + 2 * 15),
-    "openvt_monolayer_100" => (9, 9),
-    "akeeb_99x60" => (13, 13),
+    "graner_glazier_72" => (64, 64),
+    "wortel_act_100" => (64, 65),
+    "merks_100" => (64 + 15 + 1, 64 + 2 * 15 + 1),
+    "openvt_monolayer_100" => (66, 66),
+    "akeeb_99x60" => (66, 66),
 )
 
 # ---------------------------------------------------------------------------------------
@@ -490,8 +483,12 @@ end
         end
         m = solve(p60v3_merks_problem(; T = Float32), alg; backend, save_start = false).u[end]
         c = solve(p60v3_merks_problem(; T = Float32), alg; save_start = false).u[end]
-        @test Array(m.σ) == c.σ && Array(m.site.c) == c.site.c          # bitwise, CPU = device
-        @test (p60v3_digest(m.σ), p60v3_digest(m.site.c)) == P60V3_MERKS_DIGESTS[Float32]
+        # the device checkerboard is not reproducible (D-271, user ruling 2026-11-04): it runs and
+        # keeps the model's invariants (labels in range, every cell alive, a finite field)
+        σm = Array(m.σ)
+        @test size(σm) == size(c.σ) && all(v -> 0 <= v <= maximum(c.σ), σm)
+        @test Set(filter(!=(0), unique(σm))) == Set(filter(!=(0), unique(c.σ)))
+        @test all(isfinite, Array(m.site.c))
     else
         @test_skip "device (POTTS_GPU=metal|rocm)"
     end

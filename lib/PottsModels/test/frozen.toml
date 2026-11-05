@@ -159,12 +159,12 @@ decision = "D-254"
 
 [[file]]
 path = "acceptance/p6_0v3_launch_fusion.jl"
-sha256 = "7579fa3093605afeccbd01ffd5387f6cda4e358fb158d95a0d82b8d590e1a3e4"
+sha256 = "b6d11438584b56c7b6bbcacb9438c8d2e420bd9cab0eccf01c7c49be3860038b"
 decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0x_gather_ode_alloc.jl"
-sha256 = "bc1c28a64a30aeadd7a0f99722a3e6f055de27e8c2ae50dfca557bdf91ae3e98"
+sha256 = "d04fd4e0cef22ec250399053a2ae8e2c2c2b9cc12696b8d9d391ab703dd45e72"
 decision = "D-271"
 
 [[file]]
@@ -269,7 +269,7 @@ decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0au_integral_readers.jl"
-sha256 = "630044dd623f87bab79bd23ec4de601c7e6e24812fc6d2b10b83ce44d4c30d00"
+sha256 = "e6cebae5de87271b79889b1090b5b360aba40de9990f8d2b3c8b806204512539"
 decision = "D-271"
 
 [[file]]

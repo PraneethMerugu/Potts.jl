@@ -280,7 +280,9 @@ end
         # s after MCS k: the fold over σ at the end of MCS k - 1 (the before block)
         @test p60au_cell(sol, :s)[2:end] ≈ [p60au_fold(σs[k], P60AU_U0) for k in 1:K]
         # fixture: the threshold separates the cells with margin in every state the rule sees
-        @test all(k -> p60au_fold(σs[k], P60AU_U0)[1] >= 100 && p60au_fold(σs[k], P60AU_U0)[2] <= 25, 1:K)
+        # (SequentialCPM only, D-271: the checkerboard's cell 2 holds a hot site for one MCS)
+        alg isa SequentialCPM &&
+            @test all(k -> p60au_fold(σs[k], P60AU_U0)[1] >= 100 && p60au_fold(σs[k], P60AU_U0)[2] <= 25, 1:K)
         @test all(k -> all(>(0), p60au_fold(σs[k + 1], ones(16, 16))), 0:K)    # both cells live
         # the veto: cell 1 (s ≥ 100 > θ) never gains a site; cell 2 does
         @test !p60au_gained(σs, 1)
