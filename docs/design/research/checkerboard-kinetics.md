@@ -372,6 +372,42 @@ Still open: the K4 lost-cell excess (1.74 against 0.24 per run, case (b)); the O
 checkerboard record page (`reproductions/15_openvt_monolayer.jl`) still describes the old
 scheme's measured results.
 
+### Comparison with Sultan et al. (2026-11-05)
+
+Source: Sultan, Devi, Mueller and Textor, "A parallelized cellular Potts model that enables
+simulations at tissue scale", arXiv 2312.09317 v1 (2023-12-14); no journal version found on
+Crossref. Ideas only; their code is GPLv3 and was not read.
+
+| | Sultan et al. | Potts.jl (lockless blocks) |
+|---|---|---|
+| Lattice split | thread area (e.g. 8 × 8) cut into checkerboard areas (e.g. 4 × 4, 2 per axis) | block of k sub-regions per axis; default sub-region 1 site, k = 8 (2D) or 4 (3D) |
+| Active region order | "cycle periodically" | each phase drawn uniformly from the k^d offsets |
+| Attempts per switch | 1 recommended (Fig. 3, 5) | n / `switches` per stay; 1 at the default |
+| Attempts per MCS per thread area | 64 (8 × 8 area, 1 per switch) | 64 (8 × 8 block in 2D), the same in-flight density 1/64 |
+| Barrier | after every copy attempt, in the kernel | one launch per phase (KA has no grid barrier) |
+| Cell totals | atomic adds, read live | atomic adds, read live |
+| Mutex / claims | rejected (Tapia et al. locking starves sorting) | none |
+| Centroids | size and coordinate sums in one 64-bit CAS | atomic sums of offsets from an anchor, re-centered once per MCS; a torn read is off by at most one site's offset / V |
+| Connectivity, whole-cell floods | not described | serial pass after each phase; windowed `Global` in the phase |
+| Model coverage | pre-generated kernels for a fixed set of extensions | every generated model (D-271 "no refusals") |
+| Memory | active areas cached in shared memory, transfers overlapped | global memory only |
+| Multi-GPU | prototype (deltas merged every 4 MCS) | none |
+| CPU | separate serial code | the same kernel, inline or threaded |
+| Kinetic validation | sorting; chemotaxis cross-entropy; Act polarization; 3D collective phase transition | foam, sorting, K3 chain, Akeeb, OpenVT (b), K4, 3D RPE; paired z-scores |
+
+What they found that we match: atomics instead of locks, and frequent switching with one
+attempt per switch to keep waiting times between attempts at a site close to serial. Where
+we differ: random phase order (each site's waiting time is geometric per phase, not a
+periodic visit times a geometric pick) and smaller active areas spaced further apart.
+
+Gaps:
+- The Act model (Niculescu et al. 2015) was their most order-sensitive case; we have not
+  validated an Act model on the new checkerboard.
+- No shared-memory caching. Their own result: caching alone gave little, kernel
+  specialization with caching gave 10× (Fig. 6A). Our kernels are already specialized per model.
+- One launch per phase: 64 per MCS in 2D. Their in-kernel barrier avoids launches; KA has
+  no grid barrier (see the block scheme section for launch costs).
+
 ## 4. Pre-registered criteria
 
 Fixed before any variant is measured.
