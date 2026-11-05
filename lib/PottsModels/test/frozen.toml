@@ -459,8 +459,8 @@ decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0bw_rocm_wait.jl"
-sha256 = "7d464db54decea554bdfa11e5fb5a20b3e6a40ed1452a83836c955de074eca24"
-decision = "D-179"
+sha256 = "499f27a8388fa924d0ddaddfae45c707e6062a88155c99ba62995c598b6a92f0"
+decision = "D-271"
 
 [[file]]
 path = "reproductions/15_openvt_package.jl"

@@ -57,15 +57,17 @@
 #      (`Threads.maxthreadid() == 1`; Julia 1.12's default `-t 1,1` runs it on the other
 #      thread): a spin that never yields cannot finish the same kernel, and `_device_wait`
 #      then does.
-#  (R) Results unchanged (D-158), on the device backend for every gate case
-#      (`benchmark/gate.jl`, Float32 checkerboard) and on the CPU for Graner–Glazier: a
+#  (R) Results unchanged (D-158), on the CPU for Graner–Glazier: a
 #      run that saves after every MCS (a wait and device→host copies every MCS), a run
 #      that saves every 4 MCS and a run stepped with no wait until the end are bitwise
 #      equal in every leaf at every shared time, and each saved state equals `integ.u` of
 #      an independent run stepped to the same MCS. A stale read (a copy not waited for) or
 #      a wait that changed work would show up here. A wait cannot change the trajectory, so
 #      equality with the pre-change code follows: the trajectory is the kernels', and they
-#      are not touched by this item.
+#      are not touched by this item. On the device backend, every gate case
+#      (`benchmark/gate.jl`, Float32 checkerboard; D-271, not reproducible there): the save
+#      times asked for, the state moves, and every saved state and the unsaved end state are
+#      consistent in themselves (tracked volumes equal the site counts of σ).
 #  (A) Allocations: a warm `_device_wait` allocates 0 bytes on the CPU and on ROCm, idle and
 #      with work in flight; on Metal it allocates no more than `KernelAbstractions.
 #      synchronize` (Metal.jl's own wait allocates ~240 B); `_spin_until` with `done`
@@ -185,6 +187,27 @@ function p60bw_results_unchanged(prob, alg, backend)
         end
         push!(ok, p60bw_same(every.u[t], ind.u))
     end
+    return ok
+end
+
+# (R) on the device (D-271): the lockless checkerboard is not reproducible there (user ruling
+# 2026-11-04), so runs cannot be compared bitwise. A stale or torn read still shows: every
+# saved state, and the state stepped with no wait, must be consistent in itself (each cell's
+# tracked volume equals its site count in σ), at the save times asked for, and the state moves.
+p60bw_consistent(u) = (σ = Array(u.σ); v = Array(u.cell.volume);
+                       all(c -> v[c] == count(==(c), σ), eachindex(v)))
+function p60bw_saves_consistent(prob, alg, backend)
+    prob = remake(prob; tspan = (0, P60BW_N))
+    every = solve(prob, alg; saveat = 1:P60BW_N, save_start = false, save_end = false, backend)
+    fourth = solve(prob, alg; saveat = 4:4:P60BW_N, save_start = false, save_end = false, backend)
+    integ = init(prob, alg; save_start = false, save_end = false, backend)
+    for _ in 1:P60BW_N
+        step!(integ)
+    end
+    ok = Bool[every.t == collect(1:P60BW_N), fourth.t == collect(4:4:P60BW_N)]
+    push!(ok, !p60bw_same(every.u[1], every.u[end]))       # negative control: the state moves
+    append!(ok, p60bw_consistent.(every.u), p60bw_consistent.(fourth.u))
+    push!(ok, p60bw_consistent(integ.u))
     return ok
 end
 
@@ -319,7 +342,7 @@ p60bw_allocs_spin() = @allocated CorePotts._spin_until(P60BW_TRUE, 1.0)
 
         @testset "(R) results unchanged on the device, every gate case ($P60BW_DEVICE)" begin
             for (name, make) in p60bw_cases(Float32, (0, 10^6))
-                ok = p60bw_results_unchanged(make(), CheckerboardCPM(), backend)
+                ok = p60bw_saves_consistent(make(), CheckerboardCPM(), backend)
                 @test all(ok)
                 all(ok) || @info "P6.0bw (R) differs" name ok
             end
