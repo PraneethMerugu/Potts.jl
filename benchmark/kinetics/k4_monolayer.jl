@@ -4,11 +4,11 @@
 # P6.15m rules (per-seed metrics, crit(ν), PottsModels.openvt_spread_table).
 include(joinpath(ARGS[1], "lib/PottsModels/reproductions/data/15/checkerboard-2026-10-10/run_checkerboard.jl"))
 using Printf
-# ARGS[5]: block,switches,parts (default: the CheckerboardCPM defaults); copy counts on
+# ARGS[5]: block,switches,parts (default: the CheckerboardCPM defaults)
 const K4_SR = split(get(ARGS, 5, ""), ',', keepempty = false)
-const K4_ALG = isempty(K4_SR) ? CheckerboardCPM(; proposal = Moore(1), counts = true) :
-               CheckerboardCPM(; proposal = Moore(1), block = parse(Int, K4_SR[1]), switches = parse(Int, K4_SR[2]),
-                   parts = parse(Int, K4_SR[3]), counts = true)
+const K4_ALG = isempty(K4_SR) ? CheckerboardCPM(; proposal = Moore(1)) :
+               CheckerboardCPM(; proposal = Moore(1), region = parse(Int, K4_SR[1]), switches = parse(Int, K4_SR[2]),
+                   parts = parse(Int, K4_SR[3]))
 const K4_OUT = expanduser(get(ARGS, 4, "~/lpwork/cbk/k4-2026-11-03"))
 const K4_CASES = Tuple(Symbol.(split(get(ARGS, 3, "b,f"), ',')))
 const K4_RUNS = parse(Int, ARGS[2])

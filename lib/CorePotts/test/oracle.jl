@@ -48,12 +48,15 @@ include("oracle_core.jl")
     @test z > 4.5
 end
 
-@testset "preflight rejects an undeclared read radius" begin
+@testset "the checkerboard spacing covers an undeclared read radius" begin
     lat = Lattice((20, 20))
     σ, k = blocks((20, 20), 3)
     wide = PottsProblem(GG, initial_state(σ, k), lat, (0, 1), gg_params();
         contact = NeighborOrder(3))
-    @test_throws ArgumentError init(wide, CheckerboardCPM())
+    integ = init(wide, CheckerboardCPM())
+    l = integ.cache.layout
+    r, w = CorePotts.reach(wide.f.footprint, integ.ctx.proposal)
+    @test (l.k - 1) * minimum(l.base) >= CorePotts.radius(integ.ctx.contact) + w   # widened, not refused
     @test init(wide, SequentialCPM()) isa PottsIntegrator
     ok = CPMFunction(gg_delta_H; temperature = gg_temperature, footprint = Footprint(read = 2))
     @test solve(remake(wide; f = ok), CheckerboardCPM()).retcode == ReturnCode.Success

@@ -13,8 +13,8 @@
     recount(u) = [count(==(c), u.σ) for c in eachindex(kinds)]
 
     @testset "exact ΔH on the CPU" begin
-        for kw in ((;), (; block = 3), (; block = 4), (; block = 5, switches = 5), (; block = 3, switches = 3),
-                (; block = 3, switches = 4), (; block = 1, parts = 3), (; block = 2, parts = 3, switches = 2), (; parts = 2)),
+        for kw in ((;), (; region = 3), (; region = 4), (; region = 5, switches = 5), (; region = 3, switches = 3),
+                (; region = 3, switches = 4), (; region = 1, parts = 3), (; region = 2, parts = 3, switches = 2), (; parts = 2)),
             seed in 1:2
             sol = solve(remake(prob; seed), CheckerboardCPM(; proposal = Moore(1), kw...))
             u0, u = sol.u[1], sol.u[end]
@@ -22,8 +22,8 @@
             @test abs(H(u) - H(u0)) > 100
             @test u.cell.volume == recount(u)
         end
-        a = solve(remake(prob; seed = 4), CheckerboardCPM(; block = 3)).u[end]
-        b = solve(remake(prob; seed = 4), CheckerboardCPM(; block = 3)).u[end]
+        a = solve(remake(prob; seed = 4), CheckerboardCPM(; region = 3)).u[end]
+        b = solve(remake(prob; seed = 4), CheckerboardCPM(; region = 3)).u[end]
         @test a.σ == b.σ                                   # the CPU is deterministic
     end
 
@@ -73,22 +73,29 @@
     end
 
     @testset "counts" begin
-        s = solve(remake(prob; seed = 5), CheckerboardCPM(; counts = true)).stats
-        @test s.committed == s.accepted > 0
         s = solve(remake(prob; seed = 5), CheckerboardCPM()).stats
-        @test (s.accepted, s.committed) == (-1, -1)
+        @test s.committed == s.accepted > 0
+        # one counter per block, folded into the stats and zeroed at the read points
+        integ = init(remake(prob; seed = 5), CheckerboardCPM(); save_start = false)
+        step!(integ)
+        current_state(integ)                                     # a read point
+        a1 = integ.stats.accepted
+        @test a1 > 0 && all(iszero, integ.cache.cnt)
+        step!(integ)
+        current_state(integ)
+        @test integ.stats.accepted > a1
     end
 
-    @testset "skip_interior: the same dynamics" begin
-        a = solve(remake(prob; seed = 6), CheckerboardCPM(; skip_interior = true)).u[end]
-        b = solve(remake(prob; seed = 6), CheckerboardCPM()).u[end]
-        @test a.σ == b.σ
+    @testset "keywords and printing" begin
+        @test_throws MethodError CheckerboardCPM(; skip_interior = true)   # SequentialCPM's option only
+        @test repr(CheckerboardCPM()) == "CheckerboardCPM()"
+        @test repr(CheckerboardCPM(; parts = 4, threads = false)) == "CheckerboardCPM(; parts = 4, threads = false)"
     end
 
     @testset "invalid settings" begin
-        @test_throws ArgumentError init(prob, CheckerboardCPM(; block = 0))       # below the footprint
+        @test_throws ArgumentError init(prob, CheckerboardCPM(; region = 0))       # below the footprint
         @test_throws ArgumentError init(prob, CheckerboardCPM(; parts = 1))
-        @test_throws ArgumentError init(prob, CheckerboardCPM(; block = 3, switches = 0))
+        @test_throws ArgumentError init(prob, CheckerboardCPM(; region = 3, switches = 0))
         @test_throws ArgumentError init(prob, CheckerboardCPM(; parts = 2, switches = 2^14))   # 2^16 phases per MCS
     end
 
@@ -104,7 +111,7 @@
         fc = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackDeltaH{Float64}(),
             connectivity = hooks)
         cprob = PottsProblem(fc, initial_state(σ, kinds), lat, (0, 15), gg_params(); seed = 4)
-        integ = init(cprob, CheckerboardCPM(; proposal = Moore(1), counts = true); save_start = false)
+        integ = init(cprob, CheckerboardCPM(; proposal = Moore(1)); save_start = false)
         l = integ.cache.layout
         r, w = CorePotts.reach(fc.footprint, integ.ctx.proposal)
         @test (l.k - 1) * l.box[1] >= max(r, hooks.window) + w      # the window is inside the spacing
@@ -143,35 +150,32 @@
     end
 
     @testset "threaded CPU phases" begin
-        # each phase one KA launch (forced: any thread count, any phase size); trackers stay
-        # exact, a Global veto without window goes through the host serial pass
+        # `threads = true`: each phase one KA launch (any thread count, any phase size); trackers
+        # stay exact, a Global veto without window goes through the host serial pass
         @test init(prob, CheckerboardCPM()).cache.inline              # 900 sites: inline
-        CorePotts._FORCE_BLOCK_KERNEL[] = true
-        try
-            integ = init(prob, CheckerboardCPM(; proposal = Moore(1), counts = true); save_start = false)
-            nb = integ.cache.layout.nblocks
-            @test !integ.cache.inline && integ.cache.groupsize == (nb[1], cld(nb[2], Threads.nthreads()))
-            u0 = current_state(integ)
-            for _ in 1:15
-                step!(integ)
-            end
-            u = current_state(integ)
-            @test u.cell.volume == recount(u)
-            @test integ.stats.committed == integ.stats.accepted > 0
-            Threads.nthreads() == 1 && @test integ.stats.accepted_ΔH ≈ H(u) - H(u0) atol = 1e-6   # one task: in order
-            fc = CPMFunction(gg_delta_H; temperature = gg_temperature, connectivity = vetoes[2][2])
-            ci = init(PottsProblem(fc, initial_state(σ, kinds), lat, (0, 15), gg_params(); seed = 4),
-                CheckerboardCPM(; proposal = Moore(1)); save_start = false)
-            pieces0 = first(CorePotts.recompute_pieces(σ, lat, Val(false), length(kinds)))
-            for _ in 1:15
-                step!(ci)
-            end
-            uc = current_state(ci)
-            @test all(first(CorePotts.recompute_pieces(uc.σ, lat, Val(false), length(kinds))) .<= pieces0)
-            @test uc.cell.volume == recount(uc) && all(iszero, ci.cache.serial.count)
-        finally
-            CorePotts._FORCE_BLOCK_KERNEL[] = false
+        @test init(prob, CheckerboardCPM(; threads = false)).cache.inline
+        @test_throws ArgumentError init(prob, CheckerboardCPM(; threads = :many))
+        integ = init(prob, CheckerboardCPM(; proposal = Moore(1), threads = true); save_start = false)
+        nb = integ.cache.layout.nblocks
+        @test !integ.cache.inline && integ.cache.groupsize == (nb[1], cld(nb[2], Threads.nthreads()))
+        u0 = current_state(integ)
+        for _ in 1:15
+            step!(integ)
         end
+        u = current_state(integ)
+        @test u.cell.volume == recount(u)
+        @test integ.stats.committed == integ.stats.accepted > 0
+        Threads.nthreads() == 1 && @test integ.stats.accepted_ΔH ≈ H(u) - H(u0) atol = 1e-6   # one task: in order
+        fc = CPMFunction(gg_delta_H; temperature = gg_temperature, connectivity = vetoes[2][2])
+        ci = init(PottsProblem(fc, initial_state(σ, kinds), lat, (0, 15), gg_params(); seed = 4),
+            CheckerboardCPM(; proposal = Moore(1), threads = true); save_start = false)
+        pieces0 = first(CorePotts.recompute_pieces(σ, lat, Val(false), length(kinds)))
+        for _ in 1:15
+            step!(ci)
+        end
+        uc = current_state(ci)
+        @test all(first(CorePotts.recompute_pieces(uc.σ, lat, Val(false), length(kinds))) .<= pieces0)
+        @test uc.cell.volume == recount(uc) && all(iszero, ci.cache.serial.count)
     end
 
     @testset "on-copy cell writes" begin

@@ -14,16 +14,14 @@ and in what that order does to the kinetics.
 
 Both take `acceptance` and `proposal` keywords, which default to the model's
 acceptance law and the problem's proposal neighborhood (see [Problems, solvers and
-solutions](@ref manual-problems)). Both also take `skip_interior`, which defaults to
-`false`. On `CheckerboardCPM`, `skip_interior = true` changes nothing: an attempt at an
-interior site already costs almost nothing there. In both algorithms the source of a copy
-is a uniformly drawn neighbor of the target in the proposal neighborhood; they differ in
-how targets are chosen.
+solutions](@ref manual-problems)). In both algorithms the source of a copy is a uniformly
+drawn neighbor of the target in the proposal neighborhood; they differ in how targets are
+chosen.
 
 ## How `CheckerboardCPM` works
 
 The lattice is cut into blocks. Each block has `parts` sub-regions along each axis, each
-`block` sites wide. A phase activates the same sub-region in every block, and one work
+`region` sites wide. A phase activates the same sub-region in every block, and one work
 item per block makes its attempts there one after another. Each attempt reads the current
 state and commits at once if accepted. Active sub-regions of two blocks are far enough
 apart that their copies never read or write each other's sites. Each MCS draws
@@ -36,14 +34,29 @@ trackers stay exact. A copy whose decision needs a whole-cell search (a `Global`
 connectivity veto without window, the `pieces` tracker off its local fast path) is decided
 after its phase by one work item, with no other copy in flight.
 
-The block spacing comes from the model's footprint, the distance a copy reads from its
-target. The footprint covers what drives, constraints, `@on_copy` updates and the
-temperature read, and the window of a windowed `Global` rule, so a wider read there widens
-the spacing; an energy that reads a relation beyond it (an edge energy, say) is refused. A
-`contacts(r)` fold widens it wherever the fold is read, since its counts are kept up to
-date on every copy. Any other relation read only at the MCS boundary (division and link
-rules, `@before_mcs`/`@after_mcs` updates, cell ODEs, `@observed` quantities) does not
-count, whatever its radius.
+![The block layout: 3 × 3 blocks, each of 3 × 3 sub-regions 2 sites wide; the active sub-region is the same in every block](../assets/checkerboard-layout.svg)
+
+| Keyword | Default | Meaning |
+|---|---|---|
+| `parts` | 8 in 2D, 4 in 3D (about 64 phases per MCS) | sub-regions per block along each axis; more parts put fewer copies in flight at once |
+| `region` | the smallest the model allows | the side of a sub-region, in sites |
+| `switches` | 1 | phases per sub-region per MCS; each makes 1/`switches` of the sub-region's attempts |
+| `threads` | `:auto` | CPU only: `false` runs every phase inline (reproducible), `true` always threaded, `:auto` threaded above 512 blocks with more than one Julia thread |
+
+`stats.accepted` and `stats.committed` count the copies (they are equal: a copy commits
+when it is accepted).
+
+The spacing between active sub-regions, `(parts - 1) · region`, covers the distance a copy
+reads and writes around its target. That distance covers what energies, drives,
+constraints, `@on_copy` updates and the temperature read, and the window of a windowed
+`Global` rule, so a wider read widens the default `region`. A `contacts(r)` fold widens it
+wherever the fold is read, since its counts are kept up to date on every copy. A relation
+read only at the MCS boundary (division and link rules, `@before_mcs`/`@after_mcs`
+updates, cell ODEs, `@observed` quantities) does not count, whatever its radius. A
+`region` you pass that is too small for the model is an error.
+
+On a GPU, a phase with fewer than 256 blocks leaves the device mostly idle, and Potts
+warns once; such a lattice runs as fast or faster on the CPU.
 
 ## [Kinetics of `CheckerboardCPM`](@id manual-algorithms-checkerboard-time)
 
@@ -58,10 +71,11 @@ against 0.2).
 - **Fewer parts, faster, less close.** Fewer parts per axis put more copies in flight
   at once. Copies of one cell in flight together each read the cell's totals from before
   the other's commit, which is the source of the remaining deviation.
-- **Not reproducible in parallel.** On a device, or on the CPU with more than one Julia
-  thread and more than 512 blocks, the outcome depends on the timing of the work items, so
-  the same seed does not give the same run. With one thread, or on a small lattice, the
-  work items run one after another and a run is reproducible.
+- **Not reproducible in parallel.** On a device, or on the CPU when phases run threaded,
+  the outcome depends on the timing of the work items, so the same seed does not give the
+  same run. Inline phases (`threads = false`, one Julia thread, or at most 512 blocks) run
+  the work items one after another and a run is reproducible; `integ.cache.inline` says
+  which.
 - **Threads on the CPU.** With several Julia threads, each phase of a large lattice is
   split across them: 4 threads ran 3.3–3.7× faster than one on 576² and larger (PC, AMD
   Ryzen AI Max+ 395). Each phase waits for its slowest thread, so start Julia with fewer
@@ -122,8 +136,8 @@ foam reproduction run this way (D-174, D-190).
 - **Not a change to `CheckerboardCPM`.** `CheckerboardCPM` makes many attempts at once,
   which is a different dynamics, close to `SequentialCPM`'s (see
   [Kinetics](@ref manual-algorithms-checkerboard-time)). `skip_interior = true` is
-  equivalent to `SequentialCPM()` by construction. On `CheckerboardCPM` the option is
-  accepted and changes nothing.
+  equivalent to `SequentialCPM()` by construction. `CheckerboardCPM` has no such option:
+  an attempt at an interior site already ends after two reads there.
 - **General proposal laws** with a Hastings correction are later work (ROADMAP P6.4b).
 
 ### Example

@@ -4,8 +4,8 @@
 include(joinpath(ARGS[1], "lib/PottsModels/reproductions/data/15/checkerboard-2026-10-10/run_checkerboard.jl"))
 using Random, Printf
 using Statistics: quantile
-const VARIANTS = [("default", (;)), ("b1_k8", (; block = 1, parts = 8)), ("b1_k6", (; block = 1, parts = 6)),
-    ("b1_k4", (; block = 1, parts = 4))]
+const VARIANTS = [("default", (;)), ("b1_k8", (; region = 1, parts = 8)), ("b1_k6", (; region = 1, parts = 6)),
+    ("b1_k4", (; region = 1, parts = 4))]
 const USE = split(get(ARGS, 3, join(first.(VARIANTS), ',')), ',')
 const NRUN = parse(Int, ARGS[2])
 seqT = [parse(Float64, split(l, '\t')[3]) for l in Iterators.drop(eachline(joinpath(CB_DIR, "calibration_sequential_p1b.tsv")), 1)]

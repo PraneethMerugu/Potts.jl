@@ -196,9 +196,8 @@ end
 Base.@kwdef mutable struct PottsStats
     mcs::Int = 0
     attempts::Int = 0
-    accepted::Int = -1          # -1: not counted by this algorithm (checkerboard without `counts`)
-    # `CheckerboardCPM(; counts = true)` only (P6.0bl), else -1: copies committed
-    committed::Int = -1
+    accepted::Int = -1          # -1: not counted by this algorithm
+    committed::Int = -1         # CheckerboardCPM only (P6.0bl), else -1: copies committed
     launches::Int = 0
     refreshes::Int = 0          # frozen-mask recomputations (`refresh_frozen!`)
     # host↔device traffic (D-085; never counted on the CPU): explicit synchronizations,
@@ -340,8 +339,8 @@ function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, save
     state = _to_backend(backend, deepcopy(prob.u0))
     p = _to_backend(backend, prob.p)
     cache = alg isa CheckerboardCPM ?
-            CheckerboardCache(backend, lat, prob.f, relation(_proposal(alg, prob), lat); alg.block, alg.parts, alg.switches,
-                alg.counts) :
+            CheckerboardCache(backend, lat, prob.f, relation(_proposal(alg, prob), lat); alg.region, alg.parts, alg.switches,
+                alg.threads, min_read = _copy_step_reach(prob, ctx)) :
             _skips_interior(alg) ? BoundaryCache(state.σ, ctx.mobility, ctx.lattice, ctx.proposal) : nothing
     key = RNGKey(prob.seed, prob.replica, prob.repeat)
     lcache = prob.f.lifecycle === nothing ? nothing :
@@ -406,11 +405,10 @@ read any relation. `CheckerboardCPM`'s preflight measures reach over these only.
 copy_step_relations(sys, f) = nothing
 
 """
-Reject combinations the algorithm cannot execute correctly. The checkerboard stride comes
-from the model's declared footprint, so the declared read radius must cover everything
-the copy step reads: the proposal source, the contact neighborhood and the relations the
-copy-step functions read (`copy_step_relations`; every relation by default). A
-relation read only at the MCS boundary (phases, lifecycle) does not count.
+Reject combinations no algorithm can execute correctly. (The checkerboard spacing covers the
+declared footprint and everything the copy step reads, `_copy_step_reach`: the contact
+neighborhood and the relations the copy-step functions read, `copy_step_relations`, every
+relation by default. A relation read only at the MCS boundary does not count.)
 """
 function _preflight(prob::PottsProblem, alg::CPMAlgorithm, ctx)
     prob.f.lifecycle === nothing || haskey(prob.u0.cell, :m1) ||
@@ -424,15 +422,13 @@ function _preflight(prob::PottsProblem, alg::CPMAlgorithm, ctx)
             "weight); an asymmetric relation gives a ΔH that is not an energy difference"))
     end
     _check_connectivity(prob, alg, ctx)
-    alg isa CheckerboardCPM || return nothing
-    need = max(radius(ctx.contact), _copy_reach(prob.relations, copy_step_relations(prob.f.sys, prob.f)))
-    have = first(reach(prob.f.footprint, ctx.proposal))
-    have >= need || throw(ArgumentError(
-        "CheckerboardCPM: the model declares Footprint(read = $have) but its proposal, " *
-        "contact and copy-step relations reach distance $need; pass `footprint = Footprint(read = $need)` " *
-        "to CPMFunction"))
     return nothing
 end
+
+# the read distance the checkerboard spacing must cover beyond the declared footprint: the
+# contact relation and the relations the copy step reads (all of them when unknown)
+_copy_step_reach(prob::PottsProblem, ctx) =
+    max(radius(ctx.contact), _copy_reach(prob.relations, copy_step_relations(prob.f.sys, prob.f)))
 
 # the largest radius of the relations the copy step reads (all of them for `nothing`)
 _copy_reach(relations, ::Nothing) = maximum(radius, values(relations); init = 0)
@@ -655,17 +651,8 @@ function _fold_track!(stats, tk::NamedTuple)
     return nothing
 end
 
-# Read point of the checkerboard copy counts (P6.0bl, the track's pattern): the per-site
-# counters are summed into `stats.accepted` and `committed` and zeroed.
 _fold_counts!(integ) = _fold_counts!(integ.stats, integ.cache)
 _fold_counts!(stats, cache) = nothing
-_fold_counts!(stats, ::Nothing) = nothing
-function _fold_counts!(stats, cnt::NamedTuple)
-    total(a) = (h = _ondevice(a) ? _to_host(stats, a) : a; s = sum(Int, h); fill!(a, Int32(0)); s)
-    stats.accepted = max(stats.accepted, 0) + total(cnt.accepted)
-    stats.committed = max(stats.committed, 0) + total(cnt.committed)
-    return nothing
-end
 
 # bring the device lifecycle's counts into `integ.stats` (synchronizes; only off the MCS loop)
 _flush_counts!(integ) = _fold_lifecycle!(integ)

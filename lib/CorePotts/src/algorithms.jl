@@ -107,33 +107,36 @@ function Base.show(io::IO, a::SequentialCPM)
 end
 
 """
-    CheckerboardCPM(; acceptance = nothing, proposal = nothing, skip_interior = false,
-        counts = false, block = nothing, parts = nothing, switches = 1)
+    CheckerboardCPM(; acceptance = nothing, proposal = nothing, parts = nothing, region = nothing,
+        switches = 1, threads = :auto)
 
-Parallel dynamics on CPU or GPU (KernelAbstractions), lockless (after Sultan et al., arXiv
-2312.09317). The lattice is cut into blocks of `parts` sub-regions of side `block` along each
-axis. A phase activates the same sub-region in every block; one work item per block makes
-its attempts there one after another, each against the current state, and commits an
-accepted copy at once. Nothing is claimed: per-cell totals change by atomic adds and are read
-as they are. Each MCS draws `parts^d · switches` phases at random, so every site is attempted
-once per MCS on average, as with `SequentialCPM`. `acceptance` and `proposal` default to the
-model's, as for `SequentialCPM`.
+Parallel dynamics on the CPU or a GPU (KernelAbstractions), lockless (after Sultan et al.,
+arXiv 2312.09317). The lattice is cut into blocks; each block has `parts` sub-regions along
+each axis, each `region` sites wide. A phase activates the same sub-region in every block,
+and one work item per block makes its attempts there one after another, each against the
+current state, and commits an accepted copy at once. Nothing is claimed: per-cell totals
+change by atomic adds and are read as they are. Each MCS draws `parts^d · switches` phases
+at random, so every site is attempted once per MCS on average, as with `SequentialCPM`.
+`acceptance` and `proposal` default to the model's, as for `SequentialCPM`.
 
 - `parts`: sub-regions per block along each axis (default: about 64 phases per MCS, 8 in 2D
   and 4 in 3D). More parts mean fewer copies in flight at once.
-- `block`: the side of a sub-region (default: the smallest with `(parts - 1) · block` at least
-  the copy footprint's read + write distance, and at least the window of a windowed `Global`
-  search).
+- `region`: the side of a sub-region in sites (default: the smallest with
+  `(parts - 1) · region` at least the distance a copy reads and writes around its target,
+  including the window of a windowed `Global` search).
 - `switches`: phases per sub-region per MCS (default 1); each phase makes 1/`switches` of
   the sub-region's attempts.
-- `counts = true`: count accepted and committed copies into `stats.accepted` and
-  `stats.committed` (brought up to date at the host read points).
-- `skip_interior = true`: accepted; an attempt at an interior site already ends after two
-  reads, so the dynamics are those of `skip_interior = false`.
+- `threads` (CPU only): `:auto` runs a phase with one Julia thread, or with at most
+  `CorePotts.BLOCK_GRAIN[]` (512) blocks, inline, else threaded; `false` always inline;
+  `true` always threaded. `integ.cache.inline` says which.
 
-On a device the outcome depends on the timing of the work items, so runs are not
-reproducible bit for bit. On the CPU the work items run one after another, so each attempt
-sees every earlier one, and a run is reproducible.
+`stats.accepted` and `stats.committed` count the copies (equal: a copy commits when it is
+accepted), brought up to date at the host read points.
+
+Reproducibility. Inline phases (the CPU with `threads = false`, one thread, or a small
+lattice) run their work items one after another: each attempt sees every earlier one and a
+run is reproducible from its seed. Threaded CPU phases and device runs depend on the timing
+of the work items and are not.
 
 Copies to one cell in flight at the same time read its totals before each other's commit.
 Cell trackers stay exact: moments add atomically and re-center once per MCS, pieces trackers
@@ -142,18 +145,29 @@ A copy whose decision needs a whole-cell search (a `Global` veto without window,
 their local fast path) is decided after its phase by one work item, with no copy in flight.
 
 The kinetics match `SequentialCPM` within the statistical resolution of the P6.0bl checks
-(foam, cell sorting, the OpenVT chain and monolayer, Akeeb invasion, a 3D RPE sheet), except
-that small cells in a crowded monolayer are lost more often (OpenVT case (b): 1.7 against 0.2
-per run). See `docs/design/research/checkerboard-kinetics.md`.
+(foam, cell sorting, the OpenVT chain and monolayer, Akeeb invasion, a 3D RPE sheet, the
+Act cell's persistence); the Act cell moves up to 6 % faster at weak activity. See
+`docs/design/research/checkerboard-kinetics.md`.
 """
 Base.@kwdef struct CheckerboardCPM{A, R} <: CPMAlgorithm
     acceptance::A = nothing
     proposal::R = nothing
-    skip_interior::Bool = false
-    counts::Bool = false
-    block::Union{Nothing, Int} = nothing
+    region::Union{Nothing, Int} = nothing
     parts::Union{Nothing, Int} = nothing
     switches::Int = 1
+    threads::Union{Symbol, Bool} = :auto
+end
+
+# printed as the keyword call that rebuilds it; keywords at their defaults are left out
+function Base.show(io::IO, a::CheckerboardCPM)
+    kw = String[]
+    for (k, d) in ((:acceptance, nothing), (:proposal, nothing), (:region, nothing), (:parts, nothing),
+            (:switches, 1), (:threads, :auto))
+        v = getfield(a, k)
+        v == d || push!(kw, "$k = " * repr(v; context = io))
+    end
+    print(io, "CheckerboardCPM(", isempty(kw) ? "" : "; " * join(kw, ", "), ")")
+    return nothing
 end
 
 # The boundary-site sweep (`SequentialCPM(; skip_interior = true)`), known from the type.

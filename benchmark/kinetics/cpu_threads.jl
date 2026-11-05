@@ -1,8 +1,8 @@
 #     julia --project=benchmark -t <threads> benchmark/kinetics/cpu_threads.jl [<nmcs>]
 # CheckerboardCPM on the CPU (P6.0bl): MCS per second of SequentialCPM, the checkerboard with its
 # phases inline (one after another) and with each phase one threaded KA launch, on
-# Graner–Glazier tiles in 2D and cubes in 3D. Sets `CorePotts.BLOCK_GRAIN` (the phase size
-# below which the CPU runs a phase inline).
+# Graner–Glazier tiles in 2D and cubes in 3D. Measures `CorePotts.BLOCK_GRAIN` (the phase size
+# below which `threads = :auto` runs a phase inline).
 using CorePotts, Printf
 include(joinpath(@__DIR__, "..", "models.jl"))
 const NMCS = parse(Int, get(ARGS, 1, "20"))
@@ -18,21 +18,13 @@ end
 problem3(L) = (s = cubes(L, 5); PottsProblem(GRANER, initial_state(s...), Lattice((L, L, L)), (0, NMCS),
     merge(graner_params(), (; V0 = 64.0)); contact = Moore(1), seed = 5))
 
-function rate(prob, alg; inline = false, threaded = false)
-    grain = CorePotts.BLOCK_GRAIN[]
-    CorePotts.BLOCK_GRAIN[] = inline ? typemax(Int) : grain
-    CorePotts._FORCE_BLOCK_KERNEL[] = threaded
-    try
-        integ = init(prob, alg; save_start = false, save_end = false)
-        step!(integ); step!(integ)                             # compile, warm
-        t = @elapsed for _ in 1:NMCS
-            step!(integ)
-        end
-        return NMCS / t, integ
-    finally
-        CorePotts.BLOCK_GRAIN[] = grain
-        CorePotts._FORCE_BLOCK_KERNEL[] = false
+function rate(prob, alg)
+    integ = init(prob, alg; save_start = false, save_end = false)
+    step!(integ); step!(integ)                             # compile, warm
+    t = @elapsed for _ in 1:NMCS
+        step!(integ)
     end
+    return NMCS / t, integ
 end
 
 println("threads = $(Threads.nthreads())")
@@ -40,10 +32,9 @@ println("threads = $(Threads.nthreads())")
 for (label, prob) in [("2D 144²", graner_problem(; scale = 2)), ("2D 288²", graner_problem(; scale = 4)),
         ("2D 576²", graner_problem(; scale = 8)), ("2D 1152²", graner_problem(; scale = 16)),
         ("3D 40³", problem3(40)), ("3D 80³", problem3(80)), ("3D 160³", problem3(160))]
-    cb = CheckerboardCPM(; proposal = Moore(1))
     s, _ = rate(prob, SequentialCPM(; proposal = Moore(1)))
-    i, integ = rate(prob, cb; inline = true)
-    t, _ = rate(prob, cb; threaded = true)
+    i, integ = rate(prob, CheckerboardCPM(; proposal = Moore(1), threads = false))
+    t, _ = rate(prob, CheckerboardCPM(; proposal = Moore(1), threads = true))
     nb = CorePotts.nblocks(integ.cache.layout)
     @printf("%-14s %9d %8d %10.1f %10.1f %10.1f %7.2fx\n", label, length(prob.u0.σ), nb, s, i, t, t / i)
 end

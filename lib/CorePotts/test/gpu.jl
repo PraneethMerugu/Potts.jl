@@ -713,8 +713,8 @@ end
     pf = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0)
     recount(u) = [count(==(c), u.σ) for c in 1:n]
     prob = PottsProblem(CPMFunction(gg_delta_H; temperature = gg_temperature), initial_state(σ, kinds), lat, (0, 30), pf)
-    for kw in ((;), (; block = 3), (; block = 4, switches = 4), (; block = 1, parts = 4))
-        alg = CheckerboardCPM(; proposal = Moore(1), counts = true, kw...)
+    for kw in ((;), (; region = 3), (; region = 4, switches = 4), (; region = 1, parts = 4))
+        alg = CheckerboardCPM(; proposal = Moore(1), kw...)
         g = solve(remake(prob; seed = 3), alg; backend)
         @test g.u[end].cell.volume == recount(g.u[end])
         @test g.stats.committed == g.stats.accepted > 0
@@ -753,7 +753,7 @@ end
             CorePotts.ConnectivityHooks(; post = post_w, uses_global = true, window = 2))
         cprob = PottsProblem(CPMFunction(gg_delta_H; temperature = gg_temperature, connectivity = hooks),
             initial_state(σ, kinds), lat, (0, 20), pf; seed = 7)
-        sol = solve(cprob, CheckerboardCPM(; proposal = Moore(1), counts = true); backend)
+        sol = solve(cprob, CheckerboardCPM(; proposal = Moore(1)); backend)
         uc = sol.u[end]
         @test uc.cell.volume == recount(uc)
         @test all(first(CorePotts.recompute_pieces(uc.σ, lat, Val(false), n)) .<= pieces0)   # no cell splits

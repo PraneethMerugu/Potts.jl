@@ -3,7 +3,7 @@
 #
 # Layout. Each axis of length L is cut into nb = max(1, L ÷ kb) blocks of k sub-regions each
 # (`parts`), the k·nb sub-regions of side `base` = L ÷ k·nb or base + 1 (the first L mod k·nb),
-# so a block is about kb wide and its k^d sub-regions are about b wide (`block`). A phase
+# so a block is about kb wide and its k^d sub-regions are about b wide (`region`). A phase
 # activates the same sub-region (offset o ∈ {0, …, k - 1}^d) in every block, and one work item
 # per block makes its attempts there one after another: a uniform site of the sub-region, a
 # uniform direction, ΔH against the live state, the acceptance draw, and on acceptance the
@@ -81,7 +81,7 @@ end
 block_region(l::BlockLayout, blk::Int, ph::Int) = block_region(l, block_coords(l, blk), phase_offset(l, ph))
 
 # the site of draw `r`, uniform over the sub-region with start `lo` and side `side` (a one-site
-# sub-region, block 1's usual case, needs no division)
+# sub-region, region 1's usual case, needs no division)
 @inline function block_site(lo::NTuple{N, Int}, side::NTuple{N, Int}, r::UInt32) where {N}
     n = prod(side)
     n == 1 && return map(a -> a + 1, lo)
@@ -99,8 +99,8 @@ end
 # (1:P): both < 2^16 (checked)
 @inline _block_lid(q, k) = UInt32(q) << 16 | UInt32(k)
 
-@inline _count!(::Nothing, field, t) = nothing
-@inline _count!(cnt, field, t) = (@inbounds getfield(cnt, field)[t] += Int32(1); nothing) # t ≤ nsites
+# blk ≤ nblocks: one work item per block in a phase, and the serial pass runs alone
+@inline _count!(cnt, blk) = (@inbounds cnt[blk] += Int32(1); nothing)
 
 # The serial list (`nothing` without whole-cell connectivity): the deferred copies of a phase
 # as (block, draw index) pairs, their count, the refusals for want of window (read into
@@ -158,12 +158,11 @@ end
             return nothing
         end
     end
-    # t ≤ nsites: the track and the counts have one writer per site at a time
+    # t ≤ nsites: the track has one writer per site at a time
     tk === nothing || (@inbounds tk.acc[t] += tk.track(st, p, prop, ctx, dH0))
     @inbounds st.σ[t] = b
     f.commit!(st, p, prop, ctx)
-    _count!(cnt, :accepted, t)
-    _count!(cnt, :committed, t)
+    _count!(cnt, blk)
     return nothing
 end
 
@@ -214,7 +213,7 @@ struct CheckerboardCache{N, B, TK, CN, SL, K1, K2, K3, GS}
     order::Vector{Int}                # the MCS's phase offsets (1:k^N), P of them
     status::B
     track::TK                         # `nothing`, or `(; track, acc)` (acc per site)
-    cnt::CN                           # `nothing`, or the per-site counts
+    cnt::CN                           # committed copies per block (Int32), folded at the read points
     serial::SL                        # `nothing`, or the serial list (see `_push_serial!`)
     kernel::K1
     serial!::K2
@@ -229,10 +228,13 @@ end
 # 1.5–2× from 1000 blocks; 4 threads reach 3.3–3.7× at 5000 blocks and above. Each phase ends at a
 # barrier, so a thread per busy core stalls on any other process: leave the OS a spare CPU.
 const BLOCK_GRAIN = Ref(512)
-# tests: the threaded launch on any phase size and thread count
-const _FORCE_BLOCK_KERNEL = Ref(false)
-_block_inline(backend, n) = false
-_block_inline(::KernelAbstractions.CPU, n) = !_FORCE_BLOCK_KERNEL[] && (Threads.nthreads() == 1 || n <= BLOCK_GRAIN[])
+# fewer work items per phase than this leave a GPU mostly idle (a warning, not a refusal)
+const DEVICE_MIN_BLOCKS = 256
+# `threads`: `:auto` (inline with one thread or at most BLOCK_GRAIN work items), `false`
+# (always inline: reproducible), `true` (always the threaded launch)
+_block_inline(backend, n, threads) = false
+_block_inline(::KernelAbstractions.CPU, n, threads) =
+    threads === :auto ? (Threads.nthreads() == 1 || n <= BLOCK_GRAIN[]) : !threads
 # CPU: one workgroup per thread, the grid of blocks split along its last axis
 _block_groupsize(backend, nb) = nothing
 _block_groupsize(::KernelAbstractions.CPU, nb::NTuple{N, Int}) where {N} =
@@ -244,31 +246,34 @@ the density that matched `SequentialCPM` kinetics in 2D and 3D (P6.0bl).
 """
 default_parts(N::Int) = max(2, round(Int, 64^(1 / N)))
 
-function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, proposal; block = nothing, parts = nothing,
-        switches = 1, counts = false) where {N}
+function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, proposal; region = nothing, parts = nothing,
+        switches = 1, threads = :auto, min_read = 0) where {N}
     r, w = reach(f.footprint, proposal)
-    r = max(r, _window(f.connectivity))
+    r = max(r, min_read, _window(f.connectivity))
     need = max(r + w, 1)
     k = parts === nothing ? default_parts(N) : parts
     k >= 2 || throw(ArgumentError("CheckerboardCPM(; parts = $k): use at least 2"))
-    b = block === nothing ? cld(need, k - 1) : block
+    b = region === nothing ? cld(need, k - 1) : region
     b >= 1 && (k - 1) * b >= need || throw(ArgumentError(
-        "CheckerboardCPM(; block = $b, parts = $k): the model's copy footprint needs (parts - 1) × block ≥ $need"))
+        "CheckerboardCPM(; region = $b, parts = $k): the model's copy footprint needs (parts - 1) × region ≥ $need"))
     layout = BlockLayout(lat.dims, b, k)
     nbox = boxsize(layout)
     switches >= 1 || throw(ArgumentError("CheckerboardCPM(; switches = $switches): use at least 1"))
+    threads in (:auto, true, false) || throw(ArgumentError("CheckerboardCPM(; threads = $(repr(threads))): use :auto, true or false"))
     P = k^N * switches
     (nbox < 2^16 && P < 2^16) || throw(ArgumentError(
-        "CheckerboardCPM(; block = $b, parts = $k, switches = $switches): at most 2^16 - 1 sites per sub-region and phases per MCS"))
+        "CheckerboardCPM(; region = $b, parts = $k, switches = $switches): at most 2^16 - 1 sites per sub-region and phases per MCS"))
     z(T, n) = KernelAbstractions.zeros(backend, T, n)
     tk = f.track === nothing ? nothing : (; f.track, acc = z(track_eltype(f.track), nsites(lat)))
-    cnt = counts ? (; accepted = z(Int32, nsites(lat)), committed = z(Int32, nsites(lat))) : nothing
+    cnt = z(Int32, nblocks(layout))
     sl = f.connectivity === nothing ? nothing :
          (; blk = z(Int32, nblocks(layout) * cld(nbox, switches)), lid = z(UInt32, nblocks(layout) * cld(nbox, switches)),
         count = z(UInt32, 1), deferred = z(UInt32, 1), exact = f.connectivity.exact_veto)
     n = nblocks(layout)
+    backend isa KernelAbstractions.CPU || n >= DEVICE_MIN_BLOCKS ||
+        @warn "CheckerboardCPM on a device: $n work items per phase (blocks $(layout.nblocks)) leave the GPU mostly idle; a lattice this small runs as fast or faster on the CPU" maxlog = 1
     return CheckerboardCache(layout, switches, zeros(Int, P), z(UInt32, 1), tk, cnt, sl, block_kernel!(backend),
-        serial_kernel!(backend), recenter_kernel!(backend), _block_groupsize(backend, layout.nblocks), _block_inline(backend, n),
+        serial_kernel!(backend), recenter_kernel!(backend), _block_groupsize(backend, layout.nblocks), _block_inline(backend, n, threads),
         backend isa KernelAbstractions.CPU)
 end
 
@@ -326,7 +331,17 @@ function checkerboard_mcs!(st, cache::CheckerboardCache{N}, f::F, p, ctx, law::L
 end
 
 _fold_track!(stats, cache::CheckerboardCache) = _fold_track!(stats, cache.track)
-_fold_counts!(stats, cache::CheckerboardCache) = _fold_counts!(stats, cache.cnt)
+# Read point of the copy counts: the per-block counters are summed into `stats.accepted` and
+# `committed` (equal: a lockless copy commits when it is accepted) and zeroed.
+function _fold_counts!(stats, cache::CheckerboardCache)
+    a = cache.cnt
+    h = _ondevice(a) ? _to_host(stats, a) : a
+    n = sum(Int, h)
+    fill!(a, Int32(0))
+    stats.accepted = max(stats.accepted, 0) + n
+    stats.committed = max(stats.committed, 0) + n
+    return nothing
+end
 
 # Read point of the deferred-refusal counter: added into `stats.connectivity_deferred` and
 # zeroed (one counted copy on a device).

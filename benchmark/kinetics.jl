@@ -34,7 +34,7 @@ const MARGIN = Dict(vcat([o => 0.05 for o in KINETIC], [o => 0.02 for o in STATI
 const CASE_OBS = Dict("sort" => vcat(["committed"], ["H$(t)" for t in CHECKPOINTS]),
     "foam" => vcat(["committed", "D", "tauV"], STATIC))
 
-# checkerboard variants: `cb` plus `_`-separated options, e.g. `cb_b1_k8_w2` (block = 1, parts = 8,
+# checkerboard variants: `cb` plus `_`-separated options, e.g. `cb_b1_k8_w2` (region = 1, parts = 8,
 # switches = 2); `cb` alone is the default
 function arm_alg(arm)
     arm in ("seq", "seq2", "clock") && return SequentialCPM(; proposal = Moore(1))
@@ -42,7 +42,7 @@ function arm_alg(arm)
     first(tok) == "cb" || throw(ArgumentError("unknown arm $arm"))
     kw = Dict{Symbol, Any}()
     for t in tok[2:end]
-        startswith(t, "b") ? (kw[:block] = parse(Int, t[2:end])) : startswith(t, "w") ? (kw[:switches] = parse(Int, t[2:end])) :
+        startswith(t, "b") ? (kw[:region] = parse(Int, t[2:end])) : startswith(t, "w") ? (kw[:switches] = parse(Int, t[2:end])) :
         startswith(t, "k") ? (kw[:parts] = parse(Int, t[2:end])) :
         throw(ArgumentError("unknown option $t in arm $arm"))
     end

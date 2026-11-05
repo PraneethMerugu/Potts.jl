@@ -89,7 +89,7 @@ _reset_cache!(::Nothing, integ) = nothing
 function _reset_cache!(cache::CheckerboardCache, integ)
     fill!(cache.status, 0)
     cache.track === nothing || fill!(cache.track.acc, 0)
-    cache.cnt === nothing || foreach(c -> fill!(c, 0), cache.cnt)
+    fill!(cache.cnt, Int32(0))
     cache.serial === nothing || (fill!(cache.serial.count, 0); fill!(cache.serial.deferred, 0))
     return nothing
 end
