@@ -122,9 +122,17 @@ function _group_cut(sys::PDESystem, fields)
     end
     isempty(cut) && return sys, external
     mine(eq) = (l = unwrap(eq.lhs); !(_reads(l, cut) && !_reads(l, keep)))
+    eqs = filter(mine, sys.eqs)
+    # a cut field that a spatial operator of the group reads keeps its face conditions (F3-22 review r1)
+    faced = operand_reads(eqs, cut)
+    dvs = map(dvs) do v
+        any(o -> isequal(o, _opof(unwrap(v))), faced) || return v
+        return Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(v), LatticeCutField, true))
+    end
+    bcmine(eq) = mine(eq) || _reads(unwrap(eq.lhs), faced)
     ics = _ics(sys)
     ic2 = Dict(k => v for (k, v) in ics if !any(o -> isequal(o, _opof(k)), cut))
-    out = PDESystem(filter(mine, sys.eqs), filter(mine, sys.bcs), getfield(sys, :domain), sys.ivs, dvs, _params(sys);
+    out = PDESystem(eqs, filter(bcmine, sys.bcs), getfield(sys, :domain), sys.ivs, dvs, _params(sys);
         name = nameof(sys), initial_conditions = ic2)
     return out, external
 end

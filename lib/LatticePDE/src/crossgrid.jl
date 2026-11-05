@@ -96,3 +96,28 @@ function crossgrid_form(sys::PDESystem)
     return PDESystem([eqs; auxeqs], sys.bcs, getfield(sys, :domain), sys.ivs, Any[sys.dvs; auxs], _params(sys);
         name = nameof(sys), initial_conditions = _ics(sys))
 end
+
+"""
+    operand_reads(eqs, ops) -> Vector
+
+The fields of `ops` (operations, `c`) that a spatial operator in the right sides of `eqs` reads
+as its operand (`Δ(c)`, `DivKGrad(K, c)`, `Advect(v, c)`, a raw flux): its value past a face
+needs the field's face conditions. A group that reads another group's field so marks it
+`LatticeCutField` (F3-22 review r1).
+"""
+function operand_reads(eqs, ops)
+    out = Any[]
+    function walk(u)
+        u = unwrap(u)
+        iscall(u) || return nothing
+        if _xg_isop(u) && (o = _xg_operand(u)) !== nothing
+            for op in ops
+                _reads(o, (op,)) && !any(x -> isequal(x, op), out) && push!(out, op)
+            end
+        end
+        foreach(walk, arguments(u))
+        return nothing
+    end
+    foreach(eq -> walk(eq.rhs), eqs)
+    return out
+end

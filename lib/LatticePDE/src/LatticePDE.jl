@@ -45,7 +45,7 @@ using Symbolics: Symbolics, Differential, Equation, Num, VarDomainPairing, @regi
 using SymbolicUtils: SymbolicUtils, arguments, iscall, operation, unwrap_const
 using SymbolicUtils.Code: toexpr
 
-public is_crossgrid_key, euler_update, bound_parts, StabilityBound, lower_group, DeferredBound, DeferredOperator, OPERATOR_BUILDS, resolve_bound, lowers_call, check_one_kind, velocity_terms, as_written,
+public is_crossgrid_key, operand_reads, LatticeCutField, euler_update, bound_parts, StabilityBound, lower_group, DeferredBound, DeferredOperator, OPERATOR_BUILDS, resolve_bound, lowers_call, check_one_kind, velocity_terms, as_written,
        derivation, V, steady_rows, steady_form, steady_choice, steady_sign
 export Δ, DivKGrad, Advect, AdvectionScheme, Upwind1, at, at2, ismember, masked, step_index
 export LatticePlacement, LatticeStorage, LatticeLevel, Coarse, LatticeSpacing, PottsEntity, LatticeInputName
@@ -301,6 +301,13 @@ inputs = [:kind => K])` takes it as well as the variable, and messages print it;
 that generates its input variables (Potts' `kind__in`) sets it to the user's word.
 """
 struct LatticeInputName end
+"""
+Metadata key `LatticeCutField` (`true`): an input that is the field of another group (front end
+A's group system, the cut of `lower_group(…; fields)`) and that a spatial operator of the group
+reads. It carries that field's face conditions, so its ghost values are those of its own group
+(F3-22 review r1); its masks and initial values stay with its own group.
+"""
+struct LatticeCutField end
 
 Symbolics.option_to_metadata_type(::Val{:lattice_placement}) = LatticePlacement
 Symbolics.option_to_metadata_type(::Val{:lattice_storage}) = LatticeStorage

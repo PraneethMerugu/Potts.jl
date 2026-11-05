@@ -401,7 +401,10 @@ _field_aux(sys::PottsSystem) = [(f[1], eq.rhs) for eq in _p(sys, :equations) for
 # the coordinates or numbers (a face)
 function _field_at_term(u, cv)
     n = _field_at_name(u)
-    haskey(cv.states, n) || throw(ArgumentError(string("@bcs: `", _builtin_text(string(u)), "` reads the field `", n,
+    # (or another group's field whose face conditions come along, F3-26: marked `LatticeCutField`)
+    f = haskey(cv.states, n) ? cv.states[n] : get(cv.direct, n, nothing)
+    cut = f !== nothing && SymbolicUtils.getmetadata(f, LatticePDE.LatticeCutField, false) === true
+    (haskey(cv.states, n) || cut) || throw(ArgumentError(string("@bcs: `", _builtin_text(string(u)), "` reads the field `", n,
         "` of another solver group; a condition reads the field it sets (give the fields one solver)")))
     args = map(arguments(u)) do y
         w = _unwrap(y)
@@ -412,7 +415,7 @@ function _field_at_term(u, cv)
         throw(ArgumentError(string("@bcs: `", _builtin_text(string(u)), "` reads `", n, "` at `", y, "`; a field is read ",
             "at `t` and the coordinates, a face fixing one of them to a number (`", n, "(t, 0, y)`)")))
     end
-    return operation(cv.states[n])(args...)
+    return operation(f)(args...)
 end
 
 # The `@bcs` conditions of the fields `names` as PDESystem conditions (F2 design §2.12), after
@@ -421,13 +424,19 @@ end
 # condition as written; a face on an axis the lattice makes periodic, or a periodic pair on an
 # axis it closes, is refused (per-field periodicity is planned, FE-20); a periodic pair on an
 # axis the lattice makes periodic is the lattice's own and is dropped
-function _bcs_equations(sys, names, cv, core, ext)
+function _bcs_equations(sys, names, cv, core, ext; faced = Symbol[])
     out = Equation[]
     kinds = _p(sys, :kinds)
     N = length(ext)
     stepped = Symbol[info(x).name for (x, _) in _field_equations(sys)]
     for b in _p(sys, :bcs)
         eq = _located(() -> _bcs_equation(sys, b, names, cv, core, ext, kinds, N, stepped), sys, _BcsLine(b))
+        # a face condition of another group's field that an operator here reads (`faced`): it comes
+        # along (its masked conditions stay with its group)
+        if eq === nothing && !isempty(faced) && first(_bcs_reads(b, ext)[1]) in faced &&
+           !(iscall(_unwrap(b.rhs)) && operation(_unwrap(b.rhs)) === LatticePDE.masked)
+            eq = _located(() -> _bcs_equation(sys, b, faced, cv, core, ext, kinds, N, stepped), sys, _BcsLine(b))
+        end
         eq === nothing && continue
         push!(out, eq)
         push!(cv.bcsrc, eq => b)
@@ -552,14 +561,24 @@ function _field_system(sys::PottsSystem, names = Symbol[info(x).name for (x, _) 
     end
     core = core_lattice(lat)
     ext = ntuple(d -> lat.dims[d] * Float64(h[d]), N)
-    at_face(n, d, v) = (args = Any[ivs...]; args[d + 1] = v; operation(states[n])(args...))
+    # another group's field that a spatial operator here reads (`Δ(v)`, v stepped elsewhere): an
+    # input that carries its face conditions, so its ghost values are its own group's (F3-22 review r1)
+    stepped = Symbol[info(x).name for (x, _) in _field_equations(sys)]
+    others = [n for n in keys(cv.direct) if n in stepped && !(n in names)]
+    hit = LatticePDE.operand_reads(eqs, Any[operation(cv.direct[n]) for n in others])
+    faced = Symbol[n for n in others if any(o -> isequal(o, operation(cv.direct[n])), hit)]
+    for n in faced
+        cv.direct[n] = SymbolicUtils.setmetadata(cv.direct[n], LatticePDE.LatticeCutField, true)
+    end
+    fvar(n) = haskey(states, n) ? states[n] : cv.direct[n]
+    at_face(n, d, v) = (args = Any[ivs...]; args[d + 1] = v; operation(fvar(n))(args...))
     bcs = Equation[]
     for n in names, d in 1:N
         core.periodic[d] && push!(bcs, Symbolics.wrap(at_face(n, d, 0.0)) ~ Symbolics.wrap(at_face(n, d, ext[d])))
     end
     for b in _p(sys, :boundaries)
         n = info(b.field).name
-        n in names || continue
+        n in names || (n in faced && b.axis != 0) || continue
         if b.axis == 0
             push!(bcs, Symbolics.wrap(states[n]) ~ LatticePDE.masked(Symbolics.wrap(_field_term(b.mask, cv)),
                 Symbolics.wrap(_field_term(b.value, cv))))
@@ -582,7 +601,7 @@ function _field_system(sys::PottsSystem, names = Symbol[info(x).name for (x, _) 
     end
     # `@bcs` (F2 design §2.12): each condition of a field of this group, translated as the
     # equations are and appended, so `lower_group` parses it with `parse_bcs` as in front end B
-    append!(bcs, _bcs_equations(sys, names, cv, core, ext))
+    append!(bcs, _bcs_equations(sys, names, cv, core, ext; faced))
     _has_domain(lat) && _filled_input!(cv, _DOMAIN_FILL, :domain__in, Bool)
     dvs = Any[[states[n] for n in [names; auxnames]]; [cv.direct[k] for k in sort!(collect(keys(cv.direct)))];
               [cv.inputs[e[1]] for e in cv.filled if haskey(cv.inputs, e[1])]]

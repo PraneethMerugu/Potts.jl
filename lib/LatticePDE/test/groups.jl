@@ -260,6 +260,29 @@ end
     @test occursin("not a dependent variable", gerr(() -> LatticePDE.lower_group(gsys(), disc; fields = [x])))
 end
 
+# F3-22 review r1: a group that reads another group's field through a spatial operator (`Δ(o)` in
+# `c`'s rate) keeps that field's face conditions in the cut, so the input `o` has the face rules
+# of the whole system (here a Dirichlet face on x = 0). Base 9afaac05: IRError "field `go` has no
+# boundary rule on axis 1".
+using LatticeFields.IR: FaceRule as GFaceRule
+@testset "F3-22 review r1: lower_group's cut keeps the faces of a field an operator reads" begin
+    ce, oe = gc(t, x, y), go(t, x, y)
+    sys = PDESystem([D(ce) ~ 0.1 * Δ(ce) + 0.5 * Δ(oe) - ce, D(oe) ~ 0.2 * Δ(oe) - oe],
+        [gc(0, x, y) ~ 0.0, go(0, x, y) ~ x, go(t, 0, y) ~ 2.0, oe ~ masked(x < 0.3, 1.0)],
+        [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [ce, oe], Num[]; name = :gcut)
+    disc = LatticeDiscretization(Grid((8, 8)); T = Float64)
+    whole = LatticePDE.lower_group(sys, disc).rate
+    cut = LatticePDE.lower_group(sys, disc; fields = [ce]).rate
+    rules(p, k) = sort!([(r.axis, r.side, r.alpha, r.beta, r.g) for r in p.rules if r isa GFaceRule &&
+                         p.fields[r.field].key == k]; by = r -> (r[1], r[2]))
+    @test length(rules(cut, "go")) == 4 && rules(cut, "go") == rules(whole, "go")
+    @test any(r -> r[1] == 1 && r[2] == -1 && r[5].value == 2.0, rules(cut, "go"))    # the Dirichlet face came along
+    @test !any(k -> startswith(k.key, "mask:go"), cut.kernels)                       # its mask stays with its group
+    # a field read pointwise only (`0.5 o`) keeps no face (the program as before)
+    pt = PDESystem([D(ce) ~ 0.1 * Δ(ce) + 0.5 * oe - ce, D(oe) ~ 0.2 * Δ(oe) - oe], sys.bcs, sys.domain, [t, x, y], [ce, oe], Num[]; name = :gpt)
+    @test isempty(rules(LatticePDE.lower_group(pt, disc; fields = [ce]).rate, "go"))
+end
+
 # F3-02 (F2 design §2.2): the group's slots are specs, not names. A parameter slot holds its
 # default and role (a computed default: `:computed` with its expression), a table its values, an
 # input its element type, declared bounds, default and whether a front end fills it at every

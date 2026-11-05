@@ -320,3 +320,64 @@ end
         @test ForwardDiff.value.(d.u[end].site.u) == drun(fs, 0.4).u[end].site.u
     end
 end
+
+# F3-22 review r1: an operator on another group's field. Front end A builds one system per group,
+# where another group's field is an input; one that a spatial operator reads carries its face
+# conditions (`@boundary v`, a Dirichlet face here), so the reading group's ghost values are the
+# field's own: A equals B, whose `FieldGroups` step one program with every face. `Δ(c)` of the
+# coarse `c` of the other group is the F3-22 aux field, on `c`'s grid. Base 9afaac05: IRError
+# "field `v` has no boundary rule on axis 1".
+@potts_model FcCut begin
+    @kinds medium A[frozen] B[frozen]
+    @variables begin
+        c(field) = 0.0, [lattice_level = Coarse(4)]
+        v(field) = 0.0
+        u(field) = 0.0
+    end
+    @lattice Lattice((16, 12); boundary = Closed())
+    @energy cells => (volume - 20.0)^2
+    @boundary v begin
+        x => (Dirichlet(1.0), NoFlux())
+    end
+    @equations begin
+        D(v) ~ 0.1 * Δ(v) - v + 0.5 * (kind == A)
+        D(c) ~ 0.4 * Δ(c) - 0.3 * c + 0.2 * v
+        D(u) ~ 0.2 * Δ(u) - u + 0.5 * Δ(v) + 0.3 * Δ(c)
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+# the same with a Robin face set by `@bcs` (F3-26 review: the `@bcs` face of another group's field)
+@potts_model FcCutBcs begin
+    @kinds medium A[frozen] B[frozen]
+    @variables begin
+        c(field) = 0.0, [lattice_level = Coarse(4)]
+        v(field) = 0.0
+        u(field) = 0.0
+    end
+    @lattice Lattice((16, 12); boundary = Closed())
+    @energy cells => (volume - 20.0)^2
+    @bcs 1.0 * v(t, 0, y) - Differential(x)(v(t, 0, y)) ~ 0.5
+    @equations begin
+        D(v) ~ 0.1 * Δ(v) - v + 0.5 * (kind == A)
+        D(c) ~ 0.4 * Δ(c) - 0.3 * c + 0.2 * v
+        D(u) ~ 0.2 * Δ(u) - u + 0.5 * Δ(v) + 0.3 * Δ(c)
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "F3-22 review r1: an operator on another group's field in A carries its faces (A = B)" begin
+    tight = DevicePCG(; rtol = 1e-12, budget = 64)
+    fa = FieldGroups(:u => BackwardEuler(; inner = tight); default = ExplicitEuler(; substeps = 40))
+    fb = FieldGroups(:u => BackwardEuler(; dt = 1.0, inner = tight); default = ExplicitEuler(; dt = 1.0, substeps = 40))
+    for M in (FcCut, FcCutBcs)              # (a Dirichlet face from `@boundary`, a Robin face from `@bcs`)
+        a = fx_run(M, 3, fa)
+        @test all(maximum(abs, a[end][i]) > 0 for i in 1:3)
+        bp = Potts.LatticePDE.discretize(Potts.fields(M(; name = :x)),
+            Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((16, 12)); T = Float64, problem = :owned),
+            ; u0 = [:c => zeros(4, 3), :v => zeros(16, 12), :u => zeros(16, 12)], tspan = (0, 3), inputs = [:kind => fc_kin()])
+        s = Potts.LatticePDE.solve(bp, fb; saveat = 1.0)
+        @test [x[1] for x in a] == s[:c][2:end] && [x[2] for x in a] == s[:v][2:end]
+        @test maximum(abs, a[end][3] - s[:u][end]) < 1e-10    # (the BE group: its inner solve to 1e-12)
+    end
+end

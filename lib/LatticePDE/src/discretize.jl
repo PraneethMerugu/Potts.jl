@@ -345,6 +345,8 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     # dependent variables, keyed by operation (the callable `c`, never the applied term)
     dvs = Dict{Any, Any}(_opof(v) => unwrap(v) for v in sys.dvs)
     isin = Dict{Any, Bool}(op => ModelingToolkitBase.isinput(v) for (op, v) in dvs)
+    # another group's field read by a spatial operator: an input with its face conditions (F3-22 review r1)
+    cut = Dict{Any, Bool}(op => isin[op] && _meta(v, LatticeCutField) === true for (op, v) in dvs)
     ncomp(v) = (st = SymbolicUtils.symtype(v); st <: AbstractArray ? length(v) : 0)
     keys = Dict{Any, Vector{String}}(op => (n = ncomp(v); n == 0 ? [_name(op)] : ["$(_name(op))[$i]" for i in 1:n])
                                      for (op, v) in dvs)
@@ -371,7 +373,8 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         isin[op] || haskey(eqs, k) || _dverr("field `$k` has no equation")
     end
     # boundary conditions; periodicity from the pairs, shared by every field
-    bcs = parse_bcs(sys.bcs, isin, ivs, ends)
+    bcs = parse_bcs(sys.bcs, Dict{Any, Bool}(op => isin[op] && !cut[op] for op in Base.keys(isin)), ivs, ends)
+    filter!(b -> !(cut[b.op] && b.kind in (:masked, :initial)), bcs)   # (its own group's)
     seen = Set{Tuple{String, Symbol, Int, Int}}()
     for b in bcs                         # one condition per face, mask and start of each field
         slot = (key(b.op, b.comp), b.kind in (:dirichlet, :neumann, :robin) ? :face : b.kind, b.axis, b.side)
@@ -402,6 +405,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     for b in bcs
         b.kind in (:dirichlet, :neumann, :robin) || continue
         periodic[b.axis] && _dverr("`$(b.eq)` sets a face of axis $(b.axis), which a periodic pair makes periodic")
+        cut[b.op] && continue                       # (another group's rate field: its group checked it)
         kb = eqs[key(b.op, b.comp)][1]
         kb == :aux && _dverr("`$(b.eq)`: `$(key(b.op, b.comp))` is an aux field (`$(key(b.op, b.comp)) ~ rhs`), whose values " *
                              "follow its expression: it takes no face condition; give the faces to the fields its expression reads")
@@ -503,17 +507,25 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     # the rate fields (each has a face rule on every non-periodic face): a face coefficient reads
     # them at the ghost site with the ghost value (F3-ghost)
     ghosted = Int32[fids[op][1][max(comp, 1)] for (_, (kind, op, comp, _)) in eqs if kind == :rate]
+    # (and another group's field that an operator reads, with its own group's faces)
+    faced = Tuple{String, Any, Int}[(k, op, comp) for (k, (kind, op, comp, _)) in eqs if kind == :rate]
+    for (op, ks) in keys
+        cut[op] || continue
+        for (i, k) in enumerate(ks)
+            push!(faced, (k, op, length(ks) == 1 ? 0 : i))
+            push!(ghosted, fids[op][1][i])
+        end
+    end
     # (a hexagonal grid: the fields with a face condition, whose links out of the box read its
     # ghost, `_hexlap`; the others are zero flux there)
-    hex && filter!(f -> any(b -> b.kind in (:dirichlet, :neumann, :robin) && !isin[b.op] &&
+    hex && filter!(f -> any(b -> b.kind in (:dirichlet, :neumann, :robin) && (!isin[b.op] || cut[b.op]) &&
                                  fids[b.op][1][max(b.comp, 1)] == f, bcs), ghosted)
     env(mapmode, kb, lv = 0) = Env(kb, fids, params, tables, spacing, ivs[1], ivs[2:end], lo, level_spacing(h, dims, lv),
                                   mapmode, ntuple(_ -> 0, N), RESOLVE, leaf, hex, dl(lv), ghosted, lv, flev, dims, 0)
     # face rules: α c + β ∂c/∂n = g in lattice units (outward normal; ∂/∂n = side · h ∂/∂x)
-    for (k, (kind, op, comp, _)) in eqs
-        kind == :rate || continue
+    for (k, op, comp) in faced
         f = fids[op][1][max(comp, 1)]
-        lv = klev(k)
+        lv = flev[op]
         hL = level_spacing(h, dims, lv)
         for d in 1:N, s in (-1, 1)
             periodic[d] && continue
