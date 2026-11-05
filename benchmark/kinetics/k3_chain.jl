@@ -10,7 +10,8 @@ const VARIANTS = [("stock", (;)), ("rep", (; colors = :replacement)),
     ("s4_r4_rep", (; stride = 4, retries = 4, colors = :replacement)),
     ("r8_rep", (; retries = 8, colors = :replacement)),
     ("sh_s3_rep", (; cells = :shared, stride = 3, colors = :replacement)),
-    ("sh_s4_rep", (; cells = :shared, stride = 4, colors = :replacement))]
+    ("sh_s4_rep", (; cells = :shared, stride = 4, colors = :replacement)),
+    ("blk_b1_k8", (; scheme = :blocks, block = 1, parts = 8))]
 const USE = split(get(ARGS, 3, join(first.(VARIANTS), ',')), ',')
 const NRUN = parse(Int, ARGS[2])
 seqT = [parse(Float64, split(l, '\t')[3]) for l in Iterators.drop(eachline(joinpath(CB_DIR, "calibration_sequential_p1b.tsv")), 1)]
@@ -23,7 +24,8 @@ open(out, "w") do io
 end
 for (name, kw) in filter(v -> first(v) in USE, VARIANTS)
     alg = CheckerboardCPM(; proposal = Moore(1), kw...)
-    ncol = length(Base.invokelatest(Potts.init, prob, alg).cache.colors)
+    cache = Base.invokelatest(Potts.init, prob, alg).cache
+    ncol = hasproperty(cache, :colors) ? length(cache.colors) : length(cache.order)
     W = fill(NaN, length(saves), NRUN)
     seed(j) = 216_000_000 + 1000 * findfirst(==(name), first.(VARIANTS)) + j
     wall = @elapsed Threads.@threads :dynamic for j in 1:NRUN

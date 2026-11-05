@@ -146,7 +146,7 @@ Options that bring the kinetics closer to `SequentialCPM` (P6.0bl):
   read + write; default block: the smallest). A phase
   activates one sub-region per block; one work item per block makes sequential random attempts
   there and commits at once, with no claims (per-cell totals by atomic adds, read live).
-  `switches` phases per sub-region per MCS (a divisor of the sub-region box). Not deterministic on a
+  `switches` phases per sub-region per MCS, each of 1/`switches` of its sites in attempts. Not deterministic on a
   device; on the CPU the attempts run one after another. Ignores `stride`, `colors`, `retries`
   and `cells`; refuses a whole-cell connectivity veto and `claims`/`reads` hooks.
 - `counts = true`: count accepted, committed and dropped copies into `stats.accepted`,

@@ -18,10 +18,12 @@
 # `SequentialCPM`.
 #
 # Per MCS: P = k^d · switches phases, each drawn uniformly from the k^d offsets (with
-# replacement), and m = |box| / switches attempts per work item per phase. An attempt draws a
-# site of the box (side base + 1 on an axis with a remainder, else base) at the sub-region's
-# start and is skipped when the site is past the sub-region's end, so every site is attempted
-# once per MCS on average.
+# replacement). In a phase a work item makes n / switches attempts (n the active sub-region's
+# sites; a fractional part is rounded by a draw), each at a uniform site of the sub-region, so
+# every site is attempted once per MCS on average. Attempts are never skipped: drawing over a
+# common box and skipping sites past a smaller sub-region's end bunches attempts on one site
+# (a one-site sub-region in a 2 × 2 box got Binomial(4, 1/4) attempts in a row), which slowed
+# Akeeb invasion and the K3 chain by 10–30 %.
 
 struct BlockLayout{N}
     k::Int                            # sub-regions per block along each axis
@@ -39,27 +41,34 @@ function BlockLayout(dims::NTuple{N, Int}, b::Int, k::Int = 2) where {N}
 end
 boxsize(l::BlockLayout) = prod(l.box)
 
-# the target site of attempt draw `r` of block `blk` in phase offset `ph` (1-based; the base-k
-# digits of `ph - 1` give the offset per axis); `(false, x)` when past the sub-region's end
-@inline function block_site(l::BlockLayout{N}, blk::Int, ph::Int, r::UInt32) where {N}
-    u = bounded(r, boxsize(l))                           # 0:|box| - 1
-    xs = ntuple(Val(N)) do d
+# the active sub-region of block `blk` in phase offset `ph` (1-based; the base-k digits of
+# `ph - 1` give the offset per axis): its start (0-based) and side per axis
+@inline function block_region(l::BlockLayout{N}, blk::Int, ph::Int) where {N}
+    rs = ntuple(Val(N)) do d
         stride = prod(ntuple(e -> e < d ? l.nblocks[e] : 1, Val(N)))
-        bstride = prod(ntuple(e -> e < d ? l.box[e] : 1, Val(N)))
         j = l.k * rem(div(blk - 1, stride), l.nblocks[d]) + rem(div(ph - 1, l.k^(d - 1)), l.k)     # sub-region, 0-based
-        ud = rem(div(u, bstride), l.box[d])
-        size = l.base[d] + (j < l.rem[d])
-        (ud < size, j * l.base[d] + min(j, l.rem[d]) + ud + 1)
+        (j * l.base[d] + min(j, l.rem[d]), l.base[d] + (j < l.rem[d]))
     end
-    return all(map(first, xs)), map(last, xs)
+    return map(first, rs), map(last, rs)
 end
 
+# the site of draw `r`, uniform over the sub-region with start `lo` and side `side`
+@inline function block_site(lo::NTuple{N, Int}, side::NTuple{N, Int}, r::UInt32) where {N}
+    u = bounded(r, prod(side))                           # 0:n - 1
+    return ntuple(Val(N)) do d
+        s = prod(ntuple(e -> e < d ? side[e] : 1, Val(N)))
+        lo[d] + rem(div(u, s), side[d]) + 1
+    end
+end
+
+# attempts in one stay: n / s, the fractional part rounded up with probability rem(n, s) / s
+@inline _stay_attempts(n, s, r::UInt32) = div(n, s) + (bounded(r, s) < rem(n, s))
+
 # one attempt (the `propose_body!` checks, then the commit at once)
-@inline function block_attempt!(blk, k, st, f, p, ctx, law, key, mcs, layout, ph, lid, tk, cnt, status)
+@inline function block_attempt!(blk, st, f, p, ctx, law, key, mcs, lo, side, lid, tk, cnt, status)
     lat = ctx.lattice
     rd, ra, rs, _ = draw(key, mcs, blk, STREAM_BLOCK, lid)
-    inside, x = block_site(layout, blk, ph, rs)
-    inside || return nothing
+    x = block_site(lo, side, rs)
     t = linear_index(lat, x)
     dir = bounded(rd, length(ctx.proposal)) + 1
     inside, y = shift(lat, x, @inbounds ctx.proposal.offsets[dir])
@@ -88,19 +97,28 @@ end
     return nothing
 end
 
-# draw local index of attempt k (1:m) in the MCS's phase number q (1:P): both < 2^16 (checked)
+# draw local index of attempt k (1:n; 0 draws the stay's length) in the MCS's phase number q
+# (1:P): both < 2^16 (checked)
 @inline _block_lid(q, k) = UInt32(q) << 16 | UInt32(k)
 
-@kernel function block_kernel!(st, f, p, ctx, law, key, mcs, layout, ph, m, q, tk, cnt, status)
-    blk = @index(Global, Linear)
-    for k in 1:m
-        block_attempt!(blk, k, st, f, p, ctx, law, key, mcs, layout, ph, _block_lid(q, k), tk, cnt, status)
+# one work item's stay in phase number q (offset ph): its attempts one after another
+@inline function block_stay!(blk, st, f, p, ctx, law, key, mcs, layout, ph, s, q, tk, cnt, status)
+    lo, side = block_region(layout, blk, ph)
+    r, _, _, _ = draw(key, mcs, blk, STREAM_BLOCK, _block_lid(q, 0))
+    for k in 1:_stay_attempts(prod(side), s, r)
+        block_attempt!(blk, st, f, p, ctx, law, key, mcs, lo, side, _block_lid(q, k), tk, cnt, status)
     end
+    return nothing
+end
+
+@kernel function block_kernel!(st, f, p, ctx, law, key, mcs, layout, ph, s, q, tk, cnt, status)
+    blk = @index(Global, Linear)
+    block_stay!(blk, st, f, p, ctx, law, key, mcs, layout, ph, s, q, tk, cnt, status)
 end
 
 struct BlockCache{N, B, TK, CN, K}
     layout::BlockLayout{N}
-    m::Int                            # attempts per work item per phase
+    switches::Int                     # a stay makes n / switches attempts (n sites)
     order::Vector{Int}                # the MCS's phase offsets (1:k^N), P of them
     status::B
     track::TK                         # `nothing`, or `(; track, acc)` (acc per site)
@@ -124,17 +142,15 @@ function BlockCache(backend, lat::Lattice{N}, f::CPMFunction, proposal; block = 
     # an axis has no other block to meet there
     layout = BlockLayout(lat.dims, b, parts)
     nbox = boxsize(layout)
-    switches >= 1 && nbox % switches == 0 || throw(ArgumentError(
-        "CheckerboardCPM(; switches = $switches): use a divisor of the block's sub-region box, $nbox sites"))
-    m = nbox ÷ switches
+    switches >= 1 || throw(ArgumentError("CheckerboardCPM(; switches = $switches): use at least 1"))
     P = parts^N * switches
-    (m < 2^16 && P < 2^16) || throw(ArgumentError("CheckerboardCPM(; scheme = :blocks): block $b is too large"))
+    (nbox < 2^16 && P < 2^16) || throw(ArgumentError("CheckerboardCPM(; scheme = :blocks): block $b is too large"))
     tk = f.track === nothing ? nothing :
          (; f.track, acc = KernelAbstractions.zeros(backend, track_eltype(f.track), nsites(lat)))
     cnt = counts ? (; accepted = KernelAbstractions.zeros(backend, Int32, nsites(lat)),
         committed = KernelAbstractions.zeros(backend, Int32, nsites(lat)),
         dropped = KernelAbstractions.zeros(backend, Int32, nsites(lat))) : nothing
-    return BlockCache(layout, m, zeros(Int, P), KernelAbstractions.zeros(backend, UInt32, 1), tk, cnt,
+    return BlockCache(layout, switches, zeros(Int, P), KernelAbstractions.zeros(backend, UInt32, 1), tk, cnt,
         block_kernel!(backend), backend isa KernelAbstractions.CPU)
 end
 
@@ -146,15 +162,14 @@ function checkerboard_mcs!(st, cache::BlockCache{N}, f::F, p, ctx, law::L, key::
         r, _, _, _ = draw(key, mcs, q, STREAM_COLOR_ORDER, 2)
         order[q] = bounded(r, cache.layout.k^N) + 1
     end
-    l, m, n = cache.layout, cache.m, nblocks(cache.layout)
+    l, s, n = cache.layout, cache.switches, nblocks(cache.layout)
     for (q, ph) in enumerate(order)
         if cache.host
-            for blk in 1:n, k in 1:m
-                block_attempt!(blk, k, st, f, p, ctx, law, key, mcs, l, ph, _block_lid(q, k), cache.track,
-                    cache.cnt, cache.status)
+            for blk in 1:n
+                block_stay!(blk, st, f, p, ctx, law, key, mcs, l, ph, s, q, cache.track, cache.cnt, cache.status)
             end
         else
-            cache.kernel(st, f, p, ctx, law, key, mcs, l, ph, m, q, cache.track, cache.cnt, cache.status; ndrange = n)
+            cache.kernel(st, f, p, ctx, law, key, mcs, l, ph, s, q, cache.track, cache.cnt, cache.status; ndrange = n)
         end
     end
     return length(order)
