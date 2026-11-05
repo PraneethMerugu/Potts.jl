@@ -400,9 +400,23 @@ attempt per switch to keep waiting times between attempts at a site close to ser
 we differ: random phase order (each site's waiting time is geometric per phase, not a
 periodic visit times a geometric pick) and smaller active areas spaced further apart.
 
+Act validation (2026-11-05, `benchmark/kinetics/act.jl`, `~/lpwork/cbk/act-2026-11-05.tsv`):
+one `WortelAct` cell (amoeboid defaults, 200² torus), 64 seeds × 3000 MCS per arm, CPU with
+phases inline. Ratio checkerboard / sequential, 95 % bootstrap interval, Welch z:
+
+| λ_act | speed | persistence | MSD (lag 100) |
+|---|---|---|---|
+| 100 | 1.056 [1.031, 1.081], z 4.5 | 1.014 [0.988, 1.041] | 1.142 [1.075, 1.214], z 4.2 |
+| 200 | 1.036 [1.005, 1.070], z 2.2 | 1.014 [0.998, 1.030] | 1.077 [1.013, 1.148], z 2.3 |
+| 300 | 1.012 [0.981, 1.043] | 0.999 [0.980, 1.019] | 1.026 [0.971, 1.083] |
+
+Persistence, the observable Sultan et al. found order-sensitive, passes at every λ_act. Speed
+is up to 6 % high when activity is weak (MSD follows, about speed²); at λ_act = 300 every
+observable passes. Not run on the device.
+
 Gaps:
-- The Act model (Niculescu et al. 2015) was their most order-sensitive case; we have not
-  validated an Act model on the new checkerboard.
+- Act speed at weak activity (above): the excess shrinks as λ_act grows. Cause not
+  investigated.
 - No shared-memory caching. Their own result: caching alone gave little, kernel
   specialization with caching gave 10× (Fig. 6A). Our kernels are already specialized per model.
 - One launch per phase: 64 per MCS in 2D. Their in-kernel barrier avoids launches; KA has
