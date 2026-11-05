@@ -10,45 +10,57 @@ and in what that order does to the kinetics.
 |---|---|---|---|
 | `SequentialCPM()` | CPU | one copy attempt at a time, each at a uniformly drawn mobile target site: the classic CPM | the reference dynamics, against which the reproductions are defined |
 | `SequentialCPM(; skip_interior = true)` | CPU | the same dynamics, drawing only boundary sites and skipping the interior picks exactly; equal in distribution to `SequentialCPM()` | the same runs, faster, when most of the lattice is medium or cell interior |
-| `CheckerboardCPM()` | CPU and GPU | all sites of one color of a checkerboard at once; every site is a target once per MCS | GPUs and large lattices; its kinetics and time scale differ from `SequentialCPM`'s ([Time scale](@ref manual-algorithms-checkerboard-time)) |
+| `CheckerboardCPM()` | CPU and GPU | many copy attempts at once, at sites far enough apart not to interact; every site is a target once per MCS on average | GPUs and large lattices; kinetics close to `SequentialCPM`'s ([Kinetics](@ref manual-algorithms-checkerboard-time)) |
 
 Both take `acceptance` and `proposal` keywords, which default to the model's
 acceptance law and the problem's proposal neighborhood (see [Problems, solvers and
 solutions](@ref manual-problems)). Both also take `skip_interior`, which defaults to
-`false`. On `CheckerboardCPM`, `skip_interior = true` is not available yet: `solve` raises
-an `ArgumentError`. In both algorithms the source of a copy is a uniformly drawn neighbor
-of the target in the proposal neighborhood; they differ in how targets are chosen.
+`false`. On `CheckerboardCPM`, `skip_interior = true` changes nothing: an attempt at an
+interior site already costs almost nothing there. In both algorithms the source of a copy
+is a uniformly drawn neighbor of the target in the proposal neighborhood; they differ in
+how targets are chosen.
 
-`CheckerboardCPM` spaces its colors by the model's footprint, the distance a copy reads
-from its target. The footprint covers what drives, constraints, `@on_copy` updates and the
-temperature read, so a wider read there widens the spacing; an energy that reads a relation
-beyond it (an edge energy, say) is refused. A `contacts(r)` fold widens it wherever the fold
-is read, since its counts are kept up to date on every copy. Any other relation read only at
-the MCS boundary (division and link rules, `@before_mcs`/`@after_mcs` updates, cell ODEs,
-`@observed` quantities) does not count, whatever its radius.
+## How `CheckerboardCPM` works
 
-## [Time scale of `CheckerboardCPM`](@id manual-algorithms-checkerboard-time)
+The lattice is cut into blocks. Each block has `parts` sub-regions along each axis, each
+`block` sites wide. A phase activates the same sub-region in every block, and one work
+item per block makes its attempts there one after another. Each attempt reads the current
+state and commits at once if accepted. Active sub-regions of two blocks are far enough
+apart that their copies never read or write each other's sites. Each MCS draws
+`parts^d` phases at random, so every site is a target once per MCS on average, as under
+`SequentialCPM`. This is the scheme of Sultan et al. (arXiv 2312.09317).
 
-One `CheckerboardCPM` MCS is not one `SequentialCPM` MCS. Within a color, each cell changes
-at most once: an accepted copy claims the cells it touches and commits only if it wins every
-claim. On a crowded lattice many accepted copies lose a claim and are dropped. With Moore(1)
-proposals on a 2D lattice there are 4 colors, and in a confluent growing monolayer (the
-OpenVT reference model) only about 27 % of accepted copies commit: the configuration
-advances by about 3.6× fewer copies per MCS than under `SequentialCPM`.
+Nothing is locked. Two copies in flight at the same time can change the same cell: its
+volume and other totals change by atomic adds, and each copy reads them as they are. Cell
+trackers stay exact. A copy whose decision needs a whole-cell search (a `Global`
+connectivity veto without window, the `pieces` tracker off its local fast path) is decided
+after its phase by one work item, with no other copy in flight.
 
-- **Not an energy error.** ΔH matched a brute-force recompute on 16,605 committed copies,
-  with no mismatch.
-- **A time-scale effect.** With 64 colors the checkerboard's behavior comes back to the
-  sequential level, and `SequentialCPM` at 0.3·N attempts per MCS reproduces the 4-color
-  checkerboard.
-- **The color count depends on the lattice.** Colors are spaced by the footprint stride
-  per axis, so an axis whose length is not a multiple of the stride needs more: on a
-  150 × 5 periodic lattice, stride 2 gives 6 colors rather than 4.
+The block spacing comes from the model's footprint, the distance a copy reads from its
+target. The footprint covers what drives, constraints, `@on_copy` updates and the
+temperature read, and the window of a windowed `Global` rule, so a wider read there widens
+the spacing; an energy that reads a relation beyond it (an edge energy, say) is refused. A
+`contacts(r)` fold widens it wherever the fold is read, since its counts are kept up to
+date on every copy. Any other relation read only at the MCS boundary (division and link
+rules, `@before_mcs`/`@after_mcs` updates, cell ODEs, `@observed` quantities) does not
+count, whatever its radius.
 
-A schedule written in MCS (a growth rate, a cycle length, a stimulus time) therefore runs
-at a different physical pace under each algorithm. **Calibrate time-dependent parameters
-with the algorithm you run**: measure a relaxation time T on a reference geometry under
-that algorithm, and express rates per T rather than per MCS.
+## [Kinetics of `CheckerboardCPM`](@id manual-algorithms-checkerboard-time)
+
+With the default of about 64 phases per MCS (8 parts per axis in 2D, 4 in 3D), the
+kinetics match `SequentialCPM`'s within the statistical resolution of these checks (the
+P6.0bl study, `docs/design/research/checkerboard-kinetics.md`): foam coarsening and cell
+sorting on the CPU, the OpenVT chain relaxation time, the OpenVT monolayer cases (b) and
+(f), Akeeb invasion at three parameter points, and a 3D RPE sheet. One deviation remains:
+in a crowded monolayer, small cells are lost more often (OpenVT case (b): 1.7 cells per run
+against 0.2).
+
+- **Fewer parts, faster, less close.** Fewer parts per axis put more copies in flight
+  at once. Copies of one cell in flight together each read the cell's totals from before
+  the other's commit, which is the source of the remaining deviation.
+- **Not reproducible on a GPU.** On a device the outcome depends on the timing of the work
+  items, so the same seed does not give the same run. On the CPU the work items run one
+  after another and a run is reproducible.
 
 ## Skipping the interior: `skip_interior = true`
 
@@ -102,15 +114,12 @@ foam reproduction run this way (D-174, D-190).
   compared with a shadow copy, to catch writes made outside the sweep. On a nearly empty
   lattice this pass is a visible part of the cost: about 0.25 ms per MCS on 1400² (Mac, Apple
   Silicon, CPU; measured in the P6.4b1 review).
-- **Not a change to `CheckerboardCPM`.** `CheckerboardCPM` updates sites in parallel by
-  color, which is a different dynamics. Whether its kinetics are statistically equivalent
-  to `SequentialCPM`'s is open (ROADMAP P6.0bl): on the Merks models they differ
-  measurably (eight seeds at 400 MCS: compactness of the 2008 sprout 0.821 sequential
-  against 0.869 checkerboard). `skip_interior = true` is equivalent to `SequentialCPM()`
-  by construction, so it does not share that question.
-- **CPU only for now.** `CheckerboardCPM(; skip_interior = true)`, the GPU form, is later
-  work (ROADMAP P6.0bk); until then it raises an `ArgumentError`. General proposal laws
-  with a Hastings correction are also later work (ROADMAP P6.4b).
+- **Not a change to `CheckerboardCPM`.** `CheckerboardCPM` makes many attempts at once,
+  which is a different dynamics, close to `SequentialCPM`'s (see
+  [Kinetics](@ref manual-algorithms-checkerboard-time)). `skip_interior = true` is
+  equivalent to `SequentialCPM()` by construction. On `CheckerboardCPM` the option is
+  accepted and changes nothing.
+- **General proposal laws** with a Hastings correction are later work (ROADMAP P6.4b).
 
 ### Example
 

@@ -19,12 +19,14 @@ backend. Potts.jl is tested on Apple GPUs, through [Metal.jl](https://github.com
 ## The checkerboard algorithm
 
 `CheckerboardCPM` makes copy attempts in parallel. `SequentialCPM` makes one copy attempt
-after another, which cannot be parallelized. `CheckerboardCPM` colors the lattice so that
-sites of one color are far enough apart not to interact. It then makes copy attempts at all
-sites of a color at once. It samples the same model with slightly different dynamics.
+after another, which cannot be parallelized. `CheckerboardCPM` cuts the lattice into blocks
+and makes copy attempts in all blocks at once, at sites far enough apart not to interact. It
+samples the same model with kinetics close to `SequentialCPM`'s (see
+[Kinetics](@ref manual-algorithms-checkerboard-time)).
 
 - Use one algorithm throughout a study.
-- If you compare with a paper that used sequential copy attempts, use `SequentialCPM`.
+- On a GPU the same seed does not give the same run: the outcome depends on the timing of
+  the parallel work. On the CPU it does.
 
 `CheckerboardCPM` runs on the CPU too:
 
@@ -93,7 +95,7 @@ ens.u
 - **Save sparingly.** Each saved state is a transfer from the GPU to the host. Save only
   the times you need (`saveat`). In an ensemble, you can instead reduce on the fly with an
   `output_func`.
-- **Big lattices pay off.** A GPU is fast when there are many sites per color. Small
+- **Big lattices pay off.** A GPU is fast when there are many blocks to run at once. Small
   lattices are often faster on the CPU.
 - **Use the same model.** Everything a model can express runs on the GPU: fields, cell and
   model ODEs with fixed-step solvers, divisions, links and components. An `Adaptive` ODE

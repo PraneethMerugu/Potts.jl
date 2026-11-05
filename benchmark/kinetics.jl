@@ -34,19 +34,16 @@ const MARGIN = Dict(vcat([o => 0.05 for o in KINETIC], [o => 0.02 for o in STATI
 const CASE_OBS = Dict("sort" => vcat(["committed"], ["H$(t)" for t in CHECKPOINTS]),
     "foam" => vcat(["committed", "D", "tauV"], STATIC))
 
-# checkerboard variants: `cb` plus `_`-separated options, e.g. `cb_r2_rep_s3` (retries = 2, `sh`: cells = :shared,
-# colors = :replacement, stride = 3)
+# checkerboard variants: `cb` plus `_`-separated options, e.g. `cb_b1_k8_w2` (block = 1, parts = 8,
+# switches = 2); `cb` alone is the default
 function arm_alg(arm)
     arm in ("seq", "seq2", "clock") && return SequentialCPM(; proposal = Moore(1))
     tok = split(arm, '_')
     first(tok) == "cb" || throw(ArgumentError("unknown arm $arm"))
     kw = Dict{Symbol, Any}()
     for t in tok[2:end]
-        t == "rep" ? (kw[:colors] = :replacement) : t == "sh" ? (kw[:cells] = :shared) : t == "blk" ? (kw[:scheme] = :blocks) :
         startswith(t, "b") ? (kw[:block] = parse(Int, t[2:end])) : startswith(t, "w") ? (kw[:switches] = parse(Int, t[2:end])) :
         startswith(t, "k") ? (kw[:parts] = parse(Int, t[2:end])) :
-        startswith(t, "r") ? (kw[:retries] = parse(Int, t[2:end])) :
-        startswith(t, "s") ? (kw[:stride] = parse(Int, t[2:end])) :
         throw(ArgumentError("unknown option $t in arm $arm"))
     end
     return CheckerboardCPM(; proposal = Moore(1), kw...)

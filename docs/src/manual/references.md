@@ -89,8 +89,8 @@ that variable.
 - **Drives and constraints** can read anything through a reference.
 - **Between sweeps**, everything is available.
 
-Every cell a copy reads through a reference joins that copy's claim set. So a model that
-reads references in its drives stays exact under `CheckerboardCPM`. A model that reads
+A copy reads its referents as they are. Under `CheckerboardCPM` another copy of a referent
+may be in flight at the same time, as for any cell the copy reads. A model that reads
 references only between sweeps adds nothing to the copy step.
 
 ## Geometry helpers

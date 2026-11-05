@@ -132,10 +132,10 @@ floods the cell from one touching site and stops when it has reached the others.
 **`window`** is used by `CheckerboardCPM` only. `SequentialCPM`, with or without
 `skip_interior`, is exact and ignores it.
 
-- On the checkerboard, an accepted copy whose shell test fails is put on a list. A deferred
-  kernel searches each listed copy inside the box `|Δ| ≤ window` round the target, in index
-  space with the minimum image on periodic axes. If the copy passes, the kernel raises its
-  claims, so the commit step is unchanged.
+- On the checkerboard, an accepted copy whose shell test fails is searched inside the box
+  `|Δ| ≤ window` round the target, in index space with the minimum image on periodic axes,
+  before it commits. The checkerboard keeps copies in flight farther apart than the window,
+  so no other copy writes inside the box during the search.
 - A copy is refused for want of window when the touching pieces do not meet inside the box
   and every one of them leaves it. Such copies are counted in
   `sol.stats.connectivity_deferred`. The counter is `nothing` for a model without `Global`,
@@ -146,11 +146,13 @@ floods the cell from one touching site and stops when it has reached the others.
   4.25·CAP bytes per thread, so ≈ 1 KB at W = 7 in 2D but ≈ 14 KB at W = 7 in 3D. Large
   windows cost registers and private memory on a GPU; keep them small in 3D.
 - Without a window the checkerboard search is exact, on the CPU and on a device alike: it
-  runs over a scratch array one copy at a time (a serial kernel on a device).
+  runs over a scratch array one copy at a time (on a device, one work item after each
+  phase, with no other copy in flight).
+- A larger window spaces the checkerboard's copies farther apart, so fewer run at once.
 
-**Launches.** A `Global` veto adds one launch per color on the checkerboard: 4 per MCS in
-2D with `Moore(1)` copies. Cell-scope `pieces` add another one per color (below). Models
-that use neither generate exactly the code they did before.
+**Launches.** A `Global` veto without window adds one launch per checkerboard phase (the
+serial pass). A windowed veto adds none. Cell-scope `pieces` also use the serial pass
+(below). Models that use neither generate exactly the code they did before.
 
 **Inline.** `connected(c; rule = Global(…))` in a drive or constraint is exact on the host
 algorithms. On the checkerboard, a rule with a window searches inside it, and a copy it
@@ -177,8 +179,10 @@ cannot decide reads `false`. A rule without a window is exact there too.
 - The shell fold `pieces(c, shell(target))` is a different value and is unchanged.
 - **Cost.** The after-values come from the shell when the cell is one piece and the shell
   test holds, or when the target is a piece of its own. Otherwise the cell is flooded.
-- **Checkerboard.** A copy that needs a flood runs in a serial kernel, one copy at a time, over
-  the same scratch. This adds one launch per color.
+- **Checkerboard.** A copy that needs a flood, or that adds a piece to the gaining cell, is
+  decided after its phase by one work item, one copy at a time, over the same scratch, with
+  no other copy in flight. This adds one launch per phase. Other copies change the trackers
+  by atomic adds.
 - **Lifecycles.** Divisions and removals rebuild the trackers on the host. A device
   lifecycle does not maintain them, so that combination is an `ArgumentError`.
 

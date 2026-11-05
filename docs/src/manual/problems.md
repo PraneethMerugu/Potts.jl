@@ -29,7 +29,7 @@ The operating point is a vector of pairs:
 |---|---|---|
 | `SequentialCPM(; proposal)` | CPU | one copy attempt at a time: the classic model |
 | `SequentialCPM(; proposal, skip_interior = true)` | CPU | the same dynamics, drawing only sites at a cell boundary and skipping the others' null attempts exactly: equal in distribution, faster on mostly-medium lattices |
-| `CheckerboardCPM(; proposal)` | CPU and GPU | all sites of one color of a checkerboard at once |
+| `CheckerboardCPM(; proposal)` | CPU and GPU | many copy attempts at once, in blocks far enough apart not to interact |
 
 `proposal` overrides the model's proposal neighborhood for this solve.
 

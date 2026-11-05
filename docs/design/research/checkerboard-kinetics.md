@@ -345,6 +345,33 @@ same sites from the same draws as before, so those results stand.
   `ArgumentError`). The same 2 fail at the base commit without this branch's CorePotts changes.
   Frozen files unchanged.
 
+### The replacement (2026-11-05)
+
+User rulings: the lockless block scheme replaces the colored, claiming checkerboard; every
+model feature must run on it ("i can't do refusals"); re-pins approved. Commit 9c37246d.
+
+| Feature | Before (claims) | Lockless |
+|---|---|---|
+| Per-cell totals | one change per cell per color | atomic adds, read live |
+| `claims`/`reads` hooks (clusters, link partners, references) | claimed | not used; read live |
+| Moments | exact under claims, re-centered per copy | atomic integer sums; anchors re-center once per MCS (`recenter_kernel!`) |
+| `pieces`, `largest_piece` | after-values written | the change added (one-piece cells: ∓1 with the volume); copies that need floods or add a piece run in the serial pass |
+| `Global` veto without window | deferred list, serial kernel | serial pass after each phase (one work item, nothing in flight) |
+| `Global` with window | deferred list, parallel search | searched in the phase; the block spacing covers the window |
+| `@on_copy` cell write reading its own value | exclusive cell | the change added atomically (`oncopy_cell!`) |
+| `skip_interior = true` | refused | accepted; the dynamics are unchanged |
+
+Defaults: block 1 (the smallest the footprint allows), about 64 phases per MCS (8 parts in
+2D, 4 in 3D). `stats.dropped` is removed; `accepted == committed` under `counts`. On a device
+the tracked ΔH differs from the energy change when copies of one cell are in flight together
+(0.1 % over 20 MCS on a 48² test monolayer); on the CPU it is exact. The exact
+transition oracle (`Oracle.block_mcs`) holds on the CPU for a one-block lattice, in CorePotts
+and for a generated model.
+
+Still open: the K4 lost-cell excess (1.74 against 0.24 per run, case (b)); the OpenVT
+checkerboard record page (`reproductions/15_openvt_monolayer.jl`) still describes the old
+scheme's measured results.
+
 ## 4. Pre-registered criteria
 
 Fixed before any variant is measured.

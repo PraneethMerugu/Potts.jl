@@ -79,11 +79,10 @@ end
     prob = PottsProblem(CGWindow(; name = :w), [ownership => σ, kind => [:A, :A]], (0, 20); seed = 4)
     integ = init(prob, CheckerboardCPM(); save_start = false, save_end = false)
     # an old run's refusals, still on the counter (not yet read)
-    integ.cache.conn.gl.deferred .= UInt32(7)
-    integ.cache.conn.gl.gcount .= UInt32(3)
+    integ.cache.serial.deferred .= UInt32(7)
+    integ.cache.serial.count .= UInt32(3)
     reinit!(integ)
-    @test all(iszero, integ.cache.conn.gl.deferred)
-    @test all(iszero, integ.cache.conn.gl.gcount) && all(iszero, integ.cache.conn.gl.scount)
+    @test all(iszero, integ.cache.serial.deferred) && all(iszero, integ.cache.serial.count)
     Potts.CorePotts.current_state(integ)
     @test integ.stats.connectivity_deferred == 0
     # and the new run counts from 0: the same as a fresh integrator with the same seed

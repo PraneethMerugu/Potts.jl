@@ -23,10 +23,8 @@ function graner_problem(; scale, nmcs, T)
         graner_params(T); contact = Moore(1))
 end
 const backend = ROCBackend()
-arms = [("stock", (;)), ("s3_r4_rep", (; stride = 3, retries = 4, colors = :replacement)),
-    ("s4_r2_rep", (; stride = 4, retries = 2, colors = :replacement)),
-    ("s4_r4_rep", (; stride = 4, retries = 4, colors = :replacement)),
-    ("r8_rep", (; retries = 8, colors = :replacement))]
+arms = [("default", (;)), ("b1_k6", (; block = 1, parts = 6)), ("b1_k4", (; block = 1, parts = 4)),
+    ("b2_k3", (; block = 2, parts = 3))]
 for scale in (14, 28)
     for (name, kw) in arms
         prob = graner_problem(; scale, nmcs = 10^6, T = Float32)

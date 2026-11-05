@@ -333,19 +333,7 @@ end
     @test !isapprox(diff, link_energy(((1, 2), (3, 4)), 0.7, 6.0); rtol = 1e-3)    # negative control: one store
 end
 
-# The checkerboard claim protocol (CorePotts `checkerboard.jl`) on explicit copies: `writes`
-# (old, new) and shared `reads`, highest priority first. Returns which copies commit.
-function claim_protocol(copies, ncell)
-    claim = zeros(UInt32, ncell); wclaim = zeros(UInt32, ncell)
-    for (w, writes, reads) in copies
-        foreach(c -> (CorePotts._claim!(claim, Int32(c), w); CorePotts._claim!(wclaim, Int32(c), w)), writes)
-        foreach(c -> CorePotts._claim!(claim, Int32(c), w), reads)
-    end
-    return [all(c -> CorePotts._won(claim, Int32(c), w), writes) &&
-            all(c -> CorePotts._unwritten(wclaim, Int32(c), w), reads) for (w, writes, reads) in copies]
-end
-
-@testset "several relationships: the claim set holds partners from every relationship" begin
+@testset "several relationships: the read set holds partners from every relationship" begin
     prob = PottsProblem(Chain(; name = :chain), [ownership => chain_state(), CHAIN_LINKS...], (0, 20))
     u = deepcopy(prob.u0); ctx = ctx_of(prob); lat = prob.lattice
     site(c) = CorePotts.linear_index(lat, (6c - 3, 5))                # a medium site below cell c
@@ -358,25 +346,17 @@ end
     @test reads == Int32.((1, 0, 0, 0, 3, 0, 0, 0))                    # bond partner 1, tether partner 3
     @test prob.f.claims === CorePotts.no_claims                        # link partners are shared reads
     readsY = prob.f.reads(u, prob.p, Y, ctx)
-    wX, wY = (2, 0), (3, 0)
-    for (pX, pY) in ((UInt32(5), UInt32(9)), (UInt32(9), UInt32(5)))
-        ok = claim_protocol([(pX, wX, reads), (pY, wY, readsY)], 4)
-        @test count(ok) == 1                                          # X reads 3, which Y writes
-    end
-    # negative control: a claim set with the bond store only misses 3, so both commit ...
+    # negative control: the bond store alone misses partner 3 ...
     bond_only(prop) = CorePotts.link_claims(CorePotts.link_store(u.cell, :bond), prop, Val(2))
     @test bond_only(X) == Int32.((1, 0, 0, 0))
-    @test all(claim_protocol([(UInt32(5), wX, bond_only(X)), (UInt32(9), wY, bond_only(Y))], 4))
-    # ... although X's ΔH depends on Y: committing Y first changes it (a stale read)
+    # ... although X's ΔH depends on cell 3: committing Y first changes it
     dX = energy_change(prob, u, X)
     v = deepcopy(u); v.σ[Y.target] = Y.new; prob.f.commit!(v, prob.p, Y, ctx)
     @test abs(energy_change(prob, v, X) - dX) > 1e-3
-    # two copies that only share a partner (both read 2) commit together
+    # two copies that only share a partner both read it
     Z = CorePotts.Proposal(target(1), site(1), CorePotts.coordinates(lat, target(1)), 1, Int32(1), Int32(0))
     readsZ = prob.f.reads(u, prob.p, Z, ctx)
     @test 2 in readsZ && 2 in readsY
-    @test all(claim_protocol([(UInt32(5), (1, 0), readsZ), (UInt32(9), wY, readsY)], 4))
-    @test count(claim_protocol([(UInt32(5), (1, 0, readsZ...), ()), (UInt32(9), (3, 0, readsY...), ())], 4)) == 1  # exclusive: one
 end
 
 @potts_model TwoRules begin

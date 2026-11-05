@@ -4,14 +4,8 @@
 include(joinpath(ARGS[1], "lib/PottsModels/reproductions/data/15/checkerboard-2026-10-10/run_checkerboard.jl"))
 using Random, Printf
 using Statistics: quantile
-const VARIANTS = [("stock", (;)), ("rep", (; colors = :replacement)),
-    ("s3_r4_rep", (; stride = 3, retries = 4, colors = :replacement)),
-    ("s4_r2_rep", (; stride = 4, retries = 2, colors = :replacement)),
-    ("s4_r4_rep", (; stride = 4, retries = 4, colors = :replacement)),
-    ("r8_rep", (; retries = 8, colors = :replacement)),
-    ("sh_s3_rep", (; cells = :shared, stride = 3, colors = :replacement)),
-    ("sh_s4_rep", (; cells = :shared, stride = 4, colors = :replacement)),
-    ("blk_b1_k8", (; scheme = :blocks, block = 1, parts = 8))]
+const VARIANTS = [("default", (;)), ("b1_k8", (; block = 1, parts = 8)), ("b1_k6", (; block = 1, parts = 6)),
+    ("b1_k4", (; block = 1, parts = 4))]
 const USE = split(get(ARGS, 3, join(first.(VARIANTS), ',')), ',')
 const NRUN = parse(Int, ARGS[2])
 seqT = [parse(Float64, split(l, '\t')[3]) for l in Iterators.drop(eachline(joinpath(CB_DIR, "calibration_sequential_p1b.tsv")), 1)]
@@ -25,7 +19,7 @@ end
 for (name, kw) in filter(v -> first(v) in USE, VARIANTS)
     alg = CheckerboardCPM(; proposal = Moore(1), kw...)
     cache = Base.invokelatest(Potts.init, prob, alg).cache
-    ncol = hasproperty(cache, :colors) ? length(cache.colors) : length(cache.order)
+    ncol = length(cache.order)
     W = fill(NaN, length(saves), NRUN)
     seed(j) = 216_000_000 + 1000 * findfirst(==(name), first.(VARIANTS)) + j
     wall = @elapsed Threads.@threads :dynamic for j in 1:NRUN

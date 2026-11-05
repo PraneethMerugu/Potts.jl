@@ -1,6 +1,6 @@
 #     julia --project=lib/PottsModels/test -t 12 benchmark/kinetics/akeeb.jl <runs> <out> [<points> <arms>]   # ROCm for the checkerboard arms
-# Akeeb invasion (P6.0bl): SequentialCPM (CPU) against stock CheckerboardCPM and the matching
-# variant (GPU) at three paper points, the page's protocol (500 × 300, 701 MCS, the six
+# Akeeb invasion (P6.0bl): SequentialCPM (CPU) against CheckerboardCPM on the GPU and on the CPU
+# (the host loop: the scheme without concurrency) at three paper points, the page's protocol (500 × 300, 701 MCS, the six
 # invasion metrics of `akeeb_observables`, the authors' "MCS 700"), at the same MCS clock.
 using Potts, PottsModels, AMDGPU, Random, Printf
 using Statistics: mean, std, quantile
@@ -11,10 +11,7 @@ const POINTS = (P1 = (2.0, 24.0, 0.5), P4 = (-2.0, 15.0, 0.5), P5 = (5.0, 3.0, 0
 const METRICS = (:invasive, :infiltrative, :singles, :fingers, :detached, :clusters)
 const ARMS = [("seq", SequentialCPM(; proposal = VonNeumann(1)), false),
     ("cb", CheckerboardCPM(; proposal = VonNeumann(1)), true),
-    ("cb_s3_r4_rep", CheckerboardCPM(; proposal = VonNeumann(1), stride = 3, retries = 4, colors = :replacement), true),
-    ("cb_sh_s3_rep", CheckerboardCPM(; proposal = VonNeumann(1), stride = 3, cells = :shared, colors = :replacement), true),
-    ("cb_blk_b1_k8", CheckerboardCPM(; proposal = VonNeumann(1), scheme = :blocks, block = 1, parts = 8), true),
-    ("cb_blk_b1_k8_cpu", CheckerboardCPM(; proposal = VonNeumann(1), scheme = :blocks, block = 1, parts = 8), false)]
+    ("cb_cpu", CheckerboardCPM(; proposal = VonNeumann(1)), false)]
 problem(pt, seed) = (p = POINTS[pt]; PottsProblem(AkeebInvasion(; name = :akeeb, J = akeeb_contacts(p[1]), μ = p[2]),
     akeeb_state(; pp = p[3], seed = 0x5cd2609 + seed), (0, 701); capacity = 4000, seed))
 function run_one(pt, alg, gpu, seed)
