@@ -253,6 +253,53 @@ reads: copies in one pass each see the cell's volume from before the pass, so to
 remove most of a small cell that the volume term would protect in sequential order (the missing
 energy is λ(D² − k)). Not yet confirmed by logging the volumes of the cells that are lost.
 
+### Block scheme (2026-11-04, prototype; `scheme = :blocks`)
+
+User ruling 2026-11-04: device runs need not be deterministic. The block scheme follows Sultan et
+al.: one work item per block makes sequential random attempts in its active sub-region, reads
+the live state and commits at once (atomic cell totals, no claims). One launch per phase:
+2^d × `switches` per MCS. The CPU runs the work items one after another (exact ΔH).
+
+Launch costs on the PC's GPU (`benchmark/kinetics/launch_overhead.jl`): KernelAbstractions
+5.8–8 µs per launch, HIP graph replay 1.9–5 µs, raw `@roc` 2.7–5.7 µs; a cooperative launch
+holds at most 160 workgroups of 256, and `sync_grid` costs 0.8–2.1 µs. KernelAbstractions has no
+grid barrier. The retry arms were not launch-bound: about 3 of 12 ms/MCS on RPE was launches.
+
+CPU harness, 32 seeds (`~/lpwork/cbk/blocks-2026-11-04`): every static observable passes, but
+the copy rate depends on how many attempts a block makes per stay in a sub-region (consecutive
+attempts in one small patch are correlated):
+
+| Arm (block 3) | attempts per stay | committed foam / sort | verdict |
+|---|---|---|---|
+| switches 1 | 9 | 0.848 / 0.828 | committed FAIL; D, τV, H500 UNDECIDED |
+| switches 3 | 3 | 0.964 / 0.959 | all PASS |
+| switches 9 | 1 | 1.005 / 1.003 | all PASS |
+
+Block 4, switches 1 behaves as block 3, switches 1. Device, OpenVT (b), block 4, switches 1, 4
+runs: lost cells 0, 0, 2, 1 (shared s = 3: 140–195), 7.4–8.6 s per run. 3D RPE wall time: block 5
+32 ms/MCS (about 400 work items), block 3 on a 96-wide lattice 9.8 ms/MCS (shared s = 5: 9.5).
+
+Kernel profile (3D RPE, block 3, 3 draws per stay; `~/lpwork/cbk/prof/prof_blocks.jl`): per draw,
+the site draw costs 0.3 µs, ΔH 37.6 µs and the commit 3 µs. No register spills (57 VGPRs, no
+scratch). ΔH waits on memory once per neighbor load (32 radius-2 neighbors) and evaluates RPE's
+height sigmoid up to 4 times per neighbor. With about 1,500 work items nothing hides latency, so
+time per MCS ≈ (attempts per work item per MCS) × (one attempt's latency), and attempts per work
+item is 1/density. Launches are minor: 384 → 8 launches per MCS saved 3 of 17 ms. A 4× larger
+lattice (200 × 200 × 36) took 1.66× the time (blocks) and 0.84× (shared s = 5).
+
+Changes: blocks take `parts` = k sub-regions per axis ((k − 1)·block ≥ footprint), so block 1
+with k parts activates single sites k apart, one attempt per stay, as colors with stride k do.
+Generated contact loops take `target + linear offset` for interior targets (ΔH −8%) and bind the
+pair-only parts of the energy (no kind, owner or cell value; only operations that cannot throw)
+once per neighbor (RPE: one sigmoid per neighbor instead of four). A batched gather of all
+neighbors was 4× slower (the tuple went to scratch memory).
+
+3D RPE per MCS: block 1 / 4 parts 3.3 ms (300 MCS/s); block 1 / 5 parts 10.3; block 2 / 3 parts
+16.8; block 3 / 3 per stay 15.3; shared s = 4 3.5; shared s = 5 6.3. Paired validation, block 1 /
+4 parts, 12 seeds: every observable |z| < 3 (largest: roughness @4000 0.976, z −2.4; contact CV
+1.012). K4 (b), 4 runs: block 1 / 8 parts lost 0, 2, 1, 1 (11.5 s per run); block 1 / 6 parts 0, 0,
+1, 2 (13.9 s); shared s = 8 lost 1, 3, 4, 7 (16 s).
+
 ### Gate (2026-11-04, branch head)
 
 - CorePotts with `POTTS_GPU=rocm`: the new tests (74 CPU, 15 device), the device suite (393) and

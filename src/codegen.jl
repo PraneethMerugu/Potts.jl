@@ -234,6 +234,58 @@ end
 # ---------------------------------------------------------------------------------------
 # delta_H
 
+# Operations a pair-only subexpression may use: those that cannot throw, so evaluating one
+# outside the branch that used it is safe (`log`, `sqrt` and powers stay in their branch)
+const _HOIST_SAFE = (+, -, *, /, exp, max, min, abs, ifelse)
+
+# A pair-only expression: parameters, constants, the bond weight and site values at the two
+# sites (`at(x, site)`, `at(x, site′)`), combined by `_HOIST_SAFE` operations
+function _pair_only(x)
+    x = _unwrap(x)
+    x isa SymbolicUtils.BasicSymbolic || return true
+    SymbolicUtils.isconst(x) && return true
+    i = info(x)
+    if i !== nothing
+        i.role === :param && return true
+        return i.role === :builtin && i.name in (:site, :site′, :weight)
+    end
+    issym(x) && return false
+    op = operation(x)
+    if op === at
+        v, w = arguments(x)
+        return role(v) in (:site, :field) && _pair_only(w)
+    end
+    any(f -> op === f, _HOIST_SAFE) || return false
+    return all(_pair_only, arguments(x))
+end
+
+# The pair-only call subtrees of the contact energies `Ea` (new owner) and `E` (old owner),
+# children before parents, each bound to a fresh name: returns both energies with those
+# subtrees replaced, and `[(name, subtree with its children replaced)]` in binding order. The
+# names are fixed (`__pair_<relation>_<k>`), so the generated code hashes the same every build
+function _hoist_pair_terms(Ea, E, rel::Symbol)
+    found = Any[]
+    seen = Set{Any}()
+    function visit(x)
+        x = _unwrap(x)
+        (x isa SymbolicUtils.BasicSymbolic && iscall(x)) || return nothing
+        foreach(visit, arguments(x))
+        _pair_only(x) && !(x in seen) && (push!(seen, x); push!(found, x))
+        return nothing
+    end
+    visit(Ea)
+    visit(E)
+    isempty(found) && return Ea, E, Tuple{Any, Any}[]
+    sub = Dict{Any, Any}()
+    binds = Tuple{Any, Any}[]
+    for (k, x) in enumerate(found)
+        v = _tag(_sym(Symbol(:__pair_, rel, :_, k)), Info(:bound, :pair, nothing, (;)))
+        push!(binds, (v, isempty(sub) ? x : Symbolics.substitute(x, sub; fold = Val(false))))
+        sub[x] = _unwrap(v)
+    end
+    return Symbolics.substitute(_unwrap(Ea), sub; fold = Val(false)), Symbolics.substitute(_unwrap(E), sub; fold = Val(false)), binds
+end
+
 function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
     rn = c.gather_names
     body = Any[_PROP_LOCALS, :(dH = zero($T))]
@@ -252,8 +304,13 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
         R = rel === :contact ? :(ctx.contact) : :(ctx.$rel)
         ctxname = rel === :contact ? :contact : rel
         Ea = isempty(contact_after) ? E : Symbolics.substitute(E, contact_after; fold = Val(false))
-        Enew = lower(Ea, _contact_env(T, :new, :k_new, :n, :k_n, :w, :target, :sn, rn; extra = oc_binds))
+        # the pair-only parts (no kind, owner or cell value) are the same for the old and the
+        # new owner: bound once per neighbor, before the energy's branches (P6.0bl profile)
+        Ea, E, pair = _hoist_pair_terms(Ea, E, rel)
+        newenv = _contact_env(T, :new, :k_new, :n, :k_n, :w, :target, :sn, rn; extra = oc_binds)
+        Enew = lower(Ea, newenv)
         Eold = lower(E, _contact_env(T, :old, :k_old, :n, :k_n, :w, :target, :sn, rn))
+        pairbinds = [:($(nameof(_unwrap(v))) = $(lower(x, newenv))) for (v, x) in pair]
         fuse = c.uses_surface && !fused_surface && _same_relation(c, ctxname, :surface)
         fused_surface |= fuse
         surfacc = fuse ? quote
@@ -263,7 +320,7 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
         end : nothing
         # a target at least the relation's radius from every face takes its neighbors as
         # `target + linear offset`, without the wrap arithmetic (P6.0bl kernel profile)
-        inner = gensym(:interior)
+        inner = Symbol(:__interior_, rel)            # fixed names: the code's hash must not change between builds
         push!(body, quote
             $inner = CorePotts.interior(ctx.lattice, prop.x, $R)
             for kk in 1:length($R)
@@ -272,6 +329,7 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
                     n = @inbounds st.σ[sn]
                     w = CorePotts.weight($R, kk)
                     k_n = Potts._cellkind(st, n)
+                    $(pairbinds...)
                     n != new && (dH += $Enew)
                     n != old && (dH -= $Eold)
                     $surfacc
