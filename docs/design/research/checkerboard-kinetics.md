@@ -300,6 +300,18 @@ neighbors was 4× slower (the tuple went to scratch memory).
 1.012). K4 (b), 4 runs: block 1 / 8 parts lost 0, 2, 1, 1 (11.5 s per run); block 1 / 6 parts 0, 0,
 1, 2 (13.9 s); shared s = 8 lost 1, 3, 4, 7 (16 s).
 
+K4 full, block 1 / 8 parts, 100 GPU runs per case (`~/lpwork/cbk/k4-b1k8-2026-11-04`): 2 of 68 rows
+beyond crit 4.66, both lost cells. (b): lost 1.74 per run against 0.24 sequential (z 9.4); every
+other row |z| ≤ 2.5 (largest O1.n_sd 1.007). (f): lost 0.27 against 0 (z 4.9); every other row
+|z| ≤ 1.1. 11.2–11.8 s per run. The excess loss is unexplained (suspected: two concurrent copies
+shrinking a small cell, each seeing its volume before the other); not yet confirmed.
+
+Gate after the codegen changes (2026-11-04): Potts group passes. PottsModels: 41,074 pass, 199
+fail, 101 broken (pre-existing). 197 failures are frozen generated-code checks (fingerprints, the
+P6.0bk2 IR hash, P6.0af fused-lifecycle code) that the interior path and pair-only binding change
+by design; 2 are the pre-existing `p6_0ap_setter_loose_ends` failures. No behavioral test fails.
+Re-pinning the fingerprints needs the maintainer's OK.
+
 ### Gate (2026-11-04, branch head)
 
 - CorePotts with `POTTS_GPU=rocm`: the new tests (74 CPU, 15 device), the device suite (393) and
