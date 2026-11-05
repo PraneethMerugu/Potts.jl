@@ -269,7 +269,7 @@ end
     # negative control: the same copy dynamics with the snapshot frozen at u's value (no
     # phases at all) is not the run's
     f = prob.f
-    frozen = CorePotts.CPMFunction(f.delta_H; f.commit!, f.constraint, f.claims, f.reads,
+    frozen = CorePotts.CPMFunction(f.delta_H; f.commit!, f.constraint,
         temperature = Potts._ZeroTemperature(f.temperature), f.bias, f.acceptance, f.footprint, f.fingerprint, f.sys)
     for alg in (SequentialCPM(), CheckerboardCPM())
         differs = 0

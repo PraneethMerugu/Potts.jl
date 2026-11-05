@@ -658,21 +658,25 @@ end
     @test Potts.CorePotts.radius(prob.relations.far) == 2
     @test !(:far in Potts.CorePotts.copy_step_relations(f.sys, f))       # read only after the MCS
     @test Symbol(solve(prob, CheckerboardCPM()).retcode) === :Success
+    # the checkerboard's spacing with two parts: the gap between two blocks' active sub-regions
+    spacing(q) = (l = init(q, CheckerboardCPM(; parts = 2)).cache.layout; (l.k - 1) * minimum(l.base))
+    @test spacing(prob) == 1                                              # `far` is not a copy-step read
     # `anneal` (zero temperature around the generated one) keeps the generated reads
     @test Potts.anneal(prob; mcs = 2, alg = CheckerboardCPM()) isa Potts.CorePotts.CPMState
-    # a bias reading `far` (reach 2) against footprint 1: refused, not raced
+    # a bias reading `far` (reach 2) against footprint 1: the spacing widens to cover it (D-271)
     farbias = (st, p, prop, ctx) -> length(ctx.far) < 0
-    biased = Potts.CorePotts.CPMFunction(f.delta_H; f.commit!, f.constraint, f.claims, f.reads, f.temperature,
+    biased = Potts.CorePotts.CPMFunction(f.delta_H; f.commit!, f.constraint, f.temperature,
         bias = farbias, f.phases, f.lifecycle, f.acceptance, f.footprint, f.fingerprint, f.sys, f.track, f.connectivity)
     @test Potts.CorePotts.copy_step_relations(f.sys, biased) === nothing
-    @test_throws ArgumentError solve(remake(prob; f = biased), CheckerboardCPM())
+    @test spacing(remake(prob; f = biased)) >= 2
+    @test Symbol(solve(remake(prob; f = biased), CheckerboardCPM()).retcode) === :Success
     @test Symbol(solve(remake(prob; f = biased), SequentialCPM()).retcode) === :Success
     # a swapped ΔH (or temperature) likewise
     dH = (st, p, prop, ctx) -> f.delta_H(st, p, prop, ctx) + 0.0 * length(ctx.far)
-    swapped = Potts.CorePotts.CPMFunction(dH; f.commit!, f.constraint, f.claims, f.reads, f.temperature,
+    swapped = Potts.CorePotts.CPMFunction(dH; f.commit!, f.constraint, f.temperature,
         f.phases, f.lifecycle, f.acceptance, f.footprint, f.fingerprint, f.sys, f.track, f.connectivity)
-    @test_throws ArgumentError solve(remake(prob; f = swapped), CheckerboardCPM())
-    Tswap = Potts.CorePotts.CPMFunction(f.delta_H; f.commit!, f.constraint, f.claims, f.reads,
+    @test spacing(remake(prob; f = swapped)) >= 2
+    Tswap = Potts.CorePotts.CPMFunction(f.delta_H; f.commit!, f.constraint,
         temperature = (st, p, prop, ctx) -> 2.0, f.phases, f.lifecycle, f.acceptance, f.footprint, f.fingerprint, f.sys, f.track, f.connectivity)
     @test Potts.CorePotts.copy_step_relations(f.sys, Tswap) === nothing
 end

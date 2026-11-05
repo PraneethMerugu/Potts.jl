@@ -227,8 +227,7 @@
                    link_delta(Float32, st.cell, ctx, prop, S)
         end
         commitL!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
-        f = CPMFunction(dHL; commit! = commitL!, temperature = gg_temperature,
-            claims = (st, p, prop, ctx) -> link_claims(st.cell, prop, Val(1)))
+        f = CPMFunction(dHL; commit! = commitL!, temperature = gg_temperature)
         pL = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0, k = 2.0f0)
         ds = map(1:4) do seed
             u = solve(PottsProblem(f, initial_state(σL, [1, 1]; cell = cellL), latL, (0, 1000), pL; seed),
@@ -277,8 +276,7 @@
                    link_delta(Float32, st.cell, ctx, prop, S)
         end
         commitD!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
-        f = CPMFunction(dHD; commit! = commitD!, temperature = gg_temperature,
-            claims = (st, p, prop, ctx) -> link_claims(st.cell, prop, Val(2)))
+        f = CPMFunction(dHD; commit! = commitD!, temperature = gg_temperature)
         pD = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0, k = 2.0f0)
         st0 = initial_state(σD, [1, 1, 1]; cell = cellD)
         @test st0.cell.volume[3] == 0
@@ -308,8 +306,7 @@
                    link_delta(Float32, st.cell, ctx, prop, S)
         end
         commitK!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
-        f = CPMFunction(dHK; commit! = commitK!, temperature = gg_temperature,
-            claims = (st, p, prop, ctx) -> link_claims(st.cell, prop, Val(1)))
+        f = CPMFunction(dHK; commit! = commitK!, temperature = gg_temperature)
         pK = (; J = SMatrix{3, 3, Float32}(0, 16, 0, 16, 2, 16, 0, 16, 2), λ = 1.0f0, V0 = 36.0f0, λd = 50.0f0,
             T = 1.0f0, k = 1.0f0)
         st(linkit) = (cell = merge(init_moments(σK, latK, 2), empty_links(1, 2; rest = Float32));
@@ -449,8 +446,8 @@
         @test u.cell.volume == [count(==(c), u.σ) for c in 1:4] && u.cell.volume[3] > 0
         @test sum(u.site.c[lat.mask]) ≈ 36 rtol = 1e-4
     end
-    @testset "relationship reads (shared read claims) on the device" begin
-        # P6.0b4: a chain of two relationships whose link partners are reads (D-058): 1–2 a
+    @testset "a chain of two relationships on the device" begin
+        # P6.0b4: a chain of two relationships: 1–2 a
         # bond (rest 12), 2–3 a tether (len 18); every centroid distance starts at 25
         latR = Lattice((64, 30))
         σR = zeros(Int32, 64, 30); σR[5:10, 12:17] .= 1; σR[30:35, 12:17] .= 2; σR[55:60, 12:17] .= 3
@@ -468,9 +465,7 @@
                    link_delta(Float32, st.cell, (; links = st.cell.links__tether), ctx, prop, S2)
         end
         commitR!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
-        readsR(st, p, prop, ctx) = (link_claims((; links = st.cell.links__bond), prop, Val(1))...,
-            link_claims((; links = st.cell.links__tether), prop, Val(1))...)
-        f = CPMFunction(dHR; commit! = commitR!, temperature = gg_temperature, reads = readsR)
+        f = CPMFunction(dHR; commit! = commitR!, temperature = gg_temperature)
         pR(k) = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0, k = Float32(k))
         prob(g, k, seed) = PottsProblem(g, initial_state(σR, [1, 1, 1]; cell = deepcopy(cellR)), latR, (0, 1500), pR(k); seed)
         dist(u) = (centroid_distance(Float64, u.cell, latR, 1, 2), centroid_distance(Float64, u.cell, latR, 2, 3))

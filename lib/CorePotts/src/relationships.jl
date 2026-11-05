@@ -35,7 +35,7 @@ _is_adjacency(name::Symbol) = name === :links || startswith(String(name), "links
     link_store(cell, name) -> NamedTuple
 
 Relationship `name`'s adjacency in cell state `cell`, as a link store `(; links)` for the
-queries `linked`, `link_slot`, `link_count` and `link_claims` (e.g.
+queries `linked`, `link_slot` and `link_count` (e.g.
 `linked(link_store(u.cell, :bond), 1, 2)`). Payloads are left out: which `link_<p>`
 columns belong to `name` is the model's knowledge (generated code builds full views).
 """
@@ -207,28 +207,6 @@ test reads the same volume load as `old`'s centroid. Device-safe: no allocation,
         end
     end
     return dH
-end
-
-"""
-    link_claims(cell, prop, Val(maxdeg))
-
-Checkerboard claims for link energies: the partners of `old` and `new` in link store `cell`
-(whose centroids `link_delta` reads) as a static tuple (0 = none). Use as
-`CPMFunction(…; reads = (st, p, prop, ctx) -> link_claims(st.cell, prop, Val(4)))`; with
-several relationships, splat one call per store into the tuple (a store left out lets a
-concurrent copy move a partner whose centroid this copy reads). As shared `reads`,
-copies that only read a partner commit together; as exclusive `claims` (also exact), a
-linked component commits at most one copy per color (observed: spring relaxation ~2×
-slower in MCS; a chain linked by two relationships slower still). Omitting them reads
-partner centroids up to one color stale (a speed-for-accuracy trade, the user's choice).
-"""
-@inline function link_claims(cell, prop, ::Val{D}) where {D}
-    a, b = prop.old, prop.new
-    return ntuple(Val(2D)) do j
-        c = j <= D ? a : b
-        k = j <= D ? j : j - D
-        (c == 0 || k > maxdegree(cell)) ? Int32(0) : @inbounds(cell.links[k, c])
-    end
 end
 
 """

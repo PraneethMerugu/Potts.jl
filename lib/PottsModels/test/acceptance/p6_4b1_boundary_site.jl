@@ -481,7 +481,7 @@ function p64b1_life_problem(; tspan = (0, 10), seed = 4)
         capacity = 8, seed)
     f = prob.f
     lc = Lifecycle(P64b1Events(); normal = P64b1Normal(), kind = P64b1WallKind(), divide! = P64b1Halve())
-    g = CPMFunction(f.delta_H; f.commit!, f.constraint, f.claims, f.reads, f.temperature, f.bias, f.phases,
+    g = CPMFunction(f.delta_H; f.commit!, f.constraint, f.temperature, f.bias, f.phases,
         lifecycle = lc, f.acceptance, f.footprint, f.fingerprint, f.sys)
     return remake(prob; f = g)
 end

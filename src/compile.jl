@@ -918,7 +918,7 @@ function _check_energy_refs(E, d)
     return nothing
 end
 
-# `sibling` and `members` scan a whole cluster, so no claim set covers them: they are sources
+# `sibling` and `members` scan a whole cluster, which a copy changes: they are sources
 # of the cell scope (updates, division conditions and rules, `@observed`), not of the sweep
 function _check_ref_sources(x, what)
     (_has_op(x, cluster_sibling) || _has_op(x, outer_value)) && throw(ArgumentError(

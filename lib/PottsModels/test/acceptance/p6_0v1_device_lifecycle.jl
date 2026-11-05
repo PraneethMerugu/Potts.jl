@@ -172,7 +172,7 @@ function (::P60v1Halve)(st, p, ctx, key, mcs, parent, daughter)
 end
 function p60v1_with_lifecycle(prob, lc)
     f = prob.f
-    g = CPMFunction(f.delta_H; f.commit!, f.constraint, f.claims, f.reads, f.temperature, f.bias, f.phases,
+    g = CPMFunction(f.delta_H; f.commit!, f.constraint, f.temperature, f.bias, f.phases,
         lifecycle = lc, f.acceptance, f.footprint, f.fingerprint, f.sys)
     return remake(prob; f = g)
 end

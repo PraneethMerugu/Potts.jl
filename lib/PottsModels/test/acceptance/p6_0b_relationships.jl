@@ -1,5 +1,5 @@
 # P6.0b (ROADMAP Phase 6, step 0): several named relationships per model, each with its
-# own link store, laws and claim set. Frozen (AUTONOMY §7.3).
+# own link store and laws (the per-relationship claim set is gone, D-271). Frozen (AUTONOMY §7.3).
 using Potts: CorePotts
 using Statistics: mean
 

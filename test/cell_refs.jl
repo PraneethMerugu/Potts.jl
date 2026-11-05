@@ -40,9 +40,6 @@ function cr_worst_gap(prob, u)
     end
     return worst
 end
-cr_claimed(prob, u, prop) = (c = cr_ctx(prob);
-    Set(filter(>(0), vcat(Int[Int(x) for x in prob.f.reads(u, prob.p, prop, c)],
-        Int[Int(x) for x in prob.f.claims(u, prob.p, prop, c)]))))
 
 # 1. an on-copy update writes the gainer's reference, which the energy dereferences
 @potts_model CROnCopy begin
@@ -154,17 +151,14 @@ end
     @test a.cell.partner[1] == 0
     @test energy_change(p, u, pr) ≈ total_energy(p, a) - total_energy(p, u) atol = 1e-9
     @test cr_worst_gap(p, u) < 1e-9                       # every copy, kills (cell 3) included
-    @test 1 in cr_claimed(p, u, first(filter(x -> x.old == 1 && x.new == 2, cr_props(p, u))))   # the written referent
     sol = solve(p, SequentialCPM(); saveat = 1)
     @test cr_worst_gap(p, sol.u[end]) < 1e-9
 end
 
-@testset "a reference chosen with ifelse is claimed and guarded" begin
+@testset "a reference chosen with ifelse is guarded" begin
     p = PottsProblem(CRIfelse(; name = :c1), [ownership => CR_σ, :partner => [2, 0, 0], :other => [3, 0, 0]],
         (0, 2); capacity = 4)
-    u = p.u0
-    @test CorePotts.has_reads(p.f)
-    @test cr_claimed(p, u, first(filter(x -> x.old == 1 && x.new == 0, cr_props(p, u)))) ⊇ Set([2, 3])  # both branches
+    @test Symbol(solve(p, CheckerboardCPM()).retcode) === :Success
     p7 = PottsProblem(CRIfelse(; name = :c7), [ownership => CR_σ, :partner => [3, 3, 1], :q => [1.0, 2.0, 7.0]],
         (0, 1); capacity = 4)
     v = deepcopy(p7.u0); v.σ[v.σ .== 3] .= 0; v.cell.volume[3] = 0
@@ -187,15 +181,12 @@ end
     @test err isa Exception && occursin("reference", sprint(showerror, err))
 end
 
-@testset "a reference beyond the capacity claims nothing" begin
+@testset "a reference beyond the capacity runs under the checkerboard" begin
     p = PottsProblem(CRLiteral(; name = :c5), [ownership => CR_σ, :partner => [2, 3, 1]], (0, 3); capacity = 4)
     sol = solve(p, CheckerboardCPM(); saveat = 1)
     @test Symbol(sol.retcode) === :Success
     u = sol.u[end]
     @test all(==(50), u.cell.partner[1:3])
-    for pr in filter(x -> x.old == 1, cr_props(p, u))
-        @test isempty(cr_claimed(p, u, pr))
-    end
 end
 
 @testset "an update reads its own variable through a reference (snapshot default)" begin

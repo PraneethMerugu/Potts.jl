@@ -108,9 +108,7 @@ link_delta_allocs(T, cell, ctx, prop, E) = @allocated link_delta(T, cell, ctx, p
                    link_delta(Float64, st.cell, ctx, prop, S)
         end
         commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
-        f = CPMFunction(dH; commit!, temperature = gg_temperature,
-            claims = (st, p, prop, ctx) -> link_claims(st.cell, prop, Val(1)))
-        @test link_claims(cell, Proposal(1, 1, (1, 1), 1, Int32(1), Int32(0)), Val(1)) == (Int32(2), Int32(0))
+        f = CPMFunction(dH; commit!, temperature = gg_temperature)
         d0 = centroid_distance(Float64, initial_state(σ, [1, 1]; cell).cell, lat, 1, 2)
         ds = map(1:6) do seed
             u = solve(PottsProblem(f, initial_state(σ, [1, 1]; cell), lat, (0, 1000),
@@ -215,7 +213,7 @@ link_delta_allocs(T, cell, ctx, prop, E) = @allocated link_delta(T, cell, ctx, p
         @test checked >= 100 && both >= 5 && one_store_off >= checked ÷ 2
     end
 
-    @testset "shared read claims: a chain of two relationships relaxes under checkerboard" begin
+    @testset "a chain of two relationships relaxes under checkerboard" begin
         lat = Lattice((64, 30))
         σ = zeros(Int32, 64, 30); σ[5:10, 12:17] .= 1; σ[30:35, 12:17] .= 2; σ[55:60, 12:17] .= 3
         cell = merge(init_moments(σ, lat, 3), empty_links(1, 3, :bond; rest = Float64),
@@ -232,10 +230,7 @@ link_delta_allocs(T, cell, ctx, prop, E) = @allocated link_delta(T, cell, ctx, p
                    link_delta(Float64, st.cell, (; links = st.cell.links__tether), ctx, prop, S2)
         end
         commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
-        reads(st, p, prop, ctx) = (link_claims((; links = st.cell.links__bond), prop, Val(1))...,
-            link_claims((; links = st.cell.links__tether), prop, Val(1))...)
-        f = CPMFunction(dH; commit!, temperature = gg_temperature, reads)
-        @test CorePotts.has_reads(f) && !CorePotts.has_reads(GG)
+        f = CPMFunction(dH; commit!, temperature = gg_temperature)
         p = merge(gg_params(), (; V0 = 36.0, k = 2.0))
         for alg in (SequentialCPM(), CheckerboardCPM())
             ds = map(1:4) do seed

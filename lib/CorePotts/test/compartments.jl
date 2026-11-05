@@ -15,7 +15,7 @@ function compartment_cells(dims, side, core)
     return σ, vcat(fill(Int32(1), ncl), fill(Int32(2), ncl)), cluster
 end
 
-function compartment_model(; λc = 1.0, Vc = 64.0, λs = 0.0, Sc = 32.0, Jint = 2.0, claims = true)
+function compartment_model(; λc = 1.0, Vc = 64.0, λs = 0.0, Sc = 32.0, Jint = 2.0)
     function dH(st, p, prop, ctx)
         J(a, b) = same_cluster(st.cell, a, b) ? p.Jint : @inbounds p.J[kindidx(st, a), kindidx(st, b)]
         E(v, c) = p.λ * (v - @inbounds(p.V0[st.cell.kind[c]]))^2
@@ -35,10 +35,8 @@ function compartment_model(; λc = 1.0, Vc = 64.0, λs = 0.0, Sc = 32.0, Jint = 
     end
     p = (; J = SMatrix{3, 3}(0.0, 16, 30, 16, 14, 30, 30, 30, 14), Jint, λ = 1.0,
         V0 = (48.0, 16.0), λc, Vc, λs, Sc, T = 10.0)
-    cl = claims ? (st, p, prop, ctx) -> cluster_claims(st.cell, prop) : nothing
     alive(st, p, prop, ctx) = forbid_extinction(st.cell.volume, prop)
-    f = claims ? CPMFunction(dH; commit!, temperature = gg_temperature, constraint = alive, claims = cl) :
-        CPMFunction(dH; commit!, temperature = gg_temperature, constraint = alive)
+    f = CPMFunction(dH; commit!, temperature = gg_temperature, constraint = alive)
     return f, p
 end
 

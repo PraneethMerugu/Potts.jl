@@ -215,7 +215,7 @@ function p65bo_a17_problem(trig; T = Float64, tspan = (0, 1))
     f = prob.f
     lc = Lifecycle(trig; kind = P65boKind(), normal = P65boNormal(), cluster_normal = P65boNormal(),
         divide! = P65boRule(), cluster_divide! = P65boRule())
-    g = CPMFunction(f.delta_H; f.commit!, f.constraint, f.claims, f.reads, f.temperature, f.bias, f.phases,
+    g = CPMFunction(f.delta_H; f.commit!, f.constraint, f.temperature, f.bias, f.phases,
         lifecycle = lc, f.acceptance, f.footprint, f.fingerprint, f.sys)
     return remake(prob; f = g)
 end

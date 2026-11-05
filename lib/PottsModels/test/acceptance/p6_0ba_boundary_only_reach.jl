@@ -1,6 +1,12 @@
 # P6.0ba (ROADMAP Phase 6, step 0): CheckerboardCPM's preflight counts only the relations
 # the copy step reads. Follow-up of P6.0ax (D-132); deferred by D-134.
 #
+# Amended under D-271. The lockless CheckerboardCPM no longer refuses a copy-step read beyond
+# the declared footprint: it widens its spacing instead. Sections 2 and 3 now check that it
+# runs and that its spacing, `(k - 1) · base` of the block layout with `parts = 2`, covers the
+# reach 2; section 1 checks that a boundary-only read leaves the spacing at 1. The text below
+# describes the refusal as it was.
+#
 # The defect. `CorePotts._preflight` (lib/CorePotts/src/problem.jl) refuses CheckerboardCPM
 # when any relation of the problem (`prob.relations`: named and inline gathers alike) has a
 # radius beyond the declared footprint, `reach(prob.f.footprint, ctx.proposal)`. The compiler
@@ -216,8 +222,10 @@ function p60ba_refusal(label; kw...)
         return sprint(showerror, e)
     end
 end
-p60ba_is_reach_refusal(msg, d) = msg isa String && occursin("CheckerboardCPM", msg) &&
-                                 occursin("Footprint(read = 1)", msg) && occursin("reach distance $d", msg)
+"""The spacing of CheckerboardCPM(; parts = 2) on `label`'s problem: the smallest gap
+`(k - 1) · base` between the active sub-regions of two blocks (D-271)."""
+p60ba_spacing(label; kw...) = (l = init(p60ba_problem(label; kw...), CheckerboardCPM(; parts = 2)).cache.layout;
+                               (l.k - 1) * minimum(l.base))
 p60ba_linked(u) = CorePotts.linked(CorePotts.link_store(u.cell, :bond), 1, 2)
 p60ba_link_times(sol) = [t for (u, t) in zip(sol.u, sol.t) if p60ba_linked(u)]
 
@@ -332,6 +340,7 @@ end
         @testset "$label" begin
             msg = p60ba_refusal(label; links)
             @test msg === nothing                                        # base: the reach refusal
+            @test p60ba_spacing(label; links) == 1                       # the boundary read does not widen it
             if msg === nothing
                 sol = p60ba_solve(label; alg = CheckerboardCPM(), links)
                 @test Symbol(sol.retcode) === :Success
@@ -376,14 +385,15 @@ end
 # ---------------------------------------------------------------------------------------
 # 2. A copy-step read still counts
 
-@testset "P6.0ba: a copy-step read beyond the footprint is still refused" begin
+@testset "P6.0ba: a copy-step read beyond the footprint widens the spacing (D-271)" begin
     for label in ("edge far=Ball(2.0)", "edge Ball(2.0)")
         @testset "$label" begin
             p = p60ba_problem(label; links = true)
             @test total_energy(p, p.u0) ≈ 2.4                            # the edge energy reads Ball(2.0): 0.1 · 8 · distance 3
-            @test_throws ArgumentError solve(p, CheckerboardCPM())
-            @test p60ba_is_reach_refusal(p60ba_refusal(label; links = true), 2)
-            @test p60ba_is_reach_refusal(p60ba_refusal(label), 2)        # unlinked: still read by ΔH
+            @test p.f.footprint.read == 1                                # under-declared
+            @test Symbol(solve(p, CheckerboardCPM()).retcode) === :Success
+            @test p60ba_spacing(label; links = true) >= 2
+            @test p60ba_spacing(label) >= 2                              # unlinked: still read by ΔH
         end
     end
     # copy-step reads the compiler declares (read = 2): accepted, as on the base
@@ -397,13 +407,13 @@ end
 # ---------------------------------------------------------------------------------------
 # 3. A relation read in the copy step and at the boundary still counts
 
-@testset "P6.0ba: a mixed copy-step and boundary read is still refused" begin
+@testset "P6.0ba: a mixed copy-step and boundary read widens the spacing (D-271)" begin
     for label in ("mixed far=Ball(2.0)", "mixed Ball(2.0)", "mixed after+edge far=Ball(2.0)")
         @testset "$label" begin
             p = p60ba_problem(label; links = true)
             @test length(p.relations) == 1                               # one relation, read at both
-            @test_throws ArgumentError solve(p, CheckerboardCPM())
-            @test p60ba_is_reach_refusal(p60ba_refusal(label; links = true), 2)
+            @test Symbol(solve(p, CheckerboardCPM()).retcode) === :Success
+            @test p60ba_spacing(label; links = true) >= 2
         end
     end
 end

@@ -106,10 +106,10 @@ function reach(fp::Footprint, proposal)
 end
 
 """
-    CPMFunction(delta_H; commit! = commit_volume!, constraint = always, claims = no_claims,
-                reads = no_claims, temperature, bias = no_bias, phases = Phases(), lifecycle = nothing,
-                acceptance = nothing, footprint = Footprint(), fingerprint = 0, sys = nothing,
-                track = nothing)
+    CPMFunction(delta_H; commit! = commit_volume!, constraint = always, temperature,
+                bias = no_bias, phases = Phases(), lifecycle = nothing, acceptance = nothing,
+                footprint = Footprint(), fingerprint = 0, sys = nothing, track = nothing,
+                connectivity = nothing)
 
 The model, as plain Julia functions (the numerical analogue of `ODEFunction`). Each takes
 `(st, p, prop, ctx)` where `ctx` carries the lattice and relations:
@@ -117,13 +117,6 @@ The model, as plain Julia functions (the numerical analogue of `ODEFunction`). E
 - `delta_H` → energy change (plus energy-like drives) of accepting `prop`
 - `commit!` → effects of an accepted copy beyond the ownership write (trackers, state)
 - `constraint` → `false` vetoes the proposal
-- `claims` → tuple of extra cell ids (beyond old/new) whose quantities the other
-  functions read and `commit!` writes; they are claimed exclusively in checkerboard
-  execution (0 = none)
-- `reads` → tuple of extra cell ids whose quantities `delta_H` reads but no `commit!`
-  writes except as some copy's old/new (e.g. link partners, whose centroids link energies
-  read); concurrent copies may share them, a copy that writes one excludes the readers
-  (0 = none). Claiming them in `claims` instead is also exact, only more conservative.
 - `temperature` → the copy temperature
 - `bias` → added to log α (not energy-like: `ΔH_eff = ΔH − T·bias`); default none
 - `phases` → synchronous work before/after each copy sweep (`Phases`)
@@ -143,17 +136,15 @@ The model, as plain Julia functions (the numerical analogue of `ODEFunction`). E
 Symbolic models (`Potts.PottsProblem`) generate these functions; hand-written ones work
 identically.
 
-`CheckerboardCPM` spaces its colors by `footprint` and refuses a model whose contact
-relation, or any relation in the problem, reaches farther. A symbolic layer may narrow
+`CheckerboardCPM` spaces its blocks by `footprint`, widened to the contact relation and any
+relation in the problem when one reaches farther. A symbolic layer may narrow
 that to the relations its generated copy-step functions read (`CorePotts.copy_step_relations(sys, f)`,
 keyed on `sys`); it does so only while every copy-step function above is its own.
 """
-struct CPMFunction{DH, CM, CN, CL, RD, TT, BI, PH, LC, AC, SYS, TK, CO}
+struct CPMFunction{DH, CM, CN, TT, BI, PH, LC, AC, SYS, TK, CO}
     delta_H::DH
     commit!::CM
     constraint::CN
-    claims::CL
-    reads::RD
     temperature::TT
     bias::BI
     phases::PH
@@ -167,10 +158,10 @@ struct CPMFunction{DH, CM, CN, CL, RD, TT, BI, PH, LC, AC, SYS, TK, CO}
 end
 
 function CPMFunction(delta_H; commit! = commit_volume!, constraint = always,
-        claims = no_claims, reads = no_claims, temperature, bias = no_bias, phases = NO_PHASES,
+        temperature, bias = no_bias, phases = NO_PHASES,
         lifecycle = nothing, acceptance = nothing, footprint = Footprint(), fingerprint = 0,
         sys = nothing, track = nothing, connectivity = nothing)
-    return CPMFunction(delta_H, commit!, constraint, claims, reads, temperature, bias, phases,
+    return CPMFunction(delta_H, commit!, constraint, temperature, bias, phases,
         lifecycle, acceptance, footprint, UInt64(fingerprint), sys, track, connectivity)
 end
 
@@ -203,24 +194,22 @@ track_eltype(track) = throw(ArgumentError(
 The device-side part of a `CPMFunction`: the per-proposal functions, without host-only
 fields (`phases`, `sys`), so it is isbits whenever the functions are.
 """
-struct DeviceFunctions{DH, CM, CN, CL, RD, TT, BI, PO, DF}
+struct DeviceFunctions{DH, CM, CN, TT, BI, PO, DF}
     delta_H::DH
     commit!::CM
     constraint::CN
-    claims::CL
-    reads::RD
     temperature::TT
     bias::BI
     post::PO            # the `Global` veto after the draw (`ConnectivityHooks`), or `nothing`
     defer::DF           # copies the checkerboard runs serially, or `nothing`
 end
-DeviceFunctions(delta_H, commit!, constraint, claims, reads, temperature, bias) =
-    DeviceFunctions(delta_H, commit!, constraint, claims, reads, temperature, bias, nothing, nothing)
+DeviceFunctions(delta_H, commit!, constraint, temperature, bias) =
+    DeviceFunctions(delta_H, commit!, constraint, temperature, bias, nothing, nothing)
 # The track (D-140) is not part of it: the checkerboard carries it with its buffers and
 # `SequentialCPM` takes it as an argument, so untracked kernels see exactly these fields
 # (`post` and `defer` are `nothing`, zero-size, without whole-cell connectivity).
 device_functions(f::CPMFunction) =
-    DeviceFunctions(f.delta_H, f.commit!, f.constraint, f.claims, f.reads, f.temperature, f.bias,
+    DeviceFunctions(f.delta_H, f.commit!, f.constraint, f.temperature, f.bias,
         _hook(f.connectivity, :post), _hook(f.connectivity, :defer))
 _hook(::Nothing, name) = nothing
 _hook(h, name) = getfield(h, name)
@@ -239,9 +228,6 @@ _hook(h, name) = getfield(h, name)
 commit hooks that would overwrite a cell value add their change atomically instead."""
 @inline _lockless(::NamedTuple{K}) where {K} = :lockless in K
 @inline _lockless(ctx) = false
-@inline no_claims(st, p, prop, ctx) = ()
-"""Whether `f` has shared read claims (a type-level constant: no cost without them)."""
-@inline has_reads(f) = !(f.reads isa typeof(no_claims))
 @inline no_bias(st, p, prop, ctx) = false
 
 """Effective energy change: `ΔH − T·bias` (a bias adds directly to log α)."""

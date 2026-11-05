@@ -368,7 +368,15 @@ the tracked ΔH differs from the energy change when copies of one cell are in fl
 transition oracle (`Oracle.block_mcs`) holds on the CPU for a one-block lattice, in CorePotts
 and for a generated model.
 
-Still open: the K4 lost-cell excess (1.74 against 0.24 per run, case (b)); the OpenVT
+Final checks (2026-11-05, `~/lpwork/cbk/final-2026-11-05`; heads a3528269 to 267c49c5, whose API changes leave the dynamics alone): foam and sort
+all PASS (32 seeds); K3 r 0.999 [0.973, 1.027] PASS; Akeeb (48 runs, P1/P4/P5, GPU and CPU)
+every |z| < 3 (largest: P1 clusters on the device, ratio 1.22, z 2.9); K4 cases (b) and (f),
+0 of 68 rows beyond crit; K4 (b) over 16 runs lost 0.375 cells per run against sequential's
+0.24 (z 0.59), so the earlier excess (1.74, at commit 9c37246d) is gone; the change that removed
+it is not isolated (candidates: one draw per attempt, 2578813c); 3D RPE, 12 seeds paired, every |z| < 3 (contact
+CV 0.945, z −2.2).
+
+Still open: the OpenVT
 checkerboard record page (`reproductions/15_openvt_monolayer.jl`) still describes the old
 scheme's measured results.
 

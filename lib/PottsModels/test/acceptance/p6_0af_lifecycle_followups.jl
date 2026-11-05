@@ -145,7 +145,7 @@ function p60af_unfuse(prob; extra = ())
         lc.rebuild!, lc.every, lc.rules, nothing, nothing, nothing)
     ph = f.phases
     ph0 = CorePotts.Phases(ph.before_mcs, (ph.after_mcs..., CorePotts.CellPhase(lc.before), extra...), ph.end_mcs, ph.at_init)
-    f0 = CorePotts.CPMFunction(f.delta_H, f.commit!, f.constraint, f.claims, f.reads, f.temperature, f.bias, ph0, lc0,
+    f0 = CorePotts.CPMFunction(f.delta_H, f.commit!, f.constraint, f.temperature, f.bias, ph0, lc0,
         f.acceptance, f.footprint, f.fingerprint, f.sys, f.track, f.connectivity)
     return CorePotts.PottsProblem(f0, prob.u0, prob.lattice, prob.contact, prob.proposal, prob.relations, prob.spacing,
         prob.frozen, prob.tspan, prob.p, prob.seed, prob.replica, prob.repeat)

@@ -474,7 +474,7 @@ end
 (k::P63bHandClamp)(st, p, ctx, key, mcs, backend) = (st.site.c[k.sites] .= 0.0; 0)
 function p63b_with_phases(prob, phases)
     f = prob.f
-    g = CPMFunction(f.delta_H; f.commit!, f.constraint, f.claims, f.reads, f.temperature, f.bias, phases,
+    g = CPMFunction(f.delta_H; f.commit!, f.constraint, f.temperature, f.bias, phases,
         f.lifecycle, f.acceptance, f.footprint, f.fingerprint, f.sys)
     return remake(prob; f = g)
 end

@@ -24,14 +24,14 @@ struct PottsModelInfo{C, E, DE, X}
     copy_fns::Any                    # ... of these generated copy-step functions
 end
 
-# CheckerboardCPM's preflight reach (D-208): only the relations the generated copy-step
+# CheckerboardCPM's spacing reach (D-208): only the relations the generated copy-step
 # functions read, and only while `f` runs exactly those (with no bias). A `CPMFunction` that
 # keeps this `sys` but swaps one of them (`remake(prob; f = …)`) may read any relation:
 # `nothing`, every relation counts. `anneal`'s zero temperature wraps the generated one.
 function CorePotts.copy_step_relations(mi::PottsModelInfo, f)
     g = mi.copy_fns
     f.delta_H === g.delta_H && f.commit! === g.commit! && f.constraint === g.constraint &&
-        f.claims === g.claims && f.reads === g.reads && f.connectivity === g.connectivity &&
+        f.connectivity === g.connectivity &&
         _same_temperature(f.temperature, g.temperature) && f.bias === CorePotts.no_bias &&
         (f.track === nothing || f.track isa CorePotts.TrackDeltaH) || return nothing
     return mi.copy_relations
@@ -264,15 +264,14 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
     # relation, `contact_counts`), and `surface` (read by `surface_change` through a keyword
     # default, not a literal `ctx.surface`; the footprint covers it). A relation read only at the MCS boundary (lifecycle, link
     # rules, boundary updates, ODEs, observed) is not among them. The declared footprint is
-    # unchanged; CheckerboardCPM's preflight measures reach over these only.
+    # unchanged; CheckerboardCPM's spacing covers the reach of these only.
     copy_used = Set{Symbol}()
     foreach(ex -> _ctx_reads!(copy_used, ex, keys(hctx)), fns.copy_step)
     copy_relations = Symbol[k for k in keys(hctx)
                             if k ∉ (:lattice, :spacing) && (k in copy_used || k === :surface || !haskey(c.relations, k))]
-    claims, reads = _claims(c), _with_faces(() -> _reads(c, T), c)
-    copy_fns = (; fns.delta_H, fns.commit!, fns.constraint, claims, reads, fns.temperature, fns.connectivity)
+    copy_fns = (; fns.delta_H, fns.commit!, fns.constraint, fns.temperature, fns.connectivity)
     return CorePotts.CPMFunction(fns.delta_H; fns.commit!, fns.constraint, fns.temperature,
-        claims, reads, phases, lifecycle, acceptance = _acceptance(getfield(sys, :sweep), T),
+        phases, lifecycle, acceptance = _acceptance(getfield(sys, :sweep), T),
         footprint = c.footprint, fingerprint = _code_hash(generated, h),
         sys = PottsModelInfo(c, T, fns.total, fns.delta_E, hctx, cache, spec, copy_relations, copy_fns),
         track = :ΔH in track ? CorePotts.TrackDeltaH{T}() : nothing, fns.connectivity)
@@ -371,61 +370,6 @@ function _ode_layout(st, c::CompiledPottsSystem, spec::SolverSpec)
     model = add(scratchless(st.model), :model, c.model_odes)
     keys(cell) == keys(st.cell) && keys(model) == keys(st.model) && return st
     return CorePotts.CPMState(st.σ, cell, st.site, model, st.history)
-end
-
-# Checkerboard claims beyond old/new: the clusters of old/new (cluster energies read cluster
-# trackers, which the copy writes) ...
-function _claims(c::CompiledPottsSystem)
-    isempty(c.cluster_terms) && return CorePotts.no_claims
-    return _rgf(:((st, p, prop, ctx) -> (CorePotts.cluster_claims(st.cell, prop)...,)))
-end
-# ... and, shared, the link partners of old/new in every relationship with an edge energy
-# (link energies read their centroids; a copy writes only its old/new). Leaving one out
-# would let a concurrent copy move a partner whose centroid this copy's ΔH read (P6.0b).
-# Relationships used only by link rules are read on the host between sweeps: no claims.
-# References (R6, D-231 item 7): every cell the copy-step functions read through a reference,
-# each hop of a chain (`partner[old]`, `partner[partner[old]]`) and both branches of an
-# `ifelse` between references, shared like link partners; a dead referent, 0, or a value out of
-# 1:capacity claims 0 (none: `Potts._ref_claim`, so no claim array is written out of bounds).
-# References read inside population folds are not claimed (a fold reads every cell).
-function _reads(c::CompiledPottsSystem, T)
-    rels = [r for r in c.relationships if any(t -> first(t) === r.name, c.edge_terms)]
-    parts = Any[:(CorePotts.link_claims($(_link_store(c, r.name)), prop, Val($(r.capacity)))...) for r in rels]
-    refs = _ref_read_codes(c, T)
-    isempty(parts) && isempty(refs) && return CorePotts.no_claims
-    isempty(refs) && return _rgf(:((st, p, prop, ctx) -> $(Expr(:tuple, parts...))))
-    return _rgf(:((st, p, prop, ctx) -> $(Expr(:block, _PROP_LOCALS, Expr(:tuple, parts..., refs...)))))
-end
-
-# the lowered reference indices (Int32) the copy step reads, deduplicated
-function _ref_read_codes(c::CompiledPottsSystem, T)
-    rn = c.gather_names
-    out = Any[]
-    seen = Set{String}()
-    add!(code) = (k = _code_key(code); k in seen || (push!(seen, k); push!(out, :(Potts._ref_claim(st.cell.volume, $code)))))
-    for (kinds, E) in _sorted(_group_terms(c.cell_terms))
-        refs = _ref_reads(E)
-        isempty(refs) && continue
-        for (side, k) in ((:old, :k_old), (:new, :k_new))
-            env = _cell_env(T, side, rn; kind = k)
-            for r in refs
-                add!(:(($side != 0 && $(_kindtest(k, kinds))) ? $(lower(r, env)) : Int32(0)))
-            end
-        end
-    end
-    env = _proposal_env(T, rn)
-    xs = Any[c.drive, (k.expr for k in c.constraints if k.kind === :expr)..., getfield(c.sys, :sweep).temperature]
-    for u in get(c.updates, (:on_copy, :proposal), Update[])
-        push!(xs, u.eq.rhs)
-        # a reference the copy writes is read by the energies after it
-        x, _ = arguments(_unwrap(u.eq.lhs))
-        _is_ref_var(x) && add!(lower(u.eq.rhs, env))
-    end
-    for x in xs
-        x === nothing && continue
-        foreach(r -> add!(lower(r, env)), _ref_reads(_unwrap(x)))
-    end
-    return out
 end
 
 # Kind tables are indexed by kind (medium first) along every axis.

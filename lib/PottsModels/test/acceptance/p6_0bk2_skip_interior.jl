@@ -1,6 +1,6 @@
 # P6.0bk2 (ROADMAP Phase 6; D-198, amending D-177): `BoundarySiteCPM` is removed with no
-# alias and becomes `SequentialCPM(; skip_interior = true)`; `CheckerboardCPM(; skip_interior =
-# true)` is the same option on the checkerboard (P6.0bk, folded in by D-198 item 3). Frozen
+# alias and becomes `SequentialCPM(; skip_interior = true)`. `CheckerboardCPM` has no
+# `skip_interior` (D-271: it changed nothing there). Frozen
 # (AUTONOMY §7.3). Decisions: D-198 (the rename and its code-identity check), D-177 (the
 # semantics: draw only sites that can propose a non-null copy, count the skipped picks
 # exactly, N attempts per MCS), D-158 (our own recorded values are bitwise), D-171 (the gate
@@ -47,16 +47,10 @@
 #     `BoundarySiteCPM`, the files gave (Mac, default tier = always + SMOKE + FULL record):
 #     04_foam.jl 682 pass, 24 broken; 15_openvt_sweeps.jl 1117 pass, 4 broken. After the
 #     rename they must give the same counts.
-#  5. `CheckerboardCPM(; skip_interior = true)` (D-198 item 3, P6.0bk). P6.0bk's own statement is
-#     an exact null-region skip "without changing the trajectory": the checkerboard draws per
-#     (MCS, site), so skipping sites that can only propose a null copy leaves every other draw
-#     as it was. Pinned as a disjunction, since P6.0bk may land after the rename:
-#     - either the keyword is accepted and raises an informative `ArgumentError` (its message
-#       names `skip_interior` and says "not yet implemented") at construction or at `solve`;
-#     - or it runs, and on the CPU it gives, bitwise, `CheckerboardCPM(; kw...)`'s trajectory
-#       on every case, which is in turn the one recorded on the base, with
-#       `CheckerboardCPM().skip_interior === false`.
-#     A `MethodError` (the keyword unknown, as on the base) fails.
+#  5. CheckerboardCPM (D-271, replacing D-198 item 3). `CheckerboardCPM(; kw...)` gives, on the
+#     CPU, the recorded `P60BK2_CB` trajectory on every case. Its `skip_interior` keyword is
+#     removed (it gave the plain trajectory), so `CheckerboardCPM(; skip_interior = true)` is a
+#     `MethodError`.
 #  Not pinned: D-198 item 4 for proposal laws. No `ProposalLaw` and no `UnlikeNeighbor` exists
 #  on the base (P6.4b), so "the skip composes with any proposal law" is covered only for the
 #  proposal neighbourhoods of item 3; the law that P6.4b adds pins its own composition.
@@ -224,18 +218,19 @@ const P60BK2_SEQ = Dict(
     "OpenVT reference 60², Moore(1), divisions, seed 2" => p60bk2_rec("7f37a021eee48013bd0a90e4e4ad04ca36430954a8995fa852e878d0d5da69fb", 14935, 3600000, 1),
 )
 
-# Item 5: `CheckerboardCPM(; kw...)` on the base, CPU (`accepted` is −1: not counted).
+# Item 5: `CheckerboardCPM(; kw...)` on the CPU. `accepted` re-pinned under D-271 (always
+# counted now; it was −1, not counted); the σ digests are unchanged.
 const P60BK2_CB = Dict(
-    "GG 72² periodic, problem's proposal, seed 1" => p60bk2_rec("081e64b6e9ff4771f8449bcb1af696dac53001ea5798f459e3747a21f41c4ffd", -1, 103680, 0),
-    "GG 72² periodic, Moore(1), seed 2" => p60bk2_rec("84a3df3590147632f079be356098c35387a58fb4e191dbe2bb031ae228b09df7", -1, 103680, 0),
-    "GG 72² periodic, Barker, seed 3" => p60bk2_rec("9ddf4452f4f54d1c0107c6f6785521da70e02fca3b3780859dc0fc5c4f9ce3b6", -1, 103680, 0),
-    "foam 64² NeighborOrder(4), T = 3, seed 1" => p60bk2_rec("b413a5ffc280870932fd9a47e06dcff85c5597a4332b42ecbe105cb4b4557216", -1, 122880, 0),
-    "foam 64² NeighborOrder(4), T = 1e-6, seed 2" => p60bk2_rec("bd8b5eeb69957c5e96a76db196d690542f3e812c6c212a85930cdd4a8b280392", -1, 122880, 0),
-    "cubes 16³, VonNeumann(1), seed 1" => p60bk2_rec("d99c827ffa23ec67beb9ea9b24829ffbb3cb31bc5afb8371df5772bf1763eadd", -1, 49152, 0),
-    "cubes 16³, Moore(1) override, seed 2" => p60bk2_rec("3d4befab0f271a3c4e18002346124c014f8322f7238284c94be4ffc03a20df7f", -1, 49152, 0),
-    "frozen wall 32², seed 1" => p60bk2_rec("8f166346f42e9d634400e160d007177875fbf633e5ca8eb60a5748221e58a439", -1, 19840, 0),
-    "OpenVT reference 60², Moore(1), divisions, seed 1" => p60bk2_rec("5ac18a2558f25b7fad7610cf97dfdd342c4485fe613d22593f4f34d09c23a293", -1, 3600000, 1),
-    "OpenVT reference 60², Moore(1), divisions, seed 2" => p60bk2_rec("dad3a225d79fe37fcee9a53d3b2ff1e2139e3b5d2e229e3c71f44a70189083c7", -1, 3600000, 1),
+    "GG 72² periodic, problem's proposal, seed 1" => p60bk2_rec("081e64b6e9ff4771f8449bcb1af696dac53001ea5798f459e3747a21f41c4ffd", 6025, 103680, 0),
+    "GG 72² periodic, Moore(1), seed 2" => p60bk2_rec("84a3df3590147632f079be356098c35387a58fb4e191dbe2bb031ae228b09df7", 5958, 103680, 0),
+    "GG 72² periodic, Barker, seed 3" => p60bk2_rec("9ddf4452f4f54d1c0107c6f6785521da70e02fca3b3780859dc0fc5c4f9ce3b6", 3906, 103680, 0),
+    "foam 64² NeighborOrder(4), T = 3, seed 1" => p60bk2_rec("b413a5ffc280870932fd9a47e06dcff85c5597a4332b42ecbe105cb4b4557216", 1239, 122880, 0),
+    "foam 64² NeighborOrder(4), T = 1e-6, seed 2" => p60bk2_rec("bd8b5eeb69957c5e96a76db196d690542f3e812c6c212a85930cdd4a8b280392", 260, 122880, 0),
+    "cubes 16³, VonNeumann(1), seed 1" => p60bk2_rec("d99c827ffa23ec67beb9ea9b24829ffbb3cb31bc5afb8371df5772bf1763eadd", 210, 49152, 0),
+    "cubes 16³, Moore(1) override, seed 2" => p60bk2_rec("3d4befab0f271a3c4e18002346124c014f8322f7238284c94be4ffc03a20df7f", 208, 49152, 0),
+    "frozen wall 32², seed 1" => p60bk2_rec("8f166346f42e9d634400e160d007177875fbf633e5ca8eb60a5748221e58a439", 329, 19840, 0),
+    "OpenVT reference 60², Moore(1), divisions, seed 1" => p60bk2_rec("5ac18a2558f25b7fad7610cf97dfdd342c4485fe613d22593f4f34d09c23a293", 14729, 3600000, 1),
+    "OpenVT reference 60², Moore(1), divisions, seed 2" => p60bk2_rec("dad3a225d79fe37fcee9a53d3b2ff1e2139e3b5d2e229e3c71f44a70189083c7", 14914, 3600000, 1),
 )
 
 # Item 2b: sha256 of the printed optimized typed IR of `sequential_mcs!` (Julia 1.12.6).
@@ -319,32 +314,11 @@ end
 end
 
 # ---------------------------------------------------------------------------------------
-# 5. CheckerboardCPM(; skip_interior = true) (P6.0bk)
+# 5. CheckerboardCPM: the recorded trajectories; no skip_interior (D-271)
 
-"""`:pending` if `f()` raises the informative not-yet-implemented `ArgumentError`, else `f()`'s
-value (any other exception propagates)."""
-function p60bk2_pending(f)
-    try
-        return f()
-    catch e
-        (e isa ArgumentError && occursin("skip_interior", e.msg) && occursin(r"not yet implemented"i, e.msg)) &&
-            return :pending
-        rethrow()
-    end
-end
-
-@testset "P6.0bk2: CheckerboardCPM(; skip_interior = true) is exact, or pending P6.0bk" begin
+@testset "P6.0bk2: CheckerboardCPM gives the recorded trajectories and has no skip_interior" begin
+    @test_throws MethodError CheckerboardCPM(; skip_interior = true)
     for (label, mk, kw) in P60BK2_CASES
-        prob = mk()
-        got = p60bk2_pending(() -> p60bk2_trajectory(prob, CheckerboardCPM(; skip_interior = true, kw...)))
-        if got === :pending
-            @test got === :pending
-            @info "P6.0bk2: CheckerboardCPM(; skip_interior = true) is not yet implemented (P6.0bk)"
-            break
-        end
-        @test CheckerboardCPM().skip_interior === false
-        @test CheckerboardCPM(; skip_interior = true).skip_interior === true
-        @test p60bk2_trajectory(prob, CheckerboardCPM(; kw...)) == P60BK2_CB[label]
-        @test got == P60BK2_CB[label]                                 # the trajectory is unchanged
+        @test p60bk2_trajectory(mk(), CheckerboardCPM(; threads = false, kw...)) == P60BK2_CB[label]
     end
 end

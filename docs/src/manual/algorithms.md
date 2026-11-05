@@ -64,13 +64,13 @@ With the default of about 64 phases per MCS (8 parts per axis in 2D, 4 in 3D), t
 kinetics match `SequentialCPM`'s within the statistical resolution of these checks (the
 P6.0bl study, `docs/design/research/checkerboard-kinetics.md`): foam coarsening and cell
 sorting on the CPU, the OpenVT chain relaxation time, the OpenVT monolayer cases (b) and
-(f), Akeeb invasion at three parameter points, and a 3D RPE sheet. One deviation remains:
-in a crowded monolayer, small cells are lost more often (OpenVT case (b): 1.7 cells per run
-against 0.2).
+(f), Akeeb invasion at three parameter points, a 3D RPE sheet, and the persistence of an
+Act cell. One deviation remains: an Act cell moves up to 6 % faster when its activity is
+weak (λ_act = 100), and about 1 % faster at λ_act = 300.
 
 - **Fewer parts, faster, less close.** Fewer parts per axis put more copies in flight
   at once. Copies of one cell in flight together each read the cell's totals from before
-  the other's commit, which is the source of the remaining deviation.
+  the other's commit, so the kinetics drift further from `SequentialCPM`'s.
 - **Not reproducible in parallel.** On a device, or on the CPU when phases run threaded,
   the outcome depends on the timing of the work items, so the same seed does not give the
   same run. Inline phases (`threads = false`, one Julia thread, or at most 512 blocks) run

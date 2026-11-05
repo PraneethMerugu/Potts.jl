@@ -395,12 +395,12 @@ SciMLBase.u_modified!(integ::PottsIntegrator, modified::Bool) = (modified && ref
     copy_step_relations(sys, f::CPMFunction) -> collection of Symbols or nothing
 
 The names of the problem's relations that the copy-step functions of `f` read (`delta_H`,
-`commit!`, `constraint`, `claims`, `reads`, `temperature`, `bias`, `track`, the connectivity
+`commit!`, `constraint`, `temperature`, `bias`, `track`, the connectivity
 hooks), for the model described by `sys` (`f.sys`). `nothing`, the default (a hand-built
 `CPMFunction`), means every relation. A symbolic layer that knows the reads of the functions
 it generated extends it (Potts, D-208), and must return `nothing` when `f` carries a
 function it did not generate (one swapped in by `remake(prob; f = …)`), since that one may
-read any relation. `CheckerboardCPM`'s preflight measures reach over these only.
+read any relation. `CheckerboardCPM`'s spacing covers the reach of these only.
 """
 copy_step_relations(sys, f) = nothing
 

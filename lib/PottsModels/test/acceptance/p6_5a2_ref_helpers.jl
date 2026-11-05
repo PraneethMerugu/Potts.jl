@@ -77,8 +77,8 @@
 #    inside `x` bind to the site's owner, the member cell the site belongs to, so
 #    `integral(volume; over = cluster)` = Σ_members V_m², not (Σ V_m)·V_current. An unknown
 #    `over =` value, and `over = cluster` outside a cell or cluster context, are refused.
-# F. Cost. A model that uses these helpers only outside the sweep keeps
-#    `CorePotts.has_reads(prob.f) == false` (D-058, D-231 item 4).
+# F. Cost. The checkerboard claims nothing (D-271), so the test that these helpers add no
+#    reads or claims (old section 9) is removed.
 #
 # E6 (docs for cell references) is prose and is not in this file: no frozen test asserts
 # documentation text. The `kind[old] == medium` form that E6 asks the docs to use already
@@ -114,7 +114,7 @@
 # separation and integral(x; over = cluster) by hand (square, periodic × closed); 4 dead referents;
 # 5 after-MCS writes against `@observed` and an independent oracle after a short run; 6
 # minimum_image in a drive and an energy, bitwise against an explicit-wrap twin; 7 the
-# hexagonal torus; 8 refusals and axis errors (negative controls); 9 cost; 10 device.
+# hexagonal torus; 8 refusals and axis errors (negative controls); 9 device.
 #
 # Today (freeze base 588ad407) every assertion that reads a new name fails (marked DEFECT
 # CHECK): `Pairs`, `minimum_image` and `separation` are undefined, `integral` has no `over` keyword, and
@@ -776,17 +776,7 @@ end
 end
 
 # ---------------------------------------------------------------------------------------
-# 9. Cost
-
-@testset "P6.5a2: helpers outside the sweep add no reads or claims (D-058)" begin
-    prob = p65a2_refs_problem()                                  # DEFECT CHECK
-    @test !CorePotts.has_reads(prob.f)
-    u = prob.u0
-    @test all(p -> isempty(collect(prob.f.claims(u, prob.p, p, p65a2_ctx(prob)))), p65a2_props(prob, u))
-end
-
-# ---------------------------------------------------------------------------------------
-# 10. Device
+# 9. Device
 
 @testset "P6.5a2: the helpers on the device" begin
     if isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()

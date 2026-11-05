@@ -537,7 +537,7 @@ function _ref_reads!(out, y)
     (info(y) !== nothing && info(y).role in SCOPES) && return out
     op = operation(y)
     # a population fold reads every cell's referents, as a fold reads every cell (snapshot
-    # or not): no per-copy claim, and its bound cells cannot be lowered outside it
+    # or not): its bound cells cannot be lowered outside it
     op === population && return out
     r = op === at && length(arguments(y)) == 2 && _is_ref(arguments(y)[2]) ? arguments(y)[2] :
         op === cell_alive ? arguments(y)[1] : nothing
@@ -545,7 +545,7 @@ function _ref_reads!(out, y)
     foreach(a -> _ref_reads!(out, _unwrap(a)), arguments(y))
     return out
 end
-# `ifelse(c, a, b)`: each reference branch (both are claimed); others once
+# `ifelse(c, a, b)`: each reference branch (both are read); others once
 function _push_ref!(out, r)
     r = _unwrap(r)
     if r isa SymbolicUtils.BasicSymbolic && iscall(r) && operation(r) === ifelse
@@ -635,8 +635,6 @@ end
 
 """Whether slot `r` (a reference) holds an alive cell: `0 < r ≤ capacity` and `volume[r] > 0`."""
 @inline _alive_slot(vol, r) = (0 < r) & (r <= length(vol)) && @inbounds(vol[r] > 0)
-"""The claim of a copy that reads referent `r`: `r` when it is an alive slot, else 0 (none)."""
-@inline _ref_claim(vol, r) = _alive_slot(vol, r) ? Int32(r) : Int32(0)
 """Column `a` of referent `r`, or `d` (the medium's value) when `r` is 0 or dead."""
 @inline _deref(a, vol, r, d) = _alive_slot(vol, r) ? @inbounds(a[r]) : d      # r checked by `_alive_slot`
 @inline _deref_volume(vol, r) = _alive_slot(vol, r) ? @inbounds(vol[r]) : zero(eltype(vol))

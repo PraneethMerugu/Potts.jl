@@ -1,9 +1,7 @@
 # P6.5a (ROADMAP Phase 6, step 5; first step of Fortuna, reproduction 14): R6 cell
-# references, liveness per D-066 and claim widening. Frozen (AUTONOMY §7.3).
+# references and liveness per D-066. Frozen (AUTONOMY §7.3).
 # Decisions: D-066 (liveness, `birth`, references, boundaries, self-check credits), D-065 Q7
-# (sequential is the reference; the checkerboard is validated statistically), D-053 item 7
-# (references widen claim sets automatically), D-058 (shared read claims, `reads`; zero cost
-# when off), D-036 (clusters), D-075 / api-synthesis §2.6–2.7 (the reference vocabulary),
+# (sequential is the reference; the checkerboard is validated statistically), D-036 (clusters), D-075 / api-synthesis §2.6–2.7 (the reference vocabulary),
 # D-209 (an energy may not read what a copy changes beyond ΔH), D-048 (oracles, negative
 # controls).
 #
@@ -89,17 +87,10 @@
 #    allocated, every reference to a dead cell is reset to 0, so a reference never aliases
 #    the new cell that reuses the slot (and a daughter copies the reset value). On quiet MCS
 #    the stored value is not pinned, only its dereference (C). (b), R8's routine, is P6.5b.
-# H. Claim widening (D-053 item 7, D-058, D-065 Q7). For every copy, the cells that the
-#    copy's sweep functions read through references (`partner[old]`, `partner[new]` and every
-#    hop of a chain such as `partner[partner[old]]`, nonzero ones) are in
-#    `prob.f.reads(st, p, prop, ctx) ∪ prob.f.claims(st, p, prop, ctx)` (shared reads, or
-#    exclusive claims, which D-058 notes is also exact). A model whose sweep (energies,
-#    drives, constraints) reads no reference keeps the plain kernel path:
-#    `CorePotts.has_reads(prob.f) == false` and no extra claims (D-058 item 4, zero cost
-#    when off), even when its updates and observables use references.
-#    CheckerboardCPM is then validated STATISTICALLY against SequentialCPM (D-065 Q7), with
-#    the pre-registered protocol of section 6. (D-271: the lockless checkerboard claims
-#    nothing, so the negative control with `reads`/`claims` stripped is dropped.)
+# H. Checkerboard (D-065 Q7). CheckerboardCPM is validated STATISTICALLY against
+#    SequentialCPM, with the pre-registered protocol of section 6. The lockless checkerboard
+#    claims nothing (D-271), so the claim-set tests of section 5 and the negative control
+#    with `reads`/`claims` stripped are removed; section 5 keeps a two-hop chain run.
 #
 # =========================================================================================
 # Statistical protocol (section 6), pre-registered
@@ -137,7 +128,7 @@
 #
 # Sections: 1 references and dereferencing (cluster fixture); 2 updates writing and reading
 # references; 3 energies: H, ΔH and the exact self-check credits; 4 liveness, `birth`,
-# boundaries (lifecycle fixture, checkpoint); 5 claim sets; 6 the statistical validation;
+# boundaries (lifecycle fixture, checkpoint); 5 a two-hop chain under both algorithms; 6 the statistical validation;
 # 7 device. Fixtures that use the new syntax are defined through `p65a_define`, so a build
 # failure today fails the testsets that use them instead of aborting the file.
 using Test, Potts, PottsModels
@@ -196,13 +187,6 @@ function p65a_apply(prob, u, prop)
 end
 p65a_kills(u, prop) = prop.old != 0 && p65a_vol(u)[prop.old] == 1
 
-# the cells a copy's sweep functions claim or read beyond old/new (nonzero)
-function p65a_claimed(prob, u, prop)
-    ctx = p65a_ctx(prob)
-    r = Int[Int(c) for c in prob.f.reads(u, prob.p, prop, ctx)]
-    w = Int[Int(c) for c in prob.f.claims(u, prob.p, prop, ctx)]
-    return Set(filter(>(0), vcat(r, w)))
-end
 p65a_prop(prob, u, old, new) = first(filter(p -> p.old == old && p.new == new, p65a_props(prob, u)))
 
 p65a_welch(x, y) = (mean(x) - mean(y)) / sqrt(var(x) / length(x) + var(y) / length(y))
@@ -843,37 +827,11 @@ end
 end
 
 # ---------------------------------------------------------------------------------------
-# 5. Claim sets
+# 5. A two-hop reference chain under both algorithms (the claim-set tests are removed, D-271)
 
-@testset "P6.5a: references widen the claim set (drive, energy, two hops)" begin
-    # drive reading volume[partner[old]], volume[partner[new]]
-    prob = p65a_pair_problem()
-    u = prob.u0
-    @test 2 in p65a_claimed(prob, u, p65a_prop(prob, u, 1, 0))  # old = 1 reads its partner 2
-    @test 2 in p65a_claimed(prob, u, p65a_prop(prob, u, 0, 1))  # new = 1 reads its partner 2 (medium old)
-    @test 1 in p65a_claimed(prob, u, p65a_prop(prob, u, 2, 0))
-    @test 1 in p65a_claimed(prob, u, p65a_prop(prob, u, 0, 2))  # new = 2 reads its partner 1
-    # energy reading q[partner], kind[partner], alive(partner)
-    pe = p65a_energy_problem()
-    ue = pe.u0
-    @test 3 in p65a_claimed(pe, ue, p65a_prop(pe, ue, 2, 0))    # partner[2] = 3
-    @test 3 in p65a_claimed(pe, ue, p65a_prop(pe, ue, 0, 4))    # partner[4] = 3
-    @test 2 in p65a_claimed(pe, ue, p65a_prop(pe, ue, 1, 0))    # partner[1] = 2
-    # a chain: partner[partner[old]] claims both hops
+@testset "P6.5a: a reference chain runs under both algorithms" begin
     ph = p65a_hop_problem()
-    uh = ph.u0
-    @test issubset(Set([2, 3]), p65a_claimed(ph, uh, p65a_prop(ph, uh, 1, 0)))
-    @test issubset(Set([4, 1]), p65a_claimed(ph, uh, p65a_prop(ph, uh, 0, 3)))
     @test all(alg -> Symbol(solve(ph, alg).retcode) === :Success, (SequentialCPM(), CheckerboardCPM()))
-end
-
-@testset "P6.5a: no widening when the sweep reads no reference (zero cost when off)" begin
-    prob = p65a_cluster_problem()
-    u = prob.u0
-    @test !CorePotts.has_reads(prob.f)
-    for p in p65a_props(prob, u; touching = (1, 2, 3, 4, 5))
-        @test isempty(collect(prob.f.claims(u, prob.p, p, p65a_ctx(prob))))
-    end
 end
 
 # ---------------------------------------------------------------------------------------

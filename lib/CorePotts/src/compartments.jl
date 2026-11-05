@@ -84,7 +84,7 @@ end
     commit_cluster_volume!(cell, prop)
 
 Move the target between the clusters of `old` and `new` in `cell.cluster_volume` (atomic,
-so it is safe under checkerboard without `cluster_claims`).
+so it is safe under checkerboard).
 """
 @inline function commit_cluster_volume!(cell, prop)
     a, b = cluster_of(cell, prop.old), cluster_of(cell, prop.new)
@@ -151,16 +151,6 @@ end
     b != 0 && (Atomix.@atomic cell.cluster_surface[b] += δ[2])
     return nothing
 end
-
-"""
-    cluster_claims(cell, prop)
-
-Checkerboard claims on the clusters of `old` and `new` (their root ids), so a cluster
-changes at most once per color and cluster energies read exact trackers. Without them,
-members of one cluster may commit in the same color and see a stale cluster volume (the
-trackers themselves stay exact: commits are atomic).
-"""
-@inline cluster_claims(cell, prop) = (cluster_of(cell, prop.old), cluster_of(cell, prop.new))
 
 # ---------------------------------------------------------------------------------------
 # Lifecycle support (host)

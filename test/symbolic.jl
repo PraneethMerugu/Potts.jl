@@ -219,7 +219,7 @@ function selfcheck(prob; n = 300)
 end
 
 # ---------------------------------------------------------------------------------------
-# Several named relationships (P6.0b): a link store, law, claim set and rules per name
+# Several named relationships (P6.0b): a link store, law and rules per name
 
 @potts_model Chain begin
     @kinds medium blob
@@ -333,7 +333,7 @@ end
     @test !isapprox(diff, link_energy(((1, 2), (3, 4)), 0.7, 6.0); rtol = 1e-3)    # negative control: one store
 end
 
-@testset "several relationships: the read set holds partners from every relationship" begin
+@testset "several relationships: a copy's ΔH reads partners from every relationship" begin
     prob = PottsProblem(Chain(; name = :chain), [ownership => chain_state(), CHAIN_LINKS...], (0, 20))
     u = deepcopy(prob.u0); ctx = ctx_of(prob); lat = prob.lattice
     site(c) = CorePotts.linear_index(lat, (6c - 3, 5))                # a medium site below cell c
@@ -341,22 +341,10 @@ end
     # X: medium invades cell 2 (moves 2's centroid); Y: medium invades cell 3
     X = CorePotts.Proposal(target(2), site(2), CorePotts.coordinates(lat, target(2)), 1, Int32(2), Int32(0))
     Y = CorePotts.Proposal(target(3), site(3), CorePotts.coordinates(lat, target(3)), 1, Int32(3), Int32(0))
-    reads = prob.f.reads(u, prob.p, X, ctx)
-    # (old's bond slots, new's bond slots, old's tether slots, new's tether slots); new = medium
-    @test reads == Int32.((1, 0, 0, 0, 3, 0, 0, 0))                    # bond partner 1, tether partner 3
-    @test prob.f.claims === CorePotts.no_claims                        # link partners are shared reads
-    readsY = prob.f.reads(u, prob.p, Y, ctx)
-    # negative control: the bond store alone misses partner 3 ...
-    bond_only(prop) = CorePotts.link_claims(CorePotts.link_store(u.cell, :bond), prop, Val(2))
-    @test bond_only(X) == Int32.((1, 0, 0, 0))
-    # ... although X's ΔH depends on cell 3: committing Y first changes it
+    # X's ΔH depends on cell 3, its tether partner: committing Y first changes it
     dX = energy_change(prob, u, X)
     v = deepcopy(u); v.σ[Y.target] = Y.new; prob.f.commit!(v, prob.p, Y, ctx)
     @test abs(energy_change(prob, v, X) - dX) > 1e-3
-    # two copies that only share a partner both read it
-    Z = CorePotts.Proposal(target(1), site(1), CorePotts.coordinates(lat, target(1)), 1, Int32(1), Int32(0))
-    readsZ = prob.f.reads(u, prob.p, Z, ctx)
-    @test 2 in readsZ && 2 in readsY
 end
 
 @potts_model TwoRules begin
@@ -384,7 +372,6 @@ end
     n = maximum(σb)
     kinds = [isodd(c) ? :leader : :follower for c in 1:n]
     tp = PottsProblem(TwoRules(; name = :two), [ownership => σb, kind => kinds], (0, 1))
-    @test tp.f.reads === CorePotts.no_claims          # link rules run on the host: nothing to claim
     u = solve(tp, SequentialCPM()).u[end]            # after MCS 0: every rule ran once
     g = CorePotts.contact_graph(u.σ, tp.lattice, tp.contact, n)
     B, Tt = CorePotts.link_store(u.cell, :bond), CorePotts.link_store(u.cell, :tether)
@@ -904,9 +891,6 @@ end
     cl = Array(u.cell.cluster)
     @test Array(u.cell.cluster_volume) == CorePotts.recompute_cluster_volume(Array(u.σ), cl)
     @test Array(u.cell.cluster_surface) ≈ CorePotts.recompute_cluster_surface(Array(u.σ), cl, prob.lattice, Moore(1))
-    # checkerboard claims the clusters of old and new
-    t = findfirst(==(Int32(10)), σ)      # a nucleus site of cluster 1
-    @test prob.f.claims(u0, prob.p, CorePotts.Proposal(LinearIndices(σ)[t], 1, Tuple(t), 1, Int32(10), Int32(5)), ctx) == (1, 5)
     # a cluster divides as a unit: both daughters keep a nucleus and a cytoplasm
     sol = solve(remake(prob; tspan = (0, 4)), SequentialCPM(; proposal = Moore(1)))
     v = sol.u[end]

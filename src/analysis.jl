@@ -100,7 +100,7 @@ function anneal(prob::CorePotts.PottsProblem, u = prob.u0; mcs::Integer, seed::I
     # no field clamp (`@boundary` masks hold on a fresh initial state and in field steps)
     refresh = CorePotts.Phases(; before_mcs = CorePotts._derived(f.phases.at_init))
     # no track (D-140): the relaxation is a measurement, its accepted ΔH is not the run's
-    cold = CorePotts.CPMFunction(f.delta_H; f.commit!, f.constraint, f.claims, f.reads,
+    cold = CorePotts.CPMFunction(f.delta_H; f.commit!, f.constraint,
         temperature = _ZeroTemperature(f.temperature), f.bias, phases = refresh, f.acceptance,
         f.footprint, f.fingerprint, f.sys, track = nothing, f.connectivity)
     q = SciMLBase.remake(prob; f = cold, u0 = u, tspan = (0, Int(mcs)), seed)

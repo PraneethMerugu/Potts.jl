@@ -160,7 +160,6 @@ end
     mp = PottsProblem(MetalSprings(; name = :ms), [ownership => σ, kind => [:blob, :blob, :blob],
         :bond => [(1, 2)], :tether => [(2, 3)]], (0, 1500); T = Float32)
     @test eltype(mp.u0.cell.link_rest) == Float32 && eltype(mp.u0.cell.link_len) == Float32
-    @test CorePotts.has_reads(mp.f)
     d = map(1:4) do seed
         u = solve(remake(mp; seed), CheckerboardCPM(); backend).u[end]
         @test Array(u.cell.volume) == [count(==(c), Array(u.σ)) for c in 1:3]
@@ -354,7 +353,7 @@ end
         f = prob.f
         sw = M.P60dSwitch(moves)
         lc = Lifecycle(M.P60dTrigger(sw); kind = M.P60dKind(sw), normal = AlongMinorAxis{Float32}())
-        g = CPMFunction(f.delta_H; f.commit!, f.constraint, f.claims, f.reads, f.temperature, f.bias, f.phases,
+        g = CPMFunction(f.delta_H; f.commit!, f.constraint, f.temperature, f.bias, f.phases,
             lifecycle = lc, f.acceptance, f.footprint, f.fingerprint, f.sys)
         return remake(prob; f = g)
     end

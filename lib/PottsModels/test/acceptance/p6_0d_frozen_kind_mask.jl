@@ -89,7 +89,7 @@ function p60d_problem(moves::Pair{Int32, Int32}...; seed = 1)
     f = prob.f
     sw = P60dSwitch(moves)
     lc = Lifecycle(P60dTrigger(sw); kind = P60dKind(sw))
-    g = CPMFunction(f.delta_H; f.commit!, f.constraint, f.claims, f.reads, f.temperature, f.bias, f.phases,
+    g = CPMFunction(f.delta_H; f.commit!, f.constraint, f.temperature, f.bias, f.phases,
         lifecycle = lc, f.acceptance, f.footprint, f.fingerprint, f.sys)
     return remake(prob; f = g)
 end
