@@ -45,7 +45,7 @@ using Symbolics: Symbolics, Differential, Equation, Num, VarDomainPairing, @regi
 using SymbolicUtils: SymbolicUtils, arguments, iscall, operation, unwrap_const
 using SymbolicUtils.Code: toexpr
 
-public euler_update, bound_parts, StabilityBound, lower_group, DeferredBound, DeferredOperator, OPERATOR_BUILDS, resolve_bound, lowers_call, check_one_kind, velocity_terms, as_written,
+public is_crossgrid_key, euler_update, bound_parts, StabilityBound, lower_group, DeferredBound, DeferredOperator, OPERATOR_BUILDS, resolve_bound, lowers_call, check_one_kind, velocity_terms, as_written,
        derivation, V, steady_rows, steady_form, steady_choice, steady_sign
 export Δ, DivKGrad, Advect, AdvectionScheme, Upwind1, at, at2, ismember, masked, step_index
 export LatticePlacement, LatticeStorage, LatticeLevel, Coarse, LatticeSpacing, PottsEntity, LatticeInputName
@@ -263,8 +263,12 @@ inputs, a field of the lattice) are folded over each node's block:
 
 A term of a fine
 field that reads a coarse one reads the node whose block holds the site. A spatial operator
-reads its field on that field's own grid: for the Laplacian of a coarse field in a fine row,
-add an aux field on the coarse grid, `L ~ Δ(c)`, and read `L`. A map's offset read of a coarse
+(`Δ`, `DivKGrad`, `Advect`, a raw flux `Dx(K * Dx(c))`) acts on its operand's own grid. In a row of
+another grid it is an aux field of the operand's grid that LatticePDE adds (named `Δ(c)`), and the row
+reads it as it reads any field of that grid. The Laplacian of a coarse field in a fine row
+is the coarse Laplacian at the node of the site's block. The Laplacian of a fine field in a coarse
+row is the block mean of the fine Laplacian: the net flux through the faces of the block over its
+volume, so the sum over the blocks is the net flux through the faces of the box. A map's offset read of a coarse
 field moves by a multiple of `k` sites (`k * dx`). With an irregular `domain`, a node is in it
 when most of its block is (the Majority fold), and its edge is the coarse field's zero-flux edge.
 """
@@ -428,6 +432,7 @@ include("linearity.jl")
 include("lower.jl")
 include("discretize.jl")
 include("steady.jl")
+include("crossgrid.jl")
 include("problems.jl")
 include("group.jl")
 include("operator.jl")

@@ -482,13 +482,30 @@ function _robin_bounds(s::Program{N}, op::OperatorSpec, keys, p) where {N}
     return (; neg, ρ, unseen = !isempty(texts), texts)
 end
 
+# the fields kernel `i` of `s` reads, through the `aux:` kernels of the aux fields it reads (an
+# aux field is evaluated from its own reads in the row's residual, so the row depends on them:
+# `0.5 L` with `L ~ Δ(c)` reads `c`, F3-22)
+function _reads_through_aux(s::Program, i)
+    out, todo, seen = Int32[], Int[i], Set{Int}()
+    while !isempty(todo)
+        j = pop!(todo)
+        j in seen && continue
+        push!(seen, j)
+        for a in s.kernels[j].accesses
+            push!(out, a.field)
+            m = findfirst(x -> x.key == "aux:" * s.fields[a.field].key, s.kernels)
+            m === nothing || push!(todo, m)
+        end
+    end
+    return unique!(out)
+end
 # the fields of the group `keys` each row reads (its `rate:` kernel in the stepped program `s`)
 function _group_deps(s::Program, keys)
     ids = Dict(k => fieldid(s, k) for k in keys)
     deps = Dict{String, Set{String}}()
     for k in keys
         i = findfirst(x -> x.key == "rate:" * k, s.kernels)
-        rd = i === nothing ? Int32[] : unique!([a.field for a in s.kernels[i].accesses])
+        rd = i === nothing ? Int32[] : _reads_through_aux(s, i)
         deps[k] = Set(q for q in keys if q != k && ids[q] in rd)
     end
     return deps

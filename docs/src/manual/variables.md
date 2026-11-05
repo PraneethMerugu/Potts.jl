@@ -58,6 +58,14 @@ Options go in brackets after the default:
     `R[kind] * g` for a field `g` of the lattice) is replaced by its mean over the block, with
     each fine value at its own site. The coarse field then receives the fine integral of the
     term.
+  - A spatial operator reads its operand on the operand's own grid. In a row of another grid
+    it still works: `D(u) ~ Δ(c)` with a coarse `c` and a fine `u` reads the coarse Laplacian
+    at the node of each site's block, and `D(c) ~ Δ(g)` with a fine `g` and a coarse `c` reads
+    the block mean of the fine Laplacian, the net flux through the faces of the block over its
+    volume. It holds for `Δ`, `DivKGrad` and `Advect`, in 2D, 3D and on a hexagonal lattice.
+    Potts adds the aux field `L ~ Δ(c)` on the grid of the operand for you, and the term is
+    the same as writing it. Under an implicit solver it is a cross term: exact when the fields
+    do not read each other in a loop, and warned, with the term as written, when they do.
 - `[guess = g]` (cell and model variables): the starting point when
   `@initialization_equations` solve for the variable, see below. A variable with a guess and
   no value is written `r(cell), [guess = -1.0]`.

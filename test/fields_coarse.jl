@@ -230,3 +230,93 @@ end
         @test isapprox(got, w; rtol = 1e-13) || (println("M2 (A) m", i, ": ", got, " ", w); false)
     end
 end
+
+# F3-22 (F3 design §5 F3-22): a spatial operator across grids in A. `v` is fine, `c` is coarse:
+# the coarse row reads the block mean of the fine Laplacian, and the fine row `u` the coarse
+# `Δ(c)` at its block's node. The direct form is the aux field of the manual route (bitwise),
+# A equals B (`Potts.fields`) bitwise, the added aux field is the binding's scratch (not in the
+# state), and a ForwardDiff Dual runs through it (F3-21b's shadow store). Base 5316bf1c
+# (~/lpwork/f322/nc-*.log): the direct form is refused ("a spatial operator reads its field on
+# that field's own grid").
+using ForwardDiff: ForwardDiff
+@potts_model FcXd begin
+    @kinds medium A[frozen] B[frozen]
+    @parameters Dc = 0.4
+    @variables begin
+        c(field) = 0.0, [lattice_level = Coarse(4)]
+        v(field) = 0.0
+        u(field) = 0.0
+    end
+    @lattice Lattice((16, 12); boundary = Closed())
+    @energy cells => (volume - 20.0)^2
+    @equations begin
+        D(v) ~ 0.1 * Δ(v) - v + 0.5 * (kind == A)
+        D(c) ~ Dc * Δ(c) - 0.3 * c + 0.5 * Δ(v)
+        D(u) ~ 0.2 * Δ(u) - u + 0.5 * Δ(c) + 0.1 * DivKGrad(:harmonic)(1 + x, c)
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FcXr begin
+    @kinds medium A[frozen] B[frozen]
+    @parameters Dc = 0.4
+    @variables begin
+        c(field) = 0.0, [lattice_level = Coarse(4)]
+        X(field) = 0.0
+        L(field) = 0.0, [lattice_level = Coarse(4)]
+        M(field) = 0.0, [lattice_level = Coarse(4)]
+        v(field) = 0.0
+        u(field) = 0.0
+    end
+    @lattice Lattice((16, 12); boundary = Closed())
+    @energy cells => (volume - 20.0)^2
+    @equations begin
+        D(v) ~ 0.1 * Δ(v) - v + 0.5 * (kind == A)
+        X ~ Δ(v)
+        L ~ Δ(c)
+        M ~ DivKGrad(:harmonic)(1 + x, c)
+        D(c) ~ Dc * Δ(c) - 0.3 * c + 0.5 * X
+        D(u) ~ 0.2 * Δ(u) - u + 0.5 * L + 0.1 * M
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+fx_run(M, k, fs; ps = Pair[]) = begin
+    integ = init(PottsProblem(M(; name = :x), [fc_op(); ps], (0, k); field_solver = fs, seed = 3), SequentialCPM(); save_start = false)
+    [(step!(integ); st = current_state(integ).site; map(a -> copy(Array(a)), (st.c, st.v, st.u))) for _ in 1:k]
+end
+
+@testset "F3-22: a spatial operator across grids in A is the manual route, A equals B, the aux is scratch" begin
+    tight = DevicePCG(; rtol = 1e-12, budget = 64)
+    # (the explicit count is the user's: the bound does not see a cross term through an aux field, as for the route)
+    for fs in (ExplicitEuler(; substeps = 40), BackwardEuler(; inner = tight), CrankNicolson(; inner = tight))
+        a, r = fx_run(FcXd, 3, fs), fx_run(FcXr, 3, fs)
+        @test a == r && all(maximum(abs, a[end][i]) > 0 for i in 1:3)            # bitwise, and the rows moved
+        @test size(a[1][1]) == (4, 3) && size(a[1][2]) == (16, 12)
+    end
+    st = current_state(init(PottsProblem(FcXd(; name = :x), fc_op(), (0, 1); field_solver = BackwardEuler()), SequentialCPM())).site
+    @test !any(k -> occursin('(', string(k)), keys(st))                         # no hidden aux in the state
+    # A equals B: `Potts.fields` through `discretize`, the CPM frozen
+    for (fs, alg) in ((BackwardEuler(), BackwardEuler(; dt = 1.0)), (ExplicitEuler(; substeps = 40), ExplicitEuler(; dt = 1.0, substeps = 40)))
+        a = fx_run(FcXd, 3, fs)
+        bp = Potts.LatticePDE.discretize(Potts.fields(FcXd(; name = :x)),
+            Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((16, 12)); T = Float64, problem = :owned),
+            ; u0 = [:c => zeros(4, 3), :v => zeros(16, 12), :u => zeros(16, 12)], tspan = (0, 3), inputs = [:kind => fc_kin()])
+        s = Potts.LatticePDE.solve(bp, alg; saveat = 1.0)
+        @test [x[1] for x in a] == s[:c][2:end] && [x[2] for x in a] == s[:v][2:end] && [x[3] for x in a] == s[:u][2:end]
+    end
+end
+
+@testset "F3-22: a Dual runs through a cross-grid term in A (against central differences)" begin
+    tight = DevicePCG(; rtol = 1e-11, budget = 60)
+    W = [0.01 * (i + 2j) for i in 1:16, j in 1:12]
+    q(sol) = sum(W .* sol.u[end].site.u)
+    drun(fs, p) = solve(PottsProblem(FcXd(; name = :x), [fc_op(); :Dc => p], (0, 6); field_solver = fs, seed = 3), SequentialCPM(); saveat = 0:2:6)
+    for fs in (ExplicitEuler(; substeps = 40), BackwardEuler(; inner = tight))
+        d = drun(fs, ForwardDiff.Dual(0.4, 1.0))
+        h = 1e-4 * 0.4
+        fd = (q(drun(fs, 0.4 + h)) - q(drun(fs, 0.4 - h))) / 2h
+        @test ForwardDiff.partials(q(d), 1) ≈ fd rtol = 1e-6
+        @test abs(fd) > 0
+        # the Dual run is the primal run: its field values, bit for bit
+        @test ForwardDiff.value.(d.u[end].site.u) == drun(fs, 0.4).u[end].site.u
+    end
+end

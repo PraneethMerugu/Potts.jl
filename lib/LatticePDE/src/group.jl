@@ -81,6 +81,7 @@ function _lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = noth
     _check_parts(sys)
     sys, rows, tf = steady_form(sys, length(disc.grid.dims))
     steady, timefree = unique!(String[collect(String, steady); rows]), timefree || tf
+    sys = crossgrid_form(sys)                           # an operator across `Coarse` grids as an aux field (F3-22)
     check_one_kind(sys)                                 # (the whole system, before any cut)
     derived, computed, defaults = Pair[], Pair[], Pair[]
     values && ((sys, derived, computed, defaults) = _fold_computed(sys))

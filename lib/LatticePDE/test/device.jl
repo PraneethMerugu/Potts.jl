@@ -379,3 +379,20 @@ pgpu == "rocm" && @testset "F3-21a: Dual results on $pgpu equal the host's" begi
         @test vp(u[1]) == vp(u[2]) && any(d -> ForwardDiff.partials(d, 1) != 0, u[1])
     end
 end
+
+# F3-22: a spatial operator across grids on a device (the aux field of the operand's grid, the
+# block fold of the fine one): the device run equals the host's, Float32, both directions, for
+# the explicit and the implicit solvers (uses `xpair` of crossgrid.jl, which runs before).
+@testset "F3-22: cross-grid operators on $pgpu equal the host" begin
+    tight = DevicePCG(; rtol = 1.0f-6, budget = 64)
+    for (name, op) in (("Δ", XOPS[1][2]), ("DivKGrad harmonic", XOPS[2][2]), ("Advect", XOPS[4][2]))
+        p = xpair(op)
+        for (pr, row) in ((p.cf, xu), (p.fc, xcc)), alg in (ExplicitEuler(; dt = 2.0f-3, substeps = 1), BackwardEuler(; dt = 1.0f-2, substeps = 1, inner = tight))
+            run(backend) = solve(discretize(pr.dir, LatticeDiscretization(Grid((16, 16)); T = Float32, problem = :owned, backend)), alg; saveat = [0.02])
+            sd, sh = run(PDEV), run(KernelAbstractions.CPU())
+            a, b = sd[xe(row), 2], sh[xe(row), 2]
+            @info "F3-22 $pgpu $name $(row === xu ? "c to f" : "f to c") $(nameof(typeof(alg))): max |device − host| = $(maximum(abs, a .- b)) of $(maximum(abs, b))"
+            @test maximum(abs, b) > 0 && maximum(abs, a .- b) <= 1.0f-5 * maximum(abs, b)
+        end
+    end
+end

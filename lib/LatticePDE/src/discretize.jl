@@ -110,6 +110,7 @@ through it too.
 function as_written(s::AbstractString)
     s = replace(s, r"(?:LatticePDE\.)?Advect\{[\w.]+\}\(" => "Advect(", r"LatticePDE\.Upwind1\(" => "Upwind1(")
     s = replace(s, r"LatticePDE\.(Δ|DivKGrad)\(" => s"\1(")      # (`Δ(K)`, not `LatticePDE.Δ(K)`)
+    s = replace(s, r"var\"([^\"]+\))(?:#\d+)?\"\(t(, \w+)*\)" => s"\1")   # an aux field added for an operator across grids: `Δ(c)`, and `DivKGrad(c)#2` as `DivKGrad(c)` (F3-22)
     key = "SymbolicUtils.array_literal("
     while (r = findfirst(key, s)) !== nothing
         j = last(r)                                   # its `(`
@@ -326,6 +327,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     _scan_clock(sys)
     _check_parts(sys)
     sys = first(steady_form(sys, N))                # steady rows as rates; a time-free system timed (F3-12b)
+    sys = crossgrid_form(sys)                       # an operator across `Coarse` grids as an aux field (F3-22)
     sys = _clock_slot(sys, disc)
     ps, ic = _params(sys), _ics(sys)
     any(p -> p isa Pair, ps) && _dverr("parameters are declared natively, `@parameters Dc = 1e-3`; " *

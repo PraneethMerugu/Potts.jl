@@ -979,7 +979,8 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
                            k = f.key
                            if startswith(k, "mask:")
                                (CorePotts.Part((:site, Symbol(k[6:end], :__mask))), nothing)
-                           elseif startswith(k, "face:") || startswith(k, "maskvalue:") || startswith(k, "domain:") || startswith(k, "owner:")
+                           elseif startswith(k, "face:") || startswith(k, "maskvalue:") || startswith(k, "domain:") || startswith(k, "owner:") ||
+                                  _hidden_aux(k)
                                # a value field, or the domain on a coarse level: the binding's own
                                (CorePotts.BindingScratch(), nothing)
                            elseif Symbol(k) in names
@@ -1056,6 +1057,9 @@ function _field_options(c::CompiledPottsSystem, T::Type, solver, rate)
     return LatticeFields.Compile.CompileOptions(; T, float64_ok = !narrow || wide, lanes = :state, index = :cartesian,
         declared = narrow && wide)
 end
+# an aux field that LatticePDE added for a spatial operator across `Coarse` grids (`Δ(c)`, F3-22):
+# no model variable holds it, so the binding allocates it and its `aux:` kernel fills it every window
+_hidden_aux(k::AbstractString) = LatticePDE.is_crossgrid_key(k)
 function _aux_group(c::CompiledPottsSystem, T::Type, dt)
     solver = ExplicitEuler()
     lg = _field_group_spec(c, Symbol[], T)
@@ -1065,7 +1069,8 @@ function _aux_group(c::CompiledPottsSystem, T::Type, dt)
     group = LatticeFields.Problems.FieldGroup(gspec; alg = solver, program = LatticeFields.Compile.semantic(fused))
     prog = group.program
     mplan, splan = LatticeFields.Problems.group_plans(group, solver, T, KernelAbstractions.CPU(), opts)
-    arrays = Tuple((startswith(f.key, "domain:") || startswith(f.key, "owner:") ? CorePotts.BindingScratch() : CorePotts.Part((:site, Symbol(f.key))), nothing)
+    arrays = Tuple((startswith(f.key, "domain:") || startswith(f.key, "owner:") || _hidden_aux(f.key) ?
+                    CorePotts.BindingScratch() : CorePotts.Part((:site, Symbol(f.key))), nothing)
                    for f in prog.fields)
     fp = LatticeFields.Compile.fingerprint_text(fused; T)
     return _FieldGroup(Symbol[], group, solver, prog, mplan, splan, arrays, lg.tables, lg.params, _AuxSteps(), fp, opts)

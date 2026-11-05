@@ -54,7 +54,7 @@ _freeof(x, ops) = !_reads(x, ops)
 # a term of the rate of `k` in the user's words (`_term_text`), with `Advect`'s scheme type and
 # a velocity literal as written (`Advect(Upwind1())([ux, uy], c)`)
 function _optext(k, term)
-    t = replace(string(term), r"Advect\{\w+\}\(" => "Advect(", "LatticePDE." => "")
+    t = replace(string(term), r"Advect\{\w+\}\(" => "Advect(", "LatticePDE." => "", r"var\"([^\"]+\))(?:#\d+)?\"\(t(, \w+)*\)" => s"\1")
     while (i = findfirst("SymbolicUtils.array_literal(", t)) !== nothing
         j = last(i) + 1                                     # past the opening parenthesis
         depth, q = 1, j
@@ -355,6 +355,28 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
     allops = Any[unique([_ref(v) for v in values(dvs)]);
                  unique([_opof(v) for v in unwrap.(sys.dvs) if !haskey(cf.keys, _opof(v)) ||
                                                                !any(k -> k in states, cf.keys[_opof(v)])])]
+    # the group's states each aux field reads, through the aux fields it reads in turn (a term
+    # that reads an aux field is a cross term of those states, or a source when it reads none:
+    # `0.5 L` with `L ~ Δ(c)`, F3-22; the residual kernel of a row evaluates the aux kernels it
+    # reads at the stored values, so in solve order the term is exact in an acyclic group)
+    auxdef = Tuple{Any, Any}[]                  # (aux field, its right side)
+    for eq in sys.eqs
+        l = unwrap(eq.lhs)
+        (iscall(l) && !(operation(l) isa Union{Differential, Shift})) || continue
+        o = _opof(l)
+        (any(r -> isequal(r, o), staterefs) || any(i -> isequal(i, o), inputops)) || push!(auxdef, (o, eq.rhs))
+    end
+    auxrd = [Any[] for _ in auxdef]
+    for _ in 0:length(auxdef)                   # a fixpoint over the aux chain
+        for (j, (_, rhs)) in enumerate(auxdef), q in staterefs
+            _reads(rhs, (q,)) && !any(x -> isequal(x, q), auxrd[j]) && push!(auxrd[j], q)
+        end
+        for (j, (_, rhs)) in enumerate(auxdef), (j2, (o2, _)) in enumerate(auxdef)
+            _reads(rhs, (o2,)) || continue
+            foreach(q -> any(x -> isequal(x, q), auxrd[j]) || push!(auxrd[j], q), auxrd[j2])
+        end
+    end
+    auxof(term) = [j for (j, (o, _)) in enumerate(auxdef) if _reads(term, (o,))]
     rows = Problems.RowOperator[]
     plans = Dict{String, Any}()                 # field rows: what their `jac:` kernel writes
     for k in _states(s)
@@ -413,6 +435,14 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
                 push!(jterms, dj)
                 iterate = true
                 switch |= class == :LaggedSwitch
+            elseif class === :Other && !_reads(term, (_ref(c),)) && !isempty(auxof(term)) &&
+                   (rd = unique(vcat([auxrd[j] for j in auxof(term)]..., Any[o for o in staterefs if _reads(term, (o,))]));
+                    !any(o -> isequal(o, _ref(c)), rd))
+                # a term of aux fields: a cross term of the states they read, none when they read
+                # no state (a source). Exact in solve order, like any cross term; a cycle leaves it unseen
+                for o in rd
+                    push!(cross, (first(_cross_bound(k, term, (o,), cf, params, bysite)), Coef(NaN), _optext(k, term)))
+                end
             elseif class in (:LaggedSwitch, :Other) && !_reads(term, (_ref(c),)) &&
                    (rd = [o for o in others if _reads(term, (o,))]; !isempty(rd) && all(o -> any(r -> isequal(r, o), staterefs), rd))
                 # a term of other rows' fields only, whatever its form (design §3.4, review r1 M3):

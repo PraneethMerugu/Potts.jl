@@ -381,18 +381,18 @@ end
         @test occursin("axis 1 (`x`) has 18 sites", m) && occursin("divisible by 4", m) && occursin("20 or 16", m)
         @test solve(mk(cc; n = (20, 16)), ExplicitEuler(; dt = 0.1)).retcode == SciMLBase.ReturnCode.Success
         @test solve(mk(cc; n = (16, 1)), ExplicitEuler(; dt = 0.1)).retcode == SciMLBase.ReturnCode.Success   # size 1: never coarsened
-        # a spatial operator of a coarse field in a fine row: no single meaning; the route (an aux
-        # field on the coarse grid) works and reads the coarse Laplacian at each block
+        # a spatial operator of a coarse field in a fine row: the coarse operator at the node of
+        # the block (F3-22: the direct form is the aux field of the route, which also works)
         u = first(@variables uref(..))
         L = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables Lref(..))), LatticePDE.LatticeLevel, Coarse(4)))
-        bad = PDESystem([D(cc(t, x, y)) ~ 0.01 * Δ(cc(t, x, y)), D(u(t, x, y)) ~ Δ(cc(t, x, y))],
-            [cc(0, x, y) ~ x, u(0, x, y) ~ 0.0], cdom(), [t, x, y], [cc(t, x, y), u(t, x, y)], Num[]; name = :b)
-        m = cmsg(() -> cown(bad, (16, 16)))
-        @test occursin("a spatial operator reads its field on that field's own grid", m) && occursin("`L ~ Δ(cref)`", m)
+        direct = PDESystem([D(cc(t, x, y)) ~ 0.01 * Δ(cc(t, x, y)), D(u(t, x, y)) ~ Δ(cc(t, x, y))],
+            [cc(0, x, y) ~ x^2, u(0, x, y) ~ 0.0], cdom(), [t, x, y], [cc(t, x, y), u(t, x, y)], Num[]; name = :b)
         good = PDESystem([D(cc(t, x, y)) ~ 0.01 * Δ(cc(t, x, y)), L(t, x, y) ~ Δ(cc(t, x, y)), D(u(t, x, y)) ~ L(t, x, y)],
             [cc(0, x, y) ~ x^2, u(0, x, y) ~ 0.0], cdom(), [t, x, y], [cc(t, x, y), L(t, x, y), u(t, x, y)], Num[]; name = :g)
         sg = solve(cown(good, (16, 16)), ExplicitEuler(; dt = 0.01, substeps = 1); saveat = [0.01])
         @test size(sg[L(t, x, y), 1]) == (4, 4) && size(sg[u(t, x, y), 2]) == (16, 16)
+        sdir = solve(cown(direct, (16, 16)), ExplicitEuler(; dt = 0.01, substeps = 1); saveat = [0.01])
+        @test sdir[u(t, x, y), 2] == sg[u(t, x, y), 2]
         # (in a substep a field reads the fields it depends on after their update: `L` from `cref`
         # after its step; the coarse Laplacian by hand, zero flux, spacing 1/4)
         lap(v) = (n = size(v, 1); [sum((1 <= i + a <= n && 1 <= j + b <= n ? v[i + a, j + b] - v[i, j] : 0.0)

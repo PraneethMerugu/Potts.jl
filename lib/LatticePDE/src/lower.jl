@@ -260,16 +260,16 @@ function _fold_children(u, e::Env{N}, kind) where {N}
     end
     return _op(e, MUL, constant!(e.kb, 1 / n), node!(e.kb, RESTRICT, REAL, Int32[_real(e, v)], 0))
 end
-# a spatial operator reads its field on the field's own grid: in a term of a field on another
-# `Coarse` level it has no single meaning (the prolonged coarse Laplacian, or the Laplacian of the
-# prolonged field, which vanishes inside each block)
+# a spatial operator reads its field on the field's own grid. In an equation of a field on another
+# `Coarse` level `crossgrid_form` (F3-22) has already made it an aux field of the operand's grid;
+# the places it does not reach (a face value, a mask) keep this refusal
 function _same_level!(e::Env, u, what)
     _flevel(e, operation(u)) == e.level && return nothing
     lf = _flevel(e, operation(u))
     _lerr(u, string(what, " reads `", operation(u), "` on ", lf == 0 ? "the fine grid" : "`Coarse($(2^lf))`", ", and the ",
         "term is evaluated on ", e.level == 0 ? "the fine grid" : "`Coarse($(2^e.level))`", "; a spatial operator reads its ",
-        "field on that field's own grid: write it as an aux field on the grid of `", operation(u), "` (`L ~ Δ(",
-        operation(u), ")` with `lattice_level` as `", operation(u), "`'s) and read `L`"))
+        "field on that field's own grid; outside an equation (a face value, a mask) write it as an aux field on the ",
+        "grid of `", operation(u), "` (`L ~ Δ(", operation(u), ")` with `lattice_level` as `", operation(u), "`'s) and read `L`"))
 end
 _isfield(e::Env, u) = iscall(u) && haskey(e.fields, operation(u))
 _fieldarg(e::Env, u) = (u = unwrap(u);
