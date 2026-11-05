@@ -1,0 +1,48 @@
+host_planner_fallback = false
+backend = "AMDGPU.ROCBackend() (ROCm, AMDGPU.jl 2.8.0)"
+reference_runner = "lib/PottsModels/reproductions/data/15/checkerboard-2026-11-05/run_reference.jl"
+device = "AMD Radeon Graphics (HIPDevice(id=1, name=AMD Radeon Graphics, gcn_arch=gfx1100))"
+cpu = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
+sessions = 1
+scheme = "lockless block checkerboard (P6.0bl, D-271): blocks of 8 × 8 one-site sub-regions, one work item per block, 64 phases per MCS drawn at random, copies committed at once, atomic per-cell totals; 64 phases per MCS on the P1b chain and 64 on the monolayer"
+folder_token = "Potts.jl_checkerboard"
+o1_reference = "the stop frames of o1-2026-10-09's bulk archives (sha256-checked), cached in reference_o1.tsv"
+runs_simulation_s = 2862.1
+reference_runner_sha256 = "489674bde68442e2934a3904b443acd931013734cea456cf070c8dc39a2fbdf0"
+julia = "1.12.6"
+seeds = "calibration λ = 2 (P1b): CheckerboardCPM 215600001–215600100, SequentialCPM 215700001–215700100; (b) 215800001–215800100; (f) 215800201–215800300; (a) 215800701–215800710"
+wall_s = 3016.8
+finished = "2026-11-05T17:37:09.792"
+affinity = ""
+started = "2026-11-05T16:45:19.337"
+manifest_sha256 = "df05252b81957c6a57252d1d402579647e41833f9f5ca73c37caee63bec906e6"
+lifecycle_forms = "staged"
+reference_reuse = "reference_runs.tsv and reference_o1.tsv copied unchanged from checkerboard-2026-10-10 (the sequential arm, the P6.15f runs)"
+calibration_wall_s = 125.8
+calibration_sequential_commit = "e1c963d37fa5dcfb148523fac0d22fb0449f7cc4"
+item = "P6.15m"
+copy_counts = "committed copies from the GPU runs' own stats.committed (accepted == committed); no CPU replay: device runs are not reproducible from the seed (maintainer ruling 2026-11-04), so the old record's count step, a CPU replay that had to equal the GPU run, is dropped"
+runs_wall_s = 2891.0
+dirty_tracked = false
+algorithm_reference = "SequentialCPM(; proposal = Moore(1)) on the CPU (the P6.15f record and its replay, reference_runs.tsv)"
+decisions = ["D-146", "D-214", "D-216", "D-218", "D-220", "D-224", "D-271"]
+phases_chain = 64
+runner_sha256 = "273cfe270ac538ad15aaaf3768f54f97ade1a7c649a41df23c03fdd71e917bd1"
+protocol_test_sha256 = "da7d145fbd71eb8722cf18312033df38cf21009b561fd310a45a55fb17f8b05d"
+calibration_simulation_s = 105.2
+threads = 4
+phases_monolayer = 64
+framework = "Potts.jl (checkerboard)"
+test_sha256 = "e0a99aff07974a24903d3de54f7d6b58171eb44d773ee71cb255f0f854c34b61"
+algorithm = "CheckerboardCPM(; proposal = Moore(1)) on the GPU (KernelAbstractions, ROCBackend)"
+machine = "x86_64-linux-gnu"
+calibration_chain = "spec 15 §4.2 variant P1b (D-224)"
+protocol_test = "lib/PottsModels/test/reproductions/15_openvt_f3_f8.jl"
+runner = "lib/PottsModels/reproductions/data/15/checkerboard-2026-11-05/run_checkerboard.jl"
+test = "lib/PottsModels/test/reproductions/15_openvt_checkerboard.jl"
+commit = "e1c963d37fa5dcfb148523fac0d22fb0449f7cc4"
+
+[runs_gpu_s]
+f = 1243.5
+b = 1307.9
+a = 310.7
