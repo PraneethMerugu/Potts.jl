@@ -98,8 +98,8 @@
 #    `CorePotts.has_reads(prob.f) == false` and no extra claims (D-058 item 4, zero cost
 #    when off), even when its updates and observables use references.
 #    CheckerboardCPM is then validated STATISTICALLY against SequentialCPM (D-065 Q7), with
-#    the pre-registered protocol of section 6, and the protocol must detect a deliberately
-#    broken widening (the same problem with `reads`/`claims` stripped).
+#    the pre-registered protocol of section 6. (D-271: the lockless checkerboard claims
+#    nothing, so the negative control with `reads`/`claims` stripped is dropped.)
 #
 # =========================================================================================
 # Statistical protocol (section 6), pre-registered
@@ -115,13 +115,11 @@
 #  - Statistic S (one value per replicate): the mean of (V₁ − V₂)² over the saved states at
 #    MCS t = 50, 51, …, 400 (`saveat = 1`, `tspan = (0, 400)`).
 #  - Replicates: seeds 1:32 for every arm. Arms: SequentialCPM (reference), CheckerboardCPM
-#    (candidate), CheckerboardCPM on the problem with reads/claims stripped (negative
-#    control), and SequentialCPM with seeds 33:64 (the test's null).
+#    (candidate), and SequentialCPM with seeds 33:64 (the test's null).
 #  - Test: Welch t = (x̄ − ȳ)/√(s²ₓ/32 + s²ᵧ/32), critical value 3.89 (two-sided α = 1e-4
 #    under the normal reference, as P6.4b1 FULL; the t reference at the Welch df ≈ 60 puts
 #    1e-4 at ≈ 4.1, so 3.89 is slightly stricter for the agreement test). Agreement:
-#    |t(candidate, reference)| ≤ 3.89. Null: |t(seq 33:64, seq 1:32)| ≤ 3.89. Negative
-#    control: |t(stripped, reference)| > 3.89.
+#    |t(candidate, reference)| ≤ 3.89. Null: |t(seq 33:64, seq 1:32)| ≤ 3.89.
 #  - Calibration on the freeze base, with a stub in which the partner was `3 − id` and the
 #    widening was installed by hand as `reads = (partner[old], partner[new])` (the D-058
 #    mechanism the implementation is expected to use): reference mean 1.87, candidate t =
@@ -133,8 +131,7 @@
 #    (0, 1000)`, S over t = 100…1000; equivalence with a stated margin, because a powerful
 #    difference test would reject the checkerboard's own −2.4 %: pass iff the two-sided
 #    99.9 % interval (z = 3.29) of the relative difference (x̄_cb − x̄_seq)/x̄_seq lies inside
-#    ±0.06; the stripped problem's interval must lie entirely outside ±0.06 (calibrated:
-#    [−4.1 %, −0.8 %] and [+14.7 %, +18.0 %]). About 15 s.
+#    ±0.06 (calibrated on the claiming checkerboard: [−4.1 %, −0.8 %]). About 15 s.
 #  - Device (POTTS_GPU set): CheckerboardCPM on the device (Float32) with seeds 1:32 against
 #    the CPU SequentialCPM sample, |t| ≤ 3.89.
 #
@@ -535,22 +532,9 @@ function p65a_pair_problem(; seed = 1, tspan = (0, 400), T = Float64)
         seed, T)
 end
 
-# the negative control: the same problem with the widening removed (no reads, no claims)
-function p65a_unwidened(prob)
-    f = prob.f
-    g = CorePotts.CPMFunction(f.delta_H, f.commit!, f.constraint, CorePotts.no_claims, CorePotts.no_claims,
-        f.temperature, f.bias, f.phases, f.lifecycle, f.acceptance, f.footprint, f.fingerprint, f.sys, f.track,
-        f.connectivity)
-    return remake(prob; f = g)
-end
-
 p65a_stat(sol, burn) = mean(u -> Float64(p65a_vol(u)[1] - p65a_vol(u)[2])^2, sol.u[(burn + 1):end])
-function p65a_sample(alg, seeds; tspan = (0, 400), burn = 50, broken = false, kw...)
-    return [begin
-                prob = p65a_pair_problem(; seed, tspan, kw...)
-                p65a_stat(solve(broken ? p65a_unwidened(prob) : prob, alg; saveat = 1), burn)
-            end
-            for seed in seeds]
+function p65a_sample(alg, seeds; tspan = (0, 400), burn = 50, kw...)
+    return [p65a_stat(solve(p65a_pair_problem(; seed, tspan, kw...), alg; saveat = 1), burn) for seed in seeds]
 end
 
 # F5. A two-hop chain in a drive (section 5).
@@ -898,13 +882,11 @@ end
 @testset "P6.5a: the checkerboard agrees with the sequential reference (light tier)" begin
     seq = p65a_sample(SequentialCPM(), 1:32)
     cb = p65a_sample(CheckerboardCPM(), 1:32)
-    broken = p65a_sample(CheckerboardCPM(), 1:32; broken = true)
     null = p65a_sample(SequentialCPM(), 33:64)
-    t_cb, t_broken, t_null = p65a_welch(cb, seq), p65a_welch(broken, seq), p65a_welch(null, seq)
-    @info "P6.5a checkerboard vs sequential" mean_seq = mean(seq) mean_cb = mean(cb) mean_broken = mean(broken) t_cb t_broken t_null
+    t_cb, t_null = p65a_welch(cb, seq), p65a_welch(null, seq)
+    @info "P6.5a checkerboard vs sequential" mean_seq = mean(seq) mean_cb = mean(cb) t_cb t_null
     @test abs(t_null) <= 3.89                                    # the test's null holds
     @test abs(t_cb) <= 3.89                                      # agreement
-    @test abs(t_broken) > 3.89                                   # negative control: a broken widening is detected
 end
 
 @testset "P6.5a: the checkerboard agrees with the sequential reference (FULL tier)" begin
@@ -912,14 +894,11 @@ end
         kw = (; tspan = (0, 1000), burn = 100)
         seq = p65a_sample(SequentialCPM(), 1001:1200; kw...)
         cb = p65a_sample(CheckerboardCPM(), 1001:1200; kw...)
-        broken = p65a_sample(CheckerboardCPM(), 1001:1200; broken = true, kw...)
         ci(x) = (d = (mean(x) - mean(seq)) / mean(seq);
                  h = 3.29 * sqrt(var(x) / length(x) + var(seq) / length(seq)) / mean(seq); (d - h, d + h))
         lo, hi = ci(cb)
-        blo, bhi = ci(broken)
-        @info "P6.5a FULL checkerboard vs sequential" ci_cb = (lo, hi) ci_broken = (blo, bhi)
+        @info "P6.5a FULL checkerboard vs sequential" ci_cb = (lo, hi)
         @test -0.06 <= lo && hi <= 0.06                          # equivalence within ±6 %
-        @test blo > 0.06 || bhi < -0.06                          # negative control
     else
         @test_skip "FULL tier: set POTTS_FULL_REPRODUCTION=true (offline, on the PC)"
     end

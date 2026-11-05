@@ -4845,3 +4845,9 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - `CorePotts.cell_kinds`, `ownership`, `cell_generations`, `volumes` (#15): current accessors of a state. The comment that called them "the legacy `PottsSavedState` vocabulary" is reworded.
   - The 4-argument `Phases(before_mcs, after_mcs, end_mcs, at_init)` (#16): a current constructor, not an old form.
   - `ring_arcs`, `ring_cells`, `ring_medium` and `local_components`: current vocabulary (user ruling).
+
+## D-271 The lockless block checkerboard replaces the claiming one; frozen tests follow (2026-11-05; maintainer-approved: "go ahead w the replacement, and u may repin", "drop the claims stripped arm"; under D-065 Q7, D-231, D-250)
+
+- **Why.** The lockless scheme (after Sultan et al., arXiv 2312.09317) claims nothing: per-cell totals change by atomic adds and are read live. Research note: `docs/design/research/checkerboard-kinetics.md`.
+- **p6_5a_cell_refs.jl.** The negative control of section 6 built the same problem with `reads`/`claims` stripped and required it to differ from SequentialCPM. Without claims, the stripped problem is the candidate itself (light tier |t| = 1.03 against > 3.89), so the arm is dropped from the light and FULL tiers. The null and the agreement test stay.
+- **Re-pins.** Recorded fingerprints, IR hashes, digests and trajectories of the old checkerboard are re-pinned to the new one; the list follows with the gate.
