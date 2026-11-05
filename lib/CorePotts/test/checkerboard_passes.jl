@@ -65,6 +65,11 @@
         @test all(r -> CorePotts._stay_attempts(4, 1, r) == 4, rs)
         @test all(r -> CorePotts._stay_attempts(9, 4, r) in (2, 3), rs)
         @test abs(sum(r -> CorePotts._stay_attempts(9, 4, r), rs) / 20_000 - 9 / 4) < 0.02
+        # block numbers and coordinates are inverse (first axis fastest)
+        for dims in ((30, 30), (31, 17, 9)), k in (2, 3)
+            l = CorePotts.BlockLayout(dims, 1, k)
+            @test all(blk -> CorePotts.block_index(l, CorePotts.block_coords(l, blk)) == blk, 1:CorePotts.nblocks(l))
+        end
     end
 
     @testset "counts" begin
@@ -135,6 +140,38 @@
         end
         # the sequential form is unchanged: a context without `lockless` re-centers per copy
         @test !CorePotts._lockless(init(mprob, SequentialCPM()).ctx)
+    end
+
+    @testset "threaded CPU phases" begin
+        # each phase one KA launch (forced: any thread count, any phase size); trackers stay
+        # exact, a Global veto without window goes through the host serial pass
+        @test init(prob, CheckerboardCPM()).cache.inline              # 900 sites: inline
+        CorePotts._FORCE_BLOCK_KERNEL[] = true
+        try
+            integ = init(prob, CheckerboardCPM(; proposal = Moore(1), counts = true); save_start = false)
+            nb = integ.cache.layout.nblocks
+            @test !integ.cache.inline && integ.cache.groupsize == (nb[1], cld(nb[2], Threads.nthreads()))
+            u0 = current_state(integ)
+            for _ in 1:15
+                step!(integ)
+            end
+            u = current_state(integ)
+            @test u.cell.volume == recount(u)
+            @test integ.stats.committed == integ.stats.accepted > 0
+            Threads.nthreads() == 1 && @test integ.stats.accepted_ΔH ≈ H(u) - H(u0) atol = 1e-6   # one task: in order
+            fc = CPMFunction(gg_delta_H; temperature = gg_temperature, connectivity = vetoes[2][2])
+            ci = init(PottsProblem(fc, initial_state(σ, kinds), lat, (0, 15), gg_params(); seed = 4),
+                CheckerboardCPM(; proposal = Moore(1)); save_start = false)
+            pieces0 = first(CorePotts.recompute_pieces(σ, lat, Val(false), length(kinds)))
+            for _ in 1:15
+                step!(ci)
+            end
+            uc = current_state(ci)
+            @test all(first(CorePotts.recompute_pieces(uc.σ, lat, Val(false), length(kinds))) .<= pieces0)
+            @test uc.cell.volume == recount(uc) && all(iszero, ci.cache.serial.count)
+        finally
+            CorePotts._FORCE_BLOCK_KERNEL[] = false
+        end
     end
 
     @testset "on-copy cell writes" begin

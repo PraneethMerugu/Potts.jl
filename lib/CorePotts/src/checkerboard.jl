@@ -27,14 +27,21 @@
 # atomic deltas: moments accumulate atomically and re-center once per MCS (`recenter_kernel!`),
 # pieces trackers add their changes, and an `@on_copy` write that reads its own cell value adds
 # the difference. On a device the outcome depends on the timing of the work items (no
-# determinism, user ruling 2026-11-04). The CPU runs the work items one after another, so each
-# attempt sees every earlier one, as in `SequentialCPM`.
+# determinism, user ruling 2026-11-04).
+#
+# The CPU. A phase with few work items (at most `BLOCK_GRAIN`), or a process with one thread,
+# runs them inline, one after another, so each attempt sees every earlier one, as in
+# `SequentialCPM`, and the run is reproducible. A larger phase is one KA launch with one
+# workgroup per thread (KA's CPU backend spawns one task per thread and launch, so more
+# workgroups only add loop overhead); its outcome then depends on the timing of the threads,
+# as on a device.
 #
 # Whole-cell searches. A copy whose decision needs the exact floods (cell-scope `pieces` off
 # their fast path, a `Global` without window whose local test fails) is not decided in the
 # phase: its work item appends it to the serial list, and one work item runs the list after
 # the phase (`serial_kernel!`), against the state the phase left, with nothing in flight. The
-# CPU decides such copies in place.
+# CPU decides such copies in place when it runs a phase inline, else on the host after the
+# phase.
 
 struct BlockLayout{N}
     k::Int                            # sub-regions per block along each axis
@@ -53,20 +60,32 @@ end
 boxsize(l::BlockLayout) = prod(l.box)
 nblocks(l::BlockLayout) = prod(l.nblocks)
 
-# the active sub-region of block `blk` in phase offset `ph` (1-based; the base-k digits of
-# `ph - 1` give the offset per axis): its start (0-based) and side per axis
-@inline function block_region(l::BlockLayout{N}, blk::Int, ph::Int) where {N}
+# the offset of phase `ph` (1:k^N) per axis: the base-k digits of `ph - 1` (host)
+phase_offset(l::BlockLayout{N}, ph::Int) where {N} = ntuple(d -> rem(div(ph - 1, l.k^(d - 1)), l.k), Val(N))
+
+# block number `blk` (1-based, first axis fastest) and its coordinates `bc` (0-based)
+@inline block_index(l::BlockLayout{N}, bc::NTuple{N, Int}) where {N} =
+    1 + foldl((a, d) -> a * l.nblocks[d] + bc[d], ntuple(d -> N + 1 - d, Val(N)); init = 0)
+block_coords(l::BlockLayout{N}, blk::Int) where {N} =
+    ntuple(d -> rem(div(blk - 1, prod(ntuple(e -> e < d ? l.nblocks[e] : 1, Val(N)))), l.nblocks[d]), Val(N))
+
+# the active sub-region of the block at `bc` in a phase with offset `off`: its start (0-based)
+# and side per axis
+@inline function block_region(l::BlockLayout{N}, bc::NTuple{N, Int}, off::NTuple{N, Int}) where {N}
     rs = ntuple(Val(N)) do d
-        stride = prod(ntuple(e -> e < d ? l.nblocks[e] : 1, Val(N)))
-        j = l.k * rem(div(blk - 1, stride), l.nblocks[d]) + rem(div(ph - 1, l.k^(d - 1)), l.k)     # sub-region, 0-based
+        j = l.k * bc[d] + off[d]                         # sub-region, 0-based
         (j * l.base[d] + min(j, l.rem[d]), l.base[d] + (j < l.rem[d]))
     end
     return map(first, rs), map(last, rs)
 end
+block_region(l::BlockLayout, blk::Int, ph::Int) = block_region(l, block_coords(l, blk), phase_offset(l, ph))
 
-# the site of draw `r`, uniform over the sub-region with start `lo` and side `side`
+# the site of draw `r`, uniform over the sub-region with start `lo` and side `side` (a one-site
+# sub-region, block 1's usual case, needs no division)
 @inline function block_site(lo::NTuple{N, Int}, side::NTuple{N, Int}, r::UInt32) where {N}
-    u = bounded(r, prod(side))                           # 0:n - 1
+    n = prod(side)
+    n == 1 && return map(a -> a + 1, lo)
+    u = bounded(r, n)                                    # 0:n - 1
     return ntuple(Val(N)) do d
         s = prod(ntuple(e -> e < d ? side[e] : 1, Val(N)))
         lo[d] + rem(div(u, s), side[d]) + 1
@@ -148,30 +167,39 @@ end
     return nothing
 end
 
-# one work item's stay in phase number q (offset ph): its attempts one after another
-@inline function block_stay!(blk, st, f, p, ctx, law, key, mcs, layout, ph, s, q, tk, cnt, status, sl, serial::Val)
-    lo, side = block_region(layout, blk, ph)
-    r, _, _, _ = draw(key, mcs, blk, STREAM_BLOCK, _block_lid(q, 0))
-    for k in 1:_stay_attempts(prod(side), s, r)
+# one work item's stay (the block at `bc`) in phase number q (offset `off`): its attempts one
+# after another; with one switch a stay makes exactly n attempts (no draw)
+@inline function block_stay!(bc, st, f, p, ctx, law, key, mcs, layout, off, s, q, tk, cnt, status, sl, serial::Val)
+    blk = block_index(layout, bc)
+    lo, side = block_region(layout, bc, off)
+    n = prod(side)
+    m = s == 1 ? n : _stay_attempts(n, s, first(draw(key, mcs, blk, STREAM_BLOCK, _block_lid(q, 0))))
+    for k in 1:m
         block_attempt!(blk, st, f, p, ctx, law, key, mcs, lo, side, _block_lid(q, k), tk, cnt, status, sl, serial)
     end
     return nothing
 end
 
-@kernel function block_kernel!(st, f, p, ctx, law, key, mcs, layout, ph, s, q, tk, cnt, status, sl)
-    blk = @index(Global, Linear)
-    block_stay!(blk, st, f, p, ctx, law, key, mcs, layout, ph, s, q, tk, cnt, status, sl, Val(false))
+# one work item per block over the N-d grid of blocks (no index division per work item)
+@kernel function block_kernel!(st, f, p, ctx, law, key, mcs, layout, off, s, q, tk, cnt, status, sl)
+    I = @index(Global, NTuple)
+    block_stay!(map(i -> i - 1, I), st, f, p, ctx, law, key, mcs, layout, off, s, q, tk, cnt, status, sl, Val(false))
 end
 
-# one work item: the phase's listed copies in list order, then the list is emptied
-@kernel function serial_kernel!(st, f, p, ctx, law, key, mcs, layout, ph, tk, cnt, status, sl)
-    _ = @index(Global, Linear)
+# the phase's listed copies in list order, then the list is emptied (one work item, or the host)
+function serial_pass!(st, f, p, ctx, law, key, mcs, layout, off, tk, cnt, status, sl)
     for i in 1:Int(@inbounds sl.count[1])
         blk = Int(@inbounds sl.blk[i])
-        lo, side = block_region(layout, blk, ph)
+        lo, side = block_region(layout, block_coords(layout, blk), off)
         block_attempt!(blk, st, f, p, ctx, law, key, mcs, lo, side, @inbounds(sl.lid[i]), tk, cnt, status, sl, Val(true))
     end
     @inbounds sl.count[1] = UInt32(0)
+    return nothing
+end
+
+@kernel function serial_kernel!(st, f, p, ctx, law, key, mcs, layout, off, tk, cnt, status, sl)
+    _ = @index(Global, Linear)
+    serial_pass!(st, f, p, ctx, law, key, mcs, layout, off, tk, cnt, status, sl)
 end
 
 # moments re-center once per MCS (the commits only accumulate, `lockless`); c ≤ capacity
@@ -180,7 +208,7 @@ end
     _recenter!(cell, lat, c, @inbounds cell.volume[c])
 end
 
-struct CheckerboardCache{N, B, TK, CN, SL, K1, K2, K3}
+struct CheckerboardCache{N, B, TK, CN, SL, K1, K2, K3, GS}
     layout::BlockLayout{N}
     switches::Int                     # a stay makes n / switches attempts (n sites)
     order::Vector{Int}                # the MCS's phase offsets (1:k^N), P of them
@@ -191,8 +219,22 @@ struct CheckerboardCache{N, B, TK, CN, SL, K1, K2, K3}
     kernel::K1
     serial!::K2
     recenter!::K3
-    host::Bool                        # CPU: the work items run one after another
+    groupsize::GS                     # the phase launch's workgroup size (`nothing`: the backend's choice)
+    inline::Bool                      # CPU: the work items of a phase run one after another
+    host::Bool                        # the CPU backend
 end
+
+# A CPU phase of at most this many work items runs inline: below it the threaded launch costs
+# more than it saves (measured on the PC, `benchmark/kinetics/cpu_threads.jl`)
+const BLOCK_GRAIN = Ref(2048)
+# tests: the threaded launch on any phase size and thread count
+const _FORCE_BLOCK_KERNEL = Ref(false)
+_block_inline(backend, n) = false
+_block_inline(::KernelAbstractions.CPU, n) = !_FORCE_BLOCK_KERNEL[] && (Threads.nthreads() == 1 || n <= BLOCK_GRAIN[])
+# CPU: one workgroup per thread, the grid of blocks split along its last axis
+_block_groupsize(backend, nb) = nothing
+_block_groupsize(::KernelAbstractions.CPU, nb::NTuple{N, Int}) where {N} =
+    ntuple(d -> d < N ? nb[d] : cld(nb[N], Threads.nthreads()), Val(N))
 
 """
 The default `parts` of a `d`-dimensional lattice: about 64 phases per MCS (8 in 2D, 4 in 3D),
@@ -222,8 +264,10 @@ function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, proposal; b
     sl = f.connectivity === nothing ? nothing :
          (; blk = z(Int32, nblocks(layout) * cld(nbox, switches)), lid = z(UInt32, nblocks(layout) * cld(nbox, switches)),
         count = z(UInt32, 1), deferred = z(UInt32, 1), exact = f.connectivity.exact_veto)
+    n = nblocks(layout)
     return CheckerboardCache(layout, switches, zeros(Int, P), z(UInt32, 1), tk, cnt, sl, block_kernel!(backend),
-        serial_kernel!(backend), recenter_kernel!(backend), backend isa KernelAbstractions.CPU)
+        serial_kernel!(backend), recenter_kernel!(backend), _block_groupsize(backend, layout.nblocks), _block_inline(backend, n),
+        backend isa KernelAbstractions.CPU)
 end
 
 # the window of the model's windowed `Global` searches (0: none)
@@ -241,23 +285,28 @@ function checkerboard_mcs!(st, cache::CheckerboardCache{N}, f::F, p, ctx, law::L
         r, _, _, _ = draw(key, mcs, q, STREAM_COLOR_ORDER, 2)
         order[q] = bounded(r, cache.layout.k^N) + 1
     end
-    l, s, n, sl = cache.layout, cache.switches, nblocks(cache.layout), cache.serial
+    l, s, sl = cache.layout, cache.switches, cache.serial
     serial = _serial_pass(sl, f)
     launches = 0
     for (q, ph) in enumerate(order)
+        off = phase_offset(l, ph)
+        if cache.inline
+            for I in CartesianIndices(l.nblocks)
+                block_stay!(Tuple(I) .- 1, st, f, p, ctx, law, key, mcs, l, off, s, q, cache.track, cache.cnt, cache.status,
+                    sl, Val(true))
+            end
+            continue
+        end
+        cache.kernel(st, f, p, ctx, law, key, mcs, l, off, s, q, cache.track, cache.cnt, cache.status, sl;
+            ndrange = l.nblocks, workgroupsize = cache.groupsize)
+        launches += 1
+        serial || continue
         if cache.host
-            for blk in 1:n
-                block_stay!(blk, st, f, p, ctx, law, key, mcs, l, ph, s, q, cache.track, cache.cnt, cache.status, sl,
-                    Val(true))
-            end
+            serial_pass!(st, f, p, ctx, law, key, mcs, l, off, cache.track, cache.cnt, cache.status, sl)
         else
-            cache.kernel(st, f, p, ctx, law, key, mcs, l, ph, s, q, cache.track, cache.cnt, cache.status, sl; ndrange = n)
+            cache.serial!(st, f, p, ctx, law, key, mcs, l, off, cache.track, cache.cnt, cache.status, sl; ndrange = 1,
+                workgroupsize = 1)
             launches += 1
-            if serial
-                cache.serial!(st, f, p, ctx, law, key, mcs, l, ph, cache.track, cache.cnt, cache.status, sl; ndrange = 1,
-                    workgroupsize = 1)
-                launches += 1
-            end
         end
     end
     if hasproperty(st.cell, :anchor)                 # the moments re-center

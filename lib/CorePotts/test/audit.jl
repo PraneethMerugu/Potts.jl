@@ -149,8 +149,8 @@ end
     L = Lattice((48, 48))
     σ, kinds = blocks((48, 48), 6)
     prob = PottsProblem(GG, initial_state(σ, kinds), L, (0, 20), gg_params())
-    # the checkerboard runs its work items as host loops on the CPU: a warm step allocates nothing
+    # a small checkerboard phase runs inline on the CPU: a warm step allocates nothing
     a = init(prob, CheckerboardCPM(; proposal = Moore(1)))
-    @test a.cache.host
+    @test a.cache.inline
     @test minimum(_ -> (step!(a); @allocated step!(a)), 1:3) == 0
 end
