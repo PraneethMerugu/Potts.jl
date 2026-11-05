@@ -23,7 +23,7 @@
 # every site is attempted once per MCS on average. Attempts are never skipped: drawing over a
 # common box and skipping sites past a smaller sub-region's end bunches attempts on one site
 # (a one-site sub-region in a 2 × 2 box got Binomial(4, 1/4) attempts in a row), which slowed
-# Akeeb invasion and the K3 chain by 10–30 %.
+# Akeeb invasion and the K3 chain (docs/design/research/checkerboard-kinetics.md).
 
 struct BlockLayout{N}
     k::Int                            # sub-regions per block along each axis

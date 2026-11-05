@@ -769,7 +769,7 @@ end
     @test abs(mean(cg) / mean(cc) - 1) < 0.05
     # the block scheme: concurrent live reads and atomic commits keep the trackers exact (the
     # run is not deterministic on a device); the device commits at the CPU's rate
-    for kw in ((; block = 3), (; block = 4, switches = 4))
+    for kw in ((; block = 3), (; block = 4, switches = 4), (; block = 1, parts = 8))
         alg = CheckerboardCPM(; proposal = Moore(1), counts = true, scheme = :blocks, kw...)
         g = solve(remake(prob; seed = 3), alg; backend)
         u = g.u[end]

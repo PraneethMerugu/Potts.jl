@@ -312,6 +312,27 @@ P6.0bk2 IR hash, P6.0af fused-lifecycle code) that the interior path and pair-on
 by design; 2 are the pre-existing `p6_0ap_setter_loose_ends` failures. No behavioral test fails.
 Re-pinning the fingerprints needs the maintainer's OK.
 
+Lockless default, block 1 / 8 parts (2026-11-05, `~/lpwork/cbk/lockless-2026-11-05`). The CPU
+harness passes (foam and sort, 32 runs each: every observable inside its margin, committed
+1.003 and 1.002). The first Akeeb and K3 runs failed: Akeeb invasion was weak on the GPU (P1
+infiltrative 0.66, detached 0.69, clusters 0.32; P5 singles 0.27) and the K3 chain was slow
+(T_run 1.20). The CPU host loop, which has no concurrency, gave the same Akeeb bias, so the
+cause was the scheme, not the device. Cause: on an axis not divisible by k·b (Akeeb 500 × 300,
+K3), every stay drew over a common box (2 × 2) and skipped draws past its sub-region, so a
+one-site sub-region got Binomial(4, 1/4) attempts in a row. The mean rate was right; the
+attempts were bunched. Fix (commit 2dd61eaf): a stay makes n / switches attempts over its own
+n sites. After the fix:
+
+- K3 (100 runs): T_run 155.4 against 155.3, r 1.001 [0.976, 1.028], PASS.
+- Akeeb CPU host loop (48 runs, P1 and P5): every metric |z| ≤ 2.2 (largest P5 singles 0.83,
+  z −2.2).
+- Akeeb GPU (48 runs, P1, P4 and P5): every metric |z| ≤ 2.14. P4 invasive, infiltrative and
+  fingers are about 10 % high (z 2.1 each; the three move together). 1.05 s per run, half the
+  time before the fix (no skipped draws).
+
+On lattices divisible by k·b (foam, sort, K4 at 1400², RPE at 100 × 100 × 36) a stay draws the
+same sites from the same draws as before, so those results stand.
+
 ### Gate (2026-11-04, branch head)
 
 - CorePotts with `POTTS_GPU=rocm`: the new tests (74 CPU, 15 device), the device suite (393) and
