@@ -482,7 +482,10 @@ bound either, never a refused value.
   assignments times table indices exceed 4096, the evaluation cap (the bound is `Inf` or
   `NaN`; `bound_parts` says which, and where);
 - a needed parameter has no value;
-- a row with `CrossLinear` terms is not diagonally dominant with a nonpositive diagonal. The
+- a row with `CrossLinear` terms on a loop of cross reads (it reads a row that reads it back,
+  directly or through others) is not diagonally dominant with a nonpositive diagonal. A row off
+  every loop is not tested: the Jacobian is block triangular there, with the eigenvalues of
+  the rows' own blocks (F3-22 review r1). The
   step limit `dt ρ ≤ 1.8` holds for real, dissipative spectra only; coupled rows such as
   `c' = a o, o' = −a c` have imaginary eigenvalues, which forward Euler amplifies at any
   step. Until the disk test of v3 §6.2 lands (C7c), such systems are refused instead of
@@ -828,7 +831,7 @@ end
 The parts of `b(p)`: `ρ`, the Gershgorin bound over the terms `b` sees (a term in
 `b.terms` is left out); `seen`, the same bound over the finite values of each coefficient
 only (a coefficient over the evaluation cap counts 0; `seen == ρ` when `ρ` is finite), which
-raises an explicit count; `coupled`, the keys of the rows with cross terms that are not
+raises an explicit count; `coupled`, the keys of the rows on a loop of cross reads with cross terms that are not
 diagonally dominant with a nonpositive diagonal (`b(p)` is `NaN` for them); `negative`, the
 keys of the rows with a diffusion coefficient below zero at `p` (at some indicator
 assignment); `nonfinite`, when `ρ` is not finite, a `(key, coefficient, why)` per coefficient
@@ -837,9 +840,43 @@ with no finite bound (`why`: `:cap` over the evaluation cap, `:tables` no tables
 not finite, index 0 reading 0, and how many more). `b(p) == ρ`
 when `b.unbounded` and `coupled` are empty.
 """
+# the rows on a loop of cross reads (F3-22 review r1): row `i` reads row `j` through a cross term
+# or through a coefficient bounded over `j`'s declared interval (a site multiplier, a face
+# coefficient `K`, a velocity: F3-26 review), and `j` reads `i` back, directly or through other
+# rows. A row off every loop sits in a block triangular Jacobian, whose eigenvalues are those of
+# the rows' own blocks, so its cross terms need no dominance test (a loop such as
+# `c' = a o, o' = −a c` can make them complex)
+function _loop_rows(b::StabilityBound)
+    n = length(b.keys)
+    out = [Set{Int}() for _ in 1:n]
+    for i in 1:n, r in b.rows[i]
+        for (_, j) in Iterators.flatten((r.crosslinear, r.crossdiffusion))
+            (j == 0 || j == i) || push!(out[i], j)
+        end
+        for f in Iterators.flatten((r.diffusion, first.(r.sitediffusion), last.(r.sitediffusion), r.linear,
+                first.(r.crosslinear), first.(r.crossdiffusion), first.(r.advection))), (nm, _) in f.box
+            for j in 1:n
+                j != i && (b.keys[j] == nm || startswith(b.keys[j], nm * "[")) && push!(out[i], j)
+            end
+        end
+    end
+    function reaches(a, z)
+        seen, todo = Set{Int}(), [a]
+        while !isempty(todo)
+            q = pop!(todo)
+            q == z && return true
+            q in seen && continue
+            push!(seen, q)
+            append!(todo, out[q])
+        end
+        return false
+    end
+    return [any(j -> reaches(j, i), out[i]) for i in 1:n]
+end
 function bound_parts(b::StabilityBound, p)
     ρ = seen = 0.0
     coupled, negative = String[], String[]
+    loop = _loop_rows(b)
     unsure = Tuple{String, String, Any}[]      # interval diffusion coefficients of unknown sign (F3-13)
     for i in eachindex(b.keys)
         ih2 = b.invh2[i]                        # (the row's grid, F3-16)
@@ -866,7 +903,7 @@ function bound_parts(b::StabilityBound, p)
             lin = sum(f(p) for f in r.linear; init = 0.0)
             cross = sum(f(p) for (f, _) in r.crosslinear; init = 0.0) +
                     sum(f(p) * (4 * sum(b.invh2[j]) + _face_excess(b, j, p)) for (f, j) in r.crossdiffusion; init = 0.0)
-            if !isempty(r.crosslinear) || !isempty(r.crossdiffusion)
+            if loop[i] && (!isempty(r.crosslinear) || !isempty(r.crossdiffusion))
                 # the diagonal at its largest over the indicator assignments. A row of `M A` (site
                 # diffusion) is balanced: its diagonal m_i Σ K / h² equals its off-diagonal sum,
                 # so the same bound enters both sides and cancels (the row test is the rest of
@@ -1608,8 +1645,8 @@ function Problems.unbounded_reason(b::StabilityBound, p)
         isempty(r.nonfinite) && push!(parts, "a coefficient with no finite bound")
     end
     c = r.coupled
-    isempty(c) || push!(parts, "the coupled rows of $(join(("`$k`" for k in c), ", ")), which are not diagonally " *
-                               "dominant (their spectrum may be complex)")
+    isempty(c) || push!(parts, "the coupled rows of $(join(("`$k`" for k in c), ", ")), which read each other in a " *
+                               "loop and are not diagonally dominant (their spectrum may be complex)")
     return isempty(parts) ? nothing : join(parts, "; ")
 end
 

@@ -24,6 +24,10 @@
 # interval bound sees FpAdvect's advection CFL and FpAux's aux term: both become bounded (route
 # explicit → auto, least 3 → 1, `substeps = nothing`); FpAdvect's count is 1 (was 3), FpAux's
 # stays 3. Their fingerprint and canonical move; their arrays, params and fingerprint text do not.
+# F3-25 (listed move, F3-22 review r1, user request 2026-11-05; D-C7a item 2 amended): the dominance
+# test applies to loops of cross reads only, so GdAuditCrossField and GdAuditCrossLinear (`c` reads
+# `u` one way) become bounded (route explicit → auto, least 3 → 1, `substeps = nothing`). Their
+# fingerprint and canonical move; their `n` and digests do not.
 const GD_RECORDS = Dict{String, String}(
     "GiB BDF2|Float64|digest|state" => "624905f7ab2e7815",
     "GiB BDF2|Float64|n" => "[1]",
@@ -466,28 +470,28 @@ const GD_RECORDS = Dict{String, String}(
     "GdAuditBoundedField|Float64|groups" => "1",
     "GdAuditBoundedField|Float64|n" => "[8]",
     "GdAuditBoundedField|Float64|route" => "auto",
-    "GdAuditCrossField|Float64|canonical" => "c=ExplicitEuler(substeps=3,lower=nothing);u=ExplicitEuler(substeps=3,lower=nothing)",
-    "GdAuditCrossField|Float64|fingerprint" => "0x937110ccbd31484c",
+    "GdAuditCrossField|Float64|canonical" => "c=ExplicitEuler(substeps=nothing,lower=nothing);u=ExplicitEuler(substeps=nothing,lower=nothing)",
+    "GdAuditCrossField|Float64|fingerprint" => "0x1faccde921d164b5",
     "GdAuditCrossField|Float64|g1|arrays" => "((CorePotts.Part{:site, :c}(), CorePotts.Part{:site, :c__next}()), (CorePotts.Part{:site, :u}(), CorePotts.Part{:site, :u__next}()))",
     "GdAuditCrossField|Float64|g1|bounded" => "true",
     "GdAuditCrossField|Float64|g1|fingerprint_text" => "335ae49040fc6965",
-    "GdAuditCrossField|Float64|g1|least" => "Int64:3",
+    "GdAuditCrossField|Float64|g1|least" => "Int64:1",
     "GdAuditCrossField|Float64|g1|params" => "[:Dc, :Dx]",
     "GdAuditCrossField|Float64|g1|tables" => "Pair{Int64, Symbol}[]",
     "GdAuditCrossField|Float64|groups" => "1",
     "GdAuditCrossField|Float64|n" => "[5]",
-    "GdAuditCrossField|Float64|route" => "explicit",
-    "GdAuditCrossLinear|Float64|canonical" => "c=ExplicitEuler(substeps=3,lower=nothing);u=ExplicitEuler(substeps=3,lower=nothing)",
-    "GdAuditCrossLinear|Float64|fingerprint" => "0xbf26bd9753f7b9e9",
+    "GdAuditCrossField|Float64|route" => "auto",
+    "GdAuditCrossLinear|Float64|canonical" => "c=ExplicitEuler(substeps=nothing,lower=nothing);u=ExplicitEuler(substeps=nothing,lower=nothing)",
+    "GdAuditCrossLinear|Float64|fingerprint" => "0xbd90c75335f3eeeb",
     "GdAuditCrossLinear|Float64|g1|arrays" => "((CorePotts.Part{:site, :c}(), CorePotts.Part{:site, :c__next}()), (CorePotts.Part{:site, :u}(), CorePotts.Part{:site, :u__next}()))",
     "GdAuditCrossLinear|Float64|g1|bounded" => "true",
     "GdAuditCrossLinear|Float64|g1|fingerprint_text" => "bb551ab8b22490ba",
-    "GdAuditCrossLinear|Float64|g1|least" => "Int64:3",
+    "GdAuditCrossLinear|Float64|g1|least" => "Int64:1",
     "GdAuditCrossLinear|Float64|g1|params" => "[:Dc, :Dx]",
     "GdAuditCrossLinear|Float64|g1|tables" => "Pair{Int64, Symbol}[]",
     "GdAuditCrossLinear|Float64|groups" => "1",
     "GdAuditCrossLinear|Float64|n" => "[3]",
-    "GdAuditCrossLinear|Float64|route" => "explicit",
+    "GdAuditCrossLinear|Float64|route" => "auto",
     "GdAuditDiffusion|Float64|canonical" => "c=ExplicitEuler(substeps=nothing,lower=nothing)",
     "GdAuditDiffusion|Float64|fingerprint" => "0x51fa2e1faac1ba03",
     "GdAuditDiffusion|Float64|g1|arrays" => "((CorePotts.Part{:site, :c}(), CorePotts.Part{:site, :c__next}()),)",

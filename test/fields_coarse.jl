@@ -286,7 +286,7 @@ end
 
 @testset "F3-22: a spatial operator across grids in A is the manual route, A equals B, the aux is scratch" begin
     tight = DevicePCG(; rtol = 1e-12, budget = 64)
-    # (the explicit count is the user's: the bound does not see a cross term through an aux field, as for the route)
+    # (an explicit count, a minimum: the default count works too since review r1, the rows read one way)
     for fs in (ExplicitEuler(; substeps = 40), BackwardEuler(; inner = tight), CrankNicolson(; inner = tight))
         a, r = fx_run(FcXd, 3, fs), fx_run(FcXr, 3, fs)
         @test a == r && all(maximum(abs, a[end][i]) > 0 for i in 1:3)            # bitwise, and the rows moved

@@ -256,6 +256,24 @@ end
               (foreach(println, msgs); false)
     end
 
+    @testset "ExplicitEuler's default count: a cross-grid term read one way is bounded, a loop is refused" begin
+        # (review r1: the rows read one way, so the Jacobian is block triangular and the dominance
+        # test does not apply; D-C7a item 2 amended. Base 9afaac05: "no automatic substeps")
+        one = PDESystem([D(xe(xcc)) ~ 0.01 * Δ(xe(xcc)), D(xe(xu)) ~ 0.2 * Δ(xe(xu)) + 0.5 * Δ(xe(xcc)) - xe(xu)],
+            [xcc(0, x, y) ~ x^2 + y, xu(0, x, y) ~ 0.0], xdom(), [t, x, y], [xe(xcc), xe(xu)], Num[]; name = :xe1)
+        p = xown(one, (16, 16))
+        # the u row: 0.2 · 4 · 2 · 16² + 1 + 0.5 · 4 · 2 · 4² (the coarse Laplacian's row sum)
+        @test p.stability(p.p) ≈ 0.2 * 2048 + 1 + 0.5 * 128
+        s = Test.@test_logs(min_level = Base.CoreLogging.Warn, solve(p, ExplicitEuler(; dt = 0.05); saveat = [0.05]))
+        n = ceil(Int, 0.05 * (0.2 * 2048 + 1 + 0.5 * 128) / 1.8)
+        @test s.substeps == n && s[xe(xu), 2] == solve(p, ExplicitEuler(; dt = 0.05, substeps = n); saveat = [0.05])[xe(xu), 2]
+        # a loop across the grids: refused, naming both rows
+        loop = PDESystem([D(xe(xcc)) ~ 0.01 * Δ(xe(xcc)) + 0.1 * Δ(xe(xu)), D(xe(xu)) ~ 0.2 * Δ(xe(xu)) + 0.5 * Δ(xe(xcc)) - xe(xu)],
+            [xcc(0, x, y) ~ x^2 + y, xu(0, x, y) ~ 0.0], xdom(), [t, x, y], [xe(xcc), xe(xu)], Num[]; name = :xe2)
+        m = try solve(xown(loop, (16, 16)), ExplicitEuler(; dt = 0.05)); "" catch e; sprint(showerror, e) end
+        @test occursin("no automatic substeps", m) && occursin("which read each other in a loop", m) && occursin("`xcc`", m) && occursin("`xuu`", m)
+    end
+
     @testset "Duals: ∂/∂p of a cross-grid run against finite differences" begin
         tight = DevicePCG(; rtol = 1e-13, budget = 64)
         pidx(prob, s) = LatticePDE.Problems.SII.parameter_index(prob, s)

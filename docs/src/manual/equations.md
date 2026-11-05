@@ -327,9 +327,11 @@ threads).
   needs `substeps`, and the problem throws an error naming the term without it: a
   reaction that is not linear in `c` (with no declared bounds), a coefficient that reads other
   state (a field with no declared bounds, `mcs`), and a diffusion multiplier that reads a CPM
-  value directly (`volume[owner] * Δ(c)`). So does a
-  rate that reads another field (`- Dx * Δ(u)`, `- k * u`) when its row of the Jacobian is
-  not diagonally dominant. A diffusion multiplier that varies by site through a kind table
+  value directly (`volume[owner] * Δ(c)`). So do fields
+  that read each other in a loop (`- Dx * Δ(u)` in the rate of `c` and `Dx * Δ(c)` in the rate
+  of `u`) when their rows of the Jacobian are not diagonally dominant. A field that reads
+  another one way (`u` does not read `c` back) is bounded. A diffusion multiplier that varies
+  by site through a kind table
   or a kind set (`δ[kind] * Δ(c)`, `ismember(kind, g) * Δ(c)`) is bounded: the bound takes
   the largest multiplier times the largest diffusion coefficient. With `substeps = n` in the
   cases the bound cannot see, the count is the larger of

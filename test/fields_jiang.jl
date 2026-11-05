@@ -53,14 +53,15 @@ end
     σ, kinds = jiang_state(JG_DIMS)
     @test_logs min_level = Base.CoreLogging.Warn init(PottsProblem(JiangLike(; name = :j), [ownership => σ, kind => kinds], (0, 1);
         field_solver = BackwardEuler()), SequentialCPM(); save_start = false)
-    # review r1 N4: the default ExplicitEuler refusal gives this route (base cb20be97: only
-    # `ExplicitEuler(; substeps = n)` with `n ≥ mcs_duration · ρ / 1.8`, and no value for ρ)
+    # F3-22 review r1: lactate reads O₂ and glucose one way (they do not read it back), so the
+    # default ExplicitEuler count is bounded (D-C7a item 2 amended; base 9afaac05: refused with
+    # the route `field_solver = BackwardEuler()`, now checked on a loop in audit.jl)
     m = try
         PottsProblem(JiangLike(; name = :j), [ownership => σ, kind => kinds], (0, 1)); ""
     catch err
         sprint(showerror, err)
     end
-    @test occursin("not diagonally dominant", m) && occursin("`field_solver = BackwardEuler()`", m)
+    @test m == ""
     kmap = Int32[s == 0 ? 0 : findfirst(==(kinds[s]), [:P, :Q, :N]) for s in σ]
     names = (:o, :g, :l, :gf, :inh)
     bp = Potts.LatticePDE.discretize(Potts.fields(JiangLike(; name = :j)),

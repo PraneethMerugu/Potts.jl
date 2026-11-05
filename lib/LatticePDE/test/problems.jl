@@ -152,9 +152,17 @@ end
                     [Dr, ε]; T = 0.1, dvs = [ce, oe]), n)
     @test isnan(nl.stability(nl.p))
     @test_throws ArgumentError S(nl, ExplicitEuler(; dt = 0.01))
-    # cross-diffusion: no throw from the bound; the rows are not diagonally dominant, so
-    # automatic substeps are refused and a user count runs
-    xd = owned(psys([D(ce) ~ Dr * Δ(ce) + D2 * Δ(oe), D(oe) ~ Δ(oe)], [c(0, x, y) ~ 1.0; o(0, x, y) ~ cos(2π * x); per2],
+    # cross-diffusion one way (`o` does not read `c`): the Jacobian is block triangular, its
+    # eigenvalues those of each row's own block, so the bound is the Gershgorin row sum with no
+    # dominance test (F3-22 review r1, D-C7a item 2 amended; base 9afaac05: refused)
+    x1 = owned(psys([D(ce) ~ Dr * Δ(ce) + D2 * Δ(oe), D(oe) ~ Δ(oe)], [c(0, x, y) ~ 1.0; o(0, x, y) ~ cos(2π * x); per2],
+                    [Dr, D2]; T = 0.1, dvs = [ce, oe]), n)
+    @test x1.stability(x1.p) ≈ 2 * s4                             # |Dr| s4 + |D2| s4
+    s1 = solve(x1, ExplicitEuler(; dt = 0.01))
+    @test SciMLBase.successful_retcode(s1) && s1.substeps == ceil(Int, 0.01 * 2 * s4 / 1.8)
+    # a loop of cross-diffusion (`o` reads `c` back): no throw from the bound; the rows are not
+    # diagonally dominant, so automatic substeps are refused and a user count runs
+    xd = owned(psys([D(ce) ~ Dr * Δ(ce) + D2 * Δ(oe), D(oe) ~ Δ(oe) + 0.1 * Δ(ce)], [c(0, x, y) ~ 1.0; o(0, x, y) ~ cos(2π * x); per2],
                     [Dr, D2]; T = 0.1, dvs = [ce, oe]), n)
     @test isnan(xd.stability(xd.p))
     @test_throws ArgumentError solve(xd, ExplicitEuler(; dt = 0.01))
@@ -165,7 +173,8 @@ end
           sx.substeps == max(50, ceil(Int, 0.01 * LatticePDE.bound_parts(px.stability, px.p).ρ / 1.8)) > 50
     # … with a decay strong enough for dominance the bound is the Gershgorin row sum:
     # |Dr| s4 + |k| + |D2| s4 for the c row
-    xk = owned(psys([D(ce) ~ Dr * Δ(ce) + D2 * Δ(oe) - kc * ce, D(oe) ~ Δ(oe)],
+    # (a loop: `o` reads `c` back through a small reaction it dominates by its decay)
+    xk = owned(psys([D(ce) ~ Dr * Δ(ce) + D2 * Δ(oe) - kc * ce, D(oe) ~ Δ(oe) - kc * oe + 0.5 * ce],
                     [c(0, x, y) ~ 1.0; o(0, x, y) ~ cos(2π * x); per2], [Dr, D2, kc]; T = 0.1, dvs = [ce, oe]), n)
     pk = remake(xk; p = [D2 => 0.5, kc => 3000.0])
     @test pk.stability(pk.p) ≈ s4 + 3000 + 0.5 * s4
@@ -227,8 +236,10 @@ end
     ga = owned(psys([D(ce) ~ Dr * Δ(ce) + ifelse(t >= t0, Ke, 0.0), D(oe) ~ -oe, Ke ~ -1000 * oe],
                     [c(0, x, y) ~ 1.0; o(0, x, y) ~ 1.0; per2], [Dr, t0]; T = 0.1, dvs = [ce, oe, Ke]), 4)
     ga = remake(ga; p = [t0 => 0.0])
-    @test isnan(ga.stability(ga.p))
-    @test_throws ArgumentError solve(ga, ExplicitEuler(; dt = 0.01))
+    # (`o` does not read `c` back: one way, so the arm's `−1000` needs no dominance; F3-22 review r1,
+    # D-C7a item 2 amended; base 9afaac05: no bound)
+    @test ga.stability(ga.p) ≈ 4 * 2 * 16 + 1000
+    @test SciMLBase.successful_retcode(solve(ga, ExplicitEuler(; dt = 0.01)))
     # … and a condition reading an aux field is not a gate; F3-13 bounds the switch through K's
     # definition by its Jacobian entries: `∂/∂c` is −1 or 0, and the condition's `o` enters through
     # its arms only (0): ρ = Dr·Σ4/h² + 1 (base b41b73c1: no bound)

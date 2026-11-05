@@ -778,8 +778,9 @@ end
         sys = ssys([D(ce) ~ m * Δ(ce) - 0.2ce - 0.1oe, D(oe) ~ -oe], [c(0, x, y) ~ 1.0, o(0, x, y) ~ 1.0], [ce, oe, qe], [Dk2])
         @test sok(solve(sown(sys; inputs = [qe => checker(4, 1, 2)]), ExplicitEuler(; dt = 0.025)))
     end
-    # … and a row that is not dominant (the cross term outweighs the reaction) is still refused
-    sys = ssys([D(ce) ~ at(Dk2, qe) * Δ(ce) - 0.05ce - 0.1oe, D(oe) ~ -oe], [c(0, x, y) ~ 1.0, o(0, x, y) ~ 1.0], [ce, oe, qe], [Dk2])
+    # … and a row that is not dominant (the cross term outweighs the reaction) on a loop is still
+    # refused (`o` reads `c` back; one way it is bounded since F3-25)
+    sys = ssys([D(ce) ~ at(Dk2, qe) * Δ(ce) - 0.05ce - 0.1oe, D(oe) ~ -oe + 0.1ce], [c(0, x, y) ~ 1.0, o(0, x, y) ~ 1.0], [ce, oe, qe], [Dk2])
     @test occursin("coupled", emsg(() -> solve(sown(sys; inputs = [qe => checker(4, 1, 2)]), ExplicitEuler(; dt = 0.025))))
 end
 

@@ -369,3 +369,16 @@ end
     @info "F3-ghost" maximum(prof) err ref[1:6] prof[1:6]
     @test maximum(prof) > 0.3 && err < 0.015                         # (measured 0.0068, max 0.977)
 end
+
+# F3-25 (review of F3-25/F3-26): a read through a coefficient bounded over a declared interval is
+# an edge of the loop graph. `fc` reads `fo` by `5 fo` (no decay: not dominant); `fo` reads `fc`
+# only through its face coefficient `DivKGrad(:harmonic)(fc, fo)`, so the two read each other in a
+# loop and `fc`'s row is refused. With a coordinate coefficient instead, `fo` does not read `fc`:
+# one way, bounded. Base 1ec7b424: the loop was missed (a bound)
+@testset "F3-25: a loop through a coefficient over a declared interval" begin
+    ic = [fc(0, x, y) ~ 0.5, fo(0, x, y) ~ 0.0]
+    loop = fown(fsys([D(fce) ~ 0.1 * Δ(fce) + 5 * foe, D(foe) ~ DivKGrad(:harmonic)(fce, foe) - foe], ic, [fce, foe]), 8)
+    @test isnan(loop.stability(loop.p))
+    one = fown(fsys([D(fce) ~ 0.1 * Δ(fce) + 5 * foe, D(foe) ~ DivKGrad(:harmonic)(1 + x, foe) - foe], ic, [fce, foe]), 8)
+    @test isfinite(one.stability(one.p))
+end

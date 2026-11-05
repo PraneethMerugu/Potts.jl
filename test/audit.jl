@@ -406,7 +406,7 @@ end
 end
 
 # coupled fields: another field's Laplacian (or value) in a rate is an off-diagonal term of
-# the Jacobian. A row that is not diagonally dominant has no bound: refused without a count,
+# the Jacobian. A row on a loop of cross reads that is not diagonally dominant has no bound: refused without a count,
 # never silently one substep; a negative diffusion coefficient is refused at any count
 @potts_model AuditCrossField begin
     @kinds medium A
@@ -441,6 +441,25 @@ end
     @equations begin
         D(c) ~ Dc * Δ(c) - Dx * u
         D(u) ~ Dc * Δ(u)
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+# a loop: `u` reads `c` back (complex spectrum: Dc λ ± i Dx λ)
+@potts_model AuditCrossLoop begin
+    @kinds medium A
+    @parameters begin
+        Dc = 0.5
+        Dx = 0.5
+    end
+    @variables begin
+        c(field) = 0.0
+        u(field) = 0.0
+    end
+    @lattice Lattice((8, 8))
+    @energy cells => (volume - 4.0)^2
+    @equations begin
+        D(c) ~ Dc * Δ(c) - Dx * Δ(u)
+        D(u) ~ Dc * Δ(u) + Dx * Δ(c)
     end
     @sweep Metropolis(; temperature = 1.0)
 end
@@ -508,12 +527,20 @@ end
         field_solver = ExplicitEuler())
     @test audit_n(init(one, SequentialCPM())) == 3
     @test maximum(abs, Array(solve(one, SequentialCPM()).u[end].site.c)) < 1e-3
-    for M in (AuditCrossField, AuditCrossLinear)
-        err = audit_err(() -> PottsProblem(M(; name = :x), op, (0, 30); field_solver = ExplicitEuler()))
-        @test err isa ArgumentError && occursin("coupled rate of `c`", err.msg) && occursin("substeps = n", err.msg)
+    # one way (`u` does not read `c`): block triangular, so the Gershgorin bound with no dominance
+    # test (F3-22 review r1, D-C7a item 2 amended; base 9afaac05: refused), ceil((0.5·8 + 0.5·8) / 1.8)
+    # and ceil((0.5·8 + 0.5) / 1.8)
+    for (M, n) in ((AuditCrossField, 5), (AuditCrossLinear, 3))
+        prob = @test_logs min_level = Base.CoreLogging.Warn PottsProblem(M(; name = :x), op, (0, 30); field_solver = ExplicitEuler())
+        @test audit_n(init(prob, SequentialCPM())) == n
+        @test maximum(abs, Array(solve(prob, SequentialCPM()).u[end].site.c)) < 1e-3
     end
+    # a loop: refused without a count
+    err = audit_err(() -> PottsProblem(AuditCrossLoop(; name = :x), op, (0, 30); field_solver = ExplicitEuler()))
+    @test err isa ArgumentError && occursin("coupled rates of `c`, `u`", err.msg) && occursin("substeps = n", err.msg) &&
+          occursin("`field_solver = BackwardEuler()`", err.msg)
     # an explicit count: at least the Gershgorin bound of the coupled row, ceil((0.5·8 + 0.5·8) / 1.8) = 5
-    prob = @test_logs (:warn, r"coupled rates of `c`") PottsProblem(AuditCrossField(; name = :x), op, (0, 30);
+    prob = @test_logs (:warn, r"coupled rates of `c`") PottsProblem(AuditCrossLoop(; name = :x), op, (0, 30);
         field_solver = ExplicitEuler(substeps = 1))
     @test audit_n(init(prob, SequentialCPM())) == 5
     c = Array(solve(prob, SequentialCPM()).u[end].site.c)

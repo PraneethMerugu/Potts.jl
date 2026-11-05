@@ -14,8 +14,8 @@ abstract type FieldAlgorithm end
 Forward Euler: each window `dt` runs `n` substeps of `dt / n`. One type for both front ends
 (`Potts` and `LatticePDE` export this binding). `substeps = nothing` takes the automatic
 count `n = ⌈dt ρ(p) / 1.8⌉` from the problem's stability bound `ρ` at the current parameters
-(§6.2); an unknown bound (a rate term it cannot see, a parameter without a value, or coupled
-rows that are not diagonally dominant) is refused. A count `substeps = n ≥ 1` is a minimum:
+(§6.2); an unknown bound (a rate term it cannot see, a parameter without a value, or rows
+that read each other in a loop and are not diagonally dominant) is refused. A count `substeps = n ≥ 1` is a minimum:
 the count is the larger of `n` and the bound over the terms the bound sees; when no term is
 seen, `n` is used. `lower` clips each substep's result at `max(v, lower)`. `init = :steady`
 starts at the group's steady state (see [`BackwardEuler`](@ref)). `compute_T`: the number type
