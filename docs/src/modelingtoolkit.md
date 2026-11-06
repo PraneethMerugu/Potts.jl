@@ -108,10 +108,22 @@ cell variable, a built-in, …) is its `potts_entity` metadata:
 `MTK.unknowns`, `MTK.observed`, `MTK.initial_conditions` and `nameof` work too, and `sys.k` is
 the declared symbol `k`. Ask `Potts.inner(sys)` for any other MTK accessor (`iscomplete`,
 `full_equations`, the metadata, …). Potts models merge with `Potts.extend` (`@extend`) and
-compose with `Potts.compose`: each component (an MTK `System` wrapped with the model's own payload,
-`Potts.wrap(name, system, nothing, Potts.part(model))`; for a Catalyst reaction network the
-system is `Catalyst.ode_model(complete(rn))`) joins as a model-scope component, as with
-`@components model name = system`. A problem's `p` implements SciMLStructures: `Tunable` is
+compose with `Potts.compose`. `Potts.component(name, system, model)` makes an MTK `System` a
+component of the model (for a Catalyst reaction network the system is
+`Catalyst.ode_model(complete(rn))`). The component joins as a model-scope component, as with
+`@components model name = system`, and its quantities are namespaced, `name₊x`:
+
+```@example mtk
+@variables z(Potts.t) = 1.0
+@parameters kz = 0.5
+@named zdecay = System([Potts.D(z) ~ -kz * z], Potts.t)
+composed = Potts.compose(sys, Potts.component(:zdecay, zdecay, sys))
+zsol = solve(PottsProblem(composed, [ownership => σ, kind => [:A, :A]], (0, 5); seed = 3,
+    field_solver = ExplicitEuler(substeps = 2)), SequentialCPM())
+zsol[:zdecay₊z][end]
+```
+
+A problem's `p` implements SciMLStructures: `Tunable` is
 the floating-point scalar parameters, `Constants` the kind tables (and integer scalars), and CPM
 parameters stay plain numbers. A `tunable = false` parameter is in `Constants`. Computed
 parameters (a default such as `λ2 = 2λ`) are in neither portion: they are read-only (D-F2-1),

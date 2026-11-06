@@ -147,11 +147,32 @@ inner(sys::PottsSystem) = getfield(sys, :inner)
 """
     Potts.part(sys::PottsSystem) -> PottsPart
 
-The Potts payload of a model (kinds, lattice, energies, sweep, …). `Potts.wrap(name, system,
-nothing, Potts.part(model))` builds a component with the model's kinds and lattice, which
-`Potts.compose` requires.
+The Potts payload of a model (kinds, lattice, energies, sweep, …). A component for
+`Potts.compose` is built with [`Potts.component`](@ref), which takes the model's kinds and
+lattice and none of its statements.
 """
 part(sys::PottsSystem) = getfield(sys, :part)
+
+"""
+    Potts.component(name, sys::System, model::PottsSystem) -> PottsSystem
+
+The MTK `System` `sys` as a component of `model`, for [`Potts.compose`](@ref): it is
+`Potts.wrap(name, sys, nothing, part)` with a payload that has the kinds, the lattice and the
+sweep of `model` and no statements (no energies, drives, constraints, …), which is what a
+composed component may carry. `sys` is named `name` (`@named`); a Catalyst reaction network
+`rn` is `Potts.component(name, Catalyst.ode_model(complete(rn)), model)`.
+
+```julia
+@named decay = System([D(y) ~ -k * y], t)
+sys = Potts.compose(model, Potts.component(:decay, decay, model))
+```
+"""
+component(name::Symbol, sys::ModelingToolkitBase.System, model::PottsSystem) =
+    wrap(name, sys, nothing, _component_part(model))
+
+# the payload of a component of `model`: its kinds, lattice and sweep, and nothing else
+_component_part(model::PottsSystem) =
+    PottsPart(; kinds = copy(_p(model, :kinds)), lattice = _p(model, :lattice), sweep = _p(model, :sweep))
 
 """
     Potts.fields(sys::PottsSystem)
@@ -451,9 +472,9 @@ tables, relations, kind classes, obstacle kinds, a schedule, `@bcs`, its own `@c
 PDESystem, kinds or a lattice other than the model's, or a name the model already uses (a
 component or a quantity). A component's sweep and structural keywords are its constructor's
 and are not read. Units and guesses of a component's quantities are kept; their types are not
-(a component's unknowns and parameters become Real model quantities). A Catalyst reaction network
-is composed as `Potts.wrap(name, Catalyst.ode_model(complete(rn)), nothing, getfield(p, :part))`
-with the model's own payload.
+(a component's unknowns and parameters become Real model quantities). Build a component with
+[`Potts.component`](@ref): `Potts.compose(p, Potts.component(:rn, Catalyst.ode_model(complete(rn)), p))`
+composes a Catalyst reaction network.
 """
 function compose(p::PottsSystem, cs::PottsSystem...; name::Symbol = nameof(p))
     isempty(cs) && throw(ArgumentError("Potts.compose: give at least one component"))
@@ -506,7 +527,9 @@ const _STATEMENT_FIELDS = (:energies, :drives, :constraints, :updates, :division
 function _check_component_part(name::Symbol, part::PottsPart, what)
     for f in _STATEMENT_FIELDS
         isempty(getfield(part, f)) || throw(ArgumentError("$what: component `$name` has $f; a component carries " *
-                                                          "quantities, equations and field bindings, not CPM statements"))
+                                                          "quantities, equations and field bindings, not CPM statements " *
+                                                          "(build a component of a model with " *
+                                                          "`Potts.component($(repr(name)), system, model)`)"))
     end
     for (f, label) in ((:relations, "relations"), (:kind_classes, "kind classes"), (:frozen_kinds, "obstacle kinds"),
             (:schedule, "a @schedule"), (:bcs, "@bcs"), (:components, "@components"))
@@ -527,10 +550,10 @@ function _merge_part(p, cs)
         # a component's folds read kinds by number and the lattice's sites: they must be the model's
         _p(c, :kinds) == _p(p, :kinds) || throw(ArgumentError(
             "Potts.compose: component `$(nameof(c))` has the kinds $(_p(c, :kinds)), the model `$(nameof(p))` " *
-            "$(_p(p, :kinds)); a component is built with the model's kinds (`Potts.wrap(name, system, nothing, Potts.part(model))`)"))
+            "$(_p(p, :kinds)); a component is built with the model's kinds (`Potts.component(name, system, model)`)"))
         _same_lattice(_p(c, :lattice), _p(p, :lattice)) || throw(ArgumentError(
             "Potts.compose: component `$(nameof(c))` has another lattice than the model `$(nameof(p))`; a component is " *
-            "built with the model's lattice (`Potts.wrap(name, system, nothing, Potts.part(model))`)"))
+            "built with the model's lattice (`Potts.component(name, system, model)`)"))
         _stored_fields(c) === nothing || throw(ArgumentError(
             "Potts.compose: component `$(nameof(c))` has a PDESystem; a component's fields are not compiled " *
             "(declare the fields in the model: `@variables c(field)`, `@equations D(c) ~ …`)"))

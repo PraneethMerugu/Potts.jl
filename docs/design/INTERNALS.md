@@ -309,7 +309,8 @@ a complete system that still has subsystems and a name mismatch, and stores the
 System from the part (`complete(…; allow_parameter_eqs = true)`: a component parameter bound
 in `@equations` is an equation with no unknowns). The compile pipeline's rewrites
 (`_replace`) change the part and keep the authored inner System. `Potts.extend` merges two
-parts and rebuilds; `Potts.compose` composes the inner Systems through `get_parent`.
+parts and rebuilds; `Potts.compose` composes the inner Systems through `get_parent`. `Potts.component(name, sys, model)` wraps `sys` with a part that holds only the
+model's kinds, lattice and sweep (what a composed component may carry).
 
 Owned methods (exactly 15, pinned by `test/wlite.jl`): `getproperty` and `show` (text/plain);
 `equations`, `unknowns`, `parameters`, `observed`, `initial_conditions`, `bindings`,

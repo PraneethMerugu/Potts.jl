@@ -106,7 +106,7 @@ public Dirichlet, NoFlux, Flux, Robin
 public hamiltonian, drives, PottsSweepSpec
 # the container (W-lite LA, v3 §7.1): the inner System, the field PDESystem, the payload; wrap,
 # compose and extend; the field bindings
-public inner, fields, part, wrap, compose, extend, PottsPart, FieldBinding, resolve
+public inner, fields, part, component, wrap, compose, extend, PottsPart, FieldBinding, resolve
 # the model's cell and model ODEs as the MTK systems `mtkcompile` produced
 public ode_system
 # the model's cell and model initialization as MTK systems (`@initialization_equations`, D-170)

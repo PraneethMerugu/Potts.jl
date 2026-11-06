@@ -684,3 +684,52 @@ end
     @test occursin("has the input", msg(() -> mtkcompile(Potts.compose(g, Potts.wrap(:vv, WLiteC9Neg.vsys(), nothing, part())))))
     @test occursin("has the input", msg(() -> mtkcompile(Potts.compose(g, Potts.wrap(:cell, WLiteCompose.cell(), nothing, part())))))
 end
+
+# F4-10 (FE-15a, V7a): `Potts.component(name, sys, model)` makes an MTK `System` a component
+# of a model with an energy; the documented route before it, `Potts.wrap(name, sys, nothing,
+# Potts.part(model))`, carried the model's energies into the component and was refused.
+# Base (3ed05c3b, ~/lpwork/f4c/nc10-base.log): `Potts.component` is not defined (the testset
+# errors on its first call); the old route is refused with "component `decay` has energies".
+@potts_model WLiteF410 begin
+    @kinds medium cell
+    @parameters λ = 2.0
+    @variables x(model) = 1.0
+    @equations D(x) ~ -λ * x
+    @lattice Lattice((8, 8))
+    @energy cells => (volume - 9.0)^2
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "F4-10: Potts.component composes an MTK System into a model with an energy" begin
+    msg(f) = try
+        f()
+        "built"
+    catch e
+        e isa ArgumentError ? sprint(showerror, e) : "not an ArgumentError: " * sprint(showerror, e)
+    end
+    m = WLiteF410(; name = :m)
+    @test !isempty(Potts.hamiltonian(m))
+    comp = Potts.component(:decay, WLiteC9.decay(), m)
+    @test isempty(Potts.hamiltonian(comp)) && Potts.lattice(comp) == Potts.lattice(m)
+    W = Potts.compose(m, comp)
+    @test any(isequal(unwrap(W.decay.yd)), unknowns(W)) && !isempty(Potts.hamiltonian(W))
+    σ = zeros(Int32, 8, 8); σ[2:4, 2:4] .= 1
+    p = PottsProblem(W, [Potts.ownership => σ, Potts.kind => [1]], (0, 10); ode_solver = RK4(substeps = 4), seed = 2)
+    sol = solve(p, SequentialCPM())
+    rk4(h) = 1 - h + h^2 / 2 - h^3 / 6 + h^4 / 24
+    @test sol.u[end].model.decay₊yd[1] ≈ 2.0 * rk4(0.3 / 4)^40 rtol = 1e-12
+    @test sol.u[end].model.x[1] ≈ rk4(2.0 / 4)^40 rtol = 1e-12
+    @test sol.u[end].σ != σ                                  # the energy's CPM ran
+    # the route before F4-10 is refused, and the refusal names `Potts.component`
+    old = msg(() -> Potts.compose(m, Potts.wrap(:decay, WLiteC9.decay(), nothing, Potts.part(m))))
+    @test occursin("has energies", old) && occursin("Potts.component(:decay, system, model)", old)
+    # PO74, PO75: other kinds or another lattice name `Potts.component`
+    part = WLiteModels.part
+    g = WLiteGuard(; name = :g)
+    kinds = msg(() -> Potts.compose(g, Potts.wrap(:decay, WLiteC9.decay(), nothing, part(; kinds = [:medium, :ka]))))
+    lat = msg(() -> Potts.compose(g, Potts.wrap(:decay, WLiteC9.decay(), nothing, part(; lattice = Potts.lattice_spec((6, 6))))))
+    @test occursin("has the kinds", kinds) && occursin("Potts.component(name, system, model)", kinds)
+    @test occursin("another lattice", lat) && occursin("Potts.component(name, system, model)", lat)
+    # the component's name is the System's (as `Potts.wrap`)
+    @test occursin("must agree", msg(() -> Potts.component(:other, WLiteC9.decay(), m)))
+end
