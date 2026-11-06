@@ -42,11 +42,12 @@ p60vx_division_counts(u0) = (0, 0, 0)
 
 """Hand count of `integ.u` (a host read point) for a model with a device lifecycle: one
 sync (`current_state`), the fold of the device lifecycle statistics (`_fold_lifecycle!`:
-one transfer of the `Int32` accumulators), and the snapshot (one transfer per array leaf
-of the state, `sizeof` bytes each). `u0` is the problem's host state."""
-function p60vx_read_counts(u0)
+one transfer of the `Int32` accumulators), the fold of the checkerboard's copy counts (one
+transfer of its per-block `Int32` counters, `nblocks`), and the snapshot (one transfer per
+array leaf of the state, `sizeof` bytes each). `u0` is the problem's host state."""
+function p60vx_read_counts(u0, nblocks)
     leaves = Any[u0.σ, values(u0.cell)..., values(u0.site)..., values(u0.model)..., values(u0.history)...]
-    return (1, 1 + length(leaves), CorePotts._NACC * sizeof(Int32) + sum(sizeof, leaves))
+    return (1, 2 + length(leaves), (CorePotts._NACC + nblocks) * sizeof(Int32) + sum(sizeof, leaves))
 end
 
 # HostPhase fixture (CorePotts level): a no-op host phase after every sweep.
@@ -94,7 +95,7 @@ p60vx_declared_counts(u0) = (1, 3, sizeof(u0.cell.x) + 2 * sizeof(u0.cell.y))
         @test p60vx_counts(integ.stats) .- c0 == p60vx_division_counts(prob.u0)
         c1 = p60vx_counts(integ.stats)
         u = integ.u                                                      # a host read point
-        @test p60vx_counts(integ.stats) .- c1 == p60vx_read_counts(prob.u0)
+        @test p60vx_counts(integ.stats) .- c1 == p60vx_read_counts(prob.u0, CorePotts.nblocks(integ.cache.layout))
         @test integ.stats.lifecycle.divisions == 2                       # folded at the read
         @test count(>(0), u.cell.volume) == 4
         prob = p60vx_hostphase_problem(; T = Float32)

@@ -7,13 +7,9 @@
 using Test
 using CorePotts: CorePotts
 
-# name => why the ROCm GPU group cannot compile it
-const ALLOWLIST = Dict{String, String}(
-    "propose_body!" => "called inside gpu_propose_kernel! and gpu_propose_track_kernel! (both scanned), never launched itself",
-    "commit_body!" => "called inside gpu_commit_kernel! and gpu_commit_track_kernel! (both scanned), never launched itself",
-    "propose_conn_body!" => "called inside gpu_propose_conn_kernel! and gpu_serial_conn_kernel! (both scanned), never launched itself",
-    "global_deferred_body!" => "called inside gpu_global_conn_kernel! and gpu_global_serial_kernel! (both scanned), never launched itself",
-)
+# name => why the ROCm GPU group cannot compile it (empty since the claiming checkerboard's
+# bodies went with it, P6.0bl)
+const ALLOWLIST = Dict{String, String}()
 
 @testset "device IR: every CorePotts kernel and launch body is scanned" begin
     dir = get(ENV, "POTTS_DEVICE_IR_DIR", "")
