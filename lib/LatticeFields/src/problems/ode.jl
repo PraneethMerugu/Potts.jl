@@ -101,19 +101,56 @@ struct LatticeRHS{L <: Tuple, W, E, X, I}
     owner::Vector{Any}                         # [the task that runs this build, or nothing]
     copies::Dict{Task, Any}                    # the builds of other tasks (finished ones dropped)
     lock::ReentrantLock                        # guards `owner` changes and `copies`
+    synced::Vector{Any}                        # [the `LatticeParameters` whose tables and inputs the store holds]
+    stamp::Vector{Int}                         # … at its write count
 end
-_rhs_eltype(du, u, p, t) = promote_dual(promote_dual(promote_type(eltype(u), eltype(du)), eltype(p)), typeof(t))
+_rhs_eltype(du, u, p, t) = promote_dual(promote_dual(promote_type(eltype(u), eltype(du)), eltype(_pvals(p))), typeof(t))
 function (f::LatticeRHS{L, W, E})(du, u, p, t) where {L, W, E}
     f.owner[1] === current_task() || return _other_task(f, du, u, p, t)
-    degenerate_face(f.faces, p) == 0 || check_faces(f.faces, p)
+    pv = _pvals(p)
+    degenerate_face(f.faces, pv) == 0 || check_faces(f.faces, pv)
     C = _rhs_eltype(du, u, p, t)
     C === E || return _variant(f, C)(du, u, p, t)
+    # the tables and inputs of `p` (F4-00): uploaded again when `p` or its write count changes
+    _synced(f, p) || _sync!(f, p)
     # the computed slots (F2-15): derived again when the values change, and on every call for
     # parameters with derivative parts (a reseeded Dual vector keeps its primal values)
-    _derives(f) && (_plainp(p) && _checked(f, p) || derive!(p, f.ctx.tables, f.ctx.index))
-    _checked(f, p) || _check!(f, p)
-    isempty(f.init.launches) || _same_params(f, p) || _init!(f, p)
-    f.walk(f.launches, (du, u, p, t))
+    _derives(f) && (_plainp(pv) && _checked(f, pv) || derive!(pv, _ptables(p, f.ctx.tables), f.ctx.index))
+    _checked(f, pv) || _check!(f, p)
+    isempty(f.init.launches) || _same_params(f, pv) || _init!(f, pv)
+    f.walk(f.launches, (du, u, pv, t))
+    return nothing
+end
+
+# the store holds the tables and inputs of `p` (a raw parameter vector: the build's own)
+# a plain vector holds no input values: the store's inputs are those given at the build (an
+# eager `ode_problem`), or of a `LatticeParameters` an earlier call synced; else the inputs
+# would read as zero, which is refused (review finding 5)
+_synced(f::LatticeRHS, p) = f.synced[1] !== nothing || _no_inputs(f.ctx.program) || _raw_inputs(f)
+_no_inputs(s::Program) = !any(fd -> fd.role == :input, s.fields)
+function _raw_inputs(f::LatticeRHS)
+    ks = [input_name(f.ctx.index, fd.key) for fd in f.ctx.program.fields if fd.role == :input]
+    throw(ArgumentError(string("the parameters are a plain vector, which holds no input values: the input field",
+        length(ks) == 1 ? " " : "s ", join(("`$k`" for k in ks), ", "), " would read as zero. Give the problem's ",
+        "parameters, `prob.p` (a `LatticeParameters`, with the inputs), or `remake(prob; p = values)`")))
+end
+_synced(f::LatticeRHS, p::LatticeParameters) = f.synced[1] === p && f.stamp[1] == p.stamp[]
+# upload the tables and inputs of `p` into the store, in place (the bound launches hold the
+# arrays); the init kernels and the checks run again at this call
+function _sync!(f::LatticeRHS, p::LatticeParameters)
+    prog, st = f.ctx.program, f.store
+    for (k, v) in p.tables
+        a = st.tables[findfirst(t -> t.key == k, prog.tables)]
+        copyto!(a, convert(Vector{eltype(a)}, collect(v)))
+    end
+    check_inputs_set(p.inputs; index = f.ctx.index)
+    for (k, v) in p.inputs
+        _set_input!(st, prog, k, v)
+    end
+    f.lastp[1] = nothing
+    f.checkp[1] = nothing
+    f.synced[1] = p
+    f.stamp[1] = p.stamp[]
     return nothing
 end
 
@@ -150,12 +187,21 @@ end
 _checked(f::LatticeRHS, p) = f.checkp[1] === p && length(f.checkv) == length(p) &&
                              all(i -> f.checkv[i] == Float64(primal(p[i])), eachindex(f.checkv))
 function _check!(f::LatticeRHS, p)
-    check_values(p, f.ctx.index)
-    check_parameters(f.ctx.stability, with_tables(map(primal, p), f.ctx.tables; inputs = f.ctx.binputs))
-    f.checkp[1] = p
-    resize!(f.checkv, length(p))
-    f.checkv .= [Float64(primal(x)) for x in p]
+    pv = _pvals(p)
+    check_values(pv, f.ctx.index)
+    check_parameters(f.ctx.stability, with_tables(map(primal, pv), _ptables(p, f.ctx.tables); inputs = _binputs(f.ctx, p)))
+    f.checkp[1] = pv
+    resize!(f.checkv, length(pv))
+    f.checkv .= [Float64(primal(x)) for x in pv]
     return nothing
+end
+# the inputs the stability bound reads in an index, shaped by site: those of `p`, or the ones
+# the problem was built with
+_binputs(ctx, p) = ctx.binputs
+function _binputs(ctx, p::LatticeParameters)
+    bks = bound_inputs(ctx.stability)
+    isempty(bks) && return ctx.binputs
+    return Pair{String, Any}[k => _site_shaped(ctx.program, k, v) for (k, v) in p.inputs if k in bks && v !== nothing]
 end
 
 # A deep copy (SciML's `safetycopy` of an ensemble's problem) is a new build: it has no owner
@@ -163,6 +209,7 @@ end
 # not serialize), which the task that first calls the deserialized function claims.
 _unowned(f::LatticeRHS, val) = typeof(f)(map(fieldnames(typeof(f))) do k
     k === :owner ? Any[nothing] : k === :copies ? Dict{Task, Any}() : k === :lock ? ReentrantLock() :
+    k === :synced ? Any[getfield(f, :synced)[1] === nothing ? nothing : :given] :
     val(getfield(f, k))
 end...)
 function Base.deepcopy_internal(f::LatticeRHS, d::IdDict)
@@ -202,6 +249,7 @@ function _for_task(f::LatticeRHS{L, W, E}) where {L, W, E}
         g === nothing || return g
         filter!(kv -> !istaskdone(first(kv)), f.copies)
         g = _lattice_rhs(f.ctx, E, f.store; shared = :inputs)
+        f.synced[1] === nothing || (g.synced[1] = :given)      # (the inputs are shared)
         g.owner[1] = ct
         f.copies[ct] = g
         task_local_storage(f.owner, WeakRef(g))
@@ -220,6 +268,7 @@ function _variant(f::LatticeRHS, ::Type{C}) where {C}
                 "differentiate with respect to Float32 parameters (θ::Vector{Float32}) here")))
         _check_eltype(C, ctx.backend)
         v = _lattice_rhs(ctx, C, f.store)
+        f.synced[1] === nothing || (v.synced[1] = :given)      # (the integer inputs are shared)
         v.owner[1] = f.owner[1]                  # the variant runs on its build's task
         f.variants[C] = v
         push!(f.order, C)
@@ -287,7 +336,8 @@ function _lattice_rhs(ctx::RHSContext, ::Type{E}, base, Pinit = nothing, inputs 
     f = LatticeRHS{typeof(ls), typeof(each(length(ls))), E, typeof(ctx), typeof(ip)}(ls,
         each(length(ls)), ctx.faces, st, ctx, ip, Any[nothing], Float64[], Any[nothing], Float64[],
         Dict{Type, Any}(), Type[],
-        Any[nothing], Dict{Task, Any}(), ReentrantLock())
+        Any[nothing], Dict{Task, Any}(), ReentrantLock(), Any[nothing], Int[0])
+    isempty(inputs) || (f.synced[1] = :given)                # (the inputs given at the build)
     Pinit === nothing || isempty(ip.launches) || _init!(f, Pinit)
     return f
 end
@@ -370,11 +420,13 @@ function ode_problem(prog::Program, u0, tspan, p; state, rates, init = String[],
     U = copyto!(KA.allocate(backend, E, n), convert(Vector{E}, collect(u0)))
     # aux fields `K ~ rhs` read as observed quantities (`sol[K]`, `integ[K]`: F3-00 review M1)
     index isa LatticeIndex && !isempty(index.aux) && (index.auxeval[] = ODEAux(f, s))
+    index isa LatticeIndex && (index.program[] = s)          # (the checks of an input write)
     fun = SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize}(f; sys = index)
+    lp = LatticeParameters(pv, tabs, ins)
     # a system with no time (F3-12b): the steady state of the right side, for SciML's steady
     # solvers (`DynamicSS`, a nonlinear solver)
-    steady && return SciMLBase.SteadyStateProblem(fun, U, pv)
-    return SciMLBase.ODEProblem(fun, U, (Float64(tspan[1]), Float64(tspan[2])), pv)
+    steady && return SciMLBase.SteadyStateProblem(fun, U, lp)
+    return SciMLBase.ODEProblem(fun, U, (Float64(tspan[1]), Float64(tspan[2])), lp)
 end
 
 # The problems built from a field program's ODE form (an ODEProblem whose right side is a
@@ -408,43 +460,135 @@ const LatticeNonlinearProblem = typewith(SciMLBase.NonlinearProblem, :f,
                                           typewith(SciMLBase.NonlinearFunction, :sys, LatticeIndex))
 const LatticeSciMLProblem = Union{LatticeODEProblem, LatticeSteadyStateProblem, LatticeNonlinearProblem}
 
-# a parameter map's keys (a vector or tuple of pairs, `Any[...]` too, or a dict); an untyped
-# vector of pairs is passed on as a vector of pairs (SciMLBase reads a map by its eltype)
-function _check_map_keys(prob, p)
+# The parameters of a remake of a lattice problem (F4-00): `p` a `LatticeParameters`, a vector
+# of every scalar parameter, or a map whose keys name scalar parameters, whole tables (`Dk =>
+# values`) and inputs (`kind => K`); `inputs` more input pairs. Every key names a parameter (a
+# typo, an expression or a computed parameter is refused, F1), each write is checked (a
+# declared bound, finite table values, one input value per site) and the computed slots
+# follow (F2-15). A plain value is written into the parameter type, a Dual promotes it.
+# `missing`: the problem's own object.
+function remake_params(prob, p, inputs = ())
+    lp = prob.p
+    lp isa LatticeParameters || return p
     ix = SII.symbolic_container(prob.f)
-    ix isa LatticeIndex || return p
-    p isa AbstractVector{<:Real} && check_bounds(p, ix)            # a declared bound, at the write (F2-14)
-    ismap = p isa AbstractDict || (p isa Union{AbstractVector, Tuple} && !isempty(p) && all(x -> x isa Pair, p))
-    ismap || return p
-    check_parameter_keys(ix, (first(x) for x in p))
-    check_bounds(prob.p, ix, p; tables = rhs_tables(prob.f))
-    return p isa AbstractVector && !(eltype(p) <: Pair) ? Pair[x for x in p] : p
-end
-function SciMLBase.remake(prob::LatticeODEProblem; p = missing, kw...)
-    p = _check_map_keys(prob, p)
-    q = invoke(SciMLBase.remake, Tuple{SciMLBase.ODEProblem}, prob; p, kw...)
-    q.p === prob.p || derive!(q.p, q.f.f.ctx.tables, q.f.f.ctx.index)     # the computed slots follow (F2-15)
+    p === missing && isempty(inputs) && return missing
+    q = if p === missing
+        copy(lp)
+    elseif p isa LatticeParameters
+        p
+    elseif p isa AbstractVector{<:Real}
+        length(p) == length(lp.values) ||
+            throw(ArgumentError("`p` has $(length(p)) values; the problem has $(length(lp.values)) parameters"))
+        with_values(lp, collect(p))
+    elseif p isa AbstractDict || (p isa Union{AbstractVector, Tuple} && all(x -> x isa Pair, p))
+        _params_from_map(lp, ix, p)
+    else
+        throw(ArgumentError(string("`p` is a `LatticeParameters`, a vector of every parameter or `parameter => value` ",
+            "pairs; got a ", typeof(p))))
+    end
+    for (s, v) in inputs
+        SII.set_parameter!(q, v, InputSlot(_input_of(ix, s, q), ix))
+    end
+    ix isa LatticeIndex || return q
+    derive!(q.values, q.tables, ix)                    # the computed slots follow (F2-15)
+    check_bounds(q.values, ix)                         # a declared bound, at the write (F2-14)
     return q
 end
-function SciMLBase.remake(prob::LatticeSteadyStateProblem; p = missing, kw...)
-    p = _check_map_keys(prob, p)
-    return invoke(SciMLBase.remake, Tuple{SciMLBase.SteadyStateProblem}, prob; p, kw...)
+# the input key of `s` among the inputs of `q`, else an error listing them
+function _input_of(ix, s, q::LatticeParameters)
+    k = ix isa LatticeIndex && !(s isa Union{AbstractArray, Tuple, Integer}) ? input_key(ix, s) : nothing
+    k === nothing && s isa AbstractString && any(x -> first(x) == s, q.inputs) && (k = String(s))
+    k === nothing && _not_input(s, [input_name(ix, first(x)) for x in q.inputs])
+    return k
 end
-function SciMLBase.remake(prob::LatticeNonlinearProblem; p = missing, kw...)
-    p = _check_map_keys(prob, p)
-    return invoke(SciMLBase.remake, Tuple{SciMLBase.NonlinearProblem}, prob; p, kw...)
+function _params_from_map(lp::LatticeParameters, ix, p)
+    ix isa LatticeIndex && check_parameter_keys(ix, (first(x) for x in p))
+    T = foldl((T, x) -> last(x) isa Real ? promote_dual(T, typeof(last(x))) : T, p; init = eltype(lp.values))
+    q = with_values(lp, Vector{T}(lp.values))
+    # a whole table of a wider type (BigFloat values for Float64 defaults) widens the tables
+    TT0 = _tabeltype(lp.tables)
+    TT = foldl((S, x) -> SII.parameter_index(ix, first(x)) isa TableSlot && last(x) isa Union{AbstractArray, Tuple} ?
+                         promote_type(S, _tabelt(collect(last(x)))) : S, p; init = TT0)
+    TT === TT0 || (q = LatticeParameters(q.values, Pair{String, Vector{TT}}[k => Vector{TT}(v) for (k, v) in q.tables],
+        q.inputs; tick = q.tick[]))
+    for (k, v) in p
+        i = SII.parameter_index(ix, k)
+        if i isa TableSlot
+            i.entry == 0 || throw(ArgumentError(string("`", _symtext(k), "` is entry ", i.entry, " of the table `", i.key,
+                "`: give the whole table, `", i.key, " => values`")))
+            SII.set_parameter!(q, v, i)
+        elseif i isa InputSlot
+            SII.set_parameter!(q, v, i)
+        else
+            q.values[i] = v
+        end
+    end
+    return q
+end
+# `u0` of a remake: a flat state, or `field => values` pairs (a number or one value per site)
+# over the problem's state, on its backend; a Dual value promotes the state
+function remake_u0(prob, u0)
+    u0 isa Union{AbstractVector{<:Pair}, Tuple, AbstractDict} && !isempty(u0) || return u0
+    ix = SII.symbolic_container(prob.f)
+    all(x -> x isa Pair, u0) || throw(ArgumentError("`u0` is a flat vector of the state or `field => values` pairs"))
+    E = foldl((T, x) -> last(x) isa Real ? promote_dual(T, typeof(last(x))) :
+                        last(x) isa AbstractArray ? promote_dual(T, eltype(last(x))) : T, u0; init = eltype(prob.u0))
+    out = Vector{E}(Array(prob.u0))
+    for (k, v) in u0
+        slot = ix isa LatticeIndex ? _slot(ix, k) : nothing
+        slot === nothing && throw(ArgumentError(string("`u0`: `", _symtext(k), "` is not a field of the state",
+            ix isa LatticeIndex ? string("; its fields: ", join(("`$(_symtext(f))`" for f in ix.varsyms), ", ")) : "")))
+        if v isa Real
+            out[slot.range] .= v
+        elseif v isa AbstractArray && length(v) == length(slot.range)
+            out[slot.range] .= vec(collect(v))
+        else
+            throw(ArgumentError(string("`u0`: give `", _symtext(k), "` one value per site (", length(slot.range),
+                ") or a number; got ", v isa AbstractArray ? "$(length(v)) values" : repr(v))))
+        end
+    end
+    return copyto!(similar(prob.u0, E), out)
+end
+function SciMLBase.remake(prob::LatticeODEProblem; p = missing, u0 = missing, inputs = (), kw...)
+    return invoke(SciMLBase.remake, Tuple{SciMLBase.ODEProblem}, prob; p = remake_params(prob, p, inputs),
+        u0 = remake_u0(prob, u0), kw...)
+end
+function SciMLBase.remake(prob::LatticeSteadyStateProblem; p = missing, u0 = missing, inputs = (), kw...)
+    return invoke(SciMLBase.remake, Tuple{SciMLBase.SteadyStateProblem}, prob; p = remake_params(prob, p, inputs),
+        u0 = remake_u0(prob, u0), kw...)
+end
+function SciMLBase.remake(prob::LatticeNonlinearProblem; p = missing, u0 = missing, inputs = (), kw...)
+    return invoke(SciMLBase.remake, Tuple{SciMLBase.NonlinearProblem}, prob; p = remake_params(prob, p, inputs),
+        u0 = remake_u0(prob, u0), kw...)
 end
 
 # `setp` of a symbol that is no parameter names it (SII: "invalid index: nothing")
 function check_setp(sys, sym)
+    # (a resolved index: SII's setter of an array symbol calls `setp` again with its index)
+    sym isa Union{TableSlot, InputSlot, Integer} && return nothing
     ix = SII.symbolic_container(sys isa Union{FieldProblem, FieldIntegrator} ? sys : sys.f)
     ix isa LatticeIndex && !(sym isa Union{AbstractArray, Tuple}) && check_parameter_keys(ix, (sym,))
+    # an owned problem holds its tables and inputs as given: `remake` gives new ones
+    if sys isa FieldProblem && ix isa LatticeIndex
+        t = table_key(ix, sym)
+        t === nothing || throw(ArgumentError(string("`", t, "` is a table (an array parameter) of an owned problem: ",
+            "`remake(prob; p = [", t, " => values])` gives it new values, and on its integrator `integ.ps[", t, "] = values`")))
+        k = sym isa Union{AbstractArray, Tuple, Integer} ? nothing : input_key(ix, sym)
+        k === nothing || throw(ArgumentError(string("`", input_name(ix, k), "` is an input of an owned problem: ",
+            "`remake(prob; inputs = [", _route(input_name(ix, k)), " => values])` gives it new values, and on its integrator ",
+            "`integ.ps[", input_name(ix, k), "] = values`")))
+    end
     return nothing
 end
 function SII.setp(sys::Union{FieldProblem, FieldIntegrator, LatticeSciMLProblem}, sym; kw...)
     # a table (or an entry of one) of an integrator: its write, with the checks (`integ.ps[Dk] = values`)
     if sys isa FieldIntegrator && sys.prob.index isa LatticeIndex && table_key(sys.prob.index, sym) !== nothing
         return (i, v) -> (_write_table!(i, v, sym); v)
+    end
+    # an input of an integrator: the input write (`integ.ps[kind] = K` is `integ[kind] = K`)
+    if sys isa FieldIntegrator && sys.prob.index isa LatticeIndex && !(sym isa Union{AbstractArray, Tuple, Integer}) &&
+       input_key(sys.prob.index, sym) !== nothing
+        return (i, v) -> (i[sym] = v; v)
     end
     check_setp(sys, sym)
     return invoke(SII.setp, Tuple{Any, Any}, sys, sym; kw...)

@@ -84,6 +84,7 @@ function FieldProblem(spec::GroupSpec, u0, tspan, p; index = LatticeIndex(), tab
     pv = collect(p)
     ins = resolve_inputs(s, index, inputs)
     tabs = _table_list(tables)
+    index isa LatticeIndex && (index.program[] = s)          # (the checks of an input write)
     prob = _field_problem(s, collect(String, state), u0, tspan, pv, tabs, ins, backend, index, faces, stability, kind,
         collect(String, init), _state_options(options, problem_eltype(u0, pv, tabs)), FieldGroup(spec; alg, program = s))
     ids = sort!([fieldid(s, k) for k in state])
@@ -215,6 +216,7 @@ stability bound is a function of the parameters, evaluated again when solved.
 """
 function SciMLBase.remake(prob::FieldProblem; u0 = prob.u0, tspan = prob.tspan, p = prob.p,
         inputs = ())
+    p, inputs = _input_pairs(prob.index, p, inputs)
     tables, p = _tables(prob, p)
     pv = _parameter_vector(prob, p)
     check_faces(prob.faces, pv)
@@ -230,6 +232,14 @@ function SciMLBase.remake(prob::FieldProblem; u0 = prob.u0, tspan = prob.tspan, 
     return _field_problem(prob.program, prob.state, collect(u0), tspan, pv, tables,
         ins, prob.backend, prob.index, prob.faces, prob.stability, prob.kind, prob.initkeys,
         prob.options, prob.group)
+end
+# the input pairs of a parameter map `p` (`kind => K`: an input is a parameter, F4 design
+# §3.3) moved to the input pairs; the other pairs in `p`'s container type
+_input_pairs(ix, p, inputs) = p, inputs
+function _input_pairs(ix::LatticeIndex, p::Union{AbstractVector{<:Pair}, Tuple, AbstractDict}, inputs)
+    isin(x) = !(first(x) isa Union{AbstractArray, Tuple, Integer}) && input_key(ix, first(x)) !== nothing
+    any(isin, p) || return p, inputs
+    return filter(!isin, p), Any[collect(Any, inputs); [x for x in p if isin(x)]]
 end
 # the table pairs of `p` (`Dk => values`, array parameters) as the problem's new tables, and
 # the other pairs (in the caller's container type, so a `Vector` of pairs infers). The tables'
@@ -1023,12 +1033,25 @@ function SII.getp(sys::Union{FieldProblem, FieldIntegrator, FieldSolution}, sym)
     sym isa Union{Symbol, AbstractString} && String(sym) == CLOCK_KEY && throw(ArgumentError(string(
         "`", CLOCK_KEY, "` is the clock's slot, which the stepper writes at every launch, not a parameter of the ",
         "problem: an equation reads the step index as `step_index(t)`")))
+    # an input (a parameter of the `Discrete` portion, F4 design §3.3): its current values
+    ki = ix isa LatticeIndex && !(sym isa Union{AbstractArray, Tuple, Integer}) ? input_key(ix, sym) : nothing
+    ki === nothing || return x -> _read_input(x, ki)
     if ix isa LatticeIndex && _has_table(ix, sym)
         table_key(ix, sym) === nothing || return x -> _read_table(x, sym)
         gs = map(s -> SII.getp(sys, s), sym isa Tuple ? sym : collect(sym))
         return sym isa Tuple ? (x -> map(g -> g(x), gs)) : (x -> [g(x) for g in gs])
     end
     return invoke(SII.getp, Tuple{Any, Any}, sys, sym)
+end
+# input `k` of a problem (its values as given, shaped by site), an integrator (its store) or a
+# solution (its problem's)
+_read_input(i::FieldIntegrator, k) = i[k]
+function _read_input(x::Union{FieldProblem, FieldSolution}, k)
+    prob = x isa FieldProblem ? x : x.prob
+    v = last(prob.inputs[findfirst(q -> first(q) == k, prob.inputs)])
+    v isa AbstractArray || return v
+    a = reshape(copy(v), _input_dims(prob.program, prob.program.fields[fieldid(prob.program, k)]))
+    return is_bool_input(prob.index, k) ? map(!iszero, a) : a
 end
 # a symbol as the user wrote it: `:kind`, `"kind"`, or a variable without `⋆` and `(t, x, y)`
 _symtext(sym::Union{Symbol, AbstractString}) = repr(sym)

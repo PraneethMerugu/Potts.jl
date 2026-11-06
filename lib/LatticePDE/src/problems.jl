@@ -1803,12 +1803,12 @@ function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = (),
     index = _index(cf, sys, s, state; g.derived, g.computed, cdefaults = g.defaults, free = timefree ? free : nothing)
     x0 = _given_u0(_initial(cf, sys, state, T), index, u0)
     _check_state_bounds(x0, cf, sys, index)
-    pv, tables = _given_p(cf.defaults, cf.tables, index, p)
+    pv, tables, pins = _given_p(cf.defaults, cf.tables, index, p)
     Problems.derive!(pv, tables, index)                  # the computed slots (F2-15)
     Problems.check_bounds(pv, index)                     # … within their bounds too
     # a constant face or mask value outside its field's declared bounds (batch 5 review M2)
     Problems.check_declared(spec.stability, Problems.with_tables(map(primal, pv), tables))
-    ins = Pair[_input_defaults(cf, sys); collect(inputs)]
+    ins = Pair[_input_defaults(cf, sys); collect(inputs); pins]
     if kind == :owned
         _check_fusion(s, sys, disc)
         return FieldProblem(spec, x0, span, pv; index, tables, inputs = ins, backend, options)
@@ -1906,11 +1906,11 @@ function _given_u0(x0, index, u0)
     return out
 end
 function _given_p(defaults, tables, index, p)
-    p === nothing && return defaults, tables
+    p === nothing && return defaults, tables, Pair[]
     if p isa AbstractVector{<:Real}
         length(p) == length(defaults) || _dverr("`p` has $(length(p)) values; the system has $(length(defaults)) parameters")
         Problems.check_bounds(p, index)              # a declared bound, at the write (F2-14)
-        return collect(p), tables
+        return collect(p), tables, Pair[]
     end
     p isa Union{AbstractVector{<:Pair}, Tuple, AbstractDict} ||
         _dverr("`p` is a vector of every parameter or `parameter => value` pairs; got a $(typeof(p))")
@@ -1918,6 +1918,7 @@ function _given_p(defaults, tables, index, p)
     P = foldl((T, x) -> last(x) isa Real ? promote_dual(T, typeof(last(x))) : T, p; init = eltype(defaults))
     pv = Vector{P}(defaults)
     tabs = Pair{String, Any}[k => v for (k, v) in tables]
+    ins = Pair[]                                     # an input is a parameter too (F4-00): `kind => K`
     for (k, v) in p
         t = Problems.table_key(index, k)
         if t !== nothing
@@ -1931,10 +1932,11 @@ function _given_p(defaults, tables, index, p)
         end
         i = parameter_index(index, k)                    # a computed parameter, or an unknown name, is an error naming it
         i === nothing && _dverr("`p`: `$(_keytext(k))` is not a parameter of the system")
+        i isa Problems.InputSlot && (push!(ins, k => v); continue)
         pv[i] = v
     end
     Problems.check_bounds(pv, index)                 # a declared bound, at the write (F2-14)
-    return pv, tabs
+    return pv, tabs, ins
 end
 
 # a key as the user wrote it (`c`, not `c(t, x, y)`; `:c` as `c`)

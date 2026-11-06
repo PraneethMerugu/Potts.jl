@@ -286,6 +286,7 @@ bcs = [ce ~ masked(ke == 3, 0.0), oe ~ masked(ismember(ke, (2, 3)), 1.0)]
     include("silent.jl")
     include("groups.jl")
     include("integ_ps.jl")
+    include("params.jl")
     include("groups_coupling.jl")
     include("implicit.jl")
     include("cranknicolson.jl")

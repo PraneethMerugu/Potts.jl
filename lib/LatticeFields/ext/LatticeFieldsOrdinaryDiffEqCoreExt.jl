@@ -14,9 +14,13 @@ const LatticeODEIntegrator = Problems.typewith(ODEIntegrator, :f, Problems.Latti
 function SII.setp(sys::LatticeODEIntegrator, sym; kw...)
     Problems.check_setp(sys, sym)
     s = invoke(SII.setp, Tuple{Any, Any}, sys, sym; kw...)
+    # (a resolved index, from SII's setter of an array symbol: the symbol's setter checks)
+    sym isa Union{Problems.TableSlot, Problems.InputSlot, Integer} && return s
     return function (integ, v)
         kv = sym isa Union{AbstractArray, Tuple} ? collect(zip(sym, v)) : [sym => v]
-        Problems.check_bounds(integ.p, SII.symbolic_container(integ.f), kv; tables = Problems.rhs_tables(integ.f))   # (the function holds the index)
+        p = integ.p                                    # (the function holds the index)
+        lp = p isa Problems.LatticeParameters
+        Problems.check_bounds(lp ? p.values : p, SII.symbolic_container(integ.f), kv; tables = lp ? p.tables : Problems.rhs_tables(integ.f))
         return s(integ, v)
     end
 end

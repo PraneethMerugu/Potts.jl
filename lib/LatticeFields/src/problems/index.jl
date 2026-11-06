@@ -63,6 +63,7 @@ struct LatticeIndex{F}
     aux::Dict{Any, String}                      # symbol → aux field key (F3-00)
     auxsyms::Vector{Any}                        # the canonical symbol of each aux field
     auxeval::Ref{Any}                           # the ODE path's aux evaluator `(u, p, t, key)`, or nothing
+    program::Ref{Any}                           # the semantic program (the checks of an input write), or nothing
 end
 function LatticeIndex(; key::F = identity, variables = Pair[], parameters = Pair[],
         independent_variables = Any[], defaults = Dict{Any, Any}(), inputs = Pair[],
@@ -109,7 +110,7 @@ function LatticeIndex(; key::F = identity, variables = Pair[], parameters = Pair
                                                        for (ss, k) in tables for s in syms(ss)),
         Dict{Int, Tuple{Float64, Float64}}(Int(i) => Float64.((b[1], b[2])) for (i, b) in parambounds), derive,
         Dict{Any, String}(key(s) => String(k) for (ss, k) in aux for s in syms(ss)), Any[first(syms(ss)) for (ss, _) in aux],
-        Ref{Any}(nothing))
+        Ref{Any}(nothing), Ref{Any}(nothing))
 end
 
 # `ix.K` for a name that is not a field of the index: its canonical symbol, as an MTK system
@@ -179,12 +180,17 @@ SII.variable_symbols(ix::LatticeIndex) = ix.varsyms
 # `parameter_observed`, and its `parameter_index` is an error that says why, so a remake
 # (SciMLBase's `fill_p` asks `parameter_index` for every key) or `setp` of it is refused (F1)
 _scalar(sym) = !(sym isa Union{AbstractArray, Tuple})
-SII.is_parameter(ix::LatticeIndex, sym) = _scalar(sym) && haskey(ix.params, ix.key(sym))
+# A table (or an entry) and an input are parameters too (F4 design §3.3: `Constants` and
+# `Discrete` of `LatticeParameters`), indexed by a `TableSlot` and an `InputSlot`
+SII.is_parameter(ix::LatticeIndex, sym) = (_scalar(sym) && haskey(ix.params, ix.key(sym))) || table_key(ix, sym) !== nothing ||
+                                          (!(sym isa Union{AbstractArray, Tuple, Integer}) && input_key(ix, sym) !== nothing)
 SII.is_observed(ix::LatticeIndex, sym) = _scalar(sym) && (haskey(ix.observed, ix.key(sym)) || _ode_aux(ix, sym) !== nothing)
 # an aux field on the ODE path (F3-00 review M1): observed, `rhs(u(t), t)` from the solver's state
 _ode_aux(ix::LatticeIndex, sym) = ix.auxeval[] === nothing ? nothing : aux_key(ix, sym)
-SII.parameter_observed(ix::LatticeIndex, sym) = _scalar(sym) ? get(ix.observed, ix.key(sym), nothing) :
+SII.parameter_observed(ix::LatticeIndex, sym) = _scalar(sym) ? _on_values(get(ix.observed, ix.key(sym), nothing)) :
                                                _observed_list(ix, sym)
+# an observed parameter reads the scalar values (`LatticeParameters` or a raw vector)
+_on_values(f) = f === nothing ? nothing : (p, t) -> f(_pvals(p), t)
 function SII.observed(ix::LatticeIndex, sym)
     k = _scalar(sym) ? _ode_aux(ix, sym) : nothing
     if k !== nothing
@@ -199,10 +205,10 @@ end
 function _observed_list(ix::LatticeIndex, syms)
     fs = map(collect(syms)) do s
         k = ix.key(s)
-        haskey(ix.observed, k) && return ix.observed[k]
+        haskey(ix.observed, k) && return _on_values(ix.observed[k])
         i = get(ix.params, k, nothing)
         i === nothing && throw(ArgumentError("`$s` is not a parameter of the problem"))
-        return (p, t) -> p[i]
+        return (p, t) -> _pvals(p)[i]
     end
     return (p, t) -> [f(p, t) for f in fs]
 end
@@ -216,20 +222,16 @@ function SII.parameter_index(ix::LatticeIndex, sym)
         return Int(sym)
     end
     k = ix.key(sym)
-    if haskey(ix.tables, k)
-        t = first(ix.tables[k])
-        throw(ArgumentError(string("`", t, "` is a table (an array parameter), set where the problem is built: ",
-            "on an owned problem (a FieldProblem), `remake(prob; p = [", t, " => values])` gives it new values, ",
-            "and on its integrator `integ.ps[", t, "] = values`; an ODE problem's tables are fixed (give them to ",
-            "`discretize(…; p = [", t, " => values])`)")))
-    end
+    haskey(ix.tables, k) && return TableSlot(ix.tables[k]...)
     _scalar(sym) || return nothing
+    ki = input_key(ix, sym)
+    ki === nothing || return InputSlot(ki, ix)
     i = get(ix.params, k, nothing)
     i === nothing || return i
     haskey(ix.derived, k) && throw(ArgumentError(ix.derived[k]))     # a computed parameter (D-F2-1): read-only
     # a variable, an input or the time is not a parameter (`nothing`); any other symbol is a
     # typo, an error rather than a key `remake` would skip
-    (haskey(ix.vars, k) || haskey(ix.inputs, k) || SII.is_independent_variable(ix, sym)) && return nothing
+    (haskey(ix.vars, k) || SII.is_independent_variable(ix, sym)) && return nothing
     # an expression (`2c`) is not an index (SII's contract: `nothing`); a name is
     sym isa Union{Symbol, AbstractString} || SII.hasname(sym) || return nothing
     throw(ArgumentError(string("`", sym, "` is not a parameter of the problem (its parameters: ",

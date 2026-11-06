@@ -17,6 +17,7 @@ using KernelAbstractions: KernelAbstractions as KA
 using RuntimeGeneratedFunctions: RuntimeGeneratedFunctions, RuntimeGeneratedFunction,
                                  drop_expr
 using SciMLBase: SciMLBase
+using SciMLStructures: SciMLStructures as SS
 using SymbolicIndexingInterface: SymbolicIndexingInterface as SII
 using ..Exec: Exec
 using ..IR: Coef, DomainEdgeRule, HEX, Ex, FaceRule, NodeValueRule, Program, RUNTIME, PARAM, LOAD, fieldid, print_program, isfloat, juliatype, leveldims, ncomp, nsites,
@@ -50,6 +51,7 @@ include("store.jl")
 include("steps.jl")
 include("faces.jl")
 include("index.jl")
+include("params.jl")
 include("derivation.jl")
 include("inputs.jl")
 include("algorithms.jl")
@@ -61,6 +63,8 @@ include("coupled.jl")
 include("tangent.jl")
 include("ode.jl")
 
+# the parameter object of B's SciML problems (F4-00)
+public LatticeParameters, TableSlot, InputSlot, with_values, remake_params, remake_u0
 # the coupling between field groups and the per-group counts (review of F2-06)
 public compute_type, substep_counts, lagged_coupling, group_loops, steady_loop_rates, steady_start, starts_steady, StartText, StartSubsteps
 # the one substep policy of both front ends and its words (F3-01)

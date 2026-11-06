@@ -10,6 +10,7 @@ using ExplicitImports: ExplicitImports, check_no_implicit_imports,
 const LF_NONPUBLIC = (
     :RuntimeGeneratedFunction, :drop_expr,  # RGF's documented API; the package declares no `public`
     :remove_linenums!,                     # Base.remove_linenums!: canonical body text for hashing
+    :RefValue,                             # Base's concrete `Ref` type: the concrete cells of `LatticeParameters` and the lazy right side (F4-00)
     :Dual, :Partials, :partials, :value,   # ForwardDiff's documented Dual API (extension); no `public`
     :Compile,                              # the extension extends LatticeFields.Compile (declared public with the module list at C2/C7a)
     :supports_float64,                     # KernelAbstractions' Float64 capability query (Metal: false); KA declares no `public`
