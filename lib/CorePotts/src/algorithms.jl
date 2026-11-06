@@ -127,7 +127,8 @@ at random, so every site is attempted once per MCS on average, as with `Sequenti
 - `switches`: phases per sub-region per MCS (default 1); each phase makes 1/`switches` of
   the sub-region's attempts.
 - `threads` (CPU only): `:auto` runs a phase with one Julia thread, or with at most
-  `CorePotts.BLOCK_GRAIN[]` (512) blocks, inline, else threaded; `false` always inline;
+  `CorePotts.BLOCK_GRAIN[]` (512) blocks, or as a trajectory of a threaded ensemble,
+  inline, else threaded; `false` always inline;
   `true` always threaded. `integ.cache.inline` says which.
 
 `stats.accepted` and `stats.committed` count the copies (equal: a copy commits when it is

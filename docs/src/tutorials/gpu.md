@@ -73,14 +73,21 @@ sol = solve(prob, CheckerboardCPM(); backend = MetalBackend(), saveat = 25)
 
 Everything else is unchanged. The state lives on the GPU during the run. Potts.jl
 transfers every saved state back to the host, so `sol.u`, `sol[:volume]`, `record_potts`
-and the rest work as on the CPU. Ensembles take the backend too. They run their
-trajectories one after another on the GPU:
+and the rest work as on the CPU. Ensembles take the backend too. They run as many
+trajectories at once as Julia has threads, each on its own GPU queue:
 
 **GPU only**:
 
 ```julia
+# start Julia with, for example, `julia -t 4`
 solve(EnsembleProblem(prob), CheckerboardCPM(); backend = MetalBackend(), trajectories = 8)
 ```
+
+One run alone often leaves the GPU partly idle, so several at once give more MCS per
+second in total. On an AMD Ryzen AI Max+ 395, the OpenVT monolayer (1400²) ran at about
+720 MCS/s alone and about 1,900 MCS/s in total with 4 or 8 runs at once. A run waiting for
+the GPU keeps its CPU thread busy, so use no more threads than free CPUs. Pass
+`EnsembleSerial()` to run the trajectories one after another.
 
 On the CPU, use the same calls without `backend`, as above:
 
@@ -97,6 +104,8 @@ ens.u
   `output_func`.
 - **Big lattices pay off.** A GPU is fast when there are many blocks to run at once. Small
   lattices are often faster on the CPU.
+- **Run ensembles for many seeds.** Several runs at once fill the GPU better than one run
+  alone (see above).
 - **Use the same model.** Everything a model can express runs on the GPU: fields, cell and
   model ODEs with fixed-step solvers, divisions, links and components. An `Adaptive` ODE
   solver integrates on the host and transfers the state once per MCS.

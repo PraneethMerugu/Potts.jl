@@ -755,6 +755,14 @@ end
         @test sol.stats.committed > 1000
         @test sol.stats.connectivity_deferred isa Int
     end
+    # ensembles: concurrent trajectories (tasks, each with its own device queue; on one thread
+    # they interleave at the waits) each stay consistent and draw their own stream
+    alg = CheckerboardCPM(; proposal = Moore(1))
+    runs = fetch.([Threads.@spawn(solve(remake(prob; seed = 20 + k), alg; backend)) for k in 1:4])
+    @test all(s -> s.u[end].cell.volume == recount(s.u[end]) && s.stats.committed == s.stats.accepted > 0, runs)
+    @test allunique([s.u[end].σ for s in runs])
+    ens = solve(EnsembleProblem(prob), alg; backend, trajectories = 3)    # EnsembleThreads by default
+    @test all(s -> s.u[end].cell.volume == recount(s.u[end]), ens.u) && allunique([s.u[end].σ for s in ens.u])
 end
 
 # ROCm, last: no `double` in any kernel this suite compiled (full scan of the kernel cache,

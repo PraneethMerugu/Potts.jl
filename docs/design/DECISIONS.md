@@ -4902,3 +4902,13 @@ The Manifest is git-ignored (one per checkout), and the CI checkout removes it, 
 - The runner keeps the Manifest of its last green run at `~/potts-ci/Manifest.toml`. CI copies it into the checkout and runs `Pkg.resolve()`, which changes only what the Projects require. The last step copies the Manifest back; it runs only when every other step passed.
 - A manual dispatch with `update_deps` resolves afresh. The step prints each version change against the lock (`.github/ci/manifest_diff.jl`), so a failure after an update names its candidates.
 - The repository still has no committed Manifest (the workspace rule is unchanged). The lock was seeded from run 42175663532 (98b2e7e2, green).
+
+## D-273 Ensembles run their trajectories at once on a device too (2026-11-06; maintainer-approved: "lets do that. i have an amd strix halo with 64gb of vram available, ensembles seem like a smart idea")
+
+`solve(EnsembleProblem(prob), alg; backend)` without an ensemble algorithm now runs `EnsembleThreads()` on every backend; before, a device ran `EnsembleSerial()`. Each trajectory's task has its own device queue, so their kernels overlap. Nothing in the step path is shared between integrators (transfer counters are per integrator; the global `Ref`s are test switches and read-only settings), and kernels compiled inside concurrent trajectories without error.
+
+- Measured (`benchmark/kinetics/ensemble.jl`, ROCm on the PC, CPUs 12-15/28-31, GPU shared with a test gate): the OpenVT monolayer case (b), 1400² to 1000 cells, ran at about 720 MCS/s one trajectory at a time, 1,865 MCS/s in total with 4 at once and 1,944 with 8 (an earlier probe with 8 Julia tasks: 1,750–2,240). The plateau is about 2.6× the serial rate; 4 at once take most of it. Cells lost per run (0–3) are as in single runs.
+- A waiting trajectory spins on its CPU thread (`_device_wait`), so the number of Julia threads sets how many run at once and how many CPUs are busy.
+- On the CPU, a `CheckerboardCPM(; threads = :auto)` trajectory of a parallel ensemble runs its phases inline (`IN_THREADED_ENSEMBLE`, a scoped value the trajectory tasks inherit): threaded phases would wait at their barriers on threads that other trajectories hold.
+- Untested: Metal and CUDA. Both Julia packages are expected to give each task its own queue, as AMDGPU does; not checked or run here.
+- Not done: batched replicas (one launch over several replicas). Concurrent queues reach the plateau above with no change to the kernels.

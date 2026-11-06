@@ -228,13 +228,18 @@ end
 # 1.5–2× from 1000 blocks; 4 threads reach 3.3–3.7× at 5000 blocks and above. Each phase ends at a
 # barrier, so a thread per busy core stalls on any other process: leave the OS a spare CPU.
 const BLOCK_GRAIN = Ref(512)
+# true while the trajectories of a parallel ensemble run (set by the ensemble `solve`; the
+# trajectory tasks inherit it): threaded phases would wait at each barrier on threads that
+# other trajectories hold
+const IN_THREADED_ENSEMBLE = ScopedValue(false)
 # fewer work items per phase than this leave a GPU mostly idle (a warning, not a refusal)
 const DEVICE_MIN_BLOCKS = 256
-# `threads`: `:auto` (inline with one thread or at most BLOCK_GRAIN work items), `false`
-# (always inline: reproducible), `true` (always the threaded launch)
+# `threads`: `:auto` (inline with one thread, at most BLOCK_GRAIN work items, or inside a threaded
+# ensemble, whose trajectories already hold the threads), `false` (always inline:
+# reproducible), `true` (always the threaded launch)
 _block_inline(backend, n, threads) = false
 _block_inline(::KernelAbstractions.CPU, n, threads) =
-    threads === :auto ? (Threads.nthreads() == 1 || n <= BLOCK_GRAIN[]) : !threads
+    threads === :auto ? (Threads.nthreads() == 1 || n <= BLOCK_GRAIN[] || IN_THREADED_ENSEMBLE[]) : !threads
 # CPU: one workgroup per thread, the grid of blocks split along its last axis
 _block_groupsize(backend, nb) = nothing
 _block_groupsize(::KernelAbstractions.CPU, nb::NTuple{N, Int}) where {N} =

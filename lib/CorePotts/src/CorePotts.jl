@@ -13,6 +13,7 @@ using CommonSolve: CommonSolve, init, solve, solve!, step!
 using KernelAbstractions: KernelAbstractions, @kernel, @index, @localmem, @synchronize, CPU
 using SciMLBase: SciMLBase, remake, reinit!, u_modified!, EnsembleProblem, EnsembleSerial, EnsembleThreads,
     DiscreteCallback, CallbackSet, terminate!
+using Base.ScopedValues: ScopedValue, @with
 using Serialization: Serialization
 using StaticArrays: MVector
 using SymbolicIndexingInterface: SymbolicIndexingInterface, getu, setu, getp, setp

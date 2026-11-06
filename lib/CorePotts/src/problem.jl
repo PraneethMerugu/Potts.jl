@@ -842,13 +842,24 @@ end
 """
     solve(ens::EnsembleProblem, alg::CPMAlgorithm; backend = CPU(), trajectories, …)
 
-An ensemble solved without an ensemble algorithm runs `EnsembleThreads()` on the CPU and
-`EnsembleSerial()` on a device backend (one queue), with `backend` forwarded to every
-trajectory's `solve`. Trajectories are the same whichever runs them (independent streams).
+An ensemble solved without an ensemble algorithm runs `EnsembleThreads()`, with `backend`
+forwarded to every trajectory's `solve`: as many trajectories run at once as Julia has
+threads. On a device each trajectory's task has its own queue, so their kernels overlap
+(OpenVT monolayer, 1400², ROCm: about 720 MCS/s one at a time, 1,900 in total with 4 or 8 at
+once). A waiting trajectory spins on its CPU thread, so start Julia with no more threads than
+free CPUs. `EnsembleSerial()` runs them one after another. Each trajectory has its own
+random stream, whichever ensemble runs it.
 """
-function SciMLBase.__solve(prob::SciMLBase.AbstractEnsembleProblem, alg::CPMAlgorithm; backend = CPU(), kwargs...)
-    ensemble = backend isa CPU ? EnsembleThreads() : EnsembleSerial()
-    return SciMLBase.__solve(prob, alg, ensemble; backend, kwargs...)
+SciMLBase.__solve(prob::SciMLBase.AbstractEnsembleProblem, alg::CPMAlgorithm; backend = CPU(), kwargs...) =
+    SciMLBase.__solve(prob, alg, EnsembleThreads(); backend, kwargs...)
+
+# a parallel ensemble's trajectories run with `IN_THREADED_ENSEMBLE` set (the tasks inherit it)
+function SciMLBase.__solve(prob::SciMLBase.AbstractEnsembleProblem, alg::CPMAlgorithm,
+        ensemble::SciMLBase.BasicEnsembleAlgorithm; kwargs...)
+    generic() = invoke(SciMLBase.__solve, Tuple{SciMLBase.AbstractEnsembleProblem, Any, SciMLBase.BasicEnsembleAlgorithm},
+        prob, alg, ensemble; kwargs...)
+    ensemble isa EnsembleSerial && return generic()
+    return @with IN_THREADED_ENSEMBLE => true generic()
 end
 
 struct _ReplicaProbFunc{F}

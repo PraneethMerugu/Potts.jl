@@ -176,6 +176,21 @@
         uc = current_state(ci)
         @test all(first(CorePotts.recompute_pieces(uc.σ, lat, Val(false), length(kinds))) .<= pieces0)
         @test uc.cell.volume == recount(uc) && all(iszero, ci.cache.serial.count)
+        # `:auto` in a threaded ensemble runs inline (its trajectories hold the threads); in a
+        # serial ensemble or a plain run the size rule decides (here: threaded, grain 0)
+        grain = CorePotts.BLOCK_GRAIN[]
+        CorePotts.BLOCK_GRAIN[] = 0
+        try
+            seen = Channel{Bool}(Inf)
+            cb = DiscreteCallback((u, t, i) -> t == 1, i -> put!(seen, i.cache.inline); save_positions = (false, false))
+            inline_in(e) = (solve(EnsembleProblem(remake(prob; tspan = (0, 2))), CheckerboardCPM(), e; trajectories = 3,
+                callback = cb); [take!(seen) for _ in 1:3])
+            @test all(inline_in(EnsembleThreads()))
+            @test inline_in(EnsembleSerial()) == fill(Threads.nthreads() == 1, 3)
+            @test init(prob, CheckerboardCPM()).cache.inline == (Threads.nthreads() == 1)
+        finally
+            CorePotts.BLOCK_GRAIN[] = grain
+        end
     end
 
     @testset "on-copy cell writes" begin

@@ -79,7 +79,9 @@ weak (λ_act = 100), and about 1 % faster at λ_act = 300.
 - **Threads on the CPU.** With several Julia threads, each phase of a large lattice is
   split across them: 4 threads ran 3.3–3.7× faster than one on 576² and larger (PC, AMD
   Ryzen AI Max+ 395). Each phase waits for its slowest thread, so start Julia with fewer
-  threads than free CPUs; with one thread per busy core, the speed-up fell below one.
+  threads than free CPUs; with one thread per busy core, the speed-up fell below one. In
+  a threaded ensemble the trajectories already hold the threads, so `threads = :auto`
+  runs each trajectory's phases inline there.
 
 ## Skipping the interior: `skip_interior = true`
 
