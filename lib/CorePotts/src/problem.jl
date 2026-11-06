@@ -349,6 +349,10 @@ function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, save
         prob.tspan[1], prob.tspan[2], sort!(collect(Int, saveat)), save_start, save_end,
         Int[], Any[], SciMLBase.ReturnCode.Default, _initial_stats(prob.f), _callbacks(callback),
         prob.frozen === nothing ? nsites(lat) : count(!, prob.frozen), _mobility_scratch(backend, prob, ctx.mobility))
+    # compile the handler of each MCS entry before `step!` is compiled: if `step!` is inferred while
+    # a field-step entry's handler is still in an inference cycle, the call stays dynamic and
+    # boxes the entry (16 B per MCS, Merks Float32 under CheckerboardCPM, P6.0bl)
+    _each(e -> precompile(_run_entry!, (typeof(integ), typeof(e))), prob.f.phases.mcs)
     integ.stats.launches += _run_phases(fresh ? prob.f.phases.at_init : _derived(prob.f.phases.at_init), integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, integ.stats)
     _each(cb -> cb.initialize(cb, integ.state, integ.t, integ), integ.callbacks)
