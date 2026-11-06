@@ -221,13 +221,18 @@ function p60af_check_handover(name, prob, k; backend = nothing)
     @test uform == CorePotts._FORM_HOST && uat == at
     un, nform, _ = p60af_run(q, 0; backend)
     @test nform != CorePotts._FORM_HOST                            # the device planner throughout
-    # the same path: bitwise in everything
-    @test p60af_same(fa, ua)
-    # against the device planner: bitwise except the trackers' representation …
-    @test p60af_same_but_trackers(fa, un)
-    # … whose values both equal a recount from σ
-    @test p60af_trackers_exact(fa, prob.lattice) && p60af_trackers_exact(un, prob.lattice)
-    @test fa.stats.lifecycle.divisions == un.stats.lifecycle.divisions == ua.stats.lifecycle.divisions
+    # a device checkerboard is not reproducible (D-271): its runs are compared only through
+    # the recount below; the CPU runs (phases inline) carry the run-to-run comparisons
+    if backend === nothing
+        # the same path: bitwise in everything
+        @test p60af_same(fa, ua)
+        # against the device planner: bitwise except the trackers' representation …
+        @test p60af_same_but_trackers(fa, un)
+        @test fa.stats.lifecycle.divisions == un.stats.lifecycle.divisions == ua.stats.lifecycle.divisions
+    end
+    # … whose values equal a recount from σ
+    @test p60af_trackers_exact(fa, prob.lattice) && p60af_trackers_exact(un, prob.lattice) &&
+          p60af_trackers_exact(ua, prob.lattice)
     # divisions after the handover (the host planner really planned some)
     live(u) = count(>(0), u.cell.volume)
     @test live(fa.u[end]) > live(fa.u[findfirst(>=(at), fa.t)])

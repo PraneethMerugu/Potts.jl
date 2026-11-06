@@ -959,6 +959,15 @@ function (s::ParameterSetter)(valp, vals)
 end
 SymbolicIndexingInterface.setp(sys::Union{PottsIntegrator, PottsProblem, CPMFunction}, ps::Union{Tuple, AbstractVector};
                                run_hook = true) = parameter_setter(sys, ps, run_hook)
+SymbolicIndexingInterface.setp(sys::Union{PottsIntegrator, PottsProblem, CPMFunction}, p; run_hook = true) =
+    name_setter(sys, p, run_hook)
+
+# `setp(sys, x)` for one name: SymbolicIndexingInterface's setter, after the same name check
+# as a list (since SII 0.3.56 an unknown name is an `ErrorException` there)
+function name_setter(sys, p, run_hook)
+    SymbolicIndexingInterface.symbolic_type(p) isa SymbolicIndexingInterface.ScalarSymbolic && _check_settable(sys, p)
+    return invoke(SymbolicIndexingInterface.setp, Tuple{Any, Any}, sys, p; run_hook)
+end
 
 """
     parameter_setter(sys, ps, run_hook)
@@ -970,14 +979,16 @@ the list (set those with `setu`, or both with `setsym`) or an unknown name is an
 """
 function parameter_setter(sys, ps, run_hook)
     isempty(ps) && return invoke(SymbolicIndexingInterface.setp, Tuple{Any, Any}, sys, ps; run_hook)
-    for x in ps
-        SymbolicIndexingInterface.is_parameter(sys, x) && continue
-        SymbolicIndexingInterface.is_variable(sys, x) &&
-            throw(ArgumentError("setp: `$x` is a state variable, not a parameter; set states with " *
-                                "`setu`, or parameters and states together with `setsym`"))
-        throw(_unknown_name(sys, x, "setp"))
-    end
+    foreach(x -> _check_settable(sys, x), ps)
     return ParameterSetter(map(x -> SymbolicIndexingInterface.parameter_index(sys, x), ps), ps, run_hook)
+end
+
+function _check_settable(sys, x)
+    SymbolicIndexingInterface.is_parameter(sys, x) && return nothing
+    SymbolicIndexingInterface.is_variable(sys, x) &&
+        throw(ArgumentError("setp: `$x` is a state variable, not a parameter; set states with " *
+                            "`setu`, or parameters and states together with `setsym`"))
+    throw(_unknown_name(sys, x, "setp"))
 end
 
 function _unknown_name(sys, x, fn)

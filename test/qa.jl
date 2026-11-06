@@ -240,6 +240,7 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     :set_parameter,       # parameter-update hook Potts extends
     :set_parameters,      # its batched form (`setp(integ, [x, y])` as one change, D-112)
     :parameter_setter,    # `setp` with several parameters on a model description (one change)
+    :name_setter,         # `setp` with one name on a model description (the same name check)
     :symbol_setter,       # `setsym` with a list on a model description (its parameters as one change, D-116)
     :stream_id,           # named RNG stream for `draw` in generated code
     # --- Potts -> Base: no public equivalent

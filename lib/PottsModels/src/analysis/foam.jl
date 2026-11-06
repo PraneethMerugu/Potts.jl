@@ -282,15 +282,19 @@ Nyquist frequency 0.5, as the axes of Figs. 8 and 10. The f = 0 bin is left out,
 constant offset does not change `S`. No window is applied (the paper's low-f ringing in
 Fig. 8 is the raw periodogram's). Fewer than two samples is an `ArgumentError`.
 
-The transform is FFTW's real-input FFT, O(L log L) for any length.
+The transform is FFTW's real-to-halfcomplex FFT, O(L log L) for any length. It is not
+`rfft`: FFTA (a KernelDensity dependency) also extends `plan_rfft` for real arrays, and
+the two methods are ambiguous when both packages are loaded.
 """
 function power_spectrum(x::AbstractVector{<:Real}; dt::Real = 1)
     L = length(x)
     L >= 2 || throw(ArgumentError("power_spectrum: need at least 2 samples, got $L"))
     dt > 0 || throw(ArgumentError("power_spectrum: dt must be positive, got $dt"))
-    X = rfft(Float64.(x))                     # X[k + 1] = Σ_t x_t e^{−2πi k t / L}, k = 0:L÷2
+    # halfcomplex: X[k + 1] and X[L − k + 1] are the real and imaginary parts of
+    # Σ_t x_t e^{−2πi k t / L}; the imaginary part of k = L/2 (L even) is zero and not stored
+    X = r2r(Float64.(x), R2HC)
     K = L ÷ 2
-    S = [abs2(X[k + 1]) / L for k in 1:K]
+    S = [(X[k + 1]^2 + (2k < L ? X[L - k + 1]^2 : 0.0)) / L for k in 1:K]
     f = [k / (L * dt) for k in 1:K]
     return (; f, S)
 end

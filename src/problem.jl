@@ -980,6 +980,7 @@ end
 
 SymbolicIndexingInterface.setp(sys::PottsModelInfo, ps::Union{Tuple, AbstractVector}; run_hook = true) =
     CorePotts.parameter_setter(sys, ps, run_hook)
+SymbolicIndexingInterface.setp(sys::PottsModelInfo, p; run_hook = true) = CorePotts.name_setter(sys, p, run_hook)
 SymbolicIndexingInterface.setsym(sys::PottsModelInfo, syms::Union{Tuple, AbstractVector}) =
     CorePotts.symbol_setter(sys, syms)
 
