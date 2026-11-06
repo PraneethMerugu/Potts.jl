@@ -15,7 +15,7 @@ using PrecompileTools: @setup_workload, @compile_workload
         sys = PDESystem([D(ce) ~ Dc * Δ(ce) - k * ce + x], [c(0, x, y) ~ x * y, c(t, 0, y) ~ 1.0],
             [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [ce], [Dc, k];
             name = :precompile)
-        prob = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
+        prob = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64))
         for alg in (ExplicitEuler(; dt = 0.01), BackwardEuler(; dt = 0.01))
             integ = init(prob, alg)
             step!(integ)

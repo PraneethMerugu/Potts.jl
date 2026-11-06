@@ -631,7 +631,7 @@ function fc_runA(M, k, names; kw...)
 end
 function fc_runB(M, k, names; alg, kw...)
     bp = Potts.LatticePDE.discretize(Potts.fields(M(; name = :f)),
-        Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((12, 10)); T = Float64, problem = :owned);
+        Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((12, 10)); T = Float64);
         u0 = [n => zeros(12, 10) for n in names], tspan = (0, k), inputs = [:kind => fi_kin((12, 10))], kw...)
     s = Potts.LatticePDE.solve(bp, alg; saveat = 1.0)
     return [[s[n][i] for n in names] for i in 2:(k + 1)], s

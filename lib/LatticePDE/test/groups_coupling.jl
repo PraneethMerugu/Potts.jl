@@ -14,7 +14,7 @@ pce, poe, pqe = gpc(t, x, y), gpo(t, x, y), gpq(t, x, y)
          gpc(t, 0, y) ~ gpc(t, 1, y), gpc(t, x, 0) ~ gpc(t, x, 1)],
         [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [pce, poe, pqe],
         [gkc, gDo, gKt]; name = :pp)
-    p = discretize(sys, LatticeDiscretization(Grid((16, 16)); T = Float64, problem = :owned);
+    p = discretize(sys, LatticeDiscretization(Grid((16, 16)); T = Float64);
         inputs = [pqe => fill(Int32(1), 16, 16)])
     alg = FieldGroups(pce => ExplicitEuler(; dt = 0.01, substeps = 1), poe => ExplicitEuler(; dt = 0.01))
     ig = init(p, alg)
@@ -45,7 +45,7 @@ rsys() = PDESystem([D(r1e) ~ -gk * r2e, D(r2e) ~ gk * r1e], [gr1(0, x, y) ~ 1.0,
 rtwo(n) = FieldGroups(r1e => ExplicitEuler(; dt = 0.01, substeps = n), r2e => ExplicitEuler(; dt = 0.01, substeps = n + 1))
 
 @testset "F2-06 review: the coupling between groups is bounded (K-unsafe: refused with the routes)" begin
-    rp = discretize(rsys(), LatticeDiscretization(Grid((4, 4)); T = Float64, problem = :owned))
+    rp = discretize(rsys(), LatticeDiscretization(Grid((4, 4)); T = Float64))
     # k dt = 3 in two groups (base: counts [1, 1], Success at 3.3e41)
     e = gerr(() -> init(rp, rtwo(1)))
     @test occursin("dt · Σ max|coefficient| = 3.0 > 1", e) && occursin("`gr1`", e) && occursin("`gr2`", e) &&
@@ -93,7 +93,7 @@ end
 @variables gwc(..) gwu(..) gwo(..) gwv(..) gwa(..)
 wce, wue, woe, wve, wae = gwc(t, x, y), gwu(t, x, y), gwo(t, x, y), gwv(t, x, y), gwa(t, x, y)
 const GW_DOM = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-gwdisc() = LatticeDiscretization(Grid((4, 4)); T = Float64, problem = :owned)
+gwdisc() = LatticeDiscretization(Grid((4, 4)); T = Float64)
 gwerr(f) = (e = gerr(f); replace(e, r"\s+" => " "))
 # the number after `key` in a message, verbatim (`dt ≤ 0.006666`)
 gwnum(e, key) = parse(Float64, match(Regex(key * raw" ([0-9.eE+-]+)"), e).captures[1])
@@ -219,7 +219,7 @@ end
 end
 
 @testset "F2-06 round 2: following the printed routes is accepted (B)" begin
-    rp = discretize(rsys(), LatticeDiscretization(Grid((4, 4)); T = Float64, problem = :owned))
+    rp = discretize(rsys(), LatticeDiscretization(Grid((4, 4)); T = Float64))
     for k in (150.0, 1 / 0.0033335, 300.0, 7.0e3 / 3, 1234.5)
         pk = remake(rp; p = [gk => k])
         e = gwerr(() -> init(pk, rtwo(1)))
@@ -242,7 +242,7 @@ end
     # route 1 when the merged rows are dominant: the count can be automatic, and it is
     sysd = PDESystem([D(r1e) ~ -10gk * r1e - gk * r2e, D(r2e) ~ gk * r1e - 10gk * r2e], [gr1(0, x, y) ~ 1.0, gr2(0, x, y) ~ 0.0],
         GW_DOM, [t, x, y], [r1e, r2e], [gk]; name = :dom)
-    pd = discretize(sysd, LatticeDiscretization(Grid((4, 4)); T = Float64, problem = :owned))
+    pd = discretize(sysd, LatticeDiscretization(Grid((4, 4)); T = Float64))
     e = gwerr(() -> init(pd, rtwo(1)))
     @test occursin("in one group (one algorithm; its count can be automatic)", e)
     @test solve(pd, ExplicitEuler(; dt = 0.01)).retcode == ReturnCode.Success

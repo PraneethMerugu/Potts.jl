@@ -26,7 +26,7 @@ isdefined(Main, :JiangLike) || include(joinpath(@__DIR__, "fields_jiang_model.jl
     # B: the same fields at the same window (a quarter MCS), the kind map of the frozen cells
     kmap = Int32[s == 0 ? 0 : findfirst(==(kinds[s]), [:P, :Q, :N]) for s in σ]
     bp = Potts.LatticePDE.discretize(Potts.fields(JiangLike(; name = :j)),
-        Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(JG_DIMS); T = Float64, problem = :owned);
+        Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(JG_DIMS); T = Float64);
         u0 = [n => zeros(JG_DIMS .÷ 4) for n in names], tspan = (0, k), inputs = [:kind => kmap])
     sb = Potts.LatticePDE.solve(bp, BackwardEuler(; dt = 0.25); saveat = 1.0)
     for n in names
@@ -65,7 +65,7 @@ end
     kmap = Int32[s == 0 ? 0 : findfirst(==(kinds[s]), [:P, :Q, :N]) for s in σ]
     names = (:o, :g, :l, :gf, :inh)
     bp = Potts.LatticePDE.discretize(Potts.fields(JiangLike(; name = :j)),
-        Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(JG_DIMS); T = Float64, problem = :owned);
+        Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(JG_DIMS); T = Float64);
         u0 = [n => zeros(JG_DIMS .÷ 4) for n in names], tspan = (0, 2), inputs = [:kind => kmap])
     shifted = [circshift(kmap, (s, 0, 0)) for s in 0:3]
     function run(alg)

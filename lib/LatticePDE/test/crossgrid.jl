@@ -18,7 +18,8 @@ const xcc, xLc = xlev(:xcc, 4), xlev(:xLc, 4)
 const xu, xv, xX = xfine(:xuu), xfine(:xvv), xfine(:xXf)
 xe(f) = f(t, x, y)
 xdom(T = 1.0) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-xown(sys, dims; kw...) = discretize(sys, LatticeDiscretization(Grid(dims); problem = :owned, kw...))
+# (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
+xown(sys, dims; kw...) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims); kw...)))
 const XT = 0.002
 @parameters xDq = 0.01 xaq = 0.5
 # the operators of the cross-grid path (a coordinate coefficient makes the face coefficient vary)
@@ -117,14 +118,14 @@ end
         d2 = PDESystem([D(e3(v3)) ~ 0.01 * Δ(e3(v3)), D(e3(c3)) ~ 0.5 * Δ(e3(v3)) - e3(c3)], ic2, dom3, [t, x, y, z], [e3(v3), e3(c3)], Num[]; name = :x3c)
         r2 = PDESystem([D(e3(v3)) ~ 0.01 * Δ(e3(v3)), e3(X3) ~ Δ(e3(v3)), D(e3(c3)) ~ 0.5 * e3(X3) - e3(c3)], ic2, dom3, [t, x, y, z],
             [e3(v3), e3(X3), e3(c3)], Num[]; name = :x3d)
-        own3(s) = discretize(s, LatticeDiscretization(Grid((8, 8, 8)); problem = :owned))
+        own3(s) = discretize(s, LatticeDiscretization(Grid((8, 8, 8))))
         alg = ExplicitEuler(; dt = XT, substeps = 1)
         for (a, b, f) in ((d1, r1, w3), (d2, r2, c3))
             sa, sb = solve(own3(a), alg; saveat = [0.01]), solve(own3(b), alg; saveat = [0.01])
             @test sa[e3(f), 2] == sb[e3(f), 2] && maximum(abs, sa[e3(f), 2]) > 0
         end
         @test size(solve(own3(d2), alg; saveat = [0.01])[e3(c3), 2]) == (4, 4, 4)
-        hx(s) = discretize(s, LatticeDiscretization(Grid((16, 16); geometry = HEX); problem = :owned))
+        hx(s) = discretize(s, LatticeDiscretization(Grid((16, 16); geometry = HEX)))
         halg = ExplicitEuler(; dt = 0.0005, substeps = 1)
         p = xpair(c -> Δ(c))
         for (pr, row) in ((p.cf, xu), (p.fc, xcc))
@@ -136,7 +137,7 @@ end
     @testset "the :ode path: the direct form is the route" begin
         p = xpair(c -> Δ(c))
         for (pr, row) in ((p.cf, xu), (p.fc, xcc))
-            od(s) = discretize(s, LatticeDiscretization(Grid((16, 16)); problem = :ode))
+            od(s) = discretize(s, LatticeDiscretization(Grid((16, 16))))
             sa = solve(od(pr.dir), Tsit5(); abstol = 1e-10, reltol = 1e-10, saveat = [0.05])
             sb = solve(od(pr.route), Tsit5(); abstol = 1e-10, reltol = 1e-10, saveat = [0.05])
             @test sa.u[end] == sb.u[end] && maximum(abs, sa.u[end]) > 0

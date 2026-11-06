@@ -36,7 +36,8 @@ gsys(; T = 0.1) = PDESystem([D(gce) ~ Δ(gce) + ga * goe, D(goe) ~ -gb * goe + 0
     [gc(0, x, y) ~ x * y, go(0, x, y) ~ 1.0 + x, gc(t, 0, y) ~ gc(t, 1, y), gc(t, x, 0) ~ gc(t, x, 1),
      go(t, 0, y) ~ go(t, 1, y), go(t, x, 0) ~ go(t, x, 1)],
     [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [gce, goe], [ga, gb]; name = :g)
-gown(sys; n = 8) = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64, problem = :owned))
+# (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
+gown(sys; n = 8) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64)))
 gwarm(ig) = (step!(ig); step!(ig); @allocated step!(ig))      # (a function barrier)
 gerr(f) = try
     f(); ""
@@ -133,7 +134,7 @@ end
         [t ∈ Interval(0.0, 0.003), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [we, wk], Num[]; name = :w)
     K = ones(Int32, 4, 4)
     K[1, 1] = 0
-    p = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64, problem = :owned); inputs = [wk => K])
+    p = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64); inputs = [wk => K])
     s = solve(p, ExplicitEuler(; dt = 0.001, substeps = 1); saveat = 0.001)
     @test s[:gw][3][1, 1] == 0.0 && s[:gw][3][2, 1] == 0.0       # t = 0.002: the mask was off at each step's start
     # step 3 starts at t = 0.002 > 0.0015: the site is clamped at its start and the substep reads
@@ -208,7 +209,7 @@ end
     end
     # the gate inside `discretize` (`LATTICEPDE_CHECK_FUSION=1`: the suites run with it)
     withenv("LATTICEPDE_CHECK_FUSION" => "1") do
-        @test gown(gsys()) isa FieldProblem
+        @test gown(gsys()) isa LFP.FieldProblem
     end
 end
 

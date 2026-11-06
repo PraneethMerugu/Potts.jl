@@ -128,16 +128,20 @@ sol = solve(prob, SequentialCPM(); saveat = 1)
 (k = getp(prob, :k)(prob), x = getu(sol, :x)(sol)[end], excess = sol[:excess][end])
 ```
 
-On the integrator of a field problem (`LatticePDE.discretize(Potts.fields(sys), disc;
-problem = :owned)`), `integ[c]` returns a copy of the field's values, on the problem's device.
+`LatticePDE.discretize(Potts.fields(sys), disc)` gives one SciML problem: an `ODEProblem` of
+the rates, or a `DiscreteProblem` of the maps. A field algorithm steps it,
+`solve(prob, BackwardEuler(; dt = 0.1))`, and so does an OrdinaryDiffEq solver,
+`solve(prob, Rodas5P())`. The problem's `p` holds the parameters, the tables and the inputs.
+On the integrator of a field algorithm, `integ[c]` returns a copy of the field's values, on the
+problem's device.
 Writing into the copy, `integ[c][1, 1] = v`, changes nothing; to change the field, assign it:
 `integ[c] = values`.
-Parameters and tables go through `integ.ps`, as in SciML: `integ.ps[:k] = 2.0`,
-`integ.ps[:δ] = values` and `integ.ps[δ[2]] = v`. Each write runs the checks of `setp`, the
+Parameters, tables and inputs go through `integ.ps`, as in SciML: `integ.ps[:k] = 2.0`,
+`integ.ps[:δ] = values`, `integ.ps[δ[2]] = v` and `integ.ps[:kind] = K`. They work the same
+way on an OrdinaryDiffEq integrator. Each write runs the checks of `setp`, the
 substep count and the masks again, or changes nothing. `integ[:k]` of a parameter is an error
 that gives this route.
-`discretize` takes SciML's keywords `u0`, `p` and `tspan` on both problem kinds, with the
-rule of `remake`: `discretize(Potts.fields(sys), disc; p = [:k => 2.0], u0 = [:c => 0.5],
+`discretize` takes SciML's keywords `u0`, `p` and `tspan`, with the rule of `remake`: `discretize(Potts.fields(sys), disc; p = [:k => 2.0], u0 = [:c => 0.5],
 tspan = (0, 10))` builds the problem at those values, with no `remake`. Any other keyword is
 an error that names it.
 

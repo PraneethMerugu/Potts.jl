@@ -49,7 +49,7 @@ function fc_runA(k; field_solver = BackwardEuler())
 end
 function fc_runB(k; alg = BackwardEuler(; dt = 1.0))
     bp = Potts.LatticePDE.discretize(Potts.fields(FcMix(; name = :f)),
-        Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((16, 12)); T = Float64, problem = :owned);
+        Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((16, 12)); T = Float64);
         u0 = [:c => zeros(4, 3), :e => zeros(16, 12)], tspan = (0, k), inputs = [:kind => fc_kin()])
     s = Potts.LatticePDE.solve(bp, alg; saveat = 1.0)
     return s[:c][2:end], s[:e][2:end]
@@ -89,7 +89,7 @@ end
     a = [(step!(integ); copy(Array(current_state(integ).site.c))) for _ in 1:3]
     dm = Array(current_state(integ).site.domain__in) .!= 0
     bp = Potts.LatticePDE.discretize(Potts.fields(FcDom(; name = :d)),
-        Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((16, 12)); T = Float64, problem = :owned,
+        Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((16, 12)); T = Float64,
             domain = "domain__in"); u0 = [:c => zeros(4, 3)], tspan = (0, 3),
         inputs = [:kind => Int32.(σ), :domain__in => dm])
     @test a == Potts.LatticePDE.solve(bp, BackwardEuler(; dt = 1.0); saveat = 1.0)[:c][2:end]
@@ -298,7 +298,7 @@ end
     for (fs, alg) in ((BackwardEuler(), BackwardEuler(; dt = 1.0)), (ExplicitEuler(; substeps = 40), ExplicitEuler(; dt = 1.0, substeps = 40)))
         a = fx_run(FcXd, 3, fs)
         bp = Potts.LatticePDE.discretize(Potts.fields(FcXd(; name = :x)),
-            Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((16, 12)); T = Float64, problem = :owned),
+            Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((16, 12)); T = Float64),
             ; u0 = [:c => zeros(4, 3), :v => zeros(16, 12), :u => zeros(16, 12)], tspan = (0, 3), inputs = [:kind => fc_kin()])
         s = Potts.LatticePDE.solve(bp, alg; saveat = 1.0)
         @test [x[1] for x in a] == s[:c][2:end] && [x[2] for x in a] == s[:v][2:end] && [x[3] for x in a] == s[:u][2:end]
@@ -374,7 +374,7 @@ end
         a = fx_run(M, 3, fa)
         @test all(maximum(abs, a[end][i]) > 0 for i in 1:3)
         bp = Potts.LatticePDE.discretize(Potts.fields(M(; name = :x)),
-            Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((16, 12)); T = Float64, problem = :owned),
+            Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((16, 12)); T = Float64),
             ; u0 = [:c => zeros(4, 3), :v => zeros(16, 12), :u => zeros(16, 12)], tspan = (0, 3), inputs = [:kind => fc_kin()])
         s = Potts.LatticePDE.solve(bp, fb; saveat = 1.0)
         @test [x[1] for x in a] == s[:c][2:end] && [x[2] for x in a] == s[:v][2:end]

@@ -10,8 +10,9 @@ using SciMLBase: SciMLBase, ODEProblem, remake
 @parameters kr = 0.0 Dr = 1.0 gr = 0.0 βr = -0.5
 pdom(T = 1.0) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
 psys(eqs, bcs, ps; T = 1.0, dvs = [ce]) = PDESystem(eqs, bcs, pdom(T), [t, x, y], dvs, ps; name = :p)
+# (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
 owned(sys, n, m = n; T = Float64, inputs = (), kw...) =
-    discretize(sys, LatticeDiscretization(Grid((n, m)); T, problem = :owned, kw...); inputs)
+    LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((n, m)); T, kw...); inputs))
 fgrid(v, n, m) = reshape(v, n, m)
 
 @testset "Fourier mode decay through solve (owned and ODE)" begin
@@ -19,7 +20,7 @@ fgrid(v, n, m) = reshape(v, n, m)
     per = [c(t, x, 0) ~ c(t, x, 1), c(t, 0, y) ~ c(t, 1, y)]
     sys = psys([D(ce) ~ Dr * Δ(ce) - kr * ce], [c(0, x, y) ~ cos(2π * kx * x) * cos(2π * ky * y); per], [Dr, kr])
     prob = owned(sys, n, m)
-    @test prob isa FieldProblem && prob.stability(prob.p) ≈ 4 * (n^2 + m^2)            # D Σ 4/h² + |k|
+    @test prob isa LFP.FieldProblem && prob.stability(prob.p) ≈ 4 * (n^2 + m^2)            # D Σ 4/h² + |k|
     xc, yc = ((1:n) .- 0.5) ./ n, ((1:m) .- 0.5) ./ m
     mode = [cos(2π * kx * a) * cos(2π * ky * b) for a in xc, b in yc]
     λ = 4n^2 * sin(π * kx / n)^2 + 4m^2 * sin(π * ky / m)^2                     # discrete eigenvalue
@@ -126,7 +127,7 @@ end
     @test_throws ArgumentError solve(nl, ExplicitEuler(; dt = 0.01))
     @test SciMLBase.successful_retcode(solve(nl, ExplicitEuler(; dt = 0.01, substeps = 4)))
     adv = discretize(psys([D(ce) ~ -Advect(Upwind1())(ve, ce)], [c(0, x, y) ~ x; c(t, x, 0) ~ c(t, x, 1)], Num[];
-                          dvs = [ce, ve]), LatticeDiscretization(Grid((8, 4)); T = Float64, problem = :owned);
+                          dvs = [ce, ve]), LatticeDiscretization(Grid((8, 4)); T = Float64);
                      inputs = ["vel[1]" => 1.0, "vel[2]" => 0.0])
     @test_throws ArgumentError solve(adv, ExplicitEuler(; dt = 0.01))
     @test SciMLBase.successful_retcode(solve(adv, ExplicitEuler(; dt = 0.01, substeps = 2)))
@@ -308,7 +309,7 @@ end
                                  c(t, x, 0) ~ c(t, x, 1)], [βr])
     prob = owned(sys, n)                                          # default −0.5: fine
     @test_throws ArgumentError remake(prob; p = [βr => 0.125])      # α/2 + β/h = 1/2 − 1/2 = 0
-    @test remake(prob; p = [βr => 0.25]) isa FieldProblem
+    @test remake(prob; p = [βr => 0.25]) isa LFP.FieldProblem
     @test_throws ArgumentError remake(prob; p = [βr => 0.125 * (1 + 1e-9)])   # relative tolerance
     # near-degenerate (review probe βr = 0.1249): the face stiffens the boundary row; the
     # bound sees it, so the run stays finite
@@ -335,8 +336,8 @@ end
     Ne = N(t, x, y)
     sys = psys([Shift(t, 1)(Ne) ~ (N(t, x + dx, y) + N(t, x - dx, y)) / 2], [N(0, x, y) ~ x], [dx];
         T = 3.0, dvs = [Ne])
-    prob = discretize(sys, LatticeDiscretization(Grid((8, 2)); T = Float64))     # :auto → owned
-    @test prob isa FieldProblem && prob.kind == :map
+    prob = discretize(sys, LatticeDiscretization(Grid((8, 2)); T = Float64))     # a map: a DiscreteProblem (F4-01)
+    @test prob isa SciMLBase.DiscreteProblem && LFP.field_problem(prob).kind == :map
     sol = solve(prob, ExplicitMap(); saveat = 1)
     u = sol[Ne][1][:, 1]
     for k in 1:3
@@ -344,17 +345,17 @@ end
         @test sol[Ne][k + 1][:, 1] ≈ u
     end
     @test_throws ArgumentError solve(prob, ExplicitEuler(; dt = 1.0))   # a map is not a rate
-    @test_throws ArgumentError discretize(sys, LatticeDiscretization(Grid((8, 2)); T = Float64, problem = :ode))
 end
 
 @testset "refusals" begin
     sys = psys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0], Num[])
-    @test_throws ArgumentError discretize(sys, LatticeDiscretization(Grid((4, 4)); problem = :linear))
+    @test_throws ArgumentError LatticeDiscretization(Grid((4, 4)); problem = :linear)
     @test_throws ArgumentError solve(owned(sys, 4), ExplicitEuler(; dt = 0.3))   # 1.0 is not 0.3 k
     @test_throws ArgumentError solve(owned(sys, 4), ExplicitMap())
     @test_throws ArgumentError owned(psys([D(ce) ~ Δ(ce)], Equation[], Num[]), 4)  # no initial value
-    @test_throws ArgumentError discretize(psys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0, ce ~ masked(ke == 3, 0.0)], Num[];
-        dvs = [ce, ke]), LatticeDiscretization(Grid((4, 4)); T = Float64, problem = :ode))
+    # (F4-01: a masked condition discretizes to the one problem; base, with `problem = :ode`: refused)
+    @test discretize(psys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0, ce ~ masked(ke == 3, 0.0)], Num[];
+        dvs = [ce, ke]), LatticeDiscretization(Grid((4, 4)); T = Float64)) isa SciMLBase.ODEProblem
 end
 
 # F2-10 (F2 design §2.11): the one operator allowlist (`lowers_call`, which Potts `@equations`
@@ -397,35 +398,35 @@ end
     @parameters Td[1:2] = [0.5, 1.0]
     sys = psys([D(ce) ~ Dd * Δ(ce) - kd * ce - at(Td, ke) * ce], [c(0, x, y) ~ 1.0], [kd, Dd, Td]; dvs = [ce, ke])
     K = fill(Int32(1), 4, 4)
-    for problem in (:owned, :ode)
-        disc = LatticeDiscretization(Grid((4, 4)); T = Float64, problem)
-        base = discretize(sys, disc; inputs = [ke => K])
-        i = pidx(problem == :owned ? base : base.f.sys, kd)
-        a = discretize(sys, disc; inputs = [ke => K], p = [kd => 2], u0 = [ce => 0.5], tspan = (0, 2))
-        r = remake(base; p = withp(base.p, i, 2.0), u0 = fill(0.5, 16), tspan = (0.0, 2.0))
-        @test a.p == r.p && collect(a.u0) == collect(r.u0) && a.tspan == r.tspan == (0.0, 2.0)
-        sa, sr = problem == :owned ? (solve(a, ExplicitEuler(; dt = 0.1)), solve(r, ExplicitEuler(; dt = 0.1))) :
-                 (solve(a, Tsit5(); abstol = 1e-10, reltol = 1e-10), solve(r, Tsit5(); abstol = 1e-10, reltol = 1e-10))
+    # (F4-01: one problem; the field algorithm and an OrdinaryDiffEq solver both step it)
+    disc = LatticeDiscretization(Grid((4, 4)); T = Float64)
+    base = discretize(sys, disc; inputs = [ke => K])
+    i = pidx(base.f.sys, kd)
+    a = discretize(sys, disc; inputs = [ke => K], p = [kd => 2], u0 = [ce => 0.5], tspan = (0, 2))
+    r = remake(base; p = withp(base.p.values, i, 2.0), u0 = fill(0.5, 16), tspan = (0.0, 2.0))
+    @test a.p == r.p && collect(a.u0) == collect(r.u0) && a.tspan == r.tspan == (0.0, 2.0)
+    for (sa, sr) in ((solve(a, ExplicitEuler(; dt = 0.1)), solve(r, ExplicitEuler(; dt = 0.1))),
+            (solve(a, Tsit5(); abstol = 1e-10, reltol = 1e-10), solve(r, Tsit5(); abstol = 1e-10, reltol = 1e-10)))
         @test sa.u[end] == sr.u[end] && sa.t[end] == 2.0
-        # a flat `u0`, a parameter vector and an array `u0` per field
-        v = discretize(sys, disc; inputs = [ke => K], p = collect(a.p), u0 = fill(0.5, 16), tspan = (0, 2))
-        @test v.p == a.p && collect(v.u0) == collect(a.u0)
-        @test collect(discretize(sys, disc; inputs = [ke => K], u0 = [ce => fill(0.25, 4, 4)]).u0) == fill(0.25, 16)
     end
+    # a flat `u0`, a parameter vector and an array `u0` per field
+    v = discretize(sys, disc; inputs = [ke => K], p = collect(a.p.values), u0 = fill(0.5, 16), tspan = (0, 2))
+    @test v.p == a.p && collect(v.u0) == collect(a.u0)
+    @test collect(discretize(sys, disc; inputs = [ke => K], u0 = [ce => fill(0.25, 4, 4)]).u0) == fill(0.25, 16)
     # a table through `p` (the owned problem keeps it; `remake` gives the same)
-    disc = LatticeDiscretization(Grid((4, 4)); T = Float64, problem = :owned)
+    disc = LatticeDiscretization(Grid((4, 4)); T = Float64)
     pt = discretize(sys, disc; inputs = [ke => K], p = [Td => [0.25, 1.0]])
     @test getp(pt, Td)(pt) == [0.25, 1.0] && getp(pt, Td)(pt) == getp(remake(discretize(sys, disc; inputs = [ke => K]);
         p = [Td => [0.25, 1.0]]), Td)(pt)
-    # … and the ODE problem takes a table where it is built (the route its table refusal gives)
-    o = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64, problem = :ode); inputs = [ke => K],
+    # … and a `remake` of the problem gives it a new table (F4-00; base: on the ODE path refused,
+    # "an ODE problem's tables are fixed")
+    o = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64); inputs = [ke => K],
         p = [Td => [0.25, 1.0]])
-    @test last(only(o.f.f.ctx.tables)) == [0.25, 1.0]
-    @test occursin("discretize(…; p = [Td => values])", emsg(() -> remake(o; p = [Td => [0.5, 1.0]])))
+    @test o.ps[Td] == [0.25, 1.0] && remake(o; p = [Td => [0.5, 1.0]]).ps[Td] == [0.5, 1.0]
     # review S7: a Dual in `u0` promotes the state (base: `MethodError: no method matching
     # Float64(::Dual)`); an input in `u0` says it is an input and prints its name as written
     dU = discretize(sys, disc; inputs = [ke => K], u0 = [ce => ForwardDiff.Dual(0.5, 1.0)])
-    @test eltype(dU) <: ForwardDiff.Dual && ForwardDiff.value(dU.u0[1]) == 0.5
+    @test eltype(dU.u0) <: ForwardDiff.Dual && ForwardDiff.value(dU.u0[1]) == 0.5
     err = emsg(() -> discretize(sys, disc; inputs = [ke => K], u0 = [ke => 1]))
     @test occursin("`kindₛ` is an input", err) && occursin("inputs = [kindₛ => values]", err) && !occursin("⋆", err)
     # any other keyword names itself (base: a `MethodError`)
@@ -455,7 +456,7 @@ end
     # aux only: `:auto` gives the owned problem; `K` at every save (saves every second window)
     sys = psys([Ke ~ Kb + t + x], Equation[], [Kb]; dvs = [Ke])
     p = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64))
-    @test p isa FieldProblem
+    @test p isa SciMLBase.ODEProblem && isempty(p.u0)                    # (F4-01: one problem with no state)
     sol = solve(p, ExplicitEuler(; dt = 0.25); saveat = 0.5)
     @test sol.retcode == SciMLBase.ReturnCode.Success && sol.t == [0.0, 0.5, 1.0]
     @test LatticePDE.Problems.substep_counts(sol) == [0]          # no state: no substep

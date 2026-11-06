@@ -36,7 +36,7 @@ ODEs. It differentiates only the fields' response to the parameters along the pa
 | Where | Seed | Read |
 |---|---|---|
 | `@potts_model` (A) | a Dual for a parameter, or a Dual initial value of a field, in the operating point; `remake(prob; p = [k => Dual])` | `sol.u[i].site.c`, `integ[c]`, `integ.u` (Dual arrays) |
-| `FieldProblem` (B) | `remake(prob; p = [k => Dual])`, or a Dual `u0` | `sol.u[i]` (Dual arrays) |
+| `discretize` (B) | `remake(prob; p = [k => Dual])`, or a Dual `u0` | `sol.u[i]` (Dual arrays) |
 
 - In A, the live state `integ.state` stays primal. Only the field arrays are Duals.
 - A field default that reads a seeded parameter (`c(field) = c0`) carries `∂c₀/∂c0`.

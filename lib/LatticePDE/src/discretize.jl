@@ -7,8 +7,7 @@
 struct FiniteVolume end
 
 """
-    LatticeDiscretization(grid; methods = Dict(), T = nothing, backend = nothing, problem = :auto, domain = nothing,
-                          clock = nothing)
+    LatticeDiscretization(grid; methods = Dict(), T = nothing, backend = nothing, domain = nothing, clock = nothing)
 
 How a `PDESystem` is put on a lattice. `grid = Grid(dims)` gives only the site counts: the
 spacing is derived from the system's domain (`extent ./ dims`) and periodicity from its
@@ -55,20 +54,20 @@ struct LatticeDiscretization{N, M, B} <: AbstractDiscretization
     methods::M
     T::Union{Type, Nothing}
     backend::B
-    problem::Symbol
     domain::Union{Nothing, String}
     clock::Union{Nothing, Float64}
 end
 function LatticeDiscretization(grid::Grid; methods = Dict(), T::Union{Type, Nothing} = nothing,
-                               backend = nothing, problem::Symbol = :auto, domain = nothing, clock = nothing)
+                               backend = nothing, domain = nothing, clock = nothing, kw...)
+    isempty(kw) || throw(ArgumentError(string("`LatticeDiscretization` takes `methods`, `T`, `backend`, `domain` and ",
+        "`clock`; got ", join(("`$k`" for k in keys(kw)), ", "), ". The problem is chosen by the algorithm: ",
+        "`discretize` returns one SciML problem, which `solve` takes with a field algorithm or an OrdinaryDiffEq solver")))
     clock === nothing || (clock isa Real && isfinite(clock) && clock > 0) ||
         throw(ArgumentError("clock = $(repr(clock)) must be a finite period > 0 (or left out: no clock)"))
-    problem in (:auto, :owned, :ode, :linear) ||
-        throw(ArgumentError("problem must be :auto, :owned, :ode or :linear; got $(repr(problem))"))
     grid.domain == 0 || throw(ArgumentError("give an irregular domain as `domain = dom` (a Bool input field), not in the grid"))
     grid.geometry == HEX && length(grid.dims) != 2 && throw(ArgumentError("a hexagonal grid is 2D"))
     key = domain === nothing ? nothing : domain isa Union{AbstractString, Symbol} ? String(domain) : _name(_opof(domain))
-    return LatticeDiscretization(grid, methods, T, backend, problem, key, clock === nothing ? nothing : Float64(clock))
+    return LatticeDiscretization(grid, methods, T, backend, key, clock === nothing ? nothing : Float64(clock))
 end
 
 """

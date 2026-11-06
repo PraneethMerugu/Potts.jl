@@ -9,6 +9,7 @@ using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_var
 using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
 using DomainSets: Interval
 using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
 # the byte-identity gate of the update pass (F2-07) runs in every owned `discretize` of the suite
 get!(ENV, "LATTICEPDE_CHECK_FUSION", "1")
 
@@ -287,6 +288,7 @@ bcs = [ce ~ masked(ke == 3, 0.0), oe ~ masked(ismember(ke, (2, 3)), 1.0)]
     include("groups.jl")
     include("integ_ps.jl")
     include("params.jl")
+    include("families.jl")
     include("groups_coupling.jl")
     include("implicit.jl")
     include("cranknicolson.jl")

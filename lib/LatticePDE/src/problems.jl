@@ -1,10 +1,8 @@
-# `discretize`: a `PDESystem` on a lattice becomes a problem (v3 §5, §7.4, §8).
-#   :owned  FieldProblem: the fused rate + Euler update kernels (`c + dt · rhs`), stepped by
-#           ExplicitEuler (rates) or ExplicitMap (maps) through prebuilt launches.
-#   :ode    ODEProblem: the rate kernels (`∂c = rhs`) as `LatticeRHS`, for SciML solvers.
-#   :auto   ODEProblem for transient FV, FieldProblem when a discrete map is present.
-#   :linear LinearProblem for steady systems: planned (F4; refused). A steady system (`0 ~ rhs`
-#           rows, no time) is a FieldProblem solved once (F3-12b).
+# `discretize`: a `PDESystem` on a lattice becomes one SciML problem (v3 §5, §7.4, §8; F4
+# design §3.2): an `ODEProblem` of rates or a `DiscreteProblem` of maps, whose metadata holds
+# the owned problem (the fused update kernels the field algorithms step) and whose function
+# is the compiled right side (`∂c = rhs`, or the next state of a map) that SciML's solvers
+# call, built at its first call.
 
 """The explicit Euler update `c + dt · r` of the owned stepper (`dt = G.rt[2]`)."""
 euler_update(kb, c, r) = c + Ex(kb, runtime!(kb, RT_DT)) * r
@@ -1685,42 +1683,51 @@ _states(p) = [f.key for f in p.fields if f.role == :state]
 """
     discretize(pdesys, disc::LatticeDiscretization; inputs = (), u0 = nothing, p = nothing, tspan = nothing)
 
-The problem of `pdesys` on the lattice (`disc.problem`):
-- `:owned`: a `FieldProblem` (the owned fast path), solved with `ExplicitEuler(; dt,
-  substeps)` for rate equations or `ExplicitMap()` for maps;
-- `:ode`: an `ODEProblem` whose function is the compiled right side (`LatticeRHS`) with the
-  symbol table as `sys`, for SciML solvers;
-- `:auto`: `:ode` for rate equations, `:owned` when a discrete map, a masked condition
-  (`c ~ masked(pred, v)`, which only the owned path lowers) or a steady row `0 ~ rhs` is
-  present, or when the system has only aux equations `K ~ rhs` (no state: the owned path
-  evaluates them once per window and `sol[K]`, `integ[K]` read them, F3 design §3.12);
-- `:linear`: planned (a `LinearProblem`, F4); refused.
+The SciML problem of `pdesys` on the lattice (F4 design §3.2): one problem, which every
+algorithm takes.
+- Rate equations `D(c) ~ rhs` (with aux fields `K ~ rhs`, masked conditions and steady rows
+  `0 ~ rhs`) give an `ODEProblem`. The field algorithms step it, `solve(prob,
+  BackwardEuler(; dt))` (`ExplicitEuler`, `CrankNicolson`, `BDF2`, `QuasiSteady`,
+  `FieldGroups`), and so do OrdinaryDiffEq's solvers, `solve(prob, Rodas5P())`, through its
+  compiled right side, which is built at their first call (a problem only field algorithms
+  step never builds it).
+- Maps `Shift(t, 1)(m) ~ rhs` give a `DiscreteProblem`, stepped by `ExplicitMap()` (or
+  `FunctionMap()`, through the compiled map).
+- `solve(prob)` with no algorithm takes `ExplicitEuler()` for rates (it needs `dt`, or the
+  discretization's `clock`), `QuasiSteady()` when every row is steady, `ExplicitMap()` for
+  maps.
+
+The problem's `p` is a `LatticeParameters`: the scalar parameters, the tables, the inputs and
+the clock's step index. Read and write them by symbol on the problem, an integrator or a
+solution: `prob.ps[k]`, `integ.ps[Dk] = values`, `integ.ps[kind] = K`, `remake(prob; p = [k =>
+v], inputs = [kind => K])`. In this version an OrdinaryDiffEq solver refuses masked
+conditions, `step_index(t)` and steady rows (with the route to a field algorithm).
 
 **Steady rows** (F3-12b). `0 ~ rhs` is solved for the field it determines: a state field with
 no other equation that the row reads, preferably under a spatial operator (`0 ~ D * Δ(c) - k * c
 + s` is `c`'s); see `steady_rows`. Its group takes `QuasiSteady` only, by default too:
 `solve(prob, BackwardEuler(; dt))` steps the other fields with `BackwardEuler` and the steady
 ones with `QuasiSteady` at the same window, solved first in each window. A steady field with no
-initial value starts at 0. On `:ode` a steady row (a DAE) is planned (F4) and refused.
+initial value starts at 0.
 
 **Systems with no time** (F3-12b). A system whose variables are the axes only (`[x, y]`, every
 row `0 ~ rhs` or an aux field) is a steady system: the problem has `tspan = (0, 0)`, and
 `solve(prob)` (or `solve(prob, QuasiSteady(; inner, newton))`) solves it once from the cold
 `u0`, with the inner solver to `rtol = 1e-6` within 64 iterations unless `inner` is given. It
-returns a one-state solution at t = 0, read by the time-free symbol (`sol[c(x, y)]`). On `:ode`
-it is the `SteadyStateProblem` of the right side.
+returns a one-state solution at t = 0, read by the time-free symbol (`sol[c(x, y)]`).
+`SteadyStateProblem(prob)` is the steady state of its right side, for SciML's steady solvers.
 
 The time span is the domain of the first variable. Fields index solutions and integrators
 by symbol (`sol[c(t, x, y)]`, `sol[:c]`) as grid-shaped arrays.
 
-**Keywords** (SciML's `discretize`; the same set on both problem kinds; F2 design §2.8):
+**Keywords** (SciML's `discretize`; F2 design §2.8):
 - `u0`: the initial values, a flat vector of the state, or `field => values` pairs (an array
   with one value per site, or a number) that override the fields they name;
 - `p`: the parameter values, a vector of every parameter, or `parameter => value` pairs (a
-  table as `Dk => values`), with `remake`'s rule (a plain value is written into the
-  parameter type, a Dual promotes it; under `T = BigFloat` with Float64 defaults a pair's
-  BigFloat value rounds to Float64, so declare BigFloat defaults or give a BigFloat vector); a
-  computed parameter is refused, naming why;
+  table as `Dk => values`, an input as `kind => K`), with `remake`'s rule (a plain value is
+  written into the parameter type, a Dual promotes it; under `T = BigFloat` with Float64
+  defaults a pair's BigFloat value rounds to Float64, so declare BigFloat defaults or give a
+  BigFloat vector); a computed parameter is refused, naming why;
 - `tspan`: the time span `(t₀, t₁)`, over the domain of the first variable;
 - `inputs`: the input values (below).
 Any other keyword is an `ArgumentError` naming it (the `ODEFunction` keywords `jac` and
@@ -1729,11 +1736,10 @@ disc); p = [k => 2.0])`, with no second problem built.
 
 **Inputs.** Input fields (`kindₛ(..)::Int32 [input = true]`, a `domain` mask) are read and
 never written by the equations. Give their values with `inputs = [kindₛ => K, dom => M]`
-(an array with one value per site, or a number); on the owned path, also later with
-`remake(prob; inputs = …)` or `integ[kindₛ] = K` during a run (the masks follow). An input
-with a declared default (`dom(..)::Bool = true [input = true]`) needs no value; any other
-unset input is an error naming it (at `init` on the owned path, here on the ODE path). An
-input is never read as zero.
+(an array with one value per site, or a number), later with `remake(prob; inputs = …)`, and
+during a run with `integ.ps[kindₛ] = K` (the masks follow). An input with a declared default
+(`dom(..)::Bool = true [input = true]`) needs no value; any other unset input is an error
+naming it when the problem is solved. An input is never read as zero.
 
 **Parameters.** A parameter with a default that reads other parameters (`@parameters k2 =
 2a`) is computed (D-F2-1): it is read-only and follows `a` at every `remake` and `setp`
@@ -1741,11 +1747,10 @@ input is never read as zero.
 work (`getp(prob, k2)`, `integ.ps[k2]`, `sol.ps[k2]`); a write is an error naming its inputs,
 and a face or mask value may read it (`c(t, 0, y) ~ g` with `g = g1 + g2`). An array parameter needs a default of its
 declared size. A scalar parameter with no value is an error naming it before the problem
-steps (at `init` on the owned path, here on the ODE path, which has no `init`); on the owned
-path `remake(prob; p = [k => v])` gives it one. A negative diffusion coefficient, or a NaN
-value, is refused at every parameter value a problem steps with: on the ODE path at the first
-call of the right side with new values (`remake`, `setp` on an integrator), so `solve` or
-`step!` throws and never runs them.
+steps; `remake(prob; p = [k => v])` gives it one. A negative diffusion coefficient, or a NaN
+value, is refused at every parameter value a problem steps with: at `init` of a field
+algorithm, and at the first call of the right side with new values for an OrdinaryDiffEq
+solver (`remake`, `setp` on an integrator), so `solve` or `step!` throws and never runs them.
 
 A system mixes no rate equations (`D(c) ~ …`) and maps (`Shift(t, 1)(m) ~ …`) in this
 version: one problem steps one kind (split stepping is planned).
@@ -1754,27 +1759,13 @@ function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = (),
         tspan = nothing, kw...) where {N}
     isempty(kw) || _dverr(string("`discretize` takes `inputs`, `u0`, `p`, `tspan`; got ", join(("`$k`" for k in keys(kw)), ", "),
         any(k -> k in (:jac, :sparse), keys(kw)) ? " (the `ODEFunction` keywords `jac` and `sparse` are planned)" : "",
-        ": give the other settings to the discretization (`LatticeDiscretization(…; T, problem, clock)`) or to `solve`"))
+        ": give the other settings to the discretization (`LatticeDiscretization(…; T, backend, clock)`) or to `solve`"))
     _check_parts(sys)
-    kind = disc.problem
-    kind == :linear && _dverr("problem = :linear (a `LinearProblem` of a steady system) is planned (F4); a steady " *
-                              "system (`0 ~ rhs` rows, no time) is solved on the owned path: leave `problem` out and " *
-                              "`solve(prob)`")
     # steady rows `0 ~ rhs` as rates of their fields, a system with no time timed (F3-12b)
     free = sys.dvs
     sys, steady, timefree = steady_form(sys, N)
     timefree && tspan !== nothing && _dverr("`tspan`: the system has no time (a steady system, solved once); leave `tspan` out")
-    hasmap = check_one_kind(sys)
-    hasmask = any(b -> (r = unwrap(b.rhs); iscall(r) && operation(r) === masked), sys.bcs)
-    # the clock's step index needs the owned steppers, which land on its boundaries
-    hasclock = _reads_step_index(sys)
-    # aux equations only (`K ~ rhs`, no state): the owned path evaluates them once per window
-    auxonly = !isempty(sys.eqs) && all(eq -> (l = unwrap(eq.lhs); !(iscall(l) && operation(l) isa Union{Differential, Shift})), sys.eqs)
-    kind == :auto && (kind = hasmap || hasmask || hasclock || auxonly || !isempty(steady) ? :owned : :ode)
-    kind == :ode && hasclock && _dverr("`step_index(t)` needs problem = :owned in this version: an ODE solver does not " *
-                                       "land on the clock's boundaries (a discrete parameter updated at them, with " *
-                                       "`tstops`, is planned: F4); use problem = :owned or leave `problem` out")
-    kind == :ode && hasmap && _dverr("discrete maps have no ODE form; use problem = :owned")
+    check_one_kind(sys)
     backend = disc.backend === nothing ? KernelAbstractions.CPU() : disc.backend
     T = _statetype(disc)
     # Cartesian indexing on the host: the host loop hands each site its coordinates (a linear
@@ -1787,19 +1778,6 @@ function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = (),
     cf, sys, spec = g.cf, g.sys, g.spec
     s = cf.program
     state = spec.state
-    # on the owned path each state field is stored in its own `lattice_storage` (u0 in T; the
-    # saves in the promotion of the storage types; batch 5 review S2). An ODE solver's state is
-    # its one vector of T, so there a declared storage other than T is refused (FE-17)
-    if kind == :ode
-        for k in state
-            f = s.fields[fieldid(s, k)]
-            f.fixed && juliatype(f.storage) !== T &&
-                _dverr(string("field `", k, "`: `lattice_storage = ", juliatype(f.storage), "` differs from the ",
-                    "problem's number type T = ", T, "; on problem = :ode the ODE solver's state is one vector of T, so ",
-                    "its fields are stored in T. Discretize with T = ", juliatype(f.storage), ", or use problem = :owned ",
-                    "(each field stored in its own type)"))
-        end
-    end
     index = _index(cf, sys, s, state; g.derived, g.computed, cdefaults = g.defaults, free = timefree ? free : nothing)
     x0 = _given_u0(_initial(cf, sys, state, T), index, u0)
     _check_state_bounds(x0, cf, sys, index)
@@ -1809,20 +1787,9 @@ function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = (),
     # a constant face or mask value outside its field's declared bounds (batch 5 review M2)
     Problems.check_declared(spec.stability, Problems.with_tables(map(primal, pv), tables))
     ins = Pair[_input_defaults(cf, sys); collect(inputs); pins]
-    if kind == :owned
-        _check_fusion(s, sys, disc)
-        return FieldProblem(spec, x0, span, pv; index, tables, inputs = ins, backend, options)
-    end
-    # (a coarse field's owner kernels run on the ODE path too, at its first evaluation)
-    all(k -> startswith(k, "owner:"), spec.init) ||
-        _dverr("masked conditions (`c ~ masked(pred, v)`) need problem = :owned in this version")
-    !timefree && !isempty(spec.steady) && _dverr(string("problem = :ode: the steady rows of ",
-        join(("`$k`" for k in spec.steady), ", "), " make the system a DAE (a mass matrix with zero rows), which is ",
-        "planned (F4); solve it on the owned path: leave `problem` out (`QuasiSteady` steps the steady fields), or write ",
-        "the rows as rates `D(c) ~ rhs`"))
-    rates = Dict(k => "∂$k" for k in state)
-    return ode_problem(s, x0, span, pv; state, rates, init = spec.init, index,
-        tables, inputs = ins, stability = spec.stability, backend, options, steady = timefree)
+    _check_fusion(s, sys, disc)
+    # the owned problem of the group (its plans and checks), held by the SciML problem's metadata
+    return Problems.lattice_problem(FieldProblem(spec, x0, span, pv; index, tables, inputs = ins, backend, options))
 end
 
 """
@@ -1941,12 +1908,6 @@ end
 
 # a key as the user wrote it (`c`, not `c(t, x, y)`; `:c` as `c`)
 _keytext(k) = replace(string(k), r"\(t(, \w+)*\)" => "", "⋆" => "")
-
-# whether an equation or condition of `sys` reads the clock's step index
-function _reads_step_index(sys::PDESystem)
-    hit(u) = iscall(u) && (operation(u) === step_index || any(hit, arguments(u)))
-    return any(eq -> hit(unwrap(eq.lhs)) || hit(unwrap(eq.rhs)), [sys.eqs; sys.bcs])
-end
 
 # The byte-identity gate of the update pass (F2-07; F2 design §2.5), on request: with
 # `LATTICEPDE_CHECK_FUSION=1` in the environment, every owned problem checks that its rate

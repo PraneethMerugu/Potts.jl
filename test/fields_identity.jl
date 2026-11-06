@@ -446,7 +446,7 @@ function cases()
     @variables c(..) kq(..)::Int32 [input = true] N(..)
     ce, qe, Ne = c(t, x, y), kq(t, x, y), N(t, x, y)
     dom(T) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-    own(sys, n; inputs = ()) = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64, problem = :owned); inputs)
+    own(sys, n; inputs = ()) = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64); inputs)
     out = Tuple{String, Any, Int}[]                     # label, final state, substep count (0: none)
     sr = PDESystem([D(ce) ~ Δ(ce)], [c(0, x, y) ~ x * y, c(t, 0, y) + βr * Differential(x)(c(t, 0, y)) ~ 1.0,
                                      c(t, x, 0) ~ c(t, x, 1)], dom(0.1), [t, x, y], [ce], [βr]; name = :r)
@@ -478,7 +478,7 @@ function implicit_cases()
     ce = c(t, x, y)
     sys = PDESystem([D(ce) ~ Dc * Δ(ce) - k * ce + x], [c(0, x, y) ~ x * y, c(t, 0, y) ~ 1.0],
         [t ∈ Interval(0.0, 0.4), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [ce], [Dc, k]; name = :i)
-    prob = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
+    prob = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64))
     out = Tuple{String, Any, Int}[]
     for alg in (LatticePDE.BackwardEuler(; dt = 0.1), LatticePDE.CrankNicolson(; dt = 0.1), LatticePDE.BDF2(; dt = 0.1),
                 LatticePDE.QuasiSteady(; dt = 0.1))

@@ -1105,15 +1105,15 @@ end
     # and the parameters had no value, "no initial condition" / NaN): c(1) = 2 (1 − 0.05)^10
     LP = Potts.LatticePDE
     for m in (FdDefaults(; name = :f), mtkcompile(FdDefaults(; name = :f)))
-        prob = LP.discretize(Potts.fields(m), LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64, problem = :owned))
+        prob = LP.discretize(Potts.fields(m), LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64))
         s = LP.solve(prob, LP.ExplicitEuler(; dt = 0.1, substeps = 1))
         @test s.retcode == Potts.SciMLBase.ReturnCode.Success && all(≈(2 * 0.95^10), s[:c][end])
         o = LP.discretize(Potts.fields(m), LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64))
-        @test o isa Potts.SciMLBase.ODEProblem && o.p == [1.0, 0.5] && all(==(2.0), o.u0)
+        @test o isa Potts.SciMLBase.ODEProblem && o.p.values == [1.0, 0.5] && all(==(2.0), o.u0)
     end
     # a computed parameter folds and reads (round 1: reading threw): c(1) = (1 − 0.1)^10
     prob = LP.discretize(Potts.fields(FdComputedRate(; name = :f)), LP.LatticeDiscretization(LP.Grid((6, 4));
-        T = Float64, problem = :owned))
+        T = Float64))
     @test LP.getp(prob, :k2)(prob) == 1.0
     @test all(≈(0.9^10), LP.solve(prob, LP.ExplicitEuler(; dt = 0.1, substeps = 1))[:c][end])
     @test LP.getp(LP.remake(prob; p = [:k => 1.0]), :k2)(LP.remake(prob; p = [:k => 1.0])) == 2.0
@@ -1129,38 +1129,40 @@ end
     err = something(fd_err(() -> Potts.fields(FdDomainWord(; name = :f))), "(no error)")
     @test occursin("`domain` (the lattice's domain mask)", err) && occursin("also a field", err) && !occursin("__in", err)
     # … and reads back on the owned path (round 3: "`:δ` names nothing of this problem")
-    po = LP.discretize(Potts.fields(FdTab(; name = :f)), LP.LatticeDiscretization(LP.Grid((10, 8)); T = Float64,
-        problem = :owned); inputs = [:kind => zeros(Int32, 10, 8)])
+    po = LP.discretize(Potts.fields(FdTab(; name = :f)), LP.LatticeDiscretization(LP.Grid((10, 8)); T = Float64); inputs = [:kind => zeros(Int32, 10, 8)])
     ig = LP.init(po, LP.ExplicitEuler(; dt = 0.1, substeps = 1))
     @test ig.ps[:δ] == [0.5, 0.0] && LP.getp(po, :δ)(po) == [0.5, 0.0]
-    @test occursin("`δ` is a table", something(fd_err(() -> LP.setp(po, :δ)(po, [1.0, 0.0])), ""))
     LP.setp(ig, :δ)(ig, [1.0, 0.0])                     # an integrator's table is set (F2-13)
     @test ig.ps[:δ] == [1.0, 0.0] && LP.getp(po, :δ)(po) == [0.5, 0.0]
+    # a problem's table is set as SciML sets a parameter, in place (F4-00; base: refused, "`δ` is a table")
+    pw = LP.remake(po; p = [:δ => [0.5, 0.0]])
+    LP.setp(pw, :δ)(pw, [1.0, 0.0])
+    @test LP.getp(pw, :δ)(pw) == [1.0, 0.0] && LP.getp(po, :δ)(po) == [0.5, 0.0]
     # a CPM coupling is an input given by its key: one step of `s · (kind == A)` from c = 0
     K = zeros(Int32, 12, 10); K[3:5, 4:6] .= 1
-    prob = LP.discretize(Potts.fields(FdSource(; name = :f)), LP.LatticeDiscretization(LP.Grid((12, 10)); T = Float64,
-        problem = :owned); inputs = [:kind => K])
+    prob = LP.discretize(Potts.fields(FdSource(; name = :f)), LP.LatticeDiscretization(LP.Grid((12, 10)); T = Float64); inputs = [:kind => K])
     s = LP.solve(prob, LP.ExplicitEuler(; dt = 0.1, substeps = 1); saveat = 0.1)
     @test s[:c][2] ≈ 0.1 * 0.05 .* (K .== 1)
     # … by the model's word (round 1: only the generated key "kind__in"); "kind" too, and the
     # messages print routes that run, never `__in`
     fe(f) = something(fd_err(f), "(no error)")
     fsrc = Potts.fields(FdSource(; name = :f))
-    disc = LP.LatticeDiscretization(LP.Grid((12, 10)); T = Float64, problem = :owned)
-    @test LP.discretize(fsrc, disc; inputs = ["kind" => K]).inputs == prob.inputs
+    disc = LP.LatticeDiscretization(LP.Grid((12, 10)); T = Float64)
+    @test LP.discretize(fsrc, disc; inputs = ["kind" => K]).p.inputs == prob.p.inputs
     err = fe(() -> LP.solve(LP.discretize(fsrc, disc), LP.ExplicitEuler(; dt = 0.1)))
     @test occursin("`kind`", err) && occursin(":kind => values", err) && !occursin("__in", err)
-    err = fe(() -> LP.discretize(fsrc, LP.LatticeDiscretization(LP.Grid((12, 10)); T = Float64)))
+    # (F4-01: an unset input is named when the problem is solved, by a field algorithm or an
+    # OrdinaryDiffEq solver; base: at `discretize` of the ODE problem)
+    err = fe(() -> (q = LP.discretize(fsrc, LP.LatticeDiscretization(LP.Grid((12, 10)); T = Float64)); q.f(similar(q.u0), q.u0, q.p, 0.0)))
     @test occursin(":kind => values", err) && !occursin("__in", err)
     err = fe(() -> LP.discretize(fsrc, disc; inputs = [:kd => K]))
     @test occursin("`kind`", err) && !occursin("__in", err)
     fvol = Potts.fields(FdVolumeRead(; name = :f))
     V = fill(2.0, 6, 4)
-    s = LP.solve(LP.discretize(fvol, LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64, problem = :owned);
+    s = LP.solve(LP.discretize(fvol, LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64);
         inputs = [:volume => V]), LP.ExplicitEuler(; dt = 0.1, substeps = 1); saveat = 0.1)
     @test all(≈(0.1 * 0.01 * 2.0), s[:c][2])
-    err = fe(() -> LP.solve(LP.discretize(fvol, LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64,
-        problem = :owned)), LP.ExplicitEuler(; dt = 0.1)))
+    err = fe(() -> LP.solve(LP.discretize(fvol, LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64)), LP.ExplicitEuler(; dt = 0.1)))
     @test occursin("`volume`", err) && occursin(":volume => values", err) && !occursin("__in", err)
 end
 
@@ -1219,7 +1221,7 @@ end
            for d in getfield(pdesys, :domain)]
     bsys = MTKB.PDESystem(pdesys.eqs, [pdesys.bcs; ics], dom, ivs, pdesys.dvs, pdesys.ps; name = :b)
     kin = only(v for v in pdesys.dvs if isin(v))
-    bp = LP.discretize(bsys, LP.LatticeDiscretization(LP.Grid((12, 10)); T = Float64, problem = :owned);
+    bp = LP.discretize(bsys, LP.LatticeDiscretization(LP.Grid((12, 10)); T = Float64);
         inputs = [kin => Int32.(σ0 .!= 0)])
     groups = LP.FieldGroups(:c => ExplicitEuler(; dt = 1.0, substeps = 2), :u => ExplicitEuler(; dt = 1.0, substeps = 3))
     bi = init(bp, groups)
@@ -1668,7 +1670,7 @@ end
         integ = init(prob, SequentialCPM())
         foreach(_ -> step!(integ), 1:k)
         a = Array(current_state(integ).site.c)
-        bp = LP.discretize(bsys[name], LP.LatticeDiscretization(LP.Grid(dims); T = Float64, problem = :owned))
+        bp = LP.discretize(bsys[name], LP.LatticeDiscretization(LP.Grid(dims); T = Float64))
         bb = LP.solve(LP.remake(bp; u0 = vec(c0)), LP.ExplicitEuler(; dt = 1.0, substeps = n))[:c][end]
         @test a == bb
         @test maximum(abs, a .- c0) > 1e-3                 # the operator moved the field
@@ -1832,8 +1834,7 @@ end
     err = something(fd_err(() -> PottsProblem(FpMap(; name = :f), fd_empty((6, 4)), (0, 3); field_solver = ExplicitEuler())), "")
     @test occursin("`ExplicitMap()`", err) && occursin("map field", err)
     # B steps the model's map the same way
-    bm = LP.solve(LP.discretize(Potts.fields(FpMap(; name = :f)), LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64,
-        problem = :owned)), ExplicitMap())
+    bm = LP.solve(LP.discretize(Potts.fields(FpMap(; name = :f)), LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64)), ExplicitMap())
     @test bm[:m][2] == vals[1] && bm[:m][end] == vals[1]  # B's span is the PDESystem's (0, 1): one map step
     # a rate and a map in one model: refused on both front ends with F1's message
     err = something(fd_err(() -> mtkcompile(FpMixed(; name = :f))), "")
@@ -2056,7 +2057,7 @@ end
         [c(0, x, y) ~ 0.0, MTKB.Differential(x)(c(tt, 8, y)) ~ q, αr * c(tt, x, 0) - βr * MTKB.Differential(y)(c(tt, x, 0)) ~ gr],
         [tt ∈ LP.Interval(0.0, 2.0), x ∈ LP.Interval(0.0, 8.0), y ∈ LP.Interval(0.0, 6.0)], [tt, x, y], [ce],
         [Dc, q, αr, βr, gr]; name = :b)
-    bp = LP.discretize(bsys, LP.LatticeDiscretization(LP.Grid(dims); T = Float64, problem = :owned))
+    bp = LP.discretize(bsys, LP.LatticeDiscretization(LP.Grid(dims); T = Float64))
     @test run(FbBcsNR) == LP.solve(LP.remake(bp; u0 = vec(c0)), LP.ExplicitEuler(; dt = 1.0, substeps = n))[:c][end]
     # `Potts.fields` carries the `@bcs` conditions and the `Flux`/`Robin` faces
     hasder(f) = any(b -> occursin("Differential(x", string(b)), getfield(f, :bcs))
@@ -2374,7 +2375,7 @@ end
     end
     # B (`Potts.fields` → `discretize`) equals A with one solver group, bitwise
     pf = Potts.fields(FbMaskLater(; name = :f))
-    bp = LP.discretize(pf, LP.LatticeDiscretization(LP.Grid(dims); T = Float64, problem = :owned);
+    bp = LP.discretize(pf, LP.LatticeDiscretization(LP.Grid(dims); T = Float64);
         u0 = [:c => c0, :e => e0], tspan = (0, K))
     b = LP.solve(bp, LP.ExplicitEuler(; dt = 1.0, substeps = N); saveat = 1.0)[:c][2:end]
     @test b == [x[1] for x in runA(FbMaskLater; one...)]
@@ -2420,7 +2421,7 @@ end
 # `remake` (base: a `MethodError`, the keyword did not exist)
 @testset "F2-12: Potts.fields then discretize with keywords" begin
     LP = Potts.LatticePDE
-    disc = LP.LatticeDiscretization(LP.Grid((12, 10)); T = Float64, problem = :owned)
+    disc = LP.LatticeDiscretization(LP.Grid((12, 10)); T = Float64)
     prob = LP.discretize(Potts.fields(FdClosed(; name = :f)), disc; p = [:k => 0.5], u0 = [:c => 1.0], tspan = (0, 1))
     @test LP.getp(prob, :k)(prob) == 0.5 && all(==(1.0), prob.u0)
     # a uniform field decays by (1 − 0.1 k) per step: 0.95^10 (control: the default k = 0 keeps 1)
@@ -2456,16 +2457,16 @@ end
     prob = PottsProblem(FdComputedFace(; name = :f), [fd_empty((8, 8)); :c => rand(StableRNG(4), 8, 8)], (0, 2);
         field_solver = ExplicitEuler(; substeps = 2))
     a = solve(prob, SequentialCPM()).u[end].site.c
-    bp = LP.discretize(Potts.fields(FdComputedFace(; name = :f)), LP.LatticeDiscretization(LP.Grid((8, 8)); T = Float64,
-        problem = :owned); u0 = [:c => prob.u0.site.c], tspan = (0, 2))
+    bp = LP.discretize(Potts.fields(FdComputedFace(; name = :f)), LP.LatticeDiscretization(LP.Grid((8, 8)); T = Float64); u0 = [:c => prob.u0.site.c], tspan = (0, 2))
     @test LP.solve(bp, LP.ExplicitEuler(; dt = 1.0, substeps = 2))[:c][end] == a
     a3 = solve(Potts.remake(prob; p = [:g1 => 3.0]), SequentialCPM()).u[end].site.c
     @test LP.solve(LP.remake(bp; p = [:g1 => 3.0]), LP.ExplicitEuler(; dt = 1.0, substeps = 2))[:c][end] == a3 != a
     # one table of writes against A, B owned and B ODE: equal values, equal refusals
     pa = PottsProblem(FdChainK(; name = :k), [fd_empty((8, 6)); :c => c0], (0, 1))
     sysb = Potts.fields(FdChainK(; name = :k))
-    disc(kind) = LP.LatticeDiscretization(LP.Grid((8, 6)); T = Float64, problem = kind)
-    po, pd = LP.discretize(sysb, disc(:owned)), LP.discretize(sysb, disc(:ode))
+    # (F4-01: `po` is the owned problem of the one problem `discretize` returns, `pd` that problem)
+    disc() = LP.LatticeDiscretization(LP.Grid((8, 6)); T = Float64)
+    po, pd = LP.Problems.field_problem(LP.discretize(sysb, disc())), LP.discretize(sysb, disc())
     reads(q) = (getp(q, :β)(q), getp(q, :γ)(q))
     for (write, want) in (([:α => 0.2], (0.4, 0.45)), ([:α => 0.0], (0.0, 0.05)), ([:Dc => 0.3], (0.2, 0.25)))
         @test reads(Potts.remake(pa; p = write)) == reads(LP.remake(po; p = write)) == reads(LP.remake(pd; p = write)) == want
@@ -2692,7 +2693,7 @@ end
     dom = [MTKB.t_nounits ∈ LP.Interval(0.0, 1.0), x ∈ LP.Interval(0.0, 8.0), y ∈ LP.Interval(0.0, 8.0)]
     sys = MTKB.PDESystem([MTKB.D_nounits(ce) ~ Dc * LP.Δ(ce) - kw * ce^2], [c(0, x, y) ~ 0.0], dom, [MTKB.t_nounits, x, y],
         [ce], [Dc, kw]; name = :w)
-    bp = LP.discretize(sys, LP.LatticeDiscretization(LP.Grid((8, 8)); T = Float64, problem = :owned))
+    bp = LP.discretize(sys, LP.LatticeDiscretization(LP.Grid((8, 8)); T = Float64))
     logs, _ = Test.collect_test_logs() do
         [LP.init(LP.remake(bp; p = [kw => k]), LP.ExplicitEuler(; dt = 1.0, substeps = 4)) for k in (0.5, 0.7, 0.9)]
     end
@@ -3075,7 +3076,7 @@ end
     ce, ue, Ke = c(tt, x, y), u(tt, x, y), K(tt, x, y)
     dom = [tt ∈ LP.Interval(0.0, 2.0), x ∈ LP.Interval(0.0, 16.0), y ∈ LP.Interval(0.0, 16.0)]
     bcount(eqs, dvs, ps, ic) = (p = LP.discretize(MTKB.PDESystem(eqs, ic, dom, [tt, x, y], dvs, ps; name = :b),
-        LP.LatticeDiscretization(LP.Grid(dims); T = Float64, problem = :owned)); LP.Problems.substeps(p, LP.ExplicitEuler(; dt = 1.0)))
+        LP.LatticeDiscretization(LP.Grid(dims); T = Float64)); LP.Problems.substeps(LP.Problems.field_problem(p), LP.ExplicitEuler(; dt = 1.0)))
     acount(M; kw...) = substep_counts(init(PottsProblem(M(; name = :f), fd_empty(dims), (0, 2); field_solver = ExplicitEuler(), kw...),
         SequentialCPM()))
     # `DivKGrad(c, c)` with c ∈ (0, 1): ρ = 8 max K = 8, n = ⌈8/1.8⌉ = 5, as B
@@ -3085,7 +3086,7 @@ end
     a = Array(solve(PottsProblem(FbIvDivK(; name = :f), [fd_empty(dims); :c => c0], (0, 2); field_solver = ExplicitEuler()),
         SequentialCPM()).u[end].site.c)
     bp = LP.discretize(MTKB.PDESystem([DD(ce) ~ LP.DivKGrad(:harmonic)(ce, ce)], [c(0, x, y) ~ 0.5], dom, [tt, x, y], [ce], Any[];
-        name = :b), LP.LatticeDiscretization(LP.Grid(dims); T = Float64, problem = :owned))
+        name = :b), LP.LatticeDiscretization(LP.Grid(dims); T = Float64))
     @test a == LP.solve(LP.remake(bp; u0 = vec(c0)), LP.ExplicitEuler(; dt = 1.0))[:c][end]
     # no declared interval: the term stays one the bound cannot see (the count is refused)
     e = something(fd_err(() -> PottsProblem(FbIvNoBounds(; name = :f), fd_empty(dims), (0, 2); field_solver = ExplicitEuler())), "")

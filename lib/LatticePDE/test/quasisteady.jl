@@ -130,7 +130,7 @@ end
     rt = only(ig.runtimes)
     @test rt.cache.newton == 8 && rt.cache.check && ig.retcode == ReturnCode.Success
     @test rt.totals.newton_budget == 0 && rt.totals.solves < 8      # (the host stop: converged before the budget)
-    po = discretize(sys, LatticeDiscretization(Grid((16, 16)); T = Float64, problem = :ode))
+    po = discretize(sys, LatticeDiscretization(Grid((16, 16)); T = Float64))
     du = similar(po.u0)
     po.f(du, vec(ig[bce]), po.p, 0.0)
     # the steady residual against the uptake's scale (40): ε_N = 1e-3 of the field
@@ -181,7 +181,7 @@ end
     # a budget of 2 PCG iterations on 32²: the residual falls by more than half but not to the
     # tolerance; counted and warned with the route, `Success`
     p = discretize(bsys([D(bce) ~ bD * Δ(bce) - 0.01 * bce + x], [bc(0, x, y) ~ 0.0, bc(t, 0, y) ~ 1.0], [bD]),
-        LatticeDiscretization(Grid((32, 32)); T = Float64, problem = :owned); inputs = [bqe => zeros(Int32, 32, 32)])
+        LatticeDiscretization(Grid((32, 32)); T = Float64); inputs = [bqe => zeros(Int32, 32, 32)])
     ig = init(p, QuasiSteady(; dt = 0.1, inner = DevicePCG(; budget = 2)))
     @test_logs (:warn, r"field `bc`: the linear solve reached its budget 1 time so far .*a larger linear budget") step!(ig)
     sc = LSB.scalars(only(ig.runtimes).cache.rows[1].solver)
@@ -197,7 +197,7 @@ end
     dm = [j <= 2 || j >= 5 for i in 1:8, j in 1:6]
     si = PDESystem([D(bce) ~ bD * Δ(bce) + 1.0], [bc(0, x, y) ~ 0.0, bc(t, x, 0) ~ 0.0], bdom(1.0), [t, x, y], [bce, bdme], [bD];
         name = :island)
-    pi = discretize(si, LatticeDiscretization(Grid(BDIMS); T = Float64, problem = :owned, domain = bdm); inputs = [bdme => dm])
+    pi = discretize(si, LatticeDiscretization(Grid(BDIMS); T = Float64, domain = bdm); inputs = [bdme => dm])
     ig = init(pi, QuasiSteady(; dt = 0.1, inner = DevicePCG(; budget = 16)))
     @test_logs (:warn, r"field `bc`: the solve failed in window 1 \(t = 0\.0\) \(the steady solve made no real reduction: a region has no decay and no fixed value.*give that region a decay or a fixed value, or step the field with `BackwardEuler`") step!(ig)
     sc = LSB.scalars(only(ig.runtimes).cache.rows[1].solver)
@@ -209,7 +209,7 @@ end
     # the same strips with a decay in each: unique, solved
     sd = PDESystem([D(bce) ~ bD * Δ(bce) - 0.5 * bce + 1.0], [bc(0, x, y) ~ 0.0, bc(t, x, 0) ~ 0.0], bdom(1.0), [t, x, y],
         [bce, bdme], [bD]; name = :island2)
-    pd = discretize(sd, LatticeDiscretization(Grid(BDIMS); T = Float64, problem = :owned, domain = bdm); inputs = [bdme => dm])
+    pd = discretize(sd, LatticeDiscretization(Grid(BDIMS); T = Float64, domain = bdm); inputs = [bdme => dm])
     @test solve(pd, QuasiSteady(; dt = 0.1, inner = BTIGHT)).retcode == ReturnCode.Success
 end
 
@@ -225,7 +225,7 @@ end
     @test a.stats == b.stats && a.stats.solves > 0
     @test a[bue[1], length(a.t)] == b[bce, length(b.t)] && a[bue[2], length(a.t)] == b[boe, length(b.t)]
     hs = PDESystem([D(bce) ~ Δ(bce) - bce], [bc(0, x, y) ~ 0.0], bdom(1.0), [t, x, y], [bce], Any[]; name = :hex)
-    ph = discretize(hs, LatticeDiscretization(Grid((6, 6); geometry = HEX); T = Float64, problem = :owned))
+    ph = discretize(hs, LatticeDiscretization(Grid((6, 6); geometry = HEX); T = Float64))
     @test solve(ph, QuasiSteady(; dt = 0.1)).retcode == ReturnCode.Success
 end
 
@@ -241,7 +241,7 @@ end
     qae, qbe = qa(t, x, y), qb(t, x, y)
     loop(δ, k, s) = discretize(PDESystem([D(qae) ~ 0.1 * Δ(qae) - δ * qae + s * k * qbe, D(qbe) ~ 0.1 * Δ(qbe) - qbe - k * qae],
             [qa(0, x, y) ~ 0.0, qb(0, x, y) ~ 1.0], bdom(1.0), [t, x, y], [qae, qbe], Any[]; name = :loop),
-        LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
+        LatticeDiscretization(Grid((8, 8)); T = Float64))
     for (δ, k, s, κ) in ((0.1, 5.0, 1.0, "25.0"), (0.1, 5.0, -1.0, "25.0"), (1.0, 5.0, 1.0, "2.5"), (0.1, 9.0, 1.0, "81.0"))
         p = loop(δ, k, s)
         m = qmsg(() -> init(p, FieldGroups(qae => QuasiSteady(; dt = 0.1), qbe => BackwardEuler(; dt = 0.1))))
@@ -270,11 +270,11 @@ end
     # one way: `qb` reads the steady `qa`, `qa` reads no other group: accepted, the steady state
     pw = discretize(PDESystem([D(qae) ~ 0.1 * Δ(qae) - qae + x, D(qbe) ~ 0.1 * Δ(qbe) - qbe - 5 * qae],
             [qa(0, x, y) ~ 0.0, qb(0, x, y) ~ 1.0], bdom(1.0), [t, x, y], [qae, qbe], Any[]; name = :oneway),
-        LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
+        LatticeDiscretization(Grid((8, 8)); T = Float64))
     r = solve(pw, FieldGroups(qae => QuasiSteady(; dt = 0.1, inner = BTIGHT), qbe => BackwardEuler(; dt = 0.1)))
     @test r.retcode == ReturnCode.Success
     p1 = discretize(PDESystem([D(qae) ~ 0.1 * Δ(qae) - qae + x], [qa(0, x, y) ~ 0.0], bdom(1.0), [t, x, y], [qae], Any[];
-        name = :alone), LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
+        name = :alone), LatticeDiscretization(Grid((8, 8)); T = Float64))
     rs = solve(p1, QuasiSteady(; dt = 0.1, inner = BTIGHT))                     # (the steady field alone)
     @test maximum(abs, r[qae, length(r.t)] .- rs[qae, length(rs.t)]) < 1e-12
 end
@@ -292,7 +292,7 @@ end
 @testset "F3-12c: the QuasiSteady gain in the coupling rule: accepted loops match the coupled solution" begin
     @variables qa(..) qb(..)
     qae, qbe = qa(t, x, y), qb(t, x, y)
-    own8(sys) = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
+    own8(sys) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64)))
     gl(dt) = FieldGroups(qae => QuasiSteady(; dt, inner = BTIGHT), qbe => BackwardEuler(; dt, inner = BTIGHT))
     # the decay sets the gain (1/δ = 1): κ = 0.1 · 0.5 · 1 · 0.5 = 0.025. Uniform data stay
     # uniform (no flux faces): a = (k/δ) b at the window's start, then b's step,
@@ -341,7 +341,7 @@ end
     sm = PDESystem([D(qae) ~ 0.1 * Δ(qae) + 0.1 * qbe, D(qbe) ~ 0.1 * Δ(qbe) - qbe - 0.1 * qae],
         [qa(0, x, y) ~ 0.0, qb(0, x, y) ~ 1.0, qae ~ masked(qme == 1, 0.0)], bdom(1.0), [t, x, y], [qae, qbe, qme], Any[];
         name = :g3)
-    pm = discretize(sm, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned);
+    pm = discretize(sm, LatticeDiscretization(Grid((8, 8)); T = Float64);
         inputs = [qme => Int32[i == 1 ? 1 : 0 for i in 1:8, j in 1:8]])
     m = qmsg(() -> init(pm, gl(0.1)))
     @test startswith(m, "FieldGroups: the QuasiSteady group of `qa` is in a loop of groups that read one another (`qa`, `qb`)") &&
@@ -433,7 +433,7 @@ end
     dm = [j <= 2 || j >= 5 for i in 1:8, j in 1:6]
     si = PDESystem([D(bce) ~ bD * Δ(bce) + 1.0], [bc(0, x, y) ~ 0.0, bc(t, x, 0) ~ 0.0], bdom(1.0), [t, x, y], [bce, bdme], [bD];
         name = :island)
-    pi = discretize(si, LatticeDiscretization(Grid(BDIMS); T = Float64, problem = :owned, domain = bdm); inputs = [bdme => dm])
+    pi = discretize(si, LatticeDiscretization(Grid(BDIMS); T = Float64, domain = bdm); inputs = [bdme => dm])
     ig = @test_logs (:warn, r"field `bc`: the solve failed in the steady start \(`init = :steady`, t = 0\.0\)") match_mode = :any init(pi,
         BackwardEuler(; dt = 0.1, init = :steady, inner = DevicePCG(; budget = 16)))
     @test ig.retcode == ReturnCode.ConvergenceFailure
@@ -447,7 +447,8 @@ end
 # time is solved once (`solve(prob)`, the inner solver to rtol 1e-6 within 64 iterations).
 # Base (6b6bf089, ~/lpwork/f3b5-nc-12b-base.log): `0 ~ rhs` is refused ("not lowered in this
 # version") and a system with no time too (every testset errors).
-qown(sys; dims = BDIMS) = discretize(sys, LatticeDiscretization(Grid(dims); T = Float64, problem = :owned))
+# (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
+qown(sys; dims = BDIMS) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims); T = Float64)))
 @testset "F3-12b: steady rows `0 ~ rhs`: the rate row's solve, QuasiSteady only, the steady groups first" begin
     alg = QuasiSteady(; dt = 0.1, inner = BTIGHT)
     s0 = bsys([0 ~ bD * Δ(bce) - bk * bce + x + t], [bc(t, 0, y) ~ 1.0], [bD, bk]; T = 0.3)
@@ -509,10 +510,12 @@ qown(sys; dims = BDIMS) = discretize(sys, LatticeDiscretization(Grid(dims); T = 
     @test maximum(abs, rq[qe2, length(rq.t)] .- rq[bce, length(rq.t) - 1] .^ 2) < 1e-6
     m = qmsg(() -> init(bown(bsys([0 ~ -bD * Δ(bce) - bk * bce + x], [bc(t, 0, y) ~ 1.0], [bD, bk])), alg))
     @test startswith(m, "QuasiSteady: field `bc`: its local derivative `∂f/∂c` = 2.0 is positive")
-    # the ODE path: a steady row makes a DAE (planned); `:auto` takes the owned path
-    m = qmsg(() -> discretize(sm, LatticeDiscretization(Grid(BDIMS); T = Float64, problem = :ode)))
-    @test startswith(m, "problem = :ode: the steady rows of `bc` make the system a DAE")
-    @test discretize(sm, LatticeDiscretization(Grid(BDIMS); T = Float64)) isa FieldProblem
+    # an OrdinaryDiffEq solver: a steady row makes a DAE, refused in this version (F4-01: at the
+    # solve, not at `discretize`); the field algorithms step the same problem
+    psm = discretize(sm, LatticeDiscretization(Grid(BDIMS); T = Float64))
+    m = qmsg(() -> solve(psm, Tsit5()))
+    @test startswith(m, "the steady rows of `bc` make the system a DAE")
+    @test psm isa SciMLBase.ODEProblem
 end
 
 @testset "F3-12b: a steady row's time source is read at the window's start" begin
@@ -522,7 +525,7 @@ end
     f = (1 + t) * (0.1 * 2π^2 + 1) * sin(π * x) * sin(π * y)
     faces = [bc(t, 0, y) ~ 0.0, bc(t, 1, y) ~ 0.0, bc(t, x, 0) ~ 0.0, bc(t, x, 1) ~ 0.0]
     p = discretize(bsys([0 ~ 0.1 * Δ(bce) - bce + f], faces, Any[]; T = 1.0, dvs = [bce]),
-        LatticeDiscretization(Grid((n, n)); T = Float64, problem = :owned))
+        LatticeDiscretization(Grid((n, n)); T = Float64))
     ig = init(p, QuasiSteady(; dt = 0.5, inner = DevicePCG(; rtol = 1e-12, budget = 200)))
     xs = [(i - 0.5) / n for i in 1:n, j in 1:n]
     ys = [(j - 0.5) / n for i in 1:n, j in 1:n]
@@ -540,7 +543,7 @@ end
     fdom = [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
     sf = PDESystem([0 ~ bD * Δ(fce) - bk * fce + x], [fc(0, y) ~ 1.0], fdom, [x, y], [fce], [bD, bk]; name = :free)
     pf = qown(sf)
-    @test pf isa FieldProblem && pf.tspan == (0.0, 0.0) && pf.group.spec.timefree && pf.group.spec.steady == ["fc"]
+    @test pf isa LFP.FieldProblem && pf.tspan == (0.0, 0.0) && pf.group.spec.timefree && pf.group.spec.steady == ["fc"]
     @test all(iszero, pf.u0)                                                     # (the cold start)
     s = solve(pf)
     want = qs_hand(; K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces = Dict((1, -1) => (:dir, 1.0)))
@@ -555,8 +558,9 @@ end
     @test startswith(qmsg(() -> solve(pf, BackwardEuler(; dt = 0.1))), "BackwardEuler(; dt = 0.1): the system has no time")
     @test startswith(qmsg(() -> discretize(sf, LatticeDiscretization(Grid(BDIMS); T = Float64); tspan = (0, 1))),
         "`tspan`: the system has no time")
-    # the ODE path: the `SteadyStateProblem` of the right side, zero at the steady state
-    ps = discretize(sf, LatticeDiscretization(Grid(BDIMS); T = Float64, problem = :ode))
+    # the `SteadyStateProblem` of the right side, zero at the steady state (F4-01: of the one
+    # problem; base: `problem = :ode` gave it)
+    ps = SciMLBase.SteadyStateProblem(discretize(sf, LatticeDiscretization(Grid(BDIMS); T = Float64)))
     @test ps isa SciMLBase.SteadyStateProblem
     du = similar(want)
     ps.f(du, want, ps.p, 0.0)
@@ -584,7 +588,7 @@ end
     zce, zqe = zc(x, y), zq(x, y)
     fdom = [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
     free(eqs, bcs, ps; q = false) = discretize(PDESystem(eqs, bcs, fdom, [x, y], q ? [zce, zqe] : [zce], ps; name = :free2),
-        LatticeDiscretization(Grid(BDIMS); T = Float64, problem = :owned); (q ? (; inputs = [zqe => BKIND]) : (;))...)
+        LatticeDiscretization(Grid(BDIMS); T = Float64); (q ? (; inputs = [zqe => BKIND]) : (;))...)
     alg = QuasiSteady(; inner = BTIGHT)
     xs = bxs()
     for β in (-1.0, 1.0)

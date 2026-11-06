@@ -10,11 +10,11 @@ using OrdinaryDiffEqSDIRK: Trapezoid
 
 # the manufactured solution `u = e^{−t} sin(πx) sin(πy) + t` (its source, the face value `t`) on
 # [0, 1]², `dims` sites
-function mf_problem(dims; kind = :owned)
+function mf_problem(dims)
     src = -exp(-t) * sin(π * x) * sin(π * y) + 1 + 2π^2 * 0.1 * exp(-t) * sin(π * x) * sin(π * y)
     faces = [bc(t, 0, y) ~ t, bc(t, 1, y) ~ t, bc(t, x, 0) ~ t, bc(t, x, 1) ~ t]
     ms = bsys([D(bce) ~ 0.1 * Δ(bce) + src], [bc(0, x, y) ~ sin(π * x) * sin(π * y); faces], Any[]; T = 1.0, dvs = [bce])
-    return discretize(ms, LatticeDiscretization(Grid(dims); T = Float64, problem = kind))
+    return discretize(ms, LatticeDiscretization(Grid(dims); T = Float64))
 end
 mf_src(xx, yy, tt) = -exp(-tt) * sin(π * xx) * sin(π * yy) + 1 + 2π^2 * 0.1 * exp(-tt) * sin(π * xx) * sin(π * yy)
 mf_faces(tt) = Dict((a, s) => (:dir, tt) for a in 1:2, s in (-1, 1))
@@ -23,7 +23,7 @@ mf_rate(tt) = hand_rate(; K = (x, y) -> 0.1, f = (xx, yy) -> mf_src(xx, yy, tt),
 # the errors and orders of `alg(dt)` against the semi-discrete solution (the `:ode` path, Tsit5
 # at 1e-12), `m²` sites
 function mf_orders(alg, dts; m = 32)
-    ref = solve(mf_problem((m, m); kind = :ode), Tsit5(); reltol = 1e-12, abstol = 1e-12).u[end]
+    ref = solve(mf_problem((m, m)), Tsit5(); reltol = 1e-12, abstol = 1e-12).u[end]
     pm = mf_problem((m, m))
     es = [maximum(abs, vec(blast(solve(pm, alg(dt)))) .- ref) for dt in dts]
     return es, log2.(es[1:(end - 1)] ./ es[2:end])
@@ -33,7 +33,7 @@ end
 function eig_problem(n; T = 0.4)
     dirs = [bc(t, 0, y) ~ 0.0, bc(t, 1, y) ~ 0.0, bc(t, x, 0) ~ 0.0, bc(t, x, 1) ~ 0.0]
     sys = bsys([D(bce) ~ bD * Δ(bce)], [bc(0, x, y) ~ sin(π * x) * sin(π * y); dirs], [bD]; T, dvs = [bce])
-    p = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64, problem = :owned))
+    p = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64))
     λ = 2 * (2cos(π / n) - 2) * n^2
     u0 = [sin(π * (i - 0.5) / n) * sin(π * (j - 0.5) / n) for i in 1:n, j in 1:n]
     return p, λ, u0
@@ -43,7 +43,7 @@ end
 function step1d(n, h; k = 10)
     s = PDESystem([D(b1(t, x)) ~ Δ(b1(t, x))], [b1(0, x) ~ ifelse(x < 0.5, 1.0, 0.0)],
         [t ∈ Interval(0.0, k * h), x ∈ Interval(0.0, 1.0)], [t, x], [b1(t, x)], Any[]; name = :s1)
-    return discretize(s, LatticeDiscretization(Grid((n,)); T = Float64, problem = :owned))
+    return discretize(s, LatticeDiscretization(Grid((n,)); T = Float64))
 end
 tv1(u) = sum(abs, diff(vec(u)))
 # `1.5 c − rb ∂c/∂x = 0.2` at x = 1 (rb = −1: a positive diagonal, rb = +1 a negative one)
@@ -125,12 +125,12 @@ end
     # the `:ode` path: two ImplicitEuler steps of h/2 (the damped start), then Trapezoid at h
     sx = bsys([D(bce) ~ bD * Δ(bce) - bk * bce + sin(3t) * x], [bc(0, x, y) ~ x * y, bc(t, 0, y) ~ 1.0], [bD, bk];
         T = 0.4, dvs = [bce])
-    po = discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :ode))
+    po = discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64))
     h = 0.05
     s0 = solve(po, ImplicitEuler(); dt = h / 2, adaptive = false, abstol = 1e-12, reltol = 1e-12, tspan = (0.0, h))
     st = solve(remake(po; u0 = s0.u[end], tspan = (h, 0.4)), Trapezoid(); dt = h, adaptive = false, abstol = 1e-12,
         reltol = 1e-12)
-    sb = solve(discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned)),
+    sb = solve(discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64)),
         CrankNicolson(; dt = h, inner = BTIGHT))
     @test maximum(abs, vec(blast(sb)) .- st.u[end]) < 1e-8
 end
@@ -181,10 +181,10 @@ end
     @test LFP.canonical(CrankNicolson()) ==
           "CrankNicolson(inner=:auto,lower=nothing,newton=nothing,solver_T=:auto,substeps=nothing)"
     phex = discretize(bsys([D(bce) ~ bD * Δ(bce)], [bc(0, x, y) ~ x], [bD]; dvs = [bce]),
-        LatticeDiscretization(Grid((8, 8); geometry = HEX); T = Float64, problem = :owned))
+        LatticeDiscretization(Grid((8, 8); geometry = HEX); T = Float64))
     @test solve(phex, CrankNicolson(; dt = 0.1)).retcode == ReturnCode.Success     # (F3-20: was refused)
     p16 = discretize(bsys([D(bce) ~ bD * Δ(bce)], [bc(0, x, y) ~ x], [bD]; dvs = [bce]),
-        LatticeDiscretization(Grid(BDIMS); T = Float16, problem = :owned))
+        LatticeDiscretization(Grid(BDIMS); T = Float16))
     @test startswith(e(() -> init(p16, CrankNicolson(; dt = 0.1))), "CrankNicolson: the field `bc` holds Float16 and the problem's value type is Float16")
 end
 
@@ -196,12 +196,12 @@ end
 @testset "F3-10/11 (r2 S2): B counts read the group's own fields" begin
     rd = bsys([D(bce) ~ 0.3 * Δ(bce) - bce + boe, D(boe) ~ 0.3 * Δ(boe) - boe], [bc(0, x, y) ~ 0.0, bo(0, x, y) ~ 1.0], Any[];
         T = 0.4, dvs = [bce, boe])
-    p = discretize(rd, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
+    p = discretize(rd, LatticeDiscretization(Grid((8, 8)); T = Float64))
     @test [r.n for r in init(p, FieldGroups(bce => CrankNicolson(; dt = 0.1), boe => BackwardEuler(; dt = 0.1))).runtimes] == [2, 1]
     @test only(init(p, CrankNicolson(; dt = 0.1)).runtimes).n == 1          # (the same group: no jump)
     gr = bsys([D(bce) ~ 0.3 * Δ(bce) - bce + x, D(boe) ~ 0.3 * Δ(boe) + bk * boe], [bc(0, x, y) ~ 0.0, bo(0, x, y) ~ x], [bk];
         T = 1.0, dvs = [bce, boe])
-    p = discretize(gr, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
+    p = discretize(gr, LatticeDiscretization(Grid((8, 8)); T = Float64))
     ig = init(p, FieldGroups(bce => BackwardEuler(; dt = 0.5), boe => BackwardEuler(; dt = 0.5, inner = BTIGHT)))
     @test [r.n for r in ig.runtimes] == [1, 2]
     ig.ps[bk] = 4.0                                    # (a write: the counts again, `⌈2 · 0.5 · 4⌉`)

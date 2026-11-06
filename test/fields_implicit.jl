@@ -133,7 +133,7 @@ end
 # B's (`Potts.fields` → `discretize`) at the same MCS, from the same start
 function fi_runB(M, dims, k; u0, inputs = [:kind => fi_kin(dims)], alg = BackwardEuler(; dt = 1.0))
     bp = Potts.LatticePDE.discretize(Potts.fields(M(; name = :f)),
-        Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(dims); T = Float64, problem = :owned);
+        Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(dims); T = Float64);
         u0, tspan = (0, k), inputs)
     return Potts.LatticePDE.solve(bp, alg; saveat = 1.0)[:c][2:end]
 end
@@ -435,7 +435,7 @@ end
     a, integ = fi_runA(FiHexF, fi_op(dims), k)
     bp = Potts.LatticePDE.discretize(Potts.fields(FiHexF(; name = :f)),
         Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(dims; geometry = Potts.LatticeFields.IR.HEX);
-            T = Float64, problem = :owned); u0 = [:c => zeros(dims)], tspan = (0, k), inputs = [:kind => fi_kin(dims)])
+            T = Float64); u0 = [:c => zeros(dims)], tspan = (0, k), inputs = [:kind => fi_kin(dims)])
     @test a == Potts.LatticePDE.solve(bp, BackwardEuler(; dt = 1.0); saveat = 1.0)[:c][2:end]
     rt = CorePotts._runtime(getfield(integ.ctx, :__fields1))
     @test rt.cache.newton == 1 && integ.stats.fields.solves == k && all(a[end][fi_kin(dims) .== 1] .== 1.5)
@@ -456,7 +456,7 @@ end
     a, integ = fi_runA(FiHexFace, fi_op(dims), k; field_solver = tight)
     bp = Potts.LatticePDE.discretize(Potts.fields(FiHexFace(; name = :f)),
         Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(dims; geometry = Potts.LatticeFields.IR.HEX);
-            T = Float64, problem = :owned); u0 = [:c => zeros(dims)], tspan = (0, k), inputs = [])
+            T = Float64); u0 = [:c => zeros(dims)], tspan = (0, k), inputs = [])
     @test a == Potts.LatticePDE.solve(bp, BackwardEuler(; dt = 1.0, inner = DevicePCG(; rtol = 1e-12, budget = 64)); saveat = 1.0)[:c][2:end]
     # the hand BE matrix (h = 1, the site (i, j) at (i − ½, j − ½))
     n1, n2 = dims

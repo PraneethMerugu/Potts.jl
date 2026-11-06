@@ -71,7 +71,7 @@ end
     # too: the written run equals a fresh problem from the written state
     @parameters bg2 = 1.0
     sg = bsys([D(bce) ~ bD * Δ(bce) + bg2 * bce], [bc(0, x, y) ~ x * y], [bD, bg2]; T = 2.0, dvs = [bce])
-    pg = discretize(sg, LatticeDiscretization(Grid(BDIMS); T = Float64, problem = :owned))
+    pg = discretize(sg, LatticeDiscretization(Grid(BDIMS); T = Float64))
     ig = init(pg, BDF2(; dt = 0.5, inner = BTIGHT))
     @test ig.substeps == 1
     step!(ig); step!(ig)
@@ -90,13 +90,13 @@ end
     @test all(u -> length(u) == length(p.u0), s.u)
     ig = init(p, BDF2(; dt = 0.05))
     step!(ig)
-    @test length(ig.store.bufs[fieldid(p.program, "bc")]) == 2                 # (c, c__next): no third buffer
+    @test length(ig.store.bufs[fieldid(LFP.field_problem(p).program, "bc")]) == 2                 # (c, c__next): no third buffer
     @test only(ig.runtimes).cache.rows[1].prev isa Vector{Float64}
     @test bwarm(ig) == 0                                       # the warm window allocates nothing
     # a decay with h λ = 10 from a smooth start: the BDF2 right side `(4uⁿ − uⁿ⁻¹)/3` is negative
     # (reviewer probe (1): −0.028); `lower = 0` clips it
     sd = bsys([D(bce) ~ 1e-6 * Δ(bce) - 100.0 * bce], [bc(0, x, y) ~ 1.0], Any[]; T = 0.4, dvs = [bce])
-    pd = discretize(sd, LatticeDiscretization(Grid((4, 4)); T = Float64, problem = :owned))
+    pd = discretize(sd, LatticeDiscretization(Grid((4, 4)); T = Float64))
     neg = solve(pd, BDF2(; dt = 0.1); saveat = 0.1)
     @test minimum(minimum.(neg.u)) < -0.02
     pos = solve(pd, BDF2(; dt = 0.1, lower = 0.0); saveat = 0.1)
@@ -106,9 +106,9 @@ end
     # `perform_step!` takes the Euler cache at `iter == 1`), as BDF2's start
     sx = bsys([D(bce) ~ bD * Δ(bce) - bk * bce + sin(3t) * x], [bc(0, x, y) ~ x * y, bc(t, 0, y) ~ 1.0], [bD, bk];
         T = 0.4, dvs = [bce])
-    po = discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :ode))
+    po = discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64))
     sa = solve(po, ABDF2(); dt = 0.05, adaptive = false, abstol = 1e-12, reltol = 1e-12)
-    sb = solve(discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned)), BDF2(; dt = 0.05, inner = BTIGHT))
+    sb = solve(discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64)), BDF2(; dt = 0.05, inner = BTIGHT))
     @test sa.t[end] ≈ 0.4 && maximum(abs, vec(blast(sb)) .- sa.u[end]) < 1e-8
 end
 

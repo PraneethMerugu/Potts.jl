@@ -13,8 +13,9 @@ argument is positional, so `substitute`, `simplify` and `get_variables` see it.
 The discretizer (`LatticeDiscretization`, `symbolic_discretize`) puts a `PDESystem` on a
 lattice: it parses the boundary conditions, classifies rate terms in the linearity table,
 reads maps and offset reads, and lowers every equation to a LatticeFields `Program`.
-`discretize` returns the problem (an owned `FieldProblem` or a SciML `ODEProblem`); the
-steppers and `solve` are re-exported, so a standalone model needs only `using
+`discretize` returns one SciML problem (an `ODEProblem` of rates, a `DiscreteProblem` of
+maps), which the field algorithms and OrdinaryDiffEq's solvers both take; the steppers and
+`solve` are re-exported, so a standalone model needs only `using
 ModelingToolkitBase, LatticePDE`.
 """
 module LatticePDE
@@ -32,9 +33,9 @@ using KernelAbstractions: KernelAbstractions
 using LatticeFields: Exec, Problems
 using LatticeFields.Solvers: DevicePCG, DeviceGMRES, Multigrid, V
 using LatticeFields.Compile: CompileOptions, fingerprint_text, fuse_update, promote_dual, primal
-using LatticeFields.IR: fieldid, RESOLVE, degenerate, juliatype, leveldims
+using LatticeFields.IR: fieldid, RESOLVE, degenerate, leveldims
 using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
-                              ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, ode_problem, RT_DT,
+                              ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, RT_DT,
                               substep_counts, steady_fields
 using ModelingToolkitBase: ModelingToolkitBase, PDESystem, Pre, ShiftIndex, Shift, Hold, Sample
 using SciMLBase: AbstractDiscretization, NullParameters, remake
@@ -54,7 +55,7 @@ export get_lattice_placement, get_lattice_storage, get_lattice_level, get_lattic
 export vocabulary_issues, check_vocabulary
 export LatticeDiscretization, FiniteVolume, CompiledField, discretize, symbolic_discretize,
        parse_bcs, linearity, Grid, Interval
-export ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, FieldProblem, solve, init, step!, solve!, stability_bound,
+export ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, solve, init, step!, solve!, stability_bound,
        substep_counts, steady_fields
 export DevicePCG, DeviceGMRES, Multigrid    # the inner solvers (`inner = …`); `V` is public
 export remake, getp, getu, setp            # the routes its messages give (SciMLBase, SymbolicIndexingInterface)
@@ -191,8 +192,8 @@ first). The owned steppers keep `k` as an integer and never step
 across a clock boundary, so `k` does not depend on `dt` or on the save times. A gate such as
 `ifelse(step_index(t) >= 3, a, b)` is bounded through both arms; a factor that reads it
 (`(1 + ε * step_index(t)) * Δ(c)`) is a term the stability bound cannot see (give
-`ExplicitEuler(; substeps = n)`). Refused without a declared clock, and on the ODE path
-(`problem = :ode`: an ODE solver does not land on the clock's boundaries; planned).
+`ExplicitEuler(; substeps = n)`). Refused without a declared clock, and by an OrdinaryDiffEq
+solver in this version (it does not land on the clock's boundaries).
 
 ```julia
 @parameters x y

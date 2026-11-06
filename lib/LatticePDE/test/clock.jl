@@ -13,7 +13,7 @@ kperiodic = [kc(t, 0, y) ~ kc(t, 1, y), kc(t, x, 0) ~ kc(t, x, 1)]
 # the rate is the step index: c(T) = Σ over the windows of dt · k
 ksys(T; rate = step_index(t)) = PDESystem([D(kce) ~ rate], [kc(0, x, y) ~ 0.0; kperiodic], kdom(T), [t, x, y], [kce], [kη];
     name = :k)
-kdisc(; clock = 1.0, problem = :auto) = LatticeDiscretization(Grid((4, 4)); T = Float64, clock, problem)
+kdisc(; clock = 1.0) = LatticeDiscretization(Grid((4, 4)); T = Float64, clock)
 kerr(f) = try
     f(); ""
 catch e
@@ -23,7 +23,7 @@ end
 
 @testset "F2-08c: step_index(t) reads k by integer bookkeeping (B)" begin
     p = discretize(ksys(3.0), kdisc())
-    @test p isa LFP.FieldProblem                                    # :auto takes the owned path
+    @test p isa SciMLBase.ODEProblem                               # (F4-01: one problem; base: a FieldProblem)
     finals = Float64[]
     for (dt, saveat) in ((0.1, 0.3), (0.1, 0.7), (0.25, 0.5), (0.25, 0.75))
         s = solve(p, ExplicitEuler(; dt); saveat)
@@ -48,7 +48,8 @@ end
 
 @testset "F2-08c: step_index refusals name their route (B)" begin
     @test occursin("clock = τ", kerr(() -> discretize(ksys(1.0), LatticeDiscretization(Grid((4, 4)); T = Float64))))
-    @test occursin("F4", kerr(() -> discretize(ksys(1.0), kdisc(; problem = :ode))))
+    # (F4-01: the refusal moved from `discretize(…; problem = :ode)` to an OrdinaryDiffEq solve)
+    @test occursin("needs a field algorithm", kerr(() -> solve(discretize(ksys(1.0), kdisc()), Tsit5())))
     @test occursin("argument", kerr(() -> discretize(ksys(1.0; rate = step_index(2t)), kdisc())))
     @parameters clock__tick = 1.0
     bad = PDESystem([D(kce) ~ clock__tick], [kc(0, x, y) ~ 0.0; kperiodic], kdom(1.0), [t, x, y], [kce], [clock__tick]; name = :b)
@@ -56,7 +57,7 @@ end
     @test occursin("clock", kerr(() -> LatticeDiscretization(Grid((4, 4)); clock = 0.0)))
     # the step index is the stepper's, not a parameter of the problem
     p = discretize(ksys(1.0), kdisc())
-    @test !any(s -> occursin("clock__tick", string(s)), p.index.paramsyms)
+    @test !any(s -> occursin("clock__tick", string(s)), p.f.sys.paramsyms)
 end
 
 # REAL forms of the step index over several windows, in the default and the debug emission
@@ -66,7 +67,8 @@ end
     sysr = PDESystem([D(kce) ~ -kce + kη * step_index(t)], [kc(0, x, y) ~ 1.0; kperiodic], kdom(4.0), [t, x, y],
         [kce], [kη]; name = :r)
     p = discretize(sysr, kdisc())
-    dbg = LFP.FieldProblem(p.group.spec, p.u0, p.tspan, p.p; index = p.index, options = CompileOptions(; debug = true))
+    fp = LFP.field_problem(p)
+    dbg = LFP.FieldProblem(fp.group.spec, fp.u0, fp.tspan, fp.p; index = fp.index, options = CompileOptions(; debug = true))
     hand = 1.0
     for k in 0:3, _ in 1:4
         hand += 0.25 * (-hand + 0.5 * k)
@@ -82,7 +84,8 @@ end
         [t ∈ Interval(0.0, 3.0), x ∈ Interval(0.0, 4.0), y ∈ Interval(0.0, 4.0)], [t, x, y], [kce], [kη]; name = :d)
     pd = discretize(sysd, LatticeDiscretization(Grid((4, 4)); T = Float64, clock = 1.0))
     pd = remake(pd; u0 = vec(c0))
-    dd = LFP.FieldProblem(pd.group.spec, pd.u0, pd.tspan, pd.p; index = pd.index, options = CompileOptions(; debug = true))
+    fd = LFP.field_problem(pd)
+    dd = LFP.FieldProblem(fd.group.spec, fd.u0, fd.tspan, fd.p; index = fd.index, options = CompileOptions(; debug = true))
     h = 1.0
     lap(c, i, j) = (c[mod1(i + 1, 4), j] + c[mod1(i - 1, 4), j] + c[i, mod1(j + 1, 4)] + c[i, mod1(j - 1, 4)] - 4c[i, j]) / h^2
     want = copy(c0)

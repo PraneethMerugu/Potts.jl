@@ -54,6 +54,187 @@ end
 const MAX_VARIANTS = 8
 
 """
+    LatticeMetadata
+
+The discretization metadata of a problem `discretize` returns (F4 design §3.2): the owned
+problem built at `discretize` (its group, plans and checks, at the values given there), the
+family (`:ode` or `:map`), and the right side of SciML's solvers, built at its first call
+(`builds` counts the builds: an owned solve builds none). It is the `problem_type` of an
+`ODEProblem` and is held by the problem's function ([`LatticeFunction`](@ref)) in every
+family. A `remake` keeps it, so the plans stay warm.
+"""
+struct LatticeMetadata{P <: FieldProblem} <: SciMLBase.AbstractDiscretizationMetadata{Val(false)}
+    problem::P
+    family::Symbol
+    rhs::Base.RefValue{Any}
+    builds::Base.RefValue{Int}
+    lock::ReentrantLock
+end
+LatticeMetadata(fp::FieldProblem) = LatticeMetadata(fp, fp.kind == :map ? :map : :ode, Ref{Any}(nothing), Ref(0),
+    ReentrantLock())
+# a solution of SciML's solvers is returned as it is (no eager `PDENoTimeSolution`)
+SciMLBase.wrap_sol(sol, ::LatticeMetadata) = sol
+
+"""
+    LatticeFunction(meta)
+
+The function of a problem `discretize` returns: `f(du, u, p, t)` is the right side of the
+rates (an `ODEFunction`) or the next state of a map (a `DiscreteFunction`), built from
+`meta` ([`LatticeMetadata`](@ref)) at its first call, so a problem that only field algorithms
+step never builds it. A call with a `Float64` time allocates nothing once built.
+"""
+struct LatticeFunction{M}
+    meta::M
+end
+function (f::LatticeFunction)(du, u, p, t)
+    g = _built(f.meta, u, p, t)
+    t isa Float64 || return _call_any(g, du, u, p, t)
+    # the build this task runs, its time cell set, then a call with no unboxed argument (a
+    # call of the `Any`-typed build boxes a Float64 time, 16 bytes, and a function that
+    # returns the build boxes the build, about 600 bytes): every step here reads `Any` values
+    o = getfield(g, :owner)::Vector{Any}
+    h = o[1] === current_task() ? g : _task_copy_any(g, o)
+    (getfield(h, :tcell)::Base.RefValue{Float64})[] = t
+    _call_cell(h, du, u, p)
+    return nothing
+end
+# the copy of the build `g` (owner vector `o`) for this task, found in the task-local storage
+# as an `Any` (no boxing), else built
+function _task_copy_any(g, o::Vector{Any})
+    tls = current_task().storage
+    w = tls === nothing ? nothing : get(tls::IdDict{Any, Any}, o, nothing)
+    h = w === nothing ? nothing : (w::WeakRef).value
+    return h === nothing ? Base.inferencebarrier(_for_task)(g) : h
+end
+_call_any(g, du, u, p, t) = g(du, u, p, t)
+_call_cell(h, du, u, p) = h(du, u, p, h.tcell[])
+_task_rhs(g) = g.owner[1] === current_task() ? g : _task_copy(g)
+function _task_copy(f)
+    tls = current_task().storage
+    w = tls === nothing ? nothing : get(tls::IdDict{Any, Any}, f.owner, nothing)
+    g = w === nothing ? nothing : (w::WeakRef).value
+    return g === nothing ? _for_task(f) : g
+end
+
+"""
+    lattice_metadata(prob) -> LatticeMetadata or nothing
+
+The metadata of a problem `discretize` returned (in any family), else `nothing`.
+"""
+lattice_metadata(prob) = hasproperty(prob, :f) ? _lmeta(prob.f) : nothing
+_lmeta(f::LatticeFunction) = f.meta
+_lmeta(f::SciMLBase.AbstractSciMLFunction) = _lmeta(f.f)
+_lmeta(f) = nothing
+
+"""
+    rhs_build(prob) -> LatticeRHS
+
+The right side SciML's solvers call for `prob` (a problem `discretize` returned), built now if
+it was not yet; `nothing` for a problem with no field groups.
+"""
+function rhs_build(prob)
+    m = lattice_metadata(prob)
+    m === nothing && return prob.f.f isa LatticeRHS ? prob.f.f : nothing
+    return _built(m, prob.u0, prob.p, prob.tspan[1])
+end
+
+# the right side of `m`, built once (under its lock) for the element type of the first call
+function _built(m::LatticeMetadata, u, p, t)
+    g = m.rhs[]
+    g === nothing || return g
+    return lock(m.lock) do
+        m.rhs[] === nothing || return m.rhs[]
+        m.rhs[] = _build_rhs(m, u, p, t)
+        m.builds[] += 1
+        return m.rhs[]
+    end
+end
+function _build_rhs(m::LatticeMetadata, u, p, t)
+    fp = m.problem
+    _check_backend(fp.backend, u, "the solver's state")
+    _check_ode_form(fp, m.family)
+    s = semantic(fp.group.spec.rate)
+    rates = m.family == :map ? Dict{String, String}() : Dict{String, String}(k => "∂$k" for k in fp.state)
+    N = _ndims(s)
+    ctx = RHSContext{N, typeof(fp.backend)}(s, fp.backend, copy(fp.state), rates, copy(fp.initkeys), fp.options,
+        fp.tables, fp.faces, fp.tspan[1], Dict{Type, Tuple{StepPlan{N}, StepPlan{N}}}(), fp.index, fp.stability,
+        Pair{String, Any}[])
+    E = _rhs_eltype(u, u, p, t)
+    _check_eltype(E, fp.backend)
+    for k in fp.state                            # the solver's state is one vector of the state type
+        f = s.fields[fieldid(s, k)]
+        f.fixed && juliatype(f.storage) !== valtype(E) && throw(ArgumentError(string("field `", k,
+            "`: `lattice_storage = ", juliatype(f.storage), "` differs from the state's number type ", valtype(E),
+            "; an OrdinaryDiffEq solver's state is one vector of that type, so its fields are stored in it. Discretize ",
+            "with T = ", juliatype(f.storage), ", or solve with a field algorithm (each field stored in its own type)")))
+    end
+    return _lattice_rhs(ctx, E, nothing)
+end
+# what the ODE form does not lower in this version: a refusal naming the field algorithms
+function _check_ode_form(fp::FieldProblem, family)
+    spec = fp.group.spec
+    any(k -> startswith(k, "mask:"), fp.initkeys) && throw(ArgumentError(string("masked conditions ",
+        "(`c ~ masked(pred, v)`) need a field algorithm in this version (`solve(prob, ExplicitEuler(; dt))`)")))
+    clock_slot(spec) > 0 && throw(ArgumentError(string("`step_index(t)` needs a field algorithm in this version: an ",
+        "OrdinaryDiffEq solver does not land on the clock's boundaries; `solve(prob, ExplicitEuler())` steps the clock's ",
+        "windows")))
+    !isempty(spec.steady) && !spec.timefree && throw(ArgumentError(string("the steady rows of ", join(("`$k`" for k in spec.steady), ", "),
+        " make the system a DAE (a mass matrix with zero rows) that an OrdinaryDiffEq solver does not take in this ",
+        "version; solve it with a field algorithm (`QuasiSteady` steps the steady fields), or write the rows as rates ",
+        "`D(c) ~ rhs`")))
+    return nothing
+end
+# an array on another backend than the problem's is refused, naming both (SX-12)
+function _check_backend(backend, u, what)
+    u isa AbstractArray || return nothing
+    b = KA.get_backend(u)
+    typeof(b) == typeof(backend) || throw(ArgumentError(string(what, " is on the backend ", nameof(typeof(b)),
+        "; the problem's backend is ", nameof(typeof(backend)), ": give the values on ", nameof(typeof(backend)),
+        " (`copyto!` into an array of that backend)")))
+    return nothing
+end
+
+"""
+    lattice_problem(fp::FieldProblem) -> ODEProblem or DiscreteProblem
+
+The SciML problem of the owned problem `fp` (F4 design §3.2): an `ODEProblem` for rates, a
+`DiscreteProblem` for maps, with `p` a [`LatticeParameters`](@ref), the state on `fp`'s
+backend and the function a [`LatticeFunction`](@ref) whose metadata holds `fp`.
+"""
+function lattice_problem(fp::FieldProblem)
+    meta = LatticeMetadata(fp)
+    f = LatticeFunction(meta)
+    ix = fp.index
+    ix isa LatticeIndex && !isempty(ix.aux) && (ix.auxeval[] = ODEAux(f, fp.program))
+    lp = LatticeParameters(copy(fp.p), fp.tables, fp.inputs)
+    E = problem_eltype(fp.u0, fp.p, lp.tables)          # (a Dual `u0` or parameter promotes the state)
+    U = copyto!(KA.allocate(fp.backend, E, length(fp.u0)), convert(Vector{E}, fp.u0))
+    if meta.family == :map
+        return SciMLBase.DiscreteProblem(SciMLBase.DiscreteFunction{true}(f; sys = ix), U, fp.tspan, lp)
+    end
+    return SciMLBase.ODEProblem(SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize}(f; sys = ix), U, fp.tspan, lp, meta)
+end
+
+"""
+    field_problem(prob) -> FieldProblem
+
+The owned problem that field algorithms step for `prob` (a problem `discretize` returned): the
+metadata's group at `prob`'s state (on the host), time span and parameters. A `FieldProblem`
+is its own.
+"""
+field_problem(fp::FieldProblem) = fp
+function field_problem(prob)
+    m = lattice_metadata(prob)
+    m === nothing && throw(ArgumentError(string("this problem was not built by `LatticePDE.discretize` (it has no ",
+        "field groups to step): give `solve` an OrdinaryDiffEq solver")))
+    fp, lp = m.problem, prob.p
+    _check_backend(fp.backend, prob.u0, "u0")
+    u0 = prob.u0 isa Vector ? copy(prob.u0) : Array(prob.u0)
+    return _field_problem(fp.program, fp.state, u0, prob.tspan, collect(lp.values), lp.tables, lp.inputs, fp.backend,
+        fp.index, fp.faces, fp.stability, fp.kind, fp.initkeys, fp.options, fp.group)
+end
+
+"""
     LatticeRHS
 
 The in-place right side `f(du, u, p, t)` of a field program's ODE form. Each call checks the
@@ -103,6 +284,7 @@ struct LatticeRHS{L <: Tuple, W, E, X, I}
     lock::ReentrantLock                        # guards `owner` changes and `copies`
     synced::Vector{Any}                        # [the `LatticeParameters` whose tables and inputs the store holds]
     stamp::Vector{Int}                         # … at its write count
+    tcell::Base.RefValue{Float64}              # the time of a call through a `LatticeFunction` (no boxing)
 end
 _rhs_eltype(du, u, p, t) = promote_dual(promote_dual(promote_type(eltype(u), eltype(du)), eltype(_pvals(p))), typeof(t))
 function (f::LatticeRHS{L, W, E})(du, u, p, t) where {L, W, E}
@@ -209,7 +391,7 @@ end
 # not serialize), which the task that first calls the deserialized function claims.
 _unowned(f::LatticeRHS, val) = typeof(f)(map(fieldnames(typeof(f))) do k
     k === :owner ? Any[nothing] : k === :copies ? Dict{Task, Any}() : k === :lock ? ReentrantLock() :
-    k === :synced ? Any[getfield(f, :synced)[1] === nothing ? nothing : :given] :
+    k === :synced ? Any[getfield(f, :synced)[1] === nothing ? nothing : :given] : k === :tcell ? Ref(0.0) :
     val(getfield(f, k))
 end...)
 function Base.deepcopy_internal(f::LatticeRHS, d::IdDict)
@@ -293,14 +475,17 @@ function _lattice_rhs(ctx::RHSContext, ::Type{E}, base, Pinit = nothing, inputs 
         shared::Symbol = :all) where {E}
     s, backend = ctx.program, ctx.backend
     ip, sp = lock(() -> _plans!(ctx.plans, s, ctx.initkeys, ctx.options, valtype(E), backend), _PLANS_LOCK)
-    isempty(sp.swaps) || throw(ArgumentError("the ODE form has one buffer per field"))
     ids = Int[fieldid(s, k) for k in ctx.state]
+    # a rate program writes each rate into a scratch field (one buffer per field); a map program
+    # writes the next value of each state field (its `:next` role: the solver's `du`)
+    sort(sp.swaps) == (isempty(ctx.rates) ? sort(ids) : Int[]) ||
+        throw(ArgumentError("the ODE form has one buffer per field"))
     slots = state_layout(s, ids)
     n = isempty(ids) ? 0 : maximum(last, slots[ids])
     marks = Dict{Int32, StateView}()
     for (k, i) in zip(ctx.state, ids)
         marks[Int32(i)] = StateView(slots[i], false)
-        marks[fieldid(s, ctx.rates[k])] = StateView(slots[i], true)
+        isempty(ctx.rates) || (marks[fieldid(s, ctx.rates[k])] = StateView(slots[i], true))
     end
     st = FieldStore(backend, s; E, TE = _tabeltype(ctx.tables))
     for (k, v) in ctx.tables                   # in this build's value type, from the source
@@ -324,7 +509,8 @@ function _lattice_rhs(ctx::RHSContext, ::Type{E}, base, Pinit = nothing, inputs 
         # a table's id numbers the tables, not the fields: it is never a state slot (F1: a
         # table whose index equalled a state field's id was bound to the state)
         S0 = Tuple(Tuple(role === :table || !haskey(marks, id) ?
-                         array(st, id, role, role == :table ? 0 : 1) : marks[id]
+                         array(st, id, role, role == :table ? 0 : 1) :
+                         role === :next ? StateView(marks[id].range, true) : marks[id]
                    for (id, role) in lane) for lane in l.bind)
         S = map(lane -> map(a -> _resolve(a, U, dU), lane), S0)
         np = s.nparams
@@ -336,7 +522,7 @@ function _lattice_rhs(ctx::RHSContext, ::Type{E}, base, Pinit = nothing, inputs 
     f = LatticeRHS{typeof(ls), typeof(each(length(ls))), E, typeof(ctx), typeof(ip)}(ls,
         each(length(ls)), ctx.faces, st, ctx, ip, Any[nothing], Float64[], Any[nothing], Float64[],
         Dict{Type, Any}(), Type[],
-        Any[nothing], Dict{Task, Any}(), ReentrantLock(), Any[nothing], Int[0])
+        Any[nothing], Dict{Task, Any}(), ReentrantLock(), Any[nothing], Int[0], Ref(0.0))
     isempty(inputs) || (f.synced[1] = :given)                # (the inputs given at the build)
     Pinit === nothing || isempty(ip.launches) || _init!(f, Pinit)
     return f
@@ -356,7 +542,7 @@ struct ODEAux{F, P}
 end
 _build_eltype(::LatticeRHS{L, W, E}) where {L, W, E} = E
 function (a::ODEAux)(u, p, t, key)
-    f = a.f
+    f = a.f isa LatticeFunction ? _built(a.f.meta, u, p, t) : a.f
     g = f.owner[1] === current_task() ? f : _for_task(f)
     C = _rhs_eltype(u, u, p, t)
     C === _build_eltype(g) || (g = _variant(g, C))
@@ -452,13 +638,17 @@ function typewith(T::UnionAll, field::Symbol, S)
     end
     return body
 end
-const LatticeODEFunction = SciMLBase.ODEFunction{<:Any, <:Any, <:LatticeRHS}
+const LatticeODEFunction = SciMLBase.ODEFunction{<:Any, <:Any, <:Union{LatticeRHS, LatticeFunction}}
+# (the problem type bounded: SciMLBase's `remake` of a dynamical or second-order problem stays its own)
 const LatticeODEProblem = SciMLBase.ODEProblem{<:Any, <:Any, <:Any, <:Any, <:LatticeODEFunction, <:Any,
-                                               SciMLBase.StandardODEProblem}
+                                               <:Union{SciMLBase.StandardODEProblem, LatticeMetadata}}
+const LatticeDiscreteFunction = SciMLBase.DiscreteFunction{<:Any, <:Any, <:LatticeFunction}
+const LatticeDiscreteProblem = typewith(SciMLBase.DiscreteProblem, :f, LatticeDiscreteFunction)
 const LatticeSteadyStateProblem = typewith(SciMLBase.SteadyStateProblem, :f, LatticeODEFunction)
 const LatticeNonlinearProblem = typewith(SciMLBase.NonlinearProblem, :f,
                                           typewith(SciMLBase.NonlinearFunction, :sys, LatticeIndex))
-const LatticeSciMLProblem = Union{LatticeODEProblem, LatticeSteadyStateProblem, LatticeNonlinearProblem}
+const LatticeSciMLProblem = Union{LatticeODEProblem, LatticeSteadyStateProblem, LatticeNonlinearProblem,
+                                  LatticeDiscreteProblem}
 
 # The parameters of a remake of a lattice problem (F4-00): `p` a `LatticeParameters`, a vector
 # of every scalar parameter, or a map whose keys name scalar parameters, whole tables (`Dk =>
@@ -528,6 +718,8 @@ end
 # `u0` of a remake: a flat state, or `field => values` pairs (a number or one value per site)
 # over the problem's state, on its backend; a Dual value promotes the state
 function remake_u0(prob, u0)
+    # a state on another backend than the problem's is refused, naming both (SX-12)
+    u0 isa AbstractArray && !(u0 isa AbstractArray{<:Pair}) && _check_backend(KA.get_backend(prob.u0), u0, "u0")
     u0 isa Union{AbstractVector{<:Pair}, Tuple, AbstractDict} && !isempty(u0) || return u0
     ix = SII.symbolic_container(prob.f)
     all(x -> x isa Pair, u0) || throw(ArgumentError("`u0` is a flat vector of the state or `field => values` pairs"))
@@ -551,6 +743,10 @@ function remake_u0(prob, u0)
 end
 function SciMLBase.remake(prob::LatticeODEProblem; p = missing, u0 = missing, inputs = (), kw...)
     return invoke(SciMLBase.remake, Tuple{SciMLBase.ODEProblem}, prob; p = remake_params(prob, p, inputs),
+        u0 = remake_u0(prob, u0), kw...)
+end
+function SciMLBase.remake(prob::LatticeDiscreteProblem; p = missing, u0 = missing, inputs = (), kw...)
+    return invoke(SciMLBase.remake, Tuple{SciMLBase.DiscreteProblem}, prob; p = remake_params(prob, p, inputs),
         u0 = remake_u0(prob, u0), kw...)
 end
 function SciMLBase.remake(prob::LatticeSteadyStateProblem; p = missing, u0 = missing, inputs = (), kw...)
@@ -580,6 +776,8 @@ function check_setp(sys, sym)
     end
     return nothing
 end
+# (the clock's slot of a SciML problem `discretize` returned is no parameter either)
+SII.getp(sys::LatticeSciMLProblem, sym) = (_not_clock(sym); invoke(SII.getp, Tuple{Any, Any}, sys, sym))
 function SII.setp(sys::Union{FieldProblem, FieldIntegrator, LatticeSciMLProblem}, sym; kw...)
     # a table (or an entry of one) of an integrator: its write, with the checks (`integ.ps[Dk] = values`)
     if sys isa FieldIntegrator && sys.prob.index isa LatticeIndex && table_key(sys.prob.index, sym) !== nothing
@@ -594,16 +792,29 @@ function SII.setp(sys::Union{FieldProblem, FieldIntegrator, LatticeSciMLProblem}
     return invoke(SII.setp, Tuple{Any, Any}, sys, sym; kw...)
 end
 
-# A field solver or a linear solver given to an `ODEProblem` (the `:ode` path): the route to
-# an OrdinaryDiffEq solver, or to the owned problem that the field solvers step
+# A field solver or a linear solver given to an `ODEProblem` that `discretize` did not build
+# (its right side has no group to step): the route to an OrdinaryDiffEq solver
 function _ode_refusal(alg)
     name = alg isa LinearSolver ? string("`", repr(alg), "` is a linear solver, the `inner` of an implicit field solver") :
-           string("`", _algtext(alg), "` is a field solver: it steps a `FieldProblem`")
-    own = alg isa LinearSolver ? string("`solve(prob, BackwardEuler(; dt, inner = ", repr(alg), "))`") :
-          string("`solve(prob, ", _algtext(alg), ")`")
-    return ArgumentError(string("`solve`/`init` of an `ODEProblem`: ", name, ". An `ODEProblem` takes an OrdinaryDiffEq ",
-        "solver (`ImplicitEuler()` is Backward Euler); or discretize with `LatticeDiscretization(…; problem = :owned)` ",
-        "and give ", own))
+           string("`", _algtext(alg), "` is a field solver: it steps the problem of a discretized system")
+    return ArgumentError(string("`solve`/`init` of an `ODEProblem`: ", name, ". This `ODEProblem` was not built by ",
+        "`LatticePDE.discretize` (it has no field groups to step): give it an OrdinaryDiffEq solver (`ImplicitEuler()` ",
+        "is Backward Euler), or solve the problem `discretize` returns"))
 end
 CommonSolve.solve(::SciMLBase.AbstractODEProblem, alg::Union{FieldAlgorithm, LinearSolver}; kw...) = throw(_ode_refusal(alg))
 CommonSolve.init(::SciMLBase.AbstractODEProblem, alg::Union{FieldAlgorithm, LinearSolver}; kw...) = throw(_ode_refusal(alg))
+
+# The problems `discretize` returns (F4-01): one problem, many algorithms. A field algorithm
+# (or no algorithm: the default of the group's kind, Q1) steps the owned problem built from the
+# metadata and the problem's state, time span and parameters; any other algorithm is SciML's.
+const LatticeProblem = Union{LatticeODEProblem, LatticeDiscreteProblem}
+function _owned_or_refuse(prob, alg)
+    lattice_metadata(prob) === nothing && throw(_ode_refusal(alg))
+    return field_problem(prob)
+end
+CommonSolve.init(prob::LatticeProblem, alg::Union{FieldAlgorithm, LinearSolver}; kw...) =
+    CommonSolve.init(_owned_or_refuse(prob, alg), alg; kw...)
+CommonSolve.solve(prob::LatticeProblem, alg::Union{FieldAlgorithm, LinearSolver}; kw...) =
+    CommonSolve.solve(_owned_or_refuse(prob, alg), alg; kw...)
+CommonSolve.init(prob::LatticeProblem; kw...) = CommonSolve.init(field_problem(prob); kw...)
+CommonSolve.solve(prob::LatticeProblem; kw...) = CommonSolve.solve(field_problem(prob); kw...)

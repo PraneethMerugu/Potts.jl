@@ -18,7 +18,7 @@ end
         [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)],
         [t ∈ Interval(0, 10), x ∈ Interval(0, 1), y ∈ Interval(0, 1)], [t, x, y], [ce], [Dc7, k7]; name = :rd)
     run(n, backend; T = 1.0) = solve(discretize(remake_t(rd, T), LatticeDiscretization(Grid((n, n)); T = Float32,
-        problem = :owned, backend)), ExplicitEuler(dt = 1.0f-2); saveat = T / 2)
+        backend)), ExplicitEuler(dt = 1.0f-2); saveat = T / 2)
     remake_t(s, T) = PDESystem(s.eqs, s.bcs, [t ∈ Interval(0, T), x ∈ Interval(0, 1), y ∈ Interval(0, 1)],
         [t, x, y], [ce], [Dc7, k7]; name = :rd)
     sd, sh = run(128, PDEV), run(128, KernelAbstractions.CPU())
@@ -44,7 +44,7 @@ end
 @testset "F3-00: B evaluates the aux fields at the saves on $pgpu" begin
     @parameters Da7 = 0.1 ka7 = 1.0
     sys = psys([D(ce) ~ Da7 * Δ(ce) - ka7 * ce, Ke ~ 2ce + t], [c(0, x, y) ~ 1.0 + x], [Da7, ka7]; dvs = [ce, Ke])
-    mk(be) = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float32, problem = :owned, backend = be))
+    mk(be) = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float32, backend = be))
     sd = solve(mk(PDEV), ExplicitEuler(; dt = 0.25f0); saveat = 0.5)
     sh = solve(mk(KernelAbstractions.CPU()), ExplicitEuler(; dt = 0.25f0); saveat = 0.5)
     @test sd.retcode == ReturnCode.Success && sd.t == sh.t == [0.0, 0.5, 1.0]
@@ -60,7 +60,7 @@ end
 @testset "number types on $pgpu (P5)" begin
     # Dual{Float32} through the owned path on the device equals the host derivative
     sys = nsys()
-    mk(backend) = discretize(sys, LatticeDiscretization(Grid((16, 8)); T = Float32, problem = :owned, backend))
+    mk(backend) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((16, 8)); T = Float32, backend)))
     alg = ExplicitEuler(; dt = 0.01)
     i = pidx(mk(KernelAbstractions.CPU()), Dn)
     Jdev(prob) = v -> sum(Array(solve(remake(prob; p = withp(prob.p, i, v)), alg).u[end]))
@@ -68,15 +68,15 @@ end
     dd, dh = ForwardDiff.derivative(Jdev(pd), pd.p[i]), ForwardDiff.derivative(Jdev(ph), ph.p[i])
     @test dd isa Float32 && isapprox(dd, dh; rtol = 1e-5) && dd != 0
     # default state type: Float32 on a device
-    @test eltype(discretize(sys, LatticeDiscretization(Grid((8, 4)); problem = :owned, backend = PDEV))) == Float32
-    @test_throws ArgumentError discretize(sys, LatticeDiscretization(Grid((8, 4)); T = BigFloat, problem = :owned, backend = PDEV))
+    @test eltype(discretize(sys, LatticeDiscretization(Grid((8, 4)); backend = PDEV)).u0) == Float32
+    @test_throws ArgumentError discretize(sys, LatticeDiscretization(Grid((8, 4)); T = BigFloat, backend = PDEV))
     # Rodas5P on device arrays (Jacobian and time gradient through the right side)
     ode = discretize(psys([D(ce) ~ Dn * Δ(ce) - kn * ce + 0.1 * sin(ωn * t)],
             [c(0, x, y) ~ 0.0, c(t, 0, y) ~ gn, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)],
-            [Dn, kn, gn, ωn]), LatticeDiscretization(Grid((8, 4)); T = Float32, problem = :ode, backend = PDEV))
+            [Dn, kn, gn, ωn]), LatticeDiscretization(Grid((8, 4)); T = Float32, backend = PDEV))
     host = discretize(psys([D(ce) ~ Dn * Δ(ce) - kn * ce + 0.1 * sin(ωn * t)],
             [c(0, x, y) ~ 0.0, c(t, 0, y) ~ gn, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)],
-            [Dn, kn, gn, ωn]), LatticeDiscretization(Grid((8, 4)); T = Float32, problem = :ode))
+            [Dn, kn, gn, ωn]), LatticeDiscretization(Grid((8, 4)); T = Float32))
     r = solve(ode, Rodas5P(); abstol = 1e-4, reltol = 1e-4)
     rh = solve(host, Rodas5P(); abstol = 1e-4, reltol = 1e-4)
     @test SciMLBase.successful_retcode(r) && isapprox(Array(r.u[end]), rh.u[end]; rtol = 1e-3)
@@ -88,7 +88,7 @@ end
     # the copy itself, a device array, as SciML does
     fs = PDESystem([D(ce) ~ -ce], [c(0, x, y) ~ 1.0], [t ∈ Interval(0, 1), x ∈ Interval(0, 1), y ∈ Interval(0, 1)],
         [t, x, y], [ce], Num[]; name = :fv)
-    ig = init(discretize(fs, LatticeDiscretization(Grid((8, 8)); T = Float32, problem = :owned, backend = PDEV)),
+    ig = init(discretize(fs, LatticeDiscretization(Grid((8, 8)); T = Float32, backend = PDEV)),
         ExplicitEuler(; dt = 0.1f0))
     v = ig[ce]
     @test KernelAbstractions.get_backend(v) == PDEV && size(v) == (8, 8)
@@ -120,7 +120,7 @@ end
     msys = ssys([D(ce) ~ ifelse(qe == 1, 1.0, 0.0)], [c(0, x, y) ~ 0.0], [ce, qe], Num[])
     dk(vals) = (a = KernelAbstractions.allocate(PDEV, Int32, n, n); copyto!(a, vals); a)
     K = Int32[i <= 4 ? 1 : 0 for i in 1:n, j in 1:n]
-    mk(k) = discretize(msys, LatticeDiscretization(Grid((n, n)); T = Float32, problem = :owned, backend = PDEV);
+    mk(k) = discretize(msys, LatticeDiscretization(Grid((n, n)); T = Float32, backend = PDEV);
         inputs = [qe => k])
     s = solve(mk(dk(K)), ExplicitEuler(; dt = 0.1f0))
     @test Array(s[:c][end]) ≈ Float32.(K)
@@ -141,7 +141,7 @@ end
     half = [i <= 4 for i in 1:n, j in 1:n]
     db = KernelAbstractions.allocate(PDEV, Bool, n, n)
     copyto!(db, half)
-    mk(m) = discretize(dsys, LatticeDiscretization(Grid((n, n)); T = Float32, problem = :owned, backend = PDEV,
+    mk(m) = discretize(dsys, LatticeDiscretization(Grid((n, n)); T = Float32, backend = PDEV,
         domain = dm); inputs = [dm => m])
     r = Threads.@spawn Array(solve(mk(db), ExplicitEuler(; dt = 0.1f0))[:c][end])
     @test timedwait(() -> istaskdone(r), 300.0) === :ok && fetch(r) ≈ Float32.(half)
@@ -156,7 +156,7 @@ end
 end
 
 @testset "F3-04: B reads the status word at the saves on $pgpu" begin
-    p = discretize(gsys(), LatticeDiscretization(Grid((8, 8)); T = Float32, problem = :owned, backend = PDEV))
+    p = discretize(gsys(), LatticeDiscretization(Grid((8, 8)); T = Float32, backend = PDEV))
     ig = init(p, WStub(0.01; code = 2, at = 3); saveat = 0.05)
     s = @test_logs (:warn, r"the solve failed in window 3") solve!(ig)
     @test s.retcode == ReturnCode.ConvergenceFailure && ig.iter == 5           # the first save after window 3
@@ -185,7 +185,7 @@ end
              ("BDF2", field, BDF2(; dt = 0.1, newton = 1)),
              ("QuasiSteady", field, QuasiSteady(; dt = 0.1, newton = 1)),
              ("BackwardEuler, steady start", field, BackwardEuler(; dt = 0.1, newton = 1, init = :steady))]
-    mk(sys, be) = discretize(sys, LatticeDiscretization(Grid((32, 32)); T = Float32, problem = :owned, backend = be))
+    mk(sys, be) = discretize(sys, LatticeDiscretization(Grid((32, 32)); T = Float32, backend = be))
     for (name, sys, alg) in cases
         sd = solve(mk(sys, PDEV), alg; saveat = 0.5)
         sh = solve(mk(sys, KernelAbstractions.CPU()), alg; saveat = 0.5)
@@ -209,7 +209,7 @@ end
 @testset "F3-15 (R1): the device stops correcting once every row converged ($pgpu)" begin
     @parameters Dg = 0.01
     sys = psys([D(ce) ~ Dg * Δ(ce) - Advect(Upwind1())([2 * (1 + x), 0.0], ce)], [c(0, x, y) ~ x * y], [Dg]; T = 0.1)
-    mk(be, n) = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float32, problem = :owned, backend = be))
+    mk(be, n) = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float32, backend = be))
     alg = BackwardEuler(; dt = 0.05)
     sd, sh = solve(mk(PDEV, 32), alg), solve(mk(KernelAbstractions.CPU(), 32), alg)
     ig = init(mk(PDEV, 32), alg)
@@ -320,7 +320,7 @@ end
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.3), [t, x, y], [cae, cbe], Any[]; name = :nldev)
     for (lab, s, alg) in (("q1 QS", q1(0.1, 5.0; steady = true), QuasiSteady(; dt = 0.1)), ("nonlinear QS", nl, QuasiSteady(; dt = 0.1)))
         for T in (Float32, Float64)
-            mk(bk) = discretize(s, LatticeDiscretization(Grid((24, 20)); T, problem = :owned, backend = bk))
+            mk(bk) = discretize(s, LatticeDiscretization(Grid((24, 20)); T, backend = bk))
             sd, sd2 = solve(mk(PDEV), alg; saveat = 0.1), solve(mk(PDEV), alg; saveat = 0.1)
             sh = solve(mk(KernelAbstractions.CPU()), alg; saveat = 0.1)
             @test sd.retcode == sh.retcode == SciMLBase.ReturnCode.Success
@@ -345,7 +345,7 @@ end
              ("QuasiSteady", num, QuasiSteady(; dt = 0.1)), ("coupled QuasiSteady", loop, QuasiSteady(; dt = 0.1))]
     for (name, sys, alg) in cases, T in (Float32, Float64)
         k = name == "coupled QuasiSteady" ? (cae, cbe) : (bce,)
-        mk(be) = discretize(sys, LatticeDiscretization(Grid((40, 40); geometry = LatticeFields.IR.HEX); T, problem = :owned, backend = be);
+        mk(be) = discretize(sys, LatticeDiscretization(Grid((40, 40); geometry = LatticeFields.IR.HEX); T, backend = be);
             inputs = name == "coupled QuasiSteady" ? [] : [bqe => kind])
         sd, sh = solve(mk(PDEV), alg; saveat = 0.1), solve(mk(KernelAbstractions.CPU()), alg; saveat = 0.1)
         @test sd.retcode == sh.retcode == SciMLBase.ReturnCode.Success
@@ -369,10 +369,10 @@ pgpu == "rocm" && @testset "F3-21a: Dual results on $pgpu equal the host's" begi
     for (sys, alg, v) in ((mr, BackwardEuler(; dt = 0.1), ce), (mr, CrankNicolson(; dt = 0.1), ce),
                           (cp, QuasiSteady(; dt = 0.1, inner = DeviceGMRES(; rtol = 1e-12)), dae))
         u = map((KernelAbstractions.CPU(), PDEV)) do be
-            pr = discretize(sys, LatticeDiscretization(Grid((16, 16)); T = Float64, problem = :owned, backend = be))
+            pr = discretize(sys, LatticeDiscretization(Grid((16, 16)); T = Float64, backend = be))
             i = LatticePDE.Problems.SII.parameter_index(pr, kd)
-            q = collect(ForwardDiff.Dual{Nothing, Float64, 1}, pr.p)
-            q[i] = ForwardDiff.Dual(pr.p[i], 1.0)
+            q = collect(ForwardDiff.Dual{Nothing, Float64, 1}, pr.p.values)
+            q[i] = ForwardDiff.Dual(pr.p.values[i], 1.0)
             Array(solve(remake(pr; p = q), alg)[v][end])
         end
         vp(w) = [(ForwardDiff.value(d), ForwardDiff.partials(d, 1)) for d in w]
@@ -388,7 +388,7 @@ end
     for (name, op) in (("Δ", XOPS[1][2]), ("DivKGrad harmonic", XOPS[2][2]), ("Advect", XOPS[4][2]))
         p = xpair(op)
         for (pr, row) in ((p.cf, xu), (p.fc, xcc)), alg in (ExplicitEuler(; dt = 2.0f-3, substeps = 1), BackwardEuler(; dt = 1.0f-2, substeps = 1, inner = tight))
-            run(backend) = solve(discretize(pr.dir, LatticeDiscretization(Grid((16, 16)); T = Float32, problem = :owned, backend)), alg; saveat = [0.02])
+            run(backend) = solve(discretize(pr.dir, LatticeDiscretization(Grid((16, 16)); T = Float32, backend)), alg; saveat = [0.02])
             sd, sh = run(PDEV), run(KernelAbstractions.CPU())
             a, b = sd[xe(row), 2], sh[xe(row), 2]
             @info "F3-22 $pgpu $name $(row === xu ? "c to f" : "f to c") $(nameof(typeof(alg))): max |device − host| = $(maximum(abs, a .- b)) of $(maximum(abs, b))"

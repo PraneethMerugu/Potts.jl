@@ -40,8 +40,9 @@ function cmean(A, k = CK)
     return [sum(A[(I[1] - 1) * k + i, (I[2] - 1) * k + j] for j in 1:k for i in 1:k) / k^2 for I in CartesianIndices(nc)]
 end
 # the owned problem of `sys` on `dims` with inputs `ins`
-cown(sys, dims; T = Float64, ins = (), kw...) = discretize(sys, LatticeDiscretization(Grid(dims); T, problem = :owned, kw...);
-    inputs = collect(Pair, ins))
+# (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
+cown(sys, dims; T = Float64, ins = (), kw...) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims); T, kw...);
+    inputs = collect(Pair, ins)))
 
 # One system with the features a coarse field must carry: a face coefficient of the coordinates,
 # a decay at a kind (the owner), a source at a kind, a moving masked Dirichlet, a Robin face, a
@@ -181,8 +182,8 @@ end
         q, g = @variables q(..)::Int32 [input = true] g(..) [input = true]
         osys(c) = PDESystem([D(c(t, x, y)) ~ cD * Δ(c(t, x, y)) - ckd * c(t, x, y) * ismember(q(t, x, y), (2,)) + 0.05 * g(t, x, y)],
             [c(0, x, y) ~ x * y], cdom(), [t, x, y], [c(t, x, y), q(t, x, y), g(t, x, y)], [cD, ckd]; name = :os)
-        oc = discretize(osys(cc), LatticeDiscretization(Grid(CDIMS); problem = :ode); inputs = [q(t, x, y) => CQ1, g(t, x, y) => CG])
-        oh = discretize(osys(ch2), LatticeDiscretization(Grid(CDIMS .÷ CK); problem = :ode);
+        oc = discretize(osys(cc), LatticeDiscretization(Grid(CDIMS)); inputs = [q(t, x, y) => CQ1, g(t, x, y) => CG])
+        oh = discretize(osys(ch2), LatticeDiscretization(Grid(CDIMS .÷ CK));
             inputs = [q(t, x, y) => CQ1c, g(t, x, y) => cmean(CG)])
         du1, du2 = similar(oc.u0), similar(oh.u0)
         oc.f(du1, oc.u0, oc.p, 0.0); oh.f(du2, oh.u0, oh.p, 0.0)

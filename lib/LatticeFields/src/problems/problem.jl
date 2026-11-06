@@ -1026,13 +1026,14 @@ _has_table(ix, sym) = sym isa Union{AbstractVector, Tuple} && table_key(ix, sym)
                       any(s -> _has_table(ix, s), sym) : table_key(ix, sym) !== nothing
 # `getp` of a table reads it from the problem (a table is not in the parameter vector); a list
 # with a table in it reads each entry with its own `getp`
+# the clock's slot is the stepper's, not a parameter (review N6 of F2 batch 3)
+_not_clock(sym) = sym isa Union{Symbol, AbstractString} && String(sym) == CLOCK_KEY && throw(ArgumentError(string(
+    "`", CLOCK_KEY, "` is the clock's slot, which the stepper writes at every launch, not a parameter of the ",
+    "problem: an equation reads the step index as `step_index(t)`")))
 function SII.getp(sys::Union{FieldProblem, FieldIntegrator, FieldSolution}, sym)
     prob = sys isa FieldProblem ? sys : sys.prob
     ix = prob.index
-    # the clock's slot is the stepper's, not a parameter (review N6 of F2 batch 3)
-    sym isa Union{Symbol, AbstractString} && String(sym) == CLOCK_KEY && throw(ArgumentError(string(
-        "`", CLOCK_KEY, "` is the clock's slot, which the stepper writes at every launch, not a parameter of the ",
-        "problem: an equation reads the step index as `step_index(t)`")))
+    _not_clock(sym)
     # an input (a parameter of the `Discrete` portion, F4 design §3.3): its current values
     ki = ix isa LatticeIndex && !(sym isa Union{AbstractArray, Tuple, Integer}) ? input_key(ix, sym) : nothing
     ki === nothing || return x -> _read_input(x, ki)

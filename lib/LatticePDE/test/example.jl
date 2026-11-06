@@ -10,16 +10,17 @@
         @named rd = PDESystem(Differential(t)(c(t, x, y)) ~ Dc * Δ(c(t, x, y)) - k * c(t, x, y),
             [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)],
             [t ∈ Interval(0, 10), x ∈ Interval(0, 1), y ∈ Interval(0, 1)], [t, x, y], [c(t, x, y)], [Dc, k])
-        prob = discretize(rd, LatticeDiscretization(Grid((512, 512)); T = Float32, problem = :owned))
+        prob = discretize(rd, LatticeDiscretization(Grid((512, 512)); T = Float32))
         sol  = solve(prob, ExplicitEuler(dt = 1f-2); saveat = 1)
         sol[c(t, x, y)]
     end
     m = Module(:Example74)
     foreach(e -> e isa LineNumberNode || Core.eval(m, e), ex.args)    # `using` before the macros expand
     prob, sol = m.prob, m.sol
-    p = prob.program
+    fp = LFP.field_problem(prob)                                       # (F4-01: the owned problem)
+    p = fp.program
     @test p.spacing == (1 / 512, 1 / 512) && p.periodic == (false, true)   # from the domain and the bc pair
-    @test prob.p == [1e-3, 0.1] && prob.stability(prob.p) ≈ 1e-3 * 8 * 512^2 + 0.1
+    @test prob.p.values == [1e-3, 0.1] && fp.stability(fp.p) ≈ 1e-3 * 8 * 512^2 + 0.1
     @test sol.substeps == 12 && sol.t == 0:10
     v = Core.eval(m, :(sol[c(t, x, y)]))
     @test length(v) == 11 && size(v[end]) == (512, 512) && all(isfinite, v[end])

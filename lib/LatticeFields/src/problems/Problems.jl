@@ -65,6 +65,9 @@ include("ode.jl")
 
 # the parameter object of B's SciML problems (F4-00)
 public LatticeParameters, TableSlot, InputSlot, with_values, remake_params, remake_u0
+# one problem, many algorithms (F4-01)
+public LatticeMetadata, LatticeFunction, LatticeProblem, LatticeDiscreteProblem, lattice_metadata, lattice_problem,
+       field_problem, rhs_build
 # the coupling between field groups and the per-group counts (review of F2-06)
 public compute_type, substep_counts, lagged_coupling, group_loops, steady_loop_rates, steady_start, starts_steady, StartText, StartSubsteps
 # the one substep policy of both front ends and its words (F3-01)

@@ -14,7 +14,7 @@ end
     @parameters Dp[1:2] = [1.0, 2.0] kp = 0.5 mvp = 1.0
     pdom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
     sys = PDESystem([D(ce) ~ Dp[1] * Δ(ce) - kp * ce], [c(0, x, y) ~ 1.0], pdom, [t, x, y], [ce], [Dp, kp]; name = :ps)
-    p = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64, problem = :owned))
+    p = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64))
     ig = init(p, ExplicitEuler(; dt = 0.01, substeps = 1))
     # reads: a scalar (as a symbol too), a table, an entry
     @test ig.ps[kp] == 0.5 && ig.ps[:kp] == 0.5 && ig.ps[Dp] == [1.0, 2.0] && ig.ps[Dp[2]] == 2.0
@@ -22,7 +22,7 @@ end
     ig.ps[kp] = 0.25
     ig.ps[Dp] = [1.0, 3.0]
     ig.ps[Dp[1]] = 2.0
-    @test ig.ps[kp] == 0.25 && ig.ps[Dp] == [2.0, 3.0] && p.tables == ["Dp" => [1.0, 2.0]] && p.p == [0.5]
+    @test ig.ps[kp] == 0.25 && ig.ps[Dp] == [2.0, 3.0] && p.p.tables == ["Dp" => [1.0, 2.0]] && p.p.values == [0.5]
     # the step reads them: a uniform field decays by (1 − dt kp / n)ⁿ (Δ = 0)
     n = ig.substeps
     step!(ig)
@@ -47,7 +47,7 @@ end
     @test all(==(0.5), ig[ce])
     K = Int32[i <= 2 ? 1 : 0 for i in 1:4, j in 1:4]
     sv = PDESystem([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0, ce ~ masked(qe == 0, mvp)], pdom, [t, x, y], [ce, qe], [mvp]; name = :pm)
-    iv = init(discretize(sv, LatticeDiscretization(Grid((4, 4)); T = Float64, problem = :owned); inputs = [qe => K]),
+    iv = init(discretize(sv, LatticeDiscretization(Grid((4, 4)); T = Float64); inputs = [qe => K]),
         ExplicitEuler(; dt = 0.001))
     @test iv[ce][3, 1] == 1.0 && iv[ce][1, 1] == 0.0
     # a `ps` write of the mask's value moves the masked sites at once (the init and clamps run again)
@@ -73,13 +73,13 @@ end
     @parameters kb2 = 0.5 [bounds = (0, 2)]
     pdom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
     sys = PDESystem([D(ce) ~ -kb2 * ce], [c(0, x, y) ~ 1.0], pdom, [t, x, y], [ce], [kb2]; name = :pb)
-    p = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64, problem = :owned))
+    p = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64))
     ig = init(p, ExplicitEuler(; dt = 0.1, substeps = 1))
     out(e) = occursin("parameter `kb2` = 3.0 is outside its declared bounds (0, 2)", e)
     @test out(psmsg(() -> (ig.ps[kb2] = 3.0))) && ig.ps[kb2] == 0.5
     @test out(psmsg(() -> setp(ig, kb2)(ig, 3.0))) && ig.ps[kb2] == 0.5
     @test out(psmsg(() -> remake(p; p = [kb2 => 3.0])))
-    @test out(psmsg(() -> discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64, problem = :owned); p = [kb2 => 3.0])))
+    @test out(psmsg(() -> discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64); p = [kb2 => 3.0])))
     o = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64))
     @test out(psmsg(() -> remake(o; p = [kb2 => 3.0]))) && out(psmsg(() -> remake(o; p = [3.0])))
     oi = SciMLBase.init(o, Tsit5())
@@ -99,7 +99,7 @@ end
     @parameters kbd2 = 2kbd [bounds = (0, 3)]
     pdom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
     sys = PDESystem([D(ce) ~ -kbd2 * ce], [c(0, x, y) ~ 1.0], pdom, [t, x, y], [ce], [kbd, kbd2]; name = :pq)
-    p = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64, problem = :owned))
+    p = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64))
     ig = init(p, ExplicitEuler(; dt = 0.1, substeps = 1))
     e = psmsg(() -> (ig.ps[kbd] = 3.0))
     @test occursin("parameter `kbd` = 3.0 is outside its declared bounds (0, 2)", e) && !occursin("#", e)

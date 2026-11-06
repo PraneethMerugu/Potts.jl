@@ -16,13 +16,14 @@ using KernelAbstractions: KernelAbstractions
 
 # the dense Jacobian of the `:ode` rate of `sys` and its value at 0 (the steady state is `−A \ b`)
 function cjac(sys, dims)
-    po = discretize(sys, LatticeDiscretization(Grid(dims); T = Float64, problem = :ode))
+    po = discretize(sys, LatticeDiscretization(Grid(dims); T = Float64))
     m = length(po.u0)
     f(v) = (du = similar(v); po.f(du, v, po.p, 0.0); du)
     b0 = f(zeros(m))
     return hcat([f((e = zeros(m); e[j] = 1; e)) .- b0 for j in 1:m]...), b0
 end
-cown(sys; dims = (8, 8), T = Float64) = discretize(sys, LatticeDiscretization(Grid(dims); T, problem = :owned))
+# (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
+cown(sys; dims = (8, 8), T = Float64) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims); T)))
 const CTIGHT = DeviceGMRES(; rtol = 1e-12, budget = 200)
 @variables ca(..) cb(..) cq(..) cz(..)
 const cae, cbe, cqe, cze = ca(t, x, y), cb(t, x, y), cq(t, x, y), cz(t, x, y)
@@ -109,7 +110,7 @@ end
     # a nonlinear cycle (Michaelis–Menten uptake, `0.5a²` feeding back): the rate is 0 at the result
     rates = [0.1Δ(cae) - 2.0 * cae / (0.5 + cae) + cbe + x, 0.1Δ(cbe) - cbe + 0.5 * cae^2]
     po = discretize(PDESystem([D(cae) ~ rates[1], D(cbe) ~ rates[2]], [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y],
-        [cae, cbe], Any[]; name = :mmr), LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :ode))
+        [cae, cbe], Any[]; name = :mmr), LatticeDiscretization(Grid((8, 8)); T = Float64))
     p = cown(PDESystem([0 ~ rates[1], 0 ~ rates[2]], [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe],
         Any[]; name = :mm))
     for (inner, tol) in ((:auto, 1e-5), (CTIGHT, 1e-12))
@@ -307,7 +308,7 @@ end
     ce = c(t, x, y)
     sys = PDESystem([D(ce) ~ 0.3 * Δ(ce) - 2.0 * ce + x], [c(0, x, y) ~ 0.0], [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0),
         y ∈ Interval(0.0, 1.0)], [t, x, y], [ce], Any[]; name = :one)
-    init(discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned)), QuasiSteady(; dt = 0.1))
+    init(discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64)), QuasiSteady(; dt = 0.1))
     n(f) = sum(m -> count(mi -> mi isa Core.MethodInstance && isdefined(mi, :cache), Base.specializations(m)), methods(f); init = 0)
     println("M1 ", n(LF.coupled_modes), " ", n(LF._bind_coupled))
     """

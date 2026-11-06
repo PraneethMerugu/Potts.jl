@@ -19,8 +19,9 @@ const BDIMS = (8, 6)
 const BKIND = Int32[(i + j) % 3 for i in 1:8, j in 1:6]
 bdom(T = 1.0) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
 bsys(eqs, bcs, ps; T = 1.0, dvs = [bce, bqe]) = PDESystem(eqs, bcs, bdom(T), [t, x, y], dvs, ps; name = :be)
+# (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
 bown(sys; dims = BDIMS, T = Float64, kw...) =
-    discretize(sys, LatticeDiscretization(Grid(dims); T, problem = :owned, kw...); inputs = [bqe => BKIND])
+    LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims); T, kw...); inputs = [bqe => BKIND]))
 const BTIGHT = DevicePCG(; rtol = 1e-12, budget = 64)
 bwarm(ig) = (step!(ig); @allocated step!(ig))              # (a function barrier)
 blast(s) = s[bce, length(s.t)]                             # the last save
@@ -208,7 +209,7 @@ end
     λ = 2 * (2cos(π / n) - 2) * n^2
     dirs = [bc(t, 0, y) ~ 0.0, bc(t, 1, y) ~ 0.0, bc(t, x, 0) ~ 0.0, bc(t, x, 1) ~ 0.0]
     sys = bsys([D(bce) ~ bD * Δ(bce)], [bc(0, x, y) ~ sin(π * x) * sin(π * y); dirs], [bD]; T = 0.4, dvs = [bce])
-    p = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64, problem = :owned))
+    p = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64))
     u0 = [sin(π * (i - 0.5) / n) * sin(π * (j - 0.5) / n) for i in 1:n, j in 1:n]
     err(dt) = maximum(abs, blast(solve(p, BackwardEuler(; dt, inner = BTIGHT))) .- exp(0.3λ * 0.4) .* u0)
     es = [err(0.4 / 2^k) for k in 2:5]
@@ -222,7 +223,7 @@ end
     src = -exp(-t) * sin(π * x) * sin(π * y) + 1 + 2π^2 * 0.1 * exp(-t) * sin(π * x) * sin(π * y)
     faces = [bc(t, 0, y) ~ t, bc(t, 1, y) ~ t, bc(t, x, 0) ~ t, bc(t, x, 1) ~ t]
     ms = bsys([D(bce) ~ 0.1 * Δ(bce) + src], [bc(0, x, y) ~ sin(π * x) * sin(π * y); faces], Any[]; T = 1.0, dvs = [bce])
-    pm = discretize(ms, LatticeDiscretization(Grid((m, m)); T = Float64, problem = :owned))
+    pm = discretize(ms, LatticeDiscretization(Grid((m, m)); T = Float64))
     exact = [exp(-1.0) * sin(π * (i - 0.5) / m) * sin(π * (j - 0.5) / m) + 1.0 for i in 1:m, j in 1:m]
     em = [maximum(abs, blast(solve(pm, BackwardEuler(; dt = 0.1 / 2^k, inner = BTIGHT))) .- exact) for k in 0:3]
     om = log2.(em[1:(end - 1)] ./ em[2:end])
@@ -230,7 +231,7 @@ end
     # one window at the stage tⁿ⁺¹: the time-dependent source and face value of the hand matrix
     # at t = h (at t = 0, the wrong stage, it is off by about h)
     h = 0.1
-    pm8 = discretize(ms, LatticeDiscretization(Grid(BDIMS); T = Float64, problem = :owned))
+    pm8 = discretize(ms, LatticeDiscretization(Grid(BDIMS); T = Float64))
     ig, u0, u = be_window(pm8, BackwardEuler(; dt = h, inner = BTIGHT))
     s1(xx, yy, tt) = -exp(-tt) * sin(π * xx) * sin(π * yy) + 1 + 2π^2 * 0.1 * exp(-tt) * sin(π * xx) * sin(π * yy)
     fc(tt) = Dict((a, s) => (:dir, tt) for a in 1:2, s in (-1, 1))
@@ -245,7 +246,7 @@ end
     n = 16
     step0 = PDESystem([D(bce) ~ bD * Δ(bce)], [bc(0, x, y) ~ ifelse(x < 0.5, 1.0, 0.0)], bdom(80 * 1e4 / (0.3 * n^2)),
         [t, x, y], [bce], [bD]; name = :stiff)
-    p = discretize(step0, LatticeDiscretization(Grid((n, n)); T = Float64, problem = :owned))
+    p = discretize(step0, LatticeDiscretization(Grid((n, n)); T = Float64))
     hs = 1e4 / (0.3 * n^2)
     s = solve(p, BackwardEuler(; dt = hs); saveat = 8hs)
     @test s.retcode == ReturnCode.Success && all(u -> all(v -> -1e-6 <= v <= 1 + 1e-6, u), s.u)
@@ -257,10 +258,10 @@ end
     # the `:ode` path with OrdinaryDiffEq's ImplicitEuler (fixed steps, tight Newton) at equal dt
     sx = bsys([D(bce) ~ bD * Δ(bce) - bk * bce + sin(3t) * x], [bc(0, x, y) ~ x * y, bc(t, 0, y) ~ 1.0], [bD, bk];
         T = 0.4, dvs = [bce])
-    po = discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :ode))
+    po = discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64))
     # (the Newton tolerance follows abstol and reltol, 1e-12; the rate is linear, so a Newton step is exact)
     so = solve(po, ImplicitEuler(); dt = 0.05, adaptive = false, abstol = 1e-12, reltol = 1e-12)
-    sb = solve(discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned)),
+    sb = solve(discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64)),
         BackwardEuler(; dt = 0.05, inner = BTIGHT))
     @test maximum(abs, vec(blast(sb)) .- so.u[end]) < 1e-8
 end
@@ -276,7 +277,7 @@ end
     @test LatticePDE.OPERATOR_BUILDS[] == b0 + 1               # once per group
     # an acyclic pair in one group (c reads o): one Newton step in topological order is exact
     p2 = discretize(bsys([D(bce) ~ bD * Δ(bce) - bk * bce + 0.7 * boe, D(boe) ~ 0.5 * Δ(boe) - boe + x],
-        [bc(0, x, y) ~ 0.0, bo(0, x, y) ~ 0.0], [bD, bk]; dvs = [bce, boe]), LatticeDiscretization(Grid(BDIMS); T = Float64, problem = :owned))
+        [bc(0, x, y) ~ 0.0, bo(0, x, y) ~ 0.0], [bD, bk]; dvs = [bce, boe]), LatticeDiscretization(Grid(BDIMS); T = Float64))
     ig = init(p2, BackwardEuler(; dt = 0.1, inner = BTIGHT))
     @test only(ig.runtimes).cache.newton == 1 && [r.key for r in only(ig.runtimes).cache.rows] == ["bo", "bc"]
     step!(ig)
@@ -307,13 +308,12 @@ end
     @test solve(p, BackwardEuler(; dt = 0.01, inner = Multigrid())).retcode == ReturnCode.Success
     # the `:ode` path: a field or linear solver given to an `ODEProblem`
     po = discretize(bsys([D(bce) ~ bD * Δ(bce)], [bc(0, x, y) ~ x], [bD]; dvs = [bce]),
-        LatticeDiscretization(Grid(BDIMS); T = Float64, problem = :ode))
+        LatticeDiscretization(Grid(BDIMS); T = Float64))
     m = e(() -> solve(po, DevicePCG()))
-    @test startswith(m, "`solve`/`init` of an `ODEProblem`: `DevicePCG()` is a linear solver, the `inner` of an implicit field solver") &&
-          occursin("`ImplicitEuler()` is Backward Euler", m) && occursin("`solve(prob, BackwardEuler(; dt, inner = DevicePCG()))`", m)
-    m = e(() -> init(po, BackwardEuler(; dt = 0.1)))
-    @test startswith(m, "`solve`/`init` of an `ODEProblem`: `BackwardEuler(; dt = 0.1)` is a field solver") &&
-          occursin("problem = :owned", m)
+    @test occursin("give it to one, `BackwardEuler(; inner = DevicePCG())`", m)
+    # (F4-01: the field solvers step the problem `discretize` returns; base: refused, "discretize
+    # with `LatticeDiscretization(…; problem = :owned)`")
+    @test init(po, BackwardEuler(; dt = 0.1)).t == [0.0]
     @test solve(po, ImplicitEuler(); dt = 0.01, adaptive = false).retcode == ReturnCode.Success   # the route
     # the keywords
     for (f, want) in ((() -> BackwardEuler(; dt = 0.1, newton = 0), "BackwardEuler: newton = 0 is the Newton iterations"),
@@ -327,7 +327,7 @@ end
     @test eval(Meta.parse(repr(a))) == a
     # a map group has no implicit operator
     pm = discretize(PDESystem([Shift(t, 1)(bce) ~ 0.5 * bce], [bc(0, x, y) ~ x], bdom(), [t, x, y], [bce], Any[]; name = :m),
-        LatticeDiscretization(Grid(BDIMS); T = Float64, problem = :owned))
+        LatticeDiscretization(Grid(BDIMS); T = Float64))
     @test occursin("a map program is stepped by ExplicitMap()", e(() -> init(pm, BackwardEuler(; dt = 1.0))))
 end
 
@@ -366,9 +366,9 @@ end
 # The orders against the semi-discrete solution (the `:ode` path, Tsit5 at 1e-12), `n²` sites
 function nl_orders(rhs, ic; T, dts, newton = nothing, n = 16)
     sys = PDESystem([D(bce) ~ rhs], [bc(0, x, y) ~ ic], bdom(T), [t, x, y], [bce], Any[]; name = :nl)
-    ref = solve(discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64, problem = :ode)), Tsit5();
+    ref = solve(discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64)), Tsit5();
         reltol = 1e-12, abstol = 1e-12).u[end]
-    pb = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64, problem = :owned))
+    pb = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64))
     us = [vec(blast(solve(pb, BackwardEuler(; dt, inner = BTIGHT, newton)))) for dt in dts]
     es = [maximum(abs, u .- ref) for u in us]
     return es, log2.(es[1:(end - 1)] ./ es[2:end]), pb, us
@@ -416,11 +416,11 @@ end
     sys = PDESystem([D(bce) ~ 0.05 * Δ(bce) - 8 * max(bce - 0.4, 0) / 0.6 + 2 + 2 * sin(6t)], [bc(0, x, y) ~ NLIC], bdom(3.0),
         [t, x, y], [bce], Any[]; name = :sw)
     for T in (Float32, Float64)
-        p = discretize(sys, LatticeDiscretization(Grid((32, 32)); T, problem = :owned))
+        p = discretize(sys, LatticeDiscretization(Grid((32, 32)); T))
         s = @test_logs min_level = Base.CoreLogging.Warn solve(p, BackwardEuler(; dt = 0.05))
         @test s.retcode == ReturnCode.Success && s.stats.newton_budget == 0
     end
-    p = discretize(sys, LatticeDiscretization(Grid((32, 32)); T = Float64, problem = :owned))
+    p = discretize(sys, LatticeDiscretization(Grid((32, 32)); T = Float64))
     s = @test_logs (:warn, r"the Newton iteration \(`newton = 2`\) reached its budget") solve(p, BackwardEuler(; dt = 0.05, newton = 2))
     @test s.stats.newton_budget > 0
 end
@@ -430,7 +430,7 @@ end
     # is clamped at `1/(2h)`; the rest stays in the residual and the field decays
     sys = PDESystem([D(bce) ~ 0.05 * Δ(bce) + 20 * bce^2 - 20 * bce], [bc(0, x, y) ~ 0.75], bdom(0.3), [t, x, y], [bce], Any[];
         name = :clamp)
-    pb = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
+    pb = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64))
     ig = init(pb, BackwardEuler(; dt = 0.1))
     # with one Newton step nothing else tells: a warning names the field, the window and the
     # route (review r1, S2; base 2d213237: no warning)
@@ -440,14 +440,14 @@ end
     # … once per run, and a site growth that the count rule cannot see (a field row whose growth
     # reads the time: no interval bounds it) warns too
     pg = discretize(PDESystem([D(bce) ~ 0.05 * Δ(bce) + 8 * (1 + x) * (1 + t) * bce], [bc(0, x, y) ~ 0.5], bdom(0.3), [t, x, y],
-        [bce], Any[]; name = :sitegrowth), LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
+        [bce], Any[]; name = :sitegrowth), LatticeDiscretization(Grid((8, 8)); T = Float64))
     @test_logs (:warn, r"the implicit shift was clamped in window 1") solve(pg, BackwardEuler(; dt = 0.1))
     # the route works: more substeps keep the growth below the shift (`h g ≤ 0.02 · 20.2 < 1/2`): no clamp
     s = @test_logs min_level = Base.CoreLogging.Warn solve(pg, BackwardEuler(; dt = 0.1, substeps = 5))
     @test s.retcode == ReturnCode.Success
     # a decay with no clamp leaves the bit clear
     ig = init(discretize(PDESystem([D(bce) ~ 0.05 * Δ(bce) - 20 * bce], [bc(0, x, y) ~ 0.75], bdom(0.3), [t, x, y], [bce], Any[];
-        name = :noclamp), LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned)), BackwardEuler(; dt = 0.1))
+        name = :noclamp), LatticeDiscretization(Grid((8, 8)); T = Float64)), BackwardEuler(; dt = 0.1))
     solve!(ig)
     @test ig.retcode == ReturnCode.Success && only(ig.runtimes).totals.cause == 0
 end
@@ -465,7 +465,7 @@ end
 # `dt`; with `timed` the matrix is assembled at each step's end time (an operator that reads
 # the time), else once
 function direct_be(sys, dims, dt, T, nsub; timed = false, inputs = [])
-    po = discretize(sys, LatticeDiscretization(Grid(dims); T = Float64, problem = :ode); inputs)
+    po = discretize(sys, LatticeDiscretization(Grid(dims); T = Float64); inputs)
     m = length(po.u0)
     f(u, tt) = (du = similar(u); po.f(du, u, po.p, tt); du)
     z = zeros(m)
@@ -489,7 +489,7 @@ function direct_be(sys, dims, dt, T, nsub; timed = false, inputs = [])
     return u
 end
 nlsys(eqs, ics, dvs; T = 1.0) = PDESystem(eqs, ics, bdom(T), [t, x, y], dvs, Any[]; name = :dc)
-nlown(sys; dims = (16, 16)) = discretize(sys, LatticeDiscretization(Grid(dims); T = Float64, problem = :owned))
+nlown(sys; dims = (16, 16)) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims); T = Float64)))
 const WARN = Base.CoreLogging.Warn
 
 @testset "F3-09b: advection at the rule-2 count; the Newton check (R2-M1)" begin
@@ -592,7 +592,7 @@ end
     # b41b73c1: one substep, the clamp warning)
     gsys = PDESystem([D(bce) ~ 0.05 * Δ(bce) + 8 * (1 + x) * bce], [bc(0, x, y) ~ 0.5], bdom(0.3), [t, x, y], [bce], Any[];
         name = :sitegrowth2)
-    pg = discretize(gsys, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
+    pg = discretize(gsys, LatticeDiscretization(Grid((8, 8)); T = Float64))
     ig = init(pg, BackwardEuler(; dt = 0.1, inner = BTIGHT))
     @test ig.substeps == 4
     @test_logs min_level = Base.CoreLogging.Warn solve!(ig)
@@ -620,7 +620,7 @@ r1rel(a, b) = maximum(abs, a .- b) / maximum(abs, b)
     # SX-18 with a time-dependent coefficient: OrdinaryDiffEq's ImplicitEuler at the substep
     sx = nlsys([D(bce) ~ DivKGrad(:harmonic)(0.3 * (1 + 5t), bce) - (1 + 20t) * bce + sin(3t) * x], [bc(0, x, y) ~ x * y, bc(t, 0, y) ~ 1.0],
         [bce]; T = 0.4)
-    po = discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :ode))
+    po = discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64))
     # (a fresh Jacobian at every Newton iteration: with the matrix of the step's start, the
     # simplified Newton iteration of a time-dependent operator needs more than its default 10
     # iterations at 1e-12 and reports `ConvergenceFailure`)
@@ -690,7 +690,7 @@ end
     rke = rk(t, x, y)
     sysk = PDESystem([D(bce) ~ DivKGrad(:harmonic)(0.3 * (1 + rke), bce) - 2 * bce + 1],
         [bc(0, x, y) ~ x * y, 1.5 * bc(t, 1, y) - Differential(x)(bc(t, 1, y)) ~ 0.2], bdom(1.0), [t, x, y], [bce, rke], Any[]; name = :robk)
-    pk = discretize(sysk, LatticeDiscretization(Grid((10, 8)); T = Float64, problem = :owned); inputs = [rke => fill(0.5, 10, 8)])
+    pk = discretize(sysk, LatticeDiscretization(Grid((10, 8)); T = Float64); inputs = [rke => fill(0.5, 10, 8)])
     c = @test_logs (:warn, r"the Robin face of `bc` on axis 1 \(high side\), whose diagonal is negative at these parameters, is not in the implicit operator and no bound sees it") match_mode = :any only(init(pk,
         BackwardEuler(; dt = 0.1)).runtimes).cache
     @test !c.exact && !c.seen && c.newton == 4
@@ -705,7 +705,7 @@ end
                         # the reversed weights: the face coefficient's term is the stiff one
                         (0.0001 * at(rW, rqe) * Δ(bce) + 5 * DivKGrad(:harmonic)(1 + x, bce) - bce, "0.0001at(rW, rq)*Δ(bc)"))
         sys = PDESystem([D(bce) ~ rate], [bc(0, x, y) ~ x], bdom(0.2), [t, x, y], [bce, rqe], [rW]; name = :scaled)
-        p = discretize(sys, LatticeDiscretization(Grid((16, 16)); T = Float64, problem = :owned); inputs = [rqe => kind])
+        p = discretize(sys, LatticeDiscretization(Grid((16, 16)); T = Float64); inputs = [rqe => kind])
         ig = init(p, BackwardEuler(; dt = 0.05, inner = r1tight()))
         row = only(only(ig.runtimes).cache.rows).op
         @test only(row.inexact) == "`$out` (in the rate of `bc`)" && isempty(row.unseen) && only(ig.runtimes).cache.seen
@@ -762,7 +762,7 @@ function hex_hand(; n = HEXN, D = 1.0, m = (x, y) -> 1.0, k = 0.0, f = (x, y) ->
 end
 const HEXKIND = Int32[(i + 2j) % 3 for i in 1:HEXN, j in 1:HEXN]
 hexdisc(sys; T = Float64, inputs = [bqe => HEXKIND], kw...) =
-    discretize(sys, LatticeDiscretization(Grid((HEXN, HEXN); geometry = HEX); T, problem = :owned, kw...); inputs)
+    LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((HEXN, HEXN); geometry = HEX); T, kw...); inputs))
 const HEXPER = [bc(t, 0, y) ~ bc(t, 1, y), bc(t, x, 0) ~ bc(t, x, 1)]
 
 @testset "F3-20: one BackwardEuler window on a hexagonal lattice equals the hand BE matrix" begin
@@ -799,7 +799,7 @@ const HEXPER = [bc(t, 0, y) ~ bc(t, 1, y), bc(t, x, 0) ~ bc(t, x, 1)]
     hdme = hdm(t, x, y)
     dm = [(i - 6.3)^2 + (j - 5.8)^2 + (i - 6.3) * (j - 5.8) < 18 for i in 1:HEXN, j in 1:HEXN]
     pd = discretize(PDESystem([D(bce) ~ bD * Δ(bce) - bk * bce + x], [bc(0, x, y) ~ x * y], bdom(1.0), [t, x, y], [bce, hdme], [bD, bk];
-            name = :hexdom), LatticeDiscretization(Grid((HEXN, HEXN); geometry = HEX); T = Float64, problem = :owned, domain = hdm);
+            name = :hexdom), LatticeDiscretization(Grid((HEXN, HEXN); geometry = HEX); T = Float64, domain = hdm);
         inputs = [hdme => dm])
     ig, u0, u = be_window(pd, alg)
     L, b = hex_hand(; D = 0.3, k = 2.0, f = (x, y) -> x)
@@ -857,7 +857,7 @@ end
             [bc(0, x, y) ~ 0.0, -2.0 * bc(t, 0, y) - Differential(x)(bc(t, 0, y)) ~ 0.0, -2.0 * bc(t, x, 0) - Differential(y)(bc(t, x, 0)) ~ 0.0],
             bdom(1.0), [t, x, y], [bce], Any[]; name = :hexind)
         for geometry in (HEX, LatticeFields.IR.CUBIC)
-            p = discretize(sys, LatticeDiscretization(Grid((12, 12); geometry); T = Float64, problem = :owned))
+            p = discretize(sys, LatticeDiscretization(Grid((12, 12); geometry); T = Float64))
             if ok
                 @test solve(p, QuasiSteady(; dt = 0.1, inner = BTIGHT)).retcode == ReturnCode.Success
             else
@@ -905,7 +905,7 @@ end
     K = Int32[(i + j) % 4 for i in 1:8, j in 1:8]
     for set in ((0, 1, 2), (0, 1, 2, 3), (1, 2))
         sys = PDESystem([D(bce) ~ ismember(bqe, set)], [bc(0, x, y) ~ 0.0], bdom(1.0), [t, x, y], [bce, bqe], Any[]; name = :kset)
-        p = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned); inputs = [bqe => K])
+        p = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64); inputs = [bqe => K])
         ig = init(p, ExplicitEuler(; dt = 0.1))
         step!(ig)
         @test ig[bce] ./ 0.1 ≈ Float64.(in.(K, Ref(set)))
@@ -954,7 +954,7 @@ end
         lp = PDESystem([0 ~ 0.1Δ(bce) - 1.0 * bce + 2.0 * boe + x, 0 ~ 0.2Δ(boe) - 2.0 * boe - 1.5 * bce + y],
             [[bc(0, x, y) ~ 0.0, bo(0, x, y) ~ 0.0]; per ? [HEXPER; operiodic] : []], bdom(1.0), [t, x, y], [bce, boe], Any[];
             name = :hexloop)
-        p = discretize(lp, LatticeDiscretization(Grid((HEXN, HEXN); geometry = HEX); T = Float64, problem = :owned))
+        p = discretize(lp, LatticeDiscretization(Grid((HEXN, HEXN); geometry = HEX); T = Float64))
         s = solve(p, QuasiSteady(; dt = 0.1, inner = DeviceGMRES(; rtol = 1e-12, budget = 200)))
         L1, b1 = hex_hand(; D = 0.1, k = 1.0, f = (x, y) -> x, periodic = per)
         L2, b2 = hex_hand(; D = 0.2, k = 2.0, f = (x, y) -> y, periodic = per)
@@ -968,7 +968,7 @@ end
     grow = PDESystem([0 ~ 0.1Δ(bce) + 1.0 * bce + 2.0 * boe, 0 ~ 0.1Δ(boe) - 1.0 * boe + 2.0 * bce],
         [[bc(0, x, y) ~ 0.0, bo(0, x, y) ~ 0.0]; HEXPER; operiodic], bdom(1.0),
         [t, x, y], [bce, boe], Any[]; name = :hexgrow)
-    pg = discretize(grow, LatticeDiscretization(Grid((HEXN, HEXN); geometry = HEX); T = Float64, problem = :owned))
+    pg = discretize(grow, LatticeDiscretization(Grid((HEXN, HEXN); geometry = HEX); T = Float64))
     @test_throws "their coupled steady system has a growing mode" init(pg, QuasiSteady(; dt = 0.1))
 end
 
@@ -983,7 +983,7 @@ end
     end
     # `π Δ(c)` is a numeric face coefficient (no field row)
     @test !only(only(init(nlown(sym; dims = (8, 8)), BackwardEuler(; dt = 0.05)).runtimes).cache.rows).op.field
-    ode(s) = discretize(s, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :ode))
+    ode(s) = discretize(s, LatticeDiscretization(Grid((8, 8)); T = Float64))
     pa, pb = ode(sym), ode(num)
     da, db = similar(pa.u0), similar(pb.u0)
     pa.f(da, pa.u0, pa.p, 0.1)
@@ -1049,7 +1049,7 @@ end
     function prob(W, rate)
         @parameters r2W[1:2] = W
         sys = PDESystem([D(bce) ~ rate(r2W)], [bc(0, x, y) ~ x], bdom(0.5), [t, x, y], [bce, r2qe], [r2W]; name = :r2)
-        return sys, discretize(sys, LatticeDiscretization(Grid((16, 16)); T = Float64, problem = :owned); inputs = [r2qe => kind])
+        return sys, discretize(sys, LatticeDiscretization(Grid((16, 16)); T = Float64); inputs = [r2qe => kind])
     end
     # the reviewer's case: `5 DivKGrad(1 + x)` kept (its bound is the larger), `at(W, q) Δ(c)`
     # out with θ = 2 / (5 · (1 − 1/16)) = 0.43 ≤ 1/2: one substep, newton 1 + ⌈log 1e-3 / log θ⌉ = 10,
@@ -1107,7 +1107,7 @@ end
     sys = PDESystem([D(bce) ~ at(r3W, r3qe) * Δ(bce) + 5.0 * DivKGrad(:harmonic)(1 + x, bce) - bce -
                               Advect(Upwind1())([2.0, 0.0], bce)], [bc(0, x, y) ~ x], bdom(0.5), [t, x, y], [bce, r3qe],
         [r3W]; name = :r3)
-    p = discretize(sys, LatticeDiscretization(Grid((16, 16)); T = Float64, problem = :owned); inputs = [r3qe => kind])
+    p = discretize(sys, LatticeDiscretization(Grid((16, 16)); T = Float64); inputs = [r3qe => kind])
     ig = init(p, BackwardEuler(; dt = 0.05, inner = r1tight()))
     c = only(ig.runtimes).cache
     @test c.θ > 0.4 && c.ρin > 0 && c.newton > 12
@@ -1122,7 +1122,7 @@ end
 @testset "r3: a write that changes the count sets the step from the new parameters" begin
     @parameters r3g = 1.0
     sg = bsys([D(bce) ~ bD * Δ(bce) + r3g * bce], [bc(0, x, y) ~ x * y], [bD, r3g]; T = 2.0, dvs = [bce])
-    pg = discretize(sg, LatticeDiscretization(Grid(BDIMS); T = Float64, problem = :owned))
+    pg = discretize(sg, LatticeDiscretization(Grid(BDIMS); T = Float64))
     ig = init(pg, BackwardEuler(; dt = 0.5, inner = BTIGHT))
     step!(ig)
     u = vec(ig[bce])
@@ -1149,11 +1149,11 @@ using OrdinaryDiffEqSDIRK: ImplicitEuler
     xqe = xq(t, x, y)
     sx = PDESystem([D(bce) ~ 0.3 * Δ(bce) + 0.1 * Δ(xqe) - 2.0 * bce + x, D(xqe) ~ 0.3 * Δ(xqe) - xqe + 0.5 * bce],
         [bc(0, x, y) ~ 0.0, xq(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [bce, xqe], Any[]; name = :cross)
-    p = discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :owned))
+    p = discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64))
     r = @test_logs (:warn, r"`0.1Δ\(xq\)` \(in the rate of `bc`\) is not in the implicit operator and no bound sees it") match_mode = :any solve(p,
         BackwardEuler(; dt = 0.1, inner = BTIGHT))
     @test r.retcode == ReturnCode.Success
-    po = discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64, problem = :ode))
+    po = discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64))
     ro = SciMLBase.solve(po, ImplicitEuler(); adaptive = false, dt = 0.1, abstol = 1e-12, reltol = 1e-12)
     @test maximum(abs, ro.u[end] .- r.u[end]) < 1e-6 || (println("r3 N1 ", maximum(abs, ro.u[end] .- r.u[end])); false)
 end

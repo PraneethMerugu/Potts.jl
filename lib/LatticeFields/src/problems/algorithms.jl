@@ -4,9 +4,12 @@
 # (`nbuffers`) and its cache (`alg_cache`, `reset_cache!`, `step_retcode!`).
 
 """
-Field stepping algorithms of the owned path.
+Field stepping algorithms: SciML ODE algorithms (`<: SciMLBase.AbstractODEAlgorithm`) that
+step the problem `LatticePDE.discretize` returns (an `ODEProblem` of rates, a `DiscreteProblem`
+of maps) with the owned steppers, as `solve(prob, BackwardEuler(; dt))`; the same problem takes
+an OrdinaryDiffEq solver, `solve(prob, Rodas5P())`.
 """
-abstract type FieldAlgorithm end
+abstract type FieldAlgorithm <: SciMLBase.AbstractODEAlgorithm end
 
 """
     ExplicitEuler(; dt = nothing, substeps = nothing, lower = nothing, init = nothing, compute_T = :auto)
@@ -22,7 +25,7 @@ starts at the group's steady state (see [`BackwardEuler`](@ref)). `compute_T`: t
 the group's kernels compute in, `:auto` (the problem's value type), `Float32` or `Float64`
 (see [`BackwardEuler`](@ref)).
 
-- On a `FieldProblem` (`LatticePDE.discretize(…; problem = :owned)`), `dt` is the step and
+- On the problem `LatticePDE.discretize` returns, `dt` is the step and
   is required (nothing else sets the window: `saveat` does not); `lower`
   clips as above, fused into the step by the update pass ([`update_rule`](@ref)).
 - As a `PottsProblem` `field_solver`, the window is the MCS (`mcs_duration`): `dt` must be

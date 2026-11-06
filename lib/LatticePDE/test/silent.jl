@@ -8,8 +8,9 @@ using Serialization: Serialization
 
 sdom(T = 1.0) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
 ssys(eqs, bcs, dvs, ps; T = 1.0) = PDESystem(eqs, bcs, sdom(T), [t, x, y], dvs, ps; name = :s)
+# (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
 sown(sys; n = 4, inputs = (), kw...) =
-    discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64, problem = :owned, kw...); inputs)
+    LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64, kw...); inputs))
 emsg(f) = try
     f(); ""
 catch e
@@ -44,9 +45,10 @@ end
     # … and remake gives it one (the owned route): c(1) = (1 − 0.1 k)^10
     s = solve(remake(p; p = [kz => 2.0]), ExplicitEuler(; dt = 0.1, substeps = 1))
     @test s[:c][end][1] ≈ 0.8^10
-    err = emsg(() -> discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64)))
+    # (F4-01: `discretize` returns the one problem, which `remake` gives a value; base: refused
+    # at `discretize`, naming `initial_conditions`) an OrdinaryDiffEq solve names it
+    err = emsg(() -> solve(discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64)), Tsit5()))
     @test occursin("`kz`", err) && occursin("no value", err)
-    @test !occursin("remake", err) && occursin("initial_conditions", err)   # no problem exists yet (round 0: "remake")
     # setp to NaN is refused and leaves the integrator unchanged
     integ = init(remake(p; p = [kz => 2.0]), ExplicitEuler(; dt = 0.1))
     @test_throws ArgumentError setp(integ, kz)(integ, NaN)
@@ -117,7 +119,9 @@ end
         err = emsg(() -> solve(p, alg))
         @test occursin("negative", err) && occursin("`c`", err) && occursin("≥ 0", err)
     end
-    @test occursin("negative", emsg(() -> discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64))))
+    # (F4-01: an OrdinaryDiffEq solve refuses it at its first call, as a field algorithm at `init`;
+    # base: at `discretize` of the ODE problem)
+    @test occursin("negative", emsg(() -> SciMLBase.solve(discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64)), Tsit5())))
     # setp into the negative range is refused atomically
     q = remake(p; p = [Dn => 0.01])
     integ = init(q, ExplicitEuler(; dt = 0.1))
@@ -194,8 +198,8 @@ end
     K4 = copy(K3); K4[1, 1] = 0
     mi[kq] = K4
     @test mi[me][1, 1] == 1.0 && mi[me][3, 3] == 1.0
-    # `:auto` picks the owned path for masked conditions (round 0: refused, "need problem = :owned")
-    @test discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64); inputs = [qe => K]) isa FieldProblem
+    # masked conditions discretize (round 0: refused, "need problem = :owned"; F4-01: one problem)
+    @test discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64); inputs = [qe => K]) isa SciMLBase.ODEProblem
     # the clamp at a step's start uses the parameters the steps are bound to (round 2: `integ.p`,
     # so a direct `integ.p[1] = v`, which the steps ignore, moved the masked value the fluxes read)
     @parameters mv = 1.0
@@ -256,8 +260,9 @@ end
     @test solve(sown(ssrc; inputs = [qe => K]), ExplicitEuler(; dt = 0.1))[:c][end] ≈ Float64.(K)
     o = discretize(ssrc, LatticeDiscretization(Grid((n, n)); T = Float64); inputs = [qe => K])
     @test reshape(SciMLBase.solve(o, Tsit5()).u[end], n, n) ≈ Float64.(K)
-    err = emsg(() -> discretize(ssrc, LatticeDiscretization(Grid((n, n)); T = Float64)))
-    @test occursin("`kq`", err) && !occursin("remake", err)        # an ODE problem's inputs are fixed (round 0: "remake")
+    # (F4-01: an unset input is named at the solve, as on the owned path; base: at `discretize`)
+    err = emsg(() -> SciMLBase.solve(discretize(ssrc, LatticeDiscretization(Grid((n, n)); T = Float64)), Tsit5()))
+    @test occursin("`kq`", err)
     # a declared default needs no value
     s = solve(sown(ssys([D(ce) ~ 1.0], [c(0, x, y) ~ 0.0], [ce, ddv], Num[]); domain = dd), ExplicitEuler(; dt = 0.1))
     @test all(≈(1.0), s[:c][end])
@@ -277,10 +282,9 @@ end
 end
 
 @testset "messages: no stale or misleading diagnosis (F1, M items)" begin
-    # LP67: no "next commit (C7b)"
-    err = emsg(() -> discretize(ssys([D(ce) ~ -ce], [c(0, x, y) ~ 1.0], [ce], Num[]),
-        LatticeDiscretization(Grid((4, 4)); problem = :linear)))
-    @test occursin("is planned (F4)", err) && occursin("solve(prob)", err) && !occursin("C7b", err)
+    # LP67: no "next commit (C7b)"; F4-01: `problem` is deleted (a keyword it does not take)
+    err = emsg(() -> LatticeDiscretization(Grid((4, 4)); problem = :linear))
+    @test occursin("takes `methods`, `T`, `backend`, `domain` and `clock`; got `problem`", err) && !occursin("C7b", err)
     # LP45: a system with no time is a steady system (F3-12b); this one (no decay, no fixed
     # value) has no unique steady state, which its solve names (base 6b6bf089: "no time …
     # not supported in this version")
@@ -376,9 +380,9 @@ end
     @test solve(remake(p; p = [Dq => [1.0, 5.0]]), alg)[:c][end][1] ≈ 0.95^100
     @test p.tables == ["Dq" => [1.0, 2.0]]                       # the source is unchanged
     @test occursin("has 2 entries", emsg(() -> remake(p; p = [Dq => [1.0]])))
-    # where a table cannot change, the refusal names it (round 2: ODE remake a silent no-op;
-    # setp "invalid index: nothing")
-    @test occursin("is a table", emsg(() -> remake(o; p = [Dq => [1.0, 5.0]])))
+    # a remake gives the ODE problem a new table (F4-00; round 2: a silent no-op; base 3ed05c3b:
+    # refused, "is a table"); an owned problem's `setp` names the table and its route
+    @test SciMLBase.solve(remake(o; p = [Dq => [1.0, 5.0]]), Tsit5(); abstol = 1e-10, reltol = 1e-10).u[end][1] ≈ exp(-5) rtol = 1e-6
     ig = init(p, alg)
     @test occursin("table", emsg(() -> setp(p, Dq)(p, [1.0, 5.0])))
     # an integrator's table is set through `setp` (and `integ.ps`, F2-13)
@@ -443,8 +447,8 @@ end
         err = emsg(() -> remake(o; p = pm))
         @test occursin("is not a parameter of the problem", err) && occursin("`kr`", err)
     end
-    @test remake(o; p = [kr => 0.1]).p == [0.1]                  # control: a name is taken
-    @test remake(o; p = Dict(kr => 0.2)).p == [0.2]
+    @test remake(o; p = [kr => 0.1]).p.values == [0.1]                  # control: a name is taken
+    @test remake(o; p = Dict(kr => 0.2)).p.values == [0.2]
     err = emsg(() -> setp(o, 2kr))
     @test occursin("`2kr` is not a parameter", err) && !occursin("invalid index", err)
     p = sown(sys; inputs = [qe => 0])
@@ -481,7 +485,8 @@ end
     negsys = ssys([D(ce) ~ Dm[1] * Δ(ce)], [c(0, x, y) ~ 1.0], [ce], [Dm])
     alg = ExplicitEuler(; dt = 0.01, substeps = 1)
     neg(err) = occursin("is negative at these parameters", err)
-    @test neg(emsg(() -> discretize(negsys, LatticeDiscretization(Grid((4, 4)); T = Float64))))   # ODE: at build
+    # ODE: at the first call of the right side (F4-01; base: at `discretize`)
+    @test neg(emsg(() -> solve(discretize(negsys, LatticeDiscretization(Grid((4, 4)); T = Float64)), Tsit5())))
     @test neg(emsg(() -> solve(sown(negsys), alg)))                                            # owned: before a step
     p = sown(sys)
     @test neg(emsg(() -> solve(remake(p; p = [Dn => [-1.0, 2.0]]), alg)))
@@ -508,17 +513,17 @@ end
     nl = SciMLBase.NonlinearProblem(ss)
     for q in (ss, nl)
         @test occursin("`2k6` is not a parameter", emsg(() -> remake(q; p = [2k6 => 1.0])))
-        @test remake(q; p = [k6 => 0.1]).p == [0.1]                    # control
+        @test remake(q; p = [k6 => 0.1]).p.values == [0.1]                    # control
     end
     # an untyped vector of pairs is a map (round 5: not checked)
     @test occursin("`2k6` is not a parameter", emsg(() -> remake(o; p = Any[k6 => 0.1, 2k6 => 1.0])))
-    @test remake(o; p = Any[k6 => 0.1]).p == [0.1]
+    @test remake(o; p = Any[k6 => 0.1]).p.values == [0.1]
     # `setp` on an OrdinaryDiffEq integrator names it (round 5: "invalid index: nothing")
     oi = init(o, Tsit5())
     err = emsg(() -> setp(oi, 2k6))
     @test occursin("`2k6` is not a parameter", err) && !occursin("invalid index", err)
     setp(oi, k6)(oi, 0.2)
-    @test oi.p == [0.2]
+    @test oi.p.values == [0.2]
 end
 
 @testset "a table coefficient is bounded at every entry (F1 round 7)" begin
@@ -850,7 +855,9 @@ end
     # the ODE form at discretize (bda31989: accepted, a rate of Inf) …
     @parameters Dz5[1:2] = [0.0, 1.0]
     sys = ssys([D(ce) ~ -(1 / at(Dz5, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dz5])
-    err = emsg(() -> discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64); inputs = [qe => checker(4, 1, 2)]))
+    # (F4-01: at the first call of the right side; base: at `discretize`)
+    err = emsg(() -> solve(discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64);
+        inputs = [qe => checker(4, 1, 2)]), Tsit5()))
     @test occursin("not finite", err) && occursin("`Dz5[1]`", err)
     @test discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64);              # control: no kind 1
         inputs = [qe => fill(Int32(2), 4, 4)]) isa SciMLBase.ODEProblem
@@ -884,10 +891,12 @@ end
     sys = ssys([D(ce) ~ DivKGrad(:arithmetic)(Ke, ce) - ce, Ke ~ kx * (1 + ce^2)], [c(0, x, y) ~ 1.0 + x], [ce, Ke], [kx];
         T = 0.01)
     o = discretize(sys, LatticeDiscretization(Grid((16, 16)); T = Float64))
-    f = o.f.f
+    f = LFP.rhs_build(o)                                          # (F4-01: the build behind `o.f.f`)
     du, u = similar(o.u0), copy(o.u0)
     f(du, u, o.p, 0.0)                                            # the calling task owns the build
     @test (@allocated f(du, u, o.p, 0.0)) == 0                   # … and its calls stay allocation-free
+    o.f.f(du, u, o.p, 0.0)                                        # (its first call compiles)
+    @test (@allocated o.f.f(du, u, o.p, 0.0)) == 0               # … also through the problem's function
     pk = [0.1]
     warm(fn, dd, uu, pp) = (fn(dd, uu, pp, 0.0); @allocated fn(dd, uu, pp, 0.0))   # (a function barrier)
     other(fn, uu, pp) = (dd = similar(uu); bytes = warm(fn, dd, uu, pp); (dd, task_local_storage(fn.owner).value, bytes))
@@ -949,7 +958,7 @@ end
 @testset "F3-05: a linear solver where B takes a field algorithm" begin
     @parameters Dm1 = 0.1
     p = discretize(psys([D(ce) ~ Dm1 * Δ(ce)], [c(0, x, y) ~ x], [Dm1]),
-        LatticeDiscretization(Grid((8, 8)); T = Float32, problem = :owned))
+        LatticeDiscretization(Grid((8, 8)); T = Float32))
     e(f) = try
         f(); ""
     catch err

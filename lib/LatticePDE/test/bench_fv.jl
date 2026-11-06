@@ -268,7 +268,7 @@ function pg10()
     rd = PDESystem(Differential(t)(c(t, x, y)) ~ Dc * Δ(c(t, x, y)) - k * c(t, x, y),
         [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0, c(t, x, 0) ~ c(t, x, 1)],
         [t ∈ Interval(0, 1), x ∈ Interval(0, 1), y ∈ Interval(0, 1)], [t, x, y], [c(t, x, y)], [Dc, k]; name = :rd)
-    prob = discretize(rd, LatticeDiscretization(Grid((64, 64)); T = Float32, problem = :owned, backend = DEV))
+    prob = discretize(rd, LatticeDiscretization(Grid((64, 64)); T = Float32, backend = DEV))
     solve(prob, ExplicitEuler(dt = 0.1f0))   # the bound is known (Dc, k)
     devsync()
     n0 = ninstances()
@@ -298,7 +298,7 @@ function pg14()
         Problems.compile!(DEV, bs)
         devsync()
     end
-    state(n) = (prob = discretize(rd, LatticeDiscretization(Grid((n, n)); T = Float32, problem = :owned, backend = DEV));
+    state(n) = (prob = discretize(rd, LatticeDiscretization(Grid((n, n)); T = Float32, backend = DEV));
         init(prob, ExplicitEuler(dt = 1.0f-2)); devsync())
     big = SMOKE ? 512 : 4096
     build(64); build(big); state(64); state(big)            # warm: compile and first-call costs

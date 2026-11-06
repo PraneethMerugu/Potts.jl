@@ -19,7 +19,7 @@ wsys() = PDESystem([D(ce) ~ at(Dw, wke) * Δ(ce) - kw0 * ce],
     [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [ce, wke], [Dw, kw0]; name = :w)
 const WK1 = Int32[i <= 4 ? 1 : 2 for i in 1:8, j in 1:8]
 const WK2 = Int32[j <= 4 ? 2 : 1 for i in 1:8, j in 1:8]
-wdisc(kind) = LatticeDiscretization(Grid((8, 8)); T = Float64, problem = kind)
+wdisc() = LatticeDiscretization(Grid((8, 8)); T = Float64)
 wmsg(f) = try
     f(); ""
 catch e
@@ -29,7 +29,7 @@ end
 @testset "F4-00: integ.ps writes give the next window of a restart (owned and Tsit5)" begin
     # the owned integrator: a scalar, a table and an input written through `integ.ps`, then one
     # window against a fresh problem started from the written values
-    po = discretize(wsys(), wdisc(:owned); inputs = [wke => WK1])
+    po = discretize(wsys(), wdisc(); inputs = [wke => WK1])
     alg = ExplicitEuler(; dt = 0.01, substeps = 1)
     ig = init(po, alg)
     step!(ig)
@@ -49,7 +49,7 @@ end
 
     # a Tsit5 integrator of the ODE problem: the same three writes (base: the input write and
     # the table write were refused, "is a table" and "names nothing")
-    o = discretize(wsys(), wdisc(:ode); inputs = [wke => WK1])
+    o = discretize(wsys(), wdisc(); inputs = [wke => WK1])
     oi = init(o, Tsit5(); adaptive = false, dt = 0.01)
     step!(oi)
     oi.ps[kw0] = 0.3
@@ -58,7 +58,7 @@ end
     @test oi.ps[kw0] == 0.3 && oi.ps[Dw] == [0.25, 0.75] && oi.ps[wke] == WK2 && oi.ps[Dw[2]] == 0.75
     u1, t1 = copy(oi.u), oi.t
     step!(oi)
-    o2 = discretize(wsys(), wdisc(:ode); inputs = [wke => WK1])
+    o2 = discretize(wsys(), wdisc(); inputs = [wke => WK1])
     ri = init(remake(o2; u0 = u1, tspan = (t1, 1.0), p = [kw0 => 0.3, Dw => [0.25, 0.75]], inputs = [wke => WK2]), Tsit5();
         adaptive = false, dt = 0.01)
     step!(ri)
@@ -72,11 +72,11 @@ end
 end
 
 @testset "F4-00: remake with inputs, tables and u0 pairs on the ODE problem" begin
-    o = discretize(wsys(), wdisc(:ode); inputs = [wke => WK1])
+    o = discretize(wsys(), wdisc(); inputs = [wke => WK1])
     # inputs through `remake` reach an OrdinaryDiffEq solve (base: SciML's "Unrecognized keyword
     # arguments: [:inputs]" from `solve`)
     a = solve(remake(o; inputs = [wke => WK2]), Tsit5(); abstol = 1e-10, reltol = 1e-10)
-    b = solve(discretize(wsys(), wdisc(:ode); inputs = [wke => WK2]), Tsit5(); abstol = 1e-10, reltol = 1e-10)
+    b = solve(discretize(wsys(), wdisc(); inputs = [wke => WK2]), Tsit5(); abstol = 1e-10, reltol = 1e-10)
     @test a.retcode == SciMLBase.ReturnCode.Success && maximum(abs, a.u[end] .- b.u[end]) <= 1e-12
     @test maximum(abs, a.u[end] .- solve(o, Tsit5(); abstol = 1e-10, reltol = 1e-10).u[end]) > 1e-6   # control
     @test o.ps[wke] == WK1                                     # the source keeps its input
@@ -99,7 +99,7 @@ end
 end
 
 @testset "F4-00: SciMLStructures portions of LatticeParameters" begin
-    o = discretize(wsys(), wdisc(:ode); inputs = [wke => WK1])
+    o = discretize(wsys(), wdisc(); inputs = [wke => WK1])
     lp = o.p
     @test lp isa LatticePDE.Problems.LatticeParameters && SciMLStructures.isscimlstructure(lp)
     v, re, alias = SciMLStructures.canonicalize(Tunable(), lp)
@@ -122,7 +122,7 @@ end
 end
 
 @testset "F4-00: a table written on an OrdinaryDiffEq integrator is checked at the next call" begin
-    o = discretize(wsys(), wdisc(:ode); inputs = [wke => WK1])
+    o = discretize(wsys(), wdisc(); inputs = [wke => WK1])
     oi = init(o, Tsit5())
     step!(oi)
     # (base: the write itself was refused, "`Dw` is a table … an ODE problem's tables are fixed")
@@ -130,7 +130,7 @@ end
     @test oi.ps[Dw] == [-1.0, 1.0]
     @test occursin("negative", wmsg(() -> step!(oi)))
     # control: a positive table steps
-    oj = init(discretize(wsys(), wdisc(:ode); inputs = [wke => WK1]), Tsit5())
+    oj = init(discretize(wsys(), wdisc(); inputs = [wke => WK1]), Tsit5())
     setp(oj, Dw)(oj, [0.1, 1.0])
     step!(oj)
     @test oj.t > 0
