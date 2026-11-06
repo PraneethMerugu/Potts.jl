@@ -170,6 +170,27 @@ sys = Potts.compose(model, Potts.component(:decay, decay, model))
 component(name::Symbol, sys::ModelingToolkitBase.System, model::PottsSystem) =
     wrap(name, sys, nothing, _component_part(model))
 
+"""
+    Potts.component(name, pdesys::PDESystem, model::PottsSystem) -> PottsSystem
+
+The `PDESystem` `pdesys` (named `name`) as fields of `model`, for [`Potts.compose`](@ref).
+`Potts.compose(model, Potts.component(:drug, pdesys, model))` adds each dependent variable
+`c` as the field `drug₊c`, each parameter `k` as the parameter `drug₊k` (with its value),
+each equation as an `@equations` entry and each condition as a `@bcs` entry, so the fields
+run as if declared in the model: with the default field solver, or by name in
+`FieldGroups(:drug₊c => …)`. A condition at the start time, `c(0, x, y) ~ v`, is the field's
+initial value. Its time interval is not read (the problem's `tspan` is).
+
+The spatial domain is the lattice's, in the model's length unit: axis `d` spans
+`[0, dims[d] · spacing[d]]` (`[0, dims[d]]` without `@lattice spacing`), the domain
+`Potts.fields(model)` gives; another interval is an `ArgumentError` naming both. An input
+variable (`[input = true]`) is filled by the CPM by its `lattice_input_name` (or else its
+own name): `"kind"` is the kind of each site (0 for the medium), and the name of a field
+or site variable of the model reads that variable.
+"""
+component(name::Symbol, pdesys::ModelingToolkitBase.PDESystem, model::PottsSystem) =
+    wrap(name, ModelingToolkitBase.System(Equation[], _unwrap(t); name), pdesys, _component_part(model))
+
 # the payload of a component of `model`: its kinds, lattice and sweep, and nothing else
 _component_part(model::PottsSystem) =
     PottsPart(; kinds = copy(_p(model, :kinds)), lattice = _p(model, :lattice), sweep = _p(model, :sweep))
@@ -329,6 +350,10 @@ function _wrap_payload(name::Symbol, fields, part::PottsPart)
     return w
 end
 
+# whether `sys` carries a PDESystem that its payload does not build (a hand-wrapped one)
+_foreign_fields(sys::PottsSystem) = (f = _stored_fields(sys);
+                                     f !== nothing && get(_p(sys, :metadata), _FieldsFrom, nothing) != _pde_digest(f))
+
 _built_from_part(sys::PottsSystem) = (I = getfield(sys, :inner); m = SymbolicUtils.getmetadata(I, _BuiltFrom, nothing);
                                       m isa Tuple && m[1] === getfield(sys, :part) && m[2][] === I)
 
@@ -423,15 +448,12 @@ function _lower_inner(sys::PottsSystem, what::AbstractString)
     w = _wrap_payload(nameof(sys), nothing, lowered)
     diff = _inner_diff(I, getfield(w, :inner))
     if isempty(diff)
-        # `_FieldsFrom` proves Potts' `mtkcompile` built this PDESystem, not that it built it from
-        # this exact payload; harmless, since fields always compile from the payload (w has none)
-        # a PDESystem is accepted when `mtkcompile` built it from this payload (a compiled model's
-        # `sys` composed again); any other would be ignored, since fields compile from the payload
-        f = getfield(sys, :fields)
-        f === nothing || get(part.metadata, _FieldsFrom, nothing) == _pde_digest(f) || throw(ArgumentError(
-            "$what: `$(nameof(sys))` carries a PDESystem its Potts payload does not build; fields compile from the " *
-            "payload's field variables and equations (`@variables c(field)`, `@equations D(c) ~ …`), so this one would be ignored"))
-        return w
+        # a PDESystem that `mtkcompile` built from this payload (a compiled model's `sys` composed
+        # again) is the payload's own (`_FieldsFrom` proves Potts' `mtkcompile` built it; fields
+        # always compile from the payload, so w has none); any other PDESystem is the model's
+        # fields, moved into the payload under their own names (F4-11)
+        _foreign_fields(sys) || return w
+        return _wrap_payload(nameof(sys), nothing, _with_pde(w, getfield(w, :part), getfield(sys, :fields), nothing, what))
     end
     throw(ArgumentError("$what: the inner System of `$(nameof(sys))` holds content its Potts payload cannot build (" *
                         join(diff, "; ") * "). Subsystems are compiled as model-scope components; top-level " *
@@ -468,9 +490,11 @@ under its name. A component's own CPM statements (energies, drives, …) are an
 (`@components model c = system`: its unknowns are model variables `c₊x`, its parameters model
 parameters `c₊k`). An `ArgumentError` names what a component cannot carry: inputs (field
 bindings are not compiled into components), quantities per site, cell, edge or field, kind
-tables, relations, kind classes, obstacle kinds, a schedule, `@bcs`, its own `@components`, a
-PDESystem, kinds or a lattice other than the model's, or a name the model already uses (a
-component or a quantity). A component's sweep and structural keywords are its constructor's
+tables, relations, kind classes, obstacle kinds, a schedule, `@bcs`, its own `@components`,
+kinds or a lattice other than the model's, or a name the model already uses (a component or a
+quantity). A component's PDESystem ([`Potts.component`](@ref) of a `PDESystem`) joins the
+model's fields: its fields, parameters, equations and conditions become the model's, named
+`c₊x`, and the result is rebuilt from its payload. A component's sweep and structural keywords are its constructor's
 and are not read. Units and guesses of a component's quantities are kept; their types are not
 (a component's unknowns and parameters become Real model quantities). Build a component with
 [`Potts.component`](@ref): `Potts.compose(p, Potts.component(:rn, Catalyst.ode_model(complete(rn)), p))`
@@ -488,9 +512,35 @@ function compose(p::PottsSystem, cs::PottsSystem...; name::Symbol = nameof(p))
                                                        "`$(nameof(c))`; give the component another name"))
         push!(taken, nameof(c))
     end
+    # a component's PDESystem joins the payload as fields (F4-11); its System, when it has
+    # content, is composed as any other
+    if any(c -> _stored_fields(c) !== nothing, cs)
+        pdes = [c for c in cs if _stored_fields(c) !== nothing]
+        plain = PottsSystem[c for c in cs if _stored_fields(c) === nothing || !_empty_system(inner(c))]
+        p = _with_pde_components(p, pdes, isempty(plain) ? name : nameof(p))
+        isempty(plain) && return p
+        cs = Tuple(PottsSystem(_Wrap(), nameof(c), inner(c), nothing, getfield(c, :part)) for c in plain)
+    end
     un(s) = ModelingToolkitBase.toggle_namespacing(something(ModelingToolkitBase.get_parent(inner(s)), inner(s)), true)
     sys = ModelingToolkitBase.compose(un(p), [un(c) for c in cs]; name)
     return wrap(name, complete(sys; allow_parameter_eqs = true), _merge_fields(name, p, cs), _merge_part(p, cs))
+end
+
+# whether the inner System `I` holds nothing (a `Potts.component` of a PDESystem)
+_empty_system(I) = (M = ModelingToolkitBase; P = something(M.get_parent(I), I);
+                    isempty(M.unknowns(I)) && isempty(M.parameters(I)) && isempty(M.equations(I)) &&
+                    isempty(M.observed(I)) && isempty(M.get_systems(P)))
+
+# `p` with the PDESystem of each component of `pdes` as fields, named `component₊n`, rebuilt
+# from its payload (its own composed components lowered first, as `mtkcompile` does)
+function _with_pde_components(p::PottsSystem, pdes, name::Symbol)
+    base = _lower_inner(p, "Potts.compose")
+    part = getfield(base, :part)
+    for c in pdes
+        _check_component_like(p, c)
+        part = _with_pde(base, part, _stored_fields(c), nameof(c), "Potts.compose: component `$(nameof(c))`")
+    end
+    return _wrap_payload(name, nothing, part)
 end
 
 function _merge_fields(name, p, cs)
@@ -546,20 +596,23 @@ _same_lattice(a, b) = typeof(a) === typeof(b) && all(f -> isequal(getfield(a, f)
 function _merge_part(p, cs)
     bindings = copy(_p(p, :bindings))
     for c in cs
-        _check_component_part(nameof(c), getfield(c, :part), "Potts.compose")
-        # a component's folds read kinds by number and the lattice's sites: they must be the model's
-        _p(c, :kinds) == _p(p, :kinds) || throw(ArgumentError(
-            "Potts.compose: component `$(nameof(c))` has the kinds $(_p(c, :kinds)), the model `$(nameof(p))` " *
-            "$(_p(p, :kinds)); a component is built with the model's kinds (`Potts.component(name, system, model)`)"))
-        _same_lattice(_p(c, :lattice), _p(p, :lattice)) || throw(ArgumentError(
-            "Potts.compose: component `$(nameof(c))` has another lattice than the model `$(nameof(p))`; a component is " *
-            "built with the model's lattice (`Potts.component(name, system, model)`)"))
-        _stored_fields(c) === nothing || throw(ArgumentError(
-            "Potts.compose: component `$(nameof(c))` has a PDESystem; a component's fields are not compiled " *
-            "(declare the fields in the model: `@variables c(field)`, `@equations D(c) ~ …`)"))
+        _check_component_like(p, c)
         append!(bindings, (FieldBinding([nameof(c); b.path], b.name, b.source) for b in _p(c, :bindings)))
     end
     return getfield(_replace(p; bindings), :part)
+end
+
+# what a component of `p` must be: no CPM statements, and the kinds and lattice of `p`
+function _check_component_like(p, c)
+    _check_component_part(nameof(c), getfield(c, :part), "Potts.compose")
+    # a component's folds read kinds by number and the lattice's sites: they must be the model's
+    _p(c, :kinds) == _p(p, :kinds) || throw(ArgumentError(
+        "Potts.compose: component `$(nameof(c))` has the kinds $(_p(c, :kinds)), the model `$(nameof(p))` " *
+        "$(_p(p, :kinds)); a component is built with the model's kinds (`Potts.component(name, system, model)`)"))
+    _same_lattice(_p(c, :lattice), _p(p, :lattice)) || throw(ArgumentError(
+        "Potts.compose: component `$(nameof(c))` has another lattice than the model `$(nameof(p))`; a component is " *
+        "built with the model's lattice (`Potts.component(name, system, model)`)"))
+    return nothing
 end
 
 # The `@components` systems, each under its component name (MTK's `sys.dc` finds it by name).

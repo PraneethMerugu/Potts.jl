@@ -530,3 +530,40 @@ s = solve(PottsProblem(dosed, layout(Tiling((5, 5); region = (11:20, 11:20), kin
     SequentialCPM())
 s[:pk₊drug][end]
 ```
+
+`Potts.compose(model, Potts.component(:pk, sys, model))` adds the same system outside the
+macro. `Potts.component` gives it the model's kinds and lattice, which a component must have.
+
+### Fields from a `PDESystem`
+
+A LatticePDE `PDESystem` joins a model the same way: `Potts.compose(model,
+Potts.component(:drug, pdesys, model))`. Each dependent variable `c` becomes the field
+`drug₊c`, each parameter `k` the parameter `drug₊k`, each equation a field equation and
+each condition a `@bcs` condition. The fields run as declared ones do: with the problem's
+`field_solver`, or by name in `FieldGroups(:drug₊c => BackwardEuler())`. A condition at the
+start time, `c(0, x, y) ~ v`, gives the field's initial value.
+
+The rules:
+
+- The spatial domain is the lattice's, in the model's length unit: axis `d` spans
+  `[0, dims[d] · spacing[d]]`, as in `Potts.fields(model)`. Another interval is an error
+  that names both.
+- An input variable (`[input = true]`) is filled by the CPM. Its `lattice_input_name` (or
+  else its own name) says what it reads: `"kind"` is the kind of each site (0 for the
+  medium), and the name of a field or site variable of the model reads that variable.
+- A kind table of the `PDESystem` is an error: declare the table in the model.
+
+```@example equations
+using Potts.ModelingToolkitBase: PDESystem, Differential
+using Potts.ModelingToolkitBase.DomainSets: Interval
+@parameters x y Dd = 0.5 kd = 0.1
+@variables c(..) kin(..)::Int32 [input = true, lattice_input_name = "kind"]
+Dt = Differential(Potts.t)
+pde = PDESystem([Dt(c(Potts.t, x, y)) ~ Dd * Potts.LatticePDE.Δ(c(Potts.t, x, y)) - kd * c(Potts.t, x, y) + (kin(Potts.t, x, y) == 1)],
+    [c(0, x, y) ~ 0.0], [Potts.t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 30.0), y ∈ Interval(0.0, 30.0)],
+    [Potts.t, x, y], [c(Potts.t, x, y), kin(Potts.t, x, y)], [Dd, kd]; name = :drug)
+withdrug = Potts.compose(dosed, Potts.component(:drug, pde, dosed))
+s = solve(PottsProblem(withdrug, layout(Tiling((5, 5); region = (11:20, 11:20), kinds = [:cell]), withdrug), (0, 5)),
+    SequentialCPM())
+maximum(s.u[end].site.drug₊c)
+```

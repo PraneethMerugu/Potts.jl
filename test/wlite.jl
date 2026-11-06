@@ -656,11 +656,13 @@ end
     end
     # a non-System is not wrapped
     @test_throws MethodError Potts.wrap(:x, 1.0, nothing, part())
-    # B1′: a component's PDESystem is refused (its fields would not be compiled); so is a host
-    # PDESystem that the payload does not build
-    @test occursin("has a PDESystem", msg(() -> Potts.compose(g, Potts.wrap(:decay, WLiteC9.decay(), WLiteModels.pde(:decay), part()))))
-    @test occursin("PDESystem", msg(() -> mtkcompile(Potts.wrap(:h, System(Potts.Equation[], Potts.t; name = :h,
-        systems = [WLiteC9.decay()]), WLiteModels.pde(:h), part()))))
+    # B1′: a component's PDESystem and a host PDESystem that the payload does not build join the
+    # model's fields (F4-11; before, both were refused); this one spans [0, 1] on an 8 × 8
+    # lattice, so it is refused naming both domains
+    @test occursin("the PDESystem `decay` spans `x ∈ [0, 1]`, but axis 1 of the lattice of `g` spans [0, 8]",
+        msg(() -> Potts.compose(g, Potts.wrap(:decay, WLiteC9.decay(), WLiteModels.pde(:decay), part()))))
+    @test occursin("the PDESystem `h` spans `x ∈ [0, 1]`", msg(() -> mtkcompile(Potts.wrap(:h, System(Potts.Equation[], Potts.t;
+        name = :h, systems = [WLiteC9.decay()]), WLiteModels.pde(:h), part()))))
     # a compiled model's `sys` (its PDESystem built from its payload) composes and compiles again
     fsys = mtkcompile(WLiteC9Field(; name = :wf)).sys
     @test Potts.fields(fsys) !== nothing
