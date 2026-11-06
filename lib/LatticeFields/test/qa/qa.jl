@@ -16,6 +16,7 @@ const LF_NONPUBLIC = (
     :supports_float64,                     # KernelAbstractions' Float64 capability query (Metal: false); KA declares no `public`
     :deepcopy_internal,                    # Base's documented hook for a type's own `deepcopy` (LatticeRHS: a copy has no owner task, SX-37)
     :dotview,                              # Base's hook for `a[i] .= v` (FieldIntegrator: an error, not a write into a copy)
+    :DefaultInit,                          # DiffEqBase's default DAE init algorithm, which OrdinaryDiffEqCore imports and documents; no `public` (F4-02)
     :inferencebarrier,                     # Base's inference barrier (`init` binds each group at its own algorithm's type, F3 r2)
     :kdot, :knorm, :kaxpy!, :kaxpby!, :kcopy!, :kdivcopy!, :kfill!  # Krylov.jl's vector functions, the documented hook of a custom vector type (F3-12d `CoupledVector`); no `public` (compat 0.10)
 )

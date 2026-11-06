@@ -48,8 +48,7 @@ end
 
 @testset "F2-08c: step_index refusals name their route (B)" begin
     @test occursin("clock = τ", kerr(() -> discretize(ksys(1.0), LatticeDiscretization(Grid((4, 4)); T = Float64))))
-    # (F4-01: the refusal moved from `discretize(…; problem = :ode)` to an OrdinaryDiffEq solve)
-    @test occursin("needs a field algorithm", kerr(() -> solve(discretize(ksys(1.0), kdisc()), Tsit5())))
+    # (F4-02: an OrdinaryDiffEq solver no longer refuses it, "needs a field algorithm"; odepath.jl)
     @test occursin("argument", kerr(() -> discretize(ksys(1.0; rate = step_index(2t)), kdisc())))
     @parameters clock__tick = 1.0
     bad = PDESystem([D(kce) ~ clock__tick], [kc(0, x, y) ~ 0.0; kperiodic], kdom(1.0), [t, x, y], [kce], [clock__tick]; name = :b)

@@ -17,6 +17,7 @@ using KernelAbstractions: KernelAbstractions as KA
 using RuntimeGeneratedFunctions: RuntimeGeneratedFunctions, RuntimeGeneratedFunction,
                                  drop_expr
 using SciMLBase: SciMLBase
+using SciMLOperators: SciMLOperators
 using SciMLStructures: SciMLStructures as SS
 using SymbolicIndexingInterface: SymbolicIndexingInterface as SII
 using ..Exec: Exec
@@ -66,6 +67,7 @@ include("ode.jl")
 # the parameter object of B's SciML problems (F4-00)
 public LatticeParameters, TableSlot, InputSlot, with_values, remake_params, remake_u0
 # one problem, many algorithms (F4-01)
+public ClockTick, MaskSync, mask_sync!, sync_masks!, UpdateLatticeAb, steady_start!, lattice_matrix, LatticeODEProblem, LatticeOperator, LatticeLinearProblem, LatticeTimeFreeProblem
 public LatticeMetadata, LatticeFunction, LatticeProblem, LatticeDiscreteProblem, lattice_metadata, lattice_problem,
        field_problem, rhs_build
 # the coupling between field groups and the per-group counts (review of F2-06)

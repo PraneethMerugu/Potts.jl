@@ -1700,8 +1700,13 @@ algorithm takes.
 The problem's `p` is a `LatticeParameters`: the scalar parameters, the tables, the inputs and
 the clock's step index. Read and write them by symbol on the problem, an integrator or a
 solution: `prob.ps[k]`, `integ.ps[Dk] = values`, `integ.ps[kind] = K`, `remake(prob; p = [k =>
-v], inputs = [kind => K])`. In this version an OrdinaryDiffEq solver refuses masked
-conditions, `step_index(t)` and steady rows (with the route to a field algorithm).
+v], inputs = [kind => K])`.
+
+On an OrdinaryDiffEq solver (F4-02): a masked site holds its value (its rate is 0; the masks
+are run again after each accepted step, so a mask that reads `t` or moves with an input write
+is first-order in time); `step_index(t)` adds a `tstop` at every boundary of the clock, where
+the step index changes; steady rows `0 ~ rhs` give the problem a `mass_matrix` (0 on their
+fields), for a mass-matrix solver (`Rodas5P()`, `FBDF()`).
 
 **Steady rows** (F3-12b). `0 ~ rhs` is solved for the field it determines: a state field with
 no other equation that the row reads, preferably under a spatial operator (`0 ~ D * Δ(c) - k * c
@@ -1711,11 +1716,13 @@ ones with `QuasiSteady` at the same window, solved first in each window. A stead
 initial value starts at 0.
 
 **Systems with no time** (F3-12b). A system whose variables are the axes only (`[x, y]`, every
-row `0 ~ rhs` or an aux field) is a steady system: the problem has `tspan = (0, 0)`, and
+row `0 ~ rhs` or an aux field) is a steady system, and
 `solve(prob)` (or `solve(prob, QuasiSteady(; inner, newton))`) solves it once from the cold
 `u0`, with the inner solver to `rtol = 1e-6` within 64 iterations unless `inner` is given. It
-returns a one-state solution at t = 0, read by the time-free symbol (`sol[c(x, y)]`).
-`SteadyStateProblem(prob)` is the steady state of its right side, for SciML's steady solvers.
+returns a one-state solution at t = 0, read by the time-free symbol (`sol[c(x, y)]`). The
+problem is a `LinearProblem` when every row is linear (`A` a `LatticeOperator`, which applies
+the compiled right side, and `b` the constant part: `A u = b` is the steady state; building it
+runs the right side once), else a `NonlinearProblem` of the right side.
 
 The time span is the domain of the first variable. Fields index solutions and integrators
 by symbol (`sol[c(t, x, y)]`, `sol[:c]`) as grid-shaped arrays.

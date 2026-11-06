@@ -205,6 +205,39 @@ function _unpin_face_reads(bc, fids, ivs)
     return BC(bc.kind, bc.op, bc.comp, bc.axis, bc.side, bc.alpha, bc.beta,
         substitute(bc.value, reps; fold = Val(false)), bc.pred, bc.eq)
 end
+# The time derivative of a masked value `v` (F4-02): the inputs and the step index are
+# piecewise constant in time (rate 0 between writes), the coordinates and parameters constant;
+# `nothing` when it is 0 or has no symbolic derivative (then the value is held between steps
+# and the mask callback writes it)
+function _time_rate(v, tt, isinput)
+    reps, back = Dict{Any, Any}(), Dict{Any, Any}()
+    function walk(y)
+        iscall(y) || return
+        o = operation(y)
+        if isinput(o) || o === step_index
+            haskey(reps, y) && return
+            z = unwrap(Symbolics.variable(Symbol("__lattice_hold_", length(reps) + 1)))
+            reps[y] = z
+            back[z] = y
+        else
+            foreach(a -> walk(unwrap(a)), arguments(y))
+        end
+    end
+    walk(unwrap(v))
+    w = isempty(reps) ? v : substitute(v, reps; fold = Val(false))
+    d = try
+        Symbolics.expand_derivatives(Differential(tt)(w))
+    catch err
+        err isa ArgumentError || rethrow()
+        return nothing
+    end
+    u = unwrap(d)
+    z = unwrap_const(u)
+    z isa Number && return iszero(z) ? nothing : d
+    _has_differential(u) && return nothing
+    return isempty(back) ? d : substitute(d, back; fold = Val(false))
+end
+_has_differential(u) = iscall(u) && (operation(u) isa Differential || any(a -> _has_differential(unwrap(a)), arguments(u)))
 function _value_reads_state(v, eq, states, what)
     _reads(v, states) && _dverr(string("`", eq, "`: the ", what, " `", v, "` reads a field of the state; a ", what,
         " may read the time, the coordinates, the parameters and the inputs (a condition that reads the field ",
@@ -573,6 +606,11 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
             _value_reads_state(b.value, b.eq, [o for o in allops if !isin[o]], "masked value")
             vf = field!(pb, "maskvalue:$k"; storage = fids[b.op][2], role = :aux, epoch = PERSIGMA, levels = Int8[lv])
         end
+        # a value that reads the time: its rate `∂v/∂t` too (F4-02, review R1), the masked sites'
+        # rate on an OrdinaryDiffEq solver (the owned steppers write the value at each step)
+        dv = vf == 0 ? nothing : _time_rate(b.value, ivs[1], o -> get(isin, o, false))
+        rf = dv === nothing ? Int32(0) :
+             field!(pb, "maskrate:$k"; storage = fids[b.op][2], role = :aux, epoch = PERSIGMA, levels = Int8[lv])
         kb = kern(lv)
         pred = _bool(env(false, kb, lv), lower(b.pred, env(false, kb, lv)))
         dom == 0 || (pred = node!(kb, AND, BOOL, Int32[pred, _indomain(kb, dl(lv), N)]))   # the field lives in the domain
@@ -580,6 +618,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         if mv === nothing
             store!(kb, vf, fids[b.op][2], _real(env(false, kb, lv), lower(b.value, env(false, kb, lv))))
             mv = Coef(1.0)
+            dv === nothing || store!(kb, rf, fids[b.op][2], _real(env(false, kb, lv), lower(dv, env(false, kb, lv))))
         end
         add!(pb, kb, "mask:$k")
         rule!(pb, NodeValueRule(fids[b.op][1][max(b.comp, 1)], Int32(length(pb.masks)), mv, :harmonic, vf))

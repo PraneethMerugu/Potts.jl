@@ -510,12 +510,10 @@ qown(sys; dims = BDIMS) = LFP.field_problem(discretize(sys, LatticeDiscretizatio
     @test maximum(abs, rq[qe2, length(rq.t)] .- rq[bce, length(rq.t) - 1] .^ 2) < 1e-6
     m = qmsg(() -> init(bown(bsys([0 ~ -bD * Δ(bce) - bk * bce + x], [bc(t, 0, y) ~ 1.0], [bD, bk])), alg))
     @test startswith(m, "QuasiSteady: field `bc`: its local derivative `∂f/∂c` = 2.0 is positive")
-    # an OrdinaryDiffEq solver: a steady row makes a DAE, refused in this version (F4-01: at the
-    # solve, not at `discretize`); the field algorithms step the same problem
+    # an OrdinaryDiffEq solver: a steady row is a row of the mass matrix (F4-02; base: "the
+    # steady rows of `bc` make the system a DAE", refused); the field algorithms step the same problem
     psm = discretize(sm, LatticeDiscretization(Grid(BDIMS); T = Float64))
-    m = qmsg(() -> solve(psm, Tsit5()))
-    @test startswith(m, "the steady rows of `bc` make the system a DAE")
-    @test psm isa SciMLBase.ODEProblem
+    @test psm isa SciMLBase.ODEProblem && count(iszero, psm.f.mass_matrix.diag) == prod(BDIMS)
 end
 
 @testset "F3-12b: a steady row's time source is read at the window's start" begin
@@ -558,13 +556,11 @@ end
     @test startswith(qmsg(() -> solve(pf, BackwardEuler(; dt = 0.1))), "BackwardEuler(; dt = 0.1): the system has no time")
     @test startswith(qmsg(() -> discretize(sf, LatticeDiscretization(Grid(BDIMS); T = Float64); tspan = (0, 1))),
         "`tspan`: the system has no time")
-    # the `SteadyStateProblem` of the right side, zero at the steady state (F4-01: of the one
-    # problem; base: `problem = :ode` gave it)
-    ps = SciMLBase.SteadyStateProblem(discretize(sf, LatticeDiscretization(Grid(BDIMS); T = Float64)))
-    @test ps isa SciMLBase.SteadyStateProblem
-    du = similar(want)
-    ps.f(du, want, ps.p, 0.0)
-    @test maximum(abs, du) < 1e-10
+    # the `LinearProblem` of a linear system with no time, `A u = b` at the steady state (F4-02;
+    # base: `problem = :ode` gave a `SteadyStateProblem`)
+    ps = discretize(sf, LatticeDiscretization(Grid(BDIMS); T = Float64))
+    @test ps isa SciMLBase.LinearProblem
+    @test maximum(abs, ps.A * want .- ps.b) < 1e-10
     # Helmholtz `0 = Δu − 4u + (2π² + 4) sin(πx) sin(πy)` with zero faces: order 2 over three grids
     errs = map((16, 32, 64)) do n
         sh = PDESystem([0 ~ Δ(fce) - 4 * fce + (2π^2 + 4) * sin(π * x) * sin(π * y)],

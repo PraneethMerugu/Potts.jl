@@ -192,8 +192,8 @@ first). The owned steppers keep `k` as an integer and never step
 across a clock boundary, so `k` does not depend on `dt` or on the save times. A gate such as
 `ifelse(step_index(t) >= 3, a, b)` is bounded through both arms; a factor that reads it
 (`(1 + ε * step_index(t)) * Δ(c)`) is a term the stability bound cannot see (give
-`ExplicitEuler(; substeps = n)`). Refused without a declared clock, and by an OrdinaryDiffEq
-solver in this version (it does not land on the clock's boundaries).
+`ExplicitEuler(; substeps = n)`). Refused without a declared clock. An OrdinaryDiffEq solver
+lands on every boundary of the clock (a `tstop` at each, where the step index changes).
 
 ```julia
 @parameters x y

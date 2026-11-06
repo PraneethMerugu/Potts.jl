@@ -5,7 +5,9 @@
 # is refused in the user's words (F3-00).
 module LatticeFieldsOrdinaryDiffEqCoreExt
 
-using OrdinaryDiffEqCore: ODEIntegrator
+using OrdinaryDiffEqCore: OrdinaryDiffEqCore, ODEIntegrator, DefaultInit
+using LinearAlgebra: UniformScaling
+using SciMLBase: SciMLBase
 using SymbolicIndexingInterface: SymbolicIndexingInterface as SII
 using LatticeFields: Problems
 
@@ -20,8 +22,13 @@ function SII.setp(sys::LatticeODEIntegrator, sym; kw...)
         kv = sym isa Union{AbstractArray, Tuple} ? collect(zip(sym, v)) : [sym => v]
         p = integ.p                                    # (the function holds the index)
         lp = p isa Problems.LatticeParameters
-        Problems.check_bounds(lp ? p.values : p, SII.symbolic_container(integ.f), kv; tables = lp ? p.tables : Problems.rhs_tables(integ.f))
-        return s(integ, v)
+        ix = SII.symbolic_container(integ.f)
+        Problems.check_bounds(lp ? p.values : p, ix, kv; tables = lp ? p.tables : Problems.rhs_tables(integ.f))
+        s(integ, v)
+        # a write is a discrete event: every masked site takes its value now (F4-02), as a mask
+        # value may read the parameter, table or input written (its rate cannot carry the jump)
+        lp && Problems.sync_masks!(integ)
+        return v
     end
 end
 
@@ -30,6 +37,21 @@ end
 function SII.setsym(sys::LatticeODEIntegrator, sym)
     Problems.check_aux_write(SII.symbolic_container(sys.f), sym)
     return invoke(SII.setsym, Tuple{Any, Any}, sys, sym)
+end
+
+# A problem with steady rows `0 ~ rhs` (a mass matrix, F4-02) starts from a consistent state:
+# SciML's default (`CheckInit`) refuses an initial state whose steady rows are not solved, so
+# the default here solves them (`Problems.steady_start!`: the owned QuasiSteady solve of those
+# rows at t0, on the lattice; review R2). `initializealg = BrownFullBasicInit()` or
+# `CheckInit()` given to `solve` dispatch to their own methods.
+function OrdinaryDiffEqCore._initialize_dae!(integ::ODEIntegrator, prob::Problems.LatticeODEProblem, alg::DefaultInit,
+        x::Val{true})
+    generic = Tuple{ODEIntegrator, SciMLBase.ODEProblem, DefaultInit, Val{true}}
+    (SciMLBase.has_initializeprob(prob.f) || prob.f.mass_matrix isa UniformScaling ||
+     Problems.lattice_metadata(prob) === nothing) &&
+        return invoke(OrdinaryDiffEqCore._initialize_dae!, generic, integ, prob, alg, x)
+    Problems.steady_start!(integ.u, prob, integ.p, integ.t)
+    return nothing
 end
 
 end # module LatticeFieldsOrdinaryDiffEqCoreExt
