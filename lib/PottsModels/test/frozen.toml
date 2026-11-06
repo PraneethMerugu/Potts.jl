@@ -459,7 +459,7 @@ decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0bw_rocm_wait.jl"
-sha256 = "499f27a8388fa924d0ddaddfae45c707e6062a88155c99ba62995c598b6a92f0"
+sha256 = "92142df029659c16a67ba3e8edf4e7eef7a11561aa66fbe36d74e472682c85fe"
 decision = "D-271"
 
 [[file]]

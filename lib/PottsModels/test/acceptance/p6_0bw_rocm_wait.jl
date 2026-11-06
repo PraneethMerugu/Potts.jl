@@ -75,7 +75,8 @@
 #  (P) Performance (ROCm only; skipped cleanly elsewhere): on the OpenVT monolayer, Merks
 #      and OpenVT reference cases, of 300 reads `integ.u` right after a `step!`, at most
 #      6 (2 %) take over 1 ms; and of 300 `step!`s that each save, at most 6 take over
-#      3 ms (a guard: this path is fast today). Today 12–100 % of the reads on the two
+#      3 ms (a guard: this path is fast today). Up to 3 samples are taken and the best
+#      counts (D-271, 2026-11-06): the slow path fails every sample, a burst of load does not. Today 12–100 % of the reads on the two
 #      lifecycle models take over 1 ms (table above); Merks is a control that passes today.
 #      The ROCm paired A/B (`benchmark/ab.jl <base> <cand> all cpu,rocm`, D-171) is the
 #      merge gate for "no regression" and must exit 0. Its timed expression is `step!`
@@ -353,27 +354,39 @@ p60bw_allocs_spin() = @allocated CorePotts._spin_until(P60BW_TRUE, 1.0)
                 mk = Dict(p60bw_cases(Float32, (0, 10^6)))
                 for name in ("openvt_monolayer_100", "merks_100", "openvt_reference_100")
                     prob = mk[name]()
-                    integ = init(prob, CheckerboardCPM(); backend, save_start = false, save_end = false)
-                    for _ in 1:5
-                        step!(integ); integ.u
+                    # up to 3 samples of 300; the best one counts. The slow path is systematic
+                    # (12-100 % of reads, in every sample), while a busy machine preempts the
+                    # spinning thread in bursts (CI shares its CPUs: 14-20 slow reads, the
+                    # Merks control too, 2026-11-06; D-271)
+                    function sample()
+                        integ = init(prob, CheckerboardCPM(); backend, save_start = false, save_end = false)
+                        for _ in 1:5
+                            step!(integ); integ.u
+                        end
+                        reads = Float64[]
+                        for _ in 1:300
+                            step!(integ)
+                            t = time_ns(); integ.u; push!(reads, (time_ns() - t) / 1e9)
+                        end
+                        saving = init(remake(prob; tspan = (0, 400)), CheckerboardCPM(); backend,
+                            saveat = 1:400, save_start = false)
+                        for _ in 1:5
+                            step!(saving)
+                        end
+                        steps = Float64[]
+                        for _ in 1:300
+                            t = time_ns(); step!(saving); push!(steps, (time_ns() - t) / 1e9)
+                        end
+                        return (; reads = count(>(1e-3), reads), steps = count(>(3e-3), steps),
+                            median_read_us = 1e6 * sort(reads)[150])
                     end
-                    reads = Float64[]
-                    for _ in 1:300
-                        step!(integ)
-                        t = time_ns(); integ.u; push!(reads, (time_ns() - t) / 1e9)
+                    samples = [sample()]
+                    while length(samples) < 3 && (minimum(x -> x.reads, samples) > 6 || minimum(x -> x.steps, samples) > 6)
+                        push!(samples, sample())
                     end
-                    saving = init(remake(prob; tspan = (0, 400)), CheckerboardCPM(); backend,
-                        saveat = 1:400, save_start = false)
-                    for _ in 1:5
-                        step!(saving)
-                    end
-                    steps = Float64[]
-                    for _ in 1:300
-                        t = time_ns(); step!(saving); push!(steps, (time_ns() - t) / 1e9)
-                    end
-                    slow_reads = count(>(1e-3), reads)
-                    slow_steps = count(>(3e-3), steps)
-                    @info "P6.0bw (P)" name slow_reads slow_steps median_read_us = 1e6 * sort(reads)[150] max_read_ms = 1e3 * maximum(reads)
+                    slow_reads = minimum(x -> x.reads, samples)
+                    slow_steps = minimum(x -> x.steps, samples)
+                    @info "P6.0bw (P)" name slow_reads slow_steps samples
                     @test slow_reads <= 6
                     @test slow_steps <= 6
                 end

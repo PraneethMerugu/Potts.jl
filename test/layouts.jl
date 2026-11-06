@@ -393,13 +393,15 @@ _warnings(f) = [r.message for r in Test.collect_test_logs(f; min_level = Base.Co
     @test length(_warnings(() -> layout(overlay(bar, mid), (12, 12)))) == 1                # control: closed splits
     # cost: one pass over σ, boxes trimmed by a frame are skipped (was 22 s at 200³)
     layout(overlay(Tiling((5, 5, 5); kinds = [:a]), Frame(:w; width = 3)), (12, 12, 12))
-    t = @elapsed layout(overlay(Tiling((5, 5, 5); kinds = [:a]), Frame(:w; width = 3)), (60, 60, 60))
+    # the best of up to 3 timed calls: a busy machine slows one call, the regression slows all
+    best_under(f, limit) = (t = Inf; for _ in 1:3; t = min(t, @elapsed f()); t < limit && break; end; t)
+    t = best_under(() -> layout(overlay(Tiling((5, 5, 5); kinds = [:a]), Frame(:w; width = 3)), (60, 60, 60)), 5)
     @test t < 5
     # many genuinely split cells still flood-fill in linear time (warmed on a small 2D call)
     _warnings(() -> layout(overlay(Tiling((3, 3); kinds = [:a]), Tiling((1, 1); spacing = 2, region = (2:11, 2:11), kinds = [:b])),
         (12, 12)))
-    t = @elapsed layout(overlay(Tiling((3, 3); kinds = [:a]), Tiling((1, 1); spacing = 2, region = (2:299, 2:299), kinds = [:b])),
-        (300, 300))
+    t = best_under(() -> layout(overlay(Tiling((3, 3); kinds = [:a]), Tiling((1, 1); spacing = 2, region = (2:299, 2:299),
+        kinds = [:b])), (300, 300)), 5)
     @test t < 5
     # P6.1a4: the lattice-sized `visited` array is allocated only for a flood fill. Every
     # cut cell below is a box trimmed by a frame, so the check allocates only per-cell
