@@ -33,6 +33,7 @@ include("fields_steppers.jl")          # CrankNicolson and BDF2 in A (F3-10, F3-
 include("fields_coarse.jl")            # Coarse(k) fields in A (F3-17)
 include("fields_jiang.jl")             # a Jiang-like integration test (F3-18)
 include("fields_components.jl")        # PDESystem components in A (F4-11)
+include("fields_boundary.jl")          # boundary expressions in A (F4-12a)
 include("cell_sums.jl")                # exact cell sums at 1, 4 and 8 threads (F3-23)
 include("sweep_spec.jl")
 include("algebraic.jl")

@@ -607,3 +607,34 @@ end
     err = throws_with(() -> lanes(Int), "not a state type")
     @test err
 end
+
+# F4-12a: a Robin coefficient that is an expression of parameters is one value at every site,
+# held by a computed parameter of its face (`c_x_low_α`); terms on one read add up (`g1 c + g2 c`
+# kept only the last one, `g2`); a coefficient that reads the coordinates is refused, naming
+# the planned site- and time-varying coefficients (F4-12b).
+# Base (925110cc, ~/lpwork/f4c/nc12-base-lp.log): 1 error, the expression refused ("the boundary value
+# `g1 + g2` must be a number, …").
+@testset "F4-12a: a Robin coefficient of parameters" begin
+    @parameters g1 = 1.0 g2 = 2.0 ar = g1 + g2
+    g = LatticeDiscretization(Grid((8, 8)); T = Float64)
+    sysr(bc, ps) = pde([D(ce) ~ Dc * Δ(ce)], [c(0, x, y) ~ 0.0, bc], [ce], [Dc; ps])
+    rhs(o) = (du = similar(o.u0); o.f(du, fill(0.5, length(o.u0)), o.p, 0.0); du)
+    ref = discretize(sysr(ar * c(t, 0, y) - Dx(c(t, 0, y)) ~ 1.0, [g1, g2, ar]), g)
+    ex = discretize(sysr((g1 + g2) * c(t, 0, y) - Dx(c(t, 0, y)) ~ 1.0, [g1, g2]), g)
+    split = discretize(sysr(g1 * c(t, 0, y) + g2 * c(t, 0, y) - Dx(c(t, 0, y)) ~ 1.0, [g1, g2]), g)
+    @test rhs(ex) == rhs(ref) == rhs(split) && any(!iszero, rhs(ref))
+    @test getp(ex, :c_x_low_α)(ex) == 3.0
+    # it follows its parameters (read only, derived after a write)
+    @test rhs(remake(ex; p = [g1 => 4.0])) == rhs(remake(ref; p = [g1 => 4.0])) != rhs(ref)
+    # β too; and a coefficient that reads a coordinate is refused
+    exb = discretize(sysr(c(t, 0, y) - (g1 + g2) * Dx(c(t, 0, y)) ~ 1.0, [g1, g2]), g)
+    # (review: the slot holds β of the outward ∂c/∂n, as A's `Robin`, on either face; the written
+    # coefficient of ∂c/∂x on the low face is −β. Base 6d11bc85: −3.0)
+    @test getp(exb, :c_x_low_β)(exb) == 3.0
+    hib = discretize(sysr(c(t, 1, y) + (g1 + g2) * Dx(c(t, 1, y)) ~ 1.0, [g1, g2]), g)
+    @test getp(hib, :c_x_high_β)(hib) == 3.0
+    @test rhs(exb) == rhs(discretize(sysr(c(t, 0, y) - ar * Dx(c(t, 0, y)) ~ 1.0, [g1, g2, ar]), g))
+    # the refusal names the read (base 6d11bc85: "… is one value at every site: …", no read)
+    @test throws_with(() -> discretize(sysr((g1 + y) * c(t, 0, y) - Dx(c(t, 0, y)) ~ 1.0, [g1, g2]), g),
+                      "must be one value at every site; it reads `y`")
+end

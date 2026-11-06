@@ -1549,10 +1549,10 @@ _observed_eq(var, expr) = Equation(_unwrap(var), _unwrap(expr))
 A fixed value `v` of a field, in `@boundary`: on a face (`x => (Dirichlet(v), …)`) a ghost
 value, the missing neighbor set to `2v − c` so that the face value `v` is reached midway
 between the edge site and its ghost; on a site mask (`sites(pred) => Dirichlet(v)`) a node
-value, every site where `pred` holds set to `v` after every explicit substep. `v` is a
-number, a parameter, or a number times a parameter (a `remake` of the parameter keeps the
-code). For an expression of parameters, declare a computed parameter
-(`@parameters g = g1 + g2`) and write `Dirichlet(g)`.
+value, every site where `pred` holds set to `v` after every explicit substep. `v` is an
+expression of numbers, parameters, the coordinates `x`, `y`, `z`, `time` and `mcs`
+(`Dirichlet(g1 + g2)`, `Dirichlet(c0 * sin(ω * mcs))`, `Dirichlet(0.5y)`); a `remake` of a
+parameter keeps the code.
 """
 struct Dirichlet{V}
     value::V
@@ -1573,7 +1573,8 @@ A face with the outward normal derivative `∂c/∂n = q` in `@boundary` (`x => 
 the missing neighbor of an edge site is `c + q h`, so the gradient across the face is `q`
 (positive `q`: the field grows toward the face). On the low side of `x` it is LatticePDE's
 `Differential(x)(c(t, 0, y)) ~ -q`, on the high side `Differential(x)(c(t, L, y)) ~ q`.
-`Flux(0)` is `NoFlux()`. `q` is a number, a parameter, or a number times a parameter.
+`Flux(0)` is `NoFlux()`. `q` is an expression of numbers, parameters, the coordinates, `time`
+and `mcs`, as the value of [`Dirichlet`](@ref).
 """
 struct Flux{V}
     q::V
@@ -1586,8 +1587,10 @@ A face with `α c + β ∂c/∂n = g` in `@boundary` (`x => (…, Robin(α, β, 
 normal `n`: the ghost value of an edge site makes the face value and the gradient across the
 face meet the condition. On the low side of `x` it is LatticePDE's `α c(t, 0, y) -
 β Differential(x)(c(t, 0, y)) ~ g`, on the high side `α c(t, L, y) + β Differential(x)(c(t, L, y))
-~ g`. Each of `α`, `β`, `g` is a number, a parameter, or a number times a parameter. `β = 0`
-is a fixed value (write `Dirichlet(g / α)`) and `α = 0` a flux (write `Flux(g / β)`).
+~ g`. `g` is an expression as the value of [`Dirichlet`](@ref). `α` and `β` are numbers or
+expressions of parameters, one value at every site; an expression is held by a computed
+parameter of the face, `c_x_low_α` (field, axis, side, coefficient). `β = 0` is a fixed value
+(write `Dirichlet(g / α)`) and `α = 0` a flux (write `Flux(g / β)`).
 """
 struct Robin{A, B, G}
     α::A
@@ -1620,53 +1623,58 @@ end
 _boundary_side(s::Union{Dirichlet, NoFlux}, field, axis, what) = s isa Dirichlet ? Dirichlet(_boundary_value(s.value, field, "`$axis` $what face")) : s
 _boundary_side(s::Flux, field, axis, what) = Flux(_boundary_value(s.q, field, "`$axis` $what face flux"))
 function _boundary_side(s::Robin, field, axis, what)
-    α, β, g = (_boundary_value(v, field, "`$axis` $what face Robin `$k`") for (v, k) in ((s.α, "α"), (s.β, "β"), (s.g, "g")))
+    α, β = (_boundary_value(v, field, "`$axis` $what face Robin `$k`"; coef = true) for (v, k) in ((s.α, "α"), (s.β, "β")))
+    g = _boundary_value(s.g, field, "`$axis` $what face Robin `g`")
     n = info(field).name
     # a zero coefficient is another side (LatticePDE classifies the face equation the same way)
     _iszero_value(β) && throw(ArgumentError(string("@boundary $n: the $what side of axis `$axis` is `Robin(", α, ", 0, ", g,
-        ")`, a fixed value with no gradient term; ", _ratio_route("Dirichlet", g, α, "$(n)_$(axis)_$what"))))
+        ")`, a fixed value with no gradient term; ", _ratio_route("Dirichlet", g, α))))
     _iszero_value(α) && throw(ArgumentError(string("@boundary $n: the $what side of axis `$axis` is `Robin(0, ", β, ", ", g,
-        ")`, a flux with no value term; ", _ratio_route("Flux", g, β, "$(n)_$(axis)_$what"))))
+        ")`, a flux with no value term; ", _ratio_route("Flux", g, β))))
     return Robin(α, β, g)
 end
 # a number given as a side's value (a parameter is a `Num`, a `Real` too)
 _isnumber(v) = !(_unwrap(v) isa SymbolicUtils.BasicSymbolic) && _unwrap(v) isa Real
 _iszero_value(v) = _isnumber(v) && iszero(_unwrap(v))
-# the side to write instead, with the value `a / b`: the number when both are numbers; else a
-# computed parameter named by its face (`c_x_low`), so two faces get two names (review R6 of F2
-# batch 4) (a side's value is a number, a parameter or a number times one)
-_ratio_route(side, a, b, name) = _isnumber(a) && _isnumber(b) ? string("write it as `", side, "(", _unwrap(a) / _unwrap(b), ")`") :
-                                 string("declare a computed parameter, `@parameters ", name, " = ", _ratio_expr(a, b), "`, and ",
-                                        "write it as `", side, "(", name, ")`")
-_ratio_expr(a, b) = string(_builtin_text(string(a)), " / ", _builtin_text(string(b)))
+# the side to write instead, with the value `a / b` (a number when both are numbers)
+_ratio_route(side, a, b) = _isnumber(a) && _isnumber(b) ? string("write it as `", side, "(", _unwrap(a) / _unwrap(b), ")`") :
+                           string("write it as `", side, "(", _ratio_expr(a, b), ")`")
+_ratio_expr(a, b) = string("(", _builtin_text(string(a)), ") / (", _builtin_text(string(b)), ")")
 _boundary_side(s, field, axis, what) = throw(ArgumentError(
     "@boundary $(info(field).name): the $what side of axis `$axis` is `$s`; each side is `Dirichlet(value)`, `NoFlux()`, " *
     "`Flux(q)` or `Robin(α, β, g)`"))
-const _BOUNDARY_VALUE_FORMS = "a boundary value is a number, a parameter, or a number times a parameter"
-function _boundary_value(v, field, what)
+const _BOUNDARY_VALUE_FORMS = "a boundary value is an expression of numbers, parameters, the coordinates `x`, `y`, `z`, " *
+                               "`time` and `mcs`"
+const _ROBIN_COEF_FORMS = "a Robin coefficient α or β is an expression of numbers and parameters, one value at every site " *
+                          "(coefficients that vary by site or in time are planned, F4-12b)"
+# A boundary value (F4-12a, FE-10): an expression of numbers, parameters, the lattice
+# coordinates, `time` and `mcs`, as in `@bcs`; LatticePDE lowers one that is not a number or a
+# number times a parameter into a value field (F3-07). A Robin coefficient (`coef = true`) is an
+# expression of numbers and parameters: an expression is held by a computed parameter of its face
+# (`_robin_slots`)
+function _boundary_value(v, field, what; coef::Bool = false)
     u = _unwrap(v)
     u isa Real && return Float64(u)                  # a number (`Num` is a `Real` too: unwrapped first)
     u isa SymbolicUtils.BasicSymbolic || throw(ArgumentError(
         "@boundary $(info(field).name): the $what value is `$v`; $_BOUNDARY_VALUE_FORMS"))
-    for y in _leaves(u)
+    forms = coef ? _ROBIN_COEF_FORMS : _BOUNDARY_VALUE_FORMS
+    bad = Ref{Any}(nothing)
+    function walk(y)
+        bad[] === nothing && y isa SymbolicUtils.BasicSymbolic && !SymbolicUtils.isconst(y) || return nothing
         j = info(y)
-        (j === nothing || j.role === :param) || throw(ArgumentError(
-            "@boundary $(info(field).name): the $what value `$v` reads `$(j.name)`; $_BOUNDARY_VALUE_FORMS"))
+        if j !== nothing                             # a model quantity (a built-in is a call `time(t)`)
+            j.role === :param || (!coef && j.role === :builtin && j.name in (:time, :mcs)) || (bad[] = j.name)
+        elseif iscall(y)
+            foreach(walk, arguments(y))
+        else
+            (!coef && _coordinate(y)) || (bad[] = y)
+        end
+        return nothing
     end
-    # the field compiler binds one parameter per value (LatticePDE's face and mask values): an
-    # expression of parameters is refused here, at the model, with the computed-parameter route
-    _param_or_scaled(u) || throw(ArgumentError(
-        "@boundary $(info(field).name): the $what value `$v` is an expression of parameters; " *
-        "$_BOUNDARY_VALUE_FORMS. Declare a computed parameter (`@parameters g = $v`) and write `Dirichlet(g)`"))
+    walk(u)
+    bad[] === nothing || throw(ArgumentError(
+        "@boundary $(info(field).name): the $what value `$(_builtin_text(string(v)))` reads `$(bad[])`; $forms"))
     return v
-end
-_bv_param(y) = (j = info(y); j !== nothing && j.role === :param)
-_bv_number(y) = (c = SymbolicUtils.isconst(y) ? SymbolicUtils.unwrap_const(y) : y; c isa Real)
-function _param_or_scaled(u)
-    _bv_param(u) && return true
-    (iscall(u) && operation(u) === (*)) || return false
-    a = arguments(u)
-    return count(_bv_param, a) == 1 && all(y -> _bv_param(y) || _bv_number(y), a)
 end
 
 """`x => (low, high)` of `@boundary field` (axis named `name`)."""

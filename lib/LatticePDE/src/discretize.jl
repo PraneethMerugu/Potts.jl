@@ -176,8 +176,9 @@ end
 # values as one vector: the promotion of Float64 with each value's type (an integer is a Float64)
 _promoted(vs) = (T = mapreduce(typeof, promote_type, vs; init = Float64); T.(vs))
 
-# a face or mask value: a number, a parameter, or a number times a parameter (else `nothing`
-# with `strict = false`: a value field, F3-07)
+# a face coefficient, face value or mask value: a number, a parameter, or a number times a
+# parameter (else `nothing` with `strict = false`: a value field, F3-07; a Robin coefficient of
+# parameters is a computed parameter by then, `robin_slots`)
 function _coef(v, params, scale = 1.0; strict::Bool = true)
     u = unwrap(v)
     c = _cval(u)
@@ -190,7 +191,11 @@ function _coef(v, params, scale = 1.0; strict::Bool = true)
         k !== nothing && rest !== nothing && return Coef(Float64(rest) * scale, Int32(params[unwrap(a[k])]))
     end
     strict || return nothing
-    _dverr("the boundary value `$v` must be a number, a parameter, or a number times a parameter")
+    vs = [w for w in Symbolics.get_variables(u) if !haskey(params, w)]
+    _dverr(string("the Robin coefficient `", v, "` must be one value at every site",
+        isempty(vs) ? "" : string("; it reads `", first(vs), "`"),
+        " (a Robin coefficient is a number or an expression of parameters; coefficients that vary by site or in ",
+        "time are planned, F4-12b)"))
 end
 # A face value or a masked value that is an expression (F3-07): of the time, the coordinates,
 # the parameters and the inputs, never of a field of the state (the condition would be another
@@ -241,7 +246,7 @@ _has_differential(u) = iscall(u) && (operation(u) isa Differential || any(a -> _
 function _value_reads_state(v, eq, states, what)
     _reads(v, states) && _dverr(string("`", eq, "`: the ", what, " `", v, "` reads a field of the state; a ", what,
         " may read the time, the coordinates, the parameters and the inputs (a condition that reads the field ",
-        "itself is a Robin condition `α c + β ∂c/∂n = g`, with α and β numbers or parameters)"))
+        "itself is a Robin condition `α c + β ∂c/∂n = g`, with α and β numbers or expressions of parameters)"))
     return nothing
 end
 

@@ -116,13 +116,14 @@ function parse_bcs(bcs, fields, ivs, ends)
             length(p) == 1 || _bcerr(eq, "a face condition pins exactly one variable")
             axis == 0 || (axis, side) == p[1] || _bcerr(eq, "its terms sit on different faces")
             axis, side = p[1]
+            # (terms on one read add up: `g1 c + g2 c` has α = g1 + g2; F4-12a, the last one was kept)
             if isder
                 d = operation(core)
                 (d.order == 1 && isequal(d.x, ivs[axis])) ||
                     _bcerr(eq, "the derivative must be first order along the pinned `$(ivs[axis])`")
-                β = coef
+                β = isequal(β, 0) ? coef : β + coef
             else
-                α = coef
+                α = isequal(α, 0) ? coef : α + coef
             end
         end
         rr = _fieldread(rhs, fields)
@@ -177,3 +178,73 @@ function _bc_value(eq, v, op = nothing, fields = Dict{Any, Bool}())
 end
 # (`_hasdiff` is operator.jl's)
 _firstdiff(u) = operation(u) isa Differential ? u : _firstdiff(unwrap(arguments(u)[findfirst(a -> _hasdiff(unwrap(a)), arguments(u))]))
+
+# A Robin coefficient α or β that is an expression of parameters (`(g1 + g2) c + ∂c/∂x ~ g`)
+# is one value at every site; the face rule binds a number, a parameter or a number times one,
+# so the expression becomes a computed parameter of its face, `c_x_low_α = g1 + g2` (read
+# only, derived after every write, `_fold_computed`; F4-12a). A coefficient that reads the
+# coordinates, the time or an input varies by site or in time and is refused at the face
+# (planned, F4-12b).
+function robin_slots(sys::PDESystem)
+    ivs = unwrap.(sys.ivs)
+    length(ivs) >= 2 || return sys
+    fields = Dict{Any, Bool}(_opof(v) => ModelingToolkitBase.isinput(unwrap(v)) for v in sys.dvs)
+    ps = _params(sys)
+    params = Set{Any}(unwrap(q) for q in ps)
+    taken = Set{String}(string(q) for q in ps)
+    lows = map(ivs) do v
+        k = findfirst(d -> isequal(unwrap(d.variables), v), sys.domain)
+        k === nothing ? nothing : Float64(leftendpoint(sys.domain[k].domain))
+    end
+    simple(c) = _cval(c) !== nothing || unwrap(c) in params ||
+                (iscall(unwrap(c)) && operation(unwrap(c)) === (*) && count(y -> unwrap(y) in params, arguments(unwrap(c))) == 1 &&
+                 all(y -> unwrap(y) in params || _cval(y) !== nothing, arguments(unwrap(c))))
+    onlyparams(c) = (vs = Symbolics.get_variables(unwrap(c)); !isempty(vs) && all(v -> v in params, vs))
+    extra, ic = Any[], Dict{Any, Any}(_ics(sys))
+    bcs = map(sys.bcs) do eq
+        l = unwrap(eq.lhs)
+        terms = iscall(l) && operation(l) === (+) ? collect(Any, arguments(l)) : Any[l]
+        # the coefficient of each face read (`c(t, 0, y)`, `Dx(c(t, 0, y))`), summed over its terms
+        other, cores, coefs = Any[], Any[], Any[]
+        for tm in terms
+            fac = iscall(tm) && operation(tm) === (*) ? arguments(tm) : Any[tm]
+            k = findfirst(f -> _fieldread(f, fields) !== nothing || (iscall(unwrap(f)) && operation(unwrap(f)) isa Differential &&
+                                                                     _fieldread(arguments(unwrap(f))[1], fields) !== nothing), fac)
+            k === nothing && (push!(other, tm); continue)
+            core = unwrap(fac[k])
+            c = prod(Symbolics.wrap.(fac[setdiff(eachindex(fac), k)]); init = Symbolics.wrap(1))
+            j = findfirst(o -> isequal(o, core), cores)
+            j === nothing ? (push!(cores, core); push!(coefs, c)) : (coefs[j] += c)
+        end
+        changed = false
+        for (i, (core, c)) in enumerate(zip(cores, coefs))
+            (simple(c) || !onlyparams(c)) && continue
+            isder = operation(core) isa Differential
+            r = _fieldread(isder ? arguments(core)[1] : core, fields)
+            a = findfirst(j -> !isequal(r.args[j], ivs[j]), 2:length(r.args))
+            a === nothing && continue
+            side = _cval(r.args[a + 1]) == lows[a + 1] ? "low" : "high"
+            base = string(nameof(r.op), r.comp == 0 ? "" : string("_", r.comp), "_", ivs[a + 1], "_", side, "_", isder ? "β" : "α")
+            n, j = base, 1
+            while n in taken
+                j += 1
+                n = string(base, "_", j)
+            end
+            push!(taken, n)
+            q = unwrap(only(ModelingToolkitBase.@parameters $(Symbol(n))))
+            push!(extra, q)
+            # the slot holds β of `α c + β ∂c/∂n = g` (outward normal, as front end A's
+            # `Robin`): on a low face `∂c/∂n = −∂c/∂x`, so the written coefficient is −β
+            flip = isder && side == "low"
+            ic[q] = unwrap(flip ? -c : c)
+            coefs[i] = flip ? -Symbolics.wrap(q) : Symbolics.wrap(q)
+            changed = true
+        end
+        changed || return eq
+        return sum(Symbolics.wrap, other; init = Symbolics.wrap(0)) +
+               sum(Symbolics.wrap(c) * Symbolics.wrap(core) for (core, c) in zip(cores, coefs)) ~ eq.rhs
+    end
+    isempty(extra) && return sys
+    return PDESystem(sys.eqs, bcs, getfield(sys, :domain), sys.ivs, sys.dvs, Any[ps; extra]; name = nameof(sys),
+        initial_conditions = ic)
+end

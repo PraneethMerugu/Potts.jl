@@ -1083,16 +1083,16 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
-@testset "F1 SD-14: a boundary value is a number, a parameter or a number times one" begin
-    # base: accepted by `@boundary`, then refused by LatticePDE in its own words ("the boundary
-    # value `g1 + g2` must be a number, …"); now one message at the model, with the route
-    err = fd_err(() -> FdExprFace(; name = :f))
-    @test occursin("@boundary c", something(err, "")) && occursin("@parameters g = g1 + g2", something(err, ""))
-    # the route: a computed parameter runs, and follows its parameters
-    prob = PottsProblem(FdComputedFace(; name = :f), fd_empty((8, 8)), (0, 2); field_solver = ExplicitEuler())
-    a = solve(prob).u[end].site.c
-    b = solve(Potts.remake(prob; p = [:g1 => 3.0])).u[end].site.c
-    @test maximum(a) > 0 && maximum(b) > maximum(a)
+@testset "F1 SD-14, F4-12a: a boundary value is an expression of parameters" begin
+    # F1: refused at the model with the computed-parameter route ("… is an expression of
+    # parameters; … `@parameters g = g1 + g2`"); F4-12a (FE-10): it runs, and equals the
+    # computed parameter's run bitwise, also after a write
+    @test fd_err(() -> FdExprFace(; name = :f)) === nothing
+    run(M, p = []) = solve(PottsProblem(M(; name = :f), [fd_empty((8, 8)); p], (0, 2); field_solver = ExplicitEuler())).u[end].site.c
+    a = run(FdExprFace)
+    @test a == run(FdComputedFace) && maximum(a) > 0
+    b = run(FdExprFace, [:g1 => 3.0])
+    @test b == run(FdComputedFace, [:g1 => 3.0]) && maximum(b) > maximum(a)
 end
 
 @testset "F1 V13: Potts.fields returns the model's PDESystem" begin
@@ -2279,11 +2279,12 @@ end
     # R4: the error names the `@bcs` line (base: the first `@equations` line)
     @test occursin(r"\n  in @bcs c\(t, 3, y\) ~ 1\.0 at .*fields\.jl:\d+", err) && !occursin("in @equations", err)
     # S2: the Robin route with parameters, followed, builds (base: `Dirichlet(gp / αp)`, refused);
-    # R6: the parameter is named by its face, so two faces get two names (base: `face_value` twice)
+    # F4-12a: an expression is a boundary value, so the route is the expression itself (F2-11
+    # R6 named a computed parameter per face, `c_x_low = gp / αp`)
     err = something(fd_err(() -> FbRobinParam(; name = :f)), "")
-    @test occursin("`@parameters c_x_low = gp / αp`", err) && occursin("`Dirichlet(c_x_low)`", err)
+    @test occursin("`Dirichlet((gp) / (αp))`", err)
     err = something(fd_err(() -> FbRobinParamY(; name = :f)), "")
-    @test occursin("`@parameters c_y_high = gp / βp`", err) && occursin("`Flux(c_y_high)`", err)
+    @test occursin("`Flux((gp) / (βp))`", err)
     @test fd_err(() -> mtkcompile(FbRobinParamRoute(; name = :f))) === nothing
     # S3: one side in `@boundary`, the other in `@bcs`: the route moves the axis, and runs
     err = something(fd_err(() -> mtkcompile(FbSplit(; name = :f))), "")

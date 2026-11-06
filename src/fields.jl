@@ -491,6 +491,7 @@ function _bcs_equation(sys, b, names, cv, core, ext, kinds, N, stepped)
         end
     end
     drop && return nothing
+    masked || periodic || _check_robin_coefs(b)
     return Symbolics.wrap(_field_term(b.lhs, cv)) ~ Symbolics.wrap(_field_term(b.rhs, cv))
 end
 # the fields a `@bcs` condition reads (its face reads `c(t, 0, y)` and its bare field

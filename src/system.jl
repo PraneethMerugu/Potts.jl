@@ -294,10 +294,125 @@ from the declared parameters, variables, `@equations`, `@initialization_equation
 clashing names).
 """
 function PottsSystem(; name::Symbol, checks::Bool = true, kw...)
-    part = PottsPart(; kw...)
+    part = _robin_slots(PottsPart(; kw...))
     pre = _staged(name, part)
     checks && _check_primed_names(_check_name_categories(_check_reserved_names(pre)))
     return _wrap_payload(name, nothing, part)
+end
+
+# A Robin coefficient α or β that is an expression of parameters (`Robin(g1 + g2, 1, g)`, or
+# `(g1 + g2) * c(t, 0, y) - Differential(x)(c(t, 0, y)) ~ g` in `@bcs`) is one value at every
+# site; the field compiler binds a coefficient that is a number, a parameter or a number times
+# one, so the expression becomes a computed parameter of its face, `c_x_low_α = g1 + g2`, read
+# only and derived again after every write (F4-12a)
+function _robin_slots(part::PottsPart)
+    taken = Set{Symbol}(info(x).name for x in [part.parameters; part.variables] if info(x) !== nothing)
+    extra = Any[]
+    function slot(c, base)
+        (_isnumber(c) || _robin_simple(_unwrap(c))) && return c
+        n = Symbol(base)
+        k = 1
+        while n in taken
+            k += 1
+            n = Symbol(base, "_", k)
+        end
+        push!(taken, n)
+        q = parameter(n, c)
+        push!(extra, q)
+        return q
+    end
+    boundaries = map(part.boundaries) do b
+        b.axis == 0 && return b
+        f = info(b.field).name
+        sides = ntuple(2) do k
+            s = b.sides[k]
+            s isa Robin || return s
+            base = string(f, "_", _AXIS_NAMES[b.axis], "_", k == 1 ? "low" : "high", "_")
+            return Robin(slot(s.α, base * "α"), slot(s.β, base * "β"), s.g)
+        end
+        return BoundaryEntry(b.field, b.axis, sides, b.mask, b.value)
+    end
+    bcs = map(part.bcs) do eq
+        other, cores, coefs = _face_terms(eq)
+        changed = false
+        for (i, (core, c)) in enumerate(zip(cores, coefs))
+            ls = _param_leaves(c)
+            !isempty(ls) && all(y -> (j = info(y); j !== nothing && j.role === :param), ls) || continue
+            isder = operation(core) isa Differential
+            read = isder ? _unwrap(arguments(core)[1]) : core
+            a = findfirst(y -> _unwrap_number(y) isa Real, arguments(read)[2:end])
+            a === nothing && continue
+            low = iszero(_unwrap_number(arguments(read)[a + 1]))
+            base = string(_field_at_name(read), "_", _AXIS_NAMES[a], "_", low ? "low" : "high", "_", isder ? "β" : "α")
+            # the slot holds `@boundary`'s β, the coefficient of the outward ∂c/∂n: on a low face
+            # `∂c/∂n = −∂c/∂x`, so the written coefficient of `∂c/∂x` is −β
+            flip = isder && low
+            cc = flip ? -c : c
+            q = slot(cc, base)
+            q === cc && continue
+            coefs[i] = flip ? -q : q
+            changed = true
+        end
+        changed || return eq
+        return sum(Symbolics.wrap, other; init = Symbolics.wrap(0)) +
+               sum(Symbolics.wrap(c) * Symbolics.wrap(core) for (core, c) in zip(cores, coefs)) ~ eq.rhs
+    end
+    isempty(extra) && return part
+    return PottsPart(; (f => getfield(part, f) for f in fieldnames(PottsPart))..., parameters = Any[part.parameters; extra],
+        boundaries, bcs = Equation[bcs...])
+end
+# the terms of a `@bcs` condition's left side: the coefficient of each face read (`c(t, 0, y)`,
+# `Differential(x)(c(t, 0, y))`), summed over its terms (`g1 * c + g2 * c` is `(g1 + g2) * c`),
+# and the other terms
+function _face_terms(eq)
+    l = _unwrap(eq.lhs)
+    terms = iscall(l) && operation(l) === (+) ? collect(Any, arguments(l)) : Any[l]
+    other, cores, coefs = Any[], Any[], Any[]
+    for tm in terms
+        fac = iscall(tm) && operation(tm) === (*) ? arguments(tm) : Any[tm]
+        k = findfirst(_robin_core, fac)
+        k === nothing && (push!(other, tm); continue)
+        core = _unwrap(fac[k])
+        c = prod(Symbolics.wrap.(fac[setdiff(eachindex(fac), k)]); init = Symbolics.wrap(1))
+        h = findfirst(o -> isequal(o, core), cores)
+        h === nothing ? (push!(cores, core); push!(coefs, c)) : (coefs[h] += c)
+    end
+    return other, cores, coefs
+end
+# A Robin coefficient of a `@bcs` condition is one value at every site (F4-12a): one that reads
+# anything other than parameters is refused in the model's words (F4-12b plans the others)
+function _check_robin_coefs(eq)
+    _, cores, coefs = _face_terms(eq)
+    for c in coefs
+        for y in _param_leaves(c)
+            j = info(y)
+            j !== nothing && j.role === :param && continue
+            throw(ArgumentError(string("@bcs: the Robin coefficient `", _builtin_text(string(c)), "` must be one value ",
+                "at every site; it reads `", j === nothing ? string(y) : string(j.name), "` (a Robin coefficient is a number ",
+                "or an expression of parameters; coefficients that vary by site or in time are planned, F4-12b)")))
+        end
+    end
+    return nothing
+end
+# a coefficient the field compiler binds as it is: a parameter, or a number times one
+_robin_simple(u) = (j = info(u); j !== nothing && j.role === :param) ||
+                   (iscall(u) && operation(u) === (*) && count(y -> (j = info(y); j !== nothing && j.role === :param), arguments(u)) == 1 &&
+                    all(y -> (j = info(y); j !== nothing && j.role === :param) || _isnumber(y) ||
+                                 (SymbolicUtils.isconst(_unwrap(y)) && SymbolicUtils.unwrap_const(_unwrap(y)) isa Real), arguments(u)))
+# the face read of a `@bcs` term, `c(t, 0, y)` or `Differential(x)(c(t, 0, y))`
+_robin_core(f) = (u = _unwrap(f); iscall(u) && (_is_field_at(operation(u)) ||
+                                                 (operation(u) isa Differential && (a = _unwrap(arguments(u)[1]); iscall(a) && _is_field_at(operation(a))))))
+# the model quantities and other symbols an expression reads (not inside a built-in's call)
+function _param_leaves(x)
+    out = Any[]
+    function walk2(y)
+        y isa SymbolicUtils.BasicSymbolic && !SymbolicUtils.isconst(y) || return nothing
+        info(y) !== nothing && return push!(out, y)
+        iscall(y) ? foreach(walk2, arguments(y)) : push!(out, y)
+        return nothing
+    end
+    walk2(_unwrap(x))
+    return out
 end
 
 # `part` under `name` with a placeholder inner System: what the construction checks, the

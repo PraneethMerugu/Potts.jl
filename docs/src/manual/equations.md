@@ -464,11 +464,21 @@ u = solve(prob, SequentialCPM()).u[end]
   `sites(c >= 0.8) => Dirichlet(0.8)`. With `>`, the clamp sets `c = 0.8`, `0.8 > 0.8` is
   false, and the next MCS releases the sites. The masks of a field group cost one kernel
   launch per MCS.
-- **Values** are numbers, parameters, or a number times a parameter; `remake(prob; p = [:S => 2.0])`
-  changes a value without regenerating code. For an expression of parameters, declare a
-  computed parameter (`@parameters S = S1 + S2`) and write `Dirichlet(S)`; an expression in
-  `Dirichlet(…)` is an error that names this route. The conditions themselves are part of the
-  model's identity (the fingerprint): a checkpoint does not cross them.
+- **Values** of `Dirichlet`, `Flux`, `Robin`'s `g` and site masks are expressions of numbers,
+  parameters, the coordinates `x`, `y`, `z`, `time` and `mcs`: `Dirichlet(S1 + S2)`,
+  `Dirichlet(c0 * sin(ω * mcs))`, `Flux(0.5y)`. A value that is not a number or a number
+  times a parameter is computed at each boundary site at the time of each substep.
+  `remake(prob; p = [:S => 2.0])` changes a value without regenerating code. The conditions
+  themselves are part of the model's identity (the fingerprint): a checkpoint does not cross
+  them.
+- **Robin coefficients** `α` and `β` are numbers or expressions of parameters: one value at
+  every site. An expression is held by a computed parameter of the face, named
+  `c_x_low_α` (field, axis, side, coefficient), which reads like any computed parameter and
+  is derived again after every write. A slot holds the coefficient of `@boundary`'s
+  `Robin(α, β, g)`, with `β` the coefficient of the outward `∂c/∂n`, however the face is
+  written (in `@bcs` on a low face, `c_x_low_β` is minus the coefficient of `∂c/∂x`). A
+  coefficient that reads the coordinates or the time is an error (coefficients that vary by
+  site or in time are planned).
 - In an extension, a field's `@boundary` replaces the base's for that field.
 
 `Δ(c)` is a field operator: it appears in field equations (`D(c) ~ …`), where it reads the
@@ -484,7 +494,8 @@ spacing). The field compiler lowers them as it lowers a `PDESystem`:
 - `α * c(t, 0, y) - β * Differential(x)(c(t, 0, y)) ~ g`: a Robin face;
 - `c ~ masked(kind == border, v)`: a node value, the same as `sites(kind == border) => Dirichlet(v)`.
 
-A value is a number, a parameter, or a number times a parameter. A face or mask that
+A value is an expression of numbers, parameters, the coordinates, `time` and `mcs`, as in
+`@boundary`; a Robin coefficient is a number or an expression of parameters. A face or mask that
 `@boundary` sets too is an error that prints the condition. So is an initial value
 (`c(0, x, y) ~ v`: the field's `@variables` default is its initial value), and a periodic
 pair on an axis the lattice closes (periodicity is the lattice's, for every field).

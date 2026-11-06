@@ -84,6 +84,7 @@ function _lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = noth
     sys = crossgrid_form(sys)                           # an operator across `Coarse` grids as an aux field (F3-22)
     check_one_kind(sys)                                 # (the whole system, before any cut)
     derived, computed, defaults = Pair[], Pair[], Pair[]
+    values && (sys = robin_slots(sys))                  # a Robin coefficient of parameters: a computed one (F4-12a)
     values && ((sys, derived, computed, defaults) = _fold_computed(sys))
     external = String[]
     fields === nothing || ((sys, external) = _group_cut(sys, fields))
