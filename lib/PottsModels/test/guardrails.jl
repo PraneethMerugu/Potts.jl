@@ -4,7 +4,9 @@ using ExplicitImports
 
 @testset "PottsModels uses only public names" begin
     @test check_no_implicit_imports(PottsModels) === nothing
-    @test check_all_explicit_imports_are_public(PottsModels) === nothing
+    # FFTW documents but does not export `r2r` and its kinds; `rfft` is ambiguous once FFTA
+    # (a KernelDensity dependency) is loaded (`Analysis.power_spectrum`)
+    @test check_all_explicit_imports_are_public(PottsModels; ignore = (:R2HC, :r2r)) === nothing
     # no exception: `akeeb_state` draws its clocks through the public `Potts.layer_rng` (D-138)
     @test check_all_qualified_accesses_are_public(PottsModels) === nothing
     @test check_all_qualified_accesses_via_owners(PottsModels) === nothing
