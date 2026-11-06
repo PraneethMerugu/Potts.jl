@@ -189,7 +189,7 @@ decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0af_lifecycle_followups.jl"
-sha256 = "c1922d4b5c5dd98097b31f4924899afc7104bff3b334eaa62aaa51c3a80b7300"
+sha256 = "1a868056850a794a66709d79de91445f8b1b41a7cf41578e1d2866e9831440fd"
 decision = "D-271"
 
 [[file]]

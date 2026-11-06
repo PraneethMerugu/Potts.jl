@@ -13,6 +13,11 @@ on:
     paths-ignore:
       - 'docs/design/**'
   workflow_dispatch:
+    inputs:
+      update_deps:
+        description: Resolve the dependencies afresh, not from the last green run's Manifest
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -37,11 +42,22 @@ jobs:
       - name: Julia on PATH
         run: echo "$HOME/.juliaup/bin" >> "$GITHUB_PATH"
       - name: Resolve, instantiate and precompile the workspace
+        # Dependencies start from the last green run's Manifest (D-272): `Pkg.resolve` changes
+        # only what the Projects require, so a new release of a dependency cannot break CI by
+        # itself. Dispatch with `update_deps` to resolve afresh; the changes are printed.
         # Precompiled once, before the parallel step, so the parallel processes only read the
         # shared depot's compile cache (no concurrent precompilation of the same package).
+        env:
+          UPDATE_DEPS: ${{ inputs.update_deps }}
         run: |
           julia --version
+          LOCK="$HOME/potts-ci/Manifest.toml"   # the last green run's Manifest on this runner
+          if [ "$UPDATE_DEPS" != "true" ] && [ -f "$LOCK" ]; then cp "$LOCK" Manifest.toml; fi
           julia --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate(); Pkg.precompile()'
+          if [ -f "$LOCK" ]; then
+            echo "Dependency changes against the last green run:"
+            julia .github/ci/manifest_diff.jl "$LOCK" Manifest.toml
+          fi
           for p in test lib/CorePotts/test lib/MakiePotts/test lib/PottsModels/test benchmark docs; do
             $PIN julia --project=$p -e 'using Pkg; Pkg.precompile()'
           done
@@ -80,3 +96,6 @@ jobs:
           for f in benchmark/test/*.jl; do
             $PIN julia --project=benchmark "$f"
           done
+      - name: Keep this Manifest as the dependency lock (D-272)
+        # only reached when every step above passed
+        run: mkdir -p "$HOME/potts-ci" && cp Manifest.toml "$HOME/potts-ci/Manifest.toml"

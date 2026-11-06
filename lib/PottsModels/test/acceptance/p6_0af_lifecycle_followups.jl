@@ -174,6 +174,19 @@ function p60af_trackers_exact(sol, lat::CorePotts.Lattice{N}) where {N}
     end
 end
 
+# daughters seen in the saves (every MCS): a slot whose volume goes from 0 to positive. A
+# division counted twice (the planner kernel's and the host planner's) exceeds them; this
+# holds for one run alone, so it also checks the device runs, which are not reproducible
+p60af_births(sol) = sum(2:length(sol.u); init = 0) do i
+    a, b = sol.u[i - 1].cell.volume, sol.u[i].cell.volume
+    count(c -> a[c] == 0 && b[c] > 0, eachindex(b))
+end
+# (no case removes cells, so no slot is reused; a daughter left empty is not seen)
+function p60af_divisions_seen(sol)
+    s = sol.stats.lifecycle
+    return s.removals == 0 && s.divisions == p60af_births(sol) + s.empty_daughters
+end
+
 # Solve with the staged form forced and the fault at kernel `k` (0: none); returns the
 # solution, the final form and the MCS at which the form changed (or -1)
 function p60af_run(prob, k; backend = nothing, device_on_cpu = backend === nothing)
@@ -233,6 +246,8 @@ function p60af_check_handover(name, prob, k; backend = nothing)
     # … whose values equal a recount from σ
     @test p60af_trackers_exact(fa, prob.lattice) && p60af_trackers_exact(un, prob.lattice) &&
           p60af_trackers_exact(ua, prob.lattice)
+    # each run counts the divisions it made, once
+    @test p60af_divisions_seen(fa) && p60af_divisions_seen(ua) && p60af_divisions_seen(un)
     # divisions after the handover (the host planner really planned some)
     live(u) = count(>(0), u.cell.volume)
     @test live(fa.u[end]) > live(fa.u[findfirst(>=(at), fa.t)])
