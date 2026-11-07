@@ -279,8 +279,14 @@ function _builtin_callbacks(fp::FieldProblem)
     cbs = Any[]
     clock_slot(fp.group.spec) == 0 || fp.group.spec.clock === nothing ||
         push!(cbs, ClockTick(fp.group.spec.clock))
-    _has_masks(fp) && fp.kind != :map && push!(cbs, MaskSync(_masks_moving(fp.program, fp.group.spec)))
-    return [_callback(c) for c in cbs]
+    ix = fp.index
+    if _has_masks(fp) && fp.kind != :map
+        moving = _masks_moving(fp.program, fp.group.spec)
+        push!(cbs, MaskSync(moving, moving && ix isa LatticeIndex && ix.maskunlocated))
+        # each located switch of a moving mask set: a continuous callback at its root
+        moving && ix isa LatticeIndex && foreach(f -> push!(cbs, MaskEvent(f)), ix.maskevents)
+    end
+    return Any[_callback(c) for c in cbs]
 end
 _has_masks(fp::FieldProblem) = (s = fp.program; ids = Int[fieldid(s, k) for k in fp.state];
                                 any(r -> r isa NodeValueRule && r.field in ids, s.rules))
@@ -291,7 +297,7 @@ struct _Builtin{F} <: Function
     f::F
 end
 (b::_Builtin)(integ) = b.f(integ)
-_builtin(cb) = cb isa SciMLBase.DiscreteCallback && cb.affect! isa _Builtin
+_builtin(cb) = cb isa Union{SciMLBase.DiscreteCallback, SciMLBase.ContinuousCallback} && cb.affect! isa _Builtin
 
 """
     ClockTick(τ)
@@ -334,27 +340,45 @@ where the mask *set* changes, which no rate can carry:
 - at `init`, every masked site (the first save is rewritten), for a state that was not built
   by `discretize` or `remake` (they hold the masked values already);
 - when the mask kernels read the time or the clock (`moving`), after each accepted step, the
-  sites that became masked since the last write (released sites keep their values);
+  sites that became masked since the last write (released sites keep their values); and at
+  each located switch, every masked site ([`MaskEvent`](@ref));
 - at every discrete event, at every masked site (a value that reads a parameter, a table, an
   input or `step_index(t)` jumps there, which its rate cannot carry): a new step index
   ([`ClockTick`](@ref)), and any write of a parameter, a table or an input through `setp` or
   `integ.ps[k] = v` on the integrator (the OrdinaryDiffEqCore extension).
-A step that writes nothing is no discontinuity (the solver keeps its FSAL derivative). A set
-that moves within a step moves at the step's end, so a moving mask set (a predicate that reads
-`t`) is first order in time at the switch: tighten the tolerance there (measured on an 8×8
-diffusion with a set that switches on at t = 0.3: error 0.024 under Tsit5 at the default
-tolerances, 4e-6 at 1e-9; a `tstops` at the switch did not help).
+A step that writes nothing is no discontinuity (the solver keeps its FSAL derivative).
+
+**Moving sets.** A predicate that reads the time switches where one of its comparisons changes
+sign. A comparison whose sides read only `t`, scalar parameters and constants (`t > t0`,
+`sin(ω t) < 0.5`) is located exactly: a continuous callback ([`MaskEvent`](@ref)) finds its
+root and every masked site takes its value there, so a set that switches on over a quiet state
+(where an adaptive solver takes long steps) switches at the right time. A read of
+`step_index(t)` switches at the clock's boundaries, which [`ClockTick`](@ref) lands on. Any
+other read of the time in a predicate (a comparison with a field, an input or a coordinate,
+`t == t0`, a bare `t`) has no located switch: the set moves at the end of the step it moved in,
+and over a quiet state the solver can step over the switch. An OrdinaryDiffEq solve of such a
+predicate is refused at `init` (`unlocated`) unless it bounds the step (`dtmax`) or gives
+`tstops`; with them the switch is first order in time. (A `tstops` at a located switch alone
+does not apply a mask such as `t > 0.3`: the predicate is false at exactly 0.3.)
 A user callback that writes `integ.p` directly (not through `setp` or `integ.ps`) and changes a
 value that a mask reads must call [`sync_masks!`](@ref)`(integ)` itself: such a write is not
 seen by the masks until then.
 """
 struct MaskSync
     moving::Bool
+    unlocated::Bool                     # a moving predicate with a switch that has no event
 end
+MaskSync(moving::Bool) = MaskSync(moving, false)
 function _callback(c::MaskSync)
     affect!(integ) = (mask_sync!(integ) || SciMLBase.derivative_discontinuity!(integ, false); nothing)
     # at `init`: the first save (taken before the callbacks start) holds the masked values too
     function start(cb, u, t, integ)
+        c.unlocated && !_step_bounded(integ) && throw(ArgumentError(string("a masked condition's predicate reads ",
+            "the time in a switch an OrdinaryDiffEq solver cannot locate (a comparison of `t` with a field, an input ",
+            "or a coordinate, an equality, or a bare `t`): over a quiet state an adaptive step can pass the switch, ",
+            "and the mask is never applied. Bound the step (`dtmax`) or give `tstops` at the switch, write the ",
+            "switch as a comparison of `t` with parameters and constants (`t > t0`: located exactly), or solve ",
+            "with a field algorithm (`ExplicitEuler(; dt)`)")))
         mask_sync!(integ; all = true) || return SciMLBase.derivative_discontinuity!(integ, false)
         sol = integ.sol
         !isempty(sol.t) && sol.t[end] == t && length(sol.u[end]) == length(integ.u) && copyto!(sol.u[end], integ.u)
@@ -363,22 +387,65 @@ function _callback(c::MaskSync)
     cond = c.moving ? (u, t, integ) -> true : (u, t, integ) -> false
     return SciMLBase.DiscreteCallback(cond, _Builtin(affect!); initialize = start, save_positions = (false, false))
 end
-"""
-    mask_sync!(integ; all = false) -> Bool
+# an OrdinaryDiffEq solve that bounds its step (`dtmax` below the span) or gives `tstops` (more
+# than the span's end and the clock's boundaries, which the built-in callbacks add)
+function _step_bounded(integ)
+    hasproperty(integ, :opts) || return true
+    o = integ.opts
+    tf, t0 = integ.sol.prob.tspan[2], integ.sol.prob.tspan[1]
+    hasproperty(o, :dtmax) && abs(o.dtmax) < abs(tf - t0) && return true
+    hasproperty(o, :tstops) || return true
+    fp = lattice_metadata(integ.sol.prob).problem
+    τ = clock_slot(fp.group.spec) == 0 ? nothing : fp.group.spec.clock
+    h = o.tstops
+    v = hasproperty(h, :valtree) ? h.valtree : collect(h)
+    tol = 1e-9 * abs(tf - t0)
+    isclock(s) = τ !== nothing && abs((s - t0) / τ - round((s - t0) / τ)) * τ <= tol
+    return any(s -> abs(s - tf) > tol && !isclock(s), v)
+end
 
-Run the masks of an OrdinaryDiffEq integrator's right side at its time, step index and
-inputs, and write the masked values into `integ.u` at the sites that became masked since the
-last write (`all = true`: at every masked site; the work of [`MaskSync`](@ref)): whether a value
-changed.
 """
-function mask_sync!(integ; all::Bool = false)
+    MaskEvent(f)
+
+The built-in callback of one located switch of a moving mask set on an OrdinaryDiffEq solve
+(review F4 b2 #3; [`MaskSync`](@ref)): a continuous callback on `f(p, t)` (a comparison's
+`lhs - rhs` of the time and the parameters) whose root the solver finds; at the root every
+masked site takes its value, with the masks evaluated just past it (at `nextfloat(t)`: a root
+of `t - t0` is `t0` itself, where `t > t0` is still false).
+"""
+struct MaskEvent
+    f::Any
+end
+function _callback(c::MaskEvent)
+    f = c.f
+    cond(u, t, integ) = f(_pvals(integ.p), t)
+    # the masks just past the root (a root of `t - 0.3` is 0.3 itself, where `t > 0.3` is false)
+    function affect!(integ)
+        t = integ.t
+        changed = mask_sync!(integ; all = true, t = t isa AbstractFloat ? nextfloat(t) : t)
+        SciMLBase.derivative_discontinuity!(integ, changed)
+        return nothing
+    end
+    return SciMLBase.ContinuousCallback(cond, _Builtin(affect!); rootfind = SciMLBase.RightRootFind,
+        save_positions = (false, false))
+end
+
+"""
+    mask_sync!(integ; all = false, t = integ.t) -> Bool
+
+Run the masks of an OrdinaryDiffEq integrator's right side at time `t` (its own by default),
+its step index and inputs, and write the masked values into `integ.u` at the sites that became
+masked since the last write (`all = true`: at every masked site; the work of
+[`MaskSync`](@ref)): whether a value changed.
+"""
+function mask_sync!(integ; all::Bool = false, t = integ.t)
     m = lattice_metadata(integ.sol.prob)
     p, u = integ.p, integ.u
-    g = _task_rhs(_built(m, u, p, integ.t))
+    g = _task_rhs(_built(m, u, p, t))
     pv = _pvals(p)
     _synced(g, p) || _sync!(g, p)
     _derives(g) && derive!(pv, _ptables(p, g.ctx.tables), g.ctx.index)
-    isempty(g.init.launches) || _init!(g, pv, integ.t, _ptick(p))
+    isempty(g.init.launches) || _init!(g, pv, t, _ptick(p))
     changed = false
     for (range, mk, c, vf, mode, _, prev) in g.masked
         v = convert(eltype(u), _coefdual(c, pv))

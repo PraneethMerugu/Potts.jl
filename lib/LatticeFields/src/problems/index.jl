@@ -41,7 +41,10 @@ p = [Dk => values])` gives new values; `integ.ps[Dk]`, `getp(prob, Dk)` read the
 state, they are evaluated from it and read by `sol[K]` and `integ[K]` ([`aux_key`](@ref); on the
 ODE path they are observed, `rhs(u(t), t)`, through the evaluator `ode_problem` sets); `coordinates`
 maps `symbols => centers`, each spatial coordinate to its site centers (a range: `sol[x]`, and
-`sol(t, x, y)` interpolates between them, F4-04). Any
+`sol(t, x, y)` interpolates between them, F4-04); `maskevents` holds the switch functions of the
+moving masks, `(p, t) -> lhs - rhs` from the raw parameters (an `Expr` is compiled here), whose
+roots an OrdinaryDiffEq solve locates, and `maskunlocated` says that a mask predicate reads the
+time in a switch with no such function ([`MaskSync`](@ref)). Any
 other symbol given as a parameter is an error naming the parameters. Every symbol is looked up
 as `key(sym)`.
 """
@@ -68,11 +71,14 @@ struct LatticeIndex{F}
     program::Ref{Any}                           # the semantic program (the checks of an input write), or nothing
     coords::Dict{Any, Any}                      # a spatial coordinate → its site centers (a range; `sol[x]`, F4-04)
     coordsyms::Vector{Any}                      # the spatial coordinates, in order
+    maskevents::Vector{Any}                     # the masks' switch functions `(p, t) -> lhs - rhs` (an ODE path's events)
+    maskunlocated::Bool                         # a mask predicate reads the time in a switch with no event
 end
 function LatticeIndex(; key::F = identity, variables = Pair[], parameters = Pair[],
         independent_variables = Any[], defaults = Dict{Any, Any}(), inputs = Pair[],
         inputnames = Pair[], boolinputs = String[], inputbounds = Pair[], derived = Pair[], observed = Pair[],
-        tables = Pair[], parambounds = Pair[], derive = nothing, aux = Pair[], coordinates = Pair[]) where {F}
+        tables = Pair[], parambounds = Pair[], derive = nothing, aux = Pair[], coordinates = Pair[],
+        maskevents = Any[], maskunlocated::Bool = false) where {F}
     syms(x) = x isa Union{Tuple, AbstractVector} ? x : (x,)
     vars, varsyms = Dict{Any, FieldSlot}(), Any[]
     for (ss, slot) in variables
@@ -115,7 +121,7 @@ function LatticeIndex(; key::F = identity, variables = Pair[], parameters = Pair
         Dict{Int, Tuple{Float64, Float64}}(Int(i) => Float64.((b[1], b[2])) for (i, b) in parambounds), derive,
         Dict{Any, String}(key(s) => String(k) for (ss, k) in aux for s in syms(ss)), Any[first(syms(ss)) for (ss, _) in aux],
         Ref{Any}(nothing), Ref{Any}(nothing), Dict{Any, Any}(key(s) => r for (ss, r) in coordinates for s in syms(ss)),
-        Any[first(syms(ss)) for (ss, _) in coordinates])
+        Any[first(syms(ss)) for (ss, _) in coordinates], Any[f isa Expr ? rgf(f) : f for f in maskevents], maskunlocated)
 end
 
 # `ix.K` for a name that is not a field of the index: its canonical symbol, as an MTK system

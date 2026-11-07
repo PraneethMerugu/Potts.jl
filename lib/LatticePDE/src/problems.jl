@@ -1431,6 +1431,41 @@ function _initial(cf::CompiledField{N}, sys::PDESystem, state, ::Type{T}) where 
     return out
 end
 
+# The switches of the moving mask sets (review F4 b2 #3). A masked predicate that reads the time
+# switches where one of its comparisons changes sign. A comparison (`<`, `≤`, `>`, `≥`) whose
+# sides read only the time, scalar parameters and constants is an event `lhs - rhs` of `(p, t)`:
+# an OrdinaryDiffEq solve locates its root (a continuous callback) and the masks take their
+# values there. A predicate that reads the time in any other way (a comparison with a field, an
+# input or a coordinate, an equality, a bare `t`) has no such event: `unlocated`. A read of
+# `step_index(t)` switches at the clock's boundaries, which the clock's callback lands on.
+function _mask_events(sys::PDESystem, ps, tt)
+    evs, unlocated = Any[], false
+    sym(y) = y isa SymbolicUtils.BasicSymbolic
+    # `y` reads the time outside `step_index(t)` and outside a field read `c(t, x, y)`
+    bare(y) = isequal(y, tt) || (iscall(y) && operation(y) !== step_index && !sym(operation(y)) && any(bare, arguments(y)))
+    clocked(y) = iscall(y) && (operation(y) === step_index || any(clocked, arguments(y)))
+    isp(v) = isequal(v, tt) || any(q -> isequal(q, v), ps)
+    function walk(y)
+        bare(y) || return true
+        iscall(y) || return false
+        op = operation(y)
+        if op in (<, <=, >, >=)
+            a, b = arguments(y)
+            (clocked(y) || !all(isp, Symbolics.get_variables(y))) && return false
+            push!(evs, Symbolics.build_function(unwrap(a - b), ps, tt; expression = Val(true)))
+            return true
+        end
+        op in (&, |, !, xor) || return false
+        return all(walk, arguments(y))
+    end
+    for eq in sys.bcs
+        r = unwrap(eq.rhs)
+        iscall(r) && operation(r) === masked || continue
+        walk(unwrap(arguments(r)[1])) || (unlocated = true)
+    end
+    return evs, unlocated
+end
+
 function _index(cf::CompiledField, sys::PDESystem, s, state; derived = Pair[], computed = Pair[], cdefaults = Pair[],
         free = nothing)
     slots = Problems.state_layout(s, [fieldid(s, k) for k in state])
@@ -1493,9 +1528,11 @@ function _index(cf::CompiledField, sys::PDESystem, s, state; derived = Pair[], c
     coordinates = Pair[(unwrap(q), Symbol(string(unwrap(q)))) =>
                        range(ends[d + 1][1] + (ends[d + 1][2] - ends[d + 1][1]) / (2d0[d]);
                              step = (ends[d + 1][2] - ends[d + 1][1]) / d0[d], length = d0[d]) for (d, q) in enumerate(sys.ivs[2:end])]
+    # the masks' switch times on an OrdinaryDiffEq solve (review F4 b2 #3)
+    maskevents, maskunlocated = _mask_events(sys, ps, tt)
     return LatticeIndex(; key = _symkey, variables = vars, parameters = params,
         independent_variables = [unwrap(sys.ivs[1])], defaults, inputs, inputnames, boolinputs, inputbounds, derived,
-        observed, parambounds, derive, aux, coordinates,
+        observed, parambounds, derive, aux, coordinates, maskevents, maskunlocated,
         tables = Pair[[Any[unwrap(q), Symbol(k)] => k for (k, _) in cf.tables for q in _params(sys) if string(unwrap(q)) == k];
                       [e => (k, i) for (k, _) in cf.tables for q in _params(sys) if string(unwrap(q)) == k
                        for (i, e) in enumerate(Symbolics.scalarize(unwrap(q)))]])
