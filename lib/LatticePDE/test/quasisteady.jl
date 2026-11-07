@@ -387,15 +387,15 @@ end
                 CrankNicolson(; dt = 0.1, init = :steady), BDF2(; dt = 0.1, init = :steady), QuasiSteady(; dt = 0.1, init = :steady))
         ig = init(p, alg)
         # (the default inner solver: rtol 1e-6; one solve, the group's operator being exact)
-        @test maximum(abs, ig.u[1] .- want) < 1e-5 && ig.retcode == ReturnCode.Success || (println("12c init ", alg); false)
+        @test maximum(abs, ig.sol.u[1] .- want) < 1e-5 && ig.retcode == ReturnCode.Success || (println("12c init ", alg); false)
         @test LFB.field_stats(ig).solves == 1
         s = solve!(ig)
         @test s.retcode == ReturnCode.Success && maximum(abs, s.u[end] .- want) < 1e-5     # (it stays there)
     end
     # without it, the start is the initial state; with a tight `inner` the start is the hand
     # steady state to 1e-9 (the algorithm's own `inner`)
-    @test init(p, BackwardEuler(; dt = 0.1)).u[1] == zeros(48)
-    @test maximum(abs, init(p, BackwardEuler(; dt = 0.1, init = :steady, inner = BTIGHT)).u[1] .- want) < 1e-9
+    @test init(p, BackwardEuler(; dt = 0.1)).sol.u[1] == zeros(48)
+    @test maximum(abs, init(p, BackwardEuler(; dt = 0.1, init = :steady, inner = BTIGHT)).sol.u[1] .- want) < 1e-9
     # the PCG count of `ExplicitEuler(init = :steady)` from zero (design §5; review r4 N4): one
     # solve on the start's own runtime, 5 iterations of the default inner (rtol 1e-6) on the CPU
     # (the design's "6, as C7b": at most 6)
@@ -408,10 +408,10 @@ end
     ig.ps[bk] = 3.0
     reinit!(ig)
     w3 = qs_hand(; K = (x, y) -> 0.3, k = (x, y) -> 3.0, f = (x, y) -> x, faces = Dict((1, -1) => (:dir, 1.0)))
-    @test maximum(abs, ig.u[1] .- w3) < 1e-9 && length(ig.u) == 1
+    @test maximum(abs, ig.sol.u[1] .- w3) < 1e-9 && length(ig.sol.u) == 1
     # a steady row beside it starts at the steady state too (its `QuasiSteady` takes `init`)
     ps = bown(bsys([0 ~ bD * Δ(bce) - bk * bce + x], [bc(t, 0, y) ~ 1.0], [bD, bk]; T = 0.3))
-    @test maximum(abs, init(ps, QuasiSteady(; dt = 0.1, init = :steady, inner = BTIGHT)).u[1] .- want) < 1e-9
+    @test maximum(abs, init(ps, QuasiSteady(; dt = 0.1, init = :steady, inner = BTIGHT)).sol.u[1] .- want) < 1e-9
     # the refusals: a growth has no stable steady state (named with `init` and its route); the
     # step alone is accepted
     pg = bown(bsys([D(bce) ~ bD * Δ(bce) + 0.5 * bce], [bc(0, x, y) ~ 0.0, bc(t, 0, y) ~ 1.0], [bD]; T = 0.3))

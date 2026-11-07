@@ -313,7 +313,7 @@ end
     @test occursin("give it to one, `BackwardEuler(; inner = DevicePCG())`", m)
     # (F4-01: the field solvers step the problem `discretize` returns; base: refused, "discretize
     # with `LatticeDiscretization(…; problem = :owned)`")
-    @test init(po, BackwardEuler(; dt = 0.1)).t == [0.0]
+    @test init(po, BackwardEuler(; dt = 0.1)).sol.t == [0.0]
     @test solve(po, ImplicitEuler(); dt = 0.01, adaptive = false).retcode == ReturnCode.Success   # the route
     # the keywords
     for (f, want) in ((() -> BackwardEuler(; dt = 0.1, newton = 0), "BackwardEuler: newton = 0 is the Newton iterations"),

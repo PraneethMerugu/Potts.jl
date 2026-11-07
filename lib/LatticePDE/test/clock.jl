@@ -118,10 +118,10 @@ end
     e = kerr(() -> solve(p, ExplicitEuler(); saveat = 0.5))
     @test occursin("the clock's period, no `dt` given", e) && occursin("ExplicitEuler(; dt = 0.5)", e) && !occursin("dt = 1.0", e)
     @test solve(p, ExplicitEuler(; dt = 0.5); saveat = 0.5).t ≈ 0:0.5:3
-    # a span of 2.5 periods; the route works
+    # a span of 2.5 periods: the last window is shortened (F4-03; before, a refusal), and reads
+    # the step index of its period
     p25 = discretize(ksys(2.5), kdisc())
-    e = kerr(() -> solve(p25, ExplicitEuler()))
-    @test occursin("the time span = 2.5", e) && occursin("ExplicitEuler(; dt = 0.5)", e)
+    @test isapprox(solve(p25, ExplicitEuler())[kce][end][1], 0 + 1 + 0.5 * 2; rtol = 1e-12)
     @test isapprox(solve(p25, ExplicitEuler(; dt = 0.5))[kce][end][1], 0.5 * (0 + 0 + 1 + 1 + 2); rtol = 1e-12)
     # two groups, one window from the clock and one `dt`; the route works, and `step_index`
     # reads the same `k` in both groups

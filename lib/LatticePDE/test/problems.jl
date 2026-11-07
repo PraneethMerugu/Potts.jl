@@ -350,7 +350,9 @@ end
 @testset "refusals" begin
     sys = psys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0], Num[])
     @test_throws ArgumentError LatticeDiscretization(Grid((4, 4)); problem = :linear)
-    @test_throws ArgumentError solve(owned(sys, 4), ExplicitEuler(; dt = 0.3))   # 1.0 is not 0.3 k
+    # (F4-03) a span that is not a whole number of windows ends by one shortened window
+    s3 = solve(owned(sys, 4), ExplicitEuler(; dt = 0.3))
+    @test s3.retcode == SciMLBase.ReturnCode.Success && s3.t[end] ≈ 1.0
     @test_throws ArgumentError solve(owned(sys, 4), ExplicitMap())
     @test_throws ArgumentError owned(psys([D(ce) ~ Δ(ce)], Equation[], Num[]), 4)  # no initial value
     # (F4-01: a masked condition discretizes to the one problem; base, with `problem = :ode`: refused)

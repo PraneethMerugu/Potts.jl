@@ -58,8 +58,9 @@ q1(δ, k; steady = false) = PDESystem(steady ?
     # the same seed and backend repeat a run bit for bit (fixed-order reductions)
     run() = (s = solve(cown(q1(0.1, 5.0)), QuasiSteady(; dt = 0.1)); (s[cae][end], s[cbe][end]))
     @test run() == run()
-    # a warm window allocates nothing (CPU), and its solve starts at the last solution
-    ig = init(cown(q1(0.1, 5.0)), QuasiSteady(; dt = 0.1))
+    # a warm window allocates nothing (CPU), and its solve starts at the last solution (F4-03:
+    # the second window ends the span, where the end save copies the state: `save_end = false`)
+    ig = init(cown(q1(0.1, 5.0)), QuasiSteady(; dt = 0.1); save_end = false)
     @test bwarm(ig) == 0
     # the solve's words: a budget hit names the GMRES budget; `show`, the keywords, `canonical`
     r = @test_logs (:warn, r"the linear solve reached its budget .*`inner = DeviceGMRES\(; budget = n\)`") match_mode = :any solve(

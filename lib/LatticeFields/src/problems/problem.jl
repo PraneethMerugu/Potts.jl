@@ -351,18 +351,34 @@ Base.length(s::FieldSolution) = length(s.t)
 """
     FieldIntegrator
 
-The state of an owned solve: the store, the runtime of each field group
-([`GroupRuntime`](@ref): its bound launches, clamps and algorithm cache), time, step,
-substep count (the first group's) and the saved states. `step!` advances one step of `dt`
-([`advance!`](@ref) of each group, in group order); indexing by symbol reads (and sets)
-fields of the current state.
+The integrator of an owned solve, a `SciMLBase.DEIntegrator` (F4-03; F4 design §3.4): the
+store, the runtime of each field group ([`GroupRuntime`](@ref): its bound launches, clamps and
+algorithm cache), the substep count (the first group's) and the saves. `integ.t` is the
+current time and `integ.u` the current state (the store's current flat buffer, on the
+problem's device, or a `MixedState`); `integ.sol` is the solution so far. `step!(integ)`
+advances one window of `dt` ([`advance!`](@ref) of each group, in group order);
+`step!(integ, dt, true)` lands on `integ.t + dt`; indexing by symbol reads (and sets) fields
+of the current state.
+
+**Windows off the grid.** The window `dt` is fixed: the windows end at `t₀ + k dt` (the grid).
+A time off the grid that the run must land on (a `tstop`: [`add_tstop!`](@ref
+SciMLBase.add_tstop!), `step!(integ, dt, true)`; the end of the time span) is reached by one
+shortened window, and the next window is shortened to land back on the grid. In a shortened
+window of length `w` each group takes `⌈n w / dt⌉` substeps of its count `n` (so no substep is
+longer than in a full window); an implicit group rebuilds its operator for that step and back
+(BDF2 starts again, Crank–Nicolson damps again: a new step is a start).
+
+**State writes.** `integ[c] = values` and `setu` drop every group's algorithm history
+([`reset!`](@ref)). A write into `integ.u` itself is not seen by the groups until
+`derivative_discontinuity!(integ, true)` (or `u_modified!`), which drops it too.
 
 Parameters and tables change only through `integ.ps[sym] = v` or `setp(integ, sym)(integ, v)`
 (SymbolicIndexingInterface), which checks the faces, recomputes the substeps and rebinds the
 steps, or else leaves the integrator unchanged. Writing `integ.p[i] = v` directly has no effect on the run: the steps
 keep the values they were bound to.
 """
-mutable struct FieldIntegrator{P <: FieldProblem, A, S <: FieldStore, RT <: Tuple, T, PV, TB}
+mutable struct FieldIntegrator{P <: FieldProblem, A, S <: FieldStore, RT <: Tuple, T, PV, TB, U} <:
+               SciMLBase.DEIntegrator{A, true, U, Float64}
     prob::P
     alg::A
     store::S
@@ -371,18 +387,23 @@ mutable struct FieldIntegrator{P <: FieldProblem, A, S <: FieldStore, RT <: Tupl
     pgood::PV                           # the parameters the steps are bound to
     tables::TB                          # its own copy (`integ.ps[Dk] = values`), as the problem's
     t0::Float64
-    iter::Int
+    iter::Int                           # the grid windows done: the time is on the grid at `t0 + iter dt`, or past it
     dt::Float64
     substeps::Int
-    nsteps::Int
+    nsteps::Int                         # the whole windows in the time span
     per::Int                            # windows per period of the clock (0: no clock)
-    save::Vector{Int}
-    t::Vector{Float64}
-    u::Vector{Vector{T}}
+    save::Vector{Float64}               # the save times, sorted
+    ts::Vector{Float64}                 # the saved times …
+    us::Vector{Vector{T}}               # … and states (flat, host)
     retcode::SciMLBase.ReturnCode.T
     aux::Any                            # the aux kernels bound at both parities, or nothing (F3-00)
     auxu::Vector{Vector{T}}             # the aux fields at each save (flat, `_aux_layout`)
     starts::Vector{Any}                 # the steady starts of the groups with `init = :steady` (F3-12c)
+    tnow::Float64                       # the current time
+    tend::Float64                       # the end of the time span
+    tstops::Vector{Float64}             # the times to land on, sorted (`add_tstop!`)
+    nsave::Int                          # the next save time's index in `save`
+    windows::Int                        # every window stepped (shortened ones too)
 end
 
 
@@ -584,20 +605,24 @@ function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; saveat = (),
     t0, tf = prob.tspan
     a1, clock = first(groups[1]), _clock(prob)
     w = _window(a1, clock)
-    nsteps = _count(tf - t0, w, "the time span"; window = _wtext(a1, clock, w),
+    # a time span that is not a whole number of windows ends with one shortened window (F4-03)
+    whole = _whole(tf - t0, w)
+    # (a map steps whole steps only: no shortened step)
+    whole || prob.kind != :map || _count(tf - t0, w, "the time span"; window = _wtext(a1, clock, w),
         route = _count_route(a1, clock, w, tf - t0, "the time span"))
-    dt = (tf - t0) / max(nsteps, 1)                 # the step that lands on tf exactly
-    save = Int[]
-    save_start && push!(save, 0)
+    nsteps = whole ? round(Int, (tf - t0) / w) : floor(Int, (tf - t0) / w)
+    dt = whole && nsteps > 0 ? (tf - t0) / nsteps : Float64(w)     # (whole: the step that lands on tf exactly)
+    save = Float64[]
+    save_start && push!(save, t0)
     if saveat isa Real
         k = _count(saveat, dt, "saveat"; window = _wtext(a1, clock, dt), route = _count_route(a1, clock, dt, saveat, "saveat"))
-        k >= 1 && append!(save, k:k:nsteps)
+        k >= 1 && append!(save, (t0 + j * dt for j in k:k:nsteps))
     else
-        append!(save, (_count(s - t0, dt, "a saveat time"; window = _wtext(a1, clock, dt),
+        append!(save, (t0 + dt * _count(s - t0, dt, "a saveat time"; window = _wtext(a1, clock, dt),
                            route = _count_route(a1, clock, dt, s - t0, "the saveat times")) for s in saveat))
     end
-    save_end && push!(save, nsteps)
-    save = sort!(unique!(filter!(i -> 0 <= i <= nsteps, save)))
+    save_end && push!(save, tf)
+    save = sort!(unique!(x -> round(Int, (x - t0) / (1e-9 * dt)), filter!(x -> t0 - 1e-9dt <= x <= tf + 1e-9dt, save)))
     E = eltype(prob)
     # the state buffers the algorithms declare (`nbuffers`: two for the explicit ones)
     st = FieldStore(prob.backend, prob.program; flat = prob.state, E,
@@ -628,15 +653,20 @@ function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; saveat = (),
     foreach(rt -> compile!(prob.backend, rt), rts)
     aux = _bind_aux(prob, st, pgood)
     aux === nothing || compile!(prob.backend, aux[1])
-    integ = FieldIntegrator(prob, alg, st, rts, copy(prob.p), pgood,
-        eltype(prob.tables)[k => copy(v) for (k, v) in prob.tables], t0, 0, dt,
-        ms[1], nsteps, _clock(prob) === nothing ? 0 : _per(dt, _clock(prob)), save, Float64[], Vector{_ueltype(st, E)}[],
-        SciMLBase.ReturnCode.Success, aux, Vector{_ueltype(st, E)}[], Any[])
+    T = _ueltype(st, E)
+    tabs = eltype(prob.tables)[k => copy(v) for (k, v) in prob.tables]
+    pv = copy(prob.p)
+    integ = FieldIntegrator{typeof(prob), typeof(alg), typeof(st), typeof(rts), T, typeof(pv), typeof(tabs),
+                            _utype(st, E)}(prob, alg, st, rts, pv, pgood, tabs, t0, 0, dt, ms[1], nsteps,
+        _clock(prob) === nothing ? 0 : _per(dt, _clock(prob)), save, Float64[], Vector{T}[], SciMLBase.ReturnCode.Success,
+        aux, Vector{T}[], Any[], t0, tf, Float64[], 1, 0)
     # (behind a barrier: an `init` with no steady start does not compile the steady policy)
     any(g -> starts_steady(g[1]), groups) && Base.inferencebarrier(_steady_starts!)(integ, groups)
-    0 in save && _save!(integ)
+    _saves!(integ)
     return integ
 end
+# the type of `integ.u`: the store's flat buffer (a `MixedState` for a mixed store)
+_utype(st::FieldStore, ::Type{E}) where {E} = mixed_state(st) ? MixedState : isempty(st.flat) ? Vector{E} : typeof(st.flat[1])
 
 # The steady starts (`init = :steady` on a group's algorithm, F3-12c): before the first window
 # each such group's steady state `0 = r(u)` is solved once by `QuasiSteady` (`steady_start`),
@@ -735,7 +765,7 @@ function _parity(integ::FieldIntegrator)
     isempty(integ.prob.step.swaps) ? 1 :
     integ.store.cur[integ.prob.step.swaps[1]]
 end
-_time(integ::FieldIntegrator) = integ.t0 + integ.iter * integ.dt
+_time(integ::FieldIntegrator) = getfield(integ, :tnow)
 # The clock's step index of the current window: the clock boundaries reached since the start
 # of the time span, by integer bookkeeping (each period holds `per` windows, and no window
 # crosses a boundary), never from a float time; the window count without a clock
@@ -771,11 +801,73 @@ it. On the host the groups' status words are read after the step
 the code and the run goes on. On a device they are read at the saves and at the end.
 """
 function CommonSolve.step!(integ::FieldIntegrator)
-    code = _advance_all(integ.runtimes, (_time(integ), _tick(integ)))
-    integ.iter += 1
+    t, dt = _time(integ), integ.dt
+    g = integ.t0 + (integ.iter + 1) * dt            # the next grid time
+    tol = 1e-9 * dt
+    # the window's end: the next grid time, or an earlier time to land on (a tstop, the end of
+    # the span); a time within `tol` of the grid lands with a full window, at that time
+    target, full = g, abs(t - (integ.t0 + integ.iter * dt)) <= tol
+    if t < integ.tend - tol && integ.tend < g + tol
+        target, full = integ.tend, full && integ.tend > g - tol
+    end
+    while !isempty(integ.tstops) && first(integ.tstops) <= t + tol
+        popfirst!(integ.tstops)                     # (reached or passed)
+    end
+    if !isempty(integ.tstops) && first(integ.tstops) < target + tol
+        ts = first(integ.tstops)
+        target, full = ts, full && ts > g - tol
+    end
+    code = full ? _advance_all(integ.runtimes, (t, _tick(integ))) :
+           _advance_short(integ.runtimes, (t, _tick(integ)), target - t, dt)
+    target > g - tol && (integ.iter += 1)           # (a window that ends on the grid)
+    integ.tnow = target
+    integ.windows += 1
+    while !isempty(integ.tstops) && first(integ.tstops) <= integ.tnow + tol
+        popfirst!(integ.tstops)
+    end
     code == SciMLBase.ReturnCode.Success || (integ.retcode = code)
     # the status words: on the host after every step (a plain read; nothing for explicit groups)
     Exec.ishost(integ.prob.backend) && _check_statuses!(integ)
+    _saves!(integ)
+    return integ
+end
+# a shortened window of length `w` (a time off the grid, F4-03): each group takes
+# `⌈n w / dt⌉` of its `n` substeps (none longer than in a full window)
+_advance_short(::Tuple{}, clock, w::Float64, dt::Float64) = SciMLBase.ReturnCode.Success
+function _advance_short(rts::Tuple, clock, w::Float64, dt::Float64)
+    rt = first(rts)
+    code = advance!(rt, clock, _short_count(rt.n, w, dt), w)
+    _running(code) || return code
+    return _worse(code, _advance_short(Base.tail(rts), clock, w, dt))
+end
+_short_count(n::Integer, w, dt) = n == 0 ? 0 : max(1, ceil(Int, n * w / dt - 1e-9))
+# the saves due at the current time (the save times are on the grid or at the end of the span)
+function _saves!(integ::FieldIntegrator)
+    tol = 1e-9 * integ.dt
+    save, k = integ.save, integ.nsave
+    while k <= length(save) && save[k] <= integ.tnow + tol
+        abs(save[k] - integ.tnow) <= tol && (isempty(integ.ts) || integ.ts[end] != integ.tnow) && _save!(integ)
+        k += 1
+    end
+    integ.nsave = k
+    return nothing
+end
+
+"""
+    step!(integ, dt, stop_at_tdt = false)
+
+Step `integ` by windows until its time reaches `integ.t + dt` (SciML's convention): with
+`stop_at_tdt = true` the run lands on `integ.t + dt` exactly (a `tstop`: a shortened window
+when it is off the grid), else it stops at the first window end at or past it. A failure
+stops it ([`step!`](@ref CommonSolve.step!(::FieldIntegrator))).
+"""
+function CommonSolve.step!(integ::FieldIntegrator, dt::Real, stop_at_tdt::Bool = false)
+    dt < 0 && throw(ArgumentError("step!(integ, dt): dt = $dt; an integrator does not step back"))
+    next = _time(integ) + dt
+    stop_at_tdt && SciMLBase.add_tstop!(integ, next)
+    while _time(integ) < next - 1e-9 * integ.dt && _running(integ.retcode)
+        CommonSolve.step!(integ)
+    end
     return integ
 end
 # the status words of every group (F3 design §3.3): a failure becomes `integ.retcode` (the run
@@ -814,8 +906,12 @@ function SciMLBase.reinit!(integ::FieldIntegrator, u0 = integ.prob.u0)
     foreach(f -> st.cur[f] = 1, integ.prob.step.swaps)
     _load_state!(st, u0)
     integ.iter = 0
-    empty!(integ.t)
-    empty!(integ.u)
+    integ.tnow = integ.t0
+    integ.nsave = 1
+    integ.windows = 0
+    empty!(integ.tstops)
+    empty!(integ.ts)
+    empty!(integ.us)
     empty!(integ.auxu)
     integ.retcode = SciMLBase.ReturnCode.Success
     _rerun_init!(integ, integ.pgood)
@@ -823,7 +919,7 @@ function SciMLBase.reinit!(integ::FieldIntegrator, u0 = integ.prob.u0)
     foreach(clear_status!, integ.runtimes)          # a new run: no failure, no counters
     # the steady starts again, at the current parameters
     isempty(integ.starts) || Base.inferencebarrier(_steady_starts!)(integ, [(rt.alg, rt.keys) for rt in integ.runtimes])
-    0 in integ.save && _save!(integ)
+    _saves!(integ)
     return integ
 end
 
@@ -846,8 +942,8 @@ end
 function _save!(integ::FieldIntegrator)
     _check_statuses!(integ)                      # (a save synchronizes anyway)
     u = _current(integ)
-    push!(integ.t, _time(integ))
-    push!(integ.u, u)
+    push!(integ.ts, _time(integ))
+    push!(integ.us, u)
     if integ.aux !== nothing
         _eval_aux!(integ)
         push!(integ.auxu, _aux_values(integ))
@@ -886,24 +982,20 @@ _declared_all(rts::Tuple, code) = _declared_all(Base.tail(rts), _worse(code, che
 end
 
 function CommonSolve.solve!(integ::FieldIntegrator)
-    k = searchsortedfirst(integ.save, integ.iter + 1)
-    while integ.iter < integ.nsteps && _running(integ.retcode)
+    while _time(integ) < integ.tend - 1e-9 * integ.dt && _running(integ.retcode)
         CommonSolve.step!(integ)
-        if k <= length(integ.save) && integ.save[k] == integ.iter
-            _save!(integ)
-            k += 1
-        end
     end
     KA.synchronize(integ.prob.backend)
     _check_statuses!(integ)
     _running(integ.retcode) && _check_declared!(integ)
-    _running(integ.retcode) && (isempty(integ.save) ||
-     integ.save[end] != integ.iter) && (u = _current(integ); !all(isfinite, u)) && _unstable!(integ, u)
+    _running(integ.retcode) && (isempty(integ.ts) ||
+     integ.ts[end] != _time(integ)) && (u = _current(integ); !all(isfinite, u)) && _unstable!(integ, u)
     # a failure stops the run: the state it stopped at is saved (as front end A does)
-    !_running(integ.retcode) && (isempty(integ.t) || integ.t[end] != _time(integ)) && _save!(integ)
-    return FieldSolution(integ.prob, integ.t, integ.u, integ.retcode, integ.substeps, substep_counts(integ), integ.auxu,
-        field_stats(integ))
+    !_running(integ.retcode) && (isempty(integ.ts) || integ.ts[end] != _time(integ)) && _save!(integ)
+    return _solution(integ)
 end
+_solution(integ::FieldIntegrator) = FieldSolution(integ.prob, integ.ts, integ.us, integ.retcode, integ.substeps,
+    substep_counts(integ), integ.auxu, field_stats(integ))
 
 """
     field_stats(integ) -> NamedTuple
@@ -988,7 +1080,10 @@ Parameters and tables are read and written through `integ.ps` (SciML's conventio
 §2.13): `integ.ps[k]`, `integ.ps[k] = v`, `integ.ps[Dk] = values`, `integ.ps[Dk[2]] = v`.
 `integ[k]` and `integ[k] = v` of a parameter or table are errors that give that route.
 """
-function Base.getindex(i::FieldIntegrator, sym)
+# SciMLBase's `DEIntegrator` methods for a list or a tuple would be ambiguous with these
+Base.getindex(i::FieldIntegrator, sym) = _integ_getindex(i, sym)
+Base.getindex(i::FieldIntegrator, sym::Union{Tuple, AbstractArray}) = _integ_getindex(i, sym)
+function _integ_getindex(i::FieldIntegrator, sym)
     _parameter_route(i, sym, false)
     # a list reads each of its names (fields, inputs alike)
     sym isa Union{AbstractVector, Tuple} && i.prob.index isa LatticeIndex && return map(s -> i[s], sym isa Tuple ? sym : collect(sym))
@@ -1176,15 +1271,75 @@ function _parameter_route(i::FieldIntegrator, sym, write::Bool)
         " (SciML's convention: an integrator indexes states, `integ.ps` its parameters)")))
 end
 # `integ.ps`: SciML's parameter proxy (`getp`/`setp`; a table write goes through `setp` too)
+# (SciML's integrator properties: `t` the current time, `u` the current state, `sol` the
+# solution so far, `tdir` the direction, `opts` the options the callbacks of DiffEqCallbacks read)
 function Base.getproperty(i::FieldIntegrator, f::Symbol)
     f === :ps && return SII.ParameterIndexingProxy(i)
+    f === :t && return getfield(i, :tnow)
+    f === :u && return SII.state_values(i)
+    f === :sol && return _solution(i)
+    f === :tdir && return 1.0
+    f === :opts && return (; maxiters = typemax(Int), tstops = getfield(i, :tstops))
     return getfield(i, f)
 end
-Base.propertynames(i::FieldIntegrator) = (fieldnames(typeof(i))..., :ps)
+Base.propertynames(i::FieldIntegrator) = (fieldnames(typeof(i))..., :ps, :t, :u, :sol, :tdir, :opts)
+
+"""
+    add_tstop!(integ, t)
+
+Make the owned run land on the time `t` (F4-03): a time on the window grid is a window's end
+already; a time off it is reached by one shortened window ([`FieldIntegrator`](@ref)). A time
+at or before `integ.t` is an error, as on OrdinaryDiffEq's integrators.
+"""
+function SciMLBase.add_tstop!(i::FieldIntegrator, t)
+    t <= _time(i) && throw(ArgumentError(string("add_tstop!: t = ", t, " is not after the integrator's time ", _time(i))))
+    ts = getfield(i, :tstops)
+    k = searchsortedfirst(ts, t)
+    (k <= length(ts) && ts[k] == t) || insert!(ts, k, Float64(t))
+    return nothing
+end
+SciMLBase.has_tstop(i::FieldIntegrator) = !isempty(getfield(i, :tstops))
+SciMLBase.first_tstop(i::FieldIntegrator) = first(getfield(i, :tstops))
+SciMLBase.pop_tstop!(i::FieldIntegrator) = popfirst!(getfield(i, :tstops))
+"""
+    derivative_discontinuity!(integ, true)
+
+The state or the data changed outside the steps (a write into `integ.u`, a callback): every
+group's algorithm history is dropped ([`reset!`](@ref): Crank–Nicolson damps again, BDF2
+starts again). `false` changes nothing. `u_modified!` is SciML's older name.
+"""
+SciMLBase.derivative_discontinuity!(i::FieldIntegrator, b::Bool) = (b && foreach(reset!, i.runtimes); nothing)
+"""
+    terminate!(integ, retcode = ReturnCode.Terminated)
+
+End the owned run at its current time: `solve!` and `step!(integ, dt)` stop, and the state is
+saved.
+"""
+function SciMLBase.terminate!(i::FieldIntegrator, retcode = SciMLBase.ReturnCode.Terminated)
+    i.retcode = retcode
+    return nothing
+end
+"""
+    savevalues!(integ, force_save = false) -> (saved, savedexactly)
+
+Save the current state at the current time now (once per time).
+"""
+function SciMLBase.savevalues!(i::FieldIntegrator, force_save = false)
+    (isempty(i.ts) || i.ts[end] != _time(i)) || return (false, false)
+    _save!(i)
+    return (true, true)
+end
+SciMLBase.get_proposed_dt(i::FieldIntegrator) = i.dt
+SciMLBase.set_proposed_dt!(i::FieldIntegrator, dt) = throw(ArgumentError(string("set_proposed_dt!: an owned run steps ",
+    "a fixed window (dt = ", i.dt, "); land on a time with `add_tstop!` or `step!(integ, dt, true)`, or give the ",
+    "algorithm another `dt`")))
+SciMLBase.done(i::FieldIntegrator) = !_running(i.retcode) || _time(i) >= i.tend - 1e-9 * i.dt
 
 # an input symbol writes the input's array (the masks run again); a parameter or table is an
 # error naming `integ.ps`; any other goes to SII
-function Base.setindex!(i::FieldIntegrator, v, sym)
+Base.setindex!(i::FieldIntegrator, v, sym) = _integ_setindex!(i, v, sym)
+Base.setindex!(i::FieldIntegrator, v, sym::Union{Tuple, AbstractArray}) = _integ_setindex!(i, v, sym)
+function _integ_setindex!(i::FieldIntegrator, v, sym)
     _parameter_route(i, sym, true)
     k = i.prob.index isa LatticeIndex ? input_key(i.prob.index, sym) : nothing
     if k === nothing
