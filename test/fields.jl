@@ -1107,7 +1107,7 @@ end
     for m in (FdDefaults(; name = :f), mtkcompile(FdDefaults(; name = :f)))
         prob = LP.discretize(Potts.fields(m), LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64))
         s = LP.solve(prob, LP.ExplicitEuler(; dt = 0.1, substeps = 1))
-        @test s.retcode == Potts.SciMLBase.ReturnCode.Success && all(≈(2 * 0.95^10), s[:c][end])
+        @test s.retcode == Potts.SciMLBase.ReturnCode.Success && all(≈(2 * 0.95^10), s[:c, end])
         o = LP.discretize(Potts.fields(m), LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64))
         @test o isa Potts.SciMLBase.ODEProblem && o.p.values == [1.0, 0.5] && all(==(2.0), o.u0)
     end
@@ -1115,7 +1115,7 @@ end
     prob = LP.discretize(Potts.fields(FdComputedRate(; name = :f)), LP.LatticeDiscretization(LP.Grid((6, 4));
         T = Float64))
     @test LP.getp(prob, :k2)(prob) == 1.0
-    @test all(≈(0.9^10), LP.solve(prob, LP.ExplicitEuler(; dt = 0.1, substeps = 1))[:c][end])
+    @test all(≈(0.9^10), LP.solve(prob, LP.ExplicitEuler(; dt = 0.1, substeps = 1))[:c, end])
     @test LP.getp(LP.remake(prob; p = [:k => 1.0]), :k2)(LP.remake(prob; p = [:k => 1.0])) == 2.0
     # a kind table on the ODE path is the table (round 2: the right side read the state for
     # it); c = 1 on medium sites: dc/dt = −δ[medium] = −0.5
@@ -1142,7 +1142,7 @@ end
     K = zeros(Int32, 12, 10); K[3:5, 4:6] .= 1
     prob = LP.discretize(Potts.fields(FdSource(; name = :f)), LP.LatticeDiscretization(LP.Grid((12, 10)); T = Float64); inputs = [:kind => K])
     s = LP.solve(prob, LP.ExplicitEuler(; dt = 0.1, substeps = 1); saveat = 0.1)
-    @test s[:c][2] ≈ 0.1 * 0.05 .* (K .== 1)
+    @test s[:c, 2] ≈ 0.1 * 0.05 .* (K .== 1)
     # … by the model's word (round 1: only the generated key "kind__in"); "kind" too, and the
     # messages print routes that run, never `__in`
     fe(f) = something(fd_err(f), "(no error)")
@@ -1161,7 +1161,7 @@ end
     V = fill(2.0, 6, 4)
     s = LP.solve(LP.discretize(fvol, LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64);
         inputs = [:volume => V]), LP.ExplicitEuler(; dt = 0.1, substeps = 1); saveat = 0.1)
-    @test all(≈(0.1 * 0.01 * 2.0), s[:c][2])
+    @test all(≈(0.1 * 0.01 * 2.0), s[:c, 2])
     err = fe(() -> LP.solve(LP.discretize(fvol, LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64)), LP.ExplicitEuler(; dt = 0.1)))
     @test occursin("`volume`", err) && occursin(":volume => values", err) && !occursin("__in", err)
 end
@@ -1227,11 +1227,11 @@ end
     bi = init(bp, groups)
     @test [r.n for r in bi.runtimes] == [2, 3]
     s = solve!(bi)
-    @test isapprox(s[:c][end], Array(st.site.c); rtol = 1e-12) && isapprox(s[:u][end], Array(st.site.u); rtol = 1e-12)
+    @test isapprox(s[:c, end], Array(st.site.c); rtol = 1e-12) && isapprox(s[:u, end], Array(st.site.u); rtol = 1e-12)
     @test maximum(Array(st.site.u)) > 0                                     # u has grown from c
     # control: one group steps c and u together (u reads the old c)
     one = solve(bp, ExplicitEuler(; dt = 1.0, substeps = 3))
-    @test !(one[:u][end] ≈ Array(st.site.u))
+    @test !(one[:u, end] ≈ Array(st.site.u))
 end
 
 # F2-08a (review S1 of F2-06): a parameter write that the field phases refuse (a coupling past
@@ -1671,7 +1671,7 @@ end
         foreach(_ -> step!(integ), 1:k)
         a = Array(current_state(integ).site.c)
         bp = LP.discretize(bsys[name], LP.LatticeDiscretization(LP.Grid(dims); T = Float64))
-        bb = LP.solve(LP.remake(bp; u0 = vec(c0)), LP.ExplicitEuler(; dt = 1.0, substeps = n))[:c][end]
+        bb = LP.solve(LP.remake(bp; u0 = vec(c0)), LP.ExplicitEuler(; dt = 1.0, substeps = n))[:c, end]
         @test a == bb
         @test maximum(abs, a .- c0) > 1e-3                 # the operator moved the field
     end
@@ -1835,7 +1835,7 @@ end
     @test occursin("`ExplicitMap()`", err) && occursin("map field", err)
     # B steps the model's map the same way
     bm = LP.solve(LP.discretize(Potts.fields(FpMap(; name = :f)), LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64)), ExplicitMap())
-    @test bm[:m][2] == vals[1] && bm[:m][end] == vals[1]  # B's span is the PDESystem's (0, 1): one map step
+    @test bm[:m, 2] == vals[1] && bm[:m, end] == vals[1]  # B's span is the PDESystem's (0, 1): one map step
     # a rate and a map in one model: refused on both front ends with F1's message
     err = something(fd_err(() -> mtkcompile(FpMixed(; name = :f))), "")
     @test occursin("mixes rate equations (of `c`) and maps (of `m`)", err) && occursin("@after_mcs", err)
@@ -2058,7 +2058,7 @@ end
         [tt ∈ LP.Interval(0.0, 2.0), x ∈ LP.Interval(0.0, 8.0), y ∈ LP.Interval(0.0, 6.0)], [tt, x, y], [ce],
         [Dc, q, αr, βr, gr]; name = :b)
     bp = LP.discretize(bsys, LP.LatticeDiscretization(LP.Grid(dims); T = Float64))
-    @test run(FbBcsNR) == LP.solve(LP.remake(bp; u0 = vec(c0)), LP.ExplicitEuler(; dt = 1.0, substeps = n))[:c][end]
+    @test run(FbBcsNR) == LP.solve(LP.remake(bp; u0 = vec(c0)), LP.ExplicitEuler(; dt = 1.0, substeps = n))[:c, end]
     # `Potts.fields` carries the `@bcs` conditions and the `Flux`/`Robin` faces
     hasder(f) = any(b -> occursin("Differential(x", string(b)), getfield(f, :bcs))
     @test hasder(Potts.fields(FbFluxRobin(; name = :f))) && hasder(Potts.fields(FbFluxRobinBcs(; name = :f)))
@@ -2377,7 +2377,8 @@ end
     pf = Potts.fields(FbMaskLater(; name = :f))
     bp = LP.discretize(pf, LP.LatticeDiscretization(LP.Grid(dims); T = Float64);
         u0 = [:c => c0, :e => e0], tspan = (0, K))
-    b = LP.solve(bp, LP.ExplicitEuler(; dt = 1.0, substeps = N); saveat = 1.0)[:c][2:end]
+    sbp = LP.solve(bp, LP.ExplicitEuler(; dt = 1.0, substeps = N); saveat = 1.0)
+    b = [sbp[:c, i] for i in 2:length(sbp.t)]
     @test b == [x[1] for x in runA(FbMaskLater; one...)]
     # the mask on `e` from `c` at the window start or after `c`'s step
     function earlier(src)
@@ -2425,7 +2426,7 @@ end
     prob = LP.discretize(Potts.fields(FdClosed(; name = :f)), disc; p = [:k => 0.5], u0 = [:c => 1.0], tspan = (0, 1))
     @test LP.getp(prob, :k)(prob) == 0.5 && all(==(1.0), prob.u0)
     # a uniform field decays by (1 − 0.1 k) per step: 0.95^10 (control: the default k = 0 keeps 1)
-    @test all(≈(0.95^10; rtol = 1e-13), LP.solve(prob, LP.ExplicitEuler(; dt = 0.1, substeps = 1))[:c][end])
+    @test all(≈(0.95^10; rtol = 1e-13), LP.solve(prob, LP.ExplicitEuler(; dt = 0.1, substeps = 1))[:c, end])
 end
 
 # F2-15 (F2 design §2.7, D-F2-1): computed parameters are read-only and derived again from the
@@ -2458,9 +2459,9 @@ end
         field_solver = ExplicitEuler(; substeps = 2))
     a = solve(prob, SequentialCPM()).u[end].site.c
     bp = LP.discretize(Potts.fields(FdComputedFace(; name = :f)), LP.LatticeDiscretization(LP.Grid((8, 8)); T = Float64); u0 = [:c => prob.u0.site.c], tspan = (0, 2))
-    @test LP.solve(bp, LP.ExplicitEuler(; dt = 1.0, substeps = 2))[:c][end] == a
+    @test LP.solve(bp, LP.ExplicitEuler(; dt = 1.0, substeps = 2))[:c, end] == a
     a3 = solve(Potts.remake(prob; p = [:g1 => 3.0]), SequentialCPM()).u[end].site.c
-    @test LP.solve(LP.remake(bp; p = [:g1 => 3.0]), LP.ExplicitEuler(; dt = 1.0, substeps = 2))[:c][end] == a3 != a
+    @test LP.solve(LP.remake(bp; p = [:g1 => 3.0]), LP.ExplicitEuler(; dt = 1.0, substeps = 2))[:c, end] == a3 != a
     # one table of writes against A, B owned and B ODE: equal values, equal refusals
     pa = PottsProblem(FdChainK(; name = :k), [fd_empty((8, 6)); :c => c0], (0, 1))
     sysb = Potts.fields(FdChainK(; name = :k))
@@ -2486,7 +2487,7 @@ end
     ib.ps[:α] = 0.3
     @test ib.ps[:γ] == 0.65
     step!(ib)
-    @test ib[:c] == LP.solve(LP.remake(po; p = [:α => 0.3]), LP.ExplicitEuler(; dt = 1.0))[:c][end]   # the step reads γ
+    @test ib[:c] == LP.solve(LP.remake(po; p = [:α => 0.3]), LP.ExplicitEuler(; dt = 1.0))[:c, end]   # the step reads γ
     @test occursin("`γ` is computed from `α`", err(() -> (ib.ps[:γ] = 1.0))) && ib.ps[:γ] == 0.65
     # SciMLStructures: A's `replace` derives again; B's parameter vector, replaced whole with a
     # stale computed slot, is derived again by `remake`
@@ -2498,7 +2499,7 @@ end
     v[findfirst(==(0.25), v)] = 99.0                    # γ's slot, stale
     r = LP.remake(po; p = v)
     @test getp(r, :γ)(r) == 0.65 && !(99.0 in r.p)
-    @test LP.solve(r, LP.ExplicitEuler(; dt = 1.0))[:c][end] == LP.solve(LP.remake(po; p = [:α => 0.3]), LP.ExplicitEuler(; dt = 1.0))[:c][end]
+    @test LP.solve(r, LP.ExplicitEuler(; dt = 1.0))[:c, end] == LP.solve(LP.remake(po; p = [:α => 0.3]), LP.ExplicitEuler(; dt = 1.0))[:c, end]
 end
 
 # F3-00 review r1 S1: a model with states and aux fields evaluates its aux fields at init too
@@ -3087,7 +3088,7 @@ end
         SequentialCPM()).u[end].site.c)
     bp = LP.discretize(MTKB.PDESystem([DD(ce) ~ LP.DivKGrad(:harmonic)(ce, ce)], [c(0, x, y) ~ 0.5], dom, [tt, x, y], [ce], Any[];
         name = :b), LP.LatticeDiscretization(LP.Grid(dims); T = Float64))
-    @test a == LP.solve(LP.remake(bp; u0 = vec(c0)), LP.ExplicitEuler(; dt = 1.0))[:c][end]
+    @test a == LP.solve(LP.remake(bp; u0 = vec(c0)), LP.ExplicitEuler(; dt = 1.0))[:c, end]
     # no declared interval: the term stays one the bound cannot see (the count is refused)
     e = something(fd_err(() -> PottsProblem(FbIvNoBounds(; name = :f), fd_empty(dims), (0, 2); field_solver = ExplicitEuler())), "")
     @test occursin("DivKGrad", e) && occursin("cannot see", e)

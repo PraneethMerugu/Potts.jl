@@ -32,7 +32,7 @@ pce, poe, pqe = gpc(t, x, y), gpo(t, x, y), gpq(t, x, y)
     end
     @test maximum(abs, ig[poe]) <= 1.0                            # o stays bounded (diffusion of x y)
     s = solve(p, alg)
-    @test s.counts == c0 && LFP.substep_counts(s) == c0 && s.substeps == 1
+    @test LFP.substep_counts(s) == c0 && substep_counts(s)[1] == 1
 end
 
 @parameters gk = 300.0
@@ -64,7 +64,7 @@ rtwo(n) = FieldGroups(r1e => ExplicitEuler(; dt = 0.01, substeps = n), r2e => Ex
         c = c - 5.0 * 0.01 * o                                    # the c group: o held over the window
         o = o + 5.0 * 0.01 * c                                    # the o group reads the new c (2 substeps, exact)
     end
-    @test all(≈(c; rtol = 1e-12), sol[:gr1][end]) && all(≈(o; rtol = 1e-12), sol[:gr2][end])
+    @test all(≈(c; rtol = 1e-12), sol[:gr1, end]) && all(≈(o; rtol = 1e-12), sol[:gr2, end])
     @test abs(c - cos(0.5)) < 2e-2 && abs(o - sin(0.5)) < 2e-2    # within the splitting's truncation
     # a parameter change past the limit is refused, atomically
     @test occursin("dt · Σ max|coefficient| = 3.0", gerr(() -> setp(ig, gk)(ig, 300.0)))
@@ -112,7 +112,7 @@ gwnum(e, key) = parse(Float64, match(Regex(key * raw" ([0-9.eE+-]+)"), e).captur
             sol = solve!(ig)
             @test sol.retcode == ReturnCode.Success
             # the groups one after the other, by hand
-            nc, nu = cfirst ? (sol.counts[1], sol.counts[2]) : (sol.counts[2], sol.counts[1])
+            nc, nu = cfirst ? (substep_counts(sol)[1], substep_counts(sol)[2]) : (substep_counts(sol)[2], substep_counts(sol)[1])
             @test (nc, nu) == (2, 3)
             c, u = 1.0, 0.0
             for _ in 1:10
@@ -125,9 +125,9 @@ gwnum(e, key) = parse(Float64, match(Regex(key * raw" ([0-9.eE+-]+)"), e).captur
                     for _ in 1:nc; c -= 0.01 / nc * 0.1 * c; end
                 end
             end
-            @test all(≈(c; rtol = 1e-12), sol[:gwc][end]) && all(≈(u; rtol = 1e-12), sol[Symbol(rk)][end])
+            @test all(≈(c; rtol = 1e-12), sol[:gwc, end]) && all(≈(u; rtol = 1e-12), sol[Symbol(rk), end])
             uex = k * (exp(-0.01) - exp(-0.1)) / 0.9               # u' = k e^{-0.1 t} − u
-            @test abs(sol[Symbol(rk)][end][1] - uex) < 0.1 * uex   # bounded: the first-order split error
+            @test abs(sol[Symbol(rk), end][1] - uex) < 0.1 * uex   # bounded: the first-order split error
         end
     end
 end
@@ -188,7 +188,7 @@ end
             wce => ExplicitEuler(; dt = 0.01, substeps = 3))
         sol = solve(p, alg)
         @test sol.retcode == ReturnCode.Success
-        @test 0 < sol[:gwc][end][1] < 300 * 0.1                    # bounded by k t max a
+        @test 0 < sol[:gwc, end][1] < 300 * 0.1                    # bounded by k t max a
     end
 end
 
@@ -203,15 +203,15 @@ end
     alg = FieldGroups(xa => ExplicitEuler(; dt = 0.01, substeps = 1), xb => ExplicitEuler(; dt = 0.01, substeps = 2),
         xc => ExplicitEuler(; dt = 0.01, substeps = 3))
     sol = solve(p, alg)
-    @test sol.retcode == ReturnCode.Success && sol.counts == [1, 2, 3]
+    @test sol.retcode == ReturnCode.Success && substep_counts(sol) == [1, 2, 3]
     a, b, c = 1.0, 0.0, 0.0                                       # the groups in state order, by hand
     for _ in 1:10
         a -= 0.01 * a
         for _ in 1:2; b += 0.005 * (300 * a - 0.5 * c); end
         for _ in 1:3; c += 0.01 / 3 * 0.5 * b; end
     end
-    @test all(≈(a; rtol = 1e-12), sol[:gxa][end]) && all(≈(b; rtol = 1e-12), sol[:gxb][end]) &&
-          all(≈(c; rtol = 1e-12), sol[:gxc][end])
+    @test all(≈(a; rtol = 1e-12), sol[:gxa, end]) && all(≈(b; rtol = 1e-12), sol[:gxb, end]) &&
+          all(≈(c; rtol = 1e-12), sol[:gxc, end])
     # a strong loop (w dt = 3) is still refused: κ is the loop's own 3.0 (not 3 + 3), naming b and c only
     e = gwerr(() -> init(remake(p; p = [gxw => 300.0]), alg))
     @test occursin("the groups of `gxb`, `gxc` read one another in a loop", e) &&

@@ -63,6 +63,7 @@ include("implicit.jl")
 include("coupled.jl")
 include("tangent.jl")
 include("ode.jl")
+include("series.jl")
 
 # the parameter object of B's SciML problems (F4-00)
 public LatticeParameters, TableSlot, InputSlot, with_values, remake_params, remake_u0
@@ -70,6 +71,8 @@ public LatticeParameters, TableSlot, InputSlot, with_values, remake_params, rema
 public ClockTick, MaskSync, mask_sync!, sync_masks!, UpdateLatticeAb, steady_start!, lattice_matrix, LatticeODEProblem, LatticeOperator, LatticeLinearProblem, LatticeTimeFreeProblem
 public LatticeMetadata, LatticeFunction, LatticeProblem, LatticeDiscreteProblem, lattice_metadata, lattice_problem,
        field_problem, rhs_build
+# solutions (F4-04)
+public FieldSeries, field_series, LatticeStats, LatticeSolution, finish!
 # the coupling between field groups and the per-group counts (review of F2-06)
 public compute_type, substep_counts, lagged_coupling, group_loops, steady_loop_rates, steady_start, starts_steady, StartText, StartSubsteps
 # the one substep policy of both front ends and its words (F3-01)

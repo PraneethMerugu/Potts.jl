@@ -37,8 +37,8 @@ fgrid(v, n, m) = reshape(v, n, m)
     ode = discretize(sys, LatticeDiscretization(Grid((n, m)); T = Float64))
     @test ode isa ODEProblem
     os = SciMLBase.solve(ode, Tsit5(); abstol = 1e-12, reltol = 1e-12, saveat = 0.25)
-    @test all(i -> maximum(abs, os[c(t, x, y)][i] .- exp(-λ * os.t[i]) .* mode) < 1e-9, eachindex(os.t))
-    @test size(os[:c][end]) == (n, m)
+    @test all(i -> maximum(abs, os[c(t, x, y), i] .- exp(-λ * os.t[i]) .* mode) < 1e-9, eachindex(os.t))
+    @test size(os[:c, end]) == (n, m)
     # the right side allocates nothing warm
     du, u = similar(ode.u0), copy(ode.u0)
     ode.f(du, u, ode.p, 0.0)
@@ -52,7 +52,7 @@ end
     lin = psys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0, c(t, 1, y) ~ gr, c(t, x, 0) ~ c(t, x, 1)], [gr]; T = 4.0)
     sol = solve(owned(lin, n, 2), ExplicitEuler(; dt = 1 / 4n^2 / 2))
     xc = ((1:n) .- 0.5) ./ n
-    @test maximum(abs, sol[c(t, x, y)][end][:, 1] .- (1 .- xc)) < 1e-9
+    @test maximum(abs, sol[c(t, x, y), end][:, 1] .- (1 .- xc)) < 1e-9
     # the reaction-diffusion steady state D c″ = k c with c(0) = 1, c′(1) = 0 (discrete oracle)
     rd = psys([D(ce) ~ Dr * Δ(ce) - kr * ce],
         [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)], [Dr, kr]; T = 6.0)
@@ -67,11 +67,11 @@ end
     A[1, 1] += n^2                                                # Dirichlet ghost −c + 2
     A[n, n] -= n^2                                                # no-flux ghost c
     b = zeros(n); b[1] = 2n^2
-    @test maximum(abs, sr[:c][end][:, 1] .- A \ b) < 1e-9
-    @test maximum(abs, sr[:c][end][:, 1] .- (cosh.(2 .* (1 .- xc)) ./ cosh(2))) > 1e-4   # (negative control: continuous)
+    @test maximum(abs, sr[:c, end][:, 1] .- A \ b) < 1e-9
+    @test maximum(abs, sr[:c, end][:, 1] .- (cosh.(2 .* (1 .- xc)) ./ cosh(2))) > 1e-4   # (negative control: continuous)
     # conservation: periodic and no-flux faces keep Σ c to roundoff; a Dirichlet face does not
     cons(bcs) = (s = solve(owned(psys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ x + y^2; bcs], Num[]; T = 0.05), 8, 6),
-                     ExplicitEuler(; dt = 1e-3)); (sum(s[:c][1]), sum(s[:c][end])))
+                     ExplicitEuler(; dt = 1e-3)); (sum(s[:c, 1]), sum(s[:c, end])))
     m0, m1 = cons([c(t, x, 0) ~ c(t, x, 1), Differential(x)(c(t, 0, y)) ~ 0.0, Differential(x)(c(t, 1, y)) ~ 0.0])
     @test abs(m1 - m0) < 1e-12 * abs(m0)
     m0, m1 = cons([c(t, x, 0) ~ c(t, x, 1), c(t, 0, y) ~ 0.0])
@@ -94,19 +94,19 @@ end
     @test S(prob, ExplicitEuler(; dt = 0.01, substeps = 1)) == ceil(Int, 0.01 * (8n^2 + 3) / 1.8)
     sol = solve(prob, ExplicitEuler(; dt = 0.01))
     @test SciMLBase.successful_retcode(sol)
-    @test all(isfinite, sol[:c][end]) && 0 <= minimum(sol[:c][end]) && maximum(sol[:c][end]) < 1
+    @test all(isfinite, sol[:c, end]) && 0 <= minimum(sol[:c, end]) && maximum(sol[:c, end]) < 1
     # regression (review probe): D 1 → 4 through remake raises the substeps; the run stays finite
     p4 = remake(base, p = [Dr => 4.0])
     s4 = solve(p4, ExplicitEuler(; dt = 0.01))
     @test s4.substeps == ceil(Int, 0.01 * 32n^2 / 1.8) && SciMLBase.successful_retcode(s4) &&
-          all(isfinite, s4[:c][end])
+          all(isfinite, s4[:c, end])
     # … and through setp on an integrator
     integ = init(base, ExplicitEuler(; dt = 0.01))
     m1 = integ.substeps
     setp(integ, Dr)(integ, 4.0)
     @test integ.substeps == s4.substeps > m1
     si = solve!(integ)
-    @test SciMLBase.successful_retcode(si) && all(isfinite, si[:c][end])
+    @test SciMLBase.successful_retcode(si) && all(isfinite, si[:c, end])
     # negative control: one substep per dt (the bound ignored, forced on the integrator) blows
     # up, and the retcode says so
     integ = init(remake(prob; tspan = (0.0, 4.0)), ExplicitEuler(; dt = 0.01); saveat = 0.1)
@@ -120,7 +120,7 @@ end
     @test isnan(nd.stability(nd.p))
     @test_throws ArgumentError solve(nd, ExplicitEuler(; dt = 0.01))
     snd = solve(remake(nd; p = [Dn => 1.0]), ExplicitEuler(; dt = 0.01))
-    @test snd.substeps == ceil(Int, 0.01 * 8 * 16^2 / 1.8) && all(isfinite, snd[:c][end])
+    @test snd.substeps == ceil(Int, 0.01 * 8 * 16^2 / 1.8) && all(isfinite, snd[:c, end])
     # rate terms the bound cannot see (nonlinear, advection) need a user count
     nl = owned(psys([D(ce) ~ Δ(ce) - ce^3], [c(0, x, y) ~ 0.0], Num[]), 8)
     @test isnan(nl.stability(nl.p))
@@ -264,11 +264,11 @@ end
     @test_throws ArgumentError setp(integ, Dr)(integ, NaN)        # no bound at NaN
     @test integ.p == [1.0] && integ.substeps == m                 # unchanged
     s = solve!(integ)
-    @test SciMLBase.successful_retcode(s) && all(isfinite, s[:c][end])
+    @test SciMLBase.successful_retcode(s) && all(isfinite, s[:c, end])
     # a direct write to integ.p is not a parameter update (documented): the run is unchanged
     i2 = init(prob, ExplicitEuler(; dt = 0.01))
     i2.p[1] = 4.0
-    @test solve!(i2)[:c][end] ≈ s[:c][end]
+    @test solve!(i2)[:c][end] ≈ s[:c, end]
     # a degenerate face on a problem set through setp: refused at init with the face message
     rsys = psys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0, c(t, 0, y) + βr * Differential(x)(c(t, 0, y)) ~ 1.0,
                                   c(t, x, 0) ~ c(t, x, 1)], [βr])
@@ -287,13 +287,13 @@ end
     prob = owned(sys, n, m)
     sol = solve(prob, ExplicitEuler(; dt = 1e-3); saveat = 5e-3)
     @test sol.t ≈ [0.0, 0.005, 0.01]
-    @test sol[c(t, x, y)] == sol[:c] && size(sol[:c, 2]) == (n, m) && sol[:c, 2] == sol[:c][2]
-    @test sol[:c][1] ≈ repeat(((1:n) .- 0.5) ./ n, 1, m)        # cell-centered initial value
+    @test sol[c(t, x, y)] == sol[:c] && size(sol[:c, 2]) == (n, m) && sol[:c, 2] == sol[:c, 2]
+    @test sol[:c, 1] ≈ repeat(((1:n) .- 0.5) ./ n, 1, m)        # cell-centered initial value
     @test getp(sol, Dr)(sol) == 1.0 && sol[kr] == 0.0
     @test_throws Exception sol[o(t, x, y)]                       # negative control: not a field
     @test getsym(prob, :c)(prob) == fgrid(prob.u0, n, m)
     integ = init(prob, ExplicitEuler(; dt = 1e-3))
-    @test integ[c(t, x, y)] == sol[:c][1]
+    @test integ[c(t, x, y)] == sol[:c, 1]
     integ[c(t, x, y)] = fill(2.0, n, m)                           # setsym writes the current state
     step!(integ)
     @test integ[:c] ≈ fill(2.0, n, m)                             # flat field: no flux, no decay
@@ -339,10 +339,10 @@ end
     prob = discretize(sys, LatticeDiscretization(Grid((8, 2)); T = Float64))     # a map: a DiscreteProblem (F4-01)
     @test prob isa SciMLBase.DiscreteProblem && LFP.field_problem(prob).kind == :map
     sol = solve(prob, ExplicitMap(); saveat = 1)
-    u = sol[Ne][1][:, 1]
+    u = sol[Ne, 1][:, 1]
     for k in 1:3
         u = [((i < 8 ? u[i + 1] : 0.0) + (i > 1 ? u[i - 1] : 0.0)) / 2 for i in 1:8]   # reads 0 outside
-        @test sol[Ne][k + 1][:, 1] ≈ u
+        @test sol[Ne, k + 1][:, 1] ≈ u
     end
     @test_throws ArgumentError solve(prob, ExplicitEuler(; dt = 1.0))   # a map is not a rate
 end
@@ -464,7 +464,7 @@ end
     @test LatticePDE.Problems.substep_counts(sol) == [0]          # no state: no substep
     @test all(isempty, sol.u)                                        # the aux field is not state
     for (i, ti) in enumerate(sol.t)
-        @test sol[Ke][i] ≈ [2.0 + ti + a for a in xc, _ in 1:4] && sol[Ke, i] == sol[Ke][i]
+        @test sol[Ke, i] ≈ [2.0 + ti + a for a in xc, _ in 1:4] && sol[Ke, i] == sol[Ke, i]
     end
     @test sol[:K] == sol[Ke]                                         # by name too
     ig = init(p, ExplicitEuler(; dt = 0.25))
@@ -480,7 +480,7 @@ end
     s2 = solve(p2, ExplicitEuler(; dt = 0.25); saveat = 0.5)
     @test s2.substeps == 2 && s2.t == [0.0, 0.5, 1.0]
     for i in eachindex(s2.t)
-        @test s2[Ke][i] ≈ 2 .* s2[ce][i] .+ s2.t[i] rtol = 1e-14
+        @test s2[Ke, i] ≈ 2 .* s2[ce, i] .+ s2.t[i] rtol = 1e-14
     end
     ig2 = init(p2, ExplicitEuler(; dt = 0.25))
     step!(ig2)
@@ -498,11 +498,11 @@ end
     so = SciMLBase.solve(po, Tsit5(); abstol = 1e-10, reltol = 1e-10, saveat = 0.5)
     @test so.t == [0.0, 0.5, 1.0]
     for i in eachindex(so.t)
-        @test so[Ke][i] ≈ 2 .* so[ce][i] .+ so.t[i] rtol = 1e-14
-        @test so[Ke, i] == so[Ke][i] && size(so[:K][i]) == (4, 4)
+        @test so[Ke, i] ≈ 2 .* so[ce, i] .+ so.t[i] rtol = 1e-14
+        @test so[Ke, i] == so[Ke, i] && size(so[:K, i]) == (4, 4)
     end
-    @test so[ce][1] == s2[ce][1]
-    @test so[Ke][1] ≈ s2[Ke][1] rtol = 1e-14                         # the owned path at t0
+    @test so[ce, 1] == s2[ce, 1]
+    @test so[Ke, 1] ≈ s2[Ke, 1] rtol = 1e-14                         # the owned path at t0
     io = init(po, Tsit5(); abstol = 1e-10, reltol = 1e-10)
     # a write of `K` on the ODE path is refused in the user's words (review r2 nit; base
     # e0347d1a: "Invalid symbol K(t, x, y) for `setsym`")

@@ -59,7 +59,7 @@ end
     @test ig.retcode == ReturnCode.Success
     # one algorithm for every field is one group: the same launches, the same states
     s1, s2 = solve(p, a4), solve(p, FieldGroups(gce => a4, goe => a4))
-    @test s2.u == s1.u && s2.substeps == s1.substeps
+    @test s2.u == s1.u && substep_counts(s2) == substep_counts(s1)
     s3 = solve(p, FieldGroups(goe => a4; default = a4))
     @test s3.u == s1.u
     # step! allocates nothing, one group and two
@@ -136,10 +136,10 @@ end
     K[1, 1] = 0
     p = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64); inputs = [wk => K])
     s = solve(p, ExplicitEuler(; dt = 0.001, substeps = 1); saveat = 0.001)
-    @test s[:gw][3][1, 1] == 0.0 && s[:gw][3][2, 1] == 0.0       # t = 0.002: the mask was off at each step's start
+    @test s[:gw, 3][1, 1] == 0.0 && s[:gw, 3][2, 1] == 0.0       # t = 0.002: the mask was off at each step's start
     # step 3 starts at t = 0.002 > 0.0015: the site is clamped at its start and the substep reads
     # the 1.0 (without the step-start clamp the neighbour stays 0.0 until step 4)
-    @test s[:gw][4][1, 1] == 1.0 && s[:gw][4][2, 1] > 0.01
+    @test s[:gw, 4][1, 1] == 1.0 && s[:gw, 4][2, 1] > 0.01
 end
 
 @testset "F2-06: the warning set stays bounded over 500 remakes" begin
@@ -225,12 +225,12 @@ end
     s = solve(p, alg)
     k = init(p, alg).substeps                                     # 4 is a minimum: the bound raises it
     @test k == 15                                                 # ⌈0.05 · 512 / 1.8⌉
-    c = s[:gq][1]
+    c = s[:gq, 1]
     for _ in 1:4
         c = g_ftcs(c, 1.0, (1 / n, 1 / n), 0.05, k; periodic = true, rate = (c, i, j) -> -3.0, lower = 0.0)
     end
-    @test isapprox(s[:gq][end], c; rtol = 1e-12) && minimum(c) == 0.0   # clipped (base: `lower` refused in B)
-    @test minimum(solve(p, ExplicitEuler(; dt = 0.05, substeps = 4))[:gq][end]) < 0   # control: no clip
+    @test isapprox(s[:gq, end], c; rtol = 1e-12) && minimum(c) == 0.0   # clipped (base: `lower` refused in B)
+    @test minimum(solve(p, ExplicitEuler(; dt = 0.05, substeps = 4))[:gq, end]) < 0   # control: no clip
     # the clip's program is fused once, in the group (the update pass, no symbolic step)
     @test haskey(p.group.programs, (:euler, 0.0)) && length(p.group.programs) == 2
     init(p, ExplicitEuler(; dt = 0.1, substeps = 2, lower = 0.0))   # another window and count: the same update
@@ -345,13 +345,13 @@ end
     # the route builds and runs
     s = solve(gown(mk(0.5 * Δ(ce), nf); n = 4), ExplicitEuler(; dt = 0.01, substeps = 1))
     @test s.retcode == ReturnCode.Success
-    @test s[Ke][end] ≈ 0.5 .* s[ce][end] rtol = 1e-14
+    @test s[Ke, end] ≈ 0.5 .* s[ce, end] rtol = 1e-14
     # periodic: no face, so `Δ(K)` runs (with an explicit count) and equals the route
     per = [gsc(t, 0, y) ~ gsc(t, 1, y), gsc(t, x, 0) ~ gsc(t, x, 1)]
     a = solve(gown(mk(Δ(Ke), per); n = 4), ExplicitEuler(; dt = 0.01, substeps = 1))
     b = solve(gown(mk(0.5 * Δ(ce), per); n = 4), ExplicitEuler(; dt = 0.01, substeps = 1))
     @test a.retcode == ReturnCode.Success
-    @test a[ce][end] ≈ b[ce][end] rtol = 1e-12
+    @test a[ce, end] ≈ b[ce, end] rtol = 1e-12
 end
 
 # F3-02 (F3 design §3.11): an aux field that carries one state into another's rate (`K ~ c`,
@@ -374,7 +374,7 @@ end
         a, c = a - h * c, c + h * a                    # K = c at the substep's start
     end
     @test s.retcode == ReturnCode.Success
-    @test all(≈(a; rtol = 1e-14), s[ae][end]) && all(≈(c; rtol = 1e-14), s[cl][end]) && s[Kl][end] == s[cl][end]
+    @test all(≈(a; rtol = 1e-14), s[ae, end]) && all(≈(c; rtol = 1e-14), s[cl, end]) && s[Kl, end] == s[cl, end]
     s2 = solve(p, FieldGroups(ae => ExplicitEuler(; dt = h, substeps = 1), cl => ExplicitEuler(; dt = h, substeps = 2)))
     a, c = 1.0, 0.0
     for _ in 1:10
@@ -383,7 +383,7 @@ end
             c = c + h / 2 * a                           # c's group reads the new a
         end
     end
-    @test all(≈(a; rtol = 1e-14), s2[ae][end]) && all(≈(c; rtol = 1e-14), s2[cl][end])
+    @test all(≈(a; rtol = 1e-14), s2[ae, end]) && all(≈(c; rtol = 1e-14), s2[cl, end])
     # (aux fields that define each other stay refused, naming them: silent.jl LF48)
 end
 
@@ -477,10 +477,11 @@ end
     two = [(ExplicitEuler(; dt = 0.01), [String(pl.state[1])]), (ExplicitEuler(; dt = 0.01), [String(pl.state[2])])]
     @test_throws ArgumentError LFP._check_coupling(pl, two, pl.p; dt = 0.01)
     # `init` binds the groups behind a barrier (its return type is not inferred); the
-    # integrator it returns steps and solves with inferred types, explicit and implicit
+    # integrator it returns steps and runs with inferred types, explicit and implicit (the
+    # solution, SciML's `ODESolution`, is built behind a barrier: F4-04)
     for alg in (a4, BackwardEuler(; dt = 0.01, newton = 30, inner = DevicePCG(; rtol = 1e-12, budget = 64)))
         ig = init(p, alg)
         @inferred step!(ig)
-        @test (@inferred solve!(ig)).retcode == ReturnCode.Success
+        @test (@inferred LFP.finish!(ig)) === ig && solve!(ig).retcode == ReturnCode.Success
     end
 end

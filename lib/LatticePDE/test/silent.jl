@@ -28,7 +28,7 @@ me, de, qe, Le, ddv, qb = mm(t, x, y), dm(t, x, y), kq(t, x, y), Lc(t, x, y), dd
     @test occursin("mixes rate equations", err) && occursin("`c`", err) && occursin("`mm`", err)
     # control: the map alone runs
     m = sown(ssys([Shift(t, 1)(me) ~ me + 1], [mm(0, x, y) ~ 0.0], [me], Num[]))
-    @test solve(m, ExplicitMap())[:mm][end][1] == 1.0
+    @test solve(m, ExplicitMap())[:mm, end][1] == 1.0
 end
 
 @testset "SD-05, SD-06: parameters with no value are named" begin
@@ -44,7 +44,7 @@ end
     @test occursin("`kz`", err) && occursin("no value", err)
     # … and remake gives it one (the owned route): c(1) = (1 − 0.1 k)^10
     s = solve(remake(p; p = [kz => 2.0]), ExplicitEuler(; dt = 0.1, substeps = 1))
-    @test s[:c][end][1] ≈ 0.8^10
+    @test s[:c, end][1] ≈ 0.8^10
     # (F4-01: `discretize` returns the one problem, which `remake` gives a value; base: refused
     # at `discretize`, naming `initial_conditions`) an OrdinaryDiffEq solve names it
     err = emsg(() -> solve(discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64)), Tsit5()))
@@ -62,9 +62,9 @@ end
     sys = ssys([D(ce) ~ -k2 * ce], [c(0, x, y) ~ 1.0], [ce], [a0, k2])
     p = sown(sys)
     alg = ExplicitEuler(; dt = 0.01, substeps = 1)
-    @test solve(p, alg)[:c][end][1] ≈ (1 - 0.02)^100
+    @test solve(p, alg)[:c, end][1] ≈ (1 - 0.02)^100
     # a remake of a0 moves k2 (= 6), never leaving it stale
-    @test solve(remake(p; p = [a0 => 3.0]), alg)[:c][end][1] ≈ (1 - 0.06)^100
+    @test solve(remake(p; p = [a0 => 3.0]), alg)[:c, end][1] ≈ (1 - 0.06)^100
     @test occursin("computed", emsg(() -> remake(p; p = [k2 => 5.0])))
     # the ODE path folds it too
     o = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64))
@@ -73,7 +73,7 @@ end
     # a field's `initial_conditions` value reads it too (round 0: "`k2` reads k2")
     s7 = PDESystem([D(ce) ~ -a0 * ce], Equation[], sdom(), [t, x, y], [ce], [a0, k2]; name = :s7,
         initial_conditions = Dict(ce => k2))
-    @test solve(sown(s7), alg)[:c][1][1] == 2.0
+    @test solve(sown(s7), alg)[:c, 1][1] == 2.0
     # a computed parameter reads (round 1: reading threw the "computed" message)
     @test getp(o, k2)(o) == 2.0 && o.ps[k2] == 2.0 && os.ps[k2] == 2.0 && getp(os, k2)(os) == 2.0
     @test remake(o; p = [a0 => 3.0]).ps[k2] == 6.0
@@ -99,8 +99,8 @@ end
     @parameters g3 = 3.0 g4 = 5.0
     p3 = sown(ssys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0, c(t, 0, y) ~ g3], [ce], [g3]))
     p5 = sown(ssys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0, c(t, 0, y) ~ g4], [ce], [g4]))
-    @test solve(pg, alg)[:c][end] == solve(p3, alg)[:c][end]
-    @test solve(remake(pg; p = [g1 => 3.0]), alg)[:c][end] == solve(p5, alg)[:c][end]
+    @test solve(pg, alg)[:c, end] == solve(p3, alg)[:c, end]
+    @test solve(remake(pg; p = [g1 => 3.0]), alg)[:c, end] == solve(p5, alg)[:c, end]
     # the ODE integrator's `setp` of an input moves k2 at the next step (the right side derives it)
     oi = SciMLBase.init(o, Tsit5(); abstol = 1e-10, reltol = 1e-10)
     setp(oi, a0)(oi, 3.0)
@@ -158,8 +158,8 @@ end
     # a time mask switches on (base: c(1) = 0.0, the mask frozen at t0)
     s = solve(sown(ssys([D(ce) ~ 0.0], [c(0, x, y) ~ 0.0, ce ~ masked(t > 0.5, 1.0)], [ce], Num[])),
         ExplicitEuler(; dt = 0.1); saveat = 0.1)
-    @test all(==(1.0), s[:c][end])
-    @test all(==(0.0), s[:c][2])                                 # t = 0.1: not yet
+    @test all(==(1.0), s[:c, end])
+    @test all(==(0.0), s[:c, 2])                                 # t = 0.1: not yet
     # a field mask clamps (base: c(1) = 1.5, the clamp never engaged)
     s = solve(sown(ssys([D(ce) ~ 1.0], [c(0, x, y) ~ 0.5, ce ~ masked(ce > 0.9, 0.0)], [ce], Num[])),
         ExplicitEuler(; dt = 0.1); saveat = 0.1)
@@ -168,7 +168,7 @@ end
 end
 
 @testset "SD-08: the masked values hold from t0 and right after an input write" begin
-    # base: `s[:c][1]` all 0.0 at t0 under `masked(kq == 0, 1.0)`, and the first substep's flux
+    # base: `s[:c, 1]` all 0.0 at t0 under `masked(kq == 0, 1.0)`, and the first substep's flux
     # read that 0.0, so the neighbour of the masked site stayed 0.0 after step 1; an input
     # write kept the old values until the next step
     K = ones(Int32, 4, 4); K[1, 1] = 0
@@ -176,8 +176,8 @@ end
     p = sown(sys; inputs = [qe => K])
     alg = ExplicitEuler(; dt = 0.001, substeps = 1)
     s = solve(p, alg; saveat = 0.001)
-    @test s[:c][1][1, 1] == 1.0 && count(==(1.0), s[:c][1]) == 1
-    @test s[:c][2][2, 1] > 0.01 && s[:c][2][2, 1] == s[:c][2][1, 2]   # substep 1 saw the 1.0
+    @test s[:c, 1][1, 1] == 1.0 && count(==(1.0), s[:c, 1]) == 1
+    @test s[:c, 2][2, 1] > 0.01 && s[:c, 2][2, 1] == s[:c, 2][1, 2]   # substep 1 saw the 1.0
     integ = init(p, alg)
     @test integ[ce][1, 1] == 1.0
     held = SymbolicIndexingInterface.state_values(integ)
@@ -192,8 +192,8 @@ end
         [me, qe], Num[]; T = 1.0)
     mp = sown(msys; inputs = [qe => K3])
     ms = solve(mp, ExplicitMap())
-    @test ms[:mm][1][3, 3] == 1.0
-    @test ms[:mm][end][2, 3] == ms[:mm][end][4, 3] == ms[:mm][end][3, 2] == 0.25 * 16    # 0.25 Δ of the 1.0 (h = 1/4)
+    @test ms[:mm, 1][3, 3] == 1.0
+    @test ms[:mm, end][2, 3] == ms[:mm, end][4, 3] == ms[:mm, end][3, 2] == 0.25 * 16    # 0.25 Δ of the 1.0 (h = 1/4)
     mi = init(mp, ExplicitMap())
     K4 = copy(K3); K4[1, 1] = 0
     mi[kq] = K4
@@ -211,7 +211,7 @@ end
     @test ib[ce] == ia[ce] && ia[ce][2, 1] > 0
     # control: with no mask the field stays 0.0
     s0 = solve(sown(ssys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0], [ce], Num[])), alg; saveat = 0.001)
-    @test all(==(0.0), s0[:c][2])
+    @test all(==(0.0), s0[:c, 2])
 end
 
 @testset "V3: inputs are set, never read as zero" begin
@@ -222,7 +222,7 @@ end
     err = emsg(() -> solve(sown(dsys; domain = dm), ExplicitEuler(; dt = 0.1)))
     @test occursin("`dm`", err) && occursin("no value", err)
     s = solve(sown(dsys; domain = dm, inputs = [dm => half]), ExplicitEuler(; dt = 0.1))
-    @test s[:c][end] ≈ Float64.(half)
+    @test s[:c, end] ≈ Float64.(half)
     @test sown(dsys; domain = "dm", inputs = [dm => half]).inputs == sown(dsys; domain = dm, inputs = [dm => half]).inputs
     @test sown(dsys; domain = :dm, inputs = [dm => half]).inputs == sown(dsys; domain = dm, inputs = [dm => half]).inputs  # (round 0: MethodError)
     # a kind mask clamps only the kind-0 sites (base: every site clamped, extrema (1, 1))
@@ -230,7 +230,7 @@ end
     msys = ssys([D(ce) ~ 0.0], [c(0, x, y) ~ 0.0, ce ~ masked(qe == 0, 1.0)], [ce, qe], Num[])
     p = sown(msys; inputs = [qe => K])
     s = solve(p, ExplicitEuler(; dt = 0.1))
-    @test s[:c][end] == Float64.(K .== 0)
+    @test s[:c, end] == Float64.(K .== 0)
     # … set during a run (the mask follows) and through remake
     integ = init(p, ExplicitEuler(; dt = 0.1))
     step!(integ)
@@ -253,11 +253,11 @@ end
     integ[ce][1, 1] = 5.0
     @test integ[ce][1, 1] == v0 && integ[ce] isa Matrix{Float64}
     sv = solve!(integ)
-    @test all(==(1.0), sv[:c][end])
-    @test all(==(1.0), solve(remake(p; inputs = [qe => 0]), ExplicitEuler(; dt = 0.1))[:c][end])
+    @test all(==(1.0), sv[:c, end])
+    @test all(==(1.0), solve(remake(p; inputs = [qe => 0]), ExplicitEuler(; dt = 0.1))[:c, end])
     # a kind-coupled source (base: zero, extrema (0, 0)), owned and ODE
     ssrc = ssys([D(ce) ~ ifelse(qe == 1, 1.0, 0.0)], [c(0, x, y) ~ 0.0], [ce, qe], Num[])
-    @test solve(sown(ssrc; inputs = [qe => K]), ExplicitEuler(; dt = 0.1))[:c][end] ≈ Float64.(K)
+    @test solve(sown(ssrc; inputs = [qe => K]), ExplicitEuler(; dt = 0.1))[:c, end] ≈ Float64.(K)
     o = discretize(ssrc, LatticeDiscretization(Grid((n, n)); T = Float64); inputs = [qe => K])
     @test reshape(SciMLBase.solve(o, Tsit5()).u[end], n, n) ≈ Float64.(K)
     # (F4-01: an unset input is named at the solve, as on the owned path; base: at `discretize`)
@@ -265,7 +265,7 @@ end
     @test occursin("`kq`", err)
     # a declared default needs no value
     s = solve(sown(ssys([D(ce) ~ 1.0], [c(0, x, y) ~ 0.0], [ce, ddv], Num[]); domain = dd), ExplicitEuler(; dt = 0.1))
-    @test all(≈(1.0), s[:c][end])
+    @test all(≈(1.0), s[:c, end])
     # wrong names and sizes are named
     @test occursin("not an input", emsg(() -> sown(msys; inputs = [ce => K])))
     @test occursin("the field has 16 (one per site)", emsg(() -> sown(msys; inputs = [qe => zeros(Int32, 3)])))
@@ -314,11 +314,11 @@ end
     eqs, d = [D(ce) ~ -kv * ce], sdom()
     # `initial_conditions` give parameter values (base, measured: p = [NaN], c(1) = NaN)
     s1 = PDESystem(eqs, [c(0, x, y) ~ 1.0], d, [t, x, y], [ce], [kv]; name = :s1, initial_conditions = Dict(kv => 2.0))
-    @test solve(sown(s1), ExplicitEuler(; dt = 0.1, substeps = 1))[:c][end][1] ≈ 0.8^10
+    @test solve(sown(s1), ExplicitEuler(; dt = 0.1, substeps = 1))[:c, end][1] ≈ 0.8^10
     # … and field initial values where no `c(0, …)` condition gives one (base: "field `c` has
     # no initial condition"); both given is refused (base: the 0.5 silently ignored, c(0) = 1.0)
     s2 = PDESystem(eqs, Equation[], d, [t, x, y], [ce], [kv]; name = :s2, initial_conditions = Dict(kv => 2.0, ce => 0.5))
-    @test solve(sown(s2), ExplicitEuler(; dt = 0.1, substeps = 1))[:c][1][1] == 0.5
+    @test solve(sown(s2), ExplicitEuler(; dt = 0.1, substeps = 1))[:c, 1][1] == 0.5
     s3 = PDESystem(eqs, [c(0, x, y) ~ 1.0], d, [t, x, y], [ce], [kv]; name = :s3, initial_conditions = Dict(kv => 2.0, ce => 0.5))
     @test occursin("give one", emsg(() -> sown(s3)))
     # a key that is neither a parameter nor a variable is named (round 0: ignored)
@@ -328,7 +328,7 @@ end
     @test occursin("`zz`", err) && occursin("neither a parameter nor", err)
     # `ps = NullParameters()` (MTKBase's default) is no parameters (base: NullParameterIndexError)
     s4 = PDESystem([D(ce) ~ -ce], [c(0, x, y) ~ 1.0], d, [t, x, y], [ce]; name = :s4)
-    @test solve(sown(s4), ExplicitEuler(; dt = 0.1, substeps = 1))[:c][end][1] ≈ 0.9^10
+    @test solve(sown(s4), ExplicitEuler(; dt = 0.1, substeps = 1))[:c, end][1] ≈ 0.9^10
     @test discretize(s4, LatticeDiscretization(Grid((4, 4)); T = Float64)) isa SciMLBase.ODEProblem
     # subsystems and analytic solutions are refused by name (base: silently ignored, the run
     # gave c(1) = 0.9^10 = 0.3487 with either)
@@ -376,8 +376,8 @@ end
     # is not a parameter of the problem")
     p = sown(sys)
     alg = ExplicitEuler(; dt = 0.01, substeps = 1)
-    @test solve(p, alg)[:c][end][1] ≈ 0.98^100
-    @test solve(remake(p; p = [Dq => [1.0, 5.0]]), alg)[:c][end][1] ≈ 0.95^100
+    @test solve(p, alg)[:c, end][1] ≈ 0.98^100
+    @test solve(remake(p; p = [Dq => [1.0, 5.0]]), alg)[:c, end][1] ≈ 0.95^100
     @test p.tables == ["Dq" => [1.0, 2.0]]                       # the source is unchanged
     @test occursin("has 2 entries", emsg(() -> remake(p; p = [Dq => [1.0]])))
     # a remake gives the ODE problem a new table (F4-00; round 2: a silent no-op; base 3ed05c3b:
@@ -538,8 +538,8 @@ end
                               (-(1 / at(Dv, qb)) * ce, Dv, 100.0, qb))                     # 1, −100, −1
         sys = ssys([D(ce) ~ rate], [c(0, x, y) ~ 1.0], [ce, q], [tab])
         sol = solve(sown(sys; inputs = [q => K]), ExplicitEuler(; dt = 0.025))
-        @test sol.substeps == ceil(Int, 0.025 * k / 1.8)
-        @test SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c][end]) < 1e-20
+        @test substep_counts(sol)[1] == ceil(Int, 0.025 * k / 1.8)
+        @test SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 1e-20
     end
     # a zero entry under `1 / at(…)` that the inputs reach (a kind 1 at site (3, 2)) is not
     # finite: refused, naming the entry and saying to fix it (round 7: only "give an explicit
@@ -552,7 +552,7 @@ end
     @test occursin("not finite where the inputs reach", err)
     @test occursin("`Dz[1]`", err) && occursin("make it nonzero", err) && !occursin("index 0", err)
     @test count("make it nonzero", err) == 1                      # (round 8: said twice)
-    @test solve(sown(sys; inputs = [qb => K]), ExplicitEuler(; dt = 0.025)).substeps == 2
+    @test substep_counts(solve(sown(sys; inputs = [qb => K]), ExplicitEuler(; dt = 0.025)))[1] == 2
     # … and with an index that is 0 at a site the message names both, with both routes
     # (49a986f1 named index 0 only and said "make the coefficient finite")
     sys = ssys([D(ce) ~ -(1 / at(Dz, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dz])
@@ -575,7 +575,7 @@ end
     @parameters Da[1:3] = [0.0, 0.0, 0.0] Db[1:5] = [0.0, 0.0, 0.0, 0.0, 100.0]
     sys = ssys([D(ce) ~ -(at(Db, qe) - at(Da, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Da, Db])
     sol = solve(sown(sys; inputs = [qe => K5]), ExplicitEuler(; dt = 0.025))
-    @test sol.substeps == 2 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c][end]) < 1e-20
+    @test substep_counts(sol)[1] == 2 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 1e-20
     # index 0 (an input value 0, or a literal 0) reads 0, so `100 − at(T3, k)` is 100 there
     # (round 7 and f8f98e43: index 0 was not evaluated; n = 1, Success, max|c(1)| = 1.1e7 where
     # the exact value is exp(−100) = 3.7e-44)
@@ -583,7 +583,7 @@ end
     for (rate, ins) in ((-(100 - at(T3, qe)) * ce, [ce, qe]), (-(100 - at(T3, 0)) * ce, [ce]))
         sys = ssys([D(ce) ~ rate], [c(0, x, y) ~ 1.0], ins, [T3])
         sol = solve(sown(sys; inputs = length(ins) == 2 ? [qe => K0] : ()), ExplicitEuler(; dt = 0.025))
-        @test sol.substeps == 2 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c][end]) < 1e-20
+        @test substep_counts(sol)[1] == 2 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 1e-20
     end
     # the CPU `at` reads as the kernel does (round 7: `T[Int(k)]`, a BoundsError at 0)
     @test at([1.0, 2.0, 3.0], 0) == 0.0 && at([1.0, 2.0, 3.0], 5) == 3.0 && at([1.0, 2.0, 3.0], -1) == 1.0
@@ -599,7 +599,7 @@ end
         @test occursin("index 0", err) && occursin("(3, 2)", err) && occursin("bounds = (1, n)", err)
     end
     sol = solve(sown(sys; inputs = [qe => fill(Int32(2), 4, 4)]), ExplicitEuler(; dt = 0.025))
-    @test sol.substeps == 2 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c][end]) < 1e-20
+    @test substep_counts(sol)[1] == 2 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 1e-20
     # a declared index range is checked: a 0 in a map declared (1, 3) is refused, naming the site
     sys = ssys([D(ce) ~ -(1 / at(Dv8, qb)) * ce], [c(0, x, y) ~ 1.0], [ce, qb], [Dv8])
     err = emsg(() -> sown(sys; inputs = [qb => Kz]))
@@ -635,7 +635,7 @@ end
     @parameters Dv9[1:3] = fill(0.005, 3)
     sys = ssys([D(ce) ~ -(1 / at(Dv9, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dv9])
     sol = @test_logs solve(sown(sys; inputs = [qe => K]), ExplicitEuler(; dt = 0.025, substeps = 2))
-    @test sol.substeps == 3 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c][end]) < 1e-20
+    @test sol.substeps == 3 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 1e-20
     @test solve(sown(sys; inputs = [qe => K]), ExplicitEuler(; dt = 0.025)).substeps == 3
     # P1x: diffusion of c on 16² needs 4; an unrelated field's term over the cap kept 2
     # (1fb097f2: 5.2e30)
@@ -644,13 +644,13 @@ end
         [c(0, x, y) ~ 1.0 + sin(1000x + 700y), o(0, x, y) ~ 1.0], [ce, oe, qe], [Dd9, Tw9])
     sol = @test_logs (:warn, r"4096") match_mode = :any solve(sown(sys; n = 16, inputs = [qe => K16]),
         ExplicitEuler(; dt = 0.025, substeps = 2))
-    @test sol.substeps == 4 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c][end]) < 3
+    @test sol.substeps == 4 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 3
     # P2: over the cap, the diffusion still raises the count (1fb097f2: n = 2, 5.2e30)
     @parameters Tz9[1:16] = zeros(16)
     sys = ssys([D(ce) ~ Dd9 * Δ(ce) - sum(at(Tz9, qe + i) for i in 1:4) * ce], [c(0, x, y) ~ 1.0 + sin(1000x + 700y)], [ce, qe], [Dd9, Tz9])
     sol = @test_logs (:warn, r"4096") match_mode = :any solve(sown(sys; n = 16, inputs = [qe => K16]),
         ExplicitEuler(; dt = 0.025, substeps = 2))
-    @test sol.substeps == 4 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c][end]) < 3
+    @test sol.substeps == 4 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 3
 end
 
 @testset "warnings once per term and cause; messages name every cause (F2 records (a), (b), (e))" begin
@@ -711,10 +711,10 @@ function sradius(sys, n, inputs; iters = 4000)
 end
 checker(n, a, b) = [Int32(isodd(i + j) ? a : b) for i in 1:n, j in 1:n]
 
-sok(sol) = SciMLBase.successful_retcode(sol) && all(isfinite, sol[:c][end])
+sok(sol) = SciMLBase.successful_retcode(sol) && all(isfinite, sol[:c, end])
 # a run that grew without bound: not finite, or a million times its start (the owned path's
 # `Unstable` fires on Inf/NaN only: a run at dt ρ / n = 2.1 reaches 2e130 and reports Success)
-sgrew(sol) = (u = sol[:c][end]; !all(isfinite, u) || maximum(abs, u) > 1e6 * maximum(abs, sol[:c][1]))
+sgrew(sol) = (u = sol[:c, end]; !all(isfinite, u) || maximum(abs, u) > 1e6 * maximum(abs, sol[:c, 1]))
 
 @testset "F2 (g): a table-read diffusion multiplier takes an automatic count" begin
     # (g) a multiplier read from tables is site diffusion with a bound (bda31989: refused, "no
@@ -763,8 +763,8 @@ end
     Kb = checker(4, 1, 2)
     p = sown(sys; inputs = [qb => Kb])
     sol = solve(p, ExplicitEuler(; dt = 0.025, substeps = 2))
-    m0 = maximum(abs, sol[:c][1])
-    @test sol.substeps == ceil(Int, 0.025 * 100 * 128 / 1.8) && sok(sol) && maximum(abs, sol[:c][end]) <= m0
+    m0 = maximum(abs, sol[:c, 1])
+    @test substep_counts(sol)[1] == ceil(Int, 0.025 * 100 * 128 / 1.8) && sok(sol) && maximum(abs, sol[:c, end]) <= m0
     ρt = sradius(sys, 4, [qb => Kb])
     @test sol.substeps >= ceil(Int, 0.025 * ρt / 1.8)
     ig = init(p, ExplicitEuler(; dt = 0.025))
@@ -818,7 +818,7 @@ end
     sys = ssys([D(ce) ~ -(1 / at(Tq, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Tq])
     p = sown(sys; inputs = [qe => checker(4, 1, 2)])
     sol = solve(p, ExplicitEuler(; dt = 0.025))
-    @test sol.substeps == ceil(Int, 0.025 * 100 / 1.8) && sok(sol)
+    @test substep_counts(sol)[1] == ceil(Int, 0.025 * 100 / 1.8) && sok(sol)
     # … and a write that brings index 0 is refused, naming the site; the run is unchanged
     ig, ref = init(p, ExplicitEuler(; dt = 0.025)), init(p, ExplicitEuler(; dt = 0.025))
     step!(ig); step!(ref)
@@ -881,9 +881,9 @@ end
     err = emsg(() -> solve(p, ExplicitEuler()))
     @test occursin("needs `dt`", err)
     # (F2-07: `lower` clips in B too; the clip's tests are in groups.jl)
-    @test all(≈(0.95^10), solve(p, ExplicitEuler(; dt = 0.1, substeps = 1, lower = 0.0))[:c][end])
+    @test all(≈(0.95^10), solve(p, ExplicitEuler(; dt = 0.1, substeps = 1, lower = 0.0))[:c, end])
     @test occursin("`substeps = 0` is not a count", emsg(() -> ExplicitEuler(; dt = 0.1, substeps = 0)))
-    @test all(≈(0.95^10), solve(p, ExplicitEuler(; dt = 0.1, substeps = 1))[:c][end])           # control
+    @test all(≈(0.95^10), solve(p, ExplicitEuler(; dt = 0.1, substeps = 1))[:c, end])           # control
 end
 
 @testset "SX-37: trajectories on other tasks never share a right side's store" begin

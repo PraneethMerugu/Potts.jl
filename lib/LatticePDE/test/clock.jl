@@ -27,7 +27,7 @@ end
     finals = Float64[]
     for (dt, saveat) in ((0.1, 0.3), (0.1, 0.7), (0.25, 0.5), (0.25, 0.75))
         s = solve(p, ExplicitEuler(; dt); saveat)
-        push!(finals, s[kce][end][1])
+        push!(finals, s[kce, end][1])
         # the state at each save time: Σ over the windows before it of dt · k
         per = round(Int, 1.0 / dt)                                  # windows per period
         for (tk, u) in zip(s.t, s[kce])
@@ -40,7 +40,7 @@ end
     # the window of `ExplicitEuler()` without `dt` is the clock's period
     p2 = discretize(ksys(2.0), kdisc(; clock = 0.5))
     s = solve(p2, ExplicitEuler(); saveat = 0.5)
-    @test s.t ≈ [0.0, 0.5, 1.0, 1.5, 2.0] && isapprox(s[kce][end][1], 0.5 * (0 + 1 + 2 + 3); rtol = 1e-12)
+    @test s.t ≈ [0.0, 0.5, 1.0, 1.5, 2.0] && isapprox(s[kce, end][1], 0.5 * (0 + 1 + 2 + 3); rtol = 1e-12)
     # a `dt` that does not divide the period is refused, naming both (0.3 does not divide 0.5)
     e = kerr(() -> init(p2, ExplicitEuler(; dt = 0.3)))
     @test occursin("dt = 0.3", e) && occursin("period 0.5", e)
@@ -74,7 +74,7 @@ end
     end
     for q in (p, dbg)
         s = solve(q, ExplicitEuler(; dt = 1.0, substeps = 4))
-        @test all(v -> isapprox(v, hand; rtol = 1e-13), s[kce][end])
+        @test all(v -> isapprox(v, hand; rtol = 1e-13), s[kce, end])
     end
     # the diffusion factor: a slow Fourier mode (it decays by about 0.12 per window, so each
     # window's factor shows), 16 substeps per window, hand FTCS on a periodic 4×4 grid of spacing 1
@@ -93,7 +93,7 @@ end
     end
     for q in (pd, dd)
         s = solve(q, ExplicitEuler(; dt = 1.0, substeps = 16))
-        @test isapprox(vec(s[kce][end]), vec(want); rtol = 1e-12)
+        @test isapprox(vec(s[kce, end]), vec(want); rtol = 1e-12)
     end
 end
 
@@ -121,8 +121,8 @@ end
     # a span of 2.5 periods: the last window is shortened (F4-03; before, a refusal), and reads
     # the step index of its period
     p25 = discretize(ksys(2.5), kdisc())
-    @test isapprox(solve(p25, ExplicitEuler())[kce][end][1], 0 + 1 + 0.5 * 2; rtol = 1e-12)
-    @test isapprox(solve(p25, ExplicitEuler(; dt = 0.5))[kce][end][1], 0.5 * (0 + 0 + 1 + 1 + 2); rtol = 1e-12)
+    @test isapprox(solve(p25, ExplicitEuler())[kce, end][1], 0 + 1 + 0.5 * 2; rtol = 1e-12)
+    @test isapprox(solve(p25, ExplicitEuler(; dt = 0.5))[kce, end][1], 0.5 * (0 + 0 + 1 + 1 + 2); rtol = 1e-12)
     # two groups, one window from the clock and one `dt`; the route works, and `step_index`
     # reads the same `k` in both groups
     @variables kb(..)
@@ -134,7 +134,7 @@ end
     e = kerr(() -> solve(pg, FieldGroups(kbe => ExplicitEuler(; dt = 0.5); default = ExplicitEuler())))
     @test occursin("the clock's period, no `dt` given", e) && occursin("dt = 0.5", e)
     sg = solve(pg, FieldGroups(kbe => ExplicitEuler(; dt = 0.5, substeps = 2); default = ExplicitEuler(; dt = 0.5)))
-    @test isapprox(sg[kce][end][1], 3.0; rtol = 1e-12) && isapprox(sg[kbe][end][1], 6.0; rtol = 1e-12)
+    @test isapprox(sg[kce, end][1], 3.0; rtol = 1e-12) && isapprox(sg[kbe, end][1], 6.0; rtol = 1e-12)
     # a map: one step per unit of time; the clock is a whole number of map steps
     @variables km(..)
     kme = km(t, x, y)
@@ -142,8 +142,8 @@ end
         km(t, x, 0) ~ km(t, x, 1)], kdom(T), [t, x, y], [kme], [kη]; name = :m)
     e = kerr(() -> solve(discretize(sysm(3.0), kdisc(; clock = 0.5))))
     @test occursin("whole number of map steps", e) && !occursin("dt", e)
-    @test solve(discretize(sysm(3.0), kdisc(; clock = 1.0)))[kme][end][1] == 0 + 1 + 2      # k = 0, 1, 2
-    @test solve(discretize(sysm(4.0), kdisc(; clock = 2.0)))[kme][end][1] == 0 + 0 + 1 + 1  # k = 0, 0, 1, 1
+    @test solve(discretize(sysm(3.0), kdisc(; clock = 1.0)))[kme, end][1] == 0 + 1 + 2      # k = 0, 1, 2
+    @test solve(discretize(sysm(4.0), kdisc(; clock = 2.0)))[kme, end][1] == 0 + 0 + 1 + 1  # k = 0, 0, 1, 1
     # N6: the slot is not a parameter
     @test occursin("step_index(t)", kerr(() -> p.ps[:clock__tick]))
 end

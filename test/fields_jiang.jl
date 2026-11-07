@@ -30,7 +30,7 @@ isdefined(Main, :JiangLike) || include(joinpath(@__DIR__, "fields_jiang_model.jl
         u0 = [n => zeros(JG_DIMS .÷ 4) for n in names], tspan = (0, k), inputs = [:kind => kmap])
     sb = Potts.LatticePDE.solve(bp, BackwardEuler(; dt = 0.25); saveat = 1.0)
     for n in names
-        @test [x[n] for x in a] == sb[n][2:end]
+        @test [x[n] for x in a] == [sb[n, i] for i in 2:length(sb.t)]
     end
     # the fields are not trivial: O₂ falls from the medium value into the spheroid; lactate is
     # produced; the inhibitor grows in the core

@@ -347,6 +347,9 @@ function _aux_read(prog::Program, flat, k)
     return reshape(flat[_aux_layout(prog)[id]], ncomp(f) == 1 ? d : (d..., ncomp(f)))
 end
 Base.length(s::FieldSolution) = length(s.t)
+# (`sol[c, end]`: the last save)
+Base.lastindex(s::FieldSolution, d::Integer) = d == 2 ? length(s.t) :
+    throw(ArgumentError("a FieldSolution is indexed `sol[c, i]` by a symbol and a save"))
 
 """
     FieldIntegrator
@@ -404,6 +407,7 @@ mutable struct FieldIntegrator{P <: FieldProblem, A, S <: FieldStore, RT <: Tupl
     tstops::Vector{Float64}             # the times to land on, sorted (`add_tstop!`)
     nsave::Int                          # the next save time's index in `save`
     windows::Int                        # every window stepped (shortened ones too)
+    sciml::Any                          # the SciML problem solved (its solution's `prob`), or nothing
 end
 
 
@@ -659,7 +663,7 @@ function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; saveat = (),
     integ = FieldIntegrator{typeof(prob), typeof(alg), typeof(st), typeof(rts), T, typeof(pv), typeof(tabs),
                             _utype(st, E)}(prob, alg, st, rts, pv, pgood, tabs, t0, 0, dt, ms[1], nsteps,
         _clock(prob) === nothing ? 0 : _per(dt, _clock(prob)), save, Float64[], Vector{T}[], SciMLBase.ReturnCode.Success,
-        aux, Vector{T}[], Any[], t0, tf, Float64[], 1, 0)
+        aux, Vector{T}[], Any[], t0, tf, Float64[], 1, 0, nothing)
     # (behind a barrier: an `init` with no steady start does not compile the steady policy)
     any(g -> starts_steady(g[1]), groups) && Base.inferencebarrier(_steady_starts!)(integ, groups)
     _saves!(integ)
@@ -982,6 +986,17 @@ _declared_all(rts::Tuple, code) = _declared_all(Base.tail(rts), _worse(code, che
 end
 
 function CommonSolve.solve!(integ::FieldIntegrator)
+    finish!(integ)
+    return _solution(integ)
+end
+"""
+    finish!(integ) -> integ
+
+The run of `solve!` without its solution: step to the end of the time span, then the checks
+at the end (statuses, declared intervals, a state that is not finite; a failure saves the state
+it stopped at). Inferred; `solve!` then builds the solution behind a barrier (F4-04).
+"""
+function finish!(integ::FieldIntegrator)
     while _time(integ) < integ.tend - 1e-9 * integ.dt && _running(integ.retcode)
         CommonSolve.step!(integ)
     end
@@ -992,10 +1007,16 @@ function CommonSolve.solve!(integ::FieldIntegrator)
      integ.ts[end] != _time(integ)) && (u = _current(integ); !all(isfinite, u)) && _unstable!(integ, u)
     # a failure stops the run: the state it stopped at is saved (as front end A does)
     !_running(integ.retcode) && (isempty(integ.ts) || integ.ts[end] != _time(integ)) && _save!(integ)
-    return _solution(integ)
+    return integ
 end
-_solution(integ::FieldIntegrator) = FieldSolution(integ.prob, integ.ts, integ.us, integ.retcode, integ.substeps,
-    substep_counts(integ), integ.auxu, field_stats(integ))
+# the solution so far: SciML's `ODESolution` of the problem solved (F4-04), or a `FieldSolution`
+# for an owned problem stepped directly
+function _solution(integ::FieldIntegrator)
+    sp = getfield(integ, :sciml)
+    sp === nothing && return FieldSolution(integ.prob, integ.ts, integ.us, integ.retcode, integ.substeps,
+        substep_counts(integ), integ.auxu, field_stats(integ))
+    return Base.inferencebarrier(_ode_solution)(integ, sp)
+end
 
 """
     field_stats(integ) -> NamedTuple

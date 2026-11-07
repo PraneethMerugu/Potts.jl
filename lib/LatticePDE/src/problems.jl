@@ -1455,10 +1455,12 @@ function _index(cf::CompiledField, sys::PDESystem, s, state; derived = Pair[], c
                 b = _input_bounds(unwrap(v))
                 b == (-Inf, Inf) || push!(inputbounds, k => b)
             elseif k in state
-                push!(vars, (term, alias(v, i, length(ks))..., Symbol(k)) => FieldSlot(slots[fieldid(s, k)], dims(k)))
+                # (the bare callable `c` too, one component: `sol[c]`, F4-04)
+                push!(vars, (term, alias(v, i, length(ks))..., Symbol(k), (length(ks) == 1 ? (op,) : ())...) =>
+                                FieldSlot(slots[fieldid(s, k)], dims(k)))
             elseif any(q -> q.key == "aux:$k", s.kernels)
                 # an aux field `K ~ rhs` (F3 design §3.12): read by `sol[K]` and `integ[K]`
-                push!(aux, (term, alias(v, i, length(ks))..., Symbol(k)) => k)
+                push!(aux, (term, alias(v, i, length(ks))..., Symbol(k), (length(ks) == 1 ? (op,) : ())...) => k)
             end
         end
     end
@@ -1486,9 +1488,14 @@ function _index(cf::CompiledField, sys::PDESystem, s, state; derived = Pair[], c
         slot(k) = (i = findfirst(q -> isequal(unwrap(q), k), cf.params); i === nothing ? 0 : i)
         derive = (d, Any[last(b) for b in [base; tabs]], Int[slot(k) for k in cks])
     end
+    # the site centers of each spatial coordinate (`sol[x]`, `sol(t, x, y)`; F4-04)
+    ends, d0 = _domain_ends(sys), Int.(leveldims(s, 0))
+    coordinates = Pair[(unwrap(q), Symbol(string(unwrap(q)))) =>
+                       range(ends[d + 1][1] + (ends[d + 1][2] - ends[d + 1][1]) / (2d0[d]);
+                             step = (ends[d + 1][2] - ends[d + 1][1]) / d0[d], length = d0[d]) for (d, q) in enumerate(sys.ivs[2:end])]
     return LatticeIndex(; key = _symkey, variables = vars, parameters = params,
         independent_variables = [unwrap(sys.ivs[1])], defaults, inputs, inputnames, boolinputs, inputbounds, derived,
-        observed, parambounds, derive, aux,
+        observed, parambounds, derive, aux, coordinates,
         tables = Pair[[Any[unwrap(q), Symbol(k)] => k for (k, _) in cf.tables for q in _params(sys) if string(unwrap(q)) == k];
                       [e => (k, i) for (k, _) in cf.tables for q in _params(sys) if string(unwrap(q)) == k
                        for (i, e) in enumerate(Symbolics.scalarize(unwrap(q)))]])

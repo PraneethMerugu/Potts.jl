@@ -1216,12 +1216,14 @@ function _owned_or_refuse(prob, alg)
     lattice_metadata(prob) === nothing && throw(_ode_refusal(alg))
     return field_problem(prob)
 end
-CommonSolve.init(prob::LatticeProblem, alg::Union{FieldAlgorithm, LinearSolver}; kw...) =
-    CommonSolve.init(_owned_or_refuse(prob, alg), alg; kw...)
-CommonSolve.solve(prob::LatticeProblem, alg::Union{FieldAlgorithm, LinearSolver}; kw...) =
-    CommonSolve.solve(_owned_or_refuse(prob, alg), alg; kw...)
-CommonSolve.init(prob::LatticeProblem; kw...) = CommonSolve.init(field_problem(prob); kw...)
-CommonSolve.solve(prob::LatticeProblem; kw...) = CommonSolve.solve(field_problem(prob); kw...)
+# (the integrator keeps `prob`: its solution is SciML's, of `prob`; F4-04)
+_owned_init(fp::FieldProblem, alg, prob; kw...) = (ig = CommonSolve.init(fp, alg; kw...); ig.sciml = prob; ig)
+CommonSolve.init(prob::LatticeProblem, alg::FieldAlgorithm; kw...) = _owned_init(_owned_or_refuse(prob, alg), alg, prob; kw...)
+CommonSolve.init(prob::LatticeProblem, alg::LinearSolver; kw...) = CommonSolve.init(_owned_or_refuse(prob, alg), alg; kw...)
+CommonSolve.solve(prob::LatticeProblem, alg::FieldAlgorithm; kw...) = CommonSolve.solve!(CommonSolve.init(prob, alg; kw...))
+CommonSolve.solve(prob::LatticeProblem, alg::LinearSolver; kw...) = CommonSolve.solve(_owned_or_refuse(prob, alg), alg; kw...)
+CommonSolve.init(prob::LatticeProblem; kw...) = (fp = field_problem(prob); _owned_init(fp, _default_alg(fp), prob; kw...))
+CommonSolve.solve(prob::LatticeProblem; kw...) = CommonSolve.solve!(CommonSolve.init(prob; kw...))
 
 # A system with no time (F4-02): its `LinearProblem` or `NonlinearProblem`; a field algorithm
 # (or none: `QuasiSteady()`) solves the owned problem once

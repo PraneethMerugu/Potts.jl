@@ -169,14 +169,14 @@ end
     Dx, Dy = Differential(x), Differential(y)
     @variables fk(..) [input = true]
     run(g) = (p = fown(fsys([D(fue) ~ 0.1 * Δ(fue)], [fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ g], [fue]), 8);
-              solve(p, ExplicitEuler(; dt = 0.01))[:fu][end])
+              solve(p, ExplicitEuler(; dt = 0.01))[:fu, end])
     # `Dy(x y)` is `x`, which is 1 on the face x = 1: the run equals the plain value, bitwise
     @test run(Dy(x * y)) == run(1.0)
     @test maximum(abs, run(Dy(sin(x * y))) .- run(x * cos(x * y))) < 1e-14
     @test maximum(abs, run(Dx(x^2) / 2)) > 0 && run(Dx(x^2) / 2) == run(x)
     # … and in a Robin face's value and an initial value
     rob(g) = (p = fown(fsys([D(fue) ~ 0.1 * Δ(fue)], [fu(0, x, y) ~ Dy(x * y^2) / 2, fu(t, 1, y) + Dx(fu(t, 1, y)) ~ g], [fue]), 8);
-              solve(p, ExplicitEuler(; dt = 0.01))[:fu][end])
+              solve(p, ExplicitEuler(; dt = 0.01))[:fu, end])
     @test rob(Dy(y^2)) == rob(2y)
     # a derivative of a field read stays unevaluated: refused in words
     m = try
@@ -200,13 +200,13 @@ end
     @test occursin("the field's own normal derivative is its flux form", m) && occursin("`Dx(c) ~ g` (Neumann)", m)
     s = solve(fown(PDESystem([D(fue) ~ 0.1 * Δ(fue)], [fu(0, x, y) ~ 0.0, Dx(fu(t, 1, y)) ~ 1.0], fdom(), [t, x, y],
         [fue], Any[]; name = :fb), 8), ExplicitEuler(; dt = 0.01))
-    @test SciMLBase.successful_retcode(s.retcode) && maximum(s[:fu][end]) > 0
+    @test SciMLBase.successful_retcode(s.retcode) && maximum(s[:fu, end]) > 0
     # a face value that reads another field is a face value, not a periodic pair (N5): an input
     # runs; an aux field of the state is refused in words
     pk = fown(PDESystem([D(fue) ~ 0.1 * Δ(fue)], [fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ fk(t, 1, y)], fdom(), [t, x, y],
         [fue, fk(t, x, y)], Any[]; name = :fb), 8)
     s = solve(remake(pk; inputs = [fk => fill(2.0, 8, 8)]), ExplicitEuler(; dt = 0.01))
-    @test SciMLBase.successful_retcode(s.retcode) && maximum(s[:fu][end]) > 0
+    @test SciMLBase.successful_retcode(s.retcode) && maximum(s[:fu, end]) > 0
     m = try
         fown(PDESystem([D(fue) ~ 0.1 * Δ(fue), fKe ~ 2 * fue], [fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ fK(t, 1, y)], fdom(),
             [t, x, y], [fue, fKe], Any[]; name = :fb), 8)

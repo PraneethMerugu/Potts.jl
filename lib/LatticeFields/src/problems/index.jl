@@ -39,7 +39,9 @@ parameters to their table keys, or an entry's symbol to `(key, i)` (`remake(prob
 p = [Dk => values])` gives new values; `integ.ps[Dk]`, `getp(prob, Dk)` read them); `aux` maps
 `symbols => key`, the aux fields of the program (`K ~ rhs`, F3 design §3.12): not part of the
 state, they are evaluated from it and read by `sol[K]` and `integ[K]` ([`aux_key`](@ref); on the
-ODE path they are observed, `rhs(u(t), t)`, through the evaluator `ode_problem` sets). Any
+ODE path they are observed, `rhs(u(t), t)`, through the evaluator `ode_problem` sets); `coordinates`
+maps `symbols => centers`, each spatial coordinate to its site centers (a range: `sol[x]`, and
+`sol(t, x, y)` interpolates between them, F4-04). Any
 other symbol given as a parameter is an error naming the parameters. Every symbol is looked up
 as `key(sym)`.
 """
@@ -64,11 +66,13 @@ struct LatticeIndex{F}
     auxsyms::Vector{Any}                        # the canonical symbol of each aux field
     auxeval::Ref{Any}                           # the ODE path's aux evaluator `(u, p, t, key)`, or nothing
     program::Ref{Any}                           # the semantic program (the checks of an input write), or nothing
+    coords::Dict{Any, Any}                      # a spatial coordinate → its site centers (a range; `sol[x]`, F4-04)
+    coordsyms::Vector{Any}                      # the spatial coordinates, in order
 end
 function LatticeIndex(; key::F = identity, variables = Pair[], parameters = Pair[],
         independent_variables = Any[], defaults = Dict{Any, Any}(), inputs = Pair[],
         inputnames = Pair[], boolinputs = String[], inputbounds = Pair[], derived = Pair[], observed = Pair[],
-        tables = Pair[], parambounds = Pair[], derive = nothing, aux = Pair[]) where {F}
+        tables = Pair[], parambounds = Pair[], derive = nothing, aux = Pair[], coordinates = Pair[]) where {F}
     syms(x) = x isa Union{Tuple, AbstractVector} ? x : (x,)
     vars, varsyms = Dict{Any, FieldSlot}(), Any[]
     for (ss, slot) in variables
@@ -110,7 +114,8 @@ function LatticeIndex(; key::F = identity, variables = Pair[], parameters = Pair
                                                        for (ss, k) in tables for s in syms(ss)),
         Dict{Int, Tuple{Float64, Float64}}(Int(i) => Float64.((b[1], b[2])) for (i, b) in parambounds), derive,
         Dict{Any, String}(key(s) => String(k) for (ss, k) in aux for s in syms(ss)), Any[first(syms(ss)) for (ss, _) in aux],
-        Ref{Any}(nothing), Ref{Any}(nothing))
+        Ref{Any}(nothing), Ref{Any}(nothing), Dict{Any, Any}(key(s) => r for (ss, r) in coordinates for s in syms(ss)),
+        Any[first(syms(ss)) for (ss, _) in coordinates])
 end
 
 # `ix.K` for a name that is not a field of the index: its canonical symbol, as an MTK system

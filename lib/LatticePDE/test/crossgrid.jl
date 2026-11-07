@@ -267,7 +267,7 @@ end
         @test p.stability(p.p) ≈ 0.2 * 2048 + 1 + 0.5 * 128
         s = Test.@test_logs(min_level = Base.CoreLogging.Warn, solve(p, ExplicitEuler(; dt = 0.05); saveat = [0.05]))
         n = ceil(Int, 0.05 * (0.2 * 2048 + 1 + 0.5 * 128) / 1.8)
-        @test s.substeps == n && s[xe(xu), 2] == solve(p, ExplicitEuler(; dt = 0.05, substeps = n); saveat = [0.05])[xe(xu), 2]
+        @test substep_counts(s)[1] == n && s[xe(xu), 2] == solve(p, ExplicitEuler(; dt = 0.05, substeps = n); saveat = [0.05])[xe(xu), 2]
         # a loop across the grids: refused, naming both rows
         loop = PDESystem([D(xe(xcc)) ~ 0.01 * Δ(xe(xcc)) + 0.1 * Δ(xe(xu)), D(xe(xu)) ~ 0.2 * Δ(xe(xu)) + 0.5 * Δ(xe(xcc)) - xe(xu)],
             [xcc(0, x, y) ~ x^2 + y, xu(0, x, y) ~ 0.0], xdom(), [t, x, y], [xe(xcc), xe(xu)], Num[]; name = :xe2)

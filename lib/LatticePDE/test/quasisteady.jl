@@ -547,7 +547,7 @@ end
     want = qs_hand(; K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces = Dict((1, -1) => (:dir, 1.0)))
     @test s.retcode == ReturnCode.Success && s.t == [0.0] && length(s.u) == 1 && s.stats.solves == 1
     @test maximum(abs, s.u[1] .- want) < 1e-5 * maximum(abs, want)
-    @test s[fce][1] == s[:fc][1] == reshape(s.u[1], BDIMS)                       # (the time-free symbol reads)
+    @test s[fce, 1] == s[:fc, 1] == reshape(s.u[1], BDIMS)                       # (the time-free symbol reads)
     @test maximum(abs, solve(pf, QuasiSteady(; inner = BTIGHT)).u[1] .- want) < 1e-9
     # what a steady system refuses: stepping, a window, a time span, save keywords, a time stepper
     @test startswith(qmsg(() -> init(pf)), "`init`: the system has no time (a steady system), so there is nothing to step")
@@ -569,7 +569,7 @@ end
             QuasiSteady(; inner = DevicePCG(; rtol = 1e-12, budget = 200)))
         xs = [(i - 0.5) / n for i in 1:n, j in 1:n]
         ys = [(j - 0.5) / n for i in 1:n, j in 1:n]
-        maximum(abs, r[fce][1] .- sin.(π .* xs) .* sin.(π .* ys))
+        maximum(abs, r[fce, 1] .- sin.(π .* xs) .* sin.(π .* ys))
     end
     ord = log2.(errs[1:(end - 1)] ./ errs[2:end])
     @test all(o -> abs(o - 2) < 0.1, ord) || (println("Helmholtz orders ", ord, " errors ", errs); false)  # (1.99, 2.00)

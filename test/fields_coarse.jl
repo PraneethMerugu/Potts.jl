@@ -52,7 +52,7 @@ function fc_runB(k; alg = BackwardEuler(; dt = 1.0))
         Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((16, 12)); T = Float64);
         u0 = [:c => zeros(4, 3), :e => zeros(16, 12)], tspan = (0, k), inputs = [:kind => fc_kin()])
     s = Potts.LatticePDE.solve(bp, alg; saveat = 1.0)
-    return s[:c][2:end], s[:e][2:end]
+    return [s[:c, i] for i in 2:length(s.t)], [s[:e, i] for i in 2:length(s.t)]
 end
 
 @testset "F3-17: a Coarse(4) field in A equals B bitwise (σ frozen)" begin
@@ -92,7 +92,7 @@ end
         Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((16, 12)); T = Float64,
             domain = "domain__in"); u0 = [:c => zeros(4, 3)], tspan = (0, 3),
         inputs = [:kind => Int32.(σ), :domain__in => dm])
-    @test a == Potts.LatticePDE.solve(bp, BackwardEuler(; dt = 1.0); saveat = 1.0)[:c][2:end]
+    @test a == (s -> [s[:c, i] for i in 2:length(s.t)])(Potts.LatticePDE.solve(bp, BackwardEuler(; dt = 1.0); saveat = 1.0))
     # the nodes whose block is mostly outside keep their value (0); the others moved
     out = [count(dm[(I[1] - 1) * 4 .+ (1:4), (I[2] - 1) * 4 .+ (1:4)]) <= 8 for I in CartesianIndices((4, 3))]
     @test any(out) && all(a[end][out] .== 0.0) && all(a[end][.!out] .> 0.0)
@@ -301,7 +301,7 @@ end
             Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((16, 12)); T = Float64),
             ; u0 = [:c => zeros(4, 3), :v => zeros(16, 12), :u => zeros(16, 12)], tspan = (0, 3), inputs = [:kind => fc_kin()])
         s = Potts.LatticePDE.solve(bp, alg; saveat = 1.0)
-        @test [x[1] for x in a] == s[:c][2:end] && [x[2] for x in a] == s[:v][2:end] && [x[3] for x in a] == s[:u][2:end]
+        @test [x[1] for x in a] == [s[:c, i] for i in 2:length(s.t)] && [x[2] for x in a] == [s[:v, i] for i in 2:length(s.t)] && [x[3] for x in a] == [s[:u, i] for i in 2:length(s.t)]
     end
 end
 
@@ -377,7 +377,7 @@ end
             Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((16, 12)); T = Float64),
             ; u0 = [:c => zeros(4, 3), :v => zeros(16, 12), :u => zeros(16, 12)], tspan = (0, 3), inputs = [:kind => fc_kin()])
         s = Potts.LatticePDE.solve(bp, fb; saveat = 1.0)
-        @test [x[1] for x in a] == s[:c][2:end] && [x[2] for x in a] == s[:v][2:end]
-        @test maximum(abs, a[end][3] - s[:u][end]) < 1e-10    # (the BE group: its inner solve to 1e-12)
+        @test [x[1] for x in a] == [s[:c, i] for i in 2:length(s.t)] && [x[2] for x in a] == [s[:v, i] for i in 2:length(s.t)]
+        @test maximum(abs, a[end][3] - s[:u, end]) < 1e-10    # (the BE group: its inner solve to 1e-12)
     end
 end

@@ -145,6 +145,14 @@ that gives this route.
 tspan = (0, 10))` builds the problem at those values, with no `remake`. Any other keyword is
 an error that names it.
 
+A field algorithm returns SciML's `ODESolution`, with linear interpolation between the saves:
+`sol(t)`, `Array(sol)`, `sol.ps` (the values at the end of the run) and `sol.stats` work. A
+field reads time first, as in MethodOfLines, on every solver: `sol[c]` (or `sol[:c]`, or the
+bare `c`) is an array of size `(length(sol.t), nx, ny)` that reads the saves when indexed,
+`sol[c, i]` is the grid at save `i`, `sol[x]` holds the site centers, and `sol(t, x, y)`
+interpolates between them. In this front end, `field_series(sol, :c)` gives the same
+time-first view of a field over the saved MCS.
+
 ## The Hamiltonian as Symbolics expressions [C3]
 
 `Potts.hamiltonian(sys)` gives the `@energy` terms as `domain => expr` pairs of Symbolics

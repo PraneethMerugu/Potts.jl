@@ -34,7 +34,7 @@ end
     @test sd.t == sh.t && all(==(0), big)
     @test all(i -> maximum(abs, sd[ce, i] .- sh[ce, i]) < 1.0f-30, eachindex(sd.t))
     t512 = @elapsed (s = run(512, PDEV; T = 10.0))
-    @test s.substeps == 12 && all(isfinite, s[ce][end])
+    @test substep_counts(s)[1] == 12 && all(isfinite, s[ce, end])
     @info "§7.4 verbatim size on $pgpu: 512², 1000 steps × 12 substeps in $(round(t512; digits = 2)) s (incl. compile)"
 end
 
@@ -49,8 +49,8 @@ end
     sh = solve(mk(KernelAbstractions.CPU()), ExplicitEuler(; dt = 0.25f0); saveat = 0.5)
     @test sd.retcode == ReturnCode.Success && sd.t == sh.t == [0.0, 0.5, 1.0]
     for i in eachindex(sd.t)
-        @test Array(sd[Ke][i]) ≈ 2 .* Array(sd[ce][i]) .+ Float32(sd.t[i]) rtol = 1.0f-6
-        @test Array(sd[Ke][i]) ≈ Array(sh[Ke][i]) rtol = 1.0f-5
+        @test Array(sd[Ke, i]) ≈ 2 .* Array(sd[ce, i]) .+ Float32(sd.t[i]) rtol = 1.0f-6
+        @test Array(sd[Ke, i]) ≈ Array(sh[Ke, i]) rtol = 1.0f-5
     end
     ig = init(mk(PDEV), ExplicitEuler(; dt = 0.25f0))
     step!(ig)
@@ -123,7 +123,7 @@ end
     mk(k) = discretize(msys, LatticeDiscretization(Grid((n, n)); T = Float32, backend = PDEV);
         inputs = [qe => k])
     s = solve(mk(dk(K)), ExplicitEuler(; dt = 0.1f0))
-    @test Array(s[:c][end]) ≈ Float32.(K)
+    @test Array(s[:c, end]) ≈ Float32.(K)
     ig = init(mk(dk(K)), ExplicitEuler(; dt = 0.1f0))
     ig[qe] = dk(zeros(Int32, n, n))
     @test Array(ig[qe]) == zeros(Int32, n, n)
@@ -143,7 +143,7 @@ end
     copyto!(db, half)
     mk(m) = discretize(dsys, LatticeDiscretization(Grid((n, n)); T = Float32, backend = PDEV,
         domain = dm); inputs = [dm => m])
-    r = Threads.@spawn Array(solve(mk(db), ExplicitEuler(; dt = 0.1f0))[:c][end])
+    r = Threads.@spawn Array(solve(mk(db), ExplicitEuler(; dt = 0.1f0))[:c, end])
     @test timedwait(() -> istaskdone(r), 300.0) === :ok && fetch(r) ≈ Float32.(half)
     d2 = KernelAbstractions.allocate(PDEV, Int32, n, n)
     copyto!(d2, fill(Int32(2), n, n))
@@ -191,14 +191,14 @@ end
         sh = solve(mk(sys, KernelAbstractions.CPU()), alg; saveat = 0.5)
         @info "F3-15 $name: retcodes $(sd.retcode) (device), $(sh.retcode) (host); saves $(sd.t), $(sh.t)"
         @test sd.retcode == sh.retcode && sd.t ≈ sh.t
-        rel = maximum(i -> maximum(abs, Array(sd[ce][i]) .- sh[ce][i]) / maximum(abs, sh[ce][i]), eachindex(sd.t))
+        rel = maximum(i -> maximum(abs, Array(sd[ce, i]) .- sh[ce, i]) / maximum(abs, sh[ce, i]), eachindex(sd.t))
         @info "F3-15 $name: device vs host (Float32) max relative difference $rel"
         @test rel <= 1e-12
     end
     # control: the comparison sees a change of one Newton iteration (the advection case)
     sd = solve(mk(adv, PDEV), BackwardEuler(; dt = 0.1, newton = 5); saveat = 0.5)
     sh = solve(mk(adv, KernelAbstractions.CPU()), BackwardEuler(; dt = 0.1, newton = 6); saveat = 0.5)
-    @test maximum(abs, Array(sd[ce][end]) .- sh[ce][end]) / maximum(abs, sh[ce][end]) > 1e-12
+    @test maximum(abs, Array(sd[ce, end]) .- sh[ce, end]) / maximum(abs, sh[ce, end]) > 1e-12
 end
 
 # F3-15, batch 3 review R1: under the automatic Newton count the device closes a gate once every
@@ -215,7 +215,7 @@ end
     ig = init(mk(PDEV, 32), alg)
     cc = only(ig.runtimes).cache
     @test cc.gate !== nothing && cc.newton > 2               # the gate is on (automatic count, several iterations)
-    rel = maximum(abs, Array(sd[ce][end]) .- sh[ce][end]) / maximum(abs, sh[ce][end])
+    rel = maximum(abs, Array(sd[ce, end]) .- sh[ce, end]) / maximum(abs, sh[ce, end])
     @info "F3-15 R1: device vs host (early stop) max relative difference $rel; newton $(cc.newton)"
     @test sd.retcode == sh.retcode == ReturnCode.Success && rel <= 1e-5
     # the device counts the solves that ran, as the host (batch 5 review N3; 97045a1b counted the
@@ -262,7 +262,7 @@ end
         sd = solve(cown(sys, (32, 32); T = Float32, backend = PDEV), alg)
         sh = solve(cown(sys, (32, 32); T = Float32, backend = KernelAbstractions.CPU()), alg)
         for (v, n) in ((cm, 16), (um, 32))
-            a, b = Array(sd[v(t, x, y)][end]), sh[v(t, x, y)][end]
+            a, b = Array(sd[v(t, x, y), end]), sh[v(t, x, y), end]
             @test size(a) == (n, n) && maximum(abs, a .- b) / maximum(abs, b) <= 1e-6
         end
     end
@@ -305,9 +305,9 @@ end
     for alg in (ExplicitEuler(; dt = 0.05), BackwardEuler(; dt = 0.05))
         sd = solve(cown(sys, CDIMS; T = Float32, backend = PDEV, ins = [qe => CQT]), alg)
         sh = solve(cown(sys, CDIMS; T = Float32, backend = KernelAbstractions.CPU(), ins = [qe => CQT]), alg)
-        @test Array(sd[K2(t, x, y)][end]) == Float32[0.0, 1.0, 0.5, 0.25][Qc .+ 1]
-        @test Array(sd[M0(t, x, y)][end]) == Float32.(Qc .== 0)
-        @test Array(sd[cs(t, x, y)][end]) == sh[cs(t, x, y)][end] || maximum(abs, Array(sd[cs(t, x, y)][end]) .- sh[cs(t, x, y)][end]) <= 1e-6
+        @test Array(sd[K2(t, x, y), end]) == Float32[0.0, 1.0, 0.5, 0.25][Qc .+ 1]
+        @test Array(sd[M0(t, x, y), end]) == Float32.(Qc .== 0)
+        @test Array(sd[cs(t, x, y), end]) == sh[cs(t, x, y), end] || maximum(abs, Array(sd[cs(t, x, y), end]) .- sh[cs(t, x, y), end]) <= 1e-6
     end
 end
 
@@ -324,8 +324,8 @@ end
             sd, sd2 = solve(mk(PDEV), alg; saveat = 0.1), solve(mk(PDEV), alg; saveat = 0.1)
             sh = solve(mk(KernelAbstractions.CPU()), alg; saveat = 0.1)
             @test sd.retcode == sh.retcode == SciMLBase.ReturnCode.Success
-            same(a, b) = all(i -> Array(a[cae][i]) == Array(b[cae][i]) && Array(a[cbe][i]) == Array(b[cbe][i]), eachindex(sh.t))
-            @test same(sd, sh) || (println("12d dev ", lab, " ", T, " ", maximum(abs, Array(sd[cae][end]) .- sh[cae][end])); false)
+            same(a, b) = all(i -> Array(a[cae, i]) == Array(b[cae, i]) && Array(a[cbe, i]) == Array(b[cbe, i]), eachindex(sh.t))
+            @test same(sd, sh) || (println("12d dev ", lab, " ", T, " ", maximum(abs, Array(sd[cae, end]) .- sh[cae, end])); false)
             @test same(sd, sd2)
         end
     end
@@ -349,7 +349,7 @@ end
             inputs = name == "coupled QuasiSteady" ? [] : [bqe => kind])
         sd, sh = solve(mk(PDEV), alg; saveat = 0.1), solve(mk(KernelAbstractions.CPU()), alg; saveat = 0.1)
         @test sd.retcode == sh.retcode == SciMLBase.ReturnCode.Success
-        same = all(v -> all(i -> Array(sd[v][i]) == Array(sh[v][i]), eachindex(sh.t)), k)
+        same = all(v -> all(i -> Array(sd[v, i]) == Array(sh[v, i]), eachindex(sh.t)), k)
         @test same || (println("F3-20 hex dev ", name, " ", T, " ", maximum(abs, Array(sd[k[1]][end]) .- sh[k[1]][end])); false)
     end
 end
@@ -373,7 +373,7 @@ pgpu == "rocm" && @testset "F3-21a: Dual results on $pgpu equal the host's" begi
             i = LatticePDE.Problems.SII.parameter_index(pr, kd)
             q = collect(ForwardDiff.Dual{Nothing, Float64, 1}, pr.p.values)
             q[i] = ForwardDiff.Dual(pr.p.values[i], 1.0)
-            Array(solve(remake(pr; p = q), alg)[v][end])
+            Array(solve(remake(pr; p = q), alg)[v, end])
         end
         vp(w) = [(ForwardDiff.value(d), ForwardDiff.partials(d, 1)) for d in w]
         @test vp(u[1]) == vp(u[2]) && any(d -> ForwardDiff.partials(d, 1) != 0, u[1])
@@ -396,3 +396,4 @@ end
         end
     end
 end
+

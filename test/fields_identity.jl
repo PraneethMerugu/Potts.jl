@@ -440,7 +440,8 @@ module GdB
 using Potts: LatticePDE
 using Potts.ModelingToolkitBase: @parameters, @variables, PDESystem, Differential, Shift, t_nounits as t,
                                  D_nounits as D
-using .LatticePDE: Interval, discretize, LatticeDiscretization, Grid, Δ, at, DivKGrad, ExplicitEuler, ExplicitMap, solve
+using .LatticePDE: Interval, discretize, LatticeDiscretization, Grid, Δ, at, DivKGrad, ExplicitEuler, ExplicitMap, solve,
+                    substep_counts
 function cases()
     @parameters x y βr = -0.5 Dk[1:2] = [0.2, 1.0] dx [lattice_spacing = 1]
     @variables c(..) kq(..)::Int32 [input = true] N(..)
@@ -451,7 +452,7 @@ function cases()
     sr = PDESystem([D(ce) ~ Δ(ce)], [c(0, x, y) ~ x * y, c(t, 0, y) + βr * Differential(x)(c(t, 0, y)) ~ 1.0,
                                      c(t, x, 0) ~ c(t, x, 1)], dom(0.1), [t, x, y], [ce], [βr]; name = :r)
     s = solve(own(sr, 8), ExplicitEuler(; dt = 1e-2))
-    push!(out, ("B Robin owned", s.u[end], s.substeps))
+    push!(out, ("B Robin owned", s.u[end], substep_counts(s)[1]))
     o = discretize(sr, LatticeDiscretization(Grid((8, 8)); T = Float64))
     du = similar(o.u0)
     o.f(du, o.u0, o.p, 0.0)
@@ -460,11 +461,11 @@ function cases()
         [t, x, y], [ce, qe], [Dk]; name = :s)
     K = [Int32(isodd(i + j) ? 1 : 2) for i in 1:8, j in 1:8]
     s = solve(own(ss, 8; inputs = [qe => K]), ExplicitEuler(; dt = 1e-2))
-    push!(out, ("B site diffusion owned", s.u[end], s.substeps))
+    push!(out, ("B site diffusion owned", s.u[end], substep_counts(s)[1]))
     sk = PDESystem([D(ce) ~ DivKGrad(:harmonic)(at(Dk, qe), ce)], [c(0, x, y) ~ 1.0 + x * y], dom(0.1),
         [t, x, y], [ce, qe], [Dk]; name = :k)
     s = solve(own(sk, 8; inputs = [qe => K]), ExplicitEuler(; dt = 1e-2, substeps = 4))
-    push!(out, ("B DivK owned", s.u[end], s.substeps))
+    push!(out, ("B DivK owned", s.u[end], substep_counts(s)[1]))
     sm = PDESystem([Shift(t, 1)(Ne) ~ (N(t, x + dx, y) + N(t, x - dx, y)) / 2], [N(0, x, y) ~ x], dom(3.0), [t, x, y],
         [Ne], [dx]; name = :m)
     s = solve(discretize(sm, LatticeDiscretization(Grid((8, 2)); T = Float64)), ExplicitMap())
@@ -483,7 +484,7 @@ function implicit_cases()
     for alg in (LatticePDE.BackwardEuler(; dt = 0.1), LatticePDE.CrankNicolson(; dt = 0.1), LatticePDE.BDF2(; dt = 0.1),
                 LatticePDE.QuasiSteady(; dt = 0.1))
         s = solve(prob, alg)
-        push!(out, ("GiB " * string(nameof(typeof(alg))), s.u[end], s.substeps))
+        push!(out, ("GiB " * string(nameof(typeof(alg))), s.u[end], substep_counts(s)[1]))
     end
     return out
 end

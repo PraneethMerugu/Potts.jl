@@ -56,7 +56,7 @@ q1(δ, k; steady = false) = PDESystem(steady ?
         end
     end
     # the same seed and backend repeat a run bit for bit (fixed-order reductions)
-    run() = (s = solve(cown(q1(0.1, 5.0)), QuasiSteady(; dt = 0.1)); (s[cae][end], s[cbe][end]))
+    run() = (s = solve(cown(q1(0.1, 5.0)), QuasiSteady(; dt = 0.1)); (s[cae, end], s[cbe, end]))
     @test run() == run()
     # a warm window allocates nothing (CPU), and its solve starts at the last solution (F4-03:
     # the second window ends the span, where the end save copies the state: `save_end = false`)
@@ -91,10 +91,10 @@ end
         want = -(A \ b0)
         p = cown(PDESystem(eqs, bcs, bdom(0.2), [t, x, y], [cae, cqe], Any[]; name = :n5))
         r = @test_logs min_level = Logging.Warn solve(p, QuasiSteady(; dt = 0.1))
-        got = vcat(vec(r[cae][end]), vec(r[cqe][end]))
+        got = vcat(vec(r[cae, end]), vec(r[cqe, end]))
         @test r.retcode == ReturnCode.Success && maximum(abs, got .- want) < 1e-5
         rt = solve(p, QuasiSteady(; dt = 0.1, inner = CTIGHT))
-        @test maximum(abs, vcat(vec(rt[cae][end]), vec(rt[cqe][end])) .- want) < 1e-10
+        @test maximum(abs, vcat(vec(rt[cae, end]), vec(rt[cqe, end])) .- want) < 1e-10
     end
     # `0 ~ q − c²` beside `0 ~ 0.3Δ(c) − 2c + 1`: `c` is the linear steady state, `q = c²` exactly
     p = cown(PDESystem([0 ~ cqe - cae^2, 0 ~ 0.3Δ(cae) - 2.0 * cae + 1], [ca(t, 0, y) ~ 1.0, cq(0, x, y) ~ 0.0], bdom(0.2),
@@ -103,11 +103,11 @@ end
         [cae], Any[]; name = :algc), (8, 8))
     cw = -(A \ b0)
     r = @test_logs min_level = Logging.Warn solve(p, QuasiSteady(; dt = 0.1))
-    @test r.retcode == ReturnCode.Success && maximum(abs, vec(r[cae][end]) .- cw) < 1e-5 && maximum(abs, vec(r[cqe][end]) .- cw .^ 2) < 1e-5
+    @test r.retcode == ReturnCode.Success && maximum(abs, vec(r[cae, end]) .- cw) < 1e-5 && maximum(abs, vec(r[cqe, end]) .- cw .^ 2) < 1e-5
     ig = init(p, QuasiSteady(; dt = 0.1))
     @test only(ig.runtimes).cache.cs !== nothing && only(ig.runtimes).cache.newton == 8      # (nonlinear: the checked count)
     rt = solve(p, QuasiSteady(; dt = 0.1, inner = CTIGHT))
-    @test maximum(abs, vec(rt[cae][end]) .- cw) < 1e-10 && maximum(abs, vec(rt[cqe][end]) .- cw .^ 2) < 1e-10
+    @test maximum(abs, vec(rt[cae, end]) .- cw) < 1e-10 && maximum(abs, vec(rt[cqe, end]) .- cw .^ 2) < 1e-10
     # a nonlinear cycle (Michaelis–Menten uptake, `0.5a²` feeding back): the rate is 0 at the result
     rates = [0.1Δ(cae) - 2.0 * cae / (0.5 + cae) + cbe + x, 0.1Δ(cbe) - cbe + 0.5 * cae^2]
     po = discretize(PDESystem([D(cae) ~ rates[1], D(cbe) ~ rates[2]], [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y],
@@ -116,7 +116,7 @@ end
         Any[]; name = :mm))
     for (inner, tol) in ((:auto, 1e-5), (CTIGHT, 1e-12))
         r = @test_logs min_level = Logging.Warn solve(p, QuasiSteady(; dt = 0.1, inner))
-        u = vcat(vec(r[cae][end]), vec(r[cbe][end]))
+        u = vcat(vec(r[cae, end]), vec(r[cbe, end]))
         du = similar(u)
         po.f(du, u, po.p, 0.0)
         @test r.retcode == ReturnCode.Success && maximum(abs, du) < tol || (println("mm ", inner, " ", maximum(abs, du)); false)
@@ -142,7 +142,7 @@ end
         ab = -(A[s, s] \ (b0[s] .+ A[s, e] * eh))
         eh = (I - 0.1 * A[e, e]) \ (eh .+ 0.1 .* (b0[e] .+ A[e, s] * ab))
     end
-    @test maximum(abs, vec(r[cze][end]) .- eh) < 1e-9 || (println("feed ", maximum(abs, vec(r[cze][end]) .- eh)); false)
+    @test maximum(abs, vec(r[cze, end]) .- eh) < 1e-9 || (println("feed ", maximum(abs, vec(r[cze, end]) .- eh)); false)
     # a strong steady coupling (k = 5, δ = 0.1) in the loop: the rule's bound sums magnitudes, so
     # it is refused with the reason and the routes (the pair alone solves: the first testset)
     ps = cown(PDESystem([0 ~ 0.1 * Δ(cae) - 0.1 * cae + 5.0 * cbe + 0.2 * cze, 0 ~ 0.1 * Δ(cbe) - cbe - 5.0 * cae, D(cze) ~ rates[3]],
@@ -188,7 +188,7 @@ end
     A, b0 = cjac(PDESystem([D(cae) ~ rates[1], D(cbe) ~ rates[2]], [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y],
         [cae, cbe], Any[]; name = :gdr), (8, 8))
     r = solve(p, QuasiSteady(; dt = 0.1, inner = CTIGHT))
-    @test r.retcode == ReturnCode.Success && maximum(abs, vcat(vec(r[cae][end]), vec(r[cbe][end])) .+ (A \ b0)) < 1e-9
+    @test r.retcode == ReturnCode.Success && maximum(abs, vcat(vec(r[cae, end]), vec(r[cbe, end])) .+ (A \ b0)) < 1e-9
     # a write that makes the coupling grow is refused at the write, the values unchanged
     @parameters ck = 0.5
     pk = cown(PDESystem([0 ~ 0.1 * Δ(cae) - cae + ck * cbe + x, 0 ~ 0.1 * Δ(cbe) - cbe + ck * cae], [ca(0, x, y) ~ 0.0,
@@ -244,7 +244,7 @@ end
     r = solve(ss, QuasiSteady(; dt = 0.1, inner = CTIGHT))
     As, bs = cjac(PDESystem([D(cae) ~ 0.1 * Δ(cae) - cae + (2.0 + 0.1 * x) * cbe + x, D(cbe) ~ 0.1 * Δ(cbe) - 3.0 * cae - cbe + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], Any[]; name = :ssr), (8, 8))
-    @test r.retcode == ReturnCode.Success && maximum(abs, [vec(r[cae][end]); vec(r[cbe][end])] .+ As \ bs) < 1e-8
+    @test r.retcode == ReturnCode.Success && maximum(abs, [vec(r[cae, end]); vec(r[cbe, end])] .+ As \ bs) < 1e-8
     # a parameter write into the growing range is refused, and the value stays
     @parameters kw = 0.0                                   # (local λ ≤ −1 + √(0.3x) < 0: stable)
     sw = cown(PDESystem([0 ~ 0.1 * Δ(cae) - cae + (kw + 0.1 * x) * cbe + x, 0 ~ 0.1 * Δ(cbe) + 3.0 * cae - cbe + y],

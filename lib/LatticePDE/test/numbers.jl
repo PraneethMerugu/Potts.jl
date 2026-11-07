@@ -39,8 +39,8 @@ withp(p, i, v) = (q = collect(promote_type(eltype(p), typeof(v)), p); q[i] = v; 
     J64(v) = sum(solve(remake(prob; p = withp(prob.p, i, v)), alg).u[end])
     @test isapprox(ForwardDiff.derivative(J32, p32.p[i]), ForwardDiff.derivative(J64, prob.p[i]); rtol = 1e-3)
     # the substep count is a policy on the primal values: unchanged under Duals
-    @test solve(remake(prob; p = withp(prob.p, i, ForwardDiff.Dual(prob.p[i], 1.0))), alg).substeps ==
-          solve(prob, alg).substeps
+    @test substep_counts(solve(remake(prob; p = withp(prob.p, i, ForwardDiff.Dual(prob.p[i], 1.0))), alg)) ==
+          substep_counts(solve(prob, alg))
 end
 
 @testset "AD vs FD: ODE path, with an aux field" begin
@@ -267,7 +267,7 @@ end
     @test eltype(im[wue]) == Float32 && eltype(im[whe]) == Float16 && eltype(im[wce]) == Float64
     sm = solve(pm, BackwardEuler(; dt = 0.05))
     @test SciMLBase.successful_retcode(sm.retcode) && eltype(sm.u[end]) == Float64     # (the saves: their promotion)
-    @test sm[wce][end] ≈ solve(remake(pm), ExplicitEuler(; dt = 0.05))[wce][end] rtol = 1e-2
+    @test sm[wce, end] ≈ solve(remake(pm), ExplicitEuler(; dt = 0.05))[wce, end] rtol = 1e-2
     # a write and `reinit!` reach each field in its own type
     im[wce] = fill(0.25, 8, 8)
     @test im[wce] == fill(0.25, 8, 8) && eltype(im[wce]) == Float64
@@ -446,7 +446,7 @@ end
     cp = town(tsys([0 ~ Dt * Δ(tae) - tae + kt * tbe + x, 0 ~ 0.1 * Δ(tbe) - tbe - gt * tae + y],
         [ta(0, x, y) ~ 0.0, tb(0, x, y) ~ 0.0]; dvs = [tae, tbe]))
     for s in (kt, Dt, gt)
-        @test tok(tad(cp, QuasiSteady(; dt = 0.1, inner = DeviceGMRES(; rtol = 1e-12)), s; out = sol -> sol[tae][end] .^ 2)...)   # (a sum of `a` alone does not see D: zero flux)
+        @test tok(tad(cp, QuasiSteady(; dt = 0.1, inner = DeviceGMRES(; rtol = 1e-12)), s; out = sol -> sol[tae, end] .^ 2)...)   # (a sum of `a` alone does not see D: zero flux)
     end
 end
 

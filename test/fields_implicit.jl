@@ -135,7 +135,7 @@ function fi_runB(M, dims, k; u0, inputs = [:kind => fi_kin(dims)], alg = Backwar
     bp = Potts.LatticePDE.discretize(Potts.fields(M(; name = :f)),
         Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(dims); T = Float64);
         u0, tspan = (0, k), inputs)
-    return Potts.LatticePDE.solve(bp, alg; saveat = 1.0)[:c][2:end]
+    return (s -> [s[:c, i] for i in 2:length(s.t)])(Potts.LatticePDE.solve(bp, alg; saveat = 1.0))
 end
 fi_warm(integ) = (step!(integ); @allocated step!(integ))   # (a function barrier)
 
@@ -436,7 +436,7 @@ end
     bp = Potts.LatticePDE.discretize(Potts.fields(FiHexF(; name = :f)),
         Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(dims; geometry = Potts.LatticeFields.IR.HEX);
             T = Float64); u0 = [:c => zeros(dims)], tspan = (0, k), inputs = [:kind => fi_kin(dims)])
-    @test a == Potts.LatticePDE.solve(bp, BackwardEuler(; dt = 1.0); saveat = 1.0)[:c][2:end]
+    @test a == (s -> [s[:c, i] for i in 2:length(s.t)])(Potts.LatticePDE.solve(bp, BackwardEuler(; dt = 1.0); saveat = 1.0))
     rt = CorePotts._runtime(getfield(integ.ctx, :__fields1))
     @test rt.cache.newton == 1 && integ.stats.fields.solves == k && all(a[end][fi_kin(dims) .== 1] .== 1.5)
     # the implicit result is not the explicit one
@@ -457,7 +457,7 @@ end
     bp = Potts.LatticePDE.discretize(Potts.fields(FiHexFace(; name = :f)),
         Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(dims; geometry = Potts.LatticeFields.IR.HEX);
             T = Float64); u0 = [:c => zeros(dims)], tspan = (0, k), inputs = [])
-    @test a == Potts.LatticePDE.solve(bp, BackwardEuler(; dt = 1.0, inner = DevicePCG(; rtol = 1e-12, budget = 64)); saveat = 1.0)[:c][2:end]
+    @test a == (s -> [s[:c, i] for i in 2:length(s.t)])(Potts.LatticePDE.solve(bp, BackwardEuler(; dt = 1.0, inner = DevicePCG(; rtol = 1e-12, budget = 64)); saveat = 1.0))
     # the hand BE matrix (h = 1, the site (i, j) at (i − ½, j − ½))
     n1, n2 = dims
     lin(i, j) = i + (j - 1) * n1
