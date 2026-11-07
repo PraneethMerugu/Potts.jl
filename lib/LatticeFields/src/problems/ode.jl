@@ -1226,12 +1226,12 @@ end
 function SciMLBase.remake(prob::LatticeODEProblem; p = missing, u0 = missing, inputs = (), kw...)
     q = remake_params(prob, p, inputs)
     return invoke(SciMLBase.remake, Tuple{SciMLBase.ODEProblem}, prob; p = q, u0 = _masked_u0(prob, remake_u0(prob, u0), q),
-        kw...)
+        _remake_kw(prob, kw)...)
 end
 function SciMLBase.remake(prob::LatticeDiscreteProblem; p = missing, u0 = missing, inputs = (), kw...)
     q = remake_params(prob, p, inputs)
     return invoke(SciMLBase.remake, Tuple{SciMLBase.DiscreteProblem}, prob; p = q, u0 = _masked_u0(prob, remake_u0(prob, u0), q),
-        kw...)
+        _remake_kw(prob, kw)...)
 end
 function SciMLBase.remake(prob::LatticeSteadyStateProblem; p = missing, u0 = missing, inputs = (), kw...)
     q = remake_params(prob, p, inputs)
@@ -1334,8 +1334,27 @@ function _user_callbacks(cb)
     cb === nothing && return nothing
     cs = cb isa SciMLBase.CallbackSet ? cb : SciMLBase.CallbackSet(cb)
     d = filter(!_builtin, collect(Any, cs.discrete_callbacks))
-    isempty(d) && isempty(cs.continuous_callbacks) && return nothing
-    return SciMLBase.CallbackSet(cs.continuous_callbacks..., d...)
+    c = filter(!_builtin, collect(Any, cs.continuous_callbacks))
+    isempty(d) && isempty(c) && return nothing
+    return SciMLBase.CallbackSet(c..., d...)
+end
+# the built-in callbacks of a problem's keywords (the clock, the masks), or nothing
+function _builtin_set(prob)
+    cb = get(prob.kwargs, :callback, nothing)
+    cb === nothing && return nothing
+    cs = cb isa SciMLBase.CallbackSet ? cb : SciMLBase.CallbackSet(cb)
+    b = Any[c for c in (cs.continuous_callbacks..., cs.discrete_callbacks...) if _builtin(c)]
+    return isempty(b) ? nothing : b
+end
+# `remake(prob; callback = cb)`: the built-in callbacks stay, the given ones join them (a
+# replaced keyword would drop the clock and the masks of the ODE path: review F4 b2 #2)
+function _remake_kw(prob, kw)
+    haskey(kw, :callback) || return kw
+    b = _builtin_set(prob)
+    b === nothing && return kw
+    u = _user_callbacks(kw[:callback])
+    cb = u === nothing ? SciMLBase.CallbackSet(b...) : SciMLBase.CallbackSet(b..., u)
+    return merge(NamedTuple(kw), (; callback = cb))
 end
 CommonSolve.init(prob::LatticeProblem, alg::FieldAlgorithm; kw...) = _owned_init(_owned_or_refuse(prob, alg), alg, prob; kw...)
 CommonSolve.init(prob::LatticeProblem, alg::LinearSolver; kw...) = CommonSolve.init(_owned_or_refuse(prob, alg), alg; kw...)

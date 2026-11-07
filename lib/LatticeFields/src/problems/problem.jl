@@ -419,6 +419,8 @@ mutable struct FieldIntegrator{P <: FieldProblem, A, S <: FieldStore, RT <: Tupl
     tprev::Float64                      # … and its time
     syncs::Int                          # the host copies of a device state for callbacks and interpolated saves
     cprev::Any                          # the continuous callbacks' conditions at the window's start (F4-06)
+    dense::Bool                         # the solution's `dense` (the `dense` keyword)
+    prevbuf::Any                        # the host buffer `prevu` reuses (no copy allocated per window)
 end
 
 
@@ -699,7 +701,7 @@ function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; saveat = (), 
                             _utype(st, E)}(prob, alg, st, rts, pv, pgood, tabs, t0, 0, dt, ms[1], nsteps,
         _clock(prob) === nothing ? 0 : _per(dt, _clock(prob)), save, Float64[], Vector{T}[], SciMLBase.ReturnCode.Success,
         aux, Vector{T}[], Any[], t0, tf, Float64[], 1, 0, _sciml, nothing, _save_indices(prob, save_idxs),
-        save_everystep, Int(maxiters), false, nothing, nothing, t0, 0, nothing)
+        save_everystep, Int(maxiters), false, nothing, nothing, t0, 0, nothing, dense, nothing)
     for ts in tstops
         t0 < ts <= tf + 1e-9dt && SciMLBase.add_tstop!(integ, ts)
     end
@@ -868,7 +870,7 @@ function CommonSolve.step!(integ::FieldIntegrator)
     # the state at the window's start, when a save falls inside the window or an event may
     # (a continuous callback): one host copy. The rare paths sit behind barriers, and the time
     # logic is in small functions: a run on the grid compiles little (design §6)
-    _needs_prev(integ, target) && Base.inferencebarrier(_keep_prev!)(integ, t)
+    _needs_prev(integ, target) && _keep_prev!(integ, t)
     code = full ? _advance_all(integ.runtimes, (t, _tick(integ))) :
            Base.inferencebarrier(_advance_short)(integ.runtimes, (t, _tick(integ)), target - t, dt)::SciMLBase.ReturnCode.T
     _window_done!(integ, target)
@@ -928,10 +930,11 @@ function _needs_prev(integ::FieldIntegrator, target::Float64)
     k = integ.nsave
     return k <= length(integ.save) && integ.save[k] < target - 1e-9 * integ.dt
 end
+_prev_aux(integ::FieldIntegrator) = (_eval_aux!(integ); _aux_values(integ))
 function _keep_prev!(integ::FieldIntegrator, t)
     Exec.ishost(integ.prob.backend) || (integ.syncs += 1)
-    integ.prevu = _current(integ)
-    integ.prevaux = integ.aux === nothing ? nothing : (_eval_aux!(integ); _aux_values(integ))
+    integ.prevu = integ.prevbuf = _current!(integ.prevbuf, integ)
+    integ.prevaux = integ.aux === nothing ? nothing : Base.inferencebarrier(_prev_aux)(integ)
     integ.tprev = t
     return nothing
 end
@@ -1078,6 +1081,14 @@ function _current(integ::FieldIntegrator)
     return isempty(st.flat) ? eltype(integ.prob)[] : Array(st.flat[_parity(integ)])
 end
 
+# the current state into `dest` when it is a host vector of the state's size (else a new copy)
+function _current!(dest, integ::FieldIntegrator)
+    st = integ.store
+    (mixed_state(st) || isempty(st.flat)) && return _current(integ)
+    src = st.flat[_parity(integ)]
+    dest isa Vector{eltype(src)} && length(dest) == length(src) || return _current(integ)
+    return copyto!(dest, src)
+end
 # a saved state that is not finite ends the solve with `ReturnCode.Unstable`; the aux fields
 # are evaluated at the save (one aux launch) and saved with it
 _save!(integ::FieldIntegrator) = _save!(integ, _time(integ), _current(integ), nothing)

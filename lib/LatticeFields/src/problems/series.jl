@@ -206,7 +206,7 @@ function _ode_solution(integ::FieldIntegrator, sp)
     ts, us = integ.ts, integ.us
     interp = sp isa SciMLBase.DiscreteProblem ? SciMLBase.ConstantInterpolation(ts, us) :
              SciMLBase.LinearInterpolation(ts, us)
-    return SciMLBase.build_solution(q, integ.alg, ts, us; interp, dense = true, retcode = integ.retcode,
+    return SciMLBase.build_solution(q, integ.alg, ts, us; interp, dense = integ.dense, retcode = integ.retcode,
         stats = LatticeStats(integ))
 end
 function _final_problem(integ::FieldIntegrator, sp)

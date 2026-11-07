@@ -299,6 +299,7 @@ bcs = [ce ~ masked(ke == 3, 0.0), oe ~ masked(ismember(ke, (2, 3)), 1.0)]
     include("callbacks.jl")
     include("events.jl")
     include("grids.jl")
+    include("remakecb.jl")
     include("maskswitch.jl")
     include("quasisteady.jl")
     include("coupled.jl")
