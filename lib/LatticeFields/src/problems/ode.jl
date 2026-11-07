@@ -941,7 +941,8 @@ end
 
 The aux fields of an ODE problem as observed quantities (F3 design §3.12): `a(u, p, t, key)` is
 aux field `key` at state `u`, parameters `p` and time `t`, `rhs(u, t)`, grid-shaped on the
-problem's backend. One call of the right side `f` at `(u, p, t)` runs the aux kernels on the
+problem's backend (a host state, such as an owned solve's save on a device, is copied there
+first). One call of the right side `f` at `(u, p, t)` runs the aux kernels on the
 store of the build this task runs (the rates it writes into a scratch `du` are dropped).
 """
 struct ODEAux{F, P}
@@ -950,6 +951,12 @@ struct ODEAux{F, P}
 end
 _build_eltype(::LatticeRHS{L, W, E}) where {L, W, E} = E
 function (a::ODEAux)(u, p, t, key)
+    # a saved state of an owned solve on a device is a host vector: the aux kernels read it on
+    # the problem's backend (review F4 b2 #4)
+    if a.f isa LatticeFunction
+        be = a.f.meta.problem.backend
+        typeof(KA.get_backend(u)) == typeof(be) || (u = copyto!(KA.allocate(be, eltype(u), length(u)), u))
+    end
     f = a.f isa LatticeFunction ? _built(a.f.meta, u, p, t) : a.f
     g = f.owner[1] === current_task() ? f : _for_task(f)
     C = _rhs_eltype(u, u, p, t)
@@ -1223,6 +1230,29 @@ const LatticeProblem = Union{LatticeODEProblem, LatticeDiscreteProblem}
 function _owned_or_refuse(prob, alg)
     lattice_metadata(prob) === nothing && throw(_ode_refusal(alg))
     return field_problem(prob)
+end
+# `save_idxs` of state fields on an OrdinaryDiffEq solve: a field is a grid of indices, which
+# SciML's saved subsystem cannot take, so the fields become their flat indices (and `sol[c]`
+# finds the field in the saves: F4-05)
+function SciMLBase.get_save_idxs_and_saved_subsystem(prob::LatticeProblem, save_idxs)
+    idx = _field_save_idxs(prob, save_idxs)
+    idx === save_idxs && return invoke(SciMLBase.get_save_idxs_and_saved_subsystem, Tuple{Any, Any}, prob, save_idxs)
+    return invoke(SciMLBase.get_save_idxs_and_saved_subsystem, Tuple{Any, Vector{Int}}, prob, idx)
+end
+SciMLBase.get_save_idxs_and_saved_subsystem(prob::LatticeProblem, i::Nothing) =
+    invoke(SciMLBase.get_save_idxs_and_saved_subsystem, Tuple{Any, Nothing}, prob, i)
+SciMLBase.get_save_idxs_and_saved_subsystem(prob::LatticeProblem, i::Int) =
+    invoke(SciMLBase.get_save_idxs_and_saved_subsystem, Tuple{Any, Int}, prob, i)
+SciMLBase.get_save_idxs_and_saved_subsystem(prob::LatticeProblem, i::Vector{Int}) =
+    invoke(SciMLBase.get_save_idxs_and_saved_subsystem, Tuple{Any, Vector{Int}}, prob, i)
+function _field_save_idxs(prob, save_idxs)
+    m = lattice_metadata(prob)
+    m === nothing && return save_idxs
+    ix = m.problem.index
+    ix isa LatticeIndex || return save_idxs
+    isfield(i) = !(i isa Integer) && get(ix.vars, ix.key(i), nothing) isa FieldSlot
+    any(isfield, save_idxs isa Union{AbstractVector, Tuple} ? save_idxs : (save_idxs,)) || return save_idxs
+    return _save_indices(m.problem, save_idxs)
 end
 # (the integrator keeps `prob`: its solution is SciML's, of `prob`, F4-04; the problem's own
 # keywords join the call's as DiffEqBase merges them, its callbacks before the call's, without

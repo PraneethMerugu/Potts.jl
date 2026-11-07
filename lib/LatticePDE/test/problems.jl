@@ -268,7 +268,8 @@ end
     # a direct write to integ.p is not a parameter update (documented): the run is unchanged
     i2 = init(prob, ExplicitEuler(; dt = 0.01))
     i2.p[1] = 4.0
-    @test solve!(i2)[:c][end] ≈ s[:c, end]
+    s2 = solve!(i2)
+    @test s2[:c][end] == s2[:c, end] && s2[:c][end] ≈ s[:c, end]     # (the last grid, both spellings: Q18)
     # a degenerate face on a problem set through setp: refused at init with the face message
     rsys = psys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0, c(t, 0, y) + βr * Differential(x)(c(t, 0, y)) ~ 1.0,
                                   c(t, x, 0) ~ c(t, x, 1)], [βr])

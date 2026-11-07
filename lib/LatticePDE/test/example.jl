@@ -23,8 +23,8 @@
     @test prob.p.values == [1e-3, 0.1] && fp.stability(fp.p) ≈ 1e-3 * 8 * 512^2 + 0.1
     @test substep_counts(sol)[1] == 12 && sol.t == 0:10
     v = Core.eval(m, :(sol[c(t, x, y)]))
-    w = v[end, :, :]                                                # (time first: the last saved grid)
-    @test size(v) == (11, 512, 512) && all(isfinite, w)
+    w = v[end]                                                      # (one grid per save: Q18)
+    @test length(v) == 11 && size(w) == (512, 512) && all(isfinite, w)
     @test all(j -> w[:, j] == w[:, 1], 1:512)                      # periodic in y: no y dependence
     # the 1D oracle, Float64, same 12 000 substeps
     n, h = 512, 1 / 512

@@ -147,11 +147,12 @@ an error that names it.
 
 A field algorithm returns SciML's `ODESolution`, with linear interpolation between the saves:
 `sol(t)`, `Array(sol)`, `sol.ps` (the values at the end of the run) and `sol.stats` work. A
-field reads time first, as in MethodOfLines, on every solver: `sol[c]` (or `sol[:c]`, or the
-bare `c`) is an array of size `(length(sol.t), nx, ny)` that reads the saves when indexed,
-`sol[c, i]` is the grid at save `i`, `sol[x]` holds the site centers, and `sol(t, x, y)`
-interpolates between them. In this front end, `field_series(sol, :c)` gives the same
-time-first view of a field over the saved MCS.
+field reads as SciML reads a variable, on every solver and in both front ends: `sol[c]` (or
+`sol[:c]`, or the bare `c`) is one grid per save, so `sol[c][end]` is the last grid;
+`sol[c, i]` is the grid at save `i`, `sol(t; idxs = c)` the grid at time `t`, `sol[x]` holds the
+site centers, and `sol(t, x, y)` interpolates between them. `field_series(sol, :c)` is the
+time-first view, as in MethodOfLines: an array of size `(length(sol.t), nx, ny)` that reads the
+saves when indexed. In this front end it gives the same view of a field over the saved MCS.
 
 ## The Hamiltonian as Symbolics expressions [C3]
 

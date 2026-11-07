@@ -1,6 +1,7 @@
 # F4-04 (F4 design §3.5, §5): an owned solve returns SciML's `ODESolution` (`build_solution`, linear
-# interpolation), and a field read on a solution of a lattice problem is time first (Q-G): `sol[c]`
-# is a lazy `FieldSeries` of size `(nt, dims…)`; `sol[x]` the site centers; the bare callable `c`
+# interpolation). A field read on a solution of a lattice problem follows SciML (ruling Q18): `sol[c]`
+# is one grid per save, `field_series(sol, c)` a lazy `FieldSeries` of size `(nt, dims…)`
+# (MethodOfLines' shape); `sol[x]` the site centers; the bare callable `c`
 # a key; `sol(t, x, y)` multilinear; `sol.ps` the parameters at the end; `sol.stats` a
 # `LatticeStats`. Negative control at the F4-03 commit (~/lpwork/f4b5/nc04.log): `sol(0.05)` is
 # not callable (a `FieldSolution`), `sol[c]` a vector of grids, `sol[u]` "Invalid symbol".
@@ -22,26 +23,29 @@ using OrdinaryDiffEqTsit5: Tsit5
 end
 
 cbsys32() = bsys([D(bce) ~ 0.01 * Δ(bce) - bce], [bc(0, x, y) ~ x * y], Any[]; T = 0.3, dvs = [bce])
-@testset "F4-04: time-first lazy reads on owned and Tsit5 solutions; sol[x]; sol[c] by the callable" begin
+@testset "F4-04 (Q18): sol[c] is one grid per save; field_series is time first; sol[x]; sol[c] by the callable" begin
     sp = discretize(bsys([D(bce) ~ bD * Δ(bce) - bk * bce + x], [bc(0, x, y) ~ x * y], [bD, bk]; T = 0.3, dvs = [bce]),
         LatticeDiscretization(Grid((8, 8)); T = Float64))
     so = solve(sp, ExplicitEuler(; dt = 0.01); saveat = 0.1)
     st = solve(sp, Tsit5(); saveat = 0.1, abstol = 1e-10, reltol = 1e-10)
     for s in (so, st)
-        c = s[bce]
+        v = s[bce]
+        @test v isa Vector{Matrix{Float64}} && length(v) == 4 && v[2] == reshape(s.u[2], 8, 8) == s[bce, 2]
+        @test v[end] == s[bce, end] == reshape(s.u[end], 8, 8)
+        c = field_series(s, bce)
         @test c isa LFP.FieldSeries && size(c) == (4, 8, 8)
         @test Array(c) == permutedims(reshape(reduce(hcat, s.u), 8, 8, 4), (3, 1, 2))
-        @test c[2, :, :] == reshape(s.u[2], 8, 8) == s[bce, 2] && c[end, 3, 5] == s.u[end][3 + 8 * 4]
-        @test s[bc] == c && s[:bc] == c                           # the bare callable and the name
+        @test c[2, :, :] == v[2] && c[end, 3, 5] == s.u[end][3 + 8 * 4]
+        @test s[bc] == v && s[:bc] == v                           # the bare callable and the name
         @test s[x] == range(1 / 16; step = 1 / 8, length = 8) && s[y] == s[x]
     end
-    # lazy: reading `sol[c]` copies no grid (a 32×32 run: one grid is 8 KiB)
+    # lazy: `field_series` copies no grid (a 32×32 run: one grid is 8 KiB)
     s32 = solve(discretize(cbsys32(), LatticeDiscretization(Grid((32, 32)); T = Float64)), ExplicitEuler(; dt = 0.01);
         saveat = 0.1)
-    lazy(s) = @allocated s[bce]
+    lazy(s) = @allocated field_series(s, bce)
     lazy(s32)
     @test lazy(s32) < 8 * 32^2 || (println("F4-04 lazy ", lazy(s32)); false)
-    @test maximum(abs, Array(so[bce]) .- Array(st[bce])) < 0.05  # (EE at dt/substeps against Tsit5)
+    @test maximum(abs, Array(field_series(so, bce)) .- Array(field_series(st, bce))) < 0.05  # (EE against Tsit5)
     # sol(t, x, y): multilinear between the site centers, linear in time between the saves
     g = reshape(so(0.15), 8, 8)
     @test so(0.15, 1 / 16, 3 / 16; idxs = bce) ≈ g[1, 2]

@@ -1,17 +1,20 @@
 # Solutions of lattice problems (F4-04; F4 design §3.5): an owned solve returns SciML's
-# `ODESolution` (linear interpolation: `sol(t)`, `Array(sol)`, `sol.ps`, `sol.alg`, `sol.stats`),
-# and a field read on any solution of a lattice problem (owned or OrdinaryDiffEq) is time first,
-# MethodOfLines' shape (Q-G), as a lazy view of the saves.
+# `ODESolution` (linear interpolation: `sol(t)`, `Array(sol)`, `sol.ps`, `sol.alg`, `sol.stats`).
+# A field read on any solution of a lattice problem (owned, OrdinaryDiffEq, or a FieldProblem
+# solved directly) follows SciML and front end A (ruling Q18): `sol[c]` is one grid per save;
+# `field_series(sol, c)` is the time-first lazy view of the saves (MethodOfLines' shape).
 
 """
     FieldSeries
 
-A field's values over the saves of a solution, time first (F4-04; MethodOfLines' shape, ruling
-Q-G): an `AbstractArray` of size `(nt, dims...)` whose entries are read from the saved states
-when indexed, with no copy of the series. `s[i, :, :]` (or `sol[c, i]`) is the grid at save `i`,
+A field's values over the saves of a solution, time first (F4-04; MethodOfLines' shape): an
+`AbstractArray` of size `(nt, dims...)` whose entries are read from the saved states when
+indexed, with no copy of the series ([`field_series`](@ref) gives it; `sol[c]` is a vector of
+grids, ruling Q18). `s[i, :, :]` (or `sol[c, i]`, `sol[c][i]`) is the grid at save `i`,
 `Array(s)` copies the whole series. An aux field (`K ~ rhs`) is evaluated from the saved state
-at each save time when that save is read. On a device the saves are device arrays: read whole
-grids (`s[i, :, :]`, `Array(s)`), not single entries.
+at each save time when that save is read. An owned solve saves host vectors; an OrdinaryDiffEq
+solve on a device saves device arrays: there read whole grids (`s[i, :, :]`, `Array(s)`), not
+single entries.
 """
 struct FieldSeries{T, N, F} <: AbstractArray{T, N}
     size::NTuple{N, Int}
@@ -59,9 +62,11 @@ end
     field_series(sol, c) -> FieldSeries
 
 The time-first values of the field, aux field or input `c` of a solution (F4-04; F4 design
-§3.5, ruling Q4): `size = (length(sol.t), dims...)`, a lazy view of the saves. In front end B
-`sol[c]` is the same; in front end A (`PottsSolution`, per-MCS states) this accessor gives the
-time-first view.
+§3.5, ruling Q4): `size = (length(sol.t), dims...)`, a lazy view of the saves. In both front
+ends `sol[c]` is one grid per save (as SciML reads a variable, ruling Q18), so
+`field_series(sol, c)[i, :, :] == sol[c][i] == sol[c, i]`; this accessor is the time-first
+view, in front end B (an owned, OrdinaryDiffEq or FieldProblem solution) and in front end A
+(`PottsSolution`, per-MCS states).
 """
 function field_series(sol, sym)
     s = _field_series(sol, sym)
@@ -105,9 +110,14 @@ function _field_series(sol, sym)
         T = eltype(eltype(sol.u))
         r = slot.range
         idx = get(sol.prob.kwargs, :save_idxs, nothing)
-        if idx isa AbstractVector{<:Integer}                # (the saves hold `save_idxs` only)
-            pos = indexin(r, idx)
-            any(isnothing, pos) && return nothing
+        ss = sol isa SciMLBase.ODESolution ? sol.saved_subsystem : nothing
+        smap = ss isa SciMLBase.SavedSubsystem && ss.state_map isa AbstractDict ? ss.state_map : nothing
+        if idx isa AbstractVector{<:Integer} || smap !== nothing   # (the saves hold `save_idxs` only)
+            pos = idx isa AbstractVector{<:Integer} ? indexin(r, idx) : [get(smap, j, nothing) for j in r]
+            any(isnothing, pos) && throw(ArgumentError(string("`", _symtext(sym), "` is not saved whole: the ",
+                "solution saved `save_idxs` (", count(!isnothing, pos), " of the field's ", length(r), " sites). ",
+                "Save the field with `save_idxs = ", _symtext(sym), "` (or its flat indices), or read the saved ",
+                "entries as `sol.u[i]`")))
             r = Int.(pos)
             r == first(r):last(r) && (r = first(r):last(r))
         elseif nt > 0 && length(sol.u[1]) < last(r)
@@ -124,6 +134,36 @@ function _field_series(sol, sym)
         return FieldSeries{eltype(v)}((nt, size(v)...), g)
     end
     return nothing
+end
+
+# a FieldProblem solved directly (a `FieldSolution`): the grids of its own reads, time first
+function _field_series(sol::FieldSolution, sym)
+    ix = sol.prob.index
+    ix isa LatticeIndex || return nothing
+    sym isa Union{AbstractArray, Tuple} && return nothing
+    haskey(ix.vars, ix.key(sym)) || aux_key(ix, sym) !== nothing || return nothing
+    nt = length(sol.t)
+    nt == 0 && return nothing
+    v = sol[sym, 1]
+    return FieldSeries{eltype(v)}((nt, size(v)...), _GetterSlice((s, i) -> s[sym, i], sol))
+end
+# `sol(t; idxs)` of a FieldSolution, as the owned `ODESolution` reads it: linear in time
+# between the saves (a map's state is constant between its steps); `idxs` a field: its grid
+function (s::FieldSolution)(t::Real; idxs = nothing)
+    ts = s.t
+    isempty(ts) && throw(ArgumentError("the solution has no saves"))
+    tol = 1e-9 * max(abs(ts[end] - ts[1]), 1.0)
+    ts[1] - tol <= t <= ts[end] + tol || throw(ArgumentError(string("sol(t): t = ", t, " is outside the saves [",
+        ts[1], ", ", ts[end], "]")))
+    k = clamp(searchsortedlast(ts, t + tol), 1, length(ts))
+    u = abs(ts[k] - t) <= tol || k == length(ts) || s.prob.kind == :map ? s.u[k] :
+        s.u[k] .+ ((t - ts[k]) / (ts[k + 1] - ts[k])) .* (s.u[k + 1] .- s.u[k])
+    idxs === nothing && return u
+    ix = s.prob.index
+    slot = ix isa LatticeIndex ? get(ix.vars, ix.key(idxs), nothing) : nothing
+    slot isa FieldSlot || throw(ArgumentError(string("sol(t; idxs): `", _symtext(idxs), "` is not a state field ",
+        "of the problem")))
+    return reshape(u[slot.range], slot.dims)
 end
 
 """
@@ -182,12 +222,13 @@ function _final_problem(integ::FieldIntegrator, sp)
            invoke(SciMLBase.remake, Tuple{T}, sp; p = q, save_idxs = idx)
 end
 
-# Time-first reads on every solution of a lattice problem (Q-G): `sol[c]` of a state or aux field
-# is a `FieldSeries`; `sol[x]` the coordinates of the site centers; anything else as SciML reads it.
-# (The methods for integer, colon and index-array arguments keep SciML's reads, unambiguously.)
+# Field reads on every solution of a lattice problem (ruling Q18): `sol[c]` of a state or aux
+# field is one grid per save (as SciML and front end A read a variable); `sol[x]` the
+# coordinates of the site centers; anything else as SciML reads it. (The methods for integer,
+# colon and index-array arguments keep SciML's reads, unambiguously.)
 function Base.getindex(sol::LatticeSolution, sym)
     s = _field_series(sol, sym)
-    s === nothing || return s
+    s === nothing || return _grids(s)
     c = _coordinate(sol, sym)
     c === nothing || return c
     return invoke(getindex, Tuple{SciMLBase.AbstractTimeseriesSolution, Any}, sol, sym)
@@ -198,6 +239,7 @@ Base.getindex(sol::LatticeSolution, i::AbstractArray{Int}) =
     invoke(getindex, Tuple{SciMLBase.AbstractTimeseriesSolution, AbstractArray{Int}}, sol, i)
 Base.getindex(sol::LatticeSolution, i::CartesianIndex) =
     invoke(getindex, Tuple{SciMLBase.AbstractTimeseriesSolution, CartesianIndex}, sol, i)
+_grids(s::FieldSeries) = [s[i, ntuple(_ -> Colon(), ndims(s) - 1)...] for i in 1:size(s, 1)]
 function _coordinate(sol, sym)
     ix = _lindex(sol)
     ix isa LatticeIndex || return nothing

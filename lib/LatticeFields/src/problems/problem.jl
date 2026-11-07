@@ -303,7 +303,8 @@ Saved states of an owned solve: `t`, `u` (flat host vectors), `retcode`, and the
 counts used: `substeps` the first group's (the only one's for one group), `counts` every
 group's, in group order ([`substep_counts`](@ref)). Indexed by symbol through
 SymbolicIndexingInterface: `sol[c]` is a vector of grid-shaped arrays, `sol[c, i]` one of
-them. An aux field `K ~ rhs` (F3 design §3.12) is not in `u`: `aux` holds its values at each
+them, `sol(t; idxs = c)` the grid at time `t` (linear between the saves) and
+[`field_series`](@ref)`(sol, c)` the time-first view, as on the owned `ODESolution` (ruling Q18). An aux field `K ~ rhs` (F3 design §3.12) is not in `u`: `aux` holds its values at each
 save, evaluated from the saved state at the save time, and `sol[K]` reads them. `stats` holds
 the solver counters of the groups' status words ([`field_stats`](@ref)).
 """
