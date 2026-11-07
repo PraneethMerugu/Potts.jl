@@ -397,3 +397,15 @@ end
     end
 end
 
+# F4-05/F4-06: an owned run on the device reads nothing back between saves with no callback; a
+# callback's condition reads a host copy each window; an ensemble runs on the device
+@testset "F4-05/F4-06: owned runs on $pgpu: host copies only for callbacks; an ensemble" begin
+    p = discretize(cbsys(0.3), LatticeDiscretization(Grid((8, 8)); T = Float32, backend = PDEV))
+    alg = ExplicitEuler(; dt = 0.01f0)
+    @test solve(p, alg).stats.syncs == 0
+    cb = SciMLBase.DiscreteCallback((u, t, i) -> true, i -> nothing; save_positions = (false, false))
+    @test solve(p, alg; callback = cb).stats.syncs == 30
+    ep = SciMLBase.EnsembleProblem(p; prob_func = (q, ctx) -> remake(q; p = [bk => 1.0 + ctx.sim_id]))
+    es = solve(ep, alg, SciMLBase.EnsembleSerial(); trajectories = 2)
+    @test all(i -> es.u[i].u[end] == solve(remake(p; p = [bk => 1.0 + i]), alg).u[end], 1:2)
+end

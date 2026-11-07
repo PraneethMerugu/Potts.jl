@@ -243,4 +243,7 @@ function _multilinear(g, ranges, pt)
     end
     return acc
 end
+# (an ensemble's statistics: the sums; the counts of the first)
+Base.merge(a::LatticeStats, b::LatticeStats) = LatticeStats(a.nf + b.nf, a.nsolve + b.nsolve, a.counts, a.solves + b.solves,
+    a.budget + b.budget, a.floor + b.floor, a.newton_budget + b.newton_budget, a.syncs + b.syncs)
 Base.:(==)(a::LatticeStats, b::LatticeStats) = all(f -> getfield(a, f) == getfield(b, f), fieldnames(LatticeStats))
