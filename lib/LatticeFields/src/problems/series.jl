@@ -104,7 +104,15 @@ function _field_series(sol, sym)
     if slot isa FieldSlot
         T = eltype(eltype(sol.u))
         r = slot.range
-        nt > 0 && length(sol.u[1]) < last(r) && return nothing   # (a subset SciML saved: its own reads)
+        idx = get(sol.prob.kwargs, :save_idxs, nothing)
+        if idx isa AbstractVector{<:Integer}                # (the saves hold `save_idxs` only)
+            pos = indexin(r, idx)
+            any(isnothing, pos) && return nothing
+            r = Int.(pos)
+            r == first(r):last(r) && (r = first(r):last(r))
+        elseif nt > 0 && length(sol.u[1]) < last(r)
+            return nothing                                   # (a subset SciML saved: its own reads)
+        end
         return FieldSeries{T}((nt, slot.dims...), _StateSlice(sol.u, r, slot.dims))
     end
     a = get(ix.aux, k, nothing)
@@ -124,7 +132,8 @@ end
 The statistics of an owned solve (`sol.stats`, F4-04): `nf` the windows stepped (shortened ones
 too), `nsolve` the implicit solves, `counts` the substep count of each field group
 ([`substep_counts`](@ref)), and the solver counters of the groups' status words
-([`field_stats`](@ref)): `solves`, `budget`, `floor`, `newton_budget`.
+([`field_stats`](@ref)): `solves`, `budget`, `floor`, `newton_budget`; `syncs` the host copies of a
+device state that callbacks and interpolated saves took (0 with none, F4-05).
 """
 struct LatticeStats
     nf::Int
@@ -134,10 +143,12 @@ struct LatticeStats
     budget::Int64
     floor::Int64
     newton_budget::Int64
+    syncs::Int
 end
 function LatticeStats(integ::FieldIntegrator)
     f = field_stats(integ)
-    return LatticeStats(integ.windows, f.solves, substep_counts(integ), f.solves, f.budget, f.floor, f.newton_budget)
+    return LatticeStats(integ.windows, f.solves, substep_counts(integ), f.solves, f.budget, f.floor, f.newton_budget,
+        integ.syncs)
 end
 const LatticeSolution = typewith(SciMLBase.ODESolution, :prob, LatticeProblem)
 field_stats(s::LatticeSolution) = _stats(s.stats)
@@ -165,7 +176,10 @@ function _final_problem(integ::FieldIntegrator, sp)
     q = LatticeParameters(copy(integ.p), eltype(integ.tables)[k => copy(v) for (k, v) in integ.tables], ins;
         tick = _tick(integ))
     T = sp isa SciMLBase.DiscreteProblem ? SciMLBase.DiscreteProblem : SciMLBase.ODEProblem
-    return invoke(SciMLBase.remake, Tuple{T}, sp; p = q)
+    idx = getfield(integ, :saveidxs)
+    # (`save_idxs`: the saves hold those indices; the time-first reads find the fields in them)
+    return idx === nothing ? invoke(SciMLBase.remake, Tuple{T}, sp; p = q) :
+           invoke(SciMLBase.remake, Tuple{T}, sp; p = q, save_idxs = idx)
 end
 
 # Time-first reads on every solution of a lattice problem (Q-G): `sol[c]` of a state or aux field

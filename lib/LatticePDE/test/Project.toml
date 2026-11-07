@@ -1,6 +1,7 @@
 [deps]
 AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
+DiffEqCallbacks = "459566f4-90b8-5000-8ac3-15dfb0a30def"
 DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
 ExplicitImports = "7d51a73a-1435-4ff3-83d9-f097790105c7"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"

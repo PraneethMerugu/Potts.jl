@@ -296,6 +296,7 @@ bcs = [ce ~ masked(ke == 3, 0.0), oe ~ masked(ismember(ke, (2, 3)), 1.0)]
     include("bdf2.jl")
     include("integrator.jl")
     include("solution.jl")
+    include("callbacks.jl")
     include("quasisteady.jl")
     include("coupled.jl")
     include("clock.jl")

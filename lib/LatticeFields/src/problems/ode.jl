@@ -285,6 +285,14 @@ end
 _has_masks(fp::FieldProblem) = (s = fp.program; ids = Int[fieldid(s, k) for k in fp.state];
                                 any(r -> r isa NodeValueRule && r.field in ids, s.rules))
 
+# the affect of a built-in callback (the clock, the masks: the ODE path's), marked so that an
+# owned solve, which steps them itself, leaves them out of the problem's callbacks (F4-05)
+struct _Builtin{F} <: Function
+    f::F
+end
+(b::_Builtin)(integ) = b.f(integ)
+_builtin(cb) = cb isa SciMLBase.DiscreteCallback && cb.affect! isa _Builtin
+
 """
     ClockTick(τ)
 
@@ -313,7 +321,7 @@ function _callback(c::ClockTick)
         SciMLBase.derivative_discontinuity!(integ, false)
         return nothing
     end
-    return SciMLBase.DiscreteCallback(cond, affect!; initialize = start, save_positions = (false, false))
+    return SciMLBase.DiscreteCallback(cond, _Builtin(affect!); initialize = start, save_positions = (false, false))
 end
 
 """
@@ -353,7 +361,7 @@ function _callback(c::MaskSync)
         return nothing
     end
     cond = c.moving ? (u, t, integ) -> true : (u, t, integ) -> false
-    return SciMLBase.DiscreteCallback(cond, affect!; initialize = start, save_positions = (false, false))
+    return SciMLBase.DiscreteCallback(cond, _Builtin(affect!); initialize = start, save_positions = (false, false))
 end
 """
     mask_sync!(integ; all = false) -> Bool
@@ -1216,8 +1224,22 @@ function _owned_or_refuse(prob, alg)
     lattice_metadata(prob) === nothing && throw(_ode_refusal(alg))
     return field_problem(prob)
 end
-# (the integrator keeps `prob`: its solution is SciML's, of `prob`; F4-04)
-_owned_init(fp::FieldProblem, alg, prob; kw...) = (ig = CommonSolve.init(fp, alg; kw...); ig.sciml = prob; ig)
+# (the integrator keeps `prob`: its solution is SciML's, of `prob`, F4-04; the problem's own
+# keywords join the call's as DiffEqBase merges them, its callbacks before the call's, without
+# the built-in ones of the ODE path, which an owned run steps itself: F4-05)
+function _owned_init(fp::FieldProblem, alg, prob; callback = nothing, kw...)
+    pk = Dict{Symbol, Any}(pairs(prob.kwargs))
+    pcb = _user_callbacks(pop!(pk, :callback, nothing))
+    cb = pcb === nothing ? callback : callback === nothing ? pcb : SciMLBase.CallbackSet(pcb, callback)
+    return CommonSolve.init(fp, alg; pk..., kw..., callback = cb, _sciml = prob)
+end
+function _user_callbacks(cb)
+    cb === nothing && return nothing
+    cs = cb isa SciMLBase.CallbackSet ? cb : SciMLBase.CallbackSet(cb)
+    d = filter(!_builtin, collect(Any, cs.discrete_callbacks))
+    isempty(d) && isempty(cs.continuous_callbacks) && return nothing
+    return SciMLBase.CallbackSet(cs.continuous_callbacks..., d...)
+end
 CommonSolve.init(prob::LatticeProblem, alg::FieldAlgorithm; kw...) = _owned_init(_owned_or_refuse(prob, alg), alg, prob; kw...)
 CommonSolve.init(prob::LatticeProblem, alg::LinearSolver; kw...) = CommonSolve.init(_owned_or_refuse(prob, alg), alg; kw...)
 CommonSolve.solve(prob::LatticeProblem, alg::FieldAlgorithm; kw...) = CommonSolve.solve!(CommonSolve.init(prob, alg; kw...))

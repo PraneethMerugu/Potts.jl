@@ -113,10 +113,11 @@ end
     @test occursin("step_index(t)", e) && !occursin("clock__tick", e) && occursin("reads none", e)
     # whole names only: a user parameter ending in `clock__tick` keeps its name
     @test LatticePDE._clocktext("`myclock__tick` and clock__tick") == "`myclock__tick` and step_index(t)"
-    # S2: saveat against a window from the clock; the route works
+    # S2: saveat off the window from the clock: the saves between are interpolated (F4-05, Q2 (a);
+    # before, a refusal with the route `dt = 0.5`); the route still saves stepped states
     p = discretize(ksys(3.0), kdisc())
-    e = kerr(() -> solve(p, ExplicitEuler(); saveat = 0.5))
-    @test occursin("the clock's period, no `dt` given", e) && occursin("ExplicitEuler(; dt = 0.5)", e) && !occursin("dt = 1.0", e)
+    s = solve(p, ExplicitEuler(); saveat = 0.5)
+    @test s.t ≈ 0:0.5:3 && s.u[2] ≈ (s.u[1] .+ s.u[3]) ./ 2
     @test solve(p, ExplicitEuler(; dt = 0.5); saveat = 0.5).t ≈ 0:0.5:3
     # a span of 2.5 periods: the last window is shortened (F4-03; before, a refusal), and reads
     # the step index of its period

@@ -18,14 +18,17 @@ Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 SymbolicIndexingInterface = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
 
 [weakdeps]
+DiffEqBase = "2b5f629d-d688-5b77-993f-72d75c75574e"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 OrdinaryDiffEqCore = "bbf590c4-e513-4bbe-9b18-05decba2e5d8"
 
 [extensions]
+LatticeFieldsDiffEqBaseExt = "DiffEqBase"
 LatticeFieldsForwardDiffExt = "ForwardDiff"
 LatticeFieldsOrdinaryDiffEqCoreExt = "OrdinaryDiffEqCore"
 
 [compat]
+DiffEqBase = "7"
 CommonSolve = "0.2"
 ForwardDiff = "0.10, 1"
 KernelAbstractions = "0.9.42"
