@@ -511,6 +511,13 @@ _sd(f, p) = f[1](p) * f[2](p)
 _sdseen(f, p) = _seen(f[1], p) * _seen(f[2], p)
 const _MAXARMS = 64                       # row alternatives (arm choices) before giving up
 
+# A time span `[lo, hi]` that an interval bound reads at each evaluation (the window of an
+# explicit group's count, F4-12b)
+mutable struct TimeSpan
+    lo::Float64
+    hi::Float64
+    params::Any                         # the parameters, tables and inputs of the last count (`Problems.bound_params`)
+end
 struct StabilityBound
     invh2::Vector{Vector{Float64}}        # per row, 1/h_a² of its grid (a `Coarse` field's: `k h`, F3-16)
     keys::Vector{String}
@@ -530,7 +537,21 @@ struct StabilityBound
     declared::Vector{Tuple{String, Tuple{Float64, Float64}}}
     used::Vector{String}
     facevals::Vector{Tuple{String, String, Coef, Coef}}
+    # (F4-12b) per row, its Robin faces whose α or β varies by site or in time, as `(axis, f,
+    # where)`: `f` a function of the parameters giving the ghost diagonal `d = α/(α/2 + β)` over
+    # the face's sites at any time (`(NaN, NaN)`: no bound), `where` the face in the user's words
+    sitefaces::Vector{Vector{Tuple{Int, Any, String}}}
+    # (F4-12b, ruling Q15) whether a face of `sitefaces` reads the time, and the time span its
+    # bound is taken over (`Problems.bound_window!`: an explicit group sets each window's; the
+    # system's start time until then)
+    timed::Bool
+    window::TimeSpan
 end
+Problems.reads_time(b::StabilityBound) = b.timed
+Problems.bound_params!(b::StabilityBound, pp) = (b.window.params = pp; nothing)
+Problems.bound_params(b::StabilityBound) = b.window.params
+Problems.bound_window(b::StabilityBound) = (b.window.lo, b.window.hi)
+Problems.bound_window!(b::StabilityBound, t0, t1) = (b.window.lo = Float64(t0); b.window.hi = Float64(t1); nothing)
 # the input keys of an interval tree
 function _tree_inputs!(acc, t)
     h = t[1]
@@ -552,20 +573,24 @@ function _row_inputs(rows)
 end
 Problems.bound_inputs(b::StabilityBound) = b.inputs
 _cv(c::Coef, p) = c.param == 0 ? c.value : c.value * Float64(p[c.param])
-# Σ_d max(0, |r| − 1)/h_d², the worst Robin face of each axis of field `i`
+# Σ_d max(0, |r| − 1)/h_d², the worst Robin face of each axis of field `i` (a face that varies
+# by site: its worst site, `|r| = |d − 1|` over the diagonal's interval; Inf with no bound, F4-12b)
 function _face_excess(b::StabilityBound, i, p)
     return sum(eachindex(b.invh2[i]); init = 0.0) do d
-        b.invh2[i][d] * maximum((max(0.0, abs(Problems.face_ratio(_cv(α, p), _cv(β, p))) - 1)
-                              for (ax, α, β) in b.faces[i] if ax == d); init = 0.0)
+        b.invh2[i][d] * max(maximum((max(0.0, abs(Problems.face_ratio(_cv(α, p), _cv(β, p))) - 1)
+                                     for (ax, α, β) in b.faces[i] if ax == d); init = 0.0),
+                            maximum((_site_excess(f(p)) for (ax, f, _) in b.sitefaces[i] if ax == d); init = 0.0))
     end
 end
+_site_excess(q) = isnan(q[1]) ? Inf : max(0.0, abs(q[1] - 1) - 1, abs(q[2] - 1) - 1)
 # the same over the axes whose excess is finite (an axis with a degenerate Robin face, a ratio
 # that is not finite, counts 0): the seen bound keeps every finite part of a row (F2 record (f))
 function _face_excess_seen(b::StabilityBound, i, p)
     return sum(eachindex(b.invh2[i]); init = 0.0) do d
         x = b.invh2[i][d] * maximum((max(0.0, abs(Problems.face_ratio(_cv(α, p), _cv(β, p))) - 1)
                                   for (ax, α, β) in b.faces[i] if ax == d); init = 0.0)
-        isfinite(x) ? x : 0.0
+        y = b.invh2[i][d] * maximum((_site_excess(f(p)) for (ax, f, _) in b.sitefaces[i] if ax == d); init = 0.0)
+        (isfinite(x) ? x : 0.0) + (isfinite(y) ? y : 0.0)
     end
 end
 function (b::StabilityBound)(p)
@@ -588,7 +613,8 @@ function Problems.restrict_bound(b::StabilityBound, keep)
     mine(t) = any(k -> startswith(t, "$k: "), ks)
     return StabilityBound(b.invh2[idx], ks, rows, b.faces[idx], [k for k in b.unbounded if k in ks],
         filter(mine, b.terms), filter(mine, b.expanded), _row_inputs(rows), [k for k in b.crossunseen if k in ks], b.dims[idx],
-        b.anchors[idx], b.declared, _used_keys(rows, b.declared), [f for f in b.facevals if f[1] in ks])
+        b.anchors[idx], b.declared, _used_keys(rows, b.declared), [f for f in b.facevals if f[1] in ks], b.sitefaces[idx],
+        b.timed && any(!isempty, b.sitefaces[idx]), b.window)
 end
 
 # The lagged coupling of field groups (`Problems.lagged_coupling`; review of F2-06): per
@@ -671,8 +697,15 @@ function _steady_gain(b::StabilityBound, i, p)
                 anchored = false
                 for (side, k) in ((-1, 1), (1, n))
                     j = findfirst(x -> x[1] == a && x[2] == side, an)
-                    α, β = j === nothing ? (0.0, 0.0) : (_cv(an[j][3], p), _cv(an[j][4], p))
-                    q = α == 0 ? 0.0 : α / (α / 2 + β)      # the ghost rule's diagonal (Dirichlet 2, no flux 0)
+                    if j !== nothing && an[j][4] === nothing
+                        # a face whose α or β varies by site or in time (F4-12b review): its
+                        # smallest diagonal over the sites from the start on (no bound: no gain)
+                        q = an[j][3](p)[1]
+                        isnan(q) && return nothing
+                    else
+                        α, β = j === nothing ? (0.0, 0.0) : (_cv(an[j][3], p), _cv(an[j][4], p))
+                        q = α == 0 ? 0.0 : α / (α / 2 + β)      # the ghost rule's diagonal (Dirichlet 2, no flux 0)
+                    end
                     q < 0 && return nothing
                     anchored |= q > 0
                     d[k] += w * q - w
@@ -944,6 +977,11 @@ function bound_parts(b::StabilityBound, p)
             end
         end
     end
+    if !isfinite(ρ)
+        for i in eachindex(b.keys), (_, f, where) in b.sitefaces[i]
+            isnan(f(p)[1]) && push!(nonfinite, (b.keys[i], where, :robin))
+        end
+    end
     return (; ρ, seen, coupled = unique!(coupled), negative = unique!(negative), nonfinite)
 end
 
@@ -977,6 +1015,8 @@ _box_text(box) = join((string("`", k, "` ∈ [", round(b[1]; sigdigits = 4), ", 
 function _why_text(text, w)
     w === :cap && return "`$text` reads more than $(_MAXEVALS) table index combinations"
     w === :tables && return "`$text` reads tables that were not given"
+    w === :robin && return string("the Robin coefficients α and β of ", text, " give the ghost value no finite bound ",
+        "(α/2 + β/h may vanish at a site, or a coefficient has no finite bound in time)")
     w isa _IntervalWhy && return string("`$text` has no finite bound over ", _box_text(w.box))
     w isa _Unsure && return string("the diffusion coefficient `$text` may be negative over ", _box_text(w.box),
         isempty(w.ghosts) ? "" : string(" and at the ghost values of the faces with a value or a flux (",
@@ -1123,6 +1163,11 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
     rows = Vector{RowTerms}[]
     faces, unbounded, terms, expanded = Vector{Tuple{Int, Coef, Coef}}[], String[], String[], String[]
     anchors = Any[]
+    sitefaces = Vector{Tuple{Int, Any, String}}[]
+    pidx = Dict{Any, Int}(unwrap(q) => i for (i, q) in enumerate(params))
+    ivs, ends = unwrap.(sys.ivs), _domain_ends(sys)
+    window = TimeSpan(Float64(ends[1][1]), Float64(ends[1][1]), nothing)   # (the start time, F4-12b)
+    timed = any(sc -> any(x -> x !== nothing && _reads_term(x, ivs[1]), sc), values(cf.sitecoefs))
     crossunseen = String[]
     # the array parameters (tables) by their symbols: a coefficient may read them
     tabs = Dict{Any, String}(unwrap(q) => string(unwrap(q)) for q in _params(sys)
@@ -1302,10 +1347,18 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
         end
         push!(rows, alts)
         push!(faces, [(Int(r.axis), r.alpha, r.beta) for r in cf.program.rules
-                      if r isa FaceRule && cf.program.fields[r.field].key == k])
+                      if r isa FaceRule && cf.program.fields[r.field].key == k && !sitecoefs(r)])
         mine(r) = cf.program.fields[r.field].key == k
+        # (a face whose α or β varies by site or in time anchors by its smallest diagonal over
+        # the sites from the start time on: `(axis, side, f, nothing)`, F4-12b review)
         push!(anchors, any(r -> r isa DomainEdgeRule && mine(r), cf.program.rules) ? nothing :
-                       [(Int(r.axis), Int(r.side), r.alpha, r.beta) for r in cf.program.rules if r isa FaceRule && mine(r)])
+                       Any[sitecoefs(r) ?
+                           (Int(r.axis), Int(r.side),
+                            _site_diag(cf, k, Int(r.axis), Int(r.side), pidx, tabs, [cbox; (ivs[1], (Float64(ends[1][1]), Inf), "")]), nothing) :
+                           (Int(r.axis), Int(r.side), r.alpha, r.beta) for r in cf.program.rules if r isa FaceRule && mine(r)])
+        push!(sitefaces, [(a, _site_diag(cf, k, a, sd, pidx, tabs, [cbox; (ivs[1], window, "")]),
+                           string("the face ", ivs[end - N + a], " = ", ends[length(ivs) - N + a][sd > 0 ? 2 : 1]))
+                          for (kk, a, sd) in sort!(collect(keys(cf.sitecoefs))) if kk == k])
     end
     declared = _declared_fields(cf, sys)
     # each row's grid (a `Coarse` field's: spacing `k h`, F3-16)
@@ -1314,7 +1367,7 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
     return StabilityBound([[1 / h^2 for h in level_spacing(cf.program.spacing, fdims, rlev(k))] for k in ks], ks, rows, faces,
         sort!(unique!(unbounded)), unique!(terms), unique!(expanded), _row_inputs(rows), sort!(unique!(crossunseen)),
         [collect(Int, leveldims(cf.program, rlev(k))) for k in ks], anchors, declared, _used_keys(rows, declared),
-        _face_values(cf, sys, declared))
+        _face_values(cf, sys, declared), sitefaces, timed, window)
 end
 
 # The bound of a face coefficient `K` (F3-ghost): at a face with a value or a flux the face
@@ -1338,7 +1391,7 @@ function _face_coef_bound(K, dvs, frules, params, tabs, ivars, box, periodic)
             r = get(frules, (kk, a, sd), nothing)
             r === nothing && continue
             (r.alpha.value == 0 && r.g.value == 0 && r.gfield == 0) && continue
-            r.gfield == 0 || return nothing
+            (r.gfield == 0 && !sitecoefs(r)) || return nothing
             c = dvs[kk]
             α, β, g = sym(r.alpha), sym(r.beta), sym(r.g)
             reps[c] = r.beta.value == 0 ? 2g / α - c : r.alpha.value == 0 ? c + g / β : (g - (α / 2 - β) * c) / (α / 2 + β)
@@ -1391,7 +1444,7 @@ function _face_values(cf::CompiledField{N}, sys::PDESystem, declared) where {N}
     for r in s.rules
         k = s.fields[r.field].key
         any(d -> d[1] == k, declared) || continue
-        if r isa FaceRule && r.gfield == 0 && r.alpha.value != 0
+        if r isa FaceRule && r.gfield == 0 && !sitecoefs(r) && r.alpha.value != 0
             a = Int(r.axis)
             e = ends[length(ivs) - N + a][r.side > 0 ? 2 : 1]
             push!(out, (k, string("its condition on the face `", ivs[end - N + a], " = ", e, "`"), r.g, r.alpha))

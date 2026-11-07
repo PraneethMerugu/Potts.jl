@@ -409,3 +409,33 @@ end
     es = solve(ep, alg, SciMLBase.EnsembleSerial(); trajectories = 2)
     @test all(i -> es.u[i].u[end] == solve(remake(p; p = [bk => 1.0 + i]), alg).u[end], 1:2)
 end
+
+# F4-12b: Robin coefficients that vary by site and in time on a device (Float32): the value
+# fields, the field row's per-site diagonal (one sign, and both signs with a Newton count), the
+# time-varying α rebuilt at each stage, and ExplicitEuler's count re-bounded each window equal
+# the host's
+@testset "F4-12b: per-site and time-varying Robin faces on $pgpu equal the host" begin
+    @parameters Dr = 0.05 kr = 1.0
+    site = psys([D(ce) ~ Dr * Δ(ce) - kr * ce],
+        [c(0, x, y) ~ x * y, (1 + y) * c(t, 0, y) - Differential(x)(c(t, 0, y)) ~ 0.5,
+            2.0 * c(t, x, 1) + (0.5 + x) * Differential(y)(c(t, x, 1)) ~ 1.0], [Dr, kr])
+    mixed = psys([D(ce) ~ Dr * Δ(ce) - kr * ce], [c(0, x, y) ~ x * y, (y - 0.4) * c(t, 0, y) + Differential(x)(c(t, 0, y)) ~ 0.5],
+        [Dr, kr])
+    timed = psys([D(ce) ~ Dr * Δ(ce) - kr * ce], [c(0, x, y) ~ x * y, (-1 - 4t) * c(t, 0, y) - Differential(x)(c(t, 0, y)) ~ 0.0],
+        [Dr, kr])
+    cases = [("per site, BackwardEuler", site, BackwardEuler(; dt = 0.1, newton = 1)),
+             ("per site, ExplicitEuler", site, ExplicitEuler(; dt = 0.05)),
+             ("mixed sign, BackwardEuler", mixed, BackwardEuler(; dt = 0.1, newton = 4)),
+             ("time, BackwardEuler", timed, BackwardEuler(; dt = 0.1, newton = 3)),
+             ("time, ExplicitEuler (re-bounded)", timed, ExplicitEuler(; dt = 0.05))]
+    mk(sys, be) = discretize(sys, LatticeDiscretization(Grid((32, 32)); T = Float32, backend = be))
+    for (name, sys, alg) in cases
+        sd = solve(mk(sys, PDEV), alg; saveat = 0.5)
+        sh = solve(mk(sys, KernelAbstractions.CPU()), alg; saveat = 0.5)
+        # (a Float32 implicit solve may stop at its rounding floor: `StalledSuccess`, on both)
+        @test sd.retcode == sh.retcode && sd.retcode in (ReturnCode.Success, ReturnCode.StalledSuccess) && sd.t ≈ sh.t
+        rel = maximum(i -> maximum(abs, Array(sd[ce][i]) .- sh[ce][i]) / maximum(abs, sh[ce][i]), eachindex(sd.t))
+        @info "F4-12b $name: device vs host (Float32) max relative difference $rel"
+        @test rel <= 1e-5
+    end
+end

@@ -88,6 +88,10 @@ struct CompiledField{N}
     tables::Vector
     initial::Dict{String, Any}
     linearity::Dict{String, Vector{Pair{Any, Symbol}}}
+    # the Robin coefficients that vary by site or in time (F4-12b), by `(key, axis, side)`:
+    # `(α, β)` in lattice units at the face's own coordinate, each an expression or `nothing`
+    # (a number or a parameter, held by the face rule)
+    sitecoefs::Dict{Tuple{String, Int, Int}, Tuple{Any, Any}}
 end
 
 """Launch-varying slot of the time `t` (`G.rt[RUNTIME_T]`)."""
@@ -177,9 +181,9 @@ end
 _promoted(vs) = (T = mapreduce(typeof, promote_type, vs; init = Float64); T.(vs))
 
 # a face coefficient, face value or mask value: a number, a parameter, or a number times a
-# parameter (else `nothing` with `strict = false`: a value field, F3-07; a Robin coefficient of
-# parameters is a computed parameter by then, `robin_slots`)
-function _coef(v, params, scale = 1.0; strict::Bool = true)
+# parameter, else `nothing` (a value field: F3-07, and a Robin coefficient that reads the
+# coordinates or the time, F4-12b; one of parameters is a computed parameter by then, `robin_slots`)
+function _coef(v, params, scale = 1.0)
     u = unwrap(v)
     c = _cval(u)
     c !== nothing && return Coef(Float64(c) * scale + 0.0)          # no -0.0 in the printed rule
@@ -190,12 +194,7 @@ function _coef(v, params, scale = 1.0; strict::Bool = true)
         rest = k === nothing ? nothing : _cval(prod(a[setdiff(eachindex(a), [k])]))
         k !== nothing && rest !== nothing && return Coef(Float64(rest) * scale, Int32(params[unwrap(a[k])]))
     end
-    strict || return nothing
-    vs = [w for w in Symbolics.get_variables(u) if !haskey(params, w)]
-    _dverr(string("the Robin coefficient `", v, "` must be one value at every site",
-        isempty(vs) ? "" : string("; it reads `", first(vs), "`"),
-        " (a Robin coefficient is a number or an expression of parameters; coefficients that vary by site or in ",
-        "time are planned, F4-12b)"))
+    return nothing
 end
 # A face value or a masked value that is an expression (F3-07): of the time, the coordinates,
 # the parameters and the inputs, never of a field of the state (the condition would be another
@@ -209,6 +208,25 @@ function _unpin_face_reads(bc, fids, ivs)
     isempty(reps) && return bc
     return BC(bc.kind, bc.op, bc.comp, bc.axis, bc.side, bc.alpha, bc.beta,
         substitute(bc.value, reps; fold = Val(false)), bc.pred, bc.eq)
+end
+# A Robin coefficient `v` of condition `bc` (`what`: "α" or "β", times `scale` into lattice
+# units) that reads the coordinates or the time (F4-12b): a value field `face:<key>:<axis><side>:<what>`
+# computed at each site by a kernel at the step's time, at the face's own coordinate (the
+# boundary sites read it). A read of an input is read at the boundary site; a read of the
+# state is refused (the condition would be another equation)
+function _coef_field!(pb, bc, v, scale, what, k, d, s, op, lv, fids, ivs, ends, allops, isin, kern::K, env::E) where {K, E}
+    _value_reads_state(v, bc.eq, [o for o in allops if !isin[o]], "Robin coefficient")
+    w = _unpin_face_reads(BC(bc.kind, bc.op, bc.comp, bc.axis, bc.side, bc.alpha, bc.beta, v, bc.pred, bc.eq), fids, ivs).value
+    fk = string("face:", k, ":", d, s > 0 ? "+" : "-", ":", what)
+    lane = fids[op][2]
+    ff = field!(pb, fk; storage = lane, role = :aux, levels = Int8[lv])
+    kb = kern(lv)
+    e = env(false, kb, lv)
+    wx = substitute(w, Dict(ivs[d + 1] => ends[d + 1][s > 0 ? 2 : 1]); fold = Val(false))
+    x = unwrap(scale * wx)
+    store!(kb, ff, lane, _real(e, lower(x, e)))
+    add!(pb, kb, fk)
+    return ff, x
 end
 # The time derivative of a masked value `v` (F4-02): the inputs and the step index are
 # piecewise constant in time (rate 0 between writes), the coordinates and parameters constant;
@@ -246,7 +264,7 @@ _has_differential(u) = iscall(u) && (operation(u) isa Differential || any(a -> _
 function _value_reads_state(v, eq, states, what)
     _reads(v, states) && _dverr(string("`", eq, "`: the ", what, " `", v, "` reads a field of the state; a ", what,
         " may read the time, the coordinates, the parameters and the inputs (a condition that reads the field ",
-        "itself is a Robin condition `α c + β ∂c/∂n = g`, with α and β numbers or expressions of parameters)"))
+        "itself is a Robin condition `α c + β ∂c/∂n = g`, with α and β expressions of the time, the coordinates and the parameters)"))
     return nothing
 end
 
@@ -560,6 +578,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     env(mapmode, kb, lv = 0) = Env(kb, fids, params, tables, spacing, ivs[1], ivs[2:end], lo, level_spacing(h, dims, lv),
                                   mapmode, ntuple(_ -> 0, N), RESOLVE, leaf, hex, dl(lv), ghosted, lv, flev, dims, 0)
     # face rules: α c + β ∂c/∂n = g in lattice units (outward normal; ∂/∂n = side · h ∂/∂x)
+    sitecoefs = Dict{Tuple{String, Int, Int}, Tuple{Any, Any}}()
     for (k, op, comp) in faced
         f = fids[op][1][max(comp, 1)]
         lv = flev[op]
@@ -571,10 +590,18 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
             b === nothing && (rule!(pb, FaceRule(f, Int8(d), Int8(s), Coef(0.0), Coef(1.0), Coef(0.0))); continue)
             bc = bcs[b]
             α, β = _coef(bc.alpha, params), _coef(bc.beta, params, s / hL[d])
+            # a Robin coefficient that reads the coordinates or the time (F4-12b): a value field
+            # computed at each site at the step's time, as a face value (in lattice units)
+            af, ax = α === nothing ? _coef_field!(pb, bc, bc.alpha, 1.0, "α", k, d, s, op, lv, fids, ivs, ends, allops, isin, kern, env) :
+                     (Int32(0), nothing)
+            bf, bx = β === nothing ? _coef_field!(pb, bc, bc.beta, s / hL[d], "β", k, d, s, op, lv, fids, ivs, ends, allops, isin, kern, env) :
+                     (Int32(0), nothing)
+            (af == 0 && bf == 0) || (sitecoefs[(k, d, s)] = (ax, bx))
+            α, β = something(α, Coef(1.0)), something(β, Coef(1.0))
             val(c) = c.param == 0 ? c.value : c.value * defaults[c.param]     # parameter defaults bind here
-            degenerate(val(α), val(β)) &&
+            af == 0 && bf == 0 && degenerate(val(α), val(β)) &&
                 _dverr("`$(bc.eq)`: α/2 + β/h = 0 on this face leaves the ghost value undefined")
-            g = _coef(bc.value, params; strict = false)
+            g = _coef(bc.value, params)
             # a field read at the face (`G(t, 1, y)`, an input) is read at the boundary site,
             # where the value field is evaluated (batch 5 review N5)
             g === nothing && (bc = _unpin_face_reads(bc, fids, ivs))
@@ -590,9 +617,9 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
                 gx = substitute(bc.value, Dict(ivs[d + 1] => ends[d + 1][s > 0 ? 2 : 1]); fold = Val(false))
                 store!(kb, gf, fids[op][2], _real(e, lower(gx, e)))
                 add!(pb, kb, gk)
-                rule!(pb, FaceRule(f, Int8(d), Int8(s), α, β, Coef(1.0), gf))
+                rule!(pb, FaceRule(f, Int8(d), Int8(s), α, β, Coef(1.0), gf, af, bf))
             else
-                rule!(pb, FaceRule(f, Int8(d), Int8(s), α, β, g))
+                rule!(pb, FaceRule(f, Int8(d), Int8(s), α, β, g, Int32(0), af, bf))
             end
         end
     end
@@ -603,7 +630,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         lv = flev[b.op]                   # (a coarse field's mask lives on its grid: its fine reads folded)
         mf = field!(pb, "mask:$k"; storage = U8, role = :aux, epoch = PERSIGMA, levels = Int8[lv])
         push!(pb.masks, MaskDecl("mask:$k", mf, PERSIGMA))
-        mv = _coef(b.value, params; strict = false)
+        mv = _coef(b.value, params)
         vf = Int32(0)
         if mv === nothing
             # a value of the time, the coordinates, parameters or inputs: a value field, which
@@ -668,7 +695,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     end
     tvals = [string(p) => (d = something(_icvalue(ic, p), Some(ModelingToolkitBase.hasdefault(p) ? ModelingToolkitBase.getdefault(p) : Float64[]));
                            _promoted(collect(unwrap_const.(unwrap.(d))))) for p in arrays]
-    return CompiledField{N}(program(pb), keys, plist, defaults, tvals, initial, lin)
+    return CompiledField{N}(program(pb), keys, plist, defaults, tvals, initial, lin, sitecoefs)
 end
 
 # An aux field read at a neighbor site across a closed face (`Δ(K)`, F3-02 review S6) has no

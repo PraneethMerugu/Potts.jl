@@ -170,20 +170,22 @@ function _ghost!(b, p::Program, f, axis, side, center, at)
         irerror("field `", p.fields[f].key, "`: face rule on axis ",
             axis, " has α = β = 0")
     g() = _rulevalue!(b, p, r.g, r.gfield, at)
-    if α.param == 0 && β.param == 0 && β.value == 0       # Dirichlet: ghost = (2/α) g − c
+    site = sitecoefs(r)                                   # (α or β varies by site: Robin, F4-12b)
+    if !site && α.param == 0 && β.param == 0 && β.value == 0   # Dirichlet: ghost = (2/α) g − c
         return arith!(b, ADD, arith!(b, MUL, constant!(b, 2 / α.value), g()),
             arith!(b, NEG, center))
-    elseif α.param == 0 && α.value == 0                   # flux: ghost = c + g/β
+    elseif !site && α.param == 0 && α.value == 0          # flux: ghost = c + g/β
         r.gfield == 0 && r.g.param == 0 && r.g.value == 0 && return center
         return arith!(b, ADD, center, arith!(b, DIV, g(), _coef!(b, β)))
     end                                                   # Robin: (g − (α/2 − β) c)/(α/2 + β)
-    h = arith!(b, MUL, constant!(b, 0.5), _coef!(b, α))
+    av, bv = _rulevalue!(b, p, α, r.afield, at), _rulevalue!(b, p, β, r.bfield, at)
+    h = arith!(b, MUL, constant!(b, 0.5), av)
     num = arith!(b,
         ADD,
         g(),
         arith!(b, NEG,
-            arith!(b, MUL, arith!(b, ADD, h, arith!(b, NEG, _coef!(b, β))), center)))
-    return arith!(b, DIV, num, arith!(b, ADD, h, _coef!(b, β)))
+            arith!(b, MUL, arith!(b, ADD, h, arith!(b, NEG, bv)), center)))
+    return arith!(b, DIV, num, arith!(b, ADD, h, bv))
 end
 
 """

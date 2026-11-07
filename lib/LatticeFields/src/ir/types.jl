@@ -222,7 +222,9 @@ Coef(v::Real) = Coef(Float64(v), Int32(0))
 α = 1, β = 0. No flux: α = 0, β = 1, g = 0. `β` is in lattice units (the front end divides by h).
 `gfield` (0: none) is a field holding the value at each boundary site (a value that reads the
 time, the coordinates or an input, F3-07): then `g` is that field's value times the
-coefficient `g` (a kernel of the program computes the field at the step's time).
+coefficient `g` (a kernel of the program computes the field at the step's time). `afield` and
+`bfield` (0: none) do the same for `α` and `β` (F4-12b): a Robin coefficient that varies by
+site or in time is that field's value at the boundary site times the coefficient.
 """
 struct FaceRule <: BRule
     field::Int32
@@ -232,8 +234,17 @@ struct FaceRule <: BRule
     beta::Coef
     g::Coef
     gfield::Int32
+    afield::Int32
+    bfield::Int32
 end
-FaceRule(field, axis, side, alpha::Coef, beta::Coef, g::Coef) = FaceRule(field, axis, side, alpha, beta, g, Int32(0))
+FaceRule(field, axis, side, alpha::Coef, beta::Coef, g::Coef, gfield = 0) =
+    FaceRule(field, axis, side, alpha, beta, g, Int32(gfield), Int32(0), Int32(0))
+
+"""
+Does the face rule `r` have a coefficient `α` or `β` that varies by site or in time (a value
+field, F4-12b)?
+"""
+sitecoefs(r::FaceRule) = r.afield != 0 || r.bfield != 0
 
 """Relative tolerance of the degenerate-face test: `|α/2 + β| ≤ tol (|α|/2 + |β|)`."""
 const FACE_RTOL = 1e-6

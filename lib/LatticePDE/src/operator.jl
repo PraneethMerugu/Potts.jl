@@ -211,7 +211,8 @@ function _interval(x, params::Dict{Any, Int}, tabs, box)
     v isa Real && return _ -> (Float64(v), Float64(v))
     haskey(params, u) && return (i = params[u]; pp -> (v = Float64(primal(pp[i])); (v, v)))
     for (xv, b) in box
-        isequal(xv, u) && return _ -> b
+        # (a `TimeSpan` is read at each evaluation: the time window of F4-12b)
+        isequal(xv, u) && return b isa TimeSpan ? (_ -> (b.lo, b.hi)) : (_ -> b)
     end
     iscall(u) || return nothing
     f, a = operation(u), arguments(u)
@@ -300,7 +301,7 @@ function _face_max(diff, params, tabs, box, h, N)
     end
 end
 # a coefficient as a `Coef` (a number, a parameter, a number times a parameter), or nothing
-_coefof(x, params) = (x isa Number ? Coef(Float64(x)) : _coef(x, params; strict = false))
+_coefof(x, params) = (x isa Number ? Coef(Float64(x)) : _coef(x, params))
 
 function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscretization) where {N}
     s = cf.program
@@ -377,6 +378,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
         end
     end
     auxof(term) = [j for (j, (o, _)) in enumerate(auxdef) if _reads(term, (o,))]
+    t0 = Float64(_domain_ends(sys)[1][1])     # (a face's time from the system's start, F4-12b)
     rows = Problems.RowOperator[]
     plans = Dict{String, Any}()                 # field rows: what their `jac:` kernel writes
     for k in _states(s)
@@ -506,6 +508,9 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
             cj === nothing ? (field = true) : push!(jloc, cj)
         end
         field |= scaled | iterate
+        # a Robin face whose α or β varies by site or in time (F4-12b): the row writes its
+        # boundary diagonal per site (its `jac:` kernel evaluates the coefficients there)
+        field |= any(q -> q[1] == k, Base.keys(cf.sitecoefs))
         # a numeric row needs a face on every axis that has neighbors (a raw `Dx(Dx(c))` in 2D
         # has none on `y`): such a row writes its faces per site (zero faces are allowed there)
         hasdiff = !isempty(diff)
@@ -526,8 +531,13 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
         if field
             plans[k] = (; diff, jterms, scaled, local_only)
         end
+        # the faces whose α or β varies by site or in time: the ghost diagonal over the face's
+        # sites at any time (F4-12b)
+        sitefaces = Tuple{Int, Int, Any}[(a, side < 0 ? 1 : 2, _site_diag(cf, k, a, side, params, tabset,
+                                              Any[cbox; (ivs[1], (t0, Inf), "")]))
+                                         for (kk, a, side) in sort!(collect(Base.keys(cf.sitecoefs))) if kk == k]
         push!(rows, Problems.RowOperator(k, faces, jloc, field, scaled, domain, local_only, isempty(inexact), inexact,
-            iterate, switch, adv, cross, unseen, bounds, facemax, jmax, linear, crossfaces, msign))
+            iterate, switch, adv, cross, unseen, bounds, facemax, jmax, linear, crossfaces, msign, sitefaces))
     end
     jac = isempty(plans) ? nothing : _jac_program(cf, sys, disc, plans, params, xs)
     return Problems.OperatorSpec{N}(rows, jac)
@@ -631,7 +641,7 @@ function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscret
                 r === nothing && return nothing
                 fr = s.rules[r]
                 (fr.alpha.param == 0 && fr.alpha.value == 0) && return nothing
-                α, β = _coefnode(kb, fr.alpha), _coefnode(kb, fr.beta)
+                α, β = _facecoefs(e, kb, cf, k, a, side, fr)
                 return _op(e, MAX, _op(e, DIV, α, _op(e, ADD, _op(e, MUL, constant!(kb, 0.5), α), β)), zero_)
             end
             dsum = zero_
@@ -687,8 +697,7 @@ function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscret
                     r === nothing && continue
                     fr = s.rules[r]
                     (fr.alpha.param == 0 && fr.alpha.value == 0) && continue
-                    α = _coefnode(kb, fr.alpha)
-                    β = _coefnode(kb, fr.beta)
+                    α, β = _facecoefs(e, kb, cf, k, a, side, fr)
                     dd = _op(e, DIV, α, _op(e, ADD, _op(e, MUL, constant!(kb, 0.5), α), β))
                     dd = _op(e, MAX, dd, zero_)
                     term = select!(kb, inside(_unit(e, a, side)), zero_, _op(e, MUL, wb[j], dd))
@@ -709,6 +718,42 @@ function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscret
         add!(pb, kb, "jac:$k")
     end
     return program(pb)
+end
+# The ghost diagonal `d = α/(α/2 + β)` of field `k`'s face (axis `a`, `side`) whose α or β
+# varies by site or in time (F4-12b), bounded over `box` (the coordinates along the face, the
+# time; the clock, a count from 0, over [0, ∞)): a function of the parameters giving `(lo, hi)`,
+# `(NaN, NaN)` when no interval bounds it or `α/2 + β` may vanish (`|r| = |d − 1|` is the ghost
+# ratio of the explicit bound). α and β of one sign at every site (not both 0) give `0 ≤ d ≤ 2`
+# whatever their size (`1 + t` has no finite bound, and its face is still bounded)
+function _site_diag(cf::CompiledField, k, a, side, params, tabs, box)
+    s = cf.program
+    r = findfirst(x -> x isa FaceRule && s.fields[x.field].key == k && x.axis == a && x.side == side, s.rules)
+    fr = s.rules[r]
+    sc = cf.sitecoefs[(k, a, side)]
+    ck = unwrap(Symbolics.variable(:__clock_box))
+    reps = Dict{Any, Any}(unwrap(q) => ck for q in cf.params if _isclock(q))
+    ex(x) = Symbolics.wrap(isempty(reps) ? x : substitute(x, reps; fold = Val(false)))
+    sym(c::Coef, x) = (c.param == 0 ? c.value : c.value * Symbolics.wrap(cf.params[c.param])) * (x === nothing ? 1 : ex(x))
+    α, β = sym(fr.alpha, sc[1]), sym(fr.beta, sc[2])
+    bx = Any[collect(box); (ck, (0.0, Inf), "")]
+    ia, ib, id = (_interval(unwrap(y), params, tabs, bx) for y in (α, β, α / (α / 2 + β)))
+    ev(f, pp) = f === nothing ? (NaN, NaN) : (q = f(pp); (Float64(q[1]), Float64(q[2])))
+    return pp -> _diag_bounds(ev(ia, pp), ev(ib, pp), ev(id, pp))
+end
+function _diag_bounds(A, B, D)
+    same = (A[1] >= 0 && B[1] >= 0 && (A[1] > 0 || B[1] > 0)) || (A[2] <= 0 && B[2] <= 0 && (A[2] < 0 || B[2] < 0))
+    fin = all(isfinite, D)
+    same && return fin ? (max(D[1], 0.0), min(D[2], 2.0)) : (0.0, 2.0)
+    return fin ? D : (NaN, NaN)
+end
+# A face's Robin coefficients `(α, β)` as nodes of the `jac:` kernel: a number or a parameter
+# from the face rule, a coefficient that varies by site or in time (F4-12b) lowered from its
+# expression at the site (so an operator whose face reads the time is `timed`: rebuilt at each
+# stage's end time, F4 ruling Q16)
+function _facecoefs(e, kb, cf::CompiledField, k, a, side, fr)
+    sc = get(cf.sitecoefs, (k, a, side), (nothing, nothing))
+    node(c, x) = x === nothing ? _coefnode(kb, c) : _op(e, MUL, _coefnode(kb, c), _real(e, lower(x, e)))
+    return node(fr.alpha, sc[1]), node(fr.beta, sc[2])
 end
 fieldid_in(pb::ProgramBuilder, key) = Int32(findfirst(f -> f.key == key, pb.fields))
 _coefnode(kb, c::Coef) = c.param == 0 ? constant!(kb, c.value) :

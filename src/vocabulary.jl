@@ -1587,9 +1587,10 @@ A face with `α c + β ∂c/∂n = g` in `@boundary` (`x => (…, Robin(α, β, 
 normal `n`: the ghost value of an edge site makes the face value and the gradient across the
 face meet the condition. On the low side of `x` it is LatticePDE's `α c(t, 0, y) -
 β Differential(x)(c(t, 0, y)) ~ g`, on the high side `α c(t, L, y) + β Differential(x)(c(t, L, y))
-~ g`. `g` is an expression as the value of [`Dirichlet`](@ref). `α` and `β` are numbers or
-expressions of parameters, one value at every site; an expression is held by a computed
-parameter of the face, `c_x_low_α` (field, axis, side, coefficient). `β = 0` is a fixed value
+~ g`. `g`, `α` and `β` are expressions as the value of [`Dirichlet`](@ref). An `α` or `β` of
+parameters alone is one value at every site, held by a computed parameter of the face,
+`c_x_low_α` (field, axis, side, coefficient); one that reads the coordinates or the time
+varies by site or in time (`Robin(1 + 0.1y, 1.0, g)`). `β = 0` is a fixed value
 (write `Dirichlet(g / α)`) and `α = 0` a flux (write `Flux(g / β)`).
 """
 struct Robin{A, B, G}
@@ -1623,7 +1624,7 @@ end
 _boundary_side(s::Union{Dirichlet, NoFlux}, field, axis, what) = s isa Dirichlet ? Dirichlet(_boundary_value(s.value, field, "`$axis` $what face")) : s
 _boundary_side(s::Flux, field, axis, what) = Flux(_boundary_value(s.q, field, "`$axis` $what face flux"))
 function _boundary_side(s::Robin, field, axis, what)
-    α, β = (_boundary_value(v, field, "`$axis` $what face Robin `$k`"; coef = true) for (v, k) in ((s.α, "α"), (s.β, "β")))
+    α, β = (_boundary_value(v, field, "`$axis` $what face Robin `$k`") for (v, k) in ((s.α, "α"), (s.β, "β")))
     g = _boundary_value(s.g, field, "`$axis` $what face Robin `g`")
     n = info(field).name
     # a zero coefficient is another side (LatticePDE classifies the face equation the same way)
@@ -1645,35 +1646,31 @@ _boundary_side(s, field, axis, what) = throw(ArgumentError(
     "`Flux(q)` or `Robin(α, β, g)`"))
 const _BOUNDARY_VALUE_FORMS = "a boundary value is an expression of numbers, parameters, the coordinates `x`, `y`, `z`, " *
                                "`time` and `mcs`"
-const _ROBIN_COEF_FORMS = "a Robin coefficient α or β is an expression of numbers and parameters, one value at every site " *
-                          "(coefficients that vary by site or in time are planned, F4-12b)"
-# A boundary value (F4-12a, FE-10): an expression of numbers, parameters, the lattice
-# coordinates, `time` and `mcs`, as in `@bcs`; LatticePDE lowers one that is not a number or a
-# number times a parameter into a value field (F3-07). A Robin coefficient (`coef = true`) is an
-# expression of numbers and parameters: an expression is held by a computed parameter of its face
-# (`_robin_slots`)
-function _boundary_value(v, field, what; coef::Bool = false)
+# A boundary value (F4-12a, FE-10) or a Robin coefficient (F4-12b): an expression of numbers,
+# parameters, the lattice coordinates, `time` and `mcs`, as in `@bcs`; LatticePDE lowers one
+# that is not a number or a number times a parameter into a value field (F3-07). A Robin
+# coefficient of parameters alone is held by a computed parameter of its face (`_robin_slots`)
+function _boundary_value(v, field, what)
     u = _unwrap(v)
     u isa Real && return Float64(u)                  # a number (`Num` is a `Real` too: unwrapped first)
     u isa SymbolicUtils.BasicSymbolic || throw(ArgumentError(
         "@boundary $(info(field).name): the $what value is `$v`; $_BOUNDARY_VALUE_FORMS"))
-    forms = coef ? _ROBIN_COEF_FORMS : _BOUNDARY_VALUE_FORMS
     bad = Ref{Any}(nothing)
     function walk(y)
         bad[] === nothing && y isa SymbolicUtils.BasicSymbolic && !SymbolicUtils.isconst(y) || return nothing
         j = info(y)
         if j !== nothing                             # a model quantity (a built-in is a call `time(t)`)
-            j.role === :param || (!coef && j.role === :builtin && j.name in (:time, :mcs)) || (bad[] = j.name)
+            j.role === :param || (j.role === :builtin && j.name in (:time, :mcs)) || (bad[] = j.name)
         elseif iscall(y)
             foreach(walk, arguments(y))
         else
-            (!coef && _coordinate(y)) || (bad[] = y)
+            _coordinate(y) || (bad[] = y)
         end
         return nothing
     end
     walk(u)
     bad[] === nothing || throw(ArgumentError(
-        "@boundary $(info(field).name): the $what value `$(_builtin_text(string(v)))` reads `$(bad[])`; $forms"))
+        "@boundary $(info(field).name): the $what value `$(_builtin_text(string(v)))` reads `$(bad[])`; $_BOUNDARY_VALUE_FORMS"))
     return v
 end
 

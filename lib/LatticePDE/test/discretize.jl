@@ -610,8 +610,8 @@ end
 
 # F4-12a: a Robin coefficient that is an expression of parameters is one value at every site,
 # held by a computed parameter of its face (`c_x_low_α`); terms on one read add up (`g1 c + g2 c`
-# kept only the last one, `g2`); a coefficient that reads the coordinates is refused, naming
-# the planned site- and time-varying coefficients (F4-12b).
+# kept only the last one, `g2`); a coefficient that reads the coordinates is a value field of
+# its face (F4-12b, robin_site.jl).
 # Base (925110cc, ~/lpwork/f4c/nc12-base-lp.log): 1 error, the expression refused ("the boundary value
 # `g1 + g2` must be a number, …").
 @testset "F4-12a: a Robin coefficient of parameters" begin
@@ -634,7 +634,7 @@ end
     hib = discretize(sysr(c(t, 1, y) + (g1 + g2) * Dx(c(t, 1, y)) ~ 1.0, [g1, g2]), g)
     @test getp(hib, :c_x_high_β)(hib) == 3.0
     @test rhs(exb) == rhs(discretize(sysr(c(t, 0, y) - ar * Dx(c(t, 0, y)) ~ 1.0, [g1, g2, ar]), g))
-    # the refusal names the read (base 6d11bc85: "… is one value at every site: …", no read)
-    @test throws_with(() -> discretize(sysr((g1 + y) * c(t, 0, y) - Dx(c(t, 0, y)) ~ 1.0, [g1, g2]), g),
-                      "must be one value at every site; it reads `y`")
+    # (F4-12b: one that reads a coordinate is a value field of the face, not a slot; robin_site.jl)
+    sy = discretize(sysr((g1 + y) * c(t, 0, y) - Dx(c(t, 0, y)) ~ 1.0, [g1, g2]), g)
+    @test any(r -> r isa LatticeFields.IR.FaceRule && r.afield != 0, LFP.field_problem(sy).program.rules)
 end

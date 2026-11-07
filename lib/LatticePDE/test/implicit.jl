@@ -31,7 +31,7 @@ blast(s) = s[bce, length(s.t)]                             # the last save
 # harmonic face `w = 2K_i K_nb/(K_i + K_nb)` (`K` at the neighbor's center, a ghost center at a
 # face of the box). A box face takes `faces[(a, side)]`: `(:dir, g)` (ghost `2g − u_i`) or
 # `(:robin, α, β, g)` for `α u + β ∂u/∂x_a = g` as written (ghost from `α (u_g + u_i)/2 +
-# β side (u_g − u_i)/h = g`), `g` a number or a function of the face point; no entry is zero
+# β side (u_g − u_i)/h = g`), `α`, `β`, `g` numbers or functions of the face point; no entry is zero
 # flux. `hand_rate` returns the rate `(L, b)`; `be_hand` `u` of `(I − h L) u = u0 + h b`, the
 # masked sites holding `mval`.
 function be_hand(u0, h; mask = nothing, mval = nothing, kw...)
@@ -72,9 +72,11 @@ function hand_rate(; dims = BDIMS, K = (x, y) -> 1.0, m = (i, j) -> 1.0, k = (x,
                 fc = faces[(a, s)]
                 # the face point, and the ghost u_g = p u_i + q
                 fp = a == 1 ? (s < 0 ? 0.0 : 1.0, yi) : (xi, s < 0 ? 0.0 : 1.0)
-                g = fc[end] isa Function ? fc[end](fp...) : fc[end]
+                ev(v) = v isa Function ? v(fp...) : v
+                g = ev(fc[end])
+                # (F4-12b: α and β may vary along the face, functions of the face point)
                 p, q = fc[1] === :dir ? (-1.0, 2g) :
-                       (bl = fc[3] * s / hs[a]; den = fc[2] / 2 + bl; ((bl - fc[2] / 2) / den, g / den))
+                       (al = ev(fc[2]); bl = ev(fc[3]) * s / hs[a]; den = al / 2 + bl; ((bl - al / 2) / den, g / den))
                 L[r, r] += c * (p - 1)
                 b[r] += c * q
             end

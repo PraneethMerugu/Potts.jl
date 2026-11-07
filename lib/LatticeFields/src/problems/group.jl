@@ -363,9 +363,15 @@ inputs: [`with_tables`](@ref), primal values). The one policy of both front ends
 text, hashed; front end A: the group's fingerprint text); `texts` words the messages.
 """
 function substeps(spec::GroupSpec, alg::ExplicitEuler, dt::Real, pp; fields = spec.state, stability = spec.stability,
-        key = identity, texts::PolicyTexts = ProblemTexts(spec.texts.route))
+        key = identity, texts::PolicyTexts = ProblemTexts(spec.texts.route), span = nothing)
     isempty(fields) && return 0                     # aux fields only: one evaluation per window
     dt = Float64(dt)
+    # (a bound that reads the time, F4-12b: its windows are counted again at these parameters,
+    # tables and inputs; with the run's time span, the automatic count is checked over it now)
+    if reads_time(stability)
+        bound_params!(stability, pp)
+        span === nothing || alg.substeps !== nothing || _check_span(stability, pp, dt, span, texts, (; spec, fields, dt))
+    end
     r = bound_report(stability, pp)
     check_declared(stability, pp)
     ctx = (; stability, pp, r, fields = collect(String, fields), dt, least = alg.substeps)
@@ -485,9 +491,10 @@ struct _OnceKey
     key::String
 end
 (k::_OnceKey)(why) = string(k.key, "#", why)
-function (s::GroupSubsteps)(pp)
+function (s::GroupSubsteps)(pp; span = nothing)
     key = _OnceKey(s.key)
-    n = substeps(s.spec, s.alg, s.dt, pp; key, texts = s.texts)
+    n = s.alg isa ExplicitEuler ? substeps(s.spec, s.alg, s.dt, pp; key, texts = s.texts, span) :
+        substeps(s.spec, s.alg, s.dt, pp; key, texts = s.texts)
     c = s.coupling
     c === nothing || check_coupling(c.stability, c.groups, c.explicit, c.whole(pp), s.dt; check = (c.index,),
         key, texts = s.texts, steady = c.steady, rows0 = hasproperty(c, :rows0) ? c.rows0 : String[])
@@ -776,6 +783,8 @@ mutable struct GroupRuntime{ST <: FieldStore, A, B, M, CL, SC, CP, PV, S, H, DC}
     totals::StatusTotals                # the status word's host totals (`check_status!`)
     declared::DC                        # the fields whose declared interval the bound used, with
                                         # their buffers (`check_declared!`; batch 5 review M2)
+    recount::Any                        # an explicit group whose bound reads the time (F4-12b, Q15):
+                                        # its group spec, the count re-bounded each window; or nothing
 end
 
 # the current slots a launch of the group binds at slot parity `parity`: the group's fields
@@ -829,7 +838,8 @@ function bind_group(g::FieldGroup, alg, st::FieldStore, p; fields = g.spec.state
         bind_cache(alg, g, st, p; fields = collect(String, fields), n, dt, c, backend, options, V,
             (shared === nothing ? (;) : (; shared))...), SciMLBase.ReturnCode.Success,
         nothing, host,
-        StatusTotals(), _declared_checks(stab, st, prog, fields))
+        StatusTotals(), _declared_checks(stab, st, prog, fields),
+        alg isa ExplicitEuler && reads_time(stab) ? g.spec : nothing)
 end
 """
     check_backend_float64(prog, alg, backend, V; fields)
@@ -1032,7 +1042,9 @@ run once, at the window's start `(t0, k)`, with the window as their step length.
 function advance!(rt::GroupRuntime, clock::Tuple{Real, Integer}, n::Integer = rt.n, window::Real = rt.dt)
     t = Float64(clock[1])
     k = Int(clock[2])
-    h = n == 0 ? Float64(window) : Float64(window) / n
+    # (an explicit group whose bound reads the time: the window's count, F4-12b)
+    m = rt.recount === nothing ? Int(n) : _recount!(rt, Int(n), t, Float64(window))
+    h = m == 0 ? Float64(window) : Float64(window) / m
     st = rt.store
     # the window count of the status word's entry [2] (a window of length 0 is not one)
     if window > 0
@@ -1046,12 +1058,80 @@ function advance!(rt::GroupRuntime, clock::Tuple{Real, Integer}, n::Integer = rt
         # clamp the sites they mark themselves (one launch, `_mask_fuse`), so none is left here
         _clamp!(rt.stepclamps, rt.store, rt.p)
     end
-    _substeps!(rt.cache, rt, t, h, k, n)
+    _substeps!(rt.cache, rt, t, h, k, m)
     rt.ends_in === :slot1 && _slot1!(rt.copies, st.cur, rt.swaps, 1)
     code = step_retcode!(rt.cache, rt)
     rt.status = _worse(rt.status, code)      # (sticky: the worst so far, until `clear_status!`)
     return code
 end
+
+# The substep count of explicit runtime `rt` over the window `[t, t + window]` (F4-12b, ruling
+# Q15): its bound reads the time (a Robin coefficient of the time), so the count is the
+# policy's at the bound over this window, at the parameters the steps are bound to (primal
+# values; a bound that reads tables sees none here, so it has no finite bound and the policy
+# refuses or warns as at the bind). Allocates (once per window, only for such groups)
+# (a count given to `advance!` other than the runtime's own, or a window of length 0, is kept)
+function _recount!(rt::GroupRuntime, n::Int, t::Float64, window::Float64)::Int
+    (n == rt.n && window > 0) || return n
+    bound_window!(rt.stability, t, t + window)
+    pp = something(bound_params(rt.stability), Float64[primal(v) for v in rt.p])
+    m = substeps(rt.recount::GroupSpec, rt.alg, window, pp; fields = rt.keys, stability = rt.stability)::Int
+    rt.n = m
+    return m
+end
+
+# The automatic count over the run's time span `span` of a bound that reads the time (F4-12b
+# review): the bound over the whole span; when it has none, the first window `[t, t + dt]`
+# (bisection to one window) where it fails is named, so the run is refused at the bind, not
+# partway through. The window goes back to what it was
+function _check_span(stability, pp, dt::Float64, span, texts, ctx)
+    t0, t1 = Float64(span[1]), Float64(span[2])
+    w0 = bound_window(stability)
+    ok(t) = (bound_window!(stability, t0, t); r = Float64(stability(pp)); isfinite(r) && r >= 0)
+    try
+        (t1 <= t0 || ok(t1)) && return nothing
+        lo, hi = t0, t1                             # ok over [t0, lo], not over [t0, hi]
+        ok(min(t0 + dt, t1)) || (hi = min(t0 + dt, t1))
+        while hi - lo > dt
+            m = (lo + hi) / 2
+            ok(m) ? (lo = m) : (hi = m)
+        end
+        bound_window!(stability, max(t0, hi - dt), hi)
+        why = unbounded_reason(stability, pp)
+        throw(ArgumentError(string(unbounded_text(texts, (; ctx..., stability, pp, r = bound_report(stability, pp),
+            least = nothing)), " (the bound holds from the start time ", t0, " and fails in the window ending at t = ",
+            round(hi; sigdigits = 6), why === nothing ? "" : string(": ", why), ")")))
+    finally
+        w0 === nothing || bound_window!(stability, w0[1], w0[2])
+    end
+end
+
+"""
+    bound_params!(stability, pp), bound_params(stability)
+
+The parameters (with their tables and inputs) a bound that [`reads_time`](@ref) was last
+counted at, for the count of each window; a front end's bound keeps them (nothing by default).
+"""
+bound_params!(stability, pp) = nothing
+bound_params(stability) = nothing
+# the time span a bound is taken over now, `(t0, t1)`, or nothing (a front end's bound defines it)
+bound_window(stability) = nothing
+
+"""
+    reads_time(stability) -> Bool
+
+Whether a stability bound depends on the time (a Robin coefficient of the time, F4-12b): an
+explicit group then takes its count again at each window, over the window's span
+([`bound_window!`](@ref)). A front end's bound defines it; `false` by default.
+"""
+reads_time(stability) = false
+"""
+    bound_window!(stability, t0, t1)
+
+Set the time span a bound that [`reads_time`](@ref) is taken over (a front end's bound defines
+it; nothing by default).
+"""
+bound_window!(stability, t0, t1) = nothing
 
 """
     check_status!(rt, acc = nothing) -> ReturnCode.T

@@ -171,7 +171,7 @@ function CorePotts.PottsProblem(c::CompiledPottsSystem, op, tspan; backend = not
         map(r -> CorePotts.relation(r, lat), relations)...,
         (spacing === nothing ? (;) : (; spacing))...)
     f = _problem_function(c, T, spec, values, hctx, Dict{Any, Any}(); track)
-    _check_field_substeps(f, p)
+    _check_field_substeps(f, p; tspan)
     frozen = _frozen_mask(sys, st)
     _host_init!(f, st, p, hctx, seed, replica, repeat)
     tangent = isempty(seeds) && isempty(u0seeds) ? nothing : _tangent(c, T, p, seeds, opd; u0 = u0seeds)
@@ -492,7 +492,7 @@ function CorePotts.remake_function(mi::PottsModelInfo, prob; field_solver = mi.s
     values = _parameter_dict(c, prob.p)
     track = _track(track)
     f = _problem_function(c, mi.T, spec, values, mi.ctx, mi.cache; track)
-    _check_field_substeps(f, prob.p)               # the policy's refusals at `remake`, as at the build
+    _check_field_substeps(f, prob.p; prob.tspan)   # the policy's refusals at `remake`, as at the build
     return f, _track_layout(_ode_layout(prob.u0, c, spec), c, track)
 end
 

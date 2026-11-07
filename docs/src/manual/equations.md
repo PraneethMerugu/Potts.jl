@@ -471,14 +471,21 @@ u = solve(prob, SequentialCPM()).u[end]
   `remake(prob; p = [:S => 2.0])` changes a value without regenerating code. The conditions
   themselves are part of the model's identity (the fingerprint): a checkpoint does not cross
   them.
-- **Robin coefficients** `α` and `β` are numbers or expressions of parameters: one value at
-  every site. An expression is held by a computed parameter of the face, named
-  `c_x_low_α` (field, axis, side, coefficient), which reads like any computed parameter and
-  is derived again after every write. A slot holds the coefficient of `@boundary`'s
-  `Robin(α, β, g)`, with `β` the coefficient of the outward `∂c/∂n`, however the face is
-  written (in `@bcs` on a low face, `c_x_low_β` is minus the coefficient of `∂c/∂x`). A
-  coefficient that reads the coordinates or the time is an error (coefficients that vary by
-  site or in time are planned).
+- **Robin coefficients** `α` and `β` are expressions of numbers, parameters, the
+  coordinates, `time` and `mcs`, as values are. An expression of parameters alone is one
+  value at every site: a computed parameter of the face holds it, named `c_x_low_α` (field,
+  axis, side, coefficient), which reads like any computed parameter and is derived again
+  after every write. A slot holds the coefficient of `@boundary`'s `Robin(α, β, g)`, with
+  `β` the coefficient of the outward `∂c/∂n`, however the face is written (in `@bcs` on a low
+  face, `c_x_low_β` is minus the coefficient of `∂c/∂x`).
+- A Robin coefficient that reads the coordinates or the time varies by site or in time:
+  `Robin(1 + 0.1y, 1.0, g)`. It is computed at each boundary site at the time of each
+  substep. An implicit field with such a face builds its operator per site, and rebuilds it
+  at each substep when a coefficient reads the time. Where `α` and `β` have opposite signs at
+  a site, that site's part stays out of the implicit operator and the Newton iterations
+  correct it. The automatic explicit count bounds the face over its sites, and over each
+  step's time span when a coefficient reads the time: the count can change from one MCS to
+  the next.
 - In an extension, a field's `@boundary` replaces the base's for that field.
 
 `Δ(c)` is a field operator: it appears in field equations (`D(c) ~ …`), where it reads the
@@ -495,7 +502,7 @@ spacing). The field compiler lowers them as it lowers a `PDESystem`:
 - `c ~ masked(kind == border, v)`: a node value, the same as `sites(kind == border) => Dirichlet(v)`.
 
 A value is an expression of numbers, parameters, the coordinates, `time` and `mcs`, as in
-`@boundary`; a Robin coefficient is a number or an expression of parameters. A face or mask that
+`@boundary`, and so is a Robin coefficient. A face or mask that
 `@boundary` sets too is an error that prints the condition. So is an initial value
 (`c(0, x, y) ~ v`: the field's `@variables` default is its initial value), and a periodic
 pair on an axis the lattice closes (periodicity is the lattice's, for every field).

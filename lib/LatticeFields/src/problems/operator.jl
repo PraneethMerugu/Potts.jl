@@ -66,7 +66,12 @@ Jacobian that the linear solve sees:
   over the site centers (the interval evaluator; NaN when it has none), `mtext` the multiplier
   and `text` the term in the user's words. Where one may be negative the scaled row drops the
   diffusion (anti-diffusion), so the operator is not exact at those parameters: checked at
-  bind and at every parameter write.
+  bind and at every parameter write;
+- `sitefaces`: the row's Robin faces whose α or β varies by site or in time (F4-12b), each
+  `(axis, k, f)` (`k` 1 low, 2 high): `f` a function of the parameters giving the smallest and
+  largest ghost diagonal `d = α/(α/2 + β)` over the face's sites at any time (NaN when no
+  interval bounds it, or `α/2 + β` may vanish). A negative part stays out of the operator per
+  site (the row is a field row), so the operator is exact only where `d ≥ 0` at every site.
 """
 struct RowOperator
     key::String
@@ -89,6 +94,7 @@ struct RowOperator
     linear::Bool
     crossfaces::Vector{Tuple{String, Vector{Vector{Coef}}}}
     msign::Vector{Tuple{Any, String, String}}
+    sitefaces::Vector{Tuple{Int, Int, Any}}
 end
 
 

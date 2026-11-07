@@ -22,7 +22,7 @@ using SciMLOperators: SciMLOperators
 using SciMLStructures: SciMLStructures as SS
 using SymbolicIndexingInterface: SymbolicIndexingInterface as SII
 using ..Exec: Exec
-using ..IR: IR, CLAMP, INSIDE, Coef, DomainEdgeRule, HEX, Ex, FaceRule, NodeValueRule, Program, RUNTIME, PARAM, LOAD, fieldid, print_program, isfloat, juliatype, leveldims, ncomp, nsites,
+using ..IR: IR, CLAMP, INSIDE, Coef, DomainEdgeRule, HEX, Ex, FaceRule, sitecoefs, NodeValueRule, Program, RUNTIME, PARAM, LOAD, fieldid, print_program, isfloat, juliatype, leveldims, ncomp, nsites,
             runtime!, degenerate, FACE_RTOL, F64, F16
 using ..Compile: CompiledKernel, CompileOptions, body_function, derive_function, lanecast, lanetype,
                  primal, promote_dual, semantic, valtype, withvaltype, writes, fuse_update, fuse_residual,
@@ -86,7 +86,7 @@ public compute_type, substep_counts, lagged_coupling, group_loops, steady_loop_r
 # the one substep policy of both front ends and its words (F3-01)
 public PolicyTexts, ProblemTexts, GroupSubsteps, check_coupling, bound_report, unbounded_text, uncovered_text,
        refuse_parameters, coupling_unknown_text, coupling_unbounded_text, loop_text, steady_loop_text, steady_gain_text,
-       steady_why_text, steady_gain_words, rows0_route
+       steady_why_text, steady_gain_words, rows0_route, reads_time, bound_window!, bound_window, bound_params!, bound_params
 # the implicit algorithms (F3-07)
 public ImplicitAlgorithm, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, OperatorSpec, RowOperator, operator_spec, build_operator, growth, inexact_bounds, ImplicitCache,
        ImplicitRow, bind_cache, residual_program, residual_rule

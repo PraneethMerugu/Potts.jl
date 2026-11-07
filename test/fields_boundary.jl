@@ -121,16 +121,17 @@ end
         w = fb_run(FbRobin, 6, fs; p = [:g1 => 3.0])
         @test w == fb_run(FbRobinDeclared, 6, fs; p = [:g1 => 3.0]) == fb_run(FbRobinBcs, 6, fs; p = [:g1 => 3.0]) != a
     end
-    # a coefficient that reads a coordinate or the time is refused (F4-12b)
+    # a coefficient that reads a field is refused (one that reads a coordinate or the time is a
+    # value field, F4-12b below)
     e = fb_msg(() -> Base.invokelatest(eval(:(@potts_model FbBadRobin begin
         @kinds medium A
         @variables c(field) = 0.0
         @lattice Lattice((8, 8); boundary = Closed())
         @equations D(c) ~ Δ(c)
-        @boundary c x => (Robin(1 + y, 1.0, 0.0), NoFlux())
+        @boundary c x => (Robin(1 + c, 1.0, 0.0), NoFlux())
         @sweep Metropolis(; temperature = 1.0)
     end)); name = :f))
-    @test occursin("reads `y`", e) && occursin("F4-12b", e)
+    @test occursin("reads `c`", e) && occursin("`time` and `mcs`", e)
 end
 
 # the manufactured solution u = (1 + t) φ, φ = cos(πx/2) + x y² on [0, 1]², with the source
@@ -177,8 +178,10 @@ end
         a = fb_run(FbRobinBeta, 6, fs)
         @test a == fb_run(FbRobinBetaBcs, 6, fs) && maximum(a) > 0
     end
-    for (coef, word) in ((:(g1 + y), "y"), (:(g1 + mcs), "mcs"))
-        M = eval(:(@potts_model $(Symbol(:FbBadBcs, word)) begin
+    # (F4-12b: a `@bcs` coefficient of the coordinates or `mcs` is a value field; one that reads
+    # an input is refused, naming the read and the `@bcs` line)
+    for (coef, word) in ((:(g1 + y), "built"), (:(g1 + mcs), "built"), (:(g1 + volume), "reads `volume`"))
+        M = eval(:(@potts_model $(Symbol(:FbBadBcs, hash(coef))) begin
             @kinds medium A
             @parameters g1 = 1.0
             @variables c(field) = 0.0
@@ -188,7 +191,104 @@ end
             @sweep Metropolis(; temperature = 1.0)
         end))
         e = fb_msg(() -> PottsProblem(Base.invokelatest(M; name = :f), fb_op((8, 8)), (0, 1)))
-        @test occursin("must be one value at every site; it reads `$word`", e) && occursin("in @bcs", e) &&
-              !occursin("step_index", e)
+        @test occursin(word, e) && (word == "built" || (occursin("in @bcs", e) && !occursin("step_index", e))) ||
+              (println("F4-12b @bcs ", coef, ": ", e); false)
     end
+end
+
+# F4-12b (rulings Q14–Q17): Robin coefficients that vary by site or in time. `@boundary` and
+# `@bcs` equal each other bitwise, and one BackwardEuler MCS equals the hand ghost-rule matrix.
+# Base (ca232825, ~/lpwork/f4c/nc12b-base.log): the models are refused ("… reads `y`; … planned, F4-12b").
+@potts_model FbSite begin
+    @kinds medium A
+    @parameters Dc = 0.2 g1 = 1.0
+    @variables c(field) = 0.0
+    @lattice Lattice((16, 16); boundary = Closed())
+    @equations D(c) ~ Dc * Δ(c) - 0.1 * c
+    @boundary c begin
+        x => (Robin(1 + 0.1y, 1.0, 1.0), Robin(g1 * (1 + 0.5 * time), 2.0, 0.0))
+        y => (NoFlux(), Robin(2.0, 0.5 + 0.05x, 0.5))
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FbSiteBcs begin
+    @kinds medium A
+    @parameters Dc = 0.2 g1 = 1.0
+    @variables c(field) = 0.0
+    @lattice Lattice((16, 16); boundary = Closed())
+    @equations D(c) ~ Dc * Δ(c) - 0.1 * c
+    @bcs begin
+        (1 + 0.1y) * c(t, 0, y) - Differential(x)(c(t, 0, y)) ~ 1.0
+        g1 * (1 + 0.5 * time) * c(t, 16, y) + 2.0 * Differential(x)(c(t, 16, y)) ~ 0.0
+        2.0 * c(t, x, 16) + (0.5 + 0.05x) * Differential(y)(c(t, x, 16)) ~ 0.5
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "F4-12b: per-site and time-varying Robin coefficients (A)" begin
+    run(M, k, fs; p = []) = Array(solve(PottsProblem(M(; name = :m), fb_op((16, 16), p), (0, k); field_solver = fs),
+        SequentialCPM()).u[end].site.c)
+    tight = BackwardEuler(; inner = DevicePCG(; rtol = 1e-12, budget = 64))
+    for fs in (ExplicitEuler(; substeps = 4), tight)
+        a = run(FbSite, 3, fs)
+        @test a == run(FbSiteBcs, 3, fs) && maximum(a) > 0.1
+        @test run(FbSite, 3, fs; p = [:g1 => 3.0]) == run(FbSiteBcs, 3, fs; p = [:g1 => 3.0]) != a
+    end
+    # one MCS (t from 0 to 1) is one BackwardEuler step at t = 1: the hand ghost-rule matrix (h = 1,
+    # site (i, j) at (i − ½, j − ½); ghost from `α (u_g + u_i)/2 + β (u_g − u_i) = g` with the outward β)
+    n = 16
+    lin(i, j) = i + (j - 1) * n
+    L, b = zeros(n^2, n^2), zeros(n^2)
+    for j in 1:n, i in 1:n
+        r = lin(i, j)
+        L[r, r] -= 0.1
+        for (di, dj) in ((1, 0), (-1, 0), (0, 1), (0, -1))
+            ii, jj = i + di, j + dj
+            if 1 <= ii <= n && 1 <= jj <= n
+                L[r, lin(ii, jj)] += 0.2
+                L[r, r] -= 0.2
+                continue
+            end
+            face = di < 0 ? (1 + 0.1 * (j - 0.5), 1.0, 1.0) : di > 0 ? (1 + 0.5 * 1.0, 2.0, 0.0) :
+                   dj > 0 ? (2.0, 0.5 + 0.05 * (i - 0.5), 0.5) : nothing
+            face === nothing && continue
+            α, β, g = face
+            den = α / 2 + β
+            L[r, r] += 0.2 * ((β - α / 2) / den - 1)
+            b[r] += 0.2 * g / den
+        end
+    end
+    a = run(FbSite, 1, BackwardEuler(; substeps = 1, inner = DevicePCG(; rtol = 1e-12, budget = 64)))
+    @test maximum(abs, vec(a) .- (Float64.((1:(n^2)) .== (1:(n^2))') - L) \ b) < 1e-10
+end
+
+# F4-12b review: a kind table with a time-varying Robin face under the automatic explicit count
+# (each window is counted with the tables and inputs of the bind; base 895c1a02: "reads tables
+# that were not given" in the first window), and a face whose bound fails within the run's time
+# span is refused at the problem, naming the time (base: the run threw partway through `solve`)
+@potts_model FbTab begin
+    @kinds medium A
+    @parameters Dk[kind] = [0.2, 0.3]
+    @variables c(field) = 1.0
+    @lattice Lattice((16, 16); boundary = Closed())
+    @equations D(c) ~ Dk[kind] * Δ(c) - 0.05 * c
+    @boundary c x => (Robin(-0.5 - 0.1 * time, 1.0, 0.0), NoFlux())
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model FbMid begin
+    @kinds medium A
+    @variables c(field) = 1.0
+    @lattice Lattice((16, 16); boundary = Closed())
+    @equations D(c) ~ 0.2 * Δ(c)
+    @boundary c x => (Robin(1 - time, 0.5, 0.0), NoFlux())
+    @sweep Metropolis(; temperature = 1.0)
+end
+@testset "F4-12b review: windows counted with tables; a span that fails is refused at the problem" begin
+    s = solve(PottsProblem(FbTab(; name = :m), fb_op((16, 16)), (0, 3); field_solver = ExplicitEuler()), SequentialCPM())
+    @test all(isfinite, Array(s.u[end].site.c))
+    e = fb_msg(() -> PottsProblem(FbMid(; name = :m), fb_op((16, 16)), (0, 4); field_solver = ExplicitEuler()))
+    @test occursin("fails in the window ending at t = 2", e) && occursin("Robin coefficients", e) && !occursin("``", e) ||
+          (println("F4-12b span ", e); false)
+    # a span that ends before it fails is accepted
+    @test fb_msg(() -> PottsProblem(FbMid(; name = :m), fb_op((16, 16)), (0, 1); field_solver = ExplicitEuler())) == "built"
 end

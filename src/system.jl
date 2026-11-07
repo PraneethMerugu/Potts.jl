@@ -310,6 +310,9 @@ function _robin_slots(part::PottsPart)
     extra = Any[]
     function slot(c, base)
         (_isnumber(c) || _robin_simple(_unwrap(c))) && return c
+        # (a coefficient that reads the coordinates or the time varies by site: LatticePDE
+        # lowers it into a value field, F4-12b)
+        _params_only(c) || return c
         n = Symbol(base)
         k = 1
         while n in taken
@@ -336,8 +339,7 @@ function _robin_slots(part::PottsPart)
         other, cores, coefs = _face_terms(eq)
         changed = false
         for (i, (core, c)) in enumerate(zip(cores, coefs))
-            ls = _param_leaves(c)
-            !isempty(ls) && all(y -> (j = info(y); j !== nothing && j.role === :param), ls) || continue
+            _params_only(c) || continue
             isder = operation(core) isa Differential
             read = isder ? _unwrap(arguments(core)[1]) : core
             a = findfirst(y -> _unwrap_number(y) isa Real, arguments(read)[2:end])
@@ -379,17 +381,21 @@ function _face_terms(eq)
     end
     return other, cores, coefs
 end
-# A Robin coefficient of a `@bcs` condition is one value at every site (F4-12a): one that reads
-# anything other than parameters is refused in the model's words (F4-12b plans the others)
+# whether `c` is an expression of parameters alone (at least one): a computed parameter holds it
+_params_only(c) = (ls = _param_leaves(c); !isempty(ls) && all(y -> (j = info(y); j !== nothing && j.role === :param), ls))
+# A Robin coefficient of a `@bcs` condition reads the parameters, the coordinates and the time
+# (F4-12b: one that varies by site or in time is a value field); one that reads a field is
+# refused in the model's words (the condition would be another equation)
 function _check_robin_coefs(eq)
     _, cores, coefs = _face_terms(eq)
     for c in coefs
         for y in _param_leaves(c)
             j = info(y)
-            j !== nothing && j.role === :param && continue
-            throw(ArgumentError(string("@bcs: the Robin coefficient `", _builtin_text(string(c)), "` must be one value ",
-                "at every site; it reads `", j === nothing ? string(y) : string(j.name), "` (a Robin coefficient is a number ",
-                "or an expression of parameters; coefficients that vary by site or in time are planned, F4-12b)")))
+            j !== nothing && (j.role === :param || (j.role === :builtin && j.name in (:time, :mcs))) && continue
+            j === nothing && _coordinate(y) && continue
+            throw(ArgumentError(string("@bcs: the Robin coefficient `", _builtin_text(string(c)), "` reads `",
+                j === nothing ? string(y) : string(j.name), "`; a Robin coefficient α or β is an expression of numbers, ",
+                "parameters, the coordinates `x`, `y`, `z`, `time` and `mcs`")))
         end
     end
     return nothing

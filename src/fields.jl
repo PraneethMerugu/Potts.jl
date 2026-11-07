@@ -901,6 +901,9 @@ end
 function _nonfinite_text(text, w, cv; warning::Bool = false)
     # a kind table read `at(τ, 1 + kind)` as the model writes it, `τ[kind]`
     u = replace(_user_text(text, cv), r"at\((\w+), (?:1 \+ kind|kind \+ 1)\)" => s"\1[kind]")
+    # (a Robin face whose coefficients vary by site or in time, F4-12b: the face in words)
+    w === :robin && return string("the Robin coefficients of ", u, " give the ghost value no finite bound (α/2 + β/h ",
+        "may vanish at a site, or a coefficient grows without bound in time)")
     t = "`" * u * "`"
     # past the cap: the error gives the route (a count), the warning (a count was given) none
     w === :cap && warning && return string(t, " (it reads more than 4096 kind table index combinations)")
@@ -1173,14 +1176,19 @@ end
 
 # At build: each field phase's substep count at the problem's parameters (the policy's
 # refusals, and its warning for an explicit count the bound does not cover)
-function _check_field_substeps(f, p)
+function _check_field_substeps(f, p; tspan = nothing)
     # (the steady starts too, `init = :steady`: their steady refusals, F3-12c)
     for e in (f.phases.mcs..., f.phases.at_init), t in (e isa CorePotts.Repeat ? e.entries : (e,))
         t isa Tuple || continue
         for ph in t
             ph isa CorePotts.FieldPhase && !ph.init &&
                 ph.substeps isa Union{LatticeFields.Problems.GroupSubsteps, LatticeFields.Problems.StartSubsteps} || continue
-            ph.substeps(LatticeFields.Problems.with_tables(Float64[CorePotts._praw(ph, p)...], CorePotts._table_values(ph, p)))
+            pp = LatticeFields.Problems.with_tables(Float64[CorePotts._praw(ph, p)...], CorePotts._table_values(ph, p))
+            # (the run's time span, MCS times the step length: a Robin face that reads the time
+            # is checked over it, F4-12b review)
+            sp = tspan === nothing || !(ph.substeps isa LatticeFields.Problems.GroupSubsteps) ? nothing :
+                 (Float64(tspan[1]) * ph.period, Float64(tspan[2]) * ph.period)
+            sp === nothing ? ph.substeps(pp) : ph.substeps(pp; span = sp)
         end
     end
     return nothing

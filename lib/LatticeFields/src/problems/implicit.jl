@@ -393,12 +393,14 @@ end
 _typetext(T::Type) = (T <: Real && T !== valtype(T)) ? string("ForwardDiff Duals of ", valtype(T)) : string(T)
 
 # the face conditions of field `id` of program `s` on axis `a` side `k` (1 low, 2 high), at
-# parameters `p`, in the solver's homogeneous form: `(:none,)`, `(:dirichlet,)` or
-# `(:robin, α, β)` (lattice units)
+# parameters `p`, in the solver's homogeneous form: `(:none,)`, `(:dirichlet,)`,
+# `(:robin, α, β)` (lattice units) or `(:site,)`, a Robin face whose α or β varies by site or in
+# time (F4-12b: its row's `sitefaces` bound its diagonal)
 function _face_kind(s::Program, id, a, k, p)
     r = findfirst(x -> x isa FaceRule && x.field == id && x.axis == a && x.side == (k == 1 ? -1 : 1), s.rules)
     r === nothing && return (:none, 0.0, 0.0)
     f = s.rules[r]::FaceRule
+    sitecoefs(f) && return (:site, NaN, NaN)
     α, β = _coefval(f.alpha, p), _coefval(f.beta, p)
     α == 0 && return (:none, 0.0, 0.0)
     β == 0 && return (:dirichlet, α, 0.0)
@@ -461,16 +463,17 @@ function _robin_bounds(s::Program{N}, op::OperatorSpec, keys, p) where {N}
             m = 0.0
             for k in 1:2
                 f = _face_kind(s, id, a, k, p)
-                f[1] === :robin || continue
-                dm = Solvers.robin_parts(f[2], f[3], 0.0)[2]
-                dm < 0 || continue
+                f[1] in (:robin, :site) || continue
+                # (a face that varies by site: its smallest diagonal over the sites, F4-12b)
+                dm = f[1] === :robin ? Solvers.robin_parts(f[2], f[3], 0.0)[2] : min(_site_dmin(r, a, k, p), 0.0)
+                (dm < 0 || isnan(dm)) || continue
                 neg = true
                 if r.field
                     r.facemax !== nothing && fm === nothing && (fm = r.facemax(p))
                     w = fm === nothing ? NaN : Float64(fm[a])
-                    isfinite(w) ? (m = max(m, w * abs(dm))) :
+                    isfinite(w * dm) ? (m = max(m, w * abs(dm))) :
                     push!(texts, string("the Robin face of `", r.key, "` on axis ", a, " (", k == 1 ? "low" : "high",
-                        " side), whose diagonal is negative at these parameters,"))
+                        " side), whose diagonal ", isnan(dm) ? "may be negative at some site" : "is negative", " at these parameters,"))
                 else
                     m = max(m, abs(_coefsum(r.faces[a], p)) * abs(dm))
                 end
@@ -480,6 +483,14 @@ function _robin_bounds(s::Program{N}, op::OperatorSpec, keys, p) where {N}
         ρ = max(ρ, q)
     end
     return (; neg, ρ, unseen = !isempty(texts), texts)
+end
+
+# the smallest ghost diagonal of row `r`'s face (axis `a`, side `k`) whose α or β varies by site
+# or in time, over its sites at parameters `p` (NaN when no bound: F4-12b)
+function _site_dmin(r::RowOperator, a, k, p)
+    j = findfirst(x -> x[1] == a && x[2] == k, r.sitefaces)
+    j === nothing && return NaN
+    return Float64(r.sitefaces[j][3](p)[1])
 end
 
 # the fields kernel `i` of `s` reads, through the `aux:` kernels of the aux fields it reads (an

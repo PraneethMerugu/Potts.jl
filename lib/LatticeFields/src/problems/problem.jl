@@ -467,7 +467,7 @@ function substeps(prob::FieldProblem, alg::Union{ExplicitEuler, ImplicitAlgorith
     pp = with_tables(map(primal, p), tables; inputs)        # a policy: on the primal values
     # the one policy of both front ends (F3-01), in front end B's words
     return substeps(prob.group.spec, alg, dt, pp; fields, stability, key = why -> _warn_key(prob, why),
-        texts = ProblemTexts(prob.group.spec.texts.route))
+        texts = ProblemTexts(prob.group.spec.texts.route), (alg isa ExplicitEuler ? (; span = prob.tspan) : (;))...)
 end
 
 # whole number of `dt` in `span` (to a relative 1e-5, so `dt = 1f-2` counts 0.01), else an

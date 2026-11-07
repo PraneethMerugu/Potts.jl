@@ -17,11 +17,12 @@ end
 """
     face_checks(p) -> Vector{FaceCheck}
 
-The face rules of `p` whose `α/2 + β` depends on a parameter.
+The face rules of `p` whose `α/2 + β` depends on a parameter (one value on the face: a face
+whose α or β varies by site or in time is bounded by the front end's stability bound, F4-12b).
 """
 function face_checks(p::Program)
     return [FaceCheck(r.alpha, r.beta, p.fields[r.field].key, r.axis, r.side)
-            for r in p.rules if r isa FaceRule && (r.alpha.param != 0 || r.beta.param != 0)]
+            for r in p.rules if r isa FaceRule && !sitecoefs(r) && (r.alpha.param != 0 || r.beta.param != 0)]
 end
 
 # on the primal value: a face check is a policy, constant across a derivative
