@@ -148,7 +148,13 @@ sparse pattern of its Jacobian, read off the compiled program (`jacobian_sparsit
 a coloring of it, so `Rodas5P()` forms the Jacobian with a few evaluations of the right side
 instead of a dense one. `jac = true` gives it the Jacobian itself (colored Duals). Both are
 host only. The Jacobian-vector product `prob.f.jvp` is always set, so a Krylov linear solver
-runs matrix-free, also on a device. Any other keyword is an error that names it.
+runs matrix-free, also on a device, and the lattice multigrid preconditions it:
+`solve(prob, FBDF(; linsolve = KrylovJL_GMRES(; precs = LatticeMG(), gmres_restart = 10)))`.
+With `LatticeMG`, GMRES takes a few iterations per solve, so a small memory,
+`gmres_restart = 10`, is enough: LinearSolve currently allocates the GMRES workspace again
+at each new `W` (SciML/LinearSolve.jl#1378 fixes it). For a symmetric
+system, `linsolve = LatticePCG()` takes conjugate gradients with the same preconditioner.
+Any other keyword is an error that names it.
 
 A field algorithm returns SciML's `ODESolution`, with linear interpolation between the saves:
 `sol(t)`, `Array(sol)`, `sol.ps` (the values at the end of the run) and `sol.stats` work. A

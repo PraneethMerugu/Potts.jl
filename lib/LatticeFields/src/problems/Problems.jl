@@ -67,6 +67,7 @@ include("tangent.jl")
 include("ode.jl")
 include("series.jl")
 include("sparsity.jl")
+include("precond.jl")
 
 # the parameter object of B's SciML problems (F4-00)
 public LatticeParameters, TableSlot, InputSlot, with_values, remake_params, remake_u0
@@ -76,6 +77,8 @@ public LatticeMetadata, LatticeFunction, LatticeProblem, LatticeDiscreteProblem,
        field_problem, rhs_build
 # the Jacobian of the ODE right side (F4-07)
 public jacobian_sparsity, column_colors, LatticeJacobian, LatticeJVP, JacobianOperator, colored_jacobian!, lattice_jvp!
+# the lattice multigrid as a LinearSolve preconditioner and algorithm (F4-08)
+public LatticeMG, MGPreconditioner, LatticePCG
 # solutions (F4-04)
 public FieldSeries, field_series, LatticeStats, LatticeSolution, finish!
 # the coupling between field groups and the per-group counts (review of F2-06)
