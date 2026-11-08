@@ -36,7 +36,7 @@ using LatticeFields.Compile: CompileOptions, fingerprint_text, fuse_update, prom
 using LatticeFields.IR: fieldid, RESOLVE, degenerate, leveldims
 using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
                               ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, RT_DT,
-                              substep_counts, steady_fields, field_series
+                              substep_counts, steady_fields, field_series, jacobian_sparsity
 using ModelingToolkitBase: ModelingToolkitBase, PDESystem, Pre, ShiftIndex, Shift, Hold, Sample
 using SciMLBase: AbstractDiscretization, NullParameters, remake
 using SymbolicIndexingInterface: getp, getu, setp, parameter_index
@@ -58,6 +58,7 @@ export LatticeDiscretization, FiniteVolume, CompiledField, discretize, symbolic_
 export ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, solve, init, step!, solve!, stability_bound,
        substep_counts, steady_fields, field_series
 export DevicePCG, DeviceGMRES, Multigrid    # the inner solvers (`inner = …`); `V` is public
+export jacobian_sparsity                  # the pattern of the right side's Jacobian (F4-07)
 export remake, getp, getu, setp            # the routes its messages give (SciMLBase, SymbolicIndexingInterface)
 
 # ---------------------------------------------------------------------------------------

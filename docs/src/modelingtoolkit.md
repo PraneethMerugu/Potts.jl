@@ -142,8 +142,13 @@ way on an OrdinaryDiffEq integrator. Each write runs the checks of `setp`, the
 substep count and the masks again, or changes nothing. `integ[:k]` of a parameter is an error
 that gives this route.
 `discretize` takes SciML's keywords `u0`, `p` and `tspan`, with the rule of `remake`: `discretize(Potts.fields(sys), disc; p = [:k => 2.0], u0 = [:c => 0.5],
-tspan = (0, 10))` builds the problem at those values, with no `remake`. Any other keyword is
-an error that names it.
+tspan = (0, 10))` builds the problem at those values, with no `remake`. It also takes the
+Jacobian keywords of an implicit OrdinaryDiffEq solver. `sparse = true` gives the problem the
+sparse pattern of its Jacobian, read off the compiled program (`jacobian_sparsity(prob)`), and
+a coloring of it, so `Rodas5P()` forms the Jacobian with a few evaluations of the right side
+instead of a dense one. `jac = true` gives it the Jacobian itself (colored Duals). Both are
+host only. The Jacobian-vector product `prob.f.jvp` is always set, so a Krylov linear solver
+runs matrix-free, also on a device. Any other keyword is an error that names it.
 
 A field algorithm returns SciML's `ODESolution`, with linear interpolation between the saves:
 `sol(t)`, `Array(sol)`, `sol.ps` (the values at the end of the run) and `sol.stats` work. A

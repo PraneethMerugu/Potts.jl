@@ -13,6 +13,7 @@ using CommonSolve: CommonSolve
 using Serialization: Serialization
 using Krylov: Krylov
 using LinearAlgebra: LinearAlgebra
+using SparseArrays: SparseArrays
 using KernelAbstractions: KernelAbstractions as KA
 using RuntimeGeneratedFunctions: RuntimeGeneratedFunctions, RuntimeGeneratedFunction,
                                  drop_expr
@@ -21,7 +22,7 @@ using SciMLOperators: SciMLOperators
 using SciMLStructures: SciMLStructures as SS
 using SymbolicIndexingInterface: SymbolicIndexingInterface as SII
 using ..Exec: Exec
-using ..IR: Coef, DomainEdgeRule, HEX, Ex, FaceRule, NodeValueRule, Program, RUNTIME, PARAM, LOAD, fieldid, print_program, isfloat, juliatype, leveldims, ncomp, nsites,
+using ..IR: IR, CLAMP, INSIDE, Coef, DomainEdgeRule, HEX, Ex, FaceRule, NodeValueRule, Program, RUNTIME, PARAM, LOAD, fieldid, print_program, isfloat, juliatype, leveldims, ncomp, nsites,
             runtime!, degenerate, FACE_RTOL, F64, F16
 using ..Compile: CompiledKernel, CompileOptions, body_function, derive_function, lanecast, lanetype,
                  primal, promote_dual, semantic, valtype, withvaltype, writes, fuse_update, fuse_residual,
@@ -65,6 +66,7 @@ include("coupled.jl")
 include("tangent.jl")
 include("ode.jl")
 include("series.jl")
+include("sparsity.jl")
 
 # the parameter object of B's SciML problems (F4-00)
 public LatticeParameters, TableSlot, InputSlot, with_values, remake_params, remake_u0
@@ -72,6 +74,8 @@ public LatticeParameters, TableSlot, InputSlot, with_values, remake_params, rema
 public ClockTick, MaskSync, mask_sync!, sync_masks!, UpdateLatticeAb, steady_start!, lattice_matrix, LatticeODEProblem, LatticeOperator, LatticeLinearProblem, LatticeTimeFreeProblem
 public LatticeMetadata, LatticeFunction, LatticeProblem, LatticeDiscreteProblem, lattice_metadata, lattice_problem,
        field_problem, rhs_build
+# the Jacobian of the ODE right side (F4-07)
+public jacobian_sparsity, column_colors, LatticeJacobian, LatticeJVP, JacobianOperator, colored_jacobian!, lattice_jvp!
 # solutions (F4-04)
 public FieldSeries, field_series, LatticeStats, LatticeSolution, finish!
 # the coupling between field groups and the per-group counts (review of F2-06)

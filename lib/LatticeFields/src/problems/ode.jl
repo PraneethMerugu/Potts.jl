@@ -236,8 +236,22 @@ part) or a `NonlinearProblem` of the right side. `p` is a [`LatticeParameters`](
 state is on `fp`'s backend and the function a [`LatticeFunction`](@ref) whose metadata holds
 `fp`. The built-in callbacks (the clock's step index, [`ClockTick`](@ref); the masks,
 [`MaskSync`](@ref)) are in the problem's keywords, so every OrdinaryDiffEq solve runs them.
+
+The Jacobian keywords (F4-07; F4 design §3.7) set the `ODEFunction`'s (and a nonlinear
+system's `NonlinearFunction`'s) Jacobian fields:
+
+- `jvp = true` (the default): `jvp` is a [`LatticeJVP`](@ref), one Dual evaluation of the right
+  side, which Krylov linear solvers use; on a device it is also the `jac_prototype`, a
+  matrix-free [`JacobianOperator`](@ref) (ruling Q7);
+- `sparse = true`: `jac_prototype` is the sparse pattern of [`jacobian_sparsity`](@ref) with
+  its diagonal, and `colorvec` a distance-2 coloring of it ([`column_colors`](@ref)), so
+  OrdinaryDiffEq forms the Jacobian with one colored evaluation per color (host only);
+- `jac = true`: `jac` is a [`LatticeJacobian`](@ref), the colored Dual Jacobian (host only).
+
+A map's problem has no Jacobian; a linear system with no time keeps its operator (its
+matrix is `lattice_matrix(prob.A)`).
 """
-function lattice_problem(fp::FieldProblem)
+function lattice_problem(fp::FieldProblem; jac::Bool = false, sparse::Bool = false, jvp::Bool = true)
     meta = LatticeMetadata(fp)
     f = LatticeFunction(meta)
     ix = fp.index
@@ -246,15 +260,18 @@ function lattice_problem(fp::FieldProblem)
     E = problem_eltype(fp.u0, fp.p, lp.tables)          # (a Dual `u0` or parameter promotes the state)
     U = copyto!(KA.allocate(fp.backend, E, length(fp.u0)), convert(Vector{E}, fp.u0))
     _clamp_masks!(U, meta, lp)                           # `prob.u0` holds the masked values (review 2)
-    fp.group.spec.timefree && return _timefree_problem(meta, f, U, lp)
+    meta.family == :map && (jac || sparse) && throw(ArgumentError(string("`", jac ? "jac" : "sparse",
+        " = true`: a map `Shift(t, 1)(m) ~ rhs` gives a `DiscreteProblem`, which has no Jacobian")))
+    fp.group.spec.timefree && return _timefree_problem(meta, f, U, lp; jac, sparse, jvp)
     cbs = _builtin_callbacks(fp)
     kw = isempty(cbs) ? (;) : (; callback = SciMLBase.CallbackSet(cbs...))
     if meta.family == :map
         return SciMLBase.DiscreteProblem(SciMLBase.DiscreteFunction{true}(f; sys = ix), U, fp.tspan, lp; kw...)
     end
     M = _mass_matrix(fp, E)
-    fun = M === LinearAlgebra.I ? SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize}(f; sys = ix) :
-          SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize}(f; sys = ix, mass_matrix = M)
+    jkw = _jacobian_kw(meta, U, lp; jac, sparse, jvp)
+    fun = M === LinearAlgebra.I ? SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize}(f; sys = ix, jkw...) :
+          SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize}(f; sys = ix, mass_matrix = M, jkw...)
     return SciMLBase.ODEProblem(fun, U, fp.tspan, lp, meta; kw...)
 end
 
@@ -532,7 +549,7 @@ end
 
 # A system with no time (F4-02; F4 design §3.6): every row linear gives a `LinearProblem` of the
 # right side's operator, any other a `NonlinearProblem` of the right side at `t₀`
-function _timefree_problem(meta, f, U, lp)
+function _timefree_problem(meta, f, U, lp; jac::Bool = false, sparse::Bool = false, jvp::Bool = true)
     fp = meta.problem
     ix = fp.index
     if all(r -> r.linear, operator_spec(fp.group.spec).rows)
@@ -541,8 +558,18 @@ function _timefree_problem(meta, f, U, lp)
         return SciMLBase.LinearProblem{true}(A, b, lp; u0 = U, f = SciMLBase.SymbolicLinearInterface(;
             update_Ab = UpdateLatticeAb(), sys = ix, observed = nothing, metadata = meta))
     end
-    return SciMLBase.NonlinearProblem(SciMLBase.NonlinearFunction{true}(f; sys = ix), U, lp)
+    # (the residual's Jacobian keywords take the time span's start, as the residual does)
+    jkw = map(v -> v isa Union{LatticeJacobian, LatticeJVP} ? _AtStart(v, fp.tspan[1]) : v,
+        _jacobian_kw(meta, U, lp; jac, sparse, jvp))
+    return SciMLBase.NonlinearProblem(SciMLBase.NonlinearFunction{true}(f; sys = ix, jkw...), U, lp)
 end
+# a Jacobian function of the right side as one of a residual `r(u, p)`: at time `t`
+struct _AtStart{F}
+    f::F
+    t::Float64
+end
+(a::_AtStart)(J, u, p) = a.f(J, u, p, a.t)
+(a::_AtStart)(Jv, v, u, p) = a.f(Jv, v, u, p, a.t)
 # the residual of a steady system: the right side at the time span's start
 (f::LatticeFunction)(du, u, p) = f(du, u, p, f.meta.problem.tspan[1])
 
@@ -1238,6 +1265,25 @@ function SciMLBase.remake(prob::LatticeSteadyStateProblem; p = missing, u0 = mis
     return invoke(SciMLBase.remake, Tuple{SciMLBase.SteadyStateProblem}, prob; p = q, u0 = _masked_u0(prob, remake_u0(prob, u0), q),
         kw...)
 end
+# `NonlinearProblem(SteadyStateProblem(prob))`: the residual `f(du, u, p, Inf)` with the
+# Jacobian keywords in residual form. (SciMLBase 3.58's own conversion wraps a `jvp` as
+# `(Jv, u, p)`, dropping the vector, so its `NonlinearFunction` refuses an in-place `jvp` as
+# nonconforming; F4-07 sets one on every problem.)
+# Upstream: https://github.com/SciML/SciMLBase.jl/issues/1663; drop this method once a fixed SciMLBase is required.
+function SciMLBase.NonlinearProblem(prob::LatticeSteadyStateProblem)
+    f = prob.f
+    kw = (; sys = f.sys)
+    f.jac === nothing || (kw = (; kw..., jac = _AtStart(f.jac, Inf)))
+    f.jvp === nothing || (kw = (; kw..., jvp = _AtStart(f.jvp, Inf)))
+    f.jac_prototype isa SparseArrays.SparseMatrixCSC && (kw = (; kw..., jac_prototype = f.jac_prototype, colorvec = f.colorvec))
+    r = _SteadyResidual(f.f)
+    return SciMLBase.NonlinearProblem(SciMLBase.NonlinearFunction{true, SciMLBase.FullSpecialize}(r; kw...), prob.u0, prob.p;
+        prob.kwargs...)
+end
+struct _SteadyResidual{F}
+    f::F
+end
+(r::_SteadyResidual)(du, u, p) = (r.f(du, u, p, Inf); nothing)
 function SciMLBase.remake(prob::LatticeNonlinearProblem; p = missing, u0 = missing, inputs = (), kw...)
     q = remake_params(prob, p, inputs)
     return invoke(SciMLBase.remake, Tuple{SciMLBase.NonlinearProblem}, prob; p = q, u0 = _masked_u0(prob, remake_u0(prob, u0), q),

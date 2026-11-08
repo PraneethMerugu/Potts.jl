@@ -290,6 +290,7 @@ bcs = [ce ~ masked(ke == 3, 0.0), oe ~ masked(ismember(ke, (2, 3)), 1.0)]
     include("params.jl")
     include("families.jl")
     include("odepath.jl")
+    include("jacobian.jl")
     include("groups_coupling.jl")
     include("implicit.jl")
     include("cranknicolson.jl")

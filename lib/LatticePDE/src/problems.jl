@@ -1780,10 +1780,17 @@ by symbol (`sol[c(t, x, y)]`, `sol[:c]`) as grid-shaped arrays.
   defaults a pair's BigFloat value rounds to Float64, so declare BigFloat defaults or give a
   BigFloat vector); a computed parameter is refused, naming why;
 - `tspan`: the time span `(t₀, t₁)`, over the domain of the first variable;
-- `inputs`: the input values (below).
-Any other keyword is an `ArgumentError` naming it (the `ODEFunction` keywords `jac` and
-`sparse` are planned). `discretize(sys, disc; p = [k => 2.0])` is `remake(discretize(sys,
-disc); p = [k => 2.0])`, with no second problem built.
+- `inputs`: the input values (below);
+- `jvp = true`, `sparse = false`, `jac = false`: the Jacobian of the right side for implicit
+  OrdinaryDiffEq solvers (F4-07). `jvp` is the Jacobian-vector product (one Dual evaluation),
+  which Krylov linear solvers use (`linsolve = KrylovJL_GMRES()`); on a device it is also the
+  `jac_prototype`, a matrix-free operator. `sparse = true` sets `jac_prototype` to the sparse
+  pattern the IR gives (`jacobian_sparsity`) and `colorvec` to its coloring, so `Rodas5P()` or
+  `FBDF()` form the Jacobian with one evaluation per color (5 to 7 for a 5-point stencil)
+  instead of a dense one. `jac = true` sets `jac` to the colored Dual Jacobian. Both are host
+  only (no KernelAbstractions sparse matrix exists); a device takes `jvp`.
+Any other keyword is an `ArgumentError` naming it. `discretize(sys, disc; p = [k => 2.0])` is
+`remake(discretize(sys, disc); p = [k => 2.0])`, with no second problem built.
 
 **Inputs.** Input fields (`kindₛ(..)::Int32 [input = true]`, a `domain` mask) are read and
 never written by the equations. Give their values with `inputs = [kindₛ => K, dom => M]`
@@ -1807,9 +1814,9 @@ A system mixes no rate equations (`D(c) ~ …`) and maps (`Shift(t, 1)(m) ~ …`
 version: one problem steps one kind (split stepping is planned).
 """
 function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = (), u0 = nothing, p = nothing,
-        tspan = nothing, kw...) where {N}
-    isempty(kw) || _dverr(string("`discretize` takes `inputs`, `u0`, `p`, `tspan`; got ", join(("`$k`" for k in keys(kw)), ", "),
-        any(k -> k in (:jac, :sparse), keys(kw)) ? " (the `ODEFunction` keywords `jac` and `sparse` are planned)" : "",
+        tspan = nothing, jac::Bool = false, sparse::Bool = false, jvp::Bool = true, kw...) where {N}
+    isempty(kw) || _dverr(string("`discretize` takes `inputs`, `u0`, `p`, `tspan`, `jac`, `sparse`, `jvp`; got ",
+        join(("`$k`" for k in keys(kw)), ", "),
         ": give the other settings to the discretization (`LatticeDiscretization(…; T, backend, clock)`) or to `solve`"))
     _check_parts(sys)
     # steady rows `0 ~ rhs` as rates of their fields, a system with no time timed (F3-12b)
@@ -1840,7 +1847,8 @@ function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = (),
     ins = Pair[_input_defaults(cf, sys); collect(inputs); pins]
     _check_fusion(s, sys, disc)
     # the owned problem of the group (its plans and checks), held by the SciML problem's metadata
-    return Problems.lattice_problem(FieldProblem(spec, x0, span, pv; index, tables, inputs = ins, backend, options))
+    return Problems.lattice_problem(FieldProblem(spec, x0, span, pv; index, tables, inputs = ins, backend, options);
+        jac, sparse, jvp)
 end
 
 """

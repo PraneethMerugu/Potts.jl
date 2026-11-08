@@ -432,10 +432,10 @@ end
     @test eltype(dU.u0) <: ForwardDiff.Dual && ForwardDiff.value(dU.u0[1]) == 0.5
     err = emsg(() -> discretize(sys, disc; inputs = [ke => K], u0 = [ke => 1]))
     @test occursin("`kindₛ` is an input", err) && occursin("inputs = [kindₛ => values]", err) && !occursin("⋆", err)
-    # any other keyword names itself (base: a `MethodError`)
-    err = emsg(() -> discretize(sys, disc; inputs = [ke => K], jac = true))
-    @test occursin("`discretize` takes `inputs`, `u0`, `p`, `tspan`; got `jac`", err) && occursin("planned", err)
-    @test occursin("got `saveat`", emsg(() -> discretize(sys, disc; inputs = [ke => K], saveat = 0.1)))
+    # any other keyword names itself (base: a `MethodError`); `jac` and `sparse` are keywords (F4-07)
+    @test discretize(sys, disc; inputs = [ke => K], jac = true).f.jac isa LFP.LatticeJacobian
+    err = emsg(() -> discretize(sys, disc; inputs = [ke => K], saveat = 0.1))
+    @test occursin("`discretize` takes `inputs`, `u0`, `p`, `tspan`, `jac`, `sparse`, `jvp`; got `saveat`", err)
     # misshapen values are named
     @test occursin("`u0` has 3 values; the state has 16", emsg(() -> discretize(sys, disc; inputs = [ke => K], u0 = [1.0, 2, 3])))
     @test occursin("`u0`: `nope` is not a field", emsg(() -> discretize(sys, disc; inputs = [ke => K], u0 = [:nope => 1.0])))
