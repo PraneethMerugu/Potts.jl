@@ -4,14 +4,17 @@
 # callback), not only on the owned one.
 
 """
-    LatticeParameters(values, tables = [], inputs = []; tick = 0)
+    LatticeParameters(values, tables = [], inputs = []; tick = 0, fns = [])
 
 The parameters of a field problem (F4 design §3.3): `values` the scalar parameters in raw
 order (SciMLStructures' `Tunable` portion; Duals allowed), `tables` the kind tables as
 `key => values` (`Constants`), `inputs` the input arrays as `key => values` (flat host
 values, or `nothing` for an unset input) and `tick` the clock's step index (`Discrete`, with
 the inputs). `stamp` counts the writes of tables and inputs: the right side of an ODE solver
-uploads them again (and runs its masks and checks again) when it changes.
+uploads them again (and runs its masks and checks again) when it changes. `fns` are the
+inputs given as functions of the time (`key => f`, F4-B1): every solver writes `f(t)` into the
+input: the owned run at the start and after each window, an OrdinaryDiffEq solver's right
+side at every call ([`InputRefresh`](@ref)).
 
 Read and write it by symbol, as every SciML parameter object: `prob.ps[k]`, `integ.ps[Dk] =
 values`, `integ.ps[kind] = K`, `remake(prob; p = [k => v, Dk => values, kind => K])`. A
@@ -28,10 +31,11 @@ mutable struct LatticeParameters{V <: AbstractVector, TB <: AbstractVector, IN <
     inputs::IN
     tick::Base.RefValue{Int}
     stamp::Base.RefValue{Int}
+    fns::Vector{Pair{String, Any}}      # the inputs given as functions of the time, `key => f`
 end
 LatticeParameters(values::AbstractVector, tables = Pair{String, Vector{Float64}}[], inputs = Pair{String, Any}[];
-    tick::Integer = 0) = LatticeParameters(values, _table_list(tables), Pair{String, Any}[k => v for (k, v) in inputs],
-    Ref(Int(tick)), Ref(0))
+    tick::Integer = 0, fns = Pair{String, Any}[]) = LatticeParameters(values, _table_list(tables),
+    Pair{String, Any}[k => v for (k, v) in inputs], Ref(Int(tick)), Ref(0), Pair{String, Any}[k => f for (k, f) in fns])
 
 # the scalar values of a parameter object (a raw vector is its own)
 _pvals(p::LatticeParameters) = p.values
@@ -41,13 +45,14 @@ _ptables(p, fallback) = fallback
 
 Base.eltype(::Type{<:LatticeParameters{V}}) where {V} = eltype(V)
 Base.copy(p::LatticeParameters) = LatticeParameters(copy(p.values), eltype(p.tables)[k => copy(v) for (k, v) in p.tables],
-    Pair{String, Any}[k => (v === nothing ? v : copy(v)) for (k, v) in p.inputs], Ref(p.tick[]), Ref(p.stamp[]))
+    Pair{String, Any}[k => (v === nothing ? v : copy(v)) for (k, v) in p.inputs], Ref(p.tick[]), Ref(p.stamp[]), copy(p.fns))
 Base.:(==)(a::LatticeParameters, b::LatticeParameters) = a.values == b.values && a.tables == b.tables &&
-                                                         a.inputs == b.inputs && a.tick[] == b.tick[]
+                                                         a.inputs == b.inputs && a.tick[] == b.tick[] && a.fns == b.fns
 # the same tables and inputs with other scalar values (SciMLStructures' `replace`, a remake)
 with_values(p::LatticeParameters, v::AbstractVector) =
     LatticeParameters(v, eltype(p.tables)[k => copy(x) for (k, x) in p.tables],
-        Pair{String, Any}[k => (x === nothing ? x : copy(x)) for (k, x) in p.inputs], Ref(p.tick[]), Ref(p.stamp[]))
+        Pair{String, Any}[k => (x === nothing ? x : copy(x)) for (k, x) in p.inputs], Ref(p.tick[]), Ref(p.stamp[]),
+        copy(p.fns))
 function Base.show(io::IO, p::LatticeParameters)
     print(io, "LatticeParameters(", p.values)
     isempty(p.tables) || print(io, "; tables ", join(("`$k`" for (k, _) in p.tables), ", "))
@@ -118,6 +123,7 @@ function SII.set_parameter!(p::LatticeParameters, v, s::TableSlot)
     return v
 end
 function SII.set_parameter!(p::LatticeParameters, v, s::InputSlot)
+    any(x -> first(x) == s.key, p.fns) && _fn_write_error(input_name(s.index, s.key))
     j = _inpos(p, s.key)
     prog = s.index.program[]
     w = prog isa Program ? _input_value(prog, s.key, v, input_name(s.index, s.key); bool = is_bool_input(s.index, s.key),

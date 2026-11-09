@@ -214,7 +214,7 @@ function _final_problem(integ::FieldIntegrator, sp)
     lp isa LatticeParameters || return sp
     ins = Pair{String, Any}[k => (v === nothing ? v : _read_input(integ, k)) for (k, v) in lp.inputs]
     q = LatticeParameters(copy(integ.p), eltype(integ.tables)[k => copy(v) for (k, v) in integ.tables], ins;
-        tick = _tick(integ))
+        tick = _tick(integ), fns = lp.fns)
     T = sp isa SciMLBase.DiscreteProblem ? SciMLBase.DiscreteProblem : SciMLBase.ODEProblem
     idx = getfield(integ, :saveidxs)
     # (`save_idxs`: the saves hold those indices; the time-first reads find the fields in them)

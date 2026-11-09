@@ -71,6 +71,48 @@ function LatticeDiscretization(grid::Grid; methods = Dict(), T::Union{Type, Noth
 end
 
 """
+    lattice_domain(t, (x, y), dims; spacing = 1, tspan = (0.0, 1.0))
+    lattice_domain((x, y), dims; spacing = 1)
+
+The domain of a `PDESystem` on a lattice of `dims` sites: `[t ∈ Interval(tspan...), x ∈
+Interval(0, dims[1] * spacing), y ∈ Interval(0, dims[2] * spacing)]`. Give it as the
+`PDESystem`'s domain, so you do not compute the extents yourself:
+
+```julia
+dom = lattice_domain(t, (x, y), (64, 48); spacing = 0.5)   # x ∈ [0, 32], y ∈ [0, 24]
+@named sys = PDESystem(eqs, bcs, dom, [t, x, y], [c(t, x, y)], [D])
+discretize(sys, LatticeDiscretization(Grid((64, 48))))
+```
+
+`spacing` is one number for every axis or one per axis (each finite and > 0). The
+discretization derives the spacing back from the domain (`extent / dims`). A model's
+lattice uses the same rule: axis `d` spans `[0, dims[d] * spacing[d]]`. `tspan` is the time
+interval, which is the default time span of `discretize`. The form without `t` is the domain
+of a system with no time (a steady system).
+"""
+lattice_domain(t, xs, dims; spacing = 1, tspan = (0.0, 1.0)) =
+    [_time_interval(t, tspan); lattice_domain(xs, dims; spacing)]
+function lattice_domain(xs, dims; spacing = 1)
+    xs isa Union{Tuple, AbstractVector} || throw(ArgumentError(string("lattice_domain: give the coordinates as a ",
+        "tuple, `(x, y)`; got ", repr(xs))))
+    N = length(xs)
+    dims isa Union{Tuple, AbstractVector} && length(dims) == N && all(d -> d isa Integer && !(d isa Bool) && d > 0, dims) ||
+        throw(ArgumentError(string("lattice_domain: `dims` is the site count of each of the ", N, " axes ",
+            "(positive integers, as `Grid(dims)` takes them); got ", repr(dims))))
+    h = spacing isa Real ? ntuple(_ -> spacing, N) : spacing
+    h isa Union{Tuple, AbstractVector} && length(h) == N && all(s -> s isa Real && isfinite(s) && s > 0, h) ||
+        throw(ArgumentError(string("lattice_domain: `spacing` is one number or one per axis (", N, "), each finite ",
+            "and > 0; got ", repr(spacing))))
+    return [xs[d] ∈ Interval(0.0, dims[d] * Float64(h[d])) for d in 1:N]
+end
+function _time_interval(t, tspan)
+    tspan isa Union{Tuple, AbstractVector} && length(tspan) == 2 && all(v -> v isa Real && isfinite(v), tspan) &&
+        tspan[1] < tspan[2] || throw(ArgumentError(string("lattice_domain: `tspan` is the time interval `(t₀, t₁)`, ",
+        "two finite numbers with t₀ < t₁; got ", repr(tspan))))
+    return t ∈ Interval(Float64(tspan[1]), Float64(tspan[2]))
+end
+
+"""
 The lowered field system. `program` is the LatticeFields `Program` (before the semantic
 passes); `keys[op]` are the field keys of each dependent variable (one per component);
 `params[i]` is the parameter of slot `i` with its value `defaults[i]` (`lattice_spacing`

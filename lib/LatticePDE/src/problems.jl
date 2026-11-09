@@ -1845,10 +1845,27 @@ by symbol (`sol[c(t, x, y)]`, `sol[:c]`) as grid-shaped arrays.
 Any other keyword is an `ArgumentError` naming it. `discretize(sys, disc; p = [k => 2.0])` is
 `remake(discretize(sys, disc); p = [k => 2.0])`, with no second problem built.
 
+Write a kind set as `ismember(k, (1, 2))`, never with `∈`: see the warning in the manual's
+"Fields from a `PDESystem`" (`k ∈ Set(…)` deletes the term).
+
 **Inputs.** Input fields (`kindₛ(..)::Int32 [input = true]`, a `domain` mask) are read and
 never written by the equations. Give their values with `inputs = [kindₛ => K, dom => M]`
 (an array with one value per site, or a number), later with `remake(prob; inputs = …)`, and
-during a run with `integ.ps[kindₛ] = K` (the masks follow). An input with a declared default
+during a run with `integ.ps[kindₛ] = K` (the masks follow). An input that changes in time is
+given as a function of the time, `inputs = [q => t -> f(t)]`, which returns an array with one
+value per site or a number (any value that is not an array or a number is called as `v(t)`, so
+an interpolation object works too). A field algorithm writes `v(t)` into the input at the
+start and at the end of each window, as a callback that writes `integ.ps[q] = v(integ.t)`
+would, and the value holds over the window: a time-varying input is first order in time on
+the owned path, implicit algorithms included (use an OrdinaryDiffEq solver, or a smaller `dt`,
+for a higher order). An OrdinaryDiffEq solver's right side evaluates
+`v` at the time of every call (each stage, the Jacobian-vector product, `LatticeMG`), so the
+solver sees the input at its own times; under a Rosenbrock solver (`Rodas5P`) the time
+derivative `∂f/∂t` does not see the input's own change in time. The masks follow on both; on an OrdinaryDiffEq solver
+a masked value jumps where the input switches (written after the step), so a mask that reads
+such an input needs `dtmax` or `tstops`, as a mask whose switch has no event does. A write of `integ.ps[q]`
+holds until the next window of an owned run, or the next call of the right side; a value
+given to `remake(prob; inputs = [q => K])` makes the input constant again. An input with a declared default
 (`dom(..)::Bool = true [input = true]`) needs no value; any other unset input is an error
 naming it when the problem is solved. An input is never read as zero.
 

@@ -18,6 +18,9 @@ function _input_value(p::Program, key::AbstractString, v, name = key; bool::Bool
         bounds::Tuple{Float64, Float64} = (-Inf, Inf))
     n = _input_length(p, key)
     v isa Number && (_check_integer(p, key, name, v; bool, bounds); return fill(v, n))
+    is_input_function(v) && throw(ArgumentError(string("input `", name, "`: a function of the time is given where ",
+        "the problem is built, `discretize(sys, disc; inputs = [", name, " => t -> values])` or `remake(prob; inputs = …)`; ",
+        "a write on an integrator takes an array with one value per site (", n, ") or a number")))
     v isa AbstractArray || throw(ArgumentError(
         "input `$name`: give an array with one value per site ($n) or a number; got a $(typeof(v))"))
     length(v) == n || throw(ArgumentError(
@@ -28,25 +31,140 @@ function _input_value(p::Program, key::AbstractString, v, name = key; bool::Bool
 end
 
 """
-    resolve_inputs(p, index, given, base = nothing) -> Vector{Pair{String, Any}}
+    resolve_inputs(p, index, given, base = nothing; t0 = nothing) -> Vector{Pair{String, Any}}
 
 The value of every input field of program `p` (in field order): `base` (a previous list) or
 unset (`nothing`), replaced by the `given` pairs (`symbol => values`, the symbol looked up in
-`index`, or the field key).
+`index`, or the field key). A value that is a function of the time ([`is_input_function`](@ref))
+gives its value at `t0` (a problem with no start time takes none); [`input_functions`](@ref)
+keeps the function.
 """
-function resolve_inputs(p::Program, index, given, base = nothing)
+function resolve_inputs(p::Program, index, given, base = nothing; t0 = nothing)
     ks = _input_keys(p)
     vals = Dict{String, Any}(k => nothing for k in ks)
     base === nothing || foreach(((k, v),) -> vals[k] = v, base)
     for (s, v) in given
-        k = index isa LatticeIndex ? input_key(index, s) : nothing
-        k === nothing && s isa AbstractString && s in ks && (k = String(s))
-        k === nothing && _not_input(s, [input_name(index, x) for x in ks])
-        vals[k] = _input_value(p, k, v, input_name(index, k); bool = is_bool_input(index, k),
-            bounds = input_bounds(index, k))
+        k = _given_input_key(p, index, s, ks)
+        name = input_name(index, k)
+        if is_input_function(v)
+            t0 === nothing && throw(ArgumentError(string("input `", name, "`: this problem takes input values, ",
+                "not a function of the time; give an array with one value per site or a number")))
+            vals[k] = _host_input(p, k, _call_input(v, t0, name), name, index)
+        else
+            vals[k] = _input_value(p, k, v, name; bool = is_bool_input(index, k), bounds = input_bounds(index, k))
+        end
     end
     return Pair{String, Any}[k => vals[k] for k in ks]
 end
+# the field key of the input a given pair names (its symbol in `index`, or the key itself)
+function _given_input_key(p::Program, index, s, ks = _input_keys(p))
+    k = index isa LatticeIndex ? input_key(index, s) : nothing
+    k === nothing && s isa AbstractString && s in ks && (k = String(s))
+    k === nothing && _not_input(s, [input_name(index, x) for x in ks])
+    return k
+end
+
+"""
+    is_input_function(v) -> Bool
+
+Whether an input value `v` is a function of the time (F4-B1): anything that is not a number,
+an array or `nothing` (an anonymous function `t -> values`, a named function, an
+interpolation object). The run calls it as `v(t)`, which returns an array with one value per
+site or a number.
+"""
+is_input_function(v) = !(v isa Union{Number, AbstractArray, Nothing})
+
+"""
+    input_functions(p, index, given, base = []) -> Vector{Pair{String, Any}}
+
+The inputs of `given` that are functions of the time, `key => f`, over those of `base`: a
+function replaces the input's previous one, and a value removes it (the input is constant
+again).
+"""
+function input_functions(p::Program, index, given, base = Pair{String, Any}[])
+    out = Pair{String, Any}[k => f for (k, f) in base]
+    ks = _input_keys(p)
+    for (s, v) in given
+        k = _given_input_key(p, index, s, ks)
+        filter!(x -> first(x) != k, out)
+        is_input_function(v) && push!(out, k => v)
+    end
+    return out
+end
+
+# the value of input function `f` at time `t`, refused in the user's words when `f` takes no time
+function _call_input(f::F, t, name) where {F}
+    applicable(f, t) || throw(ArgumentError(string("input `", name, "`: a value that is not an array or a number is ",
+        "a function of the time, called as `f(t)`; the given `", typeof(f), "` takes no time argument. Give ",
+        "`", name, " => t -> values`")))
+    return f(t)
+end
+# the host values of an input function's result: a vector of the input's host type (Float64 for
+# a float field, its integer type for a kind map or a mask), so later results are written into it
+# in place
+function _host_input(p::Program, key::AbstractString, v, name, index)
+    _check_plain(v, name)
+    w = _input_value(p, key, v, name; bool = is_bool_input(index, key), bounds = input_bounds(index, key))
+    f = p.fields[fieldid(p, key)]
+    return convert(Vector{isfloat(f.storage) ? Float64 : juliatype(f.storage)}, w)
+end
+
+# the checks of an input function's result `v` at a write, with no allocation (the work of
+# `_input_value` and `_check_integer` on a value that passes)
+function check_input_result(p::Program, key::AbstractString, v, index)
+    n = _input_length(p, key)
+    ok = v isa Number || (v isa AbstractArray && length(v) == n)
+    if !ok || !_input_ok(p, key, v, is_bool_input(index, key), input_bounds(index, key))
+        _check_plain(v, input_name(index, key))
+        # the error in the user's words (`_input_value` throws it)
+        _input_value(p, key, v, input_name(index, key); bool = is_bool_input(index, key),
+            bounds = input_bounds(index, key))
+        throw(ArgumentError(string("input `", input_name(index, key), "`: the function returned a ", typeof(v))))
+    end
+    return nothing
+end
+function _input_ok(p::Program, key::AbstractString, v, bool::Bool, bounds::Tuple{Float64, Float64})
+    st = p.fields[fieldid(p, key)].storage
+    return _values_ok(v, isfloat(st), _int_range(st), bool, bounds)
+end
+# the values of an integer storage type, as Float64 (a type-stable `typemin`/`typemax`)
+_int_range(st) = st == U8 ? (0.0, 255.0) : st == I32 ? (Float64(typemin(Int32)), Float64(typemax(Int32))) :
+                 st == U32 ? (0.0, Float64(typemax(UInt32))) : (-Inf, Inf)
+_values_ok(v::Number, fl, r, bool, bounds) = _value_ok(v, fl, r, bool, bounds)
+function _values_ok(v::AbstractArray, fl, r, bool, bounds)
+    # (a device array is checked on a host copy: no scalar indexing)
+    v isa Union{Array, AbstractRange} || KA.get_backend(v) isa KA.CPU || return _values_ok(Array(v), fl, r, bool, bounds)
+    for x in v
+        _value_ok(x, fl, r, bool, bounds) || return false
+    end
+    return true
+end
+function _value_ok(x, fl::Bool, r::Tuple{Float64, Float64}, bool::Bool, bounds::Tuple{Float64, Float64})
+    _plain(x) || return false
+    bounds[1] <= x <= bounds[2] || return false
+    fl && return true
+    return x isa Bool || (bool ? (x == 0 || x == 1) : isinteger(x) && r[1] <= x <= r[2])
+end
+# a write of an input that a function of the time gives (the function would take it over)
+@noinline _fn_write_error(name) = throw(ArgumentError(string("input `", name, "` is given as a function of the time, ",
+    "which sets it at every window or call; give it a constant with `remake(prob; inputs = [", _route(name),
+    " => K])` (or another function the same way)")))
+
+# an input's values are plain numbers: a value with derivative parts (a ForwardDiff Dual that an
+# input function closes over) has no input store to go to in this version (F4-B1 review)
+_plain(x) = x isa Union{AbstractFloat, Integer, Rational}
+function _check_plain(v, name)
+    x = v isa AbstractArray ? (isempty(v) ? 0.0 : first(v isa Union{Array, AbstractRange} ? v : Array(v))) : v
+    v isa Union{Number, AbstractArray} && !_plain(x) && throw(ArgumentError(string("input `", name, "`: the function ",
+        "returned values of type ", typeof(x), "; an input holds plain numbers (no derivative parts): to differentiate ",
+        "through a time-dependent input, write it in the equations with a parameter (`a * sin(ω * t)`) and ",
+        "differentiate with respect to that parameter")))
+    return nothing
+end
+
+# write the result `v` of an input function into the host vector `x` in place
+_write_host!(x::AbstractVector, v::Number) = fill!(x, v)
+_write_host!(x::AbstractVector, v::AbstractArray) = copyto!(x, v)
 
 # a symbol that is not an input: an array input (whose components are the inputs) asks for
 # each component, else the inputs are listed
@@ -128,10 +246,10 @@ function upload_inputs!(st::FieldStore, p::Program, inputs; index = nothing)
     return st
 end
 function _set_input!(st::FieldStore, p::Program, key::AbstractString, v)
-    a = array(st, fieldid(p, key), :cur)
-    copyto!(a, convert(Vector{eltype(a)}, v))
-    return a
+    return _copy_input!(array(st, fieldid(p, key), :cur), v)
 end
+# (on the host an elementwise copy: no conversion buffer, so an input write allocates nothing)
+_copy_input!(a, v) = a isa Array || eltype(v) === eltype(a) ? copyto!(a, v) : copyto!(a, convert(Vector{eltype(a)}, v))
 
 """
     ParamsTables(p, tables, inputs = [])

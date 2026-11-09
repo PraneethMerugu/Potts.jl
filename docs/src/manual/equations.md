@@ -571,6 +571,23 @@ The rules:
   medium), and the name of a field or site variable of the model reads that variable.
 - A kind table of the `PDESystem` is an error: declare the table in the model.
 
+!!! warning "Write a kind set as `ismember`, not with `∈`"
+    In a `PDESystem` equation, write a kind set as `ismember(k, (1, 2))`. Two spellings
+    with `∈` build without an error, but they do not test membership:
+
+    - `k ∈ Set([1, 2])` is `false` before any symbolic term exists. So
+      `3k * (k ∈ Set([1, 2]))` is `0`: the term is deleted from the equation, and no
+      check can see it after that. This is reported to Symbolics as
+      [Symbolics.jl#2126](https://github.com/JuliaSymbolics/Symbolics.jl/issues/2126).
+    - `k ∈ (1, 2)` is a domain pairing (`VarDomainPairing`): it says that `k` lies in the
+      interval from 1 to 2. In an expression it is an error from Symbolics
+      (`MethodError: no method matching +(::Num, ::VarDomainPairing)`); alone as a side,
+      LatticePDE refuses it.
+
+    These facts hold on Symbolics 7.45.0 and 7.48.0.
+
+    `k ∈ [1, 2]` stays a symbolic `in` term, which LatticePDE also refuses.
+
 ```@example equations
 using Potts.ModelingToolkitBase: PDESystem, Differential
 using Potts.ModelingToolkitBase.DomainSets: Interval
@@ -584,4 +601,25 @@ withdrug = Potts.compose(dosed, Potts.component(:drug, pde, dosed))
 s = solve(PottsProblem(withdrug, layout(Tiling((5, 5); region = (11:20, 11:20), kinds = [:cell]), withdrug), (0, 5)),
     SequentialCPM())
 maximum(s.u[end].site.drug₊c)
+```
+
+`lattice_domain(t, (x, y), dims; spacing)` gives the domain of a lattice, so you do not
+compute the extents yourself. An input that changes in time takes a function of the time,
+`inputs = [q => t -> values]`. A field algorithm writes its value into the input at the
+start and at the end of each window. An OrdinaryDiffEq solver evaluates it at every call of
+the right side, so it sees the input at each stage time. The masks that read the input
+follow. This standalone system has a source that a moving front switches
+on:
+
+```@example equations
+using Potts.LatticePDE: lattice_domain, discretize, LatticeDiscretization, Grid
+@variables w(..) front(..) [input = true]
+we, fe = w(Potts.t, x, y), front(Potts.t, x, y)
+dom = lattice_domain(Potts.t, (x, y), (20, 10); spacing = 0.5, tspan = (0.0, 2.0))
+pulse = PDESystem([Dt(we) ~ Dd * Potts.LatticePDE.Δ(we) - kd * we + fe], [w(0, x, y) ~ 0.0], dom,
+    [Potts.t, x, y], [we, fe], [Dd, kd]; name = :pulse)
+lit(t) = [i <= 10t ? 1.0 : 0.0 for i in 1:20, j in 1:10]   # columns 1 to 10t are on
+pprob = discretize(pulse, LatticeDiscretization(Grid((20, 10))); inputs = [fe => lit])
+psol = solve(pprob, ExplicitEuler(; dt = 0.1))
+round.(psol[we][end][:, 5]; digits = 2)
 ```

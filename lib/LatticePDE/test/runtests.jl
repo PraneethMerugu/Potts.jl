@@ -311,6 +311,8 @@ bcs = [ce ~ masked(ke == 3, 0.0), oe ~ masked(ismember(ke, (2, 3)), 1.0)]
     include("coarse.jl")
     include("crossgrid.jl")
     include("example.jl")
+    include("latticedomain.jl")
+    include("timeinputs.jl")
     isempty(get(ENV, "LATTICEPDE_GPU", "")) || include("device.jl")
 
     @testset "QA" begin

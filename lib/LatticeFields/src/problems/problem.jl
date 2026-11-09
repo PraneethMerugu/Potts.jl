@@ -51,6 +51,7 @@ struct FieldProblem{N, B, X, R, U, PV, E, TB} <: SciMLBase.AbstractSciMLProblem
     initkeys::Vector{String}
     options::CompileOptions
     group::FieldGroup{N}               # the group: its spec and plans, shared by remakes
+    inputfns::Vector{Pair{String, Any}}  # the inputs given as functions of the time, `key => f` (F4-B1)
 end
 function FieldProblem(prog::Program, u0, tspan, p; state, kind::Symbol,
         init = String[], index = LatticeIndex(), tables = Pair{String, Vector{Float64}}[],
@@ -77,16 +78,19 @@ it first steps the problem (once per family, [`group_program`](@ref)).
 function FieldProblem(spec::GroupSpec, u0, tspan, p; index = LatticeIndex(), tables = Pair{String, Vector{Float64}}[],
         inputs = Pair[], backend = KA.CPU(), options::CompileOptions = CompileOptions())
     prog, state, kind, init, stability = spec.rate, spec.state, spec.kind, spec.init, spec.stability
+    tspan = (Float64(tspan[1]), Float64(tspan[2]))
     faces = face_checks(prog)
     check_faces(faces, p)
     alg = kind == :map ? ExplicitMap() : ExplicitEuler()
     s = semantic(fuse_update(prog, update_rule(alg)))
     pv = collect(p)
-    ins = resolve_inputs(s, index, inputs)
-    tabs = _table_list(tables)
     index isa LatticeIndex && (index.program[] = s)          # (the checks of an input write)
+    ins = resolve_inputs(s, index, inputs; t0 = tspan[1])
+    fns = input_functions(s, index, inputs)
+    tabs = _table_list(tables)
     prob = _field_problem(s, collect(String, state), u0, tspan, pv, tabs, ins, backend, index, faces, stability, kind,
-        collect(String, init), _state_options(options, problem_eltype(u0, pv, tabs)), FieldGroup(spec; alg, program = s))
+        collect(String, init), _state_options(options, problem_eltype(u0, pv, tabs)), FieldGroup(spec; alg, program = s);
+        inputfns = fns)
     ids = sort!([fieldid(s, k) for k in state])
     sort(prob.step.swaps) == ids ||
         throw(ArgumentError(string("every state field must be written ",
@@ -175,7 +179,7 @@ function _check_eltype(::Type{E}, backend) where {E}
 end
 
 function _field_problem(s::Program, state, u0, tspan, p, tables, inputs, backend, index, faces,
-        stability, kind, initkeys, options, group)
+        stability, kind, initkeys, options, group; inputfns = Pair{String, Any}[])
     derive!(p, tables, index)                       # the computed slots from the base values (F2-15)
     E = problem_eltype(u0, p, tables)
     _check_eltype(E, backend)
@@ -184,7 +188,7 @@ function _field_problem(s::Program, state, u0, tspan, p, tables, inputs, backend
     return FieldProblem{_ndims(s), typeof(backend), typeof(index),
         typeof(stability), typeof(u0), typeof(p), E, typeof(tables)}(s, ip, sp, state, u0,
         (Float64(tspan[1]), Float64(tspan[2])), p, tables, inputs, backend, index, faces, stability,
-        kind, initkeys, options, group)
+        kind, initkeys, options, group, Pair{String, Any}[k => f for (k, f) in inputfns])
 end
 
 _ndims(::Program{N}) where {N} = N
@@ -228,10 +232,12 @@ function SciMLBase.remake(prob::FieldProblem; u0 = prob.u0, tspan = prob.tspan, 
     # new initial values as at the build
     check_declared(prob.stability, with_tables(map(primal, pv), tables))
     u0 === prob.u0 || check_declared_state(prob, u0, eachindex(u0), "starts at")
-    ins = isempty(inputs) ? prob.inputs : resolve_inputs(prob.program, prob.index, inputs, prob.inputs)
+    ins = isempty(inputs) ? prob.inputs :
+          resolve_inputs(prob.program, prob.index, inputs, prob.inputs; t0 = Float64(tspan[1]))
+    fns = isempty(inputs) ? prob.inputfns : input_functions(prob.program, prob.index, inputs, prob.inputfns)
     return _field_problem(prob.program, prob.state, collect(u0), tspan, pv, tables,
         ins, prob.backend, prob.index, prob.faces, prob.stability, prob.kind, prob.initkeys,
-        prob.options, prob.group)
+        prob.options, prob.group; inputfns = fns)
 end
 # the input pairs of a parameter map `p` (`kind => K`: an input is a parameter, F4 design
 # §3.3) moved to the input pairs; the other pairs in `p`'s container type
@@ -421,6 +427,7 @@ mutable struct FieldIntegrator{P <: FieldProblem, A, S <: FieldStore, RT <: Tupl
     cprev::Any                          # the continuous callbacks' conditions at the window's start (F4-06)
     dense::Bool                         # the solution's `dense` (the `dense` keyword)
     prevbuf::Any                        # the host buffer `prevu` reuses (no copy allocated per window)
+    inputfns::Any                       # the inputs given as functions of the time (`InputFns`), or nothing
 end
 
 
@@ -701,7 +708,10 @@ function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; saveat = (), 
                             _utype(st, E)}(prob, alg, st, rts, pv, pgood, tabs, t0, 0, dt, ms[1], nsteps,
         _clock(prob) === nothing ? 0 : _per(dt, _clock(prob)), save, Float64[], Vector{T}[], SciMLBase.ReturnCode.Success,
         aux, Vector{T}[], Any[], t0, tf, Float64[], 1, 0, _sciml, nothing, _save_indices(prob, save_idxs),
-        save_everystep, Int(maxiters), false, nothing, nothing, t0, 0, nothing, dense, nothing)
+        save_everystep, Int(maxiters), false, nothing, nothing, t0, 0, nothing, dense, nothing,
+        isempty(prob.inputfns) ? nothing : Base.inferencebarrier(_input_fns)(prob, st, rts))
+    # the inputs given as functions of the time take their values at the start (F4-B1)
+    integ.inputfns === nothing || Base.inferencebarrier(_refresh_inputs!)(integ)
     for ts in tstops
         t0 < ts <= tf + 1e-9dt && SciMLBase.add_tstop!(integ, ts)
     end
@@ -875,6 +885,8 @@ function CommonSolve.step!(integ::FieldIntegrator)
            Base.inferencebarrier(_advance_short)(integ.runtimes, (t, _tick(integ)), target - t, dt)::SciMLBase.ReturnCode.T
     _window_done!(integ, target)
     code == SciMLBase.ReturnCode.Success || (integ.retcode = code)
+    # the inputs given as functions of the time take their values at the window's end (F4-B1)
+    getfield(integ, :inputfns) === nothing || Base.inferencebarrier(_refresh_inputs!)(integ)
     # the status words: on the host after every step (a plain read; nothing for explicit groups)
     Exec.ishost(integ.prob.backend) && _check_statuses!(integ)
     # the callbacks (behind a barrier; none: no host read), then the saves due
@@ -1057,6 +1069,7 @@ function SciMLBase.reinit!(integ::FieldIntegrator, u0 = integ.prob.u0)
     empty!(integ.us)
     empty!(integ.auxu)
     integ.retcode = SciMLBase.ReturnCode.Success
+    integ.inputfns === nothing || Base.inferencebarrier(_refresh_inputs!)(integ)
     _rerun_init!(integ, integ.pgood)
     foreach(reset!, integ.runtimes)
     foreach(clear_status!, integ.runtimes)          # a new run: no failure, no counters
@@ -1509,9 +1522,11 @@ SciMLBase.done(i::FieldIntegrator) = !_running(i.retcode) || _time(i) >= i.tend 
 # error naming `integ.ps`; any other goes to SII
 Base.setindex!(i::FieldIntegrator, v, sym) = _integ_setindex!(i, v, sym)
 Base.setindex!(i::FieldIntegrator, v, sym::Union{Tuple, AbstractArray}) = _integ_setindex!(i, v, sym)
-function _integ_setindex!(i::FieldIntegrator, v, sym)
+function _integ_setindex!(i::FieldIntegrator, v, sym; refresh::Bool = false)
     _parameter_route(i, sym, true)
     k = i.prob.index isa LatticeIndex ? input_key(i.prob.index, sym) : nothing
+    refresh || k === nothing || getfield(i, :inputfns) === nothing || !(k in (i.inputfns::InputFns).keys) ||
+        _fn_write_error(input_name(i.prob.index, k))
     if k === nothing
         _check_symbol(i, sym; write = true)
         SII.setsym(i, sym)(i, v)                   # a state write resets (`set_state!`); a parameter's rebinds
@@ -1533,6 +1548,96 @@ function _integ_setindex!(i::FieldIntegrator, v, sym)
     _rerun_init!(i, i.pgood)                       # the parameters the steps are bound to
     foreach(reset!, i.runtimes)                    # the masked values may have moved
     return i
+end
+
+"""
+    InputFns
+
+The inputs of an owned run given as functions of the time (F4-B1): for each, its field key,
+the function, the store's array and a host buffer of the array's type (a device array is
+written through it; on the host the result is copied in directly).
+"""
+mutable struct InputFns
+    keys::Vector{String}
+    fns::Vector{Any}
+    arrays::Vector{Any}
+    bufs::Vector{Any}
+    masks::Bool                         # a mask (an init kernel) reads one of them
+    ops::Vector{Bool}                   # per group: its implicit operator reads one of them
+    initbs::Any                         # the init launches bound (a rerun allocates nothing), or nothing
+    initp::Any                          # … the parameter vector they hold
+    initv::Vector{Float64}              # … at these values
+end
+# whether a kernel of `ks` loads one of the fields `keys`
+_loads(s::Program, ks, keys) = any(k -> any(n -> n.op == LOAD && s.fields[k.accesses[n.imm].field].key in keys, k.nodes), ks)
+function _input_fns(prob::FieldProblem, st::FieldStore, rts)
+    ks = String[k for (k, _) in prob.inputfns]
+    arrays = Any[array(st, fieldid(prob.program, k), :cur) for k in ks]
+    bufs = Any[a isa Array ? nothing : Vector{eltype(a)}(undef, length(a)) for a in arrays]
+    s = prob.program
+    masks = _loads(s, [k for k in s.kernels if k.key in prob.initkeys], ks)
+    ops = Bool[rt.cache isa ImplicitCache && rt.cache.op.jac !== nothing && _loads(rt.cache.op.jac, rt.cache.op.jac.kernels, ks)
+               for rt in rts]
+    return InputFns(ks, Any[f for (_, f) in prob.inputfns], arrays, bufs, masks, ops, nothing, nothing, Float64[])
+end
+
+# Write `f(t)` of every input function into its input at the current time (F4-B1), as
+# `integ.ps[q] = f(t)` does, but keeping what the input does not touch (review B1 #1): a mask
+# that reads one runs again with the clamps, and the groups start again (Crank–Nicolson damps,
+# BDF2 restarts: the masked data jump); an implicit operator that reads one is rebuilt (stale)
+# with its history kept; a read by the rates alone changes nothing else. An input the stability
+# bound reads in an index takes the write of `integ.ps[q]`, which counts the substeps again; any
+# other is checked and copied in place, so the write allocates only what `f` returns.
+function _refresh_inputs!(integ::FieldIntegrator)
+    fs = integ.inputfns::InputFns
+    bks = bound_inputs(integ.prob.stability)
+    for i in eachindex(fs.keys)
+        k = fs.keys[i]
+        # (the time is read inside: a Float64 through this dynamic call would be boxed)
+        _refresh_one!(integ, k, fs.fns[i], fs.arrays[i], fs.bufs[i], k in bks)
+    end
+    if fs.masks
+        _init_inputs!(integ, fs, integ.pgood)
+        foreach(reset!, integ.runtimes)
+    elseif any(fs.ops)
+        for i in eachindex(fs.ops)
+            fs.ops[i] && _mark_stale!(integ.runtimes[i])
+        end
+    end
+    return nothing
+end
+_mark_stale!(rt) = (rt.cache isa ImplicitCache && (rt.cache.stale = true); nothing)
+# `_rerun_init!` with the init launches bound once per parameter vector and values
+function _init_inputs!(integ::FieldIntegrator, fs::InputFns, p)
+    prob = integ.prob
+    isempty(prob.init.launches) && return nothing
+    if fs.initbs === nothing || fs.initp !== p || length(fs.initv) != length(p) ||
+       !all(i -> fs.initv[i] == Float64(primal(p[i])), eachindex(p)) || !(eltype(p) <: Union{Float32, Float64})
+        fs.initbs = BoundStep(prob.backend, prob.program, prob.init, integ.store, p; c = zero(eltype(prob)))
+        fs.initp = p
+        fs.initv = Float64[primal(x) for x in p]
+    end
+    _run_owned_init!(fs.initbs, integ)
+    foreach(rt -> _clamp!(rt.clamps, integ.store, p), integ.runtimes)
+    return nothing
+end
+function _run_owned_init!(bs, integ::FieldIntegrator)
+    bs((Float64(_time(integ)), Float64(integ.dt), Float64(_tick(integ))))
+    swap!(integ.store, integ.prob.init)
+    return nothing
+end
+function _refresh_one!(integ::FieldIntegrator, k::String, f::F, a, buf, bound::Bool) where {F}
+    prob = integ.prob
+    v = f(getfield(integ, :tnow))
+    bound && (_integ_setindex!(integ, v, k; refresh = true); return nothing)
+    check_input_result(prob.program, k, v, prob.index)
+    if buf === nothing
+        _write_host!(a, v)
+    else
+        _write_host!(buf, v)
+        copyto!(a, buf)
+    end
+    return nothing
 end
 
 # `integ.ps[Dk] = values` (or `integ.ps[Dk[i]] = value`, `setp(integ, Dk)`) sets the

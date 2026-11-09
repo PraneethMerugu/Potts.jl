@@ -439,3 +439,23 @@ end
         @test rel <= 1e-5
     end
 end
+
+# F4-B1: an input given as a function of the time on the device (the result goes through a host
+# buffer of the input's type into the device array each window) equals the host executor's run
+@testset "F4-B1: an input as a function of t on $pgpu" begin
+    @variables dq(..) [input = true]
+    dqe = dq(t, x, y)
+    sys = PDESystem([D(ce) ~ 0.1 * Δ(ce) - ce + dqe], [c(0, x, y) ~ 0.0],
+        [t ∈ Interval(0.0, 0.5), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [ce, dqe], Any[]; name = :dq)
+    Q(s) = [s > 0.05i ? 1.0 : 0.0 for i in 1:8, j in 1:8]
+    mk(be) = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float32, backend = be); inputs = [dqe => Q])
+    sd = solve(mk(PDEV), ExplicitEuler(; dt = 0.01f0); saveat = 0.1)
+    sh = solve(mk(KernelAbstractions.CPU()), ExplicitEuler(; dt = 0.01f0); saveat = 0.1)
+    @test sd.t == sh.t && all(i -> isapprox(Array(sd[ce, i]), sh[ce, i]; rtol = 1.0f-5), eachindex(sd.t))
+    @test maximum(sh[ce, length(sh.t)]) > 0.05
+    # a function that returns a device array (review B1 #7: the checks read a host copy)
+    QD(s) = copyto!(KernelAbstractions.allocate(PDEV, Float64, 8, 8), Q(s))
+    pg = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float32, backend = PDEV); inputs = [dqe => QD])
+    sg = solve(pg, ExplicitEuler(; dt = 0.01f0); saveat = 0.1)
+    @test all(i -> isapprox(Array(sg[ce, i]), sh[ce, i]; rtol = 1.0f-5), eachindex(sg.t))
+end

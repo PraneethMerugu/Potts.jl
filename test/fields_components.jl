@@ -128,6 +128,23 @@ end
     @test occursin("spans `x ∈ [0, 12]`", lat) && occursin("spans [0, 6]", lat) && occursin("spacing 0.5", lat)
 end
 
+# F4-B1: `lattice_domain(t, (x, y), dims; spacing)` is the domain the check takes. Negative
+# control at 8c3f01cf: `lattice_domain` is not defined (an UndefVarError).
+@testset "F4-B1: lattice_domain passes the component's domain check" begin
+    hosth = FcHostH(; name = :m)
+    T, X, Y = FcPDE.t, FcPDE.x, FcPDE.y
+    hand = FcPDE.drug((6, 5))
+    with(dom) = FcPDE.PDESystem(getfield(hand, :eqs), getfield(hand, :bcs), dom, getfield(hand, :ivs),
+        getfield(hand, :dvs), getfield(hand, :ps); name = :drug)
+    a = fc_run(Potts.compose(hosth, Potts.component(:drug, with(Potts.LatticePDE.lattice_domain(T, (X, Y), (12, 10);
+        spacing = 0.5)), hosth)), :drug₊u, 5)
+    @test a == fc_run(FcRefH(; name = :m), :u, 5)
+    # (control: the lattice's sites without its spacing are refused, naming the spacing)
+    e = fc_msg(() -> Potts.compose(hosth, Potts.component(:drug, with(Potts.LatticePDE.lattice_domain(T, (X, Y),
+        (12, 10))), hosth)))
+    @test occursin("spans [0, 6]", e) && occursin("spacing 0.5", e)
+end
+
 @testset "F4-11: inputs by their CPM word; refusals name the PDESystem" begin
     host = FcHost(; name = :m)
     # an input with no word the CPM fills

@@ -54,7 +54,7 @@ export get_lattice_placement, get_lattice_storage, get_lattice_level, get_lattic
        get_potts_entity, get_lattice_input_name
 export vocabulary_issues, check_vocabulary
 export LatticeDiscretization, FiniteVolume, CompiledField, discretize, symbolic_discretize,
-       parse_bcs, linearity, Grid, Interval
+       parse_bcs, linearity, Grid, HEX, Interval, lattice_domain
 export ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, solve, init, step!, solve!, stability_bound,
        substep_counts, steady_fields, field_series
 export DevicePCG, DeviceGMRES, Multigrid    # the inner solvers (`inner = …`); `V` is public

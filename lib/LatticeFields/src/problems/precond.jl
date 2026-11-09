@@ -82,7 +82,7 @@ function (mg::LatticeMG)(W, p)
     fp = m.problem
     u, q, t = p isa Tuple && length(p) == 4 ? (p[2], p[3], p[4]) : (nothing, p, fp.tspan[1])
     lp = q isa LatticeParameters ? q : m.problem.p isa LatticeParameters ? m.problem.p :
-         LatticeParameters(copy(fp.p), fp.tables, fp.inputs)
+         LatticeParameters(copy(fp.p), fp.tables, fp.inputs; fns = fp.inputfns)
     P = lock(mg.lock) do
         key = (objectid(m), current_task())
         e = get(mg.engines, key, nothing)
@@ -130,6 +130,8 @@ end
 function _mg_bind!(P::MGPreconditioner, u, lp, t, γ)
     ig = P.integ
     _load_state!(ig.store, u)
+    # the inputs given as functions of the time, at the time of the bind (F4-B1), as the right side
+    lp isa LatticeParameters && !isempty(lp.fns) && _mg_inputs!(ig, lp, t)
     k = lp.tick[]
     for rt in ig.runtimes
         c = rt.cache
@@ -140,6 +142,19 @@ function _mg_bind!(P::MGPreconditioner, u, lp, t, γ)
     end
     P.γ = γ
     return P
+end
+
+function _mg_inputs!(ig::FieldIntegrator, lp::LatticeParameters, t)
+    prob = ig.prob
+    s = Float64(primal(t))
+    for (k, g) in lp.fns
+        v = g(s)
+        check_input_result(prob.program, k, v, prob.index)
+        a = array(ig.store, fieldid(prob.program, k), :cur)
+        v isa Number ? fill!(a, v) : _copy_input!(a, v)
+    end
+    _rerun_init!(ig, ig.pgood)
+    return nothing
 end
 
 # `y = P r`: each field's V-cycles from zero on its part of `r` (`(I/γ − J̃) x = r`, and `W⁻¹ r ≈

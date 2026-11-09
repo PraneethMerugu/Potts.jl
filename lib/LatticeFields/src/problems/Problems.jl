@@ -23,7 +23,7 @@ using SciMLStructures: SciMLStructures as SS
 using SymbolicIndexingInterface: SymbolicIndexingInterface as SII
 using ..Exec: Exec
 using ..IR: IR, CLAMP, INSIDE, Coef, DomainEdgeRule, HEX, Ex, FaceRule, sitecoefs, NodeValueRule, Program, RUNTIME, PARAM, LOAD, fieldid, print_program, isfloat, juliatype, leveldims, ncomp, nsites,
-            runtime!, degenerate, FACE_RTOL, F64, F16
+            runtime!, degenerate, FACE_RTOL, F64, F16, U8, I32, U32
 using ..Compile: CompiledKernel, CompileOptions, body_function, derive_function, lanecast, lanetype,
                  primal, promote_dual, semantic, valtype, withvaltype, writes, fuse_update, fuse_residual,
                  npartials, dvalue, dpartial, dsetpartial, dreplace
@@ -70,9 +70,9 @@ include("sparsity.jl")
 include("precond.jl")
 
 # the parameter object of B's SciML problems (F4-00)
-public LatticeParameters, TableSlot, InputSlot, with_values, remake_params, remake_u0
+public LatticeParameters, TableSlot, InputSlot, with_values, remake_params, remake_u0, is_input_function, input_functions
 # one problem, many algorithms (F4-01)
-public ClockTick, MaskSync, mask_sync!, sync_masks!, UpdateLatticeAb, steady_start!, lattice_matrix, LatticeODEProblem, LatticeOperator, LatticeLinearProblem, LatticeTimeFreeProblem
+public ClockTick, MaskSync, InputRefresh, refresh_inputs!, mask_sync!, sync_masks!, UpdateLatticeAb, steady_start!, lattice_matrix, LatticeODEProblem, LatticeOperator, LatticeLinearProblem, LatticeTimeFreeProblem
 public LatticeMetadata, LatticeFunction, LatticeProblem, LatticeDiscreteProblem, lattice_metadata, lattice_problem,
        field_problem, rhs_build
 # the Jacobian of the ODE right side (F4-07)
