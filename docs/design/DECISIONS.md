@@ -5145,3 +5145,19 @@ INTERNALS §5 forbids recursion over heterogeneous tuples. The owned field integ
 
 - **Evidence.** The measurement is in `~/lpwork/f4b2-rev2/cbscale/out.txt` on the PC (B ExplicitEuler model, fresh process, two passes). First init plus one step with the recursive walk matches the untyped-vector loop it replaced within 0.03 s at every count of user callbacks from 0 to 16. Both grow by about 0.4 s from 0 to 16 callbacks, most of it at the first callback. Warm `step!` allocates 32 B with two or more callbacks (0 B with at most one), against 240 B with one callback and 33–48 KB with two or more for the vector loop. `_advance_all` costs about 0.08 s of first init per extra group (0.66, 0.74 and 0.82 s for 1, 2 and 4 groups).
 - **Scope.** Callback tuples of the field integrator and group tuples of the group runtime. A new use elsewhere needs its own measurement and ruling.
+
+## D-F4-2 One field front end: the MTK PDESystem (B); A's field syntax is removed (2026-11-09; user ruling 2026-11-09; supersedes the two-front-end parity of no-privileged-paths for fields)
+
+Potts.jl keeps one field front end, the ModelingToolkit `PDESystem` path through LatticePDE (B). A's field surface is removed with no deprecations or aliases: the field lines of `@equations`, `@boundary` and `@bcs`. A model couples a `PDESystem` through `Potts.couple(model, pdesys; inputs)` or `@fields pdesys (bindings...)` inside `@potts_model`. Cell reads such as `volume[owner]` and `kind == endothelial` are bound in the coupling, so the `PDESystem` sees only plain input fields. `@equations` stays for cell and model ODEs.
+
+- **Why.** Keeping A and B equal had become most of the field work: about 21 of 72 feature commits since C9 were parity, and divergence caused four silent wrong results (research/front-end-consolidation.md).
+- **Plan.** F4-B1..B6 in research/field-compiler/f4/F4-design.md §11 (design: research/front-end-b-only.md). The frozen PottsModels tests are respelled in one commit under the standing frozen-edit OK. Any fingerprint re-pin needs the user's OK.
+- **D-159 still holds.** The fields are declared in ModelingToolkit and compiled by LatticePDE; MTK does not step them.
+
+## D-F4-3 No `Base.in` method for symbolic membership (2026-11-09; user ruling 2026-11-09)
+
+In Symbolics 7.45.0 and 7.48.0 (Julia 1.12.6), `k ∈ Set([1, 2])` is `false` before any symbolic term exists, so `3k * (k ∈ Set([1, 2]))` is `0`: the term is deleted silently and no validation can see it. `k ∈ (1, 2)` is an interval domain pairing (`VarDomainPairing`), not membership; inside an equation it fails to build. `k ∈ [1, 2]` stays a symbolic `in` term. LatticePDE does not define `Base.in(::Num, ::AbstractSet)` to catch this, because that is type piracy. Instead:
+
+- the hazard is reported upstream as JuliaSymbolics/Symbolics.jl#2126 (issue only; text in research/symbolics-in-set-issue.md);
+- the coupling (F4-B2) binds kind tests, so a coupled `PDESystem` sees 0/1 input fields and never a symbolic `kind`;
+- the LatticePDE docs warn about `∈ Set(…)` and `∈ (a, b)` and point to `ismember`, citing the issue.
