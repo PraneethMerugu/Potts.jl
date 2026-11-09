@@ -176,6 +176,9 @@ field reads as SciML reads a variable, on every solver and in both front ends: `
 site centers, and `sol(t, x, y)` interpolates between them. `field_series(sol, :c)` is the
 time-first view, as in MethodOfLines: an array of size `(length(sol.t), nx, ny)` that reads the
 saves when indexed. In this front end it gives the same view of a field over the saved MCS.
+On a large lattice, pass `saveat` (the times to keep) or `save_everystep = false` (the end
+only) to an OrdinaryDiffEq solver. By default it saves every step with its dense output, about
+seven state vectors per step for `FBDF` (14 MiB per step at 512²).
 
 ## The Hamiltonian as Symbolics expressions [C3]
 
