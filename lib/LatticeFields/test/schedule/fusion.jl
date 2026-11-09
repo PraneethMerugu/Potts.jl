@@ -3,7 +3,7 @@
 # fused execution bit-exact with split execution; static ndrange marking.
 
 using LatticeFields.Schedule: traffic, modeled_time, working_set, merge_kernels, step_order,
-                              field_report, CostModel
+                              fusion_report, CostModel
 
 """
 K masked-Helmholtz smoother components sharing one byte mask (6 streams each: u stencil,
@@ -191,7 +191,7 @@ end
           [l.members[1] for l in sp.launches] == ["z_produce", "a_consume"]
     d = only(sp.decisions)
     @test !d.merged && d.reason == :illegal && occursin("at offset (1, 0, 0)", d.detail)
-    @test occursin("split z_produce | a_consume  illegal", sprint(field_report, sp))
+    @test occursin("split z_produce | a_consume  illegal", sprint(fusion_report, sp))
     # the cost model alone would have merged it (same traffic as the legal case)
     @test plan(producer_consumer((0, 0, 0))).decisions[1].merged
 end

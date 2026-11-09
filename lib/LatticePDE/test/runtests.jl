@@ -313,7 +313,9 @@ bcs = [ce ~ masked(ke == 3, 0.0), oe ~ masked(ismember(ke, (2, 3)), 1.0)]
     include("example.jl")
     include("latticedomain.jl")
     include("timeinputs.jl")
+    include("report.jl")
     isempty(get(ENV, "LATTICEPDE_GPU", "")) || include("device.jl")
+    isempty(get(ENV, "LATTICEPDE_GPU", "")) || include("report_device.jl")
 
     @testset "QA" begin
         using Aqua, ExplicitImports

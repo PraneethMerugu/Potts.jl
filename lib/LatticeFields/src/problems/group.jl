@@ -379,17 +379,19 @@ function substeps(spec::GroupSpec, alg::ExplicitEuler, dt::Real, pp; fields = sp
     full = Float64(stability(pp))
     if alg.substeps !== nothing
         ρ = seen_bound(stability, pp)
-        n = isfinite(ρ) && ρ >= 0 ? max(alg.substeps, ceil(Int, dt * ρ / 1.8)) : alg.substeps
+        n = isfinite(ρ) && ρ >= 0 ? max(alg.substeps, _bound_count(dt, ρ)) : alg.substeps
         if !(isfinite(full) && full >= 0)
             why = unbounded_key(stability, pp)
             why === nothing || !_warn_once(key(why)) || @warn uncovered_text(texts, (; ctx..., n))
         end
         return n
     end
-    isfinite(full) && full >= 0 && return max(1, ceil(Int, dt * full / 1.8))
+    isfinite(full) && full >= 0 && return max(1, _bound_count(dt, full))
     throw(ArgumentError(unbounded_text(texts, ctx)))
 end
 substeps(g::FieldGroup, alg::ExplicitEuler, dt::Real, pp; kw...) = substeps(g.spec, alg, dt, pp; kw...)
+# the explicit count of the bound `ρ` over a window `dt`: `⌈dt ρ / 1.8⌉` (`substeps`, `field_report`)
+_bound_count(dt::Float64, ρ::Float64) = ceil(Int, dt * ρ / 1.8)
 
 # a new substep count of a runtime (`_set_counts!`): an algorithm's cache may follow it (the
 # implicit one's step and Newton count)

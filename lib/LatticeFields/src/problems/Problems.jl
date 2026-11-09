@@ -27,7 +27,7 @@ using ..IR: IR, CLAMP, INSIDE, Coef, DomainEdgeRule, HEX, Ex, FaceRule, sitecoef
 using ..Compile: CompiledKernel, CompileOptions, body_function, derive_function, lanecast, lanetype,
                  primal, promote_dual, semantic, valtype, withvaltype, writes, fuse_update, fuse_residual,
                  npartials, dvalue, dpartial, dsetpartial, dreplace
-using ..Schedule: LaunchSpec, StepPlan, plan
+using ..Schedule: LaunchSpec, StepPlan, plan, fusion_report
 using ..Solvers: Solvers
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
@@ -68,6 +68,7 @@ include("ode.jl")
 include("series.jl")
 include("sparsity.jl")
 include("precond.jl")
+include("report.jl")
 
 # the parameter object of B's SciML problems (F4-00)
 public LatticeParameters, TableSlot, InputSlot, with_values, remake_params, remake_u0, is_input_function, input_functions
@@ -87,6 +88,8 @@ public compute_type, substep_counts, lagged_coupling, group_loops, steady_loop_r
 public PolicyTexts, ProblemTexts, GroupSubsteps, check_coupling, bound_report, unbounded_text, uncovered_text,
        refuse_parameters, coupling_unknown_text, coupling_unbounded_text, loop_text, steady_loop_text, steady_gain_text,
        steady_why_text, steady_gain_words, rows0_route, reads_time, bound_window!, bound_window, bound_params!, bound_params
+# the field report (F4-13, AF-09)
+public field_report, group_report, substep_cause, implicit_facts, ImplicitFacts
 # the implicit algorithms (F3-07)
 public ImplicitAlgorithm, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, OperatorSpec, RowOperator, operator_spec, build_operator, growth, inexact_bounds, ImplicitCache,
        ImplicitRow, bind_cache, residual_program, residual_rule

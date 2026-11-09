@@ -2,7 +2,7 @@
     LatticeFields.Schedule
 
 Step order (topological, Jacobi inside cycles), cost-model fusion (v3 §4.3), buffer binding,
-launch descriptions for Exec and the field report.
+launch descriptions for Exec and the fusion report.
 """
 module Schedule
 
@@ -16,7 +16,7 @@ using KernelAbstractions: KernelAbstractions, @index, @kernel, @localmem, @synch
 using ..Exec: Exec
 using Polyester: @batch
 
-public plan
+public plan, fusion_report
 
 include("contract.jl")
 include("cost.jl")

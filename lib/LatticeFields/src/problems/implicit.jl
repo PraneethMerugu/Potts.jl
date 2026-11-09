@@ -1333,6 +1333,17 @@ function substeps(spec::GroupSpec, alg::ImplicitAlgorithm, dt::Real, pp; fields 
     check_declared(stability, pp)
     ctx = (; stability, pp, r, fields = collect(String, fields), dt, least = alg.substeps)
     (isempty(r.negative) && !any(x -> x[3] isa Tuple, r.nonfinite)) || refuse_parameters(texts, ctx)
+    (; op, keys, b, ρrob, n1, n2, m) = _implicit_rules(spec, alg, dt, pp, fields)
+    if alg.substeps !== nothing && max(n1, n2) > m
+        rule = n2 >= n1 ? 2 : 1
+        _warn_once(key(string("implicit-raise#", rule))) && @warn _raise_text(op, keys, alg, max(n1, n2), rule, b.κ > 0, ρrob > 0)
+    end
+    return max(m, n1, n2)
+end
+# the parts of the implicit count (`substeps`, and `field_report`'s cause): `m` the user's count
+# (or the least, `_least_count`), `n1` the growth rule (`g` the growth the operator sees), `n2`
+# the convergence rule of the terms out of the operator (`b` their bounds, `ρrob` the Robin part)
+function _implicit_rules(spec::GroupSpec, alg::ImplicitAlgorithm, dt::Float64, pp, fields)
     op = _operator(spec, alg)
     keys = collect(String, fields)
     g = growth(op, keys, pp)
@@ -1343,11 +1354,7 @@ function substeps(spec::GroupSpec, alg::ImplicitAlgorithm, dt::Real, pp; fields 
     n1 = ceil(Int, 2γ * dt * g)
     n2 = ceil(Int, 2γ * dt * (b.ρ + b.κ + ρrob) / (1 - b.θ))
     m = something(alg.substeps, _least_count(spec, alg, keys))
-    if alg.substeps !== nothing && max(n1, n2) > m
-        rule = n2 >= n1 ? 2 : 1
-        _warn_once(key(string("implicit-raise#", rule))) && @warn _raise_text(op, keys, alg, max(n1, n2), rule, b.κ > 0, ρrob > 0)
-    end
-    return max(m, n1, n2)
+    return (; op, keys, g, b, ρrob, γ, n1, n2, m)
 end
 # why an implicit count is above the user's (`substeps = m` is a minimum), in the manual's words
 # (the growth rule, the convergence rule of the Newton correction)

@@ -268,9 +268,13 @@ function plan(p::Program{N}, ids::Vector{Int} = collect(eachindex(p.kernels));
 end
 
 """
-The field report: one line per fusion decision with its modeled times.
+    fusion_report(io, plan::StepPlan)
+
+The fusion decisions of a step plan, one line per decision: `fuse` or `split`, the kernels, the
+candidate and the reason (the modeled fused and split times of a cost decision). Part of
+`Problems.field_report`, which prints it per field group.
 """
-function field_report(io::IO, sp::StepPlan)
+function fusion_report(io::IO, sp::StepPlan)
     for d in sp.decisions
         println(io, d.merged ? "fuse  " : "split ",
             join(d.group, "+"), " | ", d.candidate, "  ",

@@ -291,8 +291,10 @@ function _mass_matrix(fp::FieldProblem, ::Type{E}) where {E}
 end
 
 # the built-in callbacks of `fp`'s SciML problem: the clock's step index when the group reads
-# it, and the masks when a state field has one
-function _builtin_callbacks(fp::FieldProblem)
+# it, and the masks when a state field has one (`_builtin_specs`: their descriptions, which
+# `field_report` names)
+_builtin_callbacks(fp::FieldProblem) = Any[_callback(c) for c in _builtin_specs(fp)]
+function _builtin_specs(fp::FieldProblem)
     cbs = Any[]
     # (first: the masks and the clock read the inputs it writes)
     any(f -> f.role == :input, fp.program.fields) &&
@@ -306,7 +308,7 @@ function _builtin_callbacks(fp::FieldProblem)
         # each located switch of a moving mask set: a continuous callback at its root
         moving && ix isa LatticeIndex && foreach(f -> push!(cbs, MaskEvent(f)), ix.maskevents)
     end
-    return Any[_callback(c) for c in cbs]
+    return cbs
 end
 # (no allocation: the input refresh asks at every step)
 _has_masks(fp::FieldProblem) = (s = fp.program;
