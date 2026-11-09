@@ -266,3 +266,53 @@ end
 
 SII.parameter_values(p::PottsParameters) = p
 SII.parameter_values(p::PottsParameters, i::Symbol) = p[i]
+
+"""
+    Potts.field_inputs(integ) -> Dict{Symbol, Array}
+    Potts.field_inputs(prob)
+
+The current values of the inputs of the PDESystems moved into a model
+([`Potts.couple`](@ref), `@fields`, [`Potts.component`](@ref) of a `PDESystem`), at the CPM
+state of an integrator (`integ.u` at `integ.t`) or the initial state of a problem: one array
+over the lattice per input, by the name its PDESystem gives it (`lattice_input_name`, else
+the variable's name). Each array holds the values the field compiler reads for that input: a
+`Bool` input gives a `Bool` array, an integer input an array of its type, any other input an
+array of the model's scalar type. They are what `discretize(pdesys, disc; inputs =
+Potts.field_inputs(integ))` takes: the fields of `pdesys` solved by any SciML solver with the
+CPM frozen at that state. That solve matches the model's own run only while the lattice does
+not change (σ frozen): in a run the CPM moves the cells every MCS and the inputs follow them,
+while the frozen inputs do not. A model without such inputs gives an empty `Dict`.
+
+The values are computed from the CPM state at `integ.t` (`integ.u`: the lattice and cells at
+the end of the last completed MCS). They are not the arrays the field phase filled during that
+MCS: a phase after it in the schedule (divisions and the other lifecycle rules, by default)
+may have changed the lattice since.
+"""
+field_inputs(integ::CorePotts.PottsIntegrator) = _field_inputs_at(integ.f.sys, integ.u, integ.p, integ.t)
+field_inputs(prob::CorePotts.PottsProblem) = _field_inputs_at(prob.f.sys, prob.u0, prob.p, prob.tspan[1])
+
+function _field_inputs_at(info::PottsModelInfo, u, p, t)
+    c = info.csys
+    out = Dict{Symbol, Array}()
+    seen = Dict{Symbol, Any}()
+    for (name, ex, E) in get(_p(c.sys, :metadata), _FieldInputs, ())
+        if haskey(seen, name)
+            isequal(seen[name], ex) || throw(ArgumentError(string("field_inputs: two inputs are named `", name,
+                "` and read different CPM expressions (`", _builtin_text(string(seen[name])), "` and `",
+                _builtin_text(string(ex)), "`); give one of them another `lattice_input_name`")))
+            continue
+        end
+        seen[name] = ex
+        f = lock(_OBSERVED_LOCK) do
+            get!(info.cache, (:field_input, ex)) do
+                code = _with_model_scope(() -> lower(ex, _site_env(info.T, :i, c.gather_names; mcs = :t)), c)
+                _rgf(:((st, p, ctx, t) -> reshape([$code for i in 1:length(st.σ)], size(st.σ))))
+            end
+        end
+        v = f(u, p, info.ctx, t)
+        # the values the field compiler uses, converted exactly (a value the element type cannot
+        # hold is an InexactError, never a rounded or truncated value)
+        out[name] = E === Bool ? Bool.(v) : E <: Integer ? E.(v) : info.T.(v)
+    end
+    return out
+end

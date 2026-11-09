@@ -35,8 +35,11 @@ its own system. Any other scope, or a `PottsSystem` that has not been through
 """
 function ode_system(c::CompiledPottsSystem, scope::Symbol)
     scope in (:cell, :model) || throw(ArgumentError(
-        "ode_system: the scope is `:cell` or `:model`; got `:$scope` (field equations are " *
-        "stepped by Potts on the lattice and are not an ODE system)"))
+        "ode_system: the scope is `:cell` or `:model`; got `:$scope`" * (scope === :field ?
+        " (field equations are stepped by Potts on the lattice and are not an ODE system; their PDESystem is " *
+        "`Potts.fields(csys)`, or the one given to `Potts.couple`: `discretize(pdesys, disc; inputs = " *
+        "Potts.field_inputs(integ))` solves it with a SciML solver at the CPM state of `integ`)" :
+        " (field equations are stepped by Potts on the lattice and are not an ODE system)")))
     return get(c.ode_systems, scope, nothing)
 end
 ode_system(sys::PottsSystem, ::Symbol) = throw(ArgumentError(

@@ -11,7 +11,7 @@ const SECTIONS = (Symbol("@structural_parameters"), Symbol("@kinds"), Symbol("@p
     Symbol("@before_mcs"), Symbol("@equations"), Symbol("@divide"), Symbol("@sweep"),
     Symbol("@relationship"), Symbol("@link"), Symbol("@unlink"), Symbol("@observed"),
     Symbol("@extend"), Symbol("@components"), Symbol("@boundary"), Symbol("@schedule"),
-    Symbol("@initialization_equations"), Symbol("@convert"), Symbol("@bcs"))
+    Symbol("@initialization_equations"), Symbol("@convert"), Symbol("@bcs"), Symbol("@fields"))
 
 """
     @potts_model Name begin
@@ -212,6 +212,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         end
     end
     _warn_coordinate_globals(name, body, parts)
+    _check_fields_placement(body)
     kws = Any[Expr(:kw, :name, QuoteNode(name))]
     for (k, v) in parts.structural
         k in parts.params && throw(ArgumentError("`$k` is both a structural parameter and a parameter"))
@@ -220,6 +221,9 @@ function _potts_model(name::Symbol, body::Expr, mod)
     for k in parts.params
         push!(kws, Expr(:kw, k, :nothing))        # `Model(; λ = 2.0)` overrides the default
     end
+    # the parameters of `@fields` PDESystems are keywords too (`Model(; Dc = 1.0)`); their names
+    # are known only when the constructor runs
+    _has_section(body, Symbol("@fields")) && push!(kws, Expr(:..., :__fields_kw))
     P = :(Potts)
     # `@boundary`/`@schedule` state only in models that use them (anywhere, conditionals
     # included): a model without them builds exactly as before (first-construction latency)
@@ -229,7 +233,9 @@ function _potts_model(name::Symbol, body::Expr, mod)
     # likewise `@convert` (R8, D-233)
     convs = _has_section(body, Symbol("@convert"))
     # likewise `@bcs` (raw MTK boundary conditions: stored and printed; the field compiler classifies them)
-    bcs = _has_section(body, Symbol("@bcs"))
+    # likewise `@fields` (F4-B2: a plain PDESystem's fields, its conditions joining `@bcs`)
+    coupled = _has_section(body, Symbol("@fields"))
+    bcs = _has_section(body, Symbol("@bcs")) || coupled
     preamble = quote
         # each parameter keyword, kept before `@extend` may rebind its name (D-114)
         $([:($(_kw_local(k)) = $k) for k in parts.params]...)
@@ -264,6 +270,8 @@ function _potts_model(name::Symbol, body::Expr, mod)
         $(inits ? :(__init_eqs = $P.Equation[]) : nothing)
         $(convs ? :(__converts = $P.ConvertSpec[]) : nothing)
         $(bcs ? :(__bcs = $P.Equation[]) : nothing)
+        $(coupled ? :(__field_inputs = Any[]; __field_values = Dict{Symbol, Any}(pairs(__fields_kw));
+                      __fields_brought = Dict{Symbol, String}()) : nothing)
         __bases = $P.PottsSystem[]
         __sources = IdDict{Any, LineNumberNode}()
         __components = Any[]
@@ -281,7 +289,8 @@ function _potts_model(name::Symbol, body::Expr, mod)
         $((inits ? (Expr(:kw, :initialization_eqs, :__init_eqs),) : ())...),
         $((convs ? (Expr(:kw, :converts, :__converts),) : ())...),
         $((bcs ? (Expr(:kw, :bcs, :__bcs),) : ())...),
-        structural = $structural, metadata = $P._built_metadata(__features)))
+        structural = $structural, metadata = $(coupled ? :($P._with_field_inputs($P._built_metadata(__features), __field_inputs)) :
+                                               :($P._built_metadata(__features)))))
     targets = :(Dict{Symbol, String}($([:($(QuoteNode(k)) => $v) for (k, v) in _prime_targets(parts, body)]...)))
     return quote
         Base.@__doc__ function $name(; $(kws...))
@@ -301,10 +310,37 @@ function _potts_model(name::Symbol, body::Expr, mod)
             end) : nothing)
             __lattice === nothing && throw(ArgumentError($("model $name has no @lattice")))
             __sweep === nothing && throw(ArgumentError($("model $name has no @sweep")))
+            $(coupled ? :($P._fields_keywords_left(name, __field_values);
+                          $P._check_fields_names(__params, __vars, __fields_brought)) : nothing)
             $(extends ? :(foldl((s, b) -> $P.extend(s, b; name), __bases; init = $finish)) : finish)
           end
         end
     end
+end
+
+# `@fields` at expansion: its bindings read kind names, so it comes after `@kinds`; a name it
+# binds (`@fields c = pdesys`) is a local of the constructor from its line on, so a statement
+# before that line that reads it would meet an unassigned local (an UndefVarError)
+const _DECLARING = (Symbol("@structural_parameters"), Symbol("@kinds"), Symbol("@parameters"), Symbol("@variables"),
+    Symbol("@extend"), Symbol("@relations"), Symbol("@observed"), Symbol("@components"), Symbol("@relationship"),
+    Symbol("@fields"), Symbol("@lattice"))
+function _check_fields_placement(body::Expr)
+    args = body.args
+    for (i, ex) in enumerate(args)
+        _is_section(ex) && ex.args[1] === Symbol("@fields") || continue
+        any(e -> _is_section(e) && e.args[1] === Symbol("@kinds"), args[(i + 1):end]) && throw(ArgumentError(
+            "@fields: write `@fields` after `@kinds` (its bindings read the kind names, `kind == A`)"))
+        a = filter(x -> !(x isa LineNumberNode), ex.args[3:end])
+        isempty(a) && continue
+        lhs = a[1] isa Expr && a[1].head === :(=) ? a[1].args[1] : nothing
+        names = lhs isa Symbol ? Any[lhs] : lhs isa Expr && lhs.head === :tuple ? lhs.args : Any[]
+        for n in names, e in args[1:(i - 1)]
+            n isa Symbol && !(_is_section(e) && e.args[1] in _DECLARING) && _reads_free(e, n) || continue
+            throw(ArgumentError("`$n` is read on a line before `@fields $n = …`, which binds it on a later line; " *
+                                "move the `@fields` line above the first use of `$n`"))
+        end
+    end
+    return nothing
 end
 
 # `x′` is bound only for a site or field variable `x` (the value at the other site of a
@@ -759,6 +795,46 @@ function _section!(parts, sec, args, ln = nothing)
             _lines_ln(args, ln))
     elseif sec === Symbol("@initialization_equations")
         foreach(((l, lln),) -> push!(code, _located_push(:__init_eqs, _rewrite_eq(l), lln)), _lines_ln(args, ln))
+    elseif sec === Symbol("@fields")
+        # `@fields c, u = pdesys (endo => kind == A, vol => volume[owner])` (F4-B2): the
+        # PDESystem's fields, parameters, equations and conditions join the model here, under
+        # their own names (as `Potts.couple`), each binding an input of it to a CPM expression;
+        # the names before `=` are bound to those fields for the statements after this line.
+        # The names and the bindings are optional.
+        usage = "@fields takes optional field names, a PDESystem and its input bindings: " *
+                "`@fields c = pdesys (inner => kind == A, vol => volume[owner])`"
+        (length(args) in (1, 2) && !(args[1] isa Expr && args[1].head === :tuple)) || throw(ArgumentError(usage))
+        sysex, names = args[1], Symbol[]
+        if sysex isa Expr && sysex.head === :(=)
+            lhs, sysex = sysex.args[1], sysex.args[2]
+            ls = lhs isa Expr && lhs.head === :tuple ? lhs.args : Any[lhs]
+            all(n -> n isa Symbol, ls) || throw(ArgumentError("@fields: the names before `=` are field names, " *
+                                                               "`@fields c, u = pdesys (…)`; got `$lhs`"))
+            for n in ls
+                n in names && throw(ArgumentError("@fields: the field `$n` is listed twice"))
+                push!(names, n)
+            end
+        end
+        sysex isa Expr && sysex.head === :(=) && throw(ArgumentError(usage))
+        bs = length(args) == 1 ? Any[] : args[2] isa Expr && args[2].head === :tuple ? args[2].args : Any[args[2]]
+        pairs = map(bs) do b
+            b isa Expr && b.head === :call && b.args[1] === :(=>) && length(b.args) == 3 || throw(ArgumentError(
+                "@fields $(sysex): `$b` is not a binding; write `input => expression`, e.g. `inner => kind == A`"))
+            :($(b.args[2]) => $(rewrite(b.args[3])))
+        end
+        foreach(n -> _declare!(parts, n, "field"), names)
+        # a bound name is a local of the constructor: inside this line it still means the global
+        glob(ex) = foldl((e, n) -> _globalize(e, n, parts.mod), names; init = ex)
+        fs = gensym(:fields_sys)
+        fc = gensym(:fields_content)
+        push!(code, :($fs = $(glob(sysex))),
+            :($fc = $P._fields_content(name, __lattice, __kinds, __bases, __params, __vars, $fs, Any[$(map(glob, pairs)...)],
+                __field_values)),
+            :(foreach(x -> __fields_brought[$P.info(x).name] = string("the PDESystem `", nameof($fs), "`"),
+                [$fc.parameters; $fc.variables])),
+            :(append!(__vars, $fc.variables)), :(append!(__params, $fc.parameters)),
+            :(append!(__equations, $fc.equations)), :(append!(__bcs, $fc.bcs)), :(append!(__field_inputs, $fc.inputs)),
+            [:($n = $P._fields_name($fc, $(QuoteNode(n)), $fs)) for n in names]...)
     elseif sec === Symbol("@bcs")
         foreach(((l, lln),) -> push!(code, _located_push(:__bcs, _bcs_calls(_rewrite_eq(l)), lln)), _lines_ln(args, ln))
     elseif sec === Symbol("@divide")

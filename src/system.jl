@@ -191,6 +191,46 @@ or site variable of the model reads that variable.
 component(name::Symbol, pdesys::ModelingToolkitBase.PDESystem, model::PottsSystem) =
     wrap(name, ModelingToolkitBase.System(Equation[], _unwrap(t); name), pdesys, _component_part(model))
 
+"""
+    Potts.couple(model::PottsSystem, pdesys::PDESystem; inputs = []) -> PottsSystem
+
+`model` with the fields of the plain `PDESystem` `pdesys`, under their own names: each
+dependent variable `c` becomes the field `c` of the model, each parameter `k` the parameter
+`k` (with its value), and each equation and condition joins the model's fields, as in
+[`Potts.component`](@ref) but without a namespace. The fields then run in the model's MCS loop
+with its `field_solver`, are read as `sol[:c]`, take `FieldGroups(:c => …)` pairs and the
+operating point `:c => values`, and a model that extends the result reads them by name
+(`@extend c = base = …`, then `@drive … c[target]`).
+
+`inputs` binds each input of `pdesys` (a dependent variable declared `[input = true]`) to a
+CPM expression at a site: `inputs = [endo => Potts.kind == Potts.lookup(model, :A), vol =>
+Potts.at(Potts.B.volume, Potts.B.owner)]`. A kind is compared by its number
+(`Potts.lookup(model, :A)` gives it): `Potts.kind == :A` is Julia's constant `false`, and a
+binding to a constant truth value is an `ArgumentError` saying so. The field compiler fills each one per site every MCS, as it fills the CPM
+reads of a field equation, so `pdesys` itself holds only plain input fields (0/1 or numbers),
+never a Potts quantity. A key is the input variable (`endo` or `endo(t, x, y)`) or its name. A
+`Bool` input (`endo(..)::Bool`) takes a truth value. An input left unbound is filled by its
+`lattice_input_name` (or its name), as in [`Potts.component`](@ref): `kind`, `owner`,
+`position`, `site`, `mcs`, `time`, or a field or site variable of the model.
+
+The spatial domain of `pdesys` is the lattice's, in the model's length unit (axis `d` spans
+`[0, dims[d] · spacing[d]]`). Its time interval is not read (the problem's `tspan` is). A name
+`model` already has is an `ArgumentError`; compose it as a component to namespace it.
+`pdesys` stays a plain MTK system: [`Potts.field_inputs`](@ref) gives the current values of
+its inputs, so `discretize(pdesys, disc; inputs = Potts.field_inputs(integ))` solves the fields
+with any SciML solver at the CPM state of an integrator. Inside `@potts_model`, write
+`@fields c = pdesys (endo => kind == A, …)`: the fields join the model at that line, and the
+names before `=` (`c`, or a list `c, u`) are bound to them for the statements after it
+(`@drive Chemotaxis(c; …)`). Without names (`@fields pdesys (…)`) the fields join the model
+and are reached by name (`sol[:c]`) only.
+"""
+function couple(model::PottsSystem, pdesys::ModelingToolkitBase.PDESystem; inputs = ())
+    what = "Potts.couple"
+    base = _lower_inner(model, what)
+    part = _with_pde(base, getfield(base, :part), pdesys, nothing, what; inputs = collect(Any, inputs))
+    return _wrap_payload(nameof(model), nothing, part)
+end
+
 # the payload of a component of `model`: its kinds, lattice and sweep, and nothing else
 _component_part(model::PottsSystem) =
     PottsPart(; kinds = copy(_p(model, :kinds)), lattice = _p(model, :lattice), sweep = _p(model, :sweep))
