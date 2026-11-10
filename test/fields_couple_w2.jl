@@ -205,3 +205,11 @@ end
     @test occursin("gives the domain `zz ∈ 0.0 .. 1.0`, but `zz` is not one of its independent variables (t, x, y)", e) ||
           (println(e); false)
 end
+
+# --- E11: `sol[:u]` of an array field ------------------------------------------------------------
+@testset "F4-E11 review: sol[:u] of an array field names its components" begin
+    sol = solve(PottsProblem(CeFiCompB(; name = :m), ce_op((12, 10)), (0, 1); field_solver = BackwardEuler()), SequentialCPM())
+    @test sol[:u_1][end] isa AbstractArray
+    e = cp_msg(() -> sol[:u])
+    @test occursin("`u` is a vector quantity of m: read its components (:u_1, :u_2)", e) || (println(e); false)
+end

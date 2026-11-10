@@ -172,8 +172,12 @@ function SII.parameter_index(sys::PottsModelInfo, x)
     return i isa Integer ? info(_p(sys.csys.sys, :parameters)[i]).name : i
 end
 # a list setter (`setp(integ, [:k2, …])`, `setsym`) names a computed parameter with its route
-CorePotts.readonly_message(sys::PottsModelInfo, x) =
-    (ci = _computed_info(sys, x); ci === nothing ? nothing : _computed_message(_p(sys.csys.sys, :parameters), ci))
+function CorePotts.readonly_message(sys::PottsModelInfo, x)
+    x isa Symbol && !isempty(_vector_components(sys.csys.sys, _localize(sys.csys.sys, x))) &&
+        return _vector_message(sys.csys.sys, _localize(sys.csys.sys, x))
+    ci = _computed_info(sys, x)
+    return ci === nothing ? nothing : _computed_message(_p(sys.csys.sys, :parameters), ci)
+end
 SII.parameter_symbols(sys::PottsModelInfo) = filter(x -> !_is_symbolic(info(x).default), _p(sys.csys.sys, :parameters))
 # a computed parameter reads as observed from the parameter object (`getp`, `integ.ps[k2]`, `sol.ps[k2]`)
 function SII.parameter_observed(sys::PottsModelInfo, x)
@@ -214,14 +218,24 @@ function _named_quantity(sys::PottsModelInfo, x::Symbol)
     end
     return x in BUILTIN_NAMES ? getfield(B, x) : nothing
 end
+# a vector name (`u` of `@variables u(field)[1:2]`, an array field of a PDESystem) is observed
+# only so that `sol[:u]` reaches `SII.observed`, which names its components
 SII.is_observed(sys::PottsModelInfo, x::Symbol) = !SII.is_parameter(sys, x) && !SII.is_variable(sys, x) &&
                                                   (_named_quantity(sys, _localize(sys.csys.sys, x)) !== nothing ||
-                                                   _computed_info(sys, x) !== nothing)
+                                                   _computed_info(sys, x) !== nothing ||
+                                                   !isempty(_vector_components(sys.csys.sys, _localize(sys.csys.sys, x))))
 function SII.observed(sys::PottsModelInfo, x::Symbol)
     ci = _computed_info(sys, x)
     ci === nothing || (n = ci.name; return (u, p, t) -> getproperty(p, n))
-    return _observed_function(sys, _named_quantity(sys, _localize(sys.csys.sys, x)))
+    q = _named_quantity(sys, _localize(sys.csys.sys, x))
+    q === nothing && throw(ArgumentError(_vector_message(sys.csys.sys, _localize(sys.csys.sys, x))))
+    return _observed_function(sys, q)
 end
+# the component names of the vector quantity `x` of model `m` (`[:u_1, :u_2]`), or none
+_vector_components(m, x) = Symbol[info(v).name for v in Iterators.flatten((_p(m, :parameters), _p(m, :variables)))
+                                  if get(info(v).options, :vector, nothing) === x]
+_vector_message(m, x) = "`$x` is a vector quantity of $(nameof(m)): read its components " *
+                        "($(join((":" * string(n) for n in _vector_components(m, x)), ", ")))"
 
 """
     observe(prob_or_sol, x[, u])
