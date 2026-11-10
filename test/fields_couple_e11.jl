@@ -257,3 +257,48 @@ end
         @test Array(u.σ) == ce_mask_sigma() && Array(u.site.c) == 7.0 .* (ce_mask_sigma() .== 1)
     end
 end
+
+# --- E14: a face condition on a field with no spatial operator ---------------------------------
+# A face sets the ghost values of a spatial operator; on `D(c) ~ 0.1 - 0.01c` it would do
+# nothing. `@boundary` refused it (BSFaceNoLap); a condition (`@bcs`, a PDESystem's) built.
+module CeFace
+using Potts: Potts
+using Potts.Fields
+@variables c(..) = 0.0
+const C = c(t, x, y)
+nolap() = pdesystem([Differential(t)(C) ~ 0.1 - 0.01 * C], [c(t, 0, y) ~ 1.0]; name = :nolap)
+lap() = pdesystem([Differential(t)(C) ~ 0.1 * Δ(C) + 0.1 - 0.01 * C], [c(t, 0, y) ~ 1.0]; name = :lap)
+end
+@potts_model CeFaceB begin
+    @kinds medium A
+    @lattice Lattice((8, 6); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @fields CeFace.nolap()
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model CeFaceLapB begin
+    @kinds medium A
+    @lattice Lattice((8, 6); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @fields CeFace.lap()
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model CeFaceBcsA begin
+    @kinds medium A
+    @variables c(field) = 0.0
+    @lattice Lattice((8, 6); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ 0.1 - 0.01 * c
+    @bcs c(t, 0, y) ~ 1.0
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "F4-E14: a face condition on a field with no spatial operator is refused" begin
+    op = [ownership => zeros(Int32, 8, 6), kind => Symbol[]]
+    e = cp_msg(() -> PottsProblem(CeFaceB(; name = :f), op, (0, 1)))
+    @test occursin("the PDESystem `nolap`", e) && occursin("has no `Δ(c)`", e) && occursin("would do nothing", e) ||
+          (println(e); false)
+    e = cp_msg(() -> PottsProblem(CeFaceBcsA(; name = :f), op, (0, 1)))
+    @test occursin("@bcs:", e) && occursin("has no `Δ(c)`", e) || (println(e); false)
+    @test PottsProblem(CeFaceLapB(; name = :f), op, (0, 1)) isa PottsProblem          # control: with `Δ(c)`
+end

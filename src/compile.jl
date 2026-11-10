@@ -758,17 +758,12 @@ function _check_boundaries(sys::PottsSystem, fields, rn)
                 lat.periodic[b.axis] && throw(ArgumentError(
                     "@boundary $n: axis `$ax` is periodic; a face condition needs a closed axis (`Closed()` on axis $(b.axis))"))
                 (n, b.axis) in seen && throw(ArgumentError("@boundary $n: axis `$ax` is given twice"))
-                rate = last(fields[findfirst(f -> info(first(f)).name === n, fields)])
-                # any spatial operator of the field sets ghost values (`Δ`, `DivKGrad`, `Advect`, a raw
-                # flux `Differential(x)(K * Differential(x)(c))`; F2 design §2.11)
-                lap = Ref(false)
-                isop(y) = iscall(y) && _spatial_op(operation(y)) && (o = _unwrap(arguments(y)[end]);
-                                                                     info(o) !== nothing && info(o).name === n)
-                _walk_all(y -> isop(y) && (lap[] = true), rate)
-                lap[] || throw(ArgumentError(
+                # another field's operator on `n` (`D(u) ~ Δ(n)`) reads the ghosts of `n` too
+                any(f -> _has_spatial_op(last(f), n), fields) || throw(ArgumentError(
                     "@boundary $n: a face condition (`$ax => …`) sets the ghost values of a spatial operator of `$n`, " *
                     "but the equation `D($n) ~ …` has no `Δ($n)` nor another spatial operator of `$n` " *
-                    "(`DivKGrad(…)(K, $n)`, `Advect(…)(u, $n)`, a raw flux `Differential(x)(K * Differential(x)($n))`); " *
+                    "(`DivKGrad(…)(K, $n)`, `Advect(…)(u, $n)`, a raw flux `Differential(x)(K * Differential(x)($n))`), " *
+                    "and no other field's equation has one; " *
                     "drop the face entry, or use a site mask `sites(…) => Dirichlet(v)`"))
                 push!(seen, (n, b.axis))
             end

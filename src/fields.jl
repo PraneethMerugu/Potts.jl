@@ -81,6 +81,18 @@ _field_bounds(sys, name) = (x = only(x for x in _p(sys, :variables) if info(x) !
 _field_op(f) = LatticePDE.lowers_call(f)
 # LatticePDE's spatial operators, passed through to the PDESystem (F2 design §2.11)
 _spatial_op(f) = f === Δ || f isa LatticePDE.DivKGrad || f isa LatticePDE.Advect || f isa Differential
+# whether `rate` applies a spatial operator to the field `n` (`Δ`, `DivKGrad`, `Advect`, a raw
+# flux `Differential(x)(K * Differential(x)(c))`; F2 design §2.11): the operators whose ghost
+# values a face condition sets
+function _has_spatial_op(rate, n::Symbol)
+    found = Ref(false)
+    _walk_all(rate) do y
+        iscall(y) && _spatial_op(operation(y)) || return
+        o = _unwrap(arguments(y)[end])
+        info(o) !== nothing && info(o).name === n && (found[] = true)
+    end
+    return found[]
+end
 
 """
 The CPM inputs of a model's fields: `(name, expr, eltype)` per filled input, in the canonical
@@ -482,6 +494,17 @@ function _bcs_equation(sys, b, names, cv, core, ext, kinds, N, stepped)
                 "from `@boundary` and write the other side as a `@bcs` condition at `$ax = $(side < 0 ? _extent_text(ext[d]) : "0")`; " *
                 "a face with no condition is zero flux)"))
         end
+    end
+    # a face condition sets the ghost values of a spatial operator of `n`: with none in any
+    # field's equation (`D(u) ~ Δ(n)` reads the ghosts of `n` too) it would do nothing (F4-E14;
+    # the `@boundary` refusal, `_check_boundaries`)
+    if !periodic && !masked && !isempty(axes)
+        any(f -> _has_spatial_op(f[2], n), _field_equations(sys)) || throw(ArgumentError(
+            "@bcs: the condition $text sets a face of `$n`, which sets the ghost values of a spatial operator of `$n`, " *
+            "but the equation of `$n` has no `Δ($n)` nor another spatial operator of `$n` (`DivKGrad(…)(K, $n)`, " *
+            "`Advect(…)(u, $n)`, a raw flux `Differential(x)(K * Differential(x)($n))`), and no other field's " *
+            "equation has one; the condition would do nothing: drop it, or hold sites with a masked condition " *
+            "`$n ~ masked(pred, v)`"))
     end
     if masked
         for e in _p(sys, :boundaries)
