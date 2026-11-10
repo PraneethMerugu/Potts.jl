@@ -499,6 +499,18 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         _reads(d, allops) && _dverr("the initial value of `$k` in `initial_conditions` reads a field")
         initial[k] = something(_cval(d), d)
     end
+    # a field's default (`@variables c(..) = v`) is its initial value where no condition
+    # `c(0, …) ~ v` and no `initial_conditions` entry gives one; a condition wins, as in the
+    # coupling into a model (F4-E3). An aux field has no initial value, so its default is unused.
+    for (op, v) in dvs
+        (isin[op] || ncomp(v) != 0 || haskey(initial, key(op, 0))) && continue
+        haskey(eqs, key(op, 0)) && eqs[key(op, 0)][1] in (:rate, :map) || continue
+        d = ModelingToolkitBase.hasdefault(v) ? ModelingToolkitBase.getdefault(v) : nothing
+        d === nothing && continue
+        _reads(d, allops) && _dverr("the default of `$(key(op, 0))` reads a field; give its initial value as a condition " *
+                                    "`$(key(op, 0))(0, …) ~ v`")
+        initial[key(op, 0)] = something(_cval(d), d)
+    end
     for b in bcs
         b.kind in (:dirichlet, :neumann, :robin) || continue
         periodic[b.axis] && _dverr("`$(b.eq)` sets a face of axis $(b.axis), which a periodic pair makes periodic")

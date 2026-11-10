@@ -1481,14 +1481,17 @@ function _initial(cf::CompiledField{N}, sys::PDESystem, state, ::Type{T}) where 
     ivs = unwrap.(sys.ivs)
     vals = Dict{Any, Any}(p => d for (p, d) in zip(cf.params, cf.defaults) if !isnan(d))
     vals[ivs[1]] = ends[1][1]
-    out = T[]
+    # a Dual initial value (a condition's or a default's) promotes the state, as a Dual `u0` does
+    E = foldl((S, k) -> haskey(cf.initial, k) && cf.initial[k] isa Real ? promote_dual(S, typeof(cf.initial[k])) : S,
+              state; init = T)
+    out = E[]
     for k in state
         haskey(cf.initial, k) || _dverr("field `$k` has no initial condition `$k(0, …) ~ value`")
         # (a `Coarse` field at its nodes' centers, F3-16)
         dims = Int.(leveldims(cf.program, cf.program.fields[fieldid(cf.program, k)].levels[1]))
         v = cf.initial[k]
         if v isa Number
-            append!(out, fill(T(v), prod(dims)))
+            append!(out, fill(E(v), prod(dims)))
             continue
         end
         e = substitute(v, vals; fold = Val(true))
