@@ -1,0 +1,39 @@
+# F4-E4 (research/field-compiler/f4/F4-ergonomics.md item 1, user ruling 2026-11-10): the opt-in
+# vocabulary `using Potts.Fields`. Checks: `using Potts, Potts.Fields` leaves no name
+# ambiguous; every exported name is the binding of its source (MTKBase, LatticePDE, Potts); a
+# name it shares with LatticePDE, ModelingToolkitBase, SciMLBase or the OrdinaryDiffEq solver
+# packages of this environment is the same binding; `using Potts` alone brings in no `t`, `x`,
+# `y`, `z`. Negative control at the base 4ca38af7: `Potts.Fields` does not exist (~/lpwork/f4E/nc-e4e7.log).
+using OrdinaryDiffEqTsit5: OrdinaryDiffEqTsit5
+using OrdinaryDiffEqRosenbrock: OrdinaryDiffEqRosenbrock
+
+fv_exports() = [n for n in names(Potts.Fields) if n !== :Fields]
+fv_ambiguous(mods...) = (m = Module(); foreach(p -> Core.eval(m, Expr(:using, Expr(:., p...))), mods);
+    [n for n in fv_exports() if (try; Core.eval(m, n); false; catch e; e isa UndefVarError; end)])
+
+@testset "F4-E4: using Potts.Fields" begin
+    ex = fv_exports()
+    @test issetequal(ex, [:PDESystem, :Differential, Symbol("@variables"), Symbol("@parameters"), :Interval, :Δ, :DivKGrad,
+        :Advect, :Upwind1, :at, :at2, :ismember, :masked, :step_index, :lattice_domain, :t, :x, :y, :z])
+    # no ambiguity with Potts, and with LatticePDE as well
+    @test isempty(fv_ambiguous([:Potts], [:Potts, :Fields])) || (println(fv_ambiguous([:Potts], [:Potts, :Fields])); false)
+    @test isempty(fv_ambiguous([:Potts], [:Potts, :Fields], [:Potts, :LatticePDE]))
+    # the bindings of their sources
+    MB, LP = Potts.ModelingToolkitBase, Potts.LatticePDE
+    @test Potts.Fields.t === Potts.t && isequal(Potts.Fields.t, MB.t_nounits)
+    @test all(n -> getfield(Potts.Fields, n) === getfield(Potts.FIELD_NAMES, n), (:x, :y, :z))
+    @test Potts.Fields.PDESystem === MB.PDESystem && Potts.Fields.Differential === MB.Differential
+    @test all(n -> getfield(Potts.Fields, n) === getfield(LP, n),
+        (:Interval, :Δ, :DivKGrad, :Advect, :Upwind1, :at, :at2, :ismember, :masked, :step_index, :lattice_domain))
+    # the names clash check: a name another package exports is the same binding (MTKBase exports
+    # no `t`; ModelingToolkit's units `t` is the documented exception, checked in
+    # ~/lpwork/f4E/e4-mtk.log, as ModelingToolkit and OrdinaryDiffEq are not in this environment)
+    for M in (LP, MB, Potts.SciMLBase, OrdinaryDiffEqTsit5, OrdinaryDiffEqRosenbrock, Potts)
+        clash = [n for n in ex if Base.isexported(M, n) && isdefined(M, n) && getfield(M, n) !== getfield(Potts.Fields, n)]
+        @test isempty(clash) || (println(M, ": ", clash); false)
+    end
+    # opt-in: `using Potts` alone has no `t`, `x`, `y`, `z`
+    m = Module()
+    Core.eval(m, :(using Potts))
+    @test !any(n -> (try; Core.eval(m, n); true; catch; false; end), (:t, :x, :y, :z))
+end
