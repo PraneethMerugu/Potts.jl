@@ -302,3 +302,37 @@ end
     @test occursin("@bcs:", e) && occursin("has no `Δ(c)`", e) || (println(e); false)
     @test PottsProblem(CeFaceLapB(; name = :f), op, (0, 1)) isa PottsProblem          # control: with `Δ(c)`
 end
+
+# --- E15: a fingerprint that depends on the session -----------------------------------------
+# A neighbourhood with an anonymous weight printed its compiler-generated type name
+# (`Main.var"#24#25"`) into the fingerprint seed; the number depends on what was defined before
+# it in the session (the B4t pad tests: CsWComp and CsWSurf in cell_sums_models.jl). Two
+# closures with the same body have two such names: the fingerprints must agree.
+const CE_W1 = Potts.CorePotts.Weighted(Moore(1), o -> 1 / sqrt(sum(abs2, o)))
+const CE_W2 = Potts.CorePotts.Weighted(Moore(1), o -> 1 / sqrt(sum(abs2, o)))
+for (nm, w) in ((:CeW1, :CE_W1), (:CeW2, :CE_W2))
+    @eval @potts_model $nm begin
+        @kinds medium A
+        @lattice Lattice((20, 20); boundary = Periodic(), neighborhood = $w)
+        @energy cells => (volume - 16.0)^2
+        @sweep Metropolis(; temperature = 10.0)
+    end
+end
+
+@testset "F4-E15: a neighbourhood's anonymous weight does not enter the fingerprint by name" begin
+    @test typeof(CE_W1.weight) != typeof(CE_W2.weight)
+    op = (σ = zeros(Int32, 20, 20); σ[3:6, 3:6] .= 1; [ownership => σ, kind => [:A]])
+    f1, f2 = (PottsProblem(M(; name = :w), op, (0, 1)).f.fingerprint for M in (CeW1, CeW2))
+    @test f1 == f2
+    # the resolved weights do enter it: another weight gives another fingerprint
+    W3 = Potts.CorePotts.Weighted(Moore(1), o -> 2 / sqrt(sum(abs2, o)))
+    @eval @potts_model CeW3 begin
+        @kinds medium A
+        @lattice Lattice((20, 20); boundary = Periodic(), neighborhood = $W3)
+        @energy cells => (volume - 16.0)^2
+        @sweep Metropolis(; temperature = 10.0)
+    end
+    @test Base.invokelatest(() -> PottsProblem(CeW3(; name = :w), op, (0, 1)).f.fingerprint) != f1
+    # a neighbourhood without a closure keeps its printed form (and so its fingerprint)
+    @test !occursin("resolved(", Potts._fingerprint_seed(CpHost(; name = :m), Float64))
+end

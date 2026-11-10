@@ -475,8 +475,20 @@ end
 # domain, geometry), spacing, neighbourhood and scalar type by content. Hashing the objects
 # would fall back to `objectid` for package structs and tie the fingerprint to the build.
 _fingerprint_seed(sys::PottsSystem, T) = string("lattice=", _canonical_value(core_lattice(_p(sys, :lattice))),
-    ";spacing=", _canonical_value(_p(sys, :lattice).spacing), ";neighborhood=", _canonical_value(_p(sys, :lattice).neighborhood),
+    ";spacing=", _canonical_value(_p(sys, :lattice).spacing), ";neighborhood=", _canonical_neighborhood(sys),
     ";T=", string(T))
+# The neighbourhood by content. A neighbourhood that holds a compiler-generated name (an
+# anonymous weight, `Weighted(Moore(1), o -> 1 / norm(o))`) printed as `var"#24#25"`, a number
+# that depends on what was defined before it in the session (F4-E15), so it is written by its
+# offsets and weights on the lattice instead. Every other neighbourhood keeps its printed form,
+# and so its fingerprint.
+function _canonical_neighborhood(sys::PottsSystem)
+    nb = _p(sys, :lattice).neighborhood
+    s = _canonical_value(nb)
+    occursin("var\"#", s) || return s
+    r = CorePotts.relation(nb, core_lattice(_p(sys, :lattice)))
+    return string("resolved(", r.offsets, ";", r.weights, ")")
+end
 
 # `remake(prob; field_solver | ode_solver | solvers = …)`: the problem's code rebuilt through
 # the codegen point with the named keywords replaced and the others kept, and `u0` re-laid
