@@ -194,6 +194,12 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
     for (u, op) in fields
         v = haskey(ic, u) ? ic[u] : haskey(ic, op) ? ic[op] : haskey(start, op) ? start[op] :
             M.hasdefault(u) ? M.getdefault(u) : nothing
+        if SymbolicUtils.symtype(u) <: AbstractArray
+            # an array field `u(..)[1:n]` (F4-E11): its components `u_1, …, u_n`, as `@variables
+            # u(field)[1:n]` declares them; `u[i]` reads component `i`
+            _pde_components!(variables, fmap, u, op, v, m, fresh, what, pname)
+            continue
+        end
         if v !== nothing
             v = _pde_term(v, m)
             for w in (symbolic(v) ? Symbolics.get_variables(v) : ())
@@ -221,6 +227,33 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
     mf = (; m..., face = true)
     bcs = Equation[Symbolics.wrap(_pde_term(b.lhs, mf)) ~ Symbolics.wrap(_pde_term(b.rhs, mf)) for b in conds]
     return (; variables, parameters = Any[Symbolics.wrap(pmap[u]) for u in raw], equations, bcs, inputs = filled)
+end
+
+# The components of the array field `u` (operation `op`) of a PDESystem as model fields (F4-E11):
+# `vector_variable(name, 1:n, :field)`, the components `name_i` that `@variables name(field)[1:n]`
+# declares, with the field's default (one value for every component, or one per component)
+function _pde_components!(variables, fmap, u, op, v, m, fresh, what, pname)
+    M = ModelingToolkitBase
+    sz = size(u)
+    length(sz) == 1 || throw(ArgumentError(string(what, ": the array field `", u, "` of ", pname, " has the shape ", sz,
+        "; a field with components is a vector, `", nameof(op), "(..)[1:n]`")))
+    n = sz[1]
+    if v !== nothing
+        v = v isa AbstractArray ? collect(v) : v
+        v = v isa AbstractArray ? map(w -> _unwrap_number(_pde_term(w, m)), v) : _unwrap_number(_pde_term(v, m))
+        all(w -> w isa Real, v isa AbstractArray ? v : (v,)) || throw(ArgumentError(string(what, ": the initial value of the ",
+            "array field `", u, "` of ", pname, " is `", v, "`; give numbers (one for every component, or one per component)")))
+    end
+    opts = Pair{Symbol, Any}[]
+    for (k, key) in ((:lattice_storage, LatticePDE.LatticeStorage), (:bounds, M.VariableBounds), (:lattice_level, LatticePDE.LatticeLevel))
+        w = _dv_meta(u, op, key)
+        w === nothing || push!(opts, k => w)
+    end
+    name = fresh(nameof(op), "the field")
+    vv = v === nothing ? vector_variable(name, 1:n, :field; opts...) : vector_variable(name, 1:n, :field; default = v, opts...)
+    fmap[op] = Any[_unwrap(c) for c in vv.components]
+    append!(variables, vv.components)
+    return nothing
 end
 
 # the name an input of a PDESystem goes by: its `lattice_input_name`, else its own name (the
@@ -400,6 +433,14 @@ function _pde_term(x, m)
     iscall(u) || throw(ArgumentError(string(m.what, " reads `", u, "`, which is not one of its dependent variables, ",
         "parameters or independent variables")))
     f, a = operation(u), arguments(u)
+    # `u[i]` of an array field (F4-E11): component `i`, at its site or a face
+    if f === getindex && length(a) == 2 && iscall(_unwrap(a[1])) && (g = operation(_unwrap(a[1])); haskey(m.fmap, g)) &&
+       m.fmap[g] isa AbstractVector
+        i = _unwrap_number(a[2])
+        i isa Integer && 1 <= i <= length(m.fmap[g]) || throw(ArgumentError(string(m.what, " reads `", u, "`; a component ",
+            "is read by its number, 1 to ", length(m.fmap[g]))))
+        return _pde_read(_unwrap(a[1]), m.fmap[g][i], m)
+    end
     if haskey(m.fmap, f) || haskey(m.imap, f)
         all(i -> isequal(a[i], m.ivs[i]), eachindex(a)) && return haskey(m.fmap, f) ? m.fmap[f] : m.imap[f]
         (haskey(m.fmap, f) && m.face) || throw(ArgumentError(string(m.what, " reads `", u, "` at a point; ",
@@ -425,6 +466,22 @@ function _pde_term(x, m)
         return _unwrap(B.mcs)
     end
     return _unwrap(f(map(y -> Symbolics.wrap(_pde_term(y, m)), a)...))
+end
+
+# a read of a component `comp` of an array field, `r = u(t, x, y)` at its site (the component) or
+# `u(t, 0, y)` at a face in a condition (the `@bcs` read of the component)
+function _pde_read(r, comp, m)
+    a = arguments(r)
+    all(i -> isequal(a[i], m.ivs[i]), eachindex(a)) && return comp
+    m.face || throw(ArgumentError(string(m.what, " reads `", r, "` at a point; an equation reads a field at its site ",
+        "(a condition reads it at a face)")))
+    args = map(a) do y
+        w = _unwrap(y)
+        m.tc !== nothing && isequal(w, m.tc) && return _unwrap(t)
+        j = findfirst(v -> isequal(v, w), m.xc)
+        return j === nothing ? _unwrap_number(w) : _FIELD_X[j]
+    end
+    return _unwrap(_bcs_call(Symbolics.wrap(comp), args...))
 end
 
 # `part` with the PDESystem `f` as fields, its quantities named `prefix₊n`
@@ -484,6 +541,8 @@ function _fields_name(c, n::Symbol, f)
     for x in Iterators.flatten((c.variables, c.parameters))
         info(x).name === n && return x
     end
+    comps = [x for x in c.variables if get(info(x).options, :vector, nothing) === n]      # an array field (F4-E11)
+    isempty(comps) || return QuantityVector(n, Num[Symbolics.wrap(x) for x in comps])
     throw(ArgumentError(string("@fields ", n, " = ", nameof(f), ": `", n, "` is not a field of the PDESystem `", nameof(f),
         "`; its fields are ", join(("`$(info(x).name)`" for x in c.variables), ", "), isempty(c.parameters) ? "" :
         string(", and its parameters (a name may be one too) ", join(("`$(info(x).name)`" for x in c.parameters), ", ")))))
