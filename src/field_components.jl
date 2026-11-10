@@ -69,12 +69,12 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
             join((string(w) for w in ivs if !isequal(w, v)), ", ") * "]`")))
     end
     # the spatial domain is the lattice's in the model's length unit (ruling Q8): axis `d` spans
-    # `[0, dims[d] · spacing[d]]`, which is also the domain `Potts.fields` gives
+    # `[0, dims[d] · spacing[d]]`, which is also the domain `Potts.fields` gives. An axis the
+    # PDESystem gives no interval for takes the lattice's (F4-E5); a given one must match it.
     dom = getfield(f, :domain)
     for d in 1:N
         k = findfirst(e -> isequal(_unwrap(e.variables), xc[d]), dom)
-        k === nothing && throw(ArgumentError("$what: $pname gives no interval for `$(xc[d])`; give " *
-                                             "`$(xc[d]) ∈ Interval(0, $(_extent_text(ext[d])))`, axis $d of the lattice"))
+        k === nothing && continue
         lo, hi = Float64(minimum(dom[k].domain)), Float64(maximum(dom[k].domain))
         iszero(lo) && isapprox(hi, ext[d]; rtol = 1e-12) || throw(ArgumentError(string(what, ": ", pname, " spans `",
             xc[d], " ∈ [", _extent_text(lo), ", ", _extent_text(hi), "]`, but axis ", d, " of the lattice of `", _hostname(sys),

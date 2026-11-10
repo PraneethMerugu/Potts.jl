@@ -214,7 +214,8 @@ never a Potts quantity. A key is the input variable (`endo` or `endo(t, x, y)`) 
 `position`, `site`, `mcs`, `time`, or a field or site variable of the model.
 
 The spatial domain of `pdesys` is the lattice's, in the model's length unit (axis `d` spans
-`[0, dims[d] · spacing[d]]`). Its time interval is not read (the problem's `tspan` is). A name
+`[0, dims[d] · spacing[d]]`). An axis `pdesys` gives no interval for takes that one; a given
+interval must equal it. Its time interval is not read (the problem's `tspan` is). A name
 `model` already has is an `ArgumentError`; compose it as a component to namespace it.
 `pdesys` stays a plain MTK system: [`Potts.field_inputs`](@ref) gives the current values of
 its inputs, so `discretize(pdesys, disc; inputs = Potts.field_inputs(integ))` solves the fields
