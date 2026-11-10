@@ -198,3 +198,10 @@ end
     @test occursin("which is not one of its dependent variables, parameters or independent variables; list it " *
                    "in the 6th argument of `PDESystem` (its parameters, empty here)", e) && occursin("build the system with `pdesystem`", e) || (println(e); false)
 end
+
+# --- E5: a domain entry for another variable ---------------------------------------------------
+@testset "F4-E5 review: a domain entry for a variable that is not an independent variable" begin
+    e = w2_new(w2_model(:(@fields c = W2.zdom())))
+    @test occursin("gives the domain `zz ∈ 0.0 .. 1.0`, but `zz` is not one of its independent variables (t, x, y)", e) ||
+          (println(e); false)
+end

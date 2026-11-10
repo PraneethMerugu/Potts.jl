@@ -90,6 +90,13 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
     # `[0, dims[d] · spacing[d]]`, which is also the domain `Potts.fields` gives. An axis the
     # PDESystem gives no interval for takes the lattice's (F4-E5); a given one must match it.
     dom = getfield(f, :domain)
+    for e in dom
+        v = _unwrap(e.variables)
+        any(w -> isequal(w, v), ivs) || throw(ArgumentError(string(what, ": ", pname, " gives the domain `", e.variables,
+            " ∈ ", e.domain, "`, but `", e.variables, "` is not one of its independent variables (", join(ivs, ", "),
+            "); give an interval only for an independent variable, or leave the spatial domain out (each axis then ",
+            "takes the lattice's interval)")))
+    end
     for d in 1:N
         k = findfirst(e -> isequal(_unwrap(e.variables), xc[d]), dom)
         k === nothing && continue
