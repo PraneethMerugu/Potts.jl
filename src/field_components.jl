@@ -259,7 +259,9 @@ function _input_bindings(sys, f, inputs, what, pname)
         M.isinput(u) || throw(ArgumentError(string(what, ": `", _key_text(key), "` is a dependent variable of ", pname,
             " but not an input; declare it `[input = true]` to bind it to a CPM expression")))
         haskey(out, op) && throw(ArgumentError("$what: the input `$(_input_key(u, op))` is bound twice"))
-        e = _unwrap(ex)
+        # a constant term is its value: in a vector that also holds a symbolic binding, Julia
+        # promotes `false` to `Num(false)` (F4-E1), which must meet the same check as `false`
+        e = _unwrap_number(ex)
         # `Potts.kind == :A` is Julia's `==` of a symbol and a Symbol: the constant `false`, built
         # before any symbolic term exists, so the kind name cannot be recovered here
         e isa Bool && throw(ArgumentError(string(what, ": the input `", _input_key(u, op), "` is bound to the constant `", e,
