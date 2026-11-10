@@ -1,11 +1,13 @@
-# F4-E5 (research/field-compiler/f4/F4-ergonomics.md item 4, user ruling 2026-11-10). Uses the
-# definitions of fields_couple.jl (CpPDE, CpHost, cp_*).
+# F4-E5, F4-E6 (research/field-compiler/f4/F4-ergonomics.md items 4 and 5, user rulings
+# 2026-11-10). Uses the definitions of fields_couple.jl (CpPDE, CpHost, cp_*).
 #
 # E5: a coupled PDESystem may leave out an axis interval; the axis takes the lattice's
 # `[0, dims · spacing]`. A given interval must still match. Oracle: Merks (the B form of
 # docs/models/src/merks_model.jl, its PDESystem built in a function of the lattice with
 # `lattice_domain`) against the same PDESystem with no domain, bitwise.
-# Negative control at the E4 commit (~/lpwork/f4E/nc-e5e7.log): "gives no interval for `x`".
+# E6: the same Merks field from `LatticePDE.pdesystem` (no lists, no domain), bitwise.
+# Negative controls: at the E4 commit "gives no interval for `x`" (~/lpwork/f4E/nc-e5e7.log);
+# at 4ca38af7 `Potts.Fields` and `pdesystem` do not exist (~/lpwork/f4E/nc-e4e6.log).
 
 module FsMerks
 using Potts: Potts
@@ -19,12 +21,24 @@ eq() = Differential(t)(C) ~ Dc * Δ(C) + σc * cell(t, x, y) - δc * C * ecm(t, 
 # the current form: a function of the lattice
 chemoattractant(lattice) = PDESystem([eq()], [c(0, x, y) ~ 0.0], lattice_domain(t, (x, y), lattice), [t, x, y],
     [C, cell(t, x, y), ecm(t, x, y)], [Dc, σc, δc]; name = :merks_field)
-# the short form: no domain
+# the short form: no domain (and `pdesystem` works out the lists)
+const SHORT = Potts.LatticePDE.pdesystem([eq()], [c(0, x, y) ~ 0.0]; name = :merks_field)
 const NODOM = PDESystem([eq()], [c(0, x, y) ~ 0.0], [], [t, x, y], [C, cell(t, x, y), ecm(t, x, y)], [Dc, σc, δc];
     name = :merks_field)
 end
 
-for (nm, sys) in ((:FsMerksLong, :(FsMerks.chemoattractant(lattice))), (:FsMerksNoDom, :(FsMerks.NODOM)))
+# the short vocabulary end to end: `using Potts.Fields`, `pdesystem` with no domain, Potts' own `x, y`
+module FsShort
+using Potts: Potts
+using Potts.Fields
+@parameters Dc = 0.2 s = 0.5 kd = 0.1
+@variables c(..) = 0.0 endo(..)::Bool [input = true]
+const C = c(t, x, y)
+const SYS = pdesystem([Differential(t)(C) ~ Dc * Δ(C) + s * endo(t, x, y) - kd * C]; name = :fields)
+end
+
+for (nm, sys) in ((:FsMerksLong, :(FsMerks.chemoattractant(lattice))), (:FsMerksShort, :(FsMerks.SHORT)),
+                  (:FsMerksNoDom, :(FsMerks.NODOM)))
     @eval @potts_model $nm begin
         @structural_parameters lattice = (40, 30)
         @lattice Lattice(lattice; boundary = Closed(), neighborhood = Moore(1))
@@ -49,9 +63,12 @@ fs_run(m; op = fs_op(Potts._p(m, :lattice).dims), k = 20) = solve(PottsProblem(m
     ref = fs_run(FsMerksLong(; name = :m))
     @test maximum(ref.u[end].site.c) > 0 && ref.u[end].σ != ref.u[1].σ
     @test cp_same(fs_run(FsMerksNoDom(; name = :m)), ref)                       # bitwise
+    @test cp_same(fs_run(FsMerksShort(; name = :m)), ref)
     # another lattice size: the function form follows it, the short form needs no change
-    @test cp_same(fs_run(FsMerksNoDom(; name = :m, lattice = (40, 36))), fs_run(FsMerksLong(; name = :m, lattice = (40, 36))))
+    @test cp_same(fs_run(FsMerksShort(; name = :m, lattice = (40, 36))), fs_run(FsMerksLong(; name = :m, lattice = (40, 36))))
+    # `Potts.couple` too (the lattice of `CpHost` is 24 × 20)
     host = CpHost(; name = :m)
+    @test Potts.couple(host, FsShort.SYS; inputs = [FsShort.endo => Potts.kind == 1]) isa Potts.PottsSystem
     # a given interval must still match: refused as before
     e = cp_msg(() -> Potts.couple(host, FsMerks.chemoattractant((40, 30));
         inputs = [FsMerks.cell => Potts.kind == 1, FsMerks.ecm => Potts.kind == 0]))

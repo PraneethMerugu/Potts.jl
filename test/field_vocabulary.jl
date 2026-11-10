@@ -14,7 +14,7 @@ fv_ambiguous(mods...) = (m = Module(); foreach(p -> Core.eval(m, Expr(:using, Ex
 @testset "F4-E4: using Potts.Fields" begin
     ex = fv_exports()
     @test issetequal(ex, [:PDESystem, :Differential, Symbol("@variables"), Symbol("@parameters"), :Interval, :Δ, :DivKGrad,
-        :Advect, :Upwind1, :at, :at2, :ismember, :masked, :step_index, :lattice_domain, :t, :x, :y, :z])
+        :Advect, :Upwind1, :at, :at2, :ismember, :masked, :step_index, :lattice_domain, :pdesystem, :t, :x, :y, :z])
     # no ambiguity with Potts, and with LatticePDE as well
     @test isempty(fv_ambiguous([:Potts], [:Potts, :Fields])) || (println(fv_ambiguous([:Potts], [:Potts, :Fields])); false)
     @test isempty(fv_ambiguous([:Potts], [:Potts, :Fields], [:Potts, :LatticePDE]))
@@ -24,10 +24,10 @@ fv_ambiguous(mods...) = (m = Module(); foreach(p -> Core.eval(m, Expr(:using, Ex
     @test all(n -> getfield(Potts.Fields, n) === getfield(Potts.FIELD_NAMES, n), (:x, :y, :z))
     @test Potts.Fields.PDESystem === MB.PDESystem && Potts.Fields.Differential === MB.Differential
     @test all(n -> getfield(Potts.Fields, n) === getfield(LP, n),
-        (:Interval, :Δ, :DivKGrad, :Advect, :Upwind1, :at, :at2, :ismember, :masked, :step_index, :lattice_domain))
-    # the names clash check: a name another package exports is the same binding (MTKBase exports
-    # no `t`; ModelingToolkit's units `t` is the documented exception, checked in
-    # ~/lpwork/f4E/e4-mtk.log, as ModelingToolkit and OrdinaryDiffEq are not in this environment)
+        (:Interval, :Δ, :DivKGrad, :Advect, :Upwind1, :at, :at2, :ismember, :masked, :step_index, :lattice_domain, :pdesystem))
+    # the names clash check: a name another package exports is the same binding. ModelingToolkit
+    # and OrdinaryDiffEq are not in this environment; a one-off check with both loaded found no
+    # clash and no ambiguity (2026-11-10, ~/lpwork/f4E/e4-mtk.jl and e4-mtk.log)
     for M in (LP, MB, Potts.SciMLBase, OrdinaryDiffEqTsit5, OrdinaryDiffEqRosenbrock, Potts)
         clash = [n for n in ex if Base.isexported(M, n) && isdefined(M, n) && getfield(M, n) !== getfield(Potts.Fields, n)]
         @test isempty(clash) || (println(M, ": ", clash); false)
