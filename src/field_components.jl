@@ -252,7 +252,13 @@ function _input_bindings(sys, f, inputs, what, pname)
     for b in inputs
         b isa Pair || throw(ArgumentError("$what: the inputs are pairs `input => expression`; got `$b`"))
         key, ex = b
-        k = _binding_target(key, ops)
+        if key isa _NamedKey
+            # `@fields … (cell => …)`: the name of an input first, then the local value (F4-E2)
+            k = _binding_target(key.name, ops)
+            k === nothing && (key = _key_value(key); k = _binding_target(key, ops))
+        else
+            k = _binding_target(key, ops)
+        end
         k === nothing && throw(ArgumentError(string(what, ": `", _key_text(key), "` is not a dependent variable of ", pname,
             "; its inputs are ", isempty(names) ? "none" : names)))
         u, op = ops[k]
@@ -318,6 +324,24 @@ end
 
 # a kind name of model `sys` for messages (its second kind, else its first, else `A`)
 _example_kind(sys) = (ks = _p(sys, :kinds); length(ks) >= 2 ? ks[2] : isempty(ks) ? :A : ks[1])
+
+# a bare-symbol key of an `@fields` binding (`cell => kind == cell`): its name, matched against
+# the inputs of the PDESystem first, and its value in the constructor (a closure), read only when
+# no input has that name (F4-E2: so a kind `cell` does not shadow the input `cell`)
+struct _NamedKey{F}
+    name::Symbol
+    value::F
+end
+Base.show(io::IO, k::_NamedKey) = print(io, k.name)
+# the local value of `key`; its name when no local or global of that name is defined
+function _key_value(key::_NamedKey)
+    return try
+        key.value()
+    catch err
+        err isa UndefVarError && err.var === key.name || rethrow()
+        key.name
+    end
+end
 
 # a binding key as the user wrote it: a callable variable (`@variables endo(..)`) prints as
 # `endo⋆` (Symbolics' `CallAndWrap`)

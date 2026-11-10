@@ -820,7 +820,9 @@ function _section!(parts, sec, args, ln = nothing)
         pairs = map(bs) do b
             b isa Expr && b.head === :call && b.args[1] === :(=>) && length(b.args) == 3 || throw(ArgumentError(
                 "@fields $(sysex): `$b` is not a binding; write `input => expression`, e.g. `inner => kind == A`"))
-            :($(b.args[2]) => $(rewrite(b.args[3])))
+            # a bare-symbol key is an input's name first, its local value second (F4-E2)
+            k = b.args[2]
+            :($(k isa Symbol ? :($P._NamedKey($(QuoteNode(k)), () -> $k)) : k) => $(rewrite(b.args[3])))
         end
         foreach(n -> _declare!(parts, n, "field"), names)
         # a bound name is a local of the constructor: inside this line it still means the global
