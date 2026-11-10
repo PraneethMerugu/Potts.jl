@@ -20,7 +20,7 @@
     @test last(eltype(b).parameters) === Potts.Num
     e = cp_msg(() -> Potts.couple(host, CpPDE.sys(); inputs = b))
     @test occursin("the input `endo` is bound to the constant `false`", e) &&
-          occursin("Potts.kind == Potts.lookup(model, :A)", e) || (println(e); false)
+          occursin("Potts.is_kind(model, :A)", e) || (println(e); false)
     # either order, and a `Bool` and a numeric input mixed with a test
     e = cp_msg(() -> Potts.couple(host, CpPDE.sys(); inputs = [CpPDE.vol => vol, CpPDE.endo => Potts.kind == :A]))
     @test occursin("bound to the constant `false`", e) || (println(e); false)

@@ -104,3 +104,57 @@ w2_u(m) = (pr = PottsProblem(m(; name = :m), w2_face_op(), (0, 3); seed = 1); Ar
     @test w2_u(W2FaceBnd) == uw
     @test w2_u(W2FaceBcs) == uw
 end
+
+# --- an unbound input (m2) --------------------------------------------------------------------
+@testset "F4-E16: an unbound input leads with the binding route" begin
+    e = w2_new(w2_model(:(@fields c = W2.sec())))
+    @test occursin("has the input `secreting(t, x, y)`, named `secreting`, which no binding fills", e) || (println(e); false)
+    i, j = findfirst("@fields … (secreting => kind == cell)", e), findfirst("lattice_input_name", e)
+    @test i !== nothing && j !== nothing && first(i) < first(j) || (println(e); false)
+    @test occursin("`inputs = [secreting => Potts.is_kind(model, :cell)]` in `Potts.couple`", e) || (println(e); false)
+end
+
+# --- membership mistakes (m5, m5b, m5c, m5d, m4b) ---------------------------------------------
+@testset "F4-E16: membership tests in bindings" begin
+    # `@fields`: `∈`/`in` is refused by syntax (m5b: the constant `false`; m5c: an interval)
+    for (b, form) in ((:(secreting => kind ∈ Set([cell, other])), "ismember(kind, (cell, other))"),
+                      (:(secreting => kind ∈ (cell, other)), "ismember(kind, (cell, other))"),
+                      (:(secreting => in(kind, (cell, other))), "ismember(kind, (cell, other))"))
+        e = cp_build_err(w2_model(:(@fields c = W2.sec() ($b))))
+        @test occursin("tests membership with", e) && occursin("a binding writes a kind set as `$form`", e) || (println(e); false)
+    end
+    # the route builds and fills both kinds
+    @test w2_new(w2_model(:(@fields c = W2.sec() (secreting => ismember(kind, (cell, other)))))) == "built"
+    # `Potts.couple`: `Potts.kind ∈ (1, 2)` is an interval pairing
+    host = W2Host(; name = :m)
+    e = cp_msg(() -> Potts.couple(host, W2.sec(); inputs = [W2.secreting => Potts.kind ∈ (1, 2)]))
+    @test occursin("is bound to `kind ∈ 1 .. 2`, which Symbolics builds as an interval pairing (a domain), not a membership test", e) &&
+          occursin("Potts.is_kind(model, :cell, …)", e) || (println(e); false)
+    # the constant `false`: both causes and the route
+    for b in (Potts.kind == :cell, Potts.kind ∈ Set([1, 2]))
+        e = cp_msg(() -> Potts.couple(host, W2.sec(); inputs = [W2.secreting => b]))
+        @test occursin("bound to the constant `false`", e) && occursin("`Potts.kind == :cell`", e) &&
+              occursin("`Potts.kind ∈ Set(…)`", e) && occursin("write `Potts.is_kind(model, :cell)`", e) || (println(e); false)
+    end
+    # m5: the key is a declared input that no equation reads (its `∈ Set(…)` term was deleted)
+    e = w2_new(w2_model(:(@fields c = W2.inset() (W2.kin => kind))))
+    @test occursin("`kin` is declared `[input = true]`, but no equation of the PDESystem `sec` reads it", e) &&
+          occursin("`kin(t, x, y) ∈ Set(…)` is Julia's `false`, so its term is deleted", e) || (println(e); false)
+    e = cp_msg(() -> Potts.couple(host, W2.inset(); inputs = [W2.kin => Potts.kind]))
+    @test occursin("`kin` is declared `[input = true]`", e) || (println(e); false)
+    # m5d: a listed input that nothing reads is a warning (it ran silently with max c = 0)
+    Core.eval(Main, w2_model(:(@fields c = W2.insetlong())))
+    @test_logs (:warn, r"the PDESystem `sec` lists the input `kinl`, which no equation or condition reads") match_mode = :any Base.invokelatest(() -> W2M(; name = :m))
+end
+
+# --- a kind name that is not a kind (m1c) -----------------------------------------------------
+@testset "F4-E16: @fields checks a kind name in a binding" begin
+    e = w2_new(w2_model(:(@fields c = W2.sec() (secreting => kind == cells)); kinds = :(@kinds medium cell)))
+    @test occursin("@fields: the binding `kind == cells` compares the kind with `cells`, which is not a kind of the model (it is", e) &&
+          occursin("; its kinds are `medium`, `cell`", e) || (println(e); false)
+    e = w2_new(w2_model(:(@fields c = W2.sec() (secreting => kind == celll)); kinds = :(@kinds medium cell)))
+    @test occursin("`celll`, which is not a kind of the model; its kinds are `medium`, `cell`", e) || (println(e); false)
+    # a kind name and a kind number still bind
+    @test w2_new(w2_model(:(@fields c = W2.sec() (secreting => kind == cell)))) == "built"
+    @test w2_new(w2_model(:(@fields c = W2.sec() (secreting => 1 == kind)))) == "built"
+end

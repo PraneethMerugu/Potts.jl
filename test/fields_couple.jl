@@ -652,7 +652,7 @@ end
     host = CrHost2(; name = :m)
     e = cp_msg(() -> Potts.couple(host, CpRev.first_sys(); inputs = [CpRev.endo => Potts.kind == :A]))
     @test occursin("bound to the constant `false`", e) && occursin("a binding to a constant is the same at every site", e) &&
-          occursin("Potts.kind == Potts.lookup(model, :A)", e) ||
+          occursin("Potts.is_kind(model, :A)", e) ||
           (println(e); false)
     e = cp_msg(() -> Potts.couple(host, CpRev.first_sys(); inputs = [CpRev.endo => true]))
     @test occursin("a binding to a constant is the same at every site", e) && !occursin("kind name", e) || (println(e); false)

@@ -502,16 +502,30 @@ end
 # term `ismember(kind, g)`. `∈` has an MTK meaning of its own (a domain pairing; `∈ Set(…)`
 # is `false` before any term exists, deleting the term), so it is refused here, while the
 # line is still syntax, with the form to write.
-function _no_membership_sugar(ex)
+function _no_membership_sugar(ex, what = "@equations", which = "an equation")
     ex isa Expr || return nothing
     if ex.head === :call && ex.args[1] in (:∈, :∉, :in) && length(ex.args) == 3
         a, g = ex.args[2], ex.args[3]
+        # `Set([a, b])` and `[a, b]` are written as the tuple `(a, b)`
+        g isa Expr && g.head === :call && g.args[1] === :Set && length(g.args) == 2 && (g = g.args[2])
+        g isa Expr && g.head === :vect && (g = Expr(:tuple, g.args...))
         form = ex.args[1] === :∉ ? "!ismember($a, $g)" : "ismember($a, $g)"
-        throw(ArgumentError("@equations: `$ex` tests membership with `$(ex.args[1])`; an equation writes a kind " *
+        throw(ArgumentError("$what: `$ex` tests membership with `$(ex.args[1])`; $which writes a kind " *
                             "set as `$form`"))
     end
-    foreach(_no_membership_sugar, ex.args)
+    foreach(a -> _no_membership_sugar(a, what, which), ex.args)
     return nothing
+end
+# `kind == X` in an `@fields` binding, `X` a name: its value is checked against the model's
+# kinds when the model is built (`kind == cells` reads the function `cells`, and is `false`)
+function _checked_kind_names(ex)
+    ex isa Expr || return ex
+    if ex.head === :call && ex.args[1] in (:(==), :(!=)) && length(ex.args) == 3
+        a, b = ex.args[2], ex.args[3]
+        a === :kind && b isa Symbol && return Expr(:call, ex.args[1], a, :(Potts._binding_kind(() -> $b, $(QuoteNode(b)), __kinds)))
+        b === :kind && a isa Symbol && return Expr(:call, ex.args[1], :(Potts._binding_kind(() -> $a, $(QuoteNode(a)), __kinds)), b)
+    end
+    return Expr(ex.head, map(_checked_kind_names, ex.args)...)
 end
 
 const _COMPOUND = (:+=, :-=, :*=, :/=)
@@ -821,9 +835,12 @@ function _section!(parts, sec, args, ln = nothing)
         pairs = map(bs) do b
             b isa Expr && b.head === :call && b.args[1] === :(=>) && length(b.args) == 3 || throw(ArgumentError(
                 "@fields $(sysex): `$b` is not a binding; write `input => expression`, e.g. `inner => kind == A`"))
+            # a binding tests a kind set with `ismember`: `kind ∈ (a, b)` is an interval and
+            # `kind ∈ Set(…)` the constant `false`
+            _no_membership_sugar(b.args[3], "@fields $(sysex)", "a binding")
             # a bare-symbol key is an input's name first, its local value second (F4-E2)
             k = b.args[2]
-            :($(k isa Symbol ? :($P._NamedKey($(QuoteNode(k)), () -> $k)) : k) => $(rewrite(b.args[3])))
+            :($(k isa Symbol ? :($P._NamedKey($(QuoteNode(k)), () -> $k)) : k) => $(rewrite(_checked_kind_names(b.args[3]))))
         end
         foreach(n -> _declare!(parts, n, "field"), names)
         # a bound name is a local of the constructor: inside this line it still means the global

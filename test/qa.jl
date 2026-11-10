@@ -258,6 +258,7 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     :FnType,
     # --- Potts -> Symbolics
     :rename,              # Symbolics.rename: renames a component system (`k.x` is `k₊x`)
+    :VarDomainPairing,    # what `Potts.kind ∈ (1, 2)` builds: a binding of it is refused by name (F4-E16)
     # --- PottsDynamicQuantitiesExt -> Potts: the extension is part of Potts and gives
     # Potts's own symbolic operators their unit rules, so it reads Potts internals.
     :at, :at2, :history_lag, :cell_integral, :Δ, :cell_centroid, :copy_displacement,

@@ -148,8 +148,11 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
         elseif M.isinput(u)
             w = something(LatticePDE.get_lattice_input_name(u), string(nameof(op)))
             target = _input_target(sys, Symbol(w))
+            k = _example_kind(sys)
             target === nothing && throw(ArgumentError(string(what, ": ", pname, " has the input `", u, "`, named `", w,
-                "`, which the CPM of `", _hostname(sys), "` does not fill at a site; name it by a word the CPM fills (`[input = ",
+                "`, which no binding fills and the CPM of `", _hostname(sys), "` does not fill at a site; bind it to a CPM ",
+                "expression, `@fields … (", nameof(op), " => kind == ", k, ")` in the model, or `inputs = [", nameof(op),
+                " => Potts.is_kind(model, :", k, ")]` in `Potts.couple`; or name it by a word the CPM fills (`[input = ",
                 "true, lattice_input_name = \"kind\"]` for the kind of each site; the words are ",
                 join(("`$x`" for x in _SITE_WORDS), ", "), "), or by a field or site variable of the model",
                 Symbol(w) in BUILTIN_NAMES ? string(" (`", w, "` is a cell property: hold it in a site variable, `@variables ",
@@ -169,7 +172,17 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
             push!(fields, (u, op))
         end
     end
-    m = (; ivs, tc, xc, fmap, imap, pmap, face = false, what = "$what: $pname")
+    # an input listed but read by no equation or condition: a term `src(t, x, y) ∈ Set(…)` is
+    # Julia's `false` and deletes itself (`α * false` is 0), so the input is silently unused
+    for (op, _) in imap
+        any(eq -> _reads_op(eq.lhs, op) || _reads_op(eq.rhs, op), Iterators.flatten((getfield(f, :eqs), getfield(f, :bcs)))) &&
+            continue
+        @warn string(what, ": ", pname, " lists the input `", nameof(op), "`, which no equation or condition reads; a ",
+            "membership test `", nameof(op), "(t, x, y) ∈ Set(…)` is Julia's `false`, which deletes its term: write ",
+            "`ismember(", nameof(op), "(t, x, y), (1, 2))`, or leave the input out") maxlog = 1 _id = (nameof(f), nameof(op))
+    end
+    m = (; ivs, tc, xc, fmap, imap, pmap, face = false, what = "$what: $pname", kind = _example_kind(sys),
+         noparams = isempty(raw))
     # the conditions: a value at the start time (`c(0, x, y) ~ v`) is the field's initial value;
     # every other one is a `@bcs` condition
     start = Dict{Any, Any}()
@@ -293,7 +306,10 @@ function _input_bindings(sys, f, inputs, what, pname)
             k = _binding_target(key, ops)
         end
         k === nothing && throw(ArgumentError(string(what, ": `", _key_text(key), "` is not a dependent variable of ", pname,
-            "; its inputs are ", isempty(names) ? "none" : names)))
+            "; its inputs are ", isempty(names) ? "none" : names, _declared_input(key, getfield(f, :ivs)) ?
+            string(". `", _key_text(key), "` is declared `[input = true]`, but no equation of ", pname, " reads it: a ",
+            "membership test `", _key_text(key), "(t, x, y) ∈ Set(…)` is Julia's `false`, so its term is deleted before ",
+            "the PDESystem is built; write `ismember(", _key_text(key), "(t, x, y), (1, 2))`") : "")))
         u, op = ops[k]
         M.isinput(u) || throw(ArgumentError(string(what, ": `", _key_text(key), "` is a dependent variable of ", pname,
             " but not an input; declare it `[input = true]` to bind it to a CPM expression")))
@@ -303,11 +319,18 @@ function _input_bindings(sys, f, inputs, what, pname)
         e = _unwrap_number(ex)
         # `Potts.kind == :A` is Julia's `==` of a symbol and a Symbol: the constant `false`, built
         # before any symbolic term exists, so the kind name cannot be recovered here
+        k = _example_kind(sys)
         e isa Bool && throw(ArgumentError(string(what, ": the input `", _input_key(u, op), "` is bound to the constant `", e,
             "`; a binding to a constant is the same at every site: bind a test of a cell property (`kind == 1`, ",
-            "`volume[owner] > v`), or write the constant in the equation", e ? "" : string(". A test of `kind` against a ",
-            "kind name, `Potts.kind == :", _example_kind(sys), "`, is `false` in Julia (no symbolic term is built): compare ",
-            "with the kind's number, `Potts.kind == Potts.lookup(model, :", _example_kind(sys), ")`"))))
+            "`volume[owner] > v`), or write the constant in the equation", e ? "" : string(". Two tests are `false` in ",
+            "Julia (no symbolic term is built): `kind` against a kind name, `Potts.kind == :", k, "`, and a membership ",
+            "test, `Potts.kind ∈ Set(…)`; write `Potts.is_kind(model, :", k, ")` (several kinds: `Potts.is_kind(model, :",
+            k, ", …)`)", what == "@fields" ? string(", or in `@fields`, `kind == ", k, "` and `ismember(kind, (a, b))`") : ""))))
+        # `Potts.kind ∈ (a, b)`: Symbolics builds an interval pairing, not a membership test
+        ex isa Symbolics.VarDomainPairing && throw(ArgumentError(string(what, ": the input `", _input_key(u, op),
+            "` is bound to `", _builtin_text(string(ex.variables)), " ∈ ", ex.domain, "`, which Symbolics builds as an ",
+            "interval pairing (a domain), not a membership test; write `Potts.is_kind(model, :", k, ", …)` for kinds, or ",
+            "`ismember(", _builtin_text(string(ex.variables)), ", (a, b))`")))
         e isa Union{Real, SymbolicUtils.BasicSymbolic} ||
             throw(ArgumentError("$what: the input `$(_input_key(u, op))` is bound to `$ex`, which is not an expression"))
         for v in (e isa SymbolicUtils.BasicSymbolic ? Symbolics.get_variables(e) : ())
@@ -329,6 +352,25 @@ function _input_bindings(sys, f, inputs, what, pname)
         out[op] = e
     end
     return out
+end
+# whether `x` applies the callable `op` (`src(t, x, y)`) anywhere
+function _reads_op(x, op)
+    x isa AbstractArray && return any(y -> _reads_op(y, op), x)
+    u = _unwrap(x)
+    u isa SymbolicUtils.BasicSymbolic && !SymbolicUtils.isconst(u) && iscall(u) || return false
+    return isequal(operation(u), op) || any(a -> _reads_op(a, op), arguments(u))
+end
+# whether a binding key that names no input of the PDESystem is a variable declared `[input =
+# true]` (applied at the PDESystem's independent variables `ivs` when it is a callable)
+function _declared_input(key, ivs)
+    key isa Union{Symbol, AbstractString, _NamedKey} && return false
+    if key isa Union{Num, SymbolicUtils.BasicSymbolic}
+        u = _unwrap(key)
+    else
+        applicable(key, ivs...) || return false
+        u = _unwrap(key(ivs...))
+    end
+    return u isa SymbolicUtils.BasicSymbolic && ModelingToolkitBase.isinput(u)
 end
 # whether a binding is a truth value (F4-E9): of type `Bool`, a comparison, `ismember`, `!`,
 # `&`, `|` or `xor` of truth values, an `ifelse` of two, or an `any`/`all` fold over a relation or
@@ -375,6 +417,20 @@ function _bare_cell_reads(e)
     return unique!(out)
 end
 
+# the right side `X` of `kind == X` in an `@fields` binding (`f() = X`): a kind number, else an
+# `ArgumentError` listing the model's kinds (`kind == cells` reads Potts' `cells` and is `false`)
+function _binding_kind(f, name::Symbol, kinds)
+    v = try
+        f()
+    catch err
+        err isa UndefVarError && err.var === name || rethrow()
+        nothing
+    end
+    v isa Union{Integer, Num, SymbolicUtils.BasicSymbolic} && !(v isa Bool) && return v
+    throw(ArgumentError(string("@fields: the binding `kind == ", name, "` compares the kind with `", name, "`, which is ",
+        "not a kind of the model", v === nothing ? "" : string(" (it is ", v isa Function ? "the function " : "", "`", v, "`)"),
+        "; its kinds are ", join(("`$k`" for k in kinds), ", "))))
+end
 # a kind name of model `sys` for messages (its second kind, else its first, else `A`)
 _example_kind(sys) = (ks = _p(sys, :kinds); length(ks) >= 2 ? ks[2] : isempty(ks) ? :A : ks[1])
 
