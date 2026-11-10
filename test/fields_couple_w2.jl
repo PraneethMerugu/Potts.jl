@@ -26,6 +26,11 @@ cellread(q) = pdesystem([Differential(t)(C) ~ Dc * Δ(C) + s * (q == 1) - k * C]
 # m4c: the long form that reads Potts' `kind` in its equation
 kindlong() = PDESystem([Differential(t)(C) ~ Dc * Δ(C) + s * (Potts.kind == 1) - k * C], [], [], [t, x, y], [C], [Dc, s, k];
     name = :sec)
+# a read of Potts' clock built-ins (`Potts.B.time`, `Potts.B.mcs`), and the route: the system's own `t`
+clockread(q) = pdesystem([Differential(t)(C) ~ Dc * Δ(C) + s * sin(q) - k * C]; name = :clk)
+clocklong(q) = PDESystem([Differential(t)(C) ~ Dc * Δ(C) + s * sin(q) - k * C], [], [], [t, x, y], [C], [Dc, s, k]; name = :clk)
+timeroute() = pdesystem([Differential(t)(C) ~ Dc * Δ(C) + s * sin(t) - k * C]; name = :clk)
+mcsroute() = pdesystem([Differential(t)(C) ~ Dc * Δ(C) + s * sin(step_index(t)) - k * C]; name = :clk)
 # m7: the long form with an empty parameter list
 nops() = PDESystem([Differential(t)(C) ~ Dc * Δ(C) - k * C], [], [], [t, x, y], [C], []; name = :sys)
 # E5: a domain entry for a variable that is not an independent variable
@@ -157,4 +162,39 @@ end
     # a kind name and a kind number still bind
     @test w2_new(w2_model(:(@fields c = W2.sec() (secreting => kind == cell)))) == "built"
     @test w2_new(w2_model(:(@fields c = W2.sec() (secreting => 1 == kind)))) == "built"
+end
+
+# --- a cell quantity read in a PDESystem (m4, m4c) --------------------------------------------
+# At 11523b0b: "`kind(t)` and `c(t, x, y)` have different independent variables" (pdesystem), and
+# "`time` is not available in a site term or site update" (the long form).
+@testset "F4-E17: a PDESystem that reads a cell quantity is refused with the input route" begin
+    for (q, n) in ((Potts.kind, "kind"), (Potts.B.volume, "volume"))
+        e = cp_msg(() -> W2.cellread(q))
+        @test occursin("pdesystem: the equations read `$n`, a quantity of the CPM; a PDESystem cannot read cell quantities", e) &&
+              occursin("`@variables src(..)::Bool [input = true]`", e) && occursin("`@fields c = sys (src => kind == cell)`", e) ||
+              (println(e); false)
+    end
+    e = w2_new(w2_model(:(@fields c = W2.kindlong())))
+    @test occursin("@fields: the PDESystem `sec` reads `kind`, a quantity of the CPM; a PDESystem cannot read cell quantities", e) &&
+          occursin("src => kind == cell", e) && occursin("Potts.is_kind(model, :cell)", e) || (println(e); false)
+    e = cp_msg(() -> Potts.couple(W2Host(; name = :m), W2.kindlong()))
+    @test occursin("Potts.couple: the PDESystem `sec` reads `kind`, a quantity of the CPM", e) || (println(e); false)
+    # Potts' `time` and `mcs` (not `Base.time`): the route is the system's own time `t`
+    for (q, n, route) in ((Potts.B.time, "time", "write its independent variable `t` (`Potts.t`)"),
+                          (Potts.B.mcs, "mcs", "write `step_index(t)` of its independent variable `t`"))
+        @test Potts.info(q).role === :builtin
+        e = cp_msg(() -> W2.clockread(q))
+        @test occursin("pdesystem: the equations read `$n`, the model's", e) && occursin(route, e) &&
+              !occursin("cell quantities", e) || (println(e); false)
+        e = w2_new(w2_model(:(@fields c = W2.clocklong(Potts.B.$(Symbol(n))))))
+        @test occursin("@fields: the PDESystem `clk` reads `$n`, the model's", e) && occursin(route, e) &&
+              !occursin("cell quantities", e) || (println(e); false)
+    end
+    # the routes couple
+    @test w2_new(w2_model(:(@fields c = W2.timeroute()))) == "built"
+    @test w2_new(w2_model(:(@fields c = W2.mcsroute()))) == "built"
+    # m7: a long form whose parameter list is empty names the list and `pdesystem`
+    e = w2_new(w2_model(:(@fields c = W2.nops())))
+    @test occursin("which is not one of its dependent variables, parameters or independent variables; list it " *
+                   "in the 6th argument of `PDESystem` (its parameters, empty here)", e) && occursin("build the system with `pdesystem`", e) || (println(e); false)
 end

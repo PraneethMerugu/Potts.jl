@@ -30,6 +30,10 @@ sys = pdesystem([Differential(t)(c(t, x, y)) ~ Dc * Δ(c(t, x, y)) + src(t, x, y
 `Potts.couple`) may leave it out: each axis takes the lattice's interval. `discretize` needs it
 (`lattice_domain(t, (x, y), dims)`). Other keywords (`initial_conditions`, …) go to
 `PDESystem`.
+
+A variable that a front end tags with `potts_entity` metadata is refused when
+[`pdesystem_refusal`](@ref) gives a reason (a model's cell quantities, which a PDESystem
+cannot read).
 """
 function pdesystem(eqs, bcs = Equation[]; name, domain = Any[], kwargs...)
     eqs isa AbstractVector || (eqs = [eqs])
@@ -41,6 +45,8 @@ function pdesystem(eqs, bcs = Equation[]; name, domain = Any[], kwargs...)
         u = unwrap(x)
         u isa SymbolicUtils.BasicSymbolic || return
         SymbolicUtils.isconst(u) && return
+        e = get_potts_entity(u)
+        e === nothing || (msg = pdesystem_refusal(e, u); msg === nothing || throw(ArgumentError("pdesystem: " * msg)))
         if iscall(u)
             op = operation(u)
             if op isa SymbolicUtils.BasicSymbolic          # `c(t, x, y)`, `c(0, x, y)`
@@ -92,3 +98,13 @@ function pdesystem(eqs, bcs = Equation[]; name, domain = Any[], kwargs...)
     return PDESystem(collect(eqs), collect(bcs), domain, Symbolics.wrap.(ivs), Symbolics.wrap.(dvs),
                      isempty(ps) ? Num[] : Symbolics.wrap.(ps); name, kwargs...)
 end
+
+"""
+    pdesystem_refusal(entity, x) -> String or nothing
+
+Why [`pdesystem`](@ref) refuses the variable `x`, which carries the `potts_entity` metadata
+`entity`, or `nothing` (the default: accepted). A front end that tags its own quantities
+defines a method for its entity type, so that a quantity a PDESystem cannot read (a CPM's
+cell quantities) is named with the route.
+"""
+pdesystem_refusal(entity, x) = nothing

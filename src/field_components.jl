@@ -30,6 +30,24 @@ end
 # MTK's metadata of the dependent variable `u` or of its callable `op`
 _dv_meta(u, op, key) = (v = SymbolicUtils.getmetadata(u, key, nothing); v === nothing ? SymbolicUtils.getmetadata(op, key, nothing) : v)
 
+# a quantity of the CPM (`kind`, `volume`, `owner`) read in a PDESystem: a PDESystem holds only
+# its own fields, inputs and parameters, and a CPM value reaches it through a bound input; the
+# model's clock (`time`, `mcs`) is the PDESystem's own time `t`, which is the model's `time` once
+# coupled (`_pde_term`), and `step_index(t)` its MCS number
+function _cell_quantity_text(n::Symbol, k = :cell)
+    n === :time && return "`time`, the model's time; a PDESystem reads its own time: write its independent variable " *
+           "`t` (`Potts.t`), which is the model's `time` where the PDESystem is coupled"
+    n === :mcs && return "`mcs`, the model's MCS number; a PDESystem reads it from its own time: write " *
+           "`step_index(t)` of its independent variable `t` (`Potts.t`), which is the model's `mcs` where the " *
+           "PDESystem is coupled"
+    return string("`", n, "`, a quantity of the CPM; a PDESystem cannot read cell quantities (`kind`, `volume`, ",
+        "`owner`, …): declare an input, `@variables src(..)::Bool [input = true]`, read `src(t, x, y)` in the ",
+        "equation, and bind it where the PDESystem is coupled, `@fields c = sys (src => kind == ", k,
+        ")` or `Potts.couple(model, sys; inputs = [src => Potts.is_kind(model, :", k, ")])`")
+end
+# `LatticePDE.pdesystem` refuses a built-in of a model (its `potts_entity` is a Potts `Entity`)
+LatticePDE.pdesystem_refusal(i::Entity, x) = i.role === :builtin ? "the equations read " * _cell_quantity_text(i.name) : nothing
+
 """
     _pde_content(sys, f, prefix, what) -> (; variables, parameters, equations, bcs)
 
@@ -136,6 +154,9 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
     filled = Tuple{Symbol, Any, Type}[]         # (input name, CPM expression, element type), for `Potts.field_inputs`
     for dv in getfield(f, :dvs)
         u = _unwrap(dv)
+        i = info(u)
+        i !== nothing && i.role === :builtin &&
+            throw(ArgumentError(string(what, ": ", pname, " lists ", _cell_quantity_text(i.name, _example_kind(sys)))))
         (iscall(u) && length(arguments(u)) == length(ivs) && all(i -> isequal(arguments(u)[i], ivs[i]), eachindex(ivs))) ||
             throw(ArgumentError(string(what, ": the dependent variable `", u, "` of ", pname, " is not applied to its ",
                 "independent variables (", join(ivs, ", "), ")")))
@@ -486,8 +507,11 @@ function _pde_term(x, m)
     k = findfirst(v -> isequal(v, u), m.xc)
     k === nothing || return _FIELD_X[k]
     haskey(m.pmap, u) && return m.pmap[u]
+    i = info(u)
+    i !== nothing && i.role === :builtin && throw(ArgumentError(string(m.what, " reads ", _cell_quantity_text(i.name, m.kind))))
     iscall(u) || throw(ArgumentError(string(m.what, " reads `", u, "`, which is not one of its dependent variables, ",
-        "parameters or independent variables")))
+        "parameters or independent variables", m.noparams ? "; list it in the 6th argument of `PDESystem` (its " *
+        "parameters, empty here), or build the system with `pdesystem`, which lists them" : "")))
     f, a = operation(u), arguments(u)
     # `u[i]` of an array field (F4-E11): component `i`, at its site or a face
     if f === getindex && length(a) == 2 && iscall(_unwrap(a[1])) && (g = operation(_unwrap(a[1])); haskey(m.fmap, g)) &&
