@@ -111,7 +111,7 @@ public hamiltonian, drives, PottsSweepSpec
 public inner, fields, part, component, wrap, compose, extend, PottsPart, FieldBinding, resolve
 # a plain PDESystem as the model's fields, its inputs bound to CPM expressions (F4-B2); the
 # current values of those inputs, for SciML solvers of the PDESystem
-public couple, field_inputs
+public couple, field_inputs, is_kind
 # the model's cell and model ODEs as the MTK systems `mtkcompile` produced
 public ode_system
 # the model's cell and model initialization as MTK systems (`@initialization_equations`, D-170)

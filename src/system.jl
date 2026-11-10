@@ -203,10 +203,10 @@ operating point `:c => values`, and a model that extends the result reads them b
 (`@extend c = base = …`, then `@drive … c[target]`).
 
 `inputs` binds each input of `pdesys` (a dependent variable declared `[input = true]`) to a
-CPM expression at a site: `inputs = [endo => Potts.kind == Potts.lookup(model, :A), vol =>
+CPM expression at a site: `inputs = [endo => Potts.is_kind(model, :A), vol =>
 Potts.at(Potts.B.volume, Potts.B.owner)]`. A kind is compared by its number
-(`Potts.lookup(model, :A)` gives it): `Potts.kind == :A` is Julia's constant `false`, and a
-binding to a constant truth value is an `ArgumentError` saying so. The field compiler fills each one per site every MCS, as it fills the CPM
+([`Potts.is_kind`](@ref), or `Potts.kind == Potts.lookup(model, :A)`): `Potts.kind == :A` is
+Julia's constant `false`, and a binding to a constant truth value is an `ArgumentError` saying so. The field compiler fills each one per site every MCS, as it fills the CPM
 reads of a field equation, so `pdesys` itself holds only plain input fields (0/1 or numbers),
 never a Potts quantity. A key is the input variable (`endo` or `endo(t, x, y)`) or its name. A
 `Bool` input (`endo(..)::Bool`) takes a truth value. An input left unbound is filled by its
@@ -230,6 +230,28 @@ function couple(model::PottsSystem, pdesys::ModelingToolkitBase.PDESystem; input
     base = _lower_inner(model, what)
     part = _with_pde(base, getfield(base, :part), pdesys, nothing, what; inputs = collect(Any, inputs))
     return _wrap_payload(nameof(model), nothing, part)
+end
+
+"""
+    Potts.is_kind(model::PottsSystem, name::Symbol, names::Symbol...)
+
+The test that a site's kind is `name` (or one of `name, names…`), for a binding of
+[`Potts.couple`](@ref): `inputs = [endo => Potts.is_kind(model, :A)]`. One name gives
+`Potts.kind == Potts.lookup(model, name)`, several a membership test
+(`ismember(Potts.kind, (a, b))`). The medium is a kind (`:medium`, number 0). A name that is
+not a kind of `model` is an `ArgumentError` that lists its kinds. (`Potts.kind == :A` is Julia's
+constant `false`; this is the route.)
+"""
+function is_kind(model::PottsSystem, names::Symbol...)
+    ks = _p(model, :kinds)
+    isempty(names) && throw(ArgumentError("Potts.is_kind: give at least one kind name, `Potts.is_kind(model, :A)`"))
+    codes = map(names) do n
+        k = findfirst(==(n), ks)
+        k === nothing && throw(ArgumentError(string("Potts.is_kind: `", n, "` is not a kind of `", nameof(model), "`; its ",
+            "kinds are ", join(("`$k`" for k in ks), ", "))))
+        return k - 1
+    end
+    return length(codes) == 1 ? B.kind == only(codes) : LatticePDE.ismember(B.kind, Tuple(codes))
 end
 
 # the payload of a component of `model`: its kinds, lattice and sweep, and nothing else
