@@ -19,18 +19,26 @@ backend: CairoMakie for files and notebooks, GLMakie for interactive windows.
 
 ```@example plotting
 using Potts, MakiePotts, CairoMakie
+using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
+using Potts.LatticePDE: Δ, lattice_domain
 CairoMakie.activate!(type = "png") # hide
+
+t = Potts.t
+@parameters x y
+@variables c(..) = 0.0 isdark(..)::Bool [input = true]
+C = c(t, x, y)
+dye = PDESystem([Differential(t)(C) ~ 0.2 * Δ(C) + 0.05 * isdark(t, x, y) - 0.01 * C], [],
+    lattice_domain(t, (x, y), (40, 40)), [t, x, y], [C, isdark(t, x, y)], []; name = :dye)
 
 @potts_model Mix begin
     @kinds medium dark light
     @parameters J[kind, kind] = [0 16 16; 16 2 11; 16 11 14]
-    @variables c(field) = 0.0
     @lattice Lattice((40, 40); neighborhood = Moore(1))
     @energy begin
         Volume(dark, light; target = 25.0, strength = 1.0)
         contacts => J[kind, kind′]
     end
-    @equations D(c) ~ 0.2 * Δ(c) + 0.05 * (kind == dark) - 0.01 * c
+    @fields dye (isdark => kind == dark)
     @sweep Metropolis(; temperature = 10.0)
 end
 @named mix = Mix()

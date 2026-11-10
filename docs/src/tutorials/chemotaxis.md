@@ -2,9 +2,10 @@
 
 This tutorial adds a chemical that cells sense and secrete. In Potts.jl a chemical is a
 **field**: a value at every site that obeys a partial differential equation. You write the
-equation in ModelingToolkit syntax. You will learn:
+equation as a ModelingToolkit `PDESystem` and couple it into the model. You will learn:
 
-- how to declare a field and its reaction–diffusion equation;
+- how to write a field's reaction–diffusion equation as a `PDESystem`;
+- how to couple it into a model with `@fields`, and bind its inputs to the cells;
 - how to choose the field solver of a problem;
 - how chemotaxis biases copy attempts, with `Chemotaxis` or a written-out `@drive`;
 - how to make cells secrete, and how to plot and record a field.
@@ -13,6 +14,8 @@ The models on this page are generic teaching models, not published ones.
 
 ```@example chemo
 using Potts, MakiePotts, CairoMakie
+using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
+using Potts.LatticePDE: Δ, lattice_domain
 CairoMakie.activate!(type = "png") # hide
 nothing # hide
 ```
@@ -27,6 +30,23 @@ periodic in y:
 \frac{\partial c}{\partial t} = D_c \nabla^2 c + s\,[x > 75] - k c
 ```
 
+First write the field equation as a `PDESystem`. `t` is the time of the model, and
+`x` and `y` are the coordinates of the lattice:
+
+```@example chemo
+t = Potts.t
+Dt = Differential(t)
+@parameters x y
+@parameters Dc = 1.0 s = 0.1 k = 0.001     # diffusion, production in the strip, decay
+@variables c(..) = 0.0
+C = c(t, x, y)
+strip = PDESystem([Dt(C) ~ Dc * Δ(C) + s * (x > 75) - k * C], [],
+    lattice_domain(t, (x, y), (80, 40)), [t, x, y], [C], [Dc, s, k]; name = :strip)
+nothing # hide
+```
+
+Then couple it into the model with `@fields`:
+
 ```@example chemo
 @potts_model Gradient begin
     @kinds medium cell
@@ -35,18 +55,14 @@ periodic in y:
         V₀ = 25.0
         T = 8.0
         J[kind, kind] = [0 10; 10 8]
-        Dc = 1.0         # diffusion coefficient
-        s = 0.1          # production rate in the source strip
-        k = 0.001        # decay rate
         χ = 0.0          # chemotactic strength (off for now)
     end
-    @variables c(field) = 0.0
     @lattice Lattice((80, 40); boundary = (Closed(), Periodic()), neighborhood = Moore(1))
     @energy begin
         cells(cell) => λ * (volume - V₀)^2
         contacts => J[kind, kind′]
     end
-    @equations D(c) ~ Dc * Δ(c) + s * (position[1] > 75) - k * c
+    @fields c = strip
     @drive Chemotaxis(c; strength = χ)
     @sweep Metropolis(; temperature = T)
 end
@@ -55,13 +71,18 @@ nothing # hide
 
 New pieces:
 
-- `@variables c(field) = 0.0` declares a field with initial value 0. The **scope** in
-  parentheses says where the variable lives: `field` (a chemical on the lattice), `site`,
-  `cell` or `model`.
-- `@equations` holds differential equations. `D(c)` is the time derivative, `Δ(c)` the
-  lattice Laplacian, and `position[1]` the first coordinate of the site. A boolean such as
-  `position[1] > 75` counts as 1 or 0.
+- `@variables c(..) = 0.0` declares the field `c` with initial value 0. In the equation it
+  is `c(t, x, y)`, a function of time and space.
+- `Dt(C)` is the time derivative and `Δ(C)` the lattice Laplacian. A comparison such as
+  `x > 75` counts as 1 or 0. The coordinates are site centers, from 0 at the low face:
+  site `i` has `x = i - 0.5`, so `x > 75` holds at sites 76 to 80.
+- `lattice_domain(t, (x, y), (80, 40))` gives the domain of an 80 × 40 lattice. The domain
+  of a coupled `PDESystem` must be the lattice's.
+- `@fields c = strip` adds the fields, parameters and conditions of `strip` to the model.
+  `Dc`, `s` and `k` become model parameters, and `c = ` names the field for the lines after
+  it.
 - `@drive Chemotaxis(c; strength = χ)` biases copies towards higher `c` (more below).
+- The periodic `y` axis is the lattice's: every field takes the lattice's boundary.
 
 The problem must say how to integrate the field. `ExplicitEuler(substeps = 8, lower = 0.0)`
 takes 8 explicit Euler time steps per MCS (Monte Carlo step). It clips negative values:
@@ -91,8 +112,8 @@ fig
     coefficient and the reaction rate. Without `substeps`, `ExplicitEuler()` chooses the
     count itself from the current parameters. It takes the smallest `n` with
     ``\frac{\Delta t}{n}\left(D \sum_d 4/h_d^2 + k\right) \le 1.8``. Here ``k`` bounds
-    the reaction's ``|\partial f/\partial c|`` (`k` for `- k * c`, also with an indicator
-    such as `(kind == medium)`). The margin below the stability limit 2 damps
+    the reaction's ``|\partial f/\partial c|`` (`k` for `- k * c`, also with a 0/1 input
+    such as `- k * c * secreting`). The margin below the stability limit 2 damps
     lattice-scale noise.
 
     A number, as here, is a minimum: if the automatic count is larger, it wins. If the
@@ -151,8 +172,8 @@ Print the model to see what `Chemotaxis(c; strength = χ)` expands to:
 gradient
 ```
 
-The printout is Potts's internal form of the model. `Potts.at(c(t), target)` is the field
-at the target site, and `Potts.at2(J, kind, kind′)` is the table entry. In the notation of
+The printout is Potts's internal form of the model. `LatticePDE.at(c(t), target(t))` is the
+field at the target site, and `LatticePDE.at2(J, kind(t), kind′(t))` is the table entry. In the notation of
 `@potts_model` the drive line reads
 `copy => ifelse(new != 0, -χ * (c[target] - c[source]), 0.0)`. Here is the same model
 with that line in place of `Chemotaxis`:
@@ -165,18 +186,14 @@ with that line in place of `Chemotaxis`:
         V₀ = 25.0
         T = 8.0
         J[kind, kind] = [0 10; 10 8]
-        Dc = 1.0
-        s = 0.1
-        k = 0.001
         χ = 300.0
     end
-    @variables c(field) = 0.0
     @lattice Lattice((80, 40); boundary = (Closed(), Periodic()), neighborhood = Moore(1))
     @energy begin
         cells(cell) => λ * (volume - V₀)^2
         contacts => J[kind, kind′]
     end
-    @equations D(c) ~ Dc * Δ(c) + s * (position[1] > 75) - k * c
+    @fields c = strip
     @drive copy => ifelse(new != 0, -χ * (c[target] - c[source]), 0.0)
     @sweep Metropolis(; temperature = T)
 end
@@ -200,8 +217,20 @@ would restrict it to one kind. `Chemotaxis` has keywords for the common variants
 
 ## Cells that secrete
 
-When the cells make the chemical themselves, chemotaxis pulls them together. The source
-term is now `s * (kind == cell)`: every site owned by a cell produces `c`.
+When the cells make the chemical themselves, chemotaxis pulls them together. Every site
+owned by a cell now produces `c`. The `PDESystem` cannot see the cells. It reads an
+**input field** instead, here `secreting`, a 0/1 value at every site:
+
+```@example chemo
+@parameters Dc = 1.0 s = 0.05 k = 0.005
+@variables secreting(..)::Bool [input = true]
+secretion = PDESystem([Dt(C) ~ Dc * Δ(C) + s * secreting(t, x, y) - k * C], [],
+    lattice_domain(t, (x, y), (80, 80)), [t, x, y], [C, secreting(t, x, y)], [Dc, s, k]; name = :secretion)
+nothing # hide
+```
+
+`@fields` binds the input to an expression of the cells, `secreting => kind == cell`. Potts
+fills it at every site once per MCS, before the field steps:
 
 ```@example chemo
 @potts_model Aggregation begin
@@ -211,18 +240,14 @@ term is now `s * (kind == cell)`: every site owned by a cell produces `c`.
         V₀ = 25.0
         T = 8.0
         J[kind, kind] = [0 10; 10 8]
-        Dc = 1.0
-        s = 0.05
-        k = 0.005
         χ = 1000.0
     end
-    @variables c(field) = 0.0
     @lattice Lattice((80, 80); boundary = Periodic(), neighborhood = Moore(1))
     @energy begin
         cells(cell) => λ * (volume - V₀)^2
         contacts => J[kind, kind′]
     end
-    @equations D(c) ~ Dc * Δ(c) + s * (kind == cell) - k * c
+    @fields c = secretion (secreting => kind == cell)
     @drive Chemotaxis(c; strength = χ)
     @sweep Metropolis(; temperature = T)
 end
@@ -268,21 +293,30 @@ nothing # hide
 Cells that happen to be close raise the chemical between them. They pull each other into
 clusters, and the clusters grow by collecting more cells.
 
-!!! details "Advanced: kind-dependent coefficients and several fields"
-    Any expression of the site is allowed on the right-hand side:
+!!! details "Advanced: other bindings and several fields"
+    A binding takes any expression of the site:
 
-    - `(kind == cell)` selects sites by owner kind;
-    - a kind-indexed parameter `δ[kind]` gives each kind its own decay;
-    - several fields can be declared and coupled in one `@equations` block.
+    - `kind == cell` selects sites by owner kind;
+    - `volume[owner]` reads the volume of the cell that owns the site (a numeric input,
+      declared without `::Bool`);
+    - a kind-indexed parameter gives each kind its own coefficient: bind a numeric input
+      to the table, `dk => δ[kind]`, and write `- dk * c` in the equation for a decay per
+      kind;
+    - a fold over the neighbors, such as `any(kind[n] == cell for n in VonNeumann(1)(site))`.
+
+    One `PDESystem` can hold several fields that read each other. `@fields c, u = sys (…)`
+    names them all.
 
     Every field takes the problem's `field_solver` (default `ExplicitEuler()`, the
     automatic substep count). To give a field its own scheme, add an entry of
-    `solvers = [c => ExplicitEuler(...)]`. See
+    `solvers = [:c => ExplicitEuler(...)]`. See
     [Equations and solvers](@ref manual-equations).
 
 ## What you learned
 
-- `c(field)` declares a chemical field. `@equations D(c) ~ …` gives its PDE with `Δ`.
+- A `PDESystem` on `lattice_domain(…)` gives a field's PDE with `Δ`.
+- `@fields c = sys (input => expression)` couples it into a model and binds its inputs to
+  the cells.
 - `PottsProblem(…; field_solver = ExplicitEuler(substeps = n, lower = 0.0))` integrates it.
 - `Chemotaxis(c; strength)` or `@drive copy => …` biases copies along the field.
 - Fields can be recorded as videos through render-frame channels.

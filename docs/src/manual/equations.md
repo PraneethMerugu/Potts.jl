@@ -1,37 +1,114 @@
-# [Equations and solvers: `@equations`, `@components`](@id manual-equations)
+# [Equations and solvers: `@fields`, `@equations`, `@components`](@id manual-equations)
 
-`@equations` holds differential equations, algebraic equations and couplings, in
-ModelingToolkit syntax. `D` is
-the time derivative and `Δ` the lattice Laplacian. The scope of the variable decides what
-an equation is:
+A model holds two kinds of equations:
 
-| Equation | Variable | Meaning | Integrated by |
+- **Fields** are reaction–diffusion PDEs on the lattice. Each comes from a ModelingToolkit
+  `PDESystem`, which `@fields` couples into the model (`Potts.couple` outside the macro).
+- **Cell and model equations** are ODEs, algebraic equations and couplings in `@equations`,
+  in ModelingToolkit syntax. `D` is the time derivative.
+
+| Equation | Where | Meaning | Integrated by |
 |---|---|---|---|
-| `D(c) ~ Dc * Δ(c) + s * (kind == k) - δ * c` | `c(field)` | a reaction–diffusion PDE on the lattice | `field_solver` |
-| `D(x) ~ k₁ - k₂ * x` | `x(cell)` | one ODE per live cell | `ode_solver` |
-| `D(g) ~ -g + count(true for c in cells)` | `g(model)` | one ODE for the model | `ode_solver` |
-| `Shift(t, 1)(m) ~ g * m + x` | `m(field)` | a map: one application per MCS | `field_solver` (`ExplicitMap()`) |
-| `K ~ K₀ * (1 + 0.05 * x)` | `K(field)` | an aux field: its value from the others at every substep | — |
-| `y ~ volume / V₀` | `y(cell)` or `y(model)` | an algebraic variable (see below) | — |
-| `comp.p ~ volume / V₀` | a component parameter | a coupling (see below) | — |
+| `Dt(c) ~ Dc * Δ(c) + s * src - δ * c` | a `PDESystem` | a reaction–diffusion PDE on the lattice | `field_solver` |
+| `Shift(t, 1)(m) ~ g * m + q` | a `PDESystem` | a map: one application per MCS | `field_solver` (`ExplicitMap()`) |
+| `K ~ K₀ * (1 + 0.05 * u)` | a `PDESystem` | an aux field: its value from the others at every substep | — |
+| `D(x) ~ k₁ - k₂ * x` | `@equations`, `x(cell)` | one ODE per live cell | `ode_solver` |
+| `D(g) ~ -g + count(true for c in cells)` | `@equations`, `g(model)` | one ODE for the model | `ode_solver` |
+| `y ~ volume / V₀` | `@equations`, `y(cell)` or `y(model)` | an algebraic variable (see below) | — |
+| `comp.p ~ volume / V₀` | `@equations`, a component parameter | a coupling (see below) | — |
 
-The right side of a field equation is a site expression: `kind`, `owner`, `position`,
-other fields, kind tables (`δ[kind]`). A cell ODE reads cell quantities (`volume`, cell
-variables, `integral(c)`) and can read other cells' values (`y[j]`); every ODE step reads
-the state at the start of the step. `time` is the current time. In a field equation, `mcs`
-is the MCS number at every substep, and `time` is the time of the substep: the time at the
-start of the field step plus `j h` at substep `j` (`h` the substep length). `mcs` is the
-absolute MCS number: a problem whose span starts at MCS 2 reads 2 first. The step index of a
-LatticePDE system, `step_index(t)`, counts from the start of its own time span instead.
+In the table and in the text below, a field `c` stands for `c(t, x, y)`.
 
-**A source on a site predicate.** A term of a field rate can be switched on by any
-predicate of the site: its `kind`, a fold over a relation of `site` (the neighbors), site
-variables or a helper function of `site` defined in the model. F-actin made only at
-lamellipodium sites with a face neighbor in the substrate (Fortuna et al. 2020, Eq. 6) is
+## Fields: `@fields`
+
+A field is a dependent variable of a `PDESystem` on the lattice's domain. The `PDESystem`
+does not read the cells. It reads **input fields**, declared `[input = true]`, and
+`@fields` binds each input to an expression of the site:
+
+```@example equations
+using Potts
+using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
+using Potts.LatticePDE: Δ, lattice_domain
+
+t = Potts.t
+Dt = Differential(t)
+@parameters x y Dc = 0.2 s = 0.5 kd = 0.1 av = 0.01
+@variables c(..) = 0.0 endo(..)::Bool [input = true] vol(..) [input = true]
+C = c(t, x, y)
+attractant = PDESystem([Dt(C) ~ Dc * Δ(C) + s * endo(t, x, y) - kd * C + av * vol(t, x, y)], [],
+    lattice_domain(t, (x, y), (24, 20)), [t, x, y], [C, endo(t, x, y), vol(t, x, y)], [Dc, s, kd, av];
+    name = :attractant)
+
+@potts_model Secreting begin
+    @kinds medium A
+    @parameters χ = 400.0
+    @lattice Lattice((24, 20); boundary = Closed())
+    @energy cells(A) => (volume - 16.0)^2
+    @fields c = attractant (endo => kind == A, vol => volume[owner])
+    @drive Chemotaxis(c; strength = χ, kinds = (A,))
+    @sweep Metropolis(; temperature = 4.0)
+end
+
+@named secreting = Secreting()
+σ = zeros(Int32, 24, 20); σ[5:8, 5:8] .= 1; σ[14:17, 10:13] .= 2
+sol = solve(PottsProblem(secreting, [ownership => σ, kind => [:A, :A]], (0, 12); seed = 3), SequentialCPM())
+maximum(sol[:c][end])
+```
+
+- **Lines.** `@fields c = sys (bindings…)` adds the fields, parameters, equations and
+  conditions of `sys` to the model at that line. The names before `=` (`c`, or a list
+  `c, u`) are bound to fields of `sys` for the lines after it, so a drive or an energy
+  reads `c[target]`. Without names, `@fields sys (…)`, the fields are reached by name only
+  (`sol[:c]`). Write `@fields` after `@kinds` and `@lattice`, and above every line that
+  reads its names. A model can have several `@fields` lines. A later one can bind an input
+  to a field of an earlier one: `@fields sys2 (cin => c)`.
+- **Names.** Each field keeps its own name: `sol[:c]`, `FieldGroups(:c => …)`,
+  `solvers = [:c => …]` and the operating point `:c => values` read it. Each parameter of
+  `sys` becomes a model parameter with its value. The operating point (`:kd => 0.3`),
+  `remake` and the constructor keyword (`Secreting(; kd = 0.3)`) change it. A name that the
+  model already has is an error.
+- **Domain.** The domain of `sys` is the lattice's, in the model's length unit: axis `d`
+  spans `[0, dims[d] · spacing[d]]`. `lattice_domain(t, (x, y), dims; spacing)` gives it.
+  Another interval is an error that names both. The time interval of `sys` is not read:
+  the problem's `tspan` is. Periodicity is the lattice's, for every field.
+- **Initial value.** A field starts at its default (`c(..) = 0.0`) or at a condition at the
+  start time (`c(0, x, y) ~ v`). An operating-point entry `:c => values` replaces it.
+  LatticePDE's `discretize` reads only the condition, so a `PDESystem` that you also solve
+  on its own needs `c(0, x, y) ~ v`.
+- **Bindings.** `input => expression` takes any site expression of the model: `kind == A`,
+  `volume[owner]`, site variables, `position`, folds over the neighbors and helper
+  functions of `site`. A `Bool` input (`endo(..)::Bool`) takes a truth value, and a numeric
+  input takes a number. Potts fills every input at every site once per MCS, before the
+  fields step, and holds it over the substeps.
+- **Unbound inputs.** An input without a binding is filled by its `lattice_input_name`, or
+  else by its own name: `kind` (the kind number of the site, 0 for the medium), `owner`,
+  `position`, `site`, `mcs`, `time`, or a field or site variable of the model. A `Bool`
+  input that such a word fills with numbers is an error that gives the binding.
+
+The right side of a field equation reads the fields of its `PDESystem`, its inputs, its
+parameters, the coordinates and `t`. In a field equation `t` is the time of the substep:
+the time at the start of the field step plus `j h` at substep `j` (`h` the substep
+length). An input named `mcs` reads the absolute MCS number, held over the substeps: a
+problem whose span starts at MCS 2 reads 2 first. `step_index(t)` is the step index:
+
+- in a coupled `PDESystem` (`@fields`, `Potts.couple`) it is the model's MCS number, the
+  same absolute count as `mcs`;
+- in a standalone or SciML solve (`discretize`, which then needs
+  `LatticeDiscretization(…; clock = τ)`) it counts from the start of the problem's
+  `tspan`.
+
+**A source on a site predicate.** A binding can be any predicate of the site: its `kind`, a
+fold over a relation of `site` (the neighbors), site variables or a helper function of
+`site` defined in the model. F-actin made only at lamellipodium sites with a face neighbor
+in the substrate (Fortuna et al. 2020, Eq. 6) binds the input `edge` of its `PDESystem`:
 
 ```julia
-@equations D(F) ~ D_F * Δ(F) - k_decay * F +
-                  k_source * (kind == lamellipodium) * any(kind[n] == substrate for n in VonNeumann(1)(site))
+@variables F(..) = 0.0 edge(..) [input = true]
+actin = PDESystem([Dt(F(t, x, y)) ~ D_F * Δ(F(t, x, y)) - k_decay * F(t, x, y) + k_source * edge(t, x, y)], [],
+    lattice_domain(t, (x, y), dims), [t, x, y], [F(t, x, y), edge(t, x, y)], [D_F, k_decay, k_source]; name = :actin)
+
+# in the model
+@fields F = actin (edge => (kind == lamellipodium) * any(kind[n] == substrate for n in VonNeumann(1)(site)))
 ```
 
 and `count(true for n in VonNeumann(1)(site) if kind[n] == substrate) > 0` is the same test.
@@ -42,6 +119,51 @@ the field spreads beyond the source sites. With one explicit substep the update 
 `F + D_F·ΔF − k_decay·F + k_source·[predicate]`, so a persistent source settles at
 `k_source/k_decay`. The same rate runs in the device field kernel.
 
+!!! warning "Write a kind set as `ismember`, not with `∈`"
+    In a `PDESystem` equation, write a kind set as `ismember(k, (1, 2))`. Two spellings
+    with `∈` build without an error, but they do not test membership:
+
+    - `k ∈ Set([1, 2])` is `false` before any symbolic term exists. So
+      `3k * (k ∈ Set([1, 2]))` is `0`: the term is deleted from the equation, and no
+      check can see it after that. This is reported to Symbolics as
+      [Symbolics.jl#2126](https://github.com/JuliaSymbolics/Symbolics.jl/issues/2126).
+    - `k ∈ (1, 2)` is a domain pairing (`VarDomainPairing`): it says that `k` lies in the
+      interval from 1 to 2. In an expression it is an error from Symbolics
+      (`MethodError: no method matching +(::Num, ::VarDomainPairing)`); alone as a side,
+      LatticePDE refuses it.
+
+    These facts hold on Symbolics 7.45.0 and 7.48.0.
+
+    `k ∈ [1, 2]` stays a symbolic `in` term, which LatticePDE also refuses. A binding
+    (`inner => kind == A`) keeps most kind tests out of the `PDESystem`.
+
+**The operators of a PDESystem.** A field equation takes every operator of LatticePDE
+(`using Potts.LatticePDE: DivKGrad, Advect, Upwind1`):
+
+- `DivKGrad(:harmonic)(K, c)` and `DivKGrad(:arithmetic)(K, c)`: the conservative diffusion
+  `∇⋅(K ∇c)`, with the face mean of `K`;
+- `Advect(Upwind1())([ux, uy], c)`: first-order upwind advection, with one velocity term per
+  axis (parameters, fields or any lowered term);
+- a raw flux `Differential(x)(K * Differential(x)(c))`, the same as `DivKGrad` along `x`;
+- the coordinates `x`, `y` and `z` of the `PDESystem` (cell centers, from 0 at the low
+  face), such as a source `s * x`.
+
+The coordinates are read by field equations; a site update reads the site's `position`
+instead. `position` is the site's corner and `x` its center: `x = position[1] - h/2`, with
+`h` the spacing. An operator applies to a field. To apply one to a cell quantity, hold the
+quantity in a field.
+
+**Aux fields and maps.** `K ~ expr` in a `PDESystem` defines the field `K` by its value:
+every field group computes it from the values it reads, at every substep. A model whose
+only fields are aux fields has no field to step: its field phase computes them once per
+MCS, in its place in the schedule (in the first pass of a `repeat`), and once at the start,
+so the first sweep reads `expr`, not the declared value. Such a model takes no
+`field_solver`. `Shift(t, 1)(m) ~ rhs` is a map: one application per MCS, stepped by
+`ExplicitMap()` (the default for a map). Under `repeat(R, sweep(…), fields)`, a map steps in
+the first pass only, so it reads the CPM state after the first part of the sweep. A model
+has rate equations or maps, not both: split stepping is planned. The error gives the route,
+a site update `@after_mcs m ~ rhs` on a site variable.
+
 ## Cell and model ODEs are ModelingToolkit systems
 
 The cell equations of a model are one ModelingToolkit `System`, the template of one cell, and
@@ -51,6 +173,10 @@ advances the simplified equations for every cell in one batched kernel.
 equations, `nothing` for a scope without equations). Quantities MTK cannot express, such as
 `volume`, neighbor gathers, folds over cells and reads of other cells, appear in it as input
 parameters.
+
+A cell ODE reads cell quantities (`volume`, cell variables, `integral(c)` of a field `c`)
+and can read other cells' values (`y[j]`); every ODE step reads the state at the start of
+the step. `time` is the current time.
 
 An algebraic equation `y ~ expr` defines a cell or model variable `y` by an expression.
 `mtkcompile` eliminates `y` as an observed variable, as in ModelingToolkit:
@@ -81,52 +207,22 @@ An algebraic equation `y ~ expr` defines a cell or model variable `y` by an expr
 end
 ```
 
-**The operators of a PDESystem.** A field equation takes every operator of a LatticePDE
-`PDESystem`. A model needs no import for them:
-
-- `DivKGrad(:harmonic)(K, c)` and `DivKGrad(:arithmetic)(K, c)`: the conservative diffusion
-  `∇⋅(K ∇c)`, with the face mean of `K`;
-- `Advect(Upwind1())([ux, uy], c)`: first-order upwind advection, with one velocity term per
-  axis (parameters, fields or any lowered term);
-- a raw flux `Differential(x)(K * Differential(x)(c))`, the same as `DivKGrad` along `x`;
-- the lattice coordinates `x`, `y` and `z` (cell centers, from 0 at the low face), such as a
-  source `s * x`.
-
-A model that declares its own `x` keeps it, and `Differential(x)` in that model is an error
-that names the clash. The binding hides a global of the same name: a model body reads `x`
-as the coordinate even when its module defines `x`. When that happens, `@potts_model` warns
-once, naming the global; declare the value as a parameter (`@parameters x = 3.0`) to use it.
-The coordinates are read by field equations; a site update reads the site's `position`
-instead. `position` is the site's corner and `x` its center: `x = position[1] - h/2`, with
-`h` the spacing. An operator applies to a field or a site variable. An operator of a CPM
-read (`Δ(volume[owner])`) is an error: hold the value in a site variable and apply the
-operator to it.
-
-**Aux fields and maps.** `K ~ expr` defines the field `K` by its value: every field group
-computes it from the values it reads, at every substep. A model whose only fields are aux
-fields has no field to step: its field phase computes them once per MCS, in its place in the
-schedule (in the first pass of a `repeat`), and once at the start, so the first sweep reads
-`expr`, not the declared value. Such a model takes no `field_solver`. `Shift(t, 1)(m) ~ rhs` is a map: one
-application per MCS, stepped by `ExplicitMap()` (the default for a map). Under
-`repeat(R, sweep(…), fields)`, a map steps in the first pass only, so it reads the CPM state
-after the first part of the sweep. A model has rate
-equations or maps, not both: split stepping is planned. The error gives the route, a site
-update `@after_mcs m ~ rhs` on a site variable.
-
 ## Solvers are part of the problem
 
 The model states the equations; the problem states how to integrate them:
 
 ```@example equations
-using Potts
 using OrdinaryDiffEqTsit5: Tsit5
+
+@parameters Dc = 0.5
+@variables incell(..)::Bool [input = true]
+chemical = PDESystem([Dt(C) ~ Dc * Δ(C) + 0.1 * incell(t, x, y) - 0.05 * C], [],
+    lattice_domain(t, (x, y), (30, 30)), [t, x, y], [C, incell(t, x, y)], [Dc]; name = :chemical)
 
 @potts_model Chem begin
     @kinds medium cell
-    @parameters Dc = 0.5
     @variables begin
-        c(field) = 0.0
-        x(cell) = 1.0
+        q(cell) = 1.0
         g(model) = 0.0
     end
     @lattice Lattice((30, 30); neighborhood = Moore(1))
@@ -134,9 +230,9 @@ using OrdinaryDiffEqTsit5: Tsit5
         Volume(cell; target = 25.0, strength = 1.0)
         contacts => 8.0 * (kind != kind′)
     end
+    @fields c = chemical (incell => kind == cell)
     @equations begin
-        D(c) ~ Dc * Δ(c) + 0.1 * (kind == cell) - 0.05 * c
-        D(x) ~ 0.2 * integral(c) / volume - 0.1 * x
+        D(q) ~ 0.2 * integral(c) / volume - 0.1 * q
         D(g) ~ count(true for k in cells) - g
     end
     @sweep Metropolis(; temperature = 8.0)
@@ -146,7 +242,7 @@ end
 op = layout(Tiling((5, 5); region = (11:20, 11:20), kinds = [:cell]), chem)
 prob = PottsProblem(chem, op, (0, 50); field_solver = ExplicitEuler(substeps = 4, lower = 0.0))
 sol = solve(prob, SequentialCPM())
-sol[:x][end], sol[:g][end]
+sol[:q][end], sol[:g][end]
 ```
 
 | Keyword | Values | Default |
@@ -175,7 +271,8 @@ iteration keeps the method's order. A switch `−a max(c − c_T, 0)` takes two 
 by default: the second is a flip pass that takes the switch state at the first one's result,
 not a convergence test. Other terms, such as advection, fields of one group that read one
 another in a loop, or a second face coefficient next to a kind-dependent multiplier
-(`δ[kind] * Δ(c) + DivKGrad(K, c)`: the term with the larger bound is in the solve), are
+(`dk * Δ(c) + DivKGrad(K, c)` with `dk => δ[kind]`: the term with the larger bound is in the
+solve), are
 corrected by more Newton iterations. Their substep count keeps the correction converging (for
 the sum of their bounds; advection with a constant velocity: `substeps ≥ 2 · mcs_duration ·
 Σ_a 2|u_a|/h_a`), and `newton` defaults to the iterations that this bound needs. A second
@@ -204,8 +301,8 @@ as Backward Euler's do. Both start with Backward Euler steps:
   start time and `rhs(u)` at its end time. Data that jump ring under Crank–Nicolson, so its
   first substep after a start is damped: two Backward Euler steps of `h/2`. A start is the
   first MCS and every write (a state, parameter or table write, `reinit!`). A field whose data
-  can jump every MCS damps the first substep of every MCS. Such a field reads the CPM (`kind`,
-  `ismember`), another field group or `mcs`, or has a mask that moves. Such a field takes at
+  can jump every MCS damps the first substep of every MCS. Such a field reads an input (`kind`,
+  a binding), another field group or `mcs`, or has a mask that moves. Such a field takes at
   least 2 substeps per MCS by default: the damped one, then Crank–Nicolson substeps, so the
   error of an MCS falls as `1/n²` with the count `n`. With `substeps = 1` it is Backward Euler
   in two halves: first order, at twice Backward Euler's cost.
@@ -297,8 +394,8 @@ threads).
 
 - `substeps = nothing` in a field solver takes the smallest count `n` with
   `mcs_duration / n · ρ ≤ 1.8`, where `ρ` bounds the rate's spectral radius: `D · Σ_d 4/h_d²`
-  for diffusion plus the size of the coefficient of `c` in a linear reaction. Indicators
-  such as `(kind == medium)` and `ismember(kind, g)` are evaluated at 0 and 1, and a rate
+  for diffusion plus the size of the coefficient of `c` in a linear reaction. A `Bool`
+  input and indicators such as `ismember(kind, g)` are evaluated at 0 and 1, and a rate
   gated by `ifelse(mcs >= t₀, …, 0)` (a condition that reads no field) is bounded branch
   by branch (the worst branch counts). The count is
   recomputed when parameters change; a number is a minimum. The bound also covers, over
@@ -306,7 +403,7 @@ threads).
   - a coefficient that reads the coordinates (`(1 + x) * Δ(c)`, `DivKGrad(:harmonic)(1 + x, c)`,
     `- k * (1 + x) * c`), over the lattice's cell centers and, for a velocity and for a face
     coefficient on an axis with a boundary value or flux, one half spacing past the faces;
-  - a coefficient that reads a field with declared bounds (`c(field) = 0.5, [bounds = (0, 1)]`):
+  - a coefficient that reads a field with declared bounds (`c(..) = 0.5 [bounds = (0, 1)]`):
     `DivKGrad(:harmonic)(c, c)` takes the largest `K` over `[0, 1]`, and a nonlinear reaction
     (`a * c * (1 - c)`) takes the largest `|∂f/∂c|` over it. The bound holds inside the
     declared interval: a field that starts outside it, or a constant boundary or masked value
@@ -326,25 +423,33 @@ threads).
   bound: both need `substeps = n`, and the error names the interval. A rate the bound cannot see
   needs `substeps`, and the problem throws an error naming the term without it: a
   reaction that is not linear in `c` (with no declared bounds), a coefficient that reads other
-  state (a field with no declared bounds, `mcs`), and a diffusion multiplier that reads a CPM
-  value directly (`volume[owner] * Δ(c)`). So do fields
+  state (a field with no declared bounds, `mcs`), and a diffusion multiplier that reads a
+  bound cell quantity (`vol * Δ(c)` with `vol => volume[owner]`). So do fields
   that read each other in a loop (`- Dx * Δ(u)` in the rate of `c` and `Dx * Δ(c)` in the rate
   of `u`) when their rows of the Jacobian are not diagonally dominant. A field that reads
   another one way (`u` does not read `c` back) is bounded. A diffusion multiplier that varies
   by site through a kind table
-  or a kind set (`δ[kind] * Δ(c)`, `ismember(kind, g) * Δ(c)`) is bounded: the bound takes
+  or a kind set (`dk * Δ(c)` with `dk => δ[kind]`, `ismember(kind, g) * Δ(c)`) is bounded: the bound takes
   the largest multiplier times the largest diffusion coefficient. With `substeps = n` in the
   cases the bound cannot see, the count is the larger of
   `n` and the bound of the terms the bound sees (diffusion at least), and the problem warns
   once, naming the terms it does not cover. A reaction coefficient that reads a kind table
-  (`- δ[kind] * c`) is bounded at every entry of the table, the medium's entry included, and
+  (`- dk * c` with `dk => δ[kind]`) is bounded at every entry of the table, the medium's entry included, and
   the count follows the table's values. A coefficient that is not finite at an entry
-  (`- c / τ[kind]` with a zero entry) is refused, naming the entry, even with
+  (`- c / tk` with `tk => τ[kind]` and a zero entry) is refused, naming the entry, even with
   `substeps = n`: make the entry finite and nonzero.
 - `substep_counts(integ)` gives the substep count of each field group, in group order (the
   order of each group's first field). It follows the parameter writes. `substep_counts(prob)`
   gives the counts at the problem's parameters. The same function gives the counts of a
   LatticePDE problem.
+- `field_report(x)` (`Potts.LatticePDE.field_report`) prints why each field group of a
+  LatticePDE problem steps as it does. `x` is a problem, an integrator (owned or
+  OrdinaryDiffEq's) or a solution of either. One block per group gives its fields and
+  algorithm, the window and the substep count with its cause, the stability bound and the
+  terms it cannot see, the number types and the run's counters; then the coupling between
+  groups. `field_report(prob, alg)` prints the policy of `prob` under the algorithm `alg`
+  without binding anything. It may synchronize a device, so call it outside a timed loop.
+  The [SciML path](@ref manual-sciml-path) below shows it.
 - Fields with the same solver step together, substep by substep: a field reads the fields it
   depends on after their update, and fields that depend on each other read each other's
   values from the start of the substep. Fields with different solvers (`solvers = [u =>
@@ -364,10 +469,10 @@ threads).
   group with a term that the stability bound cannot see and that reads another field counts
   as reading every other group. A term that reads only its own field (`- 0.1 * c^2`) does
   not.
-- The CPM quantities in a field equation (`kind`, cell reads, neighbor counts) are evaluated
-  once per MCS, before the fields step, and held over the substeps; so is `mcs`. `time`
-  advances with the substeps. `rand()` cannot appear in a field equation: draw in a site
-  update and read its variable.
+- The inputs of a field (`kind`, bound cell reads, neighbor counts) are filled once per MCS,
+  before the fields step, and held over the substeps; so is `mcs`. `t` advances with the
+  substeps. `rand()` cannot appear in a field equation: draw in a site update and bind an
+  input to its variable.
 - On a hexagonal lattice, `Δ` is the only spatial operator. On a lattice with a `domain`,
   the fields live in the domain: a site outside it keeps its value, and the domain's edge
   has zero flux. Face values still apply at the faces of the box.
@@ -394,28 +499,32 @@ solve(prob2, SequentialCPM()).retcode
 
 The time step is one MCS times `mcs_duration` (default 1), set in `@sweep`.
 
-## Field boundaries: `@boundary`
+## Boundary conditions
 
-A field's boundary conditions are model content, one `@boundary` block per field:
+A field's boundary conditions are the conditions of its `PDESystem`, its second argument.
+A field is read at a face by its coordinates, with one of them fixed: `c(t, 0, y)` is the
+low face of `x`, and `c(t, L, y)` the high face, with `L` the lattice's extent along `x`
+(its size times the spacing):
 
 ```@example equations
+using Potts.LatticePDE: masked
+@parameters Dd = 0.2 S = 1.0
+@variables wall(..)::Bool [input = true]
+absorbing = PDESystem([Dt(C) ~ Dd * Δ(C) + 0.1 * incell(t, x, y)],
+    [c(t, 0, y) ~ S,                         # the low x face held at S
+     Differential(x)(c(t, 30, y)) ~ 0,       # the high x face closed
+     C ~ masked(wall(t, x, y), 0.0)],        # an absorbing obstacle
+    lattice_domain(t, (x, y), (30, 20)), [t, x, y], [C, incell(t, x, y), wall(t, x, y)], [Dd, S];
+    name = :absorbing)
+
 @potts_model Absorbed begin
     @kinds medium cell border[frozen]
-    @parameters begin
-        Dc = 0.2
-        S = 1.0
-    end
-    @variables c(field) = 0.0
     @lattice Lattice((30, 20); boundary = (Closed(), Periodic()), neighborhood = Moore(1))
     @energy begin
         Volume(cell; target = 25.0, strength = 1.0)
         contacts => 8.0 * (kind != kind′)
     end
-    @equations D(c) ~ Dc * Δ(c) + 0.1 * (kind == cell)
-    @boundary c begin
-        x => (Dirichlet(S), NoFlux())                 # the low x face held at S, the high one closed
-        sites(kind == border) => Dirichlet(0.0)        # an absorbing obstacle
-    end
+    @fields absorbing (incell => kind == cell, wall => kind == border)
     @sweep Metropolis(; temperature = 8.0)
 end
 
@@ -427,85 +536,69 @@ u = solve(prob, SequentialCPM()).u[end]
 (wall = maximum(u.site.c[14:17, :]), low_face = sum(u.site.c[1, :]) / 20)
 ```
 
-- **Faces.** `x => (low, high)` (and `y`, `z`: axes 1, 2, 3) sets both faces of a closed
-  axis. A face value is a ghost value, the missing neighbor of an edge site:
+- **Faces.** A face condition sets one face of a closed axis. Its value is a ghost value,
+  the missing neighbor of an edge site:
 
-  | Side | Meaning | Ghost value |
+  | Condition (low face of `x`) | Meaning | Ghost value |
   |---|---|---|
-  | `Dirichlet(v)` | `c = v` at the face | `2v − c`: the field reaches `v` midway between the edge site and the face |
-  | `NoFlux()` | `∂c/∂n = 0` | `c`: it mirrors the edge site |
-  | `Flux(q)` | `∂c/∂n = q`, with the outward normal `n` | `c + q h` |
-  | `Robin(α, β, g)` | `α c + β ∂c/∂n = g` | the value that meets the condition at the face |
+  | `c(t, 0, y) ~ v` | `c = v` at the face (Dirichlet) | `2v − c`: the field reaches `v` midway between the edge site and the face |
+  | `Differential(x)(c(t, 0, y)) ~ 0` | zero flux | `c`: it mirrors the edge site |
+  | `Differential(x)(c(t, 0, y)) ~ -q` | `∂c/∂n = q`, with the outward normal `n` (Neumann) | `c + q h` |
+  | `α * c(t, 0, y) - β * Differential(x)(c(t, 0, y)) ~ g` | `α c + β ∂c/∂n = g` (Robin) | the value that meets the condition at the face |
 
-  These are the face equations of a LatticePDE system: `Flux(q)` on the low side of `x` is
-  `Differential(x)(c(t, 0, y)) ~ -q`, on the high side `Differential(x)(c(t, L, y)) ~ q`.
-  `Robin(α, 0, g)` is an error that gives `Dirichlet(g / α)`, and `Robin(0, β, g)` one that
-  gives `Flux(g / β)`. A face coefficient that reads a field (`DivKGrad(:arithmetic)(c^3, c)`)
-  takes the field's ghost value at the face: with `Dirichlet(1.0)` and `c = 0` at the edge
-  site, the face mean is `(0³ + 2³)/2`, so the field enters through the face. The bound of the
-  field solvers covers these ghost values. The harmonic mean of `0³` and `2³` is 0, so
-  `DivKGrad(:harmonic)` keeps a degenerate front (`K = 0` where `c = 0`) from moving; use
-  `DivKGrad(:arithmetic)` for degenerate diffusion. A closed axis without an entry is zero flux. An
-  entry on a periodic axis, on an axis the lattice lacks, on a hexagonal lattice, or on a
-  field whose equation has no spatial operator of it is an error naming it.
-- **Site masks.** `sites(condition) => Dirichlet(v)` is a node value: every explicit
-  substep writes `v` at every site where the condition holds (after the `lower` clip, so a
-  mask value below `lower` wins), and a fresh initial state (the problem's `u0`, `init`,
-  `reinit!`) is clamped too; a state restored from a checkpoint is not (it continues the run
-  exactly), nor does `Potts.anneal` clamp. The condition is a site expression (`kind`,
-  `owner`, site and field variables), evaluated once per MCS before the substeps, so a mask
-  on a kind moves with its cells. The masked sites then take their value before the first
-  substep, so a site a cell has just reached holds `v` when its neighbors read it. The
-  condition reads the state at the start of its field group's window: it is evaluated
-  once, on the clamped values, and held over the MCS. This holds for every field it reads,
-  the field it clamps and a field stepped after it included. With several solver groups, a
-  field of a group stepped earlier in the MCS reads as stepped, as a rate reads another
-  group's field. Write a condition on the field it clamps with `>=`, as in
-  `sites(c >= 0.8) => Dirichlet(0.8)`. With `>`, the clamp sets `c = 0.8`, `0.8 > 0.8` is
-  false, and the next MCS releases the sites. The masks of a field group cost one kernel
-  launch per MCS.
-- **Values** of `Dirichlet`, `Flux`, `Robin`'s `g` and site masks are expressions of numbers,
-  parameters, the coordinates `x`, `y`, `z`, `time` and `mcs`: `Dirichlet(S1 + S2)`,
-  `Dirichlet(c0 * sin(ω * mcs))`, `Flux(0.5y)`. A value that is not a number or a number
-  times a parameter is computed at each boundary site at the time of each substep.
+  On the high face the outward normal is `+x`: `Differential(x)(c(t, L, y)) ~ q` is
+  `∂c/∂n = q`. A closed axis without a condition is zero flux. A face coefficient that reads
+  a field (`DivKGrad(:arithmetic)(c^3, c)`) takes the field's ghost value at the face: with
+  `c(t, 0, y) ~ 1.0` and `c = 0` at the edge site, the face mean is `(0³ + 2³)/2`, so the
+  field enters through the face. The bound of the field solvers covers these ghost values.
+  The harmonic mean of `0³` and `2³` is 0, so `DivKGrad(:harmonic)` keeps a degenerate
+  front (`K = 0` where `c = 0`) from moving; use `DivKGrad(:arithmetic)` for degenerate
+  diffusion. A condition on a periodic axis, on an axis the lattice lacks, on a hexagonal
+  lattice, or on a field whose equation has no spatial operator of it is an error naming
+  it. So is a periodic pair on an axis the lattice closes: periodicity is the lattice's,
+  for every field.
+- **Site masks.** `c ~ masked(condition, v)` is a node value: every explicit substep writes
+  `v` at every site where the condition holds (after the `lower` clip, so a mask value
+  below `lower` wins), and a fresh initial state (the problem's `u0`, `init`, `reinit!`) is
+  clamped too; a state restored from a checkpoint is not (it continues the run exactly),
+  nor does `Potts.anneal` clamp. The condition reads the inputs and fields of the
+  `PDESystem`. It is evaluated once per MCS before the substeps, so a mask on an input bound
+  to a kind (`wall => kind == border`) moves with its cells. The masked sites then take
+  their value before the first substep, so a site a cell has just reached holds `v` when
+  its neighbors read it. The condition reads the state at the start of its field group's
+  window: it is evaluated once, on the clamped values, and held over the MCS. This holds
+  for every field it reads, the field it clamps and a field stepped after it included.
+  With several solver groups, a field of a group stepped earlier in the MCS reads as
+  stepped, as a rate reads another group's field. Write a condition on the field it clamps
+  with `>=`, as in `c ~ masked(c >= 0.8, 0.8)`. With `>`, the clamp sets `c = 0.8`,
+  `0.8 > 0.8` is false, and the next MCS releases the sites. The masks of a field group
+  cost one kernel launch per MCS.
+- **Values** of faces and masks are expressions of numbers, parameters, the coordinates
+  and `t`: `c(t, 0, y) ~ S1 + S2`, `c(t, 0, y) ~ c0 * sin(ω * t)`,
+  `Differential(x)(c(t, L, y)) ~ 0.5y`. A value that is not a number or a number times a
+  parameter is computed at each boundary site at the time of each substep.
   `remake(prob; p = [:S => 2.0])` changes a value without regenerating code. The conditions
-  themselves are part of the model's identity (the fingerprint): a checkpoint does not cross
-  them.
+  themselves are part of the model's identity (the fingerprint): a checkpoint does not
+  cross them.
 - **Robin coefficients** `α` and `β` are expressions of numbers, parameters, the
-  coordinates, `time` and `mcs`, as values are. An expression of parameters alone is one
-  value at every site: a computed parameter of the face holds it, named `c_x_low_α` (field,
-  axis, side, coefficient), which reads like any computed parameter and is derived again
-  after every write. A slot holds the coefficient of `@boundary`'s `Robin(α, β, g)`, with
-  `β` the coefficient of the outward `∂c/∂n`, however the face is written (in `@bcs` on a low
-  face, `c_x_low_β` is minus the coefficient of `∂c/∂x`).
+  coordinates and `t`, as values are. An expression of parameters alone is one value at
+  every site: a computed parameter of the face holds it, named `c_x_low_α` (field, axis,
+  side, coefficient), which reads like any computed parameter and is derived again after
+  every write. The slot holds `β` as the coefficient of the outward `∂c/∂n`, however the
+  face is written: on a low face, `c_x_low_β` is minus the coefficient of `∂c/∂x`.
 - A Robin coefficient that reads the coordinates or the time varies by site or in time:
-  `Robin(1 + 0.1y, 1.0, g)`. It is computed at each boundary site at the time of each
-  substep. An implicit field with such a face builds its operator per site, and rebuilds it
-  at each substep when a coefficient reads the time. Where `α` and `β` have opposite signs at
-  a site, that site's part stays out of the implicit operator and the Newton iterations
-  correct it. The automatic explicit count bounds the face over its sites, and over each
-  step's time span when a coefficient reads the time: the count can change from one MCS to
-  the next.
-- In an extension, a field's `@boundary` replaces the base's for that field.
+  `(1 + 0.1y) * c(t, 0, y) - Differential(x)(c(t, 0, y)) ~ g`. It is computed at each
+  boundary site at the time of each substep. An implicit field with such a face builds its
+  operator per site, and rebuilds it at each substep when a coefficient reads the time.
+  Where `α` and `β` have opposite signs at a site, that site's part stays out of the
+  implicit operator and the Newton iterations correct it. The automatic explicit count
+  bounds the face over its sites, and over each step's time span when a coefficient reads
+  the time: the count can change from one MCS to the next.
+- An initial condition (`c(0, x, y) ~ v`) is the field's initial value, not a boundary
+  condition.
 
-`Δ(c)` is a field operator: it appears in field equations (`D(c) ~ …`), where it reads the
-faces. Anywhere else (site updates, energies, drives, `@observed`) it is an error.
-
-`@bcs` takes the boundary conditions of a LatticePDE system, one per line. A field is read
-at a face by its coordinates, with one of them fixed: `c(t, 0, y)` is the low face of `x`,
-and `c(t, L, y)` the high face, with `L` the lattice's extent along `x` (its size times the
-spacing). The field compiler lowers them as it lowers a `PDESystem`:
-
-- `c(t, 0, y) ~ v`: a fixed value, the same as `Dirichlet(v)`;
-- `Differential(x)(c(t, L, y)) ~ q`: a gradient across the face (Neumann);
-- `α * c(t, 0, y) - β * Differential(x)(c(t, 0, y)) ~ g`: a Robin face;
-- `c ~ masked(kind == border, v)`: a node value, the same as `sites(kind == border) => Dirichlet(v)`.
-
-A value is an expression of numbers, parameters, the coordinates, `time` and `mcs`, as in
-`@boundary`, and so is a Robin coefficient. A face or mask that
-`@boundary` sets too is an error that prints the condition. So is an initial value
-(`c(0, x, y) ~ v`: the field's `@variables` default is its initial value), and a periodic
-pair on an axis the lattice closes (periodicity is the lattice's, for every field).
+`Δ` is a field operator: it appears in `PDESystem` equations, where it reads the faces. In
+a model line (site updates, energies, drives, `@observed`) it is an error.
 `Potts.fields(model)` holds the conditions, so `discretize` runs them as written.
 
 ## Components
@@ -552,74 +645,112 @@ s[:pk₊drug][end]
 `Potts.compose(model, Potts.component(:pk, sys, model))` adds the same system outside the
 macro. `Potts.component` gives it the model's kinds and lattice, which a component must have.
 
-### Fields from a `PDESystem`
+### A `PDESystem` as a namespaced component
 
-A LatticePDE `PDESystem` joins a model the same way: `Potts.compose(model,
+`@fields` and `Potts.couple` add a `PDESystem` under its own names. To keep its names apart
+from the model's, compose it as a component instead: `Potts.compose(model,
 Potts.component(:drug, pdesys, model))`. Each dependent variable `c` becomes the field
-`drug₊c`, each parameter `k` the parameter `drug₊k`, each equation a field equation and
-each condition a `@bcs` condition. The fields run as declared ones do: with the problem's
-`field_solver`, or by name in `FieldGroups(:drug₊c => BackwardEuler())`. A condition at the
-start time, `c(0, x, y) ~ v`, gives the field's initial value.
+`drug₊c`, and each parameter `k` the parameter `drug₊k`. The fields run as the others do:
+with the problem's `field_solver`, or by name in `FieldGroups(:drug₊c => BackwardEuler())`.
 
-The rules:
-
-- The spatial domain is the lattice's, in the model's length unit: axis `d` spans
-  `[0, dims[d] · spacing[d]]`, as in `Potts.fields(model)`. Another interval is an error
-  that names both.
-- An input variable (`[input = true]`) is filled by the CPM. Its `lattice_input_name` (or
-  else its own name) says what it reads: `"kind"` is the kind of each site (0 for the
-  medium), and the name of a field or site variable of the model reads that variable.
+- The domain rule and the initial value are those of `@fields`.
+- A component takes no bindings. Each input is filled by its `lattice_input_name` (or else
+  its own name), as an unbound input of `@fields` is: `"kind"` is the kind of each site (0
+  for the medium), and the name of a field or site variable of the model reads that
+  variable.
 - A kind table of the `PDESystem` is an error: declare the table in the model.
 
-!!! warning "Write a kind set as `ismember`, not with `∈`"
-    In a `PDESystem` equation, write a kind set as `ismember(k, (1, 2))`. Two spellings
-    with `∈` build without an error, but they do not test membership:
-
-    - `k ∈ Set([1, 2])` is `false` before any symbolic term exists. So
-      `3k * (k ∈ Set([1, 2]))` is `0`: the term is deleted from the equation, and no
-      check can see it after that. This is reported to Symbolics as
-      [Symbolics.jl#2126](https://github.com/JuliaSymbolics/Symbolics.jl/issues/2126).
-    - `k ∈ (1, 2)` is a domain pairing (`VarDomainPairing`): it says that `k` lies in the
-      interval from 1 to 2. In an expression it is an error from Symbolics
-      (`MethodError: no method matching +(::Num, ::VarDomainPairing)`); alone as a side,
-      LatticePDE refuses it.
-
-    These facts hold on Symbolics 7.45.0 and 7.48.0.
-
-    `k ∈ [1, 2]` stays a symbolic `in` term, which LatticePDE also refuses.
-
 ```@example equations
-using Potts.ModelingToolkitBase: PDESystem, Differential
-using Potts.ModelingToolkitBase.DomainSets: Interval
-@parameters x y Dd = 0.5 kd = 0.1
-@variables c(..) kin(..)::Int32 [input = true, lattice_input_name = "kind"]
-Dt = Differential(Potts.t)
-pde = PDESystem([Dt(c(Potts.t, x, y)) ~ Dd * Potts.LatticePDE.Δ(c(Potts.t, x, y)) - kd * c(Potts.t, x, y) + (kin(Potts.t, x, y) == 1)],
-    [c(0, x, y) ~ 0.0], [Potts.t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 30.0), y ∈ Interval(0.0, 30.0)],
-    [Potts.t, x, y], [c(Potts.t, x, y), kin(Potts.t, x, y)], [Dd, kd]; name = :drug)
+@parameters Dk = 0.5 kk = 0.1
+@variables kin(..)::Int32 [input = true, lattice_input_name = "kind"]
+pde = PDESystem([Dt(C) ~ Dk * Δ(C) - kk * C + (kin(t, x, y) == 1)], [],
+    lattice_domain(t, (x, y), (30, 30)), [t, x, y], [C, kin(t, x, y)], [Dk, kk]; name = :drug)
 withdrug = Potts.compose(dosed, Potts.component(:drug, pde, dosed))
 s = solve(PottsProblem(withdrug, layout(Tiling((5, 5); region = (11:20, 11:20), kinds = [:cell]), withdrug), (0, 5)),
     SequentialCPM())
 maximum(s.u[end].site.drug₊c)
 ```
 
-`lattice_domain(t, (x, y), dims; spacing)` gives the domain of a lattice, so you do not
-compute the extents yourself. An input that changes in time takes a function of the time,
-`inputs = [q => t -> values]`. A field algorithm writes its value into the input at the
-start and at the end of each window. An OrdinaryDiffEq solver evaluates it at every call of
-the right side, so it sees the input at each stage time. The masks that read the input
-follow. This standalone system has a source that a moving front switches
-on:
+## [The SciML path: `Potts.couple` and `Potts.field_inputs`](@id manual-sciml-path)
+
+`Potts.couple(model, pdesys; inputs = [...])` is `@fields` as a function. It returns
+`model` with the fields of `pdesys` under their own names. A binding compares a kind by its
+number, which `Potts.lookup(model, :A)` gives:
 
 ```@example equations
-using Potts.LatticePDE: lattice_domain, discretize, LatticeDiscretization, Grid
+@potts_model Host begin
+    @kinds medium A[frozen]
+    @lattice Lattice((24, 20); boundary = Closed())
+    @energy cells(A) => (volume - 16.0)^2
+    @sweep Metropolis(; temperature = 4.0)
+end
+@named host = Host()
+@parameters Ds = 0.2 ss = 0.5 ks = 0.1
+source = PDESystem([Dt(C) ~ Ds * Δ(C) + ss * endo(t, x, y) - ks * C], [c(0, x, y) ~ 0.0],
+    lattice_domain(t, (x, y), (24, 20)), [t, x, y], [C, endo(t, x, y)], [Ds, ss, ks]; name = :source)
+coupled = Potts.couple(host, source; inputs = [endo => Potts.kind == Potts.lookup(host, :A)])
+nothing # hide
+```
+
+The `PDESystem` stays a plain ModelingToolkit system. `Potts.field_inputs(integ)` gives the
+current values of its inputs at the CPM state of an integrator, by name
+(`Potts.field_inputs(prob)` at the problem's initial state). With them, LatticePDE's
+`discretize` builds an `ODEProblem` of the fields, which any SciML solver steps. Here Tsit5
+steps one MCS from the field at MCS 5 of a run, and the owned run steps the same MCS with
+400 explicit substeps:
+
+```@example equations
+using Potts.LatticePDE: discretize, LatticeDiscretization, Grid
+σs = zeros(Int32, 24, 20); σs[5:8, 5:8] .= 1; σs[14:17, 10:13] .= 2
+integ = init(PottsProblem(coupled, [ownership => σs, kind => [:A, :A]], (0, 6); seed = 3,
+    field_solver = ExplicitEuler(; substeps = 400)), SequentialCPM())
+for _ in 1:5
+    step!(integ)
+end
+c5 = copy(Array(integ.u.site.c))
+fprob = discretize(source, LatticeDiscretization(Grid((24, 20)); T = Float64);
+    inputs = collect(Potts.field_inputs(integ)))
+fsol = solve(remake(fprob; u0 = vec(c5), tspan = (0.0, 1.0)), Tsit5(); abstol = 1e-11, reltol = 1e-11)
+step!(integ)
+maximum(abs, reshape(fsol.u[end], 24, 20) .- Array(integ.u.site.c))
+```
+
+The difference is the time error of the owned run's 400 explicit substeps.
+
+!!! warning "The SciML path holds the cells fixed"
+    The SciML problem carries a snapshot, and two things are not in it:
+
+    - **The cells.** The inputs are a snapshot of one CPM state. The ODE path matches the
+      owned run only while σ is frozen, as with the frozen kind `A` here. When the cells
+      move, the owned run fills the inputs again at every MCS, and a SciML solve over
+      several MCS still reads the snapshot.
+    - **The clock.** The solve above starts at MCS 5 with `tspan = (0.0, 1.0)`. In it,
+      `step_index(t)` counts from 0, not from 5, and `tspan = (5.0, 6.0)` also counts from
+      0. A rate gated on the step index (`ifelse(step_index(t) >= 3, …, 0.0)`) is on in the
+      owned run and off in the SciML solve.
+
+A LatticePDE system on its own also takes `lattice_domain`. An input that changes in time
+takes a function of the time, `inputs = [q => t -> values]`. A field algorithm writes its
+value into the input at the start and at the end of each window. An OrdinaryDiffEq solver
+evaluates it at every call of the right side, so it sees the input at each stage time. The
+masks that read the input follow. This standalone system has a source that a moving front
+switches on:
+
+```@example equations
+@parameters Dw = 0.5 kw = 0.1
 @variables w(..) front(..) [input = true]
-we, fe = w(Potts.t, x, y), front(Potts.t, x, y)
-dom = lattice_domain(Potts.t, (x, y), (20, 10); spacing = 0.5, tspan = (0.0, 2.0))
-pulse = PDESystem([Dt(we) ~ Dd * Potts.LatticePDE.Δ(we) - kd * we + fe], [w(0, x, y) ~ 0.0], dom,
-    [Potts.t, x, y], [we, fe], [Dd, kd]; name = :pulse)
+we, fe = w(t, x, y), front(t, x, y)
+dom = lattice_domain(t, (x, y), (20, 10); spacing = 0.5, tspan = (0.0, 2.0))
+pulse = PDESystem([Dt(we) ~ Dw * Δ(we) - kw * we + fe], [w(0, x, y) ~ 0.0], dom,
+    [t, x, y], [we, fe], [Dw, kw]; name = :pulse)
 lit(t) = [i <= 10t ? 1.0 : 0.0 for i in 1:20, j in 1:10]   # columns 1 to 10t are on
 pprob = discretize(pulse, LatticeDiscretization(Grid((20, 10))); inputs = [fe => lit])
 psol = solve(pprob, ExplicitEuler(; dt = 0.1))
 round.(psol[we][end][:, 5]; digits = 2)
+```
+
+`field_report` gives the substep count of this system and its cause:
+
+```@example equations
+Potts.LatticePDE.field_report(pprob, ExplicitEuler(; dt = 0.1))
 ```

@@ -148,11 +148,12 @@ end
   - Divide two such integrals for a mean over the cluster's sites.
   - Plain `integral(x)` stays the sum over the cell's own sites.
 
-The helpers also work in site scope between sweeps: field equations, site updates and the
-decisions of a `@convert` pass. For example, here is the x offset of a site from its
-cytoplasm's centroid:
+The helpers also work in site scope between sweeps: the bindings of `@fields`, site
+updates and the decisions of a `@convert` pass. For example, here is the x offset of a site
+from its cytoplasm's centroid, bound to the input `q` of a `PDESystem` with
+`Dt(signal) ~ q - signal`:
 
 ```julia
 Q = minimum_image(position[1] - centroid(sibling(owner, cytoplasm), 1), 1)
-@equations D(signal) ~ Q * (kind == cytoplasm) - signal
+@fields signal = polarity (q => Q * (kind == cytoplasm))
 ```

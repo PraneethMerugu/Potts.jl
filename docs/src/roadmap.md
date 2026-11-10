@@ -48,7 +48,6 @@ juxtacrine signaling and contact-dependent rules.
 
 - Kind-dependent diffusion in flux form, `∇⋅(Dc[kind] * ∇(c))`, with harmonic-mean faces.
 - Secretion and uptake helpers (`secrete`, `uptake`, at rims, contacts or centroids).
-- Per-face boundary conditions (`@boundary c begin … end`, Dirichlet and flux).
 - Noise in cell and field equations (`@brownians`).
 
 ## Intracellular models

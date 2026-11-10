@@ -34,8 +34,8 @@ are not available yet are on the [Roadmap](@ref roadmap).
 | `<Plugin Name="Chemotaxis">` `Lambda`, `SaturationCoef` | `@drive Chemotaxis(c; strength = λ, response = saturating(s), kinds = (k,))` |
 | `ChemotactTowards` (only into medium) | `Chemotaxis(c; strength = λ, when = old == 0)` |
 | `<Plugin Name="FocalPointPlasticity">` | `@relationship fpp(cell, cell) capacity = n`, `edges(fpp) => λ * (distance - L)^2`, `@link` / `@unlink` |
-| `<Steppable Type="DiffusionSolverFE">` | `c(field)`, `@equations D(c) ~ Dc * Δ(c) - δ * c + …`, `field_solver = ExplicitEuler(substeps = n)` |
-| `SecretionData` (inside cells of a type) | `+ s * (kind == k)` in the field equation |
+| `<Steppable Type="DiffusionSolverFE">` | a `PDESystem` with `Dt(c) ~ Dc * Δ(c) - δ * c + …`, `@fields c = sys (…)`, `field_solver = ExplicitEuler(substeps = n)` |
+| `SecretionData` (inside cells of a type) | `+ s * src` in the field equation, with the input bound as `src => kind == k` |
 | `UniformInitializer`, `BlobInitializer` | `Tiling`, `Scattered`, or your own layer (see [layouts](@ref tutorial-layouts)) |
 | PIF initializer / PIF dumper | `read_piff`, `write_piff` |
 | `MitosisSteppable` (`divide_cell_random_orientation`, along major/minor axis) | `@divide cells(k) when = …, along = RandomPlane()` / `major_axis()` / `principal_axis()` |
@@ -78,7 +78,7 @@ are not available yet are on the [Roadmap](@ref roadmap).
 | `MonteCarloSampler MCSDuration` | `@sweep Metropolis(; …, mcs_duration = Δt)` |
 | `MCS Neighborhood` (copy neighborhood) | `@relations proposal = …` |
 | `Property` (cell scope) | `@variables x(cell) = x₀` |
-| `Field` with `Diffusion rate` | `c(field)` with `D(c) ~ rate * Δ(c) + …` |
+| `Field` with `Diffusion rate` | a `PDESystem` field `c` with `Dt(c) ~ rate * Δ(c) + …`, coupled by `@fields` |
 | `System` with `DiffEqn` (cell scope) | `@equations D(x) ~ …` for a cell variable, or a `System` in `@components` |
 | `System` with `Rule` / `Equation` | `@after_mcs x ~ …` |
 | `Event` with `Condition` | an `ifelse` in an update, or a `DiscreteCallback` |

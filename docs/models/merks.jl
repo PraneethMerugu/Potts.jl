@@ -12,7 +12,8 @@
 #
 # **What you will learn**
 #
-# - how to declare a diffusing field and write its reaction–diffusion equation;
+# - how to write a diffusing field's reaction–diffusion equation as a ModelingToolkit
+#   `PDESystem`, and couple it into the model;
 # - how a *drive* adds a non-energetic bias (chemotaxis) to every copy;
 # - how a shape descriptor (the cell length) enters an energy term;
 # - how a constraint keeps cells in one piece, and how a structural parameter switches
@@ -78,9 +79,17 @@
 # - **Clocks:** one MCS is 30 s, so the paper's 48 h are 5760 MCS and 50 h are 6000 MCS.
 #   The paper run below shows both.
 #
-# Its definition, abridged:
+# Its definition, abridged. The field is a `PDESystem` whose inputs `cell`, `ecm` and
+# `frame` are 0/1 site fields:
 #
 # ```julia
+# function merks2006(lattice)            # in module MerksField
+#     @parameters Dc = 0.75 α = 5.4e-3 ε = 5.4e-3
+#     eq = Dt(C) ~ Dc * Δ(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)
+#     return PDESystem([eq], [c(0, x, y) ~ 0.0, C ~ masked(frame(t, x, y), 0.0)], lattice_domain(t, (x, y), lattice),
+#         [t, x, y], [C, cell(t, x, y), ecm(t, x, y), frame(t, x, y)], [Dc, α, ε]; name = :merks_field)
+# end
+#
 # @potts_model Merks2006 begin
 #     @structural_parameters begin
 #         lattice = (500, 500)
@@ -89,11 +98,12 @@
 #     @kinds medium endothelial border[frozen]
 #     @parameters begin
 #         T = 50.0; λ = 50.0; A = 100.0; λ_L = 5.0; L = 50.0; E₀ = 5000.0
-#         χcM = 1000.0; χcc = 1000.0; s = 0.0; Dc = 0.75; α = 5.4e-3; ε = 5.4e-3
-#         J[kind, kind] = [0.0 20.0 0.0; 20.0 40.0 100.0; 0.0 100.0 0.0]
+#         χcM = 1000.0; χcc = 1000.0; s = 0.0
 #     end
-#     @variables c(field) = 0.0
 #     @lattice Lattice(lattice; boundary = Closed(), neighborhood = Moore(1))
+#     @fields c = MerksField.merks2006(lattice) (MerksField.cell => kind == endothelial, MerksField.ecm => kind == medium,
+#         MerksField.frame => kind == border)
+#     @parameters J[kind, kind] = [0.0 20.0 0.0; 20.0 40.0 100.0; 0.0 100.0 0.0]
 #     @relations proposal = Moore(1)
 #     @energy begin
 #         cells(endothelial) => λ * (volume - A)^2 + λ_L * (major_length - L)^2
@@ -103,10 +113,6 @@
 #                    (c[target] / (1 + s * c[target]) - c[source] / (1 + s * c[source]))
 #     # rule = :soft: the authors' connectivity penalty
 #     @drive connectivity(endothelial; rule = ArcOrPair(), penalty = E₀)
-#     @equations D(c) ~ Dc * Δ(c) + α * (kind == endothelial) - ε * c * (kind == medium)
-#     @boundary c begin
-#         sites(kind == border) => Dirichlet(0.0)
-#     end
 #     @schedule fields, sweep
 #     @sweep Metropolis(; temperature = T)
 # end
@@ -216,6 +222,10 @@ nothing #hide
 #
 # <<fragment parameters>>
 #
+# The temperature and the contact energies follow the field line of Step 4:
+#
+# <<fragment contact_parameters>>
+#
 # The defaults are the paper's values in lattice units (2 µm per site, 30 s per MCS):
 # ``T = 50``, ``\chi = 1000``, cell–cell ``J = 40``, cell–matrix ``J = 20``,
 # ``D = 0.75``, ``\alpha = \varepsilon = 5.4 \cdot 10^{-3}``, target area `V₀` ``= 100``
@@ -225,12 +235,22 @@ nothing #hide
 #
 # ### Step 4: the chemoattractant field
 #
+# The field is a ModelingToolkit `PDESystem`, written before the model:
+#
+# <<fragment equation>>
+#
+# `c(t, x, y)` is the chemoattractant at every lattice site; it starts at 0
+# (`c(0, x, y) ~ 0.0`). `Differential(t)` is the time derivative and `Δ` the lattice
+# Laplacian. The `PDESystem` does not read the cells. It reads two *input fields*, `cell`
+# and `ecm`, which are 1 at an endothelial site and at a matrix site: this is Eq. (6) term
+# by term. `lattice_domain` gives the domain of the lattice, which a coupled `PDESystem`
+# must have. The model couples it at one line:
+#
 # <<fragment field>>
 #
-# A variable's *scope* is written in its signature. `c(field)` is a value at every lattice
-# site that is advanced by a differential equation (Step 7); it starts at 0. Other scopes
-# are `x(site)` (a value per site updated by rules), `x(cell)` (one value per cell) and
-# `x(model)` (one value for the whole model).
+# `@fields` adds the field and its parameters `Dc`, `σc` and `δc` to the model, binds each
+# input to a kind test, and names the field `c` for the lines after it. The field is solved
+# after every MCS. How is chosen when the problem is built (below), not in the model.
 #
 # ### Step 5: the energy
 #
@@ -258,16 +278,7 @@ nothing #hide
 # extension-only rule of the 2008 paper (its Eq. (4), here without the saturation of the
 # response), with which cells form sprouts.
 #
-# ### Step 7: the field equation
-#
-# <<fragment equation>>
-#
-# `@equations` takes ModelingToolkit-style equations. `D(c)` is the time derivative,
-# `Δ(c)` the lattice Laplacian, and `(kind == endothelial)` is 1 at sites owned by an
-# endothelial cell and 0 elsewhere: this is Eq. (6) term by term. The equation is solved
-# after every MCS. How is chosen when the problem is built (below), not in the model.
-#
-# ### Step 8: connectivity
+# ### Step 7: connectivity
 #
 # <<fragment constraint>>
 #
@@ -276,7 +287,7 @@ nothing #hide
 # default rule, `Local()`, decides from the 8 neighbors of the target site whether the
 # losing cell stays in one piece (see [Connectivity](@ref manual-connectivity)).
 #
-# ### Step 9: the sweep
+# ### Step 8: the sweep
 #
 # <<fragment sweep>>
 #

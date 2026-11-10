@@ -35,11 +35,12 @@ ODEs. It differentiates only the fields' response to the parameters along the pa
 
 | Where | Seed | Read |
 |---|---|---|
-| `@potts_model` (A) | a Dual for a parameter, or a Dual initial value of a field, in the operating point; `remake(prob; p = [k => Dual])` | `sol.u[i].site.c`, `integ[c]`, `integ.u` (Dual arrays) |
-| `discretize` (B) | `remake(prob; p = [k => Dual])`, or a Dual `u0` | `sol.u[i]` (Dual arrays) |
+| a Potts model | a Dual for a parameter, or a Dual initial value of a field, in the operating point; `remake(prob; p = [k => Dual])` | `sol.u[i].site.c`, `integ[c]`, `integ.u` (Dual arrays) |
+| a LatticePDE problem (`discretize`) | `remake(prob; p = [k => Dual])`, or a Dual `u0` | `sol.u[i]` (Dual arrays) |
 
-- In A, the live state `integ.state` stays primal. Only the field arrays are Duals.
-- A field default that reads a seeded parameter (`c(field) = c0`) carries `∂c₀/∂c0`.
+- In a Potts model, the live state `integ.state` stays primal. Only the field arrays are Duals.
+- A field whose initial value reads a seeded parameter (`c(0, x, y) ~ c0` in its `PDESystem`)
+  carries `∂c₀/∂c0`.
 - `integ[c] = v` sets the field's derivative parts from `v` (0 for plain values).
 - `integ.ps[k] = v` mid-run is allowed. The written value is plain from then on, and the other
   parameters keep their derivative parts.
@@ -48,7 +49,7 @@ ODEs. It differentiates only the fields' response to the parameters along the pa
 
 ## Cost
 
-A Dual run in A is the primal run plus the derivative parts of the fields:
+A Dual run of a Potts model is the primal run plus the derivative parts of the fields:
 
 - an explicit group: one Dual step per window (about 1.2 to 1.4 times the primal field cost);
 - an implicit group: the primal solve once per stage, then one linear solve per derivative part

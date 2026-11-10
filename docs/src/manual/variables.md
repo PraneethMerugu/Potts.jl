@@ -6,16 +6,19 @@ argument, that says where it lives:
 | Declaration | Scope | One value per | Typical use |
 |---|---|---|---|
 | `act(site) = 0.0` | site | lattice site | memory of protrusions, labels |
-| `c(field) = 0.0` | field | lattice site, integrated by a PDE | chemicals |
+| `c(..) = 0.0` in a `PDESystem` | field | lattice site, integrated by a PDE | chemicals (see [`@fields`](@ref manual-equations)) |
 | `V_target(cell) = 25.0` | cell | cell | target sizes, clocks, protein levels |
 | `g(model) = 0.0` | model | whole model | global signals, counters |
 | `rest(bond) = 6.0` | edge of relationship `bond` | link | rest lengths of links |
 
-The value after `=` is the default initial value. Initial values can also be given in the
+A field is a dependent variable of a `PDESystem`, which `@fields` couples into the model;
+it is not declared in `@variables`. The value after `=` is the default initial value. Initial values can also be given in the
 operating point: `:c => c0` (an array over the lattice for site and field variables, a
 vector over cells for cell variables, a number for any scope).
 
-Options go in brackets after the default:
+Options go in brackets after the default. The field options (`bounds`, `lattice_storage`,
+`lattice_level`) are metadata of the field's variable in its `PDESystem`, such as
+`@variables c(..) = 0.5 [bounds = (0, 1)]`:
 
 - `[clear_on_ownership_change = true]` (site variables): the value at a site is reset to
   0 whenever the site changes owner. This is how the "act" memory of the Act model forgets
@@ -37,25 +40,25 @@ Options go in brackets after the default:
 - `[lattice_storage = Float16 | Float32 | Float64]` (fields): the field's own array type,
   whatever the state type `T` of the problem. Its kernels compute in the field solver's
   `compute_T` (default: `T`) and round once at each store. A Float32 problem with
-  `c(field) = 0.0, [lattice_storage = Float64]` and `field_solver = ExplicitEuler(; compute_T = Float64)`
+  `c(..) = 0.0 [lattice_storage = Float64]` and `field_solver = ExplicitEuler(; compute_T = Float64)`
   steps `c` exactly as a Float64 problem does, while the CPM stays in Float32. A Float16 field
   takes every field solver; an implicit solver solves it in `T` and rounds each update to
   Float16.
 - `[lattice_level = Coarse(k)]` (fields): the field lives on the lattice coarsened by `k` (a
   power of two) on every axis. Each node of the coarse grid is a block of `k` sites per axis,
   and the field's array has one value per node. Every axis of the lattice must have a size
-  that `k` divides. The field's equation, its `@bcs` and its solver run on the coarse grid,
+  that `k` divides. The field's equation, its conditions and its solver run on the coarse grid,
   with the spacing `k h`. A CPM read of the field at a site reads the node of the site's
   block, so `integral(c) / volume` is the cell's average over its sites. The fine reads in
   the field's terms are folded over each node's block:
-  - `kind` (and any integer input) is read at the block's owner, the kind on most of the
-    block's sites. A tie goes to the smallest kind number that is not the medium; the medium
-    is the owner only when no cell kind ties with it. A term that reads no other fine value
-    is evaluated at the owner, so the node takes the full rate of its owner:
-    `(kind == P) + 0.5 * (kind == Q)` and `R[kind]` give the same rate, and exactly one of
-    `kind == medium` and `kind != medium` holds.
+  - `kind`, any integer input and an input bound to a kind expression (`isP => kind == P`,
+    `r => R[kind]`) are read at the block's owner, the kind on most of the block's sites. A
+    tie goes to the smallest kind number that is not the medium; the medium is the owner
+    only when no cell kind ties with it. A term that reads no other fine value is evaluated
+    at the owner, so the node takes the full rate of its owner: `isP + 0.5 * isQ` and `r`
+    give the same rate, and exactly one of `kind == medium` and `kind != medium` holds.
   - A term that reads a fine field nonlinearly (`max(g - gT, 0)`, `g / (K + g)`,
-    `R[kind] * g` for a field `g` of the lattice) is replaced by its mean over the block, with
+    `r * g` for a field `g` of the lattice) is replaced by its mean over the block, with
     each fine value at its own site. The coarse field then receives the fine integral of the
     term.
   - A spatial operator reads its operand on the operand's own grid. In a row of another grid

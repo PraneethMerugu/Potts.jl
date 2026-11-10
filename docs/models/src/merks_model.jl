@@ -2,6 +2,21 @@
 # each `#> name` marker, up to the next marker or `#<`) and then runs the whole file;
 # lib/PottsModels/test/tutorial_models.jl checks that it compiles to the same problem as
 # `PottsModels.MerksVasculogenesis`.
+using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
+using Potts.LatticePDE: Δ, lattice_domain
+
+#> equation
+function chemoattractant(lattice)
+    t = Potts.t
+    @parameters x y Dc = 0.75 σc = 5.4e-3 δc = 5.4e-3
+    @variables c(..) cell(..)::Bool [input = true] ecm(..)::Bool [input = true]
+    C = c(t, x, y)
+    eq = Differential(t)(C) ~ Dc * Δ(C) + σc * cell(t, x, y) - δc * C * ecm(t, x, y)
+    return PDESystem([eq], [c(0, x, y) ~ 0.0], lattice_domain(t, (x, y), lattice), [t, x, y],
+        [C, cell(t, x, y), ecm(t, x, y)], [Dc, σc, δc]; name = :merks_field)
+end
+#<
+
 @potts_model Vasculogenesis begin
     #> lattice
     @structural_parameters begin
@@ -19,14 +34,14 @@
         λ_L = 5.0
         L = 50.0
         χ = 1000.0
-        Dc = 0.75
-        σc = 5.4e-3
-        δc = 5.4e-3
+    end
+    #> field
+    @fields c = chemoattractant(lattice) (:cell => kind == endothelial, :ecm => kind == medium)
+    #> contact_parameters
+    @parameters begin
         T = 50.0
         J[kind, kind] = [0.0 20.0; 20.0 40.0]
     end
-    #> field
-    @variables c(field) = 0.0
     #<
     @energy begin
         #> shape
@@ -41,8 +56,6 @@
     else
         @drive copy => -χ * (c[target] - c[source])
     end
-    #> equation
-    @equations D(c) ~ Dc * Δ(c) + σc * (kind == endothelial) - δc * c * (kind == medium)
     #> constraint
     @constraint connectivity(endothelial)
     #> sweep

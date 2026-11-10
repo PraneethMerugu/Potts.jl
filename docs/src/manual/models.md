@@ -12,13 +12,14 @@ ModelingToolkit's `@mtkmodel` defines a constructor for a system.
 | `@structural_parameters` | values fixed when the model is built (lattice size, switches) | this page |
 | `@kinds` | cell kinds; the first is the medium; `[frozen]` marks obstacles | [Kinds](@ref manual-kinds) |
 | `@parameters` | numbers of the model, scalars or kind-indexed tables | [Parameters](@ref manual-parameters) |
-| `@variables` | state with a scope: `x(site)`, `x(cell)`, `x(model)`, `c(field)`, `e(rel)` | [Variables and scopes](@ref manual-variables) |
+| `@variables` | state with a scope: `x(site)`, `x(cell)`, `x(model)`, `e(rel)` | [Variables and scopes](@ref manual-variables) |
 | `@lattice`, `@relations` | the grid and the neighborhoods | [Lattices and relations](@ref manual-lattice) |
 | `@energy` | the terms of the Hamiltonian | [Energy](@ref manual-energy) |
 | `@drive` | non-energetic biases of copy attempts | [Drives](@ref manual-drive) |
 | `@constraint` | hard rules on copy attempts | [Constraints](@ref manual-constraint) |
 | `@before_mcs`, `@after_mcs`, `@on_copy` | discrete updates | [Updates](@ref manual-updates) |
-| `@equations` | PDEs for fields, ODEs for cells and the model, component couplings | [Equations and solvers](@ref manual-equations) |
+| `@fields` | the fields: a ModelingToolkit `PDESystem`, its inputs bound to site expressions | [Equations and solvers](@ref manual-equations) |
+| `@equations` | ODEs for cells and the model, algebraic equations, component couplings | [Equations and solvers](@ref manual-equations) |
 | `@components` | ModelingToolkit systems in every cell or once in the model | [Equations and solvers](@ref manual-equations) |
 | `@divide` | cell and cluster division | [Lifecycle](@ref manual-lifecycle) |
 | `@relationship`, `@link`, `@unlink` | links between cells | [Relationships](@ref manual-relationships) |

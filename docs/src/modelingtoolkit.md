@@ -27,23 +27,29 @@ uses for spatial reaction networks.
 ## One model with every part
 
 The examples on this page use one small model. It has a cell ODE with an algebraic
-variable, a model ODE, a diffusing field, an update rule, an initialization equation and a
-ModelingToolkit component in every cell:
+variable, a model ODE, a diffusing field from a `PDESystem`, an update rule, an
+initialization equation and a ModelingToolkit component in every cell:
 
 ```@example mtk
 using Potts
-using Potts.ModelingToolkitBase: System, @variables, @parameters
+using Potts.ModelingToolkitBase: System, PDESystem, Differential, @variables, @parameters
+using Potts.LatticePDE: Δ, lattice_domain
 
 @variables y(Potts.t) = 1.0
 @parameters kc = 0.1
 @named decay = System([Potts.D(y) ~ -kc * y], Potts.t)   # an ordinary MTK model
+
+@parameters px py Dc = 0.1
+@variables c(..) = 0.0
+C = c(Potts.t, px, py)
+@named heat = PDESystem([Differential(Potts.t)(C) ~ Dc * Δ(C) - 0.1 * C], [],   # a field PDE, stepped by Potts
+    lattice_domain(Potts.t, (px, py), (12, 8)), [Potts.t, px, py], [C], [Dc])
 
 @potts_model AllParts begin
     @kinds medium A
     @parameters begin
         k = 0.1
         r = 0.2
-        Dc = 0.1
     end
     @variables begin
         x(cell) = 2.0
@@ -51,18 +57,17 @@ using Potts.ModelingToolkitBase: System, @variables, @parameters
         m(model) = 0.0
         gap(model) = 0.0
         acc(cell) = 0.0
-        c(field) = 0.0
         rt(cell), [guess = 1.0]
     end
     @components cells(A) decay = decay
     @lattice Lattice((12, 8))
     @energy cells => (volume - 16.0)^2
+    @fields heat
     @equations begin
         D(x) ~ -k * excess
         excess ~ x                     # algebraic: eliminated by mtkcompile
         D(m) ~ r * gap
         gap ~ 1 - m
-        D(c) ~ Dc * Δ(c) - 0.1 * c     # a field PDE, stepped by Potts
     end
     @initialization_equations rt^2 ~ volume
     @after_mcs acc ~ Pre(acc) + excess
@@ -168,14 +173,20 @@ at each new `W` (SciML/LinearSolve.jl#1378 fixes it). For a symmetric
 system, `linsolve = LatticePCG()` takes conjugate gradients with the same preconditioner.
 Any other keyword is an error that names it.
 
+A `PDESystem` coupled by `@fields` or `Potts.couple` stays a plain ModelingToolkit system.
+`Potts.field_inputs(integ)` gives its inputs at the CPM state of an integrator, so
+`discretize(pdesys, disc; inputs = collect(Potts.field_inputs(integ)))` solves its fields with
+any SciML solver. The result matches the owned run only while σ is frozen: see
+[The SciML path](@ref manual-sciml-path).
+
 A field algorithm returns SciML's `ODESolution`, with linear interpolation between the saves:
 `sol(t)`, `Array(sol)`, `sol.ps` (the values at the end of the run) and `sol.stats` work. A
-field reads as SciML reads a variable, on every solver and in both front ends: `sol[c]` (or
+field reads as SciML reads a variable, on every solver and in a Potts solution too: `sol[c]` (or
 `sol[:c]`, or the bare `c`) is one grid per save, so `sol[c][end]` is the last grid;
 `sol[c, i]` is the grid at save `i`, `sol(t; idxs = c)` the grid at time `t`, `sol[x]` holds the
 site centers, and `sol(t, x, y)` interpolates between them. `field_series(sol, :c)` is the
 time-first view, as in MethodOfLines: an array of size `(length(sol.t), nx, ny)` that reads the
-saves when indexed. In this front end it gives the same view of a field over the saved MCS.
+saves when indexed. On a Potts solution it gives the same view of a field over the saved MCS.
 On a large lattice, pass `saveat` (the times to keep) or `save_everystep = false` (the end
 only) to an OrdinaryDiffEq solver. By default it saves every step with its dense output, about
 seven state vectors per step for `FBDF` (14 MiB per step at 512²).
@@ -239,10 +250,11 @@ u = only(Potts.updates(sys))
 ```
 
 Update rules are not ModelingToolkit events: Potts compiles and runs them in its sweep,
-and `MTK.discrete_events(sys)` and `MTK.continuous_events(sys)` are empty:
+and the events of its inner `System`, `MTK.discrete_events(Potts.inner(sys))` and
+`MTK.continuous_events(Potts.inner(sys))`, are empty:
 
 ```@example mtk
-(MTK.discrete_events(sys), MTK.continuous_events(sys))
+(MTK.discrete_events(Potts.inner(sys)), MTK.continuous_events(Potts.inner(sys)))
 ```
 
 ## Initialization per cell [C7]
@@ -276,10 +288,11 @@ Cross-entity and lattice initialization stay in Potts' own initialization phase 
   end
   ```
 
-- **Fields are not compiled by MTK** [C8]. A field PDE is a Symbolics equation that
-  `MTK.equations` lists, but it is in no ModelingToolkit system: Potts steps it on the
-  lattice with the problem's `field_solver`, and `Potts.ode_system(csys, :field)` is an
-  `ArgumentError`.
+- **Fields are not compiled by MTK** [C8]. A field's equations come from a
+  ModelingToolkit `PDESystem`, and `MTK.equations` lists them. MTK does not discretize or
+  step them. LatticePDE lowers the `PDESystem` to lattice kernels, and Potts steps them in
+  the MCS loop with the problem's `field_solver`. `Potts.ode_system(csys, :field)` is an
+  `ArgumentError` that gives the SciML route below.
 
 - **Update rules are not MTK events** [C6]. They are compiled and run by Potts, so a
   reader of `MTK.discrete_events` sees none.

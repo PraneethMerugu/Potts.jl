@@ -54,7 +54,7 @@ One MCS runs its phases in this order:
 | `before_mcs` | `@before_mcs` updates |
 | `sweep` | the copy attempts |
 | `after_mcs` | `@after_mcs` updates |
-| `fields` | the field equations (`D(c) ~ …` of `c(field)`) |
+| `fields` | the fields of `@fields` (their `PDESystem` equations) |
 | `components` | cell and model ODEs, discrete components, `@link`/`@unlink` |
 | `operators` | (none yet) |
 | `lifecycle` | `@divide` rules |
@@ -92,14 +92,22 @@ then the fields over a quarter of the MCS, four times.
 
 ```@example sweep
 using Potts
+using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
+using Potts.LatticePDE: Δ, lattice_domain
+
+t = Potts.t
+@parameters x y
+@variables c(..) = 0.0 incell(..)::Bool [input = true]
+C = c(t, x, y)
+signal = PDESystem([Differential(t)(C) ~ 0.2 * Δ(C) + 0.1 * incell(t, x, y) - 0.05 * C], [],
+    lattice_domain(t, (x, y), (20, 20)), [t, x, y], [C, incell(t, x, y)], []; name = :signal)
 
 @potts_model FieldFirst begin
     @kinds medium cell
-    @variables c(field) = 0.0
     @lattice Lattice((20, 20); neighborhood = Moore(1))
     @energy Volume(cell; target = 16.0, strength = 1.0)
+    @fields c = signal (incell => kind == cell)
     @drive copy => -5.0 * (c[target] - c[source])
-    @equations D(c) ~ 0.2 * Δ(c) + 0.1 * (kind == cell) - 0.05 * c
     @schedule fields, sweep
     @sweep Metropolis(; temperature = 4.0)
 end
