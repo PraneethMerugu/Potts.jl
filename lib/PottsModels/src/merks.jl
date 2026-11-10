@@ -1,3 +1,42 @@
+# The chemoattractant of the Merks models as plain MTK `PDESystem`s on the lattice, coupled into
+# each model with `@fields`. Their inputs are 0/1 site fields that the `@fields` line binds to
+# kind tests: `cell` (an endothelial site), `ecm` (a medium site) and `frame` (a border site).
+# The parameters keep the names and defaults of the models.
+module MerksField
+using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters, t_nounits
+using Potts.LatticePDE: Δ, masked, step_index, lattice_domain
+const t = t_nounits                     # the time of every Potts model (`Potts.t`)
+const Dt = Differential(t)
+@parameters x y
+@variables c(..) cell(..)::Bool [input = true] ecm(..)::Bool [input = true] frame(..)::Bool [input = true]
+const C = c(t, x, y)
+
+# `∂c/∂t = D Δc + α δ_cell − ε c (1 − δ_cell)` (2006 Eq. 6) with zero flux at the lattice faces
+function vasculogenesis(lattice)
+    @parameters Dc = 0.75 σc = 5.4e-3 δc = 5.4e-3
+    eq = Dt(C) ~ Dc * Δ(C) + σc * cell(t, x, y) - δc * C * ecm(t, x, y)
+    return PDESystem([eq], [c(0, x, y) ~ 0.0], lattice_domain(t, (x, y), lattice), [t, x, y],
+        [C, cell(t, x, y), ecm(t, x, y)], [Dc, σc, δc]; name = :merks_field)
+end
+
+# the same equation, held at `c = 0` on the border sites after every substep
+function merks2006(lattice)
+    @parameters Dc = 0.75 α = 5.4e-3 ε = 5.4e-3
+    eq = Dt(C) ~ Dc * Δ(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)
+    return PDESystem([eq], [c(0, x, y) ~ 0.0, C ~ masked(frame(t, x, y), 0.0)], lattice_domain(t, (x, y), lattice),
+        [t, x, y], [C, cell(t, x, y), ecm(t, x, y), frame(t, x, y)], [Dc, α, ε]; name = :merks_field)
+end
+
+# 2008 Eq. 1: as `merks2006`, but off for the first `t_relax` MCS (`step_index(t)` is the MCS)
+function merks2008(lattice)
+    @parameters Dc = 0.75 α = 0.03 ε = 0.03 t_relax = 100.0
+    rate = Dc * Δ(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)
+    eq = Dt(C) ~ ifelse(step_index(t) >= t_relax, rate, 0.0)
+    return PDESystem([eq], [c(0, x, y) ~ 0.0, C ~ masked(frame(t, x, y), 0.0)], lattice_domain(t, (x, y), lattice),
+        [t, x, y], [C, cell(t, x, y), ecm(t, x, y), frame(t, x, y)], [Dc, α, ε, t_relax]; name = :merks_field)
+end
+end
+
 """
     MerksVasculogenesis(; name, lattice = (500, 500), contact_inhibited = false, …)
 
@@ -57,14 +96,13 @@ prob = PottsProblem(MerksVasculogenesis(; name = :merks), merks_state(), (0, 10_
         λ_L = 5.0
         L = 50.0
         χ = 1000.0
-        Dc = 0.75
-        σc = 5.4e-3
-        δc = 5.4e-3
+    end
+    @lattice Lattice(lattice; boundary = Closed(), neighborhood = Moore(1))
+    @fields c = MerksField.vasculogenesis(lattice) (MerksField.cell => kind == endothelial, MerksField.ecm => kind == medium)
+    @parameters begin
         T = 50.0
         J[kind, kind] = [0.0 20.0; 20.0 40.0]
     end
-    @variables c(field) = 0.0
-    @lattice Lattice(lattice; boundary = Closed(), neighborhood = Moore(1))
     @relations proposal = Moore(1)
     @energy begin
         cells(endothelial) => λ * (volume - V₀)^2 + λ_L * (major_length - L)^2
@@ -75,7 +113,6 @@ prob = PottsProblem(MerksVasculogenesis(; name = :merks), merks_state(), (0, 10_
     else
         @drive copy => -χ * (c[target] - c[source])
     end
-    @equations D(c) ~ Dc * Δ(c) + σc * (kind == endothelial) - δc * c * (kind == medium)
     @constraint connectivity(endothelial)
     @sweep Metropolis(; temperature = T)
 end
@@ -184,8 +221,9 @@ Kinds `medium`, `endothelial` and `border[frozen]`; start it with
 - A frozen border (`Frame(:border)`, one site thick) with `J(c,B) = 100`, `J(M,B) = 0`
   (D-050 M4).
 - The field (Eq. 6, D-050 M5): `∂c/∂t = D Δc + α[endothelial] − ε c [medium]`, 5-point `Δ`,
-  held at `c = 0` on the border after every substep (`@boundary`), stepped before the sweep
-  of each MCS (`@schedule fields, sweep`).
+  held at `c = 0` on the border after every substep (the masked condition
+  `c ~ masked(frame, 0.0)`), stepped before the sweep of each MCS (`@schedule fields, sweep`).
+  The field is a plain MTK `PDESystem`, coupled with `@fields`.
 
 Parameters, in lattice units (Δx = 2 µm, 1 MCS = 30 s): `T = 50`, `λ = 50`, `A = 100`,
 `λ_L = 5`, `L = 50` ("about 100 µm"; the released files' 60 is `L = 60.0`), `E₀ = 5000`,
@@ -216,13 +254,11 @@ prob = PottsProblem(Merks2006(; name = :m), layout(merks2006_layout(), (500, 500
         χcM = 1000.0
         χcc = 1000.0
         s = 0.0
-        Dc = 0.75
-        α = 5.4e-3
-        ε = 5.4e-3
-        J[kind, kind] = [0.0 20.0 0.0; 20.0 40.0 100.0; 0.0 100.0 0.0]
     end
-    @variables c(field) = 0.0
     @lattice Lattice(lattice; boundary = Closed(), neighborhood = Moore(1))
+    @fields c = MerksField.merks2006(lattice) (MerksField.cell => kind == endothelial, MerksField.ecm => kind == medium,
+        MerksField.frame => kind == border)
+    @parameters J[kind, kind] = [0.0 20.0 0.0; 20.0 40.0 100.0; 0.0 100.0 0.0]
     @relations proposal = Moore(1)
     @energy begin
         cells(endothelial) => λ * (volume - A)^2 + λ_L * (major_length - L)^2
@@ -234,10 +270,6 @@ prob = PottsProblem(Merks2006(; name = :m), layout(merks2006_layout(), (500, 500
         @drive connectivity(endothelial; rule = ArcOrPair(), penalty = E₀)
     else
         @constraint connectivity(endothelial; rule = ArcOrPair())
-    end
-    @equations D(c) ~ Dc * Δ(c) + α * (kind == endothelial) - ε * c * (kind == medium)
-    @boundary c begin
-        sites(kind == border) => Dirichlet(0.0)
     end
     @schedule fields, sweep
     @sweep Metropolis(; temperature = T)
@@ -291,14 +323,11 @@ prob = PottsProblem(Merks2008(; name = :m), layout(merks2008_sprout(), (202, 202
         χcM = 500.0
         χcc = 0.0
         s = 0.0
-        Dc = 0.75
-        α = 0.03
-        ε = 0.03
-        t_relax = 100.0
-        J[kind, kind] = [0.0 20.0 0.0; 20.0 40.0 100.0; 0.0 100.0 0.0]
     end
-    @variables c(field) = 0.0
     @lattice Lattice(lattice; boundary = Closed(), neighborhood = NeighborOrder(4))
+    @fields c = MerksField.merks2008(lattice) (MerksField.cell => kind == endothelial, MerksField.ecm => kind == medium,
+        MerksField.frame => kind == border)
+    @parameters J[kind, kind] = [0.0 20.0 0.0; 20.0 40.0 100.0; 0.0 100.0 0.0]
     @relations proposal = NeighborOrder(4)
     @energy begin
         cells(endothelial) => λ * (volume - A)^2
@@ -310,10 +339,6 @@ prob = PottsProblem(Merks2008(; name = :m), layout(merks2008_sprout(), (202, 202
     else
         @drive copy => ifelse(new == 0, 0.0,
             -ifelse(old == 0, χcM, χcc) * (c[target] / (1 + s * c[target]) - c[source] / (1 + s * c[source])))
-    end
-    @equations D(c) ~ ifelse(mcs >= t_relax, Dc * Δ(c) + α * (kind == endothelial) - ε * c * (kind == medium), 0.0)
-    @boundary c begin
-        sites(kind == border) => Dirichlet(0.0)
     end
     @schedule fields, sweep
     @sweep Metropolis(; temperature = T)
