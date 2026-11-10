@@ -157,6 +157,17 @@ const P60G_ALGS = (SequentialCPM(), CheckerboardCPM())
 # medium owns no site, ECs are tip and stalk. Kinds: medium 0, fluid 1, matrix 2, tip 3,
 # stalk 4. Every gate site appears once; the explicit twin spells each class out.
 
+# the field `q`, `D(q) ~ 0.25 [tip or stalk]`, as a plain MTK PDESystem on the 32 × 24 lattice; its
+# input `tip_or_stalk` (0/1) is bound at `@fields` (a kind class or the explicit kinds)
+function p60g_q_pde()
+    t, L = Potts.t, Potts.LatticePDE
+    Potts.ModelingToolkitBase.@parameters x y
+    Potts.ModelingToolkitBase.@variables q(..) tip_or_stalk(..)::Bool [input = true]
+    Q = q(t, x, y)
+    return Potts.ModelingToolkitBase.PDESystem([Potts.D(Q) ~ 0.25 * tip_or_stalk(t, x, y)], [q(0, x, y) ~ 0.0],
+        L.lattice_domain(t, (x, y), (32, 24)), [t, x, y], [Q, tip_or_stalk(t, x, y)], Any[]; name = :p60g_q)
+end
+
 p60g_define(:P60gC, :(@potts_model P60gC begin
     @kinds begin
         medium
@@ -179,10 +190,10 @@ p60g_define(:P60gC, :(@potts_model P60gC begin
         tgt(cell) = 0.0
         age(cell) = 0.0
         g(cell) = 0.0
-        q(field) = 0.0
-        n_ec(model) = 0.0
     end
     @lattice Lattice((32, 24); neighborhood = Moore(1))
+    @fields p60g_q_pde() (:tip_or_stalk => ismember(kind, endothelial))
+    @variables n_ec(model) = 0.0
     @energy begin
         cells(endothelial) => 2.0 * (volume - 16)^2
         cells(ecm) => 0.02 * (volume - tgt)^2
@@ -203,10 +214,7 @@ p60g_define(:P60gC, :(@potts_model P60gC begin
         age ~ Pre(age) + (kind ∈ endothelial)
         near ~ count(true for n in Moore(1)(site) if kind[n] ∈ ecm)
     end
-    @equations begin
-        D(g) ~ 0.5 * ismember(kind, endothelial)
-        D(q) ~ 0.25 * ismember(kind, endothelial)
-    end
+    @equations D(g) ~ 0.5 * ismember(kind, endothelial)
     @observed begin
         nec ~ count(true for c in cells(endothelial))
         vecm ~ sum(volume for c in cells(ecm))
@@ -230,10 +238,10 @@ end))
         tgt(cell) = 0.0
         age(cell) = 0.0
         g(cell) = 0.0
-        q(field) = 0.0
-        n_ec(model) = 0.0
     end
     @lattice Lattice((32, 24); neighborhood = Moore(1))
+    @fields p60g_q_pde() (:tip_or_stalk => ((kind == tip) || (kind == stalk)))
+    @variables n_ec(model) = 0.0
     @energy begin
         cells(tip, stalk) => 2.0 * (volume - 16)^2
         cells(fluid, matrix) => 0.02 * (volume - tgt)^2
@@ -254,10 +262,7 @@ end))
         age ~ Pre(age) + ((kind == tip) || (kind == stalk))
         near ~ count(true for n in Moore(1)(site) if (kind[n] == fluid) || (kind[n] == matrix))
     end
-    @equations begin
-        D(g) ~ 0.5 * ((kind == tip) || (kind == stalk))
-        D(q) ~ 0.25 * ((kind == tip) || (kind == stalk))
-    end
+    @equations D(g) ~ 0.5 * ((kind == tip) || (kind == stalk))
     @observed begin
         nec ~ count(true for c in cells(tip, stalk))
         vecm ~ sum(volume for c in cells(fluid, matrix))
@@ -291,10 +296,10 @@ p60g_define(:P60gCTip, :(@potts_model P60gCTip begin
         tgt(cell) = 0.0
         age(cell) = 0.0
         g(cell) = 0.0
-        q(field) = 0.0
-        n_ec(model) = 0.0
     end
     @lattice Lattice((32, 24); neighborhood = Moore(1))
+    @fields p60g_q_pde() (:tip_or_stalk => ismember(kind, endothelial))
+    @variables n_ec(model) = 0.0
     @energy begin
         cells(endothelial) => 2.0 * (volume - 16)^2
         cells(ecm) => 0.02 * (volume - tgt)^2
@@ -315,10 +320,7 @@ p60g_define(:P60gCTip, :(@potts_model P60gCTip begin
         age ~ Pre(age) + (kind ∈ endothelial)
         near ~ count(true for n in Moore(1)(site) if kind[n] ∈ ecm)
     end
-    @equations begin
-        D(g) ~ 0.5 * ismember(kind, endothelial)
-        D(q) ~ 0.25 * ismember(kind, endothelial)
-    end
+    @equations D(g) ~ 0.5 * ismember(kind, endothelial)
     @sweep Metropolis(; temperature = 3.0)
 end))
 
@@ -336,10 +338,10 @@ p60g_define(:P60gXSpare, :(@potts_model P60gXSpare begin
         tgt(cell) = 0.0
         age(cell) = 0.0
         g(cell) = 0.0
-        q(field) = 0.0
-        n_ec(model) = 0.0
     end
     @lattice Lattice((32, 24); neighborhood = Moore(1))
+    @fields p60g_q_pde() (:tip_or_stalk => ((kind == tip) || (kind == stalk)))
+    @variables n_ec(model) = 0.0
     @energy begin
         cells(tip, stalk) => 2.0 * (volume - 16)^2
         cells(fluid, matrix) => 0.02 * (volume - tgt)^2
@@ -360,10 +362,7 @@ p60g_define(:P60gXSpare, :(@potts_model P60gXSpare begin
         age ~ Pre(age) + ((kind == tip) || (kind == stalk))
         near ~ count(true for n in Moore(1)(site) if (kind[n] == fluid) || (kind[n] == matrix))
     end
-    @equations begin
-        D(g) ~ 0.5 * ((kind == tip) || (kind == stalk))
-        D(q) ~ 0.25 * ((kind == tip) || (kind == stalk))
-    end
+    @equations D(g) ~ 0.5 * ((kind == tip) || (kind == stalk))
     @sweep Metropolis(; temperature = 3.0)
 end))
 

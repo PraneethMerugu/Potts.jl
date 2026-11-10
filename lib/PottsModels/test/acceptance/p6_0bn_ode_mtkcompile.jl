@@ -207,12 +207,20 @@ end
     end
     @sweep Metropolis(; temperature = 1.0)
 end
+# an aux field `cfield ~ 1.0`, a plain MTK PDESystem coupled with `@fields`
+function p60bn_aux_pde()
+    t, L = Potts.t, Potts.LatticePDE
+    Potts.ModelingToolkitBase.@parameters x y
+    Potts.ModelingToolkitBase.@variables cfield(..)
+    C = cfield(t, x, y)
+    return Potts.ModelingToolkitBase.PDESystem([C ~ 1.0], [cfield(0, x, y) ~ 0.0], L.lattice_domain(t, (x, y), (12, 8)),
+        [t, x, y], [C], Any[]; name = :p60bn_aux)
+end
 @potts_model P60bnFieldAlg begin
     @kinds medium A
-    @variables cfield(field) = 0.0
     @lattice Lattice((12, 8))
+    @fields p60bn_aux_pde()
     @energy cells => (volume - 16.0)^2
-    @equations cfield ~ 1.0
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model P60bnBoth begin

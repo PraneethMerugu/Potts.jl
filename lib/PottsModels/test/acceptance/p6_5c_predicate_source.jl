@@ -18,9 +18,12 @@
 #
 # - A field rate may multiply any term by a site predicate built from `kind`, neighbour
 #   folds over a relation of `site` (`any(… for n in R(site))`, `count(… for n in R(site)
-#   if …) > 0`), site variables, `position`, and model-local helper functions of `site`:
-#       @equations D(F) ~ D_F * Δ(F) - k_d * F +
-#                         k_s * (kind == lam) * any(kind[n] == substrate for n in VonNeumann(1)(site))
+#   if …) > 0`), site variables, `position`, and model-local helper functions of `site`. The
+#   field is a plain MTK PDESystem whose 0/1 inputs the `@fields` line binds to the predicate
+#   (F4-B5; formerly the field line of `@equations`):
+#       D(F) ~ D_F * Δ(F) - k_d * F + k_s * lam * src            (the PDESystem)
+#       @fields p65cb_pde() (:lam => kind == lam,
+#                            :src => any(kind[n] == substrate for n in VonNeumann(1)(site)))
 # - The predicate is evaluated on the σ the field phase sees at each substep (σ does not
 #   change between substeps: fields run between sweeps).
 # - Out-of-lattice neighbours on closed axes are skipped; periodic axes wrap (as for every
@@ -28,7 +31,7 @@
 # - The source is not confined: diffusion and decay act on the whole lattice.
 # - Explicit Euler, n substeps of dt/n; n = max(requested, stable_substeps(D, dt, h, k)),
 #   k the bound on |∂rate/∂F|. With one substep F ← F + D·ΔF − k_d·F + k_s·[pred], so
-#   F → k_s/k_d at a persistent source. A closed axis without `@boundary` is zero flux.
+#   F → k_s/k_d at a persistent source. A closed axis without a face condition is zero flux.
 # - Phase order: fields run after `after_mcs` and before every `@convert` (default schedule):
 #   sweep, then the PDE, then conversion (spec 14 §2.9.6).
 # - Device: the same rate runs in the generated field kernel on Metal (Float32) and ROCm, no
@@ -73,32 +76,51 @@ p65cb_model(name::Symbol) = isdefined(@__MODULE__, name) ? getfield(@__MODULE__,
                             error("P6.5c fixture $name did not build: $(get(P65CB_DEFINE_ERRORS, name, "unknown"))")
 p65cb_system(name::Symbol) = Base.invokelatest(p65cb_model(name); name = :pb)
 
-const P65CB_ANY = :(k_s * (kind == lam) * any(kind[n] == substrate for n in VonNeumann(1)(site)))
-# a model of Fixture P's shape; `rate` the source term, `zb` the z boundary, `field = false`
-# drops the field (the fingerprint control)
-function p65cb_src(name; rate = P65CB_ANY, zb = :(Closed()), field = true)
-    stmts = Any[
-        :(@kinds medium substrate[frozen] lam),
-        :(@parameters begin
-            D_F = 0.0
-            k_d = 0.5
-            k_s = 0.5
-            mobile = 0.0
-        end),
-        :(@lattice Lattice((6, 6, 4); boundary = (Periodic(), Periodic(), $zb), neighborhood = VonNeumann(1))),
-        :(touches_substrate(s) = count(true for n in VonNeumann(1)(s) if kind[n] == substrate) > 0),
-        :(@energy cells(lam) => (volume - 8.0)^2),
-        :(@constraint mobile > 0.5),
-    ]
-    field && append!(stmts, [:(@variables F(field) = 0.0), :(@equations D(F) ~ D_F * Δ(F) - k_d * F + $rate)])
-    push!(stmts, :(@sweep Metropolis(; temperature = 1.0)))
+const P65CB_ANY = :(any(kind[n] == substrate for n in VonNeumann(1)(site)))
+# The field `F` of Fixture P as a plain MTK PDESystem on the 6 × 6 × 4 lattice:
+# `D_F ΔF − k_d F + k_s [lam] [src]` (`diffusion = false`: no `D_F ΔF`; `source = false`: no
+# `[src]`). Its inputs `lam` (0/1) and `src` are bound at `@fields`, `lam` to `kind == lam` and
+# `src` to the site predicate, so the source term is `k_s * (kind == lam) * predicate`. `src`
+# is not declared `::Bool`: the coupling does not take the neighbor fold `any(… for n in …)` as
+# a truth value.
+function p65cb_pde(; diffusion = true, source = true)
+    t, L = Potts.t, Potts.LatticePDE
+    Potts.ModelingToolkitBase.@parameters x y z D_F = 0.0 k_d = 0.5 k_s = 0.5
+    Potts.ModelingToolkitBase.@variables F(..) lam(..)::Bool [input = true] src(..) [input = true]
+    X, LAM, SRC = F(t, x, y, z), lam(t, x, y, z), src(t, x, y, z)
+    rate = -k_d * X + (source ? k_s * LAM * SRC : k_s * LAM)
+    diffusion && (rate = D_F * L.Δ(X) + rate)
+    return Potts.ModelingToolkitBase.PDESystem([Potts.D(X) ~ rate], [F(0, x, y, z) ~ 0.0],
+        L.lattice_domain(t, (x, y, z), (6, 6, 4)), [t, x, y, z], source ? [X, LAM, SRC] : [X, LAM],
+        diffusion ? [D_F, k_d, k_s] : [k_d, k_s]; name = :p65cb_field)
+end
+# a model of Fixture P's shape; `source` the site predicate of the source term (`nothing`:
+# the kind test alone), `zb` the z boundary, `field = false` drops the field (the fingerprint
+# control)
+function p65cb_src(name; source = P65CB_ANY, zb = :(Closed()), field = true)
+    lat = :(@lattice Lattice((6, 6, 4); boundary = (Periodic(), Periodic(), $zb), neighborhood = VonNeumann(1)))
+    helper = :(touches_substrate(s) = count(true for n in VonNeumann(1)(s) if kind[n] == substrate) > 0)
+    tail = [:(@energy cells(lam) => (volume - 8.0)^2), :(@constraint mobile > 0.5), :(@sweep Metropolis(; temperature = 1.0))]
+    stmts = if field
+        fields = source === nothing ? :(@fields p65cb_pde(; source = false) (:lam => kind == lam)) :
+                 :(@fields p65cb_pde() (:lam => kind == lam, :src => $source))
+        Any[:(@kinds medium substrate[frozen] lam), lat, helper, fields, :(@parameters mobile = 0.0), tail...]
+    else
+        Any[:(@kinds medium substrate[frozen] lam),
+            :(@parameters begin
+                D_F = 0.0
+                k_d = 0.5
+                k_s = 0.5
+                mobile = 0.0
+            end), lat, helper, tail...]
+    end
     return Expr(:macrocall, Symbol("@potts_model"), LineNumberNode(0, :p65cb), name, Expr(:block, stmts...))
 end
 
 p65cb_define(:P65cbAny, p65cb_src(:P65cbAny))
-p65cb_define(:P65cbHelper, p65cb_src(:P65cbHelper; rate = :(k_s * (kind == lam) * touches_substrate(site))))
-p65cb_define(:P65cbKindOnly, p65cb_src(:P65cbKindOnly; rate = :(k_s * (kind == lam))))
-p65cb_define(:P65cbPosition, p65cb_src(:P65cbPosition; rate = :(k_s * (kind == lam) * (position[3] == 2))))
+p65cb_define(:P65cbHelper, p65cb_src(:P65cbHelper; source = :(touches_substrate(site))))
+p65cb_define(:P65cbKindOnly, p65cb_src(:P65cbKindOnly; source = nothing))
+p65cb_define(:P65cbPosition, p65cb_src(:P65cbPosition; source = :(position[3] == 2)))
 p65cb_define(:P65cbPeriodicZ, p65cb_src(:P65cbPeriodicZ; zb = :(Periodic())))
 p65cb_define(:P65cbNoField, p65cb_src(:P65cbNoField; field = false))
 
@@ -298,20 +320,15 @@ end
 
 const P65CB_CONVERT_BODY = quote
     @kinds medium substrate[frozen] cyto lam
-    @parameters begin
-        k_d = 0.5
-        k_s = 0.5
-        mobile = 0.0
-    end
-    @variables F(field) = 0.0
     @lattice Lattice((6, 6, 4); boundary = (Periodic(), Periodic(), Closed()), neighborhood = VonNeumann(1))
     touches_substrate(s) = count(true for n in VonNeumann(1)(s) if kind[n] == substrate) > 0
+    @fields p65cb_pde(; diffusion = false) (:lam => kind == lam, :src => touches_substrate(site))
+    @parameters mobile = 0.0
     @energy begin
         cells(cyto, lam) => (volume - 8.0)^2
         contacts => ifelse(cluster[owner] == cluster[owner′], 1.0, 3.0)
     end
     @constraint mobile > 0.5
-    @equations D(F) ~ -k_d * F + k_s * (kind == lam) * touches_substrate(site)
     @convert protrusion clusters(cyto) begin
         to = sibling(lam)
         at = touches_substrate(site)

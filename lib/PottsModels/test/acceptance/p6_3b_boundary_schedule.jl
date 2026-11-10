@@ -5,6 +5,12 @@
 # entries of the phase order). D-035 is amended as D-075 states, in the same change.
 # Decision: D-145. Frozen (AUTONOMY §7.3).
 #
+# F4-B5 (D-F4-2): the fields here are plain MTK PDESystems coupled with `@fields`, and the
+# `@boundary` entries below are their conditions. `x => (Dirichlet(v), …)` is `c(t, 0, y) ~ v`
+# (the high face `c(t, X, y) ~ v`, `X` the extent), `NoFlux()` is no condition, and
+# `sites(pred) => Dirichlet(v)` is the masked condition `c ~ masked(mask, v)`, its 0/1 input
+# `mask` bound to `pred` at `@fields`. The semantics, oracles and controls are unchanged.
+#
 # Surface pinned here (model content; nothing in core is model-named):
 #
 #   @boundary c begin
@@ -194,24 +200,34 @@ p63b_problem(nm::Symbol, op, tspan; kw...) = PottsProblem(p63b_sys(nm), op, tspa
 # body + extra sections (each an `Expr` of a section macro call)
 p63b_body(base::Expr, extra...) = (b = copy(base); foreach(e -> push!(b.args, e), extra); b)
 
+# --- the fields: plain MTK PDESystems coupled with `@fields` (F4-B5) -----------------------------
+# The conditions are those of the PDESystem: a face value `Dirichlet(v)` is `c(t, 0, y) ~ v` at
+# the face (its ghost rule above), a zero-flux face has no condition, and a site mask is the
+# masked condition `c ~ masked(mask, v)`, its 0/1 input `mask` bound to a kind test at `@fields`.
+# Each builder declares its axes, field, inputs and parameters (`Potts.ModelingToolkitBase`'s
+# `@parameters`, `@variables`) and returns `p63b_system(…)`.
+p63b_system(eq, bcs, dims, xs, dvs, ps) = Potts.ModelingToolkitBase.PDESystem([eq], bcs,
+    Potts.LatticePDE.lattice_domain(Potts.t, Tuple(xs), dims), [Potts.t; xs], dvs, ps; name = :p63b_field)
+const p63b_Δ = Potts.LatticePDE.Δ
+const p63b_masked = Potts.LatticePDE.masked
+
 # --- 1. the 2D absorbing ring ---------------------------------------------------------------
 const P63B_RING_BASE = quote
     @kinds medium border[frozen]
-    @parameters begin
-        Dc = 0.2
-        s = 0.05
-        cb = 0.0
-    end
-    @variables c(field) = 0.0
     @lattice Lattice((14, 12); boundary = Closed(), neighborhood = Moore(1))
     @energy cells => 0.0 * volume
-    @equations D(c) ~ Dc * Δ(c) + s
     @sweep Metropolis(; temperature = 1.0)
 end
-P63B_SRC[:P63bRing] = p63b_body(P63B_RING_BASE, :(@boundary c begin
-    sites(kind == border) => Dirichlet(cb)
-end))
-P63B_SRC[:P63bRingFree] = p63b_body(P63B_RING_BASE)        # control: no @boundary
+# `D(c) ~ Dc Δc + s`; `clamp`: c = cb on the border sites after every substep
+function p63b_ring_pde(; clamp)
+    Potts.ModelingToolkitBase.@parameters x y Dc = 0.2 s = 0.05 cb = 0.0
+    Potts.ModelingToolkitBase.@variables c(..) mask(..)::Bool [input = true]
+    C, M = c(Potts.t, x, y), mask(Potts.t, x, y)
+    return p63b_system(Potts.D(C) ~ Dc * p63b_Δ(C) + s, [c(0, x, y) ~ 0.0; clamp ? [C ~ p63b_masked(M, cb)] : []],
+        (14, 12), [x, y], clamp ? [C, M] : [C], [Dc, s, cb])
+end
+P63B_SRC[:P63bRing] = p63b_body(P63B_RING_BASE, :(@fields p63b_ring_pde(; clamp = true) (:mask => kind == border)))
+P63B_SRC[:P63bRingFree] = p63b_body(P63B_RING_BASE, :(@fields p63b_ring_pde(; clamp = false)))   # control: no clamp
 
 const P63B_RING_DIMS = (14, 12)
 p63b_ring_mask() = (m = trues(P63B_RING_DIMS); m[2:(end - 1), 2:(end - 1)] .= false; m)
@@ -225,20 +241,19 @@ p63b_ring_oracle(c0, n, k; cb = 0.0, clamp = :post) =
     p63b_ftcs(c0, n, k; D = 0.2, src = 0.05, axes = P63B_NOFLUX2, mask = p63b_ring_mask(), val = cb, clamp)
 
 # --- 2. a moving sink -------------------------------------------------------------------------
+function p63b_sink_pde()
+    Potts.ModelingToolkitBase.@parameters x y Dc = 0.2 s = 0.05
+    Potts.ModelingToolkitBase.@variables c(..) mask(..)::Bool [input = true]
+    C, M = c(Potts.t, x, y), mask(Potts.t, x, y)
+    return p63b_system(Potts.D(C) ~ Dc * p63b_Δ(C) + s, [c(0, x, y) ~ 0.0, C ~ p63b_masked(M, 0.0)], (16, 16), [x, y],
+        [C, M], [Dc, s])
+end
 P63B_SRC[:P63bSink] = quote
     @kinds medium sink
-    @parameters begin
-        Dc = 0.2
-        s = 0.05
-        T = 4.0
-    end
-    @variables c(field) = 0.0
     @lattice Lattice((16, 16); boundary = Closed(), neighborhood = Moore(1))
+    @fields p63b_sink_pde() (:mask => kind == sink)
+    @parameters T = 4.0
     @energy cells => (volume - 16.0)^2
-    @equations D(c) ~ Dc * Δ(c) + s
-    @boundary c begin
-        sites(kind == sink) => Dirichlet(0.0)
-    end
     @sweep Metropolis(; temperature = T)
 end
 function p63b_sink_op()
@@ -250,37 +265,39 @@ end
 # --- 3. per face, 2D ----------------------------------------------------------------------------
 const P63B_FACE2_BASE = quote
     @kinds medium A
-    @parameters Dc = 0.2
-    @variables c(field) = 0.0
     @lattice Lattice((16, 10); boundary = (Closed(), Periodic()), neighborhood = Moore(1))
     @energy cells => (volume - 16.0)^2
-    @equations D(c) ~ Dc * Δ(c)
     @sweep Metropolis(; temperature = 1.0)
 end
-P63B_SRC[:P63bFace2] = p63b_body(P63B_FACE2_BASE, :(@boundary c begin
-    x => (Dirichlet(0.0), NoFlux())
-end))
-P63B_SRC[:P63bFace2Free] = p63b_body(P63B_FACE2_BASE)      # control: no @boundary
+# `D(c) ~ Dc Δc`; `dirichlet`: x => (Dirichlet(0.0), NoFlux()), the value 0 at the low x face
+# and zero flux at the high one (`false`: zero flux on both)
+function p63b_face2_pde(; dirichlet = false)
+    Potts.ModelingToolkitBase.@parameters x y Dc = 0.2
+    Potts.ModelingToolkitBase.@variables c(..)
+    C = c(Potts.t, x, y)
+    return p63b_system(Potts.D(C) ~ Dc * p63b_Δ(C), [c(0, x, y) ~ 0.0; dirichlet ? [c(Potts.t, 0, y) ~ 0.0] : []],
+        (16, 10), [x, y], [C], [Dc])
+end
+P63B_SRC[:P63bFace2] = p63b_body(P63B_FACE2_BASE, :(@fields p63b_face2_pde(; dirichlet = true)))
+P63B_SRC[:P63bFace2Free] = p63b_body(P63B_FACE2_BASE, :(@fields p63b_face2_pde()))      # control: no face condition
 const P63B_FACE2_C0 = 0.5 .+ rand(StableRNG(3), 16, 10)
 p63b_face2_op() = [ownership => zeros(Int32, 16, 10), kind => Symbol[], :c => copy(P63B_FACE2_C0)]
 const P63B_FACE2_AXES = ((0.0, :noflux), :periodic)
 
 # --- 4. per face + mask, 3D ---------------------------------------------------------------------
+# x => (Dirichlet(1.0), Dirichlet(0.0)), y => (NoFlux(), Dirichlet(S)) and the border sites at 0
+function p63b_face3_pde()
+    Potts.ModelingToolkitBase.@parameters x y z Dc = 0.15 S = 2.0
+    Potts.ModelingToolkitBase.@variables c(..) mask(..)::Bool [input = true]
+    C, M, t = c(Potts.t, x, y, z), mask(Potts.t, x, y, z), Potts.t
+    bcs = [c(0, x, y, z) ~ 0.0, c(t, 0, y, z) ~ 1.0, c(t, 7, y, z) ~ 0.0, c(t, x, 6, z) ~ S, C ~ p63b_masked(M, 0.0)]
+    return p63b_system(Potts.D(C) ~ Dc * p63b_Δ(C), bcs, (7, 6, 5), [x, y, z], [C, M], [Dc, S])
+end
 P63B_SRC[:P63bFace3] = quote
     @kinds medium border[frozen]
-    @parameters begin
-        Dc = 0.15
-        S = 2.0
-    end
-    @variables c(field) = 0.0
     @lattice Lattice((7, 6, 5); boundary = (Closed(), Closed(), Periodic()), neighborhood = Moore(1))
+    @fields p63b_face3_pde() (:mask => kind == border)
     @energy cells => 0.0 * volume
-    @equations D(c) ~ Dc * Δ(c)
-    @boundary c begin
-        x => (Dirichlet(1.0), Dirichlet(0.0))
-        y => (NoFlux(), Dirichlet(S))
-        sites(kind == border) => Dirichlet(0.0)
-    end
     @sweep Metropolis(; temperature = 1.0)
 end
 const P63B_FACE3_DIMS = (7, 6, 5)
@@ -294,19 +311,26 @@ p63b_face3_oracle(c0, n, k; S = 2.0) =
     p63b_ftcs(c0, n, k; D = 0.15, axes = ((1.0, 0.0), (:noflux, S), :periodic), mask = p63b_block(), val = 0.0)
 
 # --- 5a/6. order: a drive gated on the field, before/after site updates -----------------------
+# `D(c) ~ rate`, its input `rate` bound to the model's parameter `s` (which the drive reads too)
+function p63b_order_pde()
+    Potts.ModelingToolkitBase.@parameters x y
+    Potts.ModelingToolkitBase.@variables c(..) rate(..) [input = true]
+    C = c(Potts.t, x, y)
+    return p63b_system(Potts.D(C) ~ rate(Potts.t, x, y), [c(0, x, y) ~ 0.0], (12, 12), [x, y], [C, rate(Potts.t, x, y)], Any[])
+end
 const P63B_ORDER_BASE = quote
     @kinds medium A
+    @lattice Lattice((12, 12); boundary = Closed(), neighborhood = Moore(1))
     @parameters begin
         s = 1.0
         T = 1.0
     end
+    @fields c = p63b_order_pde() (:rate => s)
     @variables begin
-        c(field) = 0.0
         wb(site) = -1.0
         wa(site) = -1.0
         occ(site) = -1.0
     end
-    @lattice Lattice((12, 12); boundary = Closed(), neighborhood = Moore(1))
     @energy cells => (volume - 16.0)^2
     @drive copy => ifelse(c[target] > 0.5 * s, 0.0, 1.0e6)
     @before_mcs wb ~ c
@@ -314,7 +338,6 @@ const P63B_ORDER_BASE = quote
         wa ~ c
         occ ~ (kind == A)
     end
-    @equations D(c) ~ s
     @sweep Metropolis(; temperature = T)
 end
 const P63B_ORDERS = (
@@ -346,13 +369,19 @@ const P63B_ORDER_EXPECT = (
 )
 
 # --- 6. the lifecycle as an entry -----------------------------------------------------------------
+# `D(c) ~ src`, its input `src` bound to the owner's volume on the A sites
+function p63b_life_pde()
+    Potts.ModelingToolkitBase.@parameters x y
+    Potts.ModelingToolkitBase.@variables c(..) src(..) [input = true]
+    C = c(Potts.t, x, y)
+    return p63b_system(Potts.D(C) ~ src(Potts.t, x, y), [c(0, x, y) ~ 0.0], (12, 12), [x, y], [C, src(Potts.t, x, y)], Any[])
+end
 const P63B_LIFE_BASE = quote
     @kinds medium A
-    @variables c(field) = 0.0
     @lattice Lattice((12, 12); boundary = Closed(), neighborhood = Moore(1))
+    @fields p63b_life_pde() (:src => ifelse(kind == A, volume[owner], 0.0))
     @energy cells => (volume - 16.0)^2
     @drive copy => 1.0e9
-    @equations D(c) ~ ifelse(kind == A, volume[owner], 0.0)
     @divide cells(A) when = mcs == 0, along = (1.0, 0.0)
     @sweep Metropolis(; temperature = 1.0)
 end
@@ -364,23 +393,24 @@ p63b_life_problem(v; seed = 3) =
         field_solver = ExplicitEuler(substeps = 1), capacity = 4, seed)
 
 # --- 5b. Merks-shaped: per-MCS oracle from the saved states ---------------------------------------
+# `D(c) ~ Dc Δc + σc [A] − δc c [medium]`, c = 0 on the border sites
+function p63b_merks_pde()
+    Potts.ModelingToolkitBase.@parameters x y Dc = 0.2 σc = 0.3 δc = 0.05
+    Potts.ModelingToolkitBase.@variables c(..) a(..)::Bool [input = true] med(..)::Bool [input = true] mask(..)::Bool [input = true]
+    C, X, Y, M = c(Potts.t, x, y), a(Potts.t, x, y), med(Potts.t, x, y), mask(Potts.t, x, y)
+    return p63b_system(Potts.D(C) ~ Dc * p63b_Δ(C) + σc * X - δc * C * Y, [c(0, x, y) ~ 0.0, C ~ p63b_masked(M, 0.0)],
+        (16, 16), [x, y], [C, X, Y, M], [Dc, σc, δc])
+end
 const P63B_MERKS_BASE = quote
     @kinds medium A border[frozen]
+    @lattice Lattice((16, 16); boundary = Closed(), neighborhood = Moore(1))
+    @fields c = p63b_merks_pde() (:a => kind == A, :med => kind == medium, :mask => kind == border)
     @parameters begin
-        Dc = 0.2
-        σc = 0.3
-        δc = 0.05
         χ = 50.0
         T = 5.0
     end
-    @variables c(field) = 0.0
-    @lattice Lattice((16, 16); boundary = Closed(), neighborhood = Moore(1))
     @energy cells(A) => (volume - 9.0)^2
     @drive copy => -χ * (c[target] - c[source])
-    @equations D(c) ~ Dc * Δ(c) + σc * (kind == A) - δc * c * (kind == medium)
-    @boundary c begin
-        sites(kind == border) => Dirichlet(0.0)
-    end
     @sweep Metropolis(; temperature = T)
 end
 P63B_SRC[:P63bMerks_fields_sweep] = p63b_body(P63B_MERKS_BASE, :(@schedule fields, sweep))
@@ -403,22 +433,22 @@ function p63b_merks_step(c, σ)
 end
 
 # --- 9. one host pass: an `Adaptive` cell ODE beside the field (Metal) ---------------------------
+# `D(c) ~ Dc Δc + [A]` on the periodic 16² lattice
+function p63b_host_pde()
+    Potts.ModelingToolkitBase.@parameters x y Dc = 0.1
+    Potts.ModelingToolkitBase.@variables c(..) a(..)::Bool [input = true]
+    C = c(Potts.t, x, y)
+    return p63b_system(Potts.D(C) ~ Dc * p63b_Δ(C) + a(Potts.t, x, y), [c(0, x, y) ~ 0.0], (16, 16), [x, y],
+        [C, a(Potts.t, x, y)], [Dc])
+end
 const P63B_HOST_BASE = quote
     @kinds medium A
-    @parameters begin
-        k = 0.3
-        Dc = 0.1
-    end
-    @variables begin
-        y(cell) = 1.0
-        c(field) = 0.0
-    end
+    @parameters k = 0.3
+    @variables y(cell) = 1.0
     @lattice Lattice((16, 16))
+    @fields p63b_host_pde() (:a => kind == A)
     @energy cells => (volume - 16.0)^2
-    @equations begin
-        D(y) ~ -k * y
-        D(c) ~ Dc * Δ(c) + (kind == A)
-    end
+    @equations D(y) ~ -k * y
     @sweep Metropolis(; temperature = 1.0)
 end
 P63B_SRC[:P63bHost_none] = p63b_body(P63B_HOST_BASE)
@@ -674,20 +704,39 @@ end
 # =======================================================================================
 # 7. errors
 # =======================================================================================
+# the error fixtures (F4-B5): a face condition on the periodic axis `y`; a field on
+# (t, x, y, z) with a zero-flux condition on its low `z` face, coupled to the 2D lattice (the
+# lattice has no axis `z`); and a masked condition on `wbin`, an input that reads the site
+# variable `wb`, a condition that sets no field
+function p63b_face2_bad(which)
+    Potts.ModelingToolkitBase.@parameters x y z Dc = 0.2
+    Potts.ModelingToolkitBase.@variables c(..)
+    if which === :periodic
+        C = c(Potts.t, x, y)
+        return p63b_system(Potts.D(C) ~ Dc * p63b_Δ(C), [c(0, x, y) ~ 0.0, c(Potts.t, x, 0) ~ 0.0], (16, 10), [x, y], [C], [Dc])
+    end
+    C = c(Potts.t, x, y, z)
+    zface = Potts.ModelingToolkitBase.Differential(z)(c(Potts.t, x, y, 0)) ~ 0.0
+    return p63b_system(Potts.D(C) ~ Dc * p63b_Δ(C), [c(0, x, y, z) ~ 0.0, zface], (16, 10, 4), [x, y, z], [C], [Dc])
+end
+function p63b_wb_bad()
+    Potts.ModelingToolkitBase.@parameters x y
+    Potts.ModelingToolkitBase.@variables w(..) wbin(..) [input = true, lattice_input_name = "wb"] a(..)::Bool [input = true]
+    W = w(Potts.t, x, y)
+    return p63b_system(Potts.D(W) ~ 0.0, [w(0, x, y) ~ 0.0, wbin(Potts.t, x, y) ~ p63b_masked(a(Potts.t, x, y), 0.0)],
+        (12, 12), [x, y], [W, wbin(Potts.t, x, y), a(Potts.t, x, y)], Any[])
+end
+
 @testset "P6.3b: @boundary and @schedule errors name the offender" begin
     face = (p63b_face2_op(), (0, 1))
     fkw = (; field_solver = ExplicitEuler(substeps = 1))
-    bad_boundary(entry) = p63b_body(P63B_FACE2_BASE, Expr(:macrocall, Symbol("@boundary"), LineNumberNode(1, :p63b), :c,
-        Expr(:block, entry)))
-    e = p63b_bad(bad_boundary(:(y => (Dirichlet(0.0), NoFlux()))), face...; fkw...)
+    e = p63b_bad(p63b_body(P63B_FACE2_BASE, :(@fields p63b_face2_bad(:periodic))), face...; fkw...)
     @test e !== nothing && occursin("periodic", lowercase(p63b_message(e)))
-    e = p63b_bad(bad_boundary(:(z => (NoFlux(), NoFlux()))), face...; fkw...)
-    @test e !== nothing && occursin(r"\bz\b", p63b_message(e))
+    e = p63b_bad(p63b_body(P63B_FACE2_BASE, :(@fields p63b_face2_bad(:z))), face...; fkw...)
+    @test e !== nothing && occursin(r"\bz\b", p63b_message(e)) && occursin("the lattice of `p63b` has 2 axes", p63b_message(e))
     order = ([ownership => p63b_order_σ(), kind => [:A]], (0, 1))
-    e = p63b_bad(p63b_body(P63B_ORDER_BASE, :(@boundary wb begin
-        sites(kind == A) => Dirichlet(0.0)
-    end)), order...; fkw...)
-    @test e !== nothing && occursin("wb", p63b_message(e))
+    e = p63b_bad(p63b_body(P63B_ORDER_BASE, :(@fields p63b_wb_bad() (:a => kind == A))), order...; fkw...)
+    @test e !== nothing && occursin(r"\bwb\b", p63b_message(e))
     for (sched, name) in ((:(@schedule feilds, sweep), "feilds"), (:(@schedule sweep, fields, sweep), "sweep"),
             (:(@schedule end_mcs, sweep), "end_mcs"), (:(@schedule after_mcs, sweep), "after_mcs"),
             (:(@schedule sweep, before_mcs), "before_mcs"))

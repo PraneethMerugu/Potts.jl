@@ -112,12 +112,20 @@ end
 
 # every construct a claim is about, in one model: cell and model ODEs with algebraic
 # variables, a field PDE, an update, an initialization equation, two components
+# the field `c`, a plain MTK PDESystem coupled with `@fields`
+function p60bs_field_pde()
+    t, L = Potts.t, Potts.LatticePDE
+    Potts.ModelingToolkitBase.@parameters x y Dc = 0.1
+    Potts.ModelingToolkitBase.@variables c(..)
+    C = c(t, x, y)
+    return Potts.ModelingToolkitBase.PDESystem([Potts.D(C) ~ Dc * L.Δ(C) - 0.1 * C], [c(0, x, y) ~ 0.0],
+        L.lattice_domain(t, (x, y), (12, 8)), [t, x, y], [C], [Dc]; name = :p60bs_field)
+end
 @potts_model P60bsAll begin
     @kinds medium A
     @parameters begin
         k = 0.1
         r = 0.2
-        Dc = 0.1
     end
     @variables begin
         x(cell) = 2.0
@@ -125,19 +133,18 @@ end
         m(model) = 0.0
         gap(model) = 0.0
         acc(cell) = 0.0
-        c(field) = 0.0
-        rt(cell), [guess = 1.0]
     end
     @components cells(A) dc = P60BS_DC
     @components cells(A) grn = P60BS_GRN
     @lattice Lattice((12, 8))
+    @fields p60bs_field_pde()
+    @variables rt(cell), [guess = 1.0]
     @energy cells => (volume - 16.0)^2
     @equations begin
         D(x) ~ -k * xalias
         xalias ~ x
         D(m) ~ r * gap
         gap ~ 1 - m
-        D(c) ~ Dc * Δ(c) - 0.1 * c
     end
     @initialization_equations rt^2 ~ volume
     @after_mcs acc ~ Pre(acc) + xalias
@@ -464,7 +471,9 @@ const P60BS_FORBIDDEN = [
         r"events (?:are|as) (?:MTK|ModelingToolkit)(?:'s)? `?Symbolic(?:Discrete|Continuous)Callback"i),
     ("fields compiled by MTK (D-165)",
         r"\bfields? (?:are |is )?(?:compiled|simulated|solved|integrated|stepped|discretized) by (?:MTK|ModelingToolkit|`?mtkcompile`?)"i),
-    ("fields as PDESystems (P6.0bq not adopted, D-159)", r"(?:diffusing )?fields are written as (?:MTK |ModelingToolkit )?`PDESystem`"i),
+    # "fields are written as `PDESystem`s" was forbidden here (P6.0bq not adopted, D-159); it is
+    # true under the B-only ruling (D-F4-2) and is allowed (D-F4-R1). The rule above, that MTK
+    # does not compile, solve or step the fields, stays.
     ("MTK simulates the CPM (D-159)",
         r"(?:MTK|ModelingToolkit) (?:compiles|simulates|runs|solves) the (?:CPM|lattice|sweep|cellular Potts|Potts model)"i),
     ("models are MTK Systems (D-159)",
@@ -546,12 +555,12 @@ end
         "its events are MTK `SymbolicDiscreteCallback`s" => 6,
         "fields are compiled by MTK" => 7,
         "the field is solved by ModelingToolkit" => 7,
-        # plan §5's bracketed clause (P6.0bq, not adopted)
-        "and diffusing fields are written as ModelingToolkit `PDESystem`s" => 8,
-        "ModelingToolkit compiles the CPM" => 9,
-        "MTK simulates the lattice" => 9,
-        "Potts.jl models are ModelingToolkit `System`s" => 10,
-        "Every model is an MTK `System`" => 10,
+        # D-F4-R1: a field written as a `PDESystem` is still not stepped by MTK
+        "The fields are written as `PDESystem`s; the fields are stepped by ModelingToolkit." => 7,
+        "ModelingToolkit compiles the CPM" => 8,
+        "MTK simulates the lattice" => 8,
+        "Potts.jl models are ModelingToolkit `System`s" => 9,
+        "Every model is an MTK `System`" => 9,
     ]
     for (s, i) in bad
         @test occursin(P60BS_FORBIDDEN[i][2], p60bs_norm(s))
@@ -561,6 +570,8 @@ end
         "route A2 of the MTK-native plan",
         "Fields are not compiled by MTK.",
         "field equations are stepped by Potts on the lattice and are not an ODE system",
+        # D-F4-R1 (the B-only ruling): true now, so allowed
+        "and diffusing fields are written as ModelingToolkit `PDESystem`s",
         "The cell equations of a model are one ModelingToolkit `System`, the template of one cell",
         "Every Potts model is a ModelingToolkit system: an `AbstractSystem` whose parameters",
         "A model's cell and model ODEs are ModelingToolkit systems compiled by `mtkcompile`.",

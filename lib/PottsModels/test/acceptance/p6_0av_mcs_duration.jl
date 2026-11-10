@@ -74,14 +74,22 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
-# a field `c` with uniform decay: on a uniform field Δc = 0, so c' = -0.05 c
+# a field `c` with uniform decay: on a uniform field Δc = 0, so c' = -0.05 c (a plain MTK
+# PDESystem, coupled with `@fields`)
+function p60av_field_pde()
+    t, L = Potts.t, Potts.LatticePDE
+    Potts.ModelingToolkitBase.@parameters x y
+    Potts.ModelingToolkitBase.@variables c(..)
+    C = c(t, x, y)
+    return Potts.ModelingToolkitBase.PDESystem([Potts.D(C) ~ 0.1 * L.Δ(C) - 0.05 * C], [c(0, x, y) ~ 0.0],
+        L.lattice_domain(t, (x, y), (12, 12)), [t, x, y], [C], Any[]; name = :p60av_field)
+end
 @potts_model P60avField begin
     @structural_parameters md = 1.0
     @kinds medium A
-    @variables c(field) = 0.0
     @lattice Lattice((12, 12))
+    @fields p60av_field_pde()
     @energy cells => (volume - 9.0)^2
-    @equations D(c) ~ 0.1 * Δ(c) - 0.05 * c
     @sweep Metropolis(; temperature = 1.0, mcs_duration = md)
 end
 

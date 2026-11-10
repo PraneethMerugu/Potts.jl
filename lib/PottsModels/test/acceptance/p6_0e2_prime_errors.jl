@@ -50,6 +50,17 @@ function p60e2_rejection(f, words...)
     return "accepted silently"
 end
 
+# a field `w` with `D(w) ~ src − w`, a plain MTK PDESystem on the 10 × 10 lattice; its input
+# `src` is bound at `@fields` (where `m′` is written)
+function p60e2_field_pde()
+    t, L = Potts.t, Potts.LatticePDE
+    Potts.ModelingToolkitBase.@parameters x y
+    Potts.ModelingToolkitBase.@variables w(..) src(..) [input = true]
+    W = w(t, x, y)
+    return Potts.ModelingToolkitBase.PDESystem([Potts.D(W) ~ src(t, x, y) - W], [w(0, x, y) ~ 0.0],
+        L.lattice_domain(t, (x, y), (10, 10)), [t, x, y], [W, src(t, x, y)], Any[]; name = :p60e2_field)
+end
+
 const P60E2_ONE = (s = zeros(Int32, 10, 10); s[3:5, 3:5] .= 1; s)
 
 """Positive control: the model compiles, builds a problem and runs a few MCS."""
@@ -67,7 +78,7 @@ end
         "constraint" => :(@constraint cells(A) => m′ < 2),
         "update" => :(@after_mcs m ~ m′ + 1),
         "on-copy update" => :(@on_copy c ~ m′),
-        "equation" => :(@equations D(u) ~ m′ - u),
+        "field input binding" => :(@fields p60e2_field_pde() (:src => m′)),
         "observed" => :(@observed q ~ m′),
     ]
         @test p60e2_rejection(() -> mtkcompile(p60e2_model(stmt)), "m′", P60E2_PHRASE) === :ok

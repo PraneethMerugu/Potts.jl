@@ -47,24 +47,31 @@ const p60c_EE = Potts.ExplicitEuler
 const p60c_RK4 = Potts.RK4
 const p60c_Adaptive = Potts.Adaptive
 
+# The field `c` as a plain MTK PDESystem on `dims`, coupled with `@fields`: `Dc Δc − δ c`
+# (`decay = true`, its parameters `Dc`, `δ`), or `0.1 Δc`
+function p60c_field_pde(dims = (20, 20); decay = true)
+    t, L = Potts.t, Potts.LatticePDE
+    Potts.ModelingToolkitBase.@parameters x y Dc = 0.05 δ = 0.1
+    Potts.ModelingToolkitBase.@variables c(..)
+    C = c(t, x, y)
+    rate, ps = decay ? (Dc * L.Δ(C) - δ * C, [Dc, δ]) : (0.1 * L.Δ(C), Any[])
+    return Potts.ModelingToolkitBase.PDESystem([Potts.D(C) ~ rate], [c(0, x, y) ~ 0.0],
+        L.lattice_domain(t, (x, y), dims), [t, x, y], [C], ps; name = :p60c_field)
+end
+
 # A field `c` independent of σ (so its oracle is closed form) and two cell ODEs: `y`
 # (non-stiff linear decay) and `s` (stiff, λ = 1000, forced by cos(t)).
 @potts_model P60cMixed begin
     @kinds medium A
-    @parameters begin
-        k = 0.3
-        Dc = 0.05
-        δ = 0.1
-    end
+    @parameters k = 0.3
+    @lattice Lattice((20, 20))
+    @fields p60c_field_pde()
     @variables begin
-        c(field) = 0.0
         y(cell) = 1.0
         s(cell) = 0.0
     end
-    @lattice Lattice((20, 20))
     @energy cells => (volume - 16.0)^2
     @equations begin
-        D(c) ~ Dc * Δ(c) - δ * c
         D(y) ~ -k * y
         D(s) ~ -1000 * (s - cos(time))
     end
@@ -74,14 +81,9 @@ end
 # the same field alone, and the same ODEs alone (no field)
 @potts_model P60cField begin
     @kinds medium A
-    @parameters begin
-        Dc = 0.05
-        δ = 0.1
-    end
-    @variables c(field) = 0.0
     @lattice Lattice((20, 20))
+    @fields p60c_field_pde()
     @energy cells => (volume - 16.0)^2
-    @equations D(c) ~ Dc * Δ(c) - δ * c
     @sweep Metropolis(; temperature = 1.0)
 end
 
@@ -167,14 +169,11 @@ function p60c_sweep_error(kw::Symbol, solver)
         Core.eval(@__MODULE__, quote
             @potts_model $nm begin
                 @kinds medium A
-                @variables c(field) = 0.0
-                @variables y(cell) = 1.0
                 @lattice Lattice((12, 12))
+                @fields p60c_field_pde((12, 12); decay = false)
+                @variables y(cell) = 1.0
                 @energy cells => (volume - 9.0)^2
-                @equations begin
-                    D(c) ~ 0.1 * Δ(c)
-                    D(y) ~ -y
-                end
+                @equations D(y) ~ -y
                 @sweep Metropolis(; temperature = 1.0, $kw = $solver)
             end
         end)

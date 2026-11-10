@@ -75,6 +75,21 @@ const p60y_EDGE = 2.0
 const p60y_MARGIN = 0.9 * p60y_EDGE        # (M): ρ ≤ 1.8
 const p60y_NMAX = 20_000
 
+# the field `c` of P60yField as a plain MTK PDESystem on `dims` sites of spacing `h`:
+# `Dc Δc − k c` (`:uniform`), `Dc Δc − k c [medium]` (`:offcell`, its 0/1 input `medium` bound
+# at `@fields`) or `Dc Δc` (`:none`); its parameters are `Dc` and `k` in every case
+function p60y_field_pde(dims, h, reaction)
+    t, L = Potts.t, Potts.LatticePDE
+    Potts.ModelingToolkitBase.@parameters x y z Dc = 0.5 k = 0.0
+    Potts.ModelingToolkitBase.@variables c(..) medium(..)::Bool [input = true]
+    xs = (x, y, z)[1:length(dims)]
+    C, M = c(t, xs...), medium(t, xs...)
+    rate = reaction === :uniform ? Dc * L.Δ(C) - k * C : reaction === :offcell ? Dc * L.Δ(C) - k * C * M : Dc * L.Δ(C)
+    return Potts.ModelingToolkitBase.PDESystem([Potts.D(C) ~ rate], [c(0, xs...) ~ 0.0],
+        L.lattice_domain(t, xs, dims; spacing = h), [t, xs...], reaction === :offcell ? [C, M] : [C], [Dc, k];
+        name = :p60y_field)
+end
+
 # a field-only model: `reaction` ∈ (:none, :uniform, :offcell)
 @potts_model P60yField begin
     @structural_parameters begin
@@ -84,20 +99,13 @@ const p60y_NMAX = 20_000
         reaction = :none
     end
     @kinds medium A
-    @parameters begin
-        Dc = 0.5
-        k = 0.0
-    end
-    @variables c(field) = 0.0
     @lattice Lattice(dims; spacing = ntuple(_ -> h, length(dims)))
-    @energy cells => (volume - 4.0)^2
-    if reaction === :uniform
-        @equations D(c) ~ Dc * Δ(c) - k * c
-    elseif reaction === :offcell
-        @equations D(c) ~ Dc * Δ(c) - k * c * (kind == medium)
+    if reaction === :offcell
+        @fields p60y_field_pde(dims, h, reaction) (:medium => kind == medium)
     else
-        @equations D(c) ~ Dc * Δ(c)
+        @fields p60y_field_pde(dims, h, reaction)
     end
+    @energy cells => (volume - 4.0)^2
     @sweep Metropolis(; temperature = 1.0, mcs_duration = dt)
 end
 

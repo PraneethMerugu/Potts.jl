@@ -2,8 +2,9 @@
 # per D-050 M1–M11 (model-spec 01, README §4.1), the `merks_state` port onto `Scattered`
 # (D-087), the 2008 20-neighbour contacts and copies with a 2-thick frame (P6.3e), and the
 # D-141 follow-up: a `Splits` cell repaired into one piece by a later layer is not warned
-# about. Adopts D-145's `@boundary … sites(kind == border) => Dirichlet(0.0)` and
-# `@schedule fields, sweep` (D-145 ruling 10). Decision: D-153. Frozen (AUTONOMY §7.3).
+# about. Adopts D-145's absorbing border (`sites(kind == border) => Dirichlet(0.0)`; since F4-B4m
+# the masked condition `c ~ masked(frame, 0.0)` of the field's PDESystem) and `@schedule fields,
+# sweep` (D-145 ruling 10). Decision: D-153. Frozen (AUTONOMY §7.3).
 #
 # Surface pinned here (PottsModels, exported; nothing in Potts or CorePotts is model-named):
 #
@@ -33,7 +34,9 @@
 #       `rule = :hard` instead vetoes exactly those copies (and has no E₀ drive). Any other
 #       `rule` is an ArgumentError.
 #     Field (M5): D(c) = Dc Δc + α [endothelial] − ε c [medium], 5-point Δ, per MCS;
-#       absorbing ring: `@boundary c begin sites(kind == border) => Dirichlet(0.0) end`;
+#       absorbing ring: the masked condition `c ~ masked(frame, 0.0)`, `frame` bound to
+#       `kind == border` at `@fields` (formerly `@boundary c begin sites(kind == border) =>
+#       Dirichlet(0.0) end`);
 #       `@schedule fields, sweep` (the field step of MCS k sees σ(k), vessel.cpp:86-94). The
 #       docstrings give the paper's solver `ExplicitEuler(substeps = 15)` (Δt = 2 s).
 #       2008: no field before MCS t_relax (0-based MCS index; the first t_relax MCS leave

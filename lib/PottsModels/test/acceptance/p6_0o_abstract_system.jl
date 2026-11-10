@@ -178,7 +178,16 @@ end
 end
 const P60O_OP_SPRING = [ownership => p60o_two((30, 20), (3:5, 3:5), (12:14, 3:5)), kind => [:host, :host]]
 
-# a field with a drive, a frozen kind, per-kind temperature
+# a field with a drive, a frozen kind, per-kind temperature; the field `c` is a plain MTK
+# PDESystem whose input `dark` (0/1) is bound at `@fields`
+function p60o_field_pde()
+    t, L = Potts.t, Potts.LatticePDE
+    Potts.ModelingToolkitBase.@parameters x y
+    Potts.ModelingToolkitBase.@variables c(..) dark(..)::Bool [input = true]
+    C = c(t, x, y)
+    return Potts.ModelingToolkitBase.PDESystem([Potts.D(C) ~ 0.1 * L.Δ(C) + 0.02 * dark(t, x, y) - 0.01 * C],
+        [c(0, x, y) ~ 0.0], L.lattice_domain(t, (x, y), (16, 16)), [t, x, y], [C, dark(t, x, y)], Any[]; name = :p60o_field)
+end
 @potts_model P60oField begin
     @kinds medium wall[frozen] dark light
     @parameters begin
@@ -186,14 +195,13 @@ const P60O_OP_SPRING = [ownership => p60o_two((30, 20), (3:5, 3:5), (12:14, 3:5)
         J[kind, kind] = [0 30 16 16; 30 0 30 30; 16 30 2 11; 16 30 11 14]
         χ = 3.0
     end
-    @variables c(field) = 0.0
     @lattice Lattice((16, 16); neighborhood = Moore(1))
+    @fields c = p60o_field_pde() (:dark => kind == dark)
     @energy begin
         Volume(dark, light; target = 9.0, strength = 1.0)
         Adhesion(J)
     end
     @drive Chemotaxis(c; strength = χ, kinds = (dark,))
-    @equations D(c) ~ 0.1 * Δ(c) + 0.02 * (kind == dark) - 0.01 * c
     @sweep Metropolis(; temperature = Tk[kind], combine = min)
 end
 const P60O_OP_FIELD = [ownership => (s = zeros(Int32, 16, 16); s[:, 1] .= 1; s[4:6, 4:6] .= 2; s[10:12, 10:12] .= 3; s),
