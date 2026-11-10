@@ -57,3 +57,58 @@ end
     @test occursin("`q` is not a field of the PDESystem `fields`; its fields are `c`", e) &&
           occursin("its parameters (a name may be one too) ", e) && occursin("`s`", e) || (println(e); false)
 end
+
+# E9: a `::Bool` input takes any truth-valued expression: a comparison, `ismember`, `!`, `&`,
+# `|`, and an `any`/`all` fold over a relation, whose symbolic type is not `Bool`. A numeric
+# expression is still refused. Oracles: the input against the hand-computed sites, and the
+# field bitwise against the same term in `@equations`. Negative control at the E8 commit: "is
+# not a truth value" for the `any` binding (~/lpwork/f4E/nc-e8e10.log).
+@potts_model CeAny begin
+    @kinds medium A
+    @lattice Lattice((24, 20); boundary = Closed())
+    @energy cells(A) => (volume - 16.0)^2
+    @fields c = CeS.named() (a => any(kind[n] == A for n in VonNeumann(1)(site)))
+    @sweep Metropolis(; temperature = 4.0)
+end
+@potts_model CeAnyRef begin
+    @kinds medium A
+    @parameters begin
+        Dc = 0.2
+        s = 0.5
+        kd = 0.1
+    end
+    @variables c(field) = 0.0
+    @lattice Lattice((24, 20); boundary = Closed())
+    @energy cells(A) => (volume - 16.0)^2
+    @equations D(c) ~ Dc * Δ(c) + s * any(kind[n] == A for n in VonNeumann(1)(site)) - kd * c
+    @sweep Metropolis(; temperature = 4.0)
+end
+@testset "F4-E9: a Bool input takes a truth-valued expression (any over a relation)" begin
+    op = cp_op()
+    σ = first(op).second
+    nb = [any(1 <= i + di <= size(σ, 1) && 1 <= j + dj <= size(σ, 2) && σ[i + di, j + dj] != 0
+              for (di, dj) in ((1, 0), (-1, 0), (0, 1), (0, -1))) for i in axes(σ, 1), j in axes(σ, 2)]
+    fi = Potts.field_inputs(PottsProblem(CeAny(; name = :m), op, (0, 1)))[:a]
+    @test fi == nb && count(nb) > 32                                         # cells' edges and their medium rims
+    @test cp_same(cp_run(CeAny(; name = :m), ExplicitEuler()), cp_run(CeAnyRef(; name = :m), ExplicitEuler()))
+    host = CpHost(; name = :m)
+    k, vol = Potts.kind, Potts.at(Potts.B.volume, Potts.B.owner)
+    # the other truth-valued forms couple; a numeric one is refused
+    for b in ((k == 1) & (vol > 3.0), (k == 1) | (k == 0), !(k == 1), Potts.LatticePDE.ismember(k, (0, 1)))
+        @test Potts.couple(host, CeS.named(); inputs = [CeS.a => b]) isa Potts.PottsSystem
+    end
+    for b in (vol, k, vol + 1.0)
+        e = cp_msg(() -> Potts.couple(host, CeS.named(); inputs = [CeS.a => b]))
+        @test occursin("the input `a` is a `Bool`", e) && occursin("is not a truth value", e) || (println(e); false)
+    end
+    e = cp_build_err(quote
+        @potts_model CeSum begin
+            @kinds medium A
+            @lattice Lattice((24, 20); boundary = Closed())
+            @fields c = CeS.named() (a => sum(volume[n] for n in VonNeumann(1)(site)))
+            @sweep Metropolis(; temperature = 4.0)
+        end
+        CeSum(; name = :m)
+    end)
+    @test occursin("is not a truth value", e) || (println(e); false)
+end

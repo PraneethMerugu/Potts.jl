@@ -289,15 +289,35 @@ function _input_bindings(sys, f, inputs, what, pname)
                 "owner, `", n, "[owner]`")))
         end
         if _input_eltype(u, op) === Bool
-            S = e isa SymbolicUtils.BasicSymbolic ? SymbolicUtils.symtype(e) : typeof(e)
-            S <: Bool || throw(ArgumentError(string(what, ": the input `", _input_key(u, op), "` is a `Bool`, and `",
-                ex, "` is not a truth value; bind it to a test (`kind == k`, `volume[owner] > v`) or declare the input ",
-                "without `::Bool`")))
+            _truth_valued(e) || throw(ArgumentError(string(what, ": the input `", _input_key(u, op), "` is a `Bool`, and `",
+                _builtin_text(string(ex)), "` is not a truth value; bind it to a test (`kind == k`, `volume[owner] > v`, ",
+                "`any(kind[n] == k for n in R(site))`) or declare the input without `::Bool`")))
         end
         out[op] = e
     end
     return out
 end
+# whether a binding is a truth value (F4-E9): of type `Bool`, a comparison, `ismember`, `!`,
+# `&`, `|` or `xor` of truth values, an `ifelse` of two, or an `any`/`all` fold over a relation or
+# a population (`any(kind[n] == k for n in R(site))`, whose symbolic type is not `Bool`)
+const _TRUTH_OPS = (==, !=, <, <=, >, >=, isequal)
+function _truth_valued(e)
+    e isa Bool && return true
+    e isa SymbolicUtils.BasicSymbolic || return false
+    SymbolicUtils.isconst(e) && return SymbolicUtils.unwrap_const(e) isa Bool
+    SymbolicUtils.symtype(e) <: Bool && return true
+    iscall(e) || return false
+    f, a = operation(e), arguments(e)
+    (f in _TRUTH_OPS || f === LatticePDE.ismember) && return true
+    f in (!, ~, &, |, xor) && return all(_truth_valued, a)
+    f === ifelse && return _truth_valued(a[2]) && _truth_valued(a[3])
+    if f === gather || f === population
+        i = info(a[1])
+        return i !== nothing && get(i.options, :op, nothing) in (:any, :all)
+    end
+    return false
+end
+
 # the bare built-ins of `e` that are cell properties, not values at a site (`volume`, not
 # `volume[owner]`): a field equation reads only the site words bare (`kind`, `owner`, …)
 function _bare_cell_reads(e)
