@@ -1,6 +1,7 @@
 # F4-11 (F4 design §3.8 FE-15b): a plain `PDESystem` composes into a model as fields.
-# `Potts.compose(model, Potts.component(:drug, pdesys, model))` equals the same field declared
-# in `@equations` and `@bcs`, bitwise on the CPU with σ frozen (one group); the component reads
+# `Potts.compose(model, Potts.component(:drug, pdesys, model))` equals the same field coupled
+# with `@fields` (F4-B4t; before, declared in `@equations` and `@bcs`), bitwise on the CPU with
+# σ frozen (one group); the component reads
 # `kind` by its user word; its fields take `FieldGroups` pairs by name; a domain other than the
 # lattice's (in the model's length unit, `@lattice spacing`) is refused naming both.
 # Base (the F4-10 commit, ~/lpwork/f4c/nc11-base.log): `Potts.component` takes no PDESystem
@@ -32,17 +33,26 @@ function drug(L; name = :drug, extra = Equation[], dvs = [u(t, x, y), kin(t, x, 
     return PDESystem([Dt(u(t, x, y)) ~ rhs], [u(0, x, y) ~ 0.0; u(t, 0, y) ~ 1.0; extra],
         [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, L[1]), y ∈ Interval(0.0, L[2])], [t, x, y], dvs, [Dd, kd]; name)
 end
+# the references, coupled with `@fields` (F4-B4t): `drug` with the kind as the bound input `kA`
+@variables kA(..)::Bool [input = true]
+ref(L) = drug(L; name = :fields, dvs = [u(t, x, y), kA(t, x, y)],
+    rhs = Dd * Potts.LatticePDE.Δ(u(t, x, y)) - kd * u(t, x, y) + ifelse(kA(t, x, y), 1.0, 0.0))
+# a host field `zz` with its own `kd`, and a host field `u`
+function hostk()
+    @parameters kd = 0.9
+    @variables zz(..)
+    Z = zz(t, x, y)
+    return PDESystem([Dt(Z) ~ -kd * Z], [zz(0, x, y) ~ 3.0], DOM, [t, x, y], [Z], [kd]; name = :fields)
+end
+hostu() = PDESystem([Dt(u(t, x, y)) ~ -u(t, x, y)], [u(0, x, y) ~ 3.0], DOM, [t, x, y], [u(t, x, y)], Any[]; name = :fields)
 end
 
-# the reference: the same field in `@equations` and `@bcs`; and the host without it
+# the reference: the same field coupled with `@fields`; and the host without it
 @potts_model FcRef begin
     @kinds medium A[frozen]
-    @parameters Dd = 0.2 kd = 0.5
-    @variables u(field) = 0.0
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 9.0)^2
-    @equations D(u) ~ Dd * Δ(u) - kd * u + ifelse(kind == A, 1.0, 0.0)
-    @bcs u(t, 0, y) ~ 1.0
+    @fields FcPDE.ref((12, 10)) (FcPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FcHost begin
@@ -54,12 +64,9 @@ end
 # with a lattice spacing (one length unit per model: the component spans dims × spacing)
 @potts_model FcRefH begin
     @kinds medium A[frozen]
-    @parameters Dd = 0.2 kd = 0.5
-    @variables u(field) = 0.0
     @lattice Lattice((12, 10); boundary = Closed(), spacing = (0.5, 0.5))
     @energy cells(A) => (volume - 9.0)^2
-    @equations D(u) ~ Dd * Δ(u) - kd * u + ifelse(kind == A, 1.0, 0.0)
-    @bcs u(t, 0, y) ~ 1.0
+    @fields FcPDE.ref((6, 5)) (FcPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FcHostH begin
@@ -88,7 +95,7 @@ end
     @test e == "built" || (println(e); false)
 end
 
-@testset "F4-11: a PDESystem component equals the field in @equations (bitwise, σ frozen)" begin
+@testset "F4-11: a PDESystem component equals the coupled field (bitwise, σ frozen)" begin
     host = FcHost(; name = :m)
     comp = Potts.component(:drug, FcPDE.drug((12, 10)), host)
     m = Potts.compose(host, comp)
@@ -187,37 +194,30 @@ end
 # the `Pair`, the time last, `volume`); the start-value cases already held (a test gap).
 @potts_model FcHostK begin
     @kinds medium A[frozen]
-    @parameters kd = 0.9
-    @variables zz(field) = 3.0
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 9.0)^2
-    @equations D(zz) ~ -kd * zz
+    @fields FcPDE.hostk()
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FcHostU begin
     @kinds medium A[frozen]
-    @variables u(field) = 3.0
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 9.0)^2
-    @equations D(u) ~ -u
+    @fields FcPDE.hostu()
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FcRefIC begin
     @kinds medium A[frozen]
-    @parameters Dd = 0.2 kd = 0.5
-    @variables u(field) = 0.7
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 9.0)^2
-    @equations D(u) ~ Dd * Δ(u) - kd * u
+    @fields FcPDE.plain([FcPDE.u(0, FcPDE.x, FcPDE.y) ~ 0.7]; name = :fields)
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FcRefIC2 begin
     @kinds medium A[frozen]
-    @parameters Dd = 0.2 kd = 0.5
-    @variables u(field) = 1.4kd
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 9.0)^2
-    @equations D(u) ~ Dd * Δ(u) - kd * u
+    @fields FcPDE.plain([FcPDE.u(0, FcPDE.x, FcPDE.y) ~ 1.4FcPDE.kd]; name = :fields)
     @sweep Metropolis(; temperature = 1.0)
 end
 
@@ -233,8 +233,9 @@ end
     @test occursin("the PDESystem `m` declares the field `u`", pu) && occursin("a field `u`", pu)
     # (namespaced as a component, the same PDESystem composes)
     @test fc_msg(() -> Potts.compose(hk, Potts.component(:drug, FcPDE.plain([u(0, X, Y) ~ 0.7]), hk))) == "built"
-    # the initial value from a start condition, bitwise against A's default: a number, a
-    # parameter expression, and that expression after an operating-point write
+    # the initial value from a start condition, bitwise against the coupled one (before F4-B4t,
+    # A's default): a number, a parameter expression, and that expression after an
+    # operating-point write
     run(pde, k; op = fc_op()) = fc_run(Potts.compose(host, Potts.component(:drug, pde, host)), :drug₊u, k; op)
     @test run(FcPDE.plain([u(0, X, Y) ~ 0.7]), 3) == fc_run(FcRefIC(; name = :m), :u, 3)
     @test run(FcPDE.plain([u(0, X, Y) ~ 1.4kd]), 3) == fc_run(FcRefIC2(; name = :m), :u, 3)

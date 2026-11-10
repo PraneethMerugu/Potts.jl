@@ -1,52 +1,44 @@
 # The Jiang-like model of F3-18 (test/fields_jiang.jl) and its spheroid, shared with the guard's
 # soft set (test/fields_identity.jl, review r1).
+isdefined(Main, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
+module JgPDE
+using ..FieldPDE
+@variables o(..) [lattice_level = Coarse(4)] g(..) [lattice_level = Coarse(4)] l(..) [lattice_level = Coarse(4)]
+@variables gf(..) [lattice_level = Coarse(4)] inh(..) [lattice_level = Coarse(4)]
+@variables pq(..)::Bool [input = true] kP(..)::Bool [input = true] kQ(..)::Bool [input = true] kN(..)::Bool [input = true]
+@variables med(..)::Bool [input = true]
+# the five fields on a coarse grid (`Coarse(4)`); the kinds are bound inputs: `pq` is
+# `ismember(kind, (P, Q))`, `kP`, `kQ`, `kN` the kinds and `med` the medium
+function jiang(dims)
+    @parameters Do = 2880.0 Dg = 73.7 Dl = 103.0 Df = 0.048 Di = 0.048 a0 = 324.0 b0 = 648.0 C0 = 720.0 oT = 0.02 gT = 0.06
+    @parameters oO = 0.28 gO = 5.5 o0 = 0.08 g0 = 5.5 df = 3.0 ei = 3.0
+    X = (t, x, y, z)
+    O, G, L, GF, INH = o(X...), g(X...), l(X...), gf(X...), inh(X...)
+    PQ, P, Q, N, M = pq(X...), kP(X...), kQ(X...), kN(X...), med(X...)
+    eqs = [Dt(O) ~ Do * Δ(O) - a0 * max(O - oT, 0) / (oO - oT) * PQ,
+        Dt(G) ~ Dg * Δ(G) - b0 * max(G - gT, 0) / (gO - gT) * PQ,
+        Dt(L) ~ Dl * Δ(L) + C0 * (max(O - oT, 0) / (oO - oT) + max(G - gT, 0) / (gO - gT)) / 2 * PQ,
+        Dt(GF) ~ Df * Δ(GF) - df * GF * (P + 0.5 * Q),
+        Dt(INH) ~ Di * Δ(INH) + ei * (Q + 2 * N)]
+    bcs = [o(0, x, y, z) ~ 0.0, g(0, x, y, z) ~ 0.0, l(0, x, y, z) ~ 0.0, gf(0, x, y, z) ~ 0.0, inh(0, x, y, z) ~ 0.0,
+        O ~ masked(M, o0), G ~ masked(M, g0), L ~ masked(M, 0.0), GF ~ masked(M, 1.0), INH ~ masked(M, 0.0)]
+    return pdesys(eqs, bcs, dims, [O, G, L, GF, INH, PQ, P, Q, N, M],
+        [Do, Dg, Dl, Df, Di, a0, b0, C0, oT, gT, oO, gO, o0, g0, df, ei])
+end
+end
 # the model on lattice `dims` (`frozen`: the cells do not move)
 function jiang_model(name, dims; frozen = true)
     kinds = frozen ? :(@kinds medium P[frozen] Q[frozen] N[frozen]) : :(@kinds medium P Q N)
     return eval(:(@potts_model $name begin
         $kinds
-        @parameters begin
-            Do = 2880.0              # O₂, glucose, lactate, growth factor, inhibitor (voxel²/MCS)
-            Dg = 73.7
-            Dl = 103.0
-            Df = 0.048
-            Di = 0.048
-            a0 = 324.0               # O₂ and glucose consumption, lactate production (mM/MCS)
-            b0 = 648.0
-            C0 = 720.0
-            oT = 0.02                # thresholds and optimal concentrations (mM)
-            gT = 0.06
-            oO = 0.28
-            gO = 5.5
-            o0 = 0.08                # the medium values (mM; relative for the factors)
-            g0 = 5.5
-            df = 3.0                 # growth factor consumption, inhibitor production (relative/MCS)
-            ei = 3.0
-        end
-        @variables begin
-            o(field) = 0.0, [lattice_level = Coarse(4)]
-            g(field) = 0.0, [lattice_level = Coarse(4)]
-            l(field) = 0.0, [lattice_level = Coarse(4)]
-            gf(field) = 0.0, [lattice_level = Coarse(4)]
-            inh(field) = 0.0, [lattice_level = Coarse(4)]
-            ocell(cell) = 0.0
-        end
+        @variables ocell(cell) = 0.0
         @lattice Lattice($dims; boundary = Closed())
         @energy cells => (volume - 27.0)^2
-        @equations begin
-            D(o) ~ Do * Δ(o) - a0 * max(o - oT, 0) / (oO - oT) * ismember(kind, (P, Q))
-            D(g) ~ Dg * Δ(g) - b0 * max(g - gT, 0) / (gO - gT) * ismember(kind, (P, Q))
-            D(l) ~ Dl * Δ(l) + C0 * (max(o - oT, 0) / (oO - oT) + max(g - gT, 0) / (gO - gT)) / 2 * ismember(kind, (P, Q))
-            D(gf) ~ Df * Δ(gf) - df * gf * ((kind == P) + 0.5 * (kind == Q))
-            D(inh) ~ Di * Δ(inh) + ei * ((kind == Q) + 2 * (kind == N))
-        end
-        @bcs begin
-            o ~ masked(kind == medium, o0)
-            g ~ masked(kind == medium, g0)
-            l ~ masked(kind == medium, 0.0)
-            gf ~ masked(kind == medium, 1.0)
-            inh ~ masked(kind == medium, 0.0)
-        end
+        # O₂, glucose, lactate, growth factor and inhibitor (diffusion in voxel²/MCS; O₂ and
+        # glucose consumption and lactate production in mM/MCS; thresholds, optimal and medium
+        # concentrations in mM, relative for the factors)
+        @fields o = JgPDE.jiang($dims) (JgPDE.pq => ismember(kind, (P, Q)), JgPDE.kP => kind == P, JgPDE.kQ => kind == Q,
+            JgPDE.kN => kind == N, JgPDE.med => kind == medium)
         @after_mcs ocell ~ integral(o) / volume
         @schedule repeat(4, sweep(fraction = 1//4), fields), after_mcs
         @sweep Metropolis(; temperature = 2.0)

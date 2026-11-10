@@ -3,6 +3,24 @@
 # phase tuples the compiler builds.
 using Potts: CorePotts
 
+# the fields of the `@schedule` and mask models, coupled with `@fields` (F4-B4t); the `@boundary`
+# models (its extension, display and refusals) stay in `@boundary` until it goes (F4-B6)
+isdefined(Main, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
+module BsPDE
+using ..FieldPDE
+@variables c(..) u(..) sink(..)::Bool [input = true]
+const X = (t, x, y)
+const C, U = c(X...), u(X...)
+relax() = pdesys([Dt(C) ~ 1.0 - C], [c(0, x, y) ~ 0.0], (8, 8), [C])
+clamp_ck() = (@parameters Dc = 0.2 s = 0.05;
+              pdesys([Dt(C) ~ Dc * Δ(C) + s], [c(0, x, y) ~ 0.0, C ~ masked(sink(X...), 0.0)], (16, 16), [C, sink(X...)], [Dc, s]))
+face_obs() = pdesys([Dt(C) ~ 0.1 * Δ(C)], [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0], (8, 4), [C])
+mask_self() = pdesys([Dt(C) ~ 0.1 * Δ(C)], [c(0, x, y) ~ 0.0, C ~ masked(C > 0.5, 0.0)], (8, 8), [C])
+two(mask) = pdesys([Dt(C) ~ 0.1 * Δ(C), Dt(U) ~ 0.1 * Δ(U)], [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0, mask], (8, 8), [C, U])
+mask_later() = two(C ~ masked(U > 0.5, 0.0))
+mask_earlier() = two(U ~ masked(C > 0.5, 0.0))
+end
+
 @potts_model BSBase begin
     @kinds medium A wall[frozen]
     @parameters begin
@@ -60,37 +78,33 @@ end
 
 @potts_model BSOrderA begin
     @kinds medium A
-    @variables c(field) = 0.0
     @lattice Lattice((8, 8); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ 1.0 - c
+    @fields BsPDE.relax()
     @schedule fields, before_mcs, sweep
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model BSOrderB begin                     # the same placed order, listed differently
     @kinds medium A
-    @variables c(field) = 0.0
     @lattice Lattice((8, 8); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ 1.0 - c
+    @fields BsPDE.relax()
     @schedule fields, before_mcs, sweep, after_mcs, components
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model BSOrderC begin                     # the default relative order
     @kinds medium A
-    @variables c(field) = 0.0
     @lattice Lattice((8, 8); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ 1.0 - c
+    @fields BsPDE.relax()
     @schedule sweep, fields, end_mcs
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model BSOrderNone begin
     @kinds medium A
-    @variables c(field) = 0.0
     @lattice Lattice((8, 8); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ 1.0 - c
+    @fields BsPDE.relax()
     @sweep Metropolis(; temperature = 1.0)
 end
 
@@ -223,22 +237,14 @@ end
 # Field clamps hold on a fresh initial state only: a checkpoint restore and `anneal` skip them.
 @potts_model BSClampCK begin
     @kinds medium sink
-    @parameters begin
-        Dc = 0.2
-        s = 0.05
-    end
-    @variables c(field) = 0.0
     @lattice Lattice((16, 16); boundary = Closed(), neighborhood = Moore(1))
     @energy cells => (volume - 16.0)^2
-    @equations D(c) ~ Dc * Δ(c) + s
-    @boundary c begin
-        sites(kind == sink) => Dirichlet(0.0)
-    end
+    @fields BsPDE.clamp_ck() (BsPDE.sink => kind == sink)
     @schedule fields, sweep
     @sweep Metropolis(; temperature = 4.0)
 end
 
-@testset "@boundary: field clamps on fresh states only" begin
+@testset "masked conditions: field clamps on fresh states only" begin
     σ = zeros(Int32, 16, 16); σ[7:10, 7:10] .= 1
     prob = PottsProblem(BSClampCK(; name = :k), [ownership => σ, kind => [:sink], :c => fill(0.1, 16, 16)], (0, 8);
         field_solver = ExplicitEuler(substeps = 2), seed = 5)
@@ -259,55 +265,36 @@ end
 # `Δ` is lowered by the field compiler in field equations only (cutover C8)
 @potts_model BSFaceObs begin
     @kinds medium A
-    @variables c(field) = 0.0
     @lattice Lattice((8, 4); boundary = (Closed(), Periodic()))
     @energy cells => 0.0 * volume
-    @equations D(c) ~ 0.1 * Δ(c)
+    @fields c = BsPDE.face_obs()
     @observed lap ~ Δ(c)
-    @boundary c begin
-        x => (Dirichlet(1.0), NoFlux())
-    end
     @sweep Metropolis(; temperature = 1.0)
 end
 
-@testset "@boundary: Δ outside a field equation is refused" begin
+@testset "Δ outside a field equation is refused" begin
     prob = PottsProblem(BSFaceObs(; name = :o), [ownership => zeros(Int32, 8, 4), kind => Symbol[], :c => zeros(8, 4)], (0, 0);
         field_solver = ExplicitEuler(substeps = 1))
     err = bs_error(() -> solve(prob, SequentialCPM())[:lap])
     @test occursin("`Δ` is a field operator", something(err, ""))
 end
 
-bs_model(:BSMaskSelf, :(@variables c(field) = 0.0), :(@equations D(c) ~ 0.1 * Δ(c)), :(@boundary c begin
-    sites(c > 0.5) => Dirichlet(0.0)
-end))
-bs_model(:BSMaskLater, :(@variables begin
-    c(field) = 0.0
-    u(field) = 0.0
-end), :(@equations begin
-    D(c) ~ 0.1 * Δ(c)
-    D(u) ~ 0.1 * Δ(u)
-end), :(@boundary c begin
-    sites(u > 0.5) => Dirichlet(0.0)
-end))
-bs_model(:BSMaskEarlier, :(@variables begin
-    c(field) = 0.0
-    u(field) = 0.0
-end), :(@equations begin
-    D(c) ~ 0.1 * Δ(c)
-    D(u) ~ 0.1 * Δ(u)
-end), :(@boundary u begin
-    sites(c > 0.5) => Dirichlet(0.0)
-end))
+bs_model(:BSMaskSelf, :(@fields BsPDE.mask_self()))
+bs_model(:BSMaskLater, :(@fields BsPDE.mask_later()))
+bs_model(:BSMaskEarlier, :(@fields BsPDE.mask_earlier()))
 bs_model(:BSFaceNoLap, :(@variables c(field) = 0.0), :(@equations D(c) ~ 0.1 - 0.01 * c), :(@boundary c begin
     x => (Dirichlet(1.0), NoFlux())
 end))
 
-@testset "@boundary: masks and faces that cannot hold" begin
+@testset "masks and faces that cannot hold" begin
     # a mask that reads the field it clamps is accepted (F2-11 review (a); before: refused)
     @test bs_error(() -> mtkcompile(Base.invokelatest(BSMaskSelf; name = :m))) === nothing
     # a mask that reads a field stepped after its own reads it at the window start (round 2 of
     # F2 batch 4; before: refused "a field stepped with or after `c`")
     @test bs_error(() -> mtkcompile(Base.invokelatest(BSMaskLater; name = :m))) === nothing
     @test bs_error(() -> mtkcompile(Base.invokelatest(BSMaskEarlier; name = :m))) === nothing
+end
+
+@testset "@boundary: a face on a field with no Δ is refused" begin
     @test occursin("has no `Δ(c)`", something(bs_error(() -> mtkcompile(Base.invokelatest(BSFaceNoLap; name = :f))), ""))
 end

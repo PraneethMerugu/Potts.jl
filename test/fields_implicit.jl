@@ -1,7 +1,7 @@
-# F3-08 (F3 design §3.7): `BackwardEuler` in front end A. A field group with
+# F3-08 (F3 design §3.7): `BackwardEuler` in a model. A field group with
 # `field_solver = BackwardEuler()` steps through the same runtime as front end B
 # (`Problems.GroupRuntime`, the implicit cache), bound to the state's site arrays: with σ frozen
-# A equals B (`Potts.fields` → `discretize`) bitwise; a moving σ enters the next window's solve
+# the model equals B (`Potts.fields` → `discretize`) bitwise; a moving σ enters the next window's solve
 # through the CPM's own input array; a parameter write rebinds in place (`reset!`: the hierarchy
 # is rebuilt); a solve that fails ends the run. Base (437a84ef, ~/lpwork/f3b3-nc-a-base.log):
 # `BackwardEuler` is not defined in Potts (every testset errors). Negative control (mutation,
@@ -14,74 +14,100 @@ const FIP = Potts.LatticeFields.Problems
 const FiRC = Potts.SciMLBase.ReturnCode
 using Potts.LatticeFields.IR: fieldid
 
+# the models' fields, coupled with `@fields` (F4-B4t; before, written in `@equations` and `@bcs`):
+# a kind or a CPM term is a bound input, a kind table the model's
+isdefined(Main, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
+module FiPDE
+using ..FieldPDE
+@variables c(..) e(..) o(..) u(..) w(..) kA(..)::Bool [input = true] kM(..)::Bool [input = true] vol(..) [input = true]
+@variables big(..)::Bool [input = true] dk(..) [input = true]
+const X = (t, x, y)
+const C, E, KA = c(X...), e(X...), kA(X...)
+const D = (12, 10)
+ic(f, v = 0.0) = f(0, x, y) ~ v
+mix() = (@parameters Dc = 0.4 kd = 0.3 s = 0.5 v = 1.5;
+         pdesys([Dt(C) ~ Dc * Δ(C) - kd * C + s * KA, Dt(E) ~ 0.02 + 0.01 * x], [ic(c), ic(e), C ~ masked(E >= 0.5, v)], D,
+             [C, E, KA], [Dc, kd, s, v]))
+# `rate` with the conditions `bcs`, no parameters, on lattice `dims`
+field1(rate, bcs = []; dims = D, c0 = 0.0, dvs = [C], ps = []) = pdesys([Dt(C) ~ rate], [ic(c, c0); bcs], dims, dvs, ps)
+robin_p() = field1(0.4 * Δ(C) - 0.3 * C + 0.1 * x, [1.0 * c(t, x, 0) - Differential(y)(c(t, x, 0)) ~ 0.5])
+robin_n() = field1(0.4 * Δ(C) - 0.3 * C + 0.1 * x, [1.0 * c(t, x, 0) + Differential(y)(c(t, x, 0)) ~ 0.5])
+field_face() = field1(DivKGrad(:harmonic)(1 + 0.05 * x * y, C) - 0.3 * C, [c(t, 0, y) ~ 1.0 + 0.1 * y])
+mask_field() = field1(0.4 * Δ(C) - 0.3 * C, [C ~ masked(KA, 1 + 0.1 * x)]; dvs = [C, KA])
+moving() = (@parameters Dc = 0.5 kd = 0.4;
+            field1(Dc * Δ(C) + 0.5 * KA - kd * C * kM(X...); dims = (16, 16), dvs = [C, KA, kM(X...)], ps = [Dc, kd]))
+blowup() = (@parameters g = 1.0; field1(0.1 * Δ(C) + g * C^3; dims = (8, 6), c0 = 1000.0, ps = [g]))
+still() = (@parameters Dc = 0.4 kd = 0.3; field1(DivKGrad(:harmonic)(Dc * (1 + 0.05 * x), C) - kd * C + 0.1 * x; ps = [Dc, kd]))
+periodic() = (@parameters Dc = 1.0; pdesys([Dt(C) ~ Dc * Δ(C)], [ic(c)], (16, 8), [C], [Dc]; spacing = 2.0))
+timed() = field1(0.1 * Δ(C) - (1 + 20 * t) * C; dims = (8, 8), c0 = 1.0)
+robin_w() = (@parameters rb = -1.0;
+             field1(0.4 * Δ(C) - 0.3 * C + 0.1 * x, [1.5 * c(t, x, 0) - rb * Differential(y)(c(t, x, 0)) ~ 0.5]; ps = [rb]))
+hex() = field1(2.0 * Δ(C) - C + 0.1 * KA; dims = (16, 16), dvs = [C, KA])
+hex_f() = field1(0.4 * Δ(C) - 0.3 * C + 0.1 * x, [C ~ masked(KA, 1.5)]; dvs = [C, KA])
+hex_face() = field1(0.4 * Δ(C) - 0.3 * C + 0.1 * x,
+    [c(t, 0, y) ~ 1.0, 1.5 * c(t, x, 0) - 0.5 * Differential(y)(c(t, x, 0)) ~ 0.2])
+kind3() = field1(1.0 * KA; dvs = [C, KA])
+scal() = (O = o(X...); pdesys([Dt(C) ~ 0.5 * Δ(C) - 40 * C / (0.025 + C) + 20, Dt(O) ~ 0.5 * Δ(O) - O + C],
+                             [ic(c, 0.5), ic(o, 0.5)], D, [C, O]))
+site_m() = field1(0.04 * (1 + x) * Δ(C) - 0.3 * C + 0.1 * y)
+site_k() = field1(0.04 * (1 + x) * DivKGrad(:harmonic)(1 + 0.05 * y, C) - 0.3 * C + 0.1 * y)
+# the derivative models (F3-21b)
+const DD = (24, 20)
+dual() = (@parameters Dc = 0.2 s = 0.5 kd = 0.1 Dh = 0.5 * Dc;
+          field1(Dh * Δ(C) + Dh * Δ(C) + s * KA - kd * C; dims = DD, dvs = [C, KA], ps = [Dc, s, kd, Dh]))
+dual_mask() = (@parameters Dc = 0.4 kd = 0.3 v = 1.5 c0 = 0.2;
+               field1(Dc * Δ(C) - kd * C, [C ~ masked(KA, v)]; c0, dvs = [C, KA], ps = [Dc, kd, v, c0]))
+dual_two() = (@parameters ra = 0.3 rb = 0.2; U = u(X...); W = w(X...);
+              pdesys([Dt(U) ~ 0.2 * Δ(U) + ra * KA - 0.1 * U, Dt(W) ~ 0.3 * Δ(W) + rb * U - 0.2 * W], [ic(u), ic(w)], DD,
+                  [U, W, KA], [ra, rb]))
+dual_fill() = (@parameters V0 = 14.0 s0 = 0.5;
+               field1(0.2 * Δ(C) + ifelse(big(X...), s0, 0.0) - 0.1 * C; dims = DD, dvs = [C, big(X...)], ps = [V0, s0]))
+dual_vol() = (@parameters V0 = 14.0;
+              field1(0.2 * Δ(C) + 0.01 * KA * (vol(X...) - V0) - 0.1 * C; dims = DD, dvs = [C, KA, vol(X...)], ps = [V0]))
+dual_kind() = field1(0.2 * Δ(C) + dk(X...) - 0.1 * C; dims = DD, dvs = [C, dk(X...)])
+end
+
 @potts_model FiMix begin
     @kinds medium A[frozen]
-    @parameters begin
-        Dc = 0.4
-        kd = 0.3
-        s = 0.5
-        v = 1.5
-    end
-    @variables begin
-        c(field) = 0.0
-        e(field) = 0.0
-    end
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations begin
-        D(c) ~ Dc * Δ(c) - kd * c + s * (kind == A)
-        D(e) ~ 0.02 + 0.01 * x
-    end
-    @bcs c ~ masked(e >= 0.5, v)
+    @fields FiPDE.mix() (FiPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FiRobinP begin
     @kinds medium A[frozen]
-    @variables c(field) = 0.0
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ 0.4 * Δ(c) - 0.3 * c + 0.1 * x
-    @bcs 1.0 * c(t, x, 0) - Differential(y)(c(t, x, 0)) ~ 0.5
+    @fields FiPDE.robin_p()
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FiRobinN begin
     @kinds medium A[frozen]
-    @variables c(field) = 0.0
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ 0.4 * Δ(c) - 0.3 * c + 0.1 * x
-    @bcs 1.0 * c(t, x, 0) + Differential(y)(c(t, x, 0)) ~ 0.5
+    @fields FiPDE.robin_n()
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FiFieldFace begin
     @kinds medium A[frozen]
-    @variables c(field) = 0.0
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ DivKGrad(:harmonic)(1 + 0.05 * x * y, c) - 0.3 * c
-    @bcs c(t, 0, y) ~ 1.0 + 0.1 * y
+    @fields FiPDE.field_face()
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FiMaskField begin
     @kinds medium A[frozen]
-    @variables c(field) = 0.0
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ 0.4 * Δ(c) - 0.3 * c
-    @bcs c ~ masked(kind == A, 1 + 0.1 * x)
+    @fields FiPDE.mask_field() (FiPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
 # a moving σ: the decay reads the kind (a field row, rebuilt every window)
 @potts_model FiMoving begin
     @kinds medium A
-    @parameters begin
-        Dc = 0.5
-        kd = 0.4
-    end
-    @variables c(field) = 0.0
     @lattice Lattice((16, 16); boundary = Closed())
     @energy cells(A) => (volume - 12.0)^2
-    @equations D(c) ~ Dc * Δ(c) + 0.5 * (kind == A) - kd * c * (kind == medium)
+    @fields FiPDE.moving() (FiPDE.kA => kind == A, FiPDE.kM => kind == medium)
     @sweep Metropolis(; temperature = 8.0)
     @schedule sweep, fields
 end
@@ -89,11 +115,9 @@ end
 # diverges and the run ends
 @potts_model FiBlowup begin
     @kinds medium A[frozen]
-    @parameters g = 1.0
-    @variables c(field) = 1000.0
     @lattice Lattice((8, 6); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ 0.1 * Δ(c) + g * c^3
+    @fields FiPDE.blowup()
     @sweep Metropolis(; temperature = 1.0)
 end
 
@@ -101,31 +125,24 @@ end
 # so only a parameter write rebuilds its hierarchy and `jac:` arrays
 @potts_model FiStill begin
     @kinds medium A[frozen]
-    @parameters begin
-        Dc = 0.4
-        kd = 0.3
-    end
-    @variables c(field) = 0.0
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ DivKGrad(:harmonic)(Dc * (1 + 0.05 * x), c) - kd * c + 0.1 * x
+    @fields FiPDE.still()
     @sweep Metropolis(; temperature = 1.0)
 end
 
 # a periodic field with no cells (the messages)
 @potts_model FiPeriodic begin
     @kinds medium A
-    @parameters Dc = 1.0
-    @variables c(field) = 0.0
     @lattice Lattice((16, 8); boundary = Periodic(), spacing = (2.0, 2.0))
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ Dc * Δ(c)
+    @fields FiPDE.periodic()
     @sweep Metropolis(; temperature = 1.0)
 end
 
 fi_op(dims) = (σ = zeros(Int32, dims...); σ[4:6, 3:5] .= 1; [ownership => σ, kind => [:A]])
 fi_kin(dims) = (K = zeros(Int32, dims...); K[4:6, 3:5] .= 1; K)
-# A's field `c` after each of `k` MCS
+# the model's field `c` after each of `k` MCS
 function fi_runA(M, op, k; field_solver = BackwardEuler(), kw...)
     integ = init(PottsProblem(M(; name = :f), op, (0, k); field_solver, kw...), SequentialCPM(); save_start = false)
     return [(step!(integ); copy(Array(current_state(integ).site.c))) for _ in 1:k], integ
@@ -139,7 +156,7 @@ function fi_runB(M, dims, k; u0, inputs = [:kind => fi_kin(dims)], alg = Backwar
 end
 fi_warm(integ) = (step!(integ); @allocated step!(integ))   # (a function barrier)
 
-@testset "F3-08: BackwardEuler in A equals B bitwise (σ frozen)" begin
+@testset "F3-08: BackwardEuler in a model equals B bitwise (σ frozen)" begin
     dims, k = (12, 10), 8
     # diffusion, decay, a kind source and a mask that moves (it follows `e`)
     a, integ = fi_runA(FiMix, fi_op(dims), k)
@@ -161,7 +178,7 @@ fi_warm(integ) = (step!(integ); @allocated step!(integ))   # (a function barrier
     @test fi_warm(integ) == 0
 end
 
-@testset "F3-08: the solver capabilities in A (F3-05), equal to B bitwise" begin
+@testset "F3-08: the solver capabilities in a model (F3-05), equal to B bitwise" begin
     dims, k = (12, 10), 3
     for M in (FiRobinP, FiFieldFace, FiMaskField)
         a, integ = fi_runA(M, fi_op(dims), k)
@@ -265,58 +282,45 @@ end
 # M2, M4 and M6. Base 2d213237 (~/lpwork/f3r1-nc-a-base.log): each testset fails there.
 @potts_model FiTimed begin
     @kinds medium A
-    @variables c(field) = 1.0
     @lattice Lattice((8, 8); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ 0.1 * Δ(c) - (1 + 20 * time) * c
+    @fields FiPDE.timed()
     @sweep Metropolis(; temperature = 1.0, mcs_duration = 0.2)
 end
 @potts_model FiRobinW begin
     @kinds medium A[frozen]
-    @parameters rb = -1.0
-    @variables c(field) = 0.0
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ 0.4 * Δ(c) - 0.3 * c + 0.1 * x
-    @bcs 1.5 * c(t, x, 0) - rb * Differential(y)(c(t, x, 0)) ~ 0.5
+    @fields FiPDE.robin_w()
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FiHex begin
     @kinds medium A
-    @variables c(field) = 0.0
     @lattice Lattice((16, 16); geometry = Hexagonal(), boundary = Periodic())
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ 2.0 * Δ(c) - c + 0.1 * (kind == A)
+    @fields FiPDE.hex() (FiPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FiHexF begin
     @kinds medium A[frozen]
-    @variables c(field) = 0.0
     @lattice Lattice((12, 10); geometry = Hexagonal(), boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ 0.4 * Δ(c) - 0.3 * c + 0.1 * x
-    @bcs c ~ masked(kind == A, 1.5)
+    @fields FiPDE.hex_f() (FiPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FiHexFace begin
     @kinds medium A[frozen]
-    @variables c(field) = 0.0
     @lattice Lattice((12, 10); geometry = Hexagonal(), boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ 0.4 * Δ(c) - 0.3 * c + 0.1 * x
-    @bcs begin
-        c(t, 0, y) ~ 1.0
-        1.5 * c(t, x, 0) - 0.5 * Differential(y)(c(t, x, 0)) ~ 0.2
-    end
+    @fields FiPDE.hex_face()
     @sweep Metropolis(; temperature = 1.0)
 end
 # a three-kind class in a rate (F3-20 r1 M2)
 @potts_model FiKind3 begin
     @kinds medium A[frozen] B[frozen] C[frozen] cells3 = (A, B, C)
-    @variables c(field) = 0.0
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ 1.0 * ismember(kind, cells3)
+    @fields FiPDE.kind3() (FiPDE.kA => ismember(kind, cells3))
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FiComp begin
@@ -332,36 +336,27 @@ end
 end
 @potts_model FiScal begin
     @kinds medium A[frozen]
-    @variables begin
-        c(field) = 0.5
-        o(field) = 0.5
-    end
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations begin
-        D(c) ~ 0.5 * Δ(c) - 40 * c / (0.025 + c) + 20
-        D(o) ~ 0.5 * Δ(o) - o + c
-    end
+    @fields FiPDE.scal()
     @sweep Metropolis(; temperature = 1.0)
 end
 
 @potts_model FiSiteM begin
     @kinds medium A[frozen]
-    @variables c(field) = 0.0
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ 0.04 * (1 + x) * Δ(c) - 0.3 * c + 0.1 * y
+    @fields FiPDE.site_m()
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FiSiteK begin
     @kinds medium A[frozen]
-    @variables c(field) = 0.0
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ 0.04 * (1 + x) * DivKGrad(:harmonic)(1 + 0.05 * y, c) - 0.3 * c + 0.1 * y
+    @fields FiPDE.site_k()
     @sweep Metropolis(; temperature = 1.0)
 end
-@testset "F3-21a r1 M1 (A): a write to a mask's value equals a restart at the write" begin
+@testset "F3-21a r1 M1 (in a model): a write to a mask's value equals a restart at the write" begin
     # FiMix's mask `c ~ masked(e ≥ 0.5, v)`: base (79af8c69) the implicit update kept the old `v`
     dims = (12, 10)
     integ = init(PottsProblem(FiMix(; name = :f), fi_op(dims), (0, 8); field_solver = BackwardEuler()), SequentialCPM();
@@ -375,7 +370,7 @@ end
     @test any(==(2.5), fresh[end]) && Array(current_state(integ).site.c) == fresh[end]
 end
 
-@testset "F3-24 (A): a multiplier that reads the coordinates: the hand BE matrix" begin
+@testset "F3-24 (in a model): a multiplier that reads the coordinates: the hand BE matrix" begin
     # the row `m_i Σ_f K_f (c_n − c_i)` (h = 1, the site (i, j) at (i − ½, j − ½), zero flux at the box);
     # base (7f8001c3): the faces `m_i K_f`, off the BE step
     dims = (12, 10)
@@ -404,7 +399,7 @@ end
     end
 end
 
-@testset "r1 M1 (A): an operator that reads the time is built at each substep's end time" begin
+@testset "r1 M1 (in a model): an operator that reads the time is built at each substep's end time" begin
     # one MCS of length 0.2 in 4 substeps: c = Π_j 1/(1 + h(1 + 20 t_j)) (base: 0.49638, the
     # first substep's operator at every substep)
     s = solve(PottsProblem(FiTimed(; name = :f), [ownership => zeros(Int32, 8, 8), kind => Symbol[]], (0, 1);
@@ -413,7 +408,7 @@ end
     @test maximum(abs, s.u[end].site.c .- prod(1 / (1 + h * (1 + 20 * j * h)) for j in 1:4)) < 1e-12
 end
 
-@testset "r1 M2 (A): a write that turns a Robin face negative reclassifies the group" begin
+@testset "r1 M2 (in a model): a write that turns a Robin face negative reclassifies the group" begin
     dims = (12, 10)
     for (b0, b1) in ((-1.0, 1.0), (1.0, -1.0))
         integ = init(PottsProblem(FiRobinW(; name = :f), [fi_op(dims); :rb => b0], (0, 4); field_solver = BackwardEuler()),
@@ -429,7 +424,7 @@ end
     end
 end
 
-@testset "F3-20 (A): BackwardEuler on a hexagonal lattice, equal to B bitwise (σ frozen)" begin
+@testset "F3-20 (in a model): BackwardEuler on a hexagonal lattice, equal to B bitwise (σ frozen)" begin
     # base (ee577f6e): refused at `init` ("a hexagonal lattice has no implicit solve yet")
     dims, k = (12, 10), 4
     a, integ = fi_runA(FiHexF, fi_op(dims), k)
@@ -448,7 +443,7 @@ end
         SequentialCPM()).retcode == FiRC.Success
 end
 
-@testset "F3-20 r1 M1 (A): face conditions on a hexagonal lattice: the hand BE matrix, equal to B bitwise" begin
+@testset "F3-20 r1 M1 (in a model): face conditions on a hexagonal lattice: the hand BE matrix, equal to B bitwise" begin
     # a Dirichlet face (axis 1 low), a Robin face (axis 2 low); a link leaving the box takes its
     # face's ghost (a diagonal link axis 1's when it leaves along axis 1); base: refused at discretize
     dims, k = (12, 10), 1
@@ -487,7 +482,7 @@ end
     @test maximum(abs, vec(a[1]) .- (Id - L) \ b) < 1e-9
 end
 
-@testset "F3-20 r1 M2 (A): a three-kind class in a rate (ExplicitEuler)" begin
+@testset "F3-20 r1 M2 (in a model): a three-kind class in a rate (ExplicitEuler)" begin
     # `ismember(kind, cells3)` is one OR of three kinds; before F3-20 the emitter kept two of them
     dims = (12, 10)
     σ = zeros(Int32, dims...)
@@ -496,7 +491,7 @@ end
     @test a[1] ≈ Float64.(σ .!= 0)
 end
 
-@testset "r1 M6 (A): a component field equals its scalar spelling" begin
+@testset "r1 M6 (in a model): a component field equals its scalar spelling" begin
     dims, k = (12, 10), 3
     function run(M)
         integ = init(PottsProblem(M(; name = :f), fi_op(dims), (0, k); field_solver = BackwardEuler()), SequentialCPM(); save_start = false)
@@ -525,52 +520,26 @@ end
 using ForwardDiff: ForwardDiff
 @potts_model FiDual begin
     @kinds medium A
-    @parameters begin
-        χ = 400.0
-        Dc = 0.2
-        s = 0.5
-        kd = 0.1
-        Dh = 0.5 * Dc
-    end
-    @variables c(field) = 0.0
+    @parameters χ = 400.0
     @lattice Lattice((24, 20); boundary = Closed())
     @energy cells(A) => (volume - 16.0)^2
+    @fields c = FiPDE.dual() (FiPDE.kA => kind == A)
     @drive Chemotaxis(c; strength = χ, kinds = (A,))
-    @equations D(c) ~ Dh * Δ(c) + Dh * Δ(c) + s * (kind == A) - kd * c
     @sweep Metropolis(; temperature = 4.0)
 end
 @potts_model FiDualMask begin
     @kinds medium A[frozen]
-    @parameters begin
-        Dc = 0.4
-        kd = 0.3
-        v = 1.5
-        c0 = 0.2
-    end
-    @variables c(field) = c0
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ Dc * Δ(c) - kd * c
-    @bcs c ~ masked(kind == A, v)
+    @fields FiPDE.dual_mask() (FiPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
 # two groups: `w` (implicit) reads `u` (explicit), so `w`'s derivative runs through `u`'s twin
 @potts_model FiDualTwo begin
     @kinds medium A
-    @parameters begin
-        ra = 0.3
-        rb = 0.2
-    end
-    @variables begin
-        u(field) = 0.0
-        w(field) = 0.0
-    end
     @lattice Lattice((24, 20); boundary = Closed())
     @energy cells(A) => (volume - 16.0)^2
-    @equations begin
-        D(u) ~ 0.2 * Δ(u) + ra * (kind == A) - 0.1 * u
-        D(w) ~ 0.3 * Δ(w) + rb * u - 0.2 * w
-    end
+    @fields FiPDE.dual_two() (FiPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 4.0)
 end
 @potts_model FiDualNoField begin
@@ -584,32 +553,24 @@ end
 # outside it (`volume[owner] - V0`) differentiates in the field program (F3-21b r1 N2)
 @potts_model FiDualFill begin
     @kinds medium A
-    @parameters begin
-        V0 = 14.0
-        s0 = 0.5
-    end
-    @variables c(field) = 0.0
     @lattice Lattice((24, 20); boundary = Closed())
     @energy cells(A) => (volume - 16.0)^2
-    @equations D(c) ~ 0.2 * Δ(c) + ifelse(volume[owner] > 15.0, s0, 0.0) - 0.1 * c
+    @fields FiPDE.dual_fill() (FiPDE.big => volume[owner] > 15.0)
     @sweep Metropolis(; temperature = 4.0)
 end
 @potts_model FiDualVol begin
     @kinds medium A
-    @parameters V0 = 14.0
-    @variables c(field) = 0.0
     @lattice Lattice((24, 20); boundary = Closed())
     @energy cells(A) => (volume - 16.0)^2
-    @equations D(c) ~ 0.2 * Δ(c) + 0.01 * (kind == A) * (volume[owner] - V0) - 0.1 * c
+    @fields FiPDE.dual_vol() (FiPDE.kA => kind == A, FiPDE.vol => volume[owner])
     @sweep Metropolis(; temperature = 4.0)
 end
 @potts_model FiDualKind begin
     @kinds medium A
     @parameters δk[kind] = [0.0, 0.1]
-    @variables c(field) = 0.0
     @lattice Lattice((24, 20); boundary = Closed())
     @energy cells(A) => (volume - 16.0)^2
-    @equations D(c) ~ 0.2 * Δ(c) + δk[kind] - 0.1 * c
+    @fields FiPDE.dual_kind() (FiPDE.dk => δk[kind])
     @sweep Metropolis(; temperature = 4.0)
 end
 fi_dop() = (σ = zeros(Int32, 24, 20); σ[5:8, 5:8] .= 1; σ[14:17, 10:13] .= 2; [ownership => σ, kind => [:A, :A]])
@@ -619,7 +580,7 @@ fi_drun(fs, ps; M = FiDual, op = fi_dop(), alg = SequentialCPM(), kw...) =
     solve(PottsProblem(M(; name = :m), [op; ps], (0, 12); field_solver = fs, seed = 3, kw...), alg; saveat = 0:3:12)
 fi_derr(f) = try f(); "" catch err sprint(showerror, err) end
 
-@testset "F3-21b: field derivatives in A against central differences (a fixed CPM path)" begin
+@testset "F3-21b: field derivatives in a model against central differences (a fixed CPM path)" begin
     # (the implicit solves converged far below the default `rtol = 1e-6`: the tangent is the
     # derivative of the converged stage, F3-21a, and central differences see the solve's tolerance)
     tight = DevicePCG(; rtol = 1e-11, budget = 60)

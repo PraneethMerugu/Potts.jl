@@ -2,6 +2,14 @@
 # test lib/PottsModels/test/acceptance/p6_5a2_ref_helpers.jl does not reach.
 using Potts: CorePotts
 
+# the field models' PDESystems (F4-B4t): the CPM terms are bound inputs
+isdefined(Main, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
+module RhPDE
+using ..FieldPDE
+@variables qf(..) qin(..) [input = true]
+source() = (Q = qf(t, x, y); pdesys([Dt(Q) ~ qin(t, x, y)], [qf(0, x, y) ~ 0.0], (20, 12), [Q, qin(t, x, y)]))
+end
+
 # --- Pairs: the same generated code (fingerprint) as the written-out matrix ---------------
 @potts_model RHPairs begin
     @kinds medium ka kb
@@ -257,7 +265,6 @@ end
     @kinds medium cytoplasm nucleus
     @variables begin
         V_target(cell) = 0.0
-        qf(field) = 0.0
         qs(site) = 0.0
         qc(cell) = 0.0
     end
@@ -268,7 +275,7 @@ end
         cells => 1.0e6 * (volume - V_target)^2
         contacts => 1.0
     end
-    @equations D(qf) ~ (Q + S) * (kind == cytoplasm)
+    @fields RhPDE.source() (RhPDE.qin => (Q + S) * (kind == cytoplasm))
     @after_mcs begin
         qs ~ (Q + S) * (kind == cytoplasm)
         qc ~ minimum_image(centroid(1) - centroid(sibling(nucleus), 1), 1)

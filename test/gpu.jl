@@ -657,11 +657,11 @@ if PottsDevices.device_name() == "rocm"
     end
 end
 
-# F3-17: a `Coarse(4)` field of A on ROCm (Float32): the field phase on the coarse arrays, the
+# F3-17: a `Coarse(4)` field of a model on ROCm (Float32): the field phase on the coarse arrays, the
 # CPM's site reads through the node of each block (`integral(c) / volume`), against the host.
 # Base 392dd404: `lattice_level` is not an option of `variable` (FcMix does not build).
 if PottsDevices.device_name() == "rocm"
-    @testset "F3-17: a Coarse(4) field of A on ROCm equals the host (Float32)" begin
+    @testset "F3-17: a Coarse(4) field of a model on ROCm equals the host (Float32)" begin
         backend = PottsDevices.device_backend()
         for fs in (ExplicitEuler(), BackwardEuler())
             mk() = PottsProblem(FcMix(; name = :f), fc_op(), (0, 3); T = Float32, seed = 2, field_solver = fs)

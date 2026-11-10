@@ -9,6 +9,34 @@
 # expression of parameters; …"); the coordinates and `mcs` were refused there too.
 using Potts, Test
 
+# F4-B4t: the models of the features that stay (the manufactured solution, per-site and
+# time-varying Robin faces, kind tables with a time-varying face) couple their fields with
+# `@fields`; the `@boundary` models and the tests that compare `@boundary` with `@bcs` stay as
+# they are until `@boundary` goes (F4-B6)
+isdefined(Main, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
+module FbPDE
+using ..FieldPDE
+@variables c(..) dk(..) [input = true]
+const X = (t, x, y)
+const C = c(X...)
+const Dx, Dy = Differential(x), Differential(y)
+# the manufactured solution on `n × n` sites of spacing 1/n
+function mms(n)
+    @parameters Dd = 1.0
+    return pdesys([Dt(C) ~ Dd * Δ(C) + (cos(π * x / 2) + x * y^2) - Dd * (1 + t) * (2x - (π^2 / 4) * cos(π * x / 2))],
+        [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1 + t, c(t, 1, y) ~ (1 + t) * y^2, Dy(c(t, x, 1)) ~ 2 * (1 + t) * x], (n, n), [C], [Dd];
+        spacing = 1 / n)
+end
+site() = (@parameters Dc = 0.2 g1 = 1.0;
+          pdesys([Dt(C) ~ Dc * Δ(C) - 0.1 * C],
+              [c(0, x, y) ~ 0.0, (1 + 0.1y) * c(t, 0, y) - Dx(c(t, 0, y)) ~ 1.0,
+                  g1 * (1 + 0.5 * t) * c(t, 16, y) + 2.0 * Dx(c(t, 16, y)) ~ 0.0,
+                  2.0 * c(t, x, 16) + (0.5 + 0.05x) * Dy(c(t, x, 16)) ~ 0.5], (16, 16), [C], [Dc, g1]))
+tab() = pdesys([Dt(C) ~ dk(X...) * Δ(C) - 0.05 * C], [c(0, x, y) ~ 1.0, (-0.5 - 0.1 * t) * c(t, 0, y) - 1.0 * Dx(c(t, 0, y)) ~ 0.0],
+    (16, 16), [C, dk(X...)])
+mid() = pdesys([Dt(C) ~ 0.2 * Δ(C)], [c(0, x, y) ~ 1.0, (1 - t) * c(t, 0, y) - 0.5 * Dx(c(t, 0, y)) ~ 0.0], (16, 16), [C])
+end
+
 @potts_model FbFaces begin
     @kinds medium A
     @parameters Dc = 0.2 g1 = 1.0 g2 = 0.5 c0 = 2.0 ω = 0.3
@@ -140,14 +168,8 @@ end
 for n in (16, 32, 64)
     @eval @potts_model $(Symbol(:FbMMS, n)) begin
         @kinds medium A
-        @parameters Dd = 1.0
-        @variables c(field) = 0.0
         @lattice Lattice(($n, $n); boundary = Closed(), spacing = (1 / $n, 1 / $n))
-        @equations D(c) ~ Dd * Δ(c) + (cos(π * x / 2) + x * y^2) - Dd * (1 + time) * (2x - (π^2 / 4) * cos(π * x / 2))
-        @boundary c begin
-            x => (Dirichlet(1 + time), Dirichlet((1 + time) * y^2))
-            y => (NoFlux(), Flux(2 * (1 + time) * x))
-        end
+        @fields FbPDE.mms($n)
         @sweep Metropolis(; temperature = 1.0)
     end
 end
@@ -197,7 +219,8 @@ end
 end
 
 # F4-12b (rulings Q14–Q17): Robin coefficients that vary by site or in time. `@boundary` and
-# `@bcs` equal each other bitwise, and one BackwardEuler MCS equals the hand ghost-rule matrix.
+# the PDESystem's conditions (`FbSiteBcs`, `@bcs` before F4-B4t) equal each other bitwise, and one
+# BackwardEuler MCS equals the hand ghost-rule matrix.
 # Base (ca232825, ~/lpwork/f4c/nc12b-base.log): the models are refused ("… reads `y`; … planned, F4-12b").
 @potts_model FbSite begin
     @kinds medium A
@@ -213,15 +236,8 @@ end
 end
 @potts_model FbSiteBcs begin
     @kinds medium A
-    @parameters Dc = 0.2 g1 = 1.0
-    @variables c(field) = 0.0
     @lattice Lattice((16, 16); boundary = Closed())
-    @equations D(c) ~ Dc * Δ(c) - 0.1 * c
-    @bcs begin
-        (1 + 0.1y) * c(t, 0, y) - Differential(x)(c(t, 0, y)) ~ 1.0
-        g1 * (1 + 0.5 * time) * c(t, 16, y) + 2.0 * Differential(x)(c(t, 16, y)) ~ 0.0
-        2.0 * c(t, x, 16) + (0.5 + 0.05x) * Differential(y)(c(t, x, 16)) ~ 0.5
-    end
+    @fields FbPDE.site()
     @sweep Metropolis(; temperature = 1.0)
 end
 
@@ -258,7 +274,7 @@ end
             b[r] += 0.2 * g / den
         end
     end
-    a = run(FbSite, 1, BackwardEuler(; substeps = 1, inner = DevicePCG(; rtol = 1e-12, budget = 64)))
+    a = run(FbSiteBcs, 1, BackwardEuler(; substeps = 1, inner = DevicePCG(; rtol = 1e-12, budget = 64)))
     @test maximum(abs, vec(a) .- (Float64.((1:(n^2)) .== (1:(n^2))') - L) \ b) < 1e-10
 end
 
@@ -269,18 +285,14 @@ end
 @potts_model FbTab begin
     @kinds medium A
     @parameters Dk[kind] = [0.2, 0.3]
-    @variables c(field) = 1.0
     @lattice Lattice((16, 16); boundary = Closed())
-    @equations D(c) ~ Dk[kind] * Δ(c) - 0.05 * c
-    @boundary c x => (Robin(-0.5 - 0.1 * time, 1.0, 0.0), NoFlux())
+    @fields FbPDE.tab() (FbPDE.dk => Dk[kind])
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FbMid begin
     @kinds medium A
-    @variables c(field) = 1.0
     @lattice Lattice((16, 16); boundary = Closed())
-    @equations D(c) ~ 0.2 * Δ(c)
-    @boundary c x => (Robin(1 - time, 0.5, 0.0), NoFlux())
+    @fields FbPDE.mid()
     @sweep Metropolis(; temperature = 1.0)
 end
 @testset "F4-12b review: windows counted with tables; a span that fails is refused at the problem" begin

@@ -142,30 +142,37 @@ end
     @test code(:MNOther) != code(:MNSpelled)
 end
 
+# the field rates (F4-B4t): the kind set is the binding of the input `e`
+isdefined(Main, :FieldPDE) || Base.include(Main, joinpath(@__DIR__, "shared", "field_pde.jl"))
+module MnPDE
+using Main.FieldPDE
+@variables c(..) e(..)::Bool [input = true]
+const C, E = c(t, x, y), e(t, x, y)
+reaction(k) = pdesys([Dt(C) ~ 0.1 * Δ(C) - k * C * E], [c(0, x, y) ~ 0.0], (12, 12), [C, E])
+diffusion() = pdesys([Dt(C) ~ 0.1 * E * Δ(C)], [c(0, x, y) ~ 0.0], (12, 12), [C, E])
+end
+
 @testset "MTK-native: `ismember` in a field rate is analysed as its `|` of equalities" begin
     # host-side analysis (the stable substep count, ∂f/∂x) reads the spelled-out form: an opaque
     # `ismember` term would bound nothing (a reaction bound of 0, or a refused diffusion bound)
-    fieldmodel(M, eq) = :(@potts_model $M begin
+    fieldmodel(M, sys, bind) = :(@potts_model $M begin
         @kinds medium tip stalk endothelial = (tip, stalk)
-        @variables c(field) = 0.0
         @lattice Lattice((12, 12))
         @energy cells => (volume - 9)^2
-        @equations $eq
+        @fields $sys (MnPDE.e => $bind)
         @sweep Metropolis(; temperature = 2.0)
     end)
     code(M) = (g = generated_code(Base.invokelatest(() -> getfield(@__MODULE__, M)(; name = :m)); field_solver = ExplicitEuler(substeps = 2));
                string(Base.remove_linenums!(deepcopy(Any[g.delta_H, g.commit!, g.phases...]))))
-    for (tag, im, sp) in (("reaction", :(D(c) ~ 0.1 * Δ(c) - 0.3 * c * ismember(kind, endothelial)),
-                                       :(D(c) ~ 0.1 * Δ(c) - 0.3 * c * ((kind == tip) | (kind == stalk)))),
-                          ("diffusion", :(D(c) ~ 0.1 * ismember(kind, endothelial) * Δ(c)),
-                                        :(D(c) ~ 0.1 * ((kind == tip) | (kind == stalk)) * Δ(c))))
+    im, sp = :(ismember(kind, endothelial)), :((kind == tip) | (kind == stalk))
+    for (tag, sys) in (("reaction", :(MnPDE.reaction(0.3))), ("diffusion", :(MnPDE.diffusion())))
         A, Bm = Symbol(:MNField_im_, tag), Symbol(:MNField_sp_, tag)
-        @test mn_build(fieldmodel(A, im), A) === nothing
-        @test mn_build(fieldmodel(Bm, sp), Bm) === nothing
+        @test mn_build(fieldmodel(A, sys, im), A) === nothing
+        @test mn_build(fieldmodel(Bm, sys, sp), Bm) === nothing
         @test code(A) == code(Bm)
     end
     # negative control: another reaction rate changes the code (the comparison can fail)
-    @test mn_build(fieldmodel(:MNField_other, :(D(c) ~ 0.1 * Δ(c) - 0.6 * c * ismember(kind, endothelial))), :MNField_other) === nothing
+    @test mn_build(fieldmodel(:MNField_other, :(MnPDE.reaction(0.6)), im), :MNField_other) === nothing
     @test code(:MNField_other) != code(:MNField_sp_reaction)
 end
 

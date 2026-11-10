@@ -7,12 +7,12 @@
 # per MCS between quarter sweeps (Fig. 3: `repeat(4, sweep(fraction = 1//4), fields)`). The
 # rates are the paper's ratios in lattice units, with O₂'s diffusion scaled so that its shift
 # `h²/(D dt)` on the coarse grid is about 0.022 (v3 §6.3). The cell average of O₂ is read through
-# `integral(o) / volume`. With σ frozen A equals B (`Potts.fields` → `discretize`) bitwise.
+# `integral(o) / volume`. With σ frozen the model equals B (`Potts.fields` → `discretize`) bitwise.
 # Base 392dd404 (~/lpwork/f3b6-nc-a.log): `lattice_level` is not an option of `variable`.
 
 isdefined(Main, :JiangLike) || include(joinpath(@__DIR__, "fields_jiang_model.jl"))
 
-@testset "F3-18: a Jiang-like model in A equals B bitwise (σ frozen, CPU)" begin
+@testset "F3-18: a Jiang-like model equals B bitwise (σ frozen, CPU)" begin
     σ, kinds = jiang_state(JG_DIMS)
     @test Set(kinds) == Set([:N, :Q, :P])
     k = 2

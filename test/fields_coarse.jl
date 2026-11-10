@@ -2,29 +2,81 @@
 # field's array is its grid's (one value per node of k×k sites), its equation runs there
 # through the same lowering as front end B (`Potts.fields` → `discretize`), and a CPM read of
 # the field at a site reads the node whose block holds the site, so `integral(c) / volume` is
-# the cell's average over its sites. With σ frozen A equals B bitwise. Base 392dd404
-# (~/lpwork/f3b6-nc-a.log): `lattice_level` is not an option of `variable` (every model errors).
+# the cell's average over its sites. With σ frozen the coupled model equals its PDESystem solved
+# by LatticePDE (`Potts.fields` → `discretize`) bitwise. The fields are coupled with `@fields`
+# (F4-B4t; before, written in `@equations`). Base 392dd404 (~/lpwork/f3b6-nc-a.log):
+# `lattice_level` is not an option of `variable` (every model errors).
 using Potts: CorePotts
+
+isdefined(Main, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
+module FcoPDE
+using ..FieldPDE
+@variables c(..) [lattice_level = Coarse(4)] e(..) kA(..)::Bool [input = true] kB(..)::Bool [input = true]
+@variables u(..) kn(..) [input = true, lattice_input_name = "kind"]
+@variables g(..) sk(..) [input = true] v(..) X(..) L(..) [lattice_level = Coarse(4)] M(..) [lattice_level = Coarse(4)]
+@variables m1(..) [lattice_level = Coarse(4)] m2(..) [lattice_level = Coarse(4)] m3(..) [lattice_level = Coarse(4)]
+@variables m4(..) [lattice_level = Coarse(4)] m5(..) [lattice_level = Coarse(4)] m6(..) [lattice_level = Coarse(4)]
+const D = (16, 12)
+const X_ = (t, x, y)
+ics(fs...) = [f(0, x, y) ~ 0.0 for f in fs]
+function mix()
+    @parameters Dc = 0.4 kd = 0.3 s = 0.5
+    C, E = c(X_...), e(X_...)
+    return pdesys([Dt(C) ~ Dc * Δ(C) - kd * C + s * kA(X_...) + 0.2 * E + 0.01 * x, Dt(E) ~ 0.1 * Δ(E) - E + 0.5 * C],
+        [ics(c, e); C ~ masked(kB(X_...), 2.0)], D, [C, E, kA(X_...), kB(X_...)], [Dc, kd, s])
+end
+dom() = (C = c(X_...); pdesys([Dt(C) ~ 0.4 * Δ(C) - 0.3 * C * kA(X_...) + 1.0], ics(c), D, [C, kA(X_...)]))
+function on_copy()
+    @variables c(..) [lattice_level = Coarse(2)]
+    C = c(X_...)
+    return pdesys([Dt(C) ~ 0.1 * Δ(C) - C], ics(c), (8, 8), [C])
+end
+function where_()
+    @variables c(..)
+    C, U = c(X_...), u(X_...)
+    return pdesys([Dt(C) ~ 0.1 * Δ(C) - C, Dt(U) ~ kA(X_...) - U + 0.1 * Δ(kn(X_...))], ics(c, u), (8, 8),
+        [C, U, kA(X_...), kn(X_...)])
+end
+function mass()
+    G = g(X_...)
+    ms = [m(X_...) for m in (m1, m2, m3, m4, m5, m6)]
+    SK = sk(X_...)
+    eqs = [G ~ 0.5 + 0.45 * sin(0.7 * x + 0.3 * y), Dt(ms[1]) ~ G, Dt(ms[2]) ~ max(G - 0.5, 0), Dt(ms[3]) ~ G^2,
+        Dt(ms[4]) ~ exp(G), Dt(ms[5]) ~ SK * G, Dt(ms[6]) ~ G / (0.2 + G)]
+    return pdesys(eqs, ics(g, m1, m2, m3, m4, m5, m6), D, [G; ms; SK])
+end
+# a spatial operator across grids: direct (`xd`) and through aux fields, the manual route (`xr`)
+function xd()
+    @parameters Dc = 0.4
+    C, V, U = c(X_...), v(X_...), u(X_...)
+    return pdesys([Dt(V) ~ 0.1 * Δ(V) - V + 0.5 * kA(X_...), Dt(C) ~ Dc * Δ(C) - 0.3 * C + 0.5 * Δ(V),
+            Dt(U) ~ 0.2 * Δ(U) - U + 0.5 * Δ(C) + 0.1 * DivKGrad(:harmonic)(1 + x, C)],
+        ics(c, v, u), D, [C, V, U, kA(X_...)], [Dc])
+end
+function xr()
+    @parameters Dc = 0.4
+    C, V, U, Xa, La, Ma = c(X_...), v(X_...), u(X_...), X(X_...), L(X_...), M(X_...)
+    return pdesys([Dt(V) ~ 0.1 * Δ(V) - V + 0.5 * kA(X_...), Xa ~ Δ(V), La ~ Δ(C), Ma ~ DivKGrad(:harmonic)(1 + x, C),
+            Dt(C) ~ Dc * Δ(C) - 0.3 * C + 0.5 * Xa, Dt(U) ~ 0.2 * Δ(U) - U + 0.5 * La + 0.1 * Ma],
+        ics(c, X, L, M, v, u), D, [C, Xa, La, Ma, V, U, kA(X_...)], [Dc])
+end
+# an operator on another group's field `v`, with a Dirichlet face (`cut`) or a Robin face (`cut_bcs`)
+function cut(face)
+    C, V, U = c(X_...), v(X_...), u(X_...)
+    return pdesys([Dt(V) ~ 0.1 * Δ(V) - V + 0.5 * kA(X_...), Dt(C) ~ 0.4 * Δ(C) - 0.3 * C + 0.2 * V,
+            Dt(U) ~ 0.2 * Δ(U) - U + 0.5 * Δ(V) + 0.3 * Δ(C)],
+        [ics(c, v, u); face], D, [C, V, U, kA(X_...)])
+end
+cut() = cut(v(t, 0, y) ~ 1.0)
+cut_bcs() = cut(1.0 * v(t, 0, y) - Differential(x)(v(t, 0, y)) ~ 0.5)
+end
 
 @potts_model FcMix begin
     @kinds medium A[frozen] B[frozen]
-    @parameters begin
-        Dc = 0.4
-        kd = 0.3
-        s = 0.5
-    end
-    @variables begin
-        c(field) = 0.0, [lattice_level = Coarse(4)]
-        e(field) = 0.0
-        avg(cell) = 0.0
-    end
+    @variables avg(cell) = 0.0
     @lattice Lattice((16, 12); boundary = Closed())
     @energy cells => (volume - 20.0)^2
-    @equations begin
-        D(c) ~ Dc * Δ(c) - kd * c + s * (kind == A) + 0.2 * e + 0.01 * x
-        D(e) ~ 0.1 * Δ(e) - e + 0.5 * c
-    end
-    @bcs c ~ masked(kind == B, 2.0)
+    @fields c = FcoPDE.mix() (FcoPDE.kA => kind == A, FcoPDE.kB => kind == B)
     @after_mcs avg ~ integral(c) / volume
     @sweep Metropolis(; temperature = 1.0)
 end
@@ -55,7 +107,7 @@ function fc_runB(k; alg = BackwardEuler(; dt = 1.0))
     return [s[:c, i] for i in 2:length(s.t)], [s[:e, i] for i in 2:length(s.t)]
 end
 
-@testset "F3-17: a Coarse(4) field in A equals B bitwise (σ frozen)" begin
+@testset "F3-17: a Coarse(4) field in a model equals B bitwise (σ frozen)" begin
     k = 4
     for (fs, alg) in ((BackwardEuler(), BackwardEuler(; dt = 1.0)), (ExplicitEuler(), ExplicitEuler(; dt = 1.0)))
         a, integ = fc_runA(k; field_solver = fs)
@@ -75,14 +127,13 @@ end
         domain = x -> x[2] <= 7.0 || x[1] <= 5.0
     end
     @kinds medium A[frozen]
-    @variables c(field) = 0.0, [lattice_level = Coarse(4)]
     @lattice Lattice((16, 12); boundary = Closed(), domain)
     @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ 0.4 * Δ(c) - 0.3 * c * (kind == A) + 1.0
+    @fields FcoPDE.dom() (FcoPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
 
-@testset "F3-17: a coarse field in an irregular domain: A equals B bitwise" begin
+@testset "F3-17: a coarse field in an irregular domain: the model equals B bitwise" begin
     σ = zeros(Int32, 16, 12); σ[2:4, 2:4] .= 1
     integ = init(PottsProblem(FcDom(; name = :d), [ownership => σ, kind => [:A]], (0, 3); field_solver = BackwardEuler()),
         SequentialCPM(); save_start = false)
@@ -116,7 +167,7 @@ end
     @test Potts._coarse_site(LinearIndices((8, 1, 4))[6, 1, 3], (8, 1, 4), 1) == LinearIndices((4, 1, 2))[3, 1, 2]
 end
 
-@testset "F3-17: lattice_level in A: arrays, refusals and routes" begin
+@testset "F3-17: lattice_level in a model: arrays, refusals and routes" begin
     # the operating point gives a coarse field its grid's array
     a0 = [Float64(i + 10j) for i in 1:4, j in 1:3]
     integ = init(PottsProblem(FcMix(; name = :f), [fc_op(); :c => a0], (0, 1)), SequentialCPM())
@@ -153,10 +204,9 @@ end
     # a copy writes one site, which has no node of its own
     oc = eval(:(@potts_model _FcOnCopy begin
         @kinds medium A
-        @variables c(field) = 0.0, [lattice_level = Coarse(2)]
         @lattice Lattice((8, 8))
         @energy cells => (volume - 9.0)^2
-        @equations D(c) ~ 0.1 * Δ(c) - c
+        @fields c = FcoPDE.on_copy()
         @on_copy c[target] ~ 1.0
         @sweep Metropolis(; temperature = 1.0)
     end))
@@ -168,16 +218,9 @@ end
     # `in @equations Differential(t, 1)(c(t)) ~ kind == 1 - c(t) + …`)
     fw = eval(:(@potts_model _FcWhere begin
         @kinds medium A
-        @variables begin
-            c(field) = 0.0
-            u(field) = 0.0
-        end
         @lattice Lattice((8, 8))
         @energy cells => (volume - 9.0)^2
-        @equations begin
-            D(c) ~ 0.1 * Δ(c) - c
-            D(u) ~ (kind == A) - u + 0.1 * Δ(kind)
-        end
+        @fields FcoPDE.where_() (FcoPDE.kA => kind == A)
         @sweep Metropolis(; temperature = 1.0)
     end))
     σw = zeros(Int32, 8, 8); σw[3:5, 3:5] .= 1
@@ -189,34 +232,17 @@ end
 end
 
 # Review r1 M2: a coarse field's source that reads a fine field nonlinearly receives the fine
-# integral of the source (the mean of the whole subterm, each fine read at its site), in A as in
+# integral of the source (the mean of the whole subterm, each fine read at its site), in a model as in
 # B. Base cb20be97 (~/lpwork/f3b6r-nc-m2a.log): `f(mean g)`, off by up to 75%.
 @potts_model FcMass begin
     @kinds medium A[frozen] B[frozen]
     @parameters S[kind] = [1.0, 2.0, 5.0]
-    @variables begin
-        g(field) = 0.0
-        m1(field) = 0.0, [lattice_level = Coarse(4)]
-        m2(field) = 0.0, [lattice_level = Coarse(4)]
-        m3(field) = 0.0, [lattice_level = Coarse(4)]
-        m4(field) = 0.0, [lattice_level = Coarse(4)]
-        m5(field) = 0.0, [lattice_level = Coarse(4)]
-        m6(field) = 0.0, [lattice_level = Coarse(4)]
-    end
     @lattice Lattice((16, 12); boundary = Closed())
     @energy cells => (volume - 20.0)^2
-    @equations begin
-        g ~ 0.5 + 0.45 * sin(0.7 * x + 0.3 * y)
-        D(m1) ~ g
-        D(m2) ~ max(g - 0.5, 0)
-        D(m3) ~ g^2
-        D(m4) ~ exp(g)
-        D(m5) ~ S[kind] * g
-        D(m6) ~ g / (0.2 + g)
-    end
+    @fields FcoPDE.mass() (FcoPDE.sk => S[kind])
     @sweep Metropolis(; temperature = 1.0)
 end
-@testset "review r1 M2: a coarse source of a fine field receives its fine integral (A)" begin
+@testset "review r1 M2: a coarse source of a fine field receives its fine integral (in a model)" begin
     integ = init(PottsProblem(FcMass(; name = :m), fc_op(), (0, 1); field_solver = ExplicitEuler()), SequentialCPM();
         save_start = false)
     step!(integ)
@@ -231,52 +257,26 @@ end
     end
 end
 
-# F3-22 (F3 design §5 F3-22): a spatial operator across grids in A. `v` is fine, `c` is coarse:
+# F3-22 (F3 design §5 F3-22): a spatial operator across grids in a model. `v` is fine, `c` is coarse:
 # the coarse row reads the block mean of the fine Laplacian, and the fine row `u` the coarse
 # `Δ(c)` at its block's node. The direct form is the aux field of the manual route (bitwise),
-# A equals B (`Potts.fields`) bitwise, the added aux field is the binding's scratch (not in the
+# the model equals B (`Potts.fields`) bitwise, the added aux field is the binding's scratch (not in the
 # state), and a ForwardDiff Dual runs through it (F3-21b's shadow store). Base 5316bf1c
 # (~/lpwork/f322/nc-*.log): the direct form is refused ("a spatial operator reads its field on
 # that field's own grid").
 using ForwardDiff: ForwardDiff
 @potts_model FcXd begin
     @kinds medium A[frozen] B[frozen]
-    @parameters Dc = 0.4
-    @variables begin
-        c(field) = 0.0, [lattice_level = Coarse(4)]
-        v(field) = 0.0
-        u(field) = 0.0
-    end
     @lattice Lattice((16, 12); boundary = Closed())
     @energy cells => (volume - 20.0)^2
-    @equations begin
-        D(v) ~ 0.1 * Δ(v) - v + 0.5 * (kind == A)
-        D(c) ~ Dc * Δ(c) - 0.3 * c + 0.5 * Δ(v)
-        D(u) ~ 0.2 * Δ(u) - u + 0.5 * Δ(c) + 0.1 * DivKGrad(:harmonic)(1 + x, c)
-    end
+    @fields FcoPDE.xd() (FcoPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FcXr begin
     @kinds medium A[frozen] B[frozen]
-    @parameters Dc = 0.4
-    @variables begin
-        c(field) = 0.0, [lattice_level = Coarse(4)]
-        X(field) = 0.0
-        L(field) = 0.0, [lattice_level = Coarse(4)]
-        M(field) = 0.0, [lattice_level = Coarse(4)]
-        v(field) = 0.0
-        u(field) = 0.0
-    end
     @lattice Lattice((16, 12); boundary = Closed())
     @energy cells => (volume - 20.0)^2
-    @equations begin
-        D(v) ~ 0.1 * Δ(v) - v + 0.5 * (kind == A)
-        X ~ Δ(v)
-        L ~ Δ(c)
-        M ~ DivKGrad(:harmonic)(1 + x, c)
-        D(c) ~ Dc * Δ(c) - 0.3 * c + 0.5 * X
-        D(u) ~ 0.2 * Δ(u) - u + 0.5 * L + 0.1 * M
-    end
+    @fields FcoPDE.xr() (FcoPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
 fx_run(M, k, fs; ps = Pair[]) = begin
@@ -284,7 +284,7 @@ fx_run(M, k, fs; ps = Pair[]) = begin
     [(step!(integ); st = current_state(integ).site; map(a -> copy(Array(a)), (st.c, st.v, st.u))) for _ in 1:k]
 end
 
-@testset "F3-22: a spatial operator across grids in A is the manual route, A equals B, the aux is scratch" begin
+@testset "F3-22: a spatial operator across grids in a model is the manual route, equals B, the aux is scratch" begin
     tight = DevicePCG(; rtol = 1e-12, budget = 64)
     # (an explicit count, a minimum: the default count works too since review r1, the rows read one way)
     for fs in (ExplicitEuler(; substeps = 40), BackwardEuler(; inner = tight), CrankNicolson(; inner = tight))
@@ -294,7 +294,7 @@ end
     end
     st = current_state(init(PottsProblem(FcXd(; name = :x), fc_op(), (0, 1); field_solver = BackwardEuler()), SequentialCPM())).site
     @test !any(k -> occursin('(', string(k)), keys(st))                         # no hidden aux in the state
-    # A equals B: `Potts.fields` through `discretize`, the CPM frozen
+    # the model equals B: `Potts.fields` through `discretize`, the CPM frozen
     for (fs, alg) in ((BackwardEuler(), BackwardEuler(; dt = 1.0)), (ExplicitEuler(; substeps = 40), ExplicitEuler(; dt = 1.0, substeps = 40)))
         a = fx_run(FcXd, 3, fs)
         bp = Potts.LatticePDE.discretize(Potts.fields(FcXd(; name = :x)),
@@ -305,7 +305,7 @@ end
     end
 end
 
-@testset "F3-22: a Dual runs through a cross-grid term in A (against central differences)" begin
+@testset "F3-22: a Dual runs through a cross-grid term in a model (against central differences)" begin
     tight = DevicePCG(; rtol = 1e-11, budget = 60)
     W = [0.01 * (i + 2j) for i in 1:16, j in 1:12]
     q(sol) = sum(W .* sol.u[end].site.u)
@@ -321,56 +321,34 @@ end
     end
 end
 
-# F3-22 review r1: an operator on another group's field. Front end A builds one system per group,
+# F3-22 review r1: an operator on another group's field. A model builds one system per group,
 # where another group's field is an input; one that a spatial operator reads carries its face
-# conditions (`@boundary v`, a Dirichlet face here), so the reading group's ghost values are the
-# field's own: A equals B, whose `FieldGroups` step one program with every face. `Δ(c)` of the
+# conditions (a Dirichlet face here), so the reading group's ghost values are the
+# field's own: the model equals B, whose `FieldGroups` step one program with every face. `Δ(c)` of the
 # coarse `c` of the other group is the F3-22 aux field, on `c`'s grid. Base 9afaac05: IRError
 # "field `v` has no boundary rule on axis 1".
 @potts_model FcCut begin
     @kinds medium A[frozen] B[frozen]
-    @variables begin
-        c(field) = 0.0, [lattice_level = Coarse(4)]
-        v(field) = 0.0
-        u(field) = 0.0
-    end
     @lattice Lattice((16, 12); boundary = Closed())
     @energy cells => (volume - 20.0)^2
-    @boundary v begin
-        x => (Dirichlet(1.0), NoFlux())
-    end
-    @equations begin
-        D(v) ~ 0.1 * Δ(v) - v + 0.5 * (kind == A)
-        D(c) ~ 0.4 * Δ(c) - 0.3 * c + 0.2 * v
-        D(u) ~ 0.2 * Δ(u) - u + 0.5 * Δ(v) + 0.3 * Δ(c)
-    end
+    @fields FcoPDE.cut() (FcoPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
 
-# the same with a Robin face set by `@bcs` (F3-26 review: the `@bcs` face of another group's field)
+# the same with a Robin face (F3-26 review: the `@bcs` face of another group's field)
 @potts_model FcCutBcs begin
     @kinds medium A[frozen] B[frozen]
-    @variables begin
-        c(field) = 0.0, [lattice_level = Coarse(4)]
-        v(field) = 0.0
-        u(field) = 0.0
-    end
     @lattice Lattice((16, 12); boundary = Closed())
     @energy cells => (volume - 20.0)^2
-    @bcs 1.0 * v(t, 0, y) - Differential(x)(v(t, 0, y)) ~ 0.5
-    @equations begin
-        D(v) ~ 0.1 * Δ(v) - v + 0.5 * (kind == A)
-        D(c) ~ 0.4 * Δ(c) - 0.3 * c + 0.2 * v
-        D(u) ~ 0.2 * Δ(u) - u + 0.5 * Δ(v) + 0.3 * Δ(c)
-    end
+    @fields FcoPDE.cut_bcs() (FcoPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
 
-@testset "F3-22 review r1: an operator on another group's field in A carries its faces (A = B)" begin
+@testset "F3-22 review r1: an operator on another group's field in a model carries its faces (equal to B)" begin
     tight = DevicePCG(; rtol = 1e-12, budget = 64)
     fa = FieldGroups(:u => BackwardEuler(; inner = tight); default = ExplicitEuler(; substeps = 40))
     fb = FieldGroups(:u => BackwardEuler(; dt = 1.0, inner = tight); default = ExplicitEuler(; dt = 1.0, substeps = 40))
-    for M in (FcCut, FcCutBcs)              # (a Dirichlet face from `@boundary`, a Robin face from `@bcs`)
+    for M in (FcCut, FcCutBcs)              # (a Dirichlet face, a Robin face)
         a = fx_run(M, 3, fa)
         @test all(maximum(abs, a[end][i]) > 0 for i in 1:3)
         bp = Potts.LatticePDE.discretize(Potts.fields(M(; name = :x)),

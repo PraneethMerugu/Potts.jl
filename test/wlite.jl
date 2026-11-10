@@ -557,12 +557,16 @@ costly(name; kw...) = System([D(hy) ~ -hk * hy], t; name, costs = [2.0], kw...)
 poisson(name; kw...) = (P = only(@poissonians P(hk)); System([D(hy) ~ -hk * hy + P], t; name, kw...))
 end
 
+isdefined(Main, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
+module WlPDE
+using ..FieldPDE
+@variables c(..)
+diffusion() = (@parameters Dc = 0.1; C = c(t, x, y); pdesys([Dt(C) ~ Dc * Δ(C)], [c(0, x, y) ~ 0.0], (8, 8), [C], [Dc]))
+end
 @potts_model WLiteC9Field begin                 # a model with a field (its PDESystem built by mtkcompile)
     @kinds medium cell
-    @parameters Dc = 0.1
-    @variables c(field) = 0.0
-    @equations D(c) ~ Dc * Δ(c)
     @lattice Lattice((8, 8))
+    @fields WlPDE.diffusion()
     @sweep Metropolis(; temperature = 1.0)
 end
 

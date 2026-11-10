@@ -1,6 +1,13 @@
 # F3-23: the models of test/cell_sums.jl, also loaded by its `-t 4` / `-t 8` processes and by
 # the device tests (test/gpu.jl).
 isdefined(Main, :JiangLike) || include(joinpath(@__DIR__, "fields_jiang_model.jl"))
+isdefined(Main, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
+module CsPDE
+using ..FieldPDE
+@variables c(..) src(..)::Bool [input = true]
+const C = c(t, x, y)
+threshold() = pdesys([Dt(C) ~ 0.2 * Δ(C) + 0.05 * src(t, x, y) - 0.02 * C], [c(0, x, y) ~ 0.0], (200, 200), [C, src(t, x, y)])
+end
 
 # Merks-like: cells secrete `c`, chemotaxis up its gradient, and the target volume moves when
 # the cell's average of `c` passes θ
@@ -10,14 +17,11 @@ isdefined(Main, :JiangLike) || include(joinpath(@__DIR__, "fields_jiang_model.jl
         θ = 1.2
         χ = 2.0
     end
-    @variables begin
-        c(field) = 0.0
-        cavg(cell) = 0.0
-    end
+    @variables cavg(cell) = 0.0
     @lattice Lattice((200, 200); boundary = Periodic())
     @energy cells => (volume - 25.0 - 15.0 * (cavg > θ))^2
+    @fields c = CsPDE.threshold() (CsPDE.src => kind == A)
     @drive Chemotaxis(c; strength = χ, kinds = (A,))
-    @equations D(c) ~ 0.2 * Δ(c) + 0.05 * (kind == A) - 0.02 * c
     @after_mcs cavg ~ integral(c) / volume
     @sweep Metropolis(; temperature = 4.0)
 end

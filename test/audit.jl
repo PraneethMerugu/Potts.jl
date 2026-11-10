@@ -1,6 +1,39 @@
 # Regression tests for docs/design/AUDIT.md findings (IDs A-xx) and decisions D-041..D-045.
 # Uses `selfcheck` from symbolic.jl.
 
+# the field models' PDESystems (F4-B4t): a kind table, a CPM read and a parameter expression
+# that a PDESystem does not hold are bound inputs (`dk => δ[kind]`)
+isdefined(Main, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
+module AuPDE
+using ..FieldPDE
+@variables c(..) u(..) dk(..) [input = true]
+const C, U, DK = c(t, x, y), u(t, x, y), dk(t, x, y)
+const D8 = (16, 16)
+dup() = pdesys([Dt(C) ~ -C / 10, Dt(C) ~ -C / 10], [c(0, x, y) ~ 1.0], (8, 8), [C])
+diffusion() = (@parameters Dc = 0.1; pdesys([Dt(C) ~ Dc * Δ(C)], [c(0, x, y) ~ 0.0], D8, [C], [Dc]))
+nonlinear() = (@parameters Dc = 0.1 k = 0.5; pdesys([Dt(C) ~ Dc * Δ(C) - k * C^2], [c(0, x, y) ~ 0.0], D8, [C], [Dc, k]))
+bounded() = (@parameters Dc = 1.0; pdesys([Dt(C) ~ Dc * Δ(C) - DK * C], [c(0, x, y) ~ 0.0], D8, [C, DK], [Dc]))
+kind_diffusion() = pdesys([Dt(C) ~ DK * Δ(C)], [c(0, x, y) ~ 0.0], D8, [C, DK])
+volume_diffusion() = pdesys([Dt(C) ~ 0.01 * DK * Δ(C)], [c(0, x, y) ~ 0.0], D8, [C, DK])
+mcs_diffusion() = pdesys([Dt(C) ~ DK * (1 + step_index(t)) * Δ(C)], [c(0, x, y) ~ 0.0], D8, [C, DK])
+inv_table() = (@parameters Dc = 0.1; pdesys([Dt(C) ~ Dc * Δ(C) - (1 / DK) * C], [c(0, x, y) ~ 0.0], D8, [C, DK], [Dc]))
+int_div() = (@parameters Dc = 0.25; Cx = c(t, x);
+             pdesys([Dt(Cx) ~ Dc * Δ(Cx) - dk(t, x) * Cx], [c(0, x) ~ 0.0], (16,), [Cx, dk(t, x)], [Dc]))
+two(e1, e2) = (@parameters Dc = 0.5 Dx = 0.5; pdesys([Dt(C) ~ e1(Dc, Dx), Dt(U) ~ e2(Dc, Dx)],
+    [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0], (8, 8), [C, U], [Dc, Dx]))
+cross_field() = two((Dc, Dx) -> Dc * Δ(C) - Dx * Δ(U), (Dc, Dx) -> Dc * Δ(U))
+cross_linear() = two((Dc, Dx) -> Dc * Δ(C) - Dx * U, (Dc, Dx) -> Dc * Δ(U))
+cross_loop() = two((Dc, Dx) -> Dc * Δ(C) - Dx * Δ(U), (Dc, Dx) -> Dc * Δ(U) + Dx * Δ(C))
+field1() = (@parameters Dc = 0.5; pdesys([Dt(C) ~ Dc * Δ(C)], [c(0, x, y) ~ 0.0], (8, 8), [C], [Dc]))
+const MCS = step_index(t)
+gate_rotation() = (@parameters t0 = 1000.0 k = 4.0;
+                   pdesys([Dt(C) ~ ifelse(MCS >= t0, -10 * C, -k * U), Dt(U) ~ ifelse(MCS >= t0, -10 * U, k * C)],
+                       [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0], (8, 8), [C, U], [t0, k]))
+gate_dominant() = (@parameters t0 = 1000.0;
+                   pdesys([Dt(C) ~ ifelse(MCS >= t0, -10 * C - U, -10 * C + U), Dt(U) ~ ifelse(MCS >= t0, -10 * U, -5 * U)],
+                       [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0], (8, 8), [C, U], [t0]))
+end
+
 audit_blocks() = (σ = zeros(Int32, 20, 20);
     for (k, (i, j)) in enumerate(Iterators.product(1:5:16, 1:5:16)); σ[i:(i + 2), j:(j + 2)] .= k; end; σ)
 
@@ -137,13 +170,9 @@ end
 
 @potts_model AuditDupODE begin
     @kinds medium A
-    @variables c(field) = 1.0
     @lattice Lattice((8, 8))
     @energy cells => (volume - 4)^2
-    @equations begin
-        D(c) ~ -c / 10
-        D(c) ~ -c / 10
-    end
+    @fields AuPDE.dup()
     @sweep Metropolis(; temperature = 5.0)
 end
 
@@ -177,11 +206,9 @@ end
 
 @potts_model AuditDiffusion begin
     @kinds medium A
-    @parameters Dc = 0.1
-    @variables c(field) = 0.0
     @lattice Lattice((16, 16))
     @energy cells(A) => (volume - 9)^2
-    @equations D(c) ~ Dc * Δ(c)
+    @fields AuPDE.diffusion()
     @sweep Metropolis(; temperature = 5.0)
 end
 
@@ -207,14 +234,9 @@ end
 
 @potts_model AuditNonlinearField begin
     @kinds medium A
-    @parameters begin
-        Dc = 0.1
-        k = 0.5
-    end
-    @variables c(field) = 0.0
     @lattice Lattice((16, 16))
     @energy cells(A) => (volume - 9)^2
-    @equations D(c) ~ Dc * Δ(c) - k * c^2
+    @fields AuPDE.nonlinear()
     @sweep Metropolis(; temperature = 5.0)
 end
 
@@ -241,14 +263,10 @@ end
 # diffusion only, gave 5), and an explicit count stays a minimum
 @potts_model AuditBoundedField begin
     @kinds medium A
-    @parameters begin
-        Dc = 1.0
-        δ[kind] = [5.0, 0.0]
-    end
-    @variables c(field) = 0.0
+    @parameters δ[kind] = [5.0, 0.0]
     @lattice Lattice((16, 16))
     @energy cells(A) => (volume - 9)^2
-    @equations D(c) ~ Dc * Δ(c) - δ[kind] * c
+    @fields AuPDE.bounded() (AuPDE.dk => δ[kind])
     @sweep Metropolis(; temperature = 5.0)
 end
 
@@ -273,18 +291,16 @@ end
 @potts_model AuditKindDiffusion begin
     @kinds medium A
     @parameters δ[kind] = [0.1, 2.0]
-    @variables c(field) = 0.0
     @lattice Lattice((16, 16))
     @energy cells(A) => (volume - 9)^2
-    @equations D(c) ~ δ[kind] * Δ(c)
+    @fields AuPDE.kind_diffusion() (AuPDE.dk => δ[kind])
     @sweep Metropolis(; temperature = 5.0)
 end
 @potts_model AuditVolumeDiffusion begin
     @kinds medium A
-    @variables c(field) = 0.0
     @lattice Lattice((16, 16))
     @energy cells(A) => (volume - 9)^2
-    @equations D(c) ~ 0.01 * volume[owner] * Δ(c)
+    @fields AuPDE.volume_diffusion() (AuPDE.dk => volume[owner])
     @sweep Metropolis(; temperature = 5.0)
 end
 
@@ -293,10 +309,9 @@ end
 @potts_model AuditMcsDiffusion begin
     @kinds medium A
     @parameters δ[kind] = [0.1, 0.2]
-    @variables c(field) = 0.0
     @lattice Lattice((16, 16))
     @energy cells(A) => (volume - 9)^2
-    @equations D(c) ~ δ[kind] * (1 + mcs) * Δ(c)
+    @fields AuPDE.mcs_diffusion() (AuPDE.dk => δ[kind])
     @sweep Metropolis(; temperature = 5.0)
 end
 
@@ -324,14 +339,10 @@ end
 # both); over the evaluation cap an explicit count runs as given (round 7: refused)
 @potts_model AuditInvTable begin
     @kinds medium A
-    @parameters begin
-        Dc = 0.1
-        τ[kind] = [2.0, 0.5]
-    end
-    @variables c(field) = 0.0
+    @parameters τ[kind] = [2.0, 0.5]
     @lattice Lattice((16, 16))
     @energy cells(A) => (volume - 9)^2
-    @equations D(c) ~ Dc * Δ(c) - (1 / τ[kind]) * c
+    @fields AuPDE.inv_table() (AuPDE.dk => τ[kind])
     @sweep Metropolis(; temperature = 5.0)
 end
 
@@ -381,14 +392,10 @@ end
 # an integer division of parameters in a rate: the bound cannot see `÷` (D-C8 item 6)
 @potts_model AuditIntDivField begin
     @kinds medium A
-    @parameters begin
-        Dc = 0.25
-        k₀ = 7.0
-    end
-    @variables c(field) = 0.0
+    @parameters k₀ = 7.0
     @lattice Lattice((16,))
     @energy cells => (volume - 4.0)^2
-    @equations D(c) ~ Dc * Δ(c) - (k₀ ÷ 2) * c
+    @fields AuPDE.int_div() (AuPDE.dk => k₀ ÷ 2)
     @sweep Metropolis(; temperature = 1.0)
 end
 
@@ -410,66 +417,31 @@ end
 # never silently one substep; a negative diffusion coefficient is refused at any count
 @potts_model AuditCrossField begin
     @kinds medium A
-    @parameters begin
-        Dc = 0.5
-        Dx = 0.5
-    end
-    @variables begin
-        c(field) = 0.0
-        u(field) = 0.0
-    end
     @lattice Lattice((8, 8))
     @energy cells => (volume - 4.0)^2
-    @equations begin
-        D(c) ~ Dc * Δ(c) - Dx * Δ(u)
-        D(u) ~ Dc * Δ(u)
-    end
+    @fields AuPDE.cross_field()
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model AuditCrossLinear begin
     @kinds medium A
-    @parameters begin
-        Dc = 0.5
-        Dx = 0.5
-    end
-    @variables begin
-        c(field) = 0.0
-        u(field) = 0.0
-    end
     @lattice Lattice((8, 8))
     @energy cells => (volume - 4.0)^2
-    @equations begin
-        D(c) ~ Dc * Δ(c) - Dx * u
-        D(u) ~ Dc * Δ(u)
-    end
+    @fields AuPDE.cross_linear()
     @sweep Metropolis(; temperature = 1.0)
 end
 # a loop: `u` reads `c` back (complex spectrum: Dc λ ± i Dx λ)
 @potts_model AuditCrossLoop begin
     @kinds medium A
-    @parameters begin
-        Dc = 0.5
-        Dx = 0.5
-    end
-    @variables begin
-        c(field) = 0.0
-        u(field) = 0.0
-    end
     @lattice Lattice((8, 8))
     @energy cells => (volume - 4.0)^2
-    @equations begin
-        D(c) ~ Dc * Δ(c) - Dx * Δ(u)
-        D(u) ~ Dc * Δ(u) + Dx * Δ(c)
-    end
+    @fields AuPDE.cross_loop()
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model AuditOneField begin
     @kinds medium A
-    @parameters Dc = 0.5
-    @variables c(field) = 0.0
     @lattice Lattice((8, 8))
     @energy cells => (volume - 4.0)^2
-    @equations D(c) ~ Dc * Δ(c)
+    @fields AuPDE.field1()
     @sweep Metropolis(; temperature = 1.0)
 end
 
@@ -477,35 +449,16 @@ end
 # certifies the rotation of the other arm (active before), so the rotation is refused
 @potts_model AuditGateRotation begin
     @kinds medium A
-    @parameters begin
-        t0 = 1000.0
-        k = 4.0
-    end
-    @variables begin
-        c(field) = 0.0
-        u(field) = 0.0
-    end
     @lattice Lattice((8, 8))
     @energy cells => (volume - 4.0)^2
-    @equations begin
-        D(c) ~ ifelse(mcs >= t0, -10 * c, -k * u)
-        D(u) ~ ifelse(mcs >= t0, -10 * u, k * c)
-    end
+    @fields AuPDE.gate_rotation()
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model AuditGateDominant begin
     @kinds medium A
-    @parameters t0 = 1000.0
-    @variables begin
-        c(field) = 0.0
-        u(field) = 0.0
-    end
     @lattice Lattice((8, 8))
     @energy cells => (volume - 4.0)^2
-    @equations begin
-        D(c) ~ ifelse(mcs >= t0, -10 * c - u, -10 * c + u)
-        D(u) ~ ifelse(mcs >= t0, -10 * u, -5 * u)
-    end
+    @fields AuPDE.gate_dominant()
     @sweep Metropolis(; temperature = 1.0)
 end
 @testset "an ifelse gate is bounded arm by arm: a gated rotation is refused" begin

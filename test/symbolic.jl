@@ -4,6 +4,22 @@
 using Random: Xoshiro
 using InteractiveUtils: code_llvm
 
+# the field models' PDESystems (F4-B4t)
+isdefined(Main, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
+module SyPDE
+using ..FieldPDE
+@variables c(..) src(..)::Bool [input = true]
+const C, S = c(t, x, y), src(t, x, y)
+float() = pdesys([Dt(C) ~ 0.1 * Δ(C) - C / 10 + exp(-1) * S], [c(0, x, y) ~ 0.0], (16, 16), [C, S])
+disk() = pdesys([Dt(C) ~ 0.2 * Δ(C) + 0.01 * S], [c(0, x, y) ~ 0.0], (40, 40), [C, S])
+chemo(dims) = pdesys([Dt(C) ~ 0.1 * Δ(C) + 0.02 * S - 0.01 * C], [c(0, x, y) ~ 0.0], dims, [C, S])
+function sorting3d()
+    C3, S3 = c(t, x, y, z), src(t, x, y, z)
+    return pdesys([Dt(C3) ~ 0.1 * Δ(C3) + 0.05 * S3 - 0.01 * C3], [c(0, x, y, z) ~ 0.0], (24, 24, 24), [C3, S3])
+end
+hex() = (@parameters Dc = 0.1; pdesys([Dt(C) ~ Dc * Δ(C)], [c(0, x, y) ~ 0.0], (30, 30), [C], [Dc]))
+end
+
 """Random proposals (Moore(1) sources) on states along a trajectory of `prob`."""
 function proposal_states(prob; mcs = (0, 5, 20), n = 400, rng = Xoshiro(11))
     sol = solve(remake(prob; tspan = (0, maximum(mcs))), SequentialCPM(; proposal = Moore(1)); saveat = collect(mcs))
@@ -663,11 +679,10 @@ end
         λ = 1.0
         T = 8.0
     end
-    @variables c(field) = 0.0
     @lattice Lattice((16, 16); neighborhood = Moore(1))
     @energy cells(A) => λ * (surface - 4 * sqrt(volume))^2 + log(2) * volume / 3
+    @fields c = SyPDE.float() (SyPDE.src => kind == A)
     @drive copy => -2 * (c[target] - c[source]) / 3
-    @equations D(c) ~ 0.1 * Δ(c) - c / 10 + exp(-1) * (kind == A)
     @sweep Metropolis(; temperature = T)
 end
 
@@ -1044,13 +1059,12 @@ end
         T = 10.0
         J[kind, kind] = [0 16 16; 16 2 11; 16 11 14]
     end
-    @variables c(field) = 0.0
     @lattice Lattice((40, 40); boundary = Closed(), domain = x -> (x[1] - 20.5)^2 + (x[2] - 20.5)^2 <= 18^2)
     @energy begin
         Volume(dark, light; target = 25.0)
         Adhesion(J)
     end
-    @equations D(c) ~ 0.2 * Δ(c) + 0.01 * (kind == dark)
+    @fields SyPDE.disk() (SyPDE.src => kind == dark)
     @sweep Metropolis(; temperature = T)
 end
 
@@ -1074,9 +1088,8 @@ end
 @potts_model ChemoSorting begin
     @extend λ, V₀, dark = base = Sorting()
     @parameters χ = 50.0
-    @variables c(field) = 0.0
+    @fields c = SyPDE.chemo((72, 72)) (SyPDE.src => kind == dark)
     @drive Chemotaxis(c; strength = χ, kinds = (dark,))
-    @equations D(c) ~ 0.1 * Δ(c) + 0.02 * (kind == dark) - 0.01 * c
     @observed mean_excess ~ sum((volume - V₀) for n in cells) * λ
 end
 
@@ -1259,18 +1272,15 @@ end
         T = 12.0
         J[kind, kind] = [0 16 16; 16 2 11; 16 11 14]
     end
-    @variables begin
-        c(field) = 0.0
-        mass(cell) = 1.0
-    end
+    @variables mass(cell) = 1.0
     @lattice Lattice((24, 24, 24); boundary = Closed(), neighborhood = NeighborOrder(2),
         domain = x -> sum(abs2, x .- 12.5) <= 11.5^2)
     @energy begin
         cells(dark, light) => λ * (volume - V₀)^2 + λₛ * (surface - S₀)^2
         contacts => J[kind, kind′]
     end
+    @fields c = SyPDE.sorting3d() (SyPDE.src => kind == dark)
     @drive copy => -2.0 * (c[target] - c[source]) * (kind[new] == dark)
-    @equations D(c) ~ 0.1 * Δ(c) + 0.05 * (kind == dark) - 0.01 * c
     @divide cells(dark) when = (mcs == 3) && (volume >= 40), along = principal_axis(), mass => Split()
     @sweep Metropolis(; temperature = T)
 end
@@ -2255,20 +2265,14 @@ end
 
 @potts_model HexSorting begin
     @kinds medium dark light
-    @parameters begin
-        J[kind, kind] = [0 16 16; 16 2 11; 16 11 14]
-        Dc = 0.1
-    end
-    @variables begin
-        c(field) = 0.0
-        cx(cell) = 0.0
-    end
+    @parameters J[kind, kind] = [0 16 16; 16 2 11; 16 11 14]
+    @variables cx(cell) = 0.0
     @lattice Lattice((30, 30); geometry = Hexagonal(), neighborhood = Hex(2))
     @energy begin
         cells => (volume - 19)^2 + 0.2 * (surface - 60)^2
         contacts => J[kind, kind′]
     end
-    @equations D(c) ~ Dc * Δ(c)
+    @fields SyPDE.hex()
     @after_mcs cx ~ centroid(1)
     @sweep Metropolis(; temperature = 8.0)
 end

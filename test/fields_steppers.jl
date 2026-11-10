@@ -1,32 +1,71 @@
-# F3-10, F3-11 (F3 design §3.3, §3.7): `CrankNicolson` and `BDF2` in front end A, through the
-# runtime of front end B (the models and helpers of fields_implicit.jl). With σ frozen A equals
+# F3-10, F3-11 (F3 design §3.3, §3.7): `CrankNicolson` and `BDF2` in a model, through the
+# runtime of front end B (the models and helpers of fields_implicit.jl). With σ frozen the model equals
 # B bitwise; Crank–Nicolson damps the first substep of every MCS when the group reads the CPM
 # or its mask moves; BDF2 keeps its history in the runtime (not in `st.site`, saved states or a
 # checkpoint), across σ moves, and restarts after a write, `reinit!` or a restored checkpoint.
 # Base (69bef544, ~/lpwork/f3b4-nc10-a-base.log, f3b4-nc11-a-base.log): `CrankNicolson` and
 # `BDF2` are not defined in Potts (every testset errors).
 
+# the models' fields, coupled with `@fields` (F4-B4t; before, written in `@equations` and
+# `@bcs`); a kind is a bound input, a kind table the model's
+isdefined(Main, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
+module FsPDE
+using ..FieldPDE
+@variables c(..) e(..) u(..) v(..) w(..) kA(..)::Bool [input = true]
+@variables dk(..) [input = true] kout(..) [input = true] kinp(..) [input = true]
+const X = (t, x, y)
+const C, E, U, V, W, KA = c(X...), e(X...), u(X...), v(X...), w(X...), kA(X...)
+const D = (12, 10)
+ic(f, v = 0.0) = f(0, x, y) ~ v
+move() = pdesys([Dt(C) ~ 4.0 * Δ(C) - 2.0 * C], [ic(c), C ~ masked(KA, 1.0)], (24, 24), [C, KA])
+secrete() = pdesys([Dt(C) ~ 1.0 * Δ(C) - 0.2 * C + 1.0 * KA], [ic(c)], (24, 24), [C, KA])
+steady(; zero = false) = (@parameters Dc = 0.4 kd = 0.3 s = 0.5;
+    pdesys([(zero ? 0 : Dt(C)) ~ Dc * Δ(C) - kd * C + s * KA], [ic(c)], D, [C, KA], [Dc, kd, s]))
+island() = (@parameters kd = 1.0; pdesys([Dt(C) ~ 0.5 * Δ(C) - kd * KA * C + 1.0], [ic(c)], (24, 12), [C, KA], [kd]))
+no_island() = pdesys([Dt(C) ~ 0.5 * Δ(C) - 0.1 * C + 1.0], [ic(c)], (24, 12), [C])
+grow() = (@parameters g = -0.5; pdesys([Dt(C) ~ 0.4 * Δ(C) - g * C + 0.1 * KA], [ic(c)], D, [C, KA], [g]))
+# two fields in a loop (`u` reads `w`, `w` reads `u`) with the parameters `ps`; a kind table is
+# the model's, bound to `dk`, `kout` or `kinp`
+loop(ru, rw, ps = [], ins = []) = pdesys([Dt(U) ~ ru, Dt(W) ~ rw], [ic(u), ic(w, 1.0)], D, [U, W, ins...], ps)
+loop() = loop(0.1 * Δ(U) - 0.1 * U + 0.5 * W, 0.1 * Δ(W) - W - 0.5 * U)
+loop_k() = (@parameters kd = 1.0 kc = 0.5; loop(0.1 * Δ(U) - kd * U + kc * W, 0.1 * Δ(W) - W - kc * U, [kd, kc]))
+loop_t() = (@parameters kc = 0.5; loop(0.1 * Δ(U) - dk(X...) * U + kc * W, 0.1 * Δ(W) - W - kc * U, [kc], [dk(X...)]))
+loop_x() = loop(0.1 * Δ(U) - 1.0 * U + kout(X...) * W, 0.1 * Δ(W) - W - kinp(X...) * U, [], [kout(X...), kinp(X...)])
+steady_mix() = pdesys([Dt(E) ~ 0.1 * Δ(E) - E + C, 0 ~ 0.4 * Δ(C) - 0.3 * C + 0.5 * KA], [ic(e), ic(c)], D, [E, C, KA])
+steady_neg() = (@parameters Dc = 0.4 kd = 0.3 s = 0.5;
+    pdesys([0 ~ kd * C - Dc * Δ(C) - s * KA], [ic(c)], D, [C, KA], [Dc, kd, s]))
+local_() = pdesys([0 ~ -2.0 * C + 0.5 * E, Dt(E) ~ 0.1 * Δ(E) - E + 0.5 * KA], [ic(c), ic(e)], D, [C, E, KA])
+robin_q() = pdesys([Dt(C) ~ 0.4 * Δ(C) - 1.0 * C + 0.1 * x], [ic(c), 1.0 * c(t, x, 0) + Differential(y)(c(t, x, 0)) ~ 0.5], D, [C])
+pair() = pdesys([0 ~ 0.1 * Δ(U) - 0.1 * U + 5.0 * V + 0.5 * KA, 0 ~ 0.1 * Δ(V) - V - 5.0 * U], [ic(u), ic(v)], D, [U, V, KA])
+feed() = (@parameters k = 0.5;
+    pdesys([Dt(E) ~ 0.1 * Δ(E) - E + 0.5 * V + 0.5 * KA, 0 ~ 0.1 * Δ(U) - U + k * V + 0.2 * E, 0 ~ 0.1 * Δ(V) - V - k * U],
+        [ic(e), ic(u), ic(v)], D, [E, U, V, KA], [k]))
+function half()
+    @variables v(..) [lattice_storage = Float16]
+    Vh = v(X...)
+    return pdesys([0 ~ 0.1 * Δ(U) - U + 0.5 * Vh + 0.5 * KA, 0 ~ 0.1 * Δ(Vh) - Vh - 0.5 * U], [ic(u), ic(v)], D, [U, Vh, KA])
+end
+end
+
 # a Dirichlet mask on moving cells (P1 (c)): `c = 1` inside the cells, fast diffusion and decay
 @potts_model FiMove begin
     @kinds medium A
-    @variables c(field) = 0.0
     @lattice Lattice((24, 24); boundary = Closed())
     @energy cells(A) => (volume - 16.0)^2
-    @equations D(c) ~ 4.0 * Δ(c) - 2.0 * c
-    @bcs c ~ masked(kind == A, 1.0)
+    @fields FsPDE.move() (FsPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 12.0)
     @schedule sweep, fields
 end
 fi_rt(integ) = CorePotts._runtime(getfield(integ.ctx, :__fields1))
 fi_c(integ) = copy(Array(current_state(integ).site.c))
 
-@testset "F3-10: CrankNicolson in A equals B bitwise (σ frozen)" begin
+@testset "F3-10: CrankNicolson in a model equals B bitwise (σ frozen)" begin
     dims, k = (12, 10), 6
     # no CPM read and no moving mask: damped at the start only (as B)
     a, integ = fi_runA(FiStill, fi_op(dims), k; field_solver = CrankNicolson())
     b = fi_runB(FiStill, dims, k; u0 = [:c => zeros(dims)], inputs = [], alg = CrankNicolson(; dt = 1.0))
     @test a == b && !fi_rt(integ).cache.jumps
-    # a mask that moves (it follows `e`) and a kind source: damped every MCS, in A and in B
+    # a mask that moves (it follows `e`) and a kind source: damped every MCS, in a model and in B
     a, integ = fi_runA(FiMix, fi_op(dims), k; field_solver = CrankNicolson())
     b = fi_runB(FiMix, dims, k; u0 = [:c => zeros(dims), :e => zeros(dims)], alg = CrankNicolson(; dt = 1.0))
     @test a == b && fi_rt(integ).cache.jumps
@@ -65,10 +104,9 @@ end
 # every run)
 @potts_model FiSecrete begin
     @kinds medium A
-    @variables c(field) = 0.0
     @lattice Lattice((24, 24); boundary = Closed())
     @energy cells(A) => (volume - 16.0)^2
-    @equations D(c) ~ 1.0 * Δ(c) - 0.2 * c + 1.0 * (kind == A)
+    @fields FsPDE.secrete() (FsPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 10.0)
 end
 
@@ -104,7 +142,7 @@ end
     @test !fi_rt(i).cache.jumps && substep_counts(i) == [1]
 end
 
-@testset "F3-11: BDF2 in A equals B bitwise; its history is no state" begin
+@testset "F3-11: BDF2 in a model equals B bitwise; its history is no state" begin
     dims, k = (12, 10), 6
     for M in (FiStill, FiMix)
         u0 = M === FiMix ? [:c => zeros(dims), :e => zeros(dims)] : [:c => zeros(dims)]
@@ -168,21 +206,15 @@ end
     @test a != b                                             # (a Backward Euler substep, then BDF2 again)
 end
 
-# F3-12a (F3 design §3.5): `QuasiSteady` in front end A, through the runtime of B. With σ
-# frozen A equals B bitwise; the refusals name the route; an island the cells' kinds leave
+# F3-12a (F3 design §3.5): `QuasiSteady` in a model, through the runtime of B. With σ
+# frozen the model equals B bitwise; the refusals name the route; an island the cells' kinds leave
 # with no decay ends the run with `ConvergenceFailure`. Base (b32d9112,
 # ~/lpwork/f3b5-nc-12a-a-base.log): `QuasiSteady` is not defined in Potts (every testset errors).
 @potts_model FiSteady begin
     @kinds medium A[frozen]
-    @parameters begin
-        Dc = 0.4
-        kd = 0.3
-        s = 0.5
-    end
-    @variables c(field) = 0.0
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ Dc * Δ(c) - kd * c + s * (kind == A)
+    @fields FsPDE.steady() (FsPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
 # two discs (the field's domain), a decay only inside the cells: the disc with no cell is an
@@ -192,11 +224,9 @@ end
         domain = x -> (x[1] - 6.5)^2 + (x[2] - 6.5)^2 <= 25 || (x[1] - 18.5)^2 + (x[2] - 6.5)^2 <= 25
     end
     @kinds medium A
-    @parameters kd = 1.0
-    @variables c(field) = 0.0
     @lattice Lattice((24, 12); boundary = Closed(), domain)
     @energy cells(A) => (volume - 16.0)^2
-    @equations D(c) ~ 0.5 * Δ(c) - kd * (kind == A) * c + 1.0
+    @fields FsPDE.island() (FsPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FiNoIsland begin
@@ -204,23 +234,20 @@ end
         domain = x -> (x[1] - 6.5)^2 + (x[2] - 6.5)^2 <= 25 || (x[1] - 18.5)^2 + (x[2] - 6.5)^2 <= 25
     end
     @kinds medium A
-    @variables c(field) = 0.0
     @lattice Lattice((24, 12); boundary = Closed(), domain)
     @energy cells(A) => (volume - 16.0)^2
-    @equations D(c) ~ 0.5 * Δ(c) - 0.1 * c + 1.0
+    @fields FsPDE.no_island()
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FiGrow begin
     @kinds medium A[frozen]
-    @parameters g = -0.5
-    @variables c(field) = 0.0
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ 0.4 * Δ(c) - g * c + 0.1 * (kind == A)
+    @fields FsPDE.grow() (FsPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
 
-@testset "F3-12a: QuasiSteady in A equals B bitwise (σ frozen); one solve per MCS" begin
+@testset "F3-12a: QuasiSteady in a model equals B bitwise (σ frozen); one solve per MCS" begin
     dims, k = (12, 10), 4
     for M in (FiStill, FiSteady)
         a, integ = fi_runA(M, fi_op(dims), k; field_solver = QuasiSteady())
@@ -238,24 +265,17 @@ end
     @test Core.eval(m, :QuasiSteady) === Potts.LatticePDE.QuasiSteady === Potts.LatticeFields.Problems.QuasiSteady
 end
 
-# Review r2 M1 in A: a steady field in a loop of solver groups is refused until F3-12c bounds
+# Review r2 M1 in a model: a steady field in a loop of solver groups is refused until F3-12c bounds
 # its gain; the routes (one `BackwardEuler` solver; `BackwardEuler` for the steady field) run.
 # Base (773f0957, ~/lpwork/f3b5-nc-r2-m1-a.log): the loop is accepted (the refusal test fails).
 @potts_model FiLoop begin
     @kinds medium A[frozen]
-    @variables begin
-        u(field) = 0.0
-        w(field) = 1.0
-    end
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations begin
-        D(u) ~ 0.1 * Δ(u) - 0.1 * u + 0.5 * w
-        D(w) ~ 0.1 * Δ(w) - w - 0.5 * u
-    end
+    @fields FsPDE.loop()
     @sweep Metropolis(; temperature = 1.0)
 end
-@testset "F3-12a (r2 M1): QuasiSteady in a loop of solver groups in A is refused, with its routes" begin
+@testset "F3-12a (r2 M1): QuasiSteady in a loop of solver groups in a model is refused, with its routes" begin
     dims = (12, 10)
     @test_throws "the fields `u`, `w` are in solver groups that read one another in a loop, and `u` is solved with `QuasiSteady`" PottsProblem(
         FiLoop(; name = :f), fi_op(dims), (0, 3); field_solver = FieldGroups(:u => QuasiSteady(), :w => BackwardEuler()))
@@ -265,7 +285,7 @@ end
     end
 end
 
-@testset "F3-12a: QuasiSteady in A: the refusals; an island ends the run" begin
+@testset "F3-12a: QuasiSteady in a model: the refusals; an island ends the run" begin
     dims = (12, 10)
     # a growth the operator sees (`g < 0` makes `- g c` a growth): at build and at a write
     @test_throws "QuasiSteady: field `c`: its local derivative `∂f/∂c` = 0.5 is positive" PottsProblem(FiGrow(; name = :f),
@@ -285,39 +305,26 @@ end
     @test s.retcode == Potts.SciMLBase.ReturnCode.Success
 end
 
-# F3-12b (F3 design §3.5): steady rows `0 ~ rhs` in A. A steady row is solved by `QuasiSteady`
+# F3-12b (F3 design §3.5): steady rows `0 ~ rhs` in a model. A steady row is solved by `QuasiSteady`
 # for the field its operator acts on, by default too; another solver for it is refused; the
 # QuasiSteady groups step first. Base (6b6bf089, ~/lpwork/f3b5-nc-12b-a-base.log): `0 ~ rhs` is
 # refused ("equations are `D(x) ~ rhs` …"; every testset errors).
 @potts_model FiSteady0 begin
     @kinds medium A[frozen]
-    @parameters begin
-        Dc = 0.4
-        kd = 0.3
-        s = 0.5
-    end
-    @variables c(field) = 0.0
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations 0 ~ Dc * Δ(c) - kd * c + s * (kind == A)
+    @fields FsPDE.steady(; zero = true) (FsPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
 # a transient field `e` (declared and written first) that reads the steady `c`
 @potts_model FiSteadyMix begin
     @kinds medium A[frozen]
-    @variables begin
-        e(field) = 0.0
-        c(field) = 0.0
-    end
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations begin
-        D(e) ~ 0.1 * Δ(e) - e + c
-        0 ~ 0.4 * Δ(c) - 0.3 * c + 0.5 * (kind == A)
-    end
+    @fields FsPDE.steady_mix() (FsPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
-@testset "F3-12b: steady rows `0 ~ rhs` in A: QuasiSteady by default, equal to the rate row and to B" begin
+@testset "F3-12b: steady rows `0 ~ rhs` in a model: QuasiSteady by default, equal to the rate row and to B" begin
     dims, k = (12, 10), 3
     a0, integ = fi_runA(FiSteady0, fi_op(dims), k; field_solver = nothing)
     a1, _ = fi_runA(FiSteady, fi_op(dims), k; field_solver = QuasiSteady())
@@ -350,29 +357,16 @@ end
 # is negative", and "this row's operators apply to `c` and `e`".
 @potts_model FiSteadyNeg begin
     @kinds medium A[frozen]
-    @parameters begin
-        Dc = 0.4
-        kd = 0.3
-        s = 0.5
-    end
-    @variables c(field) = 0.0
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations 0 ~ kd * c - Dc * Δ(c) - s * (kind == A)
+    @fields FsPDE.steady_neg() (FsPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FiLocal begin
     @kinds medium A[frozen]
-    @variables begin
-        c(field) = 0.0
-        e(field) = 0.0
-    end
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations begin
-        0 ~ -2.0 * c + 0.5 * e
-        D(e) ~ 0.1 * Δ(e) - e + 0.5 * (kind == A)
-    end
+    @fields FsPDE.local_() (FsPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
 @testset "F3-12b (r3 S3, S4): a steady row's sign; its field by the rule of both front ends" begin
@@ -386,7 +380,7 @@ end
     @test only(steady_fields(FiLocal(; name = :f))) == ("0 ~ -2.0c(t) + 0.5e(t)" => :c)      # (r3 N2)
 end
 
-# F3-12c in A: the QuasiSteady gain in the coupling rule, and `init = :steady`. `FiLoopK` is
+# F3-12c in a model: the QuasiSteady gain in the coupling rule, and `init = :steady`. `FiLoopK` is
 # FiLoop with the decay `kd` and the coupling `kc` as parameters: at kd = 1, kc = 0.5 the gain
 # is 1 and κ = 1 · 0.5 · 1 · 0.5 = 0.25, accepted; uniform data stay uniform (no flux faces), so
 # each MCS is u = (kc/kd) w, then w⁺ = (w − kc u)/2. A write to kd = 0.1 (κ = 2.5) is refused:
@@ -395,20 +389,9 @@ end
 # bound that gain yet") and `init` is no keyword (both testsets error).
 @potts_model FiLoopK begin
     @kinds medium A[frozen]
-    @parameters begin
-        kd = 1.0
-        kc = 0.5
-    end
-    @variables begin
-        u(field) = 0.0
-        w(field) = 1.0
-    end
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations begin
-        D(u) ~ 0.1 * Δ(u) - kd * u + kc * w
-        D(w) ~ 0.1 * Δ(w) - w - kc * u
-    end
+    @fields FsPDE.loop_k()
     @sweep Metropolis(; temperature = 1.0)
 end
 # the decay a kind table: the transient group's rule reads that table too (its phase holds the
@@ -416,20 +399,10 @@ end
 # table was missing from the rule, its decay read 0, and the loop was refused ("`u` has no decay").
 @potts_model FiLoopT begin
     @kinds medium A[frozen]
-    @parameters begin
-        δ[kind] = [2.0, 1.0]
-        kc = 0.5
-    end
-    @variables begin
-        u(field) = 0.0
-        w(field) = 1.0
-    end
+    @parameters δ[kind] = [2.0, 1.0]
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations begin
-        D(u) ~ 0.1 * Δ(u) - δ[kind] * u + kc * w
-        D(w) ~ 0.1 * Δ(w) - w - kc * u
-    end
+    @fields FsPDE.loop_t() (FsPDE.dk => δ[kind])
     @sweep Metropolis(; temperature = 1.0)
 end
 # the cross coefficients kind tables (review r4 N3; reviewer probe ~/lpwork/f3rev9/a4.jl): the
@@ -441,19 +414,12 @@ end
         ko[kind] = [0.5, 0.5]
         ki[kind] = [0.5, 0.5]
     end
-    @variables begin
-        u(field) = 0.0
-        w(field) = 1.0
-    end
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations begin
-        D(u) ~ 0.1 * Δ(u) - 1.0 * u + ko[kind] * w
-        D(w) ~ 0.1 * Δ(w) - w - ki[kind] * u
-    end
+    @fields FsPDE.loop_x() (FsPDE.kout => ko[kind], FsPDE.kinp => ki[kind])
     @sweep Metropolis(; temperature = 1.0)
 end
-@testset "F3-12c: the QuasiSteady gain in A: an accepted loop is the split recursion; a write past it is refused" begin
+@testset "F3-12c: the QuasiSteady gain in a model: an accepted loop is the split recursion; a write past it is refused" begin
     dims = (12, 10)
     tight = DevicePCG(; rtol = 1e-12, budget = 64)
     fs = FieldGroups(:u => QuasiSteady(; inner = tight), :w => BackwardEuler(; inner = tight))
@@ -486,7 +452,7 @@ end
         FiLoop(; name = :f), fi_op(dims), (0, 3); field_solver = FieldGroups(:u => QuasiSteady(), :w => BackwardEuler()))
 end
 
-@testset "F3-12c: `init = :steady` in A: the field starts at its steady state; refusals name `init`" begin
+@testset "F3-12c: `init = :steady` in a model: the field starts at its steady state; refusals name `init`" begin
     dims = (12, 10)
     tight = DevicePCG(; rtol = 1e-12, budget = 64)
     # the steady state: one QuasiSteady MCS (σ frozen: the same inputs)
@@ -526,17 +492,15 @@ end
 # a Robin face of opposite signs with a definite steady operator (decay 1 > the face's 0.8)
 @potts_model FiRobinQ begin
     @kinds medium A[frozen]
-    @variables c(field) = 0.0
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ 0.4 * Δ(c) - 1.0 * c + 0.1 * x
-    @bcs 1.0 * c(t, x, 0) + Differential(y)(c(t, x, 0)) ~ 0.5
+    @fields FsPDE.robin_q()
     @sweep Metropolis(; temperature = 1.0)
 end
-# F3-12a (design §5; review r4 N4): the F3-05 capabilities in a QuasiSteady group in A, each
+# F3-12a (design §5; review r4 N4): the F3-05 capabilities in a QuasiSteady group in a model, each
 # equal to B bitwise (σ frozen): a Robin face of each sign, a field face, a mask value field;
 # and an input bound by aliasing, the CPM's moving σ, read by the next window's steady solve
-@testset "F3-12a: the solver capabilities in a QuasiSteady group in A (F3-05), equal to B bitwise" begin
+@testset "F3-12a: the solver capabilities in a QuasiSteady group in a model (F3-05), equal to B bitwise" begin
     dims, k = (12, 10), 2
     # FiRobinN's face (α 1, β 1 at unit spacing: +0.8 on the diagonal against the decay 0.3) makes
     # the steady operator indefinite: refused, as in B; FiRobinQ's decay 1 keeps it definite
@@ -563,23 +527,16 @@ end
         alg = QuasiSteady(; dt = 1.0))[1]
 end
 
-# F3-12d: the coupled steady solve in A. Steady rows that read one another are one QuasiSteady
+# F3-12d: the coupled steady solve in a model. Steady rows that read one another are one QuasiSteady
 # group solved together (Krylov.jl FGMRES on the group's whole Jacobian), as in B: with σ frozen
-# A equals B bitwise; components equal scalars; a loop through a transient field composes the
+# the model equals B bitwise; components equal scalars; a loop through a transient field composes the
 # steady gains; Float16 storage is refused. Base (c40a68f8, ~/lpwork/f312d/nc-base-potts.log):
 # the strong pair ends `ConvergenceFailure`, the feedback loop is refused.
 @potts_model FcPair begin
     @kinds medium A[frozen]
-    @variables begin
-        u(field) = 0.0
-        v(field) = 0.0
-    end
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations begin
-        0 ~ 0.1 * Δ(u) - 0.1 * u + 5.0 * v + 0.5 * (kind == A)
-        0 ~ 0.1 * Δ(v) - v - 5.0 * u
-    end
+    @fields FsPDE.pair() (FsPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FcComp begin
@@ -595,33 +552,16 @@ end
 end
 @potts_model FcFeed begin
     @kinds medium A[frozen]
-    @parameters k = 0.5
-    @variables begin
-        e(field) = 0.0
-        u(field) = 0.0
-        v(field) = 0.0
-    end
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations begin
-        D(e) ~ 0.1 * Δ(e) - e + 0.5 * v + 0.5 * (kind == A)
-        0 ~ 0.1 * Δ(u) - u + k * v + 0.2 * e
-        0 ~ 0.1 * Δ(v) - v - k * u
-    end
+    @fields FsPDE.feed() (FsPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FcHalf begin
     @kinds medium A[frozen]
-    @variables begin
-        u(field) = 0.0
-        v(field) = 0.0, [lattice_storage = Float16]
-    end
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations begin
-        0 ~ 0.1 * Δ(u) - u + 0.5 * v + 0.5 * (kind == A)
-        0 ~ 0.1 * Δ(v) - v - 0.5 * u
-    end
+    @fields FsPDE.half() (FsPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
 fc_site(integ, names) = [copy(Array(getproperty(current_state(integ).site, n))) for n in names]
@@ -637,7 +577,7 @@ function fc_runB(M, k, names; alg, kw...)
     return [[s[n, i] for n in names] for i in 2:(k + 1)], s
 end
 
-@testset "F3-12d: coupled steady rows in A: solved together, equal to B bitwise; components equal scalars" begin
+@testset "F3-12d: coupled steady rows in a model: solved together, equal to B bitwise; components equal scalars" begin
     a, integ = fc_runA(FcPair, 3, (:u, :v))
     rt = fi_rt(integ)
     @test integ.retcode == FiRC.Default && Potts.LatticeFields.Problems.coupled_solve(rt.cache) && rt.cache.newton == 1
@@ -653,7 +593,7 @@ end
     @test [Array(st.w_1), Array(st.w_2)] == a[end]
 end
 
-@testset "F3-12d: a coupled steady pair feeding back through a transient field in A, equal to B" begin
+@testset "F3-12d: a coupled steady pair feeding back through a transient field in a model, equal to B" begin
     a, integ = fc_runA(FcFeed, 4, (:e, :u, :v); field_solver = BackwardEuler())
     @test integ.retcode == FiRC.Default
     b, sb = fc_runB(FcFeed, 4, (:e, :u, :v); alg = BackwardEuler(; dt = 1.0))

@@ -56,13 +56,21 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
+# the field models' PDESystems (F4-B4t)
+isdefined(Main, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
+module SvPDE
+using ..FieldPDE
+@variables c(..)
+const C = c(t, x, y)
+decay(dims, k, c0 = 0.0; D = 0.1) = pdesys([Dt(C) ~ D * Δ(C) - k * C], [c(0, x, y) ~ c0], dims, [C])
+field() = (@parameters Dc = 0.1; pdesys([Dt(C) ~ Dc * Δ(C) - 0.05 * C], [c(0, x, y) ~ 0.0], (16, 16), [C], [Dc]))
+end
+
 @potts_model SolverField begin
     @kinds medium A
-    @parameters Dc = 0.1
-    @variables c(field) = 0.0
     @lattice Lattice((16, 16))
     @energy cells => (volume - 16.0)^2
-    @equations D(c) ~ Dc * Δ(c) - 0.05 * c
+    @fields SvPDE.field()
     @sweep Metropolis(; temperature = 1.0)
 end
 
@@ -410,10 +418,9 @@ end
 function md_field_model(md)
     @potts_model MdField begin
         @kinds medium A
-        @variables c(field) = 0.0
         @lattice Lattice((12, 12))
         @energy cells => (volume - 9.0)^2
-        @equations D(c) ~ 0.1 * Δ(c) - 0.05 * c
+        @fields SvPDE.decay((12, 12), 0.05)
         @sweep Metropolis(; temperature = 1.0, mcs_duration = md)
     end
     MdField(; name = :fd)
@@ -685,10 +692,9 @@ end
 # F2-04: one `ExplicitEuler` (LatticeFields'), bound by both front ends (F2 design §2.4)
 @potts_model SolverOneField begin
     @kinds medium A
-    @variables c(field) = 1.0
     @lattice Lattice((8, 8))
     @energy cells(A) => (volume - 9)^2
-    @equations D(c) ~ 0.1 * Δ(c) - 0.5 * c
+    @fields SvPDE.decay((8, 8), 0.5, 1.0)
     @sweep Metropolis(; temperature = 1.0)
 end
 @testset "F2-04: one ExplicitEuler for both front ends" begin
