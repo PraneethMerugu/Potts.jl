@@ -464,8 +464,92 @@ function check_coupling(stability, groups, explicit, pp, dt::Real; check = eachi
         elseif κ > 1 + _COUPLING_RTOL
             throw(ArgumentError(loop_text(texts, c)))
         end
+        # a loop coupled through terms the bound cannot see (F4-13c, user ruling 2026-11-10 (a)):
+        # κ covers the seen cross terms only, so the lag through the unseen ones is not checked;
+        # warned once per loop (its fields; by its first group, as front end A checks each group
+        # on its own, with its own once-key), never refused. Only the warning reads the unseen
+        # terms' own reads: the loops stay the conservative rule's (`group_loops`)
+        if g == minimum(loops[g]) && any(h -> parts[h].unseen, loops[g])
+            u = unseen_loop(stability, pp, keys, parts, loops[g])
+            u.kind === :none || (_warn_once(key(string("coupling#unseen#", join(sort(c.lf), ",")))) &&
+                                 @warn coupling_unseen_text(texts, (; c..., u.kind, u.terms, u.fields)))
+        end
     end
     return nothing
+end
+
+"""
+    unseen_reads(stability) -> Union{Nothing, Vector{Tuple{String, String, Vector{String}}}}
+
+Each term the bound cannot see with the state fields it reads, structurally: `(row key,
+"key: term", state keys)` (its own field included; an aux field read through its definition).
+A front end's bound defines it (LatticePDE's `StabilityBound`); `nothing` (the default): the
+bound does not record them.
+"""
+unseen_reads(stability) = nothing
+
+"""
+    unseen_loop(stability, pp, keys, parts, loop) -> (; kind, terms, fields)
+
+How the loop `loop` of the group read graph (`group_loops` of `parts`, [`lagged_coupling`](@ref))
+meets the terms the bound cannot see (F4-13c), from each unseen term's reads
+([`unseen_reads`](@ref)): `kind` is `:direct` (an unseen term of a group of the loop reads a field
+of another group of the loop: the loop runs through it), `:conservative` (the loop exists only
+because the rule counts an unseen term that reads another field as reading every group), or
+`:none` (the loop is closed by seen reads and its unseen terms read outside it, or only their own
+field). `terms` the unseen terms that read another field, as the user wrote them; `fields` the
+state fields they read (the fields whose declared intervals let the bound see them).
+"""
+function unseen_loop(stability, pp, keys, parts, loop)
+    gof = Dict{String, Int}(k => h for (h, ks) in enumerate(keys) for k in ks)
+    ur = unseen_reads(stability)
+    if ur === nothing                           # (a bound that does not record the reads)
+        ks = [k for h in loop if parts[h].unseen for k in keys[h]]
+        ts = String[_termtext(t) for t in bound_report(stability, pp).terms if any(k -> startswith(t, k * ": "), ks)]
+        return (; kind = :conservative, terms = ts, fields = String[])
+    end
+    # the unseen terms that read another field (a term on its own field alone couples nothing)
+    cross = [(k, t, r) for (k, t, r) in ur if haskey(gof, k) && any(!=(k), r)]
+    mine = [x for x in cross if gof[x[1]] in loop]
+    isempty(mine) && return (; kind = :none, terms = String[], fields = String[])
+    texts(xs) = String[_termtext(x[2]) for x in xs]
+    fields(xs) = sort!(unique!(String[f for x in xs for f in x[3]]))
+    direct = [x for x in mine if any(f -> haskey(gof, f) && gof[f] != gof[x[1]] && gof[f] in loop, x[3])]
+    isempty(direct) || return (; kind = :direct, terms = texts(direct), fields = fields(direct))
+    # the loop without the conservative rule: the seen reads and each unseen term's own reads
+    reads = [unique!([parts[h].reads; [gof[f] for x in cross if gof[x[1]] == h for f in x[3] if haskey(gof, f) && gof[f] != h]])
+             for h in eachindex(keys)]
+    l2 = group_loops([(; reads = reads[h], unseen = false) for h in eachindex(keys)])
+    g = minimum(loop)
+    Set(l2[g]) == Set(loop) && return (; kind = :none, terms = String[], fields = String[])
+    return (; kind = :conservative, terms = texts(mine), fields = fields(mine))
+end
+# a bound's term as the user wrote it (`u: -u*(v^2)`, not `u: -u(t, x, y)*(v(t, x, y)^2)`)
+_termtext(t) = replace(string(t), r"\(t(, \w+)*\)" => "", "LatticePDE." => "")
+# what κ covers when a loop meets unseen terms (the warning and `field_report` say it alike)
+cover_text(terms) = string("κ covers only the cross terms the bound sees (unseen: ",
+    isempty(terms) ? "a term that reads another field" : join(terms, ", "), ")")
+
+"""
+    coupling_unseen_text(texts, c) -> String
+
+The warning of a loop of groups that meets terms the stability bound cannot see (F4-13c),
+`c.kind` from [`unseen_loop`](@ref): `:direct`, the loop runs through them; `:conservative`, the
+loop is checked as one only because an unseen term counts as reading every group. It names the
+loop's fields, the unseen terms (`c.terms`), what κ covers, and the routes (the loop's fields in
+one group; declared intervals for the state fields the terms read, `c.fields`). One text for
+both front ends (a `PolicyTexts` may define its own).
+"""
+function coupling_unseen_text(::PolicyTexts, c)
+    head = c.kind === :conservative ?
+           string("a term the bound cannot see (", join(c.terms, ", "), ") counts as reading every group, so ", _fieldlist(c.lf),
+               " are checked as a loop; κ = dt · rate = ", _num(c.κ), " covers only the seen terms") :
+           string("the groups of ", _fieldlist(c.lf), " read one another in a loop through terms the stability bound cannot see: ",
+               "κ = dt · rate = ", _num(c.κ), "; ", cover_text(c.terms))
+    return string(head, ", so the lag between the groups (each reads the others' fields held over each window dt = ", _num(c.dt),
+        ") is not checked, and a large dt can make the run inaccurate without making it unstable. Step ", _fieldlist(c.lf),
+        " in one group, or declare intervals (`bounds = (lo, hi)`) for ",
+        isempty(c.fields) ? "the fields these terms read" : _fieldlist(c.fields), ", so the bound sees them")
 end
 
 """

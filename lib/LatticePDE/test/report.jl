@@ -265,7 +265,7 @@ end
     op = rlines(rep, "operator")[1]
     @test occursin("ρ_in unknown (no bound sees ", op) && !occursin("ρ_in = 0.0", rep)
     @test occursin("4, automatic: ρ_in unknown (no bound sees a term out of the operator", rline(rep, "newton"))
-    @test occursin("group 1: loop [1, 2], κ = dt · rate = 1.0 × 0.0 = 0.0 (≤ 1); κ covers only the cross terms the bound sees (unseen: ru: -ru*(rv^2))", rep)
+    @test occursin("group 1: loop [1, 2], κ = dt · rate = 1.0 × 0.0 = 0.0 (≤ 1); κ covers only the cross terms the bound sees (unseen: ru: -ru*(rv^2), rv: ru*(rv^2))", rep)
     @test occursin("ρ not finite; over the terms it sees", rline(rep, "bound")) && occursin("unseen: ru: -ru*(rv^2)", rline(rep, "bound"))
     # with no count, `init` refuses the explicit group, and the report says so (review S4)
     bad = FieldGroups(rue => ExplicitEuler(; dt = 1.0), rve => BackwardEuler(; dt = 1.0))

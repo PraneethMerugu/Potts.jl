@@ -89,7 +89,7 @@ public PolicyTexts, ProblemTexts, GroupSubsteps, check_coupling, bound_report, u
        refuse_parameters, coupling_unknown_text, coupling_unbounded_text, loop_text, steady_loop_text, steady_gain_text,
        steady_why_text, steady_gain_words, rows0_route, reads_time, bound_window!, bound_window, bound_params!, bound_params
 # the field report (F4-13, AF-09)
-public field_report, group_report, substep_cause, implicit_facts, ImplicitFacts
+public field_report, group_report, substep_cause, implicit_facts, ImplicitFacts, coupling_unseen_text, unseen_reads, unseen_loop, cover_text
 # the implicit algorithms (F3-07)
 public ImplicitAlgorithm, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, OperatorSpec, RowOperator, operator_spec, build_operator, growth, inexact_bounds, ImplicitCache,
        ImplicitRow, bind_cache, residual_program, residual_rule

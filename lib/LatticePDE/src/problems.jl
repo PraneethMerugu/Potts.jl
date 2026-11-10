@@ -546,8 +546,12 @@ struct StabilityBound
     # system's start time until then)
     timed::Bool
     window::TimeSpan
+    # (F4-13c review) each unseen term's reads, structurally: `(row key, "key: term", state keys)`,
+    # the state fields it reads (its own included; an aux field's read through its definition)
+    unseenreads::Vector{Tuple{String, String, Vector{String}}}
 end
 Problems.reads_time(b::StabilityBound) = b.timed
+Problems.unseen_reads(b::StabilityBound) = b.unseenreads
 Problems.bound_params!(b::StabilityBound, pp) = (b.window.params = pp; nothing)
 Problems.bound_params(b::StabilityBound) = b.window.params
 Problems.bound_window(b::StabilityBound) = (b.window.lo, b.window.hi)
@@ -614,7 +618,7 @@ function Problems.restrict_bound(b::StabilityBound, keep)
     return StabilityBound(b.invh2[idx], ks, rows, b.faces[idx], [k for k in b.unbounded if k in ks],
         filter(mine, b.terms), filter(mine, b.expanded), _row_inputs(rows), [k for k in b.crossunseen if k in ks], b.dims[idx],
         b.anchors[idx], b.declared, _used_keys(rows, b.declared), [f for f in b.facevals if f[1] in ks], b.sitefaces[idx],
-        b.timed && any(!isempty, b.sitefaces[idx]), b.window)
+        b.timed && any(!isempty, b.sitefaces[idx]), b.window, [u for u in b.unseenreads if u[1] in ks])
 end
 
 # The lagged coupling of field groups (`Problems.lagged_coupling`; review of F2-06): per
@@ -1169,6 +1173,7 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
     window = TimeSpan(Float64(ends[1][1]), Float64(ends[1][1]), nothing)   # (the start time, F4-12b)
     timed = any(sc -> any(x -> x !== nothing && _reads_term(x, ivs[1]), sc), values(cf.sitecoefs))
     crossunseen = String[]
+    unseenreads = Tuple{String, String, Vector{String}}[]
     # the array parameters (tables) by their symbols: a coefficient may read them
     tabs = Dict{Any, String}(unwrap(q) => string(unwrap(q)) for q in _params(sys)
                              if string(unwrap(q)) in first.(cf.tables))
@@ -1343,6 +1348,7 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
                 # any aux field, which may carry any state) can couple field groups
                 own = _ref(dvs[k])
                 _reads(term, [op for op in unknownops if !isequal(op, own)]) && push!(crossunseen, k)
+                push!(unseenreads, (k, "$k: $(term)", _state_reads(term, dvs, auxops, auxdefs)))
             end
         end
         push!(rows, alts)
@@ -1367,7 +1373,20 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
     return StabilityBound([[1 / h^2 for h in level_spacing(cf.program.spacing, fdims, rlev(k))] for k in ks], ks, rows, faces,
         sort!(unique!(unbounded)), unique!(terms), unique!(expanded), _row_inputs(rows), sort!(unique!(crossunseen)),
         [collect(Int, leveldims(cf.program, rlev(k))) for k in ks], anchors, declared, _used_keys(rows, declared),
-        _face_values(cf, sys, declared), sitefaces, timed, window)
+        _face_values(cf, sys, declared), sitefaces, timed, window, unseenreads)
+end
+# the state fields a term reads (by key, sorted): its state reads, and through an aux field
+# `K ~ rhs` the state fields its definition reads (an aux of an aux too)
+function _state_reads(term, dvs, auxops, auxdefs, seen = Set{Any}())
+    out = String[k for (k, v) in dvs if _reads(term, [_ref(v)])]
+    for op in auxops
+        (op in seen || !_reads(term, [op])) && continue
+        push!(seen, op)
+        for (l, r) in auxdefs
+            isequal(operation(l), op) && append!(out, _state_reads(r, dvs, auxops, auxdefs, seen))
+        end
+    end
+    return sort!(unique!(out))
 end
 
 # The bound of a face coefficient `K` (F3-ghost): at a face with a value or a flux the face

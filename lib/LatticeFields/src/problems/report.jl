@@ -53,8 +53,6 @@ _keystext(ks) = join(ks, ", ")
 _backendtext(b) = string(nameof(typeof(b)))
 _plural(n, w) = string(n, " ", w, n == 1 ? "" : "s")
 _line(io, label, text) = println(io, "  ", rpad(label, 11), text)
-# a bound's term as the user wrote it (`u: -u*(v^2)`, not `u: -u(t, x, y)*(v(t, x, y)^2)`)
-_termtext(t) = replace(string(t), r"\(t(, \w+)*\)" => "", "LatticePDE." => "")
 # an algorithm in the report's headers: `FieldGroups` by field name, a map as its canonical text
 _headtext(a) = _algtext(a)
 _headtext(m::ExplicitMap) = canonical(m)
@@ -319,7 +317,6 @@ function _coupling_lines(io, stability, keys::Vector{Vector{String}}, algs, pp, 
     within = lagged_coupling(stability, keys, pp; within = loops)
     sr = any(g -> !isempty(loops[g]) && any(h -> steady[h], loops[g]), eachindex(keys)) ?
          steady_loop_rates(stability, keys, pp, steady, loops) : nothing
-    terms = bound_report(stability, pp).terms
     println(io, "coupling:")
     for g in eachindex(keys)
         isempty(loops[g]) && continue
@@ -331,14 +328,14 @@ function _coupling_lines(io, stability, keys::Vector{Vector{String}}, algs, pp, 
             println(io, "  group ", g, ": QuasiSteady, in loop ", loops[g], " (checked through the groups that read it)")
         else
             κ = dt * q.rate
-            # (a term the bound cannot see that reads another field: κ covers the cross terms it sees only)
-            uns = hasproperty(q, :unseen) && q.unseen ?
-                  [_termtext(t) for t in terms if any(k -> startswith(t, k * ": "), keys[g])] : String[]
+            # (a term the bound cannot see that reads another field: κ covers the cross terms it sees
+            # only; the words of the coupling rule's warning, F4-13c)
+            ul = !qs && any(h -> within[h].unseen, loops[g]) ? unseen_loop(stability, pp, keys, within, loops[g]) : nothing
+            unseen = ul !== nothing && ul.kind !== :none
             println(io, "  group ", g, ": loop ", loops[g], ", κ = dt · rate = ", _rtext(dt), " × ", _rtext(q.rate), " = ",
                 _rtext(κ), isfinite(κ) ? (κ <= 1 + _COUPLING_RTOL ? " (≤ 1)" : " (> 1)") : "",
                 q.row === nothing || q.row == "" ? "" : string("; worst row ", q.row, " reads ", q.other, " through ", q.text),
-                hasproperty(q, :unseen) && q.unseen ? string("; κ covers only the cross terms the bound sees (unseen: ",
-                    isempty(uns) ? "a term that reads another field" : join(uns, ", "), ")") : "")
+                unseen ? string("; ", cover_text(ul.terms)) : "")
         end
     end
     return nothing
