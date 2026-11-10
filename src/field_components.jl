@@ -457,13 +457,15 @@ function _check_fields_names(params, vars, brought::Dict{Symbol, String})
     end
     return nothing
 end
-# the field named `n` of the content `c` of the PDESystem `f` (`@fields c = f`)
+# the field or parameter named `n` of the content `c` of the PDESystem `f` (`@fields c, Dc = f`;
+# F4-E8: a parameter too, so a later statement reads it by name)
 function _fields_name(c, n::Symbol, f)
-    for x in c.variables
+    for x in Iterators.flatten((c.variables, c.parameters))
         info(x).name === n && return x
     end
     throw(ArgumentError(string("@fields ", n, " = ", nameof(f), ": `", n, "` is not a field of the PDESystem `", nameof(f),
-        "`; its fields are ", join(("`$(info(x).name)`" for x in c.variables), ", "))))
+        "`; its fields are ", join(("`$(info(x).name)`" for x in c.variables), ", "), isempty(c.parameters) ? "" :
+        string(", and its parameters (a name may be one too) ", join(("`$(info(x).name)`" for x in c.parameters), ", ")))))
 end
 # the build record of a model with the inputs of its `@fields` PDESystems (`Potts.field_inputs`)
 _with_field_inputs(md, ins) = isempty(ins) ? md : Base.ImmutableDict(md, _FieldInputs => collect(Tuple{Symbol, Any, Type}, ins))

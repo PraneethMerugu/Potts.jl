@@ -222,7 +222,8 @@ its inputs, so `discretize(pdesys, disc; inputs = Potts.field_inputs(integ))` so
 with any SciML solver at the CPM state of an integrator. Inside `@potts_model`, write
 `@fields c = pdesys (endo => kind == A, …)`: the fields join the model at that line, and the
 names before `=` (`c`, or a list `c, u`) are bound to them for the statements after it
-(`@drive Chemotaxis(c; …)`). Without names (`@fields pdesys (…)`) the fields join the model
+(`@drive Chemotaxis(c; …)`). A name may also be a parameter of `pdesys` (`@fields c, s = pdesys
+(…)`): a later statement then reads the model's copy of it (`@drive copy => -s * …`). Without names (`@fields pdesys (…)`) the fields join the model
 and are reached by name (`sol[:c]`) only.
 """
 function couple(model::PottsSystem, pdesys::ModelingToolkitBase.PDESystem; inputs = ())

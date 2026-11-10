@@ -799,7 +799,8 @@ function _section!(parts, sec, args, ln = nothing)
         # `@fields c, u = pdesys (endo => kind == A, vol => volume[owner])` (F4-B2): the
         # PDESystem's fields, parameters, equations and conditions join the model here, under
         # their own names (as `Potts.couple`), each binding an input of it to a CPM expression;
-        # the names before `=` are bound to those fields for the statements after this line.
+        # the names before `=` are bound to those fields (or parameters, F4-E8) for the
+        # statements after this line.
         # The names and the bindings are optional.
         usage = "@fields takes optional field names, a PDESystem and its input bindings: " *
                 "`@fields c = pdesys (inner => kind == A, vol => volume[owner])`"
@@ -808,7 +809,7 @@ function _section!(parts, sec, args, ln = nothing)
         if sysex isa Expr && sysex.head === :(=)
             lhs, sysex = sysex.args[1], sysex.args[2]
             ls = lhs isa Expr && lhs.head === :tuple ? lhs.args : Any[lhs]
-            all(n -> n isa Symbol, ls) || throw(ArgumentError("@fields: the names before `=` are field names, " *
+            all(n -> n isa Symbol, ls) || throw(ArgumentError("@fields: the names before `=` are names of the PDESystem's fields or parameters, " *
                                                                "`@fields c, u = pdesys (…)`; got `$lhs`"))
             for n in ls
                 n in names && throw(ArgumentError("@fields: the field `$n` is listed twice"))

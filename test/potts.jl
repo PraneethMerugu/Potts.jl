@@ -37,6 +37,7 @@ include("fields_couple.jl")            # a plain PDESystem coupled into a model 
 include("fields_couple_e.jl")          # constant bindings (F4-E1), bare keys (F4-E2)
 include("field_vocabulary.jl")         # `using Potts.Fields` (F4-E4)
 include("fields_short.jl")             # an omitted axis interval (F4-E5), `Potts.is_kind` (F4-E7)
+include("fields_couple_e8.jl")         # @fields names, Bool inputs, condition origins (F4-E8 to F4-E10)
 include("fields_boundary.jl")          # boundary expressions in A (F4-12a)
 include("cell_sums.jl")                # exact cell sums at 1, 4 and 8 threads (F3-23)
 include("sweep_spec.jl")
