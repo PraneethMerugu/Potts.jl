@@ -441,6 +441,10 @@ function _pde_term(x, m)
             "is read by its number, 1 to ", length(m.fmap[g]))))
         return _pde_read(_unwrap(a[1]), m.fmap[g][i], m)
     end
+    # an array literal (`Advect(…)([ux, 0.0], c)`, F4-E12): its shape stays, its elements map
+    if f === SymbolicUtils.array_literal
+        return reshape(Base.vect((Symbolics.wrap(_pde_term(y, m)) for y in a[2:end])...), _unwrap_number(a[1]))
+    end
     if haskey(m.fmap, f) || haskey(m.imap, f)
         all(i -> isequal(a[i], m.ivs[i]), eachindex(a)) && return haskey(m.fmap, f) ? m.fmap[f] : m.imap[f]
         (haskey(m.fmap, f) && m.face) || throw(ArgumentError(string(m.what, " reads `", u, "` at a point; ",

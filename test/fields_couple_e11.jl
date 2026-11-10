@@ -130,3 +130,85 @@ end
         @test [last.(r) for r in ra] == [last.(r) for r in rs] && maximum(last(ra[end][1])) > 0.5
     end
 end
+
+# --- E12: `Advect` with a velocity vector ------------------------------------------------------
+# `_pde_term` sent the shape argument of `SymbolicUtils.array_literal` (`[ux, 0.0]`) through the
+# generic path (a MethodError); now the shape is kept and the elements are mapped.
+module CeAdv
+using Potts: Potts
+using Potts.Fields
+@parameters ux = 0.3 s = 0.01
+@variables c(..) = 0.0 cb(..) = 0.5 [bounds = (0, 1)] ci(..) = 0.5
+const C, CB, CI = c(t, x, y), cb(t, x, y), ci(t, x, y)
+adv() = pdesystem([Differential(t)(C) ~ -Advect(Upwind1())([ux, 0.0], C) + s * y]; name = :adv)
+advconst() = pdesystem([Differential(t)(C) ~ -Advect(Upwind1())([0.3, 0.0], C) + s * y]; name = :advc)
+burgers() = pdesystem([Differential(t)(CB) ~ -Advect(Upwind1())([CB, 0.0], CB)]; name = :burgers)
+ivadv() = pdesystem([Differential(t)(CI) ~ 0.1 * Δ(CI) - Advect(Upwind1())([0.05 * (1 + x), 0.0], CI)]; name = :ivadv)
+end
+@potts_model CeAdvA begin
+    @kinds medium A
+    @parameters begin
+        ux = 0.3
+        s = 0.01
+    end
+    @variables c(field) = 0.0
+    @lattice Lattice((8, 6); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ -Advect(Upwind1())([ux, 0.0], c) + s * y
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model CeAdvConstA begin
+    @kinds medium A
+    @parameters s = 0.01
+    @variables c(field) = 0.0
+    @lattice Lattice((8, 6); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(c) ~ -Advect(Upwind1())([0.3, 0.0], c) + s * y
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model CeBurgersA begin
+    @kinds medium A
+    @variables cb(field) = 0.5, [bounds = (0, 1)]
+    @lattice Lattice((32, 32); boundary = Periodic())
+    @energy cells(A) => (volume - 25.0)^2
+    @equations D(cb) ~ -Advect(Upwind1())([cb, 0.0], cb)
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model CeIvAdvA begin
+    @kinds medium A
+    @variables ci(field) = 0.5
+    @lattice Lattice((16, 16); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(ci) ~ 0.1 * Δ(ci) - Advect(Upwind1())([0.05 * (1 + x), 0.0], ci)
+    @sweep Metropolis(; temperature = 1.0)
+end
+for (nm, dims, bnd, sys) in ((:CeAdvB, (8, 6), :(Closed()), :(CeAdv.adv())), (:CeAdvConstB, (8, 6), :(Closed()), :(CeAdv.advconst())),
+                             (:CeBurgersB, (32, 32), :(Periodic()), :(CeAdv.burgers())), (:CeIvAdvB, (16, 16), :(Closed()), :(CeAdv.ivadv())))
+    @eval @potts_model $nm begin
+        @kinds medium A
+        @lattice Lattice($dims; boundary = $bnd)
+        @energy cells(A) => (volume - 9.0)^2
+        @fields $sys
+        @sweep Metropolis(; temperature = 1.0)
+    end
+end
+
+@testset "F4-E12: Advect with a velocity vector in a coupled PDESystem" begin
+    e0(dims) = [ownership => zeros(Int32, dims...), kind => Symbol[]]
+    c0 = [0.01 * (i + 3j) for i in 1:8, j in 1:6]
+    run(M, op, k, fs) = solve(PottsProblem(M(; name = :f), op, (0, k); field_solver = fs, seed = 1), SequentialCPM()).u[end].site
+    for (A, B) in ((CeAdvA, CeAdvB), (CeAdvConstA, CeAdvConstB))
+        a, b = run(A, [e0((8, 6)); :c => c0], 2, ExplicitEuler(; substeps = 4)), run(B, [e0((8, 6)); :c => c0], 2, ExplicitEuler(; substeps = 4))
+        @test a == b && maximum(a.c) > 0
+    end
+    cb0 = [0.5 + 0.4 * sin(2π * (i - 0.5) / 32) for i in 1:32, j in 1:32]
+    # (the user's count past the linearized limit warns once per session, fields.jl tests it)
+    a, b = Base.CoreLogging.with_logger(Base.CoreLogging.NullLogger()) do
+        run(CeBurgersA, [e0((32, 32)); :cb => cb0], 5, ExplicitEuler(; substeps = 8)),
+        run(CeBurgersB, [e0((32, 32)); :cb => cb0], 5, ExplicitEuler(; substeps = 8))
+    end
+    @test a == b && a.cb != cb0
+    ci0 = [0.01 * i * j for i in 1:16, j in 1:16]
+    a, b = run(CeIvAdvA, [e0((16, 16)); :ci => ci0], 2, ExplicitEuler()), run(CeIvAdvB, [e0((16, 16)); :ci => ci0], 2, ExplicitEuler())
+    @test a == b && a.ci != ci0
+end
