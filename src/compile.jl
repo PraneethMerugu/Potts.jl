@@ -448,7 +448,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
                         (o.rhs for o in _p(sys, :observed))..., (c.expr for c in _p(sys, :constraints) if c.kind === :expr)...,
                         (r.when for r in _p(sys, :link_rules))..., _p(sys, :sweep).temperature,
                         (r for d in _p(sys, :divisions) for (_, r) in d.rules if !(r isa Split))..., tick_exprs...,
-                        _boundary_exprs(sys)...])
+                        _boundary_exprs(sys)..., _bcs_exprs(sys)...])
 
     # relations: contact (ctx.contact), surface, named, gathers
     contact_spec = get(_p(sys, :relations), :contact, _p(sys, :lattice).neighborhood)
@@ -1296,6 +1296,11 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
             (b -> _boundary_exprs(b), _p(sys, :boundaries)))
         foreach(i -> _located(() -> foreach(y -> _check_geometry(y, N; hex), vcat(x(i))), sys, i), items)
     end
+    # the conditions (`@bcs`, a PDESystem's): a masked condition's predicate and value, a face's
+    # value, are lowered in site scope at the field step, as `@boundary` entries (F4-E13)
+    for b in _p(sys, :bcs)
+        _located(() -> _check_geometry(b.rhs, N; hex), sys, _BcsLine(b))
+    end
     _located(() -> _check_geometry(_p(sys, :sweep).temperature, N; hex), sys, _p(sys, :sweep))
     # `integral(Pre(x))` is the block-start fold of an update block (D-042). Outside the
     # blocks `Pre(x)` is the stored value, so the integral would silently be another one.
@@ -1348,6 +1353,9 @@ end
 _boundary_exprs(b::BoundaryEntry) = b.axis == 0 ? Any[b.mask, b.value] :
                                     Any[s.value for s in b.sides if s isa Dirichlet]
 _boundary_exprs(sys::PottsSystem) = Any[x for b in _p(sys, :boundaries) for x in _boundary_exprs(b)]
+# the sides of the conditions (`@bcs`, a PDESystem's): a masked condition's predicate and value
+# or a face's value read CPM quantities at the field step, as `@boundary` entries do (F4-E13)
+_bcs_exprs(sys::PottsSystem) = Any[x for b in _p(sys, :bcs) for x in (b.lhs, b.rhs)]
 
 _is_hex(sys) = core_lattice(_p(sys, :lattice)).geometry isa CorePotts.Hexagonal
 

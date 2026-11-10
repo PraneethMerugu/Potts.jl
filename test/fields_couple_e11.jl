@@ -212,3 +212,48 @@ end
     a, b = run(CeIvAdvA, [e0((16, 16)); :ci => ci0], 2, ExplicitEuler()), run(CeIvAdvB, [e0((16, 16)); :ci => ci0], 2, ExplicitEuler())
     @test a == b && a.ci != ci0
 end
+
+# --- E13: a centroid-reading mask in a condition ---------------------------------------------
+# The moment trackers were allocated for `@boundary` masks only: a masked condition (`@bcs`, or
+# a PDESystem's) that reads `centroid(owner, 1)` met no trackers. The RHMaskCentroid oracle
+# (test/ref_helpers.jl): cell 1 (centroid 6) is clamped to 7, cell 2 (centroid 2) and the
+# medium stay 0.
+module CeMask
+using Potts: Potts
+using Potts.Fields
+@variables c(..) = 0.0 m(..)::Bool [input = true]
+const C = c(t, x, y)
+sys() = pdesystem([Differential(t)(C) ~ -C], [C ~ masked(m(t, x, y), 7.0)]; name = :mask)
+end
+@potts_model CeMaskBcsA begin
+    @kinds medium ka
+    @variables c(field) = 0.0
+    @lattice Lattice((12, 10); boundary = Closed(), neighborhood = Moore(1))
+    @energy cells => 1.0e6 * (volume - 9.0)^2
+    @equations D(c) ~ -c
+    @bcs c ~ masked((kind == ka) & (centroid(owner, 1) > 4.0), 7.0)
+    @sweep Metropolis(; temperature = 0.01)
+end
+@potts_model CeMaskB begin
+    @kinds medium ka
+    @lattice Lattice((12, 10); boundary = Closed(), neighborhood = Moore(1))
+    @energy cells => 1.0e6 * (volume - 9.0)^2
+    @fields CeMask.sys() (m => (kind == ka) & (centroid(owner, 1) > 4.0))
+    @sweep Metropolis(; temperature = 0.01)
+end
+function ce_mask_sigma()
+    σ = zeros(Int32, 12, 10)
+    σ[5:7, 4:6] .= 1
+    σ[1:3, 4:6] .= 2
+    return σ
+end
+
+@testset "F4-E13: a centroid in a masked condition allocates the moment trackers" begin
+    for M in (CeMaskBcsA, CeMaskB)
+        prob = PottsProblem(M(; name = :bm), [ownership => ce_mask_sigma(), kind => [:ka, :ka]], (0, 1); T = Float64,
+            field_solver = ExplicitEuler(substeps = 1))
+        @test hasproperty(prob.u0.cell, :anchor)
+        u = solve(prob, SequentialCPM()).u[end]
+        @test Array(u.σ) == ce_mask_sigma() && Array(u.site.c) == 7.0 .* (ce_mask_sigma() .== 1)
+    end
+end
