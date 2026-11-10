@@ -270,7 +270,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         $(inits ? :(__init_eqs = $P.Equation[]) : nothing)
         $(convs ? :(__converts = $P.ConvertSpec[]) : nothing)
         $(bcs ? :(__bcs = $P.Equation[]) : nothing)
-        $(coupled ? :(__field_inputs = Any[]; __field_values = Dict{Symbol, Any}(pairs(__fields_kw));
+        $(coupled ? :(__field_inputs = Any[]; __bcs_origins = Pair{Any, Symbol}[]; __field_values = Dict{Symbol, Any}(pairs(__fields_kw));
                       __fields_brought = Dict{Symbol, String}()) : nothing)
         __bases = $P.PottsSystem[]
         __sources = IdDict{Any, LineNumberNode}()
@@ -289,7 +289,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         $((inits ? (Expr(:kw, :initialization_eqs, :__init_eqs),) : ())...),
         $((convs ? (Expr(:kw, :converts, :__converts),) : ())...),
         $((bcs ? (Expr(:kw, :bcs, :__bcs),) : ())...),
-        structural = $structural, metadata = $(coupled ? :($P._with_field_inputs($P._built_metadata(__features), __field_inputs)) :
+        structural = $structural, metadata = $(coupled ? :($P._with_field_inputs($P._built_metadata(__features), __field_inputs, __bcs_origins)) :
                                                :($P._built_metadata(__features)))))
     targets = :(Dict{Symbol, String}($([:($(QuoteNode(k)) => $v) for (k, v) in _prime_targets(parts, body)]...)))
     return quote
@@ -837,6 +837,7 @@ function _section!(parts, sec, args, ln = nothing)
                 [$fc.parameters; $fc.variables])),
             :(append!(__vars, $fc.variables)), :(append!(__params, $fc.parameters)),
             :(append!(__equations, $fc.equations)), :(append!(__bcs, $fc.bcs)), :(append!(__field_inputs, $fc.inputs)),
+            :(foreach(b -> push!(__bcs_origins, b => nameof($fs)), $fc.bcs)),
             [:($n = $P._fields_name($fc, $(QuoteNode(n)), $fs)) for n in names]...)
     elseif sec === Symbol("@bcs")
         foreach(((l, lln),) -> push!(code, _located_push(:__bcs, _bcs_calls(_rewrite_eq(l)), lln)), _lines_ln(args, ln))

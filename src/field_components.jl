@@ -434,6 +434,7 @@ function _with_pde(sys::PottsSystem, part::PottsPart, f, prefix, what; inputs = 
     # fingerprint)
     md = part.metadata
     isempty(c.inputs) || (md = Base.ImmutableDict(md, _FieldInputs => [get(md, _FieldInputs, Tuple{Symbol, Any, Type}[]); c.inputs]))
+    md = _with_bcs_origins(md, Pair{Any, Symbol}[b => nameof(f) for b in c.bcs])
     return getfield(_replace(_staged(nameof(sys), part); variables = Any[part.variables; c.variables],
         parameters = Any[part.parameters; c.parameters], equations = Equation[part.equations; c.equations],
         bcs = Equation[part.bcs; c.bcs], metadata = md), :part)
@@ -488,4 +489,21 @@ function _fields_name(c, n::Symbol, f)
         string(", and its parameters (a name may be one too) ", join(("`$(info(x).name)`" for x in c.parameters), ", ")))))
 end
 # the build record of a model with the inputs of its `@fields` PDESystems (`Potts.field_inputs`)
-_with_field_inputs(md, ins) = isempty(ins) ? md : Base.ImmutableDict(md, _FieldInputs => collect(Tuple{Symbol, Any, Type}, ins))
+# and the PDESystem each of its conditions came from (F4-E10)
+_with_field_inputs(md, ins, origins = ()) =
+    _with_bcs_origins(isempty(ins) ? md : Base.ImmutableDict(md, _FieldInputs => collect(Tuple{Symbol, Any, Type}, ins)), origins)
+
+# payload metadata key (F4-E10): `condition => PDESystem name` for the conditions a PDESystem
+# brought (`@fields`, `Potts.couple`), so a refusal of one names the PDESystem, not `@bcs`. An
+# extension keeps its bases' entries (`_merged_metadata` keeps every entry; this reads them all).
+struct _BcsOrigins end
+_with_bcs_origins(md, origins) = isempty(origins) ? md : Base.ImmutableDict(md, _BcsOrigins => collect(Pair{Any, Symbol}, origins))
+function _bcs_origin(sys, eq)
+    for (k, v) in _p(sys, :metadata)
+        k === _BcsOrigins || continue
+        for (b, n) in v
+            (b === eq || isequal(b, eq)) && return n
+        end
+    end
+    return nothing
+end

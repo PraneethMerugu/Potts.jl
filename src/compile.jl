@@ -1158,6 +1158,13 @@ function _located(f, sys::PottsSystem, x)
         ln = get(_p(sys, :sources), _source_key(x), nothing)
         loc = ln === nothing ? "" : " at $(ln.file):$(ln.line)"
         msg = _builtin_text(e.msg)
+        # a condition a PDESystem brought (`@fields`, `Potts.couple`) is named as its condition (F4-E10)
+        o = x isa _BcsLine ? _bcs_origin(sys, x.eq) : nothing
+        if o !== nothing
+            msg = startswith(msg, "@bcs: ") ? string("the PDESystem `", o, "`: ", chopprefix(msg, "@bcs: ")) : msg
+            throw(ArgumentError(string(msg, "\n  in the condition `", _bc_text(x.eq, _p(sys, :kinds)), "` of the PDESystem `", o,
+                "`", loc)))
+        end
         throw(ArgumentError("$msg$(_algebraic_note(x, msg))\n  in $(_describe(x, _p(sys, :kinds)))$loc"))
     end
 end

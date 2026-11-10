@@ -112,3 +112,51 @@ end
     end)
     @test occursin("is not a truth value", e) || (println(e); false)
 end
+
+# E10: a refusal of a condition that a PDESystem brought names the PDESystem and the condition,
+# not `@bcs` (a model's own `@bcs` keeps its wording). Negative control at the E9 commit: the
+# messages start "@bcs:" and end "in @bcs …" (~/lpwork/f4E/nc-e8e10.log).
+module CeB
+using Potts: Potts
+using Potts.Fields
+@parameters Dc = 0.2
+@variables c(..) = 0.0
+const C = c(t, x, y)
+face() = pdesystem([Differential(t)(C) ~ Dc * Δ(C)], [c(t, 0, y) ~ 1.0]; name = :faced)
+end
+@potts_model CePeriodic begin
+    @kinds medium A
+    @lattice Lattice((12, 12); boundary = Periodic())
+    @energy cells => (volume - 16.0)^2
+    @fields CeB.face()
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model CePeriodicHost begin
+    @kinds medium A
+    @lattice Lattice((12, 12); boundary = Periodic())
+    @energy cells => (volume - 16.0)^2
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model CePeriodicBcs begin
+    @kinds medium A
+    @parameters Dc = 0.2
+    @variables c(field) = 0.0
+    @lattice Lattice((12, 12); boundary = Periodic())
+    @energy cells => (volume - 16.0)^2
+    @equations D(c) ~ Dc * Δ(c)
+    @bcs c(t, 0, y) ~ 1.0
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "F4-E10: a PDESystem's condition is named in its refusal" begin
+    op = [ownership => zeros(Int32, 12, 12), kind => Symbol[]]
+    for m in (CePeriodic(; name = :m), Potts.couple(CePeriodicHost(; name = :m), CeB.face()))
+        e = cp_msg(() -> PottsProblem(m, op, (0, 1)))
+        @test startswith(e, "ArgumentError: the PDESystem `faced`: the condition `c(t, 0, y) ~ 1.0` sets a face of axis `x`, which the lattice " *
+                            "makes periodic") && occursin("in the condition `c(t, 0, y) ~ 1.0` of the PDESystem `faced`", e) &&
+              !occursin("@bcs", e) || (println(e); false)
+    end
+    # a model's own `@bcs` keeps its wording
+    e = cp_msg(() -> PottsProblem(CePeriodicBcs(; name = :m), op, (0, 1)))
+    @test startswith(e, "ArgumentError: @bcs: the condition `c(t, 0, y) ~ 1.0` sets a face") && occursin("in @bcs", e) || (println(e); false)
+end
