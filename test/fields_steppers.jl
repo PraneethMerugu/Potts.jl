@@ -40,6 +40,13 @@ pair() = pdesys([0 ~ 0.1 * Δ(U) - 0.1 * U + 5.0 * V + 0.5 * KA, 0 ~ 0.1 * Δ(V)
 feed() = (@parameters k = 0.5;
     pdesys([Dt(E) ~ 0.1 * Δ(E) - E + 0.5 * V + 0.5 * KA, 0 ~ 0.1 * Δ(U) - U + k * V + 0.2 * E, 0 ~ 0.1 * Δ(V) - V - k * U],
         [ic(e), ic(u), ic(v)], D, [E, U, V, KA], [k]))
+# two components of one array field `w` in steady rows
+function comp()
+    @variables w(..)[1:2] = [0.0, 0.0]
+    Wa = w(X...)
+    return pdesystem([0 ~ 0.1 * Δ(Wa[1]) - 0.1 * Wa[1] + 5.0 * Wa[2] + 0.5 * KA, 0 ~ 0.1 * Δ(Wa[2]) - Wa[2] - 5.0 * Wa[1]];
+        name = :fields)
+end
 function half()
     @variables v(..) [lattice_storage = Float16]
     Vh = v(X...)
@@ -541,13 +548,9 @@ end
 end
 @potts_model FcComp begin
     @kinds medium A[frozen]
-    @variables w(field)[1:2] = 0.0
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations begin
-        0 ~ 0.1 * Δ(w[1]) - 0.1 * w[1] + 5.0 * w[2] + 0.5 * (kind == A)
-        0 ~ 0.1 * Δ(w[2]) - w[2] - 5.0 * w[1]
-    end
+    @fields FsPDE.comp() (FsPDE.kA => kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FcFeed begin

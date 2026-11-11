@@ -1,7 +1,9 @@
-# F4-E11 to F4-E15 (gaps found by the Potts test port F4-B4t, ~/lpwork/f4B4t/EVIDENCE.txt). Each
-# model below is its A form (as at 4ca38af7 in test/) beside the B form, which must run bitwise
-# equal. Uses `cp_msg` and `CpHost` of fields_couple.jl. Negative controls (each item's src
-# change reverted alone in the test copy): ~/lpwork/f4E/nc-e11e15.log.
+# F4-E11 to F4-E15 (gaps found by the Potts test port F4-B4t, ~/lpwork/f4B4t/EVIDENCE.txt). Until
+# F4-B6 each model here was checked bitwise against its A form; now the oracles are an
+# independent spelling (an array field against the same fields as scalars) and LatticePDE's own
+# run of the same PDESystem (σ frozen: no cells). Uses `cp_msg` and `CpHost` of fields_couple.jl.
+# Negative controls (each item's src change reverted alone in the test copy):
+# ~/lpwork/f4E/nc-e11e15.log.
 
 ce_op(dims) = (σ = zeros(Int32, dims...); σ[4:6, 3:5] .= 1; [ownership => σ, kind => [:A]])
 # every site field after each of `k` MCS
@@ -26,22 +28,17 @@ fc() = pdesystem([0 ~ 0.1 * Δ(W[1]) - 0.1 * W[1] + 5.0 * W[2] + 0.5 * k(t, x, y
 @variables q(..)[1:2, 1:2] = 0.0
 const Q = q(t, x, y)
 mat() = pdesystem([Differential(t)(Q[i, j]) ~ -Q[i, j] for i in 1:2 for j in 1:2]; name = :mat)
+# the same fields as scalars: `ua, ub` for `u`, `wa, wb` for `w`
+@variables ua(..) = 0.5 ub(..) = 0.5 wa(..) = 0.0 wb(..) = 0.0
+const UA, UB, WA, WB = ua(t, x, y), ub(t, x, y), wa(t, x, y), wb(t, x, y)
+sfi() = pdesystem([Differential(t)(UA) ~ 0.5 * Δ(UA) - 40 * UA / (0.025 + UA) + 20, Differential(t)(UB) ~ 0.5 * Δ(UB) - UB + UA];
+    name = :sfi)
+sfc() = pdesystem([0 ~ 0.1 * Δ(WA) - 0.1 * WA + 5.0 * WB + 0.5 * k(t, x, y), 0 ~ 0.1 * Δ(WB) - WB - 5.0 * WA]; name = :sfc)
 end
 @potts_model CeHostArr begin
     @kinds medium A[frozen]
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @sweep Metropolis(; temperature = 1.0)
-end
-@potts_model CeFiCompA begin
-    @kinds medium A[frozen]
-    @variables u(field)[1:2] = 0.5
-    @lattice Lattice((12, 10); boundary = Closed())
-    @energy cells(A) => (volume - 4.0)^2
-    @equations begin
-        D(u[1]) ~ 0.5 * Δ(u[1]) - 40 * u[1] / (0.025 + u[1]) + 20
-        D(u[2]) ~ 0.5 * Δ(u[2]) - u[2] + u[1]
-    end
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model CeFiCompB begin
@@ -52,35 +49,12 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 # a later statement reads a component through the name `@fields u = …` binds
-@potts_model CeFiDriveA begin
-    @kinds medium A[frozen]
-    @variables u(field)[1:2] = 0.5
-    @lattice Lattice((12, 10); boundary = Closed())
-    @energy cells(A) => (volume - 4.0)^2
-    @equations begin
-        D(u[1]) ~ 0.5 * Δ(u[1]) - 40 * u[1] / (0.025 + u[1]) + 20
-        D(u[2]) ~ 0.5 * Δ(u[2]) - u[2] + u[1]
-    end
-    @drive copy => -10.0 * (u[2][target] - u[2][source])
-    @sweep Metropolis(; temperature = 1.0)
-end
 @potts_model CeFiDriveB begin
     @kinds medium A[frozen]
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
     @fields u = CeArr.fi()
     @drive copy => -10.0 * (u[2][target] - u[2][source])
-    @sweep Metropolis(; temperature = 1.0)
-end
-@potts_model CeFcCompA begin
-    @kinds medium A[frozen]
-    @variables w(field)[1:2] = 0.0
-    @lattice Lattice((12, 10); boundary = Closed())
-    @energy cells(A) => (volume - 4.0)^2
-    @equations begin
-        0 ~ 0.1 * Δ(w[1]) - 0.1 * w[1] + 5.0 * w[2] + 0.5 * (kind == A)
-        0 ~ 0.1 * Δ(w[2]) - w[2] - 5.0 * w[1]
-    end
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model CeFcCompB begin
@@ -90,20 +64,45 @@ end
     @fields w = CeArr.fc() (k => kind == A)
     @sweep Metropolis(; temperature = 1.0)
 end
+# the scalar spellings
+@potts_model CeFiScal begin
+    @kinds medium A[frozen]
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @fields CeArr.sfi()
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model CeFiDriveScal begin
+    @kinds medium A[frozen]
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @fields ua, ub = CeArr.sfi()
+    @drive copy => -10.0 * (ub[target] - ub[source])
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model CeFcScal begin
+    @kinds medium A[frozen]
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @fields CeArr.sfc() (k => kind == A)
+    @sweep Metropolis(; temperature = 1.0)
+end
+# the values of each MCS, by position (the names differ)
+ce_values(r) = [last.(filter(p -> !endswith(string(first(p)), "__next"), step)) for step in r]
 
-@testset "F4-E11: array fields of a PDESystem are the components of @variables u(field)[1:n]" begin
+@testset "F4-E11: array fields of a PDESystem are the components u_1, …, u_n" begin
     op = ce_op((12, 10))
     for fs in (BackwardEuler(), CrankNicolson())
-        a, b = ce_steps(CeFiCompA(; name = :f), op, 3; field_solver = fs), ce_steps(CeFiCompB(; name = :f), op, 3; field_solver = fs)
-        @test filter(n -> !endswith(string(n), "__next"), first.(a[end])) == [:u_1, :u_2] && a == b   # bitwise, by component
+        a, b = ce_steps(CeFiCompB(; name = :f), op, 3; field_solver = fs), ce_steps(CeFiScal(; name = :f), op, 3; field_solver = fs)
+        @test filter(n -> !endswith(string(n), "__next"), first.(a[end])) == [:u_1, :u_2] && ce_values(a) == ce_values(b)   # bitwise, by component
     end
-    a, b = ce_steps(CeFcCompA(; name = :f), op, 3), ce_steps(CeFcCompB(; name = :f), op, 3)
-    @test a == b && maximum(abs, last(a[end][1])) > 0.01
+    a, b = ce_steps(CeFcCompB(; name = :f), op, 3), ce_steps(CeFcScal(; name = :f), op, 3)
+    @test ce_values(a) == ce_values(b) && maximum(abs, last(a[end][1])) > 0.01
     # `Potts.couple` too, and `@fields u = …` bound the vector of the components
     m = Potts.couple(CeHostArr(; name = :h), CeArr.fi())
-    @test ce_steps(m, op, 3; field_solver = BackwardEuler()) == ce_steps(CeFiCompA(; name = :f), op, 3; field_solver = BackwardEuler())
-    @test ce_steps(CeFiDriveA(; name = :f), op, 3; field_solver = BackwardEuler(), seed = 3) ==
-          ce_steps(CeFiDriveB(; name = :f), op, 3; field_solver = BackwardEuler(), seed = 3)
+    @test ce_steps(m, op, 3; field_solver = BackwardEuler()) == ce_steps(CeFiCompB(; name = :f), op, 3; field_solver = BackwardEuler())
+    d = ce_steps(CeFiDriveB(; name = :f), op, 3; field_solver = BackwardEuler(), seed = 3)
+    @test ce_values(d) == ce_values(ce_steps(CeFiDriveScal(; name = :f), op, 3; field_solver = BackwardEuler(), seed = 3))
     # only vectors: a matrix of fields is refused by its shape
     e = cp_msg(() -> Potts.couple(CeHostArr(; name = :h), CeArr.mat()))
     @test occursin("has the shape (2, 2)", e) && occursin("`q(..)[1:n]`", e) || (println(e); false)
@@ -140,47 +139,16 @@ using Potts.Fields
 @parameters ux = 0.3 s = 0.01
 @variables c(..) = 0.0 cb(..) = 0.5 [bounds = (0, 1)] ci(..) = 0.5
 const C, CB, CI = c(t, x, y), cb(t, x, y), ci(t, x, y)
-adv() = pdesystem([Differential(t)(C) ~ -Advect(Upwind1())([ux, 0.0], C) + s * y]; name = :adv)
-advconst() = pdesystem([Differential(t)(C) ~ -Advect(Upwind1())([0.3, 0.0], C) + s * y]; name = :advc)
-burgers() = pdesystem([Differential(t)(CB) ~ -Advect(Upwind1())([CB, 0.0], CB)]; name = :burgers)
-ivadv() = pdesystem([Differential(t)(CI) ~ 0.1 * Δ(CI) - Advect(Upwind1())([0.05 * (1 + x), 0.0], CI)]; name = :ivadv)
-end
-@potts_model CeAdvA begin
-    @kinds medium A
-    @parameters begin
-        ux = 0.3
-        s = 0.01
-    end
-    @variables c(field) = 0.0
-    @lattice Lattice((8, 6); boundary = Closed())
-    @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ -Advect(Upwind1())([ux, 0.0], c) + s * y
-    @sweep Metropolis(; temperature = 1.0)
-end
-@potts_model CeAdvConstA begin
-    @kinds medium A
-    @parameters s = 0.01
-    @variables c(field) = 0.0
-    @lattice Lattice((8, 6); boundary = Closed())
-    @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ -Advect(Upwind1())([0.3, 0.0], c) + s * y
-    @sweep Metropolis(; temperature = 1.0)
-end
-@potts_model CeBurgersA begin
-    @kinds medium A
-    @variables cb(field) = 0.5, [bounds = (0, 1)]
-    @lattice Lattice((32, 32); boundary = Periodic())
-    @energy cells(A) => (volume - 25.0)^2
-    @equations D(cb) ~ -Advect(Upwind1())([cb, 0.0], cb)
-    @sweep Metropolis(; temperature = 1.0)
-end
-@potts_model CeIvAdvA begin
-    @kinds medium A
-    @variables ci(field) = 0.5
-    @lattice Lattice((16, 16); boundary = Closed())
-    @energy cells(A) => (volume - 9.0)^2
-    @equations D(ci) ~ 0.1 * Δ(ci) - Advect(Upwind1())([0.05 * (1 + x), 0.0], ci)
-    @sweep Metropolis(; temperature = 1.0)
+# (`dims`: the lattice's domain, for LatticePDE's own run of the same system)
+dom(dims) = dims === nothing ? Any[] : lattice_domain(t, (x, y), dims)
+adv(dims = nothing) = pdesystem([Differential(t)(C) ~ -Advect(Upwind1())([ux, 0.0], C) + s * y]; name = :adv, domain = dom(dims))
+advconst(dims = nothing) = pdesystem([Differential(t)(C) ~ -Advect(Upwind1())([0.3, 0.0], C) + s * y]; name = :advc,
+    domain = dom(dims))
+# (the model's lattice is periodic: LatticePDE's run takes it as periodic conditions)
+burgers(dims = nothing) = pdesystem([Differential(t)(CB) ~ -Advect(Upwind1())([CB, 0.0], CB)],
+    dims === nothing ? Any[] : [cb(t, 0, y) ~ cb(t, dims[1], y), cb(t, x, 0) ~ cb(t, x, dims[2])]; name = :burgers, domain = dom(dims))
+ivadv(dims = nothing) = pdesystem([Differential(t)(CI) ~ 0.1 * Δ(CI) - Advect(Upwind1())([0.05 * (1 + x), 0.0], CI)]; name = :ivadv,
+    domain = dom(dims))
 end
 for (nm, dims, bnd, sys) in ((:CeAdvB, (8, 6), :(Closed()), :(CeAdv.adv())), (:CeAdvConstB, (8, 6), :(Closed()), :(CeAdv.advconst())),
                              (:CeBurgersB, (32, 32), :(Periodic()), :(CeAdv.burgers())), (:CeIvAdvB, (16, 16), :(Closed()), :(CeAdv.ivadv())))
@@ -194,28 +162,32 @@ for (nm, dims, bnd, sys) in ((:CeAdvB, (8, 6), :(Closed()), :(CeAdv.adv())), (:C
 end
 
 @testset "F4-E12: Advect with a velocity vector in a coupled PDESystem" begin
+    LP = Potts.LatticePDE
     e0(dims) = [ownership => zeros(Int32, dims...), kind => Symbol[]]
-    c0 = [0.01 * (i + 3j) for i in 1:8, j in 1:6]
     run(M, op, k, fs) = solve(PottsProblem(M(; name = :f), op, (0, k); field_solver = fs, seed = 1), SequentialCPM()).u[end].site
-    for (A, B) in ((CeAdvA, CeAdvB), (CeAdvConstA, CeAdvConstB))
-        a, b = run(A, [e0((8, 6)); :c => c0], 2, ExplicitEuler(; substeps = 4)), run(B, [e0((8, 6)); :c => c0], 2, ExplicitEuler(; substeps = 4))
-        @test a == b && maximum(a.c) > 0
+    # LatticePDE's own run of the same system (no cells: σ is the medium), `k` windows of length 1
+    own(sys, u0, k, alg) = reshape(LP.solve(LP.remake(LP.discretize(sys, LP.LatticeDiscretization(LP.Grid(size(u0)); T = Float64));
+        u0 = vec(u0), tspan = (0.0, Float64(k))), alg).u[end], size(u0))
+    c0 = [0.01 * (i + 3j) for i in 1:8, j in 1:6]
+    for (B, sys) in ((CeAdvB, CeAdv.adv((8, 6))), (CeAdvConstB, CeAdv.advconst((8, 6))))
+        b = run(B, [e0((8, 6)); :c => c0], 2, ExplicitEuler(; substeps = 4))
+        @test b.c == own(sys, c0, 2, LP.ExplicitEuler(; dt = 1.0, substeps = 4)) && maximum(b.c) > 0
     end
     cb0 = [0.5 + 0.4 * sin(2π * (i - 0.5) / 32) for i in 1:32, j in 1:32]
     # (the user's count past the linearized limit warns once per session, fields.jl tests it)
-    a, b = Base.CoreLogging.with_logger(Base.CoreLogging.NullLogger()) do
-        run(CeBurgersA, [e0((32, 32)); :cb => cb0], 5, ExplicitEuler(; substeps = 8)),
-        run(CeBurgersB, [e0((32, 32)); :cb => cb0], 5, ExplicitEuler(; substeps = 8))
+    b, o = Base.CoreLogging.with_logger(Base.CoreLogging.NullLogger()) do
+        run(CeBurgersB, [e0((32, 32)); :cb => cb0], 5, ExplicitEuler(; substeps = 8)),
+        own(CeAdv.burgers((32, 32)), cb0, 5, LP.ExplicitEuler(; dt = 1.0, substeps = 8))
     end
-    @test a == b && a.cb != cb0
+    @test b.cb == o && b.cb != cb0
     ci0 = [0.01 * i * j for i in 1:16, j in 1:16]
-    a, b = run(CeIvAdvA, [e0((16, 16)); :ci => ci0], 2, ExplicitEuler()), run(CeIvAdvB, [e0((16, 16)); :ci => ci0], 2, ExplicitEuler())
-    @test a == b && a.ci != ci0
+    b = run(CeIvAdvB, [e0((16, 16)); :ci => ci0], 2, ExplicitEuler())
+    @test b.ci == own(CeAdv.ivadv((16, 16)), ci0, 2, LP.ExplicitEuler(; dt = 1.0)) && b.ci != ci0
 end
 
 # --- E13: a centroid-reading mask in a condition ---------------------------------------------
-# The moment trackers were allocated for `@boundary` masks only: a masked condition (`@bcs`, or
-# a PDESystem's) that reads `centroid(owner, 1)` met no trackers. The RHMaskCentroid oracle
+# The moment trackers were allocated for `@boundary` masks only: a masked condition (a
+# PDESystem's) that reads `centroid(owner, 1)` met no trackers. The RHMaskCentroid oracle
 # (test/ref_helpers.jl): cell 1 (centroid 6) is clamped to 7, cell 2 (centroid 2) and the
 # medium stay 0.
 module CeMask
@@ -224,15 +196,6 @@ using Potts.Fields
 @variables c(..) = 0.0 m(..)::Bool [input = true]
 const C = c(t, x, y)
 sys() = pdesystem([Differential(t)(C) ~ -C], [C ~ masked(m(t, x, y), 7.0)]; name = :mask)
-end
-@potts_model CeMaskBcsA begin
-    @kinds medium ka
-    @variables c(field) = 0.0
-    @lattice Lattice((12, 10); boundary = Closed(), neighborhood = Moore(1))
-    @energy cells => 1.0e6 * (volume - 9.0)^2
-    @equations D(c) ~ -c
-    @bcs c ~ masked((kind == ka) & (centroid(owner, 1) > 4.0), 7.0)
-    @sweep Metropolis(; temperature = 0.01)
 end
 @potts_model CeMaskB begin
     @kinds medium ka
@@ -249,7 +212,7 @@ function ce_mask_sigma()
 end
 
 @testset "F4-E13: a centroid in a masked condition allocates the moment trackers" begin
-    for M in (CeMaskBcsA, CeMaskB)
+    for M in (CeMaskB,)
         prob = PottsProblem(M(; name = :bm), [ownership => ce_mask_sigma(), kind => [:ka, :ka]], (0, 1); T = Float64,
             field_solver = ExplicitEuler(substeps = 1))
         @test hasproperty(prob.u0.cell, :anchor)
@@ -260,7 +223,7 @@ end
 
 # --- E14: a face condition on a field with no spatial operator ---------------------------------
 # A face sets the ghost values of a spatial operator; on `D(c) ~ 0.1 - 0.01c` it would do
-# nothing. `@boundary` refused it (BSFaceNoLap); a condition (`@bcs`, a PDESystem's) built.
+# nothing. `@boundary` refused it; a condition (a PDESystem's) built.
 module CeFace
 using Potts: Potts
 using Potts.Fields
@@ -283,23 +246,11 @@ end
     @fields CeFace.lap()
     @sweep Metropolis(; temperature = 1.0)
 end
-@potts_model CeFaceBcsA begin
-    @kinds medium A
-    @variables c(field) = 0.0
-    @lattice Lattice((8, 6); boundary = Closed())
-    @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ 0.1 - 0.01 * c
-    @bcs c(t, 0, y) ~ 1.0
-    @sweep Metropolis(; temperature = 1.0)
-end
-
 @testset "F4-E14: a face condition on a field with no spatial operator is refused" begin
     op = [ownership => zeros(Int32, 8, 6), kind => Symbol[]]
     e = cp_msg(() -> PottsProblem(CeFaceB(; name = :f), op, (0, 1)))
     @test occursin("the PDESystem `nolap`", e) && occursin("has no `Δ(c)`", e) && occursin("would do nothing", e) ||
           (println(e); false)
-    e = cp_msg(() -> PottsProblem(CeFaceBcsA(; name = :f), op, (0, 1)))
-    @test occursin("@bcs:", e) && occursin("has no `Δ(c)`", e) || (println(e); false)
     @test PottsProblem(CeFaceLapB(; name = :f), op, (0, 1)) isa PottsProblem          # control: with `Δ(c)`
 end
 

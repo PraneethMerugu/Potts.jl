@@ -8,13 +8,17 @@ module W2
 using Potts: Potts
 using Potts.Fields
 @parameters Dc = 0.5 s = 0.4 k = 0.05
-@variables c(..) = 0.0 u(..) = 0.0 secreting(..)::Bool [input = true] kin(..)::Int32 [input = true]
+@variables c(..) = 0.0 u(..) = 0.0 K(..) = 0.0 secreting(..)::Bool [input = true] kin(..)::Int32 [input = true]
 @variables kinl(..)::Int32 [input = true, lattice_input_name = "kind"]
-const C, U = c(t, x, y), u(t, x, y)
+const C, U, KK = c(t, x, y), u(t, x, y), K(t, x, y)
 # E14: the condition on `c` sets the ghosts that `Δ(c)` in the equation of `u` reads (p14.jl)
 withbc() = pdesystem([Differential(t)(C) ~ -0.1 * C, Differential(t)(U) ~ 0.5 * Δ(C) - 0.1 * U], [c(t, 0, y) ~ 1.0];
     name = :wbc)
 nobc() = pdesystem([Differential(t)(C) ~ -0.1 * C, Differential(t)(U) ~ 0.5 * Δ(C) - 0.1 * U]; name = :nbc)
+# … and through an aux field `K ~ Δ(c)` that `u` reads
+auxbc(bcs = [c(t, 0, y) ~ 1.0]) = pdesystem([Differential(t)(C) ~ -0.1 * C, KK ~ Δ(C), Differential(t)(U) ~ 0.5 * KK - 0.1 * U],
+    bcs; name = :abc)
+auxnobc() = auxbc([])
 sec() = pdesystem([Differential(t)(C) ~ Dc * Δ(C) + s * secreting(t, x, y) - k * C]; name = :sec)
 # m5: `∈ Set(…)` is Julia's `false`; the source term is gone before `pdesystem` sees it
 inset() = pdesystem([Differential(t)(C) ~ Dc * Δ(C) + s * (kin(t, x, y) ∈ Set([1, 2])) - k * C]; name = :sec)
@@ -72,42 +76,20 @@ end
     @fields W2.nobc()
     @sweep Metropolis(; temperature = 1.0)
 end
-# the same through `@boundary` (`_check_boundaries`) and `@bcs` in an `@potts_model`
-@potts_model W2FaceBnd begin
-    @kinds medium A
-    @variables c(field) = 0.0 u(field) = 0.0
-    @lattice Lattice((8, 6); boundary = Closed())
-    @energy cells(A) => (volume - 9.0)^2
-    @equations begin
-        D(c) ~ -0.1 * c
-        D(u) ~ 0.5 * Δ(c) - 0.1 * u
-    end
-    @boundary c begin
-        x => (Dirichlet(1.0), NoFlux())
-    end
-    @sweep Metropolis(; temperature = 1.0)
-end
-@potts_model W2FaceBcs begin
-    @kinds medium A
-    @variables c(field) = 0.0 u(field) = 0.0
-    @lattice Lattice((8, 6); boundary = Closed())
-    @energy cells(A) => (volume - 9.0)^2
-    @equations begin
-        D(c) ~ -0.1 * c
-        D(u) ~ 0.5 * Δ(c) - 0.1 * u
-    end
-    @bcs c(t, 0, y) ~ 1.0
-    @sweep Metropolis(; temperature = 1.0)
-end
 w2_face_op() = (σ = zeros(Int32, 8, 6); σ[4:6, 3:5] .= 1; [ownership => σ, kind => [:A]])
-w2_u(m) = (pr = PottsProblem(m(; name = :m), w2_face_op(), (0, 3); seed = 1); Array(solve(pr, SequentialCPM()).u[end].site.u))
+w2_u(m; kw...) = (pr = PottsProblem(m(; name = :m), w2_face_op(), (0, 3); seed = 1, kw...); Array(solve(pr, SequentialCPM()).u[end].site.u))
+# the hand value of `u` after 3 MCS of 4 explicit Euler substeps (h = 1/4): `c` has no spatial
+# operator in its own equation, so it stays 0, and `Δ(c)` is 2 on the column beside the face
+# `c = 1` (the ghost value 2 · 1 − 0, h = 1) and 0 elsewhere. There `u' = 1 − 0.1 u`, so
+# `u = 10 (1 − (1 − 0.025)^12)`; elsewhere `u` stays 0
+w2_hand() = (u = zeros(8, 6); u[1, :] .= 10 * (1 - (1 - 0.1 / 4)^12); u)
 
 @testset "F4-E14 review: a face condition that another field's operator reads runs" begin
     uw, un = w2_u(W2FaceW), w2_u(W2FaceN)
     @test maximum(abs, uw .- un) > 1e-3
-    # `@boundary` and `@bcs` give the same run as the PDESystem's condition
-    @test w2_u(W2FaceBnd) == uw
-    @test w2_u(W2FaceBcs) == uw
+    # the hand value (and the control: without the condition `u` stays 0)
+    ee = ExplicitEuler(; substeps = 4)
+    @test isapprox(w2_u(W2FaceW; field_solver = ee), w2_hand(); rtol = 1e-13) && iszero(w2_u(W2FaceN; field_solver = ee))
 end
 
 # --- E14: a face condition read through an aux field ------------------------------------------
@@ -115,51 +97,25 @@ end
 # that `u` reads (review probe ~/lpwork/rev-w2v-jobs/aux_probe.jl); the inlined model ran.
 @potts_model W2AuxBcs begin
     @kinds medium A
-    @variables c(field) = 0.0 u(field) = 0.0 K(field) = 0.0
     @lattice Lattice((8, 6); boundary = Closed())
     @energy cells(A) => (volume - 9.0)^2
-    @equations begin
-        D(c) ~ -0.1 * c
-        K ~ Δ(c)
-        D(u) ~ 0.5 * K - 0.1 * u
-    end
-    @bcs c(t, 0, y) ~ 1.0
-    @sweep Metropolis(; temperature = 1.0)
-end
-@potts_model W2AuxBnd begin
-    @kinds medium A
-    @variables c(field) = 0.0 u(field) = 0.0 K(field) = 0.0
-    @lattice Lattice((8, 6); boundary = Closed())
-    @energy cells(A) => (volume - 9.0)^2
-    @equations begin
-        D(c) ~ -0.1 * c
-        K ~ Δ(c)
-        D(u) ~ 0.5 * K - 0.1 * u
-    end
-    @boundary c begin
-        x => (Dirichlet(1.0), NoFlux())
-    end
+    @fields W2.auxbc()
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model W2AuxNo begin
     @kinds medium A
-    @variables c(field) = 0.0 u(field) = 0.0 K(field) = 0.0
     @lattice Lattice((8, 6); boundary = Closed())
     @energy cells(A) => (volume - 9.0)^2
-    @equations begin
-        D(c) ~ -0.1 * c
-        K ~ Δ(c)
-        D(u) ~ 0.5 * K - 0.1 * u
-    end
+    @fields W2.auxnobc()
     @sweep Metropolis(; temperature = 1.0)
 end
-
 @testset "F4-E14 review: a face condition that an aux field's operator reads runs" begin
     # the aux kernel reads the ghosts the condition sets: the run equals the inlined one
-    # (`D(u) ~ 0.5 * Δ(c) - 0.1 * u`, W2FaceBcs), and differs from the run without the condition
-    ua, ui = w2_u(W2AuxBcs), w2_u(W2FaceBcs)
+    # (`D(u) ~ 0.5 * Δ(c) - 0.1 * u`, W2FaceW) and the hand value, and differs from the run without
+    # the condition
+    ua, ui = w2_u(W2AuxBcs), w2_u(W2FaceW)
     @test ua == ui || (println("aux vs inlined maxdiff ", maximum(abs, ua .- ui)); false)
-    @test w2_u(W2AuxBnd) == ua
+    @test isapprox(w2_u(W2AuxBcs; field_solver = ExplicitEuler(; substeps = 4)), w2_hand(); rtol = 1e-13)
     @test maximum(abs, ua .- w2_u(W2AuxNo)) > 1e-3
 end
 

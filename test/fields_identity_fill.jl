@@ -17,7 +17,7 @@ const GD_FILL = Dict{String, Any}(
     "FdClosed" => "",
     "FdDefaults" => "",
     "FdComputedRate" => "",
-    "FdVolumeRead" => "field1__in = volume(t)",
+    "FdVolumeRead" => "field1__in = LatticePDE.at(volume(t), owner(t))",          # F4-B6a: bound at the owner
     "FdSource" => "kind__in = kind(t)",
     "FdDecay" => "",
     "FdMask" => "kind__in = kind(t)",

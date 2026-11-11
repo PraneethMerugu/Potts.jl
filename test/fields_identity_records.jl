@@ -28,6 +28,10 @@
 # test applies to loops of cross reads only, so GdAuditCrossField and GdAuditCrossLinear (`c` reads
 # `u` one way) become bounded (route explicit → auto, least 3 → 1, `substeps = nothing`). Their
 # fingerprint and canonical move; their `n` and digests do not.
+# F4-B6a (listed move, soft set): FdVolumeRead read the bare word `volume` in A, refused at build
+# (route `refused`); B binds a cell quantity at the owner (`volume => volume[owner]`), so the
+# model builds: route `auto`, its fingerprint, program entries and `n` recorded at the F4-B6a
+# fixup (~/lpwork/f4B6/guard-1a.rec). No other record moved.
 const GD_RECORDS = Dict{String, String}(
     "GiB BDF2|Float64|digest|state" => "624905f7ab2e7815",
     "GiB BDF2|Float64|n" => "[1]",
@@ -458,7 +462,17 @@ const GD_RECORDS = Dict{String, String}(
     "FdTwo|Float64|g2|tables" => "Pair{Int64, Symbol}[]",
     "FdTwo|Float64|groups" => "2",
     "FdTwo|Float64|n" => "[2, 3]",
-    "FdVolumeRead|Float64|route" => "refused",
+    "FdVolumeRead|Float64|canonical" => "c=ExplicitEuler(substeps=nothing,lower=nothing)",
+    "FdVolumeRead|Float64|fingerprint" => "0x6bb59d436f7176c5",
+    "FdVolumeRead|Float64|g1|arrays" => "((CorePotts.Part{:site, :c}(), CorePotts.Part{:site, :c__next}()), (CorePotts.Part{:site, :field1__in}(), nothing))",
+    "FdVolumeRead|Float64|g1|bounded" => "true",
+    "FdVolumeRead|Float64|g1|fingerprint_text" => "30355737f82a42ab",
+    "FdVolumeRead|Float64|g1|least" => "Int64:1",
+    "FdVolumeRead|Float64|g1|params" => "Symbol[]",
+    "FdVolumeRead|Float64|g1|tables" => "Pair{Int64, Symbol}[]",
+    "FdVolumeRead|Float64|groups" => "1",
+    "FdVolumeRead|Float64|n" => "[1]",
+    "FdVolumeRead|Float64|route" => "auto",
     "GdAuditBoundedField|Float64|canonical" => "c=ExplicitEuler(substeps=nothing,lower=nothing)",
     "GdAuditBoundedField|Float64|fingerprint" => "0xfbdf662a808246a1",
     "GdAuditBoundedField|Float64|g1|arrays" => "((CorePotts.Part{:site, :c}(), CorePotts.Part{:site, :c__next}()), (CorePotts.Part{:site, :kind__in}(), nothing))",

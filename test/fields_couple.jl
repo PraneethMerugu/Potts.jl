@@ -2,9 +2,11 @@
 # into a model, `Potts.couple(model, pdesys; inputs)` or `@fields pdesys (bindings…)` in
 # `@potts_model`. Its fields join the model under their own names (`c`, not `name₊c`); each
 # input of the PDESystem (a plain 0/1 or numeric input field) is bound to a CPM expression
-# (`kind == A`, `volume[owner]`), filled per site by the field compiler. Oracles: the same field
-# written in `@equations` (bitwise); a model that extends the coupled one reads the field by
-# name in a drive (bitwise against the `@equations` model with the same drive); ForwardDiff
+# (`kind == A`, `volume[owner]`), filled per site by the field compiler. Oracles: LatticePDE's
+# own run of the same PDESystem over each MCS window (`cp_replay`), from the coupled run's
+# field before the window, with the inputs computed by hand from σ after the sweep (until
+# F4-B6 the oracle was the same field in front end A's `@equations`, bitwise); the routes
+# (`Potts.couple`, `@fields`, `@extend` with a drive) against each other, bitwise; ForwardDiff
 # against central differences at a fixed CPM path (F3-21b's shadow store); the ODE path, the
 # PDESystem solved by Tsit5 with `Potts.field_inputs(integ)` against the owned explicit run at
 # 400 substeps (max difference 4.05e-5, tolerance 6e-5), and the inputs against hand-computed
@@ -40,36 +42,6 @@ sys2(; name = :fields) = PDESystem([Dt(c(t, x, y)) ~ Dc * Δ(c(t, x, y)) + s * e
     [c(0, x, y) ~ 0.0], DOM, [t, x, y], [c(t, x, y), endo(t, x, y)], [Dc, s, kd]; name)
 end
 
-# the references: the same field in `@equations`, with and without a drive that reads it
-@potts_model CpRef begin
-    @kinds medium A
-    @parameters begin
-        Dc = 0.2
-        s = 0.5
-        kd = 0.1
-        av = 0.01
-    end
-    @variables c(field) = 0.0
-    @lattice Lattice((24, 20); boundary = Closed())
-    @energy cells(A) => (volume - 16.0)^2
-    @equations D(c) ~ Dc * Δ(c) + s * (kind == A) - kd * c + av * volume[owner]
-    @sweep Metropolis(; temperature = 4.0)
-end
-@potts_model CpRefDrive begin
-    @kinds medium A
-    @parameters begin
-        χ = 400.0
-        Dc = 0.2
-        s = 0.5
-        kd = 0.1
-    end
-    @variables c(field) = 0.0
-    @lattice Lattice((24, 20); boundary = Closed())
-    @energy cells(A) => (volume - 16.0)^2
-    @drive Chemotaxis(c; strength = χ, kinds = (A,))
-    @equations D(c) ~ Dc * Δ(c) + s * (kind == A) - kd * c
-    @sweep Metropolis(; temperature = 4.0)
-end
 @potts_model CpHost begin
     @kinds medium A
     @lattice Lattice((24, 20); boundary = Closed())
@@ -126,49 +98,7 @@ end
     @drive Chemotaxis(c; strength = χ, kinds = (A,))
     @sweep Metropolis(; temperature = 4.0)
 end
-@potts_model CpRefTwo begin
-    @kinds medium A
-    @parameters begin
-        χ = 400.0
-        Dc = 0.2
-        s = 0.5
-        kd = 0.1
-    end
-    @variables begin
-        c(field) = 0.0
-        u(field) = 0.0
-    end
-    @lattice Lattice((24, 20); boundary = Closed())
-    @energy cells(A) => (volume - 16.0)^2
-    @drive Chemotaxis(u; strength = χ, kinds = (A,))
-    @equations begin
-        D(c) ~ Dc * Δ(c) + s * (kind == A) - kd * c
-        D(u) ~ 0.3 * Δ(u) + 0.2 * c - 0.2 * u
-    end
-    @sweep Metropolis(; temperature = 4.0)
-end
-@potts_model CpRefTwoC begin
-    @kinds medium A
-    @parameters begin
-        χ = 400.0
-        Dc = 0.2
-        s = 0.5
-        kd = 0.1
-    end
-    @variables begin
-        c(field) = 0.0
-        u(field) = 0.0
-    end
-    @lattice Lattice((24, 20); boundary = Closed())
-    @energy cells(A) => (volume - 16.0)^2
-    @drive Chemotaxis(c; strength = χ, kinds = (A,))
-    @equations begin
-        D(c) ~ Dc * Δ(c) + s * (kind == A) - kd * c
-        D(u) ~ 0.3 * Δ(u) + 0.2 * c - 0.2 * u
-    end
-    @sweep Metropolis(; temperature = 4.0)
-end
-# a wrong binding (the medium, not `A`): the in-file control of the bitwise oracles
+# a wrong binding (the medium, not `A`): the in-file control of the oracles
 @potts_model CpWrong begin
     @kinds medium A
     @lattice Lattice((24, 20); boundary = Closed())
@@ -199,8 +129,41 @@ cp_q(sol) = sum(CP_W .* sol.u[end].site.c)
 # the ODE-path tolerance: the owned explicit run's time error at 400 substeps (first order in
 # the substep). Measured 4.05e-5 on the CPU (2026-11-10); the bound leaves 1.5x room
 const CP_ODE_TOL = 6e-5
+# The owned oracle: step the coupled run one MCS at a time; over each window, run LatticePDE's
+# own discretization of `sys` from the coupled field before the window, with the inputs `ins(σ,
+# kind)` computed by hand from the state after the sweep (the fields step after the sweep), and
+# return the largest difference to the coupled field after the window and the number of windows
+# compared. `skip(σ0, σ)` leaves a window out (a division in it: the fields read σ before it).
+# `fields`: the fields of `sys`, in its order (the owned state is their values one after the other).
+const LP = Potts.LatticePDE
+cp_hand(σ, kind) = [:endo => [s != 0 && kind[s] == 1 for s in σ],
+                    :vol => [s == 0 ? 0.0 : Float64(count(==(s), σ)) for s in σ]]
+cp_hand2(σ, kind) = cp_hand(σ, kind)[1:1]
+function cp_replay(m, sys, ins, alg; op = cp_op(), k = 12, seed = 3, fs = ExplicitEuler(), fields = (:c,),
+                   skip = (σ0, σ) -> false, p = nothing)
+    integ = init(PottsProblem(m, op, (0, k); field_solver = fs, seed), SequentialCPM())
+    σ = Array(integ.u.σ)
+    prob = LP.discretize(sys, LP.LatticeDiscretization(LP.Grid(size(σ)); T = Float64); inputs = ins(σ, Array(integ.u.cell.kind)))
+    p === nothing || (prob = LP.remake(prob; p))
+    state() = reduce(vcat, (vec(Array(getproperty(integ.u.site, f))) for f in fields))
+    err, n = 0.0, 0
+    for _ in 1:k
+        σ0, u0 = Array(integ.u.σ), state()
+        step!(integ)
+        σ = Array(integ.u.σ)
+        skip(σ0, σ) && continue
+        o = LP.solve(LP.remake(prob; u0, tspan = (0.0, 1.0), inputs = ins(σ, Array(integ.u.cell.kind))), alg).u[end]
+        err, n = max(err, maximum(abs, o .- state())), n + 1
+    end
+    return err, n
+end
+# the owned algorithm of a field solver of the coupled run: the same settings, `dt = 1` (one MCS)
+cp_own(fs) = typeof(fs)((n === :dt ? 1.0 : getfield(fs, n) for n in fieldnames(typeof(fs)))...)
+# the coupled implicit solve and the owned one agree to the inner solver's tolerance, not bitwise
+cp_tol(::ExplicitEuler) = 0.0
+cp_tol(::BackwardEuler) = 1e-9
 
-@testset "F4-B2: Potts.couple equals the field in @equations (bitwise), under its own names" begin
+@testset "F4-B2: Potts.couple runs the PDESystem (owned oracle), under its own names" begin
     T, X, Y = CpPDE.t, CpPDE.x, CpPDE.y
     vol = Potts.at(Potts.B.volume, Potts.B.owner)
     # keys as the callable, the applied variable and the name
@@ -210,36 +173,40 @@ const CP_ODE_TOL = 6e-5
         @test any(x -> Potts.info(x).name === :c, Potts.variables(m))                 # `c`, not `fields₊c`
         @test Set(Potts.info(q).name for q in Potts.parameters(m)) == Set([:Dc, :s, :kd, :av])
         for fs in (ExplicitEuler(), BackwardEuler())
-            a, b = cp_run(m, fs), cp_run(CpRef(; name = :m), fs)
-            @test all(a.u[i].σ == b.u[i].σ for i in eachindex(b.u))
-            @test all(a.u[i].site.c == b.u[i].site.c for i in eachindex(b.u)) && maximum(b.u[end].site.c) > 0.5
+            err, n = cp_replay(m, CpPDE.sys(), cp_hand, cp_own(fs); fs)
+            @test n == 12 && err <= cp_tol(fs) || (println("couple $fs: $err"); false)
+            @test maximum(cp_run(m, fs).u[end].site.c) > 0.5
         end
     end
     # its parameters by name in the operating point, its field in a `FieldGroups` pair
     m = Potts.couple(CpHost(; name = :m), CpPDE.sys(); inputs = [CpPDE.endo => Potts.kind == 1, CpPDE.vol => vol])
     a = cp_run(m, FieldGroups(:c => BackwardEuler()); op = [cp_op(); :s => 0.9])
-    b = cp_run(CpRef(; name = :m), FieldGroups(:c => BackwardEuler()); op = [cp_op(); :s => 0.9])
-    @test a.u[end].site.c == b.u[end].site.c && a.u[end].site.c != cp_run(CpRef(; name = :m), BackwardEuler()).u[end].site.c
-    @test a[:c][end] == b[:c][end]
+    b = cp_run(m, BackwardEuler(); op = [cp_op(); :s => 0.9])
+    @test a.u[end].site.c == b.u[end].site.c && a.u[end].site.c != cp_run(m, BackwardEuler()).u[end].site.c
+    @test a[:c][end] == a.u[end].site.c
+    err, n = cp_replay(m, CpPDE.sys(), cp_hand, cp_own(BackwardEuler()); fs = FieldGroups(:c => BackwardEuler()),
+        op = [cp_op(); :s => 0.9], p = [CpPDE.s => 0.9])
+    @test n == 12 && err <= cp_tol(BackwardEuler()) || (println("FieldGroups s = 0.9: $err"); false)
 end
 
 @testset "F4-B2: @fields in @potts_model; a drive reads the field by name" begin
     for fs in (ExplicitEuler(), BackwardEuler())
-        a, b = cp_run(CpFields(; name = :m), fs), cp_run(CpRef(; name = :m), fs)
-        @test all(a.u[i].site.c == b.u[i].site.c for i in eachindex(b.u))
-        # the drive reads `c` (the CPM path depends on the field), bitwise against `@equations`
-        d, r = cp_run(CpDrive(; name = :m), fs), cp_run(CpRefDrive(; name = :m), fs)
-        @test all(d.u[i].σ == r.u[i].σ for i in eachindex(r.u)) && all(d.u[i].site.c == r.u[i].site.c for i in eachindex(r.u))
+        err, n = cp_replay(CpFields(; name = :m), CpPDE.sys(), cp_hand, cp_own(fs); fs)
+        @test n == 12 && err <= cp_tol(fs) || (println("CpFields $fs: $err"); false)
+        # the drive reads `c` (the CPM path depends on the field); the field runs the PDESystem
+        err, n = cp_replay(CpDrive(; name = :m), CpPDE.sys2(), cp_hand2, cp_own(fs); fs)
+        @test n == 12 && err <= cp_tol(fs) || (println("CpDrive $fs: $err"); false)
         # (control: the drive moves the path)
-        @test r.u[end].σ != cp_run(CpRef(; name = :m), fs).u[end].σ
+        @test cp_run(CpDrive(; name = :m), fs).u[end].σ != cp_run(CpFields2(; name = :m), fs).u[end].σ
     end
     # the operating point reaches the coupled parameters as any others
-    @test cp_run(CpFields(; name = :m), ExplicitEuler(); op = [cp_op(); :kd => 0.3]).u[end].site.c ==
-          cp_run(CpRef(; name = :m), ExplicitEuler(); op = [cp_op(); :kd => 0.3]).u[end].site.c
+    k = cp_run(CpFields(; name = :m), ExplicitEuler(); op = [cp_op(); :kd => 0.3]).u[end].site.c
+    err, n = cp_replay(CpFields(; name = :m), CpPDE.sys(), cp_hand, cp_own(ExplicitEuler()); op = [cp_op(); :kd => 0.3],
+        p = [CpPDE.kd => 0.3])
+    @test n == 12 && err == 0 || (println("kd = 0.3: $err"); false)
     # and so do the constructor keywords (S1 of the F4-B2 review); an unknown keyword is refused
-    k = cp_run(CpFields(; name = :m, kd = 0.3), ExplicitEuler()).u[end].site.c
-    @test k == cp_run(CpRef(; name = :m, kd = 0.3), ExplicitEuler()).u[end].site.c
-    @test k != cp_run(CpRef(; name = :m), ExplicitEuler()).u[end].site.c
+    @test k == cp_run(CpFields(; name = :m, kd = 0.3), ExplicitEuler()).u[end].site.c
+    @test k != cp_run(CpFields(; name = :m), ExplicitEuler()).u[end].site.c
     @test occursin("has no keyword `zz`", cp_msg(() -> CpFields(; name = :m, zz = 1.0)))
 end
 
@@ -254,17 +221,21 @@ end
 
 @testset "F4-B2: @fields c = pdesys binds the field for the statements after it" begin
     for fs in (ExplicitEuler(), BackwardEuler())
-        # the drive in the same body: bitwise the `@extend` route and the `@equations` model
-        a, d, r = cp_run(CpSame(; name = :m), fs), cp_run(CpDrive(; name = :m), fs), cp_run(CpRefDrive(; name = :m), fs)
-        @test cp_same(r, a) && cp_same(d, a)
-        @test r.u[end].σ != cp_run(CpRef(; name = :m), fs).u[end].σ             # (control: the drive moves the path)
-        # a list of names; one name with the other field reached by name
-        @test cp_same(cp_run(CpRefTwo(; name = :m), fs), cp_run(CpList(; name = :m), fs))
-        o, ro = cp_run(CpOne(; name = :m), fs), cp_run(CpRefTwoC(; name = :m), fs)
-        @test cp_same(ro, o) && maximum(o[:u][end]) > 0
+        # the drive in the same body: bitwise the `@extend` route (whose field the owned oracle checks)
+        a, d = cp_run(CpSame(; name = :m), fs), cp_run(CpDrive(; name = :m), fs)
+        @test cp_same(d, a)
+        @test a.u[end].σ != cp_run(CpFields2(; name = :m), fs).u[end].σ             # (control: the drive moves the path)
+        # a list of names; one name with the other field reached by name: both fields run the PDESystem
+        for M in (CpList, CpOne)
+            err, n = cp_replay(M(; name = :m), CpPDE.sys3(), cp_hand2, cp_own(fs); fs, fields = (:c, :u))
+            @test n == 12 && err <= cp_tol(fs) || (println("$M $fs: $err"); false)
+        end
+        o = cp_run(CpOne(; name = :m), fs)
+        @test maximum(o[:u][end]) > 0 && o.u[end].σ != cp_run(CpList(; name = :m), fs).u[end].σ   # (the drives read other fields)
     end
-    # control: a wrong binding is caught by the bitwise oracle
-    @test cp_run(CpWrong(; name = :m), ExplicitEuler()).u[end].site.c != cp_run(CpRef(; name = :m), ExplicitEuler()).u[end].site.c
+    # control: a wrong binding is caught by the oracles
+    @test cp_run(CpWrong(; name = :m), ExplicitEuler()).u[end].site.c != cp_run(CpFields(; name = :m), ExplicitEuler()).u[end].site.c
+    @test cp_replay(CpWrong(; name = :m), CpPDE.sys(), cp_hand, cp_own(ExplicitEuler()))[1] > 1e-3
     body(line; pre = :(), post = :()) = quote
         @potts_model CpBadNames begin
             @kinds medium A
@@ -323,7 +294,7 @@ end
     e = cp_msg(() -> Potts.couple(host, CpPDE.sys(); inputs = [CpPDE.endo => Potts.kind == 1]))
     @test occursin("`vol`", e) && occursin("does not fill at a site", e)
     # a name the model has already: refused (a namespaced component is the route)
-    e = cp_msg(() -> Potts.couple(CpRef(; name = :m), CpPDE.sys(); inputs = [CpPDE.endo => Potts.kind == 1, CpPDE.vol => vol]))
+    e = cp_msg(() -> Potts.couple(CpFields(; name = :m), CpPDE.sys(); inputs = [CpPDE.endo => Potts.kind == 1, CpPDE.vol => vol]))
     @test occursin("already has a parameter `Dc`", e) || occursin("already has a field `c`", e)
     # `@fields` syntax
     e = try
@@ -390,7 +361,7 @@ end
     # the initial state of a problem; a model without coupled inputs
     p = PottsProblem(CpFields(; name = :m), cp_op(), (0, 1))
     @test Potts.field_inputs(p)[:endo] == (cp_op()[1][2] .!= 0)
-    @test isempty(Potts.field_inputs(PottsProblem(CpRef(; name = :m), cp_op(), (0, 1))))
+    @test isempty(Potts.field_inputs(PottsProblem(CpHost(; name = :m), cp_op(), (0, 1))))
     # the ODE path: σ frozen, the PDESystem discretized with those inputs and solved by Tsit5 over
     # one MCS from the field at MCS 5, against the owned explicit run at many substeps
     integ = init(PottsProblem(CpFrozen(; name = :m), cp_op(), (0, 6); seed = 3, field_solver = ExplicitEuler(; substeps = 400)),
@@ -412,9 +383,10 @@ end
 
 # ---------------------------------------------------------------------------------------------
 # F4-B2 review (2026-11-10, probes ~/lpwork/f4w1-rev/b1.jl, b2.jl, u1.jl): richer models
-# bitwise against `@equations`, and the regressions M1 (an unbound `Bool` input filled by a
-# non-Bool word), M2 (a parameter declared again after `@fields`) and M3 (`kind == :A` in
-# `Potts.couple`, always false: refused with the route). Each M testset fails at 5d86cc6e (~/lpwork/f4B2/nc-rev.log).
+# against the owned oracle (`cp_replay`; until F4-B6, bitwise against `@equations`), and the
+# regressions M1 (an unbound `Bool` input filled by a non-Bool word), M2 (a parameter declared
+# again after `@fields`) and M3 (`kind == :A` in `Potts.couple`, always false: refused with the
+# route). Each M testset fails at 5d86cc6e (~/lpwork/f4B2/nc-rev.log).
 module CpRev
 using Potts: Potts
 using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
@@ -449,37 +421,6 @@ kind_real() = PDESystem([Dt(C) ~ Dc * Δ(C) + s * kr(t, x, y) - kd * C], [c(0, x
     [C, kr(t, x, y)], [Dc, s, kd]; name = :krs)
 end
 
-@potts_model CrLifeRef begin
-    @kinds medium A B
-    @parameters begin
-        Dc = 0.2
-        s = 0.5
-        kd = 0.1
-        kq = 1.0
-    end
-    @variables begin
-        c(field) = 0.0
-        q(field) = 0.0
-        V_target(cell) = 40.0
-    end
-    @lattice Lattice((24, 20); boundary = Closed())
-    @energy begin
-        cells => 4.0 * (volume - V_target)^2
-        contacts => 2.0 * (kind != kind′)
-    end
-    @equations begin
-        D(c) ~ Dc * Δ(c) + s * (kind == A) - kd * c + 0.01 * volume[owner]
-        0 ~ 0.5 * Δ(q) - kq * q + c
-    end
-    @bcs begin
-        c(t, 0, y) ~ 0.5
-        Differential(x)(c(t, 24, y)) ~ 0.0
-        c ~ masked(kind == B, 1.0)
-    end
-    @divide cells(A) when = volume >= 30
-    @after_mcs V_target ~ ifelse((mcs >= 2) && (id == 2), 0.0, 40.0)
-    @sweep Metropolis(; temperature = 6.0)
-end
 @potts_model CrLife begin
     @kinds medium A B
     @variables V_target(cell) = 40.0
@@ -492,25 +433,6 @@ end
     @divide cells(A) when = volume >= 30
     @after_mcs V_target ~ ifelse((mcs >= 2) && (id == 2), 0.0, 40.0)
     @sweep Metropolis(; temperature = 6.0)
-end
-@potts_model CrTwoRef begin
-    @kinds medium A
-    @parameters begin
-        Dc = 0.2
-        s = 0.5
-        kd = 0.1
-    end
-    @variables begin
-        c(field) = 0.0
-        w(field) = 0.0
-    end
-    @lattice Lattice((24, 20); boundary = Closed())
-    @energy cells => (volume - 16.0)^2
-    @equations begin
-        D(c) ~ Dc * Δ(c) + s * (kind == A) - kd * c
-        D(w) ~ 0.3 * Δ(w) - w + 0.7 * c
-    end
-    @sweep Metropolis(; temperature = 4.0)
 end
 @potts_model CrTwoU begin
     @kinds medium A
@@ -528,37 +450,11 @@ end
     @fields CpRev.second_bound() (CpRev.cin => c)
     @sweep Metropolis(; temperature = 4.0)
 end
-@potts_model CrCrsRef begin
-    @kinds medium A
-    @parameters begin
-        Dc = 0.2
-        s = 0.5
-        kd = 0.1
-    end
-    @variables cc(field) = 0.0, [lattice_level = Coarse(2)]
-    @lattice Lattice((24, 20); boundary = Closed())
-    @energy cells => (volume - 16.0)^2
-    @equations D(cc) ~ Dc * Δ(cc) + s * (kind == A) - kd * cc
-    @sweep Metropolis(; temperature = 4.0)
-end
 @potts_model CrCrs begin
     @kinds medium A
     @lattice Lattice((24, 20); boundary = Closed())
     @energy cells => (volume - 16.0)^2
     @fields CpRev.coarse_sys() (CpRev.endo => kind == A)
-    @sweep Metropolis(; temperature = 4.0)
-end
-@potts_model CrKindRef begin
-    @kinds medium A B
-    @parameters begin
-        Dc = 0.2
-        s = 0.5
-        kd = 0.1
-    end
-    @variables c(field) = 0.0
-    @lattice Lattice((24, 20); boundary = Closed())
-    @energy cells => (volume - 16.0)^2
-    @equations D(c) ~ Dc * Δ(c) + s * kind - kd * c
     @sweep Metropolis(; temperature = 4.0)
 end
 @potts_model CrKindReal begin
@@ -580,21 +476,37 @@ cr_rich_op() = (σ = zeros(Int32, 24, 20); σ[3:7, 3:7] .= 1; σ[12:16, 4:8] .= 
 cr_kop() = (σ = zeros(Int32, 24, 20); σ[5:8, 5:8] .= 1; σ[14:17, 10:13] .= 2; [ownership => σ, kind => [:A, :B]])
 cr_run(m, fs, k = 10; op = cp_op(), seed = 5) =
     solve(PottsProblem(m, op, (0, k); field_solver = fs, seed), SequentialCPM(); saveat = 0:2:k)
+# the inputs of `rich` by hand; a window with a division in it is left out (the cell count changes)
+cr_hand(σ, kind) = [:endo => [s != 0 && kind[s] == 1 for s in σ], :isB => [s != 0 && kind[s] == 2 for s in σ],
+                    :vol => [s == 0 ? 0.0 : Float64(count(==(s), σ)) for s in σ]]
+cr_divided(σ0, σ) = maximum(σ) != maximum(σ0)
 
-@testset "F4-B2 review: lifecycle, faces, mask, steady rows, two PDESystems and Coarse(2), bitwise" begin
+@testset "F4-B2 review: lifecycle, faces, mask, steady rows, two PDESystems and Coarse(2), owned oracle" begin
     for fs in (ExplicitEuler(), BackwardEuler(), FieldGroups(:c => BackwardEuler(), :q => QuasiSteady()))
-        a, b = cr_run(CrLife(; name = :m), fs, 20; op = cr_rich_op()), cr_run(CrLifeRef(; name = :m), fs, 20; op = cr_rich_op())
-        @test cp_same(b, a)
+        b = cr_run(CrLife(; name = :m), fs, 20; op = cr_rich_op())
         # (the run divides cells and kills cell 2)
         live = [length(setdiff(unique(u.σ), 0)) for u in b.u]
         @test live[end] > live[1] && any(u -> count(==(2), u.σ) == 0, b.u)
+        fs isa FieldGroups && continue
+        err, n = cp_replay(CrLife(; name = :m), CpRev.rich(), cr_hand, cp_own(fs); fs, k = 20, op = cr_rich_op(), seed = 5,
+            fields = (:c, :q), skip = cr_divided)
+        @test n >= 10 && err <= cp_tol(fs) || (println("CrLife $fs: $err over $n windows"); false)
     end
     for fs in (ExplicitEuler(), BackwardEuler())
-        r = cr_run(CrTwoRef(; name = :m), fs)
-        @test cp_same(r, cr_run(CrTwoU(; name = :m), fs)) && cp_same(r, cr_run(CrTwoB(; name = :m), fs))
+        r = cr_run(CrTwoU(; name = :m), fs)
+        @test cp_same(r, cr_run(CrTwoB(; name = :m), fs))
         @test maximum(r.u[end].site.w) > 0.1
+        # `c` alone (an explicit count of its own: the automatic count is the group's, `c` with `w`)
+        f1 = fs isa ExplicitEuler ? ExplicitEuler(; substeps = 4) : fs
+        err, n = cp_replay(CrTwoB(; name = :m), CpRev.first_sys(), cp_hand2, cp_own(f1); fs = f1, k = 10, seed = 5)
+        @test n == 10 && err <= cp_tol(fs) || (println("CrTwoB $fs: $err"); false)
+        # the coarse field against LatticePDE's run of the model's own system (`Potts.fields`, its
+        # input the kind number per site, as F3-17 does)
         c = cr_run(CrCrs(; name = :m), fs)
-        @test cp_same(cr_run(CrCrsRef(; name = :m), fs), c) && size(c.u[end].site.cc) == (12, 10)
+        @test size(c.u[end].site.cc) == (12, 10)
+        err, n = cp_replay(CrCrs(; name = :m), Potts.fields(CrCrs(; name = :m)),
+            (σ, kind) -> [:kind => Int32[s == 0 ? 0 : kind[s] for s in σ]], cp_own(fs); fs, k = 10, seed = 5, fields = (:cc,))
+        @test n == 10 && err <= cp_tol(fs) || (println("CrCrs $fs: $err"); false)
     end
 end
 
@@ -613,8 +525,9 @@ end
     e = cp_msg(() -> Potts.couple(CrHost2(; name = :m), CpRev.kind_bool()))
     @test occursin("bind it: `kb => Potts.kind == :A`", e) || (println(e); false)
     # a numeric input filled by `kind` reads the kind number; `field_inputs` gives the same values
-    a = cr_run(CrKindReal(; name = :m), ExplicitEuler(); op = cr_kop())
-    @test cp_same(cr_run(CrKindRef(; name = :m), ExplicitEuler(); op = cr_kop()), a)
+    err, n = cp_replay(CrKindReal(; name = :m), CpRev.kind_real(), (σ, kind) -> [:kind => [s == 0 ? 0.0 : Float64(kind[s]) for s in σ]],
+        cp_own(ExplicitEuler()); k = 10, seed = 5, op = cr_kop())
+    @test n == 10 && err <= 1e-14 || (println("CrKindReal: $err"); false)   # (measured 4.4e-16, 2026-11-10)
     fi = Potts.field_inputs(PottsProblem(CrKindReal(; name = :m), cr_kop(), (0, 1)))
     @test fi[:kind][6, 6] === 1.0 && fi[:kind][15, 11] === 2.0 && fi[:kind][1, 1] === 0.0
 end

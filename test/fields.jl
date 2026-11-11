@@ -14,10 +14,11 @@ isdefined(Main, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl
 module FdPDE
 using ..FieldPDE
 @variables c(..) u(..) o(..) v(..) m(..) K(..) w(..) e(..) s1(..) s2(..) cfield(..)
-@variables kA(..)::Bool [input = true] k1(..)::Bool [input = true] dk(..) [input = true]
+@variables kA(..)::Bool [input = true] k1(..)::Bool [input = true] dk(..) [input = true] volume(..) [input = true]
+@variables domain(..) rnd(..) [input = true]
 const X = (t, x, y)
 const C, U, O, V, M, KK, W, E, S1, S2 = c(X...), u(X...), o(X...), v(X...), m(X...), K(X...), w(X...), e(X...), s1(X...), s2(X...)
-const KA, K1, DK = kA(X...), k1(X...), dk(X...)
+const KA, K1, DK, VOL, RND = kA(X...), k1(X...), dk(X...), volume(X...), rnd(X...)
 const Dx, Dy = Differential(x), Differential(y)
 const MCS = step_index(t)
 ic(f, v = 0.0) = f(0, x, y) ~ v
@@ -29,6 +30,9 @@ periodic() = diffusion((16, 8); h = 2.0)
 closed() = (@parameters Dc = 1.0 k = 0.0; field1(Dc * Δ(C) - k * C, (12, 10), [Dc, k]))
 defaults() = (@parameters Dc = 1.0 k = 0.5; field1(Dc * Δ(C) - k * C, (6, 4), [Dc, k]; c0 = 2.0))
 computed_rate() = (@parameters Dc = 1.0 k = 0.5 k2 = 2k; field1(Dc * Δ(C) - k2 * C, (6, 4), [Dc, k, k2]; c0 = 1.0))
+# an input named `volume`, bound to the owner's volume (A read the bare word, refused at build;
+# B binds a cell quantity at the owner, F4-B6a)
+volume_read() = field1(0.01 * VOL, (6, 4); dvs = [C, VOL])
 source(dims = (12, 10)) = (@parameters Dc = 0.2 s = 0.05; field1(Dc * Δ(C) + s * KA, dims, [Dc, s]; dvs = [C, KA]))
 two() = pdesys([Dt(C) ~ 0.2 * Δ(C) + 0.05 * KA, Dt(U) ~ 0.1 * Δ(U) + 0.5 * C], [ic(c), ic(u)], (12, 10), [C, U, KA])
 decay() = field1(-2.0, (6, 6); c0 = 1.0)
@@ -40,6 +44,10 @@ function half(dims = (12, 10), rate = (C, ps) -> ps[1] * Δ(C); ps = (@parameter
     return pdesys([Dt(Ch) ~ rate(Ch, ps)], [ic(c)], dims, [Ch], collect(ps))
 end
 stripe() = field1(0.1 * Δ(C), (9, 9); bcs = [c(t, 0, y) ~ 0.0, c(t, 9, y) ~ 100.0])
+# an input bound to a draw of the CPM (`rand()`)
+rand_rate() = field1(0.1 * Δ(C) + 0.01 * RND, (8, 6); dvs = [C, RND])
+# a field named `domain`, as the lattice's domain mask
+domain_word() = (DW = domain(X...); pdesys([Dt(DW) ~ 0.1 * Δ(DW)], [ic(domain)], (9, 9), [DW]))
 # the fields `fs` (no spatial operator), on a 6 × 6 box: `rates`, from `u0`
 ode(rates, fs, u0, ps = []; dims = (6, 6)) =
     pdesys([Dt(f(X...)) ~ r for (f, r) in zip(fs, rates)], [ic(f, v) for (f, v) in zip(fs, u0)], dims, [f(X...) for f in fs], ps)
@@ -74,6 +82,9 @@ p_raw() = (@parameters K0 = 0.4 s = 0.01; field1(Dx(K0 * Dx(C)) + Dy(K0 * Dy(C))
 p_aux() = (@parameters K0 = 0.4 s = 0.01;
            pdesys([KK ~ K0 * (1 + 0.05 * x), Dt(C) ~ DivKGrad(:arithmetic)(KK, C) + s * x], [ic(c), ic(K)], (8, 6), [C, KK], [K0, s]))
 p_map() = (@parameters g = 0.5; pdesys([Shift(t, 1)(M) ~ g * M + x], [ic(m)], (6, 4), [M], [g]))
+p_advect() = (@parameters ux = 0.3 s = 0.01; field1(-Advect(Upwind1())([ux, 0.0], C) + s * y, (8, 6), [ux, s]))
+# the velocity as a constant vector
+p_advect_const() = (@parameters s = 0.01; field1(-Advect(Upwind1())([0.3, 0.0], C) + s * y, (8, 6), [s]))
 p_mixed() = pdesys([Dt(C) ~ -C, Shift(t, 1)(M) ~ M + 1], [ic(c), ic(m)], (6, 4), [C, M])
 p_z() = (C3 = c(t, x, y, z); pdesys([Dt(C3) ~ 0.1 * z], [c(0, x, y, z) ~ 0.0], (4, 4, 3), [C3]))
 p_map_repeat() = pdesys([Shift(t, 1)(M) ~ 0.5 * M + 1], [ic(m)], (6, 4), [M])
@@ -81,6 +92,10 @@ p_map_repeat() = pdesys([Shift(t, 1)(M) ~ 0.5 * M + 1], [ic(m)], (6, 4), [M])
 b_dc(bcs = []; dims = (8, 6)) = (@parameters Dc = 0.5; field1(Dc * Δ(C), dims, [Dc]; bcs))
 b_none() = b_dc()
 b_bcs_face() = b_dc([c(t, 0, y) ~ 1.0])
+# a face value that is a computed parameter, and the same value as an expression of parameters
+computed_face() = (@parameters Dc = 0.2 g1 = 1.0 g2 = 2.0 g = g1 + g2;
+                   field1(Dc * Δ(C), (8, 8), [Dc, g1, g2, g]; bcs = [c(t, 0, y) ~ g]))
+expr_face() = (@parameters Dc = 0.2 g1 = 1.0 g2 = 2.0; field1(Dc * Δ(C), (8, 8), [Dc, g1, g2]; bcs = [c(t, 0, y) ~ g1 + g2]))
 function b_flux_robin_bcs()
     @parameters Dc = 0.5 q = 0.2 αr = 2.0 βr = 1.0 gr = 0.5
     return field1(Dc * Δ(C), (8, 6), [Dc, q, αr, βr, gr]; bcs = [Dx(c(t, 0, y)) ~ -q, αr * c(t, 8, y) + βr * Dx(c(t, 8, y)) ~ gr])
@@ -122,6 +137,9 @@ iv_no_bounds() = field1(DivKGrad(:harmonic)(C, C), (16, 16); c0 = 0.5)
 iv_out() = bounded(c -> DivKGrad(:harmonic)(c, c), 1.5)
 iv_aux() = (@parameters k = 2.0; pdesys([KK ~ k * C, Dt(C) ~ 0.1 * Δ(C) - KK], [ic(c, 0.5), ic(K)], (16, 16), [C, KK], [k]))
 dir3() = bounded(c -> DivKGrad(:harmonic)(c, c); bcs = [c(t, 16, y) ~ 3.0])
+# Burgers: the velocity reads the field it moves
+burgers() = bounded(c -> -Advect(Upwind1())([c, 0.0], c); dims = (32, 32))
+iv_advect() = field1(0.1 * Δ(C) - Advect(Upwind1())([0.05 * (1 + x), 0.0], C), (16, 16); c0 = 0.5)
 drift() = (@parameters Dc = 0.2 s = 1.0 k = 0.05;
            bounded(c -> DivKGrad(:harmonic)(Dc * (1 + c), c) + s - k * c, 0.0; b = (0, 3), ps = [Dc, s, k]))
 # F3-14: number types per role
@@ -201,10 +219,9 @@ end
 # a CPM read other than `kind` in a field equation (an input named `volume`, F1)
 @potts_model FdVolumeRead begin
     @kinds medium A
-    @variables c(field) = 0.0
     @lattice Lattice((6, 4); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ 0.01 * volume
+    @fields FdPDE.volume_read() (FdPDE.volume => volume[owner])
     @sweep Metropolis(; temperature = 1.0)
 end
 # a frozen kind is a fixed source: σ never moves, so the field has an exact hand oracle
@@ -275,19 +292,17 @@ end
 end
 @potts_model FdRand begin
     @kinds medium A
-    @variables c(field) = 0.0
     @lattice Lattice((8, 6); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ 0.1 * Δ(c) + 0.01 * rand()
+    @fields FdPDE.rand_rate() (FdPDE.rnd => rand())
     @sweep Metropolis(; temperature = 1.0)
 end
 
 @potts_model FdDomainWord begin
     @kinds medium A
-    @variables domain(field) = 0.0
     @lattice Lattice((9, 9); boundary = Closed(), domain = x -> 3 <= x[1] <= 7)
     @energy cells(A) => (volume - 4.0)^2
-    @equations D(domain) ~ 0.1 * Δ(domain)
+    @fields FdPDE.domain_word()
     @sweep Metropolis(; temperature = 1.0)
 end
 
@@ -1037,35 +1052,16 @@ end
 using Potts.LatticePDE: DivKGrad
 @potts_model FdExprFace begin
     @kinds medium A
-    @parameters begin
-        Dc = 0.2
-        g1 = 1.0
-        g2 = 2.0
-    end
-    @variables c(field) = 0.0
     @lattice Lattice((8, 8); boundary = Closed())
     @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ Dc * Δ(c)
-    @boundary c begin
-        x => (Dirichlet(g1 + g2), NoFlux())
-    end
+    @fields FdPDE.expr_face()
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FdComputedFace begin
     @kinds medium A
-    @parameters begin
-        Dc = 0.2
-        g1 = 1.0
-        g2 = 2.0
-        g = g1 + g2
-    end
-    @variables c(field) = 0.0
     @lattice Lattice((8, 8); boundary = Closed())
     @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ Dc * Δ(c)
-    @boundary c begin
-        x => (Dirichlet(g), NoFlux())
-    end
+    @fields FdPDE.computed_face()
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FdKindNonlinear begin
@@ -1157,13 +1153,14 @@ end
     @test occursin(":kind => values", err) && !occursin("__in", err)
     err = fe(() -> LP.discretize(fsrc, disc; inputs = [:kd => K]))
     @test occursin("`kind`", err) && !occursin("__in", err)
+    # (the input of a bound CPM expression is named by the expression, `volume[owner]`)
     fvol = Potts.fields(FdVolumeRead(; name = :f))
     V = fill(2.0, 6, 4)
     s = LP.solve(LP.discretize(fvol, LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64);
-        inputs = [:volume => V]), LP.ExplicitEuler(; dt = 0.1, substeps = 1); saveat = 0.1)
+        inputs = ["LatticePDE.at(volume, owner)" => V]), LP.ExplicitEuler(; dt = 0.1, substeps = 1); saveat = 0.1)
     @test all(≈(0.1 * 0.01 * 2.0), s[:c, 2])
     err = fe(() -> LP.solve(LP.discretize(fvol, LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64)), LP.ExplicitEuler(; dt = 0.1)))
-    @test occursin("`volume`", err) && occursin(":volume => values", err) && !occursin("__in", err)
+    @test occursin("volume", err) && occursin("=> values", err) && !occursin("__in", err) || (println("V13: ", err); false)
 end
 
 @testset "F1 messages: field terms in the model's words (PO02, PO06)" begin
@@ -1513,14 +1510,9 @@ end
 end
 @potts_model FpAdvect begin
     @kinds medium A
-    @parameters begin
-        ux = 0.3
-        s = 0.01
-    end
-    @variables c(field) = 0.0
     @lattice Lattice((8, 6); boundary = Closed())
     @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ -Advect(Upwind1())([ux, 0.0], c) + s * y
+    @fields FdPDE.p_advect()
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FpAux begin
@@ -1625,11 +1617,9 @@ end
 end
 @potts_model FpAdvectConst begin
     @kinds medium A
-    @parameters s = 0.01
-    @variables c(field) = 0.0
     @lattice Lattice((8, 6); boundary = Closed())
     @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ -Advect(Upwind1())([0.3, 0.0], c) + s * y
+    @fields FdPDE.p_advect_const()
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FpAdvectShort begin
@@ -1818,20 +1808,9 @@ end
 end
 @potts_model FbFluxRobin begin
     @kinds medium A
-    @parameters begin
-        Dc = 0.5
-        q = 0.2
-        αr = 2.0
-        βr = 1.0
-        gr = 0.5
-    end
-    @variables c(field) = 0.0
     @lattice Lattice((8, 6); boundary = Closed())
     @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ Dc * Δ(c)
-    @boundary c begin
-        x => (Flux(q), Robin(αr, βr, gr))
-    end
+    @fields FdPDE.b_flux_robin_bcs()
     @sweep Metropolis(; temperature = 1.0)
 end
 # the same faces as B's face equations in `@bcs` (the §2.12 table)
@@ -2806,10 +2785,9 @@ end
 # above the declared bound 1 and the initial maximum 0.9.
 @potts_model FbBurgers begin
     @kinds medium A
-    @variables c(field) = 0.5, [bounds = (0, 1)]
     @lattice Lattice((32, 32); boundary = Periodic())
     @energy cells(A) => (volume - 25.0)^2
-    @equations D(c) ~ -Advect(Upwind1())([c, 0.0], c)
+    @fields FdPDE.burgers()
     @sweep Metropolis(; temperature = 1.0)
 end
 @testset "F3-13 M1: Burgers in a model stays unseen (no frozen-velocity count)" begin
@@ -2867,10 +2845,9 @@ end
 
 @potts_model FbIvAdvect begin
     @kinds medium A
-    @variables c(field) = 0.5
     @lattice Lattice((16, 16); boundary = Closed())
     @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ 0.1 * Δ(c) - Advect(Upwind1())([0.05 * (1 + x), 0.0], c)
+    @fields FdPDE.iv_advect()
     @sweep Metropolis(; temperature = 1.0)
 end
 

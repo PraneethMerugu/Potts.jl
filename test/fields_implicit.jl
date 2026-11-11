@@ -49,6 +49,13 @@ hex_face() = field1(0.4 * Δ(C) - 0.3 * C + 0.1 * x,
 kind3() = field1(1.0 * KA; dvs = [C, KA])
 scal() = (O = o(X...); pdesys([Dt(C) ~ 0.5 * Δ(C) - 40 * C / (0.025 + C) + 20, Dt(O) ~ 0.5 * Δ(O) - O + C],
                              [ic(c, 0.5), ic(o, 0.5)], D, [C, O]))
+# two components of one array field `u`
+function comp()
+    @variables u(..)[1:2] = [0.5, 0.5]
+    Ua = u(X...)
+    return pdesystem([Dt(Ua[1]) ~ 0.5 * Δ(Ua[1]) - 40 * Ua[1] / (0.025 + Ua[1]) + 20,
+        Dt(Ua[2]) ~ 0.5 * Δ(Ua[2]) - Ua[2] + Ua[1]]; name = :fields)
+end
 site_m() = field1(0.04 * (1 + x) * Δ(C) - 0.3 * C + 0.1 * y)
 site_k() = field1(0.04 * (1 + x) * DivKGrad(:harmonic)(1 + 0.05 * y, C) - 0.3 * C + 0.1 * y)
 # the derivative models (F3-21b)
@@ -325,13 +332,9 @@ end
 end
 @potts_model FiComp begin
     @kinds medium A[frozen]
-    @variables u(field)[1:2] = 0.5
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    @equations begin
-        D(u[1]) ~ 0.5 * Δ(u[1]) - 40 * u[1] / (0.025 + u[1]) + 20
-        D(u[2]) ~ 0.5 * Δ(u[2]) - u[2] + u[1]
-    end
+    @fields FiPDE.comp()
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FiScal begin

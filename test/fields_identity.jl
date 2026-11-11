@@ -29,6 +29,14 @@ isdefined(Main, :FdTwo) || include(joinpath(@__DIR__, "fields.jl"))
 # ---------------------------------------------------------------------------------------
 # Copies of the pinned fixtures (p6_0o `P60oField`, p6_0g `P60gX`), verbatim
 
+function p60o_field_pde()
+    t, L = Potts.t, Potts.LatticePDE
+    Potts.ModelingToolkitBase.@parameters x y
+    Potts.ModelingToolkitBase.@variables c(..) dark(..)::Bool [input = true]
+    C = c(t, x, y)
+    return Potts.ModelingToolkitBase.PDESystem([Potts.D(C) ~ 0.1 * L.Δ(C) + 0.02 * dark(t, x, y) - 0.01 * C],
+        [c(0, x, y) ~ 0.0], L.lattice_domain(t, (x, y), (16, 16)), [t, x, y], [C, dark(t, x, y)], Any[]; name = :p60o_field)
+end
 @potts_model P60oField begin
     @kinds medium wall[frozen] dark light
     @parameters begin
@@ -36,19 +44,26 @@ isdefined(Main, :FdTwo) || include(joinpath(@__DIR__, "fields.jl"))
         J[kind, kind] = [0 30 16 16; 30 0 30 30; 16 30 2 11; 16 30 11 14]
         χ = 3.0
     end
-    @variables c(field) = 0.0
     @lattice Lattice((16, 16); neighborhood = Moore(1))
+    @fields c = p60o_field_pde() (:dark => kind == dark)
     @energy begin
         Volume(dark, light; target = 9.0, strength = 1.0)
         Adhesion(J)
     end
     @drive Chemotaxis(c; strength = χ, kinds = (dark,))
-    @equations D(c) ~ 0.1 * Δ(c) + 0.02 * (kind == dark) - 0.01 * c
     @sweep Metropolis(; temperature = Tk[kind], combine = min)
 end
 const GD_OP_FIELD = [ownership => (s = zeros(Int32, 16, 16); s[:, 1] .= 1; s[4:6, 4:6] .= 2; s[10:12, 10:12] .= 3; s),
     kind => [:wall, :dark, :light]]
 
+function p60g_q_pde()
+    t, L = Potts.t, Potts.LatticePDE
+    Potts.ModelingToolkitBase.@parameters x y
+    Potts.ModelingToolkitBase.@variables q(..) tip_or_stalk(..)::Bool [input = true]
+    Q = q(t, x, y)
+    return Potts.ModelingToolkitBase.PDESystem([Potts.D(Q) ~ 0.25 * tip_or_stalk(t, x, y)], [q(0, x, y) ~ 0.0],
+        L.lattice_domain(t, (x, y), (32, 24)), [t, x, y], [Q, tip_or_stalk(t, x, y)], Any[]; name = :p60g_q)
+end
 @potts_model P60gX begin
     @kinds medium fluid matrix tip stalk
     @parameters begin
@@ -62,10 +77,10 @@ const GD_OP_FIELD = [ownership => (s = zeros(Int32, 16, 16); s[:, 1] .= 1; s[4:6
         tgt(cell) = 0.0
         age(cell) = 0.0
         g(cell) = 0.0
-        q(field) = 0.0
-        n_ec(model) = 0.0
     end
     @lattice Lattice((32, 24); neighborhood = Moore(1))
+    @fields p60g_q_pde() (:tip_or_stalk => ((kind == tip) || (kind == stalk)))
+    @variables n_ec(model) = 0.0
     @energy begin
         cells(tip, stalk) => 2.0 * (volume - 16)^2
         cells(fluid, matrix) => 0.02 * (volume - tgt)^2
@@ -86,10 +101,7 @@ const GD_OP_FIELD = [ownership => (s = zeros(Int32, 16, 16); s[:, 1] .= 1; s[4:6
         age ~ Pre(age) + ((kind == tip) || (kind == stalk))
         near ~ count(true for n in Moore(1)(site) if (kind[n] == fluid) || (kind[n] == matrix))
     end
-    @equations begin
-        D(g) ~ 0.5 * ((kind == tip) || (kind == stalk))
-        D(q) ~ 0.25 * ((kind == tip) || (kind == stalk))
-    end
+    @equations D(g) ~ 0.5 * ((kind == tip) || (kind == stalk))
     @observed begin
         nec ~ count(true for c in cells(tip, stalk))
         vecm ~ sum(volume for c in cells(fluid, matrix))
@@ -119,158 +131,129 @@ const GD_PINS = Dict("MerksVasculogenesis|Float64" => 0xd89dd8d35e4384c8,
     "P60gX|Float64" => 0xcaa274201d432e7d)
 
 # ---------------------------------------------------------------------------------------
-# Copies of the `test/audit.jl` field models and of the p6_5c Fortuna-like model (soft set)
+# Copies of the `test/audit.jl` field models and of the p6_5c Fortuna-like model (soft set),
+# their fields as PDESystems (a kind table or a parameter expression that a PDESystem does not
+# hold is a bound input, `dk => δ[kind]`)
+
+module GdPDE
+using ..FieldPDE
+@variables c(..) u(..) dk(..) [input = true]
+const C, U, DK = c(t, x, y), u(t, x, y), dk(t, x, y)
+const D16 = (16, 16)
+ic(f) = f(0, x, y) ~ 0.0
+diffusion() = (@parameters Dc = 0.1; pdesys([Dt(C) ~ Dc * Δ(C)], [ic(c)], D16, [C], [Dc]))
+nonlinear() = (@parameters Dc = 0.1 k = 0.5; pdesys([Dt(C) ~ Dc * Δ(C) - k * C^2], [ic(c)], D16, [C], [Dc, k]))
+bounded() = (@parameters Dc = 1.0; pdesys([Dt(C) ~ Dc * Δ(C) - DK * C], [ic(c)], D16, [C, DK], [Dc]))
+kind_diffusion() = pdesys([Dt(C) ~ DK * Δ(C)], [ic(c)], D16, [C, DK])
+inv_table() = (@parameters Dc = 0.1; pdesys([Dt(C) ~ Dc * Δ(C) - (1 / DK) * C], [ic(c)], D16, [C, DK], [Dc]))
+int_div() = (@parameters Dc = 0.25; Cx = c(t, x);
+             pdesys([Dt(Cx) ~ Dc * Δ(Cx) - dk(t, x) * Cx], [c(0, x) ~ 0.0], (16,), [Cx, dk(t, x)], [Dc]))
+two(e1, e2) = (@parameters Dc = 0.5 Dx = 0.5; pdesys([Dt(C) ~ e1(Dc, Dx), Dt(U) ~ e2(Dc, Dx)], [ic(c), ic(u)], (8, 8), [C, U], [Dc, Dx]))
+cross_field() = two((Dc, Dx) -> Dc * Δ(C) - Dx * Δ(U), (Dc, Dx) -> Dc * Δ(U))
+cross_linear() = two((Dc, Dx) -> Dc * Δ(C) - Dx * U, (Dc, Dx) -> Dc * Δ(U))
+const MCS = step_index(t)
+gate_rotation() = (@parameters t0 = 1000.0 k = 4.0;
+                   pdesys([Dt(C) ~ ifelse(MCS >= t0, -10 * C, -k * U), Dt(U) ~ ifelse(MCS >= t0, -10 * U, k * C)],
+                       [ic(c), ic(u)], (8, 8), [C, U], [t0, k]))
+gate_dominant() = (@parameters t0 = 1000.0;
+                   pdesys([Dt(C) ~ ifelse(MCS >= t0, -10 * C - U, -10 * C + U), Dt(U) ~ ifelse(MCS >= t0, -10 * U, -5 * U)],
+                       [ic(c), ic(u)], (8, 8), [C, U], [t0]))
+end
 
 @potts_model GdAuditDiffusion begin
     @kinds medium A
-    @parameters Dc = 0.1
-    @variables c(field) = 0.0
     @lattice Lattice((16, 16))
     @energy cells(A) => (volume - 9)^2
-    @equations D(c) ~ Dc * Δ(c)
+    @fields GdPDE.diffusion()
     @sweep Metropolis(; temperature = 5.0)
 end
 @potts_model GdAuditNonlinearField begin
     @kinds medium A
-    @parameters begin
-        Dc = 0.1
-        k = 0.5
-    end
-    @variables c(field) = 0.0
     @lattice Lattice((16, 16))
     @energy cells(A) => (volume - 9)^2
-    @equations D(c) ~ Dc * Δ(c) - k * c^2
+    @fields GdPDE.nonlinear()
     @sweep Metropolis(; temperature = 5.0)
 end
 @potts_model GdAuditBoundedField begin
     @kinds medium A
-    @parameters begin
-        Dc = 1.0
-        δ[kind] = [5.0, 0.0]
-    end
-    @variables c(field) = 0.0
+    @parameters δ[kind] = [5.0, 0.0]
     @lattice Lattice((16, 16))
     @energy cells(A) => (volume - 9)^2
-    @equations D(c) ~ Dc * Δ(c) - δ[kind] * c
+    @fields GdPDE.bounded() (GdPDE.dk => δ[kind])
     @sweep Metropolis(; temperature = 5.0)
 end
 @potts_model GdAuditKindDiffusion begin             # test/audit.jl:272–280, `δ[kind] Δ(c)`
     @kinds medium A
     @parameters δ[kind] = [0.1, 0.2]
-    @variables c(field) = 0.0
     @lattice Lattice((16, 16))
     @energy cells(A) => (volume - 9)^2
-    @equations D(c) ~ δ[kind] * Δ(c)
+    @fields GdPDE.kind_diffusion() (GdPDE.dk => δ[kind])
     @sweep Metropolis(; temperature = 5.0)
 end
 @potts_model GdAuditInvTable begin
     @kinds medium A
-    @parameters begin
-        Dc = 0.1
-        τ[kind] = [2.0, 0.5]
-    end
-    @variables c(field) = 0.0
+    @parameters τ[kind] = [2.0, 0.5]
     @lattice Lattice((16, 16))
     @energy cells(A) => (volume - 9)^2
-    @equations D(c) ~ Dc * Δ(c) - (1 / τ[kind]) * c
+    @fields GdPDE.inv_table() (GdPDE.dk => τ[kind])
     @sweep Metropolis(; temperature = 5.0)
 end
 @potts_model GdAuditIntDivField begin
     @kinds medium A
-    @parameters begin
-        Dc = 0.25
-        k₀ = 7.0
-    end
-    @variables c(field) = 0.0
+    @parameters k₀ = 7.0
     @lattice Lattice((16,))
     @energy cells => (volume - 4.0)^2
-    @equations D(c) ~ Dc * Δ(c) - (k₀ ÷ 2) * c
+    @fields GdPDE.int_div() (GdPDE.dk => k₀ ÷ 2)
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model GdAuditCrossField begin
     @kinds medium A
-    @parameters begin
-        Dc = 0.5
-        Dx = 0.5
-    end
-    @variables begin
-        c(field) = 0.0
-        u(field) = 0.0
-    end
     @lattice Lattice((8, 8))
     @energy cells => (volume - 4.0)^2
-    @equations begin
-        D(c) ~ Dc * Δ(c) - Dx * Δ(u)
-        D(u) ~ Dc * Δ(u)
-    end
+    @fields GdPDE.cross_field()
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model GdAuditCrossLinear begin
     @kinds medium A
-    @parameters begin
-        Dc = 0.5
-        Dx = 0.5
-    end
-    @variables begin
-        c(field) = 0.0
-        u(field) = 0.0
-    end
     @lattice Lattice((8, 8))
     @energy cells => (volume - 4.0)^2
-    @equations begin
-        D(c) ~ Dc * Δ(c) - Dx * u
-        D(u) ~ Dc * Δ(u)
-    end
+    @fields GdPDE.cross_linear()
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model GdAuditGateRotation begin             # test/audit.jl:424–440, reads `mcs`
     @kinds medium A
-    @parameters begin
-        t0 = 1000.0
-        k = 4.0
-    end
-    @variables begin
-        c(field) = 0.0
-        u(field) = 0.0
-    end
     @lattice Lattice((8, 8))
     @energy cells => (volume - 4.0)^2
-    @equations begin
-        D(c) ~ ifelse(mcs >= t0, -10 * c, -k * u)
-        D(u) ~ ifelse(mcs >= t0, -10 * u, k * c)
-    end
+    @fields GdPDE.gate_rotation()
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model GdAuditGateDominant begin             # test/audit.jl:442–456, reads `mcs`
     @kinds medium A
-    @parameters t0 = 1000.0
-    @variables begin
-        c(field) = 0.0
-        u(field) = 0.0
-    end
     @lattice Lattice((8, 8))
     @energy cells => (volume - 4.0)^2
-    @equations begin
-        D(c) ~ ifelse(mcs >= t0, -10 * c - u, -10 * c + u)
-        D(u) ~ ifelse(mcs >= t0, -10 * u, -5 * u)
-    end
+    @fields GdPDE.gate_dominant()
     @sweep Metropolis(; temperature = 1.0)
 end
 # p6_5c `P65cbAny` (Fixture P's shape, the any-neighbor predicate source)
+function p65cb_pde(; diffusion = true, source = true)
+    t, L = Potts.t, Potts.LatticePDE
+    Potts.ModelingToolkitBase.@parameters x y z D_F = 0.0 k_d = 0.5 k_s = 0.5
+    Potts.ModelingToolkitBase.@variables F(..) lam(..)::Bool [input = true] src(..) [input = true]
+    X, LAM, SRC = F(t, x, y, z), lam(t, x, y, z), src(t, x, y, z)
+    rate = -k_d * X + (source ? k_s * LAM * SRC : k_s * LAM)
+    diffusion && (rate = D_F * L.Δ(X) + rate)
+    return Potts.ModelingToolkitBase.PDESystem([Potts.D(X) ~ rate], [F(0, x, y, z) ~ 0.0],
+        L.lattice_domain(t, (x, y, z), (6, 6, 4)), [t, x, y, z], source ? [X, LAM, SRC] : [X, LAM],
+        diffusion ? [D_F, k_d, k_s] : [k_d, k_s]; name = :p65cb_field)
+end
 @potts_model GdP65cbAny begin
     @kinds medium substrate[frozen] lam
-    @parameters begin
-        D_F = 0.0
-        k_d = 0.5
-        k_s = 0.5
-        mobile = 0.0
-    end
     @lattice Lattice((6, 6, 4); boundary = (Periodic(), Periodic(), Closed()), neighborhood = VonNeumann(1))
     touches_substrate(s) = count(true for n in VonNeumann(1)(s) if kind[n] == substrate) > 0
+    @fields p65cb_pde() (:lam => kind == lam, :src => any(kind[n] == substrate for n in VonNeumann(1)(site)))
+    @parameters mobile = 0.0
     @energy cells(lam) => (volume - 8.0)^2
     @constraint mobile > 0.5
-    @variables F(field) = 0.0
-    @equations D(F) ~ D_F * Δ(F) - k_d * F + k_s * (kind == lam) * any(kind[n] == substrate for n in VonNeumann(1)(site))
     @sweep Metropolis(; temperature = 1.0)
 end
 gd_p65cb_op() = (σ = zeros(Int32, 6, 6, 4); σ[:, :, 1] .= 1; σ[2:3, 2:3, 2:3] .= 2;
