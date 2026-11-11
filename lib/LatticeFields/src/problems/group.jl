@@ -1129,7 +1129,8 @@ function advance!(rt::GroupRuntime, clock::Tuple{Real, Integer}, n::Integer = rt
     t = Float64(clock[1])
     k = Int(clock[2])
     # (an explicit group whose bound reads the time: the window's count, F4-12b)
-    m = rt.recount === nothing ? Int(n) : _recount!(rt, Int(n), t, Float64(window))
+    # (behind a barrier: a group whose bound does not read the time compiles none of it)
+    m = rt.recount === nothing ? Int(n) : Base.inferencebarrier(_recount!)(rt, Int(n), t, Float64(window))::Int
     h = m == 0 ? Float64(window) : Float64(window) / m
     st = rt.store
     # the window count of the status word's entry [2] (a window of length 0 is not one)

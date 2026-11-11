@@ -711,7 +711,9 @@ function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; saveat = (), 
         save_everystep, Int(maxiters), false, nothing, nothing, t0, 0, nothing, dense, nothing,
         isempty(prob.inputfns) ? nothing : Base.inferencebarrier(_input_fns)(prob, st, rts))
     # the inputs given as functions of the time take their values at the start (F4-B1)
-    integ.inputfns === nothing || Base.inferencebarrier(_refresh_inputs!)(integ)
+    # (`getfield`: the integrator's type is not inferred here, and a `getproperty` called at
+    # run time is compiled for any property, `integ.sol` and its solution included)
+    getfield(integ, :inputfns) === nothing || Base.inferencebarrier(_refresh_inputs!)(integ)
     for ts in tstops
         t0 < ts <= tf + 1e-9dt && SciMLBase.add_tstop!(integ, ts)
     end
@@ -876,14 +878,19 @@ the code and the run goes on. On a device they are read at the saves and at the 
 """
 function CommonSolve.step!(integ::FieldIntegrator)
     t, dt = _time(integ), integ.dt
-    target, full = _window_end!(integ)
+    # (the time logic takes plain values, not the integrator: it is compiled once, not again
+    # for each problem's kernel types, and the rare paths sit behind barriers, so a run on the
+    # grid compiles little; first-init compile, design §6)
+    target, full = _window_end!(integ.tstops, t, dt, integ.t0, integ.iter, integ.tend)
     # the state at the window's start, when a save falls inside the window or an event may
-    # (a continuous callback): one host copy. The rare paths sit behind barriers, and the time
-    # logic is in small functions: a run on the grid compiles little (design §6)
-    _needs_prev(integ, target) && _keep_prev!(integ, t)
+    # (a continuous callback): one host copy
+    (getfield(integ, :cprev) !== nothing || _save_inside(integ.save, integ.nsave, target, dt)) &&
+        Base.inferencebarrier(_keep_prev!)(integ)
     code = full ? _advance_all(integ.runtimes, (t, _tick(integ))) :
            Base.inferencebarrier(_advance_short)(integ.runtimes, (t, _tick(integ)), target - t, dt)::SciMLBase.ReturnCode.T
-    _window_done!(integ, target)
+    integ.iter = _window_done!(integ.tstops, target, dt, integ.t0, integ.iter)
+    integ.tnow = target
+    integ.windows += 1
     code == SciMLBase.ReturnCode.Success || (integ.retcode = code)
     # the inputs given as functions of the time take their values at the window's end (F4-B1)
     getfield(integ, :inputfns) === nothing || Base.inferencebarrier(_refresh_inputs!)(integ)
@@ -892,22 +899,22 @@ function CommonSolve.step!(integ::FieldIntegrator)
     # the callbacks (behind a barrier; none: no host read), then the saves due
     getfield(integ, :cbs) === nothing || Base.inferencebarrier(_apply_callbacks!)(integ)
     _saves!(integ)
-    integ.everystep && (isempty(integ.ts) || integ.ts[end] != integ.tnow) && _save!(integ)
+    integ.everystep && (isempty(integ.ts) || integ.ts[end] != integ.tnow) && _save!(integ, _time(integ), _current(integ), nothing)
     integ.prevu = nothing
-    _past_maxiters(integ) && Base.inferencebarrier(_maxiters!)(integ)
+    _past_maxiters(integ.windows, integ.maxiters, integ.retcode, integ.tnow, integ.tend, dt) &&
+        Base.inferencebarrier(_maxiters!)(integ)
     return integ
 end
-# the window's end: the next grid time, or an earlier time to land on (a tstop, the end of the
-# span); a time within `tol` of the grid lands with a full window, at that time
-function _window_end!(integ::FieldIntegrator)
-    t, dt = integ.tnow, integ.dt
-    g = integ.t0 + (integ.iter + 1) * dt            # the next grid time
+# the end of the window that starts at `t`: the next grid time, or an earlier time to land on
+# (a tstop, the end of the span `tend`); a time within `tol` of the grid lands with a full
+# window, at that time. The tstops reached or passed are dropped
+@noinline function _window_end!(tstops::Vector{Float64}, t::Float64, dt::Float64, t0::Float64, iter::Int, tend::Float64)
+    g = t0 + (iter + 1) * dt                        # the next grid time
     tol = 1e-9 * dt
-    target, full = g, abs(t - (integ.t0 + integ.iter * dt)) <= tol
-    if t < integ.tend - tol && integ.tend < g + tol
-        target, full = integ.tend, full && integ.tend > g - tol
+    target, full = g, abs(t - (t0 + iter * dt)) <= tol
+    if t < tend - tol && tend < g + tol
+        target, full = tend, full && tend > g - tol
     end
-    tstops = integ.tstops
     while !isempty(tstops) && first(tstops) <= t + tol
         popfirst!(tstops)                           # (reached or passed)
     end
@@ -917,37 +924,33 @@ function _window_end!(integ::FieldIntegrator)
     end
     return (target, full)::Tuple{Float64, Bool}
 end
-function _window_done!(integ::FieldIntegrator, target::Float64)
-    dt = integ.dt
+# a window that ended at `target`: the grid windows done (`iter`, one more when it ends on the
+# grid); the tstops reached are dropped
+@noinline function _window_done!(tstops::Vector{Float64}, target::Float64, dt::Float64, t0::Float64, iter::Int)
     tol = 1e-9 * dt
-    target > integ.t0 + (integ.iter + 1) * dt - tol && (integ.iter += 1)   # (a window that ends on the grid)
-    integ.tnow = target
-    integ.windows += 1
-    tstops = integ.tstops
+    target > t0 + (iter + 1) * dt - tol && (iter += 1)
     while !isempty(tstops) && first(tstops) <= target + tol
         popfirst!(tstops)
     end
-    return nothing
+    return iter
 end
-_past_maxiters(integ::FieldIntegrator) = integ.windows >= integ.maxiters && _running(integ.retcode) &&
-    integ.tnow < integ.tend - 1e-9 * integ.dt
+_past_maxiters(windows::Int, maxiters::Int, code::SciMLBase.ReturnCode.T, tnow::Float64, tend::Float64, dt::Float64) =
+    windows >= maxiters && _running(code) && tnow < tend - 1e-9 * dt
 @noinline function _maxiters!(integ::FieldIntegrator)
     @warn string("the run stopped after maxiters = ", integ.maxiters, " windows at t = ", _num(_time(integ)),
         ": `ReturnCode.MaxIters`; give a larger `maxiters`")
     integ.retcode = SciMLBase.ReturnCode.MaxIters
     return nothing
 end
-function _needs_prev(integ::FieldIntegrator, target::Float64)
-    integ.cprev === nothing || return true
-    k = integ.nsave
-    return k <= length(integ.save) && integ.save[k] < target - 1e-9 * integ.dt
-end
+# whether the next save time (index `k` of `save`) falls inside the window that ends at `target`
+_save_inside(save::Vector{Float64}, k::Int, target::Float64, dt::Float64) = k <= length(save) && save[k] < target - 1e-9 * dt
 _prev_aux(integ::FieldIntegrator) = (_eval_aux!(integ); _aux_values(integ))
-function _keep_prev!(integ::FieldIntegrator, t)
+# (at the window's start, behind a barrier: a run on the grid compiles none of it)
+@noinline function _keep_prev!(integ::FieldIntegrator)
     Exec.ishost(integ.prob.backend) || (integ.syncs += 1)
     integ.prevu = integ.prevbuf = _current!(integ.prevbuf, integ)
     integ.prevaux = integ.aux === nothing ? nothing : Base.inferencebarrier(_prev_aux)(integ)
-    integ.tprev = t
+    integ.tprev = _time(integ)
     return nothing
 end
 # a shortened window of length `w` (a time off the grid, F4-03): each group takes
@@ -965,24 +968,24 @@ function _saves!(integ::FieldIntegrator)
     # none due; one, at the window's end (the usual case); anything else (an off-grid save
     # inside the window, Q2 (a)) behind a barrier, so a run without one compiles none of the
     # interpolation (first-init compile, design §6)
-    case = _save_case(integ)
+    case, k = _save_case(integ.save, integ.nsave, integ.tnow, integ.dt, integ.ts)
+    integ.nsave = k
     case == 0 && return nothing
     if case == 1
-        _save!(integ, integ.save[integ.nsave - 1], _current(integ), nothing)   # (the save time itself)
+        _save!(integ, integ.save[k - 1], _current(integ), nothing)   # (the save time itself)
     elseif case == 2
         Base.inferencebarrier(_saves_window!)(integ)
     end
     return nothing
 end
-# 0: no save due; 1: one save, at the window's end (taken); 2: the general case; 3: the one
-# save due was taken already (the index moves on)
-function _save_case(integ::FieldIntegrator)
-    tol = 1e-9 * integ.dt
-    save, k, tnow = integ.save, integ.nsave, integ.tnow
-    (k > length(save) || save[k] > tnow + tol) && return 0
-    abs(save[k] - tnow) <= tol && (k == length(save) || save[k + 1] > tnow + tol) || return 2
-    integ.nsave = k + 1
-    return isempty(integ.ts) || integ.ts[end] != save[k] ? 1 : 3
+# `(case, k)`, `k` the next save time's index after the case: 0, no save due; 1, one save, at
+# the window's end (taken); 2, the general case; 3, the one save due was taken already (the
+# index moves on). Of plain values (the save times, `ts` the times saved): compiled once
+@noinline function _save_case(save::Vector{Float64}, k::Int, tnow::Float64, dt::Float64, ts::Vector{Float64})
+    tol = 1e-9 * dt
+    (k > length(save) || save[k] > tnow + tol) && return (0, k)
+    abs(save[k] - tnow) <= tol && (k == length(save) || save[k + 1] > tnow + tol) || return (2, k)
+    return (isempty(ts) || ts[end] != save[k] ? 1 : 3, k + 1)
 end
 @noinline function _saves_window!(integ::FieldIntegrator)
     tol = 1e-9 * integ.dt
@@ -1085,13 +1088,15 @@ end
 _ueltype(st::FieldStore, ::Type{E}) where {E} =
     mixed_state(st) ? mapreduce(i -> eltype(st.bufs[i][1]), promote_type, _state_ids(st)) :
     isempty(st.flat) ? E : eltype(st.flat[1])
+# (a `Vector` of the saved element type, inferred: a save of it dispatches statically, so a
+# first save compiles `_save!` once, not again at run time; first-init compile, design §6)
 function _current(integ::FieldIntegrator)
-    st = integ.store
+    st, T = integ.store, _savetype(integ)
     if mixed_state(st)
         E = _ueltype(st, eltype(integ.prob))
-        return reduce(vcat, (convert(Vector{E}, Array(array(st, i, :cur))) for i in _state_ids(st)))
+        return convert(Vector{T}, reduce(vcat, (convert(Vector{E}, Array(array(st, i, :cur))) for i in _state_ids(st))))::Vector{T}
     end
-    return isempty(st.flat) ? eltype(integ.prob)[] : Array(st.flat[_parity(integ)])
+    return convert(Vector{T}, isempty(st.flat) ? eltype(integ.prob)[] : Array(st.flat[_parity(integ)]))::Vector{T}
 end
 
 # the current state into `dest` when it is a host vector of the state's size (else a new copy)
@@ -1111,7 +1116,8 @@ function _save!(integ::FieldIntegrator, t, u, a)
     idx = getfield(integ, :saveidxs)
     push!(integ.us, idx === nothing ? u : u[idx])
     if integ.aux !== nothing
-        push!(integ.auxu, a === nothing ? _aux_now(integ) : a)
+        a === nothing && _eval_aux!(integ)          # (not `_aux_now`: one method less to compile per problem)
+        push!(integ.auxu, a === nothing ? _aux_values(integ) : a)
     end
     _check_declared!(integ)                      # (the declared intervals: batch 5 review M2)
     _running(integ.retcode) && !all(isfinite, u) && Base.inferencebarrier(_unstable!)(integ, u)   # (a failure path: not compiled until taken)
@@ -1456,11 +1462,14 @@ end
 # `integ.ps`: SciML's parameter proxy (`getp`/`setp`; a table write goes through `setp` too)
 # (SciML's integrator properties: `t` the current time, `u` the current state, `sol` the
 # solution so far, `tdir` the direction, `opts` the options the callbacks of DiffEqCallbacks read)
+# (`sol` behind a barrier: the first `integ.x` of a problem infers this method for any symbol
+# before it propagates the constant, so a run that never reads `integ.sol` would compile the
+# solution's construction; first-init compile, design §6)
 function Base.getproperty(i::FieldIntegrator, f::Symbol)
     f === :ps && return SII.ParameterIndexingProxy(i)
     f === :t && return getfield(i, :tnow)
     f === :u && return SII.state_values(i)
-    f === :sol && return _solution(i)
+    f === :sol && return Base.inferencebarrier(_solution)(i)
     f === :tdir && return 1.0
     f === :opts && return (; maxiters = typemax(Int), tstops = getfield(i, :tstops))
     return getfield(i, f)
