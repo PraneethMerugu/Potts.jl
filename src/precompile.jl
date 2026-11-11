@@ -10,7 +10,8 @@
 # nonlinear condition (a solve from the guess); with `explicit_init = true`, explicit
 # conditions only (MTK's observed values). Initialization changes no kernel, so the second
 # build reuses the first one's compiled code. Its field `c` is a plain PDESystem coupled with
-# `@fields` (`_precompile_fields`), whose input `src` is bound to `kind == cell`.
+# `@fields` (`_precompile_fields`), whose input `src` is bound to `kind == cell`; it runs a first
+# MCS with `ExplicitEuler` and with `BackwardEuler`, and prints its `field_report`.
 #
 # The field of the precompile models: `D(c) ~ D_c Δc + src − c` on an `N`-dimensional lattice
 # (the domain is left out: each axis takes the lattice's interval)
@@ -96,9 +97,15 @@ function _precompile_workload()
         generated_code(csys; T = S, field_solver = ExplicitEuler())
         PottsProblem(csys, [CorePotts.ownership => σ, B.kind => [1]], (0, 1); T = S, field_solver = ExplicitEuler())
     end
-    prob = PottsProblem(mtkcompile(_PrecompileModel(; name = :precompile)), [CorePotts.ownership => σ, B.kind => [:cell]],
-        (0, 1); field_solver = ExplicitEuler(), capacity = 8)
-    step!(init(prob, CorePotts.SequentialCPM(); save_start = false))
+    # the coupled `@fields` model: init and a first MCS with each owned field algorithm, and
+    # its field report (F4-14)
+    csys2 = mtkcompile(_PrecompileModel(; name = :precompile))
+    for fs in (ExplicitEuler(), BackwardEuler())
+        prob = PottsProblem(csys2, [CorePotts.ownership => σ, B.kind => [:cell]], (0, 1); field_solver = fs, capacity = 8)
+        integ = init(prob, CorePotts.SequentialCPM(); save_start = false)
+        step!(integ)
+        field_report(devnull, integ)
+    end
     # Float32 on a 3D lattice under CheckerboardCPM (the device configuration, run here on
     # the host): the field compiler's 3D Float32 lowering and the checkerboard sweep
     σ3 = zeros(Int32, 8, 8, 8)
