@@ -221,7 +221,8 @@ interval must equal it. Its time interval is not read (the problem's `tspan` is)
 coupled model's fields (each binding written in as its CPM input), and
 [`Potts.field_inputs`](@ref) gives the current values of its inputs, so `discretize(Potts.fields(model),
 disc; inputs = collect(Potts.field_inputs(integ)))` solves the fields with any SciML solver at
-the CPM state of an integrator. Inside `@potts_model`, write
+the CPM state of an integrator (`Potts.field_inputs(integ, pdesys)` gives those of `pdesys`
+itself). Inside `@potts_model`, write
 `@fields c = pdesys (endo => kind == A, …)`: the fields join the model at that line, and the
 names before `=` (`c`, or a list `c, u`) are bound to them for the statements after it
 (`@drive Chemotaxis(c; …)`). A name may also be a parameter of `pdesys` (`@fields c, s = pdesys
@@ -275,7 +276,8 @@ couplings are `input = true` dependent variables, each with a name (`lattice_inp
 `kind` for the kind of each site (a binding to a kind expression, `endo => kind == A`, is
 written into the equations as that expression of `kind`), `domain` for an irregular domain,
 the name of the coupled PDESystem's input for a binding to a CPM read (`vol` for `vol =>
-volume[owner]`), and the CPM read as the model writes it (`volume[owner]`) for any other.
+volume[owner]`: the input variable is `vol(t, x, y)`, in the equations too), and the CPM read
+as the model writes it (`volume[owner]`) for any other.
 [`Potts.field_inputs`](@ref) gives their values by these names, so
 
 ```julia
@@ -284,7 +286,8 @@ prob = discretize(F, LatticeDiscretization(Grid(dims)); inputs = collect(Potts.f
 ```
 
 solves the fields with any SciML solver at the CPM state of `integ` (by hand, `inputs =
-[:kind => K, :vol => V]`, with `K` the kind number of each site, 0 for the medium). Its
+[:kind => K, :vol => V]`, with `K` the kind number of each site, 0 for the medium). For a
+coupled PDESystem of your own, `Potts.field_inputs(integ, pdesys)` gives its inputs. Its
 conditions are those of the coupled PDESystems, as `discretize` takes them. A hand-wrapped
 PDESystem (`Potts.wrap`) is returned as given.
 """
@@ -306,14 +309,47 @@ end
 # writes it (`volume[owner]`). A name another input, a field, a site variable or a parameter has
 # falls back to the read's text. The field compiler's own PDESystem is not renamed (its program,
 # input routing and fingerprint keep the generated names).
+# A name that is an identifier (`vol`, a binding's name) is the input variable's own name too, in
+# the equations, the conditions and every report (batch-end review S2: before, the variable kept
+# its generated name `field1__in` and only its `lattice_input_name` was `vol`).
 function _named_inputs(f::ModelingToolkitBase.PDESystem, sys::PottsSystem)
     names = _input_names(sys)
     isempty(names) && return f
+    # the generated input `field1__in` as the variable `vol(t, x, y)`, with its metadata
+    renamed = Dict{Any, Any}()
+    for dv in getfield(f, :dvs)
+        u = _unwrap(dv)
+        (ModelingToolkitBase.isinput(u) && iscall(u)) || continue
+        g = nameof(operation(u))
+        w = get(names, g, nothing)
+        (w === nothing || !Base.isidentifier(w) || w == string(g)) && continue
+        renamed[operation(u)] = _renamed_input(u, Symbol(w))
+    end
     rename(u) = (u = _unwrap(u); iscall(u) && haskey(names, nameof(operation(u))) ?
                                  SymbolicUtils.setmetadata(u, LatticePDE.LatticeInputName, names[nameof(operation(u))]) : u)
-    dvs = Any[ModelingToolkitBase.isinput(_unwrap(dv)) ? Symbolics.wrap(rename(dv)) : dv for dv in getfield(f, :dvs)]
-    return ModelingToolkitBase.PDESystem(getfield(f, :eqs), getfield(f, :bcs), getfield(f, :domain), getfield(f, :ivs), dvs,
+    function sub(x)
+        reps = Dict{Any, Any}()
+        _walk_all(x) do y
+            iscall(y) && haskey(renamed, operation(y)) && (reps[y] = renamed[operation(y)](arguments(y)...))
+        end
+        return isempty(reps) ? x : _unwrap(Symbolics.substitute(_unwrap(x), reps; fold = Val(false)))
+    end
+    subeq(eqs) = isempty(renamed) ? eqs : Equation[Equation(sub(eq.lhs), sub(eq.rhs)) for eq in eqs]
+    eqs, bcs = subeq(getfield(f, :eqs)), subeq(getfield(f, :bcs))
+    dvs = Any[ModelingToolkitBase.isinput(_unwrap(dv)) ? Symbolics.wrap(rename(sub(dv))) : dv for dv in getfield(f, :dvs)]
+    return ModelingToolkitBase.PDESystem(eqs, bcs, getfield(f, :domain), getfield(f, :ivs), dvs,
         getfield(f, :ps); name = nameof(f), initial_conditions = getfield(f, :initial_conditions))
+end
+# the callable of an input `u = g(t, x, y)` under the name `w`: each call carries `u`'s metadata
+# (input, bounds, storage, level, its CPM read) with `w` as its `lattice_input_name`, not its
+# source name
+function _renamed_input(u, w::Symbol)
+    f = Symbolics.unwrap(Symbolics.variable(w; T = SymbolicUtils.FnType{Tuple, SymbolicUtils.symtype(u), Nothing}))
+    keep = Pair{Any, Any}[k => x for k in (ModelingToolkitBase.VariableInput, ModelingToolkitBase.VariableBounds,
+        LatticePDE.LatticeStorage, LatticePDE.LatticeLevel, PottsEntity) for x in (SymbolicUtils.getmetadata(u, k, nothing),)
+                          if x !== nothing]
+    push!(keep, LatticePDE.LatticeInputName => string(w))
+    return (args...) -> foldl((v, kx) -> SymbolicUtils.setmetadata(v, kx[1], kx[2]), keep; init = f(args...))
 end
 # generated input name => the name `Potts.fields` gives it (the filled inputs of `sys`)
 function _input_names(sys::PottsSystem)

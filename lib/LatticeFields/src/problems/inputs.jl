@@ -176,8 +176,15 @@ function _not_input(s, ks)
         "`inputs = [", join(("$(_route(x)) => values" for x in comps), ", "), "]` (or the components of the array ",
         "variable)")))
     throw(ArgumentError(string("`", name, "` is not an input field of the problem",
-        isempty(ks) ? " (it has none)" : " (its inputs: " * join(("`$x`" for x in ks), ", ") * ")")))
+        isempty(ks) ? " (it has none)" : " (its inputs: " * join(("`$x`" for x in ks), ", ") * ")",
+        _cpm_word(string(s)) || _cpm_word(name) ? string("; `", name, "` is a name `Potts.fields(model)` gives a CPM ",
+            "input, and a coupled PDESystem's inputs are its own: `Potts.field_inputs(integ, pdesys)` gives the values of ",
+            "exactly the inputs of `pdesys`") : "")))
 end
+# a name a Potts model's `Potts.fields` gives a CPM input (batch-end review S3): a CPM word, or a
+# CPM read as the model writes it (`volume[owner]`)
+_cpm_word(n::AbstractString) = n in ("kind", "domain", "owner", "position", "site", "mcs", "time") ||
+                               occursin(r"^\w+\[\w+\]$", n)
 
 # an integer input (a kind map, a mask) takes integer values in its type's range, a Bool input
 # (`bool`: declared `::Bool`) only Bool or 0/1; a bad value is named with its site

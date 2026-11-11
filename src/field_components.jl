@@ -158,7 +158,8 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
     # the dependent variables: fields, and inputs the CPM fills by their word
     fmap, imap = Dict{Any, Any}(), Dict{Any, Any}()
     fields = Any[]
-    filled = Tuple{Symbol, Any, Type}[]         # (input name, CPM expression, element type), for `Potts.field_inputs`
+    # (input name, CPM expression, element type, PDESystem name), for `Potts.field_inputs`
+    filled = Tuple{Symbol, Any, Type, Symbol}[]
     for dv in getfield(f, :dvs)
         u = _unwrap(dv)
         i = info(u)
@@ -172,7 +173,7 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
             # an input bound by the coupling (`Potts.couple(…; inputs)`, `@fields`): the CPM
             # expression, filled per site by the field compiler as any CPM read of a field equation
             imap[op] = bound[op]
-            push!(filled, (Symbol(_input_key(u, op)), bound[op], _input_eltype(u, op)))
+            push!(filled, (Symbol(_input_key(u, op)), bound[op], _input_eltype(u, op), nameof(f)))
         elseif M.isinput(u)
             w = something(LatticePDE.get_lattice_input_name(u), string(nameof(op)))
             target = _input_target(sys, Symbol(w))
@@ -195,7 +196,7 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
                     "a number", "); bind it: `", route, "`, or declare the input without `::Bool`")))
             end
             imap[op] = _unwrap(target)
-            push!(filled, (Symbol(_input_key(u, op)), _unwrap(target), _input_eltype(u, op)))
+            push!(filled, (Symbol(_input_key(u, op)), _unwrap(target), _input_eltype(u, op), nameof(f)))
         else
             push!(fields, (u, op))
         end
@@ -581,7 +582,7 @@ function _with_pde(sys::PottsSystem, part::PottsPart, f, prefix, what; inputs = 
     # the inputs of the moved fields by name, kept for `Potts.field_inputs` (never in code or
     # fingerprint)
     md = part.metadata
-    isempty(c.inputs) || (md = Base.ImmutableDict(md, _FieldInputs => [get(md, _FieldInputs, Tuple{Symbol, Any, Type}[]); c.inputs]))
+    isempty(c.inputs) || (md = Base.ImmutableDict(md, _FieldInputs => [get(md, _FieldInputs, Tuple{Symbol, Any, Type, Symbol}[]); c.inputs]))
     md = _with_bcs_origins(md, Pair{Any, Symbol}[b => nameof(f) for b in [c.bcs; c.equations]])
     md = _with_coupled(md, _coupled_names(c.variables))
     return getfield(_replace(_staged(nameof(sys), part); variables = Any[part.variables; c.variables],
@@ -589,7 +590,7 @@ function _with_pde(sys::PottsSystem, part::PottsPart, f, prefix, what; inputs = 
         bcs = Equation[part.bcs; c.bcs], metadata = md), :part)
 end
 # payload metadata key: the inputs of the PDESystems moved into the payload, `(name, CPM
-# expression, element type)`, by the names their PDESystems give them
+# expression, element type, PDESystem name)`, by the names their PDESystems give them
 struct _FieldInputs end
 
 # `@fields [names =] pdesys (bindings…)` in `@potts_model` (F4-B2): the content of the PDESystem
@@ -642,7 +643,7 @@ end
 # the build record of a model with the inputs of its `@fields` PDESystems (`Potts.field_inputs`),
 # the PDESystem each of its conditions came from (F4-E10) and the fields they brought
 _with_field_inputs(md, ins, origins = (), coupled = ()) =
-    _with_coupled(_with_bcs_origins(isempty(ins) ? md : Base.ImmutableDict(md, _FieldInputs => collect(Tuple{Symbol, Any, Type}, ins)),
+    _with_coupled(_with_bcs_origins(isempty(ins) ? md : Base.ImmutableDict(md, _FieldInputs => collect(Tuple{Symbol, Any, Type, Symbol}, ins)),
             origins), coupled)
 
 # payload metadata key (F4-B6): the names of the fields that coupled PDESystems brought (`@fields`,

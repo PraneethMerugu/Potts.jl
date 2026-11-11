@@ -712,8 +712,10 @@ The `PDESystem` stays a plain ModelingToolkit system. `Potts.fields(coupled)` is
 as its CPM input (`endo` becomes `kind == 1`, read from the input `kind`).
 `Potts.field_inputs(integ)` gives the current values of those inputs at the CPM state of an
 integrator, by the names `Potts.fields` gives them (`Potts.field_inputs(prob)` at the
-problem's initial state). With them, LatticePDE's `discretize` builds an `ODEProblem` of the
-fields, which any SciML solver steps. Here Tsit5 steps one MCS from the field at MCS 5 of a
+problem's initial state). `Potts.field_inputs(integ, source)` gives the inputs of `source`
+itself instead (`endo`, its binding's truth value at each site), for `discretize(source, …)`.
+With them, LatticePDE's `discretize` builds an `ODEProblem` of the fields, which any SciML
+solver steps. Here Tsit5 steps one MCS from the field at MCS 5 of a
 run, and the owned run steps the same MCS with 400 explicit substeps:
 
 ```@example equations

@@ -335,3 +335,76 @@ end
     q = Potts.Symbolics.variable(:q)
     @test Potts._describe(Potts._BcsLine(q ~ 1.0), [:medium, :A]) == "the condition `q ~ 1.0` of the fields' PDESystem"
 end
+
+# batch-end review (b), S2, S3: `Potts.field_inputs(integ, pdesys)` gives exactly the inputs of
+# `pdesys`: the user's own coupled PDESystem (its names; `sec => kind == A` as a site array of
+# truth values) or `Potts.fields(model)` (its own names). `Potts.fields` names a bound read by its
+# binding in the equations too (`vol(t, x, y)`, not `field1__in`), and `discretize` given the
+# inputs of the other PDESystem names the route. Both round trips, σ frozen, against the coupled
+# run's next MCS, fine and Coarse(2). Base ab34e226 (~/lpwork/f4BE/nc.log): no method
+# `field_inputs(integ, pdesys)`; the equation reads `field1__in(t, x, y)`; no route.
+# (the PDESystem on the lattice's domain, with a start value per field: `discretize` takes the
+# field at MCS 3 as `u0`)
+function b6_owned(f)
+    un = Potts.Symbolics.unwrap
+    ics = [Potts.SymbolicUtils.operation(un(d))(0, B6.x, B6.y) ~ 0.0 for d in f.dvs if !Potts.ModelingToolkitBase.isinput(un(d))]
+    return Potts.ModelingToolkitBase.PDESystem(f.eqs, [f.bcs; ics], LP.lattice_domain(Potts.t, (B6.x, B6.y), (24, 20)), f.ivs, f.dvs,
+        f.ps; name = nameof(f))
+end
+function b6_pde_round_trip(m, pde, fs, f; op = b6_op())
+    integ = init(PottsProblem(m, op, (0, 5); field_solver = fs, seed = 3), SequentialCPM())
+    for _ in 1:3
+        step!(integ)
+    end
+    fi = Potts.field_inputs(integ, pde)
+    prob = LP.discretize(b6_owned(pde), LP.LatticeDiscretization(LP.Grid((24, 20)); T = Float64); inputs = collect(fi),
+        u0 = [f => Array(getproperty(integ.u.site, f))], tspan = (0.0, 1.0))
+    o = LP.solve(prob, cp_own(fs)).u[end]
+    step!(integ)
+    return maximum(abs, o .- vec(Array(getproperty(integ.u.site, f)))), fi, integ
+end
+
+# (Coarse(2): cells on whole 2×2 blocks. A coarse row of the user's PDESystem reads the Bool input
+# `sec` by its block mean, the coupled model reads `kind == A` at the block's owner (LatticePDE's
+# folds): on a block a cell covers in part they differ, 0.25 here at b6_op's second cell)
+b6_aligned() = (σ = zeros(Int32, 24, 20); σ[5:8, 5:8] .= 1; σ[13:16, 9:12] .= 2; [ownership => σ, kind => [:A, :A]])
+@testset "batch-end review (b): Potts.field_inputs(integ, pdesys), the user's PDESystem and Potts.fields" begin
+    for fs in (ExplicitEuler(), BackwardEuler())
+        for (m, pde, f, op) in ((B6Fine(; name = :m), B6.att(), :c, b6_op()), (B6Coarse(; name = :m), B6.coarse(), :cc, b6_aligned()))
+            σ = first(op).second
+            err, fi, integ = b6_pde_round_trip(m, pde, fs, f; op)
+            @test err <= max(cp_tol(fs), 1e-13) || (println("user round trip $(nameof(pde)) $fs: $err"); false)
+            @test fi[:sec] == (σ .!= 0) && eltype(fi[:sec]) === Bool
+            @test Set(keys(fi)) == (f === :c ? Set([:sec, :vol]) : Set([:sec]))
+            # `Potts.fields(m)`: its own inputs, as `field_inputs(integ)` gives them
+            @test Potts.field_inputs(integ, Potts.fields(m)) == Potts.field_inputs(integ)
+        end
+    end
+    σ = first(b6_op()).second
+    fi = Potts.field_inputs(PottsProblem(B6Fine(; name = :m), b6_op(), (0, 1)), B6.att())
+    @test fi[:vol] == [s == 0 ? 0.0 : 16.0 for s in σ]
+    # (the fold difference itself, measured: b6_op's second cell covers blocks in part)
+    @test b6_pde_round_trip(B6Coarse(; name = :m), B6.coarse(), ExplicitEuler(), :cc)[1] > 0.1
+    # S2: the bound read is the variable `vol` of `Potts.fields(m)`, in its equation and its report
+    F = Potts.fields(B6Fine(; name = :m))
+    @test occursin("vol(t, x, y)", string(F.eqs)) && !occursin("field1__in", string(F.eqs)) || (println(F.eqs); false)
+    @test b6_names(B6Fine(; name = :m)) == ["kind", "vol"]
+    integ = init(PottsProblem(B6Fine(; name = :m), b6_op(), (0, 5); seed = 3), SequentialCPM())
+    rep = sprint(field_report, LP.discretize(F, LP.LatticeDiscretization(LP.Grid((24, 20)); T = Float64);
+        inputs = collect(Potts.field_inputs(integ))))
+    @test occursin(r"inputs: [^\n]*\bvol\b", rep) && !occursin("field1__in", rep) || (println(rep); false)
+    # an unbound input (a site variable) holds the model's array
+    σ8 = zeros(Int32, 8, 8); σ8[1:3, 3:5] .= 1
+    integ2 = init(PottsProblem(B6LapSite(; name = :m), [ownership => σ8, kind => [:A]], (0, 4)), SequentialCPM())
+    step!(integ2)
+    @test Potts.field_inputs(integ2, B6.lapsite())[:v] == Array(integ2.u.site.v)
+    # a PDESystem the model did not couple is refused, naming both lists
+    e = cp_msg(() -> Potts.field_inputs(integ, B6.scaled()))
+    @test occursin("the inputs of the PDESystem `scaled` (`w`)", e) && occursin("`att`", e) && occursin("`kind`, `vol`", e) ||
+          (println(e); false)
+    # S3: the inputs of `Potts.fields` given to the user's PDESystem name the route
+    e = cp_msg(() -> LP.discretize(b6_owned(B6.att()), LP.LatticeDiscretization(LP.Grid((24, 20)); T = Float64);
+        inputs = collect(Potts.field_inputs(integ))))
+    @test occursin("`kind` is not an input field of the problem", e) && occursin("Potts.field_inputs(integ, pdesys)", e) ||
+          (println(e); false)
+end

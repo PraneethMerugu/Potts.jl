@@ -304,13 +304,74 @@ the end of the last completed MCS). They are not the arrays the field phase fill
 MCS: a phase after it in the schedule (divisions and the other lifecycle rules, by default)
 may have changed the lattice since.
 """
-field_inputs(integ::CorePotts.PottsIntegrator) = _field_inputs_at(integ.f.sys, integ.u, integ.p, integ.t)
-field_inputs(prob::CorePotts.PottsProblem) = _field_inputs_at(prob.f.sys, prob.u0, prob.p, prob.tspan[1])
+field_inputs(integ::CorePotts.PottsIntegrator) = _field_inputs_at(integ.f.sys, integ.u, integ.p, integ.t, _exported(integ.f.sys))
+field_inputs(prob::CorePotts.PottsProblem) = _field_inputs_at(prob.f.sys, prob.u0, prob.p, prob.tspan[1], _exported(prob.f.sys))
 
-function _field_inputs_at(info::PottsModelInfo, u, p, t)
+"""
+    Potts.field_inputs(integ, pdesys::PDESystem) -> Dict{Symbol, Array}
+    Potts.field_inputs(prob, pdesys)
+
+The current values of exactly the inputs of the PDESystem `pdesys`, by the names
+`discretize(pdesys, disc; inputs)` takes (each input's `lattice_input_name`, else its own name).
+For a PDESystem coupled into the model (`@fields c = pdesys (sec => kind == A, vol =>
+volume[owner])`, `Potts.couple`), its inputs: a bound input holds its binding evaluated at
+each site (`sec` the truth value of `kind == A`, `vol` the owner's volume), an unbound one the
+model quantity that fills it (`kind`, a site variable). For [`Potts.fields`](@ref)`(model)`,
+its own inputs, as `Potts.field_inputs(integ)` gives them. So
+
+```julia
+prob = discretize(pdesys, disc; inputs = collect(Potts.field_inputs(integ, pdesys)))
+```
+
+solves the user's own PDESystem with any SciML solver at the CPM state of `integ` (σ frozen, as
+for [`Potts.field_inputs`](@ref)`(integ)`). A `Coarse(k)` field of `pdesys` reads a `Bool` or
+real input by its mean over each block, where the coupled model reads a kind binding at the
+block's owner: the two agree where each block lies in one cell or in the medium, and differ on
+a block that a cell covers in part (`Potts.fields(model)` reads `kind` as the model does).
+A PDESystem whose inputs are neither those of a
+coupled PDESystem of the same name nor those of `Potts.fields(model)` is an `ArgumentError`
+that names both lists.
+"""
+field_inputs(integ::CorePotts.PottsIntegrator, pdesys::ModelingToolkitBase.PDESystem) =
+    _field_inputs_at(integ.f.sys, integ.u, integ.p, integ.t, _pde_inputs(integ.f.sys, pdesys))
+field_inputs(prob::CorePotts.PottsProblem, pdesys::ModelingToolkitBase.PDESystem) =
+    _field_inputs_at(prob.f.sys, prob.u0, prob.p, prob.tspan[1], _pde_inputs(prob.f.sys, pdesys))
+
+_exported(info::PottsModelInfo) = lock(() -> get!(() -> _exported_inputs(info.csys), info.cache, :field_inputs), _OBSERVED_LOCK)
+# the inputs of the PDESystem `f`, `(key, how, what, eltype)` as `_exported_inputs` gives them: a
+# coupled PDESystem's (by its name; each a CPM expression filled at a site), else those of
+# `Potts.fields(model)`
+function _pde_inputs(info::PottsModelInfo, f::ModelingToolkitBase.PDESystem)
+    want = Symbol[]
+    for dv in getfield(f, :dvs)
+        u = _unwrap(dv)
+        (iscall(u) && ModelingToolkitBase.isinput(u)) || continue
+        push!(want, Symbol(_input_key(u, operation(u))))
+    end
+    md = _p(info.csys.sys, :metadata)
+    coupled = [e for e in get(md, _FieldInputs, ()) if length(e) >= 4 && e[4] === nameof(f)]
+    out = Tuple{Symbol, Symbol, Any, Type}[]
+    if !isempty(coupled) && all(k -> any(e -> e[1] === k, coupled), want)
+        for k in unique(want)
+            e = coupled[findfirst(e -> e[1] === k, coupled)]
+            push!(out, (k, :fill, e[2], e[3]))
+        end
+        return out
+    end
+    ex = _exported(info)
+    all(k -> any(e -> e[1] === k, ex), want) && return [e for e in ex if e[1] in want]
+    lst(ks) = isempty(ks) ? "none" : join(("`$k`" for k in ks), ", ")
+    names = unique(Symbol[e[4] for e in get(md, _FieldInputs, ()) if length(e) >= 4])
+    throw(ArgumentError(string("Potts.field_inputs: the inputs of the PDESystem `", nameof(f), "` (", lst(want), ") are ",
+        "neither those of a PDESystem of that name coupled into the model (",
+        isempty(names) ? "it has none" : string("its coupled PDESystems: ", lst(names)), isempty(coupled) ? "" :
+        string("; `", nameof(f), "` has ", lst(unique(Symbol[e[1] for e in coupled]))), ") nor those of `Potts.fields(model)` (",
+        lst([e[1] for e in ex]), "); give the PDESystem that `@fields` or `Potts.couple` took, or `Potts.fields(model)`")))
+end
+
+function _field_inputs_at(info::PottsModelInfo, u, p, t, ins)
     c = info.csys
     out = Dict{Symbol, Array}()
-    ins = lock(() -> get!(() -> _exported_inputs(c), info.cache, :field_inputs), _OBSERVED_LOCK)
     for (key, how, ex, E) in ins
         v = if how === :fill
             f = lock(_OBSERVED_LOCK) do
@@ -341,10 +402,13 @@ function _exported_inputs(c::CompiledPottsSystem)
     F === nothing && return out
     isempty(_field_equations(c.sys)) && isempty(_field_aux(c.sys)) && return out    # a hand-wrapped PDESystem
     filled = Dict{Symbol, Any}(e[1] => e for e in _field_inputs(c, Float64))
+    # (an input `Potts.fields` names by its binding, `vol`: the generated input it holds)
+    back = Dict{Symbol, Symbol}(Symbol(w) => g for (g, w) in _input_names(c.sys))
     for dv in getfield(F, :dvs)
         x = _unwrap(dv)
         ModelingToolkitBase.isinput(x) || continue
         op = Symbol(nameof(operation(x)))
+        op = get(back, op, op)
         key = Symbol(something(LatticePDE.get_lattice_input_name(x), string(op)))
         st = SymbolicUtils.symtype(x)
         E = st <: Bool ? Bool : st <: Integer ? Int32 : Real
