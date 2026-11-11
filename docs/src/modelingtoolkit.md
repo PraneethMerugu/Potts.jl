@@ -174,9 +174,10 @@ system, `linsolve = LatticePCG()` takes conjugate gradients with the same precon
 Any other keyword is an error that names it.
 
 A `PDESystem` coupled by `@fields` or `Potts.couple` stays a plain ModelingToolkit system.
+`Potts.fields(model)` is the `PDESystem` of the model's fields, and
 `Potts.field_inputs(integ)` gives its inputs at the CPM state of an integrator, so
-`discretize(pdesys, disc; inputs = collect(Potts.field_inputs(integ)))` solves its fields with
-any SciML solver. The result matches the owned run only while σ is frozen: see
+`discretize(Potts.fields(model), disc; inputs = collect(Potts.field_inputs(integ)))` solves the
+fields with any SciML solver. The result matches the owned run only while σ is frozen: see
 [The SciML path](@ref manual-sciml-path).
 
 A field algorithm returns SciML's `ODESolution`, with linear interpolation between the saves:

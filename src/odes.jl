@@ -37,8 +37,8 @@ function ode_system(c::CompiledPottsSystem, scope::Symbol)
     scope in (:cell, :model) || throw(ArgumentError(
         "ode_system: the scope is `:cell` or `:model`; got `:$scope`" * (scope === :field ?
         " (field equations are stepped by Potts on the lattice and are not an ODE system; their PDESystem is " *
-        "`Potts.fields(csys)`, or the one given to `Potts.couple`: `discretize(pdesys, disc; inputs = " *
-        "Potts.field_inputs(integ))` solves it with a SciML solver at the CPM state of `integ`)" :
+        "`Potts.fields(csys)`: `discretize(Potts.fields(csys), disc; inputs = " *
+        "collect(Potts.field_inputs(integ)))` solves it with a SciML solver at the CPM state of `integ`)" :
         " (field equations are stepped by Potts on the lattice and are not an ODE system)")))
     return get(c.ode_systems, scope, nothing)
 end
@@ -136,7 +136,7 @@ function _compile_odes(sys::PottsSystem)
     return _replace(sys; variables, equations, observed, energies = m.energies, drives = m.drives,
                constraints = m.constraints, updates = m.updates, divisions = m.divisions,
                converts = m.converts, link_rules = m.link_rules, discrete = m.discrete, sweep = m.sweep,
-               boundaries = m.boundaries, sources = merge(srcs, m.sources, src)), odes, origin
+               sources = merge(srcs, m.sources, src)), odes, origin
 end
 
 # The algebraic variables of a model with its ODEs simplified (`_compile_odes`), as the

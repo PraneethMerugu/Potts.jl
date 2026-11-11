@@ -1,16 +1,19 @@
-# P6.3b (D-145): `@boundary` and `@schedule` beyond the frozen acceptance file: how they
-# compose (`extend`), the errors of the less common forms, the canonical fingerprint and the
-# phase tuples the compiler builds.
+# P6.3b (D-145): `@schedule` beyond the frozen acceptance file: how it composes (`extend`), the
+# errors of the less common forms, the canonical fingerprint and the phase tuples the compiler
+# builds. The field conditions (front end A's `@boundary` until F4-B6) are a PDESystem's.
 using Potts: CorePotts
 
-# the fields of the `@schedule` and mask models, coupled with `@fields` (F4-B4t); the `@boundary`
-# models (its extension, display and refusals) stay in `@boundary` until it goes (F4-B6)
+# the fields of the `@schedule` and mask models, coupled with `@fields` (F4-B4t, F4-B6)
 isdefined(Main, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
 module BsPDE
 using ..FieldPDE
-@variables c(..) u(..) sink(..)::Bool [input = true]
+@variables c(..) u(..) sink(..)::Bool [input = true] wall(..)::Bool [input = true]
 const X = (t, x, y)
 const C, U = c(X...), u(X...)
+# `D(c) ~ Dc Δc`: c = S on the face x = 0, no flux on x = 12, 0 on the wall's sites
+base() = (@parameters Dc = 0.2 S = 1.0;
+          pdesys([Dt(C) ~ Dc * Δ(C)], [c(0, x, y) ~ 0.0, c(t, 0, y) ~ S, Differential(x)(c(t, 12, y)) ~ 0.0,
+                  C ~ masked(wall(X...), 0.0)], (12, 10), [C, wall(X...)], [Dc, S]))
 relax() = pdesys([Dt(C) ~ 1.0 - C], [c(0, x, y) ~ 0.0], (8, 8), [C])
 clamp_ck() = (@parameters Dc = 0.2 s = 0.05;
               pdesys([Dt(C) ~ Dc * Δ(C) + s], [c(0, x, y) ~ 0.0, C ~ masked(sink(X...), 0.0)], (16, 16), [C, sink(X...)], [Dc, s]))
@@ -23,45 +26,32 @@ end
 
 @potts_model BSBase begin
     @kinds medium A wall[frozen]
-    @parameters begin
-        Dc = 0.2
-        S = 1.0
-    end
-    @variables c(field) = 0.0
     @lattice Lattice((12, 10); boundary = Closed(), neighborhood = Moore(1))
     @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ Dc * Δ(c)
-    @boundary c begin
-        x => (Dirichlet(S), NoFlux())
-        sites(kind == wall) => Dirichlet(0.0)
-    end
+    @fields c = BsPDE.base() (BsPDE.wall => kind == wall)
     @schedule fields, sweep
     @sweep Metropolis(; temperature = 2.0)
 end
 
-# an extension keeps the base's boundary and schedule unless it gives its own
+# an extension keeps the base's fields and schedule unless it gives its own schedule
 @potts_model BSKeep begin
-    @extend Dc, S, c = base = BSBase()
+    @extend c = base = BSBase()
     @kinds medium A wall[frozen]
 end
 @potts_model BSOwn begin
-    @extend Dc, S, c = base = BSBase()
+    @extend c = base = BSBase()
     @kinds medium A wall[frozen]
-    @boundary c begin
-        y => (NoFlux(), Dirichlet(0.5))
-    end
     @schedule sweep, fields
 end
 
 bs_op() = (σ = zeros(Int32, 12, 10); σ[5:7, 4:6] .= 1; σ[10, :] .= 2; [ownership => σ, kind => [:A, :wall]])
 bs_problem(sys; kw...) = PottsProblem(sys, bs_op(), (0, 2); field_solver = ExplicitEuler(substeps = 2), kw...)
 
-@testset "@boundary/@schedule: extension, phases and display" begin
+@testset "@schedule: extension, phases and display" begin
     keep, own = BSKeep(; name = :k), BSOwn(; name = :o)
     @test Potts._p(keep, :schedule) == [:fields, :sweep]
-    @test [b.axis for b in Potts._p(keep, :boundaries)] == [1, 0]
     @test Potts._p(own, :schedule) == [:sweep, :fields]
-    @test [b.axis for b in Potts._p(own, :boundaries)] == [2]                   # the field's block replaced
+    @test length(Potts._p(keep, :bcs)) == length(Potts._p(own, :bcs)) == length(Potts._p(BSBase(; name = :b), :bcs)) > 0
     # the schedule `fields, sweep`: the field step sits before the sweep, its clamp on it
     ph = bs_problem(BSBase(; name = :b)).f.phases
     k = findfirst(e -> e isa CorePotts.SweepPhase, ph.mcs)
@@ -72,8 +62,11 @@ bs_problem(sys; kw...) = PottsProblem(sys, bs_op(), (0, 2); field_solver = Expli
     sol = solve(bs_problem(BSBase(; name = :b)), SequentialCPM(); saveat = 1)
     wall = bs_op()[1].second .== 2
     @test all(u -> all(==(0.0), Array(u.site.c)[wall]), sol.u)
+    # (and the face: c = S = 1 at x = 0, the column next to it below 1 and above 0)
+    c = Array(sol.u[end].site.c)
+    @test 0 < c[1, 1] < 1.0
     txt = sprint(show, MIME"text/plain"(), BSBase(; name = :b))
-    @test occursin("boundary c x => (Dirichlet(S), NoFlux())", txt) && occursin("schedule fields, sweep", txt)
+    @test occursin("schedule fields, sweep", txt)
 end
 
 @potts_model BSOrderA begin
@@ -141,37 +134,8 @@ const BS_COMMON = quote
 end
 bs_model(name, sections...) = Core.eval(@__MODULE__, Expr(:macrocall, Symbol("@potts_model"), LineNumberNode(1, :bs), name,
     Expr(:block, BS_COMMON.args..., sections...)))
-bs_model(:BSNoEq, :(@variables begin
-    c(field) = 0.0
-    u(field) = 0.0
-end), :(@equations D(c) ~ 0.1 * Δ(c)), :(@boundary u begin
-    x => (NoFlux(), NoFlux())
-end))
-bs_model(:BSVarValue, :(@variables c(field) = 0.0), :(@equations D(c) ~ 0.1 * Δ(c)), :(@boundary c begin
-    x => (Dirichlet(c), NoFlux())
-end))
-bs_model(:BSTwice, :(@variables c(field) = 0.0), :(@equations D(c) ~ 0.1 * Δ(c)), :(@boundary c begin
-    x => (NoFlux(), NoFlux())
-    x => (Dirichlet(1.0), NoFlux())
-end))
 bs_model(:BSSched2, :(@schedule fields, sweep), :(@schedule sweep, fields))
-@potts_model BSHex begin
-    @kinds medium A
-    @variables c(field) = 0.0
-    @lattice Lattice((8, 8); boundary = Closed(), geometry = Hexagonal())
-    @energy cells(A) => (volume - 4.0)^2
-    @equations D(c) ~ 0.1 * Δ(c)
-    @boundary c begin
-        x => (Dirichlet(0.0), NoFlux())
-    end
-    @sweep Metropolis(; temperature = 1.0)
-end
-
-@testset "@boundary/@schedule: less common errors name the offender" begin
-    @test occursin("Hexagonal", something(bs_error(() -> mtkcompile(BSHex(; name = :h))), ""))
-    @test occursin("D(u)", something(bs_error(() -> mtkcompile(Base.invokelatest(BSNoEq; name = :n))), ""))
-    @test occursin("reads `c`", something(bs_error(() -> Base.invokelatest(BSVarValue; name = :v)), ""))
-    @test occursin("axis `x` is given twice", something(bs_error(() -> mtkcompile(Base.invokelatest(BSTwice; name = :t))), ""))
+@testset "@schedule: less common errors name the offender" begin
     @test occursin("given twice", something(bs_error(() -> Base.invokelatest(BSSched2; name = :s)), ""))
     @test occursin("`end_mcs` must be last", something(bs_error(() -> Potts._placed_schedule([:end_mcs, :fields])), ""))
 end
@@ -262,13 +226,14 @@ end
     @test Potts.anneal(prob, u; mcs = 2).site.c == u.site.c
 end
 
-# `Δ` is lowered by the field compiler in field equations only (cutover C8)
+# `Δ` is lowered by the field compiler in field equations only (cutover C8); a model body
+# reaches it qualified (the bare name points to `using Potts.Fields`, F4-B6)
 @potts_model BSFaceObs begin
     @kinds medium A
     @lattice Lattice((8, 4); boundary = (Closed(), Periodic()))
     @energy cells => 0.0 * volume
     @fields c = BsPDE.face_obs()
-    @observed lap ~ Δ(c)
+    @observed lap ~ Potts.LatticePDE.Δ(c)
     @sweep Metropolis(; temperature = 1.0)
 end
 
@@ -282,9 +247,6 @@ end
 bs_model(:BSMaskSelf, :(@fields BsPDE.mask_self()))
 bs_model(:BSMaskLater, :(@fields BsPDE.mask_later()))
 bs_model(:BSMaskEarlier, :(@fields BsPDE.mask_earlier()))
-bs_model(:BSFaceNoLap, :(@variables c(field) = 0.0), :(@equations D(c) ~ 0.1 - 0.01 * c), :(@boundary c begin
-    x => (Dirichlet(1.0), NoFlux())
-end))
 
 @testset "masks and faces that cannot hold" begin
     # a mask that reads the field it clamps is accepted (F2-11 review (a); before: refused)
@@ -295,6 +257,3 @@ end))
     @test bs_error(() -> mtkcompile(Base.invokelatest(BSMaskEarlier; name = :m))) === nothing
 end
 
-@testset "@boundary: a face on a field with no Δ is refused" begin
-    @test occursin("has no `Δ(c)`", something(bs_error(() -> mtkcompile(Base.invokelatest(BSFaceNoLap; name = :f))), ""))
-end

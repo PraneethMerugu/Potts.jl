@@ -141,10 +141,10 @@ end
 # The reviewed DSL surface: every name the model body sees, and every keyword of its
 # constructors. A new name or option (a model-shaped flag under a generic name, like the
 # removed `extension_only`) must be reviewed and added here.
-const DSL_NAMES = [:Adaptive, :Adhesion, :Chemotaxis, :Dirichlet, :Every, :ExplicitEuler, :Global, :NoFlux, :RK4, :RandomPlane, :Split,
+const DSL_NAMES = [:Adaptive, :Adhesion, :Chemotaxis, :Every, :ExplicitEuler, :Global, :RK4, :RandomPlane, :Split,
     :Surface, :Volume, :cells, :centroid, :clusters, :connectivity, :contacts, :displacement, :dot, :edges,
     :geomean, :integral, :log1p_geomean, :major_axis, :mean, :minor_axis, :new_contact, :no_extinction, :norm,
-    :normalize, :principal_axis, :rand, :saturating, :saturating_linear, :sites, :Δ,
+    :normalize, :principal_axis, :rand, :saturating, :saturating_linear, :sites,
     # D-150: `count` (Base's; `count(pred for _ in contacts)` is the cell-scope contact fold, a
     # kind-filtered contact count that `surface` cannot express) and `randn` (`rand()`'s
     # normal counterpart and its truncated form; without the binding `randn()` was Base's,
@@ -161,9 +161,8 @@ const DSL_NAMES = [:Adaptive, :Adhesion, :Chemotaxis, :Dirichlet, :Every, :Expli
     # `over = cluster`, the maintainer's spelling of the cluster sum)
     :Pairs, :minimum_image, :separation,
     # D-257 item 5 (cutover C3): `ismember(kind, g)`, the kind-set term of `@equations`
-    :ismember,
-    # F2-11 (F2 design §2.12): the `@boundary` sides `Flux(q)` and `Robin(α, β, g)`
-    :Flux, :Robin]
+    # (D-F4-B6: `Δ`, `Dirichlet`, `NoFlux`, `Flux` and `Robin` are removed with front end A's fields)
+    :ismember]
 const DSL_KEYWORDS = Dict(:connectivity => [:penalty, :rule], :connected => [:rule], :Volume => [:strength, :target],
     :Surface => [:strength, :target], :Chemotaxis => [:kinds, :response, :strength, :when], :randn => [:lower],
     :transfer => [:per_site], :integral => [:over])

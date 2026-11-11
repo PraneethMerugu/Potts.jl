@@ -45,8 +45,9 @@ The Potts payload of a [`PottsSystem`](@ref): everything that is not an MTK syst
 written: the inner `System` holds them too), Hamiltonian terms, drives, constraints,
 synchronous/on-copy updates, the `@equations` and `@initialization_equations` as written,
 lifecycle rules, site conversion passes, relationships and link rules, `@observed`
-equations, `@components`, `@boundary` entries, `@bcs` (stored and printed; C6 classifies
-them), the `@schedule`, the sweep and the field bindings ([`Potts.FieldBinding`](@ref)).
+equations, `@components`, the conditions of the coupled fields (`bcs`, stored and printed;
+the field compiler classifies them), the `@schedule`, the sweep and the field bindings
+([`Potts.FieldBinding`](@ref)).
 """
 Base.@kwdef struct PottsPart
     kinds::Vector{Symbol}
@@ -72,8 +73,7 @@ Base.@kwdef struct PottsPart
     components::Vector{Any} = Any[]            # `ComponentSpec`s: MTK systems instantiated per cell
     discrete::Vector{DiscreteBlock} = DiscreteBlock[]   # bound discrete components (`_bind_components`)
     sweep::SweepSpec
-    boundaries::Vector{BoundaryEntry} = BoundaryEntry[]   # `@boundary` faces and site masks (D-145)
-    bcs::Vector{Equation} = Equation[]         # `@bcs`: raw MTK boundary conditions, stored and printed
+    bcs::Vector{Equation} = Equation[]         # the coupled PDESystems' conditions (MTK equations), stored and printed
     schedule::Vector{Any} = Any[]              # `@schedule` as listed (names, a `ScheduleRepeat`); empty: the default order
     structural::NamedTuple = (;)
     sources::IdDict{Any, LineNumberNode} = IdDict{Any, LineNumberNode}()   # term → where it was written
@@ -176,8 +176,8 @@ component(name::Symbol, sys::ModelingToolkitBase.System, model::PottsSystem) =
 The `PDESystem` `pdesys` (named `name`) as fields of `model`, for [`Potts.compose`](@ref).
 `Potts.compose(model, Potts.component(:drug, pdesys, model))` adds each dependent variable
 `c` as the field `drug₊c`, each parameter `k` as the parameter `drug₊k` (with its value),
-each equation as an `@equations` entry and each condition as a `@bcs` entry, so the fields
-run as if declared in the model: with the default field solver, or by name in
+each equation as a field equation and each condition as a condition of the model, so the
+fields run as the fields of `@fields` do: with the default field solver, or by name in
 `FieldGroups(:drug₊c => …)`. A condition at the start time, `c(0, x, y) ~ v`, is the field's
 initial value. Its time interval is not read (the problem's `tspan` is).
 
@@ -217,9 +217,11 @@ The spatial domain of `pdesys` is the lattice's, in the model's length unit (axi
 `[0, dims[d] · spacing[d]]`). An axis `pdesys` gives no interval for takes that one; a given
 interval must equal it. Its time interval is not read (the problem's `tspan` is). A name
 `model` already has is an `ArgumentError`; compose it as a component to namespace it.
-`pdesys` stays a plain MTK system: [`Potts.field_inputs`](@ref) gives the current values of
-its inputs, so `discretize(pdesys, disc; inputs = Potts.field_inputs(integ))` solves the fields
-with any SciML solver at the CPM state of an integrator. Inside `@potts_model`, write
+`pdesys` stays a plain MTK system. [`Potts.fields`](@ref)`(model)` is the PDESystem of the
+coupled model's fields (each binding written in as its CPM input), and
+[`Potts.field_inputs`](@ref) gives the current values of its inputs, so `discretize(Potts.fields(model),
+disc; inputs = collect(Potts.field_inputs(integ)))` solves the fields with any SciML solver at
+the CPM state of an integrator. Inside `@potts_model`, write
 `@fields c = pdesys (endo => kind == A, …)`: the fields join the model at that line, and the
 names before `=` (`c`, or a list `c, u`) are bound to them for the statements after it
 (`@drive Chemotaxis(c; …)`). A name may also be a parameter of `pdesys` (`@fields c, s = pdesys
@@ -264,17 +266,27 @@ _component_part(model::PottsSystem) =
     Potts.fields(c::CompiledPottsSystem)
 
 The `PDESystem` of a model's fields, or `nothing` for a model without fields. A model built
-by `@potts_model` (or `PottsSystem(; …)`) has its PDESystem built from its field variables,
-`@equations` and `@boundary` entries; a compiled model returns the one `mtkcompile` built.
+by `@potts_model`, `Potts.couple` or `Potts.compose` has its PDESystem built from the field
+variables, equations and conditions of its coupled PDESystems; a compiled model returns the
+one `mtkcompile` built.
 Either carries the model's defaults as `initial_conditions` (each field's initial value and
 each parameter's value), so LatticePDE's `discretize` takes it as a plain PDE system. Its CPM
-couplings are `input = true` dependent variables, each named by the word the model uses
-(`lattice_input_name`): `kind` for the kind of each site, `domain` for an irregular domain,
-the CPM term as written (`volume`) for the others; give their values by that name,
-`discretize(…; inputs = [:kind => K, :volume => V])` (`K` the kind number of each site, 0 for
-the medium). Its conditions are the model's `@boundary` entries (`Flux(q)` and `Robin(α, β, g)`
-faces as LatticePDE's face equations) and its `@bcs` conditions, as `discretize` takes them.
-A hand-wrapped PDESystem (`Potts.wrap`) is returned as given.
+couplings are `input = true` dependent variables, each with a name (`lattice_input_name`):
+`kind` for the kind of each site (a binding to a kind expression, `endo => kind == A`, is
+written into the equations as that expression of `kind`), `domain` for an irregular domain,
+the name of the coupled PDESystem's input for a binding to a CPM read (`vol` for `vol =>
+volume[owner]`), and the CPM read as the model writes it (`volume[owner]`) for any other.
+[`Potts.field_inputs`](@ref) gives their values by these names, so
+
+```julia
+F = Potts.fields(model)
+prob = discretize(F, LatticeDiscretization(Grid(dims)); inputs = collect(Potts.field_inputs(integ)))
+```
+
+solves the fields with any SciML solver at the CPM state of `integ` (by hand, `inputs =
+[:kind => K, :vol => V]`, with `K` the kind number of each site, 0 for the medium). Its
+conditions are those of the coupled PDESystems, as `discretize` takes them. A hand-wrapped
+PDESystem (`Potts.wrap`) is returned as given.
 """
 function fields(sys::PottsSystem)
     f = _stored_fields(sys)
@@ -284,8 +296,48 @@ function fields(sys::PottsSystem)
     f === nothing && none && return nothing
     f === nothing && (f = first(_field_system(sys)))
     none && return f                                # a hand-wrapped PDESystem, as given
-    return _with_defaults(f, eqs)
+    return _named_inputs(_with_defaults(f, eqs), sys)
 end
+
+# The CPM inputs of `Potts.fields(sys)` by the names a user gives their values
+# (`lattice_input_name`; F4-B6 review), which `Potts.field_inputs` uses as its keys: `kind` and
+# `domain` stay; a filled CPM read (`field1__in`) is named by the PDESystem input bound to
+# exactly that read (`vol => volume[owner]` names it `vol`), else by the read as the model
+# writes it (`volume[owner]`). A name another input, a field, a site variable or a parameter has
+# falls back to the read's text. The field compiler's own PDESystem is not renamed (its program,
+# input routing and fingerprint keep the generated names).
+function _named_inputs(f::ModelingToolkitBase.PDESystem, sys::PottsSystem)
+    names = _input_names(sys)
+    isempty(names) && return f
+    rename(u) = (u = _unwrap(u); iscall(u) && haskey(names, nameof(operation(u))) ?
+                                 SymbolicUtils.setmetadata(u, LatticePDE.LatticeInputName, names[nameof(operation(u))]) : u)
+    dvs = Any[ModelingToolkitBase.isinput(_unwrap(dv)) ? Symbolics.wrap(rename(dv)) : dv for dv in getfield(f, :dvs)]
+    return ModelingToolkitBase.PDESystem(getfield(f, :eqs), getfield(f, :bcs), getfield(f, :domain), getfield(f, :ivs), dvs,
+        getfield(f, :ps); name = nameof(f), initial_conditions = getfield(f, :initial_conditions))
+end
+# generated input name => the name `Potts.fields` gives it (the filled inputs of `sys`)
+function _input_names(sys::PottsSystem)
+    filled = _field_inputs(sys)
+    out = Dict{Symbol, String}()
+    isempty(filled) && return out
+    user = get(_p(sys, :metadata), _FieldInputs, ())
+    taken = Set{String}(string(info(x).name) for x in Iterators.flatten((_p(sys, :variables), _p(sys, :parameters)))
+                        if info(x) !== nothing && info(x).role in (:field, :site, :param, :kindtable))
+    push!(taken, "kind", "domain")
+    for (name, ex, _) in filled
+        name in (:kind__in, :domain__in) && continue
+        ks = unique!(Symbol[k for (k, e, _) in user if isequal(_unwrap(e), _unwrap(ex))])
+        w = length(ks) == 1 ? string(only(ks)) : nothing
+        (w === nothing || w in taken) && (w = _cpm_read_text(ex))
+        w in taken && (w = string(name))           # (a model text another quantity has: the generated name)
+        push!(taken, w)
+        out[name] = w
+    end
+    return out
+end
+# a CPM read as the model writes it: `volume[owner]`, not `LatticePDE.at(volume, owner)`
+_cpm_read_text(ex) = (s = LatticePDE.as_written(replace(_builtin_text(string(ex)), "LatticePDE." => ""));
+                      replace(replace(s, r"(\w+)\(t\)" => s"\1"), r"at\((\w+), (\w+)\)" => s"\1[\2]"))
 
 # the PDESystem `f` of a model's fields with the model's defaults added to its
 # `initial_conditions` (a value already there is kept): the initial value of each field
@@ -358,14 +410,14 @@ from the declared parameters, variables, `@equations`, `@initialization_equation
 clashing names).
 """
 function PottsSystem(; name::Symbol, checks::Bool = true, kw...)
-    part = _robin_slots(PottsPart(; kw...))
+    part = _robin_slots(_check_field_lines(PottsPart(; kw...)))
     pre = _staged(name, part)
     checks && _check_primed_names(_check_name_categories(_check_reserved_names(pre)))
     return _wrap_payload(name, nothing, part)
 end
 
-# A Robin coefficient α or β that is an expression of parameters (`Robin(g1 + g2, 1, g)`, or
-# `(g1 + g2) * c(t, 0, y) - Differential(x)(c(t, 0, y)) ~ g` in `@bcs`) is one value at every
+# A Robin coefficient α or β that is an expression of parameters (`(g1 + g2) * c(t, 0, y) -
+# Differential(x)(c(t, 0, y)) ~ g` in a coupled PDESystem's conditions) is one value at every
 # site; the field compiler binds a coefficient that is a number, a parameter or a number times
 # one, so the expression becomes a computed parameter of its face, `c_x_low_α = g1 + g2`, read
 # only and derived again after every write (F4-12a)
@@ -388,17 +440,6 @@ function _robin_slots(part::PottsPart)
         push!(extra, q)
         return q
     end
-    boundaries = map(part.boundaries) do b
-        b.axis == 0 && return b
-        f = info(b.field).name
-        sides = ntuple(2) do k
-            s = b.sides[k]
-            s isa Robin || return s
-            base = string(f, "_", _AXIS_NAMES[b.axis], "_", k == 1 ? "low" : "high", "_")
-            return Robin(slot(s.α, base * "α"), slot(s.β, base * "β"), s.g)
-        end
-        return BoundaryEntry(b.field, b.axis, sides, b.mask, b.value)
-    end
     bcs = map(part.bcs) do eq
         other, cores, coefs = _face_terms(eq)
         changed = false
@@ -410,7 +451,7 @@ function _robin_slots(part::PottsPart)
             a === nothing && continue
             low = iszero(_unwrap_number(arguments(read)[a + 1]))
             base = string(_field_at_name(read), "_", _AXIS_NAMES[a], "_", low ? "low" : "high", "_", isder ? "β" : "α")
-            # the slot holds `@boundary`'s β, the coefficient of the outward ∂c/∂n: on a low face
+            # the slot holds β, the coefficient of the outward ∂c/∂n: on a low face
             # `∂c/∂n = −∂c/∂x`, so the written coefficient of `∂c/∂x` is −β
             flip = isder && low
             cc = flip ? -c : c
@@ -425,9 +466,9 @@ function _robin_slots(part::PottsPart)
     end
     isempty(extra) && return part
     return PottsPart(; (f => getfield(part, f) for f in fieldnames(PottsPart))..., parameters = Any[part.parameters; extra],
-        boundaries, bcs = Equation[bcs...])
+        bcs = Equation[bcs...])
 end
-# the terms of a `@bcs` condition's left side: the coefficient of each face read (`c(t, 0, y)`,
+# the terms of a condition's left side: the coefficient of each face read (`c(t, 0, y)`,
 # `Differential(x)(c(t, 0, y))`), summed over its terms (`g1 * c + g2 * c` is `(g1 + g2) * c`),
 # and the other terms
 function _face_terms(eq)
@@ -447,19 +488,29 @@ function _face_terms(eq)
 end
 # whether `c` is an expression of parameters alone (at least one): a computed parameter holds it
 _params_only(c) = (ls = _param_leaves(c); !isempty(ls) && all(y -> (j = info(y); j !== nothing && j.role === :param), ls))
-# A Robin coefficient of a `@bcs` condition reads the parameters, the coordinates and the time
+# A Robin coefficient of a condition reads the parameters, the coordinates and the time
 # (F4-12b: one that varies by site or in time is a value field); one that reads a field is
 # refused in the model's words (the condition would be another equation)
-function _check_robin_coefs(eq)
+function _check_robin_coefs(eq, N = 2)
     _, cores, coefs = _face_terms(eq)
+    # a field or site variable as the PDESystem writes it, `u(t, x, y)` (the model's `u(t)`)
+    args = join(("t", ("x", "y", "z")[1:N]...), ", ")
+    pde(s) = replace(_builtin_text(s), r"\b(\w+)\(t\)" => SubstitutionString("\\1($args)"))
+    refuse(c, what) = throw(ArgumentError(string("@bcs: the Robin coefficient `", pde(string(c)), "` reads `", what,
+        "`; a Robin coefficient α or β is an expression of numbers, parameters, the coordinates `x`, `y`, `z` ",
+        "and the time `t`")))
     for c in coefs
+        # a field read at a point (`u(t, 0, y)`), named as written (its arguments are no leaves)
+        at = Ref{Any}(nothing)
+        walk(y) = (y = _unwrap(y); y isa SymbolicUtils.BasicSymbolic && iscall(y) || return nothing;
+                   _is_field_at(operation(y)) ? (at[] === nothing && (at[] = y)) : foreach(walk, arguments(y)); nothing)
+        walk(c)
+        at[] === nothing || refuse(c, _builtin_text(string(at[])))
         for y in _param_leaves(c)
             j = info(y)
             j !== nothing && (j.role === :param || (j.role === :builtin && j.name in (:time, :mcs))) && continue
             j === nothing && _coordinate(y) && continue
-            throw(ArgumentError(string("@bcs: the Robin coefficient `", _builtin_text(string(c)), "` reads `",
-                j === nothing ? string(y) : string(j.name), "`; a Robin coefficient α or β is an expression of numbers, ",
-                "parameters, the coordinates `x`, `y`, `z`, `time` and `mcs`")))
+            refuse(c, j === nothing ? string(y) : j.role in (:field, :site) ? "$(j.name)($args)" : string(j.name))
         end
     end
     return nothing
@@ -469,7 +520,7 @@ _robin_simple(u) = (j = info(u); j !== nothing && j.role === :param) ||
                    (iscall(u) && operation(u) === (*) && count(y -> (j = info(y); j !== nothing && j.role === :param), arguments(u)) == 1 &&
                     all(y -> (j = info(y); j !== nothing && j.role === :param) || _isnumber(y) ||
                                  (SymbolicUtils.isconst(_unwrap(y)) && SymbolicUtils.unwrap_const(_unwrap(y)) isa Real), arguments(u)))
-# the face read of a `@bcs` term, `c(t, 0, y)` or `Differential(x)(c(t, 0, y))`
+# the face read of a condition's term, `c(t, 0, y)` or `Differential(x)(c(t, 0, y))`
 _robin_core(f) = (u = _unwrap(f); iscall(u) && (_is_field_at(operation(u)) ||
                                                  (operation(u) isa Differential && (a = _unwrap(arguments(u)[1]); iscall(a) && _is_field_at(operation(a))))))
 # the model quantities and other symbols an expression reads (not inside a built-in's call)
@@ -675,7 +726,7 @@ under its name. A component's own CPM statements (energies, drives, …) are an
 (`@components model c = system`: its unknowns are model variables `c₊x`, its parameters model
 parameters `c₊k`). An `ArgumentError` names what a component cannot carry: inputs (field
 bindings are not compiled into components), quantities per site, cell, edge or field, kind
-tables, relations, kind classes, obstacle kinds, a schedule, `@bcs`, its own `@components`,
+tables, relations, kind classes, obstacle kinds, a schedule, field conditions, its own `@components`,
 kinds or a lattice other than the model's, or a name the model already uses (a component or a
 quantity). A component's PDESystem ([`Potts.component`](@ref) of a `PDESystem`) joins the
 model's fields: its fields, parameters, equations and conditions become the model's, named
@@ -753,7 +804,7 @@ function _merge_fields(name, p, cs)
 end
 
 const _STATEMENT_FIELDS = (:energies, :drives, :constraints, :updates, :divisions, :converts, :relationships, :link_rules,
-    :discrete, :boundaries)
+    :discrete)
 
 # What a composed component (a `Potts.compose` component, or a subsystem built from a Potts
 # payload) cannot carry into the model, refused by name and never dropped: CPM statements; its
@@ -767,7 +818,7 @@ function _check_component_part(name::Symbol, part::PottsPart, what)
                                                           "`Potts.component($(repr(name)), system, model)`)"))
     end
     for (f, label) in ((:relations, "relations"), (:kind_classes, "kind classes"), (:frozen_kinds, "obstacle kinds"),
-            (:schedule, "a @schedule"), (:bcs, "@bcs"), (:components, "@components"))
+            (:schedule, "a @schedule"), (:bcs, "field conditions"), (:components, "@components"))
         isempty(getfield(part, f)) || throw(ArgumentError("$what: component `$name` has $label; a composed " *
                                                           "component carries quantities, equations and field bindings only" *
                                                           (f === :components ? " (compose its components into the model directly, " *
@@ -1067,10 +1118,6 @@ function Base.show(io::IO, ::MIME"text/plain", sys::PottsSystem)
         println(io, "  convert ", v.name, " ", _domain_string(v.domain), ": ", v.from, " → ", v.to,
             v.fresh == 0 ? "" : " (fresh kind $(v.fresh))", ", at ", v.at, ", p = ", v.p)
     end
-    for b in _p(sys, :boundaries)
-        println(io, "  boundary ", info(b.field).name, " ", b.axis == 0 ? "sites($(b.mask)) => Dirichlet($(b.value))" :
-                                                          "$(_AXIS_NAMES[b.axis]) => ($(_side_string(b.sides[1])), $(_side_string(b.sides[2])))")
-    end
     for b in _p(sys, :bcs)
         println(io, "  bc      ", b)
     end
@@ -1091,8 +1138,6 @@ end
 # a parameter with its MTK description (F2-14): `Dc ("diffusion of c")`
 _param_show(p) = (d = SymbolicUtils.getmetadata(_unwrap(p), ModelingToolkitBase.VariableDescription, nothing);
                   d === nothing ? string(info(p).name) : string(info(p).name, " (", repr(d), ")"))
-_side_string(s::Dirichlet) = "Dirichlet($(s.value))"
-_side_string(::NoFlux) = "NoFlux()"
 
 # with the model's kind names (`kinds`, the medium first), kinds print as authored
 _domain_string(d::CellDomain, kinds = nothing) = isempty(d.kinds) ? "cells" : "cells(" * _kind_list(d.kinds, kinds) * ")"

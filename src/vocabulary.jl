@@ -303,8 +303,8 @@ function variable(x, scope::Symbol; default = _NO_VALUE, unit = nothing, guess =
         # `[bounds = (lo, hi)]` on a field (F3-13, FE-18 metadata): the interval its values stay
         # in, which the stability bound takes for a coefficient that reads the field
         if k === :bounds
-            scope === :field || throw(ArgumentError("variable `$name`: `bounds` applies to fields (`$name(field) = 0.0, " *
-                                                    "[bounds = (0, 1)]`: the interval the field's values stay in)"))
+            scope === :field || throw(ArgumentError("variable `$name`: `bounds` applies to fields (`@variables " *
+                                                    "c(..) = 0.5 [bounds = (0, 1)]` in a PDESystem: the interval the field's values stay in)"))
             (v isa Tuple && length(v) == 2 && all(b -> b isa Real, v) && !any(isnan, v) && v[1] <= v[2]) ||
                 throw(ArgumentError("variable `$name`: `bounds` is a pair `(lo, hi)` of numbers with lo ≤ hi " *
                                     "(`bounds = (0, 1)`); got $(repr(v))"))
@@ -312,8 +312,8 @@ function variable(x, scope::Symbol; default = _NO_VALUE, unit = nothing, guess =
         # `[lattice_level = Coarse(k)]` on a field (F3-17): the grid coarsened by `k` per axis
         # (LatticePDE's metadata); its CPM reads read the node whose block holds the site
         if k === :lattice_level
-            scope === :field || throw(ArgumentError("variable `$name`: `lattice_level` applies to fields (`$name(field) = 0.0, " *
-                                                    "[lattice_level = Coarse(4)]`: the field on the grid coarsened by 4)"))
+            scope === :field || throw(ArgumentError("variable `$name`: `lattice_level` applies to fields (`@variables " *
+                                                    "c(..) = 0.5 [lattice_level = Coarse(4)]` in a PDESystem: the field on the grid coarsened by 4)"))
             v isa Coarse || throw(ArgumentError(string("variable `", name, "`: `lattice_level` is a grid, `Coarse(k)` (k a power ",
                 "of two: the lattice coarsened by k sites per axis); got ", repr(v),
                 v isa Integer && v >= 1 && ispow2(v) ? "; write `lattice_level = Coarse($v)`" : "")))
@@ -1541,160 +1541,12 @@ observed_var(name::Symbol) = _tag(_sym(name), Entity(:observed, name, nothing, (
 _observed_eq(var, expr) = Equation(_unwrap(var), _unwrap(expr))
 
 # ---------------------------------------------------------------------------------------
-# Field boundaries (`@boundary`, D-145) and the phase order (`@schedule`)
+# The phase order (`@schedule`, D-145)
 
-"""
-    Dirichlet(v)
-
-A fixed value `v` of a field, in `@boundary`: on a face (`x => (Dirichlet(v), …)`) a ghost
-value, the missing neighbor set to `2v − c` so that the face value `v` is reached midway
-between the edge site and its ghost; on a site mask (`sites(pred) => Dirichlet(v)`) a node
-value, every site where `pred` holds set to `v` after every explicit substep. `v` is an
-expression of numbers, parameters, the coordinates `x`, `y`, `z`, `time` and `mcs`
-(`Dirichlet(g1 + g2)`, `Dirichlet(c0 * sin(ω * mcs))`, `Dirichlet(0.5y)`); a `remake` of a
-parameter keeps the code.
-"""
-struct Dirichlet{V}
-    value::V
-end
-
-"""
-    NoFlux()
-
-A zero-flux face in `@boundary` (`x => (NoFlux(), …)`): the missing neighbor mirrors the
-edge site. A closed axis without an entry is zero flux already.
-"""
-struct NoFlux end
-
-"""
-    Flux(q)
-
-A face with the outward normal derivative `∂c/∂n = q` in `@boundary` (`x => (Flux(q), …)`):
-the missing neighbor of an edge site is `c + q h`, so the gradient across the face is `q`
-(positive `q`: the field grows toward the face). On the low side of `x` it is LatticePDE's
-`Differential(x)(c(t, 0, y)) ~ -q`, on the high side `Differential(x)(c(t, L, y)) ~ q`.
-`Flux(0)` is `NoFlux()`. `q` is an expression of numbers, parameters, the coordinates, `time`
-and `mcs`, as the value of [`Dirichlet`](@ref).
-"""
-struct Flux{V}
-    q::V
-end
-
-"""
-    Robin(α, β, g)
-
-A face with `α c + β ∂c/∂n = g` in `@boundary` (`x => (…, Robin(α, β, g))`), with the outward
-normal `n`: the ghost value of an edge site makes the face value and the gradient across the
-face meet the condition. On the low side of `x` it is LatticePDE's `α c(t, 0, y) -
-β Differential(x)(c(t, 0, y)) ~ g`, on the high side `α c(t, L, y) + β Differential(x)(c(t, L, y))
-~ g`. `g`, `α` and `β` are expressions as the value of [`Dirichlet`](@ref). An `α` or `β` of
-parameters alone is one value at every site, held by a computed parameter of the face,
-`c_x_low_α` (field, axis, side, coefficient); one that reads the coordinates or the time
-varies by site or in time (`Robin(1 + 0.1y, 1.0, g)`). `β = 0` is a fixed value
-(write `Dirichlet(g / α)`) and `α = 0` a flux (write `Flux(g / β)`).
-"""
-struct Robin{A, B, G}
-    α::A
-    β::B
-    g::G
-end
-
-"""
-One entry of a `@boundary` block of field `field`: a face pair on axis `axis` (1, 2, 3 for
-`x`, `y`, `z`) with `sides = (low, high)`, each `Dirichlet`, `NoFlux`, `Flux` or `Robin`; or,
-with `axis = 0`, a site mask `sites(mask) => Dirichlet(value)`.
-"""
-struct BoundaryEntry
-    field::Any                 # the field variable (symbolic)
-    axis::Int
-    sides::Tuple{Any, Any}
-    mask::Any
-    value::Any
-end
-
+# the axis names, for the names of the face slots (`c_x_low_α`) and messages
 const _AXIS_NAMES = (:x, :y, :z)
-
-function _boundary_field(x)
-    i = info(x)
-    (i !== nothing && i.role === :field) || throw(ArgumentError(
-        "@boundary `$(i === nothing ? x : i.name)`: boundaries are for field variables (`c(field)`), and " *
-        "`$(i === nothing ? x : i.name)` is $(i === nothing ? "not a declared variable" : _with_article("$(i.role) variable"))"))
-    return x
-end
-_boundary_side(s::Union{Dirichlet, NoFlux}, field, axis, what) = s isa Dirichlet ? Dirichlet(_boundary_value(s.value, field, "`$axis` $what face")) : s
-_boundary_side(s::Flux, field, axis, what) = Flux(_boundary_value(s.q, field, "`$axis` $what face flux"))
-function _boundary_side(s::Robin, field, axis, what)
-    α, β = (_boundary_value(v, field, "`$axis` $what face Robin `$k`") for (v, k) in ((s.α, "α"), (s.β, "β")))
-    g = _boundary_value(s.g, field, "`$axis` $what face Robin `g`")
-    n = info(field).name
-    # a zero coefficient is another side (LatticePDE classifies the face equation the same way)
-    _iszero_value(β) && throw(ArgumentError(string("@boundary $n: the $what side of axis `$axis` is `Robin(", α, ", 0, ", g,
-        ")`, a fixed value with no gradient term; ", _ratio_route("Dirichlet", g, α))))
-    _iszero_value(α) && throw(ArgumentError(string("@boundary $n: the $what side of axis `$axis` is `Robin(0, ", β, ", ", g,
-        ")`, a flux with no value term; ", _ratio_route("Flux", g, β))))
-    return Robin(α, β, g)
-end
-# a number given as a side's value (a parameter is a `Num`, a `Real` too)
+# a number (a parameter is a `Num`, a `Real` too)
 _isnumber(v) = !(_unwrap(v) isa SymbolicUtils.BasicSymbolic) && _unwrap(v) isa Real
-_iszero_value(v) = _isnumber(v) && iszero(_unwrap(v))
-# the side to write instead, with the value `a / b` (a number when both are numbers)
-_ratio_route(side, a, b) = _isnumber(a) && _isnumber(b) ? string("write it as `", side, "(", _unwrap(a) / _unwrap(b), ")`") :
-                           string("write it as `", side, "(", _ratio_expr(a, b), ")`")
-_ratio_expr(a, b) = string("(", _builtin_text(string(a)), ") / (", _builtin_text(string(b)), ")")
-_boundary_side(s, field, axis, what) = throw(ArgumentError(
-    "@boundary $(info(field).name): the $what side of axis `$axis` is `$s`; each side is `Dirichlet(value)`, `NoFlux()`, " *
-    "`Flux(q)` or `Robin(α, β, g)`"))
-const _BOUNDARY_VALUE_FORMS = "a boundary value is an expression of numbers, parameters, the coordinates `x`, `y`, `z`, " *
-                               "`time` and `mcs`"
-# A boundary value (F4-12a, FE-10) or a Robin coefficient (F4-12b): an expression of numbers,
-# parameters, the lattice coordinates, `time` and `mcs`, as in `@bcs`; LatticePDE lowers one
-# that is not a number or a number times a parameter into a value field (F3-07). A Robin
-# coefficient of parameters alone is held by a computed parameter of its face (`_robin_slots`)
-function _boundary_value(v, field, what)
-    u = _unwrap(v)
-    u isa Real && return Float64(u)                  # a number (`Num` is a `Real` too: unwrapped first)
-    u isa SymbolicUtils.BasicSymbolic || throw(ArgumentError(
-        "@boundary $(info(field).name): the $what value is `$v`; $_BOUNDARY_VALUE_FORMS"))
-    bad = Ref{Any}(nothing)
-    function walk(y)
-        bad[] === nothing && y isa SymbolicUtils.BasicSymbolic && !SymbolicUtils.isconst(y) || return nothing
-        j = info(y)
-        if j !== nothing                             # a model quantity (a built-in is a call `time(t)`)
-            j.role === :param || (j.role === :builtin && j.name in (:time, :mcs)) || (bad[] = j.name)
-        elseif iscall(y)
-            foreach(walk, arguments(y))
-        else
-            _coordinate(y) || (bad[] = y)
-        end
-        return nothing
-    end
-    walk(u)
-    bad[] === nothing || throw(ArgumentError(
-        "@boundary $(info(field).name): the $what value `$(_builtin_text(string(v)))` reads `$(bad[])`; $_BOUNDARY_VALUE_FORMS"))
-    return v
-end
-
-"""`x => (low, high)` of `@boundary field` (axis named `name`)."""
-function boundary_face(field, name::Symbol, sides)
-    _boundary_field(field)
-    axis = findfirst(==(name), _AXIS_NAMES)
-    axis === nothing && throw(ArgumentError("@boundary $(info(field).name): unknown axis `$name`; the axes are x, y, z"))
-    (sides isa Tuple && length(sides) == 2) || throw(ArgumentError(
-        "@boundary $(info(field).name): `$name => …` takes a pair of sides `(low, high)`, each `Dirichlet(value)`, " *
-        "`NoFlux()`, `Flux(q)` or `Robin(α, β, g)`"))
-    return BoundaryEntry(field, axis, (_boundary_side(sides[1], field, name, "low"), _boundary_side(sides[2], field, name, "high")),
-        nothing, nothing)
-end
-
-"""`sites(pred) => Dirichlet(v)` of `@boundary field`."""
-function boundary_mask(field, pred, value)
-    _boundary_field(field)
-    value isa Dirichlet || throw(ArgumentError(
-        "@boundary $(info(field).name): `sites(…) => $value`; a site mask takes `Dirichlet(value)`"))
-    (pred isa Bool || _unwrap(pred) isa SymbolicUtils.BasicSymbolic) || throw(ArgumentError(
-        "@boundary $(info(field).name): `sites($pred)` takes a site condition, e.g. `sites(kind == border)`"))
-    return BoundaryEntry(field, 0, (nothing, nothing), pred, _boundary_value(value.value, field, "site-mask"))
-end
 
 """The canonical phases of one MCS, in their default order (`@schedule`, D-145)."""
 const SCHEDULE_PHASES = (:before_mcs, :sweep, :after_mcs, :fields, :components, :operators, :lifecycle, :end_mcs)
@@ -2031,7 +1883,7 @@ const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivit
     principal_axis = _principal_axis, major_axis = _major_axis, minor_axis = _minor_axis,
     RandomPlane = _random_plane, Split, ExplicitEuler, RK4, Adaptive, Every, rand = _rand, randn = _randn, count = _Count(),
     centroid = _centroid, displacement = _displacement, integral = _integral,
-    dot = _dot, norm = _norm, normalize = _normalize, geomean, log1p_geomean, mean, Δ, Dirichlet, NoFlux, Flux, Robin,
+    dot = _dot, norm = _norm, normalize = _normalize, geomean, log1p_geomean, mean,
     CellRef, alive, sibling, root, members, Fresh, created = CONVERT_CREATED, transfer,
     Pairs, minimum_image = _minimum_image, separation = _separation, ismember)
 

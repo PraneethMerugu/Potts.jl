@@ -448,20 +448,22 @@ const RH_HEX10 = :(Lattice((10, 10); geometry = Hexagonal(), boundary = Periodic
     @test rh_ctx_error(quote end; temperature = :(1.0 + 0.001 * minimum_image(1.0, 1)), clusters = false) === nothing   # control
 end
 
-# A `@boundary` site mask is lowered in site scope at the field step: when it is the model's
-# only centroid read, the moment trackers must still be allocated (re-review of 20b9a546).
-# Two 3 × 3 cells held in place (λ = 10⁶, T = 0.01): cell 1 at x 5:7 (centroid 6), cell 2 at
-# x 1:3 (centroid 2). The mask `centroid(owner, 1) > 4` clamps c = 7 at cell 1's sites only;
-# `D(c) ~ -c` from c = 0 leaves every other site at 0.
+# A masked condition of a coupled PDESystem (until F4-B6 a `@boundary` site mask) is lowered in
+# site scope at the field step: when it is the model's only centroid read, the moment trackers
+# must still be allocated (re-review of 20b9a546). Two 3 × 3 cells held in place (λ = 10⁶,
+# T = 0.01): cell 1 at x 5:7 (centroid 6), cell 2 at x 1:3 (centroid 2). The mask
+# `centroid(owner, 1) > 4` clamps c = 7 at cell 1's sites only; `D(c) ~ -c` from c = 0 leaves
+# every other site at 0.
+module RHMaskPDE
+using Potts.Fields
+@variables c(..) = 0.0 m(..)::Bool [input = true]
+sys() = pdesystem([Differential(t)(c(t, x, y)) ~ -c(t, x, y)], [c(t, x, y) ~ masked(m(t, x, y), 7.0)]; name = :rhmask)
+end
 @potts_model RHMaskCentroid begin
     @kinds medium ka
-    @variables c(field) = 0.0
     @lattice Lattice((12, 10); boundary = Closed(), neighborhood = Moore(1))
     @energy cells => 1.0e6 * (volume - 9.0)^2
-    @equations D(c) ~ -c
-    @boundary c begin
-        sites((kind == ka) && (centroid(owner, 1) > 4.0)) => Dirichlet(7.0)
-    end
+    @fields RHMaskPDE.sys() (RHMaskPDE.m => (kind == ka) && (centroid(owner, 1) > 4.0))
     @sweep Metropolis(; temperature = 0.01)
 end
 function rh_mask_sigma()
@@ -473,7 +475,7 @@ end
 rh_mask_problem(; T = Float64) = PottsProblem(RHMaskCentroid(; name = :bm), [ownership => rh_mask_sigma(), kind => [:ka, :ka]],
     (0, 1); T, field_solver = ExplicitEuler(substeps = 1))
 
-@testset "centroid(c, k) in a @boundary site mask (the only centroid read)" begin
+@testset "centroid(c, k) in a masked condition (the only centroid read)" begin
     prob = rh_mask_problem()
     @test hasproperty(prob.u0.cell, :anchor)                   # the moment trackers are allocated
     u = solve(prob, SequentialCPM()).u[end]

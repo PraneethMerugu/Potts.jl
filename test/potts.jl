@@ -40,6 +40,7 @@ include("fields_short.jl")             # an omitted axis interval (F4-E5), `Pott
 include("fields_couple_e8.jl")         # @fields names, Bool inputs, condition origins (F4-E8 to F4-E10)
 include("fields_couple_e11.jl")        # array fields, Advect vectors, masks, faces, fingerprints (F4-E11 to F4-E15)
 include("fields_couple_w2.jl")         # wave 2 review fixes: faces read across fields, cell quantities, membership (F4-E16, F4-E17)
+include("fields_couple_b6.jl")         # B6 review fixes: old condition sections, the Potts.fields round trip, wording (F4-B6)
 include("fields_boundary.jl")          # boundary expressions in a model (F4-12a)
 include("cell_sums.jl")                # exact cell sums at 1, 4 and 8 threads (F3-23)
 include("sweep_spec.jl")

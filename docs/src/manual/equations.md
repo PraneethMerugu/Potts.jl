@@ -471,8 +471,10 @@ threads).
   not.
 - The inputs of a field (`kind`, bound cell reads, neighbor counts) are filled once per MCS,
   before the fields step, and held over the substeps; so is `mcs`. `t` advances with the
-  substeps. `rand()` cannot appear in a field equation: draw in a site update and bind an
-  input to its variable.
+  substeps. A field equation has no draws. `rand()` written in a `PDESystem` equation is
+  Julia's `rand()`: it is evaluated once, when the equation is built, and the field reads
+  that one number at every site and every step. For a random source, draw in a site update
+  (`@after_mcs s ~ rand()`) and read `s` as an input.
 - On a hexagonal lattice, `Δ` is the only spatial operator. On a lattice with a `domain`,
   the fields live in the domain: a site outside it keeps its value, and the domain's edge
   has zero flux. Face values still apply at the faces of the box.
@@ -553,9 +555,8 @@ u = solve(prob, SequentialCPM()).u[end]
   field enters through the face. The bound of the field solvers covers these ghost values.
   The harmonic mean of `0³` and `2³` is 0, so `DivKGrad(:harmonic)` keeps a degenerate
   front (`K = 0` where `c = 0`) from moving; use `DivKGrad(:arithmetic)` for degenerate
-  diffusion. A condition on a periodic axis, on an axis the lattice lacks, on a hexagonal
-  lattice, or on a field whose equation has no spatial operator of it is an error naming
-  it. So is a periodic pair on an axis the lattice closes: periodicity is the lattice's,
+  diffusion. A condition on a periodic axis, on an axis the lattice lacks, or on a field
+  whose equation has no spatial operator of it is an error naming it. So is a periodic pair on an axis the lattice closes: periodicity is the lattice's,
   for every field.
 - **Site masks.** `c ~ masked(condition, v)` is a node value: every explicit substep writes
   `v` at every site where the condition holds (after the `lower` clip, so a mask value
@@ -692,12 +693,14 @@ coupled = Potts.couple(host, source; inputs = [endo => Potts.kind == Potts.looku
 nothing # hide
 ```
 
-The `PDESystem` stays a plain ModelingToolkit system. `Potts.field_inputs(integ)` gives the
-current values of its inputs at the CPM state of an integrator, by name
-(`Potts.field_inputs(prob)` at the problem's initial state). With them, LatticePDE's
-`discretize` builds an `ODEProblem` of the fields, which any SciML solver steps. Here Tsit5
-steps one MCS from the field at MCS 5 of a run, and the owned run steps the same MCS with
-400 explicit substeps:
+The `PDESystem` stays a plain ModelingToolkit system. `Potts.fields(coupled)` is the
+`PDESystem` of the model's fields: the equations of `source`, with each binding written in
+as its CPM input (`endo` becomes `kind == 1`, read from the input `kind`).
+`Potts.field_inputs(integ)` gives the current values of those inputs at the CPM state of an
+integrator, by the names `Potts.fields` gives them (`Potts.field_inputs(prob)` at the
+problem's initial state). With them, LatticePDE's `discretize` builds an `ODEProblem` of the
+fields, which any SciML solver steps. Here Tsit5 steps one MCS from the field at MCS 5 of a
+run, and the owned run steps the same MCS with 400 explicit substeps:
 
 ```@example equations
 using Potts.LatticePDE: discretize, LatticeDiscretization, Grid
@@ -708,7 +711,7 @@ for _ in 1:5
     step!(integ)
 end
 c5 = copy(Array(integ.u.site.c))
-fprob = discretize(source, LatticeDiscretization(Grid((24, 20)); T = Float64);
+fprob = discretize(Potts.fields(coupled), LatticeDiscretization(Grid((24, 20)); T = Float64);
     inputs = collect(Potts.field_inputs(integ)))
 fsol = solve(remake(fprob; u0 = vec(c5), tspan = (0.0, 1.0)), Tsit5(); abstol = 1e-11, reltol = 1e-11)
 step!(integ)

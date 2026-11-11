@@ -16,8 +16,7 @@ changed cadence), an equation the base's equation for the same
 variable, an observed quantity the base's of the same name. Energies, drives, constraints,
 divisions, relationships and link rules accumulate, base first (a division rule for kinds
 the base divides at another cadence warns: both rules apply, each at its own `Every`).
-A field's `@boundary` entries replace the base's for that field as a whole; a `@schedule` of
-`sys` replaces the base's; a `@convert` pass of `sys` replaces the base's pass of the same
+A `@schedule` of `sys` replaces the base's; a `@convert` pass of `sys` replaces the base's pass of the same
 name as a whole (in the base's place). A name keeps its category: a name that is, say, a parameter of `base` and a variable of `sys`
 is an `ArgumentError` naming both. An edge variable keeps its relationship too: an edge
 variable of `sys` that re-declares one of `base` (to change its default) is the base
@@ -89,16 +88,11 @@ function extend(sys::PottsSystem, base::PottsSystem; name::Symbol = nameof(sys))
         components = unique(c -> c.name, [_p(sys, :components); _p(base, :components)]),
         discrete = unique(b -> b.name, [_p(sys, :discrete); _p(base, :discrete)]),
         sweep = _p(sys, :sweep), structural = merge(_p(base, :structural), _p(sys, :structural)),
-        # a field's boundary is the extension's when it gives one (all its entries), else the base's
-        boundaries = [filter(b -> !any(x -> _boundary_name(x) === _boundary_name(b), _p(sys, :boundaries)),
-                _p(base, :boundaries)); _p(sys, :boundaries)],
         schedule = isempty(_p(sys, :schedule)) ? _p(base, :schedule) : _p(sys, :schedule),
         sources = merge(_p(base, :sources), _p(sys, :sources)),
         bcs = [_p(base, :bcs); _p(sys, :bcs)], bindings = [_p(base, :bindings); _p(sys, :bindings)],
         metadata = _merged_metadata(base, sys))
 end
-
-_boundary_name(b::BoundaryEntry) = info(b.field).name
 
 # `@convert` passes (R8, D-233): a pass of the extension replaces the base's pass of its name
 # as a whole, in the base's place; the extension's other passes follow, in declaration order

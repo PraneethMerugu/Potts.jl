@@ -1,15 +1,14 @@
-# Fields after the field-compiler cutover (C8): `@equations D(c) ~ …` of a field is lowered by
-# the field compiler (LatticePDE → LatticeFields) and stepped by explicit Euler over each MCS.
+# Fields after the field-compiler cutover (C8): a model's field (a coupled PDESystem) is lowered
+# by the field compiler (LatticePDE → LatticeFields) and stepped by explicit Euler over each MCS.
 # Oracles: the discrete Fourier factor of FTCS, mass conservation, a hand FTCS stepper; each
 # with a negative control (D-048).
 using Potts: CorePotts
 using StableRNGs: StableRNG
 
-# The models' fields, coupled with `@fields` (F4-B4t; before, written in `@equations`, `@bcs` and
-# `@boundary`): each PDESystem below is the field system of the model of the same name. A kind or
-# a CPM term is a bound input (`kA => kind == A`), a kind table the model's (`dk => δ[kind]`).
-# The models that test A's own syntax and messages (`@boundary`, the coordinate binding of the
-# model body, the refusals in A's words) keep it until it goes (F4-B6).
+# The models' fields, coupled with `@fields` (F4-B4t, F4-B6; before, written in `@equations`,
+# `@bcs` and `@boundary`): each PDESystem below is the field system of the model of the same
+# name. A kind or a CPM term is a bound input (`kA => kind == A`), a kind table the model's
+# (`dk => δ[kind]`). The tests of A's own syntax and refusals went with it (F4-B6).
 isdefined(Main, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
 module FdPDE
 using ..FieldPDE
@@ -88,7 +87,7 @@ p_advect_const() = (@parameters s = 0.01; field1(-Advect(Upwind1())([0.3, 0.0], 
 p_mixed() = pdesys([Dt(C) ~ -C, Shift(t, 1)(M) ~ M + 1], [ic(c), ic(m)], (6, 4), [C, M])
 p_z() = (C3 = c(t, x, y, z); pdesys([Dt(C3) ~ 0.1 * z], [c(0, x, y, z) ~ 0.0], (4, 4, 3), [C3]))
 p_map_repeat() = pdesys([Shift(t, 1)(M) ~ 0.5 * M + 1], [ic(m)], (6, 4), [M])
-# F2-11: the conditions of `@bcs` (faces, masks) as the PDESystem's
+# F2-11: the conditions (faces, masks) of the PDESystems (front end A's `@bcs` until F4-B6)
 b_dc(bcs = []; dims = (8, 6)) = (@parameters Dc = 0.5; field1(Dc * Δ(C), dims, [Dc]; bcs))
 b_none() = b_dc()
 b_bcs_face() = b_dc([c(t, 0, y) ~ 1.0])
@@ -108,6 +107,12 @@ b_self_mask(rate) = (@parameters Dc = 0.5; field1(rate(Dc), (8, 6), [Dc]; bcs = 
 b_self_mask_bcs() = b_self_mask(Dc -> 0.1)
 b_self_mask_diff_bcs() = b_self_mask(Dc -> Dc * Δ(C) + 0.1)
 b_mask_later_bcs() = pdesys([Dt(C) ~ 0.5 * Δ(C), Dt(E) ~ 0.1], [ic(c), ic(e), C ~ masked(E >= 0.5, 0.8)], (8, 6), [C, E])
+# F4-B6: a velocity of one term on a 2D lattice; `Differential(z)` on a 2D lattice; a condition
+# off a face; a periodic pair on an axis the lattice closes
+advect_short() = field1(-Advect(Upwind1())([0.3], C) + 0.1 * Δ(C), (8, 6))
+z2d() = field1(Differential(z)(Differential(z)(C)), (6, 4))
+interior() = b_dc([c(t, 3, y) ~ 1.0, c(t, 8, y) ~ 0.0])
+periodic_bcs() = b_dc([c(t, x, 0) ~ c(t, x, 6)])
 b_mask_earlier() = pdesys([Dt(C) ~ 0.5 * Δ(C) - 0.2 * C, Dt(E) ~ 0.1], [ic(c), ic(e), E ~ masked(C >= 0.5, 0.0)], (8, 6), [C, E])
 function b_flux_robin2()
     @parameters Dc = 0.5 q = 0.2 αr = 3.0 βr = 1.0 gr = 0.5
@@ -1153,11 +1158,12 @@ end
     @test occursin(":kind => values", err) && !occursin("__in", err)
     err = fe(() -> LP.discretize(fsrc, disc; inputs = [:kd => K]))
     @test occursin("`kind`", err) && !occursin("__in", err)
-    # (the input of a bound CPM expression is named by the expression, `volume[owner]`)
+    # (the input of a bound CPM read is named by the PDESystem's input bound to it, `volume`;
+    # F4-B6 review: before, by the expression text "LatticePDE.at(volume, owner)")
     fvol = Potts.fields(FdVolumeRead(; name = :f))
     V = fill(2.0, 6, 4)
     s = LP.solve(LP.discretize(fvol, LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64);
-        inputs = ["LatticePDE.at(volume, owner)" => V]), LP.ExplicitEuler(; dt = 0.1, substeps = 1); saveat = 0.1)
+        inputs = ["volume" => V]), LP.ExplicitEuler(; dt = 0.1, substeps = 1); saveat = 0.1)
     @test all(≈(0.1 * 0.01 * 2.0), s[:c, 2])
     err = fe(() -> LP.solve(LP.discretize(fvol, LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64)), LP.ExplicitEuler(; dt = 0.1)))
     @test occursin("volume", err) && occursin("=> values", err) && !occursin("__in", err) || (println("V13: ", err); false)
@@ -1543,37 +1549,7 @@ end
     @fields FdPDE.p_z()
     @sweep Metropolis(; temperature = 1.0)
 end
-# a model with its own `x` keeps it (`-x * c` reads the parameter); a `Differential(x)` there is
-# refused naming the clash
-@potts_model FpOwnX begin
-    @kinds medium A
-    @parameters x = 0.5
-    @variables c(field) = 1.0
-    @lattice Lattice((6, 4); boundary = Closed())
-    @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ -x * c
-    @sweep Metropolis(; temperature = 1.0)
-end
-@potts_model FpOwnXFlux begin
-    @kinds medium A
-    @parameters x = 2.0
-    @variables c(field) = 1.0
-    @lattice Lattice((6, 4); boundary = Closed())
-    @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ Differential(x)(Differential(x)(c))
-    @sweep Metropolis(; temperature = 1.0)
-end
-# negative control: a spatial operator of a CPM read is refused, naming the operator
-@potts_model FpOpCPM begin
-    @kinds medium A
-    @variables c(field) = 0.0
-    @lattice Lattice((6, 4); boundary = Closed())
-    @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ Δ(volume[owner])
-    @sweep Metropolis(; temperature = 1.0)
-end
-
-@testset "F2-10: `@equations` operators and aux fields equal B's, bitwise" begin
+@testset "F2-10: operators and aux fields equal LatticePDE's own run, bitwise" begin
     LP, MTKB = Potts.LatticePDE, Potts.ModelingToolkitBase
     tt, DD = MTKB.t_nounits, MTKB.D_nounits
     dims, k, n = (8, 6), 3, 4
@@ -1598,7 +1574,7 @@ end
         @test a == bb
         @test maximum(abs, a .- c0) > 1e-3                 # the operator moved the field
     end
-    # the raw flux form is the `DivKGrad` form (B's rule, now in A too)
+    # the raw flux form is the `DivKGrad` form (B's rule)
     rawdiv = [Array(solve(PottsProblem(M(; name = :f), [fd_empty(dims); :c => c0], (0, k);
                   field_solver = ExplicitEuler(; substeps = n)), SequentialCPM()).u[end].site.c) for M in (FpRaw, FpDivK)]
     @test rawdiv[1] == rawdiv[2]
@@ -1624,18 +1600,16 @@ end
 end
 @potts_model FpAdvectShort begin
     @kinds medium A
-    @variables c(field) = 0.0
     @lattice Lattice((8, 6); boundary = Closed())
     @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ -Advect(Upwind1())([0.3], c) + 0.1 * Δ(c)
+    @fields FdPDE.advect_short()
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FpZ2D begin
     @kinds medium A
-    @variables c(field) = 0.0
     @lattice Lattice((6, 4); boundary = Closed())
     @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ Differential(z)(Differential(z)(c))
+    @fields FdPDE.z2d()
     @sweep Metropolis(; temperature = 1.0)
 end
 @testset "F2-10 review: map under repeat, constant velocity, global coordinates, z in 2D" begin
@@ -1650,17 +1624,17 @@ end
     run(M) = solve(PottsProblem(M(; name = :f), [fd_empty((8, 6)); :c => c0], (0, 2);
         field_solver = ExplicitEuler(; substeps = 4)), SequentialCPM()).u[end].site.c
     @test run(FpAdvectConst) == run(FpAdvect)
-    # M3: a module global `y` read in a body warns (base: the coordinate replaced it silently);
-    # a declared `x` does not
+    # M3: a module global `y` read in a body (here a binding of `@fields`) warns (base: the
+    # coordinate replaced it silently); a declared `x` does not
     m = Module(:FpGlobals)
     Core.eval(m, :(using Potts; const y = 3.0; const x = 1.0))
+    P = FdPDE
     @test_logs (:warn, r"`y` in the model body is the lattice coordinate") match_mode = :any Core.eval(m, quote
         @potts_model GlobY begin
             @kinds medium A
-            @variables c(field) = 0.0
-            @lattice Lattice((4, 4); boundary = Closed())
+            @lattice Lattice((6, 4); boundary = Closed())
             @energy cells(A) => (volume - 9.0)^2
-            @equations D(c) ~ y
+            @fields $P.volume_read() ($P.volume => y)
             @sweep Metropolis(; temperature = 1.0)
         end
     end)
@@ -1668,80 +1642,51 @@ end
         @potts_model DeclX begin
             @kinds medium A
             @parameters x = 0.5
-            @variables c(field) = 1.0
-            @lattice Lattice((4, 4); boundary = Closed())
+            @lattice Lattice((6, 4); boundary = Closed())
             @energy cells(A) => (volume - 9.0)^2
-            @equations D(c) ~ -x * c
+            @fields $P.volume_read() ($P.volume => x)
             @sweep Metropolis(; temperature = 1.0)
         end
     end)
-    # R1 (batch 4 round 2): a helper argument `x` binds `x` in the helper only, so the rate's
+    # R1 (batch 4 round 2): a helper argument `x` binds `x` in the helper only, so the binding's
     # `x` (the coordinate) still warns (base: the helper silenced the warning for the body)
     @test_logs (:warn, r"`x` in the model body is the lattice coordinate") match_mode = :any Core.eval(m, quote
         @potts_model GlobXHelper begin
             @kinds medium A
-            @variables c(field) = 0.0
-            @lattice Lattice((4, 4); boundary = Closed())
+            @lattice Lattice((6, 4); boundary = Closed())
             g(x) = 2x
             @energy cells(A) => (volume - 9.0)^2
-            @equations D(c) ~ g(1.0) * x
+            @fields $P.volume_read() ($P.volume => g(1.0) * x)
             @sweep Metropolis(; temperature = 1.0)
         end
     end)
-    # controls: reads of `x` only inside binders (a helper, its keyword, a generator) and the
-    # face syntax of `@bcs` (R2) do not warn
+    # controls: reads of `x` only inside binders (a helper, its keyword, a generator) and a
+    # keyword name (R2) do not warn
     @test_logs min_level = Base.CoreLogging.Warn Core.eval(m, quote
         @potts_model LocalXOnly begin
             @kinds medium A
-            @variables c(field) = 0.0
-            @lattice Lattice((4, 4); boundary = Closed())
+            @lattice Lattice((6, 4); boundary = Closed())
             g(x) = 2x
             h(; x = 1.0) = 3x
             w = sum(x for x in 1:3)
             @energy cells(A) => (volume - 9.0)^2
-            @equations D(c) ~ g(1.0) + h(x = 0.5) + w + Δ(c)
-            @bcs c(t, x, 0) ~ 1.0
+            @fields $P.volume_read() ($P.volume => g(1.0) + h(x = 0.5) + w)
             @sweep Metropolis(; temperature = 1.0)
         end
     end)
-    # R2 alone: a `@bcs` face read and a keyword name in a body with no binder of `x` (base: both
-    # warned)
-    @test_logs min_level = Base.CoreLogging.Warn Core.eval(m, quote
-        @potts_model BcsXOnly begin
-            @kinds medium A
-            @variables c(field) = 0.0
-            @lattice Lattice((4, 4); boundary = Closed())
-            @energy cells(A) => (volume - 9.0)^2
-            @equations D(c) ~ Δ(c) + hk(x = 0.5)
-            @bcs c(t, x, 0) ~ 1.0
-            @sweep Metropolis(; temperature = 1.0)
-        end
-    end)
-    # a read on the right side of a `@bcs` line still counts
-    @test_logs (:warn, r"`x` in the model body is the lattice coordinate") match_mode = :any Core.eval(m, quote
-        @potts_model BcsXRhs begin
-            @kinds medium A
-            @variables c(field) = 0.0
-            @lattice Lattice((4, 4); boundary = Closed())
-            @energy cells(A) => (volume - 9.0)^2
-            @equations D(c) ~ Δ(c)
-            @bcs c(t, x, 0) ~ x / 8
-            @sweep Metropolis(; temperature = 1.0)
-        end
-    end)
-    # R3: a wrong-length velocity prints the vector and the operators as written, in the reason
-    # and the location line (base: `SymbolicUtils.array_literal((1,), 0.3)`, `LatticePDE.Advect{…}`,
-    # `LatticePDE.Δ`)
+    # R3: a wrong-length velocity prints the vector and the operators as written (base:
+    # `SymbolicUtils.array_literal((1,), 0.3)`, `LatticePDE.Advect{…}`, `LatticePDE.Δ`)
     err = something(fd_err(() -> mtkcompile(FpAdvectShort(; name = :f))), "")
-    @test occursin("cannot lower `[0.3]`", err) && occursin("got 1", err)
-    @test occursin("in @equations", err) && occursin("Advect(Upwind1())([0.3], c", err) && occursin("Δ(c", err)
+    @test occursin("cannot lower `[0.3]`", err) && occursin("got 1", err) || (println("R3: ", err); false)
     @test !occursin("array_literal", err) && !occursin("LatticePDE.", err)
-    # S4: `Differential(z)` on a 2D lattice is not an axis (base: "the model declares its own `z`")
+    # S4: `Differential(z)` on a 2D lattice is not an axis of the PDESystem (base: "the model
+    # declares its own `z`")
     err = something(fd_err(() -> mtkcompile(FpZ2D(; name = :f))), "")
-    @test occursin("not a lattice axis", err) && !occursin("declares its own", err)
+    @test occursin("differentiates along `z`", err) && occursin("not one of its independent variables", err) &&
+          !occursin("declares its own", err) || (println("S4: ", repr(err)); false)
 end
 
-@testset "F2-10: maps, one kind per model, coordinates, the clash, a CPM read" begin
+@testset "F2-10: maps, one kind per model, coordinates" begin
     LP = Potts.LatticePDE
     # a map steps once per MCS (`ExplicitMap()` by default): m₁ = x, m₂ = 0.5 m₁ + x, …
     integ = init(PottsProblem(FpMap(; name = :f), fd_empty((6, 4)), (0, 3)), SequentialCPM())
@@ -1765,21 +1710,12 @@ end
     # `z` is the third coordinate: one substep of 0.1 z (cell centers 0.5, 1.5, 2.5)
     uz = solve(PottsProblem(FpZ(; name = :f), fd_empty((4, 4, 3)), (0, 1)), SequentialCPM()).u[end].site.c
     @test all(kk -> all(≈(0.1 * (kk - 0.5); rtol = 1e-14), uz[:, :, kk]), 1:3)
-    # a model's own `x` is kept; `Differential(x)` there is refused naming the clash
-    so = solve(PottsProblem(FpOwnX(; name = :f), fd_empty((6, 4)), (0, 1)), SequentialCPM())
-    @test all(==(0.5), so.u[end].site.c)                  # one substep of −0.5 c from 1
-    err = something(fd_err(() -> mtkcompile(FpOwnXFlux(; name = :f))), "")
-    @test occursin("declares its own `x`", err) && occursin("rename the model's `x`", err)
-    # negative control: an operator of a CPM read is still refused, now naming the operator
-    err = something(fd_err(() -> mtkcompile(FpOpCPM(; name = :f))), "")
-    @test occursin("applies `Δ` to", err) && occursin("a CPM read", err) && occursin("@after_mcs", err)
 end
 
-# F2-11 (F2 design §2.12): `@bcs` is lowered (translated as the equations are and parsed by
-# LatticePDE's `parse_bcs`, as in front end B), and `@boundary` takes `Flux(q)` and
-# `Robin(α, β, g)`, the spellings of B's face equation `α c + β ∂c/∂n = g`. Base (c2583722):
-# `@bcs` refused at `mtkcompile` (before F1: dropped, the run bitwise equal to the model
-# without it); `Flux`/`Robin` refused ("each side is `Dirichlet(value)` or `NoFlux()`", PO23).
+# F2-11 (F2 design §2.12): a PDESystem's conditions (front end A's `@bcs` and `@boundary` until
+# F4-B6) are parsed by LatticePDE's `parse_bcs`: faces (the face equation `α c + β ∂c/∂n = g`)
+# and masks. Oracles: hand FTCS with the ghost-node rule, LatticePDE's own run. Base
+# (c2583722): `@bcs` refused at `mtkcompile`; `Flux`/`Robin` refused (PO23).
 @potts_model FbNone begin
     @kinds medium A
     @lattice Lattice((8, 6); boundary = Closed())
@@ -1794,18 +1730,6 @@ end
     @fields FdPDE.b_bcs_face()
     @sweep Metropolis(; temperature = 1.0)
 end
-@potts_model FbBoundaryFace begin
-    @kinds medium A
-    @parameters Dc = 0.5
-    @variables c(field) = 0.0
-    @lattice Lattice((8, 6); boundary = Closed())
-    @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ Dc * Δ(c)
-    @boundary c begin
-        x => (Dirichlet(1.0), NoFlux())
-    end
-    @sweep Metropolis(; temperature = 1.0)
-end
 @potts_model FbFluxRobin begin
     @kinds medium A
     @lattice Lattice((8, 6); boundary = Closed())
@@ -1813,7 +1737,7 @@ end
     @fields FdPDE.b_flux_robin_bcs()
     @sweep Metropolis(; temperature = 1.0)
 end
-# the same faces as B's face equations in `@bcs` (the §2.12 table)
+# the same system under another name (a record of the guard)
 @potts_model FbFluxRobinBcs begin
     @kinds medium A
     @lattice Lattice((8, 6); boundary = Closed())
@@ -1821,7 +1745,7 @@ end
     @fields FdPDE.b_flux_robin_bcs()
     @sweep Metropolis(; temperature = 1.0)
 end
-# a Neumann face and a Robin face in `@bcs`, against the same conditions in a PDESystem
+# a Neumann face and a Robin face, against LatticePDE's own run of the same conditions
 @potts_model FbBcsNR begin
     @kinds medium A
     @lattice Lattice((8, 6); boundary = Closed())
@@ -1829,64 +1753,6 @@ end
     @fields FdPDE.b_bcs_nr()
     @sweep Metropolis(; temperature = 1.0)
 end
-@potts_model FbBoth begin
-    @kinds medium A
-    @parameters Dc = 0.5
-    @variables c(field) = 0.0
-    @lattice Lattice((8, 6); boundary = Closed())
-    @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ Dc * Δ(c)
-    @boundary c begin
-        x => (Dirichlet(1.0), NoFlux())
-    end
-    @bcs c(t, 0, y) ~ 2.0
-    @sweep Metropolis(; temperature = 1.0)
-end
-@potts_model FbPeriodicBcs begin
-    @kinds medium A
-    @parameters Dc = 0.5
-    @variables c(field) = 0.0
-    @lattice Lattice((8, 6); boundary = Closed())
-    @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ Dc * Δ(c)
-    @bcs c(t, x, 0) ~ c(t, x, 6)
-    @sweep Metropolis(; temperature = 1.0)
-end
-@potts_model FbInitBcs begin
-    @kinds medium A
-    @parameters Dc = 0.5
-    @variables c(field) = 0.0
-    @lattice Lattice((8, 6); boundary = Closed())
-    @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ Dc * Δ(c)
-    @bcs c(0, x, y) ~ 1.0
-    @sweep Metropolis(; temperature = 1.0)
-end
-@potts_model FbRobinB0 begin
-    @kinds medium A
-    @parameters Dc = 0.5
-    @variables c(field) = 0.0
-    @lattice Lattice((8, 6); boundary = Closed())
-    @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ Dc * Δ(c)
-    @boundary c begin
-        x => (Robin(2.0, 0, 1.0), NoFlux())
-    end
-    @sweep Metropolis(; temperature = 1.0)
-end
-@potts_model FbRobinA0 begin
-    @kinds medium A
-    @parameters Dc = 0.5
-    @variables c(field) = 0.0
-    @lattice Lattice((8, 6); boundary = Closed())
-    @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ Dc * Δ(c)
-    @boundary c begin
-        x => (NoFlux(), Robin(0, 2.0, 1.0))
-    end
-    @sweep Metropolis(; temperature = 1.0)
-end
-
 # hand FTCS on a closed box with a ghost value per face: `ghost(d, s, ce)` is the missing
 # neighbor of an edge site `ce` on side `s` (−1 low, +1 high) of axis `d`
 function fb_ftcs(c0, D, h, dt, n, ghost)
@@ -1908,27 +1774,27 @@ function fb_ftcs(c0, D, h, dt, n, ghost)
     return c
 end
 
-@testset "F2-11: `@bcs` lowered; `@boundary` Flux and Robin" begin
+@testset "F2-11: conditions lowered: a Dirichlet face, Flux and Robin" begin
     LP, MTKB = Potts.LatticePDE, Potts.ModelingToolkitBase
     dims, n = (8, 6), 4
     c0 = rand(StableRNG(5), dims...)
     run(M; k = 2) = (integ = init(PottsProblem(M(; name = :f), [fd_empty(dims); :c => c0], (0, k);
                          field_solver = ExplicitEuler(; substeps = n)), SequentialCPM());
                      foreach(_ -> step!(integ), 1:k); Array(current_state(integ).site.c))
-    # `@bcs c(t, 0, y) ~ 1` is the `@boundary` face `Dirichlet(1)`; without it the run differs
-    @test run(FbBcsFace) == run(FbBoundaryFace)
+    # `c(t, 0, y) ~ 1` is the face value: the hand FTCS with the ghost `2 − c` (the face value is
+    # the mean of the edge site and its ghost); without it the run differs
+    a1 = run(FbBcsFace; k = 1)
+    @test isapprox(a1, fb_ftcs(c0, 0.5, 1.0, 1.0, n, (d, s, ce) -> d == 1 && s < 0 ? 2.0 - ce : ce); rtol = 1e-13)
     @test run(FbBcsFace) != run(FbNone)
-    # `Flux(q)` and `Robin(α, β, g)` are B's face equations: bitwise equal to the `@bcs` form …
+    # a flux and a Robin face: a hand FTCS with the ghost-node rule: low x, ∂c/∂n = q gives c + q h; high x,
     a = run(FbFluxRobin; k = 1)
-    @test a == run(FbFluxRobinBcs; k = 1)
-    # … and to a hand FTCS with the ghost-node rule: low x, ∂c/∂n = q gives c + q h; high x,
     # α (c + g′)/2 + β (g′ − c)/h = g gives g′ = (g − c (α/2 − β/h)) / (α/2 + β/h); y zero flux
     ghost(d, s, ce) = d == 2 ? ce : s < 0 ? ce + 0.2 : (0.5 - ce * (1.0 - 1.0)) / (1.0 + 1.0)
     hand = fb_ftcs(c0, 0.5, 1.0, 1.0, n, ghost)
     @test isapprox(a, hand; rtol = 1e-13)
     # (control: the low side's sign flipped misses the oracle)
     @test !isapprox(a, fb_ftcs(c0, 0.5, 1.0, 1.0, n, (d, s, ce) -> d == 1 && s < 0 ? ce - 0.2 : ghost(d, s, ce)); rtol = 1e-6)
-    # a Neumann and a Robin face in `@bcs` match the same PDESystem in B
+    # a Neumann and a Robin face match LatticePDE's own run of the same PDESystem
     tt, DD = MTKB.t_nounits, MTKB.D_nounits
     Potts.ModelingToolkitBase.@parameters x y Dc = 0.5 q = 0.2 αr = 2.0 βr = 1.0 gr = 0.5
     Potts.ModelingToolkitBase.@variables c(..)
@@ -1939,96 +1805,19 @@ end
         [Dc, q, αr, βr, gr]; name = :b)
     bp = LP.discretize(bsys, LP.LatticeDiscretization(LP.Grid(dims); T = Float64))
     @test run(FbBcsNR) == LP.solve(LP.remake(bp; u0 = vec(c0)), LP.ExplicitEuler(; dt = 1.0, substeps = n))[:c, end]
-    # `Potts.fields` carries the `@bcs` conditions and the `Flux`/`Robin` faces
+    # `Potts.fields` carries the conditions
     hasder(f) = any(b -> occursin("Differential(x", string(b)), getfield(f, :bcs))
     @test hasder(Potts.fields(FbFluxRobin(; name = :f))) && hasder(Potts.fields(FbFluxRobinBcs(; name = :f)))
     @test any(b -> occursin("c(t, 0.0, y) ~ 1.0", string(b)) || occursin("c(t, 0, y) ~ 1.0", string(b)),
               getfield(Potts.fields(FbBcsFace(; name = :f)), :bcs))
 end
 
-# review S1–S3, (a), (c), N1 of F2 batch 4
+# review S1, (a), (c), N1 of F2 batch 4 (S2, S3: front end A's `@boundary` routes, gone in F4-B6)
 @potts_model FbInterior begin
     @kinds medium A
-    @parameters Dc = 0.5
-    @variables c(field) = 0.0
     @lattice Lattice((8, 6); boundary = Closed())
     @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ Dc * Δ(c)
-    @boundary c begin
-        x => (NoFlux(), Dirichlet(0.0))
-    end
-    @bcs c(t, 3, y) ~ 1.0
-    @sweep Metropolis(; temperature = 1.0)
-end
-@potts_model FbRobinParam begin
-    @kinds medium A
-    @parameters begin
-        Dc = 0.5
-        αp = 2.0
-        gp = 1.0
-    end
-    @variables c(field) = 0.0
-    @lattice Lattice((8, 6); boundary = Closed())
-    @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ Dc * Δ(c)
-    @boundary c begin
-        x => (Robin(αp, 0, gp), NoFlux())
-    end
-    @sweep Metropolis(; temperature = 1.0)
-end
-@potts_model FbRobinParamRoute begin
-    @kinds medium A
-    @parameters begin
-        Dc = 0.5
-        αp = 2.0
-        gp = 1.0
-        face_value = gp / αp
-    end
-    @variables c(field) = 0.0
-    @lattice Lattice((8, 6); boundary = Closed())
-    @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ Dc * Δ(c)
-    @boundary c begin
-        x => (Dirichlet(face_value), NoFlux())
-    end
-    @sweep Metropolis(; temperature = 1.0)
-end
-@potts_model FbSplit begin
-    @kinds medium A
-    @parameters Dc = 0.5
-    @variables c(field) = 0.0
-    @lattice Lattice((8, 6); boundary = Closed())
-    @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ Dc * Δ(c)
-    @boundary c begin
-        x => (Dirichlet(1.0), NoFlux())
-    end
-    @bcs c(t, 8, y) ~ 0.0
-    @sweep Metropolis(; temperature = 1.0)
-end
-@potts_model FbSplitRoute begin
-    @kinds medium A
-    @parameters Dc = 0.5
-    @variables c(field) = 0.0
-    @lattice Lattice((8, 6); boundary = Closed())
-    @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ Dc * Δ(c)
-    @bcs begin
-        c(t, 0, y) ~ 1.0
-        c(t, 8, y) ~ 0.0
-    end
-    @sweep Metropolis(; temperature = 1.0)
-end
-@potts_model FbSelfMask begin
-    @kinds medium A
-    @parameters Dc = 0.5
-    @variables c(field) = 0.0
-    @lattice Lattice((8, 6); boundary = Closed())
-    @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ 0.1
-    @boundary c begin
-        sites(c >= 0.8) => Dirichlet(0.8)
-    end
+    @fields FdPDE.interior()
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model FbSelfMaskBcs begin
@@ -2038,18 +1827,6 @@ end
     @fields FdPDE.b_self_mask_bcs()
     @sweep Metropolis(; temperature = 1.0)
 end
-@potts_model FbSelfMaskDiff begin
-    @kinds medium A
-    @parameters Dc = 0.5
-    @variables c(field) = 0.0
-    @lattice Lattice((8, 6); boundary = Closed())
-    @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ Dc * Δ(c) + 0.1
-    @boundary c begin
-        sites(c >= 0.8) => Dirichlet(0.8)
-    end
-    @sweep Metropolis(; temperature = 1.0)
-end
 @potts_model FbSelfMaskDiffBcs begin
     @kinds medium A
     @lattice Lattice((8, 6); boundary = Closed())
@@ -2057,42 +1834,9 @@ end
     @fields FdPDE.b_self_mask_diff_bcs()
     @sweep Metropolis(; temperature = 1.0)
 end
-@potts_model FbRobinParamY begin
-    @kinds medium A
-    @parameters begin
-        Dc = 0.5
-        βp = 2.0
-        gp = 1.0
-    end
-    @variables c(field) = 0.0
-    @lattice Lattice((8, 6); boundary = Closed())
-    @energy cells(A) => (volume - 9.0)^2
-    @equations D(c) ~ Dc * Δ(c)
-    @boundary c begin
-        y => (NoFlux(), Robin(0, βp, gp))
-    end
-    @sweep Metropolis(; temperature = 1.0)
-end
-# a `@boundary` mask on `c` that reads `e`, stepped after `c` (review round 2 of F2 batch 4,
-# open question: accepted; before: refused "a field stepped with or after `c`"), its `@bcs`
-# form, and a mask on `e` that reads `c`, stepped before `e`
-@potts_model FbMaskLater begin
-    @kinds medium A
-    @variables begin
-        c(field) = 0.0
-        e(field) = 0.0
-    end
-    @lattice Lattice((8, 6); boundary = Closed())
-    @energy cells(A) => (volume - 9.0)^2
-    @equations begin
-        D(c) ~ 0.5 * Δ(c)
-        D(e) ~ 0.1
-    end
-    @boundary c begin
-        sites(e >= 0.5) => Dirichlet(0.8)
-    end
-    @sweep Metropolis(; temperature = 1.0)
-end
+# a mask on `c` that reads `e`, stepped after `c` (review round 2 of F2 batch 4, open question:
+# accepted; before: refused "a field stepped with or after `c`"), and a mask on `e` that reads
+# `c`, stepped before `e`
 @potts_model FbMaskLaterBcs begin
     @kinds medium A
     @lattice Lattice((8, 6); boundary = Closed())
@@ -2115,28 +1859,15 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
-@testset "F2-11 review: off-face lines, routes followed, a self-reading mask, h = 2" begin
-    # S1: a `@bcs` line off a face is `parse_bcs`'s, with the faces named (base: "the high side
-    # of `x`, which `@boundary c` sets too")
+@testset "F2-11 review: off-face lines, a self-reading mask, h = 2" begin
+    # S1: a condition off a face is `parse_bcs`'s, with the faces named (base: "the high side
+    # of `x`, which `@boundary c` sets too"); the location names the PDESystem
     err = something(fd_err(() -> mtkcompile(FbInterior(; name = :f))), "")
-    @test occursin("`x = 3` is not on a face", err) && occursin("the high face is `x = 8.0`", err) && !occursin("high side", err)
-    # R4: the error names the `@bcs` line (base: the first `@equations` line)
-    @test occursin(r"\n  in @bcs c\(t, 3, y\) ~ 1\.0 at .*fields\.jl:\d+", err) && !occursin("in @equations", err)
-    # S2: the Robin route with parameters, followed, builds (base: `Dirichlet(gp / αp)`, refused);
-    # F4-12a: an expression is a boundary value, so the route is the expression itself (F2-11
-    # R6 named a computed parameter per face, `c_x_low = gp / αp`)
-    err = something(fd_err(() -> FbRobinParam(; name = :f)), "")
-    @test occursin("`Dirichlet((gp) / (αp))`", err)
-    err = something(fd_err(() -> FbRobinParamY(; name = :f)), "")
-    @test occursin("`Flux((gp) / (βp))`", err)
-    @test fd_err(() -> mtkcompile(FbRobinParamRoute(; name = :f))) === nothing
-    # S3: one side in `@boundary`, the other in `@bcs`: the route moves the axis, and runs
-    err = something(fd_err(() -> mtkcompile(FbSplit(; name = :f))), "")
-    @test occursin("move the whole axis there", err) && occursin("`x = 0`", err)
-    @test occursin(r"\n  in @bcs c\(t, 8, y\) ~ 0\.0 at .*fields\.jl:\d+", err)   # R4
-    @test fd_err(() -> mtkcompile(FbSplitRoute(; name = :f))) === nothing
+    @test occursin("`x = 3` is not on a face", err) && occursin("the high face is `x = 8.0`", err) && !occursin("high side", err) ||
+          (println("S1: ", err); false)
+    @test occursin("PDESystem `fields`", err) && !occursin("in @equations", err) || (println("S1: ", err); false)
     # (a): a mask that reads the field it clamps: clamped first, evaluated at each MCS start on
-    # the clamped values, held over the MCS (hand oracle; the `@bcs` form is the same run)
+    # the clamped values, held over the MCS (hand oracle)
     c0 = rand(StableRNG(9), 8, 6)
     run(M; k = 3, n = 1) = solve(PottsProblem(M(; name = :f), [fd_empty((8, 6)); :c => c0], (0, k);
         field_solver = ExplicitEuler(; substeps = n)), SequentialCPM()).u[end].site.c
@@ -2145,8 +1876,8 @@ end
         m = hand .>= 0.8
         hand = ifelse.(m, 0.8, hand .+ 0.1)
     end
-    a = run(FbSelfMask)
-    @test isapprox(a, hand; rtol = 1e-14) && a == run(FbSelfMaskBcs)
+    a = run(FbSelfMaskBcs)
+    @test isapprox(a, hand; rtol = 1e-14)
     # R5: with 4 substeps and diffusion, the mask is held over the MCS: evaluated at the window
     # start (then clamped), the values clamped after each substep; the control evaluates the
     # mask at every substep and misses
@@ -2163,8 +1894,8 @@ end
         end
         return c
     end
-    a = run(FbSelfMaskDiff; n = 4)
-    @test isapprox(a, selfmask(:start); rtol = 1e-14) && a == run(FbSelfMaskDiffBcs; n = 4)
+    a = run(FbSelfMaskDiffBcs; n = 4)
+    @test isapprox(a, selfmask(:start); rtol = 1e-14)
     @test !isapprox(a, selfmask(:substep); rtol = 1e-6)
     # N1: `Flux` and `Robin` on both axes at h = 2 against the ghost-node FTCS (α/2 − β/h ≠ 0);
     # the control `q / h` for `q h` misses
@@ -2177,7 +1908,7 @@ end
 
 # Review round 2 of F2 batch 4, open question (accepted): a mask reads the state at its group's
 # window start. A mask on `c` that reads `e`, stepped after `c`, reads `e` before its step,
-# with one solver group or two (`c`'s first), and A equals B; a mask on `e` that reads `c`,
+# with one solver group or two (`c`'s first), and equals LatticePDE's own run; a mask on `e` that reads `c`,
 # stepped earlier in another solver group, reads `c` as stepped in this MCS (as a rate reads
 # another group). The controls (the other oracle in each case) miss.
 @testset "F2-11 review: a mask reads its group's window start" begin
@@ -2211,20 +1942,19 @@ end
         return out
     end
     hs, ha = later(:start), later(:after)
-    @test fd_err(() -> mtkcompile(FbMaskLater(; name = :f))) === nothing
+    @test fd_err(() -> mtkcompile(FbMaskLaterBcs(; name = :f))) === nothing
     for kw in (one, two)
-        a = runA(FbMaskLater; kw...)
+        a = runA(FbMaskLaterBcs; kw...)
         @test all(i -> isapprox(a[i][1], hs[i]; rtol = 1e-14), 1:K)
         @test !isapprox(a[K][1], ha[K]; rtol = 1e-6)               # control: `e` after its step
-        @test [x[1] for x in a] == [x[1] for x in runA(FbMaskLaterBcs; kw...)]
     end
-    # B (`Potts.fields` → `discretize`) equals A with one solver group, bitwise
-    pf = Potts.fields(FbMaskLater(; name = :f))
+    # LatticePDE's own run (`Potts.fields` → `discretize`) equals the coupled one with one solver group, bitwise
+    pf = Potts.fields(FbMaskLaterBcs(; name = :f))
     bp = LP.discretize(pf, LP.LatticeDiscretization(LP.Grid(dims); T = Float64);
         u0 = [:c => c0, :e => e0], tspan = (0, K))
     sbp = LP.solve(bp, LP.ExplicitEuler(; dt = 1.0, substeps = N); saveat = 1.0)
     b = [sbp[:c, i] for i in 2:length(sbp.t)]
-    @test b == [x[1] for x in runA(FbMaskLater; one...)]
+    @test b == [x[1] for x in runA(FbMaskLaterBcs; one...)]
     # the mask on `e` from `c` at the window start or after `c`'s step
     function earlier(src)
         c, e = copy(c0), copy(e0)
@@ -2248,19 +1978,19 @@ end
     @test all(i -> isapprox(a2[i][2], ga[i]; rtol = 1e-14), 1:K) && !isapprox(a2[K][2], gs[K]; rtol = 1e-6)
 end
 
+@potts_model FbPeriodicBcs begin
+    @kinds medium A
+    @lattice Lattice((8, 6); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @fields FdPDE.periodic_bcs()
+    @sweep Metropolis(; temperature = 1.0)
+end
 @testset "F2-11: the refusals, each with its route" begin
-    # `Robin` with β = 0 is a fixed value, with α = 0 a flux (refused when the model is built)
-    @test occursin("write it as `Dirichlet(0.5)`", something(fd_err(() -> FbRobinB0(; name = :f)), ""))
-    @test occursin("write it as `Flux(0.5)`", something(fd_err(() -> FbRobinA0(; name = :f)), ""))
-    # a face in both `@boundary` and `@bcs`: the `@bcs` text as written
-    err = something(fd_err(() -> mtkcompile(FbBoth(; name = :f))), "")
-    @test occursin("already has a condition there", err) && occursin("`c(t, 0, y) ~ 2.0`", err)
-    # a periodic pair on an axis the lattice closes: per-field periodicity is FE-20
+    # a periodic pair on an axis the lattice closes: per-field periodicity is FE-20 (`Robin`
+    # with β = 0 or α = 0, a face set twice and an initial condition in `@bcs` were front end A's
+    # refusals, gone with it in F4-B6)
     err = something(fd_err(() -> mtkcompile(FbPeriodicBcs(; name = :f))), "")
-    @test occursin("FE-20", err) && occursin("periodic", err)
-    # an initial condition: the field's default is its initial value
-    err = something(fd_err(() -> mtkcompile(FbInitBcs(; name = :f))), "")
-    @test occursin("initial value", err) && occursin("default", err)
+    @test occursin("FE-20", err) && occursin("periodic", err) || (println("periodic: ", err); false)
 end
 
 # F2-12 (F2 design §2.8): `Potts.fields(model)` → `discretize(…; p = [:k => 2.0])` runs with no

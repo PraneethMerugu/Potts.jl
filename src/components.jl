@@ -74,15 +74,11 @@ function _map_statements(f, sys::PottsSystem; seen = nothing)
         Pair{Any, Any}[f(a) => fx(b) for (a, b) in v.writes]))
     fs = _p(sys, :sweep)
     sweep = SweepSpec(fs.law, f(fs.temperature), fs.combine, fs.offset, fs.mcs_duration)
-    fn(x) = x isa Union{Nothing, Real} ? x : f(x)          # boundary values and masks: numbers stay
-    fbd(b::BoundaryEntry) = keep(b, BoundaryEntry(b.field, b.axis,
-        map(x -> x isa Dirichlet ? Dirichlet(fn(x.value)) : x, b.sides), fn(b.mask), fn(b.value)))
     return (; energies = map(fe, _p(sys, :energies)), drives = map(fd, _p(sys, :drives)),
         constraints = map(fc, _p(sys, :constraints)), updates = map(fu, _p(sys, :updates)),
         equations = map(fq, _p(sys, :equations)), divisions = map(fv, _p(sys, :divisions)),
         link_rules = map(fl, _p(sys, :link_rules)), observed = map(fo, _p(sys, :observed)),
-        discrete = map(fb, _p(sys, :discrete)), boundaries = map(fbd, _p(sys, :boundaries)),
-        converts = map(fcv, _p(sys, :converts)), sweep, sources = src)
+        discrete = map(fb, _p(sys, :discrete)), converts = map(fcv, _p(sys, :converts)), sweep, sources = src)
 end
 
 """The model with its components expanded into cell variables, parameters and cell ODEs."""
@@ -237,7 +233,7 @@ function _bind_components(sys::PottsSystem)
     bound = _replace(sys; parameters = params, variables = vars, energies = mapped.energies, drives = mapped.drives,
         constraints = mapped.constraints, updates = mapped.updates, equations = [mapped.equations; odes],
         divisions = mapped.divisions, converts = mapped.converts, link_rules = mapped.link_rules, observed = mapped.observed,
-        discrete = blocks, sweep = mapped.sweep, boundaries = mapped.boundaries,
+        discrete = blocks, sweep = mapped.sweep,
         sources = merge(_p(sys, :sources), mapped.sources), components = Any[])
     return _check_primed_names(_check_name_categories(_check_reserved_names(bound)))
 end

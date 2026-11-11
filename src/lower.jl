@@ -128,7 +128,7 @@ function lower(x, env::LowerEnv)
     op === gather && return _lower_gather(args, env)
     op === _connected && return _lower_connected(args, env)
     op === population && return _lower_population(args, env)
-    op === Δ && error("`Δ` is a field operator: the field compiler lowers it in field equations (`D(c) ~ … Δ(c) …`); " *
+    op === Δ && error("`Δ` is a field operator: the field compiler lowers it in a field's PDESystem (`@fields`, `Potts.couple`); " *
                       "it is not available in $(_MODE_NAMES[env.mode])")
     # cell references (R6, D-066 item 5): liveness, sources, the enclosing cell of a fold
     op === cell_alive && return :(Potts._alive_slot($(_refst(env)).cell.volume, $(lower(args[1], env))))
@@ -727,6 +727,17 @@ function _is_bool_node_read(x)
     return iscall(a) && operation(a) === _nonzero
 end
 
+# A field operator read in a model statement (`Δ(c)[target]` under `using Potts.Fields`): an
+# operator is a term of the fields' PDESystem; the model reads its value through an aux field
+function _operator_read_text(x)
+    o = _unwrap(arguments(x)[end])
+    n = info(o) === nothing ? "c" : string(info(o).name)
+    op = _nopkg(replace(_builtin_text(string(x)), r"\b(\w+)\(t\)" => s"\1"))
+    return string("`", op, "` is a field operator, a term of the fields' PDESystem; a model statement reads a field, not an ",
+        "operator of it: give the PDESystem an aux field `L(t, x, y) ~ ", replace(op, Regex("\\b" * n * "\\b") => "$n(t, x, y)"),
+        "` (with `L(t, x, y)` among its dependent variables), name it in `@fields $n, L = pdesys`, and read `L[target]`")
+end
+
 function _lower_at(args, env)
     x = _unwrap(args[1])
     # `Pre(x[i])` arrives as `at(Pre(x), i)`: the previous value is the stored one
@@ -739,6 +750,7 @@ function _lower_at(args, env)
         return :(Potts._position($(env.T), ctx, $(lower(arguments(x)[2], env)))[$(lower(args[2], env))])
     end
     i = info(x)
+    i === nothing && iscall(x) && _spatial_op(operation(x)) && throw(ArgumentError(_operator_read_text(x)))
     i === nothing && error("cannot index `$(_standin_var(x))`")
     # `x[ref]`: the referent's value, the medium's when it is dead or 0 (D-066 item 5)
     i.role !== :kindtable && length(args) == 2 && _is_ref(args[2]) && return _lower_deref(i, args[2], env)

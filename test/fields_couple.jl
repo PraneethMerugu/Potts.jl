@@ -354,13 +354,15 @@ end
     σ = Array(integ.u.σ)
     k = Array(integ.u.cell.kind)
     V = [count(==(j), σ) for j in 1:length(k)]
-    @test Set(keys(inp)) == Set([:endo, :vol])
-    @test eltype(inp[:endo]) === Bool && inp[:endo] == [s != 0 && k[s] == 1 for s in σ]
+    # (the inputs of `Potts.fields`: the binding `endo => kind == A` is written in as `kind == 1`,
+    # so its input is `kind`; `vol` binds a CPM read and keeps its name; F4-B6 review)
+    @test Set(keys(inp)) == Set([:kind, :vol])
+    @test eltype(inp[:kind]) === Int32 && inp[:kind] == [s == 0 ? 0 : k[s] for s in σ]
     @test eltype(inp[:vol]) === Float64 && inp[:vol] == [s == 0 ? 0.0 : Float64(V[s]) for s in σ]
     @test σ != cp_op()[1][2]                                                            # (the cells moved)
     # the initial state of a problem; a model without coupled inputs
     p = PottsProblem(CpFields(; name = :m), cp_op(), (0, 1))
-    @test Potts.field_inputs(p)[:endo] == (cp_op()[1][2] .!= 0)
+    @test Potts.field_inputs(p)[:kind] == (cp_op()[1][2] .!= 0)
     @test isempty(Potts.field_inputs(PottsProblem(CpHost(; name = :m), cp_op(), (0, 1))))
     # the ODE path: σ frozen, the PDESystem discretized with those inputs and solved by Tsit5 over
     # one MCS from the field at MCS 5, against the owned explicit run at many substeps
@@ -370,8 +372,8 @@ end
         step!(integ)
     end
     c5 = copy(Array(integ.u.site.c))
-    prob = Potts.LatticePDE.discretize(CpPDE.sys2(), Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((24, 20)); T = Float64);
-        inputs = collect(Potts.field_inputs(integ)))
+    prob = Potts.LatticePDE.discretize(Potts.fields(CpFrozen(; name = :m)),
+        Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((24, 20)); T = Float64); inputs = collect(Potts.field_inputs(integ)))
     s = solve(remake(prob; u0 = vec(c5), tspan = (0.0, 1.0)), Tsit5(); abstol = 1e-11, reltol = 1e-11)
     step!(integ)
     c6 = Array(integ.u.site.c)
@@ -480,6 +482,20 @@ cr_run(m, fs, k = 10; op = cp_op(), seed = 5) =
 cr_hand(σ, kind) = [:endo => [s != 0 && kind[s] == 1 for s in σ], :isB => [s != 0 && kind[s] == 2 for s in σ],
                     :vol => [s == 0 ? 0.0 : Float64(count(==(s), σ)) for s in σ]]
 cr_divided(σ0, σ) = maximum(σ) != maximum(σ0)
+# `kind == 1` at the owner of each `k × k` block, on every site of the block: the owner is the kind on
+# most of its sites, a tie goes to the smallest cell kind, and the medium only when no cell kind ties
+function cr_owner_endo(σ, kind, k)
+    ks = [s == 0 ? 0 : Int(kind[s]) for s in σ]
+    out = falses(size(σ))
+    for I in 1:k:size(σ, 1), J in 1:k:size(σ, 2)
+        b = vec(ks[I:(I + k - 1), J:(J + k - 1)])
+        m = maximum(count(==(v), b) for v in b)
+        top = sort!(unique(v for v in b if count(==(v), b) == m))
+        o = any(!=(0), top) ? first(filter(!=(0), top)) : 0
+        out[I:(I + k - 1), J:(J + k - 1)] .= o == 1
+    end
+    return out
+end
 
 @testset "F4-B2 review: lifecycle, faces, mask, steady rows, two PDESystems and Coarse(2), owned oracle" begin
     for fs in (ExplicitEuler(), BackwardEuler(), FieldGroups(:c => BackwardEuler(), :q => QuasiSteady()))
@@ -500,13 +516,17 @@ cr_divided(σ0, σ) = maximum(σ) != maximum(σ0)
         f1 = fs isa ExplicitEuler ? ExplicitEuler(; substeps = 4) : fs
         err, n = cp_replay(CrTwoB(; name = :m), CpRev.first_sys(), cp_hand2, cp_own(f1); fs = f1, k = 10, seed = 5)
         @test n == 10 && err <= cp_tol(fs) || (println("CrTwoB $fs: $err"); false)
-        # the coarse field against LatticePDE's run of the model's own system (`Potts.fields`, its
-        # input the kind number per site, as F3-17 does)
+        # the coarse field against LatticePDE's run of the raw PDESystem, with `endo` filled by hand
+        # at each block's owner (F4-B6 review). The binding `endo => kind == A` is a kind
+        # expression, so on the coarse grid it is read at the block's owner, the kind on most of
+        # its sites (docs/src/manual/variables.md, `lattice_level`); the raw PDESystem's own Bool
+        # input `endo` would be folded by its mean over the block instead (0.25 apart where a
+        # block is partly `A`). Measured 2.2e-16 under both solvers (2026-11-11)
         c = cr_run(CrCrs(; name = :m), fs)
         @test size(c.u[end].site.cc) == (12, 10)
-        err, n = cp_replay(CrCrs(; name = :m), Potts.fields(CrCrs(; name = :m)),
-            (σ, kind) -> [:kind => Int32[s == 0 ? 0 : kind[s] for s in σ]], cp_own(fs); fs, k = 10, seed = 5, fields = (:cc,))
-        @test n == 10 && err <= cp_tol(fs) || (println("CrCrs $fs: $err"); false)
+        err, n = cp_replay(CrCrs(; name = :m), CpRev.coarse_sys(), (σ, kind) -> [:endo => cr_owner_endo(σ, kind, 2)],
+            cp_own(fs); fs, k = 10, seed = 5, fields = (:cc,))
+        @test n == 10 && err <= 1e-14 || (println("CrCrs $fs: $err"); false)
     end
 end
 
@@ -529,7 +549,7 @@ end
         cp_own(ExplicitEuler()); k = 10, seed = 5, op = cr_kop())
     @test n == 10 && err <= 1e-14 || (println("CrKindReal: $err"); false)   # (measured 4.4e-16, 2026-11-10)
     fi = Potts.field_inputs(PottsProblem(CrKindReal(; name = :m), cr_kop(), (0, 1)))
-    @test fi[:kind][6, 6] === 1.0 && fi[:kind][15, 11] === 2.0 && fi[:kind][1, 1] === 0.0
+    @test fi[:kind][6, 6] === Int32(1) && fi[:kind][15, 11] === Int32(2) && fi[:kind][1, 1] === Int32(0)
 end
 
 @testset "F4-B2 review M2: a name @fields brought in, declared again after it, is refused" begin
@@ -573,7 +593,7 @@ end
     m1 = Potts.couple(host, CpRev.first_sys(); inputs = [CpRev.endo => Potts.kind == 1])
     a, b = cr_run(ma, ExplicitEuler(); op = cr_kop()), cr_run(m1, ExplicitEuler(); op = cr_kop())
     @test cp_same(b, a) && maximum(a.u[end].site.c) > 0.5
-    @test Potts.field_inputs(PottsProblem(ma, cr_kop(), (0, 1)))[:endo][6, 6] === true
+    @test Potts.field_inputs(PottsProblem(ma, cr_kop(), (0, 1)))[:kind][6, 6] === Int32(1)
 end
 
 @testset "F4-B2 review S2: messages name the @fields binding and line order" begin
@@ -614,4 +634,83 @@ end
         end
     end)
     @test occursin("write `@fields` after `@kinds`", e) || (println(e); false)
+end
+
+# ---------------------------------------------------------------------------------------------
+# F4-B6 (F4 design §11, D-F4-B6): front end A's field surface is gone. Each of its spellings is an
+# ordinary error that names the route: a field line in `@equations` points to `@fields`; a name of
+# a field's PDESystem (`Δ`, `masked`, `Differential`, …) that the model's module does not define
+# points to `using Potts.Fields` and `@fields`; a field equation given to `PottsSystem(; equations)`
+# points to `Potts.couple`. Each is checked in a fresh module, so no name another test file
+# brought into `Main` is read. Negative control: at 866ea0e9 (A present) every A spelling below
+# builds and no refusal is raised (~/lpwork/f4B6/nc-b6.log).
+function cp_fresh_err(ex)
+    m = Module(:CpFresh)
+    Core.eval(m, :(using Potts))
+    return try
+        Core.eval(m, ex)
+        "built"
+    catch err
+        while err isa LoadError
+            err = err.error
+        end
+        err isa ArgumentError ? sprint(showerror, err) : "not an ArgumentError: " * sprint(showerror, err)
+    end
+end
+cp_a_model(lines...) = quote
+    @potts_model CpA begin
+        @kinds medium A
+        @variables begin
+            c(field) = 0.0
+            x(cell) = 1.0
+        end
+        @lattice Lattice((8, 8); boundary = Closed())
+        @energy cells(A) => (volume - 9.0)^2
+        $(lines...)
+        @sweep Metropolis(; temperature = 1.0)
+    end
+    CpA(; name = :m)
+end
+
+@testset "F4-B6: a field line in @equations is refused, pointing to @fields" begin
+    for (line, what) in ((:(@equations D(c) ~ -0.1 * c), "D(c)"), (:(@equations 0 ~ 1.0 - c), "0 ~"), (:(@equations c ~ 1.0), "c ~"))
+        e = cp_fresh_err(cp_a_model(line))
+        @test occursin("@equations: `", e) && occursin(what, e) && occursin("is an equation of the field `c`", e) &&
+              occursin("`@equations` holds cell and model equations", e) && occursin("using Potts.Fields", e) &&
+              occursin("`@fields c = pdesys", e) || (println(e); false)
+    end
+    # control: a cell equation, and the static field read by a drive, build
+    @test cp_fresh_err(cp_a_model(:(@equations D(x) ~ -0.1 * x), :(@drive Chemotaxis(c; strength = 1.0, kinds = (A,))))) == "built"
+end
+
+@testset "F4-B6: a name of a field's PDESystem in a model body points to using Potts.Fields" begin
+    for s in (:Δ, :DivKGrad, :Advect, :Upwind1, :masked, :Differential, :Shift)
+        e = cp_fresh_err(cp_a_model(:(@observed q ~ $s(1.0))))
+        @test occursin("`$s` is not defined in the model body", e) && occursin("using Potts.Fields", e) &&
+              occursin("@fields", e) || (println(s, ": ", e); false)
+    end
+    # the A field line is refused at expansion with the same route
+    e = cp_fresh_err(cp_a_model(:(@equations D(c) ~ 0.1 * Δ(c))))
+    @test occursin("`Δ` is not defined in the model body", e) && occursin("@fields", e) || (println(e); false)
+    # control: a module that defines the name reads its own (`using Potts.Fields`: `Δ` is LatticePDE's
+    # operator, which a model statement refuses where it is lowered, naming the route)
+    m = Module(:CpFreshFields)
+    Core.eval(m, :(using Potts; using Potts.Fields: Δ))
+    Core.eval(m, cp_a_model(:(@observed lap ~ Δ(c))))
+    @test Base.invokelatest(() -> Core.eval(m, :(CpA(; name = :m)))) isa PottsSystem
+end
+
+@testset "F4-B6: a field equation in PottsSystem(; equations) is refused, pointing to Potts.couple" begin
+    c = Potts.variable(only(Potts.Symbolics.@variables c(Potts.t)), :field; default = 0.0)
+    base = (; name = :p, kinds = [:medium, :A], lattice = Potts.lattice_spec((24, 20); boundary = Closed()),
+        sweep = Potts.sweep_spec(:metropolis; temperature = 4.0))
+    e = cp_msg(() -> Potts.PottsSystem(; base..., variables = Any[c], equations = [Potts.D(c) ~ -0.1 * c]))
+    @test occursin("PottsSystem: the equation `", e) && occursin("is an equation of the field `c`", e) &&
+          occursin("no coupled PDESystem brought", e) && occursin("Potts.couple(model, pdesys; inputs", e) || (println(e); false)
+    # control: the route runs, and a coupled model rebuilt through the keyword constructor (an
+    # extension) keeps its fields
+    host = Potts.PottsSystem(; base...)
+    m = Potts.couple(host, CpPDE.sys2(); inputs = [CpPDE.endo => Potts.kind == 1])
+    @test maximum(cp_run(m, ExplicitEuler()).u[end].site.c) > 0.5
+    @test Potts.extend(Potts.PottsSystem(; base...), m) isa PottsSystem
 end

@@ -746,7 +746,7 @@ end
     # controls: the same sources with valid entries build
     @test p63b_problem(:P63bFace2, face...; fkw...) isa PottsProblem
     @test p63b_order_problem(:fields_sweep) isa PottsProblem
-    @test :Dirichlet in keys(Potts.DSL) && :NoFlux in keys(Potts.DSL)
+    @test !(:Dirichlet in keys(Potts.DSL)) && !(:NoFlux in keys(Potts.DSL))     # removed with `@boundary` (D-F4-B6)
 end
 
 # =======================================================================================

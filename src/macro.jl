@@ -10,8 +10,8 @@ const SECTIONS = (Symbol("@structural_parameters"), Symbol("@kinds"), Symbol("@p
     Symbol("@drive"), Symbol("@constraint"), Symbol("@on_copy"), Symbol("@after_mcs"),
     Symbol("@before_mcs"), Symbol("@equations"), Symbol("@divide"), Symbol("@sweep"),
     Symbol("@relationship"), Symbol("@link"), Symbol("@unlink"), Symbol("@observed"),
-    Symbol("@extend"), Symbol("@components"), Symbol("@boundary"), Symbol("@schedule"),
-    Symbol("@initialization_equations"), Symbol("@convert"), Symbol("@bcs"), Symbol("@fields"))
+    Symbol("@extend"), Symbol("@components"), Symbol("@schedule"),
+    Symbol("@initialization_equations"), Symbol("@convert"), Symbol("@fields"))
 
 """
     @potts_model Name begin
@@ -110,50 +110,79 @@ function _warn_coordinate_globals(name, body, parts)
             !any(p -> first(p) === s, parts.structural) || continue
         _reads_free(body, s) && !_binds_top(body, s) || continue
         @warn string("@potts_model ", name, ": `", s, "` in the model body is the lattice coordinate (bound in model ",
-            "bodies for field equations); the global `", parts.mod, ".", s, "` is not read there. To use the global's ",
+            "bodies for the fields' bindings); the global `", parts.mod, ".", s, "` is not read there. To use the global's ",
             "value, declare it, `@parameters ", s, " = …` (the model's own `", s, "` hides the coordinate), or rename ",
             "the global") _module = parts.mod
     end
     return nothing
 end
+# The names of a field's PDESystem (LatticePDE's operators and `masked`, MTK's `Differential` and
+# `Shift`) are not names of the model body: a field is a PDESystem written with `using
+# Potts.Fields` and coupled with `@fields`. A body that reads one the calling module does not
+# define meets this error at expansion (a module that defines one reads its own, as Julia does)
+const _FIELD_BODY_NAMES = (:Δ, :DivKGrad, :Advect, :Upwind1, :masked, :Differential, :Shift)
+function _check_field_body_names(name, body, parts)
+    for s in _FIELD_BODY_NAMES
+        (isdefined(parts.mod, s) || haskey(parts.declared, s) || s in parts.bound || any(p -> first(p) === s, parts.structural)) &&
+            continue
+        _reads_free(body, s) && !_binds_top(body, s) || continue
+        throw(ArgumentError(string("@potts_model ", name, ": `", s, "` is not defined in the model body; a field and its ",
+            "operators (`Δ`, `DivKGrad`, `Advect`, `masked`, `Differential`, …) are written as a PDESystem with ",
+            "`using Potts.Fields` and coupled into the model with `@fields c = pdesys (input => expression)`")))
+    end
+    return nothing
+end
+# The old condition sections `@bcs` and `@boundary` are not sections of a model body (F4-B6): a
+# field's conditions are the second argument of its PDESystem. A body that uses one meets this
+# error at expansion, with the route (a module that defines the macro uses its own)
+const _OLD_BCS_TEXT = string("a field's conditions are the second argument of its PDESystem (`using Potts.Fields`): ",
+    "`PDESystem(eqs, [c(t, 0, y) ~ v, Differential(x)(c(t, L, y)) ~ 0, c ~ masked(wall(t, x, y), 0.0)], domain, ivs, ",
+    "dvs, ps)` with `wall(..)::Bool [input = true]` among the dependent variables, coupled into the model with ",
+    "`@fields c = pdesys (wall => kind == border)`")
+const _OLD_BOUNDARY_TEXT = string("a face condition is an equation in the second argument of the field's PDESystem ",
+    "(`using Potts.Fields`), coupled into the model with `@fields c = pdesys`. On the low face of `x`: Dirichlet ",
+    "`c(t, 0, y) ~ v`; NoFlux `Differential(x)(c(t, 0, y)) ~ 0` (a closed axis without a condition has no flux); Robin ",
+    "`α * c(t, 0, y) - β * Differential(x)(c(t, 0, y)) ~ g` (α c + β ∂c/∂n = g, n the outward normal). On the high ",
+    "face `x = L` the outward normal is `+x`: `c(t, L, y) ~ v`, `Differential(x)(c(t, L, y)) ~ 0`, ",
+    "`α * c(t, L, y) + β * Differential(x)(c(t, L, y)) ~ g`")
+function _check_old_condition_sections(name, body, mod)
+    for (s, text) in ((Symbol("@bcs"), _OLD_BCS_TEXT), (Symbol("@boundary"), _OLD_BOUNDARY_TEXT))
+        isdefined(mod, s) && continue
+        _uses_macro(body, s) || continue
+        throw(ArgumentError(string("@potts_model ", name, ": `", s, "` is not a section of a model body; ", text)))
+    end
+    return nothing
+end
+_uses_macro(ex, s) = ex isa Expr && ((ex.head === :macrocall && ex.args[1] === s) || any(a -> _uses_macro(a, s), ex.args))
 # Whether `ex` reads `s` outside every scope that binds `s` itself (review R1 of F2 batch 4: a
-# helper `g(x) = 2x` binds `x` in its own body only, so `D(c) ~ g(1.0) * x` still reads the
-# coordinate). Scopes: a function definition (its arguments, keywords included), an anonymous
-# function, `let`, a `for` loop and a generator or comprehension. Syntax that is not a read: the
-# axis keys of `@boundary`, the axis of `Differential(x)`, the face arguments of a field read in
-# `@bcs` (`c(t, x, 0)`; the right side still counts) and a keyword name (`h(x = 0.5)`).
-function _reads_free(ex, s; bcs = false)
+# helper `g(x) = 2x` binds `x` in its own body only, so a binding `src => g(1.0) * x` still
+# reads the coordinate). Scopes: a function definition (its arguments, keywords included), an
+# anonymous function, `let`, a `for` loop and a generator or comprehension. A keyword name
+# (`h(x = 0.5)`) is not a read.
+function _reads_free(ex, s)
     ex === s && return true
     ex isa Expr || return false
     h = ex.head
-    if h === :macrocall
-        ex.args[1] === Symbol("@boundary") && return false
-        bcs = bcs || ex.args[1] === Symbol("@bcs")
-    end
-    h === :kw && return _reads_free(ex.args[2], s; bcs)
+    h === :kw && return _reads_free(ex.args[2], s)
     if _is_fundef(ex)
         sig = ex.args[1]
         s in _sig_binders(sig) && return false
-        return any(a -> _reads_free(a, s; bcs), _sig_defaults(sig)) || _reads_free(ex.args[2], s; bcs)
+        return any(a -> _reads_free(a, s), _sig_defaults(sig)) || _reads_free(ex.args[2], s)
     end
     if h === :->
         s in _sig_binders(ex.args[1]) && return false
-        return _reads_free(ex.args[2], s; bcs)
+        return _reads_free(ex.args[2], s)
     end
     if h === :let || h === :for
         binds = ex.args[1]
         bs = binds isa Expr && binds.head === :block ? binds.args : Any[binds]
         any(b -> _assigns(b, s), bs) && return false
-        return any(a -> _reads_free(a, s; bcs), ex.args)
+        return any(a -> _reads_free(a, s), ex.args)
     end
     if h === :generator
         any(b -> _assigns(b, s), _gen_binders(ex)) && return false
     end
-    # a field read at a face inside `@bcs`: `c(t, x, 0)`, its arguments are face syntax; so is
-    # the axis of `Differential(x)`
-    bcs && h === :call && length(ex.args) ≥ 2 && ex.args[2] === :t && return false
-    h === :call && ex.args[1] === :Differential && return false
-    return any(a -> _reads_free(a, s; bcs), ex.args)
+    return any(a -> _reads_free(a, s), ex.args)
 end
 _is_fundef(ex) = ex isa Expr && (ex.head === :function || ex.head === :(=)) && length(ex.args) == 2 &&
                  _sig_call(ex.args[1]) !== nothing
@@ -199,6 +228,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
     d = _div_definition(body)
     d === nothing || throw(ArgumentError("@potts_model $name defines `$d`: inside a model `div(a, b)` and `a ÷ b` " *
                                          "are integer division; give the helper another name"))
+    _check_old_condition_sections(name, body, mod)
     parts = _Parts(Any[], Symbol[], Any[], mod, Dict{Symbol, String}())
     union!(parts.bound, _extend_bound_names(body))
     for ex in body.args
@@ -212,6 +242,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         end
     end
     _warn_coordinate_globals(name, body, parts)
+    _check_field_body_names(name, body, parts)
     _check_fields_placement(body)
     kws = Any[Expr(:kw, :name, QuoteNode(name))]
     for (k, v) in parts.structural
@@ -225,17 +256,16 @@ function _potts_model(name::Symbol, body::Expr, mod)
     # are known only when the constructor runs
     _has_section(body, Symbol("@fields")) && push!(kws, Expr(:..., :__fields_kw))
     P = :(Potts)
-    # `@boundary`/`@schedule` state only in models that use them (anywhere, conditionals
-    # included): a model without them builds exactly as before (first-construction latency)
-    bsched = _has_section(body, Symbol("@boundary")) || _has_section(body, Symbol("@schedule"))
+    # `@schedule` state only in models that use it (anywhere, conditionals included): a model
+    # without it builds exactly as before (first-construction latency)
+    sched = _has_section(body, Symbol("@schedule"))
     # likewise `@initialization_equations` (D-170)
     inits = _has_section(body, Symbol("@initialization_equations"))
     # likewise `@convert` (R8, D-233)
     convs = _has_section(body, Symbol("@convert"))
-    # likewise `@bcs` (raw MTK boundary conditions: stored and printed; the field compiler classifies them)
-    # likewise `@fields` (F4-B2: a plain PDESystem's fields, its conditions joining `@bcs`)
+    # likewise `@fields` (F4-B2: a plain PDESystem's fields; its conditions are stored, printed and
+    # classified by the field compiler)
     coupled = _has_section(body, Symbol("@fields"))
-    bcs = _has_section(body, Symbol("@bcs")) || coupled
     preamble = quote
         # each parameter keyword, kept before `@extend` may rebind its name (D-114)
         $([:($(_kw_local(k)) = $k) for k in parts.params]...)
@@ -266,11 +296,11 @@ function _potts_model(name::Symbol, body::Expr, mod)
         __observed = $P.Equation[]
         __lattice = nothing
         __sweep = nothing
-        $(bsched ? :(__boundaries = $P.BoundaryEntry[]; __schedule = Any[]) : nothing)
+        $(sched ? :(__schedule = Any[]) : nothing)
         $(inits ? :(__init_eqs = $P.Equation[]) : nothing)
         $(convs ? :(__converts = $P.ConvertSpec[]) : nothing)
-        $(bcs ? :(__bcs = $P.Equation[]) : nothing)
-        $(coupled ? :(__field_inputs = Any[]; __bcs_origins = Pair{Any, Symbol}[]; __field_values = Dict{Symbol, Any}(pairs(__fields_kw));
+        $(coupled ? :(__bcs = $P.Equation[]; __field_inputs = Any[]; __bcs_origins = Pair{Any, Symbol}[];
+                      __coupled = Symbol[]; __field_values = Dict{Symbol, Any}(pairs(__fields_kw));
                       __fields_brought = Dict{Symbol, String}()) : nothing)
         __bases = $P.PottsSystem[]
         __sources = IdDict{Any, LineNumberNode}()
@@ -285,11 +315,11 @@ function _potts_model(name::Symbol, body::Expr, mod)
         constraints = __constraints, updates = __updates, equations = __equations,
         divisions = __divisions, relationships = __relationships, link_rules = __links,
         observed = __observed, frozen_kinds = __frozen, kind_classes = __classes, sources = __sources, components = __components,
-        sweep = __sweep, $((bsched ? (Expr(:kw, :boundaries, :__boundaries), Expr(:kw, :schedule, :__schedule)) : ())...),
+        sweep = __sweep, $((sched ? (Expr(:kw, :schedule, :__schedule),) : ())...),
         $((inits ? (Expr(:kw, :initialization_eqs, :__init_eqs),) : ())...),
         $((convs ? (Expr(:kw, :converts, :__converts),) : ())...),
-        $((bcs ? (Expr(:kw, :bcs, :__bcs),) : ())...),
-        structural = $structural, metadata = $(coupled ? :($P._with_field_inputs($P._built_metadata(__features), __field_inputs, __bcs_origins)) :
+        $((coupled ? (Expr(:kw, :bcs, :__bcs),) : ())...),
+        structural = $structural, metadata = $(coupled ? :($P._with_field_inputs($P._built_metadata(__features), __field_inputs, __bcs_origins, __coupled)) :
                                                :($P._built_metadata(__features)))))
     targets = :(Dict{Symbol, String}($([:($(QuoteNode(k)) => $v) for (k, v) in _prime_targets(parts, body)]...)))
     return quote
@@ -485,19 +515,6 @@ _push_located!(list, sources, xs::AbstractVector, ln) = foreach(x -> _push_locat
 _rewrite_eq(l) = l isa Expr && l.head === :call && l.args[1] === :~ && length(l.args) == 3 ?
                  :(Potts._eq($(rewrite(l.args[2])), $(rewrite(l.args[3])))) : rewrite(l)
 _is_range(ex) = ex isa Expr && ex.head === :call && ex.args[1] === :(:)
-# `@bcs` lines read a field at a face, `c(t, 0, y)` (F2 design §2.12): every plain call
-# `f(args…)` there goes through `Potts._bcs_call`, which builds the field read when `f` is a
-# field variable of the model and calls `f` otherwise
-function _bcs_calls(ex)
-    ex isa Expr || return ex
-    args = map(_bcs_calls, ex.args)
-    if ex.head === :call && ex.args[1] isa Symbol && !Base.isoperator(ex.args[1]) &&
-       !any(a -> a isa Expr && a.head in (:parameters, :kw), ex.args[2:end])
-        return Expr(:call, :(Potts._bcs_call), ex.args[1], args[2:end]...)
-    end
-    return Expr(ex.head, args...)
-end
-
 # `@equations` lines are MTK equations (D-257 item 5, V3-3): a kind set is the positional
 # term `ismember(kind, g)`. `∈` has an MTK meaning of its own (a domain pairing; `∈ Set(…)`
 # is `false` before any term exists, deleting the term), so it is refused here, while the
@@ -676,8 +693,10 @@ function _section!(parts, sec, args, ln = nothing)
                 decl = decl.args[1]
             end
             decl isa Expr && decl.head === :call && length(decl.args) == 2 ||
-                throw(ArgumentError("variables are declared with a scope: `x(site)`, `x(cell)`, `x(model)`, `c(field)`, " *
-                                    "`e(edge)` or `e(rel)` for an edge variable of `@relationship rel`"))
+                throw(ArgumentError("variables are declared with a scope: `x(site)`, `x(cell)`, `x(model)`, " *
+                                    "`e(edge)` or `e(rel)` for an edge variable of `@relationship rel`; a field is a " *
+                                    "dependent variable of a PDESystem, `@variables c(..) = 0.5 [bounds = (0, 1)]`, " *
+                                    "coupled into the model with `@fields`"))
             k, scope = decl.args
             _declare!(parts, k, "variable")
             # `= default, [options…]`; a tuple without an options vector is the default itself
@@ -805,7 +824,10 @@ function _section!(parts, sec, args, ln = nothing)
                                                               :($P.update($phase, $every, $l)), lln)))
         end
     elseif sec === Symbol("@equations")
-        foreach(((l, lln),) -> (_no_membership_sugar(l); push!(code, _located_push(:__equations, _rewrite_eq(l), lln))),
+        # cell and model equations; a field's equation is refused when the line is built
+        # (`_no_field_line`: whether its left side is a field is known then)
+        foreach(((l, lln),) -> (_no_membership_sugar(l);
+                                push!(code, _located_push(:__equations, :($P._no_field_line($(_rewrite_eq(l)), $(string(l)))), lln))),
             _lines_ln(args, ln))
     elseif sec === Symbol("@initialization_equations")
         foreach(((l, lln),) -> push!(code, _located_push(:__init_eqs, _rewrite_eq(l), lln)), _lines_ln(args, ln))
@@ -854,35 +876,14 @@ function _section!(parts, sec, args, ln = nothing)
                 [$fc.parameters; $fc.variables])),
             :(append!(__vars, $fc.variables)), :(append!(__params, $fc.parameters)),
             :(append!(__equations, $fc.equations)), :(append!(__bcs, $fc.bcs)), :(append!(__field_inputs, $fc.inputs)),
+            :(append!(__coupled, $P._coupled_names($fc.variables))),
             :(foreach(b -> push!(__bcs_origins, b => nameof($fs)), $fc.bcs)),
             [:($n = $P._fields_name($fc, $(QuoteNode(n)), $fs)) for n in names]...)
-    elseif sec === Symbol("@bcs")
-        foreach(((l, lln),) -> push!(code, _located_push(:__bcs, _bcs_calls(_rewrite_eq(l)), lln)), _lines_ln(args, ln))
     elseif sec === Symbol("@divide")
         domain = args[1]
         opts, rules = _options(args[2:end])
         kw = [Expr(:kw, k, rewrite(v)) for (k, v) in opts]
         push!(code, _located_push(:__divisions, :($P.divide($domain, $(map(rewrite, rules)...); $(kw...))), ln))
-    elseif sec === Symbol("@boundary")
-        # `@boundary c begin x => (low, high); sites(pred) => Dirichlet(v) end` (D-145): the axis
-        # keys `x`, `y`, `z` are read here, as keys, so a model variable `x` does not interfere
-        (length(args) >= 2 && args[1] isa Symbol) || throw(ArgumentError(
-            "@boundary takes a field and its conditions: `@boundary c begin x => (Dirichlet(0.0), NoFlux()); " *
-            "sites(kind == border) => Dirichlet(0.0) end`"))
-        field = args[1]
-        for (l, lln) in _lines_ln(args[2:end], ln)
-            (l isa Expr && l.head === :call && l.args[1] === :(=>) && length(l.args) == 3) || throw(ArgumentError(
-                "@boundary $field: `$l` is not a condition; write `x => (low, high)` (each side `Dirichlet(v)` or " *
-                "`NoFlux()`) or `sites(condition) => Dirichlet(v)`"))
-            lhs, rhs = l.args[2], l.args[3]
-            if lhs isa Symbol
-                push!(code, _located_push(:__boundaries, :($P.boundary_face($field, $(QuoteNode(lhs)), $(rewrite(rhs)))), lln))
-            elseif lhs isa Expr && lhs.head === :call && lhs.args[1] === :sites && length(lhs.args) == 2
-                push!(code, _located_push(:__boundaries, :($P.boundary_mask($field, $(rewrite(lhs.args[2])), $(rewrite(rhs)))), lln))
-            else
-                throw(ArgumentError("@boundary $field: `$lhs` is neither an axis (`x`, `y`, `z`) nor a site mask `sites(condition)`"))
-            end
-        end
     elseif sec === Symbol("@schedule")
         # `@schedule fields, sweep`: the phases of one MCS in order (D-145), checked here
         names = length(args) == 1 && args[1] isa Expr && args[1].head === :tuple ? args[1].args : args

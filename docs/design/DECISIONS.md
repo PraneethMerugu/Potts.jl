@@ -5179,3 +5179,39 @@ Spelling only, except the assertion changes in p6_0bs, p6_0e2 and p6_3b listed b
 - `p6_5c_predicate_source.jl`: every field fixture. The predicate is bound to an input `src`. `src` is a real input, not `::Bool`, because the coupling does not take the neighbor fold `any(… for n in …)` as a truth value.
 
 `p6_0bo_initialization.jl` declares `cfield(field)` only to show that an initialization equation on a field is refused. It has no field line, so it is not changed.
+
+## D-F4-B6 Front end A's field surface is deleted (2026-11-10; user rulings 2026-11-10; standing frozen-edit OK 2026-11-05; D-F4-2)
+
+F4-B6 removes front end A's field surface with no deprecations, aliases or stubs. Removed: the `@boundary` and `@bcs` sections, the field lines of `@equations`, `Dirichlet`, `NoFlux`, `Flux`, `Robin`, `BoundaryEntry` and their helpers, and `PottsPart.boundaries` with its plumbing. The model-body names `Δ`, `Advect`, `DivKGrad`, `Upwind1`, `masked`, `Differential` and `Shift` are removed; they live in `Potts.Fields`. A static `c(field)` declaration with no field line stays (units, algebraic and initialization checks, a drive reading a field set by the operating point).
+
+User rulings of 2026-11-10 (after the B6 inventory, research/field-compiler/f4/F4-B6-inventory.md):
+
+- B6 is approved as inventoried. `PottsEntity` and `_no_membership_sugar` stay, shared with B (this amends F4 design §11).
+- The precompile workload is ported to B in the B6 commit (`_precompile_fields`, coupled by `@fields` and by `Potts.couple`).
+- The removed body names error inside `@potts_model` and point to `@fields`.
+- `PottsSystem(; equations = [D(c) ~ ...])` with a `:field` variable is refused, pointing to `Potts.couple`.
+- The frozen edits below go under the standing frozen-edit OK. Any fingerprint re-pin still needs the user's OK; B6 re-pins none.
+
+New refusals (ordinary `ArgumentError`s, each tested in test/fields_couple.jl with a negative control at 866ea0e9):
+
+- a field line in `@equations`: names the field and points to `using Potts.Fields` and `@fields c = pdesys (input => expression)`;
+- a removed body name read in a model body that does not define it: points to `using Potts.Fields` and `@fields`;
+- a field equation in `PottsSystem(; equations)` that no coupled `PDESystem` brought: points to `Potts.couple(model, pdesys; inputs)`.
+
+Frozen edits (only what the removal forces; no tolerance, pin or run length changes):
+
+- `lib/PottsModels/test/guardrails.jl` `DSL_NAMES`: `:Dirichlet`, `:NoFlux`, `:Δ`, `:Flux` and `:Robin` are removed from the reviewed DSL surface, with a comment citing this entry. guardrails.jl is not listed in frozen.toml.
+- `lib/PottsModels/test/acceptance/p6_3b_boundary_schedule.jl:752`: `@test :Dirichlet in keys(Potts.DSL) && :NoFlux in keys(Potts.DSL)` becomes `@test !(:Dirichlet in keys(Potts.DSL)) && !(:NoFlux in keys(Potts.DSL))`. D-F4-R1 kept the check "until F4-B6 removes that vocabulary"; the assertion now checks the removal. New sha256 in frozen.toml.
+- `lib/PottsModels/reproductions/01_merks.jl` (frozen under D-254): comments only. The condensed model listing and two rows of the deviation table showed front end A's field lines and `@boundary`; they now show the `MerksField` PDESystem coupled with `@fields`, as the model in PottsModels is written (F4-B4m). No code line, value or assertion changes. New sha256 in frozen.toml.
+
+Tests: the A-only tests are deleted. Where a B test was checked only against its A twin, it gets an independent oracle: LatticePDE's own run of the same `PDESystem` (with hand-computed inputs per MCS window for moving cells), a hand FTCS or ghost-rule value, a hand value of a Robin slot, or a scalar spelling of an array field.
+
+Soft record change (test/fields_identity_records.jl, soft set): FdVolumeRead read the bare word `volume` in A and was refused at build (route `refused`). In B it binds the cell quantity at the owner (`volume => volume[owner]`) and builds: its route becomes `auto`, with the fingerprint `0x6bb59d436f7176c5` and its program entries recorded at the F4-B6a fixup. No other record moved. Approved by the user on 2026-11-11 (as relayed to the B6 review builder by the coordinator).
+
+Review fixes (F4-B6 review, 2026-11-11; tests in test/fields_couple_b6.jl, negative controls at 071a1cc7 in ~/lpwork/f4B6r/nc.log):
+
+- `@bcs` and `@boundary` in a model body are refused with an `ArgumentError` that names the route: the conditions are the second argument of the field's `PDESystem`, coupled with `@fields` (before, ``UndefVarError: `@bcs` not defined``). No shim or alias.
+- `Potts.field_inputs(integ)` gives the inputs of `Potts.fields(model)`, by the names `Potts.fields` gives them, so `discretize(Potts.fields(model), disc; inputs = collect(Potts.field_inputs(integ)))` builds and matches the coupled run with σ frozen, for a `Coarse(2)` field too. The names: `kind`, `domain`, the coupled PDESystem's input name for a binding to exactly one CPM read (`vol => volume[owner]` gives `vol`), else the read as the model writes it (`volume[owner]`). Only the exported `PDESystem` is renamed: the field compiler's own system, its input routing and every fingerprint keep the generated names. A binding to a kind expression (`endo => kind == A`) is written into the equations, so its input is `kind`: `field_inputs` no longer gives `endo`, and `discretize` of the user's own `PDESystem` with `field_inputs` no longer applies to kind bindings (that route folded a Bool input by its mean on a coarse grid, while the model reads the block's owner).
+- A spatial operator of a bound input (`Δ(endo)` with `endo => kind == A`) is refused in the model's words (`applies Δ to kind == A, a CPM value`), with the route: a site variable set by `@after_mcs` and read by the PDESystem as an unbound input. That route now works on a lattice with a closed axis: a site variable (or a field with no equation) that an operator reads has no flux through a closed face (before, LatticeFields refused it: "field `v` has no boundary rule"). On a lattice periodic on every axis nothing changes. No fingerprint moves: every model this changes was refused before.
+- A field operator in a model line (`Δ(c)[target]` under `using Potts.Fields`) is refused with the route of an aux field `L(t, x, y) ~ Δ(c(t, x, y))` read as `L[target]` (before, "cannot index").
+- Front end A's wording is gone from the refusals: the Robin coefficient names `t` and the read as the PDESystem writes it (`u(t, x, y)`, `u(t, 0, y)`, not `t`); a field equation is `Differential(t)(c(t, x, y)) ~ …`; a field declaration is `@variables c(..) = 0.5 [bounds = (0, 1)]` in a PDESystem; a condition with no recorded PDESystem is a condition of the fields' PDESystem, not `@bcs`. The model's-own-`x` branch of the axis check is removed (a PDESystem's `x` is its own variable, so the branch was unreachable).

@@ -9,7 +9,18 @@
 # model pair (MTK's linear initialization problem) and cells with an explicit and a
 # nonlinear condition (a solve from the guess); with `explicit_init = true`, explicit
 # conditions only (MTK's observed values). Initialization changes no kernel, so the second
-# build reuses the first one's compiled code.
+# build reuses the first one's compiled code. Its field `c` is a plain PDESystem coupled with
+# `@fields` (`_precompile_fields`), whose input `src` is bound to `kind == cell`.
+#
+# The field of the precompile models: `D(c) ~ D_c Δc + src − c` on an `N`-dimensional lattice
+# (the domain is left out: each axis takes the lattice's interval)
+function _precompile_fields(N::Int)
+    xs = (FIELD_NAMES.x, FIELD_NAMES.y, FIELD_NAMES.z)[1:N]
+    D_c = only(ModelingToolkitBase.@parameters D_c = 0.1)
+    c, src = ModelingToolkitBase.@variables c(..) = 0.0 src(..)::Bool [input = true]
+    C = c(t, xs...)
+    return LatticePDE.pdesystem([Differential(t)(C) ~ D_c * Δ(C) + src(t, xs...) - C]; name = :precompile_fields)
+end
 @potts_model _PrecompileModel begin
     @structural_parameters begin
         lattice = (16, 16)
@@ -19,13 +30,11 @@
     @parameters begin
         λ = 1.0
         V₀ = 20.0
-        D_c = 0.1
         T = 10.0
         J[kind, kind] = [0.0 16.0; 16.0 2.0]
     end
     @variables begin
         V_target(cell) = V₀
-        c(field) = 0.0
         x(cell) = 1.0
         x_rate(cell) = 0.0
         s₀(cell)
@@ -34,13 +43,13 @@
         m₁(model)
     end
     @lattice Lattice(lattice; boundary = Closed(), neighborhood = Moore(1))
+    @fields c = Potts._precompile_fields(length(lattice)) (src => kind == cell)
     @energy begin
         cells(cell) => λ * (volume - V_target)^2
         contacts => J[kind, kind′]
     end
     @drive copy => -λ * (c[target] - c[source])
     @equations begin
-        D(c) ~ D_c * Δ(c) + (kind == cell) - c
         D(x) ~ -x_rate
         x_rate ~ x / T
     end
@@ -69,18 +78,17 @@ function _precompile_workload()
     V₀ = parameter(:V₀, 20.0)
     T = parameter(:T, 10.0)
     J = kind_parameter(:J, [0 16; 16 2])
-    c = variable(only(Symbolics.@variables c(t)), :field; default = 0.0)
     mark = variable(only(Symbolics.@variables mark(t)), :site; default = 0.0)
-    sys = PottsSystem(; name = :precompile, kinds = [:medium, :cell],
+    host = PottsSystem(; name = :precompile, kinds = [:medium, :cell],
         lattice = lattice_spec((16, 16); neighborhood = Moore(1)), parameters = Any[λ, V₀, T, J],
-        variables = Any[c, mark],
+        variables = Any[mark],
         energies = [energy(cells(1) => λ * (volume - V₀)^2 + λ * (surface - V₀)^2),
             energy(contacts => _index(J, kind, kind′))],
-        drives = [drive(COPY => ifelse(_index(kind, new) == 1, -λ * (_index(c, target) - _index(c, source)), 0.0))],
+        drives = [drive(COPY => ifelse(_index(kind, new) == 1, -λ * (_index(mark, target) - _index(mark, source)), 0.0))],
         constraints = [connectivity(1)],
         updates = [update(:after_mcs, mark ~ max(Pre(mark) - 1, 0)), update(:on_copy, _index(mark, target) ~ λ)],
-        equations = [D(c) ~ λ * Δ(c) - λ * c],
         sweep = sweep_spec(:metropolis; temperature = T))
+    sys = couple(host, _precompile_fields(2); inputs = [:src => kind == 1])
     csys = ModelingToolkitBase.mtkcompile(sys)
     σ = zeros(Int32, 16, 16)
     σ[4:8, 4:8] .= 1

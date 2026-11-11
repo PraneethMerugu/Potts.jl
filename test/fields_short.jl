@@ -101,15 +101,15 @@ end
     # in a mixed vector with a numeric binding (the E1 situation): a test, not a constant
     vol = Potts.at(Potts.B.volume, Potts.B.owner)
     mv = Potts.couple(host, CpPDE.sys(); inputs = [CpPDE.endo => Potts.is_kind(host, :A), CpPDE.vol => vol])
-    @test count(Potts.field_inputs(PottsProblem(mv, cp_op(), (0, 1)))[:endo]) == 32
+    @test count(==(1), Potts.field_inputs(PottsProblem(mv, cp_op(), (0, 1)))[:kind]) == 32   # (the kind numbers, F4-B6 review)
     # several kinds: a membership test, bitwise against `ismember`
     h2 = CrHost2(; name = :m)
     op2 = (σ = zeros(Int32, 24, 20); σ[5:8, 5:8] .= 1; σ[14:17, 10:13] .= 2; [ownership => σ, kind => [:A, :B]])
     mk = Potts.couple(h2, CpPDE.sys2(); inputs = [CpPDE.endo => Potts.is_kind(h2, :A, :B)])
     mi = Potts.couple(h2, CpPDE.sys2(); inputs = [CpPDE.endo => Potts.LatticePDE.ismember(Potts.kind, (1, 2))])
     mA = Potts.couple(h2, CpPDE.sys2(); inputs = [CpPDE.endo => Potts.is_kind(h2, :A)])
-    @test count(Potts.field_inputs(PottsProblem(mk, op2, (0, 1)))[:endo]) == 32
-    @test count(Potts.field_inputs(PottsProblem(mA, op2, (0, 1)))[:endo]) == 16
+    @test count(in((1, 2)), Potts.field_inputs(PottsProblem(mk, op2, (0, 1)))[:kind]) == 32
+    @test count(==(1), Potts.field_inputs(PottsProblem(mA, op2, (0, 1)))[:kind]) == 16
     @test cp_same(cp_run(mk, ExplicitEuler(); op = op2), cp_run(mi, ExplicitEuler(); op = op2))
     # the short vocabulary end to end equals the long form (bitwise)
     ms = Potts.couple(host, FsShort.SYS; inputs = [FsShort.endo => Potts.is_kind(host, :A)])

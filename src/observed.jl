@@ -73,7 +73,6 @@ function _observed_function_unlocked(info::PottsModelInfo, x)
     end
 end
 
-# (in the scope of the model's `@boundary` faces: a `Δ` here sees them)
 function _observed_build(info::PottsModelInfo, c, T, x)
     e = _expand_observed(c, _unwrap(x))
     _check_integral_pre_outside(e)
@@ -285,17 +284,20 @@ SII.parameter_values(p::PottsParameters, i::Symbol) = p[i]
     Potts.field_inputs(integ) -> Dict{Symbol, Array}
     Potts.field_inputs(prob)
 
-The current values of the inputs of the PDESystems moved into a model
-([`Potts.couple`](@ref), `@fields`, [`Potts.component`](@ref) of a `PDESystem`), at the CPM
-state of an integrator (`integ.u` at `integ.t`) or the initial state of a problem: one array
-over the lattice per input, by the name its PDESystem gives it (`lattice_input_name`, else
-the variable's name). Each array holds the values the field compiler reads for that input: a
-`Bool` input gives a `Bool` array, an integer input an array of its type, any other input an
-array of the model's scalar type. They are what `discretize(pdesys, disc; inputs =
-Potts.field_inputs(integ))` takes: the fields of `pdesys` solved by any SciML solver with the
-CPM frozen at that state. That solve matches the model's own run only while the lattice does
-not change (σ frozen): in a run the CPM moves the cells every MCS and the inputs follow them,
-while the frozen inputs do not. A model without such inputs gives an empty `Dict`.
+The current values of the CPM inputs of a model's fields, at the CPM state of an integrator
+(`integ.u` at `integ.t`) or the initial state of a problem: one array over the lattice per
+input of [`Potts.fields`](@ref)`(model)`, by the name it gives that input
+(`lattice_input_name`): `kind` (the kind number of each site, 0 for the medium), `vol` for a
+binding `vol => volume[owner]`, `volume[owner]` for a CPM read with no binding of its own, a
+site variable by its name. Each array holds the values the field compiler reads for that
+input: a `Bool` input gives a `Bool` array, an integer input an array of its type, any other
+input an array of the model's scalar type. They are what `discretize(Potts.fields(model),
+disc; inputs = collect(Potts.field_inputs(integ)))` takes: the fields solved by any SciML
+solver with the CPM frozen at that state, a `Coarse(k)` field included (its kind
+expressions read the block's owner, as in the model). That solve matches the model's own run
+only while the lattice does not change (σ frozen): in a run the CPM moves the cells every MCS
+and the inputs follow them, while the frozen inputs do not. A model without such inputs gives
+an empty `Dict`.
 
 The values are computed from the CPM state at `integ.t` (`integ.u`: the lattice and cells at
 the end of the last completed MCS). They are not the arrays the field phase filled during that
@@ -308,25 +310,51 @@ field_inputs(prob::CorePotts.PottsProblem) = _field_inputs_at(prob.f.sys, prob.u
 function _field_inputs_at(info::PottsModelInfo, u, p, t)
     c = info.csys
     out = Dict{Symbol, Array}()
-    seen = Dict{Symbol, Any}()
-    for (name, ex, E) in get(_p(c.sys, :metadata), _FieldInputs, ())
-        if haskey(seen, name)
-            isequal(seen[name], ex) || throw(ArgumentError(string("field_inputs: two inputs are named `", name,
-                "` and read different CPM expressions (`", _builtin_text(string(seen[name])), "` and `",
-                _builtin_text(string(ex)), "`); give one of them another `lattice_input_name`")))
-            continue
-        end
-        seen[name] = ex
-        f = lock(_OBSERVED_LOCK) do
-            get!(info.cache, (:field_input, ex)) do
-                code = _with_model_scope(() -> lower(ex, _site_env(info.T, :i, c.gather_names; mcs = :t)), c)
-                _rgf(:((st, p, ctx, t) -> reshape([$code for i in 1:length(st.σ)], size(st.σ))))
+    ins = lock(() -> get!(() -> _exported_inputs(c), info.cache, :field_inputs), _OBSERVED_LOCK)
+    for (key, how, ex, E) in ins
+        v = if how === :fill
+            f = lock(_OBSERVED_LOCK) do
+                get!(info.cache, (:field_input, ex)) do
+                    code = _with_model_scope(() -> lower(ex, _site_env(info.T, :i, c.gather_names; mcs = :t)), c)
+                    _rgf(:((st, p, ctx, t) -> reshape([$code for i in 1:length(st.σ)], size(st.σ))))
+                end
             end
+            f(u, p, info.ctx, t)
+        elseif how === :domain
+            m = core_lattice(_p(c.sys, :lattice)).mask
+            m === nothing ? trues(size(u.σ)) : collect(m)
+        else
+            collect(getproperty(u.site, ex))
         end
-        v = f(u, p, info.ctx, t)
         # the values the field compiler uses, converted exactly (a value the element type cannot
         # hold is an InexactError, never a rounded or truncated value)
-        out[name] = E === Bool ? Bool.(v) : E <: Integer ? E.(v) : info.T.(v)
+        out[key] = E === Bool ? Bool.(v) : E <: Integer ? E.(v) : info.T.(v)
+    end
+    return out
+end
+# the inputs of `Potts.fields(c)`: `(key, how, what, eltype)`, `how` one of `:fill` (a CPM
+# expression `what`, `kind` or a CPM read), `:domain` (the lattice's mask) and `:site` (the site
+# array named `what`: a site variable or a field the PDESystem reads)
+function _exported_inputs(c::CompiledPottsSystem)
+    out = Tuple{Symbol, Symbol, Any, Type}[]
+    F = fields(c.sys)
+    F === nothing && return out
+    isempty(_field_equations(c.sys)) && isempty(_field_aux(c.sys)) && return out    # a hand-wrapped PDESystem
+    filled = Dict{Symbol, Any}(e[1] => e for e in _field_inputs(c, Float64))
+    for dv in getfield(F, :dvs)
+        x = _unwrap(dv)
+        ModelingToolkitBase.isinput(x) || continue
+        op = Symbol(nameof(operation(x)))
+        key = Symbol(something(LatticePDE.get_lattice_input_name(x), string(op)))
+        st = SymbolicUtils.symtype(x)
+        E = st <: Bool ? Bool : st <: Integer ? Int32 : Real
+        if op === :domain__in
+            push!(out, (key, :domain, nothing, Bool))
+        elseif haskey(filled, op)
+            push!(out, (key, :fill, filled[op][2], filled[op][3]))
+        else
+            push!(out, (key, :site, op, E))
+        end
     end
     return out
 end

@@ -36,7 +36,7 @@
     @test cp_same(rs, rp) && maximum(rs.u[end].site.c) > 0.1
     # the route: a test that is not constant still binds (a mixed vector of symbolic tests)
     mr = Potts.couple(host, CpPDE.sys(); inputs = [CpPDE.endo => Potts.kind == Potts.lookup(host, :A), CpPDE.vol => vol])
-    @test count(Potts.field_inputs(PottsProblem(mr, cp_op(), (0, 1)))[:endo]) == 32
+    @test count(==(1), Potts.field_inputs(PottsProblem(mr, cp_op(), (0, 1)))[:kind]) == 32
 end
 
 # a model whose kind has the name of the PDESystem's input; and a global that holds an input
@@ -62,7 +62,7 @@ end
     ref = cp_run(CpFields2(; name = :m), ExplicitEuler())
     kn = cp_run(CeKindNamed(; name = :m), ExplicitEuler(); op = ce_op(:endo))
     @test cp_same(kn, ref) && maximum(ref.u[end].site.c) > 0.1                  # bitwise, kind `endo` ≡ kind `A`
-    @test count(Potts.field_inputs(PottsProblem(CeKindNamed(; name = :m), ce_op(:endo), (0, 1)))[:endo]) == 32
+    @test count(==(1), Potts.field_inputs(PottsProblem(CeKindNamed(; name = :m), ce_op(:endo), (0, 1)))[:kind]) == 32
     @test cp_same(cp_run(CeAlias(; name = :m), ExplicitEuler()), ref)            # the value of a name that is no input
     # a key that names neither an input nor a value: the refusal names the inputs
     e = cp_build_err(quote

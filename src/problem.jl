@@ -88,7 +88,7 @@ re-seed it), its initial value on every initial link of its relationship (both e
 default: its declared default); links made later by `@link` start at the declared default. `T` is the scalar
 type of the generated code and state: by default `Float64`, or the default float type of
 `backend` when one is given (`Float32` on a device, `LatticeFields.Exec.default_float`; pass
-the same backend to `init`/`solve`). A field declared `c(field) = …, [lattice_storage = S]`
+the same backend to `init`/`solve`). A field declared `@variables c(..) = 0.5 [lattice_storage = S]` in its PDESystem
 (`Float16`, `Float32` or `Float64`) is stored in `S` and computed in its field solver's
 `compute_T` (default `T`). The generated code is `Potts.generated_code(sys; T)`.
 

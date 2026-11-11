@@ -55,9 +55,15 @@ Its entity-local initialization is too: `Potts.initialization_system(csys, :cell
 are the model's `@initialization_equations`, solved through MTK's `InitializationProblem`
 when a problem is built (see [Variables](@ref manual-variables)).
 A model's fields come from a ModelingToolkit `PDESystem`: `@fields` in `@potts_model`, or
-`Potts.couple(model, pdesys; inputs)` outside it, couples it, and `Potts.field_inputs(integ)`
-gives its inputs at the CPM state of an integrator (see
-[The SciML path](@ref manual-sciml-path)).
+`Potts.couple(model, pdesys; inputs)` outside it, couples it. `Potts.fields(model)` is the
+`PDESystem` of the model's fields, and `Potts.field_inputs(integ)` gives its inputs at the CPM
+state of an integrator (see
+[The SciML path](@ref manual-sciml-path)). `using Potts.Fields` brings the names a field's
+`PDESystem` is written with:
+
+```@docs
+Potts.Fields
+```
 
 ```@autodocs
 Modules = [Potts]

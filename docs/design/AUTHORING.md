@@ -371,7 +371,6 @@ site, owner; relation, fold)` for hand-written models.
 @variables begin
     act(site)   = 0.0, [clear_on_ownership_change = true]
     clock(cell) = 0.0
-    c(field)    = 0.0
     total(model)
 end
 
@@ -535,7 +534,6 @@ snapshot on a device), so adaptive trajectories changed within tolerance.
 
 ```julia
 @equations begin
-    D(c) ~ Dc * Δ(c) + σ * (kind == endothelial) - δ * c     # field PDE (c(field))
     D(g) ~ r * g * (1 - g / K)                                # per-cell ODE (g(cell))
     D(h) ~ -h                                                 # model ODE (h(model))
 end
@@ -545,11 +543,12 @@ prob = PottsProblem(sys, op, tspan; field_solver = ExplicitEuler(substeps = 4),
     ode_solver = Adaptive(Tsit5()))
 ```
 
-The variable's scope decides what the equation is: a field variable with `Δ`/`∇`
-becomes a lattice PDE step, a cell variable becomes a batched per-cell ODE, a model
-variable a scalar ODE. `D = Differential(t)` and `t` are MTK's; `Δ`, `∇`, `∇²` are
-lattice operators registered by Potts. `MethodOfLines` remains available for PDEs that
-should not use the built-in stencils.
+The variable's scope decides what the equation is: a cell variable becomes a batched
+per-cell ODE, a model variable a scalar ODE. `D = Differential(t)` and `t` are MTK's. A
+field is not written here: its PDE is a PDESystem (`using Potts.Fields`), coupled into the
+model with `@fields` (§12.5). A field line in `@equations` is refused with that route
+(D-F4-B6). `MethodOfLines` remains available for PDEs that should not use the built-in
+stencils.
 
 ---
 
@@ -841,21 +840,23 @@ end
 
 ```julia
 @named clock = ODESystem([D(m) ~ 1 / τ], t; name = :clock)   # mitotic clock, MTK
+using Potts.Fields                                             # the field: a PDESystem
+@variables c(..) = 0.0 src(..)::Bool [input = true]
+field = pdesystem([Differential(t)(c(t, x, y)) ~ Δ(c(t, x, y)) - 0.1c(t, x, y) + src(t, x, y)]; name = :field)
 
 @potts_model Invasion begin
     @structural_parameters begin lattice = (500, 300) end
     @kinds medium leader follower
     @parameters begin λ = 1.0; V₀ = 40.0; T = 8.0; μ = 30.0; k = 0.5; ℓ₀ = 6.0
                       J[kind, kind] = [0 16 16; 16 4 6; 16 6 8] end
-    @variables c(field) = 0.0
     @components clock = clock                     # per-cell instance (cell scope inferred)
     @lattice Lattice(lattice; boundary = (Closed(), Periodic()), neighborhood = Moore(1))
+    @fields c = field (src => kind == leader)
     @energy begin
         cells(leader, follower) => λ * (volume - V₀)^2
         contacts                => J[kind, kind′]
         edges(bond)             => k * (distance - ℓ₀)^2
     end
-    @equations D(c) ~ Δ(c) - 0.1c + (kind == leader)
     @drive copy => -μ * (c[target] - c[source]) * (kind[source] == leader)
     @relationship bond(cell, cell)  distance = centroid_distance, capacity = 4
     @link   bond when = new_contact(a, b) && kind[a] == leader && kind[b] == follower
@@ -1015,14 +1016,24 @@ with the target site added or removed. The length constraint is
 
 ### 12.5 Fields
 
+A model's fields are a plain MTK `PDESystem`, written with `using Potts.Fields` and coupled
+into the model with `@fields` (or `Potts.couple(model, pdesys; inputs)`); front end A's field
+lines in `@equations`, `@boundary` and `@bcs` were removed in F4-B6 (D-F4-B6). The CPM enters
+through inputs (`[input = true]`) that the `@fields` line binds to model expressions; a kind
+table is the model's (`dk => δ[kind]`).
+
 ```julia
-@equations begin
-    D(c) ~ ∇⋅(Dc[kind] * ∇(c)) - δ[kind] * c + secrete(σ; at = outer_rim(tumor))
-    D(c) ~ … - uptake(c; vmax, K, by = kind == tumor)       # Michaelis–Menten, conservative
-    0    ~ Do * Δ(o) - consume(o; rate = k, by = kind == tumor)   # quasi-steady (LinearSolve.jl)
-end
-@boundary c begin
-    x => (Dirichlet(1.0), NoFlux())       # per axis, per face; default follows the lattice
+using Potts.Fields
+@parameters Do = 10.0 k = 0.1 σ = 1.0
+@variables c(..) = 0.0 o(..) = 0.0 dk(..) [input = true] tumor(..)::Bool [input = true]
+C, O = c(t, x, y), o(t, x, y)
+tumor_fields() = pdesystem([Differential(t)(C) ~ DivKGrad(:harmonic)(dk(t, x, y), C) + σ * tumor(t, x, y) - k * C,
+        0 ~ Do * Δ(O) - k * tumor(t, x, y) * O],      # quasi-steady (LinearSolve.jl)
+    [c(t, 0, y) ~ 1.0]; name = :tumor_fields)         # a face condition; the other faces are zero flux
+
+@potts_model Tumor begin
+    # … kinds (with `tumor`), parameters (`Dc[kind]`), lattice …
+    @fields c, o = tumor_fields() (dk => Dc[kind], tumor => kind == tumor)
 end
 ```
 

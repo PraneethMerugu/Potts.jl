@@ -299,8 +299,8 @@ and `part::PottsPart`: `kinds`, `frozen_kinds`, `kind_classes`, `lattice`, `para
 metadata, `Potts.Entity`; built-ins are MTK inputs `volume(t)` with the entity
 `Builtin(:volume)`), `relations`, `energies`, `drives`, `constraints`, `updates`, `equations`,
 `initialization_eqs`, `divisions`, `converts`, `relationships`, `link_rules`,
-`observed::Vector{Equation}`, `components`, `discrete`, `sweep`, `boundaries`, `bcs`
-(`@bcs`, stored and printed), `schedule`, `structural`, `sources`, `metadata` (Potts' build
+`observed::Vector{Equation}`, `components`, `discrete`, `sweep`, `bcs` (the conditions of
+the coupled PDESystems, stored and printed), `schedule`, `structural`, `sources`, `metadata` (Potts' build
 record, not MTK metadata) and `bindings` (`FieldBinding`s, `(path, name)`).
 
 `Potts.wrap(name, sys, fields, part)` builds one: it completes an uncompleted `sys`, refuses

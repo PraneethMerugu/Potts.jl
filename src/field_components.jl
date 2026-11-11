@@ -1,8 +1,8 @@
 # A plain `PDESystem` as fields of a model (F4-11, FE-15b). `Potts.component(name, pdesys,
 # model)` carries it, and `Potts.compose` moves it into the model's payload: each dependent
-# variable becomes a field variable, each parameter a model parameter, each equation an
-# `@equations` entry and each condition a `@bcs` entry. The fields then compile, group and run
-# exactly as fields declared in `@potts_model`. A component's quantities are namespaced,
+# variable becomes a field variable, each parameter a model parameter, each equation a field
+# equation and each condition a condition of the payload (`bcs`). The fields then compile,
+# group and run as the fields of `@fields` in `@potts_model`. A component's quantities are namespaced,
 # `name₊c` and `name₊k`, as those of an MTK component are. A model wrapped with its own
 # PDESystem (`Potts.wrap(name, sys, pdesys, part)`) has its fields moved the same way at
 # `mtkcompile`, under their own names.
@@ -13,7 +13,7 @@ _hostname(sys::PottsSystem) = nameof(sys)
 _hostname(h::NamedTuple) = h.name
 _p(h::NamedTuple, f::Symbol) = getfield(h, f)
 
-# the built-ins a field equation of front end A reads bare at a site (a cell property such as
+# the built-ins a field equation reads bare at a site (a cell property such as
 # `volume` is read through the owner, `volume[owner]`, which a PDESystem cannot write)
 const _SITE_WORDS = (:owner, :kind, :position, :site, :mcs, :time)
 # the word an input of the PDESystem is filled by: a built-in a field equation reads at a site
@@ -212,7 +212,7 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
     m = (; ivs, tc, xc, fmap, imap, pmap, face = false, what = "$what: $pname", kind = _example_kind(sys),
          noparams = isempty(raw))
     # the conditions: a value at the start time (`c(0, x, y) ~ v`) is the field's initial value;
-    # every other one is a `@bcs` condition
+    # every other one is a condition of the payload
     start = Dict{Any, Any}()
     conds = Any[]
     k = tc === nothing ? nothing : findfirst(e -> isequal(_unwrap(e.variables), tc), dom)
@@ -505,7 +505,7 @@ _unwrap_number(x) = (u = _unwrap(x); u isa SymbolicUtils.BasicSymbolic && Symbol
 # The model form of a term of the PDESystem (map `m` of `_pde_content`): its time is the model's
 # `time` (`mcs` for `step_index(t)`), its coordinates the lattice's `x`, `y`, `z`, its fields
 # and parameters the model's, its inputs the CPM words. In a condition (`m.face`), a field read
-# at a face, `c(t, 0, y)`, is the `@bcs` read of the model's field.
+# at a face, `c(t, 0, y)`, is the face read of the model's field (`_bcs_call`).
 function _pde_term(x, m)
     u = _unwrap(x)
     u isa SymbolicUtils.BasicSymbolic || return u
@@ -560,7 +560,7 @@ function _pde_term(x, m)
 end
 
 # a read of a component `comp` of an array field, `r = u(t, x, y)` at its site (the component) or
-# `u(t, 0, y)` at a face in a condition (the `@bcs` read of the component)
+# `u(t, 0, y)` at a face in a condition (the face read of the component)
 function _pde_read(r, comp, m)
     a = arguments(r)
     all(i -> isequal(a[i], m.ivs[i]), eachindex(a)) && return comp
@@ -583,6 +583,7 @@ function _with_pde(sys::PottsSystem, part::PottsPart, f, prefix, what; inputs = 
     md = part.metadata
     isempty(c.inputs) || (md = Base.ImmutableDict(md, _FieldInputs => [get(md, _FieldInputs, Tuple{Symbol, Any, Type}[]); c.inputs]))
     md = _with_bcs_origins(md, Pair{Any, Symbol}[b => nameof(f) for b in c.bcs])
+    md = _with_coupled(md, _coupled_names(c.variables))
     return getfield(_replace(_staged(nameof(sys), part); variables = Any[part.variables; c.variables],
         parameters = Any[part.parameters; c.parameters], equations = Equation[part.equations; c.equations],
         bcs = Equation[part.bcs; c.bcs], metadata = md), :part)
@@ -638,13 +639,60 @@ function _fields_name(c, n::Symbol, f)
         "`; its fields are ", join(("`$(info(x).name)`" for x in c.variables), ", "), isempty(c.parameters) ? "" :
         string(", and its parameters (a name may be one too) ", join(("`$(info(x).name)`" for x in c.parameters), ", ")))))
 end
-# the build record of a model with the inputs of its `@fields` PDESystems (`Potts.field_inputs`)
-# and the PDESystem each of its conditions came from (F4-E10)
-_with_field_inputs(md, ins, origins = ()) =
-    _with_bcs_origins(isempty(ins) ? md : Base.ImmutableDict(md, _FieldInputs => collect(Tuple{Symbol, Any, Type}, ins)), origins)
+# the build record of a model with the inputs of its `@fields` PDESystems (`Potts.field_inputs`),
+# the PDESystem each of its conditions came from (F4-E10) and the fields they brought
+_with_field_inputs(md, ins, origins = (), coupled = ()) =
+    _with_coupled(_with_bcs_origins(isempty(ins) ? md : Base.ImmutableDict(md, _FieldInputs => collect(Tuple{Symbol, Any, Type}, ins)),
+            origins), coupled)
+
+# payload metadata key (F4-B6): the names of the fields that coupled PDESystems brought (`@fields`,
+# `Potts.couple`, `Potts.compose`, `Potts.wrap`). Their equations are the model's field equations;
+# any other equation of a field is refused (`_check_field_lines`). An extension keeps its bases'
+# entries (`_merged_metadata`).
+struct _CoupledFields end
+_coupled_names(vars) = Symbol[info(x).name for x in vars]
+_with_coupled(md, names) = isempty(names) ? md : Base.ImmutableDict(md, _CoupledFields => collect(Symbol, names))
+_coupled_fields(part) = Set{Symbol}(n for (k, v) in part.metadata if k === _CoupledFields for n in v)
+
+# The fields an equation writes: its left side's field (`D(c) ~ …`, `Shift(t, 1)(m) ~ …`, an aux
+# `K ~ …`), or the fields a steady row `0 ~ …` reads; empty for a cell or model equation
+function _field_line_names(eq)
+    f = _field_lhs(eq)
+    f === nothing && return Symbol[]
+    f[1] === nothing || return Symbol[info(f[1]).name]
+    return Symbol[info(x).name for x in _steady_reads(eq).all]
+end
+_field_names_text(ns) = join(("`$n`" for n in ns), ", ")
+# An `@equations` line that writes a field (F4-B6): a model's fields are coupled PDESystems
+# (`text`: the line as written in the model body, when the macro has it)
+_no_field_line(x::AbstractVector, text = nothing) = (foreach(e -> _no_field_line(e, text), x); x)
+_no_field_line(x, text = nothing) = x
+function _no_field_line(eq::Equation, text = nothing)
+    ns = _field_line_names(eq)
+    isempty(ns) && return eq
+    throw(ArgumentError(string("@equations: `", text === nothing ? _builtin_text(string(eq)) : text, "` is an equation of the field",
+        length(ns) == 1 ? " " : "s ", _field_names_text(ns), "; `@equations` holds cell and model equations. Write the ",
+        "field as a PDESystem (`using Potts.Fields`) and couple it into the model with `@fields ", first(ns),
+        " = pdesys (input => expression)`")))
+end
+# The equations of the payload `part` (`PottsSystem(; equations)`) that write a field no coupled
+# PDESystem brought (F4-B6): refused, with the route `Potts.couple`
+function _check_field_lines(part::PottsPart)
+    coupled = nothing
+    for eq in part.equations
+        ns = _field_line_names(eq)
+        isempty(ns) && continue
+        coupled === nothing && (coupled = _coupled_fields(part))
+        all(n -> n in coupled, ns) && continue
+        throw(ArgumentError(string("PottsSystem: the equation `", _builtin_text(string(eq)), "` is an equation of the field",
+            length(ns) == 1 ? " " : "s ", _field_names_text(ns), ", which no coupled PDESystem brought; a model's fields are ",
+            "a PDESystem coupled into it: `Potts.couple(model, pdesys; inputs = [input => expression])`")))
+    end
+    return part
+end
 
 # payload metadata key (F4-E10): `condition => PDESystem name` for the conditions a PDESystem
-# brought (`@fields`, `Potts.couple`), so a refusal of one names the PDESystem, not `@bcs`. An
+# brought (`@fields`, `Potts.couple`), so a refusal of one names the PDESystem. An
 # extension keeps its bases' entries (`_merged_metadata` keeps every entry; this reads them all).
 struct _BcsOrigins end
 _with_bcs_origins(md, origins) = isempty(origins) ? md : Base.ImmutableDict(md, _BcsOrigins => collect(Pair{Any, Symbol}, origins))

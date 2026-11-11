@@ -364,8 +364,8 @@ decision = "D-149"
 
 [[file]]
 path = "acceptance/p6_3b_boundary_schedule.jl"
-sha256 = "2acce3ba3d61504effcad669522be146ec644f5356dcc835c8d5392b1799b006"
-decision = "D-F4-R1"
+sha256 = "50fd8de8b44bad26a8e1230b68152c08a02d703c70ce79d196cbb0858506ef8d"
+decision = "D-F4-B6"
 
 [[file]]
 path = "acceptance/p6_15c_openvt_table_s1.jl"
@@ -384,8 +384,8 @@ decision = "D-240"
 
 [[file]]
 path = "../reproductions/01_merks.jl"
-sha256 = "632d648b3f56195bee5c1933c22cf6b185c454929afb433b2989b688ce1ec920"
-decision = "D-254"
+sha256 = "3d95a0c2cf0dc68e7c74d2ec3a5b3a976d9ee7e45b448138993ab7270cc8337b"
+decision = "D-F4-B6"
 
 [[file]]
 path = "acceptance/p6_0bm_hamiltonian_metadata.jl"

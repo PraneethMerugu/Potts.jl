@@ -214,7 +214,7 @@ function ModelingToolkitBase.mtkcompile(authored::PottsSystem)
     return _via_algebraic(() -> _compile_bound(authored, _bind_components(routed), ode_systems, initialization), routed, origin)
 end
 
-# a `@bcs` condition as written: built-ins without their time argument (`kind`, not `kind(t)`),
+# a condition as written: built-ins without their time argument (`kind`, not `kind(t)`),
 # and a kind by its name (`kind == border`, not the number `kind == 2`)
 function _bc_text(b, kinds)
     s = _builtin_text(string(b))
@@ -448,7 +448,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
                         (o.rhs for o in _p(sys, :observed))..., (c.expr for c in _p(sys, :constraints) if c.kind === :expr)...,
                         (r.when for r in _p(sys, :link_rules))..., _p(sys, :sweep).temperature,
                         (r for d in _p(sys, :divisions) for (_, r) in d.rules if !(r isa Split))..., tick_exprs...,
-                        _boundary_exprs(sys)..., _bcs_exprs(sys)...])
+                        _bcs_exprs(sys)...])
 
     # relations: contact (ctx.contact), surface, named, gathers
     contact_spec = get(_p(sys, :relations), :contact, _p(sys, :lattice).neighborhood)
@@ -591,7 +591,6 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
 
     _dry_lower(sys, gather_names, fields, cell_odes)
     _check_algebraic_lowering(sys, gather_names)
-    _check_boundaries(sys, fields, gather_names)
     fieldsys, field_specs = _check_fields(sys, gather_names)
     isempty(_p(sys, :schedule)) || _placed_schedule(_p(sys, :schedule), _convert_names(sys))
     _check_units(sys)
@@ -723,57 +722,7 @@ end
 # the proposal neighbourhood: `@relations proposal = …`, or `VonNeumann(1)`
 _proposal_spec(sys::PottsSystem) = get(_p(sys, :relations), :proposal, CorePotts.VonNeumann(1))
 
-# `@boundary` (D-145): a field with an equation; faces on closed axes of a square lattice the
-# model has, each axis once per field; masks are site conditions.
-function _check_boundaries(sys::PottsSystem, fields, rn)
-    bs = _p(sys, :boundaries)
-    isempty(bs) && return nothing
-    lat = core_lattice(_p(sys, :lattice))
-    N = ndims(lat)
-    stepped = Set{Symbol}(info(x).name for (x, _) in fields)
-    seen = Set{Tuple{Symbol, Int}}()
-    for b in bs
-        _located(sys, b) do
-            i = info(b.field)
-            n = i.name
-            (i.role === :field && any(x -> info(x) !== nothing && info(x).name === n && info(x).role === :field,
-                _p(sys, :variables))) || throw(ArgumentError(
-                "@boundary $n: `$n` is not a field variable of $(nameof(sys)); boundaries are for `c(field)` variables"))
-            n in stepped || throw(ArgumentError(
-                "@boundary $n: `$n` has no equation `D($n) ~ …`; a boundary condition applies to a field the model steps"))
-            if b.axis == 0
-                _check_names(b.mask, _SITE_BUILTINS, "a boundary site mask"; between_copies = true)
-                _has_op(b.mask, random_uniform) && throw(ArgumentError("@boundary $n: a site mask cannot draw `rand()`"))
-                lower(b.mask, _site_env(Float64, :i, rn; mcs = :mcs))
-                # a mask reads the state at its group's window start, whatever it reads (`n` itself,
-                # a field stepped after `n`), as `@bcs` and LatticePDE do; a field of a solver group
-                # stepped earlier in the MCS reads as stepped (review (a) and round 2 of F2 batch 4)
-            else
-                ax = _AXIS_NAMES[b.axis]
-                lat.geometry isa CorePotts.Hexagonal && throw(ArgumentError(
-                    "@boundary $n: face conditions (`$ax => …`) are for square lattices; this lattice is Hexagonal " *
-                    "(its missing neighbors are zero flux); a site mask `sites(…) => Dirichlet(v)` works on every lattice"))
-                b.axis <= N || throw(ArgumentError(
-                    "@boundary $n: axis `$ax` does not exist on this $(N)D lattice (its axes are $(join(_AXIS_NAMES[1:N], ", ")))"))
-                lat.periodic[b.axis] && throw(ArgumentError(
-                    "@boundary $n: axis `$ax` is periodic; a face condition needs a closed axis (`Closed()` on axis $(b.axis))"))
-                (n, b.axis) in seen && throw(ArgumentError("@boundary $n: axis `$ax` is given twice"))
-                # another field's operator on `n` (`D(u) ~ Δ(n)`, an aux `K ~ Δ(n)`) reads the ghosts of `n` too
-                any(f -> _has_spatial_op(last(f), n), fields) || any(f -> _has_spatial_op(last(f), n), _field_aux(sys)) ||
-                    throw(ArgumentError(
-                    "@boundary $n: a face condition (`$ax => …`) sets the ghost values of a spatial operator of `$n`, " *
-                    "but the equation `D($n) ~ …` has no `Δ($n)` nor another spatial operator of `$n` " *
-                    "(`DivKGrad(…)(K, $n)`, `Advect(…)(u, $n)`, a raw flux `Differential(x)(K * Differential(x)($n))`), " *
-                    "and no other field's equation or aux definition `K ~ …` has one; " *
-                    "drop the face entry, or use a site mask `sites(…) => Dirichlet(v)`"))
-                push!(seen, (n, b.axis))
-            end
-        end
-    end
-    return nothing
-end
-
-# The field equations and `@boundary` entries as a `PDESystem`, lowered once through
+# The field equations and conditions as a `PDESystem`, lowered once through
 # LatticePDE's `lower_group` (in Float64) so that a term the field compiler cannot lower is an
 # error here, with the CPM inputs dry-lowered in site scope. Returns the PDESystem and the
 # cache of lowered groups (`CompiledPottsSystem.field_specs`) holding the group of all fields,
@@ -782,10 +731,12 @@ end
 function _check_fields(sys::PottsSystem, rn)
     specs = Dict{Any, Any}()
     eqs = _field_equations(sys)
-    # a `@bcs` condition sets a stepped field (never dropped; F2 design §2.12)
+    # a condition sets a stepped field (never dropped; F2 design §2.12)
     isempty(eqs) && !isempty(_p(sys, :bcs)) && _located(sys, _BcsLine(first(_p(sys, :bcs)))) do
         throw(ArgumentError(string("@bcs: the condition `", _bc_text(first(_p(sys, :bcs)), _p(sys, :kinds)), "` of `",
-            nameof(sys), "`: the model has no field equation (`D(c) ~ …`); a condition applies to a field the model steps")))
+            nameof(sys), "`: the model has no field equation (`Differential(t)(c(",
+            join(("t", ("x", "y", "z")[1:length(_p(sys, :lattice).dims)]...), ", "),
+            ")) ~ …`); a condition applies to a field the model steps")))
     end
     # a model whose only fields are aux fields `K ~ rhs` has one group with no state, which
     # evaluates them once per MCS (F3 design §3.12)
@@ -1161,18 +1112,21 @@ function _located(f, sys::PottsSystem, x)
             throw(ArgumentError(string(msg, "\n  in the condition `", _bc_text(x.eq, _p(sys, :kinds)), "` of the PDESystem `", o,
                 "`", loc)))
         end
+        # (a condition with no recorded PDESystem, `PottsSystem(; bcs)`: the fields' PDESystem)
+        startswith(msg, "@bcs: ") && (msg = string("the fields' PDESystem: ", chopprefix(msg, "@bcs: ")))
         throw(ArgumentError("$msg$(_algebraic_note(x, msg))\n  in $(_describe(x, _p(sys, :kinds)))$loc"))
     end
 end
 
-# a `@bcs` condition as a located statement (its line is the `@bcs` line; review R4 of F2
-# batch 4: the error named the first `@equations` line)
+# a condition as a located statement (review R4 of F2 batch 4: the error named the first
+# `@equations` line); a condition a PDESystem brought is named with it (F4-E10)
 struct _BcsLine
     eq::Any
 end
 _source_key(x) = x
 _source_key(b::_BcsLine) = b.eq
-_describe_text(b::_BcsLine, kinds = nothing) = "@bcs " * (kinds === nothing ? _builtin_text(string(b.eq)) : _bc_text(b.eq, kinds))
+_describe_text(b::_BcsLine, kinds = nothing) =
+    "the condition `" * (kinds === nothing ? _builtin_text(string(b.eq)) : _bc_text(b.eq, kinds)) * "` of the fields' PDESystem"
 
 # descriptions are built only when reporting (printing symbolic expressions is slow); a
 # built-in shows as written (`volume`, not the input `volume(t)`), and an operator of the field
@@ -1210,8 +1164,6 @@ _cadence_string(n) = n == 1 ? "" : " Every($n)"
 _describe_text(x, ::Any) = _describe_text(x)
 _describe_text(r::LinkRule) = "@$(r.action) $(r.relationship)$(_cadence_string(r.every)) when = $(r.when)"
 _describe_text(s::SweepSpec) = "@sweep temperature = $(s.temperature)"
-_describe_text(b::BoundaryEntry) = "@boundary $(info(b.field).name) " *
-                              (b.axis == 0 ? "sites($(b.mask)) => Dirichlet($(b.value))" : "$(_AXIS_NAMES[b.axis]) => …")
 _describe_text(b::DiscreteBlock) = "@components $(b.scope === :model ? "model" : "cells") $(b.name) (discrete)"
 
 # Lower every statement once, in the scope it will be generated in, so errors that lowering
@@ -1288,12 +1240,11 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
     for (x, items) in ((d -> d.expr, _p(sys, :drives)), (c -> c.kind === :expr ? c.expr : 0, _p(sys, :constraints)),
             (u -> u.eq.rhs, _p(sys, :updates)), (eq -> eq.rhs, _p(sys, :equations)),
             (d -> [d.when; [r for (_, r) in d.rules if !(r isa Split)]], _p(sys, :divisions)),
-            (_convert_exprs, _p(sys, :converts)), (r -> r.when, _p(sys, :link_rules)),
-            (b -> _boundary_exprs(b), _p(sys, :boundaries)))
+            (_convert_exprs, _p(sys, :converts)), (r -> r.when, _p(sys, :link_rules)))
         foreach(i -> _located(() -> foreach(y -> _check_geometry(y, N; hex), vcat(x(i))), sys, i), items)
     end
-    # the conditions (`@bcs`, a PDESystem's): a masked condition's predicate and value, a face's
-    # value, are lowered in site scope at the field step, as `@boundary` entries (F4-E13)
+    # the conditions of the coupled PDESystems: a masked condition's predicate and value, a face's
+    # value, are lowered in site scope at the field step (F4-E13)
     for b in _p(sys, :bcs)
         _located(() -> _check_geometry(b.rhs, N; hex), sys, _BcsLine(b))
     end
@@ -1344,13 +1295,8 @@ function _check_copy_integral(x, what; when = "every copy attempt")
     return nothing
 end
 
-# The expressions of a `@boundary` entry, lowered in site scope at the field step: a site
-# mask and its value, or a face's `Dirichlet` values
-_boundary_exprs(b::BoundaryEntry) = b.axis == 0 ? Any[b.mask, b.value] :
-                                    Any[s.value for s in b.sides if s isa Dirichlet]
-_boundary_exprs(sys::PottsSystem) = Any[x for b in _p(sys, :boundaries) for x in _boundary_exprs(b)]
-# the sides of the conditions (`@bcs`, a PDESystem's): a masked condition's predicate and value
-# or a face's value read CPM quantities at the field step, as `@boundary` entries do (F4-E13)
+# the sides of the conditions of the coupled PDESystems: a masked condition's predicate and
+# value or a face's value read CPM quantities at the field step (F4-E13)
 _bcs_exprs(sys::PottsSystem) = Any[x for b in _p(sys, :bcs) for x in (b.lhs, b.rhs)]
 
 _is_hex(sys) = core_lattice(_p(sys, :lattice)).geometry isa CorePotts.Hexagonal

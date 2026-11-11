@@ -48,6 +48,16 @@ nothing #hide
 # lattice units: one site is 2 µm and one MCS is 30 s.
 #
 # ```julia
+# # the chemoattractant as a plain MTK PDESystem (module `MerksField`); its inputs `cell`, `ecm`
+# # and `frame` are bound to kind tests where the model couples it with `@fields`
+# function merks2006(lattice)
+#     @parameters Dc = 0.75 α = 5.4e-3 ε = 5.4e-3  # diffusion, secretion, decay
+#     eq = Dt(C) ~ Dc * Δ(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)  # Eq. 6
+#     return PDESystem([eq], [c(0, x, y) ~ 0.0, C ~ masked(frame(t, x, y), 0.0)],  # absorbing ring, as in the authors' code
+#         lattice_domain(t, (x, y), lattice), [t, x, y], [C, cell(t, x, y), ecm(t, x, y), frame(t, x, y)], [Dc, α, ε];
+#         name = :merks_field)
+# end
+#
 # @potts_model Merks2006 begin
 #     @structural_parameters begin
 #         lattice = (500, 500)
@@ -59,11 +69,11 @@ nothing #hide
 #         λ_L = 5.0; L = 50.0                # length strength; target length ("about 100 µm")
 #         E₀ = 5000.0                        # penalty for breaking a cell (p. 49: "E0 > 2000")
 #         χcM = 1000.0; χcc = 1000.0; s = 0.0  # chemotaxis at cell–matrix / cell–cell copies; saturation
-#         Dc = 0.75; α = 5.4e-3; ε = 5.4e-3  # diffusion, secretion, decay
 #         J[kind, kind] = [0.0 20.0 0.0; 20.0 40.0 100.0; 0.0 100.0 0.0]  # medium, endothelial, border
 #     end
-#     @variables c(field) = 0.0               # the chemoattractant
 #     @lattice Lattice(lattice; boundary = Closed(), neighborhood = Moore(1))
+#     @fields c = MerksField.merks2006(lattice) (MerksField.cell => kind == endothelial,  # the chemoattractant
+#         MerksField.ecm => kind == medium, MerksField.frame => kind == border)
 #     @relations proposal = Moore(1)
 #     @energy begin                           # Eqs. 1, 4, 5
 #         cells(endothelial) => λ * (volume - A)^2 + λ_L * (major_length - L)^2
@@ -76,10 +86,6 @@ nothing #hide
 #         @drive copy => E₀ * ((kind[old] == endothelial) & !((ring_arcs <= 1) | ((ring_cells == 2) & (ring_medium == 0))))
 #     else
 #         @constraint connectivity(endothelial; rule = ArcOrPair())
-#     end
-#     @equations D(c) ~ Dc * Δ(c) + α * (kind == endothelial) - ε * c * (kind == medium)  # Eq. 6
-#     @boundary c begin
-#         sites(kind == border) => Dirichlet(0.0)  # absorbing ring, as in the authors' code
 #     end
 #     @schedule fields, sweep                 # the field steps before each sweep
 #     @sweep Metropolis(; temperature = T)
@@ -94,12 +100,13 @@ nothing #hide
 #     @parameters begin
 #         T = 50.0; λ = 25.0; A = 50.0
 #         χcM = 500.0; χcc = 0.0; s = 0.0     # χcc = 0 is contact inhibition; χcc = χcM removes it
-#         Dc = 0.75; α = 0.03; ε = 0.03
-#         t_relax = 100.0                    # no field for the first 100 MCS (the authors' relaxation)
 #         J[kind, kind] = [0.0 20.0 0.0; 20.0 40.0 100.0; 0.0 100.0 0.0]
 #     end
-#     @variables c(field) = 0.0
 #     @lattice Lattice(lattice; boundary = Closed(), neighborhood = NeighborOrder(4))  # 20 neighbors
+#     # `MerksField.merks2008`: as `merks2006` with `α = ε = 0.03`, and off for the first `t_relax = 100`
+#     # MCS (the authors' relaxation): `Dt(C) ~ ifelse(step_index(t) >= t_relax, rate, 0.0)`
+#     @fields c = MerksField.merks2008(lattice) (MerksField.cell => kind == endothelial,
+#         MerksField.ecm => kind == medium, MerksField.frame => kind == border)
 #     @relations proposal = NeighborOrder(4)
 #     @energy begin                           # no length term
 #         cells(endothelial) => λ * (volume - A)^2
@@ -111,10 +118,6 @@ nothing #hide
 #     else                                    # 01b Eq. 4: no chemotaxis on retractions
 #         @drive copy => ifelse(new == 0, 0.0,
 #             -ifelse(old == 0, χcM, χcc) * (c[target] / (1 + s * c[target]) - c[source] / (1 + s * c[source])))
-#     end
-#     @equations D(c) ~ ifelse(mcs >= t_relax, Dc * Δ(c) + α * (kind == endothelial) - ε * c * (kind == medium), 0.0)
-#     @boundary c begin
-#         sites(kind == border) => Dirichlet(0.0)
 #     end
 #     @schedule fields, sweep
 #     @sweep Metropolis(; temperature = T)
@@ -562,8 +565,8 @@ $(join([full_deviation_rows; b01_deviation_rows], "\n"))
 # | extension-only chemotaxis (01b Eq. 4) | — | `mode = :extension_only` |
 # | connectivity penalty E₀ on ring-breaking copies of the losing cell (01a p.49; ca.cpp:442-448, :1166-1226) | `@drive copy => E₀ * <TST ring test>`, E₀ = 5000; `rule = :hard` vetoes instead | — (`conn_diss = 0`) |
 # | frozen border B, J(c,B) = 100 (01a p.48; 01b p.11), J(M,B) = 0 (ca.cpp:236-238) | `border[frozen]`, 1-site `Frame` | 2-site `Frame` on 202² (TST's stencil reaches the off-lattice ring) |
-# | ∂c/∂t = α[cell] − ε c[ECM] + D∇²c (01b Eq. 1; 01a Eq. 6 as prose, A-4) | `D(c) ~ Dc * Δ(c) + α * (kind == endothelial) - ε * c * (kind == medium)` | the same, off for the first `t_relax` MCS |
-# | absorbing c = 0 ring, c₀ = 0 (pde.cpp:104-106, :189-194) | `@boundary c begin sites(kind == border) => Dirichlet(0.0) end` | same |
+# | ∂c/∂t = α[cell] − ε c[ECM] + D∇²c (01b Eq. 1; 01a Eq. 6 as prose, A-4) | `Dt(C) ~ Dc * Δ(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)`, `cell => kind == endothelial`, `ecm => kind == medium` | the same, off for the first `t_relax` MCS |
+# | absorbing c = 0 ring, c₀ = 0 (pde.cpp:104-106, :189-194) | `C ~ masked(frame(t, x, y), 0.0)`, `frame => kind == border` | same |
 # | 15 diffusion steps of Δt = 2 s per MCS, before the CPM sweep (01a p.49; vessel.cpp:86-94) | `@schedule fields, sweep` and `field_solver = ExplicitEuler(substeps = 15)` | same |
 # | relaxation: 100 MCS without the field (Dataset S1 `relaxation = 100`; not in the paper) | — | `t_relax = 100` |
 # | Metropolis at T = 50 (01a p.48; 01b p.11) | `@sweep Metropolis(; temperature = T)` | same |

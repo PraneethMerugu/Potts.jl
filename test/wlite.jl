@@ -3,7 +3,7 @@
 # 53 checks A–G) on the probe's two models, built with `Potts.wrap`, plus: the refusal matrix on
 # every published model with its negative control (the refusal loop deleted, in a subprocess),
 # the 15-method list, Aqua piracy, the `getfield` grep, `Potts.compose` (single and nested)
-# against the raw MTK reference, (path, name) bindings, `wrap`'s checks and `@bcs`.
+# against the raw MTK reference, (path, name) bindings, `wrap`'s checks and a PDESystem's conditions.
 using Potts, Test, Aqua, PottsModels
 using InteractiveUtils: methodswith
 using Potts.LatticePDE: masked
@@ -361,40 +361,34 @@ end
     @test_throws ArgumentError Potts.compose(wtop, cpm)
 end
 
-@testset "W-lite: @bcs is stored, printed and lowered (F1, V4; F2-11)" begin
+# A condition of a coupled PDESystem (until F4-B6 front end A's `@bcs`, then checked bitwise
+# against a `@boundary` site mask): stored, printed and lowered; the masked sites hold 5.0
+module WLitePDE
+using Potts.Fields
+@parameters Dc = 1.0
+@variables c(..) = 0.0 border(..)::Bool [input = true]
+sys() = pdesystem([Differential(t)(c(t, x, y)) ~ Dc * Δ(c(t, x, y))], [c(t, x, y) ~ masked(border(t, x, y), 5.0)]; name = :wl)
+end
+@testset "W-lite: a PDESystem's condition is stored, printed and lowered (F1, V4; F2-11)" begin
     @potts_model WLiteBcs begin
         @kinds medium cell border
-        @parameters T = 1.0 Dc = 1.0
-        @variables c(field) = 0.0
-        @equations D(c) ~ Dc * Δ(c)
-        @bcs c ~ masked(kind == border, 5.0)
+        @parameters T = 1.0
         @lattice Lattice((8, 8))
-        @sweep Metropolis(; temperature = T)
-    end
-    # the same condition as a `@boundary` site mask
-    @potts_model WLiteMask begin
-        @kinds medium cell border
-        @parameters T = 1.0 Dc = 1.0
-        @variables c(field) = 0.0
-        @equations D(c) ~ Dc * Δ(c)
-        @boundary c begin
-            sites(kind == border) => Dirichlet(5.0)
-        end
-        @lattice Lattice((8, 8))
+        @fields WLitePDE.sys() (WLitePDE.border => kind == border)
         @sweep Metropolis(; temperature = T)
     end
     sys = WLiteBcs(; name = :b)
     bcs = Potts.getfield(Potts.getfield(sys, :part), :bcs)
     @test length(bcs) == 1 && occursin("masked", string(bcs[1]))
     @test occursin("bc      ", sprint(show, MIME"text/plain"(), sys))
-    # F2-11: lowered (`masked` is bound in the model body), the same run as the `@boundary`
-    # mask. Base: refused at compile (F1); on f9a77dd3 it was dropped (the run bitwise equal
-    # to the model without it)
+    # F2-11: lowered. The sites of the border cell after the last sweep (the fields step after
+    # it) hold 5.0; the field spreads from them to the others
     σ = zeros(Int32, 8, 8); σ[1, :] .= 1
     op = [ownership => σ, kind => [:border]]
-    run(m) = solve(PottsProblem(m, op, (0, 2); field_solver = ExplicitEuler(substeps = 1)), SequentialCPM()).u[end].site.c
-    a = run(sys)
-    @test a == run(WLiteMask(; name = :m)) && maximum(a) == 5.0
+    u = solve(PottsProblem(sys, op, (0, 2); field_solver = ExplicitEuler(substeps = 1)), SequentialCPM()).u[end]
+    a, own = u.site.c, Array(u.σ) .== 1
+    @test any(own) && all(a[own] .== 5.0) && maximum(a) == 5.0
+    @test any(!=(0.0), a[.!own]) && all(a[.!own] .!= 5.0)
     # … and `Potts.fields` carries it (base, round 0: its PDESystem dropped the condition)
     @test any(b -> occursin("masked", string(b)), getfield(Potts.fields(sys), :bcs))
     @potts_model WLiteNoBcs begin
