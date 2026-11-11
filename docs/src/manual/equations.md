@@ -563,7 +563,9 @@ u = solve(prob, SequentialCPM()).u[end]
   | `α * c(t, 0, y) - β * Differential(x)(c(t, 0, y)) ~ g` | `α c + β ∂c/∂n = g` (Robin) | the value that meets the condition at the face |
 
   On the high face the outward normal is `+x`: `Differential(x)(c(t, L, y)) ~ q` is
-  `∂c/∂n = q`. A closed axis without a condition is zero flux. A face coefficient that reads
+  `∂c/∂n = q`. A closed axis without a condition is zero flux. A site variable or a field
+  with no condition that a spatial operator reads (`Δ(v)`) also has zero-flux faces on each
+  closed axis, and wraps on each periodic axis. A face coefficient that reads
   a field (`DivKGrad(:arithmetic)(c^3, c)`) takes the field's ghost value at the face: with
   `c(t, 0, y) ~ 1.0` and `c = 0` at the edge site, the face mean is `(0³ + 2³)/2`, so the
   field enters through the face. The bound of the field solvers covers these ghost values.
@@ -596,10 +598,11 @@ u = solve(prob, SequentialCPM()).u[end]
   themselves are part of the model's identity (the fingerprint): a checkpoint does not
   cross them.
 - **Robin coefficients** `α` and `β` are expressions of numbers, parameters, the
-  coordinates and `t`, as values are. An expression of parameters alone is one value at
-  every site: a computed parameter of the face holds it, named `c_x_low_α` (field, axis,
-  side, coefficient), which reads like any computed parameter and is derived again after
-  every write. The slot holds `β` as the coefficient of the outward `∂c/∂n`, however the
+  coordinates and `t`, as values are. A number, a parameter or a number times a parameter
+  is read as it is. Any other expression of parameters alone (`a + b`) is one
+  value at every site: a computed parameter of the face holds it, named `c_x_low_α` (field,
+  axis, side, coefficient), which reads like any computed parameter and is derived again
+  after every write. The slot holds `β` as the coefficient of the outward `∂c/∂n`, however the
   face is written: on a low face, `c_x_low_β` is minus the coefficient of `∂c/∂x`.
 - A Robin coefficient that reads the coordinates or the time varies by site or in time:
   `(1 + 0.1y) * c(t, 0, y) - Differential(x)(c(t, 0, y)) ~ g`. It is computed at each

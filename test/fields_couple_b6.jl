@@ -174,6 +174,33 @@ end
     @test maximum(abs, Array(integ.u.site.c)) > 0.01
 end
 
+# batch-end review (a): the same route on a mixed lattice, `x` closed and `y` periodic. The site
+# variable `v` under `Δ` has a zero-flux face on each end of `x` and wraps along `y`: hand oracle
+# with the cell on the low face of `x` and across the `y` wrap (the reviewer's probe,
+# ~/lpwork/f4rbe/probe/probe.log; it passes at ab34e226 too: the docs sentence's case)
+@potts_model B6LapMix begin
+    @kinds medium A[frozen]
+    @variables v(site) = 0.0
+    @lattice Lattice((8, 8); boundary = (Closed(), Periodic()))
+    @energy cells(A) => (volume - 4.0)^2
+    @fields c = B6.lapsite()
+    @after_mcs v ~ kind == A
+    @sweep Metropolis(; temperature = 1.0)
+end
+@testset "batch-end review (a): a site variable under Δ, x closed and y periodic" begin
+    σ = zeros(Int32, 8, 8); σ[1:2, [8, 1, 2]] .= 1
+    integ = init(PottsProblem(B6LapMix(; name = :m), [ownership => σ, kind => [:A]], (0, 4);
+        field_solver = ExplicitEuler(; substeps = 1)), SequentialCPM())
+    step!(integ); step!(integ)
+    c2, v2 = copy(Array(integ.u.site.c)), copy(Array(integ.u.site.v))
+    step!(integ)
+    lap(a) = [sum(a[clamp(i + di, 1, 8), mod1(j + dj, 8)] - a[i, j] for (di, dj) in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+              for i in 1:8, j in 1:8]
+    @test v2 == Float64.(σ .!= 0)
+    @test maximum(abs, Array(integ.u.site.c) .- (c2 .+ 0.1 .* lap(c2) .+ 0.1 .* lap(v2))) <= 1e-14
+    @test maximum(abs, Array(integ.u.site.c)) > 0.01
+end
+
 # batch-end review (d): with no field named, a refusal names the model's one field equation (or the
 # fields' PDESystem), never its first equation, which may be a cell ODE (base ab34e226: `D(g) ~ …`)
 @potts_model B6Ode begin
