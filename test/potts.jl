@@ -42,6 +42,7 @@ include("fields_couple_e11.jl")        # array fields, Advect vectors, masks, fa
 include("fields_couple_w2.jl")         # wave 2 review fixes: faces read across fields, cell quantities, membership (F4-E16, F4-E17)
 include("fields_couple_b6.jl")         # B6 review fixes: old condition sections, the Potts.fields round trip, wording (F4-B6)
 include("fields_boundary.jl")          # boundary expressions in a model (F4-12a)
+include("fields_report.jl")            # `field_report` of a Potts problem, integrator and solution (F4-13)
 include("cell_sums.jl")                # exact cell sums at 1, 4 and 8 threads (F3-23)
 include("sweep_spec.jl")
 include("algebraic.jl")

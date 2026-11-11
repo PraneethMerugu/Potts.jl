@@ -172,6 +172,8 @@ _table_values(ph::FieldPhase, p) = Pair{String, Vector{Float64}}[
     [k => Float64.(vec(collect(getproperty(p, name)))) for (k, name) in ph.rule_tables]]
 # the raw parameter values of the phase's slots at `p`
 _praw(ph::FieldPhase, p) = Tuple(_param(p, n) for n in ph.params)
+# … as the substep rule reads them, with the phase's tables (`field_substeps`, `field_report`)
+_policy_params(ph::FieldPhase, p) = Problems.with_tables(Float64[_praw(ph, p)...], _table_values(ph, p))
 
 """
     field_substeps(ph, p) -> Int
@@ -184,7 +186,7 @@ at least one substep; a group with no state (aux fields only, F3 design §3.12) 
 window evaluates them once.
 """
 function field_substeps(ph::FieldPhase, p)
-    n = ph.substeps(Problems.with_tables(Float64[_praw(ph, p)...], _table_values(ph, p)))
+    n = ph.substeps(_policy_params(ph, p))
     _stateless(ph) && return n
     n >= 1 || throw(ArgumentError("a field group needs at least one substep; got $n"))
     return n

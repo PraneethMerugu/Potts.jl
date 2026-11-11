@@ -304,6 +304,41 @@ function _policy_lines(io, title, spec, alg, dt::Float64, n, pp, fields, stabili
     return nothing
 end
 
+"""
+    group_report(io, g::FieldGroup, alg, pp; title = "group", dt, n = nothing, facts = nothing, fields = g.spec.state,
+                 stability = g.spec.stability, E = Float64, t0 = nothing)
+
+The block of a field group that no runtime holds (a problem's group, or the group of a
+finished run) in [`field_report`](@ref): its policy under `alg` over the window `dt` at the
+raw parameters `pp` (with the tables and the bound's inputs), counted over the first window
+from `t0` when the bound reads the time; `n` is the count the run used (`nothing`: the
+policy's). For an implicit algorithm, the facts resolved when the group was bound (`facts`,
+an [`ImplicitFacts`](@ref)), or else `inner` and the Newton count as given. `fields` are the
+group's state keys and `E` the state's element type. Each front end calls it per group.
+"""
+function group_report(io::IO, g::FieldGroup, alg, pp; title = "group", dt::Real, n = nothing, facts = nothing,
+        fields = g.spec.state, stability = g.spec.stability, E::Type = Float64, t0 = nothing)
+    _policy_lines(io, title, g.spec, alg, Float64(dt), n, pp, fields, stability, E, facts; t0)
+    if facts !== nothing
+        _fact_lines(io, alg, facts)                 # (resolved when the run's group was bound)
+    elseif alg isa ImplicitAlgorithm
+        _given_lines(io, g.spec, g, alg, fields)
+    end
+    return nothing
+end
+
+"""
+    coupling_report(io, stability, keys, algs, pp, dt)
+
+The coupling lines of [`field_report`](@ref) for field groups with state keys `keys` (one
+vector per group) stepped by `algs` over the window `dt`: for each group in a loop of the group
+read graph, the coupling rule's `κ = dt · rate` ([`lagged_coupling`](@ref),
+[`check_coupling`](@ref)) of the whole system's bound `stability` at its raw parameters `pp`.
+Nothing for one group.
+"""
+coupling_report(io::IO, stability, keys::Vector{Vector{String}}, algs, pp, dt::Real) =
+    _coupling_lines(io, stability, keys, algs, pp, Float64(dt))
+
 # the coupling rule's κ per group in a loop of the group read graph (`check_coupling`)
 function _coupling_lines(io, stability, keys::Vector{Vector{String}}, algs, pp, dt::Float64)
     length(keys) > 1 || return nothing
@@ -544,13 +579,9 @@ function _groups_lines(io, fp::FieldProblem, alg, counts; facts = nothing)
         stab = one ? fp.stability : restrict_bound(fp.stability, ks)
         dt = _window(a, clock)
         f = facts === nothing || i > length(facts) ? nothing : facts[i]
-        _policy_lines(io, string("group ", i, " of ", length(groups)), fp.group.spec, a, dt,
-            counts === nothing ? nothing : i <= length(counts) ? counts[i] : 0, pp, ks, stab, E, f; t0 = fp.tspan[1])
-        if f !== nothing
-            _fact_lines(io, a, f)                   # (resolved when the run's group was bound)
-        elseif a isa ImplicitAlgorithm
-            _given_lines(io, fp.group.spec, fp.group, a, ks)
-        end
+        group_report(io, fp.group, a, pp; title = string("group ", i, " of ", length(groups)), dt,
+            n = counts === nothing ? nothing : i <= length(counts) ? counts[i] : 0, facts = f, fields = ks, stability = stab, E,
+            t0 = fp.tspan[1])
     end
     fp.kind == :map || _coupling_lines(io, fp.stability, [collect(String, ks) for (_, ks) in groups], [a for (a, _) in groups], pp,
         _window(first(groups[1]), clock))

@@ -1351,3 +1351,120 @@ substep_counts(integ)        # [3, 2]: the group of c takes 3 substeps per MCS, 
 # (from the parameters, not the runtimes: a runtime rebinds at its next step)
 Problems.substep_counts(integ::PottsIntegrator) = Int[field_substeps(ph, integ.p) for ph in _field_phases(integ.f.phases)]
 Problems.substep_counts(prob::PottsProblem) = Int[field_substeps(ph, prob.p) for ph in _field_phases(prob.f.phases)]
+
+"""
+    field_report([io::IO = stdout], prob::PottsProblem)
+    field_report([io::IO = stdout], integ::PottsIntegrator)
+    field_report([io::IO = stdout], sol::PottsSolution)
+
+Print the policy of every field group of a Potts problem, integrator or solution, as
+LatticeFields prints the groups of a LatticePDE problem (`field_report` of a `FieldProblem`,
+one function): one block per group with its fields and algorithm, the window (the MCS, or its
+part in a `repeat(n, …)` of the fields), the substep count and its cause (the bound, the user
+minimum `substeps = m`, or both), the stability bound `ρ` and its parts, and the number types;
+for an implicit group `inner` and its multigrid levels and the Newton count; then the coupling
+rule's `κ` for groups that read each other in a loop. A problem gives the policy at its
+parameters (an implicit group's `inner` and Newton count as given: they are resolved when the
+group is bound). An integrator gives each bound group as it is, with its run counters (windows,
+solves, budget hits, status), its launches per substep and its fusion decisions; then its
+steady starts (`init = :steady`). An integrator or a solution also gives the run's field
+counters (`stats.fields`). The report reads what the problem, integrator or solution holds and
+changes nothing in the run. On a device it reads the groups' status words first (one
+synchronization), so call it outside a timed loop.
+
+```julia
+integ = init(PottsProblem(sys, op, tspan), SequentialCPM())
+field_report(integ)
+```
+"""
+function Problems.field_report(io::IO, prob::PottsProblem)
+    phases = _field_phases(prob.f.phases)
+    println(io, "Field report: PottsProblem, ", _report_groups(phases), " (the policy at the problem's parameters; nothing bound)")
+    for (i, ph) in enumerate(phases)
+        Problems.group_report(io, ph.group, ph.alg, _policy_params(ph, prob.p); title = _report_title(i, phases), ph.dt,
+            E = ph.T, t0 = prob.tspan[1] * ph.period)
+    end
+    _report_coupling(io, phases, prob.p)
+    return nothing
+end
+function Problems.field_report(io::IO, integ::PottsIntegrator)
+    phases = _field_phases(integ.f.phases)
+    st = integ.stats                            # (on a device the status words are read first)
+    println(io, "Field report: PottsIntegrator, ", _report_groups(phases), ", ", nameof(typeof(integ.alg)))
+    _report_line(io, "time", string("MCS ", integ.t, " of ", integ.prob.tspan, ", retcode ", integ.retcode))
+    rts = [_runtime(getfield(integ.ctx, _ctxkey(ph))) for ph in phases]
+    # (the counts the runtimes hold: the substep rule is not called, so nothing warns)
+    _report_counters(io, phases, Int[rt.n for rt in rts], st.fields)
+    p = integ.p
+    for (i, (ph, rt)) in enumerate(zip(phases, rts))
+        _await!(rt)                             # (a device compile still pending: its launches)
+        Problems.group_report(io, rt, _policy_params(ph, p); title = _report_title(i, phases), ph.dt, spec = ph.group.spec)
+    end
+    for ph in _start_phases(integ.f.phases)
+        rt = _runtime(getfield(integ.ctx, _ctxkey(ph)))
+        _await!(rt)
+        Problems.group_report(io, rt, _policy_params(ph, p); title = "steady start", ph.dt, spec = ph.group.spec)
+    end
+    _report_coupling(io, phases, p)
+    return nothing
+end
+function Problems.field_report(io::IO, sol::PottsSolution)
+    prob = sol.prob
+    phases = _field_phases(prob.f.phases)
+    println(io, "Field report: PottsSolution, ", _report_groups(phases), ", ", nameof(typeof(sol.alg)), ", retcode ", sol.retcode,
+        " (the policy at the problem's parameters)")
+    _report_line(io, "saves", string(length(sol.t), " over ", prob.tspan, ", ", sol.stats.mcs, " MCS"))
+    _report_counters(io, phases, nothing, sol.stats.fields)
+    for (i, ph) in enumerate(phases)
+        Problems.group_report(io, ph.group, ph.alg, _policy_params(ph, prob.p); title = _report_title(i, phases), ph.dt,
+            E = ph.T, t0 = prob.tspan[1] * ph.period)
+    end
+    _report_coupling(io, phases, prob.p)
+    return nothing
+end
+
+# --- the field report's own lines (the groups are LatticeFields' `group_report`) ---
+_report_line(io, label, text) = println(io, "  ", rpad(label, 11), text)
+_report_groups(phases) = isempty(phases) ? "no fields" : string(length(phases), " field group", length(phases) == 1 ? "" : "s")
+_report_title(i, phases) = string("group ", i, " of ", length(phases))
+function _report_counters(io, phases, counts, f::FieldStats)
+    parts = String[]
+    counts === nothing ||
+        push!(parts, string("substep counts ", join((string(join(ph.group.spec.state, ", "), " ", n) for (ph, n) in zip(phases, counts)), ", ")))
+    f.solves > 0 && push!(parts, string(f.solves, " solve", f.solves == 1 ? "" : "s"))
+    f.budget > 0 && push!(parts, string(f.budget, " linear budget hits"))
+    f.floor > 0 && push!(parts, string(f.floor, " floors"))
+    f.newton_budget > 0 && push!(parts, string(f.newton_budget, " Newton budget hits"))
+    push!(parts, string("code ", f.code))
+    isempty(phases) || _report_line(io, "counters", join(parts, "; "))
+    return nothing
+end
+# the steady starts (`init = :steady`) among the at-init phases, each once
+function _start_phases(phases::Phases)
+    out = FieldPhase[]
+    for t in (phases.at_init isa Repeat ? phases.at_init.entries : (phases.at_init,))
+        t isa Tuple || continue
+        for ph in t
+            ph isa FieldPhase && ph.start && !any(q -> q === ph, out) && push!(out, ph)
+        end
+    end
+    return out
+end
+# the coupling between groups (`Problems.coupling_report`): the whole field system's bound at
+# the parameters of every group's phase, merged by name (each phase holds its own parameters;
+# a parameter it does not read is `NaN` in its part)
+function _report_coupling(io, phases, p)
+    rules = [ph.substeps for ph in phases if ph.substeps isa Problems.GroupSubsteps && ph.substeps.coupling !== nothing]
+    length(rules) == length(phases) && length(phases) > 1 || return nothing
+    c = first(rules).coupling
+    wp, tabs = Float64[], Pair{String, Vector{Float64}}[]
+    for ph in phases
+        w = ph.substeps.coupling.whole(_policy_params(ph, p))
+        v = w isa Problems.ParamsTables ? w.p : w
+        isempty(wp) ? append!(wp, v) : (wp .= ifelse.(isnan.(wp), v, wp))
+        w isa Problems.ParamsTables && append!(tabs, (t for t in w.tables if !any(u -> u[1] == t[1], tabs)))
+    end
+    Problems.coupling_report(io, c.stability, c.groups, [ph.alg for ph in phases], Problems.with_tables(wp, tabs),
+        first(phases).dt)
+    return nothing
+end

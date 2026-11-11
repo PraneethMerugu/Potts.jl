@@ -442,14 +442,17 @@ threads).
   order of each group's first field). It follows the parameter writes. `substep_counts(prob)`
   gives the counts at the problem's parameters. The same function gives the counts of a
   LatticePDE problem.
-- `field_report(x)` (`Potts.LatticePDE.field_report`) prints why each field group of a
-  LatticePDE problem steps as it does. `x` is a problem, an integrator (owned or
-  OrdinaryDiffEq's) or a solution of either. One block per group gives its fields and
-  algorithm, the window and the substep count with its cause, the stability bound and the
-  terms it cannot see, the number types and the run's counters; then the coupling between
-  groups. `field_report(prob, alg)` prints the policy of `prob` under the algorithm `alg`
-  without binding anything. It may synchronize a device, so call it outside a timed loop.
-  The [SciML path](@ref manual-sciml-path) below shows it.
+- `field_report(x)` prints why each field group steps as it does. `x` is a `PottsProblem`,
+  a `PottsIntegrator` or a `PottsSolution`, or a LatticePDE problem, integrator (owned or
+  OrdinaryDiffEq's) or solution: it is the same function. One block per group gives its
+  fields and algorithm, the window (the MCS) and the substep count with its cause, the
+  stability bound and the terms it cannot see, and the number types. An implicit group also
+  gives its `inner` solver with its multigrid levels and the Newton count. An integrator
+  also gives the run's counters. Then the report gives the coupling between groups.
+  `field_report(prob, alg)` prints the policy of a LatticePDE problem under the algorithm
+  `alg` without binding anything. The report changes nothing in the run. It may synchronize
+  a device, so call it outside a timed loop. The example below and the
+  [SciML path](@ref manual-sciml-path) show it.
 - Fields with the same solver step together, substep by substep: a field reads the fields it
   depends on after their update, and fields that depend on each other read each other's
   values from the start of the substep. Fields with different solvers (`solvers = [u =>
@@ -497,6 +500,17 @@ threads).
 ```@example equations
 prob2 = remake(prob; ode_solver = Adaptive(Tsit5(); reltol = 1e-8), solvers = [:g => RK4(substeps = 4)])
 solve(prob2, SequentialCPM()).retcode
+```
+
+`field_report` of an integrator of the first model on this page (`secreting`) gives the
+substep count of its field `c` and its cause, the bound, and the counters of three MCS:
+
+```@example equations
+integ = init(PottsProblem(secreting, [ownership => σ, kind => [:A, :A]], (0, 12); seed = 3), SequentialCPM())
+for _ in 1:3
+    step!(integ)
+end
+field_report(integ)
 ```
 
 The time step is one MCS times `mcs_duration` (default 1), set in `@sweep`.
