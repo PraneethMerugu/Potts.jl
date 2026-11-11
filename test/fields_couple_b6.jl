@@ -143,6 +143,10 @@ end
     @test occursin("applies `Δ` to `kind == A`, a CPM value", e) && occursin("an input of the PDESystem bound to `kind == A`", e) &&
           occursin("`@after_mcs v ~ kind == A`", e) && !occursin("kind__in", e) && !occursin("cannot lower", e) ||
           (println(e); false)
+    # the location (batch-end review (d)): the equation of `c` in the PDESystem `lapin`, as written
+    # (base ab34e226, ~/lpwork/f4BE/nc.log: `in @equations Differential(t, 1)(c(t)) ~ …`)
+    @test occursin("\n  in the equation of `c` in the PDESystem `lapin`: `Differential(t)(c(t, x, y)) ~ ", e) &&
+          occursin("Δ(c(t, x, y))", e) && !occursin("@equations", e) && !occursin("c(t))", e) || (println(e); false)
     # the route: the value in a site variable, read by the PDESystem as an unbound input. Its
     # closed faces have no flux (before, LatticeFields refused it: "field `v` has no boundary
     # rule"). Hand oracle with the cell on the low face of `x` and σ frozen: from MCS 2 on, `v` is
@@ -168,6 +172,24 @@ end
     @test v2 == Float64.(σ .!= 0)
     @test maximum(abs, Array(integ.u.site.c) .- (c2 .+ 0.1 .* lap(c2) .+ 0.1 .* lap(v2))) <= 1e-14
     @test maximum(abs, Array(integ.u.site.c)) > 0.01
+end
+
+# batch-end review (d): with no field named, a refusal names the model's one field equation (or the
+# fields' PDESystem), never its first equation, which may be a cell ODE (base ab34e226: `D(g) ~ …`)
+@potts_model B6Ode begin
+    @kinds medium A
+    @variables g(cell) = 1.0
+    @lattice Lattice((8, 8); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @equations D(g) ~ -0.1 * g
+    @fields c = B6.plain()
+    @sweep Metropolis(; temperature = 1.0)
+end
+@testset "batch-end review (d): the equation a field refusal names" begin
+    m = B6Ode(; name = :m)
+    eq = Potts._field_equation_of(m, nothing)
+    @test eq isa Potts.Symbolics.Equation && Potts.info(Potts._field_lhs(eq, m)[1]).name === :c
+    @test Potts._field_equation_of(m, "c") === eq
 end
 
 @potts_model B6Hex begin

@@ -582,7 +582,7 @@ function _with_pde(sys::PottsSystem, part::PottsPart, f, prefix, what; inputs = 
     # fingerprint)
     md = part.metadata
     isempty(c.inputs) || (md = Base.ImmutableDict(md, _FieldInputs => [get(md, _FieldInputs, Tuple{Symbol, Any, Type}[]); c.inputs]))
-    md = _with_bcs_origins(md, Pair{Any, Symbol}[b => nameof(f) for b in c.bcs])
+    md = _with_bcs_origins(md, Pair{Any, Symbol}[b => nameof(f) for b in [c.bcs; c.equations]])
     md = _with_coupled(md, _coupled_names(c.variables))
     return getfield(_replace(_staged(nameof(sys), part); variables = Any[part.variables; c.variables],
         parameters = Any[part.parameters; c.parameters], equations = Equation[part.equations; c.equations],
@@ -691,8 +691,9 @@ function _check_field_lines(part::PottsPart)
     return part
 end
 
-# payload metadata key (F4-E10): `condition => PDESystem name` for the conditions a PDESystem
-# brought (`@fields`, `Potts.couple`), so a refusal of one names the PDESystem. An
+# payload metadata key (F4-E10): `condition => PDESystem name` for the conditions and the field
+# equations a PDESystem brought (`@fields`, `Potts.couple`), so a refusal of one names the
+# PDESystem (the equations since the batch-end review (d)). An
 # extension keeps its bases' entries (`_merged_metadata` keeps every entry; this reads them all).
 struct _BcsOrigins end
 _with_bcs_origins(md, origins) = isempty(origins) ? md : Base.ImmutableDict(md, _BcsOrigins => collect(Pair{Any, Symbol}, origins))

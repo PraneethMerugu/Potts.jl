@@ -225,7 +225,10 @@ end
     end))
     σw = zeros(Int32, 8, 8); σw[3:5, 3:5] .= 1
     m = msg(() -> PottsProblem(Base.invokelatest(fw; name = :w), [ownership => σw, kind => [:A]], (0, 1)))
-    @test occursin("\n  in @equations Differential(t, 1)(u(t)) ~ ", m) && occursin("(kind == A) - u(t)", m) || (println("N2: ", m); false)
+    # (batch-end review (d): the equation of its field in its PDESystem, as the user wrote it; base
+    # ab34e226, ~/lpwork/f4BE/nc.log: `in @equations Differential(t, 1)(u(t)) ~ …`)
+    @test occursin("\n  in the equation of `u` in the PDESystem `fields`: `Differential(t)(u(t, x, y)) ~ ", m) &&
+          occursin("(kind == A) - u(t, x, y)", m) && !occursin("@equations", m) || (println("N2: ", m); false)
     # Coarse(1) is the lattice itself (no option kept)
     v = Potts.variable(only(Potts.Symbolics.@variables q), :field; lattice_level = Coarse(1))
     @test !haskey(Potts.info(v).options, :lattice_level)

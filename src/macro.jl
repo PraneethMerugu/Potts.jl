@@ -877,7 +877,7 @@ function _section!(parts, sec, args, ln = nothing)
             :(append!(__vars, $fc.variables)), :(append!(__params, $fc.parameters)),
             :(append!(__equations, $fc.equations)), :(append!(__bcs, $fc.bcs)), :(append!(__field_inputs, $fc.inputs)),
             :(append!(__coupled, $P._coupled_names($fc.variables))),
-            :(foreach(b -> push!(__bcs_origins, b => nameof($fs)), $fc.bcs)),
+            :(foreach(b -> push!(__bcs_origins, b => nameof($fs)), [$fc.bcs; $fc.equations])),
             [:($n = $P._fields_name($fc, $(QuoteNode(n)), $fs)) for n in names]...)
     elseif sec === Symbol("@divide")
         domain = args[1]

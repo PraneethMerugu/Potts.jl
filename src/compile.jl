@@ -741,7 +741,7 @@ function _check_fields(sys::PottsSystem, rn)
     # a model whose only fields are aux fields `K ~ rhs` has one group with no state, which
     # evaluates them once per MCS (F3 design §3.12)
     isempty(eqs) && isempty(_field_aux(sys)) && return nothing, specs
-    known = _located(() -> _field_inputs(sys, Float64), sys, first(_p(sys, :equations)))
+    known = _located(() -> _field_inputs(sys, Float64), sys, _field_equation_of(sys, nothing))
     names = Symbol[info(x).name for (x, _) in eqs]
     # (the stability bound is built at the first problem: `mtkcompile` only checks the lowering)
     # a refusal of the lowering names the equation it was lowering (LatticePDE's note; review r1 N2)
@@ -759,17 +759,21 @@ function _check_fields(sys::PottsSystem, rn)
     return g.pdesys, specs
 end
 
-# the `@equations` entry of the field with key `k` (`"c"`, `"u[1]"`), else the first
+# the equation of the field with key `k` (`"c"`, `"u[1]"`); with no key or no such field, the
+# one field equation, else the fields' PDESystem as a whole (`_FieldSystemLine`; batch-end review
+# (d): not the model's first equation, which may be a cell ODE)
 function _field_equation_of(sys::PottsSystem, k)
-    eqs = _p(sys, :equations)
-    k === nothing && return first(eqs)
-    name = first(split(k, '['))
-    i = findfirst(eqs) do eq
-        f = _field_lhs(eq, sys)
-        f !== nothing && string(info(f[1]).name) == name
+    eqs = [eq for eq in _p(sys, :equations) if (f = _field_lhs(eq, sys); f !== nothing && f[1] !== nothing)]
+    if k !== nothing
+        name = first(split(k, '['))
+        i = findfirst(eq -> string(info(_field_lhs(eq, sys)[1]).name) == name, eqs)
+        i === nothing || return eqs[i]
     end
-    return i === nothing ? first(eqs) : eqs[i]
+    return length(eqs) == 1 ? only(eqs) : _FieldSystemLine()
 end
+# the fields' PDESystem as a whole, as a located statement
+struct _FieldSystemLine end
+_describe_text(::_FieldSystemLine, kinds = nothing) = "the fields' PDESystem"
 
 # A slot of a discrete component is written by its ticks only.
 function _check_discrete_slots(sys)
@@ -1114,8 +1118,26 @@ function _located(f, sys::PottsSystem, x)
         end
         # (a condition with no recorded PDESystem, `PottsSystem(; bcs)`: the fields' PDESystem)
         startswith(msg, "@bcs: ") && (msg = string("the fields' PDESystem: ", chopprefix(msg, "@bcs: ")))
+        # a field equation is named as the equation of its field in its PDESystem, as the user
+        # wrote it (`c(t, x, y)`; batch-end review (d), as F4-E10 names a condition)
+        fl = x isa Equation ? _field_lhs(x, sys) : nothing
+        if fl !== nothing && fl[1] !== nothing
+            o = _bcs_origin(sys, x)
+            throw(ArgumentError(string(msg, _algebraic_note(x, msg), "\n  in the equation of `", info(fl[1]).name, "` in ",
+                o === nothing ? "the fields' PDESystem" : string("the PDESystem `", o, "`"), ": `",
+                _nopkg(_builtin_text(_field_eq_text(x, sys))), "`", loc)))
+        end
         throw(ArgumentError("$msg$(_algebraic_note(x, msg))\n  in $(_describe(x, _p(sys, :kinds)))$loc"))
     end
+end
+
+# a field equation as the user wrote it in its PDESystem: each field or site variable read at its
+# site, `c(t)`, as `c(t, x, y)`, and `Differential(t, 1)` as `Differential(t)`
+function _field_eq_text(eq::Equation, sys::PottsSystem)
+    s = replace(_eq_text(eq, _p(sys, :kinds)), "Differential(t, 1)(" => "Differential(t)(")
+    names = Set{String}(string(info(x).name) for x in _p(sys, :variables) if info(x) !== nothing && info(x).role in (:field, :site))
+    at = string("(t, ", join(("x", "y", "z")[1:length(_p(sys, :lattice).dims)], ", "), ")")
+    return replace(s, r"([\w₊]+)\(t\)" => m -> (n = chop(m; tail = 3); n in names ? string(n, at) : m))
 end
 
 # a condition as a located statement (review R4 of F2 batch 4: the error named the first
