@@ -374,13 +374,14 @@ p60ah_published() = (
 )
 const P60AH_FINGERPRINTS = Dict{Symbol, UInt64}(
     :GranerGlazier => 0xe6e09483034b4193,   # re-pinned under D-122
-    :MerksVasculogenesis => 0xeb4c1851b0fe68da,   # re-pinned under D-122; re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies); re-pinned under D-C8 (fields on the field compiler)
+    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
     :P60ahAt_RK4 => 0x52fad8cebbee12ed,   # re-pinned under D-124
     :P60ahAt_Euler => 0xe41e0c4a682a9697,   # re-pinned under D-124
 )
 
 @testset "P6.0ah: fingerprints unchanged" begin
     for (name, build) in p60ah_published()
+        haskey(P60AH_FINGERPRINTS, name) || continue   # (D-INT-1: its pin was removed)
         fp = build().f.fingerprint
         @test fp == P60AH_FINGERPRINTS[name]
         fp == P60AH_FINGERPRINTS[name] || @info "P6.0ah: fingerprint $name = $(repr(fp))"

@@ -341,7 +341,7 @@ p60ag_published() = (
 )
 const P60AG_PUBLISHED = Dict{Symbol, UInt64}(
     :GranerGlazier => 0xe6e09483034b4193,   # re-pinned under D-122
-    :MerksVasculogenesis => 0xeb4c1851b0fe68da,   # re-recorded at the P6.0ag merge (D-102: substep function); re-pinned under D-122; re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies); re-pinned under D-C8 (fields on the field compiler)
+    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
 )
 
 """CPU and device runs (Float32, CheckerboardCPM, 10 MCS) of `M` with solver keywords `kw`:
@@ -404,6 +404,7 @@ end
 
 @testset "P6.0ag: fingerprints of models without an ODE unchanged" begin
     for (name, build) in p60ag_published()
+        haskey(P60AG_PUBLISHED, name) || continue   # (D-INT-1: its pin was removed)
         @test build().f.fingerprint == P60AG_PUBLISHED[name]
     end
 end

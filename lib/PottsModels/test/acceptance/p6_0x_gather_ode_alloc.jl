@@ -189,7 +189,7 @@ p60x_published() = (
 const p60x_PUBLISHED = Dict{Symbol, UInt64}(
     :GranerGlazier => 0xe6e09483034b4193,   # re-pinned under D-122
     :WortelAct => 0x9a9fcac5fc22b7c5,   # re-pinned under D-124
-    :MerksVasculogenesis => 0xeb4c1851b0fe68da,   # re-recorded at the P6.0y merge (D-102: substep function); re-pinned under D-122; re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies); re-pinned under D-C8 (fields on the field compiler)
+    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
     :OpenVTGrowingMonolayer => 0x34b40af65c56a113,   # re-pinned under D-122
 )
 
@@ -248,6 +248,7 @@ end
         @test p60x_problem(M, (0, p60x_N); kw...).f.fingerprint == p60x_FINGERPRINTS[(nameof(M), label)]
     end
     for (name, build) in p60x_published()
+        haskey(p60x_PUBLISHED, name) || continue   # (D-INT-1: its pin was removed)
         @test build().f.fingerprint == p60x_PUBLISHED[name]
     end
 end

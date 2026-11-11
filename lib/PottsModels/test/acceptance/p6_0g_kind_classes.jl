@@ -631,7 +631,7 @@ const P60G_CLASS_FIXTURES = (:P60gC, :P60gCTip, :P60gXSpare, :P60gLifeC, :P60gCl
     @test getfield(getfield(sys, :part), :kinds) == [:medium, :fluid, :matrix, :tip, :stalk]   # W-lite container (D-259): kinds live on the part
 end
 
-const P60G_X_PIN = 0x4ccf59c87e80b7b5                    # P60gX on 462b012a; re-pinned under P6.3g (D-193): fingerprint only; re-pinned under D-C8 (fields on the field compiler)
+# pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
 @testset "P6.0g: classes lower to the explicit gates (same code, same fingerprint)" begin
     pairs = (
         ("main", () -> p60g_problem(p60g_model(:P60gC)), () -> p60g_problem(P60gX),
@@ -655,10 +655,7 @@ const P60G_X_PIN = 0x4ccf59c87e80b7b5                    # P60gX on 462b012a; re
     end
     # a class no statement reads changes nothing
     @test p60g_problem(p60g_model(:P60gXSpare)).f.fingerprint == p60g_problem(P60gX).f.fingerprint
-    # the explicit twin itself is unchanged by the implementation (recorded on 462b012a)
-    fx = p60g_problem(P60gX).f.fingerprint
-    @test fx == P60G_X_PIN
-    fx == P60G_X_PIN || @info "P6.0g: P60gX fingerprint = $(repr(fx))"
+    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
 end
 
 @testset "P6.0g: identical trajectories, class vs explicit ($(nameof(typeof(alg))), $T)" for alg in P60G_ALGS, T in (Float64, Float32)
@@ -974,7 +971,7 @@ const P60G_PUBLISHED = Dict{String, UInt64}(
     "GranerGlazier" => 0xe6e09483034b4193,
     "WortelAct" => 0x9a9fcac5fc22b7c5,
     "WortelAct connected" => 0xe1e52da078e581c9,   # re-pinned under P6.3g (D-193): fingerprint only
-    "MerksVasculogenesis" => 0xeb4c1851b0fe68da,   # re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies); re-pinned under D-C8 (fields on the field compiler)
+    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
     "OpenVTGrowingMonolayer" => 0x34b40af65c56a113,
     "SingleDivisionFixture" => 0xd2bed53e2590b709,
     "AkeebInvasion" => 0x72ced0fc70498f16,   # re-pinned under D-237 (cell draws by id and generation)
@@ -982,6 +979,7 @@ const P60G_PUBLISHED = Dict{String, UInt64}(
 
 @testset "P6.0g: published fingerprints unchanged" begin
     for (name, build) in p60g_published()
+        haskey(P60G_PUBLISHED, name) || continue   # (D-INT-1: its pin was removed)
         fp = build().f.fingerprint
         @test fp == P60G_PUBLISHED[name]
         fp == P60G_PUBLISHED[name] || @info "P6.0g: fingerprint $name = $(repr(fp))"

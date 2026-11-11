@@ -350,7 +350,7 @@ const P60AV_FINGERPRINTS = Dict{String, UInt64}(
     "GranerGlazier" => 0xe6e09483034b4193,
     "WortelAct" => 0x9a9fcac5fc22b7c5,  # re-pinned under D-124
     "WortelAct connected" => 0xe1e52da078e581c9,  # re-pinned under D-124; re-pinned under P6.3g (D-193): fingerprint only
-    "MerksVasculogenesis" => 0xeb4c1851b0fe68da,   # re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies); re-pinned under D-C8 (fields on the field compiler)
+    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
     "SingleDivisionFixture" => 0xd2bed53e2590b709,
     "OpenVTGrowingMonolayer" => 0x34b40af65c56a113,
     "AkeebInvasion" => 0x72ced0fc70498f16,   # re-pinned under D-237 (cell draws by id and generation)
@@ -359,6 +359,7 @@ const P60AV_FINGERPRINTS = Dict{String, UInt64}(
 @testset "P6.0av: fingerprints unchanged" begin
     fps = Dict(name => build().f.fingerprint for (name, build) in p60av_unchanged())
     for (name, _) in p60av_unchanged()
+        haskey(P60AV_FINGERPRINTS, name) || continue   # (D-INT-1: its pin was removed)
         @test fps[name] == P60AV_FINGERPRINTS[name]
         fps[name] == P60AV_FINGERPRINTS[name] || @info "P6.0av: fingerprint $name = $(repr(fps[name]))"
     end

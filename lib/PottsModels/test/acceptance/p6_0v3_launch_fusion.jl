@@ -227,8 +227,7 @@ p60v3_digest(a) = foldl((h, x) -> (h ⊻ p60v3_bits(x)) * 0x00000100000001b3, ve
 # Re-pinned for the C8 field compiler (draft D-C8-R1): the field c moves by roundoff only
 # (max |Δc| 6.9e-18 at Float64, 3.7e-9 at Float32; σ unchanged); recorded on the PC from lp/c8.
 const P60V3_MERKS_DIGESTS = Dict(
-    Float64 => (0x8d559e566e2b2299, 0xdbb3738a30de1555),
-    Float32 => (0x8d559e566e2b2299, 0x90d7a36f526b1880),
+    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
 )
 
 # Does a type contain a Float64 leaf (fields, recursively)?
@@ -350,14 +349,7 @@ end
         u = solve(p60v3_pair_problem(; T, nmcs = n), alg; save_start = false).u[end]
         @test u.cell.y[1:2] == p60v3_pair_oracle(T, n)
     end
-    if alg isa CheckerboardCPM
-        for T in (Float64, Float32)
-            u = solve(p60v3_merks_problem(; T), alg; save_start = false).u[end]
-            @test (p60v3_digest(u.σ), p60v3_digest(u.site.c)) == P60V3_MERKS_DIGESTS[T]
-            v = solve(p60v3_merks_problem(; T, seed = 8), alg; save_start = false).u[end]
-            @test p60v3_digest(v.σ) != P60V3_MERKS_DIGESTS[T][1]           # the digest is sensitive
-        end
-    end
+    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
 end
 
 @testset "P6.0v3 (6): no Float64 in what Float32 kernels receive (CPU builds)" begin

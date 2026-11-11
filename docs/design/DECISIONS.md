@@ -5215,3 +5215,34 @@ Review fixes (F4-B6 review, 2026-11-11; tests in test/fields_couple_b6.jl, negat
 - A spatial operator of a bound input (`Δ(endo)` with `endo => kind == A`) is refused in the model's words (`applies Δ to kind == A, a CPM value`), with the route: a site variable set by `@after_mcs` and read by the PDESystem as an unbound input. That route now works on a lattice with a closed axis: a site variable (or a field with no equation) that an operator reads has no flux through a closed face (before, LatticeFields refused it: "field `v` has no boundary rule"). On a lattice periodic on every axis nothing changes. No fingerprint moves: every model this changes was refused before.
 - A field operator in a model line (`Δ(c)[target]` under `using Potts.Fields`) is refused with the route of an aux field `L(t, x, y) ~ Δ(c(t, x, y))` read as `L[target]` (before, "cannot index").
 - Front end A's wording is gone from the refusals: the Robin coefficient names `t` and the read as the PDESystem writes it (`u(t, x, y)`, `u(t, 0, y)`, not `t`); a field equation is `Differential(t)(c(t, x, y)) ~ …`; a field declaration is `@variables c(..) = 0.5 [bounds = (0, 1)]` in a PDESystem; a condition with no recorded PDESystem is a condition of the fields' PDESystem, not `@bcs`. The model's-own-`x` branch of the axis check is removed (a PDESystem's `x` is its own variable, so the branch was unreachable).
+
+## D-F4-16 F4-16 (the full Galerkin coarse hierarchy) is dropped; rule M stays (2026-11-07; user ruling; F4 design §9.1, research/field-compiler/f4/F4-16-galerkin.md §11)
+
+- **Why.** The testbed (`F4-16-galerkin.md` §11): cell-centered bilinear RAP gives 21/25-point coarse operators in 2D and 81/125-point in 3D. Full Galerkin with PCG takes fewer iterations (4–7 against 6–10) but more work than rule M with PCG: even on 2D Jiang, +31–74% in 3D, on Bauer and on the field row. Both truncations lose (diagonal lumping diverges).
+- **Decision.** The rule-M hierarchy stays for every implicit group. Per-site Robin faces use the existing coarse `sbox` fold (F4-12b). The hexagonal lattice keeps rule M; a two-ring hexagonal Galerkin RAP is a later item.
+
+## D-INT-1 Integration of the field-compiler line onto monorepo: frozen resolutions and removed pins (2026-11-11; user rulings 2026-11-11: "integrate now as ONE local branch", then "fuck the repin, move straight to TS (the test-suite phase); I accept any and all git wizardry needed"; standing frozen-edit OK 2026-11-05)
+
+- **What.** Branch `lp/int2` holds the C series, F1, F2, F3 and F4 (from `lp/f4-w3` 70f5ce1b, fixups folded, one commit per item) on `origin/monorepo` 9fdd6231, which brought the lockless block checkerboard (D-271), the CI dependency lock (D-272) and device ensembles (D-273).
+- **Pins that changed on one side.** A frozen pin that only monorepo re-pinned (D-271) takes monorepo's value; a pin that only this line re-pinned (D-C8, D-C9, D-F4-R1) takes this line's value.
+- **Pins that changed on both sides are removed.** Each was re-pinned once for the field compiler (D-C8-R1, D-C8-R5, D-C8-R6, D-C9-R1) and once for the lockless checkerboard (D-271), so the combined value is new. By the user's ruling they are not re-pinned: each assertion is removed, with the comment `# pin removed at integration (D-INT-1); replaced by a correctness test in the TS series`, and its loop skips the model (`haskey(…) || continue`). The TS series replaces them with correctness tests.
+  - `p6_0aq_acceptance_fingerprint.jl` (lines 254, 262): "MerksVasculogenesis".
+  - `p6_0p_cadence_fingerprint.jl` (lines 337, 349): "MerksVasculogenesis".
+  - `p6_0ax_gather_scan.jl` (lines 564, 572): "MerksVasculogenesis".
+  - `p6_0au_integral_readers.jl` (lines 356, 368): :MerksVasculogenesis.
+  - `p6_0c2_canonical_followups.jl` (lines 541, 549): "MerksVasculogenesis".
+  - `p6_0av_mcs_duration.jl` (lines 353, 362): "MerksVasculogenesis".
+  - `p6_0ag_ode_expand_all.jl` (lines 344, 407): :MerksVasculogenesis.
+  - `p6_0x_gather_ode_alloc.jl` (lines 192, 251): :MerksVasculogenesis.
+  - `p6_0ah_canonical_term_order.jl` (lines 377, 384): :MerksVasculogenesis.
+  - `p6_0as_sweep_validation.jl` (lines 354, 362): "MerksVasculogenesis".
+  - `p6_0at_relation_fingerprint.jl` (lines 463, 486): "MerksVasculogenesis".
+  - `p6_0t_integral_refresh.jl` (lines 469, 478): :MerksVasculogenesis.
+  - `p6_0g_kind_classes.jl` (lines 634, 658, 974, 982): P60G_X_PIN, "MerksVasculogenesis".
+  - `p6_0o_abstract_system.jl` (lines 622, 635, 651): "MerksVasculogenesis Float32", "MerksVasculogenesis Float64", "MerksVasculogenesis contact-inhibited Float32", "MerksVasculogenesis contact-inhibited Float64", "fixture field Float64".
+  - `p6_0bk2_skip_interior.jl` (lines 239, 281): "GG 72²", "cubes 16³".
+  - `p6_0v3_launch_fusion.jl` (lines 230, 352): Float64, Float32.
+- **The F2 guard (test/fields_identity.jl, not frozen).** Its copies of the removed pins (`GD_PINS`) are removed, and the 20 fingerprint records that moved with monorepo's codegen (pair-only hoisting, D-271) are no longer compared (`GD_UNPINNED`: the Merks models, Merks2006, Merks2008, the fixture field, P60gX and the four GiMerks implicit fixtures). No behavior record (`|n`, `|digest|`) moved; all are still compared.
+- **Other frozen resolutions.** None changes what a frozen test asserts beyond the removals above: assertion and comment lines are combined line by line from both sides, and `frozen.toml` names this entry for the sixteen files above, with their recomputed hashes.
+- **Code resolutions.** The checkerboard is monorepo's lockless one. The sub-MCS `Repeat` pass (C8) splits the MCS's `P` block phases (`n` must divide `P`, 64 by default) where it split the color passes; the moments re-center after each pass. The claim functions this line extended (F3-23: a cluster claim for a weighted `cluster_surface`) are gone with the claims (D-271). Monorepo's pair-only hoisting (`_hoist_pair_terms`) treats a tagged quantity as a leaf, as it treats a plain symbol: since C3, `site(t)` and the site variables are calls, and without this the bare `sn`/`target` indices were bound as pair terms (the P6.0e mutant test found it). The C2 host-executor test runs the checkerboard with `threads = false` (a threaded lockless phase is not reproducible) and keeps its threaded site phase; the PG-13 static allocation check of the old color kernels is dropped.
+- **Commits.** Eleven review fixups that change code of later items stay as their own `… follow-up:` commits after those items.

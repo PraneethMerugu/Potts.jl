@@ -619,10 +619,7 @@ const P60O_PINS = Dict{String, Any}(
     "AkeebInvasion Float64" => (fp = 0x72ced0fc70498f16, n = 10, raw = "fc2b870dce37df33e2405b688d4f5e578587b6bcfab3729f229e3c599b5212c2", canon = "a2d38a6eb64bc5f62c5a0acb86d5b3370b33b0ec33880813fe793bd52ea73a2c"),   # re-pinned under D-237 (cell draws by id and generation)
     "GranerGlazier Float32" => (fp = 0x526093de596ed924, n = 5, raw = "5477c81b88cda45820a0705515b1bcbe664db3cfc9b3942db64791f9b64f5f23", canon = "e25b1f0e742c50f2a75f7d07a05f8b53595a51a957faa1ba29b60da0d49d24f4"),
     "GranerGlazier Float64" => (fp = 0xe6e09483034b4193, n = 5, raw = "b205076896aabdd3c41c3eeaa5b95632b6673a3da0c83147e6508806aa1db524", canon = "b2204f30bb454da6f2ed6dbd5a05601a0a402d0d488416269920e0c132739196"),
-    "MerksVasculogenesis Float32" => (fp = 0x32e3a82e6f4ebcd9, n = 8, raw = "fa55b2134c2941f880e4ce34609d726f1fbb9bf70377c2ce818cee0b358533e2", canon = "cc4fe54da52d54c9370d1ef7c6eb30be3a534137495186bd033fd8cdd28daf06"),   # re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)   # re-pinned under D-C8 (fields on the field compiler)
-    "MerksVasculogenesis Float64" => (fp = 0xeb4c1851b0fe68da, n = 8, raw = "69906271ee07cedbc0cebcc0a74f74d277a93d8d1f2110920da15e69ee092346", canon = "c1fad1a705f23edeee76a0787b364b39ca4f21081d0ce943484b86769e65637e"),   # re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)   # re-pinned under D-C8 (fields on the field compiler)
-    "MerksVasculogenesis contact-inhibited Float32" => (fp = 0x0cef1a1d77e7e5b5, n = 8, raw = "ee05a537c47074d38154ebc05b9b7392dc2c29fa49cd33e7357d6f0a4b995db4", canon = "9dfd980826a22348555f024747a2e7d0d4c447ea98a64034434d00e97e6c7d82"),   # re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)   # re-pinned under D-C8 (fields on the field compiler)
-    "MerksVasculogenesis contact-inhibited Float64" => (fp = 0x6c9b003ccb05acd1, n = 8, raw = "e0f0fd7b1b7ab6c1220398f46147ef628a7d2f1a988d471e9d0524f55304878a", canon = "abcbbe9908371936d996f995dee75370a104a6b8f4d0b66fe830a7d421a663e8"),   # re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)   # re-pinned under D-C8 (fields on the field compiler)
+    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
     "OpenVTGrowingMonolayer Float32" => (fp = 0x5cd51ad3b52ddac0, n = 9, raw = "32d919af1bca7393d78557fac5344a4c76f030f69e5e62aaabb7095281a28f8c", canon = "aa8ebd9313be975cb5dd21b83a5a026c7357688f87326f43d1ec37f839f7cd82"),
     "OpenVTGrowingMonolayer Float64" => (fp = 0x34b40af65c56a113, n = 9, raw = "3884cacea09298421c5053db40366dca6ca02868f10dd70627257ae549088da0", canon = "3acc5f836bfb69fcaa4bb00516fb93b5f4a0b1c6dda1722d6ad83e449ce88060"),
     "SingleDivisionFixture Float32" => (fp = 0x8f8dd0a3b1295f9f, n = 9, raw = "6d144ef9a2779aa5d862528b3d0650856a5a491064c5ae6899c82aa8a0da9c2f", canon = "e003f6d1eaf87453cdf8825480c80e3746ef5fcdfacffb430174e6bae77fa538"),
@@ -635,7 +632,7 @@ const P60O_PINS = Dict{String, Any}(
     "fixture cell Float64" => (fp = 0xa939abe5fad3e067, n = 7, raw = "53078687891393fbd1969563164dbd956bd0c205707dd561204d89139e26ae16", canon = "ada834b39ee612bdef456fdf17eb96cdc0a1fdd6341502ecd4763f1fda81b477"),
     "fixture components Float64" => (fp = 0x96340d875f856e41, n = 7, raw = "d9e8f5d163ecbd4fee155f134149b72031e3786264ce387c385190c8e998c530", canon = "cdfe12f8a60f3f0658face0c118673019854835ef130f7fa4067845d2b3adf50"),
     "fixture discrete component Float64" => (fp = 0x7a057644bac18a54, n = 6, raw = "68b600c6209283ebe839457fe1e9c821d7f9c5833383bb365c81e72260bc77a3", canon = "68b600c6209283ebe839457fe1e9c821d7f9c5833383bb365c81e72260bc77a3"),
-    "fixture field Float64" => (fp = 0xde174fb968cfb2e4, n = 7, raw = "8a78ae15c9c0e797d954b642a64456e3ff0ec4cb7dd8a6debe9aa6ec38f628cf", canon = "013f017bfe7c89727a6c87be81296cd6f15ca5214598602e648b4e526e59a5fc"),   # re-pinned under D-C8 (fields on the field compiler)
+    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
     "fixture lifecycle Float64" => (fp = 0x8e8713c64b478b07, n = 10, raw = "e9cd0028afa47e6ae958841e04334be1ac4ab2073c40c08f2d4342b6cee5f4ba", canon = "15679caf1855ee0a9f937b7c799e079276a1da1693a7ea74dcf021afb77e36c1"),
     "fixture spring @extend Float64" => (fp = 0x2a32a89f5fccab80, n = 6, raw = "69680d0cbd5f22148cbb9d1c6d0beaec60840b4be5475bc097057f5a63d12c55", canon = "cfce48cb0a7057273238bea6cf19ecfbaa1d0b2625cf2b590793d78ae1f69e03"),
     "fixture spring @extend² Float64" => (fp = 0xcaa95f46e7a347cd, n = 6, raw = "6e13d26c7b2d5bec48536f49e9aed7aefa30518e65680ab541bbc780b40b9fa1", canon = "536f87d77219a0bc122a59139f70208f521f4e0fa4ed33ca3a0eee978d761d75"),
@@ -651,8 +648,10 @@ const P60O_PINS = Dict{String, Any}(
         h = p60o_code_hashes(sys, kw; T)
         got[key] = (; fp = p60o_fp(sys, op, kw; T), h...)
     end
-    @test Set(keys(got)) == Set(keys(P60O_PINS))
+    unpinned = Set(["MerksVasculogenesis Float32", "MerksVasculogenesis Float64", "MerksVasculogenesis contact-inhibited Float32", "MerksVasculogenesis contact-inhibited Float64", "fixture field Float64"])   # (D-INT-1: their pins were removed)
+    @test setdiff(Set(keys(got)), unpinned) == Set(keys(P60O_PINS))
     for key in sort(collect(keys(got)))
+        key in unpinned && continue
         pin = get(P60O_PINS, key, nothing)
         ok = pin !== nothing && got[key].fp == pin.fp && got[key].n == pin.n && got[key].raw == pin.raw &&
              got[key].canon == pin.canon

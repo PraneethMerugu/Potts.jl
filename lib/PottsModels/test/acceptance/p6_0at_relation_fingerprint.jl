@@ -460,7 +460,7 @@ const P60AT_FINGERPRINTS = Dict{String, UInt64}(
     "hex" => 0x7f64ce1e5b4dfc59,
     "cube" => 0xff2e2fb12cf95e96,
     "GranerGlazier" => 0xe6e09483034b4193,
-    "MerksVasculogenesis" => 0xeb4c1851b0fe68da,   # re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies); re-pinned under D-C8 (fields on the field compiler)
+    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
     "OpenVTGrowingMonolayer" => 0x34b40af65c56a113,
     "SingleDivisionFixture" => 0xd2bed53e2590b709,
     "AkeebInvasion" => 0x72ced0fc70498f16,   # re-pinned under D-237 (cell draws by id and generation)
@@ -483,6 +483,7 @@ const P60AT_OLD_FINGERPRINTS = Dict{String, UInt64}(
 
 @testset "P6.0at: fingerprints of models reading no named or gather relation unchanged" begin
     for (name, build) in p60at_unchanged()
+        haskey(P60AT_FINGERPRINTS, name) || continue   # (D-INT-1: its pin was removed)
         prob = build()
         fp = prob.f.fingerprint
         @test fp == P60AT_FINGERPRINTS[name]

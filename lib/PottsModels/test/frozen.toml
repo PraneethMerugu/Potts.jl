@@ -159,13 +159,13 @@ decision = "D-254"
 
 [[file]]
 path = "acceptance/p6_0v3_launch_fusion.jl"
-sha256 = "4d2facf4eea403f00051865d3f097d05a78eaa69e408577e3bd32f5f3bae2820"
-decision = "D-C8-R1"
+sha256 = "205ebe6469971b9283068929a0afdfc915007f31d90f69a85072ea8224794370"
+decision = "D-INT-1"
 
 [[file]]
 path = "acceptance/p6_0x_gather_ode_alloc.jl"
-sha256 = "88b543b6492984d9b525fe1902f5e226a924c4b7ccfc3475d5f3813295adc679"
-decision = "D-C8-R5"
+sha256 = "938fd5b8b3cbe4f2cfe35a8af6f3701a5be2e09fc2021adcff770801fb67c2d2"
+decision = "D-INT-1"
 
 [[file]]
 path = "acceptance/p6_0y_stable_substeps.jl"
@@ -174,8 +174,8 @@ decision = "D-F4-R1"
 
 [[file]]
 path = "acceptance/p6_0ag_ode_expand_all.jl"
-sha256 = "f4349d5e9ac5d3d2c94c71961686e127c47165c8b60d09ec1d87dade7bbe79fd"
-decision = "D-C8-R5"
+sha256 = "7e61ca9ec46fb6238177385e39a94e8b2212d181a024514e250b5a6277742654"
+decision = "D-INT-1"
 
 [[file]]
 path = "acceptance/p6_1e_gg_margin.jl"
@@ -184,8 +184,8 @@ decision = "D-106"
 
 [[file]]
 path = "acceptance/p6_0ah_canonical_term_order.jl"
-sha256 = "6baeb4e9c95450842f6746a2a90a6b828803571f2be01780fba6655ac4b03655"
-decision = "D-C8-R5"
+sha256 = "773c179ee9fd47a183f7ee8827f6003368131c9379ac5275a5d86f428a683a53"
+decision = "D-INT-1"
 
 [[file]]
 path = "acceptance/p6_0af_lifecycle_followups.jl"
@@ -239,8 +239,8 @@ decision = "D-F2-1"
 
 [[file]]
 path = "acceptance/p6_0p_cadence_fingerprint.jl"
-sha256 = "c82cc0985ed258c884deda9a95cbc4b8553834e12ac22c72167035c5ef90f376"
-decision = "D-C8-R5"
+sha256 = "f68a8db5477bbcf70555d27af579a435f889cb4a57b3d932caecb19fc68f5ee7"
+decision = "D-INT-1"
 
 [[file]]
 path = "acceptance/p6_0q_time_fold_metal.jl"
@@ -249,13 +249,13 @@ decision = "D-157"
 
 [[file]]
 path = "acceptance/p6_0t_integral_refresh.jl"
-sha256 = "66eb0ef43fa80a116f92417b12933a340eda53a21aeb7762f45ac9738cc50864"
-decision = "D-C8-R5"
+sha256 = "402bbe46ca63080bea6246de6a9c74bc86ce0a71100f4d4ddab187904509e5d4"
+decision = "D-INT-1"
 
 [[file]]
 path = "acceptance/p6_0aq_acceptance_fingerprint.jl"
-sha256 = "2e9310d46b85318d5e1600a0b1ab6100182c0cf5a9db3f92431da93aafea7228"
-decision = "D-C8-R5"
+sha256 = "3eb872a0b5c521370f8772f012c93106115471ef0e785e47a12b67828852595c"
+decision = "D-INT-1"
 
 [[file]]
 path = "acceptance/p6_0ar_neighbourhood_fingerprint.jl"
@@ -264,28 +264,28 @@ decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0as_sweep_validation.jl"
-sha256 = "2bdb153b5e0a3a2306216bad45480c0a445d212887458da1e04472e97b784364"
-decision = "D-C8-R5"
+sha256 = "023893228614f5111e619da3110a977a1f8539ab5d95c42990a180dee8ca144c"
+decision = "D-INT-1"
 
 [[file]]
 path = "acceptance/p6_0au_integral_readers.jl"
-sha256 = "0490bb1e4d99562b4c939402bf2f79afc1d8b01a6fed4a1af8f1ab2d93d94875"
-decision = "D-C8-R5"
+sha256 = "324e35e0a668f310167be1eaf557873d002328693f03992dae863484dbc076e1"
+decision = "D-INT-1"
 
 [[file]]
 path = "acceptance/p6_0at_relation_fingerprint.jl"
-sha256 = "685eef48ee95e9ed5f3d7a8aee9231fa496149b7d2938008aa684dc9fdfd8c9b"
-decision = "D-C8-R5"
+sha256 = "299f5ad43f0e79d02fcfa641bdf93fb431a6c6cfb65e4a6d57353dee13055e19"
+decision = "D-INT-1"
 
 [[file]]
 path = "acceptance/p6_0av_mcs_duration.jl"
-sha256 = "92effdfeef9b2c70045fd55423f3bb77c3ab7febb32e3d08b1fcc4c3b65ea100"
-decision = "D-F4-R1"
+sha256 = "dbc7ab502974ca0693bc0dafa666cc6a0fb57485dc6780761093d414ba7202af"
+decision = "D-INT-1"
 
 [[file]]
 path = "acceptance/p6_0ax_gather_scan.jl"
-sha256 = "8010408d76e4b4ece84e110db83d541fe95b827d1c0fd15cf9604433e43c342a"
-decision = "D-C8-R5"
+sha256 = "9413e285f17b7cfff61633d85ca08f9d36dcbdecf6b0771f174628c713b0e759"
+decision = "D-INT-1"
 
 [[file]]
 path = "acceptance/p6_0aw_on_copy_integral.jl"
@@ -304,8 +304,8 @@ decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0c2_canonical_followups.jl"
-sha256 = "b378276851928e58f549a95e3bcdc20215170f9d1a483db835ed403f06673694"
-decision = "D-C8-R5"
+sha256 = "48ca4977c1b378f3d2d8c36708815cc1825cc509d9c9753997f795d164cc6ac6"
+decision = "D-INT-1"
 
 [[file]]
 path = "acceptance/p6_0u_components_gaps.jl"
@@ -314,13 +314,13 @@ decision = "D-F2-2"
 
 [[file]]
 path = "acceptance/p6_0o_abstract_system.jl"
-sha256 = "58417be1be6f397c9b2f8fa4b46e1abb250b7d2884889f690f1557a94b002c79"
-decision = "D-F4-R1"
+sha256 = "9db184862ad542431e49efe2b3bc7d5cdb69cedda17cdd1a4640f9186deb6668"
+decision = "D-INT-1"
 
 [[file]]
 path = "acceptance/p6_0g_kind_classes.jl"
-sha256 = "b05422db0fe385536573f335bf60d64899e49777072101345dda28541fce5538"
-decision = "D-F4-R1"
+sha256 = "9c99e9931a24e7a05a7751dddd7c1bcb7d2e963a827068216b9f070f3959314c"
+decision = "D-INT-1"
 
 [[file]]
 path = "acceptance/p6_1b_boundary_anneal.jl"
@@ -544,8 +544,8 @@ decision = "D-202"
 
 [[file]]
 path = "acceptance/p6_0bk2_skip_interior.jl"
-sha256 = "942e888915968f035602ab972559c8e041211c3ad5854416be232f525ea06161"
-decision = "D-C9-R1"
+sha256 = "4f47881a767e666108631fdb6fec2c202450fc6089957192975f0a8e97ac0689"
+decision = "D-INT-1"
 pins = ["P60BK2_IR"]   # D-250: literals may be re-pinned without the maintainer (code-shape IR hash)
 
 [[file]]

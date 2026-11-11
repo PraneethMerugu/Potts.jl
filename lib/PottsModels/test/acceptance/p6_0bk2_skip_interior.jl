@@ -236,8 +236,7 @@ const P60BK2_CB = Dict(
 # Item 2b: sha256 of the printed optimized typed IR of `sequential_mcs!` (Julia 1.12.6).
 const P60BK2_IR_VERSION = v"1.12.6"
 const P60BK2_IR = Dict(
-    "GG 72²" => "8693673e96e3567e37b5255e66040655dea2b48fbab490791eee191292ac3601",   # re-pinned under D-237 (64-bit draw entity); re-pinned under D-C8 (D-250 AUTO: the sweep takes the attempt range of a sub-MCS pass); re-pinned under D-C9 (D-250 AUTO: the parameter object's type gains its computed-parameter list, `PottsParameters{NT, ()}`)
-    "cubes 16³" => "2cb839c6162f182caef3653d6a2873a2257d0b9f50a3d3e5a3c0212f42504457",   # re-pinned under D-237 (64-bit draw entity); re-pinned under D-C8 (D-250 AUTO: the sweep takes the attempt range of a sub-MCS pass); re-pinned under D-C9 (D-250 AUTO: the parameter object's type gains its computed-parameter list, `PottsParameters{NT, ()}`)
+    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
 )
 function p60bk2_ir_hash(prob)
     integ = init(prob, SequentialCPM(); save_start = false)
@@ -278,7 +277,9 @@ end
 
 const P60BK2_IR_CASES = [("GG 72²", () -> p60bk2_gg(; seed = 1)), ("cubes 16³", () -> p60bk2_cube(; seed = 1))]
 @testset "P6.0bk2: SequentialCPM()'s loop compiles to the base code ($label)" for (label, mk) in P60BK2_IR_CASES
-    if VERSION == P60BK2_IR_VERSION
+    if !haskey(P60BK2_IR, label)
+        # (D-INT-1: its pin was removed)
+    elseif VERSION == P60BK2_IR_VERSION
         @test p60bk2_ir_hash(mk()) == P60BK2_IR[label]
     else
         @test_skip p60bk2_ir_hash(mk()) == P60BK2_IR[label]

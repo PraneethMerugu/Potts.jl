@@ -122,13 +122,32 @@ function gd_p60g_op()
         :tgt => Float64[count(==(c), σ) for c in 1:length(kinds)]]
 end
 
-# the frozen pins these copies reproduce (p6_0o:614–617, :630; p6_0g:635)
-const GD_PINS = Dict("MerksVasculogenesis|Float64" => 0xd89dd8d35e4384c8,
-    "MerksVasculogenesis|Float32" => 0xb6af11159cf2d5bf,
-    "MerksVasculogenesis contact-inhibited|Float32" => 0xbb90e55fb8ea25e1,
-    "MerksVasculogenesis contact-inhibited|Float64" => 0x8c92c320ca533e38,
-    "fixture field|Float64" => 0x1f65bf177c5435c4,
-    "P60gX|Float64" => 0xcaa274201d432e7d)
+# the frozen pins these copies reproduced (p6_0o, p6_0g): pin removed at integration (D-INT-1);
+# replaced by a correctness test in the TS series
+const GD_PINS = Dict{String, UInt64}()
+# fingerprint records that moved at the integration with the lockless checkerboard's codegen
+# (both sides changed them): pin removed at integration (D-INT-1); replaced by a correctness test
+# in the TS series. Every behavior record (`|n`, `|digest|`) of these models is still compared.
+const GD_UNPINNED = Set(["fixture field|Float32|fingerprint",
+    "fixture field|Float64|fingerprint",
+    "GiMerks BackwardEuler|Float64|fingerprint",
+    "GiMerks BDF2|Float64|fingerprint",
+    "GiMerks CrankNicolson|Float64|fingerprint",
+    "GiMerks QuasiSteady|Float64|fingerprint",
+    "Merks2006|Float32|fingerprint",
+    "Merks2006|Float64|fingerprint",
+    "Merks2008|Float32|fingerprint",
+    "Merks2008|Float64|fingerprint",
+    "Merks2008 t_relax = 2.5|Float32|fingerprint",
+    "Merks2008 t_relax = 2.5|Float64|fingerprint",
+    "Merks2008 t_relax = 3|Float32|fingerprint",
+    "Merks2008 t_relax = 3|Float64|fingerprint",
+    "MerksVasculogenesis contact-inhibited|Float32|fingerprint",
+    "MerksVasculogenesis contact-inhibited|Float64|fingerprint",
+    "MerksVasculogenesis|Float32|fingerprint",
+    "MerksVasculogenesis|Float64|fingerprint",
+    "P60gX|Float32|fingerprint",
+    "P60gX|Float64|fingerprint"])
 
 # ---------------------------------------------------------------------------------------
 # Copies of the `test/audit.jl` field models and of the p6_5c Fortuna-like model (soft set),
@@ -566,8 +585,8 @@ gd_pinned(k) = any(g -> g[1] == gd_label(k) && g[5], GD_HARD)
     for (k, v) in GD_PINS
         @test got["$k|fingerprint"] == repr(v)
     end
-    hk = [k for k in keys(GD_RECORDS) if gd_label(k) in [first.(GD_HARD); GD_B]]
-    sk = setdiff(collect(keys(GD_RECORDS)), hk)
+    hk = [k for k in keys(GD_RECORDS) if gd_label(k) in [first.(GD_HARD); GD_B] && !(k in GD_UNPINNED)]
+    sk = setdiff(collect(keys(GD_RECORDS)), hk, GD_UNPINNED)
     behavior = [k for k in hk if occursin("|n", k) || occursin("|digest|", k)]
     pinned = [k for k in setdiff(hk, behavior) if gd_pinned(k)]
     unpinned = setdiff(hk, behavior, pinned)
