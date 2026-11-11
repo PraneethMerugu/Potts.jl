@@ -426,7 +426,11 @@ floors), `newton_budget` (Newton budget hits), and `code`, the worst code read s
 (`Success`, `StalledSuccess`, `ConvergenceFailure`, or `Unstable` when a field left the declared
 `bounds` its stability bound used). All zero for the explicit algorithms. On a device, each read
 of `integ.stats` reads the status words first (one synchronization), so the counters include
-every window so far.
+every window so far. When a solution is built at the end of a run, it also keeps what the
+field report of the solution reads (batch-end review (e), as LatticePDE's `sol.stats`
+does): `counts`, the substep count each field group used last ([`substep_counts`](@ref));
+`implicit`, the resolved implicit facts of each group (`nothing` for an explicit one;
+`Problems.implicit_facts`); and `backend`, the backend's name (`"CPU"`). All empty before.
 """
 Base.@kwdef mutable struct FieldStats
     solves::Int64 = 0
@@ -434,6 +438,9 @@ Base.@kwdef mutable struct FieldStats
     floor::Int64 = 0
     newton_budget::Int64 = 0
     code::SciMLBase.ReturnCode.T = SciMLBase.ReturnCode.Success
+    counts::Vector{Int} = Int[]
+    implicit::Vector{Union{Nothing, Problems.ImplicitFacts}} = Union{Nothing, Problems.ImplicitFacts}[]
+    backend::String = ""
 end
 Base.show(io::IO, s::FieldStats) = print(io, "FieldStats(solves = ", s.solves, ", budget = ", s.budget, ", floor = ",
     s.floor, ", newton_budget = ", s.newton_budget, ", code = ", s.code, ")")

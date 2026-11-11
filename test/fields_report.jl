@@ -70,6 +70,7 @@ fr_warm(ig) = (step!(ig); step!(ig); @allocated step!(ig))   # (a function barri
     @test fr_line(rep, "bound") == "  bound      ρ = 400.05 (row c: diffusion 400.0, reaction 0.05)"
     @test fr_line(rep, "route") == "  route      BackwardEuler() steps this group in 1 substep"
     @test fr_line(rep, "numbers") == "  numbers    state Float64, compute Float64"
+    @test fr_line(rep, "backend") == "  backend    set at `init` (`init(prob, alg; backend)`; the CPU by default)"
     @test substep_counts(prob) == [223]
     # the integrator: the same policy, with the run's counters
     integ = init(prob, SequentialCPM())
@@ -78,6 +79,7 @@ fr_warm(ig) = (step!(ig); step!(ig); @allocated step!(ig))   # (a function barri
     ri = sprint(field_report, integ)
     @test startswith(ri, "Field report: PottsIntegrator, 1 field group, SequentialCPM")
     @test fr_line(ri, "time") == "  time       MCS 2 of (0, 4), retcode Default"
+    @test fr_line(ri, "backend") == "  backend    CPU"
     @test fr_line(ri, "counters") == "  counters   substep counts c 223; code Success"
     @test fr_line(ri, "substeps") == fr_line(rep, "substeps")
     @test fr_line(ri, "run") == "  run        2 windows; status Success"
@@ -94,9 +96,36 @@ fr_warm(ig) = (step!(ig); step!(ig); @allocated step!(ig))   # (a function barri
     @test startswith(rs, "Field report: PottsSolution, 1 field group, SequentialCPM, retcode Success")
     @test fr_line(rs, "saves") == "  saves      2 over (0, 4), 4 MCS"
     @test fr_line(rs, "substeps") == fr_line(rep, "substeps")
+    # batch-end review (e): the solution keeps the counts its run used and the backend
+    @test fr_line(rs, "counters") == "  counters   substep counts c 223; code Success"
+    @test fr_line(rs, "backend") == "  backend    CPU"
     # a user minimum above the bound sets the count: no route
     r = sprint(field_report, fr_prob(m; field_solver = ExplicitEuler(; substeps = 300)))
     @test fr_line(r, "route") == ""
+end
+
+@testset "batch-end review (e): a PottsSolution's report matches its integrator's (counts, implicit facts)" begin
+    # base ab34e226 (~/lpwork/f4BE/nc.log): the solution prints the policy as given (`newton
+    # automatic (set when the group is bound)`, no substep counts) and no backend
+    m = FrMerks(; name = :m)
+    for fs in (ExplicitEuler(), BackwardEuler(; inner = Multigrid()))
+        prob = fr_prob(m; field_solver = fs)
+        sol = solve(prob, SequentialCPM())
+        integ = init(prob, SequentialCPM())
+        for _ in 1:4
+            step!(integ)
+        end
+        rs, ri = sprint(field_report, sol), sprint(field_report, integ)
+        # (the integrator also gives its run counters and launches)
+        own(r) = [l for l in fr_groups(r) if !startswith(l, "  run ") && !startswith(l, "  launches ") && !startswith(l, "  fusion ")]
+        @test own(rs) == own(ri) || (println(rs, "\n---\n", ri); false)
+        @test fr_line(rs, "counters") == fr_line(ri, "counters")
+        @test sol.stats.fields.counts == substep_counts(integ)
+        @test (sol.stats.fields.implicit[1] === nothing) == (fs isa ExplicitEuler)
+    end
+    rs = sprint(field_report, solve(fr_prob(m; field_solver = BackwardEuler(; inner = Multigrid())), SequentialCPM()))
+    @test fr_line(rs, "newton") == "  newton     1, automatic: the operator is exact"
+    @test fr_line(rs, "inner") == "  inner      Multigrid(; budget = 12), multigrid levels 5"
 end
 
 @testset "F4-13: field_report of a BackwardEuler group: inner, multigrid levels, the Newton count" begin

@@ -910,9 +910,21 @@ end
 
 function PottsSolution(integ::PottsIntegrator)
     S = isempty(integ.saved_u) ? Any : typeof(first(integ.saved_u))
+    _record_fields!(integ)
     return PottsSolution(convert(Vector{S}, integ.saved_u), copy(integ.saved_t),
         integ.prob, integ.alg, integ.retcode, _stats(integ))
 end
+# what the field report of the solution reads, at the end of the run (`FieldStats`): the counts the
+# groups used, their resolved implicit facts and the backend (batch-end review (e))
+function _record_fields!(integ::PottsIntegrator)
+    f = _stats(integ).fields
+    rts = [_runtime(getfield(integ.ctx, _ctxkey(ph))) for ph in _field_phases(integ.f.phases)]
+    f.counts = Int[rt.n for rt in rts]
+    f.implicit = Union{Nothing, Problems.ImplicitFacts}[Problems.implicit_facts(rt) for rt in rts]
+    f.backend = _backend_name(integ.backend)
+    return nothing
+end
+_backend_name(b) = string(nameof(typeof(b)))
 
 # Integer indexing is by saved state (`sol[end]` is the final state), not RecursiveArrayTools'
 # element indexing: a state is a named collection of arrays, not an array.
@@ -948,7 +960,8 @@ function _restore_stats!(dst::PottsStats, src::PottsStats)
         setfield!(dst.lifecycle, f, getfield(src.lifecycle, f))
     end
     for f in fieldnames(FieldStats)
-        setfield!(dst.fields, f, getfield(src.fields, f))
+        v = getfield(src.fields, f)
+        setfield!(dst.fields, f, v isa Vector ? copy(v) : v)
     end
     return dst
 end
@@ -1357,7 +1370,8 @@ Problems.substep_counts(prob::PottsProblem) = Int[field_substeps(ph, prob.p) for
     field_report([io::IO = stdout], integ::PottsIntegrator)
     field_report([io::IO = stdout], sol::PottsSolution)
 
-Print the policy of every field group of a Potts problem, integrator or solution, as
+Print the policy of every field group of a Potts problem, integrator or solution, and the
+backend of a run, as
 LatticeFields prints the groups of a LatticePDE problem (`field_report` of a `FieldProblem`,
 one function): one block per group with its fields and algorithm, the window (the MCS, or its
 part in a `repeat(n, …)` of the fields), the substep count and its cause (the bound, the user
@@ -1369,7 +1383,9 @@ group is bound). An integrator gives each bound group as it is, with its run cou
 solves, budget hits, status), its launches per substep and its fusion decisions; then its
 steady starts (`init = :steady`). An integrator or a solution also gives the run's field
 counters (`stats.fields`). The report reads what the problem, integrator or solution holds and
-changes nothing in the run. On a device it reads the groups' status words first (one
+changes nothing in the run. A solution gives the substep counts its groups used and their
+implicit facts as resolved at the end of the run (`sol.stats.fields`), so its blocks match the
+integrator's. On a device it reads the groups' status words first (one
 synchronization), so call it outside a timed loop.
 
 ```julia
@@ -1380,6 +1396,7 @@ field_report(integ)
 function Problems.field_report(io::IO, prob::PottsProblem)
     phases = _field_phases(prob.f.phases)
     println(io, "Field report: PottsProblem, ", _report_groups(phases), " (the policy at the problem's parameters; nothing bound)")
+    isempty(phases) || _report_line(io, "backend", "set at `init` (`init(prob, alg; backend)`; the CPU by default)")
     for (i, ph) in enumerate(phases)
         Problems.group_report(io, ph.group, ph.alg, _policy_params(ph, prob.p); title = _report_title(i, phases), ph.dt,
             E = ph.T, t0 = prob.tspan[1] * ph.period)
@@ -1392,6 +1409,7 @@ function Problems.field_report(io::IO, integ::PottsIntegrator)
     st = integ.stats                            # (on a device the status words are read first)
     println(io, "Field report: PottsIntegrator, ", _report_groups(phases), ", ", nameof(typeof(integ.alg)))
     _report_line(io, "time", string("MCS ", integ.t, " of ", integ.prob.tspan, ", retcode ", integ.retcode))
+    isempty(phases) || _report_line(io, "backend", _backend_name(integ.backend))
     rts = [_runtime(getfield(integ.ctx, _ctxkey(ph))) for ph in phases]
     # (the counts the runtimes hold: the substep rule is not called, so nothing warns)
     _report_counters(io, phases, Int[rt.n for rt in rts], st.fields)
@@ -1414,10 +1432,16 @@ function Problems.field_report(io::IO, sol::PottsSolution)
     println(io, "Field report: PottsSolution, ", _report_groups(phases), ", ", nameof(typeof(sol.alg)), ", retcode ", sol.retcode,
         " (the policy at the problem's parameters)")
     _report_line(io, "saves", string(length(sol.t), " over ", prob.tspan, ", ", sol.stats.mcs, " MCS"))
-    _report_counters(io, phases, nothing, sol.stats.fields)
+    # the counts the groups used and their implicit facts, kept at the end of the run (a
+    # solution built before they were kept: the policy's and as given)
+    f = sol.stats.fields
+    kept = length(f.counts) == length(phases)
+    isempty(phases) || isempty(f.backend) || _report_line(io, "backend", f.backend)
+    _report_counters(io, phases, kept ? f.counts : nothing, f)
     for (i, ph) in enumerate(phases)
         Problems.group_report(io, ph.group, ph.alg, _policy_params(ph, prob.p); title = _report_title(i, phases), ph.dt,
-            E = ph.T, t0 = prob.tspan[1] * ph.period)
+            E = ph.T, t0 = prob.tspan[1] * ph.period, n = kept ? f.counts[i] : nothing,
+            facts = kept && length(f.implicit) == length(phases) ? f.implicit[i] : nothing)
     end
     _report_coupling(io, phases, prob.p)
     return nothing
