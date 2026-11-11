@@ -65,7 +65,10 @@ fr_warm(ig) = (step!(ig); step!(ig); @allocated step!(ig))   # (a function barri
     @test fr_line(rep, "window") == "  window     dt = 1.0, 223 substeps (h = 0.0044843)"
     # ρ = 8 Do + ec (the decay in the medium) = 400.05
     @test fr_line(rep, "substeps") == "  substeps   the bound, ⌈dt ρ / 1.8⌉ = ⌈1.0 × 400.05 / 1.8⌉ = 223 [bound]"
-    @test fr_line(rep, "bound") == "  bound      ρ = 400.05"
+    # batch-end review S5, S1: ρ split into the parts of its row; past 20 substeps of the bound,
+    # the implicit count as a route (base ab34e226, ~/lpwork/f4BE/nc.log: `ρ = 400.05` alone, no route)
+    @test fr_line(rep, "bound") == "  bound      ρ = 400.05 (row c: diffusion 400.0, reaction 0.05)"
+    @test fr_line(rep, "route") == "  route      BackwardEuler() steps this group in 1 substep"
     @test fr_line(rep, "numbers") == "  numbers    state Float64, compute Float64"
     @test substep_counts(prob) == [223]
     # the integrator: the same policy, with the run's counters
@@ -91,6 +94,9 @@ fr_warm(ig) = (step!(ig); step!(ig); @allocated step!(ig))   # (a function barri
     @test startswith(rs, "Field report: PottsSolution, 1 field group, SequentialCPM, retcode Success")
     @test fr_line(rs, "saves") == "  saves      2 over (0, 4), 4 MCS"
     @test fr_line(rs, "substeps") == fr_line(rep, "substeps")
+    # a user minimum above the bound sets the count: no route
+    r = sprint(field_report, fr_prob(m; field_solver = ExplicitEuler(; substeps = 300)))
+    @test fr_line(r, "route") == ""
 end
 
 @testset "F4-13: field_report of a BackwardEuler group: inner, multigrid levels, the Newton count" begin

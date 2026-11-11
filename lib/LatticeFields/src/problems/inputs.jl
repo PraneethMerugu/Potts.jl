@@ -354,7 +354,9 @@ The parts of the stability bound at raw parameters `p` that the substep policy d
 diffusion coefficient below zero, the keys of the coupled rows that are not diagonally
 dominant, a `(key, coefficient, why)` per coefficient with no finite bound (`why`: `:cap`,
 `:tables`, or a `Tuple` of the entries where it is not finite), and the terms the bound cannot
-see (`"key: term"`). The default reports none (LatticePDE's `StabilityBound` reports them).
+see (`"key: term"`). A bound may add `worst`, the row that gives the bound and its parts
+`(; key, diffusion, advection, reaction, cross)`, which the report prints. The default reports
+none (LatticePDE's `StabilityBound` reports them).
 """
 bound_report(stability, p) = (; negative = String[], coupled = String[], nonfinite = Tuple{String, String, Any}[],
     terms = String[])

@@ -48,6 +48,15 @@ rlines(rep, label) = [String(s) for s in split(rep, '\n') if startswith(s, "  " 
     @test rline(rep, "run") == "  run        0 windows; status Success"
     @test rline(rep, "launches") == "  launches   1 per substep; no fusion decision (one kernel)"
     @test rline(rep, "inner") == ""                       # (explicit: no implicit lines)
+    # batch-end review S1, S5: no route at 12 substeps; at ten times the window the bound sets 117,
+    # and the route gives BackwardEuler's count. The bound line splits ρ into the parts of its
+    # row (base ab34e226, ~/lpwork/f4BE/nc.log: no route line, no parts)
+    @test rline(rep, "route") == ""
+    r = sprint(field_report, init(p, ExplicitEuler(; dt = 0.1)))
+    @test occursin("117 substeps", rline(r, "window"))
+    m = match(r"^  route      BackwardEuler\(\) steps this group in (\d+) substeps?$", rline(r, "route"))
+    @test m !== nothing && parse(Int, m.captures[1]) < 117 || (println(r); false)
+    @test occursin(r"^  bound      ρ = \S+ \(row rc: diffusion \S+, reaction 0\.1\)$", rline(rep, "bound")) || (println(rep); false)
     # (review N1: no empty clause, no canonical bracket; about ten lines per group)
     @test !occursin("none", rep) && !occursin("[ExplicitEuler(", rep)
     @test count(==('\n'), split(rep, "group 1 of 1")[2]) <= 10
@@ -110,7 +119,7 @@ end
     @test occursin("Field report: owned integrator, FieldGroups(rc => ExplicitEuler(; dt = 0.01), ro => BackwardEuler(; dt = 0.01))", rep)
     @test occursin("group 1 of 2: rc (ExplicitEuler", rep) && occursin("group 2 of 2: ro (BackwardEuler", rep)
     @test occursin("substep counts rc 3, ro 1", rline(rep, "counters"))      # (review N2: by group)
-    @test endswith(rline(rep, "substeps"), "= 3 [bound]") && rline(rep, "bound") == "  bound      ρ = 512.0"   # (Δ on 8²: 8/h² = 512)
+    @test endswith(rline(rep, "substeps"), "= 3 [bound]") && rline(rep, "bound") == "  bound      ρ = 512.0 (row rc: diffusion 512.0)"   # (Δ on 8²: 8/h² = 512)
     @test rline(rep, "inner") == "  inner      none: every row is local (solved site by site) (`inner = :auto`)"
     # the coupling: both groups are in one loop, κ = dt · rate (the rate: ra = 0.3 for rc, 0.1 for ro)
     @test occursin("group 1: loop [1, 2], κ = dt · rate = 0.01 × 0.3 = 0.003 (≤ 1)", rep)

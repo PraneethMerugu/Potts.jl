@@ -861,7 +861,7 @@ function Problems.steady_loop_rates(b::StabilityBound, groups, p, steady, loops)
 end
 
 """
-    bound_parts(b::StabilityBound, p) -> (; ρ, seen, coupled, negative, nonfinite)
+    bound_parts(b::StabilityBound, p) -> (; ρ, seen, coupled, negative, nonfinite, worst)
 
 The parts of `b(p)`: `ρ`, the Gershgorin bound over the terms `b` sees (a term in
 `b.terms` is left out); `seen`, the same bound over the finite values of each coefficient
@@ -872,8 +872,10 @@ keys of the rows with a diffusion coefficient below zero at `p` (at some indicat
 assignment); `nonfinite`, when `ρ` is not finite, a `(key, coefficient, why)` per coefficient
 with no finite bound (`why`: `:cap` over the evaluation cap, `:tables` no tables given, or
 `(combos, more)`: up to 4 distinct read combinations `[(table, index, value), …]` with a value that is
-not finite, index 0 reading 0, and how many more). `b(p) == ρ`
-when `b.unbounded` and `coupled` are empty.
+not finite, index 0 reading 0, and how many more); `worst`, the row that gives `ρ` and its
+parts `(; key, diffusion, advection, reaction, cross)` (diffusion with its faces, upwind
+advection, the reaction terms of the row's own field, the terms that read other fields; they
+sum to `ρ`), or `nothing` with no row. `b(p) == ρ` when `b.unbounded` and `coupled` are empty.
 """
 # the rows on a loop of cross reads (F3-22 review r1): row `i` reads row `j` through a cross term
 # or through a coefficient bounded over `j`'s declared interval (a site multiplier, a face
@@ -910,6 +912,7 @@ function _loop_rows(b::StabilityBound)
 end
 function bound_parts(b::StabilityBound, p)
     ρ = seen = 0.0
+    worst = nothing
     coupled, negative = String[], String[]
     loop = _loop_rows(b)
     unsure = Tuple{String, String, Any}[]      # interval diffusion coefficients of unknown sign (F3-13)
@@ -934,7 +937,8 @@ function bound_parts(b::StabilityBound, p)
             # upwind advection (F3-13): each axis's faces give the row `|m v_a| / h_a` twice at
             # most, `Σ_a 2 max|m v_a| / h_a`
             adv = sum(2 * f(p) * sqrt(ih2[a]) for (f, a) in r.advection; init = 0.0)
-            own = Dmag * (s4 + _face_excess(b, i, p)) + adv
+            dif = Dmag * (s4 + _face_excess(b, i, p))
+            own = dif + adv
             lin = sum(f(p) for f in r.linear; init = 0.0)
             cross = sum(f(p) for (f, _) in r.crosslinear; init = 0.0) +
                     sum(f(p) * (4 * sum(b.invh2[j]) + _face_excess(b, j, p)) for (f, j) in r.crossdiffusion; init = 0.0)
@@ -953,6 +957,9 @@ function bound_parts(b::StabilityBound, p)
                 offd = Dmag * (s4 / 2 + _face_excess(b, i, p)) + cross + short
                 diag <= 0 && -diag >= offd || push!(coupled, b.keys[i])
             end
+            # (the row that gives ρ, and its parts: the report's split, batch-end review S5)
+            (worst === nothing || own + lin + cross > ρ) &&
+                (worst = (; key = b.keys[i], diffusion = dif, advection = adv, reaction = lin, cross))
             ρ = max(ρ, own + lin + cross)
             # the same over the finite values only (a term over the cap counts 0, an axis whose
             # face excess is not finite counts 0): every row, term and field that has a bound
@@ -986,7 +993,7 @@ function bound_parts(b::StabilityBound, p)
             isnan(f(p)[1]) && push!(nonfinite, (b.keys[i], where, :robin))
         end
     end
-    return (; ρ, seen, coupled = unique!(coupled), negative = unique!(negative), nonfinite)
+    return (; ρ, seen, coupled = unique!(coupled), negative = unique!(negative), nonfinite, worst)
 end
 
 # why an interval diffusion coefficient has no bound (F3-13): its enclosure over the intervals it
@@ -1746,7 +1753,7 @@ Problems.seen_bound(b::StabilityBound, p) = bound_parts(b, p).seen
 # the parts the one substep policy decides on (F3-01): the bound's parts and its unseen terms
 function Problems.bound_report(b::StabilityBound, p)
     r = bound_parts(b, p)
-    return (; r.negative, r.coupled, r.nonfinite, terms = b.terms, r.seen, r.ρ)
+    return (; r.negative, r.coupled, r.nonfinite, terms = b.terms, r.seen, r.ρ, r.worst)
 end
 function Problems.unbounded_reason(b::StabilityBound, p)
     parts = String[]

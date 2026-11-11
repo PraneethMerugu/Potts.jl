@@ -16,10 +16,12 @@ One block per group, about ten lines:
 - the fields and the algorithm in its keyword form;
 - the window `dt`, the substep count and its cause: the bound (`⌈dt ρ / 1.8⌉` for
   `ExplicitEuler`; the growth and convergence rules for the implicit algorithms), the user
-  minimum (`substeps = m`), both, or the least count;
-- the stability bound `ρ` of the group's rows ([`bound_report`](@ref)), with the terms it
-  cannot see, the declared intervals it used ([`declared_intervals`](@ref)) and any part that
-  refuses the parameters;
+  minimum (`substeps = m`), both, or the least count; for an `ExplicitEuler` group whose bound
+  sets more than 20 substeps, the count `BackwardEuler()` takes when it is smaller (`route`);
+- the stability bound `ρ` of the group's rows ([`bound_report`](@ref)) and the parts of the
+  row that gives it (diffusion, advection, reaction, cross terms), with the terms it cannot see,
+  the declared intervals it used ([`declared_intervals`](@ref)) and any part that refuses the
+  parameters;
 - the number types: the state, the compute type of the kernels ([`compute_type`](@ref)) and, for
   the implicit groups, the solver's;
 - for the implicit groups: `inner` as resolved and its multigrid levels, the Newton count and
@@ -136,7 +138,7 @@ function _bound_line(io, stability, pp)
     r = bound_report(stability, pp)
     ρ = Float64(stability(pp))
     seen = hasproperty(r, :seen) ? Float64(r.seen) : Float64(seen_bound(stability, pp))
-    head = isfinite(ρ) ? string("ρ = ", _rtext(ρ)) : string("ρ not finite; over the terms it sees ", _rtext(seen))
+    head = isfinite(ρ) ? string("ρ = ", _rtext(ρ), _partstext(r)) : string("ρ not finite; over the terms it sees ", _rtext(seen))
     nf = [string(k, ": ", _termtext(c), " (", w isa Symbol ? w : "not finite at some entries", ")") for (k, c, w) in r.nonfinite]
     # (the warning key only when it says more than the unseen terms)
     key = unbounded_key(stability, pp)
@@ -147,6 +149,32 @@ function _bound_line(io, stability, pp)
         _clause("declared", [string(k, " ∈ ", iv, k in used ? " (used)" : "") for (k, iv) in decl]),
         isempty(extra) ? "" : string("warning key \"", join(extra, "; "), "\"")))
     return nothing
+end
+
+# an explicit group whose count the bound sets past 20 substeps (batch-end review S1): the count an
+# implicit step takes, when it is smaller (the implicit rules at these parameters). A group the
+# implicit rules cannot count (an error building its operator) gets no route line: the report
+# never fails for want of it
+function _route_line(io, spec, alg, dt::Float64, pp, fields, n)
+    (alg isa ExplicitEuler && n > 20) || return nothing
+    be = BackwardEuler()
+    k = try
+        _implicit_cause(spec, be, dt, pp, fields).n
+    catch
+        return nothing
+    end
+    k < n && _line(io, "route", string(_algtext(be), " steps this group in ", _plural(k, "substep")))
+    return nothing
+end
+
+# the parts of the row that gives ρ (`bound_report`'s `worst`, when the bound gives it): the parts
+# that are not zero, `(row c: diffusion 400.0, reaction 0.05)`
+function _partstext(r)
+    w = hasproperty(r, :worst) ? r.worst : nothing
+    w === nothing && return ""
+    ps = [string(n, " ", _rtext(v)) for (n, v) in (("diffusion", w.diffusion), ("advection", w.advection),
+        ("reaction", w.reaction), ("cross terms", w.cross)) if v != 0]
+    return isempty(ps) ? "" : string(" (row ", w.key, ": ", join(ps, ", "), ")")
 end
 
 # --- the implicit facts of a bound runtime (`ImplicitFacts`: data; the report words them) ---
@@ -292,6 +320,7 @@ function _policy_lines(io, title, spec, alg, dt::Float64, n, pp, fields, stabili
             pre = c.n == n ? "" : current ? string("now ", n, "; the policy at these parameters gives ", c.n, ": ") :
                                   string("the run's last window took ", n, "; ", c.n, " by ")
             _line(io, "substeps", string(pre, c.text, " [", c.cause, "]"))
+            c.cause in (:bound, :both) && _route_line(io, spec, alg, dt, pp, fields, n)
         end
         alg isa Union{ExplicitMap, QuasiSteady} || _bound_line(io, stability, pp)
         return nothing
