@@ -496,14 +496,15 @@ function _bcs_equation(sys, b, names, cv, core, ext, kinds, N, stepped)
         end
     end
     # a face condition sets the ghost values of a spatial operator of `n`: with none in any
-    # field's equation (`D(u) ~ Δ(n)` reads the ghosts of `n` too) it would do nothing (F4-E14;
-    # the `@boundary` refusal, `_check_boundaries`)
+    # field's equation (`D(u) ~ Δ(n)` reads the ghosts of `n` too, and so does an aux field
+    # `K ~ Δ(n)`) it would do nothing (F4-E14; the `@boundary` refusal, `_check_boundaries`)
     if !periodic && !masked && !isempty(axes)
-        any(f -> _has_spatial_op(f[2], n), _field_equations(sys)) || throw(ArgumentError(
+        any(f -> _has_spatial_op(f[2], n), _field_equations(sys)) || any(f -> _has_spatial_op(f[2], n), _field_aux(sys)) ||
+            throw(ArgumentError(
             "@bcs: the condition $text sets a face of `$n`, which sets the ghost values of a spatial operator of `$n`, " *
             "but the equation of `$n` has no `Δ($n)` nor another spatial operator of `$n` (`DivKGrad(…)(K, $n)`, " *
             "`Advect(…)(u, $n)`, a raw flux `Differential(x)(K * Differential(x)($n))`), and no other field's " *
-            "equation has one; the condition would do nothing: drop it, or hold sites with a masked condition " *
+            "equation or aux definition `K ~ …` has one; the condition would do nothing: drop it, or hold sites with a masked condition " *
             "`$n ~ masked(pred, v)`"))
     end
     if masked

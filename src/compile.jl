@@ -758,12 +758,13 @@ function _check_boundaries(sys::PottsSystem, fields, rn)
                 lat.periodic[b.axis] && throw(ArgumentError(
                     "@boundary $n: axis `$ax` is periodic; a face condition needs a closed axis (`Closed()` on axis $(b.axis))"))
                 (n, b.axis) in seen && throw(ArgumentError("@boundary $n: axis `$ax` is given twice"))
-                # another field's operator on `n` (`D(u) ~ Δ(n)`) reads the ghosts of `n` too
-                any(f -> _has_spatial_op(last(f), n), fields) || throw(ArgumentError(
+                # another field's operator on `n` (`D(u) ~ Δ(n)`, an aux `K ~ Δ(n)`) reads the ghosts of `n` too
+                any(f -> _has_spatial_op(last(f), n), fields) || any(f -> _has_spatial_op(last(f), n), _field_aux(sys)) ||
+                    throw(ArgumentError(
                     "@boundary $n: a face condition (`$ax => …`) sets the ghost values of a spatial operator of `$n`, " *
                     "but the equation `D($n) ~ …` has no `Δ($n)` nor another spatial operator of `$n` " *
                     "(`DivKGrad(…)(K, $n)`, `Advect(…)(u, $n)`, a raw flux `Differential(x)(K * Differential(x)($n))`), " *
-                    "and no other field's equation has one; " *
+                    "and no other field's equation or aux definition `K ~ …` has one; " *
                     "drop the face entry, or use a site mask `sites(…) => Dirichlet(v)`"))
                 push!(seen, (n, b.axis))
             end
