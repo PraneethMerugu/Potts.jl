@@ -161,6 +161,8 @@ function w_wide()
     Cr = c(X...)
     return pdesys([Dt(Cr) ~ Dc * Δ(Cr) - 0.125 * Cr, Dt(U) ~ Dc * Δ(U) + 0.5 * Cr], [ic(c), ic(u)], (12, 10), [Cr, U], [Dc])
 end
+# S4 (batch-end review): a rate whose Float32 arithmetic cancels, `exp(c) - 1` at c = 1e-6
+w_narrow() = field1(exp(C) - 1, (12, 10); c0 = 1e-6)
 b_half() = half((16, 16), (C, ps) -> ps[1] * Δ(C) + ps[2] - ps[3] * C; ps = (@parameters Dc = 0.2 s = 0.1 k = 0.05))
 b_full() = (@parameters Dc = 0.2 s = 0.1 k = 0.05; field1(Dc * Δ(C) + s - k * C, (16, 16), [Dc, s, k]))
 end
@@ -2679,6 +2681,29 @@ end
     @test occursin("`lattice_storage` applies to fields and is `Float16`, `Float32` or `Float64`", e) && occursin("got BigFloat", e)
     e = something(fd_err(() -> ExplicitEuler(compute_T = Float16)), "")
     @test occursin("`compute_T` takes `:auto`", e)
+end
+
+# Batch-end review S4: `compute_T = Float64` on a Float32 problem whose field is stored in Float32
+# (no `lattice_storage`) computes in Float64 and rounds once at the store: `exp(c) - 1` at c = 1e-6
+# loses 5% in Float32 arithmetic, nothing in Float64. The test above covers a Float64 storage
+# only, where the group is wide whatever `compute_T` says. At ab34e226 this passes too (the
+# reviewer's equal maxima were a coincidence of the printed digits: 504 of 576 sites differ,
+# ~/lpwork/f4BE/s4.log); it pins the arithmetic type
+@potts_model FwNarrow begin
+    @kinds medium A
+    @lattice Lattice((12, 10); boundary = Closed())
+    @energy cells(A) => (volume - 9.0)^2
+    @fields FdPDE.w_narrow()
+    @sweep Metropolis(; temperature = 1.0)
+end
+@testset "batch-end review S4: compute_T = Float64 reaches a Float32 model's field kernels" begin
+    run1(T, alg) = (integ = init(PottsProblem(FwNarrow(; name = :w), fd_empty((12, 10)), (0, 1); T, seed = 3, field_solver = alg),
+                        SequentialCPM()); step!(integ); Array(integ.u.site.c))
+    wide, narrow = run1(Float32, ExplicitEuler(; substeps = 1, compute_T = Float64)), run1(Float32, ExplicitEuler(; substeps = 1))
+    ref = run1(Float64, ExplicitEuler(; substeps = 1))
+    @test eltype(wide) === eltype(narrow) === Float32
+    @test maximum(abs, wide .- ref) < 1e-12 && maximum(abs, narrow .- ref) > 1e-8 ||
+          (println("S4: ", maximum(abs, wide .- ref), " ", maximum(abs, narrow .- ref)); false)
 end
 
 # Batch 5 review S1 and S4 in a model: a Float16 field under the implicit algorithms (solved in the
