@@ -27,6 +27,10 @@ use is above 80 % of the limit, and an item that runs longer than 20 min fails
 `POTTS_TEST_PASSLOG=<file>` appends one line per top-level testset of each item: item,
 testset, and the counts of pass, fail, error and broken results.
 
+`POTTS_TEST_WORKERS=0` runs the items in this process instead of in worker processes. Measure
+line coverage that way (`--code-coverage=@$PWD`): every worker writes its own `.cov` files, so
+the per-line record of a worker run is an artifact of which process exited last.
+
 ## Run some items
 
 In a session that keeps its compiled code between runs (Revise picks up `src` edits):
