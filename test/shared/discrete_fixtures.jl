@@ -3,7 +3,8 @@
 # file: the QA items build `QADiscreteScratch`/`QADiscreteKinds` out of these systems and out of
 # `DiscreteHybrid`, `discrete_counter_model` and `_discrete_blocks`, and an item's setup cannot
 # see another setup's names (test/symbolic_tests.jl had them in Main with the rest).
-using Potts, Potts.ModelingToolkitBase: ShiftIndex, Clock, System, @parameters, @named
+using Potts
+using Potts.ModelingToolkitBase: ShiftIndex, Clock, System, @parameters, @named
 
 isdefined(@__MODULE__, :_tc) || const _tc = Potts.t      # Potts.t: the model time variable
 
