@@ -176,37 +176,60 @@ test reads the same volume load as `old`'s centroid. Device-safe: no allocation,
 `throw`.
 """
 @inline link_delta(::Type{T}, cell, ctx, prop::Proposal, E::F) where {T, F} = link_delta(T, cell, cell, ctx, prop, E)
-@inline function link_delta(::Type{T}, cell, store, ctx, prop::Proposal{N}, E::F) where {T, N, F}
+@inline function link_delta(::Type{T}, cell, store, ctx, prop::Proposal, E::F) where {T, F}
     lat = ctx.lattice
-    a, b = prop.old, prop.new
+    fr = link_frame(T, cell, lat, prop)
     dH = zero(T)
+    for side in 1:2, k in 1:maxdegree(store)
+        c, n, m, before, after = link_at(T, fr, cell, lat, store, side, k)
+        m == 0 && continue
+        e0 = E(c, n, k, before)
+        dH += m == 1 ? -e0 : E(c, n, k, after) - e0
+    end
+    return dH
+end
+
+# `link_delta` in two steps, so generated code can evaluate the link energy inline instead of
+# passing it as a closure (a closure in a RuntimeGeneratedFunction body becomes an opaque
+# closure, which a downstream package cannot precompile; TS1c):
+#   fr = link_frame(T, cell, lat, prop)
+#   for side in 1:2, k in 1:maxdegree(store)
+#       c, n, m, before, after = link_at(T, fr, cell, lat, store, side, k)
+#       m == 0: no link; m == 1: the link dies with `old`, ΔH −= E(before); m == 2: ΔH += E(after) − E(before)
+
+"""The copy's two cells, the kill flag, their centroid shifts and centroids (`link_at`)."""
+@inline function link_frame(::Type{T}, cell, lat::Lattice{N}, prop::Proposal{N}) where {T, N}
+    a, b = prop.old, prop.new
     z = ntuple(_ -> zero(T), Val(N))
     Va = a == 0 ? zero(eltype(cell.volume)) : @inbounds cell.volume[a]
     Vb = b == 0 ? zero(eltype(cell.volume)) : @inbounds cell.volume[b]
     kill = Va == 1                                    # the copy takes a's last site: a dies (D-083)
     sa = (a == 0 || kill) ? z : centroid_shift(T, cell, lat, a, prop.x, -1)
     sb = b == 0 ? z : centroid_shift(T, cell, lat, b, prop.x, +1)
-    for (c, Vc, sc, other, so) in ((a, Va, sa, b, sb), (b, Vb, sb, a, sa))
-        c == 0 && continue
-        cc = _centroid(T, cell, lat, c, Vc)
-        for k in 1:maxdegree(store)
-            n = @inbounds store.links[k, c]
-            n == 0 && continue
-            n == other && c == b && continue          # the old–new link is counted once (from a)
-            Vn = @inbounds cell.volume[n]
-            Vn == 0 && continue                       # dead partner: skipped (D-066 item 5)
-            cn = _centroid(T, cell, lat, n, Vn)
-            before = _periodic_norm(T, lat, ntuple(d -> cc[d] - cn[d], Val(N)))
-            if kill && c == a                         # a's links die with it: E(before) → 0
-                dH -= E(c, n, k, before)
-            else
-                sn = n == other ? so : z
-                after = _periodic_norm(T, lat, ntuple(d -> cc[d] + sc[d] - cn[d] - sn[d], Val(N)))
-                dH += E(c, n, k, after) - E(c, n, k, before)
-            end
-        end
-    end
-    return dH
+    ca = a == 0 ? z : _centroid(T, cell, lat, a, Va)
+    cb = b == 0 ? z : _centroid(T, cell, lat, b, Vb)
+    return (; a, b, kill, sa, sb, ca, cb, z)
+end
+
+"""
+Link slot `k` of side `side` (1: `old`, 2: `new`) of frame `fr`: `(c, n, mode, before,
+after)`, the cell, its partner, the mode (0: no link to count, 1: the link dies with `old`,
+2: it stays) and the centroid distances before and after the copy.
+"""
+@inline function link_at(::Type{T}, fr, cell, lat::Lattice{N}, store, side::Int, k::Int) where {T, N}
+    c, sc, cc, other, so = side == 1 ? (fr.a, fr.sa, fr.ca, fr.b, fr.sb) : (fr.b, fr.sb, fr.cb, fr.a, fr.sa)
+    c == 0 && return (c, c, 0, zero(T), zero(T))
+    n = @inbounds store.links[k, c]                   # (k ≤ maxdegree(store), c a cell of the copy)
+    n == 0 && return (c, n, 0, zero(T), zero(T))
+    n == other && c == fr.b && return (c, n, 0, zero(T), zero(T))   # the old–new link is counted once (from a)
+    Vn = @inbounds cell.volume[n]
+    Vn == 0 && return (c, n, 0, zero(T), zero(T))     # dead partner: skipped (D-066 item 5)
+    cn = _centroid(T, cell, lat, n, Vn)
+    before = _periodic_norm(T, lat, ntuple(d -> cc[d] - cn[d], Val(N)))
+    fr.kill && c == fr.a && return (c, n, 1, before, zero(T))   # a's links die with it: E(before) → 0
+    sn = n == other ? so : fr.z
+    after = _periodic_norm(T, lat, ntuple(d -> cc[d] + sc[d] - cn[d] - sn[d], Val(N)))
+    return (c, n, 2, before, after)
 end
 
 """

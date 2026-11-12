@@ -299,7 +299,7 @@ integrator (`setp`, `integ.ps[x] = v`) and `remake` run it first, so a refused v
 nothing: the parameters, the state and the time stay as they were. On an integrator only the
 phases whose own parameters or tables change are checked.
 """
-function check_field_parameters(f, p)
+function check_field_parameters(@nospecialize(f), @nospecialize(p))     # host, once per change (TS1c)
     for ph in _field_phases(f.phases)
         field_substeps(ph, p)
     end

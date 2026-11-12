@@ -424,7 +424,9 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
         integ = init(prob, CheckerboardCPM(); save_start = false)
         step!(integ); step!(integ)
         @test @allocated(step!(integ)) == 0                # the host executor (PG-13)
-        solve(remake(prob; p = gg_params(), seed = 1), CheckerboardCPM())
+        # (a `p` other than `prob.p`: the first remake that changes the parameters compiles the
+        # remake hooks, once for every problem type since TS1c)
+        solve(remake(prob; p = merge(gg_params(), (; T = 5.0)), seed = 1), CheckerboardCPM())
         cold = merge(gg_params(), (; T = 4.0, λ = 2.0))
         stats = @timed solve(remake(prob; p = cold, seed = 2), CheckerboardCPM())
         @test stats.compile_time == 0

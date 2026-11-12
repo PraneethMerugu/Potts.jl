@@ -56,6 +56,8 @@ const COREPOTTS_NONPUBLIC_QUALIFIED = (
     :typename,                  # Base.typename(A).wrapper: the unparameterised device array type for Adapt
     :afoldl,                    # Base.afoldl: unrolled fold over the MCS-order tuple; public `foldl`
                                 # and `sum` allocate there on SequentialCPM (P6.3b review round 2)
+    Symbol("@nospecializeinfer"), # Base.@nospecializeinfer (documented, not declared public): the host
+                                  # setup of `init`, `remake` and `PottsProblem` inferred once for every model (TS1c)
 )
 
 @testset "QA: ExplicitImports (CorePotts)" begin
