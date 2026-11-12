@@ -184,7 +184,7 @@ end
 
 @testitem "fusion hard limits: array arguments and the register prefilter" setup = [LF_compile_regressions] tags = [:latticefields, :compile] begin
 @testset "fusion hard limits: array arguments and the register prefilter" begin
-    src = read(joinpath(@__DIR__, "..", "schedule", "fusion.jl"), String)
+    src = read(joinpath(@__DIR__, "..", "shared", "schedule_fusion.jl"), String)
     @isdefined(smoother) || include_string(@__MODULE__, split(src, "nlaunch(s) =")[1])
     s = smoother((42, 42, 42), 20)                    # η = 1 at this size: cost alone fuses all
     sp = plan(s)
