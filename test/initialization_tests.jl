@@ -499,7 +499,7 @@ end
         @test ini_error(() -> mtkcompile(IniDraw(; name = :r)), "initialization")
         @test ini_error(() -> mtkcompile(IniGatherRate(; name = :r)), "initialization", "D(g")
         # errors name where the equation was written
-        @test ini_error(() -> mtkcompile(IniSurface(; name = :r)), "@initialization_equations", "initialization.jl")
+        @test ini_error(() -> mtkcompile(IniSurface(; name = :r)), "@initialization_equations", "initialization_tests.jl")
     end
 end
 

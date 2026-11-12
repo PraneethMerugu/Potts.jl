@@ -2696,13 +2696,13 @@ end
         end
         m = msg(() -> mtkcompile(BadSiteVar(; name = :bad)))
         @test occursin("needs a site", m) && occursin("in @energy cells(A) => x", m) &&
-              occursin("symbolic.jl:$BAD_ENERGY_LINE", m)
+              occursin("symbolic_tests.jl:$BAD_ENERGY_LINE", m)
         m = msg(() -> mtkcompile(BadDrive(; name = :bad)))
-        @test occursin("`volume` is not available in a drive", m) && occursin("symbolic.jl:$BAD_DRIVE_LINE", m)
+        @test occursin("`volume` is not available in a drive", m) && occursin("symbolic_tests.jl:$BAD_DRIVE_LINE", m)
         # locations survive `extend`
         m = msg(() -> mtkcompile(Potts.extend(PottsSystem(; name = :e, kinds = [:medium, :A], lattice = Potts.lattice_spec((8, 8)),
             sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)), BadSiteVar(; name = :bad))))
-        @test occursin("symbolic.jl:$BAD_ENERGY_LINE", m)
+        @test occursin("symbolic_tests.jl:$BAD_ENERGY_LINE", m)
     end
 end
 
