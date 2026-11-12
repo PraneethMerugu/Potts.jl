@@ -122,18 +122,18 @@ end
     return nothing
 end
 
-# The accept path's per-cell reads. Every column of `st.cell` is snapshotted before a phase, and
-# the phase's decisions read the snapshot instead of the live columns, so a copy's decision does
-# not see a commit that another work item of the same phase is making to a cell it reads. The set
-# is every column of `st.cell`, because a cell is an aggregate the block spacing does not
-# separate: the spacing keeps two active sites of a phase (k - 1)·b + 1 apart, which does not
-# exclude two of them inside one cell wider than that, so any cell column a commit hook can write
-# is one a decision may read. Nothing else a decision reads moves within a phase: `σ` writes and
-# `tk.acc` are at the work item's own sites, and the mobility masks, the site columns and the
-# model slots are written only at a phase boundary. Cost: one copy of the cell columns per phase,
-# against the sub-region's attempts per work item.
+# The cell columns a launched phase's decisions read: every column of `st.cell`, copied before the
+# phase, so no decision can see a commit that another work item is making. A phase is launched only
+# when it is a colouring (`_phase_conflict!`), where the cells one item writes are not the cells
+# another reads, so the snapshot and the live columns agree there; it is kept as the second line of
+# defense, because the cells a copy touches are known only from the footprint and the proposal
+# relation, while a commit hook may write any column. The set is every column of `st.cell`, since
+# which ones a decision reads is not derivable from the model. Nothing else a decision reads moves
+# inside a phase: `σ` writes and `tk.acc` are at the work item's own sites, and the mobility masks,
+# the site columns and the model slots are written only at a phase boundary. Cost: one copy of the
+# cell columns per launched phase.
 #
-# On the host, one buffer per column. A device keeps the live reads: its outcome depends on the
+# On the host, one buffer per column; a device keeps the live reads, its outcome depending on the
 # timing of the work items (user ruling 2026-11-04).
 _snap_columns(::KernelAbstractions.CPU, cell) = map(copy, cell)
 _snap_columns(backend, cell) = nothing
@@ -142,7 +142,7 @@ _snap!(::Nothing, cell) = nothing
 @inline _snap!(snap, cell) = _snap_cols!(snap, cell, Val(fieldcount(typeof(cell))))
 
 # One column per step, from the last: `getfield` at a constant index is type-stable, and the tuple
-# of `copyto!` results is never built. A phase runs this P times per MCS, so it must not allocate
+# of `copyto!` results is never built. It runs once per launched phase, and it must not allocate
 # (`step!` is gated on zero allocations).
 @inline _snap_cols!(snap, cell, ::Val{0}) = nothing
 @inline function _snap_cols!(snap, cell, ::Val{K}) where {K}
@@ -168,29 +168,39 @@ _accept_state(st, snap) = CPMState(st.σ, snap, st.site, st.model, st.history)
 # cell, and no kind changes inside a sweep), so sharing a cell is the only way two items of one
 # phase can invalidate each other.
 #
-# One 8-byte stamp per cell holds the phase's token and the block that first claimed it, so a scan
-# costs one read and one write per active site and allocates nothing.
+# The claim covers every cell a work item can touch, not only its target's: a proposal's source
+# lies within `radius(proposal)` of the target, and a commit writes the cells of the target's
+# neighbours (`commit_surface!` maintains theirs), both inside `reach`. One 8-byte stamp per cell
+# holds the phase's token and the block that first claimed it, so a scan costs one read and one
+# write per (site, offset) and allocates nothing.
 _claim_columns(::KernelAbstractions.CPU, cell) = (; stamp = zeros(UInt64, length(cell.volume)), token = Ref(UInt32(0)))
 _claim_columns(backend, cell) = nothing
 
-_phase_conflict!(st, cache::CheckerboardCache, lat, layout, off) = _phase_conflict!(st, cache.claim, lat, layout, off)
-_phase_conflict!(st, ::Nothing, lat, layout, off) = false           # a device: no colouring guarantee
-function _phase_conflict!(st, claim::NamedTuple, lat::Lattice{N}, layout::BlockLayout{N}, off) where {N}
+_phase_conflict!(st, cache::CheckerboardCache, lat, layout, off) =
+    _phase_conflict!(st, cache.claim, cache.reach, lat, layout, off)
+_phase_conflict!(st, ::Nothing, reach, lat, layout, off) = false    # a device: no colouring guarantee
+function _phase_conflict!(st, claim::NamedTuple, reach::Int, lat::Lattice{N}, layout::BlockLayout{N}, off) where {N}
     tok = UInt64(claim.token[] += UInt32(1))
     hi = tok << 32
     stamp, σ = claim.stamp, st.σ
+    box = CartesianIndices(ntuple(_ -> -reach:reach, Val(N)))
     for I in CartesianIndices(layout.nblocks)
         bc = map(i -> i - 1, Tuple(I))
         blk = UInt64(block_index(layout, bc))
         lo, side = block_region(layout, bc, off)
         for idx in CartesianIndices(side)
-            c = @inbounds σ[linear_index(lat, ntuple(d -> lo[d] + idx[d] - 1, Val(N)))]
-            c == 0 && continue                                     # the medium holds no cell columns
-            v = @inbounds stamp[c]
-            if v >>> 32 == tok
-                (v & 0xffffffff) == blk || return true              # a second work item, one cell
-            else
-                @inbounds stamp[c] = hi | blk
+            x = ntuple(d -> lo[d] + idx[d], Val(N))                 # `lo` is 0-based, `idx` 1-based
+            for δ in box
+                inside, z = shift(lat, x, ntuple(d -> Int32(δ[d]), Val(N)))   # wraps, or the medium
+                inside || continue
+                c = @inbounds σ[linear_index(lat, z)]
+                c == 0 && continue                                 # the medium holds no cell columns
+                v = @inbounds stamp[c]
+                if v >>> 32 == tok
+                    (v & 0xffffffff) == blk || return true          # a second work item, one cell
+                else
+                    @inbounds stamp[c] = hi | blk
+                end
             end
         end
     end
@@ -301,6 +311,7 @@ struct CheckerboardCache{N, B, TK, CN, SL, CS, CK, K1, K2, K3, GS}
     track::TK                         # `nothing`, or `(; track, acc)` (acc per site)
     cnt::CN                           # committed copies per block (Int32), folded at the read points
     serial::SL                        # `nothing`, or the serial list (see `_push_serial!`)
+    reach::Int                        # the lattice distance a copy reads and writes around its target
     snap::CS                          # the launched phases' cell columns, refreshed per phase (CPU; see `_snap!`)
     claim::CK                         # `nothing`, or the per-cell claim stamps of `_phase_conflict!` (CPU)
     kernel::K1
@@ -342,6 +353,7 @@ default_parts(N::Int) = max(2, round(Int, 64^(1 / N)))
 function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, proposal; region = nothing, parts = nothing,
         switches = 1, threads = :auto, min_read = 0, cell) where {N}
     r, w = reach(f.footprint, proposal)
+    claim = max(r + w, 1)                 # the cell claim radius: what the copy reads and writes
     r = max(r, min_read, _window(f.connectivity))
     need = max(r + w, 1)
     k = parts === nothing ? default_parts(N) : parts
@@ -366,8 +378,8 @@ function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, proposal; r
     backend isa KernelAbstractions.CPU || n >= DEVICE_MIN_BLOCKS ||
         @warn "CheckerboardCPM on a device: $n work items per phase (blocks $(layout.nblocks)) leave the GPU mostly idle; a lattice this small runs as fast or faster on the CPU" maxlog = 1
     snap = _snap_columns(backend, cell)
-    claim = _claim_columns(backend, cell)
-    return CheckerboardCache(layout, switches, zeros(Int, P), z(UInt32, 1), tk, cnt, sl, snap, claim, block_kernel!(backend),
+    claims = _claim_columns(backend, cell)
+    return CheckerboardCache(layout, claim, switches, zeros(Int, P), z(UInt32, 1), tk, cnt, sl, snap, claims, block_kernel!(backend),
         serial_kernel!(backend), recenter_kernel!(backend), _block_groupsize(backend, layout.nblocks), _block_inline(backend, n, threads),
         backend isa KernelAbstractions.CPU)
 end
