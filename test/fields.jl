@@ -967,6 +967,19 @@ fd_chemo_op() = (σ = zeros(Int32, 24, 20); σ[5:8, 5:8] .= 1; σ[14:17, 10:13] 
     @test occursin("skip_interior", something(fd_err(() -> init(p, SequentialCPM(; skip_interior = true))), ""))
 end
 
+# TS1c: `init` compiles the handler of each MCS entry before `step!` (the 2-argument
+# `_run_entry!`); a `Repeat` calls the 3-argument one, `(integ, e, (j, n))`, once per pass,
+# which must not box its entry: a warm MCS allocates nothing on either algorithm
+@testset "@schedule repeat: a warm MCS allocates nothing" begin
+    for M in (FdChemoSplit, FdChemoInter), alg in (CheckerboardCPM(), SequentialCPM())
+        integ = init(PottsProblem(M(; name = :m), fd_chemo_op(), (0, 10); field_solver = ExplicitEuler(substeps = 2)),
+            alg; save_start = false, save_end = false)
+        step!(integ)
+        step!(integ)
+        @test (@allocated step!(integ)) == 0
+    end
+end
+
 @testset "@schedule repeat: fields inside step 1/n of the MCS per pass (hand oracle)" begin
     op = fd_source_op((12, 10))
     prob = PottsProblem(FdSourceInter(; name = :f), op, (0, 2); field_solver = ExplicitEuler(substeps = 2))
