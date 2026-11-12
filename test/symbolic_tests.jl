@@ -642,7 +642,7 @@ end
     @sweep Metropolis(; temperature = T)
 end
 
-const BAD_ENERGY_LINE = @__LINE__() - 4
+const BAD_ENERGY_LINE = @__LINE__() - 5   # the offending `cells(A) => x` line (the item's layout)
 
 
 @potts_model BadDrive begin
@@ -653,7 +653,7 @@ const BAD_ENERGY_LINE = @__LINE__() - 4
     @sweep Metropolis(; temperature = T)
 end
 
-const BAD_DRIVE_LINE = @__LINE__() - 3
+const BAD_DRIVE_LINE = @__LINE__() - 4    # the `@drive` line (the item's layout)
 
 
 # Components (M4.1): MTK systems instantiated per cell, advanced by a batched cell ODE kernel.
