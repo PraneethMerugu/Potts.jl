@@ -1,3 +1,12 @@
+@testsetup module MP_test_adversarial
+using Test
+using Aqua
+using CairoMakie
+using MakiePotts
+using Random
+import Makie
+import CorePotts
+include("shared/makiepotts.jl")
 function _saved_state_frame_oracle(state, request)
     active = Set(Int32(id) for id in eachindex(CorePotts.volumes(state)) if CorePotts.volumes(state)[id] > 0)
     owners = map(CorePotts.ownership(state)) do id
@@ -22,7 +31,10 @@ function _saved_state_frame_oracle(state, request)
     end
     return (; mcs = 0, owners = projected, metadata, geometry)
 end
+include("shared/export_all.jl")
+end
 
+@testitem "adversarial geometry and ownership semantics" setup = [MP_test_adversarial] tags = [:makiepotts, :adversarial] begin
 @testset "adversarial geometry and ownership semantics" begin
     one_geometry = RenderGeometry((1, 1);
         spacing = (0.25, 2.5), origin = (-3.0, 4.0))
@@ -56,7 +68,9 @@ end
     @test cell_metadata(all_cell, identity) == metadata
     @test length(legend_entries(all_cell, CellIdentityEncoding())) == 2
 end
+end
 
+@testitem "all slice axes and endpoints" setup = [MP_test_adversarial] tags = [:makiepotts, :adversarial] begin
 @testset "all slice axes and endpoints" begin
     fixture = render_fixture(dimensions = 3)
     source_size = (5, 4, 3)
@@ -87,7 +101,9 @@ end
         end
     end
 end
+end
 
+@testitem "missing values and typed channel validation" setup = [MP_test_adversarial] tags = [:makiepotts, :adversarial] begin
 @testset "missing values and typed channel validation" begin
     identity = RenderCellIdentity(1, 3)
     cells = [RenderCellMetadata(identity, 2)]
@@ -136,7 +152,9 @@ end
         0, fill(RenderOwner(MediumSite, 1), 2, 2),
         RenderCellMetadata[]; channels = (wrong_type,))
 end
+end
 
+@testitem "invalid frames and requests fail before publication" setup = [MP_test_adversarial] tags = [:makiepotts, :adversarial] begin
 @testset "invalid frames and requests fail before publication" begin
     @test_throws ArgumentError RenderGeometry((0, 2))
     @test_throws ArgumentError RenderGeometry((2, 2); spacing = (1.0, Inf))
@@ -216,7 +234,9 @@ end
         fill(RenderOwner(MediumSite, 1), 1, 1),
         RenderCellMetadata[])
 end
+end
 
+@testitem "frame construction owns mutable semantic inputs" setup = [MP_test_adversarial] tags = [:makiepotts, :adversarial] begin
 @testset "frame construction owns mutable semantic inputs" begin
     identity = RenderCellIdentity(1, 7)
     metadata = RenderCellMetadata(identity, 3; label = "Original")
@@ -258,7 +278,9 @@ end
     @test CorePotts.cell_generations(fixture.state) == generations_before
     @test CorePotts.volumes(fixture.state) == volumes_before
 end
+end
 
+@testitem "rapid reactive replacement and recording guards" setup = [MP_test_adversarial] tags = [:makiepotts, :adversarial] begin
 @testset "rapid reactive replacement and recording guards" begin
     geometry = RenderGeometry((3, 2);
         spacing = (0.5, 2.0), origin = (1.0, -2.0))
@@ -318,4 +340,5 @@ end
     @test isopen(inspected)
     @test close(inspected) === inspected
     @test !isopen(inspected)
+end
 end

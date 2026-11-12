@@ -1,3 +1,12 @@
+@testsetup module MP_test_downstream_conformance
+using Test
+using Aqua
+using CairoMakie
+using MakiePotts
+using Random
+import Makie
+import CorePotts
+include("shared/makiepotts.jl")
 using .DownstreamFixture
 
 struct ThrowingFrame <: AbstractPottsRenderFrame{2} end
@@ -8,7 +17,10 @@ MakiePotts.frame_provenance(::ThrowingFrame) =
     RenderProvenance(:throwing_fixture, ThrowingFrame, :host, RenderRequest())
 MakiePotts.owner_at(::ThrowingFrame, _) = error("broken owner accessor")
 MakiePotts.available_channels(::ThrowingFrame) = ()
+include("shared/export_all.jl")
+end
 
+@testitem "downstream protocol conformance and Makie journey" setup = [MP_test_downstream_conformance] tags = [:makiepotts, :downstream_conformance] begin
 @testset "downstream protocol conformance and Makie journey" begin
     foreign = DownstreamFixture.columnar_frame()
     replacement = DownstreamFixture.columnar_frame(1)
@@ -73,7 +85,9 @@ MakiePotts.available_channels(::ThrowingFrame) = ()
         Makie.Point3d(0.5, 1.0, 0), Makie.Vec3d(3.0, 3.75, 0))
 
 end
+end
 
+@testitem "malformed downstream frames reject before rendering" setup = [MP_test_downstream_conformance] tags = [:makiepotts, :downstream_conformance] begin
 @testset "malformed downstream frames reject before rendering" begin
     broken = ThrowingFrame()
     report = render_frame_conformance(broken)
@@ -82,4 +96,5 @@ end
     @test_throws MakiePotts.InvalidRenderFrameError assert_render_frame_conformance(broken)
     @test_throws MakiePotts.InvalidRenderFrameError Makie.plot(broken)
     @test_throws MakiePotts.InvalidRenderFrameError MakiePotts.pottsboundaries(broken)
+end
 end

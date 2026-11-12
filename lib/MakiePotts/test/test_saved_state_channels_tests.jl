@@ -1,3 +1,12 @@
+@testsetup module MP_test_saved_state_channels
+using Test
+using Aqua
+using CairoMakie
+using MakiePotts
+using Random
+import Makie
+import CorePotts
+include("shared/makiepotts.jl")
 function _site_slice_oracle(values, axis, index)
     retained_axes = Tuple(filter(!=(axis), ntuple(identity, ndims(values))))
     retained_size = ntuple(i -> size(values, retained_axes[i]), Val(2))
@@ -9,6 +18,16 @@ function _site_slice_oracle(values, axis, index)
     ]
 end
 
+# P6.0d (D-081): a solution's frames draw each saved state's own obstacles. A frozen cell
+# released at MCS 5 leaves its sites; they are medium, not obstacles, in the last frame.
+struct _ReleasedFrozenKind
+    k::Int32
+end
+CorePotts.frozen_kinds(s::_ReleasedFrozenKind) = (s.k,)
+include("shared/export_all.jl")
+end
+
+@testitem "saved-state channels use canonical frame projection and validation" setup = [MP_test_saved_state_channels] tags = [:makiepotts, :saved_state_channels] begin
 @testset "saved-state channels use canonical frame projection and validation" begin
     fixture = render_fixture(dimensions = 3)
     state = fixture.state
@@ -74,7 +93,9 @@ end
     )
     @test channel(from_solution, site_key).values == solution_values
 end
+end
 
+@testitem "saved-state channel rejection is all-or-nothing" setup = [MP_test_saved_state_channels] tags = [:makiepotts, :saved_state_channels] begin
 @testset "saved-state channel rejection is all-or-nothing" begin
     fixture = render_fixture(dimensions = 3)
     state = fixture.state
@@ -115,14 +136,9 @@ end
         channels = (RenderChannel(site_key, valid_site),),
     )
 end
-
-# P6.0d (D-081): a solution's frames draw each saved state's own obstacles. A frozen cell
-# released at MCS 5 leaves its sites; they are medium, not obstacles, in the last frame.
-struct _ReleasedFrozenKind
-    k::Int32
 end
-CorePotts.frozen_kinds(s::_ReleasedFrozenKind) = (s.k,)
 
+@testitem "solution frames follow a frozen mask that changes during the run" setup = [MP_test_saved_state_channels] tags = [:makiepotts, :saved_state_channels] begin
 @testset "solution frames follow a frozen mask that changes during the run" begin
     kindidx(st, c) = c == 0 ? 1 : Int(@inbounds st.cell.kind[c]) + 1
     function dH(st, p, prop, ctx)
@@ -146,4 +162,5 @@ CorePotts.frozen_kinds(s::_ReleasedFrozenKind) = (s.k,)
     vacated = count((σ .== 2) .& (CorePotts.ownership(sol.u[end]) .== 0))
     @test vacated > 0
     @test obstacles(renderframe(sol.u[end]; frozen = sol.prob.frozen)) == vacated
+end
 end
