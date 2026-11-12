@@ -1,8 +1,13 @@
 # Test entry point for the whole monorepo.
 #   GROUP=All (default) | Potts | CorePotts | LatticeFields | LatticePDE | MakiePotts | PottsModels | GPU
-# Each group runs in the shared workspace environment of its own test project.
+# Each group runs in the shared workspace environment of its own test project. The lib groups
+# run their own runners in a subprocess. The Potts suite (test/*_tests.jl) runs on ReTestItems
+# in this process and its workers (test/shared/rti.jl): GROUP=Potts is the items tagged
+# `:potts` without `:gpu` (and without `:qa` when POTTS_QA=false), on POTTS_TEST_WORKERS
+# workers (default 4). test/README.md has the tags and the single-item runs.
 const GROUP = get(ENV, "GROUP", "All")
 const ROOT = dirname(@__DIR__)
+include(joinpath(@__DIR__, "shared", "rti.jl"))      # PottsRTI: the Potts suite on ReTestItems
 
 function run_group(project, file, args...; env = ())
     cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$project $file $args`, env...)
@@ -18,14 +23,17 @@ GROUP in ("All", "CorePotts") &&
     run_group(joinpath(ROOT, "lib/CorePotts/test"), joinpath(ROOT, "lib/CorePotts/test/runtests.jl"))
 GROUP in ("All", "MakiePotts") &&
     run_group(joinpath(ROOT, "lib/MakiePotts/test"), joinpath(ROOT, "lib/MakiePotts/test/runtests.jl"))
-GROUP in ("All", "Potts") &&
-    run_group(joinpath(ROOT, "test"), joinpath(ROOT, "test/potts.jl"))
+if GROUP in ("All", "Potts")
+    @info "Running the Potts suite (test/*_tests.jl, ReTestItems)"
+    PottsRTI.potts_suite()
+end
 GROUP in ("All", "PottsModels") &&
     run_group(joinpath(ROOT, "lib/PottsModels/test"), joinpath(ROOT, "lib/PottsModels/test/runtests.jl"))
 # Device group (not part of All): the device tests of the CorePotts and Potts suites, on the
 # backend that POTTS_GPU / COREPOTTS_GPU request (test/shared/device_select.jl, D-157). The
-# suites run through test/shared/device_only.jl, which drops the top-level testsets that name
-# no device (the CPU groups run them) and keeps every definition and every device testset;
+# CorePotts suite runs through test/shared/device_only.jl, which drops the top-level testsets
+# that name no device (the CPU groups run them) and keeps every definition and every device
+# testset; the Potts suite runs its `:device` and `:gpu` items (`PottsRTI.device_suite`).
 # POTTS_DEVICE_ONLY=false runs the suites in full, as before.
 # Neither set: the platform's own, Metal on macOS and ROCm elsewhere. On ROCm both suites end
 # with the full no-`double` scan of their compiled kernels, and a last step checks that every
@@ -45,6 +53,8 @@ if GROUP == "GPU"
         env = ("LATTICEFIELDS_GPU" => gpu, "LATTICEFIELDS_QA" => "false"))
     suite(joinpath(ROOT, "lib/CorePotts/test"), joinpath(ROOT, "lib/CorePotts/test/runtests.jl");
         env = (env..., "COREPOTTS_QA" => "false"))
-    suite(joinpath(ROOT, "test"), joinpath(ROOT, "test/potts.jl"); env = (env..., "POTTS_QA" => "false"))
+    withenv(env..., "POTTS_QA" => "false") do
+        only ? PottsRTI.device_suite() : PottsRTI.potts_suite(; nworkers = 1, gpu = true)
+    end
     gpu == "rocm" && run_group(joinpath(ROOT, "test"), joinpath(ROOT, "test/device_coverage.jl"); env)
 end

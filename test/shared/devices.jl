@@ -3,8 +3,9 @@
 #   POTTS_GPU ∈ {"", "metal", "rocm"}   (else COREPOTTS_GPU; both set must agree; the rule
 #                                         is `PottsDeviceSelect.requested`, device_select.jl)
 #
-# Including this file defines the module `PottsDevices` in the including module (the test
-# runners include it into `Main`, guarded with `isdefined(Main, :PottsDevices) ||`). It
+# Including this file defines the module `PottsDevices` in the including module (every
+# `@testsetup` of the Potts suite includes it, guarded with
+# `isdefined(@__MODULE__, :PottsDevices) ||`; the CorePotts runner into `Main`). It
 # loads Metal.jl for "metal" and AMDGPU.jl for "rocm", and no GPU package at all when the
 # variable is empty: Metal.jl precompiles on Linux but cannot run there, and AMDGPU.jl
 # likewise on macOS, so each is only *loaded* on request.
@@ -23,7 +24,8 @@
 #   @test_skip "device (POTTS_GPU=metal|rocm)"
 # written out literally (`@test_skip` records its expression unevaluated). Frozen acceptance
 # files guard every use with `isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()`,
-# so they still load where this file was not included.
+# so they still load where this file was not included (test/gpu_tests.jl binds
+# `Main.PottsDevices` for the frozen files it includes).
 module PottsDevices
 
 isdefined(@__MODULE__, :PottsDeviceSelect) || include(joinpath(@__DIR__, "device_select.jl"))

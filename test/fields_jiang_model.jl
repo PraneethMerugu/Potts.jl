@@ -1,6 +1,6 @@
 # The Jiang-like model of F3-18 (test/fields_jiang.jl) and its spheroid, shared with the guard's
 # soft set (test/fields_identity.jl, review r1).
-isdefined(Main, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
+isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
 module JgPDE
 using ..FieldPDE
 @variables o(..) [lattice_level = Coarse(4)] g(..) [lattice_level = Coarse(4)] l(..) [lattice_level = Coarse(4)]

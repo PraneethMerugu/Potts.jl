@@ -1,7 +1,7 @@
 # F3-23: the models of test/cell_sums.jl, also loaded by its `-t 4` / `-t 8` processes and by
 # the device tests (test/gpu.jl).
-isdefined(Main, :JiangLike) || include(joinpath(@__DIR__, "fields_jiang_model.jl"))
-isdefined(Main, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
+isdefined(@__MODULE__, :JiangLike) || include(joinpath(@__DIR__, "fields_jiang_model.jl"))
+isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
 module CsPDE
 using ..FieldPDE
 @variables c(..) src(..)::Bool [input = true]
