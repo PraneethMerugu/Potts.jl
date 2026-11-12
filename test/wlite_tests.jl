@@ -300,7 +300,7 @@ end
     end
 end
 
-@testitem "W-lite D: SymbolicIndexingInterface" setup = [WliteSetup, SymbolicSetup] tags = [:potts, :wlite] begin
+@testitem "W-lite D: SymbolicIndexingInterface" setup = [WliteSetup] tags = [:potts, :wlite] begin
     @testset "W-lite D: SymbolicIndexingInterface" begin
         W, I = W_all, Potts.inner(W_all)
         uks, pps = unknowns(I), parameters(I)
@@ -338,7 +338,7 @@ end
     end
 end
 
-@testitem "W-lite E: template compile on the inner" setup = [WliteSetup, SymbolicSetup] tags = [:potts, :wlite] begin
+@testitem "W-lite E: template compile on the inner" setup = [WliteSetup] tags = [:potts, :wlite] begin
     @testset "W-lite E: template compile on the inner" begin
         I = Potts.inner(W_all)
         function du_of(sys)
@@ -354,7 +354,7 @@ end
     end
 end
 
-@testitem "W-lite F: refusal matrix (probe models)" setup = [WliteSetup, SymbolicSetup] tags = [:potts, :wlite] begin
+@testitem "W-lite F: refusal matrix (probe models)" setup = [WliteSetup] tags = [:potts, :wlite] begin
     @testset "W-lite F: refusal matrix (probe models)" begin
         for W in (W_all, W_empty)
             m = WLiteMatrix.matrix(W, decay)
@@ -382,7 +382,7 @@ end
     end
 end
 
-@testitem "W-lite F: refusal matrix on every published model" setup = [WliteSetup, SymbolicSetup] tags = [:potts, :wlite] begin
+@testitem "W-lite F: refusal matrix on every published model" setup = [WliteSetup] tags = [:potts, :wlite] begin
     @testset "W-lite F: refusal matrix on every published model" begin
         for n in WL_PUBLISHED
             W = getfield(PottsModels, n)(; name = :m)
@@ -474,7 +474,7 @@ end
     end
 end
 
-@testitem "W-lite: wrap checks" setup = [WliteSetup, SymbolicSetup] tags = [:potts, :wlite] begin
+@testitem "W-lite: wrap checks" setup = [WliteSetup] tags = [:potts, :wlite] begin
     @testset "W-lite: wrap checks" begin
         @test_throws ArgumentError Potts.wrap(:other, complete(inner_all), nothing, WLiteModels.part())            # name
         @test_throws ArgumentError Potts.wrap(:allparts, complete(inner_all), WLiteModels.pde(:x), WLiteModels.part())
