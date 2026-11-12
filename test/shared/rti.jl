@@ -37,32 +37,48 @@ const OPTIONS = (; nworker_threads = 1, memory_threshold = 0.8, testitem_timeout
 serial(ti) = :timing in ti.tags || :subprocess in ti.tags
 
 # POTTS_TEST_PASSLOG=<file>: after each item, append one line per top-level testset of the item
-# (item, testset, pass, fail, error, broken), the per-testset pass list of the old suite
-function _counts(results, n_passed = 0; nested = true)
-    p, f, e, b = n_passed, 0, 0, 0
-    for r in results
-        if r isa Test.AbstractTestSet
-            nested || continue
-            q = _counts(r.results, r.n_passed); p += q[1]; f += q[2]; e += q[3]; b += q[4]
-        else
-            r isa Test.Fail && (f += 1); r isa Test.Error && (e += 1); r isa Test.Broken && (b += 1)
-        end
-    end
-    return (p, f, e, b)
-end
+# (item, testset, pass, fail, error, broken), the per-testset pass list of the old suite.
+#
+# The expression is evaluated in the item's module in a *worker process*, and ReTestItems
+# serializes it there: it must be code with only literals in it. Interpolating a function of this
+# module (as an earlier version did with `_counts`) makes the payload a reference to a module the
+# worker does not have, and the worker dies while deserializing its first item: the coordinator
+# then fails with ECONNRESET on the next write.
 function passlog_expr()
     path = get(ENV, "POTTS_TEST_PASSLOG", "")
     isempty(path) && return Expr(:block)
-    return Expr(:block, :(let ts = Test.get_testset()
-        open($path, "a") do io
-            for r in ts.results
-                r isa Test.AbstractTestSet || continue
-                println(io, ts.description, '\t', r.description, '\t', join($(_counts)(r.results, r.n_passed), '\t'))
+    return quote
+        let ts = Test.get_testset(), io = open($path, "a")
+            # the counts of a testset's subtree: its passes are cumulative, its failures are direct
+            function counts(results, n_passed)
+                p, f, e, b = n_passed, 0, 0, 0
+                for r in results
+                    if r isa Test.AbstractTestSet
+                        q = counts(r.results, r.n_passed); p += q[1]; f += q[2]; e += q[3]; b += q[4]
+                    elseif r isa Test.Fail
+                        f += 1
+                    elseif r isa Test.Error
+                        e += 1
+                    elseif r isa Test.Broken
+                        b += 1
+                    end
+                end
+                return (p, f, e, b)
             end
-            q = $(_counts)(ts.results, ts.n_passed; nested = false)
-            any(!iszero, q) && println(io, ts.description, "\t(item level)\t", join(q, '\t'))
+            try
+                for r in ts.results
+                    r isa Test.AbstractTestSet || continue
+                    println(io, ts.description, '\t', r.description, '\t', join(counts(r.results, r.n_passed), '\t'))
+                end
+                # results outside any testset of the item (a bare @test, an error): one row
+                d = (0, count(r -> r isa Test.Fail, ts.results), count(r -> r isa Test.Error, ts.results),
+                     count(r -> r isa Test.Broken, ts.results))
+                d[2] + d[3] + d[4] > 0 && println(io, ts.description, "\t(item level)\t", join(d, '\t'))
+            finally
+                close(io)
+            end
         end
-    end))
+    end
 end
 
 """
