@@ -424,12 +424,11 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
         integ = init(prob, CheckerboardCPM(); save_start = false)
         step!(integ); step!(integ)
         @test @allocated(step!(integ)) == 0                # the host executor (PG-13)
+        # (`remake` is compiled once for every problem type and so is not inferred to the problem's
+        # type, TS1c: the first `solve` of a remade problem from here compiles its call once)
         solve(remake(prob; p = gg_params(), seed = 1), CheckerboardCPM())
+        solve(remake(prob; p = gg_params(), seed = 1), SequentialCPM())
         cold = merge(gg_params(), (; T = 4.0, λ = 2.0))
-        # a collection first: a finalizer can start a background task (Distributed's GC
-        # messages) whose compile `@timed` would count (14 ms, TS1c)
-        GC.gc()
-        yield()
         stats = @timed solve(remake(prob; p = cold, seed = 2), CheckerboardCPM())
         @test stats.compile_time == 0
         stats = @timed solve(remake(prob; p = cold, seed = 3), SequentialCPM())
