@@ -68,7 +68,7 @@ function passlog_expr()
             # one open-write-close per line: workers append to the same file concurrently, and a
             # line written through a shared buffer comes out interleaved with another worker's
             emit(parts...) = open($path, "a") do io
-                write(io, string(parts..., '\n'))
+                write(io, join(parts, '\t'), '\n')
             end
             for r in ts.results
                 r isa Test.AbstractTestSet || continue
