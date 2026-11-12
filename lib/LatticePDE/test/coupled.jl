@@ -68,6 +68,7 @@ q1(δ, k; steady = false) = PDESystem(steady ?
     @test r.retcode == ReturnCode.Success
     g = DeviceGMRES(; restart = 8, budget = 40, rtol = 1e-8, precond = DevicePCG(; budget = 3))
     @test eval(Meta.parse(repr(g))) == g
+    @test !occursin("budget", repr(DeviceGMRES()))               # a default stays out of the display
     @test startswith(cmsg(() -> DeviceGMRES(; restart = 1)), "`DeviceGMRES(; restart = 1)`: `restart` is the Krylov basis size")
     @test startswith(cmsg(() -> DeviceGMRES(; budget = 0)), "`DeviceGMRES(; budget = 0)`: `budget` is the most GMRES iterations")
     @test startswith(cmsg(() -> DeviceGMRES(; rtol = -1.0)), "`DeviceGMRES(; rtol = -1.0)`: `rtol` is the relative residual")

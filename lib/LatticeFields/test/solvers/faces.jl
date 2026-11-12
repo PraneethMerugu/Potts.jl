@@ -335,6 +335,8 @@ end
               Multigrid(; cycles = 3, rtol = 1e-8), Multigrid(; warn_tol = 0.5))
         @test eval(Meta.parse(repr(s))) == s
     end
+    # a default stays out of the display: an argument printed with no call is the empty call
+    @test !occursin("budget", repr(DevicePCG())) && !occursin("cycles", repr(Multigrid()))
 end
 
 # F3-06 review nits (batch 2): a cycle prints as the pair `(ν₁, ν₂)`, so the display runs where

@@ -323,6 +323,27 @@ end
     @test occursin("compute_T=Float64", LFP.canonical(BackwardEuler(; compute_T = Float64))) &&
           !occursin("compute_T", LFP.canonical(BackwardEuler()))
     @test LFP.canonical(ExplicitEuler(; compute_T = Float64)) != LFP.canonical(ExplicitEuler())
+    # the cache key: independently built equal algorithms print one canonical text, a difference in
+    # any field shows, and the key is not the display form (the key names every field, `repr` leaves
+    # a default out). Each row: two separately built objects, a third that differs in one field, and
+    # whether a default exists to leave out of the display
+    canon_cases = Any[
+        (ExplicitEuler(), ExplicitEuler(), ExplicitEuler(; substeps = 3), true),
+        (ExplicitMap(), ExplicitMap(), ExplicitMap(; compute_T = Float64), false),
+        (BackwardEuler(), BackwardEuler(), BackwardEuler(; substeps = 2), true),
+        (CrankNicolson(), CrankNicolson(), CrankNicolson(; newton = 2), true),
+        (BDF2(), BDF2(), BDF2(; substeps = 2), true),
+        (QuasiSteady(), QuasiSteady(), QuasiSteady(; inner = DeviceGMRES()), true),
+        (DevicePCG(), DevicePCG(), DevicePCG(; budget = 3), true),
+        (Multigrid(), Multigrid(), Multigrid(; cycles = 3), true),
+        (DeviceGMRES(), DeviceGMRES(), DeviceGMRES(; restart = 8), true)]
+    for (a, b, c, hasdefaults) in canon_cases
+        @test isequal(a, b) && LFP.canonical(a) == LFP.canonical(b)
+        @test !isequal(a, c) && LFP.canonical(a) != LFP.canonical(c)
+        hasdefaults && @test LFP.canonical(a) != repr(a)
+    end
+    @test LFP.canonical(LatticePDE.V(2, 2)) == LFP.canonical(LatticePDE.V(2, 2)) &&
+          LFP.canonical(LatticePDE.V(2, 2)) != LFP.canonical(LatticePDE.V(3, 3))
     # a compute type that is not one is refused, naming the keyword
     e = try
         ExplicitEuler(; compute_T = Int)

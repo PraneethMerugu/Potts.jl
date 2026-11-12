@@ -192,7 +192,7 @@ end
     # gap 0 allows touching boxes but never overlap: a denser packing keeps full volumes
     σ = _op(layout(Scattered(8, (2, 2); kinds = [:a], seed = 3, gap = 0), (8, 8)), ownership)
     @test maximum(σ) == 8 && all(c -> length(_sites(σ, c)) == 4, 1:8)
-    # deterministic in the seed (StableRNG): pinned lower corners, stable across Julia versions
+    # deterministic in the seed (StableRNG): the same seed gives the same corners, another differs
     corners(seed) = (σ = _op(layout(Scattered(3, (2, 2); kinds = [:a], seed), (30, 30)), ownership);
         [Tuple(minimum(_sites(σ, c))) for c in 1:3])
     @test corners(7) == corners(7)
