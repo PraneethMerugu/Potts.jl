@@ -7,41 +7,25 @@
 # times dt / 1.8 and at most 1.1 times it; half the count's substeps blow up.
 # Base (b41b73c1, ~/lpwork/f3b8-nc-base.log): every case below has no bound (`ρ = NaN`, the
 # automatic count refused), so every testset fails or errors.
-using LinearAlgebra: eigvals
-using LatticeFields: Problems as LFP
 
-@parameters fx_k = 2.0 fx_a = 3.0 fx_D = 0.1
-@variables fc(..) [bounds = (0.0, 1.0)] fu(..) fK(..) fo(..)
-fce, fue, fKe, foe = fc(t, x, y), fu(t, x, y), fK(t, x, y), fo(t, x, y)
-fdom(T = 1.0) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-fsys(eqs, bcs, dvs, ps = Any[fx_k, fx_a, fx_D]) = PDESystem(eqs, bcs, fdom(), [t, x, y], dvs, ps; name = :fb)
-# (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
-fown(sys, n = 32) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64)))
-fode(sys, n = 32) = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64))
-# the rate's Jacobian at `u` by finite differences of the `:ode` path's right side, dense
-function fjac(po, u)
-    f(v) = (du = similar(v); po.f(du, v, po.p, 0.0); du)
-    f0, m = f(u), length(u)
-    J = zeros(m, m)
-    for j in 1:m
-        v = copy(u)
-        v[j] += 1e-7
-        J[:, j] = (f(v) .- f0) ./ 1e-7
-    end
-    return J
-end
-fradius(po, u) = maximum(abs, eigvals(fjac(po, u)))
-# `steps` forward Euler steps of `h` from `u` on the `:ode` path's right side: the largest value
-function feuler(po, u, h, steps)
-    du = similar(u)
-    for _ in 1:steps
-        po.f(du, u, po.p, 0.0)
-        u = u .+ h .* du
-        all(isfinite, u) || return Inf
-    end
-    return maximum(abs, u)
+@testsetup module LP_bounds
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/problems.jl")
+include("shared/bounds.jl")
+include("shared/export_all.jl")
 end
 
+@testitem "F3-13: counts against the spectral radius; half the count blows up" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
 @testset "F3-13: counts against the spectral radius; half the count blows up" begin
     per = [fc(t, x, 0) ~ fc(t, x, 1), fc(t, 0, y) ~ fc(t, 1, y)]
     cases = [("(1 + x) Δ(c)", D(fce) ~ (1 + x) * Δ(fce), [fc(0, x, y) ~ 0.5], 0.5),
@@ -68,7 +52,9 @@ end
         @test feuler(po, copy(w), 2dt / n, 2n) > 1e3
     end
 end
+end
 
+@testitem "F3-13: aux fields, switches, declared intervals, site-varying velocities" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
 @testset "F3-13: aux fields, switches, declared intervals, site-varying velocities" begin
     s4 = 4 * 2 * 16^2                                         # Σ_a 4/h_a² on 16²
     b(sys) = (p = fown(sys, 16); p.stability(p.p))
@@ -100,12 +86,14 @@ end
     @test b(fsys([D(fue) ~ -Advect(Upwind1())([fce, 0.0], fue), D(fce) ~ 0.0 * fce], [fu(0, x, y) ~ 0.5, fc(0, x, y) ~ 0.5],
                  [fue, fce])) ≈ 2 * 1.0 * 16
 end
+end
 
 # Batch 5 review M1: a velocity that reads the advected field (Burgers, `Advect([c, 0], c)`) is
 # not bounded by its frozen velocity. The face-mean flux's Jacobian has the central part
 # `∂v/∂c · c`, so the rows are not diagonally dominant and no step is certified; the term stays
 # unseen, as in the implicit operator. Base 97045a1b (~/lpwork/b5r1-nc-m1.log): ρ = 64 (the
 # frozen bound 2 max|c|/h), count 18, and that count amplifies (max|1 + hλ| = 1.78 at c ≡ 1).
+@testitem "F3-13 M1: Burgers stays unseen; the frozen count amplifies" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
 @testset "F3-13 M1: Burgers stays unseen; the frozen count amplifies" begin
     per = [fc(t, x, 0) ~ fc(t, x, 1), fc(t, 0, y) ~ fc(t, 1, y)]
     burg = fsys([D(fce) ~ -Advect(Upwind1())([fce, 0.0], fce)], [fc(0, x, y) ~ 0.5 + 0.4 * sin(2π * x); per], [fce])
@@ -130,7 +118,9 @@ end
     @test SciMLBase.successful_retcode(s.retcode)
     @test 0.1 - 1e-6 <= minimum(minimum, s.u) && maximum(maximum, s.u) <= 0.91
 end
+end
 
+@testitem "F3-13: refusals and messages in the user's words" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
 @testset "F3-13: refusals and messages in the user's words" begin
     emsg(f) = try
         f(); ""
@@ -159,12 +149,14 @@ end
         ExplicitEuler(; dt = 0.001)))
     @test occursin("DivKGrad", m) && occursin("cannot see", m)
 end
+end
 
 # A condition's value with a derivative of the coordinates (`Dy(sin(x y))` on an `x` face): the
 # derivative is worked out before the face's own coordinate is substituted, which `substitute`
 # would not do inside a `Differential` (the steady.jl `_timed` pattern; coordinator ruling
 # 2026-10-26). Base f5641ce1 (~/lpwork/f3b8-dprobe-base.log): every case refused, "cannot lower
 # `Differential(y, 1)(x*y)`: a raw derivative that is not a flux form".
+@testitem "F3-13: a derivative of the coordinates in a condition's value" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
 @testset "F3-13: a derivative of the coordinates in a condition's value" begin
     Dx, Dy = Differential(x), Differential(y)
     @variables fk(..) [input = true]
@@ -216,6 +208,7 @@ end
     end
     @test occursin("reads a field of the state", m) && !occursin("periodic pair", m)
 end
+end
 
 # Batch 5 review M2: the declared interval is checked after the build. A constant face value
 # outside the bounds is refused at the build; `remake(; u0)`, `reinit!` and state writes take the
@@ -228,6 +221,7 @@ end
 # ends `Unstable` (the M2 testset's source drift). The reviewer's case: CrankNicolson and BDF2
 # undershoot 0 by about 2% next to a step (6a46731f, ~/lpwork/f3rev11/p2.log: `Unstable` at
 # window 2 with "-0.0207…" and "-0.0233…").
+@testitem "F3-13 r2 S1: an implicit leak warns and goes on" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
 @testset "F3-13 r2 S1: an implicit leak warns and goes on" begin
     RC = SciMLBase.ReturnCode
     us = PDESystem([D(fce) ~ 0.01 * Δ(fce) - 10 * fce + 0.5 * fce * (1 - fce)], [fc(0, x, y) ~ ifelse(x < 0.5, 1.0, 0.0)],
@@ -253,7 +247,9 @@ end
     @test_logs (:warn, r"left its declared bounds .* Widen `bounds`") (:warn, r"the implicit shift was clamped") match_mode = :any solve(gr,
         BackwardEuler(; dt = 0.5); saveat = 0.5)
 end
+end
 
+@testitem "F3-13 M2: declared intervals after the build" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
 @testset "F3-13 M2: declared intervals after the build" begin
     emsg(f) = try
         f(); ""
@@ -308,6 +304,7 @@ end
         ExplicitEuler(; dt = 0.1, substeps = 1); saveat = 0.1)
     @test s.retcode == RC.Unstable
 end
+end
 
 # F3-ghost (user OK 2026-10-26): at a Dirichlet face, a face coefficient that reads the field
 # takes the field's ghost value `2g − c`, the value the face rule gives the gradient, not the
@@ -316,6 +313,7 @@ end
 # `(0³ + 0³)/2 = 0` and nothing enters (base a40ff91b, ~/lpwork/b5r1-nc-ghost.log: c stays 0);
 # with the ghost value the front enters and spreads as a fine 1D reference with the exact face
 # value `K(1)` does. The automatic count bounds the coefficient over the ghost values too.
+@testitem "F3-ghost: a Dirichlet face coefficient reads the ghost value" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
 @testset "F3-ghost: a Dirichlet face coefficient reads the ghost value" begin
     RC = SciMLBase.ReturnCode
     T = 0.05
@@ -370,16 +368,19 @@ end
     @info "F3-ghost" maximum(prof) err ref[1:6] prof[1:6]
     @test maximum(prof) > 0.3 && err < 0.015                         # (measured 0.0068, max 0.977)
 end
+end
 
 # F3-25 (review of F3-25/F3-26): a read through a coefficient bounded over a declared interval is
 # an edge of the loop graph. `fc` reads `fo` by `5 fo` (no decay: not dominant); `fo` reads `fc`
 # only through its face coefficient `DivKGrad(:harmonic)(fc, fo)`, so the two read each other in a
 # loop and `fc`'s row is refused. With a coordinate coefficient instead, `fo` does not read `fc`:
 # one way, bounded. Base 1ec7b424: the loop was missed (a bound)
+@testitem "F3-25: a loop through a coefficient over a declared interval" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
 @testset "F3-25: a loop through a coefficient over a declared interval" begin
     ic = [fc(0, x, y) ~ 0.5, fo(0, x, y) ~ 0.0]
     loop = fown(fsys([D(fce) ~ 0.1 * Δ(fce) + 5 * foe, D(foe) ~ DivKGrad(:harmonic)(fce, foe) - foe], ic, [fce, foe]), 8)
     @test isnan(loop.stability(loop.p))
     one = fown(fsys([D(fce) ~ 0.1 * Δ(fce) + 5 * foe, D(foe) ~ DivKGrad(:harmonic)(1 + x, foe) - foe], ic, [fce, foe]), 8)
     @test isfinite(one.stability(one.p))
+end
 end

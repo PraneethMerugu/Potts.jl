@@ -6,59 +6,34 @@
 # `Trapezoid`. Base (69bef544, ~/lpwork/f3b4-nc10-base.log): `CrankNicolson` is not defined
 # (every testset errors). Negative controls (mutations of this tree, ~/lpwork/f3b4-nc10-*.log):
 # no damped start (nodamp), `r(uⁿ)` at tⁿ⁺¹ (stage).
-using OrdinaryDiffEqSDIRK: Trapezoid
 
-# the manufactured solution `u = e^{−t} sin(πx) sin(πy) + t` (its source, the face value `t`) on
-# [0, 1]², `dims` sites
-function mf_problem(dims)
-    src = -exp(-t) * sin(π * x) * sin(π * y) + 1 + 2π^2 * 0.1 * exp(-t) * sin(π * x) * sin(π * y)
-    faces = [bc(t, 0, y) ~ t, bc(t, 1, y) ~ t, bc(t, x, 0) ~ t, bc(t, x, 1) ~ t]
-    ms = bsys([D(bce) ~ 0.1 * Δ(bce) + src], [bc(0, x, y) ~ sin(π * x) * sin(π * y); faces], Any[]; T = 1.0, dvs = [bce])
-    return discretize(ms, LatticeDiscretization(Grid(dims); T = Float64))
-end
-mf_src(xx, yy, tt) = -exp(-tt) * sin(π * xx) * sin(π * yy) + 1 + 2π^2 * 0.1 * exp(-tt) * sin(π * xx) * sin(π * yy)
-mf_faces(tt) = Dict((a, s) => (:dir, tt) for a in 1:2, s in (-1, 1))
-# the hand rate `(L, b)` of the manufactured system on BDIMS at time `tt`
-mf_rate(tt) = hand_rate(; K = (x, y) -> 0.1, f = (xx, yy) -> mf_src(xx, yy, tt), faces = mf_faces(tt))
-# the errors and orders of `alg(dt)` against the semi-discrete solution (the `:ode` path, Tsit5
-# at 1e-12), `m²` sites
-function mf_orders(alg, dts; m = 32)
-    ref = solve(mf_problem((m, m)), Tsit5(); reltol = 1e-12, abstol = 1e-12).u[end]
-    pm = mf_problem((m, m))
-    es = [maximum(abs, vec(blast(solve(pm, alg(dt)))) .- ref) for dt in dts]
-    return es, log2.(es[1:(end - 1)] ./ es[2:end])
-end
-# the heat eigenmode `sin(πx) sin(πy)` with Dirichlet 0 faces (`n²` sites): the semi-discrete
-# solution is `e^{D λ t} u0`, so the error is the time error alone
-function eig_problem(n; T = 0.4)
-    dirs = [bc(t, 0, y) ~ 0.0, bc(t, 1, y) ~ 0.0, bc(t, x, 0) ~ 0.0, bc(t, x, 1) ~ 0.0]
-    sys = bsys([D(bce) ~ bD * Δ(bce)], [bc(0, x, y) ~ sin(π * x) * sin(π * y); dirs], [bD]; T, dvs = [bce])
-    p = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64))
-    λ = 2 * (2cos(π / n) - 2) * n^2
-    u0 = [sin(π * (i - 0.5) / n) * sin(π * (j - 0.5) / n) for i in 1:n, j in 1:n]
-    return p, λ, u0
-end
-# 1D step data on `n` sites with zero-flux faces, `k` windows of `h`
-@variables b1(..)
-function step1d(n, h; k = 10)
-    s = PDESystem([D(b1(t, x)) ~ Δ(b1(t, x))], [b1(0, x) ~ ifelse(x < 0.5, 1.0, 0.0)],
-        [t ∈ Interval(0.0, k * h), x ∈ Interval(0.0, 1.0)], [t, x], [b1(t, x)], Any[]; name = :s1)
-    return discretize(s, LatticeDiscretization(Grid((n,)); T = Float64))
-end
-tv1(u) = sum(abs, diff(vec(u)))
-# `1.5 c − rb ∂c/∂x = 0.2` at x = 1 (rb = −1: a positive diagonal, rb = +1 a negative one)
-function robin_sys(v)
-    @parameters crb = v
-    return PDESystem([D(bce) ~ 0.3 * Δ(bce) - 2 * bce + 1],
-        [bc(0, x, y) ~ x * y, 1.5 * bc(t, 1, y) - crb * Differential(x)(bc(t, 1, y)) ~ 0.2], bdom(1.0), [t, x, y], [bce],
-        [crb]; name = :crob), crb
-end
-# `p`'s state after each of `k` windows of `alg`
-function windows(p, alg, k)
-    ig = init(p, alg)
-    return [(step!(ig); copy(vec(ig[bce]))) for _ in 1:k], ig
+@testsetup module LP_cranknicolson
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/problems.jl")
+include("shared/bounds.jl")
+include("shared/silent.jl")
+include("shared/groups.jl")
+include("shared/families.jl")
+include("shared/odepath.jl")
+include("shared/precond.jl")
+include("shared/groups_coupling.jl")
+include("shared/implicit.jl")
+include("shared/robin_site.jl")
+include("shared/cranknicolson.jl")
+include("shared/export_all.jl")
 end
 
+@testitem "F3-10: CrankNicolson: order 2, the manufactured solution, the stages" setup = [LP_cranknicolson] tags = [:latticepde, :cranknicolson] begin
 @testset "F3-10: CrankNicolson: order 2, the manufactured solution, the stages" begin
     p, λ, u0 = eig_problem(16)
     err(dt) = maximum(abs, blast(solve(p, CrankNicolson(; dt, inner = BTIGHT))) .- exp(0.3λ * 0.4) .* u0)
@@ -85,7 +60,9 @@ end
     @test maximum(abs, us[2] .- want) < 1e-9 && maximum(abs, us[2] .- wrong) > 1e-3
     @test only(ig.runtimes).cache.newton == 1 && ig.retcode == ReturnCode.Success
 end
+end
 
+@testitem "F3-10: the damped start: step data, `reset!`, no extra rebuild" setup = [LP_cranknicolson] tags = [:latticepde, :cranknicolson] begin
 @testset "F3-10: the damped start: step data, `reset!`, no extra rebuild" begin
     # 1D step data at z = h/dx² = 400 (P1 (b)): the total variation after the first step stays
     # ≤ 1 (plain Crank–Nicolson rings, TV 2.86: the nodamp control)
@@ -120,7 +97,9 @@ end
     @test maximum(abs, vec(nd[bce]) .- vec(fresh[bce])) > 1e-6
     @test bwarm(ig) == 0                                       # the warm window allocates nothing
 end
+end
 
+@testitem "F3-10: SX-18: OrdinaryDiffEq's Trapezoid with the start replicated" setup = [LP_cranknicolson] tags = [:latticepde, :cranknicolson] begin
 @testset "F3-10: SX-18: OrdinaryDiffEq's Trapezoid with the start replicated" begin
     # the `:ode` path: two ImplicitEuler steps of h/2 (the damped start), then Trapezoid at h
     sx = bsys([D(bce) ~ bD * Δ(bce) - bk * bce + sin(3t) * x], [bc(0, x, y) ~ x * y, bc(t, 0, y) ~ 1.0], [bD, bk];
@@ -134,7 +113,9 @@ end
         CrankNicolson(; dt = h, inner = BTIGHT))
     @test maximum(abs, vec(blast(sb)) .- st.u[end]) < 1e-8
 end
+end
 
+@testitem "F3-10: counts, components, parameter writes, messages" setup = [LP_cranknicolson] tags = [:latticepde, :cranknicolson] begin
 @testset "F3-10: counts, components, parameter writes, messages" begin
     # the growth rule with the shift 2/h: `+ g c` needs n ≥ ⌈2 · ½ · dt g⌉ (Backward Euler: ⌈2 dt g⌉)
     pg = bown(bsys([D(bce) ~ bD * Δ(bce) + bk * bce], [bc(0, x, y) ~ x], [bD, bk]))
@@ -187,12 +168,14 @@ end
         LatticeDiscretization(Grid(BDIMS); T = Float16))
     @test startswith(e(() -> init(p16, CrankNicolson(; dt = 0.1))), "CrankNicolson: the field `bc` holds Float16 and the problem's value type is Float16")
 end
+end
 
 # Review r2 S2: in front end B a group's count reads the group's own fields: the damped start
 # rule of CrankNicolson sees another group's field (it moves between windows, so the group's
 # data jump) and the growth rule sees only the group's rows. Base (773f0957,
 # ~/lpwork/f3b5-nc-r2-s2.log): the other-group read counts 1 (the jump missed) and the growth
 # of `bo` raises both groups' counts to 2.
+@testitem "F3-10/11 (r2 S2): B counts read the group's own fields" setup = [LP_cranknicolson] tags = [:latticepde, :cranknicolson] begin
 @testset "F3-10/11 (r2 S2): B counts read the group's own fields" begin
     rd = bsys([D(bce) ~ 0.3 * Δ(bce) - bce + boe, D(boe) ~ 0.3 * Δ(boe) - boe], [bc(0, x, y) ~ 0.0, bo(0, x, y) ~ 1.0], Any[];
         T = 0.4, dvs = [bce, boe])
@@ -206,4 +189,5 @@ end
     @test [r.n for r in ig.runtimes] == [1, 2]
     ig.ps[bk] = 4.0                                    # (a write: the counts again, `⌈2 · 0.5 · 4⌉`)
     @test [r.n for r in ig.runtimes] == [1, 4]
+end
 end

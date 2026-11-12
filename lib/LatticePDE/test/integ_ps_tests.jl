@@ -4,12 +4,31 @@
 # `integ[p]` and `integ[p] = v` of a parameter or table are errors that give the `integ.ps`
 # route. Base (244d58e7): `ig.ps` a FieldError; `integ[Dk] = values` wrote the table and
 # `integ[k]` read the parameter.
+
+@testsetup module LP_integ_ps
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/problems.jl")
+include("shared/silent.jl")
+include("shared/groups.jl")
 psmsg(f) = try
     f(); ""
 catch e
     sprint(showerror, e)
 end
+include("shared/export_all.jl")
+end
 
+@testitem "F2-13: integ.ps reads and writes; integ[p] gives the route" setup = [LP_integ_ps] tags = [:latticepde, :integ_ps] begin
 @testset "F2-13: integ.ps reads and writes; integ[p] gives the route" begin
     @parameters Dp[1:2] = [1.0, 2.0] kp = 0.5 mvp = 1.0
     pdom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
@@ -63,12 +82,14 @@ end
     igs.ps[kp] = 0.1
     @test cs.resets == 2
 end
+end
 
 # F2-14 (FE-18) in front end B: a parameter's declared `bounds` (MTK metadata) holds at every
 # write, refused at the write as in front end A: `setp`, `integ.ps`, owned `remake`,
 # `discretize(…; p)`, ODE `remake` and the ODE integrator's `setp` (nothing changes). The bound
 # prints as A prints it. Base: the metadata was ignored (a write of 3 ran); review S1 of batch 5:
 # `remake` and the ODE paths took the value and refused it only at `init`/`solve`/`step!`.
+@testitem "F2-14: a parameter's declared bounds hold in B" setup = [LP_integ_ps] tags = [:latticepde, :integ_ps] begin
 @testset "F2-14: a parameter's declared bounds hold in B" begin
     @parameters kb2 = 0.5 [bounds = (0, 2)]
     pdom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
@@ -89,11 +110,13 @@ end
     setp(oi, kb2)(oi, 1.0)
     @test oi.ps[kb2] == 1.0
 end
+end
 
 # Review M2/S4 of batch 5: a bound message names the user's parameter (never a slot `#i`) and
 # blames the parameter written: base parameters are checked first, then computed ones, and a
 # computed parameter's message names the inputs to change (base: "parameter `#2` = 6.0 …" for
 # a write of `k = 3.0`)
+@testitem "F2-15: bound messages name the parameter written, then the computed ones" setup = [LP_integ_ps] tags = [:latticepde, :integ_ps] begin
 @testset "F2-15: bound messages name the parameter written, then the computed ones" begin
     @parameters kbd = 0.5 [bounds = (0, 2)]
     @parameters kbd2 = 2kbd [bounds = (0, 3)]
@@ -109,4 +132,5 @@ end
     @test occursin("`kbd2` is computed from `kbd`", psmsg(() -> remake(p; p = [kbd => 1.8])))
     o = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64))
     @test occursin("`kbd2` = 3.6", psmsg(() -> remake(o; p = [kbd => 1.8])))
+end
 end

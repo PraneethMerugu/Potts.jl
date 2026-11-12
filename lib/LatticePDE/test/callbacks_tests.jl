@@ -4,11 +4,34 @@
 # interpolation of its window's ends (Q2 (a)); `save_idxs` saves some fields; any other keyword
 # is an `ArgumentError` naming it. Negative control at the F4-04 commit (~/lpwork/f4b5/nc05.log):
 # "unsupported keyword argument" (`callback`, `tstops`, `save_idxs`), and `saveat = 0.015` refused.
-using DiffEqCallbacks: PresetTimeCallback, PeriodicCallback
 
-cbsys(T = 1.0) = bsys([D(bce) ~ bD * Δ(bce) - bk * bce + x], [bc(0, x, y) ~ x * y], [bD, bk]; T, dvs = [bce])
-cbprob(T = 1.0) = discretize(cbsys(T), LatticeDiscretization(Grid((8, 8)); T = Float64))
+@testsetup module LP_callbacks
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/problems.jl")
+include("shared/bounds.jl")
+include("shared/silent.jl")
+include("shared/groups.jl")
+include("shared/families.jl")
+include("shared/odepath.jl")
+include("shared/precond.jl")
+include("shared/groups_coupling.jl")
+include("shared/implicit.jl")
+include("shared/robin_site.jl")
+include("shared/callbacks.jl")
+include("shared/export_all.jl")
+end
 
+@testitem "F4-05: a callback that writes a parameter equals two chained solves (EE, BE)" setup = [LP_callbacks] tags = [:latticepde, :callbacks] begin
 @testset "F4-05: a callback that writes a parameter equals two chained solves (EE, BE)" begin
     p = cbprob()
     for alg in (ExplicitEuler(; dt = 0.01), BackwardEuler(; dt = 0.01, inner = BTIGHT))
@@ -24,7 +47,9 @@ cbprob(T = 1.0) = discretize(cbsys(T), LatticeDiscretization(Grid((8, 8)); T = F
     solve(q, ExplicitEuler(; dt = 0.1))
     @test hits ≈ 0.1:0.1:1.0
 end
+end
 
+@testitem "F4-05: PresetTimeCallback off the grid, PeriodicCallback, tstops" setup = [LP_callbacks] tags = [:latticepde, :callbacks] begin
 @testset "F4-05: PresetTimeCallback off the grid, PeriodicCallback, tstops" begin
     p = cbprob()
     hit = Float64[]
@@ -44,7 +69,9 @@ end
     end
     @test 0.0333 in seen
 end
+end
 
+@testitem "F4-05: saveat off the grid is the linear interpolation of the windows' ends; save_idxs; keywords" setup = [LP_callbacks] tags = [:latticepde, :callbacks] begin
 @testset "F4-05: saveat off the grid is the linear interpolation of the windows' ends; save_idxs; keywords" begin
     p = cbprob(0.3)
     s = solve(p, ExplicitEuler(; dt = 0.01); saveat = 0.015)
@@ -71,4 +98,5 @@ end
     @test ig.save == [0.0, 1e6]
     ig = init(remake(p; tspan = (0.0, 1e6)), ExplicitEuler(; dt = 1e-4); saveat = [0.5, 0.5 + 1e-14, 2.0])
     @test ig.save == [0.0, 0.5, 2.0, 1e6]
+end
 end

@@ -4,28 +4,24 @@
 # with `getp`, `prob.ps`, `sol.ps`. Negative controls: the base (3ed05c3b) ran each new
 # claim against its raw parameter vector; the results it gave are in the comments.
 # This file at the base: 3 pass, 2 fail, 6 errors (every testset fails).
-using SciMLBase: SciMLBase, remake
-using SymbolicIndexingInterface: getp, setp
-using SciMLStructures: SciMLStructures, Tunable, Constants, Discrete
-using ForwardDiff: ForwardDiff
-using OrdinaryDiffEqTsit5: Tsit5
 
-@parameters Dw[1:2] = [0.5, 1.0] kw0 = 0.2
-@variables wk(..)::Int32 [input = true]
-wke = wk(t, x, y)
-wsys() = PDESystem([D(ce) ~ at(Dw, wke) * Δ(ce) - kw0 * ce],
-    [c(0, x, y) ~ x * y, Differential(x)(c(t, 0, y)) ~ 0.0, Differential(x)(c(t, 1, y)) ~ 0.0,
-        c(t, x, 0) ~ c(t, x, 1)],
-    [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [ce, wke], [Dw, kw0]; name = :w)
-const WK1 = Int32[i <= 4 ? 1 : 2 for i in 1:8, j in 1:8]
-const WK2 = Int32[j <= 4 ? 2 : 1 for i in 1:8, j in 1:8]
-wdisc() = LatticeDiscretization(Grid((8, 8)); T = Float64)
-wmsg(f) = try
-    f(); ""
-catch e
-    sprint(showerror, e)
+@testsetup module LP_params
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/params.jl")
+include("shared/export_all.jl")
 end
 
+@testitem "F4-00: integ.ps writes give the next window of a restart (owned and Tsit5)" setup = [LP_params] tags = [:latticepde, :params] begin
 @testset "F4-00: integ.ps writes give the next window of a restart (owned and Tsit5)" begin
     # the owned integrator: a scalar, a table and an input written through `integ.ps`, then one
     # window against a fresh problem started from the written values
@@ -70,7 +66,9 @@ end
     # a refused input write changes nothing (a value that is no kind of an Int32 map)
     @test occursin("integer values", wmsg(() -> (oi.ps[wke] = fill(0.5, 8, 8)))) && oi.ps[wke] == WK2
 end
+end
 
+@testitem "F4-00: remake with inputs, tables and u0 pairs on the ODE problem" setup = [LP_params] tags = [:latticepde, :params] begin
 @testset "F4-00: remake with inputs, tables and u0 pairs on the ODE problem" begin
     o = discretize(wsys(), wdisc(); inputs = [wke => WK1])
     # inputs through `remake` reach an OrdinaryDiffEq solve (base: SciML's "Unrecognized keyword
@@ -97,7 +95,9 @@ end
     # an unknown input is named with the inputs
     @test occursin("its inputs: `wk`", wmsg(() -> remake(o; inputs = [:nope => WK2])))
 end
+end
 
+@testitem "F4-00: SciMLStructures portions of LatticeParameters" setup = [LP_params] tags = [:latticepde, :params] begin
 @testset "F4-00: SciMLStructures portions of LatticeParameters" begin
     o = discretize(wsys(), wdisc(); inputs = [wke => WK1])
     lp = o.p
@@ -120,7 +120,9 @@ end
     q2 = SciMLStructures.replace(Discrete(), lp, [Float64.(vec(WK2)); 3.0])
     @test q2.tick[] == 3 && reshape(last(only(q2.inputs)), 8, 8) == WK2 && lp.tick[] == 0
 end
+end
 
+@testitem "F4-00: a table written on an OrdinaryDiffEq integrator is checked at the next call" setup = [LP_params] tags = [:latticepde, :params] begin
 @testset "F4-00: a table written on an OrdinaryDiffEq integrator is checked at the next call" begin
     o = discretize(wsys(), wdisc(); inputs = [wke => WK1])
     oi = init(o, Tsit5())
@@ -135,7 +137,9 @@ end
     step!(oj)
     @test oj.t > 0
 end
+end
 
+@testitem "F4-00 (review 5): a plain parameter vector holds no inputs, which are not read as zero" setup = [LP_params] tags = [:latticepde, :params] begin
 @testset "F4-00 (review 5): a plain parameter vector holds no inputs, which are not read as zero" begin
     o = discretize(wsys(), wdisc(); inputs = [wke => WK1])
     raw = SciMLBase.ODEProblem(o.f, o.u0, o.tspan, copy(o.p.values))
@@ -143,4 +147,5 @@ end
     e = wmsg(() -> solve(raw, Tsit5()))
     @test occursin("plain vector", e) && occursin("`wk`", e)
     @test SciMLBase.successful_retcode(solve(SciMLBase.ODEProblem(o.f, o.u0, o.tspan, o.p), Tsit5()))   # control
+end
 end

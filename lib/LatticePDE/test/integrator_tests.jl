@@ -6,6 +6,33 @@
 # (~/lpwork/f4b5/nc03.log): every testset errors (`step!(integ, dt, true)` and the methods are
 # MethodErrors, `integ.t` is the vector of saved times, a time span off the grid is refused).
 
+@testsetup module LP_integrator
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/problems.jl")
+include("shared/bounds.jl")
+include("shared/silent.jl")
+include("shared/groups.jl")
+include("shared/families.jl")
+include("shared/odepath.jl")
+include("shared/precond.jl")
+include("shared/groups_coupling.jl")
+include("shared/implicit.jl")
+include("shared/robin_site.jl")
+include("shared/cranknicolson.jl")
+include("shared/export_all.jl")
+end
+
+@testitem "F4-03: integ.t, integ.u and a shortened window, explicit (against a run at dt/2)" setup = [LP_integrator] tags = [:latticepde, :integrator] begin
 @testset "F4-03: integ.t, integ.u and a shortened window, explicit (against a run at dt/2)" begin
     p, λ, u0 = eig_problem(16)
     ig = init(p, ExplicitEuler(; dt = 0.01))
@@ -29,7 +56,9 @@
     f = solve(remake(p; tspan = (0.0, 0.395)), ExplicitEuler(; dt = 0.005))
     @test s.t == [0.0, 0.395] && maximum(abs, s.u[end] .- f.u[end]) < 1e-12
 end
+end
 
+@testitem "F4-03: a shortened window of Backward Euler equals a chained run; BDF2 keeps order 2" setup = [LP_integrator] tags = [:latticepde, :integrator] begin
 @testset "F4-03: a shortened window of Backward Euler equals a chained run; BDF2 keeps order 2" begin
     p, λ, u0 = eig_problem(16)
     ib = init(p, BackwardEuler(; dt = 0.01, inner = BTIGHT))
@@ -50,7 +79,9 @@ end
     os = log2.(es[1:(end - 1)] ./ es[2:end])
     @test all(o -> abs(o - 2) < 0.15, os) || (println("F4-03 BDF2 orders ", os, " ", es); false)
 end
+end
 
+@testitem "F4-03: derivative_discontinuity! re-damps Crank–Nicolson; terminate!, add_tstop!, savevalues!" setup = [LP_integrator] tags = [:latticepde, :integrator] begin
 @testset "F4-03: derivative_discontinuity! re-damps Crank–Nicolson; terminate!, add_tstop!, savevalues!" begin
     pe, _, _ = eig_problem(16)
     ig = init(pe, CrankNicolson(; dt = 0.05, inner = BTIGHT))
@@ -77,4 +108,5 @@ end
     @test SciMLBase.done(ig) && ig.retcode == ReturnCode.Terminated
     s = solve!(ig)
     @test s.retcode == ReturnCode.Terminated && s.t[end] ≈ 0.15
+end
 end

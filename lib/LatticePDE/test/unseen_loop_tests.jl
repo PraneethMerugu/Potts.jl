@@ -7,27 +7,41 @@
 # trigger reads each unseen term's own reads; negative control at c0673406
 # (~/lpwork/f4-13b/nc-13c2.log): an out-of-loop read warns, the conservative chain has the
 # loop wording, a self-only term is listed, an aux read's route names the aux.
-using Logging: Logging
-using Test: collect_test_logs
 
-@parameters sF = 0.035 sk = 0.065
-@variables su(..) sv(..) bu(..) [bounds = (0.0, 1.0)] bv(..) [bounds = (0.0, 1.0)]
-sue, sve, bue, bve = su(t, x, y), sv(t, x, y), bu(t, x, y), bv(t, x, y)
-sdom(T) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-# Gray-Scott, periodic: `u v²` is a term the bound cannot see
-function gsys(u, v, ue, ve; name)
-    PDESystem([D(ue) ~ 2e-5 * Δ(ue) - ue * ve^2 + sF * (1 - ue), D(ve) ~ 1e-5 * Δ(ve) + ue * ve^2 - (sF + sk) * ve],
-        [u(0, x, y) ~ 1.0 - 0.5x, v(0, x, y) ~ 0.25x, u(t, 0, y) ~ u(t, 1, y), u(t, x, 0) ~ u(t, x, 1),
-         v(t, 0, y) ~ v(t, 1, y), v(t, x, 0) ~ v(t, x, 1)], sdom(4.0), [t, x, y], [ue, ve], [sF, sk]; name)
+@testsetup module LP_unseen_loop
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/problems.jl")
+include("shared/bounds.jl")
+include("shared/silent.jl")
+include("shared/groups.jl")
+include("shared/params.jl")
+include("shared/families.jl")
+include("shared/odepath.jl")
+include("shared/precond.jl")
+include("shared/groups_coupling.jl")
+include("shared/implicit.jl")
+include("shared/robin_site.jl")
+include("shared/grids.jl")
+include("shared/maskswitch.jl")
+include("shared/coupled.jl")
+include("shared/numbers.jl")
+include("shared/coarse.jl")
+include("shared/report.jl")
+include("shared/unseen_loop.jl")
+include("shared/export_all.jl")
 end
-# the loop warnings a call gives (the other warnings, such as each unseen term's, are left out)
-function loopwarns(f)
-    logs, _ = collect_test_logs(f; min_level = Logging.Warn)
-    return [string(l.message) for l in logs if occursin("read one another in a loop through terms", string(l.message)) ||
-                                                    occursin("counts as reading every group", string(l.message))]
-end
-swarm(ig) = (step!(ig); step!(ig); @allocated step!(ig))
 
+@testitem "F4-13c: a loop coupled only through unseen terms warns once, and runs as before" setup = [LP_unseen_loop] tags = [:latticepde, :unseen_loop] begin
 @testset "F4-13c: a loop coupled only through unseen terms warns once, and runs as before" begin
     p = discretize(gsys(su, sv, sue, sve; name = :gs13c), LatticeDiscretization(Grid((12, 12))))
     alg = FieldGroups(sue => ExplicitEuler(; dt = 1.0, substeps = 4), sve => BackwardEuler(; dt = 1.0))
@@ -51,7 +65,9 @@ swarm(ig) = (step!(ig); step!(ig); @allocated step!(ig))
     @test occursin("group 1: loop [1, 2], κ = dt · rate = 1.0 × 0.0 = 0.0 (≤ 1); κ covers only the cross terms the bound " *
                    "sees (unseen: su: -su*(sv^2), sv: su*(sv^2))", rep)
 end
+end
 
+@testitem "F4-13c: no warning for one group, for a loop the bound sees, or with intervals that let it see the terms" setup = [LP_unseen_loop] tags = [:latticepde, :unseen_loop] begin
 @testset "F4-13c: no warning for one group, for a loop the bound sees, or with intervals that let it see the terms" begin
     # one group: no loop between groups
     p1 = discretize(gsys(su, sv, sue, sve; name = :gs13c1), LatticeDiscretization(Grid((10, 10))))
@@ -74,7 +90,9 @@ end
     κ = parse(Float64, match(r"group 1: loop \[1, 2\], κ = dt · rate = 0\.25 × [0-9.e-]+ = ([0-9.e-]+)", rb).captures[1])
     @test κ > 0 && !occursin("κ covers only", rb) && init(pb, algb) isa LFP.FieldIntegrator
 end
+end
 
+@testitem "F4-13c (review): the trigger reads each unseen term's own reads" setup = [LP_unseen_loop] tags = [:latticepde, :unseen_loop] begin
 @testset "F4-13c (review): the trigger reads each unseen term's own reads" begin
     sdisc = LatticeDiscretization(Grid((8, 8)))
     per(fs...) = reduce(vcat, [[f(t, 0, y) ~ f(t, 1, y), f(t, x, 0) ~ f(t, x, 1)] for f in fs])
@@ -113,4 +131,5 @@ end
         [[xa(0, x, y) ~ x, xb(0, x, y) ~ 1.0]; per(xa, xb)], sdom(0.1), [t, x, y], [xae, xbe, xKe], Num[]; name = :aux13c), sdisc)
     wx = loopwarns(() -> init(px, FieldGroups(xae => ExplicitEuler(; dt = 0.01, substeps = 4), xbe => BackwardEuler(; dt = 0.01))))
     @test length(wx) == 1 && endswith(wx[1], "declare intervals (`bounds = (lo, hi)`) for `xa`, `xb`, so the bound sees them")
+end
 end

@@ -6,96 +6,32 @@
 # solution, a manufactured solution, a stiff case and OrdinaryDiffEq's `ImplicitEuler`.
 # Base (437a84ef, ~/lpwork/f3b3-nc-base.log): `BackwardEuler` is not defined (every testset
 # errors); the negative controls below are mutations of this tree (~/lpwork/f3b3-nc-*.log).
-using LinearAlgebra: I, norm, lu
-using OrdinaryDiffEqSDIRK: OrdinaryDiffEqSDIRK, ImplicitEuler
-using OrdinaryDiffEqTsit5: Tsit5
-using LatticeFields: Problems as LFB, Solvers as LSB
-using LatticeFields.IR: fieldid, HEX
 
-@parameters bD = 0.3 bk = 2.0 bW[1:2] = [0.5, 2.0] bg = 0.5
-@variables bc(..) bq(..)::Int32 [input = true] bo(..)
-bce, bqe, boe = bc(t, x, y), bq(t, x, y), bo(t, x, y)
-const BDIMS = (8, 6)
-const BKIND = Int32[(i + j) % 3 for i in 1:8, j in 1:6]
-bdom(T = 1.0) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-bsys(eqs, bcs, ps; T = 1.0, dvs = [bce, bqe]) = PDESystem(eqs, bcs, bdom(T), [t, x, y], dvs, ps; name = :be)
-# (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
-bown(sys; dims = BDIMS, T = Float64, kw...) =
-    LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims); T, kw...); inputs = [bqe => BKIND]))
-const BTIGHT = DevicePCG(; rtol = 1e-12, budget = 64)
-bwarm(ig) = (step!(ig); @allocated step!(ig))              # (a function barrier)
-blast(s) = s[bce, length(s.t)]                             # the last save
-
-# The hand BE matrix of a cell-centered grid on [0, 1]² (`dims` sites, cell centers
-# `(i − ½) h`): the rate `r(u)_i = m_i Σ_a Σ_± w (u_nb − u_i)/h_a² − k_i u_i + f_i`, with the
-# harmonic face `w = 2K_i K_nb/(K_i + K_nb)` (`K` at the neighbor's center, a ghost center at a
-# face of the box). A box face takes `faces[(a, side)]`: `(:dir, g)` (ghost `2g − u_i`) or
-# `(:robin, α, β, g)` for `α u + β ∂u/∂x_a = g` as written (ghost from `α (u_g + u_i)/2 +
-# β side (u_g − u_i)/h = g`), `α`, `β`, `g` numbers or functions of the face point; no entry is zero
-# flux. `hand_rate` returns the rate `(L, b)`; `be_hand` `u` of `(I − h L) u = u0 + h b`, the
-# masked sites holding `mval`.
-function be_hand(u0, h; mask = nothing, mval = nothing, kw...)
-    L, b = hand_rate(; kw...)
-    A = I - h * L
-    rhs = u0 .+ h .* b
-    if mask !== nothing
-        for r in eachindex(rhs)
-            mask[r] || continue
-            A[r, :] .= 0
-            A[r, r] = 1
-            rhs[r] = mval[r]
-        end
-    end
-    return A \ rhs
-end
-function hand_rate(; dims = BDIMS, K = (x, y) -> 1.0, m = (i, j) -> 1.0, k = (x, y) -> 0.0, f = (x, y) -> 0.0, faces = Dict())
-    nx, ny = dims
-    hs = (1 / nx, 1 / ny)
-    lin(i, j) = i + (j - 1) * nx
-    ctr(i, j) = ((i - 0.5) * hs[1], (j - 0.5) * hs[2])
-    n = nx * ny
-    L = zeros(n, n)
-    b = zeros(n)
-    for j in 1:ny, i in 1:nx
-        r = lin(i, j)
-        xi, yi = ctr(i, j)
-        for a in 1:2, s in (-1, 1)
-            ii, jj = a == 1 ? (i + s, j) : (i, j + s)
-            Kn = K(ctr(ii, jj)...)
-            Ki = K(xi, yi)
-            w = Ki + Kn == 0 ? 0.0 : 2Ki * Kn / (Ki + Kn)
-            c = m(i, j) * w / hs[a]^2
-            if 1 <= ii <= nx && 1 <= jj <= ny
-                L[r, lin(ii, jj)] += c
-                L[r, r] -= c
-            elseif haskey(faces, (a, s))
-                fc = faces[(a, s)]
-                # the face point, and the ghost u_g = p u_i + q
-                fp = a == 1 ? (s < 0 ? 0.0 : 1.0, yi) : (xi, s < 0 ? 0.0 : 1.0)
-                ev(v) = v isa Function ? v(fp...) : v
-                g = ev(fc[end])
-                # (F4-12b: α and β may vary along the face, functions of the face point)
-                p, q = fc[1] === :dir ? (-1.0, 2g) :
-                       (al = ev(fc[2]); bl = ev(fc[3]) * s / hs[a]; den = al / 2 + bl; ((bl - al / 2) / den, g / den))
-                L[r, r] += c * (p - 1)
-                b[r] += c * q
-            end
-        end
-        L[r, r] -= k(xi, yi)
-        b[r] += f(xi, yi)
-    end
-    return L, b
-end
-bxs() = [(i - 0.5) / BDIMS[1] for i in 1:BDIMS[1], j in 1:BDIMS[2]]
-bys() = [(j - 0.5) / BDIMS[2] for i in 1:BDIMS[1], j in 1:BDIMS[2]]
-# one window of `alg` from the problem's start state
-function be_window(prob, alg)
-    ig = init(prob, alg)
-    u0 = copy(vec(ig[bce]))
-    step!(ig)
-    return ig, u0, vec(ig[bce])
+@testsetup module LP_implicit
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/problems.jl")
+include("shared/bounds.jl")
+include("shared/silent.jl")
+include("shared/groups.jl")
+include("shared/families.jl")
+include("shared/odepath.jl")
+include("shared/precond.jl")
+include("shared/groups_coupling.jl")
+include("shared/implicit.jl")
+include("shared/export_all.jl")
 end
 
+@testitem "F3-07: one BackwardEuler window equals the hand BE matrix" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "F3-07: one BackwardEuler window equals the hand BE matrix" begin
     h = 0.05
     alg = BackwardEuler(; dt = h, inner = BTIGHT)
@@ -111,7 +47,9 @@ end
     @test all(u[vec(BKIND .== 2)] .== 1.5)                     # the mask value written back (SD-11)
     @test rt.totals.solves == 1                                # one solve per substep (exact operator)
 end
+end
 
+@testitem "F3-07: the solver capabilities in a BackwardEuler group (F3-05 in B)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "F3-07: the solver capabilities in a BackwardEuler group (F3-05 in B)" begin
     h = 0.05
     xs, ys = bxs(), bys()
@@ -174,6 +112,9 @@ end
     @test maximum(abs, vec(ig[bce]) .- want) < 1e-10
     @test bwarm(ig) == 0
 end
+end
+
+@testitem "F3-07: SiteDiffusion rows (row scaling; m = 0 rows in two stages)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "F3-07: SiteDiffusion rows (row scaling; m = 0 rows in two stages)" begin
     h = 0.05
     # `at(W, q) Δ(c)`: the row scaled by 1/m keeps the faces symmetric (q = 0 reads 0: m = 0 rows)
@@ -203,7 +144,9 @@ end
     @test !rt.cache.op.rows[1].exact && !isempty(rt.cache.op.rows[1].inexact)
     @test init(p, BackwardEuler(; dt = h)).runtimes[1].cache.newton == 10 && init(p, BackwardEuler(; dt = h)).runtimes[1].cache.seen
 end
+end
 
+@testitem "F3-07: order 1, the manufactured solution, the stage tⁿ⁺¹" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "F3-07: order 1, the manufactured solution, the stage tⁿ⁺¹" begin
     # the discrete sine is an eigenvector of the lattice Laplacian with Dirichlet 0 faces: the
     # semi-discrete solution is `e^{D λ t} u0`, so the BE error is the time error alone
@@ -241,7 +184,9 @@ end
     wrong = be_hand(u0, h; K = (x, y) -> 0.1, f = (xx, yy) -> s1(xx, yy, 0.0), faces = fc(0.0))
     @test maximum(abs, u .- want) < 1e-9 && maximum(abs, u .- wrong) > 1e-2
 end
+end
 
+@testitem "F3-07: a stiff case, OrdinaryDiffEq's ImplicitEuler (SX-18)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "F3-07: a stiff case, OrdinaryDiffEq's ImplicitEuler (SX-18)" begin
     # D h/dx² = 10⁴: BackwardEuler stays bounded and monotone; ExplicitEuler with one substep
     # (forced) blows up (`Unstable`)
@@ -267,7 +212,9 @@ end
         BackwardEuler(; dt = 0.05, inner = BTIGHT))
     @test maximum(abs, vec(blast(sb)) .- so.u[end]) < 1e-8
 end
+end
 
+@testitem "F3-07: newton = nothing, the operator built only for implicit groups (S12)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "F3-07: newton = nothing, the operator built only for implicit groups (S12)" begin
     p = bown(bsys([D(bce) ~ bD * Δ(bce) - bk * bce], [bc(0, x, y) ~ x], [bD, bk]))
     b0 = LatticePDE.OPERATOR_BUILDS[]
@@ -293,7 +240,9 @@ end
     pg = bown(bsys([D(bce) ~ bD * Δ(bce) + bk * bce], [bc(0, x, y) ~ x], [bD, bk]))
     @test init(pg, BackwardEuler(; dt = 0.5)).substeps == 2 && init(pg, BackwardEuler(; dt = 0.5, substeps = 5)).substeps == 5
 end
+end
 
+@testitem "F3-07: messages, the `:ode` path, `show`" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "F3-07: messages, the `:ode` path, `show`" begin
     e(f) = try
         f(); ""
@@ -332,20 +281,9 @@ end
         LatticeDiscretization(Grid(BDIMS); T = Float64))
     @test occursin("a map program is stepped by ExplicitMap()", e(() -> init(pm, BackwardEuler(; dt = 1.0))))
 end
-
-# R1 (F3-06 review): a group whose step ends `StalledSuccess` (a rounding floor, accepted) does
-# not stop the step: the later groups run. A failure still stops it. Base (437a84ef,
-# ~/lpwork/f3b3-nc-r1.log): `go` does not move after a stalled `gc` step.
-struct StallStub <: LFP.FieldAlgorithm
-    dt::Float64
-    code::ReturnCode.T
 end
-LFP.nbuffers(::StallStub) = 2
-LFP.update_key(::StallStub) = :euler
-LFP.update_rule(::StallStub) = LFP.update_rule(ExplicitEuler())
-LFP.alg_cache(a::StallStub, group, store) = Ref(a.code)
-LFP.step_retcode!(c::Base.RefValue{ReturnCode.T}, rt) = c[]
-LFP.substeps(::LFP.FieldProblem, ::StallStub, p = nothing; tables = nothing, inputs = nothing, stability = nothing, fields = nothing) = 1
+
+@testitem "R1: StalledSuccess does not skip the later groups" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "R1: StalledSuccess does not skip the later groups" begin
     p = gown(gsys())
     for (code, moves) in ((ReturnCode.StalledSuccess, true), (ReturnCode.ConvergenceFailure, false))
@@ -355,28 +293,9 @@ LFP.substeps(::LFP.FieldProblem, ::StallStub, p = nothing; tables = nothing, inp
         @test (ig[goe] != o0) == moves && ig.retcode == code
     end
 end
-
-# F3-09a (F3 design §3.4): a local nonlinear term `f(c)` (offset 0, its own field only) enters
-# the operator as `−∂f/∂c` at the iterate (`Symbolics.derivative`), so one Newton step per
-# substep keeps order 1; a switch `a max(c − c_T, 0)` takes `newton = 2` (one flip pass, S1);
-# a growth the count rule cannot see is clamped (the status word's cause bit 8), not a failure.
-# Base (f078eb2e, ~/lpwork/f3b3-nc-09a-base.log): these terms are left in the residual (a
-# defect correction, `newton = 4`), and the cache has no `iterate` (the testsets error).
-# Negative control (mutation, ~/lpwork/f3b3-nc-09a-noderiv.log): the derivative left out of the
-# shift (`push!(jterms, dj)` dropped in LatticePDE's `_build_operator`; the row stays exact, one
-# Newton step) fails the stiff Michaelis–Menten case (an explicit `h ∂f/∂c` up to 32).
-# The orders against the semi-discrete solution (the `:ode` path, Tsit5 at 1e-12), `n²` sites
-function nl_orders(rhs, ic; T, dts, newton = nothing, n = 16)
-    sys = PDESystem([D(bce) ~ rhs], [bc(0, x, y) ~ ic], bdom(T), [t, x, y], [bce], Any[]; name = :nl)
-    ref = solve(discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64)), Tsit5();
-        reltol = 1e-12, abstol = 1e-12).u[end]
-    pb = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64))
-    us = [vec(blast(solve(pb, BackwardEuler(; dt, inner = BTIGHT, newton)))) for dt in dts]
-    es = [maximum(abs, u .- ref) for u in us]
-    return es, log2.(es[1:(end - 1)] ./ es[2:end]), pb, us
 end
-const NLIC = 0.2 + 0.6 * x * y
 
+@testitem "F3-09a: local nonlinear rows: one Newton step keeps order 1" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "F3-09a: local nonlinear rows: one Newton step keeps order 1" begin
     dts = [0.02 / 2^k for k in 0:3]
     # logistic growth `3 c (1 − c)`
@@ -394,7 +313,9 @@ const NLIC = 0.2 + 0.6 * x * y
     es, o, _, _ = nl_orders(0.05 * Δ(bce) - 40 * bce / (0.025 + bce) + 20 + 10 * sin(10t), NLIC; T = 0.3, dts)
     @test all(q -> q > 0.9, o) && maximum(es) < 1e-3     # (measured 5.7e-4 … 7.9e-7)
 end
+end
 
+@testitem "F3-09a: the switch: newton = 2 by default keeps order 1" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "F3-09a: the switch: newton = 2 by default keeps order 1" begin
     sw = 0.05 * Δ(bce) - 8 * max(bce - 0.4, 0) / 0.6 + 2 + 2 * sin(6t)
     dts = [0.05 / 2^k for k in 0:3]
@@ -410,7 +331,9 @@ end
     # 3.5e-6 off at dt = 0.05, where one iteration is 5.7e-3 off
     @test maximum(abs, u2[1] .- u8[1]) < 1e-5 && maximum(abs, u1[1] .- u8[1]) > 1e-3
 end
+end
 
+@testitem "F3-09a: the switch's flip pass counts no budget hit (review r1, M7)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "F3-09a: the switch's flip pass counts no budget hit (review r1, M7)" begin
     # the default count's second iteration fixes the switch state: no convergence test, so a
     # default user sees no warning (base 2d213237, ~/lpwork/f3r1-nc-base.log: 2 hits and the
@@ -426,7 +349,9 @@ end
     s = @test_logs (:warn, r"the Newton iteration \(`newton = 2`\) reached its budget") solve(p, BackwardEuler(; dt = 0.05, newton = 2))
     @test s.stats.newton_budget > 0
 end
+end
 
+@testitem "F3-09a: an unseen growth is clamped (the cause bit), not a failure" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "F3-09a: an unseen growth is clamped (the cause bit), not a failure" begin
     # `20 c² − 20 c` from c = 0.75: `∂f/∂c = 10` at the start, `h = 0.1`: the shift `1/h − 10`
     # is clamped at `1/(2h)`; the rest stays in the residual and the field decays
@@ -453,47 +378,9 @@ end
     solve!(ig)
     @test ig.retcode == ReturnCode.Success && only(ig.runtimes).totals.cause == 0
 end
-
-# F3-09b (F3 design §3.4, §3.6, M5, R2-M1): a term outside the operator is a defect correction.
-# Count rule 2 keeps its contraction `ρ_c = γ h ρ_in ≤ 1/2` (`ρ_adv = Σ_a 2|u_a|/h_a` for upwind
-# advection, `κ_in` for a cycle in the group), `newton = nothing` resolves from `ρ_c`, and the
-# Newton check on the device (‖δ_k‖∞ ≤ 1e-3 ‖u_k − uⁿ‖∞ + 10 eps ‖u_k‖∞) counts a budget hit
-# and ends a divergence; a host executor stops when every row met the tolerance.
-# Base (7cead287, ~/lpwork/f3b3-nc-09b-base.log): no count rule 2, no check (the testsets fail).
-# Negative controls (mutations, ~/lpwork/f3b3-nc-09b-*.log): count rule 2 without the advection
-# bound (`norule2`): one substep, the correction diverges (`ConvergenceFailure`); the rounding
-# floor dropped (`nofloor`): the field that barely moves reports budget hits.
-# The BE map of the `:ode` path's rate, linear in u (assembled by columns): `nsub` steps per
-# `dt`; with `timed` the matrix is assembled at each step's end time (an operator that reads
-# the time), else once
-function direct_be(sys, dims, dt, T, nsub; timed = false, inputs = [])
-    po = discretize(sys, LatticeDiscretization(Grid(dims); T = Float64); inputs)
-    m = length(po.u0)
-    f(u, tt) = (du = similar(u); po.f(du, u, po.p, tt); du)
-    z = zeros(m)
-    function mat(tt)
-        A = zeros(m, m)
-        f0 = f(z, tt)
-        for j in 1:m
-            e = zeros(m)
-            e[j] = 1
-            A[:, j] = f(e, tt) .- f0
-        end
-        return A
-    end
-    h = dt / nsub
-    M = timed ? nothing : lu(I - h * mat(0.0))
-    u = copy(po.u0)
-    for s in 1:round(Int, T / h)
-        rhs = u .+ h .* f(z, s * h)
-        u = timed ? (I - h * mat(s * h)) \ rhs : M \ rhs
-    end
-    return u
 end
-nlsys(eqs, ics, dvs; T = 1.0) = PDESystem(eqs, ics, bdom(T), [t, x, y], dvs, Any[]; name = :dc)
-nlown(sys; dims = (16, 16)) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims); T = Float64)))
-const WARN = Base.CoreLogging.Warn
 
+@testitem "F3-09b: advection at the rule-2 count; the Newton check (R2-M1)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "F3-09b: advection at the rule-2 count; the Newton check (R2-M1)" begin
     # ρ_adv = 2 (1 + 0.5) · 16 = 48: n = ⌈2 · 0.25 · 48⌉ = 24 substeps, ρ_c = 1/2: newton = 10
     sys = nlsys([D(bce) ~ 0.01 * Δ(bce) - Advect(Upwind1())([1.0, 0.5], bce) + 1 + sin(4t) * x], [bc(0, x, y) ~ x * y], [bce])
@@ -520,7 +407,9 @@ const WARN = Base.CoreLogging.Warn
     solve!(ig)
     @test ig.retcode == ReturnCode.Success && only(ig.runtimes).totals.newton_budget == 0
 end
+end
 
+@testitem "F3-09b: a cycle in a group converges by Gauss–Seidel (count rule 2)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "F3-09b: a cycle in a group converges by Gauss–Seidel (count rule 2)" begin
     # κ_in = 2 (the largest cross sum): n = ⌈2 · 0.5 · 2⌉ = 2, ρ_c = 0.25 · 2 = 1/2: newton = 10
     sys = nlsys([D(bce) ~ 0.1 * Δ(bce) - bce + 2 * boe, D(boe) ~ 0.1 * Δ(boe) - 3 * boe + 1.5 * bce + 1],
@@ -540,7 +429,9 @@ end
     r10 = solve(p, BackwardEuler(; dt = 0.5, inner = BTIGHT, newton = 10))
     @test maximum(abs, r10[bce, length(r10.t)] .- r[bce, length(r.t)]) < 1e-6
 end
+end
 
+@testitem "review r1 M3: a nonlinear read of another row's field is a source in solve order" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "review r1 M3: a nonlinear read of another row's field is a source in solve order" begin
     # acyclic (c reads o through a switch, o does not read c): the term is known when c is
     # solved, so the operator is exact, newton = 1 and no warning (base cb20be97: the term is
@@ -561,7 +452,9 @@ end
         BackwardEuler(; dt = 0.5, inner = BTIGHT))
     @test only(ig.runtimes).cache.newton == 4 && only(ig.runtimes).cache.cyclic
 end
+end
 
+@testitem "F3-09b: a term no bound sees warns once; a divergence ends the run" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "F3-09b: a term no bound sees warns once; a divergence ends the run" begin
     # a velocity that varies in time: no bound (the interval bound covers the coordinates, not
     # the time; F3-13 bounds `50(1 + x)`, below), one substep, newton = 4, checked on the device
@@ -575,7 +468,9 @@ end
     # (once per group and term: a second problem does not warn at its build)
     @test_logs min_level = WARN init(p, BackwardEuler(; dt = 1.0))
 end
+end
 
+@testitem "F3-13: a site-varying velocity at the rule-2 count; a site growth at rule 1 (batch 3 review R2, r1 S2)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "F3-13: a site-varying velocity at the rule-2 count; a site growth at rule 1 (batch 3 review R2, r1 S2)" begin
     # `50(1 + x)` over the box and one spacing past it (16²: x ≤ 1 + 1/16): ρ_adv = 2 · 50 (2 + 1/16)
     # · 16 = 3300, n = ⌈2 · 0.01 · 3300⌉ = 66, ρ_c = 1/2: newton = 10, no warning, and the run is
@@ -602,12 +497,9 @@ end
     ub = direct_be(gsys, (8, 8), 0.1, 0.3, 4)
     @test maximum(abs, vec(ig[bce]) .- ub) / maximum(abs, ub) < 1e-9
 end
+end
 
-# F3 batch 3 review r1 (research/field-compiler/f3/reviews/F3-batch3-r1.md). Base 2d213237
-# (~/lpwork/f3r1-nc-base.log) unless a testset names a mutation: each testset fails there.
-r1tight() = DevicePCG(; rtol = 1e-13, budget = 200)
-r1rel(a, b) = maximum(abs, a .- b) / maximum(abs, b)
-
+@testitem "r1 M1: an operator that reads the time is built at each substep's end time" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "r1 M1: an operator that reads the time is built at each substep's end time" begin
     # against BE with the matrix assembled at every substep's end time (base, ~/lpwork/f3r1-nc-base.log:
     # 6.6e-2, 1.6e-3, 1.6e-3 relative: every substep took the first substep's operator)
@@ -637,7 +529,9 @@ r1rel(a, b) = maximum(abs, a .- b) / maximum(abs, b)
     solve!(ig)
     @test !only(ig.runtimes).cache.timed && only(ig.runtimes).cache.rebuilds == 1
 end
+end
 
+@testitem "r1 M2, S1: a Robin face's sign follows a parameter write; a negative face is bounded" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "r1 M2, S1: a Robin face's sign follows a parameter write; a negative face is bounded" begin
     # `1.5 c − rb ∂c/∂x = 0.2` at x = 1: rb = −1 a positive diagonal, rb = +1 a negative one
     function robin(rate, v)
@@ -697,7 +591,9 @@ end
         BackwardEuler(; dt = 0.1)).runtimes).cache
     @test !c.exact && !c.seen && c.newton == 4
 end
+end
 
+@testitem "r1 M3: a scaled row keeps the face coefficient with the largest bound" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "r1 M3: a scaled row keeps the face coefficient with the largest bound" begin
     @parameters rW[1:2] = [50.0, 200.0]
     @variables rq(..)::Int32 [input = true]
@@ -719,54 +615,9 @@ end
         @test r1rel(vec(blast(s)), ref) < 1e-4                              # (base: 1.8e8, diverged)
     end
 end
-
-# F3-20: a hexagonal lattice (axial coordinates; `Δ` is `2/(3h²) Σₙ (cₙ − c)` over the six
-# neighbors ±e₁, ±e₂, ±(e₁ − e₂)): the implicit solve's operator has its three face directions.
-# The hand rate on `[0, 1]²` with `n × n` sites (`h = 1/n`, the site `(i, j)` at
-# `((i − ½)h, (j − ½)h)`): `r(u)_i = m_i D 2/(3h²) Σₙ (u_n − u_i) − k u_i + f_i`, a neighbor
-# outside a closed box left out (zero flux), wrapped on a periodic one. `hex_hand` returns the
-# rate `(L, b)`. Base (ee577f6e): `init` refuses every implicit algorithm on a hexagonal lattice.
-# Negative control (F3-20 log in HANDOFF §6): the operator without the diagonal faces fails the
-# one-window tests (the defect correction of the left-out faces does not reach 1e-9).
-const HEXN = 12
-const HEXO = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1))
-function hex_hand(; n = HEXN, D = 1.0, m = (x, y) -> 1.0, k = 0.0, f = (x, y) -> 0.0, periodic = false, faces = Dict())
-    h = 1 / n
-    lin(i, j) = i + (j - 1) * n
-    L, b = zeros(n^2, n^2), zeros(n^2)
-    for j in 1:n, i in 1:n
-        r = lin(i, j)
-        xi, yi = (i - 0.5) * h, (j - 0.5) * h
-        for (di, dj) in HEXO
-            ii, jj = i + di, j + dj
-            c = m(xi, yi) * D * 2 / (3h^2)
-            if !(1 <= ii <= n && 1 <= jj <= n) && !periodic
-                # a link that leaves the box: the face of axis 1 if it leaves along axis 1, else of
-                # axis 2; `(:dir, g)` (ghost `2g − u`) or `(:robin, α, β, g)` for `α u + β ∂u/∂x_a = g`
-                # along the link (ghost from `α (u_g + u)/2 + β s (u_g − u)/h = g`); none: zero flux
-                a = 1 <= ii <= n ? 2 : 1
-                sd = a == 1 ? sign(di) : sign(dj)
-                haskey(faces, (a, sd)) || continue
-                fc = faces[(a, sd)]
-                pg, qg = fc[1] === :dir ? (-1.0, 2fc[2]) :
-                         (bl = fc[3] * sd / h; den = fc[2] / 2 + bl; ((bl - fc[2] / 2) / den, fc[4] / den))
-                L[r, r] += c * (pg - 1)
-                b[r] += c * qg
-                continue
-            end
-            L[r, lin(mod1(ii, n), mod1(jj, n))] += c
-            L[r, r] -= c
-        end
-        L[r, r] -= k
-        b[r] += f(xi, yi)
-    end
-    return L, b
 end
-const HEXKIND = Int32[(i + 2j) % 3 for i in 1:HEXN, j in 1:HEXN]
-hexdisc(sys; T = Float64, inputs = [bqe => HEXKIND], kw...) =
-    LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((HEXN, HEXN); geometry = HEX); T, kw...); inputs))
-const HEXPER = [bc(t, 0, y) ~ bc(t, 1, y), bc(t, x, 0) ~ bc(t, x, 1)]
 
+@testitem "F3-20: one BackwardEuler window on a hexagonal lattice equals the hand BE matrix" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "F3-20: one BackwardEuler window on a hexagonal lattice equals the hand BE matrix" begin
     h = 0.05
     alg = BackwardEuler(; dt = h, inner = BTIGHT)
@@ -816,7 +667,9 @@ const HEXPER = [bc(t, 0, y) ~ bc(t, 1, y), bc(t, x, 0) ~ bc(t, x, 1)]
     end
     @test maximum(abs, u .- A \ rhs) < 1e-9 && only(ig.runtimes).cache.rows[1].op.domain
 end
+end
 
+@testitem "F3-20 r1 M1: face conditions on a hexagonal lattice (explicit rate, BackwardEuler window)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "F3-20 r1 M1: face conditions on a hexagonal lattice (explicit rate, BackwardEuler window)" begin
     # a Dirichlet face (axis 1 low), a Robin face (axis 2 low), zero flux elsewhere, a mask; each link
     # that leaves the box takes its face's ghost (a diagonal link axis 1's when it leaves along axis 1)
@@ -848,7 +701,9 @@ end
         @test only(ig.runtimes).cache.exact && only(ig.runtimes).cache.newton == 1
     end
 end
+end
 
+@testitem "F3-20 r2 M1: an indefinite steady row on a hexagonal lattice is refused (Lanczos)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "F3-20 r2 M1: an indefinite steady row on a hexagonal lattice is refused (Lanczos)" begin
     # `0 ~ 0.01Δc − k c + x` with Robin faces `−2c − ∂c/∂x ~ 0` on x = 0 and y = 0 (α, β of opposite signs).
     # k = 0.01: the dense max Re λ of the hex :ode Jacobian is +0.176 (cubic +0.076), refused on both
@@ -868,7 +723,9 @@ end
         end
     end
 end
+end
 
+@testitem "F3-24: a multiplier that reads the coordinates is a site multiplier in J̃ (BackwardEuler, QuasiSteady)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "F3-24: a multiplier that reads the coordinates is a site multiplier in J̃ (BackwardEuler, QuasiSteady)" begin
     # `(1 + x) Δ(c)` and `(1 + x) DivKGrad(1 + y, c)` (`Diffusion` terms whose multiplier varies by
     # site): the Jacobian row is `m_i Σ_f K_f (c_n − c_i)`, so the row is scaled by `1/m` (symmetric
@@ -900,7 +757,9 @@ end
     @test_logs (:warn, r"is negative at some site centers \(down to -0.") match_mode = :any (ig.ps[bg] = -0.5; step!(ig))
     @test !only(ig.runtimes).cache.exact && only(ig.runtimes).cache.newton > 1
 end
+end
 
+@testitem "F3-20 r1 M2: a kind set of three or more kinds in a rate (Cartesian, ExplicitEuler)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "F3-20 r1 M2: a kind set of three or more kinds in a rate (Cartesian, ExplicitEuler)" begin
     # `ismember(q, set)` lowers to one OR node with an operand per kind; before F3-20 the emitter
     # kept two of them (32 sites instead of 48 for (0, 1, 2) here, all four 32 instead of 64)
@@ -913,7 +772,9 @@ end
         @test ig[bce] ./ 0.1 ≈ Float64.(in.(K, Ref(set)))
     end
 end
+end
 
+@testitem "F3-20: order 1 (BackwardEuler) and 2 (CrankNicolson, BDF2) on a hexagonal lattice; QuasiSteady" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "F3-20: order 1 (BackwardEuler) and 2 (CrankNicolson, BDF2) on a hexagonal lattice; QuasiSteady" begin
     # the plane wave `cos(2π(x + y))` is an eigenvector of the periodic hexagonal Laplacian with
     # `λ = −2/(3h²) Σ_d (2 − 2cos θ_d)`, `θ = (2π/n, 2π/n, 0)`: the semi-discrete solution is
@@ -947,7 +808,9 @@ end
     end
     @test s.retcode == ReturnCode.Success && maximum(abs, vec(blast(s)) .- A \ rhs) < 1e-9
 end
+end
 
+@testitem "F3-20: the coupled steady solve (F3-12d) on a hexagonal lattice" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "F3-20: the coupled steady solve (F3-12d) on a hexagonal lattice" begin
     # two steady rows that read each other: `DeviceGMRES` with the block preconditioner on the
     # hexagonal hierarchy equals the hand coupled solve
@@ -973,7 +836,9 @@ end
     pg = discretize(grow, LatticeDiscretization(Grid((HEXN, HEXN); geometry = HEX); T = Float64))
     @test_throws "their coupled steady system has a growing mode" init(pg, QuasiSteady(; dt = 0.1))
 end
+end
 
+@testitem "r1 M5: π and ℯ lower in a source, a coefficient and a face value (both paths)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "r1 M5: π and ℯ lower in a source, a coefficient and a face value (both paths)" begin
     # base: "cannot lower `π`: `identity` has no lattice lowering" on every path
     sym = nlsys([D(bce) ~ π * Δ(bce) - ℯ * bce + sin(π * x) + ℯ], [bc(0, x, y) ~ cos(π * y), bc(t, 0, y) ~ π / 2 + ℯ * y], [bce]; T = 0.2)
@@ -992,7 +857,9 @@ end
     pb.f(db, pb.u0, pb.p, 0.1)
     @test pa.u0 ≈ pb.u0 && maximum(abs, da .- db) < 1e-11
 end
+end
 
+@testitem "r1 M6, N2: a component field gets the operator of its scalar spelling" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "r1 M6, N2: a component field gets the operator of its scalar spelling" begin
     @variables bu(..)[1:2]
     bue = bu(t, x, y)
@@ -1015,7 +882,9 @@ end
     @test_logs (:warn, r"`-Advect\(Upwind1\(\)\)\(\[.*, 0\.0\], bu\[1\]\)` \(in the rate of `bu\[1\]`\) is not in the implicit operator") match_mode = :any init(pv,
         BackwardEuler(; dt = 0.1))
 end
+end
 
+@testitem "r1 S4, S6, N1: the failure route follows the cause; rule 2 on the sum; show" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "r1 S4, S6, N1: the failure route follows the cause; rule 2 on the sum; show" begin
     alg = BackwardEuler(; dt = 0.1)
     @test LFB.status_route(alg, :failure, 0x2) == LFB.status_route(alg, :failure, 0x6) ==
@@ -1043,7 +912,9 @@ end
     @test sprint(show, ExplicitEuler(; dt = 0.1, substeps = 15)) == "ExplicitEuler(; dt = 0.1, substeps = 15)"
     @test sprint(show, ExplicitEuler()) == "ExplicitEuler()"
 end
+end
 
+@testitem "R2-M1: a diffusion term left out of a scaled row contracts by its face-wise ratio" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "R2-M1: a diffusion term left out of a scaled row contracts by its face-wise ratio" begin
     @variables r2q(..)::Int32 [input = true]
     r2qe = r2q(t, x, y)
@@ -1087,11 +958,13 @@ end
     @test s.retcode == ReturnCode.Success && s.stats.newton_budget == 0
     @test r1rel(vec(blast(s)), direct_be(sys, (16, 16), 0.05, 0.5, ig.substeps; inputs = [r2qe => kind])) < 1e-4
 end
+end
 
 # Batch 3 review r3 N3: at rule 2's limit with θ > 0 the contraction bound is `ρ_c = (1 + θ)/2`
 # (up to 3/4), which 12 iterations cannot bring to ε_N: the cap is 26 when θ > 0, so the count
 # meets `ρ_c^(k − 1) ≤ ε_N` (base 69bef544: clamped at 12, `0.715^11 = 0.025`); with θ = 0 the
 # count and its cap 12 are unchanged
+@testitem "r3 N3: the Newton count meets the tolerance at rule 2's limit with θ > 0" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "r3 N3: the Newton count meets the tolerance at rule 2's limit with θ > 0" begin
     θ = 0.43
     for (ρh, want) in ((0.5 * (1 - θ), 22), (0.1, 12), (0.0, 10))
@@ -1117,10 +990,12 @@ end
     @test s.retcode == ReturnCode.Success && s.stats.newton_budget == 0
     @test r1rel(vec(blast(s)), direct_be(sys, (16, 16), 0.05, 0.5, ig.substeps; inputs = [r3qe => kind])) < 1e-4
 end
+end
 
 # A parameter write that changes the automatic count sets the step at once (R2-N3) from the new
 # parameters: the shift of a numeric row reads them (base 69bef544: the bound parameters were
 # copied after the recount, so the step's shift kept the old growth `g`: 6.58 against 8.82)
+@testitem "r3: a write that changes the count sets the step from the new parameters" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "r3: a write that changes the count sets the step from the new parameters" begin
     @parameters r3g = 1.0
     sg = bsys([D(bce) ~ bD * Δ(bce) + r3g * bce], [bc(0, x, y) ~ x * y], [bD, r3g]; T = 2.0, dvs = [bce])
@@ -1135,17 +1010,16 @@ end
     step!(fresh)
     @test vec(ig[bce]) == vec(fresh[bce])
 end
+end
 
+@testitem "R2-N1: the operator build count starts at 0 in a fresh session" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "R2-N1: the operator build count starts at 0 in a fresh session" begin
     cmd = `$(Base.julia_cmd()) --startup-file=no --project=$(Base.active_project()) -e "using LatticePDE; print(LatticePDE.OPERATOR_BUILDS[])"`
     @test read(cmd, String) == "0"                                   # (base: 1, the precompile workload's)
 end
+end
 
-# Review r3 N1: an operator of another field in a row (cross-diffusion `0.1 Δ(q)` in the rate of
-# `c`) stays in the residual, a defect term the Newton check covers (no bound sees it: newton 4,
-# warned with the term), so the owned implicit path solves what `:ode` lowers. Base (e7068add,
-# ~/lpwork/f3b6-nc-r3.log): "`Δ` is symbolic-only" from the cross term's bound.
-using OrdinaryDiffEqSDIRK: ImplicitEuler
+@testitem "r3 N1: cross-diffusion in an implicit group is a defect term" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "r3 N1: cross-diffusion in an implicit group is a defect term" begin
     @variables xq(..)
     xqe = xq(t, x, y)
@@ -1158,4 +1032,5 @@ using OrdinaryDiffEqSDIRK: ImplicitEuler
     po = discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64))
     ro = SciMLBase.solve(po, ImplicitEuler(); adaptive = false, dt = 0.1, abstol = 1e-12, reltol = 1e-12)
     @test maximum(abs, ro.u[end] .- r.u[end]) < 1e-6 || (println("r3 N1 ", maximum(abs, ro.u[end] .- r.u[end])); false)
+end
 end

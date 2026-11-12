@@ -7,28 +7,27 @@
 # Negative controls: at the base 978e73c7 `LatticeMG` is undefined and `sparse = true` is
 # refused (every testset errors); a preconditioner built without the shift `1/γ` fails the
 # iteration bound (~/lpwork/f4b3/nc-*.log).
-using LinearAlgebra: norm
-using SparseArrays: SparseArrays
-using LinearSolve: LinearSolve, KrylovJL_GMRES
-using OrdinaryDiffEqBDF: FBDF
-using OrdinaryDiffEqSDIRK: ImplicitEuler, Trapezoid
 
-@parameters qD = 0.05 qk = 1.0
-@variables qc(..) qw(..)
-qdom(T) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-qsys(T; f = 0.0) = PDESystem([D(qc(t, x, y)) ~ qD * Δ(qc(t, x, y)) - qk * qc(t, x, y) + f],
-    [qc(0, x, y) ~ sin(π * x) * cos(π * y), qc(t, 0, y) ~ 1.0], qdom(T), [t, x, y], [qc(t, x, y)], [qD, qk]; name = :qs)
-qdisc(n; kw...) = LatticeDiscretization(Grid((n, n)); T = Float64, kw...)
-const QTIGHT = DevicePCG(; rtol = 1e-13, budget = 400)
-
-# FBDF with GMRES (and `precs`) on `prob`: the solution and the Krylov iterations per linear solve
-function qfbdf(prob; precs = nothing, gmres_restart = 200)
-    j = prob.f.jvp
-    c0 = j.calls[]
-    s = solve(prob, FBDF(; linsolve = KrylovJL_GMRES(; precs, gmres_restart)); abstol = 1e-6, reltol = 1e-6)
-    return s, (j.calls[] - c0) / max(s.stats.nsolve, 1)
+@testsetup module LP_precond
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/problems.jl")
+include("shared/bounds.jl")
+include("shared/families.jl")
+include("shared/precond.jl")
+include("shared/export_all.jl")
 end
 
+@testitem "F4-08: FBDF with GMRES and LatticeMG at 256²" setup = [LP_precond] tags = [:latticepde, :precond] begin
 @testset "F4-08: FBDF with GMRES and LatticeMG at 256²" begin
     prob = discretize(qsys(0.5), qdisc(256))
     mg = LatticeMG()
@@ -46,7 +45,9 @@ end
     @test (s2.stats.naccept, s2.stats.nw, s2.stats.nsolve) == (s1.stats.naccept, s1.stats.nw, s1.stats.nsolve) && k2 == k1 ||
           (println("F4-08 gmres_restart 10 ", (s2.stats, k2), " against 200 ", (s1.stats, k1)); false)
 end
+end
 
+@testitem "F4-08: LatticePCG solves a linear system with no time" setup = [LP_precond] tags = [:latticepde, :precond] begin
 @testset "F4-08: LatticePCG solves a linear system with no time" begin
     fdom = [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
     sl = PDESystem([0 ~ 0.3 * Δ(qw(x, y)) - 2.0 * qw(x, y) + x], [qw(0, y) ~ 1.0], fdom, [x, y], [qw(x, y)], Num[]; name = :ql)
@@ -64,7 +65,9 @@ end
     r = solve(prob, FBDF(; linsolve = KrylovJL_GMRES(; precs = LatticeMG())); abstol = 1e-8, reltol = 1e-8)
     @test SciMLBase.successful_retcode(s) && maximum(abs, s.u[end] .- r.u[end]) < 1e-6
 end
+end
 
+@testitem "F4-08: SX-18 at 64², OrdinaryDiffEq's ImplicitEuler and Trapezoid" setup = [LP_precond] tags = [:latticepde, :precond] begin
 @testset "F4-08: SX-18 at 64², OrdinaryDiffEq's ImplicitEuler and Trapezoid" begin
     f = sin(3t) * x
     prob = discretize(qsys(0.4; f), qdisc(64); sparse = true)
@@ -79,7 +82,9 @@ end
     sc = solve(discretize(qsys(0.4; f), qdisc(64)), CrankNicolson(; dt = h, inner = QTIGHT))
     @test maximum(abs, sc.u[end] .- st.u[end]) < 1e-8 || (println("F4-08 TR ", maximum(abs, sc.u[end] .- st.u[end])); false)
 end
+end
 
+@testitem "F4-08: FBDF matrix-free on the device with LatticeMG" setup = [LP_precond] tags = [:latticepde, :precond] begin
 if lowercase(get(ENV, "LATTICEPDE_GPU", "")) == "rocm"
     using AMDGPU: AMDGPU
     @testset "F4-08: FBDF matrix-free on the device with LatticeMG" begin
@@ -100,4 +105,5 @@ if lowercase(get(ENV, "LATTICEPDE_GPU", "")) == "rocm"
         sh = solve(ph, alg; abstol = 1.0f-5, reltol = 1.0f-5)
         @test SciMLBase.successful_retcode(sd) && maximum(abs, Array(sd.u[end]) .- sh.u[end]) < 1.0f-3
     end
+end
 end

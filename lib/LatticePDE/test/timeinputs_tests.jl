@@ -5,6 +5,19 @@
 # (~/lpwork/f4B1/nc.log) every testset errors, as `discretize` refuses the function; at 1f1b2288
 # (input refreshed per accepted step, ~/lpwork/f4B1/q19-nc.log) Tsit5 and Rodas5P with no `dtmax`
 # step over the pulse and miss the fine owned run, and the mask is not refused.
+
+@testsetup module LP_timeinputs
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
 using OrdinaryDiffEqTsit5: Tsit5
 using OrdinaryDiffEqRosenbrock: Rodas5P
 using ForwardDiff: ForwardDiff
@@ -35,6 +48,22 @@ tiK(v) = s -> Int32[s > v * i ? 1 : 0 for i in 1:TI_N, j in 1:TI_N]
 tiint() = PDESystem([D(tice) ~ tiD * Δ(tice) - 0.5 * tice + ifelse(tike == 1, 1.0, 0.0)], [tic(0, x, y) ~ 0.0],
     tidom(), [t, x, y], [tice, tike], [tiD]; name = :tiint)
 
+# On an OrdinaryDiffEq solver the right side evaluates the function at every call (ruling Q19),
+# so an adaptive solver sees the front at its own stage times: Tsit5 and Rodas5P with no `dtmax`
+# match a fine owned run (whose input holds over windows of 1e-4)
+const TI_ODE = (; saveat = 0.1, abstol = 1e-8, reltol = 1e-8)
+tifine(sys) = tifn(sys, ExplicitEuler(; dt = 1e-4); saveat = 0.1)
+
+# Review B1 #1: a refresh keeps what the input does not touch. With `t -> 1.0` read by the rates
+# alone, Crank–Nicolson and BDF2 equal their constant-input runs bit for bit, and with a smooth
+# source `sin(6t)` in the equation they stay second order (a reset every window made BDF2
+# Backward Euler and CN two half steps)
+tismooth() = PDESystem([D(tice) ~ tiD * Δ(tice) - 0.5 * tice + sin(6t) * tiqe], [tic(0, x, y) ~ x], tidom(), [t, x, y],
+    [tice, tiqe], [tiD]; name = :tismooth)
+include("shared/export_all.jl")
+end
+
+@testitem "F4-B1: an input as a function of t, owned path (nameof(typeof(alg)))" setup = [LP_timeinputs] tags = [:latticepde, :timeinputs] begin
 @testset "F4-B1: an input as a function of t, owned path ($(nameof(typeof(alg))))" for alg in
                                                                                           (ExplicitEuler(; dt = 0.01), BackwardEuler(; dt = 0.05))
     a = tifn(tisrc(), alg; saveat = 0.1)
@@ -48,12 +77,9 @@ tiint() = PDESystem([D(tice) ~ tiD * Δ(tice) - 0.5 * tice + ifelse(tike == 1, 1
     step!(ig, 0.3, true)
     @test ig.t == 0.3 && ig[tiqe] == tiQ(ig.t) && ig.u == a.u[4]
 end
+end
 
-# On an OrdinaryDiffEq solver the right side evaluates the function at every call (ruling Q19),
-# so an adaptive solver sees the front at its own stage times: Tsit5 and Rodas5P with no `dtmax`
-# match a fine owned run (whose input holds over windows of 1e-4)
-const TI_ODE = (; saveat = 0.1, abstol = 1e-8, reltol = 1e-8)
-tifine(sys) = tifn(sys, ExplicitEuler(; dt = 1e-4); saveat = 0.1)
+@testitem "F4-B1: an input as a function of t, OrdinaryDiffEq path (nameof(typeof(alg)))" setup = [LP_timeinputs] tags = [:latticepde, :timeinputs] begin
 @testset "F4-B1: an input as a function of t, OrdinaryDiffEq path ($(nameof(typeof(alg))))" for alg in (Tsit5(), Rodas5P())
     a = tifn(tisrc(), alg; TI_ODE...)
     o = tifine(tisrc())
@@ -68,7 +94,9 @@ tifine(sys) = tifn(sys, ExplicitEuler(; dt = 1e-4); saveat = 0.1)
     step!(ig, 0.3, true)
     @test ig.t ≈ 0.3 && ig.ps[tiqe] == tiQ(ig.t)
 end
+end
 
+@testitem "F4-B1: a mask that reads a function input moves (nameof(typeof(alg)))" setup = [LP_timeinputs] tags = [:latticepde, :timeinputs] begin
 @testset "F4-B1: a mask that reads a function input moves ($(nameof(typeof(alg))))" for alg in
                                                                                      (ExplicitEuler(; dt = 0.01), Tsit5())
     # (on an OrdinaryDiffEq solver a masked value jumps where the input switches, written after
@@ -98,7 +126,9 @@ end
     c = solve(discretize(timask(), tidisc(); inputs = [tiqe => tiQ(0.0)]), alg; kw...)
     @test !any(==(2.0), c.u[end])
 end
+end
 
+@testitem "F4-B1: remake, refusals and allocations of function inputs" setup = [LP_timeinputs] tags = [:latticepde, :timeinputs] begin
 @testset "F4-B1: remake, refusals and allocations of function inputs" begin
     fp = discretize(tisrc(), tidisc(); inputs = [tiqe => tiQ])
     cp = discretize(tisrc(), tidisc(); inputs = [tiqe => tiQ(0.0)])
@@ -153,6 +183,7 @@ end
     end
     @test tiode(fp) > 0
 end
+end
 
 # Threads: each task's copy of the right side has input arrays of its own, so trajectories
 # with other input functions (an integer input here, which copies once shared) never write one
@@ -160,6 +191,7 @@ end
 # path and on the owned path (each integrator has its own store). Negative control at 243293bf
 # under -t 4 (~/lpwork/f4B1/thr-nc2.log): Tsit5 19, 24 and 24 of 24 trajectories differ (the
 # shared integer input races); the owned path already equal there.
+@testitem "F4-B1: function inputs under EnsembleThreads equal EnsembleSerial (nameof(typeof(alg)))" setup = [LP_timeinputs] tags = [:latticepde, :timeinputs] begin
 @testset "F4-B1: function inputs under EnsembleThreads equal EnsembleSerial ($(nameof(typeof(alg))))" for alg in
                                                                                                     (Tsit5(), ExplicitEuler(; dt = 0.01))
     Threads.nthreads() > 1 || @warn "F4-B1 ensemble test: one thread (run under `julia -t 4`)"
@@ -175,13 +207,9 @@ end
         @test bad == 0 || (println("F4-B1 ensemble ", nameof(typeof(alg)), ": ", bad, " of 24 trajectories differ"); false)
     end
 end
+end
 
-# Review B1 #1: a refresh keeps what the input does not touch. With `t -> 1.0` read by the rates
-# alone, Crank–Nicolson and BDF2 equal their constant-input runs bit for bit, and with a smooth
-# source `sin(6t)` in the equation they stay second order (a reset every window made BDF2
-# Backward Euler and CN two half steps)
-tismooth() = PDESystem([D(tice) ~ tiD * Δ(tice) - 0.5 * tice + sin(6t) * tiqe], [tic(0, x, y) ~ x], tidom(), [t, x, y],
-    [tice, tiqe], [tiD]; name = :tismooth)
+@testitem "F4-B1: a refresh keeps the history of nameof(typeof(alg(0.1)))" setup = [LP_timeinputs] tags = [:latticepde, :timeinputs] begin
 @testset "F4-B1: a refresh keeps the history of $(nameof(typeof(alg(0.1))))" for alg in
                                                                                (h -> CrankNicolson(; dt = h), h -> BDF2(; dt = h))
     sys = tismooth()
@@ -192,9 +220,11 @@ tismooth() = PDESystem([D(tice) ~ tiD * Δ(tice) - 0.5 * tice + sin(6t) * tiqe],
     e1, e2 = (maximum(abs, solve(fun, alg(h)).u[end] .- ref) for h in (0.05, 0.025))
     @test log2(e1 / e2) > 1.8 || (println("F4-B1 order ", nameof(typeof(alg(0.1))), ": ", log2(e1 / e2)); false)
 end
+end
 
 # Review B1 #2, #3: a mask that reads an input function reruns its init launches with no
 # allocation (owned window, ODE call), and a fixed step counts as bounded
+@testitem "F4-B1: masks that read an input function: bytes and a fixed step" setup = [LP_timeinputs] tags = [:latticepde, :timeinputs] begin
 @testset "F4-B1: masks that read an input function: bytes and a fixed step" begin
     buf = zeros(TI_N, TI_N)
     inplace(s) = (for j in 1:TI_N, i in 1:TI_N
@@ -208,4 +238,4 @@ end
     s = solve(mp, Tsit5(); adaptive = false, dt = 0.01, saveat = 0.1)
     @test s.retcode == ReturnCode.Success
 end
-
+end

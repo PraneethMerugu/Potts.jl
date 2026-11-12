@@ -4,6 +4,19 @@
 # with the value written as a condition (bitwise, owned path and Tsit5), and a Dual default's
 # derivative against central differences. Negative control (the base 4ca38af7): every testset
 # fails, "field `dfc` has no initial condition `dfc(0, …) ~ value`" (~/lpwork/f4E/nc-e3.log).
+
+@testsetup module LP_fielddefaults
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
 using OrdinaryDiffEqTsit5: Tsit5
 using ForwardDiff: ForwardDiff
 
@@ -20,7 +33,10 @@ dfmsg(f) = try
 catch e
     sprint(showerror, e)
 end
+include("shared/export_all.jl")
+end
 
+@testitem "F4-E3: a field's default is its initial value (owned path and Tsit5)" setup = [LP_fielddefaults] tags = [:latticepde, :fielddefaults] begin
 @testset "F4-E3: a field's default is its initial value (owned path and Tsit5)" begin
     pd = discretize(dfsys(), dfdisc())
     pc = discretize(dfsys([dfc(0, x, y) ~ 0.3]), dfdisc())
@@ -37,7 +53,9 @@ end
     pa = discretize(sa, dfdisc())
     @test pa.u0 == pd.u0 && isapprox(solve(pa, ExplicitEuler(; dt = 1e-3)).u[end], a.u[end]; rtol = 1e-12)
 end
+end
 
+@testitem "F4-E3: with a default and a condition, the condition wins" setup = [LP_fielddefaults] tags = [:latticepde, :fielddefaults] begin
 @testset "F4-E3: with a default and a condition, the condition wins" begin
     p = discretize(dfsys([dfc(0, x, y) ~ x]), dfdisc())
     q = discretize(PDESystem([D(dfn(t, x, y)) ~ dfD * Δ(dfn(t, x, y)) - dfk * dfn(t, x, y) + 0.1 * x],
@@ -54,7 +72,9 @@ end
             name = :dfz), dfdisc()))
     @test occursin("field `dfn` has no initial condition", m) || (println(m); false)
 end
+end
 
+@testitem "F4-E3: a Dual default: the derivative against central differences" setup = [LP_fielddefaults] tags = [:latticepde, :fielddefaults] begin
 @testset "F4-E3: a Dual default: the derivative against central differences" begin
     function J(v)
         @variables dfv(..) = v
@@ -66,4 +86,5 @@ end
     d = ForwardDiff.derivative(J, v0)
     @test d ≈ (J(v0 + h) - J(v0 - h)) / 2h rtol = 1e-6
     @test d > 0 && J(v0) ≈ ForwardDiff.value(J(ForwardDiff.Dual(v0, 1.0)))
+end
 end

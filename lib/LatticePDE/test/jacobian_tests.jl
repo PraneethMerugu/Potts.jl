@@ -11,6 +11,19 @@
 # the face cases, and one that takes a restriction's third child at every coarse site fails
 # `Coarse(2)` (~/lpwork/f4b3/nc-*.log); the untyped walk (`_Walk.k::Any`) allocates 256 MiB at
 # 128² and fails the pattern's bound (~/lpwork/f4b3fix/nc-untyped.log).
+
+@testsetup module LP_jacobian
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
 using LinearAlgebra: norm
 using SparseArrays: SparseArrays, sparse, nnz
 using ForwardDiff: ForwardDiff
@@ -66,7 +79,10 @@ function jcases()
 end
 jprob(sys, disc, ins; kw...) = discretize(sys, disc; inputs = collect(Pair, ins), kw...)
 jpattern(J) = sparse(J .!= 0)
+include("shared/export_all.jl")
+end
 
+@testitem "F4-07: the pattern from the IR equals the dense Jacobian's" setup = [LP_jacobian] tags = [:latticepde, :jacobian] begin
 @testset "F4-07: the pattern from the IR equals the dense Jacobian's" begin
     for (label, sys, disc, ins) in jcases()
         prob = jprob(sys, disc, ins)
@@ -88,7 +104,9 @@ jpattern(J) = sparse(J .!= 0)
         end
     end
 end
+end
 
+@testitem "F4-07: jac = true is the dense Jacobian; jvp is J v" setup = [LP_jacobian] tags = [:latticepde, :jacobian] begin
 @testset "F4-07: jac = true is the dense Jacobian; jvp is J v" begin
     for (label, sys, disc, ins) in jcases()
         prob = jprob(sys, disc, ins; jac = true, sparse = true)
@@ -127,7 +145,9 @@ end
     jp.f(b, u, jp.p, Inf)
     @test r == b
 end
+end
 
+@testitem "F4-07: Rodas5P with sparse = true at 128² runs in bounded memory" setup = [LP_jacobian] tags = [:latticepde, :jacobian] begin
 @testset "F4-07: Rodas5P with sparse = true at 128² runs in bounded memory" begin
     @parameters jr = 2.0
     c = jc(t, x, y)
@@ -149,4 +169,5 @@ end
         saveat = 0.05).u[end] .- s.u[end])
     e1, e2, e3 = e(0.01), e(0.005), e(0.0025)
     @test e1 > e2 > e3 && 1.6 < e1 / e2 < 2.4 && 1.6 < e2 / e3 < 2.4 || (println("F4-07 BE errors ", (e1, e2, e3)); false)
+end
 end

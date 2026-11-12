@@ -4,48 +4,26 @@
 # that `reset!` and its return code (`step_retcode!`) reach.
 # F2-07: `lower_group` (the rate form and the group cut), the update pass (`fuse_update`) and
 # its byte-identity gate, a clip in B, `dt` required, Cartesian indexing on the host.
-using LatticeFields: Problems as LFP
-using SciMLBase: SciMLBase, remake, reinit!, ReturnCode
-using SymbolicIndexingInterface: setp
-using LatticeFields.Compile: fingerprint_text, fuse_update
 
-# a stub algorithm: Euler with three substeps, three buffers and a counting cache that fails at
-# step `fail_at` (0: never)
-struct GStub <: LFP.FieldAlgorithm
-    dt::Float64
-    fail_at::Int
-end
-mutable struct GStubCache
-    steps::Int
-    resets::Int
-    fail_at::Int
-end
-LFP.nbuffers(::GStub) = 3
-LFP.update_key(::GStub) = :euler
-LFP.update_rule(::GStub) = LFP.update_rule(ExplicitEuler())
-LFP.alg_cache(a::GStub, group, store) = GStubCache(0, 0, a.fail_at)
-LFP.reset_cache!(c::GStubCache) = (c.resets += 1; nothing)
-LFP.step_retcode!(c::GStubCache, rt) = (c.steps += 1; c.steps == c.fail_at ? ReturnCode.ConvergenceFailure : ReturnCode.Success)
-LFP.substeps(::LFP.FieldProblem, ::GStub, p = nothing; tables = nothing, inputs = nothing) = 3
-
-@parameters ga = 0.3 gb = 0.2
-@variables gc(..) go(..)
-gce, goe = gc(t, x, y), go(t, x, y)
-# c diffuses and reads o; o decays and reads c
-gsys(; T = 0.1) = PDESystem([D(gce) ~ Δ(gce) + ga * goe, D(goe) ~ -gb * goe + 0.1 * gce],
-    [gc(0, x, y) ~ x * y, go(0, x, y) ~ 1.0 + x, gc(t, 0, y) ~ gc(t, 1, y), gc(t, x, 0) ~ gc(t, x, 1),
-     go(t, 0, y) ~ go(t, 1, y), go(t, x, 0) ~ go(t, x, 1)],
-    [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [gce, goe], [ga, gb]; name = :g)
-# (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
-gown(sys; n = 8) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64)))
-gwarm(ig) = (step!(ig); step!(ig); @allocated step!(ig))      # (a function barrier)
-gerr(f) = try
-    f(); ""
-catch e
-    e isa ArgumentError || rethrow()
-    sprint(showerror, e)
+@testsetup module LP_groups
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/problems.jl")
+include("shared/silent.jl")
+include("shared/groups.jl")
+include("shared/export_all.jl")
 end
 
+@testitem "F2-06: B steps through the group layer" setup = [LP_groups] tags = [:latticepde, :groups] begin
 @testset "F2-06: B steps through the group layer" begin
     p = gown(gsys())
     a4, a3 = ExplicitEuler(; dt = 0.01, substeps = 4), ExplicitEuler(; dt = 0.01, substeps = 3)
@@ -66,7 +44,9 @@ end
     @test gwarm(init(p, a4)) == 0
     @test gwarm(init(p, FieldGroups(gce => a4, goe => a3))) == 0
 end
+end
 
+@testitem "F2-06: FieldGroups: two groups in state order, each ending in slot 1" setup = [LP_groups] tags = [:latticepde, :groups] begin
 @testset "F2-06: FieldGroups: two groups in state order, each ending in slot 1" begin
     # c does not read o (ga = 0): the c group steps alone; the o group runs after it and reads
     # the new c from its array (base: no groups in B)
@@ -102,7 +82,9 @@ end
     @test occursin("one algorithm per field", gerr(() -> FieldGroups(gce => FieldGroups(goe => a4))))
     @test occursin("not a field algorithm", gerr(() -> FieldGroups(gce => 1.0)))
 end
+end
 
+@testitem "F2-06: an algorithm's buffers, cache, reset! and return code" setup = [LP_groups] tags = [:latticepde, :groups] begin
 @testset "F2-06: an algorithm's buffers, cache, reset! and return code" begin
     p = gown(gsys())
     ig = init(p, GStub(0.01, 0))
@@ -126,7 +108,9 @@ end
     @test sol.retcode == ReturnCode.ConvergenceFailure && ig.iter == 3
     @test solve(p, GStub(0.01, 0)).retcode == ReturnCode.Success  # control: no failure, the full span
 end
+end
 
+@testitem "F2-06: the step-start clamp: a mask that switches on is read by that step's substeps" setup = [LP_groups] tags = [:latticepde, :groups] begin
 @testset "F2-06: the step-start clamp: a mask that switches on is read by that step's substeps" begin
     @variables gw(..) gwk(..)::Int32 [input = true]
     we, wk = gw(t, x, y), gwk(t, x, y)
@@ -141,7 +125,9 @@ end
     # the 1.0 (without the step-start clamp the neighbour stays 0.0 until step 4)
     @test s[:gw, 4][1, 1] == 1.0 && s[:gw, 4][2, 1] > 0.01
 end
+end
 
+@testitem "F2-06: the warning set stays bounded over 500 remakes" setup = [LP_groups] tags = [:latticepde, :groups] begin
 @testset "F2-06: the warning set stays bounded over 500 remakes" begin
     # the coupled rows of c and o are not bounded: an explicit count warns once per (program,
     # term, cause), never once per value (base: 500 keys, about 120 KB, record (a))
@@ -155,33 +141,9 @@ end
     end
     @test length(LFP._SEEN_WARNED) == n0
 end
-
-# Hand FTCS on a 2D box (test/fields.jl:10–33, ported): `n` substeps of `dt/n`; periodic or
-# zero-flux faces; `rate(c, i, j)` the reaction; the update clipped below at `lower`
-function g_ftcs(c0, D, h, dt, n; periodic, rate = (c, i, j) -> 0.0, lower = nothing)
-    c = copy(c0)
-    nx, ny = size(c)
-    for _ in 1:n
-        new = similar(c)
-        for j in 1:ny, i in 1:nx
-            lap = 0.0
-            for (di, dj, hd) in ((1, 0, h[1]), (-1, 0, h[1]), (0, 1, h[2]), (0, -1, h[2]))
-                a, b = i + di, j + dj
-                if periodic
-                    a, b = mod1(a, nx), mod1(b, ny)
-                elseif !(1 <= a <= nx && 1 <= b <= ny)
-                    continue                                       # zero flux: the ghost is the site
-                end
-                lap += (c[a, b] - c[i, j]) / hd^2
-            end
-            v = c[i, j] + dt / n * (D * lap + rate(c, i, j))
-            new[i, j] = lower === nothing ? v : max(v, lower)
-        end
-        c = new
-    end
-    return c
 end
 
+@testitem "F2-07: the update pass equals the symbolic fusion (byte-identity gate)" setup = [LP_groups] tags = [:latticepde, :groups] begin
 @testset "F2-07: the update pass equals the symbolic fusion (byte-identity gate)" begin
     @variables gm(..) gd(..)::Bool [input = true] gk(..)::Int32 [input = true]
     gme, gde, gke = gm(t, x, y), gd(t, x, y), gk(t, x, y)
@@ -212,7 +174,9 @@ end
         @test gown(gsys()) isa LFP.FieldProblem
     end
 end
+end
 
+@testitem "F2-07: a clip in B; a second algorithm fuses once, with no LatticePDE call" setup = [LP_groups] tags = [:latticepde, :groups] begin
 @testset "F2-07: a clip in B; a second algorithm fuses once, with no LatticePDE call" begin
     @variables gq(..)
     gqe = gq(t, x, y)
@@ -242,7 +206,9 @@ end
     warm = @allocated init(pc, ExplicitEuler(; dt = 0.05, substeps = 4, lower = 1.0))
     @test warm < cold / 4 && length(pc.group.programs) == 2        # warm: nothing fused, planned or emitted
 end
+end
 
+@testitem "F2-07: dt is required; lower_group cuts a group" setup = [LP_groups] tags = [:latticepde, :groups] begin
 @testset "F2-07: dt is required; lower_group cuts a group" begin
     p = gown(gsys())
     for f in (() -> init(p, ExplicitEuler()), () -> solve(p), () -> solve(p; saveat = 0.05))
@@ -260,12 +226,9 @@ end
           cut.stability(LFP.with_tables([0.3, 0.2], Pair{String, Vector{Float64}}[])) ≈ 512
     @test occursin("not a dependent variable", gerr(() -> LatticePDE.lower_group(gsys(), disc; fields = [x])))
 end
+end
 
-# F3-22 review r1: a group that reads another group's field through a spatial operator (`Δ(o)` in
-# `c`'s rate) keeps that field's face conditions in the cut, so the input `o` has the face rules
-# of the whole system (here a Dirichlet face on x = 0). Base 9afaac05: IRError "field `go` has no
-# boundary rule on axis 1".
-using LatticeFields.IR: FaceRule as GFaceRule
+@testitem "F3-22 review r1: lower_group's cut keeps the faces of a field an operator reads" setup = [LP_groups] tags = [:latticepde, :groups] begin
 @testset "F3-22 review r1: lower_group's cut keeps the faces of a field an operator reads" begin
     ce, oe = gc(t, x, y), go(t, x, y)
     sys = PDESystem([D(ce) ~ 0.1 * Δ(ce) + 0.5 * Δ(oe) - ce, D(oe) ~ 0.2 * Δ(oe) - oe],
@@ -283,14 +246,9 @@ using LatticeFields.IR: FaceRule as GFaceRule
     pt = PDESystem([D(ce) ~ 0.1 * Δ(ce) + 0.5 * oe - ce, D(oe) ~ 0.2 * Δ(oe) - oe], sys.bcs, sys.domain, [t, x, y], [ce, oe], Num[]; name = :gpt)
     @test isempty(rules(LatticePDE.lower_group(pt, disc; fields = [ce]).rate, "go"))
 end
+end
 
-# F3-02 (F2 design §2.2): the group's slots are specs, not names. A parameter slot holds its
-# default and role (a computed default: `:computed` with its expression), a table its values, an
-# input its element type, declared bounds, default and whether a front end fills it at every
-# step (`filled`: front end A's CPM reads; none in B). `string` of each is its key, so the
-# names in order are unchanged.
-@parameters gk = 2ga
-@variables gin(..) [input = true, bounds = (0.0, 2.0)] gki(..)::Int32 [input = true]
+@testitem "F3-02: ParamSlot, TableSpec and InputSpec in the GroupSpec" setup = [LP_groups] tags = [:latticepde, :groups] begin
 @testset "F3-02: ParamSlot, TableSpec and InputSpec in the GroupSpec" begin
     disc = LatticeDiscretization(Grid((8, 8)); T = Float64)
     whole = LatticePDE.lower_group(gsys(), disc)
@@ -320,13 +278,9 @@ end
     tb = only(cspec.tables)
     @test tb isa LFP.TableSpec && string(tb) == "Dk" && tb.values == [1.0, 2.0, 3.0]
 end
+end
 
-# F3-02 review r1 S6: an aux field read at neighbor sites by a rate (`K ~ k c`, `D(c) ~ Δ(K)`)
-# has no value beyond a closed face: refused in the equation's words with the route (`k Δ(c)`),
-# which builds and gives the same run on a periodic box. A face condition on an aux field is
-# refused naming it. Base (8f658abd): "IRError: field `K` has no boundary rule on axis 1 side -";
-# a face on `K`: "face conditions apply to rate fields (a map's offset …)" (reviewer probe u3_b §5b).
-@variables gsc(..) gsK(..)
+@testitem "F3-02: an aux field read at neighbor sites (closed box: refused with the route)" setup = [LP_groups] tags = [:latticepde, :groups] begin
 @testset "F3-02: an aux field read at neighbor sites (closed box: refused with the route)" begin
     ce, Ke = gsc(t, x, y), gsK(t, x, y)
     dom = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
@@ -353,14 +307,9 @@ end
     @test a.retcode == ReturnCode.Success
     @test a[ce, end] ≈ b[ce, end] rtol = 1e-12
 end
+end
 
-# F3-02 (F3 design §3.11): an aux field that carries one state into another's rate (`K ~ c`,
-# `D(a) ~ -k K`, `D(c) ~ k a`) is a one-buffer field read new inside the group's Jacobi step:
-# its kernel runs first. One group equals the hand-stepped Jacobi step; two groups the split
-# (a's group, holding c, then c's group reading the new a). Base (eb2efb60): `discretize`
-# refused it ("the fields K, a, c define each other within one step (a read cycle …)").
-@parameters gkl = 1.0
-@variables gla(..) glc(..) glK(..)
+@testitem "F3-02: an aux-carried loop runs (Jacobi in a group, the split across groups)" setup = [LP_groups] tags = [:latticepde, :groups] begin
 @testset "F3-02: an aux-carried loop runs (Jacobi in a group, the split across groups)" begin
     ae, cl, Kl = gla(t, x, y), glc(t, x, y), glK(t, x, y)
     per = [gla(t, 0, y) ~ gla(t, 1, y), gla(t, x, 0) ~ gla(t, x, 1), glc(t, 0, y) ~ glc(t, 1, y), glc(t, x, 0) ~ glc(t, x, 1)]
@@ -386,46 +335,9 @@ end
     @test all(≈(a; rtol = 1e-14), s2[ae, end]) && all(≈(c; rtol = 1e-14), s2[cl, end])
     # (aux fields that define each other stay refused, naming them: silent.jl LF48)
 end
-
-# F3-04 (F3 design §3.3, §3.4): the status word and its readers. A stub with a solve (`WStub`)
-# steps as Euler and writes into its cache's word what an implicit solver would: a solve per
-# window, a linear budget hit per window when `need > budget`, and code `code` from window `at`
-# (sticky, with the window and a cause bit). B reads the word on the host after every step,
-# and at the saves and the end. Base (f8510fe8): no reader; the run ended `Success`.
-struct WStub <: LFP.FieldAlgorithm
-    dt::Float64
-    code::UInt32
-    at::Int
-    need::Int
-    budget::Int
-end
-WStub(dt; code = 0, at = 0, need = 0, budget = 8) = WStub(dt, UInt32(code), at, need, budget)
-mutable struct WStubCache{W}
-    word::W
-    steps::Int
-    a::WStub
-end
-LFP.nbuffers(::WStub) = 2
-LFP.update_key(::WStub) = :euler
-LFP.update_rule(::WStub) = LFP.update_rule(ExplicitEuler())
-LFP.alg_cache(a::WStub, group, store) = WStubCache(fill!(similar(store.flat[1], UInt32, 8), 0), 0, a)
-LFP.status_word(c::WStubCache) = c.word
-LFP.reset_cache!(::WStubCache) = nothing                  # (no history; a write keeps the word)
-LFP.substeps(::LFP.FieldProblem, ::WStub, p = nothing; tables = nothing, inputs = nothing) = 1
-wbump!(w, i, x) = (v = view(w, i:i); v .+= UInt32(x); nothing)
-wset!(w, i, x) = (v = view(w, i:i); v .= UInt32(x); nothing)
-function LFP.step_retcode!(c::WStubCache, rt)
-    c.steps += 1
-    wbump!(c.word, LFP.STATUS_SOLVES, 1)
-    c.a.need > c.a.budget && wbump!(c.word, LFP.STATUS_BUDGET, 1)
-    if c.a.code > 0 && c.steps == c.a.at
-        wset!(c.word, LFP.STATUS_CODE, c.a.code)
-        # the window, as a solver writes it: the runtime's window count (review r1 S3)
-        c.a.code >= 2 && (wset!(c.word, LFP.STATUS_WINDOW, rt.totals.windows); wset!(c.word, LFP.STATUS_CAUSE, 1))
-    end
-    return ReturnCode.Success
 end
 
+@testitem "F3-04: B reads the status word (host: after every step)" setup = [LP_groups] tags = [:latticepde, :groups] begin
 @testset "F3-04: B reads the status word (host: after every step)" begin
     p = gown(gsys())                                      # 10 windows of 0.01
     ig = init(p, WStub(0.01; code = 2, at = 3); saveat = 0.05)
@@ -445,6 +357,7 @@ end
     @test solve(p, ExplicitEuler(; dt = 0.01, substeps = 2)).stats == (; solves = 0, budget = 0, floor = 0, newton_budget = 0)
     @test gwarm(init(p, ExplicitEuler(; dt = 0.01, substeps = 2))) == 0
 end
+end
 
 # F3-04 review r1: M2 `reinit!` starts a clean run (the word, the totals and `rt.status`
 # cleared); S5 a write (`reset!`) keeps the failure; S4 a failure saves the state it stopped at;
@@ -452,6 +365,7 @@ end
 # cleared), so the run after `reinit!` succeeds. Base (8f658abd): `reinit!` kept the totals and
 # the failing window (the new run warned nothing and ended `ConvergenceFailure` at its first
 # read); a write set `rt.status = Success`; the saves ended at 0.0.
+@testitem "F3-04: reinit! starts a clean run; a write keeps the failure; the stop is saved" setup = [LP_groups] tags = [:latticepde, :groups] begin
 @testset "F3-04: reinit! starts a clean run; a write keeps the failure; the stop is saved" begin
     p = gown(gsys())
     ig = init(p, WStub(0.01; code = 2, at = 3); saveat = 0.05)
@@ -466,7 +380,9 @@ end
     s = @test_logs solve!(ig)
     @test s.retcode == ReturnCode.Success && s.t ≈ [0.0, 0.05, 0.1] && s.stats.solves == 10
 end
+end
 
+@testitem "F3 r2: init's barriers: one group skips the coupling check; step! and solve! stay inferred" setup = [LP_groups] tags = [:latticepde, :groups] begin
 @testset "F3 r2: init's barriers: one group skips the coupling check; step! and solve! stay inferred" begin
     p = gown(gsys())
     a4 = ExplicitEuler(; dt = 0.01, substeps = 4)
@@ -484,4 +400,5 @@ end
         @inferred step!(ig)
         @test (@inferred LFP.finish!(ig)) === ig && solve!(ig).retcode == ReturnCode.Success
     end
+end
 end

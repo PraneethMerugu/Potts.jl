@@ -6,15 +6,24 @@
 # OrdinaryDiffEq solver unless `dtmax` or `tstops` is given. Negative control at 70400aba
 # (~/lpwork/f4b2-rev2/nc-maskswitch.log): the masked sites end at 0.0 under both solvers; the
 # unlocated predicate is not refused.
-using OrdinaryDiffEqTsit5: Tsit5
-using OrdinaryDiffEqRosenbrock: Rodas5P
 
-@parameters mD = 0.2 mt0 = 0.3
-@variables mc(..) mk(..)::Int32 [input = true] mq(..) [input = true]
-mce, mke, mqe = mc(t, x, y), mk(t, x, y), mq(t, x, y)
-mdom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-const MK = Int32[i <= 2 ? 1 : 0 for i in 1:8, j in 1:8]
+@testsetup module LP_maskswitch
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/maskswitch.jl")
+include("shared/export_all.jl")
+end
 
+@testitem "review b2 #3: a mask set switching on over a quiet state under Tsit5 and Rodas5P" setup = [LP_maskswitch] tags = [:latticepde, :maskswitch] begin
 @testset "review b2 #3: a mask set switching on over a quiet state under Tsit5 and Rodas5P" begin
     for (name, pred) in (("t > 0.3", (t > 0.3) & (mke == 1)), ("t > mt0", (t > mt0) & (mke == 1)),
             ("0.3 < t", (0.3 < t) & (mke == 1)))
@@ -44,4 +53,5 @@ const MK = Int32[i <= 2 ? 1 : 0 for i in 1:8, j in 1:8]
     s = solve(p, Tsit5(); dtmax = 0.01)
     @test unique(s.u[end]) == [2.0]
     @test unique(solve(p, Tsit5(); tstops = [0.3, 0.31]).u[end]) == [2.0]
+end
 end

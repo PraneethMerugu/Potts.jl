@@ -2,25 +2,26 @@
 # sets the window of the owned steppers and the step index `k` that `step_index(t)` reads:
 # an integer kept by the stepper (the clock boundaries reached since the start of the time
 # span), never computed from a float time, so `k` does not depend on `dt` or `saveat`.
-using LatticeFields: Problems as LFP
-using LatticeFields.Compile: CompileOptions
 
-@parameters kη = 0.5
-@variables kc(..)
-kce = kc(t, x, y)
-kdom(T) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-kperiodic = [kc(t, 0, y) ~ kc(t, 1, y), kc(t, x, 0) ~ kc(t, x, 1)]
-# the rate is the step index: c(T) = Σ over the windows of dt · k
-ksys(T; rate = step_index(t)) = PDESystem([D(kce) ~ rate], [kc(0, x, y) ~ 0.0; kperiodic], kdom(T), [t, x, y], [kce], [kη];
-    name = :k)
-kdisc(; clock = 1.0) = LatticeDiscretization(Grid((4, 4)); T = Float64, clock)
-kerr(f) = try
-    f(); ""
-catch e
-    e isa ArgumentError || rethrow()
-    sprint(showerror, e)
+@testsetup module LP_clock
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/problems.jl")
+include("shared/silent.jl")
+include("shared/clock.jl")
+include("shared/export_all.jl")
 end
 
+@testitem "F2-08c: step_index(t) reads k by integer bookkeeping (B)" setup = [LP_clock] tags = [:latticepde, :clock] begin
 @testset "F2-08c: step_index(t) reads k by integer bookkeeping (B)" begin
     p = discretize(ksys(3.0), kdisc())
     @test p isa SciMLBase.ODEProblem                               # (F4-01: one problem; base: a FieldProblem)
@@ -45,7 +46,9 @@ end
     e = kerr(() -> init(p2, ExplicitEuler(; dt = 0.3)))
     @test occursin("dt = 0.3", e) && occursin("period 0.5", e)
 end
+end
 
+@testitem "F2-08c: step_index refusals name their route (B)" setup = [LP_clock] tags = [:latticepde, :clock] begin
 @testset "F2-08c: step_index refusals name their route (B)" begin
     @test occursin("clock = τ", kerr(() -> discretize(ksys(1.0), LatticeDiscretization(Grid((4, 4)); T = Float64))))
     # (F4-02: an OrdinaryDiffEq solver no longer refuses it, "needs a field algorithm"; odepath.jl)
@@ -58,10 +61,12 @@ end
     p = discretize(ksys(1.0), kdisc())
     @test !any(s -> occursin("clock__tick", string(s)), p.f.sys.paramsyms)
 end
+end
 
 # REAL forms of the step index over several windows, in the default and the debug emission
 # modes: `η k` is hoisted into a derived parameter, `(1 + ε k)` multiplies the diffusion; a
 # slot bound once would read the first window's `k` from the second window on
+@testitem "F2-08c: REAL forms of step_index over several windows (default and debug emission)" setup = [LP_clock] tags = [:latticepde, :clock] begin
 @testset "F2-08c: REAL forms of step_index over several windows (default and debug emission)" begin
     sysr = PDESystem([D(kce) ~ -kce + kη * step_index(t)], [kc(0, x, y) ~ 1.0; kperiodic], kdom(4.0), [t, x, y],
         [kce], [kη]; name = :r)
@@ -96,10 +101,12 @@ end
         @test isapprox(vec(s[kce, end]), vec(want); rtol = 1e-12)
     end
 end
+end
 
 # Review round 1 of F2 batch 3: messages print `step_index(t)` (S1); a window that comes from
 # the clock is named so, with routes that work when followed (S2); `step_index` with
 # `FieldGroups` and with a map (S3); the clock's slot is not a parameter (N6)
+@testitem "F2-08c: messages and routes of the clock (B)" setup = [LP_clock] tags = [:latticepde, :clock] begin
 @testset "F2-08c: messages and routes of the clock (B)" begin
     # S1: the slot prints as the user wrote it
     sysf = PDESystem([D(kce) ~ (1 + kη * step_index(t)) * Δ(kce)], [kc(0, x, y) ~ 0.0; kperiodic], kdom(2.0), [t, x, y],
@@ -147,4 +154,5 @@ end
     @test solve(discretize(sysm(4.0), kdisc(; clock = 2.0)))[kme, end][1] == 0 + 0 + 1 + 1  # k = 0, 0, 1, 1
     # N6: the slot is not a parameter
     @test occursin("step_index(t)", kerr(() -> p.ps[:clock__tick]))
+end
 end

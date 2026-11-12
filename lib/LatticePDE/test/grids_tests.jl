@@ -6,14 +6,24 @@
 # under Tsit5 too. Negative control at 70400aba (~/lpwork/f4b2-rev2/nc-grids.log): `sol[c][end]`
 # is a number on the owned and Tsit5 paths, `field_series` refuses a FieldSolution, a FieldSolution
 # is not callable, a partial `save_idxs` is a BoundsError, Tsit5 with `save_idxs = c` a MethodError.
-using OrdinaryDiffEqTsit5: Tsit5
 
-@parameters qD = 0.1 qk = 1.0
-@variables qc(..)
-qce = qc(t, x, y)
-qsys() = PDESystem([D(qce) ~ qD * Δ(qce) - qk * qce], [qc(0, x, y) ~ 1.0 + x * y],
-    [t ∈ Interval(0.0, 0.3), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [qce], [qD, qk]; name = :q18)
+@testsetup module LP_grids
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/grids.jl")
+include("shared/export_all.jl")
+end
 
+@testitem "Q18: sol[c] is one grid per save on the owned, Tsit5 and FieldProblem paths" setup = [LP_grids] tags = [:latticepde, :grids] begin
 @testset "Q18: sol[c] is one grid per save on the owned, Tsit5 and FieldProblem paths" begin
     p = discretize(qsys(), LatticeDiscretization(Grid((6, 4)); T = Float64))
     so = solve(p, ExplicitEuler(; dt = 0.01); saveat = 0.1)
@@ -36,7 +46,9 @@ qsys() = PDESystem([D(qce) ~ qD * Δ(qce) - qk * qce], [qc(0, x, y) ~ 1.0 + x * 
     @test so[qce] == sf[qce] && so.t == sf.t
     @test maximum(abs, so[qce][end] .- st[qce][end]) < 0.01   # (EE against Tsit5)
 end
+end
 
+@testitem "Q18: save_idxs on owned and Tsit5 solves" setup = [LP_grids] tags = [:latticepde, :grids] begin
 @testset "Q18: save_idxs on owned and Tsit5 solves" begin
     p = discretize(qsys(), LatticeDiscretization(Grid((6, 4)); T = Float64))
     msg(f) = try
@@ -53,4 +65,5 @@ end
     s = solve(p, ExplicitEuler(; dt = 0.01); saveat = 0.1, save_idxs = [2, 3])
     @test length(s.u[1]) == 2 && occursin("is not saved whole", msg(() -> s[qce]))
     @test occursin("save_idxs = ", msg(() -> s[qce]))
+end
 end

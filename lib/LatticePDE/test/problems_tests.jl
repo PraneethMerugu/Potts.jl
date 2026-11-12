@@ -2,19 +2,24 @@
 # the SciML ODEProblem, solved through `solve`; analytic oracles (Fourier decay, steady
 # profiles, conservation), symbolic indexing of solutions and integrators, the stability
 # bound, the parameter checks of `remake`/`setp`, and negative controls for each claim.
-using OrdinaryDiffEqTsit5: Tsit5
-using ForwardDiff: ForwardDiff
-using SymbolicIndexingInterface: getp, setp, getsym
-using SciMLBase: SciMLBase, ODEProblem, remake
 
-@parameters kr = 0.0 Dr = 1.0 gr = 0.0 βr = -0.5
-pdom(T = 1.0) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-psys(eqs, bcs, ps; T = 1.0, dvs = [ce]) = PDESystem(eqs, bcs, pdom(T), [t, x, y], dvs, ps; name = :p)
-# (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
-owned(sys, n, m = n; T = Float64, inputs = (), kw...) =
-    LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((n, m)); T, kw...); inputs))
-fgrid(v, n, m) = reshape(v, n, m)
+@testsetup module LP_problems
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/problems.jl")
+include("shared/export_all.jl")
+end
 
+@testitem "Fourier mode decay through solve (owned and ODE)" setup = [LP_problems] tags = [:latticepde, :problems] begin
 @testset "Fourier mode decay through solve (owned and ODE)" begin
     n, m, kx, ky = 16, 8, 1, 2
     per = [c(t, x, 0) ~ c(t, x, 1), c(t, 0, y) ~ c(t, 1, y)]
@@ -45,7 +50,9 @@ fgrid(v, n, m) = reshape(v, n, m)
     @test (@allocated ode.f(du, u, ode.p, 0.0)) == 0
     @test maximum(abs, fgrid(du, n, m) .+ λ .* mode) < 1e-9          # f(mode) = −λ mode
 end
+end
 
+@testitem "steady profiles and conservation through solve" setup = [LP_problems] tags = [:latticepde, :problems] begin
 @testset "steady profiles and conservation through solve" begin
     n = 8
     # linear steady profile between two Dirichlet faces (y periodic): cell-centered FV is exact
@@ -77,7 +84,9 @@ end
     m0, m1 = cons([c(t, x, 0) ~ c(t, x, 1), c(t, 0, y) ~ 0.0])
     @test abs(m1 - m0) > 1e-3 * abs(m0)
 end
+end
 
+@testitem "stability bound and substeps (§6.2)" setup = [LP_problems] tags = [:latticepde, :problems] begin
 @testset "stability bound and substeps (§6.2)" begin
     n = 32
     S = LatticePDE.Problems.substeps
@@ -132,7 +141,9 @@ end
     @test_throws ArgumentError solve(adv, ExplicitEuler(; dt = 0.01))
     @test SciMLBase.successful_retcode(solve(adv, ExplicitEuler(; dt = 0.01, substeps = 2)))
 end
+end
 
+@testitem "bound: kind-gated terms, cross coupling, array coefficients (review round 2)" setup = [LP_problems] tags = [:latticepde, :problems] begin
 @testset "bound: kind-gated terms, cross coupling, array coefficients (review round 2)" begin
     n = 16
     S = LatticePDE.Problems.substeps
@@ -255,7 +266,9 @@ end
     s_ae = solve(ae, ExplicitEuler(; dt = 0.01))                     # the automatic count
     @test SciMLBase.successful_retcode(s_ae) && s_ae.substeps == ceil(Int, 0.01 * 1024 / 1.8)
 end
+end
 
+@testitem "setp is atomic; init checks the faces (review round 2)" setup = [LP_problems] tags = [:latticepde, :problems] begin
 @testset "setp is atomic; init checks the faces (review round 2)" begin
     per = [c(t, x, 0) ~ c(t, x, 1), c(t, 0, y) ~ c(t, 1, y)]
     prob = owned(psys([D(ce) ~ Dr * Δ(ce)], [c(0, x, y) ~ cos(2π * x); per], [Dr]; T = 0.1), 32)
@@ -281,7 +294,9 @@ end
     err = try init(rp, ExplicitEuler(; dt = 1e-3, substeps = 4)); "" catch e; sprint(showerror, e) end
     @test occursin("ghost value undefined", err)
 end
+end
 
+@testitem "symbolic indexing: solutions, integrators, problems" setup = [LP_problems] tags = [:latticepde, :problems] begin
 @testset "symbolic indexing: solutions, integrators, problems" begin
     n, m = 6, 4
     sys = psys([D(ce) ~ Dr * Δ(ce) - kr * ce], [c(0, x, y) ~ x; c(t, x, 0) ~ c(t, x, 1)], [Dr, kr]; T = 0.01)
@@ -303,7 +318,9 @@ end
     @test integ[:c] ≈ fill(2.0 * (1 - 1e-2), n, m)                # c ← c (1 − dt k)
     @test (@allocated step!(integ)) == 0                          # warm step: no allocation
 end
+end
 
+@testitem "parameter updates re-check degenerate Robin faces" setup = [LP_problems] tags = [:latticepde, :problems] begin
 @testset "parameter updates re-check degenerate Robin faces" begin
     n = 4                                                         # h = 1/4: β = −h/2 at the low face
     sys = psys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0, c(t, 0, y) + βr * Differential(x)(c(t, 0, y)) ~ 1.0,
@@ -330,7 +347,9 @@ end
     @test !isfinite(r.ρ) && r.seen >= 128
     @test LatticePDE.bound_parts(prob.stability, [0.25]).seen >= 128          # control: a finite face
 end
+end
 
+@testitem "discrete maps: ExplicitMap" setup = [LP_problems] tags = [:latticepde, :problems] begin
 @testset "discrete maps: ExplicitMap" begin
     @parameters dx [lattice_spacing = 1]
     @variables N(..)
@@ -347,7 +366,9 @@ end
     end
     @test_throws ArgumentError solve(prob, ExplicitEuler(; dt = 1.0))   # a map is not a rate
 end
+end
 
+@testitem "refusals" setup = [LP_problems] tags = [:latticepde, :problems] begin
 @testset "refusals" begin
     sys = psys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0], Num[])
     @test_throws ArgumentError LatticeDiscretization(Grid((4, 4)); problem = :linear)
@@ -360,11 +381,13 @@ end
     @test discretize(psys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0, ce ~ masked(ke == 3, 0.0)], Num[];
         dvs = [ce, ke]), LatticeDiscretization(Grid((4, 4)); T = Float64)) isa SciMLBase.ODEProblem
 end
+end
 
 # F2-10 (F2 design §2.11): the one operator allowlist (`lowers_call`, which Potts `@equations`
 # asks too), and `Advect` with a velocity written as a vector of terms (`[ux, 0.0]`), equal to
 # the same velocity given as an array input. Base (c2583722): no `lowers_call`; the vector
 # velocity refused ("`Advect` takes the velocity array field").
+@testitem "F2-10: one allowlist; Advect with a vector velocity" setup = [LP_problems] tags = [:latticepde, :problems] begin
 @testset "F2-10: one allowlist; Advect with a vector velocity" begin
     for f in (+, -, *, /, ^, min, max, abs, sqrt, exp, log, ifelse, ==, !=, <, <=, >, >=, !, &, |,
         sin, cos, tan, tanh, sinh, cosh, cbrt, exp2, log2, log10, expm1, log1p, atan, floor, ceil, round)
@@ -385,10 +408,12 @@ end
     # the velocity's length is checked against the grid's axes
     @test_throws ArgumentError owned(psys([D(ce) ~ -Advect(Upwind1())([uxv], ce)], [c(0, x, y) ~ 0.0], [uxv]), 8, 4)
 end
+end
 
 # F2-12 (F2 design §2.8, SX-03): `discretize(…; u0, p, tspan)` on both problem kinds equals the
 # `remake` route; any other keyword is an `ArgumentError` naming it. Base (c2583722): the
 # keywords were a `MethodError` (`discretize` took `inputs` only).
+@testitem "F2-12: discretize keywords" setup = [LP_problems] tags = [:latticepde, :problems] begin
 @testset "F2-12: discretize keywords" begin
     pidx(prob, s) = LatticePDE.Problems.SII.parameter_index(prob, s)
     withp(p, i, v) = (q = collect(promote_type(eltype(p), typeof(v)), p); q[i] = v; q)
@@ -441,6 +466,7 @@ end
     @test occursin("`u0`: `nope` is not a field", emsg(() -> discretize(sys, disc; inputs = [ke => K], u0 = [:nope => 1.0])))
     @test occursin("`tspan` is `(t₀, t₁)`", emsg(() -> discretize(sys, disc; inputs = [ke => K], tspan = 3)))
 end
+end
 
 # F3-00 (F3 design §3.12, review r1 M1 and R2-M2): a system whose only equations are aux fields
 # `K ~ rhs` has one group with no state, evaluated once per window (0 substeps); the aux fields
@@ -448,6 +474,7 @@ end
 # saved or read `K` is `rhs` of the state at that time. Base (743ab0a0): `sol[K]` was "Invalid
 # symbol K(t, x, y) for `getsym`" and an aux-only solve saved empty states (reviewer probe
 # `r1_auxonly_b`); `integ[K]` failed the same way, also for a system with states.
+@testitem "F3-00: aux fields in B (aux-only systems, sol[K], integ[K])" setup = [LP_problems] tags = [:latticepde, :problems] begin
 @testset "F3-00: aux fields in B (aux-only systems, sol[K], integ[K])" begin
     emsg(f) = try
         f(); ""
@@ -514,4 +541,5 @@ end
     @test io.t > 0
     @test io[Ke] ≈ 2 .* io[ce] .+ io.t rtol = 1e-14
     @test SciMLBase.successful_retcode(SciMLBase.solve!(io))
+end
 end

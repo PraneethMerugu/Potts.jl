@@ -1,12 +1,27 @@
 # F2-06 review: every group keeps its own substep count through a rebind; the coupling between
 # groups has a bound (ruling K-unsafe); `setu` drops the algorithm's history; the per-group
 # counts are reported; the messages print an algorithm in its keyword form.
-using SymbolicIndexingInterface: setu, getp
 
-@parameters gkc = 0.1 gDo = 0.3 gKt[1:2] = [1.0, 2.0]
-@variables gpc(..) gpo(..) gpq(..)::Int32 [input = true, bounds = (1, 2)]
-pce, poe, pqe = gpc(t, x, y), gpo(t, x, y), gpq(t, x, y)
+@testsetup module LP_groups_coupling
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/problems.jl")
+include("shared/silent.jl")
+include("shared/groups.jl")
+include("shared/groups_coupling.jl")
+include("shared/export_all.jl")
+end
 
+@testitem "F2-06 review: each group keeps its count through setp, an input write and a table write" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
 @testset "F2-06 review: each group keeps its count through setp, an input write and a table write" begin
     # c decays at a rate read through a kind table; o diffuses (its count is the larger)
     sys = PDESystem([D(pce) ~ -gkc * at(gKt, pqe) * pce, D(poe) ~ gDo * Δ(poe)],
@@ -34,16 +49,9 @@ pce, poe, pqe = gpc(t, x, y), gpo(t, x, y), gpq(t, x, y)
     s = solve(p, alg)
     @test LFP.substep_counts(s) == c0 && substep_counts(s)[1] == 1
 end
+end
 
-@parameters gk = 300.0
-@variables gr1(..) gr2(..)
-r1e, r2e = gr1(t, x, y), gr2(t, x, y)
-# the rotation c' = −k o, o' = k c (imaginary eigenvalues ±ik)
-rsys() = PDESystem([D(r1e) ~ -gk * r2e, D(r2e) ~ gk * r1e], [gr1(0, x, y) ~ 1.0, gr2(0, x, y) ~ 0.0],
-    [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [r1e, r2e], [gk]; name = :rot)
-# two groups (two algorithms: equal ones would be one group)
-rtwo(n) = FieldGroups(r1e => ExplicitEuler(; dt = 0.01, substeps = n), r2e => ExplicitEuler(; dt = 0.01, substeps = n + 1))
-
+@testitem "F2-06 review: the coupling between groups is bounded (K-unsafe: refused with the routes)" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
 @testset "F2-06 review: the coupling between groups is bounded (K-unsafe: refused with the routes)" begin
     rp = discretize(rsys(), LatticeDiscretization(Grid((4, 4)); T = Float64))
     # k dt = 3 in two groups (base: counts [1, 1], Success at 3.3e41)
@@ -71,7 +79,9 @@ rtwo(n) = FieldGroups(r1e => ExplicitEuler(; dt = 0.01, substeps = n), r2e => Ex
     @test getp(ig, gk)(ig) == 5.0
     @test occursin("dt · Σ max|coefficient|", gerr(() -> init(remake(wp; p = [gk => 300.0]), rtwo(1))))   # remake
 end
+end
 
+@testitem "F2-06 review: setu drops the history; FieldGroups and clip messages" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
 @testset "F2-06 review: setu drops the history; FieldGroups and clip messages" begin
     p = gown(gsys())
     ig = init(p, GStub(0.01, 0))
@@ -87,17 +97,9 @@ end
     end
     @test ExplicitEuler(; dt = 0.01, lower = -1.0).lower == -1.0                  # control
 end
+end
 
-# Round 2 of the F2-06 review: only groups in a loop of the group read graph are limited.
-@parameters gwk = 300.0 gwr = 5.0
-@variables gwc(..) gwu(..) gwo(..) gwv(..) gwa(..)
-wce, wue, woe, wve, wae = gwc(t, x, y), gwu(t, x, y), gwo(t, x, y), gwv(t, x, y), gwa(t, x, y)
-const GW_DOM = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-gwdisc() = LatticeDiscretization(Grid((4, 4)); T = Float64)
-gwerr(f) = (e = gerr(f); replace(e, r"\s+" => " "))
-# the number after `key` in a message, verbatim (`dt ≤ 0.006666`)
-gwnum(e, key) = parse(Float64, match(Regex(key * raw" ([0-9.eE+-]+)"), e).captures[1])
-
+@testitem "F2-06 round 2: a one-way chain between groups is not limited (B)" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
 @testset "F2-06 round 2: a one-way chain between groups is not limited (B)" begin
     # c decays alone; the reader (u, or a: stepped before c, the groups run in state order, by
     # key) reads c in its own group: block triangular, stable for any split
@@ -131,7 +133,9 @@ gwnum(e, key) = parse(Float64, match(Regex(key * raw" ([0-9.eE+-]+)"), e).captur
         end
     end
 end
+end
 
+@testitem "F2-06 round 2: loops of groups are limited, chains next to them are not (B)" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
 @testset "F2-06 round 2: loops of groups are limited, chains next to them are not (B)" begin
     # a 3-group loop: a reads b, b reads c, c reads a
     sys3 = PDESystem([D(wce) ~ -gwk * woe, D(woe) ~ -gwk * wve, D(wve) ~ gwk * wce],
@@ -160,7 +164,9 @@ end
     @test occursin("the groups of `gwc`, `gwo` read one another in a loop", e) && !occursin("gwu", e)
     @test getp(ig, gwr)(ig) == 5.0                                # atomic
 end
+end
 
+@testitem "F2-06 round 3: an unseen term that reads another field counts as reading every group (B)" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
 @testset "F2-06 round 3: an unseen term that reads another field counts as reading every group (B)" begin
     # c's rate has a nonlinear term that reads o (unseen: the bound does not record what it
     # reads); o decays alone, u reads c. The true graph is the chain o → c → u, but c counts as
@@ -176,7 +182,9 @@ end
           occursin("the terms of `gwc` that the bound cannot see and that read another field count as reading every other group", e)
     @test solve(remake(p; p = [gwk => 50.0]), alg).retcode == ReturnCode.Success          # κ = 0.5
 end
+end
 
+@testitem "F2-06 round 3: an unseen term on the row's own field couples no group (B)" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
 @testset "F2-06 round 3: an unseen term on the row's own field couples no group (B)" begin
     # `-a^3` reads only a: the chain a → c is one-way (k dt = 3; refused in round 2)
     for selfterm in (-wae^3, -0.1 * wae - 1e-9 * wae^3)
@@ -191,7 +199,9 @@ end
         @test 0 < sol[:gwc, end][1] < 300 * 0.1                    # bounded by k t max a
     end
 end
+end
 
+@testitem "F2-06 round 3: a loop counts only the reads inside it (B)" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
 @testset "F2-06 round 3: a loop counts only the reads inside it (B)" begin
     # a is a one-way source (k dt = 3) of the loop b ⇄ c (w dt = 0.005): accepted (refused in round 2)
     @parameters gxk = 300.0 gxw = 0.5
@@ -217,7 +227,9 @@ end
     @test occursin("the groups of `gxb`, `gxc` read one another in a loop", e) &&
           occursin("dt · Σ max|coefficient| = 3.0 >", e) && occursin("the coefficient `-gxw` of `gxc`", e) && !occursin("gxa", e)
 end
+end
 
+@testitem "F2-06 round 2: following the printed routes is accepted (B)" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
 @testset "F2-06 round 2: following the printed routes is accepted (B)" begin
     rp = discretize(rsys(), LatticeDiscretization(Grid((4, 4)); T = Float64))
     for k in (150.0, 1 / 0.0033335, 300.0, 7.0e3 / 3, 1234.5)
@@ -247,7 +259,9 @@ end
     @test occursin("in one group (one algorithm; its count can be automatic)", e)
     @test solve(pd, ExplicitEuler(; dt = 0.01)).retcode == ReturnCode.Success
 end
+end
 
+@testitem "F2-06 round 2: the message prints the user's text and a short dt (B)" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
 @testset "F2-06 round 2: the message prints the user's text and a short dt (B)" begin
     @parameters gwKt[1:2] = [1.0, 2.0]
     @variables gwq(..)::Int32 [input = true, bounds = (1, 2)]
@@ -262,4 +276,5 @@ end
     @test occursin("the coefficient `-at(gwKt, gwq)` of `gwo`", e) && !occursin("LatticePDE.", e) && !occursin("(t, x, y)", e)
     @test occursin("dt = 0.00333333:", e)
     @test substep_counts(ig) == [1, 2]                            # exported from LatticePDE
+end
 end

@@ -1,26 +1,25 @@
 # F1: no silent wrong results from `discretize` (refusal inventory SD-04 … SD-12, V3, and the
 # misleading messages of LatticePDE). Each testset has a negative control: the comment gives
 # the wrong value the base f9a77dd3 returned, measured on the PC (probe of 2026-10-18).
-using SciMLBase: SciMLBase, remake
-using SymbolicIndexingInterface: SymbolicIndexingInterface, getp, setp
-using OrdinaryDiffEqTsit5: Tsit5
-using Serialization: Serialization
 
-sdom(T = 1.0) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-ssys(eqs, bcs, dvs, ps; T = 1.0) = PDESystem(eqs, bcs, sdom(T), [t, x, y], dvs, ps; name = :s)
-# (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
-sown(sys; n = 4, inputs = (), kw...) =
-    LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64, kw...); inputs))
-emsg(f) = try
-    f(); ""
-catch e
-    sprint(showerror, e)
+@testsetup module LP_silent
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/problems.jl")
+include("shared/silent.jl")
+include("shared/export_all.jl")
 end
 
-@variables mm(..) dm(..)::Bool [input = true] kq(..)::Int32 [input = true] Lc(..)
-@variables dd(..)::Bool = true [input = true] kb(..)::Int32 [input = true, bounds = (1, 3)]
-me, de, qe, Le, ddv, qb = mm(t, x, y), dm(t, x, y), kq(t, x, y), Lc(t, x, y), dd(t, x, y), kb(t, x, y)
-
+@testitem "SD-04: a rate and a map in one system are refused, naming both" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "SD-04: a rate and a map in one system are refused, naming both" begin
     # base: `ExplicitMap` stepped the rate at dt = 1: c(1) = −4.0 where exp(−5) ≈ 0.0067, Success
     sys = ssys([D(ce) ~ -5ce, Shift(t, 1)(me) ~ me + 1], [c(0, x, y) ~ 1.0, mm(0, x, y) ~ 0.0], [ce, me], Num[])
@@ -30,7 +29,9 @@ me, de, qe, Le, ddv, qb = mm(t, x, y), dm(t, x, y), kq(t, x, y), Lc(t, x, y), dd
     m = sown(ssys([Shift(t, 1)(me) ~ me + 1], [mm(0, x, y) ~ 0.0], [me], Num[]))
     @test solve(m, ExplicitMap())[:mm, end][1] == 1.0
 end
+end
 
+@testitem "SD-05, SD-06: parameters with no value are named" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "SD-05, SD-06: parameters with no value are named" begin
     # an array parameter with no default (base: a zero-length table; c stayed 1.0, Success)
     @parameters Dz[1:2]
@@ -54,7 +55,9 @@ end
     @test_throws ArgumentError setp(integ, kz)(integ, NaN)
     @test integ.p == [2.0]
 end
+end
 
+@testitem "SD-12: a computed default follows its parameters" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "SD-12: a computed default follows its parameters" begin
     # base: "Cannot convert Sym to Float64" from `_default`
     @parameters a0 = 1.0
@@ -109,7 +112,9 @@ end
     # the message names the inputs and the route (D-F2-1)
     @test occursin("`k2` is computed from `a0` (`k2 = 2a0`): set `a0`", emsg(() -> remake(p; p = [k2 => 5.0])))
 end
+end
 
+@testitem "SD-09: negative diffusion is refused, with the route" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "SD-09: negative diffusion is refused, with the route" begin
     # base: Dn = −0.01 ran (1 substep, Success): anti-diffusion over the run
     @parameters Dn = -0.01
@@ -153,7 +158,9 @@ end
     @test LatticePDE.remake === SciMLBase.remake && LatticePDE.setp === setp && isdefined(LatticePDE, :getp) &&
           isdefined(LatticePDE, :getu)
 end
+end
 
+@testitem "SD-08: masks are evaluated at every step" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "SD-08: masks are evaluated at every step" begin
     # a time mask switches on (base: c(1) = 0.0, the mask frozen at t0)
     s = solve(sown(ssys([D(ce) ~ 0.0], [c(0, x, y) ~ 0.0, ce ~ masked(t > 0.5, 1.0)], [ce], Num[])),
@@ -166,7 +173,9 @@ end
     @test maximum(u -> maximum(u), s.u) <= 1.0 + 1e-12
     @test any(u -> u[1] == 0.0, s.u[2:end])                      # the clamp engaged
 end
+end
 
+@testitem "SD-08: the masked values hold from t0 and right after an input write" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "SD-08: the masked values hold from t0 and right after an input write" begin
     # base: `s[:c, 1]` all 0.0 at t0 under `masked(kq == 0, 1.0)`, and the first substep's flux
     # read that 0.0, so the neighbour of the masked site stayed 0.0 after step 1; an input
@@ -213,7 +222,9 @@ end
     s0 = solve(sown(ssys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0], [ce], Num[])), alg; saveat = 0.001)
     @test all(==(0.0), s0[:c, 2])
 end
+end
 
+@testitem "V3: inputs are set, never read as zero" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "V3: inputs are set, never read as zero" begin
     n = 4
     half = [i <= 2 for i in 1:n, j in 1:n]
@@ -270,7 +281,9 @@ end
     @test occursin("not an input", emsg(() -> sown(msys; inputs = [ce => K])))
     @test occursin("the field has 16 (one per site)", emsg(() -> sown(msys; inputs = [qe => zeros(Int32, 3)])))
 end
+end
 
+@testitem "SD-07: lattice_placement is refused; lattice_level takes a grid (F3-16)" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "SD-07: lattice_placement is refused; lattice_level takes a grid (F3-16)" begin
     # base: `lattice_level = 4` ran at full resolution (16 sites on a 4×4 grid). Since F3-16 a
     # level is `Coarse(k)` (coarse.jl); a number is not a grid and is refused, naming `Coarse`
@@ -280,7 +293,9 @@ end
     err = emsg(() -> sown(ssys([D(cl(t, x, y)) ~ -cl(t, x, y)], [cl(0, x, y) ~ 1.0], [cl(t, x, y)], Num[])))
     @test occursin("`lattice_level = 4`", err) && occursin("`Coarse(4)`", err)
 end
+end
 
+@testitem "messages: no stale or misleading diagnosis (F1, M items)" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "messages: no stale or misleading diagnosis (F1, M items)" begin
     # LP67: no "next commit (C7b)"; F4-01: `problem` is deleted (a keyword it does not take)
     err = emsg(() -> LatticeDiscretization(Grid((4, 4)); problem = :linear))
@@ -308,7 +323,9 @@ end
     err = emsg(() -> sown(ssys([D(ce) ~ Ke, Ke ~ Le + ce, Lc(t, x, y) ~ Ke], [c(0, x, y) ~ 0.0], [ce, Ke, Le], Num[])))
     @test occursin("define each other", err) && occursin("K", err) && occursin("Lc", err)
 end
+end
 
+@testitem "SX-21: the other parts of a PDESystem are used or refused" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "SX-21: the other parts of a PDESystem are used or refused" begin
     @parameters kv
     eqs, d = [D(ce) ~ -kv * ce], sdom()
@@ -339,7 +356,9 @@ end
         analytic = [ce ~ exp(-t)])))
     @test occursin("analytic solutions", err) && occursin("does not use", err)
 end
+end
 
+@testitem "an input's names never shadow another name (F1 round 3)" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "an input's names never shadow another name (F1 round 3)" begin
     # round 2: silently misrouted (an input named `c` took `ig[:c] = …`, `kp` read the input
     # array, the last of two inputs with one name won)
@@ -361,7 +380,9 @@ end
     err = emsg(() -> solve(sown(sk), ExplicitEuler(; dt = 0.1)))
     @test occursin(":cc => values", err) && occursin(":kq => values", err)       # (round 2: a route for the first only)
 end
+end
 
+@testitem "a table on the ODE path is the table (F1 round 3)" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "a table on the ODE path is the table (F1 round 3)" begin
     # round 2 (both front ends): the ODE right side bound the table to the state: at u0 it was
     # −1 where −2, and Tsit5 gave c(1) = 0.5000 where exp(−2) = 0.1353
@@ -392,7 +413,9 @@ end
     err = emsg(() -> remake(o; p = [:typo => 3.0]))
     @test occursin("`typo` is not a parameter", err)
 end
+end
 
+@testitem "parameter keys, tables and input lists (F1 round 4)" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "parameter keys, tables and input lists (F1 round 4)" begin
     @parameters Dq[1:2] = [1.0, 2.0] kr = 0.5
     sys = ssys([D(ce) ~ -Dq[2] * ce - kr * ce + ifelse(qe == 1, 1.0, 0.0)], [c(0, x, y) ~ 1.0], [ce, qe], [Dq, kr])
@@ -435,7 +458,9 @@ end
         inputs = [ka4 => 0]))
     @test occursin("input field `ka4` has the name `c`", err) && occursin("also a field", err)
 end
+end
 
+@testitem "parameter keys, table lists and writes, input sites (F1 round 5)" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "parameter keys, table lists and writes, input sites (F1 round 5)" begin
     @parameters Dq[1:2] = [1.0, 2.0] kr = 0.5
     sys = ssys([D(ce) ~ -Dq[2] * ce - kr * ce + ifelse(qe == 1, 1.0, 0.0)], [c(0, x, y) ~ 1.0], [ce, qe], [Dq, kr])
@@ -476,7 +501,9 @@ end
     @test all(≈((1 - 0.45) * (1 - 0.05)), ig[ce])
     @test occursin("has 2 entries", emsg(() -> (ig.ps[Dq] = [1.0])))
 end
+end
 
+@testitem "table coefficients in the bound; problems built from ours (F1 round 6)" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "table coefficients in the bound; problems built from ours (F1 round 6)" begin
     # round 5: the bound could not see `Dn[1] * Δ(c)`: Dn[1] = −1 ran (discretize, remake and
     # `ig[Dn] = …`), and `ig[Dn] = [1000, 2]` kept 1 substep (unstable, reported Success)
@@ -525,7 +552,9 @@ end
     setp(oi, k6)(oi, 0.2)
     @test oi.p.values == [0.2]
 end
+end
 
+@testitem "a table coefficient is bounded at every entry (F1 round 7)" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "a table coefficient is bounded at every entry (F1 round 7)" begin
     # round 6: each read took only its smallest and largest entry, which under-bounds a
     # coefficient that is not affine in it: each run below was n = 1 and blew up with Success
@@ -566,7 +595,9 @@ end
     err = emsg(() -> solve(sown(sys; inputs = [qb => K1]), ExplicitEuler(; dt = 0.025)))
     @test occursin("`Dn9[1]`", err) && occursin("≥ 0", err) && occursin("sqrt", err) && !occursin("nonzero", err)
 end
+end
 
+@testitem "a table read takes index 0 and clamped indices as the kernel does (F1 round 8)" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "a table read takes index 0 and clamped indices as the kernel does (F1 round 8)" begin
     K5, K0 = fill(Int32(5), 4, 4), fill(Int32(0), 4, 4)
     # one index, tables of different lengths: the kernel clamps the index into each table's
@@ -622,7 +653,9 @@ end
     # one entry, under the cap (F2 record (m))
     @test solve(sown(sys; inputs = [qe => K0]), ExplicitEuler(; dt = 0.025)).substeps == ceil(Int, 0.025 * 136 / 1.8)
 end
+end
 
+@testitem "an explicit count is raised by every term with a bound (F1 round 9)" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "an explicit count is raised by every term with a bound (F1 round 9)" begin
     # 1fb097f2: a coefficient with a non-finite value (index 0) or over the cap made the whole
     # bound NaN, and an explicit count stayed as given: each run below ended Success and blew up.
@@ -652,7 +685,9 @@ end
         ExplicitEuler(; dt = 0.025, substeps = 2))
     @test sol.substeps == 4 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 3
 end
+end
 
+@testitem "warnings once per term and cause; messages name every cause (F2 records (a), (b), (e))" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "warnings once per term and cause; messages name every cause (F2 records (a), (b), (e))" begin
     # (a) a sweep over the value of an entry the bound does not cover warned once per value
     # (bda31989: three here, and the set grew with every value). Since F2 record (i) such an
@@ -687,35 +722,9 @@ end
     err = emsg(() -> solve(sown(sys; inputs = [qe => Ke0]), ExplicitEuler(; dt = 0.025)))
     @test occursin("index 0 reads 0 (an input value 0", err) && !occursin("kind map", err)
 end
-
-# the spectral radius of a linear rate's Jacobian, by power iteration on the assembled
-# operator (the ODE form's right side, column by column)
-function sradius(sys, n, inputs; iters = 4000)
-    o = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64); inputs)
-    N = length(o.u0)
-    J = zeros(N, N)
-    e, du = zero(o.u0), similar(o.u0)
-    for j in 1:N
-        fill!(e, 0); e[j] = 1
-        o.f(du, e, o.p, 0.0)
-        J[:, j] .= vec(du)
-    end
-    v = [1.0 + 0.1 * sin(3.7j) for j in 1:N]
-    λ = 0.0
-    for _ in 1:iters
-        w = J * v
-        λ = sqrt(sum(abs2, w)) / sqrt(sum(abs2, v))
-        v = w ./ sqrt(sum(abs2, w))
-    end
-    return λ
 end
-checker(n, a, b) = [Int32(isodd(i + j) ? a : b) for i in 1:n, j in 1:n]
 
-sok(sol) = SciMLBase.successful_retcode(sol) && all(isfinite, sol[:c, end])
-# a run that grew without bound: not finite, or a million times its start (the owned path's
-# `Unstable` fires on Inf/NaN only: a run at dt ρ / n = 2.1 reaches 2e130 and reports Success)
-sgrew(sol) = (u = sol[:c, end]; !all(isfinite, u) || maximum(abs, u) > 1e6 * maximum(abs, sol[:c, 1]))
-
+@testitem "F2 (g): a table-read diffusion multiplier takes an automatic count" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "F2 (g): a table-read diffusion multiplier takes an automatic count" begin
     # (g) a multiplier read from tables is site diffusion with a bound (bda31989: refused, "no
     # automatic substeps"); the count is within 10 % of the true one (8², every site kind 2)
@@ -727,7 +736,9 @@ sgrew(sol) = (u = sol[:c, end]; !all(isfinite, u) || maximum(abs, u) > 1e6 * max
     sol = solve(sown(sys; n = 8, inputs = [qe => K2]), ExplicitEuler(; dt = 0.01))
     @test ceil(Int, 0.01 * ρt / 1.8) <= sol.substeps <= ceil(Int, 1.1 * 0.01 * ρt / 1.8) && sok(sol)
 end
+end
 
+@testitem "F2 (g): the anti-correlated multiplier and face coefficient are bounded independently" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "F2 (g): the anti-correlated multiplier and face coefficient are bounded independently" begin
     Dxs, Dys = Differential(x), Differential(y)
     # the anti-correlated case: m = 1/Dw at the site, K = the face mean of Dw over two sites; a
@@ -754,7 +765,9 @@ end
         @test sgrew(solve!(ig)) && !sgrew(solve(pl, ExplicitEuler(; dt = 0.01)))
     end
 end
+end
 
+@testitem "F2 (g): an explicit count under a site-diffusion bound is raised" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "F2 (g): an explicit count under a site-diffusion bound is raised" begin
     # an explicit count under the bound is raised (bda31989: n = 2 kept, 1.7e75, Success), and
     # the solution stays within its initial range
@@ -788,7 +801,9 @@ end
     sys = ssys([D(ce) ~ at(Dk2, qe) * Δ(ce) - 0.05ce - 0.1oe, D(oe) ~ -oe + 0.1ce], [c(0, x, y) ~ 1.0, o(0, x, y) ~ 1.0], [ce, oe, qe], [Dk2])
     @test occursin("coupled", emsg(() -> solve(sown(sys; inputs = [qe => checker(4, 1, 2)]), ExplicitEuler(; dt = 0.025))))
 end
+end
 
+@testitem "F2 (j): an `ifelse` on an indicator takes its arm" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "F2 (j): an `ifelse` on an indicator takes its arm" begin
     # (j) an `ifelse` on an indicator takes its arm (bda31989: "Condition of `ifelse` must be a
     # `Bool`")
@@ -798,7 +813,9 @@ end
     @test sol.substeps >= ceil(Int, 0.025 * 100 / 1.8) && sok(sol)
     @test sradius(sys, 4, [qe => checker(4, 1, 2)]) ≈ 100                      # (the true radius)
 end
+end
 
+@testitem "F2 (m): index forms take intervals" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "F2 (m): index forms take intervals" begin
     # (m) index forms: `2kb` and `max(k, 1)` never read index 0 or entry 1 here (bda31989:
     # refused at index 0); a wrong interval would read the zero entry `Dz4[1]`
@@ -810,7 +827,9 @@ end
         @test sol.substeps == 1 && sok(sol)
     end
 end
+end
 
+@testitem "F2 (h): index intervals over the current input values; writes are rechecked" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "F2 (h): index intervals over the current input values; writes are rechecked" begin
     # (h) the interval of an index is over the current input values: an undeclared index map
     # with no 0 takes an automatic count (bda31989: refused at index 0) …
@@ -828,7 +847,9 @@ end
     step!(ig); step!(ref)
     @test ig.substeps == ref.substeps && ig[ce] == ref[ce]
 end
+end
 
+@testitem "F2 (h): `kb - 1` reaches index 0 where `kb` holds a 1" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "F2 (h): `kb - 1` reaches index 0 where `kb` holds a 1" begin
     # `kb − 1` reaches index 0 where `kb` holds a 1, though `kb` never holds 0
     @parameters Tb[1:3] = [1.0, 1.0, 1.0]
@@ -849,7 +870,9 @@ end
     err = emsg(() -> solve(sown(sys; inputs = [qe => K1]), ExplicitEuler(; dt = 0.025)))
     @test occursin("index 0", err) && occursin("(at site (3, 2))", err)
 end
+end
 
+@testitem "F2 (i): a coefficient not finite where the inputs reach is refused on every path" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "F2 (i): a coefficient not finite where the inputs reach is refused on every path" begin
     # (i) a coefficient that is not finite where the inputs reach is refused on every path:
     # the ODE form at discretize (bda31989: accepted, a rate of Inf) …
@@ -865,7 +888,9 @@ end
     err = emsg(() -> solve(sown(sys; inputs = [qe => checker(4, 1, 2)]), ExplicitEuler(; dt = 0.025, substeps = 2)))
     @test occursin("not finite", err) && occursin("whatever the substep count", err)
 end
+end
 
+@testitem "F2 (l): the CPU `at2` reads as `at` does" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "F2 (l): the CPU `at2` reads as `at` does" begin
     # (l) the CPU `at2` reads as `at` does: index 0 reads 0, each index clamps into its axis
     # (bda31989: BoundsError)
@@ -873,7 +898,9 @@ end
     @test at2(J3, 0, 1) == 0.0 && at2(J3, 1, 0) == 0.0 && at2(J3, 9, 1) == J3[end, 1] && at2(J3, -1, 9) == J3[1, end]
     @test at2(J3, 2, 3) == J3[2, 3]                                                  # control
 end
+end
 
+@testitem "F2-04: one ExplicitEuler; a FieldProblem needs its dt" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "F2-04: one ExplicitEuler; a FieldProblem needs its dt" begin
     @test ExplicitEuler === LatticePDE.Problems.ExplicitEuler
     @parameters kd = 0.5
@@ -885,7 +912,9 @@ end
     @test occursin("`substeps = 0` is not a count", emsg(() -> ExplicitEuler(; dt = 0.1, substeps = 0)))
     @test all(≈(0.95^10), solve(p, ExplicitEuler(; dt = 0.1, substeps = 1))[:c, end])           # control
 end
+end
 
+@testitem "SX-37: trajectories on other tasks never share a right side's store" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "SX-37: trajectories on other tasks never share a right side's store" begin
     @parameters kx = 0.05
     sys = ssys([D(ce) ~ DivKGrad(:arithmetic)(Ke, ce) - ce, Ke ~ kx * (1 + ce^2)], [c(0, x, y) ~ 1.0 + x], [ce, Ke], [kx];
@@ -938,14 +967,17 @@ end
         @test all(i -> a.u[i].u[end] == b.u[i].u[end], 1:8)
     end
 end
+end
 
 # F3-05 (F3 design §3.2): the solvers' inner algorithms reach B by name, the same objects as
 # A's (test/fields.jl): `DevicePCG`, `Multigrid` exported, `LatticePDE.V` public.
 # Base (1079c4ff): `UndefVarError: DevicePCG`.
+@testitem "F3-05: the inner solvers in B" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "F3-05: the inner solvers in B" begin
     @test parentmodule(DevicePCG) === LatticePDE.Problems.Solvers && Multigrid === LatticePDE.Problems.Solvers.Multigrid
     @test DevicePCG(; precond = Multigrid(; cycle = LatticePDE.V(3, 3))).precond.cycle == LatticePDE.V(3, 3)
     @test Base.ispublic(LatticePDE, :V) && !Base.isexported(LatticePDE, :V)
+end
 end
 
 # F3-05 review r1 M1: a linear solver given where a field algorithm goes is refused in B's
@@ -955,6 +987,7 @@ end
 # is "MethodError: no method matching init(::FieldProblem…, ::DevicePCG)", `FieldGroups` says
 # "`c(t, x, y) => DevicePCG(Multigrid(LatticeFields.Solvers.V(2, 2), …` is not a field
 # algorithm", and `ExplicitEuler(; dt, inner)` is a MethodError.
+@testitem "F3-05: a linear solver where B takes a field algorithm" setup = [LP_silent] tags = [:latticepde, :silent] begin
 @testset "F3-05: a linear solver where B takes a field algorithm" begin
     @parameters Dm1 = 0.1
     p = discretize(psys([D(ce) ~ Dm1 * Δ(ce)], [c(0, x, y) ~ x], [Dm1]),
@@ -979,4 +1012,5 @@ end
           occursin("leave `inner` out", m)
     @test e(() -> ExplicitEuler(; dt = 0.01, step = 2)) ==
           "ExplicitEuler: no keyword `step`; its keywords are `dt`, `substeps`, `lower`, `init` and `compute_T`"
+end
 end

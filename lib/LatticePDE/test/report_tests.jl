@@ -9,29 +9,40 @@
 # note, a bound that reads the time takes the last window's count, local rows print a PCG, an
 # unbounded explicit group prints "0 substeps", `field_report(prob, alg)` without `io` is a
 # MethodError.
-using OrdinaryDiffEqTsit5: Tsit5
-using SciMLBase: SciMLBase, ReturnCode
-using LatticeFields.IR: HEX
 
-@parameters rD = 1e-3 rk = 0.1 ra = 0.3 rb = 0.2
-@variables rc(..) ro(..)
-rce, roe = rc(t, x, y), ro(t, x, y)
-rdom(T) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-# the §7.4 problem (a Dirichlet face, a Neumann face, periodic in y)
-rsys(; T = 1.0) = PDESystem(D(rce) ~ rD * Δ(rce) - rk * rce,
-    [rc(0, x, y) ~ 0.0, rc(t, 0, y) ~ 1.0, Differential(x)(rc(t, 1, y)) ~ 0.0, rc(t, x, 0) ~ rc(t, x, 1)],
-    rdom(T), [t, x, y], [rce], [rD, rk]; name = :r)
-# two fields that read each other (a loop of two groups under `FieldGroups`)
-rsys2(; T = 0.1) = PDESystem([D(rce) ~ Δ(rce) + ra * roe, D(roe) ~ -rb * roe + 0.1 * rce],
-    [rc(0, x, y) ~ x * y, ro(0, x, y) ~ 1.0 + x, rc(t, 0, y) ~ rc(t, 1, y), rc(t, x, 0) ~ rc(t, x, 1),
-     ro(t, 0, y) ~ ro(t, 1, y), ro(t, x, 0) ~ ro(t, x, 1)],
-    rdom(T), [t, x, y], [rce, roe], [ra, rb]; name = :r2)
-rprob(n; T = 1.0) = discretize(rsys(; T), LatticeDiscretization(Grid((n, n))))
-rwarm(ig) = (step!(ig); step!(ig); @allocated step!(ig))   # (a function barrier)
-# the text of a report line `label   text` (the first such line)
-rline(rep, label) = (l = filter(s -> startswith(s, "  " * rpad(label, 11)), split(rep, '\n')); isempty(l) ? "" : String(l[1]))
-rlines(rep, label) = [String(s) for s in split(rep, '\n') if startswith(s, "  " * rpad(label, 11))]
+@testsetup module LP_report
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/problems.jl")
+include("shared/bounds.jl")
+include("shared/silent.jl")
+include("shared/groups.jl")
+include("shared/params.jl")
+include("shared/families.jl")
+include("shared/odepath.jl")
+include("shared/precond.jl")
+include("shared/groups_coupling.jl")
+include("shared/implicit.jl")
+include("shared/robin_site.jl")
+include("shared/grids.jl")
+include("shared/maskswitch.jl")
+include("shared/coupled.jl")
+include("shared/numbers.jl")
+include("shared/coarse.jl")
+include("shared/report.jl")
+include("shared/export_all.jl")
+end
 
+@testitem "F4-13: field_report of an explicit group: the count and its cause (bound, user minimum, both)" setup = [LP_report] tags = [:latticepde, :report] begin
 @testset "F4-13: field_report of an explicit group: the count and its cause (bound, user minimum, both)" begin
     # §7.4 at 512²: 12 substeps of the bound (the count the device test checks)
     p = rprob(512; T = 0.02)
@@ -73,7 +84,9 @@ rlines(rep, label) = [String(s) for s in split(rep, '\n') if startswith(s, "  " 
     step!(b)
     @test a.u == b.u && a.retcode == b.retcode == ReturnCode.Success
 end
+end
 
+@testitem "F4-13: a warm step! allocates nothing after a report, and the run is unchanged (explicit, BE)" setup = [LP_report] tags = [:latticepde, :report] begin
 @testset "F4-13: a warm step! allocates nothing after a report, and the run is unchanged (explicit, BE)" begin
     p = rprob(32)
     for alg in (ExplicitEuler(; dt = 0.01), BackwardEuler(; dt = 0.01))
@@ -87,7 +100,9 @@ end
         @test ig.u == ref.u                                 # bitwise
     end
 end
+end
 
+@testitem "F4-13: field_report of a Backward Euler group: inner, multigrid levels, the Newton count" setup = [LP_report] tags = [:latticepde, :report] begin
 @testset "F4-13: field_report of a Backward Euler group: inner, multigrid levels, the Newton count" begin
     p = rprob(32)
     ig = init(p, BackwardEuler(; dt = 0.01))
@@ -110,7 +125,9 @@ end
     @test startswith(rline(r2, "inner"), "  inner      Multigrid(; cycles = 2, budget = 2), multigrid levels") && !occursin("inner = :auto", r2)
     @test endswith(rline(r2, "substeps"), "[user]") && occursin("2 substeps", rline(r2, "window"))
 end
+end
 
+@testitem "F4-13: field_report of groups: two algorithms, and the coupling rule's κ" setup = [LP_report] tags = [:latticepde, :report] begin
 @testset "F4-13: field_report of groups: two algorithms, and the coupling rule's κ" begin
     p = discretize(rsys2(), LatticeDiscretization(Grid((8, 8))))
     ig = init(p, FieldGroups(rce => ExplicitEuler(; dt = 0.01), roe => BackwardEuler(; dt = 0.01)))
@@ -125,7 +142,9 @@ end
     @test occursin("group 1: loop [1, 2], κ = dt · rate = 0.01 × 0.3 = 0.003 (≤ 1)", rep)
     @test occursin("group 2: loop [1, 2], κ = dt · rate = 0.01 × 0.1 = 0.001 (≤ 1)", rep)
 end
+end
 
+@testitem "F4-13: field_report of solutions: owned and OrdinaryDiffEq; of a problem and a SciML integrator" setup = [LP_report] tags = [:latticepde, :report] begin
 @testset "F4-13: field_report of solutions: owned and OrdinaryDiffEq; of a problem and a SciML integrator" begin
     p = rprob(32; T = 0.1)
     s = solve(p, BackwardEuler(; dt = 0.01); saveat = 0.05)
@@ -160,7 +179,9 @@ end
     # anything else is refused in words
     @test_throws ArgumentError field_report(devnull, SciMLBase.ODEProblem((du, u, p, t) -> (du .= 0), [1.0], (0.0, 1.0)))
 end
+end
 
+@testitem "F4-13 (fixup): field_report(prob, alg): the policy under an algorithm, nothing bound" setup = [LP_report] tags = [:latticepde, :report] begin
 @testset "F4-13 (fixup): field_report(prob, alg): the policy under an algorithm, nothing bound" begin
     p = rprob(512; T = 0.02)
     rep = sprint(field_report, p, ExplicitEuler(; dt = 0.01))
@@ -197,7 +218,9 @@ end
     end
     @test startswith(out, "Field report: problem under BackwardEuler(; dt = 0.01)")
 end
+end
 
+@testitem "F4-13 (fixup): sol.stats.implicit keeps the resolved implicit facts per group, as data" setup = [LP_report] tags = [:latticepde, :report] begin
 @testset "F4-13 (fixup): sol.stats.implicit keeps the resolved implicit facts per group, as data" begin
     q = rprob(32; T = 0.05)
     s = solve(q, BackwardEuler(; dt = 0.01))
@@ -213,12 +236,9 @@ end
     @test s2.stats.implicit[1] === nothing && s2.stats.implicit[2].newton == 2 && s2.stats.implicit[2].given
     @test occursin("2: given (`newton = 2`)", sprint(field_report, s2))
 end
+end
 
-# review S5: hand oracles
-@parameters gF = 0.04 gk = 0.06
-@variables rq(..) ru(..) rv(..) rcy(..) rcz(..)
-rqe, rue, rve, rcye, rcze = rq(t, x, y), ru(t, x, y), rv(t, x, y), rcy(t, x, y), rcz(t, x, y)
-
+@testitem "F4-13 (review): an inexact operator: advection's ρ_in, the convergence rule and the Newton count by hand" setup = [LP_report] tags = [:latticepde, :report] begin
 @testset "F4-13 (review): an inexact operator: advection's ρ_in, the convergence rule and the Newton count by hand" begin
     # upwind advection with v = (1, 0.5) on 32²: ρ_in = 2 (|1| + |0.5|) / h = 2 × 1.5 × 32 = 96. The
     # convergence rule n2 = ⌈2γ dt ρ_in⌉: BE (γ = 1) ⌈2 × 0.05 × 96⌉ = ⌈9.6⌉ = 10, CN (γ = 1/2) ⌈4.8⌉ = 5.
@@ -236,7 +256,9 @@ rqe, rue, rve, rcye, rcze = rq(t, x, y), ru(t, x, y), rv(t, x, y), rcy(t, x, y),
     # the same policy without binding
     @test rline(sprint(field_report, p, BackwardEuler(; dt = 0.05)), "window") == rline(rb, "window")
 end
+end
 
+@testitem "F4-13 (review): a coupled solve, a cycle under Backward Euler, QuasiSteady, Crank–Nicolson's least count 2" setup = [LP_report] tags = [:latticepde, :report] begin
 @testset "F4-13 (review): a coupled solve, a cycle under Backward Euler, QuasiSteady, Crank–Nicolson's least count 2" begin
     sys = PDESystem([D(rcye) ~ 0.1 * Δ(rcye) - rcye + 5.0 * rcze, D(rcze) ~ 0.1 * Δ(rcze) - rcze - 5.0 * rcye],
         [rcy(0, x, y) ~ x, rcz(0, x, y) ~ y], rdom(0.2), [t, x, y], [rcye, rcze], Num[]; name = :cyc)
@@ -262,7 +284,9 @@ end
     @test rline(r2, "window") == "  window     dt = 0.01, 2 substeps (h = 0.005)" && occursin("the least count 2 (", rline(r2, "substeps")) &&
           endswith(rline(r2, "substeps"), "[least]")
 end
+end
 
+@testitem "F4-13 (review): unseen terms: ρ_in unknown, κ over the seen cross terms only, an unbounded group refused" setup = [LP_report] tags = [:latticepde, :report] begin
 @testset "F4-13 (review): unseen terms: ρ_in unknown, κ over the seen cross terms only, an unbounded group refused" begin
     # Gray-Scott: `u v²` is a term no bound sees (review S1, S2)
     gs = PDESystem([D(rue) ~ 2e-5 * Δ(rue) - rue * rve^2 + gF * (1 - rue), D(rve) ~ 1e-5 * Δ(rve) + rue * rve^2 - (gF + gk) * rve],
@@ -284,7 +308,9 @@ end
           occursin("give a count, `ExplicitEuler(; dt, substeps = n)`", rline(rr, "substeps")) && endswith(rline(rr, "substeps"), "[refused]")
     @test_throws ArgumentError init(p, bad)
 end
+end
 
+@testitem "F4-13 (review): κ near 1: 0.99 runs, 1.000000001 is refused, as the report says" setup = [LP_report] tags = [:latticepde, :report] begin
 @testset "F4-13 (review): κ near 1: 0.99 runs, 1.000000001 is refused, as the report says" begin
     p = discretize(rsys2(), LatticeDiscretization(Grid((8, 8))))
     alg = FieldGroups(rce => ExplicitEuler(; dt = 0.01), roe => BackwardEuler(; dt = 0.01))
@@ -294,7 +320,9 @@ end
     @test occursin("κ = dt · rate = 0.01 × 100.0 = 1.0 (> 1)", sprint(field_report, pbad, alg))
     @test_throws ArgumentError init(pbad, alg)
 end
+end
 
+@testitem "F4-13 (review): a bound that reads the time: the first window's count, the window restored" setup = [LP_report] tags = [:latticepde, :report] begin
 @testset "F4-13 (review): a bound that reads the time: the first window's count, the window restored" begin
     @variables rt_(..)
     rte = rt_(t, x, y)
@@ -316,7 +344,9 @@ end
     # after the run the problem's report still gives the first window's count
     @test rline(sprint(field_report, p, ExplicitEuler(; dt = 0.1)), "window") == rline(rf, "window")
 end
+end
 
+@testitem "F4-13 (review): the problem line: hexagonal grids, coarse fields; a map's header" setup = [LP_report] tags = [:latticepde, :report] begin
 @testset "F4-13 (review): the problem line: hexagonal grids, coarse fields; a map's header" begin
     sys = PDESystem([D(rce) ~ 0.2 * Δ(rce) - rce], [rc(0, x, y) ~ x * y], rdom(0.2), [t, x, y], [rce], Num[]; name = :hx)
     ph = discretize(sys, LatticeDiscretization(Grid((16, 16); geometry = HEX)))
@@ -334,4 +364,5 @@ end
         LatticeDiscretization(Grid((8, 8))))
     rm = sprint(field_report, init(pm, ExplicitMap()))
     @test occursin("Field report: owned integrator, ExplicitMap()\n", rm) && rline(rm, "window") == "  window     dt = 1.0, one map step per window"
+end
 end

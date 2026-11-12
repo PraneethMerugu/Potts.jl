@@ -5,6 +5,36 @@
 # runs). Negative control at the base 4ca38af7: `pdesystem` does not exist (an
 # `UndefVarError`, ~/lpwork/f4E/nc-e4e7.log).
 
+@testsetup module LP_pdesystem_ctor
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/problems.jl")
+include("shared/bounds.jl")
+include("shared/silent.jl")
+include("shared/groups.jl")
+include("shared/params.jl")
+include("shared/families.jl")
+include("shared/odepath.jl")
+include("shared/precond.jl")
+include("shared/groups_coupling.jl")
+include("shared/implicit.jl")
+include("shared/robin_site.jl")
+include("shared/grids.jl")
+include("shared/maskswitch.jl")
+include("shared/coupled.jl")
+include("shared/numbers.jl")
+include("shared/coarse.jl")
+include("shared/report.jl")
+include("shared/unseen_loop.jl")
 @parameters psD = 0.3 psk = 0.2 psJ[1:2] = [0.5, 1.5]
 @variables psc(..) = 0.0 psu(..) psin(..)::Bool [input = true] psm(..)::Int32 [input = true]
 psdom = [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
@@ -22,6 +52,14 @@ catch e
     sprint(showerror, e)
 end
 
+# F4-E6 review (wave 2): the inputs come after the fields in name order, not in SymbolicUtils'
+# term order or the order the conditions read them. Negative control at 11523b0b: the input
+# first read in a condition (`psa`) came after `psz` (~/lpwork/f4W2r/nc.log).
+@variables psz(..)::Bool [input = true] psa(..) [input = true]
+include("shared/export_all.jl")
+end
+
+@testitem "F4-E6: pdesystem works out the lists of the hand-built PDESystem" setup = [LP_pdesystem_ctor] tags = [:latticepde, :pdesystem_ctor] begin
 @testset "F4-E6: pdesystem works out the lists of the hand-built PDESystem" begin
     a = LatticePDE.pdesystem(pseq(), psbc(); name = :ps, domain = psdom)
     @test a isa PDESystem && nameof(a) === :ps
@@ -50,7 +88,9 @@ end
     s = LatticePDE.pdesystem([0 ~ Δ(psu(x, y)) - psu(x, y) + 1.0]; name = :pss)
     @test isequal(collect(s.ivs), [x, y]) && pslen(s) == (2, 1, 0)
 end
+end
 
+@testitem "F4-E6: pdesystem refusals" setup = [LP_pdesystem_ctor] tags = [:latticepde, :pdesystem_ctor] begin
 @testset "F4-E6: pdesystem refusals" begin
     m = psmsg(() -> LatticePDE.pdesystem([D(psc(t, x, y)) ~ psu(t, x) - psc(t, x, y)]; name = :bad))
     @test occursin("different independent variables", m) || (println(m); false)
@@ -59,11 +99,9 @@ end
     m = psmsg(() -> LatticePDE.pdesystem([psc(t, x, y)]; name = :bad))
     @test occursin("is not an equation", m) || (println(m); false)
 end
+end
 
-# F4-E6 review (wave 2): the inputs come after the fields in name order, not in SymbolicUtils'
-# term order or the order the conditions read them. Negative control at 11523b0b: the input
-# first read in a condition (`psa`) came after `psz` (~/lpwork/f4W2r/nc.log).
-@variables psz(..)::Bool [input = true] psa(..) [input = true]
+@testitem "F4-E6 review: pdesystem orders the inputs by name" setup = [LP_pdesystem_ctor] tags = [:latticepde, :pdesystem_ctor] begin
 @testset "F4-E6 review: pdesystem orders the inputs by name" begin
     dvnames(s) = [string(nameof(operation(unwrap(u)))) for u in s.dvs]
     for rhs in (psz(t, x, y) - psc(t, x, y), psc(t, x, y) * psz(t, x, y), 2.0 * psz(t, x, y) - psc(t, x, y))
@@ -75,4 +113,5 @@ end
     @test dvnames(s) == ["psu", "psc", "psa", "psz"] || (println(dvnames(s)); false)
     # a front end's refusal hook: nothing by default (a variable tagged `potts_entity` is accepted)
     @test LatticePDE.pdesystem_refusal(:any, psc(t, x, y)) === nothing
+end
 end

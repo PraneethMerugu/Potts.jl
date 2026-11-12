@@ -3,6 +3,20 @@
 # on device arrays prints the same group policy as the host, with the device's counters, and
 # the run after a report equals the run without one, bit for bit.
 # Negative control at 4d025fa8 (~/lpwork/f4-13b/nc-base-device.log): `field_report` is not defined.
+
+@testsetup module LP_report_device
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/maskswitch.jl")
 using KernelAbstractions: KernelAbstractions
 using OrdinaryDiffEqTsit5: Tsit5
 if !@isdefined(PDEV)
@@ -14,7 +28,10 @@ if !@isdefined(PDEV)
         const PDEV = AMDGPU.ROCBackend()
     end
 end
+include("shared/export_all.jl")
+end
 
+@testitem "F4-13: field_report on nameof(typeof(PDEV))" setup = [LP_report_device] tags = [:latticepde, :report_device] begin
 @testset "F4-13: field_report on $(nameof(typeof(PDEV)))" begin
     @parameters dD = 1e-3 dk = 0.1
     @variables dc(..)
@@ -55,4 +72,5 @@ end
     @test occursin("SciML solve, Tsit5, retcode Success", rt) && occursin("backend $(nameof(typeof(PDEV)))", rt)
     # (the device's matrix-free `JacobianOperator`, a SciMLOperators `FunctionOperator`; ruling Q7)
     @test occursin("jac update_coefficients!; jac_prototype FunctionOperator; jvp LatticeJVP", rt)
+end
 end

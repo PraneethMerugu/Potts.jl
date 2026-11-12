@@ -3,13 +3,24 @@
 # window with a discrete or a continuous callback that does not fire allocates nothing (CPU).
 # Negative control at 70400aba (~/lpwork/f4b2-rev2/nc-remakecb.log): the remade step_index model
 # under Tsit5 is off by 0.139, `sol.dense` is true, the warm windows allocate 240 B and 2.7 KB.
-using OrdinaryDiffEqTsit5: Tsit5
 
-@parameters rD = 0.2
-@variables rc(..) rq(..)::Int32 [input = true]
-rce, rqe = rc(t, x, y), rq(t, x, y)
-rdom(T) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+@testsetup module LP_remakecb
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/remakecb.jl")
+include("shared/export_all.jl")
+end
 
+@testitem "review b2 #2: remake(prob; callback) keeps the clock and the masks" setup = [LP_remakecb] tags = [:latticepde, :remakecb] begin
 @testset "review b2 #2: remake(prob; callback) keeps the clock and the masks" begin
     nop() = SciMLBase.DiscreteCallback((u, t, i) -> false, i -> nothing)
     tol = (; abstol = 1e-10, reltol = 1e-10)
@@ -36,7 +47,9 @@ rdom(T) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0,
     b = solve(remake(pm; callback = nop()), Tsit5(); tol...).u[end]
     @test unique(b[vec(K .== 1)]) == [2.0] && maximum(abs, b .- o) < 1e-3
 end
+end
 
+@testitem "review b2 #5: dense = false; a warm window with callbacks allocates nothing" setup = [LP_remakecb] tags = [:latticepde, :remakecb] begin
 @testset "review b2 #5: dense = false; a warm window with callbacks allocates nothing" begin
     gs = PDESystem([D(rce) ~ rD * Δ(rce) - rce], [rc(0, x, y) ~ x * y], rdom(0.2), [t, x, y], [rce], [rD]; name = :rw)
     p = discretize(gs, LatticeDiscretization(Grid((16, 16)); T = Float64))
@@ -52,4 +65,5 @@ end
         i = init(remake(p; tspan = (0.0, 100.0)), ExplicitEuler(; dt = 1e-3); callback = cb)
         @test warm(i) == 0 || (println("b2 #5 warm ", typeof(cb).name.name, " ", warm(i)); false)
     end
+end
 end

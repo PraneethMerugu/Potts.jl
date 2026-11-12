@@ -2,6 +2,23 @@
 # step). The field is uniform in y (periodic pair), so every row is the 1D problem
 # D c″ − k c with c = 1 at x = 0 and no flux at x = 1, which a Float64 host loop with the
 # same steps checks; the raw `Differential` spelling lowers to the same program.
+
+@testsetup module LP_example
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/export_all.jl")
+end
+
+@testitem "§7.4 standalone example" setup = [LP_example] tags = [:latticepde, :example] begin
 @testset "§7.4 standalone example" begin
     ex = quote
         using ModelingToolkitBase, LatticePDE
@@ -45,4 +62,5 @@
     end)
     ref = Core.eval(m, :(symbolic_discretize(rd, LatticeDiscretization(Grid((512, 512)); T = Float32))))
     @test sprint(LatticeFields.IR.print_program, raw.program) == sprint(LatticeFields.IR.print_program, ref.program)
+end
 end

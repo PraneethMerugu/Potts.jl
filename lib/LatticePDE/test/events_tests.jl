@@ -3,6 +3,33 @@
 # ensembles of owned solves. Negative control at the F4-05 commit (~/lpwork/f4b5/nc06.log): a
 # `ContinuousCallback` never fires (only the discrete callbacks run); the ensembles <…>.
 
+@testsetup module LP_events
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/problems.jl")
+include("shared/bounds.jl")
+include("shared/silent.jl")
+include("shared/groups.jl")
+include("shared/families.jl")
+include("shared/odepath.jl")
+include("shared/precond.jl")
+include("shared/groups_coupling.jl")
+include("shared/implicit.jl")
+include("shared/robin_site.jl")
+include("shared/callbacks.jl")
+include("shared/export_all.jl")
+end
+
+@testitem "F4-06: a ContinuousCallback fires within one window of the event, at the interpolated state" setup = [LP_events] tags = [:latticepde, :events] begin
 @testset "F4-06: a ContinuousCallback fires within one window of the event, at the interpolated state" begin
     p = cbprob()
     ev, st = Float64[], Vector{Float64}[]
@@ -23,7 +50,9 @@
     solve(p, ExplicitEuler(; dt = 0.01); callback = vc)
     @test sort(hits) == [1, 2]
 end
+end
 
+@testitem "F4-06: ensembles of owned solves equal the serial solves bitwise" setup = [LP_events] tags = [:latticepde, :events] begin
 @testset "F4-06: ensembles of owned solves equal the serial solves bitwise" begin
     p = cbprob(0.3)
     ep = SciMLBase.EnsembleProblem(p; prob_func = (q, ctx) -> remake(q; p = [bk => 1.0 + ctx.sim_id]))
@@ -33,4 +62,5 @@ end
         es = solve(ep, alg, ea; trajectories = 4)
         @test all(i -> es.u[i].u[end] == ref[i] && es.u[i].ps[bk] == 1.0 + i, 1:4)
     end
+end
 end

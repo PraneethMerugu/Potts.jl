@@ -5,25 +5,27 @@
 # problem = :owned", "`step_index(t)` … needs a field algorithm", "the steady rows of `bc` make
 # the system a DAE"; a system with no time gave a `SteadyStateProblem`.
 # This file at F4-01: 1 pass, 2 fail, 6 errors (every testset fails).
-using SciMLBase: SciMLBase, remake
-using OrdinaryDiffEqTsit5: Tsit5
-using OrdinaryDiffEqRosenbrock: Rodas5P
-using LinearAlgebra: Diagonal
-using LinearSolve: LinearSolve
-using SymbolicIndexingInterface: setp
-using ForwardDiff: ForwardDiff
 
-@parameters oD = 0.2
-@variables oc(..) ok(..)::Int32 [input = true] ov(..)
-ode_c, ode_k, ode_v = oc(t, x, y), ok(t, x, y), ov(t, x, y)
-odom(T) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-const OK1 = Int32[i <= 2 && j <= 2 ? 1 : 0 for i in 1:8, j in 1:8]
-const OK2 = Int32[i >= 7 && j >= 7 ? 1 : 0 for i in 1:8, j in 1:8]
-odisc(; kw...) = LatticeDiscretization(Grid((8, 8)); T = Float64, kw...)
-omsys() = PDESystem([D(ode_c) ~ oD * Δ(ode_c) - ode_c], [oc(0, x, y) ~ x, ode_c ~ masked(ode_k == 1, 2.0)], odom(0.2),
-    [t, x, y], [ode_c, ode_k], [oD]; name = :om)
-const OTOL = (; abstol = 1e-11, reltol = 1e-11)
+@testsetup module LP_odepath
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/problems.jl")
+include("shared/bounds.jl")
+include("shared/families.jl")
+include("shared/odepath.jl")
+include("shared/export_all.jl")
+end
 
+@testitem "F4-02: a masked condition under Tsit5 holds its value and equals the owned run" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
 @testset "F4-02: a masked condition under Tsit5 holds its value and equals the owned run" begin
     prob = discretize(omsys(), odisc(); inputs = [ode_k => OK1])
     s = solve(prob, Tsit5(); OTOL..., saveat = 0.02)
@@ -33,7 +35,9 @@ const OTOL = (; abstol = 1e-11, reltol = 1e-11)
     @test maximum(abs, s.u[end] .- o.u[end]) < 1e-4 || (println("F4-02 masked vs owned ", maximum(abs, s.u[end] .- o.u[end])); false)
     @test maximum(abs, reshape(s.u[end], 8, 8)[OK1 .== 0] .- 2.0) > 0.1    # control: the other sites move
 end
+end
 
+@testitem "F4-02: a mask moves with an input write in a callback" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
 @testset "F4-02: a mask moves with an input write in a callback" begin
     prob = discretize(omsys(), odisc(); inputs = [ode_k => OK1])
     cb = SciMLBase.DiscreteCallback((u, t, i) -> t == 0.1, i -> (i.ps[ode_k] = OK2; nothing))
@@ -46,7 +50,9 @@ end
     r = solve(remake(prob; u0 = a, tspan = (0.1, 0.2), inputs = [ode_k => OK2]), Tsit5(); OTOL...)
     @test maximum(abs, s.u[end] .- r.u[end]) < 1e-8
 end
+end
 
+@testitem "F4-02: step_index(t) under Tsit5 lands on every boundary" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
 @testset "F4-02: step_index(t) under Tsit5 lands on every boundary" begin
     sk = PDESystem([D(ode_c) ~ -ode_c + 0.1 * step_index(t)], [oc(0, x, y) ~ x], odom(1.0), [t, x, y], [ode_c], Num[];
         name = :ok)
@@ -69,7 +75,9 @@ end
     # a second solve starts again from k = 0
     @test solve(prob, Tsit5(); OTOL...).u[end] == s.u[end]
 end
+end
 
+@testitem "F4-02: a steady row under Rodas5P equals the owned QuasiSteady run" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
 @testset "F4-02: a steady row under Rodas5P equals the owned QuasiSteady run" begin
     ss = PDESystem([D(ode_c) ~ oD * Δ(ode_c) - ode_c + ode_v, 0 ~ 0.1 * Δ(ode_v) - ode_v + ode_c],
         [oc(0, x, y) ~ x, oc(t, 0, y) ~ 1.0], odom(0.1), [t, x, y], [ode_c, ode_v], [oD]; name = :os)
@@ -85,7 +93,9 @@ end
     prob.f(du, s.u[end], prob.p, 0.1)
     @test maximum(abs, du[65:128]) < 1e-8
 end
+end
 
+@testitem "F4-02: a system with no time gives a LinearProblem or a NonlinearProblem" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
 @testset "F4-02: a system with no time gives a LinearProblem or a NonlinearProblem" begin
     fdom = [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
     @variables ow(..)
@@ -110,16 +120,9 @@ end
     @test maximum(abs, du) < 1e-6                                            # (QuasiSteady's Newton tolerance)
     @test maximum(abs, lp.A * r.u[1] .- lp.b) > 1e-3                         # control: the cubic term
 end
+end
 
-# Review fixups (F4 batch 1, 2026-11-06). Negative controls at 0a182a0e, in each testset.
-@parameters qD = 0.5
-@variables qc(..) qk(..)::Int32 [input = true]
-qce, qke = qc(t, x, y), qk(t, x, y)
-const QK = Int32[i == 1 ? 1 : 0 for i in 1:16, j in 1:16]
-qsys(val) = PDESystem([D(qce) ~ qD * Δ(qce)], [qc(0, x, y) ~ 1.0, Differential(x)(qc(t, 1, y)) ~ 0.0,
-        Differential(y)(qc(t, x, 0)) ~ 0.0, Differential(y)(qc(t, x, 1)) ~ 0.0, qce ~ masked(qke == 1, val)],
-    [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [qce, qke], [qD]; name = :q)
-
+@testitem "F4-02 (R1): a mask value that reads t moves at its rate ∂v/∂t, at the solver's order" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
 @testset "F4-02 (R1): a mask value that reads t moves at its rate ∂v/∂t, at the solver's order" begin
     prob = discretize(qsys(1.0 + sin(10 * t)), LatticeDiscretization(Grid((16, 16)); T = Float64); inputs = [qke => QK])
     # the owned reference: ExplicitEuler at dt and 2dt, extrapolated (Richardson, order 2)
@@ -140,26 +143,9 @@ qsys(val) = PDESystem([D(qce) ~ qD * Δ(qce)], [qc(0, x, y) ~ 1.0, Differential(
     end
     @test maximum(abs, r1.u[end] .- r2.u[end]) > 1e-5                 # control: EE's own error is first order
 end
-
-# Re-review (2026-11-06): a discrete event (a new step index, a write of a parameter or an input
-# on the integrator) gives a mask value a jump its rate ∂v/∂t cannot carry, so every masked
-# site takes its value again there. Negative control at 9d30a15a, in the testset.
-@parameters rra = 1.0
-@variables rrc(..) rrk(..)::Int32 [input = true] rrq(..) [input = true]
-rrce, rrke, rrqe = rrc(t, x, y), rrk(t, x, y), rrq(t, x, y)
-const RRK = Int32[i <= 2 ? 1 : 0 for i in 1:8, j in 1:8]
-const RRM = vec(RRK .== 1)
-rrsys(val) = PDESystem([D(rrce) ~ 0.2 * Δ(rrce) - 0.5 * rrce], [rrc(0, x, y) ~ x, rrce ~ masked(rrke == 1, val)],
-    odom(1.0), [t, x, y], [rrce, rrke, rrqe], [rra]; name = :rr)
-# the masked values after a write `k => v` on a Tsit5 integrator at t = 0.5, at t = 1
-function rrwrite(val, k, v)
-    i = init(discretize(rrsys(val), odisc(); inputs = [rrke => RRK, rrqe => zeros(8, 8)]), Tsit5(); abstol = 1e-9, reltol = 1e-9)
-    SciMLBase.step!(i, 0.5, true)
-    i.ps[k] = v
-    SciMLBase.step!(i, 0.5, true)
-    return i.u[RRM]
 end
 
+@testitem "F4-02 (re-review): masked values jump at a new step index and at a write on the integrator" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
 @testset "F4-02 (re-review): masked values jump at a new step index and at a write on the integrator" begin
     # E1: a value that reads step_index(t) (clock 0.25) is 1 + k in period k, as the owned run
     # (9d30a15a: 1.0 at every save; the other sites off by 2.19)
@@ -182,7 +168,9 @@ end
     # control: with no write the value stays rra(1 + sin 10t) at rra = 1
     @test maximum(abs, rrwrite(rra * (1.0 + sin(10 * t)), rra, 1.0) .- (1 + sin(10.0))) < 1e-6
 end
+end
 
+@testitem "F4-02 (gate): a Dual parameter that a mask value reads promotes the state" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
 @testset "F4-02 (gate): a Dual parameter that a mask value reads promotes the state" begin
     # (4f2217e2: remake raised "no method matching Float64(::ForwardDiff.Dual…)" in _clamp_masks!)
     prob = discretize(rrsys(2.0 * rra), odisc(); inputs = [rrke => RRK, rrqe => zeros(8, 8)])
@@ -205,7 +193,9 @@ end
     SciMLBase.step!(it, 0.5, true)
     @test all(==(ForwardDiff.Dual{Nothing}(3.0, 2.0)), it.u[RRM])
 end
+end
 
+@testitem "F4-02 (review 2): prob.u0 holds the masked values, on every route" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
 @testset "F4-02 (review 2): prob.u0 holds the masked values, on every route" begin
     prob = discretize(omsys(), odisc(); inputs = [ode_k => OK1])
     M1 = vec(OK1 .== 1)
@@ -222,7 +212,9 @@ end
     @test all(==(2.0), q.u0[vec(OK2 .== 1)]) && q.u0[64] != prob.u0[64] && all(==(2.0), prob.u0[M1])   # (the source kept)
     @test all(==(2.0), remake(prob; u0 = zeros(64)).u0[M1]) && remake(prob; u0 = zeros(64)).u0[end] == 0.0
 end
+end
 
+@testitem "F4-02 (review 4): parameter writes on a time-free LinearProblem; factorizations" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
 @testset "F4-02 (review 4): parameter writes on a time-free LinearProblem; factorizations" begin
     @parameters ls = 1.0 la = 2.0
     @variables lw(..)
@@ -250,7 +242,9 @@ end
     r = solve(SciMLBase.LinearProblem(LFP.lattice_matrix(lp.A), lp.b), LinearSolve.LUFactorization())
     @test maximum(abs, r.u .- q) < 1e-10
 end
+end
 
+@testitem "F4-02 (R2): steady rows start from our QuasiSteady solve at t0; explicit inits stay" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
 @testset "F4-02 (R2): steady rows start from our QuasiSteady solve at t0; explicit inits stay" begin
     ss = PDESystem([D(ode_c) ~ oD * Δ(ode_c) - ode_c + ode_v, 0 ~ 0.1 * Δ(ode_v) - ode_v + ode_c],
         [oc(0, x, y) ~ x, oc(t, 0, y) ~ 1.0], odom(0.1), [t, x, y], [ode_c, ode_v], [oD]; name = :os2)
@@ -266,4 +260,5 @@ end
         err
     end
     @test e isa SciMLBase.CheckInitFailureError          # an explicit CheckInit still checks (u0 has v = 0)
+end
 end

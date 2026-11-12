@@ -2,19 +2,37 @@
 # derivatives against finite differences on the owned and ODE paths, Rodas5P (Jacobian and
 # time gradient through the right side), the BigFloat reference, promotion and plan reuse,
 # and hoisted time. Each row has a negative control.
-using ForwardDiff: ForwardDiff
-using OrdinaryDiffEqRosenbrock: Rodas5P
-using LatticeFields: LatticeFields, Compile
-using SciMLStructures: SciMLStructures, Tunable
 
-@parameters Dn = 0.5 kn = 0.3 gn = 1.0 ωn = 3.0 K0n = 0.2
-nsys(; T = 0.1) = psys([D(ce) ~ Dn * Δ(ce) - kn * ce],
-    [c(0, x, y) ~ 0.0, c(t, 0, y) ~ gn, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)],
-    [Dn, kn, gn]; T)
-fd(f, x; h = 1e-6) = (f(x + h) - f(x - h)) / (2h)
-pidx(prob, s) = LatticePDE.Problems.SII.parameter_index(prob, s)
-withp(p, i, v) = (q = collect(promote_type(eltype(p), typeof(v)), p); q[i] = v; q)
+@testsetup module LP_numbers
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/problems.jl")
+include("shared/bounds.jl")
+include("shared/silent.jl")
+include("shared/groups.jl")
+include("shared/params.jl")
+include("shared/families.jl")
+include("shared/odepath.jl")
+include("shared/precond.jl")
+include("shared/groups_coupling.jl")
+include("shared/implicit.jl")
+include("shared/robin_site.jl")
+include("shared/grids.jl")
+include("shared/maskswitch.jl")
+include("shared/numbers.jl")
+include("shared/export_all.jl")
+end
 
+@testitem "AD vs FD: owned path (∂J/∂D, ∂J/∂k, ∂J/∂g)" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
 @testset "AD vs FD: owned path (∂J/∂D, ∂J/∂k, ∂J/∂g)" begin
     prob = owned(nsys(), 8, 4)
     alg = ExplicitEuler(; dt = 0.01)
@@ -42,7 +60,9 @@ withp(p, i, v) = (q = collect(promote_type(eltype(p), typeof(v)), p); q[i] = v; 
     @test substep_counts(solve(remake(prob; p = withp(prob.p, i, ForwardDiff.Dual(prob.p[i], 1.0))), alg)) ==
           substep_counts(solve(prob, alg))
 end
+end
 
+@testitem "AD vs FD: ODE path, with an aux field" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
 @testset "AD vs FD: ODE path, with an aux field" begin
     @variables K(..)
     Kn = K(t, x, y)
@@ -65,7 +85,9 @@ end
     J2(v) = sum(solve(remake(ode; p = withp(ode.p.values, i, v)), Tsit5(); abstol = 1e-12, reltol = 1e-12).u[end])
     @test isapprox(ForwardDiff.derivative(J2, ode.p.values[i]), fd(J2, ode.p.values[i]); rtol = 1e-6)
 end
+end
 
+@testitem "Rodas5P (Jacobian and time gradient through the right side)" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
 @testset "Rodas5P (Jacobian and time gradient through the right side)" begin
     sys = psys([D(ce) ~ Dn * Δ(ce) - kn * ce + 0.1 * sin(ωn * t)],
         [c(0, x, y) ~ 0.0, c(t, 0, y) ~ gn, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)],
@@ -79,7 +101,9 @@ end
         @test isapprox(r.u[end], ts.u[end]; rtol = 100tol)
     end
 end
+end
 
+@testitem "BigFloat reference (host)" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
 @testset "BigFloat reference (host)" begin
     sys = nsys()
     alg = ExplicitEuler(; dt = 0.01)
@@ -100,7 +124,9 @@ end
     # an unsupported state type is refused by name
     @test_throws ArgumentError owned(sys, 8, 4; T = Int)
 end
+end
 
+@testitem "promotion and plan reuse" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
 @testset "promotion and plan reuse" begin
     sys = nsys()
     alg = ExplicitEuler(; dt = 0.01)
@@ -121,7 +147,9 @@ end
     b = solve(o64, Tsit5(); abstol = 1e-12, reltol = 1e-12).u[end]
     @test eltype(a) == Float64 && isapprox(a, b; rtol = 1e-10)
 end
+end
 
+@testitem "SciMLStructures: p is a plain vector (Tunable = the scalars)" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
 @testset "SciMLStructures: p is a plain vector (Tunable = the scalars)" begin
     prob = owned(nsys(), 8, 4)
     @test SciMLStructures.isscimlstructure(prob.p)
@@ -132,7 +160,9 @@ end
     i = pidx(prob, kn)
     @test isapprox(g[i], fd(x -> Jθ(withp(v, i, x)), v[i]); rtol = 1e-6)
 end
+end
 
+@testitem "hoisted time: sin(ω t) at t = 1e5 in Float32" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
 @testset "hoisted time: sin(ω t) at t = 1e5 in Float32" begin
     T0 = 1e5
     sys = PDESystem([D(ce) ~ sin(ωn * t)], [c(T0, x, y) ~ 0.0, c(t, x, 0) ~ c(t, x, 1), c(t, 0, y) ~ c(t, 1, y)],
@@ -144,11 +174,13 @@ end
     # control: `sin(ω t)` evaluated with `t` in Float32 is off by more than 1e-3 at these times
     @test abs(sin(3.0f0 * Float32(T0 + 0.01)) - sin(3.0 * (T0 + 0.01))) > 1e-3
 end
+end
 
 # F2-09 (F2 design §2.9): number types per role. Tables keep their element type (a BigFloat
 # table stays BigFloat, a Dual table promotes the problem as a Dual `p` does), BigFloat
 # defaults are kept, a Bool input reads back as Bool, and a pair-keyed `remake` infers. The
 # comments give the base (c2583722) value of each.
+@testitem "F2-09: number types per role" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
 @testset "F2-09: number types per role" begin
     @parameters Dt[1:2] = [0.5, 1.0] Dq = 0.1
     tsys = ssys([D(ce) ~ Dq * Δ(ce) - at(Dt, qe) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dq, Dt])
@@ -226,6 +258,7 @@ end
         @test eltype(sown(tsys; inputs = [qe => K]).p) == Float64
     end
 end
+end
 
 # F3-14 (FE-17, F3 design §3.8): number types per role. A field's declared `lattice_storage`
 # holds its own type whatever the problem's (an aux field here: a `FieldProblem`'s state is
@@ -233,6 +266,7 @@ end
 # in words); `compute_T` compiles a group's kernels in a wider type than its storage; Duals
 # keep their partials through a declared storage. Base f5641ce1: `compute_T` is no keyword, a
 # declared Float64 storage holds the problem's Float32, so every test fails or errors.
+@testitem "F3-14: lattice_storage, compute_T and solver_T in B (FE-17)" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
 @testset "F3-14: lattice_storage, compute_T and solver_T in B (FE-17)" begin
     @parameters kw = 0.25
     @variables wu(..) wK(..) [lattice_storage = Float64] wh(..) [lattice_storage = Float16] wc(..) [lattice_storage = Float64]
@@ -333,11 +367,13 @@ end
     end
     @test occursin("`compute_T` takes `:auto` (the problem's value type), `Float32` or `Float64`", e)
 end
+end
 
 # Batch 5 review S1: a field stored in Float16 under the implicit algorithms is solved in the
 # state's value type (its residual held there; each update rounds once to Float16), with any
 # `compute_T`; accurate to its storage against the Float64 run. Base 97045a1b
 # (~/lpwork/b5r1-nc-s1.log): refused, "an implicit solve runs in Float32 or Float64".
+@testitem "F3-14 S1: Float16 storage under the implicit algorithms" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
 @testset "F3-14 S1: Float16 storage under the implicit algorithms" begin
     @variables sh(..) [lattice_storage = Float16] s64(..)
     she, s64e = sh(t, x, y), s64(t, x, y)
@@ -361,30 +397,9 @@ end
     Js(v) = sum(solve(remake(pr; u0 = v .* pr.u0), BackwardEuler(; dt = 0.1)).u[end])
     @test isapprox(ForwardDiff.derivative(Js, 1.0), fd(Js, 1.0); rtol = 1e-7)
 end
-
-# F3-21a: derivatives through the implicit solve. A Dual state runs the primal solve and, after
-# each stage, its tangent step: the derivative parts solve the stage's linearization with the
-# primal operator, one solve per part (no Dual enters a solver). Each case against central
-# differences of the run. Base (57ea1baa): every case is refused ("holds ForwardDiff Duals").
-# Negative controls (mutations, ~/lpwork/f321-nc-*.log): the parameter part of the operator
-# (`(∂A/∂k) u`, the parameters of the face coefficients) dropped from the tangent fails ∂/∂D; the
-# right side's (the parameters of no face and no local term) dropped fails ∂/∂g
-@parameters kt = 0.7 Dt = 0.3 gt = 0.4
-@variables ta(..) tb(..)
-tae, tbe = ta(t, x, y), tb(t, x, y)
-tdom = [t ∈ Interval(0.0, 0.3), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-tsys(eqs, bcs; dvs = [ce]) = PDESystem(eqs, bcs, tdom, [t, x, y], dvs, [kt, Dt, gt]; name = :tg)
-town(sys, dims = (8, 6); geometry = LatticeFields.IR.CUBIC) =
-    LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims; geometry); T = Float64)))
-const TTIGHT = DevicePCG(; rtol = 1e-13, budget = 200)
-# AD and central differences of `sum(out(solve))` in parameter `s`
-function tad(prob, alg, s; out = sol -> sol.u[end])
-    i = pidx(prob, s)
-    J(v) = sum(out(solve(remake(prob; p = withp(prob.p, i, v)), alg)))
-    return ForwardDiff.derivative(J, prob.p[i]), fd(J, prob.p[i]; h = 1e-5)
 end
-tok(ad, f) = isapprox(ad, f; rtol = 1e-7) && ad != 0
 
+@testitem "F3-21a: ∂u/∂k through BackwardEuler, CrankNicolson, BDF2 and QuasiSteady" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
 @testset "F3-21a: ∂u/∂k through BackwardEuler, CrankNicolson, BDF2 and QuasiSteady" begin
     bcs = [c(0, x, y) ~ x * y, c(t, 0, y) ~ gt]
     lin = town(tsys([D(ce) ~ Dt * Δ(ce) - kt * ce + gt * x], bcs))
@@ -402,7 +417,9 @@ tok(ad, f) = isapprox(ad, f; rtol = 1e-7) && ad != 0
     sd = solve(remake(lin; p = withp(lin.p, i, ForwardDiff.Dual(lin.p[i], 1.0))), BackwardEuler(; dt = 0.1))
     @test ForwardDiff.value.(sd.u[end]) == solve(lin, BackwardEuler(; dt = 0.1)).u[end]
 end
+end
 
+@testitem "F3-21a: a mask and a Robin face; a nonlinear term; a hexagonal lattice; the coupled steady solve" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
 @testset "F3-21a: a mask and a Robin face; a nonlinear term; a hexagonal lattice; the coupled steady solve" begin
     # the mask's value and the Robin face's β read k
     mr = town(tsys([D(ce) ~ Dt * Δ(ce) - 0.5 * ce + gt], [c(0, x, y) ~ 0.2 + x,
@@ -449,12 +466,14 @@ end
         @test tok(tad(cp, QuasiSteady(; dt = 0.1, inner = DeviceGMRES(; rtol = 1e-12)), s; out = sol -> sol[tae, end] .^ 2)...)   # (a sum of `a` alone does not see D: zero flux)
     end
 end
+end
 
 # A declared storage on a row whose operator varies by site (a field row: a face coefficient of
 # the coordinates). Its `jac:` site values are in the row's solve type: a declared Float32 or
 # Float64 storage's own, a Float16 field's the problem's type (found while building F3-16).
 # Base 85794414 (~/lpwork/f3b6-nc-f314.log): every case errors ("`inputs`: `w1` holds Float64
 # values; this solver's state type is `Float32`", and the Float16 and Float64 forms).
+@testitem "F3-14: a declared storage on a field row under the implicit algorithms" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
 @testset "F3-14: a declared storage on a field row under the implicit algorithms" begin
     @variables sfr(..) sfr32(..) [lattice_storage = Float32] sfr16(..) [lattice_storage = Float16] sfr64(..) [lattice_storage = Float64]
     sdom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
@@ -469,12 +488,9 @@ end
         end
     end
 end
+end
 
-# Batch 5 review S3 and N4: a group that declares Float64 on a backend without it (Metal) is
-# refused at the bind in words; a stub backend whose `supports_float64` is false stands in.
-# The D-157 registry of a store's generic bodies is keyed on a Float64 device array.
-struct NoF64Backend <: LatticeFields.Exec.KernelAbstractions.GPU end
-LatticeFields.Exec.KernelAbstractions.supports_float64(::NoF64Backend) = false
+@testitem "F3-14 S3, N4: Float64 on a backend without it; the registry's keys" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
 @testset "F3-14 S3, N4: Float64 on a backend without it; the registry's keys" begin
     LFP = LatticePDE.Problems
     @variables nw(..) [lattice_storage = Float64] nv(..)
@@ -515,4 +531,5 @@ LatticeFields.Exec.KernelAbstractions.supports_float64(::NoF64Backend) = false
     @test !Ex.float64_registered("Tuple{kernel, $clip, ROCDeviceArray{Float32, 1, 1}, Float64}")
     empty!(Ex.FLOAT64_KERNELS)
     union!(Ex.FLOAT64_KERNELS, saved)
+end
 end

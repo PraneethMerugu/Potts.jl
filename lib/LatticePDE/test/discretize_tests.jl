@@ -3,46 +3,40 @@
 # runner (the Exec contract on the CPU). Each oracle has a negative control that must fail.
 # The explicit step is the test's own `update` (C7a brings the steppers).
 
-using LatticeFields: LatticeFields
-using Random: MersenneTwister
-include(joinpath(pkgdir(LatticeFields), "test", "host_runner.jl"))
-using LatticeFields.IR: print_program, runtime, F16, F32, F64
-using LatticeFields.Compile: semantic, fingerprint_text
-using LatticeFields.Schedule: plan
-using LatticePDE: BC
+@testsetup module LP_discretize
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
 
-const euler = (kb, c, r) -> c + runtime(kb, 2) * r          # rt = (t, dt)
-ir(cf) = sprint(print_program, cf.program)
-dom2(a = 1.0, b = 1.0) = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, a), y ∈ Interval(0.0, b)]
-pde(eqs, bcs, dvs, ps; d = dom2()) = PDESystem(eqs, bcs, d, [t, x, y], dvs, ps; name = :f)
-lower64(sys, dims; kw...) = symbolic_discretize(sys, LatticeDiscretization(Grid(dims); T = Float64); update = euler, kw...)
-
-"""Semantic program, step plan and host store of a lowered system (Float64)."""
-function runner(cf)
-    s = semantic(cf.program)
-    sp = plan(s; options = CompileOptions(; T = Float64))
-    return (s = s, sp = sp, st = HostStore(s), P = Tuple(cf.defaults))
-end
-field(R, key) = current(R.st, R.s, key)
-function steps!(R, dt, n; P = R.P)
-    for _ in 1:n
-        run_step!(R.s, R.sp, R.st, P; rt = (0.0, dt))
+# Salted operator hashes: another package build's hashes, in this process (the D-107 pattern
+# of `p6_0ah_canonical_term_order.jl`, extended to field terms). Inert at salt 0.
+const SALT = Ref{UInt}(0)
+for f in (Δ, at, ismember, sin, cos, exp)
+    @eval function Base.hash(g::typeof($f), h::UInt)
+        SALT[] == 0 && return invoke(hash, Tuple{Function, UInt}, g, h)
+        return hash(SALT[], hash(:lattice_salt, h))
     end
-    return R
 end
-throws_with(f, s) = (try
-                         f()
-                         false
-                     catch e
-                         e isa ArgumentError && occursin(s, sprint(showerror, e))
-                     end)
+function salted(f, s)
+    SALT[] = s
+    try
+        return f()
+    finally
+        SALT[] = 0
+    end
+end
+include("shared/export_all.jl")
+end
 
-@parameters x y z Dc = 1e-3 k = 0.1 h0 = 2.0 g0 = 0.5 K0 = 2.0 cT = 0.1 dx [lattice_spacing = 1] dy [lattice_spacing = 2]
-@parameters Dk[1:3] = [1.0, 2.0, 3.0]
-@variables c(..) o(..) K(..) N(..) kindₛ(..)::Int32 [input = true] vel(..)[1:2] [input = true] u(..)[1:2]
-Dx, Dy = Differential(x), Differential(y)
-ce, oe, Ke, Ne, ke, ue = c(t, x, y), o(t, x, y), K(t, x, y), N(t, x, y), kindₛ(t, x, y), u(t, x, y)
-
+@testitem "BC parser (S-5)" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "BC parser (S-5)" begin
     fields = Dict{Any, Bool}(operation(unwrap(v)) => MTKB.isinput(unwrap(v)) for v in (ce, ke, ue))
     ivs = unwrap.([t, x, y])
@@ -70,7 +64,9 @@ ce, oe, Ke, Ne, ke, ue = c(t, x, y), o(t, x, y), K(t, x, y), N(t, x, y), kindₛ
         @test throws_with(() -> one(bc), msg)
     end
 end
+end
 
+@testitem "keys by operation, refusals, wrong bcs" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "keys by operation, refusals, wrong bcs" begin
     eq = [D(ce) ~ Dc * Δ(ce)]
     sys = pde(eq, [c(t, x, 0) ~ c(t, x, 1)], [ce], [Dc])
@@ -100,7 +96,9 @@ end
         msg == "" ? (@test f() isa CompiledField) : (@test throws_with(f, msg))
     end
 end
+end
 
+@testitem "linearity table" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "linearity table" begin
     states = [operation(unwrap(v)) for v in (ce, oe, Ke)]
     table = [Dc * Δ(ce) - k * ce => Set([:Diffusion, :LinearLocal]),
@@ -136,7 +134,9 @@ end
     # Symbolics' own expansion is blind to the registered operators (FR-27): the reason for the table
     @test !Symbolics.linear_expansion(Dc * Δ(ce) - k * ce, ce)[3]
 end
+end
 
+@testitem "raw Differential rule: same IR as Δ and DivKGrad" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "raw Differential rule: same IR as Δ and DivKGrad" begin
     g = Grid((5, 4))
     bc = [c(t, 0, y) ~ 1.0, h0 * c(t, 1, y) + Dx(c(t, 1, y)) ~ g0, c(t, x, 0) ~ c(t, x, 1)]
@@ -150,16 +150,9 @@ end
     @test low(DivKGrad(:arithmetic)(Ke, ce); e = aux) != low(DivKGrad(:harmonic)(Ke, ce); e = aux)
     @test low(Dc * (Dx(Dx(ce)) + Dx(Dx(ce)))) != low(Dc * Δ(ce))
 end
-
-# a 2D rate system with periodic y (a 1D profile in x, 2 rows)
-function profile(bcs, n; rhs = Δ(ce), ps = [g0, h0], steps = 20000)
-    cf = lower64(pde([D(ce) ~ rhs], [bcs; c(t, x, 0) ~ c(t, x, 1)], [ce], ps), (n, 2))
-    R = runner(cf)
-    steps!(R, 0.2 / n^2, steps)
-    xc = ((1:n) .- 0.5) ./ n
-    return reshape(field(R, "c"), n, 2)[:, 1], xc
 end
 
+@testitem "steady linear profiles: Dirichlet, Robin, Neumann" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "steady linear profiles: Dirichlet, Robin, Neumann" begin
     n = 16
     v, xc = profile([c(t, 0, y) ~ 1.0, c(t, 1, y) ~ 0.0], n)
@@ -181,7 +174,9 @@ end
     v, _ = profile([c(t, 0, y) ~ 1.0, h0 * c(t, 1, y) - Dx(c(t, 1, y)) ~ g0], n)
     @test maximum(abs, v .- (1 .- a .* xc)) > 1e-2
 end
+end
 
+@testitem "Fourier mode decay (periodic 2D)" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "Fourier mode decay (periodic 2D)" begin
     n, m, kx, ky = 16, 8, 1, 2
     d = dom2(1.0, 2.0)
@@ -206,7 +201,9 @@ end
     @test maximum(abs, run(-Dc * Δ(ce)) .- oracle) > 0.1        # negative control: flipped sign
     @test maximum(abs, run(Dc * Dx(Dx(ce)) + Dc * Dx(Dx(ce))) .- oracle) > 1e-4   # an axis wrong
 end
+end
 
+@testitem "no-flux mass conservation" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "no-flux mass conservation" begin
     n, m = 12, 9
     mk(bcs) = lower64(pde([D(ce) ~ Dc * Δ(ce) + Dc * Dx(Dx(ce))], bcs, [ce], [Dc]), (n, m))
@@ -224,7 +221,9 @@ end
     dm, _ = mass([c(t, 0, y) ~ 0.0])                            # negative control: one face Dirichlet(0)
     @test dm > 1e-3
 end
+end
 
+@testitem "masked interior Dirichlet" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "masked interior Dirichlet" begin
     n, j = 16, 12                                               # mask column j holds 1
     sys(bcs) = pde([D(ce) ~ Δ(ce)], [bcs; c(t, 0, y) ~ 0.0; c(t, x, 0) ~ c(t, x, 1)], [ce, ke], Num[])
@@ -245,7 +244,9 @@ end
     v, _ = solve(Equation[])                                    # negative control: no mask
     @test maximum(abs, v .- want) > 0.5
 end
+end
 
+@testitem "3D: periodic x, no-flux y, Dirichlet z (one step against a loop)" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "3D: periodic x, no-flux y, Dirichlet z (one step against a loop)" begin
     @parameters g1 = 0.25
     dims = (6, 5, 4)
@@ -273,7 +274,9 @@ end
     bad, _ = step(Equation[])                                   # negative control: z no-flux instead
     @test maximum(abs, bad .- want) > 1e-5
 end
+end
 
+@testitem "kind table source at(Dk, kindₛ)" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "kind table source at(Dk, kindₛ)" begin
     cf = lower64(pde([D(ce) ~ at(Dk, ke)], Equation[], [ce, ke], [Dk]), (4, 2))
     @test cf.tables == ["Dk" => [1.0, 2.0, 3.0]]
@@ -283,7 +286,9 @@ end
     steps!(R, 1.0, 1)
     @test field(R, "c") == [0.0, 1.0, 2.0, 3.0, 3.0, 2.0, 1.0, 0.0]    # kind 0 reads 0
 end
+end
 
+@testitem "upwind advection: exact shift at CFL 1" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "upwind advection: exact shift at CFL 1" begin
     n = 8
     sys = pde([D(ce) ~ -Advect(Upwind1())(vel(t, x, y), ce)], [c(t, 0, y) ~ c(t, 1, y), c(t, x, 0) ~ c(t, x, 1)],
@@ -296,7 +301,9 @@ end
     steps!(R, 1 / n, 3)
     @test reshape(field(R, "c"), n, 2) ≈ circshift(reshape(u0, n, 2), (3, 0)) atol = 1e-14
 end
+end
 
+@testitem "masked averaging map (Shift and offset reads)" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "masked averaging map (Shift and offset reads)" begin
     n, Iset = 5, (1,)
     offs = ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1))
@@ -359,25 +366,9 @@ end
         @test throws_with(() -> symbolic_discretize(sys(rhs; e), g), msg)
     end
 end
-
-# Salted operator hashes: another package build's hashes, in this process (the D-107 pattern
-# of `p6_0ah_canonical_term_order.jl`, extended to field terms). Inert at salt 0.
-const SALT = Ref{UInt}(0)
-for f in (Δ, at, ismember, sin, cos, exp)
-    @eval function Base.hash(g::typeof($f), h::UInt)
-        SALT[] == 0 && return invoke(hash, Tuple{Function, UInt}, g, h)
-        return hash(SALT[], hash(:lattice_salt, h))
-    end
-end
-function salted(f, s)
-    SALT[] = s
-    try
-        return f()
-    finally
-        SALT[] = 0
-    end
 end
 
+@testitem "D-107: lowered IR independent of operator hashes" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "D-107: lowered IR independent of operator hashes" begin
     function build()
         rhs = Dc * Δ(ce) - k * ce + K0 * sin(ce) + cT * exp(-oe) + g0 * cos(oe) + h0 * ismember(ke, (2, 3)) +
@@ -395,9 +386,10 @@ end
     # negative control: the salt does reorder Symbolics' operands of a sum
     @test any(s -> salted(order, s) != base_order, 1:4)
 end
+end
 
 # ---- added after the first C6 review round ------------------------------------------------
-
+@testitem "masked averaging map: Moore neighborhood, empty sites only (pass-2 t4 oracle)" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "masked averaging map: Moore neighborhood, empty sites only (pass-2 t4 oracle)" begin
     # [N(l_i)] ← (D/|I_i|) Σ_{j∈I_i} [N(l_j)], I_i = empty sites of Moore(i) ∪ {i}; empty sites
     # update synchronously, cell sites keep their value. Empty is kind 1, the cell kind 2.
@@ -462,14 +454,18 @@ end
     steps!(R, 0.0, 1; P = (1.0, 0.2, 0.2))
     @test abs(sum(field(R, "N")[vec(empty)]) - sum(Float64.(N0[empty])) - 1069 / 840) > 1e-3
 end
+end
 
+@testitem "periodicity covers map fields" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "periodicity covers map fields" begin
     sys = pde([D(ce) ~ Δ(ce), Shift(t, 1)(Ne) ~ Ne], [c(t, x, 0) ~ c(t, x, 1)], [ce, Ne], Num[])
     @test throws_with(() -> symbolic_discretize(sys, LatticeDiscretization(Grid((4, 4)))), "periodicity is per axis")
     ok = pde([D(ce) ~ Δ(ce), Shift(t, 1)(Ne) ~ Ne], [c(t, x, 0) ~ c(t, x, 1), N(t, x, 0) ~ N(t, x, 1)], [ce, Ne], Num[])
     @test symbolic_discretize(ok, LatticeDiscretization(Grid((4, 4)))) isa CompiledField
 end
+end
 
+@testitem "array state end to end (two components)" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "array state end to end (two components)" begin
     n, m = 6, 4
     sys = pde([D(ue[1]) ~ Dc * Δ(ue[1]) - k * ue[2], D(ue[2]) ~ Δ(ue[2]) + k * ue[1]],
@@ -497,7 +493,9 @@ end
     @test maximum(abs, reshape(field(R, "u[2]"), n, m) .- w2) < 1e-14
     @test reshape(field(R, "u[2]"), n, m)[4, 2] == 0.5          # held at the masked site
 end
+end
 
+@testitem "Float32 lowered kernels: no Float64, warm launches allocate nothing" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "Float32 lowered kernels: no Float64, warm launches allocate nothing" begin
     function check32(cf; tables = Dict{Int32, Any}())
         s = semantic(cf.program)
@@ -527,7 +525,9 @@ end
         @test check32(f32(sys, (16, 8)); tables = Dict{Int32, Any}(Int32(1) => Float32[1, 2, 3])) >= 1
     end
 end
+end
 
+@testitem "review round 1: refusals" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "review round 1: refusals" begin
     g = LatticeDiscretization(Grid((4, 4)); T = Float64)
     fields = Dict{Any, Bool}(operation(unwrap(ce)) => false, operation(unwrap(ke)) => true)
@@ -561,7 +561,9 @@ end
     @test throws_with(() -> symbolic_discretize(sysb([c(t, 0, y) + 0.125 * Dx(c(t, 0, y)) ~ 1.0]), g), "ghost value")
     @test symbolic_discretize(sysb([c(t, 0, y) - 0.125 * Dx(c(t, 0, y)) ~ 1.0]), g) isa CompiledField
 end
+end
 
+@testitem "review round 2: refusals" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "review round 2: refusals" begin
     g = LatticeDiscretization(Grid((4, 4)); T = Float64)
     map(r; ps = [dx]) = () -> symbolic_discretize(pde([Shift(t, 1)(Ne) ~ r], Equation[], [Ne], ps), g)
@@ -594,7 +596,9 @@ end
     @test only(last.(LatticePDE.linearity(ke * Advect(Upwind1())(vel(t, x, y), ce), ce, st; inputs = inp))) == :Other
     @test only(last.(LatticePDE.linearity(Dc * Advect(Upwind1())(vel(t, x, y), ce), ce, st; inputs = inp))) == :Advection
 end
+end
 
+@testitem "state type: lanes per T, default by backend, refusals (P5 C6-1, C6-3)" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "state type: lanes per T, default by backend, refusals (P5 C6-1, C6-3)" begin
     sys = pde([D(ce) ~ Dc * Δ(ce) - k * ce], [c(t, 0, y) ~ 1.0, Dx(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)], [ce], [Dc, k])
     lanes(T) = [f.storage for f in symbolic_discretize(sys, LatticeDiscretization(Grid((8, 4)); T); update = euler).program.fields
@@ -607,6 +611,7 @@ end
     err = throws_with(() -> lanes(Int), "not a state type")
     @test err
 end
+end
 
 # F4-12a: a Robin coefficient that is an expression of parameters is one value at every site,
 # held by a computed parameter of its face (`c_x_low_α`); terms on one read add up (`g1 c + g2 c`
@@ -614,6 +619,7 @@ end
 # its face (F4-12b, robin_site.jl).
 # Base (925110cc, ~/lpwork/f4c/nc12-base-lp.log): 1 error, the expression refused ("the boundary value
 # `g1 + g2` must be a number, …").
+@testitem "F4-12a: a Robin coefficient of parameters" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "F4-12a: a Robin coefficient of parameters" begin
     @parameters g1 = 1.0 g2 = 2.0 ar = g1 + g2
     g = LatticeDiscretization(Grid((8, 8)); T = Float64)
@@ -637,4 +643,5 @@ end
     # (F4-12b: one that reads a coordinate is a value field of the face, not a slot; robin_site.jl)
     sy = discretize(sysr((g1 + y) * c(t, 0, y) - Dx(c(t, 0, y)) ~ 1.0, [g1, g2]), g)
     @test any(r -> r isa LatticeFields.IR.FaceRule && r.afield != 0, LFP.field_problem(sy).program.rules)
+end
 end

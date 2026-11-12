@@ -10,6 +10,32 @@
 # failure test left out (noreduce), the growth refusal left out (nogrowth).
 
 # the steady state of the hand rate `(L, b)`: `L u = −b`, the masked sites holding `mval`
+
+@testsetup module LP_quasisteady
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/problems.jl")
+include("shared/bounds.jl")
+include("shared/silent.jl")
+include("shared/groups.jl")
+include("shared/families.jl")
+include("shared/odepath.jl")
+include("shared/precond.jl")
+include("shared/groups_coupling.jl")
+include("shared/implicit.jl")
+include("shared/robin_site.jl")
+include("shared/grids.jl")
+include("shared/remakecb.jl")
+include("shared/maskswitch.jl")
 function qs_hand(; mask = nothing, mval = nothing, kw...)
     L, b = hand_rate(; kw...)
     A, rhs = copy(L), -b
@@ -31,6 +57,18 @@ catch err
 end
 @parameters qg = 1.0
 
+# F3-12b (F3 design §3.5): steady rows `0 ~ rhs` in B, time-free systems through the steady
+# solve, the QuasiSteady groups first. A steady row is lowered as the rate row of the field it
+# determines (`steady_rows`) and takes `QuasiSteady` only, by default too; a system with no
+# time is solved once (`solve(prob)`, the inner solver to rtol 1e-6 within 64 iterations).
+# Base (6b6bf089, ~/lpwork/f3b5-nc-12b-base.log): `0 ~ rhs` is refused ("not lowered in this
+# version") and a system with no time too (every testset errors).
+# (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
+qown(sys; dims = BDIMS) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims); T = Float64)))
+include("shared/export_all.jl")
+end
+
+@testitem "F3-12a: one QuasiSteady window is the steady state (the hand matrix)" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
 @testset "F3-12a: one QuasiSteady window is the steady state (the hand matrix)" begin
     alg = QuasiSteady(; dt = 0.1, inner = BTIGHT)
     # a numeric operator: diffusion, decay, a source, a Dirichlet face, a mask with its value
@@ -62,7 +100,9 @@ end
     @test bwarm(ig) == 0
     @test LSB.iterations(ig.runtimes[1].cache.rows[1].solver) <= 8
 end
+end
 
+@testitem "F3-12a: the solver capabilities in a QuasiSteady group (F3-05)" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
 @testset "F3-12a: the solver capabilities in a QuasiSteady group (F3-05)" begin
     alg = QuasiSteady(; dt = 0.1, inner = BTIGHT)
     xs = bxs()
@@ -122,7 +162,9 @@ end
     want = qs_hand(; K = (x, y) -> 1.0, m = (i, j) -> (0.0, 0.5, 2.0)[K2[i, j] + 1], k = (x, y) -> 2.0, f = (x, y) -> 1.0)
     @test maximum(abs, vec(ig[bce]) .- want) < 1e-10
 end
+end
 
+@testitem "F3-12a: nonlinear rows: Michaelis–Menten within the default 8 iterations" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
 @testset "F3-12a: nonlinear rows: Michaelis–Menten within the default 8 iterations" begin
     sys = nlsys([D(bce) ~ 0.05 * Δ(bce) - 40 * bce / (0.025 + bce) + 20], [bc(0, x, y) ~ 0.5, bc(t, 0, y) ~ 1.0], [bce]; T = 0.3)
     ig = init(nlown(sys), QuasiSteady(; dt = 0.1, inner = BTIGHT))
@@ -140,7 +182,9 @@ end
     step!(ig)
     @test rt.totals.solves - s0 <= 2
 end
+end
 
+@testitem "F3-12a: the refusals: growth, no unique steady state; keywords, show" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
 @testset "F3-12a: the refusals: growth, no unique steady state; keywords, show" begin
     # a growth the operator sees, at build and at a parameter write
     pg = bown(bsys([D(bce) ~ bD * Δ(bce) + qg * bce], [bc(0, x, y) ~ x, bc(t, 0, y) ~ 1.0], [bD, qg]))
@@ -176,7 +220,9 @@ end
     @test repr(a) == "QuasiSteady(; dt = 0.5, newton = 3)" && eval(Meta.parse(repr(a))) == a && repr(QuasiSteady()) == "QuasiSteady()"
     @test LFB.canonical(QuasiSteady()) == "QuasiSteady(inner=:auto,lower=nothing,newton=nothing,solver_T=:auto,substeps=nothing)"
 end
+end
 
+@testitem "F3-12a: budget hits: a real reduction stays Success, none (an island) is ConvergenceFailure" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
 @testset "F3-12a: budget hits: a real reduction stays Success, none (an island) is ConvergenceFailure" begin
     # a budget of 2 PCG iterations on 32²: the residual falls by more than half but not to the
     # tolerance; counted and warned with the route, `Success`
@@ -212,7 +258,9 @@ end
     pd = discretize(sd, LatticeDiscretization(Grid(BDIMS); T = Float64, domain = bdm); inputs = [bdme => dm])
     @test solve(pd, QuasiSteady(; dt = 0.1, inner = BTIGHT)).retcode == ReturnCode.Success
 end
+end
 
+@testitem "F3-12a: components equal scalars; a hexagonal lattice runs QuasiSteady (F3-20)" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
 @testset "F3-12a: components equal scalars; a hexagonal lattice runs QuasiSteady (F3-20)" begin
     @variables bu(..)[1:2]
     bue = bu(t, x, y)
@@ -228,6 +276,7 @@ end
     ph = discretize(hs, LatticeDiscretization(Grid((6, 6); geometry = HEX); T = Float64))
     @test solve(ph, QuasiSteady(; dt = 0.1)).retcode == ReturnCode.Success
 end
+end
 
 # Review r2 M1, F3-12c: a QuasiSteady group in a loop of groups takes its gain in the coupling
 # rule, κ_QS = dt · Σ k_in · gain · k_out ≤ 1 (gain 1/δ here, the decay's); past it the loop is
@@ -236,6 +285,7 @@ end
 # reviewer's q1 (~/lpwork/f3rev7/q1.jl): `0 = 0.1Δa − δa + s k b` steady, `b' = 0.1Δb − b − k a`,
 # whose lag of one window grew to 1e37 (δ = 0.1, k = 5: κ = 25). Base (773f0957,
 # ~/lpwork/f3b5-nc-r2-m1.log): every loop accepted (the refusal tests fail).
+@testitem "F3-12a (r2 M1): a QuasiSteady group in a loop past its gain is refused, with its routes" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
 @testset "F3-12a (r2 M1): a QuasiSteady group in a loop past its gain is refused, with its routes" begin
     @variables qa(..) qb(..)
     qae, qbe = qa(t, x, y), qb(t, x, y)
@@ -278,6 +328,7 @@ end
     rs = solve(p1, QuasiSteady(; dt = 0.1, inner = BTIGHT))                     # (the steady field alone)
     @test maximum(abs, r[qae, length(r.t)] .- rs[qae, length(rs.t)]) < 1e-12
 end
+end
 
 # F3-12c (F3 design §3.6): the QuasiSteady gain in the coupling rule. A steady group answers its
 # lagged inputs at once with gain G (≤ 1/s_min, and ≤ max (s + A_a)⁻¹1 along an axis with a
@@ -289,6 +340,7 @@ end
 # ~/lpwork/f3b7-nc-12c-gain.log): the q1 loops, the face-anchored k = 4 loop and the write past
 # the limit are accepted (6 fail); the face anchors left out of the gain (nc-12c-face): the
 # zero-shift loop has no bound and is refused (1 fails, 1 errors).
+@testitem "F3-12c: the QuasiSteady gain in the coupling rule: accepted loops match the coupled solution" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
 @testset "F3-12c: the QuasiSteady gain in the coupling rule: accepted loops match the coupled solution" begin
     @variables qa(..) qb(..)
     qae, qbe = qa(t, x, y), qb(t, x, y)
@@ -372,6 +424,7 @@ end
     ig = init(pg, gl(0.1))
     @test occursin("give κ = dt · Σ k_in · gain · k_out = 1.6 > 1", qmsg(() -> (ig.ps[gk] = 4.0))) && ig.ps[gk] == 0.5
 end
+end
 
 # F3-12c (F3 design §3.2): `init = :steady` on every algorithm. Before the first window (and at
 # `reinit!`) each such group's steady state is solved once by `QuasiSteady`, with the algorithm's
@@ -379,6 +432,7 @@ end
 # failed steady start ends the run. Base (932c12ce, ~/lpwork/f3b7-nc-12c-base.log): `init` is no
 # keyword (the testset errors). Negative control (mutation, nc-12c-reinit): `reinit!` without
 # the steady starts keeps the zero start (1 fails).
+@testitem "F3-12c: `init = :steady`: every algorithm starts at the steady state" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
 @testset "F3-12c: `init = :steady`: every algorithm starts at the steady state" begin
     sys = bsys([D(bce) ~ bD * Δ(bce) - bk * bce + x], [bc(0, x, y) ~ 0.0, bc(t, 0, y) ~ 1.0], [bD, bk]; T = 0.3)
     p = bown(sys)
@@ -440,15 +494,9 @@ end
     s = solve!(ig)
     @test s.retcode == ReturnCode.ConvergenceFailure && s.t == [0.0]
 end
+end
 
-# F3-12b (F3 design §3.5): steady rows `0 ~ rhs` in B, time-free systems through the steady
-# solve, the QuasiSteady groups first. A steady row is lowered as the rate row of the field it
-# determines (`steady_rows`) and takes `QuasiSteady` only, by default too; a system with no
-# time is solved once (`solve(prob)`, the inner solver to rtol 1e-6 within 64 iterations).
-# Base (6b6bf089, ~/lpwork/f3b5-nc-12b-base.log): `0 ~ rhs` is refused ("not lowered in this
-# version") and a system with no time too (every testset errors).
-# (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
-qown(sys; dims = BDIMS) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims); T = Float64)))
+@testitem "F3-12b: steady rows `0 ~ rhs`: the rate row's solve, QuasiSteady only, the steady groups first" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
 @testset "F3-12b: steady rows `0 ~ rhs`: the rate row's solve, QuasiSteady only, the steady groups first" begin
     alg = QuasiSteady(; dt = 0.1, inner = BTIGHT)
     s0 = bsys([0 ~ bD * Δ(bce) - bk * bce + x + t], [bc(t, 0, y) ~ 1.0], [bD, bk]; T = 0.3)
@@ -515,7 +563,9 @@ qown(sys; dims = BDIMS) = LFP.field_problem(discretize(sys, LatticeDiscretizatio
     psm = discretize(sm, LatticeDiscretization(Grid(BDIMS); T = Float64))
     @test psm isa SciMLBase.ODEProblem && count(iszero, psm.f.mass_matrix.diag) == prod(BDIMS)
 end
+end
 
+@testitem "F3-12b: a steady row's time source is read at the window's start" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
 @testset "F3-12b: a steady row's time source is read at the window's start" begin
     # `0 = 0.1 Δu − u + f(t)` with `u = (1 + t) sin(πx) sin(πy)` (zero faces) on 32²: window k
     # solves at its start time t_{k−1}, so the field is the solution at t_{k−1}, not at t_k
@@ -534,7 +584,9 @@ end
         @test e0 < 2e-3 && e1 > 0.4 || (println("12b start-time read ", (k, e0, e1)); false)
     end
 end
+end
 
+@testitem "F3-12b: a system with no time: one steady solve from a cold start; Helmholtz is order 2" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
 @testset "F3-12b: a system with no time: one steady solve from a cold start; Helmholtz is order 2" begin
     @variables fc(..)
     fce = fc(x, y)
@@ -574,11 +626,13 @@ end
     ord = log2.(errs[1:(end - 1)] ./ errs[2:end])
     @test all(o -> abs(o - 2) < 0.1, ord) || (println("Helmholtz orders ", ord, " errors ", errs); false)  # (1.99, 2.00)
 end
+end
 
 # F3-12b (design §5; review r4 N4): the F3-05 capabilities through the steady solve of a system
 # with no time, each against the hand steady matrix to 1e-9: a Robin face of each sign, a field
 # face with a face-Dirichlet value, a mask value field, an input bound by aliasing (a new input
 # changes the next solve)
+@testitem "F3-12b: the solver capabilities in a system with no time (F3-05)" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
 @testset "F3-12b: the solver capabilities in a system with no time (F3-05)" begin
     @variables zc(..) zq(..)::Int32 [input = true]
     zce, zqe = zc(x, y), zq(x, y)
@@ -606,4 +660,5 @@ end
     @test maximum(abs, solve(pf, alg).u[1] .- hand(BKIND)) < 1e-9
     K2 = Int32[(i * j) % 2 for i in 1:8, j in 1:6]
     @test maximum(abs, solve(remake(pf; inputs = [zqe => K2]), alg).u[1] .- hand(K2)) < 1e-9
+end
 end

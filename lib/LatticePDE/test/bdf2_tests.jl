@@ -5,12 +5,39 @@
 # ~/lpwork/f3b4-nc11-base.log): `BDF2` is not defined (every testset errors). Negative controls
 # (mutations, ~/lpwork/f3b4-nc11-*.log): the start from a zero history (zerohist), a change of
 # `h` without the restart (norestart).
+
+@testsetup module LP_bdf2
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/problems.jl")
+include("shared/bounds.jl")
+include("shared/silent.jl")
+include("shared/groups.jl")
+include("shared/families.jl")
+include("shared/odepath.jl")
+include("shared/precond.jl")
+include("shared/groups_coupling.jl")
+include("shared/implicit.jl")
+include("shared/robin_site.jl")
+include("shared/cranknicolson.jl")
 using OrdinaryDiffEqBDF: ABDF2
 
 # one Backward Euler substep of `p` from its start state, with the operator rebuilt as BDF2's
 # start does
 be_first(p, h) = (ig = init(p, BackwardEuler(; dt = h, inner = BTIGHT)); step!(ig); vec(ig[bce]))
+include("shared/export_all.jl")
+end
 
+@testitem "F3-11: BDF2: order 2, the manufactured solution, the stage" setup = [LP_bdf2] tags = [:latticepde, :bdf2] begin
 @testset "F3-11: BDF2: order 2, the manufactured solution, the stage" begin
     p, λ, u0 = eig_problem(16)
     err(dt) = maximum(abs, blast(solve(p, BDF2(; dt, inner = BTIGHT))) .- exp(0.3λ * 0.4) .* u0)
@@ -31,7 +58,9 @@ be_first(p, h) = (ig = init(p, BackwardEuler(; dt = h, inner = BTIGHT)); step!(i
     want = (I - 2h / 3 * L2) \ ((4 .* us[1] .- u0) ./ 3 .+ 2h / 3 .* b2)
     @test maximum(abs, us[2] .- want) < 1e-9
 end
+end
 
+@testitem "F3-11: the Backward Euler start: init, reset!, a change of h" setup = [LP_bdf2] tags = [:latticepde, :bdf2] begin
 @testset "F3-11: the Backward Euler start: init, reset!, a change of h" begin
     p, _, _ = eig_problem(16)
     h = 0.05
@@ -83,7 +112,9 @@ end
     step!(fresh)
     @test vec(ig[bce]) == vec(fresh[bce])
 end
+end
 
+@testitem "F3-11: the history is not state; positivity is `lower`; SX-18" setup = [LP_bdf2] tags = [:latticepde, :bdf2] begin
 @testset "F3-11: the history is not state; positivity is `lower`; SX-18" begin
     p, _, _ = eig_problem(16)
     s = solve(p, BDF2(; dt = 0.05); saveat = 0.1)
@@ -111,7 +142,9 @@ end
     sb = solve(discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64)), BDF2(; dt = 0.05, inner = BTIGHT))
     @test sa.t[end] ≈ 0.4 && maximum(abs, vec(blast(sb)) .- sa.u[end]) < 1e-8
 end
+end
 
+@testitem "F3-11: components, parameter writes, messages" setup = [LP_bdf2] tags = [:latticepde, :bdf2] begin
 @testset "F3-11: components, parameter writes, messages" begin
     @variables bu(..)[1:2]
     bue = bu(t, x, y)
@@ -149,4 +182,5 @@ end
     @test init(pg, BDF2(; dt = 0.5)).substeps == 2
     ig = @test_logs (:warn, r"^BDF2\(substeps = 1\): field `bc` takes 2 substeps, more than the 1 requested: a local growth") init(pg,
         BDF2(; dt = 0.5, substeps = 1))
+end
 end

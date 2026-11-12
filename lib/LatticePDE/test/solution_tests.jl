@@ -5,8 +5,36 @@
 # a key; `sol(t, x, y)` multilinear; `sol.ps` the parameters at the end; `sol.stats` a
 # `LatticeStats`. Negative control at the F4-03 commit (~/lpwork/f4b5/nc04.log): `sol(0.05)` is
 # not callable (a `FieldSolution`), `sol[c]` a vector of grids, `sol[u]` "Invalid symbol".
+
+@testsetup module LP_solution
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/problems.jl")
+include("shared/bounds.jl")
+include("shared/silent.jl")
+include("shared/groups.jl")
+include("shared/families.jl")
+include("shared/odepath.jl")
+include("shared/precond.jl")
+include("shared/groups_coupling.jl")
+include("shared/implicit.jl")
+include("shared/robin_site.jl")
 using OrdinaryDiffEqTsit5: Tsit5
 
+cbsys32() = bsys([D(bce) ~ 0.01 * Δ(bce) - bce], [bc(0, x, y) ~ x * y], Any[]; T = 0.3, dvs = [bce])
+include("shared/export_all.jl")
+end
+
+@testitem "F4-04: the owned solution is an ODESolution: sol(t), Array, stats, ps" setup = [LP_solution] tags = [:latticepde, :solution] begin
 @testset "F4-04: the owned solution is an ODESolution: sol(t), Array, stats, ps" begin
     sp = discretize(bsys([D(bce) ~ bD * Δ(bce) - bk * bce + x], [bc(0, x, y) ~ x * y], [bD, bk]; T = 0.3, dvs = [bce]),
         LatticeDiscretization(Grid((8, 8)); T = Float64))
@@ -21,8 +49,9 @@ using OrdinaryDiffEqTsit5: Tsit5
     ig.ps[bk] = 3.0
     @test solve!(ig).ps[bk] == 3.0 && sp.ps[bk] == 2.0
 end
+end
 
-cbsys32() = bsys([D(bce) ~ 0.01 * Δ(bce) - bce], [bc(0, x, y) ~ x * y], Any[]; T = 0.3, dvs = [bce])
+@testitem "F4-04 (Q18): sol[c] is one grid per save; field_series is time first; sol[x]; sol[c] by the callable" setup = [LP_solution] tags = [:latticepde, :solution] begin
 @testset "F4-04 (Q18): sol[c] is one grid per save; field_series is time first; sol[x]; sol[c] by the callable" begin
     sp = discretize(bsys([D(bce) ~ bD * Δ(bce) - bk * bce + x], [bc(0, x, y) ~ x * y], [bD, bk]; T = 0.3, dvs = [bce]),
         LatticeDiscretization(Grid((8, 8)); T = Float64))
@@ -51,4 +80,5 @@ cbsys32() = bsys([D(bce) ~ 0.01 * Δ(bce) - bce], [bc(0, x, y) ~ x * y], Any[]; 
     @test so(0.15, 1 / 16, 3 / 16; idxs = bce) ≈ g[1, 2]
     @test so(0.15, 2 / 16, 3 / 16; idxs = bce) ≈ (g[1, 2] + g[2, 2]) / 2
     @test so(0.15, 0.0, 0.0) ≈ [g[1, 1]]                         # past the outermost centers: the edge value
+end
 end

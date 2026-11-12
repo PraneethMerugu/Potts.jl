@@ -10,35 +10,34 @@
 # indefinite pair is accepted (each row decays) and diverges, the strong `init = :steady` loop
 # fails at t = 0, and `DeviceGMRES` is not defined.
 
-using LinearAlgebra: LinearAlgebra, I
-using Logging: Logging
-using KernelAbstractions: KernelAbstractions
-
-# the dense Jacobian of the `:ode` rate of `sys` and its value at 0 (the steady state is `−A \ b`)
-function cjac(sys, dims)
-    po = discretize(sys, LatticeDiscretization(Grid(dims); T = Float64))
-    m = length(po.u0)
-    f(v) = (du = similar(v); po.f(du, v, po.p, 0.0); du)
-    b0 = f(zeros(m))
-    return hcat([f((e = zeros(m); e[j] = 1; e)) .- b0 for j in 1:m]...), b0
+@testsetup module LP_coupled
+using Test, LatticePDE
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+                           t_nounits as t, D_nounits as D
+using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
+using DomainSets: Interval
+using SciMLBase: SciMLBase
+using LatticeFields: LatticeFields, Problems as LFP
+include("shared/lp_runner.jl")
+include("shared/discretize.jl")
+include("shared/problems.jl")
+include("shared/bounds.jl")
+include("shared/silent.jl")
+include("shared/groups.jl")
+include("shared/families.jl")
+include("shared/odepath.jl")
+include("shared/precond.jl")
+include("shared/groups_coupling.jl")
+include("shared/implicit.jl")
+include("shared/robin_site.jl")
+include("shared/grids.jl")
+include("shared/coupled.jl")
+include("shared/export_all.jl")
 end
-# (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
-cown(sys; dims = (8, 8), T = Float64) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims); T)))
-const CTIGHT = DeviceGMRES(; rtol = 1e-12, budget = 200)
-@variables ca(..) cb(..) cq(..) cz(..)
-const cae, cbe, cqe, cze = ca(t, x, y), cb(t, x, y), cq(t, x, y), cz(t, x, y)
-cmsg(f) = try
-    f(); ""
-catch err
-    err isa ArgumentError ? err.msg : sprint(showerror, err)
-end
-# the q1 loop of batch 4 review r2 (with sources, so the steady state is not 0): `lhs` is `D`
-# (rate rows, which QuasiSteady solves as steady rows) or `0 ~` rows
-q1(δ, k; steady = false) = PDESystem(steady ?
-        [0 ~ 0.1 * Δ(cae) - δ * cae + k * cbe + x, 0 ~ 0.1 * Δ(cbe) - cbe - k * cae + y] :
-        [D(cae) ~ 0.1 * Δ(cae) - δ * cae + k * cbe + x, D(cbe) ~ 0.1 * Δ(cbe) - cbe - k * cae + y],
-    [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 1.0], bdom(0.2), [t, x, y], [cae, cbe], Any[]; name = :q1)
 
+@testitem "F3-12d: the q1 loops in one QuasiSteady group equal the dense steady solve" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
 @testset "F3-12d: the q1 loops in one QuasiSteady group equal the dense steady solve" begin
     # every system is well posed (max Re λ < 0, reviewer probe s3); the block iteration's ratio
     # k/√(δμ) is 5, 15.8, 0.5 and 1.6: the coupled solve does not depend on it
@@ -79,7 +78,9 @@ q1(δ, k; steady = false) = PDESystem(steady ?
     @test occursin("solves an implicit group's fields together (F3-12d); a `FieldSolver` solves one field: give it the `DeviceGMRES`'s per-field solver, `inner = DevicePCG(; budget = 2)`",
         cmsg(() -> LSB.FieldSolver(KernelAbstractions.CPU(), op; inner = DeviceGMRES())))
 end
+end
 
+@testitem "F3-12d (r4 N5): a cross Δ in a steady row and `0 ~ q − c²`: no warning on a default run, equal to the oracle" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
 @testset "F3-12d (r4 N5): a cross Δ in a steady row and `0 ~ q − c²`: no warning on a default run, equal to the oracle" begin
     # a cross Δ in a cycle and one way; both linear: the dense steady solve of their rate form
     for (eqs, rates) in (([0 ~ 0.3Δ(cae) + 0.1Δ(cqe) - 2.0 * cae + x, 0 ~ 0.3Δ(cqe) - cqe + 0.5 * cae],
@@ -122,7 +123,9 @@ end
         @test r.retcode == ReturnCode.Success && maximum(abs, du) < tol || (println("mm ", inner, " ", maximum(abs, du)); false)
     end
 end
+end
 
+@testitem "F3-12d: a coupled steady pair feeding back through a transient field" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
 @testset "F3-12d: a coupled steady pair feeding back through a transient field" begin
     # `a`, `b` steady and coupled (0.5 each way), `e` transient: `a` reads `e`, `e` reads `b`. The
     # loop's gain composes through the steady pair, `X = (I − M)⁻¹ (G ∘ e)`, M = G k = [0 ½; ½ 0]
@@ -165,7 +168,9 @@ end
           (println("qs only ", m); false)
     @test solve(pq, FieldGroups(cae => QuasiSteady(; dt = 0.1), cbe => QuasiSteady(; dt = 0.1))).retcode == ReturnCode.Success
 end
+end
 
+@testitem "F3-12d: a coupled steady system with no unique stable steady state is refused, with its eigenvalue" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
 @testset "F3-12d: a coupled steady system with no unique stable steady state is refused, with its eigenvalue" begin
     # each row decays (−a, −b), the coupling `k` grows: mode 0 of `[−1 k; k −1]` has λ = k − 1
     ind(k) = cown(PDESystem([0 ~ 0.1 * Δ(cae) - cae + k * cbe + x, 0 ~ 0.1 * Δ(cbe) - cbe + k * cae], [ca(0, x, y) ~ 0.0,
@@ -197,7 +202,9 @@ end
     @test occursin("has a growing mode", cmsg(() -> (ig.ps[ck] = 3.0)))
     @test ig.ps[ck] == 0.5
 end
+end
 
+@testitem "F3-12d: `init = :steady` with a coupled loop starts at the coupled steady state" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
 @testset "F3-12d: `init = :steady` with a coupled loop starts at the coupled steady state" begin
     # a Backward Euler group with the strong q1 coupling: its steady start is one coupled steady
     # solve (the block iteration of the per-row path diverged, ratio 15.8)
@@ -210,7 +217,9 @@ end
     step!(ig)
     @test maximum(abs, vcat(vec(ig[cae]), vec(ig[cbe])) .- want) / maximum(abs, want) < 1e-5
 end
+end
 
+@testitem "F3-12d r1 (user ruling 2026-11-03): the time steppers refuse `inner = DeviceGMRES(…)`, with the default route" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
 @testset "F3-12d r1 (user ruling 2026-11-03): the time steppers refuse `inner = DeviceGMRES(…)`, with the default route" begin
     # it was slower than the default inner in every case measured (~/lpwork/f312d-g1.txt)
     for A in (BackwardEuler, CrankNicolson, BDF2)
@@ -222,7 +231,9 @@ end
     end
     @test QuasiSteady(; dt = 0.1, inner = DeviceGMRES()).inner isa DeviceGMRES
 end
+end
 
+@testitem "F3-12d r1 M2: a site-varying coupled system with a growing mode is refused (estimated through the operator)" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
 @testset "F3-12d r1 M2: a site-varying coupled system with a growing mode is refused (estimated through the operator)" begin
     # the reviewer's case (~/lpwork/f3rev17/p1.jl): `(3 + 0.1x) b`, dense max Re λ = +2.03; the
     # constant-coefficient check cannot see it (a coefficient that varies by site). Base (51d1f386):
@@ -295,7 +306,9 @@ end
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.3), [t, x, y], [cae, cbe], Any[]; name = :nls))
     @test solve(nls, QuasiSteady(; dt = 0.1)).retcode == ReturnCode.Success
 end
+end
 
+@testitem "F3-12d r1 M1, S1: no coupled code compiles for one field; every Krylov.jl hook is ours" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
 @testset "F3-12d r1 M1, S1: no coupled code compiles for one field; every Krylov.jl hook is ours" begin
     # M1: a single-field QuasiSteady `init` in a fresh process compiles no `coupled_modes` and no
     # `_bind_coupled` (both behind barriers). Base (51d1f386): coupled_modes compiled
@@ -326,4 +339,5 @@ end
     end
     @test_throws ArgumentError v[1]
     @test_throws ArgumentError (v[1] = 1.0)
+end
 end
