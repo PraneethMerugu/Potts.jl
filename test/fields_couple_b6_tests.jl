@@ -178,6 +178,7 @@ end
         e = try
             mod = Module(:B6Lines)
             Core.eval(mod, :(using Potts, Potts.Fields))
+            Core.eval(mod, :(const B6 = $B6))       # the setup's field constructors, as Main had them
             Core.eval(mod, quote
                 @potts_model B6DriveLap begin
                     @kinds medium A
