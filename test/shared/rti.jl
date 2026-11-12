@@ -48,7 +48,7 @@ function passlog_expr()
     path = get(ENV, "POTTS_TEST_PASSLOG", "")
     isempty(path) && return Expr(:block)
     return quote
-        let ts = Test.get_testset(), io = open($path, "a")
+        let ts = Test.get_testset()
             # the counts of a testset's subtree: its passes are cumulative, its failures are direct
             function counts(results, n_passed)
                 p, f, e, b = n_passed, 0, 0, 0
@@ -65,18 +65,19 @@ function passlog_expr()
                 end
                 return (p, f, e, b)
             end
-            try
-                for r in ts.results
-                    r isa Test.AbstractTestSet || continue
-                    println(io, ts.description, '\t', r.description, '\t', join(counts(r.results, r.n_passed), '\t'))
-                end
-                # results outside any testset of the item (a bare @test, an error): one row
-                d = (0, count(r -> r isa Test.Fail, ts.results), count(r -> r isa Test.Error, ts.results),
-                     count(r -> r isa Test.Broken, ts.results))
-                d[2] + d[3] + d[4] > 0 && println(io, ts.description, "\t(item level)\t", join(d, '\t'))
-            finally
-                close(io)
+            # one open-write-close per line: workers append to the same file concurrently, and a
+            # line written through a shared buffer comes out interleaved with another worker's
+            emit(parts...) = open($path, "a") do io
+                write(io, string(parts..., '\n'))
             end
+            for r in ts.results
+                r isa Test.AbstractTestSet || continue
+                emit(ts.description, '\t', r.description, '\t', counts(r.results, r.n_passed)...)
+            end
+            # results outside any testset of the item (a bare @test, an error): one row
+            d = (0, count(r -> r isa Test.Fail, ts.results), count(r -> r isa Test.Error, ts.results),
+                 count(r -> r isa Test.Broken, ts.results))
+            d[2] + d[3] + d[4] > 0 && emit(ts.description, "\t(item level)\t", d...)
         end
     end
 end
