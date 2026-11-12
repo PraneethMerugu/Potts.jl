@@ -263,7 +263,9 @@ function _pm_module(f; defs_only)
     Base.include(ex -> defs_only && _pm_is_testset(ex) ? nothing : inmain ? ex : _pm_main_to(m, ex), m, path)
     PM_MODULES[f] = m
     # (the file's bindings are newer than this call's world: read them in the latest world)
-    PM_EXPORTS[f] = Base.invokelatest(_pm_names, m, union(before, keys(latest)))
+    PM_EXPORTS[f] = Base.invokelatest() do
+        [p for p in _pm_names(m, before) if Base.binding_module(m, p[1]) !== e]
+    end
     return m
 end
 
