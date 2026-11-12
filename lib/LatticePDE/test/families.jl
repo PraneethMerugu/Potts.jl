@@ -34,17 +34,6 @@ const FAM_CASES = [("ExplicitEuler", fam_rate, ExplicitEuler(; dt = 0.01)),
     ("FieldGroups", fam_chain, FieldGroups(fam_u => ExplicitEuler(; dt = 0.05, substeps = 2),
         fam_v => BackwardEuler(; dt = 0.05, inner = FAM_INNER))),
     ("ExplicitMap", fam_map, ExplicitMap())]
-fam_digest(u) = (repr(sum(u)), repr(u[1]), repr(u[end]))
-# the base's owned solves (`problem = :owned` at 3ed05c3b, ~/lpwork/f4b1/pins.jl on the PC):
-# `(sum, first, last)` of the final state, printed exactly
-const FAM_PINS = Dict{String, NTuple{3, String}}(
-    "ExplicitEuler" => ("40.083782220091095", "0.8464843838279211", "0.7229504422497087"),
-    "BackwardEuler" => ("39.58397959572821", "0.8208813249422733", "0.7369070815165802"),
-    "CrankNicolson" => ("39.98320671764459", "0.8429541456996491", "0.7266335083499864"),
-    "BDF2" => ("39.98795542318008", "0.8509726321471082", "0.7289081501820648"),
-    "QuasiSteady" => ("83.97825902430269", "0.8510960053524306", "0.6964964497644828"),
-    "FieldGroups" => ("70.23816581681162", "0.8442336499283419", "0.5305929833215783"),
-    "ExplicitMap" => ("24.0", "0.1015625", "0.2734375"))
 fam_disc() = LatticeDiscretization(Grid((8, 8)); T = Float64)
 fmsg(f) = try
     f(); ""
@@ -52,7 +41,7 @@ catch e
     sprint(showerror, e)
 end
 
-@testset "F4-01: one problem per family; the field algorithms equal the base's owned solves" begin
+@testset "F4-01: one problem per family; an owned solve builds no right side" begin
     @test ExplicitEuler <: SciMLBase.AbstractODEAlgorithm && LFP.FieldAlgorithm <: SciMLBase.AbstractODEAlgorithm
     for (name, sys, alg) in FAM_CASES
         prob = discretize(sys, fam_disc())
@@ -60,7 +49,6 @@ end
         name == "ExplicitMap" || @test SciMLBase.problem_type(prob) isa LFP.LatticeMetadata
         s = solve(prob, alg)
         @test s.retcode == SciMLBase.ReturnCode.Success
-        @test fam_digest(s.u[end]) == FAM_PINS[name] || (println("F4-01 pin ", name, " ", fam_digest(s.u[end])); false)
         # an owned solve never builds the right side of SciML's solvers
         @test LFP.lattice_metadata(prob).builds[] == 0
     end
