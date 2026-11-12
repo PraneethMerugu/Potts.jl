@@ -1013,5 +1013,17 @@ function b6_pde_round_trip(m, pde, fs, f; op = b6_op())
     step!(integ)
     return maximum(abs, o .- vec(Array(getproperty(integ.u.site, f)))), fi, integ
 end
+
+# The lapped-site input model of the B6 items (it was defined inside one of their testsets in the
+# include-into-Main runner, where a later testset read it; here both items declare this setup).
+@eval @potts_model B6LapSite begin
+    @kinds medium A[frozen]
+    @variables v(site) = 0.0
+    @lattice Lattice((8, 8); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    @fields c = B6.lapsite()
+    @after_mcs v ~ kind == A                                # (the form the message gives)
+    @sweep Metropolis(; temperature = 1.0)
+end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end

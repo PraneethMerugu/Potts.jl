@@ -85,15 +85,8 @@ end
         # rule"). Hand oracle with the cell on the low face of `x` and σ frozen: from MCS 2 on, `v` is
         # 1 on the cell, and one explicit substep per MCS gives c' = c + 0.1 Δc + 0.1 Δv with the
         # mirrored ghost (a neighbor past a closed face reads the site itself)
-        @eval @potts_model B6LapSite begin
-            @kinds medium A[frozen]
-            @variables v(site) = 0.0
-            @lattice Lattice((8, 8); boundary = Closed())
-            @energy cells(A) => (volume - 4.0)^2
-            @fields c = B6.lapsite()
-            @after_mcs v ~ kind == A                                # (the form the message gives)
-            @sweep Metropolis(; temperature = 1.0)
-        end
+        # `B6LapSite` is defined once in CoupleSetup (it was here, in the include-into-Main runner,
+        # and the batch-end item below reads it too)
         σ = zeros(Int32, 8, 8); σ[1:3, 3:5] .= 1
         integ = init(PottsProblem(Base.invokelatest(B6LapSite; name = :m), [ownership => σ, kind => [:A]], (0, 4);
             field_solver = ExplicitEuler(; substeps = 1)), SequentialCPM())
