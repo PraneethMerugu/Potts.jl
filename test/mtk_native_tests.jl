@@ -392,7 +392,7 @@ end
         @test mn_build(model(:MNIsMemberTuple, :(D(q) ~ 0.25 * ismember(kind, (tip, stalk)))), :MNIsMemberTuple) === nothing
         @test mn_build(model(:MNSpelled, :(D(q) ~ 0.25 * ((kind == tip) | (kind == stalk)))), :MNSpelled) === nothing
         # `ismember(kind, g)` is the spelled-out `|` of equalities: the same generated code
-        code(M) = string(generated_code(Base.invokelatest(() -> getfield(@__MODULE__, M)(; name = :m))).phases)
+        code(M) = string(generated_code(Base.invokelatest(() -> getfield(parentmodule(mn_build), M)(; name = :m))).phases)
         @test code(:MNIsMember) == code(:MNSpelled) == code(:MNIsMemberTuple)
         # negative control: another set gives other code
         @test mn_build(model(:MNOther, :(D(q) ~ 0.25 * ismember(kind, (tip, fluid)))), :MNOther) === nothing
@@ -411,7 +411,7 @@ end
             @fields $sys (MnPDE.e => $bind)
             @sweep Metropolis(; temperature = 2.0)
         end)
-        code(M) = (g = generated_code(Base.invokelatest(() -> getfield(@__MODULE__, M)(; name = :m)); field_solver = ExplicitEuler(substeps = 2));
+        code(M) = (g = generated_code(Base.invokelatest(() -> getfield(parentmodule(mn_build), M)(; name = :m)); field_solver = ExplicitEuler(substeps = 2));
                    string(Base.remove_linenums!(deepcopy(Any[g.delta_H, g.commit!, g.phases...]))))
         im, sp = :(ismember(kind, endothelial)), :((kind == tip) | (kind == stalk))
         for (tag, sys) in (("reaction", :(MnPDE.reaction(0.3))), ("diffusion", :(MnPDE.diffusion())))

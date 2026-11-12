@@ -10,6 +10,10 @@ using JET, AllocCheck, Aqua
 
 using InteractiveUtils: code_llvm
 
+# the discrete-component fixtures (`xcell`, `toggle`, `sampler`, `DiscreteHybrid`,
+# `discrete_counter_model`, `_discrete_blocks`): shared with test/symbolic_tests.jl
+isdefined(@__MODULE__, :discrete_counter_model) || include(joinpath(@__DIR__, "shared", "discrete_fixtures.jl"))
+
 
 # D-047: every PottsModels model, Float64 and Float32. JET cannot see inside
 # RuntimeGeneratedFunction bodies, so the generated code is also `eval`'d into plain functions.
