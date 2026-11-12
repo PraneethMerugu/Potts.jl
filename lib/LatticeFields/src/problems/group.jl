@@ -721,19 +721,60 @@ end
 # `UInt32[8]` in its cache, and the drivers read it where they synchronize anyway.
 
 """
-    STATUS_CODE, STATUS_WINDOW, STATUS_CAUSE, STATUS_SOLVES, STATUS_BUDGET, STATUS_FLOOR,
+    STATUS_CODE
+
+Entry [1] of the status word (`UInt32[8]`, F3 design §3.3), the worst code: 0 `Success`,
+1 `StalledSuccess`, 2 `ConvergenceFailure`. Sticky. The other entries are
+[`STATUS_WINDOW`](@ref), [`STATUS_CAUSE`](@ref), [`STATUS_SOLVES`](@ref),
+[`STATUS_BUDGET`](@ref), [`STATUS_FLOOR`](@ref) and [`STATUS_NEWTON_BUDGET`](@ref), and [8],
+the rows that met the Newton tolerance in the last iteration (a host executor reads it to stop
+early). A read ([`check_status!`](@ref)) adds [4]-[7] to the runtime's host totals and zeroes
+them on the device; [1]-[3] are sticky.
+"""
+const STATUS_CODE = 1
+
+"""
+    STATUS_WINDOW
+
+Entry [2] of the status word: the first failing window (1-based: the `rt.totals.windows`-th
+window since the bind or `clear_status!`, which a cache reads when it writes the word). Sticky.
+"""
+const STATUS_WINDOW = 2
+
+"""
+    STATUS_CAUSE
+
+Entry [3] of the status word: the cause bits ([`STATUS_CAUSES`](@ref)). Sticky.
+"""
+const STATUS_CAUSE = 3
+
+"""
+    STATUS_SOLVES
+
+Entry [4] of the status word: the solves since the last read ([`check_status!`](@ref)).
+"""
+const STATUS_SOLVES = 4
+
+"""
+    STATUS_BUDGET
+
+Entry [5] of the status word: the linear budget hits since the last read.
+"""
+const STATUS_BUDGET = 5
+
+"""
+    STATUS_FLOOR
+
+Entry [6] of the status word: the floors hit since the last read.
+"""
+const STATUS_FLOOR = 6
+
+"""
     STATUS_NEWTON_BUDGET
 
-The entries of the status word (`UInt32[8]`, F3 design §3.3): [1] the worst code (0
-`Success`, 1 `StalledSuccess`, 2 `ConvergenceFailure`), [2] the first failing window (1-based:
-the `rt.totals.windows`-th window since the bind or `clear_status!`, which a cache reads when it
-writes the word), [3] the
-cause bits ([`STATUS_CAUSES`](@ref)), [4] solves, [5] linear budget hits, [6] floors, [7]
-Newton budget hits, [8] the rows that met the Newton tolerance in the last iteration (a host
-executor reads it to stop early). A read ([`check_status!`](@ref)) adds [4]–[7] to the
-runtime's host totals and zeroes them on the device; [1]–[3] are sticky.
+Entry [7] of the status word: the Newton budget hits since the last read.
 """
-const STATUS_CODE, STATUS_WINDOW, STATUS_CAUSE, STATUS_SOLVES, STATUS_BUDGET, STATUS_FLOOR, STATUS_NEWTON_BUDGET = 1, 2, 3, 4, 5, 6, 7
+const STATUS_NEWTON_BUDGET = 7
 
 """
     STATUS_CAUSES
