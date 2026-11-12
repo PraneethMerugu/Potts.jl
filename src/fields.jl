@@ -1153,7 +1153,7 @@ end
 
 # At build: each field phase's substep count at the problem's parameters (the policy's
 # refusals, and its warning for an explicit count the bound does not cover)
-function _check_field_substeps(f, p; tspan = nothing)
+function _check_field_substeps(@nospecialize(f), @nospecialize(p); tspan = nothing)     # (host, once per problem; TS1c)
     # (the steady starts too, `init = :steady`: their steady refusals, F3-12c)
     for e in (f.phases.mcs..., f.phases.at_init), t in (e isa CorePotts.Repeat ? e.entries : (e,))
         t isa Tuple || continue

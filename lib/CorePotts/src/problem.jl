@@ -41,9 +41,16 @@ struct PottsProblem{F <: CPMFunction, S <: CPMState, L <: Lattice, R, Q, RS, H, 
     tangent::TG
 end
 
-function PottsProblem(f::CPMFunction, u0::CPMState, lattice::Lattice, tspan, p;
-        contact = Moore(1), proposal = VonNeumann(1), relations = (;), spacing = nothing,
-        frozen = nothing, seed = 0, replica = 0, repeat = 0, tangent = nothing)
+PottsProblem(f::CPMFunction, u0::CPMState, lattice::Lattice, tspan, p; contact = Moore(1), proposal = VonNeumann(1),
+    relations = (;), spacing = nothing, frozen = nothing, seed = 0, replica = 0, repeat = 0, tangent = nothing) =
+    _problem(f, u0, lattice, tspan, p, contact, proposal, relations, spacing, frozen, seed, replica, repeat, tangent)
+
+# The checks and the resolved relations of a new problem, compiled once for every model (TS1c):
+# nothing here is specialized on the model's types (the problem type itself is built at the end)
+Base.@nospecializeinfer function _problem(@nospecialize(f::CPMFunction), @nospecialize(u0::CPMState),
+        @nospecialize(lattice::Lattice), @nospecialize(tspan), @nospecialize(p), @nospecialize(contact),
+        @nospecialize(proposal), @nospecialize(relations), @nospecialize(spacing), @nospecialize(frozen), seed, replica,
+        repeat, @nospecialize(tangent))
     size(u0.σ) == lattice.dims ||
         throw(ArgumentError("state size $(size(u0.σ)) ≠ lattice $(lattice.dims)"))
     t0, t1 = Int.(tspan)
@@ -139,7 +146,7 @@ standard rule (`frozen_kinds`) runs on the integrator's backend and ignores this
 frozen_reads(sys) = nothing
 
 # A custom `remake_frozen` without `frozen_varies(sys) = true` gives a static mask: say so.
-function _check_frozen_hooks(sys)
+function _check_frozen_hooks(@nospecialize(sys))         # (host, once per `init`; TS1c)
     frozen_varies(sys) && return nothing
     which(remake_frozen, Tuple{typeof(sys), Any, Any}).module === CorePotts && return nothing
     # a `frozen_varies` defined outside CorePotts (even `false`, also on a supertype) is a choice (D-133)
@@ -151,7 +158,7 @@ end
 
 # The declared reads of a custom rule (D-128): `nothing`, or a tuple of distinct `:σ` and
 # cell column names of `st`; checked at `init` and at every custom-rule refresh.
-function _frozen_reads(sys, st)
+function _frozen_reads(@nospecialize(sys), @nospecialize(st))
     reads = frozen_reads(sys)
     reads === nothing && return nothing
     (reads isa Tuple && all(n -> n isa Symbol, reads)) || throw(ArgumentError(
@@ -165,7 +172,7 @@ function _frozen_reads(sys, st)
         "`frozen_reads` declares `$(reads[findfirst(n -> count(==(n), reads) > 1, reads)])` more than once; got $(repr(reads))"))
     return reads
 end
-_custom_frozen(sys) = frozen_varies(sys) && frozen_kinds(sys) === nothing
+_custom_frozen(@nospecialize(sys)) = frozen_varies(sys) && frozen_kinds(sys) === nothing
 
 # the standard rule on a host state (without the domain, which `PottsProblem` adds)
 function _standard_frozen(kinds, u)
@@ -180,8 +187,14 @@ function remake_function(sys, prob; kwargs...)
                         "$(join(("`$k`" for k in keys(kwargs)), ", "))"))
 end
 
-function SciMLBase.remake(prob::PottsProblem; f = prob.f, u0 = prob.u0, tspan = prob.tspan,
-        p = prob.p, seed = prob.seed, replica = prob.replica, repeat = prob.repeat, kwargs...)
+SciMLBase.remake(prob::PottsProblem; f = prob.f, u0 = prob.u0, tspan = prob.tspan, p = prob.p, seed = prob.seed,
+    replica = prob.replica, repeat = prob.repeat, kwargs...) =
+    _remake(prob, f, u0, tspan, p, seed, replica, repeat, NamedTuple(kwargs))
+
+# `remake`, compiled once for every model (TS1c): specialized on the problem's type it was
+# 0.7–1.3 s of compile for every model, although the remade problem has the same type
+Base.@nospecializeinfer function _remake(@nospecialize(prob::PottsProblem), @nospecialize(f), @nospecialize(u0),
+        @nospecialize(tspan), @nospecialize(p), seed, replica, repeat, @nospecialize(kwargs::NamedTuple))
     relaid = prob.u0
     if !isempty(kwargs)
         f === prob.f || throw(ArgumentError("remake: give `f` or the keywords it is rebuilt from " *
@@ -203,9 +216,8 @@ function SciMLBase.remake(prob::PottsProblem; f = prob.f, u0 = prob.u0, tspan = 
     else
         u0 = relaid
     end
-    return PottsProblem(f, u0, prob.lattice, tspan, p; contact = prob.contact,
-        proposal = prob.proposal, relations = prob.relations, spacing = prob.spacing, frozen, seed,
-        replica, repeat, tangent)
+    return _problem(f, u0, prob.lattice, tspan, p, prob.contact, prob.proposal, prob.relations, prob.spacing, frozen,
+        seed, replica, repeat, tangent)
 end
 
 Base.@kwdef mutable struct PottsStats
@@ -312,11 +324,11 @@ function CommonSolve.init(prob::PottsProblem, alg::CPMAlgorithm; backend = CPU()
             "but the problem has tracking $(prob.f.track === nothing ? "off" : "on"); continue it in a problem " *
             "with the same `track`"))
         # a restored state is no fresh one: its at-init phases skip the field clamps (D-145)
-        integ = _init(prob, alg, false; backend, saveat, save_start, save_end, callback)
+        integ = _init(prob, alg, false, backend, saveat, save_start, save_end, callback)
         _restore_stats!(_stats(integ), checkpoint.stats)
         return integ
     end
-    return _init(prob, alg, true; backend, saveat, save_start, save_end, callback)
+    return _init(prob, alg, true, backend, saveat, save_start, save_end, callback)
 end
 
 """
@@ -360,7 +372,13 @@ function _device_float_notice(prob::PottsProblem, backend)
     return true
 end
 
-function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, saveat, save_start, save_end, callback)
+# The host setup of a run, inferred and compiled once for every model (TS1c): the problem,
+# the algorithm, `saveat` and the callbacks are not specialized on, so each call below is a
+# dynamic dispatch that compiles only that callee for the model's types (the setup runs once
+# per run; `step!` and the kernels stay fully specialized). Specialized on the model, this
+# body was 0.3–0.9 s of inference for every model (TS-R1 §1.1b).
+Base.@nospecializeinfer function _init(@nospecialize(prob::PottsProblem), @nospecialize(alg::CPMAlgorithm), fresh::Bool,
+        backend, @nospecialize(saveat), save_start, save_end, @nospecialize(callback))
     alg isa SequentialCPM && !(backend isa CPU) &&
         throw(ArgumentError("SequentialCPM runs on the host; use CheckerboardCPM on $(typeof(backend))"))
     t0, t1 = prob.tspan

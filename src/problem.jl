@@ -306,7 +306,8 @@ end
 
 # `remake(prob; p = …)`: the seeds of the old problem that the new map does not set, and the Duals
 # of the new map; `nothing` when none is left
-function CorePotts.remake_tangent(info::PottsModelInfo, prob, pgiven, pnew)
+Base.@nospecializeinfer function CorePotts.remake_tangent(@nospecialize(info::PottsModelInfo), @nospecialize(prob),
+        @nospecialize(pgiven), @nospecialize(pnew))
     (pgiven === nothing || pgiven === missing) && return prob.tangent
     given = _given_names(info, pgiven)
     old = prob.tangent === nothing ? Pair{Symbol, Any}[] : prob.tangent.seeds
@@ -318,7 +319,7 @@ function CorePotts.remake_tangent(info::PottsModelInfo, prob, pgiven, pnew)
     return _tangent(info.csys, info.T, pnew, seeds; u0)
 end
 # the names a parameter map sets, with the values as given
-function _given_names(info::PottsModelInfo, p)
+Base.@nospecializeinfer function _given_names(@nospecialize(info::PottsModelInfo), @nospecialize(p))
     p isa PottsParameters && return Dict{Symbol, Any}(k => v for (k, v) in pairs(NamedTuple(p)))
     p isa NamedTuple && return Dict{Symbol, Any}(pairs(p))
     _is_pairs(p) && (p = Pair[x for x in p])
@@ -556,7 +557,7 @@ end
 # The ODE scratch slots `x__ode` a state needs for solvers `spec` (several solver groups in a
 # scope, or cell ODEs reading other cells' unknowns: `_ode_scratch`), each starting as a
 # copy of its variable; any others removed. The same state if its layout already fits.
-function _ode_layout(st, c::CompiledPottsSystem, spec::SolverSpec)
+function _ode_layout(@nospecialize(st), c::CompiledPottsSystem, spec::SolverSpec)
     slots = Set(_ode_scratch_name(info(x).name) for (x, _) in Iterators.flatten((c.cell_odes, c.model_odes)))
     scratchless(nt) = NamedTuple(k => v for (k, v) in pairs(nt) if !(k in slots))
     function add(nt, scope, odes)
@@ -1211,7 +1212,7 @@ end
 
 # The at-init phases (integrals, energy snapshots) on a host state, so a problem's `u0` is
 # consistent before `init` (e.g. `total_energy(prob)`).
-function _host_init!(f, st, p, ctx, seed, replica, repeat)
+function _host_init!(@nospecialize(f), @nospecialize(st), @nospecialize(p), @nospecialize(ctx), seed, replica, repeat)
     key = CorePotts.RNGKey(seed, replica, repeat)
     ctx = merge(ctx, CorePotts.phase_contexts(f.phases, st, p, CorePotts.CPU()))
     CorePotts._run_phases(f.phases.at_init, st, p, ctx, key, 0, CorePotts.CPU())
@@ -1281,13 +1282,13 @@ end
 const _SymbolicMap = Union{AbstractVector{<:Pair}, AbstractDict}
 
 # (a Dual value: its primal value here, the Dual in the problem's tangent: `remake_tangent`, F3-21b)
-CorePotts.remake_parameters(info::PottsModelInfo, prob, p::_SymbolicMap) =
+CorePotts.remake_parameters(@nospecialize(info::PottsModelInfo), @nospecialize(prob), p::_SymbolicMap) =
     _set_parameter_map(info, prob.p, Pair{Any, Any}[k => (_is_dual(v) ? _tprimal(v) : _has_dual(v) ?
         _refuse_dual_value(string(k), :kindtable, v) : v) for (k, v) in p])
 
 # parameter object `old` with the parameter map `p` applied as one change, then every computed
 # parameter derived again (D-F2-1)
-function _set_parameter_map(info::PottsModelInfo, old::PottsParameters, p)
+Base.@nospecializeinfer function _set_parameter_map(@nospecialize(info::PottsModelInfo), @nospecialize(old::PottsParameters), p)
     p = _expand_vectors(info.csys.sys, Pair{Any, Any}[_localize(info.csys.sys, k; strict = true) => v for (k, v) in p])
     names = Dict{Any, Entity}()
     for x in _p(info.csys.sys, :parameters)
@@ -1322,7 +1323,7 @@ _model_info(x::Union{CorePotts.PottsProblem, CorePotts.PottsIntegrator}) = _mode
 _model_info(x) = throw(ArgumentError("remake_buffer: `$(nameof(typeof(x)))` does not describe a Potts model"))
 
 # `remake(prob; p = (λ = 3.0,))`: a NamedTuple is the map of its fields (D-115)
-CorePotts.remake_parameters(info::PottsModelInfo, prob, p::NamedTuple) =
+CorePotts.remake_parameters(@nospecialize(info::PottsModelInfo), @nospecialize(prob), p::NamedTuple) =
     CorePotts.remake_parameters(info, prob, _field_pairs(p))
 
 # a whole parameter object gives its base values, and the computed parameters are derived again
@@ -1331,7 +1332,8 @@ CorePotts.remake_parameters(info::PottsModelInfo, prob, p::NamedTuple) =
 # kind tables are checked either way. One of this problem's type is used as is; one of another
 # type must have the same names and sets every base value, converted to the problem's scalar type
 # (a Float32 problem's `p` does not make a Float64 problem Float32)
-function CorePotts.remake_parameters(info::PottsModelInfo, prob, p::PottsParameters)
+Base.@nospecializeinfer function CorePotts.remake_parameters(@nospecialize(info::PottsModelInfo), @nospecialize(prob),
+        @nospecialize(p::PottsParameters))
     typeof(p) === typeof(prob.p) && return _finish_parameters(info, p, p, nothing)
     new, old = keys(NamedTuple(p)), keys(NamedTuple(prob.p))
     if Set(new) != Set(old)
@@ -1346,11 +1348,11 @@ function CorePotts.remake_parameters(info::PottsModelInfo, prob, p::PottsParamet
 end
 
 # SciML's keep sentinels: `p = missing` (SciMLBase's generic `remake`) or `nothing` keeps `prob.p`
-CorePotts.remake_parameters(::PottsModelInfo, prob, ::Union{Nothing, Missing}) = prob.p
+CorePotts.remake_parameters(@nospecialize(::PottsModelInfo), @nospecialize(prob), ::Union{Nothing, Missing}) = prob.p
 
 # a vector or tuple of `Pair`s (of any eltype) is a map; anything else is an error, never a
 # silent replacement of `prob.p` (D-115)
-function CorePotts.remake_parameters(info::PottsModelInfo, prob, p)
+function CorePotts.remake_parameters(@nospecialize(info::PottsModelInfo), @nospecialize(prob), p)
     _is_pairs(p) && return CorePotts.remake_parameters(info, prob, Pair[x for x in p])
     throw(ArgumentError("`p = $(repr(p; context = :limit => true))` is not a parameter map of $(nameof(info.csys)); " *
                         "give a NamedTuple, a vector of `name => value` pairs or a Dict"))
@@ -1360,7 +1362,7 @@ _field_pairs(nt::NamedTuple) = Pair{Symbol, Any}[k => v for (k, v) in pairs(nt)]
 _is_pairs(p) = (p isa AbstractVector || p isa Tuple) && all(x -> x isa Pair, p)
 
 # Derive every computed parameter again from the base values (D-F2-1), and check the tables.
-function _finish_parameters(mi::PottsModelInfo, old, out, _)
+Base.@nospecializeinfer function _finish_parameters(@nospecialize(mi::PottsModelInfo), @nospecialize(old), @nospecialize(out), _)
     c = mi.csys
     out = _derive(_p(c.sys, :parameters), mi.T, out)
     typeof(out) === typeof(old) || throw(ArgumentError("parameter types changed; kind tables keep their size"))
@@ -1368,7 +1370,7 @@ function _finish_parameters(mi::PottsModelInfo, old, out, _)
 end
 
 # the kind tables of a parameter object: their checks, and contact tables symmetric
-function _check_parameter_tables(c::CompiledPottsSystem, out)
+function _check_parameter_tables(c::CompiledPottsSystem, @nospecialize(out))
     _check_kind_tables(c.sys, out)
     for name in _contact_tables(c)
         J = getproperty(out, name)
