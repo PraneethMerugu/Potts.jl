@@ -195,36 +195,74 @@ _pm_is_testset(ex) = ex isa Expr && ex.head === :macrocall && ex.args[1] === Sym
 # files reach `Main.PottsDevices` and an earlier file's `Main.p63d_compactness`).
 module PMFiles end
 const PM_MODULES = Dict{String, Module}()       # file => its module (full run or definitions only)
-const PM_EXPORTS = Dict{String, Vector{Pair{Symbol, Any}}}()   # file => the names its module offers later files
-const PM_SKIP = (:eval, :include, :Base, :Core, :Main, :PMFiles, :PM_MODULES, :PM_EXPORTS)
-_pm_names(m) = [n => getglobal(m, n) for n in names(m; all = true, imported = true)
-                if !startswith(string(n), '#') && !(n in PM_SKIP) && n !== nameof(m) && isdefined(m, n)]
+const PM_EXPORTS = Dict{String, Vector{Pair{Symbol, Any}}}()   # file => the names it offers later files
+const PM_SKIP = (:eval, :include, :Base, :Core, :Main, :PMFiles, :PM_MODULES, :PM_EXPORTS, :PMEarlier)
+_pm_names(m, skip = ()) = [n => getglobal(m, n) for n in names(m; all = true, imported = true)
+                           if !startswith(string(n), '#') && !(n in PM_SKIP) && !(n in skip) && n !== nameof(m) && isdefined(m, n)]
 const PM_RUNNER = _pm_names(@__MODULE__)
 const PM_RUNNER_USINGS = :(using Test, Potts, PottsModels, Aqua, TOML; using Potts: CorePotts; using Statistics: mean)
+# Frozen files whose recorded fingerprints and checkpoints hold their own definitions as
+# `Main.<name>` (the generated code names them): they run in Main, as before, until T2 replaces
+# those pins (R3). Main sees the earlier files' names through a module of their bindings.
+const PM_IN_MAIN = Set(["acceptance/p6_0ai_integral_fold_hoist.jl", "acceptance/p6_0as_sweep_validation.jl",
+    "acceptance/p6_0ax_gather_scan.jl", "acceptance/p6_0b2_link_followups.jl", "acceptance/p6_0c2_canonical_followups.jl"])
 _pm_main_to(m, ex) = ex === :Main ? m : ex isa Expr && ex.head !== :quote ? Expr(ex.head, (_pm_main_to(m, a) for a in ex.args)...) : ex
 _pm_bulk_using(ex) = ex isa Expr && ex.head in (:using, :import) && all(a -> a isa Expr && a.head === :. && a.args[1] !== :., ex.args)
+"""Names a file defines at top level (its own definitions win over an earlier file's)."""
+function _pm_own(path)
+    out = Set{Symbol}()
+    name(x) = x isa Symbol ? x : x isa Expr && x.head in (:call, :where, :(::), :curly, :<:) ? name(x.args[1]) : nothing
+    for ex in Meta.parseall(read(path, String)).args
+        ex isa Expr || continue
+        ex.head === :const && (ex = ex.args[1])
+        if ex.head in (:(=), :function, :struct, :abstract, :module)
+            t = ex.head === :struct ? ex.args[2] : ex.head === :module ? ex.args[2] : ex.args[1]
+            t isa Expr && t.head === :tuple ? foreach(a -> (n = name(a); n === nothing || push!(out, n)), t.args) :
+                (n = name(t); n === nothing || push!(out, n))
+        elseif ex.head === :macro
+            push!(out, Symbol("@", name(ex.args[1])))
+        elseif ex.head === :macrocall && length(ex.args) >= 3 && ex.args[3] isa Symbol
+            push!(out, ex.args[3])                              # @potts_model Name …
+        end
+    end
+    return out
+end
 function _pm_module(f; defs_only)
     i = findfirst(==(f), POTTSMODELS_TEST_FILES)
     earlier = POTTSMODELS_TEST_FILES[1:(i - 1)]                # the providers, in the full order
     for g in earlier
         haskey(PM_MODULES, g) || _pm_module(g; defs_only = true)
     end
+    path = joinpath(@__DIR__, f)
+    inmain = f in PM_IN_MAIN
     name = Symbol(defs_only ? "defs_" : "", replace(f, r"[^A-Za-z0-9]" => "_"))
-    m = Core.eval(PMFiles, Expr(:module, true, name, Expr(:block)))
-    Core.eval(m, PM_RUNNER_USINGS)
-    latest = Dict{Symbol, Any}(PM_RUNNER)
+    m = inmain ? (@__MODULE__) : Core.eval(PMFiles, Expr(:module, true, name, Expr(:block)))
+    before = inmain ? Set(first.(Base.invokelatest(_pm_names, m))) : Set{Symbol}()
+    inmain || Core.eval(m, PM_RUNNER_USINGS)
+    latest = inmain ? Dict{Symbol, Any}() : Dict{Symbol, Any}(PM_RUNNER)
     for g in earlier
         for ex in Meta.parseall(read(joinpath(@__DIR__, g), String)).args   # whole-package imports
             _pm_bulk_using(ex) && Core.eval(m, ex)
         end
         foreach(((n, v),) -> latest[n] = v, PM_EXPORTS[g])
     end
-    Core.eval(m, Expr(:module, true, :PMEarlier,
+    own = _pm_own(path)
+    foreach(n -> delete!(latest, n), union(own, before))
+    e = Core.eval(inmain ? PMFiles : m, Expr(:module, true, inmain ? Symbol("earlier_", name) : :PMEarlier,
         Expr(:block, (:(const $n = $(QuoteNode(v))) for (n, v) in latest)..., Expr(:export, keys(latest)...))))
-    Core.eval(m, :(using .PMEarlier))
-    Base.include(ex -> defs_only && _pm_is_testset(ex) ? nothing : _pm_main_to(m, ex), m, joinpath(@__DIR__, f))
+    Core.eval(m, Expr(:using, Expr(:., :., (inmain ? (:PMFiles,) : ())..., nameof(e))))
+    # an earlier file's name that a package the file uses also exports was the old Main's own
+    # binding and won; here both are implicit imports, so import it explicitly
+    clash = Base.invokelatest() do
+        us = filter(!=(e), ccall(:jl_module_usings, Any, (Any,), m))
+        [n for (n, v) in latest if any(M -> isdefined(M, n) && Base.isexported(M, n) && getglobal(M, n) !== v, us)]
+    end
+    isempty(clash) || Core.eval(m, Expr(:using, Expr(:(:), Expr(:., :., (inmain ? (:PMFiles,) : ())..., nameof(e)),
+        (Expr(:., n) for n in clash)...)))
+    Base.include(ex -> defs_only && _pm_is_testset(ex) ? nothing : inmain ? ex : _pm_main_to(m, ex), m, path)
     PM_MODULES[f] = m
-    PM_EXPORTS[f] = filter(((n, v),) -> n !== :PMEarlier, _pm_names(m))
+    # (the file's bindings are newer than this call's world: read them in the latest world)
+    PM_EXPORTS[f] = Base.invokelatest(_pm_names, m, union(before, keys(latest)))
     return m
 end
 
