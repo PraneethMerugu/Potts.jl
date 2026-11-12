@@ -179,27 +179,58 @@ const POTTSMODELS_SHARD_FILES = let fs = pottsmodels_shards(POTTSMODELS_TEST_FIL
 end
 POTTSMODELS_SHARD[2] > 1 && @info "PottsModels shard $(POTTSMODELS_SHARD[1])/$(POTTSMODELS_SHARD[2]): $(length(POTTSMODELS_SHARD_FILES)) of $(length(POTTSMODELS_TEST_FILES)) files" POTTSMODELS_SHARD_FILES
 
-# A shard starts from the globals the single process had: before its files, it loads the
-# definitions (each top-level `@testset` dropped) of every file that came earlier in the full
-# order and runs in another shard, so a file that uses a helper an earlier file defined
-# (e.g. siblings.jl uses mechanisms.jl's `split_cells`) finds it.
 # shared Base-only helpers that several files use (mechanisms.jl includes it; the frozen
 # papers.jl calls `akeeb_metrics` without including it), loaded once whatever the shard order
 include(joinpath(@__DIR__, "akeeb_metrics.jl"))
 _pm_is_testset(ex) = ex isa Expr && ex.head === :macrocall && ex.args[1] === Symbol("@testset")
-if POTTSMODELS_SHARD[2] > 1
-    let mine = Set(POTTSMODELS_SHARD_FILES)
-        last_mine = maximum(f -> findfirst(==(f), POTTSMODELS_TEST_FILES), POTTSMODELS_SHARD_FILES; init = 0)
-        for f in POTTSMODELS_TEST_FILES[1:last_mine]
-            f in mine && continue
-            include(ex -> _pm_is_testset(ex) ? nothing : ex, joinpath(@__DIR__, f))
-        end
+
+# Each file runs in a module of its own (TS1b; TS0 TS1-6), without editing the frozen files.
+# The module sees what the old single Main gave the file: the runner's imports and helpers
+# (above), and every name that an earlier file in the full order defined or imported, the
+# latest definition winning. Its own definitions stay in its module, so a later file cannot
+# rebind them. An earlier file that has not run in this process (another shard, or the reverse
+# order) is loaded first with its top-level testsets dropped, as the shard preload did; so a
+# shard still starts from the globals the single process had (e.g. siblings.jl uses
+# mechanisms.jl's `split_cells`). In the files, `Main` means the file's module (the frozen
+# files reach `Main.PottsDevices` and an earlier file's `Main.p63d_compactness`).
+module PMFiles end
+const PM_MODULES = Dict{String, Module}()       # file => its module (full run or definitions only)
+const PM_EXPORTS = Dict{String, Vector{Pair{Symbol, Any}}}()   # file => the names its module offers later files
+const PM_SKIP = (:eval, :include, :Base, :Core, :Main, :PMFiles, :PM_MODULES, :PM_EXPORTS)
+_pm_names(m) = [n => getglobal(m, n) for n in names(m; all = true, imported = true)
+                if !startswith(string(n), '#') && !(n in PM_SKIP) && n !== nameof(m) && isdefined(m, n)]
+const PM_RUNNER = _pm_names(@__MODULE__)
+const PM_RUNNER_USINGS = :(using Test, Potts, PottsModels, Aqua, TOML; using Potts: CorePotts; using Statistics: mean)
+_pm_main_to(m, ex) = ex === :Main ? m : ex isa Expr && ex.head !== :quote ? Expr(ex.head, (_pm_main_to(m, a) for a in ex.args)...) : ex
+_pm_bulk_using(ex) = ex isa Expr && ex.head in (:using, :import) && all(a -> a isa Expr && a.head === :. && a.args[1] !== :., ex.args)
+function _pm_module(f; defs_only)
+    i = findfirst(==(f), POTTSMODELS_TEST_FILES)
+    earlier = POTTSMODELS_TEST_FILES[1:(i - 1)]                # the providers, in the full order
+    for g in earlier
+        haskey(PM_MODULES, g) || _pm_module(g; defs_only = true)
     end
+    name = Symbol(defs_only ? "defs_" : "", replace(f, r"[^A-Za-z0-9]" => "_"))
+    m = Core.eval(PMFiles, Expr(:module, true, name, Expr(:block)))
+    Core.eval(m, PM_RUNNER_USINGS)
+    latest = Dict{Symbol, Any}(PM_RUNNER)
+    for g in earlier
+        for ex in Meta.parseall(read(joinpath(@__DIR__, g), String)).args   # whole-package imports
+            _pm_bulk_using(ex) && Core.eval(m, ex)
+        end
+        foreach(((n, v),) -> latest[n] = v, PM_EXPORTS[g])
+    end
+    Core.eval(m, Expr(:module, true, :PMEarlier,
+        Expr(:block, (:(const $n = $(QuoteNode(v))) for (n, v) in latest)..., Expr(:export, keys(latest)...))))
+    Core.eval(m, :(using .PMEarlier))
+    Base.include(ex -> defs_only && _pm_is_testset(ex) ? nothing : _pm_main_to(m, ex), m, joinpath(@__DIR__, f))
+    PM_MODULES[f] = m
+    PM_EXPORTS[f] = filter(((n, v),) -> n !== :PMEarlier, _pm_names(m))
+    return m
 end
 
 @testset "PottsModels files" begin
     @testset "$f" for f in POTTSMODELS_SHARD_FILES
-        include(joinpath(@__DIR__, f))
+        _pm_module(f; defs_only = false)
     end
     POTTSMODELS_FIRST_SHARD && @testset "Aqua" begin
         Aqua.test_all(PottsModels; deps_compat = (; check_extras = false))
