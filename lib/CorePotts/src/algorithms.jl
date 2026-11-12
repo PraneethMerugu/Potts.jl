@@ -135,16 +135,20 @@ at random, so every site is attempted once per MCS on average, as with `Sequenti
 `stats.accepted` and `stats.committed` count the copies (equal: a copy commits when it is
 accepted), brought up to date at the host read points.
 
-Reproducibility. Inline phases (the CPU with `threads = false`, one thread, or a small
-lattice) run their work items one after another: each attempt sees every earlier one and a
-run is reproducible from its seed. Threaded CPU phases and device runs depend on the timing
-of the work items and are not.
+Reproducibility. A phase's decisions read the cell columns as they were when the phase
+started (one copy of them per phase; `CorePotts._snap!`), and a work item writes only its own
+sub-region's sites, so whether a phase's work items run inline or threaded it reaches the same
+decisions: a CPU run at any thread count is reproducible from its seed, and a seed gives the
+same trajectory at `-t 1` and `-t 4`. Device runs depend on the timing of the work items and
+are not (user ruling 2026-11-04).
 
-Copies to one cell in flight at the same time read its totals before each other's commit.
-Cell trackers stay exact: moments add atomically and re-center once per MCS, pieces trackers
-add their changes, and an `@on_copy` write that reads its own cell value adds the difference.
-A copy whose decision needs a whole-cell search (a `Global` veto without window, pieces off
-their local fast path) is decided after its phase by one work item, with no copy in flight.
+Copies to one cell in one phase decide against that phase's snapshot of its totals. Cell
+trackers stay exact: moments add atomically and re-center once per MCS, pieces trackers add
+their changes, and an `@on_copy` write that reads its own cell value adds the difference. (A
+float-valued column accumulated by concurrent commits can differ in its last bits by thread
+count: an integer column is exact.) A copy whose decision needs a whole-cell search (a
+`Global` veto without window, pieces off their local fast path) is decided after its phase by
+one work item, with no copy in flight, against the same snapshot.
 
 The kinetics match `SequentialCPM` within the statistical resolution of the P6.0bl checks
 (foam, cell sorting, the OpenVT chain and monolayer, Akeeb invasion, a 3D RPE sheet, the

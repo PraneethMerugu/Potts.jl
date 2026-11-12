@@ -389,7 +389,7 @@ function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, save
     ctx = with_tangent(ctx, prob.tangent, prob.f.phases, state, p, backend, fresh)
     cache = alg isa CheckerboardCPM ?
             CheckerboardCache(backend, lat, prob.f, relation(_proposal(alg, prob), lat); alg.region, alg.parts, alg.switches,
-                alg.threads, min_read = _copy_step_reach(prob, ctx)) :
+                alg.threads, min_read = _copy_step_reach(prob, ctx), cell = state.cell) :
             _skips_interior(alg) ? BoundaryCache(state.σ, ctx.mobility, ctx.lattice, ctx.proposal) : nothing
     _check_repeat(prob.f.phases, alg, cache)
     key = RNGKey(prob.seed, prob.replica, prob.repeat)

@@ -21,20 +21,24 @@
 # (a one-site sub-region in a 2 × 2 box got Binomial(4, 1/4) attempts in a row), which slowed
 # Akeeb invasion and the K3 chain (docs/design/research/checkerboard-kinetics.md).
 #
-# Lockless cells. Nothing is claimed: per-cell totals change by atomic adds and are read as
-# they are (another work item's copy to the same cell may be in flight). The context carries
+# Lockless cells. Nothing is claimed: per-cell totals change by atomic adds. The context carries
 # `lockless = true`, so the commit hooks that would otherwise overwrite a cell value use
 # atomic deltas: moments accumulate atomically and re-center once per MCS (`recenter_kernel!`),
 # pieces trackers add their changes, and an `@on_copy` write that reads its own cell value adds
-# the difference. On a device the outcome depends on the timing of the work items (no
-# determinism, user ruling 2026-11-04).
+# the difference. On the host a phase's decisions read the cell columns as they were when the
+# phase started (`_snap!`, one copy of them per phase), not the columns its own work items are
+# changing: a cell is an aggregate the block spacing does not separate, so two active sites of
+# one phase can share a cell, and reading its live totals would make the decision depend on the
+# order of the commits. On a device the decisions read the live columns, and the outcome depends
+# on the timing of the work items (no determinism, user ruling 2026-11-04).
 #
 # The CPU. A phase with few work items (at most `BLOCK_GRAIN`), or a process with one thread,
 # runs them inline, one after another, so each attempt sees every earlier one, as in
 # `SequentialCPM`, and the run is reproducible. A larger phase is one KA launch with one
 # workgroup per thread (KA's CPU backend spawns one task per thread and launch, so more
-# workgroups only add loop overhead); its outcome then depends on the timing of the threads,
-# as on a device.
+# workgroups only add loop overhead). Both decide against the phase's snapshot and write only
+# their own sites, so a phase reaches the same decisions and leaves the same state whether its
+# work items run inline or threaded, and a threaded run is reproducible from its seed.
 #
 # Whole-cell searches. A copy whose decision needs the exact floods (cell-scope `pieces` off
 # their fast path, a `Global` without window whose local test fails) is not decided in the
@@ -113,9 +117,45 @@ end
     return nothing
 end
 
+# The accept path's per-cell reads. Every column of `st.cell` is snapshotted before a phase, and
+# the phase's decisions read the snapshot instead of the live columns, so a copy's decision does
+# not see a commit that another work item of the same phase is making to a cell it reads. The set
+# is every column of `st.cell`, because a cell is an aggregate the block spacing does not
+# separate: the spacing keeps two active sites of a phase (k - 1)·b + 1 apart, which does not
+# exclude two of them inside one cell wider than that, so any cell column a commit hook can write
+# is one a decision may read. Nothing else a decision reads moves within a phase: `σ` writes and
+# `tk.acc` are at the work item's own sites, and the mobility masks, the site columns and the
+# model slots are written only at a phase boundary. Cost: one copy of the cell columns per phase,
+# against the sub-region's attempts per work item.
+#
+# On the host, one buffer per column. A device keeps the live reads: its outcome depends on the
+# timing of the work items (user ruling 2026-11-04).
+_snap_columns(::KernelAbstractions.CPU, cell) = map(copy, cell)
+_snap_columns(backend, cell) = nothing
+
+_snap!(::Nothing, cell) = nothing
+@inline _snap!(snap, cell) = _snap_cols!(snap, cell, Val(fieldcount(typeof(cell))))
+
+# One column per step, from the last: `getfield` at a constant index is type-stable, and the tuple
+# of `copyto!` results is never built. A phase runs this P times per MCS, so it must not allocate
+# (`step!` is gated on zero allocations).
+@inline _snap_cols!(snap, cell, ::Val{0}) = nothing
+@inline function _snap_cols!(snap, cell, ::Val{K}) where {K}
+    copyto!(getfield(snap, K), getfield(cell, K))
+    _snap_cols!(snap, cell, Val(K - 1))
+    return nothing
+end
+
+# The state a phase's decisions read: the live `σ` and site arrays, the snapshot's cell columns.
+# Built once per MCS (the state's arrays are not rebound inside one), refreshed by `_snap!`.
+_accept_state(st, ::Nothing) = st
+_accept_state(st, snap) = CPMState(st.σ, snap, st.site, st.model, st.history)
+
 # One attempt. `SERIAL = false` in a phase (copies that need the floods are listed); `true` in
-# the serial pass and on the CPU (the floods run, a veto decides at once).
-@inline function block_attempt!(blk, st, f, p, ctx, law, key, mcs, lo, side, lid, tk, cnt, status, sl,
+# the serial pass and on the CPU (the floods run, a veto decides at once). `sts` is the state the
+# decision reads (the live one, or `st` with the phase's cell snapshot); `st` is the live state,
+# for the ownership write and the commit.
+@inline function block_attempt!(blk, st, sts, f, p, ctx, law, key, mcs, lo, side, lid, tk, cnt, status, sl,
         ::Val{SERIAL}) where {SERIAL}
     lat = ctx.lattice
     rd, ra, rs, _ = draw(key, mcs, blk, STREAM_BLOCK, lid)
@@ -130,28 +170,28 @@ end
     b = @inbounds st.σ[s]
     a == b && return nothing
     prop = Proposal(t, s, x, dir, a, b)
-    if !SERIAL && has_defer(f) && _defer(f)(st, p, prop, ctx)
+    if !SERIAL && has_defer(f) && _defer(f)(sts, p, prop, ctx)
         _push_serial!(sl, blk, lid)
         return nothing
     end
-    f.constraint(st, p, prop, ctx) || return nothing
-    dH0 = f.delta_H(st, p, prop, ctx)
-    temperature = f.temperature(st, p, prop, ctx)
+    f.constraint(sts, p, prop, ctx) || return nothing
+    dH0 = f.delta_H(sts, p, prop, ctx)
+    temperature = f.temperature(sts, p, prop, ctx)
     T = typeof(temperature)
-    dH = _effective_dH(f, dH0, temperature, st, p, prop, ctx)
+    dH = _effective_dH(f, dH0, temperature, sts, p, prop, ctx)
     if !isfinite(dH)
         @inbounds Atomix.@atomic status[1] |= STATUS_NONFINITE     # status has 1 entry
         return nothing
     end
     accept(law, T(dH), temperature, uniform(T, ra)) || return nothing
     if has_post(f)                                   # the whole-cell veto after the draw, as `SequentialCPM`
-        code = _post(f)(st, p, prop, ctx, SERIAL ? GlobalSearch() : GlobalLocal())
+        code = _post(f)(sts, p, prop, ctx, SERIAL ? GlobalSearch() : GlobalLocal())
         if !SERIAL && code == GLOBAL_WINDOW
             if sl.exact                              # a veto without window: the serial pass decides
                 _push_serial!(sl, blk, lid)
                 return nothing
             end
-            code = _post(f)(st, p, prop, ctx, GlobalSearch())
+            code = _post(f)(sts, p, prop, ctx, GlobalSearch())
         end
         if code != GLOBAL_PASS
             code == GLOBAL_WINDOW && Atomix.@atomic sl.deferred[1] += UInt32(1)
@@ -159,7 +199,7 @@ end
         end
     end
     # t ≤ nsites: the track has one writer per site at a time
-    tk === nothing || (@inbounds tk.acc[t] += tk.track(st, p, prop, ctx, dH0))
+    tk === nothing || (@inbounds tk.acc[t] += tk.track(sts, p, prop, ctx, dH0))
     @inbounds st.σ[t] = b
     f.commit!(st, p, prop, ctx)
     _count!(cnt, blk)
@@ -168,37 +208,37 @@ end
 
 # one work item's stay (the block at `bc`) in phase number q (offset `off`): its attempts one
 # after another; with one switch a stay makes exactly n attempts (no draw)
-@inline function block_stay!(bc, st, f, p, ctx, law, key, mcs, layout, off, s, q, tk, cnt, status, sl, serial::Val)
+@inline function block_stay!(bc, st, sts, f, p, ctx, law, key, mcs, layout, off, s, q, tk, cnt, status, sl, serial::Val)
     blk = block_index(layout, bc)
     lo, side = block_region(layout, bc, off)
     n = prod(side)
     m = s == 1 ? n : _stay_attempts(n, s, first(draw(key, mcs, blk, STREAM_BLOCK, _block_lid(q, 0))))
     for k in 1:m
-        block_attempt!(blk, st, f, p, ctx, law, key, mcs, lo, side, _block_lid(q, k), tk, cnt, status, sl, serial)
+        block_attempt!(blk, st, sts, f, p, ctx, law, key, mcs, lo, side, _block_lid(q, k), tk, cnt, status, sl, serial)
     end
     return nothing
 end
 
 # one work item per block over the N-d grid of blocks (no index division per work item)
-@kernel function block_kernel!(st, f, p, ctx, law, key, mcs, layout, off, s, q, tk, cnt, status, sl)
+@kernel function block_kernel!(st, sts, f, p, ctx, law, key, mcs, layout, off, s, q, tk, cnt, status, sl)
     I = @index(Global, NTuple)
-    block_stay!(map(i -> i - 1, I), st, f, p, ctx, law, key, mcs, layout, off, s, q, tk, cnt, status, sl, Val(false))
+    block_stay!(map(i -> i - 1, I), st, sts, f, p, ctx, law, key, mcs, layout, off, s, q, tk, cnt, status, sl, Val(false))
 end
 
 # the phase's listed copies in list order, then the list is emptied (one work item, or the host)
-function serial_pass!(st, f, p, ctx, law, key, mcs, layout, off, tk, cnt, status, sl)
+function serial_pass!(st, sts, f, p, ctx, law, key, mcs, layout, off, tk, cnt, status, sl)
     for i in 1:Int(@inbounds sl.count[1])
         blk = Int(@inbounds sl.blk[i])
         lo, side = block_region(layout, block_coords(layout, blk), off)
-        block_attempt!(blk, st, f, p, ctx, law, key, mcs, lo, side, @inbounds(sl.lid[i]), tk, cnt, status, sl, Val(true))
+        block_attempt!(blk, st, sts, f, p, ctx, law, key, mcs, lo, side, @inbounds(sl.lid[i]), tk, cnt, status, sl, Val(true))
     end
     @inbounds sl.count[1] = UInt32(0)
     return nothing
 end
 
-@kernel function serial_kernel!(st, f, p, ctx, law, key, mcs, layout, off, tk, cnt, status, sl)
+@kernel function serial_kernel!(st, sts, f, p, ctx, law, key, mcs, layout, off, tk, cnt, status, sl)
     _ = @index(Global, Linear)
-    serial_pass!(st, f, p, ctx, law, key, mcs, layout, off, tk, cnt, status, sl)
+    serial_pass!(st, sts, f, p, ctx, law, key, mcs, layout, off, tk, cnt, status, sl)
 end
 
 # moments re-center once per MCS (the commits only accumulate, `lockless`); c ≤ capacity
@@ -207,7 +247,7 @@ end
     _recenter!(cell, lat, c, @inbounds cell.volume[c])
 end
 
-struct CheckerboardCache{N, B, TK, CN, SL, K1, K2, K3, GS}
+struct CheckerboardCache{N, B, TK, CN, SL, CS, K1, K2, K3, GS}
     layout::BlockLayout{N}
     switches::Int                     # a stay makes n / switches attempts (n sites)
     order::Vector{Int}                # the MCS's phase offsets (1:k^N), P of them
@@ -215,6 +255,7 @@ struct CheckerboardCache{N, B, TK, CN, SL, K1, K2, K3, GS}
     track::TK                         # `nothing`, or `(; track, acc)` (acc per site)
     cnt::CN                           # committed copies per block (Int32), folded at the read points
     serial::SL                        # `nothing`, or the serial list (see `_push_serial!`)
+    snap::CS                          # the accept path's cell columns, refreshed per phase (CPU; see `_snap!`)
     kernel::K1
     serial!::K2
     recenter!::K3
@@ -252,7 +293,7 @@ the density that matched `SequentialCPM` kinetics in 2D and 3D (P6.0bl).
 default_parts(N::Int) = max(2, round(Int, 64^(1 / N)))
 
 function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, proposal; region = nothing, parts = nothing,
-        switches = 1, threads = :auto, min_read = 0) where {N}
+        switches = 1, threads = :auto, min_read = 0, cell) where {N}
     r, w = reach(f.footprint, proposal)
     r = max(r, min_read, _window(f.connectivity))
     need = max(r + w, 1)
@@ -277,7 +318,8 @@ function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, proposal; r
     n = nblocks(layout)
     backend isa KernelAbstractions.CPU || n >= DEVICE_MIN_BLOCKS ||
         @warn "CheckerboardCPM on a device: $n work items per phase (blocks $(layout.nblocks)) leave the GPU mostly idle; a lattice this small runs as fast or faster on the CPU" maxlog = 1
-    return CheckerboardCache(layout, switches, zeros(Int, P), z(UInt32, 1), tk, cnt, sl, block_kernel!(backend),
+    snap = _snap_columns(backend, cell)
+    return CheckerboardCache(layout, switches, zeros(Int, P), z(UInt32, 1), tk, cnt, sl, snap, block_kernel!(backend),
         serial_kernel!(backend), recenter_kernel!(backend), _block_groupsize(backend, layout.nblocks), _block_inline(backend, n, threads),
         backend isa KernelAbstractions.CPU)
 end
@@ -301,6 +343,7 @@ function checkerboard_mcs!(st, cache::CheckerboardCache{N}, f::F, p, ctx, law::L
     end
     l, s, sl = cache.layout, cache.switches, cache.serial
     serial = _serial_pass(sl, f)
+    sts = _accept_state(st, cache.snap)              # the state this MCS's decisions read (refreshed per phase)
     launches = 0
     j, np = part
     P = length(order)
@@ -308,20 +351,24 @@ function checkerboard_mcs!(st, cache::CheckerboardCache{N}, f::F, p, ctx, law::L
         ph = @inbounds order[q]                      # q ∈ 1:P (the range above)
         off = phase_offset(l, ph)
         launches += 1                                # an inline phase counts as one, like a one-workgroup launch
+        _snap!(cache.snap, st.cell)                  # the cell columns this phase's decisions read
         if cache.inline
             for I in CartesianIndices(l.nblocks)
-                block_stay!(Tuple(I) .- 1, st, f, p, ctx, law, key, mcs, l, off, s, q, cache.track, cache.cnt, cache.status,
+                block_stay!(Tuple(I) .- 1, st, sts, f, p, ctx, law, key, mcs, l, off, s, q, cache.track, cache.cnt, cache.status,
                     sl, Val(true))
             end
             continue
         end
-        cache.kernel(st, f, p, ctx, law, key, mcs, l, off, s, q, cache.track, cache.cnt, cache.status, sl;
+        cache.kernel(st, sts, f, p, ctx, law, key, mcs, l, off, s, q, cache.track, cache.cnt, cache.status, sl;
             ndrange = l.nblocks, workgroupsize = cache.groupsize)
         serial || continue
+        # the deferred copies decide against the state the phase left (the floods already do), and
+        # they run one after another: their cell reads are refreshed, not the phase's snapshot
+        _snap!(cache.snap, st.cell)
         if cache.host
-            serial_pass!(st, f, p, ctx, law, key, mcs, l, off, cache.track, cache.cnt, cache.status, sl)
+            serial_pass!(st, sts, f, p, ctx, law, key, mcs, l, off, cache.track, cache.cnt, cache.status, sl)
         else
-            cache.serial!(st, f, p, ctx, law, key, mcs, l, off, cache.track, cache.cnt, cache.status, sl; ndrange = 1,
+            cache.serial!(st, sts, f, p, ctx, law, key, mcs, l, off, cache.track, cache.cnt, cache.status, sl; ndrange = 1,
                 workgroupsize = 1)
             launches += 1
         end
