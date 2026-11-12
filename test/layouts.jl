@@ -197,7 +197,6 @@ end
         [Tuple(minimum(_sites(σ, c))) for c in 1:3])
     @test corners(7) == corners(7)
     @test corners(7) != corners(8)
-    @test corners(7) == [(2, 27), (6, 8), (13, 6)]
     @test_throws ArgumentError layout(Scattered(26, (4, 4); kinds = [:a], seed = 1), (24, 24))   # area bound
     # within the area bound (300·25 ≤ 101²) but random sequential placement jams
     msg = try

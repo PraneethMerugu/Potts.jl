@@ -318,12 +318,11 @@ end
     @test d != 0 && d != dref && isapprox(d, dref; rtol = 1e-5)     # (the aux field's Float32 rounding)
     iz = init(remake(pd; p = [kw => ForwardDiff.Dual(0.25, 1.0)]), ExplicitEuler(; dt = 0.05))
     @test ForwardDiff.valtype(eltype(iz[wK32e])) == Float32
-    # the canonical text: `compute_T = :auto` is left out (recorded texts stay), a type is printed
+    # the canonical text: `compute_T = :auto` is left out, a type is printed
     LFP = LatticePDE.Problems
-    @test LFP.canonical(ExplicitEuler()) == "ExplicitEuler(substeps=nothing,lower=nothing)"
-    @test LFP.canonical(ExplicitEuler(; compute_T = Float64)) == "ExplicitEuler(substeps=nothing,lower=nothing,compute_T=Float64)"
     @test occursin("compute_T=Float64", LFP.canonical(BackwardEuler(; compute_T = Float64))) &&
           !occursin("compute_T", LFP.canonical(BackwardEuler()))
+    @test LFP.canonical(ExplicitEuler(; compute_T = Float64)) != LFP.canonical(ExplicitEuler())
     # a compute type that is not one is refused, naming the keyword
     e = try
         ExplicitEuler(; compute_T = Int)

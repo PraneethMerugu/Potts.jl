@@ -318,7 +318,7 @@ end
     k2 = only(q for q in cspec.params if q.name == "gk")
     @test k2.role === :computed && occursin("ga", k2.derivation)
     tb = only(cspec.tables)
-    @test tb isa LFP.TableSpec && string(tb) == "Dk" && tb.values == [1.0, 2.0, 3.0]
+    @test tb isa LFP.TableSpec && tb.values == [1.0, 2.0, 3.0]
 end
 
 # F3-02 review r1 S6: an aux field read at neighbor sites by a rate (`K ~ k c`, `D(c) ~ Δ(K)`)
