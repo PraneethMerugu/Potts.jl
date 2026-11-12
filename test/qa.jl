@@ -215,6 +215,7 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     :_run_phases,         # runs the `at_init` phases when a problem is initialised
     :link_frame,          # the generated link energy, inline over these two (TS1c)
     :link_at,
+    :maxdegree,
     :_derived,            # the `at_init` phases without field clamps (`anneal`'s refresh, D-145)
     :_snapshot,           # host copy of a device state for the adaptive ODE phase
     :_run_phase,          # phase entry that receives the integrator's transfer counters (D-085)
