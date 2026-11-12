@@ -270,9 +270,8 @@ end
 
 # Review r1: CrankNicolson, BDF2, BackwardEuler(init = :steady) and QuasiSteady on a coarse field
 # on the device equal the host form and the hand-coarsened twin (the reviewer's r3, Float32); and
-# the plurality owner (a RESTRICT `:plurality` kernel) on the device, ties included. Control: a
-# stated mutation, the device `plurality` taking the first tied value (~/lpwork/f3b6r-nc-dev.log)
-@testset "review r1: coarse fields under CN, BDF2, QS and the plurality owner on $pgpu" begin
+# the block mean of a kind expression on the device (F4-15; it replaced the plurality owner)
+@testset "review r1: coarse fields under CN, BDF2, QS and the kind fold on $pgpu" begin
     for steady in (false, true)
         algs = steady ? (QuasiSteady(; dt = 0.05),) :
                (CrankNicolson(; dt = 0.05), BDF2(; dt = 0.05), BackwardEuler(; dt = 0.05, init = :steady))
@@ -281,7 +280,10 @@ end
                 pc, ph, (c, ch, q, _) = ctwins(; steady, T = Float32, backend = be)
                 ic, ih = init(pc, alg), init(ph, alg)
                 for n in 1:6
-                    n == 4 && (ic[q(t, x, y)] = CQ2; ih[q(t, x, y)] = CQ2c)
+                    if n == 4
+                        ic[q(t, x, y)] = CQ2; ih[q(t, x, y)] = CQ2c
+                        foreach(((v, a),) -> ih[v] = a, chand(CQ2, CQ2c))
+                    end
                     step!(ic); step!(ih)
                 end
                 (Array(ic[c(t, x, y)]), Array(ih[ch(t, x, y)]), ic.retcode)
@@ -289,7 +291,7 @@ end
             (d, dh, rd), (h, hh, rh) = out
             @info "review r1 $(nameof(typeof(alg))) on $pgpu: max |device − host| $(maximum(abs, d .- h)), |device − twin| $(maximum(abs, d .- dh))"
             @test rd == rh == SciMLBase.ReturnCode.Success
-            @test d == dh && maximum(abs, d .- h) / maximum(abs, h) <= 1e-6
+            @test maximum(abs, d .- dh) / maximum(abs, dh) <= 1e-5 && maximum(abs, d .- h) / maximum(abs, h) <= 1e-6
         end
     end
     lv(n) = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(Symbolics.variable(n; T = SymbolicUtils.FnType{Tuple, Real, Nothing})),
@@ -301,12 +303,11 @@ end
     sys = PDESystem([D(cs(t, x, y)) ~ 0.05 * Δ(cs(t, x, y)) - cs(t, x, y) + at(cRd, qe + 1), K2(t, x, y) ~ at(cRd, qe + 1),
             M0(t, x, y) ~ (qe == 0)], [cs(0, x, y) ~ 0.0], cdom(), [t, x, y], [cs(t, x, y), K2(t, x, y), M0(t, x, y), qe], [cRd];
         name = :pldev)
-    Qc = cowner(CQT)
     for alg in (ExplicitEuler(; dt = 0.05), BackwardEuler(; dt = 0.05))
         sd = solve(cown(sys, CDIMS; T = Float32, backend = PDEV, ins = [qe => CQT]), alg)
         sh = solve(cown(sys, CDIMS; T = Float32, backend = KernelAbstractions.CPU(), ins = [qe => CQT]), alg)
-        @test Array(sd[K2(t, x, y), end]) == Float32[0.0, 1.0, 0.5, 0.25][Qc .+ 1]
-        @test Array(sd[M0(t, x, y), end]) == Float32.(Qc .== 0)
+        @test Array(sd[K2(t, x, y), end]) == Float32.(cmean(Float64[0.0, 1.0, 0.5, 0.25][CQT .+ 1]))
+        @test Array(sd[M0(t, x, y), end]) == Float32.(cmean(Float64.(CQT .== 0)))
         @test Array(sd[cs(t, x, y), end]) == sh[cs(t, x, y), end] || maximum(abs, Array(sd[cs(t, x, y), end]) .- sh[cs(t, x, y), end]) <= 1e-6
     end
 end

@@ -45,6 +45,34 @@ isdefined(Main, :JiangLike) || include(joinpath(@__DIR__, "fields_jiang_model.jl
     @test a[2].ocell ≈ hand rtol = 1e-13
 end
 
+# F4-15 (user ruling 2026-11-11): the coupled model equals its own PDESystem (`JgPDE.jiang`)
+# solved by LatticePDE with `Potts.field_inputs(integ, pdesys)`. The kind bindings (`pq =>
+# ismember(kind, (P, Q))`, `kQ => kind == Q`, ...) and the PDESystem's Bool inputs fold by one rule
+# on the Coarse(4) grid, the block mean, so the two agree on the spheroid's rim, where blocks are
+# covered in part. This replaces the F2 guard's digests of this model (test/fields_identity.jl,
+# `GD_F415`). Base 5e972579 (~/lpwork/f4F15/nc.log): the bindings are read at the block's owner.
+@testset "F4-15: the Jiang-like model equals its PDESystem with field_inputs (blocks covered in part)" begin
+    σ, kinds = jiang_state(JG_DIMS)
+    names = (:o, :g, :l, :gf, :inh)
+    integ = init(PottsProblem(JiangLike(; name = :j), [ownership => σ, kind => kinds], (0, 3);
+        field_solver = BackwardEuler()), SequentialCPM(); save_start = false)
+    step!(integ)
+    pde = JgPDE.jiang(JG_DIMS)
+    fi = Potts.field_inputs(integ, pde)
+    # (the rim: 4×4×4 blocks the cells cover in part)
+    blk = [fi[:pq][(4i - 3):(4i), (4j - 3):(4j), (4k - 3):(4k)] for i in 1:8, j in 1:8, k in 1:8]
+    @test count(b -> any(b) && !all(b), blk) > 50
+    prob = Potts.LatticePDE.discretize(pde, Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(JG_DIMS); T = Float64);
+        inputs = collect(fi), u0 = [n => copy(Array(getproperty(integ.u.site, n))) for n in names], tspan = (0.0, 1.0))
+    s = Potts.LatticePDE.solve(prob, BackwardEuler(; dt = 0.25))
+    step!(integ)
+    for n in names
+        got, want = s[n, length(s.t)], Array(getproperty(integ.u.site, n))
+        @test maximum(abs, got .- want) <= 1e-14 * max(1.0, maximum(abs, want)) ||
+              (println("F4-15 Jiang $n: ", maximum(abs, got .- want)); false)
+    end
+end
+
 # Review r1 M3: lactate's source reads O₂ and glucose (switches of other rows' fields) and no
 # lactate, so it is known when lactate is solved after them: the default BackwardEuler operator
 # is exact, newton = 2 (the switch rows) with no warning, and equals newton = 12 (base cb20be97:

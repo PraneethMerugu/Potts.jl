@@ -584,7 +584,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
             kb = kern(lv)
             e = Env(kb, fids, params, tables, spacing, ivs[1], ivs[2:end], lo, level_spacing(h, dims, lv), false,
                 ntuple(_ -> 0, N), RESOLVE, leaf, hex, Int32(0), Int32[], lv, flev, dims, 0)
-            store!(kb, df, U8, cast!(kb, _bool(e, lower(dvs[dop], e)), U8))
+            store!(kb, df, U8, cast!(kb, _cond(dvs[dop], e), U8))
             add!(pb, kb, "domain:$lv")
             domlev[lv] = (df, Int32(length(pb.masks)))
         end
@@ -593,23 +593,6 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
             lv = flev[op]
             rule!(pb, DomainEdgeRule(fids[op][1][max(comp, 1)], :mirror, lv == 0 ? Int32(0) : domlev[lv][2]))
         end
-    end
-    # the plurality owner of each integer input on each coarse level whose terms read it (review
-    # r1 S1): the most frequent value of a node's children (ties to the smallest nonzero value, 0
-    # last), computed at a window's start with the masks; a coarse term reads it for the input
-    # (`_owner_load`) outside a mean fold
-    for lv in sort!(unique(l for (op, l) in flev if !isin[op] && l > 0)),
-        op in sort!([op for op in Base.keys(dvs) if isin[op] && fids[op][2] in (I32, U32)]; by = o -> keys[o][1])
-        rd(x) = x !== nothing && _reads(x, Any[op])
-        any(k -> klev(k) == lv && rd(eqs[k][4]), Base.keys(eqs)) ||
-            any(b -> b.kind != :initial && !isin[b.op] && flev[b.op] == lv && (rd(b.eq.lhs) || rd(b.eq.rhs)), bcs) || continue
-        ok = string("owner:", keys[op][1], ":", lv)
-        of = field!(pb, ok; storage = fids[op][2], role = :aux, epoch = PERSIGMA, levels = Int8[lv])
-        kb = kern(lv)
-        ld = load!(kb, fids[op][1][1], fids[op][2]; offset = ntuple(_ -> 0, N), level = -lv, policy = INSIDE)
-        store!(kb, of, fids[op][2], node!(kb, RESTRICT, kb.nodes[ld].type, Int32[ld], 2))
-        add!(pb, kb, ok)
-        fids[(:owner, op, lv)] = (Int32[of], fids[op][2])
     end
     # the domain's field on level `lv` (0: no domain)
     dl(lv) = dom == 0 ? Int32(0) : domlev[lv][1]
@@ -698,7 +681,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         rf = dv === nothing ? Int32(0) :
              field!(pb, "maskrate:$k"; storage = fids[b.op][2], role = :aux, epoch = PERSIGMA, levels = Int8[lv])
         kb = kern(lv)
-        pred = _bool(env(false, kb, lv), lower(b.pred, env(false, kb, lv)))
+        pred = _cond(b.pred, env(false, kb, lv))     # (on a coarse grid, by Majority over the block)
         dom == 0 || (pred = node!(kb, AND, BOOL, Int32[pred, _indomain(kb, dl(lv), N)]))   # the field lives in the domain
         store!(kb, mf, U8, cast!(kb, pred, U8))
         if mv === nothing

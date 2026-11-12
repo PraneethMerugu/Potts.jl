@@ -51,12 +51,14 @@ Options go in brackets after the default. The field options (`bounds`, `lattice_
   with the spacing `k h`. A CPM read of the field at a site reads the node of the site's
   block, so `integral(c) / volume` is the cell's average over its sites. The fine reads in
   the field's terms are folded over each node's block:
-  - `kind`, any integer input and an input bound to a kind expression (`isP => kind == P`,
-    `r => R[kind]`) are read at the block's owner, the kind on most of the block's sites. A
-    tie goes to the smallest kind number that is not the medium; the medium is the owner
-    only when no cell kind ties with it. A term that reads no other fine value is evaluated
-    at the owner, so the node takes the full rate of its owner: `isP + 0.5 * isQ` and `r`
-    give the same rate, and exactly one of `kind == medium` and `kind != medium` holds.
+  - Every fine read folds by one rule: `kind`, any integer, real or `Bool` input, an input
+    bound to a CPM value (`isP => kind == P`, `r => R[kind]`, `vol => volume[owner]`), and a
+    field of the lattice. A condition used as a number is its mean over the block: on a block
+    a quarter of whose sites are of kind P, `isP` and `kind == P` are both 0.25. So the node
+    receives the block's total source, `isP + 0.5 * isQ` and `r` give the same rate, and
+    `kind == medium` and `kind != medium` sum to 1. A bound input and its binding written
+    out in the equation give the same value. A mask's predicate holds at a node when it holds
+    on more than half of the node's block.
   - A term that reads a fine field nonlinearly (`max(g - gT, 0)`, `g / (K + g)`,
     `r * g` for a field `g` of the lattice) is replaced by its mean over the block, with
     each fine value at its own site. The coarse field then receives the fine integral of the

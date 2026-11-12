@@ -293,8 +293,7 @@ site variable by its name. Each array holds the values the field compiler reads 
 input: a `Bool` input gives a `Bool` array, an integer input an array of its type, any other
 input an array of the model's scalar type. They are what `discretize(Potts.fields(model),
 disc; inputs = collect(Potts.field_inputs(integ)))` takes: the fields solved by any SciML
-solver with the CPM frozen at that state, a `Coarse(k)` field included (its kind
-expressions read the block's owner, as in the model). That solve matches the model's own run
+solver with the CPM frozen at that state, a `Coarse(k)` field included. That solve matches the model's own run
 only while the lattice does not change (σ frozen): in a run the CPM moves the cells every MCS
 and the inputs follow them, while the frozen inputs do not. A model without such inputs gives
 an empty `Dict`.
@@ -324,11 +323,10 @@ prob = discretize(pdesys, disc; inputs = collect(Potts.field_inputs(integ, pdesy
 ```
 
 solves the user's own PDESystem with any SciML solver at the CPM state of `integ` (σ frozen, as
-for [`Potts.field_inputs`](@ref)`(integ)`). A `Coarse(k)` field of `pdesys` reads a `Bool` or
-real input by its mean over each block, where the coupled model reads a kind binding at the
-block's owner: the two agree where each block lies in one cell or in the medium, and differ on
-a block that a cell covers in part (`Potts.fields(model)` reads `kind` as the model does).
-A PDESystem whose inputs are neither those of a
+for [`Potts.field_inputs`](@ref)`(integ)`). A `Coarse(k)` field included: the coupled model
+and `pdesys` fold a fine read over each block by the same rule (the block mean of a bound input
+and of its binding written out alike), so the two agree on any cell layout, blocks that a cell
+covers in part included. A PDESystem whose inputs are neither those of a
 coupled PDESystem of the same name nor those of `Potts.fields(model)` is an `ArgumentError`
 that names both lists.
 """

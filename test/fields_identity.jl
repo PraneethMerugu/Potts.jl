@@ -128,7 +128,16 @@ const GD_PINS = Dict{String, UInt64}()
 # fingerprint records that moved at the integration with the lockless checkerboard's codegen
 # (both sides changed them): pin removed at integration (D-INT-1); replaced by a correctness test
 # in the TS series. Every behavior record (`|n`, `|digest|`) of these models is still compared.
-const GD_UNPINNED = Set(["fixture field|Float32|fingerprint",
+# F4-15 (D-F4-15): the Jiang-like model's records that moved when a coarse field's kind bindings
+# began to fold by the block mean: its field values (digests) and its program (fingerprints, the
+# owner kernel gone). Not re-pinned: replaced by the property test of test/fields_jiang.jl (the
+# coupled model equals its PDESystem with `Potts.field_inputs`, blocks covered in part included).
+# Its mask, σ and kind digests and its `n` are still compared.
+const GD_F415 = Set(["GjJiangLike BackwardEuler|Float64|digest|cell.ocell",
+    ["GjJiangLike BackwardEuler|Float64|digest|site.$f$s" for f in ("g", "gf", "inh", "l", "o") for s in ("", "__next")]...,
+    "GjJiangLike BackwardEuler|Float64|fingerprint", "GjJiangLike BackwardEuler|Float64|g1|arrays",
+    "GjJiangLike BackwardEuler|Float64|g1|fingerprint_text"])
+const GD_UNPINNED = GD_F415 ∪ Set(["fixture field|Float32|fingerprint",
     "fixture field|Float64|fingerprint",
     "GiMerks BackwardEuler|Float64|fingerprint",
     "GiMerks BDF2|Float64|fingerprint",

@@ -151,89 +151,67 @@ function _level_offset(e::Env{N}, u, o, fr) where {N}
     return ntuple(d -> e.dims[d] == 1 ? o[d] : o[d] ÷ 2^fr, N)
 end
 
-# Folds of fine reads in a term on a `Coarse` grid (F3-16; F3 design §3.9, review r1 M2 and S1).
+# Folds of fine reads in a term on a `Coarse` grid (F3-16; F3 design §3.9, review r1 M2; F4-15).
 # A term of a coarse field that reads fields of a finer grid (the CPM inputs, a fine field)
-# reads them through the block of children of each coarse node:
-# - an integer input (`kind`) reads the block's plurality owner, the most frequent value of its
-#   children, computed once per node and window (`owner:<input>:<level>`; ties go to the
-#   smallest nonzero value, 0 last). A part of a term that reads no other fine field is
-#   evaluated at that owner, so `(kind == 1) + 0.5 (kind == 2)` and `at(R, kind)` agree, and
-#   complementary conditions never both fail (v3 §6.3 T-1: the node takes the full rate of its
-#   owner);
-# - the largest subterm that reads a fine real field (a fine field, a real or Bool input) and is
-#   not linear in its fine reads is folded as a whole by the mean over the children, each fine
-#   read (the integer inputs too) at the child and each read of the term's own grid at the node.
-#   A sum is folded per summand and a product keeps its factors without fine reads outside the
-#   fold, so the coarse sum times the block size is the fine sum of the term (the restriction
-#   conserves mass: `max(g − gT, 0)`, `g/(K + g)`, `at(S, kind) g` are restricted exactly);
-# - a condition on a fine real field where a condition is used (a mask, `&`, `|`, `!`) is folded
-#   by Majority (true when more than half the children are); in a sum or a product it is a 0/1
-#   value and folds by the mean.
+# reads them through the block of children of each coarse node. One rule holds for every fine
+# read, real, Bool or integer (`kind`), so a CPM value bound to an input and the same value
+# written in the equation fold alike (F4-15, user ruling 2026-11-11):
+# - the largest subterm that reads a fine field and is not linear in its fine reads is folded as
+#   a whole by the mean over the children, each fine read at the child and each read of the
+#   term's own grid at the node. A sum is folded per summand and a product keeps its factors
+#   without fine reads outside the fold, so the coarse sum times the block size is the fine sum
+#   of the term (the restriction conserves mass: `max(g − gT, 0)`, `g/(K + g)`, `at(S, kind) g`,
+#   `kind == P` and `at(R, kind)` are restricted exactly). A condition used as a number (in a
+#   sum, a product, an operator coefficient, the right side itself) is a 0/1 value and folds by
+#   the mean too: `kind == P` on a block a third of whose sites are P is 1/3;
+# - a condition where a condition is used (a mask's predicate, the domain: `_cond`) is folded by
+#   Majority (true when more than half the children are).
 function _fold_kind(u, e::Env)
     (e.level > 0 && e.child == 0) || return nothing
     fine = _fine_ops(e)
     isempty(fine) && return nothing
     _reads(u, fine) || return nothing
-    if _isfield(e, u) || (iscall(u) && operation(u) === getindex && _isfield(e, unwrap(arguments(u)[1])))
-        op = _isfield(e, u) ? operation(u) : operation(unwrap(arguments(u)[1]))
-        _isint(e, op) && return :owner
-        SymbolicUtils.symtype(u) <: Bool && return :majority
-        return :mean
-    end
-    _reads(u, _real_ops(e, fine)) || return nothing    # integer inputs only: evaluated at the owner
-    _isbool_term(u) && return :majority
+    (_isfield(e, u) || (iscall(u) && operation(u) === getindex && _isfield(e, unwrap(arguments(u)[1])))) && return :mean
+    _isbool_term(u) && return :mean
     f = operation(u)
     # a spatial operator runs on the term's grid: its coefficients fold at each face (`_secdiff`)
     (f === Δ || f isa DivKGrad || f isa Advect || f isa Differential) && return nothing
-    f === (+) && return :sum
     f === (*) && return :product
-    (f === (-) || f === identity) && return nothing
+    (f === (+) || f === (-) || f === identity) && return nothing
     f === (/) && !_reads(arguments(u)[2], fine) && return nothing
     return :mean
 end
 _fine_ops(e::Env) = Any[op for (op, l) in e.flev if l < e.level]
-_isint(e::Env, op) = haskey(e.fields, op) && e.fields[op][2] in (I32, U32)
-_real_ops(e::Env, fine) = Any[op for op in fine if !_isint(e, op)]
 _isbool_term(u) = (iscall(u) && (operation(u) === ismember || operation(u) === (!) || operation(u) === (!=) ||
                                  operation(u) === (&) || operation(u) === (|) || any(r -> r[1] === operation(u), _CMP))) ||
                   SymbolicUtils.symtype(u) <: Bool
-# a sum on a coarse grid: per summand, a condition on a fine real field by the mean (a 0/1 value)
-function _fold_sum(u, e::Env)
-    real = _real_ops(e, _fine_ops(e))
-    ids = Int32[_isbool_term(y) && _reads(y, real) ? _fold(y, e, :mean) : lower(y, e) for y in arguments(u)]
-    return _op(e, ADD, ids...)
-end
 # a product on a coarse grid: the factors without fine reads stay outside; the factors with fine
-# reads fold together by the mean when one of them reads a fine real field and they are not a
-# single factor (a single one is lowered as itself, a single condition as a 0/1 value)
+# reads fold together by the mean when there are two or more (a single one folds itself)
 function _fold_product(u, e::Env)
     fine = _fine_ops(e)
-    real = _real_ops(e, fine)
     a = arguments(u)
     F = [y for y in a if _reads(y, fine)]
     ids = Int32[lower(y, e) for y in a if !_reads(y, fine)]
-    if any(y -> _reads(y, real), F) && (length(F) >= 2 || _isbool_term(only(F)))
-        push!(ids, _fold(length(F) == 1 ? only(F) : *(F...), e, :mean))
+    if length(F) >= 2
+        push!(ids, _fold(*(F...), e, :mean))
     else
         append!(ids, Int32[lower(y, e) for y in F])
     end
     return _op(e, MUL, ids...)
 end
-# an integer input read at the block's plurality owner (`owner:<input>:<level>`, a field of the
-# term's grid; at a neighbor, the neighbor node's, clamped at a face of the box)
-function _owner_load(e::Env{N}, u) where {N}
-    v = _isfield(e, u) ? u : unwrap(arguments(u)[1])
-    key = (:owner, operation(v), e.level)
-    haskey(e.fields, key) ||
-        _lerr(u, "the owner of an integer input on a coarse grid is not computed (an internal error: please report it)")
-    ids, lane = e.fields[key]
-    a = arguments(v)
-    o = ntuple(d -> _offset(e, a[d + 1], d), N)
-    any(!iszero, o) && !e.map &&
-        _lerr(u, "offset reads are allowed only in map equations `Shift(t, 1)(c) ~ rhs`; $RAW_HINT")
-    any(!iszero, o) &&
-        return load!(e.kb, ids[1], lane; offset = ntuple(d -> _level_offset(e, u, o, e.level)[d] + e.offset[d], N), policy = ZERO)
-    return load!(e.kb, ids[1], lane; offset = e.offset, policy = any(!iszero, e.offset) ? CLAMP : e.policy)
+"""
+    _cond(u, env) -> node id
+
+The condition `u` where a condition is used (a mask's predicate, the domain). On a `Coarse`
+grid a condition that reads fine fields is true at a node when it holds on more than half of
+the node's block (Majority); as a number it folds by the mean (`_fold_kind`).
+"""
+function _cond(u, e::Env)
+    v = unwrap(u)
+    if e.level > 0 && e.child == 0 && v isa SymbolicUtils.BasicSymbolic && !isempty(_fine_ops(e)) && _reads(v, _fine_ops(e))
+        return _fold(v, e, :majority)
+    end
+    return _bool(e, lower(u, e))
 end
 # at a neighbor (an operator coefficient, a velocity), the fold reads the neighbor node's block,
 # clamped onto the box in the coarse frame: across a closed face of the box, the node's own block
@@ -436,8 +414,6 @@ function lower(x, e::Env{N}) where {N}
         r === nothing || return r
     end
     fk = _fold_kind(u, e)                                  # fine reads in a coarse term (F3-16)
-    fk === :owner && return _owner_load(e, u)
-    fk === :sum && return _fold_sum(u, e)
     fk === :product && return _fold_product(u, e)
     fk === nothing || return _fold(u, e, fk)
     if SymbolicUtils.issym(u)

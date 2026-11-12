@@ -249,20 +249,19 @@ must have a size that `k` divides (an axis of size 1 is never coarsened). The fi
 its conditions and its solver run on the coarse grid; the fine reads in its terms (the CPM
 inputs, a field of the lattice) are folded over each node's block:
 
-  - An integer input (`kind`) is read at the block's owner, its most frequent value. A tie goes
-    to the smallest nonzero value, and 0 (the medium) wins only when no nonzero value ties. A
-    part of a term that reads no other fine field is evaluated at the owner, so the node takes
-    the full rate of its owner: `(kind == P) + 0.5 (kind == Q)` and `at(R, kind)` agree, and of
-    `kind == medium` and `kind != medium` exactly one holds.
-  - The largest part of a term that reads a fine real field (a field of the lattice, a real or
-    Bool input) and is not linear in it is replaced by its mean over the block, with the fine
-    reads (an integer input too) at each site of the block. A sum is folded per term, and the
-    factors of a product that read no fine field stay outside. The coarse field then receives
-    the fine integral of the term: `max(g - gT, 0)`, `g / (K + g)` and `at(S, kind) * g` of a
-    fine `g` are restricted exactly. A spatial operator of the coarse field is not folded; its
-    coefficient is, at each face (at a face of the box, the node's own block).
-  - A condition on a fine real field, where a condition is used (a mask, `&`, `|`, `!`), is
-    true when more than half the block is (the Majority fold).
+  - One rule holds for every fine read: a real, `Bool` or integer (`kind`) input and a field of
+    the lattice. The largest part of a term that reads a fine field and is not linear in it is
+    replaced by its mean over the block, with the fine reads at each site of the block. A sum
+    is folded per term, and the factors of a product that read no fine field stay outside. The
+    coarse field then receives the fine integral of the term: `max(g - gT, 0)`, `g / (K + g)`,
+    `at(S, kind) * g`, `kind == P` and `at(R, kind)` are restricted exactly. A condition used as
+    a number (in a sum, a product, a coefficient, the right side itself) is a 0/1 value and
+    folds by its mean: on a block a quarter of whose sites are of kind P, `kind == P` is 0.25,
+    so `(kind == P) + 0.5 (kind == Q)` and `at(R, kind)` agree, and `kind == 0` and `kind != 0`
+    sum to 1. A spatial operator of the coarse field is not folded; its coefficient is, at
+    each face (at a face of the box, the node's own block).
+  - A condition where a condition is used (a mask's predicate) is true when it holds on more
+    than half the block (the Majority fold).
 
 A term of a fine
 field that reads a coarse one reads the node whose block holds the site. A spatial operator

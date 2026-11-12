@@ -14,6 +14,8 @@ const C, CC = c(t, x, y), cc(t, x, y)
 att() = pdesystem([Differential(t)(C) ~ Dc * Δ(C) + s * sec(t, x, y) * vol(t, x, y) / 16 - kd * C]; name = :att)
 scaled() = pdesystem([Differential(t)(C) ~ Dc * Δ(C) + s * w(t, x, y) - kd * C]; name = :scaled)
 coarse() = pdesystem([Differential(t)(CC) ~ Dc * Δ(CC) + s * sec(t, x, y) - kd * CC]; name = :crs)
+# a coarse source with no decay (F4-15): the total over the lattice is the source's fine total
+conserve() = pdesystem([Differential(t)(CC) ~ Dc * Δ(CC) + s * sec(t, x, y)]; name = :cons)
 # Δ of a bound input; the route (a site variable read as an unbound input)
 lapin() = pdesystem([Differential(t)(C) ~ 0.1 * Δ(C) + 0.1 * Δ(sec(t, x, y))]; name = :lapin)
 lapsite() = pdesystem([Differential(t)(C) ~ 0.1 * Δ(C) + 0.1 * Δ(v(t, x, y))]; name = :lapsite)
@@ -88,6 +90,13 @@ end
     @lattice Lattice((24, 20); boundary = Closed())
     @energy cells(A) => (volume - 16.0)^2
     @fields cc = B6.coarse() (B6.sec => kind == A)
+    @sweep Metropolis(; temperature = 4.0)
+end
+@potts_model B6Conserve begin
+    @kinds medium A[frozen]
+    @lattice Lattice((24, 20); boundary = Closed())
+    @energy cells(A) => (volume - 16.0)^2
+    @fields cc = B6.conserve() (B6.sec => kind == A)
     @sweep Metropolis(; temperature = 4.0)
 end
 # the round trip `Potts.fields(model)` → `discretize(…; inputs = collect(Potts.field_inputs(integ)))`,
@@ -391,16 +400,15 @@ function b6_pde_round_trip(m, pde, fs, f; op = b6_op())
     return maximum(abs, o .- vec(Array(getproperty(integ.u.site, f)))), fi, integ
 end
 
-# (Coarse(2): cells on whole 2×2 blocks. A coarse row of the user's PDESystem reads the Bool input
-# `sec` by its block mean, the coupled model reads `kind == A` at the block's owner (LatticePDE's
-# folds): on a block a cell covers in part they differ, 0.25 here at b6_op's second cell)
-b6_aligned() = (σ = zeros(Int32, 24, 20); σ[5:8, 5:8] .= 1; σ[13:16, 9:12] .= 2; [ownership => σ, kind => [:A, :A]])
+# (Coarse(2): a coarse row of the user's PDESystem reads the Bool input `sec` by its block mean,
+# and the coupled model folds `kind == A` by the same rule (F4-15), so the two agree on blocks a
+# cell covers in part: b6_op's second cell starts on odd rows, and the CPM moves both cells)
 @testset "batch-end review (b): Potts.field_inputs(integ, pdesys), the user's PDESystem and Potts.fields" begin
     for fs in (ExplicitEuler(), BackwardEuler())
-        for (m, pde, f, op) in ((B6Fine(; name = :m), B6.att(), :c, b6_op()), (B6Coarse(; name = :m), B6.coarse(), :cc, b6_aligned()))
+        for (m, pde, f, op) in ((B6Fine(; name = :m), B6.att(), :c, b6_op()), (B6Coarse(; name = :m), B6.coarse(), :cc, b6_op()))
             σ = first(op).second
             err, fi, integ = b6_pde_round_trip(m, pde, fs, f; op)
-            @test err <= max(cp_tol(fs), 1e-13) || (println("user round trip $(nameof(pde)) $fs: $err"); false)
+            @test err <= max(cp_tol(fs), 1e-14) || (println("user round trip $(nameof(pde)) $fs: $err"); false)
             @test fi[:sec] == (σ .!= 0) && eltype(fi[:sec]) === Bool
             @test Set(keys(fi)) == (f === :c ? Set([:sec, :vol]) : Set([:sec]))
             # `Potts.fields(m)`: its own inputs, as `field_inputs(integ)` gives them
@@ -410,8 +418,27 @@ b6_aligned() = (σ = zeros(Int32, 24, 20); σ[5:8, 5:8] .= 1; σ[13:16, 9:12] .=
     σ = first(b6_op()).second
     fi = Potts.field_inputs(PottsProblem(B6Fine(; name = :m), b6_op(), (0, 1)), B6.att())
     @test fi[:vol] == [s == 0 ? 0.0 : 16.0 for s in σ]
-    # (the fold difference itself, measured: b6_op's second cell covers blocks in part)
-    @test b6_pde_round_trip(B6Coarse(; name = :m), B6.coarse(), ExplicitEuler(), :cc)[1] > 0.1
+    # F4-15: the coupled coarse field equals the user's PDESystem on blocks a cell covers in part
+    # (base 5e972579, ~/lpwork/f4F15/nc.log: 0.25 apart there), for layouts that cover blocks in
+    # part on purpose: odd offsets, a cell of one site, cells that meet inside a block
+    odd = (σ = zeros(Int32, 24, 20); σ[2:6, 3:9] .= 1; σ[7:7, 10:10] .= 2; σ[9:14, 4:8] .= 3; σ[15:19, 13:18] .= 4;
+           [ownership => σ, kind => [:A, :A, :A, :A]])
+    meet = (σ = zeros(Int32, 24, 20); σ[3:8, 3:8] .= 1; σ[9:13, 3:8] .= 2; σ[4:9, 11:15] .= 3; [ownership => σ, kind => [:A, :A, :A]])
+    for op in (b6_op(), odd, meet), fs in (ExplicitEuler(), BackwardEuler())
+        err, fi, _ = b6_pde_round_trip(B6Coarse(; name = :m), B6.coarse(), fs, :cc; op)
+        @test any(((I, J),) -> (b = fi[:sec][I:(I + 1), J:(J + 1)]; any(b) && !all(b)), Iterators.product(1:2:24, 1:2:20))
+        @test err <= max(cp_tol(fs), 1e-14) || (println("partial blocks $fs: $err"); false)
+    end
+    # F4-15 conservation: the coupled coarse source over blocks a cell covers in part is the fine
+    # total, `s` times the cells' sites per MCS (base 5e972579, ~/lpwork/f4F15/nc.log: the
+    # owner's count of whole blocks, 4·(blocks owned by A))
+    for op in (b6_op(), odd, meet), fs in (ExplicitEuler(), BackwardEuler())
+        integ = init(PottsProblem(B6Conserve(; name = :m), op, (0, 3); field_solver = fs, seed = 3), SequentialCPM())
+        foreach(_ -> step!(integ), 1:3)
+        tot = sum(Array(integ.u.site.cc)) * 4
+        want = 3 * 0.5 * count(!=(0), first(op).second)
+        @test isapprox(tot, want; rtol = fs isa ExplicitEuler ? 1e-14 : 1e-9) || (println("conservation $fs: $tot vs $want"); false)
+    end
     # S2: the bound read is the variable `vol` of `Potts.fields(m)`, in its equation and its report
     F = Potts.fields(B6Fine(; name = :m))
     @test occursin("vol(t, x, y)", string(F.eqs)) && !occursin("field1__in", string(F.eqs)) || (println(F.eqs); false)

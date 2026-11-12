@@ -95,7 +95,7 @@ function _lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = noth
     hasmap = any(k -> startswith(k.key, "map:"), s.kernels)
     stab = hasmap ? (p -> NaN) : bound ? stability_bound(cf, sys) : DeferredBound(cf, sys)
     spec = Problems.GroupSpec(s; state = _states(s), external, kind = hasmap ? :map : :rate, clock = disc.clock,
-        init = [k.key for k in s.kernels if any(q -> startswith(k.key, q), ("mask:", "domain:", "owner:"))], stability = stab,
+        init = [k.key for k in s.kernels if any(q -> startswith(k.key, q), ("mask:", "domain:"))], stability = stab,
         params = _param_slots(cf, defaults, values), tables = _table_specs(cf, values),
         inputs = _input_specs(cf, sys, s, filled),
         terms = stab isa StabilityBound ? copy(stab.terms) : String[], linearity = cf.linearity,

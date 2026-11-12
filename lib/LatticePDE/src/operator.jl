@@ -568,11 +568,6 @@ function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscret
         all(k -> any(f -> f.key == k, pb.fields), ks) || continue
         ids = Int32[fieldid_in(pb, k) for k in ks]
         fids[op] = (ids, pb.fields[ids[1]].storage)
-        # an integer input's plurality owner on a coarse level (review r1 S1)
-        for f in pb.fields
-            length(ks) == 1 && startswith(f.key, string("owner:", ks[1], ":")) || continue
-            fids[(:owner, op, Int(f.levels[1]))] = (Int32[fieldid_in(pb, f.key)], f.storage)
-        end
     end
     tables = Dict{Any, Tuple{Int32, Scalar}}()
     for q in _params(sys)

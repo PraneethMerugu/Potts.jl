@@ -482,20 +482,9 @@ cr_run(m, fs, k = 10; op = cp_op(), seed = 5) =
 cr_hand(σ, kind) = [:endo => [s != 0 && kind[s] == 1 for s in σ], :isB => [s != 0 && kind[s] == 2 for s in σ],
                     :vol => [s == 0 ? 0.0 : Float64(count(==(s), σ)) for s in σ]]
 cr_divided(σ0, σ) = maximum(σ) != maximum(σ0)
-# `kind == 1` at the owner of each `k × k` block, on every site of the block: the owner is the kind on
-# most of its sites, a tie goes to the smallest cell kind, and the medium only when no cell kind ties
-function cr_owner_endo(σ, kind, k)
-    ks = [s == 0 ? 0 : Int(kind[s]) for s in σ]
-    out = falses(size(σ))
-    for I in 1:k:size(σ, 1), J in 1:k:size(σ, 2)
-        b = vec(ks[I:(I + k - 1), J:(J + k - 1)])
-        m = maximum(count(==(v), b) for v in b)
-        top = sort!(unique(v for v in b if count(==(v), b) == m))
-        o = any(!=(0), top) ? first(filter(!=(0), top)) : 0
-        out[I:(I + k - 1), J:(J + k - 1)] .= o == 1
-    end
-    return out
-end
+# the `k × k` blocks of `σ` that a cell covers in part (some sites in it, some not)
+cr_partial(σ, k) = count(((I, J),) -> (b = σ[I:(I + k - 1), J:(J + k - 1)]; any(!=(0), b) && any(==(0), b)),
+                         Iterators.product(1:k:size(σ, 1), 1:k:size(σ, 2)))
 
 @testset "F4-B2 review: lifecycle, faces, mask, steady rows, two PDESystems and Coarse(2), owned oracle" begin
     for fs in (ExplicitEuler(), BackwardEuler(), FieldGroups(:c => BackwardEuler(), :q => QuasiSteady()))
@@ -517,16 +506,16 @@ end
         err, n = cp_replay(CrTwoB(; name = :m), CpRev.first_sys(), cp_hand2, cp_own(f1); fs = f1, k = 10, seed = 5)
         @test n == 10 && err <= cp_tol(fs) || (println("CrTwoB $fs: $err"); false)
         # the coarse field against LatticePDE's run of the raw PDESystem, with `endo` filled by hand
-        # at each block's owner (F4-B6 review). The binding `endo => kind == A` is a kind
-        # expression, so on the coarse grid it is read at the block's owner, the kind on most of
-        # its sites (docs/src/manual/variables.md, `lattice_level`); the raw PDESystem's own Bool
-        # input `endo` would be folded by its mean over the block instead (0.25 apart where a
-        # block is partly `A`). Measured 2.2e-16 under both solvers (2026-11-11)
+        # at each site (F4-B6 review; F4-15). The binding `endo => kind == A` and the raw
+        # PDESystem's own Bool input `endo` fold by one rule on the coarse grid, the block mean,
+        # so the two agree on any layout: the CPM moves the cells over blocks they cover in part.
+        # Base 5e972579 (~/lpwork/f4F15/nc.log): 0.25 apart where a block is partly `A`
         c = cr_run(CrCrs(; name = :m), fs)
         @test size(c.u[end].site.cc) == (12, 10)
-        err, n = cp_replay(CrCrs(; name = :m), CpRev.coarse_sys(), (σ, kind) -> [:endo => cr_owner_endo(σ, kind, 2)],
+        @test all(u -> cr_partial(u.σ, 2) > 0, c.u)
+        err, n = cp_replay(CrCrs(; name = :m), CpRev.coarse_sys(), (σ, kind) -> [:endo => [s != 0 && kind[s] == 1 for s in σ]],
             cp_own(fs); fs, k = 10, seed = 5, fields = (:cc,))
-        @test n == 10 && err <= 1e-14 || (println("CrCrs $fs: $err"); false)
+        @test n == 10 && err <= max(cp_tol(fs), 1e-14) || (println("CrCrs $fs: $err"); false)
     end
 end
 

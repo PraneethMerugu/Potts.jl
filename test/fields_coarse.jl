@@ -82,8 +82,9 @@ end
 end
 
 # two frozen cells, A (rows 2:8, columns 2:6; 9 and 12 of 16 sites of blocks (1, 1) and (2, 1),
-# 6 and 8 of (1, 2) and (2, 2): block (2, 2) is a tie, which A owns: the medium loses a tie) and
-# B (rows 9:15, columns 6:12; the owner of blocks (3, 2), (3, 3), (4, 2), (4, 3))
+# 6 and 8 of (1, 2) and (2, 2): blocks A covers in part, so `kA` folds to 9/16, 12/16, 6/16 and
+# 8/16 there) and B (rows 9:15, columns 6:12; most of blocks (3, 2), (3, 3), (4, 2), (4, 3), where
+# its mask holds)
 function fc_sigma(dims = (16, 12))
     σ = zeros(Int32, dims)
     σ[2:8, 2:6] .= 1
