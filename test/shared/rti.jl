@@ -91,17 +91,24 @@ function device_suite(; nworkers = 1, gpu = get(ENV, "POTTS_GPU", ""))
 end
 
 function _two_passes(keep, nworkers)
-    err = nothing
+    errs = Tuple{Any, Any}[]                 # (exception, backtrace), in pass order
     for (pass, n) in ((ti -> keep(ti) && !serial(ti), nworkers), (ti -> keep(ti) && serial(ti), min(nworkers, 1)))
         try
             rti(pass, TESTDIR; nworkers = n, OPTIONS..., test_end_expr = passlog_expr())
         catch e
             e isa ReTestItems.NoTestException && continue
-            err = e
+            push!(errs, (e, catch_backtrace()))
         end
     end
-    err === nothing || throw(err)
-    return nothing
+    # report every pass that failed, and fail the run with the first one (its stack is the cause;
+    # a later pass's error is usually the same failure seen again)
+    for (e, bt) in errs[2:end]
+        @error "a later pass failed too" exception = (e, bt)
+    end
+    isempty(errs) && return nothing
+    e, bt = first(errs)
+    @error "the run failed" exception = (e, bt)   # the first pass's stack is the cause
+    throw(e)
 end
 
 end
