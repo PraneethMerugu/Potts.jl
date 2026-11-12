@@ -2,47 +2,14 @@
 # frame, the refusal of a level that coarsens an axis of size 1, block reductions and gates.
 # Oracles are direct loops over the n ÷ 2 convention, independent of the emitter.
 
-using LatticeFields.IR: reduce!, gate!, table!, table, constant, CLAMP, I32
-
-ml_msg(f) =
-    try
-        f()
-        ""
-    catch e
-        sprint(showerror, e)
-    end
-function ml_modes(pb, inputs; out = "v")
-    map((CompileOptions(), CompileOptions(; index = :linear), debug_options())) do o
-        s, sp = build(pb; options = o)
-        st = HostStore(s)
-        foreach(((k, v),) -> copyto!(current(st, s, k), v), inputs)
-        run_step!(s, sp, st, ())
-        copy(current(st, s, out))
-    end
+@testsetup module LF_compile_multilevel
+using Test, LatticeFields
+include("../host_runner.jl")
+include("../shared/compile_multilevel.jl")
+include("../shared/export_all.jl")
 end
 
-"""
-Children of coarse index `X` on an axis of `nf` fine sites (n ÷ 2 convention, oracle).
-"""
-function kids(X, nf)
-    nf == 1 ? (X:X) : (X == nf ÷ 2 && isodd(nf) ? ((2X - 1):(2X + 1)) : ((2X - 1):(2X)))
-end
-
-function restrict_case(dims; op = :sum, lane = F32)
-    N = length(dims)
-    pb = ProgramBuilder(Grid(dims); periodic = ntuple(_ -> true, N), levels = 2)
-    r = field!(pb, "r"; role = :input, storage = lane)
-    v = field!(pb, "v"; role = :output, levels = [1], storage = lane)
-    kb = kernel(pb, Space{N}(; level = 1))
-    # child value plus its fine +x neighbor (fine-frame offset inside the child scope)
-    x = load(kb, r; level = -1) +
-        2 * load(kb, r; level = -1, offset = unitoff(N), policy = CLAMP)
-    store(kb, v, IR.restrict(lane == U8 ? load(kb, r; level = -1) : x; op))
-    add!(pb, kb, "rs")
-    return pb
-end
-unitoff(N) = ntuple(d -> d == 1 ? 1 : 0, N)
-
+@testitem "RESTRICT: children with odd tails and size-1 axes" setup = [LF_compile_multilevel] tags = [:latticefields, :compile] begin
 @testset "RESTRICT: children with odd tails and size-1 axes" begin
     for dims in ((5,), (7, 4), (5, 3, 1), (6, 1, 5), (2, 3, 2))
         u0 = Float32.(rand(Xoshiro(3), 1:9, prod(dims)))
@@ -63,7 +30,9 @@ unitoff(N) = ntuple(d -> d == 1 ? 1 : 0, N)
         @test got == UInt8[0, 1, 0]
     end
 end
+end
 
+@testitem "level +1 reads: parent of the fine site x + o" setup = [LF_compile_multilevel] tags = [:latticefields, :compile] begin
 @testset "level +1 reads: parent of the fine site x + o" begin
     pb = ProgramBuilder(Grid((5,)); periodic = (true,), levels = 2)
     e = field!(pb, "e"; role = :input, levels = [1])
@@ -75,9 +44,11 @@ end
         @test got == Float32[10, 20, 20, 20, 10]          # parents of 2,3,4,5,1
     end
 end
+end
 
 # F3-16 (`Coarse(k)` fields): an access m > 1 levels away. Base 85794414 (~/lpwork/f3b6-nc-lf.log):
 # `legality` refused every case ("an access shifts more than one level").
+@testitem "F3-16: RESTRICT over m > 1 levels, mixed depths, level +m reads, divisibility" setup = [LF_compile_multilevel] tags = [:latticefields, :compile] begin
 @testset "F3-16: RESTRICT over m > 1 levels, mixed depths, level +m reads, divisibility" begin
     for (dims, m) in (((8, 4), 2), ((4, 1, 8), 2), ((16,), 3))
         N = length(dims)
@@ -122,7 +93,9 @@ end
     msg = ml_msg(() -> semantic(program(pb)))
     @test occursin("shifts 2 levels across axis 1 of size 6", msg)
 end
+end
 
+@testitem "an axis of size 1 is never coarsened; a level that would is refused" setup = [LF_compile_multilevel] tags = [:latticefields, :compile] begin
 @testset "an axis of size 1 is never coarsened; a level that would is refused" begin
     @test IR.leveldims(IR.Level(Grid((8, 1)), 3)) == (1, 1)
     @test IR.leveldims(IR.Level(Grid((300, 192)), 7)) == (2, 1)
@@ -130,7 +103,9 @@ end
     field!(pb, "u")
     @test occursin("never coarsened", ml_msg(() -> semantic(program(pb))))
 end
+end
 
+@testitem "reductions: 256-site workgroups, halving-tree sums, max; gate with pass-through" setup = [LF_compile_multilevel] tags = [:latticefields, :compile] begin
 @testset "reductions: 256-site workgroups, halving-tree sums, max; gate with pass-through" begin
     n = 1000
     pb = ProgramBuilder(Grid((n,)); periodic = (true,))
@@ -181,4 +156,5 @@ end
         end
         @test tab("ps") == ps1
     end
+end
 end

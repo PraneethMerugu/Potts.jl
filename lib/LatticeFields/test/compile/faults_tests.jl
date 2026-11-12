@@ -10,6 +10,10 @@
 # | loads not before stores                  | hand-loop oracle                   |
 # (missing pass-through: lanes_masks.jl)
 
+@testsetup module LF_compile_faults
+using Test, LatticeFields
+include("../host_runner.jl")
+include("../fixtures.jl")
 using LatticeFields.Compile: hoist_params, linear_index, zero_offset, boundary, legality,
                              fold
 using LatticeFields.IR: IRError, Program, with_kernels, Kernel
@@ -48,14 +52,19 @@ function chain2()
     add!(pb, kb, "b_use_w")
     return pb
 end
+include("../shared/export_all.jl")
+end
 
+@testitem "fault: wrong derived parameter" setup = [LF_compile_faults] tags = [:latticefields, :compile] begin
 @testset "fault: wrong derived parameter" begin
     P = (0.1, 0.7, 1.3, 0.25, 2.0)
     @test differential(diffusion3(), P)
     bad = (p, k) -> ((k2, d) = hoist_params(p, k); (k2, Any[:(2 * $(x)) for x in d]))
     @test !differential(diffusion3(), P; stages = merge(LOWERING, (; hoist = bad)))
 end
+end
 
+@testitem "fault: lost forwarding in a fused kernel" setup = [LF_compile_faults] tags = [:latticefields, :compile] begin
 @testset "fault: lost forwarding in a fused kernel" begin
     s, sp = build(chain2())
     @test length(sp.launches) == 1                     # fused, so forwarding matters
@@ -65,14 +74,18 @@ end
     noforward = (p, ids, scc) -> Schedule.merge_kernels(p, ids, scc; forward = false)
     @test !differential(chain2(), (0.5,); merge = noforward)
 end
+end
 
+@testitem "fault: off-by-one target index" setup = [LF_compile_faults] tags = [:latticefields, :compile] begin
 @testset "fault: off-by-one target index" begin
     P = (0.1, 0.7, 1.3, 0.25, 2.0)
     shifted = (c, a) -> (
         e = linear_index(c, a); zero_offset(a) ? e : :(min($e + one($e), G.n)))
     @test !differential(diffusion3(), P; stages = merge(LOWERING, (; target = shifted)))
 end
+end
 
+@testitem "fault: wrong Dirichlet ghost is invisible to the differential, caught by the oracle" setup = [LF_compile_faults] tags = [:latticefields, :compile] begin
 @testset "fault: wrong Dirichlet ghost is invisible to the differential, caught by the oracle" begin
     function bad_boundary(p::Program)
         rules = IR.BRule[r isa FaceRule && r.beta.value == 0 ?
@@ -94,7 +107,9 @@ end
     sc, spc = build(diffusion3())
     @test run_field(sc, spc, u0, P) == ref
 end
+end
 
+@testitem "fault: dangling and non-topological nodes" setup = [LF_compile_faults] tags = [:latticefields, :compile] begin
 @testset "fault: dangling and non-topological nodes" begin
     function scramble(p::Program{N}) where {N}
         ks = map(p.kernels) do k
@@ -107,7 +122,9 @@ end
     @test_throws IRError semantic(program(diffusion2()); passes = (legality, scramble))
     @test semantic(program(diffusion2())) isa Program
 end
+end
 
+@testitem "fault: loads not ordered before stores" setup = [LF_compile_faults] tags = [:latticefields, :compile] begin
 @testset "fault: loads not ordered before stores" begin
     pb = ProgramBuilder(Grid((5, 3)))
     a = field!(pb, "a"; role = :aux)
@@ -126,4 +143,5 @@ end
     end
     @test go(LOWERING) == 2 .* a0
     @test go(merge(LOWERING, (; order = c -> Int32[]))) == fill(10.0f0, 15)
+end
 end

@@ -2,11 +2,20 @@
 # integrator's step, `ends_in = :slot1` brings an odd count back to slot 1 with the same
 # values, and the runtime's host parts allocate nothing (AllocCheck, and `@allocated` of a
 # warm `advance!`).
+
+@testsetup module LF_problems_owned_group
+using Test, LatticeFields
+include("../host_runner.jl")
+include("../fixtures.jl")
+include("../shared/problems_owned.jl")
 using LatticeFields.Problems: Problems as LFP, FieldProblem, ExplicitEuler, LatticeIndex, FieldSlot
 using AllocCheck: check_allocs
 using CommonSolve: init, step!
 using SciMLBase: ReturnCode
+include("../shared/export_all.jl")
+end
 
+@testitem "GroupRuntime: advance!, ends_in = :slot1, no allocation" setup = [LF_problems_owned_group] tags = [:latticefields, :problems] begin
 @testset "GroupRuntime: advance!, ends_in = :slot1, no allocation" begin
     dims = (12, 10)
     u0 = rand(Xoshiro(5), Float32, prod(dims))
@@ -30,4 +39,5 @@ using SciMLBase: ReturnCode
     @test warm(ra) == 0 && warm(rb) == 0
     @test_throws ArgumentError LFP.bind_group(prob.group, alg, b.store, copy(prob.p); n = 3, dt = 0.05, c = 0.0,
         ends_in = :last, backend = prob.backend, options = prob.options, V = Float64)
+end
 end

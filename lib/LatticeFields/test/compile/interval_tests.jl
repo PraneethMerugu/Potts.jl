@@ -1,6 +1,8 @@
 # The interval coefficient evaluator: enclosure under sampling, tightness on monotone terms,
 # the declared-interval refusal, allocation-free warm calls and a negative control.
 
+@testsetup module LF_compile_interval
+using Test, LatticeFields
 using LatticeFields.Compile: interval_function, interval_expr
 using LatticeFields.IR: IRError
 
@@ -19,7 +21,10 @@ function reaction_prog()
     return semantic(program(pb))
 end
 coef(p, u) = p[1] * u^2 - p[2] / (1 + u) + exp(-p[1]) * abs(u - p[3])
+include("../shared/export_all.jl")
+end
 
+@testitem "interval evaluator" setup = [LF_compile_interval] tags = [:latticefields, :compile] begin
 @testset "interval evaluator" begin
     s = reaction_prog()
     k = s.kernels[1]
@@ -57,4 +62,5 @@ coef(p, u) = p[1] * u^2 - p[2] / (1 + u) + exp(-p[1]) * abs(u - p[3])
     @test all(v -> e2[1] <= v <= e2[2], ps)
     w = e2[2] - e2[1]
     @test !all(v -> e2[1] + 0.01w <= v <= e2[2] - 0.01w, ps)
+end
 end

@@ -12,6 +12,12 @@
 # the first halving step fails the bitwise test; plans keyed by values and never dropped
 # grow over the sweep.
 
+@testsetup module LF_solvers_warm
+using Test, LatticeFields
+include("../host_runner.jl")
+include("../solvers_cases.jl")
+include("../shared/solvers_coefficients.jl")
+include("../shared/solvers_hierarchy.jl")
 using LatticeFields.Solvers: set_coefficients!, tangent!
 using LinearAlgebra: norm
 
@@ -48,6 +54,11 @@ end
 
 const KA_ = LatticeFields.Schedule.KernelAbstractions
 
+warm!(sv) = (rebuild!(sv); lift!(sv); solve!(sv); nothing)
+include("../shared/export_all.jl")
+end
+
+@testitem "the host reduction fast path equals the emulated workgroups bitwise" setup = [LF_solvers_warm] tags = [:latticefields, :solvers] begin
 @testset "the host reduction fast path equals the emulated workgroups bitwise" begin
     rng = Xoshiro(21)
     extra = (                                             # F3-05 operators
@@ -74,9 +85,9 @@ const KA_ = LatticeFields.Schedule.KernelAbstractions
         end
     end
 end
+end
 
-warm!(sv) = (rebuild!(sv); lift!(sv); solve!(sv); nothing)
-
+@testitem "a warm rebuild + lift + solve allocates nothing" setup = [LF_solvers_warm] tags = [:latticefields, :solvers] begin
 @testset "a warm rebuild + lift + solve allocates nothing" begin
     for (case, kw) in ((named_case("disk128", 0.022), (;)), (named_case("disk128", 0.022), (; inner = Multigrid())),
         (named_case("sphere42", 0.022), (;)), (named_case("per128", 0.022), (;)),
@@ -91,7 +102,9 @@ warm!(sv) = (rebuild!(sv); lift!(sv); solve!(sv); nothing)
         end
     end
 end
+end
 
+@testitem "a sweep over 100 coefficient values keeps sv.plans at a constant size" setup = [LF_solvers_warm] tags = [:latticefields, :solvers] begin
 @testset "a sweep over 100 coefficient values keeps sv.plans at a constant size" begin
     op, inputs = box_case(64, 32; s = 0.01, islands = 0.1)
     sv = case_solver((op, inputs), Float64; inner = DevicePCG(; budget = 64, rtol = 1e-10))
@@ -109,6 +122,7 @@ end
     # iteration count, so the size takes a few values, bounded and not growing
     @test maximum(sizes[51:end]) <= maximum(sizes[1:50]) <= 6 || (println("sv.plans sizes: ", sizes); false)
 end
+end
 
 # F3-05/06 review r1 S4: the values are not in the plan key, so a coefficient write must drop
 # the held plans (`empty!` in `_set_raw!`). After `set_coefficients!`, `steady!` and a tangent
@@ -116,6 +130,7 @@ end
 # without the `empty!`, the written solver solves with its first values: 30 of the 48 checks fail
 # (`steady!` off by up to 0.14 in 14, both executors; all 16 tangents miss the difference quotient);
 # base 9db10886 passes (no test of it existed).
+@testitem "a coefficient write takes effect: steady! and tangent! equal a fresh solver bitwise" setup = [LF_solvers_warm] tags = [:latticefields, :solvers] begin
 @testset "a coefficient write takes effect: steady! and tangent! equal a fresh solver bitwise" begin
     op0, inputs = box_case(64, 32; s = 0.01, islands = 0.1)
     mk(s, d = 1.0 + s) = CellOperator(op0.dims; periodic = op0.periodic, shift = s, mask = op0.mask, value = op0.value,
@@ -155,4 +170,5 @@ end
                 " ", inner, " ", norm(du .- fd) / norm(fd)); false)
         end
     end
+end
 end

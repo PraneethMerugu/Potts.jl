@@ -1,15 +1,15 @@
 # The solver hierarchy: depth and the bottom cut, the n ÷ 2 widths, and the rule-M build
 # against hand-computed coarse operators (independent oracles), with the ½Σ control.
 
-using LatticeFields.Solvers: depth, RULE_M
-const SV = LatticeFields.Solvers
-
-function built(op, inputs; rule = RULE_M)
-    sv = case_solver((op, inputs), Float64; inner = Multigrid(), rule)
-    rebuild!(sv)
-    return sv
+@testsetup module LF_solvers_hierarchy
+using Test, LatticeFields
+include("../host_runner.jl")
+include("../solvers_cases.jl")
+include("../shared/solvers_hierarchy.jl")
+include("../shared/export_all.jl")
 end
 
+@testitem "depth: coarsen to the first axis of size 1; bottom at ≤ 4096 sites" setup = [LF_solvers_hierarchy] tags = [:latticefields, :solvers] begin
 @testset "depth: coarsen to the first axis of size 1; bottom at ≤ 4096 sites" begin
     @test depth((42, 42, 42)) == (5, 2)              # 42 21 10 5 2 1; 10³ is the first ≤ 4096
     @test depth((512, 512)) == (9, 3)                # 64² = 4096 starts the bottom
@@ -18,7 +18,9 @@ end
     sv = built(box_case(300, 192; s = 1e-3)...)
     @test sv.ctx.dims[end] == (2, 1)
 end
+end
 
+@testitem "widths: level-ℓ cells are 2^ℓ wide, the last takes the rest" setup = [LF_solvers_hierarchy] tags = [:latticefields, :solvers] begin
 @testset "widths: level-ℓ cells are 2^ℓ wide, the last takes the rest" begin
     w(n0, ℓ) = (
         n = n0 >> ℓ; [SV._width(Int32(i), Int32(n), Int32(n0), Int32(ℓ)) for i in 1:n])
@@ -28,7 +30,9 @@ end
     @test w(42, 4)[(end - 1):end] == [16, 26]
     @test all(ℓ -> sum(w(300, ℓ)) == 300, 1:8)
 end
+end
 
+@testitem "rule M on hand-computed coarse operators" setup = [LF_solvers_hierarchy] tags = [:latticefields, :solvers] begin
 @testset "rule M on hand-computed coarse operators" begin
     one_d(mask) = (CellOperator((4, 1); shift = 0.0, mask = "in.mask", value = 0.0),
         ("in.mask" => mask,))
@@ -54,7 +58,9 @@ end
     @test field(sv, lkey(1, "w1")) ≈ [0.8, 0.8]
     @test field(sv, lkey(1, "s")) ≈ [0.4, 0.6]
 end
+end
 
+@testitem "coarse operators are symmetric (sphere 42³, random islands)" setup = [LF_solvers_hierarchy] tags = [:latticefields, :solvers] begin
 @testset "coarse operators are symmetric (sphere 42³, random islands)" begin
     for case in (ball_case((42, 42, 42); s = 0.022, R = 15.8, ctr = (21.13, 20.87, 21.41)),
         box_case(60, 40; s = 1e-3, islands = 0.1))
@@ -64,4 +70,5 @@ end
             @test A ≈ A' rtol = 1e-14
         end
     end
+end
 end

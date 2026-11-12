@@ -3,6 +3,10 @@
 # stencils on corners and degenerate axes, the ZERO policy, the coarse-level convention,
 # and the refusals added by the review.
 
+@testsetup module LF_compile_regressions
+using Test, LatticeFields
+include("../host_runner.jl")
+include("../fixtures.jl")
 using LatticeFields.IR: IRError, ZERO, coord, constant
 using LatticeFields.Schedule: live_estimate
 
@@ -24,21 +28,6 @@ function each_mode(pb, inputs, P = (); out = "v")
         foreach(((k, v),) -> copyto!(current(st, s, k), v), inputs)
         run_step!(s, sp, st, P)
         copy(current(st, s, out))
-    end
-end
-
-@testset "periodic wrap with offsets as large as the axis" begin
-    for off in ((5, 0), (-7, 0), (2, 3), (0, -4))
-        pb = ProgramBuilder(Grid((2, 3)); periodic = (true, true))
-        u, v = field!(pb, "u"; role = :input), field!(pb, "v"; role = :output)
-        kb = kernel(pb)
-        store(kb, v, load(kb, u; offset = off))
-        add!(pb, kb, "k")
-        u0 = reshape(Float32.(1:6), 2, 3)
-        want = [u0[mod1(i + off[1], 2), mod1(j + off[2], 3)] for i in 1:2, j in 1:3]
-        for got in each_mode(pb, ("u" => u0,))
-            @test reshape(got, 2, 3) == want
-        end
     end
 end
 
@@ -75,7 +64,27 @@ function boxoracle(u, per)
     end
     return out
 end
+include("../shared/export_all.jl")
+end
 
+@testitem "periodic wrap with offsets as large as the axis" setup = [LF_compile_regressions] tags = [:latticefields, :compile] begin
+@testset "periodic wrap with offsets as large as the axis" begin
+    for off in ((5, 0), (-7, 0), (2, 3), (0, -4))
+        pb = ProgramBuilder(Grid((2, 3)); periodic = (true, true))
+        u, v = field!(pb, "u"; role = :input), field!(pb, "v"; role = :output)
+        kb = kernel(pb)
+        store(kb, v, load(kb, u; offset = off))
+        add!(pb, kb, "k")
+        u0 = reshape(Float32.(1:6), 2, 3)
+        want = [u0[mod1(i + off[1], 2), mod1(j + off[2], 3)] for i in 1:2, j in 1:3]
+        for got in each_mode(pb, ("u" => u0,))
+            @test reshape(got, 2, 3) == want
+        end
+    end
+end
+end
+
+@testitem "box stencils on corners and degenerate axes" setup = [LF_compile_regressions] tags = [:latticefields, :compile] begin
 @testset "box stencils on corners and degenerate axes" begin
     for (dims, per) in (((5, 3), (false, false)), ((5, 3, 3), (false, false, false)),
         ((5, 3, 3), (true, false, false)), ((1, 3, 2), (true, false, false)), (
@@ -87,7 +96,9 @@ end
         end
     end
 end
+end
 
+@testitem "ZERO policy reads 0 outside, on the unclamped coordinate" setup = [LF_compile_regressions] tags = [:latticefields, :compile] begin
 @testset "ZERO policy reads 0 outside, on the unclamped coordinate" begin
     pb = ProgramBuilder(Grid((4,)))
     r, o = field!(pb, "r"; role = :input), field!(pb, "v"; role = :output)
@@ -102,7 +113,9 @@ end
         @test got == want
     end
 end
+end
 
+@testitem "coarse levels: n ÷ 2 sites, last aggregate of an odd axis has width 3" setup = [LF_compile_regressions] tags = [:latticefields, :compile] begin
 @testset "coarse levels: n ÷ 2 sites, last aggregate of an odd axis has width 3" begin
     # restriction 5 → 2: aggregates {1,2} and {3,4,5}; the width-3 tail reads offset 2 only
     # at the last coarse site (gated on the coarse coordinate)
@@ -132,7 +145,9 @@ end
     end
     @test IR.leveldims(IR.Level(Grid((42, 5, 1)), 1)) == (21, 2, 1)
 end
+end
 
+@testitem "review refusals and hygiene" setup = [LF_compile_regressions] tags = [:latticefields, :compile] begin
 @testset "review refusals and hygiene" begin
     # :accumulate adds to the current value at the own site (C7b)
     pb = ProgramBuilder(Grid((4,)); periodic = (true,))
@@ -165,7 +180,9 @@ end
     @test !occursin(".jl", string(sp.launches[1].kernel.body))
     @test !any(x -> x isa LineNumberNode, (y for y in sp.launches[1].kernel.body.args))
 end
+end
 
+@testitem "fusion hard limits: array arguments and the register prefilter" setup = [LF_compile_regressions] tags = [:latticefields, :compile] begin
 @testset "fusion hard limits: array arguments and the register prefilter" begin
     src = read(joinpath(@__DIR__, "..", "schedule", "fusion.jl"), String)
     @isdefined(smoother) || include_string(@__MODULE__, split(src, "nlaunch(s) =")[1])
@@ -178,4 +195,5 @@ end
     @test length(plan(s; cost = CostModel(; max_arrays = 1000, max_arg_bytes = 10^6,
         max_live = 10^6)).launches) == 1                # negative control: without limits
     @test live_estimate(s.kernels[1]) < 96
+end
 end

@@ -10,6 +10,11 @@
 # the diagonal faces fails the hand system; a coarse build that drops the diagonal fine faces
 # (`RuleWeights(; diagonal = 0)`) fails the cycle-factor bound.
 
+@testsetup module LF_solvers_hex
+using Test, LatticeFields
+include("../host_runner.jl")
+include("../solvers_cases.jl")
+include("../shared/solvers_coefficients.jl")
 using LinearAlgebra: norm
 using Random: Xoshiro
 using LatticeFields.Solvers: tangent!
@@ -96,6 +101,29 @@ function hex_case(dims; periodic = (false, false), kw...)
     return op, inp
 end
 
+# the residual reduction per stationary V(2, 2) cycle from a random error (zero right side)
+function hex_factor(dims; rule = RuleWeights(), masked = true, periodic = (false, false))
+    op0, inp = hex_case(dims; periodic)
+    op = CellOperator(dims; hex = true, periodic, face = ("w1", 0.8, "w3"), shift = 1e-3,
+        mask = masked ? "m" : nothing, value = 0.0,
+        dirichlet = (periodic[1] ? (nothing, nothing) : (0.0, 0.0), (nothing, nothing)))
+    inp = Dict(k => v for (k, v) in inp if !(k in ("in.f", "mv")) && (masked || k != "m"))
+    sv = hex_solver(op, inp; inner = Multigrid(), rule)
+    rebuild!(sv)
+    lift!(sv)
+    act = field(sv, lkey(0, "active")) .!= 0
+    copyto!(field(sv, lkey(0, "x")), (rand(Xoshiro(3), length(act)) .- 0.5) .* act)
+    rs = Float64[]
+    for _ in 1:30
+        solve!(sv; host = true, budget = 1)
+        push!(rs, scalars(sv).rnorm)
+    end
+    return (rs[30] / rs[5])^(1 / 25), sv.ctx.L, sv.ctx.lb
+end
+include("../shared/export_all.jl")
+end
+
+@testitem "F3-20: a hex solve equals the hand system of the six faces" setup = [LF_solvers_hex] tags = [:latticefields, :solvers] begin
 @testset "F3-20: a hex solve equals the hand system of the six faces" begin
     # closed box: a Robin face (axis 2 low, d > 0), a Robin face whose diagonal is negative (axis 1
     # low, the defect correction), a Dirichlet face (axis 1 high), no-flux axis 2 high
@@ -125,27 +153,9 @@ end
     @test_throws "`face` has one coefficient per face direction of a hexagonal lattice" CellOperator((8, 8);
         hex = true, face = (1.0, 1.0))
 end
-
-# the residual reduction per stationary V(2, 2) cycle from a random error (zero right side)
-function hex_factor(dims; rule = RuleWeights(), masked = true, periodic = (false, false))
-    op0, inp = hex_case(dims; periodic)
-    op = CellOperator(dims; hex = true, periodic, face = ("w1", 0.8, "w3"), shift = 1e-3,
-        mask = masked ? "m" : nothing, value = 0.0,
-        dirichlet = (periodic[1] ? (nothing, nothing) : (0.0, 0.0), (nothing, nothing)))
-    inp = Dict(k => v for (k, v) in inp if !(k in ("in.f", "mv")) && (masked || k != "m"))
-    sv = hex_solver(op, inp; inner = Multigrid(), rule)
-    rebuild!(sv)
-    lift!(sv)
-    act = field(sv, lkey(0, "active")) .!= 0
-    copyto!(field(sv, lkey(0, "x")), (rand(Xoshiro(3), length(act)) .- 0.5) .* act)
-    rs = Float64[]
-    for _ in 1:30
-        solve!(sv; host = true, budget = 1)
-        push!(rs, scalars(sv).rnorm)
-    end
-    return (rs[30] / rs[5])^(1 / 25), sv.ctx.L, sv.ctx.lb
 end
 
+@testitem "F3-20: multigrid on hex grids: the residual reduction per V-cycle" setup = [LF_solvers_hex] tags = [:latticefields, :solvers] begin
 @testset "F3-20: multigrid on hex grids: the residual reduction per V-cycle" begin
     # 7×6 coarsens two levels, 13×11 and 12×8 three (odd axes: the last coarse cell takes three
     # children); 160×150 has generated levels above the bottom (lb = 2). Measured (F3-20 log):
@@ -170,7 +180,9 @@ end
     @test hex_factor((7, 6); rule = RuleWeights(; diagonal = 0.0))[1] > 0.45
     @test hex_factor((13, 11); rule = RuleWeights(; diagonal = 0.0))[1] > 1
 end
+end
 
+@testitem "F3-20: the tangent solve of the diagonal face equals a finite difference" setup = [LF_solvers_hex] tags = [:latticefields, :solvers] begin
 @testset "F3-20: the tangent solve of the diagonal face equals a finite difference" begin
     op = CellOperator((12, 10); hex = true, face = (1.0, 0.8, 0.6), shift = 0.4,
         robin = ((nothing, nothing), ((1.0, 0.5, 0.7), nothing)), dirichlet = ((nothing, 1.0), (nothing, nothing)))
@@ -186,4 +198,5 @@ end
     steady!(s2)
     fd = (solver_solution(s2) .- u) ./ ε
     @test norm(du .- fd) <= 1e-4 * norm(fd)
+end
 end

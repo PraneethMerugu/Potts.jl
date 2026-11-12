@@ -2,6 +2,16 @@
 # split on the device, device vs host executor, one-ulp negative control), and the owned and
 # ODE problems on device arrays against the host. Included by runtests.jl when
 # LATTICEFIELDS_GPU is set (device_backend.jl defines DEV).
+
+@testsetup module LF_problems_device
+using Test, LatticeFields
+include("shared/lf_runner.jl")
+include("exec_helpers.jl")
+include("host_runner.jl")
+include("fixtures.jl")
+include("device_backend.jl")
+include("shared/problems_owned.jl")
+include("shared/problems_x1_exact.jl")
 using LatticeFields.Problems: FieldStore, FieldProblem, ExplicitEuler, ode_problem,
                               LatticeIndex, FieldSlot
 using CommonSolve: solve, init, step!
@@ -19,7 +29,10 @@ function step_on(backend, s, sp, X, P)
     return reduce(vcat, [reinterpret(UInt32, Array(Problems.current(st, s, "u$k")))
                          for k in eachindex(X)])
 end
+include("shared/export_all.jl")
+end
 
+@testitem "x1 device (gpu): K=K T=T length(dims)D" setup = [LF_problems_device] tags = [:latticefields, :problems, :gpu_only] begin
 @testset "x1 device ($gpu): K=$K T=$T $(length(dims))D" for (dims, K, T) in (
     ((64, 48), 4, 3), ((64, 48), 8, 0), ((16, 12, 10), 4, 3))
     X, P = inputs(dims, K), speciesP(K, T)
@@ -37,7 +50,9 @@ end
     Xp[1][length(X[1]) ÷ 2 + 7] = nextfloat(Xp[1][length(X[1]) ÷ 2 + 7])
     @test count(step_on(DEV, s, fused, Xp, P) .!= ref) > 0          # negative control
 end
+end
 
+@testitem "owned and ODE problems on gpu" setup = [LF_problems_device] tags = [:latticefields, :problems, :gpu_only] begin
 @testset "owned and ODE problems on $gpu" begin
     dims = (40, 30)
     u0 = rand(Xoshiro(5), Float32, prod(dims))
@@ -72,7 +87,9 @@ end
     KA.synchronize(DEV)
     @test Array(dud) == duh
 end
+end
 
+@testitem "Dual{Float32} parameters on gpu (P5)" setup = [LF_problems_device] tags = [:latticefields, :problems, :gpu_only] begin
 @testset "Dual{Float32} parameters on $gpu (P5)" begin
     dims = (16, 12)
     u0 = rand(Xoshiro(7), Float32, prod(dims))
@@ -94,7 +111,9 @@ end
         @test eltype(ud) == Float64 && isapprox(ud, uh; rtol = 1e-13)
     end
 end
+end
 
+@testitem "Dual{Float64} into a Float32 ODE on gpu: the message names the fix (review round 5)" setup = [LF_problems_device] tags = [:latticefields, :problems, :gpu_only] begin
 @testset "Dual{Float64} into a Float32 ODE on $gpu: the message names the fix (review round 5)" begin
     if !Exec.supports(DEV, Float64)
         dims = (8, 6)
@@ -108,4 +127,5 @@ end
         end
         @test err isa ArgumentError && occursin("Float32 parameters", err.msg)
     end
+end
 end

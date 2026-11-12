@@ -1,11 +1,34 @@
 # Generated FV-style 5- and 7-point stencils through the host runner, against hand loops
 # (bit-exact where the operation order is the same), a naive loop and the debug emission.
 
+@testsetup module LF_compile_stencils
+using Test, LatticeFields
+include("../host_runner.jl")
+include("../fixtures.jl")
 """
 Does an expression hold a Float64 literal or the symbol `Float64`?
 """
 has_f64(x) = x isa Float64 || x === :Float64 || (x isa Expr && any(has_f64, x.args))
 
+"""
+2D 9-point / 3D 27-point box stencil (the Q1-like access pattern), periodic.
+"""
+function boxprog(dims)
+    N = length(dims)
+    pb = ProgramBuilder(Grid(dims); periodic = ntuple(_ -> true, N), nparams = 1)
+    u = field!(pb, "u")
+    v = field!(pb, "v")
+    kb = kernel(pb)
+    acc = sum(load(kb, u; offset = Tuple(o)) * (1 + sum(abs, Tuple(o)))
+    for o in CartesianIndices(ntuple(_ -> -1:1, N)))
+    store(kb, v, param(kb, 1) * acc)
+    add!(pb, kb, "box")
+    return pb
+end
+include("../shared/export_all.jl")
+end
+
+@testitem "5-point 2D, periodic: bit-exact with the hand loop" setup = [LF_compile_stencils] tags = [:latticefields, :compile] begin
 @testset "5-point 2D, periodic: bit-exact with the hand loop" begin
     rng = Xoshiro(1)
     u0 = rand(rng, Float32, 7, 5)
@@ -26,7 +49,9 @@ has_f64(x) = x isa Float64 || x === :Float64 || (x isa Expr && any(has_f64, x.ar
     @test reinterpret(UInt32, run_field(s, sp, u1, P; steps = 3)) !=
           reinterpret(UInt32, ref)
 end
+end
 
+@testitem "7-point 3D, periodic / no flux / Dirichlet: bit-exact with the hand loop" setup = [LF_compile_stencils] tags = [:latticefields, :compile] begin
 @testset "7-point 3D, periodic / no flux / Dirichlet: bit-exact with the hand loop" begin
     rng = Xoshiro(2)
     u0 = rand(rng, Float32, 6, 5, 4)
@@ -49,23 +74,9 @@ end
     s64, sp64 = build(diffusion3(); options = CompileOptions(; I = Int64))
     @test run_field(s64, sp64, u0, P; steps = 3) == got
 end
-
-"""
-2D 9-point / 3D 27-point box stencil (the Q1-like access pattern), periodic.
-"""
-function boxprog(dims)
-    N = length(dims)
-    pb = ProgramBuilder(Grid(dims); periodic = ntuple(_ -> true, N), nparams = 1)
-    u = field!(pb, "u")
-    v = field!(pb, "v")
-    kb = kernel(pb)
-    acc = sum(load(kb, u; offset = Tuple(o)) * (1 + sum(abs, Tuple(o)))
-    for o in CartesianIndices(ntuple(_ -> -1:1, N)))
-    store(kb, v, param(kb, 1) * acc)
-    add!(pb, kb, "box")
-    return pb
 end
 
+@testitem "Cartesian index strategy for box stencils" setup = [LF_compile_stencils] tags = [:latticefields, :compile] begin
 @testset "Cartesian index strategy for box stencils" begin
     for dims in ((9, 7), (5, 4, 3))
         rng = Xoshiro(3)
@@ -82,11 +93,14 @@ end
         @test runbox(s, sp) ≈ runbox(sd, spd) rtol = 1e-5
     end
 end
+end
 
+@testitem "warm host launch allocates nothing" setup = [LF_compile_stencils] tags = [:latticefields, :compile] begin
 @testset "warm host launch allocates nothing" begin
     s, sp = build(diffusion3())
     st = HostStore(s)
     prep = prepare(s, sp.launches[1], st, (0.1, 1.0, 1.0, 0.0, 1.0))
     run!(prep)
     @test (@allocated run!(prep)) == 0
+end
 end

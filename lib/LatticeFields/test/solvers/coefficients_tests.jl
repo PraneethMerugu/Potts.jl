@@ -3,25 +3,15 @@
 # one primal solve and one tangent solve with homogeneous boundary values, against finite
 # differences, with the negative control that keeps the primal boundary values.
 
-using LatticeFields.Solvers: set_coefficients!, tangent!, coef_values
-
-"""
-`op` with keyword fields replaced (the test's own rebuild of a `CellOperator`).
-"""
-function with(op; kw...)
-    f(k) = get(kw, k, getfield(op, k))
-    CellOperator(op.dims; periodic = op.periodic, face = f(:face), shift = f(:shift),
-        mask = op.mask, value = f(:value), dirichlet = f(:dirichlet))
+@testsetup module LF_solvers_coefficients
+using Test, LatticeFields
+include("../host_runner.jl")
+include("../solvers_cases.jl")
+include("../shared/solvers_coefficients.jl")
+include("../shared/export_all.jl")
 end
 
-tight(inner_rtol) = DevicePCG(; budget = 64, rtol = inner_rtol)
-
-function primal_solve(case, T = Float64; kw...)
-    sv = case_solver(case, T; inner = tight(1e-12), kw...)
-    steady!(sv)
-    return sv, Solvers.solver_solution(sv)
-end
-
+@testitem "coefficients are parameters: a value change does not recompile" setup = [LF_solvers_coefficients] tags = [:latticefields, :solvers] begin
 @testset "coefficients are parameters: a value change does not recompile" begin
     op, inputs = box_case(64, 32; s = 0.01)
     sv, _ = primal_solve((op, inputs))
@@ -38,27 +28,9 @@ end
     @test_throws ArgumentError set_coefficients!(sv,
         with(op; dirichlet = ((0.0, nothing), (nothing, nothing))))
 end
-
-"""
-Central finite difference of the primal solution in coefficient `coef` (step `δ`).
-"""
-function fd(case, coef, δ)
-    op, inputs = case
-    function up(h)
-        coef === :shift && return with(op; shift = op.shift + h)
-        coef === :value && return with(op; value = op.value + h)
-        if coef[1] === :face
-            return with(op; face = ntuple(a -> a == coef[2] ? op.face[a] + h : op.face[a],
-                length(op.face)))
-        end
-        return with(op; dirichlet = ((op.dirichlet[1][1], op.dirichlet[1][2] + h),
-            op.dirichlet[2]))
-    end
-    (primal_solve((up(δ), inputs))[2] .- primal_solve((up(-δ), inputs))[2]) ./ (2δ)
 end
 
-relmax(a, b) = maximum(abs, a .- b) / maximum(abs, b)
-
+@testitem "tangent solves match finite differences (homogeneous boundary values)" setup = [LF_solvers_coefficients] tags = [:latticefields, :solvers] begin
 @testset "tangent solves match finite differences (homogeneous boundary values)" begin
     box = box_case(64, 32; s = 0.01)
     sv, u = primal_solve(box)
@@ -109,4 +81,5 @@ relmax(a, b) = maximum(abs, a .- b) / maximum(abs, b)
     @test sp.deflate
     @test relmax(tangent!(sp, up, :shift), fd(per, :shift, 1e-6)) <= 1e-5
     @test_throws ArgumentError tangent!(sp, up, :value => 1)
+end
 end

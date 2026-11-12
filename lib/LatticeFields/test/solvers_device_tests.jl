@@ -3,6 +3,13 @@
 # solver of unanchored weak-reaction groups (user ruling, D-C7b): `:done` at weak reaction where
 # the backend has Float64, the documented Float32 fallback (and the refusal) where it has not.
 
+@testsetup module LF_solvers_device
+using Test, LatticeFields
+include("shared/lf_runner.jl")
+include("exec_helpers.jl")
+include("host_runner.jl")
+include("solvers_cases.jl")
+include("device_backend.jl")
 const KAd = LatticeFields.Schedule.KernelAbstractions
 # `DEV` and the GPU package come from device_backend.jl (loaded once by runtests.jl)
 devconvert(x) = gpu == "metal" ? Metal.mtlconvert(x) : AMDGPU.rocconvert(x)
@@ -38,7 +45,10 @@ function dev_solved(case, exec; T = Float32, kw...)
     k = steady!(sv)
     return k, Array(field(sv, Solvers.solution_key(sv))), scalars(sv), sv
 end
+include("shared/export_all.jl")
+end
 
+@testitem "device Float32 solves equal the host form bitwise, and repeat" setup = [LF_solvers_device] tags = [:latticefields, :solvers, :gpu_only] begin
 @testset "device Float32 solves equal the host form bitwise, and repeat" begin
     for (name, s, kw) in (("disk128", 0.022, (;)), (
         "per128", 0.022, (; solver_T = Float32)),
@@ -52,7 +62,9 @@ end
         @test d1[2] == d2[2]
     end
 end
+end
 
+@testitem "no Float64 in device code: the walk on device argument types" setup = [LF_solvers_device] tags = [:latticefields, :solvers, :gpu_only] begin
 @testset "no Float64 in device code: the walk on device argument types" begin
     for (c, kw) in (("disk128", (;)), ("disk128", (; inner = Multigrid())),
         ("per128", (; solver_T = Float32)), ("sphere42", (;)))
@@ -72,7 +84,9 @@ end
         @test isempty(bad) || (foreach(println, unique(bad)); false)
     end
 end
+end
 
+@testitem "unanchored weak-reaction groups: Float64 solver on device (gpu)" setup = [LF_solvers_device] tags = [:latticefields, :solvers, :gpu_only] begin
 @testset "unanchored weak-reaction groups: Float64 solver on device ($gpu)" begin
     case = named_case("per256", 5.5e-6)
     if gpu == "metal"                      # no Float64: documented Float32 fallback, refusal
@@ -87,7 +101,9 @@ end
         @test k == h[1] && maximum(abs, u .- h[2]) <= 2eps(Float32) * maximum(abs, h[2])
     end
 end
+end
 
+@testitem "Exec as the solver executor on gpu: capability, not policy (P5 C2-1)" setup = [LF_solvers_device] tags = [:latticefields, :solvers, :gpu_only] begin
 @testset "Exec as the solver executor on $gpu: capability, not policy (P5 C2-1)" begin
     # `Schedule.supports(DEV, Float64)` is the hardware capability (`Exec.supports`), never the
     # Float32 default-float policy: on ROCm `:auto` keeps the periodic Float64 solve
@@ -102,4 +118,5 @@ end
         h = dev_solved(case, DevExec())
         @test k == h[1] && maximum(abs, u .- h[2]) <= 2eps(Float32) * maximum(abs, h[2])
     end
+end
 end

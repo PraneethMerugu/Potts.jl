@@ -1,11 +1,19 @@
 # Number types in emitted bodies (P5 role model): the conversion primitives, the Float64
 # check of backends without doubles (any Float64-based value type, Duals included), lane
 # classes, and casts through `lanecast`.
+
+@testsetup module LF_compile_numbers
+using Test, LatticeFields
+include("../host_runner.jl")
+include("../fixtures.jl")
 using ForwardDiff: Dual
 using LatticeFields.Compile: lanecast, valtype, primal, withvaltype, promote_dual, lanetype,
                              check_types
 using LatticeFields.IR: IRError, F16, F32, F64
+include("../shared/export_all.jl")
+end
 
+@testitem "number primitives" setup = [LF_compile_numbers] tags = [:latticefields, :compile] begin
 @testset "number primitives" begin
     d = Dual{Nothing}(1.5, 2.0, 3.0)
     @test lanecast(Float32, 1.5) === 1.5f0
@@ -21,7 +29,9 @@ using LatticeFields.IR: IRError, F16, F32, F64
     @test lanetype(F64, BigFloat, :state) == BigFloat && lanetype(F32, Float64, :state) == Float64 &&
           lanetype(F16, Float64, :state) == Float16                               # problems: value classes
 end
+end
 
+@testitem "backends without Float64: any Float64-based value type is refused, naming the field" setup = [LF_compile_numbers] tags = [:latticefields, :compile] begin
 @testset "backends without Float64: any Float64-based value type is refused, naming the field" begin
     s = semantic(program(diffusion2()))
     k = s.kernels[1]
@@ -37,7 +47,9 @@ end
         @test err isa IRError && occursin("u", err.msg) && occursin("Float64", err.msg)
     end
 end
+end
 
+@testitem "casts go through lanecast; :state lanes hold the value type" setup = [LF_compile_numbers] tags = [:latticefields, :compile] begin
 @testset "casts go through lanecast; :state lanes hold the value type" begin
     s = semantic(program(diffusion2()))
     k = s.kernels[1]
@@ -47,11 +59,13 @@ end
     state = compile_kernel(s, k, CompileOptions(; T = Float64, lanes = :state))   # the lane holds Float64
     @test !occursin("lanecast", string(state.body))
 end
+end
 
 # F3-14 (FE-17): a declared storage (`fixed`) holds its own type under the state lanes, a
 # compute type wider than the storage loads and stores through `lanecast` (`S`), and a declared
 # Float64 registers the kernel in Exec's D-157 registry. Base f5641ce1: no `fixed`, no `S`, no
 # registry (every test errors).
+@testitem "F3-14: fixed lanes, a compute type wider than the storage, the Float64 registry" setup = [LF_compile_numbers] tags = [:latticefields, :compile] begin
 @testset "F3-14: fixed lanes, a compute type wider than the storage, the Float64 registry" begin
     @test lanetype(F64, Float32, :state, true) == Float64 && lanetype(F32, Float64, :state, true) == Float32
     @test lanetype(F64, Float32, :state, false) == Float32                         # control: the value class
@@ -77,4 +91,5 @@ end
     compile_kernel(s, k, CompileOptions(; T = Float32, lanes = :state, declared = true))   # no Float64: none
     @test isempty(Ex.FLOAT64_KERNELS)
     union!(Ex.FLOAT64_KERNELS, saved)
+end
 end

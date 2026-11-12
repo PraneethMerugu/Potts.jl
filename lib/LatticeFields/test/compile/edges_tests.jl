@@ -1,6 +1,10 @@
 # Edge cases: idempotent semantic passes, level checks, the automatic Int64 index, throw-free
 # domain-restricted math and lazy COND, multi-component planes, rounded forwarding.
 
+@testsetup module LF_compile_edges
+using Test, LatticeFields
+include("../host_runner.jl")
+include("../fixtures.jl")
 using LatticeFields.IR: IRError, ImmersedRule, mask!, constant, cond
 
 errmsg(f) =
@@ -10,7 +14,10 @@ errmsg(f) =
     catch e
         e isa IRError ? e.msg : rethrow()
     end
+include("../shared/export_all.jl")
+end
 
+@testitem "semantic passes are idempotent" setup = [LF_compile_edges] tags = [:latticefields, :compile] begin
 @testset "semantic passes are idempotent" begin
     pb = ProgramBuilder(Grid((6, 5)); periodic = (true, false), nparams = 1)
     u = field!(pb, "u"; buffers = 2)
@@ -26,7 +33,9 @@ errmsg(f) =
     @test fingerprint(s1) == fingerprint(p)
     @test !any(a -> a.policy == IR.RESOLVE, s1.kernels[1].accesses)
 end
+end
 
+@testitem "levels: accesses and stores must match the field's levels" setup = [LF_compile_edges] tags = [:latticefields, :compile] begin
 @testset "levels: accesses and stores must match the field's levels" begin
     pb = ProgramBuilder(Grid((8, 8)); periodic = (true, true), levels = 2)
     fine = field!(pb, "fine"; role = :input)
@@ -43,7 +52,9 @@ end
     add!(pb, kb, "wrong_read")
     @test occursin("access to `fine` at level 1", errmsg(() -> semantic(program(pb))))
 end
+end
 
+@testitem "Int64 site index above 2³¹ − 1 elements" setup = [LF_compile_edges] tags = [:latticefields, :compile] begin
 @testset "Int64 site index above 2³¹ − 1 elements" begin
     pb = ProgramBuilder(Grid((50_000, 50_000)); periodic = (true, true))
     u, v = field!(pb, "u"; role = :input), field!(pb, "v"; role = :output)
@@ -55,7 +66,9 @@ end
     @test compile_kernel(semantic(program(diffusion2())), semantic(program(diffusion2())).kernels[1]).I ==
           Int32
 end
+end
 
+@testitem "domain-restricted math returns NaN; COND is lazy" setup = [LF_compile_edges] tags = [:latticefields, :compile] begin
 @testset "domain-restricted math returns NaN; COND is lazy" begin
     pb = ProgramBuilder(Grid((4, 3)))
     u = field!(pb, "u"; role = :input)
@@ -78,7 +91,9 @@ end
     @test all(isnan, current(st, s, "b")[uv .< 0]) &&
           current(st, s, "b")[uv .>= 0] == sqrt.(uv[uv .>= 0])
 end
+end
 
+@testitem "multi-component fields are planes; two-buffer partial writes are refused" setup = [LF_compile_edges] tags = [:latticefields, :compile] begin
 @testset "multi-component fields are planes; two-buffer partial writes are refused" begin
     pb = ProgramBuilder(Grid((5, 4)); periodic = (true, true))
     v = field!(pb, "v"; shape = [2], buffers = 2)
@@ -101,7 +116,9 @@ end
     add!(pb, kb, "half")
     @test occursin("all its components", errmsg(() -> semantic(program(pb))))
 end
+end
 
+@testitem "forwarding keeps the lane rounding (F16 aux, Float32 compute)" setup = [LF_compile_edges] tags = [:latticefields, :compile] begin
 @testset "forwarding keeps the lane rounding (F16 aux, Float32 compute)" begin
     pb = ProgramBuilder(Grid((7, 5)); periodic = (true, true), nparams = 1)
     u = field!(pb, "u"; role = :input)
@@ -120,4 +137,5 @@ end
         st = HostStore(s); copyto!(current(st, s, "u"), rand(Xoshiro(18), Float32, 35));
         run_step!(s, sp, st, (0.37,)); copy(current(st, s, "v")))
     @test exec(fused) == exec(split)
+end
 end

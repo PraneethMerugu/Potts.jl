@@ -4,6 +4,14 @@
 # compiled (function, argument types) pair.
 
 # fresh body types per testset, so no earlier compile is reused
+
+@testsetup module LF_exec_device
+using Test, LatticeFields
+include("shared/lf_runner.jl")
+include("exec_helpers.jl")
+include("host_runner.jl")
+include("device_backend.jl")
+include("shared/exec.jl")
 struct Put{K} end
 (::Put{K})(i, a) where {K} = (@inbounds a[i] = Float32(K); nothing)            # i ≤ n ≤ length(a)
 
@@ -16,6 +24,13 @@ function compiles(f)
     return instances() - c0
 end
 
+# v3 §4.4 asks C2 to confirm this on KA 0.9.43: a static ndrange is part of the kernel type,
+# so each distinct ndrange is expected to be its own compile; a dynamic one is not.
+const NDRANGE_COMPILES = Dict{Symbol, Vector{Int}}()
+include("shared/export_all.jl")
+end
+
+@testitem "Exec device (gpu): the guard stops at n" setup = [LF_exec_device] tags = [:latticefields, :exec, :gpu_only] begin
 @testset "Exec device ($gpu): the guard stops at n" begin
     for n in (1, 255, 256, 257, 1000)
         a = devarray(zeros(Float32, n + 300))
@@ -30,7 +45,9 @@ end
         end
     end
 end
+end
 
+@testitem "Exec device (gpu): compile! compiles the launch's kernel and writes nothing" setup = [LF_exec_device] tags = [:latticefields, :exec, :gpu_only] begin
 @testset "Exec device ($gpu): compile! compiles the launch's kernel and writes nothing" begin
     a = devarray(ones(Float32, 300))
     @test compiles(() -> Exec.compile!(DEV, Put{3}(), (a,))) == 1
@@ -50,10 +67,9 @@ end
         @test Array(b) == fill(static ? 5.0f0 : 6.0f0, 300)
     end
 end
+end
 
-# v3 §4.4 asks C2 to confirm this on KA 0.9.43: a static ndrange is part of the kernel type,
-# so each distinct ndrange is expected to be its own compile; a dynamic one is not.
-const NDRANGE_COMPILES = Dict{Symbol, Vector{Int}}()
+@testitem "Exec device (gpu): compiles per distinct ndrange" setup = [LF_exec_device] tags = [:latticefields, :exec, :gpu_only] begin
 @testset "Exec device ($gpu): compiles per distinct ndrange" begin
     a = devarray(zeros(Float32, 4096))
     # static: sizes 256 and 512 and 1024 (multiples of 64: the ndranges differ), then 256 again
@@ -67,7 +83,9 @@ const NDRANGE_COMPILES = Dict{Symbol, Vector{Int}}()
     # same ndrange from a different n (both round up to 256): no new compile
     @test compiles(Exec.Launch(DEV, Put{7}(), (a,), 200; workgroupsize = 64, static = true)) == 0
 end
+end
 
+@testitem "Exec device (gpu): compile_all! compiles a set on host tasks" setup = [LF_exec_device] tags = [:latticefields, :exec, :gpu_only] begin
 @testset "Exec device ($gpu): compile_all! compiles a set on host tasks" begin
     a = devarray(zeros(Float32, 512))
     ls = (Exec.Launch(DEV, Put{11}(), (a,), 512; workgroupsize = 64, static = true),
@@ -79,7 +97,9 @@ end
     @test compiles(() -> (foreach(l -> l(), ls); Exec.launch!(DEV, Put{14}(), 512, (a,)))) == 0
     @test Array(a) == fill(14.0f0, 512)
 end
+end
 
+@testitem "Exec device (gpu): the plan walk adds no host bytes" setup = [LF_exec_device] tags = [:latticefields, :exec, :gpu_only] begin
 @testset "Exec device ($gpu): the plan walk adds no host bytes" begin
     a = devarray(zeros(Float32, 1024))
     b = devarray(zeros(Float32, 1024))
@@ -95,7 +115,9 @@ end
     @info "plan of 40 launches on $gpu: $(bytes_plan) B; the launches one by one: $(bytes_each) B"
     @test bytes_plan <= bytes_each
 end
+end
 
+@testitem "Exec device (gpu): the Schedule contract's Cartesian form" setup = [LF_exec_device] tags = [:latticefields, :exec, :gpu_only] begin
 @testset "Exec device ($gpu): the Schedule contract's Cartesian form" begin
     G = (; n = Int32(70), dims = (Int32(7), Int32(10)), rt = ())
     b = devarray(zeros(Float32, 100))
@@ -108,4 +130,5 @@ end
     l = Exec.Launch(DEV, lin_body, ((a,), (2.0f0,), G), (Int(G.n),); workgroupsize = (64,), static = true)
     l()
     @test Array(a) == [2.0f0 .* (1:70); zeros(Float32, 30)]
+end
 end

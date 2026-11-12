@@ -2,8 +2,16 @@
 # the host executor agree bit for bit with the padded oracle loops (every `run_step!` of the
 # suite checks it); here the check itself is shown to fail on a one-ulp difference, and the
 # binding is shown to follow the spec (static ndrange, n = G.n, Cartesian wrapper).
-using Random: Xoshiro
 
+@testsetup module LF_schedule_exec_binding
+using Test, LatticeFields
+include("../host_runner.jl")
+include("../fixtures.jl")
+using Random: Xoshiro
+include("../shared/export_all.jl")
+end
+
+@testitem "Exec binding: oracle comparison detects one ulp (negative control)" setup = [LF_schedule_exec_binding] tags = [:latticefields, :schedule] begin
 @testset "Exec binding: oracle comparison detects one ulp (negative control)" begin
     s, sp = build(diffusion2((9, 7)))
     st = HostStore(s; init = (k, A) -> (A .= rand(Xoshiro(3), Float32, length(A))))
@@ -18,7 +26,9 @@ using Random: Xoshiro
     r[17] = nextfloat(r[17])
     @test !_same(u, r)                                          # one ulp is a difference
 end
+end
 
+@testitem "Exec binding follows the launch description" setup = [LF_schedule_exec_binding] tags = [:latticefields, :schedule] begin
 @testset "Exec binding follows the launch description" begin
     s, sp = build(diffusion2((9, 7)))
     l = only(sp.launches)
@@ -48,4 +58,5 @@ end
     Lx()
     @test reshape(current(stx, sx, "v"), 6, 5)[1, 1] ==
           2 * reshape(Float32.(1:30), 6, 5)[2, 2]
+end
 end

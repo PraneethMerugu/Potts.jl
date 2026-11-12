@@ -2,28 +2,16 @@
 # nothing (PG-13: also a plan of more than 32 launches), FieldProblem steps equal the
 # hand loop, slot parity alternates, the face check refuses degenerate Robin parameters,
 # and the ODE right side equals the stepper's rate.
-using LatticeFields.Problems: FieldProblem, ExplicitEuler, BoundStep, LatticeIndex,
-                              FieldSlot,
-                              ode_problem, face_checks, check_faces, degenerate_face
-using LatticeFields.IR: runtime
-using CommonSolve: solve, init, step!
-using SciMLBase: SciMLBase
 
-"""
-2D periodic diffusion stepped with `dt = G.rt[2]` (the owned stepper form).
-"""
-function euler2(dims; rate = false, storage = F32)
-    pb = ProgramBuilder(Grid(dims); periodic = (true, true), nparams = 1)
-    u = field!(pb, "u"; buffers = rate ? 1 : 2, storage)
-    g = rate ? field!(pb, "∂u"; role = :scratch, storage) : u
-    kb = kernel(pb)
-    c = load(kb, u)
-    r = param(kb, 1) * (sum(load(kb, u; offset = o) for o in OFFS2) - 4c)
-    store(kb, g, rate ? r : c + runtime(kb, 2) * r)
-    add!(pb, kb, "diffuse")
-    return program(pb)
+@testsetup module LF_problems_owned
+using Test, LatticeFields
+include("../host_runner.jl")
+include("../fixtures.jl")
+include("../shared/problems_owned.jl")
+include("../shared/export_all.jl")
 end
 
+@testitem "FieldProblem: steps equal the hand loop; warm steps allocate nothing" setup = [LF_problems_owned] tags = [:latticefields, :problems] begin
 @testset "FieldProblem: steps equal the hand loop; warm steps allocate nothing" begin
     dims = (12, 10)
     u0 = rand(Xoshiro(5), Float32, prod(dims))
@@ -45,7 +33,9 @@ end
     step!(integ)
     @test (@allocated step!(integ)) == 0
 end
+end
 
+@testitem "substeps follow the stability bound at the current parameters" setup = [LF_problems_owned] tags = [:latticefields, :problems] begin
 @testset "substeps follow the stability bound at the current parameters" begin
     dims = (8, 8)
     ix = LatticeIndex(; variables = [:u => FieldSlot(1:prod(dims), dims)], parameters = [:D => 1])
@@ -66,7 +56,9 @@ end
     @test S(prob, ExplicitEuler(; dt = 0.5, substeps = 1)) == ceil(Int, 0.5 * 4 / 1.8) == 2
     @test S(prob, ExplicitEuler(; dt = 0.5, substeps = 5)) == 5
 end
+end
 
+@testitem "PG-13: a plan of more than 32 launches allocates nothing" setup = [LF_problems_owned] tags = [:latticefields, :problems] begin
 @testset "PG-13: a plan of more than 32 launches allocates nothing" begin
     pb = ProgramBuilder(Grid((8, 8)); periodic = (true, true), nparams = 1)
     fs = [field!(pb, "u$(lpad(k, 2, '0'))"; buffers = 2) for k in 1:40]
@@ -83,7 +75,9 @@ end
     @test (@allocated bs((1.0, 0.0))) == 0
     @test array(st, IR.fieldid(s, "u01"), :next)[1] == 1.0f0     # G.rt[1] reached the body
 end
+end
 
+@testitem "Robin faces: parameter checks" setup = [LF_problems_owned] tags = [:latticefields, :problems] begin
 @testset "Robin faces: parameter checks" begin
     pb = ProgramBuilder(Grid((4, 4)); periodic = (false, true), nparams = 2)
     u = field!(pb, "u"; buffers = 2)
@@ -106,7 +100,9 @@ end
     prob = FieldProblem(p, zeros(16), (0.0, 1.0), [1.0, 1.0]; state = ["u"], kind = :rate)
     @test_throws ArgumentError SciMLBase.remake(prob; p = [1.0, -2.0])
 end
+end
 
+@testitem "ODE form: the right side is the rate" setup = [LF_problems_owned] tags = [:latticefields, :problems] begin
 @testset "ODE form: the right side is the rate" begin
     dims = (12, 10)
     u0 = rand(Xoshiro(6), prod(dims))
@@ -123,7 +119,9 @@ end
     @test maximum(abs, du .- vec(0.5 .* (nb .- 4v))) < 1e-12
     @test (@allocated ode.f(du, ode.u0, ode.p, 0.0)) == 0
 end
+end
 
+@testitem "a U8 input takes 0…255 unless declared Bool (F1 round 5)" setup = [LF_problems_owned] tags = [:latticefields, :problems] begin
 @testset "a U8 input takes 0…255 unless declared Bool (F1 round 5)" begin
     # round 4: every U8 input was held to 0/1, so a raw U8 IR input refused 7
     pb = ProgramBuilder(Grid((3, 3)); nparams = 0)
@@ -145,4 +143,5 @@ end
     err = cv(fill(7, 9); bool = true)
     @test occursin("a Bool mask", err) && occursin("got 7 at site (1, 1)", err)
     @test cv([true, false, 1, 0, 1, 0, 1, 0, 1]; bool = true) == ""
+end
 end

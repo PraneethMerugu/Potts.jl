@@ -1,10 +1,15 @@
 # Builder self-tests: hash-consing, flattening, structural operand order, canonical finish,
 # typing, and the refusals of the verifier and the legality pass.
 
-using LatticeFields.IR: Ex, KernelBuilder, IRError, verify, ADD, MUL, LOAD, REAL, nodeargs,
-                        scmp
-using LatticeFields.Compile: check_types
+@testsetup module LF_ir_builder
+using Test, LatticeFields
+include("../host_runner.jl")
+include("../fixtures.jl")
+include("../shared/ir_builder.jl")
+include("../shared/export_all.jl")
+end
 
+@testitem "interning and canonical order" setup = [LF_ir_builder] tags = [:latticefields, :ir] begin
 @testset "interning and canonical order" begin
     pb = ProgramBuilder(Grid((4, 4)); periodic = (true, true), nparams = 2)
     u = field!(pb, "u")
@@ -36,7 +41,9 @@ using LatticeFields.Compile: check_types
     @test sprint(IR.print_program, p1) == sprint(IR.print_program, p2)
     @test p1.kernels[1].nodes == p2.kernels[1].nodes
 end
+end
 
+@testitem "typing: integer lanes and casts" setup = [LF_ir_builder] tags = [:latticefields, :ir] begin
 @testset "typing: integer lanes and casts" begin
     pb = ProgramBuilder(Grid((3, 3)))
     k8 = field!(pb, "k"; storage = U8, role = :input)
@@ -49,19 +56,9 @@ end
     @test_throws ErrorException IR.bittest(load(kb, x), 1)  # BITTEST needs an unsigned operand
     @test_throws ErrorException IR.call!(kb, :evalfile, m.id) # CALL whitelist
 end
-
-"""
-A one-kernel program with stores `stores(kb, ids...)`; fields from `decls`.
-"""
-function tiny(decls, body; periodic = (true, true))
-    pb = ProgramBuilder(Grid((4, 3)); periodic, nparams = 1)
-    ids = [field!(pb, k; kw...) for (k, kw) in decls]
-    kb = kernel(pb)
-    body(kb, ids...)
-    add!(pb, kb, "k")
-    return program(pb)
 end
 
+@testitem "legality and verifier refusals" setup = [LF_ir_builder] tags = [:latticefields, :ir] begin
 @testset "legality and verifier refusals" begin
     msg(f) =
         try
@@ -99,4 +96,5 @@ end
         msg(() -> check_types(p, p.kernels[1],
             CompileOptions(; float64_ok = false))))
     @test check_types(p, p.kernels[1], CompileOptions()) === nothing
+end
 end

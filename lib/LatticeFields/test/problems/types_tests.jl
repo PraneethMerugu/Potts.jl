@@ -2,46 +2,16 @@
 # against finite differences, hoisted time, init-written aux fields in every ODE variant and
 # after parameter changes, and the refusal of an explicit options.T that differs from u0.
 # (The conversion primitives and the Float64 check are in compile/numbers.jl.)
+
+@testsetup module LF_problems_types
+using Test, LatticeFields
+include("../host_runner.jl")
+include("../fixtures.jl")
+include("../shared/problems_owned.jl")
 using ForwardDiff: ForwardDiff, Dual
 using OrdinaryDiffEqRosenbrock: Rodas5P
 using SymbolicIndexingInterface: setp
 using LatticeFields.IR: F32, F64
-
-@testset "Dual parameters through FieldProblem (vs finite differences)" begin
-    dims = (8, 6)
-    u0 = rand(Xoshiro(3), prod(dims))
-    ix = LatticeIndex(; variables = [:u => FieldSlot(1:prod(dims), dims)], parameters = [:D => 1])
-    prob = FieldProblem(euler2(dims; storage = F64), u0, (0.0, 0.2), [0.05]; state = ["u"],
-        kind = :rate, index = ix)
-    alg = ExplicitEuler(; dt = 0.05, substeps = 1)
-    J(D) = sum(abs2, solve(SciMLBase.remake(prob; p = [D]), alg).u[end])
-    d = ForwardDiff.derivative(J, 0.05)
-    h = 1e-6
-    @test isapprox(d, (J(0.05 + h) - J(0.05 - h)) / 2h; rtol = 1e-6) && d != 0
-    rp = SciMLBase.remake(prob; p = [Dual{Nothing}(0.05, 1.0)])
-    @test eltype(rp) == Dual{Nothing, Float64, 1} && rp.step === prob.step   # same value type: same plans
-    # a Float32 lane under Duals stores Dual{Float32}
-    p32 = FieldProblem(euler2(dims), Float32.(u0), (0.0, 0.2), [0.05]; state = ["u"], kind = :rate, index = ix)
-    i32 = init(SciMLBase.remake(p32; p = [Dual{Nothing}(0.05, 1.0)]), alg)
-    @test eltype(i32.store.flat[1]) == Dual{Nothing, Float32, 1}
-end
-
-@testset "hoisted time: a parameter-and-t subtree is derived on the host per launch" begin
-    pb = ProgramBuilder(Grid((4, 4)); periodic = (true, true), nparams = 1)
-    u = field!(pb, "u"; buffers = 2, storage = F32)
-    kb = kernel(pb)
-    store(kb, u, load(kb, u) + runtime(kb, 2) * (param(kb, 1) * runtime(kb, 1)))
-    add!(pb, kb, "src")
-    s = semantic(program(pb))
-    ck = only(plan(s; options = CompileOptions(; T = Float32)).launches).kernel
-    @test ck.timed && !occursin("G.rt[1]", string(ck.body))
-    prob = FieldProblem(program(pb), zeros(Float32, 16), (1e5, 1e5 + 0.04), [3.0]; state = ["u"], kind = :rate)
-    sol = solve(prob, ExplicitEuler(; dt = 0.01, substeps = 1))
-    ref = sum(0.01 * 3.0 * (1e5 + 0.01k) for k in 0:3)
-    @test isapprox(sol.u[end][1], ref; rtol = 1e-6)
-    # a kernel with no t-dependent subtree is not re-derived
-    @test !only(plan(semantic(euler2((4, 4))); options = CompileOptions(; T = Float32)).launches).kernel.timed
-end
 
 """
 6×4 periodic: init kernel `a = p[2]` (a float aux field), rate `∂u = p[1] (Σ nb − 4u) − a u`
@@ -68,7 +38,50 @@ function rate_hand(u, D, k)
     lap = circshift(v, (1, 0)) .+ circshift(v, (-1, 0)) .+ circshift(v, (0, 1)) .+ circshift(v, (0, -1)) .- 4v
     return vec(D .* lap .- k .* v)
 end
+include("../shared/export_all.jl")
+end
 
+@testitem "Dual parameters through FieldProblem (vs finite differences)" setup = [LF_problems_types] tags = [:latticefields, :problems] begin
+@testset "Dual parameters through FieldProblem (vs finite differences)" begin
+    dims = (8, 6)
+    u0 = rand(Xoshiro(3), prod(dims))
+    ix = LatticeIndex(; variables = [:u => FieldSlot(1:prod(dims), dims)], parameters = [:D => 1])
+    prob = FieldProblem(euler2(dims; storage = F64), u0, (0.0, 0.2), [0.05]; state = ["u"],
+        kind = :rate, index = ix)
+    alg = ExplicitEuler(; dt = 0.05, substeps = 1)
+    J(D) = sum(abs2, solve(SciMLBase.remake(prob; p = [D]), alg).u[end])
+    d = ForwardDiff.derivative(J, 0.05)
+    h = 1e-6
+    @test isapprox(d, (J(0.05 + h) - J(0.05 - h)) / 2h; rtol = 1e-6) && d != 0
+    rp = SciMLBase.remake(prob; p = [Dual{Nothing}(0.05, 1.0)])
+    @test eltype(rp) == Dual{Nothing, Float64, 1} && rp.step === prob.step   # same value type: same plans
+    # a Float32 lane under Duals stores Dual{Float32}
+    p32 = FieldProblem(euler2(dims), Float32.(u0), (0.0, 0.2), [0.05]; state = ["u"], kind = :rate, index = ix)
+    i32 = init(SciMLBase.remake(p32; p = [Dual{Nothing}(0.05, 1.0)]), alg)
+    @test eltype(i32.store.flat[1]) == Dual{Nothing, Float32, 1}
+end
+end
+
+@testitem "hoisted time: a parameter-and-t subtree is derived on the host per launch" setup = [LF_problems_types] tags = [:latticefields, :problems] begin
+@testset "hoisted time: a parameter-and-t subtree is derived on the host per launch" begin
+    pb = ProgramBuilder(Grid((4, 4)); periodic = (true, true), nparams = 1)
+    u = field!(pb, "u"; buffers = 2, storage = F32)
+    kb = kernel(pb)
+    store(kb, u, load(kb, u) + runtime(kb, 2) * (param(kb, 1) * runtime(kb, 1)))
+    add!(pb, kb, "src")
+    s = semantic(program(pb))
+    ck = only(plan(s; options = CompileOptions(; T = Float32)).launches).kernel
+    @test ck.timed && !occursin("G.rt[1]", string(ck.body))
+    prob = FieldProblem(program(pb), zeros(Float32, 16), (1e5, 1e5 + 0.04), [3.0]; state = ["u"], kind = :rate)
+    sol = solve(prob, ExplicitEuler(; dt = 0.01, substeps = 1))
+    ref = sum(0.01 * 3.0 * (1e5 + 0.01k) for k in 0:3)
+    @test isapprox(sol.u[end][1], ref; rtol = 1e-6)
+    # a kernel with no t-dependent subtree is not re-derived
+    @test !only(plan(semantic(euler2((4, 4))); options = CompileOptions(; T = Float32)).launches).kernel.timed
+end
+end
+
+@testitem "init-written aux in every ODE variant and after parameter changes (review round 5)" setup = [LF_problems_types] tags = [:latticefields, :problems] begin
 @testset "init-written aux in every ODE variant and after parameter changes (review round 5)" begin
     u0 = rand(Xoshiro(11), 24)
     p0 = [0.1, 2.0]
@@ -120,7 +133,9 @@ end
     step!(integ)
     @test integ[:u] ≈ reshape(u0 .+ 0.05 .* rate_hand(u0, 0.1, 5.0), 6, 4)
 end
+end
 
+@testitem "an explicit options.T that differs from u0 is refused" setup = [LF_problems_types] tags = [:latticefields, :problems] begin
 @testset "an explicit options.T that differs from u0 is refused" begin
     @test_throws ArgumentError FieldProblem(euler2((8, 8)), zeros(64), (0.0, 0.1), [0.5]; state = ["u"],
         kind = :rate, options = CompileOptions(; T = Float32))
@@ -128,4 +143,5 @@ end
         kind = :rate, options = CompileOptions(; T = Float32)) isa FieldProblem
     @test_throws ArgumentError ode_problem(euler2((8, 8); rate = true), zeros(64), (0.0, 1.0), [0.5];
         state = ["u"], rates = Dict("u" => "∂u"), options = CompileOptions(; T = Float32))
+end
 end

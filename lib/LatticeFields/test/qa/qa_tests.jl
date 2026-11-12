@@ -1,6 +1,8 @@
 # QA: ExplicitImports, the name ban (no model, paper or author names in the package or its
 # tests), and no `@generated` in the source.
 
+@testsetup module LF_qa_qa
+using Test, LatticeFields
 using ExplicitImports: ExplicitImports, check_no_implicit_imports,
                        check_all_explicit_imports_are_public,
                        check_no_stale_explicit_imports,
@@ -22,7 +24,10 @@ const LF_NONPUBLIC = (
     :Tag,                                  # ForwardDiff's documented tag of a Dual (the extension's colored Jacobian and JVP, F4-07); no `public`
     :AbstractKrylovSubspaceMethod, :init_cacheval, :needs_concrete_A, :LinearCache  # LinearSolve's documented hooks of a new algorithm (the extension's `LatticePCG`, F4-08); no `public`
 )
+include("../shared/export_all.jl")
+end
 
+@testitem "ExplicitImports" setup = [LF_qa_qa] tags = [:latticefields, :qa] begin
 @testset "ExplicitImports" begin
     @test check_no_implicit_imports(LatticeFields) === nothing
     @test check_all_explicit_imports_are_public(LatticeFields; ignore = LF_NONPUBLIC) ===
@@ -32,23 +37,29 @@ const LF_NONPUBLIC = (
     @test check_all_qualified_accesses_are_public(LatticeFields; ignore = LF_NONPUBLIC) ===
           nothing
 end
+end
 
+@testitem "Aqua" setup = [LF_qa_qa] tags = [:latticefields, :qa] begin
 @testset "Aqua" begin
     using Aqua: Aqua
     Aqua.test_all(LatticeFields)
+end
 end
 
 # Aqua's ambiguity check loads only LatticeFields' own dependencies. A user's session also
 # loads array and polynomial packages whose generic methods (`==` on any AbstractArray) can be
 # ambiguous with LatticeFields' own (f2d9c774 had 8 such, with these three loaded): load them
 # here and require LatticeFields to add none (a guard).
+@testitem "no ambiguities with common array packages loaded" setup = [LF_qa_qa] tags = [:latticefields, :qa] begin
 @testset "no ambiguities with common array packages loaded" begin
     @eval using ArrayLayouts: ArrayLayouts
     @eval using DynamicPolynomials: DynamicPolynomials
     @eval using SparseArrays: SparseArrays
     @test isempty(Test.detect_ambiguities(LatticeFields; recursive = true))
 end
+end
 
+@testitem "source rules" setup = [LF_qa_qa] tags = [:latticefields, :qa] begin
 @testset "source rules" begin
     root = dirname(@__DIR__) |> dirname
     files = [joinpath(d, f) for dir in ("src", "test")
@@ -58,4 +69,5 @@ end
     hits = [f for f in files if f != (@__FILE__) && occursin(banned, read(f, String))]
     @test isempty(hits)
     @test !any(f -> occursin("@generated", read(f, String)), filter(f -> occursin("/src/", f), files))
+end
 end

@@ -9,6 +9,10 @@
 #   - PG-4(d), depth: measured Float32 stationary counts grow ≤ 2 from the 128² to the 512² box.
 # per300 (odd coarse axes) needs 11 (3D per45: 12, in solvers/deflation.jl).
 
+@testsetup module LF_solvers_gate_pg4
+using Test, LatticeFields
+include("../host_runner.jl")
+include("../solvers_cases.jl")
 const PG4_FLOOR = Dict("per256" => 3e-4, "per300" => 1.5e-3)  # measured best: 1.0e-4, 4.8e-4
 
 function auto_run(case, T; kw...)
@@ -16,7 +20,10 @@ function auto_run(case, T; kw...)
     k = steady!(sv; maxiter = 40)
     return k, scalars(sv)
 end
+include("../shared/export_all.jl")
+end
 
+@testitem "PG-4 sweep" setup = [LF_solvers_gate_pg4] tags = [:latticefields, :solvers_gate] begin
 @testset "PG-4 sweep" begin
     mg32 = Dict{String, Int}()
     for ((name, s), ref) in sort(collect(REFERENCE); by = first)
@@ -41,4 +48,5 @@ end
         end
     end
     @test mg32["box512"] - mg32["box128"] <= 2         # PG-4(d) on measured counts
+end
 end

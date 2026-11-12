@@ -15,6 +15,10 @@
 # (max error 0.71 against the hand matrix below); the mask value field already solved (5e-13:
 # F3-05 adds its test).
 
+@testsetup module LF_solvers_faces
+using Test, LatticeFields
+include("../host_runner.jl")
+include("../solvers_cases.jl")
 using LinearAlgebra: norm
 using LatticeFields.Solvers: robin_parts, tangent!, set_coefficients!, sentinel
 
@@ -88,7 +92,10 @@ catch e
 end
 
 const NM = (; name = "c", axes = ("x", "y"))
+include("../shared/export_all.jl")
+end
 
+@testitem "Robin faces against the ghost-rule hand matrix (16²)" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin
 @testset "Robin faces against the ghost-rule hand matrix (16²)" begin
     rng = Xoshiro(5)
     f = rand(rng, 256)
@@ -114,7 +121,9 @@ const NM = (; name = "c", axes = ("x", "y"))
     end
     @test relerr(solver_solution(sr), solver_solution(sd)) <= 1e-12
 end
+end
 
+@testitem "the sign rule: a negative Robin diagonal is a defect correction" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin
 @testset "the sign rule: a negative Robin diagonal is a defect correction" begin
     rng = Xoshiro(6)
     f = rand(rng, 256)
@@ -141,7 +150,9 @@ end
     end
     @test relerr(solver_solution(s1)[cells], A \ b) <= 1e-8
 end
+end
 
+@testitem "a degenerate Robin face is refused naming the face, at build and at every write" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin
 @testset "a degenerate Robin face is refused naming the face, at build and at every write" begin
     deg = (((1.0, -0.5, 0.0), nothing), (nothing, nothing))           # α/2 + β = 0
     e = msg(() -> CellOperator((16, 16); robin = deg, NM...))
@@ -162,7 +173,9 @@ end
         msg(() -> CellOperator((16, 16); dirichlet = ((nothing, 1.0), (nothing, nothing)),
             robin = ((nothing, (1.0, 1.0, 0.0)), (nothing, nothing)), NM...)))
 end
+end
 
+@testitem "field face coefficients with face-Dirichlet and Robin faces (LF62)" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin
 @testset "field face coefficients with face-Dirichlet and Robin faces (LF62)" begin
     rng = Xoshiro(7)
     inp = Dict("in.f" => rand(rng, 256), "in.wx" => 0.5 .+ rand(rng, 256), "in.wy" => 0.5 .+ rand(rng, 256))
@@ -181,7 +194,9 @@ end
     op = CellOperator((16, 1); shift = 0.05, dirichlet = ((0.0, 1.0), (0.5, 0.5)))
     @test solve_vs_hand(op, Dict("in.f" => rand(rng, 16)))[1] <= 1e-10
 end
+end
 
+@testitem "the mask value as an input field" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin
 @testset "the mask value as an input field" begin
     rng = Xoshiro(8)
     for dims in ((16, 16), (8, 8, 8))
@@ -198,7 +213,9 @@ end
         @test relerr(solver_solution(sv)[cells], A1 \ b1) > 1e-2
     end
 end
+end
 
+@testitem "inputs bind the caller's arrays (aliased, no copy)" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin
 @testset "inputs bind the caller's arrays (aliased, no copy)" begin
     rng = Xoshiro(9)
     n = 256
@@ -241,7 +258,9 @@ end
     # following the routes works
     @test FieldSolver(HostExec(), op; T = Float32, inputs = ["in.f" => Float32.(f)]) isa FieldSolver
 end
+end
 
+@testitem "solver messages name the user's field" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin
 @testset "solver messages name the user's field" begin
     op = CellOperator((16, 16); shift = 0.1, mask = "in.mask", NM...)
     for (e, want) in (
@@ -274,7 +293,9 @@ end
     solve!(sv)
     @test (@test_logs (:warn, r"^field `c`: the field solve ended") sentinel(sv))
 end
+end
 
+@testitem "tangents of Robin coefficients match finite differences" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin
 @testset "tangents of Robin coefficients match finite differences" begin
     rng = Xoshiro(10)
     f = rand(rng, 256)
@@ -297,6 +318,7 @@ end
         @test solver_solution(sv) ≈ u                   # restored (a warm re-solve continues from u)
     end
 end
+end
 
 # F3-05 review r1 S1, N1: the inner solvers check their keywords when built, naming the keyword
 # and its range, and print by keyword without the module path. Base (9db10886,
@@ -305,6 +327,7 @@ end
 # `DevicePCG(; rtol = NaN)` and `Multigrid(; cycle = V(0, 2))` construct; V(0, 2) is refused
 # only by `FieldSolver`; `repr(DevicePCG())` is "DevicePCG(Multigrid(LatticeFields.Solvers.V(2,
 # 2), nothing, 1.0e-6, nothing, 1.0e-6), 8, 1.0e-6)".
+@testitem "the inner solvers check their keywords when built" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin
 @testset "the inner solvers check their keywords when built" begin
     e(f) = try
         f(); ""
@@ -340,6 +363,7 @@ end
         @test eval(Meta.parse(repr(s))) == s
     end
 end
+end
 
 # F3-06 review nits (batch 2): a cycle prints as the pair `(ν₁, ν₂)`, so the display runs where
 # only `DevicePCG` and `Multigrid` are bound (`V` is public, not exported); a `V` of non-integers,
@@ -347,6 +371,7 @@ end
 # a message naming the keyword and a working value. Base (437a84ef, ~/lpwork/f3b3-nc-nits.log):
 # `repr` prints `cycle = V(3, 3)` (an `UndefVarError` where `V` is not bound); `V(2.0, 2)` and
 # `Multigrid(; cycle = (2, 2))` are MethodErrors; `precond = :mg` builds; `budget = true` builds.
+@testitem "inner solver keywords: cycles, preconditioners and Bool counts" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin
 @testset "inner solver keywords: cycles, preconditioners and Bool counts" begin
     e(f) = try
         f(); ""
@@ -371,4 +396,5 @@ end
     end
     # the values the messages name build
     @test DevicePCG(; precond = Multigrid(; cycle = (3, 3))).precond.cycle == V(3, 3)
+end
 end

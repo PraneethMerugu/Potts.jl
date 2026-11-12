@@ -1,5 +1,15 @@
 # Exec on the host: the executor, launches, plans, compile and capabilities. Device
 # behavior (the guard, compile reuse, static ndranges) is in exec_device.jl.
+
+@testsetup module LF_exec
+using Test, LatticeFields
+include("exec_helpers.jl")
+include("host_runner.jl")
+include("shared/exec.jl")
+include("shared/export_all.jl")
+end
+
+@testitem "Exec: capabilities" setup = [LF_exec] tags = [:latticefields, :exec] begin
 @testset "Exec: capabilities" begin
     @test Exec.ishost(KA.CPU()) && !Exec.ishost(MockDevice())
     # capability: the host runs every type; a device Float32, Float64 where KA says so
@@ -9,7 +19,9 @@
     # policy: Float64 on the host, Float32 on every device whatever the hardware has
     @test Exec.default_float(KA.CPU()) === Float64 && Exec.default_float(MockDevice()) === Float32
 end
+end
 
+@testitem "Exec: host executor visits each index once" setup = [LF_exec] tags = [:latticefields, :exec] begin
 @testset "Exec: host executor visits each index once" begin
     for n in (0, 1, 7, Exec.HOST_GRAIN, Exec.HOST_GRAIN + 1, 3 * Exec.HOST_GRAIN + 5)
         cnt = zeros(Int, n + 3)
@@ -34,7 +46,9 @@ end
     Exec.launch!(KA.CPU(), scale!, 0, (out, 5))
     @test out == 3 .* (1:10)
 end
+end
 
+@testitem "Exec: the host loop allocates nothing" setup = [LF_exec] tags = [:latticefields, :exec] begin
 @testset "Exec: the host loop allocates nothing" begin
     a = zeros(Float32, 100)
     @test isempty(check_allocs(Exec._host_loop!, (AddK{1}, Int, Tuple{Vector{Float32}})))
@@ -42,7 +56,9 @@ end
     @test (@allocated Exec.host_launch!(AddK{1}(), 100, (a,))) == 0
     @test (@allocated Exec.launch!(KA.CPU(), AddK{1}(), 100, (a,))) == 0
 end
+end
 
+@testitem "Exec: Launch on the host" setup = [LF_exec] tags = [:latticefields, :exec] begin
 @testset "Exec: Launch on the host" begin
     a = zeros(Int, 20)
     l = Exec.Launch(KA.CPU(), AddK{2}(), (a,), 15; static = true)
@@ -55,8 +71,10 @@ end
     @test_throws ArgumentError Exec.Launch(KA.CPU(), AddK{2}(), (a,), -1; static = true)
     @test_throws ArgumentError Exec.Launch(MockDevice(), AddK{2}(), (a,), 4; static = true, workgroupsize = 0)
 end
+end
 
 # PG-13: the plan walk adds nothing on a plan of more than 32 heterogeneous launches
+@testitem "Exec: plan walk, n launches" setup = [LF_exec] tags = [:latticefields, :exec] begin
 @testset "Exec: plan walk, $n launches" for n in (5, 32, 40, 72)
     ls, a, b = host_plan(n)
     @test !(ls isa NTuple)                                          # heterogeneous
@@ -78,7 +96,9 @@ end
         @test (@allocated rwalk(ls)) > 0
     end
 end
+end
 
+@testitem "Exec: compile_all! runs every job and rethrows a failure" setup = [LF_exec] tags = [:latticefields, :exec] begin
 @testset "Exec: compile_all! runs every job and rethrows a failure" begin
     @test Exec.compile_all!(KA.CPU(), [() -> error("never runs on the host")]) === nothing
     ran = zeros(Int, 16)
@@ -92,7 +112,9 @@ end
     end
     @test err isa ArgumentError && err.msg == "compile failed"
 end
+end
 
+@testitem "Exec: walker emits one call per launch" setup = [LF_exec] tags = [:latticefields, :exec] begin
 @testset "Exec: walker emits one call per launch" begin
     log = Int[]
     calls = ntuple(k -> (() -> push!(log, k)), 40)
@@ -101,16 +123,9 @@ end
     @test Exec.walker(0)(()) === nothing
     @test_throws ArgumentError Exec.walker(-1)
 end
-
-# The Schedule contract (lp/c5 `schedule/contract.jl`): linear `body(s, S, P, G)` guarded by
-# `s <= G.n`, Cartesian `body(x, S, P, G)` guarding each axis, tuple ndranges
-lin_body(s, S, P, G) = (@inbounds S[1][s] = P[1] * s; nothing)                     # s ≤ G.n ≤ length
-function cart_body(x, S, P, G)
-    (x[1] <= G.dims[1] && x[2] <= G.dims[2]) || return nothing
-    s = x[1] + (x[2] - 1) * G.dims[1]
-    @inbounds S[1][s] = P[1] * s                                                     # s ≤ prod(dims)
-    return nothing
 end
+
+@testitem "Exec: the Schedule contract's linear and Cartesian forms (host)" setup = [LF_exec] tags = [:latticefields, :exec] begin
 @testset "Exec: the Schedule contract's linear and Cartesian forms (host)" begin
     a = zeros(Float32, 40)
     G = (; n = 30, dims = (5, 6), rt = ())
@@ -129,4 +144,5 @@ end
     p()
     @test (@allocated p()) == 0
     @test_throws ArgumentError Exec.Launch(KA.CPU(), cart_body, ((b,), (3.0f0,), G), (5, -1); static = true)
+end
 end

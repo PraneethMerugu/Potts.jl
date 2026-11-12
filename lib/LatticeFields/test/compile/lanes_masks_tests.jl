@@ -1,6 +1,10 @@
 # Integer lanes, tables, masked spaces (write-complete with pass-through), immersed and
 # node-value rules, each against a hand loop.
 
+@testsetup module LF_compile_lanes_masks
+using Test, LatticeFields
+include("../host_runner.jl")
+include("../fixtures.jl")
 using LatticeFields.IR: constant, cast, bittest, table, ImmersedRule, NodeValueRule, mask!
 
 """
@@ -36,7 +40,10 @@ function masked_run(s, sp, u0, P; steps = 3)
     end
     return reshape(copy(current(st, s, "u")), size(u0)), ref
 end
+include("../shared/export_all.jl")
+end
 
+@testitem "masked space is write-complete (odd substeps, moving mask)" setup = [LF_compile_lanes_masks] tags = [:latticefields, :compile] begin
 @testset "masked space is write-complete (odd substeps, moving mask)" begin
     u0 = rand(Xoshiro(4), Float32, 8, 5)
     P = (0.1, 0.7, 1.3)
@@ -49,7 +56,9 @@ end
     gotb, _ = masked_run(sb, spb, u0, P)
     @test gotb != ref
 end
+end
 
+@testitem "integer lanes: U8 mask counts into I32, U32 bit test into U8" setup = [LF_compile_lanes_masks] tags = [:latticefields, :compile] begin
 @testset "integer lanes: U8 mask counts into I32, U32 bit test into U8" begin
     dims = (6, 5)
     pb = ProgramBuilder(Grid(dims); periodic = (true, true))
@@ -81,7 +90,9 @@ end
     @test reshape(current(st, s, "bit"), dims) == UInt8.((fv .>> 3) .& 1)
     @test eltype(current(st, s, "cnt")) == Int32
 end
+end
 
+@testitem "tables: per-kind lookup with zero at index 0" setup = [LF_compile_lanes_masks] tags = [:latticefields, :compile] begin
 @testset "tables: per-kind lookup with zero at index 0" begin
     pb = ProgramBuilder(Grid((5, 4)))
     kind = field!(pb, "kind"; storage = I32, role = :input)
@@ -99,7 +110,9 @@ end
     @test current(st, s, "rate") ==
           [k == 0 ? 0.0f0 : 2 * Float32[1.5, 2.5, 4.0][k] for k in kv]
 end
+end
 
+@testitem "immersed zero-flux rule conserves mass outside the obstacle" setup = [LF_compile_lanes_masks] tags = [:latticefields, :compile] begin
 @testset "immersed zero-flux rule conserves mass outside the obstacle" begin
     function prog(rule::Bool)
         pb = ProgramBuilder(Grid((9, 8)); periodic = (true, true), nparams = 3)
@@ -131,7 +144,9 @@ end
     @test mass(true) ≈ m0 rtol = 1e-5
     @test !isapprox(mass(false), m0; rtol = 1e-3)               # negative control
 end
+end
 
+@testitem "node-value rule: masked sites store the value (identity row)" setup = [LF_compile_lanes_masks] tags = [:latticefields, :compile] begin
 @testset "node-value rule: masked sites store the value (identity row)" begin
     pb = ProgramBuilder(Grid((6, 6)); periodic = (true, true), nparams = 4)
     u = field!(pb, "u"; buffers = 2)
@@ -155,4 +170,5 @@ end
     got = reshape(current(st, s, "u"), 6, 6)
     @test all(got[2, :] .== 0.75f0)
     @test got[4:6, :] == hand2!(similar(u0), u0, (0.1, 1.0, 1.0))[4:6, :]
+end
 end

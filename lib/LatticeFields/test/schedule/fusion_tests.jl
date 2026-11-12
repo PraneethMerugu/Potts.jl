@@ -2,6 +2,10 @@
 # shared-reads rule and a fixed stream cap as negative controls; fusion legality; ordering;
 # fused execution bit-exact with split execution; static ndrange marking.
 
+@testsetup module LF_schedule_fusion
+using Test, LatticeFields
+include("../host_runner.jl")
+include("../shared/compile_multilevel.jl")
 using LatticeFields.Schedule: traffic, modeled_time, working_set, merge_kernels, step_order,
                               fusion_report, CostModel
 
@@ -128,6 +132,26 @@ function stream_cap_ok(s, cap)
             Dict(i => i for i in eachindex(s.kernels)))).arrays) <= cap
 end
 
+"""
+Producer `w ← 2u + p` and consumer `v ← w(off) · u`.
+"""
+function producer_consumer(off; dims = (42, 42, 42))
+    pb = ProgramBuilder(Grid(dims); periodic = (true, true, true), nparams = 1)
+    u = field!(pb, "u"; role = :input)
+    w = field!(pb, "w"; role = :aux)
+    v = field!(pb, "v"; role = :output)
+    kb = kernel(pb)
+    store(kb, v, load(kb, w; offset = off) * load(kb, u))
+    add!(pb, kb, "a_consume")                          # declared first, key sorts first
+    kb = kernel(pb)
+    store(kb, w, 2 * load(kb, u) + param(kb, 1))
+    add!(pb, kb, "z_produce")
+    return semantic(program(pb))
+end
+include("../shared/export_all.jl")
+end
+
+@testitem "cost model reproduces the measured regime table" setup = [LF_schedule_fusion] tags = [:latticefields, :schedule] begin
 @testset "cost model reproduces the measured regime table" begin
     # launch-bound 42³: merge every component, independent fields included
     @test nlaunch(smoother((42, 42, 42), 4)) == 1
@@ -150,7 +174,9 @@ end
     tf, ts = all_vs_split(smoother((42, 42, 42), 4))
     @test 12e-6 < tf < 22e-6 && 1.3 < ts / tf < 2.2
 end
+end
 
+@testitem "negative controls: shared-reads rule and a fixed stream cap disagree" setup = [LF_schedule_fusion] tags = [:latticefields, :schedule] begin
 @testset "negative controls: shared-reads rule and a fixed stream cap disagree" begin
     s = restrict((42, 42, 42), 4)
     @test !shares_read(s) && nlaunch(s) == 1          # shared reads would split; cost merges
@@ -163,24 +189,9 @@ end
         cost = CostModel(; launch0 = 0.0, launch_per_array = 0.0, eta_lo_ws = 1.0,
             eta_hi_ws = 2.0, bw_cache = 235e9)).launches) > 1
 end
-
-"""
-Producer `w ← 2u + p` and consumer `v ← w(off) · u`.
-"""
-function producer_consumer(off; dims = (42, 42, 42))
-    pb = ProgramBuilder(Grid(dims); periodic = (true, true, true), nparams = 1)
-    u = field!(pb, "u"; role = :input)
-    w = field!(pb, "w"; role = :aux)
-    v = field!(pb, "v"; role = :output)
-    kb = kernel(pb)
-    store(kb, v, load(kb, w; offset = off) * load(kb, u))
-    add!(pb, kb, "a_consume")                          # declared first, key sorts first
-    kb = kernel(pb)
-    store(kb, w, 2 * load(kb, u) + param(kb, 1))
-    add!(pb, kb, "z_produce")
-    return semantic(program(pb))
 end
 
+@testitem "fusion legality and order" setup = [LF_schedule_fusion] tags = [:latticefields, :schedule] begin
 @testset "fusion legality and order" begin
     s = producer_consumer((0, 0, 0))
     sp = plan(s)
@@ -195,7 +206,9 @@ end
     # the cost model alone would have merged it (same traffic as the legal case)
     @test plan(producer_consumer((0, 0, 0))).decisions[1].merged
 end
+end
 
+@testitem "Jacobi groups: a read cycle reads old values" setup = [LF_schedule_fusion] tags = [:latticefields, :schedule] begin
 @testset "Jacobi groups: a read cycle reads old values" begin
     function cycle(buffers)
         pb = ProgramBuilder(Grid((5, 4)); periodic = (true, true))
@@ -220,7 +233,9 @@ end
     @test reshape(current(st, s, "y"), 5, 4) == circshift(x0, (0, -1)) .* 2
     @test_throws IR.IRError step_order(cycle(1), [1, 2])
 end
+end
 
+@testitem "F3-02: a one-buffer field inside a Jacobi group is read new (its writer first)" setup = [LF_schedule_fusion] tags = [:latticefields, :schedule] begin
 @testset "F3-02: a one-buffer field inside a Jacobi group is read new (its writer first)" begin
     # x, y two-buffer, K one-buffer: `z_K` (K ← x) sorts last by key, but `fy` reads K's new
     # value, so `z_K` runs before it; x and y keep the Jacobi rule (old values)
@@ -280,7 +295,9 @@ end
     end
     @test occursin("the fields K, L define each other", err) && occursin("read cycle", err)
 end
+end
 
+@testitem "fused execution is bit-exact with split execution" setup = [LF_schedule_fusion] tags = [:latticefields, :schedule] begin
 @testset "fused execution is bit-exact with split execution" begin
     s = producer_consumer((0, 0, 0); dims = (7, 5, 3))
     exec(sp) = (
@@ -291,7 +308,9 @@ end
     @test length(fused.launches) == 1 && length(split.launches) == 2
     @test exec(fused) == exec(split)
 end
+end
 
+@testitem "content addressing and static ndrange" setup = [LF_schedule_fusion] tags = [:latticefields, :schedule] begin
 @testset "content addressing and static ndrange" begin
     pb = ProgramBuilder(Grid((8, 8)); periodic = (true, true), levels = 2)
     f0, g0 = field!(pb, "a0"; role = :input), field!(pb, "b0"; role = :output)
@@ -308,4 +327,5 @@ end
     @test sp.launches[1].ndrange != sp.launches[2].ndrange
     @test !sp.launches[1].static && !sp.launches[2].static
     @test all(l -> l.static, plan(smoother((16, 16, 16), 2)).launches)
+end
 end

@@ -2,6 +2,10 @@
 # operator (T-3), the budget skip with its pass-through, the sentinel, `inner = :auto`,
 # launch counts (PG-5) and Float32/allocation hygiene of every launch.
 
+@testsetup module LF_solvers_plans
+using Test, LatticeFields
+include("../host_runner.jl")
+include("../solvers_cases.jl")
 using LatticeFields.Solvers: precond_plan, solve_plan, resolve_inner, sentinel,
                              nlaunches, PlanBuilder, SolvePlan, fin!, gen!, INIT
 using LatticeFields.Compile: LOWERING
@@ -27,7 +31,10 @@ function symmetry_defect(sv)
     end
     return worst
 end
+include("../shared/export_all.jl")
+end
 
+@testitem "the preconditioner is a fixed linear SPD operator" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
 @testset "the preconditioner is a fixed linear SPD operator" begin
     for case in (named_case("sphere42", 0.022), named_case("box300x192", 5.5e-6))
         @test symmetry_defect(case_solver(case, Float64)) < 1e-12
@@ -36,7 +43,9 @@ end
     @test symmetry_defect(case_solver(named_case("sphere42", 0.022), Float64; inner = v21)) >
           1e-3
 end
+end
 
+@testitem "Krylov operator is symmetric in eliminated form (T-3, s = 1e-8)" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
 @testset "Krylov operator is symmetric in eliminated form (T-3, s = 1e-8)" begin
     n = 16
     m = UInt8.(rand(Xoshiro(2), n, n, n) .< 0.3)
@@ -77,7 +86,9 @@ end
     x, y = randn(rng, n^3), randn(rng, n^3)
     @test abs((R * x)' * y - x' * (R * y)) / (eps() * (abs.(y)' * abs.(R) * abs.(x))) > 1e6
 end
+end
 
+@testitem "budget skip keeps the pass-through (odd flips per cycle)" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
 @testset "budget skip keeps the pass-through (odd flips per cycle)" begin
     case = named_case("disk128", 0.022)
     v21 = Multigrid(cycle = V(2, 1))
@@ -94,7 +105,9 @@ end
         @test (field(sv, lkey(0, "x")) == want) == same
     end
 end
+end
 
+@testitem "sentinel and inner = :auto" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
 @testset "sentinel and inner = :auto" begin
     disk, per = named_case("disk512", 1.9e-3), periodic_case(128, 128; s = 1.0)
     @test resolve_inner(disk[1], :auto) isa DevicePCG
@@ -111,7 +124,9 @@ end
     solve!(sv)
     @test !sentinel(sv) && scalars(sv).done
 end
+end
 
+@testitem "sentinel uses the plan's budget; DevicePCG validation" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
 @testset "sentinel uses the plan's budget; DevicePCG validation" begin
     case = named_case("disk128", 5.5e-6)
     sv = case_solver(case, Float64; inner = DevicePCG(budget = 4))
@@ -130,7 +145,9 @@ end
     @test_throws ArgumentError resolve_inner(case[1],
         DevicePCG(precond = Multigrid(cycles = 2)))
 end
+end
 
+@testitem "launches per cycle and iteration (PG-5 ≤ 25)" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
 @testset "launches per cycle and iteration (PG-5 ≤ 25)" begin
     per = periodic_case(256, 256; s = 0.022)
     sv = case_solver(per, Float32; inner = Multigrid())
@@ -145,7 +162,9 @@ end
     @test nlaunches(solve_plan(sv, 2), 2) == 12        # V 11 + finish
     @test nlaunches(solve_plan(sv, 2), 3) == 15        # V 11 + K1, α, K2 (true residual), finish
 end
+end
 
+@testitem "Float32 launches: no Float64 in any device code (Metal)" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
 @testset "Float32 launches: no Float64 in any device code (Metal)" begin
     # Every launch body, hand-written (finish!, bottom!, gershgorin!, build_site!) or
     # generated, with every callee: no Float64 value in the typed code, and none in the
@@ -173,7 +192,9 @@ end
         typeof(probe), Vector{Float32}, typeof((; budget = Int32(8)))}))
     @test f64_type(typeof((; a = (1.0f0, 2.0))))
 end
+end
 
+@testitem "Float32 launches: warm launches allocate nothing" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
 @testset "Float32 launches: warm launches allocate nothing" begin
     sv = case_solver(named_case("disk128", 0.022), Float32)
     steady!(sv)
@@ -193,7 +214,9 @@ end
         end
     end
 end
+end
 
+@testitem "the time slot is reserved: no solver kernel reads G.rt[TIME_SLOT]" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
 @testset "the time slot is reserved: no solver kernel reads G.rt[TIME_SLOT]" begin
     TS = LatticeFields.Compile.TIME_SLOT
     for (c, kw) in (("disk128", (;)), ("disk128", (; inner = Multigrid())), ("per128", (;)))
@@ -210,4 +233,5 @@ end
     store(kb, u, load(kb, u) + IR.runtime(kb, TS))
     add!(pb, kb, "timed")
     @test_throws r"reads the time slot" Solvers.check_no_time(program(pb))
+end
 end
