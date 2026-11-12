@@ -31,7 +31,7 @@ end
 include("shared/export_all.jl")
 end
 
-@testitem "F4-13: field_report on nameof(typeof(PDEV))" setup = [LP_report_device] tags = [:latticepde, :report_device] begin
+@testitem "F4-13: field_report on nameof(typeof(PDEV))" setup = [LP_report_device] tags = [:latticepde, :report_device, :gpu_only] begin
 @testset "F4-13: field_report on $(nameof(typeof(PDEV)))" begin
     @parameters dD = 1e-3 dk = 0.1
     @variables dc(..)
