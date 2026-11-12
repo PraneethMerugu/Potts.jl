@@ -82,7 +82,7 @@ function _privileged_hits(file)
             return
         end
         indoc && return
-        if JS.is_leaf(n) && JS.kind(n) in (JS.K"Identifier", JS.K"String", JS.K"MacroName")
+        if JS.is_leaf(n) && JS.kind(n) in (JS.K"Identifier", JS.K"String", JS.K"macro_name")
             s = string(n.val)
             isempty(_denied(s)) || push!(out, (JS.source_location(n)[1], s))
         end
