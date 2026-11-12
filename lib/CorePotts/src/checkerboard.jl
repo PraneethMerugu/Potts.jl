@@ -25,20 +25,25 @@
 # `lockless = true`, so the commit hooks that would otherwise overwrite a cell value use
 # atomic deltas: moments accumulate atomically and re-center once per MCS (`recenter_kernel!`),
 # pieces trackers add their changes, and an `@on_copy` write that reads its own cell value adds
-# the difference. On the host a phase's decisions read the cell columns as they were when the
-# phase started (`_snap!`, one copy of them per phase), not the columns its own work items are
-# changing: a cell is an aggregate the block spacing does not separate, so two active sites of
-# one phase can share a cell, and reading its live totals would make the decision depend on the
-# order of the commits. On a device the decisions read the live columns, and the outcome depends
-# on the timing of the work items (no determinism, user ruling 2026-11-04).
+# the difference. On a device the outcome depends on the timing of the work items (no
+# determinism, user ruling 2026-11-04).
+#
+# Cells wider than the spacing. The spacing separates sites, not cells: two active sites of one
+# phase lie in one cell when the cell is wider than (k - 1)·region + 1, and then one work item's
+# commit changes a total another item's decision is reading. So every phase is checked before it
+# runs (`_phase_conflict!`). A phase whose items share a cell runs inline, one work item after
+# another in block order, on the live state: its decisions are exact, so the accepted ΔH still
+# sums to the trajectory's energy change. A phase whose items share no cell is a colouring and
+# runs threaded, its decisions reading the cell columns as they were when the phase started
+# (`_snap!`, one copy per phase, which such a phase cannot tell from the live ones).
 #
 # The CPU. A phase with few work items (at most `BLOCK_GRAIN`), or a process with one thread,
 # runs them inline, one after another, so each attempt sees every earlier one, as in
 # `SequentialCPM`, and the run is reproducible. A larger phase is one KA launch with one
 # workgroup per thread (KA's CPU backend spawns one task per thread and launch, so more
-# workgroups only add loop overhead). Both decide against the phase's snapshot and write only
-# their own sites, so a phase reaches the same decisions and leaves the same state whether its
-# work items run inline or threaded, and a threaded run is reproducible from its seed.
+# workgroups only add loop overhead). A colouring phase reaches the same decisions and leaves the
+# same state whether its work items run inline or threaded, and a shared-cell phase runs inline
+# either way, so a CPU run is reproducible from its seed at any thread count.
 #
 # Whole-cell searches. A copy whose decision needs the exact floods (cell-scope `pieces` off
 # their fast path, a `Global` without window whose local test fails) is not decided in the
@@ -151,6 +156,47 @@ end
 _accept_state(st, ::Nothing) = st
 _accept_state(st, snap) = CPMState(st.σ, snap, st.site, st.model, st.history)
 
+# Whether a phase is a proper colouring: whether two of its work items touch one cell. The block
+# spacing keeps two active sites (k - 1)·region + 1 apart, which does not keep them out of one cell
+# when the cell is wider than that, and a cell is not a lattice distance the spacing could cover.
+# In such a phase one work item's decision can be invalidated by another's commit, so the sum of the
+# accepted ΔH stops being the energy change of the trajectory (`stats.accepted_ΔH`); the phase runs
+# inline instead, one work item after another in block order, which is exact and independent of any
+# scheduling. Every other phase is a colouring: its items share no cell and only their own sites,
+# so whether they run inline or threaded they reach the same decisions. A cell column is read for
+# the cells a copy's target and source belong to (`kind` of a neighbour is read at the neighbour's
+# cell, and no kind changes inside a sweep), so sharing a cell is the only way two items of one
+# phase can invalidate each other.
+#
+# One 8-byte stamp per cell holds the phase's token and the block that first claimed it, so a scan
+# costs one read and one write per active site and allocates nothing.
+_claim_columns(::KernelAbstractions.CPU, cell) = (; stamp = zeros(UInt64, length(cell.volume)), token = Ref(UInt32(0)))
+_claim_columns(backend, cell) = nothing
+
+_phase_conflict!(st, cache::CheckerboardCache, lat, layout, off) = _phase_conflict!(st, cache.claim, lat, layout, off)
+_phase_conflict!(st, ::Nothing, lat, layout, off) = false           # a device: no colouring guarantee
+function _phase_conflict!(st, claim::NamedTuple, lat::Lattice{N}, layout::BlockLayout{N}, off) where {N}
+    tok = UInt64(claim.token[] += UInt32(1))
+    hi = tok << 32
+    stamp, σ = claim.stamp, st.σ
+    for I in CartesianIndices(layout.nblocks)
+        bc = map(i -> i - 1, Tuple(I))
+        blk = UInt64(block_index(layout, bc))
+        lo, side = block_region(layout, bc, off)
+        for idx in CartesianIndices(side)
+            c = @inbounds σ[linear_index(lat, ntuple(d -> lo[d] + idx[d] - 1, Val(N)))]
+            c == 0 && continue                                     # the medium holds no cell columns
+            v = @inbounds stamp[c]
+            if v >>> 32 == tok
+                (v & 0xffffffff) == blk || return true              # a second work item, one cell
+            else
+                @inbounds stamp[c] = hi | blk
+            end
+        end
+    end
+    return false
+end
+
 # One attempt. `SERIAL = false` in a phase (copies that need the floods are listed); `true` in
 # the serial pass and on the CPU (the floods run, a veto decides at once). `sts` is the state the
 # decision reads (the live one, or `st` with the phase's cell snapshot); `st` is the live state,
@@ -247,7 +293,7 @@ end
     _recenter!(cell, lat, c, @inbounds cell.volume[c])
 end
 
-struct CheckerboardCache{N, B, TK, CN, SL, CS, K1, K2, K3, GS}
+struct CheckerboardCache{N, B, TK, CN, SL, CS, CK, K1, K2, K3, GS}
     layout::BlockLayout{N}
     switches::Int                     # a stay makes n / switches attempts (n sites)
     order::Vector{Int}                # the MCS's phase offsets (1:k^N), P of them
@@ -255,7 +301,8 @@ struct CheckerboardCache{N, B, TK, CN, SL, CS, K1, K2, K3, GS}
     track::TK                         # `nothing`, or `(; track, acc)` (acc per site)
     cnt::CN                           # committed copies per block (Int32), folded at the read points
     serial::SL                        # `nothing`, or the serial list (see `_push_serial!`)
-    snap::CS                          # the accept path's cell columns, refreshed per phase (CPU; see `_snap!`)
+    snap::CS                          # the launched phases' cell columns, refreshed per phase (CPU; see `_snap!`)
+    claim::CK                         # `nothing`, or the per-cell claim stamps of `_phase_conflict!` (CPU)
     kernel::K1
     serial!::K2
     recenter!::K3
@@ -319,7 +366,8 @@ function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, proposal; r
     backend isa KernelAbstractions.CPU || n >= DEVICE_MIN_BLOCKS ||
         @warn "CheckerboardCPM on a device: $n work items per phase (blocks $(layout.nblocks)) leave the GPU mostly idle; a lattice this small runs as fast or faster on the CPU" maxlog = 1
     snap = _snap_columns(backend, cell)
-    return CheckerboardCache(layout, switches, zeros(Int, P), z(UInt32, 1), tk, cnt, sl, snap, block_kernel!(backend),
+    claim = _claim_columns(backend, cell)
+    return CheckerboardCache(layout, switches, zeros(Int, P), z(UInt32, 1), tk, cnt, sl, snap, claim, block_kernel!(backend),
         serial_kernel!(backend), recenter_kernel!(backend), _block_groupsize(backend, layout.nblocks), _block_inline(backend, n, threads),
         backend isa KernelAbstractions.CPU)
 end
@@ -351,14 +399,16 @@ function checkerboard_mcs!(st, cache::CheckerboardCache{N}, f::F, p, ctx, law::L
         ph = @inbounds order[q]                      # q ∈ 1:P (the range above)
         off = phase_offset(l, ph)
         launches += 1                                # an inline phase counts as one, like a one-workgroup launch
-        _snap!(cache.snap, st.cell)                  # the cell columns this phase's decisions read
-        if cache.inline
+        if cache.inline || _phase_conflict!(st, cache, ctx.lattice, l, off)
+            # one work item after another, so each decision sees what the item before it left: exact
+            # (the ΔH sum reconciles with the trajectory) and independent of the thread count
             for I in CartesianIndices(l.nblocks)
-                block_stay!(Tuple(I) .- 1, st, sts, f, p, ctx, law, key, mcs, l, off, s, q, cache.track, cache.cnt, cache.status,
+                block_stay!(Tuple(I) .- 1, st, st, f, p, ctx, law, key, mcs, l, off, s, q, cache.track, cache.cnt, cache.status,
                     sl, Val(true))
             end
             continue
         end
+        _snap!(cache.snap, st.cell)                  # a colouring phase: its workers share no cell
         cache.kernel(st, sts, f, p, ctx, law, key, mcs, l, off, s, q, cache.track, cache.cnt, cache.status, sl;
             ndrange = l.nblocks, workgroupsize = cache.groupsize)
         serial || continue

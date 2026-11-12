@@ -135,20 +135,22 @@ at random, so every site is attempted once per MCS on average, as with `Sequenti
 `stats.accepted` and `stats.committed` count the copies (equal: a copy commits when it is
 accepted), brought up to date at the host read points.
 
-Reproducibility. A phase's decisions read the cell columns as they were when the phase
-started (one copy of them per phase; `CorePotts._snap!`), and a work item writes only its own
-sub-region's sites, so whether a phase's work items run inline or threaded it reaches the same
-decisions: a CPU run at any thread count is reproducible from its seed, and a seed gives the
-same trajectory at `-t 1` and `-t 4`. Device runs depend on the timing of the work items and
-are not (user ruling 2026-11-04).
+Reproducibility. Every phase is checked before it runs. One whose work items would share a cell
+(possible when a cell is wider than the block spacing) runs inline, one work item after another,
+so its decisions are exact and order-free; every other phase is a colouring, whose items share no
+cell and write only their own sites, so it reaches the same decisions inline or threaded. A CPU
+run is therefore reproducible from its seed at any thread count: the same seed gives the same
+trajectory at one thread and at four. Device runs depend on the timing of the work items and are
+not (user ruling 2026-11-04).
 
-Copies to one cell in one phase decide against that phase's snapshot of its totals. Cell
-trackers stay exact: moments add atomically and re-center once per MCS, pieces trackers add
+Cell trackers stay exact: moments add atomically and re-center once per MCS, pieces trackers add
 their changes, and an `@on_copy` write that reads its own cell value adds the difference. (A
 float-valued column accumulated by concurrent commits can differ in its last bits by thread
-count: an integer column is exact.) A copy whose decision needs a whole-cell search (a
-`Global` veto without window, pieces off their local fast path) is decided after its phase by
-one work item, with no copy in flight, against the same snapshot.
+count: an integer column is exact.) `stats.accepted_ΔH` sums the accepted copies' ΔH and
+reconciles with the trajectory's energy change, since no two work items act on one cell unless
+they run one after another. A copy whose decision needs a whole-cell search (a `Global` veto
+without window, pieces off their local fast path) is decided after its phase by one work item,
+with no copy in flight.
 
 The kinetics match `SequentialCPM` within the statistical resolution of the P6.0bl checks
 (foam, cell sorting, the OpenVT chain and monolayer, Akeeb invasion, a 3D RPE sheet, the
