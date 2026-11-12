@@ -72,7 +72,7 @@ function passlog_expr()
             end
             for r in ts.results
                 r isa Test.AbstractTestSet || continue
-                emit(ts.description, '\t', r.description, '\t', counts(r.results, r.n_passed)...)
+                emit(ts.description, r.description, counts(r.results, r.n_passed)...)
             end
             # results outside any testset of the item (a bare @test, an error): one row
             d = (0, count(r -> r isa Test.Fail, ts.results), count(r -> r isa Test.Error, ts.results),
