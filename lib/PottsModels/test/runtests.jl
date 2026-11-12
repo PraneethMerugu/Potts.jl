@@ -205,7 +205,8 @@ const PM_RUNNER_USINGS = :(using Test, Potts, PottsModels, Aqua, TOML; using Pot
 # `Main.<name>` (the generated code names them): they run in Main, as before, until T2 replaces
 # those pins (R3). Main sees the earlier files' names through a module of their bindings.
 const PM_IN_MAIN = Set(["acceptance/p6_0ai_integral_fold_hoist.jl", "acceptance/p6_0as_sweep_validation.jl",
-    "acceptance/p6_0ax_gather_scan.jl", "acceptance/p6_0b2_link_followups.jl", "acceptance/p6_0c2_canonical_followups.jl"])
+    "acceptance/p6_0ax_gather_scan.jl", "acceptance/p6_0b2_link_followups.jl", "acceptance/p6_0c2_canonical_followups.jl",
+    "acceptance/p6_0o_abstract_system.jl"])
 _pm_main_to(m, ex) = ex === :Main ? m : ex isa Expr && ex.head !== :quote ? Expr(ex.head, (_pm_main_to(m, a) for a in ex.args)...) : ex
 _pm_bulk_using(ex) = ex isa Expr && ex.head in (:using, :import) && all(a -> a isa Expr && a.head === :. && a.args[1] !== :., ex.args)
 """Names a file defines at top level (its own definitions win over an earlier file's)."""
