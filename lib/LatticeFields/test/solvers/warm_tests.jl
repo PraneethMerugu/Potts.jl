@@ -59,6 +59,7 @@ include("../shared/export_all.jl")
 end
 
 @testitem "the host reduction fast path equals the emulated workgroups bitwise" setup = [LF_solvers_warm] tags = [:latticefields, :solvers] begin
+using .LF_solvers_warm: fd
 @testset "the host reduction fast path equals the emulated workgroups bitwise" begin
     rng = Xoshiro(21)
     extra = (                                             # F3-05 operators
@@ -88,6 +89,7 @@ end
 end
 
 @testitem "a warm rebuild + lift + solve allocates nothing" setup = [LF_solvers_warm] tags = [:latticefields, :solvers] begin
+using .LF_solvers_warm: fd
 @testset "a warm rebuild + lift + solve allocates nothing" begin
     for (case, kw) in ((named_case("disk128", 0.022), (;)), (named_case("disk128", 0.022), (; inner = Multigrid())),
         (named_case("sphere42", 0.022), (;)), (named_case("per128", 0.022), (;)),
@@ -105,6 +107,7 @@ end
 end
 
 @testitem "a sweep over 100 coefficient values keeps sv.plans at a constant size" setup = [LF_solvers_warm] tags = [:latticefields, :solvers] begin
+using .LF_solvers_warm: fd
 @testset "a sweep over 100 coefficient values keeps sv.plans at a constant size" begin
     op, inputs = box_case(64, 32; s = 0.01, islands = 0.1)
     sv = case_solver((op, inputs), Float64; inner = DevicePCG(; budget = 64, rtol = 1e-10))
@@ -131,6 +134,7 @@ end
 # (`steady!` off by up to 0.14 in 14, both executors; all 16 tangents miss the difference quotient);
 # base 9db10886 passes (no test of it existed).
 @testitem "a coefficient write takes effect: steady! and tangent! equal a fresh solver bitwise" setup = [LF_solvers_warm] tags = [:latticefields, :solvers] begin
+using .LF_solvers_warm: fd
 @testset "a coefficient write takes effect: steady! and tangent! equal a fresh solver bitwise" begin
     op0, inputs = box_case(64, 32; s = 0.01, islands = 0.1)
     mk(s, d = 1.0 + s) = CellOperator(op0.dims; periodic = op0.periodic, shift = s, mask = op0.mask, value = op0.value,

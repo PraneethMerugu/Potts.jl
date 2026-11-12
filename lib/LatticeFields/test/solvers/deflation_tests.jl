@@ -6,6 +6,8 @@
 
 @testsetup module LF_solvers_deflation
 using Test, LatticeFields
+# imports an earlier file made in the old single Main
+using LatticeFields.Solvers: set_coefficients!
 include("../host_runner.jl")
 include("../solvers_cases.jl")
 using LatticeFields.Solvers: resolve_inner, sentinel, solution_key, deflatable, solve_plan,

@@ -124,6 +124,7 @@ include("../shared/export_all.jl")
 end
 
 @testitem "F3-20: a hex solve equals the hand system of the six faces" setup = [LF_solvers_hex] tags = [:latticefields, :solvers] begin
+using .LF_solvers_hex: fd
 @testset "F3-20: a hex solve equals the hand system of the six faces" begin
     # closed box: a Robin face (axis 2 low, d > 0), a Robin face whose diagonal is negative (axis 1
     # low, the defect correction), a Dirichlet face (axis 1 high), no-flux axis 2 high
@@ -156,6 +157,7 @@ end
 end
 
 @testitem "F3-20: multigrid on hex grids: the residual reduction per V-cycle" setup = [LF_solvers_hex] tags = [:latticefields, :solvers] begin
+using .LF_solvers_hex: fd
 @testset "F3-20: multigrid on hex grids: the residual reduction per V-cycle" begin
     # 7×6 coarsens two levels, 13×11 and 12×8 three (odd axes: the last coarse cell takes three
     # children); 160×150 has generated levels above the bottom (lb = 2). Measured (F3-20 log):
@@ -183,6 +185,7 @@ end
 end
 
 @testitem "F3-20: the tangent solve of the diagonal face equals a finite difference" setup = [LF_solvers_hex] tags = [:latticefields, :solvers] begin
+using .LF_solvers_hex: fd
 @testset "F3-20: the tangent solve of the diagonal face equals a finite difference" begin
     op = CellOperator((12, 10); hex = true, face = (1.0, 0.8, 0.6), shift = 0.4,
         robin = ((nothing, nothing), ((1.0, 0.5, 0.7), nothing)), dirichlet = ((nothing, 1.0), (nothing, nothing)))

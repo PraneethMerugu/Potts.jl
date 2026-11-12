@@ -42,6 +42,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "F4-13c: a loop coupled only through unseen terms warns once, and runs as before" setup = [LP_unseen_loop] tags = [:latticepde, :unseen_loop] begin
+using .LP_unseen_loop: fd
 @testset "F4-13c: a loop coupled only through unseen terms warns once, and runs as before" begin
     p = discretize(gsys(su, sv, sue, sve; name = :gs13c), LatticeDiscretization(Grid((12, 12))))
     alg = FieldGroups(sue => ExplicitEuler(; dt = 1.0, substeps = 4), sve => BackwardEuler(; dt = 1.0))
@@ -68,6 +69,7 @@ end
 end
 
 @testitem "F4-13c: no warning for one group, for a loop the bound sees, or with intervals that let it see the terms" setup = [LP_unseen_loop] tags = [:latticepde, :unseen_loop] begin
+using .LP_unseen_loop: fd
 @testset "F4-13c: no warning for one group, for a loop the bound sees, or with intervals that let it see the terms" begin
     # one group: no loop between groups
     p1 = discretize(gsys(su, sv, sue, sve; name = :gs13c1), LatticeDiscretization(Grid((10, 10))))
@@ -93,6 +95,7 @@ end
 end
 
 @testitem "F4-13c (review): the trigger reads each unseen term's own reads" setup = [LP_unseen_loop] tags = [:latticepde, :unseen_loop] begin
+using .LP_unseen_loop: fd
 @testset "F4-13c (review): the trigger reads each unseen term's own reads" begin
     sdisc = LatticeDiscretization(Grid((8, 8)))
     per(fs...) = reduce(vcat, [[f(t, 0, y) ~ f(t, 1, y), f(t, x, 0) ~ f(t, x, 1)] for f in fs])

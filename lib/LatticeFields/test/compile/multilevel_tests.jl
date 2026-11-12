@@ -4,6 +4,8 @@
 
 @testsetup module LF_compile_multilevel
 using Test, LatticeFields
+# imports an earlier file made in the old single Main
+using Random: Xoshiro
 include("../host_runner.jl")
 include("../shared/compile_multilevel.jl")
 include("../shared/export_all.jl")

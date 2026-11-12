@@ -43,6 +43,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "F4-13: field_report of an explicit group: the count and its cause (bound, user minimum, both)" setup = [LP_report] tags = [:latticepde, :report] begin
+using .LP_report: fd
 @testset "F4-13: field_report of an explicit group: the count and its cause (bound, user minimum, both)" begin
     # §7.4 at 512²: 12 substeps of the bound (the count the device test checks)
     p = rprob(512; T = 0.02)
@@ -87,6 +88,7 @@ end
 end
 
 @testitem "F4-13: a warm step! allocates nothing after a report, and the run is unchanged (explicit, BE)" setup = [LP_report] tags = [:latticepde, :report] begin
+using .LP_report: fd
 @testset "F4-13: a warm step! allocates nothing after a report, and the run is unchanged (explicit, BE)" begin
     p = rprob(32)
     for alg in (ExplicitEuler(; dt = 0.01), BackwardEuler(; dt = 0.01))
@@ -103,6 +105,7 @@ end
 end
 
 @testitem "F4-13: field_report of a Backward Euler group: inner, multigrid levels, the Newton count" setup = [LP_report] tags = [:latticepde, :report] begin
+using .LP_report: fd
 @testset "F4-13: field_report of a Backward Euler group: inner, multigrid levels, the Newton count" begin
     p = rprob(32)
     ig = init(p, BackwardEuler(; dt = 0.01))
@@ -128,6 +131,7 @@ end
 end
 
 @testitem "F4-13: field_report of groups: two algorithms, and the coupling rule's κ" setup = [LP_report] tags = [:latticepde, :report] begin
+using .LP_report: fd
 @testset "F4-13: field_report of groups: two algorithms, and the coupling rule's κ" begin
     p = discretize(rsys2(), LatticeDiscretization(Grid((8, 8))))
     ig = init(p, FieldGroups(rce => ExplicitEuler(; dt = 0.01), roe => BackwardEuler(; dt = 0.01)))
@@ -145,6 +149,7 @@ end
 end
 
 @testitem "F4-13: field_report of solutions: owned and OrdinaryDiffEq; of a problem and a SciML integrator" setup = [LP_report] tags = [:latticepde, :report] begin
+using .LP_report: fd
 @testset "F4-13: field_report of solutions: owned and OrdinaryDiffEq; of a problem and a SciML integrator" begin
     p = rprob(32; T = 0.1)
     s = solve(p, BackwardEuler(; dt = 0.01); saveat = 0.05)
@@ -182,6 +187,7 @@ end
 end
 
 @testitem "F4-13 (fixup): field_report(prob, alg): the policy under an algorithm, nothing bound" setup = [LP_report] tags = [:latticepde, :report] begin
+using .LP_report: fd
 @testset "F4-13 (fixup): field_report(prob, alg): the policy under an algorithm, nothing bound" begin
     p = rprob(512; T = 0.02)
     rep = sprint(field_report, p, ExplicitEuler(; dt = 0.01))
@@ -221,6 +227,7 @@ end
 end
 
 @testitem "F4-13 (fixup): sol.stats.implicit keeps the resolved implicit facts per group, as data" setup = [LP_report] tags = [:latticepde, :report] begin
+using .LP_report: fd
 @testset "F4-13 (fixup): sol.stats.implicit keeps the resolved implicit facts per group, as data" begin
     q = rprob(32; T = 0.05)
     s = solve(q, BackwardEuler(; dt = 0.01))
@@ -239,6 +246,7 @@ end
 end
 
 @testitem "F4-13 (review): an inexact operator: advection's ρ_in, the convergence rule and the Newton count by hand" setup = [LP_report] tags = [:latticepde, :report] begin
+using .LP_report: fd
 @testset "F4-13 (review): an inexact operator: advection's ρ_in, the convergence rule and the Newton count by hand" begin
     # upwind advection with v = (1, 0.5) on 32²: ρ_in = 2 (|1| + |0.5|) / h = 2 × 1.5 × 32 = 96. The
     # convergence rule n2 = ⌈2γ dt ρ_in⌉: BE (γ = 1) ⌈2 × 0.05 × 96⌉ = ⌈9.6⌉ = 10, CN (γ = 1/2) ⌈4.8⌉ = 5.
@@ -259,6 +267,7 @@ end
 end
 
 @testitem "F4-13 (review): a coupled solve, a cycle under Backward Euler, QuasiSteady, Crank–Nicolson's least count 2" setup = [LP_report] tags = [:latticepde, :report] begin
+using .LP_report: fd
 @testset "F4-13 (review): a coupled solve, a cycle under Backward Euler, QuasiSteady, Crank–Nicolson's least count 2" begin
     sys = PDESystem([D(rcye) ~ 0.1 * Δ(rcye) - rcye + 5.0 * rcze, D(rcze) ~ 0.1 * Δ(rcze) - rcze - 5.0 * rcye],
         [rcy(0, x, y) ~ x, rcz(0, x, y) ~ y], rdom(0.2), [t, x, y], [rcye, rcze], Num[]; name = :cyc)
@@ -287,6 +296,7 @@ end
 end
 
 @testitem "F4-13 (review): unseen terms: ρ_in unknown, κ over the seen cross terms only, an unbounded group refused" setup = [LP_report] tags = [:latticepde, :report] begin
+using .LP_report: fd
 @testset "F4-13 (review): unseen terms: ρ_in unknown, κ over the seen cross terms only, an unbounded group refused" begin
     # Gray-Scott: `u v²` is a term no bound sees (review S1, S2)
     gs = PDESystem([D(rue) ~ 2e-5 * Δ(rue) - rue * rve^2 + gF * (1 - rue), D(rve) ~ 1e-5 * Δ(rve) + rue * rve^2 - (gF + gk) * rve],
@@ -311,6 +321,7 @@ end
 end
 
 @testitem "F4-13 (review): κ near 1: 0.99 runs, 1.000000001 is refused, as the report says" setup = [LP_report] tags = [:latticepde, :report] begin
+using .LP_report: fd
 @testset "F4-13 (review): κ near 1: 0.99 runs, 1.000000001 is refused, as the report says" begin
     p = discretize(rsys2(), LatticeDiscretization(Grid((8, 8))))
     alg = FieldGroups(rce => ExplicitEuler(; dt = 0.01), roe => BackwardEuler(; dt = 0.01))
@@ -323,6 +334,7 @@ end
 end
 
 @testitem "F4-13 (review): a bound that reads the time: the first window's count, the window restored" setup = [LP_report] tags = [:latticepde, :report] begin
+using .LP_report: fd
 @testset "F4-13 (review): a bound that reads the time: the first window's count, the window restored" begin
     @variables rt_(..)
     rte = rt_(t, x, y)
@@ -347,6 +359,7 @@ end
 end
 
 @testitem "F4-13 (review): the problem line: hexagonal grids, coarse fields; a map's header" setup = [LP_report] tags = [:latticepde, :report] begin
+using .LP_report: fd
 @testset "F4-13 (review): the problem line: hexagonal grids, coarse fields; a map's header" begin
     sys = PDESystem([D(rce) ~ 0.2 * Δ(rce) - rce], [rc(0, x, y) ~ x * y], rdom(0.2), [t, x, y], [rce], Num[]; name = :hx)
     ph = discretize(sys, LatticeDiscretization(Grid((16, 16); geometry = HEX)))

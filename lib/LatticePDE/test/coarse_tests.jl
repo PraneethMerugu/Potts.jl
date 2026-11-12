@@ -18,6 +18,9 @@ using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
 using DomainSets: Interval
 using SciMLBase: SciMLBase
 using LatticeFields: LatticeFields, Problems as LFP
+# imports an earlier file made in the old single Main
+using LinearAlgebra: LinearAlgebra
+using Random: Random
 include("shared/lp_runner.jl")
 include("shared/discretize.jl")
 include("shared/problems.jl")
@@ -39,6 +42,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "F3-16: Coarse(k) in the IR and LatticePDE" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
+using .LP_coarse: fd
 @testset "F3-16: Coarse(k) in the IR and LatticePDE" begin
     @testset "Coarse(1) is the lattice itself, bitwise" begin
         # (distinct names per testset: SymbolicUtils interns an applied term `c(t, x, y)`

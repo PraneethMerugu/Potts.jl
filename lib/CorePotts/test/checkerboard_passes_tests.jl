@@ -8,6 +8,9 @@
 using Test, CorePotts, StaticArrays, Statistics, Random
 using SciMLBase: SciMLBase, ReturnCode, remake
 using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+# imports an earlier file made in the old single Main
+using CorePotts: global_gains
+using CorePotts: global_keeps
 include("shared/gg_model.jl")
 include("shared/export_all.jl")
 end

@@ -3,6 +3,9 @@
 
 @testsetup module LF_qa_qa
 using Test, LatticeFields
+# imports an earlier file made in the old single Main
+using LatticeFields: Compile
+using ForwardDiff: Dual
 using ExplicitImports: ExplicitImports, check_no_implicit_imports,
                        check_all_explicit_imports_are_public,
                        check_no_stale_explicit_imports,

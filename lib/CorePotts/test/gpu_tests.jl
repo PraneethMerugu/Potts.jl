@@ -8,6 +8,11 @@ using SciMLBase: SciMLBase, ReturnCode, remake
 using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
 # PottsDevices (the old runner included it into Main)
 include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "devices.jl"))
+# imports an earlier file made in the old single Main
+using CorePotts: GlobalSearch
+using CorePotts: Proposal
+using CorePotts: global_gains
+using CorePotts: global_keeps
 include("shared/gg_model.jl")
 include("shared/geometry.jl")
 include("shared/phases.jl")

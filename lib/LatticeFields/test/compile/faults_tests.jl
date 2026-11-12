@@ -12,6 +12,8 @@
 
 @testsetup module LF_compile_faults
 using Test, LatticeFields
+# imports an earlier file made in the old single Main
+using LatticeFields.Solvers: field
 include("../host_runner.jl")
 include("../fixtures.jl")
 using LatticeFields.Compile: hoist_params, linear_index, zero_offset, boundary, legality,

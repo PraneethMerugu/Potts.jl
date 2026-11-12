@@ -4,6 +4,10 @@
 
 @testsetup module LF_schedule_fusion
 using Test, LatticeFields
+# imports an earlier file made in the old single Main
+using LatticeFields.IR: IRError
+using Random: Xoshiro
+using LatticeFields.Solvers: field
 include("../host_runner.jl")
 include("../shared/compile_multilevel.jl")
 using LatticeFields.Schedule: traffic, modeled_time, working_set, merge_kernels, step_order,

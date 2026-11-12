@@ -3,6 +3,20 @@
 
 @testsetup module LF_compile_interval
 using Test, LatticeFields
+# imports an earlier file made in the old single Main
+using LatticeFields: Compile
+using LatticeFields.IR: Grid
+using LatticeFields: IR
+using LatticeFields.IR: ProgramBuilder
+using Random: Xoshiro
+using LatticeFields.IR: add!
+using LatticeFields.IR: field!
+using LatticeFields.IR: kernel
+using LatticeFields.IR: load
+using LatticeFields.IR: param
+using LatticeFields.IR: program
+using LatticeFields.Compile: semantic
+using LatticeFields.IR: store
 using LatticeFields.Compile: interval_function, interval_expr
 using LatticeFields.IR: IRError
 

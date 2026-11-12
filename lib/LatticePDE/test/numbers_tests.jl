@@ -13,6 +13,8 @@ using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
 using DomainSets: Interval
 using SciMLBase: SciMLBase
 using LatticeFields: LatticeFields, Problems as LFP
+# imports an earlier file made in the old single Main
+using KernelAbstractions: KernelAbstractions
 include("shared/lp_runner.jl")
 include("shared/discretize.jl")
 include("shared/problems.jl")
@@ -33,6 +35,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "AD vs FD: owned path (∂J/∂D, ∂J/∂k, ∂J/∂g)" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+using .LP_numbers: fd
 @testset "AD vs FD: owned path (∂J/∂D, ∂J/∂k, ∂J/∂g)" begin
     prob = owned(nsys(), 8, 4)
     alg = ExplicitEuler(; dt = 0.01)
@@ -63,6 +66,7 @@ end
 end
 
 @testitem "AD vs FD: ODE path, with an aux field" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+using .LP_numbers: fd
 @testset "AD vs FD: ODE path, with an aux field" begin
     @variables K(..)
     Kn = K(t, x, y)
@@ -88,6 +92,7 @@ end
 end
 
 @testitem "Rodas5P (Jacobian and time gradient through the right side)" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+using .LP_numbers: fd
 @testset "Rodas5P (Jacobian and time gradient through the right side)" begin
     sys = psys([D(ce) ~ Dn * Δ(ce) - kn * ce + 0.1 * sin(ωn * t)],
         [c(0, x, y) ~ 0.0, c(t, 0, y) ~ gn, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)],
@@ -104,6 +109,7 @@ end
 end
 
 @testitem "BigFloat reference (host)" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+using .LP_numbers: fd
 @testset "BigFloat reference (host)" begin
     sys = nsys()
     alg = ExplicitEuler(; dt = 0.01)
@@ -127,6 +133,7 @@ end
 end
 
 @testitem "promotion and plan reuse" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+using .LP_numbers: fd
 @testset "promotion and plan reuse" begin
     sys = nsys()
     alg = ExplicitEuler(; dt = 0.01)
@@ -150,6 +157,7 @@ end
 end
 
 @testitem "SciMLStructures: p is a plain vector (Tunable = the scalars)" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+using .LP_numbers: fd
 @testset "SciMLStructures: p is a plain vector (Tunable = the scalars)" begin
     prob = owned(nsys(), 8, 4)
     @test SciMLStructures.isscimlstructure(prob.p)
@@ -163,6 +171,7 @@ end
 end
 
 @testitem "hoisted time: sin(ω t) at t = 1e5 in Float32" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+using .LP_numbers: fd
 @testset "hoisted time: sin(ω t) at t = 1e5 in Float32" begin
     T0 = 1e5
     sys = PDESystem([D(ce) ~ sin(ωn * t)], [c(T0, x, y) ~ 0.0, c(t, x, 0) ~ c(t, x, 1), c(t, 0, y) ~ c(t, 1, y)],
@@ -181,6 +190,7 @@ end
 # defaults are kept, a Bool input reads back as Bool, and a pair-keyed `remake` infers. The
 # comments give the base (c2583722) value of each.
 @testitem "F2-09: number types per role" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+using .LP_numbers: fd
 @testset "F2-09: number types per role" begin
     @parameters Dt[1:2] = [0.5, 1.0] Dq = 0.1
     tsys = ssys([D(ce) ~ Dq * Δ(ce) - at(Dt, qe) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dq, Dt])
@@ -267,6 +277,7 @@ end
 # keep their partials through a declared storage. Base f5641ce1: `compute_T` is no keyword, a
 # declared Float64 storage holds the problem's Float32, so every test fails or errors.
 @testitem "F3-14: lattice_storage, compute_T and solver_T in B (FE-17)" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+using .LP_numbers: fd
 @testset "F3-14: lattice_storage, compute_T and solver_T in B (FE-17)" begin
     @parameters kw = 0.25
     @variables wu(..) wK(..) [lattice_storage = Float64] wh(..) [lattice_storage = Float16] wc(..) [lattice_storage = Float64]
@@ -374,6 +385,7 @@ end
 # `compute_T`; accurate to its storage against the Float64 run. Base 97045a1b
 # (~/lpwork/b5r1-nc-s1.log): refused, "an implicit solve runs in Float32 or Float64".
 @testitem "F3-14 S1: Float16 storage under the implicit algorithms" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+using .LP_numbers: fd
 @testset "F3-14 S1: Float16 storage under the implicit algorithms" begin
     @variables sh(..) [lattice_storage = Float16] s64(..)
     she, s64e = sh(t, x, y), s64(t, x, y)
@@ -400,6 +412,7 @@ end
 end
 
 @testitem "F3-21a: ∂u/∂k through BackwardEuler, CrankNicolson, BDF2 and QuasiSteady" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+using .LP_numbers: fd
 @testset "F3-21a: ∂u/∂k through BackwardEuler, CrankNicolson, BDF2 and QuasiSteady" begin
     bcs = [c(0, x, y) ~ x * y, c(t, 0, y) ~ gt]
     lin = town(tsys([D(ce) ~ Dt * Δ(ce) - kt * ce + gt * x], bcs))
@@ -420,6 +433,7 @@ end
 end
 
 @testitem "F3-21a: a mask and a Robin face; a nonlinear term; a hexagonal lattice; the coupled steady solve" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+using .LP_numbers: fd
 @testset "F3-21a: a mask and a Robin face; a nonlinear term; a hexagonal lattice; the coupled steady solve" begin
     # the mask's value and the Robin face's β read k
     mr = town(tsys([D(ce) ~ Dt * Δ(ce) - 0.5 * ce + gt], [c(0, x, y) ~ 0.2 + x,
@@ -474,6 +488,7 @@ end
 # Base 85794414 (~/lpwork/f3b6-nc-f314.log): every case errors ("`inputs`: `w1` holds Float64
 # values; this solver's state type is `Float32`", and the Float16 and Float64 forms).
 @testitem "F3-14: a declared storage on a field row under the implicit algorithms" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+using .LP_numbers: fd
 @testset "F3-14: a declared storage on a field row under the implicit algorithms" begin
     @variables sfr(..) sfr32(..) [lattice_storage = Float32] sfr16(..) [lattice_storage = Float16] sfr64(..) [lattice_storage = Float64]
     sdom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
@@ -491,6 +506,7 @@ end
 end
 
 @testitem "F3-14 S3, N4: Float64 on a backend without it; the registry's keys" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+using .LP_numbers: fd
 @testset "F3-14 S3, N4: Float64 on a backend without it; the registry's keys" begin
     LFP = LatticePDE.Problems
     @variables nw(..) [lattice_storage = Float64] nv(..)

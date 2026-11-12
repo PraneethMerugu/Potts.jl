@@ -16,6 +16,8 @@ using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
 using DomainSets: Interval
 using SciMLBase: SciMLBase
 using LatticeFields: LatticeFields, Problems as LFP
+# imports an earlier file made in the old single Main
+using SciMLBase: ReturnCode
 include("shared/lp_runner.jl")
 include("shared/discretize.jl")
 include("shared/problems.jl")

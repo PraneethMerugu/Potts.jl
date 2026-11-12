@@ -12,6 +12,7 @@ include("../shared/export_all.jl")
 end
 
 @testitem "coefficients are parameters: a value change does not recompile" setup = [LF_solvers_coefficients] tags = [:latticefields, :solvers] begin
+using .LF_solvers_coefficients: fd
 @testset "coefficients are parameters: a value change does not recompile" begin
     op, inputs = box_case(64, 32; s = 0.01)
     sv, _ = primal_solve((op, inputs))
@@ -31,6 +32,7 @@ end
 end
 
 @testitem "tangent solves match finite differences (homogeneous boundary values)" setup = [LF_solvers_coefficients] tags = [:latticefields, :solvers] begin
+using .LF_solvers_coefficients: fd
 @testset "tangent solves match finite differences (homogeneous boundary values)" begin
     box = box_case(64, 32; s = 0.01)
     sv, u = primal_solve(box)

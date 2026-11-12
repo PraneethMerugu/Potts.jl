@@ -4,6 +4,9 @@
 
 @testsetup module LF_compile_numbers
 using Test, LatticeFields
+# imports an earlier file made in the old single Main
+using LatticeFields.IR: Ex
+using LatticeFields: Exec
 include("../host_runner.jl")
 include("../fixtures.jl")
 using ForwardDiff: Dual
@@ -14,6 +17,7 @@ include("../shared/export_all.jl")
 end
 
 @testitem "number primitives" setup = [LF_compile_numbers] tags = [:latticefields, :compile] begin
+using .LF_compile_numbers: valtype
 @testset "number primitives" begin
     d = Dual{Nothing}(1.5, 2.0, 3.0)
     @test lanecast(Float32, 1.5) === 1.5f0
@@ -32,6 +36,7 @@ end
 end
 
 @testitem "backends without Float64: any Float64-based value type is refused, naming the field" setup = [LF_compile_numbers] tags = [:latticefields, :compile] begin
+using .LF_compile_numbers: valtype
 @testset "backends without Float64: any Float64-based value type is refused, naming the field" begin
     s = semantic(program(diffusion2()))
     k = s.kernels[1]
@@ -50,6 +55,7 @@ end
 end
 
 @testitem "casts go through lanecast; :state lanes hold the value type" setup = [LF_compile_numbers] tags = [:latticefields, :compile] begin
+using .LF_compile_numbers: valtype
 @testset "casts go through lanecast; :state lanes hold the value type" begin
     s = semantic(program(diffusion2()))
     k = s.kernels[1]
@@ -66,6 +72,7 @@ end
 # Float64 registers the kernel in Exec's D-157 registry. Base f5641ce1: no `fixed`, no `S`, no
 # registry (every test errors).
 @testitem "F3-14: fixed lanes, a compute type wider than the storage, the Float64 registry" setup = [LF_compile_numbers] tags = [:latticefields, :compile] begin
+using .LF_compile_numbers: valtype
 @testset "F3-14: fixed lanes, a compute type wider than the storage, the Float64 registry" begin
     @test lanetype(F64, Float32, :state, true) == Float64 && lanetype(F32, Float64, :state, true) == Float32
     @test lanetype(F64, Float32, :state, false) == Float32                         # control: the value class

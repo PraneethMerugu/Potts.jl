@@ -5,6 +5,9 @@
 
 @testsetup module LF_problems_device
 using Test, LatticeFields
+# imports an earlier file made in the old single Main
+using ForwardDiff: Dual
+using ForwardDiff: ForwardDiff
 include("shared/lf_runner.jl")
 include("exec_helpers.jl")
 include("host_runner.jl")
@@ -33,6 +36,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "x1 device (gpu): K=K T=T length(dims)D" setup = [LF_problems_device] tags = [:latticefields, :problems, :gpu_only] begin
+using .LF_problems_device: instances
 @testset "x1 device ($gpu): K=$K T=$T $(length(dims))D" for (dims, K, T) in (
     ((64, 48), 4, 3), ((64, 48), 8, 0), ((16, 12, 10), 4, 3))
     X, P = inputs(dims, K), speciesP(K, T)
@@ -53,6 +57,7 @@ end
 end
 
 @testitem "owned and ODE problems on gpu" setup = [LF_problems_device] tags = [:latticefields, :problems, :gpu_only] begin
+using .LF_problems_device: instances
 @testset "owned and ODE problems on $gpu" begin
     dims = (40, 30)
     u0 = rand(Xoshiro(5), Float32, prod(dims))
@@ -90,6 +95,7 @@ end
 end
 
 @testitem "Dual{Float32} parameters on gpu (P5)" setup = [LF_problems_device] tags = [:latticefields, :problems, :gpu_only] begin
+using .LF_problems_device: instances
 @testset "Dual{Float32} parameters on $gpu (P5)" begin
     dims = (16, 12)
     u0 = rand(Xoshiro(7), Float32, prod(dims))
@@ -114,6 +120,7 @@ end
 end
 
 @testitem "Dual{Float64} into a Float32 ODE on gpu: the message names the fix (review round 5)" setup = [LF_problems_device] tags = [:latticefields, :problems, :gpu_only] begin
+using .LF_problems_device: instances
 @testset "Dual{Float64} into a Float32 ODE on $gpu: the message names the fix (review round 5)" begin
     if !Exec.supports(DEV, Float64)
         dims = (8, 6)

@@ -5,6 +5,8 @@
 
 @testsetup module LF_solvers_device
 using Test, LatticeFields
+# imports an earlier file made in the old single Main
+using LatticeFields.Solvers: solve_plan
 include("shared/lf_runner.jl")
 include("exec_helpers.jl")
 include("host_runner.jl")
@@ -49,6 +51,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "device Float32 solves equal the host form bitwise, and repeat" setup = [LF_solvers_device] tags = [:latticefields, :solvers, :gpu_only] begin
+using .LF_solvers_device: instances
 @testset "device Float32 solves equal the host form bitwise, and repeat" begin
     for (name, s, kw) in (("disk128", 0.022, (;)), (
         "per128", 0.022, (; solver_T = Float32)),
@@ -65,6 +68,7 @@ end
 end
 
 @testitem "no Float64 in device code: the walk on device argument types" setup = [LF_solvers_device] tags = [:latticefields, :solvers, :gpu_only] begin
+using .LF_solvers_device: instances
 @testset "no Float64 in device code: the walk on device argument types" begin
     for (c, kw) in (("disk128", (;)), ("disk128", (; inner = Multigrid())),
         ("per128", (; solver_T = Float32)), ("sphere42", (;)))
@@ -87,6 +91,7 @@ end
 end
 
 @testitem "unanchored weak-reaction groups: Float64 solver on device (gpu)" setup = [LF_solvers_device] tags = [:latticefields, :solvers, :gpu_only] begin
+using .LF_solvers_device: instances
 @testset "unanchored weak-reaction groups: Float64 solver on device ($gpu)" begin
     case = named_case("per256", 5.5e-6)
     if gpu == "metal"                      # no Float64: documented Float32 fallback, refusal
@@ -104,6 +109,7 @@ end
 end
 
 @testitem "Exec as the solver executor on gpu: capability, not policy (P5 C2-1)" setup = [LF_solvers_device] tags = [:latticefields, :solvers, :gpu_only] begin
+using .LF_solvers_device: instances
 @testset "Exec as the solver executor on $gpu: capability, not policy (P5 C2-1)" begin
     # `Schedule.supports(DEV, Float64)` is the hardware capability (`Exec.supports`), never the
     # Float32 default-float policy: on ROCm `:auto` keeps the periodic Float64 solve

@@ -2,6 +2,8 @@
 
 @testsetup module LF_qa_exec
 using Test, LatticeFields
+# imports an earlier file made in the old single Main
+using LatticeFields.Schedule: plan
 include("../exec_helpers.jl")
 using JET: @test_opt
 include("../shared/export_all.jl")

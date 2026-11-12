@@ -4,6 +4,8 @@
 
 @testsetup module LF_solvers_plans
 using Test, LatticeFields
+# imports an earlier file made in the old single Main
+using LatticeFields.IR: runtime
 include("../host_runner.jl")
 include("../solvers_cases.jl")
 using LatticeFields.Solvers: precond_plan, solve_plan, resolve_inner, sentinel,

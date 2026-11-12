@@ -4,6 +4,8 @@
 using Test, CorePotts, StaticArrays, Statistics, Random
 using SciMLBase: SciMLBase, ReturnCode, remake
 using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+# imports an earlier file made in the old single Main
+using CorePotts: Proposal
 include("shared/gg_model.jl")
 
 # The host executor (LatticeFields.Exec, v3 §9.1): a site phase of more than `HOST_GRAIN`

@@ -5,6 +5,8 @@
 
 @testsetup module LF_problems_owned_group
 using Test, LatticeFields
+# imports an earlier file made in the old single Main
+using LatticeFields.Solvers: V
 include("../host_runner.jl")
 include("../fixtures.jl")
 include("../shared/problems_owned.jl")

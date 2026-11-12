@@ -42,6 +42,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "F3-22: spatial operators across grids" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
+using .LP_crossgrid: fd, kron
 @testset "F3-22: spatial operators across grids" begin
     @testset "the direct form is the manual route, bitwise, for every operator and both directions" begin
         alg = ExplicitEuler(; dt = XT, substeps = 1)

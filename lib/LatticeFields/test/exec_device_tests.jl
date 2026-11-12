@@ -31,6 +31,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "Exec device (gpu): the guard stops at n" setup = [LF_exec_device] tags = [:latticefields, :exec, :gpu_only] begin
+using .LF_exec_device: instances
 @testset "Exec device ($gpu): the guard stops at n" begin
     for n in (1, 255, 256, 257, 1000)
         a = devarray(zeros(Float32, n + 300))
@@ -48,6 +49,7 @@ end
 end
 
 @testitem "Exec device (gpu): compile! compiles the launch's kernel and writes nothing" setup = [LF_exec_device] tags = [:latticefields, :exec, :gpu_only] begin
+using .LF_exec_device: instances
 @testset "Exec device ($gpu): compile! compiles the launch's kernel and writes nothing" begin
     a = devarray(ones(Float32, 300))
     @test compiles(() -> Exec.compile!(DEV, Put{3}(), (a,))) == 1
@@ -70,6 +72,7 @@ end
 end
 
 @testitem "Exec device (gpu): compiles per distinct ndrange" setup = [LF_exec_device] tags = [:latticefields, :exec, :gpu_only] begin
+using .LF_exec_device: instances
 @testset "Exec device ($gpu): compiles per distinct ndrange" begin
     a = devarray(zeros(Float32, 4096))
     # static: sizes 256 and 512 and 1024 (multiples of 64: the ndranges differ), then 256 again
@@ -86,6 +89,7 @@ end
 end
 
 @testitem "Exec device (gpu): compile_all! compiles a set on host tasks" setup = [LF_exec_device] tags = [:latticefields, :exec, :gpu_only] begin
+using .LF_exec_device: instances
 @testset "Exec device ($gpu): compile_all! compiles a set on host tasks" begin
     a = devarray(zeros(Float32, 512))
     ls = (Exec.Launch(DEV, Put{11}(), (a,), 512; workgroupsize = 64, static = true),
@@ -100,6 +104,7 @@ end
 end
 
 @testitem "Exec device (gpu): the plan walk adds no host bytes" setup = [LF_exec_device] tags = [:latticefields, :exec, :gpu_only] begin
+using .LF_exec_device: instances
 @testset "Exec device ($gpu): the plan walk adds no host bytes" begin
     a = devarray(zeros(Float32, 1024))
     b = devarray(zeros(Float32, 1024))
@@ -118,6 +123,7 @@ end
 end
 
 @testitem "Exec device (gpu): the Schedule contract's Cartesian form" setup = [LF_exec_device] tags = [:latticefields, :exec, :gpu_only] begin
+using .LF_exec_device: instances
 @testset "Exec device ($gpu): the Schedule contract's Cartesian form" begin
     G = (; n = Int32(70), dims = (Int32(7), Int32(10)), rt = ())
     b = devarray(zeros(Float32, 100))
