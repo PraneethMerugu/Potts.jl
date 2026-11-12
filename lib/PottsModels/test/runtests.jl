@@ -192,7 +192,10 @@ _pm_is_testset(ex) = ex isa Expr && ex.head === :macrocall && ex.args[1] === Sym
 # order) is loaded first with its top-level testsets dropped, as the shard preload did; so a
 # shard still starts from the globals the single process had (e.g. siblings.jl uses
 # mechanisms.jl's `split_cells`). In the files, `Main` means the file's module (the frozen
-# files reach `Main.PottsDevices` and an earlier file's `Main.p63d_compactness`).
+# files reach `Main.PottsDevices` and an earlier file's `Main.p63d_compactness`). A file in
+# PM_IN_MAIN runs in Main instead when its tests run (only then: a definitions-only load of it
+# goes to a module like any other), and the earlier names it lacks are set there as plain
+# globals, since the file writes some of them itself.
 module PMFiles end
 const PM_MODULES = Dict{String, Module}()       # file => its module (full run or definitions only)
 const PM_EXPORTS = Dict{String, Vector{Pair{Symbol, Any}}}()   # file => the names it offers later files
@@ -235,7 +238,7 @@ function _pm_module(f; defs_only)
         haskey(PM_MODULES, g) || _pm_module(g; defs_only = true)
     end
     path = joinpath(@__DIR__, f)
-    inmain = f in PM_IN_MAIN
+    inmain = f in PM_IN_MAIN && !defs_only                     # only a real run goes to Main
     name = Symbol(defs_only ? "defs_" : "", replace(f, r"[^A-Za-z0-9]" => "_"))
     m = inmain ? (@__MODULE__) : Core.eval(PMFiles, Expr(:module, true, name, Expr(:block)))
     before = inmain ? Set(first.(Base.invokelatest(_pm_names, m))) : Set{Symbol}()
@@ -249,22 +252,33 @@ function _pm_module(f; defs_only)
     end
     own = _pm_own(path)
     foreach(n -> delete!(latest, n), union(own, before))
-    e = Core.eval(inmain ? PMFiles : m, Expr(:module, true, inmain ? Symbol("earlier_", name) : :PMEarlier,
-        Expr(:block, (:(const $n = $(QuoteNode(v))) for (n, v) in latest)..., Expr(:export, keys(latest)...))))
-    Core.eval(m, Expr(:using, Expr(:., :., (inmain ? (:PMFiles,) : ())..., nameof(e))))
-    # an earlier file's name that a package the file uses also exports was the old Main's own
-    # binding and won; here both are implicit imports, so import it explicitly
-    clash = Base.invokelatest() do
-        us = filter(!=(e), ccall(:jl_module_usings, Any, (Any,), m))
-        [n for (n, v) in latest if any(M -> isdefined(M, n) && Base.isexported(M, n) && getglobal(M, n) !== v, us)]
+    if inmain
+        # Main keeps a name it already has; a name it lacks becomes a plain global, as the old
+        # single process had it. An imported binding would refuse the file's own top-level
+        # writes (p6_0o assigns `s` inside a `@block`-style operand list), and so would a
+        # `using` of a module of them.
+        pre = union(before, keys(latest))
+        for (n, v) in latest
+            startswith(string(n), '@') || isdefined(m, n) || Core.eval(m, Expr(:(=), n, QuoteNode(v)))
+        end
+    else
+        e = Core.eval(m, Expr(:module, true, :PMEarlier,
+            Expr(:block, (:(const $n = $(QuoteNode(v))) for (n, v) in latest)..., Expr(:export, keys(latest)...))))
+        Core.eval(m, Expr(:using, Expr(:., :., nameof(e))))
+        # an earlier file's name that a package the file uses also exports was the old Main's own
+        # binding and won; here both are implicit imports, so import it explicitly
+        clash = Base.invokelatest() do
+            us = filter(!=(e), ccall(:jl_module_usings, Any, (Any,), m))
+            [n for (n, v) in latest if any(M -> isdefined(M, n) && Base.isexported(M, n) && getglobal(M, n) !== v, us)]
+        end
+        isempty(clash) || Core.eval(m, Expr(:using, Expr(:(:), Expr(:., :., nameof(e)), (Expr(:., n) for n in clash)...)))
     end
-    isempty(clash) || Core.eval(m, Expr(:using, Expr(:(:), Expr(:., :., (inmain ? (:PMFiles,) : ())..., nameof(e)),
-        (Expr(:., n) for n in clash)...)))
     Base.include(ex -> defs_only && _pm_is_testset(ex) ? nothing : inmain ? ex : _pm_main_to(m, ex), m, path)
     PM_MODULES[f] = m
     # (the file's bindings are newer than this call's world: read them in the latest world)
     PM_EXPORTS[f] = Base.invokelatest() do
-        [p for p in _pm_names(m, before) if Base.binding_module(m, p[1]) !== e]
+        inmain ? [p for p in _pm_names(m) if Base.binding_module(m, p[1]) === m && (p[1] in own || !(p[1] in pre))] :
+            [p for p in _pm_names(m, before) if Base.binding_module(m, p[1]) !== e]
     end
     return m
 end
