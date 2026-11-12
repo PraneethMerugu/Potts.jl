@@ -83,7 +83,7 @@ end
 isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
 
 module MnPDE
-using .FieldPDE
+using ..FieldPDE
 @variables c(..) e(..)::Bool [input = true]
 const C, E = c(t, x, y), e(t, x, y)
 reaction(k) = pdesys([Dt(C) ~ 0.1 * Δ(C) - k * C * E], [c(0, x, y) ~ 0.0], (12, 12), [C, E])
