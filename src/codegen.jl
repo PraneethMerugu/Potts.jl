@@ -338,8 +338,23 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
     append!(body, _cluster_delta_code(c, T))
     for (r, E) in _edge_energies(c)
         Ecode = lower(E, _edge_env(T, :ea, :eb, :ek, :ed, rn))
-        push!(body, :(dH += CorePotts.link_delta($T, st.cell, $(_link_store(c, r)), ctx, prop,
-            (ea, eb, ek, ed) -> $Ecode)))
+        # `CorePotts.link_delta` with the edge energy inline, not as a closure (a closure here
+        # becomes an opaque closure, which a downstream package cannot precompile; TS1c)
+        push!(body, quote
+            dH += let ˍfr = CorePotts.link_frame($T, st.cell, ctx.lattice, prop), ˍstore = $(_link_store(c, r)), ˍdH = zero($T)
+                for ˍside in 1:2, ek in 1:CorePotts.maxdegree(ˍstore)
+                    (ea, eb, ˍm, ˍd0, ˍd1) = CorePotts.link_at($T, ˍfr, st.cell, ctx.lattice, ˍstore, ˍside, ek)
+                    ˍm == 0 && continue
+                    ˍe0 = let ed = ˍd0
+                        $Ecode
+                    end
+                    ˍdH += ˍm == 1 ? -ˍe0 : (let ed = ˍd1
+                        $Ecode
+                    end) - ˍe0
+                end
+                ˍdH
+            end
+        end)
     end
     for E in c.site_terms
         Eafter = lower(isempty(after[:target]) ? E : Symbolics.substitute(E, after[:target]; fold = Val(false)),
