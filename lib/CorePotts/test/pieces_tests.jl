@@ -3,6 +3,10 @@
 # and windowed) and `global_gains` against brute force; the window's three outcomes on a
 # loop. The model-level acceptance is PottsModels' frozen `p6_9a_global_connectivity.jl`.
 
+@testsetup module CP_pieces
+using Test, CorePotts, StaticArrays, Statistics, Random
+using SciMLBase: SciMLBase, ReturnCode, remake
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
 using CorePotts: FloodScratch, GlobalExact, GlobalBoard, GlobalSearch, GlobalLocal,
                  global_keeps, global_gains,
                  pieces_after!, pieces_defer, commit_pieces!, GLOBAL_PASS, GLOBAL_WINDOW,
@@ -41,7 +45,10 @@ random_labels(dims, n, rng) = Int32.(rand(rng, 0:n, dims))
 const PIECES_LATTICES = [
     Lattice((7, 6); boundary = Closed()), Lattice((7, 6); boundary = Periodic()),
     Lattice((7, 7); boundary = Closed(), geometry = Hexagonal()), Lattice((5, 4, 4); boundary = Periodic())]
+include("shared/export_all.jl")
+end
 
+@testitem "pieces: recompute and per-copy after-values = flood fill" setup = [CP_pieces] tags = [:corepotts, :pieces] begin
 @testset "pieces: recompute and per-copy after-values = flood fill" begin
     rng = Xoshiro(9)
     for lat in PIECES_LATTICES, full in (false, true), trial in 1:6
@@ -85,7 +92,9 @@ const PIECES_LATTICES = [
         @test bad == 0
     end
 end
+end
 
+@testitem "Global: exact decision = brute force; gains" setup = [CP_pieces] tags = [:corepotts, :pieces] begin
 @testset "Global: exact decision = brute force; gains" begin
     rng = Xoshiro(10)
     for lat in PIECES_LATTICES, full in (false, true), trial in 1:4
@@ -119,7 +128,9 @@ end
         @test n > 0 && agree == n
     end
 end
+end
 
+@testitem "Global: the window's three outcomes (loop fixture)" setup = [CP_pieces] tags = [:corepotts, :pieces] begin
 @testset "Global: the window's three outcomes (loop fixture)" begin
     # a one-wide square loop of side s: removing a site never splits it, but the way round
     # leaves the box of radius W unless s ≤ W + 1
@@ -155,4 +166,5 @@ end
         @test global_keeps(σ, ctx, prop, Val(false), Val(W), Val(cap), GlobalSearch()) ==
               GLOBAL_REFUSED
     end
+end
 end

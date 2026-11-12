@@ -4,67 +4,17 @@
 
 # brute force: per cell, the pairs (s, s′) over `offs` with σ(s′) ≠ σ(s) and the partner's
 # kind (0 for the medium) in `kinds`
-function cc_brute(σ, kind, lat, rel, kinds, n)
-    out = zeros(Int32, n)
-    for i in 1:nsites(lat)
-        c = σ[i]
-        c == 0 && continue
-        x = coordinates(lat, i)
-        for o in rel.offsets
-            inside, y = shift(lat, x, o)
-            inside || continue
-            q = σ[linear_index(lat, y)]
-            q == c && continue
-            (q == 0 ? 0 : kind[q]) in kinds && (out[c] += 1)
-        end
-    end
-    return out
+
+@testsetup module CP_contact_counts
+using Test, CorePotts, StaticArrays, Statistics, Random
+using SciMLBase: SciMLBase, ReturnCode, remake
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+include("shared/gg_model.jl")
+include("shared/contact_counts.jl")
+include("shared/export_all.jl")
 end
 
-const CC_MED = UInt64(0b001)          # partner is the medium
-const CC_TWO = UInt64(0b100)          # partner is of kind 2
-function cc_commit!(st, p, prop, ctx)
-    commit_volume!(st, p, prop, ctx)
-    commit_moments!(st.cell, ctx, prop)
-    commit_contact_count!(st.cell.n_med, st.σ, st.cell.kind, ctx.contact, CC_MED, ctx.lattice, prop)
-    commit_contact_count!(st.cell.n_two, st.σ, st.cell.kind, ctx.vn, CC_TWO, ctx.lattice, prop)
-    return nothing
-end
-# divisions of large cells every other MCS, and cell 1 changes kind at MCS 4
-cc_trigger(st, p, ctx, key, mcs, c) = mcs == 4 && c == 1 ? EVENT_TRANSITION :
-                                      (iseven(mcs) && st.cell.volume[c] >= 28) ? EVENT_DIVIDE : EVENT_NONE
-cc_kind(st, p, ctx, key, mcs, c) = Int32(3 - st.cell.kind[c])
-
-function cc_problem(; lifecycle = true)
-    lat = Lattice((30, 24); boundary = (Periodic(), Closed()))
-    σ = zeros(Int32, 30, 24)
-    blocks = ((vcat(29:30, 1:3), 1:5), (8:12, 1:5), (13:17, 2:6), (5:9, 12:16), (20:24, 18:22))
-    for (c, (xs, ys)) in enumerate(blocks)
-        σ[xs, ys] .= c
-    end
-    kinds = Int32[1, 2, 1, 2, 1]
-    cell = merge(init_moments(σ, lat, 5),
-        (; n_med = recompute_contact_count(σ, kinds, lat, Moore(1), CC_MED, 5),
-            n_two = recompute_contact_count(σ, kinds, lat, VonNeumann(1), CC_TWO, 5)))
-    st = with_capacity(initial_state(σ, kinds; cell), 32)
-    cc = ContactCounts((ContactCount(:n_med, Moore(1), CC_MED), ContactCount(:n_two, VonNeumann(1), CC_TWO)))
-    f = CPMFunction(gg_delta_H; commit! = cc_commit!, temperature = gg_temperature,
-        lifecycle = lifecycle ? Lifecycle(cc_trigger; kind = cc_kind, normal = random_plane) : nothing)
-    p = merge(gg_params(), (; V0 = 36.0, T = 8.0))
-    return PottsProblem(f, st, lat, (0, 30), p; contact = Moore(1), proposal = Moore(1),
-        relations = (; vn = VonNeumann(1), contact_counts = cc), seed = 7)
-end
-
-function cc_bad(sol, lat)
-    bad = 0
-    for u in sol.u
-        m = cc_brute(u.σ, u.cell.kind, lat, relation(Moore(1), lat), (0,), length(u.cell.kind))
-        t = cc_brute(u.σ, u.cell.kind, lat, relation(VonNeumann(1), lat), (2,), length(u.cell.kind))
-        bad += (u.cell.n_med != m) + (u.cell.n_two != t)
-    end
-    return bad
-end
-
+@testitem "contact counts" setup = [CP_contact_counts] tags = [:corepotts, :contact_counts] begin
 @testset "contact counts" begin
     lat = Lattice((30, 24); boundary = (Periodic(), Closed()))
     @testset "recompute equals the unweighted surface for every kind" begin
@@ -116,7 +66,9 @@ end
         @test st.cell.n_two == cc_brute(st.σ, st.cell.kind, lat, relation(VonNeumann(1), lat), (2,), length(st.cell.kind))
     end
 end
+end
 
+@testitem "normal draws" setup = [CP_contact_counts] tags = [:corepotts, :contact_counts] begin
 @testset "normal draws" begin
     key = RNGKey(11)
     z = [CorePotts.normal(Float64, draw(key, 3, e, stream_id("t.normal"))) for e in 1:20_000]
@@ -142,7 +94,9 @@ end
           neg[1] == CorePotts.STATUS_DRAW_NEGATIVE_SD
     @test CorePotts._model_status(nothing, nothing) == 0                       # a model state that is not a NamedTuple
 end
+end
 
+@testitem "a model status word fails the run" setup = [CP_contact_counts] tags = [:corepotts, :contact_counts] begin
 @testset "a model status word fails the run" begin
     lat = Lattice((12, 12))
     σ = zeros(Int32, 12, 12); σ[4:7, 4:7] .= 1
@@ -155,4 +109,5 @@ end
     end
     ok = PottsProblem(CPMFunction(gg_delta_H; temperature = gg_temperature), st, lat, (0, 6), gg_params())
     @test solve(ok, SequentialCPM()).retcode == ReturnCode.Success                    # control
+end
 end

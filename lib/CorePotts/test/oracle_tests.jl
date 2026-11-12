@@ -1,7 +1,16 @@
 # Exact transition-matrix oracle (ROADMAP M1.4b): the `Oracle` module is in oracle_core.jl
 # (the Potts group reuses it against generated models).
-include("oracle_core.jl")
 
+@testsetup module CP_oracle
+using Test, CorePotts, StaticArrays, Statistics, Random
+using SciMLBase: SciMLBase, ReturnCode, remake
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+include("shared/gg_model.jl")
+include("oracle_core.jl")
+include("shared/export_all.jl")
+end
+
+@testitem "exact transition oracle (M1.4b)" setup = [CP_oracle] tags = [:corepotts, :oracle] begin
 @testset "exact transition oracle (M1.4b)" begin
     Jk = [0.0 6 8; 6 2 10; 8 10 3]                 # medium, kind 1, kind 2
     dims = (3, 2)
@@ -47,7 +56,9 @@ include("oracle_core.jl")
     @info "oracle mutant (T = 5 against exact T = 4)" z
     @test z > 4.5
 end
+end
 
+@testitem "the checkerboard spacing covers an undeclared read radius" setup = [CP_oracle] tags = [:corepotts, :oracle] begin
 @testset "the checkerboard spacing covers an undeclared read radius" begin
     lat = Lattice((20, 20))
     σ, k = blocks((20, 20), 3)
@@ -60,4 +71,5 @@ end
     @test init(wide, SequentialCPM()) isa PottsIntegrator
     ok = CPMFunction(gg_delta_H; temperature = gg_temperature, footprint = Footprint(read = 2))
     @test solve(remake(wide; f = ok), CheckerboardCPM()).retcode == ReturnCode.Success
+end
 end

@@ -2,6 +2,46 @@
 # test/shared/devices.jl, D-157). Trackers stay exact on the device; statistics
 # agree with the CPU (D-029: statistical, not bitwise, CPU/GPU agreement).
 
+@testsetup module CP_gpu
+using Test, CorePotts, StaticArrays, Statistics, Random
+using SciMLBase: SciMLBase, ReturnCode, remake
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+# PottsDevices (the old runner included it into Main)
+include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "devices.jl"))
+include("shared/gg_model.jl")
+include("shared/geometry.jl")
+include("shared/phases.jl")
+include("shared/drives.jl")
+include("shared/cell_sums.jl")
+include("shared/lifecycle.jl")
+include("shared/compartments.jl")
+include("shared/contact_counts.jl")
+include("shared/euler.jl")
+
+# Whole-cell connectivity on the device (P6.9a, `pieces.jl`): the windowed veto (the parallel
+# deferred kernel), the exact veto (the serial deferred kernel) and an inline exact search
+# (the serial kernel over the flood scratch). Compiles every connectivity kernel (D-157).
+# both cells: the gaining one locally, the losing one by the search
+p69_post_window(st, p, prop, ctx, stage) = CorePotts.global_gains(st.σ, ctx, prop, Val(false)) ?
+    CorePotts.global_keeps(st.σ, ctx, prop, Val(false), Val(2), Val(25), stage) : Int32(2)
+p69_post_exact(st, p, prop, ctx, stage) = CorePotts.global_gains(st.σ, ctx, prop, Val(false)) ?
+    CorePotts.global_keeps(st.σ, ctx, prop, Val(false), Val(nothing), Val(0), stage) : Int32(2)
+p69_defer(st, p, prop, ctx) = CorePotts.global_defer(st.σ, ctx, prop, Val(false))
+p69_penalty_dH(st, p, prop, ctx) = gg_delta_H(st, p, prop, ctx) +
+    40.0f0 * (CorePotts.global_keeps(st.σ, ctx, prop, Val(false), Val(nothing), Val(0), CorePotts.GlobalSearch()) != Int32(0))
+
+# ROCm, last: no `double` in any kernel this suite compiled (full scan of the kernel cache,
+# D-157); the scan lives with the monorepo's shared test helpers
+const DEVICE_IR_SCAN = joinpath(@__DIR__, "..", "..", "..", "test", "shared", "device_ir_scan.jl")
+
+# Compile before enqueue (v3 §4.4): the staged lifecycle's compile set (`_CompileOnly`,
+# `Exec.compile!` with `n = 0`) compiles exactly the kernels the launches then run, on host
+# tasks, and writes nothing. Counted in the backend's kernel-instance cache.
+@inline cp_compile_write!(i, a, v) = (@inbounds a[i] = v; nothing)      # i ≤ length(a)
+include("shared/export_all.jl")
+end
+
+@testitem "device (PottsDevices.device_name())" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
 @testset "device ($(PottsDevices.device_name()))" begin
     backend = PottsDevices.device_backend()
     σ, kinds = blocks((64, 64), 6)
@@ -580,12 +620,14 @@
         end
     end
 end
+end
 
 # The device lifecycle's staged form (one kernel per stage; what problems above FUSE_SITES
 # use) with the optional stages: the surface tracker, contact counts, cluster volume and
 # surface, and the frozen-mask refresh. The fixtures above are small, so they run fused;
 # here they run staged, against the same oracles (and the full no-`double` scan below then
 # sees every stage kernel, D-157).
+@testitem "the staged device lifecycle on the device (surface, contact counts, clusters, frozen mask)" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
 @testset "the staged device lifecycle on the device (surface, contact counts, clusters, frozen mask)" begin
     backend = PottsDevices.device_backend()
     fuse = CorePotts.FUSE_SITES[]
@@ -640,19 +682,9 @@ end
         CorePotts.FUSE_SITES[] = fuse
     end
 end
+end
 
-# Whole-cell connectivity on the device (P6.9a, `pieces.jl`): the windowed veto (the parallel
-# deferred kernel), the exact veto (the serial deferred kernel) and an inline exact search
-# (the serial kernel over the flood scratch). Compiles every connectivity kernel (D-157).
-# both cells: the gaining one locally, the losing one by the search
-p69_post_window(st, p, prop, ctx, stage) = CorePotts.global_gains(st.σ, ctx, prop, Val(false)) ?
-    CorePotts.global_keeps(st.σ, ctx, prop, Val(false), Val(2), Val(25), stage) : Int32(2)
-p69_post_exact(st, p, prop, ctx, stage) = CorePotts.global_gains(st.σ, ctx, prop, Val(false)) ?
-    CorePotts.global_keeps(st.σ, ctx, prop, Val(false), Val(nothing), Val(0), stage) : Int32(2)
-p69_defer(st, p, prop, ctx) = CorePotts.global_defer(st.σ, ctx, prop, Val(false))
-p69_penalty_dH(st, p, prop, ctx) = gg_delta_H(st, p, prop, ctx) +
-    40.0f0 * (CorePotts.global_keeps(st.σ, ctx, prop, Val(false), Val(nothing), Val(0), CorePotts.GlobalSearch()) != Int32(0))
-
+@testitem "whole-cell connectivity on the device (P6.9a)" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
 @testset "whole-cell connectivity on the device (P6.9a)" begin
     backend = PottsDevices.device_backend()
     σ, kinds = blocks((32, 32), 5)
@@ -679,10 +711,12 @@ p69_penalty_dH(st, p, prop, ctx) = gg_delta_H(st, p, prop, ctx) +
         @test integ.stats.connectivity_deferred isa Int
     end
 end
+end
 
 # The lockless checkerboard on the device (P6.0bl): concurrent copies keep every tracker exact,
 # the serial pass and the windowed search keep vetoed cells whole, and the device commits at
 # the CPU's rate (statistically: D-029; runs are not reproducible on a device)
+@testitem "lockless checkerboard on the device (PottsDevices.device_name())" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
 @testset "lockless checkerboard on the device ($(PottsDevices.device_name()))" begin
     backend = PottsDevices.device_backend()
     lat = Lattice((96, 96))
@@ -747,10 +781,12 @@ end
     ens = solve(EnsembleProblem(prob), alg; backend, trajectories = 3)    # EnsembleThreads by default
     @test all(s -> s.u[end].cell.volume == recount(s.u[end]), ens.u) && allunique([s.u[end].σ for s in ens.u])
 end
+end
 
 # F3-23: a float cell sum on the device equals the host bitwise (exact fixed point), in the
 # Int64 form and in the paired 32-bit form of backends without 64-bit atomics (Metal), forced
 # here. Negative control: the float atomics of the code before F3-23 differ from the host.
+@testitem "F3-23: float cell sums on the device equal the host bitwise" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
 @testset "F3-23: float cell sums on the device equal the host bitwise" begin
     backend = PottsDevices.device_backend()
     dims = (96, 80)
@@ -780,9 +816,11 @@ end
         CorePotts._FLOAT_ATOMICS[] = false
     end
 end
+end
 
 # F3-23 r1 (S2): a weighted contact table on the device equals the host bitwise (integer
 # weight units, Int64 and paired forms)
+@testitem "F3-23 r1: weighted contact tables on the device equal the host bitwise" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
 @testset "F3-23 r1: weighted contact tables on the device equal the host bitwise" begin
     backend = PottsDevices.device_backend()
     dims = (96, 80)
@@ -809,19 +847,16 @@ end
         end
     end
 end
+end
 
-# ROCm, last: no `double` in any kernel this suite compiled (full scan of the kernel cache,
-# D-157); the scan lives with the monorepo's shared test helpers
-const DEVICE_IR_SCAN = joinpath(@__DIR__, "..", "..", "..", "test", "shared", "device_ir_scan.jl")
+@testitem "device IR: no double in any kernel this suite compiled" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only, :device_scan] begin
 if PottsDevices.device_name() == "rocm" && isfile(DEVICE_IR_SCAN)
     include(DEVICE_IR_SCAN)
     DeviceIRScan.check("CorePotts")
 end
+end
 
-# Compile before enqueue (v3 §4.4): the staged lifecycle's compile set (`_CompileOnly`,
-# `Exec.compile!` with `n = 0`) compiles exactly the kernels the launches then run, on host
-# tasks, and writes nothing. Counted in the backend's kernel-instance cache.
-@inline cp_compile_write!(i, a, v) = (@inbounds a[i] = v; nothing)      # i ≤ length(a)
+@testitem "compile-only launches compile what the launch runs, and write nothing (device)" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
 @testset "compile-only launches compile what the launch runs, and write nothing (device)" begin
     backend = PottsDevices.device_backend()
     pkg = PottsDevices.device_package()
@@ -848,4 +883,5 @@ end
     CorePotts.Exec.launch!(backend, cp_compile_write!, 8, (c, Int32(7)))
     PottsDevices.device_sync()
     @test ninst() == n0 + 3
+end
 end

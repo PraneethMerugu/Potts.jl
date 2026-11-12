@@ -1,19 +1,16 @@
 # Lifecycle: division, removal, transition, id reuse, capacity (ROADMAP M2.8).
 
-frozen_dynamics(st, p, prop, ctx) = false
-lc_state(σ, kinds, lat; capacity = length(kinds), cell = (;)) = with_capacity(
-    initial_state(σ, kinds; cell = merge(init_moments(σ, lat, length(kinds)), cell)), capacity)
-
-function run_lifecycle(σ, kinds, lat, lifecycle; capacity = length(kinds) + 4, tspan = (0, 1),
-        cell = (;), constraint = frozen_dynamics, p = gg_params(), alg = SequentialCPM(),
-        phases = Phases(), backend = CPU())
-    st = lc_state(σ, kinds, lat; capacity, cell)
-    f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint, lifecycle, phases)
-    return solve(PottsProblem(f, st, lat, tspan, p), alg; backend)
+@testsetup module CP_lifecycle
+using Test, CorePotts, StaticArrays, Statistics, Random
+using SciMLBase: SciMLBase, ReturnCode, remake
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+include("shared/gg_model.jl")
+include("shared/geometry.jl")
+include("shared/lifecycle.jl")
+include("shared/export_all.jl")
 end
 
-divide_at(t) = (st, p, ctx, key, mcs, c) -> mcs == t ? EVENT_DIVIDE : EVENT_NONE
-
+@testitem "lifecycle" setup = [CP_lifecycle] tags = [:corepotts, :lifecycle] begin
 @testset "lifecycle" begin
     @testset "division planes (2D, across the periodic seam)" begin
         lat = Lattice((40, 40))
@@ -107,7 +104,9 @@ divide_at(t) = (st, p, ctx, key, mcs, c) -> mcs == t ? EVENT_DIVIDE : EVENT_NONE
         end
     end
 end
+end
 
+@testitem "rule-carrying events: the firing rule reaches the state rule; members take the root's" setup = [CP_lifecycle] tags = [:corepotts, :lifecycle] begin
 @testset "rule-carrying events: the firing rule reaches the state rule; members take the root's" begin
     lat = Lattice((40, 40))
     # a lone cell 1 (rule 2) and a cluster {3 root, 4 member} (rule 5); cell 2 divides plain
@@ -136,52 +135,9 @@ end
         lifecycle = Lifecycle(plain; divide! = (st, p, ctx, key, mcs, parent, daughter) -> (n[] += 1; nothing)))
     @test solve(PottsProblem(f7, st, lat, (0, 1), gg_params()), SequentialCPM()).stats.lifecycle.divisions == 1 && n[] == 1
 end
-
-# P6.0d (D-081): a frozen mask that derives from the state (as Potts' `[frozen]` kinds) is
-# recomputed after every MCS with a lifecycle event, by `refresh_frozen!` and by `reinit!`.
-# `FrozenKind(k)`: the standard rule (built on the device), the sites of cells of kind `k`
-# are frozen. `HostFrozen(k)`: the same rule given as a custom `remake_frozen` (the host
-# fallback). `nothing`: a static mask.
-struct FrozenKind
-    k::Int32
-end
-CorePotts.frozen_kinds(s::FrozenKind) = (s.k,)              # `frozen_varies` follows
-struct HostFrozen
-    k::Int32
-end
-CorePotts.frozen_varies(::HostFrozen) = true                # required with a custom rule
-struct OnlyRemake end                                       # … which this one forgets
-fk_mask(u, k) = (kinds = Array(u.cell.kind); map(c -> c != 0 && kinds[c] == k, Array(u.σ)))
-CorePotts.remake_frozen(s::HostFrozen, prob, u) = fk_mask(u, s.k)
-CorePotts.remake_frozen(::OnlyRemake, prob, u) = fk_mask(u, 2)
-
-# 30×30 periodic, cell 1 (kind 1) and cell 2 (kind 2), both 6×6 and growing toward V0 = 40
-function fk_problem(trigger = nothing; kind = nothing, sys = FrozenKind(2), T = Float64,
-        tspan = (0, 30), seed = 1)
-    lat = Lattice((30, 30))
-    σ = zeros(Int32, 30, 30); σ[5:10, 5:10] .= 1; σ[18:23, 18:23] .= 2
-    st = lc_state(σ, Int32[1, 2], lat)
-    lc = trigger === nothing ? nothing :
-         Lifecycle(trigger; normal = AlongMinorAxis{T}(), (kind === nothing ? (;) : (; kind))...)
-    f = CPMFunction(gg_delta_H; temperature = gg_temperature, lifecycle = lc, sys)
-    return PottsProblem(f, st, lat, tspan, gg_params(T); seed, frozen = fk_mask(st, 2))
-end
-fk_sites(u, c) = Array(u.σ) .== c
-# saved states i-1 → i in which cell c's site set changed
-fk_moved(sol, c, is) = count(i -> fk_sites(sol.u[i], c) != fk_sites(sol.u[i - 1], c), is)
-fk_flip(S) = (st, p, ctx, key, mcs, c) -> mcs == S ? EVENT_TRANSITION : EVENT_NONE
-fk_swap(st, p, ctx, key, mcs, c) = Int32(3 - st.cell.kind[c])
-# a disk domain with no frozen kind (a static mask) and a division at MCS 2
-function fk_domain_problem(; T = Float64)
-    lat = Lattice((30, 30); boundary = Closed(), domain = x -> (x[1] - 15.5)^2 + (x[2] - 15.5)^2 <= 13^2)
-    σ = zeros(Int32, 30, 30); σ[10:19, 12:19] .= 1
-    st = lc_state(σ, Int32[1], lat; capacity = 3)
-    lc = Lifecycle((st, p, ctx, key, mcs, c) -> mcs == 2 && c == 1 ? EVENT_DIVIDE : EVENT_NONE;
-        normal = AlongMinorAxis{T}())
-    f = CPMFunction(gg_delta_H; temperature = gg_temperature, lifecycle = lc)
-    return PottsProblem(f, st, lat, (0, 8), gg_params(T))
 end
 
+@testitem "the frozen mask follows lifecycle events, callbacks and reinit! (P6.0d)" setup = [CP_lifecycle] tags = [:corepotts, :lifecycle] begin
 @testset "the frozen mask follows lifecycle events, callbacks and reinit! (P6.0d)" begin
     S = 10
     before, after = 2:(S + 2), (S + 3):31       # saved u at t = 1 … S+1 and t = S+2 … 30
@@ -314,22 +270,9 @@ end
         @test integ.ctx.mobility.frozen == fk_mask(prob.u0, 2)
     end
 end
-
-# P6.0v2b (D-128): a custom rule declares the leaves it reads (`frozen_reads`). On the CPU
-# the declared path is the live state (no copy), so only the validation and the masks are
-# exercised here; the byte behaviour is covered on Metal by the acceptance file
-# `p6_0v2b_frozen_refresh_bytes.jl`. A bad declaration fails at `init`, before any step.
-struct DeclaredFrozen
-    k::Int32
-    reads::Any
 end
-CorePotts.frozen_varies(::DeclaredFrozen) = true
-CorePotts.frozen_reads(s::DeclaredFrozen) = s.reads
-CorePotts.remake_frozen(s::DeclaredFrozen, prob, u) = fk_mask(u, s.k)
-struct KindsBadReads end                                    # the standard rule, a bad declaration
-CorePotts.frozen_kinds(::KindsBadReads) = (Int32(2),)
-CorePotts.frozen_reads(::KindsBadReads) = (:nonexistent,)
 
+@testitem "a custom rule's declared reads (frozen_reads)" setup = [CP_lifecycle] tags = [:corepotts, :lifecycle] begin
 @testset "a custom rule's declared reads (frozen_reads)" begin
     @test CorePotts.frozen_reads(HostFrozen(2)) === nothing && CorePotts.frozen_reads(FrozenKind(2)) === nothing
     S = 10
@@ -359,10 +302,12 @@ CorePotts.frozen_reads(::KindsBadReads) = (:nonexistent,)
         @test refresh_frozen!(integ).ctx.mobility.frozen == fk_mask(prob.u0, 2)
     end
 end
+end
 
 # P6.4b1 review: the skip constant log(1 - n/N) of `SequentialCPM(; skip_interior = true)`
 # is keyed on both n = |B| and the mobile count N. Removing a frozen cell embedded in medium frees its sites (N grows by
 # 36) and leaves |B| unchanged; the constant must follow N.
+@testitem "skip_interior: the skip constant follows a mask change that keeps |B| (P6.4b1)" setup = [CP_lifecycle] tags = [:corepotts, :lifecycle] begin
 @testset "skip_interior: the skip constant follows a mask change that keeps |B| (P6.4b1)" begin
     integ = init(fk_problem(), SequentialCPM(; skip_interior = true); save_start = false)
     step!(integ)
@@ -379,9 +324,11 @@ end
     step!(integ)
     @test integ.stats.attempts == N0 + integ.nmobile
 end
+end
 
 # `transitioning` is kernel-safe (no throw, it runs in the trigger); a transition bit on an
 # event other than a division is refused on the host, by both planners (review of P6.5b, S5)
+@testitem "transitioning: checked on the host, by both planners" setup = [CP_lifecycle] tags = [:corepotts, :lifecycle] begin
 @testset "transitioning: checked on the host, by both planners" begin
     @test CorePotts.transitioning(EVENT_DIVIDE) == EVENT_DIVIDE | Int32(0x10)
     @test CorePotts.transitioning(EVENT_REMOVE) isa Int32                  # no throw in a kernel
@@ -407,4 +354,5 @@ end
             CorePotts._FORCE_DEVICE_LIFECYCLE[] = prev
         end
     end
+end
 end

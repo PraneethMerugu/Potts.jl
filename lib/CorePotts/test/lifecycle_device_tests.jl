@@ -5,6 +5,19 @@
 # the same oracles as the host planner. By design (D-089), the device planner's statistics
 # are exact only at host read points (saves, `integ.u`, `checkpoint`, the end of `solve!`).
 
+@testsetup module CP_lifecycle_device
+using Test, CorePotts, StaticArrays, Statistics, Random
+using SciMLBase: SciMLBase, ReturnCode, remake
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+include("shared/gg_model.jl")
+include("shared/geometry.jl")
+include("shared/lifecycle.jl")
+include("shared/compartments.jl")
+include("shared/include_items.jl")
+include("shared/export_all.jl")
+end
+
+@testitem "device lifecycle planner on the CPU backend" setup = [CP_lifecycle_device] tags = [:corepotts, :lifecycle_device] begin
 @testset "device lifecycle planner on the CPU backend" begin
     CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
     try
@@ -49,9 +62,9 @@
             try
                 integ = init(prob, CheckerboardCPM())
                 @test (integ.lcache.device.fused! === nothing) == (form == "staged")
-                include("lifecycle.jl")
-                include("compartments.jl")
-                include("relationships.jl")
+                include_items(@__MODULE__, joinpath(@__DIR__, "lifecycle_tests.jl"))
+                include_items(@__MODULE__, joinpath(@__DIR__, "compartments_tests.jl"))
+                include_items(@__MODULE__, joinpath(@__DIR__, "relationships_tests.jl"))
             finally
                 CorePotts.FUSE_SITES[] = fuse
             end
@@ -236,4 +249,5 @@
     finally
         CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
     end
+end
 end

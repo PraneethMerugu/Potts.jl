@@ -1,5 +1,12 @@
 # Relationships: links, link energies, host rules, lifecycle interaction (ROADMAP M2.9).
 
+@testsetup module CP_relationships
+using Test, CorePotts, StaticArrays, Statistics, Random
+using SciMLBase: SciMLBase, ReturnCode, remake
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+include("shared/gg_model.jl")
+include("shared/geometry.jl")
+include("shared/lifecycle.jl")
 function brute_link_energy(σ, lat, cell, E)
     H = 0.0
     for a in axes(cell.links, 2), k in axes(cell.links, 1)
@@ -13,7 +20,10 @@ function brute_link_energy(σ, lat, cell, E)
 end
 
 link_delta_allocs(T, cell, ctx, prop, E) = @allocated link_delta(T, cell, ctx, prop, E)   # function barrier
+include("shared/export_all.jl")
+end
 
+@testitem "relationships" setup = [CP_relationships] tags = [:corepotts, :relationships] begin
 @testset "relationships" begin
     @testset "link bookkeeping" begin
         cell = empty_links(2, 4; rest = Float64)
@@ -269,4 +279,5 @@ link_delta_allocs(T, cell, ctx, prop, E) = @allocated link_delta(T, cell, ctx, p
             @test link_count(L, 2) > 0 && link_count(L, 3) > 0
         end
     end
+end
 end

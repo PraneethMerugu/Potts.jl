@@ -3,6 +3,10 @@
 # reintroduced `% Int32` or `Int32(r)` cannot show; here the kernel bodies run on a 2³²- or
 # 2³³-site lattice whose site arrays are sparse (only the touched entries are stored).
 
+@testsetup module CP_site_index_math
+using Test, CorePotts, StaticArrays, Statistics, Random
+using SciMLBase: SciMLBase, ReturnCode, remake
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
 using CorePotts: FloodScratch, GlobalExact, GlobalBoard, GlobalSearch, global_keeps, GLOBAL_REFUSED, Proposal
 
 struct SparseSites{T} <: AbstractVector{T}
@@ -15,7 +19,10 @@ Base.size(a::SparseSites) = (a.n,)
 Base.IndexStyle(::Type{<:SparseSites}) = IndexLinear()
 Base.getindex(a::SparseSites, i::Int) = get(a.d, i, a.default)
 Base.setindex!(a::SparseSites, v, i::Int) = (a.d[i] = v; a)
+include("shared/export_all.jl")
+end
 
+@testitem "site index math above 2³¹ − 1 and 2³² sites (D-253)" setup = [CP_site_index_math] tags = [:corepotts, :site_index_math] begin
 @testset "site index math above 2³¹ − 1 and 2³² sites (D-253)" begin
     @testset "@convert: the lowest converted site and `created`" begin
         lat = Lattice((2^16, 2^17))                      # 2³³ sites, no mask
@@ -66,4 +73,5 @@ Base.setindex!(a::SparseSites, v, i::Int) = (a.d[i] = v; a)
             @test global_keeps(σ, ctx, prop, Val(false), Val(2), cap, GlobalSearch()) == GLOBAL_REFUSED
         end
     end
+end
 end

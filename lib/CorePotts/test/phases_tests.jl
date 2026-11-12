@@ -1,30 +1,17 @@
 # Synchronous phases, state validation, history and accepted-copy affects (ROADMAP M2.3).
 
 # Jacobi step of u on the periodic lattice into u_next (bulk-synchronous: reads only u).
-function jacobi!(st, p, ctx, key, mcs, i)
-    lat = ctx.lattice
-    x = coordinates(lat, i)
-    acc = zero(eltype(st.site.u))
-    for off in ctx.contact.offsets
-        _, y = shift(lat, x, off)
-        acc += @inbounds st.site.u[linear_index(lat, y)]
-    end
-    @inbounds st.site.u_next[i] = st.site.u[i] + p.D * (acc - length(ctx.contact) * st.site.u[i])
-    return nothing
-end
-function host_jacobi(u, lat, rel, D)
-    v = similar(u)
-    for i in 1:nsites(lat)
-        x = coordinates(lat, i)
-        acc = 0.0
-        for off in rel.offsets
-            acc += u[linear_index(lat, shift(lat, x, off)[2])]
-        end
-        v[i] = u[i] + D * (acc - length(rel) * u[i])
-    end
-    return v
+
+@testsetup module CP_phases
+using Test, CorePotts, StaticArrays, Statistics, Random
+using SciMLBase: SciMLBase, ReturnCode, remake
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+include("shared/gg_model.jl")
+include("shared/phases.jl")
+include("shared/export_all.jl")
 end
 
+@testitem "phases" setup = [CP_phases] tags = [:corepotts, :phases] begin
 @testset "phases" begin
     σ, kinds = blocks((24, 24), 4)
     lat = Lattice((24, 24))
@@ -113,9 +100,11 @@ end
         @test any(changed_last) && all(a[changed_last] .== 1)
     end
 end
+end
 
 # P6.3b (D-145): the MCS order is one static tuple with the sweep and the lifecycle as
 # entries; a field step may carry a masked clamp.
+@testitem "MCS order and field clamps" setup = [CP_phases] tags = [:corepotts, :phases] begin
 @testset "MCS order and field clamps" begin
     σ, kinds = blocks((24, 24), 4)
     lat = Lattice((24, 24))
@@ -143,9 +132,11 @@ end
         @test any(changed) && all(sol.u[end].site.age[changed] .== fresh)
     end
 end
+end
 
 # P6.0v (D-085): the counted transfer helpers. On host arrays they copy as before and count
 # nothing; the counters add under `merge` and survive `_restore_stats!` (checkpoints).
+@testitem "transfer counters: host arrays count nothing; merge and restore" setup = [CP_phases] tags = [:corepotts, :phases] begin
 @testset "transfer counters: host arrays count nothing; merge and restore" begin
     s = CorePotts.PottsStats()
     h = Int32[1, 2, 3]
@@ -167,4 +158,5 @@ end
     @test (m.syncs, m.transfers, m.transfer_bytes) == (3, 5, 17)
     r = CorePotts._restore_stats!(CorePotts.PottsStats(), m)
     @test (r.syncs, r.transfers, r.transfer_bytes) == (3, 5, 17)
+end
 end

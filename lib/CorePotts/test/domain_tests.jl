@@ -1,6 +1,15 @@
 # Irregular lattice domains (ROADMAP M2.1b): a mask or predicate restricts the lattice; the
 # domain edge is closed for copies, contacts, surfaces and fields.
 
+@testsetup module CP_domain
+using Test, CorePotts, StaticArrays, Statistics, Random
+using SciMLBase: SciMLBase, ReturnCode, remake
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+include("shared/gg_model.jl")
+include("shared/export_all.jl")
+end
+
+@testitem "lattice domains" setup = [CP_domain] tags = [:corepotts, :domain] begin
 @testset "lattice domains" begin
     disk(x) = (x[1] - 20.5)^2 + (x[2] - 20.5)^2 <= 18^2
     lat = Lattice((40, 40); boundary = Closed(), domain = disk)
@@ -48,4 +57,4 @@
     @test worst < 1e-9
 
 end
-
+end

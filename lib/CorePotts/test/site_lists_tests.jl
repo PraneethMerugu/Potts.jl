@@ -3,6 +3,17 @@
 # fit a test machine, so `_FORCE_WIDE_SITES` takes the Int64 width on small ones: every run
 # must then be bit-identical to its Int32 run, since the width changes storage only.
 
+@testsetup module CP_site_lists
+using Test, CorePotts, StaticArrays, Statistics, Random
+using SciMLBase: SciMLBase, ReturnCode, remake
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+include("shared/gg_model.jl")
+include("shared/geometry.jl")
+include("shared/lifecycle.jl")
+include("shared/export_all.jl")
+end
+
+@testitem "site lists widen above 2³¹ − 1 sites (D-253)" setup = [CP_site_lists] tags = [:corepotts, :site_lists] begin
 @testset "site lists widen above 2³¹ − 1 sites (D-253)" begin
     @test CorePotts.site_index_type(typemax(Int32)) === Int32
     @test CorePotts.site_index_type(Int64(typemax(Int32)) + 1) === Int64
@@ -54,4 +65,5 @@
             @test device == (dl !== nothing)
         end
     end
+end
 end

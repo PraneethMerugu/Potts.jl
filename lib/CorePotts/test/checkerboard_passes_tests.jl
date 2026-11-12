@@ -4,6 +4,15 @@
 # (gpu.jl) check the trackers after concurrent runs. The closeness to SequentialCPM is measured
 # by `benchmark/kinetics.jl` and `benchmark/kinetics/`, not here; these tests pin correctness.
 
+@testsetup module CP_checkerboard_passes
+using Test, CorePotts, StaticArrays, Statistics, Random
+using SciMLBase: SciMLBase, ReturnCode, remake
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+include("shared/gg_model.jl")
+include("shared/export_all.jl")
+end
+
+@testitem "checkerboard (P6.0bl)" setup = [CP_checkerboard_passes] tags = [:corepotts, :checkerboard_passes] begin
 @testset "checkerboard (P6.0bl)" begin
     lat = Lattice((30, 30))
     σ, kinds = blocks((30, 30), 5)
@@ -208,4 +217,5 @@
         CorePotts.oncopy_cell!(b, 2, true, false, lock)               # not numeric: stored
         @test b == [false, true]
     end
+end
 end

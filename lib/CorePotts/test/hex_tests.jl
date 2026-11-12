@@ -1,4 +1,16 @@
 # Hexagonal 2D lattices (M2.1b): axial coordinates embedded at (q + r/2, r·√3/2).
+
+@testsetup module CP_hex
+using Test, CorePotts, StaticArrays, Statistics, Random
+using SciMLBase: SciMLBase, ReturnCode, remake
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+include("shared/gg_model.jl")
+include("shared/geometry.jl")
+include("shared/lifecycle.jl")
+include("shared/export_all.jl")
+end
+
+@testitem "hexagonal lattices" setup = [CP_hex] tags = [:corepotts, :hex] begin
 @testset "hexagonal lattices" begin
     L = Lattice((24, 24); geometry = Hexagonal())
     @test length(relation(Hex(1), L)) == 6 && length(relation(Hex(2), L)) == 18 && length(relation(Hex(3), L)) == 36
@@ -36,4 +48,5 @@
     onplane = count(x -> ellipse[x] == 1 && abs(embed(L, Float64.(Tuple(x) .- centre))[1]) < 1e-9, CartesianIndices(ellipse))
     @test u.cell.volume[1] - u.cell.volume[2] == onplane               # sites on the plane stay with the parent
     @test maximum(halves[1]) < minimum(halves[2]) || maximum(halves[2]) < minimum(halves[1])   # separated along x
+end
 end

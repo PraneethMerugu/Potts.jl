@@ -1,25 +1,15 @@
 # Moment trackers, shape descriptors and site trackers (ROADMAP M2.2).
-using LinearAlgebra: eigvals, Symmetric
 
-"""Brute-force geometry of cell c: unwrapped around its first site (cells < half box)."""
-function brute_geometry(σ, lat::Lattice{N}, c) where {N}
-    sites = [coordinates(lat, i) for i in 1:nsites(lat) if σ[i] == c]
-    ref = first(sites)
-    X = [collect(ref .+ min_image(lat, x, ref)) for x in sites]
-    μ = sum(X) / length(X)
-    C = sum((x - μ) * (x - μ)' for x in X) / length(X)
-    wrapped = ntuple(d -> lat.periodic[d] ? mod(μ[d] - 1, lat.dims[d]) + 1 : μ[d], N)
-    return wrapped, C
+@testsetup module CP_geometry
+using Test, CorePotts, StaticArrays, Statistics, Random
+using SciMLBase: SciMLBase, ReturnCode, remake
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+include("shared/gg_model.jl")
+include("shared/geometry.jl")
+include("shared/export_all.jl")
 end
-upper(C, N) = Tuple(C[d, e] for d in 1:N for e in d:N)
 
-function gm_commit!(st, p, prop, ctx)
-    commit_volume!(st, p, prop, ctx)
-    commit_moments!(st.cell, ctx, prop)
-end
-const GM = CPMFunction(gg_delta_H; commit! = gm_commit!, temperature = gg_temperature)
-moment_state(σ, kinds, lat) = initial_state(σ, kinds; cell = init_moments(σ, lat, length(kinds)))
-
+@testitem "geometry" setup = [CP_geometry] tags = [:corepotts, :geometry] begin
 @testset "geometry" begin
     @testset "minimum image" begin
         l = Lattice((10, 9); boundary = (Periodic(), Periodic()))
@@ -165,4 +155,5 @@ moment_state(σ, kinds, lat) = initial_state(σ, kinds; cell = init_moments(σ, 
         @test u2.cell.wsum ≈ recompute_site_sum(u2.σ, w, length(kinds))
         @test getindex.(u2.cell.wsum, 3) == u2.cell.volume
     end
+end
 end

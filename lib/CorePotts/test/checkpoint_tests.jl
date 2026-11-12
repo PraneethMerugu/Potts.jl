@@ -1,5 +1,10 @@
 # Checkpoint/continuation and reinit! (ROADMAP M2.10): continuation is exact.
 
+@testsetup module CP_checkpoint
+using Test, CorePotts, StaticArrays, Statistics, Random
+using SciMLBase: SciMLBase, ReturnCode, remake
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+include("shared/gg_model.jl")
 function everything_problem()
     lat = Lattice((40, 40))
     σ = zeros(Int32, 40, 40); σ[15:22, 15:22] .= 1; σ[5:10, 30:35] .= 2
@@ -35,7 +40,10 @@ function everything_problem()
         lifecycle = Lifecycle(big; divide! = reset!))
     return PottsProblem(f, st, lat, (0, 30), gg_params(); seed = 5)
 end
+include("shared/export_all.jl")
+end
 
+@testitem "checkpoint and continuation are exact (nameof(typeof(alg)))" setup = [CP_checkpoint] tags = [:corepotts, :checkpoint] begin
 @testset "checkpoint and continuation are exact ($(nameof(typeof(alg))))" for alg in (
         SequentialCPM(), CheckerboardCPM())
     prob = everything_problem()
@@ -67,7 +75,9 @@ end
     @test integ.t == 0 && integ.retcode == SciMLBase.ReturnCode.Default
     @test solve!(integ).u[end].σ == a.σ
 end
+end
 
+@testitem "checkpoint format: a pre-cutover checkpoint is refused by name" setup = [CP_checkpoint] tags = [:corepotts, :checkpoint] begin
 @testset "checkpoint format: a pre-cutover checkpoint is refused by name" begin
     prob = everything_problem()
     integ = init(prob, SequentialCPM())
@@ -92,4 +102,5 @@ end
     end
     @test err isa ArgumentError && occursin("format $(CorePotts.CHECKPOINT_FORMAT)", err.msg)
     @test_throws SystemError load_checkpoint(tempname())                              # a missing file is not a format error
+end
 end

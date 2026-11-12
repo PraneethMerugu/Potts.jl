@@ -1,5 +1,14 @@
 # Frozen sites, spatial queries, contact graph and per-face field BCs (ROADMAP M2.7).
 
+@testsetup module CP_spatial
+using Test, CorePotts, StaticArrays, Statistics, Random
+using SciMLBase: SciMLBase, ReturnCode, remake
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+include("shared/gg_model.jl")
+include("shared/export_all.jl")
+end
+
+@testitem "spatial" setup = [CP_spatial] tags = [:corepotts, :spatial] begin
 @testset "spatial" begin
     @testset "frozen sites never change and are not counted ($(nameof(typeof(alg))))" for alg in (
             SequentialCPM(), CheckerboardCPM())
@@ -107,4 +116,5 @@
             @test any(>(0), v.cell.contact_overflow)             # rows too short are reported
         end
     end
+end
 end

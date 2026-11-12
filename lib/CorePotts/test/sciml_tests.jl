@@ -1,7 +1,30 @@
 # SciML integration: ensembles vary the replica stream; DiscreteCallbacks run at MCS
 # boundaries.
+
+@testsetup module CP_sciml
+using Test, CorePotts, StaticArrays, Statistics, Random
+using SciMLBase: SciMLBase, ReturnCode, remake
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+include("shared/gg_model.jl")
 using SciMLBase: ContinuousCallback
 
+# P6.15m m3: a CallbackSet of two differently typed DiscreteCallbacks with `saveat` segfaulted
+# on the host CheckerboardCPM path (GC heap corruption, found in a later `_save!`). The
+# integrator looped `for cb in integ.callbacks`, which carries a `Union` of the callback types
+# (closures and a BitVector next to bits fields), and Julia 1.12's optimized code for that
+# loop corrupted the heap; it depends on the heap layout, so the crash itself reproduces only
+# in a full model run (the OpenVT chain test in PottsModels). Here: the callback paths hold
+# no such `Union`, and every hook of every callback still runs, in order.
+struct AtMCS{K} end                     # a condition type per MCS: distinct callback types
+(::AtMCS{K})(u, t, integ) where {K} = t == K
+
+# D-009 (P6.0cc): without an algorithm, SequentialCPM() on the CPU; a device backend has no
+# default and says to pass CheckerboardCPM
+struct P60ccDevice <: CorePotts.KernelAbstractions.Backend end
+include("shared/export_all.jl")
+end
+
+@testitem "SciML ensembles and callbacks" setup = [CP_sciml] tags = [:corepotts, :sciml] begin
 @testset "SciML ensembles and callbacks" begin
     σ, kinds = blocks((40, 40), 5)
     prob = PottsProblem(GG, initial_state(σ, kinds), Lattice((40, 40)), (0, 10), gg_params(); seed = 3)
@@ -47,17 +70,9 @@ using SciMLBase: ContinuousCallback
         @test calls == [1, 2]
     end
 end
+end
 
-# P6.15m m3: a CallbackSet of two differently typed DiscreteCallbacks with `saveat` segfaulted
-# on the host CheckerboardCPM path (GC heap corruption, found in a later `_save!`). The
-# integrator looped `for cb in integ.callbacks`, which carries a `Union` of the callback types
-# (closures and a BitVector next to bits fields), and Julia 1.12's optimized code for that
-# loop corrupted the heap; it depends on the heap layout, so the crash itself reproduces only
-# in a full model run (the OpenVT chain test in PottsModels). Here: the callback paths hold
-# no such `Union`, and every hook of every callback still runs, in order.
-struct AtMCS{K} end                     # a condition type per MCS: distinct callback types
-(::AtMCS{K})(u, t, integ) where {K} = t == K
-
+@testitem "CallbackSet of differently typed callbacks with saveat" setup = [CP_sciml] tags = [:corepotts, :sciml] begin
 @testset "CallbackSet of differently typed callbacks with saveat" begin
     σ, kinds = blocks((30, 30), 5)
     prob = PottsProblem(GG, initial_state(σ, kinds), Lattice((30, 30)), (0, 12), gg_params(); seed = 5)
@@ -126,9 +141,11 @@ struct AtMCS{K} end                     # a condition type per MCS: distinct cal
     @test @allocated(folded(cbs)) > 0
     @test @allocated(eached(cbs)) == 0
 end
+end
 
 # D-116: a problem without a model whose parameter object is a NamedTuple has its fields as
 # parameter names; `remake_buffer` (and `setp_oop`, which calls it) returns a new NamedTuple.
+@testitem "remake_buffer on a NamedTuple parameter object" setup = [CP_sciml] tags = [:corepotts, :sciml] begin
 @testset "remake_buffer on a NamedTuple parameter object" begin
     SII = CorePotts.SymbolicIndexingInterface
     σ, kinds = blocks((20, 20), 5)
@@ -152,10 +169,9 @@ end
         @test_throws DimensionMismatch SII.remake_buffer(gp, gp.p, [:T], [1.0, 2.0])
     end
 end
+end
 
-# D-009 (P6.0cc): without an algorithm, SequentialCPM() on the CPU; a device backend has no
-# default and says to pass CheckerboardCPM
-struct P60ccDevice <: CorePotts.KernelAbstractions.Backend end
+@testitem "default algorithm (D-009)" setup = [CP_sciml] tags = [:corepotts, :sciml] begin
 @testset "default algorithm (D-009)" begin
     σ, kinds = blocks((20, 20), 5)
     prob = PottsProblem(GG, initial_state(σ, kinds), Lattice((20, 20)), (0, 4), gg_params(); seed = 3)
@@ -168,4 +184,5 @@ struct P60ccDevice <: CorePotts.KernelAbstractions.Backend end
     end
     @test err isa ArgumentError && occursin("CheckerboardCPM", sprint(showerror, err))
     @test_throws ArgumentError init(prob; backend = P60ccDevice())
+end
 end

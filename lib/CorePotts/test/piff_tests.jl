@@ -1,3 +1,11 @@
+@testsetup module CP_piff
+using Test, CorePotts, StaticArrays, Statistics, Random
+using SciMLBase: SciMLBase, ReturnCode, remake
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+include("shared/export_all.jl")
+end
+
+@testitem "PIFF import/export" setup = [CP_piff] tags = [:corepotts, :piff] begin
 @testset "PIFF import/export" begin
     piff = """
     # a CompuCell3D-style file
@@ -30,4 +38,5 @@
     path = tempname()
     write_piff(path, σ, kinds; ids)
     @test first(read_piff(path, (10, 10))) == σ
+end
 end

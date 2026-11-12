@@ -1,6 +1,36 @@
 # Static gates: type stability (JET) and allocation freedom (AllocCheck) of the hot paths.
+
+@testsetup module CP_qa
+using Test, CorePotts, StaticArrays, Statistics, Random
+using SciMLBase: SciMLBase, ReturnCode, remake
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+include("shared/gg_model.jl")
+include("shared/phases.jl")
 using JET, AllocCheck
 
+# P6.0j: ExplicitImports guardrails (CLAUDE.md code rules). Every name CorePotts uses is
+# imported explicitly and by its owner. The allowlist names each non-public access the
+# package genuinely needs; add to it only by review, with the reason.
+using ExplicitImports: ExplicitImports, check_no_implicit_imports, check_all_explicit_imports_are_public,
+    check_no_stale_explicit_imports, check_all_qualified_accesses_via_owners, check_all_qualified_accesses_are_public
+
+const COREPOTTS_NONPUBLIC_QUALIFIED = (
+    Symbol("@adapt_structure"), # Adapt's documented struct-adaptor macro; Adapt declares no public API
+    Symbol("@atomic"),          # Atomix's documented atomics (GPU-portable); not declared public
+    Symbol("@atomicreplace"),
+    :zeros,                     # KernelAbstractions.zeros(backend, T, dims): KA's documented
+                                # device allocator; KA declares no public API
+    :RefValue,                  # Base.RefValue: concrete `Ref` type for type-stable fields
+    :typename,                  # Base.typename(A).wrapper: the unparameterised device array type for Adapt
+    :afoldl,                    # Base.afoldl: unrolled fold over the MCS-order tuple; public `foldl`
+                                # and `sum` allocate there on SequentialCPM (P6.3b review round 2)
+    Symbol("@nospecializeinfer"), # Base.@nospecializeinfer (documented, not declared public): the host
+                                  # setup of `init`, `remake` and `PottsProblem` inferred once for every model (TS1c)
+)
+include("shared/export_all.jl")
+end
+
+@testitem "QA" setup = [CP_qa] tags = [:corepotts, :qa] begin
 @testset "QA" begin
     σ0, kinds0 = blocks((36, 36), 5)
     prob = PottsProblem(GG, initial_state(σ0, kinds0), Lattice((36, 36)), (0, 20), gg_params())
@@ -39,31 +69,14 @@ using JET, AllocCheck
     prop = Proposal(1, 2, (1, 1), 1, Int32(1), Int32(0))
     @test isempty(check_allocs(gg_delta_H, typeof.((integ.state, integ.p, prop, integ.ctx))))
 end
+end
 
-# P6.0j: ExplicitImports guardrails (CLAUDE.md code rules). Every name CorePotts uses is
-# imported explicitly and by its owner. The allowlist names each non-public access the
-# package genuinely needs; add to it only by review, with the reason.
-using ExplicitImports: ExplicitImports, check_no_implicit_imports, check_all_explicit_imports_are_public,
-    check_no_stale_explicit_imports, check_all_qualified_accesses_via_owners, check_all_qualified_accesses_are_public
-
-const COREPOTTS_NONPUBLIC_QUALIFIED = (
-    Symbol("@adapt_structure"), # Adapt's documented struct-adaptor macro; Adapt declares no public API
-    Symbol("@atomic"),          # Atomix's documented atomics (GPU-portable); not declared public
-    Symbol("@atomicreplace"),
-    :zeros,                     # KernelAbstractions.zeros(backend, T, dims): KA's documented
-                                # device allocator; KA declares no public API
-    :RefValue,                  # Base.RefValue: concrete `Ref` type for type-stable fields
-    :typename,                  # Base.typename(A).wrapper: the unparameterised device array type for Adapt
-    :afoldl,                    # Base.afoldl: unrolled fold over the MCS-order tuple; public `foldl`
-                                # and `sum` allocate there on SequentialCPM (P6.3b review round 2)
-    Symbol("@nospecializeinfer"), # Base.@nospecializeinfer (documented, not declared public): the host
-                                  # setup of `init`, `remake` and `PottsProblem` inferred once for every model (TS1c)
-)
-
+@testitem "QA: ExplicitImports (CorePotts)" setup = [CP_qa] tags = [:corepotts, :qa] begin
 @testset "QA: ExplicitImports (CorePotts)" begin
     @test check_no_implicit_imports(CorePotts) === nothing
     @test check_all_explicit_imports_are_public(CorePotts) === nothing
     @test check_no_stale_explicit_imports(CorePotts) === nothing
     @test check_all_qualified_accesses_via_owners(CorePotts) === nothing
     @test check_all_qualified_accesses_are_public(CorePotts; ignore = COREPOTTS_NONPUBLIC_QUALIFIED) === nothing
+end
 end
