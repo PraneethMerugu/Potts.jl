@@ -73,6 +73,19 @@ function _observed_function_unlocked(info::PottsModelInfo, x)
     end
 end
 
+# Observed values per cell or per site: the generated function of one element, mapped here. A
+# comprehension inside the generated body would be an opaque closure, which a downstream
+# package cannot precompile (TS1c).
+struct _CellValues{T, F}
+    f::F
+end
+_CellValues{T}(f::F) where {T, F} = _CellValues{T, F}(f)
+(o::_CellValues{T})(st, p, ctx, t) where {T} = [(c == 0 ? T(0) : o.f(st, p, ctx, t, c)) for c in 1:length(st.cell.kind)]
+struct _SiteValues{F}
+    f::F
+end
+(o::_SiteValues)(st, p, ctx, t) = reshape([o.f(st, p, ctx, t, i) for i in 1:length(st.σ)], size(st.σ))
+
 function _observed_build(info::PottsModelInfo, c, T, x)
     e = _expand_observed(c, _unwrap(x))
     _check_integral_pre_outside(e)
@@ -84,10 +97,10 @@ function _observed_build(info::PottsModelInfo, c, T, x)
     scope === :model && _algebraic_cell(x) && (scope = :cell)
     f = if scope === :cell
         code = lower(e, _cell_env(T, :c, rn; mcs = :t))
-        _rgf(:((st, p, ctx, t) -> [(c == 0 ? $T(0) : $code) for c in 1:length(st.cell.kind)]))
+        _CellValues{T}(_rgf(:((st, p, ctx, t, c) -> $code)))
     elseif scope === :site
         code = lower(e, _site_env(T, :i, rn; mcs = :t))
-        _rgf(:((st, p, ctx, t) -> reshape([$code for i in 1:length(st.σ)], size(st.σ))))
+        _SiteValues(_rgf(:((st, p, ctx, t, i) -> $code)))
     else
         code = lower(e, _model_env(T, rn; mcs = :t))
         _rgf(:((st, p, ctx, t) -> $code))
@@ -377,7 +390,7 @@ function _field_inputs_at(info::PottsModelInfo, u, p, t, ins)
             f = lock(_OBSERVED_LOCK) do
                 get!(info.cache, (:field_input, ex)) do
                     code = _with_model_scope(() -> lower(ex, _site_env(info.T, :i, c.gather_names; mcs = :t)), c)
-                    _rgf(:((st, p, ctx, t) -> reshape([$code for i in 1:length(st.σ)], size(st.σ))))
+                    _SiteValues(_rgf(:((st, p, ctx, t, i) -> $code)))
                 end
             end
             f(u, p, info.ctx, t)
