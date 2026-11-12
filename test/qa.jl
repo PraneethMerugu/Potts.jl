@@ -253,6 +253,7 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     # --- Potts -> Base: no public equivalent
     Symbol("@__doc__"),   # attaching docstrings to macro-generated components
     :setindex,            # non-mutating tuple `setindex`
+    Symbol("@nospecializeinfer"),  # the remake hooks inferred once for every model (TS1c)
     # --- Potts -> SymbolicUtils: the type of a symbolic function `c(t, x, y)` (field
     # variables of the field compiler's PDESystem, D-C8); no public constructor takes it
     :FnType,
