@@ -12,8 +12,9 @@ Read `CLAUDE.md`, `docs/design/AUTONOMY.md` §7, the ROADMAP item, the DECISIONS
 cites, and `docs/design/research/feature-roadmap-review.md` §4.
 
 Check each of the following, citing file:line:
-1. **Frozen tests.** `git diff monorepo...feat/<item> -- $(frozen paths)` is empty, and
-   `frozen.toml` is unchanged unless the diff adds a DECISIONS entry that justifies it.
+1. **Acceptance tests.** `git diff monorepo...feat/<item> -- $(acceptance paths)` is empty.
+   No file is frozen and nothing hashes a test (D-275 deleted the mechanism), so a changed
+   acceptance test is a finding only if DECISIONS does not justify it.
 2. **Privilege.** No model-, paper- or author-shaped names or flags in `src/` or
    `lib/CorePotts`. No option that exists for only one model under a generic name. Every
    new DSL name or keyword is in the snapshot, with a reason.
