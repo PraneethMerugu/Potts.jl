@@ -37,7 +37,8 @@ const OPTIONS = (; nworker_threads = 1, memory_threshold = 0.8, testitem_timeout
 serial(ti) = :timing in ti.tags || :subprocess in ti.tags
 
 # POTTS_TEST_PASSLOG=<file>: after each item, append one line per top-level testset of the item
-# (item, testset, pass, fail, error, broken), the per-testset pass list of the old suite.
+# (item, testset, pass, fail, error, broken), the per-testset pass list of the old suite. Each
+# process writes `<file>.<pid>`; the gate script concatenates them into `<file>`.
 #
 # The expression is evaluated in the item's module in a *worker process*, and ReTestItems
 # serializes it there: it must be code with only literals in it. Interpolating a function of this
@@ -65,9 +66,9 @@ function passlog_expr()
                 end
                 return (p, f, e, b)
             end
-            # one open-write-close per line: workers append to the same file concurrently, and a
-            # line written through a shared buffer comes out interleaved with another worker's
-            emit(parts...) = open($path, "a") do io
+            # one file per process (the coordinator and each worker), merged after the run: two
+            # processes appending to one file split a row when a write lands in two pieces
+            emit(parts...) = open(string($path, ".", getpid()), "a") do io
                 write(io, join(parts, '\t'), '\n')
             end
             for r in ts.results

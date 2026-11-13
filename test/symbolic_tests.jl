@@ -594,7 +594,7 @@ end
 
 
 @potts_model WalledSorting begin
-    @extend base = Sorting(; lattice = (40, 40), T = 6.0)
+    @extend base = GranerGlazier(; lattice = (40, 40), T = 6.0)
     @kinds medium dark light wall[frozen]
     @parameters J[kind, kind] = [0 16 16 30; 16 2 11 30; 16 11 14 30; 30 30 30 0]
 end
