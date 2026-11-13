@@ -138,7 +138,8 @@ accepted), brought up to date at the host read points.
 Reproducibility. Every phase is checked before it runs. One whose work items would share a cell
 (possible when a cell is wider than the block spacing) runs inline, one work item after another,
 so its decisions are exact and order-free; every other phase is a colouring, whose items share no
-cell and write only their own sites, so it reaches the same decisions inline or threaded. A CPU
+cell (of those a copy's decision or commit touches: its target's, its source's, or a neighbour's),
+so it reaches the same decisions inline or threaded. A CPU
 run is therefore reproducible from its seed at any thread count: the same seed gives the same
 trajectory at one thread and at four. Device runs depend on the timing of the work items and are
 not (user ruling 2026-11-04).

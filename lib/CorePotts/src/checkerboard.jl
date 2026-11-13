@@ -30,12 +30,12 @@
 #
 # Cells wider than the spacing. The spacing separates sites, not cells: two active sites of one
 # phase lie in one cell when the cell is wider than (k - 1)·region + 1, and then one work item's
-# commit changes a total another item's decision is reading. So every phase is checked before it
-# runs (`_phase_conflict!`). A phase whose items share a cell runs inline, one work item after
-# another in block order, on the live state: its decisions are exact, so the accepted ΔH still
-# sums to the trajectory's energy change. A phase whose items share no cell is a colouring and
-# runs threaded, its decisions reading the cell columns as they were when the phase started
-# (`_snap!`, one copy per phase, which such a phase cannot tell from the live ones).
+# commit changes a total another item's decision is reading, so the accepted ΔH stops summing to
+# the trajectory's energy change. Every phase is therefore checked before it runs
+# (`_phase_conflict!`): a phase whose items share a cell runs inline, one work item after another
+# in block order, on the live state, which is exact; a phase whose items share no cell is a
+# colouring and runs threaded. Nothing is snapshotted: a colouring phase's items share no cell and
+# write only their own sites, so the live columns they read cannot be changed under them.
 #
 # The CPU. A phase with few work items (at most `BLOCK_GRAIN`), or a process with one thread,
 # runs them inline, one after another, so each attempt sees every earlier one, as in
@@ -122,40 +122,6 @@ end
     return nothing
 end
 
-# The cell columns a launched phase's decisions read: every column of `st.cell`, copied before the
-# phase, so no decision can see a commit that another work item is making. A phase is launched only
-# when it is a colouring (`_phase_conflict!`), where the cells one item writes are not the cells
-# another reads, so the snapshot and the live columns agree there; it is kept as the second line of
-# defense, because the cells a copy touches are known only from the footprint and the proposal
-# relation, while a commit hook may write any column. The set is every column of `st.cell`, since
-# which ones a decision reads is not derivable from the model. Nothing else a decision reads moves
-# inside a phase: `σ` writes and `tk.acc` are at the work item's own sites, and the mobility masks,
-# the site columns and the model slots are written only at a phase boundary. Cost: one copy of the
-# cell columns per launched phase.
-#
-# On the host, one buffer per column; a device keeps the live reads, its outcome depending on the
-# timing of the work items (user ruling 2026-11-04).
-_snap_columns(::KernelAbstractions.CPU, cell) = map(copy, cell)
-_snap_columns(backend, cell) = nothing
-
-_snap!(::Nothing, cell) = nothing
-@inline _snap!(snap, cell) = _snap_cols!(snap, cell, Val(fieldcount(typeof(cell))))
-
-# One column per step, from the last: `getfield` at a constant index is type-stable, and the tuple
-# of `copyto!` results is never built. It runs once per launched phase, and it must not allocate
-# (`step!` is gated on zero allocations).
-@inline _snap_cols!(snap, cell, ::Val{0}) = nothing
-@inline function _snap_cols!(snap, cell, ::Val{K}) where {K}
-    copyto!(getfield(snap, K), getfield(cell, K))
-    _snap_cols!(snap, cell, Val(K - 1))
-    return nothing
-end
-
-# The state a phase's decisions read: the live `σ` and site arrays, the snapshot's cell columns.
-# Built once per MCS (the state's arrays are not rebound inside one), refreshed by `_snap!`.
-_accept_state(st, ::Nothing) = st
-_accept_state(st, snap) = CPMState(st.σ, snap, st.site, st.model, st.history)
-
 # Whether a phase is a proper colouring: whether two of its work items touch one cell. The block
 # spacing keeps two active sites (k - 1)·region + 1 apart, which does not keep them out of one cell
 # when the cell is wider than that, and a cell is not a lattice distance the spacing could cover.
@@ -169,10 +135,13 @@ _accept_state(st, snap) = CPMState(st.σ, snap, st.site, st.model, st.history)
 # phase can invalidate each other.
 #
 # The claim covers every cell a work item can touch, not only its target's: a proposal's source
-# lies within `radius(proposal)` of the target, and a commit writes the cells of the target's
-# neighbours (`commit_surface!` maintains theirs), both inside `reach`. One 8-byte stamp per cell
-# holds the phase's token and the block that first claimed it, so a scan costs one read and one
-# write per (site, offset) and allocates nothing.
+# lies within `radius(proposal)` of the target, and the commit hooks write the target's neighbours'
+# cells (`commit_surface!` maintains their surface, `commit_contact_count!` every third cell next
+# to the target). The claim radius is the layout's own `need`, the lattice distance the spacing
+# guarantees: it is `reach(footprint, proposal)` widened by the contact relation and by every
+# relation a copy-step function reads, so it holds whatever a commit hook writes. One 8-byte stamp
+# per cell holds the phase's token and the block that first claimed it, so a scan costs one read
+# and one write per (site, offset) and allocates nothing.
 _claim_columns(::KernelAbstractions.CPU, cell) = (; stamp = zeros(UInt64, length(cell.volume)), token = Ref(UInt32(0)))
 _claim_columns(backend, cell) = nothing
 
@@ -208,10 +177,8 @@ function _phase_conflict!(st, claim::NamedTuple, reach::Int, lat::Lattice{N}, la
 end
 
 # One attempt. `SERIAL = false` in a phase (copies that need the floods are listed); `true` in
-# the serial pass and on the CPU (the floods run, a veto decides at once). `sts` is the state the
-# decision reads (the live one, or `st` with the phase's cell snapshot); `st` is the live state,
-# for the ownership write and the commit.
-@inline function block_attempt!(blk, st, sts, f, p, ctx, law, key, mcs, lo, side, lid, tk, cnt, status, sl,
+# the serial pass and on the CPU (the floods run, a veto decides at once).
+@inline function block_attempt!(blk, st, f, p, ctx, law, key, mcs, lo, side, lid, tk, cnt, status, sl,
         ::Val{SERIAL}) where {SERIAL}
     lat = ctx.lattice
     rd, ra, rs, _ = draw(key, mcs, blk, STREAM_BLOCK, lid)
@@ -226,28 +193,28 @@ end
     b = @inbounds st.σ[s]
     a == b && return nothing
     prop = Proposal(t, s, x, dir, a, b)
-    if !SERIAL && has_defer(f) && _defer(f)(sts, p, prop, ctx)
+    if !SERIAL && has_defer(f) && _defer(f)(st, p, prop, ctx)
         _push_serial!(sl, blk, lid)
         return nothing
     end
-    f.constraint(sts, p, prop, ctx) || return nothing
-    dH0 = f.delta_H(sts, p, prop, ctx)
-    temperature = f.temperature(sts, p, prop, ctx)
+    f.constraint(st, p, prop, ctx) || return nothing
+    dH0 = f.delta_H(st, p, prop, ctx)
+    temperature = f.temperature(st, p, prop, ctx)
     T = typeof(temperature)
-    dH = _effective_dH(f, dH0, temperature, sts, p, prop, ctx)
+    dH = _effective_dH(f, dH0, temperature, st, p, prop, ctx)
     if !isfinite(dH)
         @inbounds Atomix.@atomic status[1] |= STATUS_NONFINITE     # status has 1 entry
         return nothing
     end
     accept(law, T(dH), temperature, uniform(T, ra)) || return nothing
     if has_post(f)                                   # the whole-cell veto after the draw, as `SequentialCPM`
-        code = _post(f)(sts, p, prop, ctx, SERIAL ? GlobalSearch() : GlobalLocal())
+        code = _post(f)(st, p, prop, ctx, SERIAL ? GlobalSearch() : GlobalLocal())
         if !SERIAL && code == GLOBAL_WINDOW
             if sl.exact                              # a veto without window: the serial pass decides
                 _push_serial!(sl, blk, lid)
                 return nothing
             end
-            code = _post(f)(sts, p, prop, ctx, GlobalSearch())
+            code = _post(f)(st, p, prop, ctx, GlobalSearch())
         end
         if code != GLOBAL_PASS
             code == GLOBAL_WINDOW && Atomix.@atomic sl.deferred[1] += UInt32(1)
@@ -255,7 +222,7 @@ end
         end
     end
     # t ≤ nsites: the track has one writer per site at a time
-    tk === nothing || (@inbounds tk.acc[t] += tk.track(sts, p, prop, ctx, dH0))
+    tk === nothing || (@inbounds tk.acc[t] += tk.track(st, p, prop, ctx, dH0))
     @inbounds st.σ[t] = b
     f.commit!(st, p, prop, ctx)
     _count!(cnt, blk)
@@ -264,37 +231,37 @@ end
 
 # one work item's stay (the block at `bc`) in phase number q (offset `off`): its attempts one
 # after another; with one switch a stay makes exactly n attempts (no draw)
-@inline function block_stay!(bc, st, sts, f, p, ctx, law, key, mcs, layout, off, s, q, tk, cnt, status, sl, serial::Val)
+@inline function block_stay!(bc, st, f, p, ctx, law, key, mcs, layout, off, s, q, tk, cnt, status, sl, serial::Val)
     blk = block_index(layout, bc)
     lo, side = block_region(layout, bc, off)
     n = prod(side)
     m = s == 1 ? n : _stay_attempts(n, s, first(draw(key, mcs, blk, STREAM_BLOCK, _block_lid(q, 0))))
     for k in 1:m
-        block_attempt!(blk, st, sts, f, p, ctx, law, key, mcs, lo, side, _block_lid(q, k), tk, cnt, status, sl, serial)
+        block_attempt!(blk, st, f, p, ctx, law, key, mcs, lo, side, _block_lid(q, k), tk, cnt, status, sl, serial)
     end
     return nothing
 end
 
 # one work item per block over the N-d grid of blocks (no index division per work item)
-@kernel function block_kernel!(st, sts, f, p, ctx, law, key, mcs, layout, off, s, q, tk, cnt, status, sl)
+@kernel function block_kernel!(st, f, p, ctx, law, key, mcs, layout, off, s, q, tk, cnt, status, sl)
     I = @index(Global, NTuple)
-    block_stay!(map(i -> i - 1, I), st, sts, f, p, ctx, law, key, mcs, layout, off, s, q, tk, cnt, status, sl, Val(false))
+    block_stay!(map(i -> i - 1, I), st, f, p, ctx, law, key, mcs, layout, off, s, q, tk, cnt, status, sl, Val(false))
 end
 
 # the phase's listed copies in list order, then the list is emptied (one work item, or the host)
-function serial_pass!(st, sts, f, p, ctx, law, key, mcs, layout, off, tk, cnt, status, sl)
+function serial_pass!(st, f, p, ctx, law, key, mcs, layout, off, tk, cnt, status, sl)
     for i in 1:Int(@inbounds sl.count[1])
         blk = Int(@inbounds sl.blk[i])
         lo, side = block_region(layout, block_coords(layout, blk), off)
-        block_attempt!(blk, st, sts, f, p, ctx, law, key, mcs, lo, side, @inbounds(sl.lid[i]), tk, cnt, status, sl, Val(true))
+        block_attempt!(blk, st, f, p, ctx, law, key, mcs, lo, side, @inbounds(sl.lid[i]), tk, cnt, status, sl, Val(true))
     end
     @inbounds sl.count[1] = UInt32(0)
     return nothing
 end
 
-@kernel function serial_kernel!(st, sts, f, p, ctx, law, key, mcs, layout, off, tk, cnt, status, sl)
+@kernel function serial_kernel!(st, f, p, ctx, law, key, mcs, layout, off, tk, cnt, status, sl)
     _ = @index(Global, Linear)
-    serial_pass!(st, sts, f, p, ctx, law, key, mcs, layout, off, tk, cnt, status, sl)
+    serial_pass!(st, f, p, ctx, law, key, mcs, layout, off, tk, cnt, status, sl)
 end
 
 # moments re-center once per MCS (the commits only accumulate, `lockless`); c ≤ capacity
@@ -303,7 +270,7 @@ end
     _recenter!(cell, lat, c, @inbounds cell.volume[c])
 end
 
-struct CheckerboardCache{N, B, TK, CN, SL, CS, CK, K1, K2, K3, GS}
+struct CheckerboardCache{N, B, TK, CN, SL, CK, K1, K2, K3, GS}
     layout::BlockLayout{N}
     switches::Int                     # a stay makes n / switches attempts (n sites)
     order::Vector{Int}                # the MCS's phase offsets (1:k^N), P of them
@@ -312,7 +279,6 @@ struct CheckerboardCache{N, B, TK, CN, SL, CS, CK, K1, K2, K3, GS}
     cnt::CN                           # committed copies per block (Int32), folded at the read points
     serial::SL                        # `nothing`, or the serial list (see `_push_serial!`)
     reach::Int                        # the lattice distance a copy reads and writes around its target
-    snap::CS                          # the launched phases' cell columns, refreshed per phase (CPU; see `_snap!`)
     claim::CK                         # `nothing`, or the per-cell claim stamps of `_phase_conflict!` (CPU)
     kernel::K1
     serial!::K2
@@ -353,7 +319,6 @@ default_parts(N::Int) = max(2, round(Int, 64^(1 / N)))
 function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, proposal; region = nothing, parts = nothing,
         switches = 1, threads = :auto, min_read = 0, cell) where {N}
     r, w = reach(f.footprint, proposal)
-    claim = max(r + w, 1)                 # the cell claim radius: what the copy reads and writes
     r = max(r, min_read, _window(f.connectivity))
     need = max(r + w, 1)
     k = parts === nothing ? default_parts(N) : parts
@@ -377,9 +342,8 @@ function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, proposal; r
     n = nblocks(layout)
     backend isa KernelAbstractions.CPU || n >= DEVICE_MIN_BLOCKS ||
         @warn "CheckerboardCPM on a device: $n work items per phase (blocks $(layout.nblocks)) leave the GPU mostly idle; a lattice this small runs as fast or faster on the CPU" maxlog = 1
-    snap = _snap_columns(backend, cell)
     claims = _claim_columns(backend, cell)
-    return CheckerboardCache(layout, claim, switches, zeros(Int, P), z(UInt32, 1), tk, cnt, sl, snap, claims, block_kernel!(backend),
+    return CheckerboardCache(layout, need, switches, zeros(Int, P), z(UInt32, 1), tk, cnt, sl, claims, block_kernel!(backend),
         serial_kernel!(backend), recenter_kernel!(backend), _block_groupsize(backend, layout.nblocks), _block_inline(backend, n, threads),
         backend isa KernelAbstractions.CPU)
 end
@@ -403,7 +367,6 @@ function checkerboard_mcs!(st, cache::CheckerboardCache{N}, f::F, p, ctx, law::L
     end
     l, s, sl = cache.layout, cache.switches, cache.serial
     serial = _serial_pass(sl, f)
-    sts = _accept_state(st, cache.snap)              # the state this MCS's decisions read (refreshed per phase)
     launches = 0
     j, np = part
     P = length(order)
@@ -415,22 +378,18 @@ function checkerboard_mcs!(st, cache::CheckerboardCache{N}, f::F, p, ctx, law::L
             # one work item after another, so each decision sees what the item before it left: exact
             # (the ΔH sum reconciles with the trajectory) and independent of the thread count
             for I in CartesianIndices(l.nblocks)
-                block_stay!(Tuple(I) .- 1, st, st, f, p, ctx, law, key, mcs, l, off, s, q, cache.track, cache.cnt, cache.status,
+                block_stay!(Tuple(I) .- 1, st, f, p, ctx, law, key, mcs, l, off, s, q, cache.track, cache.cnt, cache.status,
                     sl, Val(true))
             end
             continue
         end
-        _snap!(cache.snap, st.cell)                  # a colouring phase: its workers share no cell
-        cache.kernel(st, sts, f, p, ctx, law, key, mcs, l, off, s, q, cache.track, cache.cnt, cache.status, sl;
+        cache.kernel(st, f, p, ctx, law, key, mcs, l, off, s, q, cache.track, cache.cnt, cache.status, sl;
             ndrange = l.nblocks, workgroupsize = cache.groupsize)
         serial || continue
-        # the deferred copies decide against the state the phase left (the floods already do), and
-        # they run one after another: their cell reads are refreshed, not the phase's snapshot
-        _snap!(cache.snap, st.cell)
         if cache.host
-            serial_pass!(st, sts, f, p, ctx, law, key, mcs, l, off, cache.track, cache.cnt, cache.status, sl)
+            serial_pass!(st, f, p, ctx, law, key, mcs, l, off, cache.track, cache.cnt, cache.status, sl)
         else
-            cache.serial!(st, sts, f, p, ctx, law, key, mcs, l, off, cache.track, cache.cnt, cache.status, sl; ndrange = 1,
+            cache.serial!(st, f, p, ctx, law, key, mcs, l, off, cache.track, cache.cnt, cache.status, sl; ndrange = 1,
                 workgroupsize = 1)
             launches += 1
         end
