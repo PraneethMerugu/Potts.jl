@@ -144,6 +144,26 @@ run is therefore reproducible from its seed at any thread count: the same seed g
 trajectory at one thread and at four. Device runs depend on the timing of the work items and are
 not (user ruling 2026-11-04).
 
+Threading. A phase whose items share a cell runs inline, so a geometry whose cells are wider than
+`(parts - 1) * region + 1` across serialises every phase that contains two of them, and gains
+nothing from threads. Measured on the PC, 2026-11-12, on a 200 × 200 and a 400 × 400 lattice tiled
+by 10 × 10 cells and on 30 × 30 lattices tiled by 5 × 5 cells; the serialised count is a property of
+the layout and the state, the times were taken on a loaded lane:
+
+| geometry | items per phase | cell side | spacing | serialised phases |
+| --- | --- | --- | --- | --- |
+| 30 × 30, 5 × 5 cells, `region = 1, parts = 3` | 100 | 5 | 3 | 9 / 9 |
+| 30 × 30, 5 × 5 cells, `parts = 2` | 225 | 5 | 2 | 4 / 4 |
+| 30 × 30, 5 × 5 cells, default | 9 | 5 | 8 | 0 / 64 |
+| 200 × 200, 10 × 10 cells, default | 625 | 10 | 8 | 64 / 64 |
+| 400 × 400, 10 × 10 cells, default | 2500 | 10 | 8 | 64 / 64 |
+
+So threading survives on small-cell geometries and is gone on the wide-cell ones, which are the
+ones the default layout produces: 10 × 10 cells are wider than the 8-site spacing the default
+`parts = 8, region = 1` gives. The trade at 400 × 400 with 1600 cells is the four-thread gain such a
+geometry had before this rule, about 1.4× (2.76 ms to 1.96 ms per MCS); the 3.3–3.7× recorded for
+`BLOCK_GRAIN` is a 5000-block measurement and does not describe it.
+
 Cell trackers stay exact: moments add atomically and re-center once per MCS, pieces trackers add
 their changes, and an `@on_copy` write that reads its own cell value adds the difference. (A
 float-valued column accumulated by concurrent commits can differ in its last bits by thread
