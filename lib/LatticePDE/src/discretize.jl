@@ -134,6 +134,8 @@ struct CompiledField{N}
     # `(α, β)` in lattice units at the face's own coordinate, each an expression or `nothing`
     # (a number or a parameter, held by the face rule)
     sitecoefs::Dict{Tuple{String, Int, Int}, Tuple{Any, Any}}
+    # the coarse fields that blend (F4-15b): by key, the mask predicate, which reads fine fields
+    free::Dict{String, Any}
 end
 
 """Launch-varying slot of the time `t` (`G.rt[RUNTIME_T]`)."""
@@ -612,14 +614,22 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     # ghost, `_hexlap`; the others are zero flux there)
     hex && filter!(f -> any(b -> b.kind in (:dirichlet, :neumann, :robin) && (!isin[b.op] || cut[b.op]) &&
                                  fids[b.op][1][max(b.comp, 1)] == f, bcs), ghosted)
-    env(mapmode, kb, lv = 0) = Env(kb, fids, params, tables, spacing, ivs[1], ivs[2:end], lo, level_spacing(h, dims, lv),
-                                  mapmode, ntuple(_ -> 0, N), RESOLVE, leaf, hex, dl(lv), ghosted, lv, flev, dims, 0)
+    env(mapmode, kb, lv = 0, free = nothing) = Env(kb, fids, params, tables, spacing, ivs[1], ivs[2:end], lo,
+        level_spacing(h, dims, lv), mapmode, ntuple(_ -> 0, N), RESOLVE, leaf, hex, dl(lv), ghosted, lv, flev, dims, 0, free)
+    # the coarse fields whose mask predicate reads fine fields blend (F4-15b): their equations fold
+    # over each block's free children, and their mask holds a node when every child is masked
+    free = Dict{String, Any}(key(b.op, b.comp) => b.pred for b in bcs
+                             if b.kind == :masked && !isin[b.op] && reads_fine(b.pred, flev, flev[b.op]))
     # face rules: α c + β ∂c/∂n = g in lattice units (outward normal; ∂/∂n = side · h ∂/∂x)
     sitecoefs = Dict{Tuple{String, Int, Int}, Tuple{Any, Any}}()
     for (k, op, comp) in faced
         f = fids[op][1][max(comp, 1)]
         lv = flev[op]
         hL = level_spacing(h, dims, lv)
+        # (a blending field's face values fold over the free children, as its rate does: F4-15b)
+        fenv = let fr = get(free, k, nothing)
+            (m, kb, l) -> env(m, kb, l, fr)
+        end
         for d in 1:N, s in (-1, 1)
             periodic[d] && continue
             b = findfirst(b -> b.kind in (:dirichlet, :neumann, :robin) && key(b.op, b.comp) == k &&
@@ -629,9 +639,9 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
             α, β = _coef(bc.alpha, params), _coef(bc.beta, params, s / hL[d])
             # a Robin coefficient that reads the coordinates or the time (F4-12b): a value field
             # computed at each site at the step's time, as a face value (in lattice units)
-            af, ax = α === nothing ? _coef_field!(pb, bc, bc.alpha, 1.0, "α", k, d, s, op, lv, fids, ivs, ends, allops, isin, kern, env) :
+            af, ax = α === nothing ? _coef_field!(pb, bc, bc.alpha, 1.0, "α", k, d, s, op, lv, fids, ivs, ends, allops, isin, kern, fenv) :
                      (Int32(0), nothing)
-            bf, bx = β === nothing ? _coef_field!(pb, bc, bc.beta, s / hL[d], "β", k, d, s, op, lv, fids, ivs, ends, allops, isin, kern, env) :
+            bf, bx = β === nothing ? _coef_field!(pb, bc, bc.beta, s / hL[d], "β", k, d, s, op, lv, fids, ivs, ends, allops, isin, kern, fenv) :
                      (Int32(0), nothing)
             (af == 0 && bf == 0) || (sitecoefs[(k, d, s)] = (ax, bx))
             α, β = something(α, Coef(1.0)), something(β, Coef(1.0))
@@ -649,7 +659,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
                 gk = string("face:", k, ":", d, s > 0 ? "+" : "-")
                 gf = field!(pb, gk; storage = fids[op][2], role = :aux, levels = Int8[lv])
                 kb = kern(lv)
-                e = env(false, kb, lv)
+                e = fenv(false, kb, lv)
                 # the face's own coordinate where the condition pins it
                 gx = substitute(bc.value, Dict(ivs[d + 1] => ends[d + 1][s > 0 ? 2 : 1]); fold = Val(false))
                 store!(kb, gf, fids[op][2], _real(e, lower(gx, e)))
@@ -681,7 +691,9 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         rf = dv === nothing ? Int32(0) :
              field!(pb, "maskrate:$k"; storage = fids[b.op][2], role = :aux, epoch = PERSIGMA, levels = Int8[lv])
         kb = kern(lv)
-        pred = _cond(b.pred, env(false, kb, lv))     # (on a coarse grid, by Majority over the block)
+        # (on a coarse grid a node is masked when its whole block is, F4-15b; a block masked in
+        # part is free, and the field's equation folds over its free children)
+        pred = _cond(b.pred, env(false, kb, lv); fold = :all)
         dom == 0 || (pred = node!(kb, AND, BOOL, Int32[pred, _indomain(kb, dl(lv), N)]))   # the field lives in the domain
         store!(kb, mf, U8, cast!(kb, pred, U8))
         if mv === nothing
@@ -702,7 +714,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         f, lane = fids[op][1][max(comp, 1)], fids[op][2]
         lv = flev[op]
         kb = kern(lv)
-        e = env(kind == :map, kb, lv)
+        e = env(kind == :map, kb, lv, kind in (:rate, :map) ? get(free, k, nothing) : nothing)
         # (the equation being lowered, for a front end that names it at a refusal: A's `@equations`
         # line, review r1 N2; cleared once it lowers)
         task_local_storage(:lattice_equation, k)
@@ -732,7 +744,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     end
     tvals = [string(p) => (d = something(_icvalue(ic, p), Some(ModelingToolkitBase.hasdefault(p) ? ModelingToolkitBase.getdefault(p) : Float64[]));
                            _promoted(collect(unwrap_const.(unwrap.(d))))) for p in arrays]
-    return CompiledField{N}(program(pb), keys, plist, defaults, tvals, initial, lin, sitecoefs)
+    return CompiledField{N}(program(pb), keys, plist, defaults, tvals, initial, lin, sitecoefs, free)
 end
 
 # An aux field read at a neighbor site across a closed face (`Δ(K)`, F3-02 review S6) has no

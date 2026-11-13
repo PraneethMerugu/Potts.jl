@@ -590,8 +590,9 @@ function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscret
     flev = Dict{Any, Int}(op => Int(pb.fields[ids[1]].levels[1]) for (op, (ids, _)) in fids if !(op isa Tuple))
     # the domain on a row's level (a coarse row's: the domain folded onto its grid, F3-16)
     domat(L) = domid == 0 || L == 0 ? domid : fieldid_in(pb, "domain:$L")
-    env(kb, L) = Env(kb, fids, params, tables, spacing, unwrap(sys.ivs[1]), xs, lo, level_spacing(h, fdims, L), false,
-        ntuple(_ -> 0, N), RESOLVE, nothing, false, domat(L), Int32[], L, flev, fdims, 0)
+    # (a blending coarse row's coefficients fold over the free children, as its rate does: F4-15b)
+    env(kb, L, k) = Env(kb, fids, params, tables, spacing, unwrap(sys.ivs[1]), xs, lo, level_spacing(h, fdims, L), false,
+        ntuple(_ -> 0, N), RESOLVE, nothing, false, domat(L), Int32[], L, flev, fdims, 0, get(cf.free, k, nothing))
     for (k, pl) in sort!(collect(plans); by = first)
         id = fieldid_in(pb, k)
         lane = pb.fields[id].storage
@@ -608,7 +609,7 @@ function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscret
         mid = pl.scaled ? out("m") : Int32(0)
         dmid = dlid == 0 ? Int32(0) : out("dom"; storage = U8)
         kb = L == 0 ? kernel(pb) : kernel(pb, Space{N}(FULL; level = L))
-        e = env(kb, L)
+        e = env(kb, L, k)
         zero_ = constant!(kb, 0.0)
         indom(o) = dlid == 0 ? nothing : _indomain(kb, dlid, N, o)
         inside(o) = node!(kb, INSIDE_OP, BOOL, Int32[], access!(kb, Access{N}(id, Int8(0), Sel(Int16(1)),

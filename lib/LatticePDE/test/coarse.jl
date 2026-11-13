@@ -2,10 +2,13 @@
 # coarse field lives on level log2(k) of the program's hierarchy: its rate, conditions, masks,
 # operator (`jac:`) and residual kernels run there with the spacing `k h`, and its fine reads
 # (the inputs, an irregular domain) are folded over each node's block (every fine read, an integer
-# input too, by the mean of the part of the term that reads it; a mask's predicate and the domain
-# by Majority; review r1 M2, F4-15). The oracle is the hand-coarsened problem: the same system
-# discretized on the coarse grid, with its inputs folded by hand (a kind expression as the real
-# input of its block mean); the two agree to rounding under every algorithm. Base 85794414 (~/lpwork/f3b6-nc-lp.log): `Coarse` is not defined, and
+# input too, by the mean of the part of the term that reads it; the domain by Majority; review r1
+# M2, F4-15). A field with a mask whose predicate reads fine fields blends (F4-15b): a node is
+# masked when its whole block is, and elsewhere its equation folds over the block's free children
+# (the node holds the value of its free part). The oracle is the hand-coarsened problem: the same
+# system discretized on the coarse grid, with its inputs folded by hand (a kind expression as the
+# real input of its mean over the free children, the mask's kind only on whole blocks); the two
+# agree to rounding under every algorithm. Base 85794414 (~/lpwork/f3b6-nc-lp.log): `Coarse` is not defined, and
 # `lattice_level` was refused ("does not lower"), so every testset errors.
 using LatticeFields.IR: print_program
 using LinearAlgebra: I
@@ -39,6 +42,37 @@ function cmean(A, k = CK)
     nc = size(A) .÷ k
     return [sum(A[(I[1] - 1) * k + i, (I[2] - 1) * k + j] for j in 1:k for i in 1:k) / k^2 for I in CartesianIndices(nc)]
 end
+# the mean of a fine array over each block's free children (F4-15b: the children where `held` is
+# false; in the IR's order, so a block with no held child gives `cmean`), over every child of a
+# block no child of which is free
+function cfree(A, held, k = CK)
+    nc = size(A) .÷ k
+    return map(CartesianIndices(nc)) do I
+        ch = [CartesianIndex((I[1] - 1) * k + i, (I[2] - 1) * k + j) for j in 1:k for i in 1:k]
+        fr = [c for c in ch if !held[c]]
+        isempty(fr) ? sum(A[c] for c in ch) / k^2 : sum(A[c] for c in fr) / length(fr)
+    end
+end
+# the number of free children of each block
+cnfree(held, k = CK) = [count(!, held[((I[1] - 1) * k + 1):(I[1] * k), ((I[2] - 1) * k + 1):(I[2] * k)])
+                        for I in CartesianIndices(size(held) .÷ k)]
+# a fine kind map whose 4×4 blocks hold kind 3 (the mask's) on 16, 0, 1, 2, … 15 of their sites,
+# the others drawn from 0:2 (F4-15b): masked, free and blended nodes
+function cblendkinds(seed; dims = CDIMS, k = CK)
+    rng = Xoshiro(seed)
+    Q = zeros(Int32, dims)
+    n3 = [16, 0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 12, 14, 15, 16, 0][randperm(rng, 16)]
+    for (b, J) in enumerate(CartesianIndices(dims .÷ k))
+        own = randperm(rng, k^2)
+        for (n, (i, j)) in enumerate((i, j) for j in 1:k for i in 1:k)
+            Q[(J[1] - 1) * k + i, (J[2] - 1) * k + j] = own[n] <= n3[b] ? 3 : rand(rng, 0:2)
+        end
+    end
+    return Q
+end
+# the hand twin's mask input: kind 3 where the whole block is
+cwhole(Q, k = CK) = Int32[all(==(3), Q[((I[1] - 1) * k + 1):(I[1] * k), ((I[2] - 1) * k + 1):(I[2] * k)]) ? 3 : 0
+                          for I in CartesianIndices(size(Q) .÷ k)]
 # the owned problem of `sys` on `dims` with inputs `ins`
 # (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
 cown(sys, dims; T = Float64, ins = (), kw...) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims); T, kw...);
@@ -48,29 +82,32 @@ cown(sys, dims; T = Float64, ins = (), kw...) = LFP.field_problem(discretize(sys
 # a decay at a kind, a source at a kind, a moving masked Dirichlet, a Robin face, a Dirichlet face
 # whose value reads the coordinates, a face value that reads an input (a field face), a table at
 # the kind and a source from a real input. With `hand` (the twin), the kind expressions are real
-# inputs that hold their block means: `f2` for `ismember(q, (2,))`, `f1` for `q == 1`, `sv` for
-# `at(cSv, q + 1)` (F4-15: a kind expression folds by its mean, as a real input does)
+# inputs that hold their block means: `cf2` for `ismember(q, (2,))`, `cf1` for `q == 1`, `csv` for
+# `at(cSv, q + 1)` (F4-15: a kind expression folds by its mean, as a real input does). The names are
+# unique to this file: SymbolicUtils interns an applied term `sv(t, x, y)` whatever its function's
+# metadata, and unseen_loop.jl's plain `sv` (included before device.jl) drops `input = true`
 @parameters cD = 0.02 ckd = 3.0 cs = 0.5 cSv[1:4] = [1.0, 2.0, 5.0, 3.0]
-@variables f1(..) [input = true, bounds = (0, 1)] f2(..) [input = true, bounds = (0, 1)] sv(..) [input = true, bounds = (1, 5)]
+@variables cf1(..) [input = true, bounds = (0, 1)] cf2(..) [input = true, bounds = (0, 1)] csv(..) [input = true, bounds = (1, 5)]
 function csys(c, q, g; steady = false, hand = false)
     ce, qe, ge = c(t, x, y), q(t, x, y), g(t, x, y)
-    k2, k1, tv = hand ? (f2(t, x, y), f1(t, x, y), sv(t, x, y)) : (ismember(qe, (2,)), qe == 1, at(cSv, qe + 1))
+    k2, k1, tv = hand ? (cf2(t, x, y), cf1(t, x, y), csv(t, x, y)) : (ismember(qe, (2,)), qe == 1, at(cSv, qe + 1))
     rhs = cD * DivKGrad(:harmonic)(1 + x, ce) - ckd * ce * k2 + cs * k1 + 0.1 * tv + 0.05 * ge
     eqs = steady ? [0 ~ rhs] : [D(ce) ~ rhs]
     bcs = [ce ~ masked(qe == 3, 1.0), 0.5 * c(t, 0, y) - 0.1 * Differential(x)(c(t, 0, y)) ~ 0.3,
         c(t, x, 1) ~ x, c(t, 1, y) ~ g(t, 1, y)]
     steady || push!(bcs, c(0, x, y) ~ x * y)
-    dvs = hand ? [ce, qe, ge, f1(t, x, y), f2(t, x, y), sv(t, x, y)] : [ce, qe, ge]
+    dvs = hand ? [ce, qe, ge, cf1(t, x, y), cf2(t, x, y), csv(t, x, y)] : [ce, qe, ge]
     return PDESystem(eqs, bcs, cdom(), [t, x, y], dvs, [cD, ckd, cs, cSv]; name = :cs)
 end
-# the hand twin's inputs for the fine kind map `Q`: the block means of the kind expressions, and
-# the block's majority kind for the mask (`ckinds` gives every block a strict majority)
-chand(Q, Qc) = [f1(t, x, y) => cmean(Float64.(Q .== 1)), f2(t, x, y) => cmean(Float64.(Q .== 2)),
-    sv(t, x, y) => cmean(Float64[1.0, 2.0, 5.0, 3.0][Q .+ 1])]
+# the hand twin's inputs for the fine kind map `Q`: the means of the kind expressions over the
+# free children (the mask is `q == 3`; F4-15b)
+chand(Q) = [cf1(t, x, y) => cfree(Float64.(Q .== 1), Q .== 3), cf2(t, x, y) => cfree(Float64.(Q .== 2), Q .== 3),
+    csv(t, x, y) => cfree(Float64[1.0, 2.0, 5.0, 3.0][Q .+ 1], Q .== 3)]
 # equal to rounding: the fold multiplies the block mean last in a product, the twin in its term order
 capprox(a, b; rtol = 1e-13) = isapprox(a, b; rtol) || (println("coarse twin: max |Δ| ", maximum(abs, a .- b)); false)
 const CQ1, CQ1c = ckinds(11)
 const CQ2, CQ2c = ckinds(12)
+const CQB1, CQB2 = cblendkinds(13), cblendkinds(14)
 # a real input whose block sums are exact (integers): the mean is exact in both problems
 const CG = Float64[(3i + 5j) % 7 for i in 1:16, j in 1:16]
 
@@ -103,9 +140,9 @@ function ctwins(; steady = false, T = Float64, storage = nothing, backend = noth
     storage === nothing || (ch = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(ch), LatticePDE.LatticeStorage, storage)))
     q, g = @variables q(..)::Int32 [input = true] g(..) [input = true]
     kw = backend === nothing ? (;) : (; backend)
-    pc = cown(csys(c, q, g; steady), CDIMS; T, ins = [q(t, x, y) => CQ1, g(t, x, y) => CG], kw...)
+    pc = cown(csys(c, q, g; steady), CDIMS; T, ins = [q(t, x, y) => CQB1, g(t, x, y) => CG], kw...)
     ph = cown(csys(ch, q, g; steady, hand = true), CDIMS .÷ CK; T,
-        ins = vcat([q(t, x, y) => CQ1c, g(t, x, y) => cmean(CG)], chand(CQ1, CQ1c)), kw...)
+        ins = vcat([q(t, x, y) => cwhole(CQB1), g(t, x, y) => cfree(CG, CQB1 .== 3)], chand(CQB1)), kw...)
     return pc, ph, (c, ch, q, g)
 end
 
@@ -128,7 +165,9 @@ end
     end
 
     @testset "a coarse field equals the hand-coarsened problem under every algorithm" begin
-        @test sum(Float64.(CQ1 .== 2)) != 16 * sum(CQ1c .== 2)     # (blocks are mixed: the mean is not the majority)
+        # (blocks are mixed: the mean is not the majority; blocks are masked, free and blended)
+        @test sum(Float64.(CQ1 .== 2)) != 16 * sum(CQ1c .== 2)
+        @test sort(unique(16 .- cnfree(CQB1 .== 3))) == [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 12, 14, 15, 16]
         pc, ph, (c, ch, q, g) = ctwins()
         @test size(pc.u0) == (16,) && length(ph.u0) == 16
         @test pc.u0 == ph.u0                                   # the initial values at the node centers
@@ -140,8 +179,8 @@ end
             ic, ih = init(pc, alg), init(ph, alg)
             for n in 1:6
                 if n == 4                                                       # the mask moves
-                    ic[q(t, x, y)] = CQ2; ih[q(t, x, y)] = CQ2c
-                    foreach(((v, a),) -> ih[v] = a, chand(CQ2, CQ2c))
+                    ic[q(t, x, y)] = CQB2; ih[q(t, x, y)] = cwhole(CQB2); ih[g(t, x, y)] = cfree(CG, CQB2 .== 3)
+                    foreach(((v, a),) -> ih[v] = a, chand(CQB2))
                 end
                 step!(ic); step!(ih)
             end
@@ -150,9 +189,11 @@ end
             @test capprox(ic[c(t, x, y)], ih[ch(t, x, y)]; rtol = alg isa ExplicitEuler ? 1e-13 : 1e-10)
             @test LatticePDE.substep_counts(ic) == LatticePDE.substep_counts(ih)
         end
-        # the masked nodes hold the masked value, and only where most of the block is kind 3
+        # the masked nodes hold the masked value, and only where the whole block is kind 3 (F4-15b;
+        # 15 of 16 sites leave the node free)
         ic = init(pc, BackwardEuler(; dt = 0.05)); step!(ic)
-        @test all(ic[c(t, x, y)][CQ1c .== 3] .== 1.0) && any(ic[c(t, x, y)][CQ1c .!= 3] .!= 1.0)
+        whole = cwhole(CQB1) .== 3
+        @test count(whole) == 2 && all(ic[c(t, x, y)][whole] .== 1.0) && all(ic[c(t, x, y)][.!whole] .!= 1.0)
     end
 
     @testset "steady rows, number types and the ODE path on a coarse grid" begin
@@ -190,8 +231,8 @@ end
             [c(0, x, y) ~ x * y], cdom(), [t, x, y], [c(t, x, y), g(t, x, y), extra], [cD, ckd]; name = :os)
         oc = discretize(osys(cc, ismember(q(t, x, y), (2,)), q(t, x, y)), LatticeDiscretization(Grid(CDIMS));
             inputs = [q(t, x, y) => CQ1, g(t, x, y) => CG])
-        oh = discretize(osys(ch2, f2(t, x, y), f2(t, x, y)), LatticeDiscretization(Grid(CDIMS .÷ CK));
-            inputs = [f2(t, x, y) => cmean(Float64.(CQ1 .== 2)), g(t, x, y) => cmean(CG)])
+        oh = discretize(osys(ch2, cf2(t, x, y), cf2(t, x, y)), LatticeDiscretization(Grid(CDIMS .÷ CK));
+            inputs = [cf2(t, x, y) => cmean(Float64.(CQ1 .== 2)), g(t, x, y) => cmean(CG)])
         du1, du2 = similar(oc.u0), similar(oh.u0)
         oc.f(du1, oc.u0, oc.p, 0.0); oh.f(du2, oh.u0, oh.p, 0.0)
         @test capprox(du1, du2; rtol = 1e-14)
@@ -305,6 +346,105 @@ end
         end
     end
 
+    @testset "F4-15b: a mask blends on the blocks it covers in part" begin
+        # A mask `masked(q == 0, v)` on Coarse(4): a node is masked where its whole block is kind 0;
+        # elsewhere it holds the value of its free part (the children with q ≠ 0), its equation folded
+        # over them. Base 7d101740 (~/lpwork/f4F15b/nc.log): the mask folds by Majority, so a node
+        # with 9 or more medium children is held and its sources are lost, and the others fold over
+        # the whole block.
+        lvl(n) = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(Symbolics.variable(n; T = SymbolicUtils.FnType{Tuple, Real, Nothing})),
+            LatticePDE.LatticeLevel, Coarse(CK)))
+        q = first(@variables q(..)::Int32 [input = true])
+        qe = q(t, x, y)
+        # kind 1 (the source) next to the medium (kind 0) on blocks the medium covers in part: the
+        # medium on 0, 4, 8, 9, 12, 15 or 16 of a block's sites, kind 1 on the sites next to it
+        Q = zeros(Int32, CDIMS)
+        nmed = [0, 4, 8, 9, 12, 15, 16, 9, 8, 4, 12, 15, 0, 16, 9, 12]
+        for (b, J) in enumerate(CartesianIndices(CDIMS .÷ CK))
+            sites = [CartesianIndex((J[1] - 1) * CK + i, (J[2] - 1) * CK + j) for j in 1:CK for i in 1:CK]
+            for (n, st) in enumerate(sites)
+                Q[st] = n <= nmed[b] ? 0 : n <= nmed[b] + 3 ? 1 : 2
+            end
+        end
+        held = Q .== 0
+        nf = cnfree(held)
+        @test sort(unique(nf)) == [0, 1, 4, 7, 8, 12, 16]
+        S = 0.7
+        csrc = lvl(:cb15src)
+        sys(c, v) = PDESystem([D(c(t, x, y)) ~ S * (qe == 1) + 0.25 * (qe == 2) * c(t, x, y)], [c(0, x, y) ~ 0.0, c(t, x, y) ~ masked(qe == 0, v)],
+            cdom(), [t, x, y], [c(t, x, y), qe], Num[]; name = :b15)
+        op = discretize(sys(csrc, 0.5), LatticeDiscretization(Grid(CDIMS)); inputs = [qe => Q])
+        du = similar(op.u0); op.f(du, zero(op.u0), op.p, 0.0)
+        du = reshape(du, 4, 4)
+        # one blended node by hand: the rate is the mean over its free children, S #(q == 1) / #free
+        for I in CartesianIndices(nf)
+            nf[I] in (0, 16) && continue
+            blk = Q[((I[1] - 1) * CK + 1):(I[1] * CK), ((I[2] - 1) * CK + 1):(I[2] * CK)]
+            @test du[I] ≈ S * count(==(1), blk) / nf[I] rtol = 1e-15
+        end
+        # conservation: the free volume times the rate is the fine source total (every source site
+        # is free); the Majority fold lost the sources of the blocks with 9 or more medium sites
+        @test sum(nf[I] * du[I] for I in eachindex(nf) if nf[I] > 0) ≈ S * count(==(1), Q) rtol = 1e-14
+        for alg in (ExplicitEuler(; dt = 0.25), BackwardEuler(; dt = 0.25))
+            ic = init(cown(sys(csrc, 0.5), CDIMS; ins = [qe => Q]), alg)
+            for _ in 1:4
+                step!(ic)
+            end
+            u1 = ic[csrc(t, x, y)]
+            @test all(u1[nf .== 0] .== 0.5)                                    # the masked nodes hold the value
+            # the free content Σ #free u grows by the source and by the decay of the free part:
+            # with c(0) = 0 and no diffusion each free node is the scalar ODE u' = a + b u
+            a = [nf[I] == 0 ? 0.0 : S * count(==(1), Q[((I[1] - 1) * CK + 1):(I[1] * CK), ((I[2] - 1) * CK + 1):(I[2] * CK)]) / nf[I]
+                 for I in CartesianIndices(nf)]
+            b = [nf[I] == 0 ? 0.0 : 0.25 * count(==(2), Q[((I[1] - 1) * CK + 1):(I[1] * CK), ((I[2] - 1) * CK + 1):(I[2] * CK)]) / nf[I]
+                 for I in CartesianIndices(nf)]
+            ns = 4 * only(LatticePDE.substep_counts(ic))
+            h = 1.0 / ns
+            # (each substep: ExplicitEuler u + h(a + bu), BackwardEuler (u + ha)/(1 − hb))
+            want = zeros(4, 4)
+            for _ in 1:ns
+                want = alg isa ExplicitEuler ? want .+ h .* (a .+ b .* want) : (want .+ h .* a) ./ (1 .- h .* b)
+            end
+            m = nf .> 0
+            @test isapprox(u1[m], want[m]; rtol = 1e-12) || (println("F4-15b scalar ", alg, ": ", maximum(abs, u1[m] .- want[m])); false)
+        end
+        # f = 0 and f = 1: a node no child of which is held folds over the whole block bitwise (the
+        # rate equals the unmasked system's), a node all of whose children are held is masked
+        cnm = lvl(:cb15nomask)
+        sysn = PDESystem([D(cnm(t, x, y)) ~ S * (qe == 1) + 0.25 * (qe == 2) * cnm(t, x, y)], [cnm(0, x, y) ~ 0.0], cdom(), [t, x, y],
+            [cnm(t, x, y), qe], Num[]; name = :b15n)
+        on = discretize(sysn, LatticeDiscretization(Grid(CDIMS)); inputs = [qe => Q])
+        u0 = collect(range(0.1, 1.6; length = 16))
+        du1, du2 = similar(op.u0), similar(on.u0)
+        op.f(du1, u0, op.p, 0.0); on.f(du2, u0, on.p, 0.0)
+        @test vec(nf .== 16) == (du1 .== du2 .&& vec(nf .== 16)) && any(nf .== 16)
+        @test all(du1[vec(0 .< nf .< 16)] .!= du2[vec(0 .< nf .< 16)])
+        # complementary masks on a block covered half by each (F4-15 review should-fix 3): neither
+        # node is masked; each field holds the value of its own free part (its rate folds over its
+        # own free children), so `masked(q == 0, 9)` sees the source and `masked(q != 0, 9)` does not
+        Qh = zeros(Int32, CDIMS); Qh[1:4, 1:2] .= 1                      # block (1, 1): 8 of 16 sites kind 1
+        c5, c6 = lvl(:cb15half0), lvl(:cb15half1)
+        for (c, pr, want) in ((c5, qe == 0, 1.0), (c6, qe != 0, 0.0))
+            hs = PDESystem([D(c(t, x, y)) ~ (qe == 1)], [c(0, x, y) ~ 0.0, c(t, x, y) ~ masked(pr, 9.0)], cdom(), [t, x, y],
+                [c(t, x, y), qe], Num[]; name = :b15h)
+            sl = solve(cown(hs, CDIMS; ins = [qe => Qh]), ExplicitEuler(; dt = 0.5))
+            v = sl[c(t, x, y), length(sl.t)]
+            @test v[1, 1] == want                                           # (t = 1: the free part's mean source)
+        end
+        # the ODE path (`discretize`'s right side) and every stepper of the owned path equal the
+        # hand-coarsened twin on blended nodes ("a coarse field equals the hand-coarsened problem")
+        cod, hod = lvl(:cb15ode), first(@variables hb15ode(..))
+        kq = first(@variables kq(..) [input = true, bounds = (0, 1)])
+        osys(c, k1, mq, dvs) = PDESystem([D(c(t, x, y)) ~ 0.02 * Δ(c(t, x, y)) - c(t, x, y) * k1 + 0.3 * k1],
+            [c(0, x, y) ~ x * y, c(t, x, y) ~ masked(mq == 0, 0.5)], cdom(), [t, x, y], [c(t, x, y); dvs], Num[]; name = :b15o)
+        oc = discretize(osys(cod, qe == 2, qe, [qe]), LatticeDiscretization(Grid(CDIMS)); inputs = [qe => Q])
+        oh = discretize(osys(hod, kq(t, x, y), qe, [kq(t, x, y), qe]), LatticeDiscretization(Grid(CDIMS .÷ CK));
+            inputs = [kq(t, x, y) => cfree(Float64.(Q .== 2), held), qe => Int32[n == 0 ? 0 : 1 for n in nf]])
+        d1, d2 = similar(oc.u0), similar(oh.u0)
+        oc.f(d1, oc.u0, oc.p, 0.0); oh.f(d2, oh.u0, oh.p, 0.0)
+        @test capprox(d1, d2; rtol = 1e-14)
+    end
+
     @testset "a fine field and a coarse field in one group: prolongation and restriction" begin
         # u (fine 8×8) reads c (Coarse(2), 4×4) at the node of its block; c reads u by the block
         # mean. One BackwardEuler window against the hand matrix of the coupled system.
@@ -362,14 +502,15 @@ end
         cdh = first(@variables cdomh(..))
         # (the twin reads the kind expressions' block means as real inputs, F4-15)
         function dsys(c; hand = false)
-            k2, k1 = hand ? (f2(t, x, y), f1(t, x, y)) : (ismember(q(t, x, y), (2,)), q(t, x, y) == 1)
+            k2, k1 = hand ? (cf2(t, x, y), cf1(t, x, y)) : (ismember(q(t, x, y), (2,)), q(t, x, y) == 1)
             PDESystem([D(c(t, x, y)) ~ 0.02 * Δ(c(t, x, y)) - c(t, x, y) * k2 + 0.5 * k1 + 0.05 * g(t, x, y)],
                 [c(0, x, y) ~ x + y, c(t, x, y) ~ masked(q(t, x, y) == 3, 1.0)], cdom(), [t, x, y],
-                [[c(t, x, y), cdm(t, x, y), q(t, x, y), g(t, x, y)]; hand ? [f1(t, x, y), f2(t, x, y)] : Num[]], Num[]; name = :dm)
+                [[c(t, x, y), cdm(t, x, y), q(t, x, y), g(t, x, y)]; hand ? [cf1(t, x, y), cf2(t, x, y)] : Num[]], Num[]; name = :dm)
         end
         pc = cown(dsys(cdo), CDIMS; domain = cdm, ins = [cdm(t, x, y) => Df, q(t, x, y) => CQ1, g(t, x, y) => CG])
+        # (`ckinds` covers no block with kind 3 whole: no node is masked, each folds over its free children)
         ph = cown(dsys(cdh; hand = true), CDIMS .÷ CK; domain = cdm,
-            ins = vcat([cdm(t, x, y) => Dc, q(t, x, y) => CQ1c, g(t, x, y) => cmean(CG)], chand(CQ1, CQ1c)[1:2]))
+            ins = vcat([cdm(t, x, y) => Dc, q(t, x, y) => cwhole(CQ1), g(t, x, y) => cfree(CG, CQ1 .== 3)], chand(CQ1)[1:2]))
         for alg in (ExplicitEuler(; dt = 0.05), BackwardEuler(; dt = 0.05), CrankNicolson(; dt = 0.05))
             sc, sh = solve(pc, alg), solve(ph, alg)
             @test capprox(sc[cdo(t, x, y), length(sc.t)], sh[cdh(t, x, y), length(sh.t)]; rtol = alg isa ExplicitEuler ? 1e-13 : 1e-10)

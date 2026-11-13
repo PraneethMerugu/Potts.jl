@@ -46,20 +46,28 @@ struct Env{N, B, L}
     flev::Dict{Any, Int}
     dims::NTuple{N, Int}
     child::Int
+    # the mask predicate of the coarse field whose equation (or operator row) is lowered, when it
+    # reads fine fields (F4-15b): every fold averages over the block's free children, the
+    # children where the predicate is false; `nothing` elsewhere
+    free::Any
 end
 Env(kb, fields, params, tables, spacing, t, xs, lo::NTuple{N}, h, map, offset, policy, leaf, hex, domain) where {N} =
     Env(kb, fields, params, tables, spacing, t, xs, lo, h, map, offset, policy, leaf, hex, domain, Int32[])
 Env(kb, fields, params, tables, spacing, t, xs, lo::NTuple{N}, h, map, offset, policy, leaf, hex, domain, ghosted) where {N} =
     Env(kb, fields, params, tables, spacing, t, xs, lo, h, map, offset, policy, leaf, hex, domain, ghosted, 0,
         Dict{Any, Int}(), ntuple(_ -> 2, N), 0)
+Env(kb, fields, params, tables, spacing, t, xs, lo::NTuple{N}, h, map, offset, policy, leaf, hex, domain, ghosted, level, flev,
+    dims, child) where {N} =
+    Env(kb, fields, params, tables, spacing, t, xs, lo, h, map, offset, policy, leaf, hex, domain, ghosted, level, flev, dims,
+        child, nothing)
 # a coefficient at a neighbor: `face = true` (a face coefficient of a second difference) reads
 # the ghosted fields with `RESOLVE`, the others with `CLAMP`
 _shift(e::Env{N}, o; face::Bool = false) where {N} = Env(e.kb, e.fields, e.params, e.tables, e.spacing, e.t, e.xs, e.lo, e.h,
     e.map, ntuple(d -> e.offset[d] + o[d], N), face ? RESOLVE : CLAMP, e.leaf, e.hex, e.domain, e.ghosted, e.level,
-    e.flev, e.dims, e.child)
+    e.flev, e.dims, e.child, e.free)
 # the environment inside a fold over the children `m` levels down (F3-16)
 _infold(e::Env, m) = Env(e.kb, e.fields, e.params, e.tables, e.spacing, e.t, e.xs, e.lo, e.h, e.map, e.offset, e.policy,
-    e.leaf, e.hex, e.domain, e.ghosted, e.level, e.flev, e.dims, m)
+    e.leaf, e.hex, e.domain, e.ghosted, e.level, e.flev, e.dims, m, e.free)
 _flevel(e::Env, op) = get(e.flev, op, 0)
 """
     level_spacing(h, dims, level) -> NTuple
@@ -164,8 +172,15 @@ end
 #   `kind == P` and `at(R, kind)` are restricted exactly). A condition used as a number (in a
 #   sum, a product, an operator coefficient, the right side itself) is a 0/1 value and folds by
 #   the mean too: `kind == P` on a block a third of whose sites are P is 1/3;
-# - a condition where a condition is used (a mask's predicate, the domain: `_cond`) is folded by
-#   Majority (true when more than half the children are).
+# - in the equation (and the operator row) of a coarse field with a mask whose predicate reads
+#   fine fields (F4-15b, user ruling 2026-11-12), the mean is over the block's free children (the
+#   children where the predicate is false): the node holds the value of its free part, and its
+#   free volume times the folded term is the fine sum of the term over the free sites. On a
+#   block no child of which is free (the node is masked: it holds the mask value) the mean is
+#   over every child, as on a block with no masked child;
+# - a condition where a condition is used is folded by count: a mask's predicate holds at a node
+#   when it holds at every child (`:all`, F4-15b), the domain when it holds at more than half of
+#   them (`:majority`, `_cond`).
 function _fold_kind(u, e::Env)
     (e.level > 0 && e.child == 0) || return nothing
     fine = _fine_ops(e)
@@ -200,19 +215,28 @@ function _fold_product(u, e::Env)
     return _op(e, MUL, ids...)
 end
 """
-    _cond(u, env) -> node id
+    _cond(u, env; fold = :majority) -> node id
 
 The condition `u` where a condition is used (a mask's predicate, the domain). On a `Coarse`
 grid a condition that reads fine fields is true at a node when it holds on more than half of
-the node's block (Majority); as a number it folds by the mean (`_fold_kind`).
+the node's block (`fold = :majority`, the domain) or on all of it (`fold = :all`, a mask's
+predicate: F4-15b); as a number it folds by the mean (`_fold_kind`).
 """
-function _cond(u, e::Env)
+function _cond(u, e::Env; fold::Symbol = :majority)
     v = unwrap(u)
     if e.level > 0 && e.child == 0 && v isa SymbolicUtils.BasicSymbolic && !isempty(_fine_ops(e)) && _reads(v, _fine_ops(e))
-        return _fold(v, e, :majority)
+        return _fold(v, e, fold)
     end
     return _bool(e, lower(u, e))
 end
+"""
+    reads_fine(pred, flev, level) -> Bool
+
+Whether the term `pred` (a mask's predicate) reads a field of a finer grid than `level`, by the
+fields' levels `flev` (operation => level; a field missing from it is on the fine grid): then a
+coarse field masked by it blends (F4-15b).
+"""
+reads_fine(pred, flev, level) = level > 0 && _reads(unwrap(pred), Any[op for (op, l) in flev if l < level])
 # at a neighbor (an operator coefficient, a velocity), the fold reads the neighbor node's block,
 # clamped onto the box in the coarse frame: across a closed face of the box, the node's own block
 # (as a field of the coarse grid is read there; review r1 S2), one select per shifted axis
@@ -225,18 +249,31 @@ function _fold(u, e::Env{N}, kind, axes = [d for d in 1:N if e.offset[d] != 0]) 
     ins = node!(e.kb, INSIDE_OP, BOOL, Int32[], access!(e.kb, Access{N}(lid, Int8(0), Sel(Int16(1)),
         Sel(NTuple{N, Int16}(ntuple(d -> d == ax ? e.offset[d] : 0, N))), Int8(0), INSIDE)))
     out = Env(e.kb, e.fields, e.params, e.tables, e.spacing, e.t, e.xs, e.lo, e.h, e.map,
-        ntuple(d -> d == ax ? 0 : e.offset[d], N), e.policy, e.leaf, e.hex, e.domain, e.ghosted, e.level, e.flev, e.dims, e.child)
+        ntuple(d -> d == ax ? 0 : e.offset[d], N), e.policy, e.leaf, e.hex, e.domain, e.ghosted, e.level, e.flev, e.dims, e.child,
+        e.free)
     return select!(e.kb, ins, _fold(u, e, kind, axes[2:end]), _fold(u, out, kind, axes[2:end]))
 end
 function _fold_children(u, e::Env{N}, kind) where {N}
     m = e.level - minimum(_flevel(e, op) for op in _fine_ops(e) if _reads(u, Any[op]))
     n = prod(d -> e.dims[d] == 1 ? 1 : 2^m, 1:N)       # the children of a node
     v = lower(u, _infold(e, m))
-    if kind === :majority
+    if kind === :majority || kind === :all
         cnt = node!(e.kb, RESTRICT, I32, Int32[cast!(e.kb, _bool(e, v), I32)], 0)
+        kind === :all && return _cmp(e, EQ, constant!(e.kb, n, I32), cnt)
         return _cmp(e, LT, constant!(e.kb, n, I32), arith!(e.kb, MUL, constant!(e.kb, 2, I32), cnt))
     end
-    return _op(e, MUL, constant!(e.kb, 1 / n), node!(e.kb, RESTRICT, REAL, Int32[_real(e, v)], 0))
+    whole = _op(e, MUL, constant!(e.kb, 1 / n), node!(e.kb, RESTRICT, REAL, Int32[_real(e, v)], 0))
+    (e.free === nothing || !_reads(unwrap(e.free), _fine_ops(e))) && return whole
+    # the mean over the free children (F4-15b): Σ_free v / #free, the whole block's mean where no
+    # child is free. On a block with no masked child Σ_free v is the sum Σ v (the same children
+    # in the same order) and #free = n, a power of 2, so the result is the whole mean bitwise
+    mf = max(m, e.level - minimum(_flevel(e, op) for op in _fine_ops(e) if _reads(unwrap(e.free), Any[op])))
+    ef = _infold(e, mf)
+    held = _bool(e, lower(e.free, ef))
+    zero_, one_ = constant!(e.kb, 0.0), constant!(e.kb, 1.0)
+    sfree = node!(e.kb, RESTRICT, REAL, Int32[select!(e.kb, held, zero_, _real(e, v))], 0)
+    nfree = node!(e.kb, RESTRICT, REAL, Int32[select!(e.kb, held, zero_, one_)], 0)
+    return select!(e.kb, _cmp(e, EQ, nfree, zero_), whole, _op(e, DIV, sfree, nfree))
 end
 # a spatial operator reads its field on the field's own grid. In an equation of a field on another
 # `Coarse` level `crossgrid_form` (F3-22) has already made it an aux field of the operand's grid;

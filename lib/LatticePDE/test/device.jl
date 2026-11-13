@@ -235,10 +235,10 @@ end
     @info "F3-15 R1 at 128² ($pgpu), $(init(p, alg).substeps) substeps per window: the gated run $(round(tg; digits = 3)) s, every iteration ($k) $(round(tk; digits = 3)) s"
 end
 
-# F3-16: a `Coarse(4)` field on the device (the features of coarse.jl's `csys`: the Majority
-# and mean folds, the moving masked Dirichlet, Robin and field faces) and a fine field coupled
-# to a `Coarse(2)` field (prolongation and restriction), Float32, against the host executor.
-# Base 85794414: `Coarse` is not defined (the testset errors).
+# F3-16: a `Coarse(4)` field on the device (the features of coarse.jl's `csys`: the free-child
+# mean fold and the whole-block mask (F4-15b), the moving masked Dirichlet, Robin and field
+# faces). A fine field coupled to a `Coarse(2)` field (prolongation and restriction), Float32,
+# against the host executor. Base 85794414: `Coarse` is not defined (the testset errors).
 @testset "F3-16: coarse fields on $pgpu equal the host form (Float32)" begin
     cd4 = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables cdev(..))), LatticePDE.LatticeLevel, Coarse(4)))
     q, g = @variables q(..)::Int32 [input = true] g(..) [input = true]
@@ -277,12 +277,15 @@ end
                (CrankNicolson(; dt = 0.05), BDF2(; dt = 0.05), BackwardEuler(; dt = 0.05, init = :steady))
         for alg in algs
             out = map((PDEV, KernelAbstractions.CPU())) do be
-                pc, ph, (c, ch, q, _) = ctwins(; steady, T = Float32, backend = be)
+                pc, ph, (c, ch, q, g) = ctwins(; steady, T = Float32, backend = be)
                 ic, ih = init(pc, alg), init(ph, alg)
                 for n in 1:6
                     if n == 4
-                        ic[q(t, x, y)] = CQ2; ih[q(t, x, y)] = CQ2c
-                        foreach(((v, a),) -> ih[v] = a, chand(CQ2, CQ2c))
+                        # (F4-15b: the twin's mask input holds the predicate on whole blocks only,
+                        # and its folded inputs are the free means)
+                        ic[q(t, x, y)] = CQ2; ih[q(t, x, y)] = cwhole(CQ2)
+                        ih[g(t, x, y)] = cfree(CG, CQ2 .== 3)
+                        foreach(((v, a),) -> ih[v] = a, chand(CQ2))
                     end
                     step!(ic); step!(ih)
                 end
