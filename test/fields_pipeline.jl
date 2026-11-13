@@ -1,6 +1,6 @@
 # The field pipeline's gates that hold no recorded value: the hard set on the device against the
 # same run on the CPU, and the warm MCS of the Merks models at 500² allocating nothing. Both moved
-# here from the F2 guard (test/fields_identity.jl) when D-TS2 deleted the guard's records, its
+# here from the F2 guard (test/fields_identity.jl) when D-274 deleted the guard's records, its
 # fingerprint and fill-order pins and its bitwise-parent pins.
 using Potts, Test
 using Potts: CorePotts
