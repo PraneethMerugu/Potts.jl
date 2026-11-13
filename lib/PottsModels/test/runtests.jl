@@ -231,6 +231,16 @@ function _pm_own(path)
     end
     return out
 end
+# Names a PM_IN_MAIN file declares at its top level: that file's own run declares them in Main,
+# so they are never injected there (a plain global would block the file's `const` under the
+# reverse shard order, where an in-Main file runs before the one that defines the name).
+const PM_MAIN_OWN = let s = Set{Symbol}()
+    for f in PM_IN_MAIN
+        s = union(s, _pm_own(joinpath(@__DIR__, f)))
+    end
+    s
+end
+
 function _pm_module(f; defs_only)
     i = findfirst(==(f), POTTSMODELS_TEST_FILES)
     earlier = POTTSMODELS_TEST_FILES[1:(i - 1)]                # the providers, in the full order
@@ -259,7 +269,9 @@ function _pm_module(f; defs_only)
         # `using` of a module of them.
         pre = union(before, keys(latest))
         for (n, v) in latest
-            startswith(string(n), '@') || isdefined(m, n) || Core.eval(m, Expr(:(=), n, QuoteNode(v)))
+            startswith(string(n), '@') && continue
+            n in PM_MAIN_OWN && continue       # its own run declares it in Main
+            isdefined(m, n) || Core.eval(m, Expr(:(=), n, QuoteNode(v)))
         end
     else
         e = Core.eval(m, Expr(:module, true, :PMEarlier,
