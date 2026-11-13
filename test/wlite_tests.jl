@@ -426,9 +426,9 @@ end
         names = sort([string(parentmodule(Base.unwrap_unionall(m.sig).parameters[1].instance), '.', m.name, '(',
                              join(string.(Base.unwrap_unionall(m.sig).parameters[3:end]), ", "), ')') for m in owned])
         # the type's printed form carries its module when the name is not visible from the calling
-        # module (the item's module prints `Potts.PottsSystem`, Main printed `PottsSystem`)
-        shown = string("Base.show(MIME{Symbol(\"text/plain\")}, ", T, ")")
-        @test names == sort(["Base.getproperty(Symbol)", shown,
+        # module: Main printed `PottsSystem`, the item's module prints `Potts.PottsSystem`
+        plain(s) = replace(s, "Potts." => "")
+        @test plain.(names) == sort(["Base.getproperty(Symbol)", "Base.show(MIME{Symbol(\"text/plain\")}, PottsSystem)",
             "ModelingToolkitBase.equations()", "ModelingToolkitBase.unknowns()", "ModelingToolkitBase.parameters()",
             "ModelingToolkitBase.observed()", "ModelingToolkitBase.initial_conditions()", "ModelingToolkitBase.bindings()",
             "ModelingToolkitBase.independent_variables()", "SymbolicIndexingInterface.symbolic_container()",

@@ -565,7 +565,9 @@ end
             σ = zeros(Int32, 6, 6)
             σ[2:3, 2:3] .= 1
             e = try
-                Base.invokelatest(PottsProblem, Base.invokelatest(RHDefaultMI; name = :d), [ownership => σ, kind => [:ka]], (0, 1))
+                # the model `rh_bad` evaluated lives in its module, not in the item's
+                Base.invokelatest(PottsProblem, Base.invokelatest(getfield(parentmodule(rh_bad), :RHDefaultMI); name = :d),
+                                  [ownership => σ, kind => [:ka]], (0, 1))
                 nothing
             catch err
                 err isa LoadError ? err.error : err
