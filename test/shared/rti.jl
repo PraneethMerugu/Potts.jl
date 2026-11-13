@@ -96,20 +96,27 @@ function potts_suite(; nworkers = NWORKERS, qa = get(ENV, "POTTS_QA", "true") ==
 end
 
 """
-    device_suite(; nworkers = 1)
+    device_suite()
 
 The Potts part of GROUP=GPU, run with POTTS_GPU set: the items that name a device (`:device`)
-and the device files' items (`:gpu`; the `:rocm` ones on ROCm only), one at a time (one
-device), without `:qa`.
+and the device files' items (`:gpu`; the `:rocm` ones on ROCm only), in-process, one at a time
+(one device), without `:qa`; the `:device_scan` item last (`_phases`).
 """
-function device_suite(; nworkers = 1, gpu = get(ENV, "POTTS_GPU", ""))
+function device_suite(; gpu = get(ENV, "POTTS_GPU", ""))
     keep(ti) = (:device in ti.tags || :gpu in ti.tags) && !(:qa in ti.tags) && (gpu == "rocm" || !(:rocm in ti.tags))
-    return _two_passes(keep, nworkers)
+    # the D-157 scan is an item tagged `:device_scan`, and it reads the process's kernel cache: it
+    # has to run after every other device item, in the process that compiled those kernels. Both
+    # phases run in-process (`nworkers = 0`), one item at a time; a worker's cache is its own.
+    return _phases(((ti -> keep(ti) && !(:device_scan in ti.tags), 0),
+                    (ti -> keep(ti) && :device_scan in ti.tags, 0)))
 end
 
-function _two_passes(keep, nworkers)
+_two_passes(keep, nworkers) =
+    _phases(((ti -> keep(ti) && !serial(ti), nworkers), (ti -> keep(ti) && serial(ti), min(nworkers, 1))))
+
+function _phases(phases)
     errs = Tuple{Any, Any}[]                 # (exception, backtrace), in pass order
-    for (pass, n) in ((ti -> keep(ti) && !serial(ti), nworkers), (ti -> keep(ti) && serial(ti), min(nworkers, 1)))
+    for (pass, n) in phases
         try
             rti(pass, TESTDIR; nworkers = n, OPTIONS..., test_end_expr = passlog_expr())
         catch e

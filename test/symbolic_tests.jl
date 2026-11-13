@@ -7,10 +7,6 @@ using Potts, Test
 using Potts: CorePotts
 isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "devices.jl"))
 using PottsModels: WortelAct, GranerGlazier
-
-# the name test/ports/symbolic_models.jl gives the Graner-Glazier model (`@extend ... = Sorting()`
-# in the models below); PortsSetup's file is not included here, so the setup binds it itself
-const Sorting = GranerGlazier
 using Random: Xoshiro
 
 using InteractiveUtils: code_llvm
@@ -589,7 +585,7 @@ end
 
 # Composition: a chemotactic extension of the Graner model and an obstacle kind added to it.
 @potts_model ChemoSorting begin
-    @extend λ, V₀, dark = base = Sorting()
+    @extend λ, V₀, dark = base = GranerGlazier()
     @parameters χ = 50.0
     @fields c = SyPDE.chemo((72, 72)) (SyPDE.src => kind == dark)
     @drive Chemotaxis(c; strength = χ, kinds = (dark,))
@@ -2684,7 +2680,7 @@ end
         @test pn.p.nd₊k_nd == 0.5
         # kind tables must cover every kind (an extension adding kinds)
         @potts_model MoreKinds begin
-            @extend base = Sorting()
+            @extend base = GranerGlazier()
             @kinds medium dark light extra
         end
         σg, kg = graner_state()

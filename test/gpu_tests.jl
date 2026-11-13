@@ -13,10 +13,6 @@ using StableRNGs: StableRNG
 using Statistics: mean, var
 
 # test-only models that the included acceptance files use by name (D-254)
-# The frozen acceptance files that the items below include read the device helpers as
-# `Main.PottsDevices` (`isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()`), and
-# they do not change here: bind it in the worker's `Main`, the one `Main` binding of the suite.
-isdefined(Main, :PottsDevices) || Core.eval(Main, :(const PottsDevices = $PottsDevices))
 
 isdefined(@__MODULE__, :SingleDivisionFixture) ||
     include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "fixtures.jl"))
@@ -132,12 +128,6 @@ end
 # update its formulas)
 # (include("transfer_counts.jl"): now its own item file)
 
-
-# ROCm, last: no `double` in any kernel this suite compiled (full scan of the kernel cache)
-if PottsDevices.device_name() == "rocm"
-    include(joinpath(@__DIR__, "shared", "device_ir_scan.jl"))
-    DeviceIRScan.check("Potts")
-end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
@@ -911,5 +901,15 @@ end
     module P63bOnDevice
     using Test, Potts, PottsModels
     include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_3b_boundary_schedule.jl"))
+    end
+end
+
+# D-157, ROCm: no `double` in any kernel this suite compiled (a full scan of the process's kernel
+# cache). It is an item of its own, tagged `:device_scan`: it runs after every other device item and
+# in the process that compiled those kernels (PottsRTI.device_suite), not when a setup is evaluated.
+@testitem "device IR: no double in any kernel this suite compiled (ROCm)" setup = [GpuSetup] tags = [:potts, :gpu, :device, :device_scan] begin
+    if PottsDevices.device_name() == "rocm"
+        include(joinpath(@__DIR__, "shared", "device_ir_scan.jl"))
+        DeviceIRScan.check("Potts")
     end
 end
