@@ -1,5 +1,5 @@
 # D-203: reproduction 04 (foam, Jiang et al. 1999, "04b"), the pre-registered scan of a
-# separate bulk shear scale κ_b. Frozen (AUTONOMY §7.3) BEFORE any scan run. Decisions:
+# separate bulk shear scale κ_b.  BEFORE any scan run. Decisions:
 # D-203 (this scan), D-190 (the frozen reproduction test 04_foam.jl, whose functions, foams,
 # seeds pattern and τ this file reuses unchanged), D-154 (deviations), D-156 (unstated
 # parameters are calibrated and labelled; heavy runs on the PC), D-157 (all heavy compute on

@@ -4,7 +4,7 @@
 # The point is that the claim can never drift from the code: if a sentence below stops being
 # true, this file fails; if the docs (or an in-repo paper source) say more than is true, or
 # stop saying what is approved, this file fails.
-# Decision: D-1xx (P6.0bs; the coordinator numbers it). Frozen (AUTONOMY §7.3).
+# Decision: D-1xx (P6.0bs; the coordinator numbers it).
 #
 # The claims and their checks (public API only; one testset per claim):
 #  C1. "Potts.jl is built on ModelingToolkit. Every Potts model is a ModelingToolkit
@@ -166,7 +166,7 @@ p60bs_prob() = PottsProblem(P60bsAll(; name = :all), [ownership => P60BS_σ, kin
     seed = 3, field_solver = ExplicitEuler(substeps = 2))
 
 # every published model (construction only)
-const P60BS_PUBLISHED = [
+const P60BS_MODELS = [
     ("GranerGlazier", () -> GranerGlazier(; name = :gg)),
     ("WortelAct", () -> WortelAct(; name = :act, lattice = (8, 8))),
     ("WortelAct connected", () -> WortelAct(; name = :act, lattice = (8, 8), connected = true)),
@@ -183,7 +183,7 @@ const P60BS_PUBLISHED = [
     ("OpenVTChain", () -> OpenVTChain(; name = :chain)),
     ("OpenVTReferenceMonolayer", () -> OpenVTReferenceMonolayer(; name = :ref, lattice = (24, 24))),
 ]
-const P60BS_ALL = [P60BS_PUBLISHED; ("P60bsAll fixture", () -> P60bsAll(; name = :all))]
+const P60BS_ALL = [P60BS_MODELS; ("P60bsAll fixture", () -> P60bsAll(; name = :all))]
 
 # ---------------------------------------------------------------------------------------
 # C1. Built on ModelingToolkit: every model is an MTK `AbstractSystem`, not a `System`

@@ -1,5 +1,5 @@
 # P6.15m m4, re-scoped (D-225; replaces the D-222 freeze `15_openvt_entries.jl`): the
-# CheckerboardCPM characterisation on page 15. Frozen (AUTONOMY §7.3) once committed by the
+# CheckerboardCPM characterisation on page 15.  once committed by the
 # coordinator; the test author writes no implementation.
 #
 # Maintainer (D-225): "ok we can leave checkerboard out of the submission, but keep it in the

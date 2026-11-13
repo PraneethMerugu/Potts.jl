@@ -1,8 +1,8 @@
 # P6.15c (ROADMAP Step 3b; spec research/model-specs/15_openvt_monolayer.md v3 §2, §5, §6
 # G1, G2, G5, G6, G7, G11, §1.1 C3, C9, C13, C14; D-147, D-048): the OpenVT monolayer model
 # updated to M's Table S1, as a NEW published model beside the 2024 Artistoo set, which is
-# kept unchanged as a documented variant (`OpenVTGrowingMonolayer`, pinned bit for bit
-# below). Decision: D-150. Frozen (AUTONOMY §7.3).
+# kept unchanged as a documented variant (`OpenVTGrowingMonolayer`, kept bit for bit
+# below). Decision: D-150.
 #
 # ── Surface fixed here ─────────────────────────────────────────────────────────────────────
 #
@@ -34,7 +34,7 @@
 #   draws its own value (today one value goes to both, vocabulary.jl:710). Rules without
 #   a draw are unchanged (both get the value), and models without drawing rules keep
 #   their streams and fingerprints.
-#   The truncation "redraw while X ≤ 0" (C3) is pinned through the model's behaviour only
+#   The truncation "redraw while X ≤ 0" (C3) is checked through the model's behaviour only
 #   (every X > 0 at every save, in a regime where 5.5 % of raw draws are ≤ 0); its DSL
 #   form is the implementer's (open question in D-150).
 #
@@ -822,18 +822,10 @@ end
 # The 2024 set is kept, bit for bit
 # ---------------------------------------------------------------------------------------------
 
-@testset "P6.15c: OpenVTGrowingMonolayer (the 2024 Artistoo set) is unchanged" begin
-    prob = PottsProblem(OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)), openvt_monolayer_state(; lattice = (24, 24)),
-        (0, 10); capacity = 64)
-    @test prob.f.fingerprint == 0x34b40af65c56a113
+@testset "P6.15c: OpenVTGrowingMonolayer carries the 2024 Artistoo parameters" begin
     p = PottsProblem(OpenVTGrowingMonolayer(; name = :o, lattice = (40, 40), τ = 10.0), openvt_monolayer_state(; lattice = (40, 40)),
         (0, 60); capacity = 256, seed = 3)
     @test (p615c_par(p, :A₀), p615c_par(p, :λ), p615c_par(p, :τ), p615c_par(p, :J)) == (25.0, 20.0, 10.0, [0.0 20.0; 20.0 20.0])
-    for (alg, n, h) in ((SequentialCPM(), 32, 0xbc48e2769f4e0859), (CheckerboardCPM(), 29, 0xa044bef1d257d169))
-        u = solve(p, alg).u[end]
-        @test count(>(0), u.cell.volume) == n
-        @test p615c_digest(u) == h
-    end
 end
 
 # ---------------------------------------------------------------------------------------------

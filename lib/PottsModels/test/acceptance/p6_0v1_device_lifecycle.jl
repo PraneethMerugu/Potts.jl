@@ -1,4 +1,4 @@
-# P6.0v1 (ROADMAP Phase 6, step 0): the lifecycle on the device. Frozen (AUTONOMY §7.3).
+# P6.0v1 (ROADMAP Phase 6, step 0): the lifecycle on the device.
 # Decisions: D-089 (no synchronize on a quiet MCS; the lifecycle is planned on the device),
 # D-085 (the transfer counters), D-081 (P6.0d mask counts), D-035 (lifecycle semantics, as
 # amended), D-048 (ordinary tests, no parity harness).
@@ -314,7 +314,7 @@ function p60v1_published(T)
             [sheared_foam_state(; lattice = (32, 32)); :ytop => 32.0; :ymid => 16.5; :γ0 => 2.0; :T => 1.0], (0, 8); T),
     )
 end
-const P60V1_PUBLISHED = filter(n -> (f = getfield(PottsModels, n); f isa Function && isuppercase(first(string(n)))), names(PottsModels))
+const P60V1_MODELS = filter(n -> (f = getfield(PottsModels, n); f isa Function && isuppercase(first(string(n)))), names(PottsModels))
 
 """Counter deltas of `nstep` MCS after `nwarm` MCS (no saves), with a checkpoint before and
 after the window (outside it): returns `(deltas, lifecycle before, lifecycle after,
@@ -344,7 +344,7 @@ const P60V1_CPU_ALGS = (SequentialCPM(), CheckerboardCPM())
 
 @testset "P6.0v1 (i): the published lifecycle models (CPU: fixture checks, counters zero)" begin
     builders = p60v1_published(Float64)
-    @test Set(P60V1_PUBLISHED) == Set(keys(builders))           # every published model listed
+    @test Set(P60V1_MODELS) == Set(keys(builders))           # every published model listed
     withlc = sort([n for (n, make) in builders if make().f.lifecycle !== nothing])
     @test length(withlc) >= 3                                    # non-vacuous: OpenVT, Akeeb and more
     @test issubset([:OpenVTGrowingMonolayer, :AkeebInvasion], withlc)

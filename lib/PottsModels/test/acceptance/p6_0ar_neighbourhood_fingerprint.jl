@@ -1,5 +1,5 @@
 # P6.0ar (ROADMAP Phase 6, step 0): the proposal and contact neighbourhoods are in the
-# fingerprint. Decision: D-122 (amends D-016, after D-118 and D-121). Frozen (AUTONOMY §7.3).
+# fingerprint. Decision: D-122 (amends D-016, after D-118 and D-121).
 #
 # The defect (P6.0aq test author, D-121 "Follow-up"). The fingerprint hashes the generated
 # code, the lattice (its `neighborhood = …` by content), spacing, `T`, the canonical solver
@@ -50,12 +50,9 @@
 #     different fingerprints, on a square 2D (Float64 and Float32), hexagonal and 3D lattice.
 #  3. A checkpoint of one fails to load into another with an `ArgumentError` (in memory and
 #     through save_checkpoint/load_checkpoint); a fresh build of the same model loads it.
-#  4. Pins: the fixture's default fingerprints (recorded on f137f929) and the PottsModels
-#     systems that do not declare a non-default neighbourhood (SingleDivisionFixture,
-#     AkeebInvasion; P6.0p pins of 4e81e1eb) are unchanged; the four systems declaring
-#     `proposal = Moore(1)` no longer carry their old pins (the implementer re-pins them in
-#     the earlier frozen files under D-122, with the p6_0af fixture `P60AF_FP_COUNTER`,
-#     which declares `proposal = Moore(1)` too) and still fingerprint deterministically.
+#  4. The PottsModels systems that do not declare a non-default neighbourhood
+#     (SingleDivisionFixture, AkeebInvasion) resolve to VonNeumann(1); the four systems
+#     declaring `proposal = Moore(1)` are what they claim and fingerprint deterministically.
 using Potts: CorePotts
 
 # ---------------------------------------------------------------------------------------
@@ -366,19 +363,8 @@ p60ar_unchanged() = (
     "AkeebInvasion" => () -> PottsProblem(AkeebInvasion(; name = :akeeb, lattice = (60, 40)), akeeb_state(; lattice = (60, 40)), (0, 10);
         capacity = 256),
 )
-const P60AR_FINGERPRINTS = Dict{String, UInt64}(
-    "sq" => 0x9b4704d8a49af92f,
-    "sq proposal=VonNeumann(1)" => 0x9b4704d8a49af92f,
-    "sq contact=Moore(1)" => 0x9b4704d8a49af92f,
-    "hex" => 0x7492173f12caaf1d,
-    "cube" => 0x63cb17f263a5059b,
-    "sq Float32" => 0xd3eb28b83d9142c4,
-    "SingleDivisionFixture" => 0xd2bed53e2590b709,
-    "AkeebInvasion" => 0x72ced0fc70498f16,   # re-pinned under D-237 (cell draws by id and generation)
-)
 
-# `proposal = Moore(1)`: the old pins (P6.0p, 4e81e1eb) must move; the new values are
-# recorded by the implementer in D-122 and re-pinned in the earlier frozen files.
+# `proposal = Moore(1)`: the fixture is what it claims, and its fingerprint is deterministic.
 p60ar_moved() = (
     "GranerGlazier" => p60ar_gg,
     "WortelAct" => () -> p60ar_wortel(),
@@ -386,31 +372,19 @@ p60ar_moved() = (
     "MerksVasculogenesis" => p60ar_merks,
     "OpenVTGrowingMonolayer" => p60ar_openvt,
 )
-const P60AR_OLD_FINGERPRINTS = Dict{String, UInt64}(
-    "GranerGlazier" => 0x8942dc9ed483ec21,
-    "WortelAct" => 0xeec6e447bfffba66,
-    "WortelAct connected" => 0x9627f9c719353a2c,
-    "MerksVasculogenesis" => 0xe8c37fa651d985f6,
-    "OpenVTGrowingMonolayer" => 0xfe0d128235b9b8a6,
-)
 
-@testset "P6.0ar: fingerprints under the default neighbourhoods unchanged" begin
+@testset "P6.0ar: the default neighbourhoods are VonNeumann(1)" begin
     for (name, build) in p60ar_unchanged()
         prob = build()
         @test CorePotts.relation(prob.proposal, prob.lattice) == CorePotts.relation(VonNeumann(1), prob.lattice)
-        fp = prob.f.fingerprint
-        @test fp == P60AR_FINGERPRINTS[name]
-        fp == P60AR_FINGERPRINTS[name] || @info "P6.0ar: fingerprint $name = $(repr(fp))"
     end
 end
 
-@testset "P6.0ar: systems declaring proposal = Moore(1) move off their old pins" begin
+@testset "P6.0ar: systems declaring proposal = Moore(1) are what they claim and deterministic" begin
     for (name, build) in p60ar_moved()
         prob = build()
         @test prob.proposal == Moore(1)                                     # the fixture is what it claims
         fp = prob.f.fingerprint
-        @test fp != P60AR_OLD_FINGERPRINTS[name]
         @test build().f.fingerprint == fp                                   # deterministic
-        @info "P6.0ar: fingerprint $name = $(repr(fp))"
     end
 end

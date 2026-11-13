@@ -1,7 +1,7 @@
 # P6.0k (ROADMAP Phase 6, step 0): Boolean networks are MTK discrete-time components
 # (clocked, `Shift`), extending D-038 (D-065 Q9). A per-cell 3-node network must match a
 # hand-written truth table exactly, under both algorithms (and on Metal), with zero warm
-# allocations. Frozen (AUTONOMY §7.3).
+# allocations.
 using Potts: CorePotts
 using Potts.ModelingToolkitBase: System, ShiftIndex, Clock, Sample, Hold, @variables, @parameters
 

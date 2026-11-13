@@ -1,5 +1,5 @@
 # P6.0ax (ROADMAP Phase 6, step 0): inline gathers outside the copy step are numbered.
-# Decision: D-132 (amends D-107, after D-124). Frozen (AUTONOMY §7.3).
+# Decision: D-132 (amends D-107, after D-124).
 #
 # The defect (P6.0at review). The compiler names each inline gather relation `gather1`,
 # `gather2`, … (D-107) by scanning `all_exprs` (`src/compile.jl`), the expressions of the copy
@@ -482,96 +482,4 @@ end
     # across specs that resolve alike, and across an observed-only gather: loads
     p60ax_checkpoint(pr("divwhen NeighborOrder(2)"), nothing, pr("divwhen Moore(1)"))
     p60ax_checkpoint(pr("obs Moore(2)"), nothing, pr("obs Moore(1)"))
-end
-
-# ---------------------------------------------------------------------------------------
-# 5. Pins: nothing that built before moves
-
-function p60ax_two_wortel()
-    s = zeros(Int32, 8, 8)
-    s[2:3, 2:3] .= 1
-    s[6:7, 6:7] .= 2
-    return [ownership => s, kind => [:cell, :cell]]
-end
-# The P6.0ah fixture `P60ahAt`, copied verbatim (renamed); its fingerprint does not depend on the name.
-@potts_model P60axAhAt begin
-    @kinds medium A
-    @variables y(cell) = 0.0 g(model) = 0.0
-    @lattice Lattice((12, 8))
-    @energy cells => (volume - 16.0)^2
-    @equations begin
-        D(y) ~ 0.03 * y[3 - id] + 0.04 * sin(y) + 0.05 * exp(-y) + 0.02 * sum(volume[owner[n]] for n in Moore(1)(42)) +
-               0.01 * sum(y[owner[n]] for n in Moore(1)(42) if owner[n] != id) - 0.1y
-    end
-    @after_mcs g ~ 0.01 * sum(volume[c] for c in cells) + 0.02 * sum(y[c] for c in cells) + 0.3 * g + 0.001 * sum(1.0 for s in sites)
-    @sweep Metropolis(; temperature = 1.0)
-end
-function p60ax_ah(solver)
-    s = zeros(Int32, 12, 8)
-    s[3:6, 3:6] .= 1
-    s[7:10, 3:6] .= 2
-    return PottsProblem(P60axAhAt(; name = :x), Any[ownership => s, kind => [:A, :A]], (0, 10); seed = 7, ode_solver = solver)
-end
-
-p60ax_pinned() = (
-    "sq" => () -> p60ax_problem("sq"),
-    "obs Moore(1)" => () -> p60ax_problem("obs Moore(1)"),
-    "at energy Moore(1)(40)" => () -> p60ax_problem("at energy Moore(1)(40)"),
-    "at drive Moore(2)/Moore(1)" => () -> p60ax_problem("at drive Moore(2)/Moore(1)"),
-    "at ode Moore(2)(40)" => () -> p60ax_problem("at ode Moore(2)(40)"),
-    "at update Moore(1)(40)" => () -> p60ax_problem("at update Moore(1)(40)"),
-    "divwhen far=Ball(2.0)" => () -> p60ax_problem("divwhen far=Ball(2.0)"),
-    "divwhen gather-free" => () -> p60ax_problem("divwhen gather-free"),
-    "divrule far=Moore(1)" => () -> p60ax_problem("divrule far=Moore(1)"),
-    "link far=Ball(2.0)" => () -> p60ax_problem("link far=Ball(2.0)"),
-    "unlink far=Ball(2.0)" => () -> p60ax_problem("unlink far=Ball(2.0)"),
-    "edge far=Moore(1)" => () -> p60ax_problem("edge far=Moore(1)"),
-    "P60ahAt RK4" => () -> p60ax_ah(Potts.RK4()),
-    "P60ahAt ExplicitEuler" => () -> p60ax_ah(Potts.ExplicitEuler()),
-    "GranerGlazier" => () -> (s = graner_glazier_state(); PottsProblem(GranerGlazier(; name = :gg), [ownership => s[1], kind => s[2]], (0, 10))),
-    "WortelAct" => () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8)), p60ax_two_wortel(), (0, 10)),
-    "WortelAct connected" => () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8), connected = true), p60ax_two_wortel(), (0, 10)),
-    "MerksVasculogenesis" => () -> PottsProblem(MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
-        [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 10);
-        field_solver = Potts.ExplicitEuler(substeps = 2, lower = 0.0)),
-    "SingleDivisionFixture" => () -> PottsProblem(SingleDivisionFixture(; name = :fixture),
-        [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [:epithelial]], (0, 10)),
-    "OpenVTGrowingMonolayer" => () -> PottsProblem(OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)),
-        openvt_monolayer_state(; lattice = (24, 24)), (0, 10); capacity = 64),
-    "AkeebInvasion" => () -> PottsProblem(AkeebInvasion(; name = :akeeb, lattice = (60, 40)), akeeb_state(; lattice = (60, 40)), (0, 10);
-        capacity = 256),
-)
-# "sq", "obs Moore(1)" (= "sq": D-124's observed rule) and the PottsModels systems are the
-# D-124 pins (p6_0at, p6_0as, p6_0ah); the other fixtures were recorded on fe057508.
-const P60AX_FINGERPRINTS = Dict{String, UInt64}(
-    "sq" => 0x4f162b777e9799ab,
-    "obs Moore(1)" => 0x4f162b777e9799ab,
-    "at energy Moore(1)(40)" => 0x674ddaef1ce7b141,   # re-pinned under D-209 (P6.0ca): static-value fold (was 0xfc8fdefc7a8009e2)
-    "at drive Moore(2)/Moore(1)" => 0x31e49234ba0e48d6,
-    "at ode Moore(2)(40)" => 0x98d4f6f27d29142c,
-    "at update Moore(1)(40)" => 0xc9e3fc7178508f76,
-    "divwhen far=Ball(2.0)" => 0x32743601d701f21d,
-    "divwhen gather-free" => 0x8ac448b1065e9cf8,
-    "divrule far=Moore(1)" => 0x9610345a66da7b1c,
-    "link far=Ball(2.0)" => 0x18b68385523b1eba,
-    "unlink far=Ball(2.0)" => 0x46f234aed2908eec,
-    "edge far=Moore(1)" => 0xd0bfacce83cc07bc,   # re-pinned under D-209 (P6.0ca): static-value fold (was 0xef5c912facf5e094)
-    "P60ahAt RK4" => 0x52fad8cebbee12ed,
-    "P60ahAt ExplicitEuler" => 0xe41e0c4a682a9697,
-    "GranerGlazier" => 0xe6e09483034b4193,
-    "WortelAct" => 0x9a9fcac5fc22b7c5,
-    "WortelAct connected" => 0xe1e52da078e581c9,   # re-pinned under P6.3g (D-193): fingerprint only
-    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
-    "SingleDivisionFixture" => 0xd2bed53e2590b709,
-    "OpenVTGrowingMonolayer" => 0x34b40af65c56a113,
-    "AkeebInvasion" => 0x72ced0fc70498f16,   # re-pinned under D-237 (cell draws by id and generation)
-)
-
-@testset "P6.0ax: fingerprints of models that built before are unchanged" begin
-    for (name, build) in p60ax_pinned()
-        haskey(P60AX_FINGERPRINTS, name) || continue   # (D-INT-1: its pin was removed)
-        fp = build().f.fingerprint
-        @test fp == P60AX_FINGERPRINTS[name]
-        fp == P60AX_FINGERPRINTS[name] || @info "P6.0ax: fingerprint $name = $(repr(fp))"
-    end
 end

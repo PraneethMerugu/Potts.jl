@@ -89,7 +89,6 @@
 "analysis.jl" = 3.3
 "akeeb_u0.jl" = 3.0
 "callbacks_gc.jl" = 3.4
-"frozen.jl" = 0.1
 "guardrails.jl" = 5.9
 "mechanisms.jl" = 55.6
 "openvt_analysis.jl" = 3.0

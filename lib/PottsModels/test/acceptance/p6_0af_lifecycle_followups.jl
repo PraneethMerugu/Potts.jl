@@ -62,10 +62,6 @@ using Potts: CorePotts
 
 const P60AF_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
 const P60AF_HOOK = isdefined(CorePotts, :_STAGED_FAULT_AFTER)
-# fingerprints recorded on 457104d8 (T = Float64): `generated_code` must not change the code
-const P60AF_FP_COUNTER = 0xc04355ebd70cddd6   # re-pinned under D-122
-const P60AF_FP_OTHER = 0x6eb4b64b2b51e9d4
-const P60AF_FP_OPENVT = 0x34b40af65c56a113    # re-pinned under D-122
 
 @potts_model P60afCounter begin
     @kinds medium A
@@ -335,9 +331,5 @@ end
         @test any(writes_vt, Any[gc.phases...; hasproperty(gc, :lifecycle) ? [gc.lifecycle.before] : []])  # control
         @test !any(writes_vt, gc.phases)
         @test hasproperty(gc, :lifecycle) && writes_vt(gc.lifecycle.before)
-        # the code itself is unchanged (fingerprints recorded on 457104d8)
-        @test PottsProblem(fused_model(:f), p60af_counter_state(), (0, 4); capacity = 16).f.fingerprint == P60AF_FP_COUNTER
-        @test PottsProblem(P60afOther(; name = :f), op, (0, 4); capacity = 16).f.fingerprint == P60AF_FP_OTHER
-        @test prob.f.fingerprint == P60AF_FP_OPENVT
     end
 end

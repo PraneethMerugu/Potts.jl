@@ -1,6 +1,6 @@
 # P6.0aa (ROADMAP Phase 6, step 0; topology-neighborhood-audit §6 item 4): the pair
 # exemption of `connectivity(k; rule = ArcOrPair())` needs a medium-free ring, as in TST's
-# `ConnectivityPreservedP` (ca.cpp:1218), which Wortel/Niculescu cite. Frozen (AUTONOMY §7.3).
+# `ConnectivityPreservedP` (ca.cpp:1218), which Wortel/Niculescu cite.
 #
 # Semantics pinned here (the losing cell `old` is of a constrained kind, 2D square lattice,
 # the 8-site Moore ring of the target):

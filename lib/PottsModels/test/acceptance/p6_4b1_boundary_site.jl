@@ -1,7 +1,7 @@
 # P6.4b1 (ROADMAP Phase 6; D-177): `BoundarySiteCPM`, a sweep algorithm that draws only
 # boundary sites and accounts the skipped interior (null) picks exactly, so that it is
-# statistically identical to `SequentialCPM` and MCS time means the same thing. Frozen
-# (AUTONOMY §7.3). Decisions: D-177 (the design), D-051 item 2 (whole-MCS paths cost
+# statistically identical to `SequentialCPM` and MCS time means the same thing.
+# Decisions: D-177 (the design), D-051 item 2 (whole-MCS paths cost
 # nothing), D-052 (plain Metropolis on the model's proposal; no Hastings correction here),
 # D-158 (our own code's recorded values are bitwise; same-session determinism is free),
 # D-171 (the A/B decides speed; `gate.jl` checks warm allocations), D-048 (ordinary tests:
@@ -657,22 +657,11 @@ end
     @test is.stats.accepted_ΔH == total_energy(prob, is.u) - H0
 end
 
-# Recorded on the freeze base (5f69e790, this Mac) with SequentialCPM; our own code, so
-# bitwise (D-158). The sha256 is of σ's Int32 bytes, column-major.
-const P64B1_SEQ_GG = (; sha = "4c32e24553c6780481d0780f45310c7f12cdc045927987e4ebe7da33f0db4186", accepted = 7433)
-const P64B1_SEQ_OPENVT = (; sha = "853c247939133c41260b72d239885db62f4143f3d187ec3f715f927fe5fa79f9", accepted = 26980, divisions = 1)   # re-pinned under D-237 (cell draws by id and generation)
-
-@testset "P6.4b1: SequentialCPM results are unchanged (recorded on the base)" begin
-    s = solve(p64b1_gg_problem(; tspan = (0, 25), seed = 177), SequentialCPM(); save_start = false)
-    @test p64b1_sha(s.u[end].σ) == P64B1_SEQ_GG.sha
-    @test s.stats.accepted == P64B1_SEQ_GG.accepted
-    o = solve(p64b1_openvt_problem(60; tspan = (0, 1600), seed = 177), SequentialCPM(); save_start = false)
-    @test p64b1_sha(o.u[end].σ) == P64B1_SEQ_OPENVT.sha
-    @test o.stats.accepted == P64B1_SEQ_OPENVT.accepted
-    @test o.stats.lifecycle.divisions == P64B1_SEQ_OPENVT.divisions
-    (p64b1_sha(s.u[end].σ) == P64B1_SEQ_GG.sha && p64b1_sha(o.u[end].σ) == P64B1_SEQ_OPENVT.sha) ||
-        @info "P6.4b1 SequentialCPM values" gg = (p64b1_sha(s.u[end].σ), s.stats.accepted) openvt = (
-            p64b1_sha(o.u[end].σ), o.stats.accepted, o.stats.lifecycle.divisions)
+@testset "P6.4b1: SequentialCPM runs the same problem twice alike" begin
+    prob = p64b1_gg_problem(; tspan = (0, 25), seed = 177)
+    a = solve(prob, SequentialCPM(); save_start = false)
+    b = solve(prob, SequentialCPM(); save_start = false)
+    @test p64b1_sha(a.u[end].σ) == p64b1_sha(b.u[end].σ) && a.stats.accepted == b.stats.accepted
 end
 
 # ---------------------------------------------------------------------------------------

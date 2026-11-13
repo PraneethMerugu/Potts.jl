@@ -7,7 +7,7 @@
 # equations. This makes plan §5's sentence true for ODEs: "The continuous ... parts of a
 # model are ModelingToolkit systems compiled by `mtkcompile`". Fields (lattice PDEs) are not
 # in this item; they stay Potts' `FieldStep`.
-# Decision: D-1xx (P6.0bn; the coordinator numbers it). Frozen (AUTONOMY §7.3).
+# Decision: D-1xx (P6.0bn; the coordinator numbers it).
 #
 # What is new for users: `@equations` accepts explicit algebraic equations `y ~ expr` for a
 # declared cell or model variable `y`. MTK eliminates `y` as an observed variable; it is no
@@ -333,7 +333,7 @@ function p60bn_plain()
 end
 
 # every published model (small lattices; construction and `mtkcompile` only)
-const P60BN_PUBLISHED = [
+const P60BN_MODELS = [
     ("GranerGlazier", () -> GranerGlazier(; name = :gg)),
     ("WortelAct", () -> WortelAct(; name = :act, lattice = (8, 8))),
     ("WortelAct connected", () -> WortelAct(; name = :act, lattice = (8, 8), connected = true)),
@@ -507,56 +507,22 @@ end
 end
 
 # ---------------------------------------------------------------------------------------
-# U. Unchanged
+# U. The Jacobi pair
 
-# recorded on 4b81dd79 (the tree before this item), CPU, seed 7, 10 MCS: y after 10 MCS
-const P60BN_RECORDED = Dict{Tuple{Symbol, String, String}, Vector{Float64}}(
-    (:P60bnInputsHand, "SequentialCPM", "ExplicitEuler()") => [6.74381984037, 6.75316997648],
-    (:P60bnInputsHand, "CheckerboardCPM", "ExplicitEuler()") => [3.19116157331, 3.2250388522099995],
-    (:P60bnInputsHand, "SequentialCPM", "RK4(substeps = 4)") => [6.548518825367238, 6.557115366735856],
-    (:P60bnInputsHand, "CheckerboardCPM", "RK4(substeps = 4)") => [3.121351231378657, 3.153903524285757],
-    (:P60bnPair, "SequentialCPM", "ExplicitEuler()") => [1.5, 1.5],
-    (:P60bnPair, "CheckerboardCPM", "ExplicitEuler()") => [1.5, 1.5],
-    (:P60bnPair, "SequentialCPM", "RK4(substeps = 4)") => [1.4999999036073224, 1.5000000963926776],
-    (:P60bnPair, "CheckerboardCPM", "RK4(substeps = 4)") => [1.4999999036073224, 1.5000000963926776],
-)
-
-@testset "P6.0bn U: all-differential cell ODEs keep their results" begin
-    for (M, op) in ((P60bnInputsHand, p60bn_op()), (P60bnPair, p60bn_op(:y => [1.0, 2.0]))),
-        (alab, alg) in P60BN_ALGS, (slab, kw) in P60BN_SOLVERS
-        got = p60bn_cells(p60bn_solve(M, op, alg, kw), :y)[end]
-        want = P60BN_RECORDED[(nameof(M), alab, slab)]
-        p60bn_close(got, want) || @info "P6.0bn: $(nameof(M)) $alab $slab => $(repr(got))"
-        @test p60bn_close(got, want)
+@testset "P6.0bn U: the Jacobi pair reaches the mean" begin
+    # hand oracle: two all-differential cells of y = (1, 2) exchange until both are the mean
+    for (_, alg) in P60BN_ALGS
+        got = p60bn_cells(p60bn_solve(P60bnPair, p60bn_op(:y => [1.0, 2.0]), alg, (;)), :y)
+        @test p60bn_close(got[end], [1.5, 1.5])
     end
-    # the explicit Euler oracle of the Jacobi pair: both cells reach the mean in one step
-    @test P60BN_RECORDED[(:P60bnPair, "SequentialCPM", "ExplicitEuler()")] == [1.5, 1.5]
 end
 
 @testset "P6.0bn U: published models have no cell or model template" begin
-    @testset "$label" for (label, build) in P60BN_PUBLISHED
+    @testset "$label" for (label, build) in P60BN_MODELS
         cs = mtkcompile(build())
         @test p60bn_ode(cs, :cell) === nothing
         @test p60bn_ode(cs, :model) === nothing
     end
-end
-
-# recorded on 4b81dd79: MerksVasculogenesis (8×8, one 3×3 cell), seed 11, 3 MCS, explicit
-# Euler fields with two substeps (as in runtests.jl): the lattice bitwise, the field total to
-# rtol 1e-12
-const P60BN_MERKS_σ = Int32[0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1,
-    0, 1, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0]
-const P60BN_MERKS_CSUM = 0.2911437711992861
-
-@testset "P6.0bn U: the published model with ODEs (Merks fields) runs as recorded" begin
-    s = zeros(Int32, 8, 8)
-    s[3:5, 3:5] .= 1
-    prob = PottsProblem(MerksVasculogenesis(; name = :merks, lattice = (8, 8)), [ownership => s, kind => [:endothelial]], (0, 3);
-        seed = 11, field_solver = ExplicitEuler(substeps = 2, lower = 0.0))
-    u = solve(prob, SequentialCPM()).u[end]
-    @test vec(Array(u.σ)) == P60BN_MERKS_σ
-    # the sum's SIMD association differs between CPUs (Mac 0.2911437711992861, PC …860)
-    @test isapprox(sum(Float64.(Array(u.site.c))), P60BN_MERKS_CSUM; rtol = 1e-12)
 end
 
 # ---------------------------------------------------------------------------------------

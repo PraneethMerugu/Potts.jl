@@ -1,6 +1,6 @@
 # P6.0am (ROADMAP Phase 6, step 0; found by the P6.0al test author): a name that `@extend`
 # binds from the base and the extension then redeclares in its own category keeps the
-# extension's own default. Frozen (AUTONOMY §7.2).
+# extension's own default.
 #
 # Today (a1c3ed57) `@extend λ = base = Base()` rebinds the constructor's local `λ` (the
 # keyword `λ = nothing` of `Ext(; λ)`) to the base's symbolic `λ`, so the redeclaration

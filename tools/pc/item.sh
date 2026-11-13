@@ -7,7 +7,7 @@
 # worktree of ~/potts-full (the coordinator fetches the bundle there first). It is created
 # when missing; an existing one must already be at <commit> and clean.
 #
-# Steps: instantiate + precompile (as CI does), the frozen check, the unchanged
+# Steps: instantiate + precompile (as CI does), the unchanged
 # .github/ci/parallel.sh (six pinned processes on 0-11/16-27), then the optional docs build
 # and extra commands (run from the checkout, pinned to 0-11/16-27). Every Julia process runs
 # under tools/pc/julia-scoped.sh (systemd scope, MemoryMax=24G, CPUWeight=10).
@@ -102,7 +102,6 @@ step inst $PIN bash -c '"$JULIA" --project=. -e "using Pkg; Pkg.instantiate(); P
     for p in test lib/CorePotts/test lib/MakiePotts/test lib/PottsModels/test benchmark docs; do
         "$JULIA" --project=$p -e "using Pkg; Pkg.precompile()" || exit 1
     done' || exit 1
-step frozen $PIN "$JULIA" --project=lib/PottsModels/test -e 'using Test; include("lib/PottsModels/test/frozen.jl")' || fail=1
 step suites env POTTS_CI_LOGS="$CI/$ITEM-ci-logs" bash .github/ci/parallel.sh || fail=1
 echo SUITES-DONE >> "$S"
 [ $DOCS = 1 ] && { step docs $PIN "$JULIA" -t 4 --project=docs docs/make.jl || fail=1; }

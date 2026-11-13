@@ -1,5 +1,5 @@
 # P6.0m (ROADMAP Phase 6, step 0): four confirmed small defects from the API-synthesis
-# review. Frozen (AUTONOMY §7.3). Decisions: D-074 (connectivity: exactly one component),
+# review. Decisions: D-074 (connectivity: exactly one component),
 # D-066 (liveness), D-042 (update-block semantics), D-061 (reserved names).
 #
 # Semantics pinned here:

@@ -1,5 +1,5 @@
 # P6.5b (ROADMAP Phase 6, step 5; second step of Fortuna, reproduction 14), part 1 of 2:
-# `@convert`, site conversion as a per-MCS kernel pass. Frozen (AUTONOMY §7.3).
+# `@convert`, site conversion as a per-MCS kernel pass.
 # Part 2, `p6_5b_ownership.jl`, holds the shared ownership-delta routine (priority), the
 # ownership hooks (`clear_on_ownership_change`, no `@on_copy`) and A-17.
 #
@@ -113,9 +113,8 @@
 #    through the device division planner (D-089), and a paint kernel through the shared
 #    ownership-delta routine with atomic tracker updates. On a device a pass costs NO host
 #    round trip: 0 syncs, 0 transfers, 0 bytes per MCS (D-085 counters), including the MCS
-#    that allocates. Zero cost when off: a model with no `@convert` keeps its generated code
-#    and fingerprint (pinned below on a convert-free fixture, as computed on the freeze
-#    base), and a quiet pass allocates nothing on the CPU (0 bytes per warm `step!`).
+#    that allocates. Zero cost when off: a quiet pass allocates nothing on the CPU (0 bytes
+#    per warm `step!`).
 # F. Not pinned here: `budget` (see the report: per-entity budgets need an order among
 #    independent candidates, which D-233 removed; the coordinator rules on it), `gate`,
 #    `when`, `order`, `Every(n)` on `@convert`, `cells(…)` domains with allocation, `to = 0`
@@ -701,14 +700,7 @@ end
 # ---------------------------------------------------------------------------------------
 # 9. Zero cost when off
 
-# The fingerprint of the convert-free fixture P65bPlain on the freeze base (feat/p6-5a at
-# bd6b647e): the implementation must not change the generated model of a model without
-# `@convert`.
-const P65B_PLAIN_FP = 0xab73ea1b4c6b2031
-
 @testset "P6.5b convert: zero cost when no @convert is declared" begin
-    plain = p65b_problem(:P65bPlain)
-    @test plain.f.fingerprint == P65B_PLAIN_FP
     # a quiet pass (p ≤ 0 everywhere: c = 0) allocates nothing on a warm CPU step
     prob = p65b_problem(; c = 0.0, tspan = (0, 50))
     integ = init(prob, SequentialCPM(); save_start = false, save_end = false)

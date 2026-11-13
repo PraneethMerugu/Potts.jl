@@ -3,8 +3,7 @@
 # `largest_piece`. Decisions: D-075 (api-synthesis §8.1 Q6, the device BFS), D-140 (the
 # `Global()` placeholder), D-189 (rulings 4, 8, 9 and the P6.9 amendment), D-193, D-196;
 # research/connectivity-vocabulary.md §8.1, §8.2, §8.4, §9.3, §12; model specs 05 (Bauer
-# 2009 Eq 1, the continuity term α(1 − δ_{a,a′})) and 11 (Jafari Nivlouei Eq 3). Frozen
-# (AUTONOMY §7.3).
+# 2009 Eq 1, the continuity term α(1 − δ_{a,a′})) and 11 (Jafari Nivlouei Eq 3).
 #
 # A proposal copies `new = σ(source)` into the target x, whose owner was `old`. PIECES of a
 # cell are the connected components of its sites under an ADJACENCY: `:face` (4 square, 6

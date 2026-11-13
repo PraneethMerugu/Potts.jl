@@ -1,5 +1,5 @@
 # P6.5a (ROADMAP Phase 6, step 5; first step of Fortuna, reproduction 14): R6 cell
-# references and liveness per D-066. Frozen (AUTONOMY §7.3).
+# references and liveness per D-066.
 # Decisions: D-066 (liveness, `birth`, references, boundaries, self-check credits), D-065 Q7
 # (sequential is the reference; the checkerboard is validated statistically), D-036 (clusters), D-075 / api-synthesis §2.6–2.7 (the reference vocabulary),
 # D-209 (an energy may not read what a copy changes beyond ΔH), D-048 (oracles, negative
