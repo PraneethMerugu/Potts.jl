@@ -122,59 +122,6 @@ end
     return nothing
 end
 
-# Whether a phase is a proper colouring: whether two of its work items touch one cell. The block
-# spacing keeps two active sites (k - 1)·region + 1 apart, which does not keep them out of one cell
-# when the cell is wider than that, and a cell is not a lattice distance the spacing could cover.
-# In such a phase one work item's decision can be invalidated by another's commit, so the sum of the
-# accepted ΔH stops being the energy change of the trajectory (`stats.accepted_ΔH`); the phase runs
-# inline instead, one work item after another in block order, which is exact and independent of any
-# scheduling. Every other phase is a colouring: its items share no cell and only their own sites,
-# so whether they run inline or threaded they reach the same decisions. A cell column is read for
-# the cells a copy's target and source belong to (`kind` of a neighbour is read at the neighbour's
-# cell, and no kind changes inside a sweep), so sharing a cell is the only way two items of one
-# phase can invalidate each other.
-#
-# The claim covers every cell a work item can touch, not only its target's: a proposal's source
-# lies within `radius(proposal)` of the target, and the commit hooks write the target's neighbours'
-# cells (`commit_surface!` maintains their surface, `commit_contact_count!` every third cell next
-# to the target). The claim radius is the layout's own `need`, the lattice distance the spacing
-# guarantees: it is `reach(footprint, proposal)` widened by the contact relation and by every
-# relation a copy-step function reads, so it holds whatever a commit hook writes. One 8-byte stamp
-# per cell holds the phase's token and the block that first claimed it, so a scan costs one read
-# and one write per (site, offset) and allocates nothing.
-_claim_columns(::KernelAbstractions.CPU, cell) = (; stamp = zeros(UInt64, length(cell.volume)), token = Ref(UInt32(0)))
-_claim_columns(backend, cell) = nothing
-
-_phase_conflict!(st, cache::CheckerboardCache, lat, layout, off) =
-    _phase_conflict!(st, cache.claim, cache.reach, lat, layout, off)
-_phase_conflict!(st, ::Nothing, reach, lat, layout, off) = false    # a device: no colouring guarantee
-function _phase_conflict!(st, claim::NamedTuple, reach::Int, lat::Lattice{N}, layout::BlockLayout{N}, off) where {N}
-    tok = UInt64(claim.token[] += UInt32(1))
-    hi = tok << 32
-    stamp, σ = claim.stamp, st.σ
-    box = CartesianIndices(ntuple(_ -> -reach:reach, Val(N)))
-    for I in CartesianIndices(layout.nblocks)
-        bc = map(i -> i - 1, Tuple(I))
-        blk = UInt64(block_index(layout, bc))
-        lo, side = block_region(layout, bc, off)
-        for idx in CartesianIndices(side)
-            x = ntuple(d -> lo[d] + idx[d], Val(N))                 # `lo` is 0-based, `idx` 1-based
-            for δ in box
-                inside, z = shift(lat, x, ntuple(d -> Int32(δ[d]), Val(N)))   # wraps, or the medium
-                inside || continue
-                c = @inbounds σ[linear_index(lat, z)]
-                c == 0 && continue                                 # the medium holds no cell columns
-                v = @inbounds stamp[c]
-                if v >>> 32 == tok
-                    (v & 0xffffffff) == blk || return true          # a second work item, one cell
-                else
-                    @inbounds stamp[c] = hi | blk
-                end
-            end
-        end
-    end
-    return false
-end
 
 # One attempt. `SERIAL = false` in a phase (copies that need the floods are listed); `true` in
 # the serial pass and on the CPU (the floods run, a veto decides at once).
@@ -286,6 +233,60 @@ struct CheckerboardCache{N, B, TK, CN, SL, CK, K1, K2, K3, GS}
     groupsize::GS                     # the phase launch's workgroup size (`nothing`: the backend's choice)
     inline::Bool                      # CPU: the work items of a phase run one after another
     host::Bool                        # the CPU backend
+end
+
+# Whether a phase is a proper colouring: whether two of its work items touch one cell. The block
+# spacing keeps two active sites (k - 1)·region + 1 apart, which does not keep them out of one cell
+# when the cell is wider than that, and a cell is not a lattice distance the spacing could cover.
+# In such a phase one work item's decision can be invalidated by another's commit, so the sum of the
+# accepted ΔH stops being the energy change of the trajectory (`stats.accepted_ΔH`); the phase runs
+# inline instead, one work item after another in block order, which is exact and independent of any
+# scheduling. Every other phase is a colouring: its items share no cell and only their own sites,
+# so whether they run inline or threaded they reach the same decisions. A cell column is read for
+# the cells a copy's target and source belong to (`kind` of a neighbour is read at the neighbour's
+# cell, and no kind changes inside a sweep), so sharing a cell is the only way two items of one
+# phase can invalidate each other.
+#
+# The claim covers every cell a work item can touch, not only its target's: a proposal's source
+# lies within `radius(proposal)` of the target, and the commit hooks write the target's neighbours'
+# cells (`commit_surface!` maintains their surface, `commit_contact_count!` every third cell next
+# to the target). The claim radius is the layout's own `need`, the lattice distance the spacing
+# guarantees: it is `reach(footprint, proposal)` widened by the contact relation and by every
+# relation a copy-step function reads, so it holds whatever a commit hook writes. One 8-byte stamp
+# per cell holds the phase's token and the block that first claimed it, so a scan costs one read
+# and one write per (site, offset) and allocates nothing.
+_claim_columns(::KernelAbstractions.CPU, cell) = (; stamp = zeros(UInt64, length(cell.volume)), token = Ref(UInt32(0)))
+_claim_columns(backend, cell) = nothing
+
+_phase_conflict!(st, cache::CheckerboardCache, lat, layout, off) =
+    _phase_conflict!(st, cache.claim, cache.reach, lat, layout, off)
+_phase_conflict!(st, ::Nothing, reach, lat, layout, off) = false    # a device: no colouring guarantee
+function _phase_conflict!(st, claim::NamedTuple, reach::Int, lat::Lattice{N}, layout::BlockLayout{N}, off) where {N}
+    tok = UInt64(claim.token[] += UInt32(1))
+    hi = tok << 32
+    stamp, σ = claim.stamp, st.σ
+    box = CartesianIndices(ntuple(_ -> -reach:reach, Val(N)))
+    for I in CartesianIndices(layout.nblocks)
+        bc = map(i -> i - 1, Tuple(I))
+        blk = UInt64(block_index(layout, bc))
+        lo, side = block_region(layout, bc, off)
+        for idx in CartesianIndices(side)
+            x = ntuple(d -> lo[d] + idx[d], Val(N))                 # `lo` is 0-based, `idx` 1-based
+            for δ in box
+                inside, z = shift(lat, x, ntuple(d -> Int32(δ[d]), Val(N)))   # wraps, or the medium
+                inside || continue
+                c = @inbounds σ[linear_index(lat, z)]
+                c == 0 && continue                                 # the medium holds no cell columns
+                v = @inbounds stamp[c]
+                if v >>> 32 == tok
+                    (v & 0xffffffff) == blk || return true          # a second work item, one cell
+                else
+                    @inbounds stamp[c] = hi | blk
+                end
+            end
+        end
+    end
+    return false
 end
 
 # A CPU phase of at most this many work items runs inline. Measured on the PC
