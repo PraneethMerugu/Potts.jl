@@ -215,22 +215,38 @@ _pm_bulk_using(ex) = ex isa Expr && ex.head in (:using, :import) && all(a -> a i
 """Names a file defines at top level (its own definitions win over an earlier file's)."""
 function _pm_own(path)
     out = Set{Symbol}()
-    name(x) = x isa Symbol ? x : x isa Expr && x.head in (:call, :where, :(::), :curly, :<:) ? name(x.args[1]) : nothing
-    for ex in Meta.parseall(read(path, String)).args
-        ex isa Expr || continue
-        ex.head === :const && (ex = ex.args[1])
+    name(x) = x isa Symbol ? x : x isa Expr && x.head in (:call, :where, :(::), :curly, :<:, :ref) ? name(x.args[1]) : nothing
+    function walk(ex)
+        ex isa Expr || return
+        ex.head === :const && return walk(ex.args[1])
         if ex.head in (:(=), :function, :struct, :abstract, :module)
-            t = ex.head === :struct ? ex.args[2] : ex.head === :module ? ex.args[2] : ex.args[1]
+            t = ex.head in (:struct, :module) ? ex.args[2] : ex.args[1]
             t isa Expr && t.head === :tuple ? foreach(a -> (n = name(a); n === nothing || push!(out, n)), t.args) :
                 (n = name(t); n === nothing || push!(out, n))
         elseif ex.head === :macro
             push!(out, Symbol("@", name(ex.args[1])))
-        elseif ex.head === :macrocall && length(ex.args) >= 3 && ex.args[3] isa Symbol
-            push!(out, ex.args[3])                              # @potts_model Name …
+        elseif ex.head === :macrocall
+            m = last(split(string(ex.args[1]), '.'))          # Core.@doc -> @doc
+            if m == "@potts_model" && length(ex.args) >= 3
+                push!(out, ex.args[3])                          # @potts_model Name …
+            elseif m in ("@testitem", "@testsetup", "@parameters", "@variables")
+                nothing                                         # the item, the setup and the DSL own these
+            else
+                for a in ex.args[2:end]                         # a docstring wraps its definition in @doc
+                    (a isa LineNumberNode || a isa String) && continue
+                    walk(a)
+                end
+            end
+        elseif ex.head === :block
+            foreach(walk, ex.args)
         end
+    end
+    for ex in Meta.parseall(read(path, String)).args
+        walk(ex)
     end
     return out
 end
+
 # Names a PM_IN_MAIN file declares at its top level: that file's own run declares them in Main,
 # so they are never injected there (a plain global would block the file's `const` under the
 # reverse shard order, where an in-Main file runs before the one that defines the name).
@@ -261,7 +277,15 @@ function _pm_module(f; defs_only)
         foreach(((n, v),) -> latest[n] = v, PM_EXPORTS[g])
     end
     own = _pm_own(path)
-    foreach(n -> delete!(latest, n), union(own, before))
+    # Names any in-Main file binds when it loads: statically (PM_MAIN_OWN) and by evaluating code
+    # at load time (`include_string(@__MODULE__, raw"..." ...)`, generated code), which shows up in
+    # its definitions-only load's exports. That file's own run declares them in Main, so injecting
+    # one first makes the run fail ("cannot declare Main.X constant"/"cannot define function X").
+    mainown = copy(PM_MAIN_OWN)
+    for g in PM_IN_MAIN
+        haskey(PM_EXPORTS, g) && union!(mainown, first.(PM_EXPORTS[g]))
+    end
+    foreach(n -> delete!(latest, n), union(own, mainown, before))
     if inmain
         # Main keeps a name it already has; a name it lacks becomes a plain global, as the old
         # single process had it. An imported binding would refuse the file's own top-level
@@ -270,7 +294,7 @@ function _pm_module(f; defs_only)
         pre = union(before, keys(latest))
         for (n, v) in latest
             startswith(string(n), '@') && continue
-            n in PM_MAIN_OWN && continue       # its own run declares it in Main
+            n in mainown && continue           # an in-Main file's own run declares it in Main
             isdefined(m, n) || Core.eval(m, Expr(:(=), n, QuoteNode(v)))
         end
     else
