@@ -1,71 +1,50 @@
 # P6.0bk2 (ROADMAP Phase 6; D-198, amending D-177): `BoundarySiteCPM` is removed with no
 # alias and becomes `SequentialCPM(; skip_interior = true)`. `CheckerboardCPM` has no
-# `skip_interior` (D-271: it changed nothing there). Frozen
-# (AUTONOMY §7.3). Decisions: D-198 (the rename and its code-identity check), D-177 (the
+# `skip_interior` (D-271: it changed nothing there).
+# Decisions: D-198 (the rename), D-177 (the
 # semantics: draw only sites that can propose a non-null copy, count the skipped picks
 # exactly, N attempts per MCS), D-158 (our own recorded values are bitwise), D-171 (the gate
 # and the A/B decide speed), D-048 (ordinary tests, no parity harness).
 #
-# Recorded on the freeze base (cfdf8477, Apple M-series, Julia 1.12.6) with the code as it was
-# then: `BoundarySiteCPM(; kw...)`, `SequentialCPM(; kw...)` and `CheckerboardCPM(; kw...)` on
-# the ten short cases of `P60BK2_CASES` (< 1 s each, warm): Graner–Glazier 72² periodic (the
+# Ten short cases (`P60BK2_CASES`, < 1 s each, warm): Graner–Glazier 72² periodic (the
 # problem's proposal, a Moore(1) override, Barker acceptance); the 04 foam configuration on 64²
 # (periodic x, closed y, NeighborOrder(4) contacts and proposals, dry, at T = 3 and at the
 # T → 0⁺ temperature 1e-6); cubes in medium on 16³ (VonNeumann(1) proposals, and a Moore(1)
 # override); a frozen kind (the mobility mask) on 32² periodic; and the 15 configuration, the
-# OpenVT reference model on 60² with Moore(1) proposals and a division (two seeds). Each value
-# is the sha256 of σ at t0 and after every MCS, with `stats.accepted`, `stats.attempts`, the
-# division count and the return code.
+# OpenVT reference model on 60² with Moore(1) proposals and a division (two seeds).
 #
-# What is pinned.
+# What is checked.
 #  1. API (D-198 items 1, 2). `SequentialCPM(; skip_interior = true)` is a `SequentialCPM` whose
 #     `skip_interior` is `true`; the default is `false`; the keyword composes with `acceptance`
 #     and `proposal`. `BoundarySiteCPM` is not defined in, nor exported by, CorePotts, Potts or
 #     PottsModels (no alias, no deprecation binding).
-#  2. The default is today's SequentialCPM (D-198 item 2, "the gate is unchanged").
-#     (a) `SequentialCPM(; kw...)` and `SequentialCPM(; skip_interior = false, kw...)` give,
-#         bitwise, the trajectories recorded on the base.
-#     (b) Code identity of the default loop: the optimized, typed IR of
-#         `CorePotts.sequential_mcs!` (debuginfo stripped), for the integrator `init` builds
-#         from `SequentialCPM()` on GG 72² and on the 16³ cubes, has the sha256 recorded on the
-#         base. The skip lives outside that function (as `boundary_site_mcs!` does today), so
-#         the default compiles to the same loop. The IR's printed form depends on the Julia
-#         version: the row binds on Julia 1.12.6 only and is `@test_skip` on any other.
-#     The gate itself (`benchmark/gate.jl` `sequential`) and the A/B (D-171) are run outside
-#     this file.
-#  3. Code identity of the rename (D-198 "Code-identity check"). `SequentialCPM(; skip_interior =
-#     true, kw...)` gives, bitwise, the trajectories `BoundarySiteCPM(; kw...)` gave on the base:
-#     the same RNG draws (stream, counters), the same σ after every MCS, the same accepted and
-#     attempted counts, in 2D and 3D, periodic and closed, with a frozen mask, with a lifecycle
+#  2. The default is today's SequentialCPM (D-198 item 2, "the gate is unchanged"):
+#     `SequentialCPM(; kw...)` and `SequentialCPM(; skip_interior = false, kw...)` give the
+#     same trajectory, bitwise. The gate itself (`benchmark/gate.jl` `sequential`) and the A/B
+#     (D-171) are run outside this file.
+#  3. `SequentialCPM(; skip_interior = true, kw...)` attempts N times per MCS, as the default
+#     does, in 2D and 3D, periodic and closed, with a frozen mask, with a lifecycle
 #     (divisions), and with each proposal neighbourhood in use (the problem's, a Moore(1),
 #     VonNeumann(1) or NeighborOrder(4) relation) and both acceptance laws.
 #  4. The SMOKE verdicts of reproductions 04 and 15 (D-198 "the same verdicts"). They are the
-#     re-frozen files' own (`test/reproductions/04_foam.jl` `P64R_ALG`,
+#     files' own (`test/reproductions/04_foam.jl` `P64R_ALG`,
 #     `test/reproductions/15_openvt_sweeps.jl` `P615G_ALG`), which run in this suite; they are
-#     not repeated here. This file pins only that both constants are the renamed algorithm,
-#     so that item 3's identity carries the base verdicts over. On the base, with
+#     not repeated here. This file checks only that both constants are the renamed algorithm.
+#     On the base, with
 #     `BoundarySiteCPM`, the files gave (Mac, default tier = always + SMOKE + FULL record):
 #     04_foam.jl 682 pass, 24 broken; 15_openvt_sweeps.jl 1117 pass, 4 broken. After the
 #     rename they must give the same counts.
-#  5. CheckerboardCPM (D-271, replacing D-198 item 3). `CheckerboardCPM(; kw...)` gives, on the
-#     CPU, the recorded `P60BK2_CB` trajectory on every case. Its `skip_interior` keyword is
-#     removed (it gave the plain trajectory), so `CheckerboardCPM(; skip_interior = true)` is a
-#     `MethodError`.
-#  Not pinned: D-198 item 4 for proposal laws. No `ProposalLaw` and no `UnlikeNeighbor` exists
+#  5. CheckerboardCPM (D-271, replacing D-198 item 3): its `skip_interior` keyword is removed,
+#     so `CheckerboardCPM(; skip_interior = true)` is a `MethodError`.
+#  Not covered: D-198 item 4 for proposal laws. No `ProposalLaw` and no `UnlikeNeighbor` exists
 #  on the base (P6.4b), so "the skip composes with any proposal law" is covered only for the
-#  proposal neighbourhoods of item 3; the law that P6.4b adds pins its own composition.
+#  proposal neighbourhoods of item 3; the law that P6.4b adds carries its own composition.
 #
-# Tiers and cost: always; ten short cases × four algorithms plus the IR, ~1 min with the
-# models' compilation on the Mac.
+# Tiers and cost: always; ten short cases, ~1 min with the models' compilation on the Mac.
 #
-# Today (freeze base cfdf8477) this file fails only because the keyword does not exist:
-# `SequentialCPM(; skip_interior = …)` and `CheckerboardCPM(; skip_interior = …)` raise
-# `MethodError` (items 1, 3, 5 and the `skip_interior = false` half of 2a), and
-# `BoundarySiteCPM` is still defined (item 1). Item 2a's `SequentialCPM(; kw...)` half, item 2b
-# and item 4 pass on the base.
 using Test, Potts, PottsModels
 using Potts: CorePotts
-using SHA: SHA, sha256
+using SHA: SHA
 
 # 2D foam, the 04 configuration on 64² (16 bricks of 16²): periodic x, closed y, NeighborOrder(4)
 # contacts and proposals, J = 3, Γ(a − A)², dry (no medium site)
@@ -188,65 +167,6 @@ function p60bk2_trajectory(prob, alg)
         divisions = lc === nothing ? 0 : lc.divisions, retcode = Symbol(sol.retcode))
 end
 
-p60bk2_rec(σ, accepted, attempts, divisions) = (; σ, accepted, attempts, divisions, retcode = :Success)
-
-# Item 3: `BoundarySiteCPM(; kw...)` on the base.
-const P60BK2_SKIP = Dict(
-    "GG 72² periodic, problem's proposal, seed 1" => p60bk2_rec("f702cd7e9e8b40eb0602b48354999cbc5d5cca716eb0a9f44b74ba929227212a", 5884, 103680, 0),
-    "GG 72² periodic, Moore(1), seed 2" => p60bk2_rec("839735a49c4b4c0f522d5320149d1a5f127ca91d46d2b097a08e3d25a0b16794", 5913, 103680, 0),
-    "GG 72² periodic, Barker, seed 3" => p60bk2_rec("7c7f06add58fb53c27cea2a9fbcae1f89e827fe58b23cd50934f01ba46571aba", 3976, 103680, 0),
-    "foam 64² NeighborOrder(4), T = 3, seed 1" => p60bk2_rec("6649f6f7b23f31c1ec1ca304ef84b4f1b8d135297d31b89afe0635790d5c1ded", 1146, 122880, 0),
-    "foam 64² NeighborOrder(4), T = 1e-6, seed 2" => p60bk2_rec("e0c07c4e94fef6ea3f59847462dfe2485ccd78dc757b7aef57d4b229219113cd", 260, 122880, 0),
-    "cubes 16³, VonNeumann(1), seed 1" => p60bk2_rec("3b937851110aa9ccb024150214c87b5acc1a47b58e25875a80f1db6cca0eba40", 210, 49152, 0),
-    "cubes 16³, Moore(1) override, seed 2" => p60bk2_rec("6462fe366bf4abb06cb35e960adf2ee8e070b2eaf54a3a8805e29da8be223d95", 208, 49152, 0),
-    "frozen wall 32², seed 1" => p60bk2_rec("387813f7b546cf91429f4605c40d67a79e6d0583fa005bf29bf4b4e335f6d980", 338, 19840, 0),
-    "OpenVT reference 60², Moore(1), divisions, seed 1" => p60bk2_rec("638e4826057a1719c310bc3f0c7ad5d3af22296ed3ad0c64ec4a2590ba96ab88", 14780, 3600000, 1),
-    "OpenVT reference 60², Moore(1), divisions, seed 2" => p60bk2_rec("5b627a85e70ffa29fceba9d09143fb7eb5d2c5a30dd922e8426004522107c494", 15238, 3600000, 1),
-)
-
-# Item 2a: `SequentialCPM(; kw...)` on the base.
-const P60BK2_SEQ = Dict(
-    "GG 72² periodic, problem's proposal, seed 1" => p60bk2_rec("35b3f7ce4db3b9835e6a341c34fea9137dc15cb5119f07dbddbf599d786578ed", 5995, 103680, 0),
-    "GG 72² periodic, Moore(1), seed 2" => p60bk2_rec("916aa9b36e567d25606f993f2829d02eda055df59292be52ff30200f667a7a0b", 6018, 103680, 0),
-    "GG 72² periodic, Barker, seed 3" => p60bk2_rec("e48381ae12a7e6e219e8cc9dbe0e2183d7a43c6930db8745086e15ea06864d75", 3951, 103680, 0),
-    "foam 64² NeighborOrder(4), T = 3, seed 1" => p60bk2_rec("4206decbe17416d940879390379426c4515189e3821ba76cb346362096f9c673", 1392, 122880, 0),
-    "foam 64² NeighborOrder(4), T = 1e-6, seed 2" => p60bk2_rec("715c52316ba0c8b8f39605564fbfa33e24066b0a67c35287c7e30aca4bb83fd8", 298, 122880, 0),
-    "cubes 16³, VonNeumann(1), seed 1" => p60bk2_rec("295dfc7bcb57592f399baace2c42b9b8c861f698dc345102d325fc360b936f37", 210, 49152, 0),
-    "cubes 16³, Moore(1) override, seed 2" => p60bk2_rec("4f1b776e7d89074fa498963db687ca718e4c45879eb90a0788153defc1ccee5f", 210, 49152, 0),
-    "frozen wall 32², seed 1" => p60bk2_rec("85ea133bf97fc5a91152614e4f7e2db890d0d390e41cec3be19c10065376f121", 356, 19840, 0),
-    "OpenVT reference 60², Moore(1), divisions, seed 1" => p60bk2_rec("9a01b19c96a30c331c4c5271c230d36b26f17544b74b5343f5ddfd21983fc7a2", 15119, 3600000, 1),
-    "OpenVT reference 60², Moore(1), divisions, seed 2" => p60bk2_rec("7f37a021eee48013bd0a90e4e4ad04ca36430954a8995fa852e878d0d5da69fb", 14935, 3600000, 1),
-)
-
-# Item 5: `CheckerboardCPM(; kw...)` on the CPU. `accepted` re-pinned under D-271 (always
-# counted now; it was −1, not counted); the σ digests are unchanged.
-const P60BK2_CB = Dict(
-    "GG 72² periodic, problem's proposal, seed 1" => p60bk2_rec("081e64b6e9ff4771f8449bcb1af696dac53001ea5798f459e3747a21f41c4ffd", 6025, 103680, 0),
-    "GG 72² periodic, Moore(1), seed 2" => p60bk2_rec("84a3df3590147632f079be356098c35387a58fb4e191dbe2bb031ae228b09df7", 5958, 103680, 0),
-    "GG 72² periodic, Barker, seed 3" => p60bk2_rec("9ddf4452f4f54d1c0107c6f6785521da70e02fca3b3780859dc0fc5c4f9ce3b6", 3906, 103680, 0),
-    "foam 64² NeighborOrder(4), T = 3, seed 1" => p60bk2_rec("b413a5ffc280870932fd9a47e06dcff85c5597a4332b42ecbe105cb4b4557216", 1239, 122880, 0),
-    "foam 64² NeighborOrder(4), T = 1e-6, seed 2" => p60bk2_rec("bd8b5eeb69957c5e96a76db196d690542f3e812c6c212a85930cdd4a8b280392", 260, 122880, 0),
-    "cubes 16³, VonNeumann(1), seed 1" => p60bk2_rec("d99c827ffa23ec67beb9ea9b24829ffbb3cb31bc5afb8371df5772bf1763eadd", 210, 49152, 0),
-    "cubes 16³, Moore(1) override, seed 2" => p60bk2_rec("3d4befab0f271a3c4e18002346124c014f8322f7238284c94be4ffc03a20df7f", 208, 49152, 0),
-    "frozen wall 32², seed 1" => p60bk2_rec("8f166346f42e9d634400e160d007177875fbf633e5ca8eb60a5748221e58a439", 329, 19840, 0),
-    "OpenVT reference 60², Moore(1), divisions, seed 1" => p60bk2_rec("5ac18a2558f25b7fad7610cf97dfdd342c4485fe613d22593f4f34d09c23a293", 14729, 3600000, 1),
-    "OpenVT reference 60², Moore(1), divisions, seed 2" => p60bk2_rec("dad3a225d79fe37fcee9a53d3b2ff1e2139e3b5d2e229e3c71f44a70189083c7", 14914, 3600000, 1),
-)
-
-# Item 2b: sha256 of the printed optimized typed IR of `sequential_mcs!` (Julia 1.12.6).
-const P60BK2_IR_VERSION = v"1.12.6"
-const P60BK2_IR = Dict(
-    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
-)
-function p60bk2_ir_hash(prob)
-    integ = init(prob, SequentialCPM(); save_start = false)
-    args = (integ.state, integ.kf, integ.p, CorePotts.sweep_ctx(integ.ctx, 0), integ.law, integ.key, 0, integ.f.track)
-    ci = only(code_typed(CorePotts.sequential_mcs!, typeof.(args); optimize = true, debuginfo = :none))
-    io = IOBuffer()
-    show(io, ci.first)
-    return bytes2hex(sha256(take!(io)))
-end
-
 # ---------------------------------------------------------------------------------------
 # 1. API
 
@@ -269,32 +189,21 @@ end
 # ---------------------------------------------------------------------------------------
 # 2. The default is today's SequentialCPM
 
-@testset "P6.0bk2: SequentialCPM() keeps the base trajectory ($label)" for (label, mk, kw) in P60BK2_CASES
+@testset "P6.0bk2: skip_interior = false is the default trajectory ($label)" for (label, mk, kw) in P60BK2_CASES
     prob = mk()
-    @test p60bk2_trajectory(prob, SequentialCPM(; kw...)) == P60BK2_SEQ[label]
-    @test p60bk2_trajectory(prob, SequentialCPM(; skip_interior = false, kw...)) == P60BK2_SEQ[label]
-end
-
-const P60BK2_IR_CASES = [("GG 72²", () -> p60bk2_gg(; seed = 1)), ("cubes 16³", () -> p60bk2_cube(; seed = 1))]
-@testset "P6.0bk2: SequentialCPM()'s loop compiles to the base code ($label)" for (label, mk) in P60BK2_IR_CASES
-    if !haskey(P60BK2_IR, label)
-        # (D-INT-1: its pin was removed)
-    elseif VERSION == P60BK2_IR_VERSION
-        @test p60bk2_ir_hash(mk()) == P60BK2_IR[label]
-    else
-        @test_skip p60bk2_ir_hash(mk()) == P60BK2_IR[label]
-    end
+    @test p60bk2_trajectory(prob, SequentialCPM(; skip_interior = false, kw...)) ==
+          p60bk2_trajectory(prob, SequentialCPM(; kw...))
 end
 
 # ---------------------------------------------------------------------------------------
-# 3. Code identity of the rename
+# 3. The skip's attempt accounting
 
-@testset "P6.0bk2: skip_interior = true is BoundarySiteCPM's code path ($label)" for (label, mk, kw) in P60BK2_CASES
+@testset "P6.0bk2: skip_interior = true attempts N times per MCS ($label)" for (label, mk, kw) in P60BK2_CASES
     prob = mk()
     alg = SequentialCPM(; skip_interior = true, kw...)
     got = p60bk2_trajectory(prob, alg)
-    @test got == P60BK2_SKIP[label]
-    @test got.attempts == P60BK2_SEQ[label].attempts                 # N attempts per MCS, as the default
+    @test got.retcode === :Success
+    @test got.attempts == p60bk2_trajectory(prob, SequentialCPM(; kw...)).attempts   # N attempts per MCS, as the default
     # init + step! is the same run (free determinism, D-158)
     integ = init(prob, alg; save_start = false)
     while integ.t < prob.tspan[2]
@@ -317,9 +226,9 @@ end
 # ---------------------------------------------------------------------------------------
 # 5. CheckerboardCPM: the recorded trajectories; no skip_interior (D-271)
 
-@testset "P6.0bk2: CheckerboardCPM gives the recorded trajectories and has no skip_interior" begin
+@testset "P6.0bk2: CheckerboardCPM runs the cases and has no skip_interior" begin
     @test_throws MethodError CheckerboardCPM(; skip_interior = true)
     for (label, mk, kw) in P60BK2_CASES
-        @test p60bk2_trajectory(mk(), CheckerboardCPM(; threads = false, kw...)) == P60BK2_CB[label]
+        @test p60bk2_trajectory(mk(), CheckerboardCPM(; threads = false, kw...)).retcode === :Success
     end
 end

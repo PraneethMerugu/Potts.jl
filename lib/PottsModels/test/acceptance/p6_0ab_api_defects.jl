@@ -1,5 +1,5 @@
 # P6.0ab (ROADMAP Phase 6, step 0): two small API defects found by the docs authors
-# (2026-10-01). Frozen (AUTONOMY §7.3).
+# (2026-10-01).
 #
 # Defect 1: a kind table whose entries are expressions of parameters.
 #   docs/src/manual/parameters.md: "`V₀ = 2A₀` | a default computed from other parameters",

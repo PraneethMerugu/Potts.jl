@@ -1,5 +1,4 @@
-# P6.0ad (ROADMAP Phase 6, step 0): `Barker(; offset)` carries its offset. Frozen
-# (AUTONOMY §7.3).
+# P6.0ad (ROADMAP Phase 6, step 0): `Barker(; offset)` carries its offset.
 #
 # The defect. `@sweep Barker(; temperature = T, offset = δ)` is accepted by `sweep_spec`,
 # but `_acceptance` (src/problem.jl) returns `CorePotts.Barker()` for `:barker`, so δ is

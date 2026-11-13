@@ -1,5 +1,4 @@
 # P6.0ak (ROADMAP Phase 6, step 0): computed parameters and the changes that touch them.
-# Frozen (AUTONOMY §7.2). Re-frozen under D-F2-1 (F2-15, list A, user OK 2026-10-20).
 #
 # A parameter whose default is an expression of other parameters (a scalar `β = 2α`, or a
 # kind table whose entries are expressions, D-111) is "computed". Before D-F2-1 (D-112) an

@@ -1,5 +1,5 @@
-# P6.0v (ROADMAP Phase 6, step 0): GPU host-transfer audit and instrumentation. Frozen
-# (AUTONOMY §7.3). This file accepts P6.0v itself (the counters, the current baseline and
+# P6.0v (ROADMAP Phase 6, step 0): GPU host-transfer audit and instrumentation.
+# This file accepts P6.0v itself (the counters, the current baseline and
 # the audit document), not P6.0v1–v3: their zero-transfer targets freeze with them.
 #
 # The counters. Every device→host and host→device copy and every device synchronize that

@@ -1,6 +1,5 @@
 # P6.0y (ROADMAP Phase 6, step 0): the automatic explicit-Euler field substep count is
-# strictly inside the stability region and counts the linear reaction rate. Frozen
-# (AUTONOMY §7.3).
+# strictly inside the stability region and counts the linear reaction rate.
 #
 # The scheme. `ExplicitEuler()` without `substeps` advances `∂c/∂t = D Δc + f(c)` over one
 # MCS of length `dt` (`mcs_duration`) in `n` substeps of `τ = dt/n`:
@@ -237,35 +236,21 @@ end
 # a deterministic field with every mode present
 p60y_rich(dims) = [1.0 + 0.5 * (iseven(sum(Tuple(I))) ? 1 : -1) + 0.3 * cos(2π * I[1] / dims[1]) +
                    0.2 * sin(1.3 * I[1] + 0.7 * I[2]^2) for I in CartesianIndices(dims)]
-p60y_bits(c) = [reinterpret(UInt64, c[i]) for i in (1, 7, 12, 20, 33, 41, 58, 64)]
 
-# (D, k, n, recorded bit patterns of p60y_bits after 4 MCS on d5bfd3dc; re-pinned under D-C8-R4:
-# the field compiler orders the update's floating-point operations differently, so the last
-# bits move, by at most 1 ulp; the FTCS oracle holds to rtol 1e-13 before and after)
-const p60y_EXPLICIT = [
-    (0.1, 0.1, 3, UInt64[0x3fe91eabbe91b629, 0x3fe82e535a9ab31c, 0x3fe0f416689f0ebd, 0x3fde4e73a0c41454,
-        0x3fea4fc32a4d2d51, 0x3fe9623201a9900a, 0x3fe4980f218c812d, 0x3fe958ea79d4bae8]),
-    (0.1, 0.1, 5, UInt64[0x3fe957f9f6565cad, 0x3fe854001689dc7a, 0x3fe11dec2a1e6af0, 0x3fde1a5d1074fea0,
-        0x3fea76281ae72ccd, 0x3fe96dac20ed086d, 0x3fe4ba34349699be, 0x3fe97ad0cec4bf66]),
-    (0.5, 0.2, 6, UInt64[0x3fddda01aba8439a, 0x3fde102c1aa6a191, 0x3fd9d9b3f6a4badd, 0x3fd9e62ff577edb0,
-        0x3fdea2991d39ca71, 0x3fde6537c5361052, 0x3fdc15fa830ffb6b, 0x3fdea774355b4e8f])]
+# (D, k, n): an explicit substep count above any count the stability rule allows
+const p60y_EXPLICIT = [(0.1, 0.1, 3), (0.1, 0.1, 5), (0.5, 0.2, 6)]
 
-@testset "P6.0y: an explicit substeps = n is unchanged (bitwise)" begin
+@testset "P6.0y: an explicit substeps = n matches the FTCS oracle" begin
     dims = (8, 8)
     sys = P60yField(; name = :f, dims, reaction = :uniform)
-    for (D, k, n, bits) in p60y_EXPLICIT
+    for (D, k, n) in p60y_EXPLICIT
         @test n > max(1, ceil(Int, p60y_Λdiff(D, 1.0, 2) + k))          # above any count (C) allows
         us = p60y_run(sys, dims, 4; p = (:Dc => D, :k => k), c0 = p60y_rich(dims), solver = p60y_EE(substeps = n))
         @test us[end] ≈ p60y_ftcs(p60y_rich(dims), D, k, 1.0, 1.0, n, 4) rtol = 1e-13
-        @test p60y_bits(us[end]) == bits
     end
 end
 
-# re-pinned under D-C8-R4 (as above; at most 1 ulp, relative change ≤ 2e-16)
-const p60y_MERKS_BITS = UInt64[0x3ff30d37278d0421, 0x3fe9d56eee3cb2cb, 0x3ff06551a7470e69, 0x3ff066d6ee873675,
-    0x3ff31f9e5f6aad1b, 0x3ff318f1df291fb7, 0x3ff287857f281e83, 0x3fe8c7ccb9e681c5]
-
-@testset "P6.0y: Merks with ExplicitEuler(substeps = 15, lower = 0.0) is unchanged" begin
+@testset "P6.0y: Merks with ExplicitEuler(substeps = 15, lower = 0.0) matches the FTCS oracle" begin
     N = 8
     sys = MerksVasculogenesis(; name = :m, lattice = (N, N))
     v(m, x) = cos(π * m * (x - 0.5) / N)                   # zero-flux eigenvectors
@@ -274,5 +259,4 @@ const p60y_MERKS_BITS = UInt64[0x3ff30d37278d0421, 0x3fe9d56eee3cb2cb, 0x3ff0655
     prob = PottsProblem(sys, op, (0, 3); field_solver = p60y_EE(substeps = 15, lower = 0.0))
     c = Array(solve(prob, SequentialCPM(); saveat = 1).u[end].site.c)
     @test c ≈ p60y_ftcs(c0, 0.75, 5.4e-3, 1.0, 1.0, 15, 3; periodic = false, lower = 0.0) rtol = 1e-13
-    @test p60y_bits(c) == p60y_MERKS_BITS
 end

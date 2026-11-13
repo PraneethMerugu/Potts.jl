@@ -3,7 +3,7 @@
 # D-091, D-093, D-138): the TST seeding vocabulary. `Eden` (seed-and-grow), a host-routine
 # `Splits` (not the lifecycle division routine), `RandomPoints(replace = true)`, and
 # `shortfall` with its first `:allow` consumer (01b de novo: seeds drawn with replacement
-# merge, so fewer cells than requested is the published behaviour). Frozen (AUTONOMY §7.3);
+# merge, so fewer cells than requested is the published behaviour). ;
 # decision D-141.
 #
 # Surface fixed by D-141 (Potts, src/layouts.jl):

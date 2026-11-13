@@ -8,7 +8,7 @@
 # model are ModelingToolkit systems" true for entity-local initialization. Cross-entity and
 # lattice initialization (reads of other cells, gathers, folds, site and field variables)
 # stay Potts' (R17, P6.4a); until then they are refused.
-# Decision: D-1xx (P6.0bo; the coordinator numbers it). Frozen (AUTONOMY §7.3).
+# Decision: D-1xx (P6.0bo; the coordinator numbers it).
 #
 # What is new for users:
 #  - a `@potts_model` section `@initialization_equations` (MTK's `initialization_eqs`):
@@ -391,7 +391,7 @@ function p60bo_guess(s, n)
 end
 
 # every published model (small lattices; construction and `mtkcompile` only), as in p6_0bn
-const P60BO_PUBLISHED = [
+const P60BO_MODELS = [
     ("GranerGlazier", () -> GranerGlazier(; name = :gg)),
     ("WortelAct", () -> WortelAct(; name = :act, lattice = (8, 8))),
     ("WortelAct connected", () -> WortelAct(; name = :act, lattice = (8, 8), connected = true)),
@@ -583,7 +583,7 @@ end
 end
 
 @testset "P6.0bo U: published models have no initialization template" begin
-    @testset "$label" for (label, build) in P60BO_PUBLISHED
+    @testset "$label" for (label, build) in P60BO_MODELS
         cs = mtkcompile(build())
         @test p60bo_init(cs, :cell) === nothing
         @test p60bo_init(cs, :model) === nothing

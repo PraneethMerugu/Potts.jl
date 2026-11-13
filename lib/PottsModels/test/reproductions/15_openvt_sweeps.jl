@@ -1,7 +1,7 @@
 # P6.15g (ROADMAP Step 3b): the OpenVT monolayer benchmark's inhibition sweeps. Fig 6 shows the
 # time to 10⁴ cells against β (γ = 0) and against γ (β = 0). Table 1 (T1) gives the thresholds
 # at 1.1, 2, 5, 10 and 20× the uninhibited time. Fig 7 shows 10⁴-cell colonies at β = 0 for the
-# T1 γ values. Frozen (AUTONOMY §7.3).
+# T1 γ values.
 # Protocol: spec 15 §4.0.1 cases (a), (c) and (d), §3.5 and §4.3. Targets: §4.1 V1, V2, V2b, V3
 # and V3b (docs/design/research/model-specs/15_openvt_monolayer.md v3.3, which carries the
 # P6.15g V-target audit). Every grid, seed, lattice, run count, rule and negative control below

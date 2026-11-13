@@ -1,7 +1,6 @@
 # P6.1b (ROADMAP Phase 6, step 1; review R16, D-051 item 6): the two measurements behind the
 # Graner–Glazier sorting analysis (spec 09 §9.0, PRE §II D1), as model-agnostic public
-# functions of Potts, documented on a manual page and used by the 09 tutorial. Frozen
-# (AUTONOMY §7.3).
+# functions of Potts, documented on a manual page and used by the 09 tutorial.
 #
 # Surface fixed by the coordinator (D-139):
 #

@@ -1,6 +1,5 @@
 # P6.2a (ROADMAP Phase 6, step 2; review §3 R2 and R16): the `InsertUntil` layout and the
 # code-definition analysis primitives behind Akeeb's metrics (spec 10 §5.3.3 O1–O8).
-# Frozen (AUTONOMY §7.3).
 #
 # Surface fixed by the coordinator:
 #

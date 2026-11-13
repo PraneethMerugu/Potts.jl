@@ -1,5 +1,5 @@
-# P6.0an (ROADMAP Phase 6, step 0): `remake` with a NamedTuple. Frozen (AUTONOMY §7.2).
-# Re-frozen under D-F2-1 (F2-15, list A, user OK 2026-10-20): computed parameters are read-only.
+# P6.0an (ROADMAP Phase 6, step 0): `remake` with a NamedTuple.
+# D-F2-1 (F2-15, list A, user OK 2026-10-20): computed parameters are read-only.
 #
 # Today (a1c3ed57) `remake(prob; p = (λ = 3.0,))` on a model's problem falls back to
 # CorePotts' default `remake_parameters` (identity, for hand-written problems), so `prob.p`

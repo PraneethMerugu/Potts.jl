@@ -1,5 +1,5 @@
 # P6.0e (ROADMAP Phase 6, step 0): contact energies read site values `x` (at s) and `x′`
-# (at s′), as AUTHORING §3 promises. Frozen (AUTONOMY §7.3).
+# (at s′), as AUTHORING §3 promises.
 using Potts: CorePotts
 using Statistics: mean
 

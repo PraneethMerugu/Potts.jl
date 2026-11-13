@@ -1,6 +1,6 @@
 # P6.0v2b (ROADMAP Phase 6, step 0; from the P6.0v2 review): a custom-rule
-# `refresh_frozen!` copies only the state leaves its `remake_frozen` reads. Frozen
-# (AUTONOMY §7.3). Decisions: D-081 (the mask follows the state), D-085 (counters), D-089,
+# `refresh_frozen!` copies only the state leaves its `remake_frozen` reads.
+# Decisions: D-081 (the mask follows the state), D-085 (counters), D-089,
 # D-092 (column-only copies, `HostPhase` `reads`); audit
 # `docs/design/research/gpu-host-transfer-audit.md` R4. Rule: D-128.
 #

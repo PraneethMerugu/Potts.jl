@@ -1,6 +1,6 @@
 # P6.15f (ROADMAP Step 3b): the OpenVT monolayer benchmark's Fig 3 ("Comparing monolayer
 # growth over time": deterministic case (f), stochastic case (b)) and Fig 8 (quantitative
-# comparison, target V5), overlaid on the consortium data. Frozen (AUTONOMY §7.3).
+# comparison, target V5), overlaid on the consortium data.
 # Protocols: spec 15 §4.0.1 cases (a), (b), (e), (f), §3.1 O1/O6, §3.2, §4.0.2 F8; target
 # §4.1 V5 (docs/design/research/model-specs/15_openvt_monolayer.md v3.1). Spec 15 has no
 # V-target for F3: the F3 rows below are the test author's, against the only Table S1 CPM

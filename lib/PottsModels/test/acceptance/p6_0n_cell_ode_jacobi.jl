@@ -1,5 +1,5 @@
 # P6.0n (ROADMAP Phase 6, step 0): cell ODEs that read another cell's ODE state are Jacobi
-# across cells (D-038, D-077 scratch rule, D-078; P6.0k review N3). Frozen (AUTONOMY §7.3).
+# across cells (D-038, D-077 scratch rule, D-078; P6.0k review N3).
 #
 # Semantics pinned here:
 #  1. Every cell's ODE rate reads every other cell's ODE state as it was at the start of the

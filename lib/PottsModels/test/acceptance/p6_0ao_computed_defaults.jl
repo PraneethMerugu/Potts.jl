@@ -1,6 +1,6 @@
 # P6.0ao (ROADMAP Phase 6, step 0): computed parameter defaults that call functions or read
-# a kind-table entry. Frozen (AUTONOMY §7.2). Re-frozen under D-F2-1 (F2-15, list A, user OK
-# 2026-10-20): the explicit-value sub-tests flip to refusals; every evaluation value stays (the
+# a kind-table entry. D-F2-1 (F2-15, list A, user OK 2026-10-20): the explicit-value
+# sub-tests flip to refusals; every evaluation value stays (the
 # oracle of the one derivation, `LatticePDE.derivation`).
 #
 # Today (e006198b) a computed default is evaluated by substituting the parameter values

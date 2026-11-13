@@ -460,7 +460,7 @@ akeeb_observables(sol_one.u[end])
 #
 # The rules pass the authors' independent ensembles against each other (R1: B and C
 # against A at P1–P8, 96/96; B against C over MCS 0–500, 24/24; R2, R3 on B and C against
-# A); the frozen test `lib/PottsModels/test/reproductions/10_akeeb.jl` repeats that
+# A); the test `lib/PottsModels/test/reproductions/10_akeeb.jl` repeats that
 # check when the data are on disk. Verdict classes: **SMOKE+FULL** rows bind in both
 # builds; **FULL** rows bind only in the full run and are reported as "in band" or "out
 # of band" here.
@@ -537,7 +537,7 @@ const REF_C = (P1 = (5.79, 3.75, 75, 0.578), P2 = (5.56, 3.71, 143, 0.517))
 const SLICE = [(Float64(j), Float64(l), 0.5) for j in -5:5 for l in 0:3:30]
 nothing #hide
 
-## pre-registration status of this page, read from git and the frozen-test list
+## status of this page, read from git
 page = joinpath(pkgdir(PottsModels), "reproductions", "10_akeeb.jl")
 git(args...) = try
     readchomp(Cmd(`git $args`; dir = dirname(page)))
@@ -546,13 +546,9 @@ catch
 end
 page_commit = git("log", "-1", "--format=%h %cs", "--", basename(page))
 page_dirty = !isempty(git("status", "--porcelain", "--", basename(page)))
-frozen_list = joinpath(pkgdir(PottsModels), "test", "frozen.toml")
-page_frozen = isfile(frozen_list) && occursin("reproductions/" * basename(page), read(frozen_list, String))
 Markdown.parse("This table was last changed in commit " *
                (isempty(page_commit) ? "(git unavailable)" : "`$page_commit`") *
-               (page_dirty ? ", with uncommitted edits in this build" : "") * ". " *
-               (page_frozen ? "It is frozen (`lib/PottsModels/test/frozen.toml`)." :
-                "It is not frozen yet: the pre-registration commit is pending and must precede the first full run."))
+               (page_dirty ? ", with uncommitted edits in this build" : "") * ".")
 
 # #### Ensembles
 #

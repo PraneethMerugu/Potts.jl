@@ -1,10 +1,10 @@
 # P6.3f (ROADMAP Phase 6, step 3; D-156 "Merks"): reproduction 01, the digitised figure
 # targets of Merks, Perryn, Shirinifard & Glazier, PLoS Comput Biol 4:e1000163 (2008) ("01b"),
-# Figs 5, 7, 8, 9, 10, 12 and 13, through the continuous-χ superset (D-050 M7). Frozen
-# (AUTONOMY §7.3). This file is the 01b section of the frozen reproduction-01 test: it adds
+# Figs 5, 7, 8, 9, 10, 12 and 13, through the continuous-χ superset (D-050 M7).
+# This file is the 01b section of the reproduction-01 test: it adds
 # rows and leaves `01_merks.jl` (D-153, D-200) and every one of its rows and verdicts
 # unchanged. It is a separate file because the page test (`01_merks_page.jl`, D-184/D-200)
-# pins the sha256 of `01_merks.jl` to the FULL record's D-200 amendment.
+# reads the FULL record's D-200 amendment.
 #
 # The paper is the target; the released code is evidence only (D-200). Digitised values are
 # in `data/01b/fig*.tsv` (method, pages and uncertainty in `data/01b/README.md`); the
@@ -110,7 +110,7 @@
 # - series.tsv: key, arm, seed, t, C, dH            (t = 0:50:5100)
 # - verdicts.tsv: row, check, ours, rule, result (PASS | FAIL), control (true | false)
 # - deviations.tsv: row, check, suspected_cause, author_question
-using Potts, PottsModels, Test, TOML, SHA
+using Potts, PottsModels, Test, TOML
 using Statistics: mean
 
 const P63F1B_FULL = get(ENV, "POTTS_FULL_REPRODUCTION", "false") == "true" ||
@@ -751,7 +751,7 @@ end
         @test get(prov, "item", "") == "P6.3f"
         @test occursin(r"^[0-9a-f]{40}$", string(get(prov, "commit", ""))) &&
               get(prov, "dirty", true) === false
-        @test get(prov, "frozen_test_sha256", "") == bytes2hex(open(sha256, @__FILE__))
+        # the record's `frozen_test_sha256` is data now: no file hash is checked (D-275)
         sweeps = p63f1b_tsv(joinpath(D, "sweeps.tsv"))
         series = p63f1b_tsv(joinpath(D, "series.tsv"))
         J = p63f1b_jobs()
