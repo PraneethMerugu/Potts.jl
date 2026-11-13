@@ -45,8 +45,11 @@ PottsDevices.device_name() == "rocm" && include("device_ir.jl")
         @test sx.retcode == Potts.SciMLBase.ReturnCode.Success && all(isfinite, cx) && minimum(cx) >= 0 && maximum(cx) > 0
     end
     # F3-12a: QuasiSteady (the steady stage, its status checks), 20 MCS; no clip: the steady
-    # solve's nonnegativity holds to the solver's tolerance
-    sq = solve(PottsProblem(MERKS, [ownership => merks_state(), kind => [1, 1]], (0, 20); T = Float32,
+    # solve's nonnegativity holds to the solver's tolerance. V₀ = 9.0 is the port's value
+    # (test/ports/models.jl:40): the model's V₀ = 100.0 puts the two cells' target volume at the
+    # 144-site box's whole medium, which empties `ecm`, removes the `-δc * C * ecm` decay and
+    # leaves the steady solve without a unique state (D-276).
+    sq = solve(PottsProblem(MERKS, [ownership => merks_state(), kind => [1, 1], :V₀ => 9.0], (0, 20); T = Float32,
         field_solver = QuasiSteady()), CheckerboardCPM(; proposal = Moore(1)); backend)
     cq = Array(sq.u[end].site.c)
     @test sq.retcode == Potts.SciMLBase.ReturnCode.Success && all(isfinite, cq) && minimum(cq) >= -1e-4 * maximum(cq) && maximum(cq) > 0
