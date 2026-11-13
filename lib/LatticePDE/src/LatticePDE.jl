@@ -267,7 +267,8 @@ inputs, a field of the lattice) are folded over each node's block:
     Elsewhere the node holds the value of its block's free part, the sites where the predicate
     is false: the fine reads in its equation and its operator coefficients fold over the free
     sites, so the free volume times a folded source is the fine sum of that source over the free
-    sites. A spatial operator acts on the node values as before: its flux is the operator's,
+    sites. On an irregular domain the fold's support is the free sites inside the domain: an
+    out-of-domain site is not where the equation holds, so it never enters a fold. A spatial operator acts on the node values as before: its flux is the operator's,
     not a sum over the free children. The block's mean is `f v + (1 - f) c`, with `f` its
     masked fraction.
 

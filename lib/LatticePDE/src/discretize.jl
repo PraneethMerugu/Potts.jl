@@ -136,6 +136,9 @@ struct CompiledField{N}
     sitecoefs::Dict{Tuple{String, Int, Int}, Tuple{Any, Any}}
     # the coarse fields that blend (F4-15b): by key, the mask predicate, which reads fine fields
     free::Dict{String, Any}
+    # the irregular domain's Bool input when it is finer than a blending row's grid: the row's
+    # fold intersects the free support with the in-domain children (F4-15b ruling)
+    domfree::Any
 end
 
 """Launch-varying slot of the time `t` (`G.rt[RUNTIME_T]`)."""
@@ -562,10 +565,12 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     hex && !(h[2] ≈ h[1]) && _dverr("a hexagonal grid needs equal spacing on both axes; the domain gives $h")
     # the irregular domain: a mask over its Bool input, and a zero-flux edge rule per rate field
     dom = Int32(0)
+    dompred = nothing
     if disc.domain !== nothing
         dop = findfirst(op -> keys[op] == [disc.domain], collect(Base.keys(dvs)))
         dop === nothing && _dverr("`domain = \"$(disc.domain)\"` names no dependent variable")
         dop = collect(Base.keys(dvs))[dop]
+        dompred = dvs[dop]
         (isin[dop] && fids[dop][2] == U8) || _dverr("`domain = \"$(disc.domain)\"` must name a `Bool` input field")
         dom = fids[dop][1][1]
         push!(pb.masks, MaskDecl("domain", dom, STATIC))
@@ -614,8 +619,8 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     # ghost, `_hexlap`; the others are zero flux there)
     hex && filter!(f -> any(b -> b.kind in (:dirichlet, :neumann, :robin) && (!isin[b.op] || cut[b.op]) &&
                                  fids[b.op][1][max(b.comp, 1)] == f, bcs), ghosted)
-    env(mapmode, kb, lv = 0, free = nothing) = Env(kb, fids, params, tables, spacing, ivs[1], ivs[2:end], lo,
-        level_spacing(h, dims, lv), mapmode, ntuple(_ -> 0, N), RESOLVE, leaf, hex, dl(lv), ghosted, lv, flev, dims, 0, free)
+    env(mapmode, kb, lv = 0, free = nothing, domfree = nothing) = Env(kb, fids, params, tables, spacing, ivs[1], ivs[2:end], lo,
+        level_spacing(h, dims, lv), mapmode, ntuple(_ -> 0, N), RESOLVE, leaf, hex, dl(lv), ghosted, lv, flev, dims, 0, free, domfree)
     # the coarse fields whose mask predicate reads fine fields blend (F4-15b): their equations fold
     # over each block's free children, and their mask holds a node when every child is masked
     free = Dict{String, Any}(key(b.op, b.comp) => b.pred for b in bcs
@@ -628,7 +633,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         hL = level_spacing(h, dims, lv)
         # (a blending field's face values fold over the free children, as its rate does: F4-15b)
         fenv = let fr = get(free, k, nothing)
-            (m, kb, l) -> env(m, kb, l, fr)
+            (m, kb, l) -> env(m, kb, l, fr, dompred)
         end
         for d in 1:N, s in (-1, 1)
             periodic[d] && continue
@@ -717,7 +722,8 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         f, lane = fids[op][1][max(comp, 1)], fids[op][2]
         lv = flev[op]
         kb = kern(lv)
-        e = env(kind == :map, kb, lv, kind in (:rate, :map) ? get(free, k, nothing) : nothing)
+        e = env(kind == :map, kb, lv, kind in (:rate, :map) ? get(free, k, nothing) : nothing,
+                kind in (:rate, :map) ? dompred : nothing)
         # (the equation being lowered, for a front end that names it at a refusal: A's `@equations`
         # line, review r1 N2; cleared once it lowers)
         task_local_storage(:lattice_equation, k)
@@ -747,7 +753,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     end
     tvals = [string(p) => (d = something(_icvalue(ic, p), Some(ModelingToolkitBase.hasdefault(p) ? ModelingToolkitBase.getdefault(p) : Float64[]));
                            _promoted(collect(unwrap_const.(unwrap.(d))))) for p in arrays]
-    return CompiledField{N}(program(pb), keys, plist, defaults, tvals, initial, lin, sitecoefs, free)
+    return CompiledField{N}(program(pb), keys, plist, defaults, tvals, initial, lin, sitecoefs, free, dompred)
 end
 
 # An aux field read at a neighbor site across a closed face (`Δ(K)`, F3-02 review S6) has no

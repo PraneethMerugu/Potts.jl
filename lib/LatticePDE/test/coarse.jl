@@ -53,6 +53,18 @@ function cfree(A, held, k = CK)
         isempty(fr) ? sum(A[c] for c in ch) / k^2 : sum(A[c] for c in fr) / length(fr)
     end
 end
+# the mean of a fine array over each block's free in-domain children (F4-15b ruling: the fold's
+# support is free ∩ in-domain); a block with no such child gives the in-domain mean, and none of
+# those the whole mean
+function cinfree(A, held, ind, k = CK)
+    nc = size(A) .÷ k
+    return map(CartesianIndices(nc)) do I
+        ch = [CartesianIndex((I[1] - 1) * k + i, (I[2] - 1) * k + j) for j in 1:k for i in 1:k]
+        su = [c for c in ch if !held[c] && ind[c]]
+        isempty(su) && (su = [c for c in ch if ind[c]])
+        isempty(su) ? sum(A[c] for c in ch) / k^2 : sum(A[c] for c in su) / length(su)
+    end
+end
 # the number of free children of each block
 cnfree(held, k = CK) = [count(!, held[((I[1] - 1) * k + 1):(I[1] * k), ((I[2] - 1) * k + 1):(I[2] * k)])
                         for I in CartesianIndices(size(held) .÷ k)]
@@ -446,6 +458,45 @@ end
 
     end
 
+    @testset "F4-15b: the free fold intersects the irregular domain" begin
+        # (ruling 2026-11-12: the free support is free ∩ in-domain; with no in-domain free child
+        # the mean is over the in-domain children; an out-of-domain child never contributes. A
+        # non-twin test: a hand value that the pre-fix fold misses, because the twin would
+        # reproduce whatever the fold does. At 721d1efb (~/lpwork/f4F15b/cdom-nc.log) the two
+        # cases read 100.0 and 44.875.)
+        qd = first(@variables qd(..)::Int32 [input = true])
+        kd = first(@variables kd(..) [input = true, bounds = (0, 100)])
+        dmd = first(@variables dmd(..)::Bool [input = true])
+        cdf = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables cdomfree(..))), LatticePDE.LatticeLevel, Coarse(CK)))
+        Qd = fill(Int32(1), CDIMS); Kd = zeros(Float64, CDIMS); Dd = trues(CDIMS)
+        sites(J) = [((J[1] - 1) * CK + i, (J[2] - 1) * CK + j) for j in 1:CK for i in 1:CK]
+        # block (1, 1): 9 in-domain children, all masked (q = 0), kd 1..9; 7 out-of-domain
+        # children, free (q = 1), kd 100. The support free ∩ in-domain is empty, so the value is
+        # the mean over the 9 in-domain children, 5; the pre-fix fold read the 7 free
+        # out-of-domain children, 100.
+        for (n, s) in enumerate(sites((1, 1)))
+            Qd[s...] = n <= 9 ? 0 : 1
+            Kd[s...] = n <= 9 ? Float64(n) : 100.0
+            Dd[s...] = n <= 9
+        end
+        # block (2, 1): 9 in-domain free children carry kd = 2; 7 out-of-domain free children
+        # carry kd = 100. The support is the 9 in-domain free children, 2; the pre-fix fold took
+        # all 16 free children, 45.5.
+        for (n, s) in enumerate(sites((2, 1)))
+            Qd[s...] = 1
+            Kd[s...] = n <= 9 ? 2.0 : 100.0
+            Dd[s...] = n <= 9
+        end
+        dsys(c) = PDESystem([D(c(t, x, y)) ~ kd(t, x, y)], [c(0, x, y) ~ 0.0, c(t, x, y) ~ masked(qd(t, x, y) == 0, 1.0)],
+            cdom(1e-6), [t, x, y], [c(t, x, y), dmd(t, x, y), qd(t, x, y), kd(t, x, y)], Num[]; name = :df)
+        p = cown(dsys(cdf), CDIMS; domain = dmd, ins = [dmd(t, x, y) => Dd, qd(t, x, y) => Qd, kd(t, x, y) => Kd])
+        # (u0 = 0, one explicit window: the state is h times the rate)
+        s = solve(p, ExplicitEuler(; dt = 1e-6, substeps = 1))
+        d = Array(s[cdf(t, x, y), length(s.t)]) ./ 1e-6
+        @test isapprox(d[1, 1], 5.0; rtol = 1e-14) || (println("F4-15b domain case 1: ", d[1, 1], " (want 5: the in-domain children, not the free out-of-domain ones)"); false)
+        @test isapprox(d[2, 1], 2.0; rtol = 1e-14) || (println("F4-15b domain case 2: ", d[2, 1], " (want 2: free ∩ in-domain)"); false)
+    end
+
     @testset "a fine field and a coarse field in one group: prolongation and restriction" begin
         # u (fine 8×8) reads c (Coarse(2), 4×4) at the node of its block; c reads u by the block
         # mean. One BackwardEuler window against the hand matrix of the coupled system.
@@ -509,9 +560,14 @@ end
                 [[c(t, x, y), cdm(t, x, y), q(t, x, y), g(t, x, y)]; hand ? [cf1(t, x, y), cf2(t, x, y)] : Num[]], Num[]; name = :dm)
         end
         pc = cown(dsys(cdo), CDIMS; domain = cdm, ins = [cdm(t, x, y) => Df, q(t, x, y) => CQ1, g(t, x, y) => CG])
-        # (`ckinds` covers no block with kind 3 whole: no node is masked, each folds over its free children)
+        # (`ckinds` covers no block with kind 3 whole: no node is masked, each folds over its free
+        # children; the hand inputs are the in-domain free means, as the fold's support is under
+        # the domain ruling: at 721d1efb (~/lpwork/f4F15b/cdom-nc.log) the three comparisons fail)
+        # (the hand inputs are the in-domain free means: the ruling's support is free ∩ in-domain)
         ph = cown(dsys(cdh; hand = true), CDIMS .÷ CK; domain = cdm,
-            ins = vcat([cdm(t, x, y) => Dc, q(t, x, y) => cwhole(CQ1), g(t, x, y) => cfree(CG, CQ1 .== 3)], chand(CQ1)[1:2]))
+            ins = [cdm(t, x, y) => Dc, q(t, x, y) => cwhole(CQ1), g(t, x, y) => cinfree(CG, CQ1 .== 3, Df),
+                   cf1(t, x, y) => cinfree(Float64.(CQ1 .== 1), CQ1 .== 3, Df),
+                   cf2(t, x, y) => cinfree(Float64.(CQ1 .== 2), CQ1 .== 3, Df)])
         for alg in (ExplicitEuler(; dt = 0.05), BackwardEuler(; dt = 0.05), CrankNicolson(; dt = 0.05))
             sc, sh = solve(pc, alg), solve(ph, alg)
             @test capprox(sc[cdo(t, x, y), length(sc.t)], sh[cdh(t, x, y), length(sh.t)]; rtol = alg isa ExplicitEuler ? 1e-13 : 1e-10)

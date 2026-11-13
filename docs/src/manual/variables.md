@@ -62,7 +62,8 @@ Options go in brackets after the default. The field options (`bounds`, `lattice_
     node is masked, and holds `v`, only when the condition holds at every site of its block.
     On a block that the condition covers in part, the node holds the value of the block's
     free part: the sites where the condition is false. The field's equation folds each fine
-    read over the free sites only. On a block with 8 medium sites and 8 sites of kind P,
+    read over the free sites only, and on an irregular domain over the free sites inside it:
+    an out-of-domain site is not a site where the equation holds, so it never enters a fold. On a block with 8 medium sites and 8 sites of kind P,
     `kind == P` is 1, not 0.5. The free volume `(1 - f) k^d` times a folded source is the
     fine sum of that source over the free sites, with `f` the masked fraction of the block, so
     no source of a free site is lost. The spatial operator is not a fine sum: it acts on the
