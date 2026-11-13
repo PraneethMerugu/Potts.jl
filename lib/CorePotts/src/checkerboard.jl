@@ -262,7 +262,13 @@ _phase_conflict!(st, cache::CheckerboardCache, lat, layout, off) =
     _phase_conflict!(st, cache.claim, cache.reach, lat, layout, off)
 _phase_conflict!(st, ::Nothing, reach, lat, layout, off) = false    # a device: no colouring guarantee
 function _phase_conflict!(st, claim::NamedTuple, reach::Int, lat::Lattice{N}, layout::BlockLayout{N}, off) where {N}
-    tok = UInt64(claim.token[] += UInt32(1))
+    tok = UInt64(claim.token[])
+    if tok == UInt64(typemax(UInt32))                # 4 billion phases: the stamps restart with the token
+        fill!(claim.stamp, UInt64(0))
+        tok = UInt64(0)
+    end
+    tok += 1
+    claim.token[] = UInt32(tok)
     hi = tok << 32
     stamp, σ = claim.stamp, st.σ
     box = CartesianIndices(ntuple(_ -> -reach:reach, Val(N)))
