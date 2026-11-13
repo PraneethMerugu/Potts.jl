@@ -225,22 +225,10 @@ end
 
 # `@sweep` validation beyond the frozen P6.0as acceptance (D-123, review round 1): `combine`
 # is judged by the printed form that is hashed, so wrappers are checked through; non-Real
-# offsets get the same `offset` error as non-finite ones.
-struct SweepHolder{F}
-    f::F
-end
-
-(h::SweepHolder)(a, b) = h.f(a, b)
-
-struct SweepFnSub <: Function end
-
-(::SweepFnSub)(a, b) = min(a, b)
-
-struct SweepMix
-    w::Float64
-end
-
-(m::SweepMix)(a, b) = m.w * a + (1 - m.w) * b
+# offsets get the same `offset` error as non-finite ones. `SweepHolder`, `SweepFnSub` and
+# `SweepMix` live in `Main.PottsSolverTestTypes` (shared/solver_types.jl): a setup module's name is
+# gensym'd, so a struct defined here prints `var"#"` and D-123 refuses it.
+include(joinpath(@__DIR__, "shared", "solver_types.jl"))
 
 
 # D-130: a value too deep (or cyclic) for the canonical printer, met outside the solvers, is
