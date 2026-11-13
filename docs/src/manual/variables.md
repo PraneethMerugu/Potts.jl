@@ -63,10 +63,11 @@ Options go in brackets after the default. The field options (`bounds`, `lattice_
     On a block that the condition covers in part, the node holds the value of the block's
     free part: the sites where the condition is false. The field's equation folds each fine
     read over the free sites only. On a block with 8 medium sites and 8 sites of kind P,
-    `kind == P` is 1, not 0.5. The free volume `(1 - f) k^d` times the rate is the fine sum
-    of the rate over the free sites, with `f` the masked fraction of the block, so no source
-    of a free site is lost. The masked sites hold `v`, and the mean of the block is
-    `f v + (1 - f) c`.
+    `kind == P` is 1, not 0.5. The free volume `(1 - f) k^d` times a folded source is the
+    fine sum of that source over the free sites, with `f` the masked fraction of the block, so
+    no source of a free site is lost. The spatial operator is not a fine sum: it acts on the
+    node values, so the flux through a face is the operator's, not the free children's. The
+    masked sites hold `v`, and the mean of the block is `f v + (1 - f) c`.
   - A spatial operator acts on the node values: a free part exchanges with the free parts of
     its neighbors, and a masked neighbor gives `v`. A CPM read of the field at a site of a
     blended block reads the value of the free part, at a masked site too. When the mask

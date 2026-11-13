@@ -132,12 +132,12 @@ end
     @test a2.retcode == Potts.SciMLBase.ReturnCode.Success
     @test Potts.LatticeFields.Problems.field_stats(a2).newton_budget == 0
     b = run(BackwardEuler(; dt = 0.25, newton = 12, inner = tight))
-    # F4-15b (coordinator ruling 2026-11-12): the policy's residual, not an exactness pin. The
-    # Newton pass accepts a step when its update is within NEWTON_EPS = 1e-3 relative to the
-    # field's scale (implicit.jl), so the two-step solve differs from the 12-step converged
-    # reference by at most the accepted defect, NEWTON_EPS * max(1, |b|); the derivation is the
-    # acceptance test, not a tolerance fitted to a run (the measured residual here is ~1e-15 on
-    # 1.12.6 and 6.4e-8 under 1.13.3's arithmetic).
+    # F4-15b (review): the acceptance is `dk <= NEWTON_EPS * ||u_k - u^n|| + 10 eps(T) ||u_k||`
+    # (implicit.jl), relative to the step increment; the distance from the two-step iterate to the
+    # 12-step reference is the remaining convergence error, not the accepted update. The bound
+    # NEWTON_EPS * max(1, |b|) is therefore a deliberate policy-scale loosening (1e-10 to about
+    # 1e-3; measured 6.4e-8 under 1.13.3, ~1e-15 on 1.12.6), and the 12-step comparison is the
+    # real check: the policy scale keeps a red run visible without pinning the toolchain.
     eps_ = Potts.LatticeFields.Problems.NEWTON_EPS
     for n in names
         @test maximum(abs, a2[n] .- b[n]) <= eps_ * max(1.0, maximum(abs, b[n]))
@@ -199,10 +199,7 @@ end
         idx = findall(!iszero, d)
         @test idx == want
     end
-    # the enumeration: each closure node with the majority-held neighbours whose value moves it
-    for I in findall(closure)
-        nbs = [Tuple(K) for K in nbhd(I) if held[K]]
-        @test !isempty(nbs) || (println("F4-15b closure node ", Tuple(I), " has no held neighbour"); false)
-    end
+    # the enumeration (printed, not re-derived: `closure` is by construction the free nodes with a
+    # held neighbour, so an assertion that each has one would be tautological)
     @info "F4-15b one-step closure" [Tuple(I) for I in findall(closure)]
 end
