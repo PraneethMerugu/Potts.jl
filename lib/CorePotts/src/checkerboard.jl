@@ -353,7 +353,7 @@ function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, proposal; r
     backend isa KernelAbstractions.CPU || n >= DEVICE_MIN_BLOCKS ||
         @warn "CheckerboardCPM on a device: $n work items per phase (blocks $(layout.nblocks)) leave the GPU mostly idle; a lattice this small runs as fast or faster on the CPU" maxlog = 1
     claims = _claim_columns(backend, cell)
-    return CheckerboardCache(layout, need, switches, zeros(Int, P), z(UInt32, 1), tk, cnt, sl, claims, block_kernel!(backend),
+    return CheckerboardCache(layout, switches, zeros(Int, P), z(UInt32, 1), tk, cnt, sl, need, claims, block_kernel!(backend),
         serial_kernel!(backend), recenter_kernel!(backend), _block_groupsize(backend, layout.nblocks), _block_inline(backend, n, threads),
         backend isa KernelAbstractions.CPU)
 end
