@@ -57,6 +57,10 @@ VS Code test explorer also runs single `@testitem`s.
 - `:qa`: Aqua, JET, ExplicitImports and the other quality checks (qa_tests.jl).
 - `:gpu`: the device files (gpu_tests.jl, transfer_counts_tests.jl, device_ir_tests.jl); `:rocm`: ROCm only.
 - `:device`: an item that names a device; it also runs in GROUP=GPU.
+- `:device_scan`: the D-157 no-`double` scan; it runs last in GROUP=GPU, in the process that
+  compiled the kernels (`PottsRTI.device_suite`).
+- `:gpu_only`: an item that cannot run in a fresh worker (the scan reads the process cache);
+  GROUP=GPU without `POTTS_DEVICE_ONLY=false` only.
 - `:timing`, `:subprocess`: run serially (see above).
 
 ## Write an item

@@ -91,7 +91,8 @@ items run last, in one worker.
 """
 function potts_suite(; nworkers = NWORKERS, qa = get(ENV, "POTTS_QA", "true") == "true", gpu = false)
     rocm = get(ENV, "POTTS_GPU", "") == "rocm"
-    keep(ti) = :potts in ti.tags && (gpu || !(:gpu in ti.tags)) && (rocm || !(:rocm in ti.tags)) && (qa || !(:qa in ti.tags))
+    keep(ti) = :potts in ti.tags && (gpu || !(:gpu in ti.tags)) && (rocm || !(:rocm in ti.tags)) &&
+        (qa || !(:qa in ti.tags)) && !(:gpu_only in ti.tags)   # the D-157 scan needs the device cache
     return _two_passes(keep, nworkers)
 end
 
