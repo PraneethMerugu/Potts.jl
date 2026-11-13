@@ -674,6 +674,9 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         b.kind == :masked || continue
         k = key(b.op, b.comp)
         isin[b.op] && _dverr("`$(b.eq)`: an input cannot carry a condition")
+        eqs[key(b.op, b.comp)][1] == :aux &&
+            _dverr("`$(b.eq)`: `$k` is an aux field (`$k ~ rhs`), whose values follow its expression: it takes no mask; " *
+                   "mask a rate field, or read the aux field in a rate field and mask that")
         lv = flev[b.op]                   # (a coarse field's mask lives on its grid: its fine reads folded)
         mf = field!(pb, "mask:$k"; storage = U8, role = :aux, epoch = PERSIGMA, levels = Int8[lv])
         push!(pb.masks, MaskDecl("mask:$k", mf, PERSIGMA))

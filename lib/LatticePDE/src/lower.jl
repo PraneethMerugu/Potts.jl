@@ -265,15 +265,19 @@ function _fold_children(u, e::Env{N}, kind) where {N}
     whole = _op(e, MUL, constant!(e.kb, 1 / n), node!(e.kb, RESTRICT, REAL, Int32[_real(e, v)], 0))
     (e.free === nothing || !_reads(unwrap(e.free), _fine_ops(e))) && return whole
     # the mean over the free children (F4-15b): Σ_free v / #free, the whole block's mean where no
-    # child is free. On a block with no masked child Σ_free v is the sum Σ v (the same children
-    # in the same order) and #free = n, a power of 2, so the result is the whole mean bitwise
+    # child is free. With no masked child the free mean is the whole mean; when the predicate's
+    # fold depth equals the term's (`mf == m`) it is the whole mean bitwise (`#free = n`, a power
+    # of two, and the same children in the same order); a predicate read at a finer depth
+    # (`mf > m`) is equal mathematically, not bitwise, so the all-free case returns `whole`.
     mf = max(m, e.level - minimum(_flevel(e, op) for op in _fine_ops(e) if _reads(unwrap(e.free), Any[op])))
     ef = _infold(e, mf)
     held = _bool(e, lower(e.free, ef))
     zero_, one_ = constant!(e.kb, 0.0), constant!(e.kb, 1.0)
     sfree = node!(e.kb, RESTRICT, REAL, Int32[select!(e.kb, held, zero_, _real(e, v))], 0)
     nfree = node!(e.kb, RESTRICT, REAL, Int32[select!(e.kb, held, zero_, one_)], 0)
-    return select!(e.kb, _cmp(e, EQ, nfree, zero_), whole, _op(e, DIV, sfree, nfree))
+    nfine = prod(d -> e.dims[d] == 1 ? 1.0 : 2.0^mf, 1:N)
+    allfree = _cmp(e, EQ, nfree, constant!(e.kb, nfine))
+    return select!(e.kb, allfree, whole, select!(e.kb, _cmp(e, EQ, nfree, zero_), whole, _op(e, DIV, sfree, nfree)))
 end
 # a spatial operator reads its field on the field's own grid. In an equation of a field on another
 # `Coarse` level `crossgrid_form` (F3-22) has already made it an aux field of the operand's grid;

@@ -443,6 +443,7 @@ end
         d1, d2 = similar(oc.u0), similar(oh.u0)
         oc.f(d1, oc.u0, oc.p, 0.0); oh.f(d2, oh.u0, oh.p, 0.0)
         @test capprox(d1, d2; rtol = 1e-14)
+
     end
 
     @testset "a fine field and a coarse field in one group: prolongation and restriction" begin
@@ -561,6 +562,13 @@ end
         @test size(sg[L(t, x, y), 1]) == (4, 4) && size(sg[u(t, x, y), 2]) == (16, 16)
         sdir = solve(cown(direct, (16, 16)), ExplicitEuler(; dt = 0.01, substeps = 1); saveat = [0.01])
         @test sdir[u(t, x, y), 2] == sg[u(t, x, y), 2]
+        # a mask on an aux field: refused (D-F4-15b Limits (4): an aux field follows its
+        # expression), with the route (mask a rate field)
+        am = PDESystem([D(cc(t, x, y)) ~ 0.01 * Δ(cc(t, x, y)), L(t, x, y) ~ Δ(cc(t, x, y))],
+            [cc(0, x, y) ~ x^2, L(t, x, y) ~ masked(q(t, x, y) == 3, 1.0)], cdom(),
+            [t, x, y], [cc(t, x, y), L(t, x, y), q(t, x, y)], Num[]; name = :am)
+        m = cmsg(() -> cown(am, (16, 16); ins = [q(t, x, y) => zeros(Int32, 16, 16)]))
+        @test occursin("aux field", m) && occursin("takes no mask", m) && occursin("rate field", m)
         # (in a substep a field reads the fields it depends on after their update: `L` from `cref`
         # after its step; the coarse Laplacian by hand, zero flux, spacing 1/4)
         lap(v) = (n = size(v, 1); [sum((1 <= i + a <= n && 1 <= j + b <= n ? v[i + a, j + b] - v[i, j] : 0.0)
