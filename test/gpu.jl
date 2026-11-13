@@ -663,11 +663,14 @@ end
 # F3-17: a `Coarse(4)` field of a model on ROCm (Float32): the field phase on the coarse arrays, the
 # CPM's site reads through the node of each block (`integral(c) / volume`), against the host.
 # Base 392dd404: `lattice_level` is not an option of `variable` (FcMix does not build).
+# private copy of fields_coarse.jl:94's operating point (fields_components.jl runs in Main before
+# gpu.jl under device_only.jl)
+gpu_fc_op() = [ownership => fc_sigma(), kind => [:A, :B]]
 if PottsDevices.device_name() == "rocm"
     @testset "F3-17: a Coarse(4) field of a model on ROCm equals the host (Float32)" begin
         backend = PottsDevices.device_backend()
         for fs in (ExplicitEuler(), BackwardEuler())
-            mk() = PottsProblem(FcMix(; name = :f), fc_op(), (0, 3); T = Float32, seed = 2, field_solver = fs)
+            mk() = PottsProblem(FcMix(; name = :f), gpu_fc_op(), (0, 3); T = Float32, seed = 2, field_solver = fs)
             dev = init(mk(), CheckerboardCPM(); backend)
             host = init(mk(), CheckerboardCPM())
             foreach(_ -> (step!(dev); step!(host)), 1:3)
@@ -685,7 +688,7 @@ end
 # Base cb20be97 (~/lpwork/f3b6r-nc-n1.log): `solves = 0` until a save.
 if PottsDevices.device_name() == "rocm"
     @testset "review r1 N1: integ.stats.fields counts the device solves after step! (ROCm)" begin
-        dev = init(PottsProblem(FcMix(; name = :f), fc_op(), (0, 3); T = Float32, seed = 2, field_solver = BackwardEuler()),
+        dev = init(PottsProblem(FcMix(; name = :f), gpu_fc_op(), (0, 3); T = Float32, seed = 2, field_solver = BackwardEuler()),
             CheckerboardCPM(); backend = PottsDevices.device_backend(), save_start = false)
         foreach(_ -> step!(dev), 1:2)
         s1 = dev.stats.fields.solves
@@ -735,31 +738,64 @@ end
 # F3-23 review r1 (M1, M2): the other sums over sites on ROCm. `surface` over a weighted lattice
 # neighborhood after divisions (the device lifecycle's recompute), `cluster_surface` of
 # weighted compartments that divide, and the compound writes of a `@convert` pass are sums in
-# integer units, so two device runs are bitwise equal (five for `@convert`), and equal the CPU
-# (the device lifecycle forced there) wherever σ is equal. Negative control:
-# `CorePotts._FLOAT_ATOMICS`, the float atomics before r1; logged (an order race is not
-# certain to show in a few runs), and its sums differ from the fixed-point ones.
+# integer units, so a device run and its recount from `σ` agree to a few Float32 ulps
+# (rtol 1e-5), and the CPU's two lifecycle planners give the same bits.
+#
+# D-271 (the lockless checkerboard) changed what is reproducible across runs and backends: the
+# per-copy `commit_surface!` adds `Float32` deltas atomically across concurrent GPU blocks, so
+# `cell.surface` moves in its low bits from run to run, and a lockless ROCm trajectory diverges
+# from the CPU's. So the cross-run and cross-backend equalities below are made where the lockless
+# `σ` itself agrees (the integer-unit sums then agree bitwise), and the trackers are checked
+# unconditionally against a recount from `σ` (as test/cell_sums.jl:79-82 does on the host). The
+# full unconditional bitwise checks, at 1, 4 and 8 threads, stay on the CPU in test/cell_sums.jl.
+# Negative control: `CorePotts._FLOAT_ATOMICS`, the float atomics before r1; logged (an order
+# race is not certain to show in a few runs), and its sums differ from the fixed-point ones.
 if PottsDevices.device_name() == "rocm"
     isdefined(Main, :CsWSurf) || include(joinpath(@__DIR__, "cell_sums_models.jl"))
-    @testset "F3-23 r1: weighted surfaces and @convert writes on ROCm are bitwise reproducible" begin
+    @testset "F3-23 r1: weighted surfaces and @convert writes on ROCm agree with a recount (D-271)" begin
         backend = PottsDevices.device_backend()
         a, (nw, nc) = cs_r1_digests(backend)
         b, _ = cs_r1_digests(backend)
         @test nw > 100 && nc > 10
-        @test a == b
-        conv = [cs_conv_digests(backend) for _ in 1:5]
-        @test allequal(conv)
-        # the compartments in the staged device lifecycle too (its cluster-surface fold launch):
-        # the same bits as the fused form
+        # the weighted surface against a recount from `σ`, on the run `a[2]` comes from (CsWSurf,
+        # 80 MCS, the staged device lifecycle): copies add the float weights and divisions their
+        # integer units, so the tracker and the recount differ in the last bits
         fs = CorePotts.FUSE_SITES[]
         CorePotts.FUSE_SITES[] = 0
-        staged = try
-            solve(PottsProblem(CsWComp(; name = :c), cs_wcomp_op(), (0, 40); T = Float32, seed = 7, capacity = 2000),
-                CheckerboardCPM(); backend, save_start = false).u[end]
+        pw_w = PottsProblem(CsWSurf(; name = :w), cs_wsurf_op(), (0, 80); T = Float32, seed = 7, capacity = 2000)
+        sw_w = try
+            solve(pw_w, CheckerboardCPM(); backend, save_start = false)
         finally
             CorePotts.FUSE_SITES[] = fs
         end
-        @test cs_digest(staged.σ) == a[3] && cs_bits(staged.cell.cluster_surface) == a[4]
+        w_end = sw_w.u[end]
+        @test sw_w.stats.lifecycle.divisions > 100
+        @test Array(w_end.cell.surface) ≈
+              CorePotts.recompute_surface(Array(w_end.σ), pw_w.lattice, CorePotts.relation(CS_W, pw_w.lattice),
+            length(w_end.cell.volume)) rtol = 1e-5
+        # two device runs: the integer-unit sums agree bitwise where the lockless `σ` agrees
+        b[3] == a[3] || @info "F3-23 r1: two ROCm runs' compartments left σ (D-271 lockless order)" a = a[3] b = b[3]
+        b[3] == a[3] && @test b[4] == a[4]                              # cluster_surface
+        b[5] == a[5] || @info "F3-23 r1: two ROCm runs' @convert model left σ (D-271 lockless order)" a = a[5] b = b[5]
+        b[5] == a[5] && @test b[6:7] == a[6:7]                          # the compound writes
+        conv = [cs_conv_digests(backend) for _ in 1:5]
+        same_conv_σ = all(c -> c[1] == conv[1][1], conv)
+        same_conv_σ || @info "F3-23 r1: the five ROCm @convert runs left σ (D-271 lockless order)" σ = first.(conv)
+        same_conv_σ && @test allequal(conv)
+        # the compartments in the staged device lifecycle too (its cluster-surface fold launch),
+        # against a recount from `σ`; the bits are the fused form's where the lockless `σ` agrees
+        fs = CorePotts.FUSE_SITES[]
+        CorePotts.FUSE_SITES[] = 0
+        pc_w = PottsProblem(CsWComp(; name = :c), cs_wcomp_op(), (0, 40); T = Float32, seed = 7, capacity = 2000)
+        staged = try
+            solve(pc_w, CheckerboardCPM(); backend, save_start = false).u[end]
+        finally
+            CorePotts.FUSE_SITES[] = fs
+        end
+        @test Array(staged.cell.cluster_surface) ≈
+              CorePotts.recompute_cluster_surface(Array(staged.σ), Array(staged.cell.cluster), pc_w.lattice, CS_W) rtol = 1e-5
+        cs_digest(staged.σ) == a[3] || @info "F3-23 r1: the staged compartments' σ differs from the fused run's (D-271)" staged = cs_digest(staged.σ) fused = a[3]
+        cs_digest(staged.σ) == a[3] && @test cs_bits(staged.cell.cluster_surface) == a[4]
         # the CPU: σ of each model ([1, 3, 5]) and, where σ is equal, its sums
         h, _ = cs_r1_digests(CorePotts.CPU())
         same = (h[1] == a[1], h[3] == a[3], h[5] == a[5])
@@ -767,9 +803,13 @@ if PottsDevices.device_name() == "rocm"
         same[1] && @test h[2] == a[2]
         same[2] && @test h[4] == a[4]
         same[3] && @test h[6:7] == a[6:7]
-        # review r2 (S1): the CPU's host lifecycle planner (the default on the CPU) too
+        # review r2 (S1): the CPU's host lifecycle planner adds the same integer units as the
+        # device lifecycle, so the two CPU paths agree in full (integer units, no float deltas)
         hh, _ = cs_r1_digests(CorePotts.CPU(); host = true)
-        @test hh[1] == a[1] && hh[2] == a[2] && hh[3] == a[3] && hh[4] == a[4]
+        @test hh == h
+        # and across backends the same conditional reading: σ first, then the sums
+        hh[1] == a[1] && @test hh[2] == a[2]
+        hh[3] == a[3] && @test hh[4] == a[4]
         CorePotts._FLOAT_ATOMICS[] = true
         try
             a0, _ = cs_r1_digests(backend; ctl = true)
