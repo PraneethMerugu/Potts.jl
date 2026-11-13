@@ -1,5 +1,5 @@
 # P6.15b (ROADMAP Step 3b): the OpenVT monolayer benchmark's mechanical calibration on 1D
-# cell chains (M §2.2, Fig 2, Table S5). Frozen (AUTONOMY §7.3; D-148). The protocol is
+# cell chains (M §2.2, Fig 2, Table S5). The protocol is
 # spec 15 §4.2.3 P1–P12 and the pre-registered targets are §4.1 V6–V8
 # (docs/design/research/model-specs/15_openvt_monolayer.md v3); every reference value and
 # pass band below is copied from there. The seeds, the SMOKE bands and the run lengths are

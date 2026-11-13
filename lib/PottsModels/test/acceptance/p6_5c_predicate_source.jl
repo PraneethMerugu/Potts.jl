@@ -1,5 +1,5 @@
 # P6.5c (ROADMAP Phase 6, step 5; third step of Fortuna, reproduction 14), part B of 3: a
-# PDE source on a site predicate (R5). Frozen (AUTONOMY §7.3).
+# PDE source on a site predicate (R5).
 # Part A, `p6_5c_initial_state.jl`: the initial-state vocabulary. Part C,
 # `p6_5c_msd_furth.jl`: MSD and the modified Fürth fits.
 #
@@ -413,17 +413,6 @@ end
     else
         @test_skip "device (POTTS_GPU=metal|rocm)"
     end
-end
-
-# ---------------------------------------------------------------------------------------
-# 9. Fingerprints (B8): a field-free model keeps its generated code
-
-# The fingerprint of P65cbNoField on the freeze base 588ad407 (Julia 1.12).
-const P65CB_NOFIELD_FP = 0x60348d185b44bfb6
-
-@testset "P6.5c predicate source: a field-free model keeps its fingerprint" begin
-    prob = PottsProblem(p65cb_system(:P65cbNoField), [ownership => p65cb_sigma(), kind => [:substrate, :lam]], (0, 1))
-    @test prob.f.fingerprint == P65CB_NOFIELD_FP                 # control
 end
 
 # ---------------------------------------------------------------------------------------

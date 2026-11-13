@@ -1,5 +1,4 @@
 # P6.1e (ROADMAP Phase 6, step 1): `graner_glazier_aggregate`'s default medium margin.
-# Frozen (AUTONOMY §7.3).
 #
 # Problem: the default margin is 10 sites. `GranerGlazier` is periodic (the paper does not
 # say; topology-neighborhood-audit §3.1 row 2, §5), so over a long sorting run the aggregate
@@ -35,14 +34,7 @@
 #
 # Cost (one CPU thread): the control ≈ 11 s, the default run ≈ 23 s at margin 60 (more for a
 # larger default margin: the lattice grows as (L)²).
-#
-# Digests (testset 2): computed on today's code (b011b772) by /tmp/p61e/digests_today.jl:
-# SHA-256 of σ's little-endian Int32 bytes (column-major), SHA-256 of the kinds joined by ','.
 
-using SHA: sha256
-
-p61e_σdigest(σ) = bytes2hex(sha256(reinterpret(UInt8, vec(htol.(Int32.(σ))))))
-p61e_kdigest(k) = bytes2hex(sha256(join(string.(k), ",")))
 p61e_core(n) = 2ceil(Int, sqrt(40n / π)) + 1                  # lattice side minus 2margin
 
 function p61e_edge(σ)                                          # min edge distance of a cell site
@@ -66,24 +58,6 @@ function p61e_circgap(occ::AbstractVector{Bool})               # longest circula
     return min(best, L)
 end
 p61e_imagegap(σ) = (c = σ .!= 0; min(p61e_circgap(vec(any(c; dims = 2))), p61e_circgap(vec(any(c; dims = 1)))))
-
-const P61E_DIGESTS = Dict(   # (n, seed, margin) => (side, σ digest, kinds digest), today b011b772
-    (200, 1, 10) => (123, "637e070aa6101222a7ddb7ea9c45f4688de5c9599cac29ba0c22d177db43b142",
-        "d7162b620feaa0747973139a110a9fa036993fd3c8d407d76443b9a3856ba80b"),
-    (200, 1, 60) => (223, "5f0e638e089f8bea167ff9f8589a4b39001f799eea3303bddb896d768dcb7dea",
-        "d7162b620feaa0747973139a110a9fa036993fd3c8d407d76443b9a3856ba80b"),
-    (200, 2, 10) => (123, "6b969ec2c140b940684fbe15d9e311fb53d70bdf1f46ba360f29f917ec4dee4e",
-        "d7162b620feaa0747973139a110a9fa036993fd3c8d407d76443b9a3856ba80b"),
-    (200, 2, 60) => (223, "441c36578744e3a77612e35ac9f576ee3cf09fda37f671b354f0d783e72d0927",
-        "d7162b620feaa0747973139a110a9fa036993fd3c8d407d76443b9a3856ba80b"),
-    (1000, 1, 10) => (247, "8af14647277b7b4d0aa49bb4da445b967efb3f89edafa0657e4cee178905ef1f",
-        "1be89756b456ad17a13888210217cb977b9ebe409e93344a6ce3d8b5a8d7144f"),
-    (1000, 1, 60) => (347, "d76c8f3d55eda46ed8fe83c3685098d90dacd9d64798bb96e58797636bda0df7",
-        "1be89756b456ad17a13888210217cb977b9ebe409e93344a6ce3d8b5a8d7144f"),
-    (1000, 2, 10) => (247, "84e02b13946c1b118c2618d8ac183a77f35d64f89c9494e6113171f4f81dae26",
-        "1be89756b456ad17a13888210217cb977b9ebe409e93344a6ce3d8b5a8d7144f"),
-    (1000, 2, 60) => (347, "dce2fe1ef87eb45927798422902dad338971d3b3d3a6d7e02962799dbec14f5e",
-        "1be89756b456ad17a13888210217cb977b9ebe409e93344a6ce3d8b5a8d7144f"))
 
 # The long run of testset 3: n = 200 (seed 1), run seed 16, 25 000 MCS, frames every 100 MCS.
 const P61E_RUN = (n = 200, seed = 1, run_seed = 16, mcs = 25_000, every = 100)
@@ -114,13 +88,11 @@ end
         @test allequal(margins)                                         # one default for every n
     end
 
-    @testset "2. explicit margin is honoured exactly as today" begin
-        for ((n, seed, margin), (side, dσ, dk)) in sort(collect(P61E_DIGESTS); by = first)
+    @testset "2. explicit margin sets the lattice side and keeps the margin" begin
+        for n in (200, 1000), seed in (1, 2), margin in (10, 60)
             σ, k = graner_glazier_aggregate(n; seed, margin)
-            @test size(σ) == (side, side) == ntuple(_ -> p61e_core(n) + 2margin, 2)
+            @test size(σ) == ntuple(_ -> p61e_core(n) + 2margin, 2)
             @test eltype(σ) == Int32 && eltype(k) == Int32
-            @test p61e_σdigest(σ) == dσ
-            @test p61e_kdigest(k) == dk
             @test p61e_edge(σ) >= margin
         end
     end

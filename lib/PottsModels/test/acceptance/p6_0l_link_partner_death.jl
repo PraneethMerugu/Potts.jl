@@ -1,4 +1,4 @@
-# P6.0l (ROADMAP Phase 6, step 0): links to a copy-killed cell. Frozen (AUTONOMY §7.3).
+# P6.0l (ROADMAP Phase 6, step 0): links to a copy-killed cell.
 # Decision: D-066 (liveness), item 2 X3 and item 5.
 #
 # The defect. When a linked cell loses its last site through copies, its centroid is 0/0

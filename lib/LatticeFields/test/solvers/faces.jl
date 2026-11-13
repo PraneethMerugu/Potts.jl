@@ -330,15 +330,13 @@ end
     end
     # the valid values the messages name build
     @test DevicePCG(; budget = 1, rtol = 1e-12).budget == 1 && Multigrid(; cycle = V(1, 1), cycles = 1, budget = 1).cycles == 1
-    @test repr(DevicePCG()) == "DevicePCG()" && repr(Multigrid()) == "Multigrid()" && repr(V(2, 3)) == "V(2, 3)"
-    @test repr(DevicePCG(; precond = Multigrid(; cycle = V(3, 3)), budget = 12)) ==
-          "DevicePCG(; precond = Multigrid(; cycle = (3, 3)), budget = 12)"
-    @test repr(Multigrid(; cycles = 3, rtol = 1e-8)) == "Multigrid(; cycles = 3, rtol = 1.0e-8)"
-    @test repr(Multigrid(; warn_tol = 0.5)) == "Multigrid(; warn_tol = 0.5)"
-    # the display round-trips, and `canonical` (the hashed text) is unchanged
-    for s in (DevicePCG(; precond = Multigrid(; cycle = V(3, 3)), budget = 12), Multigrid(; cycles = 3, rtol = 1e-8))
+    # the display round-trips
+    for s in (DevicePCG(), Multigrid(), V(2, 3), DevicePCG(; precond = Multigrid(; cycle = V(3, 3)), budget = 12),
+              Multigrid(; cycles = 3, rtol = 1e-8), Multigrid(; warn_tol = 0.5))
         @test eval(Meta.parse(repr(s))) == s
     end
+    # a default stays out of the display: an argument printed with no call is the empty call
+    @test !occursin("budget", repr(DevicePCG())) && !occursin("cycles", repr(Multigrid()))
 end
 
 # F3-06 review nits (batch 2): a cycle prints as the pair `(ν₁, ν₂)`, so the display runs where

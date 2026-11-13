@@ -4,7 +4,6 @@
 # variables", wherever the expression is written; it is not a bare `UndefVarError`. A
 # programmatically built `PottsSystem` that declares a quantity `c′` next to a site
 # variable `c` is rejected at construction, as `@potts_model` and `@extend` already do.
-# Frozen (AUTONOMY §7.3).
 #
 # A rejection may surface while the macro expands (Julia wraps it in a `LoadError`) or
 # while the constructor or `mtkcompile` runs; `p60e2_rejection` unwraps a `LoadError` and

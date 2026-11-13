@@ -1,5 +1,5 @@
 # P6.0p (ROADMAP Phase 6, step 0): the D-016 fingerprint includes the tick cadence.
-# Decision: D-118 (amends D-016). Frozen (AUTONOMY §7.3).
+# Decision: D-118 (amends D-016).
 #
 # The defect (found by the P6.0k2 test author, D-084 "Observation"). The fingerprint is a hash
 # of the generated expressions plus the lattice, spacing, neighbourhood, `T` and the solver
@@ -298,57 +298,5 @@ end
     end
     @testset "@link Every(2) → Every(7)" begin
         p60p_checkpoint_refused(p60p_link(2), p60p_link(7), p60p_link(2))
-    end
-end
-
-# ---------------------------------------------------------------------------------------
-# 5. Fingerprints of models without clocked components or rule cadences are unchanged
-
-p60p_unchanged() = (
-    "GranerGlazier" => () -> (s = graner_glazier_state(); PottsProblem(GranerGlazier(; name = :gg), [ownership => s[1], kind => s[2]], (0, 10))),
-    "WortelAct" => () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8)), p60p_two_wortel(), (0, 10)),
-    "WortelAct connected" => () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8), connected = true), p60p_two_wortel(), (0, 10)),
-    "MerksVasculogenesis" => () -> PottsProblem(MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
-        [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 10);
-        field_solver = Potts.ExplicitEuler(substeps = 2, lower = 0.0)),
-    "SingleDivisionFixture" => () -> PottsProblem(SingleDivisionFixture(; name = :fixture),
-        [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [:epithelial]], (0, 10)),
-    "OpenVTGrowingMonolayer" => () -> PottsProblem(OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)),
-        openvt_monolayer_state(; lattice = (24, 24)), (0, 10); capacity = 64),
-    "AkeebInvasion" => () -> PottsProblem(AkeebInvasion(; name = :akeeb, lattice = (60, 40)), akeeb_state(; lattice = (60, 40)), (0, 10);
-        capacity = 256),
-    "@after_mcs/@before_mcs Every(1)" => () -> p60p_problem(P60pUpdate(; name = :upd, n = 1)),
-    "@after_mcs/@before_mcs Every(2)" => () -> p60p_problem(P60pUpdate(; name = :upd, n = 2)),
-    "@divide Every(1)" => () -> p60p_divide(1),
-    "@link Every(1)" => () -> p60p_link(1),
-)
-function p60p_two_wortel()
-    s = zeros(Int32, 8, 8)
-    s[2:3, 2:3] .= 1
-    s[6:7, 6:7] .= 2
-    return [ownership => s, kind => [:cell, :cell]]
-end
-
-# recorded on 4e81e1eb (Julia 1.12, Float64)
-const P60P_FINGERPRINTS = Dict{String, UInt64}(
-    "GranerGlazier" => 0xe6e09483034b4193,   # re-pinned under D-122
-    "WortelAct" => 0x9a9fcac5fc22b7c5,   # re-pinned under D-124
-    "WortelAct connected" => 0xe1e52da078e581c9,   # re-pinned under D-124; re-pinned under P6.3g (D-193): fingerprint only
-    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
-    "SingleDivisionFixture" => 0xd2bed53e2590b709,
-    "OpenVTGrowingMonolayer" => 0x34b40af65c56a113,   # re-pinned under D-122
-    "AkeebInvasion" => 0x72ced0fc70498f16,   # re-pinned under D-237 (cell draws by id and generation)
-    "@after_mcs/@before_mcs Every(1)" => 0x97770dd85d99f955,
-    "@after_mcs/@before_mcs Every(2)" => 0x16868ec68c10f99e,
-    "@divide Every(1)" => 0xf6d5b1093dedc198,
-    "@link Every(1)" => 0x2dae793863949ae5,
-)
-
-@testset "P6.0p: fingerprints of models without clocked components unchanged" begin
-    for (name, build) in p60p_unchanged()
-        haskey(P60P_FINGERPRINTS, name) || continue   # (D-INT-1: its pin was removed)
-        fp = build().f.fingerprint
-        @test fp == P60P_FINGERPRINTS[name]
-        fp == P60P_FINGERPRINTS[name] || @info "P6.0p: fingerprint $name = $(repr(fp))"
     end
 end

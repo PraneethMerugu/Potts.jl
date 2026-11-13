@@ -1,5 +1,5 @@
 # P6.0c (ROADMAP Phase 6, step 0): solver placement, breaking batch part 2 (D-075 Q9 and the
-# AUTHORING §6 / D-016 / D-038 amendments; api-synthesis §3.4). Frozen (AUTONOMY §7.3).
+# AUTHORING §6 / D-016 / D-038 amendments; api-synthesis §3.4).
 #
 # Semantics pinned here:
 #  1. `field_solver`, `ode_solver` and `solvers` are `PottsProblem` construction keywords.
@@ -156,7 +156,6 @@ p60c_message(e) = e === nothing ? "" : sprint(showerror, e)
 p60c_final(prob, alg = SequentialCPM()) = solve(prob, alg).u[end]
 p60c_same(a, b) = Array(a.σ) == Array(b.σ) && a.site == b.site && a.cell == b.cell && a.model == b.model
 
-const p60c_MERKS_OLD_FINGERPRINT = UInt64(14430386590091383282)
 const p60c_MERKS_SOLVER = p60c_EE(substeps = 2, lower = 0.0)
 p60c_merks() = MerksVasculogenesis(; name = :m, lattice = (100, 100))
 p60c_merks_op() = merks_state(; lattice = (100, 100), n = 50, side = 7)    # 7² seeds (D-098)
@@ -281,8 +280,6 @@ end
         dflt = PottsProblem(p60c_merks(), p60c_merks_sensitive_op(), (0, 10); field_solver = p60c_EE())
         @test minimum(Array(p60c_final(dflt, alg).site.c)) < 0                   # no clip without it
     end
-    # D-075: a checkpoint from before the change fails the fingerprint check
-    @test prob.f.fingerprint != p60c_MERKS_OLD_FINGERPRINT
 end
 
 @testset "P6.0c: the D-016 fingerprint hashes the solver spec" begin

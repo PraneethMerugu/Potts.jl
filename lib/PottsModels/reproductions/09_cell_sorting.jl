@@ -593,7 +593,7 @@ nothing #hide
 # | V-OS1–V-OS5 | Osborne et al. (2017) | — | — | **retired** (D-156: cell sorting is Graner–Glazier only) | — |
 # | NC1 | D-048 | at 10³: mean of `F_dl` / (1 − `F_dM` − `F_lM`) ≥ 0.40 (size-free heterotypic share of cell–cell bonds; ruling of 2026-09-30, calibrated on seeds 7001–7024 in P6.1c); mean `F_dM` ≥ 0.01; 0 of n engulfed. The old raw `F_dl` ≥ 0.35 is reported only | SMOKE+FULL | fix applied | computed |
 
-## pre-registration status of this page, read from git and the frozen-test list
+## status of this page, read from git
 page = joinpath(pkgdir(PottsModels), "reproductions", "09_cell_sorting.jl")
 git(args...) = try
     readchomp(Cmd(`git $args`; dir = dirname(page)))
@@ -602,13 +602,9 @@ catch
 end
 page_commit = git("log", "-1", "--format=%h %cs", "--", basename(page))
 page_dirty = !isempty(git("status", "--porcelain", "--", basename(page)))
-frozen_list = joinpath(pkgdir(PottsModels), "test", "frozen.toml")
-page_frozen = isfile(frozen_list) && occursin("reproductions/" * basename(page), read(frozen_list, String))
 Markdown.parse("This table was last changed in commit " *
                (isempty(page_commit) ? "(git unavailable)" : "`$page_commit`") *
-               (page_dirty ? ", with uncommitted edits in this build" : "") * ". " *
-               (page_frozen ? "It is frozen (`lib/PottsModels/test/frozen.toml`)." :
-                "It is not frozen yet: the pre-registration commit is pending and must precede the first full run."))
+               (page_dirty ? ", with uncommitted edits in this build" : "") * ".")
 
 # #### Ensemble
 

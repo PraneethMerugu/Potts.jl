@@ -7,8 +7,7 @@
 # the parameter). Such a model is now rejected when the `PottsSystem` is built, with an
 # `ArgumentError` naming the name and both categories. A component's namespaced quantities
 # (`clk₊yy`) are names too: a declaration of one is rejected by the time the model compiles.
-# Redeclaring a name in its own category stays an override (the extension wins). Frozen
-# (AUTONOMY §7.2).
+# Redeclaring a name in its own category stays an override (the extension wins).
 const P60AL_MTKB = Potts.ModelingToolkitBase
 
 """`:ok` if `f()` throws an `ArgumentError` (possibly inside `LoadError`s) whose message

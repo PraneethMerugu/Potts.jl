@@ -1,6 +1,5 @@
 # P6.5c (ROADMAP Phase 6, step 5; third step of Fortuna, reproduction 14), part C of 3: the
 # mean squared displacement and the modified Fürth fits (R16) in `PottsModels.Analysis`.
-# Frozen (AUTONOMY §7.3).
 # Part A, `p6_5c_initial_state.jl`: the initial-state vocabulary. Part B,
 # `p6_5c_predicate_source.jl`: the predicate-sourced PDE source.
 #

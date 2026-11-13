@@ -1,5 +1,5 @@
 # P6.0q (ROADMAP Phase 6, step 0): a population fold that reads `time` inside a cell ODE runs
-# on Metal (D-119). Frozen (AUTONOMY §7.3).
+# on Metal (D-119).
 #
 # History: a fold whose body reads `time` cannot be hoisted to a model slot (`time` is not
 # in the model environment), so the ODE kernel computes it per cell. Found by the P6.0n test

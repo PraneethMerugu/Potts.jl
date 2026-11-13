@@ -49,8 +49,8 @@ end
 # solved by LatticePDE with `Potts.field_inputs(integ, pdesys)`. The kind bindings (`pq =>
 # ismember(kind, (P, Q))`, `kQ => kind == Q`, ...) and the PDESystem's Bool inputs fold by one rule
 # on the Coarse(4) grid, the block mean, so the two agree on the spheroid's rim, where blocks are
-# covered in part. This replaces the F2 guard's digests of this model (test/fields_identity.jl,
-# `GD_F415`). Base 5e972579 (~/lpwork/f4F15/nc.log): the bindings are read at the block's owner.
+# covered in part. This replaces the F2 guard's digests of this model (D-274).
+# Base 5e972579 (~/lpwork/f4F15/nc.log): the bindings are read at the block's owner.
 @testset "F4-15: the Jiang-like model equals its PDESystem with field_inputs (blocks covered in part)" begin
     σ, kinds = jiang_state(JG_DIMS)
     names = (:o, :g, :l, :gf, :inh)

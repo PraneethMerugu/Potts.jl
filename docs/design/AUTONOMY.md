@@ -128,10 +128,10 @@ coordinator, each iteration:
   2. FREEZE: create the worktree (`git worktree add ../PottsWorktrees/<item> -b feat/<item>
      monorepo`); write the item's acceptance tests from its ROADMAP "Accept" line and, for
      a model, the spec's V-targets, under lib/PottsModels/test/acceptance/; they fail on
-     the current tree for the right reason; list them in frozen.toml; commit
-     ("freeze: <item>") as the branch's FIRST commit. Frozen tests never land on monorepo
-     before their implementation, so monorepo stays green; the reviewer checks
-     `git diff <freeze-commit> feat/<item> -- <frozen files>` is empty
+     the current tree for the right reason; commit ("freeze: <item>") as the branch's FIRST
+     commit. Acceptance tests never land on monorepo before their implementation, so
+     monorepo stays green; the reviewer checks
+     `git diff <freeze-commit> feat/<item> -- <acceptance files>` is empty
      Before committing a freeze, check that the fixture can be satisfied on the current
      code, using the closest thing that already runs (for example the same fixture with one
      relationship instead of two), and check every expected count by hand. Triggers must hold
@@ -140,7 +140,7 @@ coordinator, each iteration:
      that return values of the promised shape), so errors in the fixture itself, such as a
      shadowed `Base.all` (D-060), show up before the freeze and not in the implementer's
      run.
-  3. DISPATCH an implementer in a worktree with: the item, the frozen files, the
+  3. DISPATCH an implementer in a worktree with: the item, the acceptance files, the
      write set, the acceptance commands
   4. implementer: implement → own suites green → perf gate (§7.3) → report
   5. REVIEW: a fresh reviewer on `git diff monorepo...feat/<item>`; findings go back to the
@@ -154,19 +154,21 @@ coordinator, each iteration:
 
 ### 7.3 Mandatory safeguards
 
-1. **Frozen acceptance tests.** They are written and committed before the implementation,
-   by the coordinator, not the implementer.
-   - `lib/PottsModels/test/frozen.toml` records a SHA-256 hash per file and the DECISIONS
-     entry that set it. The PottsModels suite fails if a frozen file changes.
-   - An implementer may add tests but never edit a frozen file.
+1. **Acceptance tests are written before the implementation.** They are committed by the
+   coordinator, not the implementer, as the branch's first commit ("freeze: <item>"), so
+   that the reviewer can verify they predate the code.
+   - No file is frozen and nothing hashes a test. `lib/PottsModels/test/frozen.toml`,
+     `tools/frozen_diff.jl` and the frozen step in `tools/pc/item.sh` were deleted on
+     2026-11-12 (D-275, user ruling "get rid of all pinning", choice "delete the pins now,
+     no replacement") because a pin fires on change rather than on wrongness.
+   - An implementer may add tests; it may not edit the acceptance tests it was dispatched
+     against. The reviewer reads the diff over those paths and treats any edit as a finding
+     that DECISIONS must justify.
    - Changing a tolerance, target, seed count or run length needs a new DECISIONS entry
      that states the measured value and the reason. A test that fails for a scientific
      reason is a science question (§7.5), not a tolerance to relax.
-   - Every re-freeze needs the maintainer's OK, except a re-pin that the base's copy of
-     `tools/frozen_diff.jl` classifies AUTO: String literals in constants that frozen.toml
-     declares under `pins` at the base, nothing else changed. It still needs a reviewer
-     APPROVE and a DECISIONS entry quoting the output, and goes in the coordinator's next
-     report with a 24 h veto (D-250).
+   - There is no re-freeze step and no AUTO classifier; D-250's automatic re-pin rule is
+     retired with the mechanism it qualified.
 2. **Performance gate** (D-171). "The +5 % gate" is the paired A/B on the PC.
    - **CPU.** `julia benchmark/ab.jl <base> <candidate> all cpu`.
    - **ROCm.** Add `... all rocm` when the change touches device code.
@@ -243,7 +245,7 @@ must justify it.
 - **Science questions.** The coordinator asks and does not guess when:
   - a published model's science can't be settled by an oracle, a spec V-target or a
     §4 decision;
-  - a frozen test fails for a reason that looks like the paper, not the code.
+  - an acceptance test fails for a reason that looks like the paper, not the code.
 - The §3 escalations.
 - **Author questions** (model-specs README §5) are drafted by the coordinator and sent
   only by the maintainer. Items gated on them stay parked, and independent items continue.

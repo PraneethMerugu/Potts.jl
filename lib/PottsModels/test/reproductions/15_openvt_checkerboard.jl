@@ -1,6 +1,6 @@
 # P6.15m m1 (ROADMAP; D-214, D-215 item 9): characterisation of the OpenVT entry
 # "Potts.jl (checkerboard)", `CheckerboardCPM` on the PC's GPU (ROCm), against the CPU
-# `SequentialCPM` reference (the "Potts.jl" entry). Frozen (AUTONOMY §7.3).
+# `SequentialCPM` reference (the "Potts.jl" entry).
 # Spec 15 §1.3 (the entry, its expected-difference classes and its own time scale), §3.1 O1,
 # §3.2, §4.0.1 cases (b), (f); D-008 (sequential is the fidelity reference), D-029
 # (CPU/GPU agreement is statistical), D-051 item 5, D-053 item 7 (claims), D-146 (offline

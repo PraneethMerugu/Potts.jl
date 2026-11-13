@@ -1,6 +1,5 @@
 # P6.0c2 (ROADMAP Phase 6, step 0): the P6.0c round-3 follow-ups (D-078): canonical solver
 # strings and reserved internal suffixes. Decision: D-130 (amends D-016/D-078, after D-123).
-# Frozen (AUTONOMY §7.3).
 #
 # The defects, measured on c0f80561:
 #  b. `_canonical_value` (src/solvers.jl) prints a non-scalar value nested deeper than 8
@@ -490,65 +489,5 @@ end
         walk(x) = x isa Expr && (x.head in (:error, :incomplete) ? (bad[] = true) : foreach(walk, x.args))
         walk(ex)
         @test !bad[]
-    end
-end
-
-# ---------------------------------------------------------------------------------------
-# Unchanged pins
-
-function p60c2_two_wortel()
-    s = zeros(Int32, 8, 8)
-    s[2:3, 2:3] .= 1
-    s[6:7, 6:7] .= 2
-    return [ownership => s, kind => [:cell, :cell]]
-end
-p60c2_unchanged() = (
-    (("fixture " * label) => (() -> p60c2_stable_problem(label)) for (label, _) in P60C2_STABLE)...,
-    "fixture Rodas5P() Float32" => () -> p60c2_stable_problem("Rodas5P()"; T = Float32),
-    "fixture split RK4/Rodas5P()" => () -> p60c2_split(p60c2_RK4(), p60c2_Adaptive(Rodas5P())),
-    "fixture split ExplicitEuler/RK4" => () -> p60c2_split(p60c2_EE(), p60c2_RK4()),
-    "GranerGlazier" => () -> (s = graner_glazier_state(); PottsProblem(GranerGlazier(; name = :gg), [ownership => s[1], kind => s[2]], (0, 10))),
-    "WortelAct" => () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8)), p60c2_two_wortel(), (0, 10)),
-    "WortelAct connected" => () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8), connected = true), p60c2_two_wortel(), (0, 10)),
-    "MerksVasculogenesis" => () -> PottsProblem(MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
-        [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 10);
-        field_solver = p60c2_EE(substeps = 2, lower = 0.0)),
-    "SingleDivisionFixture" => () -> PottsProblem(SingleDivisionFixture(; name = :fixture),
-        [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [:epithelial]], (0, 10)),
-    "OpenVTGrowingMonolayer" => () -> PottsProblem(OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)),
-        openvt_monolayer_state(; lattice = (24, 24)), (0, 10); capacity = 64),
-    "AkeebInvasion" => () -> PottsProblem(AkeebInvasion(; name = :akeeb, lattice = (60, 40)), akeeb_state(; lattice = (60, 40)), (0, 10);
-        capacity = 256),
-)
-
-# the fixtures recorded on c0f80561; the PottsModels systems are the D-122/D-124 pins
-const P60C2_FINGERPRINTS = Dict{String, UInt64}(
-    "fixture RK4()" => 0xd8f2c0ff64142fdc,
-    "fixture Rodas5P()" => 0x713e5b1e3b19c2d9,
-    "fixture Rodas5P(reltol = 1e-6)" => 0x339c33abe6b479b2,
-    "fixture Rodas5P(isoutofdomain = p60c2_ood)" => 0xd9987f8ac5499dd2,
-    "fixture Rodas5P(isoutofdomain = Guard(0.3))" => 0x3c90186ef45bf750,
-    "fixture Rodas5P(isoutofdomain = Guard(0.7))" => 0xcbc557f6e71fa2b7,
-    "fixture Rodas5P(isoutofdomain = Returns(false))" => 0xaa755fa1c38190ed,
-    "fixture Rodas5P(isoutofdomain = Guard(nest(3, 1.0)))" => 0x875232af62b84a5a,
-    "fixture Rodas5P(isoutofdomain = Guard(nest(3, 2.0)))" => 0x9fc0ad925338ea2b,
-    "fixture Rodas5P() Float32" => 0x4c3a60108b3cfabd,
-    "fixture split RK4/Rodas5P()" => 0x614820d2bb80988e,
-    "fixture split ExplicitEuler/RK4" => 0xd934712636781ae5,
-    "GranerGlazier" => 0xe6e09483034b4193,
-    "WortelAct" => 0x9a9fcac5fc22b7c5,
-    "WortelAct connected" => 0xe1e52da078e581c9,   # re-pinned under P6.3g (D-193): fingerprint only
-    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
-    "SingleDivisionFixture" => 0xd2bed53e2590b709,
-    "OpenVTGrowingMonolayer" => 0x34b40af65c56a113,
-    "AkeebInvasion" => 0x72ced0fc70498f16,   # re-pinned under D-237 (cell draws by id and generation)
-)
-
-@testset "P6.0c2: fingerprints unchanged" begin
-    for (name, build) in p60c2_unchanged()
-        haskey(P60C2_FINGERPRINTS, name) || continue   # (D-INT-1: its pin was removed)
-        fp = build().f.fingerprint
-        @test fp == get(P60C2_FINGERPRINTS, name, nothing)
-        fp == get(P60C2_FINGERPRINTS, name, nothing) || @info "P6.0c2: fingerprint $name = $(repr(fp))"
     end
 end

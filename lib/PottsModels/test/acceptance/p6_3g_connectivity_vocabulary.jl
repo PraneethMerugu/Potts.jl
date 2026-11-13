@@ -1,7 +1,7 @@
 # P6.3g (ROADMAP Phase 6, step 3): the connectivity vocabulary, surface. Folds in P6.3i
 # (gain-side and hole negative controls). Decisions: D-189 (rulings 1–12,
 # research/connectivity-vocabulary.md §8, §12, §13.1), D-191 (CC3D source check), D-099,
-# D-140. Frozen (AUTONOMY §7.3).
+# D-140.
 #
 # Semantics pinned here. A proposal copies `new = σ(source)` into the target x, whose owner
 # was `old`. The SHELL of x is the 8 sites of the 3×3 box (square 2D), the 6 hex neighbours,

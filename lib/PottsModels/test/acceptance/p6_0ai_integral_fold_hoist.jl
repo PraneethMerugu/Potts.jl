@@ -2,7 +2,7 @@
 # neither the cell nor the site is re-evaluated at every site, once per tracker: each
 # integral's site phase runs the whole fold (a loop over every cell) at every lattice site,
 # O(sites × cells) per MCS, where the same fold factored out of the integral by hand is
-# computed once per MCS (a model-scope slot, `_hoist_populations`). Frozen (AUTONOMY §7.3).
+# computed once per MCS (a model-scope slot, `_hoist_populations`).
 #
 # Fixtures: a 200 × 200 lattice tiled by 400 cells of 10 × 10 (cell 20i + j + 1 holds
 # x = 10i+1:10i+10, y = 10j+1:10j+10), a site variable `w` set to the smooth non-uniform

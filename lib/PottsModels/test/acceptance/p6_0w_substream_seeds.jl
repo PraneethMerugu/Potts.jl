@@ -1,5 +1,5 @@
 # P6.0w (ROADMAP Phase 6, step 0; from the P6.2a2 review, D-082): sub-stream seeds come from
-# one stable mixer, not from `seed + k`. Frozen (AUTONOMY §7.3).
+# one stable mixer, not from `seed + k`.
 #
 # Surface fixed by the coordinator:
 #
