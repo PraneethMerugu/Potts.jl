@@ -315,6 +315,36 @@ end
     end
 end
 
+@testset "F4-15b: a masked coarse field on an irregular domain on $pgpu" begin
+    # (review should-fix 4: the residual's free ∩ in-domain fold and the implicit rows, with a
+    # fine-reading operator coefficient and an irregular domain, on the device)
+    dvq = first(@variables dvq(..)::Int32 [input = true])
+    dvk = first(@variables dvk(..) [input = true, bounds = (0.5, 4.0)])
+    dvm = first(@variables dvm(..)::Bool [input = true])
+    dvc = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables dvc(..))), LatticePDE.LatticeLevel, Coarse(CK)))
+    rng = Xoshiro(4)
+    dvQ = zeros(Int32, CDIMS)
+    dvn = [16, 0, 3, 6, 8, 10, 12, 15, 1, 2, 5, 9, 14, 4, 7, 11]
+    for (b, J) in enumerate(CartesianIndices(CDIMS .÷ CK))
+        own = randperm(rng, 16)
+        for (n, s) in enumerate(((J[1] - 1) * CK + i, (J[2] - 1) * CK + j) for j in 1:CK for i in 1:CK)
+            dvQ[s...] = own[n] <= dvn[b] ? 3 : rand(rng, 0:2)
+        end
+    end
+    dvK = Float32[0.5f0 + 3.5f0 * rand(rng) for _ in 1:CDIMS[1], _ in 1:CDIMS[2]]
+    dvD = [rand(rng) < 0.6 for _ in 1:CDIMS[1], _ in 1:CDIMS[2]]
+    dvsys = PDESystem([D(dvc(t, x, y)) ~ 0.05 * DivKGrad(:harmonic)(dvk(t, x, y), dvc(t, x, y)) - dvc(t, x, y) * 0.3],
+        [dvc(0, x, y) ~ x * y, dvc(t, x, y) ~ masked(dvq(t, x, y) == 3, 1.0)], cdom(), [t, x, y],
+        [dvc(t, x, y), dvq(t, x, y), dvk(t, x, y), dvm(t, x, y)], Num[]; name = :dv4)
+    mk(be) = cown(dvsys, CDIMS; T = Float32, backend = be, domain = dvm,
+        ins = [dvq(t, x, y) => dvQ, dvk(t, x, y) => dvK, dvm(t, x, y) => dvD])
+    for alg in (ExplicitEuler(; dt = 0.05), BackwardEuler(; dt = 0.05, newton = 2))
+        sd, sh = solve(mk(PDEV), alg), solve(mk(KernelAbstractions.CPU()), alg)
+        a, b = Array(sd[dvc(t, x, y), end]), sh[dvc(t, x, y), end]
+        @test size(a) == (4, 4) && maximum(abs, a .- b) / maximum(abs, b) <= 1e-6
+    end
+end
+
 @testset "F3-12d: the coupled steady solve on $pgpu equals the host bitwise" begin
     # Krylov.jl's FGMRES on `CoupledVector`s: fixed-order dot products on both backends, the
     # host's least-squares arithmetic shared, so device = host and a device rerun are bitwise.

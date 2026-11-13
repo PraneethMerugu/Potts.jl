@@ -132,15 +132,15 @@ end
     @test a2.retcode == Potts.SciMLBase.ReturnCode.Success
     @test Potts.LatticeFields.Problems.field_stats(a2).newton_budget == 0
     b = run(BackwardEuler(; dt = 0.25, newton = 12, inner = tight))
-    # F4-15b (review): the acceptance is `dk <= NEWTON_EPS * ||u_k - u^n|| + 10 eps(T) ||u_k||`
-    # (implicit.jl), relative to the step increment; the distance from the two-step iterate to the
-    # 12-step reference is the remaining convergence error, not the accepted update. The bound
-    # NEWTON_EPS * max(1, |b|) is therefore a deliberate policy-scale loosening (1e-10 to about
-    # 1e-3; measured 6.4e-8 under 1.13.3, ~1e-15 on 1.12.6), and the 12-step comparison is the
-    # real check: the policy scale keeps a red run visible without pinning the toolchain.
-    eps_ = Potts.LatticeFields.Problems.NEWTON_EPS
+    # F4-15b (review; user ruling 2026-11-13): the acceptance is
+    # `dk <= NEWTON_EPS * ||u_k - u^n|| + 10 eps(T) ||u_k||` (implicit.jl), relative to the step
+    # increment; the distance from the two-step iterate to the 12-step reference is the remaining
+    # convergence error, not the accepted update. The bound 1e-5 * max(1, |b|) is the user's policy
+    # scale for that error: the measured values are 6.4e-8 under 1.13.3 and ~1e-15 on 1.12.6, so
+    # the 12-step comparison stays the real check and the scale keeps a red run visible without
+    # pinning the toolchain.
     for n in names
-        @test maximum(abs, a2[n] .- b[n]) <= eps_ * max(1.0, maximum(abs, b[n]))
+        @test maximum(abs, a2[n] .- b[n]) <= 1e-5 * max(1.0, maximum(abs, b[n]))
     end
 end
 

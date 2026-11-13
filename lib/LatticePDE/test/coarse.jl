@@ -481,7 +481,7 @@ end
         end
         # block (2, 1): 9 in-domain free children carry kd = 2; 7 out-of-domain free children
         # carry kd = 100. The support is the 9 in-domain free children, 2; the pre-fix fold took
-        # all 16 free children, 45.5.
+        # all 16 free children, 44.875.
         for (n, s) in enumerate(sites((2, 1)))
             Qd[s...] = 1
             Kd[s...] = n <= 9 ? 2.0 : 100.0
@@ -495,6 +495,103 @@ end
         d = Array(s[cdf(t, x, y), length(s.t)]) ./ 1e-6
         @test isapprox(d[1, 1], 5.0; rtol = 1e-14) || (println("F4-15b domain case 1: ", d[1, 1], " (want 5: the in-domain children, not the free out-of-domain ones)"); false)
         @test isapprox(d[2, 1], 2.0; rtol = 1e-14) || (println("F4-15b domain case 2: ", d[2, 1], " (want 2: free ∩ in-domain)"); false)
+    end
+
+    @testset "F4-15b review: the support is free ∩ in-domain, not one or the other" begin
+        # (review should-fix 1: a block whose free set and in-domain set are both proper subsets,
+        # with masked-in, free-in, free-out and masked-out children. The fold reads the free-in
+        # children only; the committed hand cases put the free set outside the domain or the
+        # in-domain set wholly masked.)
+        qd = first(@variables pr15qd(..)::Int32 [input = true])
+        kd = first(@variables pr15kd(..) [input = true, bounds = (0, 100)])
+        dmd = first(@variables pr15dmd(..)::Bool [input = true])
+        cdf = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables pr15cdf(..))), LatticePDE.LatticeLevel, Coarse(CK)))
+        psites(J) = [((J[1] - 1) * CK + i, (J[2] - 1) * CK + j) for j in 1:CK for i in 1:CK]
+        Qd = fill(Int32(1), CDIMS); Kd = fill(1.0, CDIMS); Dd = trues(CDIMS)
+        # (block, in-domain children, free children, kd of free-in / masked-in / free-out / masked-out)
+        plan = (((1, 1), 1:13, [1, 2, 3, 14, 15], (2.0, 50.0, 100.0, 7.0)),
+                ((2, 1), 1:12, [1, 2, 5, 9, 13, 14], (2.0, 50.0, 100.0, 7.0)),
+                ((1, 2), 1:13, [2, 4, 6, 14, 15, 16], (3.0, 50.0, 100.0, 7.0)),
+                ((2, 2), 1:16, 1:16, (4.0, 50.0, 100.0, 7.0)))
+        want = Dict{Tuple{Int, Int}, Float64}()
+        for (J, ins, frs, (kfi, kmi, kfo, kmo)) in plan
+            for (n, s) in enumerate(psites(J))
+                inb, free = n in ins, n in frs
+                Qd[s...] = free ? 1 : 0
+                Kd[s...] = free ? (inb ? kfi : kfo) : (inb ? kmi : kmo)
+                Dd[s...] = inb
+            end
+            want[Tuple(J)] = kfi
+        end
+        dsys(c) = PDESystem([D(c(t, x, y)) ~ kd(t, x, y)],
+            [c(0, x, y) ~ 0.0, c(t, x, y) ~ masked(qd(t, x, y) == 0, 1.0)], cdom(1e-6), [t, x, y],
+            [c(t, x, y), dmd(t, x, y), qd(t, x, y), kd(t, x, y)], Num[]; name = :pr15)
+        p = cown(dsys(cdf), CDIMS; domain = dmd, ins = [dmd(t, x, y) => Dd, qd(t, x, y) => Qd, kd(t, x, y) => Kd])
+        s = solve(p, ExplicitEuler(; dt = 1e-6, substeps = 1))
+        d = Array(s[cdf(t, x, y), length(s.t)]) ./ 1e-6
+        for (J, v) in want
+            @test isapprox(d[J...], v; rtol = 1e-14) ||
+                  (println("F4-15b P1 block ", J, ": ", d[J...], " (want ", v, " = free ∩ in-domain; the in-domain mean ",
+                       cinfree(Kd, Qd .== 0, Dd)[J...], ", the free mean ", cfree(Kd, Qd .== 0)[J...],
+                       ", the whole mean ", cmean(Kd)[J...], ")"); false)
+        end
+        # on the straddling blocks the intersection is neither the free mean nor the in-domain mean
+        for J in ((1, 1), (2, 1), (1, 2))
+            @test !(cinfree(Kd, Qd .== 0, Dd)[J...] ≈ cfree(Kd, Qd .== 0)[J...]) &&
+                  !(cinfree(Kd, Qd .== 0, Dd)[J...] ≈ cmean(Kd)[J...])
+        end
+        # every other block is wholly in the domain and free: the whole mean, 1
+        rest = [J for J in CartesianIndices((4, 4)) if !(Tuple(J) in first.(plan))]
+        @test length(rest) == 12 && all(d[J] == 1.0 for J in rest)
+    end
+
+    @testset "F4-15b review: the operator coefficient and the jac rows fold over free ∩ in-domain" begin
+        # (review should-fix 2: a partial mask, an irregular domain and a spatial operator whose
+        # coefficient reads a fine input. The coefficient folds at each face over the block's free
+        # in-domain children, and the implicit operator's rows fold as the residual does.)
+        q2 = first(@variables pr15q2(..)::Int32 [input = true])
+        ki = first(@variables pr15ki(..) [input = true, bounds = (0.5, 4)])
+        pki = first(@variables pr15pki(..) [input = true, bounds = (0.5, 4)])
+        pk1 = first(@variables pr15pk1(..) [input = true, bounds = (0, 1)])
+        dm2 = first(@variables pr15dm2(..)::Bool [input = true])
+        cq = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables pr15cq(..))), LatticePDE.LatticeLevel, Coarse(CK)))
+        ch = first(@variables pr15ch(..))
+        psites(J) = [((J[1] - 1) * CK + i, (J[2] - 1) * CK + j) for j in 1:CK for i in 1:CK]
+        rng = Xoshiro(13)
+        Q = zeros(Int32, CDIMS)
+        n3 = [16, 0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 12, 14, 15, 16, 0][randperm(rng, 16)]
+        for (b, J) in enumerate(CartesianIndices(CDIMS .÷ CK))
+            own = randperm(rng, 16)
+            for (n, s) in enumerate(psites(J))
+                Q[s...] = own[n] <= n3[b] ? 3 : rand(rng, 0:2)
+            end
+        end
+        Ki = [0.5 + 3.5 * rand(rng) for _ in 1:CDIMS[1], _ in 1:CDIMS[2]]
+        Df = [rand(rng) < 0.6 for _ in 1:CDIMS[1], _ in 1:CDIMS[2]]
+        Dc = [count(Df[((I[1] - 1) * CK + 1):(I[1] * CK), ((I[2] - 1) * CK + 1):(I[2] * CK)]) > CK^2 ÷ 2
+              for I in CartesianIndices(CDIMS .÷ CK)]
+        osys(c, K, kind1, dvs) = PDESystem([D(c(t, x, y)) ~ 0.05 * DivKGrad(:harmonic)(K, c(t, x, y)) - c(t, x, y) * 0.3 * kind1],
+            [c(0, x, y) ~ x * y, c(t, x, y) ~ masked(q2(t, x, y) == 3, 1.0)], cdom(), [t, x, y], [c(t, x, y); dvs], Num[]; name = :pr15o)
+        pc = cown(osys(cq, ki(t, x, y), q2(t, x, y) == 1, [q2(t, x, y), ki(t, x, y), dm2(t, x, y)]), CDIMS; domain = dm2,
+            ins = [q2(t, x, y) => Q, ki(t, x, y) => Ki, dm2(t, x, y) => Df])
+        ph = cown(osys(ch, pki(t, x, y), pk1(t, x, y), [q2(t, x, y), pki(t, x, y), pk1(t, x, y), dm2(t, x, y)]), CDIMS .÷ CK; domain = dm2,
+            ins = [q2(t, x, y) => cwhole(Q), pki(t, x, y) => cinfree(Ki, Q .== 3, Df),
+                   pk1(t, x, y) => cinfree(Float64.(Q .== 1), Q .== 3, Df), dm2(t, x, y) => Dc])
+        @test !(cinfree(Ki, Q .== 3, Df) ≈ cmean(Ki))                 # (the fold is not the whole mean)
+        @test !(cinfree(Ki, Q .== 3, Df) ≈ cfree(Ki, Q .== 3))        # (nor the domain-free mean)
+        # an in-domain node with free children outside it: the support is a strict subset of its
+        # free set there, the case the pre-fix fold misses
+        strad = [I for I in CartesianIndices(CDIMS .÷ CK) if Dc[I] &&
+                 any((!Df[(I[1] - 1) * CK + i, (I[2] - 1) * CK + j]) &&
+                     Q[(I[1] - 1) * CK + i, (I[2] - 1) * CK + j] != 3 for i in 1:CK, j in 1:CK)]
+        @test !isempty(strad)
+        for alg in (ExplicitEuler(; dt = 0.05), BackwardEuler(; dt = 0.05))
+            sc, sh = solve(pc, alg), solve(ph, alg)
+            @test sc.retcode == SciMLBase.ReturnCode.Success
+            a, b = Array(sc[cq(t, x, y), length(sc.t)]), sh[ch(t, x, y), length(sh.t)]
+            rt = alg isa ExplicitEuler ? 1e-13 : 1e-10
+            @test isapprox(a, b; rtol = rt) || (println("F4-15b P2 ", alg, ": max |Δ| ", maximum(abs, a .- b)); false)
+        end
     end
 
     @testset "a fine field and a coarse field in one group: prolongation and restriction" begin
