@@ -318,7 +318,7 @@ end
     end
 end
 
-@testitem "QA: discrete components (label, T)" setup = [QaSetup, SymbolicSetup] tags = [:potts, :qa] begin
+@testitem "QA: discrete components (label, T)" setup = [QaSetup] tags = [:potts, :qa] begin
     @testset "QA: discrete components ($label, $T)" for (label, make) in (
             ("scratch", () -> (QADiscreteScratch(; name = :s), [ownership => _discrete_blocks(2), kind => [1, 1]])),
             ("kinds", () -> (QADiscreteKinds(; name = :k), [ownership => _discrete_blocks(4), kind => [1, 2, 1, 2], :inp => [0, 1, 0, 1]])),
