@@ -411,6 +411,32 @@ function _site_parts(term)
     return substitute(term, reps; fold = Val(false)), only(K)
 end
 
+# The terms of one row of the Jacobian under one choice of the arms of its `ifelse` switches
+struct RowTerms
+    diffusion::Vector{CoefBound}
+    sitediffusion::Vector{Tuple{CoefBound, CoefBound}}   # center multiplier m, face coefficient K
+    linear::Vector{CoefBound}
+    crosslinear::Vector{Tuple{CoefBound, Int}}      # coefficient, index of the other field (0: not a row)
+    crossdiffusion::Vector{Tuple{CoefBound, Int}}   # coefficient, index of the other field
+    advection::Vector{Tuple{CoefBound, Int}}        # `m v_a` of an upwind advection term, its axis (F3-13)
+end
+RowTerms() = RowTerms(CoefBound[], Tuple{CoefBound, CoefBound}[], CoefBound[], Tuple{CoefBound, Int}[], Tuple{CoefBound, Int}[],
+    Tuple{CoefBound, Int}[])
+Base.copy(r::RowTerms) = RowTerms(copy(r.diffusion), copy(r.sitediffusion), copy(r.linear), copy(r.crosslinear),
+    copy(r.crossdiffusion), copy(r.advection))
+# a site-diffusion term's parts at `p`: max|m| max|K| (the independent bound) and the seen
+# product
+_sd(f, p) = f[1](p) * f[2](p)
+_sdseen(f, p) = _seen(f[1], p) * _seen(f[2], p)
+const _MAXARMS = 64                       # row alternatives (arm choices) before giving up
+
+# A time span `[lo, hi]` that an interval bound reads at each evaluation (the window of an
+# explicit group's count, F4-12b)
+mutable struct TimeSpan
+    lo::Float64
+    hi::Float64
+    params::Any                         # the parameters, tables and inputs of the last count (`Problems.bound_params`)
+end
 """
     StabilityBound
 
@@ -492,32 +518,6 @@ bound either, never a refused value.
 With no bound, `ExplicitEuler` requires a user substep count. Until the IR tangent and
 interval evaluator replace it (C7c), this is the stability analysis of the explicit steppers.
 """
-# The terms of one row of the Jacobian under one choice of the arms of its `ifelse` switches
-struct RowTerms
-    diffusion::Vector{CoefBound}
-    sitediffusion::Vector{Tuple{CoefBound, CoefBound}}   # center multiplier m, face coefficient K
-    linear::Vector{CoefBound}
-    crosslinear::Vector{Tuple{CoefBound, Int}}      # coefficient, index of the other field (0: not a row)
-    crossdiffusion::Vector{Tuple{CoefBound, Int}}   # coefficient, index of the other field
-    advection::Vector{Tuple{CoefBound, Int}}        # `m v_a` of an upwind advection term, its axis (F3-13)
-end
-RowTerms() = RowTerms(CoefBound[], Tuple{CoefBound, CoefBound}[], CoefBound[], Tuple{CoefBound, Int}[], Tuple{CoefBound, Int}[],
-    Tuple{CoefBound, Int}[])
-Base.copy(r::RowTerms) = RowTerms(copy(r.diffusion), copy(r.sitediffusion), copy(r.linear), copy(r.crosslinear),
-    copy(r.crossdiffusion), copy(r.advection))
-# a site-diffusion term's parts at `p`: max|m| max|K| (the independent bound) and the seen
-# product
-_sd(f, p) = f[1](p) * f[2](p)
-_sdseen(f, p) = _seen(f[1], p) * _seen(f[2], p)
-const _MAXARMS = 64                       # row alternatives (arm choices) before giving up
-
-# A time span `[lo, hi]` that an interval bound reads at each evaluation (the window of an
-# explicit group's count, F4-12b)
-mutable struct TimeSpan
-    lo::Float64
-    hi::Float64
-    params::Any                         # the parameters, tables and inputs of the last count (`Problems.bound_params`)
-end
 struct StabilityBound
     invh2::Vector{Vector{Float64}}        # per row, 1/h_a² of its grid (a `Coarse` field's: `k h`, F3-16)
     keys::Vector{String}
@@ -860,23 +860,6 @@ function Problems.steady_loop_rates(b::StabilityBound, groups, p, steady, loops)
     return out
 end
 
-"""
-    bound_parts(b::StabilityBound, p) -> (; ρ, seen, coupled, negative, nonfinite, worst)
-
-The parts of `b(p)`: `ρ`, the Gershgorin bound over the terms `b` sees (a term in
-`b.terms` is left out); `seen`, the same bound over the finite values of each coefficient
-only (a coefficient over the evaluation cap counts 0; `seen == ρ` when `ρ` is finite), which
-raises an explicit count; `coupled`, the keys of the rows on a loop of cross reads with cross terms that are not
-diagonally dominant with a nonpositive diagonal (`b(p)` is `NaN` for them); `negative`, the
-keys of the rows with a diffusion coefficient below zero at `p` (at some indicator
-assignment); `nonfinite`, when `ρ` is not finite, a `(key, coefficient, why)` per coefficient
-with no finite bound (`why`: `:cap` over the evaluation cap, `:tables` no tables given, or
-`(combos, more)`: up to 4 distinct read combinations `[(table, index, value), …]` with a value that is
-not finite, index 0 reading 0, and how many more); `worst`, the row that gives `ρ` and its
-parts `(; key, diffusion, advection, reaction, cross)` (diffusion with its faces, upwind
-advection, the reaction terms of the row's own field, the terms that read other fields; they
-sum to `ρ`), or `nothing` with no row. `b(p) == ρ` when `b.unbounded` and `coupled` are empty.
-"""
 # the rows on a loop of cross reads (F3-22 review r1): row `i` reads row `j` through a cross term
 # or through a coefficient bounded over `j`'s declared interval (a site multiplier, a face
 # coefficient `K`, a velocity: F3-26 review), and `j` reads `i` back, directly or through other
@@ -910,6 +893,23 @@ function _loop_rows(b::StabilityBound)
     end
     return [any(j -> reaches(j, i), out[i]) for i in 1:n]
 end
+"""
+    bound_parts(b::StabilityBound, p) -> (; ρ, seen, coupled, negative, nonfinite, worst)
+
+The parts of `b(p)`: `ρ`, the Gershgorin bound over the terms `b` sees (a term in
+`b.terms` is left out); `seen`, the same bound over the finite values of each coefficient
+only (a coefficient over the evaluation cap counts 0; `seen == ρ` when `ρ` is finite), which
+raises an explicit count; `coupled`, the keys of the rows on a loop of cross reads with cross terms that are not
+diagonally dominant with a nonpositive diagonal (`b(p)` is `NaN` for them); `negative`, the
+keys of the rows with a diffusion coefficient below zero at `p` (at some indicator
+assignment); `nonfinite`, when `ρ` is not finite, a `(key, coefficient, why)` per coefficient
+with no finite bound (`why`: `:cap` over the evaluation cap, `:tables` no tables given, or
+`(combos, more)`: up to 4 distinct read combinations `[(table, index, value), …]` with a value that is
+not finite, index 0 reading 0, and how many more); `worst`, the row that gives `ρ` and its
+parts `(; key, diffusion, advection, reaction, cross)` (diffusion with its faces, upwind
+advection, the reaction terms of the row's own field, the terms that read other fields; they
+sum to `ρ`), or `nothing` with no row. `b(p) == ρ` when `b.unbounded` and `coupled` are empty.
+"""
 function bound_parts(b::StabilityBound, p)
     ρ = seen = 0.0
     worst = nothing

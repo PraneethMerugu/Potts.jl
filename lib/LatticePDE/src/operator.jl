@@ -21,6 +21,7 @@ mutable struct DeferredOperator
     built::Any
 end
 DeferredOperator(cf, sys, disc) = DeferredOperator(cf, sys, disc, nothing)
+"""Atomic session counter (`Threads.Atomic{Int}`) incremented each time a [`DeferredOperator`](@ref) builds its `OperatorSpec`."""
 const OPERATOR_BUILDS = Threads.Atomic{Int}(0)
 const _OPERATOR_LOCK = ReentrantLock()
 

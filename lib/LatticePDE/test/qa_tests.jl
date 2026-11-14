@@ -18,6 +18,7 @@ end
         using Aqua, ExplicitImports
         Aqua.test_all(LatticePDE; ambiguities = false)
         @test isempty(Test.detect_ambiguities(LatticePDE))
+        @test isempty(Docs.undocumented_names(LatticePDE; private = false))
         @test check_no_implicit_imports(LatticePDE) === nothing
         @test check_no_stale_explicit_imports(LatticePDE) === nothing
         @test check_all_qualified_accesses_via_owners(LatticePDE) === nothing

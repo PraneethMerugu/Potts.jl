@@ -50,7 +50,18 @@ link_store(cell, name::Symbol) = (; links = getfield(cell, adjacency_name(name))
     end
     return 0
 end
+"""
+    linked(cell, a, b) -> Bool
+
+Return `true` if cells `a` and `b` are nonzero and linked in link store `cell`.
+"""
 @inline linked(cell, a, b) = a != 0 && b != 0 && link_slot(cell, a, b) != 0
+
+"""
+    link_count(cell, a) -> Int
+
+Number of active links incident on cell `a` in link store `cell`.
+"""
 @inline link_count(cell, a) = count(k -> @inbounds(cell.links[k, a]) != 0, 1:maxdegree(cell))
 
 _payload_names(cell) = Tuple(k for k in keys(cell) if startswith(String(k), "link_"))

@@ -82,3 +82,14 @@ end
     @test check_all_qualified_accesses_are_public(CorePotts; ignore = COREPOTTS_NONPUBLIC_QUALIFIED) === nothing
 end
 end
+
+@testitem "QA: Docs and extensions (CorePotts)" setup = [CP_qa] tags = [:corepotts, :qa] begin
+@testset "QA: Docs and extensions (CorePotts)" begin
+    @test isempty(Docs.undocumented_names(CorePotts; private = false))
+    for (ext_sym, trigger) in ((:CorePottsAMDGPUExt, "AMDGPU"), (:CorePottsMetalExt, "Metal"))
+        if any(k -> k.name == trigger, keys(Base.loaded_modules))
+            @test Base.get_extension(CorePotts, ext_sym) !== nothing
+        end
+    end
+end
+end

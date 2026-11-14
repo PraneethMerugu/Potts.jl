@@ -18,9 +18,13 @@ using ..Potts: Potts
 using LatticePDE: Interval, Δ, DivKGrad, Advect, Upwind1, at, at2, ismember, masked, step_index, lattice_domain, pdesystem
 using ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
 
+"""Independent time variable (`Potts.t`, ModelingToolkitBase's unitless `t_nounits`)."""
 const t = Potts.t
+"""Lattice spatial coordinate `x` (first axis, site center from 0 at the low face)."""
 const x = Potts.FIELD_NAMES.x
+"""Lattice spatial coordinate `y` (second axis, site center from 0 at the low face)."""
 const y = Potts.FIELD_NAMES.y
+"""Lattice spatial coordinate `z` (third axis, site center from 0 at the low face)."""
 const z = Potts.FIELD_NAMES.z
 
 export PDESystem, Differential, @variables, @parameters, Interval

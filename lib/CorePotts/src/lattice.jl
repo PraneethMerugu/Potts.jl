@@ -113,9 +113,19 @@ _host_lattice(stats, l::Lattice{N, Nothing}) where {N} = l
 _host_lattice(stats, l::Lattice) = _adapt_host_cached(stats, l)
 
 Base.ndims(::Lattice{N}) where {N} = N
+"""
+    nsites(lattice) -> Int
+
+Total number of sites in `lattice` (`prod(size(lattice))`).
+"""
 nsites(l::Lattice) = prod(l.dims)
 Base.size(l::Lattice) = l.dims
 
+"""
+    linear_index(lattice, x) -> Int
+
+Column-major 1-based linear site index for lattice coordinates `x`.
+"""
 @inline function linear_index(l::Lattice{N}, x::NTuple{N, Int}) where {N}
     i = 0
     stride = 1
@@ -126,6 +136,11 @@ Base.size(l::Lattice) = l.dims
     return i + 1
 end
 
+"""
+    coordinates(lattice, i) -> NTuple{N, Int}
+
+Lattice coordinates of 1-based linear site index `i`.
+"""
 @inline function coordinates(l::Lattice{N}, i::Int) where {N}
     # Stride of axis d is prod(dims[1:d-1]); no captured mutable state (it would be boxed).
     return ntuple(Val(N)) do d
@@ -177,21 +192,33 @@ Base.length(::Relation{N, K}) where {N, K} = K
 """Weight of the `k`-th offset (`Int32(1)` when unweighted, so counts stay integers)."""
 @inline weight(::Relation{N, K, Nothing}, k) where {N, K} = Int32(1)
 @inline weight(r::Relation, k) = @inbounds r.weights[k]
+"""
+    radius(relation) -> Int
+
+Maximum Chebyshev offset magnitude (`maximum(abs, o)`) across all offsets of `relation`.
+"""
 radius(r::Relation) = maximum(o -> maximum(abs, o; init = 0), r.offsets; init = 0)
 
 """
     interior(lattice, x, relation) -> Bool
-    neighbor_index(lattice, x, t, relation, k, interior) -> (inside, index)
 
-`neighbor_index` is `shift` then `linear_index` for neighbor `k` of site `t` (coordinates
-`x`); when `interior` (`x` at least the relation's radius from every face, no domain mask) it
-is `t + linear offset`, without the wrap arithmetic (P6.0bl kernel profile).
+Return `true` when site `x` lies at least `radius(relation)` sites from every face of a
+lattice with no domain mask.
 """
 @inline function interior(l::Lattice{N, Nothing}, x, rel::Relation{N, K}) where {N, K}
     r = foldl(max, ntuple(k -> foldl(max, ntuple(d -> abs(Int(@inbounds rel.offsets[k][d])), Val(N))), Val(K)))
     return all(ntuple(d -> r < x[d] <= l.dims[d] - r, Val(N)))
 end
 @inline interior(l::Lattice, x, rel) = false
+
+"""
+    neighbor_index(lattice, x, t, relation, k, interior) -> (inside::Bool, index::Int)
+
+Linear index of neighbor `k` of site `t` (with coordinates `x`) under `relation`. When
+`interior` is `true`, computes `t + linear_offset` directly without wrap arithmetic;
+otherwise calls [`shift`](@ref) and [`linear_index`](@ref), returning `(false, t)` if
+outside the domain.
+"""
 @inline function neighbor_index(l::Lattice{N}, x, t::Int, rel::Relation{N}, k, inner::Bool) where {N}
     inner && return true, t + _linear_offset(l, @inbounds rel.offsets[k])
     inside, y = shift(l, x, @inbounds rel.offsets[k])
@@ -450,6 +477,12 @@ _set_mobility!(stats, m, frozen) = throw(ArgumentError(
 end
 @inline _in_kinds(k, kinds::Tuple) = any(==(k), kinds)
 
+"""
+    is_mobile(mobility, i) -> Bool
+
+Return `true` if site `i` may change owner under `mobility` ([`AllMobile`](@ref) or
+[`MaskMobility`](@ref)).
+"""
 @inline is_mobile(::AllMobile, i) = true
 @inline is_mobile(m::MaskMobility, i) = !@inbounds(m.frozen[i])
 nmobile(::AllMobile, l::Lattice) = nsites(l)

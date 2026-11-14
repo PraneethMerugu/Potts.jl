@@ -59,17 +59,21 @@ end
     m, full, touch)
 
 """
-Evaluation of `Global` for the search: exact everywhere (`GlobalExact`, host algorithms)
-or windowed where the rule has a window (`GlobalBoard`, `CheckerboardCPM`).
+Evaluation mode for `Global`: exact floods everywhere (`GlobalExact`, used by host
+algorithms), or windowed search (`GlobalBoard`, used by `CheckerboardCPM`).
 """
 struct GlobalExact end
+
+"""Windowed global connectivity evaluation mode used by `CheckerboardCPM` when a rule sets a search window."""
 struct GlobalBoard end
+
 """
-Stage of the veto (`ConnectivityHooks.post`): the local test only (`GlobalLocal`: 0 pass,
-1 needs the search, 2 refused) or the full decision (`GlobalSearch`: 0 pass, 1 refused for
-want of window, 2 refused).
+Stage of the `Global` veto (`ConnectivityHooks.post`): local shell test only (`0` pass,
+`1` needs search, `2` refused). See [`GlobalSearch`](@ref).
 """
 struct GlobalLocal end
+
+"""Full-search stage of the `Global` veto (`ConnectivityHooks.post`): returns `0` (pass), `1` (refused for want of window), or `2` (refused)."""
 struct GlobalSearch end
 
 const GLOBAL_PASS = Int32(0)
