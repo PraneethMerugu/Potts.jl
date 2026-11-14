@@ -211,7 +211,7 @@ append!(pages, Any[
 
 makedocs(;
     sitename = "Potts.jl",
-    modules = [Potts, CorePotts, Potts.LatticeFields, Potts.LatticePDE, PottsModels, PottsModels.Analysis, MakiePotts],
+    modules = [Potts, CorePotts, Potts.LatticePDE, PottsModels, PottsModels.Analysis, MakiePotts],
     remotes = nothing,
     format = Documenter.HTML(; prettyurls = true, edit_link = nothing, repolink = nothing,
         size_threshold = nothing, size_threshold_warn = nothing),
