@@ -26,7 +26,7 @@ JULIA=${JULIA:-julia}
 BULK=${OPENVT_PACKAGE_BULK:-}
 COV_FLAG=""
 if [ "${POTTS_CI_COVERAGE:-0}" = "1" ]; then
-    find src ext lib -name '*.cov' -delete 2>/dev/null || true
+    find src ext lib test -name '*.cov' -delete 2>/dev/null || true
     COV_FLAG="--code-coverage=@$ROOT"
 fi
 names=()

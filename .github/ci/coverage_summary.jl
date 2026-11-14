@@ -79,7 +79,7 @@ end
 
 function clean_cov(root::AbstractString)
     removed = 0
-    for rel in ("src", "ext", "lib")
+    for rel in ("src", "ext", "lib", "test")
         d = joinpath(root, rel)
         isdir(d) || continue
         for (cur, _, fs) in walkdir(d), f in fs
