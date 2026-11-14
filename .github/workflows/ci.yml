@@ -68,7 +68,12 @@ jobs:
         # (reproductions/15_openvt_package.jl) is red without them, by design.
         env:
           POTTS_CI_LOGS: ${{ runner.temp }}/potts-ci-logs
+          POTTS_CI_COVERAGE: "1"
         run: OPENVT_PACKAGE_BULK="$HOME/potts-ci/openvt-bulk" bash .github/ci/parallel.sh
+      - name: Coverage summary (non-gating, H4)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: $PIN julia --startup-file=no .github/ci/coverage_summary.jl --clean
       - name: Benchmark tooling tests (machine lock, exclusive.sh transition)
         # after the parallel step, alone on the cores: the A/B harness test times runs
         env:

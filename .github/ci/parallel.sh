@@ -24,6 +24,11 @@ LOGS=${POTTS_CI_LOGS:-${RUNNER_TEMP:-/tmp}/potts-ci-logs}
 rm -rf "$LOGS"; mkdir -p "$LOGS"
 JULIA=${JULIA:-julia}
 BULK=${OPENVT_PACKAGE_BULK:-}
+COV_FLAG=""
+if [ "${POTTS_CI_COVERAGE:-0}" = "1" ]; then
+    find src ext lib -name '*.cov' -delete 2>/dev/null || true
+    COV_FLAG="--code-coverage=@$ROOT"
+fi
 names=()
 
 launch() { # name cpus command...
@@ -43,9 +48,9 @@ for k in 1 2 3; do
         "$JULIA" -t 4 --project=test test/runtests.jl
 done
 launch GPU 6-7,22-23 env GROUP=GPU POTTS_GPU=rocm "$JULIA" --project=test test/runtests.jl
-launch Potts 8-9,24-25 env GROUP=Potts "$JULIA" --project=test test/runtests.jl
-launch LatticeFields+LatticePDE+CorePotts+MakiePotts 10-11,26-27 bash -c \
-    "GROUP=LatticeFields '$JULIA' --project=test test/runtests.jl && GROUP=LatticePDE '$JULIA' --project=test test/runtests.jl && GROUP=CorePotts '$JULIA' --project=test test/runtests.jl && GROUP=MakiePotts '$JULIA' --project=test test/runtests.jl"
+launch Potts 8-9,24-25 env GROUP=Potts "$JULIA" ${COV_FLAG:+"$COV_FLAG"} --project=test test/runtests.jl
+launch LatticeFields+LatticePDE+CorePotts+MakiePotts 10-11,26-27 env COV_FLAG="$COV_FLAG" JULIA="$JULIA" bash -c \
+    'for g in LatticeFields LatticePDE CorePotts MakiePotts; do GROUP="$g" "$JULIA" ${COV_FLAG:+"$COV_FLAG"} --project=test test/runtests.jl || exit $?; done'
 wait
 
 failed=0
