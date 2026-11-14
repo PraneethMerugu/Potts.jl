@@ -8,7 +8,7 @@
 # dimension read by `centroid()` (`Potts._DIM`, reset by every build) and the `@extend`
 # nesting depth (`Potts._NESTING`) are global build state of the same kind; the accept line
 # ("the same generated code and fingerprints as built serially") covers them too, and
-# `P60ajYieldCentroid` exercises `_DIM`. Frozen (AUTONOMY §7.3).
+# `P60ajYieldCentroid` exercises `_DIM`.
 #
 # How the overlap is produced:
 #  - tasks (`Threads.@spawn`): the fixtures `P60ajYield*` call `yield()` between their

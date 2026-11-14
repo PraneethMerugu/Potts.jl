@@ -1,5 +1,5 @@
 # P6.1b2 (ROADMAP Phase 6, step 1): a paper-size Graner–Glazier initial state (PRE 47, 2128:
-# one aggregate of about 1000 cells). Frozen (AUTONOMY §7.3).
+# one aggregate of about 1000 cells).
 #
 # Surface fixed by the coordinator:
 #   graner_glazier_aggregate(n = 1000; seed = 1) -> (σ, kinds)

@@ -49,8 +49,8 @@ end
 # solved by LatticePDE with `Potts.field_inputs(integ, pdesys)`. The kind bindings (`pq =>
 # ismember(kind, (P, Q))`, `kQ => kind == Q`, ...) and the PDESystem's Bool inputs fold by one rule
 # on the Coarse(4) grid, the block mean, so the two agree on the spheroid's rim, where blocks are
-# covered in part. This replaces the F2 guard's digests of this model (test/fields_identity.jl,
-# `GD_F415`). Base 5e972579 (~/lpwork/f4F15/nc.log): the bindings are read at the block's owner.
+# covered in part. This replaces the F2 guard's digests of this model (D-274).
+# Base 5e972579 (~/lpwork/f4F15/nc.log): the bindings are read at the block's owner.
 @testset "F4-15: the Jiang-like model equals its PDESystem with field_inputs (blocks covered in part)" begin
     σ, kinds = jiang_state(JG_DIMS)
     names = (:o, :g, :l, :gf, :inh)
@@ -65,6 +65,20 @@ end
     prob = Potts.LatticePDE.discretize(pde, Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(JG_DIMS); T = Float64);
         inputs = collect(fi), u0 = [n => copy(Array(getproperty(integ.u.site, n))) for n in names], tspan = (0.0, 1.0))
     s = Potts.LatticePDE.solve(prob, BackwardEuler(; dt = 0.25))
+    # F4-15 review should-fix 2 and F4-15b: an oracle independent of the lowering. The inhibitor's
+    # rate at u = 0 is its source 3 (Q + 2N), folded over each block's free children (the
+    # mask is the medium), so the free volume times the rate, summed over the nodes, is 3 times
+    # the exact count of Q + 2N sites off the medium (every such site: 1593, from σ and the
+    # kinds; 1592 at 7d101740, where the Majority mask held a block with one Q site). One
+    # ExplicitEuler window of h = 1e-6 from 0 gives h times the rate (to O(h Di/H²))
+    nq = count(s -> s != 0 && kinds[s] == :Q, σ) + 2 * count(s -> s != 0 && kinds[s] == :N, σ)
+    @test nq == 1593
+    nfree = [count(!, fi[:med][(4i - 3):(4i), (4j - 3):(4j), (4k - 3):(4k)]) for i in 1:8, j in 1:8, k in 1:8]
+    p0 = Potts.LatticePDE.discretize(pde, Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(JG_DIMS); T = Float64);
+        inputs = collect(fi), u0 = [n => zeros(JG_DIMS .÷ 4) for n in names], tspan = (0.0, 1e-6))
+    # (one window: the bound cannot see the `max(· − ·, 0)` switches, so the count is explicit)
+    s0 = Potts.LatticePDE.solve(p0, ExplicitEuler(; dt = 1e-6, substeps = 1))
+    @test sum(nfree .* s0[:inh, length(s0.t)]) / 1e-6 ≈ 3 * nq rtol = 1e-8
     step!(integ)
     for n in names
         got, want = s[n, length(s.t)], Array(getproperty(integ.u.site, n))
@@ -108,14 +122,84 @@ end
     c = only(a.runtimes).cache
     @test c.newton == 2 && c.exact && !c.cyclic
     @test Potts.LatticeFields.Problems.field_stats(a).newton_budget == 0
-    # the two Newton steps are the converged BE step: with a tight inner solve they equal twelve
-    # (~1e-15 measured, ~/lpwork/f3b6r/j2.log; with the default inner tolerance the inner
-    # solves, not the Newton count, set the difference, 3.9e-9 on `l` here)
+    # the two Newton steps are the accepted BE step: the policy accepts a step within
+    # NEWTON_EPS relative to the field's scale, so the tight-inner two-step solve and the
+    # 12-step reference agree to that accepted defect (the assertion and its derivation are
+    # below; the measured residual is ~1e-15 on 1.12.6, 6.4e-8 under 1.13.3)
     tight = Potts.LatticePDE.DevicePCG(; rtol = 1e-12, budget = 64)
-    a2 = run(BackwardEuler(; dt = 0.25, inner = tight))
+    a2 = @test_logs min_level = Base.CoreLogging.Warn run(BackwardEuler(; dt = 0.25, inner = tight))
     @test only(a2.runtimes).cache.newton == 2
+    @test a2.retcode == Potts.SciMLBase.ReturnCode.Success
+    @test Potts.LatticeFields.Problems.field_stats(a2).newton_budget == 0
     b = run(BackwardEuler(; dt = 0.25, newton = 12, inner = tight))
+    # F4-15b (review; user ruling 2026-11-13): the acceptance is
+    # `dk <= NEWTON_EPS * ||u_k - u^n|| + 10 eps(T) ||u_k||` (implicit.jl), relative to the step
+    # increment; the distance from the two-step iterate to the 12-step reference is the remaining
+    # convergence error, not the accepted update. The bound 1e-5 * max(1, |b|) is the user's policy
+    # scale for that error: the measured values are 6.4e-8 under 1.13.3 and ~1e-15 on 1.12.6, so
+    # the 12-step comparison stays the real check and the scale keeps a red run visible without
+    # pinning the toolchain.
     for n in names
-        @test maximum(abs, a2[n] .- b[n]) < 1e-10
+        @test maximum(abs, a2[n] .- b[n]) <= 1e-5 * max(1.0, maximum(abs, b[n]))
     end
+end
+
+# F4-15b containment (coordinator ruling 2026-11-12, replacing the withdrawn value-level
+# containment inside the 86 partial blocks). The fold acts on each node's row and on the node
+# values the operator reads, so a fully free node one stencil step from a node the majority rule
+# held must move: its Laplacian reads that neighbour's value (v under the majority rule, the free
+# part w here). The exact closure is the 86 partial blocks plus the free nodes within one in-box
+# stencil step of a majority-held node; nothing in the 35 fully free blocks beyond that closure
+# and nothing in the 391 fully masked blocks may differ.
+@testset "F4-15b: the fold differs on partial blocks; one step moves the one-hop closure" begin
+    σ, kinds = jiang_state(JG_DIMS)
+    names = (:o, :g, :l, :gf, :inh)
+    integ = init(PottsProblem(JiangLike(; name = :j), [ownership => σ, kind => kinds], (0, 3);
+        field_solver = BackwardEuler()), SequentialCPM(); save_start = false)
+    step!(integ)
+    pde = JgPDE.jiang(JG_DIMS)
+    fi = Potts.field_inputs(integ, pde)
+    k = 4; nb = size(fi[:med]) .÷ k; nt = k^3
+    sl(J) = (k * (J[1] - 1) + 1):(k * J[1]), (k * (J[2] - 1) + 1):(k * J[2]), (k * (J[3] - 1) + 1):(k * J[3])
+    nm = [count(fi[:med][sl(J)...]) for J in CartesianIndices(nb)]
+    cls(n) = n == 0 ? 1 : n <= nt ÷ 2 ? 2 : n < nt ? 3 : 4
+    # the census: 35 fully free, 39 partial free (1..32 medium), 47 partial held (33..63),
+    # 391 fully masked (64)
+    @test [count(i -> cls(nm[i]) == c, 1:length(nm)) for c in 1:4] == [35, 39, 47, 391]
+    partial = [cls(n) in (2, 3) for n in nm]
+    held = [cls(n) == 3 for n in nm]
+    n8 = JG_DIMS .÷ 4
+    # a shared state distinct from the mask values (o0 = 0.08, g0 = 5.5, l = 0, gf = 1, inh = 0),
+    # so a held node and a free node differ in both runs too
+    u0 = [n => (n === :o ? fill(0.05, n8) : n === :g ? fill(4.0, n8) : n === :gf ? fill(0.5, n8) : fill(1.0, n8)) for n in names]
+    disc = Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(JG_DIMS); T = Float64)
+    pnew = Potts.LatticePDE.discretize(pde, disc; inputs = collect(fi), u0 = u0, tspan = (0.0, 1e-6))
+    # the majority twin: the same model with the mask at the coarse node (no fine read), so every
+    # fold is the whole-block mean and a node the majority rule holds (more than half medium) is
+    # held at v. This is the D-F4-15 semantics, built from the same fine inputs.
+    medm = [nm[I] > nt ÷ 2 for I in CartesianIndices(nb)]
+    pmaj = Potts.LatticePDE.discretize(JgPDE.jiang(JG_DIMS; coarsemask = true), disc;
+        inputs = vcat([k2 => v2 for (k2, v2) in collect(fi) if k2 != :med], [:medc => medm]),
+        u0 = u0, tspan = (0.0, 1e-6))
+    inew = init(pnew, ExplicitEuler(; dt = 1e-6, substeps = 1)); step!(inew)
+    imaj = init(pmaj, ExplicitEuler(; dt = 1e-6, substeps = 1)); step!(imaj)
+    # (one explicit step: its value difference is the support of the rate difference; no diffusion
+    # solve spreads it, and h = 1e-6 keeps Do, Dg and Dl stable)
+    function nbhd(J)
+        d = (CartesianIndex(1, 0, 0), CartesianIndex(-1, 0, 0), CartesianIndex(0, 1, 0),
+             CartesianIndex(0, -1, 0), CartesianIndex(0, 0, 1), CartesianIndex(0, 0, -1))
+        return [J + x for x in d if all(1 .<= Tuple(J + x) .<= Tuple(nb))]
+    end
+    closure = [nm[I] == 0 && any(held[K] for K in nbhd(I)) for I in CartesianIndices(nb)]
+    @test count(closure) == 12
+    want = findall(partial .|| closure)
+    for n in names
+        a, b = Array(inew[n]), Array(imaj[n])
+        d = abs.(b .- a)
+        idx = findall(!iszero, d)
+        @test idx == want
+    end
+    # the enumeration (printed, not re-derived: `closure` is by construction the free nodes with a
+    # held neighbour, so an assertion that each has one would be tautological)
+    @info "F4-15b one-step closure" [Tuple(I) for I in findall(closure)]
 end

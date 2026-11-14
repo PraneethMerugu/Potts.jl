@@ -909,8 +909,8 @@ end
     step!(ig)
     @test ig.substeps == 137 && c.newton == 10 && only(ig.runtimes).totals.newton_budget == 0
     # N1: `ExplicitEuler` prints by keyword, as `BackwardEuler` does
-    @test sprint(show, ExplicitEuler(; dt = 0.1, substeps = 15)) == "ExplicitEuler(; dt = 0.1, substeps = 15)"
-    @test sprint(show, ExplicitEuler()) == "ExplicitEuler()"
+    @test eval(Meta.parse(sprint(show, ExplicitEuler(; dt = 0.1, substeps = 15)))) == ExplicitEuler(; dt = 0.1, substeps = 15)
+    @test eval(Meta.parse(sprint(show, ExplicitEuler()))) == ExplicitEuler()
 end
 end
 

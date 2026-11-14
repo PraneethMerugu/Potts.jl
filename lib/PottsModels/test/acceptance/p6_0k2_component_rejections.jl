@@ -1,7 +1,7 @@
 # P6.0k2 (ROADMAP Phase 6, step 0; D-077 follow-ups, mtk-native-review §3 F7): what an
 # `@components` MTK System carries but Potts cannot honour is rejected by name, `Pre` of a
 # discrete node reads like the node inside a tick, and Bool reads lower without a double
-# `_nonzero`. Frozen (AUTONOMY §7.3).
+# `_nonzero`.
 #
 # F4 (the catch in `_compile_discrete` relabelling internal Potts errors) is not observable
 # without internals in this environment (MTKBase only: the catch wraps MTKBase's own

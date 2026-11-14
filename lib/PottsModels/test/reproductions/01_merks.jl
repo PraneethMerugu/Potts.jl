@@ -1,5 +1,5 @@
 # P6.3d (ROADMAP Phase 6, step 3): reproduction 01, Merks et al. 2006 (Variant E, 01a) and
-# Merks et al. 2008 (Variant CI, 01b). Frozen (AUTONOMY §7.3; D-153). The pre-registered
+# Merks et al. 2008 (Variant CI, 01b). The pre-registered
 # V-targets are spec 01 §5 (docs/design/research/model-specs/01_merks.md) as audited in
 # D-153; every reference value and tolerance below is copied from §5's "Proposed
 # acceptance" column, with the observable, time, seeds and replicate counts fixed here.

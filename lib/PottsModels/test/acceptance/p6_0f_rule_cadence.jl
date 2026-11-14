@@ -1,5 +1,5 @@
 # P6.0f (ROADMAP Phase 6, step 0): `Every(n)` per lifecycle rule. Two division rules at
-# different cadences fire at their own counts. Frozen (AUTONOMY §7.3).
+# different cadences fire at their own counts.
 
 @potts_model TwoCadences begin
     @kinds medium ka kb

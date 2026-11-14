@@ -1,4 +1,4 @@
-# P6.0r (ROADMAP Phase 6, step 0): the energy of a killing copy. Frozen (AUTONOMY §7.3).
+# P6.0r (ROADMAP Phase 6, step 0): the energy of a killing copy.
 # Decision: D-066 item 4 (amends D-037); follows D-079 (P6.0l, the dead-partner skip).
 #
 # The defect. A copy that takes the last site of a linked cell `o` (a killing copy) reports

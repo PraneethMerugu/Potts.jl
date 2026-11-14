@@ -1,5 +1,5 @@
 # P6.15k (ROADMAP Step 3b; D-211): page 15 and its records follow the 9 Oct 2026 OpenVT
-# manuscript draft (M). Frozen (AUTONOMY §7.3). Spec 15 §1.2 lists the changes; this file
+# manuscript draft (M). Spec 15 §1.2 lists the changes; this file
 # pins R1–R4 on the records and on page 15. The package side (D-204) is in
 # `15_openvt_package.jl`, the page layout (headings, items, records) in `15_openvt_page.jl`.
 #

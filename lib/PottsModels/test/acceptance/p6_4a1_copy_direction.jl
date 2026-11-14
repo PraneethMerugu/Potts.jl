@@ -2,7 +2,7 @@
 # source→target lattice offset of the attempted copy, readable wherever ΔH is written in the
 # copy scope, so that the foam shear term of Jiang et al. (1999), spec 04 §2.2 and A-1,
 #     ΔH_shear = γ(y_i, t)·(x_i − x_j)      (i = target, j = source, minimum image in x),
-# can be written. Frozen (AUTONOMY §7.3). Decisions: D-186 (the item), D-048 (ordinary tests:
+# can be written. Decisions: D-186 (the item), D-048 (ordinary tests:
 # independent oracles and negative controls), D-158 (our own code's recorded values are
 # bitwise; same-seed determinism is free), D-171 (`gate.jl` checks warm allocations, the
 # A/B decides speed), D-157 (POTTS_GPU device selection).
@@ -101,16 +101,10 @@
 #  4. Performance. Zero warm allocations (the gate's rule: the minimum over five warm
 #     `step!`s after two, `benchmark/gate.jl`) for `P64a1Dir` with the sin drive under the
 #     four algorithms of item 2 and for the 3D probe under SequentialCPM(Moore(1)).
-#     Models that do not read `direction` are unchanged bitwise (D-158) and are pinned
-#     elsewhere, not duplicated here: the SequentialCPM records of
-#     `p6_4b1_boundary_site.jl` (Graner–Glazier 72², OpenVT 60²), the bitwise rows of
-#     `p6_0x_gather_ode_alloc.jl`, the fingerprints of `p6_0ah_canonical_term_order.jl`,
-#     `p6_0aq_acceptance_fingerprint.jl` and `p6_0ar_neighbourhood_fingerprint.jl`, the
-#     transition oracles (`lib/CorePotts/test/oracle.jl`, `test/oracle.jl`) and the gate
-#     rows. One new record: `P64a1Ref`, a model with a copy-scope drive and constraint that
-#     do not read `direction` (the code path this item touches), keeps its fingerprint and
-#     its SequentialCPM result (sha256 of σ and the accepted count) recorded on the freeze
-#     base. Speed is the D-171 A/B, outside this file.
+#     Models that do not read `direction` are unchanged (D-158); the transition oracles are in
+#     `lib/CorePotts/test/oracle.jl` and `test/oracle.jl`, and the gate rows elsewhere. `P64a1Ref`, a model with a copy-scope drive and constraint that do
+#     not read `direction` (the code path this item touches), runs the same trajectory as its
+#     twin that does (testset 3). Speed is the D-171 A/B, outside this file.
 #  5. `Metropolis(tie)` is deferred (not needed for the foam). Spec 04 A-6 recommends the
 #     T → 0⁺ limit: ties (ΔH′ = 0) accepted with P = 1, uphill moves rejected. Today's
 #     `Metropolis` at T = ε > 0 does exactly that for ties (`x ≤ 0` accepts) and accepts
@@ -137,7 +131,6 @@ using Test, Potts, PottsModels
 using Potts: CorePotts
 using Statistics: mean, std, var
 using StableRNGs: StableRNG
-using SHA: sha256
 
 const P64A1_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
 const P64A1_Z1 = 3.09
@@ -582,20 +575,6 @@ end
     base = p64a1_probe_problem(p64a1_model(:P64a1Probe3D), (5, 6, 5))
     prob = remake(base; p = [:a1 => 1.0, :a3 => -0.5, :bt => 0.25, :cs => 0.125], tspan = (0, 100))
     @test p64a1_warm_alloc(prob, SequentialCPM(; proposal = Moore(1))) == 0
-end
-
-# Recorded on the freeze base d7fc5793 (Apple M-series, Julia 1.12.6): `P64a1Ref`, drive (a),
-# SequentialCPM(Moore(1)), seed 11, 8 MCS.
-const P64A1_REF_FINGERPRINT = 0xaaff5b2ec09da918
-const P64A1_REF_SHA = "303638e662289649e5f884b16fa537d0c70ea7b0182d13040158d694442b7755"
-const P64A1_REF_ACCEPTED = 55
-
-@testset "P6.4a1: a model without `direction` is unchanged (recorded)" begin
-    prob = p64a1_problem(:ref, p64a1_two())
-    sol = solve(prob, SequentialCPM(; proposal = Moore(1)))
-    @test prob.f.fingerprint == P64A1_REF_FINGERPRINT
-    @test bytes2hex(sha256(reinterpret(UInt8, vec(Array(sol.u[end].σ))))) == P64A1_REF_SHA
-    @test sol.stats.accepted == P64A1_REF_ACCEPTED
 end
 
 # ---------------------------------------------------------------------------------------

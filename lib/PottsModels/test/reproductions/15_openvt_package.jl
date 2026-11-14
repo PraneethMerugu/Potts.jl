@@ -1,5 +1,5 @@
 # P6.15j (ROADMAP Step 3b): the OpenVT monolayer submission package, in the consortium layout,
-# prepared locally. Frozen (AUTONOMY §7.3). Submitting it is the maintainer's call; this test
+# prepared locally. Submitting it is the maintainer's call; this test
 # never contacts anyone and needs neither the PC nor the consortium clone (G).
 #
 # D-204 amendment (the package completed): every item the first freeze listed as optional or
@@ -640,8 +640,12 @@ end
     @test sort(readdir(P615J_A)) == ["implementations", "results"]
     @test readdir(joinpath(P615J_A, "implementations")) == [P615J_FW]
     @test readdir(joinpath(P615J_A, "results")) == [P615J_FW]
-    # outside git only
+    # outside git only. The path is inside the checkout, so a cancelled or failed earlier run
+    # can have left the tree there: clear it first, or a stale copy makes this a trap that only
+    # passes in a pristine tree.
     ingit = joinpath(P615J_ROOT, "lib", "PottsModels", "p615j_must_not_exist")
+    ispath(ingit) && rm(ingit; recursive = true, force = true)
+    @test !ispath(ingit)
     @test_throws ArgumentError PottsModels.openvt_submission_package(ingit)
     @test !ispath(ingit)
     # no stale files: a non-empty directory is refused

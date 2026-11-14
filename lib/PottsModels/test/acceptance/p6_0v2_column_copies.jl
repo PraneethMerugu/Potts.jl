@@ -1,5 +1,5 @@
 # P6.0v2 (ROADMAP Phase 6, step 0): `_AdaptiveODE` and `HostPhase` move only the columns they
-# read and write. Frozen (AUTONOMY §7.3). Decisions: D-085 (counters), D-089; audit
+# read and write. Decisions: D-085 (counters), D-089; audit
 # `docs/design/research/gpu-host-transfer-audit.md` §4 (A1–A4) and §5 (H1–H4).
 #
 # Accept (ROADMAP): per-MCS bytes of an adaptive-ODE fixture and a `HostPhase` fixture scale

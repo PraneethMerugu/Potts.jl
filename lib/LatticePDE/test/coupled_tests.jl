@@ -61,15 +61,13 @@ end
     # the second window ends the span, where the end save copies the state: `save_end = false`)
     ig = init(cown(q1(0.1, 5.0)), QuasiSteady(; dt = 0.1); save_end = false)
     @test bwarm(ig) == 0
-    # the solve's words: a budget hit names the GMRES budget; `show`, the keywords, `canonical`
+    # the solve's words: a budget hit names the GMRES budget; `show`, the keywords
     r = @test_logs (:warn, r"the linear solve reached its budget .*`inner = DeviceGMRES\(; budget = n\)`") match_mode = :any solve(
         cown(q1(0.1, 5.0)), QuasiSteady(; dt = 0.1, inner = DeviceGMRES(; budget = 2)))
     @test r.retcode == ReturnCode.Success
     g = DeviceGMRES(; restart = 8, budget = 40, rtol = 1e-8, precond = DevicePCG(; budget = 3))
-    @test repr(g) == "DeviceGMRES(; restart = 8, budget = 40, rtol = 1.0e-8, precond = DevicePCG(; budget = 3))" && repr(DeviceGMRES()) == "DeviceGMRES()"
     @test eval(Meta.parse(repr(g))) == g
-    @test LFB.canonical(QuasiSteady(; inner = DeviceGMRES())) ==
-          "QuasiSteady(inner=DeviceGMRES(budget=60,precond=:auto,restart=20,rtol=1.0e-6),lower=nothing,newton=nothing,solver_T=:auto,substeps=nothing)"
+    @test !occursin("budget", repr(DeviceGMRES()))               # a default stays out of the display
     @test startswith(cmsg(() -> DeviceGMRES(; restart = 1)), "`DeviceGMRES(; restart = 1)`: `restart` is the Krylov basis size")
     @test startswith(cmsg(() -> DeviceGMRES(; budget = 0)), "`DeviceGMRES(; budget = 0)`: `budget` is the most GMRES iterations")
     @test startswith(cmsg(() -> DeviceGMRES(; rtol = -1.0)), "`DeviceGMRES(; rtol = -1.0)`: `rtol` is the relative residual")

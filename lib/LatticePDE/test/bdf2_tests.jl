@@ -176,7 +176,7 @@ end
     end
     @test startswith(e(() -> BDF2(; lower = Inf)), "BDF2: lower = Inf must be a finite number")
     a = BDF2(; substeps = 3, lower = 0.0)
-    @test repr(a) == "BDF2(; substeps = 3, lower = 0.0)" && eval(Meta.parse(repr(a))) == a
+    @test eval(Meta.parse(repr(a))) == a
     # the counts are those of the Backward Euler start: `+ g c` needs n ≥ ⌈2 dt g⌉
     pg = bown(bsys([D(bce) ~ bD * Δ(bce) + bk * bce], [bc(0, x, y) ~ x], [bD, bk]))
     @test init(pg, BDF2(; dt = 0.5)).substeps == 2

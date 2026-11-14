@@ -2,10 +2,13 @@
 # coarse field lives on level log2(k) of the program's hierarchy: its rate, conditions, masks,
 # operator (`jac:`) and residual kernels run there with the spacing `k h`, and its fine reads
 # (the inputs, an irregular domain) are folded over each node's block (every fine read, an integer
-# input too, by the mean of the part of the term that reads it; a mask's predicate and the domain
-# by Majority; review r1 M2, F4-15). The oracle is the hand-coarsened problem: the same system
-# discretized on the coarse grid, with its inputs folded by hand (a kind expression as the real
-# input of its block mean); the two agree to rounding under every algorithm. Base 85794414 (~/lpwork/f3b6-nc-lp.log): `Coarse` is not defined, and
+# input too, by the mean of the part of the term that reads it; the domain by Majority; review r1
+# M2, F4-15). A field with a mask whose predicate reads fine fields blends (F4-15b): a node is
+# masked when its whole block is, and elsewhere its equation folds over the block's free children
+# (the node holds the value of its free part). The oracle is the hand-coarsened problem: the same
+# system discretized on the coarse grid, with its inputs folded by hand (a kind expression as the
+# real input of its mean over the free children, the mask's kind only on whole blocks); the two
+# agree to rounding under every algorithm. Base 85794414 (~/lpwork/f3b6-nc-lp.log): `Coarse` is not defined, and
 # `lattice_level` was refused ("does not lower"), so every testset errors.
 
 @testsetup module LP_coarse
@@ -62,7 +65,9 @@ using .LP_coarse: fd
     end
 
     @testset "a coarse field equals the hand-coarsened problem under every algorithm" begin
-        @test sum(Float64.(CQ1 .== 2)) != 16 * sum(CQ1c .== 2)     # (blocks are mixed: the mean is not the majority)
+        # (blocks are mixed: the mean is not the majority; blocks are masked, free and blended)
+        @test sum(Float64.(CQ1 .== 2)) != 16 * sum(CQ1c .== 2)
+        @test sort(unique(16 .- cnfree(CQB1 .== 3))) == [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 12, 14, 15, 16]
         pc, ph, (c, ch, q, g) = ctwins()
         @test size(pc.u0) == (16,) && length(ph.u0) == 16
         @test pc.u0 == ph.u0                                   # the initial values at the node centers
@@ -74,8 +79,8 @@ using .LP_coarse: fd
             ic, ih = init(pc, alg), init(ph, alg)
             for n in 1:6
                 if n == 4                                                       # the mask moves
-                    ic[q(t, x, y)] = CQ2; ih[q(t, x, y)] = CQ2c
-                    foreach(((v, a),) -> ih[v] = a, chand(CQ2, CQ2c))
+                    ic[q(t, x, y)] = CQB2; ih[q(t, x, y)] = cwhole(CQB2); ih[g(t, x, y)] = cfree(CG, CQB2 .== 3)
+                    foreach(((v, a),) -> ih[v] = a, chand(CQB2))
                 end
                 step!(ic); step!(ih)
             end
@@ -84,9 +89,11 @@ using .LP_coarse: fd
             @test capprox(ic[c(t, x, y)], ih[ch(t, x, y)]; rtol = alg isa ExplicitEuler ? 1e-13 : 1e-10)
             @test LatticePDE.substep_counts(ic) == LatticePDE.substep_counts(ih)
         end
-        # the masked nodes hold the masked value, and only where most of the block is kind 3
+        # the masked nodes hold the masked value, and only where the whole block is kind 3 (F4-15b;
+        # 15 of 16 sites leave the node free)
         ic = init(pc, BackwardEuler(; dt = 0.05)); step!(ic)
-        @test all(ic[c(t, x, y)][CQ1c .== 3] .== 1.0) && any(ic[c(t, x, y)][CQ1c .!= 3] .!= 1.0)
+        whole = cwhole(CQB1) .== 3
+        @test count(whole) == 2 && all(ic[c(t, x, y)][whole] .== 1.0) && all(ic[c(t, x, y)][.!whole] .!= 1.0)
     end
 
     @testset "steady rows, number types and the ODE path on a coarse grid" begin
@@ -124,8 +131,8 @@ using .LP_coarse: fd
             [c(0, x, y) ~ x * y], cdom(), [t, x, y], [c(t, x, y), g(t, x, y), extra], [cD, ckd]; name = :os)
         oc = discretize(osys(cc, ismember(q(t, x, y), (2,)), q(t, x, y)), LatticeDiscretization(Grid(CDIMS));
             inputs = [q(t, x, y) => CQ1, g(t, x, y) => CG])
-        oh = discretize(osys(ch2, f2(t, x, y), f2(t, x, y)), LatticeDiscretization(Grid(CDIMS .÷ CK));
-            inputs = [f2(t, x, y) => cmean(Float64.(CQ1 .== 2)), g(t, x, y) => cmean(CG)])
+        oh = discretize(osys(ch2, cf2(t, x, y), cf2(t, x, y)), LatticeDiscretization(Grid(CDIMS .÷ CK));
+            inputs = [cf2(t, x, y) => cmean(Float64.(CQ1 .== 2)), g(t, x, y) => cmean(CG)])
         du1, du2 = similar(oc.u0), similar(oh.u0)
         oc.f(du1, oc.u0, oc.p, 0.0); oh.f(du2, oh.u0, oh.p, 0.0)
         @test capprox(du1, du2; rtol = 1e-14)
@@ -239,6 +246,242 @@ using .LP_coarse: fd
         end
     end
 
+    @testset "F4-15b: a mask blends on the blocks it covers in part" begin
+        # A mask `masked(q == 0, v)` on Coarse(4): a node is masked where its whole block is kind 0;
+        # elsewhere it holds the value of its free part (the children with q ≠ 0), its equation folded
+        # over them. Base 7d101740 (~/lpwork/f4F15b/nc.log): the mask folds by Majority, so a node
+        # with 9 or more medium children is held and its sources are lost, and the others fold over
+        # the whole block.
+        lvl(n) = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(Symbolics.variable(n; T = SymbolicUtils.FnType{Tuple, Real, Nothing})),
+            LatticePDE.LatticeLevel, Coarse(CK)))
+        q = first(@variables q(..)::Int32 [input = true])
+        qe = q(t, x, y)
+        # kind 1 (the source) next to the medium (kind 0) on blocks the medium covers in part: the
+        # medium on 0, 4, 8, 9, 12, 15 or 16 of a block's sites, kind 1 on the sites next to it
+        Q = zeros(Int32, CDIMS)
+        nmed = [0, 4, 8, 9, 12, 15, 16, 9, 8, 4, 12, 15, 0, 16, 9, 12]
+        for (b, J) in enumerate(CartesianIndices(CDIMS .÷ CK))
+            sites = [CartesianIndex((J[1] - 1) * CK + i, (J[2] - 1) * CK + j) for j in 1:CK for i in 1:CK]
+            for (n, st) in enumerate(sites)
+                Q[st] = n <= nmed[b] ? 0 : n <= nmed[b] + 3 ? 1 : 2
+            end
+        end
+        held = Q .== 0
+        nf = cnfree(held)
+        @test sort(unique(nf)) == [0, 1, 4, 7, 8, 12, 16]
+        S = 0.7
+        csrc = lvl(:cb15src)
+        sys(c, v) = PDESystem([D(c(t, x, y)) ~ S * (qe == 1) + 0.25 * (qe == 2) * c(t, x, y)], [c(0, x, y) ~ 0.0, c(t, x, y) ~ masked(qe == 0, v)],
+            cdom(), [t, x, y], [c(t, x, y), qe], Num[]; name = :b15)
+        op = discretize(sys(csrc, 0.5), LatticeDiscretization(Grid(CDIMS)); inputs = [qe => Q])
+        du = similar(op.u0); op.f(du, zero(op.u0), op.p, 0.0)
+        du = reshape(du, 4, 4)
+        # one blended node by hand: the rate is the mean over its free children, S #(q == 1) / #free
+        for I in CartesianIndices(nf)
+            nf[I] in (0, 16) && continue
+            blk = Q[((I[1] - 1) * CK + 1):(I[1] * CK), ((I[2] - 1) * CK + 1):(I[2] * CK)]
+            @test du[I] ≈ S * count(==(1), blk) / nf[I] rtol = 1e-15
+        end
+        # conservation: the free volume times the rate is the fine source total (every source site
+        # is free); the Majority fold lost the sources of the blocks with 9 or more medium sites
+        @test sum(nf[I] * du[I] for I in eachindex(nf) if nf[I] > 0) ≈ S * count(==(1), Q) rtol = 1e-14
+        for alg in (ExplicitEuler(; dt = 0.25), BackwardEuler(; dt = 0.25))
+            ic = init(cown(sys(csrc, 0.5), CDIMS; ins = [qe => Q]), alg)
+            for _ in 1:4
+                step!(ic)
+            end
+            u1 = ic[csrc(t, x, y)]
+            @test all(u1[nf .== 0] .== 0.5)                                    # the masked nodes hold the value
+            # the free content Σ #free u grows by the source and by the decay of the free part:
+            # with c(0) = 0 and no diffusion each free node is the scalar ODE u' = a + b u
+            a = [nf[I] == 0 ? 0.0 : S * count(==(1), Q[((I[1] - 1) * CK + 1):(I[1] * CK), ((I[2] - 1) * CK + 1):(I[2] * CK)]) / nf[I]
+                 for I in CartesianIndices(nf)]
+            b = [nf[I] == 0 ? 0.0 : 0.25 * count(==(2), Q[((I[1] - 1) * CK + 1):(I[1] * CK), ((I[2] - 1) * CK + 1):(I[2] * CK)]) / nf[I]
+                 for I in CartesianIndices(nf)]
+            ns = 4 * only(LatticePDE.substep_counts(ic))
+            h = 1.0 / ns
+            # (each substep: ExplicitEuler u + h(a + bu), BackwardEuler (u + ha)/(1 − hb))
+            want = zeros(4, 4)
+            for _ in 1:ns
+                want = alg isa ExplicitEuler ? want .+ h .* (a .+ b .* want) : (want .+ h .* a) ./ (1 .- h .* b)
+            end
+            m = nf .> 0
+            @test isapprox(u1[m], want[m]; rtol = 1e-12) || (println("F4-15b scalar ", alg, ": ", maximum(abs, u1[m] .- want[m])); false)
+        end
+        # f = 0 and f = 1: a node no child of which is held folds over the whole block bitwise (the
+        # rate equals the unmasked system's), a node all of whose children are held is masked
+        cnm = lvl(:cb15nomask)
+        sysn = PDESystem([D(cnm(t, x, y)) ~ S * (qe == 1) + 0.25 * (qe == 2) * cnm(t, x, y)], [cnm(0, x, y) ~ 0.0], cdom(), [t, x, y],
+            [cnm(t, x, y), qe], Num[]; name = :b15n)
+        on = discretize(sysn, LatticeDiscretization(Grid(CDIMS)); inputs = [qe => Q])
+        u0 = collect(range(0.1, 1.6; length = 16))
+        du1, du2 = similar(op.u0), similar(on.u0)
+        op.f(du1, u0, op.p, 0.0); on.f(du2, u0, on.p, 0.0)
+        @test vec(nf .== 16) == (du1 .== du2 .&& vec(nf .== 16)) && any(nf .== 16)
+        @test all(du1[vec(0 .< nf .< 16)] .!= du2[vec(0 .< nf .< 16)])
+        # complementary masks on a block covered half by each (F4-15 review should-fix 3): neither
+        # node is masked; each field holds the value of its own free part (its rate folds over its
+        # own free children), so `masked(q == 0, 9)` sees the source and `masked(q != 0, 9)` does not
+        Qh = zeros(Int32, CDIMS); Qh[1:4, 1:2] .= 1                      # block (1, 1): 8 of 16 sites kind 1
+        c5, c6 = lvl(:cb15half0), lvl(:cb15half1)
+        for (c, pr, want) in ((c5, qe == 0, 1.0), (c6, qe != 0, 0.0))
+            hs = PDESystem([D(c(t, x, y)) ~ (qe == 1)], [c(0, x, y) ~ 0.0, c(t, x, y) ~ masked(pr, 9.0)], cdom(), [t, x, y],
+                [c(t, x, y), qe], Num[]; name = :b15h)
+            sl = solve(cown(hs, CDIMS; ins = [qe => Qh]), ExplicitEuler(; dt = 0.5))
+            v = sl[c(t, x, y), length(sl.t)]
+            @test v[1, 1] == want                                           # (t = 1: the free part's mean source)
+        end
+        # the ODE path (`discretize`'s right side) and every stepper of the owned path equal the
+        # hand-coarsened twin on blended nodes ("a coarse field equals the hand-coarsened problem")
+        cod, hod = lvl(:cb15ode), first(@variables hb15ode(..))
+        kq = first(@variables kq(..) [input = true, bounds = (0, 1)])
+        osys(c, k1, mq, dvs) = PDESystem([D(c(t, x, y)) ~ 0.02 * Δ(c(t, x, y)) - c(t, x, y) * k1 + 0.3 * k1],
+            [c(0, x, y) ~ x * y, c(t, x, y) ~ masked(mq == 0, 0.5)], cdom(), [t, x, y], [c(t, x, y); dvs], Num[]; name = :b15o)
+        oc = discretize(osys(cod, qe == 2, qe, [qe]), LatticeDiscretization(Grid(CDIMS)); inputs = [qe => Q])
+        oh = discretize(osys(hod, kq(t, x, y), qe, [kq(t, x, y), qe]), LatticeDiscretization(Grid(CDIMS .÷ CK));
+            inputs = [kq(t, x, y) => cfree(Float64.(Q .== 2), held), qe => Int32[n == 0 ? 0 : 1 for n in nf]])
+        d1, d2 = similar(oc.u0), similar(oh.u0)
+        oc.f(d1, oc.u0, oc.p, 0.0); oh.f(d2, oh.u0, oh.p, 0.0)
+        @test capprox(d1, d2; rtol = 1e-14)
+
+    end
+
+    @testset "F4-15b: the free fold intersects the irregular domain" begin
+        # (ruling 2026-11-12: the free support is free ∩ in-domain; with no in-domain free child
+        # the mean is over the in-domain children; an out-of-domain child never contributes. A
+        # non-twin test: a hand value that the pre-fix fold misses, because the twin would
+        # reproduce whatever the fold does. At 721d1efb (~/lpwork/f4F15b/cdom-nc.log) the two
+        # cases read 100.0 and 44.875.)
+        qd = first(@variables qd(..)::Int32 [input = true])
+        kd = first(@variables kd(..) [input = true, bounds = (0, 100)])
+        dmd = first(@variables dmd(..)::Bool [input = true])
+        cdf = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables cdomfree(..))), LatticePDE.LatticeLevel, Coarse(CK)))
+        Qd = fill(Int32(1), CDIMS); Kd = zeros(Float64, CDIMS); Dd = trues(CDIMS)
+        sites(J) = [((J[1] - 1) * CK + i, (J[2] - 1) * CK + j) for j in 1:CK for i in 1:CK]
+        # block (1, 1): 9 in-domain children, all masked (q = 0), kd 1..9; 7 out-of-domain
+        # children, free (q = 1), kd 100. The support free ∩ in-domain is empty, so the value is
+        # the mean over the 9 in-domain children, 5; the pre-fix fold read the 7 free
+        # out-of-domain children, 100.
+        for (n, s) in enumerate(sites((1, 1)))
+            Qd[s...] = n <= 9 ? 0 : 1
+            Kd[s...] = n <= 9 ? Float64(n) : 100.0
+            Dd[s...] = n <= 9
+        end
+        # block (2, 1): 9 in-domain free children carry kd = 2; 7 out-of-domain free children
+        # carry kd = 100. The support is the 9 in-domain free children, 2; the pre-fix fold took
+        # all 16 free children, 44.875.
+        for (n, s) in enumerate(sites((2, 1)))
+            Qd[s...] = 1
+            Kd[s...] = n <= 9 ? 2.0 : 100.0
+            Dd[s...] = n <= 9
+        end
+        dsys(c) = PDESystem([D(c(t, x, y)) ~ kd(t, x, y)], [c(0, x, y) ~ 0.0, c(t, x, y) ~ masked(qd(t, x, y) == 0, 1.0)],
+            cdom(1e-6), [t, x, y], [c(t, x, y), dmd(t, x, y), qd(t, x, y), kd(t, x, y)], Num[]; name = :df)
+        p = cown(dsys(cdf), CDIMS; domain = dmd, ins = [dmd(t, x, y) => Dd, qd(t, x, y) => Qd, kd(t, x, y) => Kd])
+        # (u0 = 0, one explicit window: the state is h times the rate)
+        s = solve(p, ExplicitEuler(; dt = 1e-6, substeps = 1))
+        d = Array(s[cdf(t, x, y), length(s.t)]) ./ 1e-6
+        @test isapprox(d[1, 1], 5.0; rtol = 1e-14) || (println("F4-15b domain case 1: ", d[1, 1], " (want 5: the in-domain children, not the free out-of-domain ones)"); false)
+        @test isapprox(d[2, 1], 2.0; rtol = 1e-14) || (println("F4-15b domain case 2: ", d[2, 1], " (want 2: free ∩ in-domain)"); false)
+    end
+
+    @testset "F4-15b review: the support is free ∩ in-domain, not one or the other" begin
+        # (review should-fix 1: a block whose free set and in-domain set are both proper subsets,
+        # with masked-in, free-in, free-out and masked-out children. The fold reads the free-in
+        # children only; the committed hand cases put the free set outside the domain or the
+        # in-domain set wholly masked.)
+        qd = first(@variables pr15qd(..)::Int32 [input = true])
+        kd = first(@variables pr15kd(..) [input = true, bounds = (0, 100)])
+        dmd = first(@variables pr15dmd(..)::Bool [input = true])
+        cdf = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables pr15cdf(..))), LatticePDE.LatticeLevel, Coarse(CK)))
+        psites(J) = [((J[1] - 1) * CK + i, (J[2] - 1) * CK + j) for j in 1:CK for i in 1:CK]
+        Qd = fill(Int32(1), CDIMS); Kd = fill(1.0, CDIMS); Dd = trues(CDIMS)
+        # (block, in-domain children, free children, kd of free-in / masked-in / free-out / masked-out)
+        plan = (((1, 1), 1:13, [1, 2, 3, 14, 15], (2.0, 50.0, 100.0, 7.0)),
+                ((2, 1), 1:12, [1, 2, 5, 9, 13, 14], (2.0, 50.0, 100.0, 7.0)),
+                ((1, 2), 1:13, [2, 4, 6, 14, 15, 16], (3.0, 50.0, 100.0, 7.0)),
+                ((2, 2), 1:16, 1:16, (4.0, 50.0, 100.0, 7.0)))
+        want = Dict{Tuple{Int, Int}, Float64}()
+        for (J, ins, frs, (kfi, kmi, kfo, kmo)) in plan
+            for (n, s) in enumerate(psites(J))
+                inb, free = n in ins, n in frs
+                Qd[s...] = free ? 1 : 0
+                Kd[s...] = free ? (inb ? kfi : kfo) : (inb ? kmi : kmo)
+                Dd[s...] = inb
+            end
+            want[Tuple(J)] = kfi
+        end
+        dsys(c) = PDESystem([D(c(t, x, y)) ~ kd(t, x, y)],
+            [c(0, x, y) ~ 0.0, c(t, x, y) ~ masked(qd(t, x, y) == 0, 1.0)], cdom(1e-6), [t, x, y],
+            [c(t, x, y), dmd(t, x, y), qd(t, x, y), kd(t, x, y)], Num[]; name = :pr15)
+        p = cown(dsys(cdf), CDIMS; domain = dmd, ins = [dmd(t, x, y) => Dd, qd(t, x, y) => Qd, kd(t, x, y) => Kd])
+        s = solve(p, ExplicitEuler(; dt = 1e-6, substeps = 1))
+        d = Array(s[cdf(t, x, y), length(s.t)]) ./ 1e-6
+        for (J, v) in want
+            @test isapprox(d[J...], v; rtol = 1e-14) ||
+                  (println("F4-15b P1 block ", J, ": ", d[J...], " (want ", v, " = free ∩ in-domain; the in-domain mean ",
+                       cinfree(Kd, Qd .== 0, Dd)[J...], ", the free mean ", cfree(Kd, Qd .== 0)[J...],
+                       ", the whole mean ", cmean(Kd)[J...], ")"); false)
+        end
+        # on the straddling blocks the intersection is neither the free mean nor the in-domain mean
+        for J in ((1, 1), (2, 1), (1, 2))
+            @test !(cinfree(Kd, Qd .== 0, Dd)[J...] ≈ cfree(Kd, Qd .== 0)[J...]) &&
+                  !(cinfree(Kd, Qd .== 0, Dd)[J...] ≈ cmean(Kd)[J...])
+        end
+        # every other block is wholly in the domain and free: the whole mean, 1
+        rest = [J for J in CartesianIndices((4, 4)) if !(Tuple(J) in first.(plan))]
+        @test length(rest) == 12 && all(d[J] == 1.0 for J in rest)
+    end
+
+    @testset "F4-15b review: the operator coefficient and the jac rows fold over free ∩ in-domain" begin
+        # (review should-fix 2: a partial mask, an irregular domain and a spatial operator whose
+        # coefficient reads a fine input. The coefficient folds at each face over the block's free
+        # in-domain children, and the implicit operator's rows fold as the residual does.)
+        q2 = first(@variables pr15q2(..)::Int32 [input = true])
+        ki = first(@variables pr15ki(..) [input = true, bounds = (0.5, 4)])
+        pki = first(@variables pr15pki(..) [input = true, bounds = (0.5, 4)])
+        pk1 = first(@variables pr15pk1(..) [input = true, bounds = (0, 1)])
+        dm2 = first(@variables pr15dm2(..)::Bool [input = true])
+        cq = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables pr15cq(..))), LatticePDE.LatticeLevel, Coarse(CK)))
+        ch = first(@variables pr15ch(..))
+        psites(J) = [((J[1] - 1) * CK + i, (J[2] - 1) * CK + j) for j in 1:CK for i in 1:CK]
+        rng = Xoshiro(13)
+        Q = zeros(Int32, CDIMS)
+        n3 = [16, 0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 12, 14, 15, 16, 0][randperm(rng, 16)]
+        for (b, J) in enumerate(CartesianIndices(CDIMS .÷ CK))
+            own = randperm(rng, 16)
+            for (n, s) in enumerate(psites(J))
+                Q[s...] = own[n] <= n3[b] ? 3 : rand(rng, 0:2)
+            end
+        end
+        Ki = [0.5 + 3.5 * rand(rng) for _ in 1:CDIMS[1], _ in 1:CDIMS[2]]
+        Df = [rand(rng) < 0.6 for _ in 1:CDIMS[1], _ in 1:CDIMS[2]]
+        Dc = [count(Df[((I[1] - 1) * CK + 1):(I[1] * CK), ((I[2] - 1) * CK + 1):(I[2] * CK)]) > CK^2 ÷ 2
+              for I in CartesianIndices(CDIMS .÷ CK)]
+        osys(c, K, kind1, dvs) = PDESystem([D(c(t, x, y)) ~ 0.05 * DivKGrad(:harmonic)(K, c(t, x, y)) - c(t, x, y) * 0.3 * kind1],
+            [c(0, x, y) ~ x * y, c(t, x, y) ~ masked(q2(t, x, y) == 3, 1.0)], cdom(), [t, x, y], [c(t, x, y); dvs], Num[]; name = :pr15o)
+        pc = cown(osys(cq, ki(t, x, y), q2(t, x, y) == 1, [q2(t, x, y), ki(t, x, y), dm2(t, x, y)]), CDIMS; domain = dm2,
+            ins = [q2(t, x, y) => Q, ki(t, x, y) => Ki, dm2(t, x, y) => Df])
+        ph = cown(osys(ch, pki(t, x, y), pk1(t, x, y), [q2(t, x, y), pki(t, x, y), pk1(t, x, y), dm2(t, x, y)]), CDIMS .÷ CK; domain = dm2,
+            ins = [q2(t, x, y) => cwhole(Q), pki(t, x, y) => cinfree(Ki, Q .== 3, Df),
+                   pk1(t, x, y) => cinfree(Float64.(Q .== 1), Q .== 3, Df), dm2(t, x, y) => Dc])
+        @test !(cinfree(Ki, Q .== 3, Df) ≈ cmean(Ki))                 # (the fold is not the whole mean)
+        @test !(cinfree(Ki, Q .== 3, Df) ≈ cfree(Ki, Q .== 3))        # (nor the domain-free mean)
+        # an in-domain node with free children outside it: the support is a strict subset of its
+        # free set there, the case the pre-fix fold misses
+        strad = [I for I in CartesianIndices(CDIMS .÷ CK) if Dc[I] &&
+                 any((!Df[(I[1] - 1) * CK + i, (I[2] - 1) * CK + j]) &&
+                     Q[(I[1] - 1) * CK + i, (I[2] - 1) * CK + j] != 3 for i in 1:CK, j in 1:CK)]
+        @test !isempty(strad)
+        for alg in (ExplicitEuler(; dt = 0.05), BackwardEuler(; dt = 0.05))
+            sc, sh = solve(pc, alg), solve(ph, alg)
+            @test sc.retcode == SciMLBase.ReturnCode.Success
+            a, b = Array(sc[cq(t, x, y), length(sc.t)]), sh[ch(t, x, y), length(sh.t)]
+            rt = alg isa ExplicitEuler ? 1e-13 : 1e-10
+            @test isapprox(a, b; rtol = rt) || (println("F4-15b P2 ", alg, ": max |Δ| ", maximum(abs, a .- b)); false)
+        end
+    end
+
     @testset "a fine field and a coarse field in one group: prolongation and restriction" begin
         # u (fine 8×8) reads c (Coarse(2), 4×4) at the node of its block; c reads u by the block
         # mean. One BackwardEuler window against the hand matrix of the coupled system.
@@ -296,14 +539,20 @@ using .LP_coarse: fd
         cdh = first(@variables cdomh(..))
         # (the twin reads the kind expressions' block means as real inputs, F4-15)
         function dsys(c; hand = false)
-            k2, k1 = hand ? (f2(t, x, y), f1(t, x, y)) : (ismember(q(t, x, y), (2,)), q(t, x, y) == 1)
+            k2, k1 = hand ? (cf2(t, x, y), cf1(t, x, y)) : (ismember(q(t, x, y), (2,)), q(t, x, y) == 1)
             PDESystem([D(c(t, x, y)) ~ 0.02 * Δ(c(t, x, y)) - c(t, x, y) * k2 + 0.5 * k1 + 0.05 * g(t, x, y)],
                 [c(0, x, y) ~ x + y, c(t, x, y) ~ masked(q(t, x, y) == 3, 1.0)], cdom(), [t, x, y],
-                [[c(t, x, y), cdm(t, x, y), q(t, x, y), g(t, x, y)]; hand ? [f1(t, x, y), f2(t, x, y)] : Num[]], Num[]; name = :dm)
+                [[c(t, x, y), cdm(t, x, y), q(t, x, y), g(t, x, y)]; hand ? [cf1(t, x, y), cf2(t, x, y)] : Num[]], Num[]; name = :dm)
         end
         pc = cown(dsys(cdo), CDIMS; domain = cdm, ins = [cdm(t, x, y) => Df, q(t, x, y) => CQ1, g(t, x, y) => CG])
+        # (`ckinds` covers no block with kind 3 whole: no node is masked, each folds over its free
+        # children; the hand inputs are the in-domain free means, as the fold's support is under
+        # the domain ruling: at 721d1efb (~/lpwork/f4F15b/cdom-nc.log) the three comparisons fail)
+        # (the hand inputs are the in-domain free means: the ruling's support is free ∩ in-domain)
         ph = cown(dsys(cdh; hand = true), CDIMS .÷ CK; domain = cdm,
-            ins = vcat([cdm(t, x, y) => Dc, q(t, x, y) => CQ1c, g(t, x, y) => cmean(CG)], chand(CQ1, CQ1c)[1:2]))
+            ins = [cdm(t, x, y) => Dc, q(t, x, y) => cwhole(CQ1), g(t, x, y) => cinfree(CG, CQ1 .== 3, Df),
+                   cf1(t, x, y) => cinfree(Float64.(CQ1 .== 1), CQ1 .== 3, Df),
+                   cf2(t, x, y) => cinfree(Float64.(CQ1 .== 2), CQ1 .== 3, Df)])
         for alg in (ExplicitEuler(; dt = 0.05), BackwardEuler(; dt = 0.05), CrankNicolson(; dt = 0.05))
             sc, sh = solve(pc, alg), solve(ph, alg)
             @test capprox(sc[cdo(t, x, y), length(sc.t)], sh[cdh(t, x, y), length(sh.t)]; rtol = alg isa ExplicitEuler ? 1e-13 : 1e-10)
@@ -354,6 +603,13 @@ using .LP_coarse: fd
         @test size(sg[L(t, x, y), 1]) == (4, 4) && size(sg[u(t, x, y), 2]) == (16, 16)
         sdir = solve(cown(direct, (16, 16)), ExplicitEuler(; dt = 0.01, substeps = 1); saveat = [0.01])
         @test sdir[u(t, x, y), 2] == sg[u(t, x, y), 2]
+        # a mask on an aux field: refused (D-F4-15b Limits (4): an aux field follows its
+        # expression), with the route (mask a rate field)
+        am = PDESystem([D(cc(t, x, y)) ~ 0.01 * Δ(cc(t, x, y)), L(t, x, y) ~ Δ(cc(t, x, y))],
+            [cc(0, x, y) ~ x^2, L(t, x, y) ~ masked(q(t, x, y) == 3, 1.0)], cdom(),
+            [t, x, y], [cc(t, x, y), L(t, x, y), q(t, x, y)], Num[]; name = :am)
+        m = cmsg(() -> cown(am, (16, 16); ins = [q(t, x, y) => zeros(Int32, 16, 16)]))
+        @test occursin("aux field", m) && occursin("takes no mask", m) && occursin("rate field", m)
         # (in a substep a field reads the fields it depends on after their update: `L` from `cref`
         # after its step; the coarse Laplacian by hand, zero flux, spacing 1/4)
         lap(v) = (n = size(v, 1); [sum((1 <= i + a <= n && 1 <= j + b <= n ? v[i + a, j + b] - v[i, j] : 0.0)

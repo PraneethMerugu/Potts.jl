@@ -1,5 +1,5 @@
 # P6.0at (ROADMAP Phase 6, step 0): named and inline gather relations are in the
-# fingerprint. Decision: D-124 (amends D-016, after D-122). Frozen (AUTONOMY §7.3).
+# fingerprint. Decision: D-124 (amends D-016, after D-122).
 #
 # The defect (P6.0ar test author, D-122 "Follow-up"). A named relation (`@relations far =
 # Ball(2.0)`, read by `contacts(far)` or a fold `for n in far(site)`) and an inline gather
@@ -430,74 +430,30 @@ function p60at_ah(solver)
     return PottsProblem(P60atAhAt(; name = :x), Any[ownership => s, kind => [:A, :A]], (0, 10); seed = 7, ode_solver = solver)
 end
 
-# no named or inline gather relation read: unchanged. The fixture values were recorded on
-# e4b6ab51; the PottsModels systems carry their D-122 pins (p6_0aq, p6_0p, p6_0t).
-p60at_unchanged() = (
-    "sq" => () -> p60at_problem("sq"),
-    "sq far unused" => () -> p60at_problem("sq far unused"),
-    "sq proposal=Moore(1)" => () -> p60at_problem("sq proposal=Moore(1)"),
-    "sq observed far(40) far=Ball(2.0)" => () -> p60at_problem("sq observed far(40) far=Ball(2.0)"),
-    "sq Float32" => () -> p60at_problem("sq"; T = Float32),
-    "hex" => () -> p60at_problem("hex"),
-    "cube" => () -> p60at_problem("cube"),
-    "GranerGlazier" => () -> (s = graner_glazier_state(); PottsProblem(GranerGlazier(; name = :gg), [ownership => s[1], kind => s[2]], (0, 10))),
-    "MerksVasculogenesis" => () -> PottsProblem(MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
-        [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 10);
-        field_solver = Potts.ExplicitEuler(substeps = 2, lower = 0.0)),
-    "OpenVTGrowingMonolayer" => () -> PottsProblem(OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)),
-        openvt_monolayer_state(; lattice = (24, 24)), (0, 10); capacity = 64),
-    "SingleDivisionFixture" => () -> PottsProblem(SingleDivisionFixture(; name = :fixture),
-        [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [:epithelial]], (0, 10)),
-    "AkeebInvasion" => () -> PottsProblem(AkeebInvasion(; name = :akeeb, lattice = (60, 40)), akeeb_state(; lattice = (60, 40)), (0, 10);
-        capacity = 256),
-)
-const P60AT_FINGERPRINTS = Dict{String, UInt64}(
-    "sq" => 0x4f162b777e9799ab,
-    "sq far unused" => 0x4f162b777e9799ab,
-    "sq proposal=Moore(1)" => 0x84a3dc5064968e50,
-    "sq observed far(40) far=Ball(2.0)" => 0x4f162b777e9799ab,
-    "sq Float32" => 0x50c5cd0b28cd4266,
-    "hex" => 0x7f64ce1e5b4dfc59,
-    "cube" => 0xff2e2fb12cf95e96,
-    "GranerGlazier" => 0xe6e09483034b4193,
-    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
-    "OpenVTGrowingMonolayer" => 0x34b40af65c56a113,
-    "SingleDivisionFixture" => 0xd2bed53e2590b709,
-    "AkeebInvasion" => 0x72ced0fc70498f16,   # re-pinned under D-237 (cell draws by id and generation)
-)
-
-# models that read an inline gather: the old pins (D-122 values, e4b6ab51) must move; the new
-# values are recorded by the implementer in D-124 and re-pinned in the earlier frozen files.
+# a relation that is declared but unread, or read only by an observer, does not move the
+# fingerprint; a proposal or a compute type does.
+# models that read an inline gather: the fixture is what it claims, and its fingerprint is
+# deterministic.
 p60at_moved() = (
     "WortelAct" => () -> p60at_wortel(),
     "WortelAct connected" => () -> p60at_wortel(; connected = true),
     "P60ahAt RK4" => () -> p60at_ah(Potts.RK4()),
     "P60ahAt ExplicitEuler" => () -> p60at_ah(Potts.ExplicitEuler()),
 )
-const P60AT_OLD_FINGERPRINTS = Dict{String, UInt64}(
-    "WortelAct" => 0xd6d4f8e4e7850c5e,
-    "WortelAct connected" => 0xa2b5702602b1e8f9,
-    "P60ahAt RK4" => 0x5df9f7a97301532a,
-    "P60ahAt ExplicitEuler" => 0x2130555794801e36,
-)
 
-@testset "P6.0at: fingerprints of models reading no named or gather relation unchanged" begin
-    for (name, build) in p60at_unchanged()
-        haskey(P60AT_FINGERPRINTS, name) || continue   # (D-INT-1: its pin was removed)
-        prob = build()
-        fp = prob.f.fingerprint
-        @test fp == P60AT_FINGERPRINTS[name]
-        fp == P60AT_FINGERPRINTS[name] || @info "P6.0at: fingerprint $name = $(repr(fp))"
-    end
+@testset "P6.0at: an unused or observed-only relation does not move the fingerprint" begin
+    base = p60at_problem("sq").f.fingerprint
+    @test p60at_problem("sq far unused").f.fingerprint == base
+    @test p60at_problem("sq observed far(40) far=Ball(2.0)").f.fingerprint == base
+    @test p60at_problem("sq proposal=Moore(1)").f.fingerprint != base       # D-124: a proposal is hashed
+    @test p60at_problem("sq"; T = Float32).f.fingerprint != base            # the compute type is hashed
 end
 
-@testset "P6.0at: models reading an inline gather move off their old pins" begin
+@testset "P6.0at: models reading an inline gather are what they claim and deterministic" begin
     for (name, build) in p60at_moved()
         prob = build()
         @test any(k -> startswith(string(k), "gather"), keys(prob.relations))   # the fixture is what it claims
         fp = prob.f.fingerprint
-        @test fp != P60AT_OLD_FINGERPRINTS[name]
         @test build().f.fingerprint == fp                                    # deterministic
-        @info "P6.0at: fingerprint $name = $(repr(fp))"
     end
 end

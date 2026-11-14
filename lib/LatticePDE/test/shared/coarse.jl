@@ -31,6 +31,49 @@ function cmean(A, k = CK)
     nc = size(A) .÷ k
     return [sum(A[(I[1] - 1) * k + i, (I[2] - 1) * k + j] for j in 1:k for i in 1:k) / k^2 for I in CartesianIndices(nc)]
 end
+# the mean of a fine array over each block's free children (F4-15b: the children where `held` is
+# false; in the IR's order, so a block with no held child gives `cmean`), over every child of a
+# block no child of which is free
+function cfree(A, held, k = CK)
+    nc = size(A) .÷ k
+    return map(CartesianIndices(nc)) do I
+        ch = [CartesianIndex((I[1] - 1) * k + i, (I[2] - 1) * k + j) for j in 1:k for i in 1:k]
+        fr = [c for c in ch if !held[c]]
+        isempty(fr) ? sum(A[c] for c in ch) / k^2 : sum(A[c] for c in fr) / length(fr)
+    end
+end
+# the mean of a fine array over each block's free in-domain children (F4-15b ruling: the fold's
+# support is free ∩ in-domain); a block with no such child gives the in-domain mean, and none of
+# those the whole mean
+function cinfree(A, held, ind, k = CK)
+    nc = size(A) .÷ k
+    return map(CartesianIndices(nc)) do I
+        ch = [CartesianIndex((I[1] - 1) * k + i, (I[2] - 1) * k + j) for j in 1:k for i in 1:k]
+        su = [c for c in ch if !held[c] && ind[c]]
+        isempty(su) && (su = [c for c in ch if ind[c]])
+        isempty(su) ? sum(A[c] for c in ch) / k^2 : sum(A[c] for c in su) / length(su)
+    end
+end
+# the number of free children of each block
+cnfree(held, k = CK) = [count(!, held[((I[1] - 1) * k + 1):(I[1] * k), ((I[2] - 1) * k + 1):(I[2] * k)])
+                        for I in CartesianIndices(size(held) .÷ k)]
+# a fine kind map whose 4×4 blocks hold kind 3 (the mask's) on 16, 0, 1, 2, … 15 of their sites,
+# the others drawn from 0:2 (F4-15b): masked, free and blended nodes
+function cblendkinds(seed; dims = CDIMS, k = CK)
+    rng = Xoshiro(seed)
+    Q = zeros(Int32, dims)
+    n3 = [16, 0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 12, 14, 15, 16, 0][randperm(rng, 16)]
+    for (b, J) in enumerate(CartesianIndices(dims .÷ k))
+        own = randperm(rng, k^2)
+        for (n, (i, j)) in enumerate((i, j) for j in 1:k for i in 1:k)
+            Q[(J[1] - 1) * k + i, (J[2] - 1) * k + j] = own[n] <= n3[b] ? 3 : rand(rng, 0:2)
+        end
+    end
+    return Q
+end
+# the hand twin's mask input: kind 3 where the whole block is
+cwhole(Q, k = CK) = Int32[all(==(3), Q[((I[1] - 1) * k + 1):(I[1] * k), ((I[2] - 1) * k + 1):(I[2] * k)]) ? 3 : 0
+                          for I in CartesianIndices(size(Q) .÷ k)]
 # the owned problem of `sys` on `dims` with inputs `ins`
 # (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
 cown(sys, dims; T = Float64, ins = (), kw...) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims); T, kw...);
@@ -40,29 +83,32 @@ cown(sys, dims; T = Float64, ins = (), kw...) = LFP.field_problem(discretize(sys
 # a decay at a kind, a source at a kind, a moving masked Dirichlet, a Robin face, a Dirichlet face
 # whose value reads the coordinates, a face value that reads an input (a field face), a table at
 # the kind and a source from a real input. With `hand` (the twin), the kind expressions are real
-# inputs that hold their block means: `f2` for `ismember(q, (2,))`, `f1` for `q == 1`, `sv` for
-# `at(cSv, q + 1)` (F4-15: a kind expression folds by its mean, as a real input does)
+# inputs that hold their block means: `cf2` for `ismember(q, (2,))`, `cf1` for `q == 1`, `csv` for
+# `at(cSv, q + 1)` (F4-15: a kind expression folds by its mean, as a real input does). The names are
+# unique to this file: SymbolicUtils interns an applied term `sv(t, x, y)` whatever its function's
+# metadata, and unseen_loop.jl's plain `sv` (included before device.jl) drops `input = true`
 @parameters cD = 0.02 ckd = 3.0 cs = 0.5 cSv[1:4] = [1.0, 2.0, 5.0, 3.0]
-@variables f1(..) [input = true, bounds = (0, 1)] f2(..) [input = true, bounds = (0, 1)] sv(..) [input = true, bounds = (1, 5)]
+@variables cf1(..) [input = true, bounds = (0, 1)] cf2(..) [input = true, bounds = (0, 1)] csv(..) [input = true, bounds = (1, 5)]
 function csys(c, q, g; steady = false, hand = false)
     ce, qe, ge = c(t, x, y), q(t, x, y), g(t, x, y)
-    k2, k1, tv = hand ? (f2(t, x, y), f1(t, x, y), sv(t, x, y)) : (ismember(qe, (2,)), qe == 1, at(cSv, qe + 1))
+    k2, k1, tv = hand ? (cf2(t, x, y), cf1(t, x, y), csv(t, x, y)) : (ismember(qe, (2,)), qe == 1, at(cSv, qe + 1))
     rhs = cD * DivKGrad(:harmonic)(1 + x, ce) - ckd * ce * k2 + cs * k1 + 0.1 * tv + 0.05 * ge
     eqs = steady ? [0 ~ rhs] : [D(ce) ~ rhs]
     bcs = [ce ~ masked(qe == 3, 1.0), 0.5 * c(t, 0, y) - 0.1 * Differential(x)(c(t, 0, y)) ~ 0.3,
         c(t, x, 1) ~ x, c(t, 1, y) ~ g(t, 1, y)]
     steady || push!(bcs, c(0, x, y) ~ x * y)
-    dvs = hand ? [ce, qe, ge, f1(t, x, y), f2(t, x, y), sv(t, x, y)] : [ce, qe, ge]
+    dvs = hand ? [ce, qe, ge, cf1(t, x, y), cf2(t, x, y), csv(t, x, y)] : [ce, qe, ge]
     return PDESystem(eqs, bcs, cdom(), [t, x, y], dvs, [cD, ckd, cs, cSv]; name = :cs)
 end
-# the hand twin's inputs for the fine kind map `Q`: the block means of the kind expressions, and
-# the block's majority kind for the mask (`ckinds` gives every block a strict majority)
-chand(Q, Qc) = [f1(t, x, y) => cmean(Float64.(Q .== 1)), f2(t, x, y) => cmean(Float64.(Q .== 2)),
-    sv(t, x, y) => cmean(Float64[1.0, 2.0, 5.0, 3.0][Q .+ 1])]
+# the hand twin's inputs for the fine kind map `Q`: the means of the kind expressions over the
+# free children (the mask is `q == 3`; F4-15b)
+chand(Q) = [cf1(t, x, y) => cfree(Float64.(Q .== 1), Q .== 3), cf2(t, x, y) => cfree(Float64.(Q .== 2), Q .== 3),
+    csv(t, x, y) => cfree(Float64[1.0, 2.0, 5.0, 3.0][Q .+ 1], Q .== 3)]
 # equal to rounding: the fold multiplies the block mean last in a product, the twin in its term order
 capprox(a, b; rtol = 1e-13) = isapprox(a, b; rtol) || (println("coarse twin: max |Δ| ", maximum(abs, a .- b)); false)
 const CQ1, CQ1c = ckinds(11)
 const CQ2, CQ2c = ckinds(12)
+const CQB1, CQB2 = cblendkinds(13), cblendkinds(14)
 # a real input whose block sums are exact (integers): the mean is exact in both problems
 const CG = Float64[(3i + 5j) % 7 for i in 1:16, j in 1:16]
 
@@ -95,8 +141,8 @@ function ctwins(; steady = false, T = Float64, storage = nothing, backend = noth
     storage === nothing || (ch = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(ch), LatticePDE.LatticeStorage, storage)))
     q, g = @variables q(..)::Int32 [input = true] g(..) [input = true]
     kw = backend === nothing ? (;) : (; backend)
-    pc = cown(csys(c, q, g; steady), CDIMS; T, ins = [q(t, x, y) => CQ1, g(t, x, y) => CG], kw...)
+    pc = cown(csys(c, q, g; steady), CDIMS; T, ins = [q(t, x, y) => CQB1, g(t, x, y) => CG], kw...)
     ph = cown(csys(ch, q, g; steady, hand = true), CDIMS .÷ CK; T,
-        ins = vcat([q(t, x, y) => CQ1c, g(t, x, y) => cmean(CG)], chand(CQ1, CQ1c)), kw...)
+        ins = vcat([q(t, x, y) => cwhole(CQB1), g(t, x, y) => cfree(CG, CQB1 .== 3)], chand(CQB1)), kw...)
     return pc, ph, (c, ch, q, g)
 end

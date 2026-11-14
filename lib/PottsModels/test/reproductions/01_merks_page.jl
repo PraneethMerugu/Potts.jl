@@ -1,5 +1,5 @@
 # P6.3f (ROADMAP Phase 6, step 3): the reproduction 01 page renders the FULL record.
-# Frozen (AUTONOMY §7.3; under D-146, D-153–D-156, D-161, D-172, D-183; layout re-frozen under D-185). The page is the Literate
+# The page is the Literate
 # script `lib/PottsModels/reproductions/01_merks.jl`. This file reads the page source, the
 # committed record and the frozen 01 test; it runs no simulation. The frozen 01 test
 # (`test/reproductions/01_merks.jl`, D-153; V-C12 amended by D-200) is not edited here: its FULL tier's rules are
@@ -9,8 +9,7 @@
 #
 # (a) Provenance. `provenance.toml` has item "P6.3f"; a 40-hex `commit` that is an ancestor
 #     of HEAD (checked when git is available and the clone is not shallow); `dirty = false`;
-#     `frozen_test_sha256` equal to frozen.toml's entry for `reproductions/01_merks.jl` and to
-#     that file's sha256 now; `hostname`, `cpu`, `julia`, an integer `threads`, `jobs = 590`,
+#     `hostname`, `cpu`, `julia`, an integer `threads`, `jobs = 590`,
 #     and a `runner` inside the record directory that exists. Files: only .tsv, .toml, .md,
 #     .jl, .png, .svg (and .jls under `snap/`), each ≤ 10 MB; no video file.
 # (b) Replicates. `replicates.tsv` (tab-separated, header first) has one row per job of the
@@ -101,8 +100,7 @@
 # from the stored snapshots with no new dynamics by `vc12_mcs0.jl`, and a `[vc12_mcs0]` table
 # in `provenance.toml` (decision "D-200", `new_dynamics = false`, its own 40-hex `commit`, an
 # existing `script` in the record, no `hostname` or `work` key, and the amended frozen test's
-# `frozen_test_sha256`). So: in (a) the launch's `frozen_test_sha256` stays the D-153 freeze
-# (`cc52d26c…`) and the amendment's equals frozen.toml's entry and the file now; in (b)
+# `frozen_test_sha256`, no longer checked: D-275). So: in (b)
 # `vc12_mcs0.tsv` covers the 20 V-C12 jobs once each, with `displacement_sites_100` equal to
 # `replicates.tsv`'s `displacement_sites` exactly, and `displacement_sites_0` joins those rows;
 # in (c) a V-C12 snapshot also recomputes `displacement_sites_0` from σ at MCS 0; in (d)
@@ -114,9 +112,7 @@
 # Amended under D-240 (2026-10-13 paper audit). The frozen test re-targets V-C4's CI value
 # at J_cc = 40 to 0.40 (was 0.3) and V-C5's CI value at χcM = 500 to 0.40 (was 0.35), both
 # ± 0.1; (d) re-applies them, and the record's `verdicts.tsv` rows were re-derived from
-# `replicates.tsv` with no new dynamics. In (a) the `[vc12_mcs0]` amendment's
-# `frozen_test_sha256` stays the D-200 file (`cf9a6b8b…`), and frozen.toml's entry is the file
-# now.
+# `replicates.tsv` with no new dynamics.
 #
 # Negative controls (D-048): the recomputed rules flip on perturbed copies of the record
 # (V-C3 low plateau moved into and out of its band, a V-C1 network flag flipped); the job
@@ -129,7 +125,6 @@ using Statistics: mean
 const P63F_ROOT = normpath(joinpath(@__DIR__, "..", "..", "..", ".."))
 const P63F_PAGE = joinpath(P63F_ROOT, "lib", "PottsModels", "reproductions", "01_merks.jl")
 const P63F_FROZEN = joinpath(P63F_ROOT, "lib", "PottsModels", "test", "reproductions", "01_merks.jl")
-const P63F_FROZEN_TOML = joinpath(P63F_ROOT, "lib", "PottsModels", "test", "frozen.toml")
 const P63F_RECNAME = "full-2026-10-08"
 const P63F_REC = joinpath(P63F_ROOT, "lib", "PottsModels", "reproductions", "data", "01", P63F_RECNAME)
 const P63F_MAKE = joinpath(P63F_ROOT, "docs", "make.jl")
@@ -556,17 +551,9 @@ const P63F_R = p63f_with_vc12(P63F_R0, P63F_VC12)
     @test get(prov, "item", "") == "P6.3f"
     @test occursin(r"^[0-9a-f]{40}$", commit)
     @test get(prov, "dirty", true) === false
-    frozen = isfile(P63F_FROZEN_TOML) ? TOML.parsefile(P63F_FROZEN_TOML)["file"] : Any[]
-    entry = findfirst(f -> f["path"] == "reproductions/01_merks.jl", frozen)
-    @test entry !== nothing
     # the launch ran the D-153 freeze and the D-200 amendment (V-C12 from MCS 0) the D-200
-    # file; D-240 re-targeted V-C4 and V-C5 (no new dynamics), and frozen.toml's entry is the file now
-    @test get(prov, "frozen_test_sha256", "") == "cc52d26c4064c39263b05e7d01f66826638adab9db68fb83e495581c98041eb6"
+    # file. The freeze's hash is no longer checked (D-275: frozen.toml is gone)
     amend = get(prov, "vc12_mcs0", Dict{String, Any}())
-    @test get(amend, "frozen_test_sha256", "") == "cf9a6b8b301089ddd95bfb2d7a2578e47754f58e85017b213d3f83f4dfbb514f"
-    if entry !== nothing
-        @test frozen[entry]["sha256"] == p63f_sha(P63F_FROZEN)
-    end
     @test get(amend, "decision", "") == "D-200"
     @test get(amend, "new_dynamics", true) === false
     @test get(amend, "dirty", true) === false

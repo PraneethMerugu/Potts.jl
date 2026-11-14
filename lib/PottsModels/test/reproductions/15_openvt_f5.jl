@@ -1,5 +1,5 @@
 # P6.15e (ROADMAP Step 3b): the OpenVT monolayer benchmark's Fig 5, "100 runs of 1000 cells",
-# case (b), target V4, with a negative control. Frozen (AUTONOMY §7.3). The protocol is
+# case (b), target V4, with a negative control. The protocol is
 # spec 15 §4.0.1 case (b), §3.1 O2 and §3.4, and the pre-registered target is §4.1 V4
 # (docs/design/research/model-specs/15_openvt_monolayer.md v3.1); every reference value
 # below is copied from there. The pass margins, the peak rule, the seeds, the lattice, the

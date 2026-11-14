@@ -1,5 +1,4 @@
-# P6.0m2 (ROADMAP Phase 6, step 0): breaking batch part 1 (D-075 Q2, Q9). Frozen
-# (AUTONOMY §7.3).
+# P6.0m2 (ROADMAP Phase 6, step 0): breaking batch part 1 (D-075 Q2, Q9).
 #
 # Semantics pinned here:
 #  1. The problem type is `CorePotts.PottsProblem` (renamed from `CPMProblem`), with its

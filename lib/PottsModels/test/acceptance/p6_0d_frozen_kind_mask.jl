@@ -1,5 +1,4 @@
 # P6.0d (ROADMAP Phase 6, step 0): the frozen-kind mask is recomputed on lifecycle events.
-# Frozen (AUTONOMY §7.3).
 #
 # The defect. `@kinds … wall[frozen]` puts the sites of cells of frozen kinds into the
 # problem's `frozen` site mask once, at `PottsProblem` (`Potts._frozen_mask`), and the

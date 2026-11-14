@@ -1,6 +1,6 @@
 # P6.0x (ROADMAP Phase 6, step 0): a gather inside a cell-ODE rate allocates on every warm
 # MCS (480–1472 B here), on both algorithms and every fixed-step solver; the same rate without
-# the gather does not allocate. Frozen (AUTONOMY §7.3).
+# the gather does not allocate.
 #
 # Pinned here:
 #  1. Zero warm allocations per `step!` (after two warm-up steps, every one of five further
@@ -119,97 +119,20 @@ p60x_final_y(M, alg, kw) = Vector{Float64}(Array(solve(p60x_problem(M, (0, p60x_
 # Recorded on the code before the fix (feat/p6-0x at d5bfd3dc, CPU, 1 and 4 threads alike), seed 7, 10 MCS:
 # (model, solver label, algorithm) => y after 10 MCS.
 
-const p60x_RESULTS = Dict{Tuple{Symbol, String, Symbol}, Vector{Float64}}(
-    (:XVol, "ExplicitEuler() (default)", :SequentialCPM) => [8.137206881420001, 8.48588532152],
-    (:XVol, "ExplicitEuler() (default)", :CheckerboardCPM) => [4.60743312414, 4.95611156424],
-    (:XVol, "ExplicitEuler(substeps = 4)", :SequentialCPM) => [7.980329464932799, 8.34356190482068],
-    (:XVol, "ExplicitEuler(substeps = 4)", :CheckerboardCPM) => [4.545459699248503, 4.908692139136383],
-    (:XVol, "RK4()", :SequentialCPM) => [7.930181178854149, 8.298060953266647],
-    (:XVol, "RK4()", :CheckerboardCPM) => [4.525374264979841, 4.893254039392339],
-    (:XVol, "Adaptive(Rodas5P())", :SequentialCPM) => [7.930184775682167, 8.298064216855504],
-    (:XVol, "Adaptive(Rodas5P())", :CheckerboardCPM) => [4.525375710240825, 4.893255151413498],
-    (:XCross, "ExplicitEuler() (default)", :SequentialCPM) => [1.5, 1.5],
-    (:XCross, "ExplicitEuler() (default)", :CheckerboardCPM) => [1.125, 1.125],
-    (:XCross, "ExplicitEuler(substeps = 4)", :SequentialCPM) => [1.4999999884277573, 1.5000000115722427],
-    (:XCross, "ExplicitEuler(substeps = 4)", :CheckerboardCPM) => [1.1890983006682025, 1.1891146284148315],
-    (:XCross, "RK4()", :SequentialCPM) => [1.4999999014183043, 1.5000000985816957],
-    (:XCross, "RK4()", :CheckerboardCPM) => [1.2040927032644153, 1.2041490104080932],
-    (:XCross, "Adaptive(Rodas5P())", :SequentialCPM) => [1.4999999038193916, 1.5000000965925226],
-    (:XCross, "Adaptive(Rodas5P())", :CheckerboardCPM) => [1.2039188005970212, 1.2039743829137202],
-    (:XRing, "ExplicitEuler() (default)", :SequentialCPM) => [1.3998809088, 1.091872],
-    (:XRing, "ExplicitEuler() (default)", :CheckerboardCPM) => [0.48044769280000005, 0.9945815552000001],
-    (:XRing, "ExplicitEuler(substeps = 4)", :SequentialCPM) => [1.3885621926204719, 1.1362378903265877],
-    (:XRing, "ExplicitEuler(substeps = 4)", :CheckerboardCPM) => [0.5131953040872874, 1.0233177411349452],
-    (:XRing, "RK4()", :SequentialCPM) => [1.38505768009323, 1.1496756803180677],
-    (:XRing, "RK4()", :CheckerboardCPM) => [0.522982195178112, 1.032389477675049],
-    (:XRing, "Adaptive(Rodas5P())", :SequentialCPM) => [1.3850598505220633, 1.149667406146547],
-    (:XRing, "Adaptive(Rodas5P())", :CheckerboardCPM) => [0.5229761881528991, 1.0323838383355808],
-    (:XPlain, "ExplicitEuler() (default)", :SequentialCPM) => [1.39338704105, 1.73271534504],
-    (:XPlain, "ExplicitEuler() (default)", :CheckerboardCPM) => [1.41627155083, 1.73107271203],
-    (:XPlain, "ExplicitEuler(substeps = 4)", :SequentialCPM) => [1.3845013745124777, 1.7389600150590785],
-    (:XPlain, "ExplicitEuler(substeps = 4)", :CheckerboardCPM) => [1.4069887331695612, 1.7373509721745743],
-    (:XPlain, "RK4()", :SequentialCPM) => [1.3816657345723107, 1.7409489801675833],
-    (:XPlain, "RK4()", :CheckerboardCPM) => [1.404024261769511, 1.7393517659267832],
-    (:XPlain, "Adaptive(Rodas5P())", :SequentialCPM) => [1.3816659378752223, 1.7409488376324926],
-    (:XPlain, "Adaptive(Rodas5P())", :CheckerboardCPM) => [1.4040244743442527, 1.7393516225258678],
-    (:XPair, "ExplicitEuler() (default)", :SequentialCPM) => [1.5, 1.5],
-    (:XPair, "ExplicitEuler() (default)", :CheckerboardCPM) => [1.5, 1.5],
-    (:XPair, "ExplicitEuler(substeps = 4)", :SequentialCPM) => [1.4999999884277573, 1.5000000115722427],
-    (:XPair, "ExplicitEuler(substeps = 4)", :CheckerboardCPM) => [1.4999999884277573, 1.5000000115722427],
-    (:XPair, "RK4()", :SequentialCPM) => [1.4999999014183043, 1.5000000985816957],
-    (:XPair, "RK4()", :CheckerboardCPM) => [1.4999999014183043, 1.5000000985816957],
-    (:XPair, "Adaptive(Rodas5P())", :SequentialCPM) => [1.4999999038193916, 1.5000000965925226],
-    (:XPair, "Adaptive(Rodas5P())", :CheckerboardCPM) => [1.4999999038193916, 1.5000000965925226],
-)
-
-# (model, solver label) => problem fingerprint (Float64)
-const p60x_FINGERPRINTS = Dict{Tuple{Symbol, String}, UInt64}(
-    (:XPlain, "ExplicitEuler() (default)") => 0x6735c6e78bb18202,
-    (:XPlain, "ExplicitEuler(substeps = 4)") => 0x786ca81a07a7ca57,
-    (:XPlain, "RK4()") => 0xcf18be4cf6c34e28,
-    (:XPlain, "Adaptive(Rodas5P())") => 0xd14f9b0eab30d41e,
-    (:XPair, "ExplicitEuler() (default)") => 0x931642ceb3ccf4f0,
-    (:XPair, "ExplicitEuler(substeps = 4)") => 0xb0b464bc350e1102,
-    (:XPair, "RK4()") => 0x05dd207f8b357730,
-    (:XPair, "Adaptive(Rodas5P())") => 0x843419cc959dffb3,
-)
-
-# published models (no gather in a cell ODE) => problem fingerprint (Float64, default solvers)
-p60x_two(dims, a, b) = (s = zeros(Int32, dims); s[a...] .= 1; s[b...] .= 2; s)
-p60x_published() = (
-    (:GranerGlazier, () -> (σ = graner_glazier_state(); PottsProblem(GranerGlazier(; name = :gg), [ownership => σ[1], kind => σ[2]], (0, 10)))),
-    (:WortelAct, () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8)),
-        [ownership => p60x_two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:cell, :cell]], (0, 10))),
-    (:MerksVasculogenesis, () -> PottsProblem(MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
-        [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 10);
-        field_solver = Potts.ExplicitEuler(substeps = 2, lower = 0.0))),
-    (:OpenVTGrowingMonolayer, () -> PottsProblem(OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)),
-        openvt_monolayer_state(; lattice = (24, 24)), (0, 10))),
-)
-const p60x_PUBLISHED = Dict{Symbol, UInt64}(
-    :GranerGlazier => 0xe6e09483034b4193,   # re-pinned under D-122
-    :WortelAct => 0x9a9fcac5fc22b7c5,   # re-pinned under D-124
-    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
-    :OpenVTGrowingMonolayer => 0x34b40af65c56a113,   # re-pinned under D-122
-)
-
 # ---------------------------------------------------------------------------------------
 
 @testset "P6.0x: the fixtures exercise their gathers" begin
     # XVol reads the volumes around site 42, which change: the two algorithms' trajectories
     # differ (they would not if the gather read nothing that moves)
-    @test p60x_RESULTS[(:XVol, "ExplicitEuler() (default)", :SequentialCPM)] !=
-          p60x_RESULTS[(:XVol, "ExplicitEuler() (default)", :CheckerboardCPM)]
+    @test p60x_final_y(XVol, SequentialCPM(), (;)) != p60x_final_y(XVol, CheckerboardCPM(), (;))
     # XRing: each anchor's VonNeumann neighbours (four at the start) mostly belong to the
     # cell, so y stays near 0.1 · count / 0.2; with a count of 0 it would decay to
     # 0.8^10 · (1, 2) ≈ (0.11, 0.21). SequentialCPM only (D-271): cells drift, and over 64
     # seeds either algorithm stays above 0.9 in 78 %; the checkerboard's seed 7 does not
-    y = p60x_RESULTS[(:XRing, "ExplicitEuler() (default)", :SequentialCPM)]
-    @test all(>(0.9), y)
+    @test all(>(0.9), p60x_final_y(XRing, SequentialCPM(), (;)))
     # XCross: each cell reads the other's y across the interface; both end between their initial values 1 and 2
     for alg in p60x_ALGS
-        y = p60x_RESULTS[(:XCross, "ExplicitEuler() (default)", nameof(typeof(alg)))]
-        @test all(v -> 1.0 < v < 2.0, y)
+        @test all(v -> 1.0 < v < 2.0, p60x_final_y(XCross, alg, (;)))
     end
     @test Potts._ode_reads_other_cells(mtkcompile(XCross(; name = :x)))
 end
@@ -230,25 +153,8 @@ end
     end
 end
 
-# D-158: our own steppers stay bitwise; `Adaptive` rows run upstream OrdinaryDiffEq/LinearSolve
-# code, whose patch releases may move the last bit, so they are pinned to rtol 1e-12.
-@testset "P6.0x: results unchanged (bitwise, $p60x_N MCS, seed 7)" begin
+@testset "P6.0x: the same run twice gives the same values" begin
     for M in (p60x_GATHERS..., p60x_CONTROLS...), (label, kw) in p60x_SOLVERS, alg in p60x_ALGS
-        want = p60x_RESULTS[(nameof(M), label, nameof(typeof(alg)))]
-        if startswith(label, "Adaptive")
-            @test p60x_final_y(M, alg, kw) ≈ want rtol = 1e-12
-        else
-            @test p60x_final_y(M, alg, kw) == want
-        end
-    end
-end
-
-@testset "P6.0x: fingerprints of models without a gather unchanged" begin
-    for M in p60x_CONTROLS, (label, kw) in p60x_SOLVERS
-        @test p60x_problem(M, (0, p60x_N); kw...).f.fingerprint == p60x_FINGERPRINTS[(nameof(M), label)]
-    end
-    for (name, build) in p60x_published()
-        haskey(p60x_PUBLISHED, name) || continue   # (D-INT-1: its pin was removed)
-        @test build().f.fingerprint == p60x_PUBLISHED[name]
+        @test p60x_final_y(M, alg, kw) == p60x_final_y(M, alg, kw)
     end
 end

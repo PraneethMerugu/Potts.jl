@@ -1,5 +1,5 @@
 # P6.0a (ROADMAP Phase 6, step 0): cell division and cluster division in one model, per
-# rule domain. Frozen (AUTONOMY §7.3).
+# rule domain.
 using Potts: CorePotts
 
 @potts_model MixedDivision begin

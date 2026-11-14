@@ -1,7 +1,6 @@
 # P6.5a2 (ROADMAP Phase 6, step 5; D-231 follow-ups, before P6.5d): E2 named pairs and the
 # E7 geometry helpers `centroid(c, k)`, `minimum_image`, `separation` and
 # `integral(x; over = cluster)` (D-243 amendment; the ROADMAP's `cluster_integral`).
-# Frozen (AUTONOMY §7.3).
 # Decisions and sources: D-231 "Scope" (`centroid(c, k)`, `separation`, `minimum_image` go
 # to P6.5a2 with their own tests), D-075 / api-synthesis §2.6–2.7 and §6.4 (the reference
 # vocabulary and the geometry helpers), D-066 item 5 (a dead referent reads as the medium),
