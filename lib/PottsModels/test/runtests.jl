@@ -179,27 +179,149 @@ const POTTSMODELS_SHARD_FILES = let fs = pottsmodels_shards(POTTSMODELS_TEST_FIL
 end
 POTTSMODELS_SHARD[2] > 1 && @info "PottsModels shard $(POTTSMODELS_SHARD[1])/$(POTTSMODELS_SHARD[2]): $(length(POTTSMODELS_SHARD_FILES)) of $(length(POTTSMODELS_TEST_FILES)) files" POTTSMODELS_SHARD_FILES
 
-# A shard starts from the globals the single process had: before its files, it loads the
-# definitions (each top-level `@testset` dropped) of every file that came earlier in the full
-# order and runs in another shard, so a file that uses a helper an earlier file defined
-# (e.g. siblings.jl uses mechanisms.jl's `split_cells`) finds it.
 # shared Base-only helpers that several files use (mechanisms.jl includes it;
 # papers.jl calls `akeeb_metrics` without including it), loaded once whatever the shard order
 include(joinpath(@__DIR__, "akeeb_metrics.jl"))
 _pm_is_testset(ex) = ex isa Expr && ex.head === :macrocall && ex.args[1] === Symbol("@testset")
-if POTTSMODELS_SHARD[2] > 1
-    let mine = Set(POTTSMODELS_SHARD_FILES)
-        last_mine = maximum(f -> findfirst(==(f), POTTSMODELS_TEST_FILES), POTTSMODELS_SHARD_FILES; init = 0)
-        for f in POTTSMODELS_TEST_FILES[1:last_mine]
-            f in mine && continue
-            include(ex -> _pm_is_testset(ex) ? nothing : ex, joinpath(@__DIR__, f))
+
+# Each file runs in a module of its own (TS1b; TS0 TS1-6), without editing the frozen files.
+# The module sees what the old single Main gave the file: the runner's imports and helpers
+# (above), and every name that an earlier file in the full order defined or imported, the
+# latest definition winning. Its own definitions stay in its module, so a later file cannot
+# rebind them. An earlier file that has not run in this process (another shard, or the reverse
+# order) is loaded first with its top-level testsets dropped, as the shard preload did; so a
+# shard still starts from the globals the single process had (e.g. siblings.jl uses
+# mechanisms.jl's `split_cells`). In the files, `Main` means the file's module (the frozen
+# files reach `Main.PottsDevices` and an earlier file's `Main.p63d_compactness`). A file in
+# PM_IN_MAIN runs in Main instead when its tests run (only then: a definitions-only load of it
+# goes to a module like any other), and the earlier names it lacks are set there as plain
+# globals, since the file writes some of them itself.
+module PMFiles end
+const PM_MODULES = Dict{String, Module}()       # file => its module (full run or definitions only)
+const PM_EXPORTS = Dict{String, Vector{Pair{Symbol, Any}}}()   # file => the names it offers later files
+const PM_SKIP = (:eval, :include, :Base, :Core, :Main, :PMFiles, :PM_MODULES, :PM_EXPORTS, :PMEarlier)
+_pm_names(m, skip = ()) = [n => getglobal(m, n) for n in names(m; all = true, imported = true)
+                           if !startswith(string(n), '#') && !(n in PM_SKIP) && !(n in skip) && n !== nameof(m) && isdefined(m, n)]
+const PM_RUNNER = _pm_names(@__MODULE__)
+const PM_RUNNER_USINGS = :(using Test, Potts, PottsModels, Aqua, TOML; using Potts: CorePotts; using Statistics: mean)
+# Frozen files whose recorded fingerprints and checkpoints hold their own definitions as
+# `Main.<name>` (the generated code names them): they run in Main, as before, until T2 replaces
+# those pins (R3). Main sees the earlier files' names through a module of their bindings.
+const PM_IN_MAIN = Set(["acceptance/p6_0ai_integral_fold_hoist.jl", "acceptance/p6_0as_sweep_validation.jl",
+    "acceptance/p6_0ax_gather_scan.jl", "acceptance/p6_0b2_link_followups.jl", "acceptance/p6_0c2_canonical_followups.jl",
+    "acceptance/p6_0o_abstract_system.jl"])
+_pm_main_to(m, ex) = ex === :Main ? m : ex isa Expr && ex.head !== :quote ? Expr(ex.head, (_pm_main_to(m, a) for a in ex.args)...) : ex
+_pm_bulk_using(ex) = ex isa Expr && ex.head in (:using, :import) && all(a -> a isa Expr && a.head === :. && a.args[1] !== :., ex.args)
+"""Names a file defines at top level (its own definitions win over an earlier file's)."""
+function _pm_own(path)
+    out = Set{Symbol}()
+    name(x) = x isa Symbol ? x : x isa Expr && x.head in (:call, :where, :(::), :curly, :<:, :ref) ? name(x.args[1]) : nothing
+    function walk(ex)
+        ex isa Expr || return
+        ex.head === :const && return walk(ex.args[1])
+        if ex.head in (:(=), :function, :struct, :abstract, :module)
+            t = ex.head in (:struct, :module) ? ex.args[2] : ex.args[1]
+            t isa Expr && t.head === :tuple ? foreach(a -> (n = name(a); n === nothing || push!(out, n)), t.args) :
+                (n = name(t); n === nothing || push!(out, n))
+        elseif ex.head === :macro
+            push!(out, Symbol("@", name(ex.args[1])))
+        elseif ex.head === :macrocall
+            m = last(split(string(ex.args[1]), '.'))          # Core.@doc -> @doc
+            if m == "@potts_model" && length(ex.args) >= 3
+                push!(out, ex.args[3])                          # @potts_model Name …
+            elseif m in ("@testitem", "@testsetup", "@parameters", "@variables")
+                nothing                                         # the item, the setup and the DSL own these
+            else
+                for a in ex.args[2:end]                         # a docstring wraps its definition in @doc
+                    (a isa LineNumberNode || a isa String) && continue
+                    walk(a)
+                end
+            end
+        elseif ex.head === :block
+            foreach(walk, ex.args)
         end
     end
+    for ex in Meta.parseall(read(path, String)).args
+        walk(ex)
+    end
+    return out
+end
+
+# Names a PM_IN_MAIN file declares at its top level: that file's own run declares them in Main,
+# so they are never injected there (a plain global would block the file's `const` under the
+# reverse shard order, where an in-Main file runs before the one that defines the name).
+const PM_MAIN_OWN = let s = Set{Symbol}()
+    for f in PM_IN_MAIN
+        s = union(s, _pm_own(joinpath(@__DIR__, f)))
+    end
+    s
+end
+
+function _pm_module(f; defs_only)
+    i = findfirst(==(f), POTTSMODELS_TEST_FILES)
+    earlier = POTTSMODELS_TEST_FILES[1:(i - 1)]                # the providers, in the full order
+    for g in earlier
+        haskey(PM_MODULES, g) || _pm_module(g; defs_only = true)
+    end
+    path = joinpath(@__DIR__, f)
+    inmain = f in PM_IN_MAIN && !defs_only                     # only a real run goes to Main
+    name = Symbol(defs_only ? "defs_" : "", replace(f, r"[^A-Za-z0-9]" => "_"))
+    m = inmain ? (@__MODULE__) : Core.eval(PMFiles, Expr(:module, true, name, Expr(:block)))
+    before = inmain ? Set(first.(Base.invokelatest(_pm_names, m))) : Set{Symbol}()
+    inmain || Core.eval(m, PM_RUNNER_USINGS)
+    latest = inmain ? Dict{Symbol, Any}() : Dict{Symbol, Any}(PM_RUNNER)
+    for g in earlier
+        for ex in Meta.parseall(read(joinpath(@__DIR__, g), String)).args   # whole-package imports
+            _pm_bulk_using(ex) && Core.eval(m, ex)
+        end
+        foreach(((n, v),) -> latest[n] = v, PM_EXPORTS[g])
+    end
+    own = _pm_own(path)
+    # Names any in-Main file binds when it loads: statically (PM_MAIN_OWN) and by evaluating code
+    # at load time (`include_string(@__MODULE__, raw"..." ...)`, generated code), which shows up in
+    # its definitions-only load's exports. That file's own run declares them in Main, so injecting
+    # one first makes the run fail ("cannot declare Main.X constant"/"cannot define function X").
+    mainown = copy(PM_MAIN_OWN)
+    for g in PM_IN_MAIN
+        haskey(PM_EXPORTS, g) && union!(mainown, first.(PM_EXPORTS[g]))
+    end
+    foreach(n -> delete!(latest, n), union(own, mainown, before))
+    if inmain
+        # Main keeps a name it already has; a name it lacks becomes a plain global, as the old
+        # single process had it. An imported binding would refuse the file's own top-level
+        # writes (p6_0o assigns `s` inside a `@block`-style operand list), and so would a
+        # `using` of a module of them.
+        pre = union(before, keys(latest))
+        for (n, v) in latest
+            startswith(string(n), '@') && continue
+            n in mainown && continue           # an in-Main file's own run declares it in Main
+            isdefined(m, n) || Core.eval(m, Expr(:(=), n, QuoteNode(v)))
+        end
+    else
+        e = Core.eval(m, Expr(:module, true, :PMEarlier,
+            Expr(:block, (:(const $n = $(QuoteNode(v))) for (n, v) in latest)..., Expr(:export, keys(latest)...))))
+        Core.eval(m, Expr(:using, Expr(:., :., nameof(e))))
+        # an earlier file's name that a package the file uses also exports was the old Main's own
+        # binding and won; here both are implicit imports, so import it explicitly
+        clash = Base.invokelatest() do
+            us = filter(!=(e), ccall(:jl_module_usings, Any, (Any,), m))
+            [n for (n, v) in latest if any(M -> isdefined(M, n) && Base.isexported(M, n) && getglobal(M, n) !== v, us)]
+        end
+        isempty(clash) || Core.eval(m, Expr(:using, Expr(:(:), Expr(:., :., nameof(e)), (Expr(:., n) for n in clash)...)))
+    end
+    Base.include(ex -> defs_only && _pm_is_testset(ex) ? nothing : inmain ? ex : _pm_main_to(m, ex), m, path)
+    PM_MODULES[f] = m
+    # (the file's bindings are newer than this call's world: read them in the latest world)
+    PM_EXPORTS[f] = Base.invokelatest() do
+        inmain ? [p for p in _pm_names(m) if Base.binding_module(m, p[1]) === m && (p[1] in own || !(p[1] in pre))] :
+            [p for p in _pm_names(m, before) if Base.binding_module(m, p[1]) !== e]
+    end
+    return m
 end
 
 @testset "PottsModels files" begin
     @testset "$f" for f in POTTSMODELS_SHARD_FILES
-        include(joinpath(@__DIR__, f))
+        _pm_module(f; defs_only = false)
     end
     POTTSMODELS_FIRST_SHARD && @testset "Aqua" begin
         Aqua.test_all(PottsModels; deps_compat = (; check_extras = false))
