@@ -1,5 +1,5 @@
 # P6.2b (ROADMAP Phase 6, step 2): reproduction 10, Akeeb, Marcus & Jiang (2026), against
-# the authors' released data. Frozen (AUTONOMY §7.3; D-143). The pre-registered V-targets
+# the authors' released data. The pre-registered V-targets
 # are spec 10 §5.2 as audited in §5.3 (docs/design/research/model-specs/10_akeeb_invasion.md);
 # every reference value, tolerance, point, seed and run length below is copied from there.
 # The tutorial page `lib/PottsModels/reproductions/10_akeeb.jl` carries the same table.

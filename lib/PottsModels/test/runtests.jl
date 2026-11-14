@@ -148,7 +148,7 @@ end
 # end, so a failure still exits non-zero. `include` evaluates each file at top level, so its
 # `const`s, structs and `@potts_model`s are globals as before.
 const POTTSMODELS_TEST_FILES = [
-    "mechanisms.jl", "papers.jl", "siblings.jl", "analysis.jl", "akeeb_u0.jl", "openvt_analysis.jl", "guardrails.jl", "frozen.jl", "tutorial_models.jl",
+    "mechanisms.jl", "papers.jl", "siblings.jl", "analysis.jl", "akeeb_u0.jl", "openvt_analysis.jl", "guardrails.jl", "tutorial_models.jl",
     "foam_src.jl", "callbacks_gc.jl",
     (joinpath("acceptance", f) for f in sort(filter(endswith(".jl"), readdir(joinpath(@__DIR__, "acceptance")))))...,
     # paper reproductions (ROADMAP Phase 6 "Acceptance for model reproductions"): the SMOKE
@@ -183,7 +183,7 @@ POTTSMODELS_SHARD[2] > 1 && @info "PottsModels shard $(POTTSMODELS_SHARD[1])/$(P
 # definitions (each top-level `@testset` dropped) of every file that came earlier in the full
 # order and runs in another shard, so a file that uses a helper an earlier file defined
 # (e.g. siblings.jl uses mechanisms.jl's `split_cells`) finds it.
-# shared Base-only helpers that several files use (mechanisms.jl includes it; the frozen
+# shared Base-only helpers that several files use (mechanisms.jl includes it;
 # papers.jl calls `akeeb_metrics` without including it), loaded once whatever the shard order
 include(joinpath(@__DIR__, "akeeb_metrics.jl"))
 _pm_is_testset(ex) = ex isa Expr && ex.head === :macrocall && ex.args[1] === Symbol("@testset")

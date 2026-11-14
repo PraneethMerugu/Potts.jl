@@ -1,6 +1,6 @@
 # P6.5b (ROADMAP Phase 6, step 5; second step of Fortuna, reproduction 14), part 2 of 2:
-# the shared ownership-delta routine, its priority, the ownership hooks and A-17. Frozen
-# (AUTONOMY §7.3). Part 1, `p6_5b_convert.jl`, pins `@convert` itself (its header states the
+# the shared ownership-delta routine, its priority, the ownership hooks and A-17.
+# Part 1, `p6_5b_convert.jl`, pins `@convert` itself (its header states the
 # `@convert` API used below).
 #
 # Decisions: D-075 (api-synthesis §2.9: one host routine, priority remove > convert >

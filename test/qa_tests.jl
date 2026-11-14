@@ -30,6 +30,52 @@ _qa_float64_literals(ex) = (n = Ref(0); _qa_walk(x -> x isa Float64 && (n[] += 1
 
 _qa_walk(f, x) = (f(x); x isa Expr && foreach(a -> _qa_walk(f, a), x.args))
 
+const _CLOSURE_HEADS = (:->, :function, :do, :generator, :comprehension, :typed_comprehension)
+
+function _qa_closure_heads(ex)
+    ex isa Expr || return 0
+    # the outer `(args...) -> body` is the generated function itself: scan its body (TS1c)
+    body = ex.head === :-> ? ex.args[2] : ex
+    n = Ref(0)
+    _qa_walk(x -> x isa Expr && x.head in _CLOSURE_HEADS && (n[] += 1), body)
+    return n[]
+end
+
+function _qa_generated_exprs(gc)
+    exs = Any[]
+    for k in (:delta_H, :commit!, :temperature, :constraint, :total_energy, :delta_E)
+        ex = getproperty(gc, k)
+        ex === nothing || push!(exs, ex)
+    end
+    append!(exs, gc.phases)
+    if gc.lifecycle !== nothing
+        push!(exs, gc.lifecycle.trigger)
+        gc.lifecycle.before === nothing || push!(exs, gc.lifecycle.before)
+    end
+    return exs
+end
+
+@potts_model QAEdgeModel begin
+    @kinds medium blob
+    @parameters s = 0.5
+    @variables begin
+        rest(bond) = 12.0
+        age(bond) = 0.0
+    end
+    @relationship bond(cell, cell) capacity = 2
+    @lattice Lattice((30, 12); neighborhood = Moore(1))
+    @energy begin
+        cells(blob) => (volume - 16.0)^2
+        edges(bond) => 0.01 * (distance - rest)^2
+    end
+    @divide cells(blob) when = volume >= 34
+    @after_mcs begin
+        rest ~ Pre(rest) + Pre(age) + s
+        age ~ Pre(age) + 1
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+
 _qa_warm_allocated(integ) = (step!(integ); @allocated step!(integ))
 
 
@@ -76,23 +122,45 @@ _denied(s) = [d for d in _DENY if any(t -> t == d || (length(d) > 4 && occursin(
 
 
 const JS = Base.JuliaSyntax
+# The kind names are resolved at run time: Julia 1.13 removed `K"MacroName"` and spells a macro
+# name as a `macro_name` node around a plain `Identifier` leaf (value `:name`), where 1.12 and
+# earlier have one `MacroName` leaf whose value is `Symbol("@name")`. A macro name keeps the `@`
+# its allowlist key has always had, either way (`_macro_text`), so both versions report the same
+# hits on the same lines.
+_js_kind(name) = try
+    JS.Kind(name)
+catch
+    nothing
+end
+const _K_IDENT = _js_kind("Identifier")
+const _K_STRING = _js_kind("String")
+const _K_MACRO = _js_kind("MacroName")        # 1.12 and earlier
+const _K_MACRO_NODE = _js_kind("macro_name")  # 1.13 and later
+const _K_DOC = _js_kind("doc")
+_macro_text(s) = startswith(s, '@') ? s : "@" * s
 
 function _privileged_hits(file)
     root = JS.parseall(JS.SyntaxNode, read(file, String); filename = file)
     out = Tuple{Int, String}[]
-    function walk(n, indoc)
-        if JS.kind(n) == JS.K"doc"
-            foreach(((i, c),) -> walk(c, i == 1), enumerate(JS.children(n)))
+    function walk(n, indoc, inmacro)
+        k = JS.kind(n)
+        if k == _K_DOC
+            foreach(((i, c),) -> walk(c, i == 1, false), enumerate(JS.children(n)))
             return
         end
         indoc && return
-        if JS.is_leaf(n) && JS.kind(n) in (JS.K"Identifier", JS.K"String", JS.K"macro_name")
-            s = string(n.val)
-            isempty(_denied(s)) || push!(out, (JS.source_location(n)[1], s))
+        if JS.is_leaf(n)
+            if k == _K_IDENT || k == _K_STRING || (_K_MACRO !== nothing && k == _K_MACRO)
+                s = string(n.val)
+                inmacro && (s = _macro_text(s))
+                isempty(_denied(s)) || push!(out, (JS.source_location(n)[1], s))
+            end
+        else
+            m = inmacro || (_K_MACRO_NODE !== nothing && k == _K_MACRO_NODE)
+            foreach(c -> walk(c, false, m), JS.children(n))
         end
-        JS.is_leaf(n) || foreach(c -> walk(c, false), JS.children(n))
     end
-    walk(root, false)
+    walk(root, false, false)
     return out
 end
 
@@ -304,6 +372,7 @@ end
             @test minimum(_qa_warm_allocated(wi) for _ in 1:5) == 0
         end
         gc = generated_code(sys; T, skw...)
+        @test all(ex -> _qa_closure_heads(ex) == 0, _qa_generated_exprs(gc))
         for name in (:delta_H, :commit!, :temperature, :constraint)
             ex = getproperty(gc, name)
             ex === nothing && continue
@@ -315,6 +384,13 @@ end
                 @test !occursin(r"\bdouble\b", sprint((io, f, t) -> Base.invokelatest(code_llvm, io, f, t), fn, types))
             end
         end
+    end
+end
+
+@testitem "QA: generated edge and lifecycle code has no closure heads (TS1c)" setup = [QaSetup] tags = [:potts, :qa] begin
+    @testset "QA: generated edge and lifecycle code has no closure heads ($T)" for T in (Float64, Float32)
+        gc = generated_code(QAEdgeModel(; name = :qe); T)
+        @test all(ex -> _qa_closure_heads(ex) == 0, _qa_generated_exprs(gc))
     end
 end
 
@@ -338,6 +414,7 @@ end
         c = mtkcompile(sys)
         for b in c.discrete
             ex = Potts._tick_expr([b], T, c.gather_names, b.scope; scratch = Potts._tick_scratch(c))
+            @test _qa_closure_heads(ex) == 0
             fn = Core.eval(_QA_MOD, ex)
             args = b.scope === :cell ? (integ.state, integ.p, integ.ctx, integ.key, 1, Int32(1)) :
                    (integ.state, integ.p, integ.ctx, integ.key, 1)

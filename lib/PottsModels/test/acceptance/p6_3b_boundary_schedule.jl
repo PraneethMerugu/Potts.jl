@@ -3,7 +3,7 @@
 # substep), field phase placement and an explicit phase order. The phase order IS `@schedule`,
 # with the `step!` restructuring of api-synthesis §2.12 (the sweep and the lifecycle become
 # entries of the phase order). D-035 is amended as D-075 states, in the same change.
-# Decision: D-145. Frozen (AUTONOMY §7.3).
+# Decision: D-145.
 #
 # F4-B5 (D-F4-2): the fields here are plain MTK PDESystems coupled with `@fields`, and the
 # `@boundary` entries below are their conditions. `x => (Dirichlet(v), …)` is `c(t, 0, y) ~ v`

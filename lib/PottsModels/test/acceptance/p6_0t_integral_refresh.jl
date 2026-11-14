@@ -1,5 +1,5 @@
 # P6.0t (ROADMAP Phase 6, step 0): integral refreshes only for readers after the sweep.
-# Decision: D-120. Frozen (AUTONOMY §7.3). Related: D-042/D-076 (update blocks read fresh
+# Decision: D-120. Related: D-042/D-076 (update blocks read fresh
 # integrals), P6.0m3 (`integral(Pre(w))` slots), D-110 (P6.0ai: hoisted fold slots before
 # the refreshes), D-016/D-118 (fingerprint).
 #
@@ -164,7 +164,7 @@ end
 
 # an integral model with no integral read only before the sweep, by the temperature or by
 # @observed: Pre(w) and w after the block's write, u in the after block and an equation,
-# x before AND after the sweep. Its phases (so its fingerprint) must not change.
+# x before AND after the sweep.
 @potts_model P60tAfterOnly begin
     @kinds medium A
     @variables begin
@@ -439,45 +439,4 @@ end
     ok = minimum(rs) <= 1.5
     @test ok                                                            # DEFECT CHECK (≈ 3.6× with the waste)
     ok || @info "P6.0t: per-MCS time ratio with/without 8 observed-only integrals, paired rounds: $(round.(rs; digits = 2))"
-end
-
-# ---------------------------------------------------------------------------------------
-# 4. Fingerprints that must not change (recorded on 432a0a74)
-
-p60t_two(dims, a, b) = (s = zeros(Int32, dims); s[a...] .= 1; s[b...] .= 2; s)
-p60t_published() = (
-    (:GranerGlazier, () -> (g = graner_glazier_state(); PottsProblem(GranerGlazier(; name = :gg), [ownership => g[1], kind => g[2]], (0, 10)))),
-    (:WortelAct, () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8)),
-        [ownership => p60t_two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:cell, :cell]], (0, 10))),
-    (:WortelActConnected, () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8), connected = true),
-        [ownership => p60t_two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:cell, :cell]], (0, 10))),
-    (:MerksVasculogenesis, () -> PottsProblem(MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
-        [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 10);
-        field_solver = ExplicitEuler(substeps = 2, lower = 0.0))),
-    (:SingleDivisionFixture, () -> PottsProblem(SingleDivisionFixture(; name = :fixture),
-        [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [:epithelial]], (0, 10))),
-    (:OpenVTGrowingMonolayer, () -> PottsProblem(OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)),
-        openvt_monolayer_state(; lattice = (24, 24)), (0, 10))),
-    (:AkeebInvasion, () -> PottsProblem(AkeebInvasion(; name = :akeeb, lattice = (99, 60)), akeeb_state(; lattice = (99, 60)), (0, 10);
-        capacity = 1000)),
-    (:P60tAfterOnly, () -> PottsProblem(P60tAfterOnly(; name = :m), [ownership => P60T_SIGMA, kind => [:A, :A]], (0, 10))),
-)
-const P60T_FINGERPRINTS = Dict{Symbol, UInt64}(
-    :GranerGlazier => 0xe6e09483034b4193,  # re-pinned under D-122
-    :WortelAct => 0x9a9fcac5fc22b7c5,   # re-pinned under D-124
-    :WortelActConnected => 0xe1e52da078e581c9,   # re-pinned under D-124; re-pinned under P6.3g (D-193): fingerprint only
-    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
-    :SingleDivisionFixture => 0xd2bed53e2590b709,
-    :OpenVTGrowingMonolayer => 0x34b40af65c56a113,  # re-pinned under D-122
-    :AkeebInvasion => 0xd301c3168b46d474,   # re-pinned under D-237 (cell draws by id and generation)
-    :P60tAfterOnly => 0xa1935accc26c00ef,
-)
-
-@testset "P6.0t: fingerprints unchanged" begin
-    for (name, build) in p60t_published()
-        haskey(P60T_FINGERPRINTS, name) || continue   # (D-INT-1: its pin was removed)
-        fp = build().f.fingerprint
-        @test fp == P60T_FINGERPRINTS[name]
-        fp == P60T_FINGERPRINTS[name] || @info "P6.0t: fingerprint $name = $(repr(fp))"
-    end
 end

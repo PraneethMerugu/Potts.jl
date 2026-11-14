@@ -568,7 +568,7 @@ nothing #hide
 # topped up to 6 runs (70 runs): 160 runs, 6 of them capped. A run stops at the end of the
 # first MCS with at least 10⁴ cells or at the cap; no cell came closer than 171 sites to the
 # edge. Seeds are 160 000 000 (β) or 170 000 000 (γ) + 100 q + k, q the parameter × 10⁴.
-# The verdict rules were run once on the record; the frozen test recomputes them from the
+# The verdict rules were run once on the record; the test recomputes them from the
 # committed files.
 #
 # ### Every verdict
@@ -732,7 +732,7 @@ Markdown.parse(s5)
 # ### Records and provenance
 #
 # Each record directory holds its runner, its plotting scripts and a README that describes
-# the protocol, every file and the result. The runners rerun the frozen acceptance tests'
+# the protocol, every file and the result. The runners rerun the acceptance tests'
 # own protocols (`lib/PottsModels/test/reproductions/15_openvt_*.jl`), and the tests
 # recompute every verdict from the committed TSVs.
 #

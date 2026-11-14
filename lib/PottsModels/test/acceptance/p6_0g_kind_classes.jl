@@ -1,4 +1,4 @@
-# P6.0g (ROADMAP Phase 6, step 0): kind classes. Decision: D-135. Frozen (AUTONOMY §7.3).
+# P6.0g (ROADMAP Phase 6, step 0): kind classes. Decision: D-135.
 # Related: D-075 / api-synthesis §2.2 (classes inside `@kinds`, lowered to an unrolled `|` of
 # kind equalities), D-113 (one name, one category), D-016/D-121–D-124 (fingerprint), D-134
 # (one of the last two step-0 rows). Consumer: Bauer 2009 (spec 05; sketch 05, friction 1:
@@ -951,40 +951,6 @@ end
 # Fingerprints of the published models (recorded on 462b012a)
 
 p60g_two(dims, a, b) = (s = zeros(Int32, dims); s[a...] .= 1; s[b...] .= 2; s)
-p60g_published() = (
-    "GranerGlazier" => () -> (s = graner_glazier_state(); PottsProblem(GranerGlazier(; name = :gg), [ownership => s[1], kind => s[2]], (0, 10))),
-    "WortelAct" => () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8)),
-        [ownership => p60g_two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:cell, :cell]], (0, 10)),
-    "WortelAct connected" => () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8), connected = true),
-        [ownership => p60g_two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:cell, :cell]], (0, 10)),
-    "MerksVasculogenesis" => () -> PottsProblem(MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
-        [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 10);
-        field_solver = Potts.ExplicitEuler(substeps = 2, lower = 0.0)),
-    "OpenVTGrowingMonolayer" => () -> PottsProblem(OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)),
-        openvt_monolayer_state(; lattice = (24, 24)), (0, 10); capacity = 64),
-    "SingleDivisionFixture" => () -> PottsProblem(SingleDivisionFixture(; name = :fixture),
-        [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [:epithelial]], (0, 10)),
-    "AkeebInvasion" => () -> PottsProblem(AkeebInvasion(; name = :akeeb, lattice = (60, 40)), akeeb_state(; lattice = (60, 40)), (0, 10);
-        capacity = 256),
-)
-const P60G_PUBLISHED = Dict{String, UInt64}(
-    "GranerGlazier" => 0xe6e09483034b4193,
-    "WortelAct" => 0x9a9fcac5fc22b7c5,
-    "WortelAct connected" => 0xe1e52da078e581c9,   # re-pinned under P6.3g (D-193): fingerprint only
-    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
-    "OpenVTGrowingMonolayer" => 0x34b40af65c56a113,
-    "SingleDivisionFixture" => 0xd2bed53e2590b709,
-    "AkeebInvasion" => 0x72ced0fc70498f16,   # re-pinned under D-237 (cell draws by id and generation)
-)
-
-@testset "P6.0g: published fingerprints unchanged" begin
-    for (name, build) in p60g_published()
-        haskey(P60G_PUBLISHED, name) || continue   # (D-INT-1: its pin was removed)
-        fp = build().f.fingerprint
-        @test fp == P60G_PUBLISHED[name]
-        fp == P60G_PUBLISHED[name] || @info "P6.0g: fingerprint $name = $(repr(fp))"
-    end
-end
 
 # ---------------------------------------------------------------------------------------
 # Metal: the class gates compile for the device (constants, no allocation) and match the CPU

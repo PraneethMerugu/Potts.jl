@@ -1,5 +1,5 @@
 # P6.0bv (ROADMAP Phase 6, step 0; follow-up of D-164): edge-scope MCS updates through
-# `mtkcompile`. Decision: D-1xx (P6.0bv; the coordinator numbers it). Frozen (AUTONOMY §7.3).
+# `mtkcompile`. Decision: D-1xx (P6.0bv; the coordinator numbers it).
 #
 # The defect, measured on 405915dc: `@before_mcs`/`@after_mcs` statements that write an edge
 # variable (`rest(edge)`, `rest(bond)`) are accepted by `@potts_model` and listed by

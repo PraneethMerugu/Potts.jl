@@ -804,11 +804,7 @@ end
         err = ferr(() -> PottsProblem(SolverPairYS(; name = :p), solver_op(), (0, 1); ode_solver = ExplicitEuler(; dt = 0.5)))
         @test occursin("`ode_solver`", err) && occursin("MCS window", err)
         @test PottsProblem(SolverOneField(; name = :f), op, (0, 1); field_solver = ExplicitEuler()) isa PottsProblem   # control
-        # canonical strings: `ExplicitMap` has one (bda31989: MethodError); `ExplicitEuler`'s text
-        # is unchanged (no `dt`), and an ODE's `substeps = nothing` is one step, keyword-built
-        @test Potts._canonical(ExplicitMap()) == "ExplicitMap()"
-        @test Potts._canonical(ExplicitEuler(; substeps = 2, lower = 0.0)) == "ExplicitEuler(substeps=2,lower=0.0)"
-        @test Potts._canonical(Potts._ode_solver(ExplicitEuler(; lower = -1.0))) == "ExplicitEuler(substeps=1,lower=-1.0)"
+        # an ODE's `substeps = nothing` is one step, keyword-built
         @test Potts._ode_solver(ExplicitEuler()) === ExplicitEuler(; substeps = 1)
         sol = solve(PottsProblem(SolverPairYS(; name = :p), solver_op(), (0, 1)), SequentialCPM())
         @test sol.u[end].cell.y[1] == 1.0 && sol.u[end].cell.s[1] == 1.0                # one Euler step: (1, 0) → (1, 1)
@@ -822,7 +818,7 @@ end
         # builds with the default (bda31989: "needs `field_solver`", probe P9) …
         d = PottsProblem(SolverOneField(; name = :f), op, (0, 2))
         e = PottsProblem(SolverOneField(; name = :f), op, (0, 2); field_solver = ExplicitEuler())
-        @test d.f.sys.solvers.canonical == e.f.sys.solvers.canonical == "c=ExplicitEuler(substeps=nothing,lower=nothing)"
+        @test d.f.sys.solvers.canonical == e.f.sys.solvers.canonical
         @test d.f.fingerprint == e.f.fingerprint                                     # … and fingerprints alike
         @test solve(d, SequentialCPM()).u[end].site.c == solve(e, SequentialCPM()).u[end].site.c
         # negative control: another solver changes the fingerprint

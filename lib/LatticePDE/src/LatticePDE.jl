@@ -259,9 +259,18 @@ inputs, a field of the lattice) are folded over each node's block:
     folds by its mean: on a block a quarter of whose sites are of kind P, `kind == P` is 0.25,
     so `(kind == P) + 0.5 (kind == Q)` and `at(R, kind)` agree, and `kind == 0` and `kind != 0`
     sum to 1. A spatial operator of the coarse field is not folded; its coefficient is, at
-    each face (at a face of the box, the node's own block).
-  - A condition where a condition is used (a mask's predicate) is true when it holds on more
-    than half the block (the Majority fold).
+    each face (at a face of the box, the node's own block). A fine coefficient is the
+    arithmetic mean of its fine values over the block, not a homogenized coefficient (the
+    block's effective conductivity, which the arithmetic mean bounds from above).
+  - A mask whose predicate reads fine values (`c ~ masked(kind == medium, v)`) blends (F4-15b).
+    A node is masked, and holds `v`, when the predicate holds at every site of its block.
+    Elsewhere the node holds the value of its block's free part, the sites where the predicate
+    is false: the fine reads in its equation and its operator coefficients fold over the free
+    sites, so the free volume times a folded source is the fine sum of that source over the free
+    sites. On an irregular domain the fold's support is the free sites inside the domain: an
+    out-of-domain site is not where the equation holds, so it never enters a fold. A spatial operator acts on the node values as before: its flux is the operator's,
+    not a sum over the free children. The block's mean is `f v + (1 - f) c`, with `f` its
+    masked fraction.
 
 A term of a fine
 field that reads a coarse one reads the node whose block holds the site. A spatial operator

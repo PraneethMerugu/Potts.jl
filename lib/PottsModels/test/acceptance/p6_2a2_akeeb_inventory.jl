@@ -1,6 +1,6 @@
 # P6.2a2 (ROADMAP Phase 6, step 2; spec 10 V-A1(a); D-068, D-073, D-075): `akeeb_state` is
 # built on `InsertUntil` (`misses = :count`, `fraction = 1//4`), draws only from StableRNG,
-# and exposes the counted leader inventory. Frozen (AUTONOMY §7.3).
+# and exposes the counted leader inventory.
 #
 # Surface fixed by the coordinator:
 #

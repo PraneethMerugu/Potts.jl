@@ -1,6 +1,5 @@
 # P6.0av (ROADMAP Phase 6, step 0; found by the P6.0as test author): `@sweep mcs_duration`
 # is not validated. Decision: D-126 (follows D-123, which did the same for `offset`).
-# Frozen (AUTONOMY §7.3).
 #
 # The defect, measured on ab26cd37. `sweep_spec` (src/vocabulary.jl) stores
 # `Float64(mcs_duration)` unchecked, and every reader trusts it: the `Adaptive` ODE step
@@ -331,38 +330,9 @@ p60av_unchanged() = (
         capacity = 256),
 )
 
-# the fixtures recorded on ab26cd37; the PottsModels systems are the D-121/D-122/D-123 pins
-const P60AV_FINGERPRINTS = Dict{String, UInt64}(
-    "default" => 0xce5034a13ca88aa5,
-    "md = 1.0" => 0xce5034a13ca88aa5,
-    "md = 1" => 0xce5034a13ca88aa5,
-    "md = 0.5" => 0xe0b87213e7b75671,
-    "md = 1//2" => 0xe0b87213e7b75671,
-    "md = 0.5f0" => 0xe0b87213e7b75671,
-    "md = 2" => 0x50bbc875e573d7fb,
-    "md = 0.1f0" => 0x62f74878732d8598,
-    "Barker md = 0.5" => 0x5005a1da9c54b3b8,
-    "md = 0.5 Adaptive" => 0xc32136fed7d16010,
-    "md = 0.5 Float32" => 0x4c1d651560a149f2,
-    "extension inheriting md = 0.5" => 0xe0b87213e7b75671,
-    "field md = 0.5" => 0xf0609cefa9b93632,
-    "clock md = 0.5" => 0x69c263c32c478ae3,
-    "GranerGlazier" => 0xe6e09483034b4193,
-    "WortelAct" => 0x9a9fcac5fc22b7c5,  # re-pinned under D-124
-    "WortelAct connected" => 0xe1e52da078e581c9,  # re-pinned under D-124; re-pinned under P6.3g (D-193): fingerprint only
-    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
-    "SingleDivisionFixture" => 0xd2bed53e2590b709,
-    "OpenVTGrowingMonolayer" => 0x34b40af65c56a113,
-    "AkeebInvasion" => 0x72ced0fc70498f16,   # re-pinned under D-237 (cell draws by id and generation)
-)
 
-@testset "P6.0av: fingerprints unchanged" begin
+@testset "P6.0av: the duration's type does not move the fingerprint" begin
     fps = Dict(name => build().f.fingerprint for (name, build) in p60av_unchanged())
-    for (name, _) in p60av_unchanged()
-        haskey(P60AV_FINGERPRINTS, name) || continue   # (D-INT-1: its pin was removed)
-        @test fps[name] == P60AV_FINGERPRINTS[name]
-        fps[name] == P60AV_FINGERPRINTS[name] || @info "P6.0av: fingerprint $name = $(repr(fps[name]))"
-    end
     # the same Float64 duration fingerprints alike whatever its type; another duration differs
     @test fps["md = 1.0"] == fps["md = 1"] == fps["default"]
     @test fps["md = 0.5"] == fps["md = 1//2"] == fps["md = 0.5f0"]

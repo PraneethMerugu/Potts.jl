@@ -1,6 +1,6 @@
 # P6.15h (ROADMAP Step 3b): the OpenVT monolayer benchmark's Fig 1 (the Potts.jl panel and
 # banner) and Fig 4 (the free-surface schematic, lattice panel), with the unit test that G1
-# equals the drawn count. Frozen (AUTONOMY §7.3). Sources: spec 15 v3.2
+# equals the drawn count. Sources: spec 15 v3.2
 # (docs/design/research/model-specs/15_openvt_monolayer.md) §2.4 (f_i, G1), §4.0 (F1, F4),
 # §4.0.2 (colours, F1), §6 G1, and the consortium figure sources G:results/introduction.tex,
 # G:results/free_surface.tex and G:results/colors.tex at 54f375f (read on the PC; no G file

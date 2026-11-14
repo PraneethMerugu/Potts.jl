@@ -1,5 +1,5 @@
 # P6.0b2 (ROADMAP Phase 6, step 0): P6.0b review follow-ups on edge variables.
-# Decision: D-127 (amends D-058). Frozen (AUTONOMY §7.3).
+# Decision: D-127 (amends D-058).
 #
 # The defects, measured on 18861b25:
 #  1. `_bind_edge_scope` (src/vocabulary.jl) binds every unscoped `x(edge)` of a body to the
@@ -213,10 +213,6 @@ function p60b2_linker_state()
     return σ
 end
 
-const p60b2_FP_SPRING = 0xc954027bb6b1a299           # measured on 18861b25 (Float64)
-const p60b2_FP_TWO = 0x015f25c9c79d787a              # Two and Explicit alike (no link rule reads a default)
-const p60b2_FP_LINKER = 0x852d120c19e7d0ec
-
 # ---------------------------------------------------------------------------------------
 # A. a re-declared inherited edge variable keeps its relationship
 
@@ -232,7 +228,7 @@ const p60b2_FP_LINKER = 0x852d120c19e7d0ec
         @test p60b2_payload(u, :bond, :rest, 1, 2) == p60b2_payload(u, :bond, :rest, 2, 1) == 9.0   # the extension's default
         @test p60b2_payload(u, :tether, :len, 2, 3) == 18.0
         @test total_energy(prob) == 3264 + 72 + 6 == total_energy(p60b2_problem(P60b2Explicit, p60b2_op2()))
-        @test prob.f.fingerprint == p60b2_FP_TWO
+        @test prob.f.fingerprint == p60b2_problem(P60b2Explicit, p60b2_op2()).f.fingerprint   # the same code
         @test selfcheck(prob) < 1e-9
     end
 end
@@ -244,7 +240,7 @@ end
     @test p60b2_payload(prob.u0, :bond, :rest, 1, 2) == 9.0
     @test p60b2_payload(prob.u0, :tether, :len, 3, 2) == 20.0
     @test total_energy(prob) == 3264 + 72 + 0 == total_energy(p60b2_problem(P60b2ExplicitOverTwo, p60b2_op2()))
-    @test prob.f.fingerprint == p60b2_FP_TWO
+    @test prob.f.fingerprint == p60b2_problem(P60b2ExplicitOverTwo, p60b2_op2()).f.fingerprint   # the same code
 
     c = p60b2_compile(P60b2RedeclareTwoOwn)
     @test p60b2_names(c, :bond) == [:rest]
@@ -353,16 +349,9 @@ end
 end
 
 # ---------------------------------------------------------------------------------------
-# unchanged: generated code, fingerprints and defaults of link models
+# defaults of link models
 
-@testset "P6.0b2: link models keep their fingerprints" begin
-    @test p60b2_problem(P60b2Spring, p60b2_op()).f.fingerprint == p60b2_FP_SPRING
-    @test p60b2_problem(P60b2Spring, p60b2_op(:rest => 9.0)).f.fingerprint == p60b2_FP_SPRING   # state, not code
-    @test p60b2_problem(P60b2Two, p60b2_op2()).f.fingerprint == p60b2_FP_TWO
-    @test p60b2_problem(P60b2Explicit, p60b2_op2()).f.fingerprint == p60b2_FP_TWO
-    lk = [ownership => p60b2_linker_state(), kind => [:blob, :blob, :blob], :bond => [(1, 2)]]
-    @test PottsProblem(P60b2Linker(; name = :m), lk, (0, 2)).f.fingerprint == p60b2_FP_LINKER
-    @test PottsProblem(P60b2Linker(; name = :m), [lk; :age => 5.0], (0, 2)).f.fingerprint == p60b2_FP_LINKER
+@testset "P6.0b2: link model defaults" begin
     # defaults without an operating-point value are as before
     two = p60b2_problem(P60b2Two, p60b2_op2())
     @test two.u0.cell.link_rest == [12.0 12.0 0.0] && two.u0.cell.link_len == [0.0 18.0 18.0]

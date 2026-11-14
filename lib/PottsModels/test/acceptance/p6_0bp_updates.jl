@@ -6,7 +6,7 @@
 # "a model's update rules are Symbolics equations in ModelingToolkit's `Pre` form that MTK's
 # generic tools can inspect". Events as MTK `SymbolicDiscreteCallback`s are P6.4c's, not
 # this item's (D-162 ruling 2): MTK's `discrete_events`/`continuous_events` stay empty.
-# Decision: D-1xx (P6.0bp; the coordinator numbers it). Frozen (AUTONOMY §7.3).
+# Decision: D-1xx (P6.0bp; the coordinator numbers it).
 #
 # The contract pinned here (public API only; the element type, storage and caching are the
 # implementer's):
@@ -253,7 +253,7 @@ end
 
 # every published model (small lattices; construction only), with its updates as declared
 # in lib/PottsModels/src: (phase, scope, n, the written variable)
-const P60BP_PUBLISHED = [
+const P60BP_MODELS = [
     ("GranerGlazier", () -> GranerGlazier(; name = :gg), []),
     ("WortelAct", () -> WortelAct(; name = :act, lattice = (8, 8)),
         [(:on_copy, :site, 1, :act), (:after_mcs, :site, 1, :act)]),
@@ -381,7 +381,7 @@ end
 # P. Published models
 
 @testset "P6.0bp P: published models list their updates as declared" begin
-    @testset "$label" for (label, build, want) in P60BP_PUBLISHED
+    @testset "$label" for (label, build, want) in P60BP_MODELS
         sys = build()
         U = p60bp_updates(sys)
         @test U isa AbstractVector && length(U) == length(want)
@@ -430,7 +430,7 @@ end
     forms(s) = (Potts.inner(s), Potts.inner(getfield(mtkcompile(s), :sys)))
     fixtures = [P60bpAll(; name = :pa), P60bpNone(; name = :none), P60bpComp(; name = :pc),
         P60bpTiming(; name = :pt), Potts.extend(P60bpExtra(; name = :extra), P60bpAll(; name = :pa))]
-    for sys in [fixtures; [b() for (_, b, _) in P60BP_PUBLISHED]], s in forms(sys)
+    for sys in [fixtures; [b() for (_, b, _) in P60BP_MODELS]], s in forms(sys)
         @test isempty(P60BP_M.discrete_events(s))
         @test isempty(P60BP_M.continuous_events(s))
     end

@@ -40,7 +40,11 @@ end
 # cand-abctl, or the in-process labels), `$STUB_DIR/n.txt` lists factors, one per run of
 # that side (cycled; default 1); every case reads 10 ns/site × factor. `n.skip` lists
 # labels to skip, `n.disturb` a disturbance to report. Logs `n args threads=…`.
+# The body is one `let` block (a hard scope) and the skip list is `skips`: as flat top-level
+# statements, `f` warned as an ambiguous soft-scope assignment and, on Julia 1.13, the read of
+# `skip` resolved to `Base.skip` (D-279).
 const STUB = raw"""
+let
 sd = ENV["STUB_DIR"]
 factors(n) = (f = joinpath(sd, n * ".txt"); isfile(f) ? parse.(Float64, split(read(f, String))) : [1.0])
 function nextrun(n)
@@ -63,14 +67,15 @@ if opt("variants") !== nothing
     end
 else
     f = fac(me)
-    skip = (s = joinpath(sd, me * ".skip"); isfile(s) ? split(read(s, String)) : String[])
+    skips = (s = joinpath(sd, me * ".skip"); isfile(s) ? split(read(s, String)) : String[])
     for v in split(pos[2], ','), c in split(pos[1], ',')
-        "$c.$v" in skip ? println("ABSKIP $c.$v") : println("ABR $c.$v $(10f) $(9f) 60")
+        "$c.$v" in skips ? println("ABSKIP $c.$v") : println("ABR $c.$v $(10f) $(9f) 60")
     end
     d = joinpath(sd, me * ".disturb")
     isfile(d) && println("DISTURBED ", strip(read(d, String)))
 end
 println("TC 500100 1048576")
+end
 """
 
 g(dir, args...) = run(`git -C $dir -c user.name=t -c user.email=t@t $args`)

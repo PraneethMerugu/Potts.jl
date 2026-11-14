@@ -57,8 +57,30 @@ Options go in brackets after the default. The field options (`bounds`, `lattice_
     a quarter of whose sites are of kind P, `isP` and `kind == P` are both 0.25. So the node
     receives the block's total source, `isP + 0.5 * isQ` and `r` give the same rate, and
     `kind == medium` and `kind != medium` sum to 1. A bound input and its binding written
-    out in the equation give the same value. A mask's predicate holds at a node when it holds
-    on more than half of the node's block.
+    out in the equation give the same value.
+  - A mask whose condition reads fine values (`c ~ masked(kind == medium, v)`) blends. A
+    node is masked, and holds `v`, only when the condition holds at every site of its block.
+    On a block that the condition covers in part, the node holds the value of the block's
+    free part: the sites where the condition is false. The field's equation folds each fine
+    read over the free sites only, and on an irregular domain over the free sites inside it:
+    an out-of-domain site is not a site where the equation holds, so it never enters a fold. On a block with 8 medium sites and 8 sites of kind P,
+    `kind == P` is 1, not 0.5. The free volume `(1 - f) k^d` times a folded source is the
+    fine sum of that source over the free sites, with `f` the masked fraction of the block, so
+    no source of a free site is lost. The spatial operator is not a fine sum: it acts on the
+    node values, so the flux through a face is the operator's, not the free children's. The
+    masked sites hold `v`, and the mean of the block is `f v + (1 - f) c`.
+  - A spatial operator acts on the node values: a free part exchanges with the free parts of
+    its neighbors, and a masked neighbor gives `v`. A CPM read of the field at a site of a
+    blended block reads the value of the free part, at a masked site too. When the mask
+    moves, the free part keeps its value, and a site that the mask releases takes that value.
+  - Two fields with complementary conditions, `masked(kind == medium, v)` and
+    `masked(kind != medium, w)`, on a block that each condition covers by half: neither node
+    is masked, and each holds the value of its own free part. On the fine grid, and with
+    `Coarse(1)`, a site is masked or free, and the rule is the fine one.
+  - A fine coefficient of a spatial operator (`DivKGrad(K, c)` with `K` reading fine values)
+    takes the arithmetic mean of its fine values over the block, then the face mean. It is
+    not a homogenized coefficient: where `K` varies inside a block, the arithmetic mean is
+    larger than the block's effective conductivity.
   - A term that reads a fine field nonlinearly (`max(g - gT, 0)`, `g / (K + g)`,
     `r * g` for a field `g` of the lattice) is replaced by its mean over the block, with
     each fine value at its own site. The coarse field then receives the fine integral of the

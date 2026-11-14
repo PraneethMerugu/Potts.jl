@@ -92,8 +92,8 @@ end
 
 # two frozen cells, A (rows 2:8, columns 2:6; 9 and 12 of 16 sites of blocks (1, 1) and (2, 1),
 # 6 and 8 of (1, 2) and (2, 2): blocks A covers in part, so `kA` folds to 9/16, 12/16, 6/16 and
-# 8/16 there) and B (rows 9:15, columns 6:12; most of blocks (3, 2), (3, 3), (4, 2), (4, 3), where
-# its mask holds)
+# 8/16 there) and B (rows 9:15, columns 6:12; only block (3, 3), sites 9:12 x 9:12, lies wholly in
+# B, so the mask holds there only: D-F4-15b, a node is masked when its whole block is)
 function fc_sigma(dims = (16, 12))
     σ = zeros(Int32, dims)
     σ[2:8, 2:6] .= 1
@@ -215,9 +215,11 @@ end
             @test [x[1] for x in a] == bc
             @test [x[2] for x in a] == be
         end
-        # the mask holds on B's blocks only
+        # the mask holds on B's whole blocks only (D-F4-15b): B is rows 9:15 x columns 6:12, and of
+        # the blocks x=1:4, 5:8, 9:12, 13:16 by y=1:4, 5:8, 9:12 only 9:12 x 9:12 is inside it
+        # (x=13:16 leaves B at site 16, y=5:8 at site 5)
         a, _ = fc_runA(1)
-        @test findall(==(2.0), a[1][1]) == CartesianIndex.([(3, 2), (4, 2), (3, 3), (4, 3)])
+        @test findall(==(2.0), a[1][1]) == CartesianIndex.([(3, 3)])
     end
 end
 
@@ -264,8 +266,10 @@ end
         # the operating point gives a coarse field its grid's array
         a0 = [Float64(i + 10j) for i in 1:4, j in 1:3]
         integ = init(PottsProblem(FcMix(; name = :f), [fc_op(); :c => a0], (0, 1)), SequentialCPM())
-        # (the at-init clamp holds the masked value on B's blocks)
-        m = falses(4, 3); m[3:4, 2:3] .= true
+        # (the at-init clamp holds the masked value on B's whole blocks: as above, block (3, 3) only)
+        kb = fc_kin() .== 2
+        m = [all(kb[(I - 1) * 4 .+ (1:4), (J - 1) * 4 .+ (1:4)]) for I in 1:4, J in 1:3]
+        @test findall(m) == CartesianIndex.([(3, 3)])
         @test Array(current_state(integ).site.c) == ifelse.(m, 2.0, a0)
         msg(f) = try
             f(); ""

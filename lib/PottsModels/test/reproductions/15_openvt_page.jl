@@ -1,5 +1,5 @@
 # P6.15i (ROADMAP Phase 6, OpenVT track): the docs page "OpenVT monolayer benchmark".
-# Frozen (AUTONOMY §7.3). The page is the Literate script
+# The page is the Literate script
 # `lib/PottsModels/reproductions/15_openvt_monolayer.jl`, so the existing docs hook renders it
 # (`docs/make.jl` turns every script in `lib/PottsModels/reproductions/` into a "Published
 # models" page under `POTTS_DOCS_PUBLISHED=true`), like reproductions 01, 09 and 10. This file

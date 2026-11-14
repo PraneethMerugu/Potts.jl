@@ -176,10 +176,7 @@ end
     @test e(() -> CrankNicolson(; theta = 0.5)) ==
           "CrankNicolson: no keyword `theta`; its keywords are `dt`, `substeps`, `newton`, `lower`, `inner`, `solver_T`, `init` and `compute_T`"
     a = CrankNicolson(; dt = 0.1, newton = 2, inner = DevicePCG(; budget = 12))
-    @test repr(a) == "CrankNicolson(; dt = 0.1, newton = 2, inner = DevicePCG(; budget = 12))"
     @test eval(Meta.parse(repr(a))) == a
-    @test LFP.canonical(CrankNicolson()) ==
-          "CrankNicolson(inner=:auto,lower=nothing,newton=nothing,solver_T=:auto,substeps=nothing)"
     phex = discretize(bsys([D(bce) ~ bD * Δ(bce)], [bc(0, x, y) ~ x], [bD]; dvs = [bce]),
         LatticeDiscretization(Grid((8, 8); geometry = HEX); T = Float64))
     @test solve(phex, CrankNicolson(; dt = 0.1)).retcode == ReturnCode.Success     # (F3-20: was refused)

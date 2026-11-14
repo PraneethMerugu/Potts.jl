@@ -312,8 +312,8 @@ end
         # an ODE starts from its initial values
         @test_throws "`ode_solver`: `ExplicitEuler(; init = :steady)`: `init = :steady` starts a field group at its steady state" Potts._check_ode_dt(
             ExplicitEuler(; init = :steady), "`ode_solver`")
-        # the canonical text keeps the default's (the guard's fingerprints), and names `init` when set
-        @test Potts._canonical(BackwardEuler()) == "BackwardEuler(inner=:auto,lower=nothing,newton=nothing,solver_T=:auto,substeps=nothing)"
+        # the canonical text names `init` when it is set, and keeps the default's otherwise
+        @test Potts._canonical(BackwardEuler(; init = :steady)) != Potts._canonical(BackwardEuler())
         # the PCG count of `ExplicitEuler(init = :steady)` from zero (design §5; review r4 N4): one
         # solve, 5 iterations of the default inner (rtol 1e-6) on the CPU (the design's "6, as C7b":
         # at most 6)

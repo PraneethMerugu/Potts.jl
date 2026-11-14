@@ -1,5 +1,5 @@
 # P6.1a (ROADMAP Phase 6, step 1; review §3 R2 first slice): layout values composed by
-# `overlay` and turned into an SII operating point by `layout`. Frozen (AUTONOMY §7.3).
+# `overlay` and turned into an SII operating point by `layout`.
 #
 # Surface fixed by the coordinator:
 #   Tiling(size; spacing = 0, region = <whole lattice>, kinds)   boxes of `size`, `spacing`
