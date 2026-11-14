@@ -1,0 +1,87 @@
+# Scoped Julia 1.12 compatibility lane on the self-hosted runner (H6).
+# Runs only on manual dispatch and a weekly schedule, never on push (the compat floor in
+# Project.toml is julia = "1.12", so 1.10 LTS is out of range; see DECISIONS.md).
+name: Compat (Julia 1.12)
+
+on:
+  schedule:
+    - cron: '0 6 * * 0'
+  workflow_dispatch:
+    inputs:
+      update_deps:
+        description: Resolve dependencies afresh, not from the last green 1.12 Manifest
+        type: boolean
+        default: false
+
+concurrency:
+  group: compat-1.12-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  JULIA_PKG_PRECOMPILE_AUTO: "0"
+  PIN: taskset -c 0-11,16-27
+
+jobs:
+  compat-1-12:
+    name: Potts and PottsModels on Julia 1.12
+    runs-on: [self-hosted, Linux, X64, rocm]
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - name: Julia on PATH
+        run: echo "$HOME/.juliaup/bin" >> "$GITHUB_PATH"
+      - name: Select Julia 1.12 toolchain
+        run: |
+          if julia +1.12 --version >/dev/null 2>&1; then
+            echo "JULIA_112_FLAG=+1.12" >> "$GITHUB_ENV"
+          else
+            julia +1.12.6 --version
+            echo "JULIA_112_FLAG=+1.12.6" >> "$GITHUB_ENV"
+          fi
+      - name: Resolve, instantiate and precompile workspace for Julia 1.12
+        env:
+          UPDATE_DEPS: ${{ inputs.update_deps }}
+        run: |
+          julia "$JULIA_112_FLAG" --version
+          LOCK="$HOME/potts-ci/Manifest-1.12.toml"
+          if [ "$UPDATE_DEPS" != "true" ] && [ -f "$LOCK" ]; then cp "$LOCK" Manifest.toml; fi
+          $PIN julia "$JULIA_112_FLAG" --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate(); Pkg.precompile()'
+          if [ -f "$LOCK" ]; then
+            echo "Dependency changes against the last green 1.12 run:"
+            julia "$JULIA_112_FLAG" .github/ci/manifest_diff.jl "$LOCK" Manifest.toml
+          fi
+          for p in test lib/PottsModels/test; do
+            $PIN julia "$JULIA_112_FLAG" --project=$p -e 'using Pkg; Pkg.precompile()'
+          done
+      - name: Potts suite on Julia 1.12
+        run: GROUP=Potts $PIN julia "$JULIA_112_FLAG" --project=test test/runtests.jl
+      - name: PottsModels suite on Julia 1.12 (3 shards)
+        env:
+          LOGS: ${{ runner.temp }}/potts-1.12-logs
+        run: |
+          set -u
+          rm -rf "$LOGS"; mkdir -p "$LOGS"
+          for k in 1 2 3; do
+            cpus=$(( 2 * (k - 1) ))-$(( 2 * k - 1 )),$(( 2 * (k - 1) + 16 ))-$(( 2 * k + 15 ))
+            (
+              start=$(date +%s)
+              taskset -c "$cpus" env OPENVT_PACKAGE_BULK="$HOME/potts-ci/openvt-bulk" POTTSMODELS_SHARD="$k/3" GROUP=PottsModels \
+                julia "$JULIA_112_FLAG" -t 4 --project=test test/runtests.jl > "$LOGS/shard-$k.log" 2>&1
+              echo "$? $(( $(date +%s) - start ))" > "$LOGS/shard-$k.exit"
+            ) &
+          done
+          wait
+          failed=0
+          for k in 1 2 3; do
+            read -r code secs < "$LOGS/shard-$k.exit" || { code=99; secs=0; }
+            echo "::group::PottsModels-$k-of-3 (Julia 1.12) - exit $code, $(( secs / 60 )) min $(( secs % 60 )) s"
+            cat "$LOGS/shard-$k.log"
+            echo "::endgroup::"
+            [ "$code" = 0 ] || { failed=1; echo "::error::PottsModels-$k-of-3 failed (exit $code)"; }
+          done
+          exit $failed
+      - name: Keep this Manifest as the Julia 1.12 dependency lock
+        run: mkdir -p "$HOME/potts-ci" && cp Manifest.toml "$HOME/potts-ci/Manifest-1.12.toml"

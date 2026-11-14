@@ -1,0 +1,39 @@
+# Documentation build and doctests on the self-hosted runner (H3).
+# Runs in its own workflow and concurrency group (`docs-*`) so a docs failure does not hide a
+# test failure and a docs run never cancels `ci-*`.
+name: Docs
+
+on:
+  push:
+    branches: [monorepo]
+  workflow_dispatch:
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  JULIA_PKG_PRECOMPILE_AUTO: "0"
+  PIN: taskset -c 0-11,16-27
+
+jobs:
+  docs:
+    name: Build docs and run doctests
+    runs-on: [self-hosted, Linux, X64, rocm]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Julia on PATH
+        run: echo "$HOME/.juliaup/bin" >> "$GITHUB_PATH"
+      - name: Resolve, instantiate and precompile docs environment
+        run: |
+          julia --version
+          LOCK="$HOME/potts-ci/Manifest.toml"
+          if [ -f "$LOCK" ]; then cp "$LOCK" Manifest.toml; fi
+          $PIN julia --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate(); Pkg.precompile()'
+          $PIN julia --project=docs -e 'using Pkg; Pkg.precompile()'
+      - name: Build documentation and run doctests
+        run: $PIN julia --project=docs docs/make.jl
