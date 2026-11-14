@@ -63,11 +63,10 @@ state of an integrator (see
 
 ```@docs
 Potts.Fields
-```
-
-```@autodocs
-Modules = [Potts.Fields]
-Private = false
+Potts.Fields.t
+Potts.Fields.x
+Potts.Fields.y
+Potts.Fields.z
 ```
 
 ```@autodocs
