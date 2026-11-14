@@ -3,11 +3,60 @@
 using Test, Potts, PottsModels, Aqua, TOML
 using Potts: CorePotts
 using Statistics: mean
+
+function _load_pm_groups()
+    raw = TOML.parsefile(joinpath(@__DIR__, "test_groups.toml"))
+    out = Dict{String, Dict{String, Any}}()
+    for (name, val) in raw
+        val isa AbstractDict || throw(ArgumentError("Invalid entry \"$name\" in PottsModels test_groups.toml"))
+        out[string(name)] = Dict{String, Any}(string(k) => v for (k, v) in val)
+    end
+    return out
+end
+
+function _resolve_pm_groups(groups_table, raw_groups)
+    qa = get(ENV, "POTTSMODELS_QA", "true") == "true"
+    selected = String[]
+    for raw in raw_groups
+        g = strip(String(raw))
+        startswith(g, "PottsModels_") && (g = g[length("PottsModels_") + 1:end])
+        g == "PottsModels" && (g = "All")
+        if g == "All"
+            for name in sort!(collect(keys(groups_table)))
+                opts = groups_table[name]
+                get(opts, "in_all", true) == true || continue
+                get(opts, "group", name) == name || continue
+                name == "qa" && !qa && continue
+                push!(selected, name)
+            end
+        elseif haskey(groups_table, g)
+            target = string(get(groups_table[g], "group", g))
+            haskey(groups_table, target) ||
+                throw(ArgumentError("Unknown PottsModels target group \"$target\""))
+            push!(selected, target)
+        else
+            valid = join(["All"; sort!(collect(keys(groups_table)))], ", ")
+            throw(ArgumentError("Unknown PottsModels test group \"$g\". Valid groups: $valid"))
+        end
+    end
+    return unique(selected)
+end
+
+const POTTSMODELS_GROUPS_TABLE = _load_pm_groups()
+const POTTSMODELS_SELECTED_GROUPS = let raw = !isempty(ARGS) ? ARGS :
+        (!isempty(strip(get(ENV, "GROUP", ""))) ? [strip(ENV["GROUP"])] : ["All"])
+    _resolve_pm_groups(POTTSMODELS_GROUPS_TABLE, raw)
+end
+const POTTSMODELS_RUN_CORE = "core" in POTTSMODELS_SELECTED_GROUPS
+const POTTSMODELS_RUN_QA = "qa" in POTTSMODELS_SELECTED_GROUPS
+const POTTSMODELS_RUN_FILES = POTTSMODELS_RUN_CORE ||
+    any(g -> g in ("acceptance", "reproductions", "guardrails"), POTTSMODELS_SELECTED_GROUPS)
+
 # device selection (D-157): the acceptance files' device testsets run here only when
 # POTTS_GPU = metal | rocm; the GPU group runs them from test/gpu.jl
 isdefined(Main, :PottsDevices) || include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "devices.jl"))
 # test-only models that the acceptance files use by name (D-254)
-isdefined(Main, :SingleDivisionFixture) || include(joinpath(@__DIR__, "fixtures.jl"))
+POTTSMODELS_RUN_FILES && (isdefined(Main, :SingleDivisionFixture) || include(joinpath(@__DIR__, "fixtures.jl")))
 
 function selfcheck(prob; n = 200)
     sol = solve(remake(prob; tspan = (0, 3)), SequentialCPM(; proposal = Moore(1)))
@@ -40,7 +89,7 @@ const POTTSMODELS_SHARD = let (k, n) = parse.(Int, split(get(ENV, "POTTSMODELS_S
 end
 const POTTSMODELS_FIRST_SHARD = POTTSMODELS_SHARD[1] == 1
 
-POTTSMODELS_FIRST_SHARD && @testset "PottsModels" begin
+(POTTSMODELS_RUN_CORE && POTTSMODELS_FIRST_SHARD) && @testset "PottsModels" begin
     σ, kinds = graner_glazier_state()
     @test size(σ) == (72, 72) && length(kinds) == 64 && size(first(graner_glazier_state(2))) == (144, 144)
     two(dims, a, b) = (s = zeros(Int32, dims); s[a...] .= 1; s[b...] .= 2; s)
@@ -172,12 +221,23 @@ function pottsmodels_shards(files, n)
     end
     return [[f for f in files if shard[f] == j] for j in 1:n]
 end
-const POTTSMODELS_SHARD_FILES = let fs = pottsmodels_shards(POTTSMODELS_TEST_FILES, POTTSMODELS_SHARD[2])[POTTSMODELS_SHARD[1]]
+const POTTSMODELS_TARGET_FILES = if !POTTSMODELS_RUN_FILES
+    String[]
+elseif POTTSMODELS_RUN_CORE
+    POTTSMODELS_TEST_FILES
+else
+    filter(POTTSMODELS_TEST_FILES) do f
+        ("acceptance" in POTTSMODELS_SELECTED_GROUPS && startswith(f, "acceptance/")) ||
+        ("reproductions" in POTTSMODELS_SELECTED_GROUPS && startswith(f, "reproductions/")) ||
+        ("guardrails" in POTTSMODELS_SELECTED_GROUPS && f == "guardrails.jl")
+    end
+end
+const POTTSMODELS_SHARD_FILES = let fs = pottsmodels_shards(POTTSMODELS_TARGET_FILES, POTTSMODELS_SHARD[2])[POTTSMODELS_SHARD[1]]
     # POTTSMODELS_SHARD_ORDER = reverse: run the shard's files last to first (a check for
     # state that one file leaves for a later one)
     get(ENV, "POTTSMODELS_SHARD_ORDER", "forward") == "reverse" ? reverse(fs) : fs
 end
-POTTSMODELS_SHARD[2] > 1 && @info "PottsModels shard $(POTTSMODELS_SHARD[1])/$(POTTSMODELS_SHARD[2]): $(length(POTTSMODELS_SHARD_FILES)) of $(length(POTTSMODELS_TEST_FILES)) files" POTTSMODELS_SHARD_FILES
+POTTSMODELS_RUN_FILES && POTTSMODELS_SHARD[2] > 1 && @info "PottsModels shard $(POTTSMODELS_SHARD[1])/$(POTTSMODELS_SHARD[2]): $(length(POTTSMODELS_SHARD_FILES)) of $(length(POTTSMODELS_TARGET_FILES)) files" POTTSMODELS_SHARD_FILES
 
 # shared Base-only helpers that several files use (mechanisms.jl includes it;
 # papers.jl calls `akeeb_metrics` without including it), loaded once whatever the shard order
@@ -319,11 +379,17 @@ function _pm_module(f; defs_only)
     return m
 end
 
-@testset "PottsModels files" begin
-    @testset "$f" for f in POTTSMODELS_SHARD_FILES
-        _pm_module(f; defs_only = false)
+if POTTSMODELS_RUN_FILES
+    @testset "PottsModels files" begin
+        @testset "$f" for f in POTTSMODELS_SHARD_FILES
+            _pm_module(f; defs_only = false)
+        end
+        (POTTSMODELS_RUN_QA && POTTSMODELS_FIRST_SHARD) && @testset "Aqua" begin
+            Aqua.test_all(PottsModels; deps_compat = (; check_extras = false))
+        end
     end
-    POTTSMODELS_FIRST_SHARD && @testset "Aqua" begin
+elseif POTTSMODELS_RUN_QA
+    @testset "Aqua" begin
         Aqua.test_all(PottsModels; deps_compat = (; check_extras = false))
     end
 end

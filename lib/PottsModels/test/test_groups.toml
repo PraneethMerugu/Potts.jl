@@ -1,0 +1,48 @@
+# Declarative test groups for PottsModels.
+# Julia reads `in_all` and `group`; `num_threads = 4` documents the CI shard thread count
+# while preserving POTTSMODELS_SHARD compatibility.
+
+[core]
+group = "core"
+in_all = true
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64"]
+num_threads = 4
+timeout = 180
+
+[qa]
+group = "qa"
+in_all = true
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64"]
+num_threads = 1
+timeout = 30
+
+[acceptance]
+group = "acceptance"
+in_all = false
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64"]
+num_threads = 4
+timeout = 180
+
+[reproductions]
+group = "reproductions"
+in_all = false
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64"]
+num_threads = 4
+timeout = 180
+
+[guardrails]
+group = "guardrails"
+in_all = false
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64"]
+num_threads = 1
+timeout = 30

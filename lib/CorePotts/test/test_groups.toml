@@ -1,0 +1,33 @@
+# Declarative test groups for CorePotts.
+# Julia reads `in_all`, `group`, `tags`, and `exclude_tags`; the remaining keys are CI metadata.
+
+[core]
+group = "core"
+in_all = true
+tags = ["corepotts"]
+exclude_tags = ["qa", "gpu_only"]
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64"]
+num_threads = 1
+timeout = 60
+
+[qa]
+group = "qa"
+in_all = true
+tags = ["qa"]
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64"]
+num_threads = 1
+timeout = 30
+
+[gpu]
+group = "gpu"
+in_all = false
+tags = ["device", "device_scan"]
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64", "rocm"]
+num_threads = 1
+timeout = 60
