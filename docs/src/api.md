@@ -66,6 +66,11 @@ Potts.Fields
 ```
 
 ```@autodocs
+Modules = [Potts.Fields]
+Private = false
+```
+
+```@autodocs
 Modules = [Potts]
 Private = false
 ```
@@ -97,15 +102,6 @@ Filter = t -> !Main.on_model_page(t)
 ```@autodocs
 Modules = [PottsModels.Analysis]
 Private = false
-```
-
-## LatticeFields
-
-Internal array, IR, compilation, schedule, and solver building blocks exposed
-for `LatticePDE` and sibling packages.
-
-```@docs
-Potts.LatticeFields
 ```
 
 ## LatticePDE

@@ -8,7 +8,7 @@
                 steady = String[]) -> GroupSpec
 
 The field group of the state variables `fields` of `pdesys` (all of them by default),
-lowered on the lattice `disc` to its [`GroupSpec`](@ref LatticeFields.Problems.GroupSpec):
+lowered on the lattice `disc` to its `GroupSpec` (`LatticeFields.Problems.GroupSpec`):
 the rate program (`symbolic_discretize` in rate form: `rate:c` kernels store `∂c`), the
 state keys, the kind (`:rate` or `:map`), the masks, the stability bound, the parameter,
 table and input keys and the linearity classes.
