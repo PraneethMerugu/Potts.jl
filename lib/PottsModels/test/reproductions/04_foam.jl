@@ -1,6 +1,6 @@
 # P6.4r (ROADMAP Phase 6; D-186 foam streams 3–5): reproduction 04, Jiang, Swart, Saxena,
 # Asipauskas & Glazier, "Hysteresis and avalanches in two-dimensional foam rheology
-# simulations", Phys. Rev. E 59, 5819 (1999) ("04b"). Frozen (AUTONOMY §7.3). The
+# simulations", Phys. Rev. E 59, 5819 (1999) ("04b"). The
 # pre-registered targets are spec 04 §5.2 V1–V20 (docs/design/research/model-specs/04_foam.md);
 # every band below is copied from §5.2's "Acceptance" column, with the observable, the
 # protocol, the run lengths, the replicate counts and the seeds fixed here. Decisions: D-186

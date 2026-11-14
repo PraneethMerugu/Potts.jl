@@ -1,6 +1,6 @@
 # P6.15l (ROADMAP Step 3b; D-213, D-215): the OpenVT package made easy to e-mail (Q11
 # replaced), its conformance to the consortium repository's scripts (D-215), and the Q25
-# wording (Q25 closed by maintainer ruling, not asked). Frozen (AUTONOMY §7.3). This file adds
+# wording (Q25 closed by maintainer ruling, not asked). This file adds
 # to `15_openvt_package.jl` (the unsplit package; amended for D-215 in the same freeze) and
 # `15_openvt_page.jl` (page 15's layout, unchanged). Nothing here sends, uploads or contacts
 # anyone: the release asset is created only with the maintainer's OK at that moment (D-213

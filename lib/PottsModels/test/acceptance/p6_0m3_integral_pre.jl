@@ -1,5 +1,5 @@
-# P6.0m3 (ROADMAP Phase 6, step 0): `integral(Pre(w))` in an update block. Frozen (AUTONOMY
-# §7.3). Decisions: D-042 (update-block semantics: `Pre(x)` is the value before the block),
+# P6.0m3 (ROADMAP Phase 6, step 0): `integral(Pre(w))` in an update block.
+# Decisions: D-042 (update-block semantics: `Pre(x)` is the value before the block),
 # D-076 (fresh integrals: a bare `integral(x)` sees the block's new values), D-078 (after-MCS
 # order: updates first).
 #

@@ -157,22 +157,45 @@ _tokens(s) = [lowercase(t) for t in split(s, r"[^A-Za-z0-9]+|(?<=[a-z])(?=[A-Z])
 _denied(s) = [d for d in _DENY if any(t -> t == d || (length(d) > 4 && occursin(d, t)), _tokens(s))]
 
 const JS = Base.JuliaSyntax
+# The kind names are resolved at run time: Julia 1.13 removed `K"MacroName"` and spells a macro
+# name as a `macro_name` node around a plain `Identifier` leaf (value `:name`), where 1.12 and
+# earlier have one `MacroName` leaf whose value is `Symbol("@name")`. A macro name keeps the `@`
+# its allowlist key has always had, either way (`_macro_text`), so both versions report the same
+# hits on the same lines.
+_js_kind(name) = try
+    JS.Kind(name)
+catch
+    nothing
+end
+const _K_IDENT = _js_kind("Identifier")
+const _K_STRING = _js_kind("String")
+const _K_MACRO = _js_kind("MacroName")        # 1.12 and earlier
+const _K_MACRO_NODE = _js_kind("macro_name")  # 1.13 and later
+const _K_DOC = _js_kind("doc")
+_macro_text(s) = startswith(s, '@') ? s : "@" * s
+
 function _privileged_hits(file)
     root = JS.parseall(JS.SyntaxNode, read(file, String); filename = file)
     out = Tuple{Int, String}[]
-    function walk(n, indoc)
-        if JS.kind(n) == JS.K"doc"
-            foreach(((i, c),) -> walk(c, i == 1), enumerate(JS.children(n)))
+    function walk(n, indoc, inmacro)
+        k = JS.kind(n)
+        if k == _K_DOC
+            foreach(((i, c),) -> walk(c, i == 1, false), enumerate(JS.children(n)))
             return
         end
         indoc && return
-        if JS.is_leaf(n) && JS.kind(n) in (JS.K"Identifier", JS.K"String", JS.K"MacroName")
-            s = string(n.val)
-            isempty(_denied(s)) || push!(out, (JS.source_location(n)[1], s))
+        if JS.is_leaf(n)
+            if k == _K_IDENT || k == _K_STRING || (_K_MACRO !== nothing && k == _K_MACRO)
+                s = string(n.val)
+                inmacro && (s = _macro_text(s))
+                isempty(_denied(s)) || push!(out, (JS.source_location(n)[1], s))
+            end
+        else
+            m = inmacro || (_K_MACRO_NODE !== nothing && k == _K_MACRO_NODE)
+            foreach(c -> walk(c, false, m), JS.children(n))
         end
-        JS.is_leaf(n) || foreach(c -> walk(c, false), JS.children(n))
     end
-    walk(root, false)
+    walk(root, false, false)
     return out
 end
 

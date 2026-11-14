@@ -6,7 +6,7 @@
 # constraints, temperature and proposal neighbourhood). This is the plan §5 sentence "an
 # `AbstractSystem` whose ... Hamiltonian [is a Symbolics expression] that ModelingToolkit's
 # generic tools can inspect". It is a description only: MTK never executes the sweep.
-# Decision: D-1xx (P6.0bm; the coordinator numbers it). Frozen (AUTONOMY §7.3).
+# Decision: D-1xx (P6.0bm; the coordinator numbers it).
 #
 # The contract pinned here (public API only; storage, caching, the domain objects' types
 # and the payload's constructor are the implementer's):
@@ -183,7 +183,7 @@ struct P60bmOtherKey end
 
 # every published model (small lattices; construction only), with its number of `@energy`
 # terms as written in lib/PottsModels/src
-const P60BM_PUBLISHED = [
+const P60BM_MODELS = [
     ("GranerGlazier", () -> GranerGlazier(; name = :gg), 2),
     ("WortelAct", () -> WortelAct(; name = :act, lattice = (8, 8)), 2),
     ("WortelAct connected", () -> WortelAct(; name = :act, lattice = (8, 8), connected = true), 2),
@@ -279,7 +279,7 @@ end
 end
 
 @testset "P6.0bm H: published models" begin
-    @testset "$label" for (label, build, nterms) in P60BM_PUBLISHED
+    @testset "$label" for (label, build, nterms) in P60BM_MODELS
         sys = build()
         H = Potts.hamiltonian(sys)
         @test H isa AbstractVector && length(H) == nterms
@@ -363,7 +363,7 @@ end
 end
 
 @testset "P6.0bm M: published models" begin
-    @testset "$label" for (label, build, nterms) in P60BM_PUBLISHED
+    @testset "$label" for (label, build, nterms) in P60BM_MODELS
         sys = build()
         @test P60BM_M.hasmetadata(Potts.inner(sys), Potts.PottsSweepSpec)
         spec = p60bm_spec(sys)
@@ -404,11 +404,11 @@ p60bm_has_sweep(s) = P60BM_M.hasmetadata(p60bm_meta(s), Potts.PottsSweepSpec)
 @testset "P6.0bm X: generic code detects the sweep" begin
     @test !p60bm_has_sweep(p60bm_decay()) && !p60bm_has_sweep(P60BM_M.mtkcompile(p60bm_decay()))
     @test p60bm_has_sweep(P60bmHam(; name = :hx)) && p60bm_has_sweep(mtkcompile(P60bmHam(; name = :hx)))
-    @test all(c -> p60bm_has_sweep(c[2]()), P60BM_PUBLISHED)
+    @test all(c -> p60bm_has_sweep(c[2]()), P60BM_MODELS)
 end
 
 @testset "P6.0bm X: ODEProblem and JumpProblem refuse every published model (regression guard)" begin
-    @testset "$label" for (label, build, _) in P60BM_PUBLISHED
+    @testset "$label" for (label, build, _) in P60BM_MODELS
         sys = build()
         @test p60bm_clear(() -> P60BM_M.ODEProblem(sys, [], (0.0, 1.0)), "ODEProblem", "PottsProblem")
         @test p60bm_clear(() -> P60BM_M.JumpProblem(sys, [], (0.0, 1.0)), "JumpProblem", "PottsProblem")

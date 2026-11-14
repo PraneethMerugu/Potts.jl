@@ -135,16 +135,43 @@ at random, so every site is attempted once per MCS on average, as with `Sequenti
 `stats.accepted` and `stats.committed` count the copies (equal: a copy commits when it is
 accepted), brought up to date at the host read points.
 
-Reproducibility. Inline phases (the CPU with `threads = false`, one thread, or a small
-lattice) run their work items one after another: each attempt sees every earlier one and a
-run is reproducible from its seed. Threaded CPU phases and device runs depend on the timing
-of the work items and are not.
+Reproducibility. Every phase is checked before it runs. One whose work items would share a cell
+(possible when a cell is wider than the block spacing) runs inline, one work item after another,
+so its decisions are exact and order-free; every other phase is a colouring, whose items share no
+cell (of those a copy's decision or commit touches: its target's, its source's, or a neighbour's),
+so it reaches the same decisions inline or threaded. A CPU
+run is therefore reproducible from its seed at any thread count: the same seed gives the same
+trajectory at one thread and at four. Device runs depend on the timing of the work items and are
+not (user ruling 2026-11-04).
 
-Copies to one cell in flight at the same time read its totals before each other's commit.
-Cell trackers stay exact: moments add atomically and re-center once per MCS, pieces trackers
-add their changes, and an `@on_copy` write that reads its own cell value adds the difference.
-A copy whose decision needs a whole-cell search (a `Global` veto without window, pieces off
-their local fast path) is decided after its phase by one work item, with no copy in flight.
+Threading. A phase whose items share a cell runs inline, so a geometry whose cells are wider than
+`(parts - 1) * region + 1` across serialises every phase that contains two of them, and gains
+nothing from threads. Measured on the PC, 2026-11-12, on a 200 × 200 and a 400 × 400 lattice tiled
+by 10 × 10 cells and on 30 × 30 lattices tiled by 5 × 5 cells; the serialised count is a property of
+the layout and the state, the times were taken on a loaded lane:
+
+| geometry | items per phase | cell side | spacing | serialised phases |
+| --- | --- | --- | --- | --- |
+| 30 × 30, 5 × 5 cells, `region = 1, parts = 3` | 100 | 5 | 3 | 9 / 9 |
+| 30 × 30, 5 × 5 cells, `parts = 2` | 225 | 5 | 2 | 4 / 4 |
+| 30 × 30, 5 × 5 cells, default | 9 | 5 | 8 | 0 / 64 |
+| 200 × 200, 10 × 10 cells, default | 625 | 10 | 8 | 64 / 64 |
+| 400 × 400, 10 × 10 cells, default | 2500 | 10 | 8 | 64 / 64 |
+
+So threading survives on small-cell geometries and is gone on the wide-cell ones, which are the
+ones the default layout produces: 10 × 10 cells are wider than the 8-site spacing the default
+`parts = 8, region = 1` gives. The trade at 400 × 400 with 1600 cells is the four-thread gain such a
+geometry had before this rule, about 1.4× (2.76 ms to 1.96 ms per MCS); the 3.3–3.7× recorded for
+`BLOCK_GRAIN` is a 5000-block measurement and does not describe it.
+
+Cell trackers stay exact: moments add atomically and re-center once per MCS, pieces trackers add
+their changes, and an `@on_copy` write that reads its own cell value adds the difference. (A
+float-valued column accumulated by concurrent commits can differ in its last bits by thread
+count: an integer column is exact.) `stats.accepted_ΔH` sums the accepted copies' ΔH and
+reconciles with the trajectory's energy change, since no two work items act on one cell unless
+they run one after another. A copy whose decision needs a whole-cell search (a `Global` veto
+without window, pieces off their local fast path) is decided after its phase by one work item,
+with no copy in flight.
 
 The kinetics match `SequentialCPM` within the statistical resolution of the P6.0bl checks
 (foam, cell sorting, the OpenVT chain and monolayer, Akeeb invasion, a 3D RPE sheet, the

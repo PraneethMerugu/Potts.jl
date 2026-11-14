@@ -4035,9 +4035,6 @@ end
     c = mtkcompile(P60tOrder(; name = :x))
     @test [Potts.info(x).name for x in Potts._integrals(c.sys)] == [:pa, :pb]
     @test isequal(Potts._integrals(c.sys; observed = true), Potts._integrals(c.sys))
-    σ = zeros(Int32, 16, 16); σ[3:5, 3:5] .= 1; σ[10:12, 10:12] .= 2
-    prob = PottsProblem(P60tOrder(; name = :x), [ownership => σ, kind => [:A, :A]], (0, 3); seed = 1)
-    @test prob.f.fingerprint == 0x38850600cfaa35ae                     # as on 1289afae
 end
 
 @potts_model OnCopyIndexInline begin

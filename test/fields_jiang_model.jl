@@ -1,5 +1,4 @@
-# The Jiang-like model of F3-18 (test/fields_jiang.jl) and its spheroid, shared with the guard's
-# soft set (test/fields_identity.jl, review r1).
+# The Jiang-like model of F3-18 (test/fields_jiang.jl) and its spheroid.
 isdefined(Main, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
 module JgPDE
 using ..FieldPDE
@@ -7,14 +6,16 @@ using ..FieldPDE
 @variables gf(..) [lattice_level = Coarse(4)] inh(..) [lattice_level = Coarse(4)]
 @variables pq(..)::Bool [input = true] kP(..)::Bool [input = true] kQ(..)::Bool [input = true] kN(..)::Bool [input = true]
 @variables med(..)::Bool [input = true]
+# F4-15b: the majority twin's mask at the coarse level (no fine read: the whole-block fold)
+@variables medc(..)::Bool [input = true, lattice_level = Coarse(4)]
 # the five fields on a coarse grid (`Coarse(4)`); the kinds are bound inputs: `pq` is
 # `ismember(kind, (P, Q))`, `kP`, `kQ`, `kN` the kinds and `med` the medium
-function jiang(dims)
+function jiang(dims; coarsemask = false)
     @parameters Do = 2880.0 Dg = 73.7 Dl = 103.0 Df = 0.048 Di = 0.048 a0 = 324.0 b0 = 648.0 C0 = 720.0 oT = 0.02 gT = 0.06
     @parameters oO = 0.28 gO = 5.5 o0 = 0.08 g0 = 5.5 df = 3.0 ei = 3.0
     X = (t, x, y, z)
     O, G, L, GF, INH = o(X...), g(X...), l(X...), gf(X...), inh(X...)
-    PQ, P, Q, N, M = pq(X...), kP(X...), kQ(X...), kN(X...), med(X...)
+    PQ, P, Q, N, M = pq(X...), kP(X...), kQ(X...), kN(X...), (coarsemask ? medc(X...) : med(X...))
     eqs = [Dt(O) ~ Do * Δ(O) - a0 * max(O - oT, 0) / (oO - oT) * PQ,
         Dt(G) ~ Dg * Δ(G) - b0 * max(G - gT, 0) / (gO - gT) * PQ,
         Dt(L) ~ Dl * Δ(L) + C0 * (max(O - oT, 0) / (oO - oT) + max(G - gT, 0) / (gO - gT)) / 2 * PQ,

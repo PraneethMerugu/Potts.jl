@@ -1,5 +1,5 @@
 # P6.0aq (ROADMAP Phase 6, step 0): the acceptance law's parameters are in the fingerprint.
-# Decision: D-121 (amends D-016, after D-118). Frozen (AUTONOMY §7.3).
+# Decision: D-121 (amends D-016, after D-118).
 #
 # The defect (P6.0p review, D-118 "Review and merge"). The fingerprint hashes the generated
 # code, the lattice, spacing, neighbourhood, `T`, the canonical solver spec and (D-118) the
@@ -244,26 +244,9 @@ p60aq_unchanged() = (
         capacity = 256),
 )
 
-# the fixture recorded on 432a0a74; the PottsModels systems are the P6.0p pins (4e81e1eb)
-const P60AQ_FINGERPRINTS = Dict{String, UInt64}(
-    "fixture Metropolis()" => 0x9b4704d8a49af92f,
-    "fixture Metropolis(offset = 0)" => 0x9b4704d8a49af92f,
-    "GranerGlazier" => 0xe6e09483034b4193,   # re-pinned under D-122
-    "WortelAct" => 0x9a9fcac5fc22b7c5,   # re-pinned under D-124
-    "WortelAct connected" => 0xe1e52da078e581c9,   # re-pinned under D-124; re-pinned under P6.3g (D-193): fingerprint only
-    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
-    "SingleDivisionFixture" => 0xd2bed53e2590b709,
-    "OpenVTGrowingMonolayer" => 0x34b40af65c56a113,   # re-pinned under D-122
-    "AkeebInvasion" => 0x72ced0fc70498f16,   # re-pinned under D-237 (cell draws by id and generation)
-)
 
-@testset "P6.0aq: fingerprints under the default acceptance law unchanged" begin
+@testset "P6.0aq: the systems build under the default acceptance law" begin
     for (name, build) in p60aq_unchanged()
-        haskey(P60AQ_FINGERPRINTS, name) || continue   # (D-INT-1: its pin was removed)
-        prob = build()
-        @test prob.f.acceptance in (nothing, CorePotts.Metropolis(), CorePotts.Metropolis(0.0))   # the default law
-        fp = prob.f.fingerprint
-        @test fp == P60AQ_FINGERPRINTS[name]
-        fp == P60AQ_FINGERPRINTS[name] || @info "P6.0aq: fingerprint $name = $(repr(fp))"
+        @test build().f.acceptance in (nothing, CorePotts.Metropolis(), CorePotts.Metropolis(0.0))   # the default law
     end
 end

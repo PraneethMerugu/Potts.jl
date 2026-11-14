@@ -1,7 +1,7 @@
 # P6.4b2 (ROADMAP Phase 6; D-186 foam stream 2): the foam analysis functions of
 # reproduction 04 (Jiang, Swart, Saxena, Asipauskas & Glazier, Phys. Rev. E 59, 5819 (1999),
-# "04b"; spec docs/design/research/model-specs/04_foam.md §2.8, §5.2, §6 G12, §8). Frozen
-# (AUTONOMY §7.3). Decisions: D-186 (the stream), D-048 (ordinary tests: independent oracles
+# "04b"; spec docs/design/research/model-specs/04_foam.md §2.8, §5.2, §6 G12, §8).
+# Decisions: D-186 (the stream), D-048 (ordinary tests: independent oracles
 # and negative controls, no parity harness). Every input is a hand-built ownership array, a
 # hand-written neighbour list or a synthetic series; nothing is simulated.
 #

@@ -76,8 +76,8 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
-fc_op() = (σ = zeros(Int32, 12, 10); σ[4:6, 3:5] .= 1; [ownership => σ, kind => [:A]])
-fc_run(m, field, k; op = fc_op(), kw...) =
+fcomp_op() = (σ = zeros(Int32, 12, 10); σ[4:6, 3:5] .= 1; [ownership => σ, kind => [:A]])
+fc_run(m, field, k; op = fcomp_op(), kw...) =
     Array(getproperty(solve(PottsProblem(m, op, (0, k); seed = 1, kw...), SequentialCPM()).u[end].site, field))
 fc_msg(f) = try
     f()
@@ -108,8 +108,8 @@ end
         @test a == b && maximum(a) > 0.5 && sum(a) > 0
     end
     # its fields by name in a `FieldGroups` pair, and its parameters in the operating point
-    a = fc_run(m, :drug₊u, 4; op = [fc_op(); :drug₊Dd => 0.4], field_solver = FieldGroups(:drug₊u => BackwardEuler()))
-    b = fc_run(ref, :u, 4; op = [fc_op(); :Dd => 0.4], field_solver = FieldGroups(:u => BackwardEuler()))
+    a = fc_run(m, :drug₊u, 4; op = [fcomp_op(); :drug₊Dd => 0.4], field_solver = FieldGroups(:drug₊u => BackwardEuler()))
+    b = fc_run(ref, :u, 4; op = [fcomp_op(); :Dd => 0.4], field_solver = FieldGroups(:u => BackwardEuler()))
     @test a == b
     @test a != fc_run(ref, :u, 4; field_solver = BackwardEuler())          # (the write took effect)
     # the composed model's PDESystem is the reference's, under the component's names
@@ -120,7 +120,7 @@ end
     @test fc_run(hw, :u, 6; field_solver = ExplicitEuler()) == fc_run(ref, :u, 6; field_solver = ExplicitEuler())
     # composed with an MTK component in one call, in either order
     m2 = Potts.compose(host, Potts.component(:zz, FcPDE.zz(), host), comp)
-    sol = solve(PottsProblem(m2, fc_op(), (0, 3); seed = 1), SequentialCPM())
+    sol = solve(PottsProblem(m2, fcomp_op(), (0, 3); seed = 1), SequentialCPM())
     @test Array(sol.u[end].site.drug₊u) == fc_run(ref, :u, 3) && sol.u[end].model.zz₊zq[1] < 1
 end
 
@@ -177,7 +177,7 @@ end
         host = FcHost(; name = :m)
         m = Potts.compose(host, Potts.component(:drug, FcPDE.drug((12, 10)), host))
         for fs in (ExplicitEuler(), BackwardEuler())
-            prob = PottsProblem(m, fc_op(), (0, 6); field_solver = fs, T = Float32, seed = 1)
+            prob = PottsProblem(m, fcomp_op(), (0, 6); field_solver = fs, T = Float32, seed = 1)
             a = solve(prob, CheckerboardCPM()).u[end].site.drug₊u
             b = solve(prob, CheckerboardCPM(); backend).u[end].site.drug₊u
             @test Array(b) ≈ a rtol = 1e-5
@@ -236,11 +236,11 @@ end
     # the initial value from a start condition, bitwise against the coupled one (before F4-B4t,
     # A's default): a number, a parameter expression, and that expression after an
     # operating-point write
-    run(pde, k; op = fc_op()) = fc_run(Potts.compose(host, Potts.component(:drug, pde, host)), :drug₊u, k; op)
+    run(pde, k; op = fcomp_op()) = fc_run(Potts.compose(host, Potts.component(:drug, pde, host)), :drug₊u, k; op)
     @test run(FcPDE.plain([u(0, X, Y) ~ 0.7]), 3) == fc_run(FcRefIC(; name = :m), :u, 3)
     @test run(FcPDE.plain([u(0, X, Y) ~ 1.4kd]), 3) == fc_run(FcRefIC2(; name = :m), :u, 3)
-    a = run(FcPDE.plain([u(0, X, Y) ~ 1.4kd]), 3; op = [fc_op(); :drug₊kd => 1.0])
-    @test a == fc_run(FcRefIC2(; name = :m), :u, 3; op = [fc_op(); :kd => 1.0]) && a != fc_run(FcRefIC2(; name = :m), :u, 3)
+    a = run(FcPDE.plain([u(0, X, Y) ~ 1.4kd]), 3; op = [fcomp_op(); :drug₊kd => 1.0])
+    @test a == fc_run(FcRefIC2(; name = :m), :u, 3; op = [fcomp_op(); :kd => 1.0]) && a != fc_run(FcRefIC2(; name = :m), :u, 3)
     # a condition at another fixed time
     e = fc_msg(() -> Potts.compose(host, Potts.component(:drug, FcPDE.plain([u(5.0, X, Y) ~ 2.0]), host)))
     @test occursin("a value at the time 5.0", e) && occursin("the PDESystem `drug`", e)

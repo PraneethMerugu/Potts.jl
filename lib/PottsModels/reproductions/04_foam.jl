@@ -139,7 +139,7 @@ function frames!(integ, tend, every; each = (m, σ) -> nothing)
     return F
 end
 
-## short runs for the videos, with the frozen test's SMOKE seeds: 2 ordered foams, and
+## short runs for the videos, with the test's SMOKE seeds: 2 ordered foams, and
 ## 1 disordered (μ2(n) → 0.81) coarsened from its own ordered foam
 function ordered(seed; video = false)
     A = fill(256.0, nb)
@@ -169,7 +169,7 @@ function disordered(o, target, seed)
     return (; σ = Array(relaxed.σ), A, stop = m, frames = F, trace)
 end
 t_ord = @elapsed foams = [ordered(9_400_000 + k; video = k == 1) for k in 1:2]
-d081 = disordered(ordered(9_400_010), 0.81, 9_400_010)            # the frozen test's first d081 try
+d081 = disordered(ordered(9_400_010), 0.81, 9_400_010)            # the test's first d081 try
 
 ## a short bulk shear (model β) on the ordered and the disordered foam:
 ## φ̂ every 10 MCS, T1 events per MCS (VonNeumann(1) contacts, one T1 = 1), frames every 30 MCS
@@ -191,12 +191,12 @@ end
 const SHEAR_MCS = 3000
 sh_ord = sheared(foams[1], 0.05, SHEAR_MCS, 9_400_021)
 sh_dis = sheared(d081, 0.05, SHEAR_MCS, 9_400_023)
-## steady boundary shear (Eq. 6) at model γ0 = 24, the largest the frozen test's feasibility
+## steady boundary shear (Eq. 6) at model γ0 = 24, the largest the test's feasibility
 ## probe tried without a T1 under periodic shear
 const Γ0_MODEL = 24.0
 sh_bnd = sheared(foams[1], 0.0, SHEAR_MCS, 9_400_024; γ0 = Γ0_MODEL)
 
-## the full-run record (the one directory data/04/full-*, as the frozen test reads it)
+## the full-run record (the one directory data/04/full-*, as the test reads it)
 rec_root = joinpath(pkgdir(PottsModels), "reproductions", "data", "04")
 rec_dirs = filter(d -> startswith(d, "full-") && isdir(joinpath(rec_root, d)), readdir(rec_root))
 rec_dir = joinpath(rec_root, only(rec_dirs))
@@ -284,9 +284,9 @@ end #hide
 
 # ### Verdicts at a glance
 #
-# The rows are pre-registered in the frozen test (`test/reproductions/04_foam.jl`, D-190),
+# The rows are pre-registered in the test (`test/reproductions/04_foam.jl`, D-190),
 # with the paper's acceptance bands, and judged on the full run: 10 ordered foams, 30
-# disordered ones and every shear row on 5 replicates. The frozen test recomputes every
+# disordered ones and every shear row on 5 replicates. The test recomputes every
 # value below from the committed record.
 
 fmt(x; d = 3) = string(round(x; digits = d)) #hide
@@ -435,7 +435,7 @@ Markdown.parse(join([ #hide
 #
 # ### The full run
 #
-# The full run is the frozen test's FULL tier, made resumable and parallel over runs by
+# The full run is the test's FULL tier, made resumable and parallel over runs by
 # `lib/PottsModels/reproductions/data/04/run_full.jl`: 40 foams, 165 calibration loops, then
 # 530 loops, 15 steady and 200 bulk runs, about 1.35 × 10⁸ of our MCS (≈ 150 CPU-hours at
 # 4 ms per MCS). From the repository root:
@@ -446,12 +446,12 @@ Markdown.parse(join([ #hide
 # ```
 #
 # Each finished run is kept, so a rerun resumes. The record goes to `<dir>/record/` and is
-# committed as `lib/PottsModels/reproductions/data/04/full-<date>/`; the frozen test then
+# committed as `lib/PottsModels/reproductions/data/04/full-<date>/`; the test then
 # recomputes every row from it.
 #
 # ### Provenance of the full run
 
-Markdown.parse("Record `$(only(rec_dirs))`, written by the frozen test's FULL tier at commit " * #hide
+Markdown.parse("Record `$(only(rec_dirs))`, written by the test's FULL tier at commit " * #hide
                "$(first(rec_prov["commit"], 8)) (clean tree), Julia $(rec_prov["julia"]), $(rec_prov["threads"]) threads " * #hide
                "on an AMD Ryzen AI Max+ 395 CPU; wall time $(round(rec_prov["wall_s_this_launch"] / 3600; digits = 1)) h " * #hide
                "($(rec_prov["started"][1:16]) to $(rec_prov["finished"][1:16])). Jobs: " * #hide
@@ -463,11 +463,11 @@ Markdown.parse("Record `$(only(rec_dirs))`, written by the frozen test's FULL ti
 Markdown.parse("PottsModels $(pkgversion(PottsModels)), Julia $(VERSION), on $(strip(Sys.cpu_info()[1].model)) " *
                "($(Sys.MACHINE)), CPU, one thread. Two ordered foams in $(round(t_ord; digits = 1)) s; " *
                "bulk shear $(round(1e3 * sh_ord.wall / SHEAR_MCS; digits = 2)) ms per MCS with the per-MCS " *
-               "T1 detection (256², `SequentialCPM(; skip_interior = true)`). Seeds: the foams use the frozen test's smoke seeds " *
+               "T1 detection (256², `SequentialCPM(; skip_interior = true)`). Seeds: the foams use the test's smoke seeds " *
                "(ordered 9 400 001–2; the d081 foam's ordered start, coarsening and relaxation 9 400 010, " *
                "its first try). The ordered bulk shear uses 9 400 021, the frozen shear check's seed, " *
                "here for 3000 MCS instead of its 500, and 9 400 023–24 the disordered bulk and the " *
-               "boundary run; the frozen test does not pin these.")
+               "boundary run; the test does not check these.")
 
 # | Date | Change | Reason |
 # |---|---|---|

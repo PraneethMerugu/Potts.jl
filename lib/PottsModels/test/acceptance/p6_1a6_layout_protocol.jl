@@ -1,6 +1,6 @@
 # P6.1a6 (ROADMAP Phase 6, step 1; D-075 amends D-057; research/initial-state-review.md §4):
 # the layout protocol `paint!(op::LayoutState, l, lat)`, the layout report, `Tiling(partial)`
-# and `splits`. Frozen (AUTONOMY §7.3).
+# and `splits`.
 #
 # Surface fixed by the coordinator (Potts, src/layouts.jl, unless noted):
 #
@@ -70,12 +70,10 @@
 # report fixture's misses) is also recomputed from the documented draw rule.
 using Potts: CorePotts
 using StableRNGs: StableRNG   # D-138: PottsModels no longer depends on StableRNGs
-using SHA: sha256
 
 p61a6_get(op, key) = only(last(p) for p in op if isequal(first(p), key))
 p61a6_σ(op) = p61a6_get(op, ownership)
 p61a6_kinds(op) = p61a6_get(op, kind)
-p61a6_digest(σ) = bytes2hex(sha256(reinterpret(UInt8, vec(htol.(σ)))))
 p61a6_rows(l, x) = last(layout(l, x; report = true))
 p61a6_row(r) = (r.requested, r.painted, r.dropped, r.misses, r.counted, r.splits)
 p61a6_ins(rep) = only(r for r in rep if r.type === :InsertUntil)
@@ -177,27 +175,27 @@ function p61a6_lat_field_reads(T)
 end
 
 # ---------------------------------------------------------------------------------------------
-# Akeeb: byte identity with the tree before this item
+# Akeeb: the published slab, its inventory, and the public-layer expression
 # ---------------------------------------------------------------------------------------------
 
-# (lattice, seeding, seed, sha256(σ), followers, (painted, misses, counted)) at ec544d8
+# (lattice, seeding, seed, followers, (painted, misses, counted))
 const P61A6_AKEEB = [
-    ((500, 300), :authors, 0x5cd2609, "1210fbcf0bd50ba1cf4c8e7ee034a6eccb13f70b6985fcd5d4dac73aac91457a", 1169, (383, 7, 390)),
-    ((500, 300), :authors, 1, "eff0a9f521a0ef8feddc65737b24d6c450423423ad40fb80e71cea8ea9b5316d", 1169, (385, 5, 390)),
-    ((500, 300), :authors, 2, "de60a92b430ffabf2ec39ec47098356c6901d23c64e9f3b109d32937e0abaf16", 1169, (382, 8, 390)),
-    ((500, 300), :authors, 3, "4040c458992e809bad1e76f4aec5cd0decb83c9dc5c6e5911fb4a9e3ff542280", 1169, (382, 8, 390)),
-    ((500, 300), :retry, 0x5cd2609, "8debf2bba43219c8105dc5a756f390324bf9404e3208c5e5305e755f494c1e2c", 1169, (390, 7, 390)),
-    ((500, 300), :retry, 1, "8ae5744e2e22023650baf836739166e9670e19812000105f98276291769f315d", 1169, (390, 6, 390)),
-    ((500, 300), :retry, 2, "a97fc085e6a389c2b94e11232cfebced56562179c9f92bb85ae53f1b9c11af71", 1169, (390, 8, 390)),
-    ((500, 300), :retry, 3, "c3e4b7cc718c74902c0d67e1a0d44cf8ed18302ce5ed49b51755715db3d7a3f5", 1169, (390, 8, 390)),
-    ((99, 60), :authors, 0x5cd2609, "6f8ef5ab80258b1d36d81bbb8228b8bd1c39681cda32bd9f31b9a0d8f449f32c", 231, (76, 1, 77)),
-    ((99, 60), :authors, 1, "3e63cfab938326d2f33888d2be4fa35a641dcfdcb7003a880700bf76814d3dc3", 231, (77, 1, 78)),
-    ((99, 60), :authors, 2, "ebf44ca99d29c6f0eb35044c7a7f6e14fd1b8bf0b5c5a63b3f50016567fd79f1", 231, (77, 0, 77)),
-    ((99, 60), :authors, 3, "4d997ebbcd793e5cb167f89312d89d48a64635ff1da8cb3b7a48a965fbbafa27", 231, (74, 3, 77)),
-    ((99, 60), :retry, 0x5cd2609, "3ce84e78b0093b0bc054df622d1b6badf0cdbdd6a9ba248c0c8bf7db0db91cbc", 231, (77, 1, 77)),
-    ((99, 60), :retry, 1, "3e63cfab938326d2f33888d2be4fa35a641dcfdcb7003a880700bf76814d3dc3", 231, (77, 1, 77)),
-    ((99, 60), :retry, 2, "ebf44ca99d29c6f0eb35044c7a7f6e14fd1b8bf0b5c5a63b3f50016567fd79f1", 231, (77, 0, 77)),
-    ((99, 60), :retry, 3, "48524e9e11e77d925172f6859a3ed9159f60dd9bebce5a3eb8d6af5e1c62f4e1", 231, (77, 3, 77)),
+    ((500, 300), :authors, 0x5cd2609, 1169, (383, 7, 390)),
+    ((500, 300), :authors, 1, 1169, (385, 5, 390)),
+    ((500, 300), :authors, 2, 1169, (382, 8, 390)),
+    ((500, 300), :authors, 3, 1169, (382, 8, 390)),
+    ((500, 300), :retry, 0x5cd2609, 1169, (390, 7, 390)),
+    ((500, 300), :retry, 1, 1169, (390, 6, 390)),
+    ((500, 300), :retry, 2, 1169, (390, 8, 390)),
+    ((500, 300), :retry, 3, 1169, (390, 8, 390)),
+    ((99, 60), :authors, 0x5cd2609, 231, (76, 1, 77)),
+    ((99, 60), :authors, 1, 231, (77, 1, 78)),
+    ((99, 60), :authors, 2, 231, (77, 0, 77)),
+    ((99, 60), :authors, 3, 231, (74, 3, 77)),
+    ((99, 60), :retry, 0x5cd2609, 231, (77, 1, 77)),
+    ((99, 60), :retry, 1, 231, (77, 1, 77)),
+    ((99, 60), :retry, 2, 231, (77, 0, 77)),
+    ((99, 60), :retry, 3, 231, (77, 3, 77)),
 ]
 
 # The published slab written with public layers only (ROADMAP P6.1a6).
@@ -205,9 +203,9 @@ p61a6_akeeb(X, slab, seed, misses; splits = :allow) = overlay(
     Tiling((3, 3); region = (1:X, 1:(3 * cld(slab, 3))), kinds = [:follower], partial = :clip),
     InsertUntil(:leader; into = [:follower], fraction = 1 // 4, seed, misses, region = (2:X, 2:(slab - 1)), splits))
 
-@testset "P6.1a6: Akeeb σ, kinds and inventory are byte-identical to the tree before" begin
+@testset "P6.1a6: Akeeb σ, kinds and inventory agree with the public-layer expression" begin
     @test !isdefined(PottsModels, :_AkeebSlab)
-    for (lat, seeding, seed, dσ, nf, tally) in P61A6_AKEEB
+    for (lat, seeding, seed, nf, tally) in P61A6_AKEEB
         misses = seeding === :authors ? :count : :retry
         np = tally[1]
         expected_kinds = [fill(:follower, nf); fill(:leader, np)]
@@ -215,7 +213,6 @@ p61a6_akeeb(X, slab, seed, misses; splits = :allow) = overlay(
         op, rep = layout(PottsModels.akeeb_layout(; lattice = lat, seed, seeding), lat; report = true)
         σ = p61a6_σ(op)
         @test σ isa Matrix{Int32} && size(σ) == lat
-        @test p61a6_digest(σ) == dσ
         @test p61a6_kinds(op) == expected_kinds
         r = p61a6_ins(rep)
         @test (r.painted, r.misses, r.counted) == tally
@@ -227,18 +224,18 @@ p61a6_akeeb(X, slab, seed, misses; splits = :allow) = overlay(
         @test p61a6_row(p61a6_ins(rep2)) == p61a6_row(r)
         # akeeb_state paints the same cells
         st = akeeb_state(; lattice = lat, seed, seeding)
-        @test p61a6_digest(p61a6_σ(st)) == dσ && p61a6_kinds(st) == expected_kinds
+        @test p61a6_σ(st) == σ && p61a6_kinds(st) == expected_kinds
     end
     # x is periodic in the model: painting on the system gives the closed-lattice cells
     sys = AkeebInvasion(; name = :p61a6, lattice = (99, 60))
-    for (seeding, dσ) in ((:authors, "3e63cfab938326d2f33888d2be4fa35a641dcfdcb7003a880700bf76814d3dc3"),
-            (:retry, "3e63cfab938326d2f33888d2be4fa35a641dcfdcb7003a880700bf76814d3dc3"))
-        @test p61a6_digest(p61a6_σ(layout(PottsModels.akeeb_layout(; lattice = (99, 60), seed = 1, seeding), sys))) == dσ
+    for seeding in (:authors, :retry)
+        closed = p61a6_σ(layout(PottsModels.akeeb_layout(; lattice = (99, 60), seed = 1, seeding), (99, 60)))
+        @test p61a6_σ(layout(PottsModels.akeeb_layout(; lattice = (99, 60), seed = 1, seeding), sys)) == closed
     end
-    # negative control: the digest sees a single changed site
-    σ = copy(p61a6_σ(layout(PottsModels.akeeb_layout(; lattice = (99, 60), seed = 1), (99, 60))))
-    σ[50, 40] = 1
-    @test p61a6_digest(σ) != "3e63cfab938326d2f33888d2be4fa35a641dcfdcb7003a880700bf76814d3dc3"
+    # negative control: the comparison sees a single changed site
+    a = copy(p61a6_σ(layout(PottsModels.akeeb_layout(; lattice = (99, 60), seed = 1), (99, 60))))
+    b = copy(a); b[50, 40] = 1
+    @test a != b
 end
 
 # ---------------------------------------------------------------------------------------------

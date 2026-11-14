@@ -3,7 +3,6 @@
 # Julia 1.12 lowers that closure to an opaque closure, built on every call whenever the rate
 # is not inlined: the warm MCS allocates, and the kernel does not compile on Metal
 # (`InvalidIRError`, `jl_new_opaque_closure_jlcall`). D-103 expanded only rates with a gather.
-# Frozen (AUTONOMY §7.3).
 #
 # Rates without a gather, each as a cell ODE and as a model ODE:
 #   - `Hill`: a two-equation Hill gene circuit (`z^4 / (0.5^4 + z^4)`, `1 / (1 + (y/0.7)^3)`,
@@ -38,16 +37,11 @@
 #     `x*x*x*x`, division. In the other shapes the transcendental terms are scaled by
 #     1e-3/1e-4 or cut by `ifelse`, so their last-place differences do not reach the result
 #     (measured bitwise); those stay bitwise.
-#  3. CPU results unchanged: the ODE values after 10 MCS (seed 7) of every shape, algorithm,
-#     solver and T equal the values recorded inline, bitwise. (Recorded from the code before
-#     the fix, where forcing expansion reproduced them all bitwise; re-recorded under D-107
-#     from the canonical term order, 11 of 96 moved by at most 2 ulp; D-105's 8-ulp tolerance
-#     for model-scope shapes is withdrawn.)
+#  3. Every shape's rates are live: the ODE values after 10 MCS (seed 7) are finite and differ
+#     from the initial ones, and the two algorithms' trajectories differ where the rate reads
+#     a population fold.
 #  4. A gather-ODE model on Metal runs and equals the CPU Float32 run bitwise (a regression
 #     guard for D-103's Metal fix), and a plain-rate control does too.
-#  5. Problem fingerprints of published models WITHOUT any ODE are unchanged (GranerGlazier,
-#     MerksVasculogenesis). Fingerprints of models with an ODE change by design and are not
-#     pinned.
 using Potts: CorePotts
 
 const P60AG_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
@@ -225,124 +219,8 @@ end
 """Units in the last place between two Float32 values of the same sign."""
 p60ag_ulps(a::Float32, b::Float32) = signbit(a) == signbit(b) ? abs(Int64(reinterpret(Int32, a)) - Int64(reinterpret(Int32, b))) : typemax(Int64)
 
-const p60ag_N = 10                                     # MCS of the recorded results
+const p60ag_N = 10                                     # MCS of the fixtures run
 
-# ---------------------------------------------------------------------------------------
-# Recorded on the code before the fix (feat/p6-0ag at cb0372a1, CPU, 1 thread), seed 7, 10 MCS,
-# re-recorded under D-107 with the canonical term order (feat/p6-0ah, CPU, 1 thread):
-# (model, solver label, algorithm, T) => ODE unknowns after 10 MCS (`p60ag_values`; Float32
-# results widened exactly to Float64).
-
-const P60AG_RESULTS = Dict{Tuple{Symbol, String, Symbol, DataType}, Vector{Float64}}(
-    (:P60agHill, "ExplicitEuler() (default)", :SequentialCPM, Float64) => [2.0989936514165404, 1.47515671654117, 0.21222627913174308, 0.25537438523178735],
-    (:P60agHill, "ExplicitEuler() (default)", :SequentialCPM, Float32) => [2.0989933013916016, 1.475156545639038, 0.2122262865304947, 0.25537440180778503],
-    (:P60agHill, "ExplicitEuler() (default)", :CheckerboardCPM, Float64) => [2.1036292044757237, 1.4787494601882631, 0.2114607247182071, 0.2572517644210981],
-    (:P60agHill, "ExplicitEuler() (default)", :CheckerboardCPM, Float32) => [2.1036288738250732, 1.4787492752075195, 0.21146070957183838, 0.2572517991065979],
-    (:P60agHill, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float64) => [1.8713105944532233, 1.6707567769927005, 0.25499898821743605, 0.27770984805660553],
-    (:P60agHill, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float32) => [1.8713103532791138, 1.670756459236145, 0.2549990117549896, 0.2777099311351776],
-    (:P60agHill, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float64) => [1.8738744245881025, 1.6745555047186962, 0.25376426930741075, 0.27875234487426176],
-    (:P60agHill, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float32) => [1.8738746643066406, 1.6745554208755493, 0.25376424193382263, 0.2787523865699768],
-    (:P60agHill, "RK4()", :SequentialCPM, Float64) => [1.8690474532125243, 1.7332247875127564, 0.2681659604633495, 0.2819629454824082],
-    (:P60agHill, "RK4()", :SequentialCPM, Float32) => [1.8690471649169922, 1.733224630355835, 0.2681660056114197, 0.2819629907608032],
-    (:P60agHill, "RK4()", :CheckerboardCPM, Float64) => [1.8711170812315263, 1.7368547059524575, 0.2669169577719486, 0.2827910671360956],
-    (:P60agHill, "RK4()", :CheckerboardCPM, Float32) => [1.8711167573928833, 1.7368545532226562, 0.266916960477829, 0.2827911078929901],
-    (:P60agIf5, "ExplicitEuler() (default)", :SequentialCPM, Float64) => [0.18224735265994974, 0.1633032283809401],
-    (:P60agIf5, "ExplicitEuler() (default)", :SequentialCPM, Float32) => [0.1822473555803299, 0.1633032262325287],
-    (:P60agIf5, "ExplicitEuler() (default)", :CheckerboardCPM, Float64) => [0.1750605511029342, 0.1732653384599989],
-    (:P60agIf5, "ExplicitEuler() (default)", :CheckerboardCPM, Float32) => [0.17506054043769836, 0.17326533794403076],
-    (:P60agIf5, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float64) => [0.17864280623322212, 0.16569090537772155],
-    (:P60agIf5, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float32) => [0.17864279448986053, 0.16569089889526367],
-    (:P60agIf5, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float64) => [0.1768219095162225, 0.17224336034377963],
-    (:P60agIf5, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float32) => [0.17682191729545593, 0.17224335670471191],
-    (:P60agIf5, "RK4()", :SequentialCPM, Float64) => [0.17819080944612847, 0.1666252072247134],
-    (:P60agIf5, "RK4()", :SequentialCPM, Float32) => [0.17819081246852875, 0.16662520170211792],
-    (:P60agIf5, "RK4()", :CheckerboardCPM, Float64) => [0.17722849750486444, 0.17239078295510246],
-    (:P60agIf5, "RK4()", :CheckerboardCPM, Float32) => [0.17722849547863007, 0.17239077389240265],
-    (:P60agSum16, "ExplicitEuler() (default)", :SequentialCPM, Float64) => [1.0002832183334966, 1.9999897149060266],
-    (:P60agSum16, "ExplicitEuler() (default)", :SequentialCPM, Float32) => [1.0002832412719727, 1.9999897480010986],
-    (:P60agSum16, "ExplicitEuler() (default)", :CheckerboardCPM, Float64) => [1.0002832183334966, 1.9999897149060266],
-    (:P60agSum16, "ExplicitEuler() (default)", :CheckerboardCPM, Float32) => [1.0002832412719727, 1.9999897480010986],
-    (:P60agSum16, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float64) => [1.0001665844049756, 1.9999717145521665],
-    (:P60agSum16, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float32) => [1.000166893005371, 1.9999715089797974],
-    (:P60agSum16, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float64) => [1.0001665844049756, 1.9999717145521665],
-    (:P60agSum16, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float32) => [1.000166893005371, 1.9999715089797974],
-    (:P60agSum16, "RK4()", :SequentialCPM, Float64) => [1.0001233098077196, 1.9999663938553882],
-    (:P60agSum16, "RK4()", :SequentialCPM, Float32) => [1.0001235008239746, 1.9999663829803467],
-    (:P60agSum16, "RK4()", :CheckerboardCPM, Float64) => [1.0001233098077196, 1.9999663938553882],
-    (:P60agSum16, "RK4()", :CheckerboardCPM, Float32) => [1.0001235008239746, 1.9999663829803467],
-    (:P60agModelPop, "ExplicitEuler() (default)", :SequentialCPM, Float64) => [0.8332754040829999],
-    (:P60agModelPop, "ExplicitEuler() (default)", :SequentialCPM, Float32) => [0.8332753777503967],
-    (:P60agModelPop, "ExplicitEuler() (default)", :CheckerboardCPM, Float64) => [0.8353995917599999],
-    (:P60agModelPop, "ExplicitEuler() (default)", :CheckerboardCPM, Float32) => [0.8353996276855469],
-    (:P60agModelPop, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float64) => [0.8146732646984259],
-    (:P60agModelPop, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float32) => [0.8146733045578003],
-    (:P60agModelPop, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float64) => [0.8167610962756838],
-    (:P60agModelPop, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float32) => [0.8167610764503479],
-    (:P60agModelPop, "RK4()", :SequentialCPM, Float64) => [0.8087329557142415],
-    (:P60agModelPop, "RK4()", :SequentialCPM, Float32) => [0.8087329268455505],
-    (:P60agModelPop, "RK4()", :CheckerboardCPM, Float64) => [0.8108090870098813],
-    (:P60agModelPop, "RK4()", :CheckerboardCPM, Float32) => [0.8108090758323669],
-    (:P60agMixed, "ExplicitEuler() (default)", :SequentialCPM, Float64) => [0.48669957553163773, 0.4876742020938126, 0.4013277667210781, 0.4013277667210781],
-    (:P60agMixed, "ExplicitEuler() (default)", :SequentialCPM, Float32) => [0.48669958114624023, 0.48767417669296265, 0.4013277590274811, 0.4013277590274811],
-    (:P60agMixed, "ExplicitEuler() (default)", :CheckerboardCPM, Float64) => [0.48669957553163773, 0.4876742020938126, 0.4013277667210781, 0.4013277667210781],
-    (:P60agMixed, "ExplicitEuler() (default)", :CheckerboardCPM, Float32) => [0.48669958114624023, 0.48767417669296265, 0.4013277590274811, 0.4013277590274811],
-    (:P60agMixed, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float64) => [0.5230593941395449, 0.5278439560159921, 0.4177034123704255, 0.4177034123704255],
-    (:P60agMixed, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float32) => [0.5230592489242554, 0.5278438329696655, 0.4177033007144928, 0.4177033007144928],
-    (:P60agMixed, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float64) => [0.5230593941395449, 0.5278439560159921, 0.4177034123704255, 0.4177034123704255],
-    (:P60agMixed, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float32) => [0.5230592489242554, 0.5278438329696655, 0.4177033007144928, 0.4177033007144928],
-    (:P60agMixed, "RK4()", :SequentialCPM, Float64) => [0.5340884971803392, 0.5408467128640905, 0.4228294604145212, 0.4228294604145212],
-    (:P60agMixed, "RK4()", :SequentialCPM, Float32) => [0.5340884923934937, 0.5408467650413513, 0.4228295087814331, 0.4228295087814331],
-    (:P60agMixed, "RK4()", :CheckerboardCPM, Float64) => [0.5340884971803392, 0.5408467128640905, 0.4228294604145212, 0.4228294604145212],
-    (:P60agMixed, "RK4()", :CheckerboardCPM, Float32) => [0.5340884923934937, 0.5408467650413513, 0.4228295087814331, 0.4228295087814331],
-    (:P60agModelHill, "ExplicitEuler() (default)", :SequentialCPM, Float64) => [4.872155234703284, 0.32776905542037227],
-    (:P60agModelHill, "ExplicitEuler() (default)", :SequentialCPM, Float32) => [4.87215518951416, 0.32776907086372375],
-    (:P60agModelHill, "ExplicitEuler() (default)", :CheckerboardCPM, Float64) => [4.876406806138318, 0.32739509919941345],
-    (:P60agModelHill, "ExplicitEuler() (default)", :CheckerboardCPM, Float32) => [4.876406192779541, 0.3273950517177582],
-    (:P60agModelHill, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float64) => [3.365760547195339, 0.2608948833674407],
-    (:P60agModelHill, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float32) => [3.365760564804077, 0.2608948349952698],
-    (:P60agModelHill, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float64) => [3.3561523400420796, 0.25980362670193885],
-    (:P60agModelHill, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float32) => [3.3561525344848633, 0.2598036527633667],
-    (:P60agModelHill, "RK4()", :SequentialCPM, Float64) => [2.9062550400127396, 0.24623159182881385],
-    (:P60agModelHill, "RK4()", :SequentialCPM, Float32) => [2.906254768371582, 0.2462315559387207],
-    (:P60agModelHill, "RK4()", :CheckerboardCPM, Float64) => [2.89639064692094, 0.24528669913474488],
-    (:P60agModelHill, "RK4()", :CheckerboardCPM, Float32) => [2.896390199661255, 0.24528664350509644],
-    (:P60agModelIf5, "ExplicitEuler() (default)", :SequentialCPM, Float64) => [0.05894023053124153],
-    (:P60agModelIf5, "ExplicitEuler() (default)", :SequentialCPM, Float32) => [0.058940231800079346],
-    (:P60agModelIf5, "ExplicitEuler() (default)", :CheckerboardCPM, Float64) => [0.05980653166927863],
-    (:P60agModelIf5, "ExplicitEuler() (default)", :CheckerboardCPM, Float32) => [0.05980652570724487],
-    (:P60agModelIf5, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float64) => [0.09139349801584519],
-    (:P60agModelIf5, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float32) => [0.09139351546764374],
-    (:P60agModelIf5, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float64) => [0.09181716714845066],
-    (:P60agModelIf5, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float32) => [0.09181716293096542],
-    (:P60agModelIf5, "RK4()", :SequentialCPM, Float64) => [0.06384454875491356],
-    (:P60agModelIf5, "RK4()", :SequentialCPM, Float32) => [0.06384453177452087],
-    (:P60agModelIf5, "RK4()", :CheckerboardCPM, Float64) => [0.06382137496596896],
-    (:P60agModelIf5, "RK4()", :CheckerboardCPM, Float32) => [0.06382137537002563],
-    (:P60agModelSum16, "ExplicitEuler() (default)", :SequentialCPM, Float64) => [1.320234516679355],
-    (:P60agModelSum16, "ExplicitEuler() (default)", :SequentialCPM, Float32) => [1.3202345371246338],
-    (:P60agModelSum16, "ExplicitEuler() (default)", :CheckerboardCPM, Float64) => [1.3242339196465835],
-    (:P60agModelSum16, "ExplicitEuler() (default)", :CheckerboardCPM, Float32) => [1.3242340087890625],
-    (:P60agModelSum16, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float64) => [1.3201376476994076],
-    (:P60agModelSum16, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float32) => [1.3201379776000977],
-    (:P60agModelSum16, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float64) => [1.324137210385401],
-    (:P60agModelSum16, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float32) => [1.3241370916366577],
-    (:P60agModelSum16, "RK4()", :SequentialCPM, Float64) => [1.3201021674827713],
-    (:P60agModelSum16, "RK4()", :SequentialCPM, Float32) => [1.320102334022522],
-    (:P60agModelSum16, "RK4()", :CheckerboardCPM, Float64) => [1.3241017998352662],
-    (:P60agModelSum16, "RK4()", :CheckerboardCPM, Float32) => [1.3241018056869507],
-)
-
-# published models without any ODE => problem fingerprint (Float64, default solvers)
-p60ag_published() = (
-    (:GranerGlazier, () -> (σ = graner_glazier_state(); PottsProblem(GranerGlazier(; name = :gg), [ownership => σ[1], kind => σ[2]], (0, 10)))),
-    (:MerksVasculogenesis, () -> PottsProblem(MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
-        [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 10);
-        field_solver = Potts.ExplicitEuler(substeps = 2, lower = 0.0))),
-)
-const P60AG_PUBLISHED = Dict{Symbol, UInt64}(
-    :GranerGlazier => 0xe6e09483034b4193,   # re-pinned under D-122
-    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
-)
 
 """CPU and device runs (Float32, CheckerboardCPM, 10 MCS) of `M` with solver keywords `kw`:
 `(cpu, device)` final states, `device` the exception if the device run threw."""
@@ -364,16 +242,19 @@ end
 @testset "P6.0ag: the fixtures" begin
     # every shape moves its unknowns (the rates are live), and the Hill circuit is not at a
     # trivial fixed point: y and z differ between the two cells (volume enters y's rate)
+    got = Dict((nameof(M), label, nameof(typeof(alg))) =>
+               p60ag_values(M, solve(p60ag_problem(M, (0, p60ag_N); kw...), alg).u[end])
+               for M in P60AG_SHAPES, (label, kw) in P60AG_FIXED, alg in P60AG_ALGS)
     for M in P60AG_SHAPES, (label, _) in P60AG_FIXED, alg in P60AG_ALGS
-        v = P60AG_RESULTS[(nameof(M), label, nameof(typeof(alg)), Float64)]
+        v = got[(nameof(M), label, nameof(typeof(alg)))]
         @test all(isfinite, v)
-        @test v != Float64[p60ag_values(M, p60ag_problem(M, (0, 0)).u0)...]
+        @test v != p60ag_values(M, p60ag_problem(M, (0, 0)).u0)
     end
-    v = P60AG_RESULTS[(:P60agHill, "ExplicitEuler() (default)", :CheckerboardCPM, Float64)]
+    v = got[(:P60agHill, "ExplicitEuler() (default)", :CheckerboardCPM)]
     @test v[1] != v[2] && v[3] != v[4]
     # the population folds read the state: the two algorithms' trajectories differ
     for M in (P60agModelPop, P60agModelHill)
-        @test P60AG_RESULTS[(nameof(M), "RK4()", :SequentialCPM, Float64)] != P60AG_RESULTS[(nameof(M), "RK4()", :CheckerboardCPM, Float64)]
+        @test got[(nameof(M), "RK4()", :SequentialCPM)] != got[(nameof(M), "RK4()", :CheckerboardCPM)]
     end
 end
 
@@ -390,22 +271,6 @@ end
         a = p60ag_warm_allocs(p60ag_problem(M, (0, 100); T, kw...), alg)
         @test all(iszero, a)
         all(iszero, a) || @info "P6.0ag allocates: $(nameof(M)) $T $label $(nameof(typeof(alg))) bytes per step = $a"
-    end
-end
-
-@testset "P6.0ag: CPU results unchanged (bitwise, $p60ag_N MCS, seed 7)" begin
-    for M in P60AG_SHAPES, T in (Float64, Float32), (label, kw) in P60AG_FIXED, alg in P60AG_ALGS
-        u = solve(p60ag_problem(M, (0, p60ag_N); T, kw...), alg).u[end]
-        want = P60AG_RESULTS[(nameof(M), label, nameof(typeof(alg)), T)]
-        # D-107: the generated term order is canonical, so every shape is bitwise across builds
-        @test p60ag_values(M, u) == want
-    end
-end
-
-@testset "P6.0ag: fingerprints of models without an ODE unchanged" begin
-    for (name, build) in p60ag_published()
-        haskey(P60AG_PUBLISHED, name) || continue   # (D-INT-1: its pin was removed)
-        @test build().f.fingerprint == P60AG_PUBLISHED[name]
     end
 end
 

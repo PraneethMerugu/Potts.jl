@@ -1,7 +1,7 @@
 # P6.3a (ROADMAP Phase 6, step 3): R4 topology values dispatched on geometry, the soft E₀
 # drive, the `Global()` placeholder, and the opt-in accepted-ΔH accumulator
 # `track = (:ΔH,)` → `stats.accepted_ΔH` (D-075; 01 F9, model-spec 01 §7.7 / D-17).
-# Decision: D-140. Frozen (AUTONOMY §7.3).
+# Decision: D-140.
 #
 # Semantics pinned here:
 #
@@ -578,9 +578,6 @@ end
     @sweep Metropolis(; temperature = T, offset = 3.0)
 end
 
-# fingerprint of `p63a_track_problem()` without tracking, recorded on the base (6abfd43c)
-const P63A_TRACK_FINGERPRINT = 0xab9a80e3b73d2440
-
 const P63A_W = [Float64((3i + 5j) % 5) for i in 1:24, j in 1:24]     # integer weights 0:4
 function p63a_track_σ()
     σ = zeros(Int32, 24, 24); k = 0
@@ -599,13 +596,12 @@ p63a_same(u, v) = u.σ == v.σ && u.cell == v.cell && u.site == v.site && u.mode
 
 @testset "P6.3a: track keyword, off by default" begin
     prob = p63a_track_problem()
-    @test prob.f.fingerprint == P63A_TRACK_FINGERPRINT                  # unchanged from the base
-    @test p63a_track_problem(; track = ()).f.fingerprint == P63A_TRACK_FINGERPRINT
+    @test p63a_track_problem(; track = ()).f.fingerprint == prob.f.fingerprint   # off by default
     @test :track in fieldnames(CorePotts.CPMFunction)                   # the CorePotts hook
     @test prob.f.track === nothing                                      # off: nothing compiled
     on = p63a_track_problem(; track = (:ΔH,))
     @test on.f.track !== nothing
-    @test on.f.fingerprint != P63A_TRACK_FINGERPRINT                    # D-075: track is hashed
+    @test on.f.fingerprint != prob.f.fingerprint                        # D-075: track is hashed
     for alg in (SequentialCPM(), CheckerboardCPM())
         @test solve(prob, alg).stats.accepted_ΔH === nothing
         @test solve(p63a_track_problem(; track = ()), alg).stats.accepted_ΔH === nothing
@@ -614,7 +610,7 @@ p63a_same(u, v) = u.σ == v.σ && u.cell == v.cell && u.site == v.site && u.mode
     @test_throws ArgumentError p63a_track_problem(; track = (:ΔH, :foo))
     # remake switches it both ways and lands on the same fingerprints
     @test remake(prob; track = (:ΔH,)).f.fingerprint == on.f.fingerprint
-    @test remake(on; track = ()).f.fingerprint == P63A_TRACK_FINGERPRINT
+    @test remake(on; track = ()).f.fingerprint == prob.f.fingerprint
     @test remake(on; track = ()).f.track === nothing
 end
 

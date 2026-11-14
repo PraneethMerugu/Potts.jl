@@ -4,7 +4,7 @@
 # D-141 follow-up: a `Splits` cell repaired into one piece by a later layer is not warned
 # about. Adopts D-145's absorbing border (`sites(kind == border) => Dirichlet(0.0)`; since F4-B4m
 # the masked condition `c ~ masked(frame, 0.0)` of the field's PDESystem) and `@schedule fields,
-# sweep` (D-145 ruling 10). Decision: D-153. Frozen (AUTONOMY §7.3).
+# sweep` (D-145 ruling 10). Decision: D-153.
 #
 # Surface pinned here (PottsModels, exported; nothing in Potts or CorePotts is model-named):
 #

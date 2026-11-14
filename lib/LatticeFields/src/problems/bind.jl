@@ -17,9 +17,18 @@ struct Geom{N, L, R, I, T}
 end
 
 """
-Launch-varying slots of `G.rt`: the time `t` and the step `dt`.
+    RT_T
+
+The slot of `G.rt` that holds the time `t`.
 """
-const RT_T, RT_DT = 1, 2
+const RT_T = 1
+
+"""
+    RT_DT
+
+The slot of `G.rt` that holds the step `dt`.
+"""
+const RT_DT = 2
 
 """
     launch_geometry(p, ck, rt; R = ck.T) -> Geom

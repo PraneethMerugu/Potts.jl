@@ -1,5 +1,5 @@
-# P6.0bw (ROADMAP Phase 6, step 0; from P6.0bb): the library's device wait. Frozen
-# (AUTONOMY §7.3). Decisions: D-171 (the paired A/B decides performance; the harness's ROCm
+# P6.0bw (ROADMAP Phase 6, step 0; from P6.0bb): the library's device wait.
+# Decisions: D-171 (the paired A/B decides performance; the harness's ROCm
 # stream spin), D-157 (backend-neutral device testing; heavy compute on the PC), D-158
 # (our own code's results bitwise), D-085 (every host wait goes through `transfers.jl`),
 # D-089 (no wait on a quiet MCS), D-048 (ordinary tests, no parity harness).

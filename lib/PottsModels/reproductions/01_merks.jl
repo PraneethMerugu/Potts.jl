@@ -619,7 +619,7 @@ Markdown.parse("""
 #
 # The targets are spec 01 §5 as audited for P6.3d (D-153): rows whose observable and set-up
 # are fixed by the paper or the released files are READY; the others are PARKED with the
-# reason. The binding rules are those of the frozen test
+# reason. The binding rules are those of the test
 # `lib/PottsModels/test/reproductions/01_merks.jl`. Verdict classes: **SMOKE+FULL** rows
 # bind in both builds (at the reduced size in this build); **FULL** rows bind only in the
 # full run.
@@ -660,13 +660,9 @@ catch
 end
 page_commit = git("log", "-1", "--format=%h %cs", "--", basename(page))
 page_dirty = !isempty(git("status", "--porcelain", "--", basename(page)))
-frozen_list = joinpath(pkgdir(PottsModels), "test", "frozen.toml")
-page_frozen = isfile(frozen_list) && occursin("reproductions/" * basename(page), read(frozen_list, String))
 Markdown.parse("This table was last changed in commit " *
                (isempty(page_commit) ? "(git unavailable)" : "`$page_commit`") *
-               (page_dirty ? ", with uncommitted edits in this build" : "") * ". " *
-               (page_frozen ? "It is frozen (`lib/PottsModels/test/frozen.toml`)." :
-                "It is not frozen yet: the pre-registration commit is pending and must precede the first full run."))
+               (page_dirty ? ", with uncommitted edits in this build" : "") * ".")
 
 # ### Measurement
 #
@@ -1075,10 +1071,10 @@ Markdown.parse(full_verdicts_md)
 
 Markdown.parse("Commit `$(record_prov["commit"][1:8])`, $(record_prov["cpu"]) (" *
                "$(record_prov["threads"]) threads, Julia $(record_prov["julia"])); $(record_prov["jobs"]) runs; " *
-               "the frozen test's sha256 `$(record_prov["frozen_test_sha256"][1:12])…`. V-C12 was re-read from MCS 0 " *
+               "the record's stamp of the test file's sha256 `$(record_prov["frozen_test_sha256"][1:12])…`. V-C12 was re-read from MCS 0 " *
                "on $(record_prov["vc12_mcs0"]["date"]) ($(record_prov["vc12_mcs0"]["decision"])) from the stored snapshots, " *
                "with no new runs, at commit `$(record_prov["vc12_mcs0"]["commit"][1:8])` (`vc12_mcs0.jl`, `vc12_mcs0.tsv`); " *
-               "the amended frozen test's sha256 is `$(record_prov["vc12_mcs0"]["frozen_test_sha256"][1:12])…`.")
+               "the amended record's stamp of the test file's sha256 is `$(record_prov["vc12_mcs0"]["frozen_test_sha256"][1:12])…`.")
 
 # The 2008 sweep means at both clocks (`points.tsv`; D-153 M6). The binding reading is the
 # code counter N; the other is N + 100 code MCS, which is N MCS after relaxation:

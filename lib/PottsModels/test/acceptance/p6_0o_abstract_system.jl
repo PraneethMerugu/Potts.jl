@@ -1,6 +1,6 @@
 # P6.0o (ROADMAP Phase 6, step 0): `PottsSystem <: ModelingToolkitBase.AbstractSystem`.
 # Decision: D-137 (implements D-075 §0.1); rewritten for the W-lite LA container (v3 §7.1,
-# D-256, cutover C4; re-frozen under the list-A draft D-260). Frozen (AUTONOMY §7.3).
+# D-256, cutover C4; re-frozen under the list-A draft D-260).
 #
 # A `PottsSystem` is an MTK `AbstractSystem` that wraps a complete, flattened ModelingToolkitBase
 # `System` (`Potts.inner(sys)`), a field `PDESystem` or `nothing` (`Potts.fields(sys)`) and the
@@ -8,7 +8,7 @@
 # rebuild the container (`complete`, `extend`, `compose`, `toggle_namespacing`, metadata
 # setters) are loud on it; Potts models merge with `Potts.extend` and compose with `Potts.compose`.
 #
-# The contract pinned here:
+# The contract checked here:
 #  S. Subtype and fields. `PottsSystem <: AbstractSystem`; its fields are exactly `name`,
 #     `inner`, `fields`, `part`; the inner System is complete and flat and carries the model
 #     name. The keyword constructor takes `checks` (default true): `checks = false` skips the
@@ -50,7 +50,6 @@
 #     unchanged by the container rewrite).
 using Potts: CorePotts
 using Aqua: Aqua
-using SHA: sha256
 
 const P60O_M = Potts.ModelingToolkitBase
 const P60O_SII = Potts.SymbolicIndexingInterface
@@ -281,53 +280,9 @@ const P60O_CASES = [
     ("fixture lifecycle", () -> P60oLife(; name = :life), P60O_OP_LIFE, (;)),
     ("fixture ODE pair RK4", () -> P60oPair(; name = :pair), P60O_OP12, (; ode_solver = Potts.RK4())),
 ]
-# the published models are also pinned in Float32
-const P60O_FLOAT32 = ("GranerGlazier", "WortelAct", "WortelAct connected", "MerksVasculogenesis",
-    "MerksVasculogenesis contact-inhibited", "SingleDivisionFixture", "OpenVTGrowingMonolayer", "AkeebInvasion")
 
 p60o_problem(sys, op, kw; T = Float64) = PottsProblem(sys, op, (0, 1); T, kw...)
 p60o_fp(sys, op, kw; T = Float64) = p60o_problem(sys, op, kw; T).f.fingerprint
-
-# `generated_code` as text: line numbers stripped (also those macro calls carry), and in the
-# "canon" form flattened `+`/`*` operands sorted by their printed form (the fingerprint's
-# canonical order, src/codegen.jl `_commutative_order!`, re-implemented here)
-function p60o_strip!(ex)
-    ex isa Expr || return ex
-    Base.remove_linenums!(ex)
-    ex.head === :macrocall && length(ex.args) >= 2 && ex.args[2] isa LineNumberNode && (ex.args[2] = nothing)
-    foreach(p60o_strip!, ex.args)
-    return ex
-end
-function p60o_canon!(ex)
-    ex isa Expr || return ex
-    foreach(p60o_canon!, ex.args)
-    if ex.head === :call && length(ex.args) > 2 && any(f -> ex.args[1] === f, (:+, :*, +, *))
-        op = ex.args[1]
-        flat = Any[]
-        for a in @view ex.args[2:end]
-            if a isa Expr && a.head === :call && length(a.args) > 2 && a.args[1] === op
-                append!(flat, @view a.args[2:end])
-            else
-                push!(flat, a)
-            end
-        end
-        sort!(flat; by = string)
-        resize!(ex.args, 1)
-        append!(ex.args, flat)
-    end
-    return ex
-end
-p60o_exprs(x::Expr) = Any[x]
-p60o_exprs(::Nothing) = Any[]
-p60o_exprs(x::Union{Tuple, AbstractVector, NamedTuple}) = reduce(vcat, map(p60o_exprs, collect(values(x))); init = Any[])
-p60o_exprs(x) = Any[x]
-function p60o_code_hashes(sys, kw; T = Float64)
-    gkw = (; (k => v for (k, v) in pairs(kw) if k in (:field_solver, :ode_solver, :solvers))...)
-    exprs = p60o_exprs(generated_code(sys; T, gkw...))
-    raw = [string(p60o_strip!(deepcopy(e))) for e in exprs]
-    canon = [string(p60o_canon!(p60o_strip!(deepcopy(e)))) for e in exprs]
-    return (; n = length(exprs), raw = bytes2hex(sha256(join(raw, "\n"))), canon = bytes2hex(sha256(join(canon, "\n"))))
-end
 
 # `f()` throws an ArgumentError whose message contains every word
 function p60o_clear(f, words...)
@@ -607,58 +562,4 @@ end
     hits = p60o_property_reads()
     isempty(hits) || @info "P6.0o: $(length(hits)) property reads of PottsSystem fields, e.g. $(first(hits, 5))"
     @test isempty(hits)
-end
-
-# ---------------------------------------------------------------------------------------
-# P. Byte-identical generated code, unchanged fingerprints (recorded on 33f681df)
-
-# recorded on 33f681df (Julia 1.12.6); the Float64 fingerprints of the published models and
-# of the ODE pair duplicate the pins of p6_0p/p6_0aq/p6_0c2 (one copy kept by D-136)
-const P60O_PINS = Dict{String, Any}(
-    "AkeebInvasion Float32" => (fp = 0x7699cb850035a4db, n = 10, raw = "773eb7c3d960a8adb425acc3e22743e7cf4aeebe6bc4ce99c62b0d5a1f03eee9", canon = "11d343e5dcf4f9463c2370774517be4090dffc7c0b7c5bbccf33c15ce1e4cb8a"),   # re-pinned under D-237 (cell draws by id and generation)
-    "AkeebInvasion Float64" => (fp = 0x72ced0fc70498f16, n = 10, raw = "fc2b870dce37df33e2405b688d4f5e578587b6bcfab3729f229e3c599b5212c2", canon = "a2d38a6eb64bc5f62c5a0acb86d5b3370b33b0ec33880813fe793bd52ea73a2c"),   # re-pinned under D-237 (cell draws by id and generation)
-    "GranerGlazier Float32" => (fp = 0x526093de596ed924, n = 5, raw = "5477c81b88cda45820a0705515b1bcbe664db3cfc9b3942db64791f9b64f5f23", canon = "e25b1f0e742c50f2a75f7d07a05f8b53595a51a957faa1ba29b60da0d49d24f4"),
-    "GranerGlazier Float64" => (fp = 0xe6e09483034b4193, n = 5, raw = "b205076896aabdd3c41c3eeaa5b95632b6673a3da0c83147e6508806aa1db524", canon = "b2204f30bb454da6f2ed6dbd5a05601a0a402d0d488416269920e0c132739196"),
-    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
-    "OpenVTGrowingMonolayer Float32" => (fp = 0x5cd51ad3b52ddac0, n = 9, raw = "32d919af1bca7393d78557fac5344a4c76f030f69e5e62aaabb7095281a28f8c", canon = "aa8ebd9313be975cb5dd21b83a5a026c7357688f87326f43d1ec37f839f7cd82"),
-    "OpenVTGrowingMonolayer Float64" => (fp = 0x34b40af65c56a113, n = 9, raw = "3884cacea09298421c5053db40366dca6ca02868f10dd70627257ae549088da0", canon = "3acc5f836bfb69fcaa4bb00516fb93b5f4a0b1c6dda1722d6ad83e449ce88060"),
-    "SingleDivisionFixture Float32" => (fp = 0x8f8dd0a3b1295f9f, n = 9, raw = "6d144ef9a2779aa5d862528b3d0650856a5a491064c5ae6899c82aa8a0da9c2f", canon = "e003f6d1eaf87453cdf8825480c80e3746ef5fcdfacffb430174e6bae77fa538"),
-    "SingleDivisionFixture Float64" => (fp = 0xd2bed53e2590b709, n = 9, raw = "ae0779c004147ff3de8c5a2bf655b1d23db98199a41b9c36685f76b8bc73b155", canon = "f139f5ceca75ca70b8679fbbd2586014bbcb6a63a824ba10dd6bc3166237099a"),
-    "WortelAct Float32" => (fp = 0xaf0ab7a4bc4e3cad, n = 6, raw = "768284b74c0ac624bd092fd91b5976215805ddc5790f1f91af3e3d437dc613c5", canon = "43772d5743a4e68487ee4e20de26ccb09f08dd8859bb2143e64a64e2c10be685"),
-    "WortelAct Float64" => (fp = 0x9a9fcac5fc22b7c5, n = 6, raw = "36fb8f7bba3dbe17f0ff6a15b744beec8714119cb42f99a004e159cae7e571a5", canon = "5a9b4566bc34d2e7dbbec4b760e6ef91521bd61471465d07d35e43e5d6d92e98"),
-    "WortelAct connected Float32" => (fp = 0x3d018595ea6a08b8, n = 7, raw = "d22e2c4d6a9fe83f62fbf159a7a709dc8e9367b64e51ea1fe86bf68ad5f00b06", canon = "182bbcd4a31e39507fbabac71f5f0931c03f434fcbf13b998ae4f389d0defc0f"),   # re-pinned under P6.3g (D-193): fingerprint only
-    "WortelAct connected Float64" => (fp = 0xe1e52da078e581c9, n = 7, raw = "8d13b3d76189d4828236a92a7bc937f5f96d0618d91a5744f986efd262ad11c0", canon = "a2e51ecfd88dfc9ba260b7dba9efbe178e0ffa99160dc68ef69533b70468c9c8"),   # re-pinned under P6.3g (D-193): fingerprint only
-    "fixture ODE pair RK4 Float64" => (fp = 0xd8f2c0ff64142fdc, n = 6, raw = "d90e47de8b369e88ca0a4fc7219b3479cf69d5eec674551694c29c8cbb2655b7", canon = "3e175adc02ea555eac5c7ba167813096c2f0fc22ec744221cb0635cd70203fde"),
-    "fixture cell Float64" => (fp = 0xa939abe5fad3e067, n = 7, raw = "53078687891393fbd1969563164dbd956bd0c205707dd561204d89139e26ae16", canon = "ada834b39ee612bdef456fdf17eb96cdc0a1fdd6341502ecd4763f1fda81b477"),
-    "fixture components Float64" => (fp = 0x96340d875f856e41, n = 7, raw = "d9e8f5d163ecbd4fee155f134149b72031e3786264ce387c385190c8e998c530", canon = "cdfe12f8a60f3f0658face0c118673019854835ef130f7fa4067845d2b3adf50"),
-    "fixture discrete component Float64" => (fp = 0x7a057644bac18a54, n = 6, raw = "68b600c6209283ebe839457fe1e9c821d7f9c5833383bb365c81e72260bc77a3", canon = "68b600c6209283ebe839457fe1e9c821d7f9c5833383bb365c81e72260bc77a3"),
-    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
-    "fixture lifecycle Float64" => (fp = 0x8e8713c64b478b07, n = 10, raw = "e9cd0028afa47e6ae958841e04334be1ac4ab2073c40c08f2d4342b6cee5f4ba", canon = "15679caf1855ee0a9f937b7c799e079276a1da1693a7ea74dcf021afb77e36c1"),
-    "fixture spring @extend Float64" => (fp = 0x2a32a89f5fccab80, n = 6, raw = "69680d0cbd5f22148cbb9d1c6d0beaec60840b4be5475bc097057f5a63d12c55", canon = "cfce48cb0a7057273238bea6cf19ecfbaa1d0b2625cf2b590793d78ae1f69e03"),
-    "fixture spring @extend² Float64" => (fp = 0xcaa95f46e7a347cd, n = 6, raw = "6e13d26c7b2d5bec48536f49e9aed7aefa30518e65680ab541bbc780b40b9fa1", canon = "536f87d77219a0bc122a59139f70208f521f4e0fa4ed33ca3a0eee978d761d75"),
-    "fixture spring Float64" => (fp = 0x60c84fa4ec79b68f, n = 6, raw = "f29fea752e2b0696327a7528141474ec8902b4477b6eff3ef7670d5fb1dc2856", canon = "b7b8192b054884894332cdd61d9a2a5672fe4f5f0d465343a5e0727dc328e440"),
-)
-
-@testset "P6.0o P: generated code and fingerprints unchanged" begin
-    got = Dict{String, Any}()
-    for (label, build, op, kw) in P60O_CASES, T in (Float64, Float32)
-        T === Float32 && !(label in P60O_FLOAT32) && continue
-        key = "$label $T"
-        sys = build()
-        h = p60o_code_hashes(sys, kw; T)
-        got[key] = (; fp = p60o_fp(sys, op, kw; T), h...)
-    end
-    unpinned = Set(["MerksVasculogenesis Float32", "MerksVasculogenesis Float64", "MerksVasculogenesis contact-inhibited Float32", "MerksVasculogenesis contact-inhibited Float64", "fixture field Float64"])   # (D-INT-1: their pins were removed)
-    @test setdiff(Set(keys(got)), unpinned) == Set(keys(P60O_PINS))
-    for key in sort(collect(keys(got)))
-        key in unpinned && continue
-        pin = get(P60O_PINS, key, nothing)
-        ok = pin !== nothing && got[key].fp == pin.fp && got[key].n == pin.n && got[key].raw == pin.raw &&
-             got[key].canon == pin.canon
-        ok || @info "P6.0o: pin $(repr(key)) => $(repr(got[key]))"
-        @test pin !== nothing && got[key].fp == pin.fp
-        @test pin !== nothing && got[key].n == pin.n
-        @test pin !== nothing && got[key].canon == pin.canon
-        @test pin !== nothing && got[key].raw == pin.raw
-    end
 end

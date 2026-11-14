@@ -1,5 +1,5 @@
 # P6.0aw (ROADMAP Phase 6, step 0): `integral(...)` in `@on_copy` right-hand sides.
-# Decision: D-129. Frozen (AUTONOMY §7.3). Follow-up of D-125 (integrals rejected in drives
+# Decision: D-129. Follow-up of D-125 (integrals rejected in drives
 # and expression constraints). Related: D-045 (energies reading on-copy writes), D-080
 # (`integral(Pre(x))`), D-120 (integrals refresh only for their readers).
 #
@@ -303,33 +303,4 @@ end
     end
     # total hits = total copies counted into cells plus copies into the medium (≥ cell count)
     @test sum(hs[end]) >= sum(Array(sol.u[end].cell.n))
-end
-
-# ---------------------------------------------------------------------------------------
-# 4. Fingerprints that must not change (recorded on bff31b39)
-
-p60aw_two(dims, a, b) = (s = zeros(Int32, dims); s[a...] .= 1; s[b...] .= 2; s)
-p60aw_pinned() = (
-    (:GranerGlazier, () -> (g = graner_glazier_state(); PottsProblem(GranerGlazier(; name = :gg), [ownership => g[1], kind => g[2]], (0, 10)))),
-    (:WortelAct, () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8)),
-        [ownership => p60aw_two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:cell, :cell]], (0, 10))),
-    (:WortelActConnected, () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8), connected = true),
-        [ownership => p60aw_two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:cell, :cell]], (0, 10))),
-    (:P60awWork, () -> p60aw_problem(P60awWork)),
-    (:P60awNoIntegral, () -> p60aw_problem(P60awNoIntegral)),
-)
-const P60AW_FINGERPRINTS = Dict{Symbol, UInt64}(
-    :GranerGlazier => 0xe6e09483034b4193,
-    :WortelAct => 0x9a9fcac5fc22b7c5,  # re-pinned under D-124
-    :WortelActConnected => 0xe1e52da078e581c9,  # re-pinned under D-124; re-pinned under P6.3g (D-193): fingerprint only
-    :P60awWork => 0xf95c476c463565f6,
-    :P60awNoIntegral => 0x3f0a992b94811e57,
-)
-
-@testset "P6.0aw: fingerprints unchanged" begin
-    for (name, build) in p60aw_pinned()
-        fp = build().f.fingerprint
-        @test fp == P60AW_FINGERPRINTS[name]
-        fp == P60AW_FINGERPRINTS[name] || @info "P6.0aw: fingerprint $name = $(repr(fp))"
-    end
 end

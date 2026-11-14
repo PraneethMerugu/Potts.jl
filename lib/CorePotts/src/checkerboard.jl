@@ -21,20 +21,29 @@
 # (a one-site sub-region in a 2 × 2 box got Binomial(4, 1/4) attempts in a row), which slowed
 # Akeeb invasion and the K3 chain (docs/design/research/checkerboard-kinetics.md).
 #
-# Lockless cells. Nothing is claimed: per-cell totals change by atomic adds and are read as
-# they are (another work item's copy to the same cell may be in flight). The context carries
+# Lockless cells. Nothing is claimed: per-cell totals change by atomic adds. The context carries
 # `lockless = true`, so the commit hooks that would otherwise overwrite a cell value use
 # atomic deltas: moments accumulate atomically and re-center once per MCS (`recenter_kernel!`),
 # pieces trackers add their changes, and an `@on_copy` write that reads its own cell value adds
 # the difference. On a device the outcome depends on the timing of the work items (no
 # determinism, user ruling 2026-11-04).
 #
+# Cells wider than the spacing. The spacing separates sites, not cells: two active sites of one
+# phase lie in one cell when the cell is wider than (k - 1)·region + 1, and then one work item's
+# commit changes a total another item's decision is reading, so the accepted ΔH stops summing to
+# the trajectory's energy change. Every phase is therefore checked before it runs
+# (`_phase_conflict!`): a phase whose items share a cell runs inline, one work item after another
+# in block order, on the live state, which is exact; a phase whose items share no cell is a
+# colouring and runs threaded. Nothing is snapshotted: a colouring phase's items share no cell and
+# write only their own sites, so the live columns they read cannot be changed under them.
+#
 # The CPU. A phase with few work items (at most `BLOCK_GRAIN`), or a process with one thread,
 # runs them inline, one after another, so each attempt sees every earlier one, as in
 # `SequentialCPM`, and the run is reproducible. A larger phase is one KA launch with one
 # workgroup per thread (KA's CPU backend spawns one task per thread and launch, so more
-# workgroups only add loop overhead); its outcome then depends on the timing of the threads,
-# as on a device.
+# workgroups only add loop overhead). A colouring phase reaches the same decisions and leaves the
+# same state whether its work items run inline or threaded, and a shared-cell phase runs inline
+# either way, so a CPU run is reproducible from its seed at any thread count.
 #
 # Whole-cell searches. A copy whose decision needs the exact floods (cell-scope `pieces` off
 # their fast path, a `Global` without window whose local test fails) is not decided in the
@@ -112,6 +121,7 @@ end
     @inbounds sl.lid[i] = lid
     return nothing
 end
+
 
 # One attempt. `SERIAL = false` in a phase (copies that need the floods are listed); `true` in
 # the serial pass and on the CPU (the floods run, a veto decides at once).
@@ -207,7 +217,7 @@ end
     _recenter!(cell, lat, c, @inbounds cell.volume[c])
 end
 
-struct CheckerboardCache{N, B, TK, CN, SL, K1, K2, K3, GS}
+struct CheckerboardCache{N, B, TK, CN, SL, CK, K1, K2, K3, GS}
     layout::BlockLayout{N}
     switches::Int                     # a stay makes n / switches attempts (n sites)
     order::Vector{Int}                # the MCS's phase offsets (1:k^N), P of them
@@ -215,6 +225,8 @@ struct CheckerboardCache{N, B, TK, CN, SL, K1, K2, K3, GS}
     track::TK                         # `nothing`, or `(; track, acc)` (acc per site)
     cnt::CN                           # committed copies per block (Int32), folded at the read points
     serial::SL                        # `nothing`, or the serial list (see `_push_serial!`)
+    reach::Int                        # the lattice distance a copy reads and writes around its target
+    claim::CK                         # `nothing`, or the per-cell claim stamps of `_phase_conflict!` (CPU)
     kernel::K1
     serial!::K2
     recenter!::K3
@@ -223,10 +235,73 @@ struct CheckerboardCache{N, B, TK, CN, SL, K1, K2, K3, GS}
     host::Bool                        # the CPU backend
 end
 
+# Whether a phase is a proper colouring: whether two of its work items touch one cell. The block
+# spacing keeps two active sites (k - 1)·region + 1 apart, which does not keep them out of one cell
+# when the cell is wider than that, and a cell is not a lattice distance the spacing could cover.
+# In such a phase one work item's decision can be invalidated by another's commit, so the sum of the
+# accepted ΔH stops being the energy change of the trajectory (`stats.accepted_ΔH`); the phase runs
+# inline instead, one work item after another in block order, which is exact and independent of any
+# scheduling. Every other phase is a colouring: its items share no cell and only their own sites,
+# so whether they run inline or threaded they reach the same decisions. A cell column is read for
+# the cells a copy's target and source belong to (`kind` of a neighbour is read at the neighbour's
+# cell, and no kind changes inside a sweep), so sharing a cell is the only way two items of one
+# phase can invalidate each other.
+#
+# The claim covers every cell a work item can touch, not only its target's: a proposal's source
+# lies within `radius(proposal)` of the target, and the commit hooks write the target's neighbours'
+# cells (`commit_surface!` maintains their surface, `commit_contact_count!` every third cell next
+# to the target). The claim radius is the layout's own `need`, the lattice distance the spacing
+# guarantees: it is `reach(footprint, proposal)` widened by the contact relation and by every
+# relation a copy-step function reads, so it holds whatever a commit hook writes. One 8-byte stamp
+# per cell holds the phase's token and the block that first claimed it, so a scan costs one read
+# and one write per (site, offset) and allocates nothing.
+_claim_columns(::KernelAbstractions.CPU, cell) = (; stamp = zeros(UInt64, length(cell.volume)), token = Ref(UInt32(0)))
+_claim_columns(backend, cell) = nothing
+
+_phase_conflict!(st, cache::CheckerboardCache, lat, layout, off) =
+    _phase_conflict!(st, cache.claim, cache.reach, lat, layout, off)
+_phase_conflict!(st, ::Nothing, reach, lat, layout, off) = false    # a device: no colouring guarantee
+function _phase_conflict!(st, claim::NamedTuple, reach::Int, lat::Lattice{N}, layout::BlockLayout{N}, off) where {N}
+    tok = UInt64(claim.token[])
+    if tok == UInt64(typemax(UInt32))                # 4 billion phases: the stamps restart with the token
+        fill!(claim.stamp, UInt64(0))
+        tok = UInt64(0)
+    end
+    tok += 1
+    claim.token[] = UInt32(tok)
+    hi = tok << 32
+    stamp, σ = claim.stamp, st.σ
+    box = CartesianIndices(ntuple(_ -> -reach:reach, Val(N)))
+    for I in CartesianIndices(layout.nblocks)
+        bc = map(i -> i - 1, Tuple(I))
+        blk = UInt64(block_index(layout, bc))
+        lo, side = block_region(layout, bc, off)
+        for idx in CartesianIndices(side)
+            x = ntuple(d -> lo[d] + idx[d], Val(N))                 # `lo` is 0-based, `idx` 1-based
+            for δ in box
+                inside, z = shift(lat, x, ntuple(d -> Int32(δ[d]), Val(N)))   # wraps, or the medium
+                inside || continue
+                c = @inbounds σ[linear_index(lat, z)]
+                c == 0 && continue                                 # the medium holds no cell columns
+                v = @inbounds stamp[c]
+                if v >>> 32 == tok
+                    (v & 0xffffffff) == blk || return true          # a second work item, one cell
+                else
+                    @inbounds stamp[c] = hi | blk
+                end
+            end
+        end
+    end
+    return false
+end
+
 # A CPU phase of at most this many work items runs inline. Measured on the PC
 # (`benchmark/kinetics/cpu_threads.jl`, 2026-11-05): threads gain under 1.3× at 324 blocks and
-# 1.5–2× from 1000 blocks; 4 threads reach 3.3–3.7× at 5000 blocks and above. Each phase ends at a
-# barrier, so a thread per busy core stalls on any other process: leave the OS a spare CPU.
+# 1.5–2× from 1000 blocks; 4 threads reach 3.3–3.7× at 5000 blocks and above. That 3.3–3.7× is a
+# 5000-block measurement: at 2500 blocks over 1600 cells of 10 × 10 the four-thread gain is about
+# 1.4× (2.76 ms to 1.96 ms per MCS, best of two runs), and that is the gain a wide-cell geometry
+# loses to `_phase_conflict!` (see the docstring's threading note). Each phase ends at a barrier,
+# so a thread per busy core stalls on any other process: leave the OS a spare CPU.
 const BLOCK_GRAIN = Ref(512)
 # true while the trajectories of a parallel ensemble run (set by the ensemble `solve`; the
 # trajectory tasks inherit it): threaded phases would wait at each barrier on threads that
@@ -252,7 +327,7 @@ the density that matched `SequentialCPM` kinetics in 2D and 3D (P6.0bl).
 default_parts(N::Int) = max(2, round(Int, 64^(1 / N)))
 
 function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, proposal; region = nothing, parts = nothing,
-        switches = 1, threads = :auto, min_read = 0) where {N}
+        switches = 1, threads = :auto, min_read = 0, cell) where {N}
     r, w = reach(f.footprint, proposal)
     r = max(r, min_read, _window(f.connectivity))
     need = max(r + w, 1)
@@ -277,9 +352,15 @@ function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, proposal; r
     n = nblocks(layout)
     backend isa KernelAbstractions.CPU || n >= DEVICE_MIN_BLOCKS ||
         @warn "CheckerboardCPM on a device: $n work items per phase (blocks $(layout.nblocks)) leave the GPU mostly idle; a lattice this small runs as fast or faster on the CPU" maxlog = 1
-    return CheckerboardCache(layout, switches, zeros(Int, P), z(UInt32, 1), tk, cnt, sl, block_kernel!(backend),
+    claims = _claim_columns(backend, cell)
+    c = CheckerboardCache(layout, switches, zeros(Int, P), z(UInt32, 1), tk, cnt, sl, need, claims, block_kernel!(backend),
         serial_kernel!(backend), recenter_kernel!(backend), _block_groupsize(backend, layout.nblocks), _block_inline(backend, n, threads),
         backend isa KernelAbstractions.CPU)
+    # fifteen positional fields are easy to permute (two defects of that shape on this branch): read
+    # back the ones a swap would corrupt, once per `init`
+    @assert c.layout === layout && c.switches == switches && c.reach == need && c.serial === sl &&
+            c.inline == _block_inline(backend, n, threads)
+    return c
 end
 
 # the window of the model's windowed `Global` searches (0: none)
@@ -308,7 +389,9 @@ function checkerboard_mcs!(st, cache::CheckerboardCache{N}, f::F, p, ctx, law::L
         ph = @inbounds order[q]                      # q ∈ 1:P (the range above)
         off = phase_offset(l, ph)
         launches += 1                                # an inline phase counts as one, like a one-workgroup launch
-        if cache.inline
+        if cache.inline || _phase_conflict!(st, cache, ctx.lattice, l, off)
+            # one work item after another, so each decision sees what the item before it left: exact
+            # (the ΔH sum reconciles with the trajectory) and independent of the thread count
             for I in CartesianIndices(l.nblocks)
                 block_stay!(Tuple(I) .- 1, st, f, p, ctx, law, key, mcs, l, off, s, q, cache.track, cache.cnt, cache.status,
                     sl, Val(true))

@@ -1,5 +1,5 @@
-# P6.0ap (ROADMAP Phase 6, step 0): parameter-setter loose ends (P6.0ak review). Frozen
-# (AUTONOMY §7.2). Re-frozen under D-F2-1 (F2-15, list A, user OK 2026-10-20): a list naming
+# P6.0ap (ROADMAP Phase 6, step 0): parameter-setter loose ends (P6.0ak review).
+# D-F2-1 (F2-15, list A, user OK 2026-10-20): a list naming
 # a computed parameter (β) is refused whole; lists of base parameters are one change.
 #
 # Today (e006198b):

@@ -27,7 +27,7 @@ include("solvers.jl")
 include("analysis.jl")
 include("boundary_schedule.jl")
 include("fields.jl")
-include("fields_identity.jl")          # the F2 guard (F2 design §4 F2-01)
+include("fields_pipeline.jl")          # the device equality and the warm-MCS allocation gates
 include("fields_implicit.jl")          # BackwardEuler in a model (F3-08)
 include("fields_steppers.jl")          # CrankNicolson and BDF2 in a model (F3-10, F3-11)
 include("fields_coarse.jl")            # Coarse(k) fields in a model (F3-17)

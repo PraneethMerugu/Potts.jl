@@ -589,7 +589,9 @@ u = solve(prob, SequentialCPM()).u[end]
   stepped, as a rate reads another group's field. Write a condition on the field it clamps
   with `>=`, as in `c ~ masked(c >= 0.8, 0.8)`. With `>`, the clamp sets `c = 0.8`,
   `0.8 > 0.8` is false, and the next MCS releases the sites. The masks of a field group
-  cost one kernel launch per MCS.
+  cost one kernel launch per MCS. On a `Coarse(k)` grid, a node is masked when the
+  condition holds at every site of its block; a block that it covers in part blends (see
+  `lattice_level` in [Variables](@ref manual-variables)).
 - **Values** of faces and masks are expressions of numbers, parameters, the coordinates
   and `t`: `c(t, 0, y) ~ S1 + S2`, `c(t, 0, y) ~ c0 * sin(ω * t)`,
   `Differential(x)(c(t, L, y)) ~ 0.5y`. A value that is not a number or a number times a

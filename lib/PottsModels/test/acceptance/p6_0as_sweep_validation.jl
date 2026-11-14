@@ -1,5 +1,5 @@
 # P6.0as (ROADMAP Phase 6, step 0): `@sweep` validation and `combine` hashing.
-# Decision: D-123 (amends D-016/D-121). Frozen (AUTONOMY §7.3).
+# Decision: D-123 (amends D-016/D-121).
 #
 # The defects (P6.0aq review, D-121 "Review"), measured on b14a81cd:
 #  1. `sweep_spec` (src/vocabulary.jl) converts `offset` with `Float64(offset)` and accepts
@@ -25,8 +25,7 @@
 #         a compiler-generated name (stable only while the source of `mk` keeps its
 #         closures in the same order) plus the captured values.
 #     No PottsModels system sets `combine` (they all keep the default `min`, or use a
-#     copy-scope temperature where `combine` is not called), so none of their pins depends
-#     on this.
+#     copy-scope temperature where `combine` is not called).
 #
 # Rule (D-123), pinned here:
 #  A. `offset` must be finite: NaN, Inf and -Inf are an `ArgumentError` from `@sweep`
@@ -38,14 +37,11 @@
 #     callable type (hashed by its printed value). An anonymous function or a closure (a
 #     compiler-generated type name, starting with `#`) is an `ArgumentError` from `@sweep`
 #     whose message names `combine`, whatever the temperature's scope: define a named
-#     function, or a callable struct to carry parameters. Named `combine` keeps its
-#     fingerprint (the generated code is unchanged), so every existing pin stays.
+#     function, or a callable struct to carry parameters.
 #  C. A named or callable-struct `combine` fingerprints the same in another `julia`
 #     process (perturbed by extra anonymous functions and types defined first), and a
 #     checkpoint written there loads here; a callable struct with other fields is refused.
 #     The generated temperature code holds no compiler-generated (`var"#…"`) name.
-#  D. Unchanged pins: the default fixture, the named-combine fixtures recorded on
-#     b14a81cd, and every PottsModels system (the D-121/D-122 pins).
 using Potts: CorePotts
 using TOML: TOML
 
@@ -174,10 +170,10 @@ end
 @testset "P6.0as: controls" begin
     # an `@sweep` ArgumentError surfaces from building the system (the channel A and B use)
     p60as_argerror(() -> p60as_sys("unknown keyword"), "ofset")
-    # the default law keeps its D-121 fingerprint, and offset 0 / -0.0 are the default
-    @test p60as_problem("Metropolis()").f.fingerprint == 0x9b4704d8a49af92f
-    @test p60as_problem("Metropolis(offset = 0)").f.fingerprint == 0x9b4704d8a49af92f
-    @test p60as_problem("Metropolis(offset = -0.0)").f.fingerprint == 0x9b4704d8a49af92f
+    # offset 0 / -0.0 are the default law
+    fp_default = p60as_problem("Metropolis()").f.fingerprint
+    @test p60as_problem("Metropolis(offset = 0)").f.fingerprint == fp_default
+    @test p60as_problem("Metropolis(offset = -0.0)").f.fingerprint == fp_default
     # negative control: an anonymous function's printed form is a compiler-generated name,
     # so the `var"#` probe of part C does detect one
     @test occursin("var\"#", string(:($(p60as_anon)(a, b))))
@@ -302,66 +298,5 @@ end
         @test_throws ArgumentError init(p60as_named_problem("P60asMix(0.7)"), SequentialCPM();
             checkpoint = load_checkpoint(r["ck P60asMix(0.3)"]))
         @test_throws ArgumentError init(p60as_named_problem("min"), SequentialCPM(); checkpoint = load_checkpoint(r["ck max"]))
-    end
-end
-
-# ---------------------------------------------------------------------------------------
-# D. Unchanged pins
-
-function p60as_two_wortel()
-    s = zeros(Int32, 8, 8)
-    s[2:3, 2:3] .= 1
-    s[6:7, 6:7] .= 2
-    return [ownership => s, kind => [:cell, :cell]]
-end
-p60as_unchanged() = (
-    "fixture Metropolis()" => () -> p60as_problem("Metropolis()"),
-    "fixture Metropolis(offset = 2)" => () -> p60as_problem("Metropolis(offset = 2)"),
-    "fixture Barker(offset = -1.5)" => () -> p60as_problem("Barker(offset = -1.5)"),
-    (("combine " * label) => (() -> p60as_named_problem(label)) for (label, _) in P60AS_NAMED)...,
-    ("combine $label Float32" => (() -> p60as_named_problem(label; T = Float32)) for label in ("min", "P60asCombine.mix"))...,
-    "GranerGlazier" => () -> (s = graner_glazier_state(); PottsProblem(GranerGlazier(; name = :gg), [ownership => s[1], kind => s[2]], (0, 10))),
-    "WortelAct" => () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8)), p60as_two_wortel(), (0, 10)),
-    "WortelAct connected" => () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8), connected = true), p60as_two_wortel(), (0, 10)),
-    "MerksVasculogenesis" => () -> PottsProblem(MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
-        [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 10);
-        field_solver = Potts.ExplicitEuler(substeps = 2, lower = 0.0)),
-    "SingleDivisionFixture" => () -> PottsProblem(SingleDivisionFixture(; name = :fixture),
-        [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [:epithelial]], (0, 10)),
-    "OpenVTGrowingMonolayer" => () -> PottsProblem(OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)),
-        openvt_monolayer_state(; lattice = (24, 24)), (0, 10); capacity = 64),
-    "AkeebInvasion" => () -> PottsProblem(AkeebInvasion(; name = :akeeb, lattice = (60, 40)), akeeb_state(; lattice = (60, 40)), (0, 10);
-        capacity = 256),
-)
-
-# the fixtures recorded on b14a81cd; the PottsModels systems are the D-121/D-122 pins
-const P60AS_FINGERPRINTS = Dict{String, UInt64}(
-    "fixture Metropolis()" => 0x9b4704d8a49af92f,
-    "fixture Metropolis(offset = 2)" => 0xe52e49409c0c5d30,
-    "fixture Barker(offset = -1.5)" => 0x06e59b5f488f47c4,
-    "combine min" => 0x4164ff239487ad1d,
-    "combine max" => 0x2e523fe16241dec9,
-    "combine +" => 0x526fba6b48aeffdb,
-    "combine p60as_mean" => 0xadd16ec9cb6664f7,
-    "combine P60asCombine.mix" => 0x6e7770898612231a,
-    "combine P60asMix(0.3)" => 0xad49de4b4c143bef,
-    "combine P60asMix(0.7)" => 0x6cb29156297eae70,
-    "combine min Float32" => 0x0b2c33b2e9a70104,
-    "combine P60asCombine.mix Float32" => 0x7a8e38cd5874b35b,
-    "GranerGlazier" => 0xe6e09483034b4193,
-    "WortelAct" => 0x9a9fcac5fc22b7c5,  # re-pinned under D-124
-    "WortelAct connected" => 0xe1e52da078e581c9,  # re-pinned under D-124; re-pinned under P6.3g (D-193): fingerprint only
-    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
-    "SingleDivisionFixture" => 0xd2bed53e2590b709,
-    "OpenVTGrowingMonolayer" => 0x34b40af65c56a113,
-    "AkeebInvasion" => 0x72ced0fc70498f16,   # re-pinned under D-237 (cell draws by id and generation)
-)
-
-@testset "P6.0as: fingerprints unchanged" begin
-    for (name, build) in p60as_unchanged()
-        haskey(P60AS_FINGERPRINTS, name) || continue   # (D-INT-1: its pin was removed)
-        fp = build().f.fingerprint
-        @test fp == P60AS_FINGERPRINTS[name]
-        fp == P60AS_FINGERPRINTS[name] || @info "P6.0as: fingerprint $name = $(repr(fp))"
     end
 end

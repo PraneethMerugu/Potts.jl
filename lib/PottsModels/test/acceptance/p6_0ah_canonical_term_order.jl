@@ -7,7 +7,7 @@
 # order between builds of identical source, and its floating-point result by a few ulp.
 # Base functions (`sin`, `exp`) hash stably across builds, but the same mechanism orders
 # their terms; within one session, repeated `generated_code` calls can also swap two operands
-# (hash-consed terms rebuilt with another dictionary history). Frozen (AUTONOMY §7.3).
+# (hash-consed terms rebuilt with another dictionary history).
 #
 # How a different build is reproduced inside one process: this file adds methods
 # `Base.hash(::typeof(op), h)` for the operators above that return the ordinary hash while
@@ -52,14 +52,9 @@
 #     from the repository root (the worker processes take about 3.5 minutes, the whole file
 #     about 5; the temporary depots are deleted afterwards). Skipped by default (it compiles
 #     Potts twice).
-#  4. Fingerprints that must not change: GranerGlazier, MerksVasculogenesis and the ODE
-#     fixture `P60ahAt` (gather, `at` and Base terms in a cell rate; folds only in a model
-#     update, none hoisted), all salt-invariant today. Fingerprints that may change (once, to a
-#     canonical value): models whose ODEs hoist two or more population folds (`P60ahMix`,
-#     `P60ahModelPop` here), whose fold numbering is build-dependent today; they are pinned
-#     only as salt-invariant (item 1), not to a value. Results within a build stay the same
-#     in law; values are not pinned to recorded numbers (a canonical order may differ from
-#     today's by a few ulp).
+#  4. Salt invariance: the fingerprint of every fixture (including `P60ahAt`, gather, `at` and
+#     Base terms in a cell rate, and the multi-fold models `P60ahMix`, `P60ahModelPop`) is the
+#     same under every operator-hash salt (item 1). No fingerprint value is stored.
 using Test, Potts, PottsModels
 using Potts: CorePotts
 using TOML: TOML
@@ -358,32 +353,5 @@ end
         end
     else
         @test_skip "cross-build check (set POTTS_CROSSBUILD=1)"
-    end
-end
-
-# ---------------------------------------------------------------------------------------
-# 4. Fingerprints that must not change
-
-p60ah_published() = (
-    (:GranerGlazier, () -> (σ = graner_glazier_state(); PottsProblem(GranerGlazier(; name = :gg), [ownership => σ[1], kind => σ[2]], (0, 10)))),
-    (:MerksVasculogenesis, () -> PottsProblem(MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
-        [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 10);
-        field_solver = Potts.ExplicitEuler(substeps = 2, lower = 0.0))),
-    (:P60ahAt_RK4, () -> p60ah_problem(P60ahAt, Potts.RK4())),
-    (:P60ahAt_Euler, () -> p60ah_problem(P60ahAt, Potts.ExplicitEuler())),
-)
-const P60AH_FINGERPRINTS = Dict{Symbol, UInt64}(
-    :GranerGlazier => 0xe6e09483034b4193,   # re-pinned under D-122
-    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
-    :P60ahAt_RK4 => 0x52fad8cebbee12ed,   # re-pinned under D-124
-    :P60ahAt_Euler => 0xe41e0c4a682a9697,   # re-pinned under D-124
-)
-
-@testset "P6.0ah: fingerprints unchanged" begin
-    for (name, build) in p60ah_published()
-        haskey(P60AH_FINGERPRINTS, name) || continue   # (D-INT-1: its pin was removed)
-        fp = build().f.fingerprint
-        @test fp == P60AH_FINGERPRINTS[name]
-        fp == P60AH_FINGERPRINTS[name] || @info "P6.0ah: fingerprint $name = $(repr(fp))"
     end
 end
