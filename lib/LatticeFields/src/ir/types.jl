@@ -20,7 +20,12 @@ Host Julia type of an integer or storage lane.
 """
 juliatype(t::Scalar) = (Float16, Float32, Float64, UInt8, Int32, UInt32)[Int(t) + 1]
 
+"""
+Lattice geometry kind for [`Grid`](@ref): `CUBIC` (square or cubic Cartesian axes) or
+`HEX` (2D hexagonal lattice in axial coordinates).
+"""
 @enum Geometry::UInt8 CUBIC HEX
+@doc "2D hexagonal [`Geometry`](@ref) value in axial coordinates." HEX
 @enum Epoch::UInt8 STATIC PERSIGMA PERSTEP INNER
 """
 Boundary policy of an access: `RESOLVE` (pass 2 rewrites out-of-domain reads), `INSIDE`
@@ -43,6 +48,12 @@ const CALLS = (
     :sin, :cos, :tan, :tanh, :sinh, :cosh, :cbrt, :exp2, :log2, :log10, :expm1, :log1p,
     :atan, :floor, :ceil, :round)
 
+"""
+    Grid(dims; geometry = CUBIC, domain = 0)
+
+Lattice grid description with site counts `dims`, `geometry` (`CUBIC` or `HEX`), and
+irregular domain mask id `domain` (`0` for the full box).
+"""
 struct Grid{N}
     dims::NTuple{N, Int32}
     geometry::Geometry

@@ -14,10 +14,15 @@
 # Cell ids are `1:capacity`; an id is free when its volume is zero. Reusing an id increments
 # its generation, so cell-addressed randomness never replays (F2).
 
+"""Lifecycle trigger code (`Int32(0)`) indicating no lifecycle event for the cell."""
 const EVENT_NONE = Int32(0)
+"""Lifecycle trigger code (`Int32(1)`) indicating that the cell divides alone along `Lifecycle.normal`."""
 const EVENT_DIVIDE = Int32(1)
+"""Lifecycle trigger code (`Int32(2)`) indicating that the cell is removed and its sites become medium."""
 const EVENT_REMOVE = Int32(2)
+"""Lifecycle trigger code (`Int32(3)`) indicating that the cell transitions to the kind returned by `Lifecycle.kind`."""
 const EVENT_TRANSITION = Int32(3)
+"""Lifecycle trigger code (`Int32(4)`) indicating that the cell's compartment cluster divides as a unit (evaluated at the root)."""
 const EVENT_DIVIDE_CLUSTER = Int32(4)
 # A division that also transitions the dividing cell (A-17): the transition bit on
 # `EVENT_DIVIDE` or `EVENT_DIVIDE_CLUSTER` (`transitioning`). The transition is applied
@@ -217,19 +222,39 @@ no_rebuild(st, p, ctx, backend) = nothing
 const STREAM_DIVISION_PLANE = stream_id("CorePotts.division_plane")
 
 """
-    AlongMinorAxis{T}(), AlongMajorAxis{T}(), RandomPlane{T}()
+    AlongMinorAxis{T}()
 
-Division plane normals, computed in float type `T` (on a device, in the device's float type,
-`Float32`; a hand-written normal or state rule runs on the device and must be device code):
-`AlongMinorAxis` divides across the long axis (the plane contains the minor axis; normal =
-major axis), `AlongMajorAxis` divides along it, `RandomPlane` draws a uniform plane
-addressed by cell id and generation. `along_minor_axis` etc. are the `Float64` instances.
+Division plane normal functor in float type `T` (in the device float type `Float32` on a
+device). Divides across the cell's long axis (the plane contains the minor axis, so the
+normal is the major principal axis). See [`along_minor_axis`](@ref).
 """
 struct AlongMinorAxis{T} end
+
+"""
+    AlongMajorAxis{T}()
+
+Division plane normal functor in float type `T` (in the device float type `Float32` on a
+device). Divides along the cell's long axis (the normal is the minor principal axis). See
+[`along_major_axis`](@ref).
+"""
 struct AlongMajorAxis{T} end
+
+"""
+    RandomPlane{T}()
+
+Division plane normal functor in float type `T` (in the device float type `Float32` on a
+device). Draws a uniformly random unit normal addressed by cell id and generation. See
+[`random_plane`](@ref).
+"""
 struct RandomPlane{T} end
+
+"""Default `Float64` division plane normal instance `AlongMinorAxis{Float64}()`."""
 const along_minor_axis = AlongMinorAxis{Float64}()
+
+"""Default `Float64` division plane normal instance `AlongMajorAxis{Float64}()`."""
 const along_major_axis = AlongMajorAxis{Float64}()
+
+"""Default `Float64` division plane normal instance `RandomPlane{Float64}()`."""
 const random_plane = RandomPlane{Float64}()
 
 @inline (::AlongMinorAxis{T})(st, p, ctx, key, mcs, c) where {T} =
@@ -251,7 +276,13 @@ end
     return (s * cos(φ), s * sin(φ), z)
 end
 
-"""Unit eigenvector of cell `c`'s covariance for its `k`-th largest eigenvalue."""
+"""
+    principal_axis(::Type{T}, cell, lattice, c, k) -> NTuple{N, T}
+
+Unit eigenvector of cell `c`'s site-coordinate covariance for its `k`-th largest
+eigenvalue, in float type `T`.
+"""
+function principal_axis end
 # 1D: the axis itself (a division cuts the cell across its length, A-16)
 @inline principal_axis(::Type{T}, cell, l::Lattice{1}, c, k) where {T} = (one(T),)
 @inline function principal_axis(::Type{T}, cell, l::Lattice{2}, c, k) where {T}

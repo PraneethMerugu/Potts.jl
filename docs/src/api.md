@@ -99,6 +99,24 @@ Modules = [PottsModels.Analysis]
 Private = false
 ```
 
+## LatticeFields
+
+Internal array, IR, compilation, schedule, and solver building blocks exposed
+for `LatticePDE` and sibling packages.
+
+```@docs
+Potts.LatticeFields
+```
+
+## LatticePDE
+
+Lattice PDE grid, problem, operator, and stability analysis types.
+
+```@autodocs
+Modules = [Potts.LatticePDE]
+Private = false
+```
+
 ## MakiePotts
 
 Plotting and videos of states and solutions.

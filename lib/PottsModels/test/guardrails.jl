@@ -1,6 +1,8 @@
 # Non-privilege guardrails (D-051 R0, review §6): the published models use only public
 # primitives, build from `using Potts` alone, and the DSL surface changes only by review.
 using ExplicitImports
+using CairoMakie: CairoMakie
+using MakiePotts: MakiePotts
 
 @testset "PottsModels uses only public names" begin
     @test check_no_implicit_imports(PottsModels) === nothing
@@ -12,6 +14,15 @@ using ExplicitImports
     @test check_all_qualified_accesses_via_owners(PottsModels) === nothing
     @test check_no_stale_explicit_imports(PottsModels) === nothing
     @test check_no_self_qualified_accesses(PottsModels) === nothing
+end
+
+@testset "PottsModels docs and extensions" begin
+    @test isempty(Docs.undocumented_names(PottsModels; private = false))
+    @test isempty(Docs.undocumented_names(PottsModels.Analysis; private = false))
+    @test Base.get_extension(PottsModels, :PottsModelsMakieExt) !== nothing
+    if isdefined(@__MODULE__, :PottsDevices) && PottsDevices.device_name() == "rocm"
+        @test Base.get_extension(PottsModels, :PottsModelsAMDGPUExt) !== nothing
+    end
 end
 
 # The reproduction scripts are not modules, so ExplicitImports cannot see them: walk their

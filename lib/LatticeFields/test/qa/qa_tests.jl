@@ -42,6 +42,19 @@ end
 end
 end
 
+@testitem "API docs and extensions" setup = [LF_qa_qa] tags = [:latticefields, :qa] begin
+using OrdinaryDiffEqRosenbrock: OrdinaryDiffEqRosenbrock
+@testset "Docs.undocumented_names and extensions (LatticeFields)" begin
+    @test isempty(Docs.undocumented_names(LatticeFields; private = false))
+    @test Base.get_extension(LatticeFields, :LatticeFieldsForwardDiffExt) !== nothing
+    @test Base.get_extension(LatticeFields, :LatticeFieldsDiffEqBaseExt) !== nothing
+    @test Base.get_extension(LatticeFields, :LatticeFieldsOrdinaryDiffEqCoreExt) !== nothing
+    if any(k -> k.name == "LinearSolve", keys(Base.loaded_modules))
+        @test Base.get_extension(LatticeFields, :LatticeFieldsLinearSolveExt) !== nothing
+    end
+end
+end
+
 @testitem "Aqua" setup = [LF_qa_qa] tags = [:latticefields, :qa] begin
 @testset "Aqua" begin
     using Aqua: Aqua

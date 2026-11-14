@@ -461,6 +461,17 @@ end
     end
 end
 
+@testitem "QA: Docs and extensions (Potts)" setup = [QaSetup] tags = [:potts, :qa] begin
+    @testset "QA: Docs and extensions (Potts)" begin
+        @test isempty(Docs.undocumented_names(Potts; private = false))
+        @test isempty(Docs.undocumented_names(Potts.Fields; private = false))
+        @test Base.get_extension(Potts, :PottsDynamicQuantitiesExt) !== nothing
+        if PottsDevices.device_name() == "rocm"
+            @test Base.get_extension(Potts, :PottsAMDGPUExt) !== nothing
+        end
+    end
+end
+
 @testitem "QA: no raw host transfer outside the counted helpers (D-085)" setup = [QaSetup] tags = [:potts, :qa] begin
     @testset "QA: no raw host transfer outside the counted helpers (D-085)" begin
         root = joinpath(@__DIR__, "..")

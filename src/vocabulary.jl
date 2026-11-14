@@ -1389,6 +1389,12 @@ function lattice_spec(dims; boundary = Periodic(), neighborhood = Moore(1), spac
         throw(ArgumentError("a hexagonal lattice has one spacing"))
     return LatticeSpec(d, boundary, spacing, neighborhood, Lattice(d; boundary, domain, geometry).mask, geometry)
 end
+"""
+    core_lattice(lat::LatticeSpec) -> CorePotts.Lattice
+
+Convert a layout [`LatticeSpec`](@ref) into a [`CorePotts.Lattice`](@ref) for
+`CorePotts.shift`, `CorePotts.relation`, and `CorePotts.embed`.
+"""
 core_lattice(l::LatticeSpec) = Lattice(l.dims; boundary = l.boundary, domain = l.domain, geometry = l.geometry)
 # by content (the domain is an array)
 Base.:(==)(a::LatticeSpec, b::LatticeSpec) = a.dims == b.dims && a.boundary == b.boundary &&
