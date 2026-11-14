@@ -166,9 +166,11 @@ end
 # The gate models are the frozen P6.0v file's (the old runner had `P60vOnDevice` in `Main` from
 # test/gpu.jl); on Metal this setup includes the file itself, which runs its testsets once more.
 if PottsDevices.device_name() == "metal"
-    module P60vOnDevice
-    using Test, Potts, PottsModels
-    include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0v_transfer_counters.jl"))
+    let p60v_path = joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0v_transfer_counters.jl")
+        Core.eval(@__MODULE__, :(module P60vOnDevice
+            using Test, Potts, PottsModels
+            include($p60v_path)
+        end))
     end
 end
 const P60VX_ON_METAL = PottsDevices.device_name() == "metal" && isdefined(@__MODULE__, :P60vOnDevice)

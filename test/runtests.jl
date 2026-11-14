@@ -56,5 +56,5 @@ if GROUP == "GPU"
     withenv(env..., "POTTS_QA" => "false") do
         only ? PottsRTI.device_suite() : PottsRTI.potts_suite(; nworkers = 1, gpu = true)
     end
-    gpu == "rocm" && run_group(joinpath(ROOT, "test"), joinpath(ROOT, "test/device_coverage.jl"); env)
+    only && gpu == "rocm" && run_group(joinpath(ROOT, "test"), joinpath(ROOT, "test/device_coverage.jl"); env)
 end

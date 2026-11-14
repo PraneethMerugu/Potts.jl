@@ -61,8 +61,8 @@ function scan()
     return out
 end
 
-# the deliberate controls: this file's and the hook-based ones of test/device_ir.jl (Potts)
-iscontrol(sig) = occursin("DeviceIRScan.gpu_scan_", sig) || occursin("DeviceIR.gpu_devir_", sig)
+# the deliberate controls: this file's and the hook-based ones of test/device_ir_tests.jl (Potts)
+iscontrol(sig) = occursin("DeviceIRScan.gpu_scan_", sig) || occursin(r"DeviceIR(?:#\d+\")?\.gpu_devir_", sig)
 
 # The D-157 carve-out (F3 design §3.8, R-F3c): kernels whose Float64 a user declared (a group's
 # `compute_T` or `solver_T`, a field's `lattice_storage` of Float64) are registered in

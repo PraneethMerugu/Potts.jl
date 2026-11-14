@@ -78,7 +78,7 @@ function passlog_expr()
             # results outside any testset of the item (a bare @test, an error): one row
             d = (0, count(r -> r isa Test.Fail, ts.results), count(r -> r isa Test.Error, ts.results),
                  count(r -> r isa Test.Broken, ts.results))
-            d[2] + d[3] + d[4] > 0 && emit(ts.description, "\t(item level)\t", d...)
+            d[2] + d[3] + d[4] > 0 && emit(ts.description, "(item level)", d...)
         end
     end
 end

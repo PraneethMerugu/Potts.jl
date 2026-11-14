@@ -49,29 +49,6 @@ end
 
 
 
-# several tick phases (cell and model scope, two clocks): scratch slots published on the device
-@potts_model GPUDiscreteScratch begin
-    @kinds medium A
-    @components cells(A) cc = xcell
-    @components model mm = mmodel
-    @components cells(A) zz = zslow
-    @components cells(A) yy = yfast
-    @equations begin
-        cc.ds ~ mm.dM > 0.5
-        mm.dq ~ 1.0 + count(true for c in cells)
-        yy.dw ~ zz.dZ
-    end
-    @lattice Lattice((12, 12))
-    @energy cells => (volume - 9.0)^2
-    @sweep Metropolis(; temperature = 1.0e-6)
-end
-
-
-
-
-
-
-
 
 
 
@@ -106,12 +83,6 @@ end
     end
     @sweep Metropolis(; temperature = 10.0)
 end
-
-
-
-
-
-
 
 
 
@@ -434,6 +405,22 @@ end
 
 @testitem "P6.0k scratch-published ticks on the device (Float32)" setup = [GpuSetup, SymbolicSetup] tags = [:potts, :gpu, :device] begin
     @testset "P6.0k scratch-published ticks on the device (Float32)" begin
+        # several tick phases (cell and model scope, two clocks): scratch slots published on the device
+        @potts_model GPUDiscreteScratch begin
+            @kinds medium A
+            @components cells(A) cc = xcell
+            @components model mm = mmodel
+            @components cells(A) zz = zslow
+            @components cells(A) yy = yfast
+            @equations begin
+                cc.ds ~ mm.dM > 0.5
+                mm.dq ~ 1.0 + count(true for c in cells)
+                yy.dw ~ zz.dZ
+            end
+            @lattice Lattice((12, 12))
+            @energy cells => (volume - 9.0)^2
+            @sweep Metropolis(; temperature = 1.0e-6)
+        end
         prob = PottsProblem(GPUDiscreteScratch(; name = :s), [ownership => _discrete_blocks(2), kind => [1, 1]], (0, 5); T = Float32)
         sol = solve(prob, CheckerboardCPM(; proposal = Moore(1)); backend = PottsDevices.device_backend(), saveat = 0:5)
         Z = [isodd(t ÷ 2) for t in 0:5]
