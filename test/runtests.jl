@@ -14,6 +14,7 @@ const ROOT = dirname(@__DIR__)
 const MONOREPO_ORDER = ("LatticeFields", "LatticePDE", "CorePotts", "MakiePotts", "Potts", "PottsModels")
 
 include(joinpath(@__DIR__, "shared", "rti.jl"))      # PottsRTI: the Potts suite on ReTestItems
+include(joinpath(@__DIR__, "shared", "device_select.jl"))
 
 function load_test_groups(path)
     raw = Pkg.TOML.parsefile(path)
@@ -130,7 +131,6 @@ end
 # with the full no-`double` scan of their compiled kernels, and a last step checks that every
 # CorePotts kernel and launch body was scanned (test/device_coverage.jl).
 function run_gpu_group()
-    include(joinpath(@__DIR__, "shared", "device_select.jl"))
     gpu = PottsDeviceSelect.requested()
     isempty(gpu) && (gpu = Sys.isapple() ? "metal" : "rocm")
     @info "GROUP=GPU on $gpu"
