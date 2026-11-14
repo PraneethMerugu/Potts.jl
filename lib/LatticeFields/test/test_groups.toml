@@ -1,0 +1,92 @@
+# Declarative test groups for LatticeFields.
+# Julia reads `in_all`, `group`, and `tags`; the remaining keys are CI metadata.
+
+[exec]
+group = "exec"
+in_all = true
+tags = ["exec"]
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64"]
+num_threads = 1
+timeout = 30
+
+[ir]
+group = "ir"
+in_all = true
+tags = ["ir"]
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64"]
+num_threads = 1
+timeout = 30
+
+[compile]
+group = "compile"
+in_all = true
+tags = ["compile"]
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64"]
+num_threads = 1
+timeout = 30
+
+[schedule]
+group = "schedule"
+in_all = true
+tags = ["schedule"]
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64"]
+num_threads = 1
+timeout = 30
+
+[problems]
+group = "problems"
+in_all = true
+tags = ["problems"]
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64"]
+num_threads = 1
+timeout = 30
+
+[solvers]
+group = "solvers"
+in_all = true
+tags = ["solvers"]
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64"]
+num_threads = 1
+timeout = 60
+
+[qa]
+group = "qa"
+in_all = true
+tags = ["qa"]
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64"]
+num_threads = 1
+timeout = 30
+
+[solvers_gate]
+group = "solvers_gate"
+in_all = false
+tags = ["solvers_gate"]
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64"]
+num_threads = 1
+timeout = 60
+
+[gpu]
+group = "gpu"
+in_all = false
+tags = ["gpu_only"]
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64", "rocm"]
+num_threads = 1
+timeout = 60

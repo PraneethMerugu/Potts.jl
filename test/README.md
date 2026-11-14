@@ -11,12 +11,54 @@ runners.
 GROUP=Potts julia --project=test test/runtests.jl
 ```
 
-`test/runtests.jl` maps the `GROUP` values of CI to sets of items:
+`test/runtests.jl` dispatches from declarative `test_groups.toml` tables (`test/test_groups.toml`
+and `lib/<Pkg>/test/test_groups.toml`). When launching a sublibrary runner in a subprocess,
+`run_group` passes `--check-bounds=auto` unless `--check-bounds=yes` or `--check-bounds=no` is
+already active. Unknown `GROUP` values throw an `ArgumentError`.
 
-| GROUP | Potts items that run |
+| GROUP | What runs |
 |---|---|
-| `Potts`, `All` | tagged `:potts`, not `:gpu`; `:qa` too unless `POTTS_QA=false` |
-| `GPU` | tagged `:device` or `:gpu` (`:rocm` only on ROCm), with `POTTS_GPU` set, one worker |
+| `All` (default) | all `in_all = true` packages in `test/test_groups.toml` (`LatticeFields`, `LatticePDE`, `CorePotts`, `MakiePotts`, `Potts`, `PottsModels`) |
+| `Potts` | `:potts` items, excluding `:gpu` and `:gpu_only` (`:qa` too unless `POTTS_QA=false`) |
+| `CorePotts`, `LatticeFields`, `LatticePDE`, `MakiePotts`, `PottsModels` | all `in_all = true` groups of that sublibrary |
+| `GPU` | device suites across `LatticeFields`, `CorePotts`, and `Potts`, plus ROCm kernel IR coverage (`test/device_coverage.jl`) |
+| `<Sublib>_<group>` | forwards `<group>` to `Potts` or `lib/<Sublib>`, validated against that package's `test_groups.toml` |
+
+Examples of `GROUP=<Sublib>_<group>` forwarding:
+
+```sh
+GROUP=CorePotts_qa julia --project=test test/runtests.jl
+GROUP=CorePotts_core julia --project=test test/runtests.jl
+GROUP=LatticeFields_solvers julia --project=test test/runtests.jl
+GROUP=LatticePDE_qa julia --project=test test/runtests.jl
+GROUP=MakiePotts_core julia --project=test test/runtests.jl
+GROUP=Potts_qa julia --project=test test/runtests.jl
+GROUP=Potts_fields julia --project=test test/runtests.jl
+```
+
+You can also run a sublibrary group directly from its own test directory with `GROUP=<group>`
+or positional CLI arguments (for example `julia --project=lib/LatticeFields/test lib/LatticeFields/test/runtests.jl solvers`),
+while keeping per-package environment variables (`COREPOTTS_GPU`, `LATTICEFIELDS_GPU`,
+`LATTICEPDE_GPU`, `*_QA`, `*_TEST_NAME`, `RETESTITEMS_NWORKERS`, `POTTSMODELS_SHARD`,
+`POTTS_TEST_END_EXPR_FILE`).
+
+### Declarative `test_groups.toml` schema
+
+Each `test_groups.toml` declares named test groups for one package:
+
+| Package | Declared groups |
+|---|---|
+| `Potts` (`test/test_groups.toml`) | `LatticeFields`, `LatticePDE`, `CorePotts`, `MakiePotts`, `Potts`, `PottsModels`, `GPU`, `Potts_core`, `Potts_fields`, `Potts_symbolic`, `Potts_qa`, `Potts_gpu` |
+| `CorePotts` | `core`, `qa`, `gpu` (`in_all = false`) |
+| `LatticeFields` | `exec`, `ir`, `compile`, `schedule`, `problems`, `solvers`, `qa`, `solvers_gate` (`in_all = false`), `gpu` (`in_all = false`) |
+| `LatticePDE` | `core`, `qa`, `gpu` (`in_all = false`) |
+| `MakiePotts` | `core`, `acceptance`, `adversarial`, `allocations`, `downstream_conformance`, `saved_state_channels` |
+| `PottsModels` | `core` (`num_threads = 4`), `qa`, `acceptance` (`in_all = false`), `reproductions` (`in_all = false`), `guardrails` (`in_all = false`) |
+
+Julia reads only `in_all`, `group`, and structural routing fields (`sublib`, `tags`,
+`exclude_tags`). The remaining keys (`versions`, `os`, `runner`, `num_threads`, `timeout`,
+and optional `continue_on_error`, which is never `true` on core groups) are CI workflow
+metadata inputs.
 
 The items run on `POTTS_TEST_WORKERS` worker processes (default 4), one thread each. All
 workers share the memory limit of the run: a worker restarts after an item when the memory in

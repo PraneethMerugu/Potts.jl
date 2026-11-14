@@ -1,0 +1,62 @@
+# Declarative test groups for MakiePotts.
+# Julia reads `in_all`, `group`, and `tags`; the remaining keys are CI metadata.
+
+[core]
+group = "core"
+in_all = true
+tags = ["core"]
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64"]
+num_threads = 1
+timeout = 30
+
+[acceptance]
+group = "acceptance"
+in_all = true
+tags = ["acceptance"]
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64"]
+num_threads = 1
+timeout = 30
+
+[adversarial]
+group = "adversarial"
+in_all = true
+tags = ["adversarial"]
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64"]
+num_threads = 1
+timeout = 30
+
+[allocations]
+group = "allocations"
+in_all = true
+tags = ["allocations"]
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64"]
+num_threads = 1
+timeout = 30
+
+[downstream_conformance]
+group = "downstream_conformance"
+in_all = true
+tags = ["downstream_conformance"]
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64"]
+num_threads = 1
+timeout = 30
+
+[saved_state_channels]
+group = "saved_state_channels"
+in_all = true
+tags = ["saved_state_channels"]
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64"]
+num_threads = 1
+timeout = 30
