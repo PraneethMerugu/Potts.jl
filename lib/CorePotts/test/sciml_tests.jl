@@ -63,7 +63,7 @@ end
         integ = init(prob, alg; callback = heat)
         foreach(_ -> step!(integ), 1:3)
         @test integ.p.T == 1e6
-        @test_throws ArgumentError init(prob, alg; callback = ContinuousCallback((u, t, i) -> t - 1, i -> nothing))
+            @test_throws ["ArgumentError", "continuous callbacks", "DiscreteCallback"] init(prob, alg; callback = ContinuousCallback((u, t, i) -> t - 1, i -> nothing))
         # initialize/finalize hooks run once
         calls = Int[]
         cb = DiscreteCallback((u, t, i) -> false, i -> nothing;
@@ -167,7 +167,7 @@ end
         @test SII.setp_oop(gi, :T)(gi, 4) == merge(gp.p, (; T = 4.0))
         @test gi.p == gg_params()
         # negative controls: an unknown field; keys and values of different lengths
-        @test_throws ArgumentError SII.remake_buffer(gp, gp.p, [:T, :zz], [1.0, 2.0])
+            @test_throws ["ArgumentError", "remake_buffer", "not a field"] SII.remake_buffer(gp, gp.p, [:T, :zz], [1.0, 2.0])
         @test_throws DimensionMismatch SII.remake_buffer(gp, gp.p, [:T], [1.0, 2.0])
     end
 end
@@ -185,7 +185,7 @@ end
         e
     end
     @test err isa ArgumentError && occursin("CheckerboardCPM", sprint(showerror, err))
-    @test_throws ArgumentError init(prob; backend = P60ccDevice())
+        @test_throws ["ArgumentError", "CheckerboardCPM"] init(prob; backend = P60ccDevice())
 end
 end
 
@@ -251,11 +251,11 @@ end
             end
             @test occursin("reinit!", err_cap) && occursin("remake", err_cap)
             # unknown remake keyword
-            @test_throws ArgumentError remake(prob; unknown_kw = 1)
+            @test_throws ["ArgumentError", "remake", "unknown_kw"] remake(prob; unknown_kw = 1)
             # unknown SII parameter
-            @test_throws ArgumentError SII.getp(prob, :no_such_param)
+            @test_throws ["ArgumentError", "no_such_param", "not a parameter"] SII.getp(prob, :no_such_param)
             # ContinuousCallback is refused
-            @test_throws ArgumentError init(
+            @test_throws ["ArgumentError", "continuous callbacks", "DiscreteCallback"] init(
                 prob, SequentialCPM();
                 callback = ContinuousCallback((u, t, i) -> t - 1, i -> nothing)
             )

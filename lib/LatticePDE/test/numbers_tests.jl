@@ -128,7 +128,7 @@ using .LP_numbers: fd
     @test eltype(rb.p) == BigFloat && eltype(rb) == Float64
     @test isapprox(solve(rb, alg).u[end], s64.u[end]; rtol = 1e-14)
     # an unsupported state type is refused by name
-    @test_throws ArgumentError owned(sys, 8, 4; T = Int)
+        @test_throws ["ArgumentError", "float type", "Int"] owned(sys, 8, 4; T = Int)
 end
 end
 

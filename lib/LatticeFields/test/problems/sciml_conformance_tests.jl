@@ -117,10 +117,10 @@ end
                 sprint(showerror, e)
             end
             @test occursin("3 values", err_u0) && occursin("$(prod(dims))", err_u0)
-            @test_throws ArgumentError step!(integ, -0.05)
-            @test_throws ArgumentError remake(prob; p = [:missing_param => 1.0])
+            @test_throws ["ArgumentError", "step!(integ, dt)", "does not step back"] step!(integ, -0.05)
+            @test_throws ["ArgumentError", "missing_param", "not a parameter"] remake(prob; p = [:missing_param => 1.0])
             @test_throws ErrorException SII.getp(prob, :missing_param)
-            @test_throws ArgumentError SII.setp(integ, :missing_param)
+            @test_throws ["ArgumentError", "missing_param", "not a parameter"] SII.setp(integ, :missing_param)
         end
     end
 end

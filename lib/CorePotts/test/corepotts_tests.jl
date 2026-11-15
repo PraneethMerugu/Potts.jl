@@ -30,7 +30,7 @@ end
         r = relation(NeighborOrder(4), l2)
         @test issorted([sum(abs2, o) for o in r.offsets])
         # aliasing on small periodic axes is rejected; closed axes are fine
-        @test_throws ArgumentError relation(Moore(1), Lattice((2, 10)))
+        @test_throws ["ArgumentError", "alias on lattice"] relation(Moore(1), Lattice((2, 10)))
         @test length(relation(Moore(1), Lattice((2, 10); boundary = Closed()))) == 8
         @test length(relation(Ball(1.5), l2)) == 8
         @test length(relation(Stencil([(1, 0), (0, 1)]), l2)) == 2
@@ -401,7 +401,7 @@ end
         @test u.cell.surface ≈ brute_surface(u.σ, lat, relation(sspec, lat), length(kinds)) rtol = 1e-12
         bad = PottsProblem(GS, sprob.u0, lat, (0, 1), gs_params();
             relations = (; surface = Moore(1; include_self = true)))
-        @test_throws ArgumentError init(bad, alg)
+        @test_throws ["ArgumentError", "surface relation", "must not include the origin", "VonNeumann"] init(bad, alg)
     end
 end
 
@@ -423,8 +423,11 @@ end
             @test sol(10).σ == sol.u[3].σ
             @test sol.u[1].σ == σ0 && sol.u[2].σ != sol.u[end].σ     # snapshots, not aliases
             @test sol.u[1].σ !== sol.u[end].σ
-            @test_throws ArgumentError sol(11)
+            @test_throws ["ArgumentError", "MCS 11 was not saved"] sol(11)
             @test sol.stats.attempts == 20 * nsites(lat)
+            integ = init(prob, alg)
+            solve!(integ)
+            @test_throws ["ArgumentError", "finished with retcode", "reinit!(integ)"] step!(integ)
         end
     end
 end

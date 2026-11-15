@@ -66,7 +66,7 @@ end
     @test whole.stats.lifecycle.divisions == rest.stats.lifecycle.divisions
     @test rest.t == [12, 30]
     bad = remake(prob; f = CPMFunction(prob.f.delta_H; temperature = gg_temperature))
-    @test_throws ArgumentError init(bad, alg; checkpoint = ck)
+        @test_throws ["ArgumentError", "checkpoint fingerprint", "does not match"] init(bad, alg; checkpoint = ck)
 
     # reinit! reuses the integrator and reproduces the run
     integ = init(prob, alg)

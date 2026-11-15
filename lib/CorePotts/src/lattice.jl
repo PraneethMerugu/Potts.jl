@@ -40,13 +40,13 @@ Lattice{N, M}(dims, periodic, mask) where {N, M} = Lattice{N, M, Square}(dims, p
 
 function Lattice(dims::NTuple{N, Integer}; boundary = Periodic(), domain = nothing,
         geometry::AbstractGeometry = Square()) where {N}
-    geometry isa Hexagonal && N != 2 && throw(ArgumentError("hexagonal lattices are 2D"))
+    geometry isa Hexagonal && N != 2 && throw(ArgumentError("hexagonal lattices are 2D, got $(N)D dims $dims; pass a 2-tuple for dims or use `Square()`"))
     b = boundary isa AbstractBoundary ? ntuple(_ -> boundary, N) : Tuple(boundary)
     length(b) == N || throw(ArgumentError("need $N boundaries, got $(length(b))"))
     all(>(0), dims) || throw(ArgumentError("lattice dimensions must be positive"))
     d = Int.(dims)
     mask = _domain_mask(domain, d, geometry)
-    mask === nothing || any(mask) || throw(ArgumentError("the domain contains no sites"))
+    mask === nothing || any(mask) || throw(ArgumentError("the domain contains no sites: widen `domain` so at least one lattice site is inside"))
     return Lattice{N, typeof(mask), typeof(geometry)}(d, map(x -> x isa Periodic, b), mask, geometry)
 end
 
@@ -424,7 +424,7 @@ Adapt.@adapt_structure MaskMobility
 function mobility(frozen::Union{Nothing, AbstractArray{Bool}}, l::Lattice)
     frozen === nothing && return AllMobile()
     size(frozen) == l.dims || throw(ArgumentError("frozen mask has size $(size(frozen)), lattice $(l.dims)"))
-    any(!, frozen) || throw(ArgumentError("every site is frozen"))     # at construction only
+    any(!, frozen) || throw(ArgumentError("every site is frozen: clear at least one entry in `frozen` or use `constraint = frozen_dynamics` to keep all sites fixed"))     # at construction only
     sites = site_index_type(length(frozen))[]
     _mobile_sites!(sites, frozen)
     return MaskMobility(Array{Bool}(frozen), sites)

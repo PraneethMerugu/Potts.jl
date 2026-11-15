@@ -114,7 +114,7 @@ using .LP_device: fd, kron
     @test dd isa Float32 && isapprox(dd, dh; rtol = 1e-5) && dd != 0
     # default state type: Float32 on a device
     @test eltype(discretize(sys, LatticeDiscretization(Grid((8, 4)); backend = PDEV)).u0) == Float32
-    @test_throws ArgumentError discretize(sys, LatticeDiscretization(Grid((8, 4)); T = BigFloat, backend = PDEV))
+        @test_throws ["ArgumentError", "BigFloat", "not isbits", "host backend only"] discretize(sys, LatticeDiscretization(Grid((8, 4)); T = BigFloat, backend = PDEV))
     # Rodas5P on device arrays (Jacobian and time gradient through the right side)
     ode = discretize(psys([D(ce) ~ Dn * Δ(ce) - kn * ce + 0.1 * sin(ωn * t)],
             [c(0, x, y) ~ 0.0, c(t, 0, y) ~ gn, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)],

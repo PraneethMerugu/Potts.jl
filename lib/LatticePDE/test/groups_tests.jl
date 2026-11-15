@@ -391,7 +391,7 @@ end
     # control: two groups in a loop reach the check (`κ_c = 0.01 · 500 = 5 > 1`: refused)
     pl = remake(p; p = [ga => 500.0])
     two = [(ExplicitEuler(; dt = 0.01), [String(pl.state[1])]), (ExplicitEuler(; dt = 0.01), [String(pl.state[2])])]
-    @test_throws ArgumentError LFP._check_coupling(pl, two, pl.p; dt = 0.01)
+        @test_throws ["ArgumentError", "FieldGroups", "dt · rate"] LFP._check_coupling(pl, two, pl.p; dt = 0.01)
     # `init` binds the groups behind a barrier (its return type is not inferred); the
     # integrator it returns steps and runs with inferred types, explicit and implicit (the
     # solution, SciML's `ODESolution`, is built behind a barrier: F4-04)

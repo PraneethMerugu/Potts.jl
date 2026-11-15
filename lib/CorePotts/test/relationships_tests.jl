@@ -24,8 +24,7 @@ link_delta_allocs(T, cell, ctx, prop, E) = @allocated link_delta(T, cell, ctx, p
 include("shared/export_all.jl")
 end
 
-@testitem "relationships" setup = [CP_relationships] tags = [:corepotts, :relationships] begin
-@testset "relationships" begin
+@testitem "relationships: link bookkeeping" setup = [CP_relationships] tags = [:corepotts, :relationships] begin
     @testset "link bookkeeping" begin
         cell = empty_links(2, 4; rest = Float64)
         @test add_link!(cell, 1, 2; rest = 5.0)
@@ -41,6 +40,9 @@ end
         @test all(iszero, cell.links)
     end
 
+end
+
+@testitem "relationships: link_delta equals the brute-force energy change" setup = [CP_relationships] tags = [:corepotts, :relationships] begin
     @testset "link_delta equals the brute-force energy change" begin
         σ, kinds = blocks((30, 30), 5; gap = 0)
         σ = circshift(σ, (2, 2))
@@ -64,13 +66,16 @@ end
             dH = link_delta(Float64, st.cell, ctx, prop, E)
             after = deepcopy(st); after.σ[t] = b
             commit_volume!(after, nothing, prop, ctx); commit_moments!(after.cell, lat, prop)
-            @test dH ≈ brute_link_energy(after.σ, lat, after.cell, E) - before atol = 1e-9
+            @test dH ≈ brute_link_energy(after.σ, lat, after.cell, E) - before atol = 1.0e-9
             checked += 1; pair_checked += linked(st.cell, a, b)
             checked >= 200 && break
         end
         @test checked >= 100 && pair_checked >= 5
     end
 
+end
+
+@testitem "relationships: link_delta skips a dead partner (D-066 item 5, P6.0l)" setup = [CP_relationships] tags = [:corepotts, :relationships] begin
     @testset "link_delta skips a dead partner (D-066 item 5, P6.0l)" begin
         # cells 1 and 2 alive and linked; cell 3 linked to 1 but owns no site (copy-killed):
         # volume 0, so its centroid is 0/0. Its link must contribute nothing.
@@ -95,7 +100,7 @@ end
                 prop = Proposal(t, s, coordinates(lat, t), dir, a, b)
                 dH = link_delta(T, st.cell, ctx, prop, E)
                 @test dH isa T && isfinite(dH)
-                @test dH ≈ link_delta(T, free.cell, ctx, prop, Ef) atol = (T === Float32 ? 1e-3 : 1e-9)
+                @test dH ≈ link_delta(T, free.cell, ctx, prop, Ef) atol = (T === Float32 ? 1.0e-3 : 1.0e-9)
                 checked += 1
             end
             @test checked > 20
@@ -106,6 +111,9 @@ end
         end
     end
 
+end
+
+@testitem "relationships: a spring pulls linked cells to its rest length" setup = [CP_relationships] tags = [:corepotts, :relationships] begin
     @testset "a spring pulls linked cells to its rest length" begin
         lat = Lattice((60, 30))
         σ = zeros(Int32, 60, 30); σ[5:10, 12:17] .= 1; σ[40:45, 12:17] .= 2
@@ -116,21 +124,28 @@ end
             E(v, c) = p.λ * (v - p.V0)^2
             S(a, b, k, d) = p.k * (d - st.cell.link_rest[k, a])^2
             return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
-                   link_delta(Float64, st.cell, ctx, prop, S)
+                link_delta(Float64, st.cell, ctx, prop, S)
         end
         commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
         f = CPMFunction(dH; commit!, temperature = gg_temperature)
         d0 = centroid_distance(Float64, initial_state(σ, [1, 1]; cell).cell, lat, 1, 2)
-            ds = map(1:20) do seed
-            u = solve(PottsProblem(f, initial_state(σ, [1, 1]; cell), lat, (0, 1000),
-                merge(gg_params(), (; V0 = 36.0, k = 2.0)); seed), CheckerboardCPM()).u[end]
+        ds = map(1:20) do seed
+            u = solve(
+                PottsProblem(
+                    f, initial_state(σ, [1, 1]; cell), lat, (0, 1000),
+                    merge(gg_params(), (; V0 = 36.0, k = 2.0)); seed
+                ), CheckerboardCPM()
+            ).u[end]
             centroid_distance(Float64, u.cell, lat, 1, 2)
         end
         @test d0 ≈ 25.0 atol = 5                             # periodic min image: 35 → 25
-            @test stat_accept(ds; mu0 = 12.0, margin = 3.0, alpha = 1.0e-3).pass
-            @test !stat_accept(ds; mu0 = 20.0, margin = 3.0, alpha = 1.0e-3).pass # negative control
+        @test stat_accept(ds; mu0 = 12.0, margin = 3.0, alpha = 1.0e-3).pass
+        @test !stat_accept(ds; mu0 = 20.0, margin = 3.0, alpha = 1.0e-3).pass # negative control
     end
 
+end
+
+@testitem "relationships: host rule links touching cells; lifecycle policies" setup = [CP_relationships] tags = [:corepotts, :relationships] begin
     @testset "host rule links touching cells; lifecycle policies" begin
         σ, kinds = blocks((30, 30), 5; gap = 0)
         lat = Lattice((30, 30))
@@ -143,12 +158,18 @@ end
             end
         end
         remove_first(st, p, ctx, key, mcs, c) = mcs == 1 && c == 1 ? EVENT_REMOVE :
-                                                mcs == 1 && c == 2 ? EVENT_DIVIDE : EVENT_NONE
-        st = with_capacity(initial_state(σ, kinds;
-            cell = merge(init_moments(σ, lat, n), empty_links(8, n; age = Int32))), n + 4)
-        f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
+            mcs == 1 && c == 2 ? EVENT_DIVIDE : EVENT_NONE
+        st = with_capacity(
+            initial_state(
+                σ, kinds;
+                cell = merge(init_moments(σ, lat, n), empty_links(8, n; age = Int32))
+            ), n + 4
+        )
+        f = CPMFunction(
+            gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
             phases = Phases(after_mcs = (HostPhase(link_touching!; every = 100),)),
-            lifecycle = Lifecycle(remove_first))
+            lifecycle = Lifecycle(remove_first)
+        )
         u = solve(PottsProblem(f, st, lat, (0, 2), gg_params()), SequentialCPM()).u[end]
         g0 = contact_graph(σ, lat, vn, n)
         for a in 3:n, b in neighbors(g0, a)                    # untouched pairs stay linked
@@ -165,6 +186,9 @@ end
     # -----------------------------------------------------------------------------------
     # Several named relationships (P6.0b): one adjacency per name, payloads per variable
 
+end
+
+@testitem "relationships: named link stores are independent" setup = [CP_relationships] tags = [:corepotts, :relationships] begin
     @testset "named link stores are independent" begin
         cell = merge(empty_links(2, 4, :bond; rest = Float64), empty_links(1, 4, :tether; len = Float64))
         @test keys(cell) == (:links__bond, :link_rest, :links__tether, :link_len)
@@ -183,13 +207,18 @@ end
         @test cell.link_rest[link_slot(B, 1, 4), 1] == 0.0
     end
 
+end
+
+@testitem "relationships: link_delta per store: two relationships sum exactly" setup = [CP_relationships] tags = [:corepotts, :relationships] begin
     @testset "link_delta per store: two relationships sum exactly" begin
         σ, kinds = blocks((30, 30), 5; gap = 0)
         σ = circshift(σ, (2, 2))
         lat = Lattice((30, 30))
         n = length(kinds)
-        cell = merge(init_moments(σ, lat, n), empty_links(3, n, :bond; rest = Float64),
-            empty_links(3, n, :tether; len = Float64))
+        cell = merge(
+            init_moments(σ, lat, n), empty_links(3, n, :bond; rest = Float64),
+            empty_links(3, n, :tether; len = Float64)
+        )
         B = (; links = cell.links__bond, link_rest = cell.link_rest)
         Tt = (; links = cell.links__tether, link_len = cell.link_len)
         for (a, b) in ((1, 2), (2, 3), (7, 8), (13, 1))
@@ -202,7 +231,7 @@ end
         E1(a, b, k, d) = 0.7 * (d - st.cell.link_rest[k, a])^2
         E2(a, b, k, d) = 1.3 * (d - st.cell.link_len[k, a])^2
         brute(u) = brute_link_energy(u.σ, lat, CorePotts.link_store(u.cell, :bond), E1) +
-                   brute_link_energy(u.σ, lat, CorePotts.link_store(u.cell, :tether), E2)
+            brute_link_energy(u.σ, lat, CorePotts.link_store(u.cell, :tether), E2)
         ctx = (; lattice = lat, proposal = relation(VonNeumann(1), lat))
         checked = 0; both = 0; one_store_off = 0
         for t in 1:nsites(lat), dir in 1:4
@@ -217,19 +246,24 @@ end
             after = deepcopy(st); after.σ[t] = b
             commit_volume!(after, nothing, prop, ctx); commit_moments!(after.cell, lat, prop)
             truth = brute(after) - brute(st)
-            @test dB + dT ≈ truth atol = 1e-9
-            one_store_off += !isapprox(dB, truth; atol = 1e-6)                   # negative control
+            @test dB + dT ≈ truth atol = 1.0e-9
+            one_store_off += !isapprox(dB, truth; atol = 1.0e-6)                   # negative control
             checked += 1; both += linked(B, a, b) || linked(Tt, a, b)
             checked >= 200 && break
         end
         @test checked >= 100 && both >= 5 && one_store_off >= checked ÷ 2
     end
 
+end
+
+@testitem "relationships: a chain of two relationships relaxes under checkerboard" setup = [CP_relationships] tags = [:corepotts, :relationships] begin
     @testset "a chain of two relationships relaxes under checkerboard" begin
         lat = Lattice((64, 30))
         σ = zeros(Int32, 64, 30); σ[5:10, 12:17] .= 1; σ[30:35, 12:17] .= 2; σ[55:60, 12:17] .= 3
-        cell = merge(init_moments(σ, lat, 3), empty_links(1, 3, :bond; rest = Float64),
-            empty_links(1, 3, :tether; len = Float64))
+        cell = merge(
+            init_moments(σ, lat, 3), empty_links(1, 3, :bond; rest = Float64),
+            empty_links(1, 3, :tether; len = Float64)
+        )
         add_link!((; links = cell.links__bond, link_rest = cell.link_rest), 1, 2; rest = 12.0)
         add_link!((; links = cell.links__tether, link_len = cell.link_len), 2, 3; len = 18.0)
         function dH(st, p, prop, ctx)
@@ -238,23 +272,26 @@ end
             S1(a, b, k, d) = p.k * (d - st.cell.link_rest[k, a])^2
             S2(a, b, k, d) = p.k * (d - st.cell.link_len[k, a])^2
             return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
-                   link_delta(Float64, st.cell, (; links = st.cell.links__bond), ctx, prop, S1) +
-                   link_delta(Float64, st.cell, (; links = st.cell.links__tether), ctx, prop, S2)
+                link_delta(Float64, st.cell, (; links = st.cell.links__bond), ctx, prop, S1) +
+                link_delta(Float64, st.cell, (; links = st.cell.links__tether), ctx, prop, S2)
         end
         commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
         f = CPMFunction(dH; commit!, temperature = gg_temperature)
         p = merge(gg_params(), (; V0 = 36.0, k = 2.0))
         for alg in (SequentialCPM(), CheckerboardCPM())
-                ds = map(1:20) do seed
+            ds = map(1:20) do seed
                 u = solve(PottsProblem(f, initial_state(σ, [1, 1, 1]; cell = deepcopy(cell)), lat, (0, 1500), p; seed), alg).u[end]
                 (centroid_distance(Float64, u.cell, lat, 1, 2), centroid_distance(Float64, u.cell, lat, 2, 3))
             end
-                @test stat_accept(first.(ds); mu0 = 12.0, margin = 3.0, alpha = 1.0e-3).pass
-                @test stat_accept(last.(ds); mu0 = 18.0, margin = 3.0, alpha = 1.0e-3).pass
-                @test !stat_accept(first.(ds); mu0 = 20.0, margin = 3.0, alpha = 1.0e-3).pass
+            @test stat_accept(first.(ds); mu0 = 12.0, margin = 3.0, alpha = 1.0e-3).pass
+            @test stat_accept(last.(ds); mu0 = 18.0, margin = 3.0, alpha = 1.0e-3).pass
+            @test !stat_accept(first.(ds); mu0 = 20.0, margin = 3.0, alpha = 1.0e-3).pass
         end
     end
 
+end
+
+@testitem "relationships: lifecycle clears every relationship's links" setup = [CP_relationships] tags = [:corepotts, :relationships] begin
     @testset "lifecycle clears every relationship's links" begin
         σ, kinds = blocks((30, 30), 5; gap = 0)
         lat = Lattice((30, 30))
@@ -269,11 +306,17 @@ end
             end
         end
         remove_first(st, p, ctx, key, mcs, c) = mcs == 1 && c == 1 ? EVENT_REMOVE :
-                                                mcs == 1 && c == 2 ? EVENT_DIVIDE : EVENT_NONE
-        st = with_capacity(initial_state(σ, kinds;
-            cell = merge(init_moments(σ, lat, n), empty_links(8, n, :bond), empty_links(8, n, :tether))), n + 4)
-        f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
-            phases = Phases(after_mcs = (HostPhase(link_both!; every = 100),)), lifecycle = Lifecycle(remove_first))
+            mcs == 1 && c == 2 ? EVENT_DIVIDE : EVENT_NONE
+        st = with_capacity(
+            initial_state(
+                σ, kinds;
+                cell = merge(init_moments(σ, lat, n), empty_links(8, n, :bond), empty_links(8, n, :tether))
+            ), n + 4
+        )
+        f = CPMFunction(
+            gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
+            phases = Phases(after_mcs = (HostPhase(link_both!; every = 100),)), lifecycle = Lifecycle(remove_first)
+        )
         u = solve(PottsProblem(f, st, lat, (0, 2), gg_params()), SequentialCPM()).u[end]
         daughter = findfirst(c -> c > n && u.cell.volume[c] > 0, 1:(n + 4))
         for r in (:bond, :tether)
@@ -282,6 +325,5 @@ end
             @test daughter !== nothing && link_count(L, daughter) == 0
             @test link_count(L, 2) > 0 && link_count(L, 3) > 0
         end
-    end
 end
 end
