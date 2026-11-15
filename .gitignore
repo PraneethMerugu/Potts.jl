@@ -1,4 +1,5 @@
 Manifest.toml
+!.github/ci/runic/Manifest.toml
 Manifest-v*.toml
 /docs/build/
 *.jl.cov

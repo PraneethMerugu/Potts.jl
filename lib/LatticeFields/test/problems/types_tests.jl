@@ -147,23 +147,27 @@ end
 end
 
 @testitem "generic float types (Float16, Float32, Float64, BigFloat) through FieldProblem" setup = [LF_problems_types] tags = [:latticefields, :problems] begin
-@testset "generic float types through FieldProblem" begin
-    dims = (8, 6)
-    u0_64 = rand(Xoshiro(19), prod(dims))
-    ix = LatticeIndex(; variables = [:u => FieldSlot(1:prod(dims), dims)], parameters = [:D => 1])
-    alg = ExplicitEuler(; dt = 0.05, substeps = 1)
-    run_T(T) = solve(FieldProblem(euler2(dims; storage = LatticeFields.IR.F32), T.(u0_64),
-        (0.0, 0.2), T[0.05]; state = ["u"], kind = :rate, index = ix), alg)
-    s64 = run_T(Float64)
-    sbig = run_T(BigFloat)
-    s32 = run_T(Float32)
-    s16 = run_T(Float16)
-    @test eltype(s64.u[end]) == Float64
-    @test eltype(sbig.u[end]) == BigFloat
-    @test eltype(s32.u[end]) == Float32
-    @test eltype(s16.u[end]) == Float16
-    @test maximum(abs, Float64.(sbig.u[end]) .- s64.u[end]) < 1e-12
-    @test maximum(abs, Float64.(s32.u[end]) .- s64.u[end]) < 1e-5
-    @test maximum(abs, Float64.(s16.u[end]) .- s64.u[end]) < 2e-2
-end
+    @testset "generic float types through FieldProblem" begin
+        dims = (8, 6)
+        u0_64 = rand(Xoshiro(19), prod(dims))
+        ix = LatticeIndex(; variables = [:u => FieldSlot(1:prod(dims), dims)], parameters = [:D => 1])
+        alg = ExplicitEuler(; dt = 0.05, substeps = 1)
+        run_T(T) = solve(
+            FieldProblem(
+                euler2(dims; storage = LatticeFields.IR.F32), T.(u0_64),
+                (0.0, 0.2), T[0.05]; state = ["u"], kind = :rate, index = ix
+            ), alg
+        )
+        s64 = run_T(Float64)
+        sbig = run_T(BigFloat)
+        s32 = run_T(Float32)
+        s16 = run_T(Float16)
+        @test eltype(s64.u[end]) == Float64
+        @test eltype(sbig.u[end]) == BigFloat
+        @test eltype(s32.u[end]) == Float32
+        @test eltype(s16.u[end]) == Float16
+        @test maximum(abs, Float64.(sbig.u[end]) .- s64.u[end]) < 1.0e-12
+        @test maximum(abs, Float64.(s32.u[end]) .- s64.u[end]) < 1.0e-5
+        @test maximum(abs, Float64.(s16.u[end]) .- s64.u[end]) < 2.0e-2
+    end
 end

@@ -30,10 +30,12 @@ Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
+AllocCheck = "0.2"
 Aqua = "0.8"
 DomainSets = "0.8"
 ExplicitImports = "1.15"
 ForwardDiff = "0.10, 1"
+JET = "0.13"
 ReTestItems = "1.35"
 SciMLBase = "3"
 Test = "1"

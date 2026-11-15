@@ -9,9 +9,9 @@
 #   0-1   0-1,16-17      PottsModels shard 1/3  (julia -t 4)
 #   2-3   2-3,18-19      PottsModels shard 2/3  (julia -t 4)
 #   4-5   4-5,20-21      PottsModels shard 3/3  (julia -t 4)
-#   6-7   6-7,22-23      GPU group (ROCm, device-only, test/shared/device_only.jl)
+#   6-7   6-7,22-23      GPU group (ROCm, device-only, ReTestItems GROUP=gpu)
 #   8-9   8-9,24-25      Potts
-#   10-11 10-11,26-27    LatticeFields, LatticePDE, CorePotts, then MakiePotts
+#   10-11 10-11,26-27    LatticeFields, LatticePDE, CorePotts, MakiePotts, then Multithreaded (-t 4)
 #
 # Every process writes its own log. The script waits for all of them, prints each log in a
 # collapsible group with its wall time and exit code, and exits non-zero if any failed. The

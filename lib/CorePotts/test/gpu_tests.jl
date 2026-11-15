@@ -86,11 +86,13 @@ end
     function energy_proxy(u)          # mean |volume − V0|, a fast-relaxing observable
         sum(abs.(u.cell.volume .- 36)) / length(u.cell.volume)
     end
-    xs = [energy_proxy(solve(remake(prob; seed), CheckerboardCPM(); save_start = false).u[end]) for seed in 1:12]
-    ys = [energy_proxy(solve(remake(prob; seed), CheckerboardCPM(); backend, save_start = false).u[end]) for seed in 101:112]
-    t = (mean(xs) - mean(ys)) / sqrt(var(xs) / 12 + var(ys) / 12)
-    @info "CPU vs device" cpu = mean(xs) device = mean(ys) t
-    @test abs(t) < 4
+        n_ep = max(24, required_n(sqrt(2) * 0.4, 0.6; alpha = 1.0e-3, power = 0.9))
+        xs = [energy_proxy(solve(remake(prob; seed), CheckerboardCPM(); save_start = false).u[end]) for seed in 1:n_ep]
+        ys = [energy_proxy(solve(remake(prob; seed), CheckerboardCPM(); backend, save_start = false).u[end]) for seed in 101:(100 + n_ep)]
+        res = stat_accept(xs, ys; margin = 0.6, alpha = 1.0e-3)
+        @info "CPU vs device" cpu = mean(xs) device = mean(ys) z = res.statistic pvalue = res.pvalue
+        @test res.pass
+        @test !stat_accept(xs, ys .+ 1.2; margin = 0.6, alpha = 1.0e-3).pass
 
     @testset "phases on the device" begin
         σp, kp = blocks((32, 32), 4)
@@ -193,12 +195,14 @@ end
         # chemotaxis moves mass up the gradient; CPU and the device agree on how far
         drift(u) = sum(i -> u.σ[i] != 0 ? grad[i] : 0.0f0, eachindex(u.σ)) / count(!=(0), u.σ)
         d0 = drift(stA)
-        xs = [drift(solve(remake(probA; seed), CheckerboardCPM(); save_start = false).u[end]) - d0 for seed in 1:8]
-        ys = [drift(solve(remake(probA; seed), CheckerboardCPM(); backend, save_start = false).u[end]) - d0 for seed in 101:108]
+            n_act = max(16, required_n(sqrt(2) * 0.02, 0.03; alpha = 1.0e-3, power = 0.9))
+            xs = [drift(solve(remake(probA; seed), CheckerboardCPM(); save_start = false).u[end]) - d0 for seed in 1:n_act]
+            ys = [drift(solve(remake(probA; seed), CheckerboardCPM(); backend, save_start = false).u[end]) - d0 for seed in 101:(100 + n_act)]
         @test mean(xs) > 0 && mean(ys) > 0
-        t = (mean(xs) - mean(ys)) / sqrt(var(xs) / 8 + var(ys) / 8)
-        @info "Act/chemotaxis drift CPU vs device" cpu = mean(xs) device = mean(ys) t
-        @test abs(t) < 4
+            res = stat_accept(xs, ys; margin = 0.03, alpha = 1.0e-3)
+            @info "Act/chemotaxis drift CPU vs device" cpu = mean(xs) device = mean(ys) z = res.statistic pvalue = res.pvalue
+            @test res.pass
+            @test !stat_accept(xs, ys .+ 0.06; margin = 0.03, alpha = 1.0e-3).pass
     end
 
     @testset "ring connectivity rule and Barker on the device" begin
@@ -212,10 +216,11 @@ end
         u = solve(prob, CheckerboardCPM(acceptance = Barker()); backend).u[end]
         @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(kM)]
         @test u.σ != σM
-        xs = [mean(solve(remake(prob; seed), CheckerboardCPM(acceptance = Barker()); save_start = false).u[end].cell.volume) for seed in 1:8]
-        ys = [mean(solve(remake(prob; seed), CheckerboardCPM(acceptance = Barker()); backend, save_start = false).u[end].cell.volume) for seed in 101:108]
-        t = (mean(xs) - mean(ys)) / sqrt(var(xs) / 8 + var(ys) / 8 + eps())
-        @test abs(t) < 4
+            n_bk = max(16, required_n(sqrt(2) * 1.2, 2.0; alpha = 1.0e-3, power = 0.9))
+            xs = [mean(solve(remake(prob; seed), CheckerboardCPM(acceptance = Barker()); save_start = false).u[end].cell.volume) for seed in 1:n_bk]
+            ys = [mean(solve(remake(prob; seed), CheckerboardCPM(acceptance = Barker()); backend, save_start = false).u[end].cell.volume) for seed in 101:(100 + n_bk)]
+            @test stat_accept(xs, ys; margin = 2.0, alpha = 1.0e-3).pass
+            @test !stat_accept(xs, ys .+ 4.0; margin = 2.0, alpha = 1.0e-3).pass
     end
 
     @testset "3D second-order neighbourhood with surface on the device" begin
@@ -263,13 +268,13 @@ end
         commitL!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
         f = CPMFunction(dHL; commit! = commitL!, temperature = gg_temperature)
         pL = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0, k = 2.0f0)
-        ds = map(1:20) do seed
+            ds = map(1:20) do seed
             u = solve(PottsProblem(f, initial_state(σL, [1, 1]; cell = cellL), latL, (0, 1000), pL; seed),
                 CheckerboardCPM(); backend).u[end]
             centroid_distance(Float64, u.cell, latL, 1, 2)
         end
-        @test stat_accept(ds; mu0 = 12.0, margin = 3.0, alpha = 1e-3).pass
-        @test !stat_accept(ds; mu0 = 20.0, margin = 3.0, alpha = 1e-3).pass
+            @test stat_accept(ds; mu0 = 12.0, margin = 3.0, alpha = 1.0e-3).pass
+            @test !stat_accept(ds; mu0 = 20.0, margin = 3.0, alpha = 1.0e-3).pass
 
         σ, kinds = blocks((30, 30), 5; gap = 0)
         lat = Lattice((30, 30))
@@ -737,10 +742,12 @@ end
         g = solve(remake(prob; seed = 3), alg; backend)
         @test g.u[end].cell.volume == recount(g.u[end])
         @test g.stats.committed == g.stats.accepted > 0
-        cg = Float64[solve(remake(prob; seed), alg; backend).stats.committed for seed in 1:10]
-        cc = Float64[solve(remake(prob; seed), alg).stats.committed for seed in 11:20]
-        @test stat_accept(cg .- mean(cc); mu0 = 0.0, margin = 0.05 * mean(cc), alpha = 1e-3).pass
-        @test !stat_accept(0.5 .* cg .- mean(cc); mu0 = 0.0, margin = 0.05 * mean(cc), alpha = 1e-3).pass
+            n_cb = max(10, required_n(sqrt(2) * 250.0, 1000.0; alpha = 1.0e-3, power = 0.9))
+            cg = Float64[solve(remake(prob; seed), alg; backend).stats.committed for seed in 1:n_cb]
+            cc = Float64[solve(remake(prob; seed), alg).stats.committed for seed in 11:(10 + n_cb)]
+            margin = 0.05 * mean(cc)
+            @test stat_accept(cg, cc; margin, alpha = 1.0e-3).pass
+            @test !stat_accept(0.5 .* cg, cc; margin, alpha = 1.0e-3).pass
     end
     # moments (atomic sums, re-centered once per MCS) and on-copy counters that read their own
     # value (atomic changes): gains minus losses equal each cell's volume change, so no update was lost

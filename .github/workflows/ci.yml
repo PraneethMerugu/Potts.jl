@@ -38,32 +38,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
       - name: Julia on PATH
         run: echo "$HOME/.juliaup/bin" >> "$GITHUB_PATH"
-      - name: Check changed .jl files with Runic
+      - name: Check changed lines in .jl files with GitRunic
         env:
           JULIA_PKG_OFFLINE: "true"
         run: |
           BASE_REF="${{ github.event.before }}"
-          if [ -z "$BASE_REF" ] || [ "$BASE_REF" = "0000000000000000000000000000000000000000" ]; then
+          if [ -z "$BASE_REF" ] || [ "$BASE_REF" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BASE_REF}^{commit}" 2>/dev/null; then
             BASE_REF="HEAD~1"
           fi
-          mapfile -t CHANGED < <(git diff --name-only --diff-filter=ACMRT "$BASE_REF" HEAD -- '*.jl')
-          if [ "${#CHANGED[@]}" -eq 0 ]; then
-            echo "No changed .jl files to check."
-            exit 0
-          fi
-          printf 'Checking %d changed .jl file(s) with Runic:\n' "${#CHANGED[@]}"
-          printf '  %s\n' "${CHANGED[@]}"
-          TMP_RUNIC=$(mktemp -d)
-          trap 'rm -rf "$TMP_RUNIC"' EXIT
-          $PIN julia --startup-file=no --project="$TMP_RUNIC" -e '
+          $PIN julia --startup-file=no --project=.github/ci/runic -e '
             using Pkg
-            Pkg.add("Runic"; io=devnull)
+            Pkg.instantiate(; io = devnull)
             using Runic
-            exit(Runic.main(vcat(["--check", "--diff"], ARGS)))
-          ' -- "${CHANGED[@]}"
+            exit(Runic.GitRunic.main(["--diff", ARGS[1], "HEAD"]))
+          ' -- "$BASE_REF"
 
   test:
     name: CPU suites and ROCm GPU group

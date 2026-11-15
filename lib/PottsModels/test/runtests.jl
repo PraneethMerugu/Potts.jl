@@ -233,7 +233,7 @@ elseif POTTSMODELS_RUN_CORE
 else
     filter(POTTSMODELS_TEST_FILES) do f
         ("acceptance" in POTTSMODELS_SELECTED_GROUPS && startswith(f, "acceptance/")) ||
-        ("gpu" in POTTSMODELS_SELECTED_GROUPS && startswith(f, "acceptance/")) ||
+            ("gpu" in POTTSMODELS_SELECTED_GROUPS && startswith(f, "acceptance/")) ||
         ("reproductions" in POTTSMODELS_SELECTED_GROUPS && startswith(f, "reproductions/")) ||
         ("guardrails" in POTTSMODELS_SELECTED_GROUPS && f == "guardrails.jl")
     end

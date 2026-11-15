@@ -144,11 +144,16 @@ function run_gpu_group()
     only = get(ENV, "POTTS_DEVICE_ONLY", "true") == "true"
     sub_group = only ? "gpu" : "All"
     run_group(joinpath(ROOT, "lib/LatticeFields/test"), joinpath(ROOT, "lib/LatticeFields/test/runtests.jl");
-        env = ("GROUP" => sub_group, "LATTICEFIELDS_GPU" => gpu, "LATTICEFIELDS_QA" => "false"))
-    run_group(joinpath(ROOT, "lib/LatticePDE/test"), joinpath(ROOT, "lib/LatticePDE/test/runtests.jl");
-        env = ("GROUP" => sub_group, "LATTICEPDE_GPU" => gpu, "LATTICEPDE_QA" => "false"))
-    run_group(joinpath(ROOT, "lib/CorePotts/test"), joinpath(ROOT, "lib/CorePotts/test/runtests.jl");
-        env = ("GROUP" => sub_group, env..., "COREPOTTS_QA" => "false"))
+        env = ("GROUP" => sub_group, "LATTICEFIELDS_GPU" => gpu, "LATTICEFIELDS_QA" => "false")
+    )
+    run_group(
+        joinpath(ROOT, "lib/LatticePDE/test"), joinpath(ROOT, "lib/LatticePDE/test/runtests.jl");
+        env = ("GROUP" => sub_group, "LATTICEPDE_GPU" => gpu, "LATTICEPDE_QA" => "false")
+    )
+    run_group(
+        joinpath(ROOT, "lib/CorePotts/test"), joinpath(ROOT, "lib/CorePotts/test/runtests.jl");
+        env = ("GROUP" => sub_group, env..., "COREPOTTS_QA" => "false")
+    )
     withenv(env..., "POTTS_QA" => "false") do
         only ? PottsRTI.device_suite() : PottsRTI.potts_suite(; nworkers = 1, gpu = true)
     end

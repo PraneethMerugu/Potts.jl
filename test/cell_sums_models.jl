@@ -229,10 +229,10 @@ end
 function cs_threaded_cb_invariants()
     σ = zeros(Int32, 1536, 1536)
     id = 0
-    for bj in 1:4:1524, bi in 1:4:1524
+    for bj in 0:4:1524, bi in 0:4:1524
         (bi + bj) % 64 == 0 || continue
         id += 1
-        σ[bi:(bi + 3), bj:(bj + 3)] .= id
+        σ[(bi + 1):(bi + 4), (bj + 1):(bj + 4)] .= id
     end
     prob = PottsProblem(CsThreadedCBRepeat(; name = :tcb), [ownership => σ, kind => fill(:A, id)], (0, 2); seed = 7)
     alg = CheckerboardCPM(; threads = true)
@@ -244,11 +244,11 @@ function cs_threaded_cb_invariants()
     σ_arr = Array(u.σ)
     vol_recount = [count(==(c), σ_arr) for c in 1:length(u.cell.volume)]
     vol_ok = all(u.cell.volume .== vol_recount)
-    surf_recount = CorePotts.recompute_surface(σ_arr, prob.lattice, CorePotts.relation(VonNeumann(1), prob.lattice), length(u.cell.volume))
+    surf_recount = CorePotts.recompute_surface(σ_arr, prob.lattice, prob.relations.surface, length(u.cell.volume))
     surf_ok = Array(u.cell.surface) == surf_recount
     attempts_ok = sol.stats.attempts == 2 * length(σ_arr)
-    committed_ok = sol.stats.accepted >= sol.stats.committed
-    return (nblocks_pass > CorePotts.BLOCK_GRAIN[], vol_ok, surf_ok, attempts_ok, committed_ok)
+    committed_ok = sol.stats.accepted >= sol.stats.committed > 0
+    return (id > 0 && nblocks_pass > CorePotts.BLOCK_GRAIN[], vol_ok, surf_ok, attempts_ok, committed_ok)
 end
 
 @potts_model CsThreadedCBGlobalVeto begin
@@ -256,7 +256,7 @@ end
     @lattice Lattice((1536, 1536))
     @energy cells => (volume - 24.0)^2
     @constraint connectivity(A; rule = Global(; window = 1))
-    @schedule repeat(2, sweep(fraction = 1//2))
+    @schedule repeat(2, sweep(fraction = 1 // 2))
     @sweep Metropolis(; temperature = 12.0)
 end
 
@@ -264,17 +264,17 @@ end
     @kinds medium A
     @lattice Lattice((1536, 1536))
     @energy cells => (volume - 24.0)^2
-    @schedule repeat(2, sweep(fraction = 1//2))
+    @schedule repeat(2, sweep(fraction = 1 // 2))
     @sweep Metropolis(; temperature = 12.0)
 end
 
 function cs_threaded_cb_global_veto_check(M; threads::Bool = true)
     σ = zeros(Int32, 1536, 1536)
     id = 0
-    for bj in 1:6:1524, bi in 1:6:1524
+    for bj in 0:6:1524, bi in 0:6:1524
         (bi + bj) % 64 == 0 || continue
         id += 1
-        σ[bi:(bi + 5), bj:(bj + 5)] .= id
+        σ[(bi + 1):(bi + 6), (bj + 1):(bj + 6)] .= id
     end
     prob = PottsProblem(M(; name = :gv), [ownership => σ, kind => fill(:A, id)], (0, 6); seed = 7)
     alg = CheckerboardCPM(; threads)
@@ -289,7 +289,10 @@ function cs_threaded_cb_global_veto_check(M; threads::Bool = true)
     pieces, _ = CorePotts.recompute_pieces(σ_arr, prob.lattice, Val(false), length(u.cell.volume))
     live = findall(>(0), Array(u.cell.volume))
     one_piece_ok = !isempty(live) && all(==(1), pieces[live])
-    return (; nblocks_pass, over_grain = nblocks_pass > CorePotts.BLOCK_GRAIN[],
+    return (;
+        nonzero_cells = id > 0, committed = sol.stats.committed, nblocks_pass,
+        over_grain = nblocks_pass > CorePotts.BLOCK_GRAIN[],
         vol_ok, one_piece_ok, deferred = sol.stats.connectivity_deferred,
-        max_pieces = isempty(live) ? 0 : maximum(pieces[live]))
+        max_pieces = isempty(live) ? 0 : maximum(pieces[live]),
+    )
 end

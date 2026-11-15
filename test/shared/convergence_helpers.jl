@@ -1,5 +1,5 @@
 # Lightweight empirical convergence-order helpers for packages whose test
-# Project.toml does not depend on `Statistics` (same formula as `test/shared/props.jl`).
+# Project.toml does not depend on `Statistics`.
 
 """
     observed_orders(hs, errs) -> Vector{Float64}
@@ -9,8 +9,10 @@ Pairwise empirical convergence orders `log(errs[i] / errs[i+1]) / log(hs[i] / hs
 function observed_orders(hs::AbstractVector{<:Real}, errs::AbstractVector{<:Real})
     length(hs) == length(errs) || throw(DimensionMismatch("hs and errs must have equal length"))
     length(hs) >= 2 || throw(ArgumentError("at least 2 grid levels required"))
-    return [log(Float64(errs[i]) / Float64(errs[i + 1])) / log(Float64(hs[i]) / Float64(hs[i + 1]))
-            for i in 1:(length(hs) - 1)]
+    return [
+        log(Float64(errs[i]) / Float64(errs[i + 1])) / log(Float64(hs[i]) / Float64(hs[i + 1]))
+            for i in 1:(length(hs) - 1)
+    ]
 end
 
 """

@@ -6,7 +6,7 @@
 using Test, LatticeFields
 include("../host_runner.jl")
 include("../solvers_cases.jl")
-include("../shared/convergence_helpers.jl")
+include("../../../../test/shared/convergence_helpers.jl")
 include("../shared/export_all.jl")
 end
 
@@ -93,25 +93,25 @@ end
 end
 
 @testitem "1D Helmholtz discrete solver spatial refinement order (O(h^2))" setup = [LF_solvers_convergence] tags = [:latticefields, :solvers] begin
-@testset "1D Helmholtz discrete solver spatial refinement order" begin
-    # Physical domain [0, 1] with u(0) = 0, u(1) = 1 and Helmholtz parameter s_phys = 4.0:
-    # discrete shift is s_phys * h^2. Cell-centered FD gives O(h^2) convergence to exact sinh.
-    s_phys = 4.0
-    lam = sqrt(s_phys)
-    ns = [32, 64, 128]
-    hs = 1.0 ./ ns
-    errs = map(ns) do nx
-        h = 1.0 / nx
-        ny = 16
-        sv = case_solver(box_case(nx, ny; s = s_phys * h^2), Float64)
-        steady!(sv)
-        u = reshape(field(sv, "pcg.x"), nx, ny)
-        x = ((1:nx) .- 0.5) .* h
-        exact = sinh.(lam .* x) ./ sinh(lam)
-        maximum(abs, u .- exact)
+    @testset "1D Helmholtz discrete solver spatial refinement order" begin
+        # Physical domain [0, 1] with u(0) = 0, u(1) = 1 and Helmholtz parameter s_phys = 4.0:
+        # discrete shift is s_phys * h^2. Cell-centered FD gives O(h^2) convergence to exact sinh.
+        s_phys = 4.0
+        lam = sqrt(s_phys)
+        ns = [32, 64, 128]
+        hs = 1.0 ./ ns
+        errs = map(ns) do nx
+            h = 1.0 / nx
+            ny = 16
+            sv = case_solver(box_case(nx, ny; s = s_phys * h^2), Float64)
+            steady!(sv)
+            u = reshape(field(sv, "pcg.x"), nx, ny)
+            x = ((1:nx) .- 0.5) .* h
+            exact = sinh.(lam .* x) ./ sinh(lam)
+            maximum(abs, u .- exact)
+        end
+        orders = observed_orders(hs, errs)
+        @test all(o -> abs(o - 2.0) < 0.1, orders)
+        @test abs(observed_order(hs, errs) - 2.0) < 0.1
     end
-    orders = observed_orders(hs, errs)
-    @test all(o -> abs(o - 2.0) < 0.1, orders)
-    @test abs(observed_order(hs, errs) - 2.0) < 0.1
-end
 end

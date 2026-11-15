@@ -79,13 +79,14 @@ function rti(args...; kw...)
     else
         args
     end
-    name = (n = get(ENV, "POTTS_TEST_NAME", ""); isempty(n) ? nothing : Regex(n))
-    want = Symbol.(filter(!isempty, split(get(ENV, "POTTS_TEST_TAGS", ""), ',')))
-    if !isempty(want) && !isempty(call_args) && first(call_args) isa Function
-        pred = first(call_args)
-        call_args = (ti -> pred(ti) && any(in(ti.tags), want), call_args[2:end]...)
-    end
-    return task_local_storage(() -> ReTestItems.runtests(call_args...; name, kw...), :SOURCE_PATH,
+        name = (n = get(ENV, "POTTS_TEST_NAME", ""); isempty(n) ? nothing : Regex(n))
+        want = Symbol.(filter(!isempty, split(get(ENV, "POTTS_TEST_TAGS", ""), ',')))
+        if !isempty(want) && !isempty(call_args) && first(call_args) isa Function
+            pred = first(call_args)
+            call_args = (ti -> pred(ti) && any(in(ti.tags), want), call_args[2:end]...)
+        end
+        return task_local_storage(
+            () -> ReTestItems.runtests(call_args...; name, kw...), :SOURCE_PATH,
         Pkg.Operations.testfile(dirname(proj)))
 end
 
@@ -157,22 +158,22 @@ items run last, in one worker.
 function potts_suite(; nworkers = NWORKERS, qa = get(ENV, "POTTS_QA", "true") == "true", gpu = false)
     rocm = get(ENV, "POTTS_GPU", "") == "rocm"
     keep(ti) = :potts in ti.tags && (gpu || !(:gpu in ti.tags)) && (rocm || !(:rocm in ti.tags)) &&
-        (qa || !(:qa in ti.tags)) && !(:gpu_only in ti.tags) && !(:multithreaded in ti.tags)   # the D-157 scan needs the device cache
+            (qa || !(:qa in ti.tags)) && !(:gpu_only in ti.tags) && !(:multithreaded in ti.tags)   # the D-157 scan needs the device cache
     return _two_passes(keep, nworkers)
 end
 
-"""
-    multithreaded_suite()
+    """
+        multithreaded_suite()
 
-GROUP=Multithreaded: items tagged `:multithreaded`, run in-process (`nworkers = 0`) so all
-threads of the `julia -t 4` process are available. Fails if `Threads.nthreads() < 4`.
-"""
-function multithreaded_suite()
-    Threads.nthreads() >= 4 ||
-        error("GROUP=Multithreaded requires at least 4 Julia threads (got $(Threads.nthreads())); run with `julia -t 4`")
-    keep(ti) = :multithreaded in ti.tags && !(:gpu_only in ti.tags) && !(:qa in ti.tags)
-    return _two_passes(keep, 0)
-end
+    GROUP=Multithreaded: items tagged `:multithreaded`, run in-process (`nworkers = 0`) so all
+    threads of the `julia -t 4` process are available. Fails if `Threads.nthreads() < 4`.
+    """
+    function multithreaded_suite()
+        Threads.nthreads() >= 4 ||
+            error("GROUP=Multithreaded requires at least 4 Julia threads (got $(Threads.nthreads())); run with `julia -t 4`")
+        keep(ti) = :multithreaded in ti.tags && !(:gpu_only in ti.tags) && !(:qa in ti.tags)
+        return _two_passes(keep, 0)
+    end
 
 """
     device_suite()
@@ -182,7 +183,8 @@ and the device files' items (`:gpu`; the `:rocm` ones on ROCm only), in-process,
 (one device), without `:qa`; the `:device_scan` item last (`_phases`).
 """
 function device_suite(; gpu = get(ENV, "POTTS_GPU", ""))
-    keep(ti) = (:device in ti.tags || :gpu in ti.tags) && !(:qa in ti.tags) && (gpu == "rocm" || !(:rocm in ti.tags))
+        keep(ti) = (:device in ti.tags || :gpu in ti.tags) && !(:qa in ti.tags) &&
+            !(:multithreaded in ti.tags) && (gpu == "rocm" || !(:rocm in ti.tags))
     # the D-157 scan is an item tagged `:device_scan`, and it reads the process's kernel cache: it
     # has to run after every other device item, in the process that compiled those kernels. Both
     # phases run in-process (`nworkers = 0`), one item at a time; a worker's cache is its own.

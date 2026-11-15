@@ -455,17 +455,21 @@ end
 
 @testitem "QA: ExplicitImports (Potts)" setup = [QaSetup] tags = [:potts, :qa] begin
     @testset "QA: ExplicitImports (Potts)" begin
-        qa_explicit_imports(Potts;
+        qa_explicit_imports(
+            Potts;
             nonpublic_explicit = POTTS_NONPUBLIC_EXPLICIT,
-            nonpublic_qualified = POTTS_NONPUBLIC_QUALIFIED)
+            nonpublic_qualified = POTTS_NONPUBLIC_QUALIFIED
+        )
     end
 end
 
 @testitem "QA: Docs and extensions (Potts)" setup = [QaSetup] tags = [:potts, :qa] begin
     @testset "QA: Docs and extensions (Potts)" begin
-        qa_api_docs(Potts;
+        qa_api_docs(
+            Potts;
             submodules = (Potts.Fields,),
-            docs_dir = joinpath(@__DIR__, "..", "docs"))
+            docs_dir = joinpath(@__DIR__, "..", "docs")
+        )
         @test Base.get_extension(Potts, :PottsDynamicQuantitiesExt) !== nothing
         if PottsDevices.device_name() == "rocm"
             @test Base.get_extension(Potts, :PottsAMDGPUExt) !== nothing

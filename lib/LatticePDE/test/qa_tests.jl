@@ -19,15 +19,19 @@ end
 @testitem "QA" setup = [LP_qa] tags = [:latticepde, :qa] begin
     @testset "QA" begin
         qa_aqua(LatticePDE)
-        qa_api_docs(LatticePDE;
+        qa_api_docs(
+            LatticePDE;
             docs_dir = joinpath(@__DIR__, "..", "..", "..", "docs"),
-            doc_module_names = ["Potts.LatticePDE"])
+            doc_module_names = ["Potts.LatticePDE"]
+        )
         # `VarDomainPairing` (what `x ∈ (a, b)` builds) is not declared public by Symbolics.
         # `get_unit` (MTK unit inference, which registered operators extend) is not declared
         # public by ModelingToolkitBase.
-        qa_explicit_imports(LatticePDE;
+        qa_explicit_imports(
+            LatticePDE;
             nonpublic_explicit = (:VarDomainPairing,),
-            nonpublic_qualified = (:get_unit,))
+            nonpublic_qualified = (:get_unit,)
+        )
         qa_source_rules(joinpath(@__DIR__, ".."); exclude_files = [@__FILE__])
     end
 end

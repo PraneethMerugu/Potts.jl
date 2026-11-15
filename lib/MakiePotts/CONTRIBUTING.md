@@ -116,7 +116,6 @@ julia --project=test/backends --startup-file=no test/backends/cairo.jl
 julia --project=test/backends --startup-file=no test/backends/wgl.jl
 xvfb-run -a julia --project=test/backends --startup-file=no test/backends/gl.jl
 julia --project=test/backends --startup-file=no test/visual_regression.jl
-julia --project=test/backends --startup-file=no test/clean_install_smoke.jl
 ```
 
 ## Format Julia changes

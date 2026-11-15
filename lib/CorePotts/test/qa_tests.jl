@@ -113,20 +113,20 @@ end
 
 @testitem "QA: Aqua (CorePotts)" setup = [CP_qa] tags = [:corepotts, :qa] begin
 @testset "QA: Aqua (CorePotts)" begin
-    # `persistent_tasks = false`: KernelAbstractions/GPU backends register background tasks.
-    qa_aqua(CorePotts; persistent_tasks = false)
+        # `persistent_tasks = false`: KernelAbstractions/GPU backends register background tasks.
+        qa_aqua(CorePotts; persistent_tasks = false)
 end
 end
 
 @testitem "QA: ExplicitImports (CorePotts)" setup = [CP_qa] tags = [:corepotts, :qa] begin
 @testset "QA: ExplicitImports (CorePotts)" begin
-    qa_explicit_imports(CorePotts; nonpublic_qualified = COREPOTTS_NONPUBLIC_QUALIFIED)
+        qa_explicit_imports(CorePotts; nonpublic_qualified = COREPOTTS_NONPUBLIC_QUALIFIED)
 end
 end
 
 @testitem "QA: Docs and extensions (CorePotts)" setup = [CP_qa] tags = [:corepotts, :qa] begin
 @testset "QA: Docs and extensions (CorePotts)" begin
-    qa_api_docs(CorePotts; docs_dir = joinpath(@__DIR__, "..", "..", "..", "docs"))
+        qa_api_docs(CorePotts; docs_dir = joinpath(@__DIR__, "..", "..", "..", "docs"))
     for (ext_sym, trigger) in ((:CorePottsAMDGPUExt, "AMDGPU"), (:CorePottsMetalExt, "Metal"))
         if any(k -> k.name == trigger, keys(Base.loaded_modules))
             @test Base.get_extension(CorePotts, ext_sym) !== nothing

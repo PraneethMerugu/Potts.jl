@@ -30,7 +30,7 @@ or run one group directly, e.g. `julia --project=lib/CorePotts/test lib/CorePott
 - Closures passed to `ntuple` etc. must not reassign captured variables (they get boxed and
   allocate on every call — this cost 150 KB per MCS once).
 - Device code must not touch `Float64` values (Metal has no doubles), including struct fields.
-- SciML formatter style (`.JuliaFormatter.toml`); ExplicitImports clean.
+- Runic style on changed code (git-runic diff check); ExplicitImports clean.
 
 ## Docs prose
 

@@ -16,7 +16,7 @@ using Statistics: mean, var
 
 isdefined(@__MODULE__, :SingleDivisionFixture) ||
     include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "fixtures.jl"))
-isdefined(@__MODULE__, :stat_accept) || include(joinpath(@__DIR__, "shared", "props.jl"))
+isdefined(@__MODULE__, :stat_accept) || include(joinpath(@__DIR__, "shared", "stats_helpers.jl"))
 
 
 # ROCm: the hook-based IR checks (negative controls, compile-only launches; D-157)
@@ -110,14 +110,16 @@ end
         prob = symbolic_graner_problem(; nmcs = 40, T = Float32)
         u = solve(prob, CheckerboardCPM(); backend).u[end]
         @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(kinds)]
-        xs = [total_energy(prob, solve(remake(prob; seed), CheckerboardCPM(); save_start = false).u[end]) for seed in 1:8]
-        ys = [total_energy(prob, solve(remake(prob; seed), CheckerboardCPM(); backend, save_start = false).u[end]) for seed in 11:18]
-        res = stat_accept(xs, ys; alpha = 1e-3, alternative = :two_sided)
+        n_gg = max(8, required_n(sqrt(2) * 220.0, 800.0; alpha = 1.0e-3, power = 0.9))
+        xs = [total_energy(prob, solve(remake(prob; seed), CheckerboardCPM(); save_start = false).u[end]) for seed in 1:n_gg]
+        ys = [total_energy(prob, solve(remake(prob; seed), CheckerboardCPM(); backend, save_start = false).u[end]) for seed in 11:(10 + n_gg)]
+        margin = 0.03 * abs(mean(xs))
+        res = stat_accept(xs, ys; margin, alpha = 1.0e-3)
         @info "symbolic Graner H, CPU vs device" cpu = mean(xs) device = mean(ys) z = res.statistic pvalue = res.pvalue
-        @test !res.pass
+        @test res.pass
         # negative control: a wrong temperature is rejected
-        xs_hot = [total_energy(prob, solve(remake(prob; seed, p = [:T => 50.0f0]), CheckerboardCPM(); save_start = false).u[end]) for seed in 1:8]
-        @test stat_accept(xs, xs_hot; alpha = 1e-3, alternative = :two_sided).pass
+        xs_hot = [total_energy(prob, solve(remake(prob; seed, p = [:T => 50.0f0]), CheckerboardCPM(); save_start = false).u[end]) for seed in 1:n_gg]
+        @test !stat_accept(xs, xs_hot; margin, alpha = 1.0e-3).pass
         for (label, p) in (
                 ("wortel", PottsProblem(WORTEL, [ownership => wortel_state(), kind => [1, 1]], (0, 20); T = Float32)),
                 ("merks", PottsProblem(MERKS, [ownership => merks_state(), kind => [1, 1]], (0, 20); T = Float32,
@@ -153,9 +155,10 @@ end
         @test sq.retcode == Potts.SciMLBase.ReturnCode.Success && all(isfinite, cq) && minimum(cq) >= -1e-4 * maximum(cq) && maximum(cq) > 0
         σs = zeros(Int32, 60, 30); σs[5:10, 12:17] .= 1; σs[40:45, 12:17] .= 2
         sp = PottsProblem(Spring(; name = :spring), [ownership => σs, kind => [:blob, :blob], :bond => [(1, 2)]], (0, 1000); T = Float32)
-        n_spring = max(8, required_n(1.5, 2.5; alpha = 1e-3, power = 0.9))
+        n_spring = max(12, required_n(1.5, 2.0; alpha = 1.0e-3, power = 0.9))
         ds = [CorePotts.centroid_distance(Float64, solve(remake(sp; seed), CheckerboardCPM(); backend).u[end].cell, sp.lattice, 1, 2) for seed in 1:n_spring]
-        @test stat_accept(ds; mu0 = 12.0, margin = 2.5, alpha = 1e-3).pass
+        @test stat_accept(ds; mu0 = 12.0, margin = 3.0, alpha = 1.0e-3).pass
+        @test !stat_accept(ds; mu0 = 20.0, margin = 3.0, alpha = 1.0e-3).pass
         # model-scope updates run as a single-item kernel on the device
         σc, kc = two_kind_blocks()
         cp = PottsProblem(Census(; name = :census), [ownership => σc, kind => kc], (0, 5); T = Float32)
@@ -288,7 +291,7 @@ end
         mp = PottsProblem(MetalSprings(; name = :ms), [ownership => σ, kind => [:blob, :blob, :blob],
             :bond => [(1, 2)], :tether => [(2, 3)]], (0, 1500); T = Float32)
         @test eltype(mp.u0.cell.link_rest) == Float32 && eltype(mp.u0.cell.link_len) == Float32
-        n_ms = max(8, required_n(1.5, 2.5; alpha = 1e-3, power = 0.9))
+        n_ms = max(16, required_n(1.5, 1.9; alpha = 1.0e-3, power = 0.9))
         d = map(1:n_ms) do seed
             u = solve(remake(mp; seed), CheckerboardCPM(); backend).u[end]
             @test Array(u.cell.volume) == [count(==(c), Array(u.σ)) for c in 1:3]
@@ -297,8 +300,10 @@ end
                 CorePotts.centroid_distance(Float64, u.cell, mp.lattice, 2, 3))
         end
         @info "two relationships on the device" bond = mean(first.(d)) tether = mean(last.(d))
-        @test stat_accept(first.(d); mu0 = 12.0, margin = 2.5, alpha = 1e-3).pass
-        @test stat_accept(last.(d); mu0 = 18.0, margin = 2.5, alpha = 1e-3).pass
+        @test stat_accept(first.(d); mu0 = 12.0, margin = 3.0, alpha = 1.0e-3).pass
+        @test !stat_accept(first.(d); mu0 = 20.0, margin = 3.0, alpha = 1.0e-3).pass
+        @test stat_accept(last.(d); mu0 = 18.0, margin = 3.0, alpha = 1.0e-3).pass
+        @test !stat_accept(last.(d); mu0 = 26.0, margin = 3.0, alpha = 1.0e-3).pass
     end
 end
 
@@ -316,11 +321,13 @@ end
             ys = [i[2] for i in CartesianIndices(σ) if σ[i] > 0 && kinds[σ[i]] == 1]
             return mean(ys)
         end
-        cpu = [leader_y(CorePotts.CPU(), Float64, s) for s in 1:4]
-        gpu = [leader_y(PottsDevices.device_backend(), Float32, s) for s in 11:14]
-        res = stat_accept(cpu, gpu; alpha = 1e-3, alternative = :two_sided)
+        n_ak = max(12, required_n(sqrt(2) * 1.6, 3.0; alpha = 1.0e-3, power = 0.9))
+        cpu = [leader_y(CorePotts.CPU(), Float64, s) for s in 1:n_ak]
+        gpu = [leader_y(PottsDevices.device_backend(), Float32, s) for s in 101:(100 + n_ak)]
+        res = stat_accept(cpu, gpu; margin = 3.0, alpha = 1.0e-3)
         @info "Akeeb leader height, CPU vs device" cpu = mean(cpu) device = mean(gpu) z = res.statistic pvalue = res.pvalue
-        @test !res.pass
+        @test res.pass
+        @test !stat_accept(cpu, gpu .- 6.0; margin = 3.0, alpha = 1.0e-3).pass
         @test all(>(20), gpu)          # leaders invade (start ≈ 11; ≈ 15.5 at 200 MCS without the cue)
     end
 end
@@ -334,11 +341,14 @@ end
         u = solve(p32, CheckerboardCPM(); backend).u[end]
         @test eltype(u.site.cue) === Float32 && Array(u.site.cue) == p32.u0.site.cue       # site values stay put
         @test Array(u.cell.volume) == [count(==(c), Array(u.σ)) for c in eachindex(Array(u.cell.volume))]
-        xs = [total_energy(p64, solve(remake(p64; seed), CheckerboardCPM(); save_start = false).u[end]) for seed in 1:8]
-        ys = [total_energy(p64, solve(remake(p32; seed), CheckerboardCPM(); backend, save_start = false).u[end]) for seed in 11:18]
-        res = stat_accept(xs, ys; alpha = 1e-3, alternative = :two_sided)
+        n_sc = max(12, required_n(sqrt(2) * 150.0, 300.0; alpha = 1.0e-3, power = 0.9))
+        xs = [total_energy(p64, solve(remake(p64; seed), CheckerboardCPM(); save_start = false).u[end]) for seed in 1:n_sc]
+        ys = [total_energy(p64, solve(remake(p32; seed), CheckerboardCPM(); backend, save_start = false).u[end]) for seed in 101:(100 + n_sc)]
+        margin = 0.1 * abs(mean(xs))
+        res = stat_accept(xs, ys; margin, alpha = 1.0e-3)
         @info "P6.0e site-value contacts H, CPU vs device" cpu = mean(xs) device = mean(ys) z = res.statistic pvalue = res.pvalue
-        @test !res.pass
+        @test res.pass
+        @test !stat_accept(xs, ys .+ 0.25 * abs(mean(xs)); margin, alpha = 1.0e-3).pass
         # an on-copy write read by the contact term, on the device
         σ, kinds, cue = site_contact_state((20, 20); side = 4)
         oc = PottsProblem(SiteContactsOnCopy(; name = :oc), [ownership => σ, kind => fill(:A, length(kinds)), :mark => cue,

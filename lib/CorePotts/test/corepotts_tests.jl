@@ -53,11 +53,11 @@ end
         @test draw(k, 1, 2, s) == draw(k, 1, 2, s) != draw(k, 1, 3, s)
         @test draw(k, 1, 2, s) != draw(k, 1, 2, s + 0x1) != draw(k, 1, 2, s, 1)
         xs = [uniform(Float64, draw(k, 0, i, UInt32(7))[1]) for i in 1:100_000]
-        @test length(xs) >= required_n(1 / sqrt(12), 0.005; alpha = 1e-3, power = 0.9)
-        @test stat_accept(xs; mu0 = 0.5, margin = 0.005, alpha = 1e-3).pass
-        @test !stat_accept(xs .+ 0.01; mu0 = 0.5, margin = 0.005, alpha = 1e-3).pass # negative control
+        @test length(xs) >= required_n(1 / sqrt(12), 0.005; alpha = 1.0e-3, power = 0.9)
+        @test stat_accept(xs; mu0 = 0.5, margin = 0.005, alpha = 1.0e-3).pass
+        @test !stat_accept(xs .+ 0.01; mu0 = 0.5, margin = 0.005, alpha = 1.0e-3).pass # negative control
         v_xs = (xs .- 0.5) .^ 2
-        @test stat_accept(v_xs; mu0 = 1 / 12, margin = 0.002, alpha = 1e-3).pass
+        @test stat_accept(v_xs; mu0 = 1 / 12, margin = 0.002, alpha = 1.0e-3).pass
     end
 end
 
@@ -159,9 +159,9 @@ end
         # high-word entities are still uniform and independent of their low-word partners
         hi = [uniform(Float64, draw(k, 0, i + (i << 32), s)[1]) for i in 1:100_000]
         lo = [uniform(Float64, draw(k, 0, i, s)[1]) for i in 1:100_000]
-        @test stat_accept(hi; mu0 = 0.5, margin = 0.005, alpha = 1e-3).pass
-        @test !stat_accept(hi .- 0.01; mu0 = 0.5, margin = 0.005, alpha = 1e-3).pass # negative control
-        @test stat_accept((hi .- 0.5) .^ 2; mu0 = 1 / 12, margin = 0.002, alpha = 1e-3).pass
+        @test stat_accept(hi; mu0 = 0.5, margin = 0.005, alpha = 1.0e-3).pass
+        @test !stat_accept(hi .- 0.01; mu0 = 0.5, margin = 0.005, alpha = 1.0e-3).pass # negative control
+        @test stat_accept((hi .- 0.5) .^ 2; mu0 = 1 / 12, margin = 0.002, alpha = 1.0e-3).pass
         @test abs(cor(hi, lo)) < 0.01
     end
 end
@@ -217,10 +217,10 @@ end
             end
             base_acc = Float64[s.stats.accepted for s in base]
             wide_acc = Float64[s.stats.accepted for s in wide]
-            @test stat_accept(wide_acc .- base_acc; mu0 = 0.0, margin = 0.05 * mean(base_acc), alpha = 1e-3).pass
+            @test stat_accept(wide_acc .- base_acc; mu0 = 0.0, margin = 0.05 * mean(base_acc), alpha = 1.0e-3).pass
             # negative control: a colder temperature T = 5.0 drops accepted copies outside margin
             cold = [solve(remake(prob; seed, p = merge(gg_params(), (; T = 5.0))), alg).stats.accepted for seed in 1:12]
-            @test !stat_accept(Float64.(cold) .- base_acc; mu0 = 0.0, margin = 0.05 * mean(base_acc), alpha = 1e-3).pass
+            @test !stat_accept(Float64.(cold) .- base_acc; mu0 = 0.0, margin = 0.05 * mean(base_acc), alpha = 1.0e-3).pass
             @test solve(remake(prob; seed = 1), alg).u[end].σ == base[1].u[end].σ  # unforced: unchanged
         end
         # the hook reaches the caller's choice of regime, which is the sweep context's type:

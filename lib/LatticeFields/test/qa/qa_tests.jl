@@ -33,17 +33,19 @@ end
 
 @testitem "ExplicitImports" setup = [LF_qa_qa] tags = [:latticefields, :qa] begin
 @testset "ExplicitImports" begin
-    qa_explicit_imports(LatticeFields;
-        nonpublic_explicit = LF_NONPUBLIC,
-        nonpublic_qualified = LF_NONPUBLIC)
+        qa_explicit_imports(
+            LatticeFields;
+            nonpublic_explicit = LF_NONPUBLIC,
+            nonpublic_qualified = LF_NONPUBLIC
+        )
 end
 end
 
 @testitem "API docs and extensions" setup = [LF_qa_qa] tags = [:latticefields, :qa] begin
 using OrdinaryDiffEqRosenbrock: OrdinaryDiffEqRosenbrock
 @testset "Docs.undocumented_names and extensions (LatticeFields)" begin
-    # LatticeFields is an internal sublibrary not listed in docs/make.jl `modules`.
-    qa_api_docs(LatticeFields; check_docs_blocks = false)
+        # LatticeFields is an internal sublibrary not listed in docs/make.jl `modules`.
+        qa_api_docs(LatticeFields; check_docs_blocks = false)
     @test Base.get_extension(LatticeFields, :LatticeFieldsForwardDiffExt) !== nothing
     @test Base.get_extension(LatticeFields, :LatticeFieldsDiffEqBaseExt) !== nothing
     @test Base.get_extension(LatticeFields, :LatticeFieldsOrdinaryDiffEqCoreExt) !== nothing
@@ -55,7 +57,7 @@ end
 
 @testitem "Aqua" setup = [LF_qa_qa] tags = [:latticefields, :qa] begin
 @testset "Aqua" begin
-    qa_aqua(LatticeFields)
+        qa_aqua(LatticeFields)
 end
 end
 
@@ -75,6 +77,6 @@ end
 @testitem "source rules" setup = [LF_qa_qa] tags = [:latticefields, :qa] begin
 @testset "source rules" begin
     root = dirname(@__DIR__) |> dirname
-    qa_source_rules(root; exclude_files = [@__FILE__])
+        qa_source_rules(root; exclude_files = [@__FILE__])
 end
 end

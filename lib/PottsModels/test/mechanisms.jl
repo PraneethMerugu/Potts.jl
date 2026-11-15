@@ -541,6 +541,7 @@ end
     # centroids has no preferred direction.
     # U7: n = 60 gives Rayleigh false-alarm rate exp(-60 * 0.35^2) ≈ 6.4e-4 <= 1e-3,
     # with power > 0.9 against mean resultant length >= 0.55.
+    rayleigh_r(angs) = hypot(mean(cos.(angs)), mean(sin.(angs)))
     angles = map(1:60) do seed
         integ = init(PottsProblem(OpenVTGrowingMonolayer(; name = :m, lattice = (40, 40)),
             openvt_monolayer_state(; lattice = (40, 40)), (0, 300); seed, capacity = 16), SequentialCPM())
@@ -552,7 +553,9 @@ end
         d = m[2] .- m[1]
         2atan(d[2], d[1])
     end
-    @test hypot(mean(cos.(angles)), mean(sin.(angles))) < 0.35
+    @test rayleigh_r(angles) < 0.35
+    # negative control: a biased orientation sample fails the Rayleigh isotropy threshold
+    @test !(rayleigh_r(fill(0.25, 60)) < 0.35)
 end
 
 @testset "Akeeb invasion" begin

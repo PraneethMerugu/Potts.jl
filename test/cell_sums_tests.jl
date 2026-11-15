@@ -66,12 +66,14 @@ end
     @testset "H5: threaded CheckerboardCPM Repeat invariants, Global veto, and negative control" begin
         @test cs_threaded_cb_invariants() == (true, true, true, true, true)
         gv = cs_threaded_cb_global_veto_check(CsThreadedCBGlobalVeto; threads = true)
+        @test gv.nonzero_cells && gv.committed > 0
         @test gv.over_grain
         @test gv.vol_ok
         @test gv.deferred > 0
         @test gv.one_piece_ok
         # negative control: removing the Global veto allows cells to fragment
         nv = cs_threaded_cb_global_veto_check(CsThreadedCBNoVeto; threads = true)
+        @test nv.nonzero_cells && nv.committed > 0
         @test nv.over_grain
         @test !nv.one_piece_ok && nv.max_pieces > 1
     end

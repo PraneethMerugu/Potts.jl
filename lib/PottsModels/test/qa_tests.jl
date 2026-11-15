@@ -1,5 +1,6 @@
 using Test, Potts, PottsModels
 using Potts: CorePotts
+using AllocCheck: AllocCheck
 using CairoMakie: CairoMakie
 using MakiePotts: MakiePotts
 using JET: @test_opt
@@ -26,12 +27,15 @@ include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "qa_common.jl"))
         @test Base.get_extension(PottsModels, :PottsModelsMakieExt) !== nothing
     end
 
-    @testset "JET" begin
+    @testset "JET and AllocCheck" begin
         @test_opt target_modules = (PottsModels,) akeeb_contacts(2.0)
         σ, kinds = graner_glazier_state()
         prob = PottsProblem(GranerGlazier(; name = :gg_qa), [ownership => σ, kind => kinds], (0, 2))
         integ = init(prob, SequentialCPM(; proposal = Moore(1)); save_start = false)
         step!(integ)
         @test_opt target_modules = (PottsModels, Potts, CorePotts) step!(integ)
+        @test (@allocated step!(integ)) == 0
+        # AllocCheck static verification on pure scalar helper / warm integrator accessor
+        @test isempty(AllocCheck.check_allocs(x -> PottsModels.akeeb_phenotype(x, 12.0), (Float64,)))
     end
 end

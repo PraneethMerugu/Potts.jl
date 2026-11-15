@@ -17,7 +17,7 @@ using Potts, Test
 
 # F4-B4t, F4-B6: the models couple their fields with `@fields`
 isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
-isdefined(@__MODULE__, :observed_orders) || include(joinpath(@__DIR__, "shared", "props.jl"))
+isdefined(@__MODULE__, :observed_orders) || include(joinpath(@__DIR__, "shared", "stats_helpers.jl"))
 
 module FbPDE
 using ..FieldPDE
@@ -32,15 +32,17 @@ function mms(n)
         [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1 + t, c(t, 1, y) ~ (1 + t) * y^2, Dy(c(t, x, 1)) ~ 2 * (1 + t) * x], (n, n), [C], [Dd];
         spacing = 1 / n)
 end
-# temporal MMS for ExplicitEuler: u = (1 + t)^2 * φ on 8 × 8 with small Dd so temporal error O(dt) dominates
-function mms_ee(n = 8)
-    @parameters Dd = 0.002
-    φ = cos(π * x / 2) + x * y^2
-    Δφ = 2x - (π^2 / 4) * cos(π * x / 2)
-    return pdesys([Dt(C) ~ Dd * Δ(C) + 2 * (1 + t) * φ - Dd * (1 + t)^2 * Δφ],
-        [c(0, x, y) ~ 0.0, c(t, 0, y) ~ (1 + t)^2, c(t, 1, y) ~ (1 + t)^2 * y^2, Dy(c(t, x, 1)) ~ 2 * (1 + t)^2 * x],
-        (n, n), [C], [Dd]; spacing = 1 / n)
-end
+    # temporal MMS for ExplicitEuler: u = (1 + t)^2 * φ on 8 × 8 with small Dd so temporal error O(dt) dominates
+    function mms_ee(n = 8)
+        @parameters Dd = 0.002
+        φ = cos(π * x / 2) + x * y^2
+        Δφ = 2x - (π^2 / 4) * cos(π * x / 2)
+        return pdesys(
+            [Dt(C) ~ Dd * Δ(C) + 2 * (1 + t) * φ - Dd * (1 + t)^2 * Δφ],
+            [c(0, x, y) ~ 0.0, c(t, 0, y) ~ (1 + t)^2, c(t, 1, y) ~ (1 + t)^2 * y^2, Dy(c(t, x, 1)) ~ 2 * (1 + t)^2 * x],
+            (n, n), [C], [Dd]; spacing = 1 / n
+        )
+    end
 site() = (@parameters Dc = 0.2 g1 = 1.0;
           pdesys([Dt(C) ~ Dc * Δ(C) - 0.1 * C],
               [c(0, x, y) ~ 0.0, (1 + 0.1y) * c(t, 0, y) - Dx(c(t, 0, y)) ~ 1.0,
@@ -224,8 +226,12 @@ end
         substeps = [4, 8, 16, 32]
         dts = [1.0 / k for k in substeps]
         errs = map(substeps) do k
-            s = solve(PottsProblem(FbMMSEE(; name = :m), fb_op((n, n), [:c => φ0]), (0, 1);
-                    field_solver = ExplicitEuler(; substeps = k)), SequentialCPM())
+            s = solve(
+                PottsProblem(
+                    FbMMSEE(; name = :m), fb_op((n, n), [:c => φ0]), (0, 1);
+                    field_solver = ExplicitEuler(; substeps = k)
+                ), SequentialCPM()
+            )
             maximum(abs, Array(s.u[end].site.c) .- 4 .* φ0)
         end
         om = observed_orders(dts, errs)

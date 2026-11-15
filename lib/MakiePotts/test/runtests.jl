@@ -1,7 +1,7 @@
 # MakiePotts tests on ReTestItems (TS1b). Test items are in `*_tests.jl`; each file's
 # definitions are in its `@testsetup` module, and the old runner's fixtures and helpers are in
 # shared/makiepotts.jl. The acceptance file runs unchanged from acceptance_tests.jl.
-# (backends/ and clean_install_smoke.jl are separate scripts, as before.)
+# (`backends/` contains separate optional GL/WGL/visual scripts.)
 # Groups are declared in test_groups.toml.
 #
 #   julia --project=lib/MakiePotts/test lib/MakiePotts/test/runtests.jl [group...]
@@ -60,7 +60,9 @@ const MAKIEPOTTS_RAW_GROUPS = !isempty(ARGS) ? ARGS :
 const MAKIEPOTTS_SELECTED_GROUPS = _resolve_mp_groups(MAKIEPOTTS_GROUPS_TABLE, MAKIEPOTTS_RAW_GROUPS)
 
 function makiepotts_tests(groups = MAKIEPOTTS_SELECTED_GROUPS;
-        nworkers = parse(Int, get(ENV, "RETESTITEMS_NWORKERS", "2")))
+        nworkers = parse(Int, get(ENV, "RETESTITEMS_NWORKERS", "2")),
+        qa = get(ENV, "MAKIEPOTTS_QA", "true") == "true"
+    )
     name = (n = get(ENV, "MAKIEPOTTS_TEST_NAME", ""); isempty(n) ? nothing : Regex(n))
     endfile = get(ENV, "POTTS_TEST_END_EXPR_FILE", "")
     test_end_expr = isempty(endfile) ? Expr(:block) : Meta.parse("begin\n" * read(endfile, String) * "\nend")
@@ -74,9 +76,13 @@ function makiepotts_tests(groups = MAKIEPOTTS_SELECTED_GROUPS;
         nworker_threads = string(Threads.nthreads()), logs = :batched)
     task_local_storage(:SOURCE_PATH, Pkg.Operations.testfile(dirname(Base.active_project()))) do
         if is_all
-            runtests(MAKIEPOTTS_TESTDIR; kw...)
+            if qa
+                runtests(MAKIEPOTTS_TESTDIR; kw...)
+            else
+                runtests(ti -> !(:qa in ti.tags), MAKIEPOTTS_TESTDIR; kw...)
+            end
         else
-            runtests(ti -> any(in(ti.tags), gs), MAKIEPOTTS_TESTDIR; kw...)
+            runtests(ti -> any(in(ti.tags), gs) && (qa || !(:qa in ti.tags)), MAKIEPOTTS_TESTDIR; kw...)
         end
     end
     return nothing

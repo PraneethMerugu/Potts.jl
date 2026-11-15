@@ -143,7 +143,8 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
         hits = [f for f in files if !(normpath(f) in excluded) && occursin(banned_pattern, read(f, String))]
         Test.@test isempty(hits)
         if check_no_generated
-            src_files = filter(f -> occursin(joinpath("", "src", ""), f), files)
+            src_prefix = normpath(joinpath(pkg_root, "src")) * Base.Filesystem.path_separator
+            src_files = filter(f -> startswith(normpath(f), src_prefix), files)
             Test.@test !any(f -> occursin("@generated", read(f, String)), src_files)
         end
         return nothing

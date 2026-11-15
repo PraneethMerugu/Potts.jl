@@ -6,6 +6,7 @@
 using Potts, Test
 using Potts: CorePotts
 isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "devices.jl"))
+isdefined(@__MODULE__, :stat_accept) || include(joinpath(@__DIR__, "shared", "stats_helpers.jl"))
 using PottsModels: WortelAct, GranerGlazier
 using Random: Xoshiro
 
@@ -3363,9 +3364,11 @@ end
     @testset "P6.0e checkerboard equals sequential; Float32 never touches Float64" begin
         prob = site_contact_problem(SiteContacts(; name = :sq), (24, 24); tspan = (0, 60))
         H(alg, seeds) = [total_energy(prob, solve(remake(prob; seed), alg; save_start = false).u[end]) for seed in seeds]
-        xs, ys = H(SequentialCPM(), 1:8), H(CheckerboardCPM(), 11:18)
-        t = (Statistics.mean(xs) - Statistics.mean(ys)) / sqrt(Statistics.var(xs) / 8 + Statistics.var(ys) / 8)
-        @test abs(t) < 4
+        n_sc = max(12, required_n(sqrt(2) * 150.0, 300.0; alpha = 1.0e-3, power = 0.9))
+        xs, ys = H(SequentialCPM(), 1:n_sc), H(CheckerboardCPM(), 101:(100 + n_sc))
+        margin = 0.1 * abs(Statistics.mean(xs))
+        @test stat_accept(xs, ys; margin, alpha = 1.0e-3).pass
+        @test !stat_accept(xs, ys .+ 0.25 * abs(Statistics.mean(xs)); margin, alpha = 1.0e-3).pass
         @test Statistics.mean(xs) < total_energy(prob, prob.u0) - 100           # the runs relax: the statistic is not trivial
         p32 = site_contact_problem(SiteContacts(; name = :sq), (24, 24); T = Float32)
         @test eltype(p32.u0.site.cue) === Float32

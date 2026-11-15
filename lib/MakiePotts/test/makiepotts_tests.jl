@@ -1,5 +1,6 @@
 @testsetup module MP_makiepotts
 using Test
+using AllocCheck: check_allocs
 using Aqua
 using CairoMakie
 using JET: @test_opt
@@ -204,83 +205,88 @@ end
 end
 
 @testitem "Float32 render frames and channels (TS2-7)" setup = [MP_makiepotts] tags = [:makiepotts, :core] begin
-@testset "Float32 render frames and channels (TS2-7)" begin
-    CairoMakie.activate!(type = "png")
-    owners = fill(RenderOwner(MediumSite, 1), 3, 3)
-    owners[2, 2] = RenderOwner(CellSite, 1)
-    cells = [RenderCellMetadata(RenderCellIdentity(1, 1), 1)]
-    site_key = SiteChannelKey(:field32, Float32)
-    cell_key = CellChannelKey(:signal32, Float32)
-    site_vals = Float32[0.0 1.0 2.0; 0.5 1.5 2.5; 1.0 2.0 3.0]
-    cell_vals = Dict(RenderCellIdentity(1, 1) => Float32(0.75))
-    frame = PottsRenderFrame(0, owners, cells;
-        channels = (
-            RenderChannel(site_key, site_vals; label = "Field32", units = "a.u."),
-            RenderChannel(cell_key, cell_vals; label = "Signal32", units = "a.u."),
-        ))
-    @test assert_render_frame_conformance(frame) === frame
-    site_enc = encode(frame, ChannelEncoding(site_key))
-    @test eltype(site_enc.values) <: AbstractFloat
-    @test site_enc.values ≈ Float64.(site_vals)
-    @test site_enc.finite_range == (0.0, 3.0)
-    cell_enc = encode(frame, ChannelEncoding(cell_key))
-    @test eltype(cell_enc.values) <: AbstractFloat
-    @test cell_enc.values[2, 2] == 0.75
+    @testset "Float32 render frames and channels (TS2-7)" begin
+        CairoMakie.activate!(type = "png")
+        owners = fill(RenderOwner(MediumSite, 1), 3, 3)
+        owners[2, 2] = RenderOwner(CellSite, 1)
+        cells = [RenderCellMetadata(RenderCellIdentity(1, 1), 1)]
+        site_key = SiteChannelKey(:field32, Float32)
+        cell_key = CellChannelKey(:signal32, Float32)
+        site_vals = Float32[0.0 1.0 2.0; 0.5 1.5 2.5; 1.0 2.0 3.0]
+        cell_vals = Dict(RenderCellIdentity(1, 1) => Float32(0.75))
+        frame = PottsRenderFrame(
+            0, owners, cells;
+            channels = (
+                RenderChannel(site_key, site_vals; label = "Field32", units = "a.u."),
+                RenderChannel(cell_key, cell_vals; label = "Signal32", units = "a.u."),
+            )
+        )
+        @test assert_render_frame_conformance(frame) === frame
+        site_enc = encode(frame, ChannelEncoding(site_key))
+        @test eltype(site_enc.values) <: AbstractFloat
+        @test site_enc.values ≈ Float64.(site_vals)
+        @test site_enc.finite_range == (0.0, 3.0)
+        cell_enc = encode(frame, ChannelEncoding(cell_key))
+        @test eltype(cell_enc.values) <: AbstractFloat
+        @test cell_enc.values[2, 2] == 0.75
 
-    fig, _, plt = Makie.plot(frame; encoding = ChannelEncoding(site_key))
-    @test plt isa PottsPlot
-    @test Makie.Colorbar(fig[1, 2], plt) isa Makie.Colorbar
-    buf = CairoMakie.colorbuffer(fig)
-    @test size(buf, 1) > 100 && size(buf, 2) > 100
-end
+        fig, _, plt = Makie.plot(frame; encoding = ChannelEncoding(site_key))
+        @test plt isa PottsPlot
+        @test Makie.Colorbar(fig[1, 2], plt) isa Makie.Colorbar
+        buf = CairoMakie.colorbuffer(fig)
+        @test size(buf, 1) > 100 && size(buf, 2) > 100
+    end
 end
 
 @testitem "clean install-to-PNG journey (TS3-3)" setup = [MP_makiepotts] tags = [:makiepotts, :core] begin
-@testset "clean install-to-PNG journey (TS3-3)" begin
-    CairoMakie.activate!(type = "png")
-    frame = PottsRenderFrame(
-        0,
-        fill(RenderOwner(MediumSite, 1), 2, 2),
-        RenderCellMetadata[],
-    )
-    @test frame_size(frame) == (2, 2)
-    figure, axis, plot = CairoMakie.plot(frame; boundaries = true)
-    @test plot isa PottsPlot
-    @test axis isa CairoMakie.Axis
-    @test potts_legend(figure[1, 2], plot) isa Makie.Legend
-    buffer = CairoMakie.colorbuffer(figure)
-    @test size(buffer, 1) > 100 && size(buffer, 2) > 100
-    mktempdir() do directory
-        output = joinpath(directory, "makiepotts-clean-install.png")
-        CairoMakie.save(output, figure)
-        @test filesize(output) > 1_000
+    @testset "clean install-to-PNG journey (TS3-3)" begin
+        CairoMakie.activate!(type = "png")
+        frame = PottsRenderFrame(
+            0,
+            fill(RenderOwner(MediumSite, 1), 2, 2),
+            RenderCellMetadata[],
+        )
+        @test frame_size(frame) == (2, 2)
+        figure, axis, plot = CairoMakie.plot(frame; boundaries = true)
+        @test plot isa PottsPlot
+        @test axis isa CairoMakie.Axis
+        @test potts_legend(figure[1, 2], plot) isa Makie.Legend
+        buffer = CairoMakie.colorbuffer(figure)
+        @test size(buffer, 1) > 100 && size(buffer, 2) > 100
+        mktempdir() do directory
+            output = joinpath(directory, "makiepotts-clean-install.png")
+            CairoMakie.save(output, figure)
+            @test filesize(output) > 1_000
+        end
     end
-end
 end
 
 @testitem "MakiePotts package quality" setup = [MP_makiepotts] tags = [:makiepotts, :qa] begin
 @testset "MakiePotts package quality" begin
-    # `persistent_tasks = false`: Makie/CairoMakie may hold background font/render tasks.
-    qa_aqua(MakiePotts; persistent_tasks = false)
-    qa_api_docs(MakiePotts; docs_dir = joinpath(@__DIR__, "..", "..", "..", "docs"))
+        # `persistent_tasks = false`: Makie/CairoMakie may hold background font/render tasks.
+        qa_aqua(MakiePotts; persistent_tasks = false)
+        qa_api_docs(MakiePotts; docs_dir = joinpath(@__DIR__, "..", "..", "..", "docs"))
 end
 end
 
 @testitem "QA: ExplicitImports (MakiePotts)" setup = [MP_makiepotts] tags = [:makiepotts, :qa] begin
 @testset "QA: ExplicitImports (MakiePotts)" begin
-    qa_explicit_imports(MakiePotts; nonpublic_qualified = MAKIEPOTTS_NONPUBLIC_QUALIFIED)
-end
+        qa_explicit_imports(MakiePotts; nonpublic_qualified = MAKIEPOTTS_NONPUBLIC_QUALIFIED)
+    end
 end
 
 @testitem "QA: JET (MakiePotts)" setup = [MP_makiepotts] tags = [:makiepotts, :qa] begin
-@testset "QA: JET (MakiePotts)" begin
-    fixture = render_fixture()
-    frame = renderframe(fixture.state)
-    @test_opt target_modules = (MakiePotts,) frame_size(frame)
-    @test_opt target_modules = (MakiePotts,) frame_mcs(frame)
-    @test_opt target_modules = (MakiePotts,) owner_at(frame, CartesianIndex(1, 1))
-    @test_opt target_modules = (MakiePotts,) encode(frame, CellTypeEncoding())
-    @test_opt target_modules = (MakiePotts,) encode(frame, CellIdentityEncoding())
+    @testset "QA: JET (MakiePotts)" begin
+        fixture = render_fixture()
+        frame = renderframe(fixture.state)
+        @test_opt target_modules = (MakiePotts,) frame_size(frame)
+        @test_opt target_modules = (MakiePotts,) frame_mcs(frame)
+        @test_opt target_modules = (MakiePotts,) owner_at(frame, CartesianIndex(1, 1))
+        @test_opt target_modules = (MakiePotts,) encode(frame, CellTypeEncoding())
+        @test_opt target_modules = (MakiePotts,) encode(frame, CellIdentityEncoding())
+        @test isempty(check_allocs(frame_size, (typeof(frame),)))
+        @test isempty(check_allocs(frame_mcs, (typeof(frame),)))
+        @test isempty(check_allocs(owner_at, (typeof(frame), CartesianIndex{2})))
 end
 end
 
