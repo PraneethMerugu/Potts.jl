@@ -68,16 +68,30 @@ end
             cinteg.cache.cnt, cinteg.cache.status, cinteg.cache.serial, serial_flag)
         @test isempty(check_allocs(CorePotts.block_stay!, typeof.(bs_args)))
     end
+    # `AllocCheck` collapses shared runtime callees (`sync_end`, `wait`, `enq_work`, locks,
+    # channels) at `multiple call sites @ unknown`, so every reported allocation must either
+    # pass through `KernelAbstractions` or stay inside Base's task-scheduler files with no
+    # `CorePotts` frames.
     cb_allocs = check_allocs(CorePotts.checkerboard_mcs!, typeof.(cargs))
     ka_sched_files = ("cpu.jl", "threadingconstructs.jl", "task.jl", "channels.jl",
         "condition.jl", "lock.jl", "locks-mt.jl", "linked_list.jl", "partr.jl",
-        "gcutils.jl", "Base_compiler.jl", "libuv.jl", "boot.jl", "array.jl")
+        "gcutils.jl", "Base_compiler.jl", "libuv.jl", "boot.jl", "array.jl", "baseext.jl")
     @test isempty(filter(cb_allocs) do a
         top_file = basename(string(a.backtrace[1].file))
         any(sf -> occursin("CorePotts", string(sf.file)), a.backtrace) &&
             !(top_file in ka_sched_files)
     end)
-    @test all(a -> basename(string(a.backtrace[1].file)) in ka_sched_files, cb_allocs)
+    @test all(cb_allocs) do a
+        top_ok = basename(string(a.backtrace[1].file)) in ka_sched_files
+        has_ka = any(sf -> occursin("KernelAbstractions", string(sf.file)), a.backtrace)
+        has_cp = any(sf -> occursin("CorePotts", string(sf.file)), a.backtrace)
+        tail = a.backtrace[end]
+        collapsed_sched = !has_cp && tail.file === :unknown &&
+                          string(tail.func) == "multiple call sites" &&
+                          all(sf -> basename(string(sf.file)) in ka_sched_files,
+                              a.backtrace[1:(end - 1)])
+        top_ok && (has_ka || collapsed_sched)
+    end
     # `init` is not gated: resolving a relation fixes its length K at run time, which is a
     # deliberate one-time function barrier before the (gated) hot loop.
 
