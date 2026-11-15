@@ -119,11 +119,7 @@ end
     @kinds medium A
     @lattice Lattice((8, 8); geometry = variant === :hex ? Hexagonal() : CorePotts.Square(), boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
-    if variant === :hex
-        @fields c = B6.faces()
-    else
-        @fields c = B6.xflux()
-    end
+    @fields c = variant === :hex ? B6.faces() : B6.xflux()
     @sweep Metropolis(; temperature = 1.0)
 end
 

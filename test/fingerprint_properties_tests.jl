@@ -55,10 +55,9 @@ end
             else
                 @schedule fields, sweep
             end
-            if contact_rel === nothing
-                @relations proposal = proposal_rel
-            else
-                @relations contact = contact_rel proposal = proposal_rel
+            @relations proposal = proposal_rel
+            if contact_rel !== nothing
+                @relations contact = contact_rel
             end
             if law === :barker
                 @sweep Barker(; temperature = T, mcs_duration = mcs_dur, offset)
@@ -293,11 +292,10 @@ end
             @kinds medium cell
             @parameters λ = 1.0 V₀ = 9.0 T = 1.0
             @lattice Lattice((10, 10))
-            if proposal_rel !== nothing && contact_rel !== nothing
-                @relations contact = contact_rel proposal = proposal_rel
-            elseif proposal_rel !== nothing
+            if proposal_rel !== nothing
                 @relations proposal = proposal_rel
-            elseif contact_rel !== nothing
+            end
+            if contact_rel !== nothing
                 @relations contact = contact_rel
             end
             @energy cells => λ * (volume - V₀)^2

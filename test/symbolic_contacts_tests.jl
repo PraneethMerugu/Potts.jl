@@ -93,30 +93,26 @@ end
             @lattice Lattice((12, 12); spacing = (1.0, 1.0))
             if rel === :spacing
                 @relations spacing = Moore(2)
-                if read
-                    @energy cells => 0.1 * volume * sum(q[n] for n in spacing(40))
-                end
             elseif rel === :lattice
                 @relations lattice = Moore(2)
-                if read
-                    @energy cells => 0.1 * volume * sum(q[n] for n in lattice(40))
-                end
             elseif rel === :mobility
                 @relations mobility = Moore(2)
-                if read
-                    @energy cells => 0.1 * volume * sum(q[n] for n in mobility(40))
-                end
             elseif rel === :far
                 @relations far = Moore(2)
-                if read
-                    @energy cells => 0.1 * volume * sum(q[n] for n in far(40))
-                end
             elseif rel === :contact
                 @relations contact = Moore(2)
             else
                 @relations proposal = Moore(1)
             end
-            if !read
+            if read && rel === :spacing
+                @energy cells => 0.1 * volume * sum(q[n] for n in spacing(40))
+            elseif read && rel === :lattice
+                @energy cells => 0.1 * volume * sum(q[n] for n in lattice(40))
+            elseif read && rel === :mobility
+                @energy cells => 0.1 * volume * sum(q[n] for n in mobility(40))
+            elseif read && rel === :far
+                @energy cells => 0.1 * volume * sum(q[n] for n in far(40))
+            else
                 @energy cells => (volume - 16)^2
             end
             @sweep Metropolis(; temperature = 1.0)

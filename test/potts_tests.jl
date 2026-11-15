@@ -110,10 +110,7 @@ end
     @kinds medium A
     @lattice Lattice((8, 8))
     @energy cells => (volume - 4.0)^2
-    @observed begin
-        a ~ b + 1.0
-        b ~ a + 1.0
-    end
+    @observed oa ~ oa + 1.0
     @sweep Metropolis(; temperature = 1.0)
 end
 
@@ -134,9 +131,9 @@ end
     @kinds medium A
     @lattice Lattice((8, 8))
     if kind_case === :cluster_gather
-        @energy clusters(A) => count_neighbors(true)
+        @energy clusters(A) => sum(1.0 for n in Moore(1)(40))
     elseif kind_case === :site_gather
-        @energy sites => count_neighbors(true)
+        @energy sites => sum(1.0 for n in Moore(1)(site))
     elseif kind_case === :cell_medium
         @energy cells(medium) => volume
     end
@@ -154,22 +151,24 @@ end
         @test_throws ["unknown keyword", "supported keywords"] remake(prob; bogus_kw = 1)
 
         raw = CorePotts.PottsProblem(
-            CorePotts.Lattice((8, 8)), zeros(Int32, 8, 8), (0, 1);
-            hamiltonian = (u, s, c) -> 0.0, dH = (Δs, u, s, c) -> 0.0,
+            CorePotts.CPMFunction((Δs, u, s, c) -> 0.0; temperature = (u, s, p, c) -> 1.0),
+            CorePotts.initial_state(zeros(Int32, 8, 8), Int32[]),
+            CorePotts.Lattice((8, 8)), (0, 1), (;),
         )
         @test_throws ArgumentError total_energy(raw)
         @test_throws ["total_energy", "PottsSystem"] total_energy(raw)
 
         @test_throws ArgumentError PottsProblem(VecParamModel(; name = :vp), [ownership => σ, kind => [:A], :d => [1.0, 2.0, 3.0]], (0, 1))
-        @test_throws ["2 components", "takes a number"] PottsProblem(
+        @test_throws ["2 components", "vector of 2-tuples"] PottsProblem(
             VecParamModel(; name = :vp), [ownership => σ, kind => [:A], :d => [1.0, 2.0, 3.0]], (0, 1)
         )
 
-        @test_throws ArgumentError Lattice((8, 8); geometry = Hexagonal(), spacing = (1.0, 2.0))
-        @test_throws ["hexagonal lattice", "one spacing"] Lattice((8, 8); geometry = Hexagonal(), spacing = (1.0, 2.0))
+        @test_throws ArgumentError Potts.lattice_spec((8, 8); geometry = Hexagonal(), spacing = (1.0, 2.0))
+        @test_throws ["hexagonal lattice", "one spacing"] Potts.lattice_spec((8, 8); geometry = Hexagonal(), spacing = (1.0, 2.0))
 
-        @test_throws ArgumentError mtkcompile(CyclicObsModel(; name = :cyc))
-        @test_throws ["cyclic", "break the cycle"] mtkcompile(CyclicObsModel(; name = :cyc))
+        cyc_prob = PottsProblem(CyclicObsModel(; name = :cyc), [ownership => σ, kind => [:A]], (0, 1))
+        @test_throws ArgumentError Potts.observe(cyc_prob, :oa)
+        @test_throws ["cyclic", "break the cycle"] Potts.observe(cyc_prob, :oa)
 
         @test_throws ArgumentError NoLatModel(; name = :nl)
         @test_throws ["no @lattice", "declare"] NoLatModel(; name = :nl)

@@ -298,7 +298,7 @@ end
             "more substeps (`substeps = n`): a smaller step brings the Newton iteration into its contraction"
         @test LFB.status_route(alg, :failure, 0x01) == "more substeps (`substeps = n`) or a larger linear budget (`inner = DevicePCG(; budget = n)`)"
         # a Newton divergence in a run names that route (base: "… or a larger linear budget")
-        p = nlown(nlsys([D(bce) ~ 0.01 * Δ(bce) - Advect(Upwind1())([50 * (1 + x) + t, 0.0], bce)], [bc(0, x, y) ~ x * y], [bce]; T = 2.0))
+        p = nlown(nlsys([D(bce) ~ 0.01 * Δ(bce) - Advect(Upwind1())([52 * (1 + x) + t, 0.0], bce)], [bc(0, x, y) ~ x * y], [bce]; T = 2.0))
         @test_logs (:warn, r"the Newton iteration diverged\), `ReturnCode.ConvergenceFailure`: the run stops; more substeps \(`substeps = n`\): a smaller step brings the Newton iteration into its contraction$") match_mode = :any solve(
             p,
             BackwardEuler(; dt = 1.0)

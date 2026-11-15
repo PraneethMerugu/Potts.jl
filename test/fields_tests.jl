@@ -8,15 +8,17 @@
         dims, h = (16, 8), (2.0, 2.0)
         c0 = [cos(2π * (i - 1) / 16) for i in 1:16, j in 1:8]
         for (Dc, nexp) in ((1.0, 2), (4.0, 5))           # ρ = Dc·Σ 4/h² = 2Dc: n = ceil(2Dc/1.8)
-            prob = PottsProblem(FdPeriodic(; name = :f), [fd_empty(dims); :c => c0; :Dc => Dc], (0, 1);
-                field_solver = ExplicitEuler())
+            prob = PottsProblem(
+                FdPeriodic(; name = :f), [fd_empty(dims); :c => c0; :Dc => Dc], (0, 1);
+                field_solver = ExplicitEuler()
+            )
             integ = init(prob, SequentialCPM())
             @test fd_n(integ) == nexp
             step!(integ)
             c = Array(current_state(integ).site.c)
             g = 1 - (1 / nexp) * Dc * (4 / h[1]^2) * sin(π / 16)^2      # the per-substep factor of mode 1
-            @test maximum(abs.(c .- g^nexp .* c0)) < 1e-13
-            @test maximum(abs.(c .- (1 - (1 / (nexp + 1)) * Dc * sin(π / 16)^2)^(nexp + 1) .* c0)) > 1e-6   # control: n + 1
+            @test maximum(abs.(c .- g^nexp .* c0)) < 1.0e-13
+            @test maximum(abs.(c .- (1 - (1 / (nexp + 1)) * Dc * sin(π / 16)^2)^(nexp + 1) .* c0)) > 1.0e-6   # control: n + 1
         end
     end
 end
@@ -27,25 +29,31 @@ end
         c0 = [exp(-((i - 6)^2 + (j - 5)^2) / 4) for i in 1:12, j in 1:10]
         # ρ = Dc·8 + k: 5 at Dc = 1; 2 at Dc = 0.45; 3 with a reaction of 0.2
         for (Dc, k, nexp) in ((1.0, 0.0, 5), (0.45, 0.0, 2), (0.45, 0.2, 3))
-            prob = PottsProblem(FdClosed(; name = :f), [fd_empty(dims); :c => c0; :Dc => Dc; :k => k], (0, 2);
-                field_solver = ExplicitEuler())
+            prob = PottsProblem(
+                FdClosed(; name = :f), [fd_empty(dims); :c => c0; :Dc => Dc; :k => k], (0, 2);
+                field_solver = ExplicitEuler()
+            )
             integ = init(prob, SequentialCPM())
             @test fd_n(integ) == nexp
             step!(integ); step!(integ)
-            hand = fd_ftcs(fd_ftcs(c0, Dc, (1, 1), 1.0, nexp; periodic = false, rate = (c, i, j) -> -k * c[i, j]),
-                Dc, (1, 1), 1.0, nexp; periodic = false, rate = (c, i, j) -> -k * c[i, j])
-            @test maximum(abs.(Array(current_state(integ).site.c) .- hand)) < 1e-14
+            hand = fd_ftcs(
+                fd_ftcs(c0, Dc, (1, 1), 1.0, nexp; periodic = false, rate = (c, i, j) -> -k * c[i, j]),
+                Dc, (1, 1), 1.0, nexp; periodic = false, rate = (c, i, j) -> -k * c[i, j]
+            )
+            @test maximum(abs.(Array(current_state(integ).site.c) .- hand)) < 1.0e-14
         end
         # an explicit count is a minimum: 3 (odd: the scratch is copied back) and 4 (even)
         for n in (3, 4)
-            prob = PottsProblem(FdClosed(; name = :f), [fd_empty(dims); :c => c0; :Dc => 0.1], (0, 1);
-                field_solver = ExplicitEuler(substeps = n))
+            prob = PottsProblem(
+                FdClosed(; name = :f), [fd_empty(dims); :c => c0; :Dc => 0.1], (0, 1);
+                field_solver = ExplicitEuler(substeps = n)
+            )
             integ = init(prob, SequentialCPM())
             @test fd_n(integ) == n
             step!(integ)
             c = Array(current_state(integ).site.c)
-            @test maximum(abs.(c .- fd_ftcs(c0, 0.1, (1, 1), 1.0, n; periodic = false))) < 1e-15
-            @test maximum(abs.(c .- fd_ftcs(c0, 0.1, (1, 1), 1.0, n + 1; periodic = false))) > 1e-8   # control
+            @test maximum(abs.(c .- fd_ftcs(c0, 0.1, (1, 1), 1.0, n; periodic = false))) < 1.0e-15
+            @test maximum(abs.(c .- fd_ftcs(c0, 0.1, (1, 1), 1.0, n + 1; periodic = false))) > 1.0e-8   # control
         end
     end
 end
@@ -53,14 +61,22 @@ end
 @testitem "fields: mass conservation (periodic and closed), a sink as control" setup = [FieldsSetup] tags = [:potts, :fields] begin
     @testset "fields: mass conservation (periodic and closed), a sink as control" begin
         c0 = [1.0 + sin(i) * cos(2j) for i in 1:16, j in 1:8]
-        sol = solve(PottsProblem(FdPeriodic(; name = :f), [fd_empty((16, 8)); :c => c0], (0, 5);
-            field_solver = ExplicitEuler()), SequentialCPM())
-        @test abs(sum(sol.u[end].site.c) - sum(c0)) < 1e-11 * sum(c0)
-        @test maximum(abs.(sol.u[end].site.c .- c0)) > 1e-3                              # the field moved
+        sol = solve(
+            PottsProblem(
+                FdPeriodic(; name = :f), [fd_empty((16, 8)); :c => c0], (0, 5);
+                field_solver = ExplicitEuler()
+            ), SequentialCPM()
+        )
+        @test abs(sum(sol.u[end].site.c) - sum(c0)) < 1.0e-11 * sum(c0)
+        @test maximum(abs.(sol.u[end].site.c .- c0)) > 1.0e-3                              # the field moved
         c1 = [1.0 + sin(i) * cos(2j) for i in 1:12, j in 1:10]
-        closed(k) = solve(PottsProblem(FdClosed(; name = :f), [fd_empty((12, 10)); :c => c1; :k => k], (0, 5);
-            field_solver = ExplicitEuler()), SequentialCPM()).u[end].site.c
-        @test abs(sum(closed(0.0)) - sum(c1)) < 1e-11 * sum(c1)
+        closed(k) = solve(
+            PottsProblem(
+                FdClosed(; name = :f), [fd_empty((12, 10)); :c => c1; :k => k], (0, 5);
+                field_solver = ExplicitEuler()
+            ), SequentialCPM()
+        ).u[end].site.c
+        @test abs(sum(closed(0.0)) - sum(c1)) < 1.0e-11 * sum(c1)
         @test sum(closed(0.05)) < 0.9 * sum(c1)                                          # control: a sink
     end
 end
@@ -75,8 +91,8 @@ end
         for _ in 1:3
             hand = fd_ftcs(hand, 0.2, (1, 1), 1.0, 2; periodic = false, rate = (c, i, j) -> 0.05 * src[i, j])
         end
-        @test maximum(abs.(sol.u[end].site.c .- hand)) < 1e-15
-        @test maximum(abs.(sol.u[end].site.c .- 2 .* hand)) > 1e-3                      # control
+        @test maximum(abs.(sol.u[end].site.c .- hand)) < 1.0e-15
+        @test maximum(abs.(sol.u[end].site.c .- 2 .* hand)) > 1.0e-3                      # control
         # the filled input is a site array of the state
         @test any(k -> endswith(string(k), "__in"), keys(prob.u0.site))
     end
@@ -85,10 +101,14 @@ end
 @testitem "fields: lower clip, also at init" setup = [FieldsSetup] tags = [:potts, :fields] begin
     @testset "fields: lower clip, also at init" begin
         op = fd_empty((6, 6))
-        clip = solve(PottsProblem(FdDecay(; name = :d), op, (0, 1); field_solver = ExplicitEuler(substeps = 1, lower = 0.0)),
-            SequentialCPM()).u[end].site.c
-        free = solve(PottsProblem(FdDecay(; name = :d), op, (0, 1); field_solver = ExplicitEuler(substeps = 1)),
-            SequentialCPM()).u[end].site.c
+        clip = solve(
+            PottsProblem(FdDecay(; name = :d), op, (0, 1); field_solver = ExplicitEuler(substeps = 1, lower = 0.0)),
+            SequentialCPM()
+        ).u[end].site.c
+        free = solve(
+            PottsProblem(FdDecay(; name = :d), op, (0, 1); field_solver = ExplicitEuler(substeps = 1)),
+            SequentialCPM()
+        ).u[end].site.c
         @test all(==(0.0), clip)
         @test all(≈(-1.0), free)                                                          # control
     end
@@ -131,12 +151,12 @@ end
         b = init(remake(prob; p = [:Dc => 0.45]), SequentialCPM())
         @test fd_n(a) == 5 && fd_n(b) == 2
         step!(b)
-        @test maximum(abs.(Array(current_state(b).site.c) .- fd_ftcs(c0, 0.45, (1, 1), 1.0, 2; periodic = false))) < 1e-15
+        @test maximum(abs.(Array(current_state(b).site.c) .- fd_ftcs(c0, 0.45, (1, 1), 1.0, 2; periodic = false))) < 1.0e-15
         # in a running integrator: new parameter values are rebound at the next field phase
         a.p = remake(prob; p = [:Dc => 0.45]).p
         step!(a)
         @test fd_n(a) == 2
-        @test maximum(abs.(Array(current_state(a).site.c) .- fd_ftcs(c0, 0.45, (1, 1), 1.0, 2; periodic = false))) < 1e-15
+        @test maximum(abs.(Array(current_state(a).site.c) .- fd_ftcs(c0, 0.45, (1, 1), 1.0, 2; periodic = false))) < 1.0e-15
     end
 end
 
@@ -206,26 +226,30 @@ end
 @testitem "fields: hexagonal lattices (the old path's six-point Laplacian)" setup = [FieldsSetup] tags = [:potts, :fields] begin
     @testset "fields: hexagonal lattices (the old path's six-point Laplacian)" begin
         for boundary in (Periodic(), Closed())
-            prob = PottsProblem(FdHex(; name = :h, boundary), [fd_empty((8, 6)); :c => fd_rand((8, 6))], (0, 3);
-                field_solver = ExplicitEuler(substeps = 3))
+            prob = PottsProblem(
+                FdHex(; name = :h, boundary), [fd_empty((8, 6)); :c => fd_rand((8, 6))], (0, 3);
+                field_solver = ExplicitEuler(substeps = 3)
+            )
             u = fd_mcs(prob, 3)
             c = prob.u0.site.c
             for m in 1:3
                 c = fd_oldpath(c, prob.lattice, 0.1, 3)
-                @test maximum(abs.(u[m] .- c)) < 1e-14
+                @test maximum(abs.(u[m] .- c)) < 1.0e-14
             end
             @test sum(u[end]) ≈ sum(prob.u0.site.c)                                 # zero-sum stencil
             # negative control: the square 4-point stencil is a different field
             sq = fd_ftcs(prob.u0.site.c, 0.1, (1, 1), 1.0, 3; periodic = boundary isa Periodic)
-            @test maximum(abs.(u[1] .- sq)) > 1e-3
+            @test maximum(abs.(u[1] .- sq)) > 1.0e-3
         end
         # the stencil is exact for a quadratic: Δ|x|² = 4 (Euclidean positions of the axial sites)
         L = (24, 24)
         hl = CorePotts.Lattice(L; geometry = CorePotts.Hexagonal(), boundary = Closed())
         pos(x) = CorePotts.embed(hl, Float64.(Tuple(x)))
         f = [sum(abs2, pos(x)) for x in CartesianIndices(L)]
-        prob = PottsProblem(FdHex(; name = :h, boundary = Closed(), dims = L), [fd_empty(L); :c => f], (0, 1);
-            field_solver = ExplicitEuler(substeps = 1))
+        prob = PottsProblem(
+            FdHex(; name = :h, boundary = Closed(), dims = L), [fd_empty(L); :c => f], (0, 1);
+            field_solver = ExplicitEuler(substeps = 1)
+        )
         c1 = solve(prob, SequentialCPM(); save_start = false).u[1].site.c
         @test (c1[10, 12] - f[10, 12]) / 0.1 ≈ 4.0
         # the program reads the six axial neighbors, and only those (the IR's hexagonal offsets)
@@ -253,37 +277,59 @@ end
         c = r
         for m in 1:3
             c = fd_oldpath(c, lat, 0.2, 2)
-            @test maximum(abs.(ur[m] .- c)) < 1e-14
+            @test maximum(abs.(ur[m] .- c)) < 1.0e-14
         end
         # negative control: the full box exchanges across the disk's edge
-        full = PottsProblem(FdDomain(; name = :f, domain = x -> true), [fd_empty((40, 40)); :c => r], (0, 1);
-            field_solver = ExplicitEuler(substeps = 2))
-        @test maximum(abs.(fd_mcs(full, 1)[1] .- ur[1])) > 1e-3
+        full = PottsProblem(
+            FdDomain(; name = :f, domain = x -> true), [fd_empty((40, 40)); :c => r], (0, 1);
+            field_solver = ExplicitEuler(substeps = 2)
+        )
+        @test maximum(abs.(fd_mcs(full, 1)[1] .- ur[1])) > 1.0e-3
         # faces against the domain edge: the face value applies at the box face, not at the edge
         st = PottsProblem(FdStripe(; name = :s), fd_empty((9, 9)), (0, 1); field_solver = ExplicitEuler(substeps = 1))
         us = solve(st, SequentialCPM(); save_start = false).u[1].site.c
         @test us == fd_oldpath(zeros(9, 9), st.lattice, 0.1, 1; bc = ((0.0, 100.0), (nothing, nothing)))
         @test all(iszero, us)                                                     # x = 7 is the edge: zero flux
         # control: on the full box the same face drives the edge site
-        @test fd_oldpath(zeros(9, 9), Potts.CorePotts.Lattice((9, 9); boundary = Closed()), 0.1, 1;
-            bc = ((0.0, 100.0), (nothing, nothing)))[9, 5] ≈ 0.1 * 200.0
+        @test fd_oldpath(
+            zeros(9, 9), Potts.CorePotts.Lattice((9, 9); boundary = Closed()), 0.1, 1;
+            bc = ((0.0, 100.0), (nothing, nothing))
+        )[9, 5] ≈ 0.1 * 200.0
     end
 end
 
 @testitem "fields: refusals name the reason" setup = [FieldsSetup] tags = [:potts, :fields] begin
     @testset "fields: refusals name the reason" begin
-        @test occursin("rand()", something(fd_err(() -> PottsProblem(FdRand(; name = :r), fd_empty((8, 6)), (0, 1);
-            field_solver = ExplicitEuler(substeps = 1))), ""))
-        @test occursin("field solver", something(fd_err(() -> PottsProblem(FdClosed(; name = :f), fd_empty((12, 10)), (0, 1);
-            field_solver = RK4())), ""))
+        @test occursin(
+            "rand()", something(
+                fd_err(
+                    () -> PottsProblem(
+                        FdRand(; name = :r), fd_empty((8, 6)), (0, 1);
+                        field_solver = ExplicitEuler(substeps = 1)
+                    )
+                ), ""
+            )
+        )
+        @test occursin(
+            "field solver", something(
+                fd_err(
+                    () -> PottsProblem(
+                        FdClosed(; name = :f), fd_empty((12, 10)), (0, 1);
+                        field_solver = RK4()
+                    )
+                ), ""
+            )
+        )
     end
 end
 
 @testitem "fields: a warm MCS allocates nothing on the CPU" setup = [FieldsSetup] tags = [:potts, :fields] begin
     @testset "fields: a warm MCS allocates nothing on the CPU" begin
         op = fd_source_op((12, 10))
-        integ = init(PottsProblem(FdSource(; name = :f), op, (0, 100); field_solver = ExplicitEuler(substeps = 3)), SequentialCPM();
-            save_start = false, save_end = false)
+        integ = init(
+            PottsProblem(FdSource(; name = :f), op, (0, 100); field_solver = ExplicitEuler(substeps = 3)), SequentialCPM();
+            save_start = false, save_end = false
+        )
         step!(integ)
         @test (@allocated step!(integ)) == 0
     end
@@ -291,8 +337,12 @@ end
 
 @testitem "parameters: a value that does not convert is named, with a role-neutral reason" setup = [FieldsSetup] tags = [:potts, :fields] begin
     @testset "parameters: a value that does not convert is named, with a role-neutral reason" begin
-        err = fd_err(() -> PottsProblem(FdClosed(; name = :f), [fd_empty((12, 10)); :Dc => FdNotANumber()], (0, 1);
-            field_solver = ExplicitEuler()))
+        err = fd_err(
+            () -> PottsProblem(
+                FdClosed(; name = :f), [fd_empty((12, 10)); :Dc => FdNotANumber()], (0, 1);
+                field_solver = ExplicitEuler()
+            )
+        )
         @test occursin("`Dc`", something(err, "")) && occursin("scalar type", something(err, ""))
         @test occursin("A Dual goes to the problem", something(err, ""))     # (the route since F3-21b)
         @test !occursin("CPM parameters are plain numbers", something(err, ""))
@@ -303,16 +353,20 @@ end
     @testset "fields: number types per role (lattice_storage, the backend's default T)" begin
         c0 = [exp(-((i - 6)^2 + (j - 5)^2) / 4) for i in 1:12, j in 1:10]
         for T in (Float64, Float32)
-            prob = PottsProblem(FdHalf(; name = :h), [fd_empty((12, 10)); :c => c0], (0, 3); T,
-                field_solver = ExplicitEuler(substeps = 8))
+            prob = PottsProblem(
+                FdHalf(; name = :h), [fd_empty((12, 10)); :c => c0], (0, 3); T,
+                field_solver = ExplicitEuler(substeps = 8)
+            )
             @test eltype(prob.u0.site.c) == Float16 && eltype(prob.u0.site.c__next) == Float16
             u = fd_mcs(prob, 3)
             @test eltype(u[end]) == Float16
             ref = fd_ftcs(Float64.(Float16.(c0)), 1.0, (1, 1), 3.0, 8 * 3; periodic = false)
-            @test maximum(abs.(u[end] .- ref)) < 5e-3                     # Float16 rounding per substep
+            @test maximum(abs.(u[end] .- ref)) < 5.0e-3                     # Float16 rounding per substep
             # control: the same model stored in T differs by the rounding
-            full = PottsProblem(FdClosed(; name = :f), [fd_empty((12, 10)); :c => c0], (0, 3); T,
-                field_solver = ExplicitEuler(substeps = 8))
+            full = PottsProblem(
+                FdClosed(; name = :f), [fd_empty((12, 10)); :c => c0], (0, 3); T,
+                field_solver = ExplicitEuler(substeps = 8)
+            )
             @test eltype(full.u0.site.c) == T && fd_mcs(full, 3)[end] != u[end]
         end
         let err = try
@@ -321,11 +375,15 @@ end
                 e
             end
             @test err isa ArgumentError
-            @test occursin("lattice_storage", sprint(showerror, err)) && occursin("PDESystem", sprint(showerror, err))
+            @test occursin("lattice_storage", sprint(showerror, err)) && occursin("applies to fields", sprint(showerror, err))
         end
         # the default state type follows the backend (host: Float64)
-        @test eltype(PottsProblem(FdClosed(; name = :f), fd_empty((12, 10)), (0, 1);
-            backend = CorePotts.KernelAbstractions.CPU(), field_solver = ExplicitEuler()).u0.site.c) == Float64
+        @test eltype(
+            PottsProblem(
+                FdClosed(; name = :f), fd_empty((12, 10)), (0, 1);
+                backend = CorePotts.KernelAbstractions.CPU(), field_solver = ExplicitEuler()
+            ).u0.site.c
+        ) == Float64
     end
 end
 
@@ -348,8 +406,10 @@ end
         # base: `Potts.fields(model) === nothing` on a model with fields
         @test Potts.fields(FdClosed(; name = :f)) isa Potts.ModelingToolkitBase.PDESystem
         @test Potts.fields(mtkcompile(FdClosed(; name = :f))) isa Potts.ModelingToolkitBase.PDESystem
-        @test isequal(Potts.ModelingToolkitBase.equations(Potts.fields(FdClosed(; name = :f))),
-                      Potts.ModelingToolkitBase.equations(Potts.fields(mtkcompile(FdClosed(; name = :f)))))
+        @test isequal(
+            Potts.ModelingToolkitBase.equations(Potts.fields(FdClosed(; name = :f))),
+            Potts.ModelingToolkitBase.equations(Potts.fields(mtkcompile(FdClosed(; name = :f))))
+        )
         # … with the model's defaults, so `discretize` takes it as it is (base, round 0: the field
         # and the parameters had no value, "no initial condition" / NaN): c(1) = 2 (1 − 0.05)^10
         LP = Potts.LatticePDE
@@ -361,15 +421,21 @@ end
             @test o isa Potts.SciMLBase.ODEProblem && o.p.values == [1.0, 0.5] && all(==(2.0), o.u0)
         end
         # a computed parameter folds and reads (round 1: reading threw): c(1) = (1 − 0.1)^10
-        prob = LP.discretize(Potts.fields(FdComputedRate(; name = :f)), LP.LatticeDiscretization(LP.Grid((6, 4));
-            T = Float64))
+        prob = LP.discretize(
+            Potts.fields(FdComputedRate(; name = :f)), LP.LatticeDiscretization(
+                LP.Grid((6, 4));
+                T = Float64
+            )
+        )
         @test LP.getp(prob, :k2)(prob) == 1.0
         @test all(≈(0.9^10), LP.solve(prob, LP.ExplicitEuler(; dt = 0.1, substeps = 1))[:c, end])
         @test LP.getp(LP.remake(prob; p = [:k => 1.0]), :k2)(LP.remake(prob; p = [:k => 1.0])) == 2.0
         # a kind table on the ODE path is the table (round 2: the right side read the state for
         # it); c = 1 on medium sites: dc/dt = −δ[medium] = −0.5
-        o = LP.discretize(Potts.fields(FdTab(; name = :f)), LP.LatticeDiscretization(LP.Grid((10, 8)); T = Float64);
-            inputs = [:kind => zeros(Int32, 10, 8)])
+        o = LP.discretize(
+            Potts.fields(FdTab(; name = :f)), LP.LatticeDiscretization(LP.Grid((10, 8)); T = Float64);
+            inputs = [:kind => zeros(Int32, 10, 8)]
+        )
         du = similar(o.u0)
         o.f(du, o.u0, o.p, 0.0)
         @test all(≈(-0.5), du)
@@ -410,8 +476,12 @@ end
         # F4-B6 review: before, by the expression text "LatticePDE.at(volume, owner)")
         fvol = Potts.fields(FdVolumeRead(; name = :f))
         V = fill(2.0, 6, 4)
-        s = LP.solve(LP.discretize(fvol, LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64);
-            inputs = ["volume" => V]), LP.ExplicitEuler(; dt = 0.1, substeps = 1); saveat = 0.1)
+        s = LP.solve(
+            LP.discretize(
+                fvol, LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64);
+                inputs = ["volume" => V]
+            ), LP.ExplicitEuler(; dt = 0.1, substeps = 1); saveat = 0.1
+        )
         @test all(≈(0.1 * 0.01 * 2.0), s[:c, 2])
         err = fe(() -> LP.solve(LP.discretize(fvol, LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64)), LP.ExplicitEuler(; dt = 0.1)))
         @test occursin("volume", err) && occursin("=> values", err) && !occursin("__in", err) || (println("V13: ", err); false)
@@ -421,8 +491,14 @@ end
 @testitem "F1 messages: field terms in the model's words (PO02, PO06)" setup = [FieldsSetup] tags = [:potts, :fields] begin
     @testset "F1 messages: field terms in the model's words (PO02, PO06)" begin
         # PO06: the substep refusal names `kind`, not the generated input `kind__in(t, x, y)`
-        err = something(fd_err(() -> PottsProblem(FdKindNonlinear(; name = :f), fd_empty((8, 8)), (0, 1);
-            field_solver = ExplicitEuler())), "")
+        err = something(
+            fd_err(
+                () -> PottsProblem(
+                    FdKindNonlinear(; name = :f), fd_empty((8, 8)), (0, 1);
+                    field_solver = ExplicitEuler()
+                )
+            ), ""
+        )
         @test occursin("kind", err) && !occursin("kind__in", err) && occursin("substeps = n", err)
         # PO02: LatticePDE's operators lower in `@equations` (F2-10; F1 named them "does not lower",
         # base f9a77dd3: "reads a field or site variable inside a CPM read")
@@ -450,7 +526,7 @@ end
         prob = LP.discretize(Potts.fields(FdClosed(; name = :f)), disc; p = [:k => 0.5], u0 = [:c => 1.0], tspan = (0, 1))
         @test LP.getp(prob, :k)(prob) == 0.5 && all(==(1.0), prob.u0)
         # a uniform field decays by (1 − 0.1 k) per step: 0.95^10 (control: the default k = 0 keeps 1)
-        @test all(≈(0.95^10; rtol = 1e-13), LP.solve(prob, LP.ExplicitEuler(; dt = 0.1, substeps = 1))[:c, end])
+        @test all(≈(0.95^10; rtol = 1.0e-13), LP.solve(prob, LP.ExplicitEuler(; dt = 0.1, substeps = 1))[:c, end])
     end
 end
 
@@ -461,8 +537,10 @@ end
         c0 = rand(StableRNG(15), 8, 6)
         # A computed face value through `Potts.fields`: B's owned run equals A's field (σ frozen,
         # no cell), bitwise, and both follow `g1`
-        prob = PottsProblem(FdComputedFace(; name = :f), [fd_empty((8, 8)); :c => rand(StableRNG(4), 8, 8)], (0, 2);
-            field_solver = ExplicitEuler(; substeps = 2))
+        prob = PottsProblem(
+            FdComputedFace(; name = :f), [fd_empty((8, 8)); :c => rand(StableRNG(4), 8, 8)], (0, 2);
+            field_solver = ExplicitEuler(; substeps = 2)
+        )
         a = solve(prob, SequentialCPM()).u[end].site.c
         bp = LP.discretize(Potts.fields(FdComputedFace(; name = :f)), LP.LatticeDiscretization(LP.Grid((8, 8)); T = Float64); u0 = [:c => prob.u0.site.c], tspan = (0, 2))
         @test LP.solve(bp, LP.ExplicitEuler(; dt = 1.0, substeps = 2))[:c, end] == a

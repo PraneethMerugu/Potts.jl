@@ -153,7 +153,7 @@ end
         catch e
             e
         end
-        @test err isa ErrorException
+        @test err isa ArgumentError
         @test occursin("centroid(k)", sprint(showerror, err)) && occursin("needs a cell", sprint(showerror, err))
     end
 end

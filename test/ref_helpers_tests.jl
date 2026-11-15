@@ -91,8 +91,6 @@ end
     end
     if mode === :ok
         @observed o(cell) ~ norm(separation(id, partner))
-    else
-        @observed o(cell) ~ 0.0
     end
     @sweep Metropolis(; temperature = 1.0)
 end

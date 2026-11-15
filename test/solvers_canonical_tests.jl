@@ -130,7 +130,7 @@ end
             op = [ownership => σ, kind => [:A]]
             # control: the default itself does not resolve on this lattice
             sv_throws(
-                ArgumentError, ["alias on lattice"],
+                ArgumentError, [dims[1] == 1 ? "wraps onto the origin" : "alias on lattice"],
                 () -> Potts.CorePotts.relation(VonNeumann(1), Potts.CorePotts.Lattice(dims))
             )
             p = PottsProblem(thin_model(dims, line, nbhd), op, (0, 3); seed = 1)

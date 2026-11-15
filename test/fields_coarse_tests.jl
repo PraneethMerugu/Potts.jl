@@ -17,65 +17,83 @@ using Potts: CorePotts
 isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
 
 module FcoPDE
-using ..FieldPDE
-@variables c(..) [lattice_level = Coarse(4)] e(..) kA(..)::Bool [input = true] kB(..)::Bool [input = true]
-@variables u(..) kn(..) [input = true, lattice_input_name = "kind"]
-@variables g(..) sk(..) [input = true] v(..) X(..) L(..) [lattice_level = Coarse(4)] M(..) [lattice_level = Coarse(4)]
-@variables m1(..) [lattice_level = Coarse(4)] m2(..) [lattice_level = Coarse(4)] m3(..) [lattice_level = Coarse(4)]
-@variables m4(..) [lattice_level = Coarse(4)] m5(..) [lattice_level = Coarse(4)] m6(..) [lattice_level = Coarse(4)]
-const D = (16, 12)
-const X_ = (t, x, y)
-ics(fs...) = [f(0, x, y) ~ 0.0 for f in fs]
-function mix()
-    @parameters Dc = 0.4 kd = 0.3 s = 0.5
-    C, E = c(X_...), e(X_...)
-    return pdesys([Dt(C) ~ Dc * Δ(C) - kd * C + s * kA(X_...) + 0.2 * E + 0.01 * x, Dt(E) ~ 0.1 * Δ(E) - E + 0.5 * C],
-        [ics(c, e); C ~ masked(kB(X_...), 2.0)], D, [C, E, kA(X_...), kB(X_...)], [Dc, kd, s])
-end
-dom() = (C = c(X_...); pdesys([Dt(C) ~ 0.4 * Δ(C) - 0.3 * C * kA(X_...) + 1.0], ics(c), D, [C, kA(X_...)]))
-function on_copy()
-    @variables c(..) [lattice_level = Coarse(2)]
-    C = c(X_...)
-    return pdesys([Dt(C) ~ 0.1 * Δ(C) - C], ics(c), (8, 8), [C])
-end
-function where_()
-    @variables c(..)
-    C, U = c(X_...), u(X_...)
-    return pdesys([Dt(C) ~ 0.1 * Δ(C) - C, Dt(U) ~ kA(X_...) - U + 0.1 * Δ(kn(X_...))], ics(c, u), (8, 8),
-        [C, U, kA(X_...), kn(X_...)])
-end
-function mass()
-    G = g(X_...)
-    ms = [m(X_...) for m in (m1, m2, m3, m4, m5, m6)]
-    SK = sk(X_...)
-    eqs = [G ~ 0.5 + 0.45 * sin(0.7 * x + 0.3 * y), Dt(ms[1]) ~ G, Dt(ms[2]) ~ max(G - 0.5, 0), Dt(ms[3]) ~ G^2,
-        Dt(ms[4]) ~ exp(G), Dt(ms[5]) ~ SK * G, Dt(ms[6]) ~ G / (0.2 + G)]
-    return pdesys(eqs, ics(g, m1, m2, m3, m4, m5, m6), D, [G; ms; SK])
-end
-# a spatial operator across grids: direct (`xd`) and through aux fields, the manual route (`xr`)
-function xd()
-    @parameters Dc = 0.4
-    C, V, U = c(X_...), v(X_...), u(X_...)
-    return pdesys([Dt(V) ~ 0.1 * Δ(V) - V + 0.5 * kA(X_...), Dt(C) ~ Dc * Δ(C) - 0.3 * C + 0.5 * Δ(V),
-            Dt(U) ~ 0.2 * Δ(U) - U + 0.5 * Δ(C) + 0.1 * DivKGrad(:harmonic)(1 + x, C)],
-        ics(c, v, u), D, [C, V, U, kA(X_...)], [Dc])
-end
-function xr()
-    @parameters Dc = 0.4
-    C, V, U, Xa, La, Ma = c(X_...), v(X_...), u(X_...), X(X_...), L(X_...), M(X_...)
-    return pdesys([Dt(V) ~ 0.1 * Δ(V) - V + 0.5 * kA(X_...), Xa ~ Δ(V), La ~ Δ(C), Ma ~ DivKGrad(:harmonic)(1 + x, C),
-            Dt(C) ~ Dc * Δ(C) - 0.3 * C + 0.5 * Xa, Dt(U) ~ 0.2 * Δ(U) - U + 0.5 * La + 0.1 * Ma],
-        ics(c, X, L, M, v, u), D, [C, Xa, La, Ma, V, U, kA(X_...)], [Dc])
-end
-# an operator on another group's field `v`, with a Dirichlet face (`cut`) or a Robin face (`cut_bcs`)
-function cut(face)
-    C, V, U = c(X_...), v(X_...), u(X_...)
-    return pdesys([Dt(V) ~ 0.1 * Δ(V) - V + 0.5 * kA(X_...), Dt(C) ~ 0.4 * Δ(C) - 0.3 * C + 0.2 * V,
-            Dt(U) ~ 0.2 * Δ(U) - U + 0.5 * Δ(V) + 0.3 * Δ(C)],
-        [ics(c, v, u); face], D, [C, V, U, kA(X_...)])
-end
-cut() = cut(v(t, 0, y) ~ 1.0)
-cut_bcs() = cut(1.0 * v(t, 0, y) - Differential(x)(v(t, 0, y)) ~ 0.5)
+    using ..FieldPDE
+    @variables c(..) [lattice_level = Coarse(4)] e(..) kA(..)::Bool [input = true] kB(..)::Bool [input = true]
+    @variables u(..) kn(..) [input = true, lattice_input_name = "kind"]
+    @variables g(..) sk(..) [input = true] v(..) X(..) L(..) [lattice_level = Coarse(4)] M(..) [lattice_level = Coarse(4)]
+    @variables m1(..) [lattice_level = Coarse(4)] m2(..) [lattice_level = Coarse(4)] m3(..) [lattice_level = Coarse(4)]
+    @variables m4(..) [lattice_level = Coarse(4)] m5(..) [lattice_level = Coarse(4)] m6(..) [lattice_level = Coarse(4)]
+    const D = (16, 12)
+    const X_ = (t, x, y)
+    ics(fs...) = [f(0, x, y) ~ 0.0 for f in fs]
+    function mix()
+        @parameters Dc = 0.4 kd = 0.3 s = 0.5
+        C, E = c(X_...), e(X_...)
+        return pdesys(
+            [Dt(C) ~ Dc * Δ(C) - kd * C + s * kA(X_...) + 0.2 * E + 0.01 * x, Dt(E) ~ 0.1 * Δ(E) - E + 0.5 * C],
+            [ics(c, e); C ~ masked(kB(X_...), 2.0)], D, [C, E, kA(X_...), kB(X_...)], [Dc, kd, s]
+        )
+    end
+    dom() = (C = c(X_...); pdesys([Dt(C) ~ 0.4 * Δ(C) - 0.3 * C * kA(X_...) + 1.0], ics(c), D, [C, kA(X_...)]))
+    function on_copy()
+        @variables c(..) [lattice_level = Coarse(2)]
+        C = c(X_...)
+        return pdesys([Dt(C) ~ 0.1 * Δ(C) - C], ics(c), (8, 8), [C])
+    end
+    function where_()
+        @variables c(..)
+        C, U = c(X_...), u(X_...)
+        return pdesys(
+            [Dt(C) ~ 0.1 * Δ(C) - C, Dt(U) ~ kA(X_...) - U + 0.1 * Δ(kn(X_...))], ics(c, u), (8, 8),
+            [C, U, kA(X_...), kn(X_...)]
+        )
+    end
+    function mass()
+        G = g(X_...)
+        ms = [m(X_...) for m in (m1, m2, m3, m4, m5, m6)]
+        SK = sk(X_...)
+        eqs = [
+            G ~ 0.5 + 0.45 * sin(0.7 * x + 0.3 * y), Dt(ms[1]) ~ G, Dt(ms[2]) ~ max(G - 0.5, 0), Dt(ms[3]) ~ G^2,
+            Dt(ms[4]) ~ exp(G), Dt(ms[5]) ~ SK * G, Dt(ms[6]) ~ G / (0.2 + G),
+        ]
+        return pdesys(eqs, ics(g, m1, m2, m3, m4, m5, m6), D, [G; ms; SK])
+    end
+    # a spatial operator across grids: direct (`xd`) and through aux fields, the manual route (`xr`)
+    function xd()
+        @parameters Dc = 0.4
+        C, V, U = c(X_...), v(X_...), u(X_...)
+        return pdesys(
+            [
+                Dt(V) ~ 0.1 * Δ(V) - V + 0.5 * kA(X_...), Dt(C) ~ Dc * Δ(C) - 0.3 * C + 0.5 * Δ(V),
+                Dt(U) ~ 0.2 * Δ(U) - U + 0.5 * Δ(C) + 0.1 * DivKGrad(:harmonic)(1 + x, C),
+            ],
+            ics(c, v, u), D, [C, V, U, kA(X_...)], [Dc]
+        )
+    end
+    function xr()
+        @parameters Dc = 0.4
+        C, V, U, Xa, La, Ma = c(X_...), v(X_...), u(X_...), X(X_...), L(X_...), M(X_...)
+        return pdesys(
+            [
+                Dt(V) ~ 0.1 * Δ(V) - V + 0.5 * kA(X_...), Xa ~ Δ(V), La ~ Δ(C), Ma ~ DivKGrad(:harmonic)(1 + x, C),
+                Dt(C) ~ Dc * Δ(C) - 0.3 * C + 0.5 * Xa, Dt(U) ~ 0.2 * Δ(U) - U + 0.5 * La + 0.1 * Ma,
+            ],
+            ics(c, X, L, M, v, u), D, [C, Xa, La, Ma, V, U, kA(X_...)], [Dc]
+        )
+    end
+    # an operator on another group's field `v`, with a Dirichlet face (`cut`) or a Robin face (`cut_bcs`)
+    function cut(face)
+        C, V, U = c(X_...), v(X_...), u(X_...)
+        return pdesys(
+            [
+                Dt(V) ~ 0.1 * Δ(V) - V + 0.5 * kA(X_...), Dt(C) ~ 0.4 * Δ(C) - 0.3 * C + 0.2 * V,
+                Dt(U) ~ 0.2 * Δ(U) - U + 0.5 * Δ(V) + 0.3 * Δ(C),
+            ],
+            [ics(c, v, u); face], D, [C, V, U, kA(X_...)]
+        )
+    end
+    cut() = cut(v(t, 0, y) ~ 1.0)
+    cut_bcs() = cut(1.0 * v(t, 0, y) - Differential(x)(v(t, 0, y)) ~ 0.5)
 end
 
 
@@ -104,19 +122,23 @@ end
 fc_op() = [ownership => fc_sigma(), kind => [:A, :B]]
 
 fc_kin(σ = fc_sigma()) = Int32[s == 0 ? 0 : s for s in σ]
-          # kind number per site (A = 1, B = 2)
+# kind number per site (A = 1, B = 2)
 # A's fields and `avg` after each of `k` MCS
 function fc_runA(k; field_solver = BackwardEuler())
     integ = init(PottsProblem(FcMix(; name = :f), fc_op(), (0, k); field_solver), SequentialCPM(); save_start = false)
-    out = [(step!(integ); st = current_state(integ); (copy(Array(st.site.c)), copy(Array(st.site.e)), copy(st.cell.avg)))
-           for _ in 1:k]
+    out = [
+        (step!(integ); st = current_state(integ); (copy(Array(st.site.c)), copy(Array(st.site.e)), copy(st.cell.avg)))
+            for _ in 1:k
+    ]
     return out, integ
 end
 
 function fc_runB(k; alg = BackwardEuler(; dt = 1.0))
-    bp = Potts.LatticePDE.discretize(Potts.fields(FcMix(; name = :f)),
+    bp = Potts.LatticePDE.discretize(
+        Potts.fields(FcMix(; name = :f)),
         Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((16, 12)); T = Float64);
-        u0 = [:c => zeros(4, 3), :e => zeros(16, 12)], tspan = (0, k), inputs = [:kind => fc_kin()])
+        u0 = [:c => zeros(4, 3), :e => zeros(16, 12)], tspan = (0, k), inputs = [:kind => fc_kin()]
+    )
     s = Potts.LatticePDE.solve(bp, alg; saveat = 1.0)
     return [s[:c, i] for i in 2:length(s.t)], [s[:e, i] for i in 2:length(s.t)]
 end
@@ -227,14 +249,20 @@ end
 
         # 2. Irregular domain
         σ = zeros(Int32, 16, 12); σ[2:4, 2:4] .= 1
-        integ = init(PottsProblem(FcDom(; name = :d), [ownership => σ, kind => [:A]], (0, 3); field_solver = BackwardEuler()),
-            SequentialCPM(); save_start = false)
+        integ = init(
+            PottsProblem(FcDom(; name = :d), [ownership => σ, kind => [:A]], (0, 3); field_solver = BackwardEuler()),
+            SequentialCPM(); save_start = false
+        )
         ad = [(step!(integ); copy(Array(current_state(integ).site.c))) for _ in 1:3]
         dm = Array(current_state(integ).site.domain__in) .!= 0
-        bp = Potts.LatticePDE.discretize(Potts.fields(FcDom(; name = :d)),
-            Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((16, 12)); T = Float64,
-                domain = "domain__in"); u0 = [:c => zeros(4, 3)], tspan = (0, 3),
-            inputs = [:kind => Int32.(σ), :domain__in => dm])
+        bp = Potts.LatticePDE.discretize(
+            Potts.fields(FcDom(; name = :d)),
+            Potts.LatticePDE.LatticeDiscretization(
+                Potts.LatticePDE.Grid((16, 12)); T = Float64,
+                domain = "domain__in"
+            ); u0 = [:c => zeros(4, 3)], tspan = (0, 3),
+            inputs = [:kind => Int32.(σ), :domain__in => dm]
+        )
         @test ad == (s -> [s[:c, i] for i in 2:length(s.t)])(Potts.LatticePDE.solve(bp, BackwardEuler(; dt = 1.0); saveat = 1.0))
         out = [count(dm[(I[1] - 1) * 4 .+ (1:4), (I[2] - 1) * 4 .+ (1:4)]) <= 8 for I in CartesianIndices((4, 3))]
         @test any(out) && all(ad[end][out] .== 0.0) && all(ad[end][.!out] .> 0.0)
@@ -244,7 +272,7 @@ end
 @testitem "TS1-1: cross-grid operator coupled models equal LatticePDE owned run" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
     @testset "TS1-1: cross-grid operator coupled models equal LatticePDE owned run" begin
         # Cross-grid operators (`FcXd`, `FcXr`, `FcCut`, `FcCutBcs`)
-        tight = DevicePCG(; rtol = 1e-12, budget = 64)
+        tight = DevicePCG(; rtol = 1.0e-12, budget = 64)
         for fs in (ExplicitEuler(; substeps = 40), BackwardEuler(; inner = tight), CrankNicolson(; inner = tight))
             ax, rx = fx_run(FcXd, 3, fs), fx_run(FcXr, 3, fs)
             @test ax == rx && all(maximum(abs, ax[end][i]) > 0 for i in 1:3)
@@ -255,15 +283,17 @@ end
         fa = FieldGroups(:u => BackwardEuler(; inner = tight); default = ExplicitEuler(; substeps = 40))
         fb = FieldGroups(:u => BackwardEuler(; dt = 1.0, inner = tight); default = ExplicitEuler(; dt = 1.0, substeps = 40))
         for (M, fsA, fsB, tol) in (
-            (FcXd, BackwardEuler(), BackwardEuler(; dt = 1.0), 0.0),
-            (FcXd, ExplicitEuler(; substeps = 40), ExplicitEuler(; dt = 1.0, substeps = 40), 0.0),
-            (FcCut, fa, fb, 1e-10),
-            (FcCutBcs, fa, fb, 1e-10),
-        )
+                (FcXd, BackwardEuler(), BackwardEuler(; dt = 1.0), 0.0),
+                (FcXd, ExplicitEuler(; substeps = 40), ExplicitEuler(; dt = 1.0, substeps = 40), 0.0),
+                (FcCut, fa, fb, 1.0e-10),
+                (FcCutBcs, fa, fb, 1.0e-10),
+            )
             am = fx_run(M, 3, fsA)
-            bpm = Potts.LatticePDE.discretize(Potts.fields(M(; name = :x)),
+            bpm = Potts.LatticePDE.discretize(
+                Potts.fields(M(; name = :x)),
                 Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((16, 12)); T = Float64),
-                ; u0 = [:c => zeros(4, 3), :v => zeros(16, 12), :u => zeros(16, 12)], tspan = (0, 3), inputs = [:kind => fc_kin()])
+                ; u0 = [:c => zeros(4, 3), :v => zeros(16, 12), :u => zeros(16, 12)], tspan = (0, 3), inputs = [:kind => fc_kin()]
+            )
             sm = Potts.LatticePDE.solve(bpm, fsB; saveat = 1.0)
             @test [x[1] for x in am] == [sm[:c, i] for i in 2:length(sm.t)]
             @test [x[2] for x in am] == [sm[:v, i] for i in 2:length(sm.t)]
@@ -284,13 +314,19 @@ end
         c, avg = a[end - 1][1], a[end][3]
         # the hand average: each site of the cell reads the node of its block
         hand = [sum(c[(i - 1) ÷ 4 + 1, (j - 1) ÷ 4 + 1] for i in 1:16, j in 1:12 if σ[i, j] == n) / count(==(n), σ) for n in 1:2]
-        @test avg ≈ hand rtol = 1e-14
+        @test avg ≈ hand rtol = 1.0e-14
         # (not the average of the nodes the cell touches: cell A covers 35 sites over 4 blocks unevenly)
-        touched = [sum(c[I] for I in unique(CartesianIndex((i - 1) ÷ 4 + 1, (j - 1) ÷ 4 + 1)
-                                           for i in 1:16, j in 1:12 if σ[i, j] == n)) /
-                   length(unique(CartesianIndex((i - 1) ÷ 4 + 1, (j - 1) ÷ 4 + 1) for i in 1:16, j in 1:12 if σ[i, j] == n))
-                   for n in 1:2]
-        @test abs(avg[1] - touched[1]) > 1e-6
+        touched = [
+            sum(
+                c[I] for I in unique(
+                        CartesianIndex((i - 1) ÷ 4 + 1, (j - 1) ÷ 4 + 1)
+                        for i in 1:16, j in 1:12 if σ[i, j] == n
+                    )
+            ) /
+                length(unique(CartesianIndex((i - 1) ÷ 4 + 1, (j - 1) ÷ 4 + 1) for i in 1:16, j in 1:12 if σ[i, j] == n))
+                for n in 1:2
+        ]
+        @test abs(avg[1] - touched[1]) > 1.0e-6
         @test Potts._coarse_site(LinearIndices((16, 12))[9, 5], (16, 12), 2) == LinearIndices((4, 3))[3, 2]
         @test Potts._coarse_site(LinearIndices((8, 1, 4))[6, 1, 3], (8, 1, 4), 1) == LinearIndices((4, 1, 2))[3, 1, 2]
     end
@@ -347,7 +383,7 @@ end
         # a copy writes one site, which has no node of its own
         σ = zeros(Int32, 8, 8); σ[3:5, 3:5] .= 1
         fco_throws(
-            ErrorException, ["@on_copy cannot assign `c`", "write the change as a source in its equation"],
+            ArgumentError, ["@on_copy cannot assign `c`", "write the change as a source in its equation"],
             () -> PottsProblem(_FcOnCopy(; name = :o), [ownership => σ, kind => [:A]], (0, 1))
         )
         # review r1 N2: a refusal of the lowering names the equation it was lowering (not the first),
@@ -370,8 +406,10 @@ end
 
 @testitem "review r1 M2: a coarse source of a fine field receives its fine integral (in a model)" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
     @testset "review r1 M2: a coarse source of a fine field receives its fine integral (in a model)" begin
-        integ = init(PottsProblem(FcMass(; name = :m), fc_op(), (0, 1); field_solver = ExplicitEuler()), SequentialCPM();
-            save_start = false)
+        integ = init(
+            PottsProblem(FcMass(; name = :m), fc_op(), (0, 1); field_solver = ExplicitEuler()), SequentialCPM();
+            save_start = false
+        )
         step!(integ)
         st = current_state(integ)
         G = Array(st.site.g)
@@ -380,7 +418,7 @@ end
         want = (sum(G), sum(max.(G .- 0.5, 0)), sum(G .^ 2), sum(exp.(G)), sum(Sk .* G), sum(G ./ (0.2 .+ G)))
         for (i, w) in enumerate(want)
             got = sum(Array(getproperty(st.site, Symbol(:m, i)))) * 16
-            @test isapprox(got, w; rtol = 1e-13) || (println("M2 (A) m", i, ": ", got, " ", w); false)
+            @test isapprox(got, w; rtol = 1.0e-13) || (println("M2 (A) m", i, ": ", got, " ", w); false)
         end
     end
 end
@@ -388,20 +426,18 @@ end
 
 @testitem "F3-22: a Dual runs through a cross-grid term in a model (against central differences)" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
     @testset "F3-22: a Dual runs through a cross-grid term in a model (against central differences)" begin
-        tight = DevicePCG(; rtol = 1e-11, budget = 60)
+        tight = DevicePCG(; rtol = 1.0e-11, budget = 60)
         W = [0.01 * (i + 2j) for i in 1:16, j in 1:12]
         q(sol) = sum(W .* sol.u[end].site.u)
         drun(fs, p) = solve(PottsProblem(FcXd(; name = :x), [fc_op(); :Dc => p], (0, 6); field_solver = fs, seed = 3), SequentialCPM(); saveat = 0:2:6)
         for fs in (ExplicitEuler(; substeps = 40), BackwardEuler(; inner = tight))
             d = drun(fs, ForwardDiff.Dual(0.4, 1.0))
-            h = 1e-4 * 0.4
+            h = 1.0e-4 * 0.4
             fd = (q(drun(fs, 0.4 + h)) - q(drun(fs, 0.4 - h))) / 2h
-            @test ForwardDiff.partials(q(d), 1) ≈ fd rtol = 1e-6
+            @test ForwardDiff.partials(q(d), 1) ≈ fd rtol = 1.0e-6
             @test abs(fd) > 0
             # the Dual run is the primal run: its field values, bit for bit
             @test ForwardDiff.value.(d.u[end].site.u) == drun(fs, 0.4).u[end].site.u
         end
     end
 end
-
-

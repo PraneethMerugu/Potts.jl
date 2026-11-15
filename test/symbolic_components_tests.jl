@@ -167,7 +167,7 @@ end
         op = [ownership => σ, kind => [:A]]
         @potts_model BindProbeCell begin
             @structural_parameters begin
-                comp_sys
+                comp_sys = nothing
                 with_obs = false
             end
             @kinds medium A
@@ -180,7 +180,7 @@ end
             @sweep Metropolis(; temperature = 1.0e-6)
         end
         @potts_model BindProbeModel begin
-            @structural_parameters comp_sys
+            @structural_parameters comp_sys = nothing
             @kinds medium A
             @components model comp = comp_sys
             @lattice Lattice((10, 10))
@@ -199,32 +199,34 @@ end
         catch e
             e isa ArgumentError && (m = sprint(showerror, e); occursin("component `comp`", m) && occursin(word, m))
         end
-        @parameters k = 0.3
-        @parameters k2 = 2k
-        Potts.ModelingToolkitBase.@variables y(t) = 1.0 o(t)
-        # an unused bound parameter
-        sol = run(System([Potts.D(y) ~ -k * y], t, [y], [k, k2]; name = :comp))
-        @test sol.u[end].cell.comp₊y[1] ≈ (1 - 0.3)^2
-        # the same parameter used by the component, or read by the model, is the computed parameter
-        # `comp₊k2 = 2 comp₊k` (F2-14; before: rejected naming `k2`)
-        sol = run(System([Potts.D(y) ~ -k2 * y], t, [y], [k, k2]; name = :comp))
-        @test sol.u[end].cell.comp₊y[1] ≈ (1 - 0.6)^2
-        sol = run(System([Potts.D(y) ~ -k * y], t, [y], [k, k2]; name = :comp); with_obs = true)
-        @test Potts.observe(sol, :ok2)[end][1] ≈ 0.6
-        # at model scope, with nothing reading `comp.k2`, it builds
-        sol = run(System([Potts.D(y) ~ -k * y], t, [y], [k, k2]; name = :comp); scope = :model)
-        @test Symbol(sol.retcode) === :Success
-        # an observed variable bound (or given an initial value) consistent with its equation
-        Potts.ModelingToolkitBase.@variables ob(t) = 2y
-        sol = run(System([ob ~ 2y, Potts.D(y) ~ -k * ob], t; name = :comp))
-        @test sol.u[end].cell.comp₊y[1] ≈ (1 - 0.6)^2
-        sol = run(System([o ~ 2y, Potts.D(y) ~ -k * o], t; name = :comp, initial_conditions = [o => 2y]))
-        @test sol.u[end].cell.comp₊y[1] ≈ (1 - 0.6)^2
-        # an unknown's initial value given as an expression of parameters is evaluated (F2-14);
-        # negative control: one that reads an unknown is rejected
-        sol = run(System([o ~ 2y, Potts.D(y) ~ -k * o], t; name = :comp, initial_conditions = [y => 2k]))
-        @test sol.u[end].cell.comp₊y[1] ≈ 0.6 * (1 - 0.6)^2
-        Potts.ModelingToolkitBase.@variables q(t)
-        @test rejected(System([o ~ 2y, Potts.D(y) ~ -k * o, Potts.D(q) ~ -q], t; name = :comp, initial_conditions = [y => 2q, q => 1.0]), "2q")
+        let
+            @parameters k = 0.3
+            @parameters k2 = 2k
+            Potts.ModelingToolkitBase.@variables y(t) = 1.0 o(t)
+            # an unused bound parameter
+            sol = run(System([Potts.D(y) ~ -k * y], t, [y], [k, k2]; name = :comp))
+            @test sol.u[end].cell.comp₊y[1] ≈ (1 - 0.3)^2
+            # the same parameter used by the component, or read by the model, is the computed parameter
+            # `comp₊k2 = 2 comp₊k` (F2-14; before: rejected naming `k2`)
+            sol = run(System([Potts.D(y) ~ -k2 * y], t, [y], [k, k2]; name = :comp))
+            @test sol.u[end].cell.comp₊y[1] ≈ (1 - 0.6)^2
+            sol = run(System([Potts.D(y) ~ -k * y], t, [y], [k, k2]; name = :comp); with_obs = true)
+            @test Potts.observe(sol, :ok2)[end][1] ≈ 0.6
+            # at model scope, with nothing reading `comp.k2`, it builds
+            sol = run(System([Potts.D(y) ~ -k * y], t, [y], [k, k2]; name = :comp); scope = :model)
+            @test Symbol(sol.retcode) === :Success
+            # an observed variable bound (or given an initial value) consistent with its equation
+            Potts.ModelingToolkitBase.@variables ob(t) = 2y
+            sol = run(System([ob ~ 2y, Potts.D(y) ~ -k * ob], t; name = :comp))
+            @test sol.u[end].cell.comp₊y[1] ≈ (1 - 0.6)^2
+            sol = run(System([o ~ 2y, Potts.D(y) ~ -k * o], t; name = :comp, initial_conditions = [o => 2y]))
+            @test sol.u[end].cell.comp₊y[1] ≈ (1 - 0.6)^2
+            # an unknown's initial value given as an expression of parameters is evaluated (F2-14);
+            # negative control: one that reads an unknown is rejected
+            sol = run(System([o ~ 2y, Potts.D(y) ~ -k * o], t; name = :comp, initial_conditions = [y => 2k]))
+            @test sol.u[end].cell.comp₊y[1] ≈ 0.6 * (1 - 0.6)^2
+            Potts.ModelingToolkitBase.@variables q(t)
+            @test rejected(System([o ~ 2y, Potts.D(y) ~ -k * o, Potts.D(q) ~ -q], t; name = :comp, initial_conditions = [y => 2q, q => 1.0]), "2q")
+        end
     end
 end
