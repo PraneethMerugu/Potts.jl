@@ -46,13 +46,13 @@ end
 
 
 const AN_LATTICES = (
-    sq_periodic = () -> Lattice((7, 6); boundary = Periodic(), neighborhood = Moore(1)),
-    sq_disk = () -> Lattice(
+    sq_periodic = () -> Potts.lattice_spec((7, 6); boundary = Periodic(), neighborhood = Moore(1)),
+    sq_disk = () -> Potts.lattice_spec(
         (9, 8); boundary = Closed(), neighborhood = Moore(1),
         domain = x -> (x[1] - 5)^2 + (x[2] - 4.5)^2 <= 12
     ),
-    hex_periodic = () -> Lattice((6, 6); boundary = Periodic(), geometry = Hexagonal()),
-    cube_mixed = () -> Lattice((5, 4, 4); boundary = (Periodic(), Closed(), Periodic()), neighborhood = Moore(1)),
+    hex_periodic = () -> Potts.lattice_spec((6, 6); boundary = Periodic(), geometry = Hexagonal()),
+    cube_mixed = () -> Potts.lattice_spec((5, 4, 4); boundary = (Periodic(), Closed(), Periodic()), neighborhood = Moore(1)),
 )
 
 @potts_model AnContact begin

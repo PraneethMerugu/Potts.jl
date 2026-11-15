@@ -235,7 +235,7 @@ end
         σ = _op(layout(Frame(:w), Lattice((12, 12); boundary = Periodic(), domain = half)), ownership)
         @test findall(==(1), σ) == findall(i -> i[1] in (1, 6), CartesianIndices(σ))           # x = 1 meets 12 by wrap
         ly_throws(
-            ArgumentError, ["the domain has no boundary", "use a bounded domain"],
+            ArgumentError, ["the lattice has no boundary", "Closed()"],
             () -> layout(Frame(:w), Lattice((6, 6); boundary = Periodic(), domain = trues(6, 6)))
         )
         # hex (axial indices): a concave domain (a disk minus a wedge) gets the oracle ring, and

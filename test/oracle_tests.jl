@@ -9,7 +9,6 @@ using Potts: CorePotts
 isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "devices.jl"))
 using PottsModels: GranerGlazier
 include(joinpath(@__DIR__, "..", "lib", "CorePotts", "test", "oracle_core.jl"))
-include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 
 const ORACLE_JK = [0.0 6 8; 6 2 10; 8 10 3]                 # medium, dark, light
 const ORACLE_MOORE = [(a, b) for a in -1:1 for b in -1:1 if (a, b) != (0, 0)]
@@ -61,6 +60,7 @@ end
     end
     @sweep Metropolis(; temperature = T)
 end
+include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
 @testitem "generated Graner–Glazier against the exact oracle: SequentialCPM" setup = [OracleSetup] tags = [:potts, :oracle] begin
