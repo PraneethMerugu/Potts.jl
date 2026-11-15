@@ -54,6 +54,7 @@ function layer_rng(seed::Integer, stream::Union{Symbol, AbstractString})
 end
 
 function _check_seed(seed::Integer, what)
-    0 <= seed <= typemax(UInt64) || throw(ArgumentError("$what: seed must be in 0:typemax(UInt64), got $seed"))
+    0 <= seed <= typemax(UInt64) ||
+        throw(ArgumentError("$what: seed must be in 0:typemax(UInt64), got $seed; pass a non-negative integer seed"))
     return nothing
 end

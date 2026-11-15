@@ -10,26 +10,25 @@ using OrdinaryDiffEqTsit5: Tsit5
 using OrdinaryDiffEqRosenbrock: Rodas5P
 
 
-function adaptive_model()
-    @potts_model AdaptiveODEs begin
-        @kinds medium A B
-        @parameters k = 0.3
-        @variables begin
-            y(cell) = 1.0
-            s(cell) = 0.0
-            g(model) = 1.0
-        end
-        @lattice Lattice((20, 20))
-        @energy cells => (volume - 16.0)^2
-        @equations begin
-            D(y) ~ -k * y                                    # cell ODE
-            D(s) ~ -1000 * (s - cos(time))                   # stiff cell ODE
-            D(g) ~ -0.5 * g + count(true for c in cells(B))  # model ODE with a population input
-        end
-        @sweep Metropolis(; temperature = 1.0)
+@potts_model AdaptiveODEs begin
+    @kinds medium A B
+    @parameters k = 0.3
+    @variables begin
+        y(cell) = 1.0
+        s(cell) = 0.0
+        g(model) = 1.0
     end
-    return AdaptiveODEs(; name = :ad)
+    @lattice Lattice((20, 20))
+    @energy cells => (volume - 16.0)^2
+    @equations begin
+        D(y) ~ -k * y                                    # cell ODE
+        D(s) ~ -1000 * (s - cos(time))                   # stiff cell ODE
+        D(g) ~ -0.5 * g + count(true for c in cells(B))  # model ODE with a population input
+    end
+    @sweep Metropolis(; temperature = 1.0)
 end
+
+adaptive_model() = AdaptiveODEs(; name = :ad)
 
 
 @potts_model RndBase begin
@@ -146,28 +145,70 @@ end
     @after_mcs gm ~ gm + 1
     @sweep Metropolis(; temperature = 1.0)
 end
+@potts_model DeclLink begin
+    @kinds medium A
+    @variables begin
+        rest(bond) = 3.0
+        w(cell) = 1.0
+    end
+    @relationship bond(cell, cell) capacity = 2
+    @lattice Lattice((16, 16); neighborhood = Moore(1))
+    @energy cells => 100 * (volume - 16)^2
+    @link bond when = new_contact(a, b) && w[a] > 0
+    @unlink bond when = distance > 10.0
+    @sweep Metropolis(; temperature = 0.0)
+end
+
+
+function ad_throws(T, pats, f)
+    err = try
+        f(); nothing
+    catch e
+        e
+    end
+    @test err isa T
+    msg = sprint(showerror, err)
+    for pat in pats
+        @test occursin(pat, msg) || (println("Expected $(repr(pat)) in: ", msg); false)
+    end
+    return err
+end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "adaptive ODE integration (SciML solvers)" setup = [AdaptiveSetup] tags = [:potts, :adaptive] begin
-    @testset "adaptive ODE integration (SciML solvers)" begin
+@testitem "adaptive ODE integration (Tsit5 and remake)" setup = [AdaptiveSetup] tags = [:potts, :adaptive] begin
+    @testset "adaptive ODE integration (Tsit5 and remake)" begin
         σ = zeros(Int32, 20, 20); σ[3:6, 3:6] .= 1; σ[12:15, 12:15] .= 2
         op = [ownership => σ, kind => [:A, :B]]
         t = 5.0
         sa(t) = (1000 * (1000 * cos(t) + sin(t)) - 1000^2 * exp(-1000t)) / (1000^2 + 1)   # s(0) = 0
-        for solver in (Adaptive(Tsit5(); reltol = 1e-10, abstol = 1e-12), Adaptive(Rodas5P(); reltol = 1e-8, abstol = 1e-10))
-            p = PottsProblem(adaptive_model(), op, (0, 5); ode_solver = solver)
-            for alg in (SequentialCPM(), CheckerboardCPM())
-                u = solve(p, alg).u[end]
-                @test u.cell.y[1:2] ≈ fill(exp(-0.3t), 2) rtol = 1e-6
-                @test u.model.g[1] ≈ 2 + (1 - 2) * exp(-0.5t) rtol = 1e-6            # one B cell: g → 2
-                @test u.cell.s[1:2] ≈ fill(sa(t), 2) rtol = 1e-4
-            end
+        p = PottsProblem(adaptive_model(), op, (0, 5); ode_solver = Adaptive(Tsit5(); reltol = 1.0e-10, abstol = 1.0e-12))
+        for alg in (SequentialCPM(), CheckerboardCPM())
+            u = solve(p, alg).u[end]
+            @test u.cell.y[1:2] ≈ fill(exp(-0.3t), 2) rtol = 1.0e-6
+            @test u.model.g[1] ≈ 2 + (1 - 2) * exp(-0.5t) rtol = 1.0e-6            # one B cell: g → 2
+            @test u.cell.s[1:2] ≈ fill(sa(t), 2) rtol = 1.0e-4
         end
         # the integrator is created once and reused (init-once), and remake keeps working
-        p = PottsProblem(adaptive_model(), op, (0, 3); ode_solver = Adaptive(Tsit5(); reltol = 1e-8))
-        q = remake(p; p = [:k => 0.0])
+        p2 = PottsProblem(adaptive_model(), op, (0, 3); ode_solver = Adaptive(Tsit5(); reltol = 1.0e-8))
+        q = remake(p2; p = [:k => 0.0])
         @test solve(q, SequentialCPM()).u[end].cell.y[1] ≈ 1.0
+    end
+end
+
+@testitem "adaptive ODE integration (Rodas5P)" setup = [AdaptiveSetup] tags = [:potts, :adaptive] begin
+    @testset "adaptive ODE integration (Rodas5P)" begin
+        σ = zeros(Int32, 20, 20); σ[3:6, 3:6] .= 1; σ[12:15, 12:15] .= 2
+        op = [ownership => σ, kind => [:A, :B]]
+        t = 5.0
+        sa(t) = (1000 * (1000 * cos(t) + sin(t)) - 1000^2 * exp(-1000t)) / (1000^2 + 1)   # s(0) = 0
+        p = PottsProblem(adaptive_model(), op, (0, 5); ode_solver = Adaptive(Rodas5P(); reltol = 1.0e-8, abstol = 1.0e-10))
+        for alg in (SequentialCPM(), CheckerboardCPM())
+            u = solve(p, alg).u[end]
+            @test u.cell.y[1:2] ≈ fill(exp(-0.3t), 2) rtol = 1.0e-6
+            @test u.model.g[1] ≈ 2 + (1 - 2) * exp(-0.5t) rtol = 1.0e-6            # one B cell: g → 2
+            @test u.cell.s[1:2] ≈ fill(sa(t), 2) rtol = 1.0e-4
+        end
     end
 end
 
@@ -182,15 +223,22 @@ end
         @test solve(p, CheckerboardCPM(; proposal = Moore(1))).u[end].cell.y[1] ≈ exp(-0.9) rtol = 1e-6
         # a failing solve is an error, not a silent truncation
         bad = PottsProblem(adaptive_model(), op, (0, 1); ode_solver = Adaptive(Tsit5(); maxiters = 5))
-        @test_throws ErrorException solve(bad, SequentialCPM())
+        ad_throws(ErrorException, ["Adaptive ODE integration failed", "MaxIters"], () -> solve(bad, SequentialCPM()))
         # nested @extend: numbering continues (independent draws), the outer lattice dimension is kept
         σ2 = zeros(Int32, 16, 16); σ2[4:8, 4:8] .= 1
         u = solve(PottsProblem(RndOuter(; name = :o), [ownership => σ2, kind => [1]], (0, 1)), SequentialCPM()).u[end]
         @test u.cell.ra[1] != u.cell.rb[1]
         @test u.cell.pos_1[1] ≈ 6.0 atol = 1.5
         # replacement respects cadence; reinit! refreshes integrals
-        @test_throws ArgumentError PottsProblem(VectorBits(; name = :v), [ownership => zeros(Int32, 12, 12), kind => Int[],
-            :q => [1.0, 2.0]], (0, 1))
+        ad_throws(
+            ArgumentError, ["`q` has 3 components; got 2 numbers", "per-cell/site values"],
+            () -> PottsProblem(
+                VectorBits(; name = :v), [
+                    ownership => zeros(Int32, 12, 12), kind => Int[],
+                    :q => [1.0, 2.0],
+                ], (0, 1)
+            )
+        )
         r = PottsProblem(VectorBits(; name = :v), [ownership => (s = zeros(Int32, 12, 12); s[4:6, 4:6] .= 1; s), kind => [1],
             :q => [4.0, 5.0, 6.0]], (0, 1))
         @test r.u0.cell.q_2[1] == 5.0                                       # a flat vector: the vector itself
@@ -231,19 +279,6 @@ end
 
 @testitem "@link phases declare their reads and writes" setup = [AdaptiveSetup] tags = [:potts, :adaptive] begin
     @testset "@link phases declare their reads and writes" begin
-        @potts_model DeclLink begin
-            @kinds medium A
-            @variables begin
-                rest(bond) = 3.0
-                w(cell) = 1.0
-            end
-            @relationship bond(cell, cell) capacity = 2
-            @lattice Lattice((16, 16); neighborhood = Moore(1))
-            @energy cells => 100 * (volume - 16)^2
-            @link bond when = new_contact(a, b) && w[a] > 0
-            @unlink bond when = distance > 10.0
-            @sweep Metropolis(; temperature = 0.0)
-        end
         σ = zeros(Int32, 16, 16); σ[3:6, 3:6] .= 1; σ[7:10, 3:6] .= 2
         p = PottsProblem(DeclLink(; name = :d), [ownership => σ, kind => [:A, :A]], (0, 2))
         link, unlink = [ph for ph in p.f.phases.after_mcs if ph isa CorePotts.HostPhase]

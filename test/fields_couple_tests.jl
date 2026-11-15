@@ -148,17 +148,16 @@ end
         e = cp_msg(() -> Potts.couple(CpFields(; name = :m), CpPDE.sys(); inputs = [CpPDE.endo => Potts.kind == 1, CpPDE.vol => vol]))
         @test occursin("already has a parameter `Dc`", e) || occursin("already has a field `c`", e)
         # `@fields` syntax
-        e = try
-            @eval @potts_model CpBadFields begin
-                @kinds medium A
-                @lattice Lattice((24, 20); boundary = Closed())
-                @fields CpPDE.sys() (CpPDE.endo, CpPDE.vol => volume[owner])
-                @sweep Metropolis(; temperature = 4.0)
-            end
-            ""
-        catch err
-            sprint(showerror, err)
-        end
+        e = cp_build_err(
+            :(
+                @potts_model CpBadFields begin
+                    @kinds medium A
+                    @lattice Lattice((24, 20); boundary = Closed())
+                    @fields CpPDE.sys() (CpPDE.endo, CpPDE.vol => volume[owner])
+                    @sweep Metropolis(; temperature = 4.0)
+                end
+            )
+        )
         @test occursin("is not a binding; write `input => expression`", e)
         # the `:field` scope of `ode_system`: still refused with "field", now naming the route
         cs = mtkcompile(CpFields2(; name = :m))
@@ -239,8 +238,8 @@ end
     end
 end
 
-@testitem "F4-B2 review: lifecycle, faces, mask, steady rows, two PDESystems and Coarse(2), owned oracle" setup = [CoupleSetup] tags = [:potts, :fields_couple] begin
-    @testset "F4-B2 review: lifecycle, faces, mask, steady rows, two PDESystems and Coarse(2), owned oracle" begin
+@testitem "F4-B2 review: lifecycle, faces, mask, steady rows (CrLife, owned oracle)" setup = [CoupleSetup, CoupleReviewSetup] tags = [:potts, :fields_couple] begin
+    @testset "F4-B2 review: lifecycle, faces, mask, steady rows (CrLife, owned oracle)" begin
         for fs in (ExplicitEuler(), FieldGroups(:c => BackwardEuler(), :q => QuasiSteady()))
             b = cr_run(CrLife(; name = :m), fs, 20; op = cr_rich_op())
             # (the run divides cells and kills cell 2)
@@ -251,6 +250,11 @@ end
                 fields = (:c, :q), skip = cr_divided)
             @test n >= 10 && err <= cp_tol(fs) || (println("CrLife $fs: $err over $n windows"); false)
         end
+    end
+end
+
+@testitem "F4-B2 review: two PDESystems (CrTwoU, CrTwoB, owned oracle)" setup = [CoupleSetup, CoupleReviewSetup] tags = [:potts, :fields_couple] begin
+    @testset "F4-B2 review: two PDESystems (CrTwoU, CrTwoB, owned oracle)" begin
         for fs in (ExplicitEuler(), BackwardEuler())
             r = cr_run(CrTwoU(; name = :m), fs)
             @test cp_same(r, cr_run(CrTwoB(; name = :m), fs))
@@ -258,6 +262,13 @@ end
             f1 = fs isa ExplicitEuler ? ExplicitEuler(; substeps = 4) : fs
             err, n = cp_replay(CrTwoB(; name = :m), CpRev.first_sys(), cp_hand2, cp_own(f1); fs = f1, k = 10, seed = 5)
             @test n == 10 && err <= cp_tol(fs) || (println("CrTwoB $fs: $err"); false)
+        end
+    end
+end
+
+@testitem "F4-B2 review: Coarse(2) field against LatticePDE (CrCrs, owned oracle)" setup = [CoupleSetup, CoupleReviewSetup] tags = [:potts, :fields_couple] begin
+    @testset "F4-B2 review: Coarse(2) field against LatticePDE (CrCrs, owned oracle)" begin
+        for fs in (ExplicitEuler(), BackwardEuler())
             # the coarse field against LatticePDE's run of the raw PDESystem, with `endo` filled by hand
             c = cr_run(CrCrs(; name = :m), fs)
             @test size(c.u[end].site.cc) == (12, 10)
@@ -269,7 +280,7 @@ end
     end
 end
 
-@testitem "F4-B2 review M1: an unbound Bool input filled by a non-Bool word is refused" setup = [CoupleSetup] tags = [:potts, :fields_couple] begin
+@testitem "F4-B2 review M1: an unbound Bool input filled by a non-Bool word is refused" setup = [CoupleSetup, CoupleReviewSetup] tags = [:potts, :fields_couple] begin
     @testset "F4-B2 review M1: an unbound Bool input filled by a non-Bool word is refused" begin
         e = cp_build_err(quote
             @potts_model CrKindBool begin
@@ -324,7 +335,7 @@ end
 
 # (`Potts.kind == :A` is Julia's constant `false`: the name cannot be resolved, so a binding to a
 # constant truth value is refused with the route, and the route gives the `kind == 1` model)
-@testitem "F4-B2 review M3: kind names in Potts.couple" setup = [CoupleSetup] tags = [:potts, :fields_couple] begin
+@testitem "F4-B2 review M3: kind names in Potts.couple" setup = [CoupleSetup, CoupleReviewSetup] tags = [:potts, :fields_couple] begin
     @testset "F4-B2 review M3: kind names in Potts.couple" begin
         host = CrHost2(; name = :m)
         e = cp_msg(() -> Potts.couple(host, CpRev.first_sys(); inputs = [CpRev.endo => Potts.kind == :A]))

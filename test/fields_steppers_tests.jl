@@ -144,8 +144,11 @@ end
         # the steady state: an MCS later the field is unchanged to the solver's tolerance
         a, _ = fi_runA(FiSteady, fi_op(dims), 3; field_solver = QuasiSteady(; inner = DevicePCG(; rtol = 1e-12, budget = 64)))
         @test maximum(abs, a[3] .- a[2]) < 1e-10 && maximum(a[3]) > 0
-        @test_throws "`QuasiSteady(; dt = 0.1)`: a `PottsProblem` field steps over the MCS window (`mcs_duration`); leave `dt` out" PottsProblem(FiSteady(; name = :f),
-            fi_op(dims), (0, 2); field_solver = QuasiSteady(; dt = 0.1))
+        fi_throws(
+            ArgumentError,
+            ["`QuasiSteady(; dt = 0.1)`: a `PottsProblem` field steps over the MCS window (`mcs_duration`", "leave `dt` out"],
+            () -> PottsProblem(FiSteady(; name = :f), fi_op(dims), (0, 2); field_solver = QuasiSteady(; dt = 0.1))
+        )
         m = Module()
         Core.eval(m, :(using Potts; using Potts.LatticePDE))
         @test Core.eval(m, :QuasiSteady) === Potts.LatticePDE.QuasiSteady === Potts.LatticeFields.Problems.QuasiSteady
@@ -155,8 +158,17 @@ end
 @testitem "F3-12a (r2 M1): QuasiSteady in a loop of solver groups in a model is refused, with its routes" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
     @testset "F3-12a (r2 M1): QuasiSteady in a loop of solver groups in a model is refused, with its routes" begin
         dims = (12, 10)
-        @test_throws "the fields `u`, `w` are in solver groups that read one another in a loop, and `u` is solved with `QuasiSteady`" PottsProblem(
-            FiLoop(; name = :f), fi_op(dims), (0, 3); field_solver = FieldGroups(:u => QuasiSteady(), :w => BackwardEuler()))
+        fi_throws(
+            ArgumentError,
+            [
+                "the fields `u`, `w` are in solver groups that read one another in a loop, and `u` is solved with `QuasiSteady`",
+                "Give `u`, `w` one `BackwardEuler` solver",
+            ],
+            () -> PottsProblem(
+                FiLoop(; name = :f), fi_op(dims), (0, 3);
+                field_solver = FieldGroups(:u => QuasiSteady(), :w => BackwardEuler())
+            )
+        )
         for fs in (BackwardEuler(), FieldGroups(:u => BackwardEuler(), :w => BackwardEuler()))
             s = solve(PottsProblem(FiLoop(; name = :f), fi_op(dims), (0, 3); field_solver = fs), SequentialCPM())
             @test s.retcode == Potts.SciMLBase.ReturnCode.Success
@@ -168,11 +180,18 @@ end
     @testset "F3-12a: QuasiSteady in a model: the refusals; an island ends the run" begin
         dims = (12, 10)
         # a growth the operator sees (`g < 0` makes `- g c` a growth): at build and at a write
-        @test_throws "QuasiSteady: field `c`: its local derivative `∂f/∂c` = 0.5 is positive" PottsProblem(FiGrow(; name = :f),
-            fi_op(dims), (0, 3); field_solver = QuasiSteady())
+        fi_throws(
+            ArgumentError,
+            ["QuasiSteady: field `c`: its local derivative `∂f/∂c` = 0.5 is positive", "step the field with `BackwardEuler`"],
+            () -> PottsProblem(FiGrow(; name = :f), fi_op(dims), (0, 3); field_solver = QuasiSteady())
+        )
         integ = init(PottsProblem(FiSteady(; name = :f), fi_op(dims), (0, 3); field_solver = QuasiSteady()), SequentialCPM())
         step!(integ)
-        @test_throws "is positive (a growth the operator sees)" (integ.ps[:kd] = -1.0)
+        fi_throws(
+            ArgumentError,
+            ["is positive (a growth the operator sees)", "step the field with `BackwardEuler`"],
+            () -> (integ.ps[:kd] = -1.0)
+        )
         # an island: the cell sits in one disc; the other has no decay and no fixed value
         σ = zeros(Int32, 24, 12); σ[5:8, 5:8] .= 1
         p = PottsProblem(FiIsland(; name = :f), [ownership => σ, kind => [:A]], (0, 3); field_solver = QuasiSteady())
@@ -195,10 +214,22 @@ end
         @test a0 == fi_runB(FiSteady0, dims, k; u0 = [:c => zeros(dims)], alg = QuasiSteady(; dt = 1.0))
         @test any(eq -> startswith(string(eq), "0 ~"), Potts.fields(FiSteady0(; name = :f)).eqs)
         # another solver for a steady row is refused; `QuasiSteady` given is the default
-        @test_throws "`field_solver = BackwardEuler()`: every field of model `f` has a steady equation `0 ~ rhs` (`c`), which `QuasiSteady` solves" PottsProblem(
-            FiSteady0(; name = :f), fi_op(dims), (0, 2); field_solver = BackwardEuler())
-        @test_throws "`solvers`: the field `c` has a steady equation `0 ~ rhs`, which `QuasiSteady` solves" PottsProblem(
-            FiSteady0(; name = :f), fi_op(dims), (0, 2); solvers = [:c => BackwardEuler()])
+        fi_throws(
+            ArgumentError,
+            [
+                "`field_solver = BackwardEuler()`: every field of model `f` has a steady equation `0 ~ rhs` (`c`), which `QuasiSteady` solves",
+                "give `field_solver = QuasiSteady()` or leave it out",
+            ],
+            () -> PottsProblem(FiSteady0(; name = :f), fi_op(dims), (0, 2); field_solver = BackwardEuler())
+        )
+        fi_throws(
+            ArgumentError,
+            [
+                "`solvers`: the field `c` has a steady equation `0 ~ rhs`, which `QuasiSteady` solves",
+                "give `c => QuasiSteady()` or leave it out",
+            ],
+            () -> PottsProblem(FiSteady0(; name = :f), fi_op(dims), (0, 2); solvers = [:c => BackwardEuler()])
+        )
         b0, _ = fi_runA(FiSteady0, fi_op(dims), k; field_solver = QuasiSteady())
         @test b0 == a0
         # mixed: `c` steady (QuasiSteady), `e` with the field solver; the steady group first
@@ -208,8 +239,11 @@ end
             @test solve!(integ).retcode == Potts.SciMLBase.ReturnCode.Success
             @test first(substep_counts(integ)) == 1 && length(substep_counts(integ)) == 2
         end
-        @test_throws "`FieldGroups`: the field `c` has a steady equation `0 ~ rhs`" PottsProblem(FiSteadyMix(; name = :f),
-            fi_op(dims), (0, 2); field_solver = FieldGroups(:c => ExplicitEuler()))
+        fi_throws(
+            ArgumentError,
+            ["`FieldGroups`: the field `c` has a steady equation `0 ~ rhs`", "give `c => QuasiSteady()` or leave it out"],
+            () -> PottsProblem(FiSteadyMix(; name = :f), fi_op(dims), (0, 2); field_solver = FieldGroups(:c => ExplicitEuler()))
+        )
     end
 end
 
@@ -237,27 +271,47 @@ end
             st = current_state(integ).site
             @test maximum(abs, Array(st.w) .- 0.375^n) < 1e-9 && maximum(abs, Array(st.u) .- 0.5 * 0.375^(n - 1)) < 1e-9
         end
-        @test_throws "window · Σ k_in · gain · k_out = 2.5 > 1" (integ.ps[:kd] = 0.1)
+        fi_throws(
+            ArgumentError,
+            ["window · Σ k_in · gain · k_out = 2.5 > 1", "Give `u`, `w` one `BackwardEuler` solver"],
+            () -> (integ.ps[:kd] = 0.1)
+        )
         @test integ.ps[:kd] == 1.0
         # a kind-table decay (smallest 1: κ = 0.25): accepted; a table write to 0.1 is refused
         integ = init(PottsProblem(FiLoopT(; name = :f), fi_op(dims), (0, 3); field_solver = fs), SequentialCPM())
         @test solve!(integ).retcode == FiRC.Success
-        @test_throws "window · Σ k_in · gain · k_out = 2.5 > 1" (integ.ps[:δ] = [0.1, 0.1])
+        fi_throws(
+            ArgumentError,
+            ["window · Σ k_in · gain · k_out = 2.5 > 1", "Give `u`, `w` one `BackwardEuler` solver"],
+            () -> (integ.ps[:δ] = [0.1, 0.1])
+        )
         # the cross coefficients in kind tables: either one past the limit is refused at build and
         # at a write (the values unchanged); within it the loop runs
         for (k, v) in ((:ko, [0.5, 3.0]), (:ki, [3.0, 0.5]))
-            @test_throws "window · Σ k_in · gain · k_out = 1.5 > 1" PottsProblem(FiLoopX(; name = :f, k => v), fi_op(dims), (0, 3);
-                field_solver = fs)
+            fi_throws(
+                ArgumentError,
+                ["window · Σ k_in · gain · k_out = 1.5 > 1", "Give `u`, `w` one `BackwardEuler` solver"],
+                () -> PottsProblem(FiLoopX(; name = :f, k => v), fi_op(dims), (0, 3); field_solver = fs)
+            )
         end
         integ = init(PottsProblem(FiLoopX(; name = :f), fi_op(dims), (0, 3); field_solver = fs), SequentialCPM())
         for k in (:ko, :ki)
-            @test_throws "> 1" (integ.ps[k] = [3.0, 3.0])
+            fi_throws(ArgumentError, ["> 1", "Give `u`, `w` one `BackwardEuler` solver"], () -> (integ.ps[k] = [3.0, 3.0]))
             @test integ.ps[k] == [0.5, 0.5]
         end
         @test solve!(integ).retcode == FiRC.Success
         # FiLoop (gain 10, κ = 2.5) stays refused, now with the gain
-        @test_throws "(`u` answers at once with a gain up to 10.0, from its smallest decay and its faces, times 0.5" PottsProblem(
-            FiLoop(; name = :f), fi_op(dims), (0, 3); field_solver = FieldGroups(:u => QuasiSteady(), :w => BackwardEuler()))
+        fi_throws(
+            ArgumentError,
+            [
+                "(`u` answers at once with a gain up to 10.0, from its smallest decay and its faces, times 0.5",
+                "Give `u`, `w` one `BackwardEuler` solver",
+            ],
+            () -> PottsProblem(
+                FiLoop(; name = :f), fi_op(dims), (0, 3);
+                field_solver = FieldGroups(:u => QuasiSteady(), :w => BackwardEuler())
+            )
+        )
     end
 end
 
@@ -282,12 +336,24 @@ end
         integ = init(PottsProblem(FiSteady(; name = :f), fi_op(dims), (0, 3); field_solver = BackwardEuler()), SequentialCPM())
         @test all(iszero, Array(current_state(integ).site.c))
         # a growth has no stable steady state: refused at build, naming `init`; the step alone runs
-        @test_throws "`init = :steady` of `c`: QuasiSteady: field `c`: its local derivative `∂f/∂c` = 0.5 is positive" PottsProblem(
-            FiGrow(; name = :f), fi_op(dims), (0, 3); field_solver = BackwardEuler(; init = :steady))
+        fi_throws(
+            ArgumentError,
+            [
+                "`init = :steady` of `c`: QuasiSteady: field `c`: its local derivative `∂f/∂c` = 0.5 is positive",
+                "step the field with `BackwardEuler`",
+            ],
+            () -> PottsProblem(FiGrow(; name = :f), fi_op(dims), (0, 3); field_solver = BackwardEuler(; init = :steady))
+        )
         @test PottsProblem(FiGrow(; name = :f), fi_op(dims), (0, 3); field_solver = BackwardEuler()) isa PottsProblem
         # an ODE starts from its initial values
-        @test_throws "`ode_solver`: `ExplicitEuler(; init = :steady)`: `init = :steady` starts a field group at its steady state" Potts._check_ode_dt(
-            ExplicitEuler(; init = :steady), "`ode_solver`")
+        fi_throws(
+            ArgumentError,
+            [
+                "`ode_solver`: `ExplicitEuler(; init = :steady)`: `init = :steady` starts a field group at its steady state",
+                "leave `init` out",
+            ],
+            () -> Potts._check_ode_dt(ExplicitEuler(; init = :steady), "`ode_solver`")
+        )
         # the canonical text names `init` when it is set, and keeps the default's otherwise
         @test Potts._canonical(BackwardEuler(; init = :steady)) != Potts._canonical(BackwardEuler())
         # the PCG count of `ExplicitEuler(init = :steady)` from zero (design §5; review r4 N4): one
@@ -308,8 +374,14 @@ end
         dims = (12, 10)
         # FiRobinN's face (α 1, β 1 at unit spacing: +0.8 on the diagonal against the decay 0.3) makes
         # the steady operator indefinite: refused, as in B
-        @test_throws "its steady operator is indefinite (smallest eigenvalue -0.233)" PottsProblem(FiRobinN(; name = :f), fi_op(dims),
-            (0, 3); field_solver = QuasiSteady())
+        fi_throws(
+            ArgumentError,
+            [
+                "its steady operator is indefinite (smallest eigenvalue -0.233)",
+                "step the field with `BackwardEuler`, or give the face a smaller |β|",
+            ],
+            () -> PottsProblem(FiRobinN(; name = :f), fi_op(dims), (0, 3); field_solver = QuasiSteady())
+        )
         σ = zeros(Int32, 16, 16); σ[4:7, 4:7] .= 1; σ[10:13, 9:12] .= 2
         integ = init(PottsProblem(FiMoving(; name = :f), [ownership => σ, kind => [:A, :A]], (0, 20);
             field_solver = QuasiSteady(), seed = 3), SequentialCPM(); save_start = false)
@@ -329,20 +401,26 @@ end
     @testset "F3-12d: coupled steady pair strong-gain refusal" begin
         # strong (k = 5): the rule's bound on the pair's joint gain does not hold; the routes say that
         # the steady rows must be rates for `BackwardEuler`
-        m = try
-            PottsProblem(FcFeed(; name = :f, k = 5.0), fi_op((12, 10)), (0, 3)); ""
-        catch err
-            sprint(showerror, err)
-        end
-        @test occursin("the steady fields `u`, `v` of one group read one another", m) &&
-              occursin("for a `BackwardEuler` route, write the steady rows of `u`, `v` as rates `D(c) ~ rhs`", m) ||
-              (println("12d strong A ", m); false)
+        fi_throws(
+            ArgumentError,
+            [
+                "the steady fields `u`, `v` of one group read one another",
+                "for a `BackwardEuler` route, write the steady rows of `u`, `v` as rates `D(c) ~ rhs`",
+            ],
+            () -> PottsProblem(FcFeed(; name = :f, k = 5.0), fi_op((12, 10)), (0, 3))
+        )
     end
 end
 
 @testitem "F3-12d: a coupled steady group with a Float16 field is refused" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
     @testset "F3-12d: a coupled steady group with a Float16 field is refused" begin
-        @test_throws "the field `v` is stored in Float16, whose rounding is too coarse for the coupled solve's difference of the residual; give it `lattice_storage = Float32`" init(
-            PottsProblem(FcHalf(; name = :f), fi_op((12, 10)), (0, 3)), SequentialCPM())
+        fi_throws(
+            ArgumentError,
+            [
+                "the field `v` is stored in Float16, whose rounding is too coarse for the coupled solve's difference of the residual",
+                "give it `lattice_storage = Float32`",
+            ],
+            () -> init(PottsProblem(FcHalf(; name = :f), fi_op((12, 10)), (0, 3)), SequentialCPM())
+        )
     end
 end

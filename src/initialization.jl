@@ -380,7 +380,11 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
         what = "the operating-point value of the algebraic variable `$name` (the condition `$name ~ value`, `$name ~ $(o.rhs)`)"
         _check_init_reads(o.rhs, what)
         v = _evaluate(opd[_unwrap(o.lhs)], pvals, "the operating-point value of `$name`")
-        v isa AbstractArray ? (length(v) == n || throw(ArgumentError("$(length(v)) values of `$name` for $n entities"))) :
+        v isa AbstractArray ?
+            (
+                length(v) == n ||
+                throw(ArgumentError("the operating-point value of `$name`: got $(length(v)) values for $n entities; pass a scalar or a length-$n vector"))
+            ) :
         v isa Real || throw(ArgumentError("the operating-point value of `$name`: a number or one number per cell; got $(repr(v))"))
         push!(values, v)
     end
