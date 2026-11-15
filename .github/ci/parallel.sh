@@ -49,8 +49,44 @@ for k in 1 2 3; do
 done
 launch GPU 6-7,22-23 env GROUP=GPU POTTS_GPU=rocm "$JULIA" --project=test test/runtests.jl
 launch Potts 8-9,24-25 env GROUP=Potts "$JULIA" ${COV_FLAG:+"$COV_FLAG"} --project=test test/runtests.jl
-launch LatticeFields+LatticePDE+CorePotts+MakiePotts+Multithreaded 10-11,26-27 env COV_FLAG="$COV_FLAG" JULIA="$JULIA" bash -c \
-    'for g in LatticeFields LatticePDE CorePotts MakiePotts; do GROUP="$g" "$JULIA" ${COV_FLAG:+"$COV_FLAG"} --project=test test/runtests.jl || exit $?; done; GROUP=Multithreaded "$JULIA" -t 4 ${COV_FLAG:+"$COV_FLAG"} --project=test test/runtests.jl'
+budget_secs() {
+    case "$1" in
+        Potts) echo 1800 ;;
+        PottsModels-*|LatticePDE) echo 1200 ;;
+        LatticeFields|CorePotts|MakiePotts) echo 300 ;;
+        *) echo 0 ;;
+    esac
+}
+
+report_budget() {
+    local name=$1 secs=$2
+    local limit
+    limit=$(budget_secs "$name")
+    [ "$limit" -eq 0 ] && return 0
+    if [ "${POTTS_CI_COVERAGE:-0}" = "0" ] && [ "$secs" -gt "$limit" ]; then
+        echo "::warning::$name took $(( secs / 60 )) min $(( secs % 60 )) s (uncovered budget $(( limit / 60 )) min)"
+    fi
+}
+
+subgroups=(LatticeFields LatticePDE CorePotts MakiePotts Multithreaded)
+
+launch LatticeFields+LatticePDE+CorePotts+MakiePotts+Multithreaded 10-11,26-27 env COV_FLAG="$COV_FLAG" JULIA="$JULIA" LOGS="$LOGS" bash -c '
+    run_one() {
+        local g=$1 threads=$2 t0=$SECONDS rc
+        if [ "$threads" -gt 1 ]; then
+            GROUP="$g" "$JULIA" -t "$threads" ${COV_FLAG:+"$COV_FLAG"} --project=test test/runtests.jl
+        else
+            GROUP="$g" "$JULIA" ${COV_FLAG:+"$COV_FLAG"} --project=test test/runtests.jl
+        fi
+        rc=$?
+        echo "$rc $(( SECONDS - t0 ))" > "$LOGS/$g.exit"
+        return "$rc"
+    }
+    for g in LatticeFields LatticePDE CorePotts MakiePotts; do
+        run_one "$g" 1 || exit $?
+    done
+    run_one Multithreaded 4
+'
 wait
 
 failed=0
@@ -64,6 +100,17 @@ done
 echo "summary:"
 for name in "${names[@]}"; do
     read -r code secs < "$LOGS/$name.exit" || { code=99; secs=0; }
-    printf '  %-22s exit %-3s %3d min %02d s\n' "$name" "$code" $(( secs / 60 )) $(( secs % 60 ))
+    printf '  %-58s exit %-3s %3d min %02d s\n' "$name" "$code" $(( secs / 60 )) $(( secs % 60 ))
+    report_budget "$name" "$secs"
+done
+echo "subgroups (10-11,26-27 lane):"
+for g in "${subgroups[@]}"; do
+    if [ -f "$LOGS/$g.exit" ]; then
+        read -r code secs < "$LOGS/$g.exit" || { code=99; secs=0; }
+        printf '  %-58s exit %-3s %3d min %02d s\n' "$g" "$code" $(( secs / 60 )) $(( secs % 60 ))
+        report_budget "$g" "$secs"
+    else
+        printf '  %-58s not run (earlier subgroup failed)\n' "$g"
+    fi
 done
 exit $failed
