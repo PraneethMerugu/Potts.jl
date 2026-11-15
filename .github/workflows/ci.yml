@@ -31,6 +31,40 @@ env:
   PIN: taskset -c 0-11,16-27
 
 jobs:
+  format:
+    name: Runic formatting check (changed .jl files)
+    runs-on: [self-hosted, Linux, X64, rocm]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Julia on PATH
+        run: echo "$HOME/.juliaup/bin" >> "$GITHUB_PATH"
+      - name: Check changed .jl files with Runic
+        env:
+          JULIA_PKG_OFFLINE: "true"
+        run: |
+          BASE_REF="${{ github.event.before }}"
+          if [ -z "$BASE_REF" ] || [ "$BASE_REF" = "0000000000000000000000000000000000000000" ]; then
+            BASE_REF="HEAD~1"
+          fi
+          mapfile -t CHANGED < <(git diff --name-only --diff-filter=ACMRT "$BASE_REF" HEAD -- '*.jl')
+          if [ "${#CHANGED[@]}" -eq 0 ]; then
+            echo "No changed .jl files to check."
+            exit 0
+          fi
+          printf 'Checking %d changed .jl file(s) with Runic:\n' "${#CHANGED[@]}"
+          printf '  %s\n' "${CHANGED[@]}"
+          TMP_RUNIC=$(mktemp -d)
+          trap 'rm -rf "$TMP_RUNIC"' EXIT
+          $PIN julia --startup-file=no --project="$TMP_RUNIC" -e '
+            using Pkg
+            Pkg.add("Runic"; io=devnull)
+            using Runic
+            exit(Runic.main(vcat(["--check", "--diff"], ARGS)))
+          ' -- "${CHANGED[@]}"
+
   test:
     name: CPU suites and ROCm GPU group
     runs-on: [self-hosted, Linux, X64, rocm]

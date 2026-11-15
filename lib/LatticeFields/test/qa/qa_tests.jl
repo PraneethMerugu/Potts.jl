@@ -27,25 +27,23 @@ const LF_NONPUBLIC = (
     :Tag,                                  # ForwardDiff's documented tag of a Dual (the extension's colored Jacobian and JVP, F4-07); no `public`
     :AbstractKrylovSubspaceMethod, :init_cacheval, :needs_concrete_A, :LinearCache  # LinearSolve's documented hooks of a new algorithm (the extension's `LatticePCG`, F4-08); no `public`
 )
+include(joinpath(@__DIR__, "..", "..", "..", "..", "test", "shared", "qa_common.jl"))
 include("../shared/export_all.jl")
 end
 
 @testitem "ExplicitImports" setup = [LF_qa_qa] tags = [:latticefields, :qa] begin
 @testset "ExplicitImports" begin
-    @test check_no_implicit_imports(LatticeFields) === nothing
-    @test check_all_explicit_imports_are_public(LatticeFields; ignore = LF_NONPUBLIC) ===
-          nothing
-    @test check_no_stale_explicit_imports(LatticeFields) === nothing
-    @test check_all_qualified_accesses_via_owners(LatticeFields) === nothing
-    @test check_all_qualified_accesses_are_public(LatticeFields; ignore = LF_NONPUBLIC) ===
-          nothing
+    qa_explicit_imports(LatticeFields;
+        nonpublic_explicit = LF_NONPUBLIC,
+        nonpublic_qualified = LF_NONPUBLIC)
 end
 end
 
 @testitem "API docs and extensions" setup = [LF_qa_qa] tags = [:latticefields, :qa] begin
 using OrdinaryDiffEqRosenbrock: OrdinaryDiffEqRosenbrock
 @testset "Docs.undocumented_names and extensions (LatticeFields)" begin
-    @test isempty(Docs.undocumented_names(LatticeFields; private = false))
+    # LatticeFields is an internal sublibrary not listed in docs/make.jl `modules`.
+    qa_api_docs(LatticeFields; check_docs_blocks = false)
     @test Base.get_extension(LatticeFields, :LatticeFieldsForwardDiffExt) !== nothing
     @test Base.get_extension(LatticeFields, :LatticeFieldsDiffEqBaseExt) !== nothing
     @test Base.get_extension(LatticeFields, :LatticeFieldsOrdinaryDiffEqCoreExt) !== nothing
@@ -57,8 +55,7 @@ end
 
 @testitem "Aqua" setup = [LF_qa_qa] tags = [:latticefields, :qa] begin
 @testset "Aqua" begin
-    using Aqua: Aqua
-    Aqua.test_all(LatticeFields)
+    qa_aqua(LatticeFields)
 end
 end
 
@@ -78,12 +75,6 @@ end
 @testitem "source rules" setup = [LF_qa_qa] tags = [:latticefields, :qa] begin
 @testset "source rules" begin
     root = dirname(@__DIR__) |> dirname
-    files = [joinpath(d, f) for dir in ("src", "test")
-             for (d, _, fs) in walkdir(joinpath(root, dir))
-             for f in fs if endswith(f, ".jl")]
-    banned = r"\b(Jiang|Merks|Bauer|Graner|Glazier|Fortuna|Hogeweg|Szabo|Marée|FBCA|OpenVT)\b"
-    hits = [f for f in files if f != (@__FILE__) && occursin(banned, read(f, String))]
-    @test isempty(hits)
-    @test !any(f -> occursin("@generated", read(f, String)), filter(f -> occursin("/src/", f), files))
+    qa_source_rules(root; exclude_files = [@__FILE__])
 end
 end

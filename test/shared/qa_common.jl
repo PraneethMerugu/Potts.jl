@@ -1,0 +1,151 @@
+# Shared 6-package QA helpers (TS3-1: Potts, CorePotts, LatticeFields, LatticePDE,
+# MakiePotts, PottsModels). Included by each package's QA test file/setup.
+
+if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
+    const _POTTS_QA_COMMON_DEFINED = true
+
+    const _QA_DEFAULT_BANNED = r"\b(Jiang|Merks|Bauer|Graner|Glazier|Fortuna|Hogeweg|Szabo|Marée|FBCA|OpenVT)\b"
+
+    """
+        qa_aqua(mod; ambiguities = true, persistent_tasks = true,
+                deps_compat = (; check_extras = true), kwargs...)
+
+    Run `Aqua.test_all` with `ambiguities = true` enabled by default across all six
+    packages. Pass `persistent_tasks = false` or `deps_compat = (; check_extras = false)`
+    only where justified and documented at the call site.
+    """
+    function qa_aqua(
+            mod::Module;
+            ambiguities = true,
+            persistent_tasks = true,
+            deps_compat = (; check_extras = true),
+            kwargs...
+        )
+        Aqua = Base.require(Base.PkgId(Base.UUID("4c88cf16-eb10-579e-8560-4a9242c79595"), "Aqua"))
+        Base.invokelatest(Aqua.test_all, mod; ambiguities, persistent_tasks, deps_compat, kwargs...)
+        return nothing
+    end
+
+    """
+        qa_explicit_imports(mod; nonpublic_explicit = (), nonpublic_qualified = (),
+                            skip_owners = false)
+
+    Run the five `ExplicitImports` hygiene checks on `mod` (including any loaded
+    extensions).
+    """
+    function qa_explicit_imports(
+            mod::Module;
+            nonpublic_explicit = (),
+            nonpublic_qualified = (),
+            skip_owners = false
+        )
+        EI = Base.require(Base.PkgId(Base.UUID("7d51a73a-1435-4ff3-83d9-f097790105c7"), "ExplicitImports"))
+        Test = Base.require(Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test"))
+        Test.@test Base.invokelatest(EI.check_no_implicit_imports, mod) === nothing
+        Test.@test Base.invokelatest(EI.check_all_explicit_imports_are_public, mod; ignore = nonpublic_explicit) === nothing
+        Test.@test Base.invokelatest(EI.check_no_stale_explicit_imports, mod) === nothing
+        if !skip_owners
+            Test.@test Base.invokelatest(EI.check_all_qualified_accesses_via_owners, mod) === nothing
+        end
+        Test.@test Base.invokelatest(EI.check_all_qualified_accesses_are_public, mod; ignore = nonpublic_qualified) === nothing
+        return nothing
+    end
+
+    function _qa_collect_docs_coverage(docs_dir::AbstractString)
+        autodoc_modules = Set{String}()
+        doc_entries = Set{String}()
+        scan_dirs = [joinpath(docs_dir, "src"), joinpath(docs_dir, "models")]
+        for d in scan_dirs
+            isdir(d) || continue
+            for (root, _, files) in walkdir(d), f in files
+                (endswith(f, ".md") || endswith(f, ".jl")) || continue
+                text = read(joinpath(root, f), String)
+                for m in eachmatch(r"```@autodocs\s+(.*?)```"s, text)
+                    mm = match(r"Modules\s*=\s*\[([^\]]+)\]", m[1])
+                    mm === nothing && continue
+                    for item in split(mm[1], ',')
+                        s = strip(item)
+                        isempty(s) || push!(autodoc_modules, s)
+                    end
+                end
+                for m in eachmatch(r"```@docs\s*\n(.*?)```"s, text)
+                    for line in split(m[1], '\n')
+                        s = strip(line)
+                        isempty(s) || push!(doc_entries, s)
+                    end
+                end
+            end
+        end
+        return autodoc_modules, doc_entries
+    end
+
+    """
+        qa_api_docs(mod; submodules = (), docs_dir = nothing, check_docs_blocks = true,
+                    doc_module_names = String[], extra_documented = Symbol[])
+
+    Verify that every public name in `mod` (and `submodules`) has a docstring via
+    `Docs.undocumented_names`, and when `check_docs_blocks` is true, verify that `mod`
+    is covered by `@autodocs` or `@docs` blocks under `docs_dir`.
+    """
+    function qa_api_docs(
+            mod::Module;
+            submodules = (),
+            docs_dir = nothing,
+            check_docs_blocks::Bool = true,
+            doc_module_names::AbstractVector{<:AbstractString} = String[],
+            extra_documented::AbstractVector{Symbol} = Symbol[]
+        )
+        Test = Base.require(Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test"))
+        Test.@test isempty(Docs.undocumented_names(mod; private = false))
+        for sub in submodules
+            Test.@test isempty(Docs.undocumented_names(sub; private = false))
+        end
+        if check_docs_blocks && docs_dir !== nothing && isdir(docs_dir)
+            autodoc_modules, doc_entries = _qa_collect_docs_coverage(docs_dir)
+            candidates = isempty(doc_module_names) ? [string(nameof(mod))] : collect(String, doc_module_names)
+            if !any(in(autodoc_modules), candidates)
+                public_names = [
+                    n for n in names(mod; all = false, imported = false)
+                        if n !== nameof(mod) && !(n in extra_documented)
+                ]
+                prefix = string(nameof(mod), ".")
+                missing_docs = [
+                    n for n in public_names
+                        if !(string(n) in doc_entries) && !((prefix * string(n)) in doc_entries)
+                ]
+                Test.@test isempty(missing_docs)
+            end
+        end
+        return nothing
+    end
+
+    """
+        qa_source_rules(pkg_root; banned_pattern = _QA_DEFAULT_BANNED,
+                        check_no_generated = true, exclude_files = String[])
+
+    Verify that `src/` and `test/` files in `pkg_root` do not contain model/author names
+    matching `banned_pattern`, and (when `check_no_generated = true`) that `src/` contains
+    no `@generated` definitions.
+    """
+    function qa_source_rules(
+            pkg_root::AbstractString;
+            banned_pattern::Regex = _QA_DEFAULT_BANNED,
+            check_no_generated::Bool = true,
+            exclude_files::AbstractVector{<:AbstractString} = String[]
+        )
+        Test = Base.require(Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test"))
+        excluded = Set(normpath.(exclude_files))
+        files = [
+            joinpath(d, f) for dir in ("src", "test")
+                for (d, _, fs) in walkdir(joinpath(pkg_root, dir))
+                for f in fs if endswith(f, ".jl")
+        ]
+        hits = [f for f in files if !(normpath(f) in excluded) && occursin(banned_pattern, read(f, String))]
+        Test.@test isempty(hits)
+        if check_no_generated
+            src_files = filter(f -> occursin(joinpath("", "src", ""), f), files)
+            Test.@test !any(f -> occursin("@generated", read(f, String)), src_files)
+        end
+        return nothing
+    end
+end

@@ -1,0 +1,37 @@
+using Test, Potts, PottsModels
+using Potts: CorePotts
+using CairoMakie: CairoMakie
+using MakiePotts: MakiePotts
+using JET: @test_opt
+
+include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "qa_common.jl"))
+
+@testset "PottsModels QA" begin
+    @testset "Aqua" begin
+        # `check_extras = false`: workspace test-only deps live in test/Project.toml.
+        qa_aqua(PottsModels; deps_compat = (; check_extras = false))
+    end
+
+    @testset "ExplicitImports" begin
+        # `R2HC`, `r2r`: FFTW's documented real-to-halfcomplex plan API, not declared `public` in FFTW.
+        qa_explicit_imports(PottsModels; nonpublic_explicit = (:R2HC, :r2r))
+    end
+
+    @testset "API docs and extensions" begin
+        qa_api_docs(
+            PottsModels;
+            submodules = (PottsModels.Analysis,),
+            docs_dir = joinpath(@__DIR__, "..", "..", "..", "docs")
+        )
+        @test Base.get_extension(PottsModels, :PottsModelsMakieExt) !== nothing
+    end
+
+    @testset "JET" begin
+        @test_opt target_modules = (PottsModels,) akeeb_contacts(2.0)
+        σ, kinds = graner_glazier_state()
+        prob = PottsProblem(GranerGlazier(; name = :gg_qa), [ownership => σ, kind => kinds], (0, 2))
+        integ = init(prob, SequentialCPM(; proposal = Moore(1)); save_start = false)
+        step!(integ)
+        @test_opt target_modules = (PottsModels, Potts, CorePotts) step!(integ)
+    end
+end

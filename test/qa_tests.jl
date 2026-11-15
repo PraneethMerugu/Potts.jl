@@ -305,6 +305,7 @@ function _raw_transfer_hits(path)
     end
     return n
 end
+include(joinpath(@__DIR__, "shared", "qa_common.jl"))
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
@@ -339,7 +340,8 @@ end
 
 @testitem "QA: Aqua" setup = [QaSetup] tags = [:potts, :qa] begin
     @testset "QA: Aqua" begin
-        Aqua.test_all(Potts; ambiguities = false, deps_compat = (; check_extras = false))
+        # `check_extras = false`: workspace test-only deps live in test/Project.toml, not [extras].
+        qa_aqua(Potts; deps_compat = (; check_extras = false))
     end
 end
 
@@ -453,18 +455,17 @@ end
 
 @testitem "QA: ExplicitImports (Potts)" setup = [QaSetup] tags = [:potts, :qa] begin
     @testset "QA: ExplicitImports (Potts)" begin
-        @test check_no_implicit_imports(Potts) === nothing
-        @test check_all_explicit_imports_are_public(Potts; ignore = POTTS_NONPUBLIC_EXPLICIT) === nothing
-        @test check_no_stale_explicit_imports(Potts) === nothing
-        @test check_all_qualified_accesses_via_owners(Potts) === nothing
-        @test check_all_qualified_accesses_are_public(Potts; ignore = POTTS_NONPUBLIC_QUALIFIED) === nothing
+        qa_explicit_imports(Potts;
+            nonpublic_explicit = POTTS_NONPUBLIC_EXPLICIT,
+            nonpublic_qualified = POTTS_NONPUBLIC_QUALIFIED)
     end
 end
 
 @testitem "QA: Docs and extensions (Potts)" setup = [QaSetup] tags = [:potts, :qa] begin
     @testset "QA: Docs and extensions (Potts)" begin
-        @test isempty(Docs.undocumented_names(Potts; private = false))
-        @test isempty(Docs.undocumented_names(Potts.Fields; private = false))
+        qa_api_docs(Potts;
+            submodules = (Potts.Fields,),
+            docs_dir = joinpath(@__DIR__, "..", "docs"))
         @test Base.get_extension(Potts, :PottsDynamicQuantitiesExt) !== nothing
         if PottsDevices.device_name() == "rocm"
             @test Base.get_extension(Potts, :PottsAMDGPUExt) !== nothing

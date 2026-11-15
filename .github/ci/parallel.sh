@@ -49,8 +49,8 @@ for k in 1 2 3; do
 done
 launch GPU 6-7,22-23 env GROUP=GPU POTTS_GPU=rocm "$JULIA" --project=test test/runtests.jl
 launch Potts 8-9,24-25 env GROUP=Potts "$JULIA" ${COV_FLAG:+"$COV_FLAG"} --project=test test/runtests.jl
-launch LatticeFields+LatticePDE+CorePotts+MakiePotts 10-11,26-27 env COV_FLAG="$COV_FLAG" JULIA="$JULIA" bash -c \
-    'for g in LatticeFields LatticePDE CorePotts MakiePotts; do GROUP="$g" "$JULIA" ${COV_FLAG:+"$COV_FLAG"} --project=test test/runtests.jl || exit $?; done'
+launch LatticeFields+LatticePDE+CorePotts+MakiePotts+Multithreaded 10-11,26-27 env COV_FLAG="$COV_FLAG" JULIA="$JULIA" bash -c \
+    'for g in LatticeFields LatticePDE CorePotts MakiePotts; do GROUP="$g" "$JULIA" ${COV_FLAG:+"$COV_FLAG"} --project=test test/runtests.jl || exit $?; done; GROUP=Multithreaded "$JULIA" -t 4 ${COV_FLAG:+"$COV_FLAG"} --project=test test/runtests.jl'
 wait
 
 failed=0

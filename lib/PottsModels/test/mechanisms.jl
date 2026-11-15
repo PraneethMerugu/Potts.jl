@@ -538,8 +538,10 @@ end
     @test cβ[end] < 0.7 * c0[end]
     @test quiescent(uβ[end]) > 0.2 * cβ[end]
     # the division plane is uniform: the doubled angle between the first two daughters'
-    # centroids has no preferred direction
-    angles = map(1:40) do seed
+    # centroids has no preferred direction.
+    # U7: n = 60 gives Rayleigh false-alarm rate exp(-60 * 0.35^2) ≈ 6.4e-4 <= 1e-3,
+    # with power > 0.9 against mean resultant length >= 0.55.
+    angles = map(1:60) do seed
         integ = init(PottsProblem(OpenVTGrowingMonolayer(; name = :m, lattice = (40, 40)),
             openvt_monolayer_state(; lattice = (40, 40)), (0, 300); seed, capacity = 16), SequentialCPM())
         while live(integ.state) < 2

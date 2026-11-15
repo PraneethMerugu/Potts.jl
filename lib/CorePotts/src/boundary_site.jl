@@ -123,7 +123,7 @@ function _rebuild_boundary!(B::BoundaryCache, σ, mob, lat, offsets)
     return B
 end
 _copy_mask!(::Nothing, mob) = nothing
-_copy_mask!(f0, mob::MaskMobility) = (copyto!(f0, vec(mob.frozen)); nothing)
+_copy_mask!(f0::AbstractVector{Bool}, mob::MaskMobility) = (copyto!(f0, vec(mob.frozen)); nothing)
 
 # Bring B up to the current σ and mask: blocks of 64 sites are compared branch-free, and only
 # a block that differs is visited site by site.
@@ -150,7 +150,7 @@ end
     return d || _block_mask_changed(f0, mob, lo, hi)
 end
 @inline _block_mask_changed(::Nothing, mob, lo, hi) = false
-@inline function _block_mask_changed(f0, mob::MaskMobility, lo, hi)
+@inline function _block_mask_changed(f0::AbstractVector{Bool}, mob::MaskMobility, lo, hi)
     d = false
     fz = mob.frozen
     @simd for i in lo:hi
@@ -159,9 +159,9 @@ end
     return d
 end
 @inline _mask_changed(::Nothing, mob, i) = false
-@inline _mask_changed(f0, mob::MaskMobility, i) = @inbounds(mob.frozen[i]) != @inbounds(f0[i])
+@inline _mask_changed(f0::AbstractVector{Bool}, mob::MaskMobility, i) = @inbounds(mob.frozen[i]) != @inbounds(f0[i])
 @inline _note_mask!(::Nothing, mob, i) = nothing
-@inline _note_mask!(f0, mob::MaskMobility, i) = (@inbounds f0[i] = mob.frozen[i]; nothing)
+@inline _note_mask!(f0::AbstractVector{Bool}, mob::MaskMobility, i) = (@inbounds f0[i] = mob.frozen[i]; nothing)
 
 # log(1 - n/N) of the geometric skip, cached for the pair (n, N): a mask change can move N
 # (the mobile count) and leave n as it was

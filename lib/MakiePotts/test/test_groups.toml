@@ -11,6 +11,16 @@ runner = ["self-hosted", "Linux", "X64"]
 num_threads = 1
 timeout = 30
 
+[qa]
+group = "qa"
+in_all = true
+tags = ["qa"]
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64"]
+num_threads = 1
+timeout = 30
+
 [acceptance]
 group = "acceptance"
 in_all = true
