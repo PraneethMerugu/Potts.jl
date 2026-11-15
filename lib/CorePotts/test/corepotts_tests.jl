@@ -56,6 +56,76 @@ end
     end
 end
 
+@testitem "rng: Philox4x32-10 KAT and address keying (D6)" setup = [CP_corepotts] tags = [:corepotts, :core] begin
+@testset "rng: Philox4x32-10 KAT and address keying (D6)" begin
+    # Official Random123 (Salmon et al. 2011) Philox4x32-10 known-answer vectors
+    kat_vectors = (
+        ((0x00000000, 0x00000000, 0x00000000, 0x00000000), (0x00000000, 0x00000000),
+         (0x6627e8d5, 0xe169c58d, 0xbc57ac4c, 0x9b00dbd8)),
+        ((0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff), (0xffffffff, 0xffffffff),
+         (0x408f276d, 0x41c83b0e, 0xa20bc7c6, 0x6d5451fd)),
+        ((0x243f6a88, 0x85a308d3, 0x13198a2e, 0x03707344), (0xa4093822, 0x299f31d0),
+         (0xd16cfe09, 0x94fdcceb, 0x5001e420, 0x24126ea1)),
+    )
+    for (ctr, key, expected) in kat_vectors
+        @test CorePotts.philox4x32(ctr..., key...) == expected
+    end
+
+    # Independent re-implementation of Philox4x32-10, RNGKey, stream_id, and draw address keying
+    function ref_philox4x32(c0::UInt32, c1::UInt32, c2::UInt32, c3::UInt32, k0::UInt32, k1::UInt32)
+        M0 = UInt64(0xD2511F53); M1 = UInt64(0xCD9E8D57)
+        W0 = UInt32(0x9E3779B9); W1 = UInt32(0xBB67AE85)
+        for _ in 1:10
+            p0 = M0 * UInt64(c0)
+            p1 = M1 * UInt64(c2)
+            hi0 = UInt32(p0 >> 32); lo0 = UInt32(p0 & 0xffffffff)
+            hi1 = UInt32(p1 >> 32); lo1 = UInt32(p1 & 0xffffffff)
+            c0, c1, c2, c3 = xor(hi1, c1, k0), lo1, xor(hi0, c3, k1), lo0
+            k0 = (k0 + W0) % UInt32
+            k1 = (k1 + W1) % UInt32
+        end
+        return (c0, c1, c2, c3)
+    end
+    function ref_key(seed::Integer, replica::Integer = 0, repeat::Integer = 0)
+        s = UInt64(seed)
+        r0, r1, _, _ = ref_philox4x32(UInt32(s & 0xffffffff), UInt32(s >> 32),
+            UInt32(replica), UInt32(repeat), 0x43505331, 0x6b657931)
+        return (r0, r1)
+    end
+    function ref_draw(k0::UInt32, k1::UInt32, mcs::Integer, entity::Integer, stream::UInt32, local_idx::Integer = 0)
+        e = UInt64(entity)
+        hi = UInt32(e >> 32)
+        lo = UInt32(e & 0xffffffff)
+        eff_k0 = hi == 0 ? k0 : xor(k0, (hi * UInt32(0xBB67AE85)) % UInt32)
+        return ref_philox4x32(UInt32(mcs & 0xffffffff), lo, stream, UInt32(local_idx & 0xffffffff), eff_k0, k1)
+    end
+    function ref_fnv1a(s::AbstractString)
+        h = UInt32(0x811c9dc5)
+        for b in codeunits(s)
+            h = (xor(h, UInt32(b)) * UInt32(0x01000193)) % UInt32
+        end
+        return h
+    end
+
+    for (ctr, key, expected) in kat_vectors
+        @test ref_philox4x32(ctr..., key...) == expected
+    end
+    for name in ("CorePotts.proposal", "CorePotts.sequential_target", "CorePotts.color_order",
+                 "CorePotts.block", "CorePotts.boundary_site", "custom.stream")
+        @test stream_id(name) == ref_fnv1a(name)
+    end
+    for seed in (0, 1, 7, 0x0123456789abcdef), replica in (0, 3), rep in (0, 5)
+        rk = RNGKey(seed, replica, rep)
+        ek = ref_key(seed, replica, rep)
+        @test (rk.k0, rk.k1) == ek
+        for mcs in (0, 1, 42), ent in (UInt64(0), UInt64(17), UInt64(1) << 32, (UInt64(9) << 32) | 0xdeadbeef),
+            st in (CorePotts.STREAM_PROPOSAL, CorePotts.STREAM_BLOCK), loc in (0, 1, 13)
+            @test draw(rk, mcs, ent, st, loc) == ref_draw(ek..., mcs, ent, st, loc)
+        end
+    end
+end
+end
+
 @testitem "rng: 64-bit entities do not wrap" setup = [CP_corepotts] tags = [:corepotts, :core] begin
     @testset "rng: 64-bit entities do not wrap" begin
         k = RNGKey(3)

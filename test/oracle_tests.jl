@@ -29,6 +29,7 @@ end
         # the checkerboard is one block of one-site sub-regions (64 phases per MCS)
         for (dims, σ0, nmcs, alg, step) in (
                 ((3, 3), Int8[1, 1, 0, 2, 2, 0, 0, 0, 0], 1, SequentialCPM(; proposal = Moore(1)), Oracle.sequential_mcs),
+                ((3, 3), Int8[1, 1, 0, 2, 2, 0, 0, 0, 0], 1, SequentialCPM(; proposal = Moore(1), skip_interior = true), Oracle.sequential_mcs),
                 ((3, 3), Int8[1, 1, 0, 2, 2, 0, 0, 0, 0], 1, CheckerboardCPM(; proposal = Moore(1)), (m, d) -> Oracle.block_mcs(m, d, 64)))
             tiny = Oracle.Tiny(dims, moore, moore, [1, 2], Jk, 1.0, 2.0, 4.0, true)
             prob = PottsProblem(GranerGlazier(; name = :gg, lattice = dims),
@@ -45,6 +46,97 @@ end
             zm = Oracle.chi2_z(ex, sample(remake(prob; p = [:T => 5.0]), alg), R)
             @info "generated oracle mutant (T = 5 against exact T = 4)" zm
             @test zm > 4.5
+        end
+
+        @testset "Closed BC, multi-block / multi-site CheckerboardCPM, and copy direction" begin
+            vn = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+            @potts_model OracleDirClosed begin
+                @kinds medium dark light
+                @parameters begin
+                    J[3, 3] = zeros(3, 3)
+                    λ = 1.0
+                    V₀ = 2.0
+                    T = 4.0
+                    α = 0.0
+                end
+                @lattice Lattice((3, 2); boundary = Closed(), neighborhood = VonNeumann(1))
+                @relations proposal = VonNeumann(1)
+                @energy begin
+                    contacts => J[kind, kind′]
+                    cells => λ * (volume - V₀)^2
+                end
+                @drive copy => α * direction[1]
+                @sweep Metropolis(; temperature = T)
+            end
+
+            # Closed 4x2 multi-block CheckerboardCPM (nblocks > 1)
+            @potts_model OracleDirMB begin
+                @kinds medium dark light
+                @parameters J[3, 3] = zeros(3, 3) λ = 1.0 V₀ = 2.0 T = 4.0
+                @lattice Lattice((4, 2); boundary = Closed(), neighborhood = VonNeumann(1))
+                @relations proposal = VonNeumann(1)
+                @energy begin
+                    contacts => J[kind, kind′]
+                    cells => λ * (volume - V₀)^2
+                end
+                @sweep Metropolis(; temperature = T)
+            end
+            mb_dims = (4, 2)
+            mb_σ0 = Int8[1, 1, 0, 0, 2, 2, 0, 0]
+            mb_tiny = Oracle.Tiny(mb_dims, vn, vn, [1, 2], Jk, 1.0, 2.0, 4.0, false, 0.0)
+            mb_sys = OracleDirMB(; name = :mb)
+            mb_prob = PottsProblem(mb_sys,
+                [ownership => reshape(Int32.(mb_σ0), mb_dims), kind => [:dark, :light], :J => Jk], (0, 1))
+            mb_alg = CheckerboardCPM(; proposal = VonNeumann(1), parts = 2, region = 1)
+            mb_l = init(mb_prob, mb_alg).cache.layout
+            @test CorePotts.nblocks(mb_l) == 2 && CorePotts.boxsize(mb_l) == 1
+            ex_mb = Oracle.exact(mb_tiny, mb_σ0, 1, (m, d) -> Oracle.layout_mcs(m, d, 2, 1))
+            cnt_mb = sample(mb_prob, mb_alg)
+            d_mb, noise_mb = Oracle.tv(ex_mb, cnt_mb, R)
+            @test Oracle.chi2_z(ex_mb, cnt_mb, R) < 4.5
+            @test d_mb < 2noise_mb
+            @test Oracle.chi2_z(ex_mb, sample(remake(mb_prob; p = [:T => 5.0]), mb_alg), R) > 4.5
+
+            @potts_model OracleDirPeriodic begin
+                @kinds medium dark light
+                @parameters begin
+                    J[3, 3] = zeros(3, 3)
+                    λ = 1.0
+                    V₀ = 2.0
+                    T = 4.0
+                    α = 0.0
+                end
+                @lattice Lattice((3, 3); boundary = Periodic(), neighborhood = VonNeumann(1))
+                @relations proposal = VonNeumann(1)
+                @energy begin
+                    contacts => J[kind, kind′]
+                    cells => λ * (volume - V₀)^2
+                end
+                @drive copy => α * direction[1]
+                @sweep Metropolis(; temperature = T)
+            end
+
+            # Closed 3x2 multi-site box (boxsize > 1) and Periodic 3x3 copy-direction drive
+            for (periodic, d_arg, σ_init, sys_ctor) in (
+                    (false, (3, 2), Int8[1, 1, 0, 2, 2, 0], OracleDirClosed),
+                    (true, (3, 3), Int8[1, 1, 0, 2, 2, 0, 0, 0, 0], OracleDirPeriodic))
+                d_sys = sys_ctor(; name = :dir)
+                d_prob = PottsProblem(d_sys,
+                    [ownership => reshape(Int32.(σ_init), d_arg), kind => [:dark, :light], :J => Jk, :α => 2.0],
+                    (0, 1))
+                d_tiny = Oracle.Tiny(d_arg, vn, vn, [1, 2], Jk, 1.0, 2.0, 4.0, periodic, 2.0)
+                for (alg, step) in (
+                        (SequentialCPM(; proposal = VonNeumann(1)), Oracle.sequential_mcs),
+                        (CheckerboardCPM(; proposal = VonNeumann(1), parts = 2, region = 1),
+                         (m, d) -> Oracle.layout_mcs(m, d, 2, 1)))
+                    ex_d = Oracle.exact(d_tiny, σ_init, 1, step)
+                    cnt_d = sample(d_prob, alg)
+                    dd, nd = Oracle.tv(ex_d, cnt_d, R)
+                    @test Oracle.chi2_z(ex_d, cnt_d, R) < 4.5
+                    @test dd < 2nd
+                    @test Oracle.chi2_z(ex_d, sample(remake(d_prob; p = [:α => -2.0, :T => 1.0]), alg), R) > 4.5
+                end
+            end
         end
     end
 end

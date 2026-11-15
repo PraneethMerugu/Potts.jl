@@ -21,8 +21,10 @@ struct Tiny
     V0::Float64
     T::Float64
     periodic::Bool
+    drive_x::Float64
 end
-Tiny(dims, proposal, contact, kinds, J, λ, V0, T) = Tiny(dims, proposal, contact, kinds, J, λ, V0, T, false)
+Tiny(dims, proposal, contact, kinds, J, λ, V0, T, periodic = false) =
+    Tiny(dims, proposal, contact, kinds, J, λ, V0, T, periodic, 0.0)
 
 nsite(m::Tiny) = prod(m.dims)
 lin(m::Tiny, x, y) = x + (y - 1) * m.dims[1]
@@ -52,27 +54,99 @@ pacc(m::Tiny, dH) = dH <= 0 ? 1.0 : exp(-dH / m.T)
 
 add!(d, s, w) = (d[s] = get(d, s, 0.0) + w)
 
-"""One random-site attempt: target uniform over sites, direction uniform over the relation."""
-function attempt(m::Tiny, dist)
+"""Signed x-displacement (target - source), minimum-image on periodic axes."""
+function dx(m::Tiny, t, s)
+    xt, _ = coords(m, t)
+    xs, _ = coords(m, s)
+    d = Float64(xt - xs)
+    m.periodic || return d
+    L = m.dims[1]
+    return d - L * round(d / L)
+end
+
+"""One random-site attempt over `sites`: target uniform over `sites`, direction uniform over the relation."""
+function attempt_sites(m::Tiny, dist, sites)
     out = Dict{State, Float64}()
-    N, K = nsite(m), length(m.proposal)
+    M, K = length(sites), length(m.proposal)
+    M == 0 && return copy(dist)
     for (σ, w) in dist
         h = H(m, σ)
-        for t in 1:N, o in m.proposal
-            q = w / (N * K)
+        for t in sites, o in m.proposal
+            q = w / (M * K)
             s = nbr(m, t, o)
             if s == 0 || σ[s] == σ[t]
                 add!(out, σ, q)
                 continue
             end
             σ′ = copy(σ); σ′[t] = σ[s]
-            a = pacc(m, H(m, σ′) - h)
+            dH = (H(m, σ′) - h) + m.drive_x * dx(m, t, s)
+            a = pacc(m, dH)
             add!(out, σ′, q * a); add!(out, σ, q * (1 - a))
         end
     end
     return out
 end
+
+"""One random-site attempt: target uniform over all sites, direction uniform over the relation."""
+attempt(m::Tiny, dist) = attempt_sites(m, dist, 1:nsite(m))
 sequential_mcs(m, dist) = foldl((d, _) -> attempt(m, d), 1:nsite(m); init = dist)
+
+"""
+One `CheckerboardCPM` MCS for general `BlockLayout` (`parts = k`, `region = b`, `switches = 1`):
+each of the `P = k^2` phases activates a uniform offset in `{0, ..., k-1}^2`, and each block
+makes `length(S)` uniform attempts inside its active sub-region `S` in block order.
+"""
+function layout_mcs(m::Tiny, dist, k::Int, b::Int = 1, switches::Int = 1)
+    dims = m.dims
+    nb = ntuple(d -> max(1, dims[d] ÷ (k * b)), 2)
+    base = ntuple(d -> dims[d] ÷ (k * nb[d]), 2)
+    rem_ = ntuple(d -> dims[d] - k * nb[d] * base[d], 2)
+    offsets = [(ox, oy) for oy in 0:(k - 1) for ox in 0:(k - 1)]
+    blocks = [(bx, by) for by in 0:(nb[2] - 1) for bx in 0:(nb[1] - 1)]
+    P = length(offsets) * switches
+
+    function region_sites((bx, by), (ox, oy))
+        jx = k * bx + ox
+        jy = k * by + oy
+        x0 = jx * base[1] + min(jx, rem_[1])
+        y0 = jy * base[2] + min(jy, rem_[2])
+        sx = base[1] + (jx < rem_[1])
+        sy = base[2] + (jy < rem_[2])
+        sites = Int[]
+        for y in (y0 + 1):(y0 + sy), x in (x0 + 1):(x0 + sx)
+            push!(sites, lin(m, x, y))
+        end
+        return sites
+    end
+
+    function phase(d)
+        out = Dict{State, Float64}()
+        w_off = 1.0 / length(offsets)
+        for off in offsets
+            d_off = copy(d)
+            for blk in blocks
+                sites = region_sites(blk, off)
+                n = length(sites)
+                n == 0 && continue
+                q_lo, r_hi = divrem(n, switches)
+                for _ in 1:q_lo
+                    d_off = attempt_sites(m, d_off, sites)
+                end
+                if r_hi > 0
+                    p_extra = r_hi / switches
+                    d_stay = attempt_sites(m, d_off, sites)
+                    d_mix = Dict{State, Float64}()
+                    foreach(((σ, w),) -> add!(d_mix, σ, w * (1 - p_extra)), d_off)
+                    foreach(((σ, w),) -> add!(d_mix, σ, w * p_extra), d_stay)
+                    d_off = d_mix
+                end
+            end
+            foreach(((σ, w),) -> add!(out, σ, w * w_off), d_off)
+        end
+        return out
+    end
+    return foldl((d, _) -> phase(d), 1:P; init = dist)
+end
 
 """
 One `CheckerboardCPM` MCS on a lattice that is one block of one-site sub-regions (every axis

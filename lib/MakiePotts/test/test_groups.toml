@@ -60,3 +60,13 @@ os = ["self-hosted"]
 runner = ["self-hosted", "Linux", "X64"]
 num_threads = 1
 timeout = 30
+
+[visual]
+group = "visual"
+in_all = true
+tags = ["visual"]
+versions = ["1.12", "1.13"]
+os = ["self-hosted"]
+runner = ["self-hosted", "Linux", "X64"]
+num_threads = 1
+timeout = 30

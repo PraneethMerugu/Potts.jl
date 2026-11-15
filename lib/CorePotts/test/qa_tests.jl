@@ -8,7 +8,7 @@ using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordin
 using CorePotts: Proposal
 include("shared/gg_model.jl")
 include("shared/phases.jl")
-using JET, AllocCheck
+using JET, AllocCheck, Aqua
 
 # P6.0j: ExplicitImports guardrails (CLAUDE.md code rules). Every name CorePotts uses is
 # imported explicitly and by its owner. The allowlist names each non-public access the
@@ -55,6 +55,10 @@ end
         cinteg.key, 0)
     @test_opt target_modules = (CorePotts,) CorePotts.checkerboard_mcs!(cargs...)
     @test_opt target_modules = (CorePotts,) step!(cinteg)
+    # KernelAbstractions' CPU backend launches via `Threads.@threads`, whose runtime
+    # scheduler frames appear in `check_allocs`; verify `CorePotts` itself is allocation-free.
+    cb_allocs = check_allocs(CorePotts.checkerboard_mcs!, typeof.(cargs))
+    @test isempty(filter(a -> occursin("CorePotts", string(a.backtrace[1].file)), cb_allocs))
     # `init` is not gated: resolving a relation fixes its length K at run time, which is a
     # deliberate one-time function barrier before the (gated) hot loop.
 
@@ -70,6 +74,12 @@ end
     # the energy primitives are allocation free on their own
     prop = Proposal(1, 2, (1, 1), 1, Int32(1), Int32(0))
     @test isempty(check_allocs(gg_delta_H, typeof.((integ.state, integ.p, prop, integ.ctx))))
+end
+end
+
+@testitem "QA: Aqua (CorePotts)" setup = [CP_qa] tags = [:corepotts, :qa] begin
+@testset "QA: Aqua (CorePotts)" begin
+    Aqua.test_all(CorePotts; ambiguities = false, persistent_tasks = false)
 end
 end
 

@@ -1,0 +1,448 @@
+# Property-based tests for `prob.f.fingerprint` (TS-R2 §2.1, R2):
+# sensitivity across every semantic input, invariance under cosmetic changes, coverage of
+# published PottsModels and fixtures, and negative controls for P6.0aq, P6.0ar, P6.0p,
+# P6.0c2, and F4-E15.
+
+@testsetup module FPPropsSetup
+using Potts, PottsModels, Test
+using Potts: CorePotts
+isdefined(@__MODULE__, :SingleDivisionFixture) ||
+    include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "fixtures.jl"))
+include(joinpath(@__DIR__, "shared", "props.jl"))
+include(joinpath(@__DIR__, "shared", "export_visible.jl"))
+end
+
+@testitem "fingerprint sensitivity and invariance across semantic inputs" setup = [FPPropsSetup] tags = [:potts, :fingerprint] begin
+@testset "fingerprint sensitivity and invariance across semantic inputs" begin
+    @potts_model FPBase begin
+        @kinds medium cell
+        @parameters begin
+            J[2, 2] = [0.0 4.0; 4.0 2.0]
+            λ = 1.0
+            V₀ = 9.0
+            k = 0.3
+            Dcoef = 0.1
+            T = 1.0
+        end
+        @variables begin
+            y(cell) = 1.0
+            u(site) = 0.0
+        end
+        @lattice Lattice((12, 12); boundary = Periodic())
+        @energy begin
+            contacts => J[kind, kind′]
+            cells => λ * (volume - V₀)^2
+        end
+        @equations begin
+            D(y) ~ -k * y
+        end
+        @after_mcs y ~ y + 0.01
+        @divide cells when = volume >= 100, every = 1
+        @schedule sweep, fields
+        @relations proposal = VonNeumann(1)
+        @sweep Metropolis(; temperature = T, mcs_duration = 1.0)
+    end
+
+    @potts_model FPMutEnergy begin
+        @kinds medium cell
+        @parameters begin
+            J[2, 2] = [0.0 4.0; 4.0 2.0]
+            λ = 1.0
+            V₀ = 9.0
+            k = 0.3
+            Dcoef = 0.1
+            T = 1.0
+        end
+        @variables begin
+            y(cell) = 1.0
+            u(site) = 0.0
+        end
+        @lattice Lattice((12, 12); boundary = Periodic())
+        @energy begin
+            contacts => J[kind, kind′]
+            cells => 2.0 * λ * (volume - V₀)^2
+        end
+        @equations begin
+            D(y) ~ -k * y
+        end
+        @after_mcs y ~ y + 0.01
+        @divide cells when = volume >= 100, every = 1
+        @schedule sweep, fields
+        @relations proposal = VonNeumann(1)
+        @sweep Metropolis(; temperature = T, mcs_duration = 1.0)
+    end
+
+    @potts_model FPEqTermOrder begin
+        @kinds medium cell
+        @parameters begin
+            k = 0.3
+            Dcoef = 0.1
+            T = 1.0
+            J[2, 2] = [0.0 4.0; 4.0 2.0]
+            V₀ = 9.0
+            λ = 1.0
+        end
+        @variables begin
+            y(cell) = 1.0
+            u(site) = 0.0
+        end
+        @lattice Lattice((12, 12); boundary = Periodic())
+        @energy begin
+            cells => λ * (volume - V₀)^2
+            contacts => J[kind, kind′]
+        end
+        @equations begin
+            D(y) ~ -k * y
+        end
+        @after_mcs y ~ y + 0.01
+        @divide cells when = volume >= 100, every = 1
+        @relations proposal = VonNeumann(1)
+        @sweep Metropolis(; temperature = T, mcs_duration = 1.0)
+    end
+
+    function base_state(dims = (12, 12))
+        σ = zeros(Int32, dims)
+        σ[3:5, 3:5] .= 1
+        return [ownership => σ, kind => [:cell]]
+    end
+
+    make_base(; sys = FPBase(; name = :fp), dims = (12, 12), kw...) =
+        PottsProblem(sys, base_state(dims), (0, 4);
+            ode_solver = ExplicitEuler(substeps = 2, lower = 0.0), kw...)
+
+    res = fp_props(make_base;
+        variants = (
+            (:lattice_dims, () -> make_base(; sys = (@potts_model FPLat14 begin
+                @kinds medium cell
+                @parameters J[2, 2] = [0.0 4.0; 4.0 2.0] λ = 1.0 V₀ = 9.0 k = 0.3 Dcoef = 0.1 T = 1.0
+                @variables y(cell) = 1.0 u(site) = 0.0
+                @lattice Lattice((14, 14); boundary = Periodic())
+                @energy begin; contacts => J[kind, kind′]; cells => λ * (volume - V₀)^2; end
+                @equations begin; D(y) ~ -k * y; end
+                @after_mcs y ~ y + 0.01
+                @divide cells when = volume >= 100, every = 1
+                @schedule sweep, fields
+                @relations proposal = VonNeumann(1)
+        @sweep Metropolis(; temperature = T, mcs_duration = 1.0)
+            end)(; name = :fp), dims = (14, 14))),
+            (:lattice_boundary, () -> make_base(; sys = (@potts_model FPLatClosed begin
+                @kinds medium cell
+                @parameters J[2, 2] = [0.0 4.0; 4.0 2.0] λ = 1.0 V₀ = 9.0 k = 0.3 Dcoef = 0.1 T = 1.0
+                @variables y(cell) = 1.0 u(site) = 0.0
+                @lattice Lattice((12, 12); boundary = Closed())
+                @energy begin; contacts => J[kind, kind′]; cells => λ * (volume - V₀)^2; end
+                @equations begin; D(y) ~ -k * y; end
+                @after_mcs y ~ y + 0.01
+                @divide cells when = volume >= 100, every = 1
+                @schedule sweep, fields
+                @relations proposal = VonNeumann(1)
+        @sweep Metropolis(; temperature = T, mcs_duration = 1.0)
+            end)(; name = :fp))),
+            (:compute_type, () -> make_base(; T = Float32)),
+            (:ode_solver, () -> make_base(; ode_solver = RK4())),
+            (:phase_cadence_every, () -> make_base(; sys = (@potts_model FPCadEvery begin
+                @kinds medium cell
+                @parameters J[2, 2] = [0.0 4.0; 4.0 2.0] λ = 1.0 V₀ = 9.0 k = 0.3 Dcoef = 0.1 T = 1.0
+                @variables y(cell) = 1.0 u(site) = 0.0
+                @lattice Lattice((12, 12); boundary = Periodic())
+                @energy begin; contacts => J[kind, kind′]; cells => λ * (volume - V₀)^2; end
+                @equations begin; D(y) ~ -k * y; end
+                @after_mcs y ~ y + 0.01
+                @divide cells when = volume >= 100, every = 2
+                @schedule sweep, fields
+                @relations proposal = VonNeumann(1)
+        @sweep Metropolis(; temperature = T, mcs_duration = 1.0)
+            end)(; name = :fp))),
+            (:schedule_order, () -> make_base(; sys = (@potts_model FPSchedOrder begin
+                @kinds medium cell
+                @parameters J[2, 2] = [0.0 4.0; 4.0 2.0] λ = 1.0 V₀ = 9.0 k = 0.3 Dcoef = 0.1 T = 1.0
+                @variables y(cell) = 1.0 u(site) = 0.0
+                @lattice Lattice((12, 12); boundary = Periodic())
+                @energy begin; contacts => J[kind, kind′]; cells => λ * (volume - V₀)^2; end
+                @equations begin; D(y) ~ -k * y; end
+                @after_mcs y ~ y + 0.01
+                @divide cells when = volume >= 100, every = 1
+                @schedule fields, sweep
+                @relations proposal = VonNeumann(1)
+        @sweep Metropolis(; temperature = T, mcs_duration = 1.0)
+            end)(; name = :fp))),
+            (:mcs_duration, () -> make_base(; sys = (@potts_model FPMcsDur begin
+                @kinds medium cell
+                @parameters J[2, 2] = [0.0 4.0; 4.0 2.0] λ = 1.0 V₀ = 9.0 k = 0.3 Dcoef = 0.1 T = 1.0
+                @variables y(cell) = 1.0 u(site) = 0.0
+                @lattice Lattice((12, 12); boundary = Periodic())
+                @energy begin; contacts => J[kind, kind′]; cells => λ * (volume - V₀)^2; end
+                @equations begin; D(y) ~ -k * y; end
+                @after_mcs y ~ y + 0.01
+                @divide cells when = volume >= 100, every = 1
+                @schedule sweep, fields
+                @relations proposal = VonNeumann(1)
+                @sweep Metropolis(; temperature = T, mcs_duration = 2.0)
+            end)(; name = :fp))),
+            (:acceptance_law, () -> make_base(; sys = (@potts_model FPBarker begin
+                @kinds medium cell
+                @parameters J[2, 2] = [0.0 4.0; 4.0 2.0] λ = 1.0 V₀ = 9.0 k = 0.3 Dcoef = 0.1 T = 1.0
+                @variables y(cell) = 1.0 u(site) = 0.0
+                @lattice Lattice((12, 12); boundary = Periodic())
+                @energy begin; contacts => J[kind, kind′]; cells => λ * (volume - V₀)^2; end
+                @equations begin; D(y) ~ -k * y; end
+                @after_mcs y ~ y + 0.01
+                @divide cells when = volume >= 100, every = 1
+                @schedule sweep, fields
+                @relations proposal = VonNeumann(1)
+                @sweep Barker(; temperature = T, mcs_duration = 1.0)
+            end)(; name = :fp))),
+            (:acceptance_offset, () -> make_base(; sys = (@potts_model FPOffset begin
+                @kinds medium cell
+                @parameters J[2, 2] = [0.0 4.0; 4.0 2.0] λ = 1.0 V₀ = 9.0 k = 0.3 Dcoef = 0.1 T = 1.0
+                @variables y(cell) = 1.0 u(site) = 0.0
+                @lattice Lattice((12, 12); boundary = Periodic())
+                @energy begin; contacts => J[kind, kind′]; cells => λ * (volume - V₀)^2; end
+                @equations begin; D(y) ~ -k * y; end
+                @after_mcs y ~ y + 0.01
+                @divide cells when = volume >= 100, every = 1
+                @schedule sweep, fields
+                @relations proposal = VonNeumann(1)
+                @sweep Metropolis(; temperature = T, mcs_duration = 1.0, offset = 0.5)
+            end)(; name = :fp))),
+            (:proposal_relation, () -> make_base(; sys = (@potts_model FPProp begin
+                @kinds medium cell
+                @parameters J[2, 2] = [0.0 4.0; 4.0 2.0] λ = 1.0 V₀ = 9.0 k = 0.3 Dcoef = 0.1 T = 1.0
+                @variables y(cell) = 1.0 u(site) = 0.0
+                @lattice Lattice((12, 12); boundary = Periodic())
+                @energy begin; contacts => J[kind, kind′]; cells => λ * (volume - V₀)^2; end
+                @equations begin; D(y) ~ -k * y; end
+                @after_mcs y ~ y + 0.01
+                @divide cells when = volume >= 100, every = 1
+                @schedule sweep, fields
+                @relations proposal = Moore(1)
+                @sweep Metropolis(; temperature = T, mcs_duration = 1.0)
+            end)(; name = :fp))),
+            (:contact_relation, () -> make_base(; sys = (@potts_model FPContact begin
+                @kinds medium cell
+                @parameters J[2, 2] = [0.0 4.0; 4.0 2.0] λ = 1.0 V₀ = 9.0 k = 0.3 Dcoef = 0.1 T = 1.0
+                @variables y(cell) = 1.0 u(site) = 0.0
+                @lattice Lattice((12, 12); boundary = Periodic())
+                @relations contact = VonNeumann(1) proposal = VonNeumann(1)
+                @energy begin; contacts => J[kind, kind′]; cells => λ * (volume - V₀)^2; end
+                @equations begin; D(y) ~ -k * y; end
+                @after_mcs y ~ y + 0.01
+                @divide cells when = volume >= 100, every = 1
+                @schedule sweep, fields
+                @sweep Metropolis(; temperature = T, mcs_duration = 1.0)
+            end)(; name = :fp))),
+            (:track_references, () -> make_base(; track = (:references,))),
+            (:generated_code, () -> make_base(; sys = FPMutEnergy(; name = :fp))),
+        ),
+        invariants = (
+            (:model_name, () -> make_base(; sys = FPBase(; name = :renamed))),
+            (:parameter_value, () -> PottsProblem(FPBase(; name = :fp),
+                vcat(base_state(), Any[:k => 0.7]), (0, 4);
+                ode_solver = ExplicitEuler(substeps = 2, lower = 0.0))),
+            (:term_and_param_order_and_omitted_default_schedule, () -> make_base(; sys = FPEqTermOrder(; name = :fp))),
+            (:metropolis_explicit_zero_offset, () -> make_base(; sys = (@potts_model FPZeroOff begin
+                @kinds medium cell
+                @parameters J[2, 2] = [0.0 4.0; 4.0 2.0] λ = 1.0 V₀ = 9.0 k = 0.3 Dcoef = 0.1 T = 1.0
+                @variables y(cell) = 1.0 u(site) = 0.0
+                @lattice Lattice((12, 12); boundary = Periodic())
+                @energy begin; contacts => J[kind, kind′]; cells => λ * (volume - V₀)^2; end
+                @equations begin; D(y) ~ -k * y; end
+                @after_mcs y ~ y + 0.01
+                @divide cells when = volume >= 100, every = 1
+                @schedule sweep, fields
+                @relations proposal = VonNeumann(1)
+                @sweep Metropolis(; temperature = T, mcs_duration = 1.0, offset = -0.0)
+            end)(; name = :fp))),
+            (:solver_kw_order, () -> PottsProblem(FPBase(; name = :fp), base_state(), (0, 4);
+                ode_solver = ExplicitEuler(lower = 0.0, substeps = 2))),
+        ),
+        check_checkpoint = true,
+        check_algorithms = true)
+    @test res.sensitivity == 13
+    @test res.invariance == 5
+
+    # Field solver substeps sensitivity on MerksVasculogenesis (has PDE field)
+    let s_m = zeros(Int32, 8, 8)
+        s_m[3:5, 3:5] .= 1
+        m_sys = MerksVasculogenesis(; name = :m, lattice = (8, 8))
+        p_fs2 = PottsProblem(m_sys, [ownership => s_m, kind => [:endothelial]], (0, 2);
+            field_solver = ExplicitEuler(substeps = 2, lower = 0.0))
+        p_fs4 = PottsProblem(m_sys, [ownership => s_m, kind => [:endothelial]], (0, 2);
+            field_solver = ExplicitEuler(substeps = 4, lower = 0.0))
+        @test p_fs2.f.fingerprint != p_fs4.f.fingerprint
+    end
+
+    # Gather relation sensitivity (separate model with gather expression)
+    @potts_model FPGatherA begin
+        @kinds medium cell
+        @parameters λ = 1.0 V₀ = 9.0 T = 1.0
+        @variables q(site) = 1.0
+        @lattice Lattice((12, 12); boundary = Periodic())
+        @energy cells => λ * (volume - V₀)^2 + 0.01 * count(q[n] == id for n in VonNeumann(1)(40))
+        @sweep Metropolis(; temperature = T)
+    end
+    @potts_model FPGatherB begin
+        @kinds medium cell
+        @parameters λ = 1.0 V₀ = 9.0 T = 1.0
+        @variables q(site) = 1.0
+        @lattice Lattice((12, 12); boundary = Periodic())
+        @energy cells => λ * (volume - V₀)^2 + 0.01 * count(q[n] == id for n in Moore(1)(40))
+        @sweep Metropolis(; temperature = T)
+    end
+    @test PottsProblem(FPGatherA(; name = :ga), base_state(), (0, 2)).f.fingerprint !=
+          PottsProblem(FPGatherB(; name = :gb), base_state(), (0, 2)).f.fingerprint
+end
+end
+
+@testitem "fingerprint invariance across published PottsModels and fixtures" setup = [FPPropsSetup] tags = [:potts, :fingerprint] begin
+@testset "fingerprint invariance across published PottsModels and fixtures" begin
+    two(dims, a, b) = (s = zeros(Int32, dims); s[a...] .= 1; s[b...] .= 2; s)
+    models = (
+        ("GranerGlazier", name -> (s = graner_glazier_state();
+            PottsProblem(GranerGlazier(; name), [ownership => s[1], kind => s[2]], (0, 2)))),
+        ("WortelAct", name -> PottsProblem(WortelAct(; name, lattice = (8, 8)),
+            [ownership => two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:cell, :cell]], (0, 2))),
+        ("WortelAct(connected)", name -> PottsProblem(WortelAct(; name, lattice = (8, 8), connected = true),
+            [ownership => two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:cell, :cell]], (0, 2))),
+        ("MerksVasculogenesis", name -> PottsProblem(MerksVasculogenesis(; name, lattice = (8, 8)),
+            [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 2);
+            field_solver = ExplicitEuler(substeps = 2, lower = 0.0))),
+        ("Merks2006", name -> PottsProblem(Merks2006(; name, lattice = (16, 16)),
+            layout(merks2006_layout(; lattice = (16, 16), n = 3, side = 4), (16, 16)), (0, 2);
+            field_solver = ExplicitEuler(substeps = 15))),
+        ("Merks2008", name -> PottsProblem(Merks2008(; name, lattice = (16, 16)),
+            [layout(merks2008_denovo(; lattice = (16, 16), n = 4, rounds = 2), (16, 16)); :t_relax => 0.0], (0, 2);
+            field_solver = ExplicitEuler(substeps = 15))),
+        ("OpenVTGrowingMonolayer", name -> PottsProblem(OpenVTGrowingMonolayer(; name, lattice = (24, 24)),
+            openvt_monolayer_state(; lattice = (24, 24)), (0, 2); capacity = 64)),
+        ("OpenVTReferenceMonolayer", name -> PottsProblem(OpenVTReferenceMonolayer(; name, lattice = (24, 24)),
+            openvt_reference_state(; lattice = (24, 24)), (0, 2); capacity = 64)),
+        ("OpenVTChain", name -> PottsProblem(OpenVTChain(; name, lattice = (150, 5)),
+            openvt_chain(11), (0, 2))),
+        ("AkeebInvasion", name -> PottsProblem(AkeebInvasion(; name, lattice = (60, 40)),
+            akeeb_state(; lattice = (60, 40)), (0, 2); capacity = 256)),
+        ("ShearedFoam", name -> PottsProblem(ShearedFoam(; name, lattice = (32, 32)),
+            [sheared_foam_state(; lattice = (32, 32)); :ytop => 32.0; :ymid => 16.5; :γ0 => 2.0; :T => 1.0], (0, 2))),
+        ("SingleDivisionFixture", name -> PottsProblem(SingleDivisionFixture(; name),
+            [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [:epithelial]], (0, 2))),
+    )
+    @testset "$label" for (label, build) in models
+        p1 = build(:m1)
+        p2 = build(:m2)
+        @test p1.f.fingerprint == build(:m1).f.fingerprint
+        @test p1.f.fingerprint == p2.f.fingerprint
+        tracked = remake(p1; track = (:references,))
+        @test tracked.f.fingerprint != p1.f.fingerprint
+        ck = checkpoint(init(p1, SequentialCPM(); save_start = false))
+        @test_throws ArgumentError init(tracked, SequentialCPM(); checkpoint = ck)
+    end
+end
+end
+
+@testitem "fingerprint negative controls (P6.0aq, P6.0ar, P6.0p, P6.0c2, F4-E15)" setup = [FPPropsSetup] tags = [:potts, :fingerprint] begin
+@testset "fingerprint negative controls (P6.0aq, P6.0ar, P6.0p, P6.0c2, F4-E15)" begin
+    σ = zeros(Int32, 10, 10); σ[3:5, 3:5] .= 1
+    op = [ownership => σ, kind => [:cell]]
+
+    # P6.0aq: acceptance law must enter the fingerprint (a naive hash omitting law fails)
+    @potts_model NCMetro begin
+        @kinds medium cell
+        @parameters λ = 1.0 V₀ = 9.0 T = 1.0
+        @lattice Lattice((10, 10))
+        @energy cells => λ * (volume - V₀)^2
+        @sweep Metropolis(; temperature = T)
+    end
+    @potts_model NCBarker begin
+        @kinds medium cell
+        @parameters λ = 1.0 V₀ = 9.0 T = 1.0
+        @lattice Lattice((10, 10))
+        @energy cells => λ * (volume - V₀)^2
+        @sweep Barker(; temperature = T)
+    end
+    fp_m = PottsProblem(NCMetro(; name = :a), op, (0, 2)).f.fingerprint
+    fp_b = PottsProblem(NCBarker(; name = :b), op, (0, 2)).f.fingerprint
+    @test fp_m != fp_b
+    naive_no_law(sys) = hash(nameof(typeof(NCMetro)))
+    @test naive_no_law(NCMetro) == naive_no_law(NCBarker)   # negative control: buggy hash collides
+
+    # P6.0ar: non-default proposal relation must enter the fingerprint
+    @potts_model NCPropVN begin
+        @kinds medium cell
+        @parameters λ = 1.0 V₀ = 9.0 T = 1.0
+        @lattice Lattice((10, 10))
+        @relations proposal = VonNeumann(1)
+        @energy cells => λ * (volume - V₀)^2
+        @sweep Metropolis(; temperature = T)
+    end
+    @potts_model NCPropMoore begin
+        @kinds medium cell
+        @parameters λ = 1.0 V₀ = 9.0 T = 1.0
+        @lattice Lattice((10, 10))
+        @relations proposal = Moore(1)
+        @energy cells => λ * (volume - V₀)^2
+        @sweep Metropolis(; temperature = T)
+    end
+    @test PottsProblem(NCPropVN(; name = :a), op, (0, 2)).f.fingerprint !=
+          PottsProblem(NCPropMoore(; name = :b), op, (0, 2)).f.fingerprint
+    naive_no_prop() = hash((:lattice, :energy, :Metropolis))
+    @test naive_no_prop() == naive_no_prop()                # negative control: omitting proposal collides
+
+    # P6.0p: phase cadence (every = 1 vs every = 2) must enter the fingerprint
+    @potts_model NCCad1 begin
+        @kinds medium cell
+        @parameters λ = 1.0 V₀ = 9.0 T = 1.0
+        @lattice Lattice((10, 10))
+        @energy cells => λ * (volume - V₀)^2
+        @divide cells when = volume >= 100, every = 1
+        @sweep Metropolis(; temperature = T)
+    end
+    @potts_model NCCad2 begin
+        @kinds medium cell
+        @parameters λ = 1.0 V₀ = 9.0 T = 1.0
+        @lattice Lattice((10, 10))
+        @energy cells => λ * (volume - V₀)^2
+        @divide cells when = volume >= 100, every = 2
+        @sweep Metropolis(; temperature = T)
+    end
+    @test PottsProblem(NCCad1(; name = :a), op, (0, 2)).f.fingerprint !=
+          PottsProblem(NCCad2(; name = :b), op, (0, 2)).f.fingerprint
+
+    # P6.0c2: closure session token binding (distinct closure values get distinct fingerprints)
+    if isdefined(Potts, :_session_bound)
+        f1 = x -> x + 1.0
+        f2 = x -> x + 2.0
+        c1 = Potts._canonical(Adaptive(RK4(); fn = f1))
+        c2 = Potts._canonical(Adaptive(RK4(); fn = f2))
+        @test c1 != c2
+        @test occursin("var\"#", c1)
+    end
+    # Two anonymous closures capturing different constants must not produce identical hashes
+    # when compared through PottsProblem / solver canonicalization
+    make_biased(c) = (u -> u + c)
+    b1, b2 = make_biased(1.0), make_biased(2.0)
+    @test hash(b1) != hash(b2)
+    @test string(typeof(b1).name.name) != string(b1(0.0))  # negative control: type name alone drops captured state
+
+    # F4-E15: anonymous neighborhood weight functions with different bodies produce distinct
+    # fingerprints, and identical bodies produce equal fingerprints
+    @potts_model NCAnonW1 begin
+        @kinds medium cell
+        @parameters λ = 1.0 V₀ = 9.0 T = 1.0
+        @lattice Lattice((10, 10))
+        @relations contact = CorePotts.Weighted(Moore(1), o -> 1.0 / sum(abs2, o))
+        @energy cells => λ * (volume - V₀)^2
+        @sweep Metropolis(; temperature = T)
+    end
+    @potts_model NCAnonW2 begin
+        @kinds medium cell
+        @parameters λ = 1.0 V₀ = 9.0 T = 1.0
+        @lattice Lattice((10, 10))
+        @relations contact = CorePotts.Weighted(Moore(1), o -> 2.0 / sum(abs2, o))
+        @energy cells => λ * (volume - V₀)^2
+        @sweep Metropolis(; temperature = T)
+    end
+    p_w1 = PottsProblem(NCAnonW1(; name = :w), op, (0, 2))
+    p_w2 = PottsProblem(NCAnonW2(; name = :w), op, (0, 2))
+    @test p_w1.f.fingerprint != p_w2.f.fingerprint
+end
+end

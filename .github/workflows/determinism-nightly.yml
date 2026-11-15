@@ -1,0 +1,34 @@
+# Nightly cross-build fingerprint determinism check (D5 / U8).
+# Runs `tools/fingerprint_compare.jl` against a fresh `git archive HEAD` checkout
+# in an independent Julia process, pinned to cores 0-11,16-27.
+name: Determinism Nightly
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  JULIA_PKG_PRECOMPILE_AUTO: "0"
+  PIN: taskset -c 0-11,16-27
+
+jobs:
+  determinism:
+    name: Fresh-checkout fingerprint determinism
+    runs-on: [self-hosted, Linux, X64, rocm]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Julia on PATH
+        run: echo "$HOME/.juliaup/bin" >> "$GITHUB_PATH"
+      - name: Resolve and instantiate workspace
+        run: |
+          LOCK="$HOME/potts-ci/Manifest.toml"
+          if [ -f "$LOCK" ]; then cp "$LOCK" Manifest.toml; fi
+          $PIN julia --startup-file=no --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate()'
+          $PIN julia --startup-file=no --project=lib/PottsModels/test -e 'using Pkg; Pkg.precompile()'
+      - name: Compare fingerprints against fresh git-archive checkout
+        run: $PIN julia --startup-file=no tools/fingerprint_compare.jl

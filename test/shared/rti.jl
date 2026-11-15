@@ -17,11 +17,69 @@ using ReTestItems: ReTestItems
 using Pkg: Pkg
 using Test: Test
 
+function _shuffle!(v::AbstractVector, seed::Integer)
+    state = UInt64(seed) == 0 ? UInt64(0x9e3779b97f4a7c15) : UInt64(seed)
+    for i in length(v):-1:2
+        state ⊻= state >> 12
+        state ⊻= state << 25
+        state ⊻= state >> 27
+        r = (state * UInt64(0x2545f4914f6cdd1d)) % UInt64(i)
+        j = Int(r) + 1
+        v[i], v[j] = v[j], v[i]
+    end
+    return v
+end
+
 const TESTDIR = dirname(@__DIR__)
+
+_is_test_file(f::AbstractString) =
+    endswith(f, "_tests.jl") || endswith(f, "_test.jl") ||
+    endswith(f, "-tests.jl") || endswith(f, "-test.jl")
+
+function _collect_test_files(dir::AbstractString)
+    out = String[]
+    for (root, _, files) in walkdir(dir)
+        for f in sort!(files)
+            _is_test_file(f) && push!(out, joinpath(root, f))
+        end
+    end
+    return sort!(out)
+end
+
+function _ordered_paths(paths, spec::AbstractString = get(ENV, "POTTS_TEST_ORDER", "default"))
+    s = lowercase(strip(String(spec)))
+    (isempty(s) || s == "default") && return paths
+    files = String[]
+    for p in paths
+        if isdir(p)
+            append!(files, _collect_test_files(p))
+        else
+            push!(files, String(p))
+        end
+    end
+    if s == "reverse"
+        reverse!(files)
+    elseif s == "random" || startswith(s, "random:")
+        seed = s == "random" ? Int(time_ns() & 0x7fffffff) : parse(Int, s[(length("random:") + 1):end])
+        @info "PottsRTI test order" order = "random" seed
+        _shuffle!(files, seed)
+    else
+        throw(ArgumentError("Unknown POTTS_TEST_ORDER=$(repr(spec)); expected default, reverse, or random[:seed]"))
+    end
+    return Tuple(files)
+end
 
 function rti(args...; kw...)
     proj = ReTestItems.identify_project(TESTDIR)
-    return task_local_storage(() -> ReTestItems.runtests(args...; kw...), :SOURCE_PATH,
+    # ReTestItems accepts `(shouldrun, paths...)` or `(paths...)`
+    call_args = if !isempty(args) && !(first(args) isa AbstractString) && length(args) >= 2
+        (first(args), _ordered_paths(args[2:end])...)
+    elseif !isempty(args) && all(a -> a isa AbstractString, args)
+        _ordered_paths(args)
+    else
+        args
+    end
+    return task_local_storage(() -> ReTestItems.runtests(call_args...; kw...), :SOURCE_PATH,
         Pkg.Operations.testfile(dirname(proj)))
 end
 

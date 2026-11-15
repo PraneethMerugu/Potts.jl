@@ -1,6 +1,5 @@
-# The frozen acceptance file acceptance/p6_0by_cell_colours.jl (listed in
-# lib/PottsModels/test/frozen.toml, D-053) runs unchanged, in this item's own module, with
-# the packages the old runner had loaded (TS1b).
+# The acceptance file acceptance/p6_0by_cell_colours.jl runs unchanged, in this item's own
+# module, with the packages the old runner had loaded (TS1b).
 
 @testsetup module MP_acceptance
 using Test

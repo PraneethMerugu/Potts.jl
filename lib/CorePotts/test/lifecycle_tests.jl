@@ -1,7 +1,7 @@
 # Lifecycle: division, removal, transition, id reuse, capacity (ROADMAP M2.8).
 
 @testsetup module CP_lifecycle
-using Test, CorePotts, StaticArrays, Statistics, Random
+using Test, CorePotts, StaticArrays, Statistics, Random, Logging
 using SciMLBase: SciMLBase, ReturnCode, remake
 using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
 include("shared/gg_model.jl")
@@ -215,8 +215,16 @@ end
                 @test sol.stats.attempts == S * (900 - 36) + (30 - S) * (900 - 36 - Int(sol.u[end].cell.volume[1]))
             end
         end
-        # a custom rule without `frozen_varies` is static: init warns (once per session)
+        # a custom rule without `frozen_varies` is static: init warns once per logger,
+        # independent of prior test execution order or session warn cache (TS1-9)
         @test_logs (:warn, r"frozen_varies") init(fk_problem(; sys = OnlyRemake()), SequentialCPM())
+        io = IOBuffer()
+        Logging.with_logger(Logging.ConsoleLogger(io, Logging.Warn)) do
+            init(fk_problem(; sys = OnlyRemake()), SequentialCPM())
+            init(fk_problem(; sys = OnlyRemake()), SequentialCPM())
+        end
+        msg = String(take!(io))
+        @test occursin("frozen_varies", msg) && count("is overridden", msg) == 1
         # refresh_frozen! on a problem without a mask is a no-op
         integ = init(PottsProblem(GG, initial_state(blocks((20, 20), 5)...), Lattice((20, 20)), (0, 2), gg_params()), SequentialCPM())
         @test refresh_frozen!(integ) === integ && integ.ctx.mobility isa AllMobile && integ.stats.refreshes == 0

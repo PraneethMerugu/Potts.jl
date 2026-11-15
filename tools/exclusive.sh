@@ -15,10 +15,10 @@
 #  - Stale rules. Live waiters touch their ticket at every poll and a live holder touches
 #    its ticket and the lock every minute, so a ticket untouched for 5 minutes belongs to a
 #    dead process (e.g. a SIGKILLed waiter) and is removed. A lock untouched for 3 hours is
-#    removed (the frozen tooling test checks this rule).
+#    removed (the tooling test checks this rule).
 #  - The ticket and lock are removed on exit, including after INT, TERM, HUP, QUIT or PIPE
 #    (the command still finishes first: the lock is held for as long as it runs).
-# All state lives under paths starting with /tmp/potts-exclusive (the frozen test relies
+# All state lives under paths starting with /tmp/potts-exclusive (the tooling test relies
 # on that prefix, D-090).
 LOCK=/tmp/potts-exclusive.lock
 QUEUE=/tmp/potts-exclusive.q

@@ -4,7 +4,7 @@ Branch checks on the PC (D-157) run in two lanes of a [pueue](https://github.com
 
 | Lane | pueue group | Cores | Runs | Gives way to |
 |---|---|---|---|---|
-| S: suites | `suites`, one at a time | 0-11/16-27 (D-232's `parallel.sh` layout) | `item.sh`: instantiate, frozen check, `.github/ci/parallel.sh`, optional docs and extras | CI (kill and re-run the step), an A/B (drain) |
+| S: suites | `suites`, one at a time | 0-11/16-27 (D-232's `parallel.sh` layout) | `item.sh`: instantiate, `.github/ci/parallel.sh`, optional docs and extras | CI (kill and re-run the step), an A/B (drain) |
 | A: A/B | `ab`, one at a time | 12-15/28-31 (`ab.jl`'s own pinning) | `ab.sh`: drains lane S, then `benchmark/ab.jl` | nothing; D-242 quiet window |
 
 ## Queueing an item

@@ -1,7 +1,7 @@
 # MakiePotts tests on ReTestItems (TS1b). Test items are in `*_tests.jl`; each file's
 # definitions are in its `@testsetup` module, and the old runner's fixtures and helpers are in
-# shared/makiepotts.jl. The frozen acceptance file runs unchanged from acceptance_tests.jl.
-# (visual_regression.jl, backends/ and clean_install_smoke.jl are separate scripts, as before.)
+# shared/makiepotts.jl. The acceptance file runs unchanged from acceptance_tests.jl.
+# (backends/ and clean_install_smoke.jl are separate scripts, as before.)
 # Groups are declared in test_groups.toml.
 #
 #   julia --project=lib/MakiePotts/test lib/MakiePotts/test/runtests.jl [group...]
