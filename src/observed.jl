@@ -17,7 +17,11 @@ function _expand_observed(csys::CompiledPottsSystem, x)
         isequal(y, x) && return y
         x = y
     end
-    throw(ArgumentError("@observed definitions are cyclic"))
+    throw(
+        ArgumentError(
+            "@observed definitions are cyclic; break the cycle so each definition depends only on state, parameters or earlier definitions"
+        )
+    )
 end
 
 function _observed_scope(x)
@@ -38,8 +42,10 @@ function _observed_scope(x)
     end
     for n in _bare_builtins(x)
         n in (:owner, :position, :site) && return :site
-        n in (:volume, :surface, :kind, :id, :generation, :cluster, :cluster_volume, :cluster_surface, :major_length,
-            :euler, :euler_full, :pieces, :pieces_full, :largest_piece, :largest_piece_full, :birth) &&
+        n in (
+            :volume, :surface, :kind, :id, :generation, :cluster, :cluster_volume, :cluster_surface, :major_length,
+            :euler, :euler_full, :pieces, :pieces_full, :largest_piece, :largest_piece_full, :birth,
+        ) &&
             (scope = :cell)
     end
     any(y -> _observed_scope(y) === :cell, outer) && (scope = :cell)
@@ -51,9 +57,13 @@ end
 function _check_untracked_birth(c::CompiledPottsSystem, e)
     (_numbers_cells(c) && !c.uses_birth) || return nothing
     (_uses_builtin(e, :birth) || _has_op(e, cluster_sibling)) || return nothing
-    throw(ArgumentError("model `$(nameof(c))` never reads `birth`, so the birth column was not kept " *
-                        "(P6.5a3, D-245): `$e` cannot be evaluated after the run; declare " *
-                        "`@observed bth(cell) ~ birth` in the model to record it"))
+    throw(
+        ArgumentError(
+            "model `$(nameof(c))` never reads `birth`, so the birth column was not kept " *
+                "(P6.5a3, D-245): `$e` cannot be evaluated after the run; declare " *
+                "`@observed bth(cell) ~ birth` in the model to record it"
+        )
+    )
 end
 
 _algebraic_cell(x) = (i = info(x); i !== nothing && i.role === :observed && get(i.options, :scope, nothing) === :cell)
@@ -66,7 +76,7 @@ const _OBSERVED_LOCK = ReentrantLock()
 _observed_function(info::PottsModelInfo, x) = lock(() -> _observed_function_unlocked(info, x), _OBSERVED_LOCK)
 
 function _observed_function_unlocked(info::PottsModelInfo, x)
-    get!(info.cache, _unwrap(x)) do
+    return get!(info.cache, _unwrap(x)) do
         c = info.csys
         T = info.T
         _with_model_scope(() -> _observed_build(info, c, T, x), c)
@@ -106,7 +116,7 @@ function _observed_build(info::PottsModelInfo, c, T, x)
         _rgf(:((st, p, ctx, t) -> $code))
     end
     hctx = info.ctx
-    if _has_op(e, cell_integral)       # integrals of the state itself (not the stored refresh)
+    return if _has_op(e, cell_integral)       # integrals of the state itself (not the stored refresh)
         # observed-only integrals (D-120) have no stored column: computed here, with the rest
         ph = _integral_phases(c, T; observed = true)
         names = [_integral_name(x) for x in _integrals(c.sys; observed = true)]
@@ -125,8 +135,12 @@ function _fresh_integrals(::Type{T}, u, p, ctx, t, phases, names) where {T}
     sc = CorePotts.reduce_scratch(length(u.cell.kind))
     cell = merge(u.cell, NamedTuple(n => fresh(n) for n in names), sc.cell)
     # the integrals' hoisted folds write their model slots: copies, so `u` is left unchanged
-    model = merge(u.model, NamedTuple(n => copy(getfield(u.model, n)) for n in propertynames(u.model)
-                                      if startswith(String(n), "__ifold_")), sc.model)
+    model = merge(
+        u.model, NamedTuple(
+            n => copy(getfield(u.model, n)) for n in propertynames(u.model)
+                if startswith(String(n), "__ifold_")
+        ), sc.model
+    )
     st = CorePotts.CPMState(u.σ, cell, u.site, model, u.history)
     foreach(ph -> ph(st, p, ctx, CorePotts.RNGKey(0), Int(t), CorePotts.CPU()), phases)
     return st
@@ -216,7 +230,7 @@ SII.constant_structure(::PottsModelInfo) = true
 SII.all_symbols(sys::PottsModelInfo) = vcat(SII.all_variable_symbols(sys), _p(sys.csys.sys, :parameters), [t])
 SII.default_values(::PottsModelInfo) = Dict()
 SII.is_observed(sys::PottsModelInfo, x) = _potts_quantity(x) && !SII.is_parameter(sys, x) &&
-                                          !SII.is_variable(sys, x) && !SII.is_independent_variable(sys, x)
+    !SII.is_variable(sys, x) && !SII.is_independent_variable(sys, x)
 function SII.observed(sys::PottsModelInfo, x)
     ci = _computed_info(sys, x)
     ci === nothing || (n = ci.name; return (u, p, t) -> getproperty(p, n))
@@ -233,9 +247,11 @@ end
 # a vector name (`u` of `@variables u(field)[1:2]`, an array field of a PDESystem) is observed
 # only so that `sol[:u]` reaches `SII.observed`, which names its components
 SII.is_observed(sys::PottsModelInfo, x::Symbol) = !SII.is_parameter(sys, x) && !SII.is_variable(sys, x) &&
-                                                  (_named_quantity(sys, _localize(sys.csys.sys, x)) !== nothing ||
-                                                   _computed_info(sys, x) !== nothing ||
-                                                   !isempty(_vector_components(sys.csys.sys, _localize(sys.csys.sys, x))))
+    (
+    _named_quantity(sys, _localize(sys.csys.sys, x)) !== nothing ||
+        _computed_info(sys, x) !== nothing ||
+        !isempty(_vector_components(sys.csys.sys, _localize(sys.csys.sys, x)))
+)
 function SII.observed(sys::PottsModelInfo, x::Symbol)
     ci = _computed_info(sys, x)
     ci === nothing || (n = ci.name; return (u, p, t) -> getproperty(p, n))
@@ -244,10 +260,12 @@ function SII.observed(sys::PottsModelInfo, x::Symbol)
     return _observed_function(sys, q)
 end
 # the component names of the vector quantity `x` of model `m` (`[:u_1, :u_2]`), or none
-_vector_components(m, x) = Symbol[info(v).name for v in Iterators.flatten((_p(m, :parameters), _p(m, :variables)))
-                                  if get(info(v).options, :vector, nothing) === x]
+_vector_components(m, x) = Symbol[
+    info(v).name for v in Iterators.flatten((_p(m, :parameters), _p(m, :variables)))
+        if get(info(v).options, :vector, nothing) === x
+]
 _vector_message(m, x) = "`$x` is a vector quantity of $(nameof(m)): read its components " *
-                        "($(join((":" * string(n) for n in _vector_components(m, x)), ", ")))"
+    "($(join((":" * string(n) for n in _vector_components(m, x)), ", ")))"
 
 """
     observe(prob_or_sol, x[, u])
@@ -280,8 +298,10 @@ function _observe_quantity(sys::PottsModelInfo, x::Symbol)
         info(p).name === x && return p
     end
     msg = "`$x` is not a variable, observed quantity, built-in or parameter of $(nameof(sys.csys))"
-    comps = [info(v).name for v in Iterators.flatten((_p(m, :parameters), _p(m, :variables)))
-             if get(info(v).options, :vector, nothing) === x]
+    comps = [
+        info(v).name for v in Iterators.flatten((_p(m, :parameters), _p(m, :variables)))
+            if get(info(v).options, :vector, nothing) === x
+    ]
     if !isempty(comps)
         msg *= "; `$x` is a vector quantity: observe its components ($(join((":" * string(n) for n in comps), ", ")))"
     elseif x === :t
@@ -373,11 +393,17 @@ function _pde_inputs(info::PottsModelInfo, f::ModelingToolkitBase.PDESystem)
     all(k -> any(e -> e[1] === k, ex), want) && return [e for e in ex if e[1] in want]
     lst(ks) = isempty(ks) ? "none" : join(("`$k`" for k in ks), ", ")
     names = unique(Symbol[e[4] for e in get(md, _FieldInputs, ()) if length(e) >= 4])
-    throw(ArgumentError(string("Potts.field_inputs: the inputs of the PDESystem `", nameof(f), "` (", lst(want), ") are ",
-        "neither those of a PDESystem of that name coupled into the model (",
-        isempty(names) ? "it has none" : string("its coupled PDESystems: ", lst(names)), isempty(coupled) ? "" :
-        string("; `", nameof(f), "` has ", lst(unique(Symbol[e[1] for e in coupled]))), ") nor those of `Potts.fields(model)` (",
-        lst([e[1] for e in ex]), "); give the PDESystem that `@fields` or `Potts.couple` took, or `Potts.fields(model)`")))
+    throw(
+        ArgumentError(
+            string(
+                "Potts.field_inputs: the inputs of the PDESystem `", nameof(f), "` (", lst(want), ") are ",
+                "neither those of a PDESystem of that name coupled into the model (",
+                isempty(names) ? "it has none" : string("its coupled PDESystems: ", lst(names)), isempty(coupled) ? "" :
+                    string("; `", nameof(f), "` has ", lst(unique(Symbol[e[1] for e in coupled]))), ") nor those of `Potts.fields(model)` (",
+                lst([e[1] for e in ex]), "); give the PDESystem that `@fields` or `Potts.couple` took, or `Potts.fields(model)`"
+            )
+        )
+    )
 end
 
 function _field_inputs_at(info::PottsModelInfo, u, p, t, ins)

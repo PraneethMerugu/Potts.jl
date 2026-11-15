@@ -68,9 +68,11 @@ function _generated_code(c, T, field_solver, ode_solver, solvers)
         lifecycle = (; trigger = first(lex), before)            # `_lifecycle` compiles the trigger first
     end
     append!(phases, lex)
-    return (; delta_H = _delta_H_expr(c, T), commit! = _commit_expr(c, T), constraint = _constraint_expr(c, T),
+    return (;
+        delta_H = _delta_H_expr(c, T), commit! = _commit_expr(c, T), constraint = _constraint_expr(c, T),
         temperature = _temperature_expr(c, T), total_energy = _total_energy_expr(c, T),
-        delta_E = _delta_H_expr(c, T; drives = false), phases, lifecycle)
+        delta_E = _delta_H_expr(c, T; drives = false), phases, lifecycle,
+    )
 end
 """
     PottsProblem(sys, op, tspan; field_solver = ExplicitEuler(), ode_solver = ExplicitEuler(), solvers = [],
@@ -142,41 +144,54 @@ function CorePotts.PottsProblem(sys::PottsSystem, op, tspan; kwargs...)
     return CorePotts.PottsProblem(ModelingToolkitBase.mtkcompile(sys), op, tspan; kwargs...)
 end
 
-function CorePotts.PottsProblem(c::CompiledPottsSystem, op, tspan; backend = nothing,
+function CorePotts.PottsProblem(
+        c::CompiledPottsSystem, op, tspan; backend = nothing,
         T::Type = backend === nothing ? Float64 : LatticeFields.Exec.default_float(backend), capacity = nothing,
         seed = 0, replica = 0, repeat = 0, expression = Val(false), field_solver = nothing,
-        ode_solver = ExplicitEuler(), solvers = (), track = ())
+        ode_solver = ExplicitEuler(), solvers = (), track = ()
+    )
     sys = c.sys
     spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
     track = _track(track)
     opd = _operating_point(sys, op)
     seeds, u0seeds = _split_tangents!(sys, opd)     # Dual values: their primal values in `opd` (F3-21b)
     values = _parameter_values(c, opd)
-    p = PottsParameters(NamedTuple(info(x).name => _param_value(T, values[_unwrap(x)], info(x); ps = _p(sys, :parameters))
-                                   for x in _p(sys, :parameters)),
-        _computed_tag(_p(sys, :parameters)))
+    p = PottsParameters(
+        NamedTuple(
+            info(x).name => _param_value(T, values[_unwrap(x)], info(x); ps = _p(sys, :parameters))
+                for x in _p(sys, :parameters)
+        ),
+        _computed_tag(_p(sys, :parameters))
+    )
     _register_derivation!(_p(sys, :parameters), T, p)
     for name in _contact_tables(c)
         J = getproperty(p, name)
         J == transpose(J) || throw(ArgumentError("kind table `$name` is used in a contact energy and must be symmetric"))
     end
     _check_kind_tables(sys, p)
-    expression isa Val{true} && throw(ArgumentError(
-        "`expression = Val(true)` is not supported; use `Potts.generated_code(sys; T)` to inspect the code"))
+    expression isa Val{true} && throw(
+        ArgumentError(
+            "`expression = Val(true)` is not supported; use `Potts.generated_code(sys; T)` to inspect the code"
+        )
+    )
     st = _track_layout(_ode_layout(_initial_state(c, opd, T, capacity, values), c, spec), c, track)
     lat = core_lattice(_p(sys, :lattice))
     relations = _with_contact_counts(c, NamedTuple(k => v for (k, v) in _sorted(c.relations)))
     spacing = _p(sys, :lattice).spacing === nothing ? nothing : map(T, _p(sys, :lattice).spacing)
-    hctx = (; lattice = lat, contact = CorePotts.relation(c.contact_spec, lat),
+    hctx = (;
+        lattice = lat, contact = CorePotts.relation(c.contact_spec, lat),
         map(r -> CorePotts.relation(r, lat), relations)...,
-        (spacing === nothing ? (;) : (; spacing))...)
+        (spacing === nothing ? (;) : (; spacing))...,
+    )
     f = _problem_function(c, T, spec, values, hctx, Dict{Any, Any}(); track)
     _check_field_substeps(f, p; tspan)
     frozen = _frozen_mask(sys, st)
     _host_init!(f, st, p, hctx, seed, replica, repeat)
     tangent = isempty(seeds) && isempty(u0seeds) ? nothing : _tangent(c, T, p, seeds, opd; u0 = u0seeds)
-    return CorePotts.PottsProblem(f, st, lat, tspan, p; contact = c.contact_spec, proposal = c.proposal_spec, relations,
-        spacing, frozen, seed, replica, repeat, tangent)
+    return CorePotts.PottsProblem(
+        f, st, lat, tspan, p; contact = c.contact_spec, proposal = c.proposal_spec, relations,
+        spacing, frozen, seed, replica, repeat, tangent
+    )
 end
 
 # ---------------------------------------------------------------------------------------
@@ -215,11 +230,17 @@ end
 function _refuse_dual_value(name, role, v)
     w = v isa AbstractArray ? first(x for x in v if _is_dual(x)) : v
     what = role === :kindtable ? "kind table `$name` holds" : role === :param ? "parameter `$name` holds" :
-           "the initial value of `$name` holds"
-    throw(ArgumentError(string(what, " ", _valtext(w), ": derivatives run through scalar parameters and the ",
-        "initial values of fields (F3-21b); not through ", role === :kindtable ? "kind tables (a later feature)" :
-        "the initial values of cell, model or site variables (the CPM's state, held fixed)",
-        ". Take finite differences, or give the derivative's direction a scalar parameter")))
+        "the initial value of `$name` holds"
+    throw(
+        ArgumentError(
+            string(
+                what, " ", _valtext(w), ": derivatives run through scalar parameters and the ",
+                "initial values of fields (F3-21b); not through ", role === :kindtable ? "kind tables (a later feature)" :
+                    "the initial values of cell, model or site variables (the CPM's state, held fixed)",
+                ". Take finite differences, or give the derivative's direction a scalar parameter"
+            )
+        )
+    )
 end
 
 # the problem's `ParameterTangent`: the parameter object `p` with the seeds as Duals of the
@@ -230,19 +251,41 @@ function _tangent(c::CompiledPottsSystem, T, p::PottsParameters, seeds, opd = no
     sys = c.sys
     ps = _p(sys, :parameters)
     first_seed = isempty(seeds) ? first(u0) : first(seeds)
-    _has_fields(c) || throw(ArgumentError(string(isempty(seeds) ? "the initial value of `" : "parameter `", first_seed.first,
-        "` holds ", _valtext(first(_dualvals(first_seed.second))), "; model `", nameof(c), "` has no fields, and derivative ",
-        "parts run through the fields only (F3-21b): the CPM and the ODEs take plain numbers. Take finite differences of the run")))
-    Es = unique(Any[LatticeFields.Compile.withvaltype(v isa AbstractArray ? eltype(v) : typeof(v), T)
-                    for (_, v) in Iterators.flatten((seeds, u0))])
-    length(Es) == 1 || throw(ArgumentError(string("the values with derivative parts hold ", length(Es),
-        " different Dual types (different tags or derivative part counts): give every seed of one problem the same ",
-        "Dual type (one `ForwardDiff.derivative`, `gradient` or `jacobian` call)")))
+    _has_fields(c) || throw(
+        ArgumentError(
+            string(
+                isempty(seeds) ? "the initial value of `" : "parameter `", first_seed.first,
+                "` holds ", _valtext(first(_dualvals(first_seed.second))), "; model `", nameof(c), "` has no fields, and derivative ",
+                "parts run through the fields only (F3-21b): the CPM and the ODEs take plain numbers. Take finite differences of the run"
+            )
+        )
+    )
+    Es = unique(
+        Any[
+            LatticeFields.Compile.withvaltype(v isa AbstractArray ? eltype(v) : typeof(v), T)
+                for (_, v) in Iterators.flatten((seeds, u0))
+        ]
+    )
+    length(Es) == 1 || throw(
+        ArgumentError(
+            string(
+                "the values with derivative parts hold ", length(Es),
+                " different Dual types (different tags or derivative part counts): give every seed of one problem the same ",
+                "Dual type (one `ForwardDiff.derivative`, `gradient` or `jacobian` call)"
+            )
+        )
+    )
     nt = NamedTuple(p)
     vals = Dict{Symbol, Any}(pairs(nt))
     for (n, v) in seeds
-        nt[n] isa AbstractFloat || throw(ArgumentError(string("parameter `", n, "` holds ", _valtext(v), "; it is ",
-            "a ", typeof(nt[n]), " parameter, and derivative parts run through floating-point parameters only")))
+        nt[n] isa AbstractFloat || throw(
+            ArgumentError(
+                string(
+                    "parameter `", n, "` holds ", _valtext(v), "; it is ",
+                    "a ", typeof(nt[n]), " parameter, and derivative parts run through floating-point parameters only"
+                )
+            )
+        )
         vals[n] = LatticeFields.Compile.lanecast(T, v)
     end
     dp = _dual_object(c, T, p, vals)
@@ -296,18 +339,26 @@ function _check_tangent_reads(c::CompiledPottsSystem, T, dual::Set{Symbol})
     for (name, ex, _) in _field_inputs(c, T)
         r = reads(ex)
         isempty(r) && continue
-        throw(ArgumentError(string("the field equations read `", _input_word(name, ex), "`, which the CPM computes ",
-            "each MCS from `", first(r), "`, a parameter with derivative parts; the CPM computes in primal values, so ",
-            "that derivative would be lost (F3-21b): write `", first(r), "` outside the CPM read in the field equation ",
-            "(an `ifelse` of CPM reads is filled whole: move the parameter out of its branches), or take finite differences")))
+        throw(
+            ArgumentError(
+                string(
+                    "the field equations read `", _input_word(name, ex), "`, which the CPM computes ",
+                    "each MCS from `", first(r), "`, a parameter with derivative parts; the CPM computes in primal values, so ",
+                    "that derivative would be lost (F3-21b): write `", first(r), "` outside the CPM read in the field equation ",
+                    "(an `ifelse` of CPM reads is filled whole: move the parameter out of its branches), or take finite differences"
+                )
+            )
+        )
     end
     return nothing
 end
 
 # `remake(prob; p = …)`: the seeds of the old problem that the new map does not set, and the Duals
 # of the new map; `nothing` when none is left
-Base.@nospecializeinfer function CorePotts.remake_tangent(@nospecialize(info::PottsModelInfo), @nospecialize(prob),
-        @nospecialize(pgiven), @nospecialize(pnew))
+Base.@nospecializeinfer function CorePotts.remake_tangent(
+        @nospecialize(info::PottsModelInfo), @nospecialize(prob),
+        @nospecialize(pgiven), @nospecialize(pnew)
+    )
     (pgiven === nothing || pgiven === missing) && return prob.tangent
     given = _given_names(info, pgiven)
     old = prob.tangent === nothing ? Pair{Symbol, Any}[] : prob.tangent.seeds
@@ -349,27 +400,27 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
     slots = :references in track ? _ref_count_slots(c) : nothing
     fns, generated = Base.ScopedValues.with(_REF_SLOTS => slots) do
         _recording() do
-        _with_model_scope(c) do
-        # the build order is the fingerprint's (D-016); the log ranges mark the copy-step code
-        glog = _GENERATED[]
-        i0 = length(glog)
-        ce = _with_ref_term(() -> _constraint_expr(c, T), "@constraint")
-        delta_H = _rgf(_delta_H_expr(c, T))
-        commit! = _rgf(_commit_expr(c, T))
-        constraint = ce === nothing ? CorePotts.always : _rgf(ce)
-        temperature = _rgf(_with_ref_term(() -> _temperature_expr(c, T), "@sweep temperature"))
-        i1 = length(glog)
-        phases = _phases_parts(c, T, values, spec)
-        lifecycle = _with_ref_term(() -> _lifecycle(c, T), "@divide")
-        total = _rgf(_total_energy_expr(c, T))
-        # `energy_change` (host, on the caller's state) is never tracked: it must not bump the
-        # state's `#ref_counts` (built in place, so the fingerprint's build order is kept)
-        delta_E = Base.ScopedValues.with(() -> _rgf(_delta_H_expr(c, T; drives = false)), _REF_SLOTS => nothing)
-        i2 = length(glog)
-        connectivity = _connectivity_hooks(c, T)
-        copy_step = [glog[(i0 + 1):i1]; glog[(i2 + 1):end]]
-        (; delta_H, commit!, constraint, temperature, phases, lifecycle, total, delta_E, connectivity, copy_step)
-        end
+            _with_model_scope(c) do
+                # the build order is the fingerprint's (D-016); the log ranges mark the copy-step code
+                glog = _GENERATED[]
+                i0 = length(glog)
+                ce = _with_ref_term(() -> _constraint_expr(c, T), "@constraint")
+                delta_H = _rgf(_delta_H_expr(c, T))
+                commit! = _rgf(_commit_expr(c, T))
+                constraint = ce === nothing ? CorePotts.always : _rgf(ce)
+                temperature = _rgf(_with_ref_term(() -> _temperature_expr(c, T), "@sweep temperature"))
+                i1 = length(glog)
+                phases = _phases_parts(c, T, values, spec)
+                lifecycle = _with_ref_term(() -> _lifecycle(c, T), "@divide")
+                total = _rgf(_total_energy_expr(c, T))
+                # `energy_change` (host, on the caller's state) is never tracked: it must not bump the
+                # state's `#ref_counts` (built in place, so the fingerprint's build order is kept)
+                delta_E = Base.ScopedValues.with(() -> _rgf(_delta_H_expr(c, T; drives = false)), _REF_SLOTS => nothing)
+                i2 = length(glog)
+                connectivity = _connectivity_hooks(c, T)
+                copy_step = [glog[(i0 + 1):i1]; glog[(i2 + 1):end]]
+                (; delta_H, commit!, constraint, temperature, phases, lifecycle, total, delta_E, connectivity, copy_step)
+            end
         end
     end
     phases, lifecycle = _fuse_before(c, T, fns.phases[1], fns.lifecycle, fns.phases[2])
@@ -411,8 +462,10 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
     # not resolve on this lattice (it aliases on a thin periodic axis) is unused here, so it
     # is resolved leniently and any resolvable relation differs from it.
     lat = hctx.lattice
-    for (role, nb, default) in (("proposal", c.proposal_spec, CorePotts.VonNeumann(1)),
-            ("contact", c.contact_spec, _p(sys, :lattice).neighborhood))
+    for (role, nb, default) in (
+            ("proposal", c.proposal_spec, CorePotts.VonNeumann(1)),
+            ("contact", c.contact_spec, _p(sys, :lattice).neighborhood),
+        )
         r = CorePotts.relation(nb, lat)
         d = try
             CorePotts.relation(default, lat)
@@ -450,14 +503,18 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
     # unchanged; CheckerboardCPM's spacing covers the reach of these only.
     copy_used = Set{Symbol}()
     foreach(ex -> _ctx_reads!(copy_used, ex, keys(hctx)), fns.copy_step)
-    copy_relations = Symbol[k for k in keys(hctx)
-                            if k ∉ (:lattice, :spacing) && (k in copy_used || k === :surface || !haskey(c.relations, k))]
+    copy_relations = Symbol[
+        k for k in keys(hctx)
+            if k ∉ (:lattice, :spacing) && (k in copy_used || k === :surface || !haskey(c.relations, k))
+    ]
     copy_fns = (; fns.delta_H, fns.commit!, fns.constraint, fns.temperature, fns.connectivity)
-    return CorePotts.CPMFunction(fns.delta_H; fns.commit!, fns.constraint, fns.temperature,
+    return CorePotts.CPMFunction(
+        fns.delta_H; fns.commit!, fns.constraint, fns.temperature,
         phases, lifecycle, acceptance = _acceptance(_p(sys, :sweep), T),
         footprint = c.footprint, fingerprint = _code_hash(generated, h),
         sys = PottsModelInfo(c, T, fns.total, fns.delta_E, hctx, cache, spec, copy_relations, copy_fns),
-        track = :ΔH in track ? CorePotts.TrackDeltaH{T}() : nothing, fns.connectivity)
+        track = :ΔH in track ? CorePotts.TrackDeltaH{T}() : nothing, fns.connectivity
+    )
 end
 
 # The relation fields `names` that expression `x` reads from the run context (`ctx.<name>`),
@@ -465,7 +522,7 @@ end
 _ctx_reads!(acc, x, names) = acc
 function _ctx_reads!(acc, ex::Expr, names)
     if ex.head === :. && length(ex.args) == 2 && ex.args[1] === :ctx && ex.args[2] isa QuoteNode &&
-       ex.args[2].value in names
+            ex.args[2].value in names
         push!(acc, ex.args[2].value)
     end
     foreach(a -> _ctx_reads!(acc, a, names), ex.args)
@@ -475,9 +532,11 @@ end
 # The fingerprint's structural part as a canonical string: the lattice (dims, boundaries,
 # domain, geometry), spacing, neighbourhood and scalar type by content. Hashing the objects
 # would fall back to `objectid` for package structs and tie the fingerprint to the build.
-_fingerprint_seed(sys::PottsSystem, T) = string("lattice=", _canonical_value(core_lattice(_p(sys, :lattice))),
+_fingerprint_seed(sys::PottsSystem, T) = string(
+    "lattice=", _canonical_value(core_lattice(_p(sys, :lattice))),
     ";spacing=", _canonical_value(_p(sys, :lattice).spacing), ";neighborhood=", _canonical_neighborhood(sys),
-    ";T=", string(T))
+    ";T=", string(T)
+)
 # The neighbourhood by content. A neighbourhood that holds a compiler-generated name (an
 # anonymous weight, `Weighted(Moore(1), o -> 1 / norm(o))`) printed as `var"#24#25"`, a number
 # that depends on what was defined before it in the session (F4-E15), so it is written by its
@@ -495,10 +554,17 @@ end
 # the codegen point with the named keywords replaced and the others kept, and `u0` re-laid
 # out for its ODE scratch (values kept; CorePotts keeps p, the seed and the frozen mask).
 # Never reached by `remake(prob; p | u0 | seed)`.
-function CorePotts.remake_function(mi::PottsModelInfo, prob; field_solver = mi.solvers.field_solver,
-        ode_solver = mi.solvers.ode_solver, solvers = nothing, track = _track_names(prob), kwargs...)
-    isempty(kwargs) || throw(ArgumentError("remake: unknown keyword$(length(kwargs) == 1 ? "" : "s") " *
-                                           "$(join(("`$k`" for k in keys(kwargs)), ", "))"))
+function CorePotts.remake_function(
+        mi::PottsModelInfo, prob; field_solver = mi.solvers.field_solver,
+        ode_solver = mi.solvers.ode_solver, solvers = nothing, track = _track_names(prob), kwargs...
+    )
+    isempty(kwargs) || throw(
+        ArgumentError(
+            "remake: unknown keyword$(length(kwargs) == 1 ? "" : "s") $(join(("`$k`" for k in keys(kwargs)), ", ")); " *
+                "supported keywords are `u0`, `p`, `tspan`, `seed`, `replica`, `repeat`, `field_solver`, `ode_solver`, " *
+                "`solvers`, `track`, `f`"
+        )
+    )
     c = mi.csys
     kept = solvers === nothing                      # the problem's `solvers` (named in a clash)
     spec = _resolve_solvers(c; field_solver, ode_solver, solvers = kept ? mi.solvers.solvers : solvers, kept)
@@ -513,8 +579,11 @@ end
 # committed copy's ΔH → `stats.accepted_ΔH`) for now; per-term names wait for R18.
 const _TRACKABLE = (:ΔH, :references)
 function _track(track)
-    (track isa Union{Tuple, AbstractVector} && all(x -> x isa Symbol, track)) || throw(ArgumentError(
-        "`track` must be a tuple of names, e.g. `track = (:ΔH,)`; got $(repr(track))"))
+    (track isa Union{Tuple, AbstractVector} && all(x -> x isa Symbol, track)) || throw(
+        ArgumentError(
+            "`track` must be a tuple of names, e.g. `track = (:ΔH,)`; got $(repr(track))"
+        )
+    )
     for x in track
         x in _TRACKABLE || throw(ArgumentError("`track`: `:$x` cannot be tracked (trackable: $(join(repr.(_TRACKABLE), ", ")))"))
     end
@@ -531,7 +600,7 @@ function _track_layout(st::CorePotts.CPMState, c::CompiledPottsSystem, track)
     on = :references in track
     on == haskey(st.model, REF_COUNTS) && return st
     model = on ? merge(st.model, NamedTuple{(REF_COUNTS,)}((fill!(similar(st.cell.kind, UInt32, length(_ref_count_labels(c))), 0),))) :
-            NamedTuple(k => v for (k, v) in pairs(st.model) if k !== REF_COUNTS)
+        NamedTuple(k => v for (k, v) in pairs(st.model) if k !== REF_COUNTS)
     return CorePotts.CPMState(st.σ, st.cell, st.site, model, st.history)
 end
 
@@ -546,8 +615,10 @@ function CorePotts.report_run(info::PottsModelInfo, integ)
     lines = String[]
     for (j, n) in enumerate(counts)
         n > 0 || continue
-        push!(lines, labels[j] == _SIBLING_LABEL || endswith(labels[j], "(it converts nothing)") ? "$(labels[j]): $n time(s)" :
-                     "$(labels[j]) read a dead referent $n time(s) (it reads as the medium; guard with `alive(ref)`)")
+        push!(
+            lines, labels[j] == _SIBLING_LABEL || endswith(labels[j], "(it converts nothing)") ? "$(labels[j]): $n time(s)" :
+                "$(labels[j]) read a dead referent $n time(s) (it reads as the medium; guard with `alive(ref)`)"
+        )
     end
     @warn "references in $(nameof(info.csys)) (track = (:references,)):\n  " * join(lines, "\n  ")
     fill!(getfield(model, REF_COUNTS), 0)
@@ -577,8 +648,12 @@ function _check_kind_tables(sys::PottsSystem, p)
         i = info(x)
         i.role === :kindtable || continue
         v = getproperty(p, i.name)
-        all(==(nk), size(v)) || throw(ArgumentError("kind table `$(i.name)` has size $(size(v)); the model has $nk kinds " *
-                                                    "($(join(_p(sys, :kinds), ", "))), so it needs $nk entries per axis"))
+        all(==(nk), size(v)) || throw(
+            ArgumentError(
+                "kind table `$(i.name)` has size $(size(v)); the model has $nk kinds " *
+                    "($(join(_p(sys, :kinds), ", "))), so it needs $nk entries per axis"
+            )
+        )
     end
     return nothing
 end
@@ -612,11 +687,14 @@ function _operating_point(sys::PottsSystem, op)
             i !== nothing && i.role in _ODE_SCOPES && (key = get(algebraic, i.name, key))
         end
         if !(key in known || (key isa Symbol && key in rels))
-            throw(ArgumentError(
-                "operating-point key `$k` names nothing in model `$(nameof(sys))`; it has parameters " *
-                "$(join((info(x).name for x in _p(sys, :parameters)), ", ")), variables " *
-                "$(join((info(x).name for x in _p(sys, :variables)), ", ")), and `ownership`, `kind`, `cluster`" *
-                (isempty(rels) ? "" : ", $(join(rels, ", "))")))
+            throw(
+                ArgumentError(
+                    "operating-point key `$k` names nothing in model `$(nameof(sys))`; it has parameters " *
+                        "$(join((info(x).name for x in _p(sys, :parameters)), ", ")), variables " *
+                        "$(join((info(x).name for x in _p(sys, :variables)), ", ")), and `ownership`, `kind`, `cluster`" *
+                        (isempty(rels) ? "" : ", $(join(rels, ", "))")
+                )
+            )
         end
         opd[key] = v
     end
@@ -655,11 +733,19 @@ function _vector_entry(name, v, i, n, role)
     # a flat numeric vector is the vector itself (for every cell/site); per-entry data are
     # vectors of tuples/vectors or arrays whose last dimension is `n`
     if v isa AbstractVector && eltype(v) <: Number
-        length(v) == n || throw(ArgumentError("`$name` has $n components; got $(length(v)) numbers " *
-                                              "(per-cell/site values: a vector of $n-tuples or an array whose last dimension is $n)"))
+        length(v) == n || throw(
+            ArgumentError(
+                "`$name` has $n components; got $(length(v)) numbers " *
+                    "(per-cell/site values: a vector of $n-tuples or an array whose last dimension is $n)"
+            )
+        )
         return v[i]
     end
-    role === :param && throw(ArgumentError("`$name` takes $n numbers"))
+    role === :param && throw(
+        ArgumentError(
+            "parameter `$name` has $n components and takes a number or a length-$n vector of numbers; got $(repr(v; context = :limit => true))"
+        )
+    )
     v isa AbstractVector && all(e -> e isa Union{AbstractVector, Tuple}, v) && return [e[i] for e in v]
     v isa AbstractArray && size(v, ndims(v)) == n && return copy(selectdim(v, ndims(v), i))
     throw(ArgumentError("values for the $n-component `$name`: a number, per-entry vectors, or an array whose last dimension is $n"))
@@ -709,8 +795,12 @@ _is_symbolic(v::AbstractArray) = any(_is_symbolic, v)
 function _evaluate(v, values, who = "`$v`")
     _is_symbolic(v) || return v
     w = _substitute_entry(v, values, who)
-    _is_symbolic(w) && throw(ArgumentError("`$v` does not reduce to a number with the parameter values" *
-                                           _non_parameters(w)))
+    _is_symbolic(w) && throw(
+        ArgumentError(
+            "`$v` does not reduce to a number with the parameter values" *
+                _non_parameters(w)
+        )
+    )
     return w
 end
 
@@ -741,15 +831,25 @@ function _build_derivation(ps)
         i = info(x)
         for e in (i.default isa AbstractArray ? i.default : (i.default,))
             _is_symbolic(e) || continue
-            _has_op(e, random_uniform) && throw(ArgumentError("parameter `$(i.name)` draws a random number " *
-                "(`rand()`); a default is evaluated once per build and must be deterministic"))
+            _has_op(e, random_uniform) && throw(
+                ArgumentError(
+                    "parameter `$(i.name)` draws a random number " *
+                        "(`rand()`); a default is evaluated once per build and must be deterministic"
+                )
+            )
             m = _non_parameters(e)
-            isempty(m) || throw(ArgumentError("parameter `$(i.name)` = `$(i.default)` does not reduce to " *
-                                              "numbers with the parameter values" * m))
+            isempty(m) || throw(
+                ArgumentError(
+                    "parameter `$(i.name)` = `$(i.default)` does not reduce to " *
+                        "numbers with the parameter values" * m
+                )
+            )
         end
     end
-    return LatticePDE.derivation(Symbol[info(x).name for x in ps if !_is_symbolic(info(x).default)],
-        Pair{Symbol, Any}[info(x).name => info(x).default for x in cs])
+    return LatticePDE.derivation(
+        Symbol[info(x).name for x in ps if !_is_symbolic(info(x).default)],
+        Pair{Symbol, Any}[info(x).name => info(x).default for x in cs]
+    )
 end
 # `p` with every computed parameter derived again from its base values, in scalar type `T`
 function _derive(ps, T, p::PottsParameters)
@@ -757,8 +857,14 @@ function _derive(ps, T, p::PottsParameters)
     d = _derivation(ps)
     nt = NamedTuple(p)
     out = Dict{Symbol, Any}(zip(d.computed, d(Tuple(nt[b] for b in d.base))))
-    return _with_values(p, NamedTuple(info(x).name => (haskey(out, info(x).name) ? _param_value(T, out[info(x).name], info(x); ps) :
-                                                       nt[info(x).name]) for x in ps))
+    return _with_values(
+        p, NamedTuple(
+            info(x).name => (
+                haskey(out, info(x).name) ? _param_value(T, out[info(x).name], info(x); ps) :
+                    nt[info(x).name]
+            ) for x in ps
+        )
+    )
 end
 # the refusal of a write of computed parameter `i` (D-F2-1): its expression, its base inputs
 # (through chains) and the routes
@@ -780,9 +886,11 @@ function _computed_message(ps, i::Entity)
     # a component's binding (`k2 = 2k` in `comp`): the number goes into the component (review M1)
     o = get(i.options, :origin, nothing)
     route = o === nothing ? string("(the model constructor's keyword `", i.name, " = v` does)") :
-            string("in the component: give `", o[2], "` a number in `", o[1], "`'s parameters, in place of its binding")
-    return string("`", i.name, "` is computed from ", ins, " (`", i.name, " = ", _builtin_text(_default_text(i.default)),
-        "`): set ", length(base) == 1 ? ins : "its inputs", "; for a fixed `", i.name, "`, declare it with a number ", route)
+        string("in the component: give `", o[2], "` a number in `", o[1], "`'s parameters, in place of its binding")
+    return string(
+        "`", i.name, "` is computed from ", ins, " (`", i.name, " = ", _builtin_text(_default_text(i.default)),
+        "`): set ", length(base) == 1 ? ins : "its inputs", "; for a fixed `", i.name, "`, declare it with a number ", route
+    )
 end
 _default_text(d::AbstractArray) = "[" * join((join(map(_default_text, d[r, :]), " ") for r in axes(d, 1)), "; ") * "]"
 # (as written: no package prefixes, a discrete Bool read `!comp₊s`, not `!Potts._nonzero(comp₊s)`)
@@ -815,7 +923,7 @@ function _computed_tag(ps)
     nt = Tuple(info(x).name for x in ps if get(info(x).options, :tunable, true) === false)
     bs = Tuple((info(x).name, info(x).options.bounds...) for x in ps if haskey(info(x).options, :bounds))
     tag = isempty(cs) ? ((), UInt64(0)) :
-          (Tuple(info(x).name for x in cs), hash([(info(x).name, _canon_default(info(x).default)) for x in cs]))
+        (Tuple(info(x).name for x in cs), hash([(info(x).name, _canon_default(info(x).default)) for x in cs]))
     isempty(nt) && isempty(bs) && return isempty(cs) ? () : tag
     return (tag..., (nt, bs))
 end
@@ -841,9 +949,13 @@ function _register_derivation!(ps, T, p::PottsParameters)
         if old === nothing
             _DERIVATIONS[typeof(p)] = (; derive = (o, n) -> _derive(ps, T, n), defaults)
         elseif !_same_defaults(old.defaults, defaults)
-            throw(ArgumentError("two models share a parameter type but derive $(_computed(p)) from other defaults " *
-                                "(a fingerprint collision: equal as text, e.g. `1//3` and `0.333…`, or two functions " *
-                                "named alike); rename a parameter of one of them"))
+            throw(
+                ArgumentError(
+                    "two models share a parameter type but derive $(_computed(p)) from other defaults " *
+                        "(a fingerprint collision: equal as text, e.g. `1//3` and `0.333…`, or two functions " *
+                        "named alike); rename a parameter of one of them"
+                )
+            )
         end
     end
     return nothing
@@ -908,8 +1020,12 @@ function _numeric(x, who)
     op = SymbolicUtils.operation(x)
     args = SymbolicUtils.arguments(x)
     op === random_uniform &&
-        throw(ArgumentError("$who draws a random number (`rand()`); a default is evaluated once per build " *
-                            "and must be deterministic"))
+        throw(
+        ArgumentError(
+            "$who draws a random number (`rand()`); a default is evaluated once per build " *
+                "and must be deterministic"
+        )
+    )
     if op === ifelse
         c = _numeric(args[1], who)
         c === _PENDING && return c
@@ -928,8 +1044,12 @@ end
 # `t[k…]` of a kind table `t` by kind numbers (medium = 0, then the `@kinds` order)
 function _table_entry(who, t, ks...)
     t isa AbstractArray && ndims(t) == length(ks) ||
-        throw(ArgumentError("$who reads a kind table with $(length(ks)) kind$(length(ks) == 1 ? "" : "s"); " *
-                            "the table takes $(t isa AbstractArray ? ndims(t) : 0)"))
+        throw(
+        ArgumentError(
+            "$who reads a kind table with $(length(ks)) kind$(length(ks) == 1 ? "" : "s"); " *
+                "the table takes $(t isa AbstractArray ? ndims(t) : 0)"
+        )
+    )
     for k in ks
         k isa Real && isinteger(k) || throw(ArgumentError("$who reads a kind table at `$k`, not a kind number"))
     end
@@ -945,13 +1065,17 @@ function _non_parameters(v)
     out = unique(string(u) for u in us if (i = info(u); i === nothing || !(i.role in (:param, :kindtable))))
     isempty(out) && return ""
     return "; it reads $(join(("`$o`" for o in out), ", ")), which $(length(out) == 1 ? "is not a parameter" : "are not parameters"): " *
-           "a default is an expression of parameters, numbers and functions"
+        "a default is an expression of parameters, numbers and functions"
 end
 
 _param_value(T, v, i::Entity; ps = nothing) = _check_bounds(i, _param_value_unchecked(T, v, i), ps)
 function _param_value_unchecked(T, v, i::Entity)
-    _is_symbolic(v) && throw(ArgumentError("parameter `$(i.name)` = `$(_is_symbolic(i.default) ? i.default : v)` does not " *
-                                           "reduce to numbers with the parameter values" * _non_parameters(v)))
+    _is_symbolic(v) && throw(
+        ArgumentError(
+            "parameter `$(i.name)` = `$(_is_symbolic(i.default) ? i.default : v)` does not " *
+                "reduce to numbers with the parameter values" * _non_parameters(v)
+        )
+    )
     if i.role === :kindtable
         v isa Number && throw(ArgumentError("kind table `$(i.name)` takes a vector (one value per kind) or a matrix; got $v"))
         A = Matrix(v isa AbstractVector ? reshape(v, :, 1) : v)
@@ -968,15 +1092,19 @@ end
 _cpm_scalar(::Type{T}, v, i::Entity) where {T} = v isa Union{AbstractFloat, Integer, Rational, AbstractIrrational} ? T(v) :
     try
         T(v)
-    catch e
+catch e
         e isa Union{MethodError, InexactError, ArgumentError} || rethrow()
-        throw(ArgumentError("parameter `$(i.name)` = $(_valtext(v)) does not convert to the problem's scalar type $T: " *
-            "a parameter object holds plain numbers (no Duals). A Dual goes to the problem: " *
-            "`PottsProblem(sys, op, tspan)` or `remake(prob; p = [k => Dual])`, whose fields then carry derivative " *
-            "parts along the run's CPM path (F3-21b); an integrator write takes a plain number. A parameter the " *
-            "CPM reads has a derivative that is zero almost everywhere (the acceptance of a copy is piecewise " *
-            "constant in it), so it belongs to likelihood-free inference"))
-    end
+        throw(
+            ArgumentError(
+                "parameter `$(i.name)` = $(_valtext(v)) does not convert to the problem's scalar type $T: " *
+                "a parameter object holds plain numbers (no Duals). A Dual goes to the problem: " *
+                "`PottsProblem(sys, op, tspan)` or `remake(prob; p = [k => Dual])`, whose fields then carry derivative " *
+                "parts along the run's CPM path (F3-21b); an integrator write takes a plain number. A parameter the " *
+                "CPM reads has a derivative that is zero almost everywhere (the acceptance of a copy is piecewise " *
+                "constant in it), so it belongs to likelihood-free inference"
+            )
+        )
+end
 
 # a value in a message: a ForwardDiff Dual by its value and value type, not its type (whose tag
 # can embed the whole problem's type: several KB; batch 5 review S4)
@@ -1000,8 +1128,12 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     length(kinds) == ncell || throw(ArgumentError("$(length(kinds)) kinds for $ncell labeled cells"))
     nk = length(_p(sys, :kinds)) - 1
     for k in kinds
-        1 <= k <= nk || throw(ArgumentError("kind number $k is out of range: cell kinds are 1:$nk " *
-                                            "($(join(_p(sys, :kinds)[2:end], ", ")))"))
+        1 <= k <= nk || throw(
+            ArgumentError(
+                "kind number $k is out of range: cell kinds are 1:$nk " *
+                    "($(join(_p(sys, :kinds)[2:end], ", ")))"
+            )
+        )
     end
     lat = core_lattice(_p(sys, :lattice))
     site = Pair{Symbol, Any}[]
@@ -1020,8 +1152,14 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
             # (a `Coarse(k)` field's array is its grid's, F3-17)
             sd = _site_dims(i, _p(sys, :lattice).dims)
             v isa AbstractArray && sd != _p(sys, :lattice).dims && size(v) != sd &&
-                throw(ArgumentError(string("the operating point gives `", i.name, "` an array of size ", size(v), "; `", i.name,
-                    "` has `lattice_level = ", i.options.lattice_level, "`, so its array is its grid's, of size ", sd)))
+                throw(
+                ArgumentError(
+                    string(
+                        "the operating point gives `", i.name, "` an array of size ", size(v), "; `", i.name,
+                        "` has `lattice_level = ", i.options.lattice_level, "`, so its array is its grid's, of size ", sd
+                    )
+                )
+            )
             a = v isa AbstractArray ? S.(v) : fill(S(v), sd)
             push!(site, i.name => a)
             i.name in c.scratch && push!(site, Symbol(i.name, :__next) => copy(a))
@@ -1073,8 +1211,14 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
         ids = haskey(opd, ckey) ? opd[ckey] : 1:ncell
         length(ids) == ncell || throw(ArgumentError("$(length(ids)) cluster ids for $ncell labeled cells"))
         rel = c.uses_cluster_surface ? c.relations[:surface] : nothing
-        append!(cell, pairs(CorePotts.init_clusters(σ, ids, lat; relation = rel, T, kind = kinds,
-            prefer = _cluster_kinds(c))))
+        append!(
+            cell, pairs(
+                CorePotts.init_clusters(
+                    σ, ids, lat; relation = rel, T, kind = kinds,
+                    prefer = _cluster_kinds(c)
+                )
+            )
+        )
     elseif haskey(opd, ckey)
         throw(ArgumentError("`cluster` in the operating point, but the model uses no compartments"))
     end
@@ -1085,7 +1229,13 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
         defaults = (; (info(x).name => T(_edge_initial(x, opd, pvals, r.name)) for x in vars)...)
         for (x, y) in get(opd, r.name, ())
             CorePotts.add_link!(store, x, y; defaults...) ||
-                throw(ArgumentError("$(r.name): cannot link cells $x and $y (full row or duplicate)"))
+                throw(
+                ArgumentError(
+                    "$(r.name): cannot link cells $x and $y (out-of-range id, full row of capacity $(r.capacity), " *
+                        "self-link or duplicate); increase `capacity` in `@relationship $(r.name)(cell, cell) capacity = …` " *
+                        "or pass distinct ids in 1:$ncell"
+                )
+            )
         end
         append!(cell, pairs(links))
     end
@@ -1113,10 +1263,16 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
         push!(model, CorePotts.NEXT_BIRTH => Int32[ncell + 1])
     end
     sitent, modelnt = NamedTuple(site), NamedTuple(model)
-    history = (; (n => CorePotts.history_buffer(haskey(sitent, n) ? sitent[n] : modelnt[n], d)
-                  for (n, d) in sort!(collect(_history_depths(sys)); by = first))...)
-    st = CorePotts.initial_state(σ, kinds; cell = NamedTuple(cell), site = sitent, model = modelnt, history,
-        shapes = NamedTuple(shapes))
+    history = (;
+        (
+            n => CorePotts.history_buffer(haskey(sitent, n) ? sitent[n] : modelnt[n], d)
+                for (n, d) in sort!(collect(_history_depths(sys)); by = first)
+        )...,
+    )
+    st = CorePotts.initial_state(
+        σ, kinds; cell = NamedTuple(cell), site = sitent, model = modelnt, history,
+        shapes = NamedTuple(shapes)
+    )
     cap = capacity === nothing ? (_numbers_cells(c) ? 2ncell + 64 : ncell) : capacity
     st = cap > ncell ? CorePotts.with_capacity(st, cap) : st
     return _reduce_layout(_convert_layout(st, c), c)
@@ -1154,12 +1310,16 @@ function _convert_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
         fits(n, a) = haskey(st.cell, n) && size(getfield(st.cell, n))[1:(end - 1)] == size(a)[1:(end - 1)]
         add = [(n, a) for (n, a) in sc.cell if !fits(n, a)]
         isempty(add) && return st
-        return CorePotts.CPMState(st.σ, merge(st.cell, NamedTuple(n => dev(a) for (n, a) in add)), st.site, st.model,
-            st.history)
+        return CorePotts.CPMState(
+            st.σ, merge(st.cell, NamedTuple(n => dev(a) for (n, a) in add)), st.site, st.model,
+            st.history
+        )
     end
-    return CorePotts.CPMState(st.σ, merge(st.cell, NamedTuple(n => dev(a) for (n, a) in sc.cell)),
+    return CorePotts.CPMState(
+        st.σ, merge(st.cell, NamedTuple(n => dev(a) for (n, a) in sc.cell)),
         merge(st.site, NamedTuple(n => dev(a) for (n, a) in sc.site)),
-        merge(st.model, NamedTuple(n => dev(a) for (n, a) in sc.model)), st.history)
+        merge(st.model, NamedTuple(n => dev(a) for (n, a) in sc.model)), st.history
+    )
 end
 
 # The scratch of the cell sums of stored integrals (`CorePotts.reduce_scratch`, F3-23: exact
@@ -1169,8 +1329,10 @@ function _reduce_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
     (isempty(_integrals(c.sys)) || haskey(st.model, CorePotts.REDUCE_STATUS)) && return st
     sc = CorePotts.reduce_scratch(length(st.cell.kind))
     dev(a) = fill!(similar(st.σ, eltype(a), size(a)), zero(eltype(a)))     # zeros, where the state lives
-    return CorePotts.CPMState(st.σ, merge(st.cell, map(dev, sc.cell)), st.site, merge(st.model, map(dev, sc.model)),
-        st.history)
+    return CorePotts.CPMState(
+        st.σ, merge(st.cell, map(dev, sc.cell)), st.site, merge(st.model, map(dev, sc.model)),
+        st.history
+    )
 end
 
 # A `CellRef` column (R6): Int32 cell ids, 0 (none) or a labelled cell
@@ -1184,9 +1346,15 @@ function _check_field_bounds(i, v)
     k = findfirst(x -> !(b[1] <= x <= b[2]), vals)
     k === nothing && return nothing
     at = v isa AbstractArray ? string(" at site ", Tuple(CartesianIndices(v)[k])) : ""
-    throw(ArgumentError(string("field `", i.name, "` starts at ", vals[k], at, ", outside its declared bounds (",
-        _bnum(b[1]), ", ", _bnum(b[2]), "): the stability bound takes that interval for the coefficients that read `",
-        i.name, "`; give it initial values in its bounds, or change `bounds` in its declaration")))
+    throw(
+        ArgumentError(
+            string(
+                "field `", i.name, "` starts at ", vals[k], at, ", outside its declared bounds (",
+                _bnum(b[1]), ", ", _bnum(b[2]), "): the stability bound takes that interval for the coefficients that read `",
+                i.name, "`; give it initial values in its bounds, or change `bounds` in its declaration"
+            )
+        )
+    )
 end
 function _ref_column(name, v, ncell)
     vals = v isa AbstractArray ? vec(v) : fill(v, ncell)
@@ -1205,8 +1373,12 @@ function _edge_initial(x, opd, pvals, r)
     i = info(x)
     haskey(opd, _unwrap(x)) || return i.default
     v = _evaluate(opd[_unwrap(x)], pvals, "the operating-point value of `$(i.name)`")
-    v isa Real || throw(ArgumentError("edge variable `$(i.name)`: the operating point takes one number, " *
-        "the initial value on every initial link of `$r`; got $(repr(v; context = :limit => true))"))
+    v isa Real || throw(
+        ArgumentError(
+            "edge variable `$(i.name)`: the operating point takes one number, " *
+                "the initial value on every initial link of `$r`; got $(repr(v; context = :limit => true))"
+        )
+    )
     return v
 end
 
@@ -1221,8 +1393,16 @@ end
 
 # Kinds that name clusters (`clusters(k)` terms and divisions): a cluster's root is chosen
 # among its members of these kinds, so the filters select it.
-_cluster_kinds(c::CompiledPottsSystem) = Tuple(unique(Iterators.flatten((first.(c.cluster_terms)...,
-    (d.domain.kinds for d in c.divisions if d.domain isa ClusterDomain)...))))
+_cluster_kinds(c::CompiledPottsSystem) = Tuple(
+    unique(
+        Iterators.flatten(
+            (
+                first.(c.cluster_terms)...,
+                (d.domain.kinds for d in c.divisions if d.domain isa ClusterDomain)...,
+            )
+        )
+    )
+)
 
 # Sites of cells of frozen kinds never change owner (walls, obstacles).
 function _frozen_mask(sys::PottsSystem, st)
@@ -1243,9 +1423,11 @@ function _kind_index(sys::PottsSystem, k::Symbol)
 end
 
 # with the flood scratch of a model with whole-cell connectivity (P6.9a), exact (`GlobalExact`)
-_host_ctx(prob) = (; lattice = prob.lattice, contact = prob.contact, prob.relations...,
+_host_ctx(prob) = (;
+    lattice = prob.lattice, contact = prob.contact, prob.relations...,
     (prob.spacing === nothing ? (;) : (; spacing = prob.spacing))...,
-    CorePotts.connectivity_ctx(CorePotts.CPU(), prob.f, prob.lattice, CorePotts.GlobalExact())...)
+    CorePotts.connectivity_ctx(CorePotts.CPU(), prob.f, prob.lattice, CorePotts.GlobalExact())...,
+)
 
 """
     energy_change(prob, u, prop)
@@ -1272,7 +1454,11 @@ cluster term with `E_cluster(empty) ≠ 0`, ΔH equals the H difference for ever
 """
 function total_energy(prob::CorePotts.PottsProblem, u = prob.u0)
     info = prob.f.sys
-    info isa PottsModelInfo || throw(ArgumentError("not a PottsProblem"))
+    info isa PottsModelInfo || throw(
+        ArgumentError(
+            "total_energy: `prob` was not built from a symbolic Potts model (`PottsSystem`), so it has no generated energy"
+        )
+    )
     return info.total_energy(u, prob.p, _host_ctx(prob))
 end
 
@@ -1283,8 +1469,14 @@ const _SymbolicMap = Union{AbstractVector{<:Pair}, AbstractDict}
 
 # (a Dual value: its primal value here, the Dual in the problem's tangent: `remake_tangent`, F3-21b)
 CorePotts.remake_parameters(@nospecialize(info::PottsModelInfo), @nospecialize(prob), p::_SymbolicMap) =
-    _set_parameter_map(info, prob.p, Pair{Any, Any}[k => (_is_dual(v) ? _tprimal(v) : _has_dual(v) ?
-        _refuse_dual_value(string(k), :kindtable, v) : v) for (k, v) in p])
+    _set_parameter_map(
+    info, prob.p, Pair{Any, Any}[
+        k => (
+            _is_dual(v) ? _tprimal(v) : _has_dual(v) ?
+                _refuse_dual_value(string(k), :kindtable, v) : v
+        ) for (k, v) in p
+    ]
+)
 
 # parameter object `old` with the parameter map `p` applied as one change, then every computed
 # parameter derived again (D-F2-1)
@@ -1332,15 +1524,21 @@ CorePotts.remake_parameters(@nospecialize(info::PottsModelInfo), @nospecialize(p
 # kind tables are checked either way. One of this problem's type is used as is; one of another
 # type must have the same names and sets every base value, converted to the problem's scalar type
 # (a Float32 problem's `p` does not make a Float64 problem Float32)
-Base.@nospecializeinfer function CorePotts.remake_parameters(@nospecialize(info::PottsModelInfo), @nospecialize(prob),
-        @nospecialize(p::PottsParameters))
+Base.@nospecializeinfer function CorePotts.remake_parameters(
+        @nospecialize(info::PottsModelInfo), @nospecialize(prob),
+        @nospecialize(p::PottsParameters)
+    )
     typeof(p) === typeof(prob.p) && return _finish_parameters(info, p, p, nothing)
     new, old = keys(NamedTuple(p)), keys(NamedTuple(prob.p))
     if Set(new) != Set(old)
         extra, absent = setdiff(new, old), setdiff(old, new)
-        throw(ArgumentError("the parameter object is not one of $(nameof(info.csys))" *
-                            (isempty(extra) ? "" : "; not its parameters: $(join(extra, ", "))") *
-                            (isempty(absent) ? "" : "; missing: $(join(absent, ", "))")))
+        throw(
+            ArgumentError(
+                "the parameter object is not one of $(nameof(info.csys))" *
+                    (isempty(extra) ? "" : "; not its parameters: $(join(extra, ", "))") *
+                    (isempty(absent) ? "" : "; missing: $(join(absent, ", "))")
+            )
+        )
     end
     ps = _p(info.csys.sys, :parameters)
     base = Pair{Symbol, Any}[k => v for (k, v) in pairs(NamedTuple(p)) if _computed_entity(ps, k) === nothing]
@@ -1354,8 +1552,12 @@ CorePotts.remake_parameters(@nospecialize(::PottsModelInfo), @nospecialize(prob)
 # silent replacement of `prob.p` (D-115)
 function CorePotts.remake_parameters(@nospecialize(info::PottsModelInfo), @nospecialize(prob), p)
     _is_pairs(p) && return CorePotts.remake_parameters(info, prob, Pair[x for x in p])
-    throw(ArgumentError("`p = $(repr(p; context = :limit => true))` is not a parameter map of $(nameof(info.csys)); " *
-                        "give a NamedTuple, a vector of `name => value` pairs or a Dict"))
+    throw(
+        ArgumentError(
+            "`p = $(repr(p; context = :limit => true))` is not a parameter map of $(nameof(info.csys)); " *
+                "give a NamedTuple, a vector of `name => value` pairs or a Dict"
+        )
+    )
 end
 
 _field_pairs(nt::NamedTuple) = Pair{Symbol, Any}[k => v for (k, v) in pairs(nt)]
@@ -1365,7 +1567,11 @@ _is_pairs(p) = (p isa AbstractVector || p isa Tuple) && all(x -> x isa Pair, p)
 Base.@nospecializeinfer function _finish_parameters(@nospecialize(mi::PottsModelInfo), @nospecialize(old), @nospecialize(out), _)
     c = mi.csys
     out = _derive(_p(c.sys, :parameters), mi.T, out)
-    typeof(out) === typeof(old) || throw(ArgumentError("parameter types changed; kind tables keep their size"))
+    typeof(out) === typeof(old) || throw(
+        ArgumentError(
+            "parameter types changed (kind tables keep their size and scalars keep type $(mi.T)); pass values compatible with $(nameof(typeof(old)))"
+        )
+    )
     return _check_parameter_tables(c, out)
 end
 
@@ -1418,8 +1624,12 @@ CorePotts.frozen_kinds(info::PottsModelInfo) =
 # a state given as such (`remake(prob; u0 = st)`, `reinit!(integ, st)`, a saved state of another
 # problem of the model): its values, laid out for this problem's ODE scratch
 CorePotts.remake_state(info::PottsModelInfo, prob, u0::CorePotts.CPMState) =
-    _track_layout(_ode_layout(_reduce_layout(_convert_layout(_check_births(u0, info.csys), info.csys), info.csys), info.csys,
-        info.solvers), info.csys, _track_names(prob))
+    _track_layout(
+    _ode_layout(
+        _reduce_layout(_convert_layout(_check_births(u0, info.csys), info.csys), info.csys), info.csys,
+        info.solvers
+    ), info.csys, _track_names(prob)
+)
 
 # `@convert` (D-233): the allocations deferred for want of a free slot and the entities
 # skipped for the Int32 moment scratch, read once per solve (as the lifecycle's deferrals)
@@ -1428,10 +1638,10 @@ function _report_converts(info::PottsModelInfo, integ)
     flags = CorePotts._to_host(getfield(integ, :stats), dev)
     deferred, large = Int(flags[3]), Int(flags[4])
     deferred > 0 && @warn "@convert in $(nameof(info.csys)): $deferred allocation(s) deferred: all " *
-                          "$(length(integ.state.cell.kind)) cell slots are in use (the lowest-slot entities " *
-                          "allocate first; the others convert nothing that MCS). Pass a larger `capacity`."
+        "$(length(integ.state.cell.kind)) cell slots are in use (the lowest-slot entities " *
+        "allocate first; the others convert nothing that MCS). Pass a larger `capacity`."
     large > 0 && @warn "@convert in $(nameof(info.csys)): $large entity pass(es) skipped: the cells' second " *
-                       "moments exceed the pass's Int32 scratch (a cell far larger than any in use)"
+        "moments exceed the pass's Int32 scratch (a cell far larger than any in use)"
     (deferred > 0 || large > 0) && fill!(dev, 0)        # flags 1–2 are per pass; 3–4 counted again
     return nothing
 end
@@ -1443,10 +1653,16 @@ function _check_births(st::CorePotts.CPMState, c::CompiledPottsSystem)
     want = _tracks_births(c)
     col, ctr = haskey(st.cell, :birth), haskey(st.model, CorePotts.NEXT_BIRTH)
     col == ctr == want && return st
-    throw(ArgumentError("the given state does not fit model `$(nameof(c))`: " *
-                        (want ? "the model reads `birth`, so a state needs the `birth` cell column and its counter" :
-                         "the model keeps no cell serials, so a state has no `birth` cell column or counter") *
-                        " (the state has $(col ? "a" : "no") `birth` column and $(ctr ? "a" : "no") counter)"))
+    throw(
+        ArgumentError(
+            "the given state does not fit model `$(nameof(c))`: " *
+                (
+                want ? "the model reads `birth`, so a state needs the `birth` cell column and its counter" :
+                    "the model keeps no cell serials, so a state has no `birth` cell column or counter"
+            ) *
+                " (the state has $(col ? "a" : "no") `birth` column and $(ctr ? "a" : "no") counter)"
+        )
+    )
 end
 
 # a NamedTuple operating point is the map of its fields (D-115)
@@ -1459,13 +1675,21 @@ CorePotts.remake_state(info::PottsModelInfo, prob, ::Union{Nothing, Missing}) =
 
 function CorePotts.remake_state(info::PottsModelInfo, prob, u0)
     _is_pairs(u0) && return CorePotts.remake_state(info, prob, Pair[x for x in u0])
-    throw(ArgumentError("`u0 = $(repr(u0; context = :limit => true))` is not a state or an operating point of $(nameof(info.csys)); " *
-                        "give a state, a NamedTuple, a vector of `variable => value` pairs or a Dict"))
+    throw(
+        ArgumentError(
+            "`u0 = $(repr(u0; context = :limit => true))` is not a state or an operating point of $(nameof(info.csys)); " *
+                "give a state, a NamedTuple, a vector of `variable => value` pairs or a Dict"
+        )
+    )
 end
 
 function CorePotts.remake_state(info::PottsModelInfo, prob, u0::_SymbolicMap)
-    any(x -> _has_dual(last(x)), u0) && throw(ArgumentError("`remake(prob; u0 = …)` takes plain values: give initial " *
-        "values with derivative parts to the problem (`PottsProblem(sys, op, tspan)`, F3-21b)"))
+    any(x -> _has_dual(last(x)), u0) && throw(
+        ArgumentError(
+            "`remake(prob; u0 = …)` takes plain values: give initial " *
+                "values with derivative parts to the problem (`PottsProblem(sys, op, tspan)`, F3-21b)"
+        )
+    )
     opd = _operating_point(info.csys.sys, u0)
     # keep the old capacity and the old number of free slots (room for divisions)
     old = length(prob.u0.cell.kind)

@@ -11,7 +11,7 @@ isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "d
 const INI_M = Potts.ModelingToolkitBase
 
 ini_sigma() = (s = zeros(Int32, 12, 8); s[3:6, 3:6] .= 1; s[7:10, 3:5] .= 2; s)
-      # volumes 16, 12
+# volumes 16, 12
 ini_op(extra...; kinds = [1, 1]) = Any[ownership => ini_sigma(), kind => kinds, extra...]
 
 ini_u0(prob, n) = Vector{Float64}(Array(getproperty(prob.u0.cell, n)))
@@ -130,42 +130,26 @@ end
 
 
 # rejections the frozen file leaves to the implementer
-@potts_model IniNoODE begin
-    @kinds medium A
-    @variables v(cell)
-    @lattice Lattice((12, 8))
-    @energy cells => (volume - 14.0)^2
-    @initialization_equations D(v) ~ 0
-    @sweep Metropolis(; temperature = 1.0)
-end
-
-@potts_model IniSurface begin
-    @kinds medium A
-    @variables v(cell)
-    @lattice Lattice((12, 8))
-    @energy cells => (volume - 14.0)^2
-    @initialization_equations v ~ surface
-    @sweep Metropolis(; temperature = 1.0)
-end
-
-@potts_model IniTwice begin
-    @kinds medium A
-    @variables v(cell)
-    @lattice Lattice((12, 8))
-    @energy cells => (volume - 14.0)^2
-    @initialization_equations begin
-        v ~ volume
-        v ~ 2volume
+@potts_model IniReject begin
+    @structural_parameters begin
+        kind_case = :surface
     end
-    @sweep Metropolis(; temperature = 1.0)
-end
-
-@potts_model IniDraw begin
     @kinds medium A
     @variables v(cell)
     @lattice Lattice((12, 8))
     @energy cells => (volume - 14.0)^2
-    @initialization_equations v ~ rand()
+    if kind_case === :no_ode
+        @initialization_equations D(v) ~ 0
+    elseif kind_case === :surface
+        @initialization_equations v ~ surface
+    elseif kind_case === :twice
+        @initialization_equations begin
+            v ~ volume
+            v ~ 2volume
+        end
+    else
+        @initialization_equations v ~ rand()
+    end
     @sweep Metropolis(; temperature = 1.0)
 end
 
@@ -328,62 +312,43 @@ end
 
 # flat equations are refused (the finite-difference step never crosses a kink or a branch);
 # a large guess does not loosen the check; a guess may be an expression of parameters
-@potts_model IniKink begin
-    @kinds medium A
-    @variables v(cell), [guess = 1.0]
-    @lattice Lattice((12, 8))
-    @energy cells => (volume - 14.0)^2
-    @initialization_equations max(v, 1000.0) ~ 1000.0
-    @sweep Metropolis(; temperature = 1.0)
-end
-
-@potts_model IniClamp begin
-    @kinds medium A
-    @variables v(cell), [guess = 5.0]
-    @lattice Lattice((12, 8))
-    @energy cells => (volume - 14.0)^2
-    @initialization_equations clamp(v, -1.0, 1.0) ~ 1.0
-    @sweep Metropolis(; temperature = 1.0)
-end
-
-@potts_model IniBigGuess begin
-    @kinds medium A
-    @variables v(cell), [guess = 1.0e6]
-    @lattice Lattice((12, 8))
-    @energy cells => (volume - 14.0)^2
-    @initialization_equations v^2 ~ volume
-    @sweep Metropolis(; temperature = 1.0)
-end
-
-@potts_model IniParamGuess begin
+@potts_model IniGuessed begin
+    @structural_parameters begin
+        kind_case = :kink
+        guess_val = 1.0
+        use_pz = false
+    end
     @kinds medium A
     @parameters pz = -1.0
-    @variables v(cell), [guess = pz]
+    @variables v(cell), [guess = use_pz ? pz : guess_val]
     @lattice Lattice((12, 8))
     @energy cells => (volume - 14.0)^2
-    @initialization_equations v^2 ~ volume
+    if kind_case === :kink
+        @initialization_equations max(v, 1000.0) ~ 1000.0
+    elseif kind_case === :clamp
+        @initialization_equations clamp(v, -1.0, 1.0) ~ 1.0
+    else
+        @initialization_equations v^2 ~ volume
+    end
     @sweep Metropolis(; temperature = 1.0)
 end
 
 
 # kind tables are read at the cell's own kind
 @potts_model IniTable begin
+    @structural_parameters begin
+        fixed = false
+    end
     @kinds medium A B
     @parameters g[kind] = [0.0, 1.0, 3.0]
     @variables kv(cell)
     @lattice Lattice((12, 8))
     @energy cells => (volume - 14.0)^2
-    @initialization_equations kv ~ g[kind] * volume
-    @sweep Metropolis(; temperature = 1.0)
-end
-
-@potts_model IniTableFixed begin
-    @kinds medium A B
-    @parameters g[kind] = [0.0, 1.0, 3.0]
-    @variables kv(cell)
-    @lattice Lattice((12, 8))
-    @energy cells => (volume - 14.0)^2
-    @initialization_equations kv ~ g[2] * volume
+    if fixed
+        @initialization_equations kv ~ g[2] * volume
+    else
+        @initialization_equations kv ~ g[kind] * volume
+    end
     @sweep Metropolis(; temperature = 1.0)
 end
 
@@ -410,13 +375,13 @@ end
 @testitem "initialization: kind, parameter expressions, vector guesses" setup = [InitializationSetup] tags = [:potts, :initialization] begin
     @testset "initialization: kind, parameter expressions, vector guesses" begin
         prob = PottsProblem(IniKinds(; name = :k), ini_op(; kinds = [:A, :B]), (0, 1))
-        @test ini_u0(prob, :y) ≈ [10 + 16 + 6.0, 20 + 12 + 6.0] rtol = 1e-12
-        @test ini_u0(prob, :p_1) ≈ sqrt.(INI_VOL) rtol = 1e-9
-        @test ini_u0(prob, :p_2) ≈ -sqrt.(INI_VOL) rtol = 1e-9
-        @test !isapprox(ini_u0(prob, :p_2), sqrt.(INI_VOL); rtol = 1e-3)          # control: the other root
+        @test ini_u0(prob, :y) ≈ [10 + 16 + 6.0, 20 + 12 + 6.0] rtol = 1.0e-12
+        @test ini_u0(prob, :p_1) ≈ sqrt.(INI_VOL) rtol = 1.0e-9
+        @test ini_u0(prob, :p_2) ≈ -sqrt.(INI_VOL) rtol = 1.0e-9
+        @test !isapprox(ini_u0(prob, :p_2), sqrt.(INI_VOL); rtol = 1.0e-3)          # control: the other root
         # the parameter is read at its problem value
         prob2 = PottsProblem(IniKinds(; name = :k, c0 = 1.0), ini_op(; kinds = [:A, :B]), (0, 1))
-        @test ini_u0(prob2, :y) ≈ [10 + 16 + 2.0, 20 + 12 + 2.0] rtol = 1e-12
+        @test ini_u0(prob2, :y) ≈ [10 + 16 + 2.0, 20 + 12 + 2.0] rtol = 1.0e-12
         # the template: guesses from the vector's metadata, `w` fixed at its written value
         s = Potts.initialization_system(mtkcompile(IniKinds(; name = :k)), :cell)
         @test issubset(Set([:y, :w, :p_1, :p_2]), ini_names(INI_M.unknowns(s)))
@@ -436,10 +401,10 @@ end
         sc = Potts.initialization_system(c, :cell)
         @test ini_names(INI_M.unknowns(sc)) == Set([:z])
         prob = PottsProblem(c, ini_op(), (0, 3))
-        @test only(Array(prob.u0.model.m)) ≈ 4.0 rtol = 1e-12                    # ka / kb
-        @test ini_u0(prob, :z) ≈ INI_VOL .+ 4.0 rtol = 1e-12                    # D(m) = 0 at the start
+        @test only(Array(prob.u0.model.m)) ≈ 4.0 rtol = 1.0e-12                    # ka / kb
+        @test ini_u0(prob, :z) ≈ INI_VOL .+ 4.0 rtol = 1.0e-12                    # D(m) = 0 at the start
         sol = solve(prob, SequentialCPM(; proposal = Moore(1)))
-        @test all(u -> isapprox(only(Array(u.model.m)), 4.0; rtol = 1e-12), sol.u)  # a steady start stays
+        @test all(u -> isapprox(only(Array(u.model.m)), 4.0; rtol = 1.0e-12), sol.u)  # a steady start stays
     end
 end
 
@@ -458,12 +423,12 @@ end
     @testset "initialization: algebraic values from the operating point" begin
         sys = IniHalf(; name = :h)
         prob = PottsProblem(sys, ini_op(:half => 3.0, :xd => [19.0, 15.0]), (0, 1))
-        @test only(Array(prob.u0.model.m)) ≈ 6.0 rtol = 1e-12
-        @test ini_u0(prob, :x) ≈ [1.0, 1.0] rtol = 1e-12                         # (xd − volume) / 3
+        @test only(Array(prob.u0.model.m)) ≈ 6.0 rtol = 1.0e-12
+        @test ini_u0(prob, :x) ≈ [1.0, 1.0] rtol = 1.0e-12                         # (xd − volume) / 3
         # keyed by the compiled model's symbol, the declared symbol or the name: the same values
         for key in (sys.xd, getproperty(sys, :xd), :xd)
             p = PottsProblem(sys, ini_op(key => [19.0, 15.0]), (0, 1))
-            @test ini_u0(p, :x) ≈ [1.0, 1.0] rtol = 1e-12
+            @test ini_u0(p, :x) ≈ [1.0, 1.0] rtol = 1.0e-12
         end
         # a model value with a cell condition: the cell problem reads the initialized model
         @test ini_error(() -> PottsProblem(sys, ini_op(:m => 1.0, :half => 3.0), (0, 1)), "overdetermined", "half", "m")
@@ -484,8 +449,8 @@ end
         vol = [Float64(count(==(c), σ)) for c in 1:n]
         prob = PottsProblem(IniMany(; name = :many), [ownership => σ, kind => fill(1, n)], (0, 1))
         r = ini_u0(prob, :r)
-        @test all(c -> isapprox(r[c]^3 + r[c], vol[c] + 2c; rtol = 1e-9), 1:n)
-        @test ini_u0(prob, :s) ≈ r .* (1:n) rtol = 1e-12
+        @test all(c -> isapprox(r[c]^3 + r[c], vol[c] + 2c; rtol = 1.0e-9), 1:n)
+        @test ini_u0(prob, :s) ≈ r .* (1:n) rtol = 1.0e-12
         @test length(unique(r)) == n                                          # each cell solved, not copied
     end
 end
@@ -493,20 +458,20 @@ end
 @testitem "initialization: rejections" setup = [InitializationSetup] tags = [:potts, :initialization] begin
     @testset "initialization: rejections" begin
         @test ini_error(() -> PottsProblem(IniModelByCell(; name = :r), ini_op(), (0, 1)), "model variable", "`mm`", "model equation")
-        @test ini_error(() -> mtkcompile(IniNoODE(; name = :r)), "D(v", "ODE")
-        @test ini_error(() -> mtkcompile(IniSurface(; name = :r)), "initialization", "surface")
-        @test ini_error(() -> PottsProblem(IniTwice(; name = :r), ini_op(), (0, 1)), "overdetermined", "v")
-        @test ini_error(() -> mtkcompile(IniDraw(; name = :r)), "initialization")
+        @test ini_error(() -> mtkcompile(IniReject(; name = :r, kind_case = :no_ode)), "D(v", "ODE")
+        @test ini_error(() -> mtkcompile(IniReject(; name = :r, kind_case = :surface)), "initialization", "surface")
+        @test ini_error(() -> PottsProblem(IniReject(; name = :r, kind_case = :twice), ini_op(), (0, 1)), "overdetermined", "v")
+        @test ini_error(() -> mtkcompile(IniReject(; name = :r, kind_case = :draw)), "initialization")
         @test ini_error(() -> mtkcompile(IniGatherRate(; name = :r)), "initialization", "D(g")
         # errors name where the equation was written
-        @test ini_error(() -> mtkcompile(IniSurface(; name = :r)), "@initialization_equations", "initialization_tests.jl")
+        @test ini_error(() -> mtkcompile(IniReject(; name = :r, kind_case = :surface)), "@initialization_equations", "initialization_tests.jl")
     end
 end
 
 @testitem "initialization: results are checked against the conditions" setup = [InitializationSetup] tags = [:potts, :initialization] begin
     @testset "initialization: results are checked against the conditions" begin
         # oracle: k·kx = volume; with k = 0 there is none (MTK's linear solve would return 0)
-        @test ini_u0(PottsProblem(IniCoef(; name = :c, k = 2.0), ini_op(), (0, 1)), :kx) ≈ INI_VOL ./ 2 rtol = 1e-12
+        @test ini_u0(PottsProblem(IniCoef(; name = :c, k = 2.0), ini_op(), (0, 1)), :kx) ≈ INI_VOL ./ 2 rtol = 1.0e-12
         @test ini_error(() -> PottsProblem(IniCoef(; name = :c), ini_op(), (0, 1)), "cell 1", "found no solution", "kx")
         # a coefficient zero for one cell only names that cell
         @test ini_error(() -> PottsProblem(IniCellCoef(; name = :c), ini_op(), (0, 1)), "cell 1", "zz")
@@ -517,8 +482,8 @@ end
         @test ini_error(() -> PottsProblem(IniDependent(; name = :c), ini_op(), (0, 1)), "uniquely", "sa", "sb")
         # small scales: the stop follows the size of the terms (oracle: sqrt(1e-20 V), sqrt(kp V / kd))
         p = PottsProblem(IniSmall(; name = :c), ini_op(), (0, 1))
-        @test ini_u0(p, :ty) ≈ sqrt.(1.0e-20 .* INI_VOL) rtol = 1e-9
-        @test ini_u0(p, :cc) ≈ sqrt.(1.0e-12 .* INI_VOL) rtol = 1e-9
+        @test ini_u0(p, :ty) ≈ sqrt.(1.0e-20 .* INI_VOL) rtol = 1.0e-9
+        @test ini_u0(p, :cc) ≈ sqrt.(1.0e-12 .* INI_VOL) rtol = 1.0e-9
         # no guess: 0.0 makes the Jacobian of `r^2 ~ volume` singular; an ArgumentError, not a LinearAlgebra one
         @test ini_error(() -> PottsProblem(IniNoGuess(; name = :c), ini_op(), (0, 1)), "initialization", "`r`", "guess")
         @test ini_error(() -> PottsProblem(IniNoRoot(; name = :c), ini_op(), (0, 1)), "found no solution", "`q`")
@@ -529,13 +494,13 @@ end
     @testset "initialization: roots at zero and where the terms vanish" begin
         p = PottsProblem(IniRoots(; name = :z), ini_op(), (0, 1))
         for n in (:e1, :e2, :e3)
-            @test all(v -> abs(v) <= 1e-9, ini_u0(p, n))
+            @test all(v -> abs(v) <= 1.0e-9, ini_u0(p, n))
         end
-        @test ini_u0(p, :e4) ≈ log.(1 .+ (INI_VOL .- 16) ./ 16) atol = 1e-12
-        @test ini_u0(p, :s1) ≈ [π, π] rtol = 1e-9
-        @test ini_u0(p, :c1) ≈ [π / 2, π / 2] rtol = 1e-9
+        @test ini_u0(p, :e4) ≈ log.(1 .+ (INI_VOL .- 16) ./ 16) atol = 1.0e-12
+        @test ini_u0(p, :s1) ≈ [π, π] rtol = 1.0e-9
+        @test ini_u0(p, :c1) ≈ [π / 2, π / 2] rtol = 1.0e-9
         # a repeated root: solved to about √eps
-        @test ini_u0(PottsProblem(IniRepeated(; name = :z), ini_op(), (0, 1)), :q2) ≈ [1.0, 1.0] atol = 1e-6
+        @test ini_u0(PottsProblem(IniRepeated(; name = :z), ini_op(), (0, 1)), :q2) ≈ [1.0, 1.0] atol = 1.0e-6
         # a flat root reached exactly (the start): the growing step still sees the equation
         @test ini_u0(PottsProblem(IniFlat(; name = :z), ini_op(), (0, 1)), :f3) == [0.0, 0.0]
     end
@@ -543,12 +508,12 @@ end
 
 @testitem "initialization: flat equations, large and symbolic guesses" setup = [InitializationSetup] tags = [:potts, :initialization] begin
     @testset "initialization: flat equations, large and symbolic guesses" begin
-        @test ini_error(() -> PottsProblem(IniKink(; name = :f), ini_op(), (0, 1)), "uniquely", "`v`")
-        @test ini_error(() -> PottsProblem(IniClamp(; name = :f), ini_op(), (0, 1)), "uniquely", "`v`")
-        @test ini_u0(PottsProblem(IniBigGuess(; name = :f), ini_op(), (0, 1)), :v) ≈ sqrt.(INI_VOL) rtol = 1e-12
+        @test ini_error(() -> PottsProblem(IniGuessed(; name = :f, kind_case = :kink, guess_val = 1.0), ini_op(), (0, 1)), "uniquely", "`v`")
+        @test ini_error(() -> PottsProblem(IniGuessed(; name = :f, kind_case = :clamp, guess_val = 5.0), ini_op(), (0, 1)), "uniquely", "`v`")
+        @test ini_u0(PottsProblem(IniGuessed(; name = :f, kind_case = :root, guess_val = 1.0e6), ini_op(), (0, 1)), :v) ≈ sqrt.(INI_VOL) rtol = 1.0e-12
         # the guess is the parameter's value for the problem: it picks the root
-        @test ini_u0(PottsProblem(IniParamGuess(; name = :f), ini_op(), (0, 1)), :v) ≈ -sqrt.(INI_VOL) rtol = 1e-12
-        @test ini_u0(PottsProblem(IniParamGuess(; name = :f, pz = 1.0), ini_op(), (0, 1)), :v) ≈ sqrt.(INI_VOL) rtol = 1e-12
+        @test ini_u0(PottsProblem(IniGuessed(; name = :f, kind_case = :root, use_pz = true), ini_op(), (0, 1)), :v) ≈ -sqrt.(INI_VOL) rtol = 1.0e-12
+        @test ini_u0(PottsProblem(IniGuessed(; name = :f, kind_case = :root, use_pz = true, pz = 1.0), ini_op(), (0, 1)), :v) ≈ sqrt.(INI_VOL) rtol = 1.0e-12
     end
 end
 
@@ -558,7 +523,7 @@ end
         @test ini_u0(PottsProblem(IniTable(; name = :t), ini_op(; kinds = [:B, :A]), (0, 1)), :kv) == [48.0, 12.0]
         s = Potts.initialization_system(mtkcompile(IniTable(; name = :t)), :cell)
         @test :g_kind in ini_names(INI_M.parameters(s))
-        @test ini_error(() -> mtkcompile(IniTableFixed(; name = :t)), "kind table", "g[kind]")
+        @test ini_error(() -> mtkcompile(IniTable(; name = :t, fixed = true)), "kind table", "g[kind]")
     end
 end
 
@@ -566,7 +531,11 @@ end
     @testset "initialization: no value written changes nothing else" begin
         a, b = IniBare(; name = :n), IniZero(; name = :n)
         @test !Potts._written(only(Potts.variables(a))) && Potts._written(only(Potts.variables(b)))
-        @test string(generated_code(a)) == string(generated_code(b))
+        strip_expr(x) = x isa Expr ? Base.remove_linenums!(deepcopy(x)) :
+            x isa Tuple ? map(strip_expr, x) : x
+        ga, gb = generated_code(a), generated_code(b)
+        @test keys(ga) == keys(gb)
+        @test all(k -> strip_expr(getfield(ga, k)) == strip_expr(getfield(gb, k)), keys(ga))
         pa, pb = PottsProblem(a, ini_op(), (0, 1)), PottsProblem(b, ini_op(), (0, 1))
         @test pa.f.fingerprint == pb.f.fingerprint
         @test ini_u0(pa, :x) == ini_u0(pb, :x) == [0.0, 0.0]

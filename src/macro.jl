@@ -5,13 +5,15 @@
 # bound to symbols, after a syntactic rewrite (`rewrite`) that makes indexing, `&&`/`||`/`!`,
 # ternaries and generator folds over relations symbolic.
 
-const SECTIONS = (Symbol("@structural_parameters"), Symbol("@kinds"), Symbol("@parameters"),
+const SECTIONS = (
+    Symbol("@structural_parameters"), Symbol("@kinds"), Symbol("@parameters"),
     Symbol("@variables"), Symbol("@lattice"), Symbol("@relations"), Symbol("@energy"),
     Symbol("@drive"), Symbol("@constraint"), Symbol("@on_copy"), Symbol("@after_mcs"),
     Symbol("@before_mcs"), Symbol("@equations"), Symbol("@divide"), Symbol("@sweep"),
     Symbol("@relationship"), Symbol("@link"), Symbol("@unlink"), Symbol("@observed"),
     Symbol("@extend"), Symbol("@components"), Symbol("@schedule"),
-    Symbol("@initialization_equations"), Symbol("@convert"), Symbol("@fields"))
+    Symbol("@initialization_equations"), Symbol("@convert"), Symbol("@fields"),
+)
 
 """
     @potts_model Name begin
@@ -67,14 +69,20 @@ end
 _kw_local(k::Symbol) = Symbol("##kw#", k)
 
 # Names the constructor binds itself: a declaration of one would be silently rebound.
-const _BOUND_BUILTINS = (:volume, :surface, :kind, :kind′, :owner, :owner′, :id, :generation, :weight,
+const _BOUND_BUILTINS = (
+    :volume, :surface, :kind, :kind′, :owner, :owner′, :id, :generation, :weight,
     :source, :target, :old, :new, :mcs, :position, :distance, :cluster, :cluster_volume, :cluster_surface,
     :time, :site, :major_length, :local_components, :ring_arcs, :ring_cells, :ring_medium, :direction, :euler,
-    :largest_piece, :birth)
+    :largest_piece, :birth,
+)
 # `euler_full`, `pieces_full`, `largest_piece_full` are the columns of the `adjacency = :full`
 # forms: reserved, not bound
-_reserved_names() = Set{Symbol}([_BOUND_BUILTINS..., keys(DSL)..., :t, :D, :Pre, :name, :euler_full, :pieces_full,
-    :largest_piece_full])
+_reserved_names() = Set{Symbol}(
+    [
+        _BOUND_BUILTINS..., keys(DSL)..., :t, :D, :Pre, :name, :euler_full, :pieces_full,
+        :largest_piece_full,
+    ]
+)
 # DSL names added after published models used them as structural parameters (P6.3g:
 # `WortelAct(; connected)`): a structural parameter may take one of these names, and then it
 # shadows the DSL name in its model (which cannot use that helper)
@@ -85,8 +93,11 @@ const _SHADOWABLE_DSL_NAMES = (:connected, :shell, :pieces, :distinct, :Local, :
 # applies the same rule to a programmatic `PottsSystem`).
 """Record a declared name; reject built-in names and a second declaration of a name."""
 function _declare!(parts::_Parts, k::Symbol, what::String)
-    k in _reserved_names() && !(what == "structural parameter" && k in _SHADOWABLE_DSL_NAMES) && throw(ArgumentError(
-        "$what `$k` has the name of a built-in (`$k` means something else in @potts_model); choose another name"))
+    k in _reserved_names() && !(what == "structural parameter" && k in _SHADOWABLE_DSL_NAMES) && throw(
+        ArgumentError(
+            "$what `$k` has the name of a built-in (`$k` means something else in @potts_model); choose another name"
+        )
+    )
     k in _ENDPOINT_NAMES && throw(ArgumentError(_endpoint_message(what, k)))
     # `#…` names are the constructor's hidden locals (`_kw_local`)
     startswith(string(k), '#') && throw(ArgumentError("$what `$k`: a name cannot start with `#`; choose another name"))
@@ -109,10 +120,12 @@ function _warn_coordinate_globals(name, body, parts)
         isdefined(parts.mod, s) && !haskey(parts.declared, s) && !(s in parts.bound) &&
             !any(p -> first(p) === s, parts.structural) || continue
         _reads_free(body, s) && !_binds_top(body, s) || continue
-        @warn string("@potts_model ", name, ": `", s, "` in the model body is the lattice coordinate (bound in model ",
+        @warn string(
+            "@potts_model ", name, ": `", s, "` in the model body is the lattice coordinate (bound in model ",
             "bodies for the fields' bindings); the global `", parts.mod, ".", s, "` is not read there. To use the global's ",
             "value, declare it, `@parameters ", s, " = …` (the model's own `", s, "` hides the coordinate), or rename ",
-            "the global") _module = parts.mod
+            "the global"
+        ) _module = parts.mod
     end
     return nothing
 end
@@ -126,25 +139,35 @@ function _check_field_body_names(name, body, parts)
         (isdefined(parts.mod, s) || haskey(parts.declared, s) || s in parts.bound || any(p -> first(p) === s, parts.structural)) &&
             continue
         _reads_free(body, s) && !_binds_top(body, s) || continue
-        throw(ArgumentError(string("@potts_model ", name, ": `", s, "` is not defined in the model body; a field and its ",
-            "operators (`Δ`, `DivKGrad`, `Advect`, `masked`, `Differential`, …) are written as a PDESystem with ",
-            "`using Potts.Fields` and coupled into the model with `@fields c = pdesys (input => expression)`")))
+        throw(
+            ArgumentError(
+                string(
+                    "@potts_model ", name, ": `", s, "` is not defined in the model body; a field and its ",
+                    "operators (`Δ`, `DivKGrad`, `Advect`, `masked`, `Differential`, …) are written as a PDESystem with ",
+                    "`using Potts.Fields` and coupled into the model with `@fields c = pdesys (input => expression)`"
+                )
+            )
+        )
     end
     return nothing
 end
 # The old condition sections `@bcs` and `@boundary` are not sections of a model body (F4-B6): a
 # field's conditions are the second argument of its PDESystem. A body that uses one meets this
 # error at expansion, with the route (a module that defines the macro uses its own)
-const _OLD_BCS_TEXT = string("a field's conditions are the second argument of its PDESystem (`using Potts.Fields`): ",
+const _OLD_BCS_TEXT = string(
+    "a field's conditions are the second argument of its PDESystem (`using Potts.Fields`): ",
     "`PDESystem(eqs, [c(t, 0, y) ~ v, Differential(x)(c(t, L, y)) ~ 0, c ~ masked(wall(t, x, y), 0.0)], domain, ivs, ",
     "dvs, ps)` with `wall(..)::Bool [input = true]` among the dependent variables, coupled into the model with ",
-    "`@fields c = pdesys (wall => kind == border)`")
-const _OLD_BOUNDARY_TEXT = string("a face condition is an equation in the second argument of the field's PDESystem ",
+    "`@fields c = pdesys (wall => kind == border)`"
+)
+const _OLD_BOUNDARY_TEXT = string(
+    "a face condition is an equation in the second argument of the field's PDESystem ",
     "(`using Potts.Fields`), coupled into the model with `@fields c = pdesys`. On the low face of `x`: Dirichlet ",
     "`c(t, 0, y) ~ v`; NoFlux `Differential(x)(c(t, 0, y)) ~ 0` (a closed axis without a condition has no flux); Robin ",
     "`α * c(t, 0, y) - β * Differential(x)(c(t, 0, y)) ~ g` (α c + β ∂c/∂n = g, n the outward normal). On the high ",
     "face `x = L` the outward normal is `+x`: `c(t, L, y) ~ v`, `Differential(x)(c(t, L, y)) ~ 0`, ",
-    "`α * c(t, L, y) + β * Differential(x)(c(t, L, y)) ~ g`")
+    "`α * c(t, L, y) + β * Differential(x)(c(t, L, y)) ~ g`"
+)
 function _check_old_condition_sections(name, body, mod)
     for (s, text) in ((Symbol("@bcs"), _OLD_BCS_TEXT), (Symbol("@boundary"), _OLD_BOUNDARY_TEXT))
         isdefined(mod, s) && continue
@@ -185,7 +208,7 @@ function _reads_free(ex, s)
     return any(a -> _reads_free(a, s), ex.args)
 end
 _is_fundef(ex) = ex isa Expr && (ex.head === :function || ex.head === :(=)) && length(ex.args) == 2 &&
-                 _sig_call(ex.args[1]) !== nothing
+    _sig_call(ex.args[1]) !== nothing
 function _sig_call(sig)
     sig isa Expr || return nothing
     sig.head === :call && return sig
@@ -217,7 +240,7 @@ function _sig_defaults(sig)
     return out
 end
 _gen_binders(ex) = Any[a.head === :filter ? a.args[2:end] : a for a in ex.args[2:end] if a isa Expr] |>
-                   v -> reduce(vcat, (b isa Vector ? b : Any[b] for b in v); init = Any[])
+    v -> reduce(vcat, (b isa Vector ? b : Any[b] for b in v); init = Any[])
 _assigns(b, s) = b isa Expr && b.head === :(=) && (b.args[1] === s || s in _sig_binders(b.args[1]))
 # whether a top-level statement of the body assigns `s` (`x = 2.0` or `x, y = …`): it hides
 # the coordinate in the whole body
@@ -226,8 +249,12 @@ _binds_top(body, s) = any(ex -> ex isa Expr && ex.head === :(=) && !_is_fundef(e
 function _potts_model(name::Symbol, body::Expr, mod)
     body.head === :block || throw(ArgumentError("@potts_model $name expects a begin … end block"))
     d = _div_definition(body)
-    d === nothing || throw(ArgumentError("@potts_model $name defines `$d`: inside a model `div(a, b)` and `a ÷ b` " *
-                                         "are integer division; give the helper another name"))
+    d === nothing || throw(
+        ArgumentError(
+            "@potts_model $name defines `$d`: inside a model `div(a, b)` and `a ÷ b` " *
+                "are integer division; give the helper another name"
+        )
+    )
     _check_old_condition_sections(name, body, mod)
     parts = _Parts(Any[], Symbol[], Any[], mod, Dict{Symbol, String}())
     union!(parts.bound, _extend_bound_names(body))
@@ -299,9 +326,13 @@ function _potts_model(name::Symbol, body::Expr, mod)
         $(sched ? :(__schedule = Any[]) : nothing)
         $(inits ? :(__init_eqs = $P.Equation[]) : nothing)
         $(convs ? :(__converts = $P.ConvertSpec[]) : nothing)
-        $(coupled ? :(__bcs = $P.Equation[]; __field_inputs = Any[]; __bcs_origins = Pair{Any, Symbol}[];
-                      __coupled = Symbol[]; __field_values = Dict{Symbol, Any}(pairs(__fields_kw));
-                      __fields_brought = Dict{Symbol, String}()) : nothing)
+        $(
+            coupled ? :(
+                    __bcs = $P.Equation[]; __field_inputs = Any[]; __bcs_origins = Pair{Any, Symbol}[];
+                    __coupled = Symbol[]; __field_values = Dict{Symbol, Any}(pairs(__fields_kw));
+                    __fields_brought = Dict{Symbol, String}()
+                ) : nothing
+        )
         __bases = $P.PottsSystem[]
         __sources = IdDict{Any, LineNumberNode}()
         __components = Any[]
@@ -310,40 +341,54 @@ function _potts_model(name::Symbol, body::Expr, mod)
     end
     structural = Expr(:tuple, Expr(:parameters, [Expr(:kw, k, k) for (k, _) in parts.structural]...))
     extends = any(ex -> ex isa Expr && ex.head === :macrocall && ex.args[1] === Symbol("@extend"), body.args)
-    finish = :($P.PottsSystem(; name, kinds = __kinds, lattice = __lattice, parameters = __params,
-        variables = $P._bind_edge_scope(__vars, __relationships, __bases), relations = __relations, energies = __energies, drives = __drives,
-        constraints = __constraints, updates = __updates, equations = __equations,
-        divisions = __divisions, relationships = __relationships, link_rules = __links,
-        observed = __observed, frozen_kinds = __frozen, kind_classes = __classes, sources = __sources, components = __components,
-        sweep = __sweep, $((sched ? (Expr(:kw, :schedule, :__schedule),) : ())...),
-        $((inits ? (Expr(:kw, :initialization_eqs, :__init_eqs),) : ())...),
-        $((convs ? (Expr(:kw, :converts, :__converts),) : ())...),
-        $((coupled ? (Expr(:kw, :bcs, :__bcs),) : ())...),
-        structural = $structural, metadata = $(coupled ? :($P._with_field_inputs($P._built_metadata(__features), __field_inputs, __bcs_origins, __coupled)) :
-                                               :($P._built_metadata(__features)))))
+    finish = :(
+        $P.PottsSystem(;
+            name, kinds = __kinds, lattice = __lattice, parameters = __params,
+            variables = $P._bind_edge_scope(__vars, __relationships, __bases), relations = __relations, energies = __energies, drives = __drives,
+            constraints = __constraints, updates = __updates, equations = __equations,
+            divisions = __divisions, relationships = __relationships, link_rules = __links,
+            observed = __observed, frozen_kinds = __frozen, kind_classes = __classes, sources = __sources, components = __components,
+            sweep = __sweep, $((sched ? (Expr(:kw, :schedule, :__schedule),) : ())...),
+            $((inits ? (Expr(:kw, :initialization_eqs, :__init_eqs),) : ())...),
+            $((convs ? (Expr(:kw, :converts, :__converts),) : ())...),
+            $((coupled ? (Expr(:kw, :bcs, :__bcs),) : ())...),
+            structural = $structural, metadata = $(
+                coupled ? :($P._with_field_inputs($P._built_metadata(__features), __field_inputs, __bcs_origins, __coupled)) :
+                    :($P._built_metadata(__features))
+            )
+        )
+    )
     targets = :(Dict{Symbol, String}($([:($(QuoteNode(k)) => $v) for (k, v) in _prime_targets(parts, body)]...)))
     return quote
         Base.@__doc__ function $name(; $(kws...))
-          $P._in_build() do
-            $preamble
-            try
-                $(parts.code...)
-            catch __e
-                # an error from inside a base propagates as the base raised it (D-133)
-                __base_failed[] || $P._prime_error(__e, $targets, __bases)
-                rethrow()
+            $P._in_build() do
+                $preamble
+                try
+                    $(parts.code...)
+                catch __e
+                    # an error from inside a base propagates as the base raised it (D-133)
+                    __base_failed[] || $P._prime_error(__e, $targets, __bases)
+                    rethrow()
+                end
+                $(
+                    extends ? :(
+                            for b in __bases                # an extension inherits what it does not declare
+                                __lattice === nothing && (__lattice = $P._p(b, :lattice))
+                                __sweep === nothing && (__sweep = $P._p(b, :sweep))
+                                isempty(__kinds) && append!(__kinds, $P._p(b, :kinds))
+                        end
+                        ) : nothing
+                )
+                __lattice === nothing && throw(ArgumentError($("model $name has no @lattice; declare `@lattice Lattice(dims)` in the model body")))
+                __sweep === nothing && throw(ArgumentError($("model $name has no @sweep; declare `@sweep Metropolis(; temperature = …)` in the model body")))
+                $(
+                    coupled ? :(
+                            $P._fields_keywords_left(name, __field_values);
+                            $P._check_fields_names(__params, __vars, __fields_brought)
+                        ) : nothing
+                )
+                $(extends ? :(foldl((s, b) -> $P.extend(s, b; name), __bases; init = $finish)) : finish)
             end
-            $(extends ? :(for b in __bases                # an extension inherits what it does not declare
-                __lattice === nothing && (__lattice = $P._p(b, :lattice))
-                __sweep === nothing && (__sweep = $P._p(b, :sweep))
-                isempty(__kinds) && append!(__kinds, $P._p(b, :kinds))
-            end) : nothing)
-            __lattice === nothing && throw(ArgumentError($("model $name has no @lattice")))
-            __sweep === nothing && throw(ArgumentError($("model $name has no @sweep")))
-            $(coupled ? :($P._fields_keywords_left(name, __field_values);
-                          $P._check_fields_names(__params, __vars, __fields_brought)) : nothing)
-            $(extends ? :(foldl((s, b) -> $P.extend(s, b; name), __bases; init = $finish)) : finish)
-          end
         end
     end
 end
@@ -351,23 +396,32 @@ end
 # `@fields` at expansion: its bindings read kind names, so it comes after `@kinds`; a name it
 # binds (`@fields c = pdesys`) is a local of the constructor from its line on, so a statement
 # before that line that reads it would meet an unassigned local (an UndefVarError)
-const _DECLARING = (Symbol("@structural_parameters"), Symbol("@kinds"), Symbol("@parameters"), Symbol("@variables"),
+const _DECLARING = (
+    Symbol("@structural_parameters"), Symbol("@kinds"), Symbol("@parameters"), Symbol("@variables"),
     Symbol("@extend"), Symbol("@relations"), Symbol("@observed"), Symbol("@components"), Symbol("@relationship"),
-    Symbol("@fields"), Symbol("@lattice"))
+    Symbol("@fields"), Symbol("@lattice"),
+)
 function _check_fields_placement(body::Expr)
     args = body.args
     for (i, ex) in enumerate(args)
         _is_section(ex) && ex.args[1] === Symbol("@fields") || continue
-        any(e -> _is_section(e) && e.args[1] === Symbol("@kinds"), args[(i + 1):end]) && throw(ArgumentError(
-            "@fields: write `@fields` after `@kinds` (its bindings read the kind names, `kind == A`)"))
+        any(e -> _is_section(e) && e.args[1] === Symbol("@kinds"), args[(i + 1):end]) && throw(
+            ArgumentError(
+                "@fields: write `@fields` after `@kinds` (its bindings read the kind names, `kind == A`)"
+            )
+        )
         a = filter(x -> !(x isa LineNumberNode), ex.args[3:end])
         isempty(a) && continue
         lhs = a[1] isa Expr && a[1].head === :(=) ? a[1].args[1] : nothing
         names = lhs isa Symbol ? Any[lhs] : lhs isa Expr && lhs.head === :tuple ? lhs.args : Any[]
         for n in names, e in args[1:(i - 1)]
             n isa Symbol && !(_is_section(e) && e.args[1] in _DECLARING) && _reads_free(e, n) || continue
-            throw(ArgumentError("`$n` is read on a line before `@fields $n = …`, which binds it on a later line; " *
-                                "move the `@fields` line above the first use of `$n`"))
+            throw(
+                ArgumentError(
+                    "`$n` is read on a line before `@fields $n = …`, which binds it on a later line; " *
+                        "move the `@fields` line above the first use of `$n`"
+                )
+            )
         end
     end
     return nothing
@@ -399,13 +453,13 @@ function _prime_targets(parts::_Parts, body::Expr)
         haskey(parts.declared, Symbol(x, '′')) && continue
         sc = get(scopes, x, nothing)
         out[x] = sc isa Symbol ? (sc in SCOPES ? _scope_description(sc, nothing) : _scope_description(:edge, sc)) :
-                 _with_article(what)
+            _with_article(what)
     end
     return out
 end
 _with_article(what) = (first(what) in "aeiou" ? "an " : "a ") * what
 _scope_description(role, rel) = role === :edge ? (rel === nothing ? "an edge variable" : "an edge variable of `$rel`") :
-                                "a $role variable"
+    "a $role variable"
 
 """
 `F(args...; kws...)` for an `@extend` base `F` whose constructor raising sets `failed[]`: the
@@ -464,40 +518,46 @@ function _prime_error(e, targets::Dict{Symbol, String}, bases)
     what === nothing && (what = _base_description(bases, x))
     what === nothing && return nothing
     hint = what == "a cell variable" ? "; in a contact term, `$x[owner′]` reads it for the cell on the other side" : ""
-    throw(ArgumentError("`$n`: primes exist only for site/field variables (`y′` is the value of a site or " *
-                        "field variable `y` at the other site of a contact pair), and `$x` is $what$hint"))
+    throw(
+        ArgumentError(
+            "`$n`: primes exist only for site/field variables (`y′` is the value of a site or " *
+                "field variable `y` at the other site of a contact pair), and `$x` is $what$hint"
+        )
+    )
 end
 
 # `if cond … else … end` around sections (conditions on structural parameters): the
 # sections of the taken branch are added when the model is constructed. Declarations stay
 # unconditional (the constructor's keywords are fixed when the macro expands).
-const _UNCONDITIONAL = (Symbol("@structural_parameters"), Symbol("@kinds"), Symbol("@parameters"),
-    Symbol("@variables"), Symbol("@extend"))
+const _UNCONDITIONAL = (
+    Symbol("@structural_parameters"), Symbol("@kinds"), Symbol("@parameters"),
+    Symbol("@variables"), Symbol("@extend"),
+)
 _has_section(ex, sec) = ex isa Expr && ((ex.head === :macrocall && ex.args[1] === sec) || any(a -> _has_section(a, sec), ex.args))
 _is_section(st) = st isa Expr && st.head === :macrocall && st.args[1] in SECTIONS
 _conditional_sections(ex) = ex isa Expr && ex.head in (:if, :elseif) &&
-                            any(b -> b isa Expr && (b.head === :block ? any(_is_section, b.args) : _conditional_sections(b)), ex.args[2:end])
+    any(b -> b isa Expr && (b.head === :block ? any(_is_section, b.args) : _conditional_sections(b)), ex.args[2:end])
 function _conditional!(parts::_Parts, ex)
     branch(b) = b isa Expr && b.head in (:if, :elseif) ? _conditional!(parts, b) : begin
-        sub = _Parts(parts.structural, parts.params, Any[], parts.mod, parts.declared)
-        for st in (b isa Expr && b.head === :block ? b.args : Any[b])
-            if st isa LineNumberNode
-                push!(sub.code, st)
+            sub = _Parts(parts.structural, parts.params, Any[], parts.mod, parts.declared)
+            for st in (b isa Expr && b.head === :block ? b.args : Any[b])
+                if st isa LineNumberNode
+                    push!(sub.code, st)
             elseif _is_section(st)
-                st.args[1] in _UNCONDITIONAL &&
+                    st.args[1] in _UNCONDITIONAL &&
                     throw(ArgumentError("$(st.args[1]) cannot be conditional; declare it unconditionally"))
-                _section!(sub, st.args[1], filter(a -> !(a isa LineNumberNode), st.args[3:end]), st.args[2])
+                    _section!(sub, st.args[1], filter(a -> !(a isa LineNumberNode), st.args[3:end]), st.args[2])
             else
-                push!(sub.code, rewrite(st))
+                    push!(sub.code, rewrite(st))
             end
         end
-        Expr(:block, sub.code...)
-    end
+            Expr(:block, sub.code...)
+        end
     return Expr(ex.head, ex.args[1], map(branch, ex.args[2:end])...)
 end
 
 _lines(args) = length(args) == 1 && args[1] isa Expr && args[1].head === :block ?
-               filter(a -> !(a isa LineNumberNode), args[1].args) : args
+    filter(a -> !(a isa LineNumberNode), args[1].args) : args
 # lines with their source locations (a block's own line numbers, else the section's)
 function _lines_ln(args, ln)
     length(args) == 1 && args[1] isa Expr && args[1].head === :block || return [(a, ln) for a in args]
@@ -513,7 +573,7 @@ _push_located!(list, sources, x, ln) = push!(list, _source!(sources, x, ln))
 _push_located!(list, sources, xs::AbstractVector, ln) = foreach(x -> _push_located!(list, sources, x, ln), xs)
 # `lhs ~ rhs` → `Potts._eq(lhs, rhs)` (component-wise for vector quantities)
 _rewrite_eq(l) = l isa Expr && l.head === :call && l.args[1] === :~ && length(l.args) == 3 ?
-                 :(Potts._eq($(rewrite(l.args[2])), $(rewrite(l.args[3])))) : rewrite(l)
+    :(Potts._eq($(rewrite(l.args[2])), $(rewrite(l.args[3])))) : rewrite(l)
 _is_range(ex) = ex isa Expr && ex.head === :call && ex.args[1] === :(:)
 # `@equations` lines are MTK equations (D-257 item 5, V3-3): a kind set is the positional
 # term `ismember(kind, g)`. `∈` has an MTK meaning of its own (a domain pairing; `∈ Set(…)`
@@ -527,8 +587,12 @@ function _no_membership_sugar(ex, what = "@equations", which = "an equation")
         g isa Expr && g.head === :call && g.args[1] === :Set && length(g.args) == 2 && (g = g.args[2])
         g isa Expr && g.head === :vect && (g = Expr(:tuple, g.args...))
         form = ex.args[1] === :∉ ? "!ismember($a, $g)" : "ismember($a, $g)"
-        throw(ArgumentError("$what: `$ex` tests membership with `$(ex.args[1])`; $which writes a kind " *
-                            "set as `$form`"))
+        throw(
+            ArgumentError(
+                "$what: `$ex` tests membership with `$(ex.args[1])`; $which writes a kind " *
+                    "set as `$form`"
+            )
+        )
     end
     foreach(a -> _no_membership_sugar(a, what, which), ex.args)
     return nothing
@@ -630,8 +694,12 @@ function _section!(parts, sec, args, ln = nothing)
             # is rejected here, naming it
             for m in members
                 get(parts.declared, m, "") in ("kind", "kind class") || m in parts.bound ||
-                    throw(ArgumentError("kind class `$g`: `$m` is not a kind or an earlier kind class" *
-                                        (m === g ? " (a class cannot contain itself)" : "")))
+                    throw(
+                    ArgumentError(
+                        "kind class `$g`: `$m` is not a kind or an earlier kind class" *
+                            (m === g ? " (a class cannot contain itself)" : "")
+                    )
+                )
             end
             _declare!(parts, g, "kind class")
             push!(code, :($g = $P._kind_class($(QuoteNode(g)), $(Tuple(members)), ($(members...),))), :(push!(__classes, $g)))
@@ -642,22 +710,31 @@ function _section!(parts, sec, args, ln = nothing)
             # `λ = 1.0, [unit = u"…", tunable = false, bounds = (0, 2), description = "…"]` (MTK
             # metadata; F2-14, FE-18)
             val, opts = val isa Expr && val.head === :tuple && length(val.args) == 2 && val.args[2] isa Expr &&
-                        val.args[2].head === :vect ? (val.args[1], val.args[2]) : (val, nothing)
+                val.args[2].head === :vect ? (val.args[1], val.args[2]) : (val, nothing)
             all(o -> o isa Expr && o.head === :(=) && o.args[1] isa Symbol, opts === nothing ? () : opts.args) ||
-                throw(ArgumentError("@parameters $(lhs isa Expr ? lhs.args[1] : lhs): options are `[key = value, …]` " *
-                                    "with the keys `unit`, `tunable`, `bounds`, `description`"))
+                throw(
+                ArgumentError(
+                    "@parameters $(lhs isa Expr ? lhs.args[1] : lhs): options are `[key = value, …]` " *
+                        "with the keys `unit`, `tunable`, `bounds`, `description`"
+                )
+            )
             kw = opts === nothing ? Any[] : [Expr(:kw, o.args[1], o.args[2]) for o in opts.args]
             for k in kw
-                k.args[1] in (:unit, :tunable, :bounds, :description) || throw(ArgumentError(
-                    "@parameters $(lhs isa Expr ? lhs.args[1] : lhs): option `$(k.args[1])`; a parameter takes MTK's " *
-                    "`unit`, `tunable`, `bounds` and `description`"))
+                k.args[1] in (:unit, :tunable, :bounds, :description) || throw(
+                    ArgumentError(
+                        "@parameters $(lhs isa Expr ? lhs.args[1] : lhs): option `$(k.args[1])`; a parameter takes MTK's " *
+                            "`unit`, `tunable`, `bounds` and `description`"
+                    )
+                )
             end
             if lhs isa Expr && lhs.head === :ref && _is_range(lhs.args[2])     # `d[1:n]`: a vector
                 k = lhs.args[1]
                 _declare!(parts, k, "parameter")
                 push!(parts.params, k)
-                push!(code, :($k = $P.vector_parameter($(QuoteNode(k)), $(lhs.args[2]), $(_kw_local(k)) === nothing ? $val : $(_kw_local(k)); $(kw...))),
-                    :(append!(__params, $k.components)))
+                push!(
+                    code, :($k = $P.vector_parameter($(QuoteNode(k)), $(lhs.args[2]), $(_kw_local(k)) === nothing ? $val : $(_kw_local(k)); $(kw...))),
+                    :(append!(__params, $k.components))
+                )
                 continue
             elseif lhs isa Expr && lhs.head === :ref
                 k = lhs.args[1]
@@ -680,7 +757,7 @@ function _section!(parts, sec, args, ln = nothing)
             decl, rhs = l isa Expr && l.head === :(=) ? (l.args[1], _strip(l.args[2])) : (l, nothing)
             # `x(cell), [guess = g]`: options without a value (MTK's metadata syntax)
             if rhs === nothing && decl isa Expr && decl.head === :tuple && length(decl.args) == 2 &&
-               decl.args[2] isa Expr && decl.args[2].head === :vect
+                    decl.args[2] isa Expr && decl.args[2].head === :vect
                 decl, rhs = decl.args[1], Expr(:tuple, nothing, decl.args[2])
             end
             range = nothing
@@ -693,15 +770,19 @@ function _section!(parts, sec, args, ln = nothing)
                 decl = decl.args[1]
             end
             decl isa Expr && decl.head === :call && length(decl.args) == 2 ||
-                throw(ArgumentError("variables are declared with a scope: `x(site)`, `x(cell)`, `x(model)`, " *
-                                    "`e(edge)` or `e(rel)` for an edge variable of `@relationship rel`; a field is a " *
-                                    "dependent variable of a PDESystem, `@variables c(..) = 0.5 [bounds = (0, 1)]`, " *
-                                    "coupled into the model with `@fields`"))
+                throw(
+                ArgumentError(
+                    "variables are declared with a scope: `x(site)`, `x(cell)`, `x(model)`, " *
+                        "`e(edge)` or `e(rel)` for an edge variable of `@relationship rel`; a field is a " *
+                        "dependent variable of a PDESystem, `@variables c(..) = 0.5 [bounds = (0, 1)]`, " *
+                        "coupled into the model with `@fields`"
+                )
+            )
             k, scope = decl.args
             _declare!(parts, k, "variable")
             # `= default, [options…]`; a tuple without an options vector is the default itself
             default, opts = rhs isa Expr && rhs.head === :tuple && length(rhs.args) == 2 && rhs.args[2] isa Expr &&
-                            rhs.args[2].head === :vect ? (rhs.args[1], rhs.args[2]) : (rhs, nothing)
+                rhs.args[2].head === :vect ? (rhs.args[1], rhs.args[2]) : (rhs, nothing)
             kw = opts === nothing ? Any[] : [Expr(:kw, o.args[1], o.args[2]) for o in opts.args]
             default === nothing || push!(kw, Expr(:kw, :default, default))
             if type !== nothing
@@ -709,11 +790,15 @@ function _section!(parts, sec, args, ln = nothing)
                 push!(kw, Expr(:kw, :type, type))
             end
             if range === nothing
-                push!(code, :($k = $P.variable(only($P.Symbolics.@variables $k(t)), $(QuoteNode(scope)); $(kw...))),
-                    :(push!(__vars, $k)))
+                push!(
+                    code, :($k = $P.variable(only($P.Symbolics.@variables $k(t)), $(QuoteNode(scope)); $(kw...))),
+                    :(push!(__vars, $k))
+                )
             else
-                push!(code, :($k = $P.vector_variable($(QuoteNode(k)), $range, $(QuoteNode(scope)); $(kw...))),
-                    :(append!(__vars, $k.components)))
+                push!(
+                    code, :($k = $P.vector_variable($(QuoteNode(k)), $range, $(QuoteNode(scope)); $(kw...))),
+                    :(append!(__vars, $k.components))
+                )
             end
             if scope in (:site, :field)                  # `x′`: the value at s′ of a contact pair
                 k′ = _declare!(parts, Symbol(k, '′'), "variable (the contact-pair value of `$k`)")
@@ -745,10 +830,14 @@ function _section!(parts, sec, args, ln = nothing)
         # `_nested(F, args...; kws...)`: the arguments are evaluated before the base is entered
         # (the extension's own code); only an error the base's constructor raises is marked
         # `__base_failed`, so the extension does not relabel it (`_BaseCall`, D-133)
-        nested = Expr(:call, :($P._nested), params, :($P._BaseCall($(call.args[1]), __base_failed)),
-            filter(x -> x !== params, call.args[2:end])...)
-        push!(code, :($bname = $nested), :(push!(__bases, $bname)),
-            :($P._build().dim == 0 && $P._set_dim!(length($P._p($bname, :lattice).dims))))
+        nested = Expr(
+            :call, :($P._nested), params, :($P._BaseCall($(call.args[1]), __base_failed)),
+            filter(x -> x !== params, call.args[2:end])...
+        )
+        push!(
+            code, :($bname = $nested), :(push!(__bases, $bname)),
+            :($P._build().dim == 0 && $P._set_dim!(length($P._p($bname, :lattice).dims)))
+        )
         foreach(n -> push!(code, :($n = $P.lookup($bname, $(QuoteNode(n))))), names)
         # a bound site or field variable `x` brings its contact-pair value `x′` along
         for n in names
@@ -768,12 +857,16 @@ function _section!(parts, sec, args, ln = nothing)
             # `clock = clock`: the right-hand side means the caller's global, not the new local
             rhs = _globalize(l.args[2], k, parts.mod)
             # renamed, so `k.x` is `k₊x` whatever the system was called
-            push!(code, :($k = $P.Symbolics.rename($rhs, $(QuoteNode(k)))),
-                :(push!(__components, $P.ComponentSpec($(QuoteNode(k)), $k, $domain))))
+            push!(
+                code, :($k = $P.Symbolics.rename($rhs, $(QuoteNode(k)))),
+                :(push!(__components, $P.ComponentSpec($(QuoteNode(k)), $k, $domain)))
+            )
         end
     elseif sec === Symbol("@lattice")
-        push!(code, :(__lattice = $(_replace_call(only(args), :Lattice, :($P.lattice_spec)))),
-            :($P._set_dim!(length(__lattice.dims))))
+        push!(
+            code, :(__lattice = $(_replace_call(only(args), :Lattice, :($P.lattice_spec)))),
+            :($P._set_dim!(length(__lattice.dims)))
+        )
     elseif sec === Symbol("@relations")
         for l in _lines(args)
             k = l.args[1]
@@ -792,8 +885,10 @@ function _section!(parts, sec, args, ln = nothing)
             k = lhs isa Expr && lhs.head === :call ? lhs.args[1] : lhs      # `name(scope)` or `name`
             k isa Symbol || throw(ArgumentError("@observed: `$lhs` is not a name"))
             _declare!(parts, k, "observed quantity")
-            push!(code, :($k = $P.observed_var($(QuoteNode(k)))),
-                _located_push(:__observed, :($P._observed_eq($k, $(_rewrite_arg(l.args[3])))), ln))
+            push!(
+                code, :($k = $P.observed_var($(QuoteNode(k)))),
+                _located_push(:__observed, :($P._observed_eq($k, $(_rewrite_arg(l.args[3])))), ln)
+            )
         end
     elseif sec === Symbol("@relationship")
         decl = args[1]
@@ -802,8 +897,10 @@ function _section!(parts, sec, args, ln = nothing)
         _declare!(parts, k, "relationship")
         opts, _ = _options(args[2:end])
         kw = [Expr(:kw, o, v) for (o, v) in opts if o !== :distance]
-        push!(code, :(push!(__relationships, $P.relationship($(QuoteNode(k)); $(kw...)))),
-            :($k = $P.RelationshipRef($(QuoteNode(k)))))
+        push!(
+            code, :(push!(__relationships, $P.relationship($(QuoteNode(k)); $(kw...)))),
+            :($k = $P.RelationshipRef($(QuoteNode(k))))
+        )
     elseif sec in (Symbol("@link"), Symbol("@unlink"))
         action = QuoteNode(sec === Symbol("@link") ? :link : :unlink)
         opts, rest = _options(args[2:end])      # `rest`: a cadence `Every(n)`, checked by link_rule
@@ -820,15 +917,25 @@ function _section!(parts, sec, args, ln = nothing)
             l = _rewrite_eq(l)
             # `a`, `b` are bound for edge updates (D-169); in any other update `_check_names`
             # rejects them, as it does every name outside the update's scope
-            push!(code, _edge_scope(_located_push(:__updates, every === nothing ? :($P.update($phase, $l)) :
-                                                              :($P.update($phase, $every, $l)), lln)))
+            push!(
+                code, _edge_scope(
+                    _located_push(
+                        :__updates, every === nothing ? :($P.update($phase, $l)) :
+                            :($P.update($phase, $every, $l)), lln
+                    )
+                )
+            )
         end
     elseif sec === Symbol("@equations")
         # cell and model equations; a field's equation is refused when the line is built
         # (`_no_field_line`: whether its left side is a field is known then)
-        foreach(((l, lln),) -> (_no_membership_sugar(l);
-                                push!(code, _located_push(:__equations, :($P._no_field_line($(_rewrite_eq(l)), $(string(l)))), lln))),
-            _lines_ln(args, ln))
+        foreach(
+            ((l, lln),) -> (
+                _no_membership_sugar(l);
+                push!(code, _located_push(:__equations, :($P._no_field_line($(_rewrite_eq(l)), $(string(l)))), lln))
+            ),
+            _lines_ln(args, ln)
+        )
     elseif sec === Symbol("@initialization_equations")
         foreach(((l, lln),) -> push!(code, _located_push(:__init_eqs, _rewrite_eq(l), lln)), _lines_ln(args, ln))
     elseif sec === Symbol("@fields")
@@ -839,14 +946,18 @@ function _section!(parts, sec, args, ln = nothing)
         # statements after this line.
         # The names and the bindings are optional.
         usage = "@fields takes optional field names, a PDESystem and its input bindings: " *
-                "`@fields c = pdesys (inner => kind == A, vol => volume[owner])`"
+            "`@fields c = pdesys (inner => kind == A, vol => volume[owner])`"
         (length(args) in (1, 2) && !(args[1] isa Expr && args[1].head === :tuple)) || throw(ArgumentError(usage))
         sysex, names = args[1], Symbol[]
         if sysex isa Expr && sysex.head === :(=)
             lhs, sysex = sysex.args[1], sysex.args[2]
             ls = lhs isa Expr && lhs.head === :tuple ? lhs.args : Any[lhs]
-            all(n -> n isa Symbol, ls) || throw(ArgumentError("@fields: the names before `=` are names of the PDESystem's fields or parameters, " *
-                                                               "`@fields c, u = pdesys (…)`; got `$lhs`"))
+            all(n -> n isa Symbol, ls) || throw(
+                ArgumentError(
+                    "@fields: the names before `=` are names of the PDESystem's fields or parameters, " *
+                        "`@fields c, u = pdesys (…)`; got `$lhs`"
+                )
+            )
             for n in ls
                 n in names && throw(ArgumentError("@fields: the field `$n` is listed twice"))
                 push!(names, n)
@@ -855,8 +966,11 @@ function _section!(parts, sec, args, ln = nothing)
         sysex isa Expr && sysex.head === :(=) && throw(ArgumentError(usage))
         bs = length(args) == 1 ? Any[] : args[2] isa Expr && args[2].head === :tuple ? args[2].args : Any[args[2]]
         pairs = map(bs) do b
-            b isa Expr && b.head === :call && b.args[1] === :(=>) && length(b.args) == 3 || throw(ArgumentError(
-                "@fields $(sysex): `$b` is not a binding; write `input => expression`, e.g. `inner => kind == A`"))
+            b isa Expr && b.head === :call && b.args[1] === :(=>) && length(b.args) == 3 || throw(
+                ArgumentError(
+                    "@fields $(sysex): `$b` is not a binding; write `input => expression`, e.g. `inner => kind == A`"
+                )
+            )
             # a binding tests a kind set with `ismember`: `kind ∈ (a, b)` is an interval and
             # `kind ∈ Set(…)` the constant `false`
             _no_membership_sugar(b.args[3], "@fields $(sysex)", "a binding")
@@ -869,16 +983,26 @@ function _section!(parts, sec, args, ln = nothing)
         glob(ex) = foldl((e, n) -> _globalize(e, n, parts.mod), names; init = ex)
         fs = gensym(:fields_sys)
         fc = gensym(:fields_content)
-        push!(code, :($fs = $(glob(sysex))),
-            :($fc = $P._fields_content(name, __lattice, __kinds, __bases, __params, __vars, $fs, Any[$(map(glob, pairs)...)],
-                __field_values)),
-            :(foreach(x -> __fields_brought[$P.info(x).name] = string("the PDESystem `", nameof($fs), "`"),
-                [$fc.parameters; $fc.variables])),
+        push!(
+            code, :($fs = $(glob(sysex))),
+            :(
+                $fc = $P._fields_content(
+                    name, __lattice, __kinds, __bases, __params, __vars, $fs, Any[$(map(glob, pairs)...)],
+                    __field_values
+                )
+            ),
+            :(
+                foreach(
+                    x -> __fields_brought[$P.info(x).name] = string("the PDESystem `", nameof($fs), "`"),
+                    [$fc.parameters; $fc.variables]
+                )
+            ),
             :(append!(__vars, $fc.variables)), :(append!(__params, $fc.parameters)),
             :(append!(__equations, $fc.equations)), :(append!(__bcs, $fc.bcs)), :(append!(__field_inputs, $fc.inputs)),
             :(append!(__coupled, $P._coupled_names($fc.variables))),
             :(foreach(b -> push!(__bcs_origins, b => nameof($fs)), [$fc.bcs; $fc.equations])),
-            [:($n = $P._fields_name($fc, $(QuoteNode(n)), $fs)) for n in names]...)
+            [:($n = $P._fields_name($fc, $(QuoteNode(n)), $fs)) for n in names]...
+        )
     elseif sec === Symbol("@divide")
         domain = args[1]
         opts, rules = _options(args[2:end])
@@ -892,8 +1016,12 @@ function _section!(parts, sec, args, ln = nothing)
             if n isa Expr && n.head === :call && n.args[1] === :repeat
                 push!(listed, schedule_repeat(n))
             else
-                n isa Symbol || throw(ArgumentError("@schedule lists phase names, e.g. `@schedule fields, sweep`, " *
-                                                    "and at most one `repeat(n, sweep(fraction = 1//n), …)`; got `$n`"))
+                n isa Symbol || throw(
+                    ArgumentError(
+                        "@schedule lists phase names, e.g. `@schedule fields, sweep`, " *
+                            "and at most one `repeat(n, sweep(fraction = 1//n), …)`; got `$n`"
+                    )
+                )
                 push!(listed, n)
             end
         end
@@ -902,8 +1030,10 @@ function _section!(parts, sec, args, ln = nothing)
         # `@convert` pass (this model's or a base's), checked when the model is compiled
         all(n -> n in SCHEDULE_PHASES, _schedule_flat(listed)) ? _placed_schedule(listed) : _schedule_names(listed)
         items = map(x -> x isa Symbol ? QuoteNode(x) : :($P.ScheduleRepeat($(x.n), Symbol[$(map(QuoteNode, x.names)...)])), listed)
-        push!(code, :(isempty(__schedule) || throw(ArgumentError("@schedule is given twice; list the phases once"))),
-            :(append!(__schedule, Any[$(items...)])))
+        push!(
+            code, :(isempty(__schedule) || throw(ArgumentError("@schedule is given twice; list the phases once"))),
+            :(append!(__schedule, Any[$(items...)]))
+        )
     elseif sec === Symbol("@convert")
         push!(code, _convert_section(args, ln))
     elseif sec === Symbol("@sweep")
@@ -920,8 +1050,11 @@ end
 # pass's cells (`created` is a DSL name)
 function _convert_section(args, ln)
     P = :(Potts)
-    (length(args) == 3 && args[1] isa Symbol && args[3] isa Expr && args[3].head === :block) || throw(ArgumentError(
-        "@convert takes a name, a domain and a block: `@convert protrusion clusters(cytoplasm) begin to = sibling(k); p = … end`"))
+    (length(args) == 3 && args[1] isa Symbol && args[3] isa Expr && args[3].head === :block) || throw(
+        ArgumentError(
+            "@convert takes a name, a domain and a block: `@convert protrusion clusters(cytoplasm) begin to = sibling(k); p = … end`"
+        )
+    )
     name, domain, blk = args
     kws = Any[]
     seen = Set{Symbol}()
@@ -939,18 +1072,26 @@ function _convert_section(args, ln)
             d = rewrite(l.args[2])
             push!(writes, :($(rewrite(l.args[1])) => $(l.head === :+= ? d : :(-($d)))))
         else
-            throw(ArgumentError("@convert $name: `$l` is not a line of the block; write `from = …`, `to = …`, `at = …`, " *
-                                "`p = …`, `transfer(x, from => to, per_site = …)` or a compound write `x[to] += …`"))
+            throw(
+                ArgumentError(
+                    "@convert $name: `$l` is not a line of the block; write `from = …`, `to = …`, `at = …`, " *
+                        "`p = …`, `transfer(x, from => to, per_site = …)` or a compound write `x[to] += …`"
+                )
+            )
         end
     end
     call = :($P.convert_pass($(QuoteNode(name)), $domain; $(kws...), transfers = Any[$(transfers...)], writes = Any[$(writes...)]))
-    return _located_push(:__converts, :(let from = $P.CONVERT_FROM, to = $P.CONVERT_TO
-        $call
-    end), ln)
+    return _located_push(
+        :__converts, :(
+            let from = $P.CONVERT_FROM, to = $P.CONVERT_TO
+                $call
+            end
+        ), ln
+    )
 end
 
 _globalize(ex, k, mod) = ex === k ? GlobalRef(mod, k) :
-                         ex isa Expr ? Expr(ex.head, map(a -> _globalize(a, k, mod), ex.args)...) : ex
+    ex isa Expr ? Expr(ex.head, map(a -> _globalize(a, k, mod), ex.args)...) : ex
 
 # Replace a call to `from(args…)` by `to([extra,] args…)` at the top of `ex`.
 function _replace_call(ex, from, to, extra...)
@@ -962,15 +1103,17 @@ end
 
 # Edge-scoped statements see the link endpoints `a`, `b` (bound only there). No
 # declaration can be named `a`/`b` (`_ENDPOINT_NAMES`), so nothing is shadowed.
-_edge_scope(ex) = :(let a = Potts.B.a, b = Potts.B.b
-    $ex
-end)
+_edge_scope(ex) = :(
+    let a = Potts.B.a, b = Potts.B.b
+        $ex
+    end
+)
 
 _is_edges(l) = l isa Expr && l.head === :call && l.args[1] === :(=>) &&
-               l.args[2] isa Expr && l.args[2].head === :call && l.args[2].args[1] === :edges
+    l.args[2] isa Expr && l.args[2].head === :call && l.args[2].args[1] === :edges
 
 _replace_copy(ex) = ex isa Expr && ex.head === :call && ex.args[1] === :(=>) && ex.args[2] === :copy ?
-                    Expr(:call, :(=>), :(Potts.COPY), ex.args[3]) : ex
+    Expr(:call, :(=>), :(Potts.COPY), ex.args[3]) : ex
 
 # `when = a, along = b, x => 1` arrives as nested `=`/tuple chains; flatten to options + rules.
 function _options(args)
@@ -983,12 +1126,12 @@ function _options(args)
         i = something(findfirst(isrule, v.args), length(v.args) + 1)
         lead = v.args[1:(i - 1)]
         isempty(lead) || push!(toks, length(lead) == 1 ? lead[1] : Expr(:tuple, lead...))
-        foreach(x -> x isa Expr && x.head === :(=) ? flat(x) : push!(toks, x), v.args[i:end])
+        return foreach(x -> x isa Expr && x.head === :(=) ? flat(x) : push!(toks, x), v.args[i:end])
     end
     flat(e) = e isa Expr && e.head === :(=) ? (flatitems(e.args[1]); push!(toks, :__EQ); flatvalue(e.args[2])) :
-              flatitems(e)
+        flatitems(e)
     flatitems(e) = e isa Expr && e.head === :tuple ? foreach(x -> x isa Expr && x.head === :(=) ? flat(x) : push!(toks, x), e.args) :
-                   e isa Expr && e.head === :(=) ? flat(e) : push!(toks, e)
+        e isa Expr && e.head === :(=) ? flat(e) : push!(toks, e)
     foreach(flat, args)
     opts = Pair{Symbol, Any}[]; rules = Any[]
     i = 1
@@ -1027,8 +1170,10 @@ function _check_pairs(parts, k, val)
     end
     for a in val.args[2:end]
         a isa Expr && a.head in (:parameters, :kw) && continue
-        (a isa Expr && a.head === :call && a.args[1] === :(=>) && a.args[2] isa Expr && a.args[2].head === :tuple &&
-         length(a.args[2].args) == 2) ||
+        (
+            a isa Expr && a.head === :call && a.args[1] === :(=>) && a.args[2] isa Expr && a.args[2].head === :tuple &&
+                length(a.args[2].args) == 2
+        ) ||
             throw(ArgumentError("kind table `$k = Pairs(…)`: an entry is `(k₁, k₂) => v` with two kind names; got `$a`"))
         names = a.args[2].args
         for n in names
@@ -1036,15 +1181,27 @@ function _check_pairs(parts, k, val)
             what = get(parts.declared, n, nothing)
             what == "kind" && continue
             what === nothing && n in parts.bound && continue          # bound by `@extend`, checked when built
-            throw(ArgumentError("kind table `$k = Pairs(…)`: `$n` is " *
-                                (what === nothing ? "not a kind of @kinds (a misspelling?)" :
-                                 "$(_with_article(what)), not a kind; the keys are kind names of @kinds")))
+            throw(
+                ArgumentError(
+                    "kind table `$k = Pairs(…)`: `$n` is " *
+                        (
+                        what === nothing ? "not a kind of @kinds (a misspelling?)" :
+                            "$(_with_article(what)), not a kind; the keys are kind names of @kinds"
+                    )
+                )
+            )
         end
         p = (names[1], names[2])
         if p in seen || (symmetric && reverse(p) in seen)
-            throw(ArgumentError("kind table `$k = Pairs(…)`: the pair ($(p[1]), $(p[2])) is given twice" *
-                                (symmetric && p[1] !== p[2] ? " (with `symmetric = true`, (k₁, k₂) also sets (k₂, k₁); " *
-                                                              "pass `symmetric = false` for an asymmetric table)" : "")))
+            throw(
+                ArgumentError(
+                    "kind table `$k = Pairs(…)`: the pair ($(p[1]), $(p[2])) is given twice" *
+                        (
+                        symmetric && p[1] !== p[2] ? " (with `symmetric = true`, (k₁, k₂) also sets (k₂, k₁); " *
+                            "pass `symmetric = false` for an asymmetric table)" : ""
+                    )
+                )
+            )
         end
         push!(seen, p)
     end
@@ -1057,8 +1214,12 @@ function _check_integral_over(ex)
         kws = a isa Expr && a.head === :parameters ? a.args : a isa Expr && a.head === :kw ? Any[a] : Any[]
         for q in kws
             q isa Expr && q.head === :kw && q.args[1] === :over && q.args[2] isa Symbol && q.args[2] !== :cluster &&
-                throw(ArgumentError("`integral(x; over = …)`: `over` is `cluster` (the alive members of the cell's " *
-                                    "compartment cluster); got `$(q.args[2])`"))
+                throw(
+                ArgumentError(
+                    "`integral(x; over = …)`: `over` is `cluster` (the alive members of the cell's " *
+                        "compartment cluster); got `$(q.args[2])`"
+                )
+            )
         end
     end
     return nothing
@@ -1144,7 +1305,7 @@ function _div_definition(ex)
     return nothing
 end
 _has_endbegin(x) = x === :end || x === :begin || (x isa Expr && any(_has_endbegin, x.args)) ||
-                   (x isa AbstractVector && any(_has_endbegin, x))
+    (x isa AbstractVector && any(_has_endbegin, x))
 
 _isparams(e) = e isa Expr && e.head === :parameters
 _relation_call(e) = e isa Expr && e.head === :call && length(e.args) == 2 && !_isparams(e.args[2])
@@ -1170,8 +1331,12 @@ function _rewrite_gather(fold, gen, params = nothing)
     # iterators may be a population (`sites`, `cells(a, b)`): decided at run time
     (iter isa Expr && iter.head === :call && length(iter.args) == 2) ||
         return :($P._fold_iter($(kws...), $fold, $n -> $(rewrite(body)), $(rewrite(iter)), $condf))
-    return :($P._fold_or_gather($(kws...), $fold, $n -> $(rewrite(body)), $(rewrite(iter.args[1])),
-        $(rewrite(iter.args[2])), $condf))
+    return :(
+        $P._fold_or_gather(
+            $(kws...), $fold, $n -> $(rewrite(body)), $(rewrite(iter.args[1])),
+            $(rewrite(iter.args[2])), $condf
+        )
+    )
 end
 
 """A named relation declared in `@relations`."""
