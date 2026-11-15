@@ -13,22 +13,30 @@ using Potts: CorePotts
 isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
 
 module BsPDE
-using ..FieldPDE
-@variables c(..) u(..) sink(..)::Bool [input = true] wall(..)::Bool [input = true]
-const X = (t, x, y)
-const C, U = c(X...), u(X...)
-# `D(c) ~ Dc Δc`: c = S on the face x = 0, no flux on x = 12, 0 on the wall's sites
-base() = (@parameters Dc = 0.2 S = 1.0;
-          pdesys([Dt(C) ~ Dc * Δ(C)], [c(0, x, y) ~ 0.0, c(t, 0, y) ~ S, Differential(x)(c(t, 12, y)) ~ 0.0,
-                  C ~ masked(wall(X...), 0.0)], (12, 10), [C, wall(X...)], [Dc, S]))
-relax() = pdesys([Dt(C) ~ 1.0 - C], [c(0, x, y) ~ 0.0], (8, 8), [C])
-clamp_ck() = (@parameters Dc = 0.2 s = 0.05;
-              pdesys([Dt(C) ~ Dc * Δ(C) + s], [c(0, x, y) ~ 0.0, C ~ masked(sink(X...), 0.0)], (16, 16), [C, sink(X...)], [Dc, s]))
-face_obs() = pdesys([Dt(C) ~ 0.1 * Δ(C)], [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0], (8, 4), [C])
-mask_self() = pdesys([Dt(C) ~ 0.1 * Δ(C)], [c(0, x, y) ~ 0.0, C ~ masked(C > 0.5, 0.0)], (8, 8), [C])
-two(mask) = pdesys([Dt(C) ~ 0.1 * Δ(C), Dt(U) ~ 0.1 * Δ(U)], [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0, mask], (8, 8), [C, U])
-mask_later() = two(C ~ masked(U > 0.5, 0.0))
-mask_earlier() = two(U ~ masked(C > 0.5, 0.0))
+    using ..FieldPDE
+    @variables c(..) u(..) sink(..)::Bool [input = true] wall(..)::Bool [input = true]
+    const X = (t, x, y)
+    const C, U = c(X...), u(X...)
+    # `D(c) ~ Dc Δc`: c = S on the face x = 0, no flux on x = 12, 0 on the wall's sites
+    base() = (
+        @parameters Dc = 0.2 S = 1.0;
+        pdesys(
+            [Dt(C) ~ Dc * Δ(C)], [
+                c(0, x, y) ~ 0.0, c(t, 0, y) ~ S, Differential(x)(c(t, 12, y)) ~ 0.0,
+                C ~ masked(wall(X...), 0.0),
+            ], (12, 10), [C, wall(X...)], [Dc, S]
+        )
+    )
+    relax() = pdesys([Dt(C) ~ 1.0 - C], [c(0, x, y) ~ 0.0], (8, 8), [C])
+    clamp_ck() = (
+        @parameters Dc = 0.2 s = 0.05;
+        pdesys([Dt(C) ~ Dc * Δ(C) + s], [c(0, x, y) ~ 0.0, C ~ masked(sink(X...), 0.0)], (16, 16), [C, sink(X...)], [Dc, s])
+    )
+    face_obs() = pdesys([Dt(C) ~ 0.1 * Δ(C)], [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0], (8, 4), [C])
+    mask_self() = pdesys([Dt(C) ~ 0.1 * Δ(C)], [c(0, x, y) ~ 0.0, C ~ masked(C > 0.5, 0.0)], (8, 8), [C])
+    two(mask) = pdesys([Dt(C) ~ 0.1 * Δ(C), Dt(U) ~ 0.1 * Δ(U)], [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0, mask], (8, 8), [C, U])
+    mask_later() = two(C ~ masked(U > 0.5, 0.0))
+    mask_earlier() = two(U ~ masked(C > 0.5, 0.0))
 end
 
 
@@ -60,38 +68,19 @@ bs_op() = (σ = zeros(Int32, 12, 10); σ[5:7, 4:6] .= 1; σ[10, :] .= 2; [owners
 bs_problem(sys; kw...) = PottsProblem(sys, bs_op(), (0, 2); field_solver = ExplicitEuler(substeps = 2), kw...)
 
 
-@potts_model BSOrderA begin
+@potts_model BSOrder begin
+    @structural_parameters order = :none
     @kinds medium A
     @lattice Lattice((8, 8); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
     @fields BsPDE.relax()
-    @schedule fields, before_mcs, sweep
-    @sweep Metropolis(; temperature = 1.0)
-end
-
-@potts_model BSOrderB begin                     # the same placed order, listed differently
-    @kinds medium A
-    @lattice Lattice((8, 8); boundary = Closed())
-    @energy cells(A) => (volume - 4.0)^2
-    @fields BsPDE.relax()
-    @schedule fields, before_mcs, sweep, after_mcs, components
-    @sweep Metropolis(; temperature = 1.0)
-end
-
-@potts_model BSOrderC begin                     # the default relative order
-    @kinds medium A
-    @lattice Lattice((8, 8); boundary = Closed())
-    @energy cells(A) => (volume - 4.0)^2
-    @fields BsPDE.relax()
-    @schedule sweep, fields, end_mcs
-    @sweep Metropolis(; temperature = 1.0)
-end
-
-@potts_model BSOrderNone begin
-    @kinds medium A
-    @lattice Lattice((8, 8); boundary = Closed())
-    @energy cells(A) => (volume - 4.0)^2
-    @fields BsPDE.relax()
+    if order === :a
+        @schedule fields, before_mcs, sweep
+    elseif order === :b
+        @schedule fields, before_mcs, sweep, after_mcs, components
+    elseif order === :c
+        @schedule sweep, fields, end_mcs
+    end
     @sweep Metropolis(; temperature = 1.0)
 end
 
@@ -106,18 +95,14 @@ catch e
 end
 
 
-# models whose errors surface at construction or compilation (each expands)
-const BS_COMMON = quote
+@potts_model BSSched2 begin
     @kinds medium A
     @lattice Lattice((8, 8); boundary = Closed())
     @energy cells(A) => (volume - 4.0)^2
+    @schedule fields, sweep
+    @schedule sweep, fields
     @sweep Metropolis(; temperature = 1.0)
 end
-
-bs_model(name, sections...) = Core.eval(@__MODULE__, Expr(:macrocall, Symbol("@potts_model"), LineNumberNode(1, :bs), name,
-    Expr(:block, BS_COMMON.args..., sections...)))
-
-bs_model(:BSSched2, :(@schedule fields, sweep), :(@schedule sweep, fields))
 
 
 # Integrals under a non-default order (D-145, review round 1): one rule on the placed order
@@ -187,11 +172,20 @@ end
 end
 
 
-bs_model(:BSMaskSelf, :(@fields BsPDE.mask_self()))
-
-bs_model(:BSMaskLater, :(@fields BsPDE.mask_later()))
-
-bs_model(:BSMaskEarlier, :(@fields BsPDE.mask_earlier()))
+@potts_model BSMask begin
+    @structural_parameters mask_case = :self
+    @kinds medium A
+    @lattice Lattice((8, 8); boundary = Closed())
+    @energy cells(A) => (volume - 4.0)^2
+    if mask_case === :self
+        @fields BsPDE.mask_self()
+    elseif mask_case === :later
+        @fields BsPDE.mask_later()
+    else
+        @fields BsPDE.mask_earlier()
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
@@ -222,24 +216,26 @@ end
 @testitem "@schedule: canonical fingerprints and placement" setup = [BoundaryScheduleSetup] tags = [:potts, :boundary_schedule] begin
     @testset "@schedule: canonical fingerprints and placement" begin
         @test Potts._placed_schedule([:fields, :sweep]) ==
-              [:before_mcs, :fields, :sweep, :after_mcs, :components, :operators, :lifecycle, :end_mcs]
+            [:before_mcs, :fields, :sweep, :after_mcs, :components, :operators, :lifecycle, :end_mcs]
         @test Potts._placed_schedule([:lifecycle, :fields]) ==
-              [:before_mcs, :sweep, :after_mcs, :lifecycle, :fields, :components, :operators, :end_mcs]
+            [:before_mcs, :sweep, :after_mcs, :lifecycle, :fields, :components, :operators, :end_mcs]
         σ = zeros(Int32, 8, 8); σ[3:4, 3:4] .= 1
-        fp(M) = PottsProblem(M(; name = :o), [ownership => σ, kind => [:A]], (0, 1); field_solver = ExplicitEuler()).f.fingerprint
-        @test fp(BSOrderA) == fp(BSOrderB)                    # equal after canonicalization (D-145 ruling 9)
-        @test fp(BSOrderC) == fp(BSOrderNone)                 # the default order keeps the fingerprint
-        @test fp(BSOrderA) != fp(BSOrderNone)
+        fp(order) = PottsProblem(BSOrder(; name = :o, order), [ownership => σ, kind => [:A]], (0, 1); field_solver = ExplicitEuler()).f.fingerprint
+        @test fp(:a) == fp(:b)                                # equal after canonicalization (D-145 ruling 9)
+        @test fp(:c) == fp(:none)                             # the default order keeps the fingerprint
+        @test fp(:a) != fp(:none)
         # no schedule: today's order, entry for entry
-        p = PottsProblem(BSOrderNone(; name = :o), [ownership => σ, kind => [:A]], (0, 1); field_solver = ExplicitEuler()).f.phases
+        p = PottsProblem(BSOrder(; name = :o, order = :none), [ownership => σ, kind => [:A]], (0, 1); field_solver = ExplicitEuler()).f.phases
         @test p.mcs == (p.before_mcs, CorePotts.SweepPhase(), p.after_mcs, CorePotts.LifecyclePhase(), p.end_mcs)
     end
 end
 
 @testitem "@schedule: less common errors name the offender" setup = [BoundaryScheduleSetup] tags = [:potts, :boundary_schedule] begin
     @testset "@schedule: less common errors name the offender" begin
-        @test occursin("given twice", something(bs_error(() -> Base.invokelatest(BSSched2; name = :s)), ""))
-        @test occursin("`end_mcs` must be last", something(bs_error(() -> Potts._placed_schedule([:end_mcs, :fields])), ""))
+        @test_throws ArgumentError BSSched2(; name = :s)
+        @test_throws ["given twice"] BSSched2(; name = :s)
+        @test_throws ArgumentError Potts._placed_schedule([:end_mcs, :fields])
+        @test_throws ["`end_mcs` must be last"] Potts._placed_schedule([:end_mcs, :fields])
     end
 end
 
@@ -265,8 +261,10 @@ end
 @testitem "masked conditions: field clamps on fresh states only" setup = [BoundaryScheduleSetup] tags = [:potts, :boundary_schedule] begin
     @testset "masked conditions: field clamps on fresh states only" begin
         σ = zeros(Int32, 16, 16); σ[7:10, 7:10] .= 1
-        prob = PottsProblem(BSClampCK(; name = :k), [ownership => σ, kind => [:sink], :c => fill(0.1, 16, 16)], (0, 8);
-            field_solver = ExplicitEuler(substeps = 2), seed = 5)
+        prob = PottsProblem(
+            BSClampCK(; name = :k), [ownership => σ, kind => [:sink], :c => fill(0.1, 16, 16)], (0, 8);
+            field_solver = ExplicitEuler(substeps = 2), seed = 5
+        )
         @test all(==(0.0), prob.u0.site.c[σ .== 1])          # clamped at construction
         for alg in (SequentialCPM(), CheckerboardCPM())
             full = solve(prob, alg)
@@ -284,8 +282,10 @@ end
 
 @testitem "Δ outside a field equation is refused" setup = [BoundaryScheduleSetup] tags = [:potts, :boundary_schedule] begin
     @testset "Δ outside a field equation is refused" begin
-        prob = PottsProblem(BSFaceObs(; name = :o), [ownership => zeros(Int32, 8, 4), kind => Symbol[], :c => zeros(8, 4)], (0, 0);
-            field_solver = ExplicitEuler(substeps = 1))
+        prob = PottsProblem(
+            BSFaceObs(; name = :o), [ownership => zeros(Int32, 8, 4), kind => Symbol[], :c => zeros(8, 4)], (0, 0);
+            field_solver = ExplicitEuler(substeps = 1)
+        )
         err = bs_error(() -> solve(prob, SequentialCPM())[:lap])
         @test occursin("`Δ` is a field operator", something(err, ""))
     end
@@ -294,10 +294,10 @@ end
 @testitem "masks and faces that cannot hold" setup = [BoundaryScheduleSetup] tags = [:potts, :boundary_schedule] begin
     @testset "masks and faces that cannot hold" begin
         # a mask that reads the field it clamps is accepted (F2-11 review (a); before: refused)
-        @test bs_error(() -> mtkcompile(Base.invokelatest(BSMaskSelf; name = :m))) === nothing
+        @test bs_error(() -> mtkcompile(BSMask(; name = :m, mask_case = :self))) === nothing
         # a mask that reads a field stepped after its own reads it at the window start (round 2 of
         # F2 batch 4; before: refused "a field stepped with or after `c`")
-        @test bs_error(() -> mtkcompile(Base.invokelatest(BSMaskLater; name = :m))) === nothing
-        @test bs_error(() -> mtkcompile(Base.invokelatest(BSMaskEarlier; name = :m))) === nothing
+        @test bs_error(() -> mtkcompile(BSMask(; name = :m, mask_case = :later))) === nothing
+        @test bs_error(() -> mtkcompile(BSMask(; name = :m, mask_case = :earlier))) === nothing
     end
 end

@@ -9,63 +9,54 @@
 # and `jac:` arrays after a parameter write, and FiStill's run differs from a fresh problem's
 # (FiMix passes: its mask reads `e`, so it rebuilds every window anyway, f3b3-nc-a-reset.log).
 
-# TS1-1: Parametric coupling table covering BackwardEuler, CrankNicolson, BDF2, QuasiSteady,
-# hexagonal lattices, moving masks, Robin/field faces, and coupled steady rows against
-# LatticePDE's owned run (bitwise, σ frozen).
-@testitem "TS1-1: coupled models equal LatticePDE owned run (ImplicitSetup table)" setup = [ImplicitSetup] tags = [:potts, :fields_implicit, :fields_steppers] begin
-    @testset "TS1-1: coupled models equal LatticePDE owned run (ImplicitSetup table)" begin
-        dims = (12, 10)
-        # (M, fs, k, u0_names, has_kind, check_warm)
-        rows = (
+# TS1-1: Parametric coupling table split per solver family for 4-worker concurrency, covering
+# BackwardEuler, CrankNicolson, BDF2, QuasiSteady, hexagonal lattices, moving masks, Robin/field
+# faces, and coupled steady rows against LatticePDE's owned run (bitwise, σ frozen).
+@testitem "TS1-1: BackwardEuler coupled models equal LatticePDE owned run" setup = [ImplicitSetup] tags = [:potts, :fields_implicit, :fields_steppers] begin
+    @testset "TS1-1: BackwardEuler coupled models equal LatticePDE owned run" begin
+        fi_check_table_rows(
+            (
             (FiMix, BackwardEuler(), 8, (:c, :e), true, true),
             (FiRobinP, BackwardEuler(), 3, (:c,), false, false),
             (FiFieldFace, BackwardEuler(), 3, (:c,), false, false),
             (FiMaskField, BackwardEuler(), 3, (:c,), true, false),
             (FiRobinN, BackwardEuler(), 3, (:c,), false, false),
+            )
+        )
+    end
+end
+
+@testitem "TS1-1: CrankNicolson and BDF2 coupled models equal LatticePDE owned run" setup = [ImplicitSetup] tags = [:potts, :fields_implicit, :fields_steppers] begin
+    @testset "TS1-1: CrankNicolson and BDF2 coupled models equal LatticePDE owned run" begin
+        fi_check_table_rows(
+            (
             (FiStill, CrankNicolson(), 4, (:c,), false, false),
             (FiMix, CrankNicolson(), 4, (:c, :e), true, true),
             (FiStill, BDF2(), 4, (:c,), false, false),
             (FiMix, BDF2(), 4, (:c, :e), true, true),
+            )
+        )
+    end
+end
+
+@testitem "TS1-1: QuasiSteady coupled models equal LatticePDE owned run" setup = [ImplicitSetup] tags = [:potts, :fields_implicit, :fields_steppers] begin
+    @testset "TS1-1: QuasiSteady coupled models equal LatticePDE owned run" begin
+        fi_check_table_rows(
+            (
             (FiStill, QuasiSteady(), 4, (:c,), false, true),
             (FiSteady, QuasiSteady(), 4, (:c,), true, true),
             (FiRobinP, QuasiSteady(), 4, (:c,), false, false),
             (FiRobinQ, QuasiSteady(), 4, (:c,), false, false),
             (FiFieldFace, QuasiSteady(), 4, (:c,), false, false),
             (FiMaskField, QuasiSteady(), 4, (:c,), true, false),
+            )
         )
-        for (M, fs, k, u0_names, has_kind, check_warm) in rows
-            a, integ = fi_runA(M, fi_op(dims), k; field_solver = fs)
-            u0 = [nm => zeros(dims) for nm in u0_names]
-            inputs = has_kind ? [:kind => fi_kin(dims)] : []
-            alg = fs isa QuasiSteady ? QuasiSteady(; dt = 1.0) : remake(fs; dt = 1.0)
-            b = fi_runB(M, dims, k; u0, inputs, alg)
-            @test a == b
-            @test integ.retcode == FiRC.Default || integ.retcode == FiRC.Success
-            @test (M === FiRobinN || fs isa CrankNicolson || fs isa BDF2) ? integ.stats.fields.solves >= k : integ.stats.fields.solves == k
-            if M === FiMix && fs isa BackwardEuler
-                rt = fi_rt(integ)
-                @test rt.cache isa FIP.ImplicitCache && rt.cache.moving && rt.cache.newton == 1
-                @test integ.stats.fields.budget == 0
-                xs = [i - 0.5 for i in 1:12, j in 1:10]
-                eprev = Array(current_state(integ).site.e) .- (0.02 .+ 0.01 .* xs)
-                m = eprev .>= 0.5 + 1e-9
-                @test any(m) && !all(m) && all(a[end][m] .== 1.5) && !any(a[2] .== 1.5)
-                ae, _ = fi_runA(FiMix, fi_op(dims), k; field_solver = ExplicitEuler())
-                @test maximum(abs, ae[end] .- a[end]) > 1e-3
-            elseif M === FiRobinN && fs isa BackwardEuler
-                c = fi_rt(integ).cache
-                @test c.newton == 8 && c.seen && substep_counts(integ) == [2] && integ.stats.fields.newton_budget == 0
-            elseif M === FiMaskField && fs isa BackwardEuler
-                m = fi_kin(dims) .== 1
-                @test a[1][m] == [1 + 0.1 * (i - 0.5) for i in 1:12, j in 1:10][m]
-            elseif fs isa CrankNicolson
-                @test fi_rt(integ).cache.jumps == (M === FiMix)
-            elseif fs isa QuasiSteady && M === FiSteady
-                @test substep_counts(integ) == [1]
-            end
-            check_warm && @test fi_warm(integ) == 0
-        end
+    end
+end
 
+@testitem "TS1-1: coupled steady rows and hexagonal models equal LatticePDE owned run" setup = [ImplicitSetup] tags = [:potts, :fields_implicit, :fields_steppers] begin
+    @testset "TS1-1: coupled steady rows and hexagonal models equal LatticePDE owned run" begin
+        dims = (12, 10)
         # Coupled steady rows (`FcPair`, `FcFeed`)
         ap, ip = fc_runA(FcPair, 3, (:u, :v))
         bp, sb = fc_runB(FcPair, 3, (:u, :v); alg = QuasiSteady(; dt = 1.0))
@@ -80,7 +71,7 @@
         bf, _ = fc_runB(FcFeed, 4, (:e, :u, :v); alg = BackwardEuler(; dt = 1.0))
         @test af == bf
 
-        # Hexagonal lattice (`FiHexF`)
+        # Hexagonal lattice (`FiHexF`, `FiHex`)
         k = 4
         ah, ih = fi_runA(FiHexF, fi_op(dims), k)
         bp = Potts.LatticePDE.discretize(Potts.fields(FiHexF(; name = :f)),
@@ -332,30 +323,10 @@ end
     end
 end
 
-@testitem "F3-21b: field derivatives in a model against central differences (a fixed CPM path)" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
-    @testset "F3-21b: field derivatives in a model against central differences (a fixed CPM path)" begin
-        # (the implicit solves converged far below the default `rtol = 1e-6`: the tangent is the
-        # derivative of the converged stage, F3-21a, and central differences see the solve's tolerance)
+@testitem "F3-21b: BackwardEuler field derivatives and ForwardDiff.gradient against central differences" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
+    @testset "F3-21b: BackwardEuler field derivatives and ForwardDiff.gradient against central differences" begin
         tight = DevicePCG(; rtol = 1e-11, budget = 60)
-        # TS1-2: all 3 parameters for BackwardEuler, one parameter (:Dc) for the other 4 steppers
-        for fs in (ExplicitEuler(), BackwardEuler(; inner = tight), CrankNicolson(; inner = tight), BDF2(; inner = tight),
-                   QuasiSteady(; inner = tight))
-            base = fi_drun(fs, Pair[])
-            params = fs isa BackwardEuler ? ((:Dc, 0.2), (:s, 0.5), (:kd, 0.1)) : ((:Dc, 0.2),)
-            for (name, v) in params
-                d = fi_drun(fs, [name => ForwardDiff.Dual(v, 1.0)])
-                # the Dual run is the primal run: its σ and its field values, bit for bit, at every save
-                @test all(d.u[i].σ == base.u[i].σ for i in eachindex(base.u))
-                @test all(ForwardDiff.value.(d.u[i].site.c) == base.u[i].site.c for i in eachindex(base.u))
-                @test eltype(d.u[end].site.c) <: ForwardDiff.Dual && eltype(d.u[end].site.c__next) === Float64
-                h = 1e-4 * v
-                rp, rm = fi_drun(fs, [name => v + h]), fi_drun(fs, [name => v - h])
-                @test all(rp.u[i].σ == base.u[i].σ == rm.u[i].σ for i in eachindex(base.u))       # the path is fixed
-                fd = (fi_dq(rp) - fi_dq(rm)) / 2h
-                @test abs(fd) > 1e-6
-                @test ForwardDiff.partials(fi_dq(d), 1) ≈ fd rtol = 1e-6
-            end
-        end
+        fi_check_dual_fd(BackwardEuler(; inner = tight), ((:Dc, 0.2), (:s, 0.5), (:kd, 0.1)))
         # several derivative parts at once (one chunk: one run), the computed `Dh` through `Dc`
         q(x) = fi_dq(fi_drun(BackwardEuler(; inner = tight), [:Dc => x[1], :s => x[2], :kd => x[3]]))
         g = ForwardDiff.gradient(q, [0.2, 0.5, 0.1])
@@ -365,6 +336,21 @@ end
                   fi_dq(fi_drun(BackwardEuler(; inner = tight), [name => v - h]))) / 2h
             @test g[i] ≈ fd rtol = 1e-6
         end
+    end
+end
+
+@testitem "F3-21b: ExplicitEuler, CrankNicolson, BDF2, QuasiSteady field derivatives against central differences" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
+    @testset "F3-21b: ExplicitEuler, CrankNicolson, BDF2, QuasiSteady field derivatives against central differences" begin
+        tight = DevicePCG(; rtol = 1.0e-11, budget = 60)
+        for fs in (ExplicitEuler(), CrankNicolson(; inner = tight), BDF2(; inner = tight), QuasiSteady(; inner = tight))
+            fi_check_dual_fd(fs, ((:Dc, 0.2),))
+        end
+    end
+end
+
+@testitem "F3-21b: multi-group and masked field derivatives against central differences" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
+    @testset "F3-21b: multi-group and masked field derivatives against central differences" begin
+        tight = DevicePCG(; rtol = 1.0e-11, budget = 60)
         # a group reading another group's field: ∂w/∂ra through `u`'s twin, ∂w/∂rb in `w`'s own group
         two(ps) = solve(PottsProblem(FiDualTwo(; name = :m), [fi_dop(); ps], (0, 12); field_solver = ExplicitEuler(),
             solvers = [:w => BackwardEuler(; inner = tight)], seed = 3), SequentialCPM()).u[end].site.w
@@ -391,13 +377,7 @@ end
     @testset "F3-21b: a Dual run's integrator, remake and refusals" begin
         # `ForwardDiff.derivative` through `solve` (plain and `Potts.couple`)
         f(k) = fi_dq(fi_drun(ExplicitEuler(), [:kd => k]))
-        @test ForwardDiff.derivative(f, 0.1) ≈ (f(0.1 + 1e-5) - f(0.1 - 1e-5)) / 2e-5 rtol = 1e-6
-        @potts_model FiCoupleHost begin
-            @kinds medium A
-            @lattice Lattice((24, 20); boundary = Closed())
-            @energy cells => (volume - 16.0)^2
-            @sweep Metropolis(; temperature = 2.0)
-        end
+        @test ForwardDiff.derivative(f, 0.1) ≈ (f(0.1 + 1.0e-5) - f(0.1 - 1.0e-5)) / 2.0e-5 rtol = 1.0e-6
         T_c, X_c, Y_c = FieldPDE.t, FieldPDE.x, FieldPDE.y
         FieldPDE.@variables c_c(..)
         FieldPDE.@parameters Dc_c = 0.2 kd_c = 0.1

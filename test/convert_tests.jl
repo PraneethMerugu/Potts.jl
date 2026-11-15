@@ -49,7 +49,7 @@ end
 
 
 const CV_SUB = [CartesianIndex(8, j) for j in 6:9]
-          # interior sites: the sweep leaves them
+# interior sites: the sweep leaves them
 
 function cv_device_problem()
     σ = zeros(Int32, 24, 24)
@@ -59,8 +59,12 @@ function cv_device_problem()
     sub[CV_SUB] .= 1.0
     act = zeros(24, 24)
     act[5:10, 5:10] .= 1.0
-    return PottsProblem(CVDevice(; name = :cv), [ownership => σ, kind => [:cytoplasm, :doomed], cluster => [1, 2],
-            :keep => [2, 0], :sub => sub, :act => act, :bond => [(1, 2)]], (0, 4); T = Float32, capacity = 4)
+    return PottsProblem(
+        CVDevice(; name = :cv), [
+            ownership => σ, kind => [:cytoplasm, :doomed], cluster => [1, 2],
+            :keep => [2, 0], :sub => sub, :act => act, :bond => [(1, 2)],
+        ], (0, 4); T = Float32, capacity = 4
+    )
 end
 
 # after the run: the lamellipodium in slot 2 (serial 3, cluster 1), `keep` of cell 1 reset,
@@ -70,14 +74,18 @@ function cv_device_summary(u)
     v = Array(u.cell.volume)
     L = Array(getfield(u.cell, CorePotts.adjacency_name(:bond)))
     act = Array(u.site.act)
-    return (; alive = findall(>(0), v), kind2 = Array(u.cell.kind)[2], birth2 = Array(u.cell.birth)[2],
+    return (;
+        alive = findall(>(0), v), kind2 = Array(u.cell.kind)[2], birth2 = Array(u.cell.birth)[2],
         cluster2 = Array(u.cell.cluster)[2], keep1 = Array(u.cell.keep)[1], births = Array(u.model.births)[1],
         nconv = Array(u.model.nconv)[1], vt = Array(u.cell.V_target)[1:2], unlinked = !any(==(2), L) && all(iszero, L[:, 2]),
-        cleared = all(iszero, act[CV_SUB]), kept = act[7, 7] == 1)
+        cleared = all(iszero, act[CV_SUB]), kept = act[7, 7] == 1,
+    )
 end
 
-const CV_EXPECTED = (; alive = [1, 2], kind2 = 2, birth2 = 3, cluster2 = 1, keep1 = 0, births = 1.0f0, nconv = 4.0f0,
-    vt = Float32[32, 4], unlinked = true, cleared = true, kept = true)
+const CV_EXPECTED = (;
+    alive = [1, 2], kind2 = 2, birth2 = 3, cluster2 = 1, keep1 = 0, births = 1.0f0, nconv = 4.0f0,
+    vt = Float32[32, 4], unlinked = true, cleared = true, kept = true,
+)
 
 
 # Several entities allocating in one pass: three cytoplasm clusters (cells 1, 2, 3), the sweep
@@ -111,8 +119,12 @@ function cv_many_problem(model = CVMany; capacity = 5, σ3 = 3)
     σ[2:5, 18:21] .= σ3
     sub = zeros(24, 24)
     sub[3, [3, 11, 19]] .= 1.0
-    return PottsProblem(model(; name = :many), [ownership => σ, kind => fill(:cytoplasm, maximum(σ)), cluster => [1, 2, 3],
-            :sub => sub], (0, 2); capacity)
+    return PottsProblem(
+        model(; name = :many), [
+            ownership => σ, kind => fill(:cytoplasm, maximum(σ)), cluster => [1, 2, 3],
+            :sub => sub,
+        ], (0, 2); capacity
+    )
 end
 
 
@@ -136,7 +148,8 @@ end
 
 
 # The writes of a pass: at a cell named by a reference, and reading nothing the pass writes
-cv_write_src(write) = quote
+@potts_model CVWriteCase begin
+    @structural_parameters write_case = :ok_to
     @kinds medium cytoplasm lamellipodium
     @variables begin
         sub(site) = 0.0
@@ -145,20 +158,49 @@ cv_write_src(write) = quote
     end
     @lattice Lattice((12, 12))
     @energy cells => (volume - V_target)^2
-    @convert protrusion clusters(cytoplasm) begin
-        to = sibling(lamellipodium)
-        at = sub > 0.5
-        $write
+    if write_case === :ok_to
+        @convert protrusion clusters(cytoplasm) begin
+            to = sibling(lamellipodium)
+            at = sub > 0.5
+            V_target[to] += 1.0
+        end
+    elseif write_case === :ok_read_to
+        @convert protrusion clusters(cytoplasm) begin
+            to = sibling(lamellipodium)
+            at = sub > 0.5
+            n += V_target[to]
+        end
+    elseif write_case === :bad_owner
+        @convert protrusion clusters(cytoplasm) begin
+            to = sibling(lamellipodium)
+            at = sub > 0.5
+            V_target[owner] += 1.0
+        end
+    elseif write_case === :bad_read_written_cell
+        @convert protrusion clusters(cytoplasm) begin
+            to = sibling(lamellipodium)
+            at = sub > 0.5
+            V_target[to] += 0.1 * V_target[to]
+        end
+    elseif write_case === :bad_read_written_model
+        @convert protrusion clusters(cytoplasm) begin
+            to = sibling(lamellipodium)
+            at = sub > 0.5
+            n += n + 1.0
+        end
+    elseif write_case === :bad_transfer_per_site
+        @convert protrusion clusters(cytoplasm) begin
+            to = sibling(lamellipodium)
+            at = sub > 0.5
+            transfer(V_target, from => to, per_site = V_target[to])
+        end
     end
     @sweep Metropolis(; temperature = 1.0)
 end
 
-function cv_write_error(write)
+function cv_write_error(write_case)
     try
-        mod = Module()
-        Core.eval(mod, :(using Potts))
-        Core.eval(mod, Expr(:macrocall, Symbol("@potts_model"), LineNumberNode(0, :cv), :CVW, cv_write_src(write)))
-        Base.invokelatest(() -> mtkcompile(Base.invokelatest(getfield(mod, :CVW); name = :w)))
+        mtkcompile(CVWriteCase(; name = :w, write_case))
         return nothing
     catch e
         return e isa LoadError ? e.error : e
@@ -184,7 +226,13 @@ end
 # exactly, one `created` among the 4 conversions; unforced, Int32.
 @testitem "@convert: `created` at the Int64 site width (D-253)" setup = [ConvertSetup] tags = [:potts, :convert] begin
     @testset "@convert: `created` at the Int64 site width (D-253)" begin
-        wide(f) = (CorePotts._FORCE_WIDE_SITES[] = true; try f() finally CorePotts._FORCE_WIDE_SITES[] = false end)
+        wide(f) = (
+            CorePotts._FORCE_WIDE_SITES[] = true; try
+                f()
+            finally
+                CorePotts._FORCE_WIDE_SITES[] = false
+            end
+        )
         prob = wide(cv_device_problem)
         @test eltype(getfield(prob.u0.cell, CorePotts._CV_FIRST)) === Int64
         @test eltype(getfield(prob.u0.model, CorePotts.CONVERT_FLAGS)) === Int64
@@ -209,10 +257,17 @@ end
             @test Symbol(sol.retcode) === :Success
             @test cv_device_summary(sol.u[end]) == cpu
             # D-253: the Int64 width on the device, or its refusal without 64-bit atomics (Metal)
-            wprob = (CorePotts._FORCE_WIDE_SITES[] = true; try cv_device_problem() finally CorePotts._FORCE_WIDE_SITES[] = false end)
+            wprob = (
+                CorePotts._FORCE_WIDE_SITES[] = true; try
+                    cv_device_problem()
+                finally
+                    CorePotts._FORCE_WIDE_SITES[] = false
+                end
+            )
             if CorePotts._atomic64(backend)
                 @test cv_device_summary(solve(wprob, CheckerboardCPM(); backend).u[end]) == cpu
             else
+                @test_throws ArgumentError init(wprob, CheckerboardCPM(); backend)
                 @test_throws r"@convert pass.*Int64 atomics.*D-253" init(wprob, CheckerboardCPM(); backend)
             end
         else
@@ -273,11 +328,11 @@ end
 
 @testitem "@convert: writes at a reference, reading nothing the pass writes" setup = [ConvertSetup] tags = [:potts, :convert] begin
     @testset "@convert: writes at a reference, reading nothing the pass writes" begin
-        @test cv_write_error(:(V_target[to] += 1.0)) === nothing                 # controls
-        @test cv_write_error(:(n += V_target[to])) === nothing
-        e = cv_write_error(:(V_target[owner] += 1.0))
+        @test cv_write_error(:ok_to) === nothing                               # controls
+        @test cv_write_error(:ok_read_to) === nothing
+        e = cv_write_error(:bad_owner)
         @test e isa ArgumentError && occursin("named by a reference", sprint(showerror, e))
-        for w in (:(V_target[to] += 0.1 * V_target[to]), :(n += n + 1.0), :(transfer(V_target, from => to, per_site = V_target[to])))
+        for w in (:bad_read_written_cell, :bad_read_written_model, :bad_transfer_per_site)
             e = cv_write_error(w)
             @test e isa ArgumentError && occursin("which the pass itself", sprint(showerror, e))
         end

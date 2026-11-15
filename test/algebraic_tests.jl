@@ -107,6 +107,19 @@ end
 end
 
 
+@potts_model AlgDefault begin
+    @kinds medium A
+    @variables begin
+        x(cell) = 1.0
+        y(cell) = 2.0
+    end
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @equations y ~ x
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+
 function alg_model(body)
     m = eval(:(@potts_model _AlgBad begin
         @kinds medium A
@@ -237,18 +250,7 @@ end
             @equations y ~ sum(c for n in Moore(1)(42)) + x
         end)), "algebraic", "`y")
         # a declared value is not used (D-165, kept by D-170): its value follows from its definition
-        default_model = eval(:(@potts_model _AlgDefault begin
-            @kinds medium A
-            @variables begin
-                x(cell) = 1.0
-                y(cell) = 2.0
-            end
-            @lattice Lattice((12, 8))
-            @energy cells => (volume - 16.0)^2
-            @equations y ~ x
-            @sweep Metropolis(; temperature = 1.0)
-        end))
-        @test alg_error(() -> mtkcompile(Base.invokelatest(default_model; name = :d)), "`y`", "initial value")
+        @test alg_error(() -> mtkcompile(AlgDefault(; name = :d)), "`y`", "initial value")
         # input names: a built-in keeps its name; a compound input never takes a declared name
         let s = Potts.ode_system(mtkcompile(alg_model(quote
                 @variables input(cell) = 0.0

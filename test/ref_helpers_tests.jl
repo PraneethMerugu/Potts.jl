@@ -12,9 +12,9 @@ using Potts: CorePotts
 isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
 
 module RhPDE
-using ..FieldPDE
-@variables qf(..) qin(..) [input = true]
-source() = (Q = qf(t, x, y); pdesys([Dt(Q) ~ qin(t, x, y)], [qf(0, x, y) ~ 0.0], (20, 12), [Q, qin(t, x, y)]))
+    using ..FieldPDE
+    @variables qf(..) qin(..) [input = true]
+    source() = (Q = qf(t, x, y); pdesys([Dt(Q) ~ qin(t, x, y)], [qf(0, x, y) ~ 0.0], (20, 12), [Q, qin(t, x, y)]))
 end
 
 
@@ -55,45 +55,59 @@ function rh_pairs_op()
 end
 
 
-rh_bad(ex) = try
-    Core.eval(@__MODULE__, ex)
-    nothing
-catch e
-    e isa LoadError ? e.error : e
+# --- the E7 helpers in forms the frozen file leaves out ------------------------------------
+@potts_model RHE7Case begin
+    @structural_parameters begin
+        hex = false
+        mode = :ok
+    end
+    @kinds medium ka
+    @variables begin
+        partner(cell)::CellRef
+        w(cell) = 0.0
+    end
+    @lattice Lattice(
+        (8, 8); geometry = hex ? Hexagonal() : Square(),
+        boundary = Periodic(), neighborhood = hex ? Hex(1) : Moore(1)
+    )
+    @energy cells => (volume - 4.0)^2
+    if mode === :drive_c
+        @drive copy => 0.1 * centroid(partner[old], 1)
+    elseif mode === :drive_s
+        @drive copy => 0.1 * separation(partner[old], partner[new])[1]
+    elseif mode === :drive_m
+        @drive copy => 0.1 * minimum_image(position[target][1] - 2.0, 1)
+    else
+        @drive copy => 0.0
+    end
+    if mode === :hex_m
+        @after_mcs w ~ minimum_image(centroid(1), 1)
+    elseif mode === :hex_s
+        @after_mcs w ~ separation(id, partner)[2]
+    elseif mode === :ok
+        @after_mcs w ~ centroid(partner, 1)
+    else
+        @after_mcs w ~ 0.0
+    end
+    if mode === :ok
+        @observed o(cell) ~ norm(separation(id, partner))
+    else
+        @observed o(cell) ~ 0.0
+    end
+    @sweep Metropolis(; temperature = 1.0)
 end
 
-
-# --- the E7 helpers in forms the frozen file leaves out ------------------------------------
-function rh_build_error(name, lattice, drive, update, observed)
-    e = rh_bad(:(@potts_model $name begin
-        @kinds medium ka
-        @variables begin
-            partner(cell)::CellRef
-            w(cell) = 0.0
-        end
-        @lattice $lattice
-        @energy cells => (volume - 4.0)^2
-        @drive copy => $drive
-        @after_mcs w ~ $update
-        @observed o(cell) ~ $observed
-        @sweep Metropolis(; temperature = 1.0)
-    end))
-    e === nothing || return e
+function rh_build_error(; hex = false, mode = :ok)
     σ = zeros(Int32, 8, 8)
     σ[2, 2] = 1
     σ[5, 5] = 2
     try
-        Base.invokelatest(getfield(@__MODULE__, name); name = :b) |>
-        sys -> Base.invokelatest(PottsProblem, sys, [ownership => σ, kind => [:ka, :ka], :partner => [2, 1]], (0, 1))
+        PottsProblem(RHE7Case(; name = :b, hex, mode), [ownership => σ, kind => [:ka, :ka], :partner => [2, 1]], (0, 1))
         return nothing
     catch e
         return e isa LoadError ? e.error : e
     end
 end
-
-const RH_SQ = :(Lattice((8, 8); boundary = Periodic(), neighborhood = Moore(1)))
-
-const RH_HEX = :(Lattice((8, 8); geometry = Hexagonal(), boundary = Periodic(), neighborhood = Hex(1)))
 
 
 @potts_model RHDead begin
@@ -148,8 +162,12 @@ function rh_device_problem(hex; T = Float64)
     σ[[15, 16, 1], 2:3] .= 1
     σ[2:3, 1:3] .= 2
     σ[8:9, 8:10] .= 3
-    return PottsProblem(RHDevice(; name = :dv, geom = hex ? Hexagonal() : Square(), nbh = hex ? Hex(1) : Moore(1)), [ownership => σ, kind => [:ka, :kb, :ka], cluster => [1, 1, 3],
-            :partner => [2, 1, 1]], (0, 3); seed = 2, T)
+    return PottsProblem(
+        RHDevice(; name = :dv, geom = hex ? Hexagonal() : Square(), nbh = hex ? Hex(1) : Moore(1)), [
+            ownership => σ, kind => [:ka, :kb, :ka], cluster => [1, 1, 3],
+            :partner => [2, 1, 1],
+        ], (0, 3); seed = 2, T
+    )
 end
 
 
@@ -218,11 +236,15 @@ end
 
 rh_q_op(nx) = [ownership => rh_q_sigma(nx), kind => [:cytoplasm, :nucleus], cluster => [1, 1], :V_target => [12.0, 1.0]]
 
-rh_conv_problem(nx; T = Float64) = PottsProblem(RHConvQ(; name = :cq), [rh_q_op(nx); :sub => Float64.(rh_q_sigma(nx) .== 1)],
-    (0, 1); T, capacity = 4)
+rh_conv_problem(nx; T = Float64) = PottsProblem(
+    RHConvQ(; name = :cq), [rh_q_op(nx); :sub => Float64.(rh_q_sigma(nx) .== 1)],
+    (0, 1); T, capacity = 4
+)
 
-rh_field_problem(nx; T = Float64) = PottsProblem(RHFieldQ(; name = :fq), rh_q_op(nx), (0, 1); T,
-    field_solver = ExplicitEuler(substeps = 1))
+rh_field_problem(nx; T = Float64) = PottsProblem(
+    RHFieldQ(; name = :fq), rh_q_op(nx), (0, 1); T,
+    field_solver = ExplicitEuler(substeps = 1)
+)
 
 # the hand oracle: (Q + S) at the cytoplasm's sites, 0 elsewhere
 function rh_q_oracle(S)
@@ -265,29 +287,89 @@ end
 
 # axis and hexagonal refusals in every context: @convert `at`, `p` and writes, the sweep
 # temperature (each built to the problem, so a refusal at either stage counts)
-function rh_ctx_error(body; lattice = :(Lattice((10, 10); boundary = Periodic(), neighborhood = Moore(1))),
-        temperature = :(1.0), clusters = true)
-    name = gensym(:RHCtx)
-    e = rh_bad(:(@potts_model $name begin
-        @kinds medium ka kb
-        @variables begin
-            F(site) = 1.0
-            n(model) = 0.0
+@potts_model RHCtxCase begin
+    @structural_parameters begin
+        hex = false
+        mode = :ctrl_at
+    end
+    @kinds medium ka kb
+    @variables begin
+        F(site) = 1.0
+        n(model) = 0.0
+    end
+    @lattice Lattice(
+        (10, 10); geometry = hex ? Hexagonal() : Square(),
+        boundary = Periodic(), neighborhood = hex ? Hex(1) : Moore(1)
+    )
+    @energy cells => (volume - 4.0)^2
+    if mode === :ctrl_at
+        @convert cv clusters(ka) begin
+            to = sibling(kb)
+            at = minimum_image(position[1] - 3.0, 1) > -100.0
+            p = 0.0
+            n += 1
         end
-        @lattice $lattice
-        @energy cells => (volume - 4.0)^2
-        $(body.args...)
-        @sweep Metropolis(; temperature = $temperature)
-    end))
-    e === nothing || return e
+    elseif mode === :bad_at_axis
+        @convert cv clusters(ka) begin
+            to = sibling(kb)
+            at = minimum_image(position[1] - 3.0, 3) > -100.0
+            p = 0.0
+            n += 1
+        end
+    elseif mode === :bad_p_mi_axis
+        @convert cv clusters(ka) begin
+            to = sibling(kb)
+            at = F > 0.5
+            p = ifelse(minimum_image(position[1], 3) > 0, 1.0, 0.0)
+            n += 1
+        end
+    elseif mode === :bad_w_mi_axis
+        @convert cv clusters(ka) begin
+            to = sibling(kb)
+            at = F > 0.5
+            p = 0.0
+            n += minimum_image(1.0, 3)
+        end
+    elseif mode === :bad_p_cent_axis
+        @convert cv clusters(ka) begin
+            to = sibling(kb)
+            at = F > 0.5
+            p = ifelse(centroid(from, 3) > 0, 1.0, 0.0)
+            n += 1
+        end
+    elseif mode === :hex_p_mi
+        @convert cv clusters(ka) begin
+            to = sibling(kb)
+            at = F > 0.5
+            p = ifelse(minimum_image(position[1], 1) > 100, 1.0, 0.0)
+            n += 1
+        end
+    elseif mode === :hex_p_sep
+        @convert cv clusters(ka) begin
+            to = sibling(kb)
+            at = F > 0.5
+            p = ifelse(separation(from, from)[1] > 100, 1.0, 0.0)
+            n += 1
+        end
+    end
+    if mode === :bad_temp_axis
+        @sweep Metropolis(; temperature = 1.0 + 0.001 * minimum_image(1.0, 3))
+    elseif mode === :ctrl_temp
+        @sweep Metropolis(; temperature = 1.0 + 0.001 * minimum_image(1.0, 1))
+    else
+        @sweep Metropolis(; temperature = 1.0)
+    end
+end
+
+function rh_ctx_error(; hex = false, mode = :ctrl_at, clusters = true)
     σ = zeros(Int32, 10, 10)
     σ[2:3, 2:3] .= 1
     try
-        sys = Base.invokelatest(getfield(@__MODULE__, name); name = :c)
+        sys = RHCtxCase(; name = :c, hex, mode)
         op = Any[ownership => σ, kind => [:ka]]
         clusters && push!(op, cluster => [1])
-        prob = Base.invokelatest(PottsProblem, sys, op, (0, 1); capacity = 3)
-        Base.invokelatest(solve, prob, SequentialCPM())
+        prob = PottsProblem(sys, op, (0, 1); capacity = 3)
+        solve(prob, SequentialCPM())
         return nothing
     catch e
         return e isa LoadError ? e.error : e
@@ -296,16 +378,13 @@ end
 
 rh_msg(e, s) = e isa ArgumentError && occursin(s, sprint(showerror, e))
 
-rh_conv(at, p; w = :(n += 1)) = quote
-    @convert cv clusters(ka) begin
-        to = sibling(kb)
-        at = $at
-        p = $p
-        $w
-    end
+@potts_model RHDefaultMI begin
+    @kinds medium ka
+    @variables F(site) = minimum_image(1.0, 1)
+    @lattice Lattice((6, 6); boundary = Periodic(), neighborhood = Moore(1))
+    @energy cells => (volume - 4.0)^2
+    @sweep Metropolis(; temperature = 1.0)
 end
-
-const RH_HEX10 = :(Lattice((10, 10); geometry = Hexagonal(), boundary = Periodic(), neighborhood = Hex(1)))
 
 
 # A masked condition of a coupled PDESystem (until F4-B6 a `@boundary` site mask) is lowered in
@@ -315,9 +394,9 @@ const RH_HEX10 = :(Lattice((10, 10); geometry = Hexagonal(), boundary = Periodic
 # `centroid(owner, 1) > 4` clamps c = 7 at cell 1's sites only; `D(c) ~ -c` from c = 0 leaves
 # every other site at 0.
 module RHMaskPDE
-using Potts.Fields
-@variables c(..) = 0.0 m(..)::Bool [input = true]
-sys() = pdesystem([Differential(t)(c(t, x, y)) ~ -c(t, x, y)], [c(t, x, y) ~ masked(m(t, x, y), 7.0)]; name = :rhmask)
+    using Potts.Fields
+    @variables c(..) = 0.0 m(..)::Bool [input = true]
+    sys() = pdesystem([Differential(t)(c(t, x, y)) ~ -c(t, x, y)], [c(t, x, y) ~ masked(m(t, x, y), 7.0)]; name = :rhmask)
 end
 
 @potts_model RHMaskCentroid begin
@@ -335,8 +414,10 @@ function rh_mask_sigma()
     return σ
 end
 
-rh_mask_problem(; T = Float64) = PottsProblem(RHMaskCentroid(; name = :bm), [ownership => rh_mask_sigma(), kind => [:ka, :ka]],
-    (0, 1); T, field_solver = ExplicitEuler(substeps = 1))
+rh_mask_problem(; T = Float64) = PottsProblem(
+    RHMaskCentroid(; name = :bm), [ownership => rh_mask_sigma(), kind => [:ka, :ka]],
+    (0, 1); T, field_solver = ExplicitEuler(substeps = 1)
+)
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
@@ -355,19 +436,28 @@ end
 
 @testitem "Pairs: refusals and the runtime checks" setup = [RefHelpersSetup] tags = [:potts, :ref_helpers] begin
     @testset "Pairs: refusals and the runtime checks" begin
-        # a kind class as a key, and a missing default (both open in D-243: refused)
-        e = rh_bad(:(@potts_model RHPairsClass begin
-            @kinds begin
-                medium
-                ka
-                kb
-                both = (ka, kb)
-            end
-            @parameters J[kind, kind] = Pairs(default = 0.0, (medium, both) => 1.0)
-            @lattice Lattice((6, 6); boundary = Closed(), neighborhood = Moore(1))
-            @energy contacts => J[kind, kind′]
-            @sweep Metropolis(; temperature = 1.0)
-        end))
+        # a kind class as a key, and a missing default (both open in D-243: refused at macro expansion)
+        e = try
+            macroexpand(
+                @__MODULE__, :(
+                    @potts_model RHPairsClass begin
+                        @kinds begin
+                            medium
+                            ka
+                            kb
+                            both = (ka, kb)
+                        end
+                        @parameters J[kind, kind] = Pairs(default = 0.0, (medium, both) => 1.0)
+                        @lattice Lattice((6, 6); boundary = Closed(), neighborhood = Moore(1))
+                        @energy contacts => J[kind, kind′]
+                        @sweep Metropolis(; temperature = 1.0)
+                    end
+                )
+            )
+            nothing
+        catch err
+            err isa LoadError ? err.error : err
+        end
         @test e isa ArgumentError && occursin("kind class", sprint(showerror, e))
         @test_throws ArgumentError Potts.DSL.Pairs((0, 1) => 1.0)
         @test_throws ArgumentError Potts.DSL.Pairs(1.0; default = 0.0)
@@ -384,18 +474,18 @@ end
 @testitem "E7 helpers: copy-scope and hexagonal refusals" setup = [RefHelpersSetup] tags = [:potts, :ref_helpers] begin
     @testset "E7 helpers: copy-scope and hexagonal refusals" begin
         # control: the template builds
-        @test rh_build_error(:RHOk, RH_SQ, :(0.0), :(centroid(partner, 1)), :(norm(separation(id, partner)))) === nothing
+        @test rh_build_error(; hex = false, mode = :ok) === nothing
         # centroid(c, k) and separation read centroids a copy moves: not in drives
-        e = rh_build_error(:RHDriveC, RH_SQ, :(0.1 * centroid(partner[old], 1)), :(0.0), :(0.0))
+        e = rh_build_error(; hex = false, mode = :drive_c)
         @test e isa ArgumentError && occursin("centroid", sprint(showerror, e))
-        e = rh_build_error(:RHDriveS, RH_SQ, :(0.1 * separation(partner[old], partner[new])[1]), :(0.0), :(0.0))
+        e = rh_build_error(; hex = false, mode = :drive_s)
         @test e isa ArgumentError && occursin("separation", sprint(showerror, e))
         # minimum_image is a pure function: allowed in a drive (control)
-        @test rh_build_error(:RHDriveM, RH_SQ, :(0.1 * minimum_image(position[target][1] - 2.0, 1)), :(0.0), :(0.0)) === nothing
+        @test rh_build_error(; hex = false, mode = :drive_m) === nothing
         # on a hexagonal lattice minimum_image is refused (D-243 open: use separation), separation is not
-        e = rh_build_error(:RHHexM, RH_HEX, :(0.0), :(minimum_image(centroid(1), 1)), :(0.0))
+        e = rh_build_error(; hex = true, mode = :hex_m)
         @test e isa ArgumentError && occursin("minimum_image", sprint(showerror, e))
-        @test rh_build_error(:RHHexS, RH_HEX, :(0.0), :(separation(id, partner)[2]), :(0.0)) === nothing
+        @test rh_build_error(; hex = true, mode = :hex_s) === nothing
     end
 end
 
@@ -438,7 +528,7 @@ end
                 alive = findall(>(0), Array(u.cell.volume))
                 @test length(alive) == 3
                 for (col, ob) in ((:wc, :oc), (:ws, :os), (:wi, :oi))
-                    @test isapprox(Array(getfield(u.cell, col))[alive], observe(prob, ob, u)[alive]; atol = 1e-3)
+                    @test isapprox(Array(getfield(u.cell, col))[alive], observe(prob, ob, u)[alive]; atol = 1.0e-3)
                 end
                 @test all(>(0), Array(u.cell.ws)[alive])           # control: the pair is apart, the norm is read
             end
@@ -469,7 +559,7 @@ end
         o = rh_q_oracle(3.5)
         @test Array(u.site.qs) == o                                # the after-MCS site update
         @test observe(prob, :oq, u) == o                           # the site-scope observed quantity
-        @test isapprox(Array(u.site.qf), o; atol = 1e-12)          # one explicit Euler step of length 1 from 0
+        @test isapprox(Array(u.site.qf), o; atol = 1.0e-12)          # one explicit Euler step of length 1 from 0
         @test Array(u.cell.qc)[1:2] == [-3.5, 0.0]                 # the cell update (14b's Πx form): wrap(20.5 − 4)
         # negative control: another nucleus position changes S, and so every value
         u17 = solve(rh_field_problem(17), SequentialCPM()).u[end]
@@ -523,17 +613,15 @@ end
 
 @testitem "E7 helper axes and the hexagonal refusal in every context" setup = [RefHelpersSetup] tags = [:potts, :ref_helpers] begin
     @testset "E7 helper axes and the hexagonal refusal in every context" begin
-        @test rh_ctx_error(rh_conv(:(minimum_image(position[1] - 3.0, 1) > -100.0), :(0.0))) === nothing     # control
-        @test rh_msg(rh_ctx_error(rh_conv(:(minimum_image(position[1] - 3.0, 3) > -100.0), :(0.0))), "minimum_image")
-        @test rh_msg(rh_ctx_error(rh_conv(:(F > 0.5), :(ifelse(minimum_image(position[1], 3) > 0, 1.0, 0.0)))), "minimum_image")
-        @test rh_msg(rh_ctx_error(rh_conv(:(F > 0.5), :(0.0); w = :(n += minimum_image(1.0, 3)))), "minimum_image")
-        @test rh_msg(rh_ctx_error(rh_conv(:(F > 0.5), :(ifelse(centroid(from, 3) > 0, 1.0, 0.0)))), "centroid")
-        @test rh_msg(rh_ctx_error(rh_conv(:(F > 0.5), :(ifelse(minimum_image(position[1], 1) > 100, 1.0, 0.0)));
-            lattice = RH_HEX10), "minimum_image")
-        @test rh_ctx_error(rh_conv(:(F > 0.5), :(ifelse(separation(from, from)[1] > 100, 1.0, 0.0))); lattice = RH_HEX10) ===
-              nothing                                                                               # control: separation on hex
-        @test rh_msg(rh_ctx_error(quote end; temperature = :(1.0 + 0.001 * minimum_image(1.0, 3)), clusters = false), "minimum_image")
-        @test rh_ctx_error(quote end; temperature = :(1.0 + 0.001 * minimum_image(1.0, 1)), clusters = false) === nothing   # control
+        @test rh_ctx_error(; mode = :ctrl_at) === nothing                                           # control
+        @test rh_msg(rh_ctx_error(; mode = :bad_at_axis), "minimum_image")
+        @test rh_msg(rh_ctx_error(; mode = :bad_p_mi_axis), "minimum_image")
+        @test rh_msg(rh_ctx_error(; mode = :bad_w_mi_axis), "minimum_image")
+        @test rh_msg(rh_ctx_error(; mode = :bad_p_cent_axis), "centroid")
+        @test rh_msg(rh_ctx_error(; hex = true, mode = :hex_p_mi), "minimum_image")
+        @test rh_ctx_error(; hex = true, mode = :hex_p_sep) === nothing                             # control: separation on hex
+        @test rh_msg(rh_ctx_error(; mode = :bad_temp_axis, clusters = false), "minimum_image")
+        @test rh_ctx_error(; mode = :ctrl_temp, clusters = false) === nothing                       # control
     end
 end
 
@@ -554,25 +642,9 @@ end
 
 @testitem "a geometry helper in a default value is a clear ArgumentError" setup = [RefHelpersSetup] tags = [:potts, :ref_helpers] begin
     @testset "a geometry helper in a default value is a clear ArgumentError" begin
-        e = rh_bad(:(@potts_model RHDefaultMI begin
-            @kinds medium ka
-            @variables F(site) = minimum_image(1.0, 1)
-            @lattice Lattice((6, 6); boundary = Periodic(), neighborhood = Moore(1))
-            @energy cells => (volume - 4.0)^2
-            @sweep Metropolis(; temperature = 1.0)
-        end))
-        if e === nothing                                           # (the default is evaluated by the problem)
-            σ = zeros(Int32, 6, 6)
-            σ[2:3, 2:3] .= 1
-            e = try
-                # the model `rh_bad` evaluated lives in its module, not in the item's
-                Base.invokelatest(PottsProblem, Base.invokelatest(getfield(parentmodule(rh_bad), :RHDefaultMI); name = :d),
-                                  [ownership => σ, kind => [:ka]], (0, 1))
-                nothing
-            catch err
-                err isa LoadError ? err.error : err
-            end
-        end
-        @test e isa ArgumentError && occursin("default", sprint(showerror, e)) && occursin("minimum_image", sprint(showerror, e))
+        σ = zeros(Int32, 6, 6)
+        σ[2:3, 2:3] .= 1
+        @test_throws ArgumentError PottsProblem(RHDefaultMI(; name = :d), [ownership => σ, kind => [:ka]], (0, 1))
+        @test_throws ["default", "minimum_image"] PottsProblem(RHDefaultMI(; name = :d), [ownership => σ, kind => [:ka]], (0, 1))
     end
 end

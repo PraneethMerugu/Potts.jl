@@ -124,13 +124,28 @@ end
 # the manufactured solution u = (1 + t) φ, φ = cos(πx/2) + x y² on [0, 1]², with the source
 # u_t − D Δu: u = 1 + t at x = 0 and (1 + t) y² at x = 1 (time-dependent Dirichlet faces),
 # ∂u/∂y = 0 at y = 0 and 2(1 + t) x at y = 1 (a space-dependent Neumann face)
-for n in (16, 32, 64)
-    @eval @potts_model $(Symbol(:FbMMS, n)) begin
-        @kinds medium A
-        @lattice Lattice(($n, $n); boundary = Closed(), spacing = (1 / $n, 1 / $n))
-        @fields FbPDE.mms($n)
-        @sweep Metropolis(; temperature = 1.0)
+@potts_model _FbMMS begin
+    @structural_parameters begin
+        n = 16
     end
+    @kinds medium A
+    @lattice Lattice((n, n); boundary = Closed(), spacing = (1 / n, 1 / n))
+    @fields FbPDE.mms(n)
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+FbMMS16(; name = :FbMMS16) = _FbMMS(; name, n = 16)
+FbMMS32(; name = :FbMMS32) = _FbMMS(; name, n = 32)
+FbMMS64(; name = :FbMMS64) = _FbMMS(; name, n = 64)
+
+@potts_model _FbBadBcs begin
+    @structural_parameters begin
+        r = :y
+    end
+    @kinds medium A
+    @lattice Lattice((8, 8); boundary = Closed())
+    @fields FbPDE.bad(r) (FbPDE.vin => volume[owner])
+    @sweep Metropolis(; temperature = 1.0)
 end
 
 @potts_model FbMMSEE begin
@@ -256,13 +271,8 @@ end
         # (F4-12b: a coefficient of the coordinates or the time is a value field; one that reads an
         # input is refused, naming the read (the bound `volume`) and the PDESystem)
         for (r, word) in ((:y, "built"), (:t, "built"), (:vin, "reads `volume`"))
-            M = eval(:(@potts_model $(Symbol(:FbBadBcs, r)) begin
-                @kinds medium A
-                @lattice Lattice((8, 8); boundary = Closed())
-                @fields FbPDE.bad($(QuoteNode(r))) (FbPDE.vin => volume[owner])
-                @sweep Metropolis(; temperature = 1.0)
-            end))
-            e = fb_msg(() -> PottsProblem(Base.invokelatest(M; name = :f), fb_op((8, 8)), (0, 1)))
+            M = _FbBadBcs(; name = Symbol(:FbBadBcs, r), r)
+            e = fb_msg(() -> PottsProblem(M, fb_op((8, 8)), (0, 1)))
             @test occursin(word, e) && (word == "built" || (occursin("PDESystem `fields`", e) && !occursin("step_index", e))) ||
                   (println("F4-12b condition ", r, ": ", e); false)
         end

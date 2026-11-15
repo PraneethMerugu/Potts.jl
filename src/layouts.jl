@@ -200,7 +200,7 @@ same row.
 """
 function record!(op::LayoutState; requested::Integer, painted::Integer, misses::Integer = 0,
         counted::Integer = painted, clipped::Integer = 0)
-    op.layer == 0 && throw(ArgumentError("record!: called outside a layer's paint!"))
+    op.layer == 0 && throw(ArgumentError("record!: called outside a layer's paint!; invoke only inside `Potts.paint!`"))
     r = op.rows[op.layer]
     r.requested, r.painted, r.misses, r.counted, r.clipped, r.recorded = requested, painted, misses, counted, clipped, true
     return nothing
@@ -227,7 +227,7 @@ Throws an `ArgumentError` for `name` `:ownership` or `:kind`, an `id` that is no
 and a call outside a layer's `paint!`.
 """
 function set_column!(op::LayoutState, name::Symbol, id::Integer, value)
-    op.layer == 0 && throw(ArgumentError("set_column!: called outside a layer's paint!"))
+    op.layer == 0 && throw(ArgumentError("set_column!: called outside a layer's paint!; invoke only inside `Potts.paint!`"))
     name in (:ownership, :kind) &&
         throw(ArgumentError("set_column!: `$name` is not a column a layer sets (use new_cell! and assign!)"))
     1 <= id <= ncells(op) ||
@@ -282,26 +282,28 @@ end
 # ---------------------------------------------------------------------------------------------
 
 _tuple(x::Integer, N) = ntuple(_ -> Int(x), N)
-_tuple(x, N) = (length(x) == N || throw(ArgumentError("expected $N values, got $(length(x))")); Int.(Tuple(x)))
+_tuple(x, N) = (length(x) == N || throw(ArgumentError("expected $N values, got $(length(x)); pass an integer or a $N-tuple")); Int.(Tuple(x)))
 
 function _check_size(sz, what)
-    all(>(0), sz) || throw(ArgumentError("$what: box size must be positive, got $sz"))
+    all(>(0), sz) || throw(ArgumentError("$what: box size must be positive, got $sz; pass sizes >= 1 along every axis"))
     return sz
 end
 
 function _region_arg(region, N, what)
     region === nothing && return nothing
     length(region) == N ||
-        throw(ArgumentError("$what: region has $(length(region)) ranges, the box is $(N)D"))
+        throw(ArgumentError("$what: region has $(length(region)) ranges, the box is $(N)D; match region length to $(N)D"))
     r = map(x -> (x isa AbstractUnitRange ? UnitRange{Int}(x) :
-                  throw(ArgumentError("$what: region ranges must be unit ranges, got $x"))), Tuple(region))
-    any(isempty, r) && throw(ArgumentError("$what: region $r is empty"))
+                throw(ArgumentError("$what: region ranges must be unit ranges, got $x; pass contiguous ranges such as `1:10`"))
+        ), Tuple(region)
+    )
+    any(isempty, r) && throw(ArgumentError("$what: region $r is empty; pass non-empty ranges"))
     return r
 end
 
 function _kinds_arg(kinds, what)
     k = collect(kinds)
-    isempty(k) && throw(ArgumentError("$what: `kinds` is empty"))
+    isempty(k) && throw(ArgumentError("$what: `kinds` is empty; supply at least one kind"))
     return k
 end
 
@@ -315,13 +317,13 @@ function _region(region, dims::NTuple{N, Int}, what) where {N}
     region === nothing && return map(d -> 1:d, dims)
     for d in 1:N
         (first(region[d]) >= 1 && last(region[d]) <= dims[d]) ||
-            throw(ArgumentError("$what: region $region lies outside the lattice $dims"))
+            throw(ArgumentError("$what: region $region lies outside the lattice $dims; keep each axis range within 1:n"))
     end
     return region
 end
 
 function _check_rank(l, N, dims, what)
-    N == length(dims) || throw(ArgumentError("$what: the layout is $(N)D, the lattice $(length(dims))D"))
+    return N == length(dims) || throw(ArgumentError("$what: the layout is $(N)D, the lattice $(length(dims))D; match the layout dimension to the lattice"))
 end
 
 # The `splits` setting of a layer (custom layers: :warn).
@@ -359,7 +361,7 @@ function Tiling(size; spacing = 0, region = nothing, kinds, partial::Symbol = :s
     N = length(size)
     sz = _check_size(_tuple(size, N), "Tiling")
     sp = _tuple(spacing, N)
-    all(>=(0), sp) || throw(ArgumentError("Tiling: spacing must be non-negative, got $sp"))
+    all(>=(0), sp) || throw(ArgumentError("Tiling: spacing must be non-negative, got $sp; pass spacing >= 0"))
     partial in (:skip, :clip) ||
         throw(ArgumentError("Tiling: `partial` must be :skip or :clip, got $(repr(partial))"))
     return Tiling(sz, sp, _region_arg(region, N, "Tiling"), _kinds_arg(kinds, "Tiling"), partial,
@@ -386,7 +388,7 @@ function paint!(op::LayoutState, l::Tiling{N}, lat) where {N}
     reg = clip && l.region !== nothing ? _clip_region(l.region, dims) : _region(l.region, dims, "Tiling")
     starts = ntuple(d -> _tiling_starts(reg[d], l.size[d], l.spacing[d], dims[d], isperiodic(lat, d), clip), Val(N))
     any(isempty, starts) &&
-        throw(ArgumentError("Tiling: no box of size $(l.size) fits the region $reg"))
+        throw(ArgumentError("Tiling: no box of size $(l.size) fits the region $reg; use a smaller box size or a larger region"))
     n = 0
     for o in Iterators.product(starts...)
         n += 1
@@ -400,7 +402,7 @@ end
 # region ∩ lattice (`partial = :clip`)
 function _clip_region(region, dims)
     reg = map((r, n) -> max(first(r), 1):min(last(r), n), region, dims)
-    any(isempty, reg) && throw(ArgumentError("Tiling: region $region does not meet the lattice $dims"))
+    any(isempty, reg) && throw(ArgumentError("Tiling: region $region does not meet the lattice $dims; choose ranges overlapping the lattice extent"))
     return reg
 end
 
@@ -504,13 +506,13 @@ function paint!(op::LayoutState, l::Scattered{N}, lat) where {N}
     per = ntuple(d -> isperiodic(lat, d), Val(N))
     reg = _region(l.region, dims, "Scattered")
     ext = map(length, reg)
-    all(map(>=, ext, l.size)) || throw(ArgumentError("Scattered: boxes of size $(l.size) do not fit the region $reg"))
+    all(map(>=, ext, l.size)) || throw(ArgumentError("Scattered: boxes of size $(l.size) do not fit the region $reg; use smaller boxes or a larger region"))
     # necessary: the boxes grown by `gap` on their upper sides are disjoint in the region
     # grown by `gap`; on a periodic axis they are disjoint around the ring, so at most `n`
     room = map((e, n, p) -> p ? min(e + l.gap, n) : e + l.gap, ext, dims, per)
     grown = map((s, n, p) -> p ? min(s + l.gap, n) : s + l.gap, l.size, dims, per)
     prod(room) >= l.n * prod(grown) ||
-        throw(ArgumentError("Scattered: $(l.n) boxes of size $(l.size) with gap $(l.gap) cannot fit the region $reg"))
+        throw(ArgumentError("Scattered: $(l.n) boxes of size $(l.size) with gap $(l.gap) cannot fit the region $reg; reduce `n`, box size or `gap`, or enlarge the region"))
     rng = StableRNG(l.seed)
     ranges = map((r, s) -> first(r):(last(r) - s + 1), reg, l.size)
     occ = falses(ext)                  # sites of the boxes placed so far, in region indices
@@ -577,7 +579,7 @@ function paint!(op::LayoutState, l::Frame, lat)
     if !all(i -> indomain(lat, i), sites)
         _paint_domain_frame!(op, l, BitArray(indomain(lat, i) for i in sites), dims, per)
     else
-        all(per) && throw(ArgumentError("Frame: the lattice has no boundary (every axis is periodic, so it has no edge)"))
+        all(per) && throw(ArgumentError("Frame: the lattice has no boundary (every axis is periodic, so it has no edge); use `Closed()` or `Free()` on at least one axis"))
         id, w = new_cell!(op, l.kind), l.width
         for i in sites
             any(ntuple(d -> !per[d] && (i[d] <= w || i[d] > dims[d] - w), N)) && assign!(op, i, id)
@@ -615,7 +617,7 @@ function _paint_domain_frame!(op, l::Frame, mask, dims, per)
         end
     end
     any(i -> mask[i] && near[i], eachindex(mask)) ||
-        throw(ArgumentError("Frame: the domain has no boundary (it fills a lattice that is periodic along every axis)"))
+        throw(ArgumentError("Frame: the domain has no boundary (it fills a lattice that is periodic along every axis); use a bounded domain or `Closed()`/`Free()` on at least one axis"))
     id = new_cell!(op, l.kind)
     for i in CartesianIndices(mask)
         mask[i] && near[i] && assign!(op, i, id)
@@ -711,13 +713,15 @@ function paint!(op::LayoutState, l::InsertUntil, lat)
         s = owner(op, i)
         s > 0 && target[s] && (free += 1)
     end
-    free == 0 && throw(ArgumentError("InsertUntil: the region $(sites.indices) holds no site of the kinds $(l.into)"))
+    free == 0 && throw(ArgumentError("InsertUntil: the region $(sites.indices) holds no site of the kinds $(l.into); include target kinds in `into` or widen `region`"))
     rng = StableRNG(l.seed)
     painted = misses = 0
     done = _insert_done(l, N, K, 0)
     while !done
         free == 0 && throw(ArgumentError("InsertUntil: the region ran out of sites of the kinds $(l.into) after " *
-                                         "$painted insertions, before the stop rule was met"))
+                    "$painted insertions, before the stop rule was met; reduce `fraction`/`number` or enlarge `region`"
+            )
+        )
         i = sites[rand(rng, 1:length(sites))]
         s = owner(op, i)
         if 0 < s <= n0 && target[s]
@@ -940,10 +944,10 @@ function _draw(p::RandomPoints, lat::LatticeSpec{N}, what) where {N}
     rng = layer_rng(p.seed)
     if p.replace                                 # one draw per point, no redraw (D-141)
         (p.n == 0 || m > 0) ||
-            throw(ArgumentError("$what: RandomPoints draws $(p.n) sites from a region with no site in the domain"))
+            throw(ArgumentError("$what: RandomPoints draws $(p.n) sites from a region with no site in the domain; target an in-domain region or set `n = 0`"))
         return CartesianIndex{N}[sites[rand(rng, 1:m)] for _ in 1:(p.n)]
     end
-    p.n <= m || throw(ArgumentError("$what: RandomPoints asks for $(p.n) distinct sites, the region holds $m in the domain"))
+    p.n <= m || throw(ArgumentError("$what: RandomPoints asks for $(p.n) distinct sites, the region holds $m in the domain; pass `n <= $m`, `replace = true`, or a larger region"))
     taken = falses(m)
     out = Vector{CartesianIndex{N}}(undef, p.n)
     for k in 1:(p.n)
@@ -1050,7 +1054,7 @@ _layout_args(l::Voronoi) = (Voronoi, (:points,), (; l.points, l.region, l.lloyd,
 function paint!(op::LayoutState, l::Voronoi, lat)
     region, clipped = _region_sites(l.region, lat, "Voronoi")
     gens = _index_points(l.points, lat, "Voronoi")
-    isempty(gens) && throw(ArgumentError("Voronoi: no generator (the point pattern is empty)"))
+    isempty(gens) && throw(ArgumentError("Voronoi: no generator (the point pattern is empty); pass at least one point or `RandomPoints(n)` with `n >= 1`"))
     sites = filter(x -> owner(op, x) == 0, region)          # fill medium only
     owners = _voronoi!(gens, sites, lat, l.lloyd)
     n = length(gens)
@@ -1601,12 +1605,12 @@ _layout_args(l::InsertUntil) = (InsertUntil, (:kind,), (; l.kind, l.into, l.frac
 _layout_args(l::Eden) = (Eden, (:points,), (; l.points, l.region, l.rounds, l.kinds, l.seed, l.neighborhood, l.shortfall, l.splits))
 _layout_args(l::Splits) = (Splits, (:layer, :k), (; l.layer, l.k, l.shortfall, l.splits))
 _layout_args(l::AbstractLayout) =
-    throw(ArgumentError("remake: $(nameof(typeof(l))) does not support remake (no keyword constructor is known)"))
+    throw(ArgumentError("remake: $(nameof(typeof(l))) does not support remake (no keyword constructor is known); rebuild the layer with its constructor"))
 
 function SciMLBase.remake(l::Union{AbstractLayout, RandomPoints}; kw...)
     ctor, pos, args = _layout_args(l)
     for k in keys(kw)
-        haskey(args, k) || throw(ArgumentError("remake: $(nameof(typeof(l))) has no argument `$k`"))
+        haskey(args, k) || throw(ArgumentError("remake: $(nameof(typeof(l))) has no argument `$k`; pass valid constructor keywords"))
     end
     merged = merge(args, values(kw))
     return ctor(map(k -> merged[k], pos)...; (k => merged[k] for k in keys(merged) if !(k in pos))...)
@@ -1717,7 +1721,7 @@ function paint!(op::LayoutState, l::Fill, lat::LatticeSpec{N}) where {N}
         return nothing
     end
     sites, clipped = _region_sites(l.region, lat, "Fill")
-    isempty(sites) && throw(ArgumentError("Fill: the region has no site in the lattice's domain"))
+    isempty(sites) && throw(ArgumentError("Fill: the region has no site in the lattice's domain; choose a region overlapping the domain"))
     id = new_cell!(op, l.kind)
     for x in sites
         assign!(op, x, id)
@@ -2016,7 +2020,7 @@ function layout(l::AbstractLayout, x::_LayoutTarget; report::Bool = false)
     if mask !== nothing
         bad = findfirst(i -> σ[i] != 0 && !mask[i], CartesianIndices(σ))
         bad === nothing ||
-            throw(ArgumentError("layout: cell $(σ[bad]) covers site $(Tuple(bad)), outside the lattice domain"))
+            throw(ArgumentError("layout: cell $(σ[bad]) covers site $(Tuple(bad)), outside the lattice domain; ensure the layer's `paint!` assigns only in-domain sites"))
     end
     rows = report ? [(; layer = j, r.type, r.requested, r.painted, dropped = count(c -> counts[c] == 0, r.first:r.last),
                          r.misses, r.counted, r.clipped, r.splits) for (j, r) in enumerate(op.rows)] : nothing
@@ -2075,7 +2079,7 @@ function _check_layout_kinds(sys::PottsSystem, kinds)
 end
 
 function _layout_spec(dims::Tuple{Vararg{Integer}})
-    all(>(0), dims) || throw(ArgumentError("layout: lattice dimensions must be positive, got $dims"))
+    all(>(0), dims) || throw(ArgumentError("layout: lattice dimensions must be positive, got $dims; pass dimensions >= 1"))
     return lattice_spec(dims; boundary = Closed())
 end
 _layout_spec(lat::Lattice) = LatticeSpec(lat.dims, map(p -> p ? Periodic() : Closed(), lat.periodic), nothing,
