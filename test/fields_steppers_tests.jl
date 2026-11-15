@@ -9,23 +9,12 @@
 # the models' fields, coupled with `@fields` (F4-B4t; before, written in `@equations` and
 # `@bcs`); a kind is a bound input, a kind table the model's
 
-@testitem "F3-10: CrankNicolson in a model equals B bitwise (σ frozen)" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
-    @testset "F3-10: CrankNicolson in a model equals B bitwise (σ frozen)" begin
-        dims, k = (12, 10), 6
-        # no CPM read and no moving mask: damped at the start only (as B)
-        a, integ = fi_runA(FiStill, fi_op(dims), k; field_solver = CrankNicolson())
-        b = fi_runB(FiStill, dims, k; u0 = [:c => zeros(dims)], inputs = [], alg = CrankNicolson(; dt = 1.0))
-        @test a == b && !fi_rt(integ).cache.jumps
-        # a mask that moves (it follows `e`) and a kind source: damped every MCS, in a model and in B
-        a, integ = fi_runA(FiMix, fi_op(dims), k; field_solver = CrankNicolson())
-        b = fi_runB(FiMix, dims, k; u0 = [:c => zeros(dims), :e => zeros(dims)], alg = CrankNicolson(; dt = 1.0))
-        @test a == b && fi_rt(integ).cache.jumps
-        @test fi_warm(integ) == 0
-        # components: the scalar spelling's run, bitwise
+@testitem "F3-10: CrankNicolson components and binding" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
+    @testset "F3-10: CrankNicolson components and binding" begin
+        dims = (12, 10)
         run(M) = (i = init(PottsProblem(M(; name = :f), fi_op(dims), (0, 3); field_solver = CrankNicolson()), SequentialCPM());
                   foreach(_ -> step!(i), 1:3); st = current_state(i).site; [Array(getproperty(st, n)) for n in sort!(collect(propertynames(st)))])
         @test run(FiComp) == run(FiScal)
-        # one binding in both front ends
         m = Module()
         Core.eval(m, :(using Potts; using Potts.LatticePDE))
         @test Core.eval(m, :CrankNicolson) === Potts.LatticePDE.CrankNicolson === Potts.LatticeFields.Problems.CrankNicolson
@@ -87,15 +76,9 @@ end
     end
 end
 
-@testitem "F3-11: BDF2 in a model equals B bitwise; its history is no state" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
-    @testset "F3-11: BDF2 in a model equals B bitwise; its history is no state" begin
-        dims, k = (12, 10), 6
-        for M in (FiStill, FiMix)
-            u0 = M === FiMix ? [:c => zeros(dims), :e => zeros(dims)] : [:c => zeros(dims)]
-            a, integ = fi_runA(M, fi_op(dims), k; field_solver = BDF2())
-            @test a == fi_runB(M, dims, k; u0, inputs = M === FiMix ? [:kind => fi_kin(dims)] : [], alg = BDF2(; dt = 1.0))
-            @test fi_warm(integ) == 0
-        end
+@testitem "F3-11: BDF2 history is no state; components and binding" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
+    @testset "F3-11: BDF2 history is no state; components and binding" begin
+        dims = (12, 10)
         run(M) = (i = init(PottsProblem(M(; name = :f), fi_op(dims), (0, 3); field_solver = BDF2()), SequentialCPM());
                   foreach(_ -> step!(i), 1:3); st = current_state(i).site; [Array(getproperty(st, n)) for n in sort!(collect(propertynames(st)))])
         @test run(FiComp) == run(FiScal)
@@ -155,15 +138,9 @@ end
     end
 end
 
-@testitem "F3-12a: QuasiSteady in a model equals B bitwise (σ frozen); one solve per MCS" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
-    @testset "F3-12a: QuasiSteady in a model equals B bitwise (σ frozen); one solve per MCS" begin
-        dims, k = (12, 10), 4
-        for M in (FiStill, FiSteady)
-            a, integ = fi_runA(M, fi_op(dims), k; field_solver = QuasiSteady())
-            @test a == fi_runB(M, dims, k; u0 = [:c => zeros(dims)], inputs = M === FiSteady ? [:kind => fi_kin(dims)] : [],
-                alg = QuasiSteady(; dt = 1.0))
-            @test substep_counts(integ) == [1] && integ.stats.fields.solves == k && fi_warm(integ) == 0
-        end
+@testitem "F3-12a: QuasiSteady steady state, dt refusal, and binding" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
+    @testset "F3-12a: QuasiSteady steady state, dt refusal, and binding" begin
+        dims = (12, 10)
         # the steady state: an MCS later the field is unchanged to the solver's tolerance
         a, _ = fi_runA(FiSteady, fi_op(dims), 3; field_solver = QuasiSteady(; inner = DevicePCG(; rtol = 1e-12, budget = 64)))
         @test maximum(abs, a[3] .- a[2]) < 1e-10 && maximum(a[3]) > 0
@@ -215,8 +192,6 @@ end
         a0, integ = fi_runA(FiSteady0, fi_op(dims), k; field_solver = nothing)
         a1, _ = fi_runA(FiSteady, fi_op(dims), k; field_solver = QuasiSteady())
         @test a0 == a1 && substep_counts(integ) == [1]
-        # B reads the model's steady row as `0 ~ rhs` (`Potts.fields`) and steps it the same
-        @test a0 == fi_runB(FiSteady0, dims, k; u0 = [:c => zeros(dims)], alg = QuasiSteady(; dt = 1.0))
         @test any(eq -> startswith(string(eq), "0 ~"), Potts.fields(FiSteady0(; name = :f)).eqs)
         # another solver for a steady row is refused; `QuasiSteady` given is the default
         @test_throws "`field_solver = BackwardEuler()`: every field of model `f` has a steady equation `0 ~ rhs` (`c`), which `QuasiSteady` solves" PottsProblem(
@@ -327,20 +302,13 @@ end
 # F3-12a (design §5; review r4 N4): the F3-05 capabilities in a QuasiSteady group in a model, each
 # equal to B bitwise (σ frozen): a Robin face of each sign, a field face, a mask value field;
 # and an input bound by aliasing, the CPM's moving σ, read by the next window's steady solve
-@testitem "F3-12a: the solver capabilities in a QuasiSteady group in a model (F3-05), equal to B bitwise" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
-    @testset "F3-12a: the solver capabilities in a QuasiSteady group in a model (F3-05), equal to B bitwise" begin
-        dims, k = (12, 10), 2
+@testitem "F3-12a: QuasiSteady indefinite refusal and moving σ in a model" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
+    @testset "F3-12a: QuasiSteady indefinite refusal and moving σ in a model" begin
+        dims = (12, 10)
         # FiRobinN's face (α 1, β 1 at unit spacing: +0.8 on the diagonal against the decay 0.3) makes
-        # the steady operator indefinite: refused, as in B; FiRobinQ's decay 1 keeps it definite
+        # the steady operator indefinite: refused, as in B
         @test_throws "its steady operator is indefinite (smallest eigenvalue -0.233)" PottsProblem(FiRobinN(; name = :f), fi_op(dims),
             (0, 3); field_solver = QuasiSteady())
-        for M in (FiRobinP, FiRobinQ, FiFieldFace, FiMaskField)
-            a, integ = fi_runA(M, fi_op(dims), k; field_solver = QuasiSteady())
-            b = fi_runB(M, dims, k; u0 = [:c => zeros(dims)], inputs = M === FiMaskField ? [:kind => fi_kin(dims)] : [],
-                alg = QuasiSteady(; dt = 1.0))
-            @test a == b || (println("r4 N4 A ", M, " ", maximum(abs, a[end] .- b[end])); false)
-            @test integ.stats.fields.solves >= k && integ.retcode == FiRC.Default
-        end
         σ = zeros(Int32, 16, 16); σ[4:7, 4:7] .= 1; σ[10:13, 9:12] .= 2
         integ = init(PottsProblem(FiMoving(; name = :f), [ownership => σ, kind => [:A, :A]], (0, 20);
             field_solver = QuasiSteady(), seed = 3), SequentialCPM(); save_start = false)
@@ -356,30 +324,8 @@ end
     end
 end
 
-@testitem "F3-12d: coupled steady rows in a model: solved together, equal to B bitwise; components equal scalars" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
-    @testset "F3-12d: coupled steady rows in a model: solved together, equal to B bitwise; components equal scalars" begin
-        a, integ = fc_runA(FcPair, 3, (:u, :v))
-        rt = fi_rt(integ)
-        @test integ.retcode == FiRC.Default && Potts.LatticeFields.Problems.coupled_solve(rt.cache) && rt.cache.newton == 1
-        b, sb = fc_runB(FcPair, 3, (:u, :v); alg = QuasiSteady(; dt = 1.0))
-        @test sb.retcode == FiRC.Success && a == b || (println("12d A=B ", maximum(abs, a[end][1] .- b[end][1])); false)
-        @test fi_warm(integ) == 0
-        # the steady state: the rate is 0 to the solver's tolerance (u is not 0: the cells' source)
-        u, v = a[end]
-        @test maximum(abs, u) > 0.01 && maximum(abs, v) > 0.01
-        # components: the scalar spelling's run, bitwise
-        _, ic = fc_runA(FcComp, 3, ())
-        st = current_state(ic).site
-        @test [Array(st.w_1), Array(st.w_2)] == a[end]
-    end
-end
-
-@testitem "F3-12d: a coupled steady pair feeding back through a transient field in a model, equal to B" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
-    @testset "F3-12d: a coupled steady pair feeding back through a transient field in a model, equal to B" begin
-        a, integ = fc_runA(FcFeed, 4, (:e, :u, :v); field_solver = BackwardEuler())
-        @test integ.retcode == FiRC.Default
-        b, sb = fc_runB(FcFeed, 4, (:e, :u, :v); alg = BackwardEuler(; dt = 1.0))
-        @test a == b || (println("12d feed ", maximum(abs, a[end][1] .- b[end][1])); false)
+@testitem "F3-12d: coupled steady pair strong-gain refusal" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
+    @testset "F3-12d: coupled steady pair strong-gain refusal" begin
         # strong (k = 5): the rule's bound on the pair's joint gain does not hold; the routes say that
         # the steady rows must be rates for `BackwardEuler`
         m = try

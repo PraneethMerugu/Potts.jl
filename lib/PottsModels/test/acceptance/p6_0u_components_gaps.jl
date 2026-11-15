@@ -342,21 +342,34 @@ end
 @testset "P6.0u 4: frozen_varies defined outside CorePotts silences init's warning" begin
     alg = CorePotts.SequentialCPM()
     W = Base.CoreLogging.Warn
-    # targets: a deliberately static mask
-    @test (@test_logs min_level = W CorePotts.init(p60u_core_problem(P60uStatic()), alg)) isa CorePotts.PottsIntegrator
-    @test (@test_logs min_level = W CorePotts.init(p60u_core_problem(P60uStaticMember()), alg)) isa CorePotts.PottsIntegrator
-    @test (@test_logs min_level = W CorePotts.solve(p60u_core_problem(P60uStatic()), alg)).retcode |> Symbol === :Success
+    function p60u_warn_logs(f)
+        logger = Test.TestLogger(; min_level = W)
+        val = Base.CoreLogging.with_logger(f, logger)
+        return val, logger.logs
+    end
+    # targets: a deliberately static mask (order-independent: check specifically for frozen_varies
+    # in an isolated TestLogger so unrelated once-per-session warnings cannot cause order dependence)
+    for sys in (P60uStatic(), P60uStaticMember())
+        integ, logs = p60u_warn_logs(() -> CorePotts.init(p60u_core_problem(sys), alg))
+        @test integ isa CorePotts.PottsIntegrator
+        @test !any(r -> occursin("frozen_varies", string(r.message)), logs)
+    end
+    sol, logs = p60u_warn_logs(() -> CorePotts.solve(p60u_core_problem(P60uStatic()), alg))
+    @test Symbol(sol.retcode) === :Success
+    @test !any(r -> occursin("frozen_varies", string(r.message)), logs)
     # the mask stays static (frozen_varies is false): row 1 never moves
-    sol = CorePotts.solve(p60u_core_problem(P60uStatic()), alg)
     @test !CorePotts.frozen_varies(P60uStatic()) && sol.stats.refreshes == 0
     # controls: the warning still fires for CorePotts' default `frozen_varies`
-    @test (@test_logs (:warn, r"frozen_varies") CorePotts.init(p60u_core_problem(P60uForgot()), alg)) isa CorePotts.PottsIntegrator
-    @test (@test_logs (:warn, r"P60uForgot") CorePotts.init(p60u_core_problem(P60uForgot()), alg)) isa CorePotts.PottsIntegrator
-    # controls: no warning for `frozen_varies = true`, no system, or a Potts model (frozen_kinds)
-    @test (@test_logs min_level = W CorePotts.init(p60u_core_problem(P60uVaries()), alg)) isa CorePotts.PottsIntegrator
-    @test (@test_logs min_level = W CorePotts.init(p60u_core_problem(nothing), alg)) isa CorePotts.PottsIntegrator
-    @test (@test_logs min_level = W init(PottsProblem(P60uOuterOK(; name = :o), P60U_OP, (0, 1)), SequentialCPM())) isa
-          CorePotts.PottsIntegrator
+    integ_f, logs_f = p60u_warn_logs(() -> CorePotts.init(p60u_core_problem(P60uForgot()), alg))
+    @test integ_f isa CorePotts.PottsIntegrator
+    @test any(r -> r.level == W && occursin("frozen_varies", string(r.message)) && occursin("P60uForgot", string(r.message)), logs_f)
+    # controls: no frozen_varies warning for `frozen_varies = true`, no system, or a Potts model (frozen_kinds)
+    for prob in (p60u_core_problem(P60uVaries()), p60u_core_problem(nothing),
+            PottsProblem(P60uOuterOK(; name = :o), P60U_OP, (0, 1)))
+        integ_c, logs_c = p60u_warn_logs(() -> init(prob, alg))
+        @test integ_c isa CorePotts.PottsIntegrator
+        @test !any(r -> occursin("frozen_varies", string(r.message)), logs_c)
+    end
 end
 
 # ---------------------------------------------------------------------------------------

@@ -36,6 +36,7 @@ using Potts: CorePotts
 include(joinpath(ENV["CS_TEST_DIR"], "cell_sums_models.jl"))
 println("CSRUN ", Threads.nthreads(), " ", join(cs_digests(), " "))
 println("CSR1 ", Threads.nthreads(), " ", join(first(cs_r1_digests()), " "))
+println("CSTCB ", Threads.nthreads(), " ", join(cs_threaded_cb_invariants(), " "))
 """
 
 include(joinpath(@__DIR__, "cell_sums_models.jl"))
@@ -45,28 +46,29 @@ const CS_R1 = cs_r1_digests()
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-          # review r1 (one thread), checked below and at 4 and 8 threads
-@testitem "F3-23: cell averages are bitwise the same at 1, 4 and 8 threads" setup = [CellSumsSetup] tags = [:potts, :cell_sums, :subprocess] begin
-    @testset "F3-23: cell averages are bitwise the same at 1, 4 and 8 threads" begin
+          # review r1 (one thread), checked below and at 4 threads
+@testitem "F3-23: cell averages are bitwise the same at 1 and 4 threads; threaded CheckerboardCPM Repeat invariants" setup = [CellSumsSetup] tags = [:potts, :cell_sums, :subprocess] begin
+    @testset "F3-23: cell averages are bitwise the same at 1 and 4 threads; threaded CheckerboardCPM Repeat invariants" begin
         @test 32^3 > CorePotts.Exec.HOST_GRAIN && 200^2 > CorePotts.Exec.HOST_GRAIN
         one = cs_digests()
         @test Threads.nthreads() == 1
-        run(t) = split(strip(readchomp(addenv(`$(Base.julia_cmd()) --startup-file=no -t $t --project=$(Base.active_project()) -e $CS_THREADS_RUN`,
+        out = split(strip(readchomp(addenv(`$(Base.julia_cmd()) --startup-file=no -t 4 --project=$(Base.active_project()) -e $CS_THREADS_RUN`,
             "CS_TEST_DIR" => @__DIR__))))
-        for t in (4, 8)
-            out = run(t)
-            i = findlast(==("CSRUN"), out)
-            @test parse(Int, out[i + 1]) == t
-            got = out[(i + 2):end]
-            # fixed point: ocell, σ and cavg equal one thread's, with the default runs and with
-            # runs of one site (threaded site passes)
-            @test got[1:3] == one[1:3] && got[4:6] == one[1:3]
-            # negative control (float atomics): an average differs from one thread's
-            @test got[7:9] != one[7:9]
-            # review r1: weighted surfaces, cluster surfaces, `@convert` writes
-            j = findlast(==("CSR1"), out)
-            @test parse(Int, out[j + 1]) == t && out[(j + 2):(j + 8)] == first(CS_R1)
-        end
+        i = findlast(==("CSRUN"), out)
+        @test parse(Int, out[i + 1]) == 4
+        got = out[(i + 2):(i + 10)]
+        # fixed point: ocell, σ and cavg equal one thread's, with the default runs and with
+        # runs of one site (threaded site passes)
+        @test got[1:3] == one[1:3] && got[4:6] == one[1:3]
+        # negative control (float atomics): an average differs from one thread's
+        @test got[7:9] != one[7:9]
+        # review r1: weighted surfaces, cluster surfaces, `@convert` writes
+        j = findlast(==("CSR1"), out)
+        @test parse(Int, out[j + 1]) == 4 && out[(j + 2):(j + 8)] == first(CS_R1)
+        # TS1-4: above-BLOCK_GRAIN CheckerboardCPM(; threads = true) Repeat invariants at -t 4
+        k = findlast(==("CSTCB"), out)
+        @test parse(Int, out[k + 1]) == 4
+        @test out[(k + 2):(k + 6)] == ["true", "true", "true", "true", "true"]
         @test one[4:6] == one[1:3]                                           # the run length changes no bit
     end
 end

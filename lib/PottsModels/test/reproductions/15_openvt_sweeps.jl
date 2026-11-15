@@ -7,7 +7,7 @@
 # P6.15g V-target audit). Every grid, seed, lattice, run count, rule and negative control below
 # is the test author's (P6.15g; see the D-entry).
 #
-# Reference numbers from G (54f375f, read only, never in git) are frozen below as constants.
+# Reference numbers from G (54f375f, read only, never in git) are recorded below as constants.
 # They were computed with this file's rules (`p615g_mrule`, `p615g_g_reference`) on the PC
 # clone on 2026-10-08. The G tier recomputes them when OPENVT_MONOLAYER_REPO is set.
 #
@@ -65,7 +65,7 @@
 # | F7.1         | min over the T1 γ thresholds (5×, 10×, 20×) of the inhibited  | TST 0.961, 0.978, 0.990    | ≥ 0.90                    |
 # |              | fraction of replicate 1's final colony (O5)                   |                            |                           |
 #
-# A threshold row fails when its threshold is "—". V1 is frozen as the spec states it. D-173
+# A threshold row fails when its threshold is "—". V1 is kept as the spec states it. D-173
 # measured 15.17 cycles for case (a), so V1 may fail. A failure is a D-154 deviation: it goes
 # in `deviations.tsv`, and the band is not widened. The spread values come from Table 1 (M p.7,
 # spec v3 log). G's TST and Artistoo rows reproduce them under p615g_mrule (constants below).
@@ -114,7 +114,7 @@
 #   FULL job function on 300² with a 250-cell stop. They are β = γ = 0, γ = 10⁻⁴ (the V3b
 #   jump's mechanism: at least 1.3× slower), and β = 1.03 under a 1500-MCS cap (the cap path:
 #   capped, t = Inf; run twice, the same). Plus the O5 rows of their final states.
-# - G (OPENVT_MONOLAYER_REPO set): recompute the frozen consortium constants.
+# - G (OPENVT_MONOLAYER_REPO set): recompute the consortium constants.
 # - FULL record (always, cheap): reads the one committed D-146 record directory
 #   `reproductions/data/15/sweeps-*`:
 #   - `runs.tsv`, `verdicts.tsv` and `provenance.toml`;
@@ -560,7 +560,7 @@ if !P615G_FULL
 end
 
 # ---------------------------------------------------------------------------------------------
-# G: recompute the frozen consortium constants
+# G: recompute the consortium constants
 # ---------------------------------------------------------------------------------------------
 
 function p615g_csv(path)

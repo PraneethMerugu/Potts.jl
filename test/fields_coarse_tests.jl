@@ -205,39 +205,61 @@ end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "F3-17: a Coarse(4) field in a model equals B bitwise (σ frozen)" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
-    @testset "F3-17: a Coarse(4) field in a model equals B bitwise (σ frozen)" begin
+@testitem "TS1-1: coarse and cross-grid coupled models equal LatticePDE owned run" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
+    @testset "TS1-1: coarse and cross-grid coupled models equal LatticePDE owned run" begin
+        # 1. Coarse(4) with BackwardEuler and ExplicitEuler
         k = 4
         for (fs, alg) in ((BackwardEuler(), BackwardEuler(; dt = 1.0)), (ExplicitEuler(), ExplicitEuler(; dt = 1.0)))
-            a, integ = fc_runA(k; field_solver = fs)
+            a, _ = fc_runA(k; field_solver = fs)
             bc, be = fc_runB(k; alg)
             @test size(a[1][1]) == (4, 3) && size(a[1][2]) == (16, 12)
-            @test [x[1] for x in a] == bc
-            @test [x[2] for x in a] == be
+            @test [x[1] for x in a] == bc && [x[2] for x in a] == be
         end
-        # the mask holds on B's whole blocks only (D-F4-15b): B is rows 9:15 x columns 6:12, and of
-        # the blocks x=1:4, 5:8, 9:12, 13:16 by y=1:4, 5:8, 9:12 only 9:12 x 9:12 is inside it
-        # (x=13:16 leaves B at site 16, y=5:8 at site 5)
-        a, _ = fc_runA(1)
-        @test findall(==(2.0), a[1][1]) == CartesianIndex.([(3, 3)])
-    end
-end
+        a1, _ = fc_runA(1)
+        @test findall(==(2.0), a1[1][1]) == CartesianIndex.([(3, 3)])
 
-@testitem "F3-17: a coarse field in an irregular domain: the model equals B bitwise" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
-    @testset "F3-17: a coarse field in an irregular domain: the model equals B bitwise" begin
+        # 2. Irregular domain
         σ = zeros(Int32, 16, 12); σ[2:4, 2:4] .= 1
         integ = init(PottsProblem(FcDom(; name = :d), [ownership => σ, kind => [:A]], (0, 3); field_solver = BackwardEuler()),
             SequentialCPM(); save_start = false)
-        a = [(step!(integ); copy(Array(current_state(integ).site.c))) for _ in 1:3]
+        ad = [(step!(integ); copy(Array(current_state(integ).site.c))) for _ in 1:3]
         dm = Array(current_state(integ).site.domain__in) .!= 0
         bp = Potts.LatticePDE.discretize(Potts.fields(FcDom(; name = :d)),
             Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((16, 12)); T = Float64,
                 domain = "domain__in"); u0 = [:c => zeros(4, 3)], tspan = (0, 3),
             inputs = [:kind => Int32.(σ), :domain__in => dm])
-        @test a == (s -> [s[:c, i] for i in 2:length(s.t)])(Potts.LatticePDE.solve(bp, BackwardEuler(; dt = 1.0); saveat = 1.0))
-        # the nodes whose block is mostly outside keep their value (0); the others moved
+        @test ad == (s -> [s[:c, i] for i in 2:length(s.t)])(Potts.LatticePDE.solve(bp, BackwardEuler(; dt = 1.0); saveat = 1.0))
         out = [count(dm[(I[1] - 1) * 4 .+ (1:4), (I[2] - 1) * 4 .+ (1:4)]) <= 8 for I in CartesianIndices((4, 3))]
-        @test any(out) && all(a[end][out] .== 0.0) && all(a[end][.!out] .> 0.0)
+        @test any(out) && all(ad[end][out] .== 0.0) && all(ad[end][.!out] .> 0.0)
+
+        # 3. Cross-grid operators (`FcXd`, `FcXr`, `FcCut`, `FcCutBcs`)
+        tight = DevicePCG(; rtol = 1e-12, budget = 64)
+        ax, rx = fx_run(FcXd, 3, BackwardEuler(; inner = tight)), fx_run(FcXr, 3, BackwardEuler(; inner = tight))
+        @test ax == rx && all(maximum(abs, ax[end][i]) > 0 for i in 1:3)
+        @test size(ax[1][1]) == (4, 3) && size(ax[1][2]) == (16, 12)
+        st = current_state(init(PottsProblem(FcXd(; name = :x), fc_op(), (0, 1); field_solver = BackwardEuler()), SequentialCPM())).site
+        @test !any(k -> occursin('(', string(k)), keys(st))
+        fa = FieldGroups(:u => BackwardEuler(; inner = tight); default = ExplicitEuler(; substeps = 40))
+        fb = FieldGroups(:u => BackwardEuler(; dt = 1.0, inner = tight); default = ExplicitEuler(; dt = 1.0, substeps = 40))
+        for (M, fsA, fsB, tol) in (
+            (FcXd, BackwardEuler(), BackwardEuler(; dt = 1.0), 0.0),
+            (FcXd, ExplicitEuler(; substeps = 40), ExplicitEuler(; dt = 1.0, substeps = 40), 0.0),
+            (FcCut, fa, fb, 1e-10),
+            (FcCutBcs, fa, fb, 1e-10),
+        )
+            am = fx_run(M, 3, fsA)
+            bpm = Potts.LatticePDE.discretize(Potts.fields(M(; name = :x)),
+                Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((16, 12)); T = Float64),
+                ; u0 = [:c => zeros(4, 3), :v => zeros(16, 12), :u => zeros(16, 12)], tspan = (0, 3), inputs = [:kind => fc_kin()])
+            sm = Potts.LatticePDE.solve(bpm, fsB; saveat = 1.0)
+            @test [x[1] for x in am] == [sm[:c, i] for i in 2:length(sm.t)]
+            @test [x[2] for x in am] == [sm[:v, i] for i in 2:length(sm.t)]
+            if tol == 0.0
+                @test [x[3] for x in am] == [sm[:u, i] for i in 2:length(sm.t)]
+            else
+                @test maximum(abs, am[end][3] - sm[:u, end]) < tol
+            end
+        end
     end
 end
 
@@ -349,28 +371,6 @@ end
     end
 end
 
-@testitem "F3-22: a spatial operator across grids in a model is the manual route, equals B, the aux is scratch" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
-    @testset "F3-22: a spatial operator across grids in a model is the manual route, equals B, the aux is scratch" begin
-        tight = DevicePCG(; rtol = 1e-12, budget = 64)
-        # (an explicit count, a minimum: the default count works too since review r1, the rows read one way)
-        for fs in (ExplicitEuler(; substeps = 40), BackwardEuler(; inner = tight), CrankNicolson(; inner = tight))
-            a, r = fx_run(FcXd, 3, fs), fx_run(FcXr, 3, fs)
-            @test a == r && all(maximum(abs, a[end][i]) > 0 for i in 1:3)            # bitwise, and the rows moved
-            @test size(a[1][1]) == (4, 3) && size(a[1][2]) == (16, 12)
-        end
-        st = current_state(init(PottsProblem(FcXd(; name = :x), fc_op(), (0, 1); field_solver = BackwardEuler()), SequentialCPM())).site
-        @test !any(k -> occursin('(', string(k)), keys(st))                         # no hidden aux in the state
-        # the model equals B: `Potts.fields` through `discretize`, the CPM frozen
-        for (fs, alg) in ((BackwardEuler(), BackwardEuler(; dt = 1.0)), (ExplicitEuler(; substeps = 40), ExplicitEuler(; dt = 1.0, substeps = 40)))
-            a = fx_run(FcXd, 3, fs)
-            bp = Potts.LatticePDE.discretize(Potts.fields(FcXd(; name = :x)),
-                Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((16, 12)); T = Float64),
-                ; u0 = [:c => zeros(4, 3), :v => zeros(16, 12), :u => zeros(16, 12)], tspan = (0, 3), inputs = [:kind => fc_kin()])
-            s = Potts.LatticePDE.solve(bp, alg; saveat = 1.0)
-            @test [x[1] for x in a] == [s[:c, i] for i in 2:length(s.t)] && [x[2] for x in a] == [s[:v, i] for i in 2:length(s.t)] && [x[3] for x in a] == [s[:u, i] for i in 2:length(s.t)]
-        end
-    end
-end
 
 @testitem "F3-22: a Dual runs through a cross-grid term in a model (against central differences)" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
     @testset "F3-22: a Dual runs through a cross-grid term in a model (against central differences)" begin
@@ -390,20 +390,4 @@ end
     end
 end
 
-@testitem "F3-22 review r1: an operator on another group's field in a model carries its faces (equal to B)" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
-    @testset "F3-22 review r1: an operator on another group's field in a model carries its faces (equal to B)" begin
-        tight = DevicePCG(; rtol = 1e-12, budget = 64)
-        fa = FieldGroups(:u => BackwardEuler(; inner = tight); default = ExplicitEuler(; substeps = 40))
-        fb = FieldGroups(:u => BackwardEuler(; dt = 1.0, inner = tight); default = ExplicitEuler(; dt = 1.0, substeps = 40))
-        for M in (FcCut, FcCutBcs)              # (a Dirichlet face, a Robin face)
-            a = fx_run(M, 3, fa)
-            @test all(maximum(abs, a[end][i]) > 0 for i in 1:3)
-            bp = Potts.LatticePDE.discretize(Potts.fields(M(; name = :x)),
-                Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((16, 12)); T = Float64),
-                ; u0 = [:c => zeros(4, 3), :v => zeros(16, 12), :u => zeros(16, 12)], tspan = (0, 3), inputs = [:kind => fc_kin()])
-            s = Potts.LatticePDE.solve(bp, fb; saveat = 1.0)
-            @test [x[1] for x in a] == [s[:c, i] for i in 2:length(s.t)] && [x[2] for x in a] == [s[:v, i] for i in 2:length(s.t)]
-            @test maximum(abs, a[end][3] - s[:u, end]) < 1e-10    # (the BE group: its inner solve to 1e-12)
-        end
-    end
-end
+

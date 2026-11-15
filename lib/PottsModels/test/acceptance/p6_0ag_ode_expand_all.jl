@@ -43,6 +43,7 @@
 #  4. A gather-ODE model on Metal runs and equals the CPU Float32 run bitwise (a regression
 #     guard for D-103's Metal fix), and a plain-rate control does too.
 using Potts: CorePotts
+using OrdinaryDiffEqRosenbrock: Rodas5P
 
 const P60AG_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
 const P60AG_ALGS = (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
@@ -236,19 +237,112 @@ function p60ag_cpu_metal(M, kw)
     return cpu, gpu
 end
 
+"""Independent `Rodas5P` (`reltol = 1e-12, abstol = 1e-12`) ODE integration over the recorded
+`σ` trajectory of `sol`, computing cell volumes by hand from each post-sweep `σ`."""
+function p60ag_rodas_ref(M, sol)
+    u = Float64.(p60ag_values(M, sol.u[1]))
+    nsites = Float64(length(sol.u[1].σ))
+    for k in 0:(p60ag_N - 1)
+        σ = Array(sol.u[k + 2].σ)
+        v1 = Float64(count(==(1), σ))
+        v2 = Float64(count(==(2), σ))
+        rhs = if M === P60agHill
+            (y, _, t) -> [
+                2.0 * y[3]^4 / (0.5^4 + y[3]^4) - 0.3 * y[1] + 0.01 * v1 * exp(-t / 50),
+                2.0 * y[4]^4 / (0.5^4 + y[4]^4) - 0.3 * y[2] + 0.01 * v2 * exp(-t / 50),
+                1.5 / (1 + (y[1] / 0.7)^3) - 0.2 * y[3],
+                1.5 / (1 + (y[2] / 0.7)^3) - 0.2 * y[4],
+            ]
+        elseif M === P60agIf5
+            f_if5(y, v) = ifelse(y > 0.1, 0.01 * v - log1p(y),
+                ifelse(y > 0.2, 0.02 * v - 2 * log1p(y),
+                    ifelse(y > 0.3, 0.03 * v - 3 * log1p(y),
+                        ifelse(y > 0.4, 0.04 * v - 4 * log1p(y),
+                            ifelse(y > 0.5, 0.05 * v - 5 * log1p(y), 0.0)))))
+            (y, _, _) -> [f_if5(y[1], v1), f_if5(y[2], v2)]
+        elseif M === P60agSum16
+            f_s16(y, t) = sum(0.001 * exp(-i * y) * sin(i * t + y) / (1 + i * y^2) for i in 1:16)
+            (y, _, t) -> [f_s16(y[1], t), f_s16(y[2], t)]
+        elseif M === P60agMixed
+            # Cross-cell population folds use the start-of-MCS Jacobi scratch values.
+            sz0 = u[3] + u[4]
+            my0 = (u[1] + u[2]) / 2
+            (y, _, _) -> begin
+                f_mix(yc, zc) = 0.5 * (sz0 / 2 - yc) + sum(0.0001 * exp(-i * zc) * cos(i * yc) for i in 1:20)
+                [f_mix(y[1], y[3]), f_mix(y[2], y[4]), -0.1 * y[3] + 0.01 * my0, -0.1 * y[4] + 0.01 * my0]
+            end
+        elseif M === P60agModelPop
+            (y, _, _) -> [0.001 * (v1 + v2) + 0.001 * nsites - 0.1 * y[1]]
+        elseif M === P60agModelHill
+            (y, _, t) -> [
+                2.0 * y[2]^4 / (0.5^4 + y[2]^4) - 0.3 * y[1] + 0.01 * (v1 + v2) * exp(-t / 50),
+                1.5 / (1 + (y[1] / 0.7)^3) - 0.2 * y[2],
+            ]
+        elseif M === P60agModelIf5
+            (y, _, _) -> begin
+                g = y[1]
+                [ifelse(g > 0.1, 0.0005 * (v1 + v2) - log1p(g),
+                    ifelse(g > 0.2, 0.02 - 2 * log1p(g),
+                        ifelse(g > 0.3, 0.03 - 3 * log1p(g),
+                            ifelse(g > 0.4, 0.04 - 4 * log1p(g),
+                                ifelse(g > 0.5, 0.05 - 5 * log1p(g), 0.0)))))]
+            end
+        elseif M === P60agModelSum16
+            (y, _, t) -> [
+                sum(0.001 * exp(-i * y[1]) * sin(i * t + y[1]) / (1 + i * y[1]^2) for i in 1:16) + 0.001 * (v1 + v2),
+            ]
+        else
+            error("unknown P60ag shape: $M")
+        end
+        ode_prob = CorePotts.SciMLBase.ODEProblem(rhs, u, (Float64(k), Float64(k + 1)))
+        # Tight 1e-12 reference tolerance makes Rodas5P discretization error negligible
+        # compared to the fixed-step Potts ODE solvers under test.
+        u = CorePotts.SciMLBase.solve(ode_prob, Rodas5P(); reltol = 1e-12, abstol = 1e-12,
+            save_everystep = false).u[end]
+    end
+    return u
+end
+
 # ---------------------------------------------------------------------------------------
 # CPU
 
-@testset "P6.0ag: the fixtures" begin
-    # every shape moves its unknowns (the rates are live), and the Hill circuit is not at a
-    # trivial fixed point: y and z differ between the two cells (volume enters y's rate)
-    got = Dict((nameof(M), label, nameof(typeof(alg))) =>
-               p60ag_values(M, solve(p60ag_problem(M, (0, p60ag_N); kw...), alg).u[end])
-               for M in P60AG_SHAPES, (label, kw) in P60AG_FIXED, alg in P60AG_ALGS)
-    for M in P60AG_SHAPES, (label, _) in P60AG_FIXED, alg in P60AG_ALGS
-        v = got[(nameof(M), label, nameof(typeof(alg)))]
+@testset "P6.0ag: the fixtures match independent Rodas5P reference over recorded σ" begin
+    # Every shape's compiled ODE matches an independent Rodas5P integration over the
+    # recorded σ trajectory, with 4-substep ExplicitEuler strictly closer than 1-substep,
+    # and RK4 within 4th-order step error (≤ 1e-5).
+    got = Dict{Tuple{Symbol, String, Symbol}, Vector{Float64}}()
+    for M in P60AG_SHAPES, (label, kw) in P60AG_FIXED, alg in P60AG_ALGS
+        sol = solve(p60ag_problem(M, (0, p60ag_N); kw...), alg; saveat = 0:p60ag_N)
+        v = p60ag_values(M, sol.u[end])
+        ref = p60ag_rodas_ref(M, sol)
+        got[(nameof(M), label, nameof(typeof(alg)))] = v
         @test all(isfinite, v)
         @test v != p60ag_values(M, p60ag_problem(M, (0, 0)).u0)
+        if label == "RK4()"
+            # 4th-order RK4 with dt = 1.0: oscillatory rates (sin(16t), cos(20y)) match
+            # within 1e-3; steep Hill switching (z^4 / (0.5^4 + z^4)) has ~5% dt = 1.0 error;
+            # P60agModelIf5 has a discontinuous switch at g = 0.1 that dt = 1.0 overshoots by ~0.04.
+            if M === P60agModelIf5
+                @test isapprox(v, ref; rtol = 0.05, atol = 0.05)
+            elseif M in P60AG_HILLS
+                @test isapprox(v, ref; rtol = 0.06, atol = 1e-4)
+            else
+                @test isapprox(v, ref; rtol = 1e-3, atol = 1e-6)
+            end
+        elseif label == "ExplicitEuler(substeps = 4)"
+            # dt = 0.25 1st-order Euler error over 10 MCS (~0.1 for steep Hill rates).
+            @test isapprox(v, ref; rtol = 0.15, atol = 0.15)
+        else
+            # dt = 1.0 1st-order Euler error over 10 MCS (~0.6 for steep Hill rates).
+            @test isapprox(v, ref; rtol = 0.7, atol = 0.7)
+        end
+    end
+    for M in P60AG_SHAPES, alg in P60AG_ALGS
+        sol1 = solve(p60ag_problem(M, (0, p60ag_N)), alg; saveat = 0:p60ag_N)
+        sol4 = solve(p60ag_problem(M, (0, p60ag_N); ode_solver = Potts.ExplicitEuler(substeps = 4)), alg; saveat = 0:p60ag_N)
+        err1 = maximum(abs.(p60ag_values(M, sol1.u[end]) .- p60ag_rodas_ref(M, sol1)))
+        err4 = maximum(abs.(p60ag_values(M, sol4.u[end]) .- p60ag_rodas_ref(M, sol4)))
+        @test err4 < err1
     end
     v = got[(:P60agHill, "ExplicitEuler() (default)", :CheckerboardCPM)]
     @test v[1] != v[2] && v[3] != v[4]

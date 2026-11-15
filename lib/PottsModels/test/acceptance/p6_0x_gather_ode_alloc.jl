@@ -153,6 +153,74 @@ end
     end
 end
 
+"""Independent `Rodas5P` (`reltol = 1e-12, abstol = 1e-12`) ODE integration over the recorded
+`σ` trajectory of `sol`, computing gather inputs and cell volumes by hand from each post-sweep `σ`."""
+function p60x_rodas_ref(M, sol)
+    u = Float64.(Array(sol.u[1].cell.y))
+    for k in 0:(p60x_N - 1)
+        σ = Array(sol.u[k + 2].σ)
+        v = (Float64(count(==(1), σ)), Float64(count(==(2), σ)))
+        # Site 42 on 12x8 column-major is (6, 4); Moore(1) neighbors wrap periodically.
+        moore42 = [σ[mod1(6 + dx, 12), mod1(4 + dy, 8)] for dx in -1:1 for dy in -1:1 if !(dx == 0 && dy == 0)]
+        # Cross-cell reads in Potts (XCross, XPair) use the start-of-MCS Jacobi scratch values.
+        u_start = copy(u)
+        rhs = if M === XVol
+            s_vol = sum(o -> o > 0 ? v[o] : 0.0, moore42; init = 0.0)
+            (y, _, _) -> [0.01 * s_vol - 0.1 * y[1], 0.01 * s_vol - 0.1 * y[2]]
+        elseif M === XCross
+            m1 = maximum((u_start[o] for o in moore42 if o > 0 && o != 1); init = 0.0)
+            m2 = maximum((u_start[o] for o in moore42 if o > 0 && o != 2); init = 0.0)
+            (y, _, _) -> [0.5 * (m1 - y[1]), 0.5 * (m2 - y[2])]
+        elseif M === XRing
+            # Anchor 36 + 4c on 12x8 column-major is (4c, 4); VonNeumann(1) neighbors wrap periodically.
+            cnts = ntuple(2) do c
+                ax = 4 * c
+                ring = (σ[mod1(ax + 1, 12), 4], σ[mod1(ax - 1, 12), 4], σ[ax, mod1(5, 8)], σ[ax, mod1(3, 8)])
+                count(==(c), ring)
+            end
+            (y, _, _) -> [0.1 * cnts[1] - 0.2 * y[1], 0.1 * cnts[2] - 0.2 * y[2]]
+        elseif M === XPlain
+            (y, _, _) -> [0.01 * v[1] - 0.1 * y[1], 0.01 * v[2] - 0.1 * y[2]]
+        elseif M === XPair
+            (y, _, _) -> [0.5 * (u_start[2] - y[1]), 0.5 * (u_start[1] - y[2])]
+        else
+            error("unknown P6.0x model: $M")
+        end
+        ode_prob = CorePotts.SciMLBase.ODEProblem(rhs, u, (Float64(k), Float64(k + 1)))
+        # Tight 1e-12 reference tolerance makes Rodas5P reference error negligible
+        # compared to the tested Potts ODE solvers.
+        u = CorePotts.SciMLBase.solve(ode_prob, Rodas5P(); reltol = 1e-12, abstol = 1e-12,
+            save_everystep = false).u[end]
+    end
+    return u
+end
+
+@testset "P6.0x: compiled cell ODE matches independent Rodas5P reference over recorded σ" begin
+    for M in (p60x_GATHERS..., p60x_CONTROLS...), alg in p60x_ALGS
+        errs = Dict{String, Float64}()
+        for (label, kw) in p60x_SOLVERS
+            sol = solve(p60x_problem(M, (0, p60x_N); kw...), alg; saveat = 0:p60x_N)
+            got = Vector{Float64}(Array(sol.u[end].cell.y))
+            ref = p60x_rodas_ref(M, sol)
+            errs[label] = maximum(abs.(got .- ref))
+            if label == "Adaptive(Rodas5P())"
+                # Adaptive Rodas5P uses default SciML tolerances (~1e-3 reltol / 1e-6 abstol).
+                @test isapprox(got, ref; rtol = 1e-5, atol = 1e-6)
+            elseif label == "RK4()"
+                # 4th-order RK4 with dt = 1.0 on decay rate 0.5 has O((0.5*dt)^5) ~ 1e-4 error.
+                @test isapprox(got, ref; rtol = 1e-3, atol = 1e-6)
+            elseif label == "ExplicitEuler(substeps = 4)"
+                # dt = 0.25 1st-order Euler error over 10 MCS.
+                @test isapprox(got, ref; rtol = 0.05, atol = 0.05)
+            else
+                # dt = 1.0 1st-order Euler error over 10 MCS.
+                @test isapprox(got, ref; rtol = 0.2, atol = 0.2)
+            end
+        end
+        @test errs["ExplicitEuler(substeps = 4)"] < errs["ExplicitEuler() (default)"]
+    end
+end
+
 @testset "P6.0x: the same run twice gives the same values" begin
     for M in (p60x_GATHERS..., p60x_CONTROLS...), (label, kw) in p60x_SOLVERS, alg in p60x_ALGS
         @test p60x_final_y(M, alg, kw) == p60x_final_y(M, alg, kw)

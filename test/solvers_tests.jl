@@ -833,3 +833,152 @@ end
         @test occursin("has no field to integrate", err)
     end
 end
+
+@testitem "TS-R2 §2.6: canonical solver-spec properties and repr round-trips" setup = [SolversSetup] tags = [:potts, :solvers] begin
+    @testset "TS-R2 §2.6: canonical solver-spec properties and repr round-trips" begin
+        LFP = Potts.LatticeFields.Problems
+        LFS = Potts.LatticeFields.Solvers
+        LP = Potts.LatticePDE
+
+        # Canonical solver-spec generator: omitted defaults == explicit defaults, keyword order
+        # invariance, dt exclusion, and sensitivity to every semantic knob.
+        for (a, b, diff) in (
+            (ExplicitEuler(), ExplicitEuler(; substeps = nothing, lower = nothing, init = nothing, compute_T = :auto, dt = 0.25),
+                ExplicitEuler(; substeps = 3)),
+            (ExplicitEuler(; substeps = 2, lower = 0.0), ExplicitEuler(; lower = 0.0, substeps = 2, dt = 0.5),
+                ExplicitEuler(; substeps = 2, lower = 1e-6)),
+            (ExplicitMap(), ExplicitMap(; compute_T = :auto), ExplicitMap(; compute_T = Float32)),
+            (BackwardEuler(), BackwardEuler(; dt = 0.5, inner = :auto, solver_T = :auto, init = nothing, compute_T = :auto),
+                BackwardEuler(; newton = 4)),
+            (CrankNicolson(; inner = LFS.DevicePCG(; rtol = 1e-8)), CrankNicolson(; dt = 0.2, inner = LFS.DevicePCG(; rtol = 1e-8)),
+                CrankNicolson(; inner = LFS.Multigrid(; cycle = LFS.V(1, 1)))),
+            (BDF2(; solver_T = Float64), BDF2(; solver_T = Float64, init = nothing, dt = 1.0),
+                BDF2(; solver_T = Float32)),
+            (QuasiSteady(), QuasiSteady(; dt = 2.0, newton = nothing, inner = :auto),
+                QuasiSteady(; init = :steady)),
+            (FieldGroups(:c => BackwardEuler(); default = ExplicitEuler()),
+                FieldGroups(:c => BackwardEuler(; dt = 0.5); default = ExplicitEuler(; dt = 0.5)),
+                FieldGroups(:c => CrankNicolson(); default = ExplicitEuler())),
+            (Adaptive(Tsit5(); reltol = 1e-6, abstol = 1e-8), Adaptive(Tsit5(); abstol = 1e-8, reltol = 1e-6),
+                Adaptive(Tsit5(); reltol = 1e-5, abstol = 1e-8)),
+        )
+            @test Potts._canonical(a) == Potts._canonical(b)
+            @test Potts._canonical(a) != Potts._canonical(diff)
+        end
+
+        # `repr` round-trip: `eval(Meta.parse(repr(x))) == x`
+        rt_mod = Module(:ReprRoundTrip)
+        Core.eval(rt_mod, quote
+            using Potts
+            const CorePotts = Potts.CorePotts
+            const LatticeFields = Potts.LatticeFields
+            using Potts.LatticeFields.Problems: ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady
+            using Potts.LatticeFields.Solvers: DevicePCG, Multigrid, V
+            using Potts.LatticePDE: LatticeMG
+        end)
+        roundtrip(x) = Core.eval(rt_mod, Meta.parse(repr(x)))
+
+        for x in (
+            ExplicitEuler(),
+            ExplicitEuler(; substeps = 4, lower = 0.0),
+            ExplicitMap(),
+            BackwardEuler(),
+            BackwardEuler(; newton = 3, inner = LFS.DevicePCG(; rtol = 1e-8)),
+            CrankNicolson(; substeps = 2),
+            BDF2(),
+            QuasiSteady(; init = :steady),
+            RK4(),
+            RK4(; substeps = 3),
+            LFS.V(2, 2),
+            SequentialCPM(),
+            CheckerboardCPM(; parts = 2),
+            VonNeumann(1),
+            Moore(1),
+            Ball(2.0),
+            Metropolis(; offset = 0.5),
+            Barker(; offset = 0.0),
+        )
+            @test roundtrip(x) == x
+        end
+        let x = LP.LatticeMG(), y = roundtrip(x)
+            @test typeof(y) === typeof(x)
+            @test repr(y) == repr(x)
+        end
+    end
+end
+
+@testitem "TS-R2 §2.7: stable_substeps hand table and Fourier amplification/tightness oracle" setup = [SolversSetup] tags = [:potts, :solvers] begin
+    @testset "TS-R2 §2.7: stable_substeps hand table and Fourier amplification/tightness oracle" begin
+        LP = Potts.LatticePDE
+        LFP = Potts.LatticeFields.Problems
+        t, Dt = FieldPDE.t, FieldPDE.Dt
+        FieldPDE.@variables u1(..) u2(..) u3(..)
+        FieldPDE.@parameters x y z Dp kp
+
+        function build_field_prob(dims, spacing, Dval, kval, dtval)
+            N = length(dims)
+            xs = (x, y, z)[1:N]
+            ufn = (u1, u2, u3)[N]
+            c = ufn(t, xs...)
+            dom = LP.lattice_domain(t, xs, dims; spacing, tspan = (0.0, dtval))
+            sys = LP.PDESystem([Dt(c) ~ Dp * LP.Δ(c) - kp * c], [ufn(0, xs...) ~ 0.0], dom, [t; collect(xs)], [c], [Dp, kp]; name = :ss)
+            return LP.discretize(sys, LP.LatticeDiscretization(LP.Grid(dims); T = Float64)), [Dp => Dval, kp => kval]
+        end
+
+        # Hand table: (dims, spacing, D, k, dt)
+        rows = (
+            ((12,), (1.0,), 0.1, 0.05, 1.0),
+            ((12,), (0.5,), 0.2, 0.1, 1.0),
+            ((12,), (1.0,), 0.0, 0.5, 1.0),
+            ((12,), (1.0,), 0.0, 2.5, 1.0),
+            ((8, 8), (1.0, 1.0), 0.1, 0.05, 1.0),
+            ((8, 8), (1.0, 1.0), 0.5, 0.2, 1.0),
+            ((8, 8), (0.5, 1.0), 0.25, 0.1, 0.5),
+            ((8, 8), (0.5, 0.5), 0.2, 0.3, 1.0),
+            ((8, 8), (1.0, 1.0), 0.3, 0.0, 2.0),
+            ((6, 6, 6), (1.0, 1.0, 1.0), 0.1, 0.1, 1.0),
+            ((6, 6, 6), (0.5, 1.0, 1.0), 0.2, 0.5, 1.0),
+            ((6, 6, 6), (1.0, 1.0, 1.0), 0.25, 1.2, 0.8),
+        )
+
+        thetas = range(0.0, pi; length = 9)
+        for (dims, spacing, Dval, kval, dtval) in rows
+            prob, ps = build_field_prob(dims, spacing, Dval, kval, dtval)
+            pr = remake(prob; p = ps)
+            n = LFP.substeps(pr.problem_type.problem, ExplicitEuler(; dt = dtval), pr.p.values)
+            rho = Dval * sum(4.0 / h^2 for h in spacing) + kval
+            expected_n = max(1, ceil(Int, dtval * rho / 1.8))
+            @test n == expected_n
+
+            # Property 1: FTCS amplification factor <= 1 for every discrete Fourier mode
+            hdt = dtval / n
+            if length(dims) == 1
+                for t1 in thetas
+                    lam = Dval * (4.0 / spacing[1]^2 * sin(t1 / 2)^2) + kval
+                    @test abs(1.0 - hdt * lam) <= 1.0
+                end
+            elseif length(dims) == 2
+                for t1 in thetas, t2 in thetas
+                    lam = Dval * (4.0 / spacing[1]^2 * sin(t1 / 2)^2 + 4.0 / spacing[2]^2 * sin(t2 / 2)^2) + kval
+                    @test abs(1.0 - hdt * lam) <= 1.0
+                end
+            else
+                for t1 in thetas, t2 in thetas, t3 in thetas
+                    lam = Dval * (4.0 / spacing[1]^2 * sin(t1 / 2)^2 + 4.0 / spacing[2]^2 * sin(t2 / 2)^2 + 4.0 / spacing[3]^2 * sin(t3 / 2)^2) + kval
+                    @test abs(1.0 - hdt * lam) <= 1.0
+                end
+            end
+
+            # Property 2: tightness — (n - 1) violates the 1.8 safety margin
+            if n > 1
+                @test (dtval / (n - 1)) * rho > 1.8
+            end
+        end
+
+        # Also verify end-to-end in a PottsProblem: Dc = 0.5, k = 0.2, 16x16, h = 1, dt = 1 -> ceil((0.5*8+0.2)/1.8) = 3
+        p2 = PottsProblem(SolverField(; name = :f), [ownership => solver_sigma(), kind => [:A], :Dc => 0.5], (0, 1);
+            field_solver = ExplicitEuler())
+        integ = init(p2, SequentialCPM())
+        @test CorePotts._runtime(getfield(integ.ctx, :__fields1)).n == max(1, ceil(Int, (0.5 * 8.0 + 0.05) / 1.8))
+    end
+end

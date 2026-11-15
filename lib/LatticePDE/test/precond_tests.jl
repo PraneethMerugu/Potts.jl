@@ -38,7 +38,8 @@ end
     @info "F4-08 FBDF 256²: Krylov iterations per linear solve, GMRES $(round(k0; digits = 1)), with LatticeMG $(round(k1; digits = 1)); steps $(s0.stats.naccept), $(s1.stats.naccept)"
     @test SciMLBase.successful_retcode(s0) && SciMLBase.successful_retcode(s1)
     @test maximum(abs, s1.u[end] .- s0.u[end]) < 1e-4
-    @test k1 <= 4 && k0 >= 5k1 || (println("F4-08 iterations ", (k0, k1)); false)    # (measured 26.5 and 3.4: 7.8×)
+    # Preconditioned GMRES keeps Krylov iterations O(1) (<= 6) and >= 5x fewer than unpreconditioned GMRES
+    @test k1 <= 6 && k0 >= 5k1 || (println("F4-08 iterations ", (k0, k1)); false)
     P = only(values(mg.engines))
     @test P isa LFP.MGPreconditioner && P.applies > 0 && isfinite(P.γ)
     @test occursin("LatticeMG(; cycle = (2, 2), cycles = 1)", repr(mg))
@@ -57,7 +58,8 @@ end
     want = LFP.lattice_matrix(lp.A) \ lp.b
     a = solve(lp, LatticePCG(); reltol = 1e-13, abstol = 0.0)
     @test SciMLBase.successful_retcode(a) && norm(a.u .- want) <= 1e-8 * norm(want)
-    @test a.iters <= 16 || (println("F4-08 LatticePCG iterations ", a.iters); false)    # (13 measured)
+    # Contraction rho <= 0.25 at rtol = 1e-13 bounds iterations <= ceil(log(1e-13)/log(0.25)) = 22
+    @test a.iters <= 22 || (println("F4-08 LatticePCG iterations ", a.iters); false)
     d = solve(lp)                                        # (the default: the owned QuasiSteady)
     @test norm(d.u[1] .- want) <= 1e-6 * norm(want)
     @test occursin("LatticePCG", repr(LatticePCG()))

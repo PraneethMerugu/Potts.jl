@@ -1,6 +1,6 @@
 # D-203: reproduction 04 (foam, Jiang et al. 1999, "04b"), the pre-registered scan of a
 # separate bulk shear scale κ_b.  BEFORE any scan run. Decisions:
-# D-203 (this scan), D-190 (the frozen reproduction test 04_foam.jl, whose functions, foams,
+# D-203 (this scan), D-190 (the reproduction test 04_foam.jl, whose functions, foams,
 # seeds pattern and τ this file reuses unchanged), D-154 (deviations), D-156 (unstated
 # parameters are calibrated and labelled; heavy runs on the PC), D-157 (all heavy compute on
 # the PC), D-048 (oracles and negative controls, no parity harness).
@@ -21,10 +21,10 @@
 # both free parameters in model units, so the two scales are already independent and the scan
 # needs no new model parameter. The coupling is in the HARNESS: D-190's `p64r_bulk(st, βp, κ,
 # …)` takes one κ, and the FULL runner and `p64r_full` pass the boundary κ (`κ.kappa`) to it,
-# and the record tier asserts `beta_model ≈ κ·beta`. If this scan returns a κ_b, the re-frozen
+# and the record tier asserts `beta_model ≈ κ·beta`. If this scan returns a κ_b, the updated
 # 04 test needs a pre-registered constant (say `P64R_KAPPA_B`, a D-entry value) passed as the
 # κ argument of every `p64r_bulk` call, a `beta_model ≈ κ_b·beta` record check, and κ_b in
-# calibration.tsv. This file implements none of that (D-203: the test is re-frozen only after
+# calibration.tsv. This file implements none of that (D-203: the test is updated only after
 # a D-entry).
 #
 # ── The scan (pre-registered; set "kb", seed block 13) ──────────────────────────────────────
@@ -101,7 +101,7 @@
 #    κ̂ = √(κ̂_0.01 · κ̂_0.05). The log–log interpolated med_β(κ̂) must meet BOTH targets within
 #    ±25 % (bracket ends must be finite; else `nothing`, :off_target), and the consistency
 #    check must hold at the largest grid value ≤ κ̂ (the conservative neighbour; else
-#    `nothing`, :consistency). Then return κ̂ (an off-grid value: the D-entry, re-frozen test
+#    `nothing`, :consistency). Then return κ̂ (an off-grid value: the D-entry, updated test
 #    and the 200 bulk jobs re-run validate it, D-203 (d)).
 # A returned κ_b → the spec owner, then a D-entry, re-freeze, re-run (D-203). `nothing` →
 # stop: the Eq. 2 form is in question, the record stays provisional, F1 hard gate (Dr Jiang).
@@ -138,7 +138,7 @@
 using Potts, PottsModels, Test, Dates
 using Statistics: mean, median
 
-# The frozen D-190 test provides the model, foams, τ and run helpers (`p64r_*`). In
+# The D-190 test provides the model, foams, τ and run helpers (`p64r_*`). In
 # runtests.jl it is included first (sorted order, same module); standalone, include it here.
 isdefined(@__MODULE__, :p64r_ordered) || include(joinpath(@__DIR__, "04_foam.jl"))
 

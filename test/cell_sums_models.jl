@@ -181,8 +181,10 @@ function cs_r1_digests(backend = CorePotts.CPU(); ctl::Bool = false, mcs = 80, h
     f0 = CorePotts._FORCE_DEVICE_LIFECYCLE[]
     CorePotts._FORCE_DEVICE_LIFECYCLE[] = !host
     try
-        run(m, op, t) = solve(PottsProblem(m, op, (0, t); T = Float32, seed = 7, capacity = 2000), CheckerboardCPM();
-            backend, save_start = false)
+        # Pin `threads = false` so the 1-thread vs 4-thread comparison stays deterministic
+        # regardless of `BLOCK_GRAIN`.
+        run(m, op, t) = solve(PottsProblem(m, op, (0, t); T = Float32, seed = 7, capacity = 2000),
+            CheckerboardCPM(; threads = false); backend, save_start = false)
         # the weighted surface in the staged device lifecycle (one kernel per stage), the
         # compartments in the fused one (one workgroup: `FUSE_SITES`)
         fs = CorePotts.FUSE_SITES[]
@@ -206,10 +208,45 @@ end
 function cs_conv_digests(backend = CorePotts.CPU(); ctl::Bool = false)
     CorePotts._FLOAT_ATOMICS[] = ctl
     try
+        # Pin `threads = false` so `:auto` does not switch to threaded execution under `-t 4`.
         v = solve(PottsProblem(CsConv(; name = :v), cs_conv_op(), (0, 30); T = Float32, seed = 7, capacity = 8),
-            CheckerboardCPM(); backend, save_start = false).u[end]
+            CheckerboardCPM(; threads = false); backend, save_start = false).u[end]
         return [cs_digest(v.σ), cs_bits(v.model.tot), cs_bits(v.cell.V_target)]
     finally
         CorePotts._FLOAT_ATOMICS[] = false
     end
+end
+
+@potts_model CsThreadedCBRepeat begin
+    @kinds medium A
+    @lattice Lattice((1536, 1536))
+    @energy cells => (volume - 64.0)^2 + 0.01 * (surface - 32.0)^2
+    @energy contacts => 4.0
+    @schedule repeat(2, sweep(fraction = 1//2))
+    @sweep Metropolis(; temperature = 2.0)
+end
+
+function cs_threaded_cb_invariants()
+    σ = zeros(Int32, 1536, 1536)
+    id = 0
+    for bj in 1:4:1524, bi in 1:4:1524
+        (bi + bj) % 64 == 0 || continue
+        id += 1
+        σ[bi:(bi + 3), bj:(bj + 3)] .= id
+    end
+    prob = PottsProblem(CsThreadedCBRepeat(; name = :tcb), [ownership => σ, kind => fill(:A, id)], (0, 2); seed = 7)
+    alg = CheckerboardCPM(; threads = true)
+    integ = init(prob, alg; save_start = false)
+    lay = integ.cache.layout
+    nblocks_pass = prod(cld.(lay.nblocks, lay.k))
+    sol = solve!(integ)
+    u = sol.u[end]
+    σ_arr = Array(u.σ)
+    vol_recount = [count(==(c), σ_arr) for c in 1:length(u.cell.volume)]
+    vol_ok = all(u.cell.volume .== vol_recount)
+    surf_recount = CorePotts.recompute_surface(σ_arr, prob.lattice, CorePotts.relation(VonNeumann(1), prob.lattice), length(u.cell.volume))
+    surf_ok = Array(u.cell.surface) == surf_recount
+    attempts_ok = sol.stats.attempts == 2 * length(σ_arr)
+    committed_ok = sol.stats.accepted >= sol.stats.committed
+    return (nblocks_pass > CorePotts.BLOCK_GRAIN[], vol_ok, surf_ok, attempts_ok, committed_ok)
 end

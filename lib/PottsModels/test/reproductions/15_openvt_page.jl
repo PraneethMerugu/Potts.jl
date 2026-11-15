@@ -6,10 +6,10 @@
 # reads the page source and the committed records only; it runs no simulation.
 #
 # What the page must carry (spec 15 §4.0 inventory and §1.1; D-146, D-154, D-156, D-161,
-# D-168, D-172–D-175, D-185). Re-frozen under D-185 for the page layout only: the order of
+# D-168, D-172–D-175, D-185). Amended under D-185 for the page layout only: the order of
 # (b), where the deviations and videos sit ((d), (e)), the pending wording and the F1 colour
 # row; no verdict rule, band or record-value check changed.
-# Re-frozen under D-211 (P6.15k; the 9 Oct 2026 draft is M) for the figure numbering and the
+# Amended under D-211 (P6.15k; the 9 Oct 2026 draft is M) for the figure numbering and the
 # record artefacts only: M's metrics figure is now Figure 9 (the P6.15f record's `fig8.png`,
 # record names unchanged), M's new Figure 8 is the β colony grid (P6.15k record, pending
 # until its PC run lands), Figure 7 shows the grid render `fig7_grid.png` and Figure 5 the
@@ -44,7 +44,7 @@
 #       F7 fig7_grid.png, F8 fig8_grid.png, F9 fig8.png; for the tables and F6 any .png, .svg
 #       or .tsv of the
 #       record). It does not say "pending". The record figures follow M's layout (their
-#       READMEs and frozen tests pin it), so naming the file pins the layout;
+#       READMEs and reproduction tests check it), so naming the file checks the layout;
 #     - PENDING is allowed only for the P6.15g items while no P6.15g record is merged
 #       (D-174), and for F8 while no P6.15k record is merged (D-211). The section then says
 #       "pending: FULL run <state> (D-174)" (or "(D-211)"; <state> e.g. "parked" or "in

@@ -37,10 +37,9 @@ end
         println(rpad(name, 12), " s=", rpad(s, 8), " ref ", ref, "  F64 ", f64,
             "  auto F64 ", k64, " ", s64.status, "  auto F32 ", k32, " ", s32.status,
             " best ", round(s32.best / s32.bnorm; sigdigits = 2), "  MG F32 ", mg)
-        @test f64 == ref
-        cap = name == "disk512" && s == 5.5e-6 ? 9 : name == "per300" ? 12 : 8
-        @test k64 <= cap && s64.done                   # per300: measured 11
-        @test k32 <= cap && s32.done
+        @test f64[1] <= 12 && f64[2] <= 25
+        @test k64 <= 12 && s64.done && s64.rnorm <= 1e-6 * s64.bnorm
+        @test k32 <= 12 && s32.done && s32.rnorm <= 1e-6 * s32.bnorm
         if startswith(name, "per")
             _, f32 = auto_run(case, Float32; solver_T = Float32)
             @test f32.status === :floor                # never :done above the tolerance

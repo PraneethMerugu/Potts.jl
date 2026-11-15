@@ -379,23 +379,18 @@ function p61a5_as_voronoi(n, r, c, kinds, it, target, seed; lloyd = it)
     return Voronoi(RandomPoints(n; region = ball, seed); region = ball, lloyd, kinds)
 end
 
-@testset "P6.1a5: Voronoi over a ball paints every requested cell" begin
-    for (name, n, r, c, kinds, it, target) in P61A5_CASES, seed in P61A5_SEEDS
-        op, rep = layout(p61a5_as_voronoi(n, r, c, kinds, it, target, seed), target; report = true)
-        @test only(rep).type === :Voronoi && only(rep).requested == n && only(rep).painted == n && only(rep).dropped == 0
+function p61a5_nearest_image(x, gens, dims, per, hex)
+    best, o, best_y = Inf, 0, Tuple(x)
+    for (k, g) in enumerate(gens)
+        for y in p61a5_images(Tuple(x), dims, per)
+            d = sum(abs2, p61a5_cart(y, hex) .- Tuple(g))
+            if d < best
+                best, o, best_y = d, k, y
+            end
+        end
     end
-    # the layout follows the seed, and Lloyd moves it
-    (name, n, r, c, kinds, it, target) = P61A5_CASES[1]
-    dig(seed; kw...) = p61a5_digest(p61a5_σ(layout(p61a5_as_voronoi(n, r, c, kinds, it, target, seed; kw...), target)))
-    @test dig(1) == dig(1) && dig(1) != dig(2)
-    if it != 0
-        @test dig(1; lloyd = 0) != dig(1)     # Lloyd steps move the generators
-    end
+    return o, best_y
 end
-
-# ---------------------------------------------------------------------------------------------
-# Voronoi against a brute-force oracle (lloyd = 0, explicit generators)
-# ---------------------------------------------------------------------------------------------
 
 function p61a5_oracle(gens, target, region_sites)
     dims, per, hex, _ = p61a5_meta(target)
@@ -405,6 +400,64 @@ function p61a5_oracle(gens, target, region_sites)
     end
     return σ
 end
+
+function p61a5_lloyd_oracle(gens, target, region_sites, lloyd)
+    dims, per, hex, _ = p61a5_meta(target)
+    cur = [Float64.(Tuple(g)) for g in gens]
+    wrap(g, n, p) = p && !(0.5 <= g < n + 0.5) ? g - n * fld(g - 0.5, n) : g
+    for _ in 1:lloyd
+        sums = [zeros(length(dims)) for _ in eachindex(cur)]
+        counts = zeros(Int, length(cur))
+        for x in region_sites
+            k, y = p61a5_nearest_image(x, cur, dims, per, hex)
+            counts[k] += 1
+            for d in eachindex(dims)
+                sums[k][d] += y[d]
+            end
+        end
+        for k in eachindex(cur)
+            counts[k] > 0 || continue
+            idx_mean = ntuple(d -> wrap(sums[k][d] / counts[k], dims[d], per[d]), length(dims))
+            cur[k] = p61a5_cart(idx_mean, hex)
+        end
+    end
+    return p61a5_oracle(cur, target, region_sites)
+end
+
+@testset "P6.1a5: Voronoi over a ball paints every requested cell" begin
+    for (name, n, r, c, kinds, it, target) in P61A5_CASES, seed in P61A5_SEEDS
+        op, rep = layout(p61a5_as_voronoi(n, r, c, kinds, it, target, seed), target; report = true)
+        @test only(rep).type === :Voronoi && only(rep).requested == n && only(rep).painted == n && only(rep).dropped == 0
+    end
+    # the layout follows the seed, and Lloyd steps match the hand-recomputed centroid oracle
+    (name, n, r, c, kinds, it, target) = P61A5_CASES[1]
+    dig(seed; kw...) = p61a5_digest(p61a5_σ(layout(p61a5_as_voronoi(n, r, c, kinds, it, target, seed; kw...), target)))
+    @test dig(1) == dig(1) && dig(1) != dig(2)
+    if it != 0
+        dims, _, hex, _ = p61a5_meta(target)
+        ci = c === nothing ? map(d -> (d + 1) / 2, dims) : Float64.(Tuple(c))
+        gens = Potts.points(p61a5_as_voronoi(n, r, c, kinds, it, target, 1).points, target)
+        sites = p61a5_ballsites(p61a5_cart(ci, hex), Float64(r), target)
+        @test p61a5_σ(layout(p61a5_as_voronoi(n, r, c, kinds, it, target, 1), target)) ==
+              p61a5_lloyd_oracle(gens, target, sites, it)
+        @test dig(1; lloyd = 0) != dig(1)
+    end
+    # explicit closed and periodic Lloyd geometric oracle (1 and 3 iterations)
+    P = Potts.Point
+    for (target, gens) in (
+        ((20, 16), [P(3.0, 4.0), P(16.0, 5.0), P(8.0, 13.0), P(17.0, 14.0)]),
+        (Lattice((20, 16)), [P(2.0, 3.0), P(11.0, 9.0), P(19.0, 14.0)]),
+    ), lloyd in (1, 3)
+        dims, per, _, _ = p61a5_meta(target)
+        oracle = p61a5_lloyd_oracle(gens, target, CartesianIndices(dims), lloyd)
+        @test p61a5_split_cells(oracle, P61A5_SQ2, per) == 0
+        @test p61a5_σ(layout(Voronoi(gens; lloyd, kinds = [:a]), target)) == oracle
+    end
+end
+
+# ---------------------------------------------------------------------------------------------
+# Voronoi against a brute-force oracle (lloyd = 0, explicit generators)
+# ---------------------------------------------------------------------------------------------
 
 @testset "P6.1a5: nearest generator, minimum image, ties to the lowest (2D, 3D, periodic)" begin
     P = Potts.Point

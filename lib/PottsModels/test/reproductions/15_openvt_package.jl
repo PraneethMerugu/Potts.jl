@@ -640,29 +640,31 @@ end
     @test sort(readdir(P615J_A)) == ["implementations", "results"]
     @test readdir(joinpath(P615J_A, "implementations")) == [P615J_FW]
     @test readdir(joinpath(P615J_A, "results")) == [P615J_FW]
-    # outside git only. The path is inside the checkout, so a cancelled or failed earlier run
-    # can have left the tree there: clear it first, or a stale copy makes this a trap that only
-    # passes in a pristine tree.
-    ingit = joinpath(P615J_ROOT, "lib", "PottsModels", "p615j_must_not_exist")
-    ispath(ingit) && rm(ingit; recursive = true, force = true)
-    @test !ispath(ingit)
-    @test_throws ArgumentError PottsModels.openvt_submission_package(ingit)
-    @test !ispath(ingit)
-    # no stale files: a non-empty directory is refused
-    @test_throws ArgumentError PottsModels.openvt_submission_package(P615J_A)
-    # D-204: the bulk directory is given, outside git, complete and equal to the git manifests;
-    # otherwise the build is refused and leaves nothing behind
-    @test !isempty(P615J_BULK) && isdir(P615J_BULK) && !p615j_in_git(P615J_BULK)
-    for bulk in (nothing, P615J_DATA, mktempdir(), p615j_bogus_bulk(P615J_O1_CASES))
-        out = joinpath(mktempdir(), "pkg")
-        threw = try
-            p615j_withbulk(() -> PottsModels.openvt_submission_package(out), bulk)
-            false
-        catch e
-            e isa ArgumentError
+    # outside git only: test against an isolated temporary `git init` directory so this check
+    # does not assume the test runner's own checkout carries `.git` (e.g. rsync/archive copies)
+    mktempdir() do gitdir
+        run(`git init -q $gitdir`)
+        ingit = joinpath(gitdir, "p615j_must_not_exist")
+        @test p615j_in_git(ingit)
+        @test !ispath(ingit)
+        @test_throws ArgumentError PottsModels.openvt_submission_package(ingit)
+        @test !ispath(ingit)
+        # no stale files: a non-empty directory is refused
+        @test_throws ArgumentError PottsModels.openvt_submission_package(P615J_A)
+        # D-204: the bulk directory is given, outside git, complete and equal to the git manifests;
+        # otherwise the build is refused and leaves nothing behind
+        @test !isempty(P615J_BULK) && isdir(P615J_BULK) && !p615j_in_git(P615J_BULK)
+        for bulk in (nothing, gitdir, P615J_DATA, mktempdir(), p615j_bogus_bulk(P615J_O1_CASES))
+            out = joinpath(mktempdir(), "pkg")
+            threw = try
+                p615j_withbulk(() -> PottsModels.openvt_submission_package(out), bulk)
+                false
+            catch e
+                e isa ArgumentError
+            end
+            @test threw
+            @test !ispath(out) || isempty(readdir(out))
         end
-        @test threw
-        @test !ispath(out) || isempty(readdir(out))
     end
 end
 
