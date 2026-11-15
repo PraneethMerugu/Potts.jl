@@ -168,7 +168,33 @@ end
     end
 end
 
-# TS1-2: `ForwardDiff.derivative` through `Potts.couple` is verified in `fields_implicit_tests.jl` (F3-21b).
+# F3-21b's shadow store through the coupling: a Dual parameter of the PDESystem runs, the CPM
+# path stays primal, and the derivative matches central differences at the same seed
+@testitem "F4-B2: field derivatives of a coupled model against central differences" setup = [CoupleSetup] tags = [:potts, :fields_couple] begin
+    @testset "F4-B2: field derivatives of a coupled model against central differences" begin
+        tight = DevicePCG(; rtol = 1e-11, budget = 60)
+        for fs in (ExplicitEuler(), BackwardEuler(; inner = tight)), M in (CpFields2, CpDrive)
+            base = cp_run(M(; name = :m), fs)
+            for (name, v) in ((:s, 0.5), (:kd, 0.1), (:Dc, 0.2))
+                d = cp_run(M(; name = :m), fs; op = [cp_op(); name => ForwardDiff.Dual(v, 1.0)])
+                @test all(d.u[i].σ == base.u[i].σ for i in eachindex(base.u))
+                @test all(ForwardDiff.value.(d.u[i].site.c) == base.u[i].site.c for i in eachindex(base.u))
+                @test eltype(d.u[end].site.c) <: ForwardDiff.Dual
+                h = 1e-4 * v
+                rp = cp_run(M(; name = :m), fs; op = [cp_op(); name => v + h])
+                rm = cp_run(M(; name = :m), fs; op = [cp_op(); name => v - h])
+                @test all(rp.u[i].σ == base.u[i].σ == rm.u[i].σ for i in eachindex(base.u))   # the path is fixed
+                fd = (cp_q(rp) - cp_q(rm)) / 2h
+                @test ForwardDiff.partials(cp_q(d), 1) ≈ fd rtol = 1e-6
+                @test abs(fd) > 1e-6                                                          # (not a zero derivative)
+            end
+        end
+        # `ForwardDiff.derivative` through `solve` of a `Potts.couple` model
+        m = Potts.couple(CpHost(; name = :m), CpPDE.sys2(); inputs = [CpPDE.endo => Potts.kind == 1])
+        f(k) = cp_q(cp_run(m, ExplicitEuler(); op = [cp_op(); :kd => k]))
+        @test ForwardDiff.derivative(f, 0.1) ≈ (f(0.1 + 1e-5) - f(0.1 - 1e-5)) / 2e-5 rtol = 1e-6
+    end
+end
 
 # F4-09 through the coupling: the PDESystem stays a plain MTK system, and
 # `Potts.field_inputs(integ)` gives its inputs at the CPM state of an integrator
@@ -225,19 +251,21 @@ end
                 fields = (:c, :q), skip = cr_divided)
             @test n >= 10 && err <= cp_tol(fs) || (println("CrLife $fs: $err over $n windows"); false)
         end
-        fs = BackwardEuler()
-        r = cr_run(CrTwoU(; name = :m), fs)
-        @test cp_same(r, cr_run(CrTwoB(; name = :m), fs))
-        @test maximum(r.u[end].site.w) > 0.1
-        err, n = cp_replay(CrTwoB(; name = :m), CpRev.first_sys(), cp_hand2, cp_own(fs); fs, k = 10, seed = 5)
-        @test n == 10 && err <= cp_tol(fs) || (println("CrTwoB $fs: $err"); false)
-        # the coarse field against LatticePDE's run of the raw PDESystem, with `endo` filled by hand
-        c = cr_run(CrCrs(; name = :m), fs)
-        @test size(c.u[end].site.cc) == (12, 10)
-        @test all(u -> cr_partial(u.σ, 2) > 0, c.u)
-        err, n = cp_replay(CrCrs(; name = :m), CpRev.coarse_sys(), (σ, kind) -> [:endo => [s != 0 && kind[s] == 1 for s in σ]],
-            cp_own(fs); fs, k = 10, seed = 5, fields = (:cc,))
-        @test n == 10 && err <= max(cp_tol(fs), 1e-14) || (println("CrCrs $fs: $err"); false)
+        for fs in (ExplicitEuler(), BackwardEuler())
+            r = cr_run(CrTwoU(; name = :m), fs)
+            @test cp_same(r, cr_run(CrTwoB(; name = :m), fs))
+            @test maximum(r.u[end].site.w) > 0.1
+            f1 = fs isa ExplicitEuler ? ExplicitEuler(; substeps = 4) : fs
+            err, n = cp_replay(CrTwoB(; name = :m), CpRev.first_sys(), cp_hand2, cp_own(f1); fs = f1, k = 10, seed = 5)
+            @test n == 10 && err <= cp_tol(fs) || (println("CrTwoB $fs: $err"); false)
+            # the coarse field against LatticePDE's run of the raw PDESystem, with `endo` filled by hand
+            c = cr_run(CrCrs(; name = :m), fs)
+            @test size(c.u[end].site.cc) == (12, 10)
+            @test all(u -> cr_partial(u.σ, 2) > 0, c.u)
+            err, n = cp_replay(CrCrs(; name = :m), CpRev.coarse_sys(), (σ, kind) -> [:endo => [s != 0 && kind[s] == 1 for s in σ]],
+                cp_own(fs); fs, k = 10, seed = 5, fields = (:cc,))
+            @test n == 10 && err <= max(cp_tol(fs), 1e-14) || (println("CrCrs $fs: $err"); false)
+        end
     end
 end
 

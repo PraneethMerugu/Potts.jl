@@ -192,6 +192,7 @@ end
         a0, integ = fi_runA(FiSteady0, fi_op(dims), k; field_solver = nothing)
         a1, _ = fi_runA(FiSteady, fi_op(dims), k; field_solver = QuasiSteady())
         @test a0 == a1 && substep_counts(integ) == [1]
+        @test a0 == fi_runB(FiSteady0, dims, k; u0 = [:c => zeros(dims)], alg = QuasiSteady(; dt = 1.0))
         @test any(eq -> startswith(string(eq), "0 ~"), Potts.fields(FiSteady0(; name = :f)).eqs)
         # another solver for a steady row is refused; `QuasiSteady` given is the default
         @test_throws "`field_solver = BackwardEuler()`: every field of model `f` has a steady equation `0 ~ rhs` (`c`), which `QuasiSteady` solves" PottsProblem(

@@ -234,9 +234,11 @@ end
 
         # 3. Cross-grid operators (`FcXd`, `FcXr`, `FcCut`, `FcCutBcs`)
         tight = DevicePCG(; rtol = 1e-12, budget = 64)
-        ax, rx = fx_run(FcXd, 3, BackwardEuler(; inner = tight)), fx_run(FcXr, 3, BackwardEuler(; inner = tight))
-        @test ax == rx && all(maximum(abs, ax[end][i]) > 0 for i in 1:3)
-        @test size(ax[1][1]) == (4, 3) && size(ax[1][2]) == (16, 12)
+        for fs in (ExplicitEuler(; substeps = 40), BackwardEuler(; inner = tight), CrankNicolson(; inner = tight))
+            ax, rx = fx_run(FcXd, 3, fs), fx_run(FcXr, 3, fs)
+            @test ax == rx && all(maximum(abs, ax[end][i]) > 0 for i in 1:3)
+            @test size(ax[1][1]) == (4, 3) && size(ax[1][2]) == (16, 12)
+        end
         st = current_state(init(PottsProblem(FcXd(; name = :x), fc_op(), (0, 1); field_solver = BackwardEuler()), SequentialCPM())).site
         @test !any(k -> occursin('(', string(k)), keys(st))
         fa = FieldGroups(:u => BackwardEuler(; inner = tight); default = ExplicitEuler(; substeps = 40))

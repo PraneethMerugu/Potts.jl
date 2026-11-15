@@ -359,11 +359,18 @@ end
         @energy cells => λ * (volume - V₀)^2
         @sweep Barker(; temperature = T)
     end
-    fp_m = PottsProblem(NCMetro(; name = :a), op, (0, 2)).f.fingerprint
-    fp_b = PottsProblem(NCBarker(; name = :b), op, (0, 2)).f.fingerprint
+    sys_m = NCMetro(; name = :m)
+    sys_b = NCBarker(; name = :m)
+    fp_m = PottsProblem(sys_m, op, (0, 2)).f.fingerprint
+    fp_b = PottsProblem(sys_b, op, (0, 2)).f.fingerprint
     @test fp_m != fp_b
-    naive_no_law(sys) = hash(nameof(typeof(NCMetro)))
-    @test naive_no_law(NCMetro) == naive_no_law(NCBarker)   # negative control: buggy hash collides
+    naive_no_law(sys) = hash((nameof(sys),
+        string.(Potts.parameters(sys)),
+        Potts.part(sys).kinds,
+        string(Potts.part(sys).lattice),
+        string.(Potts.part(sys).energies),
+        string(Potts.part(sys).relations)))
+    @test naive_no_law(sys_m) == naive_no_law(sys_b)   # negative control: omitting law collides
 
     # P6.0ar: non-default proposal relation must enter the fingerprint
     @potts_model NCPropVN begin
@@ -382,10 +389,17 @@ end
         @energy cells => λ * (volume - V₀)^2
         @sweep Metropolis(; temperature = T)
     end
-    @test PottsProblem(NCPropVN(; name = :a), op, (0, 2)).f.fingerprint !=
-          PottsProblem(NCPropMoore(; name = :b), op, (0, 2)).f.fingerprint
-    naive_no_prop() = hash((:lattice, :energy, :Metropolis))
-    @test naive_no_prop() == naive_no_prop()                # negative control: omitting proposal collides
+    sys_vn = NCPropVN(; name = :m)
+    sys_mo = NCPropMoore(; name = :m)
+    @test PottsProblem(sys_vn, op, (0, 2)).f.fingerprint !=
+          PottsProblem(sys_mo, op, (0, 2)).f.fingerprint
+    naive_no_prop(sys) = hash((nameof(sys),
+        string.(Potts.parameters(sys)),
+        Potts.part(sys).kinds,
+        string(Potts.part(sys).lattice),
+        string.(Potts.part(sys).energies),
+        string(Potts.part(sys).sweep)))
+    @test naive_no_prop(sys_vn) == naive_no_prop(sys_mo)  # negative control: omitting proposal collides
 
     # P6.0p: phase cadence (every = 1 vs every = 2) must enter the fingerprint
     @potts_model NCCad1 begin
@@ -408,24 +422,42 @@ end
           PottsProblem(NCCad2(; name = :b), op, (0, 2)).f.fingerprint
 
     # P6.0c2: closure session token binding (distinct closure values get distinct fingerprints)
-    if isdefined(Potts, :_session_bound)
-        f1 = x -> x + 1.0
-        f2 = x -> x + 2.0
-        c1 = Potts._canonical(Adaptive(RK4(); fn = f1))
-        c2 = Potts._canonical(Adaptive(RK4(); fn = f2))
-        @test c1 != c2
-        @test occursin("var\"#", c1)
+    f1 = x -> x + 1.0
+    f2 = x -> x + 2.0
+    c1 = Potts._canonical(Adaptive(RK4(); fn = f1))
+    c2 = Potts._canonical(Adaptive(RK4(); fn = f2))
+    @test c1 != c2
+    @test occursin("var\"#", c1)
+    # Two anonymous closures capturing different constants must not produce identical
+    # PottsProblem fingerprints
+    @potts_model NCAdapt begin
+        @kinds medium cell
+        @parameters λ = 1.0 V₀ = 9.0 T = 1.0
+        @variables y(cell) = 1.0
+        @lattice Lattice((10, 10))
+        @energy cells => λ * (volume - V₀)^2
+        @equations D(y) ~ -y
+        @sweep Metropolis(; temperature = T)
     end
-    # Two anonymous closures capturing different constants must not produce identical hashes
-    # when compared through PottsProblem / solver canonicalization
     make_biased(c) = (u -> u + c)
     b1, b2 = make_biased(1.0), make_biased(2.0)
     @test hash(b1) != hash(b2)
-    @test string(typeof(b1).name.name) != string(b1(0.0))  # negative control: type name alone drops captured state
+    @test string(typeof(b1).name.name) == string(typeof(b2).name.name)  # negative control: type name alone drops captured state
+    fp_a1 = PottsProblem(NCAdapt(; name = :m), op, (0, 2); ode_solver = Adaptive(RK4(); fn = b1)).f.fingerprint
+    fp_a2 = PottsProblem(NCAdapt(; name = :m), op, (0, 2); ode_solver = Adaptive(RK4(); fn = b2)).f.fingerprint
+    @test fp_a1 != fp_a2
 
     # F4-E15: anonymous neighborhood weight functions with different bodies produce distinct
     # fingerprints, and identical bodies produce equal fingerprints
     @potts_model NCAnonW1 begin
+        @kinds medium cell
+        @parameters λ = 1.0 V₀ = 9.0 T = 1.0
+        @lattice Lattice((10, 10))
+        @relations contact = CorePotts.Weighted(Moore(1), o -> 1.0 / sum(abs2, o))
+        @energy cells => λ * (volume - V₀)^2
+        @sweep Metropolis(; temperature = T)
+    end
+    @potts_model NCAnonW1b begin
         @kinds medium cell
         @parameters λ = 1.0 V₀ = 9.0 T = 1.0
         @lattice Lattice((10, 10))
@@ -442,7 +474,9 @@ end
         @sweep Metropolis(; temperature = T)
     end
     p_w1 = PottsProblem(NCAnonW1(; name = :w), op, (0, 2))
+    p_w1b = PottsProblem(NCAnonW1b(; name = :w), op, (0, 2))
     p_w2 = PottsProblem(NCAnonW2(; name = :w), op, (0, 2))
+    @test p_w1.f.fingerprint == p_w1b.f.fingerprint
     @test p_w1.f.fingerprint != p_w2.f.fingerprint
 end
 end

@@ -309,7 +309,8 @@ end
 @testset "P6.0ag: the fixtures match independent Rodas5P reference over recorded σ" begin
     # Every shape's compiled ODE matches an independent Rodas5P integration over the
     # recorded σ trajectory, with 4-substep ExplicitEuler strictly closer than 1-substep,
-    # and RK4 within 4th-order step error (≤ 1e-5).
+    # and RK4 (dt = 1.0) within rtol = 1e-3, atol = 1e-6 for smooth oscillatory rates
+    # (wider for steep Hill switching and discontinuous P60agModelIf5).
     got = Dict{Tuple{Symbol, String, Symbol}, Vector{Float64}}()
     for M in P60AG_SHAPES, (label, kw) in P60AG_FIXED, alg in P60AG_ALGS
         sol = solve(p60ag_problem(M, (0, p60ag_N); kw...), alg; saveat = 0:p60ag_N)

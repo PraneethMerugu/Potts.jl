@@ -55,10 +55,29 @@ end
         cinteg.key, 0)
     @test_opt target_modules = (CorePotts,) CorePotts.checkerboard_mcs!(cargs...)
     @test_opt target_modules = (CorePotts,) step!(cinteg)
-    # KernelAbstractions' CPU backend launches via `Threads.@threads`, whose runtime
-    # scheduler frames appear in `check_allocs`; verify `CorePotts` itself is allocation-free.
+    # `checkerboard_mcs!` branches on the runtime `Bool` `cache.inline`, so `AllocCheck`
+    # analyzes the `cache.kernel(...)` KernelAbstractions CPU launch (`Threads.@threads` /
+    # `sync_end`). Verify the CorePotts per-phase and kernel helpers directly for zero
+    # allocations, and verify every frame reported on `checkerboard_mcs!` is inside the
+    # KA/Threads launch scheduler rather than `CorePotts` or unexpected `Base` calls.
+    @test isempty(check_allocs(CorePotts._phase_conflict!,
+        typeof.((cinteg.state, cinteg.cache, cinteg.ctx.lattice, cinteg.cache.layout, (0, 0)))))
+    for serial_flag in (Val(true), Val(false))
+        bs_args = ((0, 0), cinteg.state, cinteg.kf, cinteg.p, cinteg.ctx, cinteg.law, cinteg.key,
+            0, cinteg.cache.layout, (0, 0), cinteg.cache.switches, 1, cinteg.cache.track,
+            cinteg.cache.cnt, cinteg.cache.status, cinteg.cache.serial, serial_flag)
+        @test isempty(check_allocs(CorePotts.block_stay!, typeof.(bs_args)))
+    end
     cb_allocs = check_allocs(CorePotts.checkerboard_mcs!, typeof.(cargs))
-    @test isempty(filter(a -> occursin("CorePotts", string(a.backtrace[1].file)), cb_allocs))
+    ka_sched_files = ("cpu.jl", "threadingconstructs.jl", "task.jl", "channels.jl",
+        "condition.jl", "lock.jl", "locks-mt.jl", "linked_list.jl", "partr.jl",
+        "gcutils.jl", "Base_compiler.jl", "libuv.jl", "boot.jl", "array.jl")
+    @test isempty(filter(cb_allocs) do a
+        top_file = basename(string(a.backtrace[1].file))
+        any(sf -> occursin("CorePotts", string(sf.file)), a.backtrace) &&
+            !(top_file in ka_sched_files)
+    end)
+    @test all(a -> basename(string(a.backtrace[1].file)) in ka_sched_files, cb_allocs)
     # `init` is not gated: resolving a relation fixes its length K at run time, which is a
     # deliberate one-time function barrier before the (gated) hot loop.
 

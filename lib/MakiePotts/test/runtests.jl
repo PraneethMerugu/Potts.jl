@@ -8,7 +8,7 @@
 #
 # Environment:
 #   GROUP = All (default) | core | acceptance | adversarial | allocations |
-#           downstream_conformance | saved_state_channels (or MakiePotts_<group>)
+#           downstream_conformance | saved_state_channels | visual (or MakiePotts_<group>)
 #   MAKIEPOTTS_TEST_NAME = regex   only items whose name matches
 #   RETESTITEMS_NWORKERS           worker processes (default 2; 0 runs in this process);
 #                                  workers get this process's thread count

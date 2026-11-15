@@ -1,7 +1,8 @@
 # Lifecycle: division, removal, transition, id reuse, capacity (ROADMAP M2.8).
 
 @testsetup module CP_lifecycle
-using Test, CorePotts, StaticArrays, Statistics, Random, Logging
+using Test, CorePotts, StaticArrays, Statistics, Random
+using Base.CoreLogging: ConsoleLogger, Warn, with_logger
 using SciMLBase: SciMLBase, ReturnCode, remake
 using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
 include("shared/gg_model.jl")
@@ -219,7 +220,7 @@ end
         # independent of prior test execution order or session warn cache (TS1-9)
         @test_logs (:warn, r"frozen_varies") init(fk_problem(; sys = OnlyRemake()), SequentialCPM())
         io = IOBuffer()
-        Logging.with_logger(Logging.ConsoleLogger(io, Logging.Warn)) do
+        with_logger(ConsoleLogger(io, Warn)) do
             init(fk_problem(; sys = OnlyRemake()), SequentialCPM())
             init(fk_problem(; sys = OnlyRemake()), SequentialCPM())
         end

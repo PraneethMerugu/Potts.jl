@@ -969,7 +969,7 @@ end
                 end
             end
 
-            # Property 2: tightness — (n - 1) violates the 1.8 safety margin
+            # Property 2: tightness: (n - 1) violates the 1.8 safety margin
             if n > 1
                 @test (dtval / (n - 1)) * rho > 1.8
             end
