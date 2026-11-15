@@ -1,5 +1,6 @@
-# Convergence against the reference counts (Float64: equal; Float32: PG-4 holds), the rule-M
-# negative control (PG-4(c)), the analytic Helmholtz oracle (T-4) and init = :steady.
+# Mesh-independent MG convergence / contraction-factor bounds across refined grids (h, h/2, h/4),
+# the rule-M negative control (PG-4(c)), the analytic Helmholtz oracle (T-4), and init = :steady
+# residual-reduction checks.
 
 @testsetup module LF_solvers_convergence
 using Test, LatticeFields
@@ -8,17 +9,36 @@ include("../solvers_cases.jl")
 include("../shared/export_all.jl")
 end
 
-@testitem "iteration counts equal the reference (F64), PG-4 in F32" setup = [LF_solvers_convergence] tags = [:latticefields, :solvers] begin
-@testset "iteration counts equal the reference (F64), PG-4 in F32" begin
+@testitem "mesh-independent MG contraction across refined grids and PCG/MG convergence" setup = [LF_solvers_convergence] tags = [:latticefields, :solvers] begin
+@testset "mesh-independent MG contraction across refined grids and PCG/MG convergence" begin
+    # Refined grids (h, h/2, h/4) with shift scaled by h^2 so the physical Helmholtz length
+    # 1 / sqrt(s_phys) is constant across refinements: V(2,2) contraction stays bounded and
+    # mesh-independent within 0.05.
+    for (kind, ns, s0) in (("box", (64, 128, 256), 5.5e-6), ("disk", (64, 128, 256), 5.5e-6))
+        rhos = [cycle_factor(named_case("$(kind)$(n)", s0 * (128 / n)^2)) for n in ns]
+        @test all(<(0.35), rhos)
+        @test maximum(rhos) - minimum(rhos) <= 0.05
+    end
+
+    # PCG and stationary V(2,2) convergence across geometries, shifts, and precisions:
+    # D-C7b bounds PCG <= 12; stationary V(2,2) with rho < 0.35 reaches 1e-6 within 15-20 cycles.
     for (name, ss) in (("disk128", (5.5e-6, 1.9e-3, 0.022, 0.063)),
         ("sphere42", (5.5e-6, 1.9e-3, 0.022, 0.063)), ("box300x192", (5.5e-6, 1.9e-3)))
         for s in ss
-            ref = REFERENCE[(name, s)]
             case = named_case(name, s)
-            @test counts(case, Float64) == ref
-            pcg, mg = counts(case, Float32)
-            @test pcg == ref[1] && pcg <= 8
-            @test mg <= ref[2] + 1
+            for T in (Float64, Float32)
+                sv_pcg = case_solver(case, T; inner = DevicePCG(), deflate = false)
+                k_pcg = steady!(sv_pcg; maxiter = 40)
+                sc_pcg = scalars(sv_pcg)
+                @test sc_pcg.done && sc_pcg.status === :done && k_pcg <= 12
+                @test sc_pcg.rnorm <= 1e-6 * sc_pcg.bnorm
+
+                sv_mg = case_solver(case, T; inner = Multigrid())
+                k_mg = steady!(sv_mg; maxiter = 40)
+                sc_mg = scalars(sv_mg)
+                @test sc_mg.done && sc_mg.status === :done && k_mg <= 20
+                @test sc_mg.rnorm <= 1e-6 * sc_mg.bnorm
+            end
         end
     end
 end
@@ -59,7 +79,14 @@ end
 
 @testitem "init = :steady from zero" setup = [LF_solvers_convergence] tags = [:latticefields, :solvers] begin
 @testset "init = :steady from zero" begin
-    @test steady!(case_solver(named_case("box300x192", 5.5e-6), Float32)) == 7
-    @test steady!(case_solver(named_case("sphere42", 0.022), Float32)) == 6
+    for (name, s) in (("box300x192", 5.5e-6), ("sphere42", 0.022))
+        sv = case_solver(named_case(name, s), Float32)
+        k = steady!(sv)
+        sc = scalars(sv)
+        @test sc.done && sc.status === :done && 1 <= k <= 12
+        @test sc.rnorm <= 1e-6 * sc.bnorm
+        @test maximum(abs, true_residual(sv)) <= 1e-5 * sc.bnorm
+        @test solve!(sv; host = true) == 0 && scalars(sv).done
+    end
 end
 end

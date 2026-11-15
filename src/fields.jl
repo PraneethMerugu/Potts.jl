@@ -675,16 +675,6 @@ _bounded(s) = s isa Union{_MapSteps, _AuxSteps} || (isempty(s.spec.stability.unb
 # whether compiled model `c` has fields: stepped ones, or aux fields only (one group with no state)
 _has_fields(c::CompiledPottsSystem) = !isempty(c.fields) || !isempty(_field_aux(c.sys))
 
-# the explicit Euler update of a substep, clipped below at `lower`, fused symbolically (the
-# oracle of the update pass's byte-identity gate, test/fields_identity.jl)
-struct _EulerUpdate
-    lower::Union{Nothing, Float64}
-end
-function (u::_EulerUpdate)(kb, c, r)
-    v = LatticePDE.euler_update(kb, c, r)
-    return u.lower === nothing ? v : max(v, u.lower)
-end
-
 # The cache of the lowered field groups of a compiled model (`CompiledPottsSystem.field_specs`):
 # `mtkcompile` lowers the group of all fields once, in Float64, and a `PottsProblem` whose
 # partition and state type match reuses it (F2 design §2.5)

@@ -497,6 +497,48 @@ end
     end
 end
 
+@testitem "CheckerboardCPM Repeat split == plain parity with moment tracking (anchor) and deferring Global veto" setup = [FieldsSetup] tags = [:potts, :fields] begin
+    @testset "CheckerboardCPM Repeat split == plain parity with moment tracking (anchor) and deferring Global veto" begin
+        mv_mod = Module(:MomentVetoParity)
+        Core.eval(mv_mod, :(using Potts))
+        Core.eval(mv_mod, quote
+            @potts_model MomentVetoBase begin
+                @kinds medium A
+                @variables x0(cell) = 0.0
+                @lattice Lattice((24, 24))
+                @energy cells => (volume - 40.0)^2
+                @constraint connectivity(A; rule = Global(; window = 1))
+                @after_mcs x0 ~ centroid(1)
+                @sweep Metropolis(; temperature = 4.0)
+            end
+            @potts_model MomentVetoPlain begin
+                @extend base = MomentVetoBase()
+                @schedule sweep, after_mcs
+            end
+            @potts_model MomentVetoSplit begin
+                @extend base = MomentVetoBase()
+                @schedule repeat(4, sweep(fraction = 1//4)), after_mcs
+            end
+        end)
+        σ = zeros(Int32, 24, 24)
+        σ[5:12, 5:12] .= 1
+        σ[14:20, 6:14] .= 2
+        op = [ownership => σ, kind => [:A, :A]]
+        p_plain = PottsProblem(mv_mod.MomentVetoPlain(; name = :mv), op, (0, 12); seed = 4)
+        p_split = PottsProblem(mv_mod.MomentVetoSplit(; name = :mv), op, (0, 12); seed = 4)
+        @test hasproperty(p_plain.u0.cell, :anchor)
+        @test hasproperty(p_split.u0.cell, :anchor)
+        sol_plain = solve(p_plain, CheckerboardCPM())
+        sol_split = solve(p_split, CheckerboardCPM())
+        @test sol_plain.stats.connectivity_deferred > 0
+        @test sol_split.stats.connectivity_deferred == sol_plain.stats.connectivity_deferred
+        @test sol_split.stats.attempts == sol_plain.stats.attempts
+        @test sol_split.u[end].σ == sol_plain.u[end].σ
+        @test sol_split.u[end].cell.anchor == sol_plain.u[end].cell.anchor
+        @test sol_split.u[end].cell.x0 == sol_plain.u[end].cell.x0
+    end
+end
+
 # TS1c: `init` compiles the handler of each MCS entry before `step!` (the 2-argument
 # `_run_entry!`); a `Repeat` calls the 3-argument one, `(integ, e, (j, n))`, once per pass,
 # which must not box its entry: a warm MCS allocates nothing on either algorithm

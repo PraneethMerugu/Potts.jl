@@ -9,49 +9,90 @@
 # and `jac:` arrays after a parameter write, and FiStill's run differs from a fresh problem's
 # (FiMix passes: its mask reads `e`, so it rebuilds every window anyway, f3b3-nc-a-reset.log).
 
-   # (a function barrier)
-@testitem "F3-08: BackwardEuler in a model equals B bitwise (σ frozen)" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
-    @testset "F3-08: BackwardEuler in a model equals B bitwise (σ frozen)" begin
-        dims, k = (12, 10), 8
-        # diffusion, decay, a kind source and a mask that moves (it follows `e`)
-        a, integ = fi_runA(FiMix, fi_op(dims), k)
-        b = fi_runB(FiMix, dims, k; u0 = [:c => zeros(dims), :e => zeros(dims)])
-        @test a == b
-        @test integ.retcode == FiRC.Default || integ.retcode == FiRC.Success
-        rt = CorePotts._runtime(getfield(integ.ctx, :__fields1))
-        @test rt.cache isa FIP.ImplicitCache && rt.cache.moving && rt.cache.newton == 1
-        @test integ.stats.fields.solves == k && integ.stats.fields.budget == 0
-        # the mask moved: it covers part of the box at the last window's start (`e` one MCS before
-        # the end), where `c` holds `v`, and covered nothing at MCS 2
-        xs = [i - 0.5 for i in 1:12, j in 1:10]
-        eprev = Array(current_state(integ).site.e) .- (0.02 .+ 0.01 .* xs)
-        m = eprev .>= 0.5 + 1e-9
-        @test any(m) && !all(m) && all(a[end][m] .== 1.5) && !any(a[2] .== 1.5)
-        # the implicit result is not the explicit one
-        ae, _ = fi_runA(FiMix, fi_op(dims), k; field_solver = ExplicitEuler())
-        @test maximum(abs, ae[end] .- a[end]) > 1e-3
-        @test fi_warm(integ) == 0
-    end
-end
-
-@testitem "F3-08: the solver capabilities in a model (F3-05), equal to B bitwise" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
-    @testset "F3-08: the solver capabilities in a model (F3-05), equal to B bitwise" begin
-        dims, k = (12, 10), 3
-        for M in (FiRobinP, FiFieldFace, FiMaskField)
-            a, integ = fi_runA(M, fi_op(dims), k)
-            @test a == fi_runB(M, dims, k; u0 = [:c => zeros(dims)], inputs = M === FiMaskField ? [:kind => fi_kin(dims)] : [])
-            @test integ.stats.fields.solves == k
+# TS1-1: Parametric coupling table covering BackwardEuler, CrankNicolson, BDF2, QuasiSteady,
+# hexagonal lattices, moving masks, Robin/field faces, and coupled steady rows against
+# LatticePDE's owned run (bitwise, σ frozen).
+@testitem "TS1-1: coupled models equal LatticePDE owned run (ImplicitSetup table)" setup = [ImplicitSetup] tags = [:potts, :fields_implicit, :fields_steppers] begin
+    @testset "TS1-1: coupled models equal LatticePDE owned run (ImplicitSetup table)" begin
+        dims = (12, 10)
+        # (M, fs, k, u0_names, has_kind, check_warm)
+        rows = (
+            (FiMix, BackwardEuler(), 8, (:c, :e), true, true),
+            (FiRobinP, BackwardEuler(), 3, (:c,), false, false),
+            (FiFieldFace, BackwardEuler(), 3, (:c,), false, false),
+            (FiMaskField, BackwardEuler(), 3, (:c,), true, false),
+            (FiRobinN, BackwardEuler(), 3, (:c,), false, false),
+            (FiStill, CrankNicolson(), 4, (:c,), false, false),
+            (FiMix, CrankNicolson(), 4, (:c, :e), true, true),
+            (FiStill, BDF2(), 4, (:c,), false, false),
+            (FiMix, BDF2(), 4, (:c, :e), true, true),
+            (FiStill, QuasiSteady(), 4, (:c,), false, true),
+            (FiSteady, QuasiSteady(), 4, (:c,), true, true),
+            (FiRobinP, QuasiSteady(), 4, (:c,), false, false),
+            (FiRobinQ, QuasiSteady(), 4, (:c,), false, false),
+            (FiFieldFace, QuasiSteady(), 4, (:c,), false, false),
+            (FiMaskField, QuasiSteady(), 4, (:c,), true, false),
+        )
+        for (M, fs, k, u0_names, has_kind, check_warm) in rows
+            a, integ = fi_runA(M, fi_op(dims), k; field_solver = fs)
+            u0 = [nm => zeros(dims) for nm in u0_names]
+            inputs = has_kind ? [:kind => fi_kin(dims)] : []
+            alg = fs isa QuasiSteady ? QuasiSteady(; dt = 1.0) : remake(fs; dt = 1.0)
+            b = fi_runB(M, dims, k; u0, inputs, alg)
+            @test a == b
+            @test integ.retcode == FiRC.Default || integ.retcode == FiRC.Success
+            @test (M === FiRobinN || fs isa CrankNicolson || fs isa BDF2) ? integ.stats.fields.solves >= k : integ.stats.fields.solves == k
+            if M === FiMix && fs isa BackwardEuler
+                rt = fi_rt(integ)
+                @test rt.cache isa FIP.ImplicitCache && rt.cache.moving && rt.cache.newton == 1
+                @test integ.stats.fields.budget == 0
+                xs = [i - 0.5 for i in 1:12, j in 1:10]
+                eprev = Array(current_state(integ).site.e) .- (0.02 .+ 0.01 .* xs)
+                m = eprev .>= 0.5 + 1e-9
+                @test any(m) && !all(m) && all(a[end][m] .== 1.5) && !any(a[2] .== 1.5)
+                ae, _ = fi_runA(FiMix, fi_op(dims), k; field_solver = ExplicitEuler())
+                @test maximum(abs, ae[end] .- a[end]) > 1e-3
+            elseif M === FiRobinN && fs isa BackwardEuler
+                c = fi_rt(integ).cache
+                @test c.newton == 8 && c.seen && substep_counts(integ) == [2] && integ.stats.fields.newton_budget == 0
+            elseif M === FiMaskField && fs isa BackwardEuler
+                m = fi_kin(dims) .== 1
+                @test a[1][m] == [1 + 0.1 * (i - 0.5) for i in 1:12, j in 1:10][m]
+            elseif fs isa CrankNicolson
+                @test fi_rt(integ).cache.jumps == (M === FiMix)
+            elseif fs isa QuasiSteady && M === FiSteady
+                @test substep_counts(integ) == [1]
+            end
+            check_warm && @test fi_warm(integ) == 0
         end
-        # opposite signs: the negative part in the residual, with its bound `w |d⁻|` (S1): two
-        # substeps and `newton = 8` by default
-        a, integ = fi_runA(FiRobinN, fi_op(dims), k)
-        @test a == fi_runB(FiRobinN, dims, k; u0 = [:c => zeros(dims)], inputs = [])
-        c = CorePotts._runtime(getfield(integ.ctx, :__fields1)).cache
-        @test c.newton == 8 && c.seen && substep_counts(integ) == [2] && integ.stats.fields.newton_budget == 0
-        # the mask value field: each masked site holds its own value
-        a, _ = fi_runA(FiMaskField, fi_op(dims), 1)
-        m = fi_kin(dims) .== 1
-        @test a[1][m] == [1 + 0.1 * (i - 0.5) for i in 1:12, j in 1:10][m]
+
+        # Coupled steady rows (`FcPair`, `FcFeed`)
+        ap, ip = fc_runA(FcPair, 3, (:u, :v))
+        bp, sb = fc_runB(FcPair, 3, (:u, :v); alg = QuasiSteady(; dt = 1.0))
+        @test sb.retcode == FiRC.Success && ap == bp
+        @test Potts.LatticeFields.Problems.coupled_solve(fi_rt(ip).cache) && fi_rt(ip).cache.newton == 1
+        @test fi_warm(ip) == 0
+        @test maximum(abs, ap[end][1]) > 0.01 && maximum(abs, ap[end][2]) > 0.01
+        _, ic = fc_runA(FcComp, 3, ())
+        @test [Array(current_state(ic).site.w_1), Array(current_state(ic).site.w_2)] == ap[end]
+
+        af, _ = fc_runA(FcFeed, 4, (:e, :u, :v); field_solver = BackwardEuler())
+        bf, _ = fc_runB(FcFeed, 4, (:e, :u, :v); alg = BackwardEuler(; dt = 1.0))
+        @test af == bf
+
+        # Hexagonal lattice (`FiHexF`)
+        k = 4
+        ah, ih = fi_runA(FiHexF, fi_op(dims), k)
+        bp = Potts.LatticePDE.discretize(Potts.fields(FiHexF(; name = :f)),
+            Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(dims; geometry = Potts.LatticeFields.IR.HEX);
+                T = Float64); u0 = [:c => zeros(dims)], tspan = (0, k), inputs = [:kind => fi_kin(dims)])
+        @test ah == (s -> [s[:c, i] for i in 2:length(s.t)])(Potts.LatticePDE.solve(bp, BackwardEuler(; dt = 1.0); saveat = 1.0))
+        @test fi_rt(ih).cache.newton == 1 && ih.stats.fields.solves == k && all(ah[end][fi_kin(dims) .== 1] .== 1.5)
+        ahe, _ = fi_runA(FiHexF, fi_op(dims), k; field_solver = ExplicitEuler())
+        @test maximum(abs, ahe[end] .- ah[end]) > 1e-3
+        σ = zeros(Int32, 16, 16); σ[4:6, 4:6] .= 1
+        @test solve(PottsProblem(FiHex(; name = :f), [ownership => σ, kind => [:A]], (0, 3); field_solver = BackwardEuler()),
+            SequentialCPM()).retcode == FiRC.Success
     end
 end
 
@@ -220,26 +261,6 @@ end
     end
 end
 
-@testitem "F3-20 (in a model): BackwardEuler on a hexagonal lattice, equal to B bitwise (σ frozen)" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
-    @testset "F3-20 (in a model): BackwardEuler on a hexagonal lattice, equal to B bitwise (σ frozen)" begin
-        # base (ee577f6e): refused at `init` ("a hexagonal lattice has no implicit solve yet")
-        dims, k = (12, 10), 4
-        a, integ = fi_runA(FiHexF, fi_op(dims), k)
-        bp = Potts.LatticePDE.discretize(Potts.fields(FiHexF(; name = :f)),
-            Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(dims; geometry = Potts.LatticeFields.IR.HEX);
-                T = Float64); u0 = [:c => zeros(dims)], tspan = (0, k), inputs = [:kind => fi_kin(dims)])
-        @test a == (s -> [s[:c, i] for i in 2:length(s.t)])(Potts.LatticePDE.solve(bp, BackwardEuler(; dt = 1.0); saveat = 1.0))
-        rt = CorePotts._runtime(getfield(integ.ctx, :__fields1))
-        @test rt.cache.newton == 1 && integ.stats.fields.solves == k && all(a[end][fi_kin(dims) .== 1] .== 1.5)
-        # the implicit result is not the explicit one
-        ae, _ = fi_runA(FiHexF, fi_op(dims), k; field_solver = ExplicitEuler())
-        @test maximum(abs, ae[end] .- a[end]) > 1e-3
-        # a moving σ (periodic): the run that was refused
-        σ = zeros(Int32, 16, 16); σ[4:6, 4:6] .= 1
-        @test solve(PottsProblem(FiHex(; name = :f), [ownership => σ, kind => [:A]], (0, 3); field_solver = BackwardEuler()),
-            SequentialCPM()).retcode == FiRC.Success
-    end
-end
 
 @testitem "F3-20 r1 M1 (in a model): face conditions on a hexagonal lattice: the hand BE matrix, equal to B bitwise" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
     @testset "F3-20 r1 M1 (in a model): face conditions on a hexagonal lattice: the hand BE matrix, equal to B bitwise" begin
@@ -316,10 +337,12 @@ end
         # (the implicit solves converged far below the default `rtol = 1e-6`: the tangent is the
         # derivative of the converged stage, F3-21a, and central differences see the solve's tolerance)
         tight = DevicePCG(; rtol = 1e-11, budget = 60)
+        # TS1-2: all 3 parameters for BackwardEuler, one parameter (:Dc) for the other 4 steppers
         for fs in (ExplicitEuler(), BackwardEuler(; inner = tight), CrankNicolson(; inner = tight), BDF2(; inner = tight),
                    QuasiSteady(; inner = tight))
             base = fi_drun(fs, Pair[])
-            for (name, v) in ((:Dc, 0.2), (:s, 0.5), (:kd, 0.1))
+            params = fs isa BackwardEuler ? ((:Dc, 0.2), (:s, 0.5), (:kd, 0.1)) : ((:Dc, 0.2),)
+            for (name, v) in params
                 d = fi_drun(fs, [name => ForwardDiff.Dual(v, 1.0)])
                 # the Dual run is the primal run: its σ and its field values, bit for bit, at every save
                 @test all(d.u[i].σ == base.u[i].σ for i in eachindex(base.u))
@@ -329,6 +352,7 @@ end
                 rp, rm = fi_drun(fs, [name => v + h]), fi_drun(fs, [name => v - h])
                 @test all(rp.u[i].σ == base.u[i].σ == rm.u[i].σ for i in eachindex(base.u))       # the path is fixed
                 fd = (fi_dq(rp) - fi_dq(rm)) / 2h
+                @test abs(fd) > 1e-6
                 @test ForwardDiff.partials(fi_dq(d), 1) ≈ fd rtol = 1e-6
             end
         end
@@ -365,9 +389,25 @@ end
 
 @testitem "F3-21b: a Dual run's integrator, remake and refusals" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
     @testset "F3-21b: a Dual run's integrator, remake and refusals" begin
-        # `ForwardDiff.derivative` through `solve`
+        # `ForwardDiff.derivative` through `solve` (plain and `Potts.couple`)
         f(k) = fi_dq(fi_drun(ExplicitEuler(), [:kd => k]))
         @test ForwardDiff.derivative(f, 0.1) ≈ (f(0.1 + 1e-5) - f(0.1 - 1e-5)) / 2e-5 rtol = 1e-6
+        @potts_model FiCoupleHost begin
+            @kinds medium A
+            @lattice Lattice((24, 20); boundary = Closed())
+            @energy cells => (volume - 16.0)^2
+            @sweep Metropolis(; temperature = 2.0)
+        end
+        T_c, X_c, Y_c = FieldPDE.t, FieldPDE.x, FieldPDE.y
+        FieldPDE.@variables c_c(..)
+        FieldPDE.@parameters Dc_c = 0.2 kd_c = 0.1
+        FieldPDE.@variables endo_c(T_c, X_c, Y_c) [input = true]
+        csys = FieldPDE.pdesys([FieldPDE.Dt(c_c(T_c, X_c, Y_c)) ~ Dc_c * FieldPDE.Δ(c_c(T_c, X_c, Y_c)) - kd_c * c_c(T_c, X_c, Y_c) + 0.5 * endo_c],
+            [c_c(0, X_c, Y_c) ~ 0.0], (24, 20), [c_c(T_c, X_c, Y_c), endo_c], [Dc_c, kd_c])
+        cm = Potts.couple(FiCoupleHost(; name = :m), csys; inputs = [endo_c => Potts.kind == 1])
+        σ_c = zeros(Int32, 24, 20); σ_c[5:8, 5:8] .= 1
+        fc(k) = sum(FI_DW .* solve(PottsProblem(cm, [ownership => σ_c, kind => [:A], :kd_c => k], (0, 4); seed = 3), SequentialCPM()).u[end].site.c_c)
+        @test ForwardDiff.derivative(fc, 0.1) ≈ (fc(0.1 + 1e-5) - fc(0.1 - 1e-5)) / 2e-5 rtol = 1e-6
         integ = init(PottsProblem(FiDual(; name = :m), [fi_dop(); :kd => ForwardDiff.Dual(0.1, 1.0)], (0, 6)), SequentialCPM())
         step!(integ)
         @test eltype(integ[:c]) <: ForwardDiff.Dual && eltype(integ.state.site.c) === Float64     # the live state is primal

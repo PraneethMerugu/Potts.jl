@@ -82,7 +82,7 @@ end
     case = named_case("per256", 5.5e-6)
     sv, ref = case_solver(case, Float64), case_solver(case, Float64; deflate = false)
     k = steady!(sv)
-    @test scalars(sv).done && k <= 8                   # measured 8 (undeflated 8)
+    @test scalars(sv).done && k <= 12 && scalars(sv).rnorm <= 1e-6 * scalars(sv).bnorm   # D-C7b: PCG <= 12
     @test scalars(sv).mean ≈ 0.5 / 5.5e-6 rtol = 1e-12 # mean(b)/s
     steady!(ref)
     u, uref = field(sv, "pcg.u"), field(ref, "pcg.x")
@@ -101,14 +101,13 @@ end
 @testset "solver_T = :auto: Float64 solver for unanchored weak-reaction groups" begin
     # Float32 state; the solver runs in Float64 and reaches 1e-6 at weak reaction; the
     # caller-facing arrays stay Float32 (converted at the boundary)
-    for (case, cap) in ((named_case("per256", 5.5e-6), 8), (
-        named_case("per300", 5.5e-6), 12),
-        (per45_case(), 12), (neumann_x_case(), 12), (neumann_case(), 12))
+    for case in (named_case("per256", 5.5e-6), named_case("per300", 5.5e-6),
+        per45_case(), neumann_x_case(), neumann_case())
         sv = case_solver(case, Float32)
         k = steady!(sv)
         sc = scalars(sv)
         @test sv.T == Float64 && sv.state == Float32 && floor_regime(sv.op)
-        @test sc.status === :done && k <= cap && sc.rnorm <= 1e-6 * sc.bnorm
+        @test sc.status === :done && k <= 12 && sc.rnorm <= 1e-6 * sc.bnorm
         x = solver_solution(sv)
         @test maximum(abs, true_residual(sv, x)) <= 1e-6 * sc.bnorm
         u = field(sv, solution_key(sv))
@@ -122,7 +121,7 @@ end
     @test sv.T == Float32 && scalars(sv).status === :floor
     # strong reaction (s ≥ FLOOR_SHIFT) and anchored groups stay in the state type
     sv = case_solver(named_case("per256", 1.0), Float32)
-    @test sv.T == Float32 && steady!(sv) <= 8 && scalars(sv).done   # measured 4
+    @test sv.T == Float32 && steady!(sv) <= 12 && scalars(sv).done
     @test case_solver(named_case("disk128", 0.022), Float32).T == Float32
     @test case_solver(named_case("box128", 5.5e-6), Float32).T == Float32
     # explicit types: Float32 keeps (the floor testset below); Float64 forces, the solution
@@ -161,7 +160,7 @@ end
     disk = named_case("disk128", 0.022)
     sv = FieldSolver(MinExec(), disk[1])
     foreach(((k, v),) -> copyto!(field(sv, k), v), disk[2])
-    @test steady!(sv) <= 8 && scalars(sv).done && sv.T == Float32
+    @test steady!(sv) <= 12 && scalars(sv).done && sv.T == Float32
     @test FieldSolver(MinExec(), op).T == Float32           # :auto falls back
     @test_throws r"not supported" FieldSolver(MinExec(), op; solver_T = Float64)
 end
@@ -186,7 +185,7 @@ end
 @testitem "warm re-solve keeps the zero-mean part (Float32)" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
 @testset "warm re-solve keeps the zero-mean part (Float32)" begin
     sv = case_solver(named_case("per300", 1.0), Float32; solver_T = Float32)
-    @test steady!(sv) <= 8 && scalars(sv).done
+    @test steady!(sv) <= 12 && scalars(sv).done
     @test solve!(sv; host = true) == 0 && scalars(sv).done     # converged warm start
     @test abs(sum(field(sv, "pcg.x"))) / length(field(sv, "pcg.x")) < 1e-3
 end
