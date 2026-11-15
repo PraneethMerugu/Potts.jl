@@ -100,6 +100,10 @@ function run_potts_subgroup(groups, name::AbstractString)
     end
     target = resolve_group_alias(groups, name)
     opts = groups[target]
+    if target == "Multithreaded"
+        @info "Running the Multithreaded suite (test/*_tests.jl, ReTestItems)" threads = Threads.nthreads()
+        return PottsRTI.multithreaded_suite()
+    end
     if target == "Potts_gpu"
         gpu = strip(get(ENV, "POTTS_GPU", ""))
         if isempty(gpu)
@@ -116,20 +120,20 @@ function run_potts_subgroup(groups, name::AbstractString)
     keep(ti) = :potts in ti.tags &&
         (isempty(want) || any(in(ti.tags), want)) &&
         !any(in(ti.tags), excl) &&
+        (:multithreaded in want || !(:multithreaded in ti.tags)) &&
         (rocm || !(:rocm in ti.tags))
     @info "Running Potts group $target" tags = want
     return PottsRTI._two_passes(keep, PottsRTI.NWORKERS)
 end
 
-# Device group (not part of All): the device tests of the CorePotts and Potts suites, on the
-# backend that POTTS_GPU / COREPOTTS_GPU request (test/shared/device_select.jl, D-157). The
-# CorePotts suite runs through test/shared/device_only.jl, which drops the top-level testsets
-# that name no device (the CPU groups run them) and keeps every definition and every device
-# testset; the Potts suite runs its `:device` and `:gpu` items (`PottsRTI.device_suite`).
-# POTTS_DEVICE_ONLY=false runs the suites in full, as before.
-# Neither set: the platform's own, Metal on macOS and ROCm elsewhere. On ROCm both suites end
-# with the full no-`double` scan of their compiled kernels, and a last step checks that every
-# CorePotts kernel and launch body was scanned (test/device_coverage.jl).
+# Device group (not part of All): the device tests of LatticeFields, LatticePDE, CorePotts,
+# and Potts, on the backend that POTTS_GPU / COREPOTTS_GPU request (test/shared/device_select.jl,
+# D-157). Each sublibrary runs its own ReTestItems `GROUP=gpu` group when POTTS_DEVICE_ONLY=true
+# (the default), or `GROUP=All` when POTTS_DEVICE_ONLY=false; the Potts suite runs its `:device`
+# and `:gpu` items (`PottsRTI.device_suite`).
+# Neither set: the platform's own, Metal on macOS and ROCm elsewhere. On ROCm the CorePotts and
+# Potts suites end with the full no-`double` scan of their compiled kernels, and a last step checks
+# that every CorePotts kernel and launch body was scanned (test/device_coverage.jl).
 function run_gpu_group()
     gpu = PottsDeviceSelect.requested()
     isempty(gpu) && (gpu = Sys.isapple() ? "metal" : "rocm")
@@ -138,12 +142,13 @@ function run_gpu_group()
     isempty(irdir) ? (irdir = mktempdir()) : mkpath(irdir)
     env = ("POTTS_GPU" => gpu, "COREPOTTS_GPU" => gpu, "POTTS_DEVICE_IR_DIR" => irdir)
     only = get(ENV, "POTTS_DEVICE_ONLY", "true") == "true"
-    suite(project, runner; env) = only ?
-        run_group(project, joinpath(ROOT, "test/shared/device_only.jl"), runner; env) : run_group(project, runner; env)
+    sub_group = only ? "gpu" : "All"
     run_group(joinpath(ROOT, "lib/LatticeFields/test"), joinpath(ROOT, "lib/LatticeFields/test/runtests.jl");
-        env = ("GROUP" => "All", "LATTICEFIELDS_GPU" => gpu, "LATTICEFIELDS_QA" => "false"))
-    suite(joinpath(ROOT, "lib/CorePotts/test"), joinpath(ROOT, "lib/CorePotts/test/runtests.jl");
-        env = ("GROUP" => "All", env..., "COREPOTTS_QA" => "false"))
+        env = ("GROUP" => sub_group, "LATTICEFIELDS_GPU" => gpu, "LATTICEFIELDS_QA" => "false"))
+    run_group(joinpath(ROOT, "lib/LatticePDE/test"), joinpath(ROOT, "lib/LatticePDE/test/runtests.jl");
+        env = ("GROUP" => sub_group, "LATTICEPDE_GPU" => gpu, "LATTICEPDE_QA" => "false"))
+    run_group(joinpath(ROOT, "lib/CorePotts/test"), joinpath(ROOT, "lib/CorePotts/test/runtests.jl");
+        env = ("GROUP" => sub_group, env..., "COREPOTTS_QA" => "false"))
     withenv(env..., "POTTS_QA" => "false") do
         only ? PottsRTI.device_suite() : PottsRTI.potts_suite(; nworkers = 1, gpu = true)
     end

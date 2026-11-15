@@ -16,6 +16,7 @@ using Statistics: mean, var
 
 isdefined(@__MODULE__, :SingleDivisionFixture) ||
     include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "fixtures.jl"))
+isdefined(@__MODULE__, :stat_accept) || include(joinpath(@__DIR__, "shared", "props.jl"))
 
 
 # ROCm: the hook-based IR checks (negative controls, compile-only launches; D-157)
@@ -111,9 +112,12 @@ end
         @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(kinds)]
         xs = [total_energy(prob, solve(remake(prob; seed), CheckerboardCPM(); save_start = false).u[end]) for seed in 1:8]
         ys = [total_energy(prob, solve(remake(prob; seed), CheckerboardCPM(); backend, save_start = false).u[end]) for seed in 11:18]
-        t = (mean(xs) - mean(ys)) / sqrt(var(xs) / 8 + var(ys) / 8)
-        @info "symbolic Graner H, CPU vs device" cpu = mean(xs) device = mean(ys) t
-        @test abs(t) < 4
+        res = stat_accept(xs, ys; alpha = 1e-3, alternative = :two_sided)
+        @info "symbolic Graner H, CPU vs device" cpu = mean(xs) device = mean(ys) z = res.statistic pvalue = res.pvalue
+        @test !res.pass
+        # negative control: a wrong temperature is rejected
+        xs_hot = [total_energy(prob, solve(remake(prob; seed, p = [:T => 50.0f0]), CheckerboardCPM(); save_start = false).u[end]) for seed in 1:8]
+        @test stat_accept(xs, xs_hot; alpha = 1e-3, alternative = :two_sided).pass
         for (label, p) in (
                 ("wortel", PottsProblem(WORTEL, [ownership => wortel_state(), kind => [1, 1]], (0, 20); T = Float32)),
                 ("merks", PottsProblem(MERKS, [ownership => merks_state(), kind => [1, 1]], (0, 20); T = Float32,
@@ -149,8 +153,9 @@ end
         @test sq.retcode == Potts.SciMLBase.ReturnCode.Success && all(isfinite, cq) && minimum(cq) >= -1e-4 * maximum(cq) && maximum(cq) > 0
         σs = zeros(Int32, 60, 30); σs[5:10, 12:17] .= 1; σs[40:45, 12:17] .= 2
         sp = PottsProblem(Spring(; name = :spring), [ownership => σs, kind => [:blob, :blob], :bond => [(1, 2)]], (0, 1000); T = Float32)
-        ds = [CorePotts.centroid_distance(Float64, solve(remake(sp; seed), CheckerboardCPM(); backend).u[end].cell, sp.lattice, 1, 2) for seed in 1:4]
-        @test abs(sum(ds) / 4 - 12.0) < 2.5
+        n_spring = max(8, required_n(1.5, 2.5; alpha = 1e-3, power = 0.9))
+        ds = [CorePotts.centroid_distance(Float64, solve(remake(sp; seed), CheckerboardCPM(); backend).u[end].cell, sp.lattice, 1, 2) for seed in 1:n_spring]
+        @test stat_accept(ds; mu0 = 12.0, margin = 2.5, alpha = 1e-3).pass
         # model-scope updates run as a single-item kernel on the device
         σc, kc = two_kind_blocks()
         cp = PottsProblem(Census(; name = :census), [ownership => σc, kind => kc], (0, 5); T = Float32)
@@ -283,7 +288,8 @@ end
         mp = PottsProblem(MetalSprings(; name = :ms), [ownership => σ, kind => [:blob, :blob, :blob],
             :bond => [(1, 2)], :tether => [(2, 3)]], (0, 1500); T = Float32)
         @test eltype(mp.u0.cell.link_rest) == Float32 && eltype(mp.u0.cell.link_len) == Float32
-        d = map(1:4) do seed
+        n_ms = max(8, required_n(1.5, 2.5; alpha = 1e-3, power = 0.9))
+        d = map(1:n_ms) do seed
             u = solve(remake(mp; seed), CheckerboardCPM(); backend).u[end]
             @test Array(u.cell.volume) == [count(==(c), Array(u.σ)) for c in 1:3]
             @test Array(u.cell.links__bond) == mp.u0.cell.links__bond          # sweeps never touch links
@@ -291,8 +297,8 @@ end
                 CorePotts.centroid_distance(Float64, u.cell, mp.lattice, 2, 3))
         end
         @info "two relationships on the device" bond = mean(first.(d)) tether = mean(last.(d))
-        @test abs(mean(first.(d)) - 12.0) < 2.5
-        @test abs(mean(last.(d)) - 18.0) < 2.5
+        @test stat_accept(first.(d); mu0 = 12.0, margin = 2.5, alpha = 1e-3).pass
+        @test stat_accept(last.(d); mu0 = 18.0, margin = 2.5, alpha = 1e-3).pass
     end
 end
 
@@ -312,9 +318,9 @@ end
         end
         cpu = [leader_y(CorePotts.CPU(), Float64, s) for s in 1:4]
         gpu = [leader_y(PottsDevices.device_backend(), Float32, s) for s in 11:14]
-        t = (mean(cpu) - mean(gpu)) / sqrt(var(cpu) / 4 + var(gpu) / 4)
-        @info "Akeeb leader height, CPU vs device" cpu = mean(cpu) device = mean(gpu) t
-        @test abs(t) < 4
+        res = stat_accept(cpu, gpu; alpha = 1e-3, alternative = :two_sided)
+        @info "Akeeb leader height, CPU vs device" cpu = mean(cpu) device = mean(gpu) z = res.statistic pvalue = res.pvalue
+        @test !res.pass
         @test all(>(20), gpu)          # leaders invade (start ≈ 11; ≈ 15.5 at 200 MCS without the cue)
     end
 end
@@ -330,9 +336,9 @@ end
         @test Array(u.cell.volume) == [count(==(c), Array(u.σ)) for c in eachindex(Array(u.cell.volume))]
         xs = [total_energy(p64, solve(remake(p64; seed), CheckerboardCPM(); save_start = false).u[end]) for seed in 1:8]
         ys = [total_energy(p64, solve(remake(p32; seed), CheckerboardCPM(); backend, save_start = false).u[end]) for seed in 11:18]
-        t = (mean(xs) - mean(ys)) / sqrt(var(xs) / 8 + var(ys) / 8)
-        @info "P6.0e site-value contacts H, CPU vs device" cpu = mean(xs) device = mean(ys) t
-        @test abs(t) < 4
+        res = stat_accept(xs, ys; alpha = 1e-3, alternative = :two_sided)
+        @info "P6.0e site-value contacts H, CPU vs device" cpu = mean(xs) device = mean(ys) z = res.statistic pvalue = res.pvalue
+        @test !res.pass
         # an on-copy write read by the contact term, on the device
         σ, kinds, cue = site_contact_state((20, 20); side = 4)
         oc = PottsProblem(SiteContactsOnCopy(; name = :oc), [ownership => σ, kind => fill(:A, length(kinds)), :mark => cue,

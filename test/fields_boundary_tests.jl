@@ -17,6 +17,7 @@ using Potts, Test
 
 # F4-B4t, F4-B6: the models couple their fields with `@fields`
 isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
+isdefined(@__MODULE__, :observed_orders) || include(joinpath(@__DIR__, "shared", "props.jl"))
 
 module FbPDE
 using ..FieldPDE
@@ -30,6 +31,15 @@ function mms(n)
     return pdesys([Dt(C) ~ Dd * Δ(C) + (cos(π * x / 2) + x * y^2) - Dd * (1 + t) * (2x - (π^2 / 4) * cos(π * x / 2))],
         [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1 + t, c(t, 1, y) ~ (1 + t) * y^2, Dy(c(t, x, 1)) ~ 2 * (1 + t) * x], (n, n), [C], [Dd];
         spacing = 1 / n)
+end
+# temporal MMS for ExplicitEuler: u = (1 + t)^2 * φ on 8 × 8 with small Dd so temporal error O(dt) dominates
+function mms_ee(n = 8)
+    @parameters Dd = 0.002
+    φ = cos(π * x / 2) + x * y^2
+    Δφ = 2x - (π^2 / 4) * cos(π * x / 2)
+    return pdesys([Dt(C) ~ Dd * Δ(C) + 2 * (1 + t) * φ - Dd * (1 + t)^2 * Δφ],
+        [c(0, x, y) ~ 0.0, c(t, 0, y) ~ (1 + t)^2, c(t, 1, y) ~ (1 + t)^2 * y^2, Dy(c(t, x, 1)) ~ 2 * (1 + t)^2 * x],
+        (n, n), [C], [Dd]; spacing = 1 / n)
 end
 site() = (@parameters Dc = 0.2 g1 = 1.0;
           pdesys([Dt(C) ~ Dc * Δ(C) - 0.1 * C],
@@ -121,6 +131,13 @@ for n in (16, 32, 64)
     end
 end
 
+@potts_model FbMMSEE begin
+    @kinds medium A
+    @lattice Lattice((8, 8); boundary = Closed(), spacing = (1 / 8, 1 / 8))
+    @fields FbPDE.mms_ee(8)
+    @sweep Metropolis(; temperature = 1.0)
+end
+
 
 # F4-12b (rulings Q14–Q17): Robin coefficients that vary by site or in time. The coupled run
 # equals LatticePDE's own run of the PDESystem (until F4-B6, front end A's `@boundary` bitwise),
@@ -183,7 +200,7 @@ end
 @testitem "F4-12a: manufactured solution, order 2 (time-dependent Dirichlet, space-dependent Neumann)" setup = [FieldsBoundarySetup] tags = [:potts, :fields_boundary] begin
     @testset "F4-12a: manufactured solution, order 2 (time-dependent Dirichlet, space-dependent Neumann)" begin
         φ(x, y) = cos(π * x / 2) + x * y^2
-        errs = map((16, 32, 64)) do n
+        errs = map([16, 32, 64]) do n
             M = getfield(@__MODULE__, Symbol(:FbMMS, n))
             xs = ((1:n) .- 0.5) ./ n
             φ0 = [φ(x, y) for x in xs, y in xs]
@@ -191,8 +208,29 @@ end
                 SequentialCPM())
             maximum(abs, Array(s.u[end].site.c) .- 2 .* φ0)
         end
-        om = log2.(errs[1:2] ./ errs[2:3])
+        hs = [1 / n for n in (16, 32, 64)]
+        om = observed_orders(hs, errs)
         @test all(o -> abs(o - 2) < 0.1, om) || (println("F4-12a manufactured errors ", errs, " orders ", om); false)
+        @test abs(observed_order(hs, errs) - 2) < 0.1
+    end
+end
+
+@testitem "TS2-1: ExplicitEuler manufactured solution temporal convergence order 1" setup = [FieldsBoundarySetup] tags = [:potts, :fields_boundary] begin
+    @testset "TS2-1: ExplicitEuler manufactured solution temporal convergence order 1" begin
+        φ(x, y) = cos(π * x / 2) + x * y^2
+        n = 8
+        xs = ((1:n) .- 0.5) ./ n
+        φ0 = [φ(x, y) for x in xs, y in xs]
+        substeps = [4, 8, 16, 32]
+        dts = [1.0 / k for k in substeps]
+        errs = map(substeps) do k
+            s = solve(PottsProblem(FbMMSEE(; name = :m), fb_op((n, n), [:c => φ0]), (0, 1);
+                    field_solver = ExplicitEuler(; substeps = k)), SequentialCPM())
+            maximum(abs, Array(s.u[end].site.c) .- 4 .* φ0)
+        end
+        om = observed_orders(dts, errs)
+        @test all(o -> abs(o - 1.0) < 0.15, om) || (println("TS2-1 EE MMS errors ", errs, " orders ", om); false)
+        @test abs(observed_order(dts, errs) - 1.0) < 0.15
     end
 end
 

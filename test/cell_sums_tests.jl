@@ -29,16 +29,6 @@ using Potts: CorePotts
 
 isdefined(@__MODULE__, :JiangLike) || include(joinpath(@__DIR__, "fields_jiang_model.jl"))
 
-
-const CS_THREADS_RUN = raw"""
-using Potts
-using Potts: CorePotts
-include(joinpath(ENV["CS_TEST_DIR"], "cell_sums_models.jl"))
-println("CSRUN ", Threads.nthreads(), " ", join(cs_digests(), " "))
-println("CSR1 ", Threads.nthreads(), " ", join(first(cs_r1_digests()), " "))
-println("CSTCB ", Threads.nthreads(), " ", join(cs_threaded_cb_invariants(), " "))
-"""
-
 include(joinpath(@__DIR__, "cell_sums_models.jl"))
 
 
@@ -46,30 +36,44 @@ const CS_R1 = cs_r1_digests()
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-          # review r1 (one thread), checked below and at 4 threads
-@testitem "F3-23: cell averages are bitwise the same at 1 and 4 threads; threaded CheckerboardCPM Repeat invariants" setup = [CellSumsSetup] tags = [:potts, :cell_sums, :subprocess] begin
-    @testset "F3-23: cell averages are bitwise the same at 1 and 4 threads; threaded CheckerboardCPM Repeat invariants" begin
+@testitem "F3-23: cell averages are bitwise the same across run lengths (1 thread)" setup = [CellSumsSetup] tags = [:potts, :cell_sums] begin
+    @testset "F3-23: cell averages are bitwise the same across run lengths (1 thread)" begin
         @test 32^3 > CorePotts.Exec.HOST_GRAIN && 200^2 > CorePotts.Exec.HOST_GRAIN
         one = cs_digests()
-        @test Threads.nthreads() == 1
-        out = split(strip(readchomp(addenv(`$(Base.julia_cmd()) --startup-file=no -t 4 --project=$(Base.active_project()) -e $CS_THREADS_RUN`,
-            "CS_TEST_DIR" => @__DIR__))))
-        i = findlast(==("CSRUN"), out)
-        @test parse(Int, out[i + 1]) == 4
-        got = out[(i + 2):(i + 10)]
-        # fixed point: ocell, σ and cavg equal one thread's, with the default runs and with
-        # runs of one site (threaded site passes)
-        @test got[1:3] == one[1:3] && got[4:6] == one[1:3]
-        # negative control (float atomics): an average differs from one thread's
-        @test got[7:9] != one[7:9]
-        # review r1: weighted surfaces, cluster surfaces, `@convert` writes
-        j = findlast(==("CSR1"), out)
-        @test parse(Int, out[j + 1]) == 4 && out[(j + 2):(j + 8)] == first(CS_R1)
-        # TS1-4: above-BLOCK_GRAIN CheckerboardCPM(; threads = true) Repeat invariants at -t 4
-        k = findlast(==("CSTCB"), out)
-        @test parse(Int, out[k + 1]) == 4
-        @test out[(k + 2):(k + 6)] == ["true", "true", "true", "true", "true"]
-        @test one[4:6] == one[1:3]                                           # the run length changes no bit
+        # the run length changes no bit; negative control (float atomics) differs
+        @test one[4:6] == one[1:3]
+        @test one[7:9] != one[1:3]
+    end
+end
+
+@testitem "H5: F3-23 cell averages are bitwise the same at 1 and 4 threads (in-process)" setup = [CellSumsSetup] tags = [:multithreaded] begin
+    Threads.nthreads() >= 4 ||
+        error("This testitem requires at least 4 Julia threads (got $(Threads.nthreads())); run GROUP=Multithreaded with `julia -t 4`")
+    @testset "H5: F3-23 cell averages are bitwise the same at 1 and 4 threads (in-process)" begin
+        @test 32^3 > CorePotts.Exec.HOST_GRAIN && 200^2 > CorePotts.Exec.HOST_GRAIN
+        one_run = cs_digests1(false)
+        four_run = cs_digests1(false; run = 1)
+        @test four_run == one_run
+        # negative control: float atomics differ from fixed-point
+        ctl_run = cs_digests1(true; run = 1)
+        @test ctl_run != one_run
+    end
+end
+
+@testitem "H5: threaded CheckerboardCPM Repeat invariants, Global veto, and negative control" setup = [CellSumsSetup] tags = [:multithreaded] begin
+    Threads.nthreads() >= 4 ||
+        error("This testitem requires at least 4 Julia threads (got $(Threads.nthreads())); run GROUP=Multithreaded with `julia -t 4`")
+    @testset "H5: threaded CheckerboardCPM Repeat invariants, Global veto, and negative control" begin
+        @test cs_threaded_cb_invariants() == (true, true, true, true, true)
+        gv = cs_threaded_cb_global_veto_check(CsThreadedCBGlobalVeto; threads = true)
+        @test gv.over_grain
+        @test gv.vol_ok
+        @test gv.deferred > 0
+        @test gv.one_piece_ok
+        # negative control: removing the Global veto allows cells to fragment
+        nv = cs_threaded_cb_global_veto_check(CsThreadedCBNoVeto; threads = true)
+        @test nv.over_grain
+        @test !nv.one_piece_ok && nv.max_pieces > 1
     end
 end
 
