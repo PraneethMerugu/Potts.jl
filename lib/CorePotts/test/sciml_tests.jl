@@ -3,7 +3,9 @@
 
 @testsetup module CP_sciml
 using Test, CorePotts, StaticArrays, Statistics, Random
-using SciMLBase: SciMLBase, ReturnCode, remake
+using SciMLBase: SciMLBase, ReturnCode, remake, solve, solve!, init, step!, reinit!
+const SII = CorePotts.SymbolicIndexingInterface
+using ForwardDiff: ForwardDiff, Dual
 using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
 include("shared/gg_model.jl")
 using SciMLBase: ContinuousCallback
@@ -184,5 +186,118 @@ end
     end
     @test err isa ArgumentError && occursin("CheckerboardCPM", sprint(showerror, err))
     @test_throws ArgumentError init(prob; backend = P60ccDevice())
+end
+end
+
+@testitem "TS2-2: PottsProblem SciML conformance (solve, init, step!, reinit!, remake, SII, negative controls)" setup = [CP_sciml] tags = [:corepotts, :sciml] begin
+@testset "TS2-2: PottsProblem SciML conformance" begin
+    σ, kinds = blocks((24, 24), 5)
+    lat = Lattice((24, 24))
+    prob = PottsProblem(GG, initial_state(σ, kinds), lat, (0, 8), gg_params(); seed = 11)
+    for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
+        @testset "$(nameof(typeof(alg)))" begin
+            s_direct = solve(prob, alg; saveat = 2)
+            s_init = solve!(init(prob, alg; saveat = 2))
+            @test SciMLBase.successful_retcode(s_direct)
+            @test s_direct.t == s_init.t
+            @test s_direct.u[end].σ == s_init.u[end].σ
+
+            integ = init(prob, alg)
+            @test SII.current_time(integ) == 0
+            step!(integ)
+            @test SII.current_time(integ) == 1
+            reinit!(integ)
+            @test SII.current_time(integ) == 0
+            @test integ.state.σ == prob.u0.σ
+            s_re = solve!(integ)
+            @test s_re.u[end].σ == s_direct.u[end].σ
+
+            # reinit! with new state u0
+            σ_alt = copy(σ)
+            σ_alt[1:4, 1:4] .= 0
+            st_alt = initial_state(σ_alt, kinds)
+            reinit!(integ, st_alt)
+            @test integ.state.σ == st_alt.σ
+            s_alt = solve!(integ)
+            @test s_alt.u[end].σ == solve(remake(prob; u0 = st_alt), alg).u[end].σ
+
+            # remake matches fresh PottsProblem
+            p2 = merge(gg_params(), (; T = 12.0))
+            r_prob = remake(prob; p = p2, tspan = (0, 4), seed = 22)
+            f_prob = PottsProblem(GG, initial_state(σ, kinds), lat, (0, 4), p2; seed = 22)
+            @test solve(r_prob, alg).u[end].σ == solve(f_prob, alg).u[end].σ
+        end
+    end
+
+    @testset "SII state_values, parameter_values, current_time, getp/setp" begin
+        @test SII.state_values(prob) === prob.u0
+        @test SII.parameter_values(prob) === prob.p
+        @test SII.current_time(prob) == 0
+        @test SII.getp(prob, :T)(prob) == gg_params().T
+        integ = init(prob, SequentialCPM())
+        @test SII.getp(integ, :T)(integ) == gg_params().T
+        SII.setp(integ, :T)(integ, 15.0)
+        @test integ.p.T == 15.0
+    end
+
+    @testset "negative controls" begin
+        integ = init(prob, SequentialCPM())
+        # reinit! with different cell capacity is refused with shape difference message
+        st_bad = with_capacity(initial_state(σ, kinds), length(kinds) + 5)
+        err_cap = try
+            reinit!(integ, st_bad); ""
+        catch e
+            sprint(showerror, e)
+        end
+        @test occursin("reinit!", err_cap) && occursin("remake", err_cap)
+        # unknown remake keyword
+        @test_throws ArgumentError remake(prob; unknown_kw = 1)
+        # unknown SII parameter
+        @test_throws ArgumentError SII.getp(prob, :no_such_param)
+        # ContinuousCallback is refused
+        @test_throws ArgumentError init(prob, SequentialCPM();
+            callback = ContinuousCallback((u, t, i) -> t - 1, i -> nothing))
+    end
+end
+end
+
+@testitem "TS2-7 (Q7): CorePotts ForwardDiff.Dual refusal messages" setup = [CP_sciml] tags = [:corepotts, :sciml] begin
+@testset "TS2-7 (Q7): CorePotts ForwardDiff.Dual refusal messages" begin
+    # 1. Passing Dual parameters into a plain CPMProblem/SequentialCPM: CorePotts keeps CPM on
+    #    concrete floats (derivative parts run through fields only); Dual in cell/temperature
+    #    arithmetic or TrackDeltaH is refused or rejected cleanly.
+    σ, kinds = blocks((16, 16), 3)
+    lat = Lattice((16, 16))
+    dT = Dual{Nothing}(10.0, 1.0)
+
+    # Dual in TrackDeltaH: concrete float energy tracking refuses Dual
+    f_track = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackDeltaH{Float64}())
+    p_dual_T = PottsProblem(f_track, initial_state(σ, kinds), lat, (0, 2), merge(gg_params(), (; T = dT)))
+    err_cpm = try
+        solve(p_dual_T, SequentialCPM()); ""
+    catch e
+        sprint(showerror, e)
+    end
+    @test !isempty(err_cpm)
+
+    # 2. CellReduce on a non-CPU device backend refuses Dual / BigFloat columns with a clear message
+    st_dual_col = initial_state(σ, kinds; cell = merge(init_moments(σ, lat, length(kinds)),
+        (; w = fill(Dual{Nothing}(1.0, 0.5), length(kinds)))))
+    err_dev_dual = try
+        CorePotts._cell_reduce!(+, (st, p, ctx, key, mcs, i) -> Dual{Nothing}(1.0, 0.5),
+            fill(Dual{Nothing}(0.0, 0.0), length(kinds)), CorePotts.Part{:cell, :w},
+            st_dual_col, gg_params(), nothing, RNGKey(1), 0, P60ccDevice()); ""
+    catch e
+        sprint(showerror, e)
+    end
+    @test occursin("run on the CPU", err_dev_dual) && occursin("atomics", err_dev_dual)
+    err_big = try
+        CorePotts._cell_reduce!(+, (st, p, ctx, key, mcs, i) -> BigFloat(1.0),
+            fill(BigFloat(0.0), length(kinds)), CorePotts.Part{:cell, :w},
+            st_dual_col, gg_params(), nothing, RNGKey(1), 0, P60ccDevice()); ""
+    catch e
+        sprint(showerror, e)
+    end
+    @test occursin("run on the CPU", err_big) && occursin("Float32 or Float64", err_big)
 end
 end

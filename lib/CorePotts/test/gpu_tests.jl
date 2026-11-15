@@ -22,6 +22,7 @@ include("shared/lifecycle.jl")
 include("shared/compartments.jl")
 include("shared/contact_counts.jl")
 include("shared/euler.jl")
+include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "props.jl"))
 
 # Whole-cell connectivity on the device (P6.9a, `pieces.jl`): the windowed veto (the parallel
 # deferred kernel), the exact veto (the serial deferred kernel) and an inline exact search
@@ -262,12 +263,13 @@ end
         commitL!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
         f = CPMFunction(dHL; commit! = commitL!, temperature = gg_temperature)
         pL = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0, k = 2.0f0)
-        ds = map(1:4) do seed
+        ds = map(1:20) do seed
             u = solve(PottsProblem(f, initial_state(σL, [1, 1]; cell = cellL), latL, (0, 1000), pL; seed),
                 CheckerboardCPM(); backend).u[end]
             centroid_distance(Float64, u.cell, latL, 1, 2)
         end
-        @test abs(mean(ds) - 12.0) < 2.5
+        @test stat_accept(ds; mu0 = 12.0, margin = 3.0, alpha = 1e-3).pass
+        @test !stat_accept(ds; mu0 = 20.0, margin = 3.0, alpha = 1e-3).pass
 
         σ, kinds = blocks((30, 30), 5; gap = 0)
         lat = Lattice((30, 30))
@@ -735,9 +737,10 @@ end
         g = solve(remake(prob; seed = 3), alg; backend)
         @test g.u[end].cell.volume == recount(g.u[end])
         @test g.stats.committed == g.stats.accepted > 0
-        cg = [solve(remake(prob; seed), alg; backend).stats.committed for seed in 1:6]
-        cc = [solve(remake(prob; seed), alg).stats.committed for seed in 11:16]
-        @test abs(mean(cg) / mean(cc) - 1) < 0.05
+        cg = Float64[solve(remake(prob; seed), alg; backend).stats.committed for seed in 1:10]
+        cc = Float64[solve(remake(prob; seed), alg).stats.committed for seed in 11:20]
+        @test stat_accept(cg .- mean(cc); mu0 = 0.0, margin = 0.05 * mean(cc), alpha = 1e-3).pass
+        @test !stat_accept(0.5 .* cg .- mean(cc); mu0 = 0.0, margin = 0.05 * mean(cc), alpha = 1e-3).pass
     end
     # moments (atomic sums, re-centered once per MCS) and on-copy counters that read their own
     # value (atomic changes): gains minus losses equal each cell's volume change, so no update was lost

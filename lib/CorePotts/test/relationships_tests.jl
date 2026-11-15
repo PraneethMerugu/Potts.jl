@@ -7,6 +7,7 @@ using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordin
 include("shared/gg_model.jl")
 include("shared/geometry.jl")
 include("shared/lifecycle.jl")
+include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "props.jl"))
 function brute_link_energy(σ, lat, cell, E)
     H = 0.0
     for a in axes(cell.links, 2), k in axes(cell.links, 1)
@@ -120,13 +121,14 @@ end
         commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
         f = CPMFunction(dH; commit!, temperature = gg_temperature)
         d0 = centroid_distance(Float64, initial_state(σ, [1, 1]; cell).cell, lat, 1, 2)
-        ds = map(1:6) do seed
+        ds = map(1:20) do seed
             u = solve(PottsProblem(f, initial_state(σ, [1, 1]; cell), lat, (0, 1000),
                 merge(gg_params(), (; V0 = 36.0, k = 2.0)); seed), CheckerboardCPM()).u[end]
             centroid_distance(Float64, u.cell, lat, 1, 2)
         end
         @test d0 ≈ 25.0 atol = 5                             # periodic min image: 35 → 25
-        @test abs(mean(ds) - 12.0) < 2.5            # ≈13 at equilibrium (entropic stretch)
+        @test stat_accept(ds; mu0 = 12.0, margin = 3.0, alpha = 1e-3).pass
+        @test !stat_accept(ds; mu0 = 20.0, margin = 3.0, alpha = 1e-3).pass # negative control
     end
 
     @testset "host rule links touching cells; lifecycle policies" begin
@@ -243,11 +245,13 @@ end
         f = CPMFunction(dH; commit!, temperature = gg_temperature)
         p = merge(gg_params(), (; V0 = 36.0, k = 2.0))
         for alg in (SequentialCPM(), CheckerboardCPM())
-            ds = map(1:4) do seed
+            ds = map(1:20) do seed
                 u = solve(PottsProblem(f, initial_state(σ, [1, 1, 1]; cell = deepcopy(cell)), lat, (0, 1500), p; seed), alg).u[end]
                 (centroid_distance(Float64, u.cell, lat, 1, 2), centroid_distance(Float64, u.cell, lat, 2, 3))
             end
-            @test abs(mean(first.(ds)) - 12.0) < 2.5 && abs(mean(last.(ds)) - 18.0) < 2.5
+            @test stat_accept(first.(ds); mu0 = 12.0, margin = 3.0, alpha = 1e-3).pass
+            @test stat_accept(last.(ds); mu0 = 18.0, margin = 3.0, alpha = 1e-3).pass
+            @test !stat_accept(first.(ds); mu0 = 20.0, margin = 3.0, alpha = 1e-3).pass
         end
     end
 

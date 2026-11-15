@@ -5,6 +5,7 @@ using Test, CorePotts, StaticArrays, Statistics, Random
 using SciMLBase: SciMLBase, ReturnCode, remake
 using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
 include("shared/gg_model.jl")
+include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "props.jl"))
 
     invdist(o) = 1 / sqrt(sum(abs2, o))
 
@@ -52,7 +53,11 @@ end
         @test draw(k, 1, 2, s) == draw(k, 1, 2, s) != draw(k, 1, 3, s)
         @test draw(k, 1, 2, s) != draw(k, 1, 2, s + 0x1) != draw(k, 1, 2, s, 1)
         xs = [uniform(Float64, draw(k, 0, i, UInt32(7))[1]) for i in 1:100_000]
-        @test abs(mean(xs) - 0.5) < 0.005 && abs(var(xs) - 1 / 12) < 0.002
+        @test length(xs) >= required_n(1 / sqrt(12), 0.005; alpha = 1e-3, power = 0.9)
+        @test stat_accept(xs; mu0 = 0.5, margin = 0.005, alpha = 1e-3).pass
+        @test !stat_accept(xs .+ 0.01; mu0 = 0.5, margin = 0.005, alpha = 1e-3).pass # negative control
+        v_xs = (xs .- 0.5) .^ 2
+        @test stat_accept(v_xs; mu0 = 1 / 12, margin = 0.002, alpha = 1e-3).pass
     end
 end
 
@@ -154,7 +159,9 @@ end
         # high-word entities are still uniform and independent of their low-word partners
         hi = [uniform(Float64, draw(k, 0, i + (i << 32), s)[1]) for i in 1:100_000]
         lo = [uniform(Float64, draw(k, 0, i, s)[1]) for i in 1:100_000]
-        @test abs(mean(hi) - 0.5) < 0.005 && abs(var(hi) - 1 / 12) < 0.002
+        @test stat_accept(hi; mu0 = 0.5, margin = 0.005, alpha = 1e-3).pass
+        @test !stat_accept(hi .- 0.01; mu0 = 0.5, margin = 0.005, alpha = 1e-3).pass # negative control
+        @test stat_accept((hi .- 0.5) .^ 2; mu0 = 1 / 12, margin = 0.002, alpha = 1e-3).pass
         @test abs(cor(hi, lo)) < 0.01
     end
 end
@@ -194,22 +201,26 @@ end
         prob = PottsProblem(on, initial_state(σ, kinds), lat, (0, 15), gg_params())
         H(u) = total_H(u, lat, prob.contact, gg_params())
         for alg in (SequentialCPM(), SequentialCPM(; skip_interior = true))
-            base = [solve(remake(prob; seed), alg) for seed in 1:4]
+            base = [solve(remake(prob; seed), alg) for seed in 1:12]
             CorePotts._FORCE_TWO_WORD_PICK[] = true
             wide = try
-                [solve(remake(prob; seed), alg) for seed in 1:4]
+                [solve(remake(prob; seed), alg) for seed in 1:12]
             finally
                 CorePotts._FORCE_TWO_WORD_PICK[] = false
             end
-            for sol in wide
+            for sol in wide[1:4]
                 u0, u = sol.u[1], sol.u[end]
                 @test sol.stats.accepted_ΔH == H(u) - H(u0) && abs(H(u) - H(u0)) > 100
                 vol = zeros(Int32, length(kinds))
                 foreach(s -> s > 0 && (vol[s] += 1), u.σ)
                 @test vol == u.cell.volume
             end
-            ratio = sum(s -> s.stats.accepted, wide) / sum(s -> s.stats.accepted, base)
-            @test abs(ratio - 1) < 0.05
+            base_acc = Float64[s.stats.accepted for s in base]
+            wide_acc = Float64[s.stats.accepted for s in wide]
+            @test stat_accept(wide_acc .- base_acc; mu0 = 0.0, margin = 0.05 * mean(base_acc), alpha = 1e-3).pass
+            # negative control: a colder temperature T = 5.0 drops accepted copies outside margin
+            cold = [solve(remake(prob; seed, p = merge(gg_params(), (; T = 5.0))), alg).stats.accepted for seed in 1:12]
+            @test !stat_accept(Float64.(cold) .- base_acc; mu0 = 0.0, margin = 0.05 * mean(base_acc), alpha = 1e-3).pass
             @test solve(remake(prob; seed = 1), alg).u[end].σ == base[1].u[end].σ  # unforced: unchanged
         end
         # the hook reaches the caller's choice of regime, which is the sweep context's type:
