@@ -189,7 +189,7 @@ end
     repo = get(ENV, "OPENVT_MONOLAYER_REPO", "")
     zipf = joinpath(repo, "results", "Artistoo", "Monolayer", "Type 1", "Centroid_data.zip")
     if isempty(repo) || !isfile(zipf) || Sys.which("unzip") === nothing
-        @test_broken !isempty(repo) && isfile(zipf)
+        @test_broken !isempty(repo) && isfile(zipf)   # D-204, D-206: OPENVT_MONOLAYER_REPO consortium data is external to git
     else
         mktempdir() do tmp
             run(`unzip -q -j $zipf Centroid_data/centroids_neighbors_mcs_1656.csv -d $tmp`)

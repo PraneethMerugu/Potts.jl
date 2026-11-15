@@ -49,8 +49,13 @@ const POTTSMODELS_SELECTED_GROUPS = let raw = !isempty(ARGS) ? ARGS :
 end
 const POTTSMODELS_RUN_CORE = "core" in POTTSMODELS_SELECTED_GROUPS
 const POTTSMODELS_RUN_QA = "qa" in POTTSMODELS_SELECTED_GROUPS
-const POTTSMODELS_RUN_FILES = POTTSMODELS_RUN_CORE ||
+const POTTSMODELS_RUN_GPU = "gpu" in POTTSMODELS_SELECTED_GROUPS
+const POTTSMODELS_RUN_FILES = POTTSMODELS_RUN_CORE || POTTSMODELS_RUN_GPU ||
     any(g -> g in ("acceptance", "reproductions", "guardrails"), POTTSMODELS_SELECTED_GROUPS)
+
+if POTTSMODELS_RUN_GPU && isempty(strip(get(ENV, "POTTS_GPU", "")))
+    ENV["POTTS_GPU"] = Sys.isapple() ? "metal" : "rocm"
+end
 
 # device selection (D-157): the acceptance files' device testsets run here only when
 # POTTS_GPU = metal | rocm; the GPU group runs them from test/gpu.jl
@@ -228,6 +233,7 @@ elseif POTTSMODELS_RUN_CORE
 else
     filter(POTTSMODELS_TEST_FILES) do f
         ("acceptance" in POTTSMODELS_SELECTED_GROUPS && startswith(f, "acceptance/")) ||
+        ("gpu" in POTTSMODELS_SELECTED_GROUPS && startswith(f, "acceptance/")) ||
         ("reproductions" in POTTSMODELS_SELECTED_GROUPS && startswith(f, "reproductions/")) ||
         ("guardrails" in POTTSMODELS_SELECTED_GROUPS && f == "guardrails.jl")
     end
@@ -384,12 +390,8 @@ if POTTSMODELS_RUN_FILES
         @testset "$f" for f in POTTSMODELS_SHARD_FILES
             _pm_module(f; defs_only = false)
         end
-        (POTTSMODELS_RUN_QA && POTTSMODELS_FIRST_SHARD) && @testset "Aqua" begin
-            Aqua.test_all(PottsModels; deps_compat = (; check_extras = false))
-        end
+        (POTTSMODELS_RUN_QA && POTTSMODELS_FIRST_SHARD) && include(joinpath(@__DIR__, "qa_tests.jl"))
     end
 elseif POTTSMODELS_RUN_QA
-    @testset "Aqua" begin
-        Aqua.test_all(PottsModels; deps_compat = (; check_extras = false))
-    end
+    include(joinpath(@__DIR__, "qa_tests.jl"))
 end

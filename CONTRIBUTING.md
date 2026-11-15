@@ -17,7 +17,8 @@ GROUP=Potts julia --project=test test/runtests.jl
 | `All` (default) | All `in_all = true` packages (`LatticeFields`, `LatticePDE`, `CorePotts`, `MakiePotts`, `Potts`, `PottsModels`) |
 | `Potts`, `CorePotts`, `LatticeFields`, `LatticePDE`, `MakiePotts`, `PottsModels` | All `in_all = true` groups of that package |
 | `<Sublib>_<group>` | One group in `Potts` or `lib/<Sublib>` |
-| `GPU` | Device suites across `LatticeFields`, `CorePotts`, and `Potts` (`POTTS_GPU=metal\|rocm`) |
+| `GPU` | Device suites across `LatticeFields_gpu`, `CorePotts_gpu`, `LatticePDE_gpu`, and `Potts_gpu` (`POTTS_GPU=metal\|rocm`); `PottsModels_gpu` is opt-in |
+| `Multithreaded` | 4-thread checkerboard and `cell_sums` invariants (`julia -t 4`) |
 
 Common `GROUP=<Sublib>_<group>` selectors:
 
@@ -25,8 +26,8 @@ Common `GROUP=<Sublib>_<group>` selectors:
 - `CorePotts_*`: `CorePotts_core`, `CorePotts_qa`, `CorePotts_gpu`, `CorePotts_All`
 - `LatticeFields_*`: `LatticeFields_exec`, `LatticeFields_ir`, `LatticeFields_compile`, `LatticeFields_schedule`, `LatticeFields_problems`, `LatticeFields_solvers`, `LatticeFields_qa`, `LatticeFields_solvers_gate`, `LatticeFields_gpu`, `LatticeFields_All`
 - `LatticePDE_*`: `LatticePDE_core`, `LatticePDE_qa`, `LatticePDE_gpu`, `LatticePDE_All`
-- `MakiePotts_*`: `MakiePotts_core`, `MakiePotts_acceptance`, `MakiePotts_adversarial`, `MakiePotts_allocations`, `MakiePotts_downstream_conformance`, `MakiePotts_saved_state_channels`, `MakiePotts_All`
-- `PottsModels_*`: `PottsModels_core`, `PottsModels_qa`, `PottsModels_acceptance`, `PottsModels_reproductions`, `PottsModels_guardrails`, `PottsModels_All`
+- `MakiePotts_*`: `MakiePotts_core`, `MakiePotts_qa`, `MakiePotts_acceptance`, `MakiePotts_adversarial`, `MakiePotts_allocations`, `MakiePotts_downstream_conformance`, `MakiePotts_saved_state_channels`, `MakiePotts_visual`, `MakiePotts_All`
+- `PottsModels_*`: `PottsModels_core`, `PottsModels_qa`, `PottsModels_acceptance`, `PottsModels_reproductions`, `PottsModels_guardrails`, `PottsModels_gpu` (opt-in), `PottsModels_All`
 
 See [test/README.md](test/README.md) for per-package environment variables (`POTTS_TEST_WORKERS`, `POTTS_QA`, `POTTSMODELS_SHARD`, `*_TEST_NAME`).
 
@@ -59,6 +60,14 @@ GROUP=LatticeFields julia --check-bounds=yes --project=test test/runtests.jl
 
 CI runs `LatticeFields` under `--check-bounds=yes` on every push to `monorepo`.
 
+## Multithreaded tests (`-t 4`)
+
+Run the multithreaded group with 4 Julia threads:
+
+```sh
+GROUP=Multithreaded julia -t 4 --project=test test/runtests.jl
+```
+
 ## QA checks
 
 Run the QA group of any package you touch:
@@ -68,19 +77,20 @@ GROUP=Potts_qa julia --project=test test/runtests.jl
 GROUP=CorePotts_qa julia --project=test test/runtests.jl
 GROUP=LatticeFields_qa julia --project=test test/runtests.jl
 GROUP=LatticePDE_qa julia --project=test test/runtests.jl
+GROUP=MakiePotts_qa julia --project=test test/runtests.jl
 GROUP=PottsModels_qa julia --project=test test/runtests.jl
 ```
 
-The QA suites check `Aqua.jl` hygiene, `JET.jl` type stability, `AllocCheck.jl` zero-allocation hot paths, `ExplicitImports.jl` clean imports, `Docs.undocumented_names` with extension loading, and core-package model-name and host-transfer guards.
+The unified 6-package QA suites check `Aqua.jl` hygiene (including method ambiguities), `JET.jl` type stability, `AllocCheck.jl` zero-allocation hot paths, `ExplicitImports.jl` clean imports with extension loading, `Docs.undocumented_names` plus `docs/src` API documentation coverage, and core-package model-name and host-transfer guards.
 
-## Formatting (`.JuliaFormatter.toml`)
+## Formatting (`Runic.jl`)
 
-The repository configures [JuliaFormatter.jl](https://github.com/domluna/JuliaFormatter.jl) in `.JuliaFormatter.toml` (`style = "sciml"`, `format_markdown = true`, `format_docstrings = true`).
-Format only the Julia files you edit; do not reformat unrelated files in feature or bugfix PRs.
+The repository adopts [Runic.jl](https://github.com/fredrikekre/Runic.jl) for new and modified Julia code (matching `lib/MakiePotts/CONTRIBUTING.md`).
+Format only the Julia files you edit; do not mechanically reformat unrelated files in feature or bugfix PRs.
 
-```julia
-using JuliaFormatter
-format("path/to/changed_file.jl")
+```sh
+runic --check --diff path/to/changed_file.jl
+runic --inplace path/to/changed_file.jl
 ```
 
 ## Tracking known failures (`@test_broken`)

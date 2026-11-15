@@ -29,6 +29,7 @@ const COREPOTTS_NONPUBLIC_QUALIFIED = (
     Symbol("@nospecializeinfer"), # Base.@nospecializeinfer (documented, not declared public): the host
                                   # setup of `init`, `remake` and `PottsProblem` inferred once for every model (TS1c)
 )
+include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "qa_common.jl"))
 include("shared/export_all.jl")
 end
 
@@ -112,23 +113,20 @@ end
 
 @testitem "QA: Aqua (CorePotts)" setup = [CP_qa] tags = [:corepotts, :qa] begin
 @testset "QA: Aqua (CorePotts)" begin
-    Aqua.test_all(CorePotts; ambiguities = false, persistent_tasks = false)
+    # `persistent_tasks = false`: KernelAbstractions/GPU backends register background tasks.
+    qa_aqua(CorePotts; persistent_tasks = false)
 end
 end
 
 @testitem "QA: ExplicitImports (CorePotts)" setup = [CP_qa] tags = [:corepotts, :qa] begin
 @testset "QA: ExplicitImports (CorePotts)" begin
-    @test check_no_implicit_imports(CorePotts) === nothing
-    @test check_all_explicit_imports_are_public(CorePotts) === nothing
-    @test check_no_stale_explicit_imports(CorePotts) === nothing
-    @test check_all_qualified_accesses_via_owners(CorePotts) === nothing
-    @test check_all_qualified_accesses_are_public(CorePotts; ignore = COREPOTTS_NONPUBLIC_QUALIFIED) === nothing
+    qa_explicit_imports(CorePotts; nonpublic_qualified = COREPOTTS_NONPUBLIC_QUALIFIED)
 end
 end
 
 @testitem "QA: Docs and extensions (CorePotts)" setup = [CP_qa] tags = [:corepotts, :qa] begin
 @testset "QA: Docs and extensions (CorePotts)" begin
-    @test isempty(Docs.undocumented_names(CorePotts; private = false))
+    qa_api_docs(CorePotts; docs_dir = joinpath(@__DIR__, "..", "..", "..", "docs"))
     for (ext_sym, trigger) in ((:CorePottsAMDGPUExt, "AMDGPU"), (:CorePottsMetalExt, "Metal"))
         if any(k -> k.name == trigger, keys(Base.loaded_modules))
             @test Base.get_extension(CorePotts, ext_sym) !== nothing
