@@ -99,8 +99,8 @@
 # job: `key`, `row`, `seed`, `CI`, `displacement_sites_0`, `displacement_sites_100`), read
 # from the stored snapshots with no new dynamics by `vc12_mcs0.jl`, and a `[vc12_mcs0]` table
 # in `provenance.toml` (decision "D-200", `new_dynamics = false`, its own 40-hex `commit`, an
-# existing `script` in the record, no `hostname` or `work` key, and the amended frozen test's
-# `frozen_test_sha256`, no longer checked: D-275). So: in (b)
+# existing `script` in the record, no `hostname` or `work` key, and the amended test's
+# `frozen_test_sha256` provenance field). So: in (b)
 # `vc12_mcs0.tsv` covers the 20 V-C12 jobs once each, with `displacement_sites_100` equal to
 # `replicates.tsv`'s `displacement_sites` exactly, and `displacement_sites_0` joins those rows;
 # in (c) a V-C12 snapshot also recomputes `displacement_sites_0` from σ at MCS 0; in (d)
@@ -552,7 +552,8 @@ const P63F_R = p63f_with_vc12(P63F_R0, P63F_VC12)
     @test occursin(r"^[0-9a-f]{40}$", commit)
     @test get(prov, "dirty", true) === false
     # the launch ran the D-153 freeze and the D-200 amendment (V-C12 from MCS 0) the D-200
-    # file. The freeze's hash is no longer checked (D-275: frozen.toml is gone)
+    # provenance.toml's `frozen_test_sha256` records which revision of `01_merks.jl` produced
+    # the run record (provenance metadata only).
     amend = get(prov, "vc12_mcs0", Dict{String, Any}())
     @test get(amend, "decision", "") == "D-200"
     @test get(amend, "new_dynamics", true) === false

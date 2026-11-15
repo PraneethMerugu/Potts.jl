@@ -751,7 +751,7 @@ end
         @test get(prov, "item", "") == "P6.3f"
         @test occursin(r"^[0-9a-f]{40}$", string(get(prov, "commit", ""))) &&
               get(prov, "dirty", true) === false
-        # the record's `frozen_test_sha256` is data now: no file hash is checked (D-275)
+        # the record's `frozen_test_sha256` is provenance metadata only
         sweeps = p63f1b_tsv(joinpath(D, "sweeps.tsv"))
         series = p63f1b_tsv(joinpath(D, "series.tsv"))
         J = p63f1b_jobs()

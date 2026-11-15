@@ -158,13 +158,17 @@ end
     # the paper's ordering: strong 0 < mid, and mid > 0 < weak. The old `>= 2` floor sat about
     # 0.4 SD below the mid mean at μ = 24; with four seeds P(all zero) ≈ 2e-4 (D-071)
     @test mean(m -> m.singles, weak) > mean(m -> m.singles, mid) > 0
-    # the published sample (500×300, J_LF = 2, μ = 24, 700 MCS): 578 divisions in the paper.
-    # Band (D-068): mean ± 3 SD of our ensemble under the default seeding, seeds 1:40:
-    # 585.0 ± 16.4 (range 555–617). It must hold the paper's 578 (a guard on the constants)
-    band = 585.0 - 3 * 16.4, 585.0 + 3 * 16.4
+    # the published sample (500x300, J_LF = 2, mu = 24, 700 MCS): 578 divisions in the paper.
+    # Ensemble (D-068, seeds 1:40): mean 585.0, between-seed SD sigma = 16.4.
+    # With n = 4 seeds (SE = 8.2) and z_crit = 3.5 (two-sided alpha = 4.65e-4, keeping
+    # family-wise alpha <= 1e-3), the band [556.3, 613.7] holds the paper's 578 and gives
+    # power >= 0.9 against a shift delta >= (3.5 + 1.2816) * 8.2 = 39.2 divisions.
+    n_full = 4
+    se_div = 16.4 / sqrt(n_full)
+    band = (585.0 - 3.5 * se_div, 585.0 + 3.5 * se_div)
     @test band[1] <= 578 <= band[2]
-    full = sim(; μ = 24.0, W = 500, H = 300, nmcs = 700, capacity = 4000)
-    @test band[1] <= full.divisions <= band[2]
-    @test 150 <= full.singles <= 300
-    @test full.leader_front == full.outer_front                         # a leader leads
+    full_runs = [sim(; μ = 24.0, W = 500, H = 300, nmcs = 700, capacity = 4000, seed) for seed in 1:n_full]
+    @test band[1] <= mean(r -> r.divisions, full_runs) <= band[2]
+    @test all(r -> 150 <= r.singles <= 300, full_runs)
+    @test all(r -> r.leader_front == r.outer_front, full_runs)           # a leader leads
 end

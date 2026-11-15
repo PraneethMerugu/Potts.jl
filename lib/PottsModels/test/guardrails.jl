@@ -150,8 +150,11 @@ end
 end
 
 # The reviewed DSL surface: every name the model body sees, and every keyword of its
-# constructors. A new name or option (a model-shaped flag under a generic name, like the
-# removed `extension_only`) must be reviewed and added here.
+# constructors. Following ModelingToolkit/SciMLBase public-surface guardrail practice,
+# pinning the exact set in version control ensures a dependency or refactor cannot silently
+# widen the public DSL API, and removing an entry is flagged as a breaking change. A new
+# name or option (a model-shaped flag under a generic name, like the removed
+# `extension_only`) must be reviewed and added here.
 const DSL_NAMES = [:Adaptive, :Adhesion, :Chemotaxis, :Every, :ExplicitEuler, :Global, :RK4, :RandomPlane, :Split,
     :Surface, :Volume, :cells, :centroid, :clusters, :connectivity, :contacts, :displacement, :dot, :edges,
     :geomean, :integral, :log1p_geomean, :major_axis, :mean, :minor_axis, :new_contact, :no_extinction, :norm,
@@ -183,7 +186,10 @@ const DSL_KEYWORDS = Dict(:connectivity => [:penalty, :rule], :connected => [:ru
     kw = Dict{Symbol, Vector{Symbol}}()
     for (n, f) in pairs(Potts.DSL)
         f isa Function || continue
-        ks = sort(unique(reduce(vcat, [Symbol.(Base.kwarg_decl(mm)) for mm in methods(f)]; init = Symbol[])))
+        # Restrict to methods owned by Potts so unrelated Base/stdlib/extension methods on
+        # shared generic functions (such as count, mean, norm) cannot cause brittle failures.
+        potts_methods = [mm for mm in methods(f) if mm.module === Potts]
+        ks = sort(unique(reduce(vcat, [Symbol.(Base.kwarg_decl(mm)) for mm in potts_methods]; init = Symbol[])))
         isempty(ks) || (kw[n] = ks)
     end
     @test kw == DSL_KEYWORDS
