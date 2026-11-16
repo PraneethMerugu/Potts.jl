@@ -74,6 +74,8 @@ end
         @equations D(m) ~ μ
     elseif kind_case === :eq_good_rate
         @equations D(m) ~ -m
+    elseif kind_case === :divide_good_logic
+        @divide cells(A) when = (m > integral(c)) & !(volume < 4)
     end
     @sweep Metropolis(; temperature = T)
 end
@@ -125,6 +127,21 @@ end
         @test_throws ArgumentError unit_compile(:eq_bad_unit)                 # m per time ≠ m
         @test_throws ["units:", "rate", "per unit of time"] unit_compile(:eq_bad_unit)
         @test unit_compile(:eq_good_rate) isa CompiledPottsSystem             # per MCS
+        @test unit_compile(:divide_good_logic) isa CompiledPottsSystem        # `&`, `!` of conditions
+    end
+end
+
+# Potts' unit rules for `Pre` and the logic operations live in Potts' own unit check
+# (the model cases above); MTK's `get_unit` answers those operations with its own methods for
+# every other expression, so loading Potts changes no MTK model's unit check
+@testitem "units: MTK's get_unit is not extended for MTK's operations" setup = [UnitsSetup] tags = [:potts, :units] begin
+    @testset "units: MTK's get_unit is not extended for MTK's operations" begin
+        MTK = Potts.ModelingToolkitBase
+        ext = Base.get_extension(Potts, :PottsDynamicQuantitiesExt)
+        @test ext !== nothing
+        for op in (MTK.Pre, typeof(&), typeof(|), typeof(!), typeof(xor))
+            @test parentmodule(which(MTK.get_unit, Tuple{op, Vector{Any}})) !== ext
+        end
     end
 end
 

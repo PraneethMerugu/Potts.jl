@@ -11,6 +11,8 @@ include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "qa_common.jl"))
     @testset "Aqua" begin
         # `check_extras = false`: workspace test-only deps live in test/Project.toml.
         qa_aqua(PottsModels; deps_compat = (; check_extras = false))
+        exts = qa_extension_piracies(PottsModels)       # the piracy check inside each loaded extension
+        @test Base.get_extension(PottsModels, :PottsModelsMakieExt) in exts
     end
 
     @testset "ExplicitImports" begin

@@ -342,6 +342,10 @@ end
     @testset "QA: Aqua" begin
         # `check_extras = false`: workspace test-only deps live in test/Project.toml, not [extras].
         qa_aqua(Potts; deps_compat = (; check_extras = false))
+        # the piracy check inside each loaded extension (the DynamicQuantities one at least)
+        @eval using DynamicQuantities: DynamicQuantities
+        exts = qa_extension_piracies(Potts)
+        @test Base.get_extension(Potts, :PottsDynamicQuantitiesExt) in exts
     end
 end
 

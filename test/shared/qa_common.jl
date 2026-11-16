@@ -27,6 +27,42 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     end
 
     """
+        qa_extension_piracies(mod; owners = (mod,)) -> Vector{Module}
+
+    Aqua's piracy check on each loaded package extension of `mod` (`Aqua.test_all`
+    does not look inside extensions), with the functions and types of `owners` (and their
+    submodules) treated as the extension's own: an extension may extend its parent's
+    functions and add methods on its parent's types, but not add a foreign function's
+    method on foreign types. Returns the extensions checked; load the trigger packages first.
+    """
+    function qa_extension_piracies(mod::Module; owners = (mod,))
+        Aqua = Base.require(Base.PkgId(Base.UUID("4c88cf16-eb10-579e-8560-4a9242c79595"), "Aqua"))
+        Test = Base.require(Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test"))
+        own = Any[]
+        _qa_owned!(own, o::Module) =
+            for n in names(o; all = true, imported = false)
+            isdefined(o, n) || continue
+            v = getfield(o, n)
+            if v isa Module
+                v !== o && parentmodule(v) === o && _qa_owned!(own, v)
+            elseif v isa Function || v isa Type
+                push!(own, v)
+            end
+        end
+        foreach(o -> _qa_owned!(own, o), owners)
+        TOML = Base.require(Base.PkgId(Base.UUID("fa267f1f-6049-4f14-aa54-33bafae1ed76"), "TOML"))
+        project = Base.invokelatest(TOML.parsefile, joinpath(pkgdir(mod), "Project.toml"))
+        exts = Module[]
+        for name in sort!(collect(keys(get(project, "extensions", Dict{String, Any}()))))
+            ext = Base.get_extension(mod, Symbol(name))
+            ext === nothing && continue
+            push!(exts, ext)
+            Base.invokelatest(Aqua.test_piracies, ext; treat_as_own = own)
+        end
+        return exts
+    end
+
+    """
         qa_explicit_imports(mod; nonpublic_explicit = (), nonpublic_qualified = (),
                             skip_owners = false)
 

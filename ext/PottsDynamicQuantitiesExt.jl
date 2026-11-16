@@ -17,17 +17,11 @@ _same(a, b) = DQ.dimension(a) == DQ.dimension(b)
 # unit rules for Potts' symbolic operations
 MTK.get_unit(::Union{typeof(Potts.history_lag), typeof(Potts.cell_integral)}, args) = get_unit(args[1])
 MTK.get_unit(::Union{typeof(Potts.cell_centroid), typeof(Potts.copy_displacement),
-        typeof(Potts.random_uniform)}, args) = UNITLESS                    # lattice units
-MTK.get_unit(::MTK.Pre, args) = get_unit(args[1])
+        typeof(Potts.random_uniform),
+    }, args
+) = UNITLESS                    # lattice units
 MTK.get_unit(::typeof(Potts.gather), args) = _fold_unit(args[1], args[3])
 MTK.get_unit(::typeof(Potts.population), args) = _fold_unit(args[1], args[2])
-function MTK.get_unit(op::Union{typeof(&), typeof(|), typeof(!), typeof(xor)}, args)
-    for a in args
-        u = get_unit(a)
-        _isunitless(u) || throw(ValidationError(", in $op, [$u] is not dimensionless."))
-    end
-    return UNITLESS
-end
 
 function _fold_unit(n, body)
     op = info(n).options.op
@@ -42,11 +36,24 @@ _hasunit(x) = SymbolicUtils.getmetadata(Symbolics.unwrap(x), VariableUnit, nothi
 
 # A literal zero takes any unit: `ifelse(c, x, 0)`, `max(x, 0)`, `min(0, x)` have x's unit.
 _iszeroconst(x) = SymbolicUtils.isconst(x) && iszero(SymbolicUtils.unwrap_const(x))
+# The rewrite before MTK's `get_unit` (Potts' own unit rules for operations that MTK owns, so
+# the extension adds no method to MTK's function for MTK's types, which would be piracy):
+# `Pre(x)` has x's unit, so it is `x`; a logic operation (`&`, `|`, `!`, `xor`) takes
+# dimensionless operands and is dimensionless, so it is its first operand once each is checked.
+const _LOGIC_OPS = (&, |, !, xor)
 function _zero_free(x)
     x = Symbolics.unwrap(x)
     x isa SymbolicUtils.BasicSymbolic && SymbolicUtils.iscall(x) || return x
     op = SymbolicUtils.operation(x)
     args = map(_zero_free, SymbolicUtils.arguments(x))
+    op isa MTK.Pre && return args[1]
+    if any(f -> op === f, _LOGIC_OPS)
+        for a in args
+            u = get_unit(a)
+            _isunitless(u) || throw(ValidationError(", in $op, [$u] is not dimensionless."))
+        end
+        return args[1]
+    end
     if op === ifelse && length(args) == 3          # keep the condition (it must be unitless)
         _iszeroconst(args[3]) && (args = [args[1], args[2], args[2]])
         _iszeroconst(args[2]) && (args = [args[1], args[3], args[3]])

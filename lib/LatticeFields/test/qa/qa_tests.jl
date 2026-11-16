@@ -58,6 +58,10 @@ end
 @testitem "Aqua" setup = [LF_qa_qa] tags = [:latticefields, :qa] begin
 @testset "Aqua" begin
         qa_aqua(LatticeFields)
+        # the piracy check inside each loaded extension (Aqua does not look inside them)
+        @eval using OrdinaryDiffEqRosenbrock: OrdinaryDiffEqRosenbrock
+        exts = qa_extension_piracies(LatticeFields)
+        @test Base.get_extension(LatticeFields, :LatticeFieldsOrdinaryDiffEqCoreExt) in exts
 end
 end
 
