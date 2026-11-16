@@ -333,17 +333,17 @@ end
         prob = PottsProblem(GG, initial_state(σ, kinds), Lattice((20, 20)), (0, 6), gg_params(); seed = 4)
         at3(pos) = DiscreteCallback((u, t, integ) -> t == 3, integ -> nothing; save_positions = pos)
         for alg in (SequentialCPM(), CheckerboardCPM())
-            run(pos, saveat) = solve(prob, alg; callback = at3(pos), saveat, save_start = false)
+            solve_at3(pos, saveat) = solve(prob, alg; callback = at3(pos), saveat, save_start = false)
             # oracle: SciML's saves for each flag pair
-            @test run((true, true), [6]).t == [3, 3, 6]
-            @test run((true, false), [6]).t == [3, 6]
-            @test run((false, true), [6]).t == [3, 6]
-            @test run((false, false), [6]).t == [6]
-            @test run((true, true), [3, 6]).t == [3, 3, 6]
-            @test run((false, false), [3, 6]).t == [3, 6]
+            @test solve_at3((true, true), [6]).t == [3, 3, 6]
+            @test solve_at3((true, false), [6]).t == [3, 6]
+            @test solve_at3((false, true), [6]).t == [3, 6]
+            @test solve_at3((false, false), [6]).t == [6]
+            @test solve_at3((true, true), [3, 6]).t == [3, 3, 6]
+            @test solve_at3((false, false), [3, 6]).t == [3, 6]
             # the saved state is the run's state at MCS 3 (the affect changes nothing; same seed)
             ref = solve(prob, alg; saveat = [3], save_start = false, save_end = false)
-            s = run((true, true), [6])
+            s = solve_at3((true, true), [6])
             @test s.u[1].σ == ref.u[1].σ && s.u[2].σ == ref.u[1].σ
         end
     end

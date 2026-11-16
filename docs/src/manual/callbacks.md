@@ -12,6 +12,13 @@ affect!)` checks `condition(u, t, integrator)` after every MCS and, when it is t
 
 `CallbackSet(cb₁, cb₂)` combines callbacks; pass them with `solve(…; callback = …)`.
 
+A callback that fires saves the state, as in SciML. With the default `save_positions =
+(true, true)`, each firing adds two saved states at that MCS: one before `affect!` and one
+after it. A `saveat` time at which a callback fires is saved once, before the affect. A
+callback that only records or changes a parameter usually needs no saves of its own: pass
+`save_positions = (false, false)`, so the solution holds only the `saveat` states. This
+matters on large lattices, where each saved state is a copy of the lattice.
+
 ```@example callbacks
 using Potts
 
