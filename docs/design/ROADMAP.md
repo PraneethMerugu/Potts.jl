@@ -58,9 +58,9 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 
 ## Phase 4 — Coupling and models
 
-- [ ] (partial, D-038: MTK components as batched cell ODEs, Euler/RK4, CPU+Metal; model-scope ODEs and components; host adaptive/stiff integration via `Adaptive(alg)` done; DAE pending. 2026-11-16: fields are now MTK `PDESystem`s compiled by LatticePDE (D-256, D-F4-2), which appears to replace `MethodOfLinesComponent`; the Metal part cannot run here, no Mac compute since 2026-10-20) **M4.1** `ODEComponent`/`DAEComponent` init-once integrators; batched per-cell ODEs; scheduling phases; `MethodOfLinesComponent`; Metal via `EnsembleGPUKernel`.
+- [ ] (partial, D-038: MTK components as batched cell ODEs, Euler/RK4, CPU+Metal; model-scope ODEs and components; host adaptive/stiff integration via `Adaptive(alg)` done; DAE pending. 2026-11-16: fields are now MTK `PDESystem`s compiled by LatticePDE (D-256, D-F4-2). The PDE discretizer stays swappable by the model author's choice; LatticePDE is ours, and a MethodOfLines backend is an option, not a replacement (D-286); the Metal part cannot run here, no Mac compute since 2026-10-20) **M4.1** `ODEComponent`/`DAEComponent` init-once integrators; batched per-cell ODEs; scheduling phases; `MethodOfLinesComponent`; Metal via `EnsembleGPUKernel`.
   Accept: Akeeb MTK-bridge targets bytewise vs discrete clock (as in `SCDPotts/research`).
-- [ ] (started 2026-09-29: package + Graner–Glazier, Wortel Act, Merks, OpenVT with reference parity; Akeeb invasion ported, statistical parity vs SCDPotts pending. 2026-11-16: Akeeb is reproduced against the authors' 13,310-run data instead (P6.2b, D-142, D-143), which may make the SCDPotts check moot; reproduction pages exist for 01, 09, 10 and 15 (`lib/PottsModels/reproductions/`); no TTFX table found in the docs) **M4.2** `lib/PottsModels`: Wortel, Merks, OpenVT, Graner–Glazier, Wortel-Act 150², Akeeb leader/follower; tutorials; tested in CI. The published-model subset (Graner–Glazier/Osborne sorting, Merks 2006/2008, Akeeb) follows `research/model-specs/README.md` (unified features G1–G21, per-model decisions §4) and ships one reproduction tutorial each per `research/model-specs/TUTORIAL_TEMPLATE.md`.
+- [ ] (started 2026-09-29: package + Graner–Glazier, Wortel Act, Merks, OpenVT with reference parity; Akeeb invasion ported, statistical parity vs SCDPotts pending. 2026-11-16: Akeeb is reproduced against the authors' 13,310-run data instead (P6.2b, D-142, D-143), which replaces the SCDPotts parity check (D-286); reproduction pages exist for 01, 09, 10 and 15 (`lib/PottsModels/reproductions/`); no TTFX table found in the docs) **M4.2** `lib/PottsModels`: Wortel, Merks, OpenVT, Graner–Glazier, Wortel-Act 150², Akeeb leader/follower; tutorials; tested in CI. The published-model subset (Graner–Glazier/Osborne sorting, Merks 2006/2008, Akeeb) follows `research/model-specs/README.md` (unified features G1–G21, per-model decisions §4) and ships one reproduction tutorial each per `research/model-specs/TUTORIAL_TEMPLATE.md`.
   Accept (D-048): per model, brute-force ΔH, independent drive/effect checks, invariants
   and mechanism tests with negative controls; TTFX table in docs.
 
@@ -74,7 +74,7 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 - [x] ~~**M5.1** LocalMath slimming (INTERNALS §3); TTFX benchmark for 1/4/8/32-stage programs.~~ Withdrawn by D-040: `lib/LocalMath` removed from the monorepo.
 - [ ] (partial, 2026-11-16: Documenter site with manual and API pages; docs CI with doctests, D-281 H3, 1109c3c0; `POTTS_DOCS_PUBLISHED=true` renders the reproductions 01, 04, 09, 10 and 15, `docs/make.jl:7`; the other published models wait on their reproductions) **M5.2** docs site (Learn / Published models / API per package). "Published models" renders the Literate reproduction tutorials `lib/PottsModels/reproductions/<nn>_<model>.jl` (structure: `research/model-specs/TUTORIAL_TEMPLATE.md`), one per published model.
 - [ ] **M5.2a** MakiePotts: vector/arrow channels, relationship overlays, lineage, tensor ellipses, true-3D volume, WGLMakie, DataInspector, rerun controller.
-- [ ] (partial: the repository cut-over to `PraneethMerugu/Potts.jl` was done 2026-10-01 under D-095, which also archives the old repositories; registration and the `PottsStudies` repo: no evidence found) **M5.3** cut-over per AUTONOMY.md §5; registration; archive legacy repos; `PottsStudies` repo for SCD material.
+- [ ] (partial: the repository cut-over to `PraneethMerugu/Potts.jl` was done 2026-10-01 under D-095, and the legacy repositories are archived; registration comes after the paper (D-286); the `PottsStudies` repo: no evidence found) **M5.3** cut-over per AUTONOMY.md §5; registration; archive legacy repos; `PottsStudies` repo for SCD material.
 
 ## Phase 6 — Model families (D-051, D-053; run by the agent protocol, AUTONOMY §7)
 
@@ -409,7 +409,7 @@ Every item's acceptance also includes the standing checks:
     - Non-breaking fixes land directly: docstrings, `public` markers, error messages, allowlist trimming.
     - Breaking ones (renames, removals, keyword changes) are collected into ONE proposal for the maintainer to ratify as a single DECISIONS entry, as D-075 was. They land with no aliases (D-028), with PottsModels, tests, benchmarks and tutorials updated in the same change.
   - Accept: the audit document exists and every finding is resolved, ratified for later, or rejected with a reason.
-  - Accept: a frozen public-API snapshot test lists every exported or `public` name per package, so any later change to the surface needs a DECISIONS entry.
+  - Accept: every exported or `public` name has a docstring (`Docs.undocumented_names`), and Aqua and ExplicitImports are clean. Surface changes are reviewed in the diff; there is no API snapshot test (D-286, replacing the frozen snapshot).
   - Accept: Documenter `checkdocs = :exports` passes with no missing docstrings, and Aqua and ExplicitImports are clean, with allowlists no larger than before.
   - Accept: the gate is unchanged, and generated code and fingerprints are unchanged except where a ratified rename touches them.
 
@@ -565,7 +565,7 @@ Goal (user, 2026-10-05): put Potts.jl in the OpenVT monolayer lineup.
 
 Full runs are offline (D-146).
 
-- [ ] (FULL record and page merged 2026-10-08, D-184; V-C12 re-defined to the MCS-0 reference 2026-10-09, D-200: 37/37 pass; 01b figure targets and video clock overlays open; the attempts row is now required by D-200 item 2, superseding "drop the Attempts per MCS row". 2026-11-16: the 01b figure targets are merged, 24215292 2026-10-09 (D-202), with a FULL record, 4fa7f520 (27/29 rows, 7/7 controls); no commit found for the video clock overlays; the "re-freeze" mechanism is gone, D-275) **P6.3f** (D-153–D-156; after P6.3d merges) Re-freeze reproduction 01's page and test through a test author.
+- [ ] (FULL record and page merged 2026-10-08, D-184; V-C12 re-defined to the MCS-0 reference 2026-10-09, D-200: 37/37 pass; 01b figure targets and video clock overlays open; the attempts row is now required by D-200 item 2, superseding "drop the Attempts per MCS row". 2026-11-16: the 01b figure targets are merged, 24215292 2026-10-09 (D-202), with a FULL record, 4fa7f520 (27/29 rows, 7/7 controls); no commit found for the video clock overlays; the "re-freeze" mechanism is gone, D-275) **P6.3f** (D-153–D-156; after P6.3d merges) Update reproduction 01's page and test through a test author (the re-freeze step is gone, D-275).
   - Remove the cell outlines (page lines ~179, 203, 234).
   - Add the four-column deviations table, seeded from D-153 Applied's rows. Drop the wrong "Attempts per MCS" row (CorePotts already matches TST's interior-site count) and fix §2 Units.
   - Make the relaxation-end time the primary axis, with the code-MCS offset noted.
@@ -681,7 +681,7 @@ Full runs are offline (D-146).
 
 ### Ergonomics (D-199; after the 2026-10-09 meeting, alongside foam and P6.3g/P6.9a)
 
-Every API change here keeps the old form working, and none changes a frozen verdict unless the maintainer rules otherwise. (2026-11-16: this conflicts with D-254, no back-compatibility shims before the paper, and with D-275, no frozen files. The maintainer decides which rule applies here.) Priority: E1, E3, E7 and E8 first, then E2 and E4, then the rest.
+API changes here follow D-254: no back-compatibility shims before the paper, so a change is a plain rename or removal with every caller updated in the same change (D-286). There are no frozen verdicts (D-275). Priority: E1, E3, E7 and E8 first, then E2 and E4, then the rest.
 
 - [ ] **P6.E1** Named kind tables and symbolic kinds.
   - Write `J[dark, light] = 11`, symmetric unless declared otherwise, alongside the positional matrix.
@@ -829,7 +829,7 @@ Fields moved from `CorePotts.FieldStep` (explicit Euler only) to two new MIT pac
 - [x] 5e972579 2026-11-13 **Integration** onto `monorepo` after D-271 to D-273 (D-INT-1). Pins that both sides had re-pinned were removed for the TS series.
 
 Open and deferred:
-- [ ] **Confirm the provisional entries.** D-256 to D-265, D-C6, D-C7a, D-C7a-NT, D-C7b, D-C8 and the C8/C9 re-freeze entries still say "provisional, awaiting confirmation". The maintainer's OK of 2026-10-17 and 2026-10-19 is recorded only in the git-ignored `PottsWorktrees/lattice-pde/HANDOFF.md` §1. C10 was to write it into DECISIONS. Also give numbers to the placeholder ids (D-C*, D-F2-*, D-F3-*, D-F4-*, D-INT-1).
+- [x] D-286 2026-11-16 **Confirm the provisional entries.** D-256 to D-265, D-C6, D-C7a, D-C7a-NT, D-C7b, D-C8 and the C8/C9 re-freeze entries still say "provisional, awaiting confirmation". The maintainer's OK of 2026-10-17 and 2026-10-19 is recorded only in the git-ignored `PottsWorktrees/lattice-pde/HANDOFF.md` §1. C10 was to write it into DECISIONS. Also give numbers to the placeholder ids (D-C*, D-F2-*, D-F3-*, D-F4-*, D-INT-1).
 - [ ] **C10** Field-compiler docs. Stopped by the maintainer 2026-10-18; unverified WIP `8601032c` on the local branch `lp/c10` (HANDOFF status table). Some docs landed later with F4-B4d (3213f17b).
 - [ ] **F5** Polish, the last step of the 2026-10-18 plan F1 → F5 → C10 → C11 (HANDOFF). Nothing built.
 - [ ] **KernelAbstractions 0.10.** One commit with its own A/B once the upstream packages are registered (D-256 item 4). The compat is `0.9.42` today (`Project.toml:47`).
@@ -849,7 +849,7 @@ Goal (maintainer, 2026-11-11 and 2026-11-12): a fast test harness at SciML quali
 - [x] e7c1e649 2026-11-15 **T3a** Convergence orders, SciML conformance, generic number types, Welch TOST statistics, `GROUP=GPU`, a `[Multithreaded]` group, one QA helper for six packages, and Runic in CI (D-283).
 - [x] c581ff06 2026-11-15 **T3b** Compile hygiene, test files of at most 700 lines, warn-only wall-time budgets, typed refusal assertions and the final audit (D-284). Line coverage is 95.2 % over five packages. `GROUP=Potts` takes 28 min 17 s, against 71.5 min at TS0.
 
-## Next phase (proposed, not yet approved)
+## Next phase
 
-- [ ] **C11** (proposed, not yet approved) Move the paper models onto LatticePDE. Port each published model to native LatticePDE use: `PDESystem` fields and the solver its paper states. One model per commit, each with fidelity tests.
+- [ ] **C11** (approved 2026-11-16, D-286; starts after F5 and C10) Move the paper models onto LatticePDE. Port each published model to native LatticePDE use: `PDESystem` fields and the solver its paper states. One model per commit, each with fidelity tests.
   - Accept: Fortuna 3D matches or beats 14 ms/step.
