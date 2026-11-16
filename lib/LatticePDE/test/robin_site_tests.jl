@@ -129,7 +129,7 @@ end
         Problems.bound_window!(p.stability, 0.1 * (w - 1), 0.1 * w)
         @test rt.n == LFP.substeps(p, ExplicitEuler(; dt = 0.1))
     end
-    @test issorted(ns) && ns[end] > ns[1] && SciMLBase.check_error(ig) == ReturnCode.Success
+        @test issorted(ns) && ns[end] > ns[1] && SciMLBase.check_error(ig) == ReturnCode.Success
     @test all(isfinite, ig[bce])
     # a bound that does not read the time keeps its count (no re-bound)
     q = rsown(rsys([D(bce) ~ Δ(bce)], [bc(0, x, y) ~ x * y, (1 + y) * bc(t, 0, y) - Differential(x)(bc(t, 0, y)) ~ 0.0], Any[]))
@@ -164,6 +164,6 @@ end
             bdom(1.0), [t, x, y], [qae, qbe], Any[]; name = :anch), LatticeDiscretization(Grid((8, 8)); T = Float64))
     ig = init(p, FieldGroups(qae => QuasiSteady(; dt = 0.1), qbe => BackwardEuler(; dt = 0.1)))
     step!(ig)
-    @test SciMLBase.check_error(ig) == ReturnCode.Success && all(isfinite, ig[qae])
+        @test SciMLBase.check_error(ig) == ReturnCode.Success && all(isfinite, ig[qae])
 end
 end

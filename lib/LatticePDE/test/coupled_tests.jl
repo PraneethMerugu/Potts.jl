@@ -49,7 +49,7 @@ end
             step!(ig)
             c = only(ig.runtimes).cache
             got = vcat(vec(ig[cae]), vec(ig[cbe]))
-            @test c.cs !== nothing && c.newton == 1 && SciMLBase.check_error(ig) == ReturnCode.Success
+                @test c.cs !== nothing && c.newton == 1 && SciMLBase.check_error(ig) == ReturnCode.Success
             @test maximum(abs, got .- want) / maximum(abs, want) < tol || (println("q1 ", (δ, k, steady, inner), " ",
                 maximum(abs, got .- want) / maximum(abs, want)); false)
         end

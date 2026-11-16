@@ -197,10 +197,10 @@ end
         @test frozen_sites(prob, sol.u[end]) == .!prob.lattice.mask
     end
 
-    @testset "a callback that writes kind: refresh_frozen!, derivative_discontinuity!, set_state!" begin
+        @testset "a callback that writes kind: refresh_frozen!, derivative_discontinuity!, set_state!" begin
         writes = (
             refresh = integ -> (integ.state.cell.kind[1] = 2; refresh_frozen!(integ)),
-            discontinuity = integ -> (integ.state.cell.kind[1] = 2; SciMLBase.derivative_discontinuity!(integ, true)),
+                discontinuity = integ -> (integ.state.cell.kind[1] = 2; SciMLBase.derivative_discontinuity!(integ, true)),
             set_state = integ -> CorePotts.SymbolicIndexingInterface.set_state!(integ, Int32[2, 2], StateIndex(:cell, :kind)),
             stale = integ -> (integ.state.cell.kind[1] = 2))
         for (name, w) in pairs(writes)
@@ -324,7 +324,7 @@ end
     n0, N0 = length(CorePotts._boundary_sites(integ)), integ.nmobile
     CorePotts._skip_lq!(B, n0, N0)                           # cached for (n0, N0)
     integ.state.σ[integ.state.σ .== 2] .= 0                  # the frozen cell 2 is removed
-    SciMLBase.derivative_discontinuity!(integ, true)
+        SciMLBase.derivative_discontinuity!(integ, true)
     @test integ.nmobile == N0 + 36
     n = length(CorePotts._boundary_sites(integ))
     @test n == n0                                            # |B| unchanged
