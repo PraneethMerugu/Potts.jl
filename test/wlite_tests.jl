@@ -1,5 +1,5 @@
 # The W-lite LA container (v3 §7.1, C4): read access, show, property forwarding, SII,
-# refusal matrix, negative control, 15-method boundary, piracy, and getfield behavioral check.
+# refusal matrix, negative control, 18-method boundary, piracy, and getfield behavioral check.
 
 @testitem "W-lite A: read access" setup = [WliteSetup] tags = [:potts, :wlite] begin
     @testset "W-lite A: read access" begin
@@ -170,8 +170,8 @@ end
     end
 end
 
-@testitem "W-lite G: the 15 owned methods, piracy" setup = [WliteSetup] tags = [:potts, :wlite] begin
-    @testset "W-lite G: the 15 owned methods, piracy" begin
+@testitem "W-lite G: the 18 owned methods, piracy" setup = [WliteSetup] tags = [:potts, :wlite] begin
+    @testset "W-lite G: the 18 owned methods, piracy" begin
         @test isempty(Aqua.Piracy.hunt(Potts))                                                          # G1
         T = PottsSystem
         owned = Method[]
@@ -194,7 +194,8 @@ end
                 "Base.getproperty(Symbol)", "Base.show(MIME{Symbol(\"text/plain\")}, PottsSystem)",
                 "ModelingToolkitBase.equations()", "ModelingToolkitBase.unknowns()", "ModelingToolkitBase.parameters()",
                 "ModelingToolkitBase.observed()", "ModelingToolkitBase.initial_conditions()", "ModelingToolkitBase.bindings()",
-                "ModelingToolkitBase.independent_variables()", "SymbolicIndexingInterface.symbolic_container()",
+                "ModelingToolkitBase.independent_variables()", "ModelingToolkitBase.get_systems()", "ModelingToolkitBase.full_equations()", "Base.propertynames()",
+                "SymbolicIndexingInterface.symbolic_container()",
                 "SymbolicIndexingInterface.parameter_index(Any)", "SymbolicIndexingInterface.parameter_index(Symbol)",
                 "SymbolicIndexingInterface.is_parameter(ModelingToolkitBase.ParameterIndex)",
                 "SymbolicIndexingInterface.observed(Any)", "SymbolicIndexingInterface.parameter_observed(Any)",
@@ -206,7 +207,7 @@ end
         @test count(
             n -> !startswith(n, "ModelingToolkitBase.mtkcompile") && !startswith(n, "ModelingToolkitBase.extend") &&
                 !startswith(n, "LatticeFields."), names
-        ) == 15
+        ) == 18
         M, S = WL_MTKB, WL_SII
         fs = Any[
             nameof, getproperty, propertynames, show, ndims, M.equations, M.unknowns, M.parameters, M.observed,
@@ -220,7 +221,7 @@ end
             m for f in fs for m in methods(f) if m.module === Potts &&
                 any(==(PottsSystem), Base.unwrap_unionall(m.sig).parameters)
         ]
-        @test length(scanned) == 19 && all(m -> m in owned || m.name === :extend, scanned)
+        @test length(scanned) == 21 && all(m -> m in owned || m.name === :extend, scanned)
         @test length(WLiteMatrix.refusal_methods()) == 49
         @test isempty(filter(((a, b),) -> a.module === Potts || b.module === Potts, Test.detect_ambiguities(Potts; recursive = true)))
     end

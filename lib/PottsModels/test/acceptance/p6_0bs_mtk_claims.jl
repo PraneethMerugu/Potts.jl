@@ -219,7 +219,9 @@ end
         @test p60bs_names(P60BS_M.parameters(Potts.inner(sys))) == p60bs_names(p)
     end
     sys = P60bsAll(; name = :all)
-    @test Set([:x, :xalias, :m, :gap, :acc, :c, :rt]) ⊆ p60bs_names(P60BS_M.unknowns(sys))
+    @test Set([:x, :xalias, :m, :gap, :acc, :rt]) ⊆ p60bs_names(P60BS_M.unknowns(sys))
+    # the field `c` is in the PDESystem, not among the System's unknowns; `sys.c` names it
+    @test !(:c in p60bs_names(P60BS_M.unknowns(sys))) && Potts.info(sys.c).name === :c
     @test Set([:k, :r, :Dc]) ⊆ p60bs_names(P60BS_M.parameters(sys))
     # `Potts.extend` merges two models
     ext = Potts.extend(P60bsExtra(; name = :extra), sys)
@@ -398,8 +400,10 @@ end
 
 @testset "P6.0bs C8: fields are Potts' own step, not MTK systems" begin
     sys = P60bsAll(; name = :all)
-    # the field PDE is a Symbolics equation MTK's `equations` lists ...
-    @test any(e -> p60bs_symbolic(e.lhs) && occursin("c(t)", string(e.lhs)), P60BS_M.equations(sys))
+    # the field PDE is an equation of the model's PDESystem (`Potts.fields`), not of the System
+    # MTK's `equations` reads (a System has one independent variable) ...
+    @test any(e -> p60bs_symbolic(e.lhs) && occursin("c(t", string(e.lhs)), P60BS_M.equations(Potts.fields(sys)))
+    @test !any(e -> occursin("c(t", string(e.lhs)), P60BS_M.equations(sys))
     cs = mtkcompile(sys)
     # ... but no MTK system Potts builds holds the field variable
     for scope in (:cell, :model)
@@ -414,7 +418,7 @@ end
     # Merks: field PDEs only, so no ODE system in either scope
     for build in (() -> MerksVasculogenesis(; name = :merks, lattice = (8, 8)), () -> Merks2006(; name = :m6, lattice = (16, 16)))
         s = build()
-        @test any(e -> occursin("Δ", string(e)), P60BS_M.equations(s))
+        @test any(e -> occursin("Δ", string(e)), P60BS_M.equations(Potts.fields(s)))
         c = mtkcompile(s)
         @test Potts.ode_system(c, :cell) === nothing && Potts.ode_system(c, :model) === nothing
     end

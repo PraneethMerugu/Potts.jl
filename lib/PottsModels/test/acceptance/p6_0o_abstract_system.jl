@@ -367,9 +367,11 @@ end
     @test obs isa AbstractVector{P60O_M.Equation} && length(obs) == 1 && p60o_name(only(obs).lhs) === :total
     prob = p60o_problem(sys, P60O_OP12, (;))
     @test observe(prob, only(obs).lhs) == observe(prob, only(obs).rhs) == 3.0       # x = 1.5 on two cells
-    # site, field and edge variables are unknowns too; the lattice and built-ins are not
+    # site and edge variables are unknowns too; the lattice, built-ins and fields are not (a
+    # field and its equation are in the model's PDESystem, `Potts.fields`)
     @test Set(p60o_names(U(P60oLife(; name = :life)))) == Set([:m, :q, :act, :total])
-    @test p60o_names(U(P60oField(; name = :fld))) == [:c] && length(E(P60oField(; name = :fld))) == 1
+    @test isempty(U(P60oField(; name = :fld))) && isempty(E(P60oField(; name = :fld)))
+    @test length(P60O_M.equations(Potts.fields(P60oField(; name = :fld)))) == 1
     @test p60o_names(U(P60oSpring(; name = :sp))) == [:rest]
     @test Set(p60o_names(U(P60oSpringExt2(; name = :ext2)))) == Set([:rest, :len])
     @test Set(p60o_names(P(P60oSpringExt2(; name = :ext2)))) == Set([:T, :k, :χ])
@@ -393,10 +395,11 @@ end
     net = P60oNet(; name = :net)
     @test issubset([:input, :grn₊A, :grn₊B, :grn₊C], p60o_names(U(net)))
     @test :grn₊wnt in p60o_names(P(net))
-    # the published models have no components: the accessors are Potts' own lists
+    # the published models have no components: the accessors are Potts' own lists (the
+    # fields are in `Potts.fields`)
     for (label, build, _, _) in P60O_CASES[1:8]
         m = build()
-        @test Set(p60o_names(U(m))) == Set(Potts.info(v).name for v in Potts.variables(m))
+        @test Set(p60o_names(U(m))) == Set(Potts.info(v).name for v in Potts.variables(m) if Potts.info(v).role !== :field)
         @test Set(p60o_names(P(m))) == Set(Potts.info(v).name for v in Potts.parameters(m))
     end
 end

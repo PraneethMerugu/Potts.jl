@@ -442,3 +442,46 @@ end
         @test Potts.extend(Potts.PottsSystem(; base...), m) isa PottsSystem
     end
 end
+
+# The inner System of a coupled model holds no field (a field equation there was a
+# scalar ODE with a free `x`); the fields are in `Potts.fields`. MTK's hierarchy walkers answer
+# (`get_systems` is empty: a Potts model has no subsystem hierarchy). Oracle: the cell ODE alone, compiled
+# from `Potts.inner`, solves to `exp(-r t)`. Controls on the code before this change: the field equation's free
+# `x`, an underdetermined ODE, and `FieldError`/`MethodError` from the walkers.
+@testitem "a coupled model's System holds no field; MTK's walkers answer" setup = [CoupleSetup] tags = [:potts, :fields_couple] begin
+    @potts_model C11Host begin
+        @kinds medium A
+        @parameters r = 0.5
+        @variables q(cell) = 1.0
+        @lattice Lattice((24, 20); boundary = Closed())
+        @energy cells(A) => (volume - 16.0)^2
+        @equations D(q) ~ -r * q
+        @sweep Metropolis(; temperature = 4.0)
+    end
+
+    @testset "a coupled model's System holds no field; MTK's walkers answer" begin
+        M, S = Potts.ModelingToolkitBase, Potts.Symbolics
+        vol = Potts.at(Potts.B.volume, Potts.B.owner)
+        host = Potts.couple(C11Host(; name = :host), CpPDE.sys(); inputs = [CpPDE.endo => Potts.kind == 1, CpPDE.vol => vol])
+        eqs = M.equations(host)
+        known = Set(S.unwrap.([M.unknowns(host); M.parameters(host); Potts.t]))
+        free = mapreduce(e -> Set(S.get_variables(e.rhs)), union, eqs; init = Set{Any}())
+        @test issubset(free, known)                                         # no free spatial symbol
+        @test length(eqs) == length(M.unknowns(host)) == 1                  # the cell ODE only
+        @test !any(x -> Potts.info(x).name === :c, M.unknowns(host))
+        @test Potts.info(host.c).name === :c && :c in propertynames(host)   # the field by name
+        @test length(M.equations(Potts.fields(host))) == 1                  # … in the PDESystem
+        # no subsystems; the walkers answer
+        @test isempty(M.get_systems(host))
+        @test isequal(M.full_equations(host), eqs)
+        @test isempty(M.discrete_events(host)) && isempty(M.continuous_events(host))
+        @test hasproperty(host, :r) && !hasproperty(host, :nothing_here)
+        @test (redirect_stdout(() -> M.hierarchy(host), devnull); true)
+        # the cell ODE alone compiles and solves (every value given: oracle q(t) = exp(-r t))
+        ode = mtkcompile(Potts.inner(host))
+        op = [only(M.unknowns(ode)) => 1.0; [p => 0.5 for p in M.parameters(ode)]]
+        prob = Potts.SciMLBase.ODEProblem(ode, op, (0.0, 2.0))
+        sol = Potts.SciMLBase.solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+        @test sol[only(M.unknowns(ode))][end] ≈ exp(-1.0) rtol = 1.0e-6
+    end
+end

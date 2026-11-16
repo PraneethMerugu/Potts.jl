@@ -100,7 +100,8 @@ A cellular Potts model: an MTK `AbstractSystem` that holds a complete ModelingTo
 MTK's accessors read the inner System: `equations(sys)` (the `@equations` as written, plus
 each component's equations, namespaced `dc₊y`), `unknowns(sys)` (the declared variables of
 every scope plus each component's unknowns; never the lattice ownership, kinds or built-in
-cell properties), `parameters(sys)`, `observed(sys)` (one `name ~ expr` per `@observed`
+cell properties, and never a field: the fields and their equations are in
+[`Potts.fields`](@ref)`(sys)`, a `PDESystem`; `sys.c` still names the field `c`), `parameters(sys)`, `observed(sys)` (one `name ~ expr` per `@observed`
 quantity), `initial_conditions(sys)`, `bindings(sys)`, `independent_variables(sys)` (`[t]`)
 and `nameof(sys)`. SymbolicIndexingInterface queries are answered by the inner System.
 
@@ -138,9 +139,11 @@ _p(sys::PottsSystem, f::Symbol) = getfield(getfield(sys, :part), f)
 """
     Potts.inner(sys::PottsSystem)
 
-The complete (flattened) ModelingToolkitBase `System` of a model: its parameters, variables,
-`@equations`, `@observed` and components. Generic MTK code takes it where it needs a `System`
-(`mtkcompile(Potts.inner(sys); inputs = …)` compiles the cell/model ODE alone).
+The complete (flattened) ModelingToolkitBase `System` of a model: its parameters, its cell,
+model and site variables, their `@equations`, `@observed` and components. The fields and their
+equations are not in it (an MTK `System` has one independent variable, the time): they are in
+[`Potts.fields`](@ref)`(sys)`, a `PDESystem`. Generic MTK code takes it where it needs a
+`System` (`mtkcompile(Potts.inner(sys); inputs = …)` compiles the cell/model ODE alone).
 """
 inner(sys::PottsSystem) = getfield(sys, :inner)
 
@@ -580,15 +583,21 @@ _empty_inner(name) = ModelingToolkitBase.System(Equation[], _unwrap(t); name)
 # The inner System of a model: its quantities, equations, observed equations and components.
 # MTK's component checks run; its unit check does not (`mtkcompile` runs Potts' own, which
 # names the statement: a built-in such as `volume` carries the lattice's units there).
-# A field equation with a raw spatial derivative (`Differential(x)(K * Differential(x)(c))`, F2
-# design §2.11) stays out of it: an MTK `System` has one independent variable, the time; the
-# model's PDESystem (`Potts.fields`) holds it.
+# The fields stay out of it: an MTK `System` has one independent variable, the time, so
+# a field equation there would be a scalar ODE with free spatial symbols. The field variables
+# and every field equation (a rate, a map, a steady row, an aux field `K ~ rhs`, and any
+# equation with a raw spatial derivative, F2 design §2.11) are in the model's PDESystem
+# (`Potts.fields`) only.
+_is_field_variable(x) = (i = info(x); i !== nothing && i.role === :field)
 function _inner_system(sys::PottsSystem)
     spatial(eq) = (u = _unwrap(eq.rhs); found = Ref(false);
                    _walk_all(y -> iscall(y) && operation(y) isa Differential && !isequal(operation(y).x, _unwrap(t)) &&
                                   (found[] = true), u); found[])
-    eqs = [eq for eq in _p(sys, :equations) if !spatial(eq)]
-    return ModelingToolkitBase.System(eqs, _unwrap(t), _p(sys, :variables), _p(sys, :parameters);
+    of_field(eq) = (f = _field_lhs(eq, sys); f !== nothing && (f[1] === nothing || _is_field_variable(f[1])))
+    eqs = [eq for eq in _p(sys, :equations) if !spatial(eq) && !of_field(eq)]
+    vars = [x for x in _p(sys, :variables) if !_is_field_variable(x)]
+    return ModelingToolkitBase.System(
+        eqs, _unwrap(t), vars, _p(sys, :parameters);
         name = nameof(sys), observed = _p(sys, :observed), initialization_eqs = _p(sys, :initialization_eqs),
         systems = _component_systems(_p(sys, :components)), checks = ModelingToolkitBase.CheckComponents)
 end
@@ -975,7 +984,7 @@ is not a field read: `sys.<name>` is a declared symbol.
 """
 lattice(sys::PottsSystem) = _p(sys, :lattice)
 
-# --- The container's owned methods (W-lite LA, v3 §7.1). Exactly these 15; a test lists them.
+# --- The container's owned methods (W-lite LA, v3 §7.1). Exactly these 18; a test lists them.
 # Each forwards to the complete inner System. `nameof` is MTK's generic method on the `name`
 # field. MTKBase's own SymbolicIndexingInterface methods on `::AbstractSystem` would read the
 # container's (absent) index cache, so the five SII methods below route them to the inner
@@ -983,7 +992,21 @@ lattice(sys::PottsSystem) = _p(sys, :lattice)
 const _MTKB = ModelingToolkitBase
 const _SII = SymbolicIndexingInterface
 
-Base.getproperty(s::PottsSystem, n::Symbol) = getproperty(getfield(s, :inner), n)
+# the model's field variable named `n` (wrapped, as `getproperty` of a System gives), or nothing
+function _field_named(s::PottsSystem, n::Symbol)
+    for x in _p(s, :variables)
+        _is_field_variable(x) && info(x).name === n && return Symbolics.wrap(x)
+    end
+    return nothing
+end
+
+# a field variable is the model's (`Potts.fields`), not the inner System's
+function Base.getproperty(s::PottsSystem, n::Symbol)
+    f = _field_named(s, n)
+    return f === nothing ? getproperty(getfield(s, :inner), n) : f
+end
+Base.propertynames(s::PottsSystem) =
+    (propertynames(getfield(s, :inner))..., (info(x).name for x in _p(s, :variables) if _is_field_variable(x))...)
 _MTKB.equations(s::PottsSystem) = _MTKB.equations(getfield(s, :inner))
 _MTKB.unknowns(s::PottsSystem) = _MTKB.unknowns(getfield(s, :inner))
 _MTKB.parameters(s::PottsSystem; kw...) = _MTKB.parameters(getfield(s, :inner); kw...)
@@ -991,6 +1014,11 @@ _MTKB.observed(s::PottsSystem) = _MTKB.observed(getfield(s, :inner))
 _MTKB.initial_conditions(s::PottsSystem) = _MTKB.initial_conditions(getfield(s, :inner))
 _MTKB.bindings(s::PottsSystem) = _MTKB.bindings(getfield(s, :inner))
 _MTKB.independent_variables(s::PottsSystem) = _MTKB.independent_variables(getfield(s, :inner))
+# no subsystems: the inner System is flattened (a Potts model has no subsystem hierarchy),
+# so MTK's hierarchy walkers (`full_equations`, `hierarchy`, the event accessors,
+# `propertynames`) see a leaf
+_MTKB.get_systems(::PottsSystem) = _MTKB.AbstractSystem[]
+_MTKB.full_equations(s::PottsSystem; kw...) = _MTKB.full_equations(getfield(s, :inner); kw...)
 _SII.symbolic_container(s::PottsSystem) = getfield(s, :inner)
 _SII.parameter_index(s::PottsSystem, sym) = _SII.parameter_index(getfield(s, :inner), sym)
 _SII.parameter_index(s::PottsSystem, sym::Symbol) = _SII.parameter_index(getfield(s, :inner), sym)
