@@ -459,7 +459,7 @@ end
 
 Drop the algorithm history of every field group of run context `ctx`
 (`LatticeFields.Problems.reset!`): the state was written (`integ[c] = values`, `setu`, a
-callback with `u_modified!(integ, true)`, `reinit!`), so Crank–Nicolson damps its next substep
+callback with `derivative_discontinuity!(integ, true)`, `reinit!`), so Crank–Nicolson damps its next substep
 and BDF2 restarts with a Backward Euler substep; the hierarchy of an implicit group is rebuilt.
 Nothing for the explicit algorithms. A move of σ by the CPM is no write: the fields' history
 survives it.
@@ -562,8 +562,10 @@ end
 _tangent_run(h::TangentHandle) = h.ref[]::TangentRun
 
 # whether run context `ctx` has a shadow tangent store, as a type (`Val(true)` or `Val(false)`):
-# a primal run dispatches to the no-op methods, so it infers none of the tangent code
-@generated tangent_on(::NamedTuple{K}) where {K} = :(Val($(:__tangent in K)))
+# a primal run dispatches to the no-op methods, so it infers none of the tangent code. A plain
+# method (the repo rules forbid `@generated`): `K` is a constant of the type, so `in` folds
+# and the `Val` is inferred
+tangent_on(::NamedTuple{K}) where {K} = Val(:__tangent in K)
 
 # the run context with the shadow store of `tg` (none for a primal problem: no entry, so the
 # phases compile no tangent path); `fresh`: the initial state's derivative parts are seeded

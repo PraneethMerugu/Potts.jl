@@ -115,6 +115,21 @@ end
 @testset "QA: Aqua (CorePotts)" begin
         # `persistent_tasks = false`: KernelAbstractions/GPU backends register background tasks.
         qa_aqua(CorePotts; persistent_tasks = false)
+        qa_extension_piracies(CorePotts)                # inside the GPU extensions, when loaded
+    end
+end
+
+# No `@generated` in CorePotts' source (repo rule); the run context's tangent switch
+# `tangent_on` is a plain method whose `Val` is still inferred, so a primal run compiles no
+# tangent path
+@testitem "QA: no @generated; tangent_on is inferred" setup = [CP_qa] tags = [:corepotts, :qa] begin
+    @testset "QA: no @generated; tangent_on is inferred" begin
+        qa_source_rules(pkgdir(CorePotts); banned_pattern = r"(?!)")     # (the `@generated` scan only)
+        primal = (; a = 1, b = 2.0f0)
+        @test @inferred(CorePotts.tangent_on(primal)) === Val(false)
+        @test @inferred(CorePotts.tangent_on(merge(primal, (; __tangent = nothing)))) === Val(true)
+        wide = NamedTuple{ntuple(i -> Symbol(:k, i), 40)}(ntuple(identity, 40))    # past tuple unrolling
+        @test @inferred(CorePotts.tangent_on(wide)) === Val(false)
 end
 end
 
