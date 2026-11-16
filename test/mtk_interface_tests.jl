@@ -56,6 +56,13 @@ end
     gg = GranerGlazier(; name = :gg)
     @test M.independent_variable(gg) === Potts.t || isequal(M.independent_variable(gg), Potts.t)
     @test M.iscomplete(gg) && !M.does_namespacing(gg) && M.complete(gg) === gg
+    @test isequal(M.get_iv(gg), Potts.t)
+    err = try
+        M.complete(gg; split = false)
+    catch e
+        e
+    end
+    @test err isa ArgumentError && occursin("split", sprint(showerror, err))
     # the metadata is the inner System's: the sweep is there, and a value set stays through mtkcompile
     @test M.getmetadata(gg, Potts.PottsSweepSpec, nothing) isa Potts.PottsSweepSpec
     tagged = M.setmetadata(gg, MTKInterfaceKey, :tagged)
@@ -73,6 +80,8 @@ end
     @test compose(gg) === gg
     @test_throws ArgumentError compose(clock_system(), [gg])
     @test_throws ArgumentError compose(clock_system(), gg)
+    @test_throws ArgumentError compose(clock_system(), [decay_system(; name = :decay), gg])
+    @test_throws ArgumentError M.System(M.Equation[], Potts.t; name = :outer, systems = [gg])
     @test_throws ArgumentError compose(gg, [1.0])
     # extend merges two Potts models; with a plain System, or an MTK keyword, it is refused
     @test_throws ArgumentError extend(gg, decay_system(; name = :decay))
@@ -83,6 +92,14 @@ end
     @test c isa CompiledPottsSystem && c isa M.AbstractSystem && M.iscomplete(c)
     @test isequal(M.parameters(c), M.parameters(gg)) && isequal(c.λ, gg.λ)
     @test mtkcompile(c) === c
+    @test isequal(M.get_iv(c), Potts.t) && Potts.inner(c) isa M.System && nameof(Potts.inner(c)) === :gg
+    # a compiled model is read-only: operations that build a new system name the model route
+    for op in (
+            () -> M.rename(c, :other), () -> compose(c, [clock_system()]), () -> clock_system() ∘ c,
+            () -> M.setmetadata(c, MTKInterfaceKey, 1), () -> M.complete(c; split = false),
+        )
+        @test_throws ArgumentError op()
+    end
     err = try
         mtkcompile(gg; simplify = false)
     catch e

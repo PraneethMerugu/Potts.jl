@@ -21,7 +21,7 @@ domain (cells of the term's kinds, unordered pairs of the relation with differen
 …), with the conventions of `total_energy`. Drives ([`Potts.drives`](@ref)), constraints
 (the `PottsSweepSpec` payload's `constraints`) and the temperature are not terms. An algebraic
 variable (`y ~ expr` in `@equations`) appears by name; its definition is among the observed
-equations of `mtkcompile(sys).sys` and of [`Potts.ode_system`](@ref).
+equations of [`Potts.inner`](@ref)`(mtkcompile(sys))` and of [`Potts.ode_system`](@ref).
 
 ```julia
 H = Potts.hamiltonian(GranerGlazier(; name = :gg))
@@ -88,7 +88,7 @@ Folds appear as Potts fold terms over their bound variable: a contact fold as
 model: the statements are checked when the model is compiled (`mtkcompile`,
 `PottsProblem`), not here.
 An algebraic variable (`y ~ expr` in `@equations`) appears by name; its definition is
-among the observed equations of `mtkcompile(sys).sys` and of [`Potts.ode_system`](@ref).
+among the observed equations of [`Potts.inner`](@ref)`(mtkcompile(sys))` and of [`Potts.ode_system`](@ref).
 
 The rules are a description: Potts compiles and runs them in its sweep, and they are not
 ModelingToolkit events (`ModelingToolkitBase.discrete_events(sys)` is empty).

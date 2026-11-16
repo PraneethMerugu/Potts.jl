@@ -11,7 +11,10 @@ A `PottsSystem` after `mtkcompile`: an MTK `AbstractSystem` that is complete. MT
 compiled from, and SymbolicIndexingInterface getters built from it (`getp(csys, p)`) work on
 its problems, integrators and solutions. It also holds what a CPM sweep needs and no MTK
 system holds: the energy terms classified by domain with their derived copy deltas, the
-trackers and relations the model needs, and its footprint. Its metadata is read-only.
+trackers and relations the model needs, and its footprint. It is read-only: `setmetadata`,
+`rename`, `compose`, `extend`, `toggle_namespacing` and its use as a component of an MTK
+System (`system ∘ csys`) are `ArgumentError`s; apply them to the model, then compile it.
+[`Potts.inner`](@ref)`(csys)` is the System of the model as compiled.
 """
 struct CompiledPottsSystem <: ModelingToolkitBase.AbstractSystem
     sys::PottsSystem
@@ -98,7 +101,34 @@ end
 _MTKB.parameters(c::CompiledPottsSystem; kw...) = _MTKB.parameters(getfield(c, :authored); kw...)
 _MTKB.full_equations(c::CompiledPottsSystem; kw...) = _MTKB.full_equations(getfield(c, :authored); kw...)
 _MTKB.iscomplete(::CompiledPottsSystem) = true
-_MTKB.complete(c::CompiledPottsSystem; kw...) = c
+_MTKB.complete(c::CompiledPottsSystem; kw...) = (_refuse_complete_keywords(c, kw); c)
+_MTKB.get_iv(c::CompiledPottsSystem) = _MTKB.get_iv(getfield(c, :authored))
+inner(c::CompiledPottsSystem) = inner(getfield(c, :sys))
+
+# MTK's operations that build a new system: a compiled system is read-only, so each is an
+# `ArgumentError` that names the route (apply it to the model, then `mtkcompile`). MTK's
+# `extend`, `setmetadata` and `toggle_namespacing` refuse it already (`extend` in compose.jl,
+# `setmetadata` in sweep_spec.jl, `toggle_namespacing` in MTK: a Potts system has no
+# `namespacing` flag).
+Symbolics.rename(c::CompiledPottsSystem, name::Symbol) = throw(
+    ArgumentError(
+        "rename($(nameof(c)), :$name): a compiled system is read-only; rename the model, then compile it: " *
+            "`mtkcompile(rename(sys, :$name))`"
+    )
+)
+ModelingToolkitBase.compose(c::CompiledPottsSystem, ::AbstractArray; kw...) = throw(
+    ArgumentError(
+        "compose($(nameof(c)), …): a compiled system is read-only; compose the model, then compile it: " *
+            "`mtkcompile(compose(sys, components))`"
+    )
+)
+# a compiled system among an MTK System's components (`clock ∘ csys`, `System(…; systems)`)
+Base.convert(::Type{ModelingToolkitBase.System}, c::CompiledPottsSystem) = throw(
+    ArgumentError(
+        "the compiled system `$(nameof(c))` is not a component of an MTK System; compose the model the other way " *
+            "round, `compose(sys, [system])`, then compile it"
+    )
+)
 
 function Base.show(io::IO, ::MIME"text/plain", c::CompiledPottsSystem)
     print(io, "CompiledPottsSystem of ")
@@ -754,7 +784,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     _check_units(sys)
 
     # the lowered model's inner System is rebuilt from its lowered payload, so MTK's accessors
-    # on `csys.sys` list what the lowering kept (an eliminated algebraic variable is observed)
+    # on `Potts.inner(csys)` list what the lowering kept (an eliminated algebraic variable is observed)
     fsys = something(fieldsys, getfield(sys, :fields), Some(nothing))
     # the PDESystem's digest is recorded in the payload, so the compiled `sys` composes again (C9)
     fsys === nothing || (sys = _replace(sys; metadata = Base.ImmutableDict(_p(sys, :metadata), _FieldsFrom => _pde_digest(fsys))))

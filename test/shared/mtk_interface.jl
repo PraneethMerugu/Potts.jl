@@ -14,8 +14,8 @@
 #     `does_namespacing` (`systems/abstractsystem.jl:464`, named by `getproperty`'s docstring);
 #   - the metadata functions `getmetadata`, `hasmetadata`, `setmetadata`
 #     (`systems/system.jl:1310-1330`);
-#   - the exported operations `@named` (with an index range), `extend`, `compose`, `complete`
-#     and `toggle_namespacing` (`ModelingToolkitBase.jl:473`), and `rename`
+#   - the exported operations `@named` (with an index range), `extend`, `compose` (and `∘`),
+#     `complete` and `toggle_namespacing` (`ModelingToolkitBase.jl:473`), and `rename`
 #     (`systems/abstractsystem.jl:1052`);
 #   - `mtkcompile` and its keywords (`systems/systems.jl:100-135`).
 #
@@ -74,6 +74,7 @@ if !isdefined(@__MODULE__, :qa_mtk_system_interface)
             Test.@test isequal(M.unwrap(getproperty(sys, name)), M.unwrap(p)) == !namespacing
             done = mtk_outcome(() -> M.complete(sys))
             Test.@test done isa M.AbstractSystem && M.iscomplete(done) && nameof(done) === nameof(sys)
+            Test.@test mtk_answered(mtk_outcome(() -> M.complete(sys; split = false)))
             Test.@test mtk_answered(mtk_outcome(() -> M.toggle_namespacing(sys, false)))
         end
         Test.@testset "metadata" begin
@@ -91,8 +92,14 @@ if !isdefined(@__MODULE__, :qa_mtk_system_interface)
             composed = mtk_outcome(() -> M.compose(sys, [component]))
             Test.@test composed isa M.AbstractSystem && nameof(composed) === nameof(sys) &&
                 length(M.unknowns(composed)) == length(M.unknowns(sys)) + length(M.unknowns(component))
-            # a system with `sys` as its component: a composed system, or a refusal naming the route
+            # a system with `sys` as its component, alone or among other systems: a composed
+            # system, or a refusal naming the route
             Test.@test mtk_answered(mtk_outcome(() -> M.compose(component, [sys])))
+            Test.@test mtk_answered(mtk_outcome(() -> M.compose(component, [rebuild(; name = :other), sys])))
+            Test.@test mtk_answered(mtk_outcome(() -> component ∘ sys))
+            Test.@test mtk_answered(
+                mtk_outcome(() -> M.System(M.Equation[], M.independent_variable(sys); name = :outer, systems = [sys]))
+            )
             extended = mtk_outcome(() -> M.extend(rebuild(; name = :extension), rebuild(; name = :base)))
             Test.@test extended isa typeof(sys) && nameof(extended) === :extension &&
                 Set(M.getname.(M.parameters(extended))) == Set(M.getname.(M.parameters(sys)))
@@ -112,6 +119,15 @@ if !isdefined(@__MODULE__, :qa_mtk_system_interface)
             for kw in ((; simplify = false), (; inputs = [], outputs = []))
                 Test.@test mtk_answered(mtk_outcome(() -> M.mtkcompile(sys; kw...)))
             end
+            # MTK's operations on the compiled system: a value, or a refusal naming the route
+            Test.@test mtk_answered(mtk_outcome(() -> M.rename(compiled, :renamed)))
+            Test.@test mtk_answered(mtk_outcome(() -> M.compose(compiled, [component])))
+            Test.@test mtk_answered(mtk_outcome(() -> M.compose(component, [compiled])))
+            Test.@test mtk_answered(mtk_outcome(() -> component ∘ compiled))
+            Test.@test mtk_answered(mtk_outcome(() -> M.extend(compiled, rebuild(; name = :base))))
+            Test.@test mtk_answered(mtk_outcome(() -> M.setmetadata(compiled, MTKInterfaceKey, 42)))
+            Test.@test mtk_answered(mtk_outcome(() -> M.toggle_namespacing(compiled, false)))
+            Test.@test mtk_answered(mtk_outcome(() -> M.complete(compiled)))
         end
         return nothing
     end

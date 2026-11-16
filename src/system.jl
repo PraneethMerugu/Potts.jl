@@ -104,9 +104,10 @@ cell properties, and never a field: the fields and their equations are in
 [`Potts.fields`](@ref)`(sys)`, a `PDESystem`; `sys.c` still names the field `c`), `parameters(sys)`, `observed(sys)` (one `name ~ expr` per `@observed`
 quantity), `initial_conditions(sys)` (each parameter's value: its default, or the keyword that
 overrides it), `bindings(sys)`, `guesses(sys)`, `inputs(sys)`, `outputs(sys)`,
-`independent_variable(sys)` (`t`), the metadata (`getmetadata`, `hasmetadata`; `setmetadata`
+`independent_variable(sys)` and `get_iv(sys)` (`t`), the metadata (`getmetadata`, `hasmetadata`; `setmetadata`
 returns the model with its inner System's metadata set) and `nameof(sys)`. A model is complete:
-`iscomplete(sys)` is `true`, `does_namespacing(sys)` is `false` and `complete(sys)` returns it.
+`iscomplete(sys)` is `true`, `does_namespacing(sys)` is `false` and `complete(sys)` returns it
+(MTK's `complete` keywords are an `ArgumentError` that names them).
 SymbolicIndexingInterface getters and setters built from the model (`getp(sys, λ)`,
 `getu(sys, volume)`) look their symbol up in the problem, integrator or solution they are
 applied to; other SymbolicIndexingInterface queries are answered by the inner System.
@@ -126,10 +127,10 @@ MTK's operations: `compose(sys, [components])` adds components,
 `extend``(sys, base)` merges two
 Potts models (`@extend`), and `rename(sys, name)` (and `@named models[1:n] = Model(…)`)
 renames. MTK's `extend` between a Potts model and another system, and MTK's `compose` with a
-Potts model inside a plain `System`, are `ArgumentError`s naming the route;
+Potts model inside a plain `System` (alone or among other systems), are `ArgumentError`s naming the route;
 `toggle_namespacing` is an `ArgumentError`. Every SciMLBase problem constructor (`ODEProblem`,
 `JumpProblem`, …) is an `ArgumentError` naming `PottsProblem`; `mtkcompile(sys)` compiles the
-CPM ([`CompiledPottsSystem`](@ref)). Other MTKBase functions (`get_iv`, …) are asked of
+CPM ([`CompiledPottsSystem`](@ref)). Other MTKBase functions (`get_eqs`, …) are asked of
 `Potts.inner(sys)`. `Potts.lattice(sys)` is the model's lattice and
 `Potts.parameters(sys)`/`Potts.variables(sys)` its own declarations.
 """
@@ -146,12 +147,15 @@ _p(sys::PottsSystem, f::Symbol) = getfield(getfield(sys, :part), f)
 
 """
     Potts.inner(sys::PottsSystem)
+    Potts.inner(csys::CompiledPottsSystem)
 
 The complete (flattened) ModelingToolkitBase `System` of a model: its parameters, its cell,
 model and site variables, their `@equations`, `@observed` and components. The fields and their
 equations are not in it (an MTK `System` has one independent variable, the time): they are in
 [`Potts.fields`](@ref)`(sys)`, a `PDESystem`. Generic MTK code takes it where it needs a
 `System` (`mtkcompile(Potts.inner(sys); inputs = …)` compiles the cell/model ODE alone).
+Of a compiled system it is the System of the model as `mtkcompile` lowered it: an algebraic
+variable it eliminated is among its observed equations.
 """
 inner(sys::PottsSystem) = getfield(sys, :inner)
 
@@ -872,6 +876,14 @@ ModelingToolkitBase.compose(s::ModelingToolkitBase.System, ::AbstractArray{<:Pot
             "`compose(model, [$(nameof(s))])`, or declare `$(nameof(s))` in the model with `@components`"
     )
 )
+# the same with the Potts model among other systems (`compose(s, [other, model])`,
+# `System(…; systems = [model])`): MTK converts each subsystem to a `System`
+Base.convert(::Type{ModelingToolkitBase.System}, p::PottsSystem) = throw(
+    ArgumentError(
+        "the Potts model `$(nameof(p))` is not a component of an MTK System; compose the other way round, " *
+            "`compose($(nameof(p)), [system])`, or declare the system in the model with `@components`"
+    )
+)
 
 # whether the inner System `I` holds nothing (a `Potts.component` of a PDESystem)
 _empty_system(I) = (M = ModelingToolkitBase; P = something(M.get_parent(I), I);
@@ -1092,7 +1104,22 @@ _MTKB.outputs(s::PottsSystem) = _MTKB.outputs(getfield(s, :inner))
 # declared symbol, never namespaced (MTK's `does_namespacing` is `!iscomplete` for a system
 # without a `namespacing` field). `complete` returns it unchanged.
 _MTKB.iscomplete(::PottsSystem) = true
-_MTKB.complete(s::PottsSystem; kw...) = s
+_MTKB.complete(s::PottsSystem; kw...) = (_refuse_complete_keywords(s, kw); s)
+_MTKB.get_iv(s::PottsSystem) = _MTKB.get_iv(getfield(s, :inner))
+
+# MTK's `complete` keywords (`split`, `flatten`, …) shape a System being completed; a Potts
+# model is complete when it is built, so they are refused by name
+function _refuse_complete_keywords(sys, kw)
+    isempty(kw) && return nothing
+    throw(
+        ArgumentError(
+            string(
+                "complete(", nameof(sys), "; ", join(keys(kw), ", "), "): a Potts model is complete when it is built ",
+                "and takes no `complete` keywords; MTK's keywords apply to an MTK System: `complete(Potts.inner(sys); …)`"
+            )
+        )
+    )
+end
 # MTK's metadata of a model is its inner System's (`Potts.PottsSweepSpec` among it)
 SymbolicUtils.getmetadata(s::PottsSystem, k::DataType, default) = SymbolicUtils.getmetadata(getfield(s, :inner), k, default)
 SymbolicUtils.hasmetadata(s::PottsSystem, k::DataType) = SymbolicUtils.hasmetadata(getfield(s, :inner), k)
