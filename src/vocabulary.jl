@@ -1464,8 +1464,9 @@ update(phase::Symbol, e::Every, eqs::AbstractVector{<:Equation}) = [update(phase
     @divide clusters(kinds) [Every(n)] when = cond, along = normal, x => rule, …
 
 A division rule: `when` (cell scope, may use `mcs`), `along` (`principal_axis()`,
-`major_axis()`, `RandomPlane()`, or a vector expression), daughter state rules
-`x => value` (applied to both parent and daughter) or `x => Split()`. With `clusters`,
+`major_axis()`, `minor_axis()` (the same plane as `principal_axis()`), `RandomPlane()`, or a
+vector expression), daughter state rules `x => value` (applied to both parent and daughter)
+or `x => Split()`. With `clusters`,
 a compartment cluster whose root is of `kinds` divides as a unit when `when` holds at the
 root (`cluster_volume` is the cluster's); every member splits along one plane through the
 cluster centroid and the state rules apply to every member.
@@ -1970,6 +1971,10 @@ members(cl, kinds::_KindArg...) = MembersDomain(cl, _flat_kinds(kinds))
 # ---------------------------------------------------------------------------------------
 # Site conversion (R8 `@convert`, D-233, D-075)
 
+"""The kind a `@convert` target allocates when the entity has no `to` (`Fresh(k)`)."""
+struct FreshKind
+    kind::Int
+end
 """
     Fresh(k)
 
@@ -1977,9 +1982,6 @@ members(cl, kinds::_KindArg...) = MembersDomain(cl, _flat_kinds(kinds))
 pass allocates a new cell of kind `k` for it on its first conversion (D-066 X2: born on its
 first site). `to = sibling(k)` alone means the same.
 """
-struct FreshKind
-    kind::Int
-end
 Fresh(k) = FreshKind(_ref_kind("Fresh", k))
 """A `@convert` target: a reference and the kind of the cell allocated when it is absent."""
 struct ConvertTarget
@@ -1995,6 +1997,13 @@ const CONVERT_FROM = _tag(_sym(:from), Entity(:builtin, :from, 0, (; reference =
 const CONVERT_TO = _tag(_sym(:to), Entity(:builtin, :to, 0, (; reference = true)))
 const CONVERT_CREATED = _tag(_sym(:created), Entity(:builtin, :created, false, (;)))
 
+"""A `transfer(x, from => to; per_site)` of a `@convert` block."""
+struct ConvertTransfer
+    var::Any
+    from::Any
+    to::Any
+    per_site::Any
+end
 """
     transfer(x, from => to; per_site)
 
@@ -2002,12 +2011,6 @@ In a `@convert` block: once per entity and pass, with the pass's conversion coun
 entity, `x[from] -= per_site * n` and `x[to] += per_site * n` (`x` a cell variable; nothing
 when `n = 0`): Σ x over the two cells is conserved.
 """
-struct ConvertTransfer
-    var::Any
-    from::Any
-    to::Any
-    per_site::Any
-end
 function transfer(x, pair::Pair; per_site)
     i = info(x)
     (i !== nothing && i.role === :cell && get(i.options, :reference, false) !== true) || throw(
@@ -2035,6 +2038,7 @@ for which the site condition `at` holds converts to `to` independently, iff `u <
 `p` and `at` read the state at the start of the pass. Defaults: `from` the entity's member of
 the domain kind (`sibling(k)`), `at = true`, `p = 1`. `to = sibling(k)` (or `… | Fresh(k)`)
 allocates a cell of kind `k` on the entity's first conversion when it has none.
+In the writes, `created` is true for the conversion that allocated `to` and false otherwise.
 
 A compound write (`x[to] += e`, `m += e`) adds `e` once per converted site. The adds of one
 pass are an exact fixed-point sum per target (F3-23), so the result is the same for every

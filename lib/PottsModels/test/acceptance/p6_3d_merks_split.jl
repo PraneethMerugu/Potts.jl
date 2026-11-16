@@ -252,7 +252,7 @@ end
 @testset "P6.3d M3, M7: invalid variants are errors; `contact_inhibited` is gone from 2008" begin
     @test_throws ArgumentError Merks2006(; name = :m, lattice = (12, 12), rule = :other)
     @test_throws ArgumentError Merks2008(; name = :m, lattice = (12, 12), mode = :other)
-    @test_throws Exception Merks2008(; name = :m, lattice = (12, 12), contact_inhibited = true)
+    @test_throws "no keyword `contact_inhibited`" Merks2008(; name = :m, lattice = (12, 12), contact_inhibited = true)
     @test Merks2006(; name = :m, lattice = (12, 12), rule = :hard) isa PottsSystem
     @test Merks2008(; name = :m, lattice = (12, 12), mode = :extension_only) isa PottsSystem
 end

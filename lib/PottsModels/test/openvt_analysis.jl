@@ -188,9 +188,10 @@ end
 @testset "OpenVT analysis: Artistoo frame 1656 (D12; OPENVT_MONOLAYER_REPO)" begin
     repo = get(ENV, "OPENVT_MONOLAYER_REPO", "")
     zipf = joinpath(repo, "results", "Artistoo", "Monolayer", "Type 1", "Centroid_data.zip")
-    if isempty(repo) || !isfile(zipf) || Sys.which("unzip") === nothing
-        @test_broken !isempty(repo) && isfile(zipf)   # D-204, D-206: OPENVT_MONOLAYER_REPO consortium data is external to git
+    if isempty(repo)
+        @test_skip "OPENVT_MONOLAYER_REPO not set"   # D-204, D-206: the consortium data is external to git
     else
+        @test isfile(zipf) && Sys.which("unzip") !== nothing      # a set repo must hold the data
         mktempdir() do tmp
             run(`unzip -q -j $zipf Centroid_data/centroids_neighbors_mcs_1656.csv -d $tmp`)
             path = joinpath(tmp, "centroids_neighbors_mcs_1656.csv")

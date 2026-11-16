@@ -406,9 +406,10 @@ end
     @test nameof(sys) === :pr
     @test P60O_M.getmetadata(Potts.inner(sys), Potts.PottsSweepSpec, nothing) isa Potts.PottsSweepSpec
     @test P60O_M.getmetadata(Potts.inner(sys), P60oKey, :none) === :none
-    # MTK's metadata functions on the container itself are loud (not answered silently)
-    @test_throws Exception P60O_M.getmetadata(sys, P60oKey, :none)
-    @test_throws Exception P60O_M.setmetadata(sys, P60oKey, 42)
+    # MTK's metadata functions on the container itself are loud (not answered silently): the
+    # container has no MTK `metadata` field
+    @test_throws FieldError P60O_M.getmetadata(sys, P60oKey, :none)
+    @test_throws FieldError P60O_M.setmetadata(sys, P60oKey, 42)
     # documented
     doc = string(Base.Docs.doc(PottsSystem))
     for w in ("equations", "unknowns", "parameters", "observed", "nameof", "Potts.inner")
@@ -462,9 +463,9 @@ end
     @test Set(p60o_names(P60O_M.parameters(ext))) == Set([:λ, :T, :J, :μ])
     @test p60o_fp(ext, P60O_OP12, (;)) != p60o_fp(sys, P60O_OP12, (;))
     # MTK's own `complete`, `extend` and `toggle_namespacing` on a PottsSystem throw
-    @test_throws Exception P60O_M.complete(sys)
+    @test_throws FieldError P60O_M.complete(sys)                             # no MTK `ps` field
     @test p60o_clear(() -> P60O_M.extend(P60oExtra(; name = :extra), sys), "extend", "Potts.extend")
-    @test_throws Exception P60O_M.toggle_namespacing(sys, false)
+    @test_throws ArgumentError P60O_M.toggle_namespacing(sys, false)
     @test !P60O_M.iscomplete(sys) && P60O_M.iscomplete(Potts.inner(sys))     # R-1: ask the inner
     # show
     txt = sprint(show, MIME"text/plain"(), sys)
@@ -495,7 +496,7 @@ end
     # MTK's compose with a PottsSystem on either side throws (never recurses, never builds)
     for f in (() -> P60O_M.compose(sys, [mtk]), () -> P60O_M.compose(sys, [other]), () -> P60O_M.compose(sys, other),
               () -> P60O_M.compose(mtk, [sys]), () -> P60O_M.compose(mtk, sys))
-        @test_throws Exception f()
+        @test_throws MethodError f()                    # a StackOverflowError (recursion) fails this
     end
     for s in (sys, mtkcompile(sys))
         @test p60o_clear(() -> P60O_M.ODEProblem(s, [], (0.0, 1.0)), "PottsProblem")

@@ -1,5 +1,5 @@
 # Non-privilege guardrails (D-051 R0, review §6): the published models use only public
-# primitives, build from `using Potts` alone, and the DSL surface changes only by review.
+# primitives, build from `using Potts` alone, and the DSL vocabulary is documented.
 using ExplicitImports
 using CairoMakie: CairoMakie
 using MakiePotts: MakiePotts
@@ -149,49 +149,32 @@ end
     end
 end
 
-# The reviewed DSL surface: every name the model body sees, and every keyword of its
-# constructors. Following ModelingToolkit/SciMLBase public-surface guardrail practice,
-# pinning the exact set in version control ensures a dependency or refactor cannot silently
-# widen the public DSL API, and removing an entry is flagged as a breaking change. A new
-# name or option (a model-shaped flag under a generic name, like the removed
-# `extension_only`) must be reviewed and added here.
-const DSL_NAMES = [:Adaptive, :Adhesion, :Chemotaxis, :Every, :ExplicitEuler, :Global, :RK4, :RandomPlane, :Split,
-    :Surface, :Volume, :cells, :centroid, :clusters, :connectivity, :contacts, :displacement, :dot, :edges,
-    :geomean, :integral, :log1p_geomean, :major_axis, :mean, :minor_axis, :new_contact, :no_extinction, :norm,
-    :normalize, :principal_axis, :rand, :saturating, :saturating_linear, :sites,
-    # D-150: `count` (Base's; `count(pred for _ in contacts)` is the cell-scope contact fold, a
-    # kind-filtered contact count that `surface` cannot express) and `randn` (`rand()`'s
-    # normal counterpart and its truncated form; without the binding `randn()` was Base's,
-    # drawn once when the model was built)
-    :count, :randn,
-    # D-189/D-193 (P6.3g): the connectivity vocabulary (rule values, `connected`, the shell
-    # folds); `components` is removed with no alias
-    :Local, :ArcOrPair, :Simple, :connected, :shell, :pieces, :distinct,
-    # D-231 (P6.5a): cell references, their liveness test and the cluster navigation
-    :CellRef, :alive, :members, :root, :sibling,
-    # D-233 (P6.5b): `@convert` (`to = … | Fresh(k)`, the `created` flag of a write, `transfer`)
-    :Fresh, :created, :transfer,
-    # D-243 (P6.5a2): named kind pairs (E2) and the E7 geometry helpers (`integral` gains
-    # `over = cluster`, the maintainer's spelling of the cluster sum)
-    :Pairs, :minimum_image, :separation,
-    # D-257 item 5 (cutover C3): `ismember(kind, g)`, the kind-set term of `@equations`
-    # (D-F4-B6: `Δ`, `Dirichlet`, `NoFlux`, `Flux` and `Robin` are removed with front end A's fields)
-    :ismember]
-const DSL_KEYWORDS = Dict(:connectivity => [:penalty, :rule], :connected => [:rule], :Volume => [:strength, :target],
-    :Surface => [:strength, :target], :Chemotaxis => [:kinds, :response, :strength, :when], :randn => [:lower],
-    :transfer => [:per_site], :integral => [:over])
-
-@testset "DSL surface snapshot" begin
-    @test sort(collect(keys(Potts.DSL))) == sort(DSL_NAMES)
-    kw = Dict{Symbol, Vector{Symbol}}()
-    for (n, f) in pairs(Potts.DSL)
-        f isa Function || continue
-        # Restrict to methods owned by Potts so unrelated Base/stdlib/extension methods on
-        # shared generic functions (such as count, mean, norm) cannot cause brittle failures.
-        potts_methods = [mm for mm in methods(f) if mm.module === Potts]
-        ks = sort(unique(reduce(vcat, [Symbol.(Base.kwarg_decl(mm)) for mm in potts_methods]; init = Symbol[])))
-        isempty(ks) || (kw[n] = ks)
+# The DSL vocabulary (`Potts.DSL`, the names a model body sees) is not exported, so
+# `Docs.undocumented_names` cannot see it: every name must be documented, in a Potts
+# docstring or in the manual. A new name passes once it is documented; the surface itself is
+# reviewed in the diff of `Potts.DSL`, not pinned here.
+function dsl_docs_corpus()
+    texts = String[]
+    for (_, md) in Docs.meta(Potts), d in values(md.docs)
+        push!(texts, join(string.(d.text)))
     end
-    @test kw == DSL_KEYWORDS
+    manual = joinpath(pkgdir(Potts), "docs", "src", "manual")
+    for f in readdir(manual; join = true)
+        endswith(f, ".md") && push!(texts, read(f, String))
+    end
+    return join(texts, "\n")
+end
+# a docstring bound to Potts's own name (not one Potts takes from Base or a stdlib, like
+# `rand`), or the name in backticks in a docstring or the manual
+dsl_documented(corpus, n) = (Docs.Binding(Potts, n).mod === Potts && Base.Docs.hasdoc(Potts, n)) ||
+    occursin(Regex("`" * string(n) * "[`(\\[ ]"), corpus)
+
+@testset "DSL vocabulary is documented" begin
+    corpus = dsl_docs_corpus()
+    @test isempty(filter(n -> !dsl_documented(corpus, n), collect(keys(Potts.DSL))))
+    # controls: each branch alone passes, and a name the docs never mention fails; Base's
+    # docstring of `rand` does not count for Potts's `rand`
+    @test dsl_documented("", :transfer) && dsl_documented("`zz(`", :zz)
+    @test !dsl_documented(corpus, :no_such_dsl_name) && !dsl_documented("", :rand)
     @test_throws ArgumentError Potts.DSL.connectivity(1; rule = :unknown)       # Symbol options are checked
 end

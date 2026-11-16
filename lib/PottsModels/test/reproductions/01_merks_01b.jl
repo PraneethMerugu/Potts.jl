@@ -98,8 +98,7 @@
 # - FULL record (always, cheap): reads `reproductions/data/01/full-01b-*` (D-146): `sweeps.tsv`,
 #   `series.tsv`, `verdicts.tsv`, `provenance.toml`, optional `deviations.tsv`. It requires
 #   exactly the job list once each and recomputes every row and control. A failing row must be
-#   in `deviations.tsv` (D-154) and is then `@test_broken`. Until a record exists the tier is
-#   `@test_broken`.
+#   in `deviations.tsv` (D-154) and is then `@test_broken`.
 # - FULL (POTTS_FULL_REPRODUCTION=true or REPRO=full; offline on the PC, D-156/D-157): runs
 #   the 1330 jobs and applies the same rules. Cost from the 2026-10-08 record's walls (107 s
 #   per 202² × 5000 MCS job): ≈ 103 thread-hours, ≈ 4.3 h at the 24-thread cap; Figs 12–13
@@ -738,41 +737,41 @@ end
     dirs = isdir(P63F1B_DATA) ?
            filter(d -> startswith(d, "full-01b-") && isdir(joinpath(P63F1B_DATA, d)), readdir(P63F1B_DATA)) :
            String[]
-    if isempty(dirs)
-        @info "01b: no FULL record yet (expected reproductions/data/01/full-01b-*)"
-        @test_broken !isempty(dirs)
-    else
-        @test length(dirs) == 1
-        D = joinpath(P63F1B_DATA, first(dirs))
-        for f in ("sweeps.tsv", "series.tsv", "verdicts.tsv", "provenance.toml")
-            @test isfile(joinpath(D, f))
-        end
-        prov = TOML.parsefile(joinpath(D, "provenance.toml"))
-        @test get(prov, "item", "") == "P6.3f"
-        @test occursin(r"^[0-9a-f]{40}$", string(get(prov, "commit", ""))) &&
-              get(prov, "dirty", true) === false
-        # the record's `frozen_test_sha256` is provenance metadata only
-        sweeps = p63f1b_tsv(joinpath(D, "sweeps.tsv"))
-        series = p63f1b_tsv(joinpath(D, "series.tsv"))
-        J = p63f1b_jobs()
-        # the record is the job list, once each
-        @test sort([r["key"] for r in sweeps]) == sort(p63f1b_key.(J.sweeps))
-        @test sort(unique([r["key"] for r in series])) == sort(p63f1b_key.(J.series))
-        @test length(series) == length(J.series) * length(P63F1B_SERIES_T)
-        @test all(
-            r -> parse(Int, r["seed"]) == parse(Int, last(split(r["key"], "_s"))), [sweeps;
-                                                                                    series])
-        msweep, mseries = p63f1b_means(sweeps, series)
-        V = p63f1b_verdicts(msweep, mseries)
-        @info "01b FULL record" [(v.row, v.check, v.ours, v.ok)
-                                 for v in V if !startswith(v.check, "point ")]
-        dev_f = joinpath(D, "deviations.tsv")
-        p63f1b_check(V, isfile(dev_f) ? p63f1b_tsv(dev_f) : Dict{String, String}[])
-        vt = p63f1b_tsv(joinpath(D, "verdicts.tsv"))
-        for v in V
-            rr = [r for r in vt if r["row"] == v.row && r["check"] == v.check]
-            @test length(rr) == 1 && only(rr)["result"] == (v.ok ? "PASS" : "FAIL")
-        end
+    @test length(dirs) == 1
+    D = joinpath(P63F1B_DATA, first(dirs))
+    for f in ("sweeps.tsv", "series.tsv", "verdicts.tsv", "provenance.toml")
+        @test isfile(joinpath(D, f))
+    end
+    prov = TOML.parsefile(joinpath(D, "provenance.toml"))
+    @test get(prov, "item", "") == "P6.3f"
+    @test occursin(r"^[0-9a-f]{40}$", string(get(prov, "commit", ""))) &&
+        get(prov, "dirty", true) === false
+    # the record's `frozen_test_sha256` is provenance metadata only
+    sweeps = p63f1b_tsv(joinpath(D, "sweeps.tsv"))
+    series = p63f1b_tsv(joinpath(D, "series.tsv"))
+    J = p63f1b_jobs()
+    # the record is the job list, once each
+    @test sort([r["key"] for r in sweeps]) == sort(p63f1b_key.(J.sweeps))
+    @test sort(unique([r["key"] for r in series])) == sort(p63f1b_key.(J.series))
+    @test length(series) == length(J.series) * length(P63F1B_SERIES_T)
+    @test all(
+        r -> parse(Int, r["seed"]) == parse(Int, last(split(r["key"], "_s"))), [
+            sweeps;
+            series
+        ]
+    )
+    msweep, mseries = p63f1b_means(sweeps, series)
+    V = p63f1b_verdicts(msweep, mseries)
+    @info "01b FULL record" [
+        (v.row, v.check, v.ours, v.ok)
+            for v in V if !startswith(v.check, "point ")
+    ]
+    dev_f = joinpath(D, "deviations.tsv")
+    p63f1b_check(V, isfile(dev_f) ? p63f1b_tsv(dev_f) : Dict{String, String}[])
+    vt = p63f1b_tsv(joinpath(D, "verdicts.tsv"))
+    for v in V
+        rr = [r for r in vt if r["row"] == v.row && r["check"] == v.check]
+        @test length(rr) == 1 && only(rr)["result"] == (v.ok ? "PASS" : "FAIL")
     end
 end
 

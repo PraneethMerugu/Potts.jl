@@ -933,17 +933,13 @@ end
         # the centre and A₀ keywords
         s2 = snap(u; A₀ = 100.0, center = (1.0, 1.0))
         @test maximum(abs.(s2.x .- (cx .- 1) ./ sqrt(100 / π))) <= 1e-12
-        # written with P6.15d's writer (feat/p6-15d surface) when it is merged
-        if isdefined(PottsModels, :write_openvt) && isdefined(PottsModels, :read_openvt)
-            dir = mktempdir()
-            path = joinpath(dir, PottsModels.openvt_filename(:O2; k = 1))
-            mkpath(dirname(path))
-            PottsModels.write_openvt(path, :O2, s)
-            @test isequal(PottsModels.read_openvt(path, :O2), s)
-            @test readline(path) == "x,y,r,f,a"
-        else
-            @test_broken isdefined(PottsModels, :write_openvt)              # P6.15d not merged yet
-        end
+        # written with P6.15d's writer
+        dir = mktempdir()
+        path = joinpath(dir, PottsModels.openvt_filename(:O2; k = 1))
+        mkpath(dirname(path))
+        PottsModels.write_openvt(path, :O2, s)
+        @test isequal(PottsModels.read_openvt(path, :O2), s)
+        @test readline(path) == "x,y,r,f,a"
     end
 end
 

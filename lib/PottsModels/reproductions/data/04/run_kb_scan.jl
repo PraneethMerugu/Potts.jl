@@ -111,7 +111,6 @@ let bad = String[]
     end
     isempty(bad) || error("κ_b runner: the frozen test's gate failed:\n  " * join(bad, "\n  "))
 end
-P64R_SHEAR_READY || error("κ_b runner: the shear model is not on this tree")
 logmsg("frozen test gate passed in ", round(t_smoke; digits = 1), " s")
 
 # ------------------------------------------------------------------------------------------

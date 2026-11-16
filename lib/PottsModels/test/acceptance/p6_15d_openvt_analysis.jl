@@ -402,9 +402,10 @@ const P15D_TAIL = Dict(   # C_rel,w_rel from the -ffp-contract=off reference bui
     repo = get(ENV, "OPENVT_MONOLAYER_REPO", "")
     dir = joinpath(repo, "results", "Morpheus", "Monolayer", "Parameter_Plane_Centroid_Data")
     zipf = joinpath(dir, "Parameter_Plane_Morpheus_Centroids.zip")
-    if isempty(repo) || !isfile(zipf) || Sys.which("unzip") === nothing
-        @test_broken !isempty(repo) && isfile(zipf) && Sys.which("unzip") !== nothing
+    if isempty(repo)
+        @test_skip "OPENVT_MONOLAYER_REPO not set"
     else
+        @test isfile(zipf) && Sys.which("unzip") !== nothing      # a set repo must hold the data
         committed = read(joinpath(dir, "metrics.csv"), String)
         mktempdir() do tmp
             run(`unzip -q $zipf -d $tmp`)

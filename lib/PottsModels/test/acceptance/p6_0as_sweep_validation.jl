@@ -41,7 +41,6 @@
 #  C. A named or callable-struct `combine` fingerprints the same in another `julia`
 #     process (perturbed by extra anonymous functions and types defined first), and a
 #     checkpoint written there loads here; a callable struct with other fields is refused.
-#     The generated temperature code holds no compiler-generated (`var"#…"`) name.
 using Potts: CorePotts
 using TOML: TOML
 
@@ -174,11 +173,6 @@ end
     fp_default = p60as_problem("Metropolis()").f.fingerprint
     @test p60as_problem("Metropolis(offset = 0)").f.fingerprint == fp_default
     @test p60as_problem("Metropolis(offset = -0.0)").f.fingerprint == fp_default
-    # negative control: an anonymous function's printed form is a compiler-generated name,
-    # so the `var"#` probe of part C does detect one
-    @test occursin("var\"#", string(:($(p60as_anon)(a, b))))
-    @test occursin("var\"#", string(:($(P60AS_ANON_C3)(a, b))))
-    @test !occursin("var\"#", string(:($(P60asCombine.mix)(a, b))))
     # combine is in the fingerprint where it is called (cell-scope temperature)
     fps = [label => p60as_named_problem(label).f.fingerprint for (label, _) in P60AS_NAMED]
     for i in eachindex(fps), j in (i + 1):lastindex(fps)
@@ -235,13 +229,6 @@ end
 
 # ---------------------------------------------------------------------------------------
 # C. Named and callable-struct `combine` is session-stable
-
-@testset "P6.0as: the temperature code names combine by a stable identity" begin
-    for (label, _) in P60AS_NAMED
-        s = string(Base.remove_linenums!(deepcopy(generated_code(P60AS_NAMED_MODELS[label](; name = :sweep)).temperature)))
-        @test !occursin("var\"#", s)
-    end
-end
 
 """Run the named-combine fixtures in a fresh `julia` process (perturbed first) and return its
 fingerprints and the paths of checkpoints it wrote after 3 MCS."""

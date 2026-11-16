@@ -7,7 +7,7 @@
 # bitwise; same-seed determinism is free), D-171 (`gate.jl` checks warm allocations, the
 # A/B decides speed), D-157 (POTTS_GPU device selection).
 #
-# Names and forms pinned (the DSL surface; the reviewer checks DSL_NAMES, AUTONOMY §7.3).
+# Names and forms pinned (the DSL surface; the reviewer checks the diff of `Potts.DSL`, AUTONOMY §7.3).
 # - `direction[k]`, k = 1..N: component k of x_target − x_source, a scalar of the model's
 #   type `T`. Why this form: it mirrors `position[k]`, the one vector builtin of the DSL,
 #   which is already indexed by axis with `[k]` and is in the same Cartesian units. A tuple

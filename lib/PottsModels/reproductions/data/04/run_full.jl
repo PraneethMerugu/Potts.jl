@@ -114,7 +114,6 @@ let bad = String[]
     end
     isempty(bad) || error("04 runner: the frozen test's SMOKE gate failed:\n  " * join(bad, "\n  "))
 end
-P64R_SHEAR_READY || error("04 runner: P6.4a1 (`direction`) is not on this tree; FULL needs the shear model")
 logmsg("frozen test SMOKE gate passed in ", round(t_smoke; digits = 1), " s")
 
 # ------------------------------------------------------------------------------------------

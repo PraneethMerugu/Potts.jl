@@ -200,11 +200,11 @@ Existing guardrails keep running in every suite:
 - the denylist scan;
 - ExplicitImports;
 - the bare-module build;
-- the DSL surface snapshot;
+- the DSL documentation check (every `Potts.DSL` name is documented);
 - one sibling per published model.
 
-A new DSL name or keyword must be added to `DSL_NAMES`/`DSL_KEYWORDS`, and the reviewer
-must justify it.
+A new DSL name or keyword must be documented (a docstring or the manual), and the reviewer
+must justify it in the diff: a name in `Potts.DSL`, a keyword in its constructor's signature.
 
 ### 7.4 Parallelism and the machine
 

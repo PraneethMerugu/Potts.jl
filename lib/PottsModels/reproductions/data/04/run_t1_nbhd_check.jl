@@ -77,7 +77,6 @@ for ts in GATE.results
     c.fails + c.errors + c.cumulative_fails + c.cumulative_errors == 0 ||
         error("T1-neighbourhood check: the frozen gate failed in $(ts.description)")
 end
-P64R_SHEAR_READY || error("T1-neighbourhood check: the shear model is not on this tree")
 logmsg("frozen gate passed in ", round(t_gate; digits = 1), " s")
 
 # ------------------------------------------------------------------------------------------

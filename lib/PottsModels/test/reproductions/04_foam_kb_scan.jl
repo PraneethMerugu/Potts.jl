@@ -123,14 +123,14 @@
 # ── Tiers ───────────────────────────────────────────────────────────────────────────────────
 # always: the decision rule on synthetic tables (with negative controls), the early-stop
 #   oracle, the grid and cap bounds.
-# SMOKE (default, gate P6.4a1 as D-190): foam 1, κ_b = κ_D190, β = 0.05, cap 300 paper MCS
+# SMOKE (default, as D-190): foam 1, κ_b = κ_D190, β = 0.05, cap 300 paper MCS
 #   (yields, stops early); control β = 0, cap 100 (no T1, runs to the cap); TSV round trip.
 # SCAN (P64KB_SCAN=true; offline on the PC, D-157): runs the 345 jobs; with
 #   P64KB_OUT=<dir> writes scan.tsv, provenance.toml and decision.toml there. Copy to
 #   lib/PottsModels/reproductions/data/04/kb-scan-<date>/.
-# record (always): reads the one reproductions/data/04/kb-scan-*/scan.tsv: `@test_broken`
-#   until it exists; then checks completeness, τ and the harness control, recomputes the
-#   decision (and compares it with decision.toml when present) and reports it. The decision
+# record (always): reads the one reproductions/data/04/kb-scan-*/scan.tsv, checks completeness,
+#   τ and the harness control, recomputes the decision (and compares it with decision.toml when
+#   present) and reports it. The decision
 #   itself (a κ_b or `nothing`) is an outcome, not a pass/fail.
 #
 # scan.tsv schema (one header line, tab-separated): kappa_b, beta, beta_model, k, seed, tau,
@@ -396,34 +396,34 @@ end
 end
 
 # ---------------------------------------------------------------------------------------------
-# SMOKE (Mac): the harness on one κ_b, one β, a short cap (gate P6.4a1, as D-190)
+# SMOKE: the harness on one κ_b, one β, a short cap (as D-190)
 # ---------------------------------------------------------------------------------------------
 
 if !P64KB_SCAN
     @testset "04 κ_b scan SMOKE: one κ_b, one β, short cap" begin
-        if !P64R_SHEAR_READY
-            @test_broken P64R_SHEAR_READY
-        else
-            p64r_template(false, P64R_L)
-            p64r_template(true, P64R_L)
-            st, row = p64r_foam(:ordered, 1)
-            τ = 1 / row["ubar"]
-            @test 2.5 < τ < 4.5
-            r = p64kb_run(st, P64KB_KAPPA_D190 * 0.05, P64KB_SMOKE_CAP, p64kb_seed(5, 1), τ)
-            @info "04 κ_b SMOKE" τ r.t_first r.mcs_run r.t1_total
-            @test 0 <= r.t_first <= P64KB_SMOKE_CAP && r.t1_total > 0
-            @test r.mcs_run < p64r_ours(P64KB_SMOKE_CAP, τ)                           # stopped early
-            # control: no drive → no T1, runs to the cap
-            r0 = p64kb_run(st, 0.0, P64KB_SMOKE_CAP0, p64kb_seed(5, 1), τ)
-            @test r0.t_first == -1 && r0.t1_total == 0 && r0.mcs_run == p64r_ours(P64KB_SMOKE_CAP0, τ)
-            # the scan.tsv round trip
-            rows = [Dict{String, Any}("kappa_b" => P64KB_KAPPA_D190, "beta" => β, "beta_model" => P64KB_KAPPA_D190 * β,
+        p64r_template(false, P64R_L)
+        p64r_template(true, P64R_L)
+        st, row = p64r_foam(:ordered, 1)
+        τ = 1 / row["ubar"]
+        @test 2.5 < τ < 4.5
+        r = p64kb_run(st, P64KB_KAPPA_D190 * 0.05, P64KB_SMOKE_CAP, p64kb_seed(5, 1), τ)
+        @info "04 κ_b SMOKE" τ r.t_first r.mcs_run r.t1_total
+        @test 0 <= r.t_first <= P64KB_SMOKE_CAP && r.t1_total > 0
+        @test r.mcs_run < p64r_ours(P64KB_SMOKE_CAP, τ)                           # stopped early
+        # control: no drive → no T1, runs to the cap
+        r0 = p64kb_run(st, 0.0, P64KB_SMOKE_CAP0, p64kb_seed(5, 1), τ)
+        @test r0.t_first == -1 && r0.t1_total == 0 && r0.mcs_run == p64r_ours(P64KB_SMOKE_CAP0, τ)
+        # the scan.tsv round trip
+        rows = [
+            Dict{String, Any}(
+                "kappa_b" => P64KB_KAPPA_D190, "beta" => β, "beta_model" => P64KB_KAPPA_D190 * β,
                 "k" => 1, "seed" => p64kb_seed(5, 1), "tau" => τ, "cap" => c, "mcs_run" => x.mcs_run,
-                "t_first" => x.t_first, "t1_total" => x.t1_total) for (β, c, x) in ((0.05, P64KB_SMOKE_CAP, r), (0.0, P64KB_SMOKE_CAP0, r0))]
-            mktempdir() do d
-                p64kb_write(d, rows)
-                @test p64kb_read(joinpath(d, "scan.tsv")) == rows
-            end
+                "t_first" => x.t_first, "t1_total" => x.t1_total
+            ) for (β, c, x) in ((0.05, P64KB_SMOKE_CAP, r), (0.0, P64KB_SMOKE_CAP0, r0))
+        ]
+        mktempdir() do d
+            p64kb_write(d, rows)
+            @test p64kb_read(joinpath(d, "scan.tsv")) == rows
         end
     end
 end
@@ -450,37 +450,34 @@ end
 
 if P64KB_SCAN
     @testset "04 κ_b SCAN (D-203)" begin
-        @test P64R_SHEAR_READY
-        if P64R_SHEAR_READY
-            t0 = time()
-            rows, τ, foams = p64kb_scan()
-            @test length(rows) == length(P64KB_GRID) * length(P64KB_BETAS) * P64KB_N
-            A = p64kb_analyse(rows)
-            @info "04 κ_b scan decision" A.kappa_b A.path A.reason A.khat A.P τ
-            if !isempty(P64KB_OUT)
-                p64kb_write(P64KB_OUT, rows)
-                commit = try
-                    readchomp(`git -C $(@__DIR__) rev-parse HEAD`)
-                catch
-                    "unknown"
-                end
-                dirty = try
-                    !isempty(readchomp(`git -C $(@__DIR__) status --porcelain`))
-                catch
-                    true
-                end
-                open(joinpath(P64KB_OUT, "provenance.toml"), "w") do io
-                    println(io, "decision = \"D-203\"\nfrozen_test = \"lib/PottsModels/test/reproductions/04_foam_kb_scan.jl\"")
-                    println(io, "commit = \"$commit\"\ndirty = $dirty\njulia = \"$(VERSION)\"\nthreads = $(Threads.nthreads())")
-                    println(io, "machine = \"$(gethostname()); $(Sys.cpu_info()[1].model)\"\nwall_s = $(time() - t0)")
-                    println(io, "tau = $τ\nfoam_seeds = $(repr([r["seed"] for (_, r) in foams]))\nfinished = \"$(now())\"")
-                end
-                open(joinpath(P64KB_OUT, "decision.toml"), "w") do io
-                    println(io, "kappa_b = $(A.kappa_b === nothing ? "\"nothing\"" : A.kappa_b)")
-                    println(io, "path = \"$(A.path)\"\nreason = \"$(A.reason)\"\nkhat = $(repr(A.khat))")
-                end
-                @info "04 κ_b scan written" P64KB_OUT wall = time() - t0
+        t0 = time()
+        rows, τ, foams = p64kb_scan()
+        @test length(rows) == length(P64KB_GRID) * length(P64KB_BETAS) * P64KB_N
+        A = p64kb_analyse(rows)
+        @info "04 κ_b scan decision" A.kappa_b A.path A.reason A.khat A.P τ
+        if !isempty(P64KB_OUT)
+            p64kb_write(P64KB_OUT, rows)
+            commit = try
+                readchomp(`git -C $(@__DIR__) rev-parse HEAD`)
+            catch
+                "unknown"
             end
+            dirty = try
+                !isempty(readchomp(`git -C $(@__DIR__) status --porcelain`))
+            catch
+                true
+            end
+            open(joinpath(P64KB_OUT, "provenance.toml"), "w") do io
+                println(io, "decision = \"D-203\"\nfrozen_test = \"lib/PottsModels/test/reproductions/04_foam_kb_scan.jl\"")
+                println(io, "commit = \"$commit\"\ndirty = $dirty\njulia = \"$(VERSION)\"\nthreads = $(Threads.nthreads())")
+                println(io, "machine = \"$(gethostname()); $(Sys.cpu_info()[1].model)\"\nwall_s = $(time() - t0)")
+                println(io, "tau = $τ\nfoam_seeds = $(repr([r["seed"] for (_, r) in foams]))\nfinished = \"$(now())\"")
+            end
+            open(joinpath(P64KB_OUT, "decision.toml"), "w") do io
+                println(io, "kappa_b = $(A.kappa_b === nothing ? "\"nothing\"" : A.kappa_b)")
+                println(io, "path = \"$(A.path)\"\nreason = \"$(A.reason)\"\nkhat = $(repr(A.khat))")
+            end
+            @info "04 κ_b scan written" P64KB_OUT wall = time() - t0
         end
     end
 end
@@ -492,34 +489,30 @@ end
 @testset "04 κ_b scan record: reproductions/data/04/kb-scan-*" begin
     dirs = isdir(P64R_DATA) ? filter(d -> occursin(r"^kb-scan-\d{4}-\d{2}-\d{2}$", d) &&
                                           isfile(joinpath(P64R_DATA, d, "scan.tsv")), readdir(P64R_DATA)) : String[]
-    if isempty(dirs)
-        @test_broken !isempty(dirs)                                            # pending the PC scan (D-203)
-    else
-        @test length(dirs) == 1
-        D = joinpath(P64R_DATA, last(sort(dirs)))
-        rows = p64kb_read(joinpath(D, "scan.tsv"))
-        @test length(rows) == length(P64KB_GRID) * length(P64KB_BETAS) * P64KB_N
-        @test all(r -> r["seed"] == p64kb_seed(findfirst(≈(r["beta"]), P64KB_BETAS), r["k"]), rows)
-        @test all(r -> r["cap"] == P64KB_CAP[P64KB_BETAS[findfirst(≈(r["beta"]), P64KB_BETAS)]], rows)
-        @test all(r -> r["beta_model"] ≈ r["kappa_b"] * r["beta"], rows)
-        τ = rows[1]["tau"]
-        @test all(r -> r["tau"] == τ, rows) && 2.5 < τ < 4.5
-        @test all(r -> r["t_first"] == -1 ? r["mcs_run"] == p64r_ours(r["cap"], τ) : r["mcs_run"] <= p64r_ours(r["cap"], τ), rows)
-        @test all(r -> r["t_first"] == -1 || r["t1_total"] > 0, rows)
-        # harness control: at κ_b = κ_D190 the D-190 record's ordered medians are reproduced
-        A = p64kb_analyse(rows)
-        for (β, m190) in P64KB_D190_MED
-            m = A.med[9, findfirst(≈(β), P64KB_BETAS)]
-            @info "04 κ_b control at κ_D190" β m m190
-            @test p64kb_within(m, m190)
-        end
-        @info "04 κ_b scan decision (D-203)" A.kappa_b A.path A.reason A.khat A.P
-        @test A.kappa_b === nothing || P64KB_GRID[1] <= A.kappa_b <= P64KB_GRID[end]
-        dec = joinpath(D, "decision.toml")
-        if isfile(dec)
-            d = Dict(split(l, " = "; limit = 2) for l in readlines(dec) if occursin(" = ", l))
-            @test d["kappa_b"] == (A.kappa_b === nothing ? "\"nothing\"" : string(A.kappa_b))
-            @test d["reason"] == "\"$(A.reason)\""
-        end
+    @test length(dirs) == 1
+    D = joinpath(P64R_DATA, last(sort(dirs)))
+    rows = p64kb_read(joinpath(D, "scan.tsv"))
+    @test length(rows) == length(P64KB_GRID) * length(P64KB_BETAS) * P64KB_N
+    @test all(r -> r["seed"] == p64kb_seed(findfirst(≈(r["beta"]), P64KB_BETAS), r["k"]), rows)
+    @test all(r -> r["cap"] == P64KB_CAP[P64KB_BETAS[findfirst(≈(r["beta"]), P64KB_BETAS)]], rows)
+    @test all(r -> r["beta_model"] ≈ r["kappa_b"] * r["beta"], rows)
+    τ = rows[1]["tau"]
+    @test all(r -> r["tau"] == τ, rows) && 2.5 < τ < 4.5
+    @test all(r -> r["t_first"] == -1 ? r["mcs_run"] == p64r_ours(r["cap"], τ) : r["mcs_run"] <= p64r_ours(r["cap"], τ), rows)
+    @test all(r -> r["t_first"] == -1 || r["t1_total"] > 0, rows)
+    # harness control: at κ_b = κ_D190 the D-190 record's ordered medians are reproduced
+    A = p64kb_analyse(rows)
+    for (β, m190) in P64KB_D190_MED
+        m = A.med[9, findfirst(≈(β), P64KB_BETAS)]
+        @info "04 κ_b control at κ_D190" β m m190
+        @test p64kb_within(m, m190)
+    end
+    @info "04 κ_b scan decision (D-203)" A.kappa_b A.path A.reason A.khat A.P
+    @test A.kappa_b === nothing || P64KB_GRID[1] <= A.kappa_b <= P64KB_GRID[end]
+    dec = joinpath(D, "decision.toml")
+    if isfile(dec)
+        d = Dict(split(l, " = "; limit = 2) for l in readlines(dec) if occursin(" = ", l))
+        @test d["kappa_b"] == (A.kappa_b === nothing ? "\"nothing\"" : string(A.kappa_b))
+        @test d["reason"] == "\"$(A.reason)\""
     end
 end

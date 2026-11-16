@@ -153,9 +153,9 @@
 # Tiers.
 # - always: the per-seed metric rules (test author) on synthetic series; the deviation and
 #   time-scale checkers on synthetic tables.
-# - API (always, once PottsModels defines it; marked broken until then): known answers,
+# - API (always): known answers,
 #   the threshold, degenerate spreads, errors, and the negative controls on synthetic data.
-# - record (always, cheap; no GPU needed): skipped until the record exists, then items 1–5.
+# - record (always, cheap; no GPU needed): items 1–5.
 using Test, TOML, Potts, PottsModels
 using SHA: sha256
 using Statistics: mean, std
@@ -435,86 +435,84 @@ end
 # ---------------------------------------------------------------------------------------------
 
 p615m_var(x) = sum(abs2, x .- mean(x)) / (length(x) - 1)
-const P615M_API = isdefined(PottsModels, :openvt_spread_compare) && isdefined(PottsModels, :openvt_spread_table)
 
 # a table of 34 metrics with `n` seeds per arm, every metric from one law, from `rng`
 p615m_draws(rng, n; shift = Dict{String, Float64}()) =
     Dict(k => randn(rng, n) .* (1 + i / 10) .+ 3i .+ get(shift, k, 0.0) for (i, k) in enumerate(P615M_ALL))
 
 @testset "P6.15m API: the spread rule on synthetic data, and the negative controls" begin
-    if !P615M_API
-        @info "P6.15m: PottsModels.openvt_spread_compare / openvt_spread_table not defined yet (m2)"
-        @test_broken P615M_API
-    else
-        C, T = PottsModels.openvt_spread_compare, PottsModels.openvt_spread_table
-        # known answers
-        r = C([1.0, 2.0, 3.0, 4.0], [2.0, 3.0, 4.0, 5.0])
-        @test keys(r) == (:n_ref, :n_alt, :mean_ref, :mean_alt, :sd_ref, :sd_alt, :diff, :se, :z, :beyond)
-        @test r.n_ref == 4 && r.n_alt == 4 && r.n_ref isa Int
-        @test r.mean_ref == 2.5 && r.mean_alt == 3.5 && r.diff == 1.0
-        @test r.sd_ref ≈ std([1.0, 2.0, 3.0, 4.0]) && r.sd_alt ≈ r.sd_ref
-        @test r.se ≈ sqrt(2 * p615m_var([1.0, 2.0, 3.0, 4.0]) / 4) && r.z ≈ 1 / r.se && r.beyond === false
-        @test C([2.0, 3.0, 4.0, 5.0], [1.0, 2.0, 3.0, 4.0]).z ≈ -r.z                  # sign: alt − ref
-        # unequal sizes: Welch, not pooled
-        r2 = C([0.0, 2.0], [1.0, 1.0, 4.0, 4.0, 5.0])
-        @test r2.se ≈ sqrt(2.0 / 2 + p615m_var([1.0, 1.0, 4.0, 4.0, 5.0]) / 5)
-        # the threshold: default 4.42, and the keyword
-        x = collect(1.0:10.0)
-        se = sqrt(2 * p615m_var(x) / 10)
-        @test !C(x, x .+ 4.41se).beyond && C(x, x .+ 4.43se).beyond
-        @test !C(x, x .- 4.41se).beyond && C(x, x .- 4.43se).beyond
-        @test C(x, x .+ 3.0se; z = 2.0).beyond && !C(x, x .+ 3.0se; z = 4.0).beyond
-        # degenerate spreads
-        @test C(fill(1.0, 5), fill(1.0, 5)).z == 0 && !C(fill(1.0, 5), fill(1.0, 5)).beyond
-        d = C(fill(1.0, 5), fill(1.1, 5))
-        @test d.se == 0 && d.z == Inf && d.beyond
-        @test C(fill(1.0, 5), fill(0.9, 5)).z == -Inf
-        # errors
-        @test_throws ArgumentError C([1.0], [1.0, 2.0])
-        @test_throws ArgumentError C([1.0, NaN], [1.0, 2.0])
-        @test_throws ArgumentError C([1.0, 2.0], [Inf, 2.0])
-        @test_throws ArgumentError T(Dict("a" => [1.0, 2.0]), Dict("b" => [1.0, 2.0]))
-        # the table: one row per metric, sorted, each the compare of its values
-        a = Dict("t_stop" => [1.0, 2.0, 3.0], "L@0.5" => [0.0, 0.0, 1.0])
-        b = Dict("t_stop" => [9.0, 9.1, 9.2], "L@0.5" => [0.0, 1.0, 0.0])
-        tab = T(a, b)
-        @test [t.metric for t in tab] == ["L@0.5", "t_stop"]
-        @test tab[2] == merge((; metric = "t_stop"), C(a["t_stop"], b["t_stop"]))
-        @test [t.beyond for t in tab] == [false, true]
-        @test [t.beyond for t in T(a, b; z = 100.0)] == [false, false]
-        # negative control 1: a deliberately shifted metric is flagged, and only it
-        rng = StableRNG(214_001)
-        ref = p615m_draws(rng, 100)
-        shifted = p615m_draws(rng, 100; shift = Dict("t_stop" => 1.0 * (1 + findfirst(==("t_stop"), P615M_ALL) / 10)))
-        tab = T(ref, shifted)
-        @test length(tab) == 34
-        @test [t.metric for t in tab if t.beyond] == ["t_stop"]
-        @test only(t for t in tab if t.metric == "t_stop").z > 5
-        # negative control 2: a split of one law (sequential against sequential) flags nothing,
-        # over 20 independent splits (680 checks; expected false flags 0.0068)
-        rng = StableRNG(214_002)
-        nflag = sum(count(t -> t.beyond, T(p615m_draws(rng, 100), p615m_draws(rng, 100))) for _ in 1:20)
-        @test nflag == 0
-        # and on the per-seed metrics of synthetic runs: the same law split in two flags
-        # nothing; time miscounted by 1.1× flags t_stop
-        rng = StableRNG(214_003)
-        runs = [p615m_seed_metrics(p615m_ideal(; lag = 0.02 + 0.3rand(rng)), 1000) for _ in 1:40]
-        tbl(rs) = Dict(k => [m[k] for m in rs] for k in P615M_METRICS)
-        @test !any(t -> t.beyond, T(tbl(runs[1:2:end]), tbl(runs[2:2:end])))
-        rng = StableRNG(214_004)
-        reread(s) = p615m_series(round.(Int, s.t .* 775), s.N, s.r, s.A, s.C, s.w, s.g; cycle = 775 / 1.1)
-        mis = [p615m_seed_metrics(reread(p615m_ideal(; lag = 0.02 + 0.3rand(rng))), 1000) for _ in 1:20]
-        @test only(t for t in T(tbl(runs[1:2:end]), tbl(mis)) if t.metric == "t_stop").beyond
-        # negative control 3: the same law on different save grids (39 MCS against 13 MCS at
-        # another phase, and the critical value of the record tier) flags nothing
-        rng = StableRNG(214_005)
-        regrid(s, every, phase) = (m = round.(Int, s.t .* 775); keep = [i for i in eachindex(m) if i == 1 || i == length(m) ||
-                                   (m[i] - phase) % every == 0]; map(v -> v[keep], s))
-        fine = [p615m_ideal(; lag = 0.02 + 0.3rand(rng), every = 13) for _ in 1:40]
-        ga = [p615m_seed_metrics(regrid(s, 39, 13), 1000) for s in fine[1:2:end]]
-        gb = [p615m_seed_metrics(regrid(s, 13, 0), 1000) for s in fine[2:2:end]]
-        @test !any(t -> t.beyond, T(tbl(ga), tbl(gb); z = p615m_crit(20, 20)))
-    end
+    C, T = PottsModels.openvt_spread_compare, PottsModels.openvt_spread_table
+    # known answers
+    r = C([1.0, 2.0, 3.0, 4.0], [2.0, 3.0, 4.0, 5.0])
+    @test keys(r) == (:n_ref, :n_alt, :mean_ref, :mean_alt, :sd_ref, :sd_alt, :diff, :se, :z, :beyond)
+    @test r.n_ref == 4 && r.n_alt == 4 && r.n_ref isa Int
+    @test r.mean_ref == 2.5 && r.mean_alt == 3.5 && r.diff == 1.0
+    @test r.sd_ref ≈ std([1.0, 2.0, 3.0, 4.0]) && r.sd_alt ≈ r.sd_ref
+    @test r.se ≈ sqrt(2 * p615m_var([1.0, 2.0, 3.0, 4.0]) / 4) && r.z ≈ 1 / r.se && r.beyond === false
+    @test C([2.0, 3.0, 4.0, 5.0], [1.0, 2.0, 3.0, 4.0]).z ≈ -r.z                  # sign: alt − ref
+    # unequal sizes: Welch, not pooled
+    r2 = C([0.0, 2.0], [1.0, 1.0, 4.0, 4.0, 5.0])
+    @test r2.se ≈ sqrt(2.0 / 2 + p615m_var([1.0, 1.0, 4.0, 4.0, 5.0]) / 5)
+    # the threshold: default 4.42, and the keyword
+    x = collect(1.0:10.0)
+    se = sqrt(2 * p615m_var(x) / 10)
+    @test !C(x, x .+ 4.41se).beyond && C(x, x .+ 4.43se).beyond
+    @test !C(x, x .- 4.41se).beyond && C(x, x .- 4.43se).beyond
+    @test C(x, x .+ 3.0se; z = 2.0).beyond && !C(x, x .+ 3.0se; z = 4.0).beyond
+    # degenerate spreads
+    @test C(fill(1.0, 5), fill(1.0, 5)).z == 0 && !C(fill(1.0, 5), fill(1.0, 5)).beyond
+    d = C(fill(1.0, 5), fill(1.1, 5))
+    @test d.se == 0 && d.z == Inf && d.beyond
+    @test C(fill(1.0, 5), fill(0.9, 5)).z == -Inf
+    # errors
+    @test_throws ArgumentError C([1.0], [1.0, 2.0])
+    @test_throws ArgumentError C([1.0, NaN], [1.0, 2.0])
+    @test_throws ArgumentError C([1.0, 2.0], [Inf, 2.0])
+    @test_throws ArgumentError T(Dict("a" => [1.0, 2.0]), Dict("b" => [1.0, 2.0]))
+    # the table: one row per metric, sorted, each the compare of its values
+    a = Dict("t_stop" => [1.0, 2.0, 3.0], "L@0.5" => [0.0, 0.0, 1.0])
+    b = Dict("t_stop" => [9.0, 9.1, 9.2], "L@0.5" => [0.0, 1.0, 0.0])
+    tab = T(a, b)
+    @test [t.metric for t in tab] == ["L@0.5", "t_stop"]
+    @test tab[2] == merge((; metric = "t_stop"), C(a["t_stop"], b["t_stop"]))
+    @test [t.beyond for t in tab] == [false, true]
+    @test [t.beyond for t in T(a, b; z = 100.0)] == [false, false]
+    # negative control 1: a deliberately shifted metric is flagged, and only it
+    rng = StableRNG(214_001)
+    ref = p615m_draws(rng, 100)
+    shifted = p615m_draws(rng, 100; shift = Dict("t_stop" => 1.0 * (1 + findfirst(==("t_stop"), P615M_ALL) / 10)))
+    tab = T(ref, shifted)
+    @test length(tab) == 34
+    @test [t.metric for t in tab if t.beyond] == ["t_stop"]
+    @test only(t for t in tab if t.metric == "t_stop").z > 5
+    # negative control 2: a split of one law (sequential against sequential) flags nothing,
+    # over 20 independent splits (680 checks; expected false flags 0.0068)
+    rng = StableRNG(214_002)
+    nflag = sum(count(t -> t.beyond, T(p615m_draws(rng, 100), p615m_draws(rng, 100))) for _ in 1:20)
+    @test nflag == 0
+    # and on the per-seed metrics of synthetic runs: the same law split in two flags
+    # nothing; time miscounted by 1.1× flags t_stop
+    rng = StableRNG(214_003)
+    runs = [p615m_seed_metrics(p615m_ideal(; lag = 0.02 + 0.3rand(rng)), 1000) for _ in 1:40]
+    tbl(rs) = Dict(k => [m[k] for m in rs] for k in P615M_METRICS)
+    @test !any(t -> t.beyond, T(tbl(runs[1:2:end]), tbl(runs[2:2:end])))
+    rng = StableRNG(214_004)
+    reread(s) = p615m_series(round.(Int, s.t .* 775), s.N, s.r, s.A, s.C, s.w, s.g; cycle = 775 / 1.1)
+    mis = [p615m_seed_metrics(reread(p615m_ideal(; lag = 0.02 + 0.3rand(rng))), 1000) for _ in 1:20]
+    @test only(t for t in T(tbl(runs[1:2:end]), tbl(mis)) if t.metric == "t_stop").beyond
+    # negative control 3: the same law on different save grids (39 MCS against 13 MCS at
+    # another phase, and the critical value of the record tier) flags nothing
+    rng = StableRNG(214_005)
+    regrid(s, every, phase) = (
+        m = round.(Int, s.t .* 775); keep = [
+            i for i in eachindex(m) if i == 1 || i == length(m) ||
+                (m[i] - phase) % every == 0
+        ]; map(v -> v[keep], s)
+    )
+    fine = [p615m_ideal(; lag = 0.02 + 0.3rand(rng), every = 13) for _ in 1:40]
+    ga = [p615m_seed_metrics(regrid(s, 39, 13), 1000) for s in fine[1:2:end]]
+    gb = [p615m_seed_metrics(regrid(s, 13, 0), 1000) for s in fine[2:2:end]]
+    @test !any(t -> t.beyond, T(tbl(ga), tbl(gb); z = p615m_crit(20, 20)))
 end
 # ---------------------------------------------------------------------------------------------
 # The record (D-146; no GPU needed to check it)
@@ -568,213 +566,225 @@ const P615M_EXT = (".tsv", ".toml", ".md", ".jl", ".png", ".svg")
 @testset "P6.15m record: $(P615M_LABEL) against SequentialCPM" begin
     all_dirs = isdir(P615M_DATA) ? sort(filter(d -> isdir(joinpath(P615M_DATA, d)), readdir(P615M_DATA))) : String[]
     dirs = filter(d -> occursin(Regex("^" * P615M_PREFIX * raw"\d{4}-\d{2}-\d{2}$"), d), all_dirs)
-    if isempty(dirs)
-        @info "P6.15m: no characterisation record yet (reproductions/data/15/$(P615M_PREFIX)<date>/; m3)"
-        @test_skip "P6.15m record (m3: FULL runs on the PC's GPU)"
-    else
-        @test P615M_API                                     # the record is checked with the API
-        status(d) = (p = joinpath(P615M_DATA, d, "meta.toml"); isfile(p) ? string(get(TOML.parsefile(p), "status", "")) : "")
-        finals = filter(d -> status(d) == "final", dirs)
-        rec = isempty(finals) ? last(dirs) : last(finals)   # the latest final, else the latest
-        @info "P6.15m: checking $rec" dirs
-        D = joinpath(P615M_DATA, rec)
-        for f in ("provenance.toml", "meta.toml", "runs.tsv", "reference_runs.tsv", "timeseries.tsv", "metrics.tsv",
-            "comparison.tsv", "calibration.tsv", joinpath("entry", "deviations.tsv"))
-            @test isfile(joinpath(D, f))
-        end
-        # not swept into the sequential entry's tables (frozen page and package tests)
-        @test !isfile(joinpath(D, "deviations.tsv")) && !isfile(joinpath(D, "verdicts.tsv"))
-        # small statistics only (the page test's (g) rules, which m4 will apply)
-        for (root, _, fs) in walkdir(D), f in fs
-            p = joinpath(root, f)
-            ok = any(e -> endswith(lowercase(f), e), P615M_EXT) && filesize(p) <= 10 * 2^20
-            ok || @info "P6.15m: not a small statistic: $p"
-            @test ok
-        end
-        prov = TOML.parsefile(joinpath(D, "provenance.toml"))
-        meta = TOML.parsefile(joinpath(D, "meta.toml"))
+    status(d) = (p = joinpath(P615M_DATA, d, "meta.toml"); isfile(p) ? string(get(TOML.parsefile(p), "status", "")) : "")
+    finals = filter(d -> status(d) == "final", dirs)
+    rec = isempty(finals) ? last(dirs) : last(finals)   # the latest final, else the latest
+    @info "P6.15m: checking $rec" dirs
+    D = joinpath(P615M_DATA, rec)
+    for f in (
+            "provenance.toml", "meta.toml", "runs.tsv", "reference_runs.tsv", "timeseries.tsv", "metrics.tsv",
+            "comparison.tsv", "calibration.tsv", joinpath("entry", "deviations.tsv"),
+        )
+        @test isfile(joinpath(D, f))
+    end
+    # not swept into the sequential entry's tables (frozen page and package tests)
+    @test !isfile(joinpath(D, "deviations.tsv")) && !isfile(joinpath(D, "verdicts.tsv"))
+    # small statistics only (the page test's (g) rules, which m4 will apply)
+    for (root, _, fs) in walkdir(D), f in fs
+        p = joinpath(root, f)
+        ok = any(e -> endswith(lowercase(f), e), P615M_EXT) && filesize(p) <= 10 * 2^20
+        ok || @info "P6.15m: not a small statistic: $p"
+        @test ok
+    end
+    prov = TOML.parsefile(joinpath(D, "provenance.toml"))
+    meta = TOML.parsefile(joinpath(D, "meta.toml"))
 
-        # (1) provenance: algorithm, backend, no host-planner fallback, the tokens, a clean tree
-        @test get(prov, "item", "") == "P6.15m"
-        @test get(prov, "framework", "") == P615M_LABEL
-        @test get(prov, "folder_token", "") == P615M_FOLDER && occursin(r"^[A-Za-z0-9._-]+$", P615M_FOLDER)
-        @test occursin("CheckerboardCPM", get(prov, "algorithm", ""))
-        @test occursin("SequentialCPM", get(prov, "algorithm_reference", ""))
-        @test occursin(r"AMDGPU|ROCm|ROCBackend"i, get(prov, "backend", ""))
-        @test !isempty(strip(string(get(prov, "device", ""))))
-        @test get(prov, "host_planner_fallback", true) === false
-        @test occursin(r"^[0-9a-f]{40}$", string(get(prov, "commit", "")))
-        @test get(prov, "dirty_tracked", true) === false
-        rel = "lib/PottsModels/reproductions/data/15/" * rec * "/"
-        runner = string(get(prov, "runner", ""))
-        rfile = startswith(runner, rel) ? joinpath(D, runner[(length(rel) + 1):end]) : ""
-        @test isfile(rfile)
-        isfile(rfile) && @test get(prov, "runner_sha256", "") == bytes2hex(open(sha256, rfile))
-        for k in ("test_sha256", "manifest_sha256")
-            @test occursin(r"^[0-9a-f]{64}$", string(get(prov, k, "")))
-        end
-        for k in ("julia", "machine", "threads", "wall_s", "test")
-            @test haskey(prov, k)
-        end
-        @test get(meta, "status", "") in ("provisional", "final")
-        final = get(meta, "status", "") == "final"
-        @test get(meta, "reference_record", "") == P615M_SEQ_REF && isdir(joinpath(P615M_DATA, P615M_SEQ_REF))
-        every = get(meta, "every_mcs", 0)
-        @test 1 <= every <= 39
+    # (1) provenance: algorithm, backend, no host-planner fallback, the tokens, a clean tree
+    @test get(prov, "item", "") == "P6.15m"
+    @test get(prov, "framework", "") == P615M_LABEL
+    @test get(prov, "folder_token", "") == P615M_FOLDER && occursin(r"^[A-Za-z0-9._-]+$", P615M_FOLDER)
+    @test occursin("CheckerboardCPM", get(prov, "algorithm", ""))
+    @test occursin("SequentialCPM", get(prov, "algorithm_reference", ""))
+    @test occursin(r"AMDGPU|ROCm|ROCBackend"i, get(prov, "backend", ""))
+    @test !isempty(strip(string(get(prov, "device", ""))))
+    @test get(prov, "host_planner_fallback", true) === false
+    @test occursin(r"^[0-9a-f]{40}$", string(get(prov, "commit", "")))
+    @test get(prov, "dirty_tracked", true) === false
+    rel = "lib/PottsModels/reproductions/data/15/" * rec * "/"
+    runner = string(get(prov, "runner", ""))
+    rfile = startswith(runner, rel) ? joinpath(D, runner[(length(rel) + 1):end]) : ""
+    @test isfile(rfile)
+    isfile(rfile) && @test get(prov, "runner_sha256", "") == bytes2hex(open(sha256, rfile))
+    for k in ("test_sha256", "manifest_sha256")
+        @test occursin(r"^[0-9a-f]{64}$", string(get(prov, k, "")))
+    end
+    for k in ("julia", "machine", "threads", "wall_s", "test")
+        @test haskey(prov, k)
+    end
+    @test get(meta, "status", "") in ("provisional", "final")
+    final = get(meta, "status", "") == "final"
+    @test get(meta, "reference_record", "") == P615M_SEQ_REF && isdir(joinpath(P615M_DATA, P615M_SEQ_REF))
+    every = get(meta, "every_mcs", 0)
+    @test 1 <= every <= 39
 
-        # (5) the time scale: T(λ = 2) with its spread, the cycle and why
-        tm = get(meta, "time", Dict{String, Any}())
-        cal = p615m_tsv(joinpath(D, "calibration.tsv"))
-        is2(r) = parse(Float64, r["lambda"]) == 2
-        Tcb = [p615m_f64(r["T_run"]) for r in cal if is2(r)]
-        seqcal = joinpath(P615M_DATA, P615M_SEQ_CAL, "crossings.tsv")
-        Tseq = isfile(seqcal) ? [p615m_f64(r["T_run"]) for r in p615m_tsv(seqcal) if is2(r)] : Float64[]
-        @test length(Tcb) == 100 && length(Tseq) == 100
-        @test haskey(tm, "T_lambda2") && haskey(tm, "T_lambda2_sd") && get(tm, "T_runs", 0) == length(Tcb)
-        if length(Tcb) >= 2 && length(Tseq) >= 2
-            @test isapprox(get(tm, "T_lambda2_sd", NaN), std(Tcb); rtol = 1e-6)
-            # the mean-curve crossing agrees with the per-run crossings (sequential: 156 against 156.09)
-            @test abs(get(tm, "T_lambda2", Inf) - mean(Tcb)) <= 2 * std(Tcb) / sqrt(length(Tcb))
-            tz = PottsModels.openvt_spread_compare(Tseq, Tcb; z = p615m_crit(length(Tseq), length(Tcb)))
-            @test isapprox(get(tm, "z", NaN), tz.z; rtol = 1e-6)
-            @test get(tm, "cycle_mcs", 0) == p615m_cycle(tz.beyond, get(tm, "T_lambda2", 0))
-            why = string(get(tm, "cycle_reason", ""))
-            @test occursin(string(P615M_T_SEQ), why) && p615m_reason_ok(tz.beyond, why)
-        end
-        cycle = get(tm, "cycle_mcs", P615M_CYCLE_SEQ)
-        # the checkerboard seeds are its own (every committed record but the checkerboard ones)
-        seen = p615m_sequential_seeds(filter(d -> !startswith(d, P615M_PREFIX), all_dirs))
-        @test isempty(intersect(seen, [parse(Int, r["seed"]) for r in cal]))
+    # (5) the time scale: T(λ = 2) with its spread, the cycle and why
+    tm = get(meta, "time", Dict{String, Any}())
+    cal = p615m_tsv(joinpath(D, "calibration.tsv"))
+    is2(r) = parse(Float64, r["lambda"]) == 2
+    Tcb = [p615m_f64(r["T_run"]) for r in cal if is2(r)]
+    seqcal = joinpath(P615M_DATA, P615M_SEQ_CAL, "crossings.tsv")
+    Tseq = isfile(seqcal) ? [p615m_f64(r["T_run"]) for r in p615m_tsv(seqcal) if is2(r)] : Float64[]
+    @test length(Tcb) == 100 && length(Tseq) == 100
+    @test haskey(tm, "T_lambda2") && haskey(tm, "T_lambda2_sd") && get(tm, "T_runs", 0) == length(Tcb)
+    if length(Tcb) >= 2 && length(Tseq) >= 2
+        @test isapprox(get(tm, "T_lambda2_sd", NaN), std(Tcb); rtol = 1.0e-6)
+        # the mean-curve crossing agrees with the per-run crossings (sequential: 156 against 156.09)
+        @test abs(get(tm, "T_lambda2", Inf) - mean(Tcb)) <= 2 * std(Tcb) / sqrt(length(Tcb))
+        tz = PottsModels.openvt_spread_compare(Tseq, Tcb; z = p615m_crit(length(Tseq), length(Tcb)))
+        @test isapprox(get(tm, "z", NaN), tz.z; rtol = 1.0e-6)
+        @test get(tm, "cycle_mcs", 0) == p615m_cycle(tz.beyond, get(tm, "T_lambda2", 0))
+        why = string(get(tm, "cycle_reason", ""))
+        @test occursin(string(P615M_T_SEQ), why) && p615m_reason_ok(tz.beyond, why)
+    end
+    cycle = get(tm, "cycle_mcs", P615M_CYCLE_SEQ)
+    # the checkerboard seeds are its own (every committed record but the checkerboard ones)
+    seen = p615m_sequential_seeds(filter(d -> !startswith(d, P615M_PREFIX), all_dirs))
+    @test isempty(intersect(seen, [parse(Int, r["seed"]) for r in cal]))
 
-        # (1) runs: exactly cases a, b, f; protocol, seeds, device planner, lost-cell counts
-        cases = sort(collect(keys(get(meta, "cases", Dict()))))
-        @test cases == sort(P615M_REQUIRED)
-        runs = p615m_tsv(joinpath(D, "runs.tsv"))
-        @test sort(unique(r["case"] for r in runs)) == cases
-        @test all(in(p615m_header(joinpath(D, "runs.tsv"))), ["case", "k", "seed", "mcs", "N", "divisions", "live", "planner"])
-        @test all(in(p615m_header(joinpath(D, "reference_runs.tsv"))), ["case", "k", "seed", "mcs", "N", "divisions", "live"])
-        ts = p615m_tsv(joinpath(D, "timeseries.tsv"))
-        @test "r" in p615m_header(joinpath(D, "timeseries.tsv")) || "R" in p615m_header(joinpath(D, "timeseries.tsv"))
-        cbseeds = [parse(Int, r["seed"]) for r in runs]
-        @test allunique(cbseeds) && isempty(intersect(seen, cbseeds))
-        @test all(r -> r["planner"] == "device", runs)
-        replay = p615m_tsv(joinpath(D, "reference_runs.tsv"))
-        ref_runs = p615m_tsv(joinpath(P615M_DATA, P615M_SEQ_REF, "runs.tsv"))
-        ref_ts = p615m_tsv(joinpath(P615M_DATA, P615M_SEQ_REF, "timeseries.tsv"))
-        M = p615m_metric_table(p615m_tsv(joinpath(D, "metrics.tsv")))
-        cmp = p615m_tsv(joinpath(D, "comparison.tsv"))
-        @test p615m_header(joinpath(D, "comparison.tsv")) ==
-              ["case", "metric", "n_ref", "n_alt", "mean_ref", "mean_alt", "sd_ref", "sd_alt", "diff", "se", "z", "beyond"]
-        lostof(rows) = Dict(parse(Int, r["seed"]) => parse(Int, r["divisions"]) + 1 - parse(Int, r["live"]) for r in rows)
-        for c in filter(in(P615M_REQUIRED), cases)
-            P = P615M_CASES[c]
-            rr = [r for r in runs if r["case"] == c]
-            @test length(rr) == P.runs
-            @test all(r -> parse(Float64, r["beta"]) == P.beta && parse(Float64, r["gamma"]) == P.gamma &&
-                           parse(Float64, r["sigma_X"]) == P.sigma_X && parse(Int, r["lattice"]) == P.L &&
-                           r["retcode"] == "Terminated" && parse(Int, r["N"]) >= P.cells, rr)
-            @test all(r -> r["live"] == r["N"] && parse(Int, r["divisions"]) + 1 >= parse(Int, r["live"]), rr)
-            # the checkerboard series: saves at 0, every `every` MCS and the stop
-            ser = p615m_record_series(ts, c; cycle)
-            @test sort(collect(keys(ser))) == sort([parse(Int, r["seed"]) for r in rr])
-            for r in rr
-                haskey(ser, parse(Int, r["seed"])) || continue
-                s = ser[parse(Int, r["seed"])]
-                mm = round.(Int, s.t .* cycle)
-                @test mm[1] == 0 && mm[end] == parse(Int, r["mcs"]) && s.N[end] == parse(Int, r["N"])
-                @test all(diff(mm[1:(end - 1)]) .== every) && all(diff(mm) .> 0)
-            end
-            # the sequential replay is the P6.15f record's runs (stop MCS and N), with counts
-            seqseeds = [P.seed(k) for k in 1:P.runs]
-            @test sort([parse(Int, r["seed"]) for r in ref_runs if r["case"] == c]) == seqseeds
-            rp = [r for r in replay if r["case"] == c]
-            @test sort([parse(Int, r["seed"]) for r in rp]) == seqseeds
-            want = Dict(r["seed"] => (r["mcs"], r["N"]) for r in ref_runs if r["case"] == c)
-            @test all(r -> get(want, r["seed"], nothing) == (r["mcs"], r["N"]) && r["live"] == r["N"] &&
-                           parse(Int, r["divisions"]) + 1 >= parse(Int, r["live"]), rp)
-            # per-seed metrics: both algorithms, every metric, every seed; the F3–F8 ones
-            # recomputed (checkerboard from this record, sequential from the P6.15f record),
-            # `lost` from the run tables
-            refser = p615m_record_series(ref_ts, c; cycle = P615M_CYCLE_SEQ)
-            for (alg, sers, seeds, lost) in (("sequential", refser, seqseeds, lostof(rp)),
-                ("checkerboard", ser, sort(collect(keys(ser))), lostof(rr)))
-                T = get(M, (alg, c), Dict{String, Dict{Int, Float64}}())
-                @test sort(collect(keys(T))) == P615M_ALL
-                all(k -> haskey(T, k) && sort(collect(keys(T[k]))) == seeds, P615M_ALL) || (@test false; continue)
-                bad = 0
-                for sd in seeds
-                    m = p615m_seed_metrics(sers[sd], P.cells)
-                    for k in P615M_METRICS
-                        isapprox(T[k][sd], m[k]; rtol = 1e-9, atol = 1e-12) || (bad += 1)
-                    end
-                    T["lost"][sd] == get(lost, sd, NaN) || (bad += 1)
-                    # O1 summaries: in range, and consistent with the stop state
-                    o = [T[k][sd] for k in P615M_O1]
-                    (4 < o[1] < 8 && 0 < o[2] < 4 && 0 <= o[3] <= 1 && 0 <= o[4] <= 1) || (bad += 1)
-                    (P.beta == 0 && P.gamma == 0 && o[4] != 1) && (bad += 1)
+    # (1) runs: exactly cases a, b, f; protocol, seeds, device planner, lost-cell counts
+    cases = sort(collect(keys(get(meta, "cases", Dict()))))
+    @test cases == sort(P615M_REQUIRED)
+    runs = p615m_tsv(joinpath(D, "runs.tsv"))
+    @test sort(unique(r["case"] for r in runs)) == cases
+    @test all(in(p615m_header(joinpath(D, "runs.tsv"))), ["case", "k", "seed", "mcs", "N", "divisions", "live", "planner"])
+    @test all(in(p615m_header(joinpath(D, "reference_runs.tsv"))), ["case", "k", "seed", "mcs", "N", "divisions", "live"])
+    ts = p615m_tsv(joinpath(D, "timeseries.tsv"))
+    @test "r" in p615m_header(joinpath(D, "timeseries.tsv")) || "R" in p615m_header(joinpath(D, "timeseries.tsv"))
+    cbseeds = [parse(Int, r["seed"]) for r in runs]
+    @test allunique(cbseeds) && isempty(intersect(seen, cbseeds))
+    @test all(r -> r["planner"] == "device", runs)
+    replay = p615m_tsv(joinpath(D, "reference_runs.tsv"))
+    ref_runs = p615m_tsv(joinpath(P615M_DATA, P615M_SEQ_REF, "runs.tsv"))
+    ref_ts = p615m_tsv(joinpath(P615M_DATA, P615M_SEQ_REF, "timeseries.tsv"))
+    M = p615m_metric_table(p615m_tsv(joinpath(D, "metrics.tsv")))
+    cmp = p615m_tsv(joinpath(D, "comparison.tsv"))
+    @test p615m_header(joinpath(D, "comparison.tsv")) ==
+        ["case", "metric", "n_ref", "n_alt", "mean_ref", "mean_alt", "sd_ref", "sd_alt", "diff", "se", "z", "beyond"]
+    lostof(rows) = Dict(parse(Int, r["seed"]) => parse(Int, r["divisions"]) + 1 - parse(Int, r["live"]) for r in rows)
+    for c in filter(in(P615M_REQUIRED), cases)
+        P = P615M_CASES[c]
+        rr = [r for r in runs if r["case"] == c]
+        @test length(rr) == P.runs
+        @test all(
+            r -> parse(Float64, r["beta"]) == P.beta && parse(Float64, r["gamma"]) == P.gamma &&
+                parse(Float64, r["sigma_X"]) == P.sigma_X && parse(Int, r["lattice"]) == P.L &&
+                r["retcode"] == "Terminated" && parse(Int, r["N"]) >= P.cells, rr
+        )
+        @test all(r -> r["live"] == r["N"] && parse(Int, r["divisions"]) + 1 >= parse(Int, r["live"]), rr)
+        # the checkerboard series: saves at 0, every `every` MCS and the stop
+        ser = p615m_record_series(ts, c; cycle)
+        @test sort(collect(keys(ser))) == sort([parse(Int, r["seed"]) for r in rr])
+        for r in rr
+            haskey(ser, parse(Int, r["seed"])) || continue
+            s = ser[parse(Int, r["seed"])]
+            mm = round.(Int, s.t .* cycle)
+            @test mm[1] == 0 && mm[end] == parse(Int, r["mcs"]) && s.N[end] == parse(Int, r["N"])
+            @test all(diff(mm[1:(end - 1)]) .== every) && all(diff(mm) .> 0)
+        end
+        # the sequential replay is the P6.15f record's runs (stop MCS and N), with counts
+        seqseeds = [P.seed(k) for k in 1:P.runs]
+        @test sort([parse(Int, r["seed"]) for r in ref_runs if r["case"] == c]) == seqseeds
+        rp = [r for r in replay if r["case"] == c]
+        @test sort([parse(Int, r["seed"]) for r in rp]) == seqseeds
+        want = Dict(r["seed"] => (r["mcs"], r["N"]) for r in ref_runs if r["case"] == c)
+        @test all(
+            r -> get(want, r["seed"], nothing) == (r["mcs"], r["N"]) && r["live"] == r["N"] &&
+                parse(Int, r["divisions"]) + 1 >= parse(Int, r["live"]), rp
+        )
+        # per-seed metrics: both algorithms, every metric, every seed; the F3–F8 ones
+        # recomputed (checkerboard from this record, sequential from the P6.15f record),
+        # `lost` from the run tables
+        refser = p615m_record_series(ref_ts, c; cycle = P615M_CYCLE_SEQ)
+        for (alg, sers, seeds, lost) in (
+                ("sequential", refser, seqseeds, lostof(rp)),
+                ("checkerboard", ser, sort(collect(keys(ser))), lostof(rr)),
+            )
+            T = get(M, (alg, c), Dict{String, Dict{Int, Float64}}())
+            @test sort(collect(keys(T))) == P615M_ALL
+            all(k -> haskey(T, k) && sort(collect(keys(T[k]))) == seeds, P615M_ALL) || (@test false; continue)
+            bad = 0
+            for sd in seeds
+                m = p615m_seed_metrics(sers[sd], P.cells)
+                for k in P615M_METRICS
+                    isapprox(T[k][sd], m[k]; rtol = 1.0e-9, atol = 1.0e-12) || (bad += 1)
                 end
-                bad == 0 || @info "P6.15m: $bad per-seed values of ($alg, $c) disagree with the recomputation"
-                @test bad == 0
+                T["lost"][sd] == get(lost, sd, NaN) || (bad += 1)
+                # O1 summaries: in range, and consistent with the stop state
+                o = [T[k][sd] for k in P615M_O1]
+                (4 < o[1] < 8 && 0 < o[2] < 4 && 0 <= o[3] <= 1 && 0 <= o[4] <= 1) || (bad += 1)
+                (P.beta == 0 && P.gamma == 0 && o[4] != 1) && (bad += 1)
             end
-            haskey(M, ("sequential", c)) && haskey(M, ("checkerboard", c)) || continue
-            # (2) the comparison rows, recomputed with the API at crit(ν)
-            Tr, Ta = M[("sequential", c)], M[("checkerboard", c)]
-            all(k -> haskey(Tr, k) && haskey(Ta, k), P615M_ALL) || continue
-            zc = p615m_crit(P.runs, length(rr))
-            want = PottsModels.openvt_spread_table(Dict(k => p615m_vals(Tr[k]) for k in P615M_ALL),
-                Dict(k => p615m_vals(Ta[k]) for k in P615M_ALL); z = zc)
-            got = [r for r in cmp if r["case"] == c]
-            @test sort([r["metric"] for r in got]) == P615M_ALL
-            for w in want
-                g = [r for r in got if r["metric"] == w.metric]
-                length(g) == 1 || (@test length(g) == 1; continue)
-                g = only(g)
-                @test parse(Int, g["n_ref"]) == w.n_ref && parse(Int, g["n_alt"]) == w.n_alt
-                for k in ("mean_ref", "mean_alt", "sd_ref", "sd_alt", "diff", "se", "z")
-                    @test isapprox(p615m_f64(g[k]), getfield(w, Symbol(k)); rtol = 1e-6, atol = 1e-12) ||
-                          (isinf(getfield(w, Symbol(k))) && p615m_f64(g[k]) == getfield(w, Symbol(k)))
-                end
-                @test g["beyond"] == string(w.beyond)
-            end
-            # (4) negative controls on the record, sequential arm only:
-            # - a split of its seeds (odd k against even k) flags nothing;
-            # - the same split read on two different save grids (even save positions against
-            #   odd ones: 78 MCS apart, phase 39) flags nothing;
-            # - its runs read with time miscounted by 1.1× (cycle 775/1.1) flag t_stop
-            #   (cases with 100 seeds; with 5 + 5 seeds of case (a) crit(4) is too wide for it).
-            zh = p615m_crit(length(1:2:P.runs), length(2:2:P.runs))
-            odd = Dict(k => [Tr[k][P.seed(i)] for i in 1:2:P.runs] for k in P615M_ALL)
-            even = Dict(k => [Tr[k][P.seed(i)] for i in 2:2:P.runs] for k in P615M_ALL)
-            flagged = [t.metric for t in PottsModels.openvt_spread_table(odd, even; z = zh) if t.beyond]
-            isempty(flagged) || @info "P6.15m: the sequential split flags" c flagged
-            @test isempty(flagged)
-            gA = [p615m_seed_metrics(p615m_keep(refser[P.seed(i)], iseven), P.cells) for i in 1:2:P.runs]
-            gB = [p615m_seed_metrics(p615m_keep(refser[P.seed(i)], isodd), P.cells) for i in 2:2:P.runs]
-            tg = PottsModels.openvt_spread_table(Dict(k => [m[k] for m in gA] for k in P615M_METRICS),
-                Dict(k => [m[k] for m in gB] for k in P615M_METRICS); z = zh)
-            flagged = [(t.metric, round(t.z; digits = 2)) for t in tg if t.beyond]
-            isempty(flagged) || @info "P6.15m: the save-grid control flags" c flagged
-            @test isempty(flagged)
-            if P.runs >= 100
-                mis = p615m_record_series(ref_ts, c; cycle = P615M_CYCLE_SEQ / 1.1)
-                tmis = [p615m_seed_metrics(mis[P.seed(i)], P.cells)["t_stop"] for i in 2:2:P.runs]
-                @test PottsModels.openvt_spread_compare(odd["t_stop"], tmis; z = zh).beyond
-            end
+            bad == 0 || @info "P6.15m: $bad per-seed values of ($alg, $c) disagree with the recomputation"
+            @test bad == 0
         end
-        @test sort(unique(r["case"] for r in cmp)) == cases
+        haskey(M, ("sequential", c)) && haskey(M, ("checkerboard", c)) || continue
+        # (2) the comparison rows, recomputed with the API at crit(ν)
+        Tr, Ta = M[("sequential", c)], M[("checkerboard", c)]
+        all(k -> haskey(Tr, k) && haskey(Ta, k), P615M_ALL) || continue
+        zc = p615m_crit(P.runs, length(rr))
+        want = PottsModels.openvt_spread_table(
+            Dict(k => p615m_vals(Tr[k]) for k in P615M_ALL),
+            Dict(k => p615m_vals(Ta[k]) for k in P615M_ALL); z = zc
+        )
+        got = [r for r in cmp if r["case"] == c]
+        @test sort([r["metric"] for r in got]) == P615M_ALL
+        for w in want
+            g = [r for r in got if r["metric"] == w.metric]
+            length(g) == 1 || (@test length(g) == 1; continue)
+            g = only(g)
+            @test parse(Int, g["n_ref"]) == w.n_ref && parse(Int, g["n_alt"]) == w.n_alt
+            for k in ("mean_ref", "mean_alt", "sd_ref", "sd_alt", "diff", "se", "z")
+                @test isapprox(p615m_f64(g[k]), getfield(w, Symbol(k)); rtol = 1.0e-6, atol = 1.0e-12) ||
+                    (isinf(getfield(w, Symbol(k))) && p615m_f64(g[k]) == getfield(w, Symbol(k)))
+            end
+            @test g["beyond"] == string(w.beyond)
+        end
+        # (4) negative controls on the record, sequential arm only:
+        # - a split of its seeds (odd k against even k) flags nothing;
+        # - the same split read on two different save grids (even save positions against
+        #   odd ones: 78 MCS apart, phase 39) flags nothing;
+        # - its runs read with time miscounted by 1.1× (cycle 775/1.1) flag t_stop
+        #   (cases with 100 seeds; with 5 + 5 seeds of case (a) crit(4) is too wide for it).
+        zh = p615m_crit(length(1:2:P.runs), length(2:2:P.runs))
+        odd = Dict(k => [Tr[k][P.seed(i)] for i in 1:2:P.runs] for k in P615M_ALL)
+        even = Dict(k => [Tr[k][P.seed(i)] for i in 2:2:P.runs] for k in P615M_ALL)
+        flagged = [t.metric for t in PottsModels.openvt_spread_table(odd, even; z = zh) if t.beyond]
+        isempty(flagged) || @info "P6.15m: the sequential split flags" c flagged
+        @test isempty(flagged)
+        gA = [p615m_seed_metrics(p615m_keep(refser[P.seed(i)], iseven), P.cells) for i in 1:2:P.runs]
+        gB = [p615m_seed_metrics(p615m_keep(refser[P.seed(i)], isodd), P.cells) for i in 2:2:P.runs]
+        tg = PottsModels.openvt_spread_table(
+            Dict(k => [m[k] for m in gA] for k in P615M_METRICS),
+            Dict(k => [m[k] for m in gB] for k in P615M_METRICS); z = zh
+        )
+        flagged = [(t.metric, round(t.z; digits = 2)) for t in tg if t.beyond]
+        isempty(flagged) || @info "P6.15m: the save-grid control flags" c flagged
+        @test isempty(flagged)
+        if P.runs >= 100
+            mis = p615m_record_series(ref_ts, c; cycle = P615M_CYCLE_SEQ / 1.1)
+            tmis = [p615m_seed_metrics(mis[P.seed(i)], P.cells)["t_stop"] for i in 2:2:P.runs]
+            @test PottsModels.openvt_spread_compare(odd["t_stop"], tmis; z = zh).beyond
+        end
+    end
+    @test sort(unique(r["case"] for r in cmp)) == cases
 
-        # (3) deviations: every row beyond the spread explained, from the vocabulary
-        devf = joinpath(D, "entry", "deviations.tsv")
-        if isfile(devf)
-            @test p615m_header(devf) == ["target", "case", "ours", "paper", "suspected_cause", "author_question"]
-            cmpb = [merge(r, Dict("beyond" => r["beyond"] == "true", "mean_ref" => p615m_f64(r["mean_ref"]),
-                "mean_alt" => p615m_f64(r["mean_alt"]))) for r in cmp]
-            probs = p615m_deviation_problems(cmpb, p615m_tsv(devf); final)
-            isempty(probs) || @info "P6.15m deviations" probs
-            @test isempty(probs)
-            nflag = count(r -> r["beyond"] == "true", cmp)
-            nopen = count(d -> occursin(Regex(P615M_OPEN, "i"), d["suspected_cause"]), p615m_tsv(devf))
-            @info "P6.15m: $nflag of $(length(cmp)) comparison rows beyond the spread; $nopen under investigation" final
-        end
+    # (3) deviations: every row beyond the spread explained, from the vocabulary
+    devf = joinpath(D, "entry", "deviations.tsv")
+    if isfile(devf)
+        @test p615m_header(devf) == ["target", "case", "ours", "paper", "suspected_cause", "author_question"]
+        cmpb = [
+            merge(
+                r, Dict(
+                    "beyond" => r["beyond"] == "true", "mean_ref" => p615m_f64(r["mean_ref"]),
+                    "mean_alt" => p615m_f64(r["mean_alt"])
+                )
+            ) for r in cmp
+        ]
+        probs = p615m_deviation_problems(cmpb, p615m_tsv(devf); final)
+        isempty(probs) || @info "P6.15m deviations" probs
+        @test isempty(probs)
+        nflag = count(r -> r["beyond"] == "true", cmp)
+        nopen = count(d -> occursin(Regex(P615M_OPEN, "i"), d["suspected_cause"]), p615m_tsv(devf))
+        @info "P6.15m: $nflag of $(length(cmp)) comparison rows beyond the spread; $nopen under investigation" final
     end
 end

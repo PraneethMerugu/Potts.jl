@@ -17,16 +17,6 @@
 #   `direction[1]` (x_target − x_source, minimum image on the periodic x axis),
 #   `position[target][2]` and `mcs` in a drive.
 #
-# ── Gating ─────────────────────────────────────────────────────────────────────────────────
-# Every no-shear row (V1, V1b, PREP, V19 on the relaxed foam, the observable oracles) needs
-# only P6.4b2 and binds as soon as it lands. The sheared model `P64RShearedFoam` is built by
-# `p64r_build_shear()`; on a tree without P6.4a1 that build fails with
-# `UndefVarError(:direction)` or "… is not available in a drive", and ONLY those two errors
-# close the gate (any other error is rethrown). Gate closed: every shear testset records one
-# `@test_broken` per row and runs nothing; FULL refuses to run. Gate open: the rows bind.
-# The FULL record tier: no record and gate closed → `@test_broken` (pending P6.4a1); no
-# record and gate open → fails (the FULL run is due).
-#
 # ── Protocol (pre-registered) ──────────────────────────────────────────────────────────────
 # Lattice 256² (L_x × L_y), `boundary = (Periodic(), Closed())` (04b p.5822). Contacts
 # `NeighborOrder(4)` (20 neighbours, 04b p.5822) with J = 3; area term Γ(a − A)² with Γ = 1
@@ -188,7 +178,7 @@
 # compilation (no-shear ≈ 15 s, shear ≈ 10 s).
 #
 # Tiers. always: rules on synthetic series and hand-built states (oracles). SMOKE (default):
-# the no-shear rows at full size, then (gate open) the κ-free shear checks. FULL record
+# the no-shear rows at full size, then the κ-free shear checks. FULL record
 # (always): reads the one directory reproductions/data/04/full-*, recomputes τ, κ and every
 # row; a failing row must be listed in its deviations.tsv (D-154) and is then
 # `@test_broken`. FULL (POTTS_FULL_REPRODUCTION=true or REPRO=full; offline on the PC,
@@ -304,25 +294,7 @@ const P64R_SHEAR_EXPR = :(@potts_model P64RShearedFoam begin
     @sweep Metropolis(; temperature = T)
 end)
 
-"""Build `P64RShearedFoam` and a tiny problem from it: true, or false iff the tree lacks
-P6.4a1 (`direction` undefined, or `mcs`/`position` rejected in a drive)."""
-function p64r_build_shear()
-    try
-        Core.eval(@__MODULE__, P64R_SHEAR_EXPR)
-        M = Base.invokelatest(getfield, @__MODULE__, :P64RShearedFoam)
-        σ = Int32[(x - 1) ÷ 8 + 1 for x in 1:16, y in 1:16]
-        Base.invokelatest(() -> PottsProblem(M(; name = :p64r_probe, lattice = (16, 16)),
-            [ownership => σ, kind => [:bubble, :bubble], :A => [128.0, 128.0], :ytop => 16.0, :ymid => 8.5], (0, 1)))
-        return true
-    catch e
-        err = e isa LoadError ? e.error : e
-        (err isa UndefVarError && err.var === :direction) && return false
-        (err isa ArgumentError && occursin("is not available in a drive", err.msg)) && return false
-        rethrow()
-    end
-end
-const P64R_SHEAR_READY = p64r_build_shear()
-P64R_SHEAR_READY || @info "04 foam: P6.4a1 (`direction`) is not on this tree; the shear rows are gated (@test_broken)"
+Core.eval(@__MODULE__, P64R_SHEAR_EXPR)
 
 const P64R_ALG = SequentialCPM(; skip_interior = true)
 const P64R_TEMPLATES = Dict{Tuple{Bool, Tuple{Int, Int}}, Any}()
@@ -579,7 +551,7 @@ end
 p64r_bincentre_strain(b) = sinpi(2(b - 0.5) / P64R_NBIN)
 
 # ---------------------------------------------------------------------------------------------
-# Runs (gate open only). Durations are in paper MCS; our MCS m is paper time m/τ (A-5).
+# Runs. Durations are in paper MCS; our MCS m is paper time m/τ (A-5).
 # ---------------------------------------------------------------------------------------------
 
 """Paper bin of width w (paper MCS) that our MCS m (1-based) falls in, at time scale τ."""
@@ -1038,15 +1010,11 @@ end
     fb, Sb = p64r_bin(f, f .^ -1.0)
     @test issorted(fb) && fb[1] < 1e-5 && isapprox(fb[end], 0.5; rtol = 0.1) && length(fb) == 86   # empty narrow bins at low f are skipped
     @test all(i -> P64R_BIN_EDGES[1] <= fb[i] <= P64R_BIN_EDGES[end], eachindex(fb))
-    if isdefined(P64R_AN, :spectral_exponent)
-        @test p64r_alpha(fb, Sb, 1e-4, 1e-2) ≈ 1 atol = 0.02                # bin means of f^−1 (convex) bias it slightly
-        @test p64r_window_alpha(fb, Sb, 1e-4, 1e-2) ≈ 1 atol = 0.05
-        @test isnan(p64r_alpha(fb, zero(Sb), 1e-4, 1e-2))                   # all-zero T1 spectrum: no α
-        fw, Sw = p64r_bin(f, ones(length(f)))
-        @test abs(p64r_alpha(fw, Sw, 1e-4, 1e-2)) < 1e-8                    # white
-    else
-        @test_broken isdefined(P64R_AN, :spectral_exponent)                 # P6.4b2
-    end
+    @test p64r_alpha(fb, Sb, 1.0e-4, 1.0e-2) ≈ 1 atol = 0.02                # bin means of f^−1 (convex) bias it slightly
+    @test p64r_window_alpha(fb, Sb, 1.0e-4, 1.0e-2) ≈ 1 atol = 0.05
+    @test isnan(p64r_alpha(fb, zero(Sb), 1.0e-4, 1.0e-2))                   # all-zero T1 spectrum: no α
+    fw, Sw = p64r_bin(f, ones(length(f)))
+    @test abs(p64r_alpha(fw, Sw, 1.0e-4, 1.0e-2)) < 1.0e-8                    # white
     S = ones(length(f))
     S[105] = 100.0                                                          # f = 8.0e-4
     pk = p64r_peak(collect(f), S)
@@ -1068,36 +1036,32 @@ end
     lat = p64r_lat(P64R_L)
     σ = p64r_brick(P64R_L)
     @test maximum(σ) == 256 && all(==(256), [count(==(c), σ) for c in 1:256])
-    if all(s -> isdefined(P64R_AN, s), (:side_counts, :topology_moments, :stored_energy, :contact_changes, :central_moment))
-        # A-2 calibration: closed y, no wall cells → μ2(n) = 7/16 (V1b band), interior all hexagons
-        @test p64r_mu2n(σ) ≈ 7 / 16 && p64r_in(p64r_mu2n(σ), 0.3, 0.6)
-        @test p64r_hexfrac(σ, 256) == 1
-        @test p64r_sides(σ, lat, 256) == p64r_sides_oracle(σ, 256)
-        @test P64R_AN.stored_energy(σ, lat) == p64r_phi_oracle(σ)
-        # C-V1b (negative controls): the wall counted as a side (wall id 257 on rows 1 and 258)
-        # gives 7/64; periodic y gives 0. Both are outside V1b's band.
-        σw = fill(Int32(257), 256, 258)
-        σw[:, 2:257] .= σ
-        nw = P64R_AN.side_counts(σw, Lattice((256, 258); boundary = (Periodic(), Closed())))[1:256]
-        @test P64R_AN.central_moment(nw) ≈ 7 / 64 && !p64r_in(7 / 64, 0.3, 0.6)
-        mp = P64R_AN.topology_moments(σ, Lattice(P64R_L; boundary = (Periodic(), Periodic()))).mu2_n
-        @test mp == 0 && !p64r_in(mp, 0.3, 0.6)
-        # C-V18: shifting every odd brick row by one more brick (offset 24) changes every
-        # bubble's contact list (the bricks above and below are other ids)
-        σs = Int32[(r = (y - 1) ÷ 16; r * 16 + mod(x - 1 - (isodd(r) ? 24 : 0), 256) ÷ 16 + 1) for x in 1:256, y in 1:256]
-        cc = P64R_AN.contact_changes(P64R_AN.cell_graph(σ, lat), P64R_AN.cell_graph(σs, lat))
-        changed = Set(Iterators.flatten(Iterators.flatten((cc.lost, cc.gained))))
-        @test length(changed) / 256 == 1 && !(length(changed) / 256 < 0.5)
-        # V19 premise: the brick wall at A = 256 has no area energy
-        @test p64r_area_frac(σ, fill(256.0, 256), fill(256.0, 256)) == 0
-        # V7/V8 classification: the brick wall's mid rows (centroids 120.5, 136.5, 104.5,
-        # 152.5) are mid; the next rows (88.5, 168.5) are away
-        c = p64r_cells(σ, 256)
-        @test sort(unique(round.(abs.(c.cy .- 128.5); digits = 6)))[1:4] == [8.0, 24.0, 40.0, 56.0]
-        @test count(b -> abs(c.cy[b] - 128.5) <= P64R_MID, 1:256) == 64
-    else
-        @test_broken false                                                  # P6.4b2 not on this tree
-    end
+    # A-2 calibration: closed y, no wall cells → μ2(n) = 7/16 (V1b band), interior all hexagons
+    @test p64r_mu2n(σ) ≈ 7 / 16 && p64r_in(p64r_mu2n(σ), 0.3, 0.6)
+    @test p64r_hexfrac(σ, 256) == 1
+    @test p64r_sides(σ, lat, 256) == p64r_sides_oracle(σ, 256)
+    @test P64R_AN.stored_energy(σ, lat) == p64r_phi_oracle(σ)
+    # C-V1b (negative controls): the wall counted as a side (wall id 257 on rows 1 and 258)
+    # gives 7/64; periodic y gives 0. Both are outside V1b's band.
+    σw = fill(Int32(257), 256, 258)
+    σw[:, 2:257] .= σ
+    nw = P64R_AN.side_counts(σw, Lattice((256, 258); boundary = (Periodic(), Closed())))[1:256]
+    @test P64R_AN.central_moment(nw) ≈ 7 / 64 && !p64r_in(7 / 64, 0.3, 0.6)
+    mp = P64R_AN.topology_moments(σ, Lattice(P64R_L; boundary = (Periodic(), Periodic()))).mu2_n
+    @test mp == 0 && !p64r_in(mp, 0.3, 0.6)
+    # C-V18: shifting every odd brick row by one more brick (offset 24) changes every
+    # bubble's contact list (the bricks above and below are other ids)
+    σs = Int32[(r = (y - 1) ÷ 16; r * 16 + mod(x - 1 - (isodd(r) ? 24 : 0), 256) ÷ 16 + 1) for x in 1:256, y in 1:256]
+    cc = P64R_AN.contact_changes(P64R_AN.cell_graph(σ, lat), P64R_AN.cell_graph(σs, lat))
+    changed = Set(Iterators.flatten(Iterators.flatten((cc.lost, cc.gained))))
+    @test length(changed) / 256 == 1 && !(length(changed) / 256 < 0.5)
+    # V19 premise: the brick wall at A = 256 has no area energy
+    @test p64r_area_frac(σ, fill(256.0, 256), fill(256.0, 256)) == 0
+    # V7/V8 classification: the brick wall's mid rows (centroids 120.5, 136.5, 104.5,
+    # 152.5) are mid; the next rows (88.5, 168.5) are away
+    c = p64r_cells(σ, 256)
+    @test sort(unique(round.(abs.(c.cy .- 128.5); digits = 6)))[1:4] == [8.0, 24.0, 40.0, 56.0]
+    @test count(b -> abs(c.cy[b] - 128.5) <= P64R_MID, 1:256) == 64
 end
 
 # ---------------------------------------------------------------------------------------------
@@ -1135,7 +1099,7 @@ if !P64R_FULL
 end
 
 # ---------------------------------------------------------------------------------------------
-# SMOKE: shear (κ-free checks; gate: P6.4a1)
+# SMOKE: shear (κ-free checks)
 # ---------------------------------------------------------------------------------------------
 
 """Per-bubble circular centroid x (sites) of ids 1:n."""
@@ -1178,23 +1142,17 @@ function p64r_drift(st, βm, mcs, seed)
 end
 
 if !P64R_FULL
-    @testset "04 SMOKE: shear sign, T1 detection and V19 under shear (gate P6.4a1)" begin
-        if !P64R_SHEAR_READY
-            for _ in ("S1 sign", "C-S1", "S2 T1", "C-S2", "S3 V19")
-                @test_broken P64R_SHEAR_READY
-            end
-        else
-            p64r_template(true, P64R_L)
-            st = P64R_SMOKE[:ordered][1][1]
-            sh = p64r_drift(st, 0.05, 500, p64r_smoke_seed(21))
-            nul = p64r_drift(st, 0.0, 500, p64r_smoke_seed(22))
-            @info "04 SMOKE shear (β_model = 0.05 and 0, 500 MCS)" sh nul
-            @test sh.top > 1 && sh.bottom < -1                                # S1: top → +x, bottom → −x (Figs. 4a, 5a)
-            @test max(abs(nul.top), abs(nul.bottom)) < 0.25 * min(sh.top, -sh.bottom)   # C-S1: no shear, no drift
-            @test sh.t1 >= 1                                                  # S2: T1s are detected under shear
-            @test nul.t1 == 0                                                 # C-S2: none in a relaxed foam at T → 0⁺
-            @test sh.area < 5e-3                                              # S3: V19 on a sheared state
-        end
+    @testset "04 SMOKE: shear sign, T1 detection and V19 under shear" begin
+        p64r_template(true, P64R_L)
+        st = P64R_SMOKE[:ordered][1][1]
+        sh = p64r_drift(st, 0.05, 500, p64r_smoke_seed(21))
+        nul = p64r_drift(st, 0.0, 500, p64r_smoke_seed(22))
+        @info "04 SMOKE shear (β_model = 0.05 and 0, 500 MCS)" sh nul
+        @test sh.top > 1 && sh.bottom < -1                                # S1: top → +x, bottom → −x (Figs. 4a, 5a)
+        @test max(abs(nul.top), abs(nul.bottom)) < 0.25 * min(sh.top, -sh.bottom)   # C-S1: no shear, no drift
+        @test sh.t1 >= 1                                                  # S2: T1s are detected under shear
+        @test nul.t1 == 0                                                 # C-S2: none in a relaxed foam at T → 0⁺
+        @test sh.area < 5.0e-3                                              # S3: V19 on a sheared state
     end
 end
 
@@ -1223,50 +1181,46 @@ end
 @testset "04 FULL record: every row from reproductions/data/04/full-*" begin
     dirs = isdir(P64R_DATA) ? filter(d -> startswith(d, "full-") && isdir(joinpath(P64R_DATA, d)), readdir(P64R_DATA)) :
            String[]
-    if isempty(dirs) && !P64R_SHEAR_READY
-        @test_broken !isempty(dirs)                                            # pending P6.4a1 and the FULL run
-    else
-        length(dirs) == 1 || @info "04: expected exactly one reproductions/data/04/full-* directory" dirs
-        @test length(dirs) == 1
-        if length(dirs) == 1
-            D = joinpath(P64R_DATA, only(dirs))
-            for f in ("provenance.toml", "verdicts.tsv", ("$k.tsv" for k in keys(P64R_SCHEMA))...)
-                @test isfile(joinpath(D, f))
-            end
-            R = p64r_read(D)
-            # the record is the pre-registered protocol
-            @test sort([(r["foam"], r["k"]) for r in R["foams"]]) ==
-                  sort([[("ordered", k) for k in 1:10]; [(string(f), k) for f in keys(P64R_FOAMS) if f !== :ordered for k in 1:5]])
-            @test all(r -> r["seed"] == p64r_prep_seed(Symbol(r["foam"]), r["k"], r["try"]), R["foams"])
-            @test all(r -> r["ly"] == P64R_FOAMS[Symbol(r["foam"])].L[2], R["foams"])
-            cal = p64r_sel(R["loops"]; set = "cal")
-            @test sort([(r["J"], r["r"], r["k"]) for r in cal]) == sort([(3.0, r, k) for r in P64R_CAL_R for k in 1:5])
-            @test all(r -> r["gamma0"] == r["J"] * r["r"], cal)
-            sc = p64r_sel(R["loops"]; set = "scan")
-            @test sort([(r["J"], r["gp"], r["k"]) for r in sc]) == sort([(J, J * r, k) for J in P64R_SCAN_J for r in P64R_SCAN_R for k in 1:5])
-            @test all(r -> length(r["t1_cycles"]) == 10 && length(r["phi_bins"]) == 40, R["loops"])
-            κ = p64r_kappa(R)
-            @test only(R["calibration"])["kappa"] ≈ κ.kappa rtol = 1e-12
-            @test only(R["calibration"])["tau"] ≈ p64r_tau(R) rtol = 1e-12
-            for r in filter(r -> r["set"] != "cal", R["loops"])
-                @test r["gamma0"] ≈ κ.kappa * r["gp"] rtol = 1e-12
-            end
-            @test all(r -> r["beta_model"] ≈ κ.kappa * r["beta"], R["bulk"])
-            @test length(p64r_sel(R["bulk"]; set = "spec")) == 75 && all(r -> r["mcs"] == P64R_TSPEC, p64r_sel(R["bulk"]; set = "spec"))
-            @test length(p64r_sel(R["bulk"]; set = "v14")) == 100 && all(r -> r["mcs"] == P64R_T14, p64r_sel(R["bulk"]; set = "v14"))
-            @test length(p64r_sel(R["bulk"]; set = "v16")) == 20 && length(p64r_sel(R["bulk"]; set = "v16c")) == 5
-            @test length(p64r_sel(R["steady"]; set = "v2")) == 5 && all(r -> length(r["phi_50"]) == P64R_TV2 ÷ 50, p64r_sel(R["steady"]; set = "v2"))
-            V = p64r_verdicts(R)
-            dev_f = joinpath(D, "deviations.tsv")
-            devs = isfile(dev_f) ? [Dict(zip(split(readline(dev_f), '\t'), split(l, '\t'))) for l in readlines(dev_f)[2:end]] :
-                   Dict{String, String}[]
-            p64r_check(V, devs; broken_ok = true)
-            vt = split.(readlines(joinpath(D, "verdicts.tsv"))[2:end], '\t')
-            for v in V
-                v.kind === :info && continue
-                rr = filter(l -> l[1] == v.id, vt)
-                @test length(rr) == 1 && rr[1][end] == (v.ok ? "PASS" : "FAIL")
-            end
+    length(dirs) == 1 || @info "04: expected exactly one reproductions/data/04/full-* directory" dirs
+    @test length(dirs) == 1
+    if length(dirs) == 1
+        D = joinpath(P64R_DATA, only(dirs))
+        for f in ("provenance.toml", "verdicts.tsv", ("$k.tsv" for k in keys(P64R_SCHEMA))...)
+            @test isfile(joinpath(D, f))
+        end
+        R = p64r_read(D)
+        # the record is the pre-registered protocol
+        @test sort([(r["foam"], r["k"]) for r in R["foams"]]) ==
+            sort([[("ordered", k) for k in 1:10]; [(string(f), k) for f in keys(P64R_FOAMS) if f !== :ordered for k in 1:5]])
+        @test all(r -> r["seed"] == p64r_prep_seed(Symbol(r["foam"]), r["k"], r["try"]), R["foams"])
+        @test all(r -> r["ly"] == P64R_FOAMS[Symbol(r["foam"])].L[2], R["foams"])
+        cal = p64r_sel(R["loops"]; set = "cal")
+        @test sort([(r["J"], r["r"], r["k"]) for r in cal]) == sort([(3.0, r, k) for r in P64R_CAL_R for k in 1:5])
+        @test all(r -> r["gamma0"] == r["J"] * r["r"], cal)
+        sc = p64r_sel(R["loops"]; set = "scan")
+        @test sort([(r["J"], r["gp"], r["k"]) for r in sc]) == sort([(J, J * r, k) for J in P64R_SCAN_J for r in P64R_SCAN_R for k in 1:5])
+        @test all(r -> length(r["t1_cycles"]) == 10 && length(r["phi_bins"]) == 40, R["loops"])
+        κ = p64r_kappa(R)
+        @test only(R["calibration"])["kappa"] ≈ κ.kappa rtol = 1.0e-12
+        @test only(R["calibration"])["tau"] ≈ p64r_tau(R) rtol = 1.0e-12
+        for r in filter(r -> r["set"] != "cal", R["loops"])
+            @test r["gamma0"] ≈ κ.kappa * r["gp"] rtol = 1.0e-12
+        end
+        @test all(r -> r["beta_model"] ≈ κ.kappa * r["beta"], R["bulk"])
+        @test length(p64r_sel(R["bulk"]; set = "spec")) == 75 && all(r -> r["mcs"] == P64R_TSPEC, p64r_sel(R["bulk"]; set = "spec"))
+        @test length(p64r_sel(R["bulk"]; set = "v14")) == 100 && all(r -> r["mcs"] == P64R_T14, p64r_sel(R["bulk"]; set = "v14"))
+        @test length(p64r_sel(R["bulk"]; set = "v16")) == 20 && length(p64r_sel(R["bulk"]; set = "v16c")) == 5
+        @test length(p64r_sel(R["steady"]; set = "v2")) == 5 && all(r -> length(r["phi_50"]) == P64R_TV2 ÷ 50, p64r_sel(R["steady"]; set = "v2"))
+        V = p64r_verdicts(R)
+        dev_f = joinpath(D, "deviations.tsv")
+        devs = isfile(dev_f) ? [Dict(zip(split(readline(dev_f), '\t'), split(l, '\t'))) for l in readlines(dev_f)[2:end]] :
+            Dict{String, String}[]
+        p64r_check(V, devs; broken_ok = true)
+        vt = split.(readlines(joinpath(D, "verdicts.tsv"))[2:end], '\t')
+        for v in V
+            v.kind === :info && continue
+            rr = filter(l -> l[1] == v.id, vt)
+            @test length(rr) == 1 && rr[1][end] == (v.ok ? "PASS" : "FAIL")
         end
     end
 end
@@ -1344,25 +1298,22 @@ end
 
 if P64R_FULL
     @testset "04 FULL: every row, rerun" begin
-        @test P64R_SHEAR_READY                                                 # FULL needs P6.4a1
-        if P64R_SHEAR_READY
-            t0 = time()
-            R = p64r_full()
-            V = p64r_verdicts(R)
-            for v in V
-                @info "04 FULL $(v.id) ($(v.kind))" v.value v.band v.ok
-            end
-            if !isempty(P64R_RECORD_OUT)
-                p64r_write(P64R_RECORD_OUT, R)
-                open(joinpath(P64R_RECORD_OUT, "verdicts.tsv"), "w") do io
-                    println(io, "id\tkind\tvalue\tband\tresult")
-                    for v in V
-                        println(io, join((v.id, v.kind, repr(v.value), v.band, v.ok ? "PASS" : "FAIL"), '\t'))
-                    end
-                end
-                @info "04 FULL record written" P64R_RECORD_OUT wall = time() - t0 threads = Threads.nthreads()
-            end
-            p64r_check(V, Dict{String, String}[]; broken_ok = false)
+        t0 = time()
+        R = p64r_full()
+        V = p64r_verdicts(R)
+        for v in V
+            @info "04 FULL $(v.id) ($(v.kind))" v.value v.band v.ok
         end
+        if !isempty(P64R_RECORD_OUT)
+            p64r_write(P64R_RECORD_OUT, R)
+            open(joinpath(P64R_RECORD_OUT, "verdicts.tsv"), "w") do io
+                println(io, "id\tkind\tvalue\tband\tresult")
+                for v in V
+                    println(io, join((v.id, v.kind, repr(v.value), v.band, v.ok ? "PASS" : "FAIL"), '\t'))
+                end
+            end
+            @info "04 FULL record written" P64R_RECORD_OUT wall = time() - t0 threads = Threads.nthreads()
+        end
+        p64r_check(V, Dict{String, String}[]; broken_ok = false)
     end
 end

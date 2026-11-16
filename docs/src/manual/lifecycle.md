@@ -10,7 +10,7 @@ x => rule, …`:
 | `cells(k…)` | the kinds that divide by this rule (`cells`: every kind) |
 | `Every(n)` or `every = n` | check the rule only at MCS where `mcs % n == 0` (default: every MCS) |
 | `when` | a cell-scope condition: `volume`, cell variables, component variables, `mcs`, `rand()` |
-| `along` | the division plane: `RandomPlane()` (uniformly random), `principal_axis()` (across the long axis, the default), `major_axis()`, or a fixed normal `(1.0, 0.0)` |
+| `along` | the division plane: `RandomPlane()` (uniformly random), `principal_axis()` (across the long axis, the default), `major_axis()`, `minor_axis()` (the same plane as `principal_axis()`), or a fixed normal `(1.0, 0.0)` |
 | `x => value` | set `x` in both daughters (an expression of the parent's state); a value that draws (`rand()`, `randn()`, `randn(μ, σ; lower)`) is drawn separately for each daughter |
 | `x => Split()` | halve the parent's `x` between the daughters |
 

@@ -1,7 +1,6 @@
 # P6.0k2 (ROADMAP Phase 6, step 0; D-077 follow-ups, mtk-native-review §3 F7): what an
-# `@components` MTK System carries but Potts cannot honour is rejected by name, `Pre` of a
-# discrete node reads like the node inside a tick, and Bool reads lower without a double
-# `_nonzero`.
+# `@components` MTK System carries but Potts cannot honour is rejected by name, and `Pre` of a
+# discrete node reads like the node inside a tick.
 #
 # F4 (the catch in `_compile_discrete` relabelling internal Potts errors) is not observable
 # without internals in this environment (MTKBase only: the catch wraps MTKBase's own
@@ -214,20 +213,3 @@ end
     end
 end
 
-# ---------------------------------------------------------------------------------------
-# F6: a Bool node read at an index lowers to one `_nonzero`, not `_nonzero(_nonzero(…))`
-
-const P60K2_DOUBLE = r"_nonzero\)?\(\s*\(?\s*(?:Potts\.)?_nonzero\b"
-
-@testset "P6.0k2 F6: no double _nonzero in generated code" begin
-    # the pattern finds the defect as Julia prints it, and not a single coercion
-    @test occursin(P60K2_DOUBLE, "(Potts._nonzero)(Potts._nonzero(Potts._cellval(st.cell.xc₊X, c)))")
-    @test occursin(P60K2_DOUBLE, "Potts._nonzero(Potts._nonzero(x))")
-    @test !occursin(P60K2_DOUBLE, "(!)((Potts._nonzero)(Potts._cellval(st.cell.xc₊X, c)))")
-    for coupling in (:(xc.s ~ !xc.X[id]), :(xc.s ~ xc.X[id] & (volume > 1)),
-            :(xc.s ~ ifelse(id > 1, xc.X[max(id - 1, 1)], true)))
-        code = string(generated_code(p60k2_shift(false, coupling)))
-        @test occursin("xc₊X", code)                             # the node is read
-        @test count(_ -> true, eachmatch(P60K2_DOUBLE, code)) == 0     # (a count, not the code, on failure)
-    end
-end

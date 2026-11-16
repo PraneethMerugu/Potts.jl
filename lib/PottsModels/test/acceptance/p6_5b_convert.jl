@@ -43,8 +43,8 @@
 #    - `name` (a Symbol) names the pass. `domain` is `clusters(k…)` (one pass entity per
 #      cluster whose root is of kind k, visited in root order) or `cells(k…)` (one per alive
 #      cell of kind k, in slot order). Only `clusters(…)` is exercised here.
-#    - New DSL names (the implementer adds them to `DSL_NAMES`/`DSL_KEYWORDS` in
-#      guardrails.jl, and `@convert` to SECTIONS): `@convert`, `Fresh`, `created`, `transfer`
+#    - New DSL names (the implementer documents them for guardrails.jl's DSL docs check,
+#      and adds `@convert` to SECTIONS): `@convert`, `Fresh`, `created`, `transfer`
 #      (`from`, `to`, `at`, `p`, `per_site` are keys of the block).
 #    - `from`, `to` are cell references in the entity's scope (P6.5a: `sibling(k)`, …); the
 #      entity's names (`cluster`, `id`, cell quantities of the entity) are bound.

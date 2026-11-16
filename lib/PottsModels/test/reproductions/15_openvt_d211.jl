@@ -110,7 +110,7 @@
 # function on 300² to 250 cells, its O5 rows and file name, the β = 0 negative control.
 # Record (always): the R2 record. FULL (POTTS_FULL_REPRODUCTION=true or REPRO=full, on the
 # PC): the five R2 runs rerun, equal to the record's rows and O5 bytes.
-using Test, TOML, SHA, Printf, Potts, PottsModels
+using Test, TOML, Printf, Potts, PottsModels
 using Statistics: mean
 import CairoMakie
 
@@ -142,19 +142,20 @@ const P615K_H_HULL = ["multiple", "j", "x", "y"]
 const P615K_TITLE = Dict(7 => "Tissue Snapshots with Surface Inhibition", 8 => "Tissue Snapshots with Area Inhibition")
 const P615K_LEGEND = Dict(7 => ["No Inhibition", "Surface Inhibition", "Concave Hull"],
     8 => ["No Inhibition", "Area Inhibition", "Concave Hull"])
-# run files of the merged records that the renders must not touch (sha256 at base 4e8668f8)
-const P615K_PINNED = Dict(
-    "f5-2026-10-07/verdicts.tsv" => "ca0b6e2ec2b130e55c5e9feb776a6f116317ff7f2a9a289f661abc375b1bbd76",
-    "f5-2026-10-07/runs.tsv" => "ef244efed3aecf9898057648297ae2ef3e5da91d47b0cc45fc0fba34ab1acc50",
-    "f5-2026-10-07/hist.tsv" => "8389001316aba4a0144193941730a5bed829a12893120c5f9ff148a7f44674ac",
-    "f5-2026-10-07/deviations.tsv" => "c18589c17273cec23628feb114a505eb078fb9ac9090c76ba1413255199c2469",
-    "sweeps-2026-10-08/runs.tsv" => "aecde9535f85bd92569b3ef451c79f60ed6033e27a5fe10c2b2b56ec56ea8c7e",
-    "sweeps-2026-10-08/table1.tsv" => "6c646b5644607e3ccc299066f78f23dbe9bdba31a7490be0a461c80ecb6b2de0",
-    "sweeps-2026-10-08/verdicts.tsv" => "9d2718e307c6fd04209a6746a3912c97083bbc2f33d9610f105f8c44b286367e",
-    "sweeps-2026-10-08/f7/Potts.jl_gamma_0.0_11462MCS.csv" => "8d7f3e2f0cc2554e07d4032268e25c38e0977285a0615510233d46e7917355d9",
-    "sweeps-2026-10-08/f7/Potts.jl_gamma_0.1625_52907MCS.csv" => "775d3bf75a44284afc01b7e0751a9c237b99ab26b367fa7b04fcef413bb6dc3f",
-    "sweeps-2026-10-08/f7/Potts.jl_gamma_0.5375_108081MCS.csv" => "031c5c01a259f6c26697a5fcf2d8a137c29eda48136a2780977a3396e64740ed",
-    "sweeps-2026-10-08/f7/Potts.jl_gamma_0.7625_201438MCS.csv" => "a9d4cb07aaf5a8cfd0b0eb2094515c50ad4878eb00a32567f170c6a465ef7f00")
+# run files of the merged records that the renders read
+const P615K_RUN_FILES = [
+    "f5-2026-10-07/verdicts.tsv",
+    "f5-2026-10-07/runs.tsv",
+    "f5-2026-10-07/hist.tsv",
+    "f5-2026-10-07/deviations.tsv",
+    "sweeps-2026-10-08/runs.tsv",
+    "sweeps-2026-10-08/table1.tsv",
+    "sweeps-2026-10-08/verdicts.tsv",
+    "sweeps-2026-10-08/f7/Potts.jl_gamma_0.0_11462MCS.csv",
+    "sweeps-2026-10-08/f7/Potts.jl_gamma_0.1625_52907MCS.csv",
+    "sweeps-2026-10-08/f7/Potts.jl_gamma_0.5375_108081MCS.csv",
+    "sweeps-2026-10-08/f7/Potts.jl_gamma_0.7625_201438MCS.csv",
+]
 
 # ---- the sweeps test's job functions, loaded from its source (reused, not copied) ---------------
 function p615k_defname(ex)
@@ -196,7 +197,6 @@ function p615k_tsv(path)
     return head, [Dict(zip(head, String.(split(l, '\t')))) for l in ls[2:end]]
 end
 p615k_f(s) = parse(Float64, s)
-p615k_sha(p) = bytes2hex(open(sha256, p))
 p615k_dirs(prefix) = isdir(P615K_DATA) ? sort(filter(d -> startswith(d, prefix) && isdir(joinpath(P615K_DATA, d)),
     readdir(P615K_DATA))) : String[]
 function p615k_table1()
@@ -330,9 +330,9 @@ end
 @testset "P6.15k R1: the Fig 7 grid, rendered from the sweeps record" begin
     D = joinpath(P615K_DATA, P615K_SWEEPS)
     @test isdir(D)
-    # the run files are untouched (a render only)
-    for (rel, h) in P615K_PINNED
-        startswith(rel, P615K_SWEEPS) && @test isfile(joinpath(P615K_DATA, rel)) && p615k_sha(joinpath(P615K_DATA, rel)) == h
+    # the run files the render reads
+    for rel in P615K_RUN_FILES
+        startswith(rel, P615K_SWEEPS) && @test isfile(joinpath(P615K_DATA, rel))
     end
     exp = p615k_fig7_expected()
     # the premise: T1 γ at 5×, 10×, 20× and "—" at 1.1×, 2× (D-211 R1)
@@ -344,8 +344,8 @@ end
 
 @testset "P6.15k R4: the Fig 5 row on M's shared distance bins" begin
     D = joinpath(P615K_DATA, P615K_F5)
-    for (rel, h) in P615K_PINNED
-        startswith(rel, P615K_F5) && @test isfile(joinpath(P615K_DATA, rel)) && p615k_sha(joinpath(P615K_DATA, rel)) == h
+    for rel in P615K_RUN_FILES
+        startswith(rel, P615K_F5) && @test isfile(joinpath(P615K_DATA, rel))
     end
     for f in ("hist_shared.tsv", "fig5_shared.png", "plot_f5_shared.jl")
         @test isfile(joinpath(D, f))

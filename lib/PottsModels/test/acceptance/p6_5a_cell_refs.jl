@@ -18,8 +18,8 @@
 #    variable holding a reference to another cell (D-066 item 5: "cell variables of a
 #    declared reference type (e.g. `partner::CellRef`)"). `partner` is not a built-in: it is
 #    the user's name, as `prev`/`next` in the myxobacteria sketch.
-#    - `CellRef` is bound inside model bodies (a new `Potts.DSL` name; the implementer adds
-#      it to `DSL_NAMES` in guardrails.jl).
+#    - `CellRef` is bound inside model bodies (a new `Potts.DSL` name; the implementer documents
+#      it for guardrails.jl's DSL docs check).
 #    - Default 0 (no reference, the medium). The operating point sets it by slot:
 #      `:partner => [2, 3, 1, 3, 0, 6]`. A cell may reference itself.
 #    - Stored as the integer column `u.cell.partner` (`eltype <: Integer`), one entry per slot.
