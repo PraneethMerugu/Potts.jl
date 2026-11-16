@@ -153,6 +153,23 @@ end
     end
 end
 
+# `hash` agrees with `==` (equal parameter objects are one `Set` element and one `Dict`
+# key). Control on the code before this change: `==` compares values (1 == 1.0) but `hash` was the default one.
+@testitem "PottsParameters hash agrees with ==" setup = [PottsParametersStructures] tags = [:potts, :mtk_native] begin
+    @testset "PottsParameters hash agrees with ==" begin
+        σ = zeros(Int32, 12, 12); σ[2:5, 2:5] .= 1; σ[7:10, 7:10] .= 2
+        p = PottsProblem(GranerGlazier(; name = :gg, lattice = (12, 12)), [ownership => σ, kind => [1, 2]], (0, 2)).p
+        q = PottsProblem(GranerGlazier(; name = :gg, lattice = (12, 12)), [ownership => σ, kind => [1, 2]], (0, 2)).p
+        @test p == q && hash(p) == hash(q)
+        for n in (0, 1, 7, 100, -3)        # property: a == b ⇒ hash(a) == hash(b), across number types
+            a = Potts.PottsParameters((; λ = Float64(n), k = n))
+            b = Potts.PottsParameters((; λ = n, k = Float32(n)))
+            @test a == b && hash(a) == hash(b)
+            @test length(Set([a, b])) == 1 && haskey(Dict(a => 1), b)
+        end
+    end
+end
+
 @testitem "SciMLStructures: computed parameters are re-derived by replace; remake takes an object as given" setup = [PottsParametersStructures] tags = [:potts, :mtk_native] begin
     @testset "SciMLStructures: computed parameters are re-derived by replace; remake takes an object as given" begin
         σ = zeros(Int32, 12, 12); σ[2:5, 2:5] .= 1

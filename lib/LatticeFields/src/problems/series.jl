@@ -317,3 +317,4 @@ end
 Base.merge(a::LatticeStats, b::LatticeStats) = LatticeStats(a.nf + b.nf, a.nsolve + b.nsolve, a.counts, a.solves + b.solves,
     a.budget + b.budget, a.floor + b.floor, a.newton_budget + b.newton_budget, a.syncs + b.syncs, a.implicit)
 Base.:(==)(a::LatticeStats, b::LatticeStats) = all(f -> getfield(a, f) == getfield(b, f), fieldnames(LatticeStats))
+Base.hash(s::LatticeStats, h::UInt) = foldl((h, f) -> hash(getfield(s, f), h), fieldnames(LatticeStats); init = hash(:LatticeStats, h))

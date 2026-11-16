@@ -2165,6 +2165,7 @@ Base.getindex(p::PottsParameters, s::Symbol) = getfield(getfield(p, :values), s)
 Base.NamedTuple(p::PottsParameters) = getfield(p, :values)
 CorePotts.set_parameter(p::PottsParameters, v, i::Symbol) = _with_values(p, CorePotts.set_parameter(NamedTuple(p), v, i))
 Base.:(==)(a::PottsParameters, b::PottsParameters) = NamedTuple(a) == NamedTuple(b)
+Base.hash(p::PottsParameters, h::UInt) = hash(NamedTuple(p), hash(:PottsParameters, h))
 Base.show(io::IO, p::PottsParameters) = print(io, "PottsParameters", NamedTuple(p))
 
 # SciMLStructures (cutover C9, P5 C7a-11): `Tunable` is the floating-point scalar parameters in
