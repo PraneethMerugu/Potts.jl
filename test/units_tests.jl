@@ -82,6 +82,28 @@ end
 
 unit_compile(kind_case) = mtkcompile(UnitCase(; name = :u, kind_case))
 
+# a difference with the value before the block, `m - Pre(m)`: the unit check keeps `Pre(m)`
+# apart from `m` (the two must not cancel to a dimensionless zero)
+@potts_model UnitPreDiff begin
+    @kinds medium A
+    @parameters begin
+        λ = 1.0, [unit = u"J"]
+        T = 4.0, [unit = u"J"]
+        k = 1.0, [unit = u"mol"]
+    end
+    @variables begin
+        m(cell) = 0.0, [unit = u"mol"]
+        dm(cell) = 0.0, [unit = u"mol"]
+    end
+    @lattice Lattice((8, 8))
+    @energy cells => λ * (volume - 16)^2
+    @after_mcs begin
+        m ~ Pre(m) + k
+        dm ~ m - Pre(m)
+    end
+    @sweep Metropolis(; temperature = T)
+end
+
 
 @potts_model UnitRate begin
     @kinds medium A
@@ -128,6 +150,7 @@ end
         @test_throws ["units:", "rate", "per unit of time"] unit_compile(:eq_bad_unit)
         @test unit_compile(:eq_good_rate) isa CompiledPottsSystem             # per MCS
         @test unit_compile(:divide_good_logic) isa CompiledPottsSystem        # `&`, `!` of conditions
+        @test mtkcompile(UnitPreDiff(; name = :pd)) isa CompiledPottsSystem   # `m - Pre(m)` in mol
     end
 end
 

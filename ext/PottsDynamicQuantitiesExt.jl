@@ -23,6 +23,10 @@ MTK.get_unit(::Union{typeof(Potts.cell_centroid), typeof(Potts.copy_displacement
 MTK.get_unit(::typeof(Potts.gather), args) = _fold_unit(args[1], args[3])
 MTK.get_unit(::typeof(Potts.population), args) = _fold_unit(args[1], args[2])
 
+# a fresh symbol of type `T` whose unit is `u`
+_with_unit(u, ::Type{T}) where {T} =
+    SymbolicUtils.setmetadata(Symbolics.unwrap(Symbolics.variable(gensym(:pre); T)), VariableUnit, u)
+
 function _fold_unit(n, body)
     op = info(n).options.op
     op in (:count, :any, :all) && return UNITLESS
@@ -38,7 +42,8 @@ _hasunit(x) = SymbolicUtils.getmetadata(Symbolics.unwrap(x), VariableUnit, nothi
 _iszeroconst(x) = SymbolicUtils.isconst(x) && iszero(SymbolicUtils.unwrap_const(x))
 # The rewrite before MTK's `get_unit` (Potts' own unit rules for operations that MTK owns, so
 # the extension adds no method to MTK's function for MTK's types, which would be piracy):
-# `Pre(x)` has x's unit, so it is `x`; a logic operation (`&`, `|`, `!`, `xor`) takes
+# `Pre(x)` has x's unit, so it is a fresh symbol with that unit (not `x` itself, which would
+# cancel in `x - Pre(x)`); a logic operation (`&`, `|`, `!`, `xor`) takes
 # dimensionless operands and is dimensionless, so it is its first operand once each is checked.
 const _LOGIC_OPS = (&, |, !, xor)
 function _zero_free(x)
@@ -46,7 +51,7 @@ function _zero_free(x)
     x isa SymbolicUtils.BasicSymbolic && SymbolicUtils.iscall(x) || return x
     op = SymbolicUtils.operation(x)
     args = map(_zero_free, SymbolicUtils.arguments(x))
-    op isa MTK.Pre && return args[1]
+    op isa MTK.Pre && return _with_unit(get_unit(args[1]), SymbolicUtils.symtype(x))
     if any(f -> op === f, _LOGIC_OPS)
         for a in args
             u = get_unit(a)
