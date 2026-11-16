@@ -158,3 +158,34 @@ end
     @test has_leak(joinpath(@__DIR__, "determinism_tests.jl"))
 end
 end
+
+# Potts' `__init__` does not draw from the caller's RNG. In a fresh process seeded first,
+# with Potts' own dependencies loaded (some of them spawn tasks at load, which Potts does not
+# control), the next number of the task's stream and of a task spawned afterwards are the same
+# with and without `using Potts`. Control on the code before this change: `__init__` drew in a child task, which
+# advanced the task-split state, so the spawned task's number differed.
+@testitem "determinism: loading Potts leaves the seeded RNG streams unchanged" setup = [DetSetup] tags = [:potts, :determinism, :subprocess] begin
+    @testset "determinism: loading Potts leaves the seeded RNG streams unchanged" begin
+        proj = @__DIR__
+        deps = joinpath(pkgdir(Potts), "Project.toml")
+        function draws(load)
+            script = tempname() * ".jl"
+            write(
+                script, """
+                using Random: Random
+                Random.seed!(20261116)
+                TOML = Base.require(Base.PkgId(Base.UUID("fa267f1f-6049-4f14-aa54-33bafae1ed76"), "TOML"))
+                for (n, u) in TOML.parsefile($(repr(deps)))["deps"]
+                    Base.require(Base.PkgId(Base.UUID(u), n))
+                end
+                $load
+                print(hash((rand(UInt64), fetch(Threads.@spawn rand(UInt64)))))
+                """
+            )
+            return strip(read(`$(Base.julia_cmd()) --startup-file=no --project=$proj $script`, String))
+        end
+        without = draws("")
+        @test !isempty(without)
+        @test draws("using Potts") == without
+    end
+end

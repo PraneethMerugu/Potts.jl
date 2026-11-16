@@ -118,15 +118,12 @@ public initialization_system
 # they print
 public updates, Every, count_contacts
 
-# The session token (D-130, `_SESSION_TOKEN` in solvers.jl), drawn at every load: `__init__`
-# runs when Potts loads, never into the precompile image. The draw is a child task's: the
-# caller's own `rand` stream is unchanged by loading Potts, but spawning the task advances the
-# caller's task-split state, so tasks spawned afterwards get other seeds than without Potts.
-# When the caller seeded the global RNG before loading, the draw repeats across sessions and
-# the token's uniqueness rests on `time_ns()` and `getpid()`.
+# The session token (D-130, `_SESSION_TOKEN` in solvers.jl), made at every load: `__init__`
+# runs when Potts loads, never into the precompile image. It reads the clock and the process
+# id, never a random number generator: loading Potts leaves the caller's global and
+# task RNG states as they were, so a seeded run draws the same numbers with or without it.
 function __init__()
-    draw = fetch(schedule(Task(() -> rand(UInt64))))
-    _SESSION_TOKEN[] = hash((draw, time_ns(), getpid()))
+    _SESSION_TOKEN[] = hash((time_ns(), getpid(), objectid(Ref(0))))
     return nothing
 end
 
