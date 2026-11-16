@@ -5411,3 +5411,29 @@ Review fixes (F4-B6 review, 2026-11-11; tests in test/fields_couple_b6.jl, negat
 - **M4.1: the PDE discretizer is swappable.** A model author chooses it; Potts.jl's models use LatticePDE. A MethodOfLines backend stays an option, not a replacement.
 - **M4.2: the SCDPotts parity check is dropped.** Reproduction 10 against the authors' 13,310-run data (P6.2b, D-142, D-143) replaces the planned Akeeb statistical parity against SCDPotts.
 - **M5.3: the legacy repositories are archived; registration comes after the paper.**
+
+## D-287 Conformance to SciML, MTK and Julia: the rulings, the exceptions and the fix batches (2026-11-16; user approval 2026-11-16 of every recommendation in `research/conformance/SUMMARY.md`)
+
+- **The bar.** Every deviation from the SciML Style Guide, the MTK system and discretization interfaces, the SciMLBase common interface and Julia's conventions is fixed, or recorded here as an exception. An exception is justified only where SciML or MTK cannot express what a cellular Potts model needs. The four audits (`research/conformance/{mtk,scimlbase,style,julia}.md`, at 95eff001) merge into 87 findings (C-01 to C-87): 13 high, 36 medium, 38 low. The fixes replace F5 and run in eight batches, B1 to B8: correctness, MTK interface, SciMLBase integrator, renames, errors, structural, QA guards, style. Docs items go to C10.
+- **Exceptions (CPM needs SciML/MTK cannot express).**
+  1. X1: the lattice configuration (ownership, kinds, built-in cell properties) is not in MTK `unknowns`.
+  2. X2: `PottsIntegrator` refuses `ContinuousCallback` and `VectorContinuousCallback` with an `ArgumentError`; time is the integer MCS.
+  3. X3: `CPMAlgorithm` has no `abstol`, `reltol`, `dt`, `alg_order` or `isadaptive`; they are refused with an `ArgumentError` listing the accepted keywords.
+  4. X4: no interpolation between saved MCS; `dense = false`; a non-saved `t` is an `ArgumentError`.
+  5. X5: no `get_du` on `PottsIntegrator`.
+  6. X6: the `@potts_model` sections `@kinds`, `@energy`, `@sweep`, `@before_mcs`, `@after_mcs` and `@on_copy`, and no `@continuous_events`. `@discrete_events` is not covered.
+  7. X7: Potts extends the SciMLBase problem constructors and `JumpProblem` to refuse a `PottsSystem` early.
+  8. X8: `CompiledPottsSystem` carries an energy and sweep payload; the wrapper otherwise conforms.
+  9. X9: `PottsSolution` elements are state structs; `Array(sol)` and `sol[j, i]` are refused cleanly.
+- **Upstream gaps (a second category).** Where no public upstream API exists (ModelingToolkitBase `get_unit`, `ParameterIndex`, `VariableTimeDomain` and `analytic`; Base internals; Krylov's vector type; `jl_cpu_pause`), the use is a temporary exception, with an upstream issue filed by the user and an upper compat bound.
+- **R1 Unicode.** Public names become ASCII as plain renames (D-254): `Δ`, `u.σ`, `:ΔH`/`accepted_ΔH`, and PottsModels' `β`, `γ` and `A₀` keywords.
+- **R2 Style.** Repo-wide Runic (with a format check), the 92-column limit and closures on runtime paths are fixed in B8, after B4. Single-underscore private names, multi-letter type parameters and compiler-side closures stay as project style.
+- **R3 Tests.** ReTestItems meets the guide's isolation intent and replaces `@safetestset`. D-281 stands (Julia LTS out of range). The PottsModels tests move to `@testitem` (C-64).
+- **R4.** The `@generated tangent_on` (`lib/CorePotts/src/fields.jl:566`) becomes a plain method, proven by `@inferred` and AllocCheck. `CLAUDE.md` stays as it is.
+- **R5.** `integ.u` becomes the live state (device arrays on a device). `current_state(integ)` stays the host snapshot. An A/B window is required.
+- **R6.** Saving follows SciML: `save_everystep = isempty(saveat)`. A CPM state is a lattice, so a run warns when the estimated saved size is large (the 2026-10-26 out-of-memory failure). Every reproduction and docs run is checked to pass `saveat` or `save_everystep = false`.
+- **R7.** `dt` moves to the `solve` keyword. Inside `PottsProblem`'s `field_solver` the MCS sets the window. `solve(ode)` with no algorithm defers to DiffEqBase's default unless a clock fixes the window.
+- **R8.** `prob.seed` stays. `solve(...; seed)` overrides it, with `supports_solve_rng`. `backend` stays a documented keyword.
+- **R9.** `LatticeSolution` stays, with `hasTime` fixed; the `sol[c]` layout is documented.
+- **R10.** Only names unique to Potts are exported; the rest are `public`. Confirmed clashes (`parameters`, `shape`, `RK4`, `LegendEntry`) and layout words leave the export lists. `t`, `x`, `y`, `z` stay only in the opt-in `Potts.Fields` submodule.
+- **R12.** F5-07 rides with B5. F5-03 rides with the LatticePDE rename commit in B4. F5-08 and F5-09 go to C10. F5-05 (`at2`) and F5-06 (per-field periodicity) are a feature batch after B8. F5-10 and F5-13 stay optional, with an `ab` window. F5-12 is a probe test in B7.
