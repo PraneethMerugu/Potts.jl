@@ -79,7 +79,7 @@ end
 @testitem "F2-15: Foam has no computed parameter" setup = [F2MetadataSetup] tags = [:potts, :mtk_native] begin
     @testset "F2-15: Foam has no computed parameter" begin
         c = Potts.ModelingToolkitBase.mtkcompile(ShearedFoam(; name = :f, lattice = (32, 32)))
-        @test isempty(Potts._computed_params(Potts._p(c.sys, :parameters)))
+        @test isempty(Potts._computed_params(Potts._p(getfield(c, :sys), :parameters)))
     end
 end
 

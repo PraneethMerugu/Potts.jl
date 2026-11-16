@@ -80,11 +80,10 @@ end
 Base.nameof(c::CompiledPottsSystem) = nameof(getfield(c, :sys))
 fields(c::CompiledPottsSystem) = fields(getfield(c, :sys))
 
-# `c.x`: the compiled payload's own fields, read by the compiler, codegen and problem builder;
-# any other name is the model's quantity or component, as `sys.x` of the model compiled from
-function Base.getproperty(c::CompiledPottsSystem, n::Symbol)
-    return hasfield(CompiledPottsSystem, n) ? getfield(c, n) : getproperty(getfield(c, :authored), n)
-end
+# `csys.x` is the model's quantity or component, as `sys.x` of the model compiled from (MTK's
+# `getproperty`), whatever its name: Potts reads the compiled payload with `getfield`, as MTK
+# reads a system's fields
+Base.getproperty(c::CompiledPottsSystem, n::Symbol) = getproperty(getfield(c, :authored), n)
 Base.propertynames(c::CompiledPottsSystem; private::Bool = false) =
     private ? fieldnames(CompiledPottsSystem) : propertynames(getfield(c, :authored))
 
@@ -1284,7 +1283,7 @@ end
 """Kind tables referenced by contact terms (their values must be symmetric)."""
 function _contact_tables(c::CompiledPottsSystem)
     out = Set{Symbol}()
-    for E in values(c.contact_terms)
+    for E in values(getfield(c, :contact_terms))
         _walk(y -> (role(y) === :kindtable && push!(out, info(y).name)), E)
     end
     return out

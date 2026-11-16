@@ -539,7 +539,7 @@ end
         pa, pb = PottsProblem(a, ini_op(), (0, 1)), PottsProblem(b, ini_op(), (0, 1))
         @test pa.f.fingerprint == pb.f.fingerprint
         @test ini_u0(pa, :x) == ini_u0(pb, :x) == [0.0, 0.0]
-        @test isempty(mtkcompile(a).initialization) && Potts.initialization_system(mtkcompile(a), :cell) === nothing
+        @test isempty(getfield(mtkcompile(a), :initialization)) && Potts.initialization_system(mtkcompile(a), :cell) === nothing
         # control: the detector sees a written value
         @test Potts._written(Potts.variable(only(Potts.Symbolics.@variables q(Potts.t)), :cell; default = 1.0))
     end

@@ -618,7 +618,9 @@ function _inner_system(sys::PottsSystem)
     end
     # each parameter's value (its declared default, or the keyword that overrides it) is an
     # initial condition, as `@mtkmodel` writes a parameter's default, so MTK and
-    # SymbolicIndexingInterface see it; a computed parameter (an expression of others) is not
+    # SymbolicIndexingInterface see it. A computed parameter (a default that is an expression
+    # of others, read-only) is left out: as an initial condition MTK would solve for it, and as
+    # an MTK binding it would leave `parameters(sys)`
     values = Dict{Any, Any}()
     for p in _p(sys, :parameters)
         i = info(p)

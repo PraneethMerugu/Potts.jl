@@ -2068,7 +2068,7 @@ _layer_kinds(l::InsertUntil) = Any[l.kind; l.into]
 # not the model's kinds pass here (a model may serve as a lattice only); `PottsProblem`
 # rejects them in the operating point.
 _check_layout_kinds(x, kinds) = nothing
-_check_layout_kinds(c::CompiledPottsSystem, kinds) = _check_layout_kinds(c.sys, kinds)
+_check_layout_kinds(c::CompiledPottsSystem, kinds) = _check_layout_kinds(getfield(c, :sys), kinds)
 function _check_layout_kinds(sys::PottsSystem, kinds)
     isempty(_p(sys, :kind_classes)) && return nothing
     for k in kinds
@@ -2086,7 +2086,7 @@ _layout_spec(lat::Lattice) = LatticeSpec(lat.dims, map(p -> p ? Periodic() : Clo
     Moore(1), lat.mask, lat.geometry)
 _layout_spec(lat::LatticeSpec) = lat
 _layout_spec(sys::PottsSystem) = _layout_spec(_p(sys, :lattice))
-_layout_spec(sys::CompiledPottsSystem) = _layout_spec(sys.sys)
+_layout_spec(sys::CompiledPottsSystem) = _layout_spec(getfield(sys, :sys))
 
 # Drop cells with no site left and renumber the rest in order.
 function _compact(σ, kinds, counts)

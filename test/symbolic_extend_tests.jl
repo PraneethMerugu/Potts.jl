@@ -19,7 +19,7 @@
         ext = ChemoSorting(; name = :chemo)
         @test Potts._p(ext, :kinds) == [:medium, :dark, :light]
         @test Set(Potts.info(x).name for x in Potts.parameters(ext)) == Set([:λ, :V₀, :T, :J, :χ])
-        @test length(Potts._p(ext, :energies)) == 2 && length(Potts._p(ext, :drives)) == 1 && Potts.lattice(ext) == Potts.lattice(SORTING.sys)
+        @test length(Potts._p(ext, :energies)) == 2 && length(Potts._p(ext, :drives)) == 1 && Potts.lattice(ext) == Potts.lattice(getfield(SORTING, :sys))
         σ, kinds = graner_state()
         a = symbolic_graner_problem(; nmcs = 5)
         b = PottsProblem(ext, [ownership => σ, kind => kinds], (0, 5); field_solver = ExplicitEuler())
@@ -40,11 +40,11 @@
         @test pw.p.T == 6.0 && count(pw.frozen) == 40
         @test_throws ArgumentError extend(
             PottsSystem(;
-                name = :x, kinds = [:medium, :light], lattice = Potts.lattice(SORTING.sys),
-                sweep = Potts._p(SORTING.sys, :sweep)
-            ), SORTING.sys
+                name = :x, kinds = [:medium, :light], lattice = Potts.lattice(getfield(SORTING, :sys)),
+                sweep = Potts._p(getfield(SORTING, :sys), :sweep)
+            ), getfield(SORTING, :sys)
         )
-        @test_throws ArgumentError Potts.lookup(SORTING.sys, :nope)
+        @test_throws ArgumentError Potts.lookup(getfield(SORTING, :sys), :nope)
     end
 end
 

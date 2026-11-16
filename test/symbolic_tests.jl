@@ -53,7 +53,7 @@ end
         @test_throws ArgumentError PottsProblem(
             SORTING, [
                 ownership => zeros(Int32, 72, 72), kind => Int[],
-                first(filter(x -> Potts.info(x).name === :J, Potts.parameters(SORTING.sys))) => [0 1 1; 2 0 1; 1 1 0],
+                first(filter(x -> Potts.info(x).name === :J, Potts.parameters(getfield(SORTING, :sys)))) => [0 1 1; 2 0 1; 1 1 0],
             ], (0, 1)
         )
     end
@@ -73,7 +73,7 @@ end
 @testitem "remake with symbolic maps; the sweep law" setup = [SymbolicSetup, PortsSetup] tags = [:potts, :symbolic] begin
     @testset "remake with symbolic maps; the sweep law" begin
         prob = symbolic_graner_problem(; nmcs = 5)
-        λ = first(filter(x -> Potts.info(x).name === :λ, Potts.parameters(SORTING.sys)))
+        λ = first(filter(x -> Potts.info(x).name === :λ, Potts.parameters(getfield(SORTING, :sys))))
         q = remake(prob; p = [λ => 3.0])
         @test q.p.λ == 3.0 && q.p.V₀ == prob.p.V₀ && q.f === prob.f
         @test remake(prob; p = Dict(:T => 2)).p.T === 2.0              # converted to the scalar type

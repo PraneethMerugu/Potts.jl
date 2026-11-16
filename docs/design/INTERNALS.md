@@ -322,7 +322,7 @@ and `rename`; SII `symbolic_container`, `all_symbols`, `parameter_index` (2), `i
 whose accessors look the symbol up in the problem they are applied to. Besides them:
 `mtkcompile` (the CPM compile entry) and the 48 generated problem-constructor refusals.
 `CompiledPottsSystem` is an MTK `AbstractSystem` too, with the same accessors (of the authored
-model) and refusals; its `getproperty` reads its own fields first, then the model's names.
+model) and refusals; `csys.x` is the model's quantity `x`, and Potts reads the compiled payload with `getfield`.
 `sys.x` is MTK's `getproperty` on the inner System. Internal code reads payload fields with
 `_p(sys, :f)` and the container with `getfield`; `test/wlite.jl` scans `src/` for property reads.
 

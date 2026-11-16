@@ -81,8 +81,8 @@ An ODE's `ExplicitEuler(substeps = nothing)` is one step, the same as `substeps 
 """
 function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_solver = ExplicitEuler(), solvers = (),
         kept::Bool = false)
-    sys = c.sys
-    fields = [_solver_name(x) for (x, _) in c.fields]
+    sys = getfield(c, :sys)
+    fields = [_solver_name(x) for (x, _) in getfield(c, :fields)]
     # the map fields (`Shift(t, 1)(m) ~ rhs`; a model has rates or maps, F2-10)
     maps = Set{Symbol}(info(x).name for (x, _, op) in _field_equations(sys) if op isa ModelingToolkitBase.Shift)
     # the steady fields (`0 ~ rhs`, F3-12b): `QuasiSteady` only, by default too
@@ -94,7 +94,7 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
             "solves (a steady row's one solver); got ", repr(s), ": give `", n, " => QuasiSteady()` or leave it out (a ",
             "steady field takes `QuasiSteady` by default), or write its row as a rate `D(", n, ") ~ rhs` to step it")))
     end
-    odes = [_solver_name(x) for (x, _) in Iterators.flatten((c.cell_odes, c.model_odes))]
+    odes = [_solver_name(x) for (x, _) in Iterators.flatten((getfield(c, :cell_odes), getfield(c, :model_odes)))]
     fgpairs, fsolver = Pair{Any, Any}[], field_solver
     if isempty(fields)
         # a model whose only fields are aux fields (`K ~ rhs`) evaluates them once per MCS, with
@@ -219,11 +219,11 @@ _key_string(k) = (s = sprint(show, k; context = :limit => true); length(s) > 60 
 
 # A-68: an adaptive step re-evaluates the rate at trial steps, so it cannot replay draws.
 function _check_adaptive_draws(c::CompiledPottsSystem, resolved)
-    for eq in _p(c.sys, :equations)
+    for eq in _p(getfield(c, :sys), :equations)
         lhs = _unwrap(eq.lhs)
         (iscall(lhs) && operation(lhs) isa Differential) || continue
         get(resolved, _solver_name(arguments(lhs)[1]), nothing) isa Adaptive || continue
-        _has_op(eq.rhs, random_uniform) && _located(c.sys, eq) do
+        _has_op(eq.rhs, random_uniform) && _located(getfield(c, :sys), eq) do
             throw(ArgumentError("`rand()` in an equation integrated by `Adaptive(…)`: the solver re-evaluates " *
                                 "the rate at trial steps; use `RK4`/`ExplicitEuler`, or draw in an update"))
         end
@@ -255,7 +255,7 @@ end
 when they run in several solver groups (Jacobi across groups), or when a cell ODE
 reads another cell's ODE unknowns (Jacobi across cells)."""
 _ode_scratch(c::CompiledPottsSystem, spec::SolverSpec, scope) =
-    length(_ode_groups(scope === :cell ? c.cell_odes : c.model_odes, spec)) > 1 ||
+    length(_ode_groups(scope === :cell ? getfield(c, :cell_odes) : getfield(c, :model_odes), spec)) > 1 ||
     (scope === :cell && _ode_reads_other_cells(c))
 
 # A cell ODE whose rate reads a cell-ODE unknown of another cell (`y[j]`, also in a gather's
@@ -265,12 +265,12 @@ _ode_scratch(c::CompiledPottsSystem, spec::SolverSpec, scope) =
 # `y[id]`, `w[f(y)]`) do not; nor do folds hoisted to model slots (`cell_ode_pops`,
 # computed before the ODEs).
 function _ode_reads_other_cells(c::CompiledPottsSystem)
-    names = Set{Symbol}(info(x).name for (x, _) in c.cell_odes)
+    names = Set{Symbol}(info(x).name for (x, _) in getfield(c, :cell_odes))
     isempty(names) && return false
     hit = Ref(false)
     reads(y) = (found = Ref(false);
         _walk_all(z -> (i = info(z); i !== nothing && i.role === :cell && i.name in names && (found[] = true)), y); found[])
-    for (_, r) in c.cell_odes
+    for (_, r) in getfield(c, :cell_odes)
         _walk_all(r) do y
             hit[] && return
             iscall(y) || return

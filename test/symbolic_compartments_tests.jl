@@ -180,8 +180,9 @@ end
             name = :x, kinds = [:medium, :ka], lattice = Potts.lattice_spec((8, 8)),
             sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
         )
-        @test mtkcompile(
-            Potts.PottsSystem(;
+        @test getfield(
+            mtkcompile(
+                Potts.PottsSystem(;
                 base..., divisions = [
                     Potts.divide(
                         Potts.cells(1);
@@ -189,9 +190,11 @@ end
                     ),
                 ]
             )
-        ).uses_clusters
-        @test mtkcompile(
-            Potts.PottsSystem(;
+            ), :uses_clusters
+        )
+        @test getfield(
+            mtkcompile(
+                Potts.PottsSystem(;
                 base..., observed = [
                     Potts._observed_eq(
                         Potts.observed_var(:cv),
@@ -199,7 +202,8 @@ end
                     ),
                 ]
             )
-        ).uses_clusters
+            ), :uses_clusters
+        )
     end
 end
 

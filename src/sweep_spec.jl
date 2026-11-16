@@ -29,7 +29,7 @@ first(H[1]), last(H[1])        # cells(…) => λ * (volume - V₀)^2
 ```
 """
 hamiltonian(sys::PottsSystem) = Pair{Any, Any}[e.domain => _wrapped(_described(e.expr)) for e in _p(sys, :energies)]
-hamiltonian(c::CompiledPottsSystem) = hamiltonian(c.authored)
+hamiltonian(c::CompiledPottsSystem) = hamiltonian(getfield(c, :authored))
 
 # an expression as the user wrote it: wrapped (`Num`) when symbolic, a number as it is
 _wrapped(x) = Symbolics.wrap(_unwrap(x))
@@ -56,7 +56,7 @@ without drives. Drives bias the acceptance of a copy but are not terms of
 [`Potts.hamiltonian`](@ref).
 """
 drives(sys::PottsSystem) = Any[_wrapped(_described(d.expr)) for d in _p(sys, :drives)]
-drives(c::CompiledPottsSystem) = drives(c.authored)
+drives(c::CompiledPottsSystem) = drives(getfield(c, :authored))
 
 # one element of `updates(sys)`
 const _UpdateRule = @NamedTuple{phase::Symbol, scope::Symbol, every::Every, eq::Equation}
@@ -100,7 +100,7 @@ u.eq                        # V_target(t) ~ ifelse(volume >= (Pre(V_target(t))*�
 ```
 """
 updates(sys::PottsSystem) = _UpdateRule[_update_rule(u) for u in _p(sys, :updates)]
-updates(c::CompiledPottsSystem) = updates(c.authored)
+updates(c::CompiledPottsSystem) = updates(getfield(c, :authored))
 
 _update_rule(u::Update) = _UpdateRule((u.phase, _update_scope(u), Every(u.every), _described(u.eq)))
 
@@ -172,7 +172,7 @@ end
 
 # MTK's typed metadata (D-137): the payload is the inner System's (`Potts.wrap` sets it). A
 # `CompiledPottsSystem` reads every key from the authored model's inner System; it is read-only.
-SymbolicUtils.getmetadata(c::CompiledPottsSystem, k::DataType, default) = SymbolicUtils.getmetadata(inner(c.authored), k, default)
-SymbolicUtils.hasmetadata(c::CompiledPottsSystem, k::DataType) = SymbolicUtils.hasmetadata(inner(c.authored), k)
+SymbolicUtils.getmetadata(c::CompiledPottsSystem, k::DataType, default) = SymbolicUtils.getmetadata(inner(getfield(c, :authored)), k, default)
+SymbolicUtils.hasmetadata(c::CompiledPottsSystem, k::DataType) = SymbolicUtils.hasmetadata(inner(getfield(c, :authored)), k)
 SymbolicUtils.setmetadata(::CompiledPottsSystem, k::DataType, v) = throw(ArgumentError(
     "setmetadata(…, $k, …) on a CompiledPottsSystem: a compiled system is read-only; set metadata before mtkcompile"))

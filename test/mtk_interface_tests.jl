@@ -22,6 +22,20 @@ function clock_system(; name = :clock)
     return System([Potts.D(z) ~ 1.0], Potts.t; name)
 end
 
+"""A model whose quantities are named like the fields a compiled model holds."""
+@potts_model FieldNamedQuantities begin
+    @kinds medium host
+    @parameters begin
+        sys = 2.0
+        footprint = 3.0
+        T = 1.0
+    end
+    @variables drive(cell) = 1.0
+    @lattice Lattice((8, 8); neighborhood = Moore(1))
+    @energy cells(host) => sys * footprint * (volume - drive)^2
+    @sweep Metropolis(; temperature = T)
+end
+
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
@@ -116,4 +130,19 @@ end
     # a field model's parameters are there too
     merks = MerksVasculogenesis(; name = :merks, lattice = (8, 8))
     @test all(p -> haskey(M.initial_conditions(merks), M.unwrap(p)), M.parameters(merks))
+end
+
+@testitem "a compiled model's quantities are found by name, whatever the name" setup = [MTKInterfaceSetup] tags = [:potts, :mtk_interface] begin
+    m = FieldNamedQuantities(; name = :m)
+    c = mtkcompile(m)
+    for n in (:sys, :footprint, :drive)
+        @test isequal(getproperty(c, n), getproperty(m, n))
+        @test M.getname(getproperty(c, n)) === n
+    end
+    # the compiled model still runs
+    σ = zeros(Int32, 8, 8)
+    σ[3:5, 3:5] .= 1
+    prob = PottsProblem(c, [ownership => σ, kind => [:host]], (0, 2))
+    @test prob.ps[c.sys] == 2.0 && prob.ps[c.footprint] == 3.0
+    @test solve(prob, SequentialCPM()).retcode == Potts.SciMLBase.ReturnCode.Success
 end

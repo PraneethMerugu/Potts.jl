@@ -57,7 +57,7 @@ function generated_code(sys; T::Type = Float64, field_solver = nothing, ode_solv
 end
 function _generated_code(c, T, field_solver, ode_solver, solvers)
     spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
-    values = Dict{Any, Any}(_unwrap(x) => info(x).default for x in _p(c.sys, :parameters))
+    values = Dict{Any, Any}(_unwrap(x) => info(x).default for x in _p(getfield(c, :sys), :parameters))
     (phases0, cand), phases = _recording(() -> _phases_parts(c, T, values, spec))
     lc, lex = _recording(() -> _lifecycle(c, T))
     lifecycle = nothing
@@ -150,7 +150,7 @@ function CorePotts.PottsProblem(
         seed = 0, replica = 0, repeat = 0, expression = Val(false), field_solver = nothing,
         ode_solver = ExplicitEuler(), solvers = (), track = ()
     )
-    sys = c.sys
+    sys = getfield(c, :sys)
     spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
     track = _track(track)
     opd = _operating_point(sys, op)
@@ -176,10 +176,10 @@ function CorePotts.PottsProblem(
     )
     st = _track_layout(_ode_layout(_initial_state(c, opd, T, capacity, values), c, spec), c, track)
     lat = core_lattice(_p(sys, :lattice))
-    relations = _with_contact_counts(c, NamedTuple(k => v for (k, v) in _sorted(c.relations)))
+    relations = _with_contact_counts(c, NamedTuple(k => v for (k, v) in _sorted(getfield(c, :relations))))
     spacing = _p(sys, :lattice).spacing === nothing ? nothing : map(T, _p(sys, :lattice).spacing)
     hctx = (;
-        lattice = lat, contact = CorePotts.relation(c.contact_spec, lat),
+        lattice = lat, contact = CorePotts.relation(getfield(c, :contact_spec), lat),
         map(r -> CorePotts.relation(r, lat), relations)...,
         (spacing === nothing ? (;) : (; spacing))...,
     )
@@ -189,7 +189,7 @@ function CorePotts.PottsProblem(
     _host_init!(f, st, p, hctx, seed, replica, repeat)
     tangent = isempty(seeds) && isempty(u0seeds) ? nothing : _tangent(c, T, p, seeds, opd; u0 = u0seeds)
     return CorePotts.PottsProblem(
-        f, st, lat, tspan, p; contact = c.contact_spec, proposal = c.proposal_spec, relations,
+        f, st, lat, tspan, p; contact = getfield(c, :contact_spec), proposal = getfield(c, :proposal_spec), relations,
         spacing, frozen, seed, replica, repeat, tangent
     )
 end
@@ -248,7 +248,7 @@ end
 # and the initial fields' derivative parts: the Dual initial values `u0` given, and the defaults
 # that read a seeded parameter evaluated in Duals (with `opd`, the operating point: a construction)
 function _tangent(c::CompiledPottsSystem, T, p::PottsParameters, seeds, opd = nothing; u0 = Pair{Symbol, Any}[])
-    sys = c.sys
+    sys = getfield(c, :sys)
     ps = _p(sys, :parameters)
     first_seed = isempty(seeds) ? first(u0) : first(seeds)
     _has_fields(c) || throw(
@@ -311,7 +311,7 @@ _dualvals(v) = v isa AbstractArray ? [x for x in v if _is_dual(x)] : [v]
 # derived again in Duals (the others keep `p`'s values)
 function _dual_object(c::CompiledPottsSystem, T, p::PottsParameters, vals::Dict{Symbol, Any})
     if !isempty(_computed(p))
-        d = _derivation(_p(c.sys, :parameters))
+        d = _derivation(_p(getfield(c, :sys), :parameters))
         for (n, v) in zip(d.computed, d(Tuple(vals[b] for b in d.base)))
             vals[n] = _is_dual(v) ? LatticeFields.Compile.lanecast(T, v) : getproperty(p, n)
         end
@@ -322,7 +322,7 @@ end
 # a write on a run with derivative parts (F3-21b r1 S1): the base entries the write left unchanged
 # keep their derivative parts, the written ones are plain, the computed ones are derived again
 function CorePotts.tangent_parameters(info::PottsModelInfo, dp::PottsParameters, p::PottsParameters)
-    ps = _p(info.csys.sys, :parameters)
+    ps = _p(getfield(info.csys, :sys), :parameters)
     nt = NamedTuple(p)
     vals = Dict{Symbol, Any}(pairs(nt))
     for (k, v) in pairs(NamedTuple(dp))
@@ -375,7 +375,7 @@ Base.@nospecializeinfer function _given_names(@nospecialize(info::PottsModelInfo
     p isa NamedTuple && return Dict{Symbol, Any}(pairs(p))
     _is_pairs(p) && (p = Pair[x for x in p])
     p isa _SymbolicMap || return Dict{Symbol, Any}()
-    sys = info.csys.sys
+    sys = getfield(info.csys, :sys)
     out = Dict{Symbol, Any}()
     for (k, v) in _expand_vectors(sys, Pair{Any, Any}[_localize(sys, k; strict = true) => v for (k, v) in p])
         key = k isa Symbol ? k : _unwrap(k)
@@ -395,7 +395,7 @@ _cadences!(acc, v::Union{Tuple, AbstractVector}) = (foreach(y -> _cadences!(acc,
 # The one codegen point: every generated function of a problem for compiled model `c`, scalar
 # type `T` and solvers `spec`, as a `CPMFunction` (construction, and `remake` with solvers).
 function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, hctx, cache; track::Tuple = ())
-    sys = c.sys
+    sys = getfield(c, :sys)
     # `track = (:references,)` (E4/E5): the dereference counters are compiled in; else nothing is
     slots = :references in track ? _ref_count_slots(c) : nothing
     fns, generated = Base.ScopedValues.with(_REF_SLOTS => slots) do
@@ -463,8 +463,8 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
     # is resolved leniently and any resolvable relation differs from it.
     lat = hctx.lattice
     for (role, nb, default) in (
-            ("proposal", c.proposal_spec, CorePotts.VonNeumann(1)),
-            ("contact", c.contact_spec, _p(sys, :lattice).neighborhood),
+            ("proposal", getfield(c, :proposal_spec), CorePotts.VonNeumann(1)),
+            ("contact", getfield(c, :contact_spec), _p(sys, :lattice).neighborhood),
         )
         r = CorePotts.relation(nb, lat)
         d = try
@@ -482,7 +482,7 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
     # order. No default is skipped. `surface` is always the lattice neighbourhood; a relation
     # read only by observed quantities (built at query time) is not here.
     used = Set{Symbol}()
-    names = keys(c.relations)
+    names = keys(getfield(c, :relations))
     foreach(ex -> _ctx_reads!(used, ex, names), generated)
     delete!(used, :surface)
     for k in sort!(collect(used))
@@ -505,13 +505,13 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
     foreach(ex -> _ctx_reads!(copy_used, ex, keys(hctx)), fns.copy_step)
     copy_relations = Symbol[
         k for k in keys(hctx)
-            if k ∉ (:lattice, :spacing) && (k in copy_used || k === :surface || !haskey(c.relations, k))
+            if k ∉ (:lattice, :spacing) && (k in copy_used || k === :surface || !haskey(getfield(c, :relations), k))
     ]
     copy_fns = (; fns.delta_H, fns.commit!, fns.constraint, fns.temperature, fns.connectivity)
     return CorePotts.CPMFunction(
         fns.delta_H; fns.commit!, fns.constraint, fns.temperature,
         phases, lifecycle, acceptance = _acceptance(_p(sys, :sweep), T),
-        footprint = c.footprint, fingerprint = _code_hash(generated, h),
+        footprint = getfield(c, :footprint), fingerprint = _code_hash(generated, h),
         sys = PottsModelInfo(c, T, fns.total, fns.delta_E, hctx, cache, spec, copy_relations, copy_fns),
         track = :ΔH in track ? CorePotts.TrackDeltaH{T}() : nothing, fns.connectivity
     )
@@ -629,14 +629,14 @@ end
 # scope, or cell ODEs reading other cells' unknowns: `_ode_scratch`), each starting as a
 # copy of its variable; any others removed. The same state if its layout already fits.
 function _ode_layout(@nospecialize(st), c::CompiledPottsSystem, spec::SolverSpec)
-    slots = Set(_ode_scratch_name(info(x).name) for (x, _) in Iterators.flatten((c.cell_odes, c.model_odes)))
+    slots = Set(_ode_scratch_name(info(x).name) for (x, _) in Iterators.flatten((getfield(c, :cell_odes), getfield(c, :model_odes))))
     scratchless(nt) = NamedTuple(k => v for (k, v) in pairs(nt) if !(k in slots))
     function add(nt, scope, odes)
         _ode_scratch(c, spec, scope) || return nt
         return merge(nt, NamedTuple(_ode_scratch_name(info(x).name) => copy(getproperty(nt, info(x).name)) for (x, _) in odes))
     end
-    cell = add(scratchless(st.cell), :cell, c.cell_odes)
-    model = add(scratchless(st.model), :model, c.model_odes)
+    cell = add(scratchless(st.cell), :cell, getfield(c, :cell_odes))
+    model = add(scratchless(st.model), :model, getfield(c, :model_odes))
     keys(cell) == keys(st.cell) && keys(model) == keys(st.model) && return st
     return CorePotts.CPMState(st.σ, cell, st.site, model, st.history)
 end
@@ -760,7 +760,7 @@ _opkey(k) = (u = _unwrap(k); u)
 # refused naming its inputs; an operating-point value written as an expression of parameters is
 # evaluated once (D-117).
 function _parameter_values(c::CompiledPottsSystem, opd)
-    ps = _p(c.sys, :parameters)
+    ps = _p(getfield(c, :sys), :parameters)
     values = Dict{Any, Any}()
     for x in ps
         u, i = _unwrap(x), info(x)
@@ -805,7 +805,7 @@ function _evaluate(v, values, who = "`$v`")
 end
 
 # the parameters of `p` as a `Dict` (variable → value), for evaluating defaults of state
-_parameter_dict(c::CompiledPottsSystem, p) = Dict{Any, Any}(_unwrap(x) => getproperty(p, info(x).name) for x in _p(c.sys, :parameters))
+_parameter_dict(c::CompiledPottsSystem, p) = Dict{Any, Any}(_unwrap(x) => getproperty(p, info(x).name) for x in _p(getfield(c, :sys), :parameters))
 
 # The computed parameters (D-F2-1, F2 design §2.7): read-only and derived from the base
 # parameters through one compiled derivation (`LatticePDE.derivation`, D-117's rules), built
@@ -1116,7 +1116,7 @@ function _valtext(v)
 end
 
 function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{Any, Any}())
-    sys = c.sys
+    sys = getfield(c, :sys)
     haskey(opd, ownership) || throw(ArgumentError("the operating point needs `ownership => labels`"))
     σ = Int32.(opd[ownership])
     size(σ) == _p(sys, :lattice).dims || throw(ArgumentError("labels have size $(size(σ)); the lattice is $(_p(sys, :lattice).dims)"))
@@ -1162,7 +1162,7 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
             )
             a = v isa AbstractArray ? S.(v) : fill(S(v), sd)
             push!(site, i.name => a)
-            i.name in c.scratch && push!(site, Symbol(i.name, :__next) => copy(a))
+            i.name in getfield(c, :scratch) && push!(site, Symbol(i.name, :__next) => copy(a))
             sd == _p(sys, :lattice).dims || append!(shapes, [i.name => sd, Symbol(i.name, :__next) => sd, Symbol(i.name, :__mask) => sd])
         elseif i.role === :cell
             v === nothing && throw(ArgumentError("cell variable `$(i.name)` has no initial value; give it in the operating point"))
@@ -1191,26 +1191,26 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     for x in _integrals(sys)
         push!(cell, _integral_name(x) => zeros(T, ncell))
     end
-    if c.uses_surface
-        push!(cell, :surface => CorePotts.recompute_surface(σ, lat, CorePotts.relation(c.relations[:surface], lat), ncell; T))
+    if getfield(c, :uses_surface)
+        push!(cell, :surface => CorePotts.recompute_surface(σ, lat, CorePotts.relation(getfield(c, :relations)[:surface], lat), ncell; T))
     end
     # Euler characteristics (P6.3j, D-192): Int32 columns, one per adjacency the model reads
-    c.uses_euler && push!(cell, :euler => CorePotts.recompute_euler(σ, lat, Val(:face), ncell))
-    c.uses_euler_full && push!(cell, :euler_full => CorePotts.recompute_euler(σ, lat, Val(:full), ncell))
+    getfield(c, :uses_euler) && push!(cell, :euler => CorePotts.recompute_euler(σ, lat, Val(:face), ncell))
+    getfield(c, :uses_euler_full) && push!(cell, :euler_full => CorePotts.recompute_euler(σ, lat, Val(:full), ncell))
     # cell-scope pieces (P6.9a): Int32 columns, a (pieces, largest piece) pair per adjacency read
     for (full, P, L) in ((false, :pieces, :largest_piece), (true, :pieces_full, :largest_piece_full))
-        (full ? c.uses_pieces_full : c.uses_pieces) || continue
+        (full ? getfield(c, :uses_pieces_full) : getfield(c, :uses_pieces)) || continue
         pc, lc = CorePotts.recompute_pieces(σ, lat, Val(full), ncell)
         push!(cell, P => pc, L => lc)
     end
     append!(cell, _contact_count_columns(c, σ, kinds, lat, ncell))          # contact folds (D-150)
     _has_bounded_draw(sys) && push!(model, CorePotts.MODEL_STATUS => zeros(UInt32, 1))
-    c.needs_moments && append!(cell, pairs(CorePotts.init_moments(σ, lat, ncell)))
+    getfield(c, :needs_moments) && append!(cell, pairs(CorePotts.init_moments(σ, lat, ncell)))
     ckey = _unwrap(B.cluster)
-    if c.uses_clusters
+    if getfield(c, :uses_clusters)
         ids = haskey(opd, ckey) ? opd[ckey] : 1:ncell
         length(ids) == ncell || throw(ArgumentError("$(length(ids)) cluster ids for $ncell labeled cells"))
-        rel = c.uses_cluster_surface ? c.relations[:surface] : nothing
+        rel = getfield(c, :uses_cluster_surface) ? getfield(c, :relations)[:surface] : nothing
         append!(
             cell, pairs(
                 CorePotts.init_clusters(
@@ -1222,8 +1222,8 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     elseif haskey(opd, ckey)
         throw(ArgumentError("`cluster` in the operating point, but the model uses no compartments"))
     end
-    for r in c.relationships                       # one link store per relationship (P6.0b)
-        vars = c.edge_vars[r.name]
+    for r in getfield(c, :relationships)                       # one link store per relationship (P6.0b)
+        vars = getfield(c, :edge_vars)[r.name]
         links = CorePotts.empty_links(r.capacity, ncell, r.name; (info(x).name => T for x in vars)...)
         store = (; links = links[CorePotts.adjacency_name(r.name)], Base.tail(links)...)
         defaults = (; (info(x).name => T(_edge_initial(x, opd, pvals, r.name)) for x in vars)...)
@@ -1240,19 +1240,19 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
         append!(cell, pairs(links))
     end
     # previous-value snapshots and population slots (D-041, D-042)
-    for (scope, n) in unique(Iterators.flatten(values(c.pre_snapshots)))
+    for (scope, n) in unique(Iterators.flatten(values(getfield(c, :pre_snapshots))))
         dst = scope === :site ? site : scope === :cell ? cell : model
         push!(dst, Symbol(n, :__pre) => copy(last(dst[findfirst(q -> q.first === n, dst)])))
     end
     # scratch slots of discrete components ticking in several phases (P6.0k)
     if _tick_scratch(c)
-        for b in c.discrete, x in b.slots
+        for b in getfield(c, :discrete), x in b.slots
             dst = b.scope === :cell ? cell : model
             n = info(x).name
             push!(dst, _tick_scratch_name(n) => copy(last(dst[findfirst(q -> q.first === n, dst)])))
         end
     end
-    for (n, _) in Iterators.flatten((c.update_pops, c.energy_snapshots, c.cell_ode_pops, c.discrete_pops))
+    for (n, _) in Iterators.flatten((getfield(c, :update_pops), getfield(c, :energy_snapshots), getfield(c, :cell_ode_pops), getfield(c, :discrete_pops)))
         push!(model, n => zeros(T, 1))
     end
     # cell serials (R6, D-066 item 3): a model that divides numbers its cells 1, 2, … and
@@ -1279,12 +1279,12 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
 end
 
 # Cell serials and spare slots: a model that divides or allocates by `@convert`
-_numbers_cells(c::CompiledPottsSystem) = !isempty(c.divisions) || !isempty(_p(c.sys, :converts))
+_numbers_cells(c::CompiledPottsSystem) = !isempty(getfield(c, :divisions)) || !isempty(_p(getfield(c, :sys), :converts))
 # Cell serials kept (P6.5a3): a model that allocates cells and reads `birth` (`uses_birth`:
 # `birth`, `sibling`, `@convert`). Decided when the model is compiled; the state's `birth`
 # column and `NEXT_BIRTH` counter carry it to both lifecycle planners (`births = nothing`
 # without them, the serial pass skipped).
-_tracks_births(c::CompiledPottsSystem) = _numbers_cells(c) && c.uses_birth
+_tracks_births(c::CompiledPottsSystem) = _numbers_cells(c) && getfield(c, :uses_birth)
 
 # a cell-variable default that reads the built-in `kind` (E1)
 function _kind_default(v)
@@ -1300,8 +1300,8 @@ _substitute_kind(v, k) = Symbolics.substitute(v, Dict(_unwrap(B.kind) => k))
 # with fewer rows than the model's writes) gets the missing cell columns (F3-23 r2): they are
 # scratch, zero between passes, so nothing of the run is lost; the flags' counts are kept.
 function _convert_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
-    isempty(_p(c.sys, :converts)) && return st
-    J = maximum(v -> length(v.writes), _p(c.sys, :converts))
+    isempty(_p(getfield(c, :sys), :converts)) && return st
+    J = maximum(v -> length(v.writes), _p(getfield(c, :sys), :converts))
     sc = CorePotts.convert_scratch(size(st.σ), length(st.cell.kind), ndims(st.σ); writes = J)
     # every scratch array is constant (zeros, or `typemax` for the minima): filled where the
     # state lives, so a device state gets device scratch with no host transfer
@@ -1326,7 +1326,7 @@ end
 # Int64 fixed-point sums), made where the state lives; a state that has it, or a model without
 # a stored integral, is returned as is
 function _reduce_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
-    (isempty(_integrals(c.sys)) || haskey(st.model, CorePotts.REDUCE_STATUS)) && return st
+    (isempty(_integrals(getfield(c, :sys))) || haskey(st.model, CorePotts.REDUCE_STATUS)) && return st
     sc = CorePotts.reduce_scratch(length(st.cell.kind))
     dev(a) = fill!(similar(st.σ, eltype(a), size(a)), zero(eltype(a)))     # zeros, where the state lives
     return CorePotts.CPMState(
@@ -1397,8 +1397,8 @@ _cluster_kinds(c::CompiledPottsSystem) = Tuple(
     unique(
         Iterators.flatten(
             (
-                first.(c.cluster_terms)...,
-                (d.domain.kinds for d in c.divisions if d.domain isa ClusterDomain)...,
+                first.(getfield(c, :cluster_terms))...,
+                (d.domain.kinds for d in getfield(c, :divisions) if d.domain isa ClusterDomain)...,
             )
         )
     )
@@ -1481,9 +1481,9 @@ CorePotts.remake_parameters(@nospecialize(info::PottsModelInfo), @nospecialize(p
 # parameter object `old` with the parameter map `p` applied as one change, then every computed
 # parameter derived again (D-F2-1)
 Base.@nospecializeinfer function _set_parameter_map(@nospecialize(info::PottsModelInfo), @nospecialize(old::PottsParameters), p)
-    p = _expand_vectors(info.csys.sys, Pair{Any, Any}[_localize(info.csys.sys, k; strict = true) => v for (k, v) in p])
+    p = _expand_vectors(getfield(info.csys, :sys), Pair{Any, Any}[_localize(getfield(info.csys, :sys), k; strict = true) => v for (k, v) in p])
     names = Dict{Any, Entity}()
-    for x in _p(info.csys.sys, :parameters)
+    for x in _p(getfield(info.csys, :sys), :parameters)
         i = Potts.info(x)
         names[_unwrap(x)] = i
         names[i.name] = i
@@ -1494,7 +1494,7 @@ Base.@nospecializeinfer function _set_parameter_map(@nospecialize(info::PottsMod
         haskey(names, key) || throw(ArgumentError("`$k` is not a parameter of $(nameof(info.csys))"))
         i = names[key]
         # a computed parameter is read-only (D-F2-1): the whole change is refused, nothing is set
-        _is_symbolic(i.default) && throw(ArgumentError(_computed_message(_p(info.csys.sys, :parameters), i)))
+        _is_symbolic(i.default) && throw(ArgumentError(_computed_message(_p(getfield(info.csys, :sys), :parameters), i)))
         new[i.name] = _param_value(info.T, v, i)
     end
     out = _with_values(old, NamedTuple(k => get(new, k, v) for (k, v) in pairs(NamedTuple(old))))
@@ -1540,7 +1540,7 @@ Base.@nospecializeinfer function CorePotts.remake_parameters(
             )
         )
     end
-    ps = _p(info.csys.sys, :parameters)
+    ps = _p(getfield(info.csys, :sys), :parameters)
     base = Pair{Symbol, Any}[k => v for (k, v) in pairs(NamedTuple(p)) if _computed_entity(ps, k) === nothing]
     return CorePotts.remake_parameters(info, prob, base)
 end
@@ -1566,7 +1566,7 @@ _is_pairs(p) = (p isa AbstractVector || p isa Tuple) && all(x -> x isa Pair, p)
 # Derive every computed parameter again from the base values (D-F2-1), and check the tables.
 Base.@nospecializeinfer function _finish_parameters(@nospecialize(mi::PottsModelInfo), @nospecialize(old), @nospecialize(out), _)
     c = mi.csys
-    out = _derive(_p(c.sys, :parameters), mi.T, out)
+    out = _derive(_p(getfield(c, :sys), :parameters), mi.T, out)
     typeof(out) === typeof(old) || throw(
         ArgumentError(
             "parameter types changed (kind tables keep their size and scalars keep type $(mi.T)); pass values compatible with $(nameof(typeof(old)))"
@@ -1577,7 +1577,7 @@ end
 
 # the kind tables of a parameter object: their checks, and contact tables symmetric
 function _check_parameter_tables(c::CompiledPottsSystem, @nospecialize(out))
-    _check_kind_tables(c.sys, out)
+    _check_kind_tables(getfield(c, :sys), out)
     for name in _contact_tables(c)
         J = getproperty(out, name)
         J == transpose(J) || throw(ArgumentError("kind table `$name` is used in a contact energy and must be symmetric"))
@@ -1587,11 +1587,11 @@ end
 
 # `setp`/`integ.ps[x] = v` on an integrator: the same conversion, derivation and checks (A-53)
 function CorePotts.set_parameter(info::PottsModelInfo, p::PottsParameters, v, i::Symbol)
-    x = findfirst(x -> Potts.info(x).name === i, _p(info.csys.sys, :parameters))
+    x = findfirst(x -> Potts.info(x).name === i, _p(getfield(info.csys, :sys), :parameters))
     x === nothing && throw(ArgumentError("`$i` is not a parameter of $(nameof(info.csys))"))
-    e = Potts.info(_p(info.csys.sys, :parameters)[x])
-    _is_symbolic(e.default) && throw(ArgumentError(_computed_message(_p(info.csys.sys, :parameters), e)))
-    q = _with_values(p, merge(NamedTuple(p), NamedTuple{(i,)}((_param_value(info.T, v, Potts.info(_p(info.csys.sys, :parameters)[x])),))))
+    e = Potts.info(_p(getfield(info.csys, :sys), :parameters)[x])
+    _is_symbolic(e.default) && throw(ArgumentError(_computed_message(_p(getfield(info.csys, :sys), :parameters), e)))
+    q = _with_values(p, merge(NamedTuple(p), NamedTuple{(i,)}((_param_value(info.T, v, Potts.info(_p(getfield(info.csys, :sys), :parameters)[x])),))))
     return _finish_parameters(info, p, q, Set([i]))
 end
 
@@ -1603,7 +1603,7 @@ SymbolicIndexingInterface.setsym(sys::PottsModelInfo, syms::Union{Tuple, Abstrac
 
 # `setp(integ, [x, y])`: every value set first, then one derivation for the whole change
 function CorePotts.set_parameters(info::PottsModelInfo, p::PottsParameters, vals, names)
-    params = _p(info.csys.sys, :parameters)
+    params = _p(getfield(info.csys, :sys), :parameters)
     new = Dict{Symbol, Any}()
     for (v, i) in zip(vals, names)
         x = findfirst(x -> Potts.info(x).name === i, params)
@@ -1619,7 +1619,7 @@ end
 # `[frozen]` kinds: the mask follows the kinds, by CorePotts' standard rule (built on the
 # device after lifecycle events, D-081; `frozen_varies` follows from it)
 CorePotts.frozen_kinds(info::PottsModelInfo) =
-    isempty(_p(info.csys.sys, :frozen_kinds)) ? nothing : Tuple(Int32.(_p(info.csys.sys, :frozen_kinds)))
+    isempty(_p(getfield(info.csys, :sys), :frozen_kinds)) ? nothing : Tuple(Int32.(_p(getfield(info.csys, :sys), :frozen_kinds)))
 
 # a state given as such (`remake(prob; u0 = st)`, `reinit!(integ, st)`, a saved state of another
 # problem of the model): its values, laid out for this problem's ODE scratch
@@ -1690,7 +1690,7 @@ function CorePotts.remake_state(info::PottsModelInfo, prob, u0::_SymbolicMap)
                 "values with derivative parts to the problem (`PottsProblem(sys, op, tspan)`, F3-21b)"
         )
     )
-    opd = _operating_point(info.csys.sys, u0)
+    opd = _operating_point(getfield(info.csys, :sys), u0)
     # keep the old capacity and the old number of free slots (room for divisions)
     old = length(prob.u0.cell.kind)
     free = count(iszero, prob.u0.cell.volume)

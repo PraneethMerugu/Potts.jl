@@ -600,7 +600,7 @@ _field_inputs(sys::PottsSystem, T::Type = Float64) =
     _canonical_filled(_field_system(sys; T, known = Tuple{Symbol, Any, Type}[])[2].filled)
 # those of compiled model `c`, made once per state type (cached on `c`)
 _field_inputs(c::CompiledPottsSystem, T::Type = Float64) =
-    _field_cached(() -> _field_inputs(c.sys, T), c, (:inputs, T))
+    _field_cached(() -> _field_inputs(getfield(c, :sys), T), c, (:inputs, T))
 
 """The masked fields of `sys` (each has a mask site array `name__mask`): the masked conditions
 (`c ~ masked(pred, v)`)."""
@@ -673,13 +673,13 @@ _least(s) = s isa _MapSteps ? 1 : s isa _AuxSteps ? 0 : something(_given_count(s
 _given_count(a) = hasproperty(a, :substeps) ? a.substeps : nothing
 _bounded(s) = s isa Union{_MapSteps, _AuxSteps} || (isempty(s.spec.stability.unbounded) && isempty(s.spec.stability.expanded))
 # whether compiled model `c` has fields: stepped ones, or aux fields only (one group with no state)
-_has_fields(c::CompiledPottsSystem) = !isempty(c.fields) || !isempty(_field_aux(c.sys))
+_has_fields(c::CompiledPottsSystem) = !isempty(getfield(c, :fields)) || !isempty(_field_aux(getfield(c, :sys)))
 
 # The cache of the lowered field groups of a compiled model (`CompiledPottsSystem.field_specs`):
 # `mtkcompile` lowers the group of all fields once, in Float64, and a `PottsProblem` whose
 # partition and state type match reuses it (F2 design §2.5)
 const _FIELD_SPEC_LOCK = ReentrantLock()
-_field_cached(f, c::CompiledPottsSystem, key) = lock(() -> get!(f, c.field_specs, key), _FIELD_SPEC_LOCK)
+_field_cached(f, c::CompiledPottsSystem, key) = lock(() -> get!(f, getfield(c, :field_specs), key), _FIELD_SPEC_LOCK)
 
 # the number of `lower_group` calls of this session (a test counts them)
 const _LOWER_GROUP_CALLS = Threads.Atomic{Int}(0)
@@ -721,9 +721,9 @@ end
 # stability bound deferred (`LatticePDE.resolve_bound`), built here once, at the first problem
 function _field_group_spec(c::CompiledPottsSystem, names::Vector{Symbol}, T::Type)
     return lock(_FIELD_SPEC_LOCK) do
-        g = get!(() -> _lower_field_group(c.sys, names, T; known = _field_inputs(c, T)), c.field_specs, (names, T))
+        g = get!(() -> _lower_field_group(getfield(c, :sys), names, T; known = _field_inputs(c, T)), getfield(c, :field_specs), (names, T))
         g.spec.stability isa LatticePDE.DeferredBound || return g
-        c.field_specs[(names, T)] = (; g..., spec = LatticePDE.resolve_bound(g.spec))
+        getfield(c, :field_specs)[(names, T)] = (; g..., spec = LatticePDE.resolve_bound(g.spec))
     end
 end
 
@@ -928,9 +928,9 @@ is lowered once by `LatticePDE.lower_group` (cached on `c`: the group of all fie
 `mtkcompile`), and its algorithm's update is fused by the IR pass (`fuse_update`).
 """
 function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
-    sys = c.sys
+    sys = getfield(c, :sys)
     order = Tuple{String, Any, Vector{Symbol}}[]
-    for (x, _) in c.fields
+    for (x, _) in getfield(c, :fields)
         n = info(x).name
         s = spec.resolved[n]
         k = _canonical(s)
@@ -1021,7 +1021,7 @@ end
 # the fields of `names` whose declared `bounds` are not finite (batch 5 review N1)
 function _infinite_bounds(c::CompiledPottsSystem, names)
     out = Symbol[]
-    for x in _p(c.sys, :variables)
+    for x in _p(getfield(c, :sys), :variables)
         i = info(x)
         (i === nothing || i.role !== :field || !(i.name in names)) && continue
         b = get(i.options, :bounds, nothing)
@@ -1083,7 +1083,7 @@ end
 function _field_fill_phase(c::CompiledPottsSystem, T)
     filled = _field_inputs(c, T)
     isempty(filled) && return nothing
-    env = _site_env(T, :i, c.gather_names; mcs = :mcs, key = :key)
+    env = _site_env(T, :i, getfield(c, :gather_names); mcs = :mcs, key = :key)
     body = map(filled) do (name, ex, E)
         v = _fill_value(ex, env)
         E === Bool ? :(@inbounds st.site.$name[i] = UInt8($v)) : :(@inbounds st.site.$name[i] = $E($v))
@@ -1098,7 +1098,7 @@ end
 function _field_phases(c::CompiledPottsSystem, T, spec::SolverSpec)
     _has_fields(c) || return Any[], Any[]
     groups = _field_groups(c, T, spec)
-    dt = _field_dt(c.sys)
+    dt = _field_dt(getfield(c, :sys))
     steps, clamps = Any[], Any[]
     fill = _field_fill_phase(c, T)
     fill === nothing || push!(steps, fill)
@@ -1109,7 +1109,8 @@ function _field_phases(c::CompiledPottsSystem, T, spec::SolverSpec)
         log === nothing || push!(log, Expr(:field_program, g.fingerprint, string(g.arrays), string(g.params),
             string(g.tables), _canonical_value(_least(g.substeps)), string(_bounded(g.substeps))))
         ph = CorePotts.FieldPhase{Symbol(:__fields, j)}(g.group, g.alg, g.arrays; g.tables, g.params,
-            substeps = g.substeps, dt, period = Float64(_p(c.sys, :sweep).mcs_duration), g.options, T, g.rule_tables)
+            substeps = g.substeps, dt, period = Float64(_p(getfield(c, :sys), :sweep).mcs_duration), g.options, T, g.rule_tables
+        )
         push!(steps, ph)
         # the at-init phase: the masked-condition clamp (one substep of length zero; it also
         # evaluates the group's aux fields). For a group with aux fields (`K ~ rhs`) and no
@@ -1117,7 +1118,7 @@ function _field_phases(c::CompiledPottsSystem, T, spec::SolverSpec)
         # value (§3.12, F3 review S1): a group with no state takes its own step (0 substeps); a
         # rate group with state its `aux:` kernels alone, which never write the state (review r2
         # N1: no update rule, no `lower` clip); a map group none (it would apply the map)
-        mcs = Float64(_p(c.sys, :sweep).mcs_duration)
+        mcs = Float64(_p(getfield(c, :sys), :sweep).mcs_duration)
         start = LatticeFields.Problems.starts_steady(g.alg)
         if !isempty(g.masks.launches) || g.substeps isa _AuxSteps
             push!(clamps, CorePotts.field_clamp(ph))

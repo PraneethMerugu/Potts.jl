@@ -123,7 +123,7 @@
         mvf = sum(Vf[Vf .> 0]) / count(>(0), Vf)
         # the observed-only integral has no column (D-120): computed from the saved state, its
         # hoisted fold included
-        xo = last(Potts._integrals(mtkcompile(P60aiRefresh(; name = :x)).sys; observed = true))
+        xo = last(Potts._integrals(getfield(mtkcompile(P60aiRefresh(; name = :x)), :sys); observed = true))
         @test !hasproperty(uf.cell, Potts._integral_name(xo))
         @test Array(solf[:o][end]) ≈ perf(i -> wf[i] * mvf)                               # at the MCS boundary
         # model-scope ODEs and a model component (single-item kernel)

@@ -418,8 +418,8 @@ end
         integ = init(prob, SequentialCPM(; proposal = Moore(1)); save_start = false)
         step!(integ)
         c = mtkcompile(sys)
-        for b in c.discrete
-            ex = Potts._tick_expr([b], T, c.gather_names, b.scope; scratch = Potts._tick_scratch(c))
+        for b in getfield(c, :discrete)
+            ex = Potts._tick_expr([b], T, getfield(c, :gather_names), b.scope; scratch = Potts._tick_scratch(c))
             @test _qa_closure_heads(ex) == 0
             fn = Core.eval(_QA_MOD, ex)
             args = b.scope === :cell ? (integ.state, integ.p, integ.ctx, integ.key, 1, Int32(1)) :

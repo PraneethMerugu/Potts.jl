@@ -147,7 +147,7 @@ end
             field_solver = ExplicitEuler(substeps = 2, lower = 0.0)),
     )
     for p in probs
-        @test !has_leak(string(p.f.sys.csys.sys))
+            @test !has_leak(string(getfield(p.f.sys.csys, :sys)))
         @test !has_leak(p.f.sys.solvers.canonical)
     end
 

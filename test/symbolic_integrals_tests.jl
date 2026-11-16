@@ -90,7 +90,7 @@ end
         p = PottsProblem(Fresh(; name = :f), [ownership => σ, kind => [1]], (0, 4); capacity = 8)
         sol = solve(p, SequentialCPM(); saveat = 0:4)
         brute(u, x) = [sum(x[u.σ .== c]; init = 0.0) for c in eachindex(u.cell.volume)]
-        names = [Potts._integral_name(x) for x in Potts._integrals(p.f.sys.csys.sys)]
+        names = [Potts._integral_name(x) for x in Potts._integrals(getfield(p.f.sys.csys, :sys))]
         for (t, u) in zip(sol.t, sol.u)
             @test sol[:cmass][t + 1] ≈ brute(u, u.site.w)                 # observed: the saved state itself
             @test sol[:occ][t + 1] == u.cell.volume                        # after division too
@@ -154,7 +154,7 @@ end
         # u once before `sa` (which also serves the ODE); 2u gated with its reader; w once before `sb`
         c = mtkcompile(FreshIntegrals(; name = :f))
         ph = Potts._phases(
-            c, Float64, Dict{Any, Any}(Potts._unwrap(x) => Potts.info(x).default for x in Potts.parameters(c.sys)),
+            c, Float64, Dict{Any, Any}(Potts._unwrap(x) => Potts.info(x).default for x in Potts.parameters(getfield(c, :sys))),
             Potts._resolve_solvers(c)
         )
         reduces(t) = count(x -> x isa CorePotts.CellReduce || (x isa Potts._Gated && x.phase isa CorePotts.CellReduce), t)
@@ -194,11 +194,11 @@ end
 
         σ = zeros(Int32, 12, 12); σ[4:7, 4:7] .= 1
         c = mtkcompile(IntegralPre(; name = :ip))
-        @test (:site, :w) in c.pre_snapshots[:after_mcs]                    # from `v`, not from `s`
-        @test !any(t -> last(t) === :v, c.pre_snapshots[:after_mcs])       # `v` read only in an integral
-        @test isempty(c.pre_snapshots[:before_mcs])
+        @test (:site, :w) in getfield(c, :pre_snapshots)[:after_mcs]                    # from `v`, not from `s`
+        @test !any(t -> last(t) === :v, getfield(c, :pre_snapshots)[:after_mcs])       # `v` read only in an integral
+        @test isempty(getfield(c, :pre_snapshots)[:before_mcs])
         # a snapshotted `Pre(w)` both outside and inside an integral: only the outside one is rewritten
-        w = only(filter(x -> Potts.info(x).name === :w, Potts.variables(c.sys)))
+        w = only(filter(x -> Potts.info(x).name === :w, Potts.variables(getfield(c, :sys))))
         snap = Dict{Symbol, Any}(:w => Potts._standin(:site, :w__pre))
         iw = Potts._unwrap(Potts._integral(Potts.Pre(w)))
         @test isequal(Potts._to_snapshots(Potts._unwrap(Potts.Pre(w) + iw), snap, _ -> false), Potts._unwrap(snap[:w] + iw))
@@ -329,7 +329,7 @@ end
         end
         # the two integrals are distinct trackers (each fold, hoisted to its own slot, keeps its
         # bound variable's name in the key): integral(c · Σ volume) = (Σ_cell volume)², w = 2y
-        xs = Potts._integrals(Potts.ModelingToolkitBase.mtkcompile(P60ahTieIntegral(; name = :x)).sys)
+        xs = Potts._integrals(getfield(Potts.ModelingToolkitBase.mtkcompile(P60ahTieIntegral(; name = :x)), :sys))
         @test length(xs) == 2 && Potts._integral_name(xs[1]) != Potts._integral_name(xs[2])
         s = zeros(Int32, 12, 8)
         s[3:6, 3:6] .= 1
@@ -382,11 +382,11 @@ end
         (geom, dims) in ((:square, (16, 16)), (:hex, (16, 16)), (:cube, (8, 8, 8))),
             alg in (SequentialCPM(), CheckerboardCPM())
         c = mtkcompile(P60ai(; name = :x, geom))
-        xs = Potts._integrals(c.sys; observed = true)
+        xs = Potts._integrals(getfield(c, :sys); observed = true)
         hoisted = [!Potts._has_op(x, Potts.population) for x in xs]
         @test count(hoisted) == 4                    # s, bo, q and the observed o; not n, r
         @test count(!, hoisted) == 2
-        @test length(Potts._integrals(c.sys)) == 5    # o is read only by `@observed`: not stored (D-120)
+        @test length(Potts._integrals(getfield(c, :sys))) == 5    # o is read only by `@observed`: not stored (D-120)
         σ0, w0 = p60ai_init(dims)
         prob = PottsProblem(P60ai(; name = :x, geom), [ownership => σ0, kind => [:A, :A], :w => w0], (0, 4); capacity = 8, seed = 3)
         @test count(n -> startswith(String(n), "__ifold_"), propertynames(prob.u0.model)) == 4
@@ -396,7 +396,7 @@ end
         obs(u) = (V = Array(u.cell.volume); L = live(u); mv = sum(V[L]) / length(L); per(u, i -> w0[i] * mv))
         @test prob[:o] ≈ obs(prob.u0)                                         # at init
         sol = solve(prob, alg; saveat = 0:4)
-        names = [Potts._integral_name(x) for x in Potts._integrals(c.sys)]
+        names = [Potts._integral_name(x) for x in Potts._integrals(getfield(c, :sys))]
         divided = false
         for t in 1:4
             u, prev = sol.u[t + 1], sol.u[t]
@@ -435,7 +435,7 @@ end
         per(u, f) = [sum((f(i) for i in findall(==(k), Array(u.σ))); init = 0.0) for k in eachindex(u.cell.volume)]
         vsum(u) = sum(Array(u.cell.v)[Array(u.cell.volume) .> 0])
         # at init: the stored tracker of the before-MCS operand, and its reader in MCS 1
-        names = [Potts._integral_name(x) for x in Potts._integrals(mtkcompile(P60aiRefresh(; name = :x)).sys)]
+        names = [Potts._integral_name(x) for x in Potts._integrals(getfield(mtkcompile(P60aiRefresh(; name = :x)), :sys))]
         sb0 = per(prob.u0, i -> w0[i] * 32)
         @test count(n -> getfield(prob.u0.cell, n) ≈ sb0, names) == 1      # the tracker, in u0
         sol = solve(prob, alg; saveat = 0:4)
@@ -545,7 +545,7 @@ end
         end
 
         c = mtkcompile(P60tOrder(; name = :x))
-        @test [Potts.info(x).name for x in Potts._integrals(c.sys)] == [:pa, :pb]
-        @test isequal(Potts._integrals(c.sys; observed = true), Potts._integrals(c.sys))
+        @test [Potts.info(x).name for x in Potts._integrals(getfield(c, :sys))] == [:pa, :pb]
+        @test isequal(Potts._integrals(getfield(c, :sys); observed = true), Potts._integrals(getfield(c, :sys)))
     end
 end

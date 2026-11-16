@@ -65,15 +65,15 @@ end
     @testset "D-016: the structural seed is a canonical string" begin
         gg = graner_state()
         sys = mtkcompile(GranerGlazier(; name = :gg))
-        seed = Potts._fingerprint_seed(sys.sys, Float64)
+        seed = Potts._fingerprint_seed(getfield(sys, :sys), Float64)
         @test seed isa String && occursin("T=Float64", seed) && occursin("Moore", seed)
         @test !occursin("0x", seed)                                       # no addresses
         p64 = PottsProblem(sys, [ownership => gg[1], kind => gg[2]], (0, 1))
         p32 = PottsProblem(sys, [ownership => gg[1], kind => gg[2]], (0, 1); T = Float32)
         @test p64.f.fingerprint != p32.f.fingerprint
-        @test Potts._fingerprint_seed(mtkcompile(SolverPairYS(; name = :p)).sys, Float64) != seed
-        @test Potts._fingerprint_seed(mtkcompile(OpenVTGrowingMonolayer(; name = :o, lattice = (24, 24))).sys, Float64) !=
-            Potts._fingerprint_seed(mtkcompile(OpenVTGrowingMonolayer(; name = :o, lattice = (30, 30))).sys, Float64)
+        @test Potts._fingerprint_seed(getfield(mtkcompile(SolverPairYS(; name = :p)), :sys), Float64) != seed
+        @test Potts._fingerprint_seed(getfield(mtkcompile(OpenVTGrowingMonolayer(; name = :o, lattice = (24, 24))), :sys), Float64) !=
+            Potts._fingerprint_seed(getfield(mtkcompile(OpenVTGrowingMonolayer(; name = :o, lattice = (30, 30))), :sys), Float64)
     end
 end
 

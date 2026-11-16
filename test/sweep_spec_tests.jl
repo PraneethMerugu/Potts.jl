@@ -72,7 +72,7 @@ end
         cs = mtkcompile(sys)
         H, Hc = Potts.hamiltonian(sys), Potts.hamiltonian(cs)
         @test isequal(H, Hc)
-        @test !isequal(Potts.hamiltonian(cs.sys), H)       # negative control: `.sys` is the lowered model
+        @test !isequal(Potts.hamiltonian(getfield(cs, :sys)), H)       # negative control: `.sys` is the lowered model
         @test map(typeof ∘ last, H) == map(typeof ∘ last, Hc)
         @test isequal(Potts.drives(sys), Potts.drives(cs))
         # the payload of the compiled system is the authored one's

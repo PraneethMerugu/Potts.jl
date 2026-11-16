@@ -77,7 +77,7 @@ end
             ex = :(@after_mcs x ~ $call)
             if shown === nothing          # `Base.rand()` is the model's `rand()` (a draw, not a constant)
                 c = _df_build(ex)
-                @test any(u -> Potts._has_draw(u.eq.rhs), Potts._p(c.sys, :updates))
+                @test any(u -> Potts._has_draw(u.eq.rhs), Potts._p(getfield(c, :sys), :updates))
             else
                 msg = _df_msg(() -> _df_build(ex))
                 @test occursin("`$shown`", msg) && occursin("not available in a model", msg)
@@ -86,7 +86,7 @@ end
         # the model's own forms build and draw
         for call in (:(rand()), :(randn()), :(randn(1.0, 2.0)), :(randn(q, 2.0; lower = 0.0)))
             c = _df_build(:(@after_mcs x ~ $call))
-            @test any(u -> Potts._has_draw(u.eq.rhs), Potts._p(c.sys, :updates))
+            @test any(u -> Potts._has_draw(u.eq.rhs), Potts._p(getfield(c, :sys), :updates))
         end
         # a negative SD is an error when it is a number
         @test occursin("σ = -0.5 is negative", _df_msg(() -> _df_build(:(@after_mcs x ~ randn(1.0, -0.5; lower = 0.0)))))
@@ -106,9 +106,9 @@ end
             :(@after_mcs z ~ sum(count(true for _ in contacts) for c in cells(A))),
             :(@observed m ~ count(kind′ == medium for _ in contacts(big))); extra = true
         )
-        @test length(Potts._contact_folds(c.sys)) == 4
-        @test Set(r for (_, r, _) in Potts._contact_folds(c.sys)) == Set([:contact, :vn, :big])
-        @test c.footprint.read == 2                                   # the Moore(2) fold's commit reads that far
+        @test length(Potts._contact_folds(getfield(c, :sys))) == 4
+        @test Set(r for (_, r, _) in Potts._contact_folds(getfield(c, :sys))) == Set([:contact, :vn, :big])
+        @test getfield(c, :footprint).read == 2                                   # the Moore(2) fold's commit reads that far
         prob = PottsProblem(c, _df_state(), (0, 3); capacity = 8)
         @test haskey(prob.relations, :contact_counts) && length(prob.relations.contact_counts.counts) == 4
         sol = solve(prob, SequentialCPM(; proposal = Moore(1)))
@@ -120,7 +120,7 @@ end
                     count((kind′ == A) | (kind′ == medium) for _ in contacts(vn))
             )
         )
-        @test length(Potts._contact_folds(a.sys)) == 2
+        @test length(Potts._contact_folds(getfield(a, :sys))) == 2
         @test sort(last.(Potts._contact_trackers(a))) == [UInt64(0b011), UInt64(0b100)]
         # rejected, each with a message naming the rule
         for (sections, needle) in (
@@ -144,7 +144,7 @@ end
         )
         # `count` stays Base's elsewhere: a population fold and a plain helper
         p = _df_build(:(@after_mcs z ~ count(volume > 5 for c in cells)))
-        @test !any(u -> occursin("contacts_", string(u.eq.rhs)), Potts._p(p.sys, :updates))
+        @test !any(u -> occursin("contacts_", string(u.eq.rhs)), Potts._p(getfield(p, :sys), :updates))
         @test Potts.DSL.count(isodd, [1, 2, 3]) == 2 && nameof(Potts.DSL.count) === :count
     end
 end
@@ -153,10 +153,10 @@ end
     @testset "D-150: models without folds or draws generate what they did" begin
         c = _df_build(:(@after_mcs x ~ volume + 1))
         # the constructor records that it built neither, so mtkcompile and PottsProblem skip the walks (review F1)
-        @test !Potts._may_have(c.sys, :folds) && !Potts._may_have(c.sys, :bounded)
+        @test !Potts._may_have(getfield(c, :sys), :folds) && !Potts._may_have(getfield(c, :sys), :bounded)
         @test isempty(Potts._contact_trackers(c))
         f = _df_build(:(@after_mcs x ~ count(true for _ in contacts) + randn(0.0, 1.0; lower = -1.0)))
-        @test Potts._may_have(f.sys, :folds) && Potts._may_have(f.sys, :bounded) && length(Potts._contact_trackers(f)) == 1
+        @test Potts._may_have(getfield(f, :sys), :folds) && Potts._may_have(getfield(f, :sys), :bounded) && length(Potts._contact_trackers(f)) == 1
         prob = PottsProblem(c, _df_state(), (0, 1))
         @test !haskey(prob.relations, :contact_counts) && !haskey(prob.u0.model, CorePotts.MODEL_STATUS)
         integ = init(prob, SequentialCPM())

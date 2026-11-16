@@ -218,9 +218,9 @@ end
         end
 
         c = mtkcompile(SpringTether(; name = :st))
-        @test [r.name for r in c.relationships] == [:tether, :bond]
-        @test [Potts.info(x).name for x in c.edge_vars[:bond]] == [:rest]
-        @test [Potts.info(x).name for x in c.edge_vars[:tether]] == [:len]
+        @test [r.name for r in getfield(c, :relationships)] == [:tether, :bond]
+        @test [Potts.info(x).name for x in getfield(c, :edge_vars)[:bond]] == [:rest]
+        @test [Potts.info(x).name for x in getfield(c, :edge_vars)[:tether]] == [:len]
         σ = zeros(Int32, 60, 30); σ[5:10, 12:17] .= 1; σ[20:25, 12:17] .= 2; σ[40:45, 12:17] .= 3
         prob = PottsProblem(c, [ownership => σ, kind => [:blob, :blob, :blob], :bond => [(1, 2)], :tether => [(2, 3)]], (0, 20))
         @test prob.u0.cell.link_rest[1, 1] == 12.0 && prob.u0.cell.link_len[1, 2] == 18.0
@@ -247,21 +247,21 @@ end
                 (:edge, [Potts.relationship(:tether), Potts.relationship(:glue)]), (:bond, Potts.RelationshipSpec[]),
             )
             c = mtkcompile(extend(ext(scope; rels), base))
-            @test [Potts.info(x).name for x in c.edge_vars[:bond]] == [:rest]
-            @test all(r -> isempty(c.edge_vars[r]), filter(!=(:bond), collect(keys(c.edge_vars))))
+            @test [Potts.info(x).name for x in getfield(c, :edge_vars)[:bond]] == [:rest]
+            @test all(r -> isempty(getfield(c, :edge_vars)[r]), filter(!=(:bond), collect(keys(getfield(c, :edge_vars)))))
             prob = PottsProblem(c, op, (0, 5))
             @test prob.u0.cell.link_rest[1, 1] == prob.u0.cell.link_rest[1, 2] == 9.0   # the extension's default
             @test total_energy(prob) == total_energy(PottsProblem(base, [op; :rest => 9.0], (0, 5)))
         end
         # a nested extension (of an extension) keeps it too
         c = mtkcompile(extend(ext(:edge; rels = Potts.RelationshipSpec[]), extend(ext(:edge), base; name = :mid)))
-        @test [Potts.info(x).name for x in c.edge_vars[:bond]] == [:rest] && isempty(c.edge_vars[:tether])
+        @test [Potts.info(x).name for x in getfield(c, :edge_vars)[:bond]] == [:rest] && isempty(getfield(c, :edge_vars)[:tether])
         # another relationship: rejected when built, naming the variable and both relationships
         @test_throws ArgumentError extend(ext(:tether), base)
         @test_throws r"`rest`.*`bond`.*`tether`" extend(ext(:tether), base)
         # control: without the base's variable, `rest(tether)` is the extension's own
         c = mtkcompile(ext(:tether))
-        @test [Potts.info(x).name for x in c.edge_vars[:tether]] == [:rest]
+        @test [Potts.info(x).name for x in getfield(c, :edge_vars)[:tether]] == [:rest]
     end
 end
 
@@ -294,7 +294,7 @@ end
         op = [ownership => σ, kind => [:blob, :blob, :blob], :bond => [(1, 2)], :tether => [(2, 3)]]
         # alone, the body's `rest(edge)` is its only relationship's (control)
         body = EdgeBody(; name = :x)
-        @test sort([Potts.info(x).name for x in mtkcompile(body).edge_vars[:tether]]) == [:len, :rest]
+        @test sort([Potts.info(x).name for x in getfield(mtkcompile(body), :edge_vars)[:tether]]) == [:len, :rest]
         # the mark of an implicit binding is not code: settling it keeps the fingerprint
         settled = Potts.PottsSystem(;
             name = nameof(body), (f => Potts._p(body, f) for f in fieldnames(Potts.PottsPart))...,
@@ -306,10 +306,10 @@ end
         @test PottsProblem(body, bop, (0, 5)).f.fingerprint == PottsProblem(settled, bop, (0, 5)).f.fingerprint
         sys = extend(EdgeBody(; name = :x), Spring(; name = :s))
         c = mtkcompile(sys)
-        @test [Potts.info(x).name for x in c.edge_vars[:bond]] == [:rest]
-        @test [Potts.info(x).name for x in c.edge_vars[:tether]] == [:len]
+        @test [Potts.info(x).name for x in getfield(c, :edge_vars)[:bond]] == [:rest]
+        @test [Potts.info(x).name for x in getfield(c, :edge_vars)[:tether]] == [:len]
         oracle = mtkcompile(EdgeBodyExtend(; name = :x))
-        @test [Potts.info(x).name for x in oracle.edge_vars[:bond]] == [:rest]
+        @test [Potts.info(x).name for x in getfield(oracle, :edge_vars)[:bond]] == [:rest]
         p, q = PottsProblem(c, op, (0, 5)), PottsProblem(oracle, op, (0, 5))
         @test p.u0.cell.link_rest[1, 1] == 9.0 && p.u0.cell.link_len[1, 2] == 18.0
         @test total_energy(p) == total_energy(q) == 3264 + 72 + 6
@@ -402,7 +402,7 @@ end
                 lattice = Potts.lattice(c), relationships = [Potts.relationship(:bond), Potts.relationship(:bond)], sweep = Potts._p(c, :sweep)
             )
         )
-        @test isequal(mtkcompile(Spring(; name = :s)).edge_vars[:bond], Potts.variables(Spring(; name = :s)))   # `rest(edge)`: the only one
+        @test isequal(getfield(mtkcompile(Spring(; name = :s)), :edge_vars)[:bond], Potts.variables(Spring(; name = :s)))   # `rest(edge)`: the only one
         @test_throws "is a variable scope" mtkcompile(CellRelationship(; name = :cr))
     end
 end

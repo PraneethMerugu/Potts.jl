@@ -40,7 +40,7 @@ function ode_system(c::CompiledPottsSystem, scope::Symbol)
         "`Potts.fields(csys)`: `discretize(Potts.fields(csys), disc; inputs = " *
         "collect(Potts.field_inputs(integ)))` solves it with a SciML solver at the CPM state of `integ`)" :
         " (field equations are stepped by Potts on the lattice and are not an ODE system)")))
-    return get(c.ode_systems, scope, nothing)
+    return get(getfield(c, :ode_systems), scope, nothing)
 end
 ode_system(sys::PottsSystem, ::Symbol) = throw(ArgumentError(
     "ode_system: `$(nameof(sys))` has not been compiled; call `ode_system(mtkcompile(sys), scope)`"))

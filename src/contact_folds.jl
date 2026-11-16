@@ -106,7 +106,7 @@ end
 The contact-count trackers of a compiled model: `(name, relation, mask)` per fold, the
 relation `:contact` (the contact neighborhood) or a relation declared in `@relations`.
 """
-_contact_trackers(c::CompiledPottsSystem) = c.contact_trackers
+_contact_trackers(c::CompiledPottsSystem) = getfield(c, :contact_trackers)
 
 """Relation spec of a fold over `rel` (checked by `_check_contact_folds`)."""
 _fold_spec(rel::Symbol, relations, contact_spec) = rel === :contact ? contact_spec : relations[rel]
@@ -155,7 +155,8 @@ _contact_count_commits(c::CompiledPottsSystem) =
 """The initial count columns (`Int32`) of the model's folds, from σ."""
 function _contact_count_columns(c::CompiledPottsSystem, σ, kinds, lat, ncell)
     return Pair{Symbol, Any}[n => CorePotts.recompute_contact_count(σ, kinds, lat,
-                                     _fold_spec(r, c.relations, c.contact_spec), m, ncell)
+            _fold_spec(r, getfield(c, :relations), getfield(c, :contact_spec)), m, ncell
+        )
                              for (n, r, m) in _contact_trackers(c)]
 end
 
@@ -167,8 +168,10 @@ without folds only returns its argument).
 function _with_contact_counts(c::CompiledPottsSystem, @nospecialize(relations::NamedTuple))
     ts = _contact_trackers(c)
     isempty(ts) && return relations
-    nk = length(_p(c.sys, :kinds))
-    cc = CorePotts.ContactCounts(Tuple(CorePotts.ContactCount(n, _fold_spec(r, c.relations, c.contact_spec), m; kinds = nk)
+    nk = length(_p(getfield(c, :sys), :kinds))
+    cc = CorePotts.ContactCounts(
+        Tuple(
+            CorePotts.ContactCount(n, _fold_spec(r, getfield(c, :relations), getfield(c, :contact_spec)), m; kinds = nk)
                                        for (n, r, m) in ts))
     return merge(relations, (; contact_counts = cc))
 end

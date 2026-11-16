@@ -237,7 +237,7 @@ end
             @sweep Metropolis(; temperature = 1.0)
         end
 
-        @test only(mtkcompile(CadenceComponents(; name = :cc)).divisions).every == 4
+        @test only(getfield(mtkcompile(CadenceComponents(; name = :cc)), :divisions)).every == 4
     end
 end
 

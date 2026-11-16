@@ -28,7 +28,7 @@ function boundary_lengths(prob::CorePotts.PottsProblem, u = prob.u0; relation = 
     info = prob.f.sys
     info isa PottsModelInfo ||
         throw(ArgumentError("boundary_lengths: not a problem of a Potts model; construct `prob` from a compiled `@potts_model` with `PottsProblem`"))
-    names = _p(info.csys.sys, :kinds)
+    names = _p(getfield(info.csys, :sys), :kinds)
     r = relation === nothing ? prob.contact : CorePotts.relation(relation, prob.lattice)
     CorePotts.is_symmetric(r) || throw(ArgumentError("boundary_lengths: the relation is not symmetric " *
                 "(each offset needs its negation with the same weight), so its bonds are not unordered pairs; " *

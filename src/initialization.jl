@@ -53,7 +53,7 @@ function initialization_system(c::CompiledPottsSystem, scope::Symbol)
     scope in _ODE_SCOPES || throw(ArgumentError(
         "initialization_system: the scope is `:cell` or `:model`; got `:$scope` (site, field and edge " *
         "initialization reads across entities, planned in P6.4a)"))
-    s = get(c.initialization, scope, nothing)
+    s = get(getfield(c, :initialization), scope, nothing)
     return s === nothing ? nothing : s.template
 end
 initialization_system(sys::PottsSystem, ::Symbol) = throw(ArgumentError(
@@ -347,17 +347,17 @@ model's conditions first, then each cell's. `cell` and `model` are the state's c
 (name => array) and are written in place.
 """
 function _initialize!(c::CompiledPottsSystem, opd, σ, kinds, ncell, cell, model, pvals)
-    sys = c.sys
+    sys = getfield(c, :sys)
     alg = _algebraic_observed(sys)
     conds = isempty(alg) ? Any[] : Any[o for o in alg if haskey(opd, _unwrap(o.lhs))]
-    isempty(c.initialization) && isempty(conds) && return nothing
+    isempty(getfield(c, :initialization)) && isempty(conds) && return nothing
     volume = zeros(Float64, ncell)
     for l in σ
         l > 0 && (volume[l] += 1)
     end
     builtins = (; volume, id = Float64.(1:ncell), kind = Float64.(kinds))
     for scope in (:model, :cell)
-        s = get(c.initialization, scope, nothing)
+        s = get(getfield(c, :initialization), scope, nothing)
         cs = Any[o for o in conds if info(o.lhs).options.scope === scope]
         s === nothing && isempty(cs) && continue
         scope === :cell && ncell == 0 && continue
@@ -369,7 +369,7 @@ end
 _column(cols, n) = last(cols[findfirst(q -> q.first === n, cols)])
 
 function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builtins, n, cell, model, pvals)
-    sys = c.sys
+    sys = getfield(c, :sys)
     where_ = scope === :cell ? "the cells" : "the model"
     authored = s === nothing ? Equation[] : s.authored
     eqs = s === nothing ? Equation[] : s.conditions

@@ -153,7 +153,7 @@ end
         composed = complete(WL_MTKB.compose(WL_MTKB.toggle_namespacing(par, true), [dsys]))
         @test WL_MTKB.getmetadata(composed, Potts._BuiltFrom, nothing) !== nothing
         c = mtkcompile(Potts.wrap(:g, composed, nothing, part))
-        @test c isa CompiledPottsSystem && any(v -> occursin("dsys₊yd", string(v)), unknowns(c.sys))
+        @test c isa CompiledPottsSystem && any(v -> occursin("dsys₊yd", string(v)), unknowns(getfield(c, :sys)))
     end
 end
 
@@ -283,7 +283,7 @@ end
                 )
             )
         )
-        fsys = mtkcompile(WLiteC9Field(; name = :wf)).sys
+        fsys = getfield(mtkcompile(WLiteC9Field(; name = :wf)), :sys)
         @test Potts.fields(fsys) !== nothing
         @test msg(() -> mtkcompile(compose(fsys, Potts.wrap(:decay, WLiteC9.decay(), nothing, part())))) == "built"
         @test occursin(

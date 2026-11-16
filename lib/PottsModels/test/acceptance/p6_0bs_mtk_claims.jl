@@ -255,7 +255,7 @@ end
         @test all(t -> t isa Pair && p60bs_symbolic(last(t)), H)
         @test all(p60bs_symbolic, Potts.drives(sys))
         @test P60BS_M.getmetadata(Potts.inner(sys), Potts.PottsSweepSpec, nothing).constraints isa AbstractVector
-        for s in (Potts.inner(sys), mtkcompile(sys), Potts.inner(mtkcompile(sys).sys))
+        for s in (Potts.inner(sys), mtkcompile(sys), Potts.inner(getfield(mtkcompile(sys), :sys)))
             @test P60BS_M.hasmetadata(s, Potts.PottsSweepSpec)
             spec = P60BS_M.getmetadata(s, Potts.PottsSweepSpec, nothing)
             @test spec isa Potts.PottsSweepSpec

@@ -10,8 +10,8 @@ const SII = SymbolicIndexingInterface
 
 """Definitions of `@observed` names, substituted (recursively) into observed expressions."""
 function _expand_observed(csys::CompiledPottsSystem, x)
-    isempty(_p(csys.sys, :observed)) && return x
-    sub = Dict{Any, Any}(_unwrap(o.lhs) => _unwrap(o.rhs) for o in _p(csys.sys, :observed))
+    isempty(_p(getfield(csys, :sys), :observed)) && return x
+    sub = Dict{Any, Any}(_unwrap(o.lhs) => _unwrap(o.rhs) for o in _p(getfield(csys, :sys), :observed))
     for _ in 1:(length(sub) + 1)
         y = Symbolics.substitute(x, sub; fold = Val(false))
         isequal(y, x) && return y
@@ -55,7 +55,7 @@ end
 # A dividing model that reads no `birth` keeps no serials (P6.5a3): a query that reads them
 # afterwards (`sol[birth]`, `sibling`'s lowest-birth rule) is refused, not answered with slots
 function _check_untracked_birth(c::CompiledPottsSystem, e)
-    (_numbers_cells(c) && !c.uses_birth) || return nothing
+    (_numbers_cells(c) && !getfield(c, :uses_birth)) || return nothing
     (_uses_builtin(e, :birth) || _has_op(e, cluster_sibling)) || return nothing
     throw(
         ArgumentError(
@@ -100,7 +100,7 @@ function _observed_build(info::PottsModelInfo, c, T, x)
     e = _expand_observed(c, _unwrap(x))
     _check_integral_pre_outside(e)
     _check_untracked_birth(c, e)
-    rn = c.gather_names
+    rn = getfield(c, :gather_names)
     scope = _observed_scope(e)
     # an algebraic cell variable (`y ~ expr` in `@equations`) has one value per cell, whatever
     # its definition reads
@@ -119,7 +119,7 @@ function _observed_build(info::PottsModelInfo, c, T, x)
     return if _has_op(e, cell_integral)       # integrals of the state itself (not the stored refresh)
         # observed-only integrals (D-120) have no stored column: computed here, with the rest
         ph = _integral_phases(c, T; observed = true)
-        names = [_integral_name(x) for x in _integrals(c.sys; observed = true)]
+        names = [_integral_name(x) for x in _integrals(getfield(c, :sys); observed = true)]
         (u, p, t) -> f(_fresh_integrals(T, u, p, hctx, t, ph, names), p, hctx, t)
     else
         (u, p, t) -> f(u, p, hctx, t)
@@ -150,8 +150,8 @@ _potts_quantity(x) = (u = _unwrap(x); u isa SymbolicUtils.BasicSymbolic)
 
 # a base parameter (a computed one is not a parameter for SII: it is observed, D-F2-1)
 function _param_info(sys::PottsModelInfo, x)
-    x = _localize(sys.csys.sys, x; strict = true)       # another model's `other₊λ` is an error (D-137)
-    ps = _p(sys.csys.sys, :parameters)
+    x = _localize(getfield(sys.csys, :sys), x; strict = true)       # another model's `other₊λ` is an error (D-137)
+    ps = _p(getfield(sys.csys, :sys), :parameters)
     if x isa Symbol
         k = findfirst(p -> info(p).name === x, ps)
         return k === nothing || _is_symbolic(info(ps[k]).default) ? nothing : k
@@ -164,9 +164,9 @@ end
 # the computed parameter `x` names (D-F2-1), or `nothing`
 function _computed_info(sys::PottsModelInfo, x)
     x isa Union{AbstractArray, Tuple} && return nothing
-    x = _localize(sys.csys.sys, x; strict = true)
+    x = _localize(getfield(sys.csys, :sys), x; strict = true)
     x isa Symbol || _potts_quantity(x) || return nothing
-    return _computed_entity(_p(sys.csys.sys, :parameters), x isa Symbol ? x : (i = info(x); i === nothing ? x : i.name))
+    return _computed_entity(_p(getfield(sys.csys, :sys), :parameters), x isa Symbol ? x : (i = info(x); i === nothing ? x : i.name))
 end
 
 # SymbolicIndexingInterface getters and setters built from a model or a compiled model
@@ -205,10 +205,10 @@ SII.parameter_observed(c::CompiledPottsSystem, sym) = SII.parameter_observed(SII
 const _STATE_SCOPE = (cell = :cell, site = :site, field = :site, model = :model)
 _state_var(v) = (i = info(v); i !== nothing && haskey(_STATE_SCOPE, i.role))
 function _state_index(sys::PottsModelInfo, x)
-    x = _localize(sys.csys.sys, x)
-    _foreign(sys.csys.sys, x) && return nothing
+    x = _localize(getfield(sys.csys, :sys), x)
+    _foreign(getfield(sys.csys, :sys), x) && return nothing
     x isa Symbol || _potts_quantity(x) || return nothing
-    for v in _p(sys.csys.sys, :variables)
+    for v in _p(getfield(sys.csys, :sys), :variables)
         _state_var(v) || continue
         (x isa Symbol ? info(v).name === x : isequal(_unwrap(v), _unwrap(x))) &&
             return CorePotts.StateIndex(_STATE_SCOPE[info(v).role], info(v).name)
@@ -217,25 +217,25 @@ function _state_index(sys::PottsModelInfo, x)
 end
 SII.is_variable(sys::PottsModelInfo, x) = _state_index(sys, x) !== nothing
 SII.variable_index(sys::PottsModelInfo, x) = _state_index(sys, x)
-SII.variable_symbols(sys::PottsModelInfo) = filter(_state_var, _p(sys.csys.sys, :variables))
-SII.all_variable_symbols(sys::PottsModelInfo) = [SII.variable_symbols(sys); [o.lhs for o in _p(sys.csys.sys, :observed)]]
+SII.variable_symbols(sys::PottsModelInfo) = filter(_state_var, _p(getfield(sys.csys, :sys), :variables))
+SII.all_variable_symbols(sys::PottsModelInfo) = [SII.variable_symbols(sys); [o.lhs for o in _p(getfield(sys.csys, :sys), :observed)]]
 SII.is_parameter(sys::PottsModelInfo, x) = _param_info(sys, x) !== nothing
 function SII.parameter_index(sys::PottsModelInfo, x)
     # a computed parameter is read-only (D-F2-1): its index (asked by `setp`, `integ.ps[x] = v`,
     # `remake`) is an error naming its inputs
     ci = _computed_info(sys, x)
-    ci === nothing || throw(ArgumentError(_computed_message(_p(sys.csys.sys, :parameters), ci)))
+    ci === nothing || throw(ArgumentError(_computed_message(_p(getfield(sys.csys, :sys), :parameters), ci)))
     i = _param_info(sys, x)
-    return i isa Integer ? info(_p(sys.csys.sys, :parameters)[i]).name : i
+    return i isa Integer ? info(_p(getfield(sys.csys, :sys), :parameters)[i]).name : i
 end
 # a list setter (`setp(integ, [:k2, …])`, `setsym`) names a computed parameter with its route
 function CorePotts.readonly_message(sys::PottsModelInfo, x)
-    x isa Symbol && !isempty(_vector_components(sys.csys.sys, _localize(sys.csys.sys, x))) &&
-        return _vector_message(sys.csys.sys, _localize(sys.csys.sys, x))
+    x isa Symbol && !isempty(_vector_components(getfield(sys.csys, :sys), _localize(getfield(sys.csys, :sys), x))) &&
+        return _vector_message(getfield(sys.csys, :sys), _localize(getfield(sys.csys, :sys), x))
     ci = _computed_info(sys, x)
-    return ci === nothing ? nothing : _computed_message(_p(sys.csys.sys, :parameters), ci)
+    return ci === nothing ? nothing : _computed_message(_p(getfield(sys.csys, :sys), :parameters), ci)
 end
-SII.parameter_symbols(sys::PottsModelInfo) = filter(x -> !_is_symbolic(info(x).default), _p(sys.csys.sys, :parameters))
+SII.parameter_symbols(sys::PottsModelInfo) = filter(x -> !_is_symbolic(info(x).default), _p(getfield(sys.csys, :sys), :parameters))
 # a computed parameter reads as observed from the parameter object (`getp`, `integ.ps[k2]`, `sol.ps[k2]`)
 function SII.parameter_observed(sys::PottsModelInfo, x)
     if x isa Union{AbstractArray, Tuple}
@@ -247,7 +247,7 @@ function SII.parameter_observed(sys::PottsModelInfo, x)
     if ci === nothing
         i = _param_info(sys, x)
         i === nothing && return nothing
-        n = i isa Integer ? info(_p(sys.csys.sys, :parameters)[i]).name : i
+        n = i isa Integer ? info(_p(getfield(sys.csys, :sys), :parameters)[i]).name : i
         return (p, t) -> getproperty(p, n)
     end
     n = ci.name
@@ -258,18 +258,18 @@ SII.is_independent_variable(::PottsModelInfo, x) = _potts_quantity(x) && isequal
 SII.independent_variable_symbols(::PottsModelInfo) = [t]
 SII.is_time_dependent(::PottsModelInfo) = true
 SII.constant_structure(::PottsModelInfo) = true
-SII.all_symbols(sys::PottsModelInfo) = vcat(SII.all_variable_symbols(sys), _p(sys.csys.sys, :parameters), [t])
+SII.all_symbols(sys::PottsModelInfo) = vcat(SII.all_variable_symbols(sys), _p(getfield(sys.csys, :sys), :parameters), [t])
 SII.default_values(::PottsModelInfo) = Dict()
 SII.is_observed(sys::PottsModelInfo, x) = _potts_quantity(x) && !SII.is_parameter(sys, x) &&
     !SII.is_variable(sys, x) && !SII.is_independent_variable(sys, x)
 function SII.observed(sys::PottsModelInfo, x)
     ci = _computed_info(sys, x)
     ci === nothing || (n = ci.name; return (u, p, t) -> getproperty(p, n))
-    return _observed_function(sys, _localize(sys.csys.sys, x; strict = true))
+    return _observed_function(sys, _localize(getfield(sys.csys, :sys), x; strict = true))
 end
 # by name: `sol[:volume]`, `sol[:act]`, `sol[:mean_excess]`
 function _named_quantity(sys::PottsModelInfo, x::Symbol)
-    m = sys.csys.sys
+    m = getfield(sys.csys, :sys)
     for v in Iterators.flatten((_p(m, :variables), (o.lhs for o in _p(m, :observed))))
         info(v).name === x && return v
     end
@@ -279,15 +279,15 @@ end
 # only so that `sol[:u]` reaches `SII.observed`, which names its components
 SII.is_observed(sys::PottsModelInfo, x::Symbol) = !SII.is_parameter(sys, x) && !SII.is_variable(sys, x) &&
     (
-    _named_quantity(sys, _localize(sys.csys.sys, x)) !== nothing ||
+    _named_quantity(sys, _localize(getfield(sys.csys, :sys), x)) !== nothing ||
         _computed_info(sys, x) !== nothing ||
-        !isempty(_vector_components(sys.csys.sys, _localize(sys.csys.sys, x)))
+        !isempty(_vector_components(getfield(sys.csys, :sys), _localize(getfield(sys.csys, :sys), x)))
 )
 function SII.observed(sys::PottsModelInfo, x::Symbol)
     ci = _computed_info(sys, x)
     ci === nothing || (n = ci.name; return (u, p, t) -> getproperty(p, n))
-    q = _named_quantity(sys, _localize(sys.csys.sys, x))
-    q === nothing && throw(ArgumentError(_vector_message(sys.csys.sys, _localize(sys.csys.sys, x))))
+    q = _named_quantity(sys, _localize(getfield(sys.csys, :sys), x))
+    q === nothing && throw(ArgumentError(_vector_message(getfield(sys.csys, :sys), _localize(getfield(sys.csys, :sys), x))))
     return _observed_function(sys, q)
 end
 # the component names of the vector quantity `x` of model `m` (`[:u_1, :u_2]`), or none
@@ -319,12 +319,12 @@ end
 
 # `observe` by name: the model's quantity called `x` (variable, `@observed`, built-in, parameter)
 _observe_quantity(::Any, x) = x
-_observe_quantity(sys::PottsModelInfo, x) = _localize(sys.csys.sys, x; strict = true)
+_observe_quantity(sys::PottsModelInfo, x) = _localize(getfield(sys.csys, :sys), x; strict = true)
 function _observe_quantity(sys::PottsModelInfo, x::Symbol)
-    x = _localize(sys.csys.sys, x; strict = true)
+    x = _localize(getfield(sys.csys, :sys), x; strict = true)
     q = _named_quantity(sys, x)
     q === nothing || return q
-    m = sys.csys.sys
+    m = getfield(sys.csys, :sys)
     for p in _p(m, :parameters)
         info(p).name === x && return p
     end
@@ -410,7 +410,7 @@ function _pde_inputs(info::PottsModelInfo, f::ModelingToolkitBase.PDESystem)
         (iscall(u) && ModelingToolkitBase.isinput(u)) || continue
         push!(want, Symbol(_input_key(u, operation(u))))
     end
-    md = _p(info.csys.sys, :metadata)
+    md = _p(getfield(info.csys, :sys), :metadata)
     coupled = [e for e in get(md, _FieldInputs, ()) if length(e) >= 4 && e[4] === nameof(f)]
     out = Tuple{Symbol, Symbol, Any, Type}[]
     if !isempty(coupled) && all(k -> any(e -> e[1] === k, coupled), want)
@@ -444,13 +444,13 @@ function _field_inputs_at(info::PottsModelInfo, u, p, t, ins)
         v = if how === :fill
             f = lock(_OBSERVED_LOCK) do
                 get!(info.cache, (:field_input, ex)) do
-                    code = _with_model_scope(() -> lower(ex, _site_env(info.T, :i, c.gather_names; mcs = :t)), c)
+                    code = _with_model_scope(() -> lower(ex, _site_env(info.T, :i, getfield(c, :gather_names); mcs = :t)), c)
                     _SiteValues(_rgf(:((st, p, ctx, t, i) -> $code)))
                 end
             end
             f(u, p, info.ctx, t)
         elseif how === :domain
-            m = core_lattice(_p(c.sys, :lattice)).mask
+            m = core_lattice(_p(getfield(c, :sys), :lattice)).mask
             m === nothing ? trues(size(u.σ)) : collect(m)
         else
             collect(getproperty(u.site, ex))
@@ -466,12 +466,12 @@ end
 # array named `what`: a site variable or a field the PDESystem reads)
 function _exported_inputs(c::CompiledPottsSystem)
     out = Tuple{Symbol, Symbol, Any, Type}[]
-    F = fields(c.sys)
+    F = fields(getfield(c, :sys))
     F === nothing && return out
-    isempty(_field_equations(c.sys)) && isempty(_field_aux(c.sys)) && return out    # a hand-wrapped PDESystem
+    isempty(_field_equations(getfield(c, :sys))) && isempty(_field_aux(getfield(c, :sys))) && return out    # a hand-wrapped PDESystem
     filled = Dict{Symbol, Any}(e[1] => e for e in _field_inputs(c, Float64))
     # (an input `Potts.fields` names by its binding, `vol`: the generated input it holds)
-    back = Dict{Symbol, Symbol}(Symbol(w) => g for (g, w) in _input_names(c.sys))
+    back = Dict{Symbol, Symbol}(Symbol(w) => g for (g, w) in _input_names(getfield(c, :sys)))
     for dv in getfield(F, :dvs)
         x = _unwrap(dv)
         ModelingToolkitBase.isinput(x) || continue

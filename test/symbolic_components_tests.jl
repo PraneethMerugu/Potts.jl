@@ -31,8 +31,8 @@ end
             )
             sys = component_model()
             cs = mtkcompile(sys)
-            @test Set(Potts.info(v).name for v in Potts.variables(cs.sys)) == Set([:decay₊y_c, :clock₊m_c])
-            @test Set(Potts.info(v).name for v in Potts.parameters(cs.sys)) == Set([:T, :decay₊k_c, :clock₊τ_c])   # r_c is coupled
+            @test Set(Potts.info(v).name for v in Potts.variables(getfield(cs, :sys))) == Set([:decay₊y_c, :clock₊m_c])
+            @test Set(Potts.info(v).name for v in Potts.parameters(getfield(cs, :sys))) == Set([:T, :decay₊k_c, :clock₊τ_c])   # r_c is coupled
             # no copies (T = 0 and frozen cells) so the volume coupling is exact
             prob = remake(PottsProblem(cs, op, (0, 10); ode_solver = solver); p = [:T => 1.0e-9])
             sol = solve(prob, SequentialCPM(); saveat = 0:10)

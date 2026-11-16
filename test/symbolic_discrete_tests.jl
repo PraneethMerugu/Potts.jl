@@ -4,7 +4,7 @@
     @testset "discrete components: lag-2 recurrence (Fibonacci oracle)" begin
         σ = _discrete_blocks(2)
         cs = mtkcompile(DiscreteFib(; name = :f))
-        @test Set(Potts.info(v).name for v in Potts.variables(cs.sys)) == Set([:fib₊fz, Symbol("fib₊fzₜ₋₁")])
+        @test Set(Potts.info(v).name for v in Potts.variables(getfield(cs, :sys))) == Set([:fib₊fz, Symbol("fib₊fzₜ₋₁")])
         # the older lag has no MTK default: the operating point must give it
         @test_throws ArgumentError PottsProblem(cs, [ownership => σ, kind => [1, 1]], (0, 6))
         prob = PottsProblem(cs, [ownership => σ, kind => [1, 1], Symbol("fib₊fzₜ₋₁") => [0.0, 1.0]], (0, 6))
@@ -153,7 +153,7 @@ end
             @energy cells => λx * (volume - 9.0)^2
         end
         ec = mtkcompile(DiscreteExtended(; name = :e))
-        @test only(ec.discrete).name === :fib && length(ec.cell_terms) == 2
+        @test only(getfield(ec, :discrete)).name === :fib && length(getfield(ec, :cell_terms)) == 2
     end
 end
 
@@ -271,7 +271,7 @@ end
 @testitem "discrete components: array variables" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
     @testset "discrete components: array variables" begin
         cs = mtkcompile(DiscreteArray(; name = :a))
-        @test Set(Potts.info(v).name for v in Potts.variables(cs.sys)) == Set([:ar₊dz_1, :ar₊dz_2])
+        @test Set(Potts.info(v).name for v in Potts.variables(getfield(cs, :sys))) == Set([:ar₊dz_1, :ar₊dz_2])
         sol = solve(PottsProblem(cs, [ownership => _discrete_blocks(1, 8), kind => [1]], (0, 5)), SequentialCPM(); saveat = 0:5)
         # (z1, z2) ← (!z2, z1) from the array default (0, 1): (0,1) → (0,0) → (1,0) → (1,1) → (0,1) → (0,0)
         @test [(u.cell.ar₊dz_1[1], u.cell.ar₊dz_2[1]) for u in sol.u] ==

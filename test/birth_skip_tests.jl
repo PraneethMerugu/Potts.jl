@@ -190,7 +190,7 @@ end
         for (label, model, divides, reads) in cases
             c = mtkcompile(model)
             @test Potts._numbers_cells(c) == divides
-            @test c.uses_birth == reads
+            @test getfield(c, :uses_birth) == reads
             @test Potts._tracks_births(c) == (divides && reads)
         end
         # the state layout follows: a column and a counter only when the serials are kept
@@ -201,7 +201,7 @@ end
         end
         @test !haskey(bs_akeeb().u0.cell, :birth) && !haskey(bs_akeeb().u0.model, CorePotts.NEXT_BIRTH)
         # a @convert pass keeps them (its `from`/`to` default to `sibling(k)`; frozen P6.5b fixtures)
-        @test mtkcompile(CVDevice(; name = :cv)).uses_birth
+        @test getfield(mtkcompile(CVDevice(; name = :cv)), :uses_birth)
     end
 end
 

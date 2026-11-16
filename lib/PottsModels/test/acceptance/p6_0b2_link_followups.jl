@@ -200,7 +200,7 @@ end
 p60b2_op(extra...) = Any[ownership => p60b2_three(), kind => [:blob, :blob, :blob], :bond => [(1, 2)], extra...]
 p60b2_op2(extra...) = p60b2_op(:tether => [(2, 3)], extra...)
 p60b2_compile(M) = mtkcompile(M(; name = :m))
-p60b2_names(c, r) = [Potts.info(x).name for x in c.edge_vars[r]]
+p60b2_names(c, r) = [Potts.info(x).name for x in getfield(c, :edge_vars)[r]]
 p60b2_problem(M, op; kw...) = PottsProblem(M(; name = :m), op, (0, 10); kw...)
 # payload `x` of the `rel` link between `a` and `b`, read at `a`'s end
 function p60b2_payload(u, rel, x, a, b)

@@ -195,8 +195,8 @@ end
         @test site_selfcheck(prob, rel; dH = (u, prop) -> f(u, prob.p, prop, ctx_of(prob))) > 1.0e-3
         # site reads at s′ stay inside the contact radius: no extra reach, no extra claims
         c = mtkcompile(sys)
-        @test c.footprint.read == CorePotts.radius(prob.relations.wide) == 2
-        @test c.footprint.source_read == -1 && c.footprint.source_write == -1
+        @test getfield(c, :footprint).read == CorePotts.radius(prob.relations.wide) == 2
+        @test getfield(c, :footprint).source_read == -1 && getfield(c, :footprint).source_write == -1
     end
 end
 
@@ -528,8 +528,8 @@ end
         @test [u.cell.y for u in si.u] == [u.cell.y for u in sn.u]
         @test sum(si.u[end].cell.y) > 0                       # the update ran
         # the index's relation sets the read reach (Moore(3) → 3); the plain index stays at 1
-        @test mtkcompile(OnCopyIndexInline(; name = :g)).footprint.read == 3
-        @test mtkcompile(OnCopyIndexNamed(; name = :g)).footprint.read == 3
-        @test mtkcompile(OnCopyIndexPlain(; name = :g)).footprint.read == 1
+        @test getfield(mtkcompile(OnCopyIndexInline(; name = :g)), :footprint).read == 3
+        @test getfield(mtkcompile(OnCopyIndexNamed(; name = :g)), :footprint).read == 3
+        @test getfield(mtkcompile(OnCopyIndexPlain(; name = :g)), :footprint).read == 1
     end
 end

@@ -374,7 +374,7 @@ end
     @test any(n -> occursin("p60bp_cr", n), nm) && any(n -> occursin("p60bp_cy", n), nm)
     @test !any(n -> n == "volume" || occursin("p60bp_cm", n), nm)
     # negative control: `.sys` is the lowered model (cr ↦ volume/25, cy ↦ 3cm)
-    @test !p60bp_same(p60bp_updates(cs.sys), U)
+    @test !p60bp_same(p60bp_updates(getfield(cs, :sys)), U)
 end
 
 # ---------------------------------------------------------------------------------------

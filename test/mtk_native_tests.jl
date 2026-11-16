@@ -220,7 +220,7 @@ end
         end
         @test e isa ArgumentError && occursin("build the problem in this process", sprint(showerror, e))
         @test typeof(PottsProblem(C9Computed(; name = :c, T = 2.0), [ownership => σ, kind => [1]], (0, 2)).p) === typeof(p)
-        ps3 = Potts._p(Potts.ModelingToolkitBase.mtkcompile(C9Computed3(; name = :c)).sys, :parameters)
+        ps3 = Potts._p(getfield(Potts.ModelingToolkitBase.mtkcompile(C9Computed3(; name = :c)), :sys), :parameters)
         e = try
             Potts._register_derivation!(ps3, Float64, p)
         catch err
