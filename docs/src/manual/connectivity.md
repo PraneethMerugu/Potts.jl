@@ -126,7 +126,7 @@ pieces. A cell that is already in pieces can still move, and its last site may b
 draw, then the search. The draw comes from the counter RNG, so the trajectory is the same
 as evaluating the rule first, and the search runs only for accepted copies whose shell
 test fails. One consequence: a refused copy whose ΔH is not finite now fails the run
-(`retcode = Failure`), where a constraint evaluated first would have skipped it. The search
+(`retcode = Unstable`), where a constraint evaluated first would have skipped it. The search
 floods the cell from one touching site and stops when it has reached the others.
 
 **`window`** is used by `CheckerboardCPM` only. `SequentialCPM`, with or without

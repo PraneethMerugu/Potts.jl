@@ -59,7 +59,7 @@ end
             # affect! may change the live state and parameters; saved states see it
             heat = DiscreteCallback((u, t, integ) -> t == 3, integ -> (integ.p = merge(integ.p, (; T = 1.0e6))))
             s2 = solve(prob, alg; callback = heat, saveat = [3, 10])
-            @test s2.t == [0, 3, 10]
+            @test s2.t == [0, 3, 3, 10]                # the `saveat` save before the affect, one after
             integ = init(prob, alg; callback = heat)
             foreach(_ -> step!(integ), 1:3)
             @test integ.p.T == 1.0e6
@@ -105,13 +105,14 @@ end
             @test cb_unions(CorePotts.CommonSolve.step!, (T,)) == 0
             @test cb_unions(CorePotts.CommonSolve.solve!, (T,)) == 0
             sol = solve!(integ)
-            @test sol.t == 0:12 && length(sol.u) == 13
+            # MCS 4: the `saveat` save, then `heat`'s saves before and after its affect (`save_positions`)
+            @test sol.t == sort!([0:12; 4; 4]) && length(sol.u) == 15
             @test snap[] == 4 && sol.prob.p.T == gg_params().T && integ.p.T == 2 * gg_params().T
             @test calls == [(:init, 1), (:init, 2), (:final, 1), (:final, 2)]
             # stress: many solves with saves, then a full collection (the crash surfaced in GC)
             for s in 1:20
                 r = solve(remake(prob; seed = s), alg; saveat = 0:12, callback = CallbackSet(mark, heat))
-                @test length(r.u) == 13
+                @test length(r.u) == 15
             end
             GC.gc(true)
             @test true
@@ -142,7 +143,7 @@ end
             CorePotts._apply_callbacks!(integ)
             @test @allocated(CorePotts._apply_callbacks!(integ)) == 0
             sol = solve!(integ)
-            @test sol.t == 0:40 && hits == ones(Int, 33)
+            @test sol.t == sort!([0:40; 1:33]) && hits == ones(Int, 33)     # each fires once, saved after
             GC.gc(true)
         end
         # negative control: `Base.afoldl` over the same 33 callbacks goes dynamic and allocates
@@ -320,5 +321,63 @@ end
             sprint(showerror, e)
         end
         @test occursin("run on the CPU", err_big) && occursin("Float32 or Float64", err_big)
+    end
+end
+
+# `DiscreteCallback.save_positions` as SciML (DiffEqBase `apply_discrete_callback!`): a save
+# before the affect and one after, each when flagged; a `saveat` MCS at which a callback fires
+# is saved before the affect and not saved again by the `saveat` rule
+@testitem "DiscreteCallback save_positions: saves before and after the affect" setup = [CP_sciml] tags = [:corepotts, :sciml] begin
+    @testset "DiscreteCallback save_positions: saves before and after the affect" begin
+        σ, kinds = blocks((20, 20), 5)
+        prob = PottsProblem(GG, initial_state(σ, kinds), Lattice((20, 20)), (0, 6), gg_params(); seed = 4)
+        at3(pos) = DiscreteCallback((u, t, integ) -> t == 3, integ -> nothing; save_positions = pos)
+        for alg in (SequentialCPM(), CheckerboardCPM())
+            run(pos, saveat) = solve(prob, alg; callback = at3(pos), saveat, save_start = false)
+            # oracle: SciML's saves for each flag pair
+            @test run((true, true), [6]).t == [3, 3, 6]
+            @test run((true, false), [6]).t == [3, 6]
+            @test run((false, true), [6]).t == [3, 6]
+            @test run((false, false), [6]).t == [6]
+            @test run((true, true), [3, 6]).t == [3, 3, 6]
+            @test run((false, false), [3, 6]).t == [3, 6]
+            # the saved state is the run's state at MCS 3 (the affect changes nothing; same seed)
+            ref = solve(prob, alg; saveat = [3], save_start = false, save_end = false)
+            s = run((true, true), [6])
+            @test s.u[1].σ == ref.u[1].σ && s.u[2].σ == ref.u[1].σ
+        end
+    end
+end
+
+# `derivative_discontinuity!` is Potts' method (SciMLBase forwards the deprecated
+# `u_modified!` to it); `check_error` is `Success` while the run is healthy, and a
+# non-finite energy change ends the run with `Unstable`
+@testitem "derivative_discontinuity!, check_error while healthy, Unstable on a non-finite energy" setup = [CP_sciml] tags = [:corepotts, :sciml] begin
+    @testset "derivative_discontinuity!, check_error while healthy, Unstable on a non-finite energy" begin
+        σ, kinds = blocks((20, 20), 5)
+        prob = PottsProblem(GG, initial_state(σ, kinds), Lattice((20, 20)), (0, 4), gg_params(); seed = 4)
+        T = typeof(init(prob, SequentialCPM()))
+        @test which(SciMLBase.derivative_discontinuity!, (T, Bool)).module === CorePotts
+        @test which(SciMLBase.u_modified!, (T, Bool)).module === SciMLBase     # no own alias
+        @test !(:u_modified! in names(CorePotts))                                 # no own export
+        for alg in (SequentialCPM(), CheckerboardCPM())
+            integ = init(prob, alg)
+            @test integ.retcode == ReturnCode.Default
+            @test SciMLBase.check_error(integ) == ReturnCode.Success
+            step!(integ)
+            @test SciMLBase.check_error(integ) == ReturnCode.Success
+            sol = solve!(integ)
+            @test sol.retcode == ReturnCode.Success && SciMLBase.check_error(integ) == ReturnCode.Success
+            terminate!(integ)
+            @test SciMLBase.check_error(integ) == ReturnCode.Terminated
+        end
+        bad = PottsProblem(
+            CPMFunction((st, p, prop, ctx) -> NaN; temperature = gg_temperature),
+            initial_state(σ, kinds), Lattice((20, 20)), (0, 4), gg_params()
+        )
+        integ = init(bad, SequentialCPM())
+        step!(integ)
+        @test integ.retcode == ReturnCode.Unstable && SciMLBase.check_error(integ) == ReturnCode.Unstable
+        @test_throws ArgumentError step!(integ)                                    # a finished run
     end
 end

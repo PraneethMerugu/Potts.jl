@@ -107,7 +107,7 @@ law, a geometric run length in the boundary fraction ``|B|/N``. So
   equations, `@after_mcs` updates and lifecycle rules see the same clock.
 
 The boundary set is updated incrementally after each copy, division and removal, and
-rebuilt after lifecycle events, `reinit!`, `u_modified!` and a checkpoint restore.
+rebuilt after lifecycle events, `reinit!`, `derivative_discontinuity!` and a checkpoint restore.
 
 ### Equal in distribution, not bitwise
 

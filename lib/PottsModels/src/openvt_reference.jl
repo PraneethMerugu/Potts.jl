@@ -198,7 +198,7 @@ over the cell volumes), a declared host pass (D-145).
 function stop_at_cells(n::Integer; every::Integer = 1)
     every >= 1 || throw(ArgumentError("stop_at_cells: `every` must be ≥ 1, got $every"))
     condition(u, t, integ) = t % every == 0 && count(>(0), u.cell.volume) >= n
-    return DiscreteCallback(condition, terminate!)
+    return DiscreteCallback(condition, terminate!; save_positions = (false, false))   # one save of the last MCS
 end
 
 """
@@ -218,7 +218,7 @@ function edge_guard(margin::Integer; terminate::Bool = false, every::Integer = 1
     affect!(integ) = terminate ? terminate!(integ, ReturnCode.Failure) :
                      throw(DomainError(margin, "edge_guard: a cell came within $margin sites of the lattice edge " *
                                                "at MCS $(integ.t); use a larger lattice"))
-    return DiscreteCallback(condition, affect!)
+    return DiscreteCallback(condition, affect!; save_positions = (false, false))     # one save of the last MCS
 end
 
 # `near_edge` as one masked reduction: the frame of `margin` sites, built once per array

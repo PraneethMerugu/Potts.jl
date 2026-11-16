@@ -8,7 +8,7 @@ affect!)` checks `condition(u, t, integrator)` after every MCS and, when it is t
 - `integrator[:x] = v` writes a declared variable;
 - `terminate!(integrator)` stops the run;
 - after writing `integrator.state` directly (for example cell kinds), call
-  `u_modified!(integrator, true)` so that frozen sites are recomputed.
+  `derivative_discontinuity!(integrator, true)` so that frozen sites are recomputed.
 
 `CallbackSet(cb₁, cb₂)` combines callbacks; pass them with `solve(…; callback = …)`.
 

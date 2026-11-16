@@ -455,16 +455,29 @@ _callbacks(cb) = throw(ArgumentError("unsupported callback $(typeof(cb)); use Di
 _each(f::F, t::Tuple{Vararg{Any, N}}) where {F, N} = (ntuple(@inline(i -> (f(t[i]); nothing)), Val(N)); nothing)
 
 function _apply_callbacks!(integ::PottsIntegrator)
-    _each(cb -> (cb.condition(integ.state, integ.t, integ) && cb.affect!(integ); nothing), integ.callbacks)
+    _each(cb -> (cb.condition(integ.state, integ.t, integ) && _fire!(integ, cb); nothing), integ.callbacks)
     return nothing
 end
+# The saving of a callback that fires, as SciML's (DiffEqBase `apply_discrete_callback!`): a
+# `saveat` MCS is saved before the first affect at it, then the state before the affect
+# (`save_positions[1]`, unless that save was just made) and after it (`save_positions[2]`).
+function _fire!(integ::PottsIntegrator, cb)
+    at = _saveat_due(integ)
+    at && (_check_status!(integ); _save!(integ))
+    cb.save_positions[1] && !at && _save!(integ)
+    cb.affect!(integ)
+    cb.save_positions[2] && _save!(integ)
+    return nothing
+end
+# the MCS is a `saveat` time not saved yet (nothing is saved at an MCS before its callbacks run)
+_saveat_due(integ::PottsIntegrator) =
+    insorted(integ.t, integ.saveat) && (isempty(integ.saved_t) || last(integ.saved_t) != integ.t)
 
-# No derivative to reset: a callback's changes take effect at the next MCS.
-SciMLBase.derivative_discontinuity!(::PottsIntegrator, ::Bool) = nothing
-# `u_modified!(integ, true)` after writing the state: the frozen mask follows (D-081)
-# and the field groups' algorithms take the state as a start (`reset!`: Crank–Nicolson damps its
-# next substep, BDF2 restarts with a Backward Euler substep)
-SciMLBase.u_modified!(integ::PottsIntegrator, modified::Bool) =
+# `derivative_discontinuity!(integ, true)` after writing the state (what a callback's affect
+# does): the frozen mask follows (D-081) and the field groups' algorithms take the state as a
+# start (`reset!`: Crank–Nicolson damps its next substep, BDF2 restarts with a Backward Euler
+# substep). SciMLBase forwards its deprecated `u_modified!` here.
+SciMLBase.derivative_discontinuity!(integ::PottsIntegrator, modified::Bool) =
     (modified && (refresh_frozen!(integ); reset_fields!(integ.ctx)); nothing)
 
 """
@@ -602,14 +615,18 @@ const _STATUS_REASONS = (STATUS_NONFINITE => "an energy change was not finite (N
     STATUS_DRAW_NEGATIVE_SD => "a bounded randn(μ, σ; lower) draw was given σ < 0")
 function _status_failure!(integ, st::UInt32)
     st == 0 && return nothing
-    if integ.retcode != SciMLBase.ReturnCode.Failure
+    code = _status_code(st)
+    if integ.retcode != code
         why = [r for (bit, r) in _STATUS_REASONS if st & bit != 0]
         isempty(why) && push!(why, "status word $(repr(st))")
         @warn "the run failed at MCS $(integ.t): $(join(why, "; "))"
     end
-    integ.retcode = SciMLBase.ReturnCode.Failure
+    integ.retcode = code
     return nothing
 end
+# the return code of a nonzero status word: a non-finite energy change is SciML's `Unstable`
+# (the state left the finite numbers); a failed draw is a `Failure`
+_status_code(st::UInt32) = st & STATUS_NONFINITE != 0 ? SciMLBase.ReturnCode.Unstable : SciMLBase.ReturnCode.Failure
 
 function CommonSolve.step!(integ::PottsIntegrator)
     integ.retcode == SciMLBase.ReturnCode.Default ||
@@ -626,7 +643,7 @@ function CommonSolve.step!(integ::PottsIntegrator)
     _stats(integ).mcs += 1
     _stats(integ).attempts += attempts
     isempty(integ.callbacks) || _apply_callbacks!(integ)
-    insorted(integ.t, integ.saveat) && (_check_status!(integ); _save!(integ))
+    _saveat_due(integ) && (_check_status!(integ); _save!(integ))
     return integ
 end
 
@@ -643,7 +660,7 @@ function _sequential_sweep!(integ::PottsIntegrator, ctx, part::NTuple{2, Int})
     end
     _stats(integ).accepted = max(_stats(integ).accepted, 0) + acc
     tracked === nothing || (_stats(integ).accepted_ΔH += tracked)
-    status != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
+    status != 0 && (integ.retcode = _status_code(status))
     return nothing
 end
 
@@ -816,7 +833,7 @@ _flush_counts!(integ) = _fold_lifecycle!(integ)
 Recompute the frozen-site mask from the integrator's current state. The integrator does
 this itself after every MCS with a lifecycle event (transition, division, removal), and
 `reinit!` does it for the new state. A `DiscreteCallback` that writes `kind` (or `σ` around
-frozen cells) directly in `integrator.state` must call it, or `u_modified!(integrator,
+frozen cells) directly in `integrator.state` must call it, or `derivative_discontinuity!(integrator,
 true)`; `set_state!` (`setu`) on `kind` calls it.
 
 Only models whose mask follows the state (`frozen_varies`; Potts: a `[frozen]` kind) do
@@ -908,7 +925,9 @@ function CommonSolve.solve!(integ::PottsIntegrator)
     return PottsSolution(integ)
 end
 
-SciMLBase.check_error(integ::PottsIntegrator) = integ.retcode
+# SciML's contract: `Success` while the run is healthy, else the code that ended it
+SciMLBase.check_error(integ::PottsIntegrator) =
+    integ.retcode == SciMLBase.ReturnCode.Default ? SciMLBase.ReturnCode.Success : integ.retcode
 function SciMLBase.terminate!(integ::PottsIntegrator, retcode = SciMLBase.ReturnCode.Terminated)
     integ.retcode = retcode
     return integ

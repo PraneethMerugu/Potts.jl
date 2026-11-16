@@ -788,7 +788,7 @@ end
     end
     # Global is evaluated after the draw: the infinite ΔH is seen, the run fails
     for alg in (SequentialCPM(), CheckerboardCPM())
-        @test Symbol(solve(mk(P69aInfGlobal), alg).retcode) === :Failure
+        @test Symbol(solve(mk(P69aInfGlobal), alg).retcode) === :Unstable
     end
 end
 

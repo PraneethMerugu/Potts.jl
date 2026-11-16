@@ -12,7 +12,7 @@ using Atomix: Atomix
 using CommonSolve: CommonSolve, init, solve, solve!, step!
 using KernelAbstractions: KernelAbstractions, @kernel, @index, @localmem, @synchronize, CPU
 using LatticeFields: LatticeFields, Exec, Problems
-using SciMLBase: SciMLBase, remake, reinit!, u_modified!, EnsembleProblem, EnsembleSerial, EnsembleThreads,
+using SciMLBase: SciMLBase, remake, reinit!, derivative_discontinuity!, EnsembleProblem, EnsembleSerial, EnsembleThreads,
     DiscreteCallback, CallbackSet, terminate!
 using Base.ScopedValues: ScopedValue, @with
 using Serialization: Serialization
@@ -51,7 +51,7 @@ export Metropolis, Barker, SequentialCPM, CheckerboardCPM
 export PottsProblem, PottsIntegrator, PottsSolution, current_state, refresh_frozen!, frozen_sites, StateIndex, getu, setu, getp, setp
 export init, solve, solve!, step!, remake, CPU
 # SciML ensembles and callbacks, as solver packages re-export them
-export EnsembleProblem, EnsembleSerial, EnsembleThreads, DiscreteCallback, CallbackSet, terminate!, u_modified!
+export EnsembleProblem, EnsembleSerial, EnsembleThreads, DiscreteCallback, CallbackSet, terminate!, derivative_discontinuity!
 export PottsCheckpoint, checkpoint, save_checkpoint, load_checkpoint, reinit!
 export read_piff, write_piff
 # Public but not exported: generic lattice and randomness primitives for hand-written models

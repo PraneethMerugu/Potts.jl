@@ -458,8 +458,8 @@ end
     @testset "non-finite ΔH fails the solve" begin
         bad = CPMFunction((st, p, prop, ctx) -> NaN; temperature = gg_temperature)
         bprob = PottsProblem(bad, initial_state(σ0, kinds0), lat, (0, 3), gg_params())
-        @test solve(bprob, SequentialCPM()).retcode == ReturnCode.Failure
-        @test (@test_logs (:warn, r"energy change was not finite") solve(bprob, CheckerboardCPM())).retcode == ReturnCode.Failure
+        @test solve(bprob, SequentialCPM()).retcode == ReturnCode.Unstable
+        @test (@test_logs (:warn, r"energy change was not finite") solve(bprob, CheckerboardCPM())).retcode == ReturnCode.Unstable
     end
 end
 

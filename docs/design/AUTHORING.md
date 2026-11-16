@@ -611,7 +611,7 @@ counts are folded in at the next read point, exactly).
 State written outside the lifecycle:
 - `setu`/`set_state!` on `kind` refreshes the mask itself.
 - A `DiscreteCallback` that writes `integrator.state.cell.kind` directly must call
-  `refresh_frozen!(integrator)` or SciML's `u_modified!(integrator, true)`; otherwise the
+  `refresh_frozen!(integrator)` or SciML's `derivative_discontinuity!(integrator, true)`; otherwise the
   change reaches the mask at the next lifecycle event.
 - `reinit!` recomputes the mask and accepts a state with a different number of frozen
   sites.
@@ -620,7 +620,7 @@ State written outside the lifecycle:
 
 ```julia
 freeze = DiscreteCallback((u, t, integ) -> t == 100,
-    integ -> (integ.state.cell.kind[3] = 2; u_modified!(integ, true)))   # kind 2 is `wall[frozen]`
+    integ -> (integ.state.cell.kind[3] = 2; derivative_discontinuity!(integ, true)))   # kind 2 is `wall[frozen]`
 ```
 
 ### Relationships

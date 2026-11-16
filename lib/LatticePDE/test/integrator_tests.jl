@@ -90,7 +90,7 @@ end
     @test !only(ig.runtimes).cache.start
     ig.u .= 0.5 .* ig.u .+ 0.1                    # a write into the state: the groups do not see it …
     @test !only(ig.runtimes).cache.start
-    SciMLBase.derivative_discontinuity!(ig, true)  # … until this (`u_modified!` is the older name)
+        SciMLBase.derivative_discontinuity!(ig, true)  # … until this
     @test only(ig.runtimes).cache.start
     v = copy(ig.u)
     step!(ig)

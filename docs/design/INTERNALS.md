@@ -254,7 +254,7 @@ applied at the boundary.
     returns `(launches, events)` and on an MCS with events `step!` refreshes at once. On
     the device lifecycle path (D-089, `lifecycle_device.jl`) the refresh kernel is
     enqueued with the lifecycle every lifecycle MCS and returns at once on quiet rounds.
-    `reinit!`, `set_state!` on `kind` and `u_modified!(integ, true)` refresh too
+    `reinit!`, `set_state!` on `kind` and `derivative_discontinuity!(integ, true)` refresh too
     (immediately, reading the counts).
   - Standard rule: one `_frozen_body!` launch over the sites (frozen when outside the
     domain or the owner's kind is listed) rewrites `frozen` in place and counts, with

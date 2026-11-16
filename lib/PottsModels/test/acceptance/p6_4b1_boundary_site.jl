@@ -62,7 +62,7 @@
 #     proposal offsets; no production code) after `init`, after every `step!` (copies,
 #     divisions, removals, a transition to a frozen kind, the removal of a frozen cell),
 #     after `reinit!`, and after a direct write to `integ.state.σ` followed by
-#     `u_modified!(integ, true)`. On a periodic lattice (Graner–Glazier 72²), on the
+#     `derivative_discontinuity!(integ, true)`. On a periodic lattice (Graner–Glazier 72²), on the
 #     OpenVT reference model with divisions, and with a proposal that differs from the
 #     contact neighbourhood (`BoundarySiteCPM(; proposal = VonNeumann(1))` on a Moore(1)
 #     model).
@@ -867,12 +867,12 @@ end
     @test all(ok)
     l = integ.stats.lifecycle
     @test l.divisions == 2 && l.removals == 2 && l.transitions == 1
-    # reinit! and a direct write followed by u_modified!
+    # reinit! and a direct write followed by derivative_discontinuity!
     reinit!(integ)
     @test p64b1_boundary_ok(integ, P64B1_MOORE; frozen_kinds = (2,))
     step!(integ)
     integ.state.σ[12, 12] = 1                    # an isolated site of cell 1 in the medium
-    u_modified!(integ, true)
+    derivative_discontinuity!(integ, true)
     @test p64b1_boundary_ok(integ, P64B1_MOORE; frozen_kinds = (2,))
 end
 

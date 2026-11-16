@@ -85,7 +85,11 @@ relaxation's t = 0; the first relaxing MCS is `at + 1`. Pass it as
 `solve(prob, alg; callback = openvt_release(100))`.
 """
 function openvt_release(at::Integer = 100)
-    return DiscreteCallback((u, t, integ) -> t == at, integ -> (integ.ps[:A_c] = integ.ps[:A]; nothing))
+    # a parameter write: the state is unchanged, so no save of its own (`saveat` saves MCS `at`)
+    return DiscreteCallback(
+        (u, t, integ) -> t == at, integ -> (integ.ps[:A_c] = integ.ps[:A]; nothing);
+        save_positions = (false, false)
+    )
 end
 
 """

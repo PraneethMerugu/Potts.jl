@@ -363,7 +363,7 @@ end
         σ = zeros(Int32, 16, 16)
         σ[5:7, 5:7] .= 1                     # volume 9, at the pole: every copy of the cell has ΔH = −Inf
         prob = PottsProblem(AnBlowup(; name = :an_b), [ownership => σ, kind => [:A]], (0, 5); seed = 1)
-        @test Symbol(solve(prob, SequentialCPM()).retcode) === :Failure          # as in the run
+        @test Symbol(solve(prob, SequentialCPM()).retcode) === :Unstable         # as in the run
         for alg in (SequentialCPM(), CheckerboardCPM())
             an_throws(
                 ErrorException, ["stopped with retcode", "inspect the energy terms"],

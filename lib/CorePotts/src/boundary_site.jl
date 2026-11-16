@@ -14,7 +14,7 @@
 # neighbours of every site (`unlike`; t ∈ B iff t is mobile and unlike[t] > 0), and host
 # shadows of σ and of the frozen mask. A committed copy t: a → b changes `unlike` only at t
 # (recounted) and at the sites whose proposal reaches t (the reversed offsets; ±1 each).
-# Every other writer (lifecycle events, `reinit!`, a callback, `u_modified!` /
+# Every other writer (lifecycle events, `reinit!`, a callback, `derivative_discontinuity!` /
 # `refresh_frozen!`) is caught by comparing σ and the mask against the shadows at the start
 # of each sweep and at every read of B (`_boundary_sites`): a site that differs is recounted
 # with the sites that read it. The comparison is one pass over two arrays (O(N) per MCS,
