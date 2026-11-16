@@ -563,7 +563,7 @@ _tangent_run(h::TangentHandle) = h.ref[]::TangentRun
 
 # whether run context `ctx` has a shadow tangent store, as a type (`Val(true)` or `Val(false)`):
 # a primal run dispatches to the no-op methods, so it infers none of the tangent code. A plain
-# method (the repo rules forbid `@generated`): `K` is a constant of the type, so `in` folds
+# method (the repo rules forbid staged functions): `K` is a constant of the type, so `in` folds
 # and the `Val` is inferred
 tangent_on(::NamedTuple{K}) where {K} = Val(:__tangent in K)
 
