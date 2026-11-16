@@ -1,5 +1,5 @@
 # A plain `PDESystem` as fields of a model (F4-11, FE-15b). `Potts.component(name, pdesys,
-# model)` carries it, and `Potts.compose` moves it into the model's payload: each dependent
+# model)` carries it, and `compose` moves it into the model's payload: each dependent
 # variable becomes a field variable, each parameter a model parameter, each equation a field
 # equation and each condition a condition of the payload (`bcs`). The fields then compile,
 # group and run as the fields of `@fields` in `@potts_model`. A component's quantities are namespaced,
@@ -122,7 +122,7 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
         q = qname(n)
         haskey(taken, q) && throw(ArgumentError(string(what, ": ", pname, " declares ", what2, " `", n, "`, and `",
             _hostname(sys), "` already has ", taken[q], " `", q, "`; give one of them another name, or compose the PDESystem ",
-            "as a component, `Potts.compose(model, Potts.component(:name, pdesys, model))`, whose quantities are ",
+                    "as a component, `compose(model, [Potts.component(:name, pdesys, model)])`, whose quantities are ",
             "namespaced (`name₊", n, "`)")))
         return q
     end
@@ -647,7 +647,7 @@ _with_field_inputs(md, ins, origins = (), coupled = ()) =
             origins), coupled)
 
 # payload metadata key (F4-B6): the names of the fields that coupled PDESystems brought (`@fields`,
-# `Potts.couple`, `Potts.compose`, `Potts.wrap`). Their equations are the model's field equations;
+# `Potts.couple`, `compose`, `Potts.wrap`). Their equations are the model's field equations;
 # any other equation of a field is refused (`_check_field_lines`). An extension keeps its bases'
 # entries (`_merged_metadata`).
 struct _CoupledFields end

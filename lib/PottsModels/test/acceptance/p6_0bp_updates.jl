@@ -32,7 +32,7 @@
 #     `ModelingToolkitBase.Pre`.
 #  F. The forms: `updates` is the same (`isequal` equations, equal phase/scope/cadence) on
 #     the plain system and `mtkcompile(sys)` (the authored model, D-160), and after
-#     `Potts.extend` it lists the merged model's statements (MTK's `complete` of a
+#     `extend` it lists the merged model's statements (MTK's `complete` of a
 #     `PottsSystem` is refused since C4: the model already wraps a complete System). With
 #     `@components`, the compiled system reports the statements as written (reading the
 #     component's coupled parameter and observed quantity), not the lowered ones; the
@@ -341,7 +341,7 @@ end
 @testset "P6.0bp F: extend lists the merged model's statements" begin
     base = P60bpAll(; name = :pa)
     extra = P60bpExtra(; name = :extra)
-    ext = Potts.extend(extra, base)
+    ext = extend(extra, base)
     U = p60bp_updates(ext)
     @test length(U) == length(P60BP_TABLE) + 1
     key(u) = (u.phase, u.scope, u.every, string(u.eq))
@@ -429,7 +429,8 @@ end
     # the authored model and the compiled model's `.sys` (D-137)
     forms(s) = (Potts.inner(s), Potts.inner(getfield(mtkcompile(s), :sys)))
     fixtures = [P60bpAll(; name = :pa), P60bpNone(; name = :none), P60bpComp(; name = :pc),
-        P60bpTiming(; name = :pt), Potts.extend(P60bpExtra(; name = :extra), P60bpAll(; name = :pa))]
+        P60bpTiming(; name = :pt), extend(P60bpExtra(; name = :extra), P60bpAll(; name = :pa)),
+    ]
     for sys in [fixtures; [b() for (_, b, _) in P60BP_MODELS]], s in forms(sys)
         @test isempty(P60BP_M.discrete_events(s))
         @test isempty(P60BP_M.continuous_events(s))

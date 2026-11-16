@@ -124,7 +124,7 @@ end
   redeclared takes the extension's default (or the extension's keyword), and every
   expression that reads it uses that one value.
 
-`Potts.extend(sys, base)` is the functional form.
+`extend(sys, base)` is the functional form.
 
 ## Inspecting a model
 

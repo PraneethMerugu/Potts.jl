@@ -1,13 +1,13 @@
-# Composition: `Potts.extend(sys, base)` merges two Potts models, and
+# Composition: MTK's `extend(sys, base)` merges two Potts models, and
 # `@extend names = base = Model()` inside `@potts_model` binds names of a base model.
 #
 # Kinds are numbered, and expressions refer to kinds by number, so the base's kinds must be
 # a prefix of the extension's (an extension may add kinds after them).
 
 """
-    Potts.extend(sys::PottsSystem, base::PottsSystem; name = nameof(sys))
+    extend(sys::PottsSystem, base::PottsSystem; name = nameof(sys))
 
-The model with everything in `base` and `sys`. `sys` wins where both define something
+MTK's `extend` for two Potts models: the model with everything in `base` and `sys`. `sys` wins where both define something
 (parameters and variables by name, relations, the lattice and sweep of a `@potts_model`
 extension that declares them). A vector replaces the base's vector of its name as a whole and
 may be longer, not shorter (the base may read the components a shorter one would drop). Structural replacement: an update of `sys` replaces the base's
@@ -22,12 +22,22 @@ is an `ArgumentError` naming both. An edge variable keeps its relationship too: 
 variable of `sys` that re-declares one of `base` (to change its default) is the base
 relationship's (an unscoped `x(edge)` takes it), and one scoped to another relationship is an
 `ArgumentError` naming the variable and both relationships. Components (`@components`, and
-the components of a [`Potts.compose`](@ref) result) are merged by name: a component of `sys`
-replaces the base's component of the same name as a whole.
+the components of a `compose`
+result) are merged by name: a component of `sys` replaces the base's component of the same name
+as a whole. MTK's other `extend` keywords (`description`, `gui_metadata`) are an
+`ArgumentError` that names them.
 """
-function extend(sys::PottsSystem, base::PottsSystem; name::Symbol = nameof(sys))
-    sys = _lower_inner(sys, "Potts.extend")
-    base = _lower_inner(base, "Potts.extend")
+function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name::Symbol = nameof(sys), kw...)
+    isempty(kw) || throw(
+        ArgumentError(
+            string(
+                "extend: a Potts model takes the keyword `name` only; ",
+                join(("`$k`" for k in keys(kw)), ", "), " is not supported"
+            )
+        )
+    )
+    sys = _lower_inner(sys, "extend")
+    base = _lower_inner(base, "extend")
     length(_p(sys, :kinds)) >= length(_p(base, :kinds)) && _p(sys, :kinds)[1:length(_p(base, :kinds))] == _p(base, :kinds) ||
         throw(ArgumentError("extend: the kinds of $(nameof(base)) $(_p(base, :kinds)) must come first in $(nameof(sys)) $(_p(sys, :kinds))"))
     sys = _renumber_draws(sys, base)

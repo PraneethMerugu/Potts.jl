@@ -4,9 +4,9 @@
 #
 # A `PottsSystem` is an MTK `AbstractSystem` that wraps a complete, flattened ModelingToolkitBase
 # `System` (`Potts.inner(sys)`), a field `PDESystem` or `nothing` (`Potts.fields(sys)`) and the
-# Potts payload. MTK's accessors and `sys.x` are the inner System's; MTK's operations that would
-# rebuild the container (`complete`, `extend`, `compose`, `toggle_namespacing`, metadata
-# setters) are loud on it; Potts models merge with `Potts.extend` and compose with `Potts.compose`.
+# Potts payload. MTK's accessors, the metadata and `sys.x` are the inner System's; a model is
+# complete (`complete` returns it); MTK's `extend` merges two Potts models, MTK's `compose`
+# adds components and `rename` renames; `toggle_namespacing` is refused.
 #
 # The contract checked here:
 #  S. Subtype and fields. `PottsSystem <: AbstractSystem`; its fields are exactly `name`,
@@ -14,7 +14,7 @@
 #     name. The keyword constructor takes `checks` (default true): `checks = false` skips the
 #     construction checks (a reserved kind name `a` is accepted), `checks = true` runs them;
 #     both rebuild a model with the same fingerprint, and so does `Potts.wrap`. MTK's
-#     `T(fields...; checks)` rebuild has no method (so MTK's `compose`/`rename` stay loud).
+#     `T(fields...; checks)` rebuild renames the model (MTK's `@set sys.name`).
 #  A. Accessors (ModelingToolkitBase's generic functions), checked against Potts' own lists:
 #     `equations` (the `@equations` as written, plus each component's equations flattened,
 #     `dc₊y`), `unknowns` (`Potts.variables(sys)` in declaration order, plus each component's
@@ -23,24 +23,23 @@
 #     `parameters` (`Potts.parameters(sys)`, plus each component's), `observed` (one
 #     `name ~ expr` per `@observed` quantity; `observe(prob, lhs) == observe(prob, rhs)`),
 #     `nameof`. The sweep payload is the inner System's metadata; MTK's metadata functions on
-#     the container throw. The `PottsSystem` docstring names the accessors and `Potts.inner`.
+#     the container read and set it. The `PottsSystem` docstring names the accessors and `Potts.inner`.
 #  N. `sys.x` is MTK's `getproperty` on the complete inner System: the declared symbol itself
 #     for parameters, variables of each scope, `@observed` names and names merged by
 #     `@extend` (one and two levels); `sys.dc.y` is the flattened component quantity `dc₊y`;
 #     an undeclared name is an `ArgumentError`. MTK's namespaced view
 #     (`toggle_namespacing(Potts.inner(sys), true).λ`, `pr₊λ`) and the plain symbol both key
 #     the operating point of `PottsProblem`.
-#  C. `Potts.extend` merges two models; `show` is Potts' (text/plain starts with
+#  C. MTK's `extend` merges two models; `show` is Potts' (text/plain starts with
 #     "PottsSystem <name>", names the kinds and the inner System; the two-argument form does
-#     not throw); MTK's `complete` and `toggle_namespacing` on a PottsSystem throw, MTK's
-#     `extend` is an `ArgumentError` naming `Potts.extend` (D-039), and `iscomplete(sys)` is
-#     false while the inner System is complete (R-1).
+#     not throw); MTK's `complete` returns the model, `toggle_namespacing` is an
+#     `ArgumentError`, and `iscomplete(sys)` is true, as for the inner System.
 #     `Potts.lattice(sys)` (public, not exported; D-137 rule 6) returns the lattice.
-#  E. Loud paths: MTK's `compose` with a PottsSystem on either side throws (no recursion, no
-#     build); `ODEProblem`/`JumpProblem` (plain and `{iip}`) on a PottsSystem or a compiled one
-#     are `ArgumentError`s naming `PottsProblem`; MTK's `extend` between a PottsSystem and a
+#  E. MTK's `compose` adds an MTK System to a PottsSystem; a Potts model with CPM statements as
+#     a component, or a PottsSystem inside a plain System, is an `ArgumentError` (no recursion,
+#     no build); `ODEProblem`/`JumpProblem` (plain and `{iip}`) on a PottsSystem or a compiled
+#     one are `ArgumentError`s naming `PottsProblem`; MTK's `extend` between a PottsSystem and a
 #     plain `System` is an `ArgumentError` naming `extend` and `@components` either way (D-039).
-#     (MTK's `compose` no longer has a Potts message: it fails inside MTK.)
 #  Q. Aqua ambiguities and piracy on Potts are clean.
 #  G. A source scan: no property read `<x>sys.<field>`, `base.<field>`, `$bname.<field>`
 #     (and per file `b.`, `m.`, `s.`, see P60O_RECEIVERS) of a PottsSystem or PottsPart field
@@ -339,9 +338,11 @@ struct P60oOtherKey end
     w = Potts.wrap(:pr, inner, nothing, part)
     @test p60o_fp(w, P60O_OP12, (;)) == p60o_fp(sys, P60O_OP12, (;))
     @test_throws ArgumentError Potts.wrap(:other, inner, nothing, part)
-    # MTK rebuilds a system as `T(fields...; checks)`: a PottsSystem has no such method, so
-    # MTK's own `compose`/`rename` on it are loud, never a silent rebuild
-    @test_throws MethodError PottsSystem((getfield(sys, f) for f in fieldnames(PottsSystem))...; checks = false)
+    # MTK rebuilds a system as `T(fields...; checks)` (`@set sys.name = …`): the same model,
+    # renamed when the name differs
+    fs = [getfield(sys, f) for f in fieldnames(PottsSystem)]
+    @test p60o_fp(PottsSystem(fs...; checks = false), P60O_OP12, (;)) == p60o_fp(sys, P60O_OP12, (;))
+    @test nameof(PottsSystem(:other, fs[2:end]...; checks = false)) === :other
 end
 
 # ---------------------------------------------------------------------------------------
@@ -409,10 +410,10 @@ end
     @test nameof(sys) === :pr
     @test P60O_M.getmetadata(Potts.inner(sys), Potts.PottsSweepSpec, nothing) isa Potts.PottsSweepSpec
     @test P60O_M.getmetadata(Potts.inner(sys), P60oKey, :none) === :none
-    # MTK's metadata functions on the container itself are loud (not answered silently): the
-    # container has no MTK `metadata` field
-    @test_throws FieldError P60O_M.getmetadata(sys, P60oKey, :none)
-    @test_throws FieldError P60O_M.setmetadata(sys, P60oKey, 42)
+    # MTK's metadata functions on the container read and set the inner System's
+    @test P60O_M.getmetadata(sys, P60oKey, :none) === :none
+    @test P60O_M.getmetadata(sys, Potts.PottsSweepSpec, nothing) isa Potts.PottsSweepSpec
+    @test P60O_M.getmetadata(P60O_M.setmetadata(sys, P60oKey, 42), P60oKey, :none) == 42
     # documented
     doc = string(Base.Docs.doc(PottsSystem))
     for w in ("equations", "unknowns", "parameters", "observed", "nameof", "Potts.inner")
@@ -455,21 +456,22 @@ end
 end
 
 # ---------------------------------------------------------------------------------------
-# C. Potts.extend, show, lattice; MTK's complete/extend/toggle_namespacing are loud
+# C. extend, show, lattice; MTK's complete returns the model, toggle_namespacing is refused
 
-@testset "P6.0o C: Potts.extend and show; MTK's operations on a PottsSystem are loud" begin
+@testset "P6.0o C: extend and show; MTK's complete and toggle_namespacing on a PottsSystem" begin
     sys = P60oCell(; name = :pr)
     @test parentmodule(which(show, Tuple{IO, MIME"text/plain", PottsSystem})) === Potts
     # extend between Potts systems: a PottsSystem with the union of the declarations
-    ext = Potts.extend(P60oExtra(; name = :extra), sys)
+    ext = extend(P60oExtra(; name = :extra), sys)
     @test ext isa PottsSystem && nameof(ext) === :extra
     @test Set(p60o_names(P60O_M.parameters(ext))) == Set([:λ, :T, :J, :μ])
     @test p60o_fp(ext, P60O_OP12, (;)) != p60o_fp(sys, P60O_OP12, (;))
-    # MTK's own `complete`, `extend` and `toggle_namespacing` on a PottsSystem throw
-    @test_throws FieldError P60O_M.complete(sys)                             # no MTK `ps` field
-    @test p60o_clear(() -> P60O_M.extend(P60oExtra(; name = :extra), sys), "extend", "Potts.extend")
+    # MTK's `complete` returns the model, which is complete as its inner System is; MTK's
+    # `extend` is the merge above; `toggle_namespacing` is refused
+    @test P60O_M.complete(sys) === sys
+    @test P60O_M.extend === extend
     @test_throws ArgumentError P60O_M.toggle_namespacing(sys, false)
-    @test !P60O_M.iscomplete(sys) && P60O_M.iscomplete(Potts.inner(sys))     # R-1: ask the inner
+    @test P60O_M.iscomplete(sys) && P60O_M.iscomplete(Potts.inner(sys))
     # show
     txt = sprint(show, MIME"text/plain"(), sys)
     @test startswith(txt, "PottsSystem pr")
@@ -496,10 +498,13 @@ end
     sys = P60oCell(; name = :pr)
     other = P60oExtra(; name = :extra)
     mtk = p60o_decay()
-    # MTK's compose with a PottsSystem on either side throws (never recurses, never builds)
-    for f in (() -> P60O_M.compose(sys, [mtk]), () -> P60O_M.compose(sys, [other]), () -> P60O_M.compose(sys, other),
+    # MTK's compose adds an MTK System to a PottsSystem; a Potts model with CPM statements as a
+    # component, or a PottsSystem inside a plain System, is refused (never recurses, never builds)
+    @test P60O_M.compose(sys, [mtk]) isa PottsSystem
+    for f in (
+            () -> P60O_M.compose(sys, [other]), () -> P60O_M.compose(sys, other),
               () -> P60O_M.compose(mtk, [sys]), () -> P60O_M.compose(mtk, sys))
-        @test_throws MethodError f()                    # a StackOverflowError (recursion) fails this
+        @test_throws ArgumentError f()                  # a StackOverflowError (recursion) fails this
     end
     for s in (sys, mtkcompile(sys))
         @test p60o_clear(() -> P60O_M.ODEProblem(s, [], (0.0, 1.0)), "PottsProblem")

@@ -439,7 +439,7 @@ end
         host = Potts.PottsSystem(; base...)
         m = Potts.couple(host, CpPDE.sys2(); inputs = [CpPDE.endo => Potts.kind == 1])
         @test maximum(cp_run(m, ExplicitEuler()).u[end].site.c) > 0.5
-        @test Potts.extend(Potts.PottsSystem(; base...), m) isa PottsSystem
+        @test extend(Potts.PottsSystem(; base...), m) isa PottsSystem
     end
 end
 

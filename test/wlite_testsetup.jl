@@ -80,13 +80,25 @@ function wl_agree(f, W, I)
 end
 
 
-# Per published model: REFUSED 80 (every problem route), LOUD 16, BUILT 3.
-const WL_BY_DESIGN = ["flatten(W)", "mtkcompile(W)", "structural_simplify(W)"]
+# Per published model: REFUSED 80 (every problem route), LOUD 11, BUILT 8. MTK's `complete`,
+# `rename`, `compose` (with an MTK System) and `extend` (of two Potts models) answer.
+const WL_BY_DESIGN = [
+    "flatten(W)", "mtkcompile(W)", "structural_simplify(W)", "complete(W)", "complete(W; flatten = false)",
+    "rename(W, :q)", "compose(W, [System])", "extend(W, W)",
+]
 
-const WL_BY_DESIGN_RAW = ["flatten(W)"]
+# The hand-wrapped probe models (their inner Systems hold what no payload builds, so they do
+# not compile, compose with a component of their own name or extend): by model name
+const WL_BY_DESIGN_RAW = Dict(
+    :allparts => ["flatten(W)", "complete(W)", "complete(W; flatten = false)", "rename(W, :q)"],
+    :gg => [
+        "flatten(W)", "complete(W)", "complete(W; flatten = false)", "rename(W, :q)", "compose(W, [System])",
+        "compose(W, W)",
+    ],
+)
 
 const WL_LOUD_REQUIRED = [
-    "compose(W, [System])", "compose(W, W)", "rename(W, :q)", "complete(W)", "extend(W, W)",
+    "compose(W, W)", "toggle_namespacing(W, false)", "mtkcompile(W; inputs)", "convert(System, W)",
     "toggle_namespacing(W, false)", "mtkcompile(W; inputs)", "convert(System, W)",
 ]
 
@@ -96,7 +108,7 @@ const WL_PUBLISHED = (
 )
 
 
-# WL2: compose-then-wrap, `Potts.compose` via `get_parent`, nested, S-2 bindings
+# WL2: compose-then-wrap, `compose` via `get_parent`, nested, S-2 bindings
 module WLiteCompose
     using Potts
     using Potts.ModelingToolkitBase: System, @variables, @parameters
@@ -133,7 +145,7 @@ end
 end
 
 
-# C9: components rebuilt from `Potts.compose`.
+# C9: components rebuilt from `compose`.
 module WLiteC9
     using Potts
     using Potts.ModelingToolkitBase: System, @variables, @parameters

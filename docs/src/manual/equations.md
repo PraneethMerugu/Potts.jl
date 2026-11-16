@@ -662,13 +662,13 @@ s = solve(PottsProblem(dosed, layout(Tiling((5, 5); region = (11:20, 11:20), kin
 s[:pk₊drug][end]
 ```
 
-`Potts.compose(model, Potts.component(:pk, sys, model))` adds the same system outside the
+`compose(model, Potts.component(:pk, sys, model))` adds the same system outside the
 macro. `Potts.component` gives it the model's kinds and lattice, which a component must have.
 
 ### A `PDESystem` as a namespaced component
 
 `@fields` and `Potts.couple` add a `PDESystem` under its own names. To keep its names apart
-from the model's, compose it as a component instead: `Potts.compose(model,
+from the model's, compose it as a component instead: `compose(model,
 Potts.component(:drug, pdesys, model))`. Each dependent variable `c` becomes the field
 `drug₊c`, and each parameter `k` the parameter `drug₊k`. The fields run as the others do:
 with the problem's `field_solver`, or by name in `FieldGroups(:drug₊c => BackwardEuler())`.
@@ -685,7 +685,7 @@ with the problem's `field_solver`, or by name in `FieldGroups(:drug₊c => Backw
 @variables kin(..)::Int32 [input = true, lattice_input_name = "kind"]
 pde = PDESystem([Dt(C) ~ Dk * Δ(C) - kk * C + (kin(t, x, y) == 1)], [],
     lattice_domain(t, (x, y), (30, 30)), [t, x, y], [C, kin(t, x, y)], [Dk, kk]; name = :drug)
-withdrug = Potts.compose(dosed, Potts.component(:drug, pde, dosed))
+withdrug = compose(dosed, Potts.component(:drug, pde, dosed))
 s = solve(PottsProblem(withdrug, layout(Tiling((5, 5); region = (11:20, 11:20), kinds = [:cell]), withdrug), (0, 5)),
     SequentialCPM())
 maximum(s.u[end].site.drug₊c)

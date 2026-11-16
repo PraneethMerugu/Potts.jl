@@ -23,7 +23,7 @@ using LatticeFields.Problems: ExplicitEuler, ExplicitMap, BackwardEuler, CrankNi
 using LatticeFields.Solvers: DevicePCG, DeviceGMRES, Multigrid, V
 using LatticePDE: LatticePDE, PottsEntity, Δ, at, at2, ismember, Coarse
 using LinearAlgebra: Symmetric, eigen, svdvals
-using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile, complete
+using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile, complete, compose, extend
 using PrecompileTools: PrecompileTools
 using RuntimeGeneratedFunctions: RuntimeGeneratedFunctions
 using SciMLBase: SciMLBase
@@ -47,7 +47,7 @@ const D = ModelingToolkitBase.D_nounits
 for name in names(CorePotts)
     (name === :CorePotts || !Base.isexported(CorePotts, name)) || @eval export $name
 end
-export @potts_model, @named, PottsSystem, CompiledPottsSystem, mtkcompile,
+export @potts_model, @named, PottsSystem, CompiledPottsSystem, mtkcompile, compose, extend,
     total_energy, energy_change, generated_code, parameters, variables, observe, Adaptive, ExplicitEuler, ExplicitMap,
     BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, RK4, substep_counts, steady_fields, field_series, field_report, DevicePCG, DeviceGMRES, Multigrid, Coarse
 public V                                   # `Multigrid(; cycle = V(ν₁, ν₂))` (not exported: a short name)
@@ -104,9 +104,9 @@ public KindClass
 # the sweep as MTK-visible metadata (D-160): the Hamiltonian terms, the drives and the payload
 # read with `ModelingToolkitBase.getmetadata(Potts.inner(sys), Potts.PottsSweepSpec, default)`
 public hamiltonian, drives, PottsSweepSpec
-# the container (W-lite LA, v3 §7.1): the inner System, the field PDESystem, the payload; wrap,
-# compose and extend; the field bindings
-public inner, fields, part, component, wrap, compose, extend, PottsPart, FieldBinding, resolve
+# the container (W-lite LA, v3 §7.1): the inner System, the field PDESystem, the payload; wrap
+# and components (`compose` and `extend` are MTK's, exported above); the field bindings
+public inner, fields, part, component, wrap, PottsPart, FieldBinding, resolve
 # a plain PDESystem as the model's fields, its inputs bound to CPM expressions (F4-B2); the
 # current values of those inputs, for SciML solvers of the PDESystem
 public couple, field_inputs, is_kind

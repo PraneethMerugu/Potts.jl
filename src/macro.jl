@@ -387,7 +387,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
                             $P._check_fields_names(__params, __vars, __fields_brought)
                         ) : nothing
                 )
-                $(extends ? :(foldl((s, b) -> $P.extend(s, b; name), __bases; init = $finish)) : finish)
+                $(extends ? :(foldl((s, b) -> $P.ModelingToolkitBase.extend(s, b; name), __bases; init = $finish)) : finish)
             end
         end
     end

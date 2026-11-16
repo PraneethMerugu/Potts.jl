@@ -17,7 +17,7 @@
 #      C4 "complete" holds through the complete System a model wraps, `Potts.inner(sys)`: MTK's
 #      `complete` of the container itself is refused). On every published model MTK's own
 #      `equations`, `unknowns`, `parameters`, `observed`, `nameof` work and return Symbolics
-#      objects and equal the inner System's; `Potts.extend` merges two models;
+#      objects and equal the inner System's; `extend` merges two models;
 #      SymbolicIndexingInterface `getu` (an observed algebraic variable included), `getp` and
 #      `setp` work on a fixture's problem, solution and integrator.
 #  C3. The Hamiltonian, drives and constraints are Symbolics expressions readable through
@@ -223,8 +223,8 @@ end
     # the field `c` is in the PDESystem, not among the System's unknowns; `sys.c` names it
     @test !(:c in p60bs_names(P60BS_M.unknowns(sys))) && Potts.info(sys.c).name === :c
     @test Set([:k, :r, :Dc]) ⊆ p60bs_names(P60BS_M.parameters(sys))
-    # `Potts.extend` merges two models
-    ext = Potts.extend(P60bsExtra(; name = :extra), sys)
+    # `extend` merges two models
+    ext = extend(P60bsExtra(; name = :extra), sys)
     @test ext isa PottsSystem
     @test :κ in p60bs_names(P60BS_M.parameters(ext)) && :k in p60bs_names(P60BS_M.parameters(ext))
     @test length(Potts.hamiltonian(ext)) == 2

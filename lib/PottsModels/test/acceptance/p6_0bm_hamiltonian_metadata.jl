@@ -39,7 +39,7 @@
 #     entry per `@constraint`, `temperature` is the `@sweep` temperature as written (the
 #     declared symbol `T`), `proposal` the `@relations proposal` relation. It is present on
 #     `mtkcompile(sys)` (the `CompiledPottsSystem` itself) and on its `.sys`'s inner System,
-#     and describes the merged model after `Potts.extend` (never the base's stale payload).
+#     and describes the merged model after `extend` (never the base's stale payload).
 #     `show` of the payload names `PottsSweepSpec`. Other metadata keys behave as before on
 #     the inner System.
 #  N. Negative controls: a plain MTK `System` (and its `mtkcompile`) has no payload
@@ -269,7 +269,7 @@ end
 
 @testset "P6.0bm H: extend merges the terms" begin
     base = P60bmHam(; name = :hx)
-    ext = Potts.extend(P60bmExtra(; name = :extra), base)
+    ext = extend(P60bmExtra(; name = :extra), base)
     H = Potts.hamiltonian(ext)
     @test length(H) == 4
     got = Set(string(P60BM_S.unwrap(last(t))) for t in H)
@@ -354,7 +354,7 @@ end
 
 @testset "P6.0bm M: extend gives the merged model's payload" begin
     base = P60bmHam(; name = :hx)
-    ext = Potts.extend(P60bmExtra(; name = :extra), base)
+    ext = extend(P60bmExtra(; name = :extra), base)
     spec = p60bm_spec(ext)
     @test spec isa Potts.PottsSweepSpec
     @test length(spec.hamiltonian) == 4                             # not the base's 3, not the extra's 1

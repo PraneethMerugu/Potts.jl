@@ -741,7 +741,7 @@ MTK's `@extend`:
 - The base's kinds must come first in the extension's `@kinds`, which may add more (for
   example `wall[frozen]`).
 
-`Potts.extend(sys, base)` is the functional form. Quantities can also be read by name:
+`extend(sys, base)` is the functional form. Quantities can also be read by name:
 `sol[:volume]`, `sol[:c]`, `sol[:my_observed]`.
 
 ---

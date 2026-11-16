@@ -149,8 +149,8 @@ p60al_find(xs, n) = only(filter(x -> Potts.info(x).name === n, xs))
     @testset "programmatic builds: extend and PottsSystem" begin
         base = P60alBase(; name = :b)
         var = P60alVarGain(; name = :v)
-        @test p60al_rejection(() -> Potts.extend(var, base), "gain", "parameter", "variable") === :ok
-        @test p60al_rejection(() -> Potts.extend(base, var), "gain", "parameter", "variable") === :ok
+        @test p60al_rejection(() -> extend(var, base), "gain", "parameter", "variable") === :ok
+        @test p60al_rejection(() -> extend(base, var), "gain", "parameter", "variable") === :ok
         @test p60al_rejection(() -> Potts.PottsSystem(; name = :p, kinds = getfield(getfield(base, :part), :kinds), lattice = Potts.lattice(base),
             sweep = getfield(getfield(base, :part), :sweep), parameters = Any[Potts.parameters(base)...], variables = Any[Potts.variables(var)...]),
             "gain", "parameter", "variable") === :ok
@@ -158,7 +158,7 @@ p60al_find(xs, n) = only(filter(x -> Potts.info(x).name === n, xs))
         @test Potts.PottsSystem(; name = :p, kinds = getfield(getfield(base, :part), :kinds), lattice = Potts.lattice(base), sweep = getfield(getfield(base, :part), :sweep),
             parameters = Any[filter(p -> Potts.info(p).name !== :gain, Potts.parameters(base))...],
             variables = Any[Potts.variables(var)...]) isa Potts.PottsSystem
-        @test Potts.extend(P60alBase(; name = :b2), base) isa Potts.PottsSystem
+        @test extend(P60alBase(; name = :b2), base) isa Potts.PottsSystem
     end
 
     @testset "controls: a redeclaration in its own category is an override" begin

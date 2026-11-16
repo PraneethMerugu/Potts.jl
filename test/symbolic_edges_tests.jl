@@ -246,7 +246,7 @@ end
                 (:edge, [Potts.relationship(:tether; capacity = 1)]), (:edge, Potts.RelationshipSpec[]),
                 (:edge, [Potts.relationship(:tether), Potts.relationship(:glue)]), (:bond, Potts.RelationshipSpec[]),
             )
-            c = mtkcompile(Potts.extend(ext(scope; rels), base))
+            c = mtkcompile(extend(ext(scope; rels), base))
             @test [Potts.info(x).name for x in c.edge_vars[:bond]] == [:rest]
             @test all(r -> isempty(c.edge_vars[r]), filter(!=(:bond), collect(keys(c.edge_vars))))
             prob = PottsProblem(c, op, (0, 5))
@@ -254,11 +254,11 @@ end
             @test total_energy(prob) == total_energy(PottsProblem(base, [op; :rest => 9.0], (0, 5)))
         end
         # a nested extension (of an extension) keeps it too
-        c = mtkcompile(Potts.extend(ext(:edge; rels = Potts.RelationshipSpec[]), Potts.extend(ext(:edge), base; name = :mid)))
+        c = mtkcompile(extend(ext(:edge; rels = Potts.RelationshipSpec[]), extend(ext(:edge), base; name = :mid)))
         @test [Potts.info(x).name for x in c.edge_vars[:bond]] == [:rest] && isempty(c.edge_vars[:tether])
         # another relationship: rejected when built, naming the variable and both relationships
-        @test_throws ArgumentError Potts.extend(ext(:tether), base)
-        @test_throws r"`rest`.*`bond`.*`tether`" Potts.extend(ext(:tether), base)
+        @test_throws ArgumentError extend(ext(:tether), base)
+        @test_throws r"`rest`.*`bond`.*`tether`" extend(ext(:tether), base)
         # control: without the base's variable, `rest(tether)` is the extension's own
         c = mtkcompile(ext(:tether))
         @test [Potts.info(x).name for x in c.edge_vars[:tether]] == [:rest]
@@ -304,7 +304,7 @@ end
         @test !any(x -> haskey(Potts.info(x).options, :implicit_relationship), Potts.variables(settled))
         bop = [ownership => σ, kind => [:blob, :blob, :blob], :tether => [(2, 3)]]
         @test PottsProblem(body, bop, (0, 5)).f.fingerprint == PottsProblem(settled, bop, (0, 5)).f.fingerprint
-        sys = Potts.extend(EdgeBody(; name = :x), Spring(; name = :s))
+        sys = extend(EdgeBody(; name = :x), Spring(; name = :s))
         c = mtkcompile(sys)
         @test [Potts.info(x).name for x in c.edge_vars[:bond]] == [:rest]
         @test [Potts.info(x).name for x in c.edge_vars[:tether]] == [:len]
@@ -314,7 +314,7 @@ end
         @test p.u0.cell.link_rest[1, 1] == 9.0 && p.u0.cell.link_len[1, 2] == 18.0
         @test total_energy(p) == total_energy(q) == 3264 + 72 + 6
         # an explicit `rest(tether)` is still a move, and rejected
-        @test_throws r"`rest`.*`bond`.*`tether`" Potts.extend(
+        @test_throws r"`rest`.*`bond`.*`tether`" extend(
             RestOnTether(; name = :x) |> s -> Potts.PottsSystem(;
                 name = :x,
                 kinds = Potts._p(s, :kinds), lattice = Potts.lattice(s), sweep = Potts._p(s, :sweep), relationships = Potts._p(s, :relationships),
@@ -323,7 +323,7 @@ end
             Spring(; name = :s)
         )
         # once merged, a binding is settled: a second base declaring `rest` elsewhere is an error
-        @test_throws ArgumentError Potts.extend(Potts.extend(EdgeBody(; name = :x), Spring(; name = :s)), RestOnTether(; name = :t))
+        @test_throws ArgumentError extend(extend(EdgeBody(; name = :x), Spring(; name = :s)), RestOnTether(; name = :t))
     end
 end
 

@@ -38,7 +38,7 @@
         σw = zeros(Int32, 40, 40); σw[:, 1] .= 1; σw[10:15, 10:15] .= 2; σw[20:25, 20:25] .= 3
         pw = PottsProblem(w, [ownership => σw, kind => [:wall, :dark, :light]], (0, 10))
         @test pw.p.T == 6.0 && count(pw.frozen) == 40
-        @test_throws ArgumentError Potts.extend(
+        @test_throws ArgumentError extend(
             PottsSystem(;
                 name = :x, kinds = [:medium, :light], lattice = Potts.lattice(SORTING.sys),
                 sweep = Potts._p(SORTING.sys, :sweep)
@@ -130,7 +130,7 @@ end
         # locations survive `extend`
         m = msg(
             () -> mtkcompile(
-                Potts.extend(
+                extend(
                     PottsSystem(;
                         name = :e, kinds = [:medium, :A], lattice = Potts.lattice_spec((8, 8)),
                         sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)
@@ -279,7 +279,7 @@ end
         @test rejection(() -> NVSingleScalar1(; name = :ext), "`vb_2`", "component of the vector `vb`") === :ok
         # programmatic: `extend` and a hand-built `PottsSystem`
         base, var = NameVecBase(; name = :b), NameVecVarBase(; name = :v)
-        @test rejection(() -> Potts.extend(var, base), "`vb_1`", "in the base `b`", "component of the vector `vb`") === :ok
+        @test rejection(() -> extend(var, base), "`vb_1`", "in the base `b`", "component of the vector `vb`") === :ok
         @test rejection(
             () -> Potts.PottsSystem(;
                 name = :p, kinds = Potts._p(base, :kinds), lattice = Potts.lattice(base), sweep = Potts._p(base, :sweep),
@@ -390,28 +390,21 @@ end
 end
 
 
-@testitem "W-lite: MTK's system operations on a PottsSystem are loud; metadata is the inner System's" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "W-lite: MTK's system operations on a PottsSystem are loud; metadata is the inner System's" begin
+@testitem "MTK's system operations on a PottsSystem; metadata is the inner System's" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "MTK's system operations on a PottsSystem; metadata is the inner System's" begin
         M = Potts.ModelingToolkitBase
         sys = NsCell(; name = :pr)
-        @test !isdefined(Potts, :complete) || Potts.complete === M.complete     # Potts no longer exports MTK's `complete`
-        @test !Base.isexported(Potts, :complete) && !Base.isexported(Potts, :extend)
-        @test_throws ErrorException M.complete(sys)
-        err_ext = try
-            M.extend(sys, NsCell(; name = :b))
-            nothing
-        catch err
-            err
-        end
-        @test err_ext isa ArgumentError &&
-            occursin("does not merge a Potts model", sprint(showerror, err_ext)) &&
-            occursin("Potts.extend", sprint(showerror, err_ext))
+        # Potts re-exports MTK's own `compose` and `extend`; `complete` is MTK's, not exported
+        @test Potts.complete === M.complete && Potts.compose === M.compose && Potts.extend === M.extend
+        @test !Base.isexported(Potts, :complete)
+        @test M.complete(sys) === sys
+        @test M.extend(sys, NsCell(; name = :b)) isa PottsSystem
         @test_throws ArgumentError M.toggle_namespacing(sys, false)
-        @test_throws MethodError NsSetfield.@set sys.name = :zz
-        @test_throws FieldError M.getmetadata(sys, NsKey, nothing)
-        # the sweep payload is on the inner System, and follows `Potts.extend`
+        @test nameof(NsSetfield.@set sys.name = :zz) === :zz
+        @test M.getmetadata(sys, NsKey, nothing) === nothing
+        # the sweep payload is on the inner System, and follows `extend`
         @test M.getmetadata(Potts.inner(sys), Potts.PottsSweepSpec, nothing) isa Potts.PottsSweepSpec
-        e = Potts.extend(NsCell(; name = :a), NsCell(; name = :b))
+        e = extend(NsCell(; name = :a), NsCell(; name = :b))
         @test M.getmetadata(Potts.inner(e), Potts.PottsSweepSpec, nothing) isa Potts.PottsSweepSpec
         @test M.getmetadata(Potts.inner(sys), NsKey, nothing) === nothing
     end

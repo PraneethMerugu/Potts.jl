@@ -215,7 +215,7 @@ end
         sys = @test_logs (:warn, r"@divide cells\(1\) Every\(3\).*adds to the base's @divide cells\(1\) Every\(2\)") CadenceDivExt(; name = :e, case = :new_cadence)
         @test [d.every for d in Potts._p(sys, :divisions)] == [2, 3]                  # both rules stay, each with its cadence
         # two separately built models: extend renumbers the draws of `sys` and keeps its cadences
-        other = @test_logs (:warn, r"adds to the base's") Potts.extend(
+        other = @test_logs (:warn, r"adds to the base's") extend(
             CadenceDivOther(; name = :o), CadenceDivBase(; name = :b)
         )
         @test [d.every for d in Potts._p(other, :divisions)] == [2, 3]

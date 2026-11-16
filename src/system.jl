@@ -26,7 +26,7 @@ end
 
 A coupling of a model input to the field side (S-2): the input `name` of the component at
 `path` (a vector of component names, empty for the model itself) is driven by `source`.
-Bindings are stored per component as `(path, name)`; [`Potts.compose`](@ref) prefixes the
+Bindings are stored per component as `(path, name)`; `compose` prefixes the
 path by the component name, and the input resolves after the wrap as
 `getproperty(foldl(getproperty, path; init = sys), name)` ([`Potts.resolve`](@ref)), a term of
 `unknowns(sys)`. They are stored and printed; the field compiler consumes them.
@@ -102,8 +102,14 @@ each component's equations, namespaced `dc₊y`), `unknowns(sys)` (the declared 
 every scope plus each component's unknowns; never the lattice ownership, kinds or built-in
 cell properties, and never a field: the fields and their equations are in
 [`Potts.fields`](@ref)`(sys)`, a `PDESystem`; `sys.c` still names the field `c`), `parameters(sys)`, `observed(sys)` (one `name ~ expr` per `@observed`
-quantity), `initial_conditions(sys)`, `bindings(sys)`, `independent_variables(sys)` (`[t]`)
-and `nameof(sys)`. SymbolicIndexingInterface queries are answered by the inner System.
+quantity), `initial_conditions(sys)` (each parameter's value: its default, or the keyword that
+overrides it), `bindings(sys)`, `guesses(sys)`, `inputs(sys)`, `outputs(sys)`,
+`independent_variable(sys)` (`t`), the metadata (`getmetadata`, `hasmetadata`; `setmetadata`
+returns the model with its inner System's metadata set) and `nameof(sys)`. A model is complete:
+`iscomplete(sys)` is `true`, `does_namespacing(sys)` is `false` and `complete(sys)` returns it.
+SymbolicIndexingInterface getters and setters built from the model (`getp(sys, λ)`,
+`getu(sys, volume)`) look their symbol up in the problem, integrator or solution they are
+applied to; other SymbolicIndexingInterface queries are answered by the inner System.
 
 `sys.x` is MTK's own `getproperty` on the complete inner System: the declared symbol itself
 (`sys.λ` is `λ`), and `sys.dc.y` is the component quantity `dc₊y`. A name that is not a
@@ -111,18 +117,20 @@ quantity or component of the system is an `ArgumentError`. Either form, and the 
 `name₊x` of the model's own name, works as a key wherever a model quantity is named
 (operating point, `remake`, `getu`/`setu`/`getp`, `observe`, `prob[…]`/`sol[…]`, `solvers`)
 for a model built by `@potts_model` or the keyword constructor. A model from
-[`Potts.compose`](@ref) compiles, solves and extends with each component as a model-scope
-component (`@components model c = system`); a `Potts.wrap` of a hand-built System does when
-its top-level content is its payload's and the rest is subsystems (otherwise an
-`ArgumentError` naming the content).
+`compose` compiles, solves
+and extends with each component as a model-scope component (`@components model c = system`);
+a `Potts.wrap` of a hand-built System does when its top-level content is its payload's and the
+rest is subsystems (otherwise an `ArgumentError` naming the content).
 
-Other MTKBase functions are not answered by a `PottsSystem`: ask `Potts.inner(sys)`
-(`iscomplete`, `get_iv`, `full_equations`, `guesses`, the metadata, …; `iscomplete(sys)` itself
-is `false`). `complete`, `extend`, MTK's `compose` and `toggle_namespacing` are errors; Potts
-models merge with [`Potts.extend`](@ref) (`@extend`) and compose with
-[`Potts.compose`](@ref); MTK's `extend` is an `ArgumentError` saying so. Every SciMLBase problem constructor (`ODEProblem`, `JumpProblem`, …)
-is an `ArgumentError` naming `PottsProblem`; `mtkcompile(sys)` compiles the CPM
-([`CompiledPottsSystem`](@ref)). `Potts.lattice(sys)` is the model's lattice and
+MTK's operations: `compose(sys, [components])` adds components,
+`extend``(sys, base)` merges two
+Potts models (`@extend`), and `rename(sys, name)` (and `@named models[1:n] = Model(…)`)
+renames. MTK's `extend` between a Potts model and another system, and MTK's `compose` with a
+Potts model inside a plain `System`, are `ArgumentError`s naming the route;
+`toggle_namespacing` is an `ArgumentError`. Every SciMLBase problem constructor (`ODEProblem`,
+`JumpProblem`, …) is an `ArgumentError` naming `PottsProblem`; `mtkcompile(sys)` compiles the
+CPM ([`CompiledPottsSystem`](@ref)). Other MTKBase functions (`get_iv`, …) are asked of
+`Potts.inner(sys)`. `Potts.lattice(sys)` is the model's lattice and
 `Potts.parameters(sys)`/`Potts.variables(sys)` its own declarations.
 """
 struct PottsSystem <: ModelingToolkitBase.AbstractSystem
@@ -151,7 +159,7 @@ inner(sys::PottsSystem) = getfield(sys, :inner)
     Potts.part(sys::PottsSystem) -> PottsPart
 
 The Potts payload of a model (kinds, lattice, energies, sweep, …). A component for
-`Potts.compose` is built with [`Potts.component`](@ref), which takes the model's kinds and
+`compose` is built with [`Potts.component`](@ref), which takes the model's kinds and
 lattice and none of its statements.
 """
 part(sys::PottsSystem) = getfield(sys, :part)
@@ -159,7 +167,7 @@ part(sys::PottsSystem) = getfield(sys, :part)
 """
     Potts.component(name, sys::System, model::PottsSystem) -> PottsSystem
 
-The MTK `System` `sys` as a component of `model`, for [`Potts.compose`](@ref): it is
+The MTK `System` `sys` as a component of `model`, for `compose`: it is
 `Potts.wrap(name, sys, nothing, part)` with a payload that has the kinds, the lattice and the
 sweep of `model` and no statements (no energies, drives, constraints, …), which is what a
 composed component may carry. `sys` is named `name` (`@named`); a Catalyst reaction network
@@ -167,7 +175,7 @@ composed component may carry. `sys` is named `name` (`@named`); a Catalyst react
 
 ```julia
 @named decay = System([D(y) ~ -k * y], t)
-sys = Potts.compose(model, Potts.component(:decay, decay, model))
+sys = compose(model, [Potts.component(:decay, decay, model)])
 ```
 """
 component(name::Symbol, sys::ModelingToolkitBase.System, model::PottsSystem) =
@@ -176,8 +184,8 @@ component(name::Symbol, sys::ModelingToolkitBase.System, model::PottsSystem) =
 """
     Potts.component(name, pdesys::PDESystem, model::PottsSystem) -> PottsSystem
 
-The `PDESystem` `pdesys` (named `name`) as fields of `model`, for [`Potts.compose`](@ref).
-`Potts.compose(model, Potts.component(:drug, pdesys, model))` adds each dependent variable
+The `PDESystem` `pdesys` (named `name`) as fields of `model`, for `compose`.
+`compose(model, [Potts.component(:drug, pdesys, model)])` adds each dependent variable
 `c` as the field `drug₊c`, each parameter `k` as the parameter `drug₊k` (with its value),
 each equation as a field equation and each condition as a condition of the model, so the
 fields run as the fields of `@fields` do: with the default field solver, or by name in
@@ -270,7 +278,7 @@ _component_part(model::PottsSystem) =
     Potts.fields(c::CompiledPottsSystem)
 
 The `PDESystem` of a model's fields, or `nothing` for a model without fields. A model built
-by `@potts_model`, `Potts.couple` or `Potts.compose` has its PDESystem built from the field
+by `@potts_model`, `Potts.couple` or `compose` has its PDESystem built from the field
 variables, equations and conditions of its coupled PDESystems; a compiled model returns the
 one `mtkcompile` built.
 Either carries the model's defaults as `initial_conditions` (each field's initial value and
@@ -608,14 +616,24 @@ function _inner_system(sys::PottsSystem)
         _is_field_variable(x) && info(x).name in read || continue
         push!(vars, SymbolicUtils.setmetadata(_unwrap(x), ModelingToolkitBase.VariableInput, true))
     end
+    # each parameter's value (its declared default, or the keyword that overrides it) is an
+    # initial condition, as `@mtkmodel` writes a parameter's default, so MTK and
+    # SymbolicIndexingInterface see it; a computed parameter (an expression of others) is not
+    values = Dict{Any, Any}()
+    for p in _p(sys, :parameters)
+        i = info(p)
+        i === nothing || i.default === nothing || _is_symbolic(i.default) || (values[_unwrap(p)] = i.default)
+    end
     return ModelingToolkitBase.System(
         eqs, _unwrap(t), vars, _p(sys, :parameters);
         name = nameof(sys), observed = _p(sys, :observed), initialization_eqs = _p(sys, :initialization_eqs),
-        systems = _component_systems(_p(sys, :components)), checks = ModelingToolkitBase.CheckComponents)
+        initial_conditions = values, systems = _component_systems(_p(sys, :components)),
+        checks = ModelingToolkitBase.CheckComponents
+    )
 end
 
-# The compile pipeline and `Potts.extend` read the payload only. A model whose inner System
-# holds more than its payload builds (a `Potts.compose` result, a `Potts.wrap` of a hand-built
+# The compile pipeline and `extend` read the payload only. A model whose inner System
+# holds more than its payload builds (a `compose` result, a `Potts.wrap` of a hand-built
 # System with subsystems) is first lowered (`_lower_inner`): each subsystem the payload does
 # not declare becomes a model-scope component (`ComponentSpec(name, system, :model)`, as
 # `@components model name = system`), and the model is rebuilt from that payload. Content the
@@ -672,6 +690,10 @@ function _inner_diff(I, ref)
         a, b = names(f(I)), names(f(ref))
         a == b && continue
         extra = sort!(collect(setdiff(a, b)))
+        # the payload writes each parameter's value as an initial condition: a hand-built
+        # System that leaves them out holds nothing the payload cannot build (one that gives
+        # another value does: that entry is extra)
+        label == "initial conditions" && isempty(extra) && continue
         push!(diff, "$label not in the payload: " * (isempty(extra) ? "(the payload's differ)" : join(first(extra, 5), ", ")))
     end
     return diff
@@ -682,7 +704,7 @@ end
 
 `sys` itself when its inner System is the one its payload builds; otherwise the model rebuilt
 from its payload with every undeclared subsystem of the inner System's hierarchy as a
-model-scope component (cutover C9: components rebuilt from `Potts.compose`). An
+model-scope component (cutover C9: components rebuilt from `compose`). An
 `ArgumentError` when the inner System holds anything else, or a component has inputs (field
 bindings are not compiled into components).
 """
@@ -701,7 +723,7 @@ function _lower_inner(sys::PottsSystem, what::AbstractString)
     for s in subs
         nameof(s) in declared && continue          # an `@components` system of the payload
         # a subsystem built from a Potts payload (`get_parent(Potts.inner(m))` wrapped by hand)
-        # carries what a `Potts.compose` component may not; check it the same way
+        # carries what a `compose` component may not; check it the same way
         m = SymbolicUtils.getmetadata(s, _BuiltFrom, nothing)
         m isa Tuple && m[1] isa PottsPart && _check_component_part(nameof(s), m[1], what)
         for q in M.parameters(s)
@@ -771,15 +793,18 @@ a term of `unknowns(sys)`.
 resolve(sys::PottsSystem, b::FieldBinding) = getproperty(foldl(getproperty, b.path; init = sys), b.name)
 
 """
-    Potts.compose(p::PottsSystem, cs::PottsSystem...; name = nameof(p))
+    compose(p::PottsSystem, cs::AbstractArray; name = nameof(p))
+    compose(p::PottsSystem, cs...; name = nameof(p))
 
-`p` with the systems `cs` as components: the inner Systems are composed (MTK's `compose` on
+MTK's `compose` for a Potts model: `p` with the systems `cs` as components. A component is a
+[`Potts.component`](@ref), or an MTK `System` or `PDESystem` itself (taken as
+`Potts.component(nameof(c), c, p)`). The inner Systems are composed (MTK's `compose` on
 the unflattened hierarchies, `get_parent`), completed and wrapped, so `sys.c.x` is the
 quantity `c₊x` of component `c` and nested compositions match composing the raw Systems.
 The `PDESystem`s are merged; the payload is `p`'s, with each component's field bindings
 under its name. A component's own CPM statements (energies, drives, …) are an
 `ArgumentError`: components carry quantities, equations and bindings. `mtkcompile`,
-`PottsProblem` and [`Potts.extend`](@ref) compile each component as a model-scope component
+`PottsProblem` and `extend` compile each component as a model-scope component
 (`@components model c = system`: its unknowns are model variables `c₊x`, its parameters model
 parameters `c₊k`). An `ArgumentError` names what a component cannot carry: inputs (field
 bindings are not compiled into components), quantities per site, cell, edge or field, kind
@@ -790,18 +815,26 @@ model's fields: its fields, parameters, equations and conditions become the mode
 `c₊x`, and the result is rebuilt from its payload. A component's sweep and structural keywords are its constructor's
 and are not read. Units and guesses of a component's quantities are kept; their types are not
 (a component's unknowns and parameters become Real model quantities). Build a component with
-[`Potts.component`](@ref): `Potts.compose(p, Potts.component(:rn, Catalyst.ode_model(complete(rn)), p))`
-composes a Catalyst reaction network.
+[`Potts.component`](@ref): `compose(p, [Potts.component(:rn, Catalyst.ode_model(complete(rn)), p)])`
+composes a Catalyst reaction network. With no components, `compose` returns `p`, as MTK's does.
+MTK's `compose` of a plain `System` with a Potts model as its component is an `ArgumentError`:
+compose the MTK system into the Potts model instead.
 """
-function compose(p::PottsSystem, cs::PottsSystem...; name::Symbol = nameof(p))
-    isempty(cs) && throw(ArgumentError("Potts.compose: give at least one component"))
+function ModelingToolkitBase.compose(p::PottsSystem, systems::AbstractArray; name = nameof(p))
+    isempty(systems) && return p
+    name isa Symbol || throw(ArgumentError("compose: `name` is a Symbol; got $(repr(name))"))
+    cs = Tuple(_as_component(c, p) for c in systems)
     taken = Set{Symbol}(nameof.(ModelingToolkitBase.get_systems(something(ModelingToolkitBase.get_parent(inner(p)), inner(p)))))
     quantities = Set{Symbol}(Symbol(SymbolicIndexingInterface.getname(x)) for x in
                              [ModelingToolkitBase.unknowns(inner(p)); ModelingToolkitBase.parameters(inner(p))])
     for c in cs
-        nameof(c) in taken && throw(ArgumentError("Potts.compose: `$(nameof(p))` already has a component named " *
+        nameof(c) in taken && throw(
+            ArgumentError(
+                "compose: `$(nameof(p))` already has a component named " *
                                                   "`$(nameof(c))`; give each component its own name"))
-        nameof(c) in quantities && throw(ArgumentError("Potts.compose: `$(nameof(p))` has a quantity named " *
+        nameof(c) in quantities && throw(
+            ArgumentError(
+                "compose: `$(nameof(p))` has a quantity named " *
                                                        "`$(nameof(c))`; give the component another name"))
         push!(taken, nameof(c))
     end
@@ -819,6 +852,25 @@ function compose(p::PottsSystem, cs::PottsSystem...; name::Symbol = nameof(p))
     return wrap(name, complete(sys; allow_parameter_eqs = true), _merge_fields(name, p, cs), _merge_part(p, cs))
 end
 
+# a component of `p` for `compose`: a Potts model as it is, an MTK system as `Potts.component`
+_as_component(c::PottsSystem, ::PottsSystem) = c
+_as_component(c::Union{ModelingToolkitBase.System, ModelingToolkitBase.PDESystem}, p::PottsSystem) = component(nameof(c), c, p)
+_as_component(c, p::PottsSystem) = throw(
+    ArgumentError(
+        "compose: a component of the Potts model `$(nameof(p))` is a Potts model, an MTK `System` or `PDESystem`, " *
+            "or a `Potts.component`; got a $(typeof(c))"
+    )
+)
+
+# MTK's `compose` with a plain System around a Potts model: a Potts model is not a subsystem
+# of an MTK System (its lattice and sweep have no place there)
+ModelingToolkitBase.compose(s::ModelingToolkitBase.System, ::AbstractArray{<:PottsSystem}; kw...) = throw(
+    ArgumentError(
+        "compose($(nameof(s)), …): a Potts model is not a component of an MTK System; compose the other way round, " *
+            "`compose(model, [$(nameof(s))])`, or declare `$(nameof(s))` in the model with `@components`"
+    )
+)
+
 # whether the inner System `I` holds nothing (a `Potts.component` of a PDESystem)
 _empty_system(I) = (M = ModelingToolkitBase; P = something(M.get_parent(I), I);
                     isempty(M.unknowns(I)) && isempty(M.parameters(I)) && isempty(M.equations(I)) &&
@@ -827,11 +879,11 @@ _empty_system(I) = (M = ModelingToolkitBase; P = something(M.get_parent(I), I);
 # `p` with the PDESystem of each component of `pdes` as fields, named `component₊n`, rebuilt
 # from its payload (its own composed components lowered first, as `mtkcompile` does)
 function _with_pde_components(p::PottsSystem, pdes, name::Symbol)
-    base = _lower_inner(p, "Potts.compose")
+    base = _lower_inner(p, "compose")
     part = getfield(base, :part)
     for c in pdes
         _check_component_like(p, c)
-        part = _with_pde(base, part, _stored_fields(c), nameof(c), "Potts.compose: component `$(nameof(c))`")
+        part = _with_pde(base, part, _stored_fields(c), nameof(c), "compose: component `$(nameof(c))`")
     end
     return _wrap_payload(name, nothing, part)
 end
@@ -846,13 +898,17 @@ function _merge_fields(name, p, cs)
     # (subsystems, analytic solutions) are refused, never dropped (SX-21)
     for f in fs
         isempty(getfield(f, :systems)) && getfield(f, :analytic) === nothing && getfield(f, :analytic_func) === nothing ||
-            throw(ArgumentError("Potts.compose: the PDESystem `$(nameof(f))` has subsystems or analytic solutions, " *
+            throw(
+            ArgumentError(
+                "compose: the PDESystem `$(nameof(f))` has subsystems or analytic solutions, " *
                                 "which a composed model's PDESystem does not carry; leave them out"))
     end
     ic = Dict{Any, Any}()
     for f in fs, (k, v) in getfield(f, :initial_conditions)
         haskey(ic, k) && !isequal(ic[k], v) && throw(ArgumentError(
-            "Potts.compose: two PDESystems give `$k` different initial conditions ($(ic[k]) and $v)"))
+                "compose: two PDESystems give `$k` different initial conditions ($(ic[k]) and $v)"
+            )
+        )
         ic[k] = v
     end
     ps(f) = (x = getfield(f, :ps); x isa SciMLBase.NullParameters ? Any[] : x)
@@ -863,7 +919,7 @@ end
 const _STATEMENT_FIELDS = (:energies, :drives, :constraints, :updates, :divisions, :converts, :relationships, :link_rules,
     :discrete)
 
-# What a composed component (a `Potts.compose` component, or a subsystem built from a Potts
+# What a composed component (a `compose` component, or a subsystem built from a Potts
 # payload) cannot carry into the model, refused by name and never dropped: CPM statements; its
 # relations, kind classes, obstacle kinds, schedule and boundary conditions; its own
 # `@components` (a per-cell one would become model-wide; compose components directly).
@@ -897,13 +953,13 @@ end
 
 # what a component of `p` must be: no CPM statements, and the kinds and lattice of `p`
 function _check_component_like(p, c)
-    _check_component_part(nameof(c), getfield(c, :part), "Potts.compose")
+    _check_component_part(nameof(c), getfield(c, :part), "compose")
     # a component's folds read kinds by number and the lattice's sites: they must be the model's
     _p(c, :kinds) == _p(p, :kinds) || throw(ArgumentError(
-        "Potts.compose: component `$(nameof(c))` has the kinds $(_p(c, :kinds)), the model `$(nameof(p))` " *
+            "compose: component `$(nameof(c))` has the kinds $(_p(c, :kinds)), the model `$(nameof(p))` " *
         "$(_p(p, :kinds)); a component is built with the model's kinds (`Potts.component(name, system, model)`)"))
     _same_lattice(_p(c, :lattice), _p(p, :lattice)) || throw(ArgumentError(
-        "Potts.compose: component `$(nameof(c))` has another lattice than the model `$(nameof(p))`; a component is " *
+            "compose: component `$(nameof(c))` has another lattice than the model `$(nameof(p))`; a component is " *
         "built with the model's lattice (`Potts.component(name, system, model)`)"))
     return nothing
 end
@@ -996,8 +1052,8 @@ is not a field read: `sys.<name>` is a declared symbol.
 """
 lattice(sys::PottsSystem) = _p(sys, :lattice)
 
-# --- The container's owned methods (W-lite LA, v3 §7.1). Exactly these 18; a test lists them.
-# Each forwards to the complete inner System. `nameof` is MTK's generic method on the `name`
+# --- The container's owned methods (W-lite LA, v3 §7.1); a test lists them. Each accessor
+# forwards to the complete inner System. `nameof` is MTK's generic method on the `name`
 # field. MTKBase's own SymbolicIndexingInterface methods on `::AbstractSystem` would read the
 # container's (absent) index cache, so the five SII methods below route them to the inner
 # System; `symbolic_container` covers the rest of the interface.
@@ -1025,7 +1081,70 @@ _MTKB.parameters(s::PottsSystem; kw...) = _MTKB.parameters(getfield(s, :inner); 
 _MTKB.observed(s::PottsSystem) = _MTKB.observed(getfield(s, :inner))
 _MTKB.initial_conditions(s::PottsSystem) = _MTKB.initial_conditions(getfield(s, :inner))
 _MTKB.bindings(s::PottsSystem) = _MTKB.bindings(getfield(s, :inner))
-_MTKB.independent_variables(s::PottsSystem) = _MTKB.independent_variables(getfield(s, :inner))
+# the scalar extension point (MTK's `independent_variables` wraps it)
+_MTKB.independent_variable(s::PottsSystem) = _MTKB.get_iv(getfield(s, :inner))
+_MTKB.guesses(s::PottsSystem) = _MTKB.guesses(getfield(s, :inner))
+_MTKB.inputs(s::PottsSystem) = _MTKB.inputs(getfield(s, :inner))
+_MTKB.outputs(s::PottsSystem) = _MTKB.outputs(getfield(s, :inner))
+# A model is complete when it is built: its inner System is complete, and `sys.x` is the
+# declared symbol, never namespaced (MTK's `does_namespacing` is `!iscomplete` for a system
+# without a `namespacing` field). `complete` returns it unchanged.
+_MTKB.iscomplete(::PottsSystem) = true
+_MTKB.complete(s::PottsSystem; kw...) = s
+# MTK's metadata of a model is its inner System's (`Potts.PottsSweepSpec` among it)
+SymbolicUtils.getmetadata(s::PottsSystem, k::DataType, default) = SymbolicUtils.getmetadata(getfield(s, :inner), k, default)
+SymbolicUtils.hasmetadata(s::PottsSystem, k::DataType) = SymbolicUtils.hasmetadata(getfield(s, :inner), k)
+SymbolicUtils.setmetadata(s::PottsSystem, k::DataType, v) =
+    _with_inner(s, getfield(s, :name), SymbolicUtils.setmetadata(getfield(s, :inner), k, v), getfield(s, :fields))
+
+# `s` with another name, inner System or PDESystem and the same payload. A model built from its
+# payload stays marked as such (`_built_from_part`), so `mtkcompile` keeps the new inner System
+# (and its metadata) as it is.
+function _with_inner(s::PottsSystem, name::Symbol, I::ModelingToolkitBase.System, fields)
+    if _built_from_part(s)
+        token = Ref{Any}(nothing)
+        I = SymbolicUtils.setmetadata(I, _BuiltFrom, (getfield(s, :part), token))
+        token[] = I
+    end
+    return PottsSystem(_Wrap(), name, I, fields, getfield(s, :part))
+end
+
+"""
+    rename(sys::PottsSystem, name::Symbol)
+
+MTK's `rename`: the model under another name (its inner System and its PDESystem renamed with
+it). `@named models[1:n] = Model(…)` renames this way.
+"""
+function Symbolics.rename(s::PottsSystem, name::Symbol)
+    f = getfield(s, :fields)
+    return _with_inner(s, name, Symbolics.rename(getfield(s, :inner), name), f === nothing ? nothing : _renamed_pde(f, name))
+end
+
+# the PDESystem `f` under `name`, every stored field kept. Read with `getfield`, as in
+# `_merge_fields`: MTKBase's `rename` of a PDESystem (`@set`) fails on its `nothing` metadata.
+_renamed_pde(f::ModelingToolkitBase.PDESystem, name::Symbol) = ModelingToolkitBase.PDESystem(
+    getfield(f, :eqs), getfield(f, :bcs), getfield(f, :domain), getfield(f, :ivs), getfield(f, :dvs), getfield(f, :ps);
+    name, initial_conditions = getfield(f, :initial_conditions), systems = getfield(f, :systems),
+    connector_type = getfield(f, :connector_type), metadata = getfield(f, :metadata), analytic = getfield(f, :analytic),
+    analytic_func = getfield(f, :analytic_func), gui_metadata = getfield(f, :gui_metadata),
+    description = getfield(f, :description), checks = false
+)
+
+"""
+    PottsSystem(name, inner, fields, part; checks = false)
+
+The model `Potts.wrap(nameof(inner), inner, fields, part)` renamed `name`: MTK's rebuild of a
+system from its fields (`@set sys.name = name`, which `rename` and `@named models[1:n]` use).
+Only the name may change; build a model with `@potts_model`, the keyword constructor or
+[`Potts.wrap`](@ref).
+"""
+function PottsSystem(
+        name::Symbol, I::ModelingToolkitBase.System, fields::Union{Nothing, ModelingToolkitBase.PDESystem},
+        part::PottsPart; checks = false
+    )
+    s = PottsSystem(_Wrap(), nameof(I), I, fields, part)
+    return name === nameof(I) ? s : Symbolics.rename(s, name)
+end
 # no subsystems: the inner System is flattened (a Potts model has no subsystem hierarchy),
 # so MTK's hierarchy walkers (`full_equations`, `hierarchy`, the event accessors,
 # `propertynames`) see a leaf
@@ -1069,15 +1188,15 @@ end
 SciMLBase.ODEProblem{iip, SciMLBase.FunctionWrapperSpecialize}(::PottsSystem, ::_ProblemArg, args...; kw...) where {iip} =
     throw(ArgumentError(_problem_msg("ODEProblem")))
 
-# MTK's `extend` with a Potts model on either side (D-039): a clear refusal naming the two
-# ways that work, not MTK's rebuild of the container (which has no MTK constructor).
-_extend_msg(a, b) = "extend($(nameof(a)), $(nameof(b))): MTK's `extend` does not merge a Potts model; merge two Potts " *
-                    "models with `Potts.extend(sys, base)`, and add an MTK System to a Potts model as `@components`"
+# MTK's `extend` with a Potts model on one side and another system on the other (D-039): a
+# clear refusal naming the ways that work, not MTK's rebuild of the container.
+_extend_msg(a, b) = "extend($(nameof(a)), $(nameof(b))): a Potts model extends only a Potts model " *
+    "(`extend(sys, base)` with both Potts models); add an MTK System to a Potts model as " *
+    "`@components`, or with `compose(model, [system])`"
 ModelingToolkitBase.extend(a::PottsSystem, b::ModelingToolkitBase.AbstractSystem; kw...) =
     throw(ArgumentError(_extend_msg(a, b)))
 ModelingToolkitBase.extend(a::ModelingToolkitBase.AbstractSystem, b::PottsSystem; kw...) =
     throw(ArgumentError(_extend_msg(a, b)))
-ModelingToolkitBase.extend(a::PottsSystem, b::PottsSystem; kw...) = throw(ArgumentError(_extend_msg(a, b)))
 
 # --- Keys namespaced by the model itself (D-137 review SF1). `sys.x` of an uncompleted `sys`
 # is `pr₊x`; wherever a key names a model quantity (operating point, `remake`, `getu`/`setu`/

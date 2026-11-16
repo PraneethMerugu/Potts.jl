@@ -1,5 +1,5 @@
 # F4-11 (F4 design §3.8 FE-15b): a plain `PDESystem` composes into a model as fields.
-# `Potts.compose(model, Potts.component(:drug, pdesys, model))` equals the same field coupled
+# `compose(model, Potts.component(:drug, pdesys, model))` equals the same field coupled
 # with `@fields` (F4-B4t; before, declared in `@equations` and `@bcs`), bitwise on the CPU with
 # σ frozen (one group); the component reads
 # `kind` by its user word; its fields take `FieldGroups` pairs by name; a domain other than the
@@ -147,7 +147,7 @@ end
         host = FcHost(; name = :m)
         w = Potts.wrap(:drug, FcPDE.System(FcPDE.Equation[], FcPDE.t; name = :drug), FcPDE.drug((12, 10)),
             Potts.part(Potts.component(:zz, FcPDE.zz(), host)))
-        e = fc_msg(() -> fc_run(Potts.compose(host, w), :drug₊u, 3))
+        e = fc_msg(() -> fc_run(compose(host, w), :drug₊u, 3))
         @test e == "built" || (println(e); false)
     end
 end
@@ -156,7 +156,7 @@ end
     @testset "F4-11: a PDESystem component equals the coupled field (bitwise, σ frozen)" begin
         host = FcHost(; name = :m)
         comp = Potts.component(:drug, FcPDE.drug((12, 10)), host)
-        m = Potts.compose(host, comp)
+        m = compose(host, comp)
         @test any(x -> Potts.info(x).name === :drug₊u, Potts.variables(m))
         @test Set(Potts.info(q).name for q in Potts.parameters(m)) == Set([:drug₊Dd, :drug₊kd])
         ref = FcRef(; name = :m)
@@ -177,7 +177,7 @@ end
         hw = Potts.wrap(:m, Potts.inner(host), FcPDE.drug((12, 10); name = :m), Potts.part(host))
         @test fc_run(hw, :u, 6; field_solver = ExplicitEuler()) == fc_run(ref, :u, 6; field_solver = ExplicitEuler())
         # composed with an MTK component in one call, in either order
-        m2 = Potts.compose(host, Potts.component(:zz, FcPDE.zz(), host), comp)
+        m2 = compose(host, Potts.component(:zz, FcPDE.zz(), host), comp)
         sol = solve(PottsProblem(m2, fcm_op(), (0, 3); seed = 1), SequentialCPM())
         @test Array(sol.u[end].site.drug₊u) == fc_run(ref, :u, 3) && sol.u[end].model.zz₊zq[1] < 1
     end
@@ -187,11 +187,11 @@ end
     @testset "F4-11: the domain is the lattice's, in the model's length unit" begin
         host, hosth = FcHost(; name = :m), FcHostH(; name = :m)
         # lattice units on a lattice without spacing; dims × spacing on one with spacing
-        wide = fc_msg(() -> Potts.compose(host, Potts.component(:drug, FcPDE.drug((24, 10)), host)))
+        wide = fc_msg(() -> compose(host, Potts.component(:drug, FcPDE.drug((24, 10)), host)))
         @test occursin("spans `x ∈ [0, 24]`", wide) && occursin("spans [0, 12]", wide) && occursin("drug", wide)
-        a = fc_run(Potts.compose(hosth, Potts.component(:drug, FcPDE.drug((6, 5)), hosth)), :drug₊u, 5)
+        a = fc_run(compose(hosth, Potts.component(:drug, FcPDE.drug((6, 5)), hosth)), :drug₊u, 5)
         @test a == fc_run(FcRefH(; name = :m), :u, 5)
-        lat = fc_msg(() -> Potts.compose(hosth, Potts.component(:drug, FcPDE.drug((12, 10)), hosth)))
+        lat = fc_msg(() -> compose(hosth, Potts.component(:drug, FcPDE.drug((12, 10)), hosth)))
         @test occursin("spans `x ∈ [0, 12]`", lat) && occursin("spans [0, 6]", lat) && occursin("spacing 0.5", lat)
     end
 end
@@ -205,11 +205,21 @@ end
         hand = FcPDE.drug((6, 5))
         with(dom) = FcPDE.PDESystem(getfield(hand, :eqs), getfield(hand, :bcs), dom, getfield(hand, :ivs),
             getfield(hand, :dvs), getfield(hand, :ps); name = :drug)
-        a = fc_run(Potts.compose(hosth, Potts.component(:drug, with(Potts.LatticePDE.lattice_domain(T, (X, Y), (12, 10);
+        a = fc_run(
+            compose(
+                hosth, Potts.component(
+                    :drug, with(
+                        Potts.LatticePDE.lattice_domain(
+                            T, (X, Y), (12, 10);
             spacing = 0.5)), hosth)), :drug₊u, 5)
         @test a == fc_run(FcRefH(; name = :m), :u, 5)
         # (control: the lattice's sites without its spacing are refused, naming the spacing)
-        e = fc_msg(() -> Potts.compose(hosth, Potts.component(:drug, with(Potts.LatticePDE.lattice_domain(T, (X, Y),
+        e = fc_msg(
+            () -> compose(
+                hosth, Potts.component(
+                    :drug, with(
+                        Potts.LatticePDE.lattice_domain(
+                            T, (X, Y),
             (12, 10))), hosth)))
         @test occursin("spans [0, 6]", e) && occursin("spacing 0.5", e)
     end
@@ -221,17 +231,21 @@ end
         # an input with no word the CPM fills
         bad = FcPDE.drug((12, 10); dvs = [FcPDE.u(FcPDE.t, FcPDE.x, FcPDE.y), FcPDE.nut(FcPDE.t, FcPDE.x, FcPDE.y)],
             rhs = -FcPDE.kd * FcPDE.u(FcPDE.t, FcPDE.x, FcPDE.y) + FcPDE.nut(FcPDE.t, FcPDE.x, FcPDE.y))
-        e = fc_msg(() -> Potts.compose(host, Potts.component(:drug, bad, host)))
+        e = fc_msg(() -> compose(host, Potts.component(:drug, bad, host)))
         @test occursin("`nutrient`", e) && occursin("lattice_input_name = \"kind\"", e)
         # an input with no `lattice_input_name` goes by its own name: `kind`
         T, X, Y, kd = FcPDE.t, FcPDE.x, FcPDE.y, FcPDE.kd
         pk = FcPDE.drug((12, 10); dvs = [FcPDE.u(T, X, Y), FcPDE.kind(T, X, Y)],
             rhs = FcPDE.Dd * Potts.LatticePDE.Δ(FcPDE.u(T, X, Y)) - kd * FcPDE.u(T, X, Y) + ifelse(FcPDE.kind(T, X, Y) == 1, 1.0, 0.0))
-        @test fc_run(Potts.compose(host, Potts.component(:drug, pk, host)), :drug₊u, 3) == fc_run(FcRef(; name = :m), :u, 3)
+        @test fc_run(compose(host, Potts.component(:drug, pk, host)), :drug₊u, 3) == fc_run(FcRef(; name = :m), :u, 3)
         # the PDESystem's name is the component's (as `Potts.wrap`)
         @test occursin("must agree", fc_msg(() -> Potts.component(:other, FcPDE.drug((12, 10)), host)))
         # a component's CPM statements are still refused
-        @test occursin("has energies", fc_msg(() -> Potts.compose(host, Potts.wrap(:drug,
+        @test occursin(
+            "has energies", fc_msg(
+                () -> compose(
+                    host, Potts.wrap(
+                        :drug,
             FcPDE.System(FcPDE.Equation[], FcPDE.t; name = :drug), FcPDE.drug((12, 10)), Potts.part(host)))))
     end
 end
@@ -241,7 +255,7 @@ end
         if isdefined(@__MODULE__, :PottsDevices) && PottsDevices.on_device() && PottsDevices.device_name() == "rocm"
             backend = PottsDevices.device_backend()
             host = FcHost(; name = :m)
-            m = Potts.compose(host, Potts.component(:drug, FcPDE.drug((12, 10)), host))
+            m = compose(host, Potts.component(:drug, FcPDE.drug((12, 10)), host))
             for fs in (ExplicitEuler(), BackwardEuler())
                 prob = PottsProblem(m, fcm_op(), (0, 6); field_solver = fs, T = Float32, seed = 1)
                 a = solve(prob, CheckerboardCPM()).u[end].site.drug₊u
@@ -264,28 +278,28 @@ end
         pu = fc_msg(() -> Potts.ModelingToolkitBase.mtkcompile(Potts.wrap(:m, Potts.inner(hu), FcPDE.plain([u(0, X, Y) ~ 0.7]; name = :m), Potts.part(hu))))
         @test occursin("the PDESystem `m` declares the field `u`", pu) && occursin("a field `u`", pu)
         # (namespaced as a component, the same PDESystem composes)
-        @test fc_msg(() -> Potts.compose(hk, Potts.component(:drug, FcPDE.plain([u(0, X, Y) ~ 0.7]), hk))) == "built"
+        @test fc_msg(() -> compose(hk, Potts.component(:drug, FcPDE.plain([u(0, X, Y) ~ 0.7]), hk))) == "built"
         # the initial value from a start condition, bitwise against the coupled one (before F4-B4t,
         # A's default): a number, a parameter expression, and that expression after an
         # operating-point write
-        run(pde, k; op = fcm_op()) = fc_run(Potts.compose(host, Potts.component(:drug, pde, host)), :drug₊u, k; op)
+        run(pde, k; op = fcm_op()) = fc_run(compose(host, Potts.component(:drug, pde, host)), :drug₊u, k; op)
         @test run(FcPDE.plain([u(0, X, Y) ~ 0.7]), 3) == fc_run(FcRefIC(; name = :m), :u, 3)
         @test run(FcPDE.plain([u(0, X, Y) ~ 1.4kd]), 3) == fc_run(FcRefIC2(; name = :m), :u, 3)
         a = run(FcPDE.plain([u(0, X, Y) ~ 1.4kd]), 3; op = [fcm_op(); :drug₊kd => 1.0])
         @test a == fc_run(FcRefIC2(; name = :m), :u, 3; op = [fcm_op(); :kd => 1.0]) && a != fc_run(FcRefIC2(; name = :m), :u, 3)
         # a condition at another fixed time
-        e = fc_msg(() -> Potts.compose(host, Potts.component(:drug, FcPDE.plain([u(5.0, X, Y) ~ 2.0]), host)))
+        e = fc_msg(() -> compose(host, Potts.component(:drug, FcPDE.plain([u(5.0, X, Y) ~ 2.0]), host)))
         @test occursin("a value at the time 5.0", e) && occursin("the PDESystem `drug`", e)
         # `Pair` parameters (B's rule)
-        e = fc_msg(() -> Potts.compose(host, Potts.component(:drug, FcPDE.plain([u(0, X, Y) ~ 0.0]; ps = [FcPDE.Dd => 0.2, kd]), host)))
+        e = fc_msg(() -> compose(host, Potts.component(:drug, FcPDE.plain([u(0, X, Y) ~ 0.0]; ps = [FcPDE.Dd => 0.2, kd]), host)))
         @test occursin("is a `Pair`", e) && occursin("the PDESystem `drug`", e)
         # the time is the first independent variable
-        e = fc_msg(() -> Potts.compose(host, Potts.component(:drug, FcPDE.plain(FcPDE.Equation[]; ivs = [X, Y, T]), host)))
+        e = fc_msg(() -> compose(host, Potts.component(:drug, FcPDE.plain(FcPDE.Equation[]; ivs = [X, Y, T]), host)))
         @test occursin("the time is the first independent variable", e) && occursin("the PDESystem `drug`", e)
         # a cell property is no site word: refused at compose, with the site-variable route
         vol = FcPDE.vol
         pv = FcPDE.drug((12, 10); dvs = [u(T, X, Y), vol(T, X, Y)], rhs = 0.01 * vol(T, X, Y) - kd * u(T, X, Y))
-        e = fc_msg(() -> Potts.compose(host, Potts.component(:drug, pv, host)))
+        e = fc_msg(() -> compose(host, Potts.component(:drug, pv, host)))
         @test occursin("`volume`", e) && occursin("@after_mcs s ~ volume[owner]", e)
     end
 end

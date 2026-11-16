@@ -1,5 +1,5 @@
 # Fields (v3 §2.3, §7; cutover C8). A model's field equations `D(c) ~ rate` and their
-# conditions, from its coupled PDESystems (`@fields`, `Potts.couple`, `Potts.compose`), are a
+# conditions, from its coupled PDESystems (`@fields`, `Potts.couple`, `compose`), are a
 # ModelingToolkitBase `PDESystem` (`Potts.fields(csys.sys)`) over
 # the lattice's coordinates; LatticePDE discretizes it into a LatticeFields program and
 # `CorePotts.FieldPhase` runs the program's step plan inside the MCS.

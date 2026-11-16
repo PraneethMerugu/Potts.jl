@@ -110,10 +110,12 @@ cell variable, a built-in, …) is its `potts_entity` metadata:
 (all(MTK.isparameter, MTK.parameters(sys)), MTK.isinput(kind), Potts.LatticePDE.get_potts_entity(kind))
 ```
 
-`MTK.unknowns`, `MTK.observed`, `MTK.initial_conditions` and `nameof` work too, and `sys.k` is
-the declared symbol `k`. Ask `Potts.inner(sys)` for any other MTK accessor (`iscomplete`,
-`full_equations`, the metadata, …). Potts models merge with `Potts.extend` (`@extend`) and
-compose with `Potts.compose`. `Potts.component(name, system, model)` makes an MTK `System` a
+`MTK.unknowns`, `MTK.observed`, `MTK.initial_conditions` (each parameter's value),
+`MTK.guesses`, `MTK.inputs`, `MTK.outputs`, `MTK.independent_variable`, the metadata and
+`nameof` work too, and `sys.k` is the declared symbol `k`. A model is complete
+(`MTK.iscomplete(sys)` is `true`), so `sys.k` is never namespaced. Potts models merge with
+MTK's `extend` (`@extend`), compose with MTK's `compose`, and rename with MTK's `rename` (and
+`@named models[1:n] = Model()`). `Potts.component(name, system, model)` makes an MTK `System` a
 component of the model (for a Catalyst reaction network the system is
 `Catalyst.ode_model(complete(rn))`). The component joins as a model-scope component, as with
 `@components model name = system`, and its quantities are namespaced, `name₊x`:
@@ -122,7 +124,7 @@ component of the model (for a Catalyst reaction network the system is
 @variables z(Potts.t) = 1.0
 @parameters kz = 0.5
 @named zdecay = System([Potts.D(z) ~ -kz * z], Potts.t)
-composed = Potts.compose(sys, Potts.component(:zdecay, zdecay, sys))
+composed = compose(sys, [zdecay])
 zsol = solve(PottsProblem(composed, [ownership => σ, kind => [:A, :A]], (0, 5); seed = 3,
     field_solver = ExplicitEuler(substeps = 2)), SequentialCPM())
 zsol[:zdecay₊z][end]
