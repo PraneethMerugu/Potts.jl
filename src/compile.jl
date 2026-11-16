@@ -5,10 +5,15 @@
 """
     CompiledPottsSystem
 
-A `PottsSystem` after `mtkcompile`: energy terms classified by domain with their derived
-copy deltas, the trackers and relations the model needs, and its footprint.
+A `PottsSystem` after `mtkcompile`: an MTK `AbstractSystem` that is complete. MTK's accessors
+(`equations`, `unknowns`, `parameters`, `observed`, `initial_conditions`, `guesses`, `inputs`,
+`outputs`, `independent_variable`, the metadata) and `csys.x` answer as for the model it was
+compiled from, and SymbolicIndexingInterface getters built from it (`getp(csys, p)`) work on
+its problems, integrators and solutions. It also holds what a CPM sweep needs and no MTK
+system holds: the energy terms classified by domain with their derived copy deltas, the
+trackers and relations the model needs, and its footprint. Its metadata is read-only.
 """
-struct CompiledPottsSystem
+struct CompiledPottsSystem <: ModelingToolkitBase.AbstractSystem
     sys::PottsSystem
     cell_terms::Vector{Tuple{Vector{Int}, Any}}       # (kinds, E) with E in volume/surface/…
     cluster_terms::Vector{Tuple{Vector{Int}, Any}}    # (root kinds, E) with E in cluster_volume/…
@@ -72,8 +77,34 @@ struct CompiledPottsSystem
     field_specs::Dict{Any, Any}
 end
 
-Base.nameof(c::CompiledPottsSystem) = nameof(c.sys)
-fields(c::CompiledPottsSystem) = fields(c.sys)
+Base.nameof(c::CompiledPottsSystem) = nameof(getfield(c, :sys))
+fields(c::CompiledPottsSystem) = fields(getfield(c, :sys))
+
+# `c.x`: the compiled payload's own fields, read by the compiler, codegen and problem builder;
+# any other name is the model's quantity or component, as `sys.x` of the model compiled from
+function Base.getproperty(c::CompiledPottsSystem, n::Symbol)
+    return hasfield(CompiledPottsSystem, n) ? getfield(c, n) : getproperty(getfield(c, :authored), n)
+end
+Base.propertynames(c::CompiledPottsSystem; private::Bool = false) =
+    private ? fieldnames(CompiledPottsSystem) : propertynames(getfield(c, :authored))
+
+# MTK's accessors: the model's own (`authored`, before its components are lowered)
+_MTKB.get_systems(::CompiledPottsSystem) = _MTKB.AbstractSystem[]
+for f in (
+        :equations, :unknowns, :observed, :initial_conditions, :bindings, :independent_variable, :guesses,
+        :inputs, :outputs,
+    )
+    @eval _MTKB.$f(c::CompiledPottsSystem) = _MTKB.$f(getfield(c, :authored))
+end
+_MTKB.parameters(c::CompiledPottsSystem; kw...) = _MTKB.parameters(getfield(c, :authored); kw...)
+_MTKB.full_equations(c::CompiledPottsSystem; kw...) = _MTKB.full_equations(getfield(c, :authored); kw...)
+_MTKB.iscomplete(::CompiledPottsSystem) = true
+_MTKB.complete(c::CompiledPottsSystem; kw...) = c
+
+function Base.show(io::IO, ::MIME"text/plain", c::CompiledPottsSystem)
+    print(io, "CompiledPottsSystem of ")
+    return show(io, MIME"text/plain"(), getfield(c, :authored))
+end
 
 const _CELL_ENERGY_BUILTINS = (
     :volume, :surface, :kind, :id, :generation, :cluster, :major_length, :euler, :euler_full,
@@ -223,15 +254,34 @@ end
     mtkcompile(sys::PottsSystem) -> CompiledPottsSystem
 
 Validate and analyze a Potts model (the symbolic half of compilation; code is generated
-per scalar type by `PottsProblem`).
+per scalar type by `PottsProblem`). MTK's `mtkcompile` keywords (`inputs`, `outputs`,
+`simplify`, …) are an `ArgumentError` that names them: they apply to an MTK `System`, so give
+them to `mtkcompile(Potts.inner(sys); …)`, which compiles the cell and model equations alone.
+`mtkcompile` of a `CompiledPottsSystem` returns it.
 """
-function ModelingToolkitBase.mtkcompile(authored::PottsSystem)
+function ModelingToolkitBase.mtkcompile(authored::PottsSystem; kw...)
+    _refuse_compile_keywords(authored, kw)
     authored = _lower_inner(authored, "mtkcompile")
     # the model's own cell and model ODEs through MTK's `mtkcompile` first (odes.jl)
     routed, ode_systems, origin = _compile_odes(authored)
     # entity-local initialization through MTK's `InitializationProblem` (initialization.jl)
     initialization = _compile_initialization(routed)
     return _via_algebraic(() -> _compile_bound(authored, _bind_components(routed), ode_systems, initialization), routed, origin)
+end
+
+ModelingToolkitBase.mtkcompile(c::CompiledPottsSystem; kw...) = (_refuse_compile_keywords(c, kw); c)
+
+function _refuse_compile_keywords(sys, kw)
+    isempty(kw) && return nothing
+    throw(
+        ArgumentError(
+            string(
+                "mtkcompile(", nameof(sys), "; ", join(keys(kw), ", "), "): a Potts model takes no ",
+                "`mtkcompile` keywords; MTK's keywords apply to an MTK System: `mtkcompile(Potts.inner(sys); …)` compiles the cell ",
+                "and model equations alone"
+            )
+        )
+    )
 end
 
 # a condition as written: built-ins without their time argument (`kind`, not `kind(t)`),

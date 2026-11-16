@@ -4,7 +4,7 @@
 @testitem "W-lite A: read access" setup = [WliteSetup] tags = [:potts, :wlite] begin
     @testset "W-lite A: read access" begin
         W, I, R = W_all, Potts.inner(W_all), complete(inner_all)
-        @test W isa WL_MTKB.AbstractSystem && iscomplete(I) && !iscomplete(W)    # R-1: ask the inner
+        @test W isa WL_MTKB.AbstractSystem && iscomplete(I) && iscomplete(W)     # complete, as its inner
         @test isequal(equations(W), equations(I))                                # A1
         @test isequal(unknowns(W), unknowns(I))                                  # A2
         @test isequal(parameters(W), parameters(I))                              # A3
@@ -70,7 +70,9 @@ end
         @test all(p -> wl_agree(s -> WL_SII.timeseries_parameter_index(s, p), W, I), pps)                # D23
         @test wl_agree(s -> WL_SII.getu(s, W.xv + 2 * W.a)(prob), W, I)                                  # D24
         @test wl_agree(s -> WL_SII.getp(s, 2 * W.a)(prob), W, I)                                         # D25
-        @test wl_agree(s -> WL_SII.getu(s, [W.xv, W.decay.yd])(prob), W, I)                              # D26
+        # a getter built from the model reads through the problem's own index (the inner System
+        # is not the compiled one the problem was built from)
+        @test WL_SII.getu(W, [W.xv, W.decay.yd])(prob) == WL_SII.getu(prob, [W.xv, W.decay.yd])(prob)  # D26
         # the five SII methods answer from the inner, not from MTKBase's `::AbstractSystem` methods
         @test WL_SII.parameter_index(W, a) isa WL_MTKB.ParameterIndex                                    # not a plain Int
         @test WL_SII.getp(W, W.a)(prob) == 0.1
@@ -105,9 +107,10 @@ end
                         !startswith(first(p), "Initialization"), m
                 )
             )
-            @test sort(WLiteMatrix.built(m)) == sort(WL_BY_DESIGN_RAW)                                 # F2
-            @test all(l -> Dict(m)[l] === :LOUD, WL_LOUD_REQUIRED)                                     # F3: no hang, loud
-            @test WLiteMatrix.tally(m) == Dict(:REFUSED => 80, :LOUD => 18, :BUILT => 1)
+            built = WL_BY_DESIGN_RAW[nameof(W)]
+            @test sort(WLiteMatrix.built(m)) == sort(built)                                            # F2
+            @test all(l -> Dict(m)[l] === :LOUD, setdiff(WL_LOUD_REQUIRED, built))                     # F3: no hang, loud
+            @test WLiteMatrix.tally(m) == Dict(:REFUSED => 80, :LOUD => 19 - length(built), :BUILT => length(built))
             @test occursin(
                 "payload cannot build", sprint(
                     showerror, try
@@ -138,7 +141,7 @@ end
         for n in WL_PUBLISHED
             W = getfield(PottsModels, n)(; name = :m)
             m = WLiteMatrix.matrix(W, decay)
-            @test WLiteMatrix.tally(m) == Dict(:REFUSED => 80, :LOUD => 16, :BUILT => 3)
+            @test WLiteMatrix.tally(m) == Dict(:REFUSED => 80, :LOUD => 19 - length(WL_BY_DESIGN), :BUILT => length(WL_BY_DESIGN))
             @test sort(WLiteMatrix.built(m)) == sort(WL_BY_DESIGN)
             @test mtkcompile(W) isa CompiledPottsSystem
         end
@@ -170,8 +173,8 @@ end
     end
 end
 
-@testitem "W-lite G: the 18 owned methods, piracy" setup = [WliteSetup] tags = [:potts, :wlite] begin
-    @testset "W-lite G: the 18 owned methods, piracy" begin
+@testitem "W-lite G: the owned methods, piracy" setup = [WliteSetup] tags = [:potts, :wlite] begin
+    @testset "W-lite G: the owned methods, piracy" begin
         @test isempty(Aqua.Piracy.hunt(Potts))                                                          # G1
         T = PottsSystem
         owned = Method[]
@@ -191,23 +194,30 @@ end
         plain(s) = replace(s, "Potts." => "")
         @test plain.(names) == sort(
             [
-                "Base.getproperty(Symbol)", "Base.show(MIME{Symbol(\"text/plain\")}, PottsSystem)",
+                "Base.getproperty(Symbol)", "Base.propertynames()", "Base.show(MIME{Symbol(\"text/plain\")}, PottsSystem)",
+                "LatticeFields.Problems.steady_fields()",
                 "ModelingToolkitBase.equations()", "ModelingToolkitBase.unknowns()", "ModelingToolkitBase.parameters()",
                 "ModelingToolkitBase.observed()", "ModelingToolkitBase.initial_conditions()", "ModelingToolkitBase.bindings()",
-                "ModelingToolkitBase.independent_variables()", "ModelingToolkitBase.get_systems()", "ModelingToolkitBase.full_equations()", "Base.propertynames()",
-                "SymbolicIndexingInterface.symbolic_container()",
+                "ModelingToolkitBase.independent_variable()", "ModelingToolkitBase.get_systems()",
+                "ModelingToolkitBase.full_equations()", "ModelingToolkitBase.guesses()", "ModelingToolkitBase.inputs()",
+                "ModelingToolkitBase.outputs()", "ModelingToolkitBase.iscomplete()", "ModelingToolkitBase.complete()",
+                "ModelingToolkitBase.compose(AbstractArray)",
+                "SymbolicUtils.getmetadata(DataType, Any)", "SymbolicUtils.hasmetadata(DataType)",
+                "SymbolicUtils.setmetadata(DataType, Any)",
+                "SymbolicIndexingInterface.symbolic_container()", "SymbolicIndexingInterface.all_symbols()",
                 "SymbolicIndexingInterface.parameter_index(Any)", "SymbolicIndexingInterface.parameter_index(Symbol)",
                 "SymbolicIndexingInterface.is_parameter(ModelingToolkitBase.ParameterIndex)",
                 "SymbolicIndexingInterface.observed(Any)", "SymbolicIndexingInterface.parameter_observed(Any)",
+                "SymbolicIndexingInterface.getsym(Any)", "SymbolicIndexingInterface.getp(Any)",
+                "SymbolicIndexingInterface.setsym(Any)", "SymbolicIndexingInterface.setp(Any)",
                 "ModelingToolkitBase.mtkcompile()", "ModelingToolkitBase.extend(ModelingToolkitBase.AbstractSystem)",
                 "ModelingToolkitBase.extend(PottsSystem)", "ModelingToolkitBase.extend(PottsSystem)",
-                "LatticeFields.Problems.steady_fields()",
             ]
         )
         @test count(
             n -> !startswith(n, "ModelingToolkitBase.mtkcompile") && !startswith(n, "ModelingToolkitBase.extend") &&
                 !startswith(n, "LatticeFields."), names
-        ) == 18
+        ) == 32
         M, S = WL_MTKB, WL_SII
         fs = Any[
             nameof, getproperty, propertynames, show, ndims, M.equations, M.unknowns, M.parameters, M.observed,
@@ -221,7 +231,7 @@ end
             m for f in fs for m in methods(f) if m.module === Potts &&
                 any(==(PottsSystem), Base.unwrap_unionall(m.sig).parameters)
         ]
-        @test length(scanned) == 21 && all(m -> m in owned || m.name === :extend, scanned)
+        @test length(scanned) == 26 && all(m -> m in owned || m.name === :extend, scanned)
         @test length(WLiteMatrix.refusal_methods()) == 49
         @test isempty(filter(((a, b),) -> a.module === Potts || b.module === Potts, Test.detect_ambiguities(Potts; recursive = true)))
     end
@@ -231,7 +241,7 @@ end
     @testset "W-lite: internal access uses getfield (shadowed inner/part/fields properties)" begin
         base = WLiteShadow(; name = :sh)
         comp = Potts.component(:fields, WLiteC9.decay(; name = :fields), base)
-        W = Potts.compose(base, comp)
+        W = compose(base, comp)
         # User properties resolve to the model's quantity / parameter / subsystem, not PottsSystem fields
         @test isequal(unwrap(W.inner), unwrap(base.inner))
         @test isequal(unwrap(W.part), unwrap(base.part))

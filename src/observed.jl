@@ -169,6 +169,37 @@ function _computed_info(sys::PottsModelInfo, x)
     return _computed_entity(_p(sys.csys.sys, :parameters), x isa Symbol ? x : (i = info(x); i === nothing ? x : i.name))
 end
 
+# SymbolicIndexingInterface getters and setters built from a model or a compiled model
+# (`getp(sys, T)`, `getu(sys, volume)`, `setp(mtkcompile(sys), T)`): the model holds names, the
+# problem holds the generated code and the context that values are computed with. So the
+# accessor looks its symbol up in the problem, integrator or solution it is applied to (whose
+# index provider is the compiled model's `PottsModelInfo`) and reads or writes there. Other
+# queries on the model are answered by its inner System (`symbolic_container`).
+struct _DeferredAccessor{F, S}
+    build::F        # `SII.getsym`, `SII.getp`, `SII.setsym` or `SII.setp` (with its keywords)
+    sym::S
+end
+(a::_DeferredAccessor)(target) = a.build(target, a.sym)(target)
+# a getter with a time index (`getu(sys, x)(sol, i)`), or a setter with its value (`(prob, v)`)
+(a::_DeferredAccessor)(target, x) = a.build(target, a.sym)(target, x)
+
+const _ModelOrCompiled = Union{PottsSystem, CompiledPottsSystem}
+SII.getsym(sys::_ModelOrCompiled, sym) = _DeferredAccessor(SII.getsym, sym)
+SII.getp(sys::_ModelOrCompiled, p) = _DeferredAccessor(SII.getp, p)
+SII.setsym(sys::_ModelOrCompiled, sym) = _DeferredAccessor(SII.setsym, sym)
+SII.setp(sys::_ModelOrCompiled, p; run_hook = true) = _DeferredAccessor((target, q) -> SII.setp(target, q; run_hook), p)
+# MTKBase's `all_symbols` of a complete system reads its bound parameters, which only the
+# inner System holds
+SII.all_symbols(sys::_ModelOrCompiled) = SII.all_symbols(SII.symbolic_container(sys))
+# the compiled model's other queries: the model's inner System, as for the model (MTKBase's
+# own methods on an `AbstractSystem` would read an index cache it does not have)
+SII.symbolic_container(c::CompiledPottsSystem) = inner(getfield(c, :authored))
+SII.parameter_index(c::CompiledPottsSystem, sym) = SII.parameter_index(SII.symbolic_container(c), sym)
+SII.parameter_index(c::CompiledPottsSystem, sym::Symbol) = SII.parameter_index(SII.symbolic_container(c), sym)
+SII.is_parameter(c::CompiledPottsSystem, i::ModelingToolkitBase.ParameterIndex) = SII.is_parameter(SII.symbolic_container(c), i)
+SII.observed(c::CompiledPottsSystem, sym; kw...) = SII.observed(SII.symbolic_container(c), sym; kw...)
+SII.parameter_observed(c::CompiledPottsSystem, sym) = SII.parameter_observed(SII.symbolic_container(c), sym)
+
 # Declared state variables are SII variables (settable with `setu`/`integ[x] = v`); built-ins
 # and expressions are observed (read-only).
 const _STATE_SCOPE = (cell = :cell, site = :site, field = :site, model = :model)

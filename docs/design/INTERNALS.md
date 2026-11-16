@@ -308,16 +308,21 @@ a complete system that still has subsystems and a name mismatch, and stores the
 `PottsSweepSpec` as the inner System's metadata. The keyword constructor builds the inner
 System from the part (`complete(…; allow_parameter_eqs = true)`: a component parameter bound
 in `@equations` is an equation with no unknowns). The compile pipeline's rewrites
-(`_replace`) change the part and keep the authored inner System. `Potts.extend` merges two
-parts and rebuilds; `Potts.compose` composes the inner Systems through `get_parent`. `Potts.component(name, sys, model)` wraps `sys` with a part that holds only the
+(`_replace`) change the part and keep the authored inner System. `extend` merges two
+parts and rebuilds; `compose` composes the inner Systems through `get_parent`. `Potts.component(name, sys, model)` wraps `sys` with a part that holds only the
 model's kinds, lattice and sweep (what a composed component may carry).
 
-Owned methods (exactly 15, pinned by `test/wlite.jl`): `getproperty` and `show` (text/plain);
-`equations`, `unknowns`, `parameters`, `observed`, `initial_conditions`, `bindings`,
-`independent_variables`; SII `symbolic_container` plus `parameter_index` (2), `is_parameter`
-(`ParameterIndex`), `observed`, `parameter_observed`. Besides them: `mtkcompile` (the CPM
-compile entry) and the 48 generated problem-constructor refusals. Every other MTKBase
-function is a `FieldError`/`MethodError` on a `PottsSystem`, except `iscomplete` (false; R-1).
+Owned methods (listed by `test/wlite_tests.jl`): `getproperty`, `propertynames` and `show`
+(text/plain); MTK's accessors `equations`, `unknowns`, `parameters`, `observed`,
+`initial_conditions`, `bindings`, `guesses`, `inputs`, `outputs`, `independent_variable`,
+`get_systems`, `full_equations` and the metadata functions, all of the inner System;
+`iscomplete` (true) and `complete` (the model itself); MTK's operations `compose`, `extend`
+and `rename`; SII `symbolic_container`, `all_symbols`, `parameter_index` (2), `is_parameter`
+(`ParameterIndex`), `observed`, `parameter_observed`, and `getsym`/`getp`/`setsym`/`setp`,
+whose accessors look the symbol up in the problem they are applied to. Besides them:
+`mtkcompile` (the CPM compile entry) and the 48 generated problem-constructor refusals.
+`CompiledPottsSystem` is an MTK `AbstractSystem` too, with the same accessors (of the authored
+model) and refusals; its `getproperty` reads its own fields first, then the model's names.
 `sys.x` is MTK's `getproperty` on the inner System. Internal code reads payload fields with
 `_p(sys, :f)` and the container with `getfield`; `test/wlite.jl` scans `src/` for property reads.
 

@@ -125,13 +125,20 @@ function _merged_metadata(base::PottsSystem, sys::PottsSystem)
     return meta
 end
 
-# A compiled model is not an ODE or jump system either (the `PottsSystem` refusals: system.jl)
-SciMLBase.ODEProblem(::CompiledPottsSystem, op, tspan::Union{Nothing, Tuple}; kw...) =
+# A compiled model is not an ODE or jump system either: the same refusals as a `PottsSystem`'s
+# (system.jl), so that MTK's problem constructors for an `AbstractSystem` never run on it
+for (M, n) in ((:JumpProcesses, :JumpProblem), ((:SciMLBase, n) for n in _REFUSED_PROBLEMS)...)
+    P = Expr(:., M, QuoteNode(n))
+    msg = String(n)
+    @eval begin
+        $P(::CompiledPottsSystem, ::_ProblemArg, args...; kw...) = throw(ArgumentError(_problem_msg($msg)))
+        $P{iip}(::CompiledPottsSystem, ::_ProblemArg, args...; kw...) where {iip} = throw(ArgumentError(_problem_msg($msg)))
+        $P{iip, spec}(::CompiledPottsSystem, ::_ProblemArg, args...; kw...) where {iip, spec} =
+            throw(ArgumentError(_problem_msg($msg)))
+    end
+end
+SciMLBase.ODEProblem{iip, SciMLBase.FunctionWrapperSpecialize}(::CompiledPottsSystem, ::_ProblemArg, args...; kw...) where {iip} =
     throw(ArgumentError(_problem_msg("ODEProblem")))
-SciMLBase.ODEProblem{iip}(::CompiledPottsSystem, op, tspan::Union{Nothing, Tuple}; kw...) where {iip} =
-    throw(ArgumentError(_problem_msg("ODEProblem")))
-JumpProcesses.JumpProblem(::CompiledPottsSystem, op, tspan::Union{Nothing, Tuple}; kw...) =
-    throw(ArgumentError(_problem_msg("JumpProblem")))
 
 """
 The variables `xs` of an extension, each edge variable that re-declares one of the base's
