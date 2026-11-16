@@ -380,7 +380,7 @@ longer than in a full window); an implicit group rebuilds its operator for that 
 
 **State writes.** `integ[c] = values` and `setu` drop every group's algorithm history
 ([`reset!`](@ref)). A write into `integ.u` itself is not seen by the groups until
-`derivative_discontinuity!(integ, true)` (or `u_modified!`), which drops it too.
+`derivative_discontinuity!(integ, true)`, which drops it too.
 
 Parameters and tables change only through `integ.ps[sym] = v` or `setp(integ, sym)(integ, v)`
 (SymbolicIndexingInterface), which checks the faces, recomputes the substeps and rebinds the
@@ -428,6 +428,7 @@ mutable struct FieldIntegrator{P <: FieldProblem, A, S <: FieldStore, RT <: Tupl
     dense::Bool                         # the solution's `dense` (the `dense` keyword)
     prevbuf::Any                        # the host buffer `prevu` reuses (no copy allocated per window)
     inputfns::Any                       # the inputs given as functions of the time (`InputFns`), or nothing
+    verbose::Bool                       # the run's warnings print (`verbose`; `Exec.VERBOSE` in its calls)
 end
 
 
@@ -634,9 +635,14 @@ end
 _map_saveat(sat, t0, dt, a1, clock) = foreach(s -> _whole(s - t0, dt) || _count(s - t0, dt, "a saveat time";
     window = _wtext(a1, clock, dt), route = _count_route(a1, clock, dt, s - t0, "the saveat times")), sat)
 
-function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; saveat = (), save_start::Bool = true,
+function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; verbose::Bool = true, kw...)
+    verbose && return _init(prob, alg, verbose; kw...)
+    return Base.ScopedValues.with(() -> _init(prob, alg, verbose; kw...), Exec.VERBOSE => false)
+end
+function _init(
+        prob::FieldProblem, alg::FieldAlgorithm, verbose::Bool; saveat = (), save_start::Bool = true,
         save_end::Bool = true, save_everystep::Bool = false, save_on::Bool = true, save_idxs = nothing,
-        callback = nothing, tstops = (), maxiters::Integer = typemax(Int), verbose = true, alias_u0::Bool = false,
+        callback = nothing, tstops = (), maxiters::Integer = typemax(Int), alias_u0::Bool = false,
         dense::Bool = true, _sciml = nothing, kw...)
     isempty(kw) || throw(ArgumentError(string("`solve`/`init` with ", _algtext(alg), ": the keyword",
         length(kw) == 1 ? " " : "s ", join(("`$k`" for k in keys(kw)), ", "), length(kw) == 1 ? " is" : " are",
@@ -706,10 +712,11 @@ function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; saveat = (), 
     pv = copy(prob.p)
     integ = FieldIntegrator{typeof(prob), typeof(alg), typeof(st), typeof(rts), T, typeof(pv), typeof(tabs),
                             _utype(st, E)}(prob, alg, st, rts, pv, pgood, tabs, t0, 0, dt, ms[1], nsteps,
-        _clock(prob) === nothing ? 0 : _per(dt, _clock(prob)), save, Float64[], Vector{T}[], SciMLBase.ReturnCode.Success,
+        _clock(prob) === nothing ? 0 : _per(dt, _clock(prob)), save, Float64[], Vector{T}[], SciMLBase.ReturnCode.Default,
         aux, Vector{T}[], Any[], t0, tf, Float64[], 1, 0, _sciml, nothing, _save_indices(prob, save_idxs),
         save_everystep, Int(maxiters), false, nothing, nothing, t0, 0, nothing, dense, nothing,
-        isempty(prob.inputfns) ? nothing : Base.inferencebarrier(_input_fns)(prob, st, rts))
+        isempty(prob.inputfns) ? nothing : Base.inferencebarrier(_input_fns)(prob, st, rts), verbose
+    )
     # the inputs given as functions of the time take their values at the start (F4-B1)
     # (`getfield`: the integrator's type is not inferred here, and a `getproperty` called at
     # run time is compiled for any property, `integ.sol` and its solution included)
@@ -877,6 +884,13 @@ it. On the host the groups' status words are read after the step
 the code and the run goes on. On a device they are read at the saves and at the end.
 """
 function CommonSolve.step!(integ::FieldIntegrator)
+    getfield(integ, :verbose) || return Base.inferencebarrier(_quietly)(_step!, integ)::typeof(integ)
+    return _step!(integ)
+end
+# a call of an integrator given `verbose = false`, with its warnings off (behind a barrier: a
+# verbose run compiles none of it)
+@noinline _quietly(f::F, integ) where {F} = Base.ScopedValues.with(() -> f(integ), Exec.VERBOSE => false)
+function _step!(integ::FieldIntegrator)
     t, dt = _time(integ), integ.dt
     # (the time logic takes plain values, not the integrator: it is compiled once, not again
     # for each problem's kernel types, and the rare paths sit behind barriers, so a run on the
@@ -937,7 +951,8 @@ end
 _past_maxiters(windows::Int, maxiters::Int, code::SciMLBase.ReturnCode.T, tnow::Float64, tend::Float64, dt::Float64) =
     windows >= maxiters && _running(code) && tnow < tend - 1e-9 * dt
 @noinline function _maxiters!(integ::FieldIntegrator)
-    @warn string("the run stopped after maxiters = ", integ.maxiters, " windows at t = ", _num(_time(integ)),
+    Exec.VERBOSE[] && @warn string(
+        "the run stopped after maxiters = ", integ.maxiters, " windows at t = ", _num(_time(integ)),
         ": `ReturnCode.MaxIters`; give a larger `maxiters`")
     integ.retcode = SciMLBase.ReturnCode.MaxIters
     return nothing
@@ -1036,8 +1051,10 @@ function _check_statuses!(integ::FieldIntegrator)
 end
 _check_all(::Tuple{}, code) = code
 _check_all(rts::Tuple, code) = _check_all(Base.tail(rts), _worse(code, check_status!(first(rts))))
-# a run goes on while its code is `Success` or `StalledSuccess` (a rounding floor, accepted)
-_running(c::SciMLBase.ReturnCode.T) = c == SciMLBase.ReturnCode.Success || c == SciMLBase.ReturnCode.StalledSuccess
+# a run goes on while its code is `Default` (no step has ended it, SciML's code of a run in
+# progress), `Success` or `StalledSuccess` (a rounding floor, accepted)
+_running(c::SciMLBase.ReturnCode.T) = c == SciMLBase.ReturnCode.Default || c == SciMLBase.ReturnCode.Success ||
+    c == SciMLBase.ReturnCode.StalledSuccess
 _advance_all(::Tuple{}, clock) = SciMLBase.ReturnCode.Success
 # the groups in order; a failing group stops the step (the later groups do not run), a
 # `StalledSuccess` (a rounding floor, accepted) does not: the step returns the worst code
@@ -1056,6 +1073,10 @@ again, every group's algorithm history is dropped ([`reset!`](@ref)) and the sta
 saved when the save times include it.
 """
 function SciMLBase.reinit!(integ::FieldIntegrator, u0 = integ.prob.u0)
+    getfield(integ, :verbose) || return Base.inferencebarrier(_quietly)(i -> _reinit!(i, u0), integ)
+    return _reinit!(integ, u0)
+end
+function _reinit!(integ::FieldIntegrator, u0)
     length(u0) == length(integ.prob.u0) ||
         throw(ArgumentError("u0 has $(length(u0)) values; the state has $(length(integ.prob.u0))"))
     u0 === integ.prob.u0 || check_declared_state(integ.prob, u0, eachindex(u0), "starts at")
@@ -1071,7 +1092,7 @@ function SciMLBase.reinit!(integ::FieldIntegrator, u0 = integ.prob.u0)
     empty!(integ.ts)
     empty!(integ.us)
     empty!(integ.auxu)
-    integ.retcode = SciMLBase.ReturnCode.Success
+    integ.retcode = SciMLBase.ReturnCode.Default
     integ.inputfns === nothing || Base.inferencebarrier(_refresh_inputs!)(integ)
     _rerun_init!(integ, integ.pgood)
     foreach(reset!, integ.runtimes)
@@ -1145,7 +1166,8 @@ _declared_all(rts::Tuple, code) = _declared_all(Base.tail(rts), _worse(code, che
         end
     end
     isempty(bad) && (bad = copy(integ.prob.state))
-    @warn string("field", length(bad) == 1 ? " " : "s ", _fieldlist(bad), ": the state is not finite at t = ",
+    Exec.VERBOSE[] && @warn string(
+        "field", length(bad) == 1 ? " " : "s ", _fieldlist(bad), ": the state is not finite at t = ",
         _num(_time(integ)), " (the step is unstable): `ReturnCode.Unstable`, the run stops. Give more substeps ",
         "(`substeps = n`), or step the field", length(bad) == 1 ? "" : "s", " with `BackwardEuler`; a term the ",
         "stability bound cannot see (named when the count was set) is the usual cause")
@@ -1164,6 +1186,10 @@ at the end (statuses, declared intervals, a state that is not finite; a failure 
 it stopped at). Inferred; `solve!` then builds the solution behind a barrier (F4-04).
 """
 function finish!(integ::FieldIntegrator)
+    getfield(integ, :verbose) || return Base.inferencebarrier(_quietly)(_finish!, integ)::typeof(integ)
+    return _finish!(integ)
+end
+function _finish!(integ::FieldIntegrator)
     while _time(integ) < integ.tend - 1e-9 * integ.dt && _running(integ.retcode)
         CommonSolve.step!(integ)
     end
@@ -1175,6 +1201,7 @@ function finish!(integ::FieldIntegrator)
      integ.ts[end] != _time(integ)) && (u = _current(integ); !all(isfinite, u)) && Base.inferencebarrier(_unstable!)(integ, u)
     # a failure stops the run: the state it stopped at is saved (as front end A does)
     !_running(integ.retcode) && (isempty(integ.ts) || integ.ts[end] != _time(integ)) && _save!(integ)
+    integ.retcode == SciMLBase.ReturnCode.Default && (integ.retcode = SciMLBase.ReturnCode.Success)
     return integ
 end
 # the solution so far: SciML's `ODESolution` of the problem solved (F4-04), or a `FieldSolution`
@@ -1498,7 +1525,7 @@ SciMLBase.pop_tstop!(i::FieldIntegrator) = popfirst!(getfield(i, :tstops))
 
 The state or the data changed outside the steps (a write into `integ.u`, a callback): every
 group's algorithm history is dropped ([`reset!`](@ref): Crank–Nicolson damps again, BDF2
-starts again). `false` changes nothing. `u_modified!` is SciML's older name.
+starts again). `false` changes nothing.
 """
 SciMLBase.derivative_discontinuity!(i::FieldIntegrator, b::Bool) = (i.modflag = b; b && foreach(reset!, i.runtimes); nothing)
 """
@@ -1526,6 +1553,10 @@ SciMLBase.set_proposed_dt!(i::FieldIntegrator, dt) = throw(ArgumentError(string(
     "a fixed window (dt = ", i.dt, "); land on a time with `add_tstop!` or `step!(integ, dt, true)`, or give the ",
     "algorithm another `dt`")))
 SciMLBase.done(i::FieldIntegrator) = !_running(i.retcode) || _time(i) >= i.tend - 1e-9 * i.dt
+# SciML's contract: `Success` while the run is healthy, else the code that ended it (a
+# `StalledSuccess` too: the run goes on with it)
+SciMLBase.check_error(i::FieldIntegrator) =
+    i.retcode == SciMLBase.ReturnCode.Default ? SciMLBase.ReturnCode.Success : i.retcode
 
 # an input symbol writes the input's array (the masks run again); a parameter or table is an
 # error naming `integ.ps`; any other goes to SII
@@ -1722,6 +1753,10 @@ end
 # the substep count of each group at parameters `p` (checked, nothing changes yet), and
 # setting them
 function _counts(i::FieldIntegrator, p; tables, inputs)
+    getfield(i, :verbose) || return Base.inferencebarrier(_quietly)(i -> _counts_all(i, p; tables, inputs), i)
+    return _counts_all(i, p; tables, inputs)
+end
+function _counts_all(i::FieldIntegrator, p; tables, inputs)
     ms = map(rt -> rt.all_state ? substeps(i.prob, rt.alg, p; tables, inputs) :
                    substeps(i.prob, rt.alg, p; tables, inputs, stability = rt.stability, fields = rt.keys), i.runtimes)
     _check_coupling(i.prob, [(rt.alg, rt.keys) for rt in i.runtimes], p; tables, inputs, dt = i.dt)

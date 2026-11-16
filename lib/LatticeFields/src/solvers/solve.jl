@@ -516,7 +516,8 @@ function set_coefficients!(sv::FieldSolver, op::CellOperator)
     check_coefficients(op)
     if sv.auto && !sv.warned && resolve_solver_T(sv.exec, op, sv.state, :auto) != sv.T
         sv.warned = true
-        @warn string(_who(op), ": set_coefficients!: solver_T = :auto would now resolve to ",
+        Exec.VERBOSE[] && @warn string(
+            _who(op), ": set_coefficients!: solver_T = :auto would now resolve to ",
             resolve_solver_T(sv.exec, op, sv.state, :auto), ", but the group keeps ", sv.T,
             " (resolved at build; changing it recompiles). Pass solver_T explicitly or ",
             "rebuild the FieldSolver to change it.")
@@ -1079,7 +1080,8 @@ function sentinel(sv::FieldSolver)
            ""
     what = s.status === :floor ? "stagnated (floor)" :
            s.status === :diverged ? "diverged" : "ended"
-    @warn string(_who(sv.op), ": the field solve ", what, " at ‖r‖∞ = ", s.rnorm,
+    Exec.VERBOSE[] && @warn string(
+        _who(sv.op), ": the field solve ", what, " at ‖r‖∞ = ", s.rnorm,
         " > tolerance after ", s.iter, " iterations.", hint)
     return true
 end
@@ -1118,7 +1120,8 @@ function _defect_solve!(sv::FieldSolver, maxiter::Int)
         k += j
         (j == 0 && scalars(sv).done) && return k
     end
-    @warn string(_who(sv.op), ": the defect correction of the Robin faces with a negative diagonal ",
+    Exec.VERBOSE[] && @warn string(
+        _who(sv.op), ": the defect correction of the Robin faces with a negative diagonal ",
         "(α and β of opposite sign, |β| > α/2) did not converge in ", maxiter, " passes: the face ",
         "condition is too strong for this operator; a larger `α/2 + β`, or a larger shift or face ",
         "coefficient, makes it converge")

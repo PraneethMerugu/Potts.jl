@@ -31,10 +31,10 @@ end
         rt = only(ig.runtimes)
         @test rt isa LFP.GroupRuntime && rt.n == ig.substeps == 4 && rt.ends_in === :parity
         @test p.group isa LFP.FieldGroup && p.group.spec.state == p.state && p.group.spec.kind === :rate
-        # `advance!` returns the step's code, and `integ.retcode` reads it
+        # `advance!` returns the step's code; a healthy run in progress is `Default` (SciML)
         @test LFP.advance!(rt, (0.0, 0)) == ReturnCode.Success && rt.status == ReturnCode.Success
         step!(ig)
-        @test ig.retcode == ReturnCode.Success
+        @test ig.retcode == ReturnCode.Default && SciMLBase.check_error(ig) == ReturnCode.Success
         # one algorithm for every field is one group: the same launches, the same states
         s1, s2 = solve(p, a4), solve(p, FieldGroups(gce => a4, goe => a4))
         @test s2.u == s1.u && substep_counts(s2) == substep_counts(s1)

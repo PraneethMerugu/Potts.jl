@@ -58,7 +58,7 @@ end
     end
     want, wrong = cn(us[1], h, 2h), cn(us[1], 2h, 2h)
     @test maximum(abs, us[2] .- want) < 1e-9 && maximum(abs, us[2] .- wrong) > 1e-3
-    @test only(ig.runtimes).cache.newton == 1 && ig.retcode == ReturnCode.Success
+        @test only(ig.runtimes).cache.newton == 1 && SciMLBase.check_error(ig) == ReturnCode.Success
 end
 end
 

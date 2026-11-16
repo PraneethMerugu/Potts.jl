@@ -50,7 +50,7 @@ end
             reinit!(integ)
             @test SII.current_time(integ) == 0.0
             @test integ.iter == 0
-            @test integ.retcode == ReturnCode.Success
+            @test integ.retcode == ReturnCode.Default           # a fresh run is in progress
             @test length(integ.ts) == 1 && integ.ts[1] == 0.0
             @test integ.us[1] == u0
             s_re = solve!(integ)
@@ -122,5 +122,56 @@ end
             @test_throws ErrorException SII.getp(prob, :missing_param)
             @test_throws ["ArgumentError", "missing_param", "not a parameter"] SII.setp(integ, :missing_param)
         end
+    end
+end
+
+# `hash` agrees with `==` (equal objects are one `Set` element and one `Dict` key).
+# `verbose = false` silences the run's warnings. `retcode` is `Default` until
+# the run ends, `check_error` is `Success` while it is healthy. Controls on the code before this change: equal
+# objects hashed apart, the `maxiters` warning printed at `verbose = false`, `check_error` threw
+# (no `force_dtmin` in the options) and `retcode` was `Success` before the first step.
+@testitem "FieldIntegrator: hash agrees with ==, verbose, check_error, retcode in progress" setup = [LF_problems_sciml] tags = [:latticefields, :problems] begin
+    LP = LatticeFields.Problems
+    dims = (10, 8)
+    u0 = rand(Xoshiro(17), prod(dims))
+    ix = LatticeIndex(; variables = [:u => FieldSlot(1:prod(dims), dims)], parameters = [:D => 1])
+    prob = FieldProblem(
+        euler2(dims; storage = LatticeFields.IR.F64), copy(u0), (0.0, 0.2), [0.5];
+        state = ["u"], kind = :rate, index = ix
+    )
+    alg = ExplicitEuler(; dt = 0.05, substeps = 1)
+    @testset "hash agrees with ==" begin
+        rng = Xoshiro(2)
+        for _ in 1:20                         # property: a == b ⇒ hash(a) == hash(b)
+            v, k = rand(rng, 3), rand(rng, 4)
+            a = LP.LatticeParameters(v, ["K" => k]; tick = rand(rng, 0:5))
+            b = copy(a)
+            @test a == b && hash(a) == hash(b)
+            @test length(Set([a, b])) == 1 && haskey(Dict(a => 1), b)
+        end
+        s1 = LP.LatticeStats(LP.finish!(init(prob, alg)))
+        s2 = LP.LatticeStats(LP.finish!(init(prob, alg)))
+        @test s1 == s2 && hash(s1) == hash(s2) && length(Set([s1, s2])) == 1
+    end
+    @testset "retcode and check_error" begin
+        integ = init(prob, alg)
+        @test integ.retcode == ReturnCode.Default
+        @test SciMLBase.check_error(integ) == ReturnCode.Success
+        step!(integ)
+        @test integ.retcode == ReturnCode.Default && SciMLBase.check_error(integ) == ReturnCode.Success
+        @test solve!(integ).retcode == ReturnCode.Success
+        @test SciMLBase.check_error(integ) == ReturnCode.Success
+        reinit!(integ)
+        @test integ.retcode == ReturnCode.Default
+        SciMLBase.terminate!(integ)
+        @test SciMLBase.check_error(integ) == ReturnCode.Terminated
+    end
+    @testset "verbose" begin
+        # a run stopped by `maxiters` warns, and is silent at `verbose = false`; same result
+        loud = @test_logs (:warn,) solve(prob, alg; maxiters = 2)
+        quiet = @test_logs solve(prob, alg; maxiters = 2, verbose = false)
+        @test loud.retcode == quiet.retcode == ReturnCode.MaxIters
+        @test loud.u == quiet.u
+        @test_logs step!(init(prob, alg; maxiters = 1, verbose = false))
     end
 end

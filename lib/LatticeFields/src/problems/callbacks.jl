@@ -6,7 +6,7 @@
 # the conditions read a host copy of the state: one copy per window while a callback is active,
 # and one more after an affect when another condition reads it (`sol.stats.syncs`); with no callback the windows read nothing
 # back. An affect that changes nothing still drops the history, as in SciML: a callback that
-# only observes calls `derivative_discontinuity!(integ, false)` (or `u_modified!`) to keep it.
+# only observes calls `derivative_discontinuity!(integ, false)` to keep it.
 # The callbacks are held in their `CallbackSet` (a tuple of each kind) and walked by recursion,
 # so a warm window with callbacks whose conditions do not fire allocates nothing.
 

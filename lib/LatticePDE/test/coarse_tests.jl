@@ -89,7 +89,7 @@ end
                 end
                 step!(ic); step!(ih)
             end
-            @test ic.retcode == ih.retcode == SciMLBase.ReturnCode.Success
+            @test ic.retcode == ih.retcode == SciMLBase.ReturnCode.Default      # in progress
             @test size(ic[c(t, x, y)]) == (4, 4)
             @test capprox(ic[c(t, x, y)], ih[ch(t, x, y)]; rtol = alg isa ExplicitEuler ? 1.0e-13 : 1.0e-10)
             @test LatticePDE.substep_counts(ic) == LatticePDE.substep_counts(ih)

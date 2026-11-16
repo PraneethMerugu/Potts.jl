@@ -337,7 +337,7 @@ ProblemTexts() = ProblemTexts("ExplicitEuler(; dt, substeps = n)")
 # once), for both front ends
 const _SEEN_WARNED = Set{String}()
 const _SEEN_WARNED_LOCK = ReentrantLock()
-_warn_once(key) = ccall(:jl_generating_output, Cint, ()) == 0 &&
+_warn_once(key) = Exec.VERBOSE[] && ccall(:jl_generating_output, Cint, ()) == 0 &&
                   lock(() -> key in _SEEN_WARNED ? false : (push!(_SEEN_WARNED, key); true), _SEEN_WARNED_LOCK)
 
 """
@@ -1075,11 +1075,13 @@ end
                 string("Give `lower = ", x.lo, "` to the algorithm (it clips each substep at ", x.lo, ": ",
             _algname(rt.alg), " does not keep the values inside the bounds by itself), or widen `bounds`") :
                 "Widen `bounds` in the field's declaration to the range the field takes"
-        @warn string(head, route, ". The interval sets only the implicit solve's counts, and the solve checks its own ",
+        Exec.VERBOSE[] && @warn string(
+            head, route, ". The interval sets only the implicit solve's counts, and the solve checks its own ",
             "steps (the Newton check when it iterates, the shift clamp when it takes one step; both warn), so the run goes on")
         return true
     end
-    @warn string(head, "The stability bound takes that interval for the coefficients ",
+    Exec.VERBOSE[] && @warn string(
+        head, "The stability bound takes that interval for the coefficients ",
         "that read `", x.key, "`, so the substep count does not cover the run past it: `ReturnCode.Unstable`, the run ",
         "stops. Give more substeps (`substeps = n`), or widen `bounds` in the field's declaration to the range the field ",
         "takes (a source, a boundary flux or an overshoot can carry it out)")
@@ -1307,6 +1309,7 @@ end
 @noinline function _clamp_warn(@nospecialize(rt), h)
     tot = rt.totals
     tot.clamped = true
+    Exec.VERBOSE[] || return nothing
     s = length(rt.keys) == 1 ? "" : "s"
     w = length(h) >= 9 && h[9] != 0 ? Int(h[9]) : tot.windows
     rt.alg isa QuasiSteady && return @warn string("field", s, " ", join(("`$k`" for k in rt.keys), ", "),
@@ -1333,14 +1336,14 @@ _stepname(a) = a isa BackwardEuler ? "Backward Euler" : a isa CrankNicolson ? "C
                (string("the Newton iteration", (k = newton_count(rt.cache)) === nothing ? "" : " (`newton = $k`)",
                     " reached its budget $(tot.newton_budget) time$(tot.newton_budget == 1 ? "" : "s")"),
                 status_route(rt.alg, :newton_budget))
-        @warn "field$s $fs: $(what[1]) so far (the result is accepted, `ReturnCode.Success`, and counted in `stats`); " *
+        Exec.VERBOSE[] && @warn "field$s $fs: $(what[1]) so far (the result is accepted, `ReturnCode.Success`, and counted in `stats`); " *
               "$(what[2]) removes this warning"
     end
     if code == SciMLBase.ReturnCode.ConvergenceFailure && tot.window == 0
         tot.window = max(Int64(window), 1)
         why = [r for (bit, r) in STATUS_CAUSES if tot.cause & bit != 0]
         route = status_route(rt.alg, :failure, tot.cause; coupled = coupled_solve(rt.cache))
-        @warn "field$s $fs: the solve failed in $(window_text(rt, tot.window))$(isempty(why) ? "" : " (" * join(why, "; ") * ")"), " *
+        Exec.VERBOSE[] && @warn "field$s $fs: the solve failed in $(window_text(rt, tot.window))$(isempty(why) ? "" : " (" * join(why, "; ") * ")"), " *
               "`ReturnCode.ConvergenceFailure`: the run stops; $route"
     end
     return nothing

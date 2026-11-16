@@ -72,7 +72,7 @@ end
         # route (review r1, S2; base 2d213237: no warning)
         @test_logs (:warn, r"^field `bc`: the implicit shift was clamped in window 1 \(t = 0\.0\) .*a larger `newton = k` checks the step") solve!(ig)
         rt = only(ig.runtimes)
-        @test ig.retcode == ReturnCode.Success && rt.totals.cause & 0x08 != 0 && maximum(ig[bce]) < 1.0e-3
+        @test SciMLBase.check_error(ig) == ReturnCode.Success && rt.totals.cause & 0x08 != 0 && maximum(ig[bce]) < 1.0e-3
         # … once per run, and a site growth that the count rule cannot see (a field row whose growth
         # reads the time: no interval bounds it) warns too
         pg = discretize(
@@ -95,7 +95,7 @@ end
             ), BackwardEuler(; dt = 0.1)
         )
         solve!(ig)
-        @test ig.retcode == ReturnCode.Success && only(ig.runtimes).totals.cause == 0
+        @test SciMLBase.check_error(ig) == ReturnCode.Success && only(ig.runtimes).totals.cause == 0
     end
 end
 
@@ -126,7 +126,7 @@ end
         ig = init(still, BackwardEuler(; dt = 0.25))
         @test only(ig.runtimes).cache.newton == 2
         solve!(ig)
-        @test ig.retcode == ReturnCode.Success && only(ig.runtimes).totals.newton_budget == 0
+        @test SciMLBase.check_error(ig) == ReturnCode.Success && only(ig.runtimes).totals.newton_budget == 0
     end
 end
 
@@ -232,7 +232,7 @@ end
         ig = init(pg, BackwardEuler(; dt = 0.1, inner = BTIGHT))
         @test ig.substeps == 4
         @test_logs min_level = Base.CoreLogging.Warn solve!(ig)
-        @test ig.retcode == ReturnCode.Success && only(ig.runtimes).totals.cause & 0x08 == 0
+        @test SciMLBase.check_error(ig) == ReturnCode.Success && only(ig.runtimes).totals.cause & 0x08 == 0
         ub = direct_be(gsys, (8, 8), 0.1, 0.3, 4)
         @test maximum(abs, vec(ig[bce]) .- ub) / maximum(abs, ub) < 1.0e-9
     end

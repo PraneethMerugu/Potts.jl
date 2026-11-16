@@ -140,7 +140,7 @@ end
         tight = Potts.LatticePDE.DevicePCG(; rtol = 1e-12, budget = 64)
         a2 = @test_logs min_level = Base.CoreLogging.Warn run(BackwardEuler(; dt = 0.25, inner = tight))
         @test only(a2.runtimes).cache.newton == 2
-        @test a2.retcode == Potts.SciMLBase.ReturnCode.Success
+        @test Potts.SciMLBase.check_error(a2) == Potts.SciMLBase.ReturnCode.Success   # healthy, in progress
         @test Potts.LatticeFields.Problems.field_stats(a2).newton_budget == 0
         b = run(BackwardEuler(; dt = 0.25, newton = 12, inner = tight))
         # F4-15b (review; user ruling 2026-11-13): the acceptance is

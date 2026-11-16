@@ -26,7 +26,7 @@ using Polyester: @batch
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
-public HOST_GRAIN, COMPILE_ONLY, compiling, ishost, supports, default_float, register_float64!, float64_registered, FLOAT64_KERNELS, FLOAT64_ARRAY, host_launch!, launch!, compile!, compile_all!, Launch, Plan, walker
+public HOST_GRAIN, COMPILE_ONLY, VERBOSE, compiling, ishost, supports, default_float, register_float64!, float64_registered, FLOAT64_KERNELS, FLOAT64_ARRAY, host_launch!, launch!, compile!, compile_all!, Launch, Plan, walker
 
 # ---------------------------------------------------------------------------------------
 # Capabilities
@@ -194,6 +194,11 @@ launches in the pending compile task). The host executor ignores it.
 compiling() = COMPILE_ONLY[]
 """Compile mode, task-scoped (`Base.ScopedValues.with(Exec.COMPILE_ONLY => true) do … end`)."""
 const COMPILE_ONLY = Base.ScopedValues.ScopedValue(false)
+"""
+Whether a run's warnings print, task-scoped: `false` inside an owned run given `verbose = false`
+(SciML's `verbose` keyword); every warning of a run checks it.
+"""
+const VERBOSE = Base.ScopedValues.ScopedValue(true)
 
 """
     compile!(backend, body, args)
