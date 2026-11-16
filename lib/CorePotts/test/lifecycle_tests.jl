@@ -238,7 +238,7 @@ end
         # no `frozen` given: the rule builds it; a different mask is rejected
         lat, st = prob.lattice, prob.u0
         @test PottsProblem(prob.f, st, lat, (0, 1), gg_params()).frozen == fk_mask(st, 2)
-        @test_throws ArgumentError PottsProblem(prob.f, st, lat, (0, 1), gg_params(); frozen = falses(30, 30))
+            @test_throws ["ArgumentError", "frozen kinds", "cannot be combined"] PottsProblem(prob.f, st, lat, (0, 1), gg_params(); frozen = falses(30, 30))
         integ = init(prob, alg)
         for _ in 1:15
             step!(integ)

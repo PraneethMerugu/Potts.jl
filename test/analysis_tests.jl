@@ -46,30 +46,29 @@ end
 
 
 const AN_LATTICES = (
-    sq_periodic = :(Lattice((7, 6); boundary = Periodic(), neighborhood = Moore(1))),
-    sq_disk = :(Lattice((9, 8); boundary = Closed(), neighborhood = Moore(1),
-        domain = x -> (x[1] - 5)^2 + (x[2] - 4.5)^2 <= 12)),
-    hex_periodic = :(Lattice((6, 6); boundary = Periodic(), geometry = Hexagonal())),
-    cube_mixed = :(Lattice((5, 4, 4); boundary = (Periodic(), Closed(), Periodic()), neighborhood = Moore(1))),
+    sq_periodic = () -> Potts.lattice_spec((7, 6); boundary = Periodic(), neighborhood = Moore(1)),
+    sq_disk = () -> Potts.lattice_spec(
+        (9, 8); boundary = Closed(), neighborhood = Moore(1),
+        domain = x -> (x[1] - 5)^2 + (x[2] - 4.5)^2 <= 12
+    ),
+    hex_periodic = () -> Potts.lattice_spec((6, 6); boundary = Periodic(), geometry = Hexagonal()),
+    cube_mixed = () -> Potts.lattice_spec((5, 4, 4); boundary = (Periodic(), Closed(), Periodic()), neighborhood = Moore(1)),
 )
 
-const AN_MODELS = Dict{Symbol, Any}()
-
-for (key, lat) in pairs(AN_LATTICES)
-    name = Symbol(:AnContact_, key)
-    @eval @potts_model $name begin
-        @kinds medium A B
-        @parameters J[kind, kind] = [0.0 3.0 5.0; 3.0 7.0 11.0; 5.0 11.0 13.0]
-        @lattice $lat
-        @energy contacts => J[kind, kind′]
-        @sweep Metropolis(; temperature = 4.0)
+@potts_model AnContact begin
+    @structural_parameters begin
+        lat = AN_LATTICES[:sq_periodic]
     end
-    AN_MODELS[key] = @eval $name
+    @kinds medium A B
+    @parameters J[kind, kind] = [0.0 3.0 5.0; 3.0 7.0 11.0; 5.0 11.0 13.0]
+    @lattice lat()
+    @energy contacts => J[kind, kind′]
+    @sweep Metropolis(; temperature = 4.0)
 end
 
 
 function an_random_problem(key, seed)
-    sys = AN_MODELS[key](; name = Symbol(:an_, key))
+    sys = AnContact(; name = Symbol(:an_, key), lat = AN_LATTICES[key])
     lat = Potts.core_lattice(Potts.lattice(sys))
     rng = Xoshiro(seed)
     σ = Int32.(rand(rng, 0:5, lat.dims))
@@ -168,6 +167,19 @@ end
     @energy cells => 1 / (volume - 9)^2
     @sweep Metropolis(; temperature = 5.0)
 end
+function an_throws(T, pats, f)
+    err = try
+        f(); nothing
+    catch e
+        e
+    end
+    @test err isa T
+    msg = sprint(showerror, err)
+    for pat in pats
+        @test occursin(pat, msg) || (println("Expected $(repr(pat)) in: ", msg); false)
+    end
+    return err
+end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
@@ -215,9 +227,25 @@ end
         @test h == an_boundary_oracle(prob.u0.σ, kinds, prob.lattice, CorePotts.relation(Stencil([[1, 0], [-1, 0]]), prob.lattice))
         v = Potts.boundary_lengths(prob; relation = Stencil([[0, 1], [0, -1]]))
         @test Dict(k => h[k] + v[k] for k in keys(h)) == Potts.boundary_lengths(prob; relation = VonNeumann(1))
-        # an asymmetric relation has no unordered bonds
-        @test_throws ArgumentError Potts.boundary_lengths(prob; relation = Stencil([[1, 0]]))
-        @test_throws ArgumentError Potts.boundary_lengths(prob; relation = Weighted(Moore(1), o -> 1.0 + o[1]))
+        # an asymmetric relation has no unordered bonds, and non-model problems are refused
+        an_throws(
+            ArgumentError, ["the relation is not symmetric", "pass a symmetric relation"],
+            () -> Potts.boundary_lengths(prob; relation = Stencil([[1, 0]]))
+        )
+        an_throws(
+            ArgumentError, ["the relation is not symmetric", "pass a symmetric relation"],
+            () -> Potts.boundary_lengths(prob; relation = Weighted(Moore(1), o -> 1.0 + o[1]))
+        )
+        raw_f = CorePotts.CPMFunction(
+            prob.f.delta_H; prob.f.commit!, prob.f.constraint,
+            prob.f.temperature, prob.f.bias, prob.f.acceptance, prob.f.footprint,
+            prob.f.fingerprint, sys = nothing
+        )
+        non_potts = remake(prob; f = raw_f)
+        an_throws(
+            ArgumentError, ["not a problem of a Potts model", "with `PottsProblem`"],
+            () -> Potts.boundary_lengths(non_potts)
+        )
         # the input is not modified
         σ0 = copy(prob.u0.σ)
         Potts.boundary_lengths(prob)
@@ -296,7 +324,10 @@ end
         @test Potts.anneal(driven; mcs = 3, seed = 5).σ == Potts.anneal(remake(driven; seed = 99); mcs = 3, seed = 5).σ
         z = Potts.anneal(driven; mcs = 0)
         @test z !== driven.u0 && z.σ == σ && z.σ !== driven.u0.σ
-        @test_throws ArgumentError Potts.anneal(driven; mcs = -1)
+        an_throws(
+            ArgumentError, ["`mcs` must be non-negative", "pass `mcs >= 0`"],
+            () -> Potts.anneal(driven; mcs = -1)
+        )
         # an annealed state can be annealed again and measured
         @test valtype(Potts.boundary_lengths(driven, Potts.anneal(driven, z; mcs = 1))) === Int
     end
@@ -334,13 +365,19 @@ end
         prob = PottsProblem(AnBlowup(; name = :an_b), [ownership => σ, kind => [:A]], (0, 5); seed = 1)
         @test Symbol(solve(prob, SequentialCPM()).retcode) === :Failure          # as in the run
         for alg in (SequentialCPM(), CheckerboardCPM())
-            @test_throws ErrorException Potts.anneal(prob; mcs = 5, seed = 1, alg)
+            an_throws(
+                ErrorException, ["stopped with retcode", "inspect the energy terms"],
+                () -> Potts.anneal(prob; mcs = 5, seed = 1, alg)
+            )
         end
         # negative control: away from volume 8 the same model anneals
         σ2 = zeros(Int32, 16, 16)
         σ2[3:6, 3:6] .= 1                                        # volume 16: T = 0 grows it, ΔH finite
         ok = PottsProblem(AnBlowup(; name = :an_b2), [ownership => σ2, kind => [:A]], (0, 5); seed = 1)
         @test Potts.anneal(ok; mcs = 2, seed = 1).cell.volume[1] > 16
-        @test_throws ArgumentError Potts.anneal(ok; mcs = 1, seed = -1)
+        an_throws(
+            ArgumentError, ["`seed` must be non-negative", "pass `seed >= 0`"],
+            () -> Potts.anneal(ok; mcs = 1, seed = -1)
+        )
     end
 end

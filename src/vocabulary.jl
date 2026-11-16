@@ -37,11 +37,13 @@ _sym(name::Symbol) = Symbolics.unwrap(only(Symbolics.@variables $name))
 # ---------------------------------------------------------------------------------------
 # Built-in names
 
-const BUILTIN_NAMES = (:volume, :surface, :kind, :kind′, :owner, :owner′, :id, :generation,
+const BUILTIN_NAMES = (
+    :volume, :surface, :kind, :kind′, :owner, :owner′, :id, :generation,
     :weight, :source, :target, :old, :new, :mcs, :position, :a, :b, :distance, :cluster,
     :cluster_volume, :cluster_surface, :time, :site, :site′, :major_length, :local_components, :ring_arcs,
     :ring_cells, :ring_medium, :direction, :euler, :euler_full, :pieces, :pieces_full, :largest_piece,
-    :largest_piece_full, :birth)
+    :largest_piece_full, :birth,
+)
 
 # A built-in is an MTK input `name(t)`: the CPM supplies its value wherever it is read.
 _builtin(n::Symbol) = _tag(only(Symbolics.@variables $n(t) [input = true]), Builtin(n))
@@ -49,8 +51,10 @@ _builtin(n::Symbol) = _tag(only(Symbolics.@variables $n(t) [input = true]), Buil
 const B = NamedTuple{BUILTIN_NAMES}(map(_builtin, BUILTIN_NAMES))
 # Text shown to users (statement descriptions, errors) names a built-in as written in a
 # model, `volume`, not as the MTK input it is, `volume(t)`.
-const _BUILTIN_CALL_TEXT = Regex("(?<![\\w′₊])(" * join(sort(collect(string.(BUILTIN_NAMES)); by = length, rev = true), "|") *
-                                 ")\\(t\\)")
+const _BUILTIN_CALL_TEXT = Regex(
+    "(?<![\\w′₊])(" * join(sort(collect(string.(BUILTIN_NAMES)); by = length, rev = true), "|") *
+        ")\\(t\\)"
+)
 _builtin_text(s::AbstractString) = replace(s, _BUILTIN_CALL_TEXT => s"\1")
 
 # Tracker deltas substituted during ΔH derivation (not user-visible)
@@ -72,14 +76,20 @@ const DLARGEST_FULL = _tag(_sym(:δlargest_piece_full), Entity(:delta, :largest_
 # `:face` is the bare `euler`. On a hexagonal lattice the two are the same (D-192 Q4).
 const _EULER_ADJACENCIES = (:face, :full)
 function _euler_builtin(adjacency)
-    adjacency isa Symbol && adjacency in _EULER_ADJACENCIES || throw(ArgumentError(
-        "`euler(; adjacency = $(repr(adjacency)))`: the adjacency is `:face` (the default) or `:full`"))
+    adjacency isa Symbol && adjacency in _EULER_ADJACENCIES || throw(
+        ArgumentError(
+            "`euler(; adjacency = $(repr(adjacency)))`: the adjacency is `:face` (the default) or `:full`"
+        )
+    )
     return adjacency === :face ? B.euler : B.euler_full
 end
 _euler(; adjacency = :face) = _euler_builtin(adjacency)
 _euler(c; adjacency = :face) = _index(_euler_builtin(adjacency), c)
-_euler(args...; kwargs...) = throw(ArgumentError(
-    "`euler` takes at most one cell (`euler(old; adjacency)`) and only the keyword `adjacency`"))
+_euler(args...; kwargs...) = throw(
+    ArgumentError(
+        "`euler` takes at most one cell (`euler(old; adjacency)`) and only the keyword `adjacency`"
+    )
+)
 
 # Cell-scope `pieces` and `largest_piece` (P6.9a, D-189 ruling 9): the number of connected
 # components of a cell's sites and the site count of the largest, under `:face` (the bare
@@ -87,15 +97,21 @@ _euler(args...; kwargs...) = throw(ArgumentError(
 # the shell fold (`_Pieces`); `@potts_model` rewrites a bare `pieces` to `_bare_pieces(pieces)`
 # and a call of `largest_piece` to `_largest_piece`.
 function _pieces_builtin(name, adjacency)
-    adjacency isa Symbol && adjacency in _EULER_ADJACENCIES || throw(ArgumentError(
-        "`$name(; adjacency = $(repr(adjacency)))`: the adjacency is `:face` (the default) or `:full`"))
+    adjacency isa Symbol && adjacency in _EULER_ADJACENCIES || throw(
+        ArgumentError(
+            "`$name(; adjacency = $(repr(adjacency)))`: the adjacency is `:face` (the default) or `:full`"
+        )
+    )
     name === :pieces && return adjacency === :face ? B.pieces : B.pieces_full
     return adjacency === :face ? B.largest_piece : B.largest_piece_full
 end
 _largest_piece(; adjacency = :face) = _pieces_builtin(:largest_piece, adjacency)
 _largest_piece(c; adjacency = :face) = _index(_pieces_builtin(:largest_piece, adjacency), c)
-_largest_piece(args...; kwargs...) = throw(ArgumentError(
-    "`largest_piece` takes at most one cell (`largest_piece(old; adjacency)`) and only the keyword `adjacency`"))
+_largest_piece(args...; kwargs...) = throw(
+    ArgumentError(
+        "`largest_piece` takes at most one cell (`largest_piece(old; adjacency)`) and only the keyword `adjacency`"
+    )
+)
 
 # ---------------------------------------------------------------------------------------
 # Declarations
@@ -108,14 +124,22 @@ write) and `description` (shown with the model). The metadata is MTK's own, so
 `ModelingToolkitBase.istunable`, `getbounds` and `getdescription` read it.
 """
 parameter(name::Symbol, default; unit = nothing, tunable = true, bounds = nothing, description = nothing, origin = nothing) =
-    _with_meta(_tag(_param(name; tunable = _tunable(name, tunable)), Entity(:param, name, default,
-        _origin(_meta_options(name, tunable, bounds, description), origin))), unit, bounds, description)
+    _with_meta(
+    _tag(
+        _param(name; tunable = _tunable(name, tunable)), Entity(
+            :param, name, default,
+            _origin(_meta_options(name, tunable, bounds, description), origin)
+        )
+    ), unit, bounds, description
+)
 # a component's bound parameter keeps where it was bound, `(component, name)`, for its messages (F2-15)
 _origin(opts, ::Nothing) = opts
 _origin(opts, o) = (; opts..., origin = o)
 # (`tunable = false` through MTK's own declaration: its metadata key is not public)
-_param(name::Symbol; tunable::Bool = true) = Symbolics.unwrap(tunable ? only(ModelingToolkitBase.@parameters $name) :
-                                                              only(ModelingToolkitBase.@parameters $name [tunable = false]))
+_param(name::Symbol; tunable::Bool = true) = Symbolics.unwrap(
+    tunable ? only(ModelingToolkitBase.@parameters $name) :
+        only(ModelingToolkitBase.@parameters $name [tunable = false])
+)
 _tunable(name, t) = t isa Bool ? t : throw(ArgumentError("parameter `$name`: `tunable` is `true` or `false`; got $(repr(t))"))
 
 _with_unit(x, ::Nothing) = x
@@ -136,9 +160,15 @@ function _meta_options(name, tunable, bounds, description)
         throw(ArgumentError("parameter `$name`: `description` is a string; got $(repr(description))"))
     opts = tunable ? (;) : (; tunable)
     bounds === nothing && return opts
-    (bounds isa Tuple && length(bounds) == 2 && all(b -> b isa Real, bounds) && !any(isnan, bounds) &&
-     bounds[1] <= bounds[2]) || throw(ArgumentError("parameter `$name`: `bounds` is a pair `(lo, hi)` of numbers with " *
-                                                   "lo ≤ hi (`bounds = (0, 2)`); got $(repr(bounds))"))
+    (
+        bounds isa Tuple && length(bounds) == 2 && all(b -> b isa Real, bounds) && !any(isnan, bounds) &&
+            bounds[1] <= bounds[2]
+    ) || throw(
+        ArgumentError(
+            "parameter `$name`: `bounds` is a pair `(lo, hi)` of numbers with " *
+                "lo ≤ hi (`bounds = (0, 2)`); got $(repr(bounds))"
+        )
+    )
     return (; opts..., bounds = (Float64(bounds[1]), Float64(bounds[2])))
 end
 # a value of parameter `i` outside its declared bounds (every entry of a kind table); `ps`, the
@@ -148,8 +178,10 @@ function _check_bounds(i::Entity, v, ps = nothing)
     b === nothing && return v
     for x in (v isa AbstractArray ? v : (v,))
         b[1] <= x <= b[2] && continue
-        head = string("parameter `", i.name, "` = ", v isa AbstractArray ? "$v (entry $x)" : x,
-            " is outside its declared bounds (", _bnum(b[1]), ", ", _bnum(b[2]), ")")
+        head = string(
+            "parameter `", i.name, "` = ", v isa AbstractArray ? "$v (entry $x)" : x,
+            " is outside its declared bounds (", _bnum(b[1]), ", ", _bnum(b[2]), ")"
+        )
         ps !== nothing && _is_symbolic(i.default) && throw(ArgumentError(string(head, ": ", _computed_message(ps, i))))
         throw(ArgumentError(string(head, ": give a value in them, or change `bounds` in its declaration")))
     end
@@ -171,10 +203,12 @@ function kind_parameter(name::Symbol, values; unit = nothing, tunable = true, bo
         length(n) == 1 ? only(ModelingToolkitBase.@parameters $name[1:n[1]]) : only(ModelingToolkitBase.@parameters $name[1:n[1], 1:n[2]])
     else
         length(n) == 1 ? only(ModelingToolkitBase.@parameters $name[1:n[1]] [tunable = false]) :
-        only(ModelingToolkitBase.@parameters $name[1:n[1], 1:n[2]] [tunable = false])
+            only(ModelingToolkitBase.@parameters $name[1:n[1], 1:n[2]] [tunable = false])
     end
-    return _with_meta(_tag(x, Entity(:kindtable, name, values, _meta_options(name, tunable, bounds, description))),
-        unit, bounds, description)
+    return _with_meta(
+        _tag(x, Entity(:kindtable, name, values, _meta_options(name, tunable, bounds, description))),
+        unit, bounds, description
+    )
 end
 
 """
@@ -197,8 +231,12 @@ function Pairs(entries::Pair...; default = nothing, symmetric::Bool = true)
     default === nothing && throw(ArgumentError("`Pairs(…)`: give the value of the unlisted entries, `default = …`"))
     return Pairs(Pair{Any, Any}[e for e in entries], default, symmetric)
 end
-Pairs(args...; kws...) = throw(ArgumentError("`Pairs` takes kind pairs `(k₁, k₂) => v` and the keywords `default`, " *
-                                             "`symmetric`; got $(join(map(repr, args), ", "))"))
+Pairs(args...; kws...) = throw(
+    ArgumentError(
+        "`Pairs` takes kind pairs `(k₁, k₂) => v` and the keywords `default`, " *
+            "`symmetric`; got $(join(map(repr, args), ", "))"
+    )
+)
 
 _pairs_kind_name(k) = (u = _unwrap(k); i = u isa SymbolicUtils.BasicSymbolic ? info(u) : nothing; i === nothing ? repr(k) : string(i.name))
 
@@ -213,15 +251,23 @@ function _pairs_matrix(t::Pairs, nk::Integer, name::Symbol)
         (key isa Tuple && length(key) == 2) ||
             throw(ArgumentError("kind table `$name = Pairs(…)`: an entry is `(k₁, k₂) => v` with two kind names; got `$(repr(key))`"))
         for k in key
-            (k isa Integer && !(k isa Bool) && 0 <= k < nk) || throw(ArgumentError(
-                "kind table `$name = Pairs(…)`: `$(_pairs_kind_name(k))` is not a kind of @kinds"))
+            (k isa Integer && !(k isa Bool) && 0 <= k < nk) || throw(
+                ArgumentError(
+                    "kind table `$name = Pairs(…)`: `$(_pairs_kind_name(k))` is not a kind of @kinds"
+                )
+            )
         end
         a, b = key[1] + 1, key[2] + 1
         cells = t.symmetric ? unique([(a, b), (b, a)]) : [(a, b)]
-        any(((i, j),) -> given[i, j], cells) && throw(ArgumentError(
-            "kind table `$name = Pairs(…)`: the pair $(repr(key)) is given twice" *
-            (t.symmetric && a != b ? " (with `symmetric = true`, (k₁, k₂) also sets (k₂, k₁); pass `symmetric = false` " *
-                                     "for an asymmetric table)" : "")))
+        any(((i, j),) -> given[i, j], cells) && throw(
+            ArgumentError(
+                "kind table `$name = Pairs(…)`: the pair $(repr(key)) is given twice" *
+                    (
+                    t.symmetric && a != b ? " (with `symmetric = true`, (k₁, k₂) also sets (k₂, k₁); pass `symmetric = false` " *
+                        "for an asymmetric table)" : ""
+                )
+            )
+        )
         for (i, j) in cells
             A[i, j] = v
             given[i, j] = true
@@ -271,15 +317,26 @@ function variable(x, scope::Symbol; default = _NO_VALUE, unit = nothing, guess =
     if type !== nothing
         u0 = Symbolics.unwrap(x)
         n0 = SymbolicUtils.iscall(u0) ? nameof(SymbolicUtils.operation(u0)) : nameof(u0)
-        type === CellRef || throw(ArgumentError("variable `$n0`: `::$type` is not a variable type; the one declared " *
-                                                "type is `CellRef` (`$n0(cell)::CellRef`, a reference to a cell)"))
+        type === CellRef || throw(
+            ArgumentError(
+                "variable `$n0`: `::$type` is not a variable type; the one declared " *
+                    "type is `CellRef` (`$n0(cell)::CellRef`, a reference to a cell)"
+            )
+        )
         scope === :cell || throw(ArgumentError("variable `$n0`: a `CellRef` is a cell variable, `$n0(cell)::CellRef`"))
-        (default isa Integer && !(default isa Bool) && default >= 0) || throw(ArgumentError(
-            "variable `$n0`: a `CellRef` defaults to a cell id or 0 (no reference), got $(repr(default))"))
+        (default isa Integer && !(default isa Bool) && default >= 0) || throw(
+            ArgumentError(
+                "variable `$n0`: a `CellRef` defaults to a cell id or 0 (no reference), got $(repr(default))"
+            )
+        )
         options = (; options..., reference = true)
     end
     if !(scope in SCOPES)
-        haskey(options, :relationship) && throw(ArgumentError("`relationship` is given twice"))
+        haskey(options, :relationship) && throw(
+            ArgumentError(
+                "`relationship` is given twice; specify it either as `name(rel)` or `[relationship = rel]`, not both"
+            )
+        )
         options = (; options..., relationship = scope)
         scope = :edge
     end
@@ -288,39 +345,69 @@ function variable(x, scope::Symbol; default = _NO_VALUE, unit = nothing, guess =
     haskey(options, :relationship) && scope !== :edge &&
         throw(ArgumentError("variable `$name`: `relationship` applies to edge variables"))
     for (k, v) in pairs(options)
-        k in _VARIABLE_OPTIONS || throw(ArgumentError("variable `$name`: unknown option `$k` " *
-                                                      "(options: `unit`, `guess`, `clear_on_ownership_change`; a field also " *
-                                                      "takes `lattice_storage`, `bounds` and `lattice_level`)"))
+        k in _VARIABLE_OPTIONS || throw(
+            ArgumentError(
+                "variable `$name`: unknown option `$k` " *
+                    "(options: `unit`, `guess`, `clear_on_ownership_change`; a field also " *
+                    "takes `lattice_storage`, `bounds` and `lattice_level`)"
+            )
+        )
         k === :clear_on_ownership_change && v === true && !(scope in (:site, :field)) &&
             throw(ArgumentError("variable `$name`: `clear_on_ownership_change` applies to site variables"))
         # `[lattice_storage = Float16 | Float32 | Float64]` (P5 role model, FE-17): a field's own
         # storage type, narrower or wider than the state type `T` (its kernels compute in the
         # group's `compute_T`, and each store rounds once to the storage)
         k === :lattice_storage && !(scope === :field && v in (Float16, Float32, Float64)) &&
-            throw(ArgumentError("variable `$name`: `lattice_storage` applies to fields and is `Float16`, `Float32` or " *
-                                "`Float64` (the state type `T` is the default storage; got " *
-                                (v isa Type ? string(v) : repr(v)) * (scope === :field ? ")" : " on a variable that is not a field)")))
+            throw(
+            ArgumentError(
+                "variable `$name`: `lattice_storage` applies to fields and is `Float16`, `Float32` or " *
+                    "`Float64` (the state type `T` is the default storage; got " *
+                    (v isa Type ? string(v) : repr(v)) * (scope === :field ? ")" : " on a variable that is not a field)")
+            )
+        )
         # `[bounds = (lo, hi)]` on a field (F3-13, FE-18 metadata): the interval its values stay
         # in, which the stability bound takes for a coefficient that reads the field
         if k === :bounds
-            scope === :field || throw(ArgumentError("variable `$name`: `bounds` applies to fields (`@variables " *
-                                                    "c(..) = 0.5 [bounds = (0, 1)]` in a PDESystem: the interval the field's values stay in)"))
+            scope === :field || throw(
+                ArgumentError(
+                    "variable `$name`: `bounds` applies to fields (`@variables " *
+                        "c(..) = 0.5 [bounds = (0, 1)]` in a PDESystem: the interval the field's values stay in)"
+                )
+            )
             (v isa Tuple && length(v) == 2 && all(b -> b isa Real, v) && !any(isnan, v) && v[1] <= v[2]) ||
-                throw(ArgumentError("variable `$name`: `bounds` is a pair `(lo, hi)` of numbers with lo ≤ hi " *
-                                    "(`bounds = (0, 1)`); got $(repr(v))"))
+                throw(
+                ArgumentError(
+                    "variable `$name`: `bounds` is a pair `(lo, hi)` of numbers with lo ≤ hi " *
+                        "(`bounds = (0, 1)`); got $(repr(v))"
+                )
+            )
         end
         # `[lattice_level = Coarse(k)]` on a field (F3-17): the grid coarsened by `k` per axis
         # (LatticePDE's metadata); its CPM reads read the node whose block holds the site
         if k === :lattice_level
-            scope === :field || throw(ArgumentError("variable `$name`: `lattice_level` applies to fields (`@variables " *
-                                                    "c(..) = 0.5 [lattice_level = Coarse(4)]` in a PDESystem: the field on the grid coarsened by 4)"))
-            v isa Coarse || throw(ArgumentError(string("variable `", name, "`: `lattice_level` is a grid, `Coarse(k)` (k a power ",
-                "of two: the lattice coarsened by k sites per axis); got ", repr(v),
-                v isa Integer && v >= 1 && ispow2(v) ? "; write `lattice_level = Coarse($v)`" : "")))
+            scope === :field || throw(
+                ArgumentError(
+                    "variable `$name`: `lattice_level` applies to fields (`@variables " *
+                        "c(..) = 0.5 [lattice_level = Coarse(4)]` in a PDESystem: the field on the grid coarsened by 4)"
+                )
+            )
+            v isa Coarse || throw(
+                ArgumentError(
+                    string(
+                        "variable `", name, "`: `lattice_level` is a grid, `Coarse(k)` (k a power ",
+                        "of two: the lattice coarsened by k sites per axis); got ", repr(v),
+                        v isa Integer && v >= 1 && ispow2(v) ? "; write `lattice_level = Coarse($v)`" : ""
+                    )
+                )
+            )
             get(options, :clear_on_ownership_change, false) === true && v.k > 1 &&
-                throw(ArgumentError("variable `$name`: `clear_on_ownership_change` with `lattice_level = $v`: a node of the " *
-                                    "coarse grid holds a block of sites of several owners, so one site's change cannot clear " *
-                                    "it; drop one of the two options"))
+                throw(
+                ArgumentError(
+                    "variable `$name`: `clear_on_ownership_change` with `lattice_level = $v`: a node of the " *
+                        "coarse grid holds a block of sites of several owners, so one site's change cannot clear " *
+                        "it; drop one of the two options"
+                )
+            )
         end
     end
     haskey(options, :bounds) && (options = (; options..., bounds = (Float64(options.bounds[1]), Float64(options.bounds[2]))))
@@ -358,7 +445,7 @@ _component_name(name, i) = Symbol(name, :_, i)
 _component(v, i) = v isa Union{AbstractVector, Tuple} ? v[i] : v
 function _vector_length(r)
     r isa AbstractUnitRange && first(r) == 1 && return length(r)
-    throw(ArgumentError("vector quantities are declared with a range `1:n`"))
+    throw(ArgumentError("vector quantities are declared with a range `1:n` (e.g. `p(cell)[1:2]`)"))
 end
 
 """`vector_variable(name, 1:n, scope; default, unit, options...)`: components `name_i` of a vector variable."""
@@ -372,19 +459,35 @@ function vector_variable(name::Symbol, r, scope::Symbol; default = _NO_VALUE, un
     n = _vector_length(r)
     _check_components(name, default, n)
     _check_components(name, guess, n)
-    return QuantityVector(name, [variable(only(Symbolics.@variables $(_component_name(name, i))(t)), scope;
-                                     default = _component(default, i), unit = _component(unit, i),
-                                     guess = _component(guess, i), vector = name, index = i, options...) for i in 1:n])
+    return QuantityVector(
+        name, [
+            variable(
+                only(Symbolics.@variables $(_component_name(name, i))(t)), scope;
+                default = _component(default, i), unit = _component(unit, i),
+                guess = _component(guess, i), vector = name, index = i, options...
+            ) for i in 1:n
+        ]
+    )
 end
 """`vector_parameter(name, 1:n, default; unit, tunable, bounds, description)`: components `name_i`
 of a vector parameter (the metadata applies to every component)."""
 function vector_parameter(name::Symbol, r, default; unit = nothing, tunable = true, bounds = nothing, description = nothing)
     n = _vector_length(r)
     _check_components(name, default, n)
-    return QuantityVector(name, [_with_meta(_tag(_param(_component_name(name, i); tunable = _tunable(name, tunable)),
-                                                 Entity(:param, _component_name(name, i), _component(default, i),
-                                                     (; vector = name, index = i, _meta_options(name, tunable, bounds, description)...))),
-                                            _component(unit, i), bounds, description) for i in 1:n])
+    return QuantityVector(
+        name, [
+            _with_meta(
+                _tag(
+                    _param(_component_name(name, i); tunable = _tunable(name, tunable)),
+                    Entity(
+                        :param, _component_name(name, i), _component(default, i),
+                        (; vector = name, index = i, _meta_options(name, tunable, bounds, description)...)
+                    )
+                ),
+                _component(unit, i), bounds, description
+            ) for i in 1:n
+        ]
+    )
 end
 
 """`lhs ~ rhs` in updates and equations: component-wise for vectors."""
@@ -447,7 +550,7 @@ end
 _set_dim!(d) = (_build().dim = d)
 _next_number!() = (_build().count += 1)
 _lattice_dim() = (d = _build().dim) > 0 ? d :
-                 throw(ArgumentError("`centroid()` and `displacement(c)` need the model's @lattice declared before them"))
+    throw(ArgumentError("`centroid()` and `displacement(c)` need the model's @lattice declared before them"))
 
 # ---------------------------------------------------------------------------------------
 # Symbolic operations recognised by lowering (the field operator `Δ` is LatticePDE's)
@@ -490,7 +593,7 @@ _centroid(c, k) = Symbolics.wrap(ref_centroid(_symarg(c), _symarg(k)))
 # called only when a value is computed outside a model's statements: a default (evaluated
 # from parameters alone, with no lattice or state)
 _GEOMETRY_DEFAULT(name) = "`$name` reads the lattice and the cells, so it cannot be computed in a default value " *
-                          "(defaults are expressions of parameters); write it in an update, equation or @observed"
+    "(defaults are expressions of parameters); write it in an update, equation or @observed"
 """`ref_centroid(c, k)`: coordinate `k` of the centroid of referent `c` (cell scope)."""
 ref_centroid(c, k) = throw(ArgumentError(_GEOMETRY_DEFAULT("centroid(c, k)")))
 Symbolics.@register_symbolic ref_centroid(c, k)
@@ -557,8 +660,11 @@ _integral(x; over = nothing) = over === nothing ? cell_integral(x isa Num ? x : 
 # (spec-owner ruling R1), so `integral(volume; over = cluster)` is Σ_members V_m².
 function _integral_over(x, over)
     u = _unwrap(over)
-    (u isa SymbolicUtils.BasicSymbolic && isequal(u, _unwrap(B.cluster))) || throw(ArgumentError(
-        "`integral(x; over = …)`: `over` is `cluster` (the alive members of the cell's compartment cluster); got `$over`"))
+    (u isa SymbolicUtils.BasicSymbolic && isequal(u, _unwrap(B.cluster))) || throw(
+        ArgumentError(
+            "`integral(x; over = …)`: `over` is `cluster` (the alive members of the cell's compartment cluster); got `$over`"
+        )
+    )
     y = _unwrap(x isa Num ? x : Num(x))
     sub = Dict{Any, Any}(_unwrap(B.volume) => _unwrap(at(B.volume, B.owner)))
     for v in _bare_vars(y)
@@ -715,8 +821,10 @@ function _population(fold, body, d, cond)
     return population(n, body(n), c)
 end
 
-const FOLDS = (:sum, :prod, :mean, :geomean, :log1p_geomean, :minimum, :maximum, :count,
-    :any, :all, :distinct, :pieces)
+const FOLDS = (
+    :sum, :prod, :mean, :geomean, :log1p_geomean, :minimum, :maximum, :count,
+    :any, :all, :distinct, :pieces,
+)
 
 # A fold over `shell(s)`. Two folds lower to the same code as a ring builtin (D-193): `distinct(owner[n] for n in shell(target) if owner[n] != 0)` is
 # `ring_cells`, `count(owner[n] == 0 for n in shell(target))` is `ring_medium`.
@@ -733,8 +841,8 @@ function _shell_fold(fold, body, a::Around, cond; kws...)
         own = _unwrap(_index(B.owner, n))
         op = nameof(fold)
         alias = op === :distinct && isequal(_unwrap(b), own) && isequal(_unwrap(c), _unwrap(_index(B.owner, n) != 0)) ? B.ring_cells :
-                op === :count && isequal(_unwrap(b), _unwrap(_index(B.owner, n) == 0)) && _is_true(c) ? B.ring_medium :
-                nothing
+            op === :count && isequal(_unwrap(b), _unwrap(_index(B.owner, n) == 0)) && _is_true(c) ? B.ring_medium :
+            nothing
         if alias !== nothing
             _build().count = count0            # the fold numbers nothing, as the builtin
             return alias
@@ -762,7 +870,7 @@ function _gather(fold, body, a::Around, cond = nothing; adjacency = nothing)
     adjacency === nothing || op === :pieces ||
         throw(ArgumentError("`$op` over a relation takes no `adjacency`; only `pieces` does"))
     opts = op === :pieces ? (; relation = a.relation, op, full = _check_adjacency("pieces", something(adjacency, :face)) === :full) :
-           (; relation = a.relation, op)
+        (; relation = a.relation, op)
     n = _tag(_sym(Symbol(:n_, _next_number!())), Entity(:bound, :n, nothing, opts))
     b = body(n)
     c = cond === nothing ? true : cond(n)
@@ -802,8 +910,12 @@ Base.hash(g::KindClass, h::UInt) = hash(g.kinds, hash(g.name, hash(KindClass, h)
 Base.show(io::IO, g::KindClass) = print(io, "kind class `", g.name, "` = ", Tuple(g.kinds))
 Base.in(x::Integer, g::KindClass) = x in g.kinds
 # `kind == g` would otherwise fall back to `===` and silently become `false` (`!=`: `true`)
-_class_compare(g::KindClass) = throw(ArgumentError("`$(g.name)` is a kind class; test membership with " *
-                                                    "`ismember(kind, $(g.name))` (or `kind ∈ $(g.name)` outside @equations)"))
+_class_compare(g::KindClass) = throw(
+    ArgumentError(
+        "`$(g.name)` is a kind class; test membership with " *
+            "`ismember(kind, $(g.name))` (or `kind ∈ $(g.name)` outside @equations)"
+    )
+)
 Base.:(==)(::Num, g::KindClass) = _class_compare(g)
 Base.:(==)(g::KindClass, ::Num) = _class_compare(g)
 Base.:(!=)(::Num, g::KindClass) = _class_compare(g)
@@ -843,8 +955,12 @@ function _kind_class(name::Symbol, names::Tuple, members::Tuple)
         if m isa KindClass
             append!(ks, m.kinds)
         elseif m isa Integer && !(m isa Bool)
-            m == 0 && throw(ArgumentError("kind class `$name` lists the medium `$n`, which is not a cell kind; " *
-                                          "write `kind[x] == $n || kind[x] ∈ $name` instead"))
+            m == 0 && throw(
+                ArgumentError(
+                    "kind class `$name` lists the medium `$n`, which is not a cell kind; " *
+                        "write `kind[x] == $n || kind[x] ∈ $name` instead"
+                )
+            )
             push!(ks, m)
         else
             throw(ArgumentError("kind class `$name`: `$n` is not a kind or an earlier kind class"))
@@ -855,8 +971,12 @@ function _kind_class(name::Symbol, names::Tuple, members::Tuple)
 end
 function _no_class_index(is...)
     for i in is
-        i isa KindClass && throw(ArgumentError("`$(i.name)` is a kind class and cannot index a kind table; " *
-                                               "index by a kind (e.g. `J[kind, kind′]`) and gate with `kind ∈ $(i.name)`"))
+        i isa KindClass && throw(
+            ArgumentError(
+                "`$(i.name)` is a kind class and cannot index a kind table; " *
+                    "index by a kind (e.g. `J[kind, kind′]`) and gate with `kind ∈ $(i.name)`"
+            )
+        )
     end
     return nothing
 end
@@ -1014,7 +1134,7 @@ _rule_code(r::Simple) = 5 + Int(r.adjacency === :full)
 _rule_code(r::Global) = 7 + Int(r.adjacency === :full) + 2 * something(r.window, 0)
 """The `Global` rule of rule code `code` (`_rule_code`), or `nothing` for a local rule."""
 _global_rule(code::Integer) = code < 7 ? nothing :
-                              Global(; window = (code - 7) ÷ 2 == 0 ? nothing : (code - 7) ÷ 2, adjacency = isodd(code - 7) ? :full : :face)
+    Global(; window = (code - 7) ÷ 2 == 0 ? nothing : (code - 7) ÷ 2, adjacency = isodd(code - 7) ? :full : :face)
 Base.show(io::IO, r::Global) = print(io, "Global(; window = ", repr(r.window), ", adjacency = ", repr(r.adjacency), ")")
 
 """`_connected(c, code)`: rule `code` (`_rule_code`) holds for cell `c` (`old` or `new`)."""
@@ -1047,9 +1167,12 @@ undecided copy reads `false`.
 function connected(c; rule = Local())
     r = _rule("connected", rule)
     who = _which_cell("connected", c)
-    who === :new && !(r isa Union{Simple, Global}) && throw(ArgumentError(
-        "connected(new; rule = $r): only `Simple()` and `Global()` test the gaining cell; `Local()` and `ArcOrPair()` " *
-        "test the losing cell, `connected(old; …)`"))
+    who === :new && !(r isa Union{Simple, Global}) && throw(
+        ArgumentError(
+            "connected(new; rule = $r): only `Simple()` and `Global()` test the gaining cell; `Local()` and `ArcOrPair()` " *
+                "test the losing cell, `connected(old; …)`"
+        )
+    )
     return Symbolics.wrap(_connected(who === :old ? B.old : B.new, _rule_code(r)))
 end
 
@@ -1116,16 +1239,23 @@ not part of it.
 struct ShellRelation end
 const shell = ShellRelation()
 function (s::ShellRelation)(anchor; kws...)
-    isempty(kws) || throw(ArgumentError("shell($anchor; $(join(keys(kws), ", "))): the shell takes no options; it is " *
-                                        "the target's neighbor shell without the target itself (no `include_self`)"))
+    isempty(kws) || throw(
+        ArgumentError(
+            "shell($anchor; $(join(keys(kws), ", "))): the shell takes no options; it is " *
+                "the target's neighbor shell without the target itself (no `include_self`)"
+        )
+    )
     return Around(s, _shell_anchor(anchor))
 end
 # the shell is anchored at a site (`target`, `source`), never at a cell
 function _shell_anchor(anchor)
     x = _unwrap(anchor)
-    (isequal(x, _unwrap(B.old)) || isequal(x, _unwrap(B.new))) && throw(ArgumentError(
-        "shell($anchor): the shell is anchored at a site, e.g. `shell(target)`; `$anchor` is a cell. For the pieces " *
-        "of a cell's shell sites write `pieces($anchor, shell(target))`"))
+    (isequal(x, _unwrap(B.old)) || isequal(x, _unwrap(B.new))) && throw(
+        ArgumentError(
+            "shell($anchor): the shell is anchored at a site, e.g. `shell(target)`; `$anchor` is a cell. For the pieces " *
+                "of a cell's shell sites write `pieces($anchor, shell(target))`"
+        )
+    )
     return anchor
 end
 Base.show(io::IO, ::ShellRelation) = print(io, "shell")
@@ -1165,11 +1295,19 @@ _index(::_Pieces, i) = _index(B.pieces, i)
 `pieces` shadows it and is returned as is)."""
 _bare_pieces(::_Pieces) = B.pieces
 _bare_pieces(x) = x
-(::_Pieces)(args...; kws...) = throw(ArgumentError("pieces: write `pieces(c, shell(target))`, " *
-                                                   "`pieces(n for n in shell(target) if cond)`, or the cell's `pieces`, " *
-                                                   "`pieces(; adjacency)`, `pieces[c]`, `pieces(c; adjacency)`"))
-_not_shell() = throw(ArgumentError("pieces: the relation must be `shell` (`pieces(c, shell(target))`); " *
-                                   "no other relation is a shell in v1"))
+(::_Pieces)(args...; kws...) = throw(
+    ArgumentError(
+        "pieces: write `pieces(c, shell(target))`, " *
+            "`pieces(n for n in shell(target) if cond)`, or the cell's `pieces`, " *
+            "`pieces(; adjacency)`, `pieces[c]`, `pieces(c; adjacency)`"
+    )
+)
+_not_shell() = throw(
+    ArgumentError(
+        "pieces: the relation must be `shell` (`pieces(c, shell(target))`); " *
+            "no other relation is a shell in v1"
+    )
+)
 
 """
     distinct(body(n) for n in R(s) if cond(n))
@@ -1240,8 +1378,12 @@ function _bind_edge_scope(vars, rels, bases = ())
     from = Dict{Symbol, Symbol}()                      # edge variable → the base declaring it
     for b in bases, (n, r) in _edge_relationships(_p(b, :variables))
         old = get!(inherited, n, r)
-        old === r || throw(ArgumentError("bases `$(from[n])` and `$(nameof(b))` both declare edge variable " *
-            "`$n`, on `$old` and `$r`; rename one (an edge variable belongs to one relationship)"))
+        old === r || throw(
+            ArgumentError(
+                "bases `$(from[n])` and `$(nameof(b))` both declare edge variable " *
+                    "`$n`, on `$old` and `$r`; rename one (an edge variable belongs to one relationship)"
+            )
+        )
         get!(from, n, nameof(b))
     end
     own = length(rels) == 1 ? only(rels).name : nothing
@@ -1277,13 +1419,20 @@ new_contact(a, b) = true
 drive(p::Pair{CopyDomain}) = Drive(p.second)
 drive(p::Pair) = throw(ArgumentError("a drive must be `copy => expr`"))
 drive(p::ConnectivityPenalty) = Drive(p.expr)
-drive(c::Constraint) = throw(ArgumentError(c.kind === :connectivity ?
-    "@drive connectivity(…) needs a `penalty` (the soft form: ΔH += penalty for every copy the rule refuses); " *
-    "the veto form, without `penalty`, goes in @constraint" : "a drive must be `copy => expr`"))
+drive(c::Constraint) = throw(
+    ArgumentError(
+        c.kind === :connectivity ?
+            "@drive connectivity(…) needs a `penalty` (the soft form: ΔH += penalty for every copy the rule refuses); " *
+            "the veto form, without `penalty`, goes in @constraint" : "a drive must be `copy => expr`"
+    )
+)
 constraint(c::Constraint) = c
-constraint(::ConnectivityPenalty) = throw(ArgumentError(
-    "@constraint connectivity(…; penalty): a `penalty` is the soft form, which goes in @drive " *
-    "(`@drive connectivity(k; rule, penalty)`); @constraint takes the veto form, without `penalty`"))
+constraint(::ConnectivityPenalty) = throw(
+    ArgumentError(
+        "@constraint connectivity(…; penalty): a `penalty` is the soft form, which goes in @drive " *
+            "(`@drive connectivity(k; rule, penalty)`); @constraint takes the veto form, without `penalty`"
+    )
+)
 constraint(x) = Constraint(:expr, Int[], x)
 
 """Synchronous or on-copy update `lhs ~ rhs` in `phase` (`:before_mcs`, `:after_mcs`, `:on_copy`)."""
@@ -1350,10 +1499,16 @@ cadence (`@divide`, `@link`/`@unlink`, and future lifecycle rules) parses it her
 """
 function _rule_cadence(what, args, every)
     cadences = Every[a for a in args if a isa Every]
-    every === nothing || push!(cadences, every isa Every ? every : every isa Integer ? Every(every) :
-                                         throw(ArgumentError("$what: `every = n` takes an integer n ≥ 1 or `Every(n)`; got $(repr(every))")))
-    length(cadences) <= 1 || throw(ArgumentError("$what: a rule has one cadence; got " *
-                                                 join(("Every($(e.n))" for e in cadences), " and ")))
+    every === nothing || push!(
+        cadences, every isa Every ? every : every isa Integer ? Every(every) :
+            throw(ArgumentError("$what: `every = n` takes an integer n ≥ 1 or `Every(n)`; got $(repr(every))"))
+    )
+    length(cadences) <= 1 || throw(
+        ArgumentError(
+            "$what: a rule has one cadence; got " *
+                join(("Every($(e.n))" for e in cadences), " and ")
+        )
+    )
     return (isempty(cadences) ? 1 : only(cadences).n), Any[a for a in args if !(a isa Every)]
 end
 
@@ -1364,7 +1519,7 @@ function divide(d::Union{CellDomain, ClusterDomain}, args...; when, along = Alon
         a isa Pair || throw(ArgumentError("@divide: `$a` is neither a cadence `Every(n)` nor a state rule `x => rule`"))
         x, r = a       # vector quantities: component-wise (a scalar or `Split()` applies to all)
         x isa AbstractVector ? append!(rules, [c => (r isa AbstractVector ? r[i] : r) for (i, c) in enumerate(x)]) :
-        push!(rules, x => r)
+            push!(rules, x => r)
     end
     return DivideRule(d, when, along, rules, n)
 end
@@ -1382,11 +1537,13 @@ struct LatticeSpec{N, B, S, R, D, G}
     domain::D
     geometry::G                   # `Square()` or `Hexagonal()` (CorePotts)
 end
-function lattice_spec(dims; boundary = Periodic(), neighborhood = Moore(1), spacing = nothing, domain = nothing,
-        geometry = CorePotts.Square())
+function lattice_spec(
+        dims; boundary = Periodic(), neighborhood = Moore(1), spacing = nothing, domain = nothing,
+        geometry = CorePotts.Square()
+    )
     d = Tuple(Int.(dims))
     geometry isa CorePotts.Hexagonal && spacing !== nothing && length(unique(spacing)) > 1 &&
-        throw(ArgumentError("a hexagonal lattice has one spacing"))
+        throw(ArgumentError("a hexagonal lattice has one spacing; pass a single spacing or equal spacings on all axes"))
     return LatticeSpec(d, boundary, spacing, neighborhood, Lattice(d; boundary, domain, geometry).mask, geometry)
 end
 """
@@ -1452,19 +1609,37 @@ struct SweepSpec
 end
 # D-123: a finite real, also after conversion to Float64
 function _sweep_offset(offset)
-    o = offset isa Real ? (try Float64(offset) catch; NaN end) : NaN
-    isfinite(o) || throw(ArgumentError(
-        "`@sweep`: `offset` must be a finite real number, got $(repr(offset))::$(typeof(offset)); " *
-        "pass a finite number (`offset = 0` disables it)"))
+    o = offset isa Real ? (
+            try
+                Float64(offset)
+        catch
+                NaN
+        end
+        ) : NaN
+    isfinite(o) || throw(
+        ArgumentError(
+            "`@sweep`: `offset` must be a finite real number, got $(repr(offset))::$(typeof(offset)); " *
+                "pass a finite number (`offset = 0` disables it)"
+        )
+    )
     return o
 end
 # D-126: a positive, finite real, also after conversion to Float64 (a `BigFloat` can overflow
 # to Inf or underflow to 0); a symbolic parameter does not convert and is rejected
 function _sweep_mcs_duration(mcs_duration)
-    md = mcs_duration isa Real ? (try Float64(mcs_duration) catch; NaN end) : NaN
-    (isfinite(md) && md > 0) || throw(ArgumentError(
-        "`@sweep`: `mcs_duration` must be a positive, finite real number, got $(repr(mcs_duration))::$(typeof(mcs_duration)); " *
-        "it is the time one MCS stands for (default 1.0)"))
+    md = mcs_duration isa Real ? (
+            try
+                Float64(mcs_duration)
+        catch
+                NaN
+        end
+        ) : NaN
+    (isfinite(md) && md > 0) || throw(
+        ArgumentError(
+            "`@sweep`: `mcs_duration` must be a positive, finite real number, got $(repr(mcs_duration))::$(typeof(mcs_duration)); " *
+                "it is the time one MCS stands for (default 1.0)"
+        )
+    )
     return md
 end
 # D-123: `combine` is interpolated into the generated temperature code, whose printed form
@@ -1474,11 +1649,14 @@ end
 # fields) carries a session counter. Module paths such as Pluto's `var"workspace#3"` pass:
 # stable within a session, the user's contract across sessions.
 _stable_callable(f) = !occursin("var\"#", string(:($f(a, b))))
-_sweep_combine(combine) = _stable_callable(combine) || throw(ArgumentError(
-    "`@sweep`: `combine` must print without a compiler-generated name, got $combine: an anonymous " *
-    "function or closure, or a wrapper holding one, is named differently in every session, so " *
-    "checkpoints could not be matched. Use a top-level named function, `f(a, b) = …` and " *
-    "`combine = f`, or a callable struct whose fields are values, not anonymous functions"))
+_sweep_combine(combine) = _stable_callable(combine) || throw(
+    ArgumentError(
+        "`@sweep`: `combine` must print without a compiler-generated name, got $combine: an anonymous " *
+            "function or closure, or a wrapper holding one, is named differently in every session, so " *
+            "checkpoints could not be matched. Use a top-level named function, `f(a, b) = …` and " *
+            "`combine = f`, or a callable struct whose fields are values, not anonymous functions"
+    )
+)
 """
     sweep_spec(law; temperature, combine = min, offset = 0.0, mcs_duration = 1.0)
 
@@ -1503,8 +1681,12 @@ A hand-built `SweepSpec(law, temperature, combine, offset, mcs_duration)` checks
 `combine` and `mcs_duration` the same way.
 """
 function sweep_spec(law::Symbol; temperature, combine = min, offset = 0.0, mcs_duration = 1.0, kwargs...)
-    isempty(kwargs) || throw(ArgumentError("`@sweep`: unknown keyword(s) $(join(("`$k`" for k in keys(kwargs)), ", ")); " *
-                                           "it takes `temperature`, `combine`, `offset` and `mcs_duration`"))
+    isempty(kwargs) || throw(
+        ArgumentError(
+            "`@sweep`: unknown keyword(s) $(join(("`$k`" for k in keys(kwargs)), ", ")); " *
+                "it takes `temperature`, `combine`, `offset` and `mcs_duration`"
+        )
+    )
     # `offset`, `combine` and `mcs_duration` are checked by the constructor, in that order
     return SweepSpec(law, temperature, combine, offset, mcs_duration)
 end
@@ -1580,8 +1762,11 @@ const _REPEAT_REFUSED = (:before_mcs, :components, :lifecycle, :end_mcs)
 """`repeat(n, sweep(fraction = 1//n), names…)` of `@schedule` (macro time)."""
 function schedule_repeat(ex::Expr)
     args = ex.args[2:end]
-    (length(args) >= 2 && args[1] isa Integer && args[1] >= 2) || throw(ArgumentError(
-        "@schedule: `repeat(n, sweep(fraction = 1//n), …)` takes a literal count n ≥ 2 first; got `$ex`"))
+    (length(args) >= 2 && args[1] isa Integer && args[1] >= 2) || throw(
+        ArgumentError(
+            "@schedule: `repeat(n, sweep(fraction = 1//n), …)` takes a literal count n ≥ 2 first; got `$ex`"
+        )
+    )
     n = Int(args[1])
     names = Symbol[]
     for a in args[2:end]
@@ -1590,16 +1775,25 @@ function schedule_repeat(ex::Expr)
                 a.args[2].args[1] : (length(a.args) == 2 ? a.args[2] : nothing)
             kw = q isa Expr && q.head in (:kw, :(=)) && q.args[1] === :fraction ? q.args[2] : nothing
             frac = kw isa Expr && kw.head === :call && kw.args[1] === :// && length(kw.args) == 3 &&
-                   all(x -> x isa Integer, kw.args[2:3]) ? kw.args[2] // kw.args[3] : nothing
-            frac == 1 // n || throw(ArgumentError(
-                "@schedule: in `repeat($n, …)` the sweep is `sweep(fraction = 1//$n)` (each pass sweeps 1/$n of the MCS); got `$a`"))
+                all(x -> x isa Integer, kw.args[2:3]) ? kw.args[2] // kw.args[3] : nothing
+            frac == 1 // n || throw(
+                ArgumentError(
+                    "@schedule: in `repeat($n, …)` the sweep is `sweep(fraction = 1//$n)` (each pass sweeps 1/$n of the MCS); got `$a`"
+                )
+            )
             push!(names, :sweep)
         elseif a isa Symbol
-            a === :sweep && throw(ArgumentError(
-                "@schedule: in `repeat($n, …)` write the sweep as `sweep(fraction = 1//$n)`"))
-            a in _REPEAT_REFUSED && throw(ArgumentError(
-                "@schedule: `$a` cannot be repeated within an MCS (`repeat` holds the sweep, `fields`, `after_mcs`, " *
-                "`operators` and `@convert` passes)"))
+            a === :sweep && throw(
+                ArgumentError(
+                    "@schedule: in `repeat($n, …)` write the sweep as `sweep(fraction = 1//$n)`"
+                )
+            )
+            a in _REPEAT_REFUSED && throw(
+                ArgumentError(
+                    "@schedule: `$a` cannot be repeated within an MCS (`repeat` holds the sweep, `fields`, `after_mcs`, " *
+                        "`operators` and `@convert` passes)"
+                )
+            )
             push!(names, a)
         else
             throw(ArgumentError("@schedule: `repeat` lists phase names and `sweep(fraction = 1//$n)`; got `$a`"))
@@ -1633,12 +1827,18 @@ function _placed_schedule(listed, converts = Symbol[])
     seen = _schedule_names(listed)
     r = _schedule_repeat(listed)
     for n in seen
-        n in default || throw(ArgumentError(
-            "@schedule: unknown phase `$n`; the phases are $(join(default, ", "))" *
-            (isempty(converts) ? "" : " (the `@convert` passes $(join(converts, ", ")) among them)")))
+        n in default || throw(
+            ArgumentError(
+                "@schedule: unknown phase `$n`; the phases are $(join(default, ", "))" *
+                    (isempty(converts) ? "" : " (the `@convert` passes $(join(converts, ", ")) among them)")
+            )
+        )
     end
-    :end_mcs in seen && last(seen) !== :end_mcs && throw(ArgumentError(
-        "@schedule: `end_mcs` must be last (the MCS boundary: history, callbacks, saving)"))
+    :end_mcs in seen && last(seen) !== :end_mcs && throw(
+        ArgumentError(
+            "@schedule: `end_mcs` must be last (the MCS boundary: history, callbacks, saving)"
+        )
+    )
     seq = copy(seen)
     for (j, ph) in enumerate(default)
         ph in seq && continue
@@ -1651,17 +1851,26 @@ function _placed_schedule(listed, converts = Symbol[])
         insert!(seq, pos + 1, ph)
     end
     at(n) = findfirst(==(n), seq)
-    at(:before_mcs) < at(:sweep) || throw(ArgumentError(
-        "@schedule: `before_mcs` must come before `sweep` (the before-MCS updates precede the copy sweep, D-042)"))
-    at(:after_mcs) > at(:sweep) || throw(ArgumentError(
-        "@schedule: `after_mcs` must come after `sweep` (the after-MCS updates follow the copy sweep, D-042)"))
+    at(:before_mcs) < at(:sweep) || throw(
+        ArgumentError(
+            "@schedule: `before_mcs` must come before `sweep` (the before-MCS updates precede the copy sweep, D-042)"
+        )
+    )
+    at(:after_mcs) > at(:sweep) || throw(
+        ArgumentError(
+            "@schedule: `after_mcs` must come after `sweep` (the after-MCS updates follow the copy sweep, D-042)"
+        )
+    )
     if r !== nothing
         for n in r.names
             n in _REPEAT_REFUSED && throw(ArgumentError("@schedule: `$n` cannot be repeated within an MCS"))
         end
         k = at(first(r.names))
-        seq[k:(k + length(r.names) - 1)] == r.names || throw(ArgumentError(
-            "@schedule: an unlisted phase falls inside `$r` in the default placement; list it before or after the repeat"))
+        seq[k:(k + length(r.names) - 1)] == r.names || throw(
+            ArgumentError(
+                "@schedule: an unlisted phase falls inside `$r` in the default placement; list it before or after the repeat"
+            )
+        )
     end
     return seq
 end
@@ -1716,8 +1925,11 @@ outer_value(x) = error("`members` is symbolic-only")
 Symbolics.@register_symbolic outer_value(x)
 
 _symarg(x) = x isa Num ? x : x isa Real ? Num(x) : x
-_ref_kind(who, k) = (k isa Integer && !(k isa Bool) && k >= 1) ? k : throw(ArgumentError(
-    "`$who`: the kind is a cell kind (a kind name of `@kinds`, not the medium or a kind class), got $(repr(k))"))
+_ref_kind(who, k) = (k isa Integer && !(k isa Bool) && k >= 1) ? k : throw(
+        ArgumentError(
+            "`$who`: the kind is a cell kind (a kind name of `@kinds`, not the medium or a kind class), got $(repr(k))"
+        )
+    )
 
 """
     alive(ref)
@@ -1798,12 +2010,19 @@ struct ConvertTransfer
 end
 function transfer(x, pair::Pair; per_site)
     i = info(x)
-    (i !== nothing && i.role === :cell && get(i.options, :reference, false) !== true) || throw(ArgumentError(
-        "transfer(x, from => to; per_site): `x` is a cell variable (a number), got `$x`"))
+    (i !== nothing && i.role === :cell && get(i.options, :reference, false) !== true) || throw(
+        ArgumentError(
+            "transfer(x, from => to; per_site): `x` is a cell variable (a number), got `$x`"
+        )
+    )
     return ConvertTransfer(_unwrap(x), _unwrap(pair.first), _unwrap(pair.second), _unwrap(per_site))
 end
-transfer(args...; per_site = nothing) = throw(ArgumentError("`transfer` takes a cell variable, a pair `from => to` and `per_site = …`: " *
-                                               "`transfer(x, from => to, per_site = 1.0)`"))
+transfer(args...; per_site = nothing) = throw(
+    ArgumentError(
+        "`transfer` takes a cell variable, a pair `from => to` and `per_site = …`: " *
+            "`transfer(x, from => to, per_site = 1.0)`"
+    )
+)
 
 """
     @convert name domain begin from = …; to = …; at = …; p = …; transfer(…); x[to] += … end
@@ -1853,8 +2072,12 @@ function convert_pass(name::Symbol, domain; from = nothing, to = nothing, at = t
         throw(ArgumentError("@convert $name: the domain is `clusters(kind…)` or `cells(kind…)`, got `$domain`"))
     0 in d.kinds && throw(ArgumentError("@convert $name: the domain cannot include the medium kind"))
     if from === nothing
-        length(d.kinds) == 1 || throw(ArgumentError("@convert $name: give `from` (the default, the entity's member " *
-                                                    "of the domain kind, needs a domain of one kind)"))
+        length(d.kinds) == 1 || throw(
+            ArgumentError(
+                "@convert $name: give `from` (the default, the entity's member " *
+                    "of the domain kind, needs a domain of one kind)"
+            )
+        )
         from = sibling(only(d.kinds))
     end
     to === nothing && throw(ArgumentError("@convert $name: give `to`, e.g. `to = sibling(k)`"))
@@ -1866,8 +2089,12 @@ function convert_pass(name::Symbol, domain; from = nothing, to = nothing, at = t
         fresh = _implicit_fresh(to)
     end
     for (what, r) in (("from", from), ("to", to))
-        _is_ref(_unwrap(r)) || throw(ArgumentError("@convert $name: `$what` is a reference to a cell (`sibling(k)`, " *
-                                                   "a `CellRef` variable, `root(cluster)`), got `$r`"))
+        _is_ref(_unwrap(r)) || throw(
+            ArgumentError(
+                "@convert $name: `$what` is a reference to a cell (`sibling(k)`, " *
+                    "a `CellRef` variable, `root(cluster)`), got `$r`"
+            )
+        )
     end
     ts = ConvertTransfer[]
     for t in transfers
@@ -1883,7 +2110,8 @@ function convert_pass(name::Symbol, domain; from = nothing, to = nothing, at = t
 end
 
 """Names bound inside `@potts_model` bodies (the modeling vocabulary, not exported)."""
-const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivity, no_extinction, Global, Local, ArcOrPair,
+const DSL = (;
+    cells, clusters, contacts, sites, edges, new_contact, connectivity, no_extinction, Global, Local, ArcOrPair,
     Simple, connected, shell, pieces, distinct,
     Volume, Surface, Adhesion, Chemotaxis, saturating, saturating_linear,
     principal_axis = _principal_axis, major_axis = _major_axis, minor_axis = _minor_axis,
@@ -1891,7 +2119,8 @@ const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivit
     centroid = _centroid, displacement = _displacement, integral = _integral,
     dot = _dot, norm = _norm, normalize = _normalize, geomean, log1p_geomean, mean,
     CellRef, alive, sibling, root, members, Fresh, created = CONVERT_CREATED, transfer,
-    Pairs, minimum_image = _minimum_image, separation = _separation, ismember)
+    Pairs, minimum_image = _minimum_image, separation = _separation, ismember,
+)
 
 # ---------------------------------------------------------------------------------------
 # Parameters object
@@ -1912,8 +2141,12 @@ struct PottsParameters{NT <: NamedTuple, D}
     values::NT
     PottsParameters{NT, D}(values::NT) where {NT <: NamedTuple, D} = new{NT, D}(values)
 end
-PottsParameters(values::NamedTuple, tag::Union{Tuple{}, Tuple{Tuple{Vararg{Symbol}}, UInt64},
-        Tuple{Tuple{Vararg{Symbol}}, UInt64, Tuple{Tuple{Vararg{Symbol}}, Tuple}}} = ()) =
+PottsParameters(
+    values::NamedTuple, tag::Union{
+        Tuple{}, Tuple{Tuple{Vararg{Symbol}}, UInt64},
+        Tuple{Tuple{Vararg{Symbol}}, UInt64, Tuple{Tuple{Vararg{Symbol}}, Tuple}},
+    } = ()
+) =
     PottsParameters{typeof(values), tag}(values)
 _computed(::PottsParameters{NT, D}) where {NT, D} = D === () ? () : D[1]
 # the MTK metadata in the type (F2-14), only when a parameter has some: the names declared
@@ -1947,9 +2180,15 @@ SciMLStructures.hasportion(::SciMLStructures.AbstractPortion, ::PottsParameters)
 _portion_keys(::SciMLStructures.Tunable, p) =
     (nt = NamedTuple(p); Tuple(k for k in keys(nt) if nt[k] isa AbstractFloat && !(k in _computed(p)) && !(k in _nontunable(p))))
 _portion_keys(::SciMLStructures.Constants, p) =
-    (nt = NamedTuple(p); Tuple(k for k in keys(nt) if (nt[k] isa StaticArrays.StaticArray ||
-                                                       (nt[k] isa Number && !(nt[k] isa AbstractFloat)) ||
-                                                       (nt[k] isa AbstractFloat && k in _nontunable(p))) && !(k in _computed(p))))
+    (
+    nt = NamedTuple(p); Tuple(
+        k for k in keys(nt) if (
+                nt[k] isa StaticArrays.StaticArray ||
+                (nt[k] isa Number && !(nt[k] isa AbstractFloat)) ||
+                (nt[k] isa AbstractFloat && k in _nontunable(p))
+            ) && !(k in _computed(p))
+    )
+)
 _flat(x::Number) = (x,)
 _flat(x) = Tuple(x)
 
@@ -1966,9 +2205,13 @@ end
 
 function _cpm_value(::Type{T}, v, k::Symbol) where {T}
     v isa Union{AbstractFloat, Integer, Rational, AbstractIrrational} ||
-        throw(ArgumentError("SciMLStructures.replace: parameter `$k` = $v (a $(typeof(v))) is not a plain number: " *
-                            "a problem's parameter object holds plain numbers in its scalar type (no Duals); " *
-                            "differentiating through a Potts problem is not supported in this version"))
+        throw(
+        ArgumentError(
+            "SciMLStructures.replace: parameter `$k` = $v (a $(typeof(v))) is not a plain number: " *
+                "a problem's parameter object holds plain numbers in its scalar type (no Duals); " *
+                "differentiating through a Potts problem is not supported in this version"
+        )
+    )
     try
         return T(v)
     catch e
@@ -1979,8 +2222,10 @@ end
 _rebuild(old::Number, k, it) = _cpm_value(typeof(old), popfirst!(it), k)
 _rebuild(old::A, k, it) where {A <: StaticArrays.StaticArray} = A(ntuple(_ -> _cpm_value(eltype(A), popfirst!(it), k), length(old)))
 
-function SciMLStructures.replace(portion::Union{SciMLStructures.Tunable, SciMLStructures.Constants}, p::PottsParameters,
-        v::AbstractVector)
+function SciMLStructures.replace(
+        portion::Union{SciMLStructures.Tunable, SciMLStructures.Constants}, p::PottsParameters,
+        v::AbstractVector
+    )
     nt = NamedTuple(p)
     ks = _portion_keys(portion, p)
     n = sum((length(_flat(nt[k])) for k in ks); init = 0)
@@ -1993,9 +2238,13 @@ function SciMLStructures.replace(portion::Union{SciMLStructures.Tunable, SciMLSt
     end
     isempty(_computed(p)) && return q
     f = lock(() -> get(_DERIVATIONS, typeof(p), nothing), _DERIVATIONS_LOCK)
-    f === nothing && throw(ArgumentError("SciMLStructures.replace: the computed parameters $(_computed(p)) are " *
-                                         "re-derived by their model; build the problem in this process (each worker) " *
-                                         "first, or set the values with `remake(prob; p = [name => value])`"))
+    f === nothing && throw(
+        ArgumentError(
+            "SciMLStructures.replace: the computed parameters $(_computed(p)) are " *
+                "re-derived by their model; build the problem in this process (each worker) " *
+                "first, or set the values with `remake(prob; p = [name => value])`"
+        )
+    )
     return f.derive(p, q)
 end
 

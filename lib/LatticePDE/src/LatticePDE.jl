@@ -70,7 +70,7 @@ export remake, getp, getu, setp            # the routes its messages give (SciML
 finite-volume lowering it is `DivKGrad` with `K ≡ 1`.
 """
 function Δ end
-Δ(x) = error("`Δ` is symbolic-only")
+Δ(x) = error("`Δ` is symbolic-only: apply it inside a `PDESystem` equation and discretize with `LatticePDE.discretize`")
 @register_symbolic Δ(x)
 
 const FACE_MEANS = (:harmonic, :arithmetic)
@@ -91,7 +91,7 @@ struct DivKGrad
         return new(mean)
     end
 end
-(op::DivKGrad)(K, c) = error("`DivKGrad($(repr(op.mean)))` is symbolic-only")
+(op::DivKGrad)(K, c) = error("`DivKGrad($(repr(op.mean)))` is symbolic-only: apply it inside a `PDESystem` equation and discretize with `LatticePDE.discretize`")
 @register_symbolic (op::DivKGrad)(K, c)
 
 """Discretization scheme of an [`Advect`](@ref) term."""
@@ -108,7 +108,7 @@ component, or the velocity array). `scheme` is an [`AdvectionScheme`](@ref).
 struct Advect{S <: AdvectionScheme}
     scheme::S
 end
-(op::Advect)(u, c) = error("`Advect` is symbolic-only")
+(op::Advect)(u, c) = error("`Advect` is symbolic-only: apply it inside a `PDESystem` equation and discretize with `LatticePDE.discretize`")
 # One registration for a velocity component and the velocity array: SymbolicUtils 4 gives
 # scalar and array symbolics one `BasicSymbolic` type, so two registrations (`u` and
 # `u::AbstractVector`) define the same methods twice, an error under precompilation.

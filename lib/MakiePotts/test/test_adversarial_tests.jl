@@ -218,10 +218,10 @@ end
     @test occursin("explicit RenderChannel", missing_message)
 
     fixture_2d = render_fixture()
-    @test_throws ArgumentError renderframe(
+        @test_throws ["ArgumentError", "OrthogonalSlice", "three-dimensional"] renderframe(
         fixture_2d.state,
         RenderRequest(extent = OrthogonalSlice(1, 1)))
-    @test_throws ArgumentError renderframe(
+        @test_throws ["ArgumentError", "cell metadata cannot be omitted"] renderframe(
         fixture_2d.state,
         RenderRequest(include_cell_metadata = false))
 
@@ -305,7 +305,7 @@ end
     @test Makie.data_limits(plot) == Makie.Rect3d(
         Makie.Point3d(1.0, -2.0, 0), Makie.Vec3d(1.5, 4.0, 0))
 
-    @test_throws ArgumentError record_potts(
+        @test_throws ["ArgumentError", "recording requires at least one frame"] record_potts(
         tempname() * ".gif", PottsRenderFrame{2}[])
 
     singleton_output = tempname() * ".gif"
@@ -322,17 +322,17 @@ end
             spacing = (0.5, 2.0), origin = (2.0, -2.0)))
     incompatible_output = tempname() * ".gif"
     write(incompatible_output, "previous valid artifact")
-    @test_throws ArgumentError record_potts(
+        @test_throws ["ArgumentError", "incompatible geometry"] record_potts(
         incompatible_output, [first(frames), shifted])
     @test read(incompatible_output, String) == "previous valid artifact"
-    @test_throws ArgumentError explore_potts(
+        @test_throws ["ArgumentError", "explorer frames must have compatible geometry"] explore_potts(
         [first(frames), shifted]; inspector = false)
 
-    @test_throws ArgumentError record_potts(
+        @test_throws ["ArgumentError", "recording framerate must be positive and finite"] record_potts(
         tempname() * ".gif", [first(frames)]; framerate = 0)
-    @test_throws ArgumentError record_potts(
+        @test_throws ["ArgumentError", "recording framerate must be positive and finite"] record_potts(
         tempname() * ".gif", [first(frames)]; framerate = Inf)
-    @test_throws ArgumentError record_potts(
+        @test_throws ["ArgumentError", "recording filename must include an output extension"] record_potts(
         tempname(), [first(frames)])
 
     inspected = explore_potts(

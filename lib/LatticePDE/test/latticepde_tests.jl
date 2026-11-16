@@ -33,8 +33,9 @@ end
         @test_throws ArgumentError DivKGrad(:geometric)                     # negative control: the mean is checked
         @test_throws MethodError Advect(:upwind)                            # a scheme is an AdvectionScheme
         # the field operators never evaluate; the CPM reads do
-        @test_throws ErrorException Δ(1.0)
-        @test_throws ErrorException DivKGrad(:harmonic)(1.0, 2.0)
+        @test_throws ["`Δ` is symbolic-only", "PDESystem", "LatticePDE.discretize"] Δ(1.0)
+        @test_throws ["`DivKGrad(:harmonic)` is symbolic-only", "PDESystem", "LatticePDE.discretize"] DivKGrad(:harmonic)(1.0, 2.0)
+        @test_throws ["`Advect` is symbolic-only", "PDESystem", "LatticePDE.discretize"] Advect(Upwind1())(1.0, 2.0)
         @test at([10.0, 20.0, 30.0], 2.0) == 20.0
         @test at2(reshape(collect(1.0:9.0), 3, 3), 2, 3) == 8.0
         @test ismember(Int32(3), (2, 3)) && !ismember(1.0, (2, 3))
@@ -131,7 +132,7 @@ end
         # negative control: MTK `getindex` on an array parameter keeps the input as an unknown
         cs = mtkcompile(System([D(q) ~ -q + Jk[kc]], t; name = :cell); inputs = [kc])
         @test any(u -> isequal(u, unwrap(kc)), unknowns(cs))
-        @test_throws Exception ODEProblem(cs, [q => 1.0, kc => 2], (0.0, 1.0))
+        @test_throws MTKB.IncompleteInitializationError ODEProblem(cs, [q => 1.0, kc => 2], (0.0, 1.0))
     end
 end
 
@@ -139,8 +140,8 @@ end
     @testset "operators refuse symbolic differentiation" begin
         Dx = Differential(x)
         # a kind-table read: Symbolics refuses differentiation through the array argument itself
-        @test_throws Exception Symbolics.expand_derivatives(Dx(at(Dk, ke)))
-        @test_throws Exception Symbolics.expand_derivatives(Dx(at2(J, ke, ke)))
+        @test_throws ["Differentiation with array expressions"] Symbolics.expand_derivatives(Dx(at(Dk, ke)))
+        @test_throws ["Differentiation with array expressions"] Symbolics.expand_derivatives(Dx(at2(J, ke, ke)))
         for term in (Δ(ce), DivKGrad(:harmonic)(Ke, ce), Advect(Upwind1())(ve[1], ce), at(ce, ke),
             ismember(ke, (2, 3)), masked(ke == 3, ce))
             err = try
@@ -256,7 +257,7 @@ end
         @test unwrap_const(only(arguments(unwrap(g)))) isa ShiftIndex
         @test has(vocabulary_issues([g ~ Ne]), "Shift(t, 1)(c(t, x, y))")
         @test has(vocabulary_issues([Shift(t, 1)(Ne) ~ Δ(N(k + 1))]), "ShiftIndex")   # nested in an operator
-        @test_throws Exception Ne(k + 1)                                    # MTK refuses the applied form itself
+        @test_throws ["Cannot shift an expression with multiple independent variables"] Ne(k + 1)                                    # MTK refuses the applied form itself
         @test isempty(vocabulary_issues([Shift(t, 1)(Ne) ~ Δ(Ne)]))
 
         # Pre: the callback previous value
@@ -273,6 +274,6 @@ end
         @test err isa ArgumentError && occursin("3 terms", err.msg)
         @test occursin("ismember(kindₛ, (2, 3))", err.msg) && occursin("Shift(t, 1)", err.msg)
         pd = PDESystem([bad], Equation[], dom, [t, x, y], [ce, ke], [α, ε]; name = :bad)
-        @test_throws ArgumentError check_vocabulary(pd)
+        @test_throws ["ArgumentError", "LatticePDE refuses", "ismember("] check_vocabulary(pd)
     end
 end

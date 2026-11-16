@@ -88,7 +88,7 @@ end
     two = pde([eq; D(oe) ~ Δ(oe)], [c(t, x, 0) ~ c(t, x, 1)], [ce, oe], [Dc])
     @test throws_with(() -> symbolic_discretize(two, LatticeDiscretization(g)), "periodicity is per axis")
     # the vocabulary scans run first
-    @test_throws ArgumentError symbolic_discretize(pde([D(ce) ~ Pre(ce)], Equation[], [ce], [Dc]), LatticeDiscretization(g))
+        @test_throws ["ArgumentError", "LatticePDE refuses", "`Pre`"] symbolic_discretize(pde([D(ce) ~ Pre(ce)], Equation[], [ce], [Dc]), LatticeDiscretization(g))
     # spellings with no lattice meaning
     for (rhs, msg) in [Dx(ce) => "flux form", Dx(Dx(ce) * Dy(ce)) => "flux form", at(ce, ke) => "array parameter",
         ce^cT => "", Symbolics.Num(unwrap(z)) => "not a declared"]

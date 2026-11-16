@@ -490,7 +490,7 @@ function _preflight(prob::PottsProblem, alg::CPMAlgorithm, ctx)
     prob.f.lifecycle === nothing || haskey(prob.u0.cell, :m1) ||
         throw(ArgumentError("a lifecycle needs the moment trackers: add `init_moments(σ, lattice, capacity)` to the cell state"))
     haskey(ctx, :surface) && has_origin(ctx.surface) &&
-        throw(ArgumentError("the surface relation must not include the origin"))
+        throw(ArgumentError("the surface relation must not include the origin: pass a neighbor relation without offset zero (such as `VonNeumann(1)` or `Moore(1)`)"))
     # the pair-energy deltas assume unordered bonds: every offset needs its negation
     for name in (:contact, :surface)
         haskey(ctx, name) && !is_symmetric(getfield(ctx, name)) && throw(ArgumentError(
@@ -613,7 +613,7 @@ end
 
 function CommonSolve.step!(integ::PottsIntegrator)
     integ.retcode == SciMLBase.ReturnCode.Default ||
-        throw(ArgumentError("integrator finished with retcode $(integ.retcode)"))
+        throw(ArgumentError("integrator finished with retcode $(integ.retcode); call `reinit!(integ)` to reset it before stepping again"))
     attempts = integ.nmobile                        # this sweep's count (a refresh may change it)
     # one fold over the static MCS order (api-synthesis §2.12): phase tuples, the sweep and the
     # lifecycle in the model's order: `Base.afoldl` over the tuple (unrolled by Base, no

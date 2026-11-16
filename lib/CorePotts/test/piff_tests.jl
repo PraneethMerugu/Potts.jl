@@ -28,12 +28,14 @@ end
     io = IOBuffer(); write_piff(io, σ3d, [:a, :b])
     @test first(read_piff(IOBuffer(String(take!(io))), (5, 4, 3))) == σ3d
     # errors
-    @test_throws ArgumentError read_piff(IOBuffer("1 A 0 10 0 0 0 0"), (10, 10))           # outside
-    @test_throws ArgumentError read_piff(IOBuffer("1 A 0 1 0 0 0 0\n2 B 1 2 0 0 0 0"), (10, 10))   # overlap
-    @test_throws ArgumentError read_piff(IOBuffer("1 A 0 1 0 0 0 0\n1 B 3 4 0 0 0 0"), (10, 10))   # two types
-    @test_throws ArgumentError read_piff(IOBuffer("1 A 0 1 0 0 0 1"), (10, 10))           # z in 2D
-    @test_throws ArgumentError read_piff(IOBuffer("1 A 0 1"), (10, 10))
-    @test_throws ArgumentError read_piff(IOBuffer("1 A 0 1 0 0 0 0\n0 Medium 0 3 0 0 0 0"), (10, 10))  # medium over a cell
+        @test_throws ["ArgumentError", "PIFF describes 2D or 3D lattices", "1D", "pass a 2-tuple or 3-tuple"] read_piff(IOBuffer("1 A 0 1 0 0 0 0"), (10,))
+        @test_throws ["ArgumentError", "PIFF describes 2D or 3D lattices", "4D", "pass a 2D or 3D array"] write_piff(IOBuffer(), zeros(Int32, 2, 2, 2, 2), Dict(1 => :A))
+        @test_throws ["ArgumentError", "box", "outside the lattice"] read_piff(IOBuffer("1 A 0 10 0 0 0 0"), (10, 10))           # outside
+        @test_throws ["ArgumentError", "cell 2 overlaps cell 1"] read_piff(IOBuffer("1 A 0 1 0 0 0 0\n2 B 1 2 0 0 0 0"), (10, 10))   # overlap
+        @test_throws ["ArgumentError", "cell 1 listed as both"] read_piff(IOBuffer("1 A 0 1 0 0 0 0\n1 B 3 4 0 0 0 0"), (10, 10))   # two types
+        @test_throws ["ArgumentError", "z must be 0 on a 2D lattice"] read_piff(IOBuffer("1 A 0 1 0 0 0 1"), (10, 10))           # z in 2D
+        @test_throws ["ArgumentError", "expected 8 fields, got 4"] read_piff(IOBuffer("1 A 0 1"), (10, 10))
+        @test_throws ["ArgumentError", "medium box overlaps a cell"] read_piff(IOBuffer("1 A 0 1 0 0 0 0\n0 Medium 0 3 0 0 0 0"), (10, 10))  # medium over a cell
     # a file on disk
     path = tempname()
     write_piff(path, σ, kinds; ids)

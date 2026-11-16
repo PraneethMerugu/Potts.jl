@@ -108,7 +108,8 @@ using .LF_problems_device: instances
     @test dd isa Float32 && isapprox(dd, dh; rtol = 1e-5) && dd != 0
     # Float64 values are refused on a backend without Float64 hardware (Metal); where the
     # hardware has it (ROCm) a Float64 problem runs on the device (capability, P5 C2-1)
-    Exec.supports(DEV, Float64) || @test_throws ArgumentError FieldProblem(euler2(dims), Float64.(u0),
+        Exec.supports(DEV, Float64) || @test_throws ["ArgumentError", "no Float64 compute", "use T = Float32"] FieldProblem(
+            euler2(dims), Float64.(u0),
         (0.0, 0.2), [0.05]; state = ["u"], kind = :rate, index = ix, backend = DEV)
     if Exec.supports(DEV, Float64)
         p64(backend) = FieldProblem(euler2(dims), Float64.(u0), (0.0, 0.2), [0.05]; state = ["u"],

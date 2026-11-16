@@ -98,7 +98,7 @@ end
     step!(fresh)
     @test ig.u == fresh.u                         # the damped start, as a fresh run's
     # the other methods
-    @test_throws ArgumentError SciMLBase.add_tstop!(ig, 0.1)
+        @test_throws ["ArgumentError", "add_tstop!", "not after the integrator"] SciMLBase.add_tstop!(ig, 0.1)
     @test (SciMLBase.add_tstop!(ig, 0.3); SciMLBase.has_tstop(ig) && SciMLBase.first_tstop(ig) == 0.3)
     @test SciMLBase.get_proposed_dt(ig) == 0.05
     @test occursin("fixed window", sprint(showerror, try SciMLBase.set_proposed_dt!(ig, 0.01) catch e e end))

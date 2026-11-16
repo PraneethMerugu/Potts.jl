@@ -24,8 +24,10 @@ function eu_state()
     return σ
 end
 
-eu_payload(cell, r, x, a, b) = (k = EU_CP.link_slot(EU_CP.link_store(cell, r), a, b);
-                                k == 0 ? nothing : Float64(Array(getproperty(cell, Symbol(:link_, x)))[k, a]))
+eu_payload(cell, r, x, a, b) = (
+    k = EU_CP.link_slot(EU_CP.link_store(cell, r), a, b);
+    k == 0 ? nothing : Float64(Array(getproperty(cell, Symbol(:link_, x)))[k, a])
+)
 
 
 # two relationships updated in one stage (one cadence): each from its own links and payload;
@@ -62,27 +64,63 @@ end
 eu_two_op() = Any[ownership => eu_state(), kind => [:blob, :blob, :blob], :bond => [(1, 2)], :tether => [(2, 3), (1, 3)]]
 
 
-# refusals: what an edge update cannot read
-eu_model(stmts...) = eval(quote
-    @potts_model EURefuse begin
-        @kinds medium blob
-        @parameters T = 1.0
-        @variables begin
-            rest(bond) = 12.0
-            age(bond) = 0.0
-            g(cell) = 0.0
-        end
-        @relationship bond(cell, cell) capacity = 2
-        @lattice Lattice((30, 12); neighborhood = Moore(1))
-        @energy begin
-            cells(blob) => (volume - 16.0)^2
-            edges(bond) => (distance - rest)^2
-        end
-        $(stmts...)
-        @sweep Metropolis(; temperature = T)
+# variants of an edge update: refusals, stored reads and cadence declaration order
+@potts_model EUCase begin
+    @structural_parameters mode = :stored_read
+    @kinds medium blob
+    @parameters T = 1.0
+    @variables begin
+        rest(bond) = 12.0
+        age(bond) = 0.0
+        g(cell) = 0.0
     end
-    EURefuse(; name = :r)
-end)
+    @relationship bond(cell, cell) capacity = 2
+    @lattice Lattice((30, 12); neighborhood = Moore(1))
+    @energy begin
+        cells(blob) => (volume - 16.0)^2
+        edges(bond) => (distance - rest)^2
+    end
+    if mode === :same_cadence_bare
+        @after_mcs begin
+            rest ~ Pre(rest) + age
+            age ~ Pre(age) + 1
+        end
+    elseif mode === :other_cadence
+        @after_mcs rest ~ Pre(rest) + Pre(age)
+        @after_mcs Every(2) age ~ Pre(age) + 1
+    elseif mode === :mixed_other_cadence
+        @after_mcs begin
+            rest ~ Pre(rest) + Pre(age)
+            age ~ Pre(age) + 1
+        end
+        @after_mcs Every(2) age ~ Pre(age) * 2
+    elseif mode === :stored_read
+        @after_mcs rest ~ Pre(rest) + age
+    elseif mode === :bare_volume
+        @after_mcs rest ~ Pre(rest) + volume
+    elseif mode === :bare_cell_var
+        @after_mcs rest ~ Pre(rest) + g
+    elseif mode === :rand_call
+        @after_mcs rest ~ Pre(rest) + rand()
+    elseif mode === :randn_call
+        @after_mcs rest ~ Pre(rest) + randn()
+    elseif mode === :decl_order_b
+        @after_mcs Every(2) age ~ Pre(age) + 1
+        @after_mcs rest ~ Pre(rest) + 1
+        @after_mcs Every(2) rest ~ 2 * Pre(rest)
+    elseif mode === :decl_order_a
+        @after_mcs rest ~ Pre(rest) + 1
+        @after_mcs Every(2) rest ~ 2 * Pre(rest)
+    elseif mode === :alt_cadence
+        @after_mcs rest ~ Pre(rest) + 1
+        @after_mcs Every(2) rest ~ 2 * Pre(rest)
+        @after_mcs Every(2) age ~ Pre(age) + 1
+        @after_mcs age ~ 2 * Pre(age)
+    end
+    @sweep Metropolis(; temperature = T)
+end
+
+eu_case(mode) = EUCase(; name = :r, mode)
 
 
 # the review probe (D-169): a model update, then two edge updates of one cadence, `rest`
@@ -168,7 +206,7 @@ end
         # Float32
         c = solve(PottsProblem(EUTwo(; name = :two), eu_two_op(), (0, 5); T = Float32), SequentialCPM()).u[end].cell
         @test eltype(c.link_len) === Float32
-        @test eu_payload(c, :tether, :len, 1, 3) ≈ 63.0 rtol = 1e-6
+        @test eu_payload(c, :tether, :len, 1, 3) ≈ 63.0 rtol = 1.0e-6
     end
 end
 
@@ -185,21 +223,14 @@ end
 @testitem "edge updates: refusals" setup = [EdgeUpdatesSetup] tags = [:potts, :edge_updates] begin
     @testset "edge updates: refusals" begin
         # another edge variable of the block, bare (a new value) or at another cadence
-        @test eu_error(() -> mtkcompile(eu_model(:(@after_mcs begin
-            rest ~ Pre(rest) + age
-            age ~ Pre(age) + 1
-        end))), "rest", "age", "Pre")
-        @test eu_error(() -> mtkcompile(eu_model(:(@after_mcs rest ~ Pre(rest) + Pre(age)),
-            :(@after_mcs Every(2) age ~ Pre(age) + 1))), "rest", "age", "another cadence")
-        @test eu_error(() -> mtkcompile(eu_model(:(@after_mcs begin
-            rest ~ Pre(rest) + Pre(age)
-            age ~ Pre(age) + 1
-        end), :(@after_mcs Every(2) age ~ Pre(age) * 2))), "rest", "age", "another cadence")
+        @test eu_error(() -> mtkcompile(eu_case(:same_cadence_bare)), "rest", "age", "Pre")
+        @test eu_error(() -> mtkcompile(eu_case(:other_cadence)), "rest", "age", "another cadence")
+        @test eu_error(() -> mtkcompile(eu_case(:mixed_other_cadence)), "rest", "age", "another cadence")
         # an edge variable not written in the block reads its stored value (no refusal)
-        @test mtkcompile(eu_model(:(@after_mcs rest ~ Pre(rest) + age))) isa Potts.CompiledPottsSystem
+        @test mtkcompile(eu_case(:stored_read)) isa Potts.CompiledPottsSystem
         # the vocabulary is that of `edges(rel)` and `@unlink`: no bare cell quantities
-        @test eu_error(() -> mtkcompile(eu_model(:(@after_mcs rest ~ Pre(rest) + volume))), "volume", "edge update")
-        @test eu_error(() -> mtkcompile(eu_model(:(@after_mcs rest ~ Pre(rest) + g))), "g")
+        @test eu_error(() -> mtkcompile(eu_case(:bare_volume)), "volume", "edge update")
+        @test eu_error(() -> mtkcompile(eu_case(:bare_cell_var)), "g")
     end
 end
 
@@ -241,9 +272,11 @@ end
 
 @testitem "edge updates: rand() names the edge update" setup = [EdgeUpdatesSetup] tags = [:potts, :edge_updates] begin
     @testset "edge updates: rand() names the edge update" begin
-        @test eu_error(() -> mtkcompile(eu_model(:(@after_mcs rest ~ Pre(rest) + rand()))), "rand()", "an edge update",
-            "draws are not addressed per link")
-        @test eu_error(() -> mtkcompile(eu_model(:(@after_mcs rest ~ Pre(rest) + randn()))), "randn()", "an edge update")
+        @test eu_error(
+            () -> mtkcompile(eu_case(:rand_call)), "rand()", "an edge update",
+            "draws are not addressed per link"
+        )
+        @test eu_error(() -> mtkcompile(eu_case(:randn_call)), "randn()", "an edge update")
     end
 end
 
@@ -252,16 +285,12 @@ end
 @testitem "edge updates: writers of one variable in declaration order" setup = [EdgeUpdatesSetup] tags = [:potts, :edge_updates] begin
     @testset "edge updates: writers of one variable in declaration order" begin
         op = Any[ownership => eu_state(), kind => [:blob, :blob, :blob], :bond => [(1, 2), (2, 3)]]
-        for stmts in ((:(@after_mcs Every(2) age ~ Pre(age) + 1), :(@after_mcs rest ~ Pre(rest) + 1),
-                          :(@after_mcs Every(2) rest ~ 2 * Pre(rest))),
-                      (:(@after_mcs rest ~ Pre(rest) + 1), :(@after_mcs Every(2) rest ~ 2 * Pre(rest))))
-            sol = solve(PottsProblem(eu_model(stmts...), op, (0, 3)), SequentialCPM(); saveat = 1)
+        for mode in (:decl_order_b, :decl_order_a)
+            sol = solve(PottsProblem(eu_case(mode), op, (0, 3)), SequentialCPM(); saveat = 1)
             @test [eu_payload(u.cell, :bond, :rest, 1, 2) for u in sol.u] == [12.0, 26.0, 27.0, 56.0]   # +1, then ×2
             @test [eu_payload(u.cell, :bond, :rest, 3, 2) for u in sol.u] == [12.0, 26.0, 27.0, 56.0]
         end
         # writers that alternate between two cadences have no stage order: refused, naming them
-        @test eu_error(() -> mtkcompile(eu_model(:(@after_mcs rest ~ Pre(rest) + 1), :(@after_mcs Every(2) rest ~ 2 * Pre(rest)),
-                :(@after_mcs Every(2) age ~ Pre(age) + 1), :(@after_mcs age ~ 2 * Pre(age)))),
-            "`age`", "`rest`", "declaration order")
+        @test eu_error(() -> mtkcompile(eu_case(:alt_cadence)), "`age`", "`rest`", "declaration order")
     end
 end

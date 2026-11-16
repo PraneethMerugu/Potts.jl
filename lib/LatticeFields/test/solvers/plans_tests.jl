@@ -142,9 +142,11 @@ end
     @test !sc.done && sc.warn
     @test sc.rnorm ≈ maximum(abs, true_residual(sv)) rtol = 1e-6   # final true residual
     @test (@test_logs (:warn, r"tolerance") sentinel(sv))
-    @test_throws ArgumentError resolve_inner(case[1],
+        @test_throws ["ArgumentError", "DevicePCG", "symmetric preconditioner cycle"] resolve_inner(
+            case[1],
         DevicePCG(precond = Multigrid(cycle = V(2, 1))))
-    @test_throws ArgumentError resolve_inner(case[1],
+        @test_throws ["ArgumentError", "DevicePCG", "one preconditioner cycle per iteration", "cycles = 2"] resolve_inner(
+            case[1],
         DevicePCG(precond = Multigrid(cycles = 2)))
 end
 end

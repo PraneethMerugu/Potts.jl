@@ -39,7 +39,8 @@ end
     @test isempty(check_allocs(LFP._slot1!, (typeof(rb.copies), typeof(rb.store.cur), typeof(rb.swaps), Int)))
     warm(rt) = (LFP.advance!(rt, (0.0, 0)); @allocated LFP.advance!(rt, (0.0, 0)))
     @test warm(ra) == 0 && warm(rb) == 0
-    @test_throws ArgumentError LFP.bind_group(prob.group, alg, b.store, copy(prob.p); n = 3, dt = 0.05, c = 0.0,
+        @test_throws ["ArgumentError", "ends_in must be :parity or :slot1"] LFP.bind_group(
+            prob.group, alg, b.store, copy(prob.p); n = 3, dt = 0.05, c = 0.0,
         ends_in = :last, backend = prob.backend, options = prob.options, V = Float64)
 end
 end

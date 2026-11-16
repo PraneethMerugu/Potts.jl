@@ -14,7 +14,7 @@ types are errors.
 read_piff(path::AbstractString, dims; kw...) = open(io -> read_piff(io, dims; kw...), path)
 
 function read_piff(io::IO, dims::NTuple{N, Integer}; medium::AbstractString = "Medium") where {N}
-    N in (2, 3) || throw(ArgumentError("PIFF describes 2D or 3D lattices"))
+    N in (2, 3) || throw(ArgumentError("PIFF describes 2D or 3D lattices, got $(N)D dims $dims; pass a 2-tuple or 3-tuple for dims"))
     labels = zeros(Int32, dims)
     kinds = String[]
     ids = Int[]
@@ -63,7 +63,7 @@ write_piff(path::AbstractString, labels, kinds; kw...) = open(io -> write_piff(i
 
 function write_piff(io::IO, labels::AbstractArray{<:Integer, N}, kinds; medium = nothing,
         ids = 1:length(kinds)) where {N}
-    N in (2, 3) || throw(ArgumentError("PIFF describes 2D or 3D lattices"))
+    N in (2, 3) || throw(ArgumentError("PIFF describes 2D or 3D lattices, got a $(N)D labels array; pass a 2D or 3D array"))
     dims = size(labels)
     for rest in CartesianIndices(dims[2:end])
         x = 1
