@@ -595,7 +595,19 @@ function _inner_system(sys::PottsSystem)
                                   (found[] = true), u); found[])
     of_field(eq) = (f = _field_lhs(eq, sys); f !== nothing && (f[1] === nothing || _is_field_variable(f[1])))
     eqs = [eq for eq in _p(sys, :equations) if !spatial(eq) && !of_field(eq)]
-    vars = [x for x in _p(sys, :variables) if !_is_field_variable(x)]
+    # a field the remaining equations read (`integral(c)` in a cell equation) is an input of
+    # the System, MTK's form of a value set from outside: it compiles with `inputs` given
+    read = Set{Symbol}()
+    note(y) = (_is_field_variable(y) && push!(read, info(y).name); nothing)
+    for eq in Iterators.flatten((eqs, _p(sys, :observed)))
+        _walk_all(note, _unwrap(eq.lhs))
+        _walk_all(note, _unwrap(eq.rhs))
+    end
+    vars = Any[x for x in _p(sys, :variables) if !_is_field_variable(x)]
+    for x in _p(sys, :variables)
+        _is_field_variable(x) && info(x).name in read || continue
+        push!(vars, SymbolicUtils.setmetadata(_unwrap(x), ModelingToolkitBase.VariableInput, true))
+    end
     return ModelingToolkitBase.System(
         eqs, _unwrap(t), vars, _p(sys, :parameters);
         name = nameof(sys), observed = _p(sys, :observed), initialization_eqs = _p(sys, :initialization_eqs),
