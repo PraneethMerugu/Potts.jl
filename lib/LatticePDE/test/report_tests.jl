@@ -83,7 +83,7 @@ using .LP_report: fd
     sprint(field_report, a)
     step!(a)
     step!(b)
-        @test a.u == b.u && a.retcode == b.retcode == ReturnCode.Default        # both in progress
+    @test a.u == b.u && a.retcode == b.retcode == ReturnCode.Default        # both in progress
 end
 end
 

@@ -49,7 +49,7 @@ end
             step!(ig)
             c = only(ig.runtimes).cache
             got = vcat(vec(ig[cae]), vec(ig[cbe]))
-                @test c.cs !== nothing && c.newton == 1 && SciMLBase.check_error(ig) == ReturnCode.Success
+            @test c.cs !== nothing && c.newton == 1 && SciMLBase.check_error(ig) == ReturnCode.Success
             @test maximum(abs, got .- want) / maximum(abs, want) < tol || (println("q1 ", (δ, k, steady, inner), " ",
                 maximum(abs, got .- want) / maximum(abs, want)); false)
         end
@@ -209,7 +209,7 @@ end
     A, b0 = cjac(q1(0.1, 5.0), (8, 8))
     want = -(A \ b0)
     ig = init(cown(q1(0.1, 5.0)), BackwardEuler(; dt = 0.1, init = :steady))
-        @test ig.retcode == ReturnCode.Default || SciMLBase.check_error(ig) == ReturnCode.Success
+    @test ig.retcode == ReturnCode.Default || ig.retcode == ReturnCode.Success
     @test maximum(abs, vcat(vec(ig[cae]), vec(ig[cbe])) .- want) / maximum(abs, want) < 1e-5
     # the steady state stays (the rate is 0 there)
     step!(ig)
@@ -269,7 +269,7 @@ end
     for _ in 1:2
         step!(fr)
     end
-        @test ig.retcode == ReturnCode.Default || SciMLBase.check_error(ig) == ReturnCode.Success
+    @test ig.retcode == ReturnCode.Default || ig.retcode == ReturnCode.Success
     @test ig[cae] == fr[cae] && ig[cbe] == fr[cbe]
     # nonlinear (r2 M1, the reviewer's probe2): `+ 0.01a²` turns the constant-coefficient check
     # off; the Jacobian at the steady state the solve finds has max Re λ ≈ +2.0, found at the

@@ -80,7 +80,7 @@ end
         mask = mk, mval = fill(1.5, 48))
     @test maximum(abs, u .- want) < 1e-9 && all(u[mk] .== 1.5)
     rt = only(ig.runtimes)
-        @test rt.cache.newton == 1 && rt.cache.exact && rt.totals.solves == 1 && SciMLBase.check_error(ig) == ReturnCode.Success
+    @test rt.cache.newton == 1 && rt.cache.exact && rt.totals.solves == 1 && SciMLBase.check_error(ig) == ReturnCode.Success
     @test ig.substeps == 1                                     # (one solve per window)
     # the window's start time: a source `x + t` is read at t = 0, then at t = 0.1; the start
     # state does not matter (a steady solve)
@@ -125,7 +125,7 @@ end
         ig = init(p, alg)
         @test_logs min_level = WARN step!(ig)
         rt = only(ig.runtimes)
-            @test rt.cache.newton == 1 && rt.cache.exact && rt.totals.solves == 1 && SciMLBase.check_error(ig) == ReturnCode.Success
+        @test rt.cache.newton == 1 && rt.cache.exact && rt.totals.solves == 1 && SciMLBase.check_error(ig) == ReturnCode.Success
         @test maximum(abs, vec(ig[bce]) .- want) < 1e-9
     end
     # the faces that make the steady problem indefinite (max Re λ +3.4, +0.82, +1.1, +5.4) are
@@ -170,7 +170,7 @@ end
     ig = init(nlown(sys), QuasiSteady(; dt = 0.1, inner = BTIGHT))
     step!(ig)
     rt = only(ig.runtimes)
-        @test rt.cache.newton == 8 && rt.cache.check && SciMLBase.check_error(ig) == ReturnCode.Success
+    @test rt.cache.newton == 8 && rt.cache.check && SciMLBase.check_error(ig) == ReturnCode.Success
     @test rt.totals.newton_budget == 0 && rt.totals.solves < 8      # (the host stop: converged before the budget)
     po = discretize(sys, LatticeDiscretization(Grid((16, 16)); T = Float64))
     du = similar(po.u0)
@@ -230,7 +230,7 @@ end
     ig = init(p, QuasiSteady(; dt = 0.1, inner = DevicePCG(; budget = 2)))
     @test_logs (:warn, r"field `bc`: the linear solve reached its budget 1 time so far .*a larger linear budget") step!(ig)
     sc = LSB.scalars(only(ig.runtimes).cache.rows[1].solver)
-        @test sc.status === :budget && sc.rnorm < sc.bnorm / 2 && SciMLBase.check_error(ig) == ReturnCode.Success   # (3.9 of 614)
+    @test sc.status === :budget && sc.rnorm < sc.bnorm / 2 && SciMLBase.check_error(ig) == ReturnCode.Success   # (3.9 of 614)
     s = solve(p, QuasiSteady(; dt = 0.1, inner = DevicePCG(; budget = 2)))
     @test s.retcode == ReturnCode.Success && s.stats.budget > 0
     # an island: the domain (a Bool input) is two strips; the low one touches the Dirichlet face
@@ -440,7 +440,7 @@ end
                 CrankNicolson(; dt = 0.1, init = :steady), BDF2(; dt = 0.1, init = :steady), QuasiSteady(; dt = 0.1, init = :steady))
         ig = init(p, alg)
         # (the default inner solver: rtol 1e-6; one solve, the group's operator being exact)
-            @test maximum(abs, ig.sol.u[1] .- want) < 1.0e-5 && SciMLBase.check_error(ig) == ReturnCode.Success || (println("12c init ", alg); false)
+        @test maximum(abs, ig.sol.u[1] .- want) < 1.0e-5 && SciMLBase.check_error(ig) == ReturnCode.Success || (println("12c init ", alg); false)
         @test LFB.field_stats(ig).solves == 1
         s = solve!(ig)
         @test s.retcode == ReturnCode.Success && maximum(abs, s.u[end] .- want) < 1e-5     # (it stays there)

@@ -51,7 +51,7 @@ end
         mask = vec(BKIND .== 2), mval = fill(1.5, 48))
     @test maximum(abs, u .- want) < 1e-9
     rt = only(ig.runtimes)
-        @test rt.cache.newton == 1 && rt.cache.exact && SciMLBase.check_error(ig) == ReturnCode.Success
+    @test rt.cache.newton == 1 && rt.cache.exact && SciMLBase.check_error(ig) == ReturnCode.Success
     @test all(u[vec(BKIND .== 2)] .== 1.5)                     # the mask value written back (SD-11)
     @test rt.totals.solves == 1                                # one solve per substep (exact operator)
 end
