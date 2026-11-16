@@ -146,12 +146,16 @@ end
             v, k = rand(rng, 3), rand(rng, 4)
             a = LP.LatticeParameters(v, ["K" => k]; tick = rand(rng, 0:5))
             b = copy(a)
-            @test a == b && hash(a) == hash(b)
+            @test a == b && isequal(a, b) && hash(a) == hash(b)
             @test length(Set([a, b])) == 1 && haskey(Dict(a => 1), b)
         end
+        # `-0.0 == 0.0` but they are not `isequal` (and hash apart): isequal objects hash equal
+        z, nz = LP.LatticeParameters([0.0, 1.0]), LP.LatticeParameters([-0.0, 1.0])
+        @test z == nz && !isequal(z, nz) && isequal(z, copy(z)) && hash(z) == hash(copy(z))
+        @test length(Set([z, nz, copy(z)])) == 2
         s1 = LP.LatticeStats(LP.finish!(init(prob, alg)))
         s2 = LP.LatticeStats(LP.finish!(init(prob, alg)))
-        @test s1 == s2 && hash(s1) == hash(s2) && length(Set([s1, s2])) == 1
+        @test s1 == s2 && isequal(s1, s2) && hash(s1) == hash(s2) && length(Set([s1, s2])) == 1
     end
     @testset "retcode and check_error" begin
         integ = init(prob, alg)

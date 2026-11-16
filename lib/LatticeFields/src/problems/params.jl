@@ -48,7 +48,10 @@ Base.copy(p::LatticeParameters) = LatticeParameters(copy(p.values), eltype(p.tab
     Pair{String, Any}[k => (v === nothing ? v : copy(v)) for (k, v) in p.inputs], Ref(p.tick[]), Ref(p.stamp[]), copy(p.fns))
 Base.:(==)(a::LatticeParameters, b::LatticeParameters) = a.values == b.values && a.tables == b.tables &&
                                                          a.inputs == b.inputs && a.tick[] == b.tick[] && a.fns == b.fns
-# the same fields `==` compares (the tick's value, not its `Ref`), so equal objects hash equal
+# `isequal` and `hash` over the same fields `==` compares (the tick's value, not its `Ref`),
+# so `isequal` objects hash equal (`-0.0` and `0.0` are `==` but not `isequal`)
+Base.isequal(a::LatticeParameters, b::LatticeParameters) = isequal(a.values, b.values) && isequal(a.tables, b.tables) &&
+    isequal(a.inputs, b.inputs) && isequal(a.tick[], b.tick[]) && isequal(a.fns, b.fns)
 Base.hash(p::LatticeParameters, h::UInt) =
     hash(p.fns, hash(p.tick[], hash(p.inputs, hash(p.tables, hash(p.values, hash(:LatticeParameters, h))))))
 # the same tables and inputs with other scalar values (SciMLStructures' `replace`, a remake)

@@ -164,9 +164,12 @@ end
         for n in (0, 1, 7, 100, -3)        # property: a == b ⇒ hash(a) == hash(b), across number types
             a = Potts.PottsParameters((; λ = Float64(n), k = n))
             b = Potts.PottsParameters((; λ = n, k = Float32(n)))
-            @test a == b && hash(a) == hash(b)
+            @test a == b && isequal(a, b) && hash(a) == hash(b)
             @test length(Set([a, b])) == 1 && haskey(Dict(a => 1), b)
         end
+        # `-0.0 == 0.0` but they are not `isequal` (and hash apart): isequal objects hash equal
+        z, nz = Potts.PottsParameters((; λ = 0.0)), Potts.PottsParameters((; λ = -0.0))
+        @test z == nz && !isequal(z, nz) && length(Set([z, nz])) == 2
     end
 end
 
