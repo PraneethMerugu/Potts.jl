@@ -366,7 +366,7 @@ p60bw_allocs_spin() = @allocated CorePotts._spin_until(P60BW_TRUE, 1.0)
                         reads = Float64[]
                         for _ in 1:300
                             step!(integ)
-                            t = time_ns(); current_state(integ); push!(reads, (time_ns() - t) / 1e9)
+                            t = time_ns(); current_state(integ); push!(reads, (time_ns() - t) / 1.0e9)
                         end
                         saving = init(remake(prob; tspan = (0, 400)), CheckerboardCPM(); backend,
                             saveat = 1:400, save_start = false)

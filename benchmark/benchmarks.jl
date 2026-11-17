@@ -8,6 +8,8 @@ for (name, alg) in (("sequential", SequentialCPM(; proposal = Moore(1))),
     for scale in (1, 4)
         SUITE["graner"][name]["$(72scale)²"] = @benchmarkable step!(integ) setup = (
             integ = init(graner_problem(; scale = $scale, nmcs = 10^6), $alg;
-                save_start = false, save_everystep = false); step!(integ)) evals = 1 samples = 50
+                save_start = false, save_everystep = false
+            ); step!(integ)
+        ) evals = 1 samples = 50
     end
 end

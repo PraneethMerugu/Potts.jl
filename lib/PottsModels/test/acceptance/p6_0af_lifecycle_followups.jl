@@ -144,7 +144,8 @@ function p60af_unfuse(prob; extra = ())
     f0 = CorePotts.CPMFunction(f.delta_H, f.commit!, f.constraint, f.temperature, f.bias, ph0, lc0,
         f.acceptance, f.footprint, f.fingerprint, f.sys, f.track, f.connectivity)
     return CorePotts.PottsProblem(f0, prob.u0, prob.lattice, prob.contact, prob.proposal, prob.relations, prob.spacing,
-        prob.frozen, prob.tspan, prob.p, prob.seed, prob.replica, prob.repeat, prob.tangent, prob.kwargs)
+        prob.frozen, prob.tspan, prob.p, prob.seed, prob.replica, prob.repeat, prob.tangent, prob.kwargs
+    )
 end
 
 const P60AF_TRACKERS = (:anchor, :m1, :m2)

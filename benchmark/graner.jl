@@ -30,7 +30,8 @@ const WARM = time() - t
 
 t = time()
 integ2 = init(remake(prob; p = merge(graner_params(T), (; λ = T(2))), seed = 1), alg;
-    backend, save_start = false, save_everystep = false)
+    backend, save_start = false, save_everystep = false
+)
 step!(integ2); current_state(integ2)
 const REMAKE = time() - t
 

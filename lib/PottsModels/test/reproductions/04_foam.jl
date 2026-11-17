@@ -1138,7 +1138,8 @@ function p64r_drift(st, βm, mcs, seed)
         end
     end
     return (; top = mean(d[cy .>= 192]), bottom = mean(d[cy .<= 64]), t1,
-        area = p64r_area_frac(current_state(integ).σ, p64r_vol(current_state(integ), n), st.A))
+        area = p64r_area_frac(current_state(integ).σ, p64r_vol(current_state(integ), n), st.A),
+    )
 end
 
 if !P64R_FULL

@@ -673,7 +673,7 @@ function _openvt_pkg_impl_readme(recs, prov, scripts, facts)
     using Potts, PottsModels
     sys = mtkcompile(OpenVTReferenceMonolayer(; name = :monolayer, lattice = (400, 400)))
     prob = PottsProblem(sys, openvt_reference_state(; lattice = (400, 400)), (0, $(facts.cycle)); capacity = 2000)
-    sol = solve(prob, SequentialCPM(); save_everystep = false)
+            sol = solve(prob, SequentialCPM(); save_everystep = false)
     ```
 
     ## Rerun the records
