@@ -321,7 +321,7 @@ length(u0[2].second)
 #
 # A model with a field needs a *field solver*, chosen when the problem is built. The paper
 # integrates the field with 15 explicit Euler steps per MCS (2 s each); `substeps = 15`
-# does the same, and `lower = 0.0` clips the concentration at zero. One MCS is 30 s, so
+# does the same, and `lower_bound = 0.0` clips the concentration at zero. One MCS is 30 s, so
 # 1000 MCS are about 8 hours (paper: 50 hours; here: 1000 MCS, to keep the build short):
 
 prob = PottsProblem(vasc, u0, (0, 1000); seed = 1, field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0))

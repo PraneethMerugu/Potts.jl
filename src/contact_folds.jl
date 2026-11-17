@@ -194,10 +194,10 @@ end
 
 _is_one_of(op, ops::Vector{Any}) = any(o -> o === op, ops)
 
-"""Whether `x` draws (`rand()`, `randn()`, `randn(μ, σ; lower)`)."""
+"""Whether `x` draws (`rand()`, `randn()`, `randn(μ, σ; lower_bound)`)."""
 _has_draw(x) = _has_any_op(x, _DRAW_OPS)
 
-"""Whether the model has a bounded draw (`randn(μ, σ; lower)`): its state carries a status word."""
+"""Whether the model has a bounded draw (`randn(μ, σ; lower_bound)`): its state carries a status word."""
 function _has_bounded_draw(sys::PottsSystem)
     _may_have(sys, :bounded) || return false
     hit(x) = _has_any_op(x, _BOUNDED_DRAW_OPS)

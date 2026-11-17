@@ -955,8 +955,8 @@ end
 
 # A nonzero status word fails the run, with a warning naming each reason (once per run)
 const _STATUS_REASONS = (STATUS_NONFINITE => "an energy change was not finite (NaN or Inf)",
-    STATUS_DRAW_EXHAUSTED => "a bounded randn(μ, σ; lower) draw exhausted its $MAX_DRAW_ATTEMPTS attempts",
-    STATUS_DRAW_NEGATIVE_SD => "a bounded randn(μ, σ; lower) draw was given σ < 0")
+    STATUS_DRAW_EXHAUSTED => "a bounded randn(μ, σ; lower_bound) draw exhausted its $MAX_DRAW_ATTEMPTS attempts",
+    STATUS_DRAW_NEGATIVE_SD => "a bounded randn(μ, σ; lower_bound) draw was given σ < 0")
 function _status_failure!(integ, st::UInt32)
     st == 0 && return nothing
     code = _status_code(st)

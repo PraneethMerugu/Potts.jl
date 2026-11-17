@@ -61,8 +61,8 @@ sol = solve(PottsProblem(clocks, op, (0, 20); seed = 1), SequentialCPM(); saveat
 - **Randomness.** `rand()` is a uniform number in (0, 1), drawn fresh for every cell or site
   and every MCS from the problem's seed; runs are reproducible, on any backend. `randn()`
   is a standard normal number with the same contract, `randn(μ, σ)` is `μ + σ * randn()`,
-  and `randn(μ, σ; lower)` is redrawn while it is `≤ lower` (a truncated normal; after 64
-  draws all `≤ lower` the value is NaN and the run fails with `ReturnCode.Failure`, which
+  and `randn(μ, σ; lower_bound)` is redrawn while it is `≤ lower_bound` (a truncated normal; after 64
+  draws all `≤ lower_bound` the value is NaN and the run fails with `ReturnCode.Failure`, which
   for a bound below `μ + 2σ` does not happen in practice). Each draw depends only on the
   seed, the MCS, the cell or site and the draw's place in the model, so it is the same on
   every algorithm and thread count. Other random functions (`rand(1:6)`, `randn(3)`,

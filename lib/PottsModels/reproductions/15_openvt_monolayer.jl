@@ -115,7 +115,7 @@ nothing #hide
 #         contacts => J[kind, neighbor_kind]
 #     end
 #     # the first cell draws its X before its first division check
-#     @before_mcs X ~ ifelse(Pre(X) > 0, Pre(X), randn(μ_X, σ_X; lower = 0.0))
+#     @before_mcs X ~ ifelse(Pre(X) > 0, Pre(X), randn(μ_X, σ_X; lower_bound = 0.0))
 #     @after_mcs begin                   # f, then growth unless inhibited (type 1 and type 2)
 #         f ~ ifelse(count(true for _ in contacts) > 0,
 #             count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts), 1.0
@@ -124,7 +124,7 @@ nothing #hide
 #     end
 #     # division on the actual area; each daughter draws its own X
 #     @divide cells(cell) when = volume >= X * A₀, along = RandomPlane(), A_star => Split(),
-#         X => randn(μ_X, σ_X; lower = 0.0)
+#         X => randn(μ_X, σ_X; lower_bound = 0.0)
 #     @sweep Metropolis(; temperature = T)
 # end
 # ```

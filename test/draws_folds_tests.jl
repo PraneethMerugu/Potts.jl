@@ -71,7 +71,7 @@ end
                 (:(rand(1:3)), "rand(1:3)"), (:(rand(2)), "rand(2)"), (:(randn(3)), "randn(3)"),
                 (:(randn(Float32)), "randn(Float32)"), (:(randexp()), "randexp()"), (:(Base.rand()), nothing),
                 (:(Random.randn(2, 3, 4)), "randn(2, 3, 4)"), (:(Random.randexp(2)), "randexp(2)"),
-                (:(shuffle([1, 2])), "shuffle([1, 2])"), (:(randn(; lower = 0.0)), "randn(lower = 0.0)"),
+                (:(shuffle([1, 2])), "shuffle([1, 2])"), (:(randn(; lower_bound = 0.0)), "randn(lower_bound = 0.0)"),
                 (:(rand(; x = 1)), "rand(x = 1)"),
             )
             ex = :(@after_mcs x ~ $call)
@@ -84,12 +84,12 @@ end
             end
         end
         # the model's own forms build and draw
-        for call in (:(rand()), :(randn()), :(randn(1.0, 2.0)), :(randn(q, 2.0; lower = 0.0)))
+        for call in (:(rand()), :(randn()), :(randn(1.0, 2.0)), :(randn(q, 2.0; lower_bound = 0.0)))
             c = _df_build(:(@after_mcs x ~ $call))
             @test any(u -> Potts._has_draw(u.eq.rhs), Potts._p(getfield(c, :sys), :updates))
         end
         # a negative SD is an error when it is a number
-        @test occursin("σ = -0.5 is negative", _df_msg(() -> _df_build(:(@after_mcs x ~ randn(1.0, -0.5; lower = 0.0)))))
+        @test occursin("σ = -0.5 is negative", _df_msg(() -> _df_build(:(@after_mcs x ~ randn(1.0, -0.5; lower_bound = 0.0)))))
         # a plain helper computing a constant from Base's RNG is rejected too (it would be fixed at build)
         @test occursin("`rand(1:6)`", _df_msg(() -> _df_build(:(@after_mcs x ~ q * rand(1:6)))))
         # not a model quantity where draws are not allowed
@@ -155,7 +155,7 @@ end
         # the constructor records that it built neither, so mtkcompile and PottsProblem skip the walks (review F1)
         @test !Potts._may_have(getfield(c, :sys), :folds) && !Potts._may_have(getfield(c, :sys), :bounded)
         @test isempty(Potts._contact_trackers(c))
-        f = _df_build(:(@after_mcs x ~ count(true for _ in contacts) + randn(0.0, 1.0; lower = -1.0)))
+        f = _df_build(:(@after_mcs x ~ count(true for _ in contacts) + randn(0.0, 1.0; lower_bound = -1.0)))
         @test Potts._may_have(getfield(f, :sys), :folds) && Potts._may_have(getfield(f, :sys), :bounded) && length(Potts._contact_trackers(f)) == 1
         prob = PottsProblem(c, _df_state(), (0, 1))
         @test !haskey(prob.relations, :contact_counts) && !haskey(prob.u0.model, CorePotts.MODEL_STATUS)
@@ -163,10 +163,10 @@ end
         step!(integ)
         @test (@allocated step!(integ)) == 0
         @inferred Potts.SciMLBase.step!(integ)
-        b = PottsProblem(_df_build(:(@after_mcs x ~ randn(0.0, 1.0; lower = 5.0))), _df_state(), (0, 1))
+        b = PottsProblem(_df_build(:(@after_mcs x ~ randn(0.0, 1.0; lower_bound = 5.0))), _df_state(), (0, 1))
         @test haskey(b.u0.model, CorePotts.MODEL_STATUS)
         # exhaustion (P ≈ 3·10⁻⁷ per attempt, 64 attempts) fails the run instead of throwing
-        b10 = PottsProblem(_df_build(:(@after_mcs x ~ randn(0.0, 1.0; lower = 10.0))), _df_state(), (0, 4))
+        b10 = PottsProblem(_df_build(:(@after_mcs x ~ randn(0.0, 1.0; lower_bound = 10.0))), _df_state(), (0, 4))
         for alg in (SequentialCPM(), CheckerboardCPM())
             sol = @test_logs (:warn, r"exhausted its 64 attempts") solve(b10, alg; saveat = 1)
             @test sol.retcode == Potts.SciMLBase.ReturnCode.Failure && isnan(sol.u[end].cell.x[1]) && sol.t[end] == 1

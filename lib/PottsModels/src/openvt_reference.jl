@@ -14,7 +14,7 @@ with [`edge_guard`](@ref PottsModels.edge_guard)):
   with the contact fold `count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts)`;
 - division at `volume ≥ X · A₀` along a random plane. Both daughters take half the
   mother's `A_star` and draw their own `X ~ N(μ_X, σ_X)`, redrawn while `X ≤ 0`
-  (`randn(μ_X, σ_X; lower = 0)`); the first cell draws its `X` the same way before the first
+  (`randn(μ_X, σ_X; lower_bound = 0)`); the first cell draws its `X` the same way before the first
   division check. `σ_X = 0` is the deterministic mode `X ≡ μ_X`.
 
 Parameters (Table S1): `A₀ = 50` (A\\*(0), px), `λ = 2`, `T = 20`, `α = 50/775` px/MCS (a
@@ -53,7 +53,7 @@ the variant [`OpenVTGrowingMonolayer`](@ref).
         cells(cell) => λ * (volume - A_star)^2
         contacts => J[kind, neighbor_kind]
     end
-    @before_mcs X ~ ifelse(Pre(X) > 0, Pre(X), randn(μ_X, σ_X; lower = 0.0))
+    @before_mcs X ~ ifelse(Pre(X) > 0, Pre(X), randn(μ_X, σ_X; lower_bound = 0.0))
     @after_mcs begin
         f ~ ifelse(count(true for _ in contacts) > 0,
             count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts), 1.0
@@ -61,7 +61,7 @@ the variant [`OpenVTGrowingMonolayer`](@ref).
         A_star ~ ifelse((volume / Pre(A_star) >= β) && (f >= γ), Pre(A_star) + α, Pre(A_star))
     end
     @divide cells(cell) when = volume >= X * A₀, along = RandomPlane(), A_star => Split(),
-        X => randn(μ_X, σ_X; lower = 0.0)
+        X => randn(μ_X, σ_X; lower_bound = 0.0)
     @sweep Metropolis(; temperature = T)
 end
 
