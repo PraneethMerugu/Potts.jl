@@ -139,7 +139,7 @@ p60w_name(f) = f isa Symbol ? f :
 p60w_iscall(ex, names) = ex isa Expr && ex.head === :call && p60w_name(ex.args[1]) in names
 p60w_seedlike(x) = (x isa Symbol && occursin("seed", lowercase(String(x)))) ||
     (x isa Expr && x.head === :. && length(x.args) == 2 && x.args[2] isa QuoteNode &&
-        occursin("seed", lowercase(String(x.args[2].value)))) ||
+        x.args[2].value isa Symbol && occursin("seed", lowercase(String(x.args[2].value)))) ||
     (p60w_iscall(x, P60W_CONV) && any(p60w_seedlike, x.args[2:end]))
 p60w_plain(x) = x isa Symbol || x isa Integer || x isa QuoteNode ||
     (x isa Expr && x.head === :. && length(x.args) == 2 && x.args[2] isa QuoteNode) ||
