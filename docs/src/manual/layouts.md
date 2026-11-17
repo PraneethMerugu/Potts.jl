@@ -2,7 +2,7 @@
 
 A layout builds an initial state from layers. [Tutorial 4](@ref tutorial-layouts) walks
 through them; this page is the reference. The names on this page come from
-`using Potts.Layouts` (each is also `Potts.name`).
+`using Potts.Layouts`.
 
 ## Turning layers into an operating point
 
@@ -167,8 +167,8 @@ A `Group` is the top-level layout or a member of a top-level `overlay`, never in
 
 !!! note "DomainSets"
     DomainSets (which ModelingToolkit loads) exports its own `Sphere` and `Point`. After
-    `using Potts, DomainSets` both names are ambiguous: write `Potts.Sphere` and
-    `Potts.Point`, or import the ones you need (`using Potts: Sphere, Point`).
+    `using Potts.Layouts, DomainSets` both names are ambiguous: write `Potts.Layouts.Sphere`
+    and `Potts.Layouts.Point`, or import the ones you need (`using Potts.Layouts: Sphere, Point`).
 
 ## Writing a layer
 

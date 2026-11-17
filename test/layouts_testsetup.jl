@@ -2,6 +2,7 @@
 
 @testsetup module LayoutsSetup
 using Potts, Test
+using Potts.Layouts
 using Potts: CorePotts
 isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "devices.jl"))
 using PottsModels: akeeb_state

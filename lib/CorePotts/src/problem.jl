@@ -302,11 +302,11 @@ end
 """
     SavedLeaves
 
-The state leaves a run saves (`save_idxs`): the labels `σ` when `σ` is true, and the named
-cell, site and model arrays.
+The state leaves a run saves (`save_idxs`): the labels `ownership` when `ownership` is true,
+and the named cell, site and model arrays.
 """
 struct SavedLeaves
-    σ::Bool
+    ownership::Bool
     cell::Vector{Symbol}
     site::Vector{Symbol}
     model::Vector{Symbol}
@@ -596,16 +596,16 @@ end
 _saved_leaves(prob, ::Nothing) = nothing
 function _saved_leaves(prob, idxs)
     u = prob.u0
-    σ, cell, site, model = false, Symbol[], Symbol[], Symbol[]
+    ownership, cell, site, model = false, Symbol[], Symbol[], Symbol[]
     for x in (idxs isa Union{AbstractVector, Tuple} ? idxs : (idxs,))
         i = _leaf(prob, x)
         if i === :ownership
-            σ = true
+            ownership = true
         else
             push!(i.scope === :cell ? cell : i.scope === :site ? site : model, i.name)
         end
     end
-    return SavedLeaves(σ, unique!(cell), unique!(site), unique!(model))
+    return SavedLeaves(ownership, unique!(cell), unique!(site), unique!(model))
 end
 # one entry of `save_idxs`: `:ownership`, a `StateIndex`, an array name of the state, or a state
 # variable of the model

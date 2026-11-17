@@ -136,14 +136,18 @@ end
         )
         for n in words
             @test Base.isexported(Potts.Layouts, n) && !Base.isexported(Potts, n)
-            @test getglobal(Potts.Layouts, n) === getglobal(Potts, n)
+            # the layout words are Potts's own (public there too); the shapes are GeometryBasics'
+            isdefined(Potts, n) && @test getglobal(Potts.Layouts, n) === getglobal(Potts, n)
+        end
+        for n in (:HyperSphere, :Circle, :Sphere, :Point)
+            @test parentmodule(getglobal(Potts.Layouts, n)) !== Potts
         end
         @test sort!([n for n in names(Potts.Layouts) if n !== :Layouts]) == sort!(collect(words))
     end
 end
 
 @testitem "packages: the DSL names are ASCII, primes are aliases" setup = [NamesSetup] tags = [:potts, :names] begin
-    using .NamesSetup: Potts
+    using Potts
     @testset "packages: the DSL names are ASCII, primes are aliases" begin
         @test all(n -> isascii(String(n)), Potts.BUILTIN_NAMES)
         @test all(n -> isascii(String(n)), keys(Potts.DSL))

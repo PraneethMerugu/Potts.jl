@@ -8,12 +8,12 @@
         @test all(==(1), σ)
         # a domain of two strips (x ≤ 5, x ≥ 9): a seed in the left strip fills it, never the right
         dom = Lattice((14, 6); boundary = Closed(), domain = x -> x[1] <= 5 || x[1] >= 9)
-        σ = _op(layout(Eden(Potts.Point(2.0, 3.0); rounds = 400, kinds = [:a], seed = 2), dom), ownership)
+        σ = _op(layout(Eden(Point(2.0, 3.0); rounds = 400, kinds = [:a], seed = 2), dom), ownership)
         @test all(==(1), σ[1:5, :]) && all(==(0), σ[6:14, :])
         # control: on the full lattice the same seed reaches the right side
-        @test all(==(1), _op(layout(Eden(Potts.Point(2.0, 3.0); rounds = 400, kinds = [:a], seed = 2), (14, 6)), ownership))
+        @test all(==(1), _op(layout(Eden(Point(2.0, 3.0); rounds = 400, kinds = [:a], seed = 2), (14, 6)), ownership))
         # a periodic lattice: the blob crosses the edge from a seed at the corner
-        σ = _op(layout(Eden(Potts.Point(1.0, 1.0); rounds = 12, kinds = [:a], seed = 3), Lattice((20, 20))), ownership)
+        σ = _op(layout(Eden(Point(1.0, 1.0); rounds = 12, kinds = [:a], seed = 3), Lattice((20, 20))), ownership)
         @test σ[20, 20] == 1 || σ[20, 1] == 1 || σ[1, 20] == 1
     end
 end
@@ -26,14 +26,14 @@ end
         R = 8
         seed_site = (20, 20)
         for s in 1:3
-            vn = _op(layout(Eden(Potts.Point(20.0, 20.0); rounds = R, kinds = [:a], seed = s, neighborhood = VonNeumann(1)), (40, 40)), ownership)
-            mo = _op(layout(Eden(Potts.Point(20.0, 20.0); rounds = R, kinds = [:a], seed = s), (40, 40)), ownership)
+            vn = _op(layout(Eden(Point(20.0, 20.0); rounds = R, kinds = [:a], seed = s, neighborhood = VonNeumann(1)), (40, 40)), ownership)
+            mo = _op(layout(Eden(Point(20.0, 20.0); rounds = R, kinds = [:a], seed = s), (40, 40)), ownership)
             @test all(x -> sum(abs.(Tuple(x) .- seed_site)) <= R, findall(==(1), vn))
             @test all(x -> maximum(abs.(Tuple(x) .- seed_site)) <= R, findall(==(1), mo))
         end
         # a diagonal domain (x = y): VonNeumann(1) has no step inside it, Moore(1) grows along it
         diag = Lattice((20, 20); boundary = Closed(), domain = x -> x[1] == x[2])
-        e = Eden(Potts.Point(10.0, 10.0); rounds = 60, kinds = [:a], seed = 1)
+        e = Eden(Point(10.0, 10.0); rounds = 60, kinds = [:a], seed = 1)
         @test count(==(1), _op(layout(remake(e; neighborhood = VonNeumann(1)), diag), ownership)) == 1
         @test count(==(1), _op(layout(e, diag), ownership)) > 5
         # a model's own neighbourhood is the default: Hex(1) on the hexagonal probe equals the keyword

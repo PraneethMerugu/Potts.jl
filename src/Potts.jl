@@ -37,7 +37,7 @@ using SymbolicIndexingInterface: SymbolicIndexingInterface
 # Last, on purpose (D-138): GeometryBasics' `OffsetInteger` `convert` methods invalidate the
 # symbolic stack's cached code when GeometryBasics loads before it (`using Potts` 4.8 → 6.2 s;
 # 4.9 s from here). Later dependencies go above this line.
-using GeometryBasics: HyperSphere, Circle, Sphere, Point
+using GeometryBasics: HyperSphere, Point
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
@@ -95,17 +95,18 @@ The initial-state vocabulary: `layout` and its layers (`Tiling`, `Scattered`, `F
 `Sphere` and `Point`, the lattice `Center`, `RandomPoints`, `Voronoi`), seed-and-grow and
 divisions (`Eden`, `Splits`), and strict shapes, filled regions, translated copies and
 compartment groups (`Interior`, `Fill`, `Objects`, `Group`). `using Potts.Layouts` brings
-these names into scope; each is also reachable as `Potts.name`.
+these names into scope; each layout word is also public as `Potts.name`.
 """
 module Layouts
 
-    using ..Potts: AbstractLayout, Tiling, Scattered, Frame, InsertUntil, overlay, layout, HyperSphere, Circle,
-        Sphere, Point, Center, RandomPoints, Voronoi, Eden, Splits, Interior, Fill, Objects, Group
+    using ..Potts: AbstractLayout, Tiling, Scattered, Frame, InsertUntil, overlay, layout, Center, RandomPoints,
+        Voronoi, Eden, Splits, Interior, Fill, Objects, Group
+    using GeometryBasics: HyperSphere, Circle, Sphere, Point
 
     export AbstractLayout, Tiling, Scattered, Frame, InsertUntil, overlay, layout
     export HyperSphere, Circle, Sphere, Point, Center, RandomPoints, Voronoi
     export Eden, Splits
-export Interior, Fill, Objects, Group
+    export Interior, Fill, Objects, Group
 
 end
 # the layout words, also public on Potts; `set_column!` is the custom layer's seam for

@@ -204,7 +204,7 @@ own name): `"kind"` is the kind of each site (0 for the medium), and the name of
 or site variable of the model reads that variable.
 """
 component(name::Symbol, pdesys::ModelingToolkitBase.PDESystem, model::PottsSystem) =
-    wrap(name, ModelingToolkitBase.System(Equation[], _unwrap(t); name), pdesys, _component_part(model))
+    wrap_system(name, ModelingToolkitBase.System(Equation[], _unwrap(t); name), pdesys, _component_part(model))
 
 """
     Potts.couple(model::PottsSystem, pdesys::PDESystem; inputs = []) -> PottsSystem

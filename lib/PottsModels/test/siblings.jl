@@ -523,7 +523,7 @@ end
     # four rounds of Hex(2) growth from 50-odd seeds cover about half of the 900 sites
     @test 350 < count(>(0), σ0) < 900
     # a sprout: one blob through the corner of the periodic lattice, divided 3 times
-    blob = Eden(Potts.Point(1.0, 1.0); rounds = 8, kinds = [:dark], seed = 3)
+    blob = Eden(Point(1.0, 1.0); rounds = 8, kinds = [:dark], seed = 3)
     nblob = count(>(0), layout(blob, sys)[1].second)
     sop, srep = layout(Splits(blob, 3; splits = :allow), sys; report = true)
     σs = sop[1].second

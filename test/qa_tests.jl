@@ -503,6 +503,7 @@ end
 # stable on square, hexagonal and 3D lattices (host-side, but `graner_glazier_aggregate`
 # runs it at paper size for every replicate).
 @testitem "QA: Voronoi and shape regions are type stable (label)" setup = [QaSetup] tags = [:potts, :qa] begin
+    using Potts.Layouts
     @testset "QA: Voronoi and shape regions are type stable ($label)" for (label, L) in (
             ("hex periodic", Lattice((30, 30); geometry = Hexagonal())), ("square closed", Lattice((30, 30); boundary = Closed())),
             ("3D", Lattice((12, 12, 12); boundary = Closed())))
@@ -518,6 +519,7 @@ end
 # P6.3c (D-141): Eden's growth and the Splits passes are type stable on square, hexagonal and
 # 3D lattices (host-side; the growth loop runs once per round over the frontier).
 @testitem "QA: Eden and Splits are type stable (label)" setup = [QaSetup] tags = [:potts, :qa] begin
+    using Potts.Layouts
     @testset "QA: Eden and Splits are type stable ($label)" for (label, L) in (
             ("hex periodic", Lattice((30, 30); geometry = Hexagonal())), ("square closed", Lattice((30, 30); boundary = Closed())),
             ("3D", Lattice((12, 12, 12); boundary = Closed())))
