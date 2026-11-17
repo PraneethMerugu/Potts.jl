@@ -127,7 +127,7 @@ discretized problem.
 `prob.f.delta_H` returns it; not the acceptance law's offset) into `sol.stats.accepted_ΔH`
 (a `Float64`; `nothing` with the default `track = ()`). Under `SequentialCPM` it is exact
 after every step; under `CheckerboardCPM` it is brought up to date at the host read points
-(a save, `integrator.u`, `checkpoint`, the end of `solve!`). Tracking changes nothing else
+(a save, `current_state`, `checkpoint`, the end of `solve!`). Tracking changes nothing else
 in the run; it is hashed into the fingerprint (only when on), and `remake(prob; track)`
 switches it. `track = (:references,)` is the debug mode of cell references (R6): every
 dereference of a dead referent (a nonzero reference to a cell that is not alive, which reads
@@ -148,7 +148,7 @@ function CorePotts.PottsProblem(
         c::CompiledPottsSystem, op, tspan; backend = nothing,
         T::Type = backend === nothing ? Float64 : LatticeFields.Exec.default_float(backend), capacity = nothing,
         seed = 0, replica = 0, repeat = 0, expression = Val(false), field_solver = nothing,
-        ode_solver = ExplicitEuler(), solvers = (), track = ()
+        ode_solver = ExplicitEuler(), solvers = (), track = (), kwargs...
     )
     sys = getfield(c, :sys)
     spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
@@ -190,7 +190,7 @@ function CorePotts.PottsProblem(
     tangent = isempty(seeds) && isempty(u0seeds) ? nothing : _tangent(c, T, p, seeds, opd; u0 = u0seeds)
     return CorePotts.PottsProblem(
         f, st, lat, tspan, p; contact = getfield(c, :contact_spec), proposal = getfield(c, :proposal_spec), relations,
-        spacing, frozen, seed, replica, repeat, tangent
+        spacing, frozen, seed, replica, repeat, tangent, kwargs...
     )
 end
 

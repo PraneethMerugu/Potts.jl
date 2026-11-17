@@ -328,7 +328,7 @@ end
         op = fd_source_op((12, 10))
         integ = init(
             PottsProblem(FdSource(; name = :f), op, (0, 100); field_solver = ExplicitEuler(substeps = 3)), SequentialCPM();
-            save_start = false, save_end = false
+            save_start = false, save_end = false, save_everystep = false
         )
         step!(integ)
         @test (@allocated step!(integ)) == 0

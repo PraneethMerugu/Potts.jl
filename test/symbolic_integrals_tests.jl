@@ -219,7 +219,7 @@ end
             @test [Array(u.cell.f)[1] for u in sol.u] == 16.0 .* k                       # fresh (D-076)
             @test [Array(u.cell.sb)[1] for u in sol.u] == [16.0 * max(j - 1, 0) for j in k]  # before block
         end
-        integ = init(PottsProblem(IntegralPre(; name = :ip), [ownership => σ, kind => [:A]], (0, 100)), SequentialCPM())
+        integ = init(PottsProblem(IntegralPre(; name = :ip), [ownership => σ, kind => [:A]], (0, 100)), SequentialCPM(); save_everystep = false)
         warm() = (step!(integ); @allocated step!(integ))
         @test minimum(warm() for _ in 1:5) == 0
 

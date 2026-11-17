@@ -656,7 +656,7 @@ end
         s = @test_logs solve!(integ)
         @test s.retcode == RC.Success && integ.stats.fields.budget == 0 && integ.stats.fields.solves == 6
         # explicit groups read nothing: no counters; a warm MCS allocates nothing (above)
-        integ = init(prob(ExplicitEuler(substeps = 2)), SequentialCPM(); save_start = false, save_end = false)
+        integ = init(prob(ExplicitEuler(substeps = 2)), SequentialCPM(); save_start = false, save_end = false, save_everystep = false)
         step!(integ)
         @test (@allocated step!(integ)) == 0 && integ.stats.fields.solves == 0
     end

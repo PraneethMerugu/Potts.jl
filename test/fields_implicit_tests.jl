@@ -92,7 +92,7 @@ end
         dims = (16, 16)
         σ = zeros(Int32, dims...); σ[4:7, 4:7] .= 1; σ[10:13, 9:12] .= 2
         integ = init(PottsProblem(FiMoving(; name = :f), [ownership => σ, kind => [:A, :A]], (0, 20);
-            field_solver = BackwardEuler(), seed = 3), SequentialCPM(); save_start = false)
+            field_solver = BackwardEuler(), seed = 3), SequentialCPM(); save_start = false, save_everystep = false)
         foreach(_ -> step!(integ), 1:3)
         st = current_state(integ)
         rt = CorePotts._runtime(getfield(integ.ctx, :__fields1))

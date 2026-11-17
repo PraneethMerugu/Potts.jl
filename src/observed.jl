@@ -263,9 +263,21 @@ SII.default_values(::PottsModelInfo) = Dict()
 SII.is_observed(sys::PottsModelInfo, x) = _potts_quantity(x) && !SII.is_parameter(sys, x) &&
     !SII.is_variable(sys, x) && !SII.is_independent_variable(sys, x)
 function SII.observed(sys::PottsModelInfo, x)
+    # a list of quantities (`sol[[a, b]]`, `getsym(sol, (a, b))`): one function per entry, read
+    # together, a vector for a vector and a tuple for a tuple (SymbolicIndexingInterface's contract)
+    if x isa Union{AbstractArray, Tuple}
+        fs = map(y -> _entry_observed(sys, y), x isa Tuple ? x : collect(x))
+        return x isa Tuple ? ((u, p, t) -> map(f -> f(u, p, t), fs)) : ((u, p, t) -> [f(u, p, t) for f in fs])
+    end
     ci = _computed_info(sys, x)
     ci === nothing || (n = ci.name; return (u, p, t) -> getproperty(p, n))
     return _observed_function(sys, _localize(getfield(sys.csys, :sys), x; strict = true))
+end
+# one entry of a list read: a state variable by its index, anything else as observed
+function _entry_observed(sys::PottsModelInfo, y)
+    i = SII.is_variable(sys, y) ? SII.variable_index(sys, y) : nothing
+    i === nothing || return (u, p, t) -> u[i]
+    return SII.observed(sys, y)
 end
 # by name: `sol[:volume]`, `sol[:act]`, `sol[:mean_excess]`
 function _named_quantity(sys::PottsModelInfo, x::Symbol)
@@ -349,7 +361,7 @@ SII.parameter_values(p::PottsParameters, i::Symbol) = p[i]
     Potts.field_inputs(prob)
 
 The current values of the CPM inputs of a model's fields, at the CPM state of an integrator
-(`integ.u` at `integ.t`) or the initial state of a problem: one array over the lattice per
+(the state at `integ.t`) or the initial state of a problem: one array over the lattice per
 input of [`Potts.fields`](@ref)`(model)`, by the name it gives that input
 (`lattice_input_name`): `kind` (the kind number of each site, 0 for the medium), `vol` for a
 binding `vol => volume[owner]`, `volume[owner]` for a CPM read with no binding of its own, a
@@ -362,12 +374,12 @@ only while the lattice does not change (σ frozen): in a run the CPM moves the c
 and the inputs follow them, while the frozen inputs do not. A model without such inputs gives
 an empty `Dict`.
 
-The values are computed from the CPM state at `integ.t` (`integ.u`: the lattice and cells at
-the end of the last completed MCS). They are not the arrays the field phase filled during that
+The values are computed from the CPM state at `integ.t` (the lattice and cells at the end of
+the last completed MCS). They are not the arrays the field phase filled during that
 MCS: a phase after it in the schedule (divisions and the other lifecycle rules, by default)
 may have changed the lattice since.
 """
-field_inputs(integ::CorePotts.PottsIntegrator) = _field_inputs_at(integ.f.sys, integ.u, integ.p, integ.t, _exported(integ.f.sys))
+field_inputs(integ::CorePotts.PottsIntegrator) = _field_inputs_at(integ.f.sys, CorePotts.current_state(integ), integ.p, integ.t, _exported(integ.f.sys))
 field_inputs(prob::CorePotts.PottsProblem) = _field_inputs_at(prob.f.sys, prob.u0, prob.p, prob.tspan[1], _exported(prob.f.sys))
 
 """
@@ -395,7 +407,7 @@ coupled PDESystem of the same name nor those of `Potts.fields(model)` is an `Arg
 that names both lists.
 """
 field_inputs(integ::CorePotts.PottsIntegrator, pdesys::ModelingToolkitBase.PDESystem) =
-    _field_inputs_at(integ.f.sys, integ.u, integ.p, integ.t, _pde_inputs(integ.f.sys, pdesys))
+    _field_inputs_at(integ.f.sys, CorePotts.current_state(integ), integ.p, integ.t, _pde_inputs(integ.f.sys, pdesys))
 field_inputs(prob::CorePotts.PottsProblem, pdesys::ModelingToolkitBase.PDESystem) =
     _field_inputs_at(prob.f.sys, prob.u0, prob.p, prob.tspan[1], _pde_inputs(prob.f.sys, pdesys))
 

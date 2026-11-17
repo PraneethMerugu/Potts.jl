@@ -51,7 +51,7 @@ enqueues kernels only): (0, 0, 0). Before it, the D-035 host plan made (2, 18, 1
 p60vx_division_counts(u0) = (0, 0, 0)
 
 
-"""Hand count of `integ.u` (a host read point) for a model with a device lifecycle: one
+"""Hand count of `current_state(integ)` (a host read point) for a model with a device lifecycle: one
 sync (`current_state`), the fold of the device lifecycle statistics (`_fold_lifecycle!`:
 one transfer of the `Int32` accumulators), the fold of the checkerboard's copy counts (one
 transfer of its per-block `Int32` counters, `nblocks`), and the snapshot (one transfer per
@@ -205,7 +205,7 @@ end
             step!(integ)                                                     # MCS 0: both cells divide
             @test p60vx_counts(integ.stats) .- c0 == p60vx_division_counts(prob.u0)
             c1 = p60vx_counts(integ.stats)
-            u = integ.u                                                      # a host read point
+            u = current_state(integ)                                                      # a host read point
             @test p60vx_counts(integ.stats) .- c1 == p60vx_read_counts(prob.u0, CorePotts.nblocks(integ.cache.layout))
             @test integ.stats.lifecycle.divisions == 2                       # folded at the read
             @test count(>(0), u.cell.volume) == 4

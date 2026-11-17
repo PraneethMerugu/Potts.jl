@@ -270,7 +270,8 @@ end
         @test integ.ps[:μ] === 700.0 && typeof(integ.p) === P
         setp(integ, :μ)(integ, 800.0)
         @test getp(integ, :μ)(integ) == 800.0
-        @test_throws ArgumentError setp(p, :μ)(p, 1.0)                       # problems: remake
+        setp(p, :μ)(p, 1.0)                                                  # problems too (SII)
+        @test getp(p, :μ)(p) == 1.0
         # state: declared variables write through to the live state; built-ins are read-only
         integ[:px] = [0.5]
         @test integ.state.cell.px == [0.5] && integ[:px] == [0.5] && getu(integ, :px)(integ) == [0.5]

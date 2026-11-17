@@ -278,8 +278,9 @@ const RAW_TRANSFER_ALLOW = Dict(
     # `initial_state` builds host arrays (53 `Vector{Int32}`, 66 `Array{Int32}`; setup)
     "lib/CorePotts/src/model.jl" => 2,
     # `_standard_frozen` on a host state (problem construction, remake, reinit!, `frozen_sites`;
-    # 122-123); `_set_state_array!` converts the user's host value (650; the copy is counted)
-    "lib/CorePotts/src/problem.jl" => 3,
+    # 122-123); `_set_state_array!` converts the user's host value (650; the copy is counted);
+    # `Base.Array(::PottsSolution)` refuses (D-287 X9: no transfer)
+    "lib/CorePotts/src/problem.jl" => 4,
     # the boundary set's shadow copies of σ and the frozen mask (120, 125) under
     # `SequentialCPM(; skip_interior = true)`: host arrays only, the algorithm is CPU-only
     # (D-177)
@@ -374,7 +375,7 @@ end
         # a warm MCS allocates nothing: phases, the lifecycle check and checkerboard colors that
         # fit one CPU workgroup run as plain loops (`CorePotts._launch`; AUTONOMY §5)
         for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
-            wi = init(PottsProblem(sys, op, (0, 100); T, capacity = cap, skw...), alg; save_start = false, save_end = false)
+            wi = init(PottsProblem(sys, op, (0, 100); T, capacity = cap, skw...), alg; save_start = false, save_end = false, save_everystep = false)
             @test minimum(_qa_warm_allocated(wi) for _ in 1:5) == 0
         end
         gc = generated_code(sys; T, skw...)
@@ -411,7 +412,7 @@ end
         sys, op = make()
         prob = PottsProblem(sys, op, (0, 100); T)
         for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
-            integ = init(prob, alg; save_start = false, save_end = false)
+            integ = init(prob, alg; save_start = false, save_end = false, save_everystep = false)
             @test minimum(_qa_warm_allocated(integ) for _ in 1:5) == 0
             @test_opt target_modules = (CorePotts, Potts) step!(integ)
         end

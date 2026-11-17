@@ -348,7 +348,7 @@ fi_op(dims) = (σ = zeros(Int32, dims...); σ[4:6, 3:5] .= 1; [ownership => σ, 
 fi_kin(dims) = (K = zeros(Int32, dims...); K[4:6, 3:5] .= 1; K)
 
 function fi_runA(M, op, k; field_solver = BackwardEuler(), kw...)
-    integ = init(PottsProblem(M(; name = :f), op, (0, k); field_solver, kw...), SequentialCPM(); save_start = false)
+    integ = init(PottsProblem(M(; name = :f), op, (0, k); field_solver, kw...), SequentialCPM(); save_start = false, save_everystep = false)
     return [(step!(integ); copy(Array(current_state(integ).site.c))) for _ in 1:k], integ
 end
 
@@ -449,7 +449,7 @@ end
 fc_site(integ, names) = [copy(Array(getproperty(current_state(integ).site, n))) for n in names]
 
 function fc_runA(M, k, names; kw...)
-    integ = init(PottsProblem(M(; name = :f), fi_op((12, 10)), (0, k); kw...), SequentialCPM(); save_start = false)
+    integ = init(PottsProblem(M(; name = :f), fi_op((12, 10)), (0, k); kw...), SequentialCPM(); save_start = false, save_everystep = false)
     return [(step!(integ); fc_site(integ, names)) for _ in 1:k], integ
 end
 

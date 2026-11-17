@@ -111,7 +111,7 @@ end
         sol = solve(prob, SequentialCPM())
         rs = sprint(field_report, sol)
         @test startswith(rs, "Field report: PottsSolution, 1 field group, SequentialCPM, retcode Success")
-        @test fr_line(rs, "saves") == "  saves      2 over (0, 4), 4 MCS"
+        @test fr_line(rs, "saves") == "  saves      5 over (0, 4), 4 MCS"                 # every MCS (SciML)
         @test fr_line(rs, "substeps") == fr_line(rep, "substeps")
         # batch-end review (e): the solution keeps the counts its run used and the backend
         @test fr_line(rs, "counters") == "  counters   substep counts c 223; code Success"
@@ -211,7 +211,7 @@ end
     @testset "F4-13: a report adds nothing to a run (a warm step! allocates 0 B after it)" begin
         m = FrMerks(; name = :m)
         for fs in (ExplicitEuler(), BackwardEuler(; inner = Multigrid()))
-            integ = init(PottsProblem(m, fr_op(), (0, 20); seed = 3, field_solver = fs), SequentialCPM())
+            integ = init(PottsProblem(m, fr_op(), (0, 20); seed = 3, field_solver = fs), SequentialCPM(); save_everystep = false)
             @test fr_warm(integ) == 0
             field_report(devnull, integ)
             @test fr_warm(integ) == 0

@@ -30,7 +30,7 @@ function fd_threads_run()
     c0 = [sin(i / 7) * cos(j / 5) for i in 1:120, j in 1:100]
     prob = PottsProblem(FdBig(; name = :b), [ownership => zeros(Int32, 120, 100), kind => Symbol[], :c => c0], (0, 20);
         field_solver = ExplicitEuler())
-    integ = init(prob, SequentialCPM(); save_start = false, save_end = false)
+    integ = init(prob, SequentialCPM(); save_start = false, save_end = false, save_everystep = false)
     step!(integ); step!(integ)
     a = minimum(_ -> (@allocated step!(integ)), 1:3)
     return a, hash(Array(current_state(integ).site.c))

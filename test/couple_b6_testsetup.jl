@@ -151,10 +151,10 @@ function b6_round_trip(m, fs, f)
     end
     F = Potts.fields(m)
     prob = B6_LP.discretize(F, B6_LP.LatticeDiscretization(B6_LP.Grid((24, 20)); T = Float64); inputs = collect(Potts.field_inputs(integ)))
-    u0 = vec(Array(getproperty(integ.u.site, f)))
+    u0 = vec(Array(getproperty(current_state(integ).site, f)))
     o = B6_LP.solve(B6_LP.remake(prob; u0, tspan = (0.0, 1.0)), b6_own(fs)).u[end]
     step!(integ)
-    return maximum(abs, o .- vec(Array(getproperty(integ.u.site, f)))), integ
+    return maximum(abs, o .- vec(Array(getproperty(current_state(integ).site, f)))), integ
 end
 
 b6_names(m) = sort!(
@@ -181,11 +181,11 @@ function b6_pde_round_trip(m, pde, fs, f; op = b6_op())
     fi = Potts.field_inputs(integ, pde)
     prob = B6_LP.discretize(
         b6_owned(pde), B6_LP.LatticeDiscretization(B6_LP.Grid((24, 20)); T = Float64); inputs = collect(fi),
-        u0 = [f => Array(getproperty(integ.u.site, f))], tspan = (0.0, 1.0)
+        u0 = [f => Array(getproperty(current_state(integ).site, f))], tspan = (0.0, 1.0)
     )
     o = B6_LP.solve(prob, b6_own(fs)).u[end]
     step!(integ)
-    return maximum(abs, o .- vec(Array(getproperty(integ.u.site, f)))), fi, integ
+    return maximum(abs, o .- vec(Array(getproperty(current_state(integ).site, f)))), fi, integ
 end
 
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))

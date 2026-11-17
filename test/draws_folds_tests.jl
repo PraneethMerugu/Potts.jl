@@ -159,7 +159,7 @@ end
         @test Potts._may_have(getfield(f, :sys), :folds) && Potts._may_have(getfield(f, :sys), :bounded) && length(Potts._contact_trackers(f)) == 1
         prob = PottsProblem(c, _df_state(), (0, 1))
         @test !haskey(prob.relations, :contact_counts) && !haskey(prob.u0.model, CorePotts.MODEL_STATUS)
-        integ = init(prob, SequentialCPM())
+        integ = init(prob, SequentialCPM(); save_everystep = false)
         step!(integ)
         @test (@allocated step!(integ)) == 0
         @inferred Potts.SciMLBase.step!(integ)

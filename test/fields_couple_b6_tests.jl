@@ -48,7 +48,7 @@ end
                 err, integ = b6_round_trip(m, fs, f)
                 @test Set(String.(keys(Potts.field_inputs(integ)))) == Set(b6_names(m))
                 @test err <= b6_tol(fs) || (println("round trip $(nameof(m)) $fs: $err"); false)
-                @test maximum(getproperty(integ.u.site, f)) > 0.01
+                @test maximum(getproperty(current_state(integ).site, f)) > 0.01
             end
         end
         fi = Potts.field_inputs(PottsProblem(B6Fine(; name = :m), b6_op(), (0, 1)))
@@ -83,13 +83,13 @@ end
                 B6LapSite(; name = :m), [ownership => σ, kind => [:A]], (0, 4);
             field_solver = ExplicitEuler(; substeps = 1)), SequentialCPM())
         step!(integ); step!(integ)
-        c2, v2 = copy(Array(integ.u.site.c)), copy(Array(integ.u.site.v))
+        c2, v2 = copy(Array(current_state(integ).site.c)), copy(Array(current_state(integ).site.v))
         step!(integ)
         lap(a) = [sum(a[clamp(i + di, 1, 8), clamp(j + dj, 1, 8)] - a[i, j] for (di, dj) in ((1, 0), (-1, 0), (0, 1), (0, -1)))
                   for i in 1:8, j in 1:8]
         @test v2 == Float64.(σ .!= 0)
-        @test maximum(abs, Array(integ.u.site.c) .- (c2 .+ 0.1 .* lap(c2) .+ 0.1 .* lap(v2))) <= 1e-14
-        @test maximum(abs, Array(integ.u.site.c)) > 0.01
+        @test maximum(abs, Array(current_state(integ).site.c) .- (c2 .+ 0.1 .* lap(c2) .+ 0.1 .* lap(v2))) <= 1e-14
+        @test maximum(abs, Array(current_state(integ).site.c)) > 0.01
     end
 end
 
@@ -99,13 +99,13 @@ end
         integ = init(PottsProblem(B6LapMix(; name = :m), [ownership => σ, kind => [:A]], (0, 4);
             field_solver = ExplicitEuler(; substeps = 1)), SequentialCPM())
         step!(integ); step!(integ)
-        c2, v2 = copy(Array(integ.u.site.c)), copy(Array(integ.u.site.v))
+        c2, v2 = copy(Array(current_state(integ).site.c)), copy(Array(current_state(integ).site.v))
         step!(integ)
         lap(a) = [sum(a[clamp(i + di, 1, 8), mod1(j + dj, 8)] - a[i, j] for (di, dj) in ((1, 0), (-1, 0), (0, 1), (0, -1)))
                   for i in 1:8, j in 1:8]
         @test v2 == Float64.(σ .!= 0)
-        @test maximum(abs, Array(integ.u.site.c) .- (c2 .+ 0.1 .* lap(c2) .+ 0.1 .* lap(v2))) <= 1e-14
-        @test maximum(abs, Array(integ.u.site.c)) > 0.01
+        @test maximum(abs, Array(current_state(integ).site.c) .- (c2 .+ 0.1 .* lap(c2) .+ 0.1 .* lap(v2))) <= 1e-14
+        @test maximum(abs, Array(current_state(integ).site.c)) > 0.01
     end
 end
 
@@ -126,10 +126,10 @@ end
         prob = B6_LP.discretize(B6.faces_owned(), B6_LP.LatticeDiscretization(B6_LP.Grid((8, 8); geometry = B6_LP.HEX); T = Float64))
         err = 0.0
         for _ in 1:3
-            u0 = vec(Array(integ.u.site.c))
+            u0 = vec(Array(current_state(integ).site.c))
             step!(integ)
             o = B6_LP.solve(B6_LP.remake(prob; u0, tspan = (0.0, 1.0)), ExplicitEuler(; dt = 1.0, substeps = 4)).u[end]
-            err = max(err, maximum(abs, o .- vec(Array(integ.u.site.c))))
+            err = max(err, maximum(abs, o .- vec(Array(current_state(integ).site.c))))
         end
         @test err == 0 || (println("hex faces: $err"); false)
         h = 2.0^-10
@@ -253,7 +253,7 @@ end
         for op in (b6_op(), odd, meet), fs in (ExplicitEuler(), BackwardEuler())
             integ = init(PottsProblem(B6Conserve(; name = :m), op, (0, 3); field_solver = fs, seed = 3), SequentialCPM())
             foreach(_ -> step!(integ), 1:3)
-            tot = sum(Array(integ.u.site.cc)) * 4
+            tot = sum(Array(current_state(integ).site.cc)) * 4
             want = 3 * 0.5 * count(!=(0), first(op).second)
             @test isapprox(tot, want; rtol = fs isa ExplicitEuler ? 1e-14 : 1e-9) || (println("conservation $fs: $tot vs $want"); false)
         end
@@ -269,7 +269,7 @@ end
         σ8 = zeros(Int32, 8, 8); σ8[1:3, 3:5] .= 1
         integ2 = init(PottsProblem(B6LapSite(; name = :m), [ownership => σ8, kind => [:A]], (0, 4)), SequentialCPM())
         step!(integ2)
-        @test Potts.field_inputs(integ2, B6.lapsite())[:v] == Array(integ2.u.site.v)
+        @test Potts.field_inputs(integ2, B6.lapsite())[:v] == Array(current_state(integ2).site.v)
         e = b6_msg(() -> Potts.field_inputs(integ, B6.scaled()))
         @test occursin("the inputs of the PDESystem `scaled` (`w`)", e) && occursin("`att`", e) && occursin("`kind`, `vol`", e) ||
               (println(e); false)

@@ -133,17 +133,17 @@ cp_hand2(σ, kind) = cp_hand(σ, kind)[1:1]
 function cp_replay(m, sys, ins, alg; op = cp_op(), k = 12, seed = 3, fs = ExplicitEuler(), fields = (:c,),
                    skip = (σ0, σ) -> false, p = nothing)
     integ = init(PottsProblem(m, op, (0, k); field_solver = fs, seed), SequentialCPM())
-    σ = Array(integ.u.σ)
-    prob = LP.discretize(sys, LP.LatticeDiscretization(LP.Grid(size(σ)); T = Float64); inputs = ins(σ, Array(integ.u.cell.kind)))
+    σ = Array(current_state(integ).σ)
+    prob = LP.discretize(sys, LP.LatticeDiscretization(LP.Grid(size(σ)); T = Float64); inputs = ins(σ, Array(current_state(integ).cell.kind)))
     p === nothing || (prob = LP.remake(prob; p))
-    state() = reduce(vcat, (vec(Array(getproperty(integ.u.site, f))) for f in fields))
+    state() = reduce(vcat, (vec(Array(getproperty(current_state(integ).site, f))) for f in fields))
     err, n = 0.0, 0
     for _ in 1:k
-        σ0, u0 = Array(integ.u.σ), state()
+        σ0, u0 = Array(current_state(integ).σ), state()
         step!(integ)
-        σ = Array(integ.u.σ)
+        σ = Array(current_state(integ).σ)
         skip(σ0, σ) && continue
-        o = LP.solve(LP.remake(prob; u0, tspan = (0.0, 1.0), inputs = ins(σ, Array(integ.u.cell.kind))), alg).u[end]
+        o = LP.solve(LP.remake(prob; u0, tspan = (0.0, 1.0), inputs = ins(σ, Array(current_state(integ).cell.kind))), alg).u[end]
         err, n = max(err, maximum(abs, o .- state())), n + 1
     end
     return err, n

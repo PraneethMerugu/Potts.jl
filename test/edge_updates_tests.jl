@@ -213,7 +213,7 @@ end
 @testitem "edge updates: zero warm allocations" setup = [EdgeUpdatesSetup] tags = [:potts, :edge_updates] begin
     @testset "edge updates: zero warm allocations" begin
         for alg in (SequentialCPM(), CheckerboardCPM())
-            integ = init(PottsProblem(EUTwo(; name = :two), eu_two_op(), (0, 100)), alg)
+            integ = init(PottsProblem(EUTwo(; name = :two), eu_two_op(), (0, 100)), alg; save_everystep = false)
             step!(integ); step!(integ)
             @test (@allocated step!(integ)) == 0
         end

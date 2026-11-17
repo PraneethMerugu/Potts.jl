@@ -70,7 +70,7 @@ end
         for M in (FdChemoSplit, FdChemoInter), alg in (CheckerboardCPM(), SequentialCPM())
             integ = init(
                 PottsProblem(M(; name = :m), fd_chemo_op(), (0, 10); field_solver = ExplicitEuler(substeps = 2)),
-                alg; save_start = false, save_end = false
+                alg; save_start = false, save_end = false, save_everystep = false
             )
             step!(integ)
             step!(integ)

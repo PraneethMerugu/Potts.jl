@@ -244,9 +244,9 @@ end
         @test r.u0.cell.q_2[1] == 5.0                                       # a flat vector: the vector itself
         σf = zeros(Int32, 16, 16); σf[3:8, 3:8] .= 1
         integ = init(PottsProblem(Fresh(; name = :f), [ownership => σf, kind => [1]], (0, 4); capacity = 8), SequentialCPM())
-        step!(integ); m1 = integ.u.cell.mb[1]
+        step!(integ); m1 = current_state(integ).cell.mb[1]
         reinit!(integ); step!(integ)
-        @test integ.u.cell.mb[1] == m1 == 36
+        @test current_state(integ).cell.mb[1] == m1 == 36
     end
 end
 

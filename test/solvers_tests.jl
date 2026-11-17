@@ -47,7 +47,7 @@ end
         v(n) = solver_var(sys, n)
         prob = PottsProblem(sys, solver_op(), (0, 100); solvers = [v(:s) => RK4(), v(:h) => RK4()])
         for alg in (SequentialCPM(), CheckerboardCPM())
-            integ = init(prob, alg; save_start = false, save_end = false)
+            integ = init(prob, alg; save_start = false, save_end = false, save_everystep = false)
             @test minimum(solver_warm(integ) for _ in 1:5) == 0
         end
         # one group → two groups → one group: the state gains and loses its scratch, values kept
@@ -125,7 +125,7 @@ end
         # R2: reinit! with a scratchless state
         integ = init(multi, SequentialCPM()); step!(integ)
         reinit!(integ, plain)
-        @test integ.u.cell.y == plain.cell.y && haskey(integ.u.cell, :s__ode)
+        @test current_state(integ).cell.y == plain.cell.y && haskey(current_state(integ).cell, :s__ode)
         # R3: a solver remake together with a state
         r3 = remake(single; solvers = [:s => RK4()], u0 = plain)
         @test haskey(r3.u0.cell, :s__ode) && r3.f.fingerprint == multi.f.fingerprint

@@ -151,7 +151,7 @@ end
         # A-15: reinit! validates shapes, takes symbolic maps, reruns callback initialization
         σ2 = zeros(Int32, 12, 12); σ2[6:8, 6:8] .= 1
         reinit!(integ, [ownership => σ2, kind => [1]])
-        @test integ.u.σ == σ2
+        @test current_state(integ).σ == σ2
         bad_u0 = PottsProblem(
             AuditDerived(; name = :d),
             [ownership => (s = zeros(Int32, 12, 12); s[1:2, 1:2] .= 1; s[5:6, 5:6] .= 2; s), kind => [1, 1]], (0, 2);

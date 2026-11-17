@@ -34,7 +34,7 @@ end
         sol = @test_logs solve(remake(pr; p = [:s => 0.1]), SequentialCPM())
         @test sol.retcode == RC.Success && sol.t[end] == 20
         # the check reads the field after each MCS on the host and allocates nothing there
-        integ = init(remake(pr; p = [:s => 0.1]), SequentialCPM(); save_start = false, save_end = false)
+        integ = init(remake(pr; p = [:s => 0.1]), SequentialCPM(); save_start = false, save_end = false, save_everystep = false)
         step!(integ); step!(integ)
         @test (@allocated step!(integ)) == 0
     end
@@ -160,7 +160,7 @@ end
             integ = init(
                 PottsProblem(FwNarrow(; name = :w), fd_empty((12, 10)), (0, 1); T, seed = 3, field_solver = alg),
                 SequentialCPM()
-            ); step!(integ); Array(integ.u.site.c)
+            ); step!(integ); Array(current_state(integ).site.c)
         )
         wide, narrow = run1(Float32, ExplicitEuler(; substeps = 1, compute_T = Float64)), run1(Float32, ExplicitEuler(; substeps = 1))
         ref = run1(Float64, ExplicitEuler(; substeps = 1))

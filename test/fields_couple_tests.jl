@@ -205,8 +205,8 @@ end
             step!(integ)
         end
         inp = Potts.field_inputs(integ)
-        σ = Array(integ.u.σ)
-        k = Array(integ.u.cell.kind)
+        σ = Array(current_state(integ).σ)
+        k = Array(current_state(integ).cell.kind)
         V = [count(==(j), σ) for j in 1:length(k)]
         # (the inputs of `Potts.fields`: the binding `endo => kind == A` is written in as `kind == 1`,
         # so its input is `kind`; `vol` binds a CPM read and keeps its name; F4-B6 review)
@@ -225,12 +225,12 @@ end
         for _ in 1:5
             step!(integ)
         end
-        c5 = copy(Array(integ.u.site.c))
+        c5 = copy(Array(current_state(integ).site.c))
         prob = Potts.LatticePDE.discretize(Potts.fields(CpFrozen(; name = :m)),
             Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((24, 20)); T = Float64); inputs = collect(Potts.field_inputs(integ)))
         s = solve(remake(prob; u0 = vec(c5), tspan = (0.0, 1.0)), Tsit5(); abstol = 1e-11, reltol = 1e-11)
         step!(integ)
-        c6 = Array(integ.u.site.c)
+        c6 = Array(current_state(integ).site.c)
         err = maximum(abs, reshape(s.u[end], 24, 20) .- c6)
         @info "F4-B2 ODE path: Tsit5 vs the owned run at 400 substeps, max difference $err"
         @test err < CP_ODE_TOL

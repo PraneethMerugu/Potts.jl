@@ -61,7 +61,7 @@ end
         σ = zeros(Int32, 500, 500); σ[200:215, 200:215] .= 1; σ[300:312, 280:300] .= 2
         prob = PottsProblem(MerksVasculogenesis(; name = :m, lattice = (500, 500)), [ownership => σ, kind => [:endothelial, :endothelial]],
             (0, 100); field_solver = ExplicitEuler(substeps = 15, lower = 0.0))
-        integ = init(prob, SequentialCPM(); save_start = false, save_end = false)
+        integ = init(prob, SequentialCPM(); save_start = false, save_end = false, save_everystep = false)
         @test warm(integ) == 0
     end
 end
@@ -76,7 +76,7 @@ end
         σ[200:215, 200:215] .= 2; σ[300:312, 280:300] .= 3
         prob = PottsProblem(Merks2006(; name = :m, lattice = (500, 500)), [ownership => σ, kind => [:border, :endothelial, :endothelial]],
             (0, 100); field_solver = ExplicitEuler(substeps = 15))
-        integ = init(prob, SequentialCPM(); save_start = false, save_end = false)
+        integ = init(prob, SequentialCPM(); save_start = false, save_end = false, save_everystep = false)
         @test warm(integ) == 0
     end
 end
@@ -91,7 +91,7 @@ end
         σ[200:215, 200:215] .= 2; σ[300:312, 280:300] .= 3
         prob = PottsProblem(Merks2008(; name = :m, lattice = (500, 500)), [ownership => σ, kind => [:border, :endothelial, :endothelial],
             :t_relax => 1.0], (0, 100); field_solver = ExplicitEuler(substeps = 15))
-        integ = init(prob, SequentialCPM(); save_start = false, save_end = false)
+        integ = init(prob, SequentialCPM(); save_start = false, save_end = false, save_everystep = false)
         @test warm(integ) == 0
     end
 end

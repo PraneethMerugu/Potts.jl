@@ -72,7 +72,7 @@ end
         blk = [fi[:pq][(4i - 3):(4i), (4j - 3):(4j), (4k - 3):(4k)] for i in 1:8, j in 1:8, k in 1:8]
         @test count(b -> any(b) && !all(b), blk) > 50
         prob = Potts.LatticePDE.discretize(pde, Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(JG_DIMS); T = Float64);
-            inputs = collect(fi), u0 = [n => copy(Array(getproperty(integ.u.site, n))) for n in names], tspan = (0.0, 1.0))
+            inputs = collect(fi), u0 = [n => copy(Array(getproperty(current_state(integ).site, n))) for n in names], tspan = (0.0, 1.0))
         s = Potts.LatticePDE.solve(prob, BackwardEuler(; dt = 0.25))
         # F4-15 review should-fix 2 and F4-15b: an oracle independent of the lowering. The inhibitor's
         # rate at u = 0 is its source 3 (Q + 2N), folded over each block's free children (the
@@ -90,7 +90,7 @@ end
         @test sum(nfree .* s0[:inh, length(s0.t)]) / 1e-6 ≈ 3 * nq rtol = 1e-8
         step!(integ)
         for n in names
-            got, want = s[n, length(s.t)], Array(getproperty(integ.u.site, n))
+            got, want = s[n, length(s.t)], Array(getproperty(current_state(integ).site, n))
             @test maximum(abs, got .- want) <= 1e-14 * max(1.0, maximum(abs, want)) ||
                   (println("F4-15 Jiang $n: ", maximum(abs, got .- want)); false)
         end
