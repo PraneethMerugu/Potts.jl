@@ -41,7 +41,7 @@ end
     pd = discretize(dfsys(), dfdisc())
     pc = discretize(dfsys([dfc(0, x, y) ~ 0.3]), dfdisc())
     @test pd.u0 == pc.u0 && all(==(0.3), pd.u0)
-    a, b = solve(pd, ExplicitEuler(); dt = 1e-3), solve(pc, ExplicitEuler(); dt = 1e-3)
+        a, b = solve(pd, ExplicitEuler(); dt = 1.0e-3), solve(pc, ExplicitEuler(); dt = 1.0e-3)
     @test a.u[end] == b.u[end] && maximum(abs, a.u[end] .- 0.3) > 1e-3       # bitwise; the field moved
     o1 = solve(pd, Tsit5(); abstol = 1e-10, reltol = 1e-10)
     o2 = solve(pc, Tsit5(); abstol = 1e-10, reltol = 1e-10)
@@ -51,7 +51,7 @@ end
     sa = PDESystem([D(dfc(t, x, y)) ~ dfD * Δ(dfc(t, x, y)) - dfk * dfc(t, x, y) + 0.1 * dfa(t, x, y),
             dfa(t, x, y) ~ x], [], dfdom, [t, x, y], [dfc(t, x, y), dfa(t, x, y)], [dfD, dfk]; name = :dfa)
     pa = discretize(sa, dfdisc())
-    @test pa.u0 == pd.u0 && isapprox(solve(pa, ExplicitEuler(); dt = 1e-3).u[end], a.u[end]; rtol = 1e-12)
+        @test pa.u0 == pd.u0 && isapprox(solve(pa, ExplicitEuler(); dt = 1.0e-3).u[end], a.u[end]; rtol = 1.0e-12)
 end
 end
 
@@ -61,7 +61,7 @@ end
     q = discretize(PDESystem([D(dfn(t, x, y)) ~ dfD * Δ(dfn(t, x, y)) - dfk * dfn(t, x, y) + 0.1 * x],
             [dfn(0, x, y) ~ x], dfdom, [t, x, y], [dfn(t, x, y)], [dfD, dfk]; name = :dfn), dfdisc())
     @test p.u0 == q.u0 && !any(==(0.3), p.u0)
-    @test solve(p, ExplicitEuler(); dt = 1e-3).u[end] == solve(q, ExplicitEuler(); dt = 1e-3).u[end]
+        @test solve(p, ExplicitEuler(); dt = 1.0e-3).u[end] == solve(q, ExplicitEuler(); dt = 1.0e-3).u[end]
     @test solve(p, Tsit5(); abstol = 1e-10, reltol = 1e-10).u[end] == solve(q, Tsit5(); abstol = 1e-10, reltol = 1e-10).u[end]
     # `initial_conditions` over the default too
     r = discretize(PDESystem([D(dfc(t, x, y)) ~ dfD * Δ(dfc(t, x, y)) - dfk * dfc(t, x, y) + 0.1 * x], [], dfdom,
@@ -80,7 +80,7 @@ end
         @variables dfv(..) = v
         s = PDESystem([D(dfv(t, x, y)) ~ dfD * Δ(dfv(t, x, y)) - dfk * dfv(t, x, y) * dfv(t, x, y)], [], dfdom, [t, x, y],
             [dfv(t, x, y)], [dfD, dfk]; name = :dfd)
-        return sum(solve(discretize(s, dfdisc()), ExplicitEuler(; substeps = 1); dt = 1e-3).u[end])   # (a nonlinear decay: no bound)
+            return sum(solve(discretize(s, dfdisc()), ExplicitEuler(; substeps = 1); dt = 1.0e-3).u[end])   # (a nonlinear decay: no bound)
     end
     v0, h = 0.4, 1e-6
     d = ForwardDiff.derivative(J, v0)

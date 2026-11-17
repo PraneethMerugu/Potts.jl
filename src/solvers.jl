@@ -43,7 +43,9 @@ function _check_field_solver(s, what; map::Bool = false)
         "default = …)`, or give this field one algorithm")))
     s isa ExplicitMap && !map && throw(ArgumentError(
         "$what: `ExplicitMap()` steps discrete maps `Shift(t, 1)(m) ~ rhs`; a rate field `D(c) ~ rhs` is stepped by " *
-        "`ExplicitEuler(…)`, `BackwardEuler(…)`, `CrankNicolson(…)`, `BDF2(…)` or `QuasiSteady(…)`"))
+                "`ExplicitEuler(…)`, `BackwardEuler(…)`, `CrankNicolson(…)`, `BDF2(…)` or `QuasiSteady(…)`"
+        )
+    )
     return s
 end
 # an ODE's explicit Euler steps over the MCS window too; `init = :steady` is a field group's
@@ -114,7 +116,9 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
         fsolver === nothing && (fsolver = isempty(maps) ? ExplicitEuler() : ExplicitMap())
         fsolver isa LatticeFields.Problems.LinearSolver && throw(LatticeFields.Problems.linear_solver_refusal(
             "`field_solver`", fsolver, "`field_solver = ExplicitEuler()` (or `ExplicitMap()` for a map)";
-            implicit = "`field_solver = BackwardEuler(; linsolve = $(repr(fsolver)))`"))
+                implicit = "`field_solver = BackwardEuler(; linsolve = $(repr(fsolver)))`"
+            )
+        )
         _is_field_solver(fsolver) || throw(ArgumentError(
             "`field_solver` takes a field solver ($(_field_solver_names())); got $(repr(fsolver))"))
         _check_field_solver(fsolver, field_solver isa LatticeFields.Problems.FieldGroups ? "`FieldGroups`: `default`" :
@@ -156,7 +160,9 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
         if n in fields
             s isa LatticeFields.Problems.LinearSolver && throw(LatticeFields.Problems.linear_solver_refusal(
                 "`solvers`: the field `$n`", s, "`solvers = [$n => ExplicitEuler()]`";
-                implicit = "`solvers = [$n => BackwardEuler(; linsolve = $(repr(s)))]`"))
+                    implicit = "`solvers = [$n => BackwardEuler(; linsolve = $(repr(s)))]`"
+                )
+            )
             _is_field_solver(s) || throw(ArgumentError(
                 "`solvers`: the field `$n` takes a field solver ($(_field_solver_names())); got $(repr(s))"))
             _check_field_solver(s, "`solvers`: the field `$n`"; map = n in maps)

@@ -34,7 +34,9 @@
         # F3-08: Merks with `BackwardEuler` on the device (the implicit runtime's launches, the
         # status word read at the saves), 20 MCS
         sb = solve(PottsProblem(MERKS, [ownership => merks_state(), kind => [1, 1]], (0, 20); T = Float32,
-            field_solver = BackwardEuler(lower_bound = 0.0)), CheckerboardCPM(; proposal = Moore(1)); backend)
+                field_solver = BackwardEuler(lower_bound = 0.0)
+            ), CheckerboardCPM(; proposal = Moore(1)); backend
+        )
         cb = Array(sb.u[end].site.c)
         @test sb.retcode == Potts.SciMLBase.ReturnCode.Success && all(isfinite, cb) && minimum(cb) >= 0 && maximum(cb) > 0
         # F3-10, F3-11: Crank–Nicolson and BDF2 (their right-side and history launches), 20 MCS

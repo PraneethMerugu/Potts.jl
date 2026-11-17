@@ -71,7 +71,8 @@ end
                 () -> solve(
                     sown(sys; inputs = [qe => checker(4, 1, 2)]),
                     ExplicitEuler()
-                ; dt = 0.025)
+                    ; dt = 0.025
+                )
             )
         )
         # a row of `M A` is balanced, so site diffusion with a cross term is checked by the rest of

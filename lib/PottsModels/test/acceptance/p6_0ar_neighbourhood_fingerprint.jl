@@ -345,7 +345,8 @@ p60ar_gg() = (s = graner_glazier_state(); PottsProblem(GranerGlazier(; name = :g
 p60ar_wortel(; kw...) = PottsProblem(WortelAct(; name = :act, lattice = (8, 8), kw...), p60ar_two_wortel(), (0, 10))
 p60ar_merks() = PottsProblem(MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
     [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 10);
-    field_solver = Potts.ExplicitEuler(substeps = 2, lower_bound = 0.0))
+    field_solver = Potts.ExplicitEuler(substeps = 2, lower_bound = 0.0)
+)
 p60ar_openvt() = PottsProblem(OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)),
     openvt_monolayer_state(; lattice = (24, 24)), (0, 10); capacity = 64)
 

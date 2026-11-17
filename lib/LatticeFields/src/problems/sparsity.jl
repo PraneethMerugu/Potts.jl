@@ -445,7 +445,10 @@ function _jacobian_kw(meta::LatticeMetadata, U, lp; jac::Bool, sparse::Bool, jvp
         throw(ArgumentError(string("`", sparse ? "sparse" : "jac", " = true` builds a sparse matrix on the host; the ",
             "problem's backend is ", nameof(typeof(fp.backend)), ", and no KernelAbstractions sparse matrix exists ",
             "(a hardware limit): on a device the Jacobian is the matrix-free product (`jvp = true`, the default), ",
-            "the problem's `jac_prototype`, for a Krylov linear solver with `precs = LatticeMultigrid()`")))
+                    "the problem's `jac_prototype`, for a Krylov linear solver with `precs = LatticeMultigrid()`"
+                )
+            )
+        )
     end
     kw = (;)
     j = LatticeJVP(meta)

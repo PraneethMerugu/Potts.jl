@@ -87,7 +87,7 @@ end
         p0 = Potts.LatticePDE.discretize(pde, Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(JG_DIMS); T = Float64);
             inputs = collect(fi), u0 = [n => zeros(JG_DIMS .÷ 4) for n in names], tspan = (0.0, 1e-6))
         # (one window: the bound cannot see the `max(· − ·, 0)` switches, so the count is explicit)
-        s0 = Potts.LatticePDE.solve(p0, ExplicitEuler(; substeps = 1); dt = 1e-6)
+        s0 = Potts.LatticePDE.solve(p0, ExplicitEuler(; substeps = 1); dt = 1.0e-6)
         @test sum(nfree .* s0[:inh, length(s0.t)]) / 1e-6 ≈ 3 * nq rtol = 1e-8
         step!(integ)
         for n in names
@@ -138,7 +138,7 @@ end
         # NEWTON_EPS relative to the field's scale, so the tight-inner two-step solve and the
         # 12-step reference agree to that accepted defect (the assertion and its derivation are
         # below; the measured residual is ~1e-15 on 1.12.6, 6.4e-8 under 1.13.3)
-        tight = Potts.LatticePDE.DevicePCG(; reltol = 1e-12, maxiters = 64)
+        tight = Potts.LatticePDE.DevicePCG(; reltol = 1.0e-12, maxiters = 64)
         a2 = @test_logs min_level = Base.CoreLogging.Warn run(BackwardEuler(; linsolve = tight))
         @test only(a2.runtimes).cache.newton == 2
         @test Potts.SciMLBase.check_error(a2) == Potts.SciMLBase.ReturnCode.Success   # healthy, in progress
@@ -195,8 +195,8 @@ end
         pmaj = Potts.LatticePDE.discretize(JgPDE.jiang(JG_DIMS; coarsemask = true), disc;
             inputs = vcat([k2 => v2 for (k2, v2) in collect(fi) if k2 != :med], [:medc => medm]),
             u0 = u0, tspan = (0.0, 1e-6))
-        inew = init(pnew, ExplicitEuler(; substeps = 1); dt = 1e-6); step!(inew)
-        imaj = init(pmaj, ExplicitEuler(; substeps = 1); dt = 1e-6); step!(imaj)
+        inew = init(pnew, ExplicitEuler(; substeps = 1); dt = 1.0e-6); step!(inew)
+        imaj = init(pmaj, ExplicitEuler(; substeps = 1); dt = 1.0e-6); step!(imaj)
         # (one explicit step: its value difference is the support of the rate difference; no diffusion
         # solve spreads it, and h = 1e-6 keeps Do, Dg and Dl stable)
         function nbhd(J)

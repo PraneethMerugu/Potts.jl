@@ -226,7 +226,8 @@ end
 @testset "divergence is reported as :diverged, transient growth is not" begin
     # stationary V(1,1) on the 512² disk diverges (‖r‖/‖b‖ 0.46 → 0.93 by cycle 10)
     sv = case_solver(named_case("disk512", 5.5e-6), Float64;
-        inner = Multigrid(cycle = VCycle(1, 1)))
+            inner = Multigrid(cycle = VCycle(1, 1))
+        )
     k = steady!(sv; maxiter = 30)
     sc = scalars(sv)
     @test sc.status === :diverged && !sc.done && sc.warn && k < 30

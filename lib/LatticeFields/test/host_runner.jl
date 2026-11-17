@@ -74,7 +74,7 @@ function prepare(p::IR.Program, l::LaunchSpec, st, Praw; rt = ())
     isempty(ck.kernel.reductions) || return WorkgroupPrep(          # contract item 5
         body_function(ck), l.ndrange[1] ÷ Schedule.WG, zeros(ck.T, Schedule.reduce_lds(ck)),
         launch_arrays(st, l), launch_parameters(ck, Praw), launch_geometry(p, ck, _rt2(rt)))
-    Problems.bind_program(HOST, p, l, launch_arrays(st, l), launch_parameters(ck, Praw), _rt2(rt))
+    return Problems.bind_program(HOST, p, l, launch_arrays(st, l), launch_parameters(ck, Praw), _rt2(rt))
 end
 run!(l) = (l(); nothing)
 

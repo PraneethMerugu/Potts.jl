@@ -140,11 +140,13 @@ function _precompile_workload()
     _first_mcs(mtkcompile(GranerGlazier(; name = :gg)), [ownership => gg[1], kind => gg[2]])
     _first_mcs(mtkcompile(WortelAct(; name = :w, lattice = (24, 24))), [ownership => σ, kind => [:cell]])
     _first_mcs(mtkcompile(MerksVasculogenesis(; name = :m, lattice = (24, 24))),
-        merks_state(; lattice = (24, 24), n = 2, side = 5); field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0))
+        merks_state(; lattice = (24, 24), n = 2, side = 5); field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0)
+    )
     # Float32 under CheckerboardCPM: the configuration of a device run (PG-11)
     _first_mcs(mtkcompile(MerksVasculogenesis(; name = :m, lattice = (24, 24))),
         merks_state(; lattice = (24, 24), n = 2, side = 5), CheckerboardCPM(); T = Float32,
-        field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0))
+        field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0)
+    )
     _first_mcs(mtkcompile(Merks2006(; name = :m6, lattice = (24, 24))),
         layout(merks2006_layout(; lattice = (24, 24), n = 2, side = 5), (24, 24)); field_solver = ExplicitEuler(substeps = 15))
     _first_mcs(mtkcompile(Merks2008(; name = :m8, lattice = (24, 24))),

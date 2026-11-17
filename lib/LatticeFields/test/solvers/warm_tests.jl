@@ -110,7 +110,7 @@ end
 using .LF_solvers_warm: fd
 @testset "a sweep over 100 coefficient values keeps sv.plans at a constant size" begin
     op, inputs = box_case(64, 32; s = 0.01, islands = 0.1)
-    sv = case_solver((op, inputs), Float64; inner = DevicePCG(; maxiters = 64, reltol = 1e-10))
+        sv = case_solver((op, inputs), Float64; inner = DevicePCG(; maxiters = 64, reltol = 1.0e-10))
     sizes = Int[]
     for (i, s) in enumerate(range(0.005, 0.05; length = 100))
         set_coefficients!(sv, CellOperator(op.dims; periodic = op.periodic, shift = s, mask = op.mask,
@@ -163,7 +163,7 @@ using .LF_solvers_warm: fd
             # and both are the derivative: a central difference of two tight fresh solves (a
             # stale perturbed plan gives du = 0 in both)
             function tight(o)                      # only `coef` moves: the face value stays 1 + b
-                ft = FieldSolver(exec, o; T = Float64, inner = DevicePCG(; reltol = 1e-12, maxiters = 256))
+                    ft = FieldSolver(exec, o; T = Float64, inner = DevicePCG(; reltol = 1.0e-12, maxiters = 256))
                 foreach(((k, v),) -> copyto!(field(ft, k), v), inp)
                 steady!(ft)
                 return copy(Solvers.solver_solution(ft))

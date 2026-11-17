@@ -210,7 +210,8 @@ end
 function LatticeStats(integ::FieldIntegrator)
     f = field_stats(integ)
     return LatticeStats(integ.windows, f.solves, substep_counts(integ), f.solves, f.budget, f.floor, f.newton_budget,
-        integ.syncs, Union{Nothing, ImplicitFacts}[implicit_facts(rt) for rt in integ.runtimes], _iwindow(integ))
+        integ.syncs, Union{Nothing, ImplicitFacts}[implicit_facts(rt) for rt in integ.runtimes], _iwindow(integ)
+    )
 end
 function Base.show(io::IO, s::LatticeStats)
     ni = count(!isnothing, s.implicit)
@@ -316,7 +317,8 @@ function _multilinear(g, ranges, pt)
 end
 # (an ensemble's statistics: the sums; the counts of the first)
 Base.merge(a::LatticeStats, b::LatticeStats) = LatticeStats(a.nf + b.nf, a.nsolve + b.nsolve, a.counts, a.solves + b.solves,
-    a.budget + b.budget, a.floor + b.floor, a.newton_budget + b.newton_budget, a.syncs + b.syncs, a.implicit, a.dt)
+    a.budget + b.budget, a.floor + b.floor, a.newton_budget + b.newton_budget, a.syncs + b.syncs, a.implicit, a.dt
+)
 Base.:(==)(a::LatticeStats, b::LatticeStats) = all(f -> getfield(a, f) == getfield(b, f), fieldnames(LatticeStats))
 Base.isequal(a::LatticeStats, b::LatticeStats) = all(f -> isequal(getfield(a, f), getfield(b, f)), fieldnames(LatticeStats))
 Base.hash(s::LatticeStats, h::UInt) = foldl((h, f) -> hash(getfield(s, f), h), fieldnames(LatticeStats); init = hash(:LatticeStats, h))

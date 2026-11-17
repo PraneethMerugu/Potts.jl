@@ -29,7 +29,7 @@ end
     @test p isa SciMLBase.ODEProblem                               # (F4-01: one problem; base: a FieldProblem)
     finals = Float64[]
     for (dt, saveat) in ((0.1, 0.3), (0.1, 0.7), (0.25, 0.5), (0.25, 0.75))
-        s = solve(p, ExplicitEuler(); dt, saveat)
+            s = solve(p, ExplicitEuler(); dt, saveat)
         push!(finals, s[kce, end][1])
         # the state at each save time: Σ over the windows before it of dt · k
         per = round(Int, 1.0 / dt)                                  # windows per period
@@ -45,7 +45,7 @@ end
     s = solve(p2, ExplicitEuler(); saveat = 0.5)
     @test s.t ≈ [0.0, 0.5, 1.0, 1.5, 2.0] && isapprox(s[kce, end][1], 0.5 * (0 + 1 + 2 + 3); rtol = 1e-12)
     # a `dt` that does not divide the period is refused, naming both (0.3 does not divide 0.5)
-    e = kerr(() -> init(p2, ExplicitEuler(); dt = 0.3))
+        e = kerr(() -> init(p2, ExplicitEuler(); dt = 0.3))
     @test occursin("dt = 0.3", e) && occursin("period 0.5", e)
 end
 end
@@ -80,7 +80,7 @@ end
         hand += 0.25 * (-hand + 0.5 * k)
     end
     for q in (p, dbg)
-        s = solve(q, ExplicitEuler(; substeps = 4); dt = 1.0)
+            s = solve(q, ExplicitEuler(; substeps = 4); dt = 1.0)
         @test all(v -> isapprox(v, hand; rtol = 1e-13), s[kce, end])
     end
     # the diffusion factor: a slow Fourier mode (it decays by about 0.12 per window, so each
@@ -99,7 +99,7 @@ end
         want = [want[i, j] + (1 / 16) * (1 + 0.5 * k) * lap(want, i, j) for i in 1:4, j in 1:4]
     end
     for q in (pd, dd)
-        s = solve(q, ExplicitEuler(; substeps = 16); dt = 1.0)
+            s = solve(q, ExplicitEuler(; substeps = 16); dt = 1.0)
         @test isapprox(vec(s[kce, end]), vec(want); rtol = 1e-12)
     end
 end
@@ -127,20 +127,20 @@ end
     p = discretize(ksys(3.0), kdisc())
     s = solve(p, ExplicitEuler(); saveat = 0.5)
     @test s.t ≈ 0:0.5:3 && s.u[2] ≈ (s.u[1] .+ s.u[3]) ./ 2
-    @test solve(p, ExplicitEuler(); dt = 0.5, saveat = 0.5).t ≈ 0:0.5:3
+        @test solve(p, ExplicitEuler(); dt = 0.5, saveat = 0.5).t ≈ 0:0.5:3
     # a span of 2.5 periods: the last window is shortened (F4-03; before, a refusal), and reads
     # the step index of its period
     p25 = discretize(ksys(2.5), kdisc())
     @test isapprox(solve(p25, ExplicitEuler())[kce, end][1], 0 + 1 + 0.5 * 2; rtol = 1e-12)
-    @test isapprox(solve(p25, ExplicitEuler(); dt = 0.5)[kce, end][1], 0.5 * (0 + 0 + 1 + 1 + 2); rtol = 1e-12)
-    # two groups share the window `dt` of `solve`, and `step_index` reads the same `k` in both
+        @test isapprox(solve(p25, ExplicitEuler(); dt = 0.5)[kce, end][1], 0.5 * (0 + 0 + 1 + 1 + 2); rtol = 1.0e-12)
+        # two groups share the window `dt` of `solve`, and `step_index` reads the same `k` in both
     @variables kb(..)
     kbe = kb(t, x, y)
     sysg = PDESystem([D(kce) ~ step_index(t), D(kbe) ~ 2 * step_index(t)],
         [kc(0, x, y) ~ 0.0; kb(0, x, y) ~ 0.0; kperiodic; kb(t, 0, y) ~ kb(t, 1, y); kb(t, x, 0) ~ kb(t, x, 1)], kdom(3.0),
         [t, x, y], [kce, kbe], [kη]; name = :g)
     pg = discretize(sysg, kdisc())
-    sg = solve(pg, FieldGroups(kbe => ExplicitEuler(; substeps = 2); default = ExplicitEuler()); dt = 0.5)
+        sg = solve(pg, FieldGroups(kbe => ExplicitEuler(; substeps = 2); default = ExplicitEuler()); dt = 0.5)
     @test isapprox(sg[kce, end][1], 3.0; rtol = 1e-12) && isapprox(sg[kbe, end][1], 6.0; rtol = 1e-12)
     # a map: one step per unit of time; the clock is a whole number of map steps
     @variables km(..)

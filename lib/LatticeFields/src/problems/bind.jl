@@ -61,7 +61,8 @@ The prebuilt launch of `spec` with arrays `S`, parameters `P` and `rt = (t, dt)`
 ndrange when `spec.static`, the workgroup of the spec, the Cartesian wrapper for Cartesian
 bodies. `n` is `G.n`.
 """
-function bind_program(backend, p::Program{N}, spec::LaunchSpec{N}, S::Tuple, P::Tuple, rt;
+function bind_program(
+        backend, p::Program{N}, spec::LaunchSpec{N}, S::Tuple, P::Tuple, rt;
         R::Type = spec.kernel.T, wrap::W = identity) where {N, W}
     ck = spec.kernel
     G = launch_geometry(p, ck, rt; R)

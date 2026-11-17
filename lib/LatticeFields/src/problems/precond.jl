@@ -76,7 +76,10 @@ _mg_gamma(::LatticeOperator) = Inf
 
 function (mg::LatticeMultigrid)(W, p)
     m = _mg_meta(W)
-    m isa LatticeMetadata || throw(ArgumentError(string("`LatticeMultigrid()` preconditions the linear solves of a problem ",
+    m isa LatticeMetadata || throw(
+        ArgumentError(
+            string(
+                "`LatticeMultigrid()` preconditions the linear solves of a problem ",
         "`discretize` returned (its `W = J − M/γ`, or the operator of a system with no time); got a ", nameof(typeof(W)))))
     γ = _mg_gamma(W)
     fp = m.problem

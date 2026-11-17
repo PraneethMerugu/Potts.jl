@@ -130,7 +130,8 @@ function _tqcur(prog::Program, s::Program, swaps, all_state, stcur, par)
     return cur
 end
 
-function _bind_tangent(alg::AbstractImplicitFieldAlgorithm, g::FieldGroup, st::FieldStore, p; fields, n, dt, c, backend, options, V,
+function _bind_tangent(
+        alg::AbstractImplicitFieldAlgorithm, g::FieldGroup, st::FieldStore, p; fields, n, dt, c, backend, options, V,
         shared = nothing)
     s = group_program(g, alg)
     keys = collect(String, fields)

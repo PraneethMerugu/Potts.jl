@@ -177,10 +177,13 @@ end
 @testitem "F4-13: a coupled model and its bare PDESystem print the same group lines" setup = [FieldsReportSetup] tags = [:potts, :fields_report] begin
     @testset "F4-13: a coupled model and its bare PDESystem print the same group lines" begin
         LP = Potts.LatticePDE
-        cases = ((FrMerks(; name = :m), ExplicitEuler(), ExplicitEuler(), 1),
+        cases = (
+            (FrMerks(; name = :m), ExplicitEuler(), ExplicitEuler(), 1),
             (FrMerks(; name = :m), BackwardEuler(; linsolve = Multigrid()), BackwardEuler(; linsolve = Multigrid()), 1),
             (FrLoop(; name = :m), FieldGroups(:u => ExplicitEuler(; substeps = 4); default = ExplicitEuler()),
-                FieldGroups(:u => ExplicitEuler(; substeps = 4); default = ExplicitEuler()), 2))
+                FieldGroups(:u => ExplicitEuler(; substeps = 4); default = ExplicitEuler()), 2,
+            ),
+        )
         # the owned algorithms also give their window (`dt = 1.0`), which a Potts problem takes from
         # the MCS: the headers differ by it alone
         nodt(s) = replace(s, "(; dt = 1.0)" => "()", "dt = 1.0, " => "", ", dt = 1.0" => "")

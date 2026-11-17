@@ -11,7 +11,7 @@ qdom(T) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0,
 qsys(T; f = 0.0) = PDESystem([D(qc(t, x, y)) ~ qD * Δ(qc(t, x, y)) - qk * qc(t, x, y) + f],
     [qc(0, x, y) ~ sin(π * x) * cos(π * y), qc(t, 0, y) ~ 1.0], qdom(T), [t, x, y], [qc(t, x, y)], [qD, qk]; name = :qs)
 qdisc(n; kw...) = LatticeDiscretization(Grid((n, n)); T = Float64, kw...)
-const QTIGHT = DevicePCG(; reltol = 1e-13, maxiters = 400)
+const QTIGHT = DevicePCG(; reltol = 1.0e-13, maxiters = 400)
 
 # FBDF with GMRES (and `precs`) on `prob`: the solution and the Krylov iterations per linear solve
 function qfbdf(prob; precs = nothing, gmres_restart = 200)

@@ -41,7 +41,7 @@ end
     for case in (named_case("sphere42", 0.022), named_case("box300x192", 5.5e-6))
         @test symmetry_defect(case_solver(case, Float64)) < 1e-12
     end
-    v21 = Multigrid(cycle = VCycle(2, 1))       # negative control (DevicePCG refuses it)
+        v21 = Multigrid(cycle = VCycle(2, 1))       # negative control (DevicePCG refuses it)
     @test symmetry_defect(case_solver(named_case("sphere42", 0.022), Float64; inner = v21)) >
           1e-3
 end
@@ -93,7 +93,7 @@ end
 @testitem "budget skip keeps the pass-through (odd flips per cycle)" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
 @testset "budget skip keeps the pass-through (odd flips per cycle)" begin
     case = named_case("disk128", 0.022)
-    v21 = Multigrid(cycle = VCycle(2, 1))
+        v21 = Multigrid(cycle = VCycle(2, 1))
     sv = case_solver(case, Float32; inner = v21)
     k = steady!(sv)
     want = copy(field(sv, lkey(0, "x")))
@@ -113,8 +113,8 @@ end
 @testset "sentinel and inner = :auto" begin
     disk, per = named_case("disk512", 1.9e-3), periodic_case(128, 128; s = 1.0)
     @test resolve_inner(disk[1], :auto) isa DevicePCG
-    @test resolve_inner(disk[1], Multigrid()).maxiters == 12
-    @test resolve_inner(per[1], :auto).maxiters == 8
+        @test resolve_inner(disk[1], Multigrid()).maxiters == 12
+        @test resolve_inner(per[1], :auto).maxiters == 8
     sv = case_solver(disk, Float32; inner = Multigrid())   # stationary budget 12 needs 17
     rebuild!(sv)
     lift!(sv)
@@ -131,10 +131,10 @@ end
 @testitem "sentinel uses the plan's budget; DevicePCG validation" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
 @testset "sentinel uses the plan's budget; DevicePCG validation" begin
     case = named_case("disk128", 5.5e-6)
-    sv = case_solver(case, Float64; inner = DevicePCG(maxiters = 4))
+        sv = case_solver(case, Float64; inner = DevicePCG(maxiters = 4))
     @test steady!(sv) > 4                    # past the algorithm budget, converged
     @test scalars(sv).done && !scalars(sv).warn && !sentinel(sv)
-    sv = case_solver(case, Float64; inner = DevicePCG(maxiters = 30))
+        sv = case_solver(case, Float64; inner = DevicePCG(maxiters = 30))
     rebuild!(sv)
     lift!(sv)
     @test solve!(sv; host = true, budget = 3) == 3   # plan budget below the algorithm's
@@ -144,7 +144,8 @@ end
     @test (@test_logs (:warn, r"tolerance") sentinel(sv))
         @test_throws ["ArgumentError", "DevicePCG", "symmetric preconditioner cycle"] resolve_inner(
             case[1],
-        DevicePCG(precond = Multigrid(cycle = VCycle(2, 1))))
+            DevicePCG(precond = Multigrid(cycle = VCycle(2, 1)))
+        )
         @test_throws ["ArgumentError", "DevicePCG", "one preconditioner cycle per iteration", "cycles = 2"] resolve_inner(
             case[1],
         DevicePCG(precond = Multigrid(cycles = 2)))

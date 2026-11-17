@@ -313,7 +313,8 @@ end
         c32 = solve(
             discretize(csys, LatticeDiscretization(Grid((8, 8)); T = Float32)),
             ExplicitEuler(; compute_type = Float64)
-        ; dt = 0.05)
+            ; dt = 0.05
+        )
         @variables wc64(..)
         c64 = solve(
             discretize(
@@ -323,7 +324,8 @@ end
                 ), LatticeDiscretization(Grid((8, 8)); T = Float64)
             ),
             ExplicitEuler()
-        ; dt = 0.05)
+            ; dt = 0.05
+        )
         @test eltype(c32.u[end]) == Float64 && c32.u[end] == c64.u[end]
         msys = PDESystem(
             [
@@ -519,7 +521,8 @@ end
         i = pidx(nl, kt)
         @test_logs (:warn, r"derivative parts are those of each stage's solution") match_mode = :any solve(
             remake(nl; p = withp(nl.p, i, ForwardDiff.Dual(nl.p[i], 1.0))), BackwardEuler()
-        ; dt = 0.1)
+            ; dt = 0.1
+        )
         hx = town(
             tsys([D(ce) ~ Dt * Δ(ce) - kt * ce + gt * x], [c(0, x, y) ~ x * y, c(t, 0, y) ~ gt]), (8, 8);
             geometry = LatticeFields.IR.HEX

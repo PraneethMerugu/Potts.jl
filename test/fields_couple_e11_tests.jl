@@ -43,7 +43,10 @@ end
         run(M, op, k, fs) = solve(PottsProblem(M(; name = :f), op, (0, k); field_solver = fs, seed = 1), SequentialCPM()).u[end].site
         # LatticePDE's own run of the same system (no cells: σ is the medium), `k` windows of length 1
         own(sys, u0, k, alg) = reshape(LP.solve(LP.remake(LP.discretize(sys, LP.LatticeDiscretization(LP.Grid(size(u0)); T = Float64));
-            u0 = vec(u0), tspan = (0.0, Float64(k))), alg; dt = 1.0).u[end], size(u0))
+                    u0 = vec(u0), tspan = (0.0, Float64(k))
+                ), alg; dt = 1.0
+            ).u[end], size(u0)
+        )
         c0 = [0.01 * (i + 3j) for i in 1:8, j in 1:6]
         for (B, sys) in ((CeAdvB, CeAdv.adv((8, 6))), (CeAdvConstB, CeAdv.advconst((8, 6))))
             b = run(B, [e0((8, 6)); :c => c0], 2, ExplicitEuler(; substeps = 4))
@@ -53,7 +56,7 @@ end
         # (the user's count past the linearized limit warns once per session, fields.jl tests it)
         b, o = Base.CoreLogging.with_logger(Base.CoreLogging.NullLogger()) do
             run(CeBurgersB, [e0((32, 32)); :cb => cb0], 5, ExplicitEuler(; substeps = 8)),
-            own(CeAdv.burgers((32, 32)), cb0, 5, LP.ExplicitEuler(; substeps = 8))
+                own(CeAdv.burgers((32, 32)), cb0, 5, LP.ExplicitEuler(; substeps = 8))
         end
         @test b.cb == o && b.cb != cb0
         ci0 = [0.01 * i * j for i in 1:16, j in 1:16]

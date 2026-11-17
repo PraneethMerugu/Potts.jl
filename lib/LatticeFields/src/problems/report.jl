@@ -196,7 +196,9 @@ function _implicit_facts(alg, c, keys)
     c isa ImplicitCache || return nothing
     sv = [r.solver for r in c.rows if r.solver !== nothing]
     rows = [r for r in c.op.rows if r.key in c.keys]
-    return ImplicitFacts((collect(String, keys), unique(Any[s.alg for s in sv]), c.cs === nothing ? nothing : _krylov(alg.linsolve),
+    return ImplicitFacts(
+        (
+            collect(String, keys), unique(Any[s.alg for s in sv]), c.cs === nothing ? nothing : _krylov(alg.linsolve),
         unique([length(s.prog.hierarchy) for s in sv]), unique(Type[s.T for s in sv]), c.newton, alg.newton !== nothing,
         c.cs !== nothing, c.cs !== nothing && c.cs.linear, c.exact, c.exact0, c.switch, c.iterate, c.seen, c.cyclic, c.h,
         c.ρin, c.θ, c.smin, unique([t for r in rows for t in r.inexact]), unique([t for r in rows for t in r.unseen])))
@@ -241,7 +243,7 @@ function _fact_lines(io, alg, f)
     return nothing
 end
 _solvertext(alg, f) = f === nothing || isempty(f.solver_T) ? string("solver ", canonical(alg.solver_type), " (set when bound)") :
-                      string("solver ", join(f.solver_T, ", "), alg.solver_type === :auto ? " (`solver_type = :auto`)" : "")
+    string("solver ", join(f.solver_T, ", "), alg.solver_type === :auto ? " (`solver_type = :auto`)" : "")
 # … and an implicit group with no bound runtime (`field_report(prob, alg)`): as given
 function _given_lines(io, spec::GroupSpec, g::FieldGroup, alg::AbstractImplicitFieldAlgorithm, keys)
     op = _operator(spec, alg)
@@ -249,7 +251,7 @@ function _given_lines(io, spec::GroupSpec, g::FieldGroup, alg::AbstractImplicitF
     rows = [r for r in op.rows if r.key in keys]
     inner = coupled ? string("coupled solve ", repr(_krylov(alg.linsolve))) :
             all(r -> r.local_only, rows) ? "none: every row is local (solved site by site)" :
-            alg.linsolve === :auto ? string(repr(Solvers.DevicePCG()), " (`linsolve = :auto`)") : repr(alg.linsolve)
+        alg.linsolve === :auto ? string(repr(Solvers.DevicePCG()), " (`linsolve = :auto`)") : repr(alg.linsolve)
     _line(io, "linsolve", inner)
     _line(io, "newton", alg.newton === nothing ? "automatic (set when the group is bound)" : string(alg.newton, ": given"))
     return nothing
@@ -329,8 +331,11 @@ function _policy_lines(io, title, spec, alg, dt::Float64, n, pp, fields, stabili
     end
     V = value_type(E)
     _line(io, "numbers", _clauses(string("state ", _typetext(E), ", compute ", compute_type(alg, V),
-        hasproperty(alg, :compute_type) && alg.compute_type !== :auto ? " (`compute_type`)" : "",
-        alg isa AbstractImplicitFieldAlgorithm ? string(", ", _solvertext(alg, f)) : "")))
+                hasproperty(alg, :compute_type) && alg.compute_type !== :auto ? " (`compute_type`)" : "",
+                alg isa AbstractImplicitFieldAlgorithm ? string(", ", _solvertext(alg, f)) : ""
+            )
+        )
+    )
     starts_steady(alg) && _line(io, "steady", "steady start (`init = :steady`): solved once by QuasiSteady before the first window")
     return nothing
 end
@@ -524,7 +529,8 @@ function field_report(io::IO, integ::FieldIntegrator)
     pp = _raw_params(integ)
     one = length(rts) == 1
     for (i, rt) in enumerate(rts)
-        group_report(io, rt, pp; title = string("group ", i, " of ", length(rts)), dt = _iwindow(integ),
+        group_report(
+            io, rt, pp; title = string("group ", i, " of ", length(rts)), dt = _iwindow(integ),
             spec = prob.group.spec, stability = one ? prob.stability : rt.stability)
     end
     for rt in integ.starts
@@ -609,11 +615,13 @@ function _groups_lines(io, fp::FieldProblem, alg, counts; facts = nothing, dt = 
         stab = one ? fp.stability : restrict_bound(fp.stability, ks)
         w = _window(a, dt, clock)
         f = facts === nothing || i > length(facts) ? nothing : facts[i]
-        group_report(io, fp.group, a, pp; title = string("group ", i, " of ", length(groups)), dt = w,
+        group_report(
+            io, fp.group, a, pp; title = string("group ", i, " of ", length(groups)), dt = w,
             n = counts === nothing ? nothing : i <= length(counts) ? counts[i] : 0, facts = f, fields = ks, stability = stab, E,
             t0 = fp.tspan[1])
     end
     fp.kind == :map || _coupling_lines(io, fp.stability, [collect(String, ks) for (_, ks) in groups], [a for (a, _) in groups], pp,
-        _window(first(groups[1]), dt, clock))
+        _window(first(groups[1]), dt, clock)
+    )
     return nothing
 end

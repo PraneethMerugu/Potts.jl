@@ -274,7 +274,8 @@ end
         sh = solve(
             cown(osys(hop, kf(t, x, y), [kf(t, x, y)]), CDIMS .÷ CK; ins = [kf(t, x, y) => cmean(Float64.(1 .<= Q .<= 2))]),
             ExplicitEuler(; substeps = 4)
-        ; dt = 0.05)
+            ; dt = 0.05
+        )
         @test capprox(so[cop(t, x, y), length(so.t)], sh[hop(t, x, y), length(sh.t)]; rtol = 1.0e-14)
         # S2: a kind-dependent face coefficient (and a real one) at a face of the box equals the
         # hand-coarsened twin bitwise: the neighbor block clamped in the coarse frame (base

@@ -15,7 +15,7 @@ bsys(eqs, bcs, ps; T = 1.0, dvs = [bce, bqe]) = PDESystem(eqs, bcs, bdom(T), [t,
 # (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
 bown(sys; dims = BDIMS, T = Float64, kw...) =
     LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims); T, kw...); inputs = [bqe => BKIND]))
-const BTIGHT = DevicePCG(; reltol = 1e-12, maxiters = 64)
+const BTIGHT = DevicePCG(; reltol = 1.0e-12, maxiters = 64)
 bwarm(ig) = (step!(ig); @allocated step!(ig))              # (a function barrier)
 blast(s) = s[bce, length(s.t)]                             # the last save
 
@@ -165,7 +165,7 @@ const WARN = Base.CoreLogging.Warn
 
 # F3 batch 3 review r1 (research/field-compiler/f3/reviews/F3-batch3-r1.md). Base 2d213237
 # (~/lpwork/f3r1-nc-base.log) unless a testset names a mutation: each testset fails there.
-r1tight() = DevicePCG(; reltol = 1e-13, maxiters = 200)
+r1tight() = DevicePCG(; reltol = 1.0e-13, maxiters = 200)
 r1rel(a, b) = maximum(abs, a .- b) / maximum(abs, b)
 
 # F3-20: a hexagonal lattice (axial coordinates; `Δ` is `2/(3h²) Σₙ (cₙ − c)` over the six

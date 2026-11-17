@@ -332,7 +332,8 @@ end
         sol = @test_logs (:warn, r"4096") match_mode = :any solve(
             sown(sys; n = 16, inputs = [qe => K16]),
             ExplicitEuler(; substeps = 2)
-        ; dt = 0.025)
+            ; dt = 0.025
+        )
         @test first(substep_counts(sol)) == 4 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 3
         # P2: over the cap, the diffusion still raises the count (1fb097f2: n = 2, 5.2e30)
         @parameters Tz9[1:16] = zeros(16)
@@ -340,7 +341,8 @@ end
         sol = @test_logs (:warn, r"4096") match_mode = :any solve(
             sown(sys; n = 16, inputs = [qe => K16]),
             ExplicitEuler(; substeps = 2)
-        ; dt = 0.025)
+            ; dt = 0.025
+        )
         @test first(substep_counts(sol)) == 4 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 3
     end
 end
@@ -361,7 +363,8 @@ end
                     () -> solve(
                         remake(prob; p = [Ds2 => [v, 1.0, 1.0]]),
                         ExplicitEuler(; substeps = 2)
-                    ; dt = 0.025)
+                        ; dt = 0.025
+                    )
                 )
             ), (-1.0, -2.0, -3.0)
         )

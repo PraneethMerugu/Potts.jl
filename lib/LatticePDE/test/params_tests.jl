@@ -29,8 +29,8 @@ end
     # the owned integrator: a scalar, a table and an input written through `integ.ps`, then one
     # window against a fresh problem started from the written values
     po = discretize(wsys(), wdisc(); inputs = [wke => WK1])
-    alg = ExplicitEuler(; substeps = 1)
-    ig = init(po, alg; dt = 0.01)
+        alg = ExplicitEuler(; substeps = 1)
+        ig = init(po, alg; dt = 0.01)
     step!(ig)
     ig.ps[kw0] = 0.3
     ig.ps[Dw] = [0.25, 0.75]
@@ -38,11 +38,11 @@ end
     @test ig.ps[kw0] == 0.3 && ig.ps[Dw] == [0.25, 0.75] && ig.ps[wke] == WK2
     u1 = copy(ig[ce])
     step!(ig)
-    r = init(remake(po; u0 = vec(u1), tspan = (0.01, 1.0), p = [kw0 => 0.3, Dw => [0.25, 0.75]], inputs = [wke => WK2]), alg; dt = 0.01)
+        r = init(remake(po; u0 = vec(u1), tspan = (0.01, 1.0), p = [kw0 => 0.3, Dw => [0.25, 0.75]], inputs = [wke => WK2]), alg; dt = 0.01)
     step!(r)
     @test maximum(abs, ig[ce] .- r[ce]) <= 1e-12
     # control: the window with the old input differs
-    r0 = init(remake(po; u0 = vec(u1), tspan = (0.01, 1.0), p = [kw0 => 0.3, Dw => [0.25, 0.75]]), alg; dt = 0.01)
+        r0 = init(remake(po; u0 = vec(u1), tspan = (0.01, 1.0), p = [kw0 => 0.3, Dw => [0.25, 0.75]]), alg; dt = 0.01)
     step!(r0)
     @test maximum(abs, ig[ce] .- r0[ce]) > 1e-6
 

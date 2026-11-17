@@ -48,8 +48,8 @@ end
     ix = LatticeIndex(; variables = [:u => FieldSlot(1:prod(dims), dims)], parameters = [:D => 1])
     prob = FieldProblem(euler2(dims; storage = F64), u0, (0.0, 0.2), [0.05]; state = ["u"],
         kind = :rate, index = ix)
-    alg = ExplicitEuler(; substeps = 1)
-    J(D) = sum(abs2, solve(SciMLBase.remake(prob; p = [D]), alg; dt = 0.05).u[end])
+        alg = ExplicitEuler(; substeps = 1)
+        J(D) = sum(abs2, solve(SciMLBase.remake(prob; p = [D]), alg; dt = 0.05).u[end])
     d = ForwardDiff.derivative(J, 0.05)
     h = 1e-6
     @test isapprox(d, (J(0.05 + h) - J(0.05 - h)) / 2h; rtol = 1e-6) && d != 0
@@ -57,7 +57,7 @@ end
     @test eltype(rp) == Dual{Nothing, Float64, 1} && rp.step === prob.step   # same value type: same plans
     # a Float32 lane under Duals stores Dual{Float32}
     p32 = FieldProblem(euler2(dims), Float32.(u0), (0.0, 0.2), [0.05]; state = ["u"], kind = :rate, index = ix)
-    i32 = init(SciMLBase.remake(p32; p = [Dual{Nothing}(0.05, 1.0)]), alg; dt = 0.05)
+        i32 = init(SciMLBase.remake(p32; p = [Dual{Nothing}(0.05, 1.0)]), alg; dt = 0.05)
     @test eltype(i32.store.flat[1]) == Dual{Nothing, Float32, 1}
 end
 end
@@ -73,7 +73,7 @@ end
     ck = only(plan(s; options = CompileOptions(; T = Float32)).launches).kernel
     @test ck.timed && !occursin("G.rt[1]", string(ck.body))
     prob = FieldProblem(program(pb), zeros(Float32, 16), (1e5, 1e5 + 0.04), [3.0]; state = ["u"], kind = :rate)
-    sol = solve(prob, ExplicitEuler(; substeps = 1); dt = 0.01)
+        sol = solve(prob, ExplicitEuler(; substeps = 1); dt = 0.01)
     ref = sum(0.01 * 3.0 * (1e5 + 0.01k) for k in 0:3)
     @test isapprox(sol.u[end][1], ref; rtol = 1e-6)
     # a kernel with no t-dependent subtree is not re-derived
@@ -125,10 +125,10 @@ end
     own = FieldProblem(initaux(; ode = false), u0, (0.0, 0.2), p0; state = ["u"], kind = :rate,
         init = ["init"], index = LatticeIndex(; variables = [:u => FieldSlot(1:24, (6, 4))],
             parameters = [:D => 1, :k => 2]))
-    alg = ExplicitEuler(; substeps = 1)
-    Jo(k) = sum(solve(SciMLBase.remake(own; p = [0.1, k]), alg; dt = 0.05).u[end])
+        alg = ExplicitEuler(; substeps = 1)
+        Jo(k) = sum(solve(SciMLBase.remake(own; p = [0.1, k]), alg; dt = 0.05).u[end])
     @test isapprox(ForwardDiff.derivative(Jo, 2.0), (Jo(2.0 + h) - Jo(2.0 - h)) / 2h; rtol = 1e-6)
-    integ = init(own, alg; dt = 0.05)
+        integ = init(own, alg; dt = 0.05)
     setp(integ, :k)(integ, 5.0)
     step!(integ)
     @test integ[:u] ≈ reshape(u0 .+ 0.05 .* rate_hand(u0, 0.1, 5.0), 6, 4)
@@ -159,7 +159,8 @@ end
                 euler2(dims; storage = LatticeFields.IR.F32), T.(u0_64),
                 (0.0, 0.2), T[0.05]; state = ["u"], kind = :rate, index = ix
             ), alg
-        ; dt = 0.05)
+            ; dt = 0.05
+        )
         s64 = run_T(Float64)
         sbig = run_T(BigFloat)
         s32 = run_T(Float32)

@@ -401,8 +401,10 @@ function _bind_coupled(rows, kr::Solvers.DeviceGMRES, st::FieldStore, s::Program
     m = min(kr.gmres_restart, kr.maxiters)
     ws = Krylov.FgmresWorkspace(Krylov.KrylovConstructor(b); memory = m)
     sizehint!(ws.stats.residuals, kr.maxiters + cld(kr.maxiters, m) + 2)
-    return CoupledKrylov(rws, walk, A, P, ws, _zeros(st.backend, K, off), off, scal, zeros(K, GM_SCALARS), m, kr.maxiters,
-        kr.reltol, linear, mkpres, 0, 1.0, collect(String, keys))
+    return CoupledKrylov(
+        rws, walk, A, P, ws, _zeros(st.backend, K, off), off, scal, zeros(K, GM_SCALARS), m, kr.maxiters,
+        kr.reltol, linear, mkpres, 0, 1.0, collect(String, keys)
+    )
 end
 
 # a per-row operation of a coupled solve, `S` its name and `a` its arguments

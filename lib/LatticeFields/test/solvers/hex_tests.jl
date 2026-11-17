@@ -73,7 +73,7 @@ function hex_system(op::CellOperator{2}, inp)
     return A, b, cells
 end
 
-function hex_solver(op, inp; inner = DevicePCG(; maxiters = 64, reltol = 1e-12), T = Float64, kw...)
+function hex_solver(op, inp; inner = DevicePCG(; maxiters = 64, reltol = 1.0e-12), T = Float64, kw...)
     sv = FieldSolver(HostExec(), op; T, inner, kw...)
     for (k, v) in inp
         copyto!(field(sv, k), v)
@@ -137,12 +137,13 @@ using .LF_solvers_hex: fd
         op, inp = hex_case((16, 12); periodic = per,
             robin = per[2] ? ((nothing, nothing), (nothing, nothing)) : ((nothing, nothing), (nothing, (2.0, 1.0, 0.3))))
         @test hex_vs_hand(op, inp)[1] < 1e-9
-        @test hex_vs_hand(op, inp; inner = Multigrid(; reltol = 1e-12, maxiters = 60))[1] < 1e-9
+            @test hex_vs_hand(op, inp; inner = Multigrid(; reltol = 1.0e-12, maxiters = 60))[1] < 1.0e-9
     end
     # Float32: to the Float32 level
     op, inp = hex_case((16, 12))
     @test hex_vs_hand(op, Dict(k => (v isa Vector{Float64} ? Float32.(v) : v) for (k, v) in inp); T = Float32,
-        inner = DevicePCG(; reltol = 1e-6))[1] < 1e-4
+            inner = DevicePCG(; reltol = 1.0e-6)
+        )[1] < 1.0e-4
     # numbers on every face: an unmasked periodic group deflates its constant mode
     op = CellOperator((12, 10); hex = true, periodic = (true, true), face = (1.0, 2.0, 0.5), shift = 0.01)
     f = rand(Xoshiro(2), 120)

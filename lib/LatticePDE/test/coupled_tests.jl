@@ -45,7 +45,7 @@ end
         A, b0 = cjac(q1(δ, k), (8, 8))
         want = -(A \ b0)
         for steady in (false, true), (inner, tol) in ((CTIGHT, 1e-9), (:auto, 2e-6))
-            ig = init(cown(q1(δ, k; steady)), QuasiSteady(; linsolve = inner); dt = 0.1)
+                ig = init(cown(q1(δ, k; steady)), QuasiSteady(; linsolve = inner); dt = 0.1)
             step!(ig)
             c = only(ig.runtimes).cache
             got = vcat(vec(ig[cae]), vec(ig[cbe]))
@@ -55,25 +55,27 @@ end
         end
     end
     # the same seed and backend repeat a run bit for bit (fixed-order reductions)
-    run() = (s = solve(cown(q1(0.1, 5.0)), QuasiSteady(); dt = 0.1); (s[cae, end], s[cbe, end]))
+        run() = (s = solve(cown(q1(0.1, 5.0)), QuasiSteady(); dt = 0.1); (s[cae, end], s[cbe, end]))
     @test run() == run()
     # a warm window allocates nothing (CPU), and its solve starts at the last solution (F4-03:
     # the second window ends the span, where the end save copies the state: `save_end = false`)
         ig = init(cown(q1(0.1, 5.0)), QuasiSteady(); dt = 0.1, save_end = false, save_everystep = false)
     @test bwarm(ig) == 0
     # the solve's words: a budget hit names the GMRES budget; `show`, the keywords
-    r = @test_logs (:warn, r"the linear solve reached its budget .*`linsolve = DeviceGMRES\(; maxiters = n\)`") match_mode = :any solve(
-        cown(q1(0.1, 5.0)), QuasiSteady(; linsolve = DeviceGMRES(; maxiters = 2)); dt = 0.1)
+        r = @test_logs (:warn, r"the linear solve reached its budget .*`linsolve = DeviceGMRES\(; maxiters = n\)`") match_mode = :any solve(
+            cown(q1(0.1, 5.0)), QuasiSteady(; linsolve = DeviceGMRES(; maxiters = 2)); dt = 0.1
+        )
     @test r.retcode == ReturnCode.Success
-    g = DeviceGMRES(; gmres_restart = 8, maxiters = 40, reltol = 1e-8, precond = DevicePCG(; maxiters = 3))
+        g = DeviceGMRES(; gmres_restart = 8, maxiters = 40, reltol = 1.0e-8, precond = DevicePCG(; maxiters = 3))
     @test eval(Meta.parse(repr(g))) == g
-    @test !occursin("maxiters", repr(DeviceGMRES()))               # a default stays out of the display
-    @test startswith(cmsg(() -> DeviceGMRES(; gmres_restart = 1)), "`DeviceGMRES(; gmres_restart = 1)`: `gmres_restart` is the Krylov basis size")
-    @test startswith(cmsg(() -> DeviceGMRES(; maxiters = 0)), "`DeviceGMRES(; maxiters = 0)`: `maxiters` is the most GMRES iterations")
-    @test startswith(cmsg(() -> DeviceGMRES(; reltol = -1.0)), "`DeviceGMRES(; reltol = -1.0)`: `reltol` is the relative residual")
+        @test !occursin("maxiters", repr(DeviceGMRES()))               # a default stays out of the display
+        @test startswith(cmsg(() -> DeviceGMRES(; gmres_restart = 1)), "`DeviceGMRES(; gmres_restart = 1)`: `gmres_restart` is the Krylov basis size")
+        @test startswith(cmsg(() -> DeviceGMRES(; maxiters = 0)), "`DeviceGMRES(; maxiters = 0)`: `maxiters` is the most GMRES iterations")
+        @test startswith(cmsg(() -> DeviceGMRES(; reltol = -1.0)), "`DeviceGMRES(; reltol = -1.0)`: `reltol` is the relative residual")
     @test startswith(cmsg(() -> DeviceGMRES(; precond = :pcg)), "`DeviceGMRES(; precond = :pcg)`: `precond` is each field's solve")
     op = LSB.CellOperator((8, 8); shift = 1.0)
-    @test occursin("solves an implicit group's fields together (F3-12d); a `FieldSolver` solves one field: give it the `DeviceGMRES`'s per-field solver, `linsolve = DevicePCG(; maxiters = 2)`",
+        @test occursin(
+            "solves an implicit group's fields together (F3-12d); a `FieldSolver` solves one field: give it the `DeviceGMRES`'s per-field solver, `linsolve = DevicePCG(; maxiters = 2)`",
         cmsg(() -> LSB.FieldSolver(KernelAbstractions.CPU(), op; inner = DeviceGMRES())))
 end
 end
@@ -89,10 +91,10 @@ end
         A, b0 = cjac(PDESystem(rates, [bcs; ca(0, x, y) ~ 0.0; cq(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cqe], Any[]; name = :n5r), (8, 8))
         want = -(A \ b0)
         p = cown(PDESystem(eqs, bcs, bdom(0.2), [t, x, y], [cae, cqe], Any[]; name = :n5))
-        r = @test_logs min_level = Logging.Warn solve(p, QuasiSteady(); dt = 0.1)
+            r = @test_logs min_level = Logging.Warn solve(p, QuasiSteady(); dt = 0.1)
         got = vcat(vec(r[cae, end]), vec(r[cqe, end]))
         @test r.retcode == ReturnCode.Success && maximum(abs, got .- want) < 1e-5
-        rt = solve(p, QuasiSteady(; linsolve = CTIGHT); dt = 0.1)
+            rt = solve(p, QuasiSteady(; linsolve = CTIGHT); dt = 0.1)
         @test maximum(abs, vcat(vec(rt[cae, end]), vec(rt[cqe, end])) .- want) < 1e-10
     end
     # `0 ~ q − c²` beside `0 ~ 0.3Δ(c) − 2c + 1`: `c` is the linear steady state, `q = c²` exactly
@@ -101,11 +103,11 @@ end
     A, b0 = cjac(PDESystem([D(cae) ~ 0.3Δ(cae) - 2.0 * cae + 1], [ca(t, 0, y) ~ 1.0, ca(0, x, y) ~ 0.0], bdom(0.2), [t, x, y],
         [cae], Any[]; name = :algc), (8, 8))
     cw = -(A \ b0)
-    r = @test_logs min_level = Logging.Warn solve(p, QuasiSteady(); dt = 0.1)
+        r = @test_logs min_level = Logging.Warn solve(p, QuasiSteady(); dt = 0.1)
     @test r.retcode == ReturnCode.Success && maximum(abs, vec(r[cae, end]) .- cw) < 1e-5 && maximum(abs, vec(r[cqe, end]) .- cw .^ 2) < 1e-5
-    ig = init(p, QuasiSteady(); dt = 0.1)
+        ig = init(p, QuasiSteady(); dt = 0.1)
     @test only(ig.runtimes).cache.cs !== nothing && only(ig.runtimes).cache.newton == 8      # (nonlinear: the checked count)
-    rt = solve(p, QuasiSteady(; linsolve = CTIGHT); dt = 0.1)
+        rt = solve(p, QuasiSteady(; linsolve = CTIGHT); dt = 0.1)
     @test maximum(abs, vec(rt[cae, end]) .- cw) < 1e-10 && maximum(abs, vec(rt[cqe, end]) .- cw .^ 2) < 1e-10
     # a nonlinear cycle (Michaelis–Menten uptake, `0.5a²` feeding back): the rate is 0 at the result
     rates = [0.1Δ(cae) - 2.0 * cae / (0.5 + cae) + cbe + x, 0.1Δ(cbe) - cbe + 0.5 * cae^2]
@@ -114,7 +116,7 @@ end
     p = cown(PDESystem([0 ~ rates[1], 0 ~ rates[2]], [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe],
         Any[]; name = :mm))
     for (inner, tol) in ((:auto, 1e-5), (CTIGHT, 1e-12))
-        r = @test_logs min_level = Logging.Warn solve(p, QuasiSteady(; linsolve = inner); dt = 0.1)
+            r = @test_logs min_level = Logging.Warn solve(p, QuasiSteady(; linsolve = inner); dt = 0.1)
         u = vcat(vec(r[cae, end]), vec(r[cbe, end]))
         du = similar(u)
         po.f(du, u, po.p, 0.0)
@@ -130,8 +132,8 @@ end
     rates = [0.1 * Δ(cae) - cae + 0.5 * cbe + 0.2 * cze, 0.1 * Δ(cbe) - cbe - 0.5 * cae, 0.1 * Δ(cze) - cze + 0.5 * cbe + x]
     bc0 = [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0, cz(0, x, y) ~ 0.0]
     p = cown(PDESystem([0 ~ rates[1], 0 ~ rates[2], D(cze) ~ rates[3]], bc0, bdom(1.0), [t, x, y], [cae, cbe, cze], Any[]; name = :fb))
-    alg = FieldGroups(cze => BackwardEuler(; linsolve = BTIGHT); default = QuasiSteady(; linsolve = CTIGHT))
-    r = solve(p, alg; dt = 0.1)
+        alg = FieldGroups(cze => BackwardEuler(; linsolve = BTIGHT); default = QuasiSteady(; linsolve = CTIGHT))
+        r = solve(p, alg; dt = 0.1)
     @test r.retcode == ReturnCode.Success
     # the dense split recursion: each window the steady pair at `e`'s window-start values, then
     # `e`'s Backward Euler step reading them
@@ -148,7 +150,7 @@ end
     # it is refused with the reason and the routes (the pair alone solves: the first testset)
     ps = cown(PDESystem([0 ~ 0.1 * Δ(cae) - 0.1 * cae + 5.0 * cbe + 0.2 * cze, 0 ~ 0.1 * Δ(cbe) - cbe - 5.0 * cae, D(cze) ~ rates[3]],
         bc0, bdom(1.0), [t, x, y], [cae, cbe, cze], Any[]; name = :fbs))
-    m = cmsg(() -> init(ps, alg; dt = 0.1))
+        m = cmsg(() -> init(ps, alg; dt = 0.1))
     @test occursin("the steady fields `ca`, `cb` of one group read one another, and the rule's bound on their joint gain does not hold", m) &&
           occursin("Step `ca`, `cb`, `cz` in one `BackwardEuler` group, or step `ca`, `cb` with `BackwardEuler`", m) &&
           endswith(m, "; for a `BackwardEuler` route, write the steady rows of `ca`, `cb` as rates `D(c) ~ rhs` (a steady row `0 ~ rhs` takes only `QuasiSteady`)") ||
@@ -156,15 +158,15 @@ end
     # the route: the rows as rates, stepped by one `BackwardEuler` group
     pr = cown(PDESystem([D(cae) ~ 0.1 * Δ(cae) - 0.1 * cae + 5.0 * cbe + 0.2 * cze, D(cbe) ~ 0.1 * Δ(cbe) - cbe - 5.0 * cae,
             D(cze) ~ rates[3]], bc0, bdom(1.0), [t, x, y], [cae, cbe, cze], Any[]; name = :fbr))
-    @test solve(pr, BackwardEuler(); dt = 0.1).retcode == ReturnCode.Success
+        @test solve(pr, BackwardEuler(); dt = 0.1).retcode == ReturnCode.Success
     # steady groups that read one another only (two `QuasiSteady` with other keywords): one
     # `QuasiSteady` is the route, and it solves
     pq = cown(q1(0.1, 5.0; steady = true))
-    m = cmsg(() -> init(pq, FieldGroups(cae => QuasiSteady(), cbe => QuasiSteady(; newton = 3)); dt = 0.1))
+        m = cmsg(() -> init(pq, FieldGroups(cae => QuasiSteady(), cbe => QuasiSteady(; newton = 3)); dt = 0.1))
     @test occursin("every group of the loop is steady, so no window damps the lag between them", m) &&
           occursin("Give `ca`, `cb` one `QuasiSteady` (the same keywords: one group, whose steady rows are solved together)", m) ||
           (println("qs only ", m); false)
-    @test solve(pq, FieldGroups(cae => QuasiSteady(), cbe => QuasiSteady()); dt = 0.1).retcode == ReturnCode.Success
+        @test solve(pq, FieldGroups(cae => QuasiSteady(), cbe => QuasiSteady()); dt = 0.1).retcode == ReturnCode.Success
 end
 end
 
@@ -173,16 +175,16 @@ end
     # each row decays (−a, −b), the coupling `k` grows: mode 0 of `[−1 k; k −1]` has λ = k − 1
     ind(k) = cown(PDESystem([0 ~ 0.1 * Δ(cae) - cae + k * cbe + x, 0 ~ 0.1 * Δ(cbe) - cbe + k * cae], [ca(0, x, y) ~ 0.0,
         cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], Any[]; name = :ind))
-    m = cmsg(() -> init(ind(2.0), QuasiSteady(); dt = 0.1))
+        m = cmsg(() -> init(ind(2.0), QuasiSteady(); dt = 0.1))
     @test startswith(m, "QuasiSteady: the fields `ca`, `cb` read one another, and their coupled steady system has a growing mode: an eigenvalue of its Jacobian with positive real part (1.0, in the slowest spatial mode), so its steady state is unstable") &&
           endswith(m, "step the fields with `BackwardEuler` (a steady row `0 ~ rhs` written as the rate `D(c) ~ rhs`: a steady row takes only `QuasiSteady`), or change the couplings or decays so that every mode decays") || (println("ind ", m); false)
-    m = cmsg(() -> init(ind(1.0), QuasiSteady(); dt = 0.1))
+        m = cmsg(() -> init(ind(1.0), QuasiSteady(); dt = 0.1))
     @test occursin("has a neutral mode: an eigenvalue of its Jacobian with zero real part", m) && occursin("not unique", m)
-    @test solve(ind(0.5), QuasiSteady(); dt = 0.1).retcode == ReturnCode.Success
+        @test solve(ind(0.5), QuasiSteady(); dt = 0.1).retcode == ReturnCode.Success
     # the route: the rows as rates, stepped by `BackwardEuler` (the growing mode grows)
     indr = cown(PDESystem([D(cae) ~ 0.1 * Δ(cae) - cae + 2.0 * cbe + x, D(cbe) ~ 0.1 * Δ(cbe) - cbe + 2.0 * cae], [ca(0, x, y) ~ 0.0,
         cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], Any[]; name = :indr))
-    @test solve(indr, BackwardEuler(); dt = 0.1).retcode == ReturnCode.Success
+        @test solve(indr, BackwardEuler(); dt = 0.1).retcode == ReturnCode.Success
     # a row's own growth that the coupling damps (0.5a − 2b, 2a − b: λ = −0.25 ± 1.85i) is well
     # posed: accepted, and the rate is 0 at the result
     rates = [0.1 * Δ(cae) + 0.5 * cae - 2.0 * cbe + x, 0.1 * Δ(cbe) + 2.0 * cae - cbe]
@@ -190,13 +192,13 @@ end
         Any[]; name = :gd))
     A, b0 = cjac(PDESystem([D(cae) ~ rates[1], D(cbe) ~ rates[2]], [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y],
         [cae, cbe], Any[]; name = :gdr), (8, 8))
-    r = solve(p, QuasiSteady(; linsolve = CTIGHT); dt = 0.1)
+        r = solve(p, QuasiSteady(; linsolve = CTIGHT); dt = 0.1)
     @test r.retcode == ReturnCode.Success && maximum(abs, vcat(vec(r[cae, end]), vec(r[cbe, end])) .+ (A \ b0)) < 1e-9
     # a write that makes the coupling grow is refused at the write, the values unchanged
     @parameters ck = 0.5
     pk = cown(PDESystem([0 ~ 0.1 * Δ(cae) - cae + ck * cbe + x, 0 ~ 0.1 * Δ(cbe) - cbe + ck * cae], [ca(0, x, y) ~ 0.0,
         cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], [ck]; name = :indk))
-    ig = init(pk, QuasiSteady(); dt = 0.1)
+        ig = init(pk, QuasiSteady(); dt = 0.1)
     @test occursin("has a growing mode", cmsg(() -> (ig.ps[ck] = 3.0)))
     @test ig.ps[ck] == 0.5
 end
@@ -208,7 +210,7 @@ end
     # solve (the block iteration of the per-row path diverged, ratio 15.8)
     A, b0 = cjac(q1(0.1, 5.0), (8, 8))
     want = -(A \ b0)
-    ig = init(cown(q1(0.1, 5.0)), BackwardEuler(; init = :steady); dt = 0.1)
+        ig = init(cown(q1(0.1, 5.0)), BackwardEuler(; init = :steady); dt = 0.1)
     @test ig.retcode == ReturnCode.Default || ig.retcode == ReturnCode.Success
     @test maximum(abs, vcat(vec(ig[cae]), vec(ig[cbe])) .- want) / maximum(abs, want) < 1e-5
     # the steady state stays (the rate is 0 there)
@@ -218,16 +220,16 @@ end
 end
 
 @testitem "F3-12d r1 (user ruling 2026-11-03): the time steppers refuse `linsolve = DeviceGMRES(…)`, with the default route" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
-@testset "F3-12d r1 (user ruling 2026-11-03): the time steppers refuse `linsolve = DeviceGMRES(…)`, with the default route" begin
-    # it was slower than the default linear solver in every case measured (~/lpwork/f312d-g1.txt)
+    @testset "F3-12d r1 (user ruling 2026-11-03): the time steppers refuse `linsolve = DeviceGMRES(…)`, with the default route" begin
+        # it was slower than the default linear solver in every case measured (~/lpwork/f312d-g1.txt)
     for A in (BackwardEuler, CrankNicolson, BDF2)
-        m = cmsg(() -> A(; linsolve = DeviceGMRES()))
-        @test startswith(m, "$(nameof(A)): `linsolve = DeviceGMRES(") &&
+            m = cmsg(() -> A(; linsolve = DeviceGMRES()))
+            @test startswith(m, "$(nameof(A)): `linsolve = DeviceGMRES(") &&
               occursin("is the solver of a coupled steady group (`QuasiSteady`, whose fields read one another)", m) &&
-              endswith(m, "leave `linsolve` out, or give `linsolve = DevicePCG(; maxiters = n)`") || (println("r1 S2 ", m); false)
-        @test A(; linsolve = DevicePCG(; maxiters = 12)) isa A                  # (the route)
+                endswith(m, "leave `linsolve` out, or give `linsolve = DevicePCG(; maxiters = n)`") || (println("r1 S2 ", m); false)
+            @test A(; linsolve = DevicePCG(; maxiters = 12)) isa A                  # (the route)
     end
-    @test QuasiSteady(; linsolve = DeviceGMRES()).linsolve isa DeviceGMRES
+        @test QuasiSteady(; linsolve = DeviceGMRES()).linsolve isa DeviceGMRES
 end
 end
 
@@ -239,7 +241,7 @@ end
     @parameters kv = 3.0
     sv() = cown(PDESystem([0 ~ 0.1 * Δ(cae) - cae + (kv + 0.1 * x) * cbe + x, 0 ~ 0.1 * Δ(cbe) + 3.0 * cae - cbe + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], [kv]; name = :sv))
-    m = cmsg(() -> init(sv(), QuasiSteady(); dt = 0.1))
+        m = cmsg(() -> init(sv(), QuasiSteady(); dt = 0.1))
     @test startswith(m, "QuasiSteady: the fields `ca`, `cb` read one another, and their coupled steady system has a growing mode") &&
           occursin("estimated through the coupled operator: a coefficient varies by site", m) || (println("M2 ", m); false)
     λ = parse(Float64, match(r"real part \(([-0-9.e]+)", m).captures[1])
@@ -250,7 +252,7 @@ end
     # stable and site-varying (a skew coupling): accepted, and equal to the dense steady solve
     ss = cown(PDESystem([0 ~ 0.1 * Δ(cae) - cae + (2.0 + 0.1 * x) * cbe + x, 0 ~ 0.1 * Δ(cbe) - 3.0 * cae - cbe + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], Any[]; name = :ss))
-    r = solve(ss, QuasiSteady(; linsolve = CTIGHT); dt = 0.1)
+        r = solve(ss, QuasiSteady(; linsolve = CTIGHT); dt = 0.1)
     As, bs = cjac(PDESystem([D(cae) ~ 0.1 * Δ(cae) - cae + (2.0 + 0.1 * x) * cbe + x, D(cbe) ~ 0.1 * Δ(cbe) - 3.0 * cae - cbe + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], Any[]; name = :ssr), (8, 8))
     @test r.retcode == ReturnCode.Success && maximum(abs, [vec(r[cae, end]); vec(r[cbe, end])] .+ As \ bs) < 1e-8
@@ -258,14 +260,14 @@ end
     @parameters kw = 0.0                                   # (local λ ≤ −1 + √(0.3x) < 0: stable)
     sw = cown(PDESystem([0 ~ 0.1 * Δ(cae) - cae + (kw + 0.1 * x) * cbe + x, 0 ~ 0.1 * Δ(cbe) + 3.0 * cae - cbe + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], [kw]; name = :sw))
-    ig = init(sw, QuasiSteady(); dt = 0.1)
+        ig = init(sw, QuasiSteady(); dt = 0.1)
     @test_throws "estimated through the coupled operator" (ig.ps[kw] = 3.0)
     @test ig.ps[kw] == 0.0
     # the refused write left the old launches (r2 S1): its run equals a fresh one's, bit for bit
     for _ in 1:2
         step!(ig)
     end
-    fr = init(sw, QuasiSteady(); dt = 0.1)
+        fr = init(sw, QuasiSteady(); dt = 0.1)
     for _ in 1:2
         step!(fr)
     end
@@ -276,7 +278,7 @@ end
     # first window after that solve. Base (3f9d5909): `Success`, no warning
     nl(c) = cown(PDESystem([0 ~ 0.1 * Δ(cae) - cae + c * cbe + x + 0.01 * cae^2, 0 ~ 0.1 * Δ(cbe) + 3.0 * cae - cbe + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.3), [t, x, y], [cae, cbe], Any[]; name = :nlg))
-    m = cmsg(() -> solve(nl(3.0), QuasiSteady(); dt = 0.1))
+        m = cmsg(() -> solve(nl(3.0), QuasiSteady(); dt = 0.1))
     @test occursin("has a growing mode: an eigenvalue of its Jacobian with positive real part", m) &&
           occursin(", at the steady state its solve found)", m) || (println("r2 M1 ", m); false)
     # right after the first solve (r3): a one-window run and a steady start are refused too.
@@ -284,17 +286,17 @@ end
     # start not checked
     nl1 = cown(PDESystem([0 ~ 0.1 * Δ(cae) - cae + 3.0 * cbe + x + 0.01 * cae^2, 0 ~ 0.1 * Δ(cbe) + 3.0 * cae - cbe + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.1), [t, x, y], [cae, cbe], Any[]; name = :nl1))
-    @test occursin(", at the steady state its solve found)", cmsg(() -> solve(nl1, QuasiSteady(); dt = 0.1)))
+        @test occursin(", at the steady state its solve found)", cmsg(() -> solve(nl1, QuasiSteady(); dt = 0.1)))
     nlr = cown(PDESystem([D(cae) ~ 0.1 * Δ(cae) - cae + 3.0 * cbe + x + 0.01 * cae^2, D(cbe) ~ 0.1 * Δ(cbe) + 3.0 * cae - cbe + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.3), [t, x, y], [cae, cbe], Any[]; name = :nlr))
-    m = cmsg(() -> init(nlr, BackwardEuler(; init = :steady); dt = 0.1))
+        m = cmsg(() -> init(nlr, BackwardEuler(; init = :steady); dt = 0.1))
     @test occursin("has a growing mode", m) && occursin(", at the steady state its solve found)", m) || (println("r3 init ", m); false)
     # a write from stable to unstable (r3 S1): every later step is refused, not only the first.
     # Control (the old order, `pending` cleared before the check): the second `step!` succeeds
     @parameters kn = 0.0
     nlw = cown(PDESystem([0 ~ 0.1 * Δ(cae) - cae + kn * cbe + x + 0.01 * cae^2, 0 ~ 0.1 * Δ(cbe) + 3.0 * cae - cbe + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(1.0), [t, x, y], [cae, cbe], [kn]; name = :nlw))
-    iw = init(nlw, QuasiSteady(); dt = 0.1)
+        iw = init(nlw, QuasiSteady(); dt = 0.1)
     step!(iw)
     iw.ps[kn] = 3.0
     @test occursin(", at the steady state its solve found)", cmsg(() -> step!(iw)))
@@ -302,7 +304,7 @@ end
     # stable with the same term (a skew coupling): accepted
     nls = cown(PDESystem([0 ~ 0.1 * Δ(cae) - cae + 2.0 * cbe + x + 0.01 * cae^2, 0 ~ 0.1 * Δ(cbe) - 3.0 * cae - cbe + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.3), [t, x, y], [cae, cbe], Any[]; name = :nls))
-    @test solve(nls, QuasiSteady(); dt = 0.1).retcode == ReturnCode.Success
+        @test solve(nls, QuasiSteady(); dt = 0.1).retcode == ReturnCode.Success
 end
 end
 
@@ -320,7 +322,7 @@ end
     ce = c(t, x, y)
     sys = PDESystem([D(ce) ~ 0.3 * Δ(ce) - 2.0 * ce + x], [c(0, x, y) ~ 0.0], [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0),
         y ∈ Interval(0.0, 1.0)], [t, x, y], [ce], Any[]; name = :one)
-    init(discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64)), QuasiSteady(); dt = 0.1)
+            init(discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64)), QuasiSteady(); dt = 0.1)
     n(f) = sum(m -> count(mi -> mi isa Core.MethodInstance && isdefined(mi, :cache), Base.specializations(m)), methods(f); init = 0)
     println("M1 ", n(LF.coupled_modes), " ", n(LF._bind_coupled))
     """

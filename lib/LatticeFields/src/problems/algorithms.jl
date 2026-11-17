@@ -46,11 +46,17 @@ struct ExplicitEuler <: AbstractFieldAlgorithm
         substeps === nothing || (substeps isa Integer && !(substeps isa Bool) && substeps >= 1) ||
             throw(ArgumentError("ExplicitEuler: substeps = $(repr(substeps)) must be an integer ≥ 1 (or left out: automatic)"))
         lower_bound === nothing || lower_bound isa Real && isfinite(lower_bound) ||
-            throw(ArgumentError("ExplicitEuler: lower_bound = $(repr(lower_bound)) must be a finite number (a clip at ±Inf or NaN " *
-                                "clips nothing or every value; leave `lower_bound` out for no clip)"))
-        return new(substeps === nothing ? nothing : Int(substeps),
+            throw(
+            ArgumentError(
+                "ExplicitEuler: lower_bound = $(repr(lower_bound)) must be a finite number (a clip at ±Inf or NaN " *
+                    "clips nothing or every value; leave `lower_bound` out for no clip)"
+            )
+        )
+        return new(
+            substeps === nothing ? nothing : Int(substeps),
             lower_bound === nothing ? nothing : Float64(lower_bound), _init_keyword("ExplicitEuler", init),
-            _compute_keyword("ExplicitEuler", compute_type))
+            _compute_keyword("ExplicitEuler", compute_type)
+        )
     end
 end
 # `init`: `nothing` (start from the initial state) or `:steady` (F3-12c)
@@ -62,7 +68,10 @@ function _init_keyword(w, init)
 end
 # `compute_type` (FE-17, F3 design §3.8): `:auto` (the problem's value type), `Float32` or `Float64`
 function _compute_keyword(w, c)
-    c === :auto || c === Float32 || c === Float64 || throw(ArgumentError(string(w, ": `compute_type` takes `:auto` (the ",
+    c === :auto || c === Float32 || c === Float64 || throw(
+        ArgumentError(
+            string(
+                w, ": `compute_type` takes `:auto` (the ",
         "problem's value type), `Float32` or `Float64` (the number type the group's kernels compute in; its fields keep ",
         "their storage, converted at each load and store); got ", repr(c))))
     return c
@@ -73,16 +82,24 @@ end
 The value type the kernels of a group stepped by `alg` compute in, for problem value type `V`:
 `V` under `compute_type = :auto`, else `compute_type` (FE-17).
 """
-compute_type(a, ::Type{V}) where {V} = (c = hasfield(typeof(a), :compute_type) ? getfield(a, :compute_type) : :auto;
+compute_type(a, ::Type{V}) where {V} = (
+    c = hasfield(typeof(a), :compute_type) ? getfield(a, :compute_type) : :auto;
                                          c === :auto ? V : c)
 function ExplicitEuler(; substeps = nothing, lower_bound = nothing, init = nothing, compute_type = :auto, kw...)
     isempty(kw) || throw(ArgumentError(string("ExplicitEuler: ",
-        haskey(kw, :linsolve) ? string("`linsolve = ", repr(kw[:linsolve]), "`: `linsolve` is a keyword of the implicit field ",
+                haskey(kw, :linsolve) ? string(
+                        "`linsolve = ", repr(kw[:linsolve]), "`: `linsolve` is a keyword of the implicit field ",
                                    "solvers (the linear solver of each implicit step), and `ExplicitEuler` solves no ",
-                                   "linear system; give it to an implicit field solver, `BackwardEuler(; linsolve = ",
-                                   repr(kw[:linsolve]), ")`, or leave `linsolve` out") :
-        string("no keyword ", join(("`$k`" for k in keys(kw)), ", "), "; its keywords are `substeps`, `lower_bound`, `init` ",
-               "and `compute_type`", _dt_text(kw)))))
+                        "linear system; give it to an implicit field solver, `BackwardEuler(; linsolve = ",
+                        repr(kw[:linsolve]), ")`, or leave `linsolve` out"
+                    ) :
+                    string(
+                        "no keyword ", join(("`$k`" for k in keys(kw)), ", "), "; its keywords are `substeps`, `lower_bound`, `init` ",
+                        "and `compute_type`", _dt_text(kw)
+                    )
+            )
+        )
+    )
     return ExplicitEuler(substeps, lower_bound, init, compute_type)
 end
 # the route of a `dt` given to a field algorithm: the window is a keyword of `solve`
@@ -160,8 +177,10 @@ struct BackwardEuler <: AbstractImplicitFieldAlgorithm
     init::Union{Nothing, Symbol}
     compute_type::Any
     BackwardEuler(substeps, newton, lower_bound, linsolve, solver_type, init = nothing, compute_type = :auto) =
-        new(_implicit_keywords("BackwardEuler", substeps, newton, lower_bound, linsolve, solver_type)..., _init_keyword("BackwardEuler", init),
-            _compute_keyword("BackwardEuler", compute_type))
+        new(
+        _implicit_keywords("BackwardEuler", substeps, newton, lower_bound, linsolve, solver_type)..., _init_keyword("BackwardEuler", init),
+        _compute_keyword("BackwardEuler", compute_type)
+    )
 end
 # The keywords of a time-stepping implicit algorithm, each checked (an `ArgumentError` naming
 # the keyword) and converted (`w` names the algorithm in the messages)
@@ -174,31 +193,57 @@ function _implicit_keywords(w, substeps, newton, lower_bound, linsolve, solver_t
         throw(ArgumentError("$w: newton = $(repr(newton)) is the Newton iterations per substep, an integer ≥ 1 " *
                             "(or left out: automatic)"))
     lower_bound === nothing || lower_bound isa Real && !(lower_bound isa Bool) && isfinite(lower_bound) ||
-        throw(ArgumentError("$w: lower_bound = $(repr(lower_bound)) must be a finite number (a clip at ±Inf or NaN " *
-                            "clips nothing or every value; leave `lower_bound` out for no clip)"))
+        throw(
+        ArgumentError(
+            "$w: lower_bound = $(repr(lower_bound)) must be a finite number (a clip at ±Inf or NaN " *
+                "clips nothing or every value; leave `lower_bound` out for no clip)"
+        )
+    )
     # (`DeviceGMRES` is the coupled steady solve's: on a time stepper it was slower in every case
     # measured, F3-12d r1, user ruling 2026-11-03)
-    linsolve isa Solvers.DeviceGMRES && w != "QuasiSteady" && throw(ArgumentError(string(w, ": `linsolve = ", repr(linsolve),
+    linsolve isa Solvers.DeviceGMRES && w != "QuasiSteady" && throw(
+        ArgumentError(
+            string(
+                w, ": `linsolve = ", repr(linsolve),
         "` is the solver of a coupled steady group (`QuasiSteady`, whose fields read one another); a time stepper ",
-        "solves each field with `DevicePCG(…)` (the default) or `Multigrid(…)`: leave `linsolve` out, or give ",
-        "`linsolve = DevicePCG(; maxiters = n)`")))
+                "solves each field with `DevicePCG(…)` (the default) or `Multigrid(…)`: leave `linsolve` out, or give ",
+                "`linsolve = DevicePCG(; maxiters = n)`"
+            )
+        )
+    )
     linsolve === :auto || linsolve isa Solvers.DevicePCG || linsolve isa Solvers.Multigrid || linsolve isa Solvers.DeviceGMRES ||
-        throw(ArgumentError("$w: `linsolve` takes `:auto`, a `DevicePCG(…)`" * (w == "QuasiSteady" ? ", a `Multigrid(…)` or a `DeviceGMRES(…)`" : " or a `Multigrid(…)`") * " (the " *
-                            "linear solver of each implicit step); got $(repr(linsolve))"))
-    solver_type === :auto || solver_type === Float32 || solver_type === Float64 || throw(ArgumentError(string(w,
-        ": `solver_type` takes `:auto` (the state's number type), `Float32` or `Float64`; got ", repr(solver_type),
-        solver_type isa Type && !(solver_type <: AbstractFloat && isbitstype(solver_type)) ? "" :
-        solver_type isa Type ? " (a BigFloat implicit solve is planned after the paper, FE-26; a Dual state's derivative parts take tangent solves in its value type)" : "")))
-    return (substeps === nothing ? nothing : Int(substeps),
-        newton === nothing ? nothing : Int(newton), lower_bound === nothing ? nothing : Float64(lower_bound), linsolve, solver_type)
+        throw(
+        ArgumentError(
+            "$w: `linsolve` takes `:auto`, a `DevicePCG(…)`" * (w == "QuasiSteady" ? ", a `Multigrid(…)` or a `DeviceGMRES(…)`" : " or a `Multigrid(…)`") * " (the " *
+                "linear solver of each implicit step); got $(repr(linsolve))"
+        )
+    )
+    solver_type === :auto || solver_type === Float32 || solver_type === Float64 || throw(
+        ArgumentError(
+            string(
+                w,
+                ": `solver_type` takes `:auto` (the state's number type), `Float32` or `Float64`; got ", repr(solver_type),
+                solver_type isa Type && !(solver_type <: AbstractFloat && isbitstype(solver_type)) ? "" :
+                    solver_type isa Type ? " (a BigFloat implicit solve is planned after the paper, FE-26; a Dual state's derivative parts take tangent solves in its value type)" : ""
+            )
+        )
+    )
+    return (
+        substeps === nothing ? nothing : Int(substeps),
+        newton === nothing ? nothing : Int(newton), lower_bound === nothing ? nothing : Float64(lower_bound), linsolve, solver_type,
+    )
 end
 function _implicit_kwerror(w, kw)
     return ArgumentError(string(w, ": no keyword ", join(("`$k`" for k in keys(kw)), ", "),
-        "; its keywords are `substeps`, `newton`, `lower_bound`, `linsolve`, `solver_type`, `init` and `compute_type`",
-        _dt_text(kw)))
+            "; its keywords are `substeps`, `newton`, `lower_bound`, `linsolve`, `solver_type`, `init` and `compute_type`",
+            _dt_text(kw)
+        )
+    )
 end
-function BackwardEuler(; substeps = nothing, newton = nothing, lower_bound = nothing, linsolve = :auto,
-        solver_type = :auto, init = nothing, compute_type = :auto, kw...)
+function BackwardEuler(;
+        substeps = nothing, newton = nothing, lower_bound = nothing, linsolve = :auto,
+        solver_type = :auto, init = nothing, compute_type = :auto, kw...
+    )
     isempty(kw) || throw(_implicit_kwerror("BackwardEuler", kw))
     return BackwardEuler(substeps, newton, lower_bound, linsolve, solver_type, init, compute_type)
 end
@@ -235,11 +280,15 @@ struct CrankNicolson <: AbstractImplicitFieldAlgorithm
     init::Union{Nothing, Symbol}
     compute_type::Any
     CrankNicolson(substeps, newton, lower_bound, linsolve, solver_type, init = nothing, compute_type = :auto) =
-        new(_implicit_keywords("CrankNicolson", substeps, newton, lower_bound, linsolve, solver_type)..., _init_keyword("CrankNicolson", init),
-            _compute_keyword("CrankNicolson", compute_type))
+        new(
+        _implicit_keywords("CrankNicolson", substeps, newton, lower_bound, linsolve, solver_type)..., _init_keyword("CrankNicolson", init),
+        _compute_keyword("CrankNicolson", compute_type)
+    )
 end
-function CrankNicolson(; substeps = nothing, newton = nothing, lower_bound = nothing, linsolve = :auto,
-        solver_type = :auto, init = nothing, compute_type = :auto, kw...)
+function CrankNicolson(;
+        substeps = nothing, newton = nothing, lower_bound = nothing, linsolve = :auto,
+        solver_type = :auto, init = nothing, compute_type = :auto, kw...
+    )
     isempty(kw) || throw(_implicit_kwerror("CrankNicolson", kw))
     return CrankNicolson(substeps, newton, lower_bound, linsolve, solver_type, init, compute_type)
 end
@@ -274,11 +323,15 @@ struct BDF2 <: AbstractImplicitFieldAlgorithm
     init::Union{Nothing, Symbol}
     compute_type::Any
     BDF2(substeps, newton, lower_bound, linsolve, solver_type, init = nothing, compute_type = :auto) =
-        new(_implicit_keywords("BDF2", substeps, newton, lower_bound, linsolve, solver_type)..., _init_keyword("BDF2", init),
-            _compute_keyword("BDF2", compute_type))
+        new(
+        _implicit_keywords("BDF2", substeps, newton, lower_bound, linsolve, solver_type)..., _init_keyword("BDF2", init),
+        _compute_keyword("BDF2", compute_type)
+    )
 end
-function BDF2(; substeps = nothing, newton = nothing, lower_bound = nothing, linsolve = :auto,
-        solver_type = :auto, init = nothing, compute_type = :auto, kw...)
+function BDF2(;
+        substeps = nothing, newton = nothing, lower_bound = nothing, linsolve = :auto,
+        solver_type = :auto, init = nothing, compute_type = :auto, kw...
+    )
     isempty(kw) || throw(_implicit_kwerror("BDF2", kw))
     return BDF2(substeps, newton, lower_bound, linsolve, solver_type, init, compute_type)
 end
@@ -350,11 +403,17 @@ end
 function QuasiSteady(; newton = nothing, linsolve = :auto, solver_type = :auto, init = nothing, compute_type = :auto, kw...)
     haskey(kw, :substeps) && throw(ArgumentError(string("QuasiSteady: no keyword `substeps`: a steady field is solved ",
         "once per window; give `newton = k` for more Newton iterations per window")))
-    haskey(kw, :lower_bound) && throw(ArgumentError(string("QuasiSteady: no keyword `lower_bound`: a steady solve has no substep to ",
+    haskey(kw, :lower_bound) && throw(
+        ArgumentError(
+            string(
+                "QuasiSteady: no keyword `lower_bound`: a steady solve has no substep to ",
         "clip (a steady state below a bound means the equation allows it; `BackwardEuler` keeps nonnegative data ",
         "nonnegative)")))
     isempty(kw) || throw(ArgumentError(string("QuasiSteady: no keyword ", join(("`$k`" for k in keys(kw)), ", "),
-        "; its keywords are `newton`, `linsolve`, `solver_type`, `init` and `compute_type`", _dt_text(kw))))
+                "; its keywords are `newton`, `linsolve`, `solver_type`, `init` and `compute_type`", _dt_text(kw)
+            )
+        )
+    )
     return QuasiSteady(newton, linsolve, solver_type, init, compute_type)
 end
 nbuffers(::QuasiSteady) = 2
@@ -383,7 +442,7 @@ function _window(alg::AbstractFieldAlgorithm, dt, clock)
     if dt === nothing
         clock === nothing && throw(ArgumentError(string(
             "`", nameof(typeof(alg)), "` on a `FieldProblem` needs `dt` (the window) when the discretization declares no ",
-            "`clock`: nothing else sets the window, and `saveat` never does; give `solve(prob, alg; dt)` or ",
+                    "`clock`: nothing else sets the window, and `saveat` never does; give `solve(prob, alg; dt)` or ",
             "`LatticeDiscretization(…; clock = τ)`")))
         return Float64(clock)
     end
@@ -392,8 +451,14 @@ function _window(alg::AbstractFieldAlgorithm, dt, clock)
 end
 # a map steps one unit of time: a clock is a whole number of map steps
 function _window(::ExplicitMap, dt, clock)
-    dt === nothing || dt == 1 || throw(ArgumentError(string("`solve`/`init`: dt = ", repr(dt), " on a map: a map ",
-        "steps one unit of time; leave `dt` out")))
+    dt === nothing || dt == 1 || throw(
+        ArgumentError(
+            string(
+                "`solve`/`init`: dt = ", repr(dt), " on a map: a map ",
+                "steps one unit of time; leave `dt` out"
+            )
+        )
+    )
     clock === nothing || (clock >= 1 && abs(round(clock) - clock) <= 1e-12 * clock) || throw(ArgumentError(string(
         "the clock's period ", clock, " is not a whole number of map steps (a map steps one unit of time, and ",
         "`step_index(t)` counts whole periods): give `clock = n` with an integer n ≥ 1, or no clock")))
@@ -494,8 +559,10 @@ const LinearSolver = Union{Solvers.DevicePCG, Solvers.Multigrid, Solvers.DeviceG
 The refusal of a linear solver `s` given where a field algorithm goes (`what` names the
 place), with `route` the working spelling. Both front ends and `init` use it.
 """
-linear_solver_refusal(what, s, route; implicit = "`BackwardEuler(; linsolve = $(repr(s)))`") = ArgumentError(string(what,
-    ": `", repr(s), "` is a linear solver: it is the `linsolve` of an implicit field solver, not a field solver; give it to ",
+linear_solver_refusal(what, s, route; implicit = "`BackwardEuler(; linsolve = $(repr(s)))`") = ArgumentError(
+    string(
+        what,
+        ": `", repr(s), "` is a linear solver: it is the `linsolve` of an implicit field solver, not a field solver; give it to ",
     "one, ", implicit, ", or step the field with an explicit field algorithm: give ", route))
 
 """
@@ -577,8 +644,10 @@ device problem print alike). `init = nothing` and `compute_type = :auto` (the de
 in F3) are left out, so the texts recorded before them stay. A `FieldGroups` prints its pairs as given (a front end that
 resolves it per field, front end A, prints the per-field map instead).
 """
-canonical(s::ExplicitEuler) = string("ExplicitEuler(substeps=", repr(s.substeps), ",lower_bound=", repr(s.lower_bound),
-    s.init === nothing ? "" : string(",init=", repr(s.init)), s.compute_type === :auto ? "" : string(",compute_type=", s.compute_type), ")")
+canonical(s::ExplicitEuler) = string(
+    "ExplicitEuler(substeps=", repr(s.substeps), ",lower_bound=", repr(s.lower_bound),
+    s.init === nothing ? "" : string(",init=", repr(s.init)), s.compute_type === :auto ? "" : string(",compute_type=", s.compute_type), ")"
+)
 canonical(m::ExplicitMap) = m.compute_type === :auto ? "ExplicitMap()" : string("ExplicitMap(compute_type=", m.compute_type, ")")
 canonical(g::FieldGroups) = string("FieldGroups(", join((string(k, "=", canonical(a)) for (k, a) in g.pairs), ","),
     ";default=", g.default === nothing ? "nothing" : canonical(g.default), ")")
@@ -593,7 +662,10 @@ canonical(x) = throw(ArgumentError("no canonical text for $(repr(x)) (a `$(typeo
                                    "keywords are numbers, symbols, types or solver parts"))
 _canonical_fields(s) = string(nameof(typeof(s)), "(",
     join((string(f, "=", canonical(getfield(s, f))) for f in sort!(collect(fieldnames(typeof(s))))
-          if !(f === :init && getfield(s, f) === nothing) && !(f === :compute_type && getfield(s, f) === :auto)), ","), ")")
+                if !(f === :init && getfield(s, f) === nothing) && !(f === :compute_type && getfield(s, f) === :auto)
+        ), ","
+    ), ")"
+)
 
 # an algorithm in messages, in its keyword form (`ExplicitEuler(; substeps = 2)`)
 function _algtext(a::ExplicitEuler)

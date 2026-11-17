@@ -108,7 +108,7 @@ function steady_start!(u, prob, p, t)
     g = _field_problem(fp.program, fp.state, u isa Vector ? copy(u) : Array(u), (Float64(primal(t)), Float64(primal(t)) + δ),
         collect(p.values), p.tables, p.inputs, fp.backend, fp.index, fp.faces, fp.stability, fp.kind, fp.initkeys,
         fp.options, fp.group)
-    inner = Solvers.DevicePCG(; reltol = 1e-10, maxiters = 400)
+    inner = Solvers.DevicePCG(; reltol = 1.0e-10, maxiters = 400)
     alg = FieldGroups((k => QuasiSteady(; linsolve = inner) for k in st)...; default = ExplicitEuler())
     ig = CommonSolve.init(g, alg; dt = δ, save_start = false)
     CommonSolve.step!(ig)          # (the steady rows are solved first, from the fields at `t`)
@@ -209,8 +209,11 @@ function _build_rhs(m::LatticeMetadata, u, p, t)
     _check_eltype(E, fp.backend)
     for k in fp.state                            # the solver's state is one vector of the state type
         f = s.fields[fieldid(s, k)]
-        f.fixed && juliatype(f.storage) !== value_type(E) && throw(ArgumentError(string("field `", k,
-            "`: `lattice_storage = ", juliatype(f.storage), "` differs from the state's number type ", value_type(E),
+        f.fixed && juliatype(f.storage) !== value_type(E) && throw(
+            ArgumentError(
+                string(
+                    "field `", k,
+                    "`: `lattice_storage = ", juliatype(f.storage), "` differs from the state's number type ", value_type(E),
             "; an OrdinaryDiffEq solver's state is one vector of that type, so its fields are stored in it. Discretize ",
             "with T = ", juliatype(f.storage), ", or solve with a field algorithm (each field stored in its own type)")))
     end
@@ -369,7 +372,10 @@ function _callback(c::InputRefresh)
             "an input given as a function of the time (", join(("`$k`" for (k, _) in integ.p.fns if k in c.masks), ", "),
             "): its masked values are written after each accepted step, and over a quiet state an adaptive step can ",
             "pass a switch. Bound the step (`dtmax`) or give `tstops` at the input's changes, or solve with a field ",
-            "algorithm (`solve(prob, ExplicitEuler(); dt)`)")))
+                    "algorithm (`solve(prob, ExplicitEuler(); dt)`)"
+                )
+            )
+        )
         refresh_inputs!(integ)
         return nothing
     end
@@ -515,7 +521,10 @@ function _callback(c::MaskSync)
             "or a coordinate, an equality, or a bare `t`): over a quiet state an adaptive step can pass the switch, ",
             "and the mask is never applied. Bound the step (`dtmax`) or give `tstops` at the switch, write the ",
             "switch as a comparison of `t` with parameters and constants (`t > t0`: located exactly), or solve ",
-            "with a field algorithm (`solve(prob, ExplicitEuler(); dt)`)")))
+                    "with a field algorithm (`solve(prob, ExplicitEuler(); dt)`)"
+                )
+            )
+        )
         mask_sync!(integ; all = true) || return SciMLBase.derivative_discontinuity!(integ, false)
         sol = integ.sol
         !isempty(sol.t) && sol.t[end] == t && length(sol.u[end]) == length(integ.u) && copyto!(sol.u[end], integ.u)
@@ -1189,7 +1198,8 @@ function _lattice_rhs(ctx::RHSContext, ::Type{E}, base, Pinit = nothing, inputs 
         S = map(lane -> map(a -> _resolve(a, U, dU), lane), S0)
         np = s.nparams
         P = launch_parameters(l.kernel, ntuple(_ -> zero(E), np), c)
-        RHSLaunch(bind_program(backend, s, l, S, P, (0.0, 0.0); R = E), S0, derive_function(l.kernel),
+        RHSLaunch(
+            bind_program(backend, s, l, S, P, (0.0, 0.0); R = E), S0, derive_function(l.kernel),
             Val(np), c)
     end
     Exec.compile_all!(backend, [r.launch for r in ls])

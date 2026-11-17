@@ -83,7 +83,8 @@ end
             s = solve(
                 owned(psys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ x + y^2; bcs], Num[]; T = 0.05), 8, 6),
                 ExplicitEuler()
-            ; dt = 1.0e-3); (sum(s[:c, 1]), sum(s[:c, end]))
+                ; dt = 1.0e-3
+            ); (sum(s[:c, 1]), sum(s[:c, end]))
         )
         m0, m1 = cons([c(t, x, 0) ~ c(t, x, 1), Differential(x)(c(t, 0, y)) ~ 0.0, Differential(x)(c(t, 1, y)) ~ 0.0])
         @test abs(m1 - m0) < 1.0e-12 * abs(m0)

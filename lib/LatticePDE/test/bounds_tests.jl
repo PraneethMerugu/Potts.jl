@@ -40,7 +40,7 @@ end
         r = fradius(po, u)
         # a window whose count is about 60 at the radius
         dt = 60 * 1.8 / r
-        n = LFP.substeps(pr, ExplicitEuler(), pr.p; dt)
+            n = LFP.substeps(pr, ExplicitEuler(), pr.p; dt)
         @test n >= r * dt / 1.8                              # the count is stable
         @test n <= 1.1 * r * dt / 1.8                        # and not over-pessimistic
         # (measured on 32²: (1 + x) Δ 1.070, DivKGrad(1 + x) 1.087, DivKGrad(c, c) 1.002, Advect 1.000)
@@ -63,9 +63,9 @@ end
     aux = fsys([D(fue) ~ fx_D * Δ(fue) - fKe, fKe ~ fx_k * fue], [fu(0, x, y) ~ 0.5], [fue, fKe])
     @test b(aux) ≈ 0.1 * s4 + 2.0
     pa = fown(aux, 16)
-    @test LFP.substeps(pa, ExplicitEuler(), pa.p; dt = 0.1) == ceil(Int, 0.1 * (0.1 * s4 + 2.0) / 1.8)
+        @test LFP.substeps(pa, ExplicitEuler(), pa.p; dt = 0.1) == ceil(Int, 0.1 * (0.1 * s4 + 2.0) / 1.8)
     # … and a write of `k` recounts through it
-    @test LFP.substeps(remake(pa; p = [fx_k => 20.0]), ExplicitEuler(); dt = 0.1) == ceil(Int, 0.1 * (0.1 * s4 + 20.0) / 1.8)
+        @test LFP.substeps(remake(pa; p = [fx_k => 20.0]), ExplicitEuler(); dt = 0.1) == ceil(Int, 0.1 * (0.1 * s4 + 20.0) / 1.8)
     # an aux field that reads another field: a cross term of the row (`K ~ k o`, `D(u) ~ −K`)
     xaux = fsys([D(fue) ~ fx_D * Δ(fue) - fKe - fue, D(foe) ~ fx_D * Δ(foe) - foe, fKe ~ 0.5 * foe],
         [fu(0, x, y) ~ 0.5, fo(0, x, y) ~ 0.5], [fue, foe, fKe])
@@ -102,7 +102,7 @@ end
     @test "fc" in pr.stability.unbounded
     @test occursin("Advect", LFP.unbounded_reason(pr.stability, pr.p))
     # the automatic count is refused in words, with a route (not a silent count)
-    @test_throws "Advect" LFP.substeps(pr, ExplicitEuler(), pr.p; dt = 0.5)
+        @test_throws "Advect" LFP.substeps(pr, ExplicitEuler(), pr.p; dt = 0.5)
     # why: the count the frozen velocity gives (ρ = 2 · 1 · 32 = 64, n = ⌈0.5 · 64 / 1.8⌉ = 18)
     # amplifies at c ≡ 1 (the linearized face-mean scheme needs h ≲ Δx/4 there)
     J = fjac(po, fill(1.0, length(po.u0)))
@@ -114,7 +114,7 @@ end
     @test maximum(λ -> abs(1 + hs * λ), eigvals(fjac(po, fill(0.5, length(po.u0))))) <= 1 + 1e-9
     # and the run with that count stays bounded (measured: max 0.902 from 0.9, the face mean's
     # small overshoot; 1.549 at 32 substeps and 1.0001 at 64)
-    s = solve(pr, ExplicitEuler(; substeps = 128); dt = 0.5, saveat = 0.5)
+        s = solve(pr, ExplicitEuler(; substeps = 128); dt = 0.5, saveat = 0.5)
     @test SciMLBase.successful_retcode(s.retcode)
     @test 0.1 - 1e-6 <= minimum(minimum, s.u) && maximum(maximum, s.u) <= 0.91
 end
@@ -131,12 +131,14 @@ end
     # enclosure does not show a negative value), the reason names it and its interval
     neg = fown(fsys([D(fue) ~ (x - 0.5) * Δ(fue)], [fu(0, x, y) ~ 0.5], [fue]), 16)
     @test isnan(neg.stability(neg.p))
-    m = emsg(() -> solve(neg, ExplicitEuler(); dt = 0.001))
+        m = emsg(() -> solve(neg, ExplicitEuler(); dt = 0.001))
     @test occursin("may be negative over `x` ∈ [0.03125, 0.9688]", m) && occursin("needs it ≥ 0", m)
-    @test occursin("ExplicitEuler(; substeps = n)", m)         # the route: an explicit count
+        @test occursin("ExplicitEuler(; substeps = n)", m)         # the route: an explicit count
     # a coefficient negative over its whole interval is negative diffusion: refused at any count
     m = emsg(() -> solve(fown(fsys([D(fue) ~ (x - 2) * Δ(fue)], [fu(0, x, y) ~ 0.5], [fue]), 16),
-        ExplicitEuler(; substeps = 4); dt = 0.001))
+                ExplicitEuler(; substeps = 4); dt = 0.001
+            )
+        )
     @test occursin("is negative at these parameters (anti-diffusion", m)
     # an interval that is not finite (`1 / (x − 0.5)` over the box): no bound, named, never refused
     inf = fown(fsys([D(fue) ~ Δ(fue) - fue / (x - 0.5)], [fu(0, x, y) ~ 0.5], [fue]), 8)
@@ -146,7 +148,9 @@ end
     @test occursin("field `fc` starts at", m) && occursin("outside its declared bounds (0.0, 1.0)", m)
     # field-dependent diffusion with no declared interval: the term stays one the bound cannot see
     m = emsg(() -> solve(fown(fsys([D(fue) ~ DivKGrad(:harmonic)(fue, fue)], [fu(0, x, y) ~ 0.5], [fue]), 8),
-        ExplicitEuler(); dt = 0.001))
+                ExplicitEuler(); dt = 0.001
+            )
+        )
     @test occursin("DivKGrad", m) && occursin("cannot see", m)
 end
 end
@@ -161,14 +165,16 @@ end
     Dx, Dy = Differential(x), Differential(y)
     @variables fk(..) [input = true]
     run(g) = (p = fown(fsys([D(fue) ~ 0.1 * Δ(fue)], [fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ g], [fue]), 8);
-              solve(p, ExplicitEuler(); dt = 0.01)[:fu, end])
+            solve(p, ExplicitEuler(); dt = 0.01)[:fu, end]
+        )
     # `Dy(x y)` is `x`, which is 1 on the face x = 1: the run equals the plain value, bitwise
     @test run(Dy(x * y)) == run(1.0)
     @test maximum(abs, run(Dy(sin(x * y))) .- run(x * cos(x * y))) < 1e-14
     @test maximum(abs, run(Dx(x^2) / 2)) > 0 && run(Dx(x^2) / 2) == run(x)
     # … and in a Robin face's value and an initial value
     rob(g) = (p = fown(fsys([D(fue) ~ 0.1 * Δ(fue)], [fu(0, x, y) ~ Dy(x * y^2) / 2, fu(t, 1, y) + Dx(fu(t, 1, y)) ~ g], [fue]), 8);
-              solve(p, ExplicitEuler(); dt = 0.01)[:fu, end])
+            solve(p, ExplicitEuler(); dt = 0.01)[:fu, end]
+        )
     @test rob(Dy(y^2)) == rob(2y)
     # a derivative of a field read stays unevaluated: refused in words
     m = try
@@ -191,13 +197,16 @@ end
     end
     @test occursin("the field's own normal derivative is its flux form", m) && occursin("`Dx(c) ~ g` (Neumann)", m)
     s = solve(fown(PDESystem([D(fue) ~ 0.1 * Δ(fue)], [fu(0, x, y) ~ 0.0, Dx(fu(t, 1, y)) ~ 1.0], fdom(), [t, x, y],
-        [fue], Any[]; name = :fb), 8), ExplicitEuler(); dt = 0.01)
+                    [fue], Any[]; name = :fb
+                ), 8
+            ), ExplicitEuler(); dt = 0.01
+        )
     @test SciMLBase.successful_retcode(s.retcode) && maximum(s[:fu, end]) > 0
     # a face value that reads another field is a face value, not a periodic pair (N5): an input
     # runs; an aux field of the state is refused in words
     pk = fown(PDESystem([D(fue) ~ 0.1 * Δ(fue)], [fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ fk(t, 1, y)], fdom(), [t, x, y],
         [fue, fk(t, x, y)], Any[]; name = :fb), 8)
-    s = solve(remake(pk; inputs = [fk => fill(2.0, 8, 8)]), ExplicitEuler(); dt = 0.01)
+        s = solve(remake(pk; inputs = [fk => fill(2.0, 8, 8)]), ExplicitEuler(); dt = 0.01)
     @test SciMLBase.successful_retcode(s.retcode) && maximum(s[:fu, end]) > 0
     m = try
         fown(PDESystem([D(fue) ~ 0.1 * Δ(fue), fKe ~ 2 * fue], [fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ fK(t, 1, y)], fdom(),
@@ -227,25 +236,28 @@ end
     us = PDESystem([D(fce) ~ 0.01 * Δ(fce) - 10 * fce + 0.5 * fce * (1 - fce)], [fc(0, x, y) ~ ifelse(x < 0.5, 1.0, 0.0)],
         fdom(4.0), [t, x, y], [fce], Any[]; name = :us)
     pu = fown(us)
-    for alg in (CrankNicolson(), BDF2())
-        s = @test_logs (:warn, r"field `fc` left its declared bounds \(0\.0, 1\.0\): it holds -0\.02\d* at site .* Give `lower_bound = 0\.0` to the algorithm") solve(pu,
-            alg; dt = 1.0, saveat = 1.0)
+        for alg in (CrankNicolson(), BDF2())
+            s = @test_logs (:warn, r"field `fc` left its declared bounds \(0\.0, 1\.0\): it holds -0\.02\d* at site .* Give `lower_bound = 0\.0` to the algorithm") solve(
+                pu,
+                alg; dt = 1.0, saveat = 1.0
+            )
         @test s.retcode == RC.Success && s.t[end] == 4.0 && -0.03 < minimum(minimum, s.u) < 0
         @test s.stats.newton_budget == 0
         # following the route: no warning, the values stay ≥ 0
-        a2 = alg isa BDF2 ? BDF2(; lower_bound = 0.0) : CrankNicolson(; lower_bound = 0.0)
-        s2 = @test_logs solve(pu, a2; dt = 1.0, saveat = 1.0)
+            a2 = alg isa BDF2 ? BDF2(; lower_bound = 0.0) : CrankNicolson(; lower_bound = 0.0)
+            s2 = @test_logs solve(pu, a2; dt = 1.0, saveat = 1.0)
         @test s2.retcode == RC.Success && minimum(minimum, s2.u) >= 0
     end
     # Backward Euler keeps the values in (0, 1) here: no warning
-    @test (@test_logs solve(pu, BackwardEuler(); dt = 1.0, saveat = 1.0)).retcode == RC.Success
+        @test (@test_logs solve(pu, BackwardEuler(); dt = 1.0, saveat = 1.0)).retcode == RC.Success
     # a growth past the interval that the count did not see is caught by the solve's own check:
     # a source and `3c²` carry c above 1 (a blow-up), and with one Newton step per substep the
     # shift clamp warns (with `newton > 1` the Newton check counts it)
     gr = fown(PDESystem([D(fce) ~ 0.01 * Δ(fce) + 3 * fce^2 + 0.5], [fc(0, x, y) ~ 0.5], fdom(3.0), [t, x, y], [fce], Any[];
         name = :gr), 16)
     @test_logs (:warn, r"left its declared bounds .* Widen `bounds`") (:warn, r"the implicit shift was clamped") match_mode = :any solve(gr,
-        BackwardEuler(); dt = 0.5, saveat = 0.5)
+            BackwardEuler(); dt = 0.5, saveat = 0.5
+        )
 end
 end
 
@@ -273,26 +285,29 @@ end
     @test occursin("its masked condition holds 1.5", emsg(() -> fown(dm, 16)))
     # a value inside is accepted, and the run stays in [0.5, 1]
     s = solve(fown(fsys([D(fce) ~ DivKGrad(:harmonic)(fce, fce)], [fc(0, x, y) ~ 0.5, fc(t, 1, y) ~ 1.0], [fce]), 16),
-        ExplicitEuler(); dt = 0.01, saveat = 0.1)
+            ExplicitEuler(); dt = 0.01, saveat = 0.1
+        )
     @test s.retcode == RC.Success && 0.5 - 1e-12 <= minimum(minimum, s.u) && maximum(maximum, s.u) <= 1 + 1e-12
     # a source drives c out of (0, 1): `Unstable` with one warning that names the field and routes
     src = fown(fsys([D(fce) ~ DivKGrad(:harmonic)(fce, fce) + 20.0], [fc(0, x, y) ~ 0.5], [fce]), 16)
     s = @test_logs (:warn, r"field `fc` left its declared bounds \(0\.0, 1\.0\): it holds .* by the end of window .*`ReturnCode\.Unstable`, the run stops\. Give more substeps \(`substeps = n`\), or widen `bounds`") solve(src,
-        ExplicitEuler(); dt = 0.01, saveat = 0.05)
+            ExplicitEuler(); dt = 0.01, saveat = 0.05
+        )
     @test s.retcode == RC.Unstable && s.t[end] < 1.0 && maximum(s.u[end]) > 1
     # a source that keeps it inside runs to the end with no warning
     s = @test_logs solve(fown(fsys([D(fce) ~ DivKGrad(:harmonic)(fce, fce) + 0.2 * (1 - fce)], [fc(0, x, y) ~ 0.5], [fce]), 16),
-        ExplicitEuler(); dt = 0.01, saveat = 0.05)
+            ExplicitEuler(); dt = 0.01, saveat = 0.05
+        )
     @test s.retcode == RC.Success && s.t[end] == 1.0
     # a field with declared bounds that no coefficient reads is not checked in the run
     nu = fown(fsys([D(fce) ~ 0.1 * Δ(fce) + 20.0], [fc(0, x, y) ~ 0.5], [fce]), 16)
     @test isempty(nu.stability.used)
-    @test solve(nu, ExplicitEuler(); dt = 0.01).retcode == RC.Success
+        @test solve(nu, ExplicitEuler(); dt = 0.01).retcode == RC.Success
     # the writes take the start check (values outside refused, naming the site)
     pr = fown(fsys([D(fce) ~ DivKGrad(:harmonic)(fce, fce)], [fc(0, x, y) ~ 0.5], [fce]), 16)
     @test occursin("field `fc` starts at 2.0 at site (1, 1), outside its declared bounds (0.0, 1.0)",
         emsg(() -> remake(pr; u0 = fill(2.0, 256))))
-    ig = init(pr, ExplicitEuler(); dt = 0.01)
+        ig = init(pr, ExplicitEuler(); dt = 0.01)
     @test occursin("field `fc` is written 2.0 at site (1, 1), outside its declared bounds", emsg(() -> (ig[fce] = fill(2.0, 16, 16))))
     @test occursin("field `fc` starts at 2.0 at site (1, 1)", emsg(() -> SciMLBase.reinit!(ig, fill(2.0, 256))))
     @test maximum(ig[fce]) == 0.5                                    # nothing changed
@@ -301,7 +316,8 @@ end
     # a state that is not finite warns once, naming the field (review N7)
     un = fown(fsys([D(fue) ~ 100 * fue^3], [fu(0, x, y) ~ 0.5], [fue]), 8)
     s = @test_logs (:warn, r"field `fu`: the state is not finite at t = .*`ReturnCode\.Unstable`, the run stops\. Give more substeps") match_mode = :any solve(un,
-        ExplicitEuler(; substeps = 1); dt = 0.1, saveat = 0.1)
+            ExplicitEuler(; substeps = 1); dt = 0.1, saveat = 0.1
+        )
     @test s.retcode == RC.Unstable
 end
 end
@@ -332,7 +348,7 @@ end
     ex = PDESystem([D(fce) ~ DivKGrad(:arithmetic)(exp(3 * fce), fce)], [fc(0, x, y) ~ 0.5, fc(t, 0, y) ~ 0.0],
         fdom(T), [t, x, y], [fce], Any[]; name = :ex)
     for (name, pr) in (("c³, c = 1 on the face", po), ("exp(3c), c = 0 on the face", fown(ex, n)))
-        sr = @test_logs solve(remake(pr; u0 = rough), ExplicitEuler(); dt = 0.01, saveat = T)
+            sr = @test_logs solve(remake(pr; u0 = rough), ExplicitEuler(); dt = 0.01, saveat = T)
         @test sr.retcode == RC.Success && sr.t[end] == T
         @test all(u -> -1e-12 <= minimum(u) && maximum(u) <= 1 + 1e-12, sr.u)
     end
@@ -341,13 +357,13 @@ end
     neg = PDESystem([D(fce) ~ DivKGrad(:arithmetic)(fce * (1 - fce) + 0.01, fce)], [fc(0, x, y) ~ 0.5, fc(t, 0, y) ~ 1.0],
         fdom(T), [t, x, y], [fce], Any[]; name = :neg)
     mneg = try
-        solve(fown(neg, 16), ExplicitEuler(); dt = 0.01); ""
+            solve(fown(neg, 16), ExplicitEuler(); dt = 0.01); ""
     catch e
         sprint(showerror, e)
     end
     @info "F3-ghost N4" mneg
     @test occursin("may be negative", mneg) && occursin("ghost values of the faces", mneg) && occursin("`fc` → `", mneg)
-    s = solve(po, ExplicitEuler(); dt = 0.01, saveat = T)
+        s = solve(po, ExplicitEuler(); dt = 0.01, saveat = T)
     @test s.retcode == RC.Success
     prof = vec(sum(reshape(s.u[end], n, n); dims = 2)) ./ n                 # the x profile
     # fine 1D reference: finite volumes, 12 cells per coarse cell, the face value K(1) = 1 at x = 0

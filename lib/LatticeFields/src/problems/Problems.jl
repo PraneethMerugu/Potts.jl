@@ -25,7 +25,7 @@ using ..Exec: Exec
 using ..IR: IR, CLAMP, INSIDE, Coef, DomainEdgeRule, HEX, Ex, FaceRule, sitecoefs, NodeValueRule, Program, RUNTIME, PARAM, LOAD, fieldid, print_program, isfloat, juliatype, leveldims, ncomp, nsites,
             runtime!, degenerate, FACE_RTOL, F64, F16, U8, I32, U32
 using ..Compile: CompiledKernel, CompileOptions, body_function, derive_function, lanecast, lanetype,
-                 primal, promote_dual, semantic, value_type, withvaltype, writes, fuse_update, fuse_residual,
+    primal, promote_dual, semantic, value_type, withvaltype, writes, fuse_update, fuse_residual,
                  npartials, dvalue, dpartial, dsetpartial, dreplace
 using ..Schedule: LaunchSpec, StepPlan, plan, fusion_report
 using ..Solvers: Solvers
@@ -37,7 +37,7 @@ public Geom, RT_T, RT_DT, launch_geometry, launch_parameters, bind_program, rebi
        FieldStore,
        array, current, settable!, launch_arrays, state_layout, BoundStep, compile!, swap!,
        run_step!, FaceCheck, face_checks, degenerate_face, check_faces, face_ratio, FieldSlot,
-       LatticeIndex, AbstractFieldAlgorithm, LinearSolver, linear_solver_refusal, ExplicitEuler, ExplicitMap, nbuffers, FieldProblem,
+    LatticeIndex, AbstractFieldAlgorithm, LinearSolver, linear_solver_refusal, ExplicitEuler, ExplicitMap, nbuffers, FieldProblem,
        FieldGroups, update_key, update_rule, EulerRule, alg_family, alg_cache, reset_cache!, step_retcode!, GroupSpec, FieldGroup,
        ParamSlot, TableSpec, InputSpec, canonical, check_status!, check_declared!, check_declared_state, check_backend_float64, status_word, status_route, StatusTotals, STATUS_CODE,
        STATUS_WINDOW, STATUS_CAUSE, STATUS_SOLVES, STATUS_BUDGET, STATUS_FLOOR, STATUS_NEWTON_BUDGET, STATUS_CAUSES, field_stats,

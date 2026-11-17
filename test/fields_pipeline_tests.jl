@@ -26,7 +26,8 @@
             dev = [
                 ("MerksVasculogenesis", () -> MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
                     [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]],
-                    (; field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0))),
+                    (; field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0)),
+                ),
                 ("Merks2006", () -> Merks2006(; name = :m, lattice = (16, 16)), fp_op2006(),
                     (; field_solver = ExplicitEuler(substeps = 15))),
                 # two solver groups; `u` reads `c` from its array (fields_tests.jl, FdTwo)
@@ -60,7 +61,8 @@ end
         warm(integ) = (step!(integ); step!(integ); @allocated step!(integ))
         σ = zeros(Int32, 500, 500); σ[200:215, 200:215] .= 1; σ[300:312, 280:300] .= 2
         prob = PottsProblem(MerksVasculogenesis(; name = :m, lattice = (500, 500)), [ownership => σ, kind => [:endothelial, :endothelial]],
-            (0, 100); field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0))
+            (0, 100); field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0)
+        )
         integ = init(prob, SequentialCPM(); save_start = false, save_end = false, save_everystep = false)
         @test warm(integ) == 0
     end

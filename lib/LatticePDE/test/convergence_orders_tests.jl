@@ -82,7 +82,8 @@ end
                             ue => ExplicitEuler(; substeps = 1),
                             ve => BackwardEuler(; linsolve = BTIGHT)
                         )
-                    ; dt).u[end] .- iref
+                        ; dt
+                    ).u[end] .- iref
                 ) for dt in idts
             ]
             orders = observed_orders(idts, errs)

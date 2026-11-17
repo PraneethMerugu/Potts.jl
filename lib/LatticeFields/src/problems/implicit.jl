@@ -580,7 +580,8 @@ end
 
 # The `ImplicitCache` of the implicit algorithm `alg` for the fields `fields` of group `g` on
 # store `st` at raw parameters `p`, `n` substeps of `dt / n`
-function bind_cache(alg::AbstractImplicitFieldAlgorithm, g::FieldGroup, st::FieldStore, p; fields, n, dt, c, backend, options, V,
+function bind_cache(
+        alg::AbstractImplicitFieldAlgorithm, g::FieldGroup, st::FieldStore, p; fields, n, dt, c, backend, options, V,
         shared = nothing)
     s = group_program(g, alg)                       # the stepped program: the store's
     # a state with derivative parts (Dual parameters or a Dual start): the primal solve on a
@@ -750,7 +751,8 @@ function bind_cache(alg::AbstractImplicitFieldAlgorithm, g::FieldGroup, st::Fiel
     iterate = any(r -> r.op.iterate, rows)
     smin = _steady_shift(op, keys, p)
     # (behind a barrier: a group that is not coupled compiles none of it, r1 M1)
-    cs = coupled ? Base.inferencebarrier(_bind_coupled)(rows, _krylov(alg.linsolve), st, s, rs, rst, sps, rcurss, swaps, keys,
+    cs = coupled ? Base.inferencebarrier(_bind_coupled)(
+            rows, _krylov(alg.linsolve), st, s, rs, rst, sps, rcurss, swaps, keys,
         g.spec.init, backend, p, c, op, alg) : nothing
     newton = alg.newton !== nothing ? alg.newton : coupled ? _coupled_newton(alg, cs.linear, switch) :
              _auto_newton(alg, exact, switch, iterate, seen, ρin, h, b.θ, smin)
@@ -1325,8 +1327,10 @@ or unknown, puts the term's Gershgorin bound in the sum instead). No stability b
 needed: an unknown bound is no refusal (the device check decides). When a rule raises the
 user's count, a warning says which, once per cause (`key`).
 """
-function substeps(spec::GroupSpec, alg::AbstractImplicitFieldAlgorithm, dt::Real, pp; fields = spec.state, stability = spec.stability,
-        key = identity, texts::AbstractPolicyTexts = ProblemTexts(spec.texts.route))
+function substeps(
+        spec::GroupSpec, alg::AbstractImplicitFieldAlgorithm, dt::Real, pp; fields = spec.state, stability = spec.stability,
+        key = identity, texts::AbstractPolicyTexts = ProblemTexts(spec.texts.route)
+    )
     isempty(fields) && return 0
     dt = Float64(dt)
     r = bound_report(stability, pp)
@@ -1376,7 +1380,8 @@ substeps(g::FieldGroup, alg::AbstractImplicitFieldAlgorithm, dt::Real, pp; kw...
 # QuasiSteady: one solve per window (no count), after the parameter refusals and the steady
 # refusals (F3 design §3.5), at build and at every parameter write
 function substeps(spec::GroupSpec, alg::QuasiSteady, dt::Real, pp; fields = spec.state, stability = spec.stability,
-        key = identity, texts::AbstractPolicyTexts = ProblemTexts(spec.texts.route))
+        key = identity, texts::AbstractPolicyTexts = ProblemTexts(spec.texts.route)
+    )
     isempty(fields) && return 0
     r = bound_report(stability, pp)
     check_declared(stability, pp)

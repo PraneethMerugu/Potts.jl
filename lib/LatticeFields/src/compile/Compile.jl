@@ -27,7 +27,7 @@ using ..IR: IR, Access, BOOL, CALL, CAST, CLAMP, COND, CONST, COORD, Coef, DIV,
             loadtype, ncomp, nsites, node!, nodeargs, opname, param!, print_program,
             rebuild,
             remap_access,
-            select!, verify, with_kernels, AbstractBoundaryRule, Ex, FieldDecl, FlagDecl, MaskDecl, _rulemap, cast!, load!
+    select!, verify, with_kernels, AbstractBoundaryRule, Ex, FieldDecl, FlagDecl, MaskDecl, _rulemap, cast!, load!
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 

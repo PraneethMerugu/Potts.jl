@@ -40,16 +40,16 @@ end
     # the face rules read value fields; the row is a field row
     fr = [r for r in p.program.rules if r isa LatticeFields.IR.FaceRule && LatticeFields.IR.sitecoefs(r)]
     @test length(fr) == 2 && fr[1].afield != 0 && fr[2].bfield != 0
-    ig, u0, u = rs_window(p, BackwardEuler(; linsolve = BTIGHT); dt = h)
+        ig, u0, u = rs_window(p, BackwardEuler(; linsolve = BTIGHT); dt = h)
     want = be_hand(u0, h; dims = RSD, K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces = rs_faces())
     rt = only(ig.runtimes)
     @test maximum(abs, u .- want) < 1e-10 && rt.cache.rows[1].op.field && rt.cache.exact && rt.cache.newton == 1
     # the explicit rate is the hand rate (one small window)
-    ig, u0, u = rs_window(p, ExplicitEuler(; substeps = 1); dt = 1e-3)
+        ig, u0, u = rs_window(p, ExplicitEuler(; substeps = 1); dt = 1.0e-3)
     L, b = hand_rate(; dims = RSD, K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces = rs_faces())
     @test maximum(abs, u .- (u0 .+ 1e-3 .* (L * u0 .+ b))) < 1e-12
     # the default count sees the faces (the bound over the face's sites): the count is finite
-    @test LFP.substeps(p, ExplicitEuler(); dt = 0.5) >= 1
+        @test LFP.substeps(p, ExplicitEuler(); dt = 0.5) >= 1
 end
 end
 
@@ -62,13 +62,13 @@ end
         [bD, bk, bg]))
     site = rsown(rsys([D(bce) ~ bD * Δ(bce) - bk * bce],
         [bc(0, x, y) ~ x * y, ifelse(y < 2.0, bg, 0.0) * bc(t, 0, y) - Differential(x)(bc(t, 0, y)) ~ 1.0], [bD, bk, bg]))
-    for inner in (BTIGHT, Multigrid(; reltol = 1e-12, maxiters = 64))
-        igu, _, uu = rs_window(uni, BackwardEuler(; linsolve = inner); dt = h)
-        igs, _, us = rs_window(site, BackwardEuler(; linsolve = inner); dt = h)
+        for inner in (BTIGHT, Multigrid(; reltol = 1.0e-12, maxiters = 64))
+            igu, _, uu = rs_window(uni, BackwardEuler(; linsolve = inner); dt = h)
+            igs, _, us = rs_window(site, BackwardEuler(; linsolve = inner); dt = h)
         @test !only(igu.runtimes).cache.rows[1].op.field && only(igs.runtimes).cache.rows[1].op.field
         @test maximum(abs, uu .- us) < 1e-10
     end
-    @test LFP.substeps(uni, ExplicitEuler(); dt = 0.5) == LFP.substeps(site, ExplicitEuler(); dt = 0.5)
+        @test LFP.substeps(uni, ExplicitEuler(); dt = 0.5) == LFP.substeps(site, ExplicitEuler(); dt = 0.5)
 end
 end
 
@@ -79,16 +79,16 @@ end
     bcs = [bc(0, x, y) ~ x * y, (y - 0.4) * bc(t, 0, y) + Differential(x)(bc(t, 0, y)) ~ 0.5]
     p = rsown(rsys([D(bce) ~ bD * Δ(bce) - bk * bce + x], bcs, [bD, bk]))
     faces = Dict((1, -1) => (:robin, (x, y) -> y - 0.4, 1.0, 0.5))
-    ig, u0, _ = rs_window(p, BackwardEuler(; linsolve = BTIGHT); dt = h)
+        ig, u0, _ = rs_window(p, BackwardEuler(; linsolve = BTIGHT); dt = h)
     c = only(ig.runtimes).cache
     @test !c.exact && c.newton > 1
-    ig, u0, u = rs_window(p, BackwardEuler(; newton = 30, linsolve = BTIGHT); dt = h)
+        ig, u0, u = rs_window(p, BackwardEuler(; newton = 30, linsolve = BTIGHT); dt = h)
     want = be_hand(u0, h; dims = RSD, K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces)
     @test maximum(abs, u .- want) < 1e-10
     # the same face with α ≥ 0 at every site is exact (the sign is per site, from the bound)
     p2 = rsown(rsys([D(bce) ~ bD * Δ(bce) - bk * bce + x],
         [bc(0, x, y) ~ x * y, (y + 0.1) * bc(t, 0, y) - Differential(x)(bc(t, 0, y)) ~ 0.5], [bD, bk]))
-    @test only(init(p2, BackwardEuler(); dt = h).runtimes).cache.exact
+        @test only(init(p2, BackwardEuler(); dt = h).runtimes).cache.exact
 end
 end
 
@@ -96,19 +96,19 @@ end
 @testset "F4-12b: a time-varying α (BackwardEuler rebuilt at each stage; ExplicitEuler at a small step)" begin
     bcs = [bc(0, x, y) ~ x * y, (1.5 + sin(4t)) * bc(t, 0, y) - Differential(x)(bc(t, 0, y)) ~ 1.0]
     p = rsown(rsys([D(bce) ~ bD * Δ(bce) - bk * bce], bcs, [bD, bk]; T = 0.5))
-    ig = init(p, BackwardEuler(; linsolve = BTIGHT); dt = 0.05)
+        ig = init(p, BackwardEuler(; linsolve = BTIGHT); dt = 0.05)
     @test only(ig.runtimes).cache.timed
     # the rate at time t reads α(t): one explicit window at t0 = 0 equals the hand rate there
-    _, u0, u = rs_window(p, ExplicitEuler(; substeps = 1); dt = 1e-3)
+        _, u0, u = rs_window(p, ExplicitEuler(; substeps = 1); dt = 1.0e-3)
     L, b = hand_rate(; dims = RSD, K = (x, y) -> 0.3, k = (x, y) -> 2.0, faces = Dict((1, -1) => (:robin, 1.5, -1.0, 1.0)))
     @test maximum(abs, u .- (u0 .+ 1e-3 .* (L * u0 .+ b))) < 1e-12
     # BackwardEuler converges to the explicit solution (first order in dt)
-    ref = solve(p, ExplicitEuler(; substeps = 1); dt = 1e-4).u[end]
+        ref = solve(p, ExplicitEuler(; substeps = 1); dt = 1.0e-4).u[end]
     errs = map((0.02, 0.01)) do dt
-        maximum(abs, solve(p, BackwardEuler(; linsolve = BTIGHT); dt).u[end] .- ref)
+            maximum(abs, solve(p, BackwardEuler(; linsolve = BTIGHT); dt).u[end] .- ref)
     end
     @test errs[2] < 0.6 * errs[1] && errs[2] < 5e-3
-    @test LFP.substeps(p, ExplicitEuler(); dt = 0.5) >= 1
+        @test LFP.substeps(p, ExplicitEuler(); dt = 0.5) >= 1
 end
 end
 
@@ -119,7 +119,7 @@ end
     bcs = [bc(0, x, y) ~ x * y, (-1 - 40t) * bc(t, 0, y) - Differential(x)(bc(t, 0, y)) ~ 0.0]
     p = rsown(rsys([D(bce) ~ Δ(bce)], bcs, Any[]; T = 0.5))
     @test Problems.reads_time(p.stability)
-    ig = init(p, ExplicitEuler(); dt = 0.1)
+        ig = init(p, ExplicitEuler(); dt = 0.1)
     rt = only(ig.runtimes)
     ns = Int[]
     for w in 1:5
@@ -127,13 +127,13 @@ end
         push!(ns, rt.n)
         # the window's count is the policy's at the bound over [t, t + dt]
         Problems.bound_window!(p.stability, 0.1 * (w - 1), 0.1 * w)
-        @test rt.n == LFP.substeps(p, ExplicitEuler(); dt = 0.1)
+            @test rt.n == LFP.substeps(p, ExplicitEuler(); dt = 0.1)
     end
         @test issorted(ns) && ns[end] > ns[1] && SciMLBase.check_error(ig) == ReturnCode.Success
     @test all(isfinite, ig[bce])
     # a bound that does not read the time keeps its count (no re-bound)
     q = rsown(rsys([D(bce) ~ Δ(bce)], [bc(0, x, y) ~ x * y, (1 + y) * bc(t, 0, y) - Differential(x)(bc(t, 0, y)) ~ 0.0], Any[]))
-    @test !Problems.reads_time(q.stability) && only(init(q, ExplicitEuler(); dt = 0.1).runtimes).recount === nothing
+        @test !Problems.reads_time(q.stability) && only(init(q, ExplicitEuler(); dt = 0.1).runtimes).recount === nothing
 end
 end
 
@@ -143,8 +143,8 @@ end
     bcs = [bc(0, x, y) ~ x * y, ra * (1 + y) * bc(t, 0, y) - rb * (1 + x) * Differential(x)(bc(t, 0, y)) ~ 1.0,
         (1 + x) * bc(t, x, 1) + rb * Differential(y)(bc(t, x, 1)) ~ 0.5]
     p = rsown(rsys([D(bce) ~ bD * Δ(bce) - bk * bce], bcs, [bD, bk, ra, rb]; T = 0.2))
-    for (q, v0) in ((ra, 1.2), (rb, 0.7)), alg in (BackwardEuler(; linsolve = BTIGHT), ExplicitEuler())
-        J(v) = sum(solve(remake(p; p = [q => v]), alg; dt = 0.05).u[end])
+        for (q, v0) in ((ra, 1.2), (rb, 0.7)), alg in (BackwardEuler(; linsolve = BTIGHT), ExplicitEuler())
+            J(v) = sum(solve(remake(p; p = [q => v]), alg; dt = 0.05).u[end])
         d = ForwardDiff.derivative(J, v0)
         fd = (J(v0 + 1e-6) - J(v0 - 1e-6)) / 2e-6
         @test abs(d - fd) < 1e-5 * abs(fd) && abs(fd) > 1e-3 || (println("F4-12b Dual ", q, " ", d, " ", fd); false)
@@ -162,7 +162,7 @@ end
     p = discretize(PDESystem([D(qae) ~ 0.1 * Δ(qae) + 0.05 * qbe, D(qbe) ~ 0.1 * Δ(qbe) - qbe - 0.05 * qae],
             [qa(0, x, y) ~ 0.0, qb(0, x, y) ~ 1.0, (1 + y) * qa(t, 0, y) - Differential(x)(qa(t, 0, y)) ~ 0.0],
             bdom(1.0), [t, x, y], [qae, qbe], Any[]; name = :anch), LatticeDiscretization(Grid((8, 8)); T = Float64))
-    ig = init(p, FieldGroups(qae => QuasiSteady(), qbe => BackwardEuler()); dt = 0.1)
+        ig = init(p, FieldGroups(qae => QuasiSteady(), qbe => BackwardEuler()); dt = 0.1)
     step!(ig)
         @test SciMLBase.check_error(ig) == ReturnCode.Success && all(isfinite, ig[qae])
 end

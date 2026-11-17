@@ -93,7 +93,8 @@ end
                     name = :noclamp
                 ), LatticeDiscretization(Grid((8, 8)); T = Float64)
             ), BackwardEuler()
-        ; dt = 0.1)
+            ; dt = 0.1
+        )
         solve!(ig)
         @test ig.retcode == ReturnCode.Success && only(ig.runtimes).totals.cause == 0
     end
@@ -117,7 +118,8 @@ end
         s2 = @test_logs (:warn, r"field `bc`: the Newton iteration \(`newton = 2`\) reached its budget \d+ times.*a larger `newton = k`") solve(
             p,
             BackwardEuler(; linsolve = BTIGHT, newton = 2)
-        ; dt = 0.25)
+            ; dt = 0.25
+        )
         @test s2.retcode == ReturnCode.Success && s2.stats.newton_budget == 96
         s3 = @test_logs min_level = WARN solve(p, BackwardEuler(; linsolve = BTIGHT, newton = 12); dt = 0.25)
         @test s3.stats.newton_budget == 0
@@ -182,7 +184,8 @@ end
         ig = @test_logs (:warn, r"`2\.75max\(-0\.5 \+ bo, 0\)` \(in the rate of `bc`\) is not in the implicit operator and no bound sees it") match_mode = :any init(
             pc,
             BackwardEuler(; linsolve = BTIGHT)
-        ; dt = 0.5)
+            ; dt = 0.5
+        )
         @test only(ig.runtimes).cache.newton == 4 && only(ig.runtimes).cache.cyclic
     end
 end
@@ -198,7 +201,8 @@ end
         ) solve(
             p,
             BackwardEuler()
-        ; dt = 1.0)
+            ; dt = 1.0
+        )
         @test s.retcode == ReturnCode.ConvergenceFailure
         ig = init(p, BackwardEuler(); dt = 1.0)
         @test ig.substeps == 1 && only(ig.runtimes).cache.newton == 4 && !only(ig.runtimes).cache.seen
@@ -336,7 +340,8 @@ end
             init(
                 pk,
                 BackwardEuler()
-            ; dt = 0.1).runtimes
+                ; dt = 0.1
+            ).runtimes
         ).cache
         @test !c.exact && !c.seen && c.newton == 4
     end

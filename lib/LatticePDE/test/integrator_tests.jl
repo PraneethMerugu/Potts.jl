@@ -35,7 +35,7 @@ end
 @testitem "F4-03: integ.t, integ.u and a shortened window, explicit (against a run at dt/2)" setup = [LP_integrator] tags = [:latticepde, :integrator] begin
 @testset "F4-03: integ.t, integ.u and a shortened window, explicit (against a run at dt/2)" begin
     p, λ, u0 = eig_problem(16)
-    ig = init(p, ExplicitEuler(); dt = 0.01)
+        ig = init(p, ExplicitEuler(); dt = 0.01)
     @test ig isa SciMLBase.DEIntegrator && ig.t == 0.0 && ig.u ≈ vec(u0) && ig.sol.t == [0.0]
     step!(ig, 0.05, true)
     @test ig.t == 0.05 && ig.iter == 5
@@ -43,7 +43,7 @@ end
     @test ig.t == 0.055 && ig.iter == 5 && ig.windows == 6
     # the counts: 4 substeps of 0.0025 in a window of 0.01, 2 in the shortened one; the run at
     # dt = 0.005 takes 2 of 0.0025 each window, so the two runs take the same substeps
-    fine = init(p, ExplicitEuler(); dt = 0.005)
+        fine = init(p, ExplicitEuler(); dt = 0.005)
     step!(fine, 0.055, true)
     @test substep_counts(ig) == [4] && substep_counts(fine) == [2]
     @test fine.t == 0.055 && maximum(abs, ig.u .- fine.u) < 1e-12
@@ -53,7 +53,7 @@ end
     @test maximum(abs, ig.u .- fine.u) < 1e-12
     # a time span that is not a whole number of windows ends with a shortened window
         s = solve(remake(p; tspan = (0.0, 0.395)), ExplicitEuler(); dt = 0.01, save_everystep = false)
-    f = solve(remake(p; tspan = (0.0, 0.395)), ExplicitEuler(); dt = 0.005)
+        f = solve(remake(p; tspan = (0.0, 0.395)), ExplicitEuler(); dt = 0.005)
     @test s.t == [0.0, 0.395] && maximum(abs, s.u[end] .- f.u[end]) < 1e-12
 end
 end
@@ -61,11 +61,11 @@ end
 @testitem "F4-03: a shortened window of Backward Euler equals a chained run; BDF2 keeps order 2" setup = [LP_integrator] tags = [:latticepde, :integrator] begin
 @testset "F4-03: a shortened window of Backward Euler equals a chained run; BDF2 keeps order 2" begin
     p, λ, u0 = eig_problem(16)
-    ib = init(p, BackwardEuler(; linsolve = BTIGHT); dt = 0.01)
+        ib = init(p, BackwardEuler(; linsolve = BTIGHT); dt = 0.01)
     step!(ib, 0.055, true)
-    c1 = init(p, BackwardEuler(; linsolve = BTIGHT); dt = 0.01)
+        c1 = init(p, BackwardEuler(; linsolve = BTIGHT); dt = 0.01)
     step!(c1, 0.05, true)
-    c2 = init(remake(p; u0 = copy(c1.u), tspan = (0.05, 0.4)), BackwardEuler(; linsolve = BTIGHT); dt = 0.005)
+        c2 = init(remake(p; u0 = copy(c1.u), tspan = (0.05, 0.4)), BackwardEuler(; linsolve = BTIGHT); dt = 0.005)
     step!(c2)
     @test ib.t == 0.055 && maximum(abs, ib.u .- c2.u) < 1e-10
     step!(ib)                                     # a shortened window back to the grid, then full ones
@@ -73,7 +73,8 @@ end
     @test ib.t ≈ 0.07 && only(ib.runtimes).cache.h == 0.01
     # BDF2 with one shortened window (a tstop off the grid, then the window back to it): each
     # change of the step starts BDF2 again, and the run keeps order 2
-    err(dt) = (ig = init(p, BDF2(; linsolve = BTIGHT); dt); step!(ig, 0.1234, true); solve!(ig);
+        err(dt) = (
+            ig = init(p, BDF2(; linsolve = BTIGHT); dt); step!(ig, 0.1234, true); solve!(ig);
                maximum(abs, ig.u .- exp(0.3λ * 0.4) .* vec(u0)))
     es = [err(0.4 / 2^k) for k in 4:7]
     os = log2.(es[1:(end - 1)] ./ es[2:end])
@@ -94,7 +95,7 @@ end
     @test only(ig.runtimes).cache.start
     v = copy(ig.u)
     step!(ig)
-    fresh = init(remake(pe; u0 = v), CrankNicolson(; linsolve = BTIGHT); dt = 0.05)   # (the heat operator reads no time)
+        fresh = init(remake(pe; u0 = v), CrankNicolson(; linsolve = BTIGHT); dt = 0.05)   # (the heat operator reads no time)
     step!(fresh)
     @test ig.u == fresh.u                         # the damped start, as a fresh run's
     # the other methods

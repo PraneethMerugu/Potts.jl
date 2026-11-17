@@ -30,7 +30,7 @@ end
         sys = PDESystem([D(mce) ~ mD * Δ(mce) - 0.5 * mce], [mc(0, x, y) ~ 0.0, mce ~ masked(pred, 2.0)], mdom,
             [t, x, y], [mce, mke], [mD, mt0]; name = :ms)
         p = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64); inputs = [mke => MK])
-        o = solve(p, ExplicitEuler(); dt = 1e-4, saveat = [0.2, 1.0])
+            o = solve(p, ExplicitEuler(); dt = 1.0e-4, saveat = [0.2, 1.0])
         for alg in (Tsit5(), Rodas5P())
             s = solve(p, alg; abstol = 1e-9, reltol = 1e-9, saveat = [0.2, 1.0])
             @test unique(s.u[end][vec(MK .== 1)]) == [2.0] && all(iszero, s(0.2))   # (off before the switch)
@@ -48,7 +48,7 @@ end
         sprint(showerror, e)
     end
     @test occursin("cannot locate", err) && occursin("dtmax", err)
-    o = solve(p, ExplicitEuler(); dt = 1e-3)
+        o = solve(p, ExplicitEuler(); dt = 1.0e-3)
     @test unique(o.u[end]) == [2.0]                                # (the owned run applies it)
     s = solve(p, Tsit5(); dtmax = 0.01)
     @test unique(s.u[end]) == [2.0]

@@ -363,7 +363,8 @@ inputs: [`with_tables`](@ref), primal values). The one policy of both front ends
 text, hashed; front end A: the group's fingerprint text); `texts` words the messages.
 """
 function substeps(spec::GroupSpec, alg::ExplicitEuler, dt::Real, pp; fields = spec.state, stability = spec.stability,
-        key = identity, texts::AbstractPolicyTexts = ProblemTexts(spec.texts.route), span = nothing)
+        key = identity, texts::AbstractPolicyTexts = ProblemTexts(spec.texts.route), span = nothing
+    )
     isempty(fields) && return 0                     # aux fields only: one evaluation per window
     dt = Float64(dt)
     # (a bound that reads the time, F4-12b: its windows are counted again at these parameters,
@@ -419,7 +420,8 @@ the cross terms is the same for every group. `span` is the time span (front end 
 loop whose gain the rule does not bound is refused (`steady_loop_text`).
 """
 function check_coupling(stability, groups, explicit, pp, dt::Real; check = eachindex(groups), key = identity,
-        texts::AbstractPolicyTexts = ProblemTexts(), span = nothing, steady = nothing, rows0 = String[])
+        texts::AbstractPolicyTexts = ProblemTexts(), span = nothing, steady = nothing, rows0 = String[]
+    )
     length(groups) > 1 || return nothing
     keys = [collect(String, ks) for ks in groups]
     parts = lagged_coupling(stability, keys, pp)
@@ -822,7 +824,7 @@ a `QuasiSteady` group only), so its linear budget is the `DeviceGMRES`'s.
 function status_route(alg, which::Symbol, cause::Integer = 0; coupled::Bool = false)
     which === :budget && return "a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`)"
     which === :newton_budget && return "more Newton iterations (a larger `newton = k`) or more substeps (`substeps = n`)"
-    cause & 0x1 != 0 && return "more substeps (`substeps = n`) or a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`)"
+    cause & 0x01 != 0 && return "more substeps (`substeps = n`) or a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`)"
     cause & 0x6 != 0 && return "more substeps (`substeps = n`): a smaller step brings the Newton iteration into its contraction"
     return "more substeps (`substeps = n`) or a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`)"
 end
@@ -830,13 +832,14 @@ end
 # transient solver
 function status_route(::QuasiSteady, which::Symbol, cause::Integer = 0; coupled::Bool = false)
     which === :budget && return coupled ? "a larger linear budget (`linsolve = DeviceGMRES(; maxiters = n)`)" :
-                                "a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`)"
+        "a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`)"
     which === :newton_budget && return "more Newton iterations (a larger `newton = k`)"
     cause & 0xc0 != 0 && return string("step the fields with `BackwardEuler` (a transient solve needs no unique steady ",
-        "state), or give the coupled solve a larger budget (`linsolve = DeviceGMRES(; maxiters = n)`)")
+        "state), or give the coupled solve a larger budget (`linsolve = DeviceGMRES(; maxiters = n)`)"
+    )
     cause & 0x20 != 0 && return "step the field with `BackwardEuler`, or give each region a decay or a fixed value"
     cause & 0x10 != 0 && return "give that region a decay or a fixed value, or step the field with `BackwardEuler`"
-    cause & 0x1 != 0 && return "a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`), or step the field with `BackwardEuler`"
+    cause & 0x01 != 0 && return "a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`), or step the field with `BackwardEuler`"
     return "step the field with `BackwardEuler` (a transient solve converges where the steady Newton iteration does not)"
 end
 
@@ -982,11 +985,23 @@ function check_backend_float64(prog, alg, backend, V::Type; fields = String[])
     fs = join(("`$k`" for k in fields), ", ")
     head = string("field", length(fields) == 1 ? " " : "s ", fs, ": ")
     tail = " needs Float64 on the device, and this backend has no Float64 (`supports_float64` is false: Metal)"
-    compute_type(alg, V) === Float64 && value_type(V) !== Float64 && throw(ArgumentError(string(head, _algtext(alg),
-        ": `compute_type = Float64`", tail, "; leave `compute_type` out (`:auto`, the problem's type) or give `compute_type = Float32`")))
+    compute_type(alg, V) === Float64 && value_type(V) !== Float64 && throw(
+        ArgumentError(
+            string(
+                head, _algtext(alg),
+                ": `compute_type = Float64`", tail, "; leave `compute_type` out (`:auto`, the problem's type) or give `compute_type = Float32`"
+            )
+        )
+    )
     hasfield(typeof(alg), :solver_type) && getfield(alg, :solver_type) === Float64 && value_type(V) !== Float64 &&
-        throw(ArgumentError(string(head, _algtext(alg), ": `solver_type = Float64`", tail, "; leave `solver_type` out (`:auto`) ",
-            "or give `solver_type = Float32`")))
+        throw(
+        ArgumentError(
+            string(
+                head, _algtext(alg), ": `solver_type = Float64`", tail, "; leave `solver_type` out (`:auto`) ",
+                "or give `solver_type = Float32`"
+            )
+        )
+    )
     for f in prog.fields
         f.fixed && f.storage == F64 || continue
         throw(ArgumentError(string(head, "the field `", f.key, "` is declared `lattice_storage = Float64`, which", tail,
@@ -1072,7 +1087,8 @@ end
     if rt.alg isa AbstractImplicitFieldAlgorithm && isfinite(v)
         below = v < x.lo
         route = below && !(rt.alg isa QuasiSteady) ?
-                string("Give `lower_bound = ", x.lo, "` to the algorithm (it clips each substep at ", x.lo, ": ",
+            string(
+                "Give `lower_bound = ", x.lo, "` to the algorithm (it clips each substep at ", x.lo, ": ",
             _algname(rt.alg), " does not keep the values inside the bounds by itself), or widen `bounds`") :
                 "Widen `bounds` in the field's declaration to the range the field takes"
         Exec.VERBOSE[] && @warn string(

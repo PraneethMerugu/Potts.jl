@@ -287,7 +287,8 @@ end
         @test_logs (:warn, r"`-Advect\(Upwind1\(\)\)\(\[.*, 0\.0\], bu\[1\]\)` \(in the rate of `bu\[1\]`\) is not in the implicit operator") match_mode = :any init(
             pv,
             BackwardEuler()
-        ; dt = 0.1)
+            ; dt = 0.1
+        )
     end
 end
 
@@ -302,7 +303,8 @@ end
         @test_logs (:warn, r"the Newton iteration diverged\), `ReturnCode.ConvergenceFailure`: the run stops; more substeps \(`substeps = n`\): a smaller step brings the Newton iteration into its contraction$") match_mode = :any solve(
             p,
             BackwardEuler()
-        ; dt = 1.0)
+            ; dt = 1.0
+        )
         # S6: advection (ρ_adv = 48) and a cycle (κ_in = 2) in one group: n = ⌈2 · 0.25 · 50⌉ = 25,
         # so ρ_c = 1/2 and newton = 10 (base, rule 2 on the larger: n = 24, ρ_c = 0.52, newton = 11)
         @parameters bvx = 1.0
@@ -356,7 +358,8 @@ end
         ig = @test_logs (:warn, r"^BackwardEuler\(substeps = 1\): field `bc` takes \d+ substeps, more than the 1 requested: the terms out of the implicit operator \(`at\(r2W, r2q\)\*Δ\(bc\)` \(in the rate of `bc`\)\) are corrected by Newton iterations, which converge only when the substep keeps their contraction at most 1/2; fewer substeps would not converge$") init(
             p,
             BackwardEuler(; substeps = 1, linsolve = r1tight())
-        ; dt = 0.05)
+            ; dt = 0.05
+        )
         @test ig.substeps == n
         s = solve(p, BackwardEuler(; linsolve = r1tight()); dt = 0.05)
         @test s.retcode == ReturnCode.Success && s.stats.newton_budget == 0
@@ -452,7 +455,8 @@ end
         r = @test_logs (:warn, r"`0.1Δ\(xq\)` \(in the rate of `bc`\) is not in the implicit operator and no bound sees it") match_mode = :any solve(
             p,
             BackwardEuler(; linsolve = BTIGHT)
-        ; dt = 0.1)
+            ; dt = 0.1
+        )
         @test r.retcode == ReturnCode.Success
         po = discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64))
         ro = SciMLBase.solve(po, ImplicitEuler(); adaptive = false, dt = 0.1, abstol = 1.0e-12, reltol = 1.0e-12)
