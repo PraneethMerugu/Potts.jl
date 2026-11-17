@@ -82,6 +82,8 @@ public jacobian_sparsity, column_colors, LatticeJacobian, LatticeJVP, JacobianOp
 public LatticeMG, MGPreconditioner, LatticePCG
 # solutions (F4-04)
 public FieldSeries, field_series, LatticeStats, LatticeSolution, finish!
+# the saved size above which a run that saves every step warns (field runs and Potts runs)
+public LARGE_SAVE_BYTES
 # the coupling between field groups and the per-group counts (review of F2-06)
 public compute_type, substep_counts, lagged_coupling, group_loops, steady_loop_rates, steady_start, starts_steady, StartText, StartSubsteps
 # the one substep policy of both front ends and its words (F3-01)
