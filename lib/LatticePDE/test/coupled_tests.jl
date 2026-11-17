@@ -312,7 +312,7 @@ end
 @testset "F3-12d r1 M1, S1: no coupled code compiles for one field; every Krylov.jl hook is ours" begin
     # M1: a single-field QuasiSteady `init` in a fresh process compiles no `coupled_modes` and no
     # `_bind_coupled` (both behind barriers). Base (51d1f386): coupled_modes compiled
-    # runic: off
+        # runic: off
     code = raw"""
     using LatticePDE
     using ModelingToolkitBase: @parameters, @variables, PDESystem, t_nounits as t, D_nounits as D
@@ -327,7 +327,7 @@ end
     n(f) = sum(m -> count(mi -> mi isa Core.MethodInstance && isdefined(mi, :cache), Base.specializations(m)), methods(f); init = 0)
     println("M1 ", n(LF.coupled_modes), " ", n(LF._bind_coupled))
     """
-    # runic: on
+        # runic: on
     out = readchomp(`$(Base.julia_cmd()) --startup-file=no --project=$(Base.active_project()) -e $code`)
     @test occursin("M1 0 0", out) || (println("M1 ", out); false)
     # S1: each vector function Krylov.jl calls on a `CoupledVector` is our method, and indexing it
