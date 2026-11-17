@@ -26,7 +26,7 @@ prob = remake(prob; p = [:β => 0.0, :γ => 0.0, :σ_X => 0.4])
 alg = SequentialCPM(; proposal = Moore(1))
 ncells(u) = count(>(0), u.cell.volume)
 
-solve(remake(prob; tspan = (0, 2)), alg)                                   # compile
+solve(remake(prob; tspan = (0, 2)), alg; save_everystep = false)          # compile
 
 fig = Figure(; size = (720, 760), fontsize = 14, backgroundcolor = :white)
 Label(fig[0, 1], "OpenVT reference monolayer (Table S1), case (b): β = γ = 0, X ~ N(2, 0.4)\n" *
@@ -59,7 +59,7 @@ function rec(integ)
 end
 cb = CorePotts.DiscreteCallback((u, t, integ) -> t % EVERY == 0 || ncells(u) >= N_STOP, rec;
     initialize = (cb, u, t, integ) -> rec(integ), save_positions = (false, false))
-wall = @elapsed sol = solve(prob, alg; save_start = false,
+wall = @elapsed sol = solve(prob, alg; save_start = false, save_everystep = false,
     callback = CorePotts.CallbackSet(cb, PottsModels.stop_at_cells(N_STOP), PottsModels.edge_guard(5; terminate = true)))
 wall -= rec_wall[]
 mp4 = joinpath(ASSETS, "openvt_monolayer.mp4")

@@ -42,7 +42,7 @@ end
 minimage(d) = d - L * round(d / L)
 
 function run(alg, λ_act, seed)
-    integ = init(problem(λ_act, seed), alg; save_start = false, save_end = false)
+    integ = init(problem(λ_act, seed), alg; save_start = false, save_end = false, save_everystep = false)
     x = zeros(2, NMCS)
     prev = centroid(Array(integ.state.σ))
     pos = copy(prev)

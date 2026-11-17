@@ -19,7 +19,7 @@ problem3(L) = (s = cubes(L, 5); PottsProblem(GRANER, initial_state(s...), Lattic
     merge(graner_params(), (; V0 = 64.0)); contact = Moore(1), seed = 5))
 
 function rate(prob, alg)
-    integ = init(prob, alg; save_start = false, save_end = false)
+    integ = init(prob, alg; save_start = false, save_end = false, save_everystep = false)
     step!(integ); step!(integ)                             # compile, warm
     t = @elapsed for _ in 1:NMCS
         step!(integ)

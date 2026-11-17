@@ -28,7 +28,7 @@ arms = [("default", (;)), ("b1_k6", (; region = 1, parts = 6)), ("b1_k4", (; reg
 for scale in (14, 28)
     for (name, kw) in arms
         prob = graner_problem(; scale, nmcs = 10^6, T = Float32)
-        integ = init(prob, CheckerboardCPM(; proposal = Moore(1), kw...); backend, save_start = false)
+        integ = init(prob, CheckerboardCPM(; proposal = Moore(1), kw...); backend, save_start = false, save_everystep = false)
         for _ in 1:20; step!(integ); end
         KernelAbstractions.synchronize(backend)
         n = 200

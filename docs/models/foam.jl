@@ -36,8 +36,8 @@ L = (128, 96)
 alg = SequentialCPM(; skip_interior = true)
 start = sheared_foam_state(; lattice = L)
 prob = PottsProblem(foam, start, (0, 10); seed = 1)
-shaken = solve(remake(prob; p = [:T => 3.0]), alg).u[end]
-relaxed = solve(remake(prob; u0 = [ownership => Array(shaken.σ); start[2:3]], tspan = (0, 300)), alg).u[end]
+shaken = solve(remake(prob; p = [:T => 3.0]), alg; save_everystep = false).u[end]
+relaxed = solve(remake(prob; u0 = [ownership => Array(shaken.σ); start[2:3]], tspan = (0, 300)), alg; save_everystep = false).u[end]
 sheared = solve(remake(prob; u0 = [ownership => Array(relaxed.σ); start[2:3]], p = [:γ0 => 36.0], tspan = (0, 4000)),
     alg; saveat = 0:20:4000)
 nothing #hide
