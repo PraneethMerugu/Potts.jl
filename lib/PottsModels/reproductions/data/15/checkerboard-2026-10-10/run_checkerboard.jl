@@ -155,11 +155,8 @@ cb_colours(prob) = length(Base.invokelatest(Potts.init, prob, CB_ALG).cache.colo
 # the release (`openvt_release(CAL_BURNIN)`: A_c := A at the end of the burn-in) with a hook
 # run in the same affect (one DiscreteCallback: a CallbackSet of two with `saveat` corrupts
 # memory on the host path)
-# (no saves of its own: the `saveat` times save the run, as before callbacks honoured
-# `save_positions`)
 p1b_release(hook) = Potts.DiscreteCallback((u, t, integ) -> t == CAL_BURNIN,
-    integ -> (hook(integ); integ.ps[:A_c] = integ.ps[:A]; nothing); save_positions = (false, false)
-)
+    integ -> (hook(integ); integ.ps[:A_c] = integ.ps[:A]; nothing))
 # per-run crossings, the mean-curve crossing and the per-MCS changed sites of saved chain runs
 function p1b_reduce(W)
     t = collect((-CAL_BURNIN):CAL_TMAX)

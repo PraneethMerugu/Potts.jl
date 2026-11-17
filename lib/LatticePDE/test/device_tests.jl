@@ -362,7 +362,7 @@ using .LP_device: fd, kron
             end
             (d, dh, rd), (h, hh, rh) = out
             @info "review r1 $(nameof(typeof(alg))) on $pgpu: max |device − host| $(maximum(abs, d .- h)), |device − twin| $(maximum(abs, d .- dh))"
-            @test rd == rh == SciMLBase.ReturnCode.Success
+            @test rd == rh == SciMLBase.ReturnCode.Default        # stepped, not finished
             @test maximum(abs, d .- dh) / maximum(abs, dh) <= 1e-5 && maximum(abs, d .- h) / maximum(abs, h) <= 1e-6
         end
     end
