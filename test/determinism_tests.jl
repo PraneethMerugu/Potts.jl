@@ -53,13 +53,15 @@ end
         parent_gg_digest = hash(sol_gg.u[end].ownership)
 
     # D2: fresh subprocess computes identical fingerprint and CPU run digest
+    # runic: off
     d2_code = """
     using Potts, PottsModels
     s = graner_glazier_state()
     p = PottsProblem(GranerGlazier(; name = :gg), [ownership => s[1], kind => s[2]], (0, 3); seed = 5)
     sol = solve(p, SequentialCPM(); save_start = false)
-            println(repr(p.f.fingerprint), " ", repr(hash(sol.u[end].ownership)))
+    println(repr(p.f.fingerprint), " ", repr(hash(sol.u[end].ownership)))
     """
+    # runic: on
     out = strip(read(`$(Base.julia_cmd()) --startup-file=no --project=$proj -e $d2_code`, String))
     parts = split(out)
     @test length(parts) == 2
@@ -83,7 +85,7 @@ end
         @parameters J[3, 3] = [0.0 4.0 6.0; 4.0 2.0 8.0; 6.0 8.0 2.0] λ = 1.0 V₀ = 9.0 T = 1.0
         @lattice Lattice((10, 10))
         @energy begin
-                    contacts => J[kind, neighbor_kind]
+            contacts => J[kind, kind′]
             cells => λ * (volume - V₀)^2
         end
         @sweep Metropolis(; temperature = T)

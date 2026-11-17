@@ -845,6 +845,7 @@ end
         src = joinpath(dir, "model.jl")
         write(src, string(P65B_SRC[:P65bConvert]))
         script = joinpath(dir, "run.jl")
+        # runic: off
         write(script, """
             using Potts, PottsModels, Serialization
             include($(repr(src)))
@@ -857,11 +858,12 @@ end
                     :sub => s, :V_target => [40.0, 4.0, 10.0, 2.0, 16.0]], (0, 4); seed, capacity = 8)
                 for alg in (SequentialCPM(), CheckerboardCPM())
                     sol = solve(prob, alg; saveat = 1)
-                                push!(out, [(Array(u.ownership), Array(u.cell.V_target), Array(u.cell.birth)) for u in sol.u])
+                    push!(out, [(Array(u.ownership), Array(u.cell.V_target), Array(u.cell.birth)) for u in sol.u])
                 end
             end
             serialize(ARGS[1], out)
             """)
+        # runic: on
         proj = dirname(Base.active_project())
         res = map((1, 4)) do nt
             path = joinpath(dir, "t$nt.jls")
