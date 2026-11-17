@@ -194,11 +194,11 @@ end
         plain(s) = replace(s, "Potts." => "")
         @test plain.(names) == sort(
             [
-                "Base.getproperty(Symbol)", "Base.propertynames()", "Base.show(MIME{Symbol(\"text/plain\")}, PottsSystem)",
+                "Base.convert(PottsSystem)", "Base.getproperty(Symbol)", "Base.propertynames()", "Base.show(MIME{Symbol(\"text/plain\")}, PottsSystem)",
                 "LatticeFields.Problems.steady_fields()",
                 "ModelingToolkitBase.equations()", "ModelingToolkitBase.unknowns()", "ModelingToolkitBase.parameters()",
                 "ModelingToolkitBase.observed()", "ModelingToolkitBase.initial_conditions()", "ModelingToolkitBase.bindings()",
-                "ModelingToolkitBase.independent_variable()", "ModelingToolkitBase.get_systems()",
+                "ModelingToolkitBase.independent_variable()", "ModelingToolkitBase.get_iv()", "ModelingToolkitBase.get_systems()",
                 "ModelingToolkitBase.full_equations()", "ModelingToolkitBase.guesses()", "ModelingToolkitBase.inputs()",
                 "ModelingToolkitBase.outputs()", "ModelingToolkitBase.iscomplete()", "ModelingToolkitBase.complete()",
                 "ModelingToolkitBase.compose(AbstractArray)",
@@ -217,7 +217,7 @@ end
         @test count(
             n -> !startswith(n, "ModelingToolkitBase.mtkcompile") && !startswith(n, "ModelingToolkitBase.extend") &&
                 !startswith(n, "LatticeFields."), names
-        ) == 32
+        ) == 34
         M, S = WL_MTKB, WL_SII
         fs = Any[
             nameof, getproperty, propertynames, show, ndims, M.equations, M.unknowns, M.parameters, M.observed,
@@ -231,7 +231,7 @@ end
             m for f in fs for m in methods(f) if m.module === Potts &&
                 any(==(PottsSystem), Base.unwrap_unionall(m.sig).parameters)
         ]
-        @test length(scanned) == 26 && all(m -> m in owned || m.name === :extend, scanned)
+        @test length(scanned) == 27 && all(m -> m in owned || m.name === :extend, scanned)
         @test length(WLiteMatrix.refusal_methods()) == 49
         @test isempty(filter(((a, b),) -> a.module === Potts || b.module === Potts, Test.detect_ambiguities(Potts; recursive = true)))
     end

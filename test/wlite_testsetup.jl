@@ -80,26 +80,27 @@ function wl_agree(f, W, I)
 end
 
 
-# Per published model: REFUSED 80 (every problem route), LOUD 11, BUILT 8. MTK's `complete`,
-# `rename`, `compose` (with an MTK System) and `extend` (of two Potts models) answer.
+# Per published model: REFUSED 80 (every problem route), LOUD 12, BUILT 7. MTK's `complete`,
+# `rename`, `compose` (with an MTK System) and `extend` (of two Potts models) answer; MTK's
+# `complete` keywords are refused by name.
 const WL_BY_DESIGN = [
-    "flatten(W)", "mtkcompile(W)", "structural_simplify(W)", "complete(W)", "complete(W; flatten = false)",
+    "flatten(W)", "mtkcompile(W)", "structural_simplify(W)", "complete(W)",
     "rename(W, :q)", "compose(W, [System])", "extend(W, W)",
 ]
 
 # The hand-wrapped probe models (their inner Systems hold what no payload builds, so they do
 # not compile, compose with a component of their own name or extend): by model name
 const WL_BY_DESIGN_RAW = Dict(
-    :allparts => ["flatten(W)", "complete(W)", "complete(W; flatten = false)", "rename(W, :q)"],
+    :allparts => ["flatten(W)", "complete(W)", "rename(W, :q)"],
     :gg => [
-        "flatten(W)", "complete(W)", "complete(W; flatten = false)", "rename(W, :q)", "compose(W, [System])",
+        "flatten(W)", "complete(W)", "rename(W, :q)", "compose(W, [System])",
         "compose(W, W)",
     ],
 )
 
 const WL_LOUD_REQUIRED = [
     "compose(W, W)", "toggle_namespacing(W, false)", "mtkcompile(W; inputs)", "convert(System, W)",
-    "toggle_namespacing(W, false)", "mtkcompile(W; inputs)", "convert(System, W)",
+    "toggle_namespacing(W, false)", "mtkcompile(W; inputs)", "convert(System, W)", "complete(W; flatten = false)",
 ]
 
 const WL_PUBLISHED = (
