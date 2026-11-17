@@ -59,7 +59,8 @@ function rec(integ)
 end
 cb = CorePotts.DiscreteCallback((u, t, integ) -> t % EVERY == 0 || ncells(u) >= N_STOP, rec;
     initialize = (cb, u, t, integ) -> rec(integ), save_positions = (false, false))
-wall = @elapsed sol = solve(prob, alg; save_start = false, save_everystep = false,
+wall = @elapsed sol = solve(
+    prob, alg; save_start = false, save_everystep = false,
     callback = CorePotts.CallbackSet(cb, PottsModels.stop_at_cells(N_STOP), PottsModels.edge_guard(5; terminate = true)))
 wall -= rec_wall[]
 mp4 = joinpath(ASSETS, "openvt_monolayer.mp4")

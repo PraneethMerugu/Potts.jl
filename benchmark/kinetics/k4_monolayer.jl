@@ -22,7 +22,8 @@ function k4_run(prob, seed, c; backend = cb_backend())
     cbr = Potts.DiscreteCallback((u, t, integ) -> t % CB_EVERY == 0 || count(>(0), u.cell.volume) >= c.cells,
         record; initialize = (cb, u, t, integ) -> record(integ), save_positions = (false, false))
     pr = remake(prob; seed, p = [:β => c.beta, :γ => c.gamma, :σ_X => c.sigma_X, :α => α])
-    integ = init(pr, K4_ALG; backend, save_start = false, save_everystep = false,
+    integ = init(
+        pr, K4_ALG; backend, save_start = false, save_everystep = false,
         callback = Potts.CorePotts.CallbackSet(cbr, PottsModels.stop_at_cells(c.cells),
             PottsModels.edge_guard(P615F_GUARD; terminate = true)))
     sol = solve!(integ)

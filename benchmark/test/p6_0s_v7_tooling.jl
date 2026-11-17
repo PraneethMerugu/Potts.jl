@@ -380,7 +380,8 @@ end
                 be = Metal.MetalBackend()
                 gg32 = Dict(GateUnderTest.cases(Float32))["graner_glazier_72"]
                 prob = gg32()
-                fresh() = (i = GateUnderTest.init(prob, alg; backend = be, save_start = false, save_end = false, save_everystep = false);
+                fresh() = (
+                    i = GateUnderTest.init(prob, alg; backend = be, save_start = false, save_end = false, save_everystep = false);
                     GateUnderTest.step!(i); GateUnderTest.step!(i); KernelAbstractions.synchronize(be); i)
                 fresh()
                 ref() = run(@benchmarkable((GateUnderTest.step!(i); KernelAbstractions.synchronize($be)),

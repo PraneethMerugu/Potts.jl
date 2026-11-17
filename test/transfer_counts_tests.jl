@@ -244,7 +244,8 @@ end
                 step!(integ); step!(integ)
                 y = Array(integ.state.cell.y)[1]
                 integ = init(p60vx_param_problem(p60vx_write_acc!; declared = false), alg; backend,
-                    save_start = false, save_everystep = false, save_end = false)
+                    save_start = false, save_everystep = false, save_end = false
+                )
                 foreach(_ -> step!(integ), 1:3)
                 (y, Array(integ.p.acc)[1])
             end

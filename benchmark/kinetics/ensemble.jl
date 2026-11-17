@@ -11,7 +11,8 @@ base(L) = remake(cb_problem(L); p = [:β => c.beta, :γ => c.gamma, :σ_X => c.s
 cbs(cells) = Potts.CorePotts.CallbackSet(PottsModels.stop_at_cells(cells), PottsModels.edge_guard(P615F_GUARD; terminate = true))
 out(sol, i) = ((Int(sol.t[end]), sol.stats.lifecycle.divisions + 1 - count(>(0), Array(sol.u[end].cell.volume))), false)
 ens(L, cells, n) = solve(EnsembleProblem(base(L); output_func = out), ALG, EnsembleThreads(); backend = cb_backend(),
-    trajectories = n, callback = cbs(cells), save_start = false, save_everystep = false)
+    trajectories = n, callback = cbs(cells), save_start = false, save_everystep = false
+)
 t = @elapsed ens(400, 2, 2 * Threads.nthreads())      # cold: compiled inside the concurrent trajectories
 @info "cold ensemble (compile in the trajectories)" t threads = Threads.nthreads()
 for n in parse.(Int, split(ARGS[2], ','))

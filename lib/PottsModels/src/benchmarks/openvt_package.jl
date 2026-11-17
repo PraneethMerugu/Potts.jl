@@ -615,6 +615,8 @@ function _openvt_pkg_impl_readme(recs, prov, scripts, facts)
     d = facts.defaults
     g = _openvt_pkg_g
     io = IOBuffer()
+    # (Runic re-indents a changed line inside a triple-quoted string; the template stays as written)
+    #! format: off
     print(io, """
     # Potts.jl: OpenVT growing monolayer
 
@@ -693,6 +695,7 @@ function _openvt_pkg_impl_readme(recs, prov, scripts, facts)
     | Record | Results | Runner | Commit | Threads | Wall time | Command |
     |---|---|---|---|---|---|---|
     """)
+    #! format: on
     for k in _openvt_pkg_keys(recs)
         r, p = recs[k], prov[k]
         runner = basename(p["runner"])

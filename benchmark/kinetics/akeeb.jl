@@ -16,7 +16,7 @@ problem(pt, seed) = (p = POINTS[pt]; PottsProblem(AkeebInvasion(; name = :akeeb,
     akeeb_state(; pp = p[3], seed = 0x5cd2609 + seed), (0, 701); capacity = 4000, seed))
 function run_one(pt, alg, gpu, seed)
     sol = gpu ? solve(problem(pt, seed), alg; backend = ROCBackend(), save_start = false, save_everystep = false) :
-          solve(problem(pt, seed), alg; save_start = false, save_everystep = false)
+        solve(problem(pt, seed), alg; save_start = false, save_everystep = false)
     o = akeeb_observables(sol.u[end])
     return Dict(String(m) => Float64(getproperty(o, m)) for m in METRICS)
 end
