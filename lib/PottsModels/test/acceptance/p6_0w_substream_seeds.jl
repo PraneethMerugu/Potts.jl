@@ -132,14 +132,12 @@ const P60W_BLOCKS = (UInt64(0), UInt64(0x5cd2609), UInt64(2)^63)   # zero, Akeeb
 const P60W_RNGS = (:StableRNG, :LehmerRNG, :Xoshiro, :MersenneTwister)
 const P60W_ARITH = (:+, :-, :*, :⊻, :xor, :|, :<<, :>>, :>>>, :.+, :.-, :.*, :.⊻)
 const P60W_CONV = (:UInt64, :Int, :Int64, :UInt, :UInt32, :Int32, :UInt128, :convert, :(%))
-# (a name is a Symbol: `M.:($f)` in an `@eval` loop names no function the scan can read)
-p60w_name(f) = f isa Symbol ? f :
-    f isa Expr && f.head === :. && length(f.args) == 2 && f.args[2] isa QuoteNode && f.args[2].value isa Symbol ? f.args[2].value :
-    f isa GlobalRef ? f.name : nothing
+# the name in `M.:name`; nothing when it is not a Symbol (`M.:($f)` in an `@eval` loop)
+p60w_qname(x) = x isa Expr && x.head === :. && length(x.args) == 2 && x.args[2] isa QuoteNode &&
+    x.args[2].value isa Symbol ? x.args[2].value : nothing
+p60w_name(f) = f isa Symbol ? f : f isa GlobalRef ? f.name : p60w_qname(f)
 p60w_iscall(ex, names) = ex isa Expr && ex.head === :call && p60w_name(ex.args[1]) in names
-p60w_seedlike(x) = (x isa Symbol && occursin("seed", lowercase(String(x)))) ||
-    (x isa Expr && x.head === :. && length(x.args) == 2 && x.args[2] isa QuoteNode &&
-        x.args[2].value isa Symbol && occursin("seed", lowercase(String(x.args[2].value)))) ||
+p60w_seedlike(x) = (n = x isa Symbol ? x : p60w_qname(x); n isa Symbol && occursin("seed", lowercase(String(n)))) ||
     (p60w_iscall(x, P60W_CONV) && any(p60w_seedlike, x.args[2:end]))
 p60w_plain(x) = x isa Symbol || x isa Integer || x isa QuoteNode ||
     (x isa Expr && x.head === :. && length(x.args) == 2 && x.args[2] isa QuoteNode) ||
