@@ -233,7 +233,7 @@ end
 
 @named scopes = Scopes()
 op = layout(Tiling((5, 5); region = (6:25, 6:25), spacing = 1, kinds = [:cell]), scopes)
-sol = solve(PottsProblem(scopes, [op; :age => 10.0], (0, 20)), SequentialCPM())
+sol = solve(PottsProblem(scopes, [op; :age => 10.0], (0, 20)), SequentialCPM(); save_everystep = false)
 (age = sol[:age][end][1], ncells = sol[:ncells][end], marked = count(>(0), sol[:mark][end]),
  pol = (sol[:pol_1][end][1], sol[:pol_2][end][1]))
 ```

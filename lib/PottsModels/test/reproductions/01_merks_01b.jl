@@ -369,7 +369,7 @@ function p63f1b_run(seed, set, saves; track = false)
         field_solver = P63F1B_SOLVER, seed, track = track ? (:ΔH,) : ())
     integ = init(prob, SequentialCPM(); save_start = false, save_end = false)
     out = Dict{Int, Tuple{Float64, Union{Nothing, Float64}}}()
-    record!(t) = (out[t] = (p63f1b_compactness(Array(integ.u.σ)), integ.stats.accepted_ΔH))
+    record!(t) = (out[t] = (p63f1b_compactness(Array(current_state(integ).σ)), integ.stats.accepted_ΔH))
     0 in saves && record!(0)
     while integ.t < tend
         step!(integ)
@@ -691,7 +691,7 @@ end
     set = p63f1b_setup("F10", "CI128", 5.0)
     set = merge(set, (lattice = (62, 62), rounds = 12, divisions = 3))
     out, integ = p63f1b_run(90_102, set, (150, 250))
-    c = Array(integ.u.site.c)
+    c = Array(current_state(integ).site.c)
     @test all(isfinite, c) && minimum(c) >= 0 && maximum(c) > 0
     @test isfinite(out[250][1]) && out[250][2] === nothing
     # the inferred starts: 256 cells (Figs 12–13) and 1024 cells (Fig 10)

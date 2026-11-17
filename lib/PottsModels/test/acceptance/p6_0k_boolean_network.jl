@@ -125,7 +125,7 @@ function p60k_mismatches(sol, rows, table; every = 1)
 end
 
 function p60k_warm_allocs(prob, alg)
-    integ = init(prob, alg; save_start = false, save_end = false)
+    integ = init(prob, alg; save_start = false, save_end = false, save_everystep = false)
     step!(integ)
     step!(integ)
     m = typemax(Int)

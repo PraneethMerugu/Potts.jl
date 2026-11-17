@@ -67,7 +67,7 @@ function with_Jdl(prob, Jdl)
     J = [0 16 16; 16 2 Jdl; 16 Jdl 14]
     return remake(prob; p = [:J => J])
 end
-one_run = [heterotypic_fraction(solve(with_Jdl(prob, J), SequentialCPM()).u[end]) for J in Js]
+one_run = [heterotypic_fraction(solve(with_Jdl(prob, J), SequentialCPM(); save_everystep = false).u[end]) for J in Js]
 ```
 
 ## Replicates with an ensemble
@@ -79,7 +79,7 @@ then does not keep every saved state:
 
 ```@example scans
 ens = EnsembleProblem(prob; output_func = (sol, i) -> (heterotypic_fraction(sol.u[end]), false))
-results = solve(ens, SequentialCPM(); trajectories = 4)
+results = solve(ens, SequentialCPM(); trajectories = 4, save_everystep = false)
 results.u
 ```
 
@@ -95,7 +95,7 @@ reps = 3
 scan = EnsembleProblem(prob;
     prob_func = (p, ctx) -> with_Jdl(p, Js[mod1(ctx.sim_id, length(Js))]),
     output_func = (sol, i) -> (heterotypic_fraction(sol.u[end]), false))
-res = solve(scan, SequentialCPM(); trajectories = reps * length(Js))
+res = solve(scan, SequentialCPM(); trajectories = reps * length(Js), save_everystep = false)
 F = reshape(res.u, length(Js), reps)           # rows: J values, columns: replicates
 
 fig = Figure(size = (600, 320))
@@ -113,7 +113,7 @@ dashed line is the paper's value.
 !!! tip "Threads"
     On the CPU, an ensemble runs its trajectories on all of Julia's threads. To use every
     core, start Julia with `julia --threads=auto`. To run the trajectories one after another,
-    use `solve(ens, SequentialCPM(), EnsembleSerial(); trajectories = n)`.
+    use `solve(ens, SequentialCPM(), EnsembleSerial(); trajectories = n, save_everystep = false)`.
 
 !!! note "What `remake` cannot change cheaply"
     Changing the model's structure (a new term, another lattice size) needs a new model.

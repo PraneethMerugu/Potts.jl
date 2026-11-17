@@ -482,7 +482,7 @@ end
             integ = p60v3_metal_integ(make())
             @test !any(p60v3_hasf64, p60v3_kernel_types(integ))
             foreach(_ -> step!(integ), 1:2)
-            @test count(>(0), Array(integ.u.cell.volume)) > 0           # ran and saved on the device
+            @test count(>(0), Array(current_state(integ).cell.volume)) > 0           # ran and saved on the device
         end
         # control: Metal refuses a kernel that touches a Float64 (a leak fails loudly). ROCm
         # has doubles; there the no-`double` IR check (test/device_ir.jl, D-157) is the control.

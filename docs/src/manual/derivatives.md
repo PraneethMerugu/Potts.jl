@@ -4,12 +4,12 @@
 using Potts, ForwardDiff
 
 # ∂(total chemical)/∂k of a run, at a fixed seed
-f(k) = sum(solve(PottsProblem(sys, [op; :k => k], (0, 100); seed = 1), SequentialCPM()).u[end].site.c)
+f(k) = sum(solve(PottsProblem(sys, [op; :k => k], (0, 100); seed = 1), SequentialCPM(); save_everystep = false).u[end].site.c)
 ForwardDiff.derivative(f, 0.1)
 
 # or seed by hand: a Dual in the operating point or in `remake`
 prob = remake(PottsProblem(sys, op, (0, 100)); p = [:k => ForwardDiff.Dual(0.1, 1.0)])
-sol = solve(prob, SequentialCPM())
+sol = solve(prob, SequentialCPM(); save_everystep = false)
 ForwardDiff.partials.(sol.u[end].site.c, 1)      # ∂c/∂k at every site
 ```
 
@@ -35,10 +35,10 @@ ODEs. It differentiates only the fields' response to the parameters along the pa
 
 | Where | Seed | Read |
 |---|---|---|
-| a Potts model | a Dual for a parameter, or a Dual initial value of a field, in the operating point; `remake(prob; p = [k => Dual])` | `sol.u[i].site.c`, `integ[c]`, `integ.u` (Dual arrays) |
+| a Potts model | a Dual for a parameter, or a Dual initial value of a field, in the operating point; `remake(prob; p = [k => Dual])` | `sol.u[i].site.c`, `integ[c]`, `current_state(integ)` (Dual arrays) |
 | a LatticePDE problem (`discretize`) | `remake(prob; p = [k => Dual])`, or a Dual `u0` | `sol.u[i]` (Dual arrays) |
 
-- In a Potts model, the live state `integ.state` stays primal. Only the field arrays are Duals.
+- In a Potts model, the live state `integ.u` stays primal. Only the field arrays are Duals.
 - A field whose initial value reads a seeded parameter (`c(0, x, y) ~ c0` in its `PDESystem`)
   carries `∂c₀/∂c0`.
 - `integ[c] = v` sets the field's derivative parts from `v` (0 for plain values).

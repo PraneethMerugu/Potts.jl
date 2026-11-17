@@ -126,7 +126,7 @@ component of the model (for a Catalyst reaction network the system is
 @named zdecay = System([Potts.D(z) ~ -kz * z], Potts.t)
 composed = compose(sys, [zdecay])
 zsol = solve(PottsProblem(composed, [ownership => σ, kind => [:A, :A]], (0, 5); seed = 3,
-    field_solver = ExplicitEuler(substeps = 2)), SequentialCPM())
+    field_solver = ExplicitEuler(substeps = 2)), SequentialCPM(); save_everystep = false)
 zsol[:zdecay₊z][end]
 ```
 
@@ -149,7 +149,7 @@ sol = solve(prob, SequentialCPM(); saveat = 1)
 
 `LatticePDE.discretize(Potts.fields(sys), disc)` gives one SciML problem: an `ODEProblem` of
 the rates, or a `DiscreteProblem` of the maps. A field algorithm steps it,
-`solve(prob, BackwardEuler(; dt = 0.1))`, and so does an OrdinaryDiffEq solver,
+`solve(prob, BackwardEuler(; dt = 0.1); save_everystep = false)`, and so does an OrdinaryDiffEq solver,
 `solve(prob, Rodas5P())`. The problem's `p` holds the parameters, the tables and the inputs.
 On the integrator of a field algorithm, `integ[c]` returns a copy of the field's values, on the
 problem's device.

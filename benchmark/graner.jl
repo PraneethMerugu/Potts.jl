@@ -17,21 +17,21 @@ prob = graner_problem(; scale, nmcs, T)
 const BUILD = time() - t
 
 t = time()
-integ = init(prob, alg; backend, save_start = false)
-step!(integ); integ.u
+integ = init(prob, alg; backend, save_start = false, save_everystep = false)
+step!(integ); current_state(integ)
 const FIRST = time() - t
 
 t = time()
 for _ in 2:nmcs
     step!(integ)
 end
-st = integ.u
+st = current_state(integ)
 const WARM = time() - t
 
 t = time()
 integ2 = init(remake(prob; p = merge(graner_params(T), (; λ = T(2))), seed = 1), alg;
-    backend, save_start = false)
-step!(integ2); integ2.u
+    backend, save_start = false, save_everystep = false)
+step!(integ2); current_state(integ2)
 const REMAKE = time() - t
 
 nsite = length(st.σ)

@@ -89,7 +89,7 @@ end
 # run, cell for cell:
 
 let small = akeeb_state(; lattice = (99, 60)), alg = SequentialCPM(; proposal = VonNeumann(1))
-    run(M) = solve(PottsProblem(M(; name = :akeeb, lattice = (99, 60)), small, (0, 701); capacity = 1000, seed = 7), alg)
+    run(M) = solve(PottsProblem(M(; name = :akeeb, lattice = (99, 60)), small, (0, 701); capacity = 1000, seed = 7), alg; save_everystep = false)
     a, b = run(AkeebInvasion), run(PottsModels.AkeebInvasion)
     ownership(a.u[end]) == ownership(b.u[end]) && a.stats.lifecycle.divisions == b.stats.lifecycle.divisions > 0
 end
@@ -103,7 +103,7 @@ end
 
 @named akeeb = AkeebInvasion()
 prob = PottsProblem(akeeb, akeeb_state(; seed = 1), (0, 701); capacity = 4000, seed = 1)
-sol = solve(prob, SequentialCPM(; proposal = VonNeumann(1)))
+sol = solve(prob, SequentialCPM(; proposal = VonNeumann(1)); save_everystep = false)
 akeeb_observables(sol.u[end])
 
 # To scan, `remake` the problem with a contact table and a chemotaxis strength, for
@@ -416,8 +416,8 @@ nothing #hide
 alg = SequentialCPM(; proposal = VonNeumann(1))
 run_prob(point, seed; tmax = 701) = remake(base; u0 = akeeb_state(; pp = point[3], seed),
     p = [:μ => point[2], :J => akeeb_contacts(point[1])], seed, tspan = (0, tmax))
-solve(run_prob((2.0, 24.0, 0.5), 1; tmax = 2), alg)                  # warm-up (compilation)
-t_one = @elapsed sol_one = solve(run_prob((2.0, 24.0, 0.5), 1), alg)
+solve(run_prob((2.0, 24.0, 0.5), 1; tmax = 2), alg; save_everystep = false)                  # warm-up (compilation)
+t_one = @elapsed sol_one = solve(run_prob((2.0, 24.0, 0.5), 1), alg; save_everystep = false)
 const MACHINE = "$(strip(Sys.cpu_info()[1].model)) ($(Sys.MACHINE)), CPU backend, one thread"
 Markdown.parse("One run, 500 × 300, 701 MCS, `SequentialCPM`: " *
                "**$(round(t_one; digits = 1)) s** on $MACHINE ($(sol_one.stats.lifecycle.divisions) divisions).")

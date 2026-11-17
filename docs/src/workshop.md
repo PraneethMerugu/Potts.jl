@@ -62,8 +62,8 @@ Main.paper_run("graner_glazier", "../") # hide
         end
         return mixed / total
     end
-    paper = solve(prob, SequentialCPM())
-    mixing = solve(remake(prob; p = [:J => [0 16 16; 16 2 6; 16 6 14]]), SequentialCPM())
+    paper = solve(prob, SequentialCPM(); save_everystep = false)
+    mixing = solve(remake(prob; p = [:J => [0 16 16; 16 2 6; 16 6 14]]), SequentialCPM(); save_everystep = false)
     (start = heterotypic_fraction(prob.u0), paper = heterotypic_fraction(paper.u[end]),
      mixing = heterotypic_fraction(mixing.u[end]))
     ```
@@ -84,7 +84,7 @@ Main.paper_run("graner_glazier", "../") # hide
 !!! details "Answer"
     ```@example workshop
     function at_temperature(T)
-        s = solve(remake(prob; p = [:T => T]), SequentialCPM())
+        s = solve(remake(prob; p = [:T => T]), SequentialCPM(); save_everystep = false)
         return (T = T, fraction = round(heterotypic_fraction(s.u[end]); digits = 3),
                 cells = count(>(0), s[:volume][end]))
     end
@@ -143,7 +143,7 @@ nothing # hide
     end
     chemo = PottsProblem(twochemo, [op; :c => c0; :χ => 400.0], (0, 600); seed = 1)
     map(1:3) do seed
-        sol = solve(remake(chemo; seed), SequentialCPM())
+        sol = solve(remake(chemo; seed), SequentialCPM(); save_everystep = false)
         (leaders = mean_x(sol.u[end], 1) - mean_x(sol.u[1], 1),
          followers = mean_x(sol.u[end], 2) - mean_x(sol.u[1], 2))
     end
@@ -167,7 +167,7 @@ Start from your answer to Exercise 3. **Measure how far the leaders travel as a 
     ens = EnsembleProblem(base_prob;
         prob_func = (p, ctx) -> remake(p; p = [:χ => χs[mod1(ctx.sim_id, length(χs))]]),
         output_func = (s, i) -> (mean_x(s.u[end], 1) - mean_x(s.u[1], 1), false))
-    res = solve(ens, SequentialCPM(); trajectories = 2length(χs))
+    res = solve(ens, SequentialCPM(); trajectories = 2length(χs), save_everystep = false)
     travel = vec(mean(reshape(res.u, length(χs), 2); dims = 2))
     fig = Figure(size = (500, 280))
     ax = Axis(fig[1, 1]; xlabel = "χ", ylabel = "leader travel (sites)")
@@ -191,8 +191,8 @@ lattice: 400×400; here: 150×150.)
     start = openvt_monolayer_state(; lattice = (150, 150))
     p0 = PottsProblem(openvt, start, (0, 900); seed = 1, capacity = 1200)
     count_cells(s) = count(>(0), s[:volume][end])
-    (free = count_cells(solve(p0, SequentialCPM())),
-     inhibited = count_cells(solve(remake(p0; p = [:β => 0.9]), SequentialCPM())))
+    (free = count_cells(solve(p0, SequentialCPM(); save_everystep = false)),
+     inhibited = count_cells(solve(remake(p0; p = [:β => 0.9]), SequentialCPM(); save_everystep = false)))
     ```
 
     With inhibition, the colony has about a fifth fewer cells. Squeezed cells in the

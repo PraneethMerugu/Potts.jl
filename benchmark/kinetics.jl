@@ -104,7 +104,10 @@ function run_one(case, arm, seed)
     lat = Lattice(size(σ0))
     prob = PottsProblem(GRANER, initial_state(σ0, kinds), lat, (0, nmcs), graner_params();
         contact = Moore(1), seed)
-    integ = init(prob, arm_alg(arm); save_start = false, save_end = false)
+    alg = arm_alg(arm)
+    # (no saves; `save_everystep` only where `init` takes it, so that an older base runs this file)
+    nosave = hasmethod(init, Tuple{typeof(prob), typeof(alg)}, (:save_everystep,)) ? (; save_everystep = false) : (;)
+    integ = init(prob, alg; save_start = false, save_end = false, nosave...)
     st = integ.state
     ncell = length(kinds)
     L1, L2 = size(σ0)

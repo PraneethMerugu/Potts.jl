@@ -113,7 +113,7 @@ the source and the target:
 end
 @named actmem = ActMemory()
 op = layout(Tiling((14, 14); region = (14:27, 14:27), kinds = [:cell]), actmem)
-sol = solve(PottsProblem(actmem, op, (0, 50); seed = 1), SequentialCPM())
+sol = solve(PottsProblem(actmem, op, (0, 50); seed = 1), SequentialCPM(); save_everystep = false)
 sol[:volume][end]
 ```
 

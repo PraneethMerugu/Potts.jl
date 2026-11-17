@@ -206,7 +206,7 @@ main tumor to measure then). Built from [`PottsModels.Analysis`](@ref): `cell_gr
 
 ```julia
 sol = solve(PottsProblem(AkeebInvasion(; name = :a), akeeb_state(), (0, 701); capacity = 4000),
-    SequentialCPM(; proposal = VonNeumann(1)))
+    SequentialCPM(; proposal = VonNeumann(1)); save_everystep = false)
 akeeb_observables(sol.u[end])    # the authors' "MCS 700"
 ```
 """

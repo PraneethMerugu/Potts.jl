@@ -504,12 +504,12 @@ end
 
 """Net x drift of the cell over M MCS: the sum of minimum-image centroid increments."""
 function p64a1_drift(prob, M)
-    integ = init(prob, SequentialCPM(; proposal = Moore(1)); save_start = false, save_end = false)
-    c = p64a1_cx(integ.u.σ)
+    integ = init(prob, SequentialCPM(; proposal = Moore(1)); save_start = false, save_end = false, save_everystep = false)
+    c = p64a1_cx(current_state(integ).σ)
     D = 0.0
     for _ in 1:M
         step!(integ)
-        c2 = p64a1_cx(integ.u.σ)
+        c2 = p64a1_cx(current_state(integ).σ)
         D += c2 - c - P64A1_LAT[1] * round((c2 - c) / P64A1_LAT[1])
         c = c2
     end
@@ -555,7 +555,7 @@ end
 
 """The gate's rule: the minimum allocation over five warm `step!`s, after two."""
 function p64a1_warm_alloc(prob, alg)
-    integ = init(prob, alg; save_start = false, save_end = false)
+    integ = init(prob, alg; save_start = false, save_end = false, save_everystep = false)
     step!(integ)
     step!(integ)
     m = typemax(Int)

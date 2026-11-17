@@ -303,11 +303,11 @@ end
         step!(integ)
     end
     @test integ.t == 99 && integ.ps[:A_c] == 25.0
-    σ99 = copy(integ.u.σ)
+    σ99 = copy(current_state(integ).σ)
     step!(integ)
     @test integ.t == 100 && integ.ps[:A_c] == 50.0 && integ.ps[:A] == 50.0
     # the callback changes the parameter only: the t = 0 state is the burn-in's end
-    σ100 = copy(integ.u.σ)
+    σ100 = copy(current_state(integ).σ)
     step!(integ)
     @test integ.ps[:A_c] == 50.0
     @test integ.saved_t == [99, 100, 101]

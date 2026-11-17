@@ -443,8 +443,8 @@ Markdown.parse("""
 alg = SequentialCPM(; proposal = Moore(1))
 const MACHINE = "$(strip(Sys.cpu_info()[1].model)) ($(Sys.MACHINE)), CPU backend, one thread"
 prob = remake(prob0; tspan = (0, PAPER_MCS * 1000))
-solve(remake(prob; tspan = (0, PAPER_MCS)), alg)            # warm-up (compilation)
-t_one = @elapsed solve(prob, alg)
+solve(remake(prob; tspan = (0, PAPER_MCS)), alg; save_everystep = false)            # warm-up (compilation)
+t_one = @elapsed solve(prob, alg; save_everystep = false)
 Markdown.parse("One replicate ($ncells cells), 10³ paper MCS, compiled: " *
                "**$(round(t_one; digits = 1)) s** on $MACHINE." *
                (FULL ? "" : " In the reduced build this is the $ncells-cell aggregate, so this is not the " *
@@ -458,8 +458,8 @@ t_per_mcs = if FULL
 else
     prob_big = PottsProblem(GranerGlazier(; name = :gg1000, lattice = size(big_start[1])),
         [ownership => big_start[1], kind => big_start[2]], (0, PAPER_MCS); seed = 1)
-    solve(prob_big, alg)                                     # warm-up (compilation)
-    (@elapsed solve(remake(prob_big; tspan = (0, 10PAPER_MCS)), alg)) / 10
+    solve(prob_big, alg; save_everystep = false)                                     # warm-up (compilation)
+    (@elapsed solve(remake(prob_big; tspan = (0, 10PAPER_MCS)), alg; save_everystep = false)) / 10
 end
 Markdown.parse("Paper size ($(length(big_start[2])) cells on $(join(size(big_start[1]), " × "))): " *
                "**$(round(t_per_mcs; digits = 3)) s per paper MCS**, so one full-run replicate " *

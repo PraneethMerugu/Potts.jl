@@ -8,8 +8,8 @@
 # under the machine lock; Float32 checkerboard gate cases):
 #  - `step!` itself waits nowhere: 0 syncs and 0 transfers per MCS (200 MCS, no save) on
 #    Graner–Glazier 72², the OpenVT monolayer 100², Merks 100² and the OpenVT reference
-#    100². The wait cost is all at host read points: saves, `integ.u`, checkpoints.
-#  - A read point right after `step!` (`integ.u`, i.e. `current_state`; also what a
+#    100². The wait cost is all at host read points: saves, `current_state(integ)`, checkpoints.
+#  - A read point right after `step!` (`current_state(integ)`, i.e. `current_state`; also what a
 #    callback or a hand-written integrator loop reads), 600 reads per process, two
 #    processes per mode. "default" is the library today: `_sync!` is
 #    `KernelAbstractions.synchronize`, i.e. AMDGPU's default `synchronize` (256 spins,
@@ -60,7 +60,7 @@
 #  (R) Results unchanged (D-158), on the CPU for Graner–Glazier: a
 #      run that saves after every MCS (a wait and device→host copies every MCS), a run
 #      that saves every 4 MCS and a run stepped with no wait until the end are bitwise
-#      equal in every leaf at every shared time, and each saved state equals `integ.u` of
+#      equal in every leaf at every shared time, and each saved state equals `current_state(integ)` of
 #      an independent run stepped to the same MCS. A stale read (a copy not waited for) or
 #      a wait that changed work would show up here. A wait cannot change the trajectory, so
 #      equality with the pre-change code follows: the trajectory is the kernels', and they
@@ -73,7 +73,7 @@
 #      synchronize` (Metal.jl's own wait allocates ~240 B); `_spin_until` with `done`
 #      already true allocates 0. (A warm `step!` stays allocation-free on the CPU: gate.jl.)
 #  (P) Performance (ROCm only; skipped cleanly elsewhere): on the OpenVT monolayer, Merks
-#      and OpenVT reference cases, of 300 reads `integ.u` right after a `step!`, at most
+#      and OpenVT reference cases, of 300 reads `current_state(integ)` right after a `step!`, at most
 #      6 (2 %) take over 1 ms; and of 300 `step!`s that each save, at most 6 take over
 #      3 ms (a guard: this path is fast today). Up to 3 samples are taken and the best
 #      counts (D-271, 2026-11-06): the slow path fails every sample, a burst of load does not. Today 12–100 % of the reads on the two
@@ -173,7 +173,7 @@ function p60bw_results_unchanged(prob, alg, backend)
     for _ in 1:P60BW_N
         step!(integ)                                                         # no wait at all
     end
-    uend = integ.u
+    uend = current_state(integ)
     ok = Bool[]
     push!(ok, every.t == collect(1:P60BW_N), fourth.t == collect(4:4:P60BW_N))
     push!(ok, p60bw_same(every.u[end], uend), p60bw_same(fourth.u[end], uend))
@@ -208,7 +208,7 @@ function p60bw_saves_consistent(prob, alg, backend)
     ok = Bool[every.t == collect(1:P60BW_N), fourth.t == collect(4:4:P60BW_N)]
     push!(ok, !p60bw_same(every.u[1], every.u[end]))       # negative control: the state moves
     append!(ok, p60bw_consistent.(every.u), p60bw_consistent.(fourth.u))
-    push!(ok, p60bw_consistent(integ.u))
+    push!(ok, p60bw_consistent(current_state(integ)))
     return ok
 end
 
@@ -361,12 +361,12 @@ p60bw_allocs_spin() = @allocated CorePotts._spin_until(P60BW_TRUE, 1.0)
                     function sample()
                         integ = init(prob, CheckerboardCPM(); backend, save_start = false, save_end = false)
                         for _ in 1:5
-                            step!(integ); integ.u
+                            step!(integ); current_state(integ)
                         end
                         reads = Float64[]
                         for _ in 1:300
                             step!(integ)
-                            t = time_ns(); integ.u; push!(reads, (time_ns() - t) / 1e9)
+                            t = time_ns(); current_state(integ); push!(reads, (time_ns() - t) / 1e9)
                         end
                         saving = init(remake(prob; tspan = (0, 400)), CheckerboardCPM(); backend,
                             saveat = 1:400, save_start = false)

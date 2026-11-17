@@ -287,13 +287,13 @@ from each replicate. Here it keeps the number of mixed contacts at the end:
 
 ```@example start
 ensemble = EnsembleProblem(prob; output_func = (sol, i) -> (mixed_contacts(sol.u[end]), false))
-results = solve(ensemble, SequentialCPM(); trajectories = 4)
+results = solve(ensemble, SequentialCPM(); trajectories = 4, save_everystep = false)
 results.u
 ```
 
 The replicates use all the threads Julia was started with (`julia --threads=auto`).
 Replicate `i` is reproducible on its own. It equals
-`solve(remake(prob; replica = i), SequentialCPM())`.
+`solve(remake(prob; replica = i), SequentialCPM(); save_everystep = false)`.
 
 ## What you learned
 

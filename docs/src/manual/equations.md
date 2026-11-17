@@ -51,7 +51,7 @@ end
 
 @named secreting = Secreting()
 σ = zeros(Int32, 24, 20); σ[5:8, 5:8] .= 1; σ[14:17, 10:13] .= 2
-sol = solve(PottsProblem(secreting, [ownership => σ, kind => [:A, :A]], (0, 12); seed = 3), SequentialCPM())
+sol = solve(PottsProblem(secreting, [ownership => σ, kind => [:A, :A]], (0, 12); seed = 3), SequentialCPM(); save_everystep = false)
 maximum(sol[:c][end])
 ```
 
@@ -241,7 +241,7 @@ end
 @named chem = Chem()
 op = layout(Tiling((5, 5); region = (11:20, 11:20), kinds = [:cell]), chem)
 prob = PottsProblem(chem, op, (0, 50); field_solver = ExplicitEuler(substeps = 4, lower = 0.0))
-sol = solve(prob, SequentialCPM())
+sol = solve(prob, SequentialCPM(); save_everystep = false)
 sol[:q][end], sol[:g][end]
 ```
 
@@ -499,14 +499,14 @@ threads).
 
 ```@example equations
 prob2 = remake(prob; ode_solver = Adaptive(Tsit5(); reltol = 1e-8), solvers = [:g => RK4(substeps = 4)])
-solve(prob2, SequentialCPM()).retcode
+solve(prob2, SequentialCPM(); save_everystep = false).retcode
 ```
 
 `field_report` of an integrator of the first model on this page (`secreting`) gives the
 substep count of its field `c` and its cause, the bound, and the counters of three MCS:
 
 ```@example equations
-integ = init(PottsProblem(secreting, [ownership => σ, kind => [:A, :A]], (0, 12); seed = 3), SequentialCPM())
+integ = init(PottsProblem(secreting, [ownership => σ, kind => [:A, :A]], (0, 12); seed = 3), SequentialCPM(); save_everystep = false)
 for _ in 1:3
     step!(integ)
 end
@@ -548,7 +548,7 @@ end
 σ = zeros(Int32, 30, 20); σ[14:17, 1:20] .= 1; σ[4:8, 8:12] .= 2
 prob = PottsProblem(absorbed, [ownership => σ, kind => [:border, :cell]], (0, 20);
     field_solver = ExplicitEuler(substeps = 2))
-u = solve(prob, SequentialCPM()).u[end]
+u = solve(prob, SequentialCPM(); save_everystep = false).u[end]
 (wall = maximum(u.site.c[14:17, :]), low_face = sum(u.site.c[1, :]) / 20)
 ```
 
@@ -658,7 +658,7 @@ using Potts.ModelingToolkitBase: System, @variables, @parameters
 end
 @named dosed = Dosed()
 s = solve(PottsProblem(dosed, layout(Tiling((5, 5); region = (11:20, 11:20), kinds = [:cell]), dosed), (0, 20)),
-    SequentialCPM())
+    SequentialCPM(); save_everystep = false)
 s[:pk₊drug][end]
 ```
 
@@ -687,7 +687,7 @@ pde = PDESystem([Dt(C) ~ Dk * Δ(C) - kk * C + (kin(t, x, y) == 1)], [],
     lattice_domain(t, (x, y), (30, 30)), [t, x, y], [C, kin(t, x, y)], [Dk, kk]; name = :drug)
 withdrug = compose(dosed, Potts.component(:drug, pde, dosed))
 s = solve(PottsProblem(withdrug, layout(Tiling((5, 5); region = (11:20, 11:20), kinds = [:cell]), withdrug), (0, 5)),
-    SequentialCPM())
+    SequentialCPM(); save_everystep = false)
 maximum(s.u[end].site.drug₊c)
 ```
 
@@ -727,16 +727,16 @@ run, and the owned run steps the same MCS with 400 explicit substeps:
 using Potts.LatticePDE: discretize, LatticeDiscretization, Grid
 σs = zeros(Int32, 24, 20); σs[5:8, 5:8] .= 1; σs[14:17, 10:13] .= 2
 integ = init(PottsProblem(coupled, [ownership => σs, kind => [:A, :A]], (0, 6); seed = 3,
-    field_solver = ExplicitEuler(; substeps = 400)), SequentialCPM())
+    field_solver = ExplicitEuler(; substeps = 400)), SequentialCPM(); save_everystep = false)
 for _ in 1:5
     step!(integ)
 end
-c5 = copy(Array(integ.u.site.c))
+c5 = copy(Array(current_state(integ).site.c))
 fprob = discretize(Potts.fields(coupled), LatticeDiscretization(Grid((24, 20)); T = Float64);
     inputs = collect(Potts.field_inputs(integ)))
 fsol = solve(remake(fprob; u0 = vec(c5), tspan = (0.0, 1.0)), Tsit5(); abstol = 1e-11, reltol = 1e-11)
 step!(integ)
-maximum(abs, reshape(fsol.u[end], 24, 20) .- Array(integ.u.site.c))
+maximum(abs, reshape(fsol.u[end], 24, 20) .- Array(current_state(integ).site.c))
 ```
 
 The difference is the time error of the owned run's 400 explicit substeps.
@@ -769,7 +769,7 @@ pulse = PDESystem([Dt(we) ~ Dw * Δ(we) - kw * we + fe], [w(0, x, y) ~ 0.0], dom
     [t, x, y], [we, fe], [Dw, kw]; name = :pulse)
 lit(t) = [i <= 10t ? 1.0 : 0.0 for i in 1:20, j in 1:10]   # columns 1 to 10t are on
 pprob = discretize(pulse, LatticeDiscretization(Grid((20, 10))); inputs = [fe => lit])
-psol = solve(pprob, ExplicitEuler(; dt = 0.1))
+psol = solve(pprob, ExplicitEuler(; dt = 0.1); save_everystep = false)
 round.(psol[we][end][:, 5]; digits = 2)
 ```
 

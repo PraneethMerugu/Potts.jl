@@ -215,7 +215,7 @@ p60n_close(a, b, T) = length(a) == length(b) &&
                       all(isapprox.(a, b; rtol = T === Float32 ? 1e-5 : 1e-9, atol = T === Float32 ? 1e-5 : 1e-9))
 
 function p60n_warm_allocs(prob, alg)
-    integ = init(prob, alg; save_start = false, save_end = false)
+    integ = init(prob, alg; save_start = false, save_end = false, save_everystep = false)
     step!(integ)
     step!(integ)
     m = typemax(Int)

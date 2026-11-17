@@ -115,7 +115,7 @@ end
 @named ff = FieldFirst()
 σ = zeros(Int32, 20, 20); σ[8:11, 8:11] .= 1
 sol = solve(PottsProblem(ff, [ownership => σ, kind => [:cell]], (0, 10); field_solver = ExplicitEuler(substeps = 2)),
-    SequentialCPM())
+    SequentialCPM(); save_everystep = false)
 sol.retcode
 ```
 
@@ -157,7 +157,7 @@ end
 @named sorting = Sorting()
 op = layout(Tiling((5, 5); region = (11:30, 11:30), spacing = 0, kinds = [:dark, :light]), sorting)
 prob = PottsProblem(sorting, op, (0, 50); seed = 1)
-ratio(law) = (sol = solve(prob, SequentialCPM(; acceptance = law)); sol.stats.accepted / sol.stats.attempts)
+ratio(law) = (sol = solve(prob, SequentialCPM(; acceptance = law); save_everystep = false); sol.stats.accepted / sol.stats.attempts)
 (metropolis = ratio(Metropolis()), barker = ratio(Barker()))
 ```
 
@@ -181,7 +181,7 @@ end
 @named twotemps = TwoTemperatures()
 op = layout(Tiling((5, 5); region = (11:30, 11:30), spacing = 2, kinds = [:calm, :busy]), twotemps)
 prob = PottsProblem(twotemps, op, (0, 50); seed = 1)
-sol = solve(prob, SequentialCPM())
+sol = solve(prob, SequentialCPM(); save_everystep = false)
 sol.stats.accepted / sol.stats.attempts                     # the fraction of accepted attempts
 ```
 
@@ -211,7 +211,7 @@ end
 
 @named freezing = Freezing()
 op = layout(Tiling((5, 5); region = (11:30, 11:30), spacing = 2, kinds = [:stem, :mature]), freezing)
-sol = solve(PottsProblem(freezing, op, (0, 50); seed = 1), SequentialCPM())
+sol = solve(PottsProblem(freezing, op, (0, 50); seed = 1), SequentialCPM(); save_everystep = false)
 (start = sol[:T_cell][1], finish = sol[:T_cell][end])
 ```
 

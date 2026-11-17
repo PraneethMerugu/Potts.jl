@@ -80,7 +80,7 @@ trajectories at once as Julia has threads, each on its own GPU queue:
 
 ```julia
 # start Julia with, for example, `julia -t 4`
-solve(EnsembleProblem(prob), CheckerboardCPM(); backend = MetalBackend(), trajectories = 8)
+solve(EnsembleProblem(prob), CheckerboardCPM(); backend = MetalBackend(), trajectories = 8, save_everystep = false)
 ```
 
 One run alone often leaves the GPU partly idle, so several at once give more MCS per
@@ -93,7 +93,7 @@ On the CPU, use the same calls without `backend`, as above:
 
 ```@example gpu
 ens = solve(EnsembleProblem(prob; output_func = (s, i) -> (total_energy(prob, s.u[end]), false)),
-    CheckerboardCPM(); trajectories = 2)
+    CheckerboardCPM(); trajectories = 2, save_everystep = false)
 ens.u
 ```
 
@@ -116,7 +116,7 @@ ens.u
 
 - `CheckerboardCPM` is the parallel algorithm. It runs on the CPU and on GPUs.
 - `PottsProblem(…; T = Float32)` builds a single-precision problem.
-- `solve(prob, CheckerboardCPM(); backend = MetalBackend())` runs it on an Apple GPU.
+- `solve(prob, CheckerboardCPM(); backend = MetalBackend(), save_everystep = false)` runs it on an Apple GPU.
 
 The full run of the sorting model, as long as in the paper:
 

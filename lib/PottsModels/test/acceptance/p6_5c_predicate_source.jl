@@ -407,7 +407,7 @@ end
             push!(counts, (integ.stats.syncs, integ.stats.transfers, integ.stats.transfer_bytes) .- c0)
         end
         @test all(==((0, 0, 0)), counts)
-        u = integ.u                                              # a read point
+        u = current_state(integ)                                              # a read point
         @test sum(Array(u.site.F)) > 0                           # control: the source ran
         @test integ.stats.transfers > 0                          # control: the counters are live
     else

@@ -91,7 +91,7 @@ surface has three effects:
 ```@example energies
 fig = Figure(size = (700, 260))
 for (i, S₀) in enumerate((40.0, 70.0, 110.0))
-    s = solve(remake(prob; p = [:λₛ => 1.0, :S₀ => S₀]), SequentialCPM())
+    s = solve(remake(prob; p = [:λₛ => 1.0, :S₀ => S₀]), SequentialCPM(); save_everystep = false)
     ax = Axis(fig[1, i]; title = "S₀ = $S₀", aspect = DataAspect())
     hidedecorations!(ax)
     pottsplot!(ax, renderframe(s.u[end]))
@@ -147,7 +147,7 @@ tables = ["sorting" => [0 16 16; 16 2 11; 16 11 14],
           "scattering" => [0 4 4; 4 14 14; 4 14 14]]
 fig = Figure(size = (900, 300))
 for (i, (label, J)) in enumerate(tables)
-    s = solve(remake(base; p = [:J => J]), SequentialCPM())
+    s = solve(remake(base; p = [:J => J]), SequentialCPM(); save_everystep = false)
     ax = Axis(fig[1, i]; title = label, aspect = DataAspect())
     hidedecorations!(ax)
     pottsplot!(ax, renderframe(s.u[end]))
@@ -176,7 +176,7 @@ The temperature sets how often a copy that raises ``H`` is accepted:
 ```@example energies
 fig = Figure(size = (900, 300))
 for (i, T) in enumerate((2.0, 10.0, 30.0))
-    s = solve(remake(base; p = [:T => T], tspan = (0, 300)), SequentialCPM())
+    s = solve(remake(base; p = [:T => T], tspan = (0, 300)), SequentialCPM(); save_everystep = false)
     ax = Axis(fig[1, i]; title = "T = $T", aspect = DataAspect())
     hidedecorations!(ax)
     pottsplot!(ax, renderframe(s.u[end]))
@@ -238,7 +238,7 @@ end
 
 @named twosizes = TwoSizes()
 start = layout(Tiling((5, 5); region = (11:40, 11:40), kinds = [:dark, :light]), twosizes)
-s = solve(PottsProblem(twosizes, start, (0, 200); seed = 1), SequentialCPM())
+s = solve(PottsProblem(twosizes, start, (0, 200); seed = 1), SequentialCPM(); save_everystep = false)
 vols, kinds = s[:volume][end], s[:kind][end]
 (dark = sum(vols[kinds .== 1]) / count(==(1), kinds), light = sum(vols[kinds .== 2]) / count(==(2), kinds))
 ```

@@ -127,7 +127,7 @@ public openvt_submission_package, openvt_spread_compare, openvt_spread_table
 # Developers switch it off with the PrecompileTools preference `precompile_workload = false`.
 function _first_mcs(c, op, alg = SequentialCPM(); kw...)
     prob = PottsProblem(c, op, (0, 10); kw...)
-    step!(init(prob, alg; save_start = false))
+    step!(init(prob, alg; save_start = false, save_everystep = false))
     return nothing
 end
 

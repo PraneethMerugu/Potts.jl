@@ -100,9 +100,9 @@ brick(L) = first(sheared_foam_state(; lattice = L)).second
 nb = length(last(u0).second)
 prob = PottsProblem(ShearedFoam(; name = :foam), u0, (0, 10); seed = 1)
 alg = SequentialCPM(; skip_interior = true)
-annealed = solve(remake(prob; p = [:T => 3.0]), alg).u[end]                       # 10 MCS at T = 3
+annealed = solve(remake(prob; p = [:T => 3.0]), alg; save_everystep = false).u[end]                       # 10 MCS at T = 3
 relaxed = solve(remake(prob; u0 = [ownership => Array(annealed.σ), kind => fill(:bubble, nb), :A => fill(256.0, nb)],
-    tspan = (0, 1000)), alg).u[end]                                                 # 1000 MCS at T → 0⁺
+    tspan = (0, 1000)), alg; save_everystep = false).u[end]                                                 # 1000 MCS at T → 0⁺
 lat = Lattice(L; boundary = (Periodic(), Closed()))
 (hexagons = count(==(6), side_counts(Array(relaxed.σ), lat)), μ2_n = topology_moments(Array(relaxed.σ), lat).mu2_n)
 
@@ -130,11 +130,11 @@ end
 mu2n(σ) = topology_moments(σ, foam_lat(size(σ))).mu2_n
 """Run `prob` for `tend` MCS, keeping σ every `every` MCS (and at the start) for the video."""
 function frames!(integ, tend, every; each = (m, σ) -> nothing)
-    F = [copy(Array(integ.u.σ))]
+    F = [copy(Array(current_state(integ).σ))]
     for m in 1:tend
         step!(integ)
-        each(m, integ.u.σ)
-        m % every == 0 && push!(F, copy(Array(integ.u.σ)))
+        each(m, current_state(integ).σ)
+        m % every == 0 && push!(F, copy(Array(current_state(integ).σ)))
     end
     return F
 end
@@ -143,14 +143,14 @@ end
 ## 1 disordered (μ2(n) → 0.81) coarsened from its own ordered foam
 function ordered(seed; video = false)
     A = fill(256.0, nb)
-    i1 = init(foam_problem(brick(L), A, 10; seed, T = 3.0), alg)
+    i1 = init(foam_problem(brick(L), A, 10; seed, T = 3.0), alg; save_everystep = false)
     F1 = frames!(i1, 10, 1)
-    i2 = init(foam_problem(Array(i1.u.σ), A, 1000; seed), alg)
+    i2 = init(foam_problem(Array(i1.u.σ), A, 1000; seed), alg; save_everystep = false)
     F2 = frames!(i2, 1000, video ? 10 : 1000)
     return (; σ = Array(i2.u.σ), A, frames = video ? [F1; F2[2:end]] : nothing)
 end
 function disordered(o, target, seed)
-    integ = init(foam_problem(o.σ, o.A, 20_000; seed, T = 3.0, Γ = 0.0), alg)
+    integ = init(foam_problem(o.σ, o.A, 20_000; seed, T = 3.0, Γ = 0.0), alg; save_everystep = false)
     F = [copy(o.σ)]
     m = 0
     trace = [(0, mu2n(o.σ))]
@@ -159,13 +159,13 @@ function disordered(o, target, seed)
             step!(integ)
         end
         m += 10
-        push!(F, copy(Array(integ.u.σ)))
-        push!(trace, (m, mu2n(Array(integ.u.σ))))
+        push!(F, copy(Array(current_state(integ).σ)))
+        push!(trace, (m, mu2n(Array(current_state(integ).σ))))
         last(trace)[2] >= target && break
     end
-    σc = Array(integ.u.σ)
-    A = Float64.(integ.u.cell.volume[1:Int(maximum(σc))])
-    relaxed = solve(foam_problem(σc, A, 1000; seed), alg).u[end]
+    σc = Array(current_state(integ).σ)
+    A = Float64.(current_state(integ).cell.volume[1:Int(maximum(σc))])
+    relaxed = solve(foam_problem(σc, A, 1000; seed), alg; save_everystep = false).u[end]
     return (; σ = Array(relaxed.σ), A, stop = m, frames = F, trace)
 end
 t_ord = @elapsed foams = [ordered(9_400_000 + k; video = k == 1) for k in 1:2]
@@ -174,7 +174,7 @@ d081 = disordered(ordered(9_400_010), 0.81, 9_400_010)            # the test's f
 ## a short bulk shear (model β) on the ordered and the disordered foam:
 ## φ̂ every 10 MCS, T1 events per MCS (VonNeumann(1) contacts, one T1 = 1), frames every 30 MCS
 function sheared(f, βm, tend, seed; γ0 = 0.0)
-    integ = init(foam_problem(f.σ, f.A, tend; seed, β = βm, bulk = βm > 0 ? 1.0 : 0.0, γ0), alg)
+    integ = init(foam_problem(f.σ, f.A, tend; seed, β = βm, bulk = βm > 0 ? 1.0 : 0.0, γ0), alg; save_everystep = false)
     fl = foam_lat(size(f.σ))
     φ0 = stored_energy(f.σ, fl)
     g = Ref(cell_graph(f.σ, fl))
@@ -186,7 +186,7 @@ function sheared(f, βm, tend, seed; γ0 = 0.0)
         m % 10 == 0 && push!(φ, stored_energy(σ, fl) / φ0)
     end
     t = @elapsed F = frames!(integ, tend, 30; each)
-    return (; frames = F, φ, t1, wall = t, σ = Array(integ.u.σ))
+    return (; frames = F, φ, t1, wall = t, σ = Array(current_state(integ).σ))
 end
 const SHEAR_MCS = 3000
 sh_ord = sheared(foams[1], 0.05, SHEAR_MCS, 9_400_021)

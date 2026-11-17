@@ -542,7 +542,7 @@ function p64b1_warm_allocs(integ)          # a function barrier, as in benchmark
     return m
 end
 function p64b1_warm_ns(prob, alg; samples = 30)
-    integ = init(prob, alg; save_start = false, save_end = false)
+    integ = init(prob, alg; save_start = false, save_end = false, save_everystep = false)
     step!(integ); step!(integ)
     best = typemax(UInt64)
     for _ in 1:samples
@@ -641,11 +641,11 @@ end
     # integer energies, no drive, `no_extinction` (no killing credit): Σ accepted ΔH = H(t) − H(0)
     prob = p64b1_free_problem(; tspan = (0, 8), seed = 12, track = (:ΔH,))
     integ = init(prob, p64b1_bs(); save_start = false)
-    H0 = total_energy(prob, integ.u)
+    H0 = total_energy(prob, current_state(integ))
     ok = true
     for _ in 1:8
         step!(integ)
-        ok &= integ.stats.accepted_ΔH == total_energy(prob, integ.u) - H0
+        ok &= integ.stats.accepted_ΔH == total_energy(prob, current_state(integ)) - H0
     end
     @test ok
     @test integ.stats.accepted > 0
@@ -789,7 +789,7 @@ function p64b1_time_samples(alg, seed0; marks = (10,))
     msd = Dict(k => Float64[] for k in marks)
     attempts_ok = true
     for j in 1:P64B1_N_RUNS
-        integ = init(remake(prob; seed = seed0 + j), alg; save_start = false, save_end = false)
+        integ = init(remake(prob; seed = seed0 + j), alg; save_start = false, save_end = false, save_everystep = false)
         c0 = p64b1_centroids(integ.state.σ, 4)
         for t in 1:maximum(marks)
             step!(integ)
@@ -883,7 +883,7 @@ end
         ("OpenVT reference 60², VonNeumann(1) proposal on Moore(1) contacts",
             () -> remake(p64b1_openvt_problem(60; seed = 3); p = [:σ_X => 0.0]),
             () -> p64b1_bs(; proposal = VonNeumann(1)), P64B1_VN, false, 900))
-    integ = init(make(), alg(); save_start = false, save_end = false)
+    integ = init(make(), alg(); save_start = false, save_end = false, save_everystep = false)
     bad = Int[]
     p64b1_boundary_ok(integ, offsets; periodic) || push!(bad, 0)
     for t in 1:nmcs
@@ -906,7 +906,7 @@ const P64B1_SMOKE_RUNS = 8
 
 """N(t) for t = 0:tmax of one run (`OpenVTReferenceMonolayer`, Table S1 defaults)."""
 function p64b1_growth(prob, alg, seed, tmax)
-    integ = init(remake(prob; seed), alg; save_start = false, save_end = false)
+    integ = init(remake(prob; seed), alg; save_start = false, save_end = false, save_everystep = false)
     N = zeros(Int, tmax + 1)
     N[1] = count(>(0), integ.state.cell.volume)
     for t in 1:tmax
@@ -1016,7 +1016,7 @@ end
         ("Graner–Glazier 72²", () -> p64b1_gg_problem()),
         ("openvt_reference_100 (gate case, quiet lifecycle)", p64b1_openvt100_problem),
         ("400², 5.2 % cover", () -> p64b1_free_problem(; L = 400, side = 7, first = 15, spacing = 30, tspan = (0, 10^6))))
-    integ = init(make(), p64b1_bs(); save_start = false, save_end = false)
+    integ = init(make(), p64b1_bs(); save_start = false, save_end = false, save_everystep = false)
     step!(integ); step!(integ)
     @test p64b1_warm_allocs(integ) == 0
 end

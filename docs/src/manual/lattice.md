@@ -33,7 +33,7 @@ CairoMakie.activate!(type = "png") # hide
 end
 @named disk = InADisk()
 op = layout(Tiling((5, 5); region = (11:40, 11:40), spacing = 1, kinds = [:cell]), disk)
-sol = solve(PottsProblem(disk, op, (0, 200); seed = 1), SequentialCPM())
+sol = solve(PottsProblem(disk, op, (0, 200); seed = 1), SequentialCPM(); save_everystep = false)
 fig = Figure(size = (320, 320))
 ax = Axis(fig[1, 1]; aspect = DataAspect())
 hidedecorations!(ax)
@@ -67,7 +67,7 @@ site itself (zero flux). The face conditions of a `PDESystem` are an error there
 end
 @named hexsort = HexSorting()
 op = layout(Tiling((4, 4); region = (5:26, 5:26), kinds = [:dark, :light]), hexsort)
-sol = solve(PottsProblem(hexsort, op, (0, 200); seed = 1), SequentialCPM())
+sol = solve(PottsProblem(hexsort, op, (0, 200); seed = 1), SequentialCPM(); save_everystep = false)
 fig = Figure(size = (320, 320))
 ax = Axis(fig[1, 1]; aspect = DataAspect())
 hidedecorations!(ax)
@@ -121,7 +121,7 @@ A model uses relations in three roles:
 end
 @named roles = Roles()
 prob = PottsProblem(roles, layout(Tiling((5, 5); region = (11:30, 11:30), kinds = [:cell]), roles), (0, 50))
-solve(prob, SequentialCPM()).retcode
+solve(prob, SequentialCPM(); save_everystep = false).retcode
 ```
 
 The algorithm can also override the proposal relation per solve:

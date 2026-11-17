@@ -75,13 +75,13 @@ function child(case, nwarm)
     tm = @elapsed c = mtkcompile(sys)
     tp = @elapsed prob = PottsProblem(c, op, (0, 10); T, kw...)
     tf = @elapsed begin
-        integ = init(prob, SequentialCPM(); save_start = false)
+        integ = init(prob, SequentialCPM(); save_start = false, save_everystep = false)
         step!(integ)
     end
     tf2 = 0.0
     if case == "akeeb_f32_first_mcs"         # D-047: also the checkerboard's first MCS
         tf2 = @elapsed begin
-            integ2 = init(prob, CheckerboardCPM(); save_start = false)
+            integ2 = init(prob, CheckerboardCPM(); save_start = false, save_everystep = false)
             step!(integ2)
         end
     end

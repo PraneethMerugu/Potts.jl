@@ -115,7 +115,7 @@ classic fourth-order Runge–Kutta method with `n` time steps per MCS:
 
 ```@example odes
 prob_rk4 = remake(prob; ode_solver = RK4(substeps = 2))
-sol_rk4 = solve(prob_rk4, SequentialCPM())
+sol_rk4 = solve(prob_rk4, SequentialCPM(); save_everystep = false)
 count(>(0), sol_rk4[:volume][end])
 ```
 
@@ -125,7 +125,7 @@ precise chemistry. Load the solver package first:
 ```@example odes
 using OrdinaryDiffEqTsit5: Tsit5
 prob_adaptive = remake(prob; ode_solver = Adaptive(Tsit5(); reltol = 1e-8))
-sol_adaptive = solve(prob_adaptive, SequentialCPM())
+sol_adaptive = solve(prob_adaptive, SequentialCPM(); save_everystep = false)
 count(>(0), sol_adaptive[:volume][end])
 ```
 

@@ -314,7 +314,7 @@ p60bn_close(a, b; rtol = 1e-12) = length(a) == length(b) && all(i -> isapprox(a[
 
 """Bytes allocated by each of five warm `step!`s (after two warm-up steps)."""
 function p60bn_warm_allocs(prob, alg)
-    integ = init(prob, alg; save_start = false, save_end = false)
+    integ = init(prob, alg; save_start = false, save_end = false, save_everystep = false)
     step!(integ)
     step!(integ)
     out = Int[]

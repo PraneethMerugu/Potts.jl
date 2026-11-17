@@ -108,7 +108,7 @@ sol = solve(PottsProblem(clocks, op, (0, 20); seed = 1), SequentialCPM(); saveat
       σ[5 + 5a .+ (1:5), 5 + 5b .+ (1:5)] .= k
   end
   op = [ownership => σ, kind => [isodd(k) ? :A : :B for k in 1:16]]
-  u = solve(PottsProblem(exposure, op, (0, 10); seed = 1), SequentialCPM()).u[end]
+  u = solve(PottsProblem(exposure, op, (0, 10); seed = 1), SequentialCPM(); save_everystep = false).u[end]
   (corner = u.cell.free[1], inner = u.cell.free[6], b_contacts = u.cell.touching_b[1:4])
   ```
 - **Cell quantities.** `centroid(k)` is the `k`-th centroid coordinate of a cell;

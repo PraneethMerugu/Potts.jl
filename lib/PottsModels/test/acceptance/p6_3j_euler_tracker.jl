@@ -582,7 +582,7 @@ const P63J_ALGS = [("SequentialCPM", SequentialCPM()), ("CheckerboardCPM", Check
     for (label, alg) in P63J_ALGS, prefix in ("P63jTrack", "P63jObs")
         prefix == "P63jObs" && label != "SequentialCPM" && continue
         prob = p63j_problem(p63j_model(prefix, geom, periodic), p63j_blocks(dims); tspan = (0, 15))
-        integ = init(prob, alg; save_start = false, save_end = false)
+        integ = init(prob, alg; save_start = false, save_end = false, save_everystep = false)
         bad = checks = 0
         seen = Set{Int}()
         obs_ok = true
@@ -622,7 +622,7 @@ end
         _, _, dims = Dict(P63J_GEOMS)[(geom, periodic)]
         M = p63j_model("P63jDivide", geom, periodic)
         prob = p63j_problem(M, p63j_blocks(dims); tspan = (0, 12), capacity = 64)
-        integ = init(prob, SequentialCPM(); save_start = false, save_end = false)
+        integ = init(prob, SequentialCPM(); save_start = false, save_end = false, save_everystep = false)
         bad = 0
         for _ in 1:12
             step!(integ)
@@ -837,7 +837,7 @@ end
 
 """Bytes allocated by each of five warm `step!`s (after two warm-up steps)."""
 function p63j_warm_allocs(prob, alg)
-    integ = init(prob, alg; save_start = false, save_end = false)
+    integ = init(prob, alg; save_start = false, save_end = false, save_everystep = false)
     step!(integ)
     step!(integ)
     out = Int[]

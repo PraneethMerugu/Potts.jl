@@ -275,7 +275,7 @@ end
                 ck = load_checkpoint(r["ck " * label])
                 integ = init(here, SequentialCPM(); checkpoint = ck)
                 @test integ.t == 3
-                @test integ.u.σ == ck.state.σ
+                @test current_state(integ).σ == ck.state.σ
             end
         end
         # negative controls: the harness compares real values (another combine differs, and

@@ -703,17 +703,17 @@ end
 @testset "P6.5b convert: zero cost when no @convert is declared" begin
     # a quiet pass (p ≤ 0 everywhere: c = 0) allocates nothing on a warm CPU step
     prob = p65b_problem(; c = 0.0, tspan = (0, 50))
-    integ = init(prob, SequentialCPM(); save_start = false, save_end = false)
+    integ = init(prob, SequentialCPM(); save_start = false, save_end = false, save_everystep = false)
     for _ in 1:3
         step!(integ)
     end
     @test minimum(_ -> (@allocated step!(integ)), 1:3) == 0       # DEFECT CHECK
     # and after the passes have converted (A full, B at or past its target: quiet from then on)
-    integ2 = init(p65b_problem(; tspan = (0, 50)), SequentialCPM(); save_start = false, save_end = false)
+    integ2 = init(p65b_problem(; tspan = (0, 50)), SequentialCPM(); save_start = false, save_end = false, save_everystep = false)
     for _ in 1:6
         step!(integ2)
     end
-    @test count(==(6), Array(integ2.u.σ)) == 8                  # control: the pass did convert
+    @test count(==(6), Array(current_state(integ2).σ)) == 8                  # control: the pass did convert
     @test minimum(_ -> (@allocated step!(integ2)), 1:3) == 0
 end
 
@@ -904,7 +904,7 @@ end
             end
         end
         # D-233 cost: no host round trip per MCS, including the MCS that allocates
-        integ = init(p65b_problem(; T = Float32, tspan = (0, 5)), alg; backend, save_start = false, save_end = false)
+        integ = init(p65b_problem(; T = Float32, tspan = (0, 5)), alg; backend, save_start = false, save_end = false, save_everystep = false)
         counts = NTuple{3, Int}[]
         for _ in 1:4
             c0 = (integ.stats.syncs, integ.stats.transfers, integ.stats.transfer_bytes)
@@ -912,7 +912,7 @@ end
             push!(counts, (integ.stats.syncs, integ.stats.transfers, integ.stats.transfer_bytes) .- c0)
         end
         @test all(==((0, 0, 0)), counts)
-        u = integ.u                                              # control: the passes ran (a read point)
+        u = current_state(integ)                                              # control: the passes ran (a read point)
         @test count(==(6), Array(u.σ)) == 8
         @test integ.stats.transfers > 0                          # control: the counters are live
     else

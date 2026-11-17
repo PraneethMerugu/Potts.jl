@@ -24,7 +24,7 @@ using Potts, PottsModels
 
 σ, kinds = graner_glazier_state()
 prob = PottsProblem(GranerGlazier(; name = :gg), [ownership => σ, kind => kinds], (0, 200); seed = 1)
-u = solve(prob, SequentialCPM()).u[end]
+u = solve(prob, SequentialCPM(); save_everystep = false).u[end]
 L = Potts.boundary_lengths(prob, u)
 ```
 

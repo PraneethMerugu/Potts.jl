@@ -30,10 +30,10 @@
 # ordinary, non-frozen regression test that those rows update):
 #  (c) The division fixture (every cell divides at MCS 0) divides both cells at MCS 0, read
 #      at a `checkpoint` (a host read point: under D-089 `stats.lifecycle` is exact only at
-#      saves, the end of `solve!`, `checkpoint` and `integ.u`, and the event MCS has no
+#      saves, the end of `solve!`, `checkpoint` and `current_state(integ)`, and the event MCS has no
 #      host traffic bound here; re-frozen by P6.0v1).
 #  (d) An MCS running a `HostPhase` (host code over host copies) transfers: transfers ≥ 1.
-#  Counters never decrease from one MCS to the next; a save (`integ.u`) is counted (lower
+#  Counters never decrease from one MCS to the next; a save (`current_state(integ)`) is counted (lower
 #  bounds: it synchronizes and copies σ and every cell column down).
 # The audit document has a section per known starting point of the ROADMAP row.
 #
@@ -194,7 +194,7 @@ end
         # a save is counted too: it synchronizes and copies the state down
         integ = init(p60v_divide_problem(; T = Float32, tspan = (0, 2)), alg; backend, save_start = false, save_end = false)
         step!(integ); c0 = p60v_counts(integ.stats)
-        integ.u
+        current_state(integ)
         d = p60v_counts(integ.stats) .- c0
         @test d[1] >= 1 && d[2] >= 1 + length(integ.state.cell) && d[3] >= sizeof(integ.state.σ)
     else

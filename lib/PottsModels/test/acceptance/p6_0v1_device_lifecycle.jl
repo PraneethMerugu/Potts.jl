@@ -28,7 +28,7 @@
 #        model (OpenVT) is compared in law over seeds.
 #  (iv)  `stats.lifecycle` and the P6.0d mask counts (`stats.attempts`) are exact at the
 #        host read points of D-089: a save (after the `step!` that saves), the end of
-#        `solve!` (`sol.stats`), `checkpoint` (`ck.stats`) and `integ.u` (`current_state`).
+#        `solve!` (`sol.stats`), `checkpoint` (`ck.stats`) and `current_state(integ)` (`current_state`).
 #        Between those points they may lag on a device (documented, not tested);
 #        `reinit!`, `set_state!` and `merge` are not pinned.
 #  (v)   No GPU wait at all in a quiet lifecycle MCS (OpenVT, Akeeb): Metal.jl's
@@ -599,10 +599,10 @@ end
 
 """Run the read-point schedule on `backend` (tspan (0, 6); the event is at MCS S):
 - a save at t = 1 (before the event): `r1`;
-- past the event MCS without a save, then `integ.u` at t = S + 1, the first read after it: `ru`;
+- past the event MCS without a save, then `current_state(integ)` at t = S + 1, the first read after it: `ru`;
 - one more MCS (it runs with the new mask), then `checkpoint` at t = S + 2: `rck`;
 - the save at t = S + 3: `r2`; then `solve!` to the end: `rend`;
-- a second integrator with no save and no read until `integ.u` at t = S + 3: `ru3`.
+- a second integrator with no save and no read until `current_state(integ)` at t = S + 3: `ru3`.
 Returns the lifecycle counts and `stats.attempts` read at each point."""
 function p60v1_read_points(prob, alg; backend)
     rd(st) = (p60v1_lifecycle(st), st.attempts)
@@ -612,7 +612,7 @@ function p60v1_read_points(prob, alg; backend)
     while integ.t < P60V1_S + 1
         step!(integ)
     end
-    integ.u                                                      # t = S + 1: a host read, no save
+    current_state(integ)                                                      # t = S + 1: a host read, no save
     ru = rd(integ.stats)
     step!(integ)
     ck = checkpoint(integ)                                       # t = S + 2
@@ -625,7 +625,7 @@ function p60v1_read_points(prob, alg; backend)
     while integ.t < P60V1_S + 3
         step!(integ)
     end
-    integ.u
+    current_state(integ)
     ru3 = rd(integ.stats)
     return (; r1, ru, rck, r2, rend, ru3)
 end

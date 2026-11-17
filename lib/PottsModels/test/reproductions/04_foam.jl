@@ -420,10 +420,10 @@ function p64r_disordered(target, seed; L = P64R_L)
             step!(integ)
         end
         m += P64R_CHECK
-        p64r_mu2n(Array(integ.u.σ)) >= target && break
+        p64r_mu2n(Array(current_state(integ).σ)) >= target && break
     end
-    σc = Array(integ.u.σ)
-    A = p64r_vol(integ.u, n)[1:Int(maximum(σc))]                # ids above the largest survivor are dropped
+    σc = Array(current_state(integ).σ)
+    A = p64r_vol(current_state(integ), n)[1:Int(maximum(σc))]                # ids above the largest survivor are dropped
     u = solve(p64r_problem((; σ = σc, A), P64R_NR; seed), P64R_ALG).u[end]
     return (; σ = Array(u.σ), A, stop = m)
 end
@@ -573,7 +573,7 @@ function p64r_loop(st, J, γ0m, T, seed, τ)
     all = Float64[]
     for m in 1:(P64R_CYCLES * P)
         step!(integ)
-        σ = integ.u.σ
+        σ = current_state(integ).σ
         g2 = P64R_AN.cell_graph(σ, lat)
         c = (m - 1) ÷ P + 1
         t1[c] += P64R_AN.t1_events(g, g2; unit = :t1)
@@ -609,7 +609,7 @@ function p64r_steady(st, γ0m, tp, seed, τ)
     cmax = 0.0
     for m in 1:T
         step!(integ)
-        σ = integ.u.σ
+        σ = current_state(integ).σ
         g2 = P64R_AN.cell_graph(σ, lat)
         N[m] = P64R_AN.t1_events(g, g2; unit = :t1)
         cc = P64R_AN.contact_changes(g, g2)
@@ -653,7 +653,7 @@ function p64r_bulk(st, βp, κ, tp, seed, τ; spectra = false)
     tw = 0.0
     for m in 1:T
         step!(integ)
-        σ = integ.u.σ
+        σ = current_state(integ).σ
         g2 = P64R_AN.cell_graph(σ, lat)
         N[m] = P64R_AN.t1_events(g, g2; unit = :t1)
         cc = P64R_AN.contact_changes(g, g2)
@@ -666,7 +666,7 @@ function p64r_bulk(st, βp, κ, tp, seed, τ; spectra = false)
         w = p64r_pbin(m, 100, τ)
         if w <= nw && (m == T || p64r_pbin(m + 1, 100, τ) > w)
             fr = p64r_frame(σ, lat, n)
-            vol = p64r_vol(integ.u, n)
+            vol = p64r_vol(current_state(integ), n)
             push!(W, Dict{String, Any}("w" => w, "t1" => tw,
                 "phi" => spectra ? Φ[m] : P64R_AN.stored_energy(σ, lat) / φ0, "mu2n" => p64r_mu2n(σ),
                 "nonhex_mid" => fr.mid, "nonhex_away" => fr.away,
@@ -1128,17 +1128,17 @@ function p64r_drift(st, βm, mcs, seed)
     t1 = 0.0
     for m in 1:mcs
         step!(integ)
-        g2 = P64R_AN.cell_graph(integ.u.σ, lat)
+        g2 = P64R_AN.cell_graph(current_state(integ).σ, lat)
         t1 += P64R_AN.t1_events(g, g2; unit = :t1)
         g = g2
         if m % 10 == 0
-            x1 = p64r_cx(integ.u.σ, n)
+            x1 = p64r_cx(current_state(integ).σ, n)
             d .+= mod.(x1 .- x0 .+ X / 2, X) .- X / 2
             x0 = x1
         end
     end
     return (; top = mean(d[cy .>= 192]), bottom = mean(d[cy .<= 64]), t1,
-        area = p64r_area_frac(integ.u.σ, p64r_vol(integ.u, n), st.A))
+        area = p64r_area_frac(current_state(integ).σ, p64r_vol(current_state(integ), n), st.A))
 end
 
 if !P64R_FULL

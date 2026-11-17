@@ -101,7 +101,7 @@ p60x_problem(M, tspan; T = Float64, kw...) =
 
 """Bytes allocated by each of five warm `step!`s (after two warm-up steps)."""
 function p60x_warm_allocs(prob, alg)
-    integ = init(prob, alg; save_start = false, save_end = false)
+    integ = init(prob, alg; save_start = false, save_end = false, save_everystep = false)
     step!(integ)
     step!(integ)
     out = Int[]

@@ -387,7 +387,7 @@ end
 end
 
 @testset "P6.0t: warm steps allocate nothing" begin
-    integ = init(p60t_problem(P60tReaders, 100), SequentialCPM())
+    integ = init(p60t_problem(P60tReaders, 100), SequentialCPM(); save_everystep = false)
     warm() = (step!(integ); @allocated step!(integ))
     @test minimum(warm() for _ in 1:5) == 0
 end

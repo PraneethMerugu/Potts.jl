@@ -163,8 +163,8 @@ end
 op = layout(Tiling((5, 5); region = (21:40, 21:40), spacing = 5, kinds = [:cell]), dilute)
 prob = PottsProblem(dilute, op, (0, 20); seed = 1)
 
-seq = solve(prob, SequentialCPM())
-bnd = solve(prob, SequentialCPM(; skip_interior = true))
+seq = solve(prob, SequentialCPM(); save_everystep = false)
+bnd = solve(prob, SequentialCPM(; skip_interior = true); save_everystep = false)
 (; sequential = (seq.stats.attempts, seq.stats.accepted),
    boundary = (bnd.stats.attempts, bnd.stats.accepted))
 ```

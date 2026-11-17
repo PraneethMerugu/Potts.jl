@@ -165,10 +165,13 @@ settle(backend) = device_sync(backend)
 timed_step!(integ, ::Nothing) = (step!(integ); nothing)
 timed_step!(integ, backend) = (step!(integ); device_sync(backend); nothing)
 
-# A warmed-up integrator (two MCS) with no work still in flight.
+# A warmed-up integrator (two MCS) with no work still in flight. No saves: a step is timed
+# alone. (`save_everystep` only where `init` takes it, so that an A/B base before it runs this
+# same file.)
 function fresh_integrator(prob, alg, backend)
     kw = backend === nothing ? (;) : (; backend)
-    integ = init(prob, alg; save_start = false, save_end = false, kw...)
+    nosave = hasmethod(init, Tuple{typeof(prob), typeof(alg)}, (:save_everystep,)) ? (; save_everystep = false) : (;)
+    integ = init(prob, alg; save_start = false, save_end = false, nosave..., kw...)
     step!(integ)
     step!(integ)
     settle(backend)

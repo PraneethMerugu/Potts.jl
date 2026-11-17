@@ -465,7 +465,7 @@ end
                 ck = load_checkpoint(r["ck " * label])
                 integ = init(here, SequentialCPM(); checkpoint = ck)
                 @test integ.t == 2
-                @test integ.u.σ == ck.state.σ
+                @test current_state(integ).σ == ck.state.σ
             end
         end
         # negative controls: another solver's fingerprint differs and its checkpoint is refused

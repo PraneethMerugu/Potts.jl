@@ -18,7 +18,7 @@ cycle = P615M_CYCLE_SEQ
 k4_seed(c, k) = 217_000_000 + 1000 * findfirst(==(c), K4_CASES) + k
 function k4_run(prob, seed, c; backend = cb_backend())
     rec = NamedTuple[]
-    record(integ) = push!(rec, p615f_row(integ.u, integ.t; c.beta, c.gamma))
+    record(integ) = push!(rec, p615f_row(current_state(integ), integ.t; c.beta, c.gamma))
     cbr = Potts.DiscreteCallback((u, t, integ) -> t % CB_EVERY == 0 || count(>(0), u.cell.volume) >= c.cells,
         record; initialize = (cb, u, t, integ) -> record(integ), save_positions = (false, false))
     pr = remake(prob; seed, p = [:β => c.beta, :γ => c.gamma, :σ_X => c.sigma_X, :α => α])

@@ -284,9 +284,10 @@ end
 
 @testset "P6.0av: PottsProblem, remake and solve do not take mcs_duration" begin
     prob = p60av_problem(P60avODE(; name = :ode, md = 0.5))
-    @test_throws MethodError p60av_problem(P60avODE(; name = :ode, md = 0.5); mcs_duration = NaN)
+    # a problem keeps unknown keywords for `solve` (SciML), which refuses them by name
+    @test_throws "`mcs_duration`" solve(p60av_problem(P60avODE(; name = :ode, md = 0.5); mcs_duration = NaN), SequentialCPM())
     @test_throws "unknown keyword `mcs_duration`" remake(prob; mcs_duration = NaN)
-    @test_throws MethodError solve(prob, SequentialCPM(); mcs_duration = NaN)
+    @test_throws ArgumentError solve(prob, SequentialCPM(); mcs_duration = NaN)
     # control: the problem itself is fine
     @test Symbol(solve(prob, SequentialCPM()).retcode) === :Success
 end

@@ -44,7 +44,7 @@ end
 
 @named divider = Divider()
 op = layout(Tiling((5, 5); region = (16:25, 16:25), kinds = [:cell]), divider)
-sol = solve(PottsProblem(divider, op, (0, 200); seed = 1, capacity = 64), SequentialCPM())
+sol = solve(PottsProblem(divider, op, (0, 200); seed = 1, capacity = 64), SequentialCPM(); save_everystep = false)
 alive = sol[:volume][end] .> 0
 (cells = count(alive), divisions = sol.stats.lifecycle.divisions, total_mass = sum(sol[:mass][end][alive]))
 ```

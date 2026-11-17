@@ -58,7 +58,7 @@ end
 
 op = layout(Tiling((8, 8); region = (17:24, 17:24), kinds = [:cell]), Fragile(; name = :f))
 [npieces(solve(PottsProblem(Fragile(; name = :f, connected = c), op, (0, 100); seed = 1),
-              SequentialCPM()).u[end].σ, 1) for c in (true, false)]
+              SequentialCPM(); save_everystep = false).u[end].σ, 1) for c in (true, false)]
 ```
 
 At this high temperature the unconstrained cell breaks into pieces; with

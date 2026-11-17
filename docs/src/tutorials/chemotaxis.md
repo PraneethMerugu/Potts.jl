@@ -202,7 +202,7 @@ end
 function short(sys)
     start = layout(Scattered(12, (5, 5); region = (8:30, 1:40), kinds = [:cell], seed = 1), sys)
     prob = PottsProblem(sys, start, (0, 100); field_solver = ExplicitEuler(substeps = 8, lower = 0.0), seed = 1)
-    return solve(remake(prob; p = [:χ => 300.0]), SequentialCPM())
+    return solve(remake(prob; p = [:χ => 300.0]), SequentialCPM(); save_everystep = false)
 end
 short(by_hand).u[end].σ == short(gradient).u[end].σ
 ```

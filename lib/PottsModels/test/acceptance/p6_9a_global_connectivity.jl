@@ -306,7 +306,7 @@ end
 
 """Replays `n` MCS of the twin problem; the σ after each MCS and the total refusals."""
 function p69a_replay(prob, n, ok; kw...)
-    integ = init(prob, SequentialCPM(); save_start = false, save_end = false)
+    integ = init(prob, SequentialCPM(); save_start = false, save_end = false, save_everystep = false)
     out = Array{Int32}[]
     refused = 0
     for t in 0:(n - 1)
@@ -320,7 +320,7 @@ end
 
 """The σ after each of `n` `step!`s of the real integrator."""
 function p69a_run(prob, alg, n)
-    integ = init(prob, alg; save_start = false, save_end = false)
+    integ = init(prob, alg; save_start = false, save_end = false, save_everystep = false)
     out = Array{Int32}[]
     for _ in 1:n
         step!(integ)
@@ -776,11 +776,11 @@ end
     bar = zeros(Int32, 12, 12); bar[6, 3:9] .= 1
     mk(M) = PottsProblem(M(; name = :inf), [ownership => bar, kind => [:A]], (0, 3); seed = 2)
     # the harness: the pre-ΔH reference skips the infinite copies, the post-draw order does not
-    integ = init(mk(P69aInfTwin), SequentialCPM(); save_start = false, save_end = false)
+    integ = init(mk(P69aInfTwin), SequentialCPM(); save_start = false, save_end = false, save_everystep = false)
     ok = (σ, x, a, b) -> a == 0 || p69a_no_increase(σ, x, b, a, :square, :face; periodic = false)
     st, refused, refused_inf = p69a_replay_mcs!(integ, 0, ok; order = :pre)
     @test st == 0 && refused_inf > 0
-    integ = init(mk(P69aInfTwin), SequentialCPM(); save_start = false, save_end = false)
+    integ = init(mk(P69aInfTwin), SequentialCPM(); save_start = false, save_end = false, save_everystep = false)
     @test p69a_replay_mcs!(integ, 0, ok; order = :post)[1] == CorePotts.STATUS_NONFINITE
     # control: a pre-ΔH (local) constraint guards the drive; the run succeeds
     for alg in (SequentialCPM(), CheckerboardCPM())
@@ -857,7 +857,7 @@ end
     # t = 0 (the initial rebuild)
     u = prob.u0
     @test getu(prob, :np)(prob)[1:3] == first.(p69a_cellvals(Array(u.σ), 3, geom, :face; periodic))
-    integ = init(prob, alg; save_start = false, save_end = false)
+    integ = init(prob, alg; save_start = false, save_end = false, save_everystep = false)
     bad = 0
     seen = Set{Int}()
     for _ in 1:10
@@ -976,7 +976,7 @@ end
 
 """Bytes allocated by each of five warm `step!`s (after two warm-up steps)."""
 function p69a_warm_allocs(prob, alg)
-    integ = init(prob, alg; save_start = false, save_end = false)
+    integ = init(prob, alg; save_start = false, save_end = false, save_everystep = false)
     step!(integ)
     step!(integ)
     return [@allocated(step!(integ)) for _ in 1:5]
@@ -1034,22 +1034,22 @@ const P69A_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_de
             _, _, dims = Dict(P69A_GEOMS)[(geom, periodic)]
             σ0 = p69a_random_σ(dims, 3, 13)
             prob = p69a_problem(p69a_model("P69aVeto", geom, periodic), σ0; T = Float32, tspan = (0, 10))
-            integ = init(prob, CheckerboardCPM(); backend, save_start = false, save_end = false)
+            integ = init(prob, CheckerboardCPM(); backend, save_start = false, save_end = false, save_everystep = false)
             prev = p69a_counts(σ0, geom, :face; periodic)
             up = 0
             for _ in 1:10
                 step!(integ)
-                now = p69a_counts(Array(integ.u.σ), geom, :face; periodic)
+                now = p69a_counts(Array(current_state(integ).σ), geom, :face; periodic)
                 up += (now[1] > prev[1]) + (now[3] > prev[3])
                 prev = now
             end
             @test up == 0
             prob = p69a_problem(p69a_model("P69aCell", geom, periodic), σ0; T = Float32, tspan = (0, 10))
-            integ = init(prob, CheckerboardCPM(); backend, save_start = false, save_end = false)
+            integ = init(prob, CheckerboardCPM(); backend, save_start = false, save_end = false, save_everystep = false)
             bad = 0
             for _ in 1:10
                 step!(integ)
-                face = p69a_cellvals(Array(integ.u.σ), 3, geom, :face; periodic)
+                face = p69a_cellvals(Array(current_state(integ).σ), 3, geom, :face; periodic)
                 bad += collect(integ[:np])[1:3] != first.(face)
                 bad += collect(integ[:lp])[1:3] != last.(face)
             end

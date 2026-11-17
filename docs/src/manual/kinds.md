@@ -97,7 +97,7 @@ end
 @named obstacles = Obstacles()
 op = layout(overlay(Tiling((5, 5); spacing = 2, kinds = [:cell]),
                     Tiling((4, 4); spacing = 10, region = (5:46, 5:46), kinds = [:pillar])), obstacles)
-sol = solve(PottsProblem(obstacles, op, (0, 100); seed = 1), SequentialCPM())
+sol = solve(PottsProblem(obstacles, op, (0, 100); seed = 1), SequentialCPM(); save_everystep = false)
 fig = Figure(size = (320, 320))
 ax = Axis(fig[1, 1]; aspect = DataAspect())
 hidedecorations!(ax)

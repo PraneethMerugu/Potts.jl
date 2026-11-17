@@ -307,9 +307,9 @@ const P60AN_HW = CorePotts.CPMFunction(p60an_hw_dH; temperature = p60an_hw_T)
         @test remake(hp; p = (h = 1.0, T = 5.0)).p === (h = 1.0, T = 5.0)
         @test remake(hp; p = (T = 5.0,)).p === (T = 5.0,)
         @test remake(hp; p = merge(hp.p, (; T = 5.0))).p === (h = 0.0, T = 5.0)
-        # any object, as given
+        # any other object, as given; a map sets the named fields (SciML's remake)
         @test remake(hp; p = 3.0).p === 3.0
-        @test remake(hp; p = [:T => 5.0]).p == [:T => 5.0]
+        @test remake(hp; p = [:T => 5.0]).p === (h = 0.0, T = 5.0)
         # and runs with it
         hi = init(remake(hp; p = (h = 0.0, T = 5.0)), SequentialCPM())
         step!(hi)

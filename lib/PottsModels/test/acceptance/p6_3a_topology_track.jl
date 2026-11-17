@@ -641,7 +641,7 @@ end
     integ = init(on, SequentialCPM(); save_start = false, save_end = false)
     for _ in 1:6
         step!(integ)
-        @test integ.stats.accepted_ΔH == p63a_Φ(on, integ.u) - Φ0
+        @test integ.stats.accepted_ΔH == p63a_Φ(on, current_state(integ)) - Φ0
     end
     integ = init(on, CheckerboardCPM(); save_start = false, save_end = false)
     for _ in 1:3

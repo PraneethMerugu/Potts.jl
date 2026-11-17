@@ -311,9 +311,10 @@ const P60AP_HWT = CorePotts.CPMFunction(p60ap_hwt_dH; temperature = p60ap_hwt_T)
         e = p60ap_error(() -> setp(i, :h)(i, -1.0))
         @test e === nothing
         e === nothing && (step!(i); @test i.stats.accepted > 0)
-        # setp applied to the problem: immutable, as on a model's problem
-        e = p60ap_error(() -> setp(hp, :T)(hp, 5.0))
-        @test e isa ArgumentError && occursin("remake", p60ap_msg(e))
+        # setp applied to the problem writes the problem's parameters (SciML), not another's
+        hq = remake(hp)
+        e = p60ap_error(() -> setp(hq, :T)(hq, 5.0))
+        @test e === nothing && hq.p === (h = 0.0, T = 5.0)
         @test hp.p === (h = 0.0, T = 10.0)
         # negative controls: a name that is not a field
         e = p60ap_error(() -> setp(hinit(), :zz))

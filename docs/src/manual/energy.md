@@ -41,7 +41,7 @@ end
 @named allterms = AllTerms()
 op = layout(Tiling((5, 5); region = (11:30, 11:30), kinds = [:dark, :light]), allterms)
 prob = PottsProblem(allterms, op, (0, 50); seed = 1)
-total_energy(prob), total_energy(prob, solve(prob, SequentialCPM()).u[end])
+total_energy(prob), total_energy(prob, solve(prob, SequentialCPM(); save_everystep = false).u[end])
 ```
 
 Notes:
@@ -95,7 +95,7 @@ end
 @named comp = Compartments()
 prob = PottsProblem(comp, [ownership => σ, kind => [:cytoplasm, :cytoplasm, :nucleus, :nucleus],
                            cluster => [1, 2, 1, 2]], (0, 50))
-sol = solve(prob, SequentialCPM())
+sol = solve(prob, SequentialCPM(); save_everystep = false)
 sol[:cluster_volume][end]
 ```
 

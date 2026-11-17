@@ -263,7 +263,7 @@ function p615f_problem(L, cells)
 end
 function p615f_run(prob, seed, c; cells = c.cells, tmax = nothing)
     rec = NamedTuple[]
-    record(integ) = push!(rec, p615f_row(integ.u, integ.t; c.beta, c.gamma))
+    record(integ) = push!(rec, p615f_row(current_state(integ), integ.t; c.beta, c.gamma))
     cb_rec = Potts.DiscreteCallback((u, t, integ) -> t % P615F_EVERY == 0 || count(>(0), u.cell.volume) >= cells,
         record; initialize = (cb, u, t, integ) -> record(integ), save_positions = (false, false))
     p = [:β => c.beta, :γ => c.gamma, :σ_X => c.sigma_X]

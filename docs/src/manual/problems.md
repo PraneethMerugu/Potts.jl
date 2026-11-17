@@ -70,7 +70,7 @@ sol(50) === sol.u[3]
 `init` returns an **integrator** that you advance yourself, as in SciML:
 
 ```@example problems
-integ = init(prob, SequentialCPM())
+integ = init(prob, SequentialCPM(); save_everystep = false)
 step!(integ)                    # one MCS
 integ.t, integ[:age][1]
 ```
@@ -82,7 +82,9 @@ sol2 = solve!(integ)            # run to the end
 sol2.t
 ```
 
-`integ.u` is a copy of the current state.
+`integ.u` is the live state, as in SciML: a write into it is seen by the next MCS after
+`derivative_discontinuity!(integ, true)`. On a GPU backend it holds device arrays.
+`current_state(integ)` is a host copy of the current state.
 
 ## A saved state
 
@@ -96,12 +98,12 @@ manual-indexing)), which works for every quantity, derived ones included.
 A checkpoint saves an integrator, so a long run can be stopped and resumed exactly:
 
 ```@example problems
-integ = init(prob, SequentialCPM())
+integ = init(prob, SequentialCPM(); save_everystep = false)
 foreach(_ -> step!(integ), 1:40)
 ck = checkpoint(integ)
 path = tempname() * ".jls"
 save_checkpoint(path, ck)
-resumed = init(prob, SequentialCPM(); checkpoint = load_checkpoint(path))
+resumed = init(prob, SequentialCPM(); checkpoint = load_checkpoint(path), save_everystep = false)
 resumed.t
 ```
 

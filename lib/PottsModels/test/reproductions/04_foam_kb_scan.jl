@@ -270,7 +270,7 @@ function p64kb_run(st, βm, cap, seed, τ)
     N = zeros(T)
     for m in 1:T
         step!(integ)
-        g2 = P64R_AN.cell_graph(integ.u.σ, lat)
+        g2 = P64R_AN.cell_graph(current_state(integ).σ, lat)
         N[m] = P64R_AN.t1_events(g, g2; unit = :t1)
         g = g2
         (m % w == 0 || m == T) || continue
