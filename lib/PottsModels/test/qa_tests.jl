@@ -33,7 +33,7 @@ include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "qa_common.jl"))
         @test_opt target_modules = (PottsModels,) akeeb_contacts(2.0)
         σ, kinds = graner_glazier_state()
         prob = PottsProblem(GranerGlazier(; name = :gg_qa), [ownership => σ, kind => kinds], (0, 2))
-        integ = init(prob, SequentialCPM(; proposal = Moore(1)); save_start = false)
+        integ = init(prob, SequentialCPM(; proposal = Moore(1)); save_start = false, save_everystep = false)
         step!(integ)
         @test_opt target_modules = (PottsModels, Potts, CorePotts) step!(integ)
         @test (@allocated step!(integ)) == 0

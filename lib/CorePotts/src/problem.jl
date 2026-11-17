@@ -346,7 +346,7 @@ The integrator for a `PottsProblem`, a `SciMLBase.DEIntegrator`. `t` is the curr
 from the next MCS; after one, call `derivative_discontinuity!(integrator, true)` so that the
 frozen mask and the field groups follow it. `step!` enqueues one MCS without synchronizing;
 `step!(integrator, n, true)` lands on MCS `t + n`. `integrator.sol` is the solution so far,
-`integrator.opts` the run's [`PottsOptions`](@ref) and `integrator.iter` the MCS this run took.
+`integrator.opts` the run's `PottsOptions` and `integrator.iter` the MCS this run took.
 
 `check_error(integrator)` is the cheap read of the run's health inside a callback: `Success`
 while the run goes on, else the code that ended it. It reads a host field and does not
@@ -483,7 +483,7 @@ clock:
 - `backend`: the KernelAbstractions backend the run executes on; `checkpoint`: a
   [`PottsCheckpoint`](@ref) to continue.
 
-Any other keyword is an `ArgumentError` listing these ([`SOLVE_KEYWORDS`](@ref)). The
+Any other keyword is an `ArgumentError` listing these (`SOLVE_KEYWORDS`). The
 problem's `kwargs` are merged in first.
 """
 function CommonSolve.init(prob::PottsProblem, alg::CPMAlgorithm; kwargs...)
