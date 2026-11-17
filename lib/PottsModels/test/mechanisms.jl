@@ -404,7 +404,7 @@ end
         u = solve(PottsProblem(MerksVasculogenesis(; name = :m, lattice = (140, 140)),
             [merks_state(; lattice = (140, 140), n = 49, seed); :λ_L => λ_L], (0, 1500); seed, field_solver = MERKS_SOLVER),
             SequentialCPM(); saveat = 1500).u[end]
-        el = map(c -> (s = CP.shape(u.cell, CP.Lattice((140, 140)), c); s.elongation), 1:49)
+        el = map(c -> (s = CP.cell_shape(u.cell, CP.Lattice((140, 140)), c); s.elongation), 1:49)
         return (; compact = compactness(u.ownership), largest = maximum(components(u.ownership .!= 0)[1]), elongation = mean(el))
     end
     net, isl = [vasculo(5.0, s) for s in 1:3], [vasculo(0.0, s) for s in 1:3]

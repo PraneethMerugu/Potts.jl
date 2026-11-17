@@ -932,7 +932,7 @@ end
         @test maximum(abs.(s.a .- Array(u.cell.volume)[live] ./ Array(u.cell.A_star)[live])) <= 1e-12
         @test any(<(1.0), s.f)                                           # non-vacuous: contacts between cells
         # the centre and A₀ keywords
-        s2 = snap(u; A₀ = 100.0, center = (1.0, 1.0))
+        s2 = snap(u; area0 = 100.0, center = (1.0, 1.0))
         @test maximum(abs.(s2.x .- (cx .- 1) ./ sqrt(100 / π))) <= 1e-12
         # written with P6.15d's writer
         dir = mktempdir()

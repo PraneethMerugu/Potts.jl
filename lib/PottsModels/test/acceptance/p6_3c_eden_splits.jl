@@ -213,7 +213,7 @@ p63c_box(r...) = vec([Tuple(x) for x in CartesianIndices(r)])
 # ---------------------------------------------------------------------------------------------
 
 @testset "P6.3c surface" begin
-    @test Base.isexported(Potts, :Eden) && Base.isexported(Potts, :Splits)
+    @test Base.isexported(Potts.Layouts, :Eden) && Base.isexported(Potts.Layouts, :Splits)
     @test Potts.Eden <: Potts.AbstractLayout && Potts.Splits <: Potts.AbstractLayout
     # a host layer, not the lifecycle routine: CorePotts has no such names
     @test !isdefined(CorePotts, :Eden) && !isdefined(CorePotts, :Splits)

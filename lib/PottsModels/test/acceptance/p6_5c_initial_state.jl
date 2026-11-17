@@ -221,7 +221,7 @@ end
 
 @testset "P6.5c initial state: the new names are exported, `set_column!` is public" begin
     for n in (:Interior, :Fill, :Objects, :Group)
-        @test Base.isexported(Potts, n)                          # DEFECT CHECK
+        @test Base.isexported(Potts.Layouts, n)                  # DEFECT CHECK
     end
     @test Base.ispublic(Potts, :set_column!)                     # DEFECT CHECK
     @test !Base.isexported(Potts, :set_column!)                  # public, not exported (control today: absent)

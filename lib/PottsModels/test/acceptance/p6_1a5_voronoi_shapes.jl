@@ -184,8 +184,8 @@ end
 # ---------------------------------------------------------------------------------------------
 
 @testset "P6.1a5: surface (exports, public names, GeometryBasics bindings)" begin
-    for n in P61A5_NEW_EXPORTS
-        @test Base.isexported(Potts, n)
+    for n in P61A5_NEW_EXPORTS                               # the opt-in layout vocabulary
+        @test Base.isexported(Potts.Layouts, n)
     end
     for n in P61A5_NEW_PUBLIC
         @test Base.ispublic(Potts, n) && !Base.isexported(Potts, n)
@@ -193,11 +193,11 @@ end
     GB = parentmodule(HyperSphere)
     @test nameof(GB) === :GeometryBasics
     for n in (:HyperSphere, :Circle, :Sphere, :Point)
-        @test getfield(Potts, n) === getfield(GB, n)          # the same binding as GeometryBasics' (and Makie's)
+        @test getfield(Potts.Layouts, n) === getfield(GB, n)  # the same binding as GeometryBasics' (and Makie's)
     end
     @test Circle === HyperSphere{2} && Sphere === HyperSphere{3}
     for n in P61A5_GB_KEPT_OUT                               # index boxes stay ranges; no clashing GB names
-        @test !Base.isexported(Potts, n)
+        @test !Base.isexported(Potts, n) && !Base.isexported(Potts.Layouts, n)
         @test !(isdefined(Potts, n) && isdefined(GB, n) && getfield(Potts, n) === getfield(GB, n))
     end
     # no package of the D-056 list (Makie, SciMLBase, ModelingToolkit, Graphs; plus Symbolics

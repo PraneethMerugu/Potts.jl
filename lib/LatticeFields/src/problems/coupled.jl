@@ -665,7 +665,7 @@ Base.size(S::CoupledShift) = size(S.A)
 Base.eltype(S::CoupledShift) = eltype(S.A)
 function LinearAlgebra.mul!(w::CoupledVector, S::CoupledShift, z::CoupledVector)
     LinearAlgebra.mul!(w, S.A, z)
-    Krylov.kaxpy!(length(w), S.ownership, z, w)
+    Krylov.kaxpy!(length(w), S.σ, z, w)
     return w
 end
 function coupled_growth(cs::CoupledKrylov, σ::Real, t; m = 12, par = 1)
@@ -733,7 +733,7 @@ check_coupled_growth(rt, p) = nothing
 function _after_solve!(cs::CoupledKrylov, par, t, h)
     (isinf(h) && cs.pending > 0 && !Exec.compiling()) || return nothing
     @inbounds cs.hscal[_GM_DONE] == 1 || return nothing            # (pending: the next solve checks)
-    λ = coupled_growth(cs, cs.ownership, t; par)
+    λ = coupled_growth(cs, cs.σ, t; par)
     λ === nothing || throw(_growth_refusal(cs.keys, λ, 0.0, ", at the steady state its solve found"))
     cs.pending = 0                          # (cleared only by a converged solve that passes, r3 S1)
     return nothing
@@ -746,7 +746,7 @@ check_coupled_growth(rt::GroupRuntime{<:FieldStore, <:QuasiSteady}, p) =
 function _check_growth(cs, alg, s::Program, op::OperatorSpec, keys, p)
     (cs isa CoupledKrylov && alg isa QuasiSteady) || return nothing
     if !cs.linear                           # (at its next steady state: the window's iteration)
-        cs.ownership = _growth_shift(op, keys, p)
+        cs.σ = _growth_shift(op, keys, p)
         cs.pending = 1
         return nothing
     end

@@ -540,7 +540,7 @@ if !P615F_FULL
     end
     @testset "P6.15f SMOKE: O1 rows of the SMOKE states" begin
         for (name, r) in P615F_SMOKE
-            c = name == "control" ? (β = 0.0, γ = P615F_GAMMA_CTL) : (β = 0.0, γ = 0.0)
+            c = name == "control" ? (beta = 0.0, gamma = P615F_GAMMA_CTL) : (beta = 0.0, gamma = 0.0)
             fr = PottsModels.openvt_frame(r.u; c...)
             o = PottsModels.openvt_snapshot(r.u)
             @test fr.x == o.x && fr.y == o.y && length(fr.n) == r.series.N[end]

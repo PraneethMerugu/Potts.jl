@@ -451,16 +451,16 @@ end
 
 @testset "P6.15d: A3 inhibition codes and fractions" begin
     code = P15D.openvt_inhibition_code
-    @test code(0.9, 0.2; β = 0.9, γ = 0.2) == 0      # a = β and f = γ grow (≥, spec C9)
-    @test code(0.89, 0.5; β = 0.9, γ = 0.2) == 1     # type 1 only
-    @test code(1.0, 0.19; β = 0.9, γ = 0.2) == 2     # type 2 only
-    @test code(0.5, 0.0; β = 0.9, γ = 0.2) == 3      # both
-    @test code(prevfloat(0.9), 0.2; β = 0.9, γ = 0.2) == 1   # one ulp below β inhibits
-    @test code(0.9, prevfloat(0.2); β = 0.9, γ = 0.2) == 2
+    @test code(0.9, 0.2; beta = 0.9, gamma = 0.2) == 0      # a = β and f = γ grow (≥, spec C9)
+    @test code(0.89, 0.5; beta = 0.9, gamma = 0.2) == 1     # type 1 only
+    @test code(1.0, 0.19; beta = 0.9, gamma = 0.2) == 2     # type 2 only
+    @test code(0.5, 0.0; beta = 0.9, gamma = 0.2) == 3      # both
+    @test code(prevfloat(0.9), 0.2; beta = 0.9, gamma = 0.2) == 1   # one ulp below β inhibits
+    @test code(0.9, prevfloat(0.2); beta = 0.9, gamma = 0.2) == 2
     # β = γ = 0 (case a): nothing is ever inhibited, even a = f = 0
-    @test all(code(a, f; β = 0.0, γ = 0.0) == 0 for a in (0.0, 0.3, 1.2), f in (0.0, 0.4, 1.0))
+    @test all(code(a, f; beta = 0.0, gamma = 0.0) == 0 for a in (0.0, 0.3, 1.2), f in (0.0, 0.4, 1.0))
     # negative control on C9: the schema's strict `>` would make a = β inhibited; M's ≥ does not
-    @test code(0.8, 1.0; β = 0.8, γ = 0.0) == 0 && code(0.8 - 1e-12, 1.0; β = 0.8, γ = 0.0) == 1
+    @test code(0.8, 1.0; beta = 0.8, gamma = 0.0) == 0 && code(0.8 - 1e-12, 1.0; beta = 0.8, gamma = 0.0) == 1
 
     fr = P15D.openvt_inhibition_fractions([0, 0, 1, 2, 3, 3, 3, 0])
     @test keys(fr) == (:uninhibited, :type1, :type2, :both)
@@ -472,7 +472,7 @@ end
     # codes → fractions from per-cell (a, f), one save of an O1 series
     a = [1.0, 0.95, 0.7, 0.85, 0.99, 0.6]
     f = [0.0, 0.3, 0.5, 0.0, 0.25, 0.1]
-    i = [code(a[k], f[k]; β = 0.9, γ = 0.25) for k in eachindex(a)]
+    i = [code(a[k], f[k]; beta = 0.9, gamma = 0.25) for k in eachindex(a)]
     @test i == [2, 0, 1, 3, 0, 3]
     @test P15D.openvt_inhibition_fractions(i) == (uninhibited = 2 / 6, type1 = 1 / 6, type2 = 1 / 6, both = 2 / 6)
 end

@@ -556,7 +556,7 @@ end
 
 # the owner of site j after the pass (`_ownership_delta!`'s `after`)
 struct _ConvertAfter{S, A, B}
-    σ::S
+    ownership::S
     site::A
     to::B
 end
