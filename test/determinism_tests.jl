@@ -53,7 +53,7 @@ end
         parent_gg_digest = hash(sol_gg.u[end].ownership)
 
     # D2: fresh subprocess computes identical fingerprint and CPU run digest
-    # runic: off
+        # runic: off
     d2_code = """
     using Potts, PottsModels
     s = graner_glazier_state()
@@ -61,7 +61,7 @@ end
     sol = solve(p, SequentialCPM(); save_start = false)
     println(repr(p.f.fingerprint), " ", repr(hash(sol.u[end].ownership)))
     """
-    # runic: on
+        # runic: on
     out = strip(read(`$(Base.julia_cmd()) --startup-file=no --project=$proj -e $d2_code`, String))
     parts = split(out)
     @test length(parts) == 2
