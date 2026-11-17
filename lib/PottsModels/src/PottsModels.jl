@@ -8,9 +8,10 @@ keywords override structural parameters and parameter defaults, and `@extend` bu
 """
 module PottsModels
 
-using Potts: Potts, @potts_model, Center, Circle, Closed, DiscreteCallback, Eden, Frame, Lattice, Metropolis, Moore,
-    NeighborOrder, Periodic, Point, RandomPlane, RandomPoints, Scattered, Splits, VonNeumann, Voronoi, kind, layout,
-    major_length, ownership, overlay, InsertUntil, Tiling, terminate!
+using Potts: Potts, @potts_model, Closed, DiscreteCallback, Lattice, Metropolis, Moore, NeighborOrder, Periodic,
+    RandomPlane, VonNeumann, kind, major_length, ownership, terminate!
+using Potts.Layouts: Center, Circle, Eden, Frame, InsertUntil, Point, RandomPoints, Scattered, Splits, Tiling, Voronoi,
+    layout, overlay
 # for the compile workload (end of this file)
 using Potts: CheckerboardCPM, ExplicitEuler, PottsProblem, SequentialCPM, init, mtkcompile, step!
 using DelimitedFiles: readdlm
