@@ -460,7 +460,7 @@ end
     # β = γ = 0 (case a): nothing is ever inhibited, even a = f = 0
     @test all(code(a, f; beta = 0.0, gamma = 0.0) == 0 for a in (0.0, 0.3, 1.2), f in (0.0, 0.4, 1.0))
     # negative control on C9: the schema's strict `>` would make a = β inhibited; M's ≥ does not
-    @test code(0.8, 1.0; beta = 0.8, gamma = 0.0) == 0 && code(0.8 - 1e-12, 1.0; beta = 0.8, gamma = 0.0) == 1
+    @test code(0.8, 1.0; beta = 0.8, gamma = 0.0) == 0 && code(0.8 - 1.0e-12, 1.0; beta = 0.8, gamma = 0.0) == 1
 
     fr = P15D.openvt_inhibition_fractions([0, 0, 1, 2, 3, 3, 3, 0])
     @test keys(fr) == (:uninhibited, :type1, :type2, :both)

@@ -670,8 +670,10 @@ end
     @test_throws ArgumentError layout(Voronoi(P{2, Float64}[]; kinds = [:a]), (10, 10))           # no generator
     @test_throws ArgumentError layout(Voronoi([P(1.0, 2.0, 3.0)]; kinds = [:a]), (10, 10))        # 3D point, 2D lattice
     @test_throws ArgumentError layout(Voronoi(g; region = Sphere(P(5.0, 5.0, 5.0), 2.0), kinds = [:a]), (10, 10))
-    @test_throws ArgumentError layout(Voronoi(RandomPoints(200; region = Circle(P(5.0, 5.0), 3.0), seed = 1);
-        kinds = [:a]), (10, 10))                                                                  # 29 sites < 200
+    # 29 sites < 200
+    @test_throws ArgumentError layout(
+        Voronoi(RandomPoints(200; region = Circle(P(5.0, 5.0), 3.0), seed = 1); kinds = [:a]), (10, 10)
+    )
     v = Voronoi(RandomPoints(12; seed = 3); kinds = [:a, :b])
     @test p61a5_σ(layout(remake(v; lloyd = 5), (20, 20))) == p61a5_σ(layout(Voronoi(RandomPoints(12; seed = 3); lloyd = 5, kinds = [:a, :b]), (20, 20)))
     @test p61a5_σ(layout(remake(v; lloyd = 5), (20, 20))) != p61a5_σ(layout(v, (20, 20)))
