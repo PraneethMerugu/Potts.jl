@@ -5437,3 +5437,5 @@ Review fixes (F4-B6 review, 2026-11-11; tests in test/fields_couple_b6.jl, negat
 - **R9.** `LatticeSolution` stays, with `hasTime` fixed; the `sol[c]` layout is documented.
 - **R10.** Only names unique to Potts are exported; the rest are `public`. Confirmed clashes (`parameters`, `shape`, `RK4`, `LegendEntry`) and layout words leave the export lists. `t`, `x`, `y`, `z` stay only in the opt-in `Potts.Fields` submodule.
 - **R12.** F5-07 rides with B5. F5-03 rides with the LatticePDE rename commit in B4. F5-08 and F5-09 go to C10. F5-05 (`at2`) and F5-06 (per-field periodicity) are a feature batch after B8. F5-10 and F5-13 stay optional, with an `ab` window. F5-12 is a probe test in B7.
+- **Follow-ups.**
+  1. A time-free steady field solve (`solve` on a `LatticeProblem` with no time span) still returns `FieldSolution`. SciML returns a `SteadyStateSolution` there. B3 keeps the current form for now (coordinator ruling 2026-11-16).
