@@ -1148,15 +1148,8 @@ const _FORCE_DEVICE_LIFECYCLE = Ref(false)
 const _FORCE_STAGED_LIFECYCLE = Ref(false)
 # the sizes up to which the device lifecycle runs fused (`CheckerboardCPM` keywords; validated here)
 _fused_lifecycle_limits(alg) = (;)
-function _fused_lifecycle_limits(alg::CheckerboardCPM)
-    s, c = alg.fused_lifecycle_max_sites, alg.fused_lifecycle_max_cells
-    s >= 0 && c >= 0 || throw(
-        ArgumentError(
-            "CheckerboardCPM(; fused_lifecycle_max_sites = $s, fused_lifecycle_max_cells = $c): use at least 0"
-        )
-    )
-    return (; max_sites = s, max_cells = c)
-end
+# (both at least 0: the constructor checks them)
+_fused_lifecycle_limits(alg::CheckerboardCPM) = (; max_sites = alg.fused_lifecycle_max_sites, max_cells = alg.fused_lifecycle_max_cells)
 
 # counters for the standard-rule refresh: only when the mask can change by the standard rule
 _mobility_scratch(backend, prob, ::AllMobile) = nothing

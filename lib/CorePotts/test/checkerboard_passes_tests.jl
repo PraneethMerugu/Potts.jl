@@ -233,8 +233,11 @@ end
         # printed as the keyword call that rebuilds it, defaults left out
         @test repr(alg) == "CheckerboardCPM()"
         tuned = CheckerboardCPM(; inline_max_blocks = 7, fused_lifecycle_max_cells = 3)
-        @test repr(tuned) == "CheckerboardCPM(; inline_max_blocks = 7, fused_lifecycle_max_cells = 3)"
         @test eval(Meta.parse(repr(tuned))) == tuned
+        # a negative limit is refused when the algorithm is built, naming the keyword
+        for k in (:inline_max_blocks, :fused_lifecycle_max_sites, :fused_lifecycle_max_cells)
+            @test_throws ["ArgumentError", "$k = -1"] CheckerboardCPM(; (k => -1,)...)
+        end
         # a phase with at most `inline_max_blocks` work items runs inline; 0 sends every phase
         # to the threads (one thread runs everything inline)
         @test init(prob, CheckerboardCPM(; inline_max_blocks = 10^6)).cache.inline

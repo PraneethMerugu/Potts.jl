@@ -194,7 +194,17 @@ Base.@kwdef struct CheckerboardCPM{A, R} <: AbstractCPMAlgorithm
     inline_max_blocks::Int = _INLINE_MAX_BLOCKS
     fused_lifecycle_max_sites::Int = _FUSED_LIFECYCLE_MAX_SITES
     fused_lifecycle_max_cells::Int = _FUSED_LIFECYCLE_MAX_CELLS
+    function CheckerboardCPM{A, R}(acceptance, proposal, region, parts, switches, threads, inline_max_blocks,
+            fused_lifecycle_max_sites, fused_lifecycle_max_cells) where {A, R}
+        for (k, v) in ((:inline_max_blocks, inline_max_blocks), (:fused_lifecycle_max_sites, fused_lifecycle_max_sites),
+                (:fused_lifecycle_max_cells, fused_lifecycle_max_cells))
+            v >= 0 || throw(ArgumentError("CheckerboardCPM(; $k = $v): use at least 0"))
+        end
+        return new{A, R}(acceptance, proposal, region, parts, switches, threads, inline_max_blocks,
+            fused_lifecycle_max_sites, fused_lifecycle_max_cells)
+    end
 end
+CheckerboardCPM(acceptance::A, proposal::R, args...) where {A, R} = CheckerboardCPM{A, R}(acceptance, proposal, args...)
 
 # printed as the keyword call that rebuilds it; keywords at their defaults are left out
 function Base.show(io::IO, a::CheckerboardCPM)
