@@ -361,7 +361,7 @@ using .LP_device: fd, kron
         for alg in algs
             out = map((PDEV, KernelAbstractions.CPU())) do be
                 pc, ph, (c, ch, q, g) = ctwins(; steady, T = Float32, backend = be)
-                    ic, ih = init(pc, alg; dt = 0.05; dt = 0.05), init(ph, alg; dt = 0.05; dt = 0.05)
+                    ic, ih = init(pc, alg; dt = 0.05), init(ph, alg; dt = 0.05)
                 for n in 1:6
                     if n == 4
                         # (F4-15b: the twin's mask input holds the predicate on whole blocks only,
