@@ -284,7 +284,7 @@ function p60v3_window!(integ; nstep = 3)
     return out, l0 == l1, P60V3_WAITS[] - w
 end
 function p60v3_metal_integ(prob; nwarm = 2)
-    integ = init(prob, CheckerboardCPM(); backend = Main.PottsDevices.device_backend(), save_start = false, save_end = false)
+    integ = init(prob, CheckerboardCPM(); backend = Main.PottsDevices.device_backend(), save_start = false, save_everystep = false, save_end = false)
     foreach(_ -> step!(integ), 1:nwarm)
     return integ
 end
@@ -303,7 +303,7 @@ const P60V3_ALGS = (SequentialCPM(), CheckerboardCPM())
     @test any(ph -> ph isa CorePotts.CopyPhase, prob.f.phases.after_mcs)
     # gate cases build and run; nothing is counted on the CPU
     for (name, make) in p60v3_gate_cases(Float64)
-        integ = init(make(), CheckerboardCPM(); save_start = false, save_end = false)
+        integ = init(make(), CheckerboardCPM(); save_start = false, save_everystep = false, save_end = false)
         foreach(_ -> step!(integ), 1:2)
         @test p60v3_counts(integ.stats) == (0, 0, 0)
         @test integ.stats.launches > 0
@@ -334,13 +334,13 @@ end
 
 @testset "P6.0v3 (6): no Float64 in what Float32 kernels receive (CPU builds)" begin
     for (name, make) in p60v3_gate_cases(Float32)
-        integ = init(make(), CheckerboardCPM(); save_start = false, save_end = false)
+        integ = init(make(), CheckerboardCPM(); save_start = false, save_everystep = false, save_end = false)
         @test !any(p60v3_hasf64, p60v3_kernel_types(integ))
         any(p60v3_hasf64, p60v3_kernel_types(integ)) && @info "P6.0v3 Float64 leaf" name p60v3_hasf64.(p60v3_kernel_types(integ))
     end
     # control: the scan finds the Float64 of a T = Float64 build
     for (name, make) in p60v3_gate_cases(Float64)
-        integ = init(make(), CheckerboardCPM(); save_start = false, save_end = false)
+        integ = init(make(), CheckerboardCPM(); save_start = false, save_everystep = false, save_end = false)
         @test any(p60v3_hasf64, p60v3_kernel_types(integ))
     end
 end

@@ -200,7 +200,7 @@ end
             backend = PottsDevices.device_backend()
             alg = CheckerboardCPM()
             prob = p60vx_divide_problem(; T = Float32)
-            integ = init(prob, alg; backend, save_start = false, save_end = false)
+            integ = init(prob, alg; backend, save_start = false, save_everystep = false, save_end = false)
             c0 = p60vx_counts(integ.stats)
             step!(integ)                                                     # MCS 0: both cells divide
             @test p60vx_counts(integ.stats) .- c0 == p60vx_division_counts(prob.u0)
@@ -210,14 +210,14 @@ end
             @test integ.stats.lifecycle.divisions == 2                       # folded at the read
             @test count(>(0), u.cell.volume) == 4
             prob = p60vx_hostphase_problem(; T = Float32)
-            integ = init(prob, alg; backend, save_start = false, save_end = false)
+            integ = init(prob, alg; backend, save_start = false, save_everystep = false, save_end = false)
             for _ in 1:3
                 c0 = p60vx_counts(integ.stats)
                 step!(integ)
                 @test p60vx_counts(integ.stats) .- c0 == p60vx_hostphase_counts(prob.u0)
             end
             prob = p60vx_declared_problem(; T = Float32)
-            integ = init(prob, alg; backend, save_start = false, save_end = false)
+            integ = init(prob, alg; backend, save_start = false, save_everystep = false, save_end = false)
             c0 = p60vx_counts(integ.stats)
             step!(integ)                                                     # the mask comes down once
             @test p60vx_counts(integ.stats) .- c0 == p60vx_declared_counts(prob.u0) .+ (0, 1, sizeof(prob.lattice.mask))
@@ -238,13 +238,13 @@ end
         if PottsDevices.on_device()
             alg = CheckerboardCPM()
             out = map((CorePotts.CPU(), PottsDevices.device_backend())) do backend
-                integ = init(p60vx_param_problem(p60vx_read_q!), alg; backend, save_start = false, save_end = false)
+                integ = init(p60vx_param_problem(p60vx_read_q!), alg; backend, save_start = false, save_everystep = false, save_end = false)
                 step!(integ); step!(integ)
                 integ.p.Q .= 10                                  # in place, between MCS
                 step!(integ); step!(integ)
                 y = Array(integ.state.cell.y)[1]
                 integ = init(p60vx_param_problem(p60vx_write_acc!; declared = false), alg; backend,
-                    save_start = false, save_end = false)
+                    save_start = false, save_everystep = false, save_end = false)
                 foreach(_ -> step!(integ), 1:3)
                 (y, Array(integ.p.acc)[1])
             end
@@ -270,7 +270,7 @@ end
             alg = CheckerboardCPM()
             # quiet MCS of every gate model
             for (label, _, make) in P60vOnDevice.p60v_gate_models(Float32)
-                integ = init(make(), alg; backend, save_start = false, save_end = false)
+                integ = init(make(), alg; backend, save_start = false, save_everystep = false, save_end = false)
                 P60VX_STATS[] = integ.stats
                 step!(integ); step!(integ)
                 PottsDevices.device_sync()
@@ -282,7 +282,7 @@ end
             # the event MCS of the division fixture: planned on the device (P6.0v1, D-089), no
             # wait at all (2 syncs + 2 × 18 transfers = 38 waits on the D-035 host plan)
             prob = p60vx_divide_problem(; T = Float32)
-            integ = init(prob, alg; backend, save_start = false, save_end = false)
+            integ = init(prob, alg; backend, save_start = false, save_everystep = false, save_end = false)
             P60VX_STATS[] = integ.stats
             PottsDevices.device_sync()
             waits, d = p60vx_waits(() -> step!(integ))
@@ -290,7 +290,7 @@ end
             @test waits == 0
             @test checkpoint(integ).stats.lifecycle.divisions == 2           # control: the event fired
             # HostPhase MCS
-            integ = init(p60vx_hostphase_problem(; T = Float32), alg; backend, save_start = false, save_end = false)
+            integ = init(p60vx_hostphase_problem(; T = Float32), alg; backend, save_start = false, save_everystep = false, save_end = false)
             P60VX_STATS[] = integ.stats
             PottsDevices.device_sync()
             for _ in 1:2

@@ -638,12 +638,12 @@ end
 @testset "P6.3a: accepted_ΔH at every step (SequentialCPM) and at checkpoints (CheckerboardCPM)" begin
     on = p63a_track_problem(; track = (:ΔH,))
     Φ0 = p63a_Φ(on, on.u0)
-    integ = init(on, SequentialCPM(); save_start = false, save_end = false)
+    integ = init(on, SequentialCPM(); save_start = false, save_everystep = false, save_end = false)
     for _ in 1:6
         step!(integ)
         @test integ.stats.accepted_ΔH == p63a_Φ(on, current_state(integ)) - Φ0
     end
-    integ = init(on, CheckerboardCPM(); save_start = false, save_end = false)
+    integ = init(on, CheckerboardCPM(); save_start = false, save_everystep = false, save_end = false)
     for _ in 1:3
         step!(integ); step!(integ)
         ck = checkpoint(integ)
@@ -697,7 +697,7 @@ const P63A_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_de
         @test solve(off, alg; backend).stats.accepted_ΔH === nothing
         # no per-MCS sync: a quiet MCS costs 0 syncs and 0 transfers, tracked or not
         for prob in (off, on)
-            integ = init(prob, alg; backend, save_start = false, save_end = false)
+            integ = init(prob, alg; backend, save_start = false, save_everystep = false, save_end = false)
             step!(integ)
             for _ in 1:4
                 c0 = (integ.stats.syncs, integ.stats.transfers, integ.stats.transfer_bytes)

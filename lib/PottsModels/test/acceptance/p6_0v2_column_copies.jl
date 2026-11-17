@@ -63,7 +63,7 @@ p60v2_bytes(arrays) = isempty(arrays) ? 0 : sum(sizeof, arrays)
 
 """Per-MCS counter triples of `step!` (no saves), after `nwarm` warm-up MCS."""
 function p60v2_deltas(prob, alg; backend, nwarm = 1, nstep = 3)
-    integ = init(prob, alg; backend, save_start = false, save_end = false)
+    integ = init(prob, alg; backend, save_start = false, save_everystep = false, save_end = false)
     for _ in 1:nwarm
         step!(integ)
     end

@@ -320,7 +320,7 @@ const P60V1_MODELS = filter(n -> (f = getfield(PottsModels, n); f isa Function &
 after the window (outside it): returns `(deltas, lifecycle before, lifecycle after,
 checkpoint delta)`. The checkpoints are the read points that make the lifecycle counts exact."""
 function p60v1_window(prob, alg; backend, nwarm, nstep)
-    integ = init(prob, alg; backend, save_start = false, save_end = false)
+    integ = init(prob, alg; backend, save_start = false, save_everystep = false, save_end = false)
     for _ in 1:nwarm
         step!(integ)
     end
@@ -369,7 +369,7 @@ end
             all(==((0, 0, 0)), deltas) || @info "P6.0v1 quiet lifecycle MCS" n deltas
         end
         # the division fixture: the MCS before and after its event MCS are quiet too
-        integ = init(p60v1_divide_problem(; T = Float32), CheckerboardCPM(); backend, save_start = false, save_end = false)
+        integ = init(p60v1_divide_problem(; T = Float32), CheckerboardCPM(); backend, save_start = false, save_everystep = false, save_end = false)
         for mcs in 0:4
             c = p60v1_counts(integ.stats)
             step!(integ)
@@ -379,7 +379,7 @@ end
         # compartments (events at MCS 1) and links with a removal (events at MCS 1 and 3)
         for (make, events, n) in ((() -> p60v1_cluster_problem(; T = Float32), (1,), 3),
             (() -> p60v1_link_problem(; T = Float32), (1, 3), 5))
-            integ = init(make(), CheckerboardCPM(); backend, save_start = false, save_end = false)
+            integ = init(make(), CheckerboardCPM(); backend, save_start = false, save_everystep = false, save_end = false)
             for mcs in 0:(n - 1)
                 c = p60v1_counts(integ.stats)
                 step!(integ)
@@ -621,7 +621,7 @@ function p60v1_read_points(prob, alg; backend)
     r2 = rd(integ.stats)                                         # t = S + 3: a save
     sol = solve!(integ)
     rend = rd(sol.stats)
-    integ = init(prob, alg; backend, save_start = false, save_end = false)
+    integ = init(prob, alg; backend, save_start = false, save_everystep = false, save_end = false)
     while integ.t < P60V1_S + 3
         step!(integ)
     end
@@ -742,7 +742,7 @@ P60V1_WAITS_ON && p60v1_instrument_waits!()     # at top level: the testset must
         backend = Main.PottsDevices.device_backend()
         builders = p60v1_published(Float32)
         for n in (:OpenVTGrowingMonolayer, :AkeebInvasion)
-            integ = init(builders[n](), CheckerboardCPM(); backend, save_start = false, save_end = false)
+            integ = init(builders[n](), CheckerboardCPM(); backend, save_start = false, save_everystep = false, save_end = false)
             step!(integ); step!(integ)
             l0 = p60v1_lifecycle(checkpoint(integ).stats)
             Main.PottsDevices.device_sync()

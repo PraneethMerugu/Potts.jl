@@ -768,7 +768,7 @@ end
 const P63B_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
 
 function p63b_metal_counts(prob; nwarm = 1, n = 3)
-    integ = init(prob, CheckerboardCPM(); backend = Main.PottsDevices.device_backend(), save_start = false, save_end = false)
+    integ = init(prob, CheckerboardCPM(); backend = Main.PottsDevices.device_backend(), save_start = false, save_everystep = false, save_end = false)
     foreach(_ -> step!(integ), 1:nwarm)
     out = NTuple{3, Int}[]
     for _ in 1:n

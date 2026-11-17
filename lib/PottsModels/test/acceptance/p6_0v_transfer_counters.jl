@@ -103,7 +103,7 @@ The window is quiet when a `checkpoint` (a host read point, D-089) before and af
 no lifecycle event; then every MCS in it is quiet, otherwise none is counted as quiet. The
 checkpoints lie outside the measured deltas."""
 function p60v_step_deltas(prob, alg; backend, nwarm = 1, nstep = 4)
-    integ = init(prob, alg; backend, save_start = false, save_end = false)
+    integ = init(prob, alg; backend, save_start = false, save_everystep = false, save_end = false)
     for _ in 1:nwarm
         step!(integ)
     end
@@ -168,7 +168,7 @@ end
         # (c) the division fixture: both cells divide at MCS 0 (read at a checkpoint); later
         # MCS are quiet (exact, as (b))
         prob = p60v_divide_problem(; T = Float32)
-        integ = init(prob, alg; backend, save_start = false, save_end = false)
+        integ = init(prob, alg; backend, save_start = false, save_everystep = false, save_end = false)
         step!(integ)                                                     # MCS 0: both cells divide
         @test checkpoint(integ).stats.lifecycle.divisions == 2
         for _ in 1:3
@@ -178,7 +178,7 @@ end
         end
         @test checkpoint(integ).stats.lifecycle.divisions == 2
         # (d) a HostPhase every MCS
-        integ = init(p60v_hostphase_problem(; T = Float32), alg; backend, save_start = false, save_end = false)
+        integ = init(p60v_hostphase_problem(; T = Float32), alg; backend, save_start = false, save_everystep = false, save_end = false)
         for _ in 1:3
             c0 = p60v_counts(integ.stats)
             step!(integ)
@@ -186,13 +186,13 @@ end
         end
         # counters never decrease
         for prob in (p60v_divide_problem(; T = Float32), p60v_hostphase_problem(; T = Float32))
-            integ = init(prob, alg; backend, save_start = false, save_end = false)
+            integ = init(prob, alg; backend, save_start = false, save_everystep = false, save_end = false)
             c0 = p60v_counts(integ.stats)
             tr = pushfirst!(p60v_trace!(integ, 4), c0)
             @test p60v_nondecreasing(tr)
         end
         # a save is counted too: it synchronizes and copies the state down
-        integ = init(p60v_divide_problem(; T = Float32, tspan = (0, 2)), alg; backend, save_start = false, save_end = false)
+        integ = init(p60v_divide_problem(; T = Float32, tspan = (0, 2)), alg; backend, save_start = false, save_everystep = false, save_end = false)
         step!(integ); c0 = p60v_counts(integ.stats)
         current_state(integ)
         d = p60v_counts(integ.stats) .- c0

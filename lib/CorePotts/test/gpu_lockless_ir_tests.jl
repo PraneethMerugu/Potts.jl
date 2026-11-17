@@ -155,7 +155,7 @@ end
         # D-089: the counts of a refresh after an event MCS stay on the device until a host
         # read point (here `current_state(integ)`), which corrects the MCS that ran with the old count
         rm2(st, p, ctx, key, mcs, c) = mcs == S && c == 2 ? EVENT_REMOVE : EVENT_NONE
-        integ = init(fk_problem(rm2; T = Float32), CheckerboardCPM(); backend, save_start = false)
+        integ = init(fk_problem(rm2; T = Float32), CheckerboardCPM(); backend, save_start = false, save_everystep = false)
         for _ in 0:S
             step!(integ)
         end
@@ -163,7 +163,7 @@ end
         @test count(!, Array(integ.ctx.mobility.frozen)) == 900
         step!(integ)                                                  # MCS S+1: no read-back …
         @test integ.nmobile == 900 - 36 && integ.stats.lifecycle.removals == 0
-        current_state(integ)                                                       # … until a host read point
+        current_state(integ)                                          # … until a host read point
         @test integ.nmobile == 900 && integ.stats.lifecycle.removals == 1
         # D-253: the Int64 width (forced; it is the width above 2³¹ − 1 sites) on the device.
         # With 64-bit atomic adds the counted run equals its Int32 run; without them (Metal)
@@ -237,7 +237,7 @@ end
         @test isapprox(b.stats.accepted_ΔH, H(b.u[end]) - H(b.u[1]); rtol = 0.01)
         @test abs(H(b.u[end]) - H(b.u[1])) > 100
         for f in (off, on)
-            integ = init(mk(f), CheckerboardCPM(); backend, save_start = false, save_end = false)
+            integ = init(mk(f), CheckerboardCPM(); backend, save_start = false, save_everystep = false, save_end = false)
             step!(integ)
             c0 = (integ.stats.syncs, integ.stats.transfers)
             step!(integ); step!(integ)
