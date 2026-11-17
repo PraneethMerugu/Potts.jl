@@ -853,3 +853,4 @@ Goal (maintainer, 2026-11-11 and 2026-11-12): a fast test harness at SciML quali
 
 - [ ] **C11** (approved 2026-11-16, D-286; starts after F5 and C10) Move the paper models onto LatticePDE. Port each published model to native LatticePDE use: `PDESystem` fields and the solver its paper states. One model per commit, each with fidelity tests.
   - Accept: Fortuna 3D matches or beats 14 ms/step.
+- [ ] **Device libraries 7.0 put doubles in Potts kernels.** A fresh resolve (ROCmDeviceLibs_jll 6.2.1 to 7.0.2) adds `fpext float to double` and `llvm.frexp.f64` to 12 Potts LatticeFields kernels, and the device IR scan fails (`test/shared/device_ir_scan.jl`). CI's locked Manifest (D-272) is clean, so the next dependency update hits it. Find the Float32 call that now lowers through `frexp` and give it a Float32-only form.
