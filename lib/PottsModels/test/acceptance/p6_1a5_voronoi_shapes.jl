@@ -207,8 +207,8 @@ end
     d056 = [m for m in Base.loaded_modules_array() if nameof(m) in
             (:Makie, :CairoMakie, :SciMLBase, :ModelingToolkit, :ModelingToolkitBase, :Graphs, :Symbolics, :GeometryBasics)]
     @test length(d056) >= 3                                  # SciMLBase, ModelingToolkitBase, GeometryBasics at least
-    @test isempty(p61a5_clashes(Potts, P61A5_NEW_EXPORTS, d056))
-    @test p61a5_clashes(Potts, (:Center,), [P61A5Clash]) == [(P61A5Clash, :Center)]
+    @test isempty(p61a5_clashes(Potts.Layouts, P61A5_NEW_EXPORTS, d056))
+    @test p61a5_clashes(Potts.Layouts, (:Center,), [P61A5Clash]) == [(P61A5Clash, :Center)]
     # no DSL name: layouts are problem data (D-057)
     @test !any(n -> n in keys(Potts.DSL), (P61A5_NEW_EXPORTS..., P61A5_NEW_PUBLIC...))
     # VoronoiBall is gone (Q3: Voronoi reproduces it), with no alias (D-028)

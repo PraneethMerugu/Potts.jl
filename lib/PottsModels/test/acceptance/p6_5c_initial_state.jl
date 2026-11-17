@@ -229,7 +229,7 @@ end
     for n in (:Plane, :Spheres, :Rect)
         @test !isdefined(Potts, n)                               # control
     end
-    @test Base.isexported(Potts, :Sphere) && Base.isexported(Potts, :Circle)   # control (D-138)
+    @test Base.isexported(Potts.Layouts, :Sphere) && Base.isexported(Potts.Layouts, :Circle)   # control (D-138)
 end
 
 # ---------------------------------------------------------------------------------------
