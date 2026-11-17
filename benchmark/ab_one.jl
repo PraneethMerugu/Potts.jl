@@ -100,6 +100,7 @@ end
 
 # the number of sites of a state (the ownership array is `σ` in older checkouts: an A/B base
 # may be one)
+# The old name is accepted only so an A/B can run against a base older than the renames; drop it once no base predates them.
 nsites(u) = length(hasproperty(u, :ownership) ? u.ownership : u.σ)
 
 function ab_time(prob, alg, backend; samples, seconds, gctrial = backend !== nothing)

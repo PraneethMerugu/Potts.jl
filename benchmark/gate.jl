@@ -72,6 +72,7 @@ const BASELINE_HEADER = """
     """
 
 # ExplicitEuler with a lower clamp (the keyword is `lower` in older checkouts: an A/B base may be one)
+# The old name is accepted only so an A/B can run against a base older than the renames; drop it once no base predates them.
 clamped_euler(n, lo) = :lower_bound in fieldnames(ExplicitEuler) ? ExplicitEuler(; substeps = n, lower_bound = lo) :
     ExplicitEuler(; substeps = n, lower = lo)
 
@@ -189,7 +190,8 @@ function measure(make, alg; backend = nothing)
     timed_step!(integ, backend)
     allocs = backend === nothing ? warm_allocs(integ) : 0
     b = run(@benchmarkable timed_step!(i, $backend) setup=(i=fresh_integrator($prob, $alg, $backend)) evals=1 samples=40 seconds=30)
-    n = length(hasproperty(integ.state, :ownership) ? integ.state.ownership : integ.state.σ)   # `σ` in older checkouts
+    # `σ` is accepted only so an A/B can run against a base older than the renames; drop it once no base predates them
+    n = length(hasproperty(integ.state, :ownership) ? integ.state.ownership : integ.state.σ)
     return minimum(b).time / n, allocs
 end
 
