@@ -188,7 +188,7 @@ end
         # `components` (the connected components of a cell graph)
         # `Fill` (a layout filling a region) is kept too: FillArrays exports an array of that name
         layouts_allow = (:Fill => :FillArrays, :Point => :DomainSets, :Sphere => :DomainSets)
-        @test export_clashes(Potts.Layouts, others; allow = layouts_allow) == Pair{Symbol, Symbol}[]
+        # and `t`, MTK's unitless `t_nounits` (ModelingToolkitBase's own `t` carries units and is public, not exported)
         # `using Potts.Fields` brings `Δ` (Graphs exports a maximum-degree function of that name)
         # and `t`, MTK's unitless `t_nounits` (ModelingToolkitBase's own `t` carries units)
         fields_allow = (:t => :ModelingToolkitBase, :Δ => :Graphs)

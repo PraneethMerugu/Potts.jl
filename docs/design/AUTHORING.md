@@ -438,18 +438,18 @@ algorithm fields.
 
 ```julia
 prob = PottsProblem(sys, op, (0, 500);
-    field_solver = ExplicitEuler(substeps = 15, lower = 0.0),   # required when the model has a field
+    field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0),   # required when the model has a field
     ode_solver = ExplicitEuler(),                                # the default: one step per MCS (D-038)
     solvers = [V => Adaptive(Rodas5P(); reltol = 1e-8)])         # per variable, keyed symbolically
-prob2 = remake(prob; field_solver = ExplicitEuler(substeps = 30, lower = 0.0))
+prob2 = remake(prob; field_solver = ExplicitEuler(substeps = 30, lower_bound = 0.0))
 ```
 
-- `field_solver = ExplicitEuler(; substeps, lower)` has **no default**: a model with an
+- `field_solver = ExplicitEuler(; substeps, lower_bound)` has **no default**: a model with an
   integrated field (`D(c) ~ …`) needs it, even when `solvers` names every field, and a
   model without one rejects it. `substeps = nothing` takes the stable count from the
-  diffusion coefficient; an explicit `n` is a minimum. `lower` clips after every substep. A
+  diffusion coefficient; an explicit `n` is a minimum. `lower_bound` clips after every substep. A
   published model's docstring gives its value (Merks: `ExplicitEuler(substeps = 15,
-  lower = 0.0)`, the paper's schedule).
+  lower_bound = 0.0)`, the paper's schedule).
 - `ode_solver` integrates every cell and model ODE (`D(x) ~ …`, components):
   `ExplicitEuler(; substeps)`, `RK4(; substeps)` or `Adaptive(alg; kwargs...)`. It has a
   default, so a model without ODEs accepts it silently (it changes nothing, fingerprint
@@ -822,7 +822,7 @@ end
 ```
 
 Its problem gives the field solver (D-075): `PottsProblem(MerksVasculogenesis(…), op, tspan;
-field_solver = ExplicitEuler(substeps = 15, lower = 0.0))`.
+field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0))`.
 
 ### OpenVT growing monolayer (`OpenVTGrowingMonolayer`, Artistoo parameter set)
 

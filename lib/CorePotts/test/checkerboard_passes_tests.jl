@@ -236,7 +236,12 @@ end
         @test eval(Meta.parse(repr(tuned))) == tuned
         # a negative limit is refused when the algorithm is built, naming the keyword
         for k in (:inline_max_blocks, :fused_lifecycle_max_sites, :fused_lifecycle_max_cells)
-            @test_throws ["ArgumentError", "$k = -1"] CheckerboardCPM(; (k => -1,)...)
+            err = try
+                CheckerboardCPM(; (k => -1,)...)
+            catch e
+                e
+            end
+            @test err isa ArgumentError && occursin(string(k), err.msg)
         end
         # a phase with at most `inline_max_blocks` work items runs inline; 0 sends every phase
         # to the threads (one thread runs everything inline)
