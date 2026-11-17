@@ -8,7 +8,8 @@ using OrdinaryDiffEqTsit5: Tsit5
 @parameters Dw[1:2] = [0.5, 1.0] kw0 = 0.2
 @variables wk(..)::Int32 [input = true]
 wke = wk(t, x, y)
-wsys() = PDESystem([D(ce) ~ value_at(Dw, wke) * laplacian(ce) - kw0 * ce],
+wsys() = PDESystem(
+    [D(ce) ~ value_at(Dw, wke) * laplacian(ce) - kw0 * ce],
     [c(0, x, y) ~ x * y, Differential(x)(c(t, 0, y)) ~ 0.0, Differential(x)(c(t, 1, y)) ~ 0.0,
         c(t, x, 0) ~ c(t, x, 1)],
     [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [ce, wke], [Dw, kw0]; name = :w)

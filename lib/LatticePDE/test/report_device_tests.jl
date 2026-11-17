@@ -36,7 +36,8 @@ end
     @parameters dD = 1e-3 dk = 0.1
     @variables dc(..)
     dce = dc(t, x, y)
-    sys = PDESystem(D(dce) ~ dD * laplacian(dce) - dk * dce,
+        sys = PDESystem(
+            D(dce) ~ dD * laplacian(dce) - dk * dce,
         [dc(0, x, y) ~ 0.0, dc(t, 0, y) ~ 1.0, Differential(x)(dc(t, 1, y)) ~ 0.0, dc(t, x, 0) ~ dc(t, x, 1)],
         [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [dce], [dD, dk]; name = :d)
     mk(n, be) = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float32, backend = be))

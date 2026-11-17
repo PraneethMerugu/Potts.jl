@@ -28,7 +28,8 @@ const Dx, Dy = Differential(x), Differential(y)
 # the manufactured solution on `n × n` sites of spacing 1/n
 function mms(n)
     @parameters Dd = 1.0
-    return pdesys([Dt(C) ~ Dd * laplacian(C) + (cos(π * x / 2) + x * y^2) - Dd * (1 + t) * (2x - (π^2 / 4) * cos(π * x / 2))],
+        return pdesys(
+            [Dt(C) ~ Dd * laplacian(C) + (cos(π * x / 2) + x * y^2) - Dd * (1 + t) * (2x - (π^2 / 4) * cos(π * x / 2))],
         [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1 + t, c(t, 1, y) ~ (1 + t) * y^2, Dy(c(t, x, 1)) ~ 2 * (1 + t) * x], (n, n), [C], [Dd];
         spacing = 1 / n)
 end
@@ -44,29 +45,35 @@ end
         )
     end
 site() = (@parameters Dc = 0.2 g1 = 1.0;
-          pdesys([Dt(C) ~ Dc * laplacian(C) - 0.1 * C],
+        pdesys(
+            [Dt(C) ~ Dc * laplacian(C) - 0.1 * C],
               [c(0, x, y) ~ 0.0, (1 + 0.1y) * c(t, 0, y) - Dx(c(t, 0, y)) ~ 1.0,
                   g1 * (1 + 0.5 * t) * c(t, 16, y) + 2.0 * Dx(c(t, 16, y)) ~ 0.0,
                   2.0 * c(t, x, 16) + (0.5 + 0.05x) * Dy(c(t, x, 16)) ~ 0.5], (16, 16), [C], [Dc, g1]))
-tab() = pdesys([Dt(C) ~ dk(X...) * laplacian(C) - 0.05 * C], [c(0, x, y) ~ 1.0, (-0.5 - 0.1 * t) * c(t, 0, y) - 1.0 * Dx(c(t, 0, y)) ~ 0.0],
+    tab() = pdesys(
+        [Dt(C) ~ dk(X...) * laplacian(C) - 0.05 * C], [c(0, x, y) ~ 1.0, (-0.5 - 0.1 * t) * c(t, 0, y) - 1.0 * Dx(c(t, 0, y)) ~ 0.0],
     (16, 16), [C, dk(X...)])
 # the faces: Dirichlet values of parameters, a coordinate and the time; a Neumann flux of a coordinate
 faces() = (@parameters Dc = 0.2 g1 = 1.0 g2 = 0.5 c0 = 2.0 ω = 0.3;
-           pdesys([Dt(C) ~ Dc * laplacian(C)], [c(0, x, y) ~ 0.0, c(t, 0, y) ~ g1 + g2, c(t, 12, y) ~ 0.5y, c(t, x, 0) ~ c0 * sin(ω * t),
+        pdesys(
+            [Dt(C) ~ Dc * laplacian(C)], [
+                c(0, x, y) ~ 0.0, c(t, 0, y) ~ g1 + g2, c(t, 12, y) ~ 0.5y, c(t, x, 0) ~ c0 * sin(ω * t),
                    Dy(c(t, x, 10)) ~ 0.1x], (12, 10), [C], [Dc, g1, g2, c0, ω]))
 # Robin coefficients of parameters: α (`g1 + g2`) and β (`h1 + h2`, of ∂c/∂x on the low face)
 robin() = (@parameters Dc = 0.2 g1 = 1.0 g2 = 0.5;
-           pdesys([Dt(C) ~ Dc * laplacian(C)], [c(0, x, y) ~ 0.0, (g1 + g2) * c(t, 0, y) - Dx(c(t, 0, y)) ~ 1.0], (12, 10), [C], [Dc, g1, g2]))
+        pdesys([Dt(C) ~ Dc * laplacian(C)], [c(0, x, y) ~ 0.0, (g1 + g2) * c(t, 0, y) - Dx(c(t, 0, y)) ~ 1.0], (12, 10), [C], [Dc, g1, g2])
+    )
 robin_beta() = (@parameters Dc = 0.2 h1 = 0.5 h2 = 0.25;
-                pdesys([Dt(C) ~ Dc * laplacian(C)], [c(0, x, y) ~ 0.0, c(t, 0, y) - (h1 + h2) * Dx(c(t, 0, y)) ~ 1.0], (12, 10), [C], [Dc, h1, h2]))
+        pdesys([Dt(C) ~ Dc * laplacian(C)], [c(0, x, y) ~ 0.0, c(t, 0, y) - (h1 + h2) * Dx(c(t, 0, y)) ~ 1.0], (12, 10), [C], [Dc, h1, h2])
+    )
 # a Robin coefficient `g1 + r` that reads `r`: a coordinate (`:y`), the time (`:t`) or an input (`:vin`)
 @variables vin(..) [input = true]
 function bad(r)
     @parameters g1 = 1.0
     coef = g1 + (r === :y ? y : r === :t ? t : vin(X...))
-    return pdesys([Dt(C) ~ laplacian(C)], [c(0, x, y) ~ 0.0, coef * c(t, 0, y) - Dx(c(t, 0, y)) ~ 1.0], (8, 8), [C, vin(X...)], [g1])
+        return pdesys([Dt(C) ~ laplacian(C)], [c(0, x, y) ~ 0.0, coef * c(t, 0, y) - Dx(c(t, 0, y)) ~ 1.0], (8, 8), [C, vin(X...)], [g1])
 end
-mid() = pdesys([Dt(C) ~ 0.2 * laplacian(C)], [c(0, x, y) ~ 1.0, (1 - t) * c(t, 0, y) - 0.5 * Dx(c(t, 0, y)) ~ 0.0], (16, 16), [C])
+    mid() = pdesys([Dt(C) ~ 0.2 * laplacian(C)], [c(0, x, y) ~ 1.0, (1 - t) * c(t, 0, y) - 0.5 * Dx(c(t, 0, y)) ~ 0.0], (16, 16), [C])
 end
 
 

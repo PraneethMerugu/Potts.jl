@@ -223,7 +223,8 @@ function p63b_ring_pde(; clamp)
     Potts.ModelingToolkitBase.@parameters x y Dc = 0.2 s = 0.05 cb = 0.0
     Potts.ModelingToolkitBase.@variables c(..) mask(..)::Bool [input = true]
     C, M = c(Potts.t, x, y), mask(Potts.t, x, y)
-    return p63b_system(Potts.D(C) ~ Dc * p63b_laplacian(C) + s, [c(0, x, y) ~ 0.0; clamp ? [C ~ p63b_masked(M, cb)] : []],
+    return p63b_system(
+        Potts.D(C) ~ Dc * p63b_laplacian(C) + s, [c(0, x, y) ~ 0.0; clamp ? [C ~ p63b_masked(M, cb)] : []],
         (14, 12), [x, y], clamp ? [C, M] : [C], [Dc, s, cb])
 end
 P63B_SRC[:P63bRing] = p63b_body(P63B_RING_BASE, :(@fields p63b_ring_pde(; clamp = true) (:mask => kind == border)))
@@ -245,7 +246,8 @@ function p63b_sink_pde()
     Potts.ModelingToolkitBase.@parameters x y Dc = 0.2 s = 0.05
     Potts.ModelingToolkitBase.@variables c(..) mask(..)::Bool [input = true]
     C, M = c(Potts.t, x, y), mask(Potts.t, x, y)
-    return p63b_system(Potts.D(C) ~ Dc * p63b_laplacian(C) + s, [c(0, x, y) ~ 0.0, C ~ p63b_masked(M, 0.0)], (16, 16), [x, y],
+    return p63b_system(
+        Potts.D(C) ~ Dc * p63b_laplacian(C) + s, [c(0, x, y) ~ 0.0, C ~ p63b_masked(M, 0.0)], (16, 16), [x, y],
         [C, M], [Dc, s])
 end
 P63B_SRC[:P63bSink] = quote
@@ -275,7 +277,8 @@ function p63b_face2_pde(; dirichlet = false)
     Potts.ModelingToolkitBase.@parameters x y Dc = 0.2
     Potts.ModelingToolkitBase.@variables c(..)
     C = c(Potts.t, x, y)
-    return p63b_system(Potts.D(C) ~ Dc * p63b_laplacian(C), [c(0, x, y) ~ 0.0; dirichlet ? [c(Potts.t, 0, y) ~ 0.0] : []],
+    return p63b_system(
+        Potts.D(C) ~ Dc * p63b_laplacian(C), [c(0, x, y) ~ 0.0; dirichlet ? [c(Potts.t, 0, y) ~ 0.0] : []],
         (16, 10), [x, y], [C], [Dc])
 end
 P63B_SRC[:P63bFace2] = p63b_body(P63B_FACE2_BASE, :(@fields p63b_face2_pde(; dirichlet = true)))
@@ -398,7 +401,8 @@ function p63b_merks_pde()
     Potts.ModelingToolkitBase.@parameters x y Dc = 0.2 σc = 0.3 δc = 0.05
     Potts.ModelingToolkitBase.@variables c(..) a(..)::Bool [input = true] med(..)::Bool [input = true] mask(..)::Bool [input = true]
     C, X, Y, M = c(Potts.t, x, y), a(Potts.t, x, y), med(Potts.t, x, y), mask(Potts.t, x, y)
-    return p63b_system(Potts.D(C) ~ Dc * p63b_laplacian(C) + σc * X - δc * C * Y, [c(0, x, y) ~ 0.0, C ~ p63b_masked(M, 0.0)],
+    return p63b_system(
+        Potts.D(C) ~ Dc * p63b_laplacian(C) + σc * X - δc * C * Y, [c(0, x, y) ~ 0.0, C ~ p63b_masked(M, 0.0)],
         (16, 16), [x, y], [C, X, Y, M], [Dc, σc, δc])
 end
 const P63B_MERKS_BASE = quote
@@ -438,7 +442,8 @@ function p63b_host_pde()
     Potts.ModelingToolkitBase.@parameters x y Dc = 0.1
     Potts.ModelingToolkitBase.@variables c(..) a(..)::Bool [input = true]
     C = c(Potts.t, x, y)
-    return p63b_system(Potts.D(C) ~ Dc * p63b_laplacian(C) + a(Potts.t, x, y), [c(0, x, y) ~ 0.0], (16, 16), [x, y],
+    return p63b_system(
+        Potts.D(C) ~ Dc * p63b_laplacian(C) + a(Potts.t, x, y), [c(0, x, y) ~ 0.0], (16, 16), [x, y],
         [C, a(Potts.t, x, y)], [Dc])
 end
 const P63B_HOST_BASE = quote

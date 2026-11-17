@@ -316,7 +316,9 @@ function _same_level!(e::Env, u, what)
     _lerr(u, string(what, " reads `", operation(u), "` on ", lf == 0 ? "the fine grid" : "`Coarse($(2^lf))`", ", and the ",
         "term is evaluated on ", e.level == 0 ? "the fine grid" : "`Coarse($(2^e.level))`", "; a spatial operator reads its ",
         "field on that field's own grid; outside an equation (a face value, a mask) write it as an aux field on the ",
-        "grid of `", operation(u), "` (`L ~ laplacian(", operation(u), ")` with `lattice_level` as `", operation(u), "`'s) and read `L`"))
+            "grid of `", operation(u), "` (`L ~ laplacian(", operation(u), ")` with `lattice_level` as `", operation(u), "`'s) and read `L`"
+        )
+    )
 end
 _isfield(e::Env, u) = iscall(u) && haskey(e.fields, operation(u))
 _fieldarg(e::Env, u) = (u = unwrap(u);

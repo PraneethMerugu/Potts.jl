@@ -78,7 +78,8 @@ end
             fam_v => BackwardEuler(; linsolve = FAM_INNER)
         )
         sg = solve(discretize(fam_chain, fam_disc()), fg; dt = 0.05)
-    uonly = PDESystem([D(fam_u) ~ fDc * laplacian(fam_u) - fk * fam_u], [fu(0, x, y) ~ x; fam_faces], fam_dom, [t, x, y],
+        uonly = PDESystem(
+            [D(fam_u) ~ fDc * laplacian(fam_u) - fk * fam_u], [fu(0, x, y) ~ x; fam_faces], fam_dom, [t, x, y],
         [fam_u], [fDc, fk]; name = :famu)
         su = solve(discretize(uonly, fam_disc()), ExplicitEuler(; substeps = 2); dt = 0.05)
     @test length(su.t) == length(sg.t) && su.t == sg.t

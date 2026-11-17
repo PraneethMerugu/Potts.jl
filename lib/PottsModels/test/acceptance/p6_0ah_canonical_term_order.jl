@@ -265,7 +265,10 @@ end
     end
     Potts.Symbolics.@variables a b
     sx() = string.(Potts.SymbolicUtils.arguments(Potts.Symbolics.unwrap(Potts.population(a, b, true) + Potts.gather(a, b, a, b) +
-                                                                         Potts.value_at(a, b) + Potts.population(b, a, true) + sin(a))))
+                    Potts.value_at(a, b) + Potts.population(b, a, true) + sin(a)
+            )
+        )
+    )
     sx0 = sx()
     orders = [p60ah_salted(sx, P60AH_POTTS_OPS, s) for s in P60AH_SALTS]
     @test all(o -> sort(o) == sort(sx0), orders)       # the same terms

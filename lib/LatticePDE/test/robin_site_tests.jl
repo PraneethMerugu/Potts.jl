@@ -36,7 +36,7 @@ end
 @testitem "F4-12b: per-site α and β equal the hand ghost-rule matrix (BackwardEuler, ExplicitEuler)" setup = [LP_robin_site] tags = [:latticepde, :robin_site] begin
 @testset "F4-12b: per-site α and β equal the hand ghost-rule matrix (BackwardEuler, ExplicitEuler)" begin
     h = 0.05
-    p = rsown(rsys([D(bce) ~ bD * laplacian(bce) - bk * bce + x], rs_bcs(), [bD, bk, bg]))
+        p = rsown(rsys([D(bce) ~ bD * laplacian(bce) - bk * bce + x], rs_bcs(), [bD, bk, bg]))
     # the face rules read value fields; the row is a field row
     fr = [r for r in p.program.rules if r isa LatticeFields.IR.FaceRule && LatticeFields.IR.sitecoefs(r)]
     @test length(fr) == 2 && fr[1].afield != 0 && fr[2].bfield != 0
@@ -58,9 +58,13 @@ end
     # `ifelse(y < 2, bg, 0)` reads `y` but is `bg` on every face site: a value field, a field row
     # (the multigrid folds its boundary diagonal with the shift); the result is the scalar face's
     h = 0.05
-    uni = rsown(rsys([D(bce) ~ bD * laplacian(bce) - bk * bce], [bc(0, x, y) ~ x * y, bg * bc(t, 0, y) - Differential(x)(bc(t, 0, y)) ~ 1.0],
+        uni = rsown(
+            rsys(
+                [D(bce) ~ bD * laplacian(bce) - bk * bce], [bc(0, x, y) ~ x * y, bg * bc(t, 0, y) - Differential(x)(bc(t, 0, y)) ~ 1.0],
         [bD, bk, bg]))
-    site = rsown(rsys([D(bce) ~ bD * laplacian(bce) - bk * bce],
+        site = rsown(
+            rsys(
+                [D(bce) ~ bD * laplacian(bce) - bk * bce],
         [bc(0, x, y) ~ x * y, ifelse(y < 2.0, bg, 0.0) * bc(t, 0, y) - Differential(x)(bc(t, 0, y)) ~ 1.0], [bD, bk, bg]))
         for inner in (BTIGHT, Multigrid(; reltol = 1.0e-12, maxiters = 64))
             igu, _, uu = rs_window(uni, BackwardEuler(; linsolve = inner); dt = h)
@@ -77,7 +81,7 @@ end
     # α = y − 0.4 on x = 0: d = α/(α/2 + β/h) changes sign along the face
     h = 0.05
     bcs = [bc(0, x, y) ~ x * y, (y - 0.4) * bc(t, 0, y) + Differential(x)(bc(t, 0, y)) ~ 0.5]
-    p = rsown(rsys([D(bce) ~ bD * laplacian(bce) - bk * bce + x], bcs, [bD, bk]))
+        p = rsown(rsys([D(bce) ~ bD * laplacian(bce) - bk * bce + x], bcs, [bD, bk]))
     faces = Dict((1, -1) => (:robin, (x, y) -> y - 0.4, 1.0, 0.5))
         ig, u0, _ = rs_window(p, BackwardEuler(; linsolve = BTIGHT); dt = h)
     c = only(ig.runtimes).cache
@@ -86,7 +90,9 @@ end
     want = be_hand(u0, h; dims = RSD, K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces)
     @test maximum(abs, u .- want) < 1e-10
     # the same face with α ≥ 0 at every site is exact (the sign is per site, from the bound)
-    p2 = rsown(rsys([D(bce) ~ bD * laplacian(bce) - bk * bce + x],
+        p2 = rsown(
+            rsys(
+                [D(bce) ~ bD * laplacian(bce) - bk * bce + x],
         [bc(0, x, y) ~ x * y, (y + 0.1) * bc(t, 0, y) - Differential(x)(bc(t, 0, y)) ~ 0.5], [bD, bk]))
         @test only(init(p2, BackwardEuler(); dt = h).runtimes).cache.exact
 end
@@ -95,7 +101,7 @@ end
 @testitem "F4-12b: a time-varying α (BackwardEuler rebuilt at each stage; ExplicitEuler at a small step)" setup = [LP_robin_site] tags = [:latticepde, :robin_site] begin
 @testset "F4-12b: a time-varying α (BackwardEuler rebuilt at each stage; ExplicitEuler at a small step)" begin
     bcs = [bc(0, x, y) ~ x * y, (1.5 + sin(4t)) * bc(t, 0, y) - Differential(x)(bc(t, 0, y)) ~ 1.0]
-    p = rsown(rsys([D(bce) ~ bD * laplacian(bce) - bk * bce], bcs, [bD, bk]; T = 0.5))
+        p = rsown(rsys([D(bce) ~ bD * laplacian(bce) - bk * bce], bcs, [bD, bk]; T = 0.5))
         ig = init(p, BackwardEuler(; linsolve = BTIGHT); dt = 0.05)
     @test only(ig.runtimes).cache.timed
     # the rate at time t reads α(t): one explicit window at t0 = 0 equals the hand rate there
@@ -117,7 +123,7 @@ end
     # α(t) = −1 − 40t with the outward β = 1/h > 0: the ghost diagonal d = α/(α/2 + β/h) is
     # negative and grows in size with t, so the face's excess |d − 1| − 1 (and the count) grows
     bcs = [bc(0, x, y) ~ x * y, (-1 - 40t) * bc(t, 0, y) - Differential(x)(bc(t, 0, y)) ~ 0.0]
-    p = rsown(rsys([D(bce) ~ laplacian(bce)], bcs, Any[]; T = 0.5))
+        p = rsown(rsys([D(bce) ~ laplacian(bce)], bcs, Any[]; T = 0.5))
     @test Problems.reads_time(p.stability)
         ig = init(p, ExplicitEuler(); dt = 0.1)
     rt = only(ig.runtimes)
@@ -132,7 +138,7 @@ end
         @test issorted(ns) && ns[end] > ns[1] && SciMLBase.check_error(ig) == ReturnCode.Success
     @test all(isfinite, ig[bce])
     # a bound that does not read the time keeps its count (no re-bound)
-    q = rsown(rsys([D(bce) ~ laplacian(bce)], [bc(0, x, y) ~ x * y, (1 + y) * bc(t, 0, y) - Differential(x)(bc(t, 0, y)) ~ 0.0], Any[]))
+        q = rsown(rsys([D(bce) ~ laplacian(bce)], [bc(0, x, y) ~ x * y, (1 + y) * bc(t, 0, y) - Differential(x)(bc(t, 0, y)) ~ 0.0], Any[]))
         @test !Problems.reads_time(q.stability) && only(init(q, ExplicitEuler(); dt = 0.1).runtimes).recount === nothing
 end
 end
@@ -142,7 +148,7 @@ end
     @parameters ra = 1.2 rb = 0.7
     bcs = [bc(0, x, y) ~ x * y, ra * (1 + y) * bc(t, 0, y) - rb * (1 + x) * Differential(x)(bc(t, 0, y)) ~ 1.0,
         (1 + x) * bc(t, x, 1) + rb * Differential(y)(bc(t, x, 1)) ~ 0.5]
-    p = rsown(rsys([D(bce) ~ bD * laplacian(bce) - bk * bce], bcs, [bD, bk, ra, rb]; T = 0.2))
+        p = rsown(rsys([D(bce) ~ bD * laplacian(bce) - bk * bce], bcs, [bD, bk, ra, rb]; T = 0.2))
         for (q, v0) in ((ra, 1.2), (rb, 0.7)), alg in (BackwardEuler(; linsolve = BTIGHT), ExplicitEuler())
             J(v) = sum(solve(remake(p; p = [q => v]), alg; dt = 0.05).u[end])
         d = ForwardDiff.derivative(J, v0)
@@ -159,7 +165,9 @@ end
 @testset "F4-12b review: a per-site Robin face anchors a QuasiSteady group" begin
     @variables qa(..) qb(..)
     qae, qbe = qa(t, x, y), qb(t, x, y)
-    p = discretize(PDESystem([D(qae) ~ 0.1 * laplacian(qae) + 0.05 * qbe, D(qbe) ~ 0.1 * laplacian(qbe) - qbe - 0.05 * qae],
+        p = discretize(
+            PDESystem(
+                [D(qae) ~ 0.1 * laplacian(qae) + 0.05 * qbe, D(qbe) ~ 0.1 * laplacian(qbe) - qbe - 0.05 * qae],
             [qa(0, x, y) ~ 0.0, qb(0, x, y) ~ 1.0, (1 + y) * qa(t, 0, y) - Differential(x)(qa(t, 0, y)) ~ 0.0],
             bdom(1.0), [t, x, y], [qae, qbe], Any[]; name = :anch), LatticeDiscretization(Grid((8, 8)); T = Float64))
         ig = init(p, FieldGroups(qae => QuasiSteady(), qbe => BackwardEuler()); dt = 0.1)

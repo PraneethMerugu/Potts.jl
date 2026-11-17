@@ -4,7 +4,7 @@
 # The parameters keep the names and defaults of the models.
 module MerksField
 using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters, t_nounits
-using Potts.LatticePDE: laplacian, masked, step_index, lattice_domain
+    using Potts.LatticePDE: laplacian, masked, step_index, lattice_domain
 const t = t_nounits                     # the time of every Potts model (`Potts.t`)
 const Dt = Differential(t)
 @parameters x y
@@ -14,7 +14,7 @@ const C = c(t, x, y)
 # `∂c/∂t = D Δc + α δ_cell − ε c (1 − δ_cell)` (2006 Eq. 6) with zero flux at the lattice faces
 function vasculogenesis(lattice)
     @parameters Dc = 0.75 σc = 5.4e-3 δc = 5.4e-3
-    eq = Dt(C) ~ Dc * laplacian(C) + σc * cell(t, x, y) - δc * C * ecm(t, x, y)
+        eq = Dt(C) ~ Dc * laplacian(C) + σc * cell(t, x, y) - δc * C * ecm(t, x, y)
     return PDESystem([eq], [c(0, x, y) ~ 0.0], lattice_domain(t, (x, y), lattice), [t, x, y],
         [C, cell(t, x, y), ecm(t, x, y)], [Dc, σc, δc]; name = :merks_field)
 end
@@ -22,7 +22,7 @@ end
 # the same equation, held at `c = 0` on the border sites after every substep
 function merks2006(lattice)
     @parameters Dc = 0.75 α = 5.4e-3 ε = 5.4e-3
-    eq = Dt(C) ~ Dc * laplacian(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)
+        eq = Dt(C) ~ Dc * laplacian(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)
     return PDESystem([eq], [c(0, x, y) ~ 0.0, C ~ masked(frame(t, x, y), 0.0)], lattice_domain(t, (x, y), lattice),
         [t, x, y], [C, cell(t, x, y), ecm(t, x, y), frame(t, x, y)], [Dc, α, ε]; name = :merks_field)
 end
@@ -30,7 +30,7 @@ end
 # 2008 Eq. 1: as `merks2006`, but off for the first `t_relax` MCS (`step_index(t)` is the MCS)
 function merks2008(lattice)
     @parameters Dc = 0.75 α = 0.03 ε = 0.03 t_relax = 100.0
-    rate = Dc * laplacian(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)
+        rate = Dc * laplacian(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)
     eq = Dt(C) ~ ifelse(step_index(t) >= t_relax, rate, 0.0)
     return PDESystem([eq], [c(0, x, y) ~ 0.0, C ~ masked(frame(t, x, y), 0.0)], lattice_domain(t, (x, y), lattice),
         [t, x, y], [C, cell(t, x, y), ecm(t, x, y), frame(t, x, y)], [Dc, α, ε, t_relax]; name = :merks_field)

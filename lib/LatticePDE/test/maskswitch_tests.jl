@@ -27,7 +27,8 @@ end
 @testset "review b2 #3: a mask set switching on over a quiet state under Tsit5 and Rodas5P" begin
     for (name, pred) in (("t > 0.3", (t > 0.3) & (mke == 1)), ("t > mt0", (t > mt0) & (mke == 1)),
             ("0.3 < t", (0.3 < t) & (mke == 1)))
-        sys = PDESystem([D(mce) ~ mD * laplacian(mce) - 0.5 * mce], [mc(0, x, y) ~ 0.0, mce ~ masked(pred, 2.0)], mdom,
+            sys = PDESystem(
+                [D(mce) ~ mD * laplacian(mce) - 0.5 * mce], [mc(0, x, y) ~ 0.0, mce ~ masked(pred, 2.0)], mdom,
             [t, x, y], [mce, mke], [mD, mt0]; name = :ms)
         p = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64); inputs = [mke => MK])
             o = solve(p, ExplicitEuler(); dt = 1.0e-4, saveat = [0.2, 1.0])
@@ -39,7 +40,8 @@ end
         end
     end
     # a switch the solver cannot locate (`t` against an input): refused, unless the step is bounded
-    sys = PDESystem([D(mce) ~ mD * laplacian(mce) - 0.5 * mce], [mc(0, x, y) ~ 0.0, mce ~ masked(t > mqe, 2.0)], mdom,
+        sys = PDESystem(
+            [D(mce) ~ mD * laplacian(mce) - 0.5 * mce], [mc(0, x, y) ~ 0.0, mce ~ masked(t > mqe, 2.0)], mdom,
         [t, x, y], [mce, mqe], [mD]; name = :mu)
     p = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64); inputs = [mqe => fill(0.3, 8, 8)])
     err = try

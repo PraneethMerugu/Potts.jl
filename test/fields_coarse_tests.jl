@@ -394,8 +394,10 @@ end
         # ab34e226, ~/lpwork/f4BE/nc.log: `in @equations Differential(t, 1)(u(t)) ~ …`)
         err_w = fco_throws(
             ArgumentError,
-            ["\n  in the equation of `u` in the PDESystem `fields`: `Differential(t)(u(t, x, y)) ~ ", "(kind == A)", "0.1laplacian(kind)",
-                "- u(t, x, y)`"],
+            [
+                "\n  in the equation of `u` in the PDESystem `fields`: `Differential(t)(u(t, x, y)) ~ ", "(kind == A)", "0.1laplacian(kind)",
+                "- u(t, x, y)`",
+            ],
             () -> PottsProblem(_FcWhere(; name = :w), [ownership => σw, kind => [:A]], (0, 1))
         )
         @test !occursin("@equations", sprint(showerror, err_w))

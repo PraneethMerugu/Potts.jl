@@ -146,7 +146,7 @@ end
 @testset "F4-00 (review 5): a plain parameter vector holds no inputs, which are not read as zero" begin
     o = discretize(wsys(), wdisc(); inputs = [wke => WK1])
     raw = SciMLBase.ODEProblem(o.f, o.u0, o.tspan, copy(o.p.values))
-    # (at 0a182a0e: no error; the input read as zero, so `value_at(Dw, 0)` gave the rate 0)
+        # (at 0a182a0e: no error; the input read as zero, so `value_at(Dw, 0)` gave the rate 0)
     e = wmsg(() -> solve(raw, Tsit5()))
     @test occursin("plain vector", e) && occursin("`wk`", e)
     @test SciMLBase.successful_retcode(solve(SciMLBase.ODEProblem(o.f, o.u0, o.tspan, o.p), Tsit5()))   # control

@@ -23,52 +23,67 @@ const C, E, KA = c(X...), e(X...), kA(X...)
 const D = (12, 10)
 ic(f, v = 0.0) = f(0, x, y) ~ v
 mix() = (@parameters Dc = 0.4 kd = 0.3 s = 0.5 v = 1.5;
-         pdesys([Dt(C) ~ Dc * laplacian(C) - kd * C + s * KA, Dt(E) ~ 0.02 + 0.01 * x], [ic(c), ic(e), C ~ masked(E >= 0.5, v)], D,
+        pdesys(
+            [Dt(C) ~ Dc * laplacian(C) - kd * C + s * KA, Dt(E) ~ 0.02 + 0.01 * x], [ic(c), ic(e), C ~ masked(E >= 0.5, v)], D,
              [C, E, KA], [Dc, kd, s, v]))
 # `rate` with the conditions `bcs`, no parameters, on lattice `dims`
 field1(rate, bcs = []; dims = D, c0 = 0.0, dvs = [C], ps = []) = pdesys([Dt(C) ~ rate], [ic(c, c0); bcs], dims, dvs, ps)
-robin_p() = field1(0.4 * laplacian(C) - 0.3 * C + 0.1 * x, [1.0 * c(t, x, 0) - Differential(y)(c(t, x, 0)) ~ 0.5])
-robin_n() = field1(0.4 * laplacian(C) - 0.3 * C + 0.1 * x, [1.0 * c(t, x, 0) + Differential(y)(c(t, x, 0)) ~ 0.5])
+    robin_p() = field1(0.4 * laplacian(C) - 0.3 * C + 0.1 * x, [1.0 * c(t, x, 0) - Differential(y)(c(t, x, 0)) ~ 0.5])
+    robin_n() = field1(0.4 * laplacian(C) - 0.3 * C + 0.1 * x, [1.0 * c(t, x, 0) + Differential(y)(c(t, x, 0)) ~ 0.5])
 field_face() = field1(DivKGrad(:harmonic)(1 + 0.05 * x * y, C) - 0.3 * C, [c(t, 0, y) ~ 1.0 + 0.1 * y])
-mask_field() = field1(0.4 * laplacian(C) - 0.3 * C, [C ~ masked(KA, 1 + 0.1 * x)]; dvs = [C, KA])
+    mask_field() = field1(0.4 * laplacian(C) - 0.3 * C, [C ~ masked(KA, 1 + 0.1 * x)]; dvs = [C, KA])
 moving() = (@parameters Dc = 0.5 kd = 0.4;
-            field1(Dc * laplacian(C) + 0.5 * KA - kd * C * kM(X...); dims = (16, 16), dvs = [C, KA, kM(X...)], ps = [Dc, kd]))
-blowup() = (@parameters g = 1.0; field1(0.1 * laplacian(C) + g * C^3; dims = (8, 6), c0 = 1000.0, ps = [g]))
+        field1(Dc * laplacian(C) + 0.5 * KA - kd * C * kM(X...); dims = (16, 16), dvs = [C, KA, kM(X...)], ps = [Dc, kd])
+    )
+    blowup() = (@parameters g = 1.0; field1(0.1 * laplacian(C) + g * C^3; dims = (8, 6), c0 = 1000.0, ps = [g]))
 still() = (@parameters Dc = 0.4 kd = 0.3; field1(DivKGrad(:harmonic)(Dc * (1 + 0.05 * x), C) - kd * C + 0.1 * x; ps = [Dc, kd]))
-periodic() = (@parameters Dc = 1.0; pdesys([Dt(C) ~ Dc * laplacian(C)], [ic(c)], (16, 8), [C], [Dc]; spacing = 2.0))
-timed() = field1(0.1 * laplacian(C) - (1 + 20 * t) * C; dims = (8, 8), c0 = 1.0)
+    periodic() = (@parameters Dc = 1.0; pdesys([Dt(C) ~ Dc * laplacian(C)], [ic(c)], (16, 8), [C], [Dc]; spacing = 2.0))
+    timed() = field1(0.1 * laplacian(C) - (1 + 20 * t) * C; dims = (8, 8), c0 = 1.0)
 robin_w() = (@parameters rb = -1.0;
-             field1(0.4 * laplacian(C) - 0.3 * C + 0.1 * x, [1.5 * c(t, x, 0) - rb * Differential(y)(c(t, x, 0)) ~ 0.5]; ps = [rb]))
-hex() = field1(2.0 * laplacian(C) - C + 0.1 * KA; dims = (16, 16), dvs = [C, KA])
-hex_f() = field1(0.4 * laplacian(C) - 0.3 * C + 0.1 * x, [C ~ masked(KA, 1.5)]; dvs = [C, KA])
-hex_face() = field1(0.4 * laplacian(C) - 0.3 * C + 0.1 * x,
+        field1(0.4 * laplacian(C) - 0.3 * C + 0.1 * x, [1.5 * c(t, x, 0) - rb * Differential(y)(c(t, x, 0)) ~ 0.5]; ps = [rb])
+    )
+    hex() = field1(2.0 * laplacian(C) - C + 0.1 * KA; dims = (16, 16), dvs = [C, KA])
+    hex_f() = field1(0.4 * laplacian(C) - 0.3 * C + 0.1 * x, [C ~ masked(KA, 1.5)]; dvs = [C, KA])
+    hex_face() = field1(
+        0.4 * laplacian(C) - 0.3 * C + 0.1 * x,
     [c(t, 0, y) ~ 1.0, 1.5 * c(t, x, 0) - 0.5 * Differential(y)(c(t, x, 0)) ~ 0.2])
 kind3() = field1(1.0 * KA; dvs = [C, KA])
-scal() = (O = o(X...); pdesys([Dt(C) ~ 0.5 * laplacian(C) - 40 * C / (0.025 + C) + 20, Dt(O) ~ 0.5 * laplacian(O) - O + C],
+    scal() = (
+        O = o(X...); pdesys(
+            [Dt(C) ~ 0.5 * laplacian(C) - 40 * C / (0.025 + C) + 20, Dt(O) ~ 0.5 * laplacian(O) - O + C],
             [ic(c, 0.5), ic(o, 0.5)], D, [C, O]
         )
     )
 function comp()
     @variables u(..)[1:2] = [0.5, 0.5]
     Ua = u(X...)
-    return pdesystem([Dt(Ua[1]) ~ 0.5 * laplacian(Ua[1]) - 40 * Ua[1] / (0.025 + Ua[1]) + 20,
-        Dt(Ua[2]) ~ 0.5 * laplacian(Ua[2]) - Ua[2] + Ua[1]]; name = :fields)
+        return pdesystem(
+            [
+                Dt(Ua[1]) ~ 0.5 * laplacian(Ua[1]) - 40 * Ua[1] / (0.025 + Ua[1]) + 20,
+                Dt(Ua[2]) ~ 0.5 * laplacian(Ua[2]) - Ua[2] + Ua[1],
+            ]; name = :fields
+        )
 end
-site_m() = field1(0.04 * (1 + x) * laplacian(C) - 0.3 * C + 0.1 * y)
+    site_m() = field1(0.04 * (1 + x) * laplacian(C) - 0.3 * C + 0.1 * y)
     site_k() = field1(0.04 * (1 + x) * DivKGrad(:harmonic)(1 + 0.05 * y, C) - 0.3 * C + 0.1 * y)
 const DD = (24, 20)
 dual() = (@parameters Dc = 0.2 s = 0.5 kd = 0.1 Dh = 0.5 * Dc;
-          field1(Dh * laplacian(C) + Dh * laplacian(C) + s * KA - kd * C; dims = DD, dvs = [C, KA], ps = [Dc, s, kd, Dh]))
+        field1(Dh * laplacian(C) + Dh * laplacian(C) + s * KA - kd * C; dims = DD, dvs = [C, KA], ps = [Dc, s, kd, Dh])
+    )
 dual_mask() = (@parameters Dc = 0.4 kd = 0.3 v = 1.5 c0 = 0.2;
-               field1(Dc * laplacian(C) - kd * C, [C ~ masked(KA, v)]; c0, dvs = [C, KA], ps = [Dc, kd, v, c0]))
+        field1(Dc * laplacian(C) - kd * C, [C ~ masked(KA, v)]; c0, dvs = [C, KA], ps = [Dc, kd, v, c0])
+    )
 dual_two() = (@parameters ra = 0.3 rb = 0.2; U = u(X...); W = w(X...);
-              pdesys([Dt(U) ~ 0.2 * laplacian(U) + ra * KA - 0.1 * U, Dt(W) ~ 0.3 * laplacian(W) + rb * U - 0.2 * W], [ic(u), ic(w)], DD,
+        pdesys(
+            [Dt(U) ~ 0.2 * laplacian(U) + ra * KA - 0.1 * U, Dt(W) ~ 0.3 * laplacian(W) + rb * U - 0.2 * W], [ic(u), ic(w)], DD,
                   [U, W, KA], [ra, rb]))
 dual_fill() = (@parameters V0 = 14.0 s0 = 0.5;
-               field1(0.2 * laplacian(C) + ifelse(big(X...), s0, 0.0) - 0.1 * C; dims = DD, dvs = [C, big(X...)], ps = [V0, s0]))
+        field1(0.2 * laplacian(C) + ifelse(big(X...), s0, 0.0) - 0.1 * C; dims = DD, dvs = [C, big(X...)], ps = [V0, s0])
+    )
 dual_vol() = (@parameters V0 = 14.0;
-              field1(0.2 * laplacian(C) + 0.01 * KA * (vol(X...) - V0) - 0.1 * C; dims = DD, dvs = [C, KA, vol(X...)], ps = [V0]))
-dual_kind() = field1(0.2 * laplacian(C) + dk(X...) - 0.1 * C; dims = DD, dvs = [C, dk(X...)])
+        field1(0.2 * laplacian(C) + 0.01 * KA * (vol(X...) - V0) - 0.1 * C; dims = DD, dvs = [C, KA, vol(X...)], ps = [V0])
+    )
+    dual_kind() = field1(0.2 * laplacian(C) + dk(X...) - 0.1 * C; dims = DD, dvs = [C, dk(X...)])
 end
 
 module FsPDE

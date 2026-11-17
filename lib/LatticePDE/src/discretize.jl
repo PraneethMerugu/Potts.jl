@@ -781,7 +781,9 @@ function _check_aux_offsets(prog::Program{N}, sys::PDESystem) where {N}
             r === nothing ? "" : string(" (`", replace(as_written(string(r[1])), r"\(t(, \w+)*\)" => ""), "`)"),
             ": an aux field has no value beyond a ",
             "closed face (it takes no face condition). Write the term with the fields its expression reads (with ",
-            "`K ~ k * c`, `laplacian(K)` is `k * laplacian(c)`), or make the axis periodic"))
+                "`K ~ k * c`, `laplacian(K)` is `k * laplacian(c)`), or make the axis periodic"
+            )
+        )
     end
     return nothing
 end

@@ -128,7 +128,8 @@ function lower(x, env::LowerEnv)
     op === gather && return _lower_gather(args, env)
     op === _connected && return _lower_connected(args, env)
     op === population && return _lower_population(args, env)
-    op === laplacian && error("`laplacian` is a field operator: the field compiler lowers it in a field's PDESystem (`@fields`, `Potts.couple`); " *
+    op === laplacian && error(
+        "`laplacian` is a field operator: the field compiler lowers it in a field's PDESystem (`@fields`, `Potts.couple`); " *
                       "it is not available in $(_MODE_NAMES[env.mode])")
     # cell references (R6, D-066 item 5): liveness, sources, the enclosing cell of a fold
     op === cell_alive && return :(Potts._alive_slot($(_refst(env)).cell.volume, $(lower(args[1], env))))

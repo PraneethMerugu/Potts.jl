@@ -39,7 +39,7 @@ end
 function _diffusion_parts(term, xs)
     reps, parts = Dict{Any, Any}(), Any[]
     walk(y) = iscall(y) && (f = operation(y);
-                            f === laplacian ? (reps[y] = 1; push!(parts, (1, :all, :harmonic))) :
+        f === laplacian ? (reps[y] = 1; push!(parts, (1, :all, :harmonic))) :
                             f isa DivKGrad ? (reps[y] = 1; push!(parts, (arguments(y)[1], :all, f.mean))) :
                             f isa Differential ? (r = _raw_flux(y); reps[y] = 1;
                                                   push!(parts, (r === nothing || r[1] === nothing ? 1 : r[1],
@@ -139,7 +139,9 @@ function _advection_ibound(k, term, params, tabs, box, h)
     return out
 end
 # whether `u` applies a spatial operator to a read of `o`
-_operator_of(u, o) = iscall(u) && ((f = operation(u); (f === laplacian || f isa DivKGrad || f isa Advect || f isa Differential) &&
+_operator_of(u, o) = iscall(u) && (
+    (
+        f = operation(u); (f === laplacian || f isa DivKGrad || f isa Advect || f isa Differential) &&
                                     _reads(u, (o,))) || any(a -> _operator_of(unwrap(a), o), arguments(u)))
 # a cross term `a · o` (`CrossLinear`, `o` another field) as (the field's key, `a` as a `Coef`
 # or `Coef(NaN)` when it is not a number or a number times a parameter, its text)

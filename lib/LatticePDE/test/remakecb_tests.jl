@@ -42,7 +42,8 @@ end
           count(LFP._builtin, (p.kwargs[:callback].discrete_callbacks..., p.kwargs[:callback].continuous_callbacks...))
     # a mask that switches on over a quiet state, remade with a callback: the mask still applies
     K = Int32[i == 1 ? 1 : 0 for i in 1:4, j in 1:3]
-    ms = PDESystem([D(rce) ~ rD * laplacian(rce) - rce], [rc(0, x, y) ~ 0.0, rce ~ masked((t > 0.3) & (rqe == 1), 2.0)],
+        ms = PDESystem(
+            [D(rce) ~ rD * laplacian(rce) - rce], [rc(0, x, y) ~ 0.0, rce ~ masked((t > 0.3) & (rqe == 1), 2.0)],
         rdom(1.0), [t, x, y], [rce, rqe], [rD]; name = :rm)
     pm = discretize(ms, LatticeDiscretization(Grid((4, 3)); T = Float64); inputs = [rqe => K])
         o = solve(pm, ExplicitEuler(); dt = 1.0e-4).u[end]
@@ -53,7 +54,7 @@ end
 
 @testitem "review b2 #5: dense = false; a warm window with callbacks allocates nothing" setup = [LP_remakecb] tags = [:latticepde, :remakecb] begin
 @testset "review b2 #5: dense = false; a warm window with callbacks allocates nothing" begin
-    gs = PDESystem([D(rce) ~ rD * laplacian(rce) - rce], [rc(0, x, y) ~ x * y], rdom(0.2), [t, x, y], [rce], [rD]; name = :rw)
+        gs = PDESystem([D(rce) ~ rD * laplacian(rce) - rce], [rc(0, x, y) ~ x * y], rdom(0.2), [t, x, y], [rce], [rD]; name = :rw)
     p = discretize(gs, LatticeDiscretization(Grid((16, 16)); T = Float64))
         @test !solve(p, ExplicitEuler(); dt = 0.01, saveat = 0.1, dense = false).dense
         @test solve(p, ExplicitEuler(); dt = 0.01, saveat = 0.1).dense

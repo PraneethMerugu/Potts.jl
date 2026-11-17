@@ -83,10 +83,16 @@ end
 @testitem "F3-12d (r4 N5): a cross Δ in a steady row and `0 ~ q − c²`: no warning on a default run, equal to the oracle" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
 @testset "F3-12d (r4 N5): a cross Δ in a steady row and `0 ~ q − c²`: no warning on a default run, equal to the oracle" begin
     # a cross Δ in a cycle and one way; both linear: the dense steady solve of their rate form
-    for (eqs, rates) in (([0 ~ 0.3 * laplacian(cae) + 0.1 * laplacian(cqe) - 2.0 * cae + x, 0 ~ 0.3 * laplacian(cqe) - cqe + 0.5 * cae],
-                          [D(cae) ~ 0.3 * laplacian(cae) + 0.1 * laplacian(cqe) - 2.0 * cae + x, D(cqe) ~ 0.3 * laplacian(cqe) - cqe + 0.5 * cae]),
-                         ([0 ~ 0.3 * laplacian(cae) + 0.1 * laplacian(cqe) - 2.0 * cae + x, 0 ~ 0.3 * laplacian(cqe) - cqe + y],
-                          [D(cae) ~ 0.3 * laplacian(cae) + 0.1 * laplacian(cqe) - 2.0 * cae + x, D(cqe) ~ 0.3 * laplacian(cqe) - cqe + y]))
+        for (eqs, rates) in (
+                (
+                    [0 ~ 0.3 * laplacian(cae) + 0.1 * laplacian(cqe) - 2.0 * cae + x, 0 ~ 0.3 * laplacian(cqe) - cqe + 0.5 * cae],
+                    [D(cae) ~ 0.3 * laplacian(cae) + 0.1 * laplacian(cqe) - 2.0 * cae + x, D(cqe) ~ 0.3 * laplacian(cqe) - cqe + 0.5 * cae],
+                ),
+                (
+                    [0 ~ 0.3 * laplacian(cae) + 0.1 * laplacian(cqe) - 2.0 * cae + x, 0 ~ 0.3 * laplacian(cqe) - cqe + y],
+                    [D(cae) ~ 0.3 * laplacian(cae) + 0.1 * laplacian(cqe) - 2.0 * cae + x, D(cqe) ~ 0.3 * laplacian(cqe) - cqe + y],
+                ),
+            )
         bcs = [ca(t, 0, y) ~ 1.0, cq(t, 0, y) ~ 0.0]
         A, b0 = cjac(PDESystem(rates, [bcs; ca(0, x, y) ~ 0.0; cq(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cqe], Any[]; name = :n5r), (8, 8))
         want = -(A \ b0)
@@ -97,10 +103,14 @@ end
             rt = solve(p, QuasiSteady(; linsolve = CTIGHT); dt = 0.1)
         @test maximum(abs, vcat(vec(rt[cae, end]), vec(rt[cqe, end])) .- want) < 1e-10
     end
-    # `0 ~ q − c²` beside `0 ~ 0.3 * laplacian(c) − 2c + 1`: `c` is the linear steady state, `q = c²` exactly
-    p = cown(PDESystem([0 ~ cqe - cae^2, 0 ~ 0.3 * laplacian(cae) - 2.0 * cae + 1], [ca(t, 0, y) ~ 1.0, cq(0, x, y) ~ 0.0], bdom(0.2),
+        # `0 ~ q − c²` beside `0 ~ 0.3 * laplacian(c) − 2c + 1`: `c` is the linear steady state, `q = c²` exactly
+        p = cown(
+            PDESystem(
+                [0 ~ cqe - cae^2, 0 ~ 0.3 * laplacian(cae) - 2.0 * cae + 1], [ca(t, 0, y) ~ 1.0, cq(0, x, y) ~ 0.0], bdom(0.2),
         [t, x, y], [cae, cqe], Any[]; name = :alg))
-    A, b0 = cjac(PDESystem([D(cae) ~ 0.3 * laplacian(cae) - 2.0 * cae + 1], [ca(t, 0, y) ~ 1.0, ca(0, x, y) ~ 0.0], bdom(0.2), [t, x, y],
+        A, b0 = cjac(
+            PDESystem(
+                [D(cae) ~ 0.3 * laplacian(cae) - 2.0 * cae + 1], [ca(t, 0, y) ~ 1.0, ca(0, x, y) ~ 0.0], bdom(0.2), [t, x, y],
         [cae], Any[]; name = :algc), (8, 8))
     cw = -(A \ b0)
         r = @test_logs min_level = Logging.Warn solve(p, QuasiSteady(); dt = 0.1)
@@ -110,7 +120,7 @@ end
         rt = solve(p, QuasiSteady(; linsolve = CTIGHT); dt = 0.1)
     @test maximum(abs, vec(rt[cae, end]) .- cw) < 1e-10 && maximum(abs, vec(rt[cqe, end]) .- cw .^ 2) < 1e-10
     # a nonlinear cycle (Michaelis–Menten uptake, `0.5a²` feeding back): the rate is 0 at the result
-    rates = [0.1 * laplacian(cae) - 2.0 * cae / (0.5 + cae) + cbe + x, 0.1 * laplacian(cbe) - cbe + 0.5 * cae^2]
+        rates = [0.1 * laplacian(cae) - 2.0 * cae / (0.5 + cae) + cbe + x, 0.1 * laplacian(cbe) - cbe + 0.5 * cae^2]
     po = discretize(PDESystem([D(cae) ~ rates[1], D(cbe) ~ rates[2]], [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y],
         [cae, cbe], Any[]; name = :mmr), LatticeDiscretization(Grid((8, 8)); T = Float64))
     p = cown(PDESystem([0 ~ rates[1], 0 ~ rates[2]], [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe],
@@ -129,7 +139,7 @@ end
 @testset "F3-12d: a coupled steady pair feeding back through a transient field" begin
     # `a`, `b` steady and coupled (0.5 each way), `e` transient: `a` reads `e`, `e` reads `b`. The
     # loop's gain composes through the steady pair, `X = (I − M)⁻¹ (G ∘ e)`, M = G k = [0 ½; ½ 0]
-    rates = [0.1 * laplacian(cae) - cae + 0.5 * cbe + 0.2 * cze, 0.1 * laplacian(cbe) - cbe - 0.5 * cae, 0.1 * laplacian(cze) - cze + 0.5 * cbe + x]
+        rates = [0.1 * laplacian(cae) - cae + 0.5 * cbe + 0.2 * cze, 0.1 * laplacian(cbe) - cbe - 0.5 * cae, 0.1 * laplacian(cze) - cze + 0.5 * cbe + x]
     bc0 = [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0, cz(0, x, y) ~ 0.0]
     p = cown(PDESystem([0 ~ rates[1], 0 ~ rates[2], D(cze) ~ rates[3]], bc0, bdom(1.0), [t, x, y], [cae, cbe, cze], Any[]; name = :fb))
         alg = FieldGroups(cze => BackwardEuler(; linsolve = BTIGHT); default = QuasiSteady(; linsolve = CTIGHT))
@@ -148,7 +158,9 @@ end
     @test maximum(abs, vec(r[cze, end]) .- eh) < 1e-9 || (println("feed ", maximum(abs, vec(r[cze, end]) .- eh)); false)
     # a strong steady coupling (k = 5, δ = 0.1) in the loop: the rule's bound sums magnitudes, so
     # it is refused with the reason and the routes (the pair alone solves: the first testset)
-    ps = cown(PDESystem([0 ~ 0.1 * laplacian(cae) - 0.1 * cae + 5.0 * cbe + 0.2 * cze, 0 ~ 0.1 * laplacian(cbe) - cbe - 5.0 * cae, D(cze) ~ rates[3]],
+        ps = cown(
+            PDESystem(
+                [0 ~ 0.1 * laplacian(cae) - 0.1 * cae + 5.0 * cbe + 0.2 * cze, 0 ~ 0.1 * laplacian(cbe) - cbe - 5.0 * cae, D(cze) ~ rates[3]],
         bc0, bdom(1.0), [t, x, y], [cae, cbe, cze], Any[]; name = :fbs))
         m = cmsg(() -> init(ps, alg; dt = 0.1))
     @test occursin("the steady fields `ca`, `cb` of one group read one another, and the rule's bound on their joint gain does not hold", m) &&
@@ -156,7 +168,10 @@ end
           endswith(m, "; for a `BackwardEuler` route, write the steady rows of `ca`, `cb` as rates `D(c) ~ rhs` (a steady row `0 ~ rhs` takes only `QuasiSteady`)") ||
           (println("feed strong ", m); false)
     # the route: the rows as rates, stepped by one `BackwardEuler` group
-    pr = cown(PDESystem([D(cae) ~ 0.1 * laplacian(cae) - 0.1 * cae + 5.0 * cbe + 0.2 * cze, D(cbe) ~ 0.1 * laplacian(cbe) - cbe - 5.0 * cae,
+        pr = cown(
+            PDESystem(
+                [
+                    D(cae) ~ 0.1 * laplacian(cae) - 0.1 * cae + 5.0 * cbe + 0.2 * cze, D(cbe) ~ 0.1 * laplacian(cbe) - cbe - 5.0 * cae,
             D(cze) ~ rates[3]], bc0, bdom(1.0), [t, x, y], [cae, cbe, cze], Any[]; name = :fbr))
         @test solve(pr, BackwardEuler(); dt = 0.1).retcode == ReturnCode.Success
     # steady groups that read one another only (two `QuasiSteady` with other keywords): one
@@ -173,7 +188,10 @@ end
 @testitem "F3-12d: a coupled steady system with no unique stable steady state is refused, with its eigenvalue" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
 @testset "F3-12d: a coupled steady system with no unique stable steady state is refused, with its eigenvalue" begin
     # each row decays (−a, −b), the coupling `k` grows: mode 0 of `[−1 k; k −1]` has λ = k − 1
-    ind(k) = cown(PDESystem([0 ~ 0.1 * laplacian(cae) - cae + k * cbe + x, 0 ~ 0.1 * laplacian(cbe) - cbe + k * cae], [ca(0, x, y) ~ 0.0,
+        ind(k) = cown(
+            PDESystem(
+                [0 ~ 0.1 * laplacian(cae) - cae + k * cbe + x, 0 ~ 0.1 * laplacian(cbe) - cbe + k * cae], [
+                    ca(0, x, y) ~ 0.0,
         cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], Any[]; name = :ind))
         m = cmsg(() -> init(ind(2.0), QuasiSteady(); dt = 0.1))
     @test startswith(m, "QuasiSteady: the fields `ca`, `cb` read one another, and their coupled steady system has a growing mode: an eigenvalue of its Jacobian with positive real part (1.0, in the slowest spatial mode), so its steady state is unstable") &&
@@ -182,12 +200,15 @@ end
     @test occursin("has a neutral mode: an eigenvalue of its Jacobian with zero real part", m) && occursin("not unique", m)
         @test solve(ind(0.5), QuasiSteady(); dt = 0.1).retcode == ReturnCode.Success
     # the route: the rows as rates, stepped by `BackwardEuler` (the growing mode grows)
-    indr = cown(PDESystem([D(cae) ~ 0.1 * laplacian(cae) - cae + 2.0 * cbe + x, D(cbe) ~ 0.1 * laplacian(cbe) - cbe + 2.0 * cae], [ca(0, x, y) ~ 0.0,
+        indr = cown(
+            PDESystem(
+                [D(cae) ~ 0.1 * laplacian(cae) - cae + 2.0 * cbe + x, D(cbe) ~ 0.1 * laplacian(cbe) - cbe + 2.0 * cae], [
+                    ca(0, x, y) ~ 0.0,
         cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], Any[]; name = :indr))
         @test solve(indr, BackwardEuler(); dt = 0.1).retcode == ReturnCode.Success
     # a row's own growth that the coupling damps (0.5a − 2b, 2a − b: λ = −0.25 ± 1.85i) is well
     # posed: accepted, and the rate is 0 at the result
-    rates = [0.1 * laplacian(cae) + 0.5 * cae - 2.0 * cbe + x, 0.1 * laplacian(cbe) + 2.0 * cae - cbe]
+        rates = [0.1 * laplacian(cae) + 0.5 * cae - 2.0 * cbe + x, 0.1 * laplacian(cbe) + 2.0 * cae - cbe]
     p = cown(PDESystem([0 ~ rates[1], 0 ~ rates[2]], [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe],
         Any[]; name = :gd))
     A, b0 = cjac(PDESystem([D(cae) ~ rates[1], D(cbe) ~ rates[2]], [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y],
@@ -196,7 +217,10 @@ end
     @test r.retcode == ReturnCode.Success && maximum(abs, vcat(vec(r[cae, end]), vec(r[cbe, end])) .+ (A \ b0)) < 1e-9
     # a write that makes the coupling grow is refused at the write, the values unchanged
     @parameters ck = 0.5
-    pk = cown(PDESystem([0 ~ 0.1 * laplacian(cae) - cae + ck * cbe + x, 0 ~ 0.1 * laplacian(cbe) - cbe + ck * cae], [ca(0, x, y) ~ 0.0,
+        pk = cown(
+            PDESystem(
+                [0 ~ 0.1 * laplacian(cae) - cae + ck * cbe + x, 0 ~ 0.1 * laplacian(cbe) - cbe + ck * cae], [
+                    ca(0, x, y) ~ 0.0,
         cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], [ck]; name = :indk))
         ig = init(pk, QuasiSteady(); dt = 0.1)
     @test occursin("has a growing mode", cmsg(() -> (ig.ps[ck] = 3.0)))
@@ -239,26 +263,36 @@ end
     # constant-coefficient check cannot see it (a coefficient that varies by site). Base (51d1f386):
     # `Success` at the unstable steady state, no warning
     @parameters kv = 3.0
-    sv() = cown(PDESystem([0 ~ 0.1 * laplacian(cae) - cae + (kv + 0.1 * x) * cbe + x, 0 ~ 0.1 * laplacian(cbe) + 3.0 * cae - cbe + y],
+        sv() = cown(
+            PDESystem(
+                [0 ~ 0.1 * laplacian(cae) - cae + (kv + 0.1 * x) * cbe + x, 0 ~ 0.1 * laplacian(cbe) + 3.0 * cae - cbe + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], [kv]; name = :sv))
         m = cmsg(() -> init(sv(), QuasiSteady(); dt = 0.1))
     @test startswith(m, "QuasiSteady: the fields `ca`, `cb` read one another, and their coupled steady system has a growing mode") &&
           occursin("estimated through the coupled operator: a coefficient varies by site", m) || (println("M2 ", m); false)
     λ = parse(Float64, match(r"real part \(([-0-9.e]+)", m).captures[1])
-    A, _ = cjac(PDESystem([D(cae) ~ 0.1 * laplacian(cae) - cae + (3.0 + 0.1 * x) * cbe + x, D(cbe) ~ 0.1 * laplacian(cbe) + 3.0 * cae - cbe + y],
+        A, _ = cjac(
+            PDESystem(
+                [D(cae) ~ 0.1 * laplacian(cae) - cae + (3.0 + 0.1 * x) * cbe + x, D(cbe) ~ 0.1 * laplacian(cbe) + 3.0 * cae - cbe + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], Any[]; name = :svr), (8, 8))
     λd = maximum(real, LinearAlgebra.eigvals(A))
     @test λd > 1 && abs(λ - λd) <= 0.05 * λd || (println("M2 λ ", λ, " dense ", λd); false)
     # stable and site-varying (a skew coupling): accepted, and equal to the dense steady solve
-    ss = cown(PDESystem([0 ~ 0.1 * laplacian(cae) - cae + (2.0 + 0.1 * x) * cbe + x, 0 ~ 0.1 * laplacian(cbe) - 3.0 * cae - cbe + y],
+        ss = cown(
+            PDESystem(
+                [0 ~ 0.1 * laplacian(cae) - cae + (2.0 + 0.1 * x) * cbe + x, 0 ~ 0.1 * laplacian(cbe) - 3.0 * cae - cbe + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], Any[]; name = :ss))
         r = solve(ss, QuasiSteady(; linsolve = CTIGHT); dt = 0.1)
-    As, bs = cjac(PDESystem([D(cae) ~ 0.1 * laplacian(cae) - cae + (2.0 + 0.1 * x) * cbe + x, D(cbe) ~ 0.1 * laplacian(cbe) - 3.0 * cae - cbe + y],
+        As, bs = cjac(
+            PDESystem(
+                [D(cae) ~ 0.1 * laplacian(cae) - cae + (2.0 + 0.1 * x) * cbe + x, D(cbe) ~ 0.1 * laplacian(cbe) - 3.0 * cae - cbe + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], Any[]; name = :ssr), (8, 8))
     @test r.retcode == ReturnCode.Success && maximum(abs, [vec(r[cae, end]); vec(r[cbe, end])] .+ As \ bs) < 1e-8
     # a parameter write into the growing range is refused, and the value stays
     @parameters kw = 0.0                                   # (local λ ≤ −1 + √(0.3x) < 0: stable)
-    sw = cown(PDESystem([0 ~ 0.1 * laplacian(cae) - cae + (kw + 0.1 * x) * cbe + x, 0 ~ 0.1 * laplacian(cbe) + 3.0 * cae - cbe + y],
+        sw = cown(
+            PDESystem(
+                [0 ~ 0.1 * laplacian(cae) - cae + (kw + 0.1 * x) * cbe + x, 0 ~ 0.1 * laplacian(cbe) + 3.0 * cae - cbe + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], [kw]; name = :sw))
         ig = init(sw, QuasiSteady(); dt = 0.1)
     @test_throws "estimated through the coupled operator" (ig.ps[kw] = 3.0)
@@ -276,7 +310,9 @@ end
     # nonlinear (r2 M1, the reviewer's probe2): `+ 0.01a²` turns the constant-coefficient check
     # off; the Jacobian at the steady state the solve finds has max Re λ ≈ +2.0, found at the
     # first window after that solve. Base (3f9d5909): `Success`, no warning
-    nl(c) = cown(PDESystem([0 ~ 0.1 * laplacian(cae) - cae + c * cbe + x + 0.01 * cae^2, 0 ~ 0.1 * laplacian(cbe) + 3.0 * cae - cbe + y],
+        nl(c) = cown(
+            PDESystem(
+                [0 ~ 0.1 * laplacian(cae) - cae + c * cbe + x + 0.01 * cae^2, 0 ~ 0.1 * laplacian(cbe) + 3.0 * cae - cbe + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.3), [t, x, y], [cae, cbe], Any[]; name = :nlg))
         m = cmsg(() -> solve(nl(3.0), QuasiSteady(); dt = 0.1))
     @test occursin("has a growing mode: an eigenvalue of its Jacobian with positive real part", m) &&
@@ -284,17 +320,23 @@ end
     # right after the first solve (r3): a one-window run and a steady start are refused too.
     # Base (5005083e, the check deferred to the next window): one window `Success`, the steady
     # start not checked
-    nl1 = cown(PDESystem([0 ~ 0.1 * laplacian(cae) - cae + 3.0 * cbe + x + 0.01 * cae^2, 0 ~ 0.1 * laplacian(cbe) + 3.0 * cae - cbe + y],
+        nl1 = cown(
+            PDESystem(
+                [0 ~ 0.1 * laplacian(cae) - cae + 3.0 * cbe + x + 0.01 * cae^2, 0 ~ 0.1 * laplacian(cbe) + 3.0 * cae - cbe + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.1), [t, x, y], [cae, cbe], Any[]; name = :nl1))
         @test occursin(", at the steady state its solve found)", cmsg(() -> solve(nl1, QuasiSteady(); dt = 0.1)))
-    nlr = cown(PDESystem([D(cae) ~ 0.1 * laplacian(cae) - cae + 3.0 * cbe + x + 0.01 * cae^2, D(cbe) ~ 0.1 * laplacian(cbe) + 3.0 * cae - cbe + y],
+        nlr = cown(
+            PDESystem(
+                [D(cae) ~ 0.1 * laplacian(cae) - cae + 3.0 * cbe + x + 0.01 * cae^2, D(cbe) ~ 0.1 * laplacian(cbe) + 3.0 * cae - cbe + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.3), [t, x, y], [cae, cbe], Any[]; name = :nlr))
         m = cmsg(() -> init(nlr, BackwardEuler(; init = :steady); dt = 0.1))
     @test occursin("has a growing mode", m) && occursin(", at the steady state its solve found)", m) || (println("r3 init ", m); false)
     # a write from stable to unstable (r3 S1): every later step is refused, not only the first.
     # Control (the old order, `pending` cleared before the check): the second `step!` succeeds
     @parameters kn = 0.0
-    nlw = cown(PDESystem([0 ~ 0.1 * laplacian(cae) - cae + kn * cbe + x + 0.01 * cae^2, 0 ~ 0.1 * laplacian(cbe) + 3.0 * cae - cbe + y],
+        nlw = cown(
+            PDESystem(
+                [0 ~ 0.1 * laplacian(cae) - cae + kn * cbe + x + 0.01 * cae^2, 0 ~ 0.1 * laplacian(cbe) + 3.0 * cae - cbe + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(1.0), [t, x, y], [cae, cbe], [kn]; name = :nlw))
         iw = init(nlw, QuasiSteady(); dt = 0.1)
     step!(iw)
@@ -302,7 +344,9 @@ end
     @test occursin(", at the steady state its solve found)", cmsg(() -> step!(iw)))
     @test occursin(", at the steady state its solve found)", cmsg(() -> step!(iw)))
     # stable with the same term (a skew coupling): accepted
-    nls = cown(PDESystem([0 ~ 0.1 * laplacian(cae) - cae + 2.0 * cbe + x + 0.01 * cae^2, 0 ~ 0.1 * laplacian(cbe) - 3.0 * cae - cbe + y],
+        nls = cown(
+            PDESystem(
+                [0 ~ 0.1 * laplacian(cae) - cae + 2.0 * cbe + x + 0.01 * cae^2, 0 ~ 0.1 * laplacian(cbe) - 3.0 * cae - cbe + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.3), [t, x, y], [cae, cbe], Any[]; name = :nls))
         @test solve(nls, QuasiSteady(); dt = 0.1).retcode == ReturnCode.Success
 end

@@ -28,7 +28,8 @@ end
 @testitem "F3-13: counts against the spectral radius; half the count blows up" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
 @testset "F3-13: counts against the spectral radius; half the count blows up" begin
     per = [fc(t, x, 0) ~ fc(t, x, 1), fc(t, 0, y) ~ fc(t, 1, y)]
-    cases = [("(1 + x) laplacian(c)", D(fce) ~ (1 + x) * laplacian(fce), [fc(0, x, y) ~ 0.5], 0.5),
+        cases = [
+            ("(1 + x) laplacian(c)", D(fce) ~ (1 + x) * laplacian(fce), [fc(0, x, y) ~ 0.5], 0.5),
              ("DivKGrad(1 + x, c)", D(fce) ~ DivKGrad(:harmonic)(1 + x, fce), [fc(0, x, y) ~ 0.5], 0.5),
              # c ∈ (0, 1) declared: the coefficient over [0, 1]; the Jacobian at c ≡ 1 is Δ's
              ("DivKGrad(c, c)", D(fce) ~ DivKGrad(:harmonic)(fce, fce), [fc(0, x, y) ~ 1.0], 1.0),
@@ -58,29 +59,30 @@ end
 @testset "F3-13: aux fields, switches, declared intervals, site-varying velocities" begin
     s4 = 4 * 2 * 16^2                                         # Σ_a 4/h_a² on 16²
     b(sys) = (p = fown(sys, 16); p.stability(p.p))
-    # an aux field through its definition (`K ~ k c`, `D(c) ~ D laplacian(c) − K`): the decay `k`
+        # an aux field through its definition (`K ~ k c`, `D(c) ~ D laplacian(c) − K`): the decay `k`
     # (HANDOFF §5, batch 1 r2 record; base: no bound)
-    aux = fsys([D(fue) ~ fx_D * laplacian(fue) - fKe, fKe ~ fx_k * fue], [fu(0, x, y) ~ 0.5], [fue, fKe])
+        aux = fsys([D(fue) ~ fx_D * laplacian(fue) - fKe, fKe ~ fx_k * fue], [fu(0, x, y) ~ 0.5], [fue, fKe])
     @test b(aux) ≈ 0.1 * s4 + 2.0
     pa = fown(aux, 16)
         @test LFP.substeps(pa, ExplicitEuler(), pa.p; dt = 0.1) == ceil(Int, 0.1 * (0.1 * s4 + 2.0) / 1.8)
     # … and a write of `k` recounts through it
         @test LFP.substeps(remake(pa; p = [fx_k => 20.0]), ExplicitEuler(); dt = 0.1) == ceil(Int, 0.1 * (0.1 * s4 + 20.0) / 1.8)
     # an aux field that reads another field: a cross term of the row (`K ~ k o`, `D(u) ~ −K`)
-    xaux = fsys([D(fue) ~ fx_D * laplacian(fue) - fKe - fue, D(foe) ~ fx_D * laplacian(foe) - foe, fKe ~ 0.5 * foe],
+        xaux = fsys(
+            [D(fue) ~ fx_D * laplacian(fue) - fKe - fue, D(foe) ~ fx_D * laplacian(foe) - foe, fKe ~ 0.5 * foe],
         [fu(0, x, y) ~ 0.5, fo(0, x, y) ~ 0.5], [fue, foe, fKe])
     @test b(xaux) ≈ 0.1 * s4 + 1.5
     # a switch `a max(c − c_T, 0)`: its Jacobian entry is `a` or 0 (no interval needed)
-    @test b(fsys([D(fue) ~ fx_D * laplacian(fue) - fx_a * max(fue - 0.3, 0)], [fu(0, x, y) ~ 0.5], [fue])) ≈ 0.1 * s4 + 3.0
+        @test b(fsys([D(fue) ~ fx_D * laplacian(fue) - fx_a * max(fue - 0.3, 0)], [fu(0, x, y) ~ 0.5], [fue])) ≈ 0.1 * s4 + 3.0
     # a nonlinear local term over the declared interval: `∂(a c (1 − c))/∂c = a (1 − 2c)` over c ∈ [0, 1]
-    @test b(fsys([D(fce) ~ fx_D * laplacian(fce) + fx_a * fce * (1 - fce)], [fc(0, x, y) ~ 0.5], [fce])) ≈ 0.1 * s4 + 3.0
+        @test b(fsys([D(fce) ~ fx_D * laplacian(fce) + fx_a * fce * (1 - fce)], [fc(0, x, y) ~ 0.5], [fce])) ≈ 0.1 * s4 + 3.0
     # … with no declared interval, no bound (the term stays one the bound cannot see)
-    nb = fsys([D(fue) ~ fx_D * laplacian(fue) + fx_a * fue * (1 - fue)], [fu(0, x, y) ~ 0.5], [fue])
+        nb = fsys([D(fue) ~ fx_D * laplacian(fue) + fx_a * fue * (1 - fue)], [fu(0, x, y) ~ 0.5], [fue])
     @test isnan(b(nb))
     @test occursin("cannot see", LFP.unbounded_reason(fown(nb, 16).stability, fown(nb, 16).p))
     # a site-varying velocity (batch 3 review R2): `Σ_a 2 max|v_a| / h_a` over the box (16²:
     # x ∈ [−1/32, 1 + 1/32], a face mean reads a ghost site)
-    v = fsys([D(fue) ~ 0.01 * laplacian(fue) - Advect(Upwind1())([50 * (1 + x), 0.0], fue)], [fu(0, x, y) ~ 0.5], [fue])
+        v = fsys([D(fue) ~ 0.01 * laplacian(fue) - Advect(Upwind1())([50 * (1 + x), 0.0], fue)], [fu(0, x, y) ~ 0.5], [fue])
     @test b(v) ≈ 0.01 * s4 + 2 * 50 * (2 + 1 / 32) * 16
     # a velocity that reads another field with a declared interval: its frozen velocity
     @test b(fsys([D(fue) ~ -Advect(Upwind1())([fce, 0.0], fue), D(fce) ~ 0.0 * fce], [fu(0, x, y) ~ 0.5, fc(0, x, y) ~ 0.5],
@@ -129,19 +131,21 @@ end
     end
     # a diffusion coefficient whose interval holds negative values: no bound (not a refusal: the
     # enclosure does not show a negative value), the reason names it and its interval
-    neg = fown(fsys([D(fue) ~ (x - 0.5) * laplacian(fue)], [fu(0, x, y) ~ 0.5], [fue]), 16)
+        neg = fown(fsys([D(fue) ~ (x - 0.5) * laplacian(fue)], [fu(0, x, y) ~ 0.5], [fue]), 16)
     @test isnan(neg.stability(neg.p))
         m = emsg(() -> solve(neg, ExplicitEuler(); dt = 0.001))
     @test occursin("may be negative over `x` ∈ [0.03125, 0.9688]", m) && occursin("needs it ≥ 0", m)
         @test occursin("ExplicitEuler(; substeps = n)", m)         # the route: an explicit count
     # a coefficient negative over its whole interval is negative diffusion: refused at any count
-    m = emsg(() -> solve(fown(fsys([D(fue) ~ (x - 2) * laplacian(fue)], [fu(0, x, y) ~ 0.5], [fue]), 16),
+        m = emsg(
+            () -> solve(
+                fown(fsys([D(fue) ~ (x - 2) * laplacian(fue)], [fu(0, x, y) ~ 0.5], [fue]), 16),
                 ExplicitEuler(; substeps = 4); dt = 0.001
             )
         )
     @test occursin("is negative at these parameters (anti-diffusion", m)
     # an interval that is not finite (`1 / (x − 0.5)` over the box): no bound, named, never refused
-    inf = fown(fsys([D(fue) ~ laplacian(fue) - fue / (x - 0.5)], [fu(0, x, y) ~ 0.5], [fue]), 8)
+        inf = fown(fsys([D(fue) ~ laplacian(fue) - fue / (x - 0.5)], [fu(0, x, y) ~ 0.5], [fue]), 8)
     @test occursin("has no finite bound over `x` ∈ [0.0625, 0.9375]", LFP.unbounded_reason(inf.stability, inf.p))
     # a field that starts outside its declared bounds is refused, naming the site
     m = emsg(() -> fown(fsys([D(fce) ~ DivKGrad(:harmonic)(fce, fce)], [fc(0, x, y) ~ 1.5 * x], [fce]), 8))
@@ -164,7 +168,8 @@ end
 @testset "F3-13: a derivative of the coordinates in a condition's value" begin
     Dx, Dy = Differential(x), Differential(y)
     @variables fk(..) [input = true]
-    run(g) = (p = fown(fsys([D(fue) ~ 0.1 * laplacian(fue)], [fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ g], [fue]), 8);
+        run(g) = (
+            p = fown(fsys([D(fue) ~ 0.1 * laplacian(fue)], [fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ g], [fue]), 8);
             solve(p, ExplicitEuler(); dt = 0.01)[:fu, end]
         )
     # `Dy(x y)` is `x`, which is 1 on the face x = 1: the run equals the plain value, bitwise
@@ -172,13 +177,16 @@ end
     @test maximum(abs, run(Dy(sin(x * y))) .- run(x * cos(x * y))) < 1e-14
     @test maximum(abs, run(Dx(x^2) / 2)) > 0 && run(Dx(x^2) / 2) == run(x)
     # … and in a Robin face's value and an initial value
-    rob(g) = (p = fown(fsys([D(fue) ~ 0.1 * laplacian(fue)], [fu(0, x, y) ~ Dy(x * y^2) / 2, fu(t, 1, y) + Dx(fu(t, 1, y)) ~ g], [fue]), 8);
+        rob(g) = (
+            p = fown(fsys([D(fue) ~ 0.1 * laplacian(fue)], [fu(0, x, y) ~ Dy(x * y^2) / 2, fu(t, 1, y) + Dx(fu(t, 1, y)) ~ g], [fue]), 8);
             solve(p, ExplicitEuler(); dt = 0.01)[:fu, end]
         )
     @test rob(Dy(y^2)) == rob(2y)
     # a derivative of a field read stays unevaluated: refused in words
     m = try
-        fown(PDESystem([D(fue) ~ 0.1 * laplacian(fue)], [fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ Dy(fk(t, x, y))], fdom(), [t, x, y],
+            fown(
+                PDESystem(
+                    [D(fue) ~ 0.1 * laplacian(fue)], [fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ Dy(fk(t, x, y))], fdom(), [t, x, y],
             [fue, fk(t, x, y)], Any[]; name = :fb), 8)
         ""
     catch e
@@ -189,14 +197,19 @@ end
     # the condition's own field takes its flux form (`Dx(c) ~ g`), which then runs
     @test occursin("give the input's derivative as an input field of its own", m)
     m = try
-        fown(PDESystem([D(fue) ~ 0.1 * laplacian(fue)], [fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ Dy(fu(t, 1, y))], fdom(), [t, x, y],
+            fown(
+                PDESystem(
+                    [D(fue) ~ 0.1 * laplacian(fue)], [fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ Dy(fu(t, 1, y))], fdom(), [t, x, y],
             [fue], Any[]; name = :fb), 8)
         ""
     catch e
         sprint(showerror, e)
     end
     @test occursin("the field's own normal derivative is its flux form", m) && occursin("`Dx(c) ~ g` (Neumann)", m)
-    s = solve(fown(PDESystem([D(fue) ~ 0.1 * laplacian(fue)], [fu(0, x, y) ~ 0.0, Dx(fu(t, 1, y)) ~ 1.0], fdom(), [t, x, y],
+        s = solve(
+            fown(
+                PDESystem(
+                    [D(fue) ~ 0.1 * laplacian(fue)], [fu(0, x, y) ~ 0.0, Dx(fu(t, 1, y)) ~ 1.0], fdom(), [t, x, y],
                     [fue], Any[]; name = :fb
                 ), 8
             ), ExplicitEuler(); dt = 0.01
@@ -204,12 +217,16 @@ end
     @test SciMLBase.successful_retcode(s.retcode) && maximum(s[:fu, end]) > 0
     # a face value that reads another field is a face value, not a periodic pair (N5): an input
     # runs; an aux field of the state is refused in words
-    pk = fown(PDESystem([D(fue) ~ 0.1 * laplacian(fue)], [fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ fk(t, 1, y)], fdom(), [t, x, y],
+        pk = fown(
+            PDESystem(
+                [D(fue) ~ 0.1 * laplacian(fue)], [fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ fk(t, 1, y)], fdom(), [t, x, y],
         [fue, fk(t, x, y)], Any[]; name = :fb), 8)
         s = solve(remake(pk; inputs = [fk => fill(2.0, 8, 8)]), ExplicitEuler(); dt = 0.01)
     @test SciMLBase.successful_retcode(s.retcode) && maximum(s[:fu, end]) > 0
     m = try
-        fown(PDESystem([D(fue) ~ 0.1 * laplacian(fue), fKe ~ 2 * fue], [fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ fK(t, 1, y)], fdom(),
+            fown(
+                PDESystem(
+                    [D(fue) ~ 0.1 * laplacian(fue), fKe ~ 2 * fue], [fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ fK(t, 1, y)], fdom(),
             [t, x, y], [fue, fKe], Any[]; name = :fb), 8)
         ""
     catch e
@@ -233,7 +250,8 @@ end
 @testitem "F3-13 r2 S1: an implicit leak warns and goes on" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
 @testset "F3-13 r2 S1: an implicit leak warns and goes on" begin
     RC = SciMLBase.ReturnCode
-    us = PDESystem([D(fce) ~ 0.01 * laplacian(fce) - 10 * fce + 0.5 * fce * (1 - fce)], [fc(0, x, y) ~ ifelse(x < 0.5, 1.0, 0.0)],
+        us = PDESystem(
+            [D(fce) ~ 0.01 * laplacian(fce) - 10 * fce + 0.5 * fce * (1 - fce)], [fc(0, x, y) ~ ifelse(x < 0.5, 1.0, 0.0)],
         fdom(4.0), [t, x, y], [fce], Any[]; name = :us)
     pu = fown(us)
         for alg in (CrankNicolson(), BDF2())
@@ -253,7 +271,9 @@ end
     # a growth past the interval that the count did not see is caught by the solve's own check:
     # a source and `3c²` carry c above 1 (a blow-up), and with one Newton step per substep the
     # shift clamp warns (with `newton > 1` the Newton check counts it)
-    gr = fown(PDESystem([D(fce) ~ 0.01 * laplacian(fce) + 3 * fce^2 + 0.5], [fc(0, x, y) ~ 0.5], fdom(3.0), [t, x, y], [fce], Any[];
+        gr = fown(
+            PDESystem(
+                [D(fce) ~ 0.01 * laplacian(fce) + 3 * fce^2 + 0.5], [fc(0, x, y) ~ 0.5], fdom(3.0), [t, x, y], [fce], Any[];
         name = :gr), 16)
     @test_logs (:warn, r"left its declared bounds .* Widen `bounds`") (:warn, r"the implicit shift was clamped") match_mode = :any solve(gr,
             BackwardEuler(); dt = 0.5, saveat = 0.5
@@ -281,7 +301,7 @@ end
     pg = fown(dg, 16)
     @test occursin("holds 2.0, outside", emsg(() -> remake(pg; p = [fx_g => 2.0])))
     # … a masked value
-    dm = fsys([D(fce) ~ 0.1 * laplacian(fce)], [fc(0, x, y) ~ 0.5, fc(t, x, y) ~ masked(x < 0.2, 1.5)], [fce])
+        dm = fsys([D(fce) ~ 0.1 * laplacian(fce)], [fc(0, x, y) ~ 0.5, fc(t, x, y) ~ masked(x < 0.2, 1.5)], [fce])
     @test occursin("its masked condition holds 1.5", emsg(() -> fown(dm, 16)))
     # a value inside is accepted, and the run stays in [0.5, 1]
     s = solve(fown(fsys([D(fce) ~ DivKGrad(:harmonic)(fce, fce)], [fc(0, x, y) ~ 0.5, fc(t, 1, y) ~ 1.0], [fce]), 16),
@@ -300,7 +320,7 @@ end
         )
     @test s.retcode == RC.Success && s.t[end] == 1.0
     # a field with declared bounds that no coefficient reads is not checked in the run
-    nu = fown(fsys([D(fce) ~ 0.1 * laplacian(fce) + 20.0], [fc(0, x, y) ~ 0.5], [fce]), 16)
+        nu = fown(fsys([D(fce) ~ 0.1 * laplacian(fce) + 20.0], [fc(0, x, y) ~ 0.5], [fce]), 16)
     @test isempty(nu.stability.used)
         @test solve(nu, ExplicitEuler(); dt = 0.01).retcode == RC.Success
     # the writes take the start check (values outside refused, naming the site)
@@ -394,9 +414,9 @@ end
 @testitem "F3-25: a loop through a coefficient over a declared interval" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
 @testset "F3-25: a loop through a coefficient over a declared interval" begin
     ic = [fc(0, x, y) ~ 0.5, fo(0, x, y) ~ 0.0]
-    loop = fown(fsys([D(fce) ~ 0.1 * laplacian(fce) + 5 * foe, D(foe) ~ DivKGrad(:harmonic)(fce, foe) - foe], ic, [fce, foe]), 8)
+        loop = fown(fsys([D(fce) ~ 0.1 * laplacian(fce) + 5 * foe, D(foe) ~ DivKGrad(:harmonic)(fce, foe) - foe], ic, [fce, foe]), 8)
     @test isnan(loop.stability(loop.p))
-    one = fown(fsys([D(fce) ~ 0.1 * laplacian(fce) + 5 * foe, D(foe) ~ DivKGrad(:harmonic)(1 + x, foe) - foe], ic, [fce, foe]), 8)
+        one = fown(fsys([D(fce) ~ 0.1 * laplacian(fce) + 5 * foe, D(foe) ~ DivKGrad(:harmonic)(1 + x, foe) - foe], ic, [fce, foe]), 8)
     @test isfinite(one.stability(one.p))
 end
 end

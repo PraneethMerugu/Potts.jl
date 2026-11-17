@@ -53,7 +53,7 @@ public Δ, pdesystem, pdesystem_refusal, is_crossgrid_key, operand_reads, Lattic
 export laplacian, DivKGrad, Advect, AbstractAdvectionScheme, Upwind1, value_at, ismember, masked, step_index
 export LatticePlacement, LatticeStorage, LatticeLevel, Coarse, LatticeSpacing, LatticeInputName
 export get_lattice_placement, get_lattice_storage, get_lattice_level, get_lattice_spacing,
-       get_lattice_input_name
+    get_lattice_input_name
 export vocabulary_issues, check_vocabulary
 export LatticeDiscretization, FiniteVolume, CompiledField, discretize, symbolic_discretize,
        parse_bcs, linearity, Grid, HEX, Interval, lattice_domain

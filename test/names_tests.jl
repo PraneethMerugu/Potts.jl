@@ -28,8 +28,10 @@ end
     using .NamesSetup: LF, LP
     @testset "field libraries: the keywords of the algorithm constructors are ASCII" begin
         P, S = LF.Problems, LF.Solvers
-        ctors = (P.ExplicitEuler, P.ExplicitMap, P.BackwardEuler, P.CrankNicolson, P.BDF2, P.QuasiSteady, P.FieldGroups,
-            S.DevicePCG, S.DeviceGMRES, S.Multigrid, LP.LatticeDiscretization)
+        ctors = (
+            P.ExplicitEuler, P.ExplicitMap, P.BackwardEuler, P.CrankNicolson, P.BDF2, P.QuasiSteady, P.FieldGroups,
+            S.DevicePCG, S.DeviceGMRES, S.Multigrid, LP.LatticeDiscretization,
+        )
         kwargs(f) = unique!(reduce(vcat, (Base.kwarg_decl(m) for m in methods(f)); init = Symbol[]))
         for f in ctors
             kws = kwargs(f)

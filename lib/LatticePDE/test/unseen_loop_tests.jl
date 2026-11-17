@@ -78,7 +78,9 @@ using .LP_unseen_loop: fd
     @parameters sa = 0.3 sb = 0.2
     @variables sc(..) so(..)
     sce, soe = sc(t, x, y), so(t, x, y)
-    ps = discretize(PDESystem([D(sce) ~ laplacian(sce) + sa * soe, D(soe) ~ -sb * soe + 0.1 * sce],
+        ps = discretize(
+            PDESystem(
+                [D(sce) ~ laplacian(sce) + sa * soe, D(soe) ~ -sb * soe + 0.1 * sce],
         [sc(0, x, y) ~ x * y, so(0, x, y) ~ 1.0 + x, sc(t, 0, y) ~ sc(t, 1, y), sc(t, x, 0) ~ sc(t, x, 1),
          so(t, 0, y) ~ so(t, 1, y), so(t, x, 0) ~ so(t, x, 1)], sdom(0.1), [t, x, y], [sce, soe], [sa, sb]; name = :seen13c),
         LatticeDiscretization(Grid((8, 8))))
@@ -102,7 +104,9 @@ using .LP_unseen_loop: fd
     # S1: a loop a ⇄ b closed by seen reads; a's unseen term reads c, outside the loop: no warning
     @variables oa(..) ob(..) oc(..)
     oae, obe, oce = oa(t, x, y), ob(t, x, y), oc(t, x, y)
-    po = discretize(PDESystem([D(oae) ~ laplacian(oae) + 0.3 * obe - 0.001 * oae * oce^2, D(obe) ~ -0.2 * obe + 0.1 * oae, D(oce) ~ -0.5 * oce],
+        po = discretize(
+            PDESystem(
+                [D(oae) ~ laplacian(oae) + 0.3 * obe - 0.001 * oae * oce^2, D(obe) ~ -0.2 * obe + 0.1 * oae, D(oce) ~ -0.5 * oce],
         [[oa(0, x, y) ~ x, ob(0, x, y) ~ 1.0, oc(0, x, y) ~ 1.0]; per(oa, ob, oc)], sdom(0.1), [t, x, y], [oae, obe, oce], Num[];
         name = :out13c), sdisc)
         algo = FieldGroups(oae => ExplicitEuler(; substeps = 4), obe => BackwardEuler(), oce => ExplicitEuler())
@@ -123,14 +127,18 @@ using .LP_unseen_loop: fd
     # S2: a term on its own field alone (`-ta³`) is not listed
     @variables ta(..) tb(..)
     tae, tbe = ta(t, x, y), tb(t, x, y)
-    pt = discretize(PDESystem([D(tae) ~ laplacian(tae) - 0.1 * tae * tbe^2 - tae^3, D(tbe) ~ -0.2 * tbe + 0.1 * tae],
+        pt = discretize(
+            PDESystem(
+                [D(tae) ~ laplacian(tae) - 0.1 * tae * tbe^2 - tae^3, D(tbe) ~ -0.2 * tbe + 0.1 * tae],
         [[ta(0, x, y) ~ x, tb(0, x, y) ~ 1.0]; per(ta, tb)], sdom(0.1), [t, x, y], [tae, tbe], Num[]; name = :self13c), sdisc)
         wt = loopwarns(() -> init(pt, FieldGroups(tae => ExplicitEuler(; substeps = 4), tbe => BackwardEuler()); dt = 0.01))
     @test length(wt) == 1 && occursin("(unseen: ta: -0.1ta*(tb^2)), so", wt[1]) && !occursin("ta^3", wt[1])
     # N1: an unseen read of an aux field `K ~ a b`: the route names the state fields the aux reads
     @variables xa(..) xb(..) xK(..)
     xae, xbe, xKe = xa(t, x, y), xb(t, x, y), xK(t, x, y)
-    px = discretize(PDESystem([D(xae) ~ laplacian(xae) + 0.5 * xKe, D(xbe) ~ -0.2 * xbe + 0.1 * xae, xKe ~ xae * xbe],
+        px = discretize(
+            PDESystem(
+                [D(xae) ~ laplacian(xae) + 0.5 * xKe, D(xbe) ~ -0.2 * xbe + 0.1 * xae, xKe ~ xae * xbe],
         [[xa(0, x, y) ~ x, xb(0, x, y) ~ 1.0]; per(xa, xb)], sdom(0.1), [t, x, y], [xae, xbe, xKe], Num[]; name = :aux13c), sdisc)
         wx = loopwarns(() -> init(px, FieldGroups(xae => ExplicitEuler(; substeps = 4), xbe => BackwardEuler()); dt = 0.01))
     @test length(wx) == 1 && endswith(wx[1], "declare intervals (`bounds = (lo, hi)`) for `xa`, `xb`, so the bound sees them")

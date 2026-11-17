@@ -115,7 +115,8 @@ end
                 return mtkcompile(sys; inputs = reverse(ins))
             end
         end
-        cases = [(D(q) ~ -q + value_at(Jk, kc), [kc], [kc => 2], 19.0, Jk),
+        cases = [
+            (D(q) ~ -q + value_at(Jk, kc), [kc], [kc => 2], 19.0, Jk),
             (D(q) ~ -q + value_at(J2, kc, kcp), [kc, kcp], [kc => 2, kcp => 3], 7.0, J2),
             (D(q) ~ -q + 5 * ismember(kc, (2, 3)), [kc], [kc => 3], 4.0, nothing)]
         for (eq, ins, iv, expect, table) in cases
@@ -142,7 +143,8 @@ end
         # a kind-table read: Symbolics refuses differentiation through the array argument itself
         @test_throws ["Differentiation with array expressions"] Symbolics.expand_derivatives(Dx(value_at(Dk, ke)))
         @test_throws ["Differentiation with array expressions"] Symbolics.expand_derivatives(Dx(value_at(J, ke, ke)))
-        for term in (laplacian(ce), DivKGrad(:harmonic)(Ke, ce), Advect(Upwind1())(ve[1], ce), value_at(ce, ke),
+        for term in (
+                laplacian(ce), DivKGrad(:harmonic)(Ke, ce), Advect(Upwind1())(ve[1], ce), value_at(ce, ke),
             ismember(ke, (2, 3)), masked(ke == 3, ce))
             err = try
                 Symbolics.expand_derivatives(Dx(term))
@@ -188,9 +190,12 @@ end
         @test get_lattice_level(ue) == 2
         @test get_lattice_input_name(kde) == "kind" && MTKB.isinput(kde)
         @test all(f -> f(we) === nothing, (get_lattice_placement, get_lattice_storage, get_lattice_level,
-            get_lattice_input_name))
+                get_lattice_input_name,
+            )
+        )
         # the keys read back from the stored dependent variables
-        pd = PDESystem([D(ue) ~ laplacian(ue) + kde, D(we) ~ laplacian(we)], Equation[], dom, [t, x, y], [ue, we, kde], Num[];
+        pd = PDESystem(
+            [D(ue) ~ laplacian(ue) + kde, D(we) ~ laplacian(we)], Equation[], dom, [t, x, y], [ue, we, kde], Num[];
             name = :meta)
         @test get_lattice_placement(pd.dvs[1]) === :node && get_lattice_input_name(pd.dvs[3]) == "kind"
         @test get_lattice_placement(pd.dvs[2]) === nothing

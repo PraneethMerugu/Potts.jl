@@ -387,7 +387,7 @@ end
 function _diffusion_coefficient(term)
     reps = Dict{Any, Any}()
     walk(y) = iscall(y) && (f = operation(y);
-                            f === laplacian ? (reps[y] = 1) :
+        f === laplacian ? (reps[y] = 1) :
                             f isa DivKGrad ? (reps[y] = arguments(y)[1]) :
                             f isa Differential ? (r = _raw_flux(y); reps[y] = r === nothing || r[1] === nothing ? 1 : r[1]) :
                             foreach(walk, arguments(y)))
@@ -401,7 +401,7 @@ end
 function _site_parts(term)
     reps, K = Dict{Any, Any}(), Any[]
     walk(y) = iscall(y) && (f = operation(y);
-                            f === laplacian ? (reps[y] = 1; push!(K, 1)) :
+        f === laplacian ? (reps[y] = 1; push!(K, 1)) :
                             f isa DivKGrad ? (reps[y] = 1; push!(K, arguments(y)[1])) :
                             f isa Differential ? (r = _raw_flux(y); reps[y] = 1;
                                                   push!(K, r === nothing || r[1] === nothing ? 1 : r[1])) :
@@ -1717,7 +1717,8 @@ function Problems.check_parameters(b::StabilityBound, p)
     isempty(neg) && return _check_finite(r)
     _dverr("the diffusion coefficient of the field$(length(neg) == 1 ? "" : "s") $(join(("`$k`" for k in neg), ", ")) " *
            "is negative at these parameters (anti-diffusion: an ill-posed equation, unstable at any step and with any " *
-           "solver); write the term with a coefficient ≥ 0 (`D * laplacian(c)` with `D ≥ 0`; a decay is a reaction term `-k * c`)")
+            "solver); write the term with a coefficient ≥ 0 (`D * laplacian(c)` with `D ≥ 0`; a decay is a reaction term `-k * c`)"
+    )
 end
 # The declared intervals against the constant face and mask values (batch 5 review M2): a value
 # outside its field's declared bounds drives the field out of the interval the bound takes

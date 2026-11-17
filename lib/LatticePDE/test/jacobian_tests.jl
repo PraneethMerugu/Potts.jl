@@ -57,23 +57,39 @@ function jcases()
     push!(out, ("Dirichlet", jsys([D(c) ~ jD * laplacian(c) - c], [ic; jc(t, 0, y) ~ 1.0; jc(t, x, 1) ~ 0.5], [c]), jdisc(), ()))
     push!(out, ("Neumann", jsys([D(c) ~ jD * laplacian(c) - c^2], [ic; Dx(jc(t, 1, y)) ~ 0.3], [c]), jdisc(), ()))
     push!(out, ("Robin", jsys([D(c) ~ jD * laplacian(c)], [ic; 2.0 * jc(t, x, 0) + Dy(jc(t, x, 0)) ~ 0.5], [c]), jdisc(), ()))
-    push!(out, ("periodic", jsys([D(c) ~ jD * laplacian(c) + c * (1 - c)], [ic; jc(t, x, 0) ~ jc(t, x, 1); jc(t, 0, y) ~ jc(t, 1, y)], [c]),
+    push!(
+        out, (
+            "periodic", jsys([D(c) ~ jD * laplacian(c) + c * (1 - c)], [ic; jc(t, x, 0) ~ jc(t, x, 1); jc(t, 0, y) ~ jc(t, 1, y)], [c]),
         jdisc(), ()))
-    push!(out, ("advection, Robin", jsys([D(c) ~ -Advect(Upwind1())([0.3, -0.2], c) + 0.01 * laplacian(c)],
+    push!(
+        out, (
+            "advection, Robin", jsys(
+                [D(c) ~ -Advect(Upwind1())([0.3, -0.2], c) + 0.01 * laplacian(c)],
         [ic; 2.0 * jc(t, 0, y) + Dx(jc(t, 0, y)) ~ 0.5; 1.5 * jc(t, 1, y) - Dx(jc(t, 1, y)) ~ 0.0; jc(t, x, 0) ~ 1.0], [c], Num[]),
         jdisc(), ()))
     push!(out, ("masks", jsys([D(c) ~ jD * laplacian(c) - c], [ic; c ~ masked(k == 1, 2.0)], [c, k]), jdisc(), (k => JK1,)))
     cc = jC2(t, x, y)
-    push!(out, ("Coarse(2)", jsys([D(cc) ~ 0.05 * laplacian(cc) - cc + ja * v, D(v) ~ 0.02 * laplacian(v) - v + jb * cc],
+    push!(
+        out, (
+            "Coarse(2)", jsys(
+                [D(cc) ~ 0.05 * laplacian(cc) - cc + ja * v, D(v) ~ 0.02 * laplacian(v) - v + jb * cc],
         [jC2(0, x, y) ~ x, jv(0, x, y) ~ y], [cc, v], [ja, jb]), jdisc(), ()))
     push!(out, ("hexagonal", jsys([D(c) ~ jD * laplacian(c) - c], [ic; jc(t, 0, y) ~ 1.0], [c]), jdisc(; geometry = HEX), ()))
-    push!(out, ("cross-grid", jsys([D(cc) ~ 0.01 * laplacian(cc), D(v) ~ 0.5 * laplacian(cc) - v], [jC2(0, x, y) ~ x^2, jv(0, x, y) ~ 0.0],
+    push!(
+        out, (
+            "cross-grid", jsys(
+                [D(cc) ~ 0.01 * laplacian(cc), D(v) ~ 0.5 * laplacian(cc) - v], [jC2(0, x, y) ~ x^2, jv(0, x, y) ~ 0.0],
         [cc, v], Num[]), jdisc((16, 16)), ()))
     a1, a2 = ja1(t, x, y), ja2(t, x, y)
     # (an aux field takes no face condition: a spatial operator of one needs periodic axes)
-    push!(out, ("aux chain", jsys([a1 ~ laplacian(c), a2 ~ a1 * c, D(c) ~ -0.01 * laplacian(a2)],
+    push!(
+        out, (
+            "aux chain", jsys(
+                [a1 ~ laplacian(c), a2 ~ a1 * c, D(c) ~ -0.01 * laplacian(a2)],
         [ic; jc(t, x, 0) ~ jc(t, x, 1); jc(t, 0, y) ~ jc(t, 1, y)], [c, a1, a2]), jdisc(), ()))
-    push!(out, ("steady row", jsys([D(c) ~ jD * laplacian(c) - c + v, 0 ~ 0.1 * laplacian(v) - v + c], [ic; jc(t, 0, y) ~ 1.0], [c, v]),
+    push!(
+        out, (
+            "steady row", jsys([D(c) ~ jD * laplacian(c) - c + v, 0 ~ 0.1 * laplacian(v) - v + c], [ic; jc(t, 0, y) ~ 1.0], [c, v]),
         jdisc(), ()))
     return out
 end
@@ -86,7 +102,7 @@ end
 @testset "F4-07: the pattern from the IR equals the dense Jacobian's" begin
     for (label, sys, disc, ins) in jcases()
         prob = jprob(sys, disc, ins)
-        P = LFP.field_jacobian_sparsity(prob)
+            P = LFP.field_jacobian_sparsity(prob)
         u = jstate(prob)
         if label == "masks"
             # a masked site keeps its row (a mask that moves with an input write stays covered):
@@ -151,14 +167,15 @@ end
 @testset "F4-07: Rodas5P with sparse = true at 128² runs in bounded memory" begin
     @parameters jr = 2.0
     c = jc(t, x, y)
-    sys = PDESystem([D(c) ~ 0.05 * laplacian(c) - jr * c], [jc(0, x, y) ~ sin(π * x) * sin(π * y), jc(t, 0, y) ~ 0.0],
+        sys = PDESystem(
+            [D(c) ~ 0.05 * laplacian(c) - jr * c], [jc(0, x, y) ~ sin(π * x) * sin(π * y), jc(t, 0, y) ~ 0.0],
         jdom(0.05), [t, x, y], [c], [jr]; name = :jbig)
     prob = discretize(sys, jdisc((128, 128)); sparse = true)
     @test nnz(prob.f.jac_prototype) <= 5 * 128^2
     # the pattern walk is type-stable: ~12 MiB at 128² (an untyped walk, a dynamic dispatch per
     # node visit, allocated 256 MiB)
-    pb = @allocated LFP.field_jacobian_sparsity(prob)
-    @test pb < 64 * 2^20 || (println("F4-07 field_jacobian_sparsity 128² allocated ", pb / 2^20, " MiB"); false)
+        pb = @allocated LFP.field_jacobian_sparsity(prob)
+        @test pb < 64 * 2^20 || (println("F4-07 field_jacobian_sparsity 128² allocated ", pb / 2^20, " MiB"); false)
     s = solve(prob, Rodas5P(); abstol = 1e-8, reltol = 1e-8)              # (warm)
     bytes = @allocated s = solve(prob, Rodas5P(); abstol = 1e-8, reltol = 1e-8)
     @test SciMLBase.successful_retcode(s)

@@ -86,7 +86,8 @@ end
     # the diffusion factor: a slow Fourier mode (it decays by about 0.12 per window, so each
     # window's factor shows), 16 substeps per window, hand FTCS on a periodic 4×4 grid of spacing 1
     c0 = [1.0 + cos(π * (i - 1) / 2) for i in 1:4, j in 1:4]
-    sysd = PDESystem([D(kce) ~ (1 + kη * step_index(t)) * laplacian(kce)], [kc(0, x, y) ~ 0.0; kc(t, 0, y) ~ kc(t, 4, y); kc(t, x, 0) ~ kc(t, x, 4)],
+        sysd = PDESystem(
+            [D(kce) ~ (1 + kη * step_index(t)) * laplacian(kce)], [kc(0, x, y) ~ 0.0; kc(t, 0, y) ~ kc(t, 4, y); kc(t, x, 0) ~ kc(t, x, 4)],
         [t ∈ Interval(0.0, 3.0), x ∈ Interval(0.0, 4.0), y ∈ Interval(0.0, 4.0)], [t, x, y], [kce], [kη]; name = :d)
     pd = discretize(sysd, LatticeDiscretization(Grid((4, 4)); T = Float64, clock = 1.0))
     pd = remake(pd; u0 = vec(c0))
@@ -111,7 +112,8 @@ end
 @testitem "F2-08c: messages and routes of the clock (B)" setup = [LP_clock] tags = [:latticepde, :clock] begin
 @testset "F2-08c: messages and routes of the clock (B)" begin
     # S1: the slot prints as the user wrote it
-    sysf = PDESystem([D(kce) ~ (1 + kη * step_index(t)) * laplacian(kce)], [kc(0, x, y) ~ 0.0; kperiodic], kdom(2.0), [t, x, y],
+        sysf = PDESystem(
+            [D(kce) ~ (1 + kη * step_index(t)) * laplacian(kce)], [kc(0, x, y) ~ 0.0; kperiodic], kdom(2.0), [t, x, y],
         [kce], [kη]; name = :f)
     e = kerr(() -> solve(discretize(sysf, kdisc()), ExplicitEuler()))
     @test occursin("step_index(t)", e) && !occursin("clock__tick", e)

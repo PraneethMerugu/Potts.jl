@@ -88,7 +88,9 @@ function steady_rows(sys::PDESystem)
         _dverr(string("equation `", eq, "`: a steady equation `0 ~ rhs` is solved for a field that it reads and that ",
             "has no other equation, and it reads none", isempty(left) ? " (every field has an equation)" :
             string(" of the fields with no equation (", join(("`$(_slotkey(f))`" for f in left), ", "), ")"),
-            "; write the field's operator into the row (`0 ~ D * laplacian(c) - k * c + s` for `c`)"))
+                "; write the field's operator into the row (`0 ~ D * laplacian(c) - k * c + s` for `c`)"
+            )
+        )
     end
     pick = Dict{Int, Tuple{Any, Int}}(q => free[picks[q]] for q in eachindex(rows))
     term(s) = (v = sys.dvs[findfirst(v -> isequal(_opof(v), s[1]), sys.dvs)]; s[2] == 0 ? v : Symbolics.wrap(v)[s[2]])
@@ -167,7 +169,8 @@ function steady_sign(rhs, c)
         u = unwrap(u)
         iscall(u) || return nothing
         f, a = operation(u), arguments(u)
-        if (f === laplacian && isequal(unwrap(a[1]), c)) || (f isa Differential && iscall(unwrap(a[1])) &&
+        if (f === laplacian && isequal(unwrap(a[1]), c)) || (
+                f isa Differential && iscall(unwrap(a[1])) &&
                                                      operation(unwrap(a[1])) isa Differential && isequal(unwrap(arguments(unwrap(a[1]))[1]), c))
             ops[u] = z
             return nothing

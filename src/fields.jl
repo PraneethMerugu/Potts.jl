@@ -242,7 +242,7 @@ function _filled_or_refuse(cv, u)
         "site update (`@after_mcs s ~ rand()`) and bind the input to that variable"))
     _reads_site_vars(u) && throw(ArgumentError(
         "the term `$(_builtin_text(string(u)))` of a field equation reads a field or site variable inside a CPM " *
-        "read (a gather, a cell read, …); the field compiler lowers fields only through arithmetic, `laplacian`, " *
+                "read (a gather, a cell read, …); the field compiler lowers fields only through arithmetic, `laplacian`, " *
         "`ismember`, `ifelse` and kind tables: compute the CPM part in a site update and read the variable"))
     # the model-wide list (`known`) names each term once, so every group binds the same array
     k = findfirst(e -> isequal(e[2], u), cv.filled)
@@ -374,7 +374,10 @@ function _steady_assign(sys::PottsSystem)
         throw(ArgumentError(string("`", rows[bad], "`: a steady row `0 ~ rhs` is solved for a field that it reads and that ",
             "has no other equation, and it reads none", isempty(left) ? " (every field has an equation)" :
             string(" of the fields with no equation (", join(("`$n`" for n in left), ", "), ")"),
-            "; write the field's operator into the row (`0 ~ D * laplacian(c) - k * c + …` for `c`)")))
+                    "; write the field's operator into the row (`0 ~ D * laplacian(c) - k * c + …` for `c`)"
+                )
+            )
+        )
     end
     return Pair{Any, Any}[rows[q] => free[picks[q]] for q in eachindex(rows)]
 end
@@ -480,7 +483,7 @@ function _bcs_equation(sys, b, names, cv, core, ext, kinds, N, stepped)
         any(f -> _has_spatial_op(f[2], n), _field_equations(sys)) || any(f -> _has_spatial_op(f[2], n), _field_aux(sys)) ||
             throw(ArgumentError(
             "@bcs: the condition $text sets a face of `$n`, which sets the ghost values of a spatial operator of `$n`, " *
-            "but the equation of `$n` has no `laplacian($n)` nor another spatial operator of `$n` (`DivKGrad(…)(K, $n)`, " *
+                    "but the equation of `$n` has no `laplacian($n)` nor another spatial operator of `$n` (`DivKGrad(…)(K, $n)`, " *
             "`Advect(…)(u, $n)`, a raw flux `Differential(x)(K * Differential(x)($n))`), and no other field's " *
             "equation or aux definition `K ~ …` has one; the condition would do nothing: drop it, or hold sites with a masked condition " *
             "`$n ~ masked(pred, v)`"))
@@ -761,8 +764,8 @@ function LatticeFields.Problems.unbounded_text(t::_PottsTexts, c)
                "$(length(r.terms) == 1 ? "" : "s") $(join(("`$(_user_text(x, t.cv))`" for x in r.terms), ", ")), " *
                "which the stability bound cannot see: a nonlinear term or a coefficient that reads a field with no " *
                "finite declared `bounds`, an advection whose velocity reads the field it moves, a diffusion " *
-               "multiplier that varies by site through a CPM value read directly (`volume[owner] * laplacian(c)`; a kind " *
-               "table `δ[kind] * laplacian(c)` or a kind set `ismember(kind, g) * laplacian(c)` is bounded), or a coefficient " *
+            "multiplier that varies by site through a CPM value read directly (`volume[owner] * laplacian(c)`; a kind " *
+            "table `δ[kind] * laplacian(c)` or a kind set `ismember(kind, g) * laplacian(c)` is bounded), or a coefficient " *
                "that reads `mcs`)" * _infinite_text(t) * "; declare finite `bounds = (lo, hi)` on a field whose " *
                "values stay in an interval (`@variables c(..) = 0.5 [bounds = (0, 1)]` in its PDESystem: the bound then sees its nonlinear " *
                "terms and coefficients), or give " * _A_ROUTE
@@ -797,7 +800,7 @@ function LatticeFields.Problems.refuse_parameters(t::_PottsTexts, c)
     isempty(r.negative) || throw(ArgumentError(
         "the diffusion coefficient of the field$(length(r.negative) == 1 ? "" : "s") $(_fieldlist(r.negative)) " *
         "is negative at the current parameters (anti-diffusion: an ill-posed equation, unstable at any step and " *
-        "with any solver); write the term with a coefficient ≥ 0 (`D * laplacian(c)` with `D ≥ 0`; a decay is a reaction " *
+                "with any solver); write the term with a coefficient ≥ 0 (`D * laplacian(c)` with `D ≥ 0`; a decay is a reaction " *
         "term `-k * c`), or give the parameters values that make it ≥ 0"))
     throw(ArgumentError(LatticeFields.Problems.unbounded_text(_PottsTexts(t.names, t.cv), (; c..., r = (; r..., terms = String[],
         coupled = String[])))))

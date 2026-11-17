@@ -251,7 +251,8 @@ using .LP_report: fd
     # upwind advection with v = (1, 0.5) on 32²: ρ_in = 2 (|1| + |0.5|) / h = 2 × 1.5 × 32 = 96. The
     # convergence rule n2 = ⌈2γ dt ρ_in⌉: BE (γ = 1) ⌈2 × 0.05 × 96⌉ = ⌈9.6⌉ = 10, CN (γ = 1/2) ⌈4.8⌉ = 5.
     # BE's Newton count: h = 0.005, ρ_c = γ h ρ_in = 0.48, ⌈log ε_N / log 0.48⌉ = 10
-    sys = PDESystem([D(rqe) ~ 0.01 * laplacian(rqe) - Advect(Upwind1())([1.0, 0.5], rqe) + 1], [rq(0, x, y) ~ ifelse(x < 0.5, 1.0, 0.0)],
+        sys = PDESystem(
+            [D(rqe) ~ 0.01 * laplacian(rqe) - Advect(Upwind1())([1.0, 0.5], rqe) + 1], [rq(0, x, y) ~ ifelse(x < 0.5, 1.0, 0.0)],
         rdom(0.2), [t, x, y], [rqe], Num[]; name = :adv)
     p = discretize(sys, LatticeDiscretization(Grid((32, 32))))
         rb = sprint(field_report, init(p, BackwardEuler(); dt = 0.05))
@@ -269,7 +270,8 @@ end
 @testitem "F4-13 (review): a coupled solve, a cycle under Backward Euler, QuasiSteady, Crank–Nicolson's least count 2" setup = [LP_report] tags = [:latticepde, :report] begin
 using .LP_report: fd
 @testset "F4-13 (review): a coupled solve, a cycle under Backward Euler, QuasiSteady, Crank–Nicolson's least count 2" begin
-    sys = PDESystem([D(rcye) ~ 0.1 * laplacian(rcye) - rcye + 5.0 * rcze, D(rcze) ~ 0.1 * laplacian(rcze) - rcze - 5.0 * rcye],
+        sys = PDESystem(
+            [D(rcye) ~ 0.1 * laplacian(rcye) - rcye + 5.0 * rcze, D(rcze) ~ 0.1 * laplacian(rcze) - rcze - 5.0 * rcye],
         [rcy(0, x, y) ~ x, rcz(0, x, y) ~ y], rdom(0.2), [t, x, y], [rcye, rcze], Num[]; name = :cyc)
     p = discretize(sys, LatticeDiscretization(Grid((8, 8))))
     # QuasiSteady takes the coupled solve: its operator is the whole Jacobian (review M2)
@@ -299,7 +301,8 @@ end
 using .LP_report: fd
 @testset "F4-13 (review): unseen terms: ρ_in unknown, κ over the seen cross terms only, an unbounded group refused" begin
     # Gray-Scott: `u v²` is a term no bound sees (review S1, S2)
-    gs = PDESystem([D(rue) ~ 2e-5 * laplacian(rue) - rue * rve^2 + gF * (1 - rue), D(rve) ~ 1e-5 * laplacian(rve) + rue * rve^2 - (gF + gk) * rve],
+        gs = PDESystem(
+            [D(rue) ~ 2.0e-5 * laplacian(rue) - rue * rve^2 + gF * (1 - rue), D(rve) ~ 1.0e-5 * laplacian(rve) + rue * rve^2 - (gF + gk) * rve],
         [ru(0, x, y) ~ 1.0 - 0.5x, rv(0, x, y) ~ 0.25x, ru(t, 0, y) ~ ru(t, 1, y), ru(t, x, 0) ~ ru(t, x, 1),
          rv(t, 0, y) ~ rv(t, 1, y), rv(t, x, 0) ~ rv(t, x, 1)], rdom(2.0), [t, x, y], [rue, rve], [gF, gk]; name = :gs)
     p = discretize(gs, LatticeDiscretization(Grid((16, 16))))
@@ -338,7 +341,8 @@ using .LP_report: fd
 @testset "F4-13 (review): a bound that reads the time: the first window's count, the window restored" begin
     @variables rt_(..)
     rte = rt_(t, x, y)
-    sys = PDESystem([D(rte) ~ laplacian(rte)], [rt_(0, x, y) ~ x * y, (-1 - 40t) * rt_(t, 0, y) - Differential(x)(rt_(t, 0, y)) ~ 0.0],
+        sys = PDESystem(
+            [D(rte) ~ laplacian(rte)], [rt_(0, x, y) ~ x * y, (-1 - 40t) * rt_(t, 0, y) - Differential(x)(rt_(t, 0, y)) ~ 0.0],
         rdom(0.5), [t, x, y], [rte], Num[]; name = :rt)
     p = discretize(sys, LatticeDiscretization(Grid((16, 16))))
     stab = LFP.lattice_metadata(p).problem.stability
@@ -361,12 +365,13 @@ end
 @testitem "F4-13 (review): the problem line: hexagonal grids, coarse fields; a map's header" setup = [LP_report] tags = [:latticepde, :report] begin
 using .LP_report: fd
 @testset "F4-13 (review): the problem line: hexagonal grids, coarse fields; a map's header" begin
-    sys = PDESystem([D(rce) ~ 0.2 * laplacian(rce) - rce], [rc(0, x, y) ~ x * y], rdom(0.2), [t, x, y], [rce], Num[]; name = :hx)
+        sys = PDESystem([D(rce) ~ 0.2 * laplacian(rce) - rce], [rc(0, x, y) ~ x * y], rdom(0.2), [t, x, y], [rce], Num[]; name = :hx)
     ph = discretize(sys, LatticeDiscretization(Grid((16, 16); geometry = HEX)))
     @test occursin("grid 16×16 (hexagonal)", rline(sprint(field_report, ph), "problem"))
     cz = first(@variables rcf(..) [lattice_level = Coarse(2)])
     cze = cz(t, x, y)
-    pc = discretize(PDESystem([D(cze) ~ 0.2 * laplacian(cze) - cze], [cz(0, x, y) ~ x * y], rdom(0.2), [t, x, y], [cze], Num[]; name = :cf),
+        pc = discretize(
+            PDESystem([D(cze) ~ 0.2 * laplacian(cze) - cze], [cz(0, x, y) ~ x * y], rdom(0.2), [t, x, y], [cze], Num[]; name = :cf),
         LatticeDiscretization(Grid((16, 16))))
     @test occursin("own grids: rcf 8×8 (coarse)", rline(sprint(field_report, pc), "problem"))
     @parameters rdx [lattice_spacing = 1]

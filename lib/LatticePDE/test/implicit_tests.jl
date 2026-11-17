@@ -44,7 +44,10 @@ end
     h = 0.05
         alg = BackwardEuler(; linsolve = BTIGHT)
     # a numeric operator: diffusion, decay, a source, a Dirichlet face, a mask with its value
-    p = bown(bsys([D(bce) ~ bD * laplacian(bce) - bk * bce + x], [bc(0, x, y) ~ x * y, bc(t, 0, y) ~ 1.0,
+        p = bown(
+            bsys(
+                [D(bce) ~ bD * laplacian(bce) - bk * bce + x], [
+                    bc(0, x, y) ~ x * y, bc(t, 0, y) ~ 1.0,
         bce ~ masked(bqe == 2, 1.5)], [bD, bk]))
         ig, u0, u = be_window(p, alg; dt = h)
     want = be_hand(u0, h; K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces = Dict((1, -1) => (:dir, 1.0)),
@@ -62,7 +65,9 @@ end
     h = 0.05
     xs, ys = bxs(), bys()
     # a Robin face, positive part (α and β of the same sign with the outward normal)
-    p = bown(bsys([D(bce) ~ bD * laplacian(bce) - bk * bce + x], [bc(0, x, y) ~ 0.0, 2.0 * bc(t, x, 0) - Differential(y)(bc(t, x, 0)) ~ bg],
+        p = bown(
+            bsys(
+                [D(bce) ~ bD * laplacian(bce) - bk * bce + x], [bc(0, x, y) ~ 0.0, 2.0 * bc(t, x, 0) - Differential(y)(bc(t, x, 0)) ~ bg],
         [bD, bk, bg]))
         ig, u0, u = be_window(p, BackwardEuler(; linsolve = BTIGHT); dt = h)
     want = be_hand(u0, h; K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces = Dict((2, -1) => (:robin, 2.0, -1.0, 0.5)))
@@ -70,7 +75,9 @@ end
     # opposite signs: the negative part stays in the residual (a defect correction), so the
     # automatic Newton count is more than one (from its bound `w |d⁻|`, S1: 5 here); `newton = k`
     # converges it to the hand matrix
-    p = bown(bsys([D(bce) ~ bD * laplacian(bce) - bk * bce + x], [bc(0, x, y) ~ 0.0, 2.0 * bc(t, x, 0) + Differential(y)(bc(t, x, 0)) ~ bg],
+        p = bown(
+            bsys(
+                [D(bce) ~ bD * laplacian(bce) - bk * bce + x], [bc(0, x, y) ~ 0.0, 2.0 * bc(t, x, 0) + Differential(y)(bc(t, x, 0)) ~ bg],
         [bD, bk, bg]))
     want = be_hand(zeros(48), h; K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces = Dict((2, -1) => (:robin, 2.0, 1.0, 0.5)))
         ig, _, u4 = be_window(p, BackwardEuler(; linsolve = BTIGHT); dt = h)
@@ -85,7 +92,7 @@ end
     want = be_hand(u0, h; K = (x, y) -> 1 + x * y, k = (x, y) -> 2.0, faces = Dict((1, -1) => (:dir, (x, y) -> 1.0 + y)))
     @test maximum(abs, u .- want) < 1e-10
     # a mask whose value is a field (`masked(pred, 1 + x)`): each masked site takes its own value
-    p = bown(bsys([D(bce) ~ bD * laplacian(bce) - bk * bce], [bc(0, x, y) ~ 0.0, bce ~ masked(bqe == 2, 1 + x)], [bD, bk]))
+        p = bown(bsys([D(bce) ~ bD * laplacian(bce) - bk * bce], [bc(0, x, y) ~ 0.0, bce ~ masked(bqe == 2, 1 + x)], [bD, bk]))
         ig, u0, u = be_window(p, BackwardEuler(; linsolve = BTIGHT); dt = h)
     mk = vec(BKIND .== 2)
     want = be_hand(u0, h; K = (x, y) -> 0.3, k = (x, y) -> 2.0, mask = mk, mval = vec(1 .+ xs))
@@ -102,7 +109,7 @@ end
     @test u0[mk] == vec(1 .+ xs)[mk] && maximum(abs, vec(ig[bce]) .- want) < 1e-12
     # an input bound by aliasing: the operator reads the problem's own input array, and a write
     # of the input between windows changes the next solve (no copy; the warm window 0 B)
-    p = bown(bsys([D(bce) ~ value_at(bW, bqe) * laplacian(bce) - bk * bce + 1], [bc(0, x, y) ~ 0.0], [bW, bk]))
+        p = bown(bsys([D(bce) ~ value_at(bW, bqe) * laplacian(bce) - bk * bce + 1], [bc(0, x, y) ~ 0.0], [bW, bk]))
         ig = init(p, BackwardEuler(; linsolve = BTIGHT); dt = h, save_everystep = false)
     rt = only(ig.runtimes)
     r = rt.cache.rows[1]
@@ -125,28 +132,28 @@ end
 @testitem "F3-07: SiteDiffusion rows (row scaling; m = 0 rows in two stages)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "F3-07: SiteDiffusion rows (row scaling; m = 0 rows in two stages)" begin
     h = 0.05
-    # `value_at(W, q) laplacian(c)`: the row scaled by 1/m keeps the faces symmetric (q = 0 reads 0: m = 0 rows)
-    p = bown(bsys([D(bce) ~ value_at(bW, bqe) * laplacian(bce) - bk * bce + 1], [bc(0, x, y) ~ x], [bW, bk]))
+        # `value_at(W, q) laplacian(c)`: the row scaled by 1/m keeps the faces symmetric (q = 0 reads 0: m = 0 rows)
+        p = bown(bsys([D(bce) ~ value_at(bW, bqe) * laplacian(bce) - bk * bce + 1], [bc(0, x, y) ~ x], [bW, bk]))
         ig, u0, u = be_window(p, BackwardEuler(; linsolve = BTIGHT); dt = h)
     mm = (i, j) -> (0.0, 0.5, 2.0)[BKIND[i, j] + 1]
     want = be_hand(u0, h; m = mm, k = (x, y) -> 2.0, f = (x, y) -> 1.0)
     @test maximum(abs, u .- want) < 1e-12
     @test only(ig.runtimes).cache.rows[1].op.scaled && only(ig.runtimes).cache.exact
     # a multiplier that is 0 on some rows (`ifelse(kind == 1, 0, D)`): the two-stage solve
-    p = bown(bsys([D(bce) ~ ifelse(bqe == 1, 0.0, 0.7) * laplacian(bce) - 50.0 * bce], [bc(0, x, y) ~ 1.0 + x], Any[]))
+        p = bown(bsys([D(bce) ~ ifelse(bqe == 1, 0.0, 0.7) * laplacian(bce) - 50.0 * bce], [bc(0, x, y) ~ 1.0 + x], Any[]))
         ig, u0, u = be_window(p, BackwardEuler(; linsolve = BTIGHT); dt = 0.1)
     want = be_hand(u0, 0.1; m = (i, j) -> BKIND[i, j] == 1 ? 0.0 : 0.7, k = (x, y) -> 50.0)
     @test maximum(abs, u .- want) < 1e-12
     # (the pinned-row rule `δ = G h` is a forward Euler step there: off by about 4 at decay 50)
     @test maximum(abs, u[vec(BKIND .== 1)] .- (u0[vec(BKIND .== 1)] ./ (1 + 0.1 * 50))) < 1e-12
-    # `m laplacian(c) + D laplacian(c)` is `(m + D) laplacian(c)`, exact
-    p = bown(bsys([D(bce) ~ value_at(bW, bqe) * laplacian(bce) + bD * laplacian(bce) - bk * bce], [bc(0, x, y) ~ x], [bW, bD, bk]))
+        # `m laplacian(c) + D laplacian(c)` is `(m + D) laplacian(c)`, exact
+        p = bown(bsys([D(bce) ~ value_at(bW, bqe) * laplacian(bce) + bD * laplacian(bce) - bk * bce], [bc(0, x, y) ~ x], [bW, bD, bk]))
         ig, u0, u = be_window(p, BackwardEuler(; linsolve = BTIGHT); dt = h)
     want = be_hand(u0, h; m = (i, j) -> mm(i, j) + 0.3, k = (x, y) -> 2.0)
     @test maximum(abs, u .- want) < 1e-12 && only(ig.runtimes).cache.exact
     # two face coefficients: one stays in the residual with its bound, the operator is inexact
     # (more Newton iterations, from the bound, which converge to the BE step)
-    p = bown(bsys([D(bce) ~ value_at(bW, bqe) * laplacian(bce) + bD * DivKGrad(:harmonic)(1 + x, bce) - bk * bce], [bc(0, x, y) ~ x], [bW, bD, bk]))
+        p = bown(bsys([D(bce) ~ value_at(bW, bqe) * laplacian(bce) + bD * DivKGrad(:harmonic)(1 + x, bce) - bk * bce], [bc(0, x, y) ~ x], [bW, bD, bk]))
         ig = init(p, BackwardEuler(; newton = 40, linsolve = BTIGHT); dt = h)
     rt = only(ig.runtimes)
     @test !rt.cache.op.rows[1].exact && !isempty(rt.cache.op.rows[1].inexact)
@@ -161,7 +168,7 @@ end
     n = 16
     λ = 2 * (2cos(π / n) - 2) * n^2
     dirs = [bc(t, 0, y) ~ 0.0, bc(t, 1, y) ~ 0.0, bc(t, x, 0) ~ 0.0, bc(t, x, 1) ~ 0.0]
-    sys = bsys([D(bce) ~ bD * laplacian(bce)], [bc(0, x, y) ~ sin(π * x) * sin(π * y); dirs], [bD]; T = 0.4, dvs = [bce])
+        sys = bsys([D(bce) ~ bD * laplacian(bce)], [bc(0, x, y) ~ sin(π * x) * sin(π * y); dirs], [bD]; T = 0.4, dvs = [bce])
     p = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64))
     u0 = [sin(π * (i - 0.5) / n) * sin(π * (j - 0.5) / n) for i in 1:n, j in 1:n]
         err(dt) = maximum(abs, blast(solve(p, BackwardEuler(; linsolve = BTIGHT); dt)) .- exp(0.3λ * 0.4) .* u0)
@@ -175,7 +182,7 @@ end
     m = 64
     src = -exp(-t) * sin(π * x) * sin(π * y) + 1 + 2π^2 * 0.1 * exp(-t) * sin(π * x) * sin(π * y)
     faces = [bc(t, 0, y) ~ t, bc(t, 1, y) ~ t, bc(t, x, 0) ~ t, bc(t, x, 1) ~ t]
-    ms = bsys([D(bce) ~ 0.1 * laplacian(bce) + src], [bc(0, x, y) ~ sin(π * x) * sin(π * y); faces], Any[]; T = 1.0, dvs = [bce])
+        ms = bsys([D(bce) ~ 0.1 * laplacian(bce) + src], [bc(0, x, y) ~ sin(π * x) * sin(π * y); faces], Any[]; T = 1.0, dvs = [bce])
     pm = discretize(ms, LatticeDiscretization(Grid((m, m)); T = Float64))
     exact = [exp(-1.0) * sin(π * (i - 0.5) / m) * sin(π * (j - 0.5) / m) + 1.0 for i in 1:m, j in 1:m]
         em = [maximum(abs, blast(solve(pm, BackwardEuler(; linsolve = BTIGHT); dt = 0.1 / 2^k)) .- exact) for k in 0:3]
@@ -199,7 +206,8 @@ end
     # D h/dx² = 10⁴: BackwardEuler stays bounded and monotone; ExplicitEuler with one substep
     # (forced) blows up (`Unstable`)
     n = 16
-    step0 = PDESystem([D(bce) ~ bD * laplacian(bce)], [bc(0, x, y) ~ ifelse(x < 0.5, 1.0, 0.0)], bdom(80 * 1e4 / (0.3 * n^2)),
+        step0 = PDESystem(
+            [D(bce) ~ bD * laplacian(bce)], [bc(0, x, y) ~ ifelse(x < 0.5, 1.0, 0.0)], bdom(80 * 1.0e4 / (0.3 * n^2)),
         [t, x, y], [bce], [bD]; name = :stiff)
     p = discretize(step0, LatticeDiscretization(Grid((n, n)); T = Float64))
     hs = 1e4 / (0.3 * n^2)
@@ -211,7 +219,8 @@ end
     solve!(ig)
     @test ig.retcode == ReturnCode.Unstable
     # the `:ode` path with OrdinaryDiffEq's ImplicitEuler (fixed steps, tight Newton) at equal dt
-    sx = bsys([D(bce) ~ bD * laplacian(bce) - bk * bce + sin(3t) * x], [bc(0, x, y) ~ x * y, bc(t, 0, y) ~ 1.0], [bD, bk];
+        sx = bsys(
+            [D(bce) ~ bD * laplacian(bce) - bk * bce + sin(3t) * x], [bc(0, x, y) ~ x * y, bc(t, 0, y) ~ 1.0], [bD, bk];
         T = 0.4, dvs = [bce])
     po = discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64))
     # (the Newton tolerance follows abstol and reltol, 1e-12; the rate is linear, so a Newton step is exact)
@@ -225,7 +234,7 @@ end
 
 @testitem "F3-07: newton = nothing, the operator built only for implicit groups (S12)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
 @testset "F3-07: newton = nothing, the operator built only for implicit groups (S12)" begin
-    p = bown(bsys([D(bce) ~ bD * laplacian(bce) - bk * bce], [bc(0, x, y) ~ x], [bD, bk]))
+        p = bown(bsys([D(bce) ~ bD * laplacian(bce) - bk * bce], [bc(0, x, y) ~ x], [bD, bk]))
     b0 = LatticePDE.OPERATOR_BUILDS[]
         solve(p, ExplicitEuler(); dt = 0.01)
     @test LatticePDE.OPERATOR_BUILDS[] == b0                   # an explicit group builds none
@@ -234,7 +243,9 @@ end
         init(p, BackwardEuler(); dt = 0.02)
     @test LatticePDE.OPERATOR_BUILDS[] == b0 + 1               # once per group
     # an acyclic pair in one group (c reads o): one Newton step in topological order is exact
-    p2 = discretize(bsys([D(bce) ~ bD * laplacian(bce) - bk * bce + 0.7 * boe, D(boe) ~ 0.5 * laplacian(boe) - boe + x],
+        p2 = discretize(
+            bsys(
+                [D(bce) ~ bD * laplacian(bce) - bk * bce + 0.7 * boe, D(boe) ~ 0.5 * laplacian(boe) - boe + x],
         [bc(0, x, y) ~ 0.0, bo(0, x, y) ~ 0.0], [bD, bk]; dvs = [bce, boe]), LatticeDiscretization(Grid(BDIMS); T = Float64))
         ig = init(p2, BackwardEuler(; linsolve = BTIGHT); dt = 0.1)
     @test only(ig.runtimes).cache.newton == 1 && [r.key for r in only(ig.runtimes).cache.rows] == ["bo", "bc"]
@@ -246,7 +257,7 @@ end
     @test maximum(abs, vec(ig[boe]) .- o1) < 1e-10 && maximum(abs, vec(ig[bce]) .- c1) < 1e-10
     # the substep count: 1, raised only by a positive local derivative (`+ g c`: n ≥ ⌈2 dt g⌉)
         @test init(p, BackwardEuler(); dt = 0.5).substeps == 1
-    pg = bown(bsys([D(bce) ~ bD * laplacian(bce) + bk * bce], [bc(0, x, y) ~ x], [bD, bk]))
+        pg = bown(bsys([D(bce) ~ bD * laplacian(bce) + bk * bce], [bc(0, x, y) ~ x], [bD, bk]))
         @test init(pg, BackwardEuler(); dt = 0.5).substeps == 2 && init(pg, BackwardEuler(; substeps = 5); dt = 0.5).substeps == 5
 end
 end
@@ -258,7 +269,7 @@ end
     catch err
         err isa ArgumentError ? err.msg : sprint(showerror, err)
     end
-    p = bown(bsys([D(bce) ~ bD * laplacian(bce)], [bc(0, x, y) ~ x], [bD]))
+        p = bown(bsys([D(bce) ~ bD * laplacian(bce)], [bc(0, x, y) ~ x], [bD]))
         # M1: a linear solver where a field solver goes names `BackwardEuler(; linsolve = …)`, which works
         m = e(() -> solve(p, DevicePCG(; maxiters = 12)))
         @test occursin("give it to one, `BackwardEuler(; linsolve = DevicePCG(; maxiters = 12))`", m)
@@ -267,7 +278,8 @@ end
         @test occursin("give it to an implicit field solver, `BackwardEuler(; linsolve = Multigrid())`", m)
         @test solve(p, BackwardEuler(; linsolve = Multigrid()); dt = 0.01).retcode == ReturnCode.Success
     # the `:ode` path: a field or linear solver given to an `ODEProblem`
-    po = discretize(bsys([D(bce) ~ bD * laplacian(bce)], [bc(0, x, y) ~ x], [bD]; dvs = [bce]),
+        po = discretize(
+            bsys([D(bce) ~ bD * laplacian(bce)], [bc(0, x, y) ~ x], [bD]; dvs = [bce]),
         LatticeDiscretization(Grid(BDIMS); T = Float64))
     m = e(() -> solve(po, DevicePCG()))
         @test occursin("give it to one, `BackwardEuler(; linsolve = DevicePCG())`", m)

@@ -36,7 +36,8 @@ end
 
 @testitem "F4-04: the owned solution is an ODESolution: sol(t), Array, stats, ps" setup = [LP_solution] tags = [:latticepde, :solution] begin
 @testset "F4-04: the owned solution is an ODESolution: sol(t), Array, stats, ps" begin
-    sp = discretize(bsys([D(bce) ~ bD * laplacian(bce) - bk * bce + x], [bc(0, x, y) ~ x * y], [bD, bk]; T = 0.3, dvs = [bce]),
+        sp = discretize(
+            bsys([D(bce) ~ bD * laplacian(bce) - bk * bce + x], [bc(0, x, y) ~ x * y], [bD, bk]; T = 0.3, dvs = [bce]),
         LatticeDiscretization(Grid((8, 8)); T = Float64))
         s = solve(sp, ExplicitEuler(); dt = 0.01, saveat = 0.1)
     @test s isa SciMLBase.ODESolution && s.prob isa SciMLBase.ODEProblem && s.alg isa ExplicitEuler
@@ -53,7 +54,8 @@ end
 
 @testitem "F4-04 (Q18): sol[c] is one grid per save; field_series is time first; sol[x]; sol[c] by the callable" setup = [LP_solution] tags = [:latticepde, :solution] begin
 @testset "F4-04 (Q18): sol[c] is one grid per save; field_series is time first; sol[x]; sol[c] by the callable" begin
-    sp = discretize(bsys([D(bce) ~ bD * laplacian(bce) - bk * bce + x], [bc(0, x, y) ~ x * y], [bD, bk]; T = 0.3, dvs = [bce]),
+        sp = discretize(
+            bsys([D(bce) ~ bD * laplacian(bce) - bk * bce + x], [bc(0, x, y) ~ x * y], [bD, bk]; T = 0.3, dvs = [bce]),
         LatticeDiscretization(Grid((8, 8)); T = Float64))
         so = solve(sp, ExplicitEuler(); dt = 0.01, saveat = 0.1)
     st = solve(sp, Tsit5(); saveat = 0.1, abstol = 1e-10, reltol = 1e-10)

@@ -6,9 +6,11 @@ using TOML: TOML
 
 # The packages a user loads beside ours. They are loaded from the shared workspace manifest by
 # UUID, so a test project does not need them as direct dependencies.
-const CLASH_PACKAGES = ["ModelingToolkitBase", "Symbolics", "SymbolicUtils", "SciMLBase", "DiffEqBase",
+const CLASH_PACKAGES = [
+    "ModelingToolkitBase", "Symbolics", "SymbolicUtils", "SciMLBase", "DiffEqBase",
     "LinearSolve", "NonlinearSolve", "OrdinaryDiffEqCore", "JumpProcesses", "Graphs", "StatsBase",
-    "Distributions", "KernelAbstractions", "SymbolicIndexingInterface", "DomainSets"]
+    "Distributions", "KernelAbstractions", "SymbolicIndexingInterface", "DomainSets",
+]
 
 # the module of the package `name` in the workspace manifest, loaded by UUID
 function manifest_package(name::AbstractString)

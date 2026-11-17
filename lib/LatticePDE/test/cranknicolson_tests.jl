@@ -102,7 +102,8 @@ end
 @testitem "F3-10: SX-18: OrdinaryDiffEq's Trapezoid with the start replicated" setup = [LP_cranknicolson] tags = [:latticepde, :cranknicolson] begin
 @testset "F3-10: SX-18: OrdinaryDiffEq's Trapezoid with the start replicated" begin
     # the `:ode` path: two ImplicitEuler steps of h/2 (the damped start), then Trapezoid at h
-    sx = bsys([D(bce) ~ bD * laplacian(bce) - bk * bce + sin(3t) * x], [bc(0, x, y) ~ x * y, bc(t, 0, y) ~ 1.0], [bD, bk];
+        sx = bsys(
+            [D(bce) ~ bD * laplacian(bce) - bk * bce + sin(3t) * x], [bc(0, x, y) ~ x * y, bc(t, 0, y) ~ 1.0], [bD, bk];
         T = 0.4, dvs = [bce])
     po = discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64))
     h = 0.05
@@ -119,14 +120,16 @@ end
 @testitem "F3-10: counts, components, parameter writes, messages" setup = [LP_cranknicolson] tags = [:latticepde, :cranknicolson] begin
 @testset "F3-10: counts, components, parameter writes, messages" begin
     # the growth rule with the shift 2/h: `+ g c` needs n ≥ ⌈2 · ½ · dt g⌉ (Backward Euler: ⌈2 dt g⌉)
-    pg = bown(bsys([D(bce) ~ bD * laplacian(bce) + bk * bce], [bc(0, x, y) ~ x], [bD, bk]))
+        pg = bown(bsys([D(bce) ~ bD * laplacian(bce) + bk * bce], [bc(0, x, y) ~ x], [bD, bk]))
         @test init(pg, CrankNicolson(); dt = 0.5).substeps == 1 && init(pg, BackwardEuler(); dt = 0.5).substeps == 2
     # components: the operator and the run of the scalar spelling, bitwise
     @variables bu(..)[1:2]
     bue = bu(t, x, y)
-    comp = nlsys([D(bue[1]) ~ 0.05 * laplacian(bue[1]) - 40 * bue[1] / (0.025 + bue[1]) + 20, D(bue[2]) ~ 0.05 * laplacian(bue[2]) - bue[2] + bue[1]],
+        comp = nlsys(
+            [D(bue[1]) ~ 0.05 * laplacian(bue[1]) - 40 * bue[1] / (0.025 + bue[1]) + 20, D(bue[2]) ~ 0.05 * laplacian(bue[2]) - bue[2] + bue[1]],
         [bu(0, x, y)[1] ~ 0.5, bu(0, x, y)[2] ~ 0.0], [bue]; T = 0.3)
-    scal = nlsys([D(bce) ~ 0.05 * laplacian(bce) - 40 * bce / (0.025 + bce) + 20, D(boe) ~ 0.05 * laplacian(boe) - boe + bce],
+        scal = nlsys(
+            [D(bce) ~ 0.05 * laplacian(bce) - 40 * bce / (0.025 + bce) + 20, D(boe) ~ 0.05 * laplacian(boe) - boe + bce],
         [bc(0, x, y) ~ 0.5, bo(0, x, y) ~ 0.0], [bce, boe]; T = 0.3)
         a = @test_logs min_level = WARN solve(nlown(comp), CrankNicolson(); dt = 0.05)
         b = solve(nlown(scal), CrankNicolson(); dt = 0.05)
@@ -159,10 +162,12 @@ end
             "CrankNicolson: no keyword `theta`; its keywords are `substeps`, `newton`, `lower_bound`, `linsolve`, `solver_type`, `init` and `compute_type`"
         a = CrankNicolson(; newton = 2, linsolve = DevicePCG(; maxiters = 12))
     @test eval(Meta.parse(repr(a))) == a
-    phex = discretize(bsys([D(bce) ~ bD * laplacian(bce)], [bc(0, x, y) ~ x], [bD]; dvs = [bce]),
+        phex = discretize(
+            bsys([D(bce) ~ bD * laplacian(bce)], [bc(0, x, y) ~ x], [bD]; dvs = [bce]),
         LatticeDiscretization(Grid((8, 8); geometry = HEX); T = Float64))
         @test solve(phex, CrankNicolson(); dt = 0.1).retcode == ReturnCode.Success     # (F3-20: was refused)
-    p16 = discretize(bsys([D(bce) ~ bD * laplacian(bce)], [bc(0, x, y) ~ x], [bD]; dvs = [bce]),
+        p16 = discretize(
+            bsys([D(bce) ~ bD * laplacian(bce)], [bc(0, x, y) ~ x], [bD]; dvs = [bce]),
         LatticeDiscretization(Grid(BDIMS); T = Float16))
         @test startswith(e(() -> init(p16, CrankNicolson(); dt = 0.1)), "CrankNicolson: the field `bc` holds Float16 and the problem's value type is Float16")
 end
@@ -175,12 +180,14 @@ end
 # of `bo` raises both groups' counts to 2.
 @testitem "F3-10/11 (r2 S2): B counts read the group's own fields" setup = [LP_cranknicolson] tags = [:latticepde, :cranknicolson] begin
 @testset "F3-10/11 (r2 S2): B counts read the group's own fields" begin
-    rd = bsys([D(bce) ~ 0.3 * laplacian(bce) - bce + boe, D(boe) ~ 0.3 * laplacian(boe) - boe], [bc(0, x, y) ~ 0.0, bo(0, x, y) ~ 1.0], Any[];
+        rd = bsys(
+            [D(bce) ~ 0.3 * laplacian(bce) - bce + boe, D(boe) ~ 0.3 * laplacian(boe) - boe], [bc(0, x, y) ~ 0.0, bo(0, x, y) ~ 1.0], Any[];
         T = 0.4, dvs = [bce, boe])
     p = discretize(rd, LatticeDiscretization(Grid((8, 8)); T = Float64))
         @test [r.n for r in init(p, FieldGroups(bce => CrankNicolson(), boe => BackwardEuler()); dt = 0.1).runtimes] == [2, 1]
         @test only(init(p, CrankNicolson(); dt = 0.1).runtimes).n == 1          # (the same group: no jump)
-    gr = bsys([D(bce) ~ 0.3 * laplacian(bce) - bce + x, D(boe) ~ 0.3 * laplacian(boe) + bk * boe], [bc(0, x, y) ~ 0.0, bo(0, x, y) ~ x], [bk];
+        gr = bsys(
+            [D(bce) ~ 0.3 * laplacian(bce) - bce + x, D(boe) ~ 0.3 * laplacian(boe) + bk * boe], [bc(0, x, y) ~ 0.0, bo(0, x, y) ~ x], [bk];
         T = 1.0, dvs = [bce, boe])
     p = discretize(gr, LatticeDiscretization(Grid((8, 8)); T = Float64))
         ig = init(p, FieldGroups(bce => BackwardEuler(), boe => BackwardEuler(; linsolve = BTIGHT)); dt = 0.5)
