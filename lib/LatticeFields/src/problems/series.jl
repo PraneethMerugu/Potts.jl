@@ -179,7 +179,8 @@ operator has a bound), `cyclic`; `h` the substep, `ρin` the bound of the terms 
 operator, `θ`, `smin` (the decay); `terms` the terms out of the operator and `unseen` those no
 bound sees.
 """
-const ImplicitFacts = @NamedTuple{keys::Vector{String}, linsolve::Vector{Any}, krylov::Any, levels::Vector{Int}, solver_type::Vector{Type},
+const ImplicitFacts = @NamedTuple{
+    keys::Vector{String}, linsolve::Vector{Any}, krylov::Any, levels::Vector{Int}, solver_type::Vector{Type},
                                   newton::Int, given::Bool, coupled::Bool, linear::Bool, exact::Bool, exact0::Bool, switch::Bool,
                                   iterate::Bool, seen::Bool, cyclic::Bool, h::Float64, ρin::Float64, θ::Float64, smin::Float64,
                                   terms::Vector{String}, unseen::Vector{String}}

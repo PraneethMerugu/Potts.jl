@@ -31,7 +31,8 @@ end
         f64 = counts(case, Float64)
         k64, s64 = auto_run(case, Float64)
         k32, s32 = auto_run(case, Float32)
-        mg = steady!(case_solver(case, Float32; linsolve = Multigrid(), solver_type = Float32);
+            mg = steady!(
+                case_solver(case, Float32; linsolve = Multigrid(), solver_type = Float32);
             maxiter = 40)
         s == 5.5e-6 && (mg32[name] = mg)
         println(rpad(name, 12), " s=", rpad(s, 8), " ref ", ref, "  F64 ", f64,
@@ -41,7 +42,7 @@ end
         @test k64 <= 12 && s64.done && s64.rnorm <= 1e-6 * s64.bnorm
         @test k32 <= 12 && s32.done && s32.rnorm <= 1e-6 * s32.bnorm
         if startswith(name, "per")
-            _, f32 = auto_run(case, Float32; solver_type = Float32)
+                _, f32 = auto_run(case, Float32; solver_type = Float32)
             @test f32.status === :floor                # never :done above the tolerance
             @test f32.best / f32.bnorm <= PG4_FLOOR[name]
         end

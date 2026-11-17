@@ -28,13 +28,13 @@ end
         for s in ss
             case = named_case(name, s)
             for T in (Float64, Float32)
-                sv_pcg = case_solver(case, T; linsolve = DevicePCG(), deflate = false)
+                    sv_pcg = case_solver(case, T; linsolve = DevicePCG(), deflate = false)
                 k_pcg = steady!(sv_pcg; maxiter = 40)
                 sc_pcg = scalars(sv_pcg)
                 @test sc_pcg.done && sc_pcg.status === :done && k_pcg <= 12
                 @test sc_pcg.rnorm <= 1e-6 * sc_pcg.bnorm
 
-                sv_mg = case_solver(case, T; linsolve = Multigrid())
+                    sv_mg = case_solver(case, T; linsolve = Multigrid())
                 k_mg = steady!(sv_mg; maxiter = 40)
                 sc_mg = scalars(sv_mg)
                 @test sc_mg.done && sc_mg.status === :done && k_mg <= 20
@@ -53,7 +53,7 @@ end
     @test cycle_factor(sph; rule = half) > 1           # diverges (reference 1.31)
     disk = named_case("disk128", 1.9e-3)
     @test cycle_factor(disk) < 0.3
-    sv = case_solver(disk, Float64; linsolve = Multigrid(), rule = half)
+        sv = case_solver(disk, Float64; linsolve = Multigrid(), rule = half)
     steady!(sv; maxiter = 20)
     @test !scalars(sv).done                            # stalls (floor) or runs out
 end
@@ -71,7 +71,7 @@ end
         u = reshape(field(sv, "pcg.x"), nx, ny)
         @test maximum(abs, u .- exact) / maximum(exact) < 1e-4
     end
-    sv = case_solver(box_case(nx, ny; s), Float64; linsolve = Multigrid(cycles = 2))
+        sv = case_solver(box_case(nx, ny; s), Float64; linsolve = Multigrid(cycles = 2))
     steady!(sv)                                        # negative control: two cycles
     u = reshape(field(sv, lkey(0, "x")), nx, ny)
     @test maximum(abs, u .- exact) / maximum(exact) > 1e-4

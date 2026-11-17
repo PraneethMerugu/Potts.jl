@@ -106,7 +106,7 @@ end
     op = CellOperator((16, 16); shift = 0.05, robin = rob, NM...)
     @test !Solvers.has_defect(op) && Solvers.anchored(op) && !Solvers.deflatable(op)
         for linsolve in (DevicePCG(; maxiters = 64, reltol = 1.0e-12), Multigrid(; maxiters = 64, reltol = 1.0e-12))
-        e, _ = solve_vs_hand(op, Dict("in.f" => f); linsolve)
+            e, _ = solve_vs_hand(op, Dict("in.f" => f); linsolve)
         @test e <= 1e-10
     end
     # a pure flux face (α = 0): no diagonal, the flux g/β on the right side
@@ -184,7 +184,7 @@ end
     op = CellOperator((16, 16); shift = 0.02, face = ("in.wx", "in.wy"),
         dirichlet = ((0.2, 1.0), (nothing, nothing)), robin = ((nothing, nothing), ((1.0, 0.5, 0.3), nothing)), NM...)
         for T in (Float64,), linsolve in (DevicePCG(; maxiters = 64, reltol = 1.0e-12), Multigrid(; maxiters = 64, reltol = 1.0e-12))
-        @test solve_vs_hand(op, inp; linsolve, T)[1] <= 1e-10
+            @test solve_vs_hand(op, inp; linsolve, T)[1] <= 1.0e-10
     end
     # a field shift and a mask on top
     inp["in.s"] = 0.01 .+ 0.1rand(rng, 256)
@@ -224,7 +224,7 @@ end
     f, m, v = rand(rng, n), UInt8.(rand(rng, n) .< 0.2), rand(rng, n)
     op = CellOperator((16, 16); shift = 0.05, mask = "in.mask", value = "in.v", NM...)
         linsolve = DevicePCG(; maxiters = 64, reltol = 1.0e-12)
-    sv = FieldSolver(HostExec(), op; T = Float64, linsolve, inputs = ("in.f" => f, "in.mask" => m, "in.v" => v))
+        sv = FieldSolver(HostExec(), op; T = Float64, linsolve, inputs = ("in.f" => f, "in.mask" => m, "in.v" => v))
     @test field(sv, "in.f") === f && field(sv, "in.mask") === m && field(sv, "in.v") === v
     steady!(sv)
     @test solve_vs_hand(op, Dict("in.f" => f, "in.mask" => m, "in.v" => v))[1] <= 1e-10
@@ -237,7 +237,7 @@ end
     @test relerr(solver_solution(sv)[cells], A \ b) <= 1e-10
     # an array of the lattice's shape: its memory is read (a write into it reaches the solve)
     F = reshape(copy(f), 16, 16)
-    s2 = FieldSolver(HostExec(), CellOperator((16, 16); shift = 0.05); T = Float64, linsolve, inputs = Dict("in.f" => F))
+        s2 = FieldSolver(HostExec(), CellOperator((16, 16); shift = 0.05); T = Float64, linsolve, inputs = Dict("in.f" => F))
     steady!(s2)
     F .*= 3
     steady!(s2)
@@ -269,12 +269,13 @@ end
                 (
                     msg(() -> FieldSolver(HostExec(), op; linsolve = DevicePCG(; precond = Multigrid(; cycle = VCycle(2, 1))))),
             "`DevicePCG` needs a symmetric preconditioner cycle `(ν, ν)`; got `(2, 1)`: use `DevicePCG(; precond = Multigrid(; cycle = (2, 2)))`"),
-        (msg(() -> FieldSolver(HostExec(), op; linsolve = DevicePCG(; precond = Multigrid(; cycles = 2)))),
+                (
+                    msg(() -> FieldSolver(HostExec(), op; linsolve = DevicePCG(; precond = Multigrid(; cycles = 2)))),
             "applies one preconditioner cycle per iteration"),
                 (msg(() -> FieldSolver(HostExec(), op; linsolve = :pcg)), "`linsolve` takes `:auto`, a `DevicePCG(…)` or a `Multigrid(…)`; got :pcg"),
         (msg(() -> FieldSolver(HostExec(), op; deflate = true)), "`deflate = true` needs `DevicePCG` on a group with no mask"),
-        (msg(() -> FieldSolver(HostExec(), op; solver_type = BigFloat)), "BigFloat (solver_type) is not lowered"),
-        (msg(() -> FieldSolver(HostExec(false), op; solver_type = Float64)), "Float64 (solver_type) is not supported"),
+                (msg(() -> FieldSolver(HostExec(), op; solver_type = BigFloat)), "BigFloat (solver_type) is not lowered"),
+                (msg(() -> FieldSolver(HostExec(false), op; solver_type = Float64)), "Float64 (solver_type) is not supported"),
         (msg(() -> FieldSolver(HostExec(), CellOperator((1, 1); NM...))), "the lattice (1, 1) has one site"),
         (msg(() -> set_coefficients!(FieldSolver(HostExec(), op), CellOperator((16, 16); shift = 0.1, NM...))),
             "set_coefficients! takes new values for the same structure; the mask differs"),
@@ -286,7 +287,8 @@ end
     # the routes the messages give work when followed
         for kw in (
                 (; linsolve = DevicePCG(; precond = Multigrid(; cycle = VCycle(2, 2)))), (; linsolve = Multigrid(; cycle = VCycle(2, 1))),
-            (; linsolve = Multigrid(; cycles = 2)), (; deflate = :auto), (; solver_type = Float32))
+                (; linsolve = Multigrid(; cycles = 2)), (; deflate = :auto), (; solver_type = Float32),
+            )
         @test FieldSolver(HostExec(false), op; kw...) isa FieldSolver
     end
     # the sentinel names the field

@@ -76,7 +76,8 @@ end
     op = LSB.CellOperator((8, 8); shift = 1.0)
         @test occursin(
             "solves an implicit group's fields together (F3-12d); a `FieldSolver` solves one field: give it the `DeviceGMRES`'s per-field solver, `linsolve = DevicePCG(; maxiters = 2)`",
-        cmsg(() -> LSB.FieldSolver(KernelAbstractions.CPU(), op; linsolve = DeviceGMRES())))
+            cmsg(() -> LSB.FieldSolver(KernelAbstractions.CPU(), op; linsolve = DeviceGMRES()))
+        )
 end
 end
 

@@ -103,8 +103,10 @@ Iterations of PCG and stationary V(2,2) from zero (host-checked, at most `maxite
 undeflated by default, as in the reference implementation.
 """
 function counts(case, T; maxiter = 40, deflate = false)
-    (steady!(case_solver(case, T; linsolve = DevicePCG(), deflate); maxiter),
-        steady!(case_solver(case, T; linsolve = Multigrid()); maxiter))
+    return (
+        steady!(case_solver(case, T; linsolve = DevicePCG(), deflate); maxiter),
+        steady!(case_solver(case, T; linsolve = Multigrid()); maxiter),
+    )
 end
 
 """

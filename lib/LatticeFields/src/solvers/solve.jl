@@ -390,7 +390,8 @@ solution `pcg.x − mean(pcg.x) + c` is written to `pcg.u` after every solve.
 true residual (upper bound `eps(Float32)·|c|·‖A‖∞` relative to ‖b‖∞, D-C7b), whatever the
 solver precision.
 """
-function FieldSolver(exec, op::CellOperator{N}; linsolve = :auto, T = Float32,
+function FieldSolver(
+        exec, op::CellOperator{N}; linsolve = :auto, T = Float32,
         solver_type = :auto, rule::RuleWeights = RULE_M, stages = LOWERING,
         deflate = :auto, inputs = ()) where {N}
     state = lowered_type(exec, T, "state"; op)
@@ -431,7 +432,8 @@ function FieldSolver(exec, op::CellOperator{N}; linsolve = :auto, T = Float32,
     return FieldSolver{N, typeof(exec)}(
         exec, op, alg, dfl, s, ctx, T, state, rule, bufs, slot, tables, bodies,
         Dict{Tuple{Symbol, Int, UInt64}, SolvePlan}(), _rotation_fields(bufs), praw,
-        solver_type === :auto, false)
+        solver_type === :auto, false
+    )
 end
 
 function _rotation_fields(bufs)
@@ -486,7 +488,8 @@ for types other than Float32), else an error naming `S`.
 function lowered_type(exec, S, role; op = nothing)
     who = op === nothing ? "the solver group" : _who(op)
     bad(msg...) = throw(ArgumentError(string(who, ": ", msg...)))
-    S isa Type || bad(role, " expects ", role == "solver_type" ? ":auto or " : "",
+    S isa Type || bad(
+        role, " expects ", role == "solver_type" ? ":auto or " : "",
         "a number type; got ", repr(S))
     S in LOWERED_TYPES ||
         bad("number type ", S, " (", role, ") is not lowered for this solver; ",
@@ -1132,7 +1135,7 @@ function sentinel(sv::FieldSolver)
     hint = sv.alg isa Multigrid ? " Stationary multigrid: use DevicePCG (linsolve = :auto)." :
            s.status === :floor && sv.T == Float32 && floor_regime(sv.op) ?
            " Float32 floor of an unanchored group at weak reaction: solve in Float64 " *
-           "(solver_type; a backend with Float64)." :
+        "(solver_type; a backend with Float64)." :
            ""
     what = s.status === :floor ? "stagnated (floor)" :
            s.status === :diverged ? "diverged" : "ended"

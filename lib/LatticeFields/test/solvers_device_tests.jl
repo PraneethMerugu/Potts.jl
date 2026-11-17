@@ -54,9 +54,11 @@ end
 using .LF_solvers_device: instances
 @testset "device Float32 solves equal the host form bitwise, and repeat" begin
     for (name, s, kw) in (("disk128", 0.022, (;)), (
-        "per128", 0.022, (; solver_type = Float32)),
-        ("sphere42", 0.022, (;)), ("disk128", 1.9e-3, (; linsolve = Multigrid())),
-        ("per256", 5.5e-6, (; solver_type = Float32)))
+                    "per128", 0.022, (; solver_type = Float32),
+                ),
+                ("sphere42", 0.022, (;)), ("disk128", 1.9e-3, (; linsolve = Multigrid())),
+                ("per256", 5.5e-6, (; solver_type = Float32)),
+            )
         h = dev_solved(named_case(name, s), HostExec(); kw...)
         d1 = dev_solved(named_case(name, s), DevExec(); kw...)
         d2 = dev_solved(named_case(name, s), DevExec(); kw...)
@@ -70,8 +72,10 @@ end
 @testitem "no Float64 in device code: the walk on device argument types" setup = [LF_solvers_device] tags = [:latticefields, :solvers, :gpu_only] begin
 using .LF_solvers_device: instances
 @testset "no Float64 in device code: the walk on device argument types" begin
-    for (c, kw) in (("disk128", (;)), ("disk128", (; linsolve = Multigrid())),
-        ("per128", (; solver_type = Float32)), ("sphere42", (;)))
+        for (c, kw) in (
+                ("disk128", (;)), ("disk128", (; linsolve = Multigrid())),
+                ("per128", (; solver_type = Float32)), ("sphere42", (;)),
+            )
         sv = FieldSolver(DevExec(), named_case(c, 0.022)[1]; T = Float32, kw...)
         bad = String[]
         for sp in (Solvers.rebuild_plan(sv), Solvers.lift_plan(sv), Solvers.solve_plan(sv, 1)),

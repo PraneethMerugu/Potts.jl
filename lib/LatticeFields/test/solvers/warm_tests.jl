@@ -75,13 +75,13 @@ using .LF_solvers_warm: fd
     for (name, case) in cases, T in (Float32, Float64)
         n = prod(case[1].dims)
         inners = n <= 300 * 192 ? (:auto, Multigrid()) : (:auto,)
-        for linsolve in inners
+            for linsolve in inners
             inp = (case[1], Tuple(k => (k == case[1].mask ? v : T.(v)) for (k, v) in case[2]))
-            ref = solved_on(HostExec(), inp, T; linsolve)
+                ref = solved_on(HostExec(), inp, T; linsolve)
             for exec in (KA_.CPU(), ChunkExec(3))
-                got = solved_on(exec, inp, T; linsolve)
+                    got = solved_on(exec, inp, T; linsolve)
                 ok = got[1] == ref[1] && got[2] == ref[2] && got[3] == ref[3] && got[4] == ref[4]
-                @test ok || (println("not bitwise: ", name, " ", T, " ", linsolve, " ", exec); false)
+                    @test ok || (println("not bitwise: ", name, " ", T, " ", linsolve, " ", exec); false)
             end
         end
     end
@@ -91,7 +91,8 @@ end
 @testitem "a warm rebuild + lift + solve allocates nothing" setup = [LF_solvers_warm] tags = [:latticefields, :solvers] begin
 using .LF_solvers_warm: fd
 @testset "a warm rebuild + lift + solve allocates nothing" begin
-    for (case, kw) in ((named_case("disk128", 0.022), (;)), (named_case("disk128", 0.022), (; linsolve = Multigrid())),
+        for (case, kw) in (
+                (named_case("disk128", 0.022), (;)), (named_case("disk128", 0.022), (; linsolve = Multigrid())),
         (named_case("sphere42", 0.022), (;)), (named_case("per128", 0.022), (;)),
         ((CellOperator((64, 64); shift = 0.05, robin = (((0.1, -1.0, 0.4), nothing), (nothing, nothing))), ()), (;)))
         for exec in (KA_.CPU(), HostExec())
@@ -140,11 +141,11 @@ using .LF_solvers_warm: fd
     mk(s, d = 1.0 + s) = CellOperator(op0.dims; periodic = op0.periodic, shift = s, mask = op0.mask, value = op0.value,
         dirichlet = ((0.0, d), (nothing, nothing)))
     rob(β, _ = nothing) = CellOperator((40, 24); shift = 0.05, robin = (((0.4, β, 0.3), (0.1, -1.0, 0.4)), (nothing, nothing)))
-    for exec in (HostExec(), KA_.CPU()), linsolve in (:auto, Multigrid()),
+        for exec in (HostExec(), KA_.CPU()), linsolve in (:auto, Multigrid()),
         (make, vals, coef) in ((mk, (0.01, 0.035, 0.02), :shift), (rob, (0.25, 0.6, 0.4), (:robin, 1, 1, :beta)))
         inp = make === mk ? inputs : ()
         function built(o)
-            s = FieldSolver(exec, o; T = Float64, linsolve)
+                s = FieldSolver(exec, o; T = Float64, linsolve)
             foreach(((k, v),) -> copyto!(field(s, k), v), inp)
             return s
         end
@@ -156,10 +157,10 @@ using .LF_solvers_warm: fd
             k, kf = steady!(sv), steady!(fresh)
             u, uf = copy(Solvers.solver_solution(sv)), copy(Solvers.solver_solution(fresh))
             @test sv !== fresh && (k == kf && u == uf) ||
-                  (println("steady! differs: ", make, " ", b, " ", exec, " ", linsolve, " ", maximum(abs.(u .- uf))); false)
+                    (println("steady! differs: ", make, " ", b, " ", exec, " ", linsolve, " ", maximum(abs.(u .- uf))); false)
             du, duf = copy(tangent!(sv, u, coef)), copy(tangent!(fresh, uf, coef))
             @test du == duf ||
-                  (println("tangent! differs: ", make, " ", b, " ", exec, " ", linsolve, " ", maximum(abs.(du .- duf))); false)
+                    (println("tangent! differs: ", make, " ", b, " ", exec, " ", linsolve, " ", maximum(abs.(du .- duf))); false)
             # and both are the derivative: a central difference of two tight fresh solves (a
             # stale perturbed plan gives du = 0 in both)
             function tight(o)                      # only `coef` moves: the face value stays 1 + b
@@ -171,7 +172,9 @@ using .LF_solvers_warm: fd
             ε = 1e-4 * b
             fd = (tight(make(b + ε, 1.0 + b)) .- tight(make(b - ε, 1.0 + b))) ./ (2ε)
             @test norm(du .- fd) <= 1e-3 * norm(fd) || (println("tangent! is not the derivative: ", make, " ", b, " ", exec,
-                " ", linsolve, " ", norm(du .- fd) / norm(fd)); false)
+                        " ", linsolve, " ", norm(du .- fd) / norm(fd)
+                    ); false
+                )
         end
     end
 end

@@ -13,7 +13,7 @@ end
 tight(inner_rtol) = DevicePCG(; maxiters = 64, reltol = inner_rtol)
 
 function primal_solve(case, T = Float64; kw...)
-    sv = case_solver(case, T; linsolve = tight(1e-12), kw...)
+    sv = case_solver(case, T; linsolve = tight(1.0e-12), kw...)
     steady!(sv)
     return sv, Solvers.solver_solution(sv)
 end

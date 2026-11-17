@@ -234,9 +234,11 @@ function _operator_text(f)
 end
 function _fact_lines(io, alg, f)
     auto = alg.linsolve === :auto ? " (`linsolve = :auto`)" : ""
-    inner = f.coupled ? string("coupled solve ", repr(f.krylov), isempty(f.linsolve) ? "" :
-                                                                 string(", each field preconditioned by ", join(repr.(f.linsolve), ", "))) :
-            isempty(f.linsolve) ? "none: every row is local (solved site by site)" : join(repr.(f.linsolve), ", ")
+    inner = f.coupled ? string(
+            "coupled solve ", repr(f.krylov), isempty(f.linsolve) ? "" :
+            string(", each field preconditioned by ", join(repr.(f.linsolve), ", "))
+        ) :
+        isempty(f.linsolve) ? "none: every row is local (solved site by site)" : join(repr.(f.linsolve), ", ")
     _line(io, "linsolve", string(inner, auto, isempty(f.levels) ? "" : string(", multigrid levels ", join(f.levels, ", "))))
     _line(io, "newton", _newton_text(alg, f))
     _line(io, "operator", _operator_text(f))

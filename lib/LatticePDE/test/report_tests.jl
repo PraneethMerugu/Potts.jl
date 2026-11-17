@@ -235,7 +235,7 @@ using .LP_report: fd
         ig = init(q, BackwardEuler(); dt = 0.01)
     sv = only(r.solver for r in only(ig.runtimes).cache.rows)
     @test f isa LFP.ImplicitFacts && f.keys == ["rc"] && f.newton == 1 && f.levels == [length(sv.prog.hierarchy)]
-    @test f.solver_type == [sv.T] && f.exact && !f.coupled && !f.given && f.linsolve == Any[DevicePCG()] && f.h == 0.01
+        @test f.solver_type == [sv.T] && f.exact && !f.coupled && !f.given && f.linsolve == Any[DevicePCG()] && f.h == 0.01
     @test f == LFP.implicit_facts(only(ig.runtimes))
         @test solve(q, ExplicitEuler(); dt = 0.01).stats.implicit == [nothing]
     p2 = discretize(rsys2(), LatticeDiscretization(Grid((8, 8))))
