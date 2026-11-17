@@ -300,10 +300,10 @@ end
         K015 = reshape(Int32.(0:15), 4, 4)
         err = emsg(() -> solve(sown(sys; inputs = [qe => K015]), ExplicitEuler(; dt = 0.025)))
         @test occursin("4096", err) && occursin("substeps = n", err)
-        @test solve(sown(sys; inputs = [qe => K015]), ExplicitEuler(; dt = 0.025, substeps = 2)).substeps == 2
+        @test first(substep_counts(solve(sown(sys; inputs = [qe => K015]), ExplicitEuler(; dt = 0.025, substeps = 2)))) == 2
         # the interval of the index is over the current values: with 0 everywhere each read takes
         # one entry, under the cap (F2 record (m))
-        @test solve(sown(sys; inputs = [qe => K0]), ExplicitEuler(; dt = 0.025)).substeps == ceil(Int, 0.025 * 136 / 1.8)
+        @test first(substep_counts(solve(sown(sys; inputs = [qe => K0]), ExplicitEuler(; dt = 0.025)))) == ceil(Int, 0.025 * 136 / 1.8)
     end
 end
 
@@ -320,8 +320,8 @@ end
         @parameters Dv9[1:3] = fill(0.005, 3)
         sys = ssys([D(ce) ~ -(1 / at(Dv9, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dv9])
         sol = @test_logs solve(sown(sys; inputs = [qe => K]), ExplicitEuler(; dt = 0.025, substeps = 2))
-        @test sol.substeps == 3 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 1.0e-20
-        @test solve(sown(sys; inputs = [qe => K]), ExplicitEuler(; dt = 0.025)).substeps == 3
+        @test first(substep_counts(sol)) == 3 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 1.0e-20
+        @test first(substep_counts(solve(sown(sys; inputs = [qe => K]), ExplicitEuler(; dt = 0.025)))) == 3
         # P1x: diffusion of c on 16² needs 4; an unrelated field's term over the cap kept 2
         # (1fb097f2: 5.2e30)
         @parameters Dd9 = 0.125 Tw9[1:16] = zeros(16)
@@ -333,7 +333,7 @@ end
             sown(sys; n = 16, inputs = [qe => K16]),
             ExplicitEuler(; dt = 0.025, substeps = 2)
         )
-        @test sol.substeps == 4 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 3
+        @test first(substep_counts(sol)) == 4 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 3
         # P2: over the cap, the diffusion still raises the count (1fb097f2: n = 2, 5.2e30)
         @parameters Tz9[1:16] = zeros(16)
         sys = ssys([D(ce) ~ Dd9 * Δ(ce) - sum(at(Tz9, qe + i) for i in 1:4) * ce], [c(0, x, y) ~ 1.0 + sin(1000x + 700y)], [ce, qe], [Dd9, Tz9])
@@ -341,7 +341,7 @@ end
             sown(sys; n = 16, inputs = [qe => K16]),
             ExplicitEuler(; dt = 0.025, substeps = 2)
         )
-        @test sol.substeps == 4 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 3
+        @test first(substep_counts(sol)) == 4 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 3
     end
 end
 

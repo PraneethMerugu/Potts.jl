@@ -103,7 +103,7 @@ end
     # an input bound by aliasing: the operator reads the problem's own input array, and a write
     # of the input between windows changes the next solve (no copy; the warm window 0 B)
     p = bown(bsys([D(bce) ~ at(bW, bqe) * Δ(bce) - bk * bce + 1], [bc(0, x, y) ~ 0.0], [bW, bk]))
-    ig = init(p, BackwardEuler(; dt = h, inner = BTIGHT))
+    ig = init(p, BackwardEuler(; dt = h, inner = BTIGHT); save_everystep = false)
     rt = only(ig.runtimes)
     r = rt.cache.rows[1]
     qid = fieldid(rt.program, "bq")

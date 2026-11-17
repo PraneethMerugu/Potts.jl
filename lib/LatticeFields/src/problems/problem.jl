@@ -194,6 +194,7 @@ end
 _ndims(::Program{N}) where {N} = N
 # the period of the discretization's clock (`nothing`: none)
 _clock(prob::FieldProblem) = prob.group.spec.clock
+SciMLBase.isinplace(::FieldProblem) = true
 
 Base.eltype(::FieldProblem{N, B, X, R, U, PV, E}) where {N, B, X, R, U, PV, E} = E
 
@@ -221,6 +222,7 @@ stability bound is a function of the parameters, evaluated again when solved.
 function SciMLBase.remake(prob::FieldProblem; u0 = prob.u0, tspan = prob.tspan, p = prob.p,
         inputs = ())
     p, inputs = _input_pairs(prob.index, p, inputs)
+    u0 = _u0_vector(prob, u0)
     tables, p = _tables(prob, p)
     pv = _parameter_vector(prob, p)
     check_faces(prob.faces, pv)
@@ -283,6 +285,30 @@ _newtab(::Type{TT}, ::Type{Pair{K, V}}, ix, p) where {TT, K, V <: Real} =
 _newtab(::Type{TT}, _, ix, p) where {TT} =
     foldl((T, x) -> table_key(ix, first(x)) !== nothing && last(x) isa AbstractArray ? promote_type(T, _tabelt(last(x))) : T,
         p; init = TT)
+# `u0` as a vector, or a map of state fields to values (`[c => grid, d => 0.0]`: the fields not
+# named keep the problem's values)
+_u0_vector(::FieldProblem, u0) = u0
+function _u0_vector(prob::FieldProblem, u0::Union{AbstractVector{<:Pair}, Tuple{Vararg{Pair}}, AbstractDict})
+    out = collect(prob.u0)
+    for (k, v) in u0
+        r = _state_range(prob, k)
+        if v isa Number
+            out[r] .= v
+        else
+            length(v) == length(r) || throw(ArgumentError(string("remake: the state field `", _symtext(k), "` has ",
+                length(r), " values; got ", length(v))))
+            out[r] .= vec(collect(v))
+        end
+    end
+    return out
+end
+function _state_range(prob::FieldProblem, k)
+    ix = prob.index
+    slot = ix isa LatticeIndex ? get(ix.vars, ix.key(k), nothing) : nothing
+    slot isa FieldSlot && return slot.range
+    throw(ArgumentError(string("remake: `", _symtext(k), "` is not a state field of the problem; its fields: ",
+        join(("`$s`" for s in prob.state), ", "))))
+end
 _parameter_vector(::FieldProblem, p::AbstractVector{<:Real}) = collect(p)
 _parameter_vector(prob::FieldProblem, p) = _pairs_vector(prob, p)
 # the parameter type after pairs `p`: the problem's, promoted only by a Dual value (a plain
@@ -325,6 +351,7 @@ struct FieldSolution{P, U}
     stats::@NamedTuple{solves::Int64, budget::Int64, floor::Int64, newton_budget::Int64}   # (`field_stats`)
 end
 SciMLBase.successful_retcode(s::FieldSolution) = SciMLBase.successful_retcode(s.retcode)
+Base.getproperty(s::FieldSolution, f::Symbol) = f === :ps ? SII.ParameterIndexingProxy(s) : getfield(s, f)
 
 SII.is_timeseries(::Type{<:FieldSolution}) = SII.Timeseries()
 SII.symbolic_container(s::FieldSolution) = s.prob.index
@@ -429,6 +456,8 @@ mutable struct FieldIntegrator{P <: FieldProblem, A, S <: FieldStore, RT <: Tupl
     prevbuf::Any                        # the host buffer `prevu` reuses (no copy allocated per window)
     inputfns::Any                       # the inputs given as functions of the time (`InputFns`), or nothing
     verbose::Bool                       # the run's warnings print (`verbose`; `Exec.VERBOSE` in its calls)
+    saveopts::Any                       # the save keywords (`saveat` as given, `save_start`, `save_end`, `save_on`), for `reinit!`
+    tstops0::Vector{Float64}            # the `tstops` given to `init`, restored by `reinit!`
 end
 
 
@@ -631,6 +660,22 @@ function _save_times(t0::Float64, tf::Float64, dt::Float64, save_start::Bool, sa
     end
     return out
 end
+# the save times of the save keywords `o` over `t0..tf`
+function _save_list(prob::FieldProblem, o, t0::Float64, tf::Float64, dt::Float64, a1, clock)
+    sat = !o.save_on ? Float64[] : o.saveat isa Real ? _saveat_grid(t0, tf, o.saveat) : copy(o.saveat)
+    prob.kind == :map && !isempty(sat) && Base.inferencebarrier(_map_saveat)(sat, t0, dt, a1, clock)
+    return _save_times(t0, tf, dt, o.save_start, o.save_end, sat)
+end
+# `save_everystep` (the default when no `saveat` is given, as in SciML) keeps every window's
+# state on the host: a warning when that passes `LARGE_SAVE_BYTES`
+const LARGE_SAVE_BYTES = 2^31
+@noinline function _warn_large_saves(integ::FieldIntegrator)
+    idx = getfield(integ, :saveidxs)
+    n = (integ.nsteps + 2) * (idx === nothing ? length(integ.prob.u0) : length(idx)) * sizeof(_savetype(integ))
+    n > LARGE_SAVE_BYTES && @warn string("`solve`/`init` saves every window (no `saveat` given): about ", n ÷ 2^20,
+        " MiB of saved states. Give `saveat` or `save_everystep = false` to save less") maxlog = 1
+    return nothing
+end
 # a map saves whole steps only
 _map_saveat(sat, t0, dt, a1, clock) = foreach(s -> _whole(s - t0, dt) || _count(s - t0, dt, "a saveat time";
     window = _wtext(a1, clock, dt), route = _count_route(a1, clock, dt, s - t0, "the saveat times")), sat)
@@ -641,7 +686,7 @@ function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; verbose::Bool
 end
 function _init(
         prob::FieldProblem, alg::FieldAlgorithm, verbose::Bool; saveat = (), save_start::Bool = true,
-        save_end::Bool = true, save_everystep::Bool = false, save_on::Bool = true, save_idxs = nothing,
+        save_end::Bool = true, save_everystep::Bool = isempty(saveat), save_on::Bool = true, save_idxs = nothing,
         callback = nothing, tstops = (), maxiters::Integer = typemax(Int), alias_u0::Bool = false,
         dense::Bool = true, _sciml = nothing, kw...)
     isempty(kw) || throw(ArgumentError(string("`solve`/`init` with ", _algtext(alg), ": the keyword",
@@ -674,9 +719,8 @@ function _init(
     dt = whole && nsteps > 0 ? (tf - t0) / nsteps : Float64(w)     # (whole: the step that lands on tf exactly)
     # the save times (F4-05): a time off the grid is the linear interpolation of the states at the
     # ends of its window (Q2 (a): no extra window); a map saves whole steps only
-    sat = !save_on ? Float64[] : saveat isa Real ? _saveat_grid(t0, tf, Float64(saveat)) : Float64[s for s in saveat]
-    prob.kind == :map && !isempty(sat) && Base.inferencebarrier(_map_saveat)(sat, t0, dt, a1, clock)
-    save = _save_times(t0, tf, dt, save_start, save_end, sat)
+    saveopts = (; saveat = saveat isa Real ? Float64(saveat) : Float64[s for s in saveat], save_start, save_end, save_on)
+    save = _save_list(prob, saveopts, t0, tf, dt, a1, clock)
     E = eltype(prob)
     # the state buffers the algorithms declare (`nbuffers`: two for the explicit ones)
     st = FieldStore(prob.backend, prob.program; flat = prob.state, E,
@@ -715,7 +759,8 @@ function _init(
         _clock(prob) === nothing ? 0 : _per(dt, _clock(prob)), save, Float64[], Vector{T}[], SciMLBase.ReturnCode.Default,
         aux, Vector{T}[], Any[], t0, tf, Float64[], 1, 0, _sciml, nothing, _save_indices(prob, save_idxs),
         save_everystep, Int(maxiters), false, nothing, nothing, t0, 0, nothing, dense, nothing,
-        isempty(prob.inputfns) ? nothing : Base.inferencebarrier(_input_fns)(prob, st, rts), verbose
+        isempty(prob.inputfns) ? nothing : Base.inferencebarrier(_input_fns)(prob, st, rts), verbose,
+        saveopts, Float64[]
     )
     # the inputs given as functions of the time take their values at the start (F4-B1)
     # (`getfield`: the integrator's type is not inferred here, and a `getproperty` called at
@@ -724,6 +769,8 @@ function _init(
     for ts in tstops
         t0 < ts <= tf + 1e-9dt && SciMLBase.add_tstop!(integ, ts)
     end
+    append!(getfield(integ, :tstops0), getfield(integ, :tstops))
+    save_on && save_everystep && verbose && _warn_large_saves(integ)
     # (behind a barrier: an `init` with no steady start does not compile the steady policy)
     any(g -> starts_steady(g[1]), groups) && Base.inferencebarrier(_steady_starts!)(integ, groups)
     _saves!(integ)
@@ -1065,21 +1112,30 @@ function _advance_all(rts::Tuple, clock)
 end
 
 """
-    reinit!(integ, u0 = integ.prob.u0)
+    reinit!(integ, u0 = integ.prob.u0; t0 = integ.t0, tf = integ.tend, erase_sol = true,
+            reinit_callbacks = true)
 
-Start `integ` again from the flat state `u0` at the problem's start time, with its current
-parameters, tables and inputs: the saved states are dropped, the masks and the clamp run
+Start `integ` again from the flat state `u0` at `t0` (by default the start of its time span),
+to end at `tf`, with its current parameters, tables and inputs: the masks and the clamp run
 again, every group's algorithm history is dropped ([`reset!`](@ref)) and the start state is
-saved when the save times include it.
+saved when the save times include it. The window `dt` is that of `init` (a span that is not a
+whole number of windows ends with one shortened window; a map steps whole steps only), and the
+`saveat` and `tstops` of `init` apply again, those in the new span. `erase_sol = false` keeps
+the saves so far; `reinit_callbacks = false` does not run the callbacks' `initialize` again.
 """
-function SciMLBase.reinit!(integ::FieldIntegrator, u0 = integ.prob.u0)
-    getfield(integ, :verbose) || return Base.inferencebarrier(_quietly)(i -> _reinit!(i, u0), integ)
-    return _reinit!(integ, u0)
+function SciMLBase.reinit!(integ::FieldIntegrator, u0 = integ.prob.u0; t0 = getfield(integ, :t0),
+        tf = getfield(integ, :tend), erase_sol::Bool = true, reinit_callbacks::Bool = true)
+    f = i -> _reinit!(i, u0, Float64(t0), Float64(tf), erase_sol, reinit_callbacks)
+    getfield(integ, :verbose) || return Base.inferencebarrier(_quietly)(f, integ)
+    return f(integ)
 end
-function _reinit!(integ::FieldIntegrator, u0)
+function _reinit!(integ::FieldIntegrator, u0, t0::Float64 = integ.t0, tf::Float64 = integ.tend, erase_sol::Bool = true,
+        reinit_callbacks::Bool = true)
     length(u0) == length(integ.prob.u0) ||
         throw(ArgumentError("u0 has $(length(u0)) values; the state has $(length(integ.prob.u0))"))
     u0 === integ.prob.u0 || check_declared_state(integ.prob, u0, eachindex(u0), "starts at")
+    tf > t0 || throw(ArgumentError(string("reinit!: tf = ", tf, " is not after t0 = ", t0)))
+    (t0 == integ.t0 && tf == integ.tend) || _respan!(integ, t0, tf)
     st = integ.store
     foreach(f -> st.cur[f] = 1, integ.prob.step.swaps)
     _load_state!(st, u0)
@@ -1089,9 +1145,12 @@ function _reinit!(integ::FieldIntegrator, u0)
     integ.windows = 0
     integ.prevu = nothing
     empty!(integ.tstops)
-    empty!(integ.ts)
-    empty!(integ.us)
-    empty!(integ.auxu)
+    append!(integ.tstops, filter(t -> t0 < t <= tf + 1e-9 * integ.dt, getfield(integ, :tstops0)))
+    if erase_sol
+        empty!(integ.ts)
+        empty!(integ.us)
+        empty!(integ.auxu)
+    end
     integ.retcode = SciMLBase.ReturnCode.Default
     integ.inputfns === nothing || Base.inferencebarrier(_refresh_inputs!)(integ)
     _rerun_init!(integ, integ.pgood)
@@ -1100,8 +1159,20 @@ function _reinit!(integ::FieldIntegrator, u0)
     # the steady starts again, at the current parameters
     isempty(integ.starts) || Base.inferencebarrier(_steady_starts!)(integ, [(rt.alg, rt.keys) for rt in integ.runtimes])
     _saves!(integ)
-    getfield(integ, :cbs) === nothing || Base.inferencebarrier(_initialize_callbacks!)(integ)
+    reinit_callbacks && getfield(integ, :cbs) !== nothing && Base.inferencebarrier(_initialize_callbacks!)(integ)
     return integ
+end
+# a new time span for `reinit!`: the windows and the save times over it, at the window of `init`
+function _respan!(integ::FieldIntegrator, t0::Float64, tf::Float64)
+    dt = integ.dt
+    whole = _whole(tf - t0, dt)
+    a1, clock = integ.runtimes[1].alg, _clock(integ.prob)
+    whole || integ.prob.kind != :map || _count(tf - t0, dt, "the time span"; window = _wtext(a1, clock, dt),
+        route = _count_route(a1, clock, dt, tf - t0, "the time span"))
+    integ.t0, integ.tend = t0, tf
+    integ.nsteps = whole ? round(Int, (tf - t0) / dt) : floor(Int, (tf - t0) / dt)
+    integ.save = _save_list(integ.prob, getfield(integ, :saveopts), t0, tf, dt, a1, clock)
+    return nothing
 end
 
 # the saved state's element type: the state's storage (a mixed store: their promotion, so no
@@ -1204,13 +1275,18 @@ function _finish!(integ::FieldIntegrator)
     integ.retcode == SciMLBase.ReturnCode.Default && (integ.retcode = SciMLBase.ReturnCode.Success)
     return integ
 end
-# the solution so far: SciML's `ODESolution` of the problem solved (F4-04), or a `FieldSolution`
-# for an owned problem stepped directly
+# the solution so far: SciML's `ODESolution` of the problem solved. A `FieldProblem`
+# solved directly is solved as its SciML problem (`lattice_problem`, built at the first read and
+# kept), as the discretize path does
 function _solution(integ::FieldIntegrator)
+    return Base.inferencebarrier(_ode_solution)(integ, _sciml_problem(integ))
+end
+function _sciml_problem(integ::FieldIntegrator)
     sp = getfield(integ, :sciml)
-    sp === nothing && return FieldSolution(integ.prob, integ.ts, integ.us, integ.retcode, integ.substeps,
-        substep_counts(integ), integ.auxu, field_stats(integ))
-    return Base.inferencebarrier(_ode_solution)(integ, sp)
+    sp === nothing || return sp
+    sp = lattice_problem(integ.prob)
+    setfield!(integ, :sciml, sp)
+    return sp
 end
 
 """
@@ -1272,9 +1348,9 @@ function _steady_solve(prob::FieldProblem, alg::FieldAlgorithm; kw...)
         join(("`$k`" for k in keys(kw)), ", "), ": it is solved once and returns that one state")))
     a = QuasiSteady(; dt = 1.0, newton = alg.newton, inner = alg.inner === :auto ? STEADY_INNER : alg.inner,
         solver_T = alg.solver_T)
-    s = CommonSolve.solve!(CommonSolve.init(SciMLBase.remake(prob; tspan = (0.0, 1.0)), a; save_start = false))
-    return FieldSolution(prob, [0.0], s.u[end:end], s.retcode, s.substeps, s.counts, isempty(s.aux) ? s.aux : s.aux[end:end],
-        s.stats)
+    s = finish!(CommonSolve.init(SciMLBase.remake(prob; tspan = (0.0, 1.0)), a; save_start = false))
+    return FieldSolution(prob, [0.0], s.us[end:end], s.retcode, s.substeps, substep_counts(s),
+        isempty(s.auxu) ? s.auxu : s.auxu[end:end], field_stats(s))
 end
 
 SII.symbolic_container(i::FieldIntegrator) = i.prob.index
@@ -1498,10 +1574,30 @@ function Base.getproperty(i::FieldIntegrator, f::Symbol)
     f === :u && return SII.state_values(i)
     f === :sol && return Base.inferencebarrier(_solution)(i)
     f === :tdir && return 1.0
-    f === :opts && return (; maxiters = typemax(Int), tstops = getfield(i, :tstops))
+    f === :opts && return (; maxiters = getfield(i, :maxiters), tstops = getfield(i, :tstops),
+        save_everystep = getfield(i, :everystep), verbose = getfield(i, :verbose))
+    f === :stats && return Base.inferencebarrier(LatticeStats)(i)
     return getfield(i, f)
 end
-Base.propertynames(i::FieldIntegrator) = (fieldnames(typeof(i))..., :ps, :t, :u, :sol, :tdir, :opts)
+Base.propertynames(i::FieldIntegrator) = (fieldnames(typeof(i))..., :ps, :t, :u, :sol, :tdir, :opts, :stats)
+SciMLBase.has_stats(::FieldIntegrator) = true
+
+"""
+    get_du(integ) -> du
+
+The rate `du/dt` at the integrator's current state, time and parameters: the problem's rate
+program evaluated once (on the problem's device), as `f(du, u, p, t)` of its `ODEProblem`
+([`lattice_problem`](@ref)). A map (`Shift(t, 1)(m) ~ rhs`) has no rate: an `ArgumentError`.
+"""
+function SciMLBase.get_du(integ::FieldIntegrator)
+    integ.prob.kind == :map && throw(ArgumentError("get_du: a map steps `u(t + 1) = f(u(t))` and has no rate"))
+    sp = _sciml_problem(integ)
+    q = _final_problem(integ, sp)
+    u = copyto!(similar(sp.u0), _current(integ))
+    du = similar(u)
+    sp.f(du, u, q.p, _time(integ))
+    return du
+end
 
 """
     add_tstop!(integ, t)
@@ -1552,7 +1648,15 @@ SciMLBase.get_proposed_dt(i::FieldIntegrator) = i.dt
 SciMLBase.set_proposed_dt!(i::FieldIntegrator, dt) = throw(ArgumentError(string("set_proposed_dt!: an owned run steps ",
     "a fixed window (dt = ", i.dt, "); land on a time with `add_tstop!` or `step!(integ, dt, true)`, or give the ",
     "algorithm another `dt`")))
-SciMLBase.done(i::FieldIntegrator) = !_running(i.retcode) || _time(i) >= i.tend - 1e-9 * i.dt
+# The end of an iteration (`for i in integ`): at the end of the time span, or when the run
+# ended. The end of the run is taken then, once (`finish!`, as `solve!` does and as SciML's
+# integrators do), so the solution carries its return code
+function SciMLBase.done(i::FieldIntegrator)
+    _running(i.retcode) || return true
+    _time(i) < i.tend - 1.0e-9 * i.dt && return false
+    i.retcode == SciMLBase.ReturnCode.Default && finish!(i)
+    return true
+end
 # SciML's contract: `Success` while the run is healthy, else the code that ended it (a
 # `StalledSuccess` too: the run goes on with it)
 SciMLBase.check_error(i::FieldIntegrator) =

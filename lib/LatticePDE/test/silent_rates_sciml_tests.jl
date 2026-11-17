@@ -12,7 +12,7 @@
         K2 = fill(Int32(2), 8, 8)
         ρt = sradius(sys, 8, [qe => K2])
         sol = solve(sown(sys; n = 8, inputs = [qe => K2]), ExplicitEuler(; dt = 0.01))
-        @test ceil(Int, 0.01 * ρt / 1.8) <= sol.substeps <= ceil(Int, 1.1 * 0.01 * ρt / 1.8) && sok(sol)
+        @test ceil(Int, 0.01 * ρt / 1.8) <= first(substep_counts(sol)) <= ceil(Int, 1.1 * 0.01 * ρt / 1.8) && sok(sol)
     end
 end
 
@@ -33,7 +33,7 @@ end
             ρt = sradius(sys, 8, [qe => Kc])
             p = sown(sys; n = 8, inputs = [qe => Kc])
             sol = solve(p, ExplicitEuler(; dt = 0.01))
-            @test grouped == 3 && sol.substeps >= ceil(Int, 0.01 * ρt / 1.8) && sol.substeps > grouped && sok(sol)
+            @test grouped == 3 && first(substep_counts(sol)) >= ceil(Int, 0.01 * ρt / 1.8) && first(substep_counts(sol)) > grouped && sok(sol)
             # negative control: a count under the true limit (dt ρ / n = 3 > 2) grows without bound,
             # where the bound's count stays within the start's range. (Half the bound's count is
             # stable here: on these checkerboards the Gershgorin bound is about twice the true
@@ -59,7 +59,7 @@ end
         m0 = maximum(abs, sol[:c, 1])
         @test substep_counts(sol)[1] == ceil(Int, 0.025 * 100 * 128 / 1.8) && sok(sol) && maximum(abs, sol[:c, end]) <= m0
         ρt = sradius(sys, 4, [qb => Kb])
-        @test sol.substeps >= ceil(Int, 0.025 * ρt / 1.8)
+        @test first(substep_counts(sol)) >= ceil(Int, 0.025 * ρt / 1.8)
         ig = init(p, ExplicitEuler(; dt = 0.025))
         ig.substeps = floor(Int, 0.025 * ρt / 3)                 # negative control: under the limit
         @test sgrew(solve!(ig)) && !sgrew(sol)
@@ -96,7 +96,7 @@ end
         @parameters kf = 100.0
         sys = ssys([D(ce) ~ -ifelse(qe == 2, kf, 0) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [kf])
         sol = solve(sown(sys; inputs = [qe => checker(4, 1, 2)]), ExplicitEuler(; dt = 0.025))
-        @test sol.substeps >= ceil(Int, 0.025 * 100 / 1.8) && sok(sol)
+        @test first(substep_counts(sol)) >= ceil(Int, 0.025 * 100 / 1.8) && sok(sol)
         @test sradius(sys, 4, [qe => checker(4, 1, 2)]) ≈ 100                      # (the true radius)
     end
 end
@@ -112,7 +112,7 @@ end
             )
             sys = ssys([D(ce) ~ rate], [c(0, x, y) ~ 1.0], [ce, q], [tab])
             sol = solve(sown(sys; inputs = [q => K]), ExplicitEuler(; dt = 0.025))
-            @test sol.substeps == 1 && sok(sol)
+            @test first(substep_counts(sol)) == 1 && sok(sol)
         end
     end
 end

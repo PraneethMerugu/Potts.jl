@@ -41,8 +41,8 @@ end
         s3 = solve(p, FieldGroups(goe => a4; default = a4))
         @test s3.u == s1.u
         # step! allocates nothing, one group and two
-        @test gwarm(init(p, a4)) == 0
-        @test gwarm(init(p, FieldGroups(gce => a4, goe => a3))) == 0
+        @test gwarm(init(p, a4; save_everystep = false)) == 0
+        @test gwarm(init(p, FieldGroups(gce => a4, goe => a3); save_everystep = false)) == 0
     end
 end
 
@@ -386,8 +386,8 @@ end
         s = @test_logs solve(p, WStub(0.01; need = 10, budget = 16))
         @test s.retcode == ReturnCode.Success && s.stats.budget == 0
         # explicit groups read nothing: no counters, and a warm step allocates nothing
-        @test solve(p, ExplicitEuler(; dt = 0.01, substeps = 2)).stats == (; solves = 0, budget = 0, floor = 0, newton_budget = 0)
-        @test gwarm(init(p, ExplicitEuler(; dt = 0.01, substeps = 2))) == 0
+        @test LFP.field_stats(solve(p, ExplicitEuler(; dt = 0.01, substeps = 2))) == (; solves = 0, budget = 0, floor = 0, newton_budget = 0)
+        @test gwarm(init(p, ExplicitEuler(; dt = 0.01, substeps = 2); save_everystep = false)) == 0
     end
 end
 

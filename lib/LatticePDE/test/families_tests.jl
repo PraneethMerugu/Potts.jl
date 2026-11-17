@@ -131,9 +131,10 @@ end
 
 @testitem "F4-01: the default algorithm (Q1), the map's function, the deleted keyword" setup = [LP_families] tags = [:latticepde, :families] begin
 @testset "F4-01: the default algorithm (Q1), the map's function, the deleted keyword" begin
-    # rates: `ExplicitEuler()`, which needs `dt` without a clock
+    # rates without a clock: DiffEqBase's default, as for every `ODEProblem` (none is loaded
+    # here); with a clock, `ExplicitEuler()` at the clock's step
     prob = discretize(fam_rate, fam_disc())
-    @test occursin("needs `dt`", fmsg(() -> solve(prob)))
+    @test_throws SciMLBase.NoDefaultAlgorithmError solve(prob)
     pc = discretize(fam_rate, LatticeDiscretization(Grid((8, 8)); T = Float64, clock = 0.01))
     @test solve(pc).u[end] == solve(pc, ExplicitEuler()).u[end]
     # maps: `ExplicitMap()`; the problem's function is one map step (`FunctionMap`'s call)

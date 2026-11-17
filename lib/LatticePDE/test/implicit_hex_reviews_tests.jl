@@ -275,7 +275,7 @@ end
         @test all(r -> isempty(r.op.unseen), cc.rows) && [r.op.faces for r in cc.rows] == [r.op.faces for r in cs.rows]
         a = @test_logs min_level = WARN solve(pc, BackwardEuler(; dt = 0.05))
         b = solve(ps, BackwardEuler(; dt = 0.05))
-        @test a.stats == b.stats && a.stats.solves == 12
+        @test LatticePDE.Problems.field_stats(a) == LatticePDE.Problems.field_stats(b) && a.stats.solves == 12
         @test a[bue[1], length(a.t)] == b[bce, length(b.t)] && a[bue[2], length(a.t)] == b[boe, length(b.t)]
         # N2: a component read in a message is `u[1]` as written (base: `(bu)[1]`)
         pv = nlown(

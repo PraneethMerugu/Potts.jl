@@ -208,11 +208,13 @@ function _mg_local_body!(i, y, off, r, sh, mask, dom, s)
 end
 
 """
-    LatticePCG(; precs = LatticeMG(), rtol, budget)
+    LatticePCG(; precs = LatticeMG())
 
 A LinearSolve algorithm for a symmetric `W` (a diffusion–reaction system: `W = J − M/γ` with
 `J` symmetric, or the operator of a linear system with no time): preconditioned conjugate
 gradients on `−W` with [`LatticeMG`](@ref)'s V-cycles, matrix-free (F4-08). Defined when
-LinearSolve is loaded (its extension).
+LinearSolve is loaded (its extension). The tolerances and the iteration limit are LinearSolve's
+keywords (`reltol`, `abstol`, `maxiters`); a solve that stops at `maxiters` returns
+`ReturnCode.MaxIters`, one that stops otherwise without converging `ReturnCode.ConvergenceFailure`.
 """
 function LatticePCG end

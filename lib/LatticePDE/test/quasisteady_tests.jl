@@ -94,7 +94,7 @@ end
     @test maximum(abs, vec(ig[bce]) .- w2) < 1e-9
     # the default inner solver from a cold start, and warm: the next window starts at the last
     # solution, so its solve is done at its setup
-    ig = init(p, QuasiSteady(; dt = 0.1))
+    ig = init(p, QuasiSteady(; dt = 0.1); save_everystep = false)
     step!(ig)
     @test maximum(abs, vec(ig[bce]) .- w1) < 1e-4
     @test bwarm(ig) == 0
@@ -153,7 +153,7 @@ end
     @test maximum(abs, u .- want) < 1e-10 && all(u[mk] .== vec(1 .+ xs)[mk])
     # an input bound by aliasing: a write of the input between windows changes the next solve
     p = bown(bsys([D(bce) ~ at(bW, bqe) * Δ(bce) - bk * bce + 1], [bc(0, x, y) ~ 0.0], [bW, bk]))
-    ig = init(p, alg)
+    ig = init(p, alg; save_everystep = false)
     step!(ig); step!(ig)
     @test bwarm(ig) == 0
     K2 = Int32[(i * j) % 2 for i in 1:8, j in 1:6]
@@ -269,7 +269,7 @@ end
         [bc(0, x, y) ~ 0.5, bo(0, x, y) ~ 0.0], [bce, boe]; T = 0.3)
     a = solve(nlown(comp), QuasiSteady(; dt = 0.1))
     b = solve(nlown(scal), QuasiSteady(; dt = 0.1))
-    @test a.stats == b.stats && a.stats.solves > 0
+    @test LatticePDE.Problems.field_stats(a) == LatticePDE.Problems.field_stats(b) && a.stats.solves > 0
     @test a[bue[1], length(a.t)] == b[bce, length(b.t)] && a[bue[2], length(a.t)] == b[boe, length(b.t)]
     hs = PDESystem([D(bce) ~ Δ(bce) - bce], [bc(0, x, y) ~ 0.0], bdom(1.0), [t, x, y], [bce], Any[]; name = :hex)
     ph = discretize(hs, LatticeDiscretization(Grid((6, 6); geometry = HEX); T = Float64))

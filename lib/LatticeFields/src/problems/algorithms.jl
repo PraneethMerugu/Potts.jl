@@ -555,6 +555,18 @@ function FieldGroups(pairs::Pair...; default = nothing)
 end
 nbuffers(g::FieldGroups) = maximum(nbuffers, [last.(g.pairs); g.default === nothing ? FieldAlgorithm[] : [g.default]])
 
+# SciML's algorithm traits: a field algorithm steps fixed windows (not adaptive), has `init`
+# and `step!`, and its order in time is the stepper's (a map is exact per step: order 0, as
+# OrdinaryDiffEq's `FunctionMap`; a group of algorithms: the lowest of its members)
+SciMLBase.isadaptive(::FieldAlgorithm) = false
+SciMLBase.has_init(::FieldAlgorithm) = true
+SciMLBase.has_step(::FieldAlgorithm) = true
+SciMLBase.alg_order(::Union{ExplicitEuler, BackwardEuler, QuasiSteady}) = 1
+SciMLBase.alg_order(::Union{CrankNicolson, BDF2}) = 2
+SciMLBase.alg_order(::ExplicitMap) = 0
+SciMLBase.alg_order(g::FieldGroups) =
+    minimum(SciMLBase.alg_order, [last.(g.pairs); g.default === nothing ? FieldAlgorithm[] : [g.default]])
+
 """
     canonical(alg) -> String
 

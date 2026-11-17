@@ -43,8 +43,11 @@ function SciMLBase.solve!(cache::LinearSolve.LinearCache, alg::LatticePCGAlgorit
     x, stats = Krylov.cg(NegatedOperator(cache.A), .-cache.b; M, ldiv = true, atol = float(cache.abstol),
         rtol = float(cache.reltol), itmax = cache.maxiters)
     copyto!(cache.u, x)
-    return SciMLBase.build_linear_solution(alg, cache.u, nothing, cache;
-        retcode = stats.solved ? SciMLBase.ReturnCode.Success : SciMLBase.ReturnCode.Failure, iters = stats.niter, stats)
+    # (not converged: `MaxIters` at the iteration limit, else `ConvergenceFailure`, as LinearSolve's
+    # Krylov methods report it)
+    retcode = stats.solved ? SciMLBase.ReturnCode.Success :
+              stats.niter >= cache.maxiters ? SciMLBase.ReturnCode.MaxIters : SciMLBase.ReturnCode.ConvergenceFailure
+    return SciMLBase.build_linear_solution(alg, cache.u, nothing, cache; retcode, iters = stats.niter, stats)
 end
 
 end # module LatticeFieldsLinearSolveExt

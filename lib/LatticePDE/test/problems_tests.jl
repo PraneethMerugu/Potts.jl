@@ -31,7 +31,7 @@ end
         λ = 4n^2 * sin(π * kx / n)^2 + 4m^2 * sin(π * ky / m)^2                     # discrete eigenvalue
         dt = 0.25 / (n^2 + m^2) / 2
         sol = solve(prob, ExplicitEuler(; dt); saveat = 10dt)
-        @test sol.substeps == 1                                       # dt is inside the bound
+        @test first(substep_counts(sol)) == 1                                       # dt is inside the bound
         for (i, ti) in enumerate(sol.t)
             k = round(Int, ti / dt)
             @test maximum(abs, sol[c(t, x, y), i] .- (1 - dt * λ)^k .* mode) < 1.0e-12
@@ -117,13 +117,13 @@ end
         # regression (review probe): D 1 → 4 through remake raises the substeps; the run stays finite
         p4 = remake(base, p = [Dr => 4.0])
         s4 = solve(p4, ExplicitEuler(; dt = 0.01))
-        @test s4.substeps == ceil(Int, 0.01 * 32n^2 / 1.8) && SciMLBase.successful_retcode(s4) &&
+        @test first(substep_counts(s4)) == ceil(Int, 0.01 * 32n^2 / 1.8) && SciMLBase.successful_retcode(s4) &&
             all(isfinite, s4[:c, end])
         # … and through setp on an integrator
         integ = init(base, ExplicitEuler(; dt = 0.01))
         m1 = integ.substeps
         setp(integ, Dr)(integ, 4.0)
-        @test integ.substeps == s4.substeps > m1
+        @test integ.substeps == first(substep_counts(s4)) > m1
         si = solve!(integ)
         @test SciMLBase.successful_retcode(si) && all(isfinite, si[:c, end])
         # negative control: one substep per dt (the bound ignored, forced on the integrator) blows
@@ -139,7 +139,7 @@ end
         @test isnan(nd.stability(nd.p))
         @test_throws ["ArgumentError", "parameter", "Dn", "has no value"] solve(nd, ExplicitEuler(; dt = 0.01))
         snd = solve(remake(nd; p = [Dn => 1.0]), ExplicitEuler(; dt = 0.01))
-        @test snd.substeps == ceil(Int, 0.01 * 8 * 16^2 / 1.8) && all(isfinite, snd[:c, end])
+        @test first(substep_counts(snd)) == ceil(Int, 0.01 * 8 * 16^2 / 1.8) && all(isfinite, snd[:c, end])
         # rate terms the bound cannot see (nonlinear, advection) need a user count
         nl = owned(psys([D(ce) ~ Δ(ce) - ce^3], [c(0, x, y) ~ 0.0], Num[]), 8)
         @test isnan(nl.stability(nl.p))
@@ -197,7 +197,7 @@ end
         )
         @test x1.stability(x1.p) ≈ 2 * s4                             # |Dr| s4 + |D2| s4
         s1 = solve(x1, ExplicitEuler(; dt = 0.01))
-        @test SciMLBase.successful_retcode(s1) && s1.substeps == ceil(Int, 0.01 * 2 * s4 / 1.8)
+        @test SciMLBase.successful_retcode(s1) && first(substep_counts(s1)) == ceil(Int, 0.01 * 2 * s4 / 1.8)
         # a loop of cross-diffusion (`o` reads `c` back): no throw from the bound; the rows are not
         # diagonally dominant, so automatic substeps are refused and a user count runs
         xd = owned(
@@ -212,7 +212,7 @@ end
         sx = solve(px, ExplicitEuler(; dt = 0.01, substeps = 50))
         # the count is a minimum (Q2): raised to the bound over the terms it sees (Gershgorin row sum)
         @test SciMLBase.successful_retcode(sx) &&
-            sx.substeps == max(50, ceil(Int, 0.01 * LatticePDE.bound_parts(px.stability, px.p).ρ / 1.8)) > 50
+            first(substep_counts(sx)) == max(50, ceil(Int, 0.01 * LatticePDE.bound_parts(px.stability, px.p).ρ / 1.8)) > 50
         # … with a decay strong enough for dominance the bound is the Gershgorin row sum:
         # |Dr| s4 + |k| + |D2| s4 for the c row
         # (a loop: `o` reads `c` back through a small reaction it dominates by its decay)
@@ -336,7 +336,7 @@ end
         @test ae.stability(LatticePDE.Problems.with_tables(ae.p, ae.tables)) ≈ 1024
         @test isnan(ae.stability(ae.p))
         s_ae = solve(ae, ExplicitEuler(; dt = 0.01))                     # the automatic count
-        @test SciMLBase.successful_retcode(s_ae) && s_ae.substeps == ceil(Int, 0.01 * 1024 / 1.8)
+        @test SciMLBase.successful_retcode(s_ae) && first(substep_counts(s_ae)) == ceil(Int, 0.01 * 1024 / 1.8)
     end
 end
 
@@ -385,10 +385,10 @@ end
         @test sol.t ≈ [0.0, 0.005, 0.01]
         @test sol[c(t, x, y)] == sol[:c] && size(sol[:c, 2]) == (n, m) && sol[:c, 2] == sol[:c, 2]
         @test sol[:c, 1] ≈ repeat(((1:n) .- 0.5) ./ n, 1, m)        # cell-centered initial value
-        @test getp(sol, Dr)(sol) == 1.0 && sol[kr] == 0.0
+        @test getp(sol, Dr)(sol) == 1.0 && getp(sol, kr)(sol) == 0.0
         @test_throws ["Invalid symbol", "getsym"] sol[o(t, x, y)]                       # negative control: not a field
         @test getsym(prob, :c)(prob) == fgrid(prob.u0, n, m)
-        integ = init(prob, ExplicitEuler(; dt = 1.0e-3))
+        integ = init(prob, ExplicitEuler(; dt = 1.0e-3); save_everystep = false)
         @test integ[c(t, x, y)] == sol[:c, 1]
         integ[c(t, x, y)] = fill(2.0, n, m)                           # setsym writes the current state
         step!(integ)
@@ -606,7 +606,7 @@ end
         sys2 = psys([D(ce) ~ Da * Δ(ce) - ka * ce, Ke ~ 2ce + t], [c(0, x, y) ~ 1.0 + x], [Da, ka]; dvs = [ce, Ke])
         p2 = owned(sys2, 4)
         s2 = solve(p2, ExplicitEuler(; dt = 0.25); saveat = 0.5)
-        @test s2.substeps == 2 && s2.t == [0.0, 0.5, 1.0]
+        @test first(substep_counts(s2)) == 2 && s2.t == [0.0, 0.5, 1.0]
         for i in eachindex(s2.t)
             @test s2[Ke, i] ≈ 2 .* s2[ce, i] .+ s2.t[i] rtol = 1.0e-14
         end

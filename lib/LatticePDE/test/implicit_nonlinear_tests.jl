@@ -6,7 +6,7 @@
         # logistic growth `3 c (1 − c)`
         es, o, pb, _ = nl_orders(0.05 * Δ(bce) + 3 * bce * (1 - bce), NLIC; T = 0.5, dts)
         @test all(q -> abs(q - 1) < 0.1, o)                 # (measured 1.06, 1.03, 1.02)
-        ig = init(pb, BackwardEuler(; dt = 0.02, inner = BTIGHT))
+        ig = init(pb, BackwardEuler(; dt = 0.02, inner = BTIGHT); save_everystep = false)
         c = only(ig.runtimes).cache
         @test c.newton == 1 && c.iterate && c.exact && only(c.rows).op.iterate && !only(c.rows).op.switch
         @test bwarm(ig) == 0

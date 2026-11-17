@@ -1608,8 +1608,25 @@ CommonSolve.init(prob::LatticeProblem, alg::FieldAlgorithm; kw...) = _owned_init
 CommonSolve.init(prob::LatticeProblem, alg::LinearSolver; kw...) = CommonSolve.init(_owned_or_refuse(prob, alg), alg; kw...)
 CommonSolve.solve(prob::LatticeProblem, alg::FieldAlgorithm; kw...) = CommonSolve.solve!(CommonSolve.init(prob, alg; kw...))
 CommonSolve.solve(prob::LatticeProblem, alg::LinearSolver; kw...) = CommonSolve.solve(_owned_or_refuse(prob, alg), alg; kw...)
-CommonSolve.init(prob::LatticeProblem; kw...) = (fp = field_problem(prob); _owned_init(fp, _default_alg(fp), prob; kw...))
-CommonSolve.solve(prob::LatticeProblem; kw...) = CommonSolve.solve!(CommonSolve.init(prob; kw...))
+# With no algorithm (D-287 R7): a problem whose window is fixed, by a clock (`Shift`, sampled
+# inputs) or by the map's step (a map: `ExplicitMap`, SciML's `FunctionMap`), runs the owned
+# default; any other is DiffEqBase's, as for every `ODEProblem` (its default algorithm, when a
+# package that provides one is loaded)
+_fixed_window(fp) = fp.kind == :map || _clock(fp) !== nothing
+function CommonSolve.init(prob::LatticeProblem; kw...)
+    fp = field_problem(prob)
+    _fixed_window(fp) && return _owned_init(fp, _default_alg(fp), prob; kw...)
+    _check_default_alg()
+    return invoke(CommonSolve.init, Tuple{SciMLBase.AbstractDEProblem, Vararg{Any}}, prob; kw...)
+end
+function CommonSolve.solve(prob::LatticeProblem; kw...)
+    _fixed_window(field_problem(prob)) && return CommonSolve.solve!(CommonSolve.init(prob; kw...))
+    _check_default_alg()
+    return invoke(CommonSolve.solve, Tuple{SciMLBase.AbstractDEProblem, Vararg{Any}}, prob; kw...)
+end
+_check_default_alg() = hasmethod(CommonSolve.solve, Tuple{SciMLBase.AbstractDEProblem}) || throw(ArgumentError(string(
+    "`solve(prob)` with no algorithm uses DiffEqBase's default algorithm, and no package that provides it is loaded: ",
+    "give an algorithm, `solve(prob, ExplicitEuler(; dt))` or `solve(prob, Tsit5())`, or load OrdinaryDiffEq")))
 
 # A system with no time (F4-02): its `LinearProblem` or `NonlinearProblem`; a field algorithm
 # (or none: `QuasiSteady()`) solves the owned problem once

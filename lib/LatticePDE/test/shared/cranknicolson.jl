@@ -48,6 +48,6 @@ function robin_sys(v)
 end
 # `p`'s state after each of `k` windows of `alg`
 function windows(p, alg, k)
-    ig = init(p, alg)
+    ig = init(p, alg; save_everystep = false)
     return [(step!(ig); copy(vec(ig[bce]))) for _ in 1:k], ig
 end

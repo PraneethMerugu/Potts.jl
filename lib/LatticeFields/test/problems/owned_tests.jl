@@ -27,7 +27,7 @@ end
     end
     @test isapprox(sol[:u][end], v; rtol = 1e-5) &&
           !isapprox(sol[:u][end], reshape(u0, dims); rtol = 1e-3)
-    integ = init(prob, ExplicitEuler(; dt = 0.05, substeps = 1))
+    integ = init(prob, ExplicitEuler(; dt = 0.05, substeps = 1); save_everystep = false)
     step!(integ)
     @test integ.store.cur[1] == 2                                 # one swap per substep
     step!(integ)

@@ -92,7 +92,7 @@ using .LP_report: fd
 @testset "F4-13: a warm step! allocates nothing after a report, and the run is unchanged (explicit, BE)" begin
     p = rprob(32)
     for alg in (ExplicitEuler(; dt = 0.01), BackwardEuler(; dt = 0.01))
-        ig, ref = init(p, alg), init(p, alg)
+        ig, ref = init(p, alg; save_everystep = false), init(p, alg; save_everystep = false)
         before = rwarm(ig)
         rwarm(ref)
         sprint(field_report, ig)
