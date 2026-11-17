@@ -84,13 +84,13 @@ New pieces:
 - `@drive Chemotaxis(c; strength = χ)` biases copies towards higher `c` (more below).
 - The periodic `y` axis is the lattice's: every field takes the lattice's boundary.
 
-The problem must say how to integrate the field. `ExplicitEuler(substeps = 8, lower = 0.0)`
+The problem must say how to integrate the field. `ExplicitEuler(substeps = 8, lower_bound = 0.0)`
 takes 8 explicit Euler time steps per MCS (Monte Carlo step). It clips negative values:
 
 ```@example chemo
 @named gradient = Gradient()
 start = layout(Scattered(12, (5, 5); region = (8:30, 1:40), kinds = [:cell], seed = 1), gradient)
-prob = PottsProblem(gradient, start, (0, 1500); field_solver = ExplicitEuler(substeps = 8, lower = 0.0), seed = 1)
+prob = PottsProblem(gradient, start, (0, 1500); field_solver = ExplicitEuler(substeps = 8, lower_bound = 0.0), seed = 1)
 sol = solve(prob, SequentialCPM(); saveat = 25)
 nothing # hide
 ```
@@ -201,7 +201,7 @@ end
 @named by_hand = GradientByHand()
 function short(sys)
     start = layout(Scattered(12, (5, 5); region = (8:30, 1:40), kinds = [:cell], seed = 1), sys)
-    prob = PottsProblem(sys, start, (0, 100); field_solver = ExplicitEuler(substeps = 8, lower = 0.0), seed = 1)
+    prob = PottsProblem(sys, start, (0, 100); field_solver = ExplicitEuler(substeps = 8, lower_bound = 0.0), seed = 1)
     return solve(remake(prob; p = [:χ => 300.0]), SequentialCPM(); save_everystep = false)
 end
 short(by_hand).u[end].σ == short(gradient).u[end].σ
@@ -254,7 +254,7 @@ end
 
 @named aggregation = Aggregation()
 start = layout(Scattered(60, (5, 5); kinds = [:cell], seed = 1, gap = 2), aggregation)
-prob = PottsProblem(aggregation, start, (0, 2000); field_solver = ExplicitEuler(substeps = 8, lower = 0.0), seed = 1)
+prob = PottsProblem(aggregation, start, (0, 2000); field_solver = ExplicitEuler(substeps = 8, lower_bound = 0.0), seed = 1)
 sol = solve(prob, SequentialCPM(); saveat = 30)
 nothing # hide
 ```
@@ -317,7 +317,7 @@ clusters, and the clusters grow by collecting more cells.
 - A `PDESystem` on `lattice_domain(…)` gives a field's PDE with `Δ`.
 - `@fields c = sys (input => expression)` couples it into a model and binds its inputs to
   the cells.
-- `PottsProblem(…; field_solver = ExplicitEuler(substeps = n, lower = 0.0))` integrates it.
+- `PottsProblem(…; field_solver = ExplicitEuler(substeps = n, lower_bound = 0.0))` integrates it.
 - `Chemotaxis(c; strength)` or `@drive copy => …` biases copies along the field.
 - Fields can be recorded as videos through render-frame channels.
 

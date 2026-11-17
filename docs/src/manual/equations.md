@@ -240,21 +240,21 @@ end
 
 @named chem = Chem()
 op = layout(Tiling((5, 5); region = (11:20, 11:20), kinds = [:cell]), chem)
-prob = PottsProblem(chem, op, (0, 50); field_solver = ExplicitEuler(substeps = 4, lower = 0.0))
+prob = PottsProblem(chem, op, (0, 50); field_solver = ExplicitEuler(substeps = 4, lower_bound = 0.0))
 sol = solve(prob, SequentialCPM(); save_everystep = false)
 sol[:q][end], sol[:g][end]
 ```
 
 | Keyword | Values | Default |
 |---|---|---|
-| `field_solver` | `ExplicitEuler(; substeps, lower)`: `substeps` explicit steps per MCS, values clipped at `lower`; `BackwardEuler(; substeps, newton, lower, inner, solver_T)`: implicit steps, each a linear solve with `inner`; `CrankNicolson(…)`, `BDF2(…)`: second-order implicit steps, the same keywords; `QuasiSteady(; newton, inner, solver_T)`: the steady state in each MCS; each takes `init = :steady` (a steady start) and `compute_T` (`Float32` or `Float64`: the number type its kernels compute in; default the problem's `T`) | `ExplicitEuler()`: the automatic count, no clip |
+| `field_solver` | `ExplicitEuler(; substeps, lower_bound)`: `substeps` explicit steps per MCS, values clipped at `lower_bound`; `BackwardEuler(; substeps, newton, lower_bound, linsolve, solver_type)`: implicit steps, each a linear solve with `linsolve`; `CrankNicolson(…)`, `BDF2(…)`: second-order implicit steps, the same keywords; `QuasiSteady(; newton, linsolve, solver_type)`: the steady state in each MCS; each takes `init = :steady` (a steady start) and `compute_type` (`Float32` or `Float64`: the number type its kernels compute in; default the problem's `T`) | `ExplicitEuler()`: the automatic count, no clip |
 | `ode_solver` | `ExplicitEuler(; substeps)`, `RK4(; substeps)`, `Adaptive(alg; kwargs...)` | `ExplicitEuler()`, one step per MCS |
 | `solvers` | `[x => solver, …]`, per variable or component | — |
 
-The linear solvers `DevicePCG(; budget, rtol, precond)`, `Multigrid(; cycle = (2, 2), cycles, rtol, budget)`
-and `DeviceGMRES(; restart, budget, rtol, precond)` are the `LatticeFields.Solvers` objects, the same in Potts and LatticePDE. They are the
-`inner` linear solver of the implicit field solvers:
-`field_solver = BackwardEuler(; inner = DevicePCG(; budget = 12))`. They are not field
+The linear solvers `DevicePCG(; maxiters, reltol, precond)`, `Multigrid(; cycle = (2, 2), cycles, reltol, maxiters)`
+and `DeviceGMRES(; gmres_restart, maxiters, reltol, precond)` are the `LatticeFields.Solvers` objects, the same in Potts and LatticePDE. They are the
+`linsolve` linear solver of the implicit field solvers:
+`field_solver = BackwardEuler(; linsolve = DevicePCG(; maxiters = 12))`. They are not field
 solvers themselves: `field_solver`, `solvers` and `FieldGroups` refuse them and give that
 route.
 
@@ -279,7 +279,7 @@ the sum of their bounds; advection with a constant velocity: `substeps ≥ 2 · 
 diffusion term that is at most half the one in the solve, face by face (with a multiplier in
 the solve that is positive everywhere), needs no extra substeps at all, only a few more
 Newton iterations. When these rules raise a `substeps = n` you gave, a warning says which
-rule and which terms. `DeviceGMRES` is not a time stepper's `inner` (it is the coupled steady
+rule and which terms. `DeviceGMRES` is not a time stepper's `linsolve` (it is the coupled steady
 solve's, below): on BackwardEuler, CrankNicolson and BDF2 it was slower in every case measured,
 so they refuse it. Each substep
 checks the Newton correction: a correction that does not reach the tolerance in `newton`
@@ -313,7 +313,7 @@ as Backward Euler's do. Both start with Backward Euler steps:
   the substep count (the formula needs one step length). A move of the cells is no start.
 
 Neither keeps nonnegative values nonnegative: a stiff decay overshoots below 0. Give
-`lower = 0.0` for a concentration, or use `BackwardEuler`, which needs no clip on a
+`lower_bound = 0.0` for a concentration, or use `BackwardEuler`, which needs no clip on a
 consumption field. A clip changes the equation solved slightly.
 
 `QuasiSteady()` solves a field's steady state `0 = rhs` in each MCS, at the cells of that
@@ -323,8 +323,8 @@ solved for a field it reads that has no other equation, the one under its operat
 with `QuasiSteady` by default (another solver for it is an error). Its sign does not matter:
 `0 ~ kd * c - Dc * Δ(c) - s` is the same row. A local row such as `0 ~ -2c + 0.5e`, with
 `D(e) ~ …`, is `c`'s. Steady fields are solved first in each MCS, so the other fields read their
-values of that MCS. `QuasiSteady` also solves a rate row `D(c) ~ rhs` as `0 = rhs`. It takes `newton`, `inner` and `solver_T` with the meanings above, and has no
-`substeps` and no `lower`. A linear field takes one linear solve per MCS; a nonlinear or
+values of that MCS. `QuasiSteady` also solves a rate row `D(c) ~ rhs` as `0 = rhs`. It takes `newton`, `linsolve` and `solver_type` with the meanings above, and has no
+`substeps` and no `lower_bound`. A linear field takes one linear solve per MCS; a nonlinear or
 switched one takes up to 8 Newton iterations, checked as above. When a term stays out of the
 operator (advection), the count comes from the bound on that term against the decay, from 8
 to at most 40 iterations; give `newton = k` if the warning says the budget is hit. Steady
@@ -332,7 +332,7 @@ fields of one `QuasiSteady` that read one another (`0 ~ Δ(a) - a + 0.5b` and
 `0 ~ Δ(b) - b - 0.5a`, a cross diffusion `Δ(b)` in `a`'s row), and a row with a term the
 operator does not see (`c²` in `0 ~ q - c^2`), are solved together: one Newton iteration
 solves all their rows with every cross term in the operator, by a restarted GMRES
-(`DeviceGMRES()`; a `DevicePCG` or `Multigrid` given as `inner` is its preconditioner). There
+(`DeviceGMRES()`; a `DevicePCG` or `Multigrid` given as `linsolve` is its preconditioner). There
 is no gain limit inside one group. On a GPU this solve waits for each dot product of its GMRES
 (about 100–250 waits per MCS for a strong pair), where every other field solver waits for none;
 a model whose fields are not coupled this way keeps a GPU step free of waits. A coupled steady system whose slowest mode grows or is
@@ -380,7 +380,7 @@ the MCS and the route.
 
 Every field solver takes `init = :steady`: before the first MCS (and at `reinit!`) the group's
 steady state is solved once, as `QuasiSteady` would, then the solver steps from it:
-`field_solver = BackwardEuler(; init = :steady)`. The steady solve uses the solver's `inner`
+`field_solver = BackwardEuler(; init = :steady)`. The steady solve uses the solver's `linsolve`
 (by default a conjugate gradient solve to a relative 1e-6), and the steady state must exist and
 be unique, as for `QuasiSteady`: a growth is refused, with the route of leaving `init` out. A
 steady start that fails stops the run before its first MCS. A state restored from a checkpoint
@@ -389,7 +389,7 @@ is not solved again.
 `BackwardEuler` pays a linear solve per substep. It is the faster choice when the explicit
 count is large (fast diffusion, a stiff decay); for a field whose explicit count is a few
 substeps, `ExplicitEuler` is cheaper. Merks' model on 100² takes about 4.9 ms per MCS with
-`BackwardEuler(; lower = 0.0)` against 0.8 ms with `ExplicitEuler(; substeps = 15)` (4 CPU
+`BackwardEuler(; lower_bound = 0.0)` against 0.8 ms with `ExplicitEuler(; substeps = 15)` (4 CPU
 threads).
 
 - `substeps = nothing` in a field solver takes the smallest count `n` with
@@ -409,7 +409,7 @@ threads).
     declared interval: a field that starts outside it, or a constant boundary or masked value
     outside it, is an error, and a field that leaves it during an `ExplicitEuler` run ends the
     run with `ReturnCode.Unstable` and a warning (`substeps = n` or wider `bounds` are the
-    routes); an implicit run warns and goes on (`lower = lo` or wider `bounds` are the routes);
+    routes); an implicit run warns and goes on (`lower_bound = lo` or wider `bounds` are the routes);
   - a switch (`- a * max(c - c_T, 0)`): its derivative is `a` or 0, so it needs no interval;
   - upwind advection, `Σ_d 2 max|v_d| / h_d` (the CFL limit): a velocity of parameters, of the
     coordinates (`[50 * (1 + x), 0.0]`) or of other fields with declared bounds. A velocity
@@ -447,7 +447,7 @@ threads).
   OrdinaryDiffEq's) or solution: it is the same function. One block per group gives its
   fields and algorithm, the window (the MCS) and the substep count with its cause, the
   stability bound and the terms it cannot see, and the number types. An implicit group also
-  gives its `inner` solver with its multigrid levels and the Newton count. An integrator
+  gives its `linsolve` solver with its multigrid levels and the Newton count. An integrator
   also gives the run's counters. Then the report gives the coupling between groups.
   `field_report(prob, alg)` prints the policy of a LatticePDE problem under the algorithm
   `alg` without binding anything. The report changes nothing in the run. It may synchronize
@@ -575,8 +575,8 @@ u = solve(prob, SequentialCPM(); save_everystep = false).u[end]
   whose equation has no spatial operator of it is an error naming it. So is a periodic pair on an axis the lattice closes: periodicity is the lattice's,
   for every field.
 - **Site masks.** `c ~ masked(condition, v)` is a node value: every explicit substep writes
-  `v` at every site where the condition holds (after the `lower` clip, so a mask value
-  below `lower` wins), and a fresh initial state (the problem's `u0`, `init`, `reinit!`) is
+  `v` at every site where the condition holds (after the `lower_bound` clip, so a mask value
+  below `lower_bound` wins), and a fresh initial state (the problem's `u0`, `init`, `reinit!`) is
   clamped too; a state restored from a checkpoint is not (it continues the run exactly),
   nor does `Potts.anneal` clamp. The condition reads the inputs and fields of the
   `PDESystem`. It is evaluated once per MCS before the substeps, so a mask on an input bound
@@ -769,12 +769,12 @@ pulse = PDESystem([Dt(we) ~ Dw * Δ(we) - kw * we + fe], [w(0, x, y) ~ 0.0], dom
     [t, x, y], [we, fe], [Dw, kw]; name = :pulse)
 lit(t) = [i <= 10t ? 1.0 : 0.0 for i in 1:20, j in 1:10]   # columns 1 to 10t are on
 pprob = discretize(pulse, LatticeDiscretization(Grid((20, 10))); inputs = [fe => lit])
-psol = solve(pprob, ExplicitEuler(; dt = 0.1); save_everystep = false)
+psol = solve(pprob, ExplicitEuler(); dt = 0.1, save_everystep = false)
 round.(psol[we][end][:, 5]; digits = 2)
 ```
 
 `field_report` gives the substep count of this system and its cause:
 
 ```@example equations
-Potts.LatticePDE.field_report(pprob, ExplicitEuler(; dt = 0.1))
+Potts.LatticePDE.field_report(pprob, ExplicitEuler(); dt = 0.1)
 ```

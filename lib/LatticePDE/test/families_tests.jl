@@ -1,6 +1,6 @@
 # F4-01 (F4 design §3.2, rulings Q-B and Q1): `discretize` returns one SciML problem (an
 # `ODEProblem` of rates, a `DiscreteProblem` of maps) that the field algorithms and
-# OrdinaryDiffEq's solvers both take; `FieldAlgorithm <: SciMLBase.AbstractODEAlgorithm`; the
+# OrdinaryDiffEq's solvers both take; `AbstractFieldAlgorithm <: SciMLBase.AbstractODEAlgorithm`; the
 # compiled right side is built at its first call only; the `problem` keyword is deleted.
 # Negative controls (the base 3ed05c3b): `ExplicitEuler <: AbstractDEAlgorithm` was false, and
 # the right side was built at `discretize` (one build before any solve).
@@ -27,12 +27,12 @@ end
 
 @testitem "F4-01: one problem per family; an owned solve builds no right side" setup = [LP_families] tags = [:latticepde, :families] begin
 @testset "F4-01: one problem per family; an owned solve builds no right side" begin
-    @test ExplicitEuler <: SciMLBase.AbstractODEAlgorithm && LFP.FieldAlgorithm <: SciMLBase.AbstractODEAlgorithm
-    for (name, sys, alg) in FAM_CASES
+    @test ExplicitEuler <: SciMLBase.AbstractODEAlgorithm && LFP.AbstractFieldAlgorithm <: SciMLBase.AbstractODEAlgorithm
+    for (name, sys, alg, kw) in FAM_CASES
         prob = discretize(sys, fam_disc())
         @test prob isa (name == "ExplicitMap" ? SciMLBase.DiscreteProblem : SciMLBase.ODEProblem)
         name == "ExplicitMap" || @test SciMLBase.problem_type(prob) isa LFP.LatticeMetadata
-        s = solve(prob, alg)
+        s = solve(prob, alg; kw...)
         @test s.retcode == SciMLBase.ReturnCode.Success
         # an owned solve never builds the right side of SciML's solvers
         @test LFP.lattice_metadata(prob).builds[] == 0
@@ -44,7 +44,7 @@ end
 @testset "F4-01: OrdinaryDiffEq's solvers on the same problem" begin
     prob = discretize(fam_rate, fam_disc())
     m = LFP.lattice_metadata(prob)
-    be = solve(prob, BackwardEuler(; dt = 1e-4, inner = FAM_INNER))
+    be = solve(prob, BackwardEuler(; linsolve = FAM_INNER); dt = 1e-4)
     @test m.builds[] == 0
     for alg in (Tsit5(), Rodas5P(), FBDF())
         s = solve(prob, alg; abstol = 1e-9, reltol = 1e-9)
@@ -63,7 +63,7 @@ end
     end
     @test es.u[1].u[end] != es.u[3].u[end]                     # control: the trajectories differ
     # the same problem, then a field algorithm again: the plans are the problem's
-    @test solve(prob, BackwardEuler(; dt = 1e-4, inner = FAM_INNER)).u[end] == be.u[end]
+    @test solve(prob, BackwardEuler(; linsolve = FAM_INNER); dt = 1e-4).u[end] == be.u[end]
 end
 end
 
@@ -73,12 +73,12 @@ end
 # at every save, bitwise.
 @testitem "F4-01 (TS2): the group cut leaves a field it does not feed bitwise unchanged" setup = [LP_families] tags = [:latticepde, :families] begin
 @testset "F4-01 (TS2): the group cut leaves a field it does not feed bitwise unchanged" begin
-    fg = FieldGroups(fam_u => ExplicitEuler(; dt = 0.05, substeps = 2),
-        fam_v => BackwardEuler(; dt = 0.05, inner = FAM_INNER))
-    sg = solve(discretize(fam_chain, fam_disc()), fg)
+    fg = FieldGroups(fam_u => ExplicitEuler(; substeps = 2),
+        fam_v => BackwardEuler(; linsolve = FAM_INNER))
+    sg = solve(discretize(fam_chain, fam_disc()), fg; dt = 0.05)
     uonly = PDESystem([D(fam_u) ~ fDc * Δ(fam_u) - fk * fam_u], [fu(0, x, y) ~ x; fam_faces], fam_dom, [t, x, y],
         [fam_u], [fDc, fk]; name = :famu)
-    su = solve(discretize(uonly, fam_disc()), ExplicitEuler(; dt = 0.05, substeps = 2))
+    su = solve(discretize(uonly, fam_disc()), ExplicitEuler(; substeps = 2); dt = 0.05)
     @test length(su.t) == length(sg.t) && su.t == sg.t
     bad = [k for k in eachindex(su.t) if !(Array(sg[fam_u, k]) == Array(su[fam_u, k]))]
     @test isempty(bad) || (println("F4-01 TS2 grouped u differs at ", bad); false)
@@ -121,8 +121,8 @@ end
 @testitem "F4-01 (TS2): the coupled steady system converges to its analytic solution u = v = 1" setup = [LP_families] tags = [:latticepde, :families] begin
 @testset "F4-01 (TS2): the coupled steady system converges to its analytic solution u = v = 1" begin
     prob = discretize(fam_steady, fam_disc())
-    @test SciMLBase.successful_retcode(solve(prob, BackwardEuler(; dt = 0.05, inner = FAM_INNER)))
-    long = solve(remake(prob; tspan = (0.0, 2000.0)), BackwardEuler(; dt = 1.0, inner = FAM_INNER))
+    @test SciMLBase.successful_retcode(solve(prob, BackwardEuler(; linsolve = FAM_INNER); dt = 0.05))
+    long = solve(remake(prob; tspan = (0.0, 2000.0)), BackwardEuler(; linsolve = FAM_INNER); dt = 1.0)
     ue = collect(Float64.(long.u[end]))
     @test length(ue) == 128
     @test maximum(abs, ue .- 1.0) < 1e-6 || (println("F4-01 TS2 steady max dev ", maximum(abs, ue .- 1.0)); false)

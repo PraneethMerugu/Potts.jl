@@ -213,7 +213,7 @@ const FLOOR_SHIFT = 0.5
 """
 Is the group in the Float32 floor regime: unanchored, with its weakest reaction relative to
 its strongest face below `FLOOR_SHIFT`? A field-valued shift or face counts as weak (its
-range is not known at build time). `solver_T = :auto` solves such groups in Float64
+range is not known at build time). `solver_type = :auto` solves such groups in Float64
 (provisional D-C7b).
 """
 function floor_regime(op::CellOperator{N}) where {N}

@@ -53,7 +53,7 @@ end
             p = LP.discretize(
                 MTKB.PDESystem(eqs, ic, dom, [tt, x, y], dvs, ps; name = :b),
                 LP.LatticeDiscretization(LP.Grid(dims); T = Float64)
-            ); LP.Problems.substeps(LP.Problems.field_problem(p), LP.ExplicitEuler(; dt = 1.0))
+            ); LP.Problems.substeps(LP.Problems.field_problem(p), LP.ExplicitEuler(); dt = 1.0)
         )
         acount(M; kw...) = substep_counts(
             init(
@@ -77,7 +77,7 @@ end
                 name = :b
             ), LP.LatticeDiscretization(LP.Grid(dims); T = Float64)
         )
-        @test a == LP.solve(LP.remake(bp; u0 = vec(c0)), LP.ExplicitEuler(; dt = 1.0))[:c, end]
+        @test a == LP.solve(LP.remake(bp; u0 = vec(c0)), LP.ExplicitEuler(); dt = 1.0)[:c, end]
         # no declared interval: the term stays one the bound cannot see (the count is refused)
         e = something(fd_err(() -> PottsProblem(FbIvNoBounds(; name = :f), fd_empty(dims), (0, 2); field_solver = ExplicitEuler())), "")
         @test occursin("DivKGrad", e) && occursin("cannot see", e)
@@ -97,8 +97,8 @@ end
     end
 end
 
-@testitem "F3-14: lattice_storage, compute_T and solver_T in a model (FE-17)" setup = [FieldsSetup, FieldsBoundsRolesSetup] tags = [:potts, :fields] begin
-    @testset "F3-14: lattice_storage, compute_T and solver_T in a model (FE-17)" begin
+@testitem "F3-14: lattice_storage, compute_type and solver_type in a model (FE-17)" setup = [FieldsSetup, FieldsBoundsRolesSetup] tags = [:potts, :fields] begin
+    @testset "F3-14: lattice_storage, compute_type and solver_type in a model (FE-17)" begin
         σ = zeros(Int32, 12, 10)
         σ[3:5, 3:5] .= 1
         σ[8:10, 6:8] .= 2
@@ -126,8 +126,8 @@ end
         # a Float32 CPM with a Float64 field computed in Float64 equals the Float64 reference to
         # 1e-12 (measured: 0, bitwise); computed in Float32 (the control) it does not (5.7e-8)
         for (a32, ref) in (
-                (ExplicitEuler(substeps = 8, compute_T = Float64), ExplicitEuler(substeps = 8)),
-                (BackwardEuler(compute_T = Float64), BackwardEuler()),
+                (ExplicitEuler(substeps = 8, compute_type = Float64), ExplicitEuler(substeps = 8)),
+                (BackwardEuler(compute_type = Float64), BackwardEuler()),
             )
             a, b = run(Float32, a32; M = FwWide), run(Float64, ref; M = FwWide)
             @test maximum(abs, current_state(a).site.c .- current_state(b).site.c) < 1.0e-12
@@ -137,11 +137,11 @@ end
                 current_state(run(Float64, ExplicitEuler(substeps = 8); M = FwWide)).site.c
         )
         @test ctl > 1.0e-9
-        # solver_T from A: the implicit solver's own type
+        # solver_type from A: the implicit solver's own type
         integ = init(
             PottsProblem(
                 FwWide(; name = :w), [ownership => σ, kind => [:A, :A], :c => c0], (0, 3); T = Float32,
-                field_solver = BackwardEuler(solver_T = Float64)
+                field_solver = BackwardEuler(solver_type = Float64)
             ), SequentialCPM()
         )
         rows = CorePotts._runtime(getfield(integ.ctx, :__fields1)).cache.rows
@@ -149,20 +149,20 @@ end
         # refusals in the user's words
         e = something(fd_err(() -> Potts.variable(only(Potts.Symbolics.@variables q(Potts.t)), :field; lattice_storage = BigFloat)), "")
         @test occursin("`lattice_storage` applies to fields and is `Float16`, `Float32` or `Float64`", e) && occursin("got BigFloat", e)
-        e = something(fd_err(() -> ExplicitEuler(compute_T = Float16)), "")
-        @test occursin("`compute_T` takes `:auto`", e)
+        e = something(fd_err(() -> ExplicitEuler(compute_type = Float16)), "")
+        @test occursin("`compute_type` takes `:auto`", e)
     end
 end
 
-@testitem "batch-end review S4: compute_T = Float64 reaches a Float32 model's field kernels" setup = [FieldsSetup, FieldsBoundsRolesSetup] tags = [:potts, :fields] begin
-    @testset "batch-end review S4: compute_T = Float64 reaches a Float32 model's field kernels" begin
+@testitem "batch-end review S4: compute_type = Float64 reaches a Float32 model's field kernels" setup = [FieldsSetup, FieldsBoundsRolesSetup] tags = [:potts, :fields] begin
+    @testset "batch-end review S4: compute_type = Float64 reaches a Float32 model's field kernels" begin
         run1(T, alg) = (
             integ = init(
                 PottsProblem(FwNarrow(; name = :w), fd_empty((12, 10)), (0, 1); T, seed = 3, field_solver = alg),
                 SequentialCPM()
             ); step!(integ); Array(current_state(integ).site.c)
         )
-        wide, narrow = run1(Float32, ExplicitEuler(; substeps = 1, compute_T = Float64)), run1(Float32, ExplicitEuler(; substeps = 1))
+        wide, narrow = run1(Float32, ExplicitEuler(; substeps = 1, compute_type = Float64)), run1(Float32, ExplicitEuler(; substeps = 1))
         ref = run1(Float64, ExplicitEuler(; substeps = 1))
         @test eltype(wide) === eltype(narrow) === Float32
         @test maximum(abs, wide .- ref) < 1.0e-12 && maximum(abs, narrow .- ref) > 1.0e-8 ||
@@ -173,7 +173,7 @@ end
 @testitem "F3-14 S1, S4 in a model: Float16 under the implicit algorithms; Dual parameters in words" setup = [FieldsSetup, FieldsBoundsRolesSetup] tags = [:potts, :fields] begin
     @testset "F3-14 S1, S4 in a model: Float16 under the implicit algorithms; Dual parameters in words" begin
         dims = (16, 16)
-        for fs in (BackwardEuler(), BackwardEuler(; compute_T = Float64), CrankNicolson(), BDF2(), QuasiSteady())
+        for fs in (BackwardEuler(), BackwardEuler(; compute_type = Float64), CrankNicolson(), BDF2(), QuasiSteady())
             a = solve(PottsProblem(FbHalf(; name = :h), fd_empty(dims), (0, 10); field_solver = fs, T = Float32), SequentialCPM())
             b = solve(PottsProblem(FbFull(; name = :f), fd_empty(dims), (0, 10); field_solver = fs), SequentialCPM())
             ca, cb = a.u[end].site.c, b.u[end].site.c

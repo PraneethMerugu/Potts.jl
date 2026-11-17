@@ -9,7 +9,7 @@ per buffer, `nsites × ncomp` elements of the field's storage lane; and an empty
 table (set with [`settable!`](@ref)). `cur[f]` is the current slot of field `f` (1 or 2).
 
 `E` is the problem's element type (P5 role model): a float lane holds
-[`lanetype`](@ref LatticeFields.Compile.lanetype)`(lane, valtype(E), :state, fixed)` wrapped like `E`
+[`lanetype`](@ref LatticeFields.Compile.lanetype)`(lane, value_type(E), :state, fixed)` wrapped like `E`
 (a field with a declared storage, `fixed`, holds its own lane type, FE-17)
 (a Dual of it when `E` is a Dual): the state lanes hold the problem's value type (BigFloat
 under `T = BigFloat`, Float64 after a Float64 `u0`), and Dual parameters give Dual fields.
@@ -39,13 +39,13 @@ end
 _eltype(lane, ::Nothing, fixed::Bool = false) = juliatype(lane)
 function _eltype(lane, ::Type{E}, fixed::Bool = false) where {E}
     isfloat(lane) || return juliatype(lane)
-    return withvaltype(E, lanetype(lane, valtype(E), :state, fixed))
+    return withvaltype(E, lanetype(lane, value_type(E), :state, fixed))
 end
 _tabletype(lane, ::Nothing, _) = juliatype(lane)
 function _tabletype(lane, ::Type{E}, TE) where {E}
     isfloat(lane) || return juliatype(lane)
-    V = lanetype(lane, valtype(E), :state)
-    return TE === nothing || valtype(TE) === TE ? V : withvaltype(E, V)
+    V = lanetype(lane, value_type(E), :state)
+    return TE === nothing || value_type(TE) === TE ? V : withvaltype(E, V)
 end
 # The front ends' generic device bodies (copies, clamps, the implicit steps' bodies) and
 # GPUArrays' fill, registered for the D-157 scan once a store on a device whose default float
@@ -55,7 +55,7 @@ _generic_bodies() = (_copy_body!, _clamp_body!, _clamp_field_body!, _zero_body!,
     _be_status_body!, _bdf2_q_body!)
 function _register_float64_store!(backend, bufs)
     (Exec.ishost(backend) || Exec.default_float(backend) === Float64) && return nothing
-    any(b -> any(a -> eltype(a) <: AbstractFloat && valtype(eltype(a)) === Float64, b), bufs) || return nothing
+    any(b -> any(a -> eltype(a) <: AbstractFloat && value_type(eltype(a)) === Float64, b), bufs) || return nothing
     # keyed on a Float64 device array in the signature (batch 5 review N4): an instance of these
     # bodies over Float32 arrays that reaches a Float64 scalar is still flagged
     foreach(f -> Exec.register_float64!(string(typeof(f)), Exec.FLOAT64_ARRAY), _generic_bodies())

@@ -49,7 +49,7 @@ end
             σ = zeros(Int32, 12, 10); σ[3:5, 3:5] .= 1
             c0 = rand(StableRNG(14), 12, 10)
             before = length(Potts.LatticeFields.Exec.FLOAT64_KERNELS)
-            for alg in (ExplicitEuler(substeps = 8, compute_T = Float64), BackwardEuler(compute_T = Float64, solver_T = Float64))
+            for alg in (ExplicitEuler(substeps = 8, compute_type = Float64), BackwardEuler(compute_type = Float64, solver_type = Float64))
                 prob = PottsProblem(
                     FwWide(; name = :w), [ownership => σ, kind => [:A], :c => c0], (0, 2);
                     T = Float32, backend, seed = 3, field_solver = alg
@@ -86,7 +86,7 @@ end
                     if occursin("LatticeFields.", s)
             )
             backend = PottsDevices.device_backend()
-            for fs in (BackwardEuler(lower = 0.0), CrankNicolson(lower = 0.0), BDF2(lower = 0.0), QuasiSteady())
+            for fs in (BackwardEuler(lower_bound = 0.0), CrankNicolson(lower_bound = 0.0), BDF2(lower_bound = 0.0), QuasiSteady())
                 prob = PottsProblem(
                     MERKS, [ownership => merks_state(), kind => [1, 1]], (0, 4); T = Float32, seed = 5,
                     field_solver = fs

@@ -1343,7 +1343,7 @@ function _ode_steps(solver, T, dt, ys, rates)
     h = :($T($dt / $substeps))
     bindings(t, args) = Expr(:block, :(tt = $t), [:($(ys[i]) = $(args[i])) for i in 1:n]...)
     call(t, args...) = Expr(:let, bindings(t, args), :(($(rates...),)))
-    lowerclip = solver isa ExplicitEuler ? solver.lower : nothing
+    lowerclip = solver isa ExplicitEuler ? solver.lower_bound : nothing
     clip(v) = lowerclip === nothing ? v : :(max($v, $T($lowerclip)))
     step = if solver isa RK4
         k(j) = [Symbol(:k, j, :_, i) for i in 1:n]

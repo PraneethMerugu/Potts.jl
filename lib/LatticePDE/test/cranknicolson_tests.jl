@@ -36,18 +36,18 @@ end
 @testitem "F3-10: CrankNicolson: order 2, the manufactured solution, the stages" setup = [LP_cranknicolson] tags = [:latticepde, :cranknicolson] begin
 @testset "F3-10: CrankNicolson: order 2, the manufactured solution, the stages" begin
     p, λ, u0 = eig_problem(16)
-    err(dt) = maximum(abs, blast(solve(p, CrankNicolson(; dt, inner = BTIGHT))) .- exp(0.3λ * 0.4) .* u0)
+    err(dt) = maximum(abs, blast(solve(p, CrankNicolson(; linsolve = BTIGHT); dt)) .- exp(0.3λ * 0.4) .* u0)
     es = [err(0.4 / 2^k) for k in 2:5]
     @test all(o -> abs(o - 2) < 0.1, log2.(es[1:(end - 1)] ./ es[2:end]))       # (measured 2.02, 2.01, 2.00)
     # the manufactured solution: `r(uⁿ)` at tⁿ, `r(u)` at tⁿ⁺¹, the damped start at tⁿ + h/2 and tⁿ + h
-    em, om = mf_orders(dt -> CrankNicolson(; dt, inner = BTIGHT), [0.1 / 2^k for k in 0:3])
+    em, om = mf_orders(CrankNicolson(; linsolve = BTIGHT), [0.1 / 2^k for k in 0:3])
     @test all(o -> abs(o - 2) < 0.1, om) || (println("CN manufactured orders ", om); false)
     # two windows against the hand matrices: the first is the damped start (two Backward Euler
     # steps of h/2 at h/2 and h), the second a Crank–Nicolson step (r(uⁿ) at h, r(u) at 2h)
     h = 0.1
     p8 = mf_problem(BDIMS)
-    u0 = vec(init(p8, CrankNicolson(; dt = h))[bce])
-    us, ig = windows(p8, CrankNicolson(; dt = h, inner = BTIGHT), 2)
+    u0 = vec(init(p8, CrankNicolson(); dt = h)[bce])
+    us, ig = windows(p8, CrankNicolson(; linsolve = BTIGHT), 2; dt = h)
     half(u, tt) = (Lb = mf_rate(tt); (I - h / 2 * Lb[1]) \ (u .+ h / 2 .* Lb[2]))
     w1 = half(half(u0, h / 2), h)
     @test maximum(abs, us[1] .- w1) < 1e-9
@@ -69,7 +69,7 @@ end
     n = 200
     h = 400 / n^2
     p = step1d(n, h)
-    ig = init(p, CrankNicolson(; dt = h, inner = BTIGHT))
+    ig = init(p, CrankNicolson(; linsolve = BTIGHT); dt = h)
     step!(ig)
     @test tv1(ig[b1(t, x)]) <= 1 + 1e-9 || (println("TV ", tv1(ig[b1(t, x)])); false)
     # no extra rebuild: the two half steps share the operator (shift 2/h) with the later steps
@@ -82,16 +82,16 @@ end
     # a state write re-damps (`reset!`): the next window equals a fresh problem's first window
     # from the written state (damped), bitwise
     pe, _, _ = eig_problem(16)
-    us, ig = windows(pe, CrankNicolson(; dt = 0.05, inner = BTIGHT), 2)
+    us, ig = windows(pe, CrankNicolson(; linsolve = BTIGHT), 2; dt = 0.05)
     v = 0.5 .* reshape(us[2], 16, 16) .+ 0.1
     ig[bce] = v
     @test only(ig.runtimes).cache.start
     step!(ig)
-    fresh = init(remake(pe; u0 = vec(v)), CrankNicolson(; dt = 0.05, inner = BTIGHT))
+    fresh = init(remake(pe; u0 = vec(v)), CrankNicolson(; linsolve = BTIGHT); dt = 0.05)
     step!(fresh)
     @test vec(ig[bce]) == vec(fresh[bce])
     # (a Crank–Nicolson step from the same state differs: the write did restart it)
-    nd = init(remake(pe; u0 = vec(v)), CrankNicolson(; dt = 0.05, inner = BTIGHT))
+    nd = init(remake(pe; u0 = vec(v)), CrankNicolson(; linsolve = BTIGHT); dt = 0.05)
     only(nd.runtimes).cache.start = false
     step!(nd)
     @test maximum(abs, vec(nd[bce]) .- vec(fresh[bce])) > 1e-6
@@ -110,7 +110,7 @@ end
     st = solve(remake(po; u0 = s0.u[end], tspan = (h, 0.4)), Trapezoid(); dt = h, adaptive = false, abstol = 1e-12,
         reltol = 1e-12)
     sb = solve(discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64)),
-        CrankNicolson(; dt = h, inner = BTIGHT))
+        CrankNicolson(; linsolve = BTIGHT); dt = h)
     @test maximum(abs, vec(blast(sb)) .- st.u[end]) < 1e-8
 end
 end
@@ -119,7 +119,7 @@ end
 @testset "F3-10: counts, components, parameter writes, messages" begin
     # the growth rule with the shift 2/h: `+ g c` needs n ≥ ⌈2 · ½ · dt g⌉ (Backward Euler: ⌈2 dt g⌉)
     pg = bown(bsys([D(bce) ~ bD * Δ(bce) + bk * bce], [bc(0, x, y) ~ x], [bD, bk]))
-    @test init(pg, CrankNicolson(; dt = 0.5)).substeps == 1 && init(pg, BackwardEuler(; dt = 0.5)).substeps == 2
+    @test init(pg, CrankNicolson(); dt = 0.5).substeps == 1 && init(pg, BackwardEuler(); dt = 0.5).substeps == 2
     # components: the operator and the run of the scalar spelling, bitwise
     @variables bu(..)[1:2]
     bue = bu(t, x, y)
@@ -127,19 +127,19 @@ end
         [bu(0, x, y)[1] ~ 0.5, bu(0, x, y)[2] ~ 0.0], [bue]; T = 0.3)
     scal = nlsys([D(bce) ~ 0.05 * Δ(bce) - 40 * bce / (0.025 + bce) + 20, D(boe) ~ 0.05 * Δ(boe) - boe + bce],
         [bc(0, x, y) ~ 0.5, bo(0, x, y) ~ 0.0], [bce, boe]; T = 0.3)
-    a = @test_logs min_level = WARN solve(nlown(comp), CrankNicolson(; dt = 0.05))
-    b = solve(nlown(scal), CrankNicolson(; dt = 0.05))
+    a = @test_logs min_level = WARN solve(nlown(comp), CrankNicolson(); dt = 0.05)
+    b = solve(nlown(scal), CrankNicolson(); dt = 0.05)
         @test LatticePDE.Problems.field_stats(a) == LatticePDE.Problems.field_stats(b) && a.stats.solves > 0
     @test a[bue[1], length(a.t)] == b[bce, length(b.t)] && a[bue[2], length(a.t)] == b[boe, length(b.t)]
     # a parameter write reclassifies as a fresh problem (a Robin face's sign; the count) and
     # restarts (damped), so the written run equals the fresh one
-    for alg in (CrankNicolson(; dt = 0.1, inner = BTIGHT),), (v0, v1) in ((-1.0, 1.0), (1.0, -1.0))
+    for alg in (CrankNicolson(; linsolve = BTIGHT),), (v0, v1) in ((-1.0, 1.0), (1.0, -1.0))
         sys0, rb = robin_sys(v0)
-        ig = init(nlown(sys0; dims = (10, 8)), alg)
+        ig = init(nlown(sys0; dims = (10, 8)), alg; dt = 0.1)
         step!(ig)
         u = vec(ig[bce])
         ig.ps[rb] = v1
-        fresh = init(remake(nlown(first(robin_sys(v1)); dims = (10, 8)); u0 = u), alg)
+        fresh = init(remake(nlown(first(robin_sys(v1)); dims = (10, 8)); u0 = u), alg; dt = 0.1)
         c, cf = only(ig.runtimes).cache, only(fresh.runtimes).cache
         @test (c.exact, c.seen, c.newton, c.check, c.start, c.γ) == (cf.exact, cf.seen, cf.newton, cf.check, cf.start, cf.γ)
         @test ig.substeps == fresh.substeps
@@ -155,15 +155,15 @@ end
     end
     @test startswith(e(() -> CrankNicolson(; newton = 0)), "CrankNicolson: newton = 0 is the Newton iterations")
     @test e(() -> CrankNicolson(; theta = 0.5)) ==
-          "CrankNicolson: no keyword `theta`; its keywords are `dt`, `substeps`, `newton`, `lower`, `inner`, `solver_T`, `init` and `compute_T`"
-    a = CrankNicolson(; dt = 0.1, newton = 2, inner = DevicePCG(; budget = 12))
+          "CrankNicolson: no keyword `theta`; its keywords are `substeps`, `newton`, `lower_bound`, `linsolve`, `solver_type`, `init` and `compute_type`"
+    a = CrankNicolson(; newton = 2, linsolve = DevicePCG(; maxiters = 12))
     @test eval(Meta.parse(repr(a))) == a
     phex = discretize(bsys([D(bce) ~ bD * Δ(bce)], [bc(0, x, y) ~ x], [bD]; dvs = [bce]),
         LatticeDiscretization(Grid((8, 8); geometry = HEX); T = Float64))
-    @test solve(phex, CrankNicolson(; dt = 0.1)).retcode == ReturnCode.Success     # (F3-20: was refused)
+    @test solve(phex, CrankNicolson(); dt = 0.1).retcode == ReturnCode.Success     # (F3-20: was refused)
     p16 = discretize(bsys([D(bce) ~ bD * Δ(bce)], [bc(0, x, y) ~ x], [bD]; dvs = [bce]),
         LatticeDiscretization(Grid(BDIMS); T = Float16))
-    @test startswith(e(() -> init(p16, CrankNicolson(; dt = 0.1))), "CrankNicolson: the field `bc` holds Float16 and the problem's value type is Float16")
+    @test startswith(e(() -> init(p16, CrankNicolson(); dt = 0.1)), "CrankNicolson: the field `bc` holds Float16 and the problem's value type is Float16")
 end
 end
 
@@ -177,12 +177,12 @@ end
     rd = bsys([D(bce) ~ 0.3 * Δ(bce) - bce + boe, D(boe) ~ 0.3 * Δ(boe) - boe], [bc(0, x, y) ~ 0.0, bo(0, x, y) ~ 1.0], Any[];
         T = 0.4, dvs = [bce, boe])
     p = discretize(rd, LatticeDiscretization(Grid((8, 8)); T = Float64))
-    @test [r.n for r in init(p, FieldGroups(bce => CrankNicolson(; dt = 0.1), boe => BackwardEuler(; dt = 0.1))).runtimes] == [2, 1]
-    @test only(init(p, CrankNicolson(; dt = 0.1)).runtimes).n == 1          # (the same group: no jump)
+    @test [r.n for r in init(p, FieldGroups(bce => CrankNicolson(), boe => BackwardEuler()); dt = 0.1).runtimes] == [2, 1]
+    @test only(init(p, CrankNicolson(); dt = 0.1).runtimes).n == 1          # (the same group: no jump)
     gr = bsys([D(bce) ~ 0.3 * Δ(bce) - bce + x, D(boe) ~ 0.3 * Δ(boe) + bk * boe], [bc(0, x, y) ~ 0.0, bo(0, x, y) ~ x], [bk];
         T = 1.0, dvs = [bce, boe])
     p = discretize(gr, LatticeDiscretization(Grid((8, 8)); T = Float64))
-    ig = init(p, FieldGroups(bce => BackwardEuler(; dt = 0.5), boe => BackwardEuler(; dt = 0.5, inner = BTIGHT)))
+    ig = init(p, FieldGroups(bce => BackwardEuler(), boe => BackwardEuler(; linsolve = BTIGHT)); dt = 0.5)
     @test [r.n for r in ig.runtimes] == [1, 2]
     ig.ps[bk] = 4.0                                    # (a write: the counts again, `⌈2 · 0.5 · 4⌉`)
     @test [r.n for r in ig.runtimes] == [1, 4]

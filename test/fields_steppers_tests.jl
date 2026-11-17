@@ -138,17 +138,12 @@ end
     end
 end
 
-@testitem "F3-12a: QuasiSteady steady state, dt refusal, and binding" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
-    @testset "F3-12a: QuasiSteady steady state, dt refusal, and binding" begin
+@testitem "F3-12a: QuasiSteady steady state and binding" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
+    @testset "F3-12a: QuasiSteady steady state and binding" begin
         dims = (12, 10)
         # the steady state: an MCS later the field is unchanged to the solver's tolerance
-        a, _ = fi_runA(FiSteady, fi_op(dims), 3; field_solver = QuasiSteady(; inner = DevicePCG(; rtol = 1e-12, budget = 64)))
+        a, _ = fi_runA(FiSteady, fi_op(dims), 3; field_solver = QuasiSteady(; linsolve = DevicePCG(; reltol = 1e-12, maxiters = 64)))
         @test maximum(abs, a[3] .- a[2]) < 1e-10 && maximum(a[3]) > 0
-        fi_throws(
-            ArgumentError,
-            ["`QuasiSteady(; dt = 0.1)`: a `PottsProblem` field steps over the MCS window (`mcs_duration`", "leave `dt` out"],
-            () -> PottsProblem(FiSteady(; name = :f), fi_op(dims), (0, 2); field_solver = QuasiSteady(; dt = 0.1))
-        )
         m = Module()
         Core.eval(m, :(using Potts; using Potts.LatticePDE))
         @test Core.eval(m, :QuasiSteady) === Potts.LatticePDE.QuasiSteady === Potts.LatticeFields.Problems.QuasiSteady
@@ -211,7 +206,7 @@ end
         a0, integ = fi_runA(FiSteady0, fi_op(dims), k; field_solver = nothing)
         a1, _ = fi_runA(FiSteady, fi_op(dims), k; field_solver = QuasiSteady())
         @test a0 == a1 && substep_counts(integ) == [1]
-        @test a0 == fi_runB(FiSteady0, dims, k; u0 = [:c => zeros(dims)], alg = QuasiSteady(; dt = 1.0))
+        @test a0 == fi_runB(FiSteady0, dims, k; u0 = [:c => zeros(dims)], alg = QuasiSteady())
         @test any(eq -> startswith(string(eq), "0 ~"), Potts.fields(FiSteady0(; name = :f)).eqs)
         # another solver for a steady row is refused; `QuasiSteady` given is the default
         fi_throws(
@@ -250,8 +245,8 @@ end
 @testitem "F3-12b (r3 S3, S4): a steady row's sign; its field by the rule of both front ends" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
     @testset "F3-12b (r3 S3, S4): a steady row's sign; its field by the rule of both front ends" begin
         dims, k = (12, 10), 3
-        an, _ = fi_runA(FiSteadyNeg, fi_op(dims), k; field_solver = QuasiSteady(; inner = DevicePCG(; rtol = 1e-12, budget = 64)))
-        a0, _ = fi_runA(FiSteady0, fi_op(dims), k; field_solver = QuasiSteady(; inner = DevicePCG(; rtol = 1e-12, budget = 64)))
+        an, _ = fi_runA(FiSteadyNeg, fi_op(dims), k; field_solver = QuasiSteady(; linsolve = DevicePCG(; reltol = 1e-12, maxiters = 64)))
+        a0, _ = fi_runA(FiSteady0, fi_op(dims), k; field_solver = QuasiSteady(; linsolve = DevicePCG(; reltol = 1e-12, maxiters = 64)))
         @test maximum(abs, an[end] .- a0[end]) < 1e-10
         al, integ = fi_runA(FiLocal, fi_op(dims), k)
         @test substep_counts(integ)[1] == 1 && maximum(al[end]) > 0
@@ -263,8 +258,8 @@ end
 @testitem "F3-12c: the QuasiSteady gain in a model: an accepted loop is the split recursion; a write past it is refused" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
     @testset "F3-12c: the QuasiSteady gain in a model: an accepted loop is the split recursion; a write past it is refused" begin
         dims = (12, 10)
-        tight = DevicePCG(; rtol = 1e-12, budget = 64)
-        fs = FieldGroups(:u => QuasiSteady(; inner = tight), :w => BackwardEuler(; inner = tight))
+        tight = DevicePCG(; reltol = 1e-12, maxiters = 64)
+        fs = FieldGroups(:u => QuasiSteady(; linsolve = tight), :w => BackwardEuler(; linsolve = tight))
         integ = init(PottsProblem(FiLoopK(; name = :f), fi_op(dims), (0, 3); field_solver = fs), SequentialCPM())
         for n in 1:3
             step!(integ)
@@ -318,10 +313,10 @@ end
 @testitem "F3-12c: `init = :steady` in a model: the field starts at its steady state; refusals name `init`" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
     @testset "F3-12c: `init = :steady` in a model: the field starts at its steady state; refusals name `init`" begin
         dims = (12, 10)
-        tight = DevicePCG(; rtol = 1e-12, budget = 64)
+        tight = DevicePCG(; reltol = 1e-12, maxiters = 64)
         # the steady state: one QuasiSteady MCS (σ frozen: the same inputs)
-        ref, _ = fi_runA(FiSteady, fi_op(dims), 1; field_solver = QuasiSteady(; inner = tight))
-        for fs in (BackwardEuler(; init = :steady, inner = tight), ExplicitEuler(; init = :steady), CrankNicolson(; init = :steady),
+        ref, _ = fi_runA(FiSteady, fi_op(dims), 1; field_solver = QuasiSteady(; linsolve = tight))
+        for fs in (BackwardEuler(; init = :steady, linsolve = tight), ExplicitEuler(; init = :steady), CrankNicolson(; init = :steady),
                    BDF2(; init = :steady), QuasiSteady(; init = :steady))
             integ = init(PottsProblem(FiSteady(; name = :f), fi_op(dims), (0, 3); field_solver = fs), SequentialCPM())
             c0 = copy(Array(current_state(integ).site.c))
@@ -352,7 +347,7 @@ end
                 "`ode_solver`: `ExplicitEuler(; init = :steady)`: `init = :steady` starts a field group at its steady state",
                 "leave `init` out",
             ],
-            () -> Potts._check_ode_dt(ExplicitEuler(; init = :steady), "`ode_solver`")
+            () -> Potts._check_ode_init(ExplicitEuler(; init = :steady), "`ode_solver`")
         )
         # the canonical text names `init` when it is set, and keeps the default's otherwise
         @test Potts._canonical(BackwardEuler(; init = :steady)) != Potts._canonical(BackwardEuler())
@@ -391,9 +386,9 @@ end
         st = current_state(integ)
         @test Array(st.σ) != σ3
         K4 = Int32.(Array(st.σ) .!= 0)
-        @test Array(st.site.c) == fi_runB(FiMoving, (16, 16), 1; u0 = [:c => c3], inputs = [:kind => K4], alg = QuasiSteady(; dt = 1.0))[1]
+        @test Array(st.site.c) == fi_runB(FiMoving, (16, 16), 1; u0 = [:c => c3], inputs = [:kind => K4], alg = QuasiSteady())[1]
         @test Array(st.site.c) != fi_runB(FiMoving, (16, 16), 1; u0 = [:c => c3], inputs = [:kind => Int32.(σ3 .!= 0)],
-            alg = QuasiSteady(; dt = 1.0))[1]
+            alg = QuasiSteady())[1]
     end
 end
 

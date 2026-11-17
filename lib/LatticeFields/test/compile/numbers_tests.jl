@@ -10,20 +10,20 @@ using LatticeFields: Exec
 include("../host_runner.jl")
 include("../fixtures.jl")
 using ForwardDiff: Dual
-using LatticeFields.Compile: lanecast, valtype, primal, withvaltype, promote_dual, lanetype,
+using LatticeFields.Compile: lanecast, value_type, primal, withvaltype, promote_dual, lanetype,
                              check_types
 using LatticeFields.IR: IRError, F16, F32, F64
 include("../shared/export_all.jl")
 end
 
 @testitem "number primitives" setup = [LF_compile_numbers] tags = [:latticefields, :compile] begin
-using .LF_compile_numbers: valtype
+using .LF_compile_numbers: value_type
 @testset "number primitives" begin
     d = Dual{Nothing}(1.5, 2.0, 3.0)
     @test lanecast(Float32, 1.5) === 1.5f0
     @test lanecast(Float32, d) === Dual{Nothing}(1.5f0, 2.0f0, 3.0f0)          # tag and partials kept
     @test lanecast(Float64, Dual{Nothing}(1.5f0, 2.0f0)) === Dual{Nothing}(1.5, 2.0)
-    @test valtype(typeof(d)) == Float64 && valtype(Float32) == Float32 && valtype(BigFloat) == BigFloat
+    @test value_type(typeof(d)) == Float64 && value_type(Float32) == Float32 && value_type(BigFloat) == BigFloat
     @test primal(d) === 1.5 && primal(2.0f0) === 2.0f0
     @test withvaltype(typeof(d), Float32) == Dual{Nothing, Float32, 2} && withvaltype(Float64, Float32) == Float32
     @test promote_dual(Float32, Float64) == Float32                              # plain p: no promotion
@@ -36,7 +36,7 @@ end
 end
 
 @testitem "backends without Float64: any Float64-based value type is refused, naming the field" setup = [LF_compile_numbers] tags = [:latticefields, :compile] begin
-using .LF_compile_numbers: valtype
+using .LF_compile_numbers: value_type
 @testset "backends without Float64: any Float64-based value type is refused, naming the field" begin
     s = semantic(program(diffusion2()))
     k = s.kernels[1]
@@ -55,7 +55,7 @@ end
 end
 
 @testitem "casts go through lanecast; :state lanes hold the value type" setup = [LF_compile_numbers] tags = [:latticefields, :compile] begin
-using .LF_compile_numbers: valtype
+using .LF_compile_numbers: value_type
 @testset "casts go through lanecast; :state lanes hold the value type" begin
     s = semantic(program(diffusion2()))
     k = s.kernels[1]
@@ -72,7 +72,7 @@ end
 # Float64 registers the kernel in Exec's D-157 registry. Base f5641ce1: no `fixed`, no `S`, no
 # registry (every test errors).
 @testitem "F3-14: fixed lanes, a compute type wider than the storage, the Float64 registry" setup = [LF_compile_numbers] tags = [:latticefields, :compile] begin
-using .LF_compile_numbers: valtype
+using .LF_compile_numbers: value_type
 @testset "F3-14: fixed lanes, a compute type wider than the storage, the Float64 registry" begin
     @test lanetype(F64, Float32, :state, true) == Float64 && lanetype(F32, Float64, :state, true) == Float32
     @test lanetype(F64, Float32, :state, false) == Float32                         # control: the value class

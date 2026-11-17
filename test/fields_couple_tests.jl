@@ -27,7 +27,7 @@
             @test any(x -> Potts.info(x).name === :c, Potts.variables(m))                 # `c`, not `fields₊c`
             @test Set(Potts.info(q).name for q in Potts.parameters(m)) == Set([:Dc, :s, :kd, :av])
             for fs in (ExplicitEuler(), BackwardEuler())
-                err, n = cp_replay(m, CpPDE.sys(), cp_hand, cp_own(fs); fs)
+                err, n = cp_replay(m, CpPDE.sys(), cp_hand, fs; fs)
                 @test n == 12 && err <= cp_tol(fs) || (println("couple $fs: $err"); false)
                 @test maximum(cp_run(m, fs).u[end].site.c) > 0.5
             end
@@ -38,7 +38,7 @@
         b = cp_run(m, BackwardEuler(); op = [cp_op(); :s => 0.9])
         @test a.u[end].site.c == b.u[end].site.c && a.u[end].site.c != cp_run(m, BackwardEuler()).u[end].site.c
         @test a[:c][end] == a.u[end].site.c
-        err, n = cp_replay(m, CpPDE.sys(), cp_hand, cp_own(BackwardEuler()); fs = FieldGroups(:c => BackwardEuler()),
+        err, n = cp_replay(m, CpPDE.sys(), cp_hand, BackwardEuler(); fs = FieldGroups(:c => BackwardEuler()),
             op = [cp_op(); :s => 0.9], p = [CpPDE.s => 0.9])
         @test n == 12 && err <= cp_tol(BackwardEuler()) || (println("FieldGroups s = 0.9: $err"); false)
     end
@@ -47,17 +47,17 @@ end
 @testitem "F4-B2: @fields in @potts_model; a drive reads the field by name" setup = [CoupleSetup] tags = [:potts, :fields_couple] begin
     @testset "F4-B2: @fields in @potts_model; a drive reads the field by name" begin
         for fs in (ExplicitEuler(), BackwardEuler())
-            err, n = cp_replay(CpFields(; name = :m), CpPDE.sys(), cp_hand, cp_own(fs); fs)
+            err, n = cp_replay(CpFields(; name = :m), CpPDE.sys(), cp_hand, fs; fs)
             @test n == 12 && err <= cp_tol(fs) || (println("CpFields $fs: $err"); false)
             # the drive reads `c` (the CPM path depends on the field); the field runs the PDESystem
-            err, n = cp_replay(CpDrive(; name = :m), CpPDE.sys2(), cp_hand2, cp_own(fs); fs)
+            err, n = cp_replay(CpDrive(; name = :m), CpPDE.sys2(), cp_hand2, fs; fs)
             @test n == 12 && err <= cp_tol(fs) || (println("CpDrive $fs: $err"); false)
             # (control: the drive moves the path)
             @test cp_run(CpDrive(; name = :m), fs).u[end].σ != cp_run(CpFields2(; name = :m), fs).u[end].σ
         end
         # the operating point reaches the coupled parameters as any others
         k = cp_run(CpFields(; name = :m), ExplicitEuler(); op = [cp_op(); :kd => 0.3]).u[end].site.c
-        err, n = cp_replay(CpFields(; name = :m), CpPDE.sys(), cp_hand, cp_own(ExplicitEuler()); op = [cp_op(); :kd => 0.3],
+        err, n = cp_replay(CpFields(; name = :m), CpPDE.sys(), cp_hand, ExplicitEuler(); op = [cp_op(); :kd => 0.3],
             p = [CpPDE.kd => 0.3])
         @test n == 12 && err == 0 || (println("kd = 0.3: $err"); false)
         # and so do the constructor keywords (S1 of the F4-B2 review); an unknown keyword is refused
@@ -76,7 +76,7 @@ end
             @test a.u[end].σ != cp_run(CpFields2(; name = :m), fs).u[end].σ             # (control: the drive moves the path)
             # a list of names; one name with the other field reached by name: both fields run the PDESystem
             for M in (CpList, CpOne)
-                err, n = cp_replay(M(; name = :m), CpPDE.sys3(), cp_hand2, cp_own(fs); fs, fields = (:c, :u))
+                err, n = cp_replay(M(; name = :m), CpPDE.sys3(), cp_hand2, fs; fs, fields = (:c, :u))
                 @test n == 12 && err <= cp_tol(fs) || (println("$M $fs: $err"); false)
             end
             o = cp_run(CpOne(; name = :m), fs)
@@ -84,7 +84,7 @@ end
         end
         # control: a wrong binding is caught by the oracles
         @test cp_run(CpWrong(; name = :m), ExplicitEuler()).u[end].site.c != cp_run(CpFields(; name = :m), ExplicitEuler()).u[end].site.c
-        @test cp_replay(CpWrong(; name = :m), CpPDE.sys(), cp_hand, cp_own(ExplicitEuler()))[1] > 1e-3
+        @test cp_replay(CpWrong(; name = :m), CpPDE.sys(), cp_hand, ExplicitEuler())[1] > 1e-3
         body(line; pre = :(), post = :()) = quote
             @potts_model CpBadNames begin
                 @kinds medium A
@@ -171,8 +171,8 @@ end
 # path stays primal, and the derivative matches central differences at the same seed
 @testitem "F4-B2: field derivatives of a coupled model against central differences" setup = [CoupleSetup] tags = [:potts, :fields_couple] begin
     @testset "F4-B2: field derivatives of a coupled model against central differences" begin
-        tight = DevicePCG(; rtol = 1e-11, budget = 60)
-        for fs in (ExplicitEuler(), BackwardEuler(; inner = tight)), M in (CpFields2, CpDrive)
+        tight = DevicePCG(; reltol = 1e-11, maxiters = 60)
+        for fs in (ExplicitEuler(), BackwardEuler(; linsolve = tight)), M in (CpFields2, CpDrive)
             base = cp_run(M(; name = :m), fs)
             for (name, v) in ((:s, 0.5), (:kd, 0.1), (:Dc, 0.2))
                 d = cp_run(M(; name = :m), fs; op = [cp_op(); name => ForwardDiff.Dual(v, 1.0)])
@@ -246,7 +246,7 @@ end
             live = [length(setdiff(unique(u.σ), 0)) for u in b.u]
             @test live[end] > live[1] && any(u -> count(==(2), u.σ) == 0, b.u)
             fs isa FieldGroups && continue
-            err, n = cp_replay(CrLife(; name = :m), CpRev.rich(), cr_hand, cp_own(fs); fs, k = 20, op = cr_rich_op(), seed = 5,
+            err, n = cp_replay(CrLife(; name = :m), CpRev.rich(), cr_hand, fs; fs, k = 20, op = cr_rich_op(), seed = 5,
                 fields = (:c, :q), skip = cr_divided)
             @test n >= 10 && err <= cp_tol(fs) || (println("CrLife $fs: $err over $n windows"); false)
         end
@@ -260,7 +260,7 @@ end
             @test cp_same(r, cr_run(CrTwoB(; name = :m), fs))
             @test maximum(r.u[end].site.w) > 0.1
             f1 = fs isa ExplicitEuler ? ExplicitEuler(; substeps = 4) : fs
-            err, n = cp_replay(CrTwoB(; name = :m), CpRev.first_sys(), cp_hand2, cp_own(f1); fs = f1, k = 10, seed = 5)
+            err, n = cp_replay(CrTwoB(; name = :m), CpRev.first_sys(), cp_hand2, f1; fs = f1, k = 10, seed = 5)
             @test n == 10 && err <= cp_tol(fs) || (println("CrTwoB $fs: $err"); false)
         end
     end
@@ -274,7 +274,7 @@ end
             @test size(c.u[end].site.cc) == (12, 10)
             @test all(u -> cr_partial(u.σ, 2) > 0, c.u)
             err, n = cp_replay(CrCrs(; name = :m), CpRev.coarse_sys(), (σ, kind) -> [:endo => [s != 0 && kind[s] == 1 for s in σ]],
-                cp_own(fs); fs, k = 10, seed = 5, fields = (:cc,))
+                fs; fs, k = 10, seed = 5, fields = (:cc,))
             @test n == 10 && err <= max(cp_tol(fs), 1e-14) || (println("CrCrs $fs: $err"); false)
         end
     end
@@ -297,7 +297,7 @@ end
         @test occursin("bind it: `kb => Potts.kind == :A`", e) || (println(e); false)
         # a numeric input filled by `kind` reads the kind number; `field_inputs` gives the same values
         err, n = cp_replay(CrKindReal(; name = :m), CpRev.kind_real(), (σ, kind) -> [:kind => [s == 0 ? 0.0 : Float64(kind[s]) for s in σ]],
-            cp_own(ExplicitEuler()); k = 10, seed = 5, op = cr_kop())
+            ExplicitEuler(); k = 10, seed = 5, op = cr_kop())
         @test n == 10 && err <= 1e-14 || (println("CrKindReal: $err"); false)   # (measured 4.4e-16, 2026-11-10)
         fi = Potts.field_inputs(PottsProblem(CrKindReal(; name = :m), cr_kop(), (0, 1)))
         @test fi[:kind][6, 6] === Int32(1) && fi[:kind][15, 11] === Int32(2) && fi[:kind][1, 1] === Int32(0)

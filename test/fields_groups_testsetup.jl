@@ -111,7 +111,7 @@ FdClockRepeat(; name = :FdClockRepeat, kw...) = _Fg4x4(; variant = :clock_repeat
 FdTimeRead(; name = :FdTimeRead, kw...) = _Fg4x4(; variant = :time_read, name, kw...)
 FdClockHalf(; name = :FdClockHalf, kw...) = _Fg4x4(; variant = :clock_half, name, kw...)
 
-struct AStub <: Potts.LatticeFields.Problems.FieldAlgorithm
+struct AStub <: Potts.LatticeFields.Problems.AbstractFieldAlgorithm
     code::UInt32
     at::Int
     need::Int

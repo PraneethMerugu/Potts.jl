@@ -27,11 +27,11 @@ using ..IR: IR, Access, BOOL, CALL, CAST, CLAMP, COND, CONST, COORD, Coef, DIV,
             loadtype, ncomp, nsites, node!, nodeargs, opname, param!, print_program,
             rebuild,
             remap_access,
-            select!, verify, with_kernels, BRule, Ex, FieldDecl, FlagDecl, MaskDecl, _rulemap, cast!, load!
+            select!, verify, with_kernels, AbstractBoundaryRule, Ex, FieldDecl, FlagDecl, MaskDecl, _rulemap, cast!, load!
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
-public CompileOptions, semantic, fingerprint_text, fuse_update, fuse_residual, lanecast, valtype, primal, withvaltype, promote_dual, lanetype, npartials, dvalue, dpartial, dsetpartial, dreplace
+public CompileOptions, semantic, fingerprint_text, fuse_update, fuse_residual, lanecast, value_type, primal, withvaltype, promote_dual, lanetype, npartials, dvalue, dpartial, dsetpartial, dreplace
 
 include("numbers.jl")
 include("semantic.jl")

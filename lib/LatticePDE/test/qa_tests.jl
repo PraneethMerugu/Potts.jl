@@ -51,8 +51,8 @@ end
         )
         grid = Grid((16, 16))
         prob = discretize(sys, LatticeDiscretization(grid; T = Float64))
-        for alg in (ExplicitEuler(dt = 0.05, substeps = 2), BackwardEuler(dt = 0.05))
-            integ = init(prob, alg; save_start = false, save_everystep = false, save_end = false)
+        for alg in (ExplicitEuler(substeps = 2), BackwardEuler())
+            integ = init(prob, alg; dt = 0.05, save_start = false, save_everystep = false, save_end = false)
             step!(integ)
             @test_opt target_modules = (LatticePDE,) step!(integ)
             if alg isa ExplicitEuler

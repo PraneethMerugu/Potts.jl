@@ -147,7 +147,7 @@ const P60AJ_CASES = Dict{String, Tuple{Any, Any, NamedTuple}}(
     "GranerGlazier" => (() -> GranerGlazier(; name = :gg), Any[ownership => P60AJ_GG[1], kind => P60AJ_GG[2]], (;)),
     "MerksVasculogenesis" => (() -> MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
         Any[ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]],
-        (; field_solver = Potts.ExplicitEuler(substeps = 2, lower = 0.0))),
+        (; field_solver = Potts.ExplicitEuler(substeps = 2, lower_bound = 0.0))),
 )
 const P60AJ_TASK_LABELS = ("P60ajYield", "P60ajYieldCentroid", "P60ajBase", "P60ajPlain", "WortelAct")
 const P60AJ_THREAD_LABELS = ("WortelAct", "WortelAct connected", "AkeebInvasion", "GranerGlazier",

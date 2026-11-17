@@ -82,9 +82,9 @@ function compile_kernel(p::Program{N}, k::Kernel{N}, o::CompileOptions = Compile
 end
 
 # whether kernel `k` computes in Float64 or loads or stores a lane that holds Float64
-_touches_float64(p::Program, k::Kernel, o::CompileOptions) = valtype(o.T) === Float64 ||
-    any(a -> isfloat(p.fields[a.field].storage) && valtype(_lane_holds(p.fields[a.field], o)) === Float64, k.accesses) ||
-    any(s -> isfloat(p.fields[s.access.field].storage) && valtype(_lane_holds(p.fields[s.access.field], o)) === Float64, k.stores)
+_touches_float64(p::Program, k::Kernel, o::CompileOptions) = value_type(o.T) === Float64 ||
+    any(a -> isfloat(p.fields[a.field].storage) && value_type(_lane_holds(p.fields[a.field], o)) === Float64, k.accesses) ||
+    any(s -> isfloat(p.fields[s.access.field].storage) && value_type(_lane_holds(p.fields[s.access.field], o)) === Float64, k.stores)
 _reads(ex, s::Symbol) = ex === s || (ex isa Expr && any(a -> _reads(a, s), ex.args))
 # whether kernel `k` reads parameter slot `i` itself, and whether a hoisted value's host
 # expression reads it (`Q[i]`, `hostexpr`)

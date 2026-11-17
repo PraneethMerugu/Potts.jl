@@ -75,12 +75,12 @@ using .LP_pdesystem_ctor: fd
     ins = [psin => PS_K, psm => PS_M]
     pa, pb = discretize(a, psdisc(); inputs = ins), discretize(b, psdisc(); inputs = ins)
     @test pa.u0 == pb.u0 && isequal(pa.p.values, pb.p.values)
-    ra, rb = solve(pa, ExplicitEuler(; dt = 1e-3)), solve(pb, ExplicitEuler(; dt = 1e-3))
+    ra, rb = solve(pa, ExplicitEuler(); dt = 1e-3), solve(pb, ExplicitEuler(); dt = 1e-3)
     @test ra.u[end] == rb.u[end] && maximum(abs, ra.u[end] .- ra.u[1]) > 1e-3
     # and the hand-built one in the written order (the lists are the same as sets)
     c = PDESystem(pseq(), psbc(), psdom, [t, x, y], [psc(t, x, y), psu(t, x, y), psin(t, x, y), psm(t, x, y)],
         [psD, psk, psJ]; name = :ps)
-    @test solve(discretize(c, psdisc(); inputs = ins), ExplicitEuler(; dt = 1e-3)).u[end] == ra.u[end]
+    @test solve(discretize(c, psdisc(); inputs = ins), ExplicitEuler(); dt = 1e-3).u[end] == ra.u[end]
     # keywords go to PDESystem; no parameters gives an empty list
     i = LatticePDE.pdesystem([D(psc(t, x, y)) ~ -psc(t, x, y)]; name = :pi, domain = psdom,
         initial_conditions = Dict(psc(t, x, y) => 0.25))

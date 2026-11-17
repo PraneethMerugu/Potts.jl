@@ -15,7 +15,7 @@ bsys(eqs, bcs, ps; T = 1.0, dvs = [bce, bqe]) = PDESystem(eqs, bcs, bdom(T), [t,
 # (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
 bown(sys; dims = BDIMS, T = Float64, kw...) =
     LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims); T, kw...); inputs = [bqe => BKIND]))
-const BTIGHT = DevicePCG(; rtol = 1e-12, budget = 64)
+const BTIGHT = DevicePCG(; reltol = 1e-12, maxiters = 64)
 bwarm(ig) = (step!(ig); @allocated step!(ig))              # (a function barrier)
 blast(s) = s[bce, length(s.t)]                             # the last save
 
@@ -82,8 +82,8 @@ end
 bxs() = [(i - 0.5) / BDIMS[1] for i in 1:BDIMS[1], j in 1:BDIMS[2]]
 bys() = [(j - 0.5) / BDIMS[2] for i in 1:BDIMS[1], j in 1:BDIMS[2]]
 # one window of `alg` from the problem's start state
-function be_window(prob, alg)
-    ig = init(prob, alg)
+function be_window(prob, alg; dt)
+    ig = init(prob, alg; dt)
     u0 = copy(vec(ig[bce]))
     step!(ig)
     return ig, u0, vec(ig[bce])
@@ -92,8 +92,7 @@ end
 # R1 (F3-06 review): a group whose step ends `StalledSuccess` (a rounding floor, accepted) does
 # not stop the step: the later groups run. A failure still stops it. Base (437a84ef,
 # ~/lpwork/f3b3-nc-r1.log): `go` does not move after a stalled `gc` step.
-struct StallStub <: LFP.FieldAlgorithm
-    dt::Float64
+struct StallStub <: LFP.AbstractFieldAlgorithm
     code::ReturnCode.T
 end
 LFP.nbuffers(::StallStub) = 2
@@ -101,7 +100,7 @@ LFP.update_key(::StallStub) = :euler
 LFP.update_rule(::StallStub) = LFP.update_rule(ExplicitEuler())
 LFP.alg_cache(a::StallStub, group, store) = Ref(a.code)
 LFP.step_retcode!(c::Base.RefValue{ReturnCode.T}, rt) = c[]
-LFP.substeps(::LFP.FieldProblem, ::StallStub, p = nothing; tables = nothing, inputs = nothing, stability = nothing, fields = nothing) = 1
+LFP.substeps(::LFP.FieldProblem, ::StallStub, p = nothing; tables = nothing, inputs = nothing, stability = nothing, fields = nothing, dt = nothing) = 1
 
 # F3-09a (F3 design §3.4): a local nonlinear term `f(c)` (offset 0, its own field only) enters
 # the operator as `−∂f/∂c` at the iterate (`Symbolics.derivative`), so one Newton step per
@@ -118,7 +117,7 @@ function nl_orders(rhs, ic; T, dts, newton = nothing, n = 16)
     ref = solve(discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64)), Tsit5();
         reltol = 1e-12, abstol = 1e-12).u[end]
     pb = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64))
-    us = [vec(blast(solve(pb, BackwardEuler(; dt, inner = BTIGHT, newton)))) for dt in dts]
+    us = [vec(blast(solve(pb, BackwardEuler(; linsolve = BTIGHT, newton); dt))) for dt in dts]
     es = [maximum(abs, u .- ref) for u in us]
     return es, log2.(es[1:(end - 1)] ./ es[2:end]), pb, us
 end
@@ -166,7 +165,7 @@ const WARN = Base.CoreLogging.Warn
 
 # F3 batch 3 review r1 (research/field-compiler/f3/reviews/F3-batch3-r1.md). Base 2d213237
 # (~/lpwork/f3r1-nc-base.log) unless a testset names a mutation: each testset fails there.
-r1tight() = DevicePCG(; rtol = 1e-13, budget = 200)
+r1tight() = DevicePCG(; reltol = 1e-13, maxiters = 200)
 r1rel(a, b) = maximum(abs, a .- b) / maximum(abs, b)
 
 # F3-20: a hexagonal lattice (axial coordinates; `Δ` is `2/(3h²) Σₙ (cₙ − c)` over the six

@@ -33,25 +33,25 @@ using OrdinaryDiffEqBDF: ABDF2
 
 # one Backward Euler substep of `p` from its start state, with the operator rebuilt as BDF2's
 # start does
-be_first(p, h) = (ig = init(p, BackwardEuler(; dt = h, inner = BTIGHT)); step!(ig); vec(ig[bce]))
+be_first(p, h) = (ig = init(p, BackwardEuler(; linsolve = BTIGHT); dt = h); step!(ig); vec(ig[bce]))
 include("shared/export_all.jl")
 end
 
 @testitem "F3-11: BDF2: order 2, the manufactured solution, the stage" setup = [LP_bdf2] tags = [:latticepde, :bdf2] begin
 @testset "F3-11: BDF2: order 2, the manufactured solution, the stage" begin
     p, λ, u0 = eig_problem(16)
-    err(dt) = maximum(abs, blast(solve(p, BDF2(; dt, inner = BTIGHT))) .- exp(0.3λ * 0.4) .* u0)
+    err(dt) = maximum(abs, blast(solve(p, BDF2(; linsolve = BTIGHT); dt)) .- exp(0.3λ * 0.4) .* u0)
     # (from h = 0.025 down: at h = 0.05 the Backward Euler start's error and BDF2's own cancel, so
     # coarser ladders show orders like 7.1, −0.8; a scalar BDF2 recurrence reproduces them, r1 N1)
     es = [err(0.4 / 2^k) for k in 4:7]
     @test all(o -> abs(o - 2) < 0.1, log2.(es[1:(end - 1)] ./ es[2:end])) || (println("BDF2 heat ", es); false)
-    em, om = mf_orders(dt -> BDF2(; dt, inner = BTIGHT), [0.025 / 2^k for k in 0:3])
+    em, om = mf_orders(BDF2(; linsolve = BTIGHT), [0.025 / 2^k for k in 0:3])
     @test all(o -> abs(o - 2) < 0.1, om) || (println("BDF2 manufactured orders ", om); false)
     # two windows against the hand matrices: Backward Euler at h, then BDF2 at 2h
     h = 0.1
     p8 = mf_problem(BDIMS)
-    u0 = vec(init(p8, BDF2(; dt = h))[bce])
-    us, ig = windows(p8, BDF2(; dt = h, inner = BTIGHT), 2)
+    u0 = vec(init(p8, BDF2(); dt = h)[bce])
+    us, ig = windows(p8, BDF2(; linsolve = BTIGHT), 2; dt = h)
     L1, b1_ = mf_rate(h)
     @test maximum(abs, us[1] .- (I - h * L1) \ (u0 .+ h .* b1_)) < 1e-9
     L2, b2 = mf_rate(2h)
@@ -66,7 +66,7 @@ end
     h = 0.05
     # the first substep after init is one Backward Euler substep, bitwise (the Backward Euler
     # operator, then the BDF2 one: two rebuilds)
-    ig = init(p, BDF2(; dt = h, inner = BTIGHT))
+    ig = init(p, BDF2(; linsolve = BTIGHT); dt = h)
     c = only(ig.runtimes).cache
     @test c.start && c.γ == 1.0
     step!(ig)
@@ -85,7 +85,7 @@ end
     # `substeps` doubles starts with a Backward Euler substep and the run keeps order 2 (without
     # the restart, one halving of h drops BDF2 to order 1: reviewer probe (5), the norestart control)
     function halved(dt)
-        ig = init(p, BDF2(; dt, substeps = 1, inner = BTIGHT))
+        ig = init(p, BDF2(; substeps = 1, linsolve = BTIGHT); dt)
         m = ig.nsteps
         for k in 1:m
             k == m ÷ 2 + 1 && (ig.substeps = 2)
@@ -101,14 +101,14 @@ end
     @parameters bg2 = 1.0
     sg = bsys([D(bce) ~ bD * Δ(bce) + bg2 * bce], [bc(0, x, y) ~ x * y], [bD, bg2]; T = 2.0, dvs = [bce])
     pg = discretize(sg, LatticeDiscretization(Grid(BDIMS); T = Float64))
-    ig = init(pg, BDF2(; dt = 0.5, inner = BTIGHT))
+    ig = init(pg, BDF2(; linsolve = BTIGHT); dt = 0.5)
     @test ig.substeps == 1
     step!(ig); step!(ig)
     u = vec(ig[bce])
     ig.ps[bg2] = 4.0
     @test ig.substeps == 4 && only(ig.runtimes).cache.start
     step!(ig)
-    fresh = init(remake(pg; u0 = u, p = [bg2 => 4.0]), BDF2(; dt = 0.5, inner = BTIGHT))
+    fresh = init(remake(pg; u0 = u, p = [bg2 => 4.0]), BDF2(; linsolve = BTIGHT); dt = 0.5)
     step!(fresh)
     @test vec(ig[bce]) == vec(fresh[bce])
 end
@@ -117,9 +117,9 @@ end
 @testitem "F3-11: the history is not state; positivity is `lower`; SX-18" setup = [LP_bdf2] tags = [:latticepde, :bdf2] begin
 @testset "F3-11: the history is not state; positivity is `lower`; SX-18" begin
     p, _, _ = eig_problem(16)
-    s = solve(p, BDF2(; dt = 0.05); saveat = 0.1)
+    s = solve(p, BDF2(); dt = 0.05, saveat = 0.1)
     @test all(u -> length(u) == length(p.u0), s.u)
-        ig = init(p, BDF2(; dt = 0.05); save_everystep = false)
+        ig = init(p, BDF2(); dt = 0.05, save_everystep = false)
     step!(ig)
     @test length(ig.store.bufs[fieldid(LFP.field_problem(p).program, "bc")]) == 2                 # (c, c__next): no third buffer
     @test only(ig.runtimes).cache.rows[1].prev isa Vector{Float64}
@@ -128,18 +128,18 @@ end
     # (reviewer probe (1): −0.028); `lower = 0` clips it
     sd = bsys([D(bce) ~ 1e-6 * Δ(bce) - 100.0 * bce], [bc(0, x, y) ~ 1.0], Any[]; T = 0.4, dvs = [bce])
     pd = discretize(sd, LatticeDiscretization(Grid((4, 4)); T = Float64))
-    neg = solve(pd, BDF2(; dt = 0.1); saveat = 0.1)
+    neg = solve(pd, BDF2(); dt = 0.1, saveat = 0.1)
     @test minimum(minimum.(neg.u)) < -0.02
-    pos = solve(pd, BDF2(; dt = 0.1, lower = 0.0); saveat = 0.1)
+    pos = solve(pd, BDF2(; lower_bound = 0.0); dt = 0.1, saveat = 0.1)
     @test minimum(minimum.(pos.u)) >= 0
-    @test minimum(minimum.(solve(pd, BackwardEuler(; dt = 0.1)).u)) >= 0      # (Backward Euler needs no clip)
+    @test minimum(minimum.(solve(pd, BackwardEuler(); dt = 0.1).u)) >= 0      # (Backward Euler needs no clip)
     # SX-18: OrdinaryDiffEq's ABDF2 at a fixed step, whose first step is ImplicitEuler (its
     # `perform_step!` takes the Euler cache at `iter == 1`), as BDF2's start
     sx = bsys([D(bce) ~ bD * Δ(bce) - bk * bce + sin(3t) * x], [bc(0, x, y) ~ x * y, bc(t, 0, y) ~ 1.0], [bD, bk];
         T = 0.4, dvs = [bce])
     po = discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64))
     sa = solve(po, ABDF2(); dt = 0.05, adaptive = false, abstol = 1e-12, reltol = 1e-12)
-    sb = solve(discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64)), BDF2(; dt = 0.05, inner = BTIGHT))
+    sb = solve(discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64)), BDF2(; linsolve = BTIGHT); dt = 0.05)
     @test sa.t[end] ≈ 0.4 && maximum(abs, vec(blast(sb)) .- sa.u[end]) < 1e-8
 end
 end
@@ -152,18 +152,18 @@ end
         [bu(0, x, y)[1] ~ 0.5, bu(0, x, y)[2] ~ 0.0], [bue]; T = 0.3)
     scal = nlsys([D(bce) ~ 0.05 * Δ(bce) - 40 * bce / (0.025 + bce) + 20, D(boe) ~ 0.05 * Δ(boe) - boe + bce],
         [bc(0, x, y) ~ 0.5, bo(0, x, y) ~ 0.0], [bce, boe]; T = 0.3)
-    a = @test_logs min_level = WARN solve(nlown(comp), BDF2(; dt = 0.05))
-    b = solve(nlown(scal), BDF2(; dt = 0.05))
+    a = @test_logs min_level = WARN solve(nlown(comp), BDF2(); dt = 0.05)
+    b = solve(nlown(scal), BDF2(); dt = 0.05)
         @test LatticePDE.Problems.field_stats(a) == LatticePDE.Problems.field_stats(b) && a.stats.solves > 0
     @test a[bue[1], length(a.t)] == b[bce, length(b.t)] && a[bue[2], length(a.t)] == b[boe, length(b.t)]
     for (v0, v1) in ((-1.0, 1.0), (1.0, -1.0))
-        alg = BDF2(; dt = 0.1, inner = BTIGHT)
+        alg = BDF2(; linsolve = BTIGHT)
         sys0, rb = robin_sys(v0)
-        ig = init(nlown(sys0; dims = (10, 8)), alg)
+        ig = init(nlown(sys0; dims = (10, 8)), alg; dt = 0.1)
         step!(ig); step!(ig)
         u = vec(ig[bce])
         ig.ps[rb] = v1
-        fresh = init(remake(nlown(first(robin_sys(v1)); dims = (10, 8)); u0 = u), alg)
+        fresh = init(remake(nlown(first(robin_sys(v1)); dims = (10, 8)); u0 = u), alg; dt = 0.1)
         c, cf = only(ig.runtimes).cache, only(fresh.runtimes).cache
         @test (c.exact, c.seen, c.newton, c.check, c.start) == (cf.exact, cf.seen, cf.newton, cf.check, cf.start)
         step!(ig); step!(fresh)
@@ -174,13 +174,13 @@ end
     catch err
         err isa ArgumentError ? err.msg : sprint(showerror, err)
     end
-    @test startswith(e(() -> BDF2(; lower = Inf)), "BDF2: lower = Inf must be a finite number")
-    a = BDF2(; substeps = 3, lower = 0.0)
+    @test startswith(e(() -> BDF2(; lower_bound = Inf)), "BDF2: lower_bound = Inf must be a finite number")
+    a = BDF2(; substeps = 3, lower_bound = 0.0)
     @test eval(Meta.parse(repr(a))) == a
     # the counts are those of the Backward Euler start: `+ g c` needs n ≥ ⌈2 dt g⌉
     pg = bown(bsys([D(bce) ~ bD * Δ(bce) + bk * bce], [bc(0, x, y) ~ x], [bD, bk]))
-    @test init(pg, BDF2(; dt = 0.5)).substeps == 2
+    @test init(pg, BDF2(); dt = 0.5).substeps == 2
     ig = @test_logs (:warn, r"^BDF2\(substeps = 1\): field `bc` takes 2 substeps, more than the 1 requested: a local growth") init(pg,
-        BDF2(; dt = 0.5, substeps = 1))
+        BDF2(; substeps = 1); dt = 0.5)
 end
 end

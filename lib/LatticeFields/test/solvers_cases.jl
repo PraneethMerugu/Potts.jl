@@ -4,7 +4,7 @@
 # masked islands, and a periodic box. Face coefficients 1, shift `s` (scaled form).
 
 using Random
-using LatticeFields.Solvers: CellOperator, FieldSolver, DevicePCG, Multigrid, V, steady!,
+using LatticeFields.Solvers: CellOperator, FieldSolver, DevicePCG, Multigrid, VCycle, steady!,
                              field, scalars, rebuild!, lift!, solve!, lkey, RuleWeights,
                              solution_key
 
@@ -111,7 +111,7 @@ end
 Asymptotic factor of stationary cycles, (‖r₃₀‖∞/‖r₅‖∞)^(1/25), from a random error with
 zero right-hand side (Dirichlet values 0).
 """
-function cycle_factor(case; rule = RuleWeights(), cycle = V(2, 2), T = Float64)
+function cycle_factor(case; rule = RuleWeights(), cycle = VCycle(2, 2), T = Float64)
     op0, inputs = case
     op = CellOperator(
         op0.dims; periodic = op0.periodic, face = op0.face, shift = op0.shift,

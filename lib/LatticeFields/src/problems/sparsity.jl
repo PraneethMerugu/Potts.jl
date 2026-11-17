@@ -428,7 +428,7 @@ lattice_jvp!(Jv, j, v, u, p, t) = throw(ArgumentError("the Jacobian-vector produ
 The matrix-free Jacobian of a problem on a device (F4 design §3.10, ruling Q7): a
 `SciMLOperators.FunctionOperator` whose product is [`LatticeJVP`](@ref), the `jac_prototype`
 of an `ODEProblem` on a device, so an implicit OrdinaryDiffEq solver forms `W = J − M/γ` as an
-operator and solves it with a Krylov method (precondition it with `LatticeMG()`).
+operator and solves it with a Krylov method (precondition it with `LatticeMultigrid()`).
 """
 function JacobianOperator(jvp::LatticeJVP, u, p, t)
     return SciMLOperators.FunctionOperator(jvp, u, u; u, p, t, isinplace = true, outofplace = false,
@@ -445,7 +445,7 @@ function _jacobian_kw(meta::LatticeMetadata, U, lp; jac::Bool, sparse::Bool, jvp
         throw(ArgumentError(string("`", sparse ? "sparse" : "jac", " = true` builds a sparse matrix on the host; the ",
             "problem's backend is ", nameof(typeof(fp.backend)), ", and no KernelAbstractions sparse matrix exists ",
             "(a hardware limit): on a device the Jacobian is the matrix-free product (`jvp = true`, the default), ",
-            "the problem's `jac_prototype`, for a Krylov linear solver with `precs = LatticeMG()`")))
+            "the problem's `jac_prototype`, for a Krylov linear solver with `precs = LatticeMultigrid()`")))
     end
     kw = (;)
     j = LatticeJVP(meta)
@@ -454,7 +454,7 @@ function _jacobian_kw(meta::LatticeMetadata, U, lp; jac::Bool, sparse::Bool, jvp
         P = _sparsity(meta)
         n = size(P, 1)
         P = P .| SparseArrays.sparse(1:n, 1:n, true, n, n)
-        proto = SparseArrays.SparseMatrixCSC{valtype(eltype(U)), Int}(P)
+        proto = SparseArrays.SparseMatrixCSC{value_type(eltype(U)), Int}(P)
         fill!(SparseArrays.nonzeros(proto), zero(eltype(SparseArrays.nonzeros(proto))))
         colors = column_colors(proto, _state_coords(fp))
         sparse && (kw = (; kw..., jac_prototype = proto, colorvec = colors))

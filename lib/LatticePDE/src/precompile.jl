@@ -25,11 +25,11 @@ function _precompile_workload()
         prob = discretize(sys, LatticeDiscretization(Grid((8, 8)); T))
         du = similar(prob.u0)
         prob.f(du, prob.u0, prob.p, zero(T))                         # the ODE right side
-        for alg in (ExplicitEuler(; dt = T(0.01)), BackwardEuler(; dt = T(0.01)))
-            integ = init(prob, alg)
+        for alg in (ExplicitEuler(), BackwardEuler())
+            integ = init(prob, alg; dt = T(0.01))
             step!(integ)
             integ[ce]
-            sol = solve(prob, alg; saveat = T(0.5))
+            sol = solve(prob, alg; dt = T(0.01), saveat = T(0.5))
             sol[ce]
             field_report(devnull, sol)
         end

@@ -11,7 +11,7 @@
         )
         K2 = fill(Int32(2), 8, 8)
         ρt = sradius(sys, 8, [qe => K2])
-        sol = solve(sown(sys; n = 8, inputs = [qe => K2]), ExplicitEuler(; dt = 0.01))
+        sol = solve(sown(sys; n = 8, inputs = [qe => K2]), ExplicitEuler(); dt = 0.01)
         @test ceil(Int, 0.01 * ρt / 1.8) <= first(substep_counts(sol)) <= ceil(Int, 1.1 * 0.01 * ρt / 1.8) && sok(sol)
     end
 end
@@ -32,7 +32,7 @@ end
             sys = ssys([D(ce) ~ rate], [c(0, x, y) ~ 1.0 + sin(1000x + 700y)], [ce, qe], [Dw]; T = 0.02)
             ρt = sradius(sys, 8, [qe => Kc])
             p = sown(sys; n = 8, inputs = [qe => Kc])
-            sol = solve(p, ExplicitEuler(; dt = 0.01))
+            sol = solve(p, ExplicitEuler(); dt = 0.01)
             @test grouped == 3 && first(substep_counts(sol)) >= ceil(Int, 0.01 * ρt / 1.8) && first(substep_counts(sol)) > grouped && sok(sol)
             # negative control: a count under the true limit (dt ρ / n = 3 > 2) grows without bound,
             # where the bound's count stays within the start's range. (Half the bound's count is
@@ -40,9 +40,9 @@ end
             # radius.)
             nb = floor(Int, 0.01 * ρt / 3)
             pl = remake(p; tspan = (0.0, 0.01 * cld(2000, nb)))                                     # 2000 substeps
-            ig = init(pl, ExplicitEuler(; dt = 0.01))
+            ig = init(pl, ExplicitEuler(); dt = 0.01)
             ig.substeps = nb
-            @test sgrew(solve!(ig)) && !sgrew(solve(pl, ExplicitEuler(; dt = 0.01)))
+            @test sgrew(solve!(ig)) && !sgrew(solve(pl, ExplicitEuler(); dt = 0.01))
         end
     end
 end
@@ -55,12 +55,12 @@ end
         sys = ssys([D(ce) ~ (1 / at(Dw3, qb)) * Δ(ce)], [c(0, x, y) ~ 1.0 + sin(1000x + 700y)], [ce, qb], [Dw3])
         Kb = checker(4, 1, 2)
         p = sown(sys; inputs = [qb => Kb])
-        sol = solve(p, ExplicitEuler(; dt = 0.025, substeps = 2))
+        sol = solve(p, ExplicitEuler(; substeps = 2); dt = 0.025)
         m0 = maximum(abs, sol[:c, 1])
         @test substep_counts(sol)[1] == ceil(Int, 0.025 * 100 * 128 / 1.8) && sok(sol) && maximum(abs, sol[:c, end]) <= m0
         ρt = sradius(sys, 4, [qb => Kb])
         @test first(substep_counts(sol)) >= ceil(Int, 0.025 * ρt / 1.8)
-        ig = init(p, ExplicitEuler(; dt = 0.025))
+        ig = init(p, ExplicitEuler(); dt = 0.025)
         ig.substeps = floor(Int, 0.025 * ρt / 3)                 # negative control: under the limit
         @test sgrew(solve!(ig)) && !sgrew(sol)
         # a negative entry is negative diffusion, refused
@@ -70,8 +70,8 @@ end
             "is negative at these parameters", emsg(
                 () -> solve(
                     sown(sys; inputs = [qe => checker(4, 1, 2)]),
-                    ExplicitEuler(; dt = 0.025)
-                )
+                    ExplicitEuler()
+                ; dt = 0.025)
             )
         )
         # a row of `M A` is balanced, so site diffusion with a cross term is checked by the rest of
@@ -80,12 +80,12 @@ end
         @parameters Dk2[1:2] = [0.01, 1.0]
         for m in (at(Dk2, qe), 1.0)
             sys = ssys([D(ce) ~ m * Δ(ce) - 0.2ce - 0.1oe, D(oe) ~ -oe], [c(0, x, y) ~ 1.0, o(0, x, y) ~ 1.0], [ce, oe, qe], [Dk2])
-            @test sok(solve(sown(sys; inputs = [qe => checker(4, 1, 2)]), ExplicitEuler(; dt = 0.025)))
+            @test sok(solve(sown(sys; inputs = [qe => checker(4, 1, 2)]), ExplicitEuler(); dt = 0.025))
         end
         # … and a row that is not dominant (the cross term outweighs the reaction) on a loop is still
         # refused (`o` reads `c` back; one way it is bounded since F3-25)
         sys = ssys([D(ce) ~ at(Dk2, qe) * Δ(ce) - 0.05ce - 0.1oe, D(oe) ~ -oe + 0.1ce], [c(0, x, y) ~ 1.0, o(0, x, y) ~ 1.0], [ce, oe, qe], [Dk2])
-        @test occursin("coupled", emsg(() -> solve(sown(sys; inputs = [qe => checker(4, 1, 2)]), ExplicitEuler(; dt = 0.025))))
+        @test occursin("coupled", emsg(() -> solve(sown(sys; inputs = [qe => checker(4, 1, 2)]), ExplicitEuler(); dt = 0.025)))
     end
 end
 
@@ -95,7 +95,7 @@ end
         # `Bool`")
         @parameters kf = 100.0
         sys = ssys([D(ce) ~ -ifelse(qe == 2, kf, 0) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [kf])
-        sol = solve(sown(sys; inputs = [qe => checker(4, 1, 2)]), ExplicitEuler(; dt = 0.025))
+        sol = solve(sown(sys; inputs = [qe => checker(4, 1, 2)]), ExplicitEuler(); dt = 0.025)
         @test first(substep_counts(sol)) >= ceil(Int, 0.025 * 100 / 1.8) && sok(sol)
         @test sradius(sys, 4, [qe => checker(4, 1, 2)]) ≈ 100                      # (the true radius)
     end
@@ -111,7 +111,7 @@ end
                 (-(1 / at(Dy4, max(qe, 1))) * ce, qe, checker(4, 0, 2), Dy4),
             )
             sys = ssys([D(ce) ~ rate], [c(0, x, y) ~ 1.0], [ce, q], [tab])
-            sol = solve(sown(sys; inputs = [q => K]), ExplicitEuler(; dt = 0.025))
+            sol = solve(sown(sys; inputs = [q => K]), ExplicitEuler(); dt = 0.025)
             @test first(substep_counts(sol)) == 1 && sok(sol)
         end
     end
@@ -124,10 +124,10 @@ end
         @parameters Tq[1:2] = [0.01, 1.0]
         sys = ssys([D(ce) ~ -(1 / at(Tq, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Tq])
         p = sown(sys; inputs = [qe => checker(4, 1, 2)])
-        sol = solve(p, ExplicitEuler(; dt = 0.025))
+        sol = solve(p, ExplicitEuler(); dt = 0.025)
         @test substep_counts(sol)[1] == ceil(Int, 0.025 * 100 / 1.8) && sok(sol)
         # … and a write that brings index 0 is refused, naming the site; the run is unchanged
-        ig, ref = init(p, ExplicitEuler(; dt = 0.025)), init(p, ExplicitEuler(; dt = 0.025))
+        ig, ref = init(p, ExplicitEuler(); dt = 0.025), init(p, ExplicitEuler(); dt = 0.025)
         step!(ig); step!(ref)
         K0 = checker(4, 1, 2); K0[3, 2] = 0
         err = emsg(() -> (ig[qe] = K0))
@@ -142,20 +142,20 @@ end
         # `kb − 1` reaches index 0 where `kb` holds a 1, though `kb` never holds 0
         @parameters Tb[1:3] = [1.0, 1.0, 1.0]
         sys = ssys([D(ce) ~ -(1 / at(Tb, qb - 1)) * ce], [c(0, x, y) ~ 1.0], [ce, qb], [Tb])
-        err = emsg(() -> solve(sown(sys; inputs = [qb => checker(4, 1, 2)]), ExplicitEuler(; dt = 0.025)))
+        err = emsg(() -> solve(sown(sys; inputs = [qb => checker(4, 1, 2)]), ExplicitEuler(); dt = 0.025))
         @test occursin("index 0", err) && occursin("at site", err)
         p = sown(sys; inputs = [qb => checker(4, 2, 3)])                              # control: kb ≥ 2
-        @test sok(solve(p, ExplicitEuler(; dt = 0.025)))
-        ig = init(p, ExplicitEuler(; dt = 0.025))
+        @test sok(solve(p, ExplicitEuler(); dt = 0.025))
+        ig = init(p, ExplicitEuler(); dt = 0.025)
         err = emsg(() -> (ig[qb] = checker(4, 1, 2)))
         @test occursin("index 0", err) && occursin("(2, 1)", err) && ig[qb] == checker(4, 2, 3)
         # an `ifelse` index is decided at the sites where the host values give it: with no kind 1,
         # `ifelse(k == 1, 0, k)` never reads index 0 (305be9ad: refused, no site named, by the hull)
         @parameters Tz[1:2] = [1.0, 1.0]
         sys = ssys([D(ce) ~ -(1 / at(Tz, ifelse(qe == 1, 0, qe))) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Tz])
-        @test sok(solve(sown(sys; inputs = [qe => fill(Int32(2), 4, 4)]), ExplicitEuler(; dt = 0.025)))
+        @test sok(solve(sown(sys; inputs = [qe => fill(Int32(2), 4, 4)]), ExplicitEuler(); dt = 0.025))
         K1 = fill(Int32(2), 4, 4); K1[3, 2] = 1
-        err = emsg(() -> solve(sown(sys; inputs = [qe => K1]), ExplicitEuler(; dt = 0.025)))
+        err = emsg(() -> solve(sown(sys; inputs = [qe => K1]), ExplicitEuler(); dt = 0.025))
         @test occursin("index 0", err) && occursin("(at site (3, 2))", err)
     end
 end
@@ -181,7 +181,7 @@ end
             inputs = [qe => fill(Int32(2), 4, 4)]
         ) isa SciMLBase.ODEProblem
         # … and the owned form with an explicit count (bda31989: warned and ran, probe P10)
-        err = emsg(() -> solve(sown(sys; inputs = [qe => checker(4, 1, 2)]), ExplicitEuler(; dt = 0.025, substeps = 2)))
+        err = emsg(() -> solve(sown(sys; inputs = [qe => checker(4, 1, 2)]), ExplicitEuler(; substeps = 2); dt = 0.025))
         @test occursin("not finite", err) && occursin("whatever the substep count", err)
     end
 end
@@ -203,10 +203,10 @@ end
         p = sown(ssys([D(ce) ~ -kd * ce], [c(0, x, y) ~ 1.0], [ce], [kd]))
         err = emsg(() -> solve(p, ExplicitEuler()))
         @test occursin("needs `dt`", err)
-        # (F2-07: `lower` clips in B too; the clip's tests are in groups.jl)
-        @test all(≈(0.95^10), solve(p, ExplicitEuler(; dt = 0.1, substeps = 1, lower = 0.0))[:c, end])
-        @test occursin("`substeps = 0` is not a count", emsg(() -> ExplicitEuler(; dt = 0.1, substeps = 0)))
-        @test all(≈(0.95^10), solve(p, ExplicitEuler(; dt = 0.1, substeps = 1))[:c, end])           # control
+        # (F2-07: `lower_bound` clips in B too; the clip's tests are in groups.jl)
+        @test all(≈(0.95^10), solve(p, ExplicitEuler(; substeps = 1, lower_bound = 0.0); dt = 0.1)[:c, end])
+        @test occursin("`substeps = 0` is not a count", emsg(() -> ExplicitEuler(; substeps = 0)))
+        @test all(≈(0.95^10), solve(p, ExplicitEuler(; substeps = 1); dt = 0.1)[:c, end])           # control
     end
 end
 
@@ -268,23 +268,23 @@ end
 end
 
 # F3-05 (F3 design §3.2): the solvers' inner algorithms reach B by name, the same objects as
-# A's (test/fields.jl): `DevicePCG`, `Multigrid` exported, `LatticePDE.V` public.
+# A's (test/fields.jl): `DevicePCG`, `Multigrid` exported, `LatticePDE.VCycle` public.
 # Base (1079c4ff): `UndefVarError: DevicePCG`.
 @testitem "F3-05: the inner solvers in B" setup = [LP_silent] tags = [:latticepde, :silent] begin
     @testset "F3-05: the inner solvers in B" begin
         @test parentmodule(DevicePCG) === LatticePDE.Problems.Solvers && Multigrid === LatticePDE.Problems.Solvers.Multigrid
-        @test DevicePCG(; precond = Multigrid(; cycle = LatticePDE.V(3, 3))).precond.cycle == LatticePDE.V(3, 3)
-        @test Base.ispublic(LatticePDE, :V) && !Base.isexported(LatticePDE, :V)
+        @test DevicePCG(; precond = Multigrid(; cycle = LatticePDE.VCycle(3, 3))).precond.cycle == LatticePDE.VCycle(3, 3)
+        @test Base.ispublic(LatticePDE, :VCycle) && !Base.isexported(LatticePDE, :VCycle)
     end
 end
 
 # F3-05 review r1 M1: a linear solver given where a field algorithm goes is refused in B's
-# words, naming it a linear solver (the `inner` of an implicit field solver), and the route
+# words, naming it a linear solver (the `linsolve` of an implicit field solver), and the route
 # works when followed. Base (9db10886, ~/lpwork/f3b2r1-nc-b.log, 6 of 8 fail;
 # the 2 that pass are the followed routes): `solve(p, DevicePCG())`
 # is "MethodError: no method matching init(::FieldProblem…, ::DevicePCG)", `FieldGroups` says
 # "`c(t, x, y) => DevicePCG(Multigrid(LatticeFields.Solvers.V(2, 2), …` is not a field
-# algorithm", and `ExplicitEuler(; dt, inner)` is a MethodError.
+# algorithm", and `ExplicitEuler(; dt, linsolve)` is a MethodError.
 @testitem "F3-05: a linear solver where B takes a field algorithm" setup = [LP_silent] tags = [:latticepde, :silent] begin
     @testset "F3-05: a linear solver where B takes a field algorithm" begin
         @parameters Dm1 = 0.1
@@ -297,20 +297,20 @@ end
         catch err
             err isa ArgumentError ? err.msg : sprint(showerror, err)
         end
-        lin = "is a linear solver: it is the `inner` of an implicit field solver, not a field solver"
+        lin = "is a linear solver: it is the `linsolve` of an implicit field solver, not a field solver"
         m = e(() -> solve(p, DevicePCG()))
-        @test startswith(m, "`solve`/`init`: `DevicePCG()` " * lin) && occursin("give `solve(prob, ExplicitEuler(; dt))`", m)
+        @test startswith(m, "`solve`/`init`: `DevicePCG()` " * lin) && occursin("give `solve(prob, ExplicitEuler(); dt)`", m)
         @test startswith(e(() -> init(p, Multigrid(; cycles = 3))), "`solve`/`init`: `Multigrid(; cycles = 3)` " * lin)
-        @test solve(p, ExplicitEuler(; dt = 0.01)).retcode == SciMLBase.ReturnCode.Success           # the route
-        m = e(() -> FieldGroups(ce => DevicePCG(; budget = 12)))
-        @test startswith(m, "FieldGroups: the field `c(t, x, y)`: `DevicePCG(; budget = 12)` " * lin) &&
+        @test solve(p, ExplicitEuler(); dt = 0.01).retcode == SciMLBase.ReturnCode.Success           # the route
+        m = e(() -> FieldGroups(ce => DevicePCG(; maxiters = 12)))
+        @test startswith(m, "FieldGroups: the field `c(t, x, y)`: `DevicePCG(; maxiters = 12)` " * lin) &&
             occursin("give `c(t, x, y) => ExplicitEuler(…)`", m)
         @test startswith(e(() -> FieldGroups(; default = Multigrid())), "FieldGroups: `default`: `Multigrid()` " * lin)
-        @test solve(p, FieldGroups(ce => ExplicitEuler(; dt = 0.01))).retcode == SciMLBase.ReturnCode.Success
-        m = e(() -> ExplicitEuler(; dt = 0.01, inner = DevicePCG()))
-        @test startswith(m, "ExplicitEuler: `inner = DevicePCG()`: `inner` is a keyword of the implicit field solvers") &&
-            occursin("leave `inner` out", m)
-        @test e(() -> ExplicitEuler(; dt = 0.01, step = 2)) ==
-            "ExplicitEuler: no keyword `step`; its keywords are `dt`, `substeps`, `lower`, `init` and `compute_T`"
+        @test solve(p, FieldGroups(ce => ExplicitEuler()); dt = 0.01).retcode == SciMLBase.ReturnCode.Success
+        m = e(() -> ExplicitEuler(; linsolve = DevicePCG()))
+        @test startswith(m, "ExplicitEuler: `linsolve = DevicePCG()`: `linsolve` is a keyword of the implicit field solvers") &&
+            occursin("leave `linsolve` out", m)
+        @test e(() -> ExplicitEuler(; step = 2)) ==
+            "ExplicitEuler: no keyword `step`; its keywords are `substeps`, `lower_bound`, `init` and `compute_type`"
     end
 end

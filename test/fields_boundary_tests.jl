@@ -100,13 +100,10 @@ fb_run(M, k, fs; p = []) = Array(solve(PottsProblem(M(; name = :m), fb_op((12, 1
 # LatticePDE's own run of `sys` over `k` MCS (one window of length 1 each), parameters `p`
 const LP = Potts.LatticePDE
 
-# (the coupled run's solver with `dt = 1`, its other settings kept)
-fb_own_alg(fs) = typeof(fs)((n === :dt ? 1.0 : getfield(fs, n) for n in fieldnames(typeof(fs)))...)
-
 function fb_own(sys, dims, k, fs; p = [])
     prob = LP.remake(LP.discretize(sys, LP.LatticeDiscretization(LP.Grid(dims); T = Float64)); tspan = (0.0, Float64(k)))
     isempty(p) || (prob = LP.remake(prob; p))
-    return reshape(LP.solve(prob, fb_own_alg(fs)).u[end], dims)
+    return reshape(LP.solve(prob, fs; dt = 1.0).u[end], dims)   # the coupled run's solver, one window per MCS
 end
 
 # the coupled run against the owned one: bitwise for the explicit step, to the inner solver's
@@ -283,7 +280,7 @@ end
     @testset "F4-12b: per-site and time-varying Robin coefficients" begin
         run(M, k, fs; p = []) = Array(solve(PottsProblem(M(; name = :m), fb_op((16, 16), p), (0, k); field_solver = fs),
             SequentialCPM()).u[end].site.c)
-        tight = BackwardEuler(; inner = DevicePCG(; rtol = 1e-12, budget = 64))
+        tight = BackwardEuler(; linsolve = DevicePCG(; reltol = 1e-12, maxiters = 64))
         for fs in (ExplicitEuler(; substeps = 4), tight)
             a = run(FbSiteBcs, 3, fs)
             @test fb_same(a, fb_own(FbPDE.site(), (16, 16), 3, fs), fs) && maximum(a) > 0.1
@@ -314,7 +311,7 @@ end
                 b[r] += 0.2 * g / den
             end
         end
-        a = run(FbSiteBcs, 1, BackwardEuler(; substeps = 1, inner = DevicePCG(; rtol = 1e-12, budget = 64)))
+        a = run(FbSiteBcs, 1, BackwardEuler(; substeps = 1, linsolve = DevicePCG(; reltol = 1e-12, maxiters = 64)))
         @test maximum(abs, vec(a) .- (Float64.((1:(n^2)) .== (1:(n^2))') - L) \ b) < 1e-10
     end
 end

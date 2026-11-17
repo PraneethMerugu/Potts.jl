@@ -48,7 +48,7 @@ function fuse_update(p::Program{N}, rule) where {N}
     end
     masks = [MaskDecl(m.key, fm(m.field), m.epoch) for m in p.masks]
     flags = [FlagDecl(g.key, fm(g.field), g.bits, g.epoch) for g in p.flags]
-    rules = BRule[_rulemap(r, fm, identity) for r in p.rules]
+    rules = AbstractBoundaryRule[_rulemap(r, fm, identity) for r in p.rules]
     return Program{N}(p.hierarchy, fields, p.tables, masks, flags, rules, kernels, p.periodic, p.spacing, p.nparams)
 end
 
@@ -137,7 +137,7 @@ function fuse_residual(p::Program{N}, rule; widen16::Bool = false) where {N}
     # (a rule never names a scratch field: `fm` maps the others to their new ids)
     masks = [MaskDecl(m.key, fm(m.field), m.epoch) for m in p.masks]
     flags = [FlagDecl(g.key, fm(g.field), g.bits, g.epoch) for g in p.flags]
-    rules = BRule[_rulemap(r, fm, identity) for r in p.rules]
+    rules = AbstractBoundaryRule[_rulemap(r, fm, identity) for r in p.rules]
     return Program{N}(p.hierarchy, fields, p.tables, masks, flags, rules, kernels, p.periodic, p.spacing, p.nparams)
 end
 

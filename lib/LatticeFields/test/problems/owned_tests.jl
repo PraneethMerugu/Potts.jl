@@ -20,14 +20,14 @@ end
     prob = FieldProblem(
         euler2(dims), Float64.(u0), (0.0, 0.1), [0.5]; state = ["u"], kind = :rate,
         index = ix)
-    sol = solve(prob, ExplicitEuler(; dt = 0.05, substeps = 1); saveat = 0.05)
+    sol = solve(prob, ExplicitEuler(; substeps = 1); dt = 0.05, saveat = 0.05)
     v = reshape(u0, dims)
     for _ in 1:2
         v = hand2!(similar(v), v, (0.05, 0.5, 1.0))               # u + (dt D/h²)(Σ nb − 4u)
     end
     @test isapprox(sol[:u][end], v; rtol = 1e-5) &&
           !isapprox(sol[:u][end], reshape(u0, dims); rtol = 1e-3)
-        integ = init(prob, ExplicitEuler(; dt = 0.05, substeps = 1); save_everystep = false)
+        integ = init(prob, ExplicitEuler(; substeps = 1); dt = 0.05, save_everystep = false)
     step!(integ)
     @test integ.store.cur[1] == 2                                 # one swap per substep
     step!(integ)
@@ -41,20 +41,20 @@ end
     ix = LatticeIndex(; variables = [:u => FieldSlot(1:prod(dims), dims)], parameters = [:D => 1])
     S = LatticeFields.Problems.substeps
     unknown = FieldProblem(euler2(dims), zeros(64), (0.0, 0.1), [0.5]; state = ["u"], kind = :rate, index = ix)
-        @test_throws ["ArgumentError", "no automatic substeps"] S(unknown, ExplicitEuler(; dt = 0.05))       # no bound, no count
-    @test S(unknown, ExplicitEuler(; dt = 0.05, substeps = 3)) == 3
+        @test_throws ["ArgumentError", "no automatic substeps"] S(unknown, ExplicitEuler(); dt = 0.05)       # no bound, no count
+    @test S(unknown, ExplicitEuler(; substeps = 3); dt = 0.05) == 3
     prob = FieldProblem(euler2(dims), zeros(64), (0.0, 0.1), [0.5]; state = ["u"], kind = :rate,
         index = ix, stability = p -> 8 * p[1])
-    @test S(prob, ExplicitEuler(; dt = 0.5)) == ceil(Int, 0.5 * 4 / 1.8)
-    @test S(SciMLBase.remake(prob; p = [2.0]), ExplicitEuler(; dt = 0.5)) == ceil(Int, 0.5 * 16 / 1.8)
-    integ = init(prob, ExplicitEuler(; dt = 0.05))
+    @test S(prob, ExplicitEuler(); dt = 0.5) == ceil(Int, 0.5 * 4 / 1.8)
+    @test S(SciMLBase.remake(prob; p = [2.0]), ExplicitEuler(); dt = 0.5) == ceil(Int, 0.5 * 16 / 1.8)
+    integ = init(prob, ExplicitEuler(); dt = 0.05)
     LatticeFields.Problems.SII.setp(integ, :D)(integ, 100.0)
     @test integ.substeps == ceil(Int, 0.05 * 800 / 1.8)
     # a user count is a minimum (ruling Q2, F1): raised to the bound's count, kept above it, and
     # used as given when there is no bound (`unknown` above). On f9a77dd3 the count was used
     # as given below the bound too: substeps = 1 gave 1 here, not 2
-    @test S(prob, ExplicitEuler(; dt = 0.5, substeps = 1)) == ceil(Int, 0.5 * 4 / 1.8) == 2
-    @test S(prob, ExplicitEuler(; dt = 0.5, substeps = 5)) == 5
+    @test S(prob, ExplicitEuler(; substeps = 1); dt = 0.5) == ceil(Int, 0.5 * 4 / 1.8) == 2
+    @test S(prob, ExplicitEuler(; substeps = 5); dt = 0.5) == 5
 end
 end
 

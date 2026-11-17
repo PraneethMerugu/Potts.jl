@@ -67,7 +67,7 @@ default_float(backend) = ishost(backend) ? Float64 : Float32
     register_float64!(parts::String...)
 
 The D-157 carve-out (F3 design §3.8, R-F3c): a kernel whose Float64 its user declared (a
-group's `compute_T` or `solver_T` of Float64, or a field's `lattice_storage = Float64`, on a
+group's `compute_type` or `solver_type` of Float64, or a field's `lattice_storage = Float64`, on a
 device whose default float is Float32) is registered by the parts of its signature text: a
 kernel signature that holds every part is skipped by the no-`double` scan of the device test
 suites, which still flags every other kernel. [`float64_registered`](@ref) asks.

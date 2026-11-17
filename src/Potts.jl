@@ -18,9 +18,9 @@ using CorePotts: Metropolis, RandomPlane
 using JumpProcesses: JumpProcesses
 using KernelAbstractions: KernelAbstractions
 using LatticeFields: LatticeFields
-using LatticeFields.Problems: ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, FieldAlgorithm,
+using LatticeFields.Problems: ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, AbstractFieldAlgorithm,
                              substep_counts, steady_fields, field_series, field_report
-using LatticeFields.Solvers: DevicePCG, DeviceGMRES, Multigrid, V
+using LatticeFields.Solvers: DevicePCG, DeviceGMRES, Multigrid, VCycle
 using LatticePDE: LatticePDE, PottsEntity, Δ, at, at2, ismember, Coarse
 using LinearAlgebra: Symmetric, eigen, svdvals
 using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile, complete, compose, extend
@@ -50,7 +50,7 @@ end
 export @potts_model, @named, PottsSystem, CompiledPottsSystem, mtkcompile, compose, extend,
     total_energy, energy_change, generated_code, parameters, variables, observe, Adaptive, ExplicitEuler, ExplicitMap,
     BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, RK4, substep_counts, steady_fields, field_series, field_report, DevicePCG, DeviceGMRES, Multigrid, Coarse
-public V                                   # `Multigrid(; cycle = V(ν₁, ν₂))` (not exported: a short name)
+public VCycle                               # `Multigrid(; cycle = VCycle(ν₁, ν₂))` (not exported: a short name)
 
 include("seeds.jl")
 include("draws.jl")

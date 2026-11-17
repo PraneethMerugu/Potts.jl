@@ -165,8 +165,8 @@ end
     # a dense Jacobian alone would take 128⁴ × 8 B = 2.1 GB
     @test bytes < 400 * 2^20 || (println("F4-07 Rodas5P 128² allocated ", bytes / 2^20, " MiB"); false)
     # the owned BackwardEuler run tends to it at first order as dt halves
-    e(dt) = maximum(abs, solve(prob, BackwardEuler(; dt, substeps = 1, inner = DevicePCG(; rtol = 1e-10, budget = 200)),
-        saveat = 0.05).u[end] .- s.u[end])
+    e(dt) = maximum(abs, solve(prob, BackwardEuler(; substeps = 1, linsolve = DevicePCG(; reltol = 1e-10, maxiters = 200)),
+        saveat = 0.05; dt).u[end] .- s.u[end])
     e1, e2, e3 = e(0.01), e(0.005), e(0.0025)
     @test e1 > e2 > e3 && 1.6 < e1 / e2 < 2.4 && 1.6 < e2 / e3 < 2.4 || (println("F4-07 BE errors ", (e1, e2, e3)); false)
 end

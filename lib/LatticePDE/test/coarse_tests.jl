@@ -55,8 +55,8 @@ end
         p1 = cown(csys(c1, q, g), CDIMS; ins = [q(t, x, y) => CQ1, g(t, x, y) => CG])
         p0 = cown(csys(c0, q, g), CDIMS; ins = [q(t, x, y) => CQ1, g(t, x, y) => CG])
         @test replace(sprint(print_program, p1.program), "cone" => "cnil") == sprint(print_program, p0.program)
-        for alg in (ExplicitEuler(; dt = 0.01), BackwardEuler(; dt = 0.05))
-            s1, s0 = solve(p1, alg), solve(p0, alg)
+        for (alg, dt) in ((ExplicitEuler(), 0.01), (BackwardEuler(), 0.05))
+            s1, s0 = solve(p1, alg; dt), solve(p0, alg; dt)
             @test s1[c1(t, x, y), length(s1.t)] == s0[c0(t, x, y), length(s0.t)]
         end
         @test_throws ArgumentError Coarse(3)
@@ -75,13 +75,13 @@ end
         @test size(pc.u0) == (16,) && length(ph.u0) == 16
         @test pc.u0 == ph.u0                                   # the initial values at the node centers
         # the stability bound reads the coarse spacing: the automatic counts agree
-        @test LatticePDE.Problems.substeps(pc, ExplicitEuler(; dt = 0.05)) == LatticePDE.Problems.substeps(ph, ExplicitEuler(; dt = 0.05))
+        @test LatticePDE.Problems.substeps(pc, ExplicitEuler(); dt = 0.05) == LatticePDE.Problems.substeps(ph, ExplicitEuler(); dt = 0.05)
         for alg in (
-                ExplicitEuler(; dt = 0.05), BackwardEuler(; dt = 0.05), CrankNicolson(; dt = 0.05), BDF2(; dt = 0.05),
-                BackwardEuler(; dt = 0.05, init = :steady), ExplicitEuler(; dt = 0.05, lower = 0.0),
-                BackwardEuler(; dt = 0.05, inner = Multigrid(; cycles = 4)),
+                ExplicitEuler(), BackwardEuler(), CrankNicolson(), BDF2(),
+                BackwardEuler(; init = :steady), ExplicitEuler(; lower_bound = 0.0),
+                BackwardEuler(; linsolve = Multigrid(; cycles = 4)),
             )
-            ic, ih = init(pc, alg), init(ph, alg)
+            ic, ih = init(pc, alg; dt = 0.05), init(ph, alg; dt = 0.05)
             for n in 1:6
                 if n == 4                                                       # the mask moves
                     ic[q(t, x, y)] = CQB2; ih[q(t, x, y)] = cwhole(CQB2); ih[g(t, x, y)] = cfree(CG, CQB2 .== 3)
@@ -96,7 +96,7 @@ end
         end
         # the masked nodes hold the masked value, and only where the whole block is kind 3 (F4-15b;
         # 15 of 16 sites leave the node free)
-        ic = init(pc, BackwardEuler(; dt = 0.05)); step!(ic)
+        ic = init(pc, BackwardEuler(); dt = 0.05); step!(ic)
         whole = cwhole(CQB1) .== 3
         @test count(whole) == 2 && all(ic[c(t, x, y)][whole] .== 1.0) && all(ic[c(t, x, y)][.!whole] .!= 1.0)
     end
@@ -107,17 +107,17 @@ end
     using .LP_coarse: fd
     @testset "steady rows, number types and the ODE path on a coarse grid" begin
         pc, ph, (c, ch, _...) = ctwins(; steady = true)
-        sc, sh = solve(pc, QuasiSteady(; dt = 0.1)), solve(ph, QuasiSteady(; dt = 0.1))
+        sc, sh = solve(pc, QuasiSteady(); dt = 0.1), solve(ph, QuasiSteady(); dt = 0.1)
         @test capprox(sc[c(t, x, y), length(sc.t)], sh[ch(t, x, y), length(sh.t)]; rtol = 1.0e-10)
         pc, ph, (c, ch, _...) = ctwins(; T = Float32)
         @test eltype(pc.u0) == Float32
-        for alg in (ExplicitEuler(; dt = 0.05), BackwardEuler(; dt = 0.05))
-            sc, sh = solve(pc, alg), solve(ph, alg)
+        for alg in (ExplicitEuler(), BackwardEuler())
+            sc, sh = solve(pc, alg; dt = 0.05), solve(ph, alg; dt = 0.05)
             @test capprox(sc[c(t, x, y), length(sc.t)], sh[ch(t, x, y), length(sh.t)]; rtol = 1.0e-5)
         end
         pc, ph, (c, ch, _...) = ctwins(; storage = Float32)          # a declared storage on the owned path
-        for alg in (ExplicitEuler(; dt = 0.05), BackwardEuler(; dt = 0.05))
-            sc, sh = solve(pc, alg), solve(ph, alg)
+        for alg in (ExplicitEuler(), BackwardEuler())
+            sc, sh = solve(pc, alg; dt = 0.05), solve(ph, alg; dt = 0.05)
             @test eltype(sc[c(t, x, y), 1]) == Float32
             @test capprox(sc[c(t, x, y), length(sc.t)], sh[ch(t, x, y), length(sh.t)]; rtol = 1.0e-5)
         end
@@ -130,8 +130,8 @@ end
             [c(0, x, y) ~ x * y, c(t, 0, y) ~ 2.0, 0.5 * c(t, 1, y) + Differential(x)(c(t, 1, y)) ~ 0.1], cdom(), [t, x, y],
             [c(t, x, y)], Num[]; name = :gh
         )
-        for alg in (ExplicitEuler(; dt = 0.05, substeps = 4), BackwardEuler(; dt = 0.05))
-            sc, sh = solve(cown(gsys(cgh), CDIMS), alg), solve(cown(gsys(hgh), CDIMS .÷ CK), alg)
+        for alg in (ExplicitEuler(; substeps = 4), BackwardEuler())
+            sc, sh = solve(cown(gsys(cgh), CDIMS), alg; dt = 0.05), solve(cown(gsys(hgh), CDIMS .÷ CK), alg; dt = 0.05)
             @test sc[cgh(t, x, y), length(sc.t)] == sh[hgh(t, x, y), length(sh.t)]
         end
         # problem = :ode: the coarse right side is the hand problem's (no masks there)
@@ -170,7 +170,7 @@ end
             [c(0, x, y) ~ 0.0], cdom(), [t, x, y], [c(t, x, y), K(t, x, y), q(t, x, y), g(t, x, y)], Num[]; name = :m
         )
         p = cown(sys, CDIMS; ins = [q(t, x, y) => CQ1, g(t, x, y) => G])
-        s = solve(p, ExplicitEuler(; dt = 0.25))
+        s = solve(p, ExplicitEuler(); dt = 0.25)
         Kv = s[K(t, x, y), length(s.t)]
         @test size(Kv) == (4, 4)
         @test sum(Kv) * CK^2 ≈ sum(G) + count(==(2), CQ1) rtol = 1.0e-14      # the means (F4-15: the kind's too)
@@ -185,7 +185,7 @@ end
             [c3(t, x, y, z), g3(t, x, y, z)], Num[]; name = :m3
         )
         G3 = rand(Xoshiro(4), 4, 6, 8)
-        s3 = solve(cown(sys3, (4, 6, 8); ins = [g3(t, x, y, z) => G3]), ExplicitEuler(; dt = 0.5))
+        s3 = solve(cown(sys3, (4, 6, 8); ins = [g3(t, x, y, z) => G3]), ExplicitEuler(); dt = 0.5)
         v3 = s3[c3(t, x, y, z), length(s3.t)]
         @test size(v3) == (2, 3, 4)
         @test sum(v3) * 8 ≈ sum(G3) rtol = 1.0e-13
@@ -220,7 +220,7 @@ end
                 [D(c(t, x, y)) ~ src], [c(0, x, y) ~ 0.0], cdom(), [t, x, y], [c(t, x, y), q(t, x, y), g(t, x, y)],
                 [cSv]; name = :m2
             )
-            s = solve(cown(sys, CDIMS; ins = [q(t, x, y) => CQ1, g(t, x, y) => G]), ExplicitEuler(; dt = 0.25))
+            s = solve(cown(sys, CDIMS; ins = [q(t, x, y) => CQ1, g(t, x, y) => G]), ExplicitEuler(); dt = 0.25)
             got = sum(s[c(t, x, y), length(s.t)]) * CK^2
             @test isapprox(got, want; rtol = 1.0e-13) || (println("M2 ", src, ": ", got, " ", want); false)
         end
@@ -254,7 +254,7 @@ end
             ], [cs1(0, x, y) ~ 0.0], cdom(), [t, x, y],
             [cs1(t, x, y), K1(t, x, y), K2(t, x, y), M0(t, x, y), M1(t, x, y), qe], [cR]; name = :s1
         )
-        s = solve(cown(sys, CDIMS; ins = [qe => Q]), ExplicitEuler(; dt = 0.5))
+        s = solve(cown(sys, CDIMS; ins = [qe => Q]), ExplicitEuler(); dt = 0.5)
         r(v) = s[v(t, x, y), length(s.t)]
         fine = [0.0, 1.0, 0.5, 0.0][Q .+ 1]
         @test r(K1) == r(K2) == cmean(fine)
@@ -270,11 +270,11 @@ end
             [D(c(t, x, y)) ~ 0.05 * DivKGrad(:arithmetic)(0.5 + K, c(t, x, y))],
             [c(0, x, y) ~ x * y], cdom(), [t, x, y], [c(t, x, y); dvs], Num[]; name = :ops1
         )
-        so = solve(cown(osys(cop, ismember(qe, (1, 2)), [qe]), CDIMS; ins = [qe => Q]), ExplicitEuler(; dt = 0.05, substeps = 4))
+        so = solve(cown(osys(cop, ismember(qe, (1, 2)), [qe]), CDIMS; ins = [qe => Q]), ExplicitEuler(; substeps = 4); dt = 0.05)
         sh = solve(
             cown(osys(hop, kf(t, x, y), [kf(t, x, y)]), CDIMS .÷ CK; ins = [kf(t, x, y) => cmean(Float64.(1 .<= Q .<= 2))]),
-            ExplicitEuler(; dt = 0.05, substeps = 4)
-        )
+            ExplicitEuler(; substeps = 4)
+        ; dt = 0.05)
         @test capprox(so[cop(t, x, y), length(so.t)], sh[hop(t, x, y), length(sh.t)]; rtol = 1.0e-14)
         # S2: a kind-dependent face coefficient (and a real one) at a face of the box equals the
         # hand-coarsened twin bitwise: the neighbor block clamped in the coarse frame (base
@@ -297,8 +297,8 @@ end
                 [c(0, x, y) ~ x * y, c(t, 0, y) ~ 1.0, c(t, 1, y) ~ 0.0], cdom(), [t, x, y], [c(t, x, y), qe, ki(t, x, y)], [cKv];
                 name = :s2
             )
-            for alg in (ExplicitEuler(; dt = 0.05, substeps = 4), BackwardEuler(; dt = 0.05))
-                sc, sh = solve(cown(tsys(c2, K(qe)), CDIMS; ins = insf), alg), solve(cown(tsys(ch, ki(t, x, y)), CDIMS .÷ CK; ins = insc), alg)
+            for alg in (ExplicitEuler(; substeps = 4), BackwardEuler())
+                sc, sh = solve(cown(tsys(c2, K(qe)), CDIMS; ins = insf), alg; dt = 0.05), solve(cown(tsys(ch, ki(t, x, y)), CDIMS .÷ CK; ins = insc), alg; dt = 0.05)
                 @test sc[c2(t, x, y), length(sc.t)] == sh[ch(t, x, y), length(sh.t)] ||
                     (println("S2 ", lab, " ", alg, " ", maximum(abs, sc[c2(t, x, y), length(sc.t)] .- sh[ch(t, x, y), length(sh.t)])); false)
             end

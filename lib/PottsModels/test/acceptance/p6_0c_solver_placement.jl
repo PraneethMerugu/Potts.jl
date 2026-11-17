@@ -20,8 +20,8 @@
 #     (closed-form oracles of the discrete schemes, the analytic solution for Rodas5P). A key
 #     that is a parameter, not an integrated variable, is an `ArgumentError`.
 #  5. Merks: a bare `PottsProblem(MerksVasculogenesis(…), …)` throws; with
-#     `field_solver = ExplicitEuler(substeps = 2, lower = 0.0)` it builds and runs, and in a
-#     configuration where they bind (c(0) = −0.05), `lower = 0.0` keeps the field ≥ 0 while
+#     `field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0)` it builds and runs, and in a
+#     configuration where they bind (c(0) = −0.05), `lower_bound = 0.0` keeps the field ≥ 0 while
 #     `ExplicitEuler()` does not. Bitwise equality with the pre-change (`@sweep`-placed)
 #     result is checked by the coordinator at merge, not frozen here (digests would pin
 #     floating-point operand order, which shifts with unrelated codegen edits; D-070). The
@@ -156,7 +156,7 @@ p60c_message(e) = e === nothing ? "" : sprint(showerror, e)
 p60c_final(prob, alg = SequentialCPM()) = solve(prob, alg).u[end]
 p60c_same(a, b) = Array(a.σ) == Array(b.σ) && a.site == b.site && a.cell == b.cell && a.model == b.model
 
-const p60c_MERKS_SOLVER = p60c_EE(substeps = 2, lower = 0.0)
+const p60c_MERKS_SOLVER = p60c_EE(substeps = 2, lower_bound = 0.0)
 p60c_merks() = MerksVasculogenesis(; name = :m, lattice = (100, 100))
 p60c_merks_op() = merks_state(; lattice = (100, 100), n = 50, side = 7)    # 7² seeds (D-098)
 p60c_merks_sensitive_op() = [p60c_merks_op(); :Dc => 0.01; :c => fill(-0.05, 100, 100)]
@@ -230,7 +230,7 @@ end
     end
     # lower: a field driven below zero is clipped at 0 after every substep
     neg = [ownership => p60c_sigma(), kind => [:A], :c => fill(-0.5, p60c_N, p60c_N)]
-    clip = p60c_final(PottsProblem(sys, neg, (0, 2); field_solver = p60c_EE(substeps = 2, lower = 0.0)))
+    clip = p60c_final(PottsProblem(sys, neg, (0, 2); field_solver = p60c_EE(substeps = 2, lower_bound = 0.0)))
     free = p60c_final(PottsProblem(sys, neg, (0, 2); field_solver = p60c_EE(substeps = 2)))
     @test all(iszero, clip.site.c)
     @test free.site.c ≈ fill(-0.5 * (1 - 0.1 / 2)^4, p60c_N, p60c_N) rtol = 1e-12
@@ -276,7 +276,7 @@ end
         u = p60c_final(prob, alg)
         @test all(isfinite, Array(u.site.c)) && maximum(Array(u.σ)) > 0
         sens = PottsProblem(p60c_merks(), p60c_merks_sensitive_op(), (0, 10); field_solver = p60c_MERKS_SOLVER)
-        @test minimum(Array(p60c_final(sens, alg).site.c)) >= 0                  # lower = 0.0 binds
+        @test minimum(Array(p60c_final(sens, alg).site.c)) >= 0                  # lower_bound = 0.0 binds
         dflt = PottsProblem(p60c_merks(), p60c_merks_sensitive_op(), (0, 10); field_solver = p60c_EE())
         @test minimum(Array(p60c_final(dflt, alg).site.c)) < 0                   # no clip without it
     end
@@ -291,7 +291,7 @@ end
     @test a.f.fingerprint == a′.f.fingerprint
     others = [
         mk(sys -> (; field_solver = p60c_EE(substeps = 3), solvers = sv(sys, p60c_rodas()))),
-        mk(sys -> (; field_solver = p60c_EE(substeps = 2, lower = 0.0), solvers = sv(sys, p60c_rodas()))),
+        mk(sys -> (; field_solver = p60c_EE(substeps = 2, lower_bound = 0.0), solvers = sv(sys, p60c_rodas()))),
         mk(sys -> (; field_solver = p60c_EE(substeps = 2), solvers = sv(sys, p60c_rodas(; reltol = 1e-6)))),
         mk(sys -> (; field_solver = p60c_EE(substeps = 2))),
         mk(sys -> (; field_solver = p60c_EE(substeps = 2), ode_solver = p60c_RK4(), solvers = sv(sys, p60c_rodas()))),

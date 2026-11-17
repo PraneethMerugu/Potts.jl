@@ -1,5 +1,5 @@
 # The coupled solve of an implicit group (F3-12d): a QuasiSteady group whose fields read one
-# another, or given `inner = DeviceGMRES(…)`, solves its rows together. Each
+# another, or given `linsolve = DeviceGMRES(…)`, solves its rows together. Each
 # Newton iteration solves `A δ = G(u_k)` over every field of the group at once, `A` the whole
 # Jacobian of the residual (`A v = −(G(u_k + εv) − G(u_k))/ε`: the residual kernels themselves,
 # every term of every row, the cross terms included; exact at any ε for a group that is linear
@@ -311,7 +311,7 @@ end
     coupled_solve(alg, op, s, keys) -> Bool
 
 Whether the implicit group of the fields `keys` (its operator `op`, its stepped program `s`)
-takes the coupled solve (F3-12d): a `QuasiSteady` group with `inner = DeviceGMRES(…)` always, or
+takes the coupled solve (F3-12d): a `QuasiSteady` group with `linsolve = DeviceGMRES(…)` always, or
 when its rows read one another in a cycle, or a row reads another field of the group through a
 term the operator does not take as a source (a cross diffusion `D Δ(o)`, a nonlinear term such
 as `c²`, a term that reads its own field and another): its steady rows are then solved together,
@@ -319,9 +319,9 @@ the cross terms in the operator. Otherwise the rows are solved one by one in the
 reads (exact for an acyclic group with linear cross terms).
 """
 function coupled_solve(alg, op::OperatorSpec, s::Program, keys)
-    alg isa ImplicitAlgorithm || return false
+    alg isa AbstractImplicitFieldAlgorithm || return false
     alg isa QuasiSteady || return false                # (a time stepper refuses `DeviceGMRES`)
-    alg.inner isa Solvers.DeviceGMRES && return true
+    alg.linsolve isa Solvers.DeviceGMRES && return true
     length(keys) >= 2 || return false
     deps = _group_deps(s, keys)
     _, cyclic = _solve_order(s, keys)
@@ -336,7 +336,7 @@ coupled_solve(c::ImplicitCache) = c.cs !== nothing
 _primal_cache(c) = c
 coupled_solve(::Any) = false
 
-# the Krylov solver of a coupled group from its `inner`: a `DeviceGMRES` as given; `:auto` (and
+# the Krylov solver of a coupled group from its `linsolve`: a `DeviceGMRES` as given; `:auto` (and
 # the steady start's default) its defaults; a `DevicePCG` or `Multigrid` given for the group
 # becomes each field's preconditioner
 function _krylov(inner)
@@ -346,10 +346,10 @@ function _krylov(inner)
     return Solvers.DeviceGMRES(; precond = inner)
 end
 # the per-field solver of a row of a group (its preconditioner when the group is coupled)
-_row_inner(alg, coupled::Bool) = coupled ? Solvers.gmres_precond(_krylov(alg.inner)) : alg.inner
+_row_inner(alg, coupled::Bool) = coupled ? Solvers.gmres_precond(_krylov(alg.linsolve)) : alg.linsolve
 # the steady start's and the time-free solve's coupled solver (as `STEADY_INNER`, 64 PCG
 # iterations to 1e-6: a larger budget, its fields' preconditioners at their default)
-const STEADY_GMRES = Solvers.DeviceGMRES(; restart = 30, budget = 240)
+const STEADY_GMRES = Solvers.DeviceGMRES(; gmres_restart = 30, maxiters = 240)
 
 # A coupled solve's arrays and launches for the rows `rows` (in solve order) of a group bound to
 # store `st` (stepped program `s`, residual program `rs`, its store `rst`, the residual plans
@@ -398,11 +398,11 @@ function _bind_coupled(rows, kr::Solvers.DeviceGMRES, st::FieldStore, s::Program
     f = K(linear ? 1.0 : sqrt(Float64(eps(K))))
     A = CoupledOperator(rws, walk, b, _zeros(st.backend, K, cld(ntot, NB) + 1), scal, f, ntot, st.backend, (1, true, 0.0, 1.0, 0))
     P = CoupledPrecond(rws, walk, st.backend)
-    m = min(kr.restart, kr.budget)
+    m = min(kr.gmres_restart, kr.maxiters)
     ws = Krylov.FgmresWorkspace(Krylov.KrylovConstructor(b); memory = m)
-    sizehint!(ws.stats.residuals, kr.budget + cld(kr.budget, m) + 2)
-    return CoupledKrylov(rws, walk, A, P, ws, _zeros(st.backend, K, off), off, scal, zeros(K, GM_SCALARS), m, kr.budget,
-        kr.rtol, linear, mkpres, 0, 1.0, collect(String, keys))
+    sizehint!(ws.stats.residuals, kr.maxiters + cld(kr.maxiters, m) + 2)
+    return CoupledKrylov(rws, walk, A, P, ws, _zeros(st.backend, K, off), off, scal, zeros(K, GM_SCALARS), m, kr.maxiters,
+        kr.reltol, linear, mkpres, 0, 1.0, collect(String, keys))
 end
 
 # a per-row operation of a coupled solve, `S` its name and `a` its arguments

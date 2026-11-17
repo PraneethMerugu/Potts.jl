@@ -103,7 +103,7 @@ end
         make_base(; sys = FPBase(; name = :fp), dims = (12, 12), kw...) =
             PottsProblem(
             sys, base_state(dims), (0, 4);
-            ode_solver = ExplicitEuler(substeps = 2, lower = 0.0), kw...
+            ode_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0), kw...
         )
 
         res = fp_props(
@@ -129,7 +129,7 @@ end
                     :parameter_value, () -> PottsProblem(
                         FPBase(; name = :fp),
                         vcat(base_state(), Any[:k => 0.7]), (0, 4);
-                        ode_solver = ExplicitEuler(substeps = 2, lower = 0.0)
+                        ode_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0)
                     ),
                 ),
                 (:term_and_param_order_and_omitted_default_schedule, () -> make_base(; sys = FPEqTermOrder(; name = :fp))),
@@ -137,7 +137,7 @@ end
                 (
                     :solver_kw_order, () -> PottsProblem(
                         FPBase(; name = :fp), base_state(), (0, 4);
-                        ode_solver = ExplicitEuler(lower = 0.0, substeps = 2)
+                        ode_solver = ExplicitEuler(lower_bound = 0.0, substeps = 2)
                     ),
                 ),
             ),
@@ -153,11 +153,11 @@ end
             m_sys = MerksVasculogenesis(; name = :m, lattice = (8, 8))
             p_fs2 = PottsProblem(
                 m_sys, [ownership => s_m, kind => [:endothelial]], (0, 2);
-                field_solver = ExplicitEuler(substeps = 2, lower = 0.0)
+                field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0)
             )
             p_fs4 = PottsProblem(
                 m_sys, [ownership => s_m, kind => [:endothelial]], (0, 2);
-                field_solver = ExplicitEuler(substeps = 4, lower = 0.0)
+                field_solver = ExplicitEuler(substeps = 4, lower_bound = 0.0)
             )
             @test p_fs2.f.fingerprint != p_fs4.f.fingerprint
         end
@@ -210,7 +210,7 @@ end
                 "MerksVasculogenesis", name -> PottsProblem(
                     MerksVasculogenesis(; name, lattice = (8, 8)),
                     [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 2);
-                    field_solver = ExplicitEuler(substeps = 2, lower = 0.0)
+                    field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0)
                 ),
             ),
             (

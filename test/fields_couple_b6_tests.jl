@@ -128,12 +128,12 @@ end
         for _ in 1:3
             u0 = vec(Array(current_state(integ).site.c))
             step!(integ)
-            o = B6_LP.solve(B6_LP.remake(prob; u0, tspan = (0.0, 1.0)), ExplicitEuler(; dt = 1.0, substeps = 4)).u[end]
+            o = B6_LP.solve(B6_LP.remake(prob; u0, tspan = (0.0, 1.0)), ExplicitEuler(; substeps = 4); dt = 1.0).u[end]
             err = max(err, maximum(abs, o .- vec(Array(current_state(integ).site.c))))
         end
         @test err == 0 || (println("hex faces: $err"); false)
         h = 2.0^-10
-        one = B6_LP.solve(B6_LP.remake(prob; u0 = ones(64), tspan = (0.0, h)), ExplicitEuler(; dt = h, substeps = 1)).u[end]
+        one = B6_LP.solve(B6_LP.remake(prob; u0 = ones(64), tspan = (0.0, h)), ExplicitEuler(; substeps = 1); dt = h).u[end]
         hand = 0.3 * 2 / 3 * (2 * (-1 - 1)) - 0.2 + 0.05 * 0.5
         @test abs((one[1 + 3 * 8] - 1) / h - hand) <= 1e-12 || (println("hex rate: ", (one[1 + 3 * 8] - 1) / h, " vs ", hand); false)
     end

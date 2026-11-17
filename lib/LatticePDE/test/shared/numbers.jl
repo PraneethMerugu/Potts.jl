@@ -26,11 +26,11 @@ tdom = [t ∈ Interval(0.0, 0.3), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 
 tsys(eqs, bcs; dvs = [ce]) = PDESystem(eqs, bcs, tdom, [t, x, y], dvs, [kt, Dt, gt]; name = :tg)
 town(sys, dims = (8, 6); geometry = LatticeFields.IR.CUBIC) =
     LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims; geometry); T = Float64)))
-const TTIGHT = DevicePCG(; rtol = 1e-13, budget = 200)
+const TTIGHT = DevicePCG(; reltol = 1e-13, maxiters = 200)
 # AD and central differences of `sum(out(solve))` in parameter `s`
-function tad(prob, alg, s; out = sol -> sol.u[end])
+function tad(prob, alg, s; dt, out = sol -> sol.u[end])
     i = pidx(prob, s)
-    J(v) = sum(out(solve(remake(prob; p = withp(prob.p, i, v)), alg)))
+    J(v) = sum(out(solve(remake(prob; p = withp(prob.p, i, v)), alg; dt)))
     return ForwardDiff.derivative(J, prob.p[i]), fd(J, prob.p[i]; h = 1e-5)
 end
 tok(ad, f) = isapprox(ad, f; rtol = 1e-7) && ad != 0

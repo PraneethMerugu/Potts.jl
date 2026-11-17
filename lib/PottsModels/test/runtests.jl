@@ -104,7 +104,7 @@ const POTTSMODELS_FIRST_SHARD = POTTSMODELS_SHARD[1] == 1
         ("Wortel Act (connected)", WortelAct(; name = :act, lattice = (8, 8), connected = true),
             [ownership => two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:cell, :cell]]),
         ("Merks", MerksVasculogenesis(; name = :merks, lattice = (8, 8)), [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]],
-            (; field_solver = ExplicitEuler(substeps = 2, lower = 0.0))),
+            (; field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0))),
         ("Merks 2006", Merks2006(; name = :m6, lattice = (16, 16)),
             layout(merks2006_layout(; lattice = (16, 16), n = 3, side = 4), (16, 16)), (; field_solver = ExplicitEuler(substeps = 15))),
         ("Merks 2006 (hard connectivity)", Merks2006(; name = :m6, lattice = (16, 16), rule = :hard),

@@ -8,7 +8,7 @@ mutable struct ProgramBuilder{N}
     tables::Vector{TableDecl}
     masks::Vector{MaskDecl}
     flags::Vector{FlagDecl}
-    rules::Vector{BRule}
+    rules::Vector{AbstractBoundaryRule}
     kernels::Vector{Kernel{N}}
     periodic::NTuple{N, Bool}
     spacing::NTuple{N, Float64}
@@ -19,7 +19,7 @@ function ProgramBuilder(
         nparams = 0, levels = 1) where {N}
     return ProgramBuilder{N}(
         [Level(grid, s) for s in 0:(levels - 1)], FieldDecl{N}[], TableDecl[],
-        MaskDecl[], FlagDecl[], BRule[], Kernel{N}[], Tuple(periodic),
+        MaskDecl[], FlagDecl[], AbstractBoundaryRule[], Kernel{N}[], Tuple(periodic),
         Float64.(Tuple(spacing)), nparams)
 end
 
@@ -54,7 +54,7 @@ function table!(pb::ProgramBuilder, key; storage = F32, oob = :zero_at_0)
     push!(pb.tables, TableDecl(String(key), storage, oob))
     return Int32(length(pb.tables))
 end
-rule!(pb::ProgramBuilder, r::BRule) = (push!(pb.rules, r); nothing)
+rule!(pb::ProgramBuilder, r::AbstractBoundaryRule) = (push!(pb.rules, r); nothing)
 
 """
 A kernel builder for space `space` (default: the full space at level 0).
@@ -124,7 +124,7 @@ function program(pb::ProgramBuilder{N}) where {N}
     grid = pb.hierarchy[1].grid
     hier = [Level{N}(Grid{N}(grid.dims, grid.geometry, mm(grid.domain)), l.shift, l.widths)
             for l in pb.hierarchy]
-    rules = BRule[_rulemap(r, fm, mm) for r in pb.rules]
+    rules = AbstractBoundaryRule[_rulemap(r, fm, mm) for r in pb.rules]
     p = Program{N}(
         hier, fields, tables, masks, sort(flags; by = g -> g.key), rules, kernels,
         pb.periodic, pb.spacing, pb.nparams)

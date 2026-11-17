@@ -22,7 +22,7 @@
             foreach(_ -> step!(integ), 1:k)
             a = Array(current_state(integ).site.c)
             bp = LP.discretize(bsys[name], LP.LatticeDiscretization(LP.Grid(dims); T = Float64))
-            bb = LP.solve(LP.remake(bp; u0 = vec(c0)), LP.ExplicitEuler(; dt = 1.0, substeps = n))[:c, end]
+            bb = LP.solve(LP.remake(bp; u0 = vec(c0)), LP.ExplicitEuler(; substeps = n); dt = 1.0)[:c, end]
             @test a == bb
             @test maximum(abs, a .- c0) > 1.0e-3                 # the operator moved the field
         end
@@ -178,11 +178,11 @@ end
         @test Array(st0.site.c) == c0                                   # the zero-length step moves no state
         @test Array(st0.site.K) ≈ 2 .* c0 .+ 1 rtol = 1.0e-14
         @test Array(integ.saved_u[1].site.K) ≈ 2 .* c0 .+ 1 rtol = 1.0e-14  # the saved start
-        # N1: `c` keeps its initial value bitwise under `lower = 0.0`; `K = rhs(u0)`
+        # N1: `c` keeps its initial value bitwise under `lower_bound = 0.0`; `K = rhs(u0)`
         ig = init(
             PottsProblem(
                 FaLower(; name = :l), [ownership => σ0, kind => [:A]], (0, 2);
-                field_solver = ExplicitEuler(substeps = 2, lower = 0.0)
+                field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0)
             ), SequentialCPM()
         )
         sl = CorePotts.current_state(ig)
@@ -289,7 +289,7 @@ end
         )
         bp = LP.discretize(sys, LP.LatticeDiscretization(LP.Grid((8, 8)); T = Float64))
         logs, _ = Test.collect_test_logs() do
-            [LP.init(LP.remake(bp; p = [kw => k]), LP.ExplicitEuler(; dt = 1.0, substeps = 4)) for k in (0.5, 0.7, 0.9)]
+            [LP.init(LP.remake(bp; p = [kw => k]), LP.ExplicitEuler(; substeps = 4); dt = 1.0) for k in (0.5, 0.7, 0.9)]
         end
         @test warns(logs) == 1 && occursin("ExplicitEuler(substeps = 4): 4 substeps", string(logs[end].message))
         @test length(LFP._SEEN_WARNED) == n0 + 2

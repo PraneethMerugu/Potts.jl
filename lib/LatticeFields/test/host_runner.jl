@@ -74,7 +74,7 @@ function prepare(p::IR.Program, l::LaunchSpec, st, Praw; rt = ())
     isempty(ck.kernel.reductions) || return WorkgroupPrep(          # contract item 5
         body_function(ck), l.ndrange[1] ÷ Schedule.WG, zeros(ck.T, Schedule.reduce_lds(ck)),
         launch_arrays(st, l), launch_parameters(ck, Praw), launch_geometry(p, ck, _rt2(rt)))
-    Problems.bind(HOST, p, l, launch_arrays(st, l), launch_parameters(ck, Praw), _rt2(rt))
+    Problems.bind_program(HOST, p, l, launch_arrays(st, l), launch_parameters(ck, Praw), _rt2(rt))
 end
 run!(l) = (l(); nothing)
 
@@ -234,7 +234,7 @@ end
 HostExec() = HostExec(true)
 Solvers.alloc(::HostExec, ::Type{T}, n) where {T} = zeros(T, n)
 Schedule.supports(e::HostExec, ::Type{Float64}) = e.f64
-Solvers.fetch(::HostExec, A) = copy(A)
+Solvers.to_host(::HostExec, A) = copy(A)
 function Solvers.launch!(::HostExec, l::Solvers.Launch)
     if l.wg == 0
         _hostrun(l.body, l.n, l.S, l.P, l.G)

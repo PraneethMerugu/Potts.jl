@@ -34,7 +34,7 @@ end
     l = only(sp.launches)
     st = HostStore(s)
     P = Problems.launch_parameters(l.kernel, (0.1, 1.0, 1.0))
-    L = Problems.bind(HOST, s, l, Problems.launch_arrays(st, l), P, (0.0, 0.0))
+    L = Problems.bind_program(HOST, s, l, Problems.launch_arrays(st, l), P, (0.0, 0.0))
     S, P2, G = L.params[2]
     @test L.params[3] == Int(G.n) == 63 && G.n isa Int32        # n is G.n, in the index type
     @test G.rt === (0.0f0, 0.0f0) && P2 === P
@@ -52,7 +52,7 @@ end
     lx = only(spx.launches)
     @test lx.kernel.strategy == :cartesian
     stx = HostStore(sx)
-    Lx = Problems.bind(HOST, sx, lx, Problems.launch_arrays(stx, lx), (2.0f0,), (0.0, 0.0))
+    Lx = Problems.bind_program(HOST, sx, lx, Problems.launch_arrays(stx, lx), (2.0f0,), (0.0, 0.0))
     @test Lx.params[3] == (6, 5)
     copyto!(current(stx, sx, "u"), Float32.(1:30))
     Lx()

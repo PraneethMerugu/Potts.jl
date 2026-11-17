@@ -31,12 +31,12 @@ using LatticeFields.IR: F16, Grid, Program, ProgramBuilder, Coef, FaceRule, Node
 using CommonSolve: solve, init, step!, solve!
 using KernelAbstractions: KernelAbstractions
 using LatticeFields: Exec, Problems
-using LatticeFields.Solvers: DevicePCG, DeviceGMRES, Multigrid, V
+using LatticeFields.Solvers: DevicePCG, DeviceGMRES, Multigrid, VCycle
 using LatticeFields.Compile: CompileOptions, fingerprint_text, fuse_update, promote_dual, primal
 using LatticeFields.IR: fieldid, RESOLVE, degenerate, leveldims, sitecoefs
 using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
                               ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, RT_DT,
-                              substep_counts, steady_fields, field_series, jacobian_sparsity, LatticeMG, LatticePCG,
+                              substep_counts, steady_fields, field_series, jacobian_sparsity, LatticeMultigrid, LatticePCG,
                               field_report
 using ModelingToolkitBase: ModelingToolkitBase, PDESystem, Pre, ShiftIndex, Shift, Hold, Sample
 using SciMLBase: AbstractDiscretization, NullParameters, remake
@@ -48,7 +48,7 @@ using SymbolicUtils: SymbolicUtils, arguments, iscall, operation, unwrap_const
 using SymbolicUtils.Code: toexpr
 
 public pdesystem, pdesystem_refusal, is_crossgrid_key, operand_reads, LatticeCutField, euler_update, bound_parts, StabilityBound, lower_group, DeferredBound, DeferredOperator, OPERATOR_BUILDS, resolve_bound, lowers_call, check_one_kind, velocity_terms, as_written,
-       derivation, V, steady_rows, steady_form, steady_choice, steady_sign
+       derivation, VCycle, steady_rows, steady_form, steady_choice, steady_sign
 export Δ, DivKGrad, Advect, AdvectionScheme, Upwind1, at, at2, ismember, masked, step_index
 export LatticePlacement, LatticeStorage, LatticeLevel, Coarse, LatticeSpacing, PottsEntity, LatticeInputName
 export get_lattice_placement, get_lattice_storage, get_lattice_level, get_lattice_spacing,
@@ -58,8 +58,8 @@ export LatticeDiscretization, FiniteVolume, CompiledField, discretize, symbolic_
        parse_bcs, linearity, Grid, HEX, Interval, lattice_domain
 export ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, solve, init, step!, solve!, stability_bound,
        substep_counts, steady_fields, field_series, field_report
-export DevicePCG, DeviceGMRES, Multigrid    # the inner solvers (`inner = …`); `V` is public
-export jacobian_sparsity, LatticeMG, LatticePCG   # the Jacobian's pattern, the preconditioner and the linear solver of SciML's implicit solvers (F4-07, F4-08)
+export DevicePCG, DeviceGMRES, Multigrid    # the linear solvers (`linsolve = …`); `VCycle` is public
+export jacobian_sparsity, LatticeMultigrid, LatticePCG   # the Jacobian's pattern, the preconditioner and the linear solver of SciML's implicit solvers (F4-07, F4-08)
 export remake, getp, getu, setp            # the routes its messages give (SciMLBase, SymbolicIndexingInterface)
 
 # ---------------------------------------------------------------------------------------
@@ -202,7 +202,7 @@ lands on every boundary of the clock (a `tstop` at each, where the step index ch
 @variables c(..)
 eqs = [D(c(t, x, y)) ~ -c(t, x, y) + 0.1 * step_index(t)]
 prob = discretize(sys, LatticeDiscretization(Grid((16, 16)); clock = 1.0))   # `sys`: a PDESystem of `eqs`
-sol = solve(prob, ExplicitEuler(; dt = 0.25))       # 4 windows per step index
+sol = solve(prob, ExplicitEuler(); dt = 0.25)       # 4 windows per step index
 ```
 """
 step_index(t::Real) = throw(ArgumentError("`step_index(t)` is the step index of a discretization's clock: it has a " *

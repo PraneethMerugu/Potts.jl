@@ -44,13 +44,13 @@ end
                                    startswith(l, "           ")), split(r, '\n')), '\n')
     # the §7.4 count at 512² (12 substeps of the bound) on the device
     pd = mk(512, PDEV)
-    ig = init(pd, ExplicitEuler(; dt = 0.01))
+    ig = init(pd, ExplicitEuler(); dt = 0.01)
     r = sprint(field_report, ig)
     @test occursin("backend $(nameof(typeof(PDEV)))", r) && occursin("12 substeps", r) && occursin("/ 1.8⌉ = 12 [bound]", r)
     @test occursin("state Float32, compute Float32", r)
-    for alg in (ExplicitEuler(; dt = 0.01), BackwardEuler(; dt = 0.01))
+    for alg in (ExplicitEuler(), BackwardEuler())
         pd, ph = mk(32, PDEV), mk(32, KernelAbstractions.CPU())
-        a, b, h = init(pd, alg), init(pd, alg), init(ph, alg)
+        a, b, h = init(pd, alg; dt = 0.01), init(pd, alg; dt = 0.01), init(ph, alg; dt = 0.01)
         step!(a)
         step!(b)
         step!(h)
@@ -61,12 +61,12 @@ end
         step!(b)
         @test Array(a.u) == Array(b.u)                  # the report changed nothing in the run
         if alg isa BackwardEuler
-            @test occursin("DevicePCG() (`inner = :auto`), multigrid levels", rd) && occursin("1 window; 1 solve; status Success", rd)
+            @test occursin("DevicePCG() (`linsolve = :auto`), multigrid levels", rd) && occursin("1 window; 1 solve; status Success", rd)
         end
     end
-    s = solve(mk(32, PDEV), BackwardEuler(; dt = 0.01))
+    s = solve(mk(32, PDEV), BackwardEuler(); dt = 0.01)
     rs = sprint(field_report, s)
-    @test occursin("owned solve, BackwardEuler(; dt = 0.01), retcode Success", rs) && occursin("substep counts dc 1; 10 solves", rs)
+    @test occursin("owned solve, BackwardEuler(), retcode Success", rs) && occursin("substep counts dc 1; 10 solves", rs)
     st = solve(mk(32, PDEV), Tsit5())
     rt = sprint(field_report, st)
     @test occursin("SciML solve, Tsit5, retcode Success", rt) && occursin("backend $(nameof(typeof(PDEV)))", rt)

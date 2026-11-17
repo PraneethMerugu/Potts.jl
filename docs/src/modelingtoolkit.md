@@ -149,7 +149,7 @@ sol = solve(prob, SequentialCPM(); saveat = 1)
 
 `LatticePDE.discretize(Potts.fields(sys), disc)` gives one SciML problem: an `ODEProblem` of
 the rates, or a `DiscreteProblem` of the maps. A field algorithm steps it,
-`solve(prob, BackwardEuler(; dt = 0.1); save_everystep = false)`, and so does an OrdinaryDiffEq solver,
+`solve(prob, BackwardEuler(); dt = 0.1, save_everystep = false)`, and so does an OrdinaryDiffEq solver,
 `solve(prob, Rodas5P())`. The problem's `p` holds the parameters, the tables and the inputs.
 On the integrator of a field algorithm, `integ[c]` returns a copy of the field's values, on the
 problem's device.
@@ -168,8 +168,8 @@ a coloring of it, so `Rodas5P()` forms the Jacobian with a few evaluations of th
 instead of a dense one. `jac = true` gives it the Jacobian itself (colored Duals). Both are
 host only. The Jacobian-vector product `prob.f.jvp` is always set, so a Krylov linear solver
 runs matrix-free, also on a device, and the lattice multigrid preconditions it:
-`solve(prob, FBDF(; linsolve = KrylovJL_GMRES(; precs = LatticeMG(), gmres_restart = 10)))`.
-With `LatticeMG`, GMRES takes a few iterations per solve, so a small memory,
+`solve(prob, FBDF(; linsolve = KrylovJL_GMRES(; precs = LatticeMultigrid(), gmres_restart = 10)))`.
+With `LatticeMultigrid`, GMRES takes a few iterations per solve, so a small memory,
 `gmres_restart = 10`, is enough: LinearSolve currently allocates the GMRES workspace again
 at each new `W` (SciML/LinearSolve.jl#1378 fixes it). For a symmetric
 system, `linsolve = LatticePCG()` takes conjugate gradients with the same preconditioner.

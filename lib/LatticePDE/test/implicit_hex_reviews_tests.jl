@@ -3,11 +3,11 @@
 @testitem "F3-20: one BackwardEuler window on a hexagonal lattice equals the hand BE matrix" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
     @testset "F3-20: one BackwardEuler window on a hexagonal lattice equals the hand BE matrix" begin
         h = 0.05
-        alg = BackwardEuler(; dt = h, inner = BTIGHT)
+        alg = BackwardEuler(; linsolve = BTIGHT)
         # numeric rows: closed with a mask and its value, and periodic
         for (bcs, per, mask) in (([bc(0, x, y) ~ x * y, bce ~ masked(bqe == 2, 1.5)], false, true), ([bc(0, x, y) ~ x * y; HEXPER], true, false))
             p = hexdisc(bsys([D(bce) ~ bD * Δ(bce) - bk * bce + x], bcs, [bD, bk]))
-            ig, u0, u = be_window(p, alg)
+            ig, u0, u = be_window(p, alg; dt = h)
             L, b = hex_hand(; D = 0.3, k = 2.0, f = (x, y) -> x, periodic = per)
             A, rhs = I - h * L, u0 .+ h .* b
             if mask
@@ -26,7 +26,7 @@
         # edge, the diagonal included; a site outside keeps its value)
         mq(xx, yy) = (0.0, 0.5, 2.0)[HEXKIND[round(Int, xx * HEXN + 0.5), round(Int, yy * HEXN + 0.5)] + 1]
         p = hexdisc(bsys([D(bce) ~ at(bW, bqe) * Δ(bce) - bk * bce + 1], [bc(0, x, y) ~ x * y], [bW, bk]))
-        ig, u0, u = be_window(p, alg)
+        ig, u0, u = be_window(p, alg; dt = h)
         L, b = hex_hand(; m = mq, k = 2.0, f = (x, y) -> 1.0)
         @test maximum(abs, u .- (I - h * L) \ (u0 .+ h .* b)) < 1.0e-9
         rt = only(ig.runtimes)
@@ -41,7 +41,7 @@
             ), LatticeDiscretization(Grid((HEXN, HEXN); geometry = HEX); T = Float64, domain = hdm);
             inputs = [hdme => dm]
         )
-        ig, u0, u = be_window(pd, alg)
+        ig, u0, u = be_window(pd, alg; dt = h)
         L, b = hex_hand(; D = 0.3, k = 2.0, f = (x, y) -> x)
         out = findall(.!vec(dm))
         for r in axes(L, 1), c in axes(L, 2)            # no face across the domain's edge
@@ -72,7 +72,7 @@ end
             p = hexdisc(bsys([D(bce) ~ rate], bcs, ps))
             L, b = hex_hand(; D = m === nothing ? 1.0 : 0.3, m = something(m, mq), k = 2.0, f = (x, y) -> x, faces = hf)
             # the explicit rate at the start: `L u0 + b` (the ghosts of the face conditions)
-            ie = init(p, ExplicitEuler(; dt = 1.0e-7, substeps = 1))
+            ie = init(p, ExplicitEuler(; substeps = 1); dt = 1.0e-7)
             u0 = copy(vec(ie[bce]))
             step!(ie)
             r = (vec(ie[bce]) .- u0) ./ 1.0e-7
@@ -80,7 +80,7 @@ end
             @test maximum(abs, (r .- (L * u0 .+ b))[act]) < 1.0e-5 * maximum(abs, L * u0 .+ b) ||
                 (println("hex face rate ", lab, " ", maximum(abs, (r .- (L * u0 .+ b))[act])); false)
             # one BackwardEuler window: the hand BE matrix
-            ig, u0, u = be_window(p, BackwardEuler(; dt = h, inner = BTIGHT))
+            ig, u0, u = be_window(p, BackwardEuler(; linsolve = BTIGHT); dt = h)
             A, rhs = I - h * L, u0 .+ h .* b
             for q in findall(.!act)
                 A[q, :] .= 0
@@ -107,9 +107,9 @@ end
             for geometry in (HEX, LatticeFields.IR.CUBIC)
                 p = discretize(sys, LatticeDiscretization(Grid((12, 12); geometry); T = Float64))
                 if ok
-                    @test solve(p, QuasiSteady(; dt = 0.1, inner = BTIGHT)).retcode == ReturnCode.Success
+                    @test solve(p, QuasiSteady(; linsolve = BTIGHT); dt = 0.1).retcode == ReturnCode.Success
                 else
-                    @test_throws "its steady operator is indefinite" init(p, QuasiSteady(; dt = 0.1))
+                    @test_throws "its steady operator is indefinite" init(p, QuasiSteady(); dt = 0.1)
                 end
             end
         end
@@ -126,24 +126,24 @@ end
         for (rhs, K) in ((0.3 * (1 + x) * Δ(bce), (x, y) -> 1.0), (0.3 * (1 + x) * DivKGrad(:harmonic)(1 + y, bce), (x, y) -> 1 + y))
             bcs = [bc(0, x, y) ~ sin(3x) * cos(2y), bc(t, 0, y) ~ 1.0]
             kw = (; m = xm, K, k = (x, y) -> 2.0, f = (x, y) -> y, faces = Dict((1, -1) => (:dir, 1.0)))
-            ig, u0, u = be_window(bown(bsys([D(bce) ~ rhs - bk * bce + y], bcs, [bk])), BackwardEuler(; dt = h, inner = BTIGHT))
+            ig, u0, u = be_window(bown(bsys([D(bce) ~ rhs - bk * bce + y], bcs, [bk])), BackwardEuler(; linsolve = BTIGHT); dt = h)
             @test maximum(abs, u .- be_hand(u0, h; kw...)) < 1.0e-9
             rt = only(ig.runtimes)
             @test rt.cache.exact && rt.cache.newton == 1 && rt.cache.op.rows[1].scaled
             L, b = hand_rate(; kw...)
-            sq = solve(bown(bsys([0 ~ rhs - bk * bce + y], bcs, [bk])), QuasiSteady(; dt = 0.1, inner = BTIGHT))
+            sq = solve(bown(bsys([0 ~ rhs - bk * bce + y], bcs, [bk])), QuasiSteady(; linsolve = BTIGHT); dt = 0.1)
             @test maximum(abs, vec(blast(sq)) .- (-L \ b)) < 1.0e-9
         end
         # a multiplier that is negative at some sites (anti-diffusion): the scaled row drops it there,
         # so the operator is not exact and Newton iterates (warned)
         # (S1: the warning names the cause and the routes, not the generic unseen text)
         p = bown(bsys([D(bce) ~ 0.3 * (x - 0.5) * Δ(bce) - bk * bce], [bc(0, x, y) ~ x], [bk]))
-        ig = @test_logs (:warn, r"multiplier .* is negative at some site centers .* anti-diffusion.*keep the multiplier ≥ 0") match_mode = :any init(p, BackwardEuler(; dt = h))
+        ig = @test_logs (:warn, r"multiplier .* is negative at some site centers .* anti-diffusion.*keep the multiplier ≥ 0") match_mode = :any init(p, BackwardEuler(); dt = h)
         @test !only(ig.runtimes).cache.exact && only(ig.runtimes).cache.newton > 1
         # r1 M1: bound exact (bg = 0.5), then a write that turns `0.3(bg + x)` negative (bg = −0.5) reclassifies
         # the row at the write, with the warning. Base (27b14031): exact, newton = 1, Success, 0.27 off
         p = bown(bsys([D(bce) ~ 0.3 * (bg + x) * Δ(bce) - bk * bce], [bc(0, x, y) ~ x], [bg, bk]))
-        ig = init(p, BackwardEuler(; dt = h, inner = BTIGHT))
+        ig = init(p, BackwardEuler(; linsolve = BTIGHT); dt = h)
         @test only(ig.runtimes).cache.exact && only(ig.runtimes).cache.newton == 1
         @test_logs (:warn, r"is negative at some site centers \(down to -0.") match_mode = :any (ig.ps[bg] = -0.5; step!(ig))
         @test !only(ig.runtimes).cache.exact && only(ig.runtimes).cache.newton > 1
@@ -158,7 +158,7 @@ end
         for set in ((0, 1, 2), (0, 1, 2, 3), (1, 2))
             sys = PDESystem([D(bce) ~ ismember(bqe, set)], [bc(0, x, y) ~ 0.0], bdom(1.0), [t, x, y], [bce, bqe], Any[]; name = :kset)
             p = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64); inputs = [bqe => K])
-            ig = init(p, ExplicitEuler(; dt = 0.1))
+            ig = init(p, ExplicitEuler(); dt = 0.1)
             step!(ig)
             @test ig[bce] ./ 0.1 ≈ Float64.(in.(K, Ref(set)))
         end
@@ -177,20 +177,20 @@ end
         p = hexdisc(sys; inputs = [])
         u0 = [cos(2π * ((i - 0.5) + (j - 0.5)) / n) for i in 1:n, j in 1:n]
         ex = exp(0.3λ * 0.2) .* u0
-        err(alg) = maximum(abs, blast(solve(p, alg)) .- ex)
-        eb = [err(BackwardEuler(; dt = 0.2 / 2^k, inner = BTIGHT)) for k in 2:5]
+        err(alg; dt) = maximum(abs, blast(solve(p, alg; dt)) .- ex)
+        eb = [err(BackwardEuler(; linsolve = BTIGHT); dt = 0.2 / 2^k) for k in 2:5]
         @test all(o -> abs(o - 1) < 0.1, log2.(eb[1:(end - 1)] ./ eb[2:end]))
         # exactly the BE map (1 − h D λ)^{-m}
-        @test maximum(abs, blast(solve(p, BackwardEuler(; dt = 0.05, inner = BTIGHT))) .- (1 - 0.05 * 0.3λ)^-4 .* u0) < 1.0e-12
+        @test maximum(abs, blast(solve(p, BackwardEuler(; linsolve = BTIGHT); dt = 0.05)) .- (1 - 0.05 * 0.3λ)^-4 .* u0) < 1.0e-12
         # (at h D |λ| ≤ 0.1: measured CN 2.04, 2.01, 2.00 and BDF2 2.11, 2.06, 2.03; larger steps are
         # not yet asymptotic)
-        for alg in (dt -> CrankNicolson(; dt, inner = BTIGHT), dt -> BDF2(; dt, inner = BTIGHT))
-            ec = [err(alg(0.2 / 2^k)) for k in 4:7]
+        for alg in (CrankNicolson(; linsolve = BTIGHT), BDF2(; linsolve = BTIGHT))
+            ec = [err(alg; dt = 0.2 / 2^k) for k in 4:7]
             @test all(o -> abs(o - 2) < 0.15, log2.(ec[1:(end - 1)] ./ ec[2:end])) || (println("hex order 2: ", ec); false)
         end
         # QuasiSteady: the steady state of `D Δ c − k c + f` (closed, a mask) is the hand solve
         qs = hexdisc(bsys([D(bce) ~ bD * Δ(bce) - bk * bce + x], [bc(0, x, y) ~ 0.0, bce ~ masked(bqe == 2, 1.5)], [bD, bk]))
-        s = solve(qs, QuasiSteady(; dt = 0.1, inner = BTIGHT))
+        s = solve(qs, QuasiSteady(; linsolve = BTIGHT); dt = 0.1)
         L, b = hex_hand(; D = 0.3, k = 2.0, f = (x, y) -> x)
         A, rhs = -L, copy(b)
         for r in findall(vec(HEXKIND .== 2))
@@ -213,7 +213,7 @@ end
                 name = :hexloop
             )
             p = discretize(lp, LatticeDiscretization(Grid((HEXN, HEXN); geometry = HEX); T = Float64))
-            s = solve(p, QuasiSteady(; dt = 0.1, inner = DeviceGMRES(; rtol = 1.0e-12, budget = 200)))
+            s = solve(p, QuasiSteady(; linsolve = DeviceGMRES(; reltol = 1.0e-12, maxiters = 200)); dt = 0.1)
             L1, b1 = hex_hand(; D = 0.1, k = 1.0, f = (x, y) -> x, periodic = per)
             L2, b2 = hex_hand(; D = 0.2, k = 2.0, f = (x, y) -> y, periodic = per)
             n2 = HEXN^2
@@ -229,7 +229,7 @@ end
             [t, x, y], [bce, boe], Any[]; name = :hexgrow
         )
         pg = discretize(grow, LatticeDiscretization(Grid((HEXN, HEXN); geometry = HEX); T = Float64))
-        @test_throws "their coupled steady system has a growing mode" init(pg, QuasiSteady(; dt = 0.1))
+        @test_throws "their coupled steady system has a growing mode" init(pg, QuasiSteady(); dt = 0.1)
     end
 end
 
@@ -241,12 +241,12 @@ end
             [D(bce) ~ Float64(π) * Δ(bce) - Float64(ℯ) * bce + sin(Float64(π) * x) + Float64(ℯ)],
             [bc(0, x, y) ~ cos(Float64(π) * y), bc(t, 0, y) ~ Float64(π) / 2 + Float64(ℯ) * y], [bce]; T = 0.2
         )
-        for alg in (ExplicitEuler(; dt = 0.05), BackwardEuler(; dt = 0.05, inner = r1tight()))
-            a, b = blast(solve(nlown(sym; dims = (8, 8)), alg)), blast(solve(nlown(num; dims = (8, 8)), alg))
+        for alg in (ExplicitEuler(), BackwardEuler(; linsolve = r1tight()))
+            a, b = blast(solve(nlown(sym; dims = (8, 8)), alg; dt = 0.05)), blast(solve(nlown(num; dims = (8, 8)), alg; dt = 0.05))
             @test maximum(abs, a .- b) < 1.0e-13
         end
         # `π Δ(c)` is a numeric face coefficient (no field row)
-        @test !only(only(init(nlown(sym; dims = (8, 8)), BackwardEuler(; dt = 0.05)).runtimes).cache.rows).op.field
+        @test !only(only(init(nlown(sym; dims = (8, 8)), BackwardEuler(); dt = 0.05).runtimes).cache.rows).op.field
         ode(s) = discretize(s, LatticeDiscretization(Grid((8, 8)); T = Float64))
         pa, pb = ode(sym), ode(num)
         da, db = similar(pa.u0), similar(pb.u0)
@@ -269,12 +269,12 @@ end
             [bc(0, x, y) ~ 0.5, bo(0, x, y) ~ 0.0], [bce, boe]; T = 0.3
         )
         pc, ps = nlown(comp), nlown(scal)
-        cc, cs = only(init(pc, BackwardEuler(; dt = 0.05)).runtimes).cache, only(init(ps, BackwardEuler(; dt = 0.05)).runtimes).cache
+        cc, cs = only(init(pc, BackwardEuler(); dt = 0.05).runtimes).cache, only(init(ps, BackwardEuler(); dt = 0.05).runtimes).cache
         # base: every term of both rows unseen, five warnings, newton = 4, no solve
         @test cc.newton == cs.newton == 1 && cc.exact && [r.op.iterate for r in cc.rows] == [r.op.iterate for r in cs.rows] == [true, false]
         @test all(r -> isempty(r.op.unseen), cc.rows) && [r.op.faces for r in cc.rows] == [r.op.faces for r in cs.rows]
-        a = @test_logs min_level = WARN solve(pc, BackwardEuler(; dt = 0.05))
-        b = solve(ps, BackwardEuler(; dt = 0.05))
+        a = @test_logs min_level = WARN solve(pc, BackwardEuler(); dt = 0.05)
+        b = solve(ps, BackwardEuler(); dt = 0.05)
         @test LatticePDE.Problems.field_stats(a) == LatticePDE.Problems.field_stats(b) && a.stats.solves == 12
         @test a[bue[1], length(a.t)] == b[bce, length(b.t)] && a[bue[2], length(a.t)] == b[boe, length(b.t)]
         # N2: a component read in a message is `u[1]` as written (base: `(bu)[1]`)
@@ -286,23 +286,23 @@ end
         )
         @test_logs (:warn, r"`-Advect\(Upwind1\(\)\)\(\[.*, 0\.0\], bu\[1\]\)` \(in the rate of `bu\[1\]`\) is not in the implicit operator") match_mode = :any init(
             pv,
-            BackwardEuler(; dt = 0.1)
-        )
+            BackwardEuler()
+        ; dt = 0.1)
     end
 end
 
 @testitem "r1 S4, S6, N1: the failure route follows the cause; rule 2 on the sum; show" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
     @testset "r1 S4, S6, N1: the failure route follows the cause; rule 2 on the sum; show" begin
-        alg = BackwardEuler(; dt = 0.1)
+        alg = BackwardEuler()
         @test LFB.status_route(alg, :failure, 0x02) == LFB.status_route(alg, :failure, 0x06) ==
             "more substeps (`substeps = n`): a smaller step brings the Newton iteration into its contraction"
-        @test LFB.status_route(alg, :failure, 0x01) == "more substeps (`substeps = n`) or a larger linear budget (`inner = DevicePCG(; budget = n)`)"
+        @test LFB.status_route(alg, :failure, 0x01) == "more substeps (`substeps = n`) or a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`)"
         # a Newton divergence in a run names that route (base: "… or a larger linear budget")
         p = nlown(nlsys([D(bce) ~ 0.01 * Δ(bce) - Advect(Upwind1())([52 * (1 + x) + t, 0.0], bce)], [bc(0, x, y) ~ x * y], [bce]; T = 2.0))
         @test_logs (:warn, r"the Newton iteration diverged\), `ReturnCode.ConvergenceFailure`: the run stops; more substeps \(`substeps = n`\): a smaller step brings the Newton iteration into its contraction$") match_mode = :any solve(
             p,
-            BackwardEuler(; dt = 1.0)
-        )
+            BackwardEuler()
+        ; dt = 1.0)
         # S6: advection (ρ_adv = 48) and a cycle (κ_in = 2) in one group: n = ⌈2 · 0.25 · 50⌉ = 25,
         # so ρ_c = 1/2 and newton = 10 (base, rule 2 on the larger: n = 24, ρ_c = 0.52, newton = 11)
         @parameters bvx = 1.0
@@ -312,7 +312,7 @@ end
                 [bc(0, x, y) ~ x * y, bo(0, x, y) ~ y], bdom(1.0), [t, x, y], [bce, boe], [bvx]; name = :s6
             )
         )
-        ig = init(p, BackwardEuler(; dt = 0.25, inner = BTIGHT))
+        ig = init(p, BackwardEuler(; linsolve = BTIGHT); dt = 0.25)
         c = only(ig.runtimes).cache
         @test c.cyclic && c.ρin == 50.0 && ig.substeps == 25 && c.newton == 10
         # the reviewer's write `vx = 8`: ρ_in = 2 (8 + 0.5) 16 + 2 = 274, n = 137, newton 10 at once
@@ -322,7 +322,7 @@ end
         step!(ig)
         @test ig.substeps == 137 && c.newton == 10 && only(ig.runtimes).totals.newton_budget == 0
         # N1: `ExplicitEuler` prints by keyword, as `BackwardEuler` does
-        @test eval(Meta.parse(sprint(show, ExplicitEuler(; dt = 0.1, substeps = 15)))) == ExplicitEuler(; dt = 0.1, substeps = 15)
+        @test eval(Meta.parse(sprint(show, ExplicitEuler(; substeps = 15)))) == ExplicitEuler(; substeps = 15)
         @test eval(Meta.parse(sprint(show, ExplicitEuler()))) == ExplicitEuler()
     end
 end
@@ -333,11 +333,11 @@ end
         # out with θ = 2 / (5 · (1 − 1/16)) = 0.43 ≤ 1/2: one substep, newton 1 + ⌈log 1e-3 / log θ⌉ = 10,
         # no budget hit, the direct BE (base 9585df2e: 410 substeps, 8,228 solves)
         sys, p, r2qe, kind = r2m1_prob([0.5, 2.0], (W, q) -> at(W, q) * Δ(bce) + 5.0 * DivKGrad(:harmonic)(1 + x, bce) - bce)
-        for alg in (BackwardEuler(; dt = 0.05, inner = r1tight()), BackwardEuler(; dt = 0.05, substeps = 1, inner = r1tight()))
-            ig = init(p, alg)
+        for alg in (BackwardEuler(; linsolve = r1tight()), BackwardEuler(; substeps = 1, linsolve = r1tight()))
+            ig = init(p, alg; dt = 0.05)
             c = only(ig.runtimes).cache
             @test ig.substeps == 1 && c.θ ≈ 2 / (5 * 15 / 16) && c.ρin == 0 && c.newton == 10
-            s = @test_logs min_level = WARN solve(p, alg)
+            s = @test_logs min_level = WARN solve(p, alg; dt = 0.05)
             @test s.retcode == ReturnCode.Success && s.stats.newton_budget == 0 && s.stats.solves < 100
             @test r1rel(vec(blast(s)), direct_be(sys, (16, 16), 0.05, 0.5, 1; inputs = [r2qe => kind])) < 1.0e-4
         end
@@ -349,16 +349,16 @@ end
         # θ = 4 / 4.69 > 1/2: the term's Gershgorin bound counts (rule 2 raises the count), and a
         # requested count below it warns why
         sys, p, r2qe, kind = r2m1_prob([1.0, 4.0], (W, q) -> at(W, q) * Δ(bce) + 5.0 * DivKGrad(:harmonic)(1 + x, bce) - bce)
-        ig = init(p, BackwardEuler(; dt = 0.05, inner = r1tight()))
+        ig = init(p, BackwardEuler(; linsolve = r1tight()); dt = 0.05)
         c = only(ig.runtimes).cache
         @test c.θ == 0 && c.ρin > 0 && ig.substeps > 1
         n = ig.substeps
         ig = @test_logs (:warn, r"^BackwardEuler\(substeps = 1\): field `bc` takes \d+ substeps, more than the 1 requested: the terms out of the implicit operator \(`at\(r2W, r2q\)\*Δ\(bc\)` \(in the rate of `bc`\)\) are corrected by Newton iterations, which converge only when the substep keeps their contraction at most 1/2; fewer substeps would not converge$") init(
             p,
-            BackwardEuler(; dt = 0.05, substeps = 1, inner = r1tight())
-        )
+            BackwardEuler(; substeps = 1, linsolve = r1tight())
+        ; dt = 0.05)
         @test ig.substeps == n
-        s = solve(p, BackwardEuler(; dt = 0.05, inner = r1tight()))
+        s = solve(p, BackwardEuler(; linsolve = r1tight()); dt = 0.05)
         @test s.retcode == ReturnCode.Success && s.stats.newton_budget == 0
         @test r1rel(vec(blast(s)), direct_be(sys, (16, 16), 0.05, 0.5, n; inputs = [r2qe => kind])) < 1.0e-4
     end
@@ -368,10 +368,10 @@ end
     @testset "R2-M1: kept multiplier with zero rows uses Gershgorin bound" begin
         # a kept multiplier with zero rows (`ifelse(q == 1, 0, 8) Δ(c)` kept): no ratio, the bound counts
         sys, p, r2qe, kind = r2m1_prob([0.5, 2.0], (W, q) -> ifelse(q == 1, 0.0, 8.0) * Δ(bce) + DivKGrad(:harmonic)(1 + x, bce) - bce)
-        ig = init(p, BackwardEuler(; dt = 0.05, inner = r1tight()))
+        ig = init(p, BackwardEuler(; linsolve = r1tight()); dt = 0.05)
         c = only(ig.runtimes).cache
         @test c.θ == 0 && c.ρin > 0 && ig.substeps > 1
-        s = solve(p, BackwardEuler(; dt = 0.05, inner = r1tight()))
+        s = solve(p, BackwardEuler(; linsolve = r1tight()); dt = 0.05)
         @test s.retcode == ReturnCode.Success && s.stats.newton_budget == 0
         @test r1rel(vec(blast(s)), direct_be(sys, (16, 16), 0.05, 0.5, ig.substeps; inputs = [r2qe => kind])) < 1.0e-4
     end
@@ -404,10 +404,10 @@ end
             [r3W]; name = :r3
         )
         p = discretize(sys, LatticeDiscretization(Grid((16, 16)); T = Float64); inputs = [r3qe => kind])
-        ig = init(p, BackwardEuler(; dt = 0.05, inner = r1tight()))
+        ig = init(p, BackwardEuler(; linsolve = r1tight()); dt = 0.05)
         c = only(ig.runtimes).cache
         @test c.θ > 0.4 && c.ρin > 0 && c.newton > 12
-        s = @test_logs min_level = WARN solve(p, BackwardEuler(; dt = 0.05, inner = r1tight()))
+        s = @test_logs min_level = WARN solve(p, BackwardEuler(; linsolve = r1tight()); dt = 0.05)
         @test s.retcode == ReturnCode.Success && s.stats.newton_budget == 0
         @test r1rel(vec(blast(s)), direct_be(sys, (16, 16), 0.05, 0.5, ig.substeps; inputs = [r3qe => kind])) < 1.0e-4
     end
@@ -421,13 +421,13 @@ end
         @parameters r3g = 1.0
         sg = bsys([D(bce) ~ bD * Δ(bce) + r3g * bce], [bc(0, x, y) ~ x * y], [bD, r3g]; T = 2.0, dvs = [bce])
         pg = discretize(sg, LatticeDiscretization(Grid(BDIMS); T = Float64))
-        ig = init(pg, BackwardEuler(; dt = 0.5, inner = BTIGHT))
+        ig = init(pg, BackwardEuler(; linsolve = BTIGHT); dt = 0.5)
         step!(ig)
         u = vec(ig[bce])
         ig.ps[r3g] = 4.0
         @test ig.substeps == 4
         step!(ig)
-        fresh = init(remake(pg; u0 = u, p = [r3g => 4.0]), BackwardEuler(; dt = 0.5, inner = BTIGHT))
+        fresh = init(remake(pg; u0 = u, p = [r3g => 4.0]), BackwardEuler(; linsolve = BTIGHT); dt = 0.5)
         step!(fresh)
         @test vec(ig[bce]) == vec(fresh[bce])
     end
@@ -451,8 +451,8 @@ end
         p = discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64))
         r = @test_logs (:warn, r"`0.1Δ\(xq\)` \(in the rate of `bc`\) is not in the implicit operator and no bound sees it") match_mode = :any solve(
             p,
-            BackwardEuler(; dt = 0.1, inner = BTIGHT)
-        )
+            BackwardEuler(; linsolve = BTIGHT)
+        ; dt = 0.1)
         @test r.retcode == ReturnCode.Success
         po = discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64))
         ro = SciMLBase.solve(po, ImplicitEuler(); adaptive = false, dt = 0.1, abstol = 1.0e-12, reltol = 1.0e-12)

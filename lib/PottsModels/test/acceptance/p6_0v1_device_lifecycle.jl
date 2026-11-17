@@ -295,7 +295,7 @@ function p60v1_published(T)
         :GranerGlazier => () -> PottsProblem(GranerGlazier(; name = :gg), [ownership => gg[1], kind => gg[2]], (0, 8); T),
         :WortelAct => () -> PottsProblem(WortelAct(; name = :w, lattice = (32, 32)), [ownership => w, kind => [:cell]], (0, 8); T),
         :MerksVasculogenesis => () -> PottsProblem(MerksVasculogenesis(; name = :m, lattice = (32, 32)),
-            merks_state(; lattice = (32, 32), n = 6, side = 7), (0, 8); T, field_solver = ExplicitEuler(substeps = 2, lower = 0.0)),
+            merks_state(; lattice = (32, 32), n = 6, side = 7), (0, 8); T, field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0)),
         :OpenVTGrowingMonolayer => () -> PottsProblem(OpenVTGrowingMonolayer(; name = :o, lattice = (24, 24), τ = 1e6),
             openvt_monolayer_state(; lattice = (24, 24)), (0, 8); T, capacity = 64),
         :AkeebInvasion => () -> PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60)),

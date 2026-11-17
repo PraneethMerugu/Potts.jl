@@ -27,7 +27,6 @@ function b6_build_err(ex)
     end
 end
 
-b6_own(fs) = typeof(fs)((n === :dt ? 1.0 : getfield(fs, n) for n in fieldnames(typeof(fs)))...)
 b6_tol(::ExplicitEuler) = 0.0
 b6_tol(::BackwardEuler) = 1.0e-9
 
@@ -152,7 +151,7 @@ function b6_round_trip(m, fs, f)
     F = Potts.fields(m)
     prob = B6_LP.discretize(F, B6_LP.LatticeDiscretization(B6_LP.Grid((24, 20)); T = Float64); inputs = collect(Potts.field_inputs(integ)))
     u0 = vec(Array(getproperty(current_state(integ).site, f)))
-    o = B6_LP.solve(B6_LP.remake(prob; u0, tspan = (0.0, 1.0)), b6_own(fs)).u[end]
+    o = B6_LP.solve(B6_LP.remake(prob; u0, tspan = (0.0, 1.0)), fs; dt = 1.0).u[end]
     step!(integ)
     return maximum(abs, o .- vec(Array(getproperty(current_state(integ).site, f)))), integ
 end
@@ -183,7 +182,7 @@ function b6_pde_round_trip(m, pde, fs, f; op = b6_op())
         b6_owned(pde), B6_LP.LatticeDiscretization(B6_LP.Grid((24, 20)); T = Float64); inputs = collect(fi),
         u0 = [f => Array(getproperty(current_state(integ).site, f))], tspan = (0.0, 1.0)
     )
-    o = B6_LP.solve(prob, b6_own(fs)).u[end]
+    o = B6_LP.solve(prob, fs; dt = 1.0).u[end]
     step!(integ)
     return maximum(abs, o .- vec(Array(getproperty(current_state(integ).site, f)))), fi, integ
 end

@@ -25,7 +25,7 @@ end
     gg = [ownership => σg, kind => kg]
     merks = [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]]
     act = [ownership => two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:cell, :cell]]
-    euler = (; field_solver = ExplicitEuler(substeps = 2, lower = 0.0))
+    euler = (; field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0))
     cases = [
         ("Graner–Glazier", T.CellSorting(; name = :m), GranerGlazier(; name = :m), gg, (;)),
         ("Graner–Glazier, keywords", T.CellSorting(; name = :m, lattice = (144, 144), T = 5.0),

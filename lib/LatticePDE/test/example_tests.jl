@@ -28,7 +28,7 @@ end
             [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)],
             [t ∈ Interval(0, 10), x ∈ Interval(0, 1), y ∈ Interval(0, 1)], [t, x, y], [c(t, x, y)], [Dc, k])
         prob = discretize(rd, LatticeDiscretization(Grid((512, 512)); T = Float32))
-        sol  = solve(prob, ExplicitEuler(dt = 1f-2); saveat = 1)
+        sol  = solve(prob, ExplicitEuler(); dt = 1f-2, saveat = 1)
         sol[c(t, x, y)]
     end
     m = Module(:Example74)

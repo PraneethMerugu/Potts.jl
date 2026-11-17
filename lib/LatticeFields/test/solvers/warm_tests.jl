@@ -30,7 +30,7 @@ struct ChunkExec
     k::Int
 end
 Solvers.alloc(::ChunkExec, ::Type{T}, n) where {T} = zeros(T, n)
-Solvers.fetch(::ChunkExec, A) = copy(A)
+Solvers.to_host(::ChunkExec, A) = copy(A)
 Schedule.supports(::ChunkExec, ::Type{Float64}) = true
 Solvers.lds_regions(e::ChunkExec) = e.k
 function Solvers.launch!(e::ChunkExec, l::Solvers.Launch)
@@ -110,7 +110,7 @@ end
 using .LF_solvers_warm: fd
 @testset "a sweep over 100 coefficient values keeps sv.plans at a constant size" begin
     op, inputs = box_case(64, 32; s = 0.01, islands = 0.1)
-    sv = case_solver((op, inputs), Float64; inner = DevicePCG(; budget = 64, rtol = 1e-10))
+    sv = case_solver((op, inputs), Float64; inner = DevicePCG(; maxiters = 64, reltol = 1e-10))
     sizes = Int[]
     for (i, s) in enumerate(range(0.005, 0.05; length = 100))
         set_coefficients!(sv, CellOperator(op.dims; periodic = op.periodic, shift = s, mask = op.mask,
@@ -163,7 +163,7 @@ using .LF_solvers_warm: fd
             # and both are the derivative: a central difference of two tight fresh solves (a
             # stale perturbed plan gives du = 0 in both)
             function tight(o)                      # only `coef` moves: the face value stays 1 + b
-                ft = FieldSolver(exec, o; T = Float64, inner = DevicePCG(; rtol = 1e-12, budget = 256))
+                ft = FieldSolver(exec, o; T = Float64, inner = DevicePCG(; reltol = 1e-12, maxiters = 256))
                 foreach(((k, v),) -> copyto!(field(ft, k), v), inp)
                 steady!(ft)
                 return copy(Solvers.solver_solution(ft))

@@ -19,15 +19,16 @@ fam_chain = PDESystem([D(fam_u) ~ fDc * Δ(fam_u) - fk * fam_u, D(fam_v) ~ 0.5 *
     [fu(0, x, y) ~ x; fv(0, x, y) ~ y; fam_faces; fv(t, x, 0) ~ fv(t, x, 1)], fam_dom, [t, x, y], [fam_u, fam_v], [fDc, fk]; name = :famc)
 fam_map = PDESystem([Shift(t, 1)(fam_N) ~ (fN(t, x + fdx, y) + fN(t, x - fdx, y)) / 2], [fN(0, x, y) ~ x],
     [t ∈ Interval(0.0, 3.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [fam_N], [fdx]; name = :famm)
-const FAM_INNER = DevicePCG(; rtol = 1e-12, budget = 64)
-const FAM_CASES = [("ExplicitEuler", fam_rate, ExplicitEuler(; dt = 0.01)),
-    ("BackwardEuler", fam_rate, BackwardEuler(; dt = 0.05, inner = FAM_INNER)),
-    ("CrankNicolson", fam_rate, CrankNicolson(; dt = 0.05, inner = FAM_INNER)),
-    ("BDF2", fam_rate, BDF2(; dt = 0.05, inner = FAM_INNER)),
-    ("QuasiSteady", fam_steady, BackwardEuler(; dt = 0.05, inner = FAM_INNER)),
-    ("FieldGroups", fam_chain, FieldGroups(fam_u => ExplicitEuler(; dt = 0.05, substeps = 2),
-        fam_v => BackwardEuler(; dt = 0.05, inner = FAM_INNER))),
-    ("ExplicitMap", fam_map, ExplicitMap())]
+const FAM_INNER = DevicePCG(; reltol = 1e-12, maxiters = 64)
+# (name, system, algorithm, the keywords of `solve`: the window `dt`)
+const FAM_CASES = [("ExplicitEuler", fam_rate, ExplicitEuler(), (; dt = 0.01)),
+    ("BackwardEuler", fam_rate, BackwardEuler(; linsolve = FAM_INNER), (; dt = 0.05)),
+    ("CrankNicolson", fam_rate, CrankNicolson(; linsolve = FAM_INNER), (; dt = 0.05)),
+    ("BDF2", fam_rate, BDF2(; linsolve = FAM_INNER), (; dt = 0.05)),
+    ("QuasiSteady", fam_steady, BackwardEuler(; linsolve = FAM_INNER), (; dt = 0.05)),
+    ("FieldGroups", fam_chain, FieldGroups(fam_u => ExplicitEuler(; substeps = 2),
+        fam_v => BackwardEuler(; linsolve = FAM_INNER)), (; dt = 0.05)),
+    ("ExplicitMap", fam_map, ExplicitMap(), (;))]
 fam_disc() = LatticeDiscretization(Grid((8, 8)); T = Float64)
 fmsg(f) = try
     f(); ""

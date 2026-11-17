@@ -1927,9 +1927,9 @@ LatticeFields prints the groups of a LatticePDE problem (`field_report` of a `Fi
 one function): one block per group with its fields and algorithm, the window (the MCS, or its
 part in a `repeat(n, …)` of the fields), the substep count and its cause (the bound, the user
 minimum `substeps = m`, or both), the stability bound `ρ` and its parts, and the number types;
-for an implicit group `inner` and its multigrid levels and the Newton count; then the coupling
+for an implicit group `linsolve` and its multigrid levels and the Newton count; then the coupling
 rule's `κ` for groups that read each other in a loop. A problem gives the policy at its
-parameters (an implicit group's `inner` and Newton count as given: they are resolved when the
+parameters (an implicit group's `linsolve` and Newton count as given: they are resolved when the
 group is bound). An integrator gives each bound group as it is, with its run counters (windows,
 solves, budget hits, status), its launches per substep and its fusion decisions; then its
 steady starts (`init = :steady`). An integrator or a solution also gives the run's field

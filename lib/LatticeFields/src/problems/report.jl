@@ -3,13 +3,14 @@
 
 """
     field_report([io::IO = stdout], x)
-    field_report([io::IO = stdout], prob, alg)
+    field_report([io::IO = stdout], prob, alg; dt = nothing)
 
 Print the policy of every field group of `x` and the counters of its run. `x` is a lattice
 problem (what `LatticePDE.discretize` returns, or a `FieldProblem`), an owned integrator
 (`init(prob, alg)` with a field algorithm), the integrator of a SciML solver (OrdinaryDiffEq's
 `init(prob, Tsit5())`), or a solution of either. `field_report(prob, alg)` prints the policy of
-`prob`'s groups under the field algorithm `alg` without binding anything.
+`prob`'s groups under the field algorithm `alg` without binding anything, over the window `dt` (as given to `solve`; `nothing`: the clock's
+period).
 
 One block per group, about ten lines:
 
@@ -24,7 +25,7 @@ One block per group, about ten lines:
   parameters;
 - the number types: the state, the compute type of the kernels ([`compute_type`](@ref)) and, for
   the implicit groups, the solver's;
-- for the implicit groups: `inner` as resolved and its multigrid levels, the Newton count and
+- for the implicit groups: `linsolve` as resolved and its multigrid levels, the Newton count and
   the rule that set it, and whether the operator `J̃` is exact (the terms it leaves out and their
   bound `ρ_in`);
 - the run counters of the group's status word ([`field_stats`](@ref) sums them), the launches
@@ -47,7 +48,8 @@ synchronize, so call it outside a timed loop; it changes nothing in the run.
 """
 function field_report end
 field_report(x) = field_report(stdout, x)
-field_report(prob::SciMLBase.AbstractSciMLProblem, alg::FieldAlgorithm) = field_report(stdout, prob, alg)
+field_report(prob::SciMLBase.AbstractSciMLProblem, alg::AbstractFieldAlgorithm; dt = nothing) =
+    field_report(stdout, prob, alg; dt)
 
 # --- text helpers ---
 _rtext(x::Real) = isfinite(x) ? string(_num(Float64(x))) : string(x)
@@ -84,7 +86,7 @@ function substep_cause(spec::GroupSpec, alg, dt::Real, pp; fields = spec.state, 
     isempty(fields) && return (; n = 0, cause = :aux, text = "aux fields only: one evaluation per window")
     alg isa QuasiSteady && return (; n = 1, cause = :steady, text = "one steady solve per window")
     alg isa ExplicitEuler && return _explicit_cause(spec, alg, dt, pp, stability)
-    alg isa ImplicitAlgorithm && return _implicit_cause(spec, alg, dt, pp, fields)
+    alg isa AbstractImplicitFieldAlgorithm && return _implicit_cause(spec, alg, dt, pp, fields)
     return (; n = 0, cause = :unknown, text = string("no substep rule for ", _algtext(alg)))
 end
 function _explicit_cause(spec::GroupSpec, alg::ExplicitEuler, dt::Float64, pp, stability)
@@ -107,7 +109,7 @@ function _explicit_cause(spec::GroupSpec, alg::ExplicitEuler, dt::Float64, pp, s
     b < m && return (; n, cause = :user, text = string("the user minimum `substeps = ", m, "` (the bound needs ", bt, ")"))
     return (; n, cause = :both, text = string("both the user minimum `substeps = ", m, "` and the bound, ", bt))
 end
-function _implicit_cause(spec::GroupSpec, alg::ImplicitAlgorithm, dt::Float64, pp, fields)
+function _implicit_cause(spec::GroupSpec, alg::AbstractImplicitFieldAlgorithm, dt::Float64, pp, fields)
     r = _implicit_rules(spec, alg, dt, pp, fields)
     n = max(r.m, r.n1, r.n2)
     rules = string("the growth rule ⌈2γ dt g⌉ = ", r.n1, ", the convergence rule ⌈2γ dt ρ_in / (1 − θ)⌉ = ", r.n2)
@@ -182,19 +184,19 @@ end
     implicit_facts(rt::GroupRuntime) -> Union{Nothing, ImplicitFacts}
 
 The resolved implicit facts of a bound group (an implicit algorithm's cache), or `nothing` for
-an explicit group: its fields, its solvers (`inner` as resolved, the coupled solve's Krylov
-solver), their multigrid levels and `solver_T`, the Newton count and what set it, whether the
+an explicit group: its fields, its solvers (`linsolve` as resolved, the coupled solve's Krylov
+solver), their multigrid levels and `solver_type`, the Newton count and what set it, whether the
 operator `J̃` is exact and the terms it leaves out with their bound `ρ_in`. `LatticeStats`
 keeps them per group when a solution is built (`sol.stats.implicit`); [`field_report`](@ref)
 words them.
 """
-implicit_facts(rt::GroupRuntime) = rt.alg isa ImplicitAlgorithm ? _implicit_facts(rt.alg, rt.cache, rt.keys) : nothing
+implicit_facts(rt::GroupRuntime) = rt.alg isa AbstractImplicitFieldAlgorithm ? _implicit_facts(rt.alg, rt.cache, rt.keys) : nothing
 function _implicit_facts(alg, c, keys)
     c = _primal_cache(c)
     c isa ImplicitCache || return nothing
     sv = [r.solver for r in c.rows if r.solver !== nothing]
     rows = [r for r in c.op.rows if r.key in c.keys]
-    return ImplicitFacts((collect(String, keys), unique(Any[s.alg for s in sv]), c.cs === nothing ? nothing : _krylov(alg.inner),
+    return ImplicitFacts((collect(String, keys), unique(Any[s.alg for s in sv]), c.cs === nothing ? nothing : _krylov(alg.linsolve),
         unique([length(s.prog.hierarchy) for s in sv]), unique(Type[s.T for s in sv]), c.newton, alg.newton !== nothing,
         c.cs !== nothing, c.cs !== nothing && c.cs.linear, c.exact, c.exact0, c.switch, c.iterate, c.seen, c.cyclic, c.h,
         c.ρin, c.θ, c.smin, unique([t for r in rows for t in r.inexact]), unique([t for r in rows for t in r.unseen])))
@@ -229,26 +231,26 @@ function _operator_text(f)
         ", corrected by the Newton iterations")
 end
 function _fact_lines(io, alg, f)
-    auto = alg.inner === :auto ? " (`inner = :auto`)" : ""
+    auto = alg.linsolve === :auto ? " (`linsolve = :auto`)" : ""
     inner = f.coupled ? string("coupled solve ", repr(f.krylov), isempty(f.inner) ? "" :
                                                                  string(", each field preconditioned by ", join(repr.(f.inner), ", "))) :
             isempty(f.inner) ? "none: every row is local (solved site by site)" : join(repr.(f.inner), ", ")
-    _line(io, "inner", string(inner, auto, isempty(f.levels) ? "" : string(", multigrid levels ", join(f.levels, ", "))))
+    _line(io, "linsolve", string(inner, auto, isempty(f.levels) ? "" : string(", multigrid levels ", join(f.levels, ", "))))
     _line(io, "newton", _newton_text(alg, f))
     _line(io, "operator", _operator_text(f))
     return nothing
 end
-_solvertext(alg, f) = f === nothing || isempty(f.solver_T) ? string("solver ", canonical(alg.solver_T), " (set when bound)") :
-                      string("solver ", join(f.solver_T, ", "), alg.solver_T === :auto ? " (`solver_T = :auto`)" : "")
+_solvertext(alg, f) = f === nothing || isempty(f.solver_T) ? string("solver ", canonical(alg.solver_type), " (set when bound)") :
+                      string("solver ", join(f.solver_T, ", "), alg.solver_type === :auto ? " (`solver_type = :auto`)" : "")
 # … and an implicit group with no bound runtime (`field_report(prob, alg)`): as given
-function _given_lines(io, spec::GroupSpec, g::FieldGroup, alg::ImplicitAlgorithm, keys)
+function _given_lines(io, spec::GroupSpec, g::FieldGroup, alg::AbstractImplicitFieldAlgorithm, keys)
     op = _operator(spec, alg)
     coupled = coupled_solve(alg, op, group_program(g, alg), keys)
     rows = [r for r in op.rows if r.key in keys]
-    inner = coupled ? string("coupled solve ", repr(_krylov(alg.inner))) :
+    inner = coupled ? string("coupled solve ", repr(_krylov(alg.linsolve))) :
             all(r -> r.local_only, rows) ? "none: every row is local (solved site by site)" :
-            alg.inner === :auto ? string(repr(Solvers.DevicePCG()), " (`inner = :auto`)") : repr(alg.inner)
-    _line(io, "inner", inner)
+            alg.linsolve === :auto ? string(repr(Solvers.DevicePCG()), " (`linsolve = :auto`)") : repr(alg.linsolve)
+    _line(io, "linsolve", inner)
     _line(io, "newton", alg.newton === nothing ? "automatic (set when the group is bound)" : string(alg.newton, ": given"))
     return nothing
 end
@@ -282,7 +284,7 @@ end calls it per group.
 function group_report(io::IO, rt::GroupRuntime, pp; title = "group", dt::Real = rt.dt, spec::GroupSpec,
         stability = rt.stability, E::Type = _state_type(rt))
     alg = rt.alg
-    f = alg isa ImplicitAlgorithm ? _implicit_facts(alg, rt.cache, rt.keys) : nothing
+    f = alg isa AbstractImplicitFieldAlgorithm ? _implicit_facts(alg, rt.cache, rt.keys) : nothing
     _policy_lines(io, title, spec, alg, Float64(dt), rt.n, pp, rt.keys, stability, E, f; current = true)
     f === nothing || _fact_lines(io, alg, f)
     _line(io, "run", _runtext(rt.totals, rt.status))
@@ -325,10 +327,10 @@ function _policy_lines(io, title, spec, alg, dt::Float64, n, pp, fields, stabili
         alg isa Union{ExplicitMap, QuasiSteady} || _bound_line(io, stability, pp)
         return nothing
     end
-    V = valtype(E)
+    V = value_type(E)
     _line(io, "numbers", _clauses(string("state ", _typetext(E), ", compute ", compute_type(alg, V),
-        hasproperty(alg, :compute_T) && alg.compute_T !== :auto ? " (`compute_T`)" : "",
-        alg isa ImplicitAlgorithm ? string(", ", _solvertext(alg, f)) : "")))
+        hasproperty(alg, :compute_type) && alg.compute_type !== :auto ? " (`compute_type`)" : "",
+        alg isa AbstractImplicitFieldAlgorithm ? string(", ", _solvertext(alg, f)) : "")))
     starts_steady(alg) && _line(io, "steady", "steady start (`init = :steady`): solved once by QuasiSteady before the first window")
     return nothing
 end
@@ -342,7 +344,7 @@ finished run) in [`field_report`](@ref): its policy under `alg` over the window 
 raw parameters `pp` (with the tables and the bound's inputs), counted over the first window
 from `t0` when the bound reads the time; `n` is the count the run used (`nothing`: the
 policy's). For an implicit algorithm, the facts resolved when the group was bound (`facts`,
-an [`ImplicitFacts`](@ref)), or else `inner` and the Newton count as given. `fields` are the
+an [`ImplicitFacts`](@ref)), or else `linsolve` and the Newton count as given. `fields` are the
 group's state keys and `E` the state's element type. Each front end calls it per group.
 """
 function group_report(io::IO, g::FieldGroup, alg, pp; title = "group", dt::Real, n = nothing, facts = nothing,
@@ -350,7 +352,7 @@ function group_report(io::IO, g::FieldGroup, alg, pp; title = "group", dt::Real,
     _policy_lines(io, title, g.spec, alg, Float64(dt), n, pp, fields, stability, E, facts; t0)
     if facts !== nothing
         _fact_lines(io, alg, facts)                 # (resolved when the run's group was bound)
-    elseif alg isa ImplicitAlgorithm
+    elseif alg isa AbstractImplicitFieldAlgorithm
         _given_lines(io, g.spec, g, alg, fields)
     end
     return nothing
@@ -466,12 +468,12 @@ end
 The policy of each field group of `prob` under the field algorithm `alg`, at the problem's
 parameters, without binding anything (no store, no plan, no solver): per group the algorithm,
 the window, the substep count and its cause (a bound that reads the time over the first
-window), the bound, the number types, and for the implicit groups `inner` and the Newton count
+window), the bound, the number types, and for the implicit groups `linsolve` and the Newton count
 as given (an `:auto` or automatic one is resolved when a group is bound); then the coupling
 rule's κ. The policy's refusals hold (a window that does not divide the clock, an algorithm of
 the wrong family); an explicit group that `init` would refuse says so. No warning is given.
 """
-function field_report(io::IO, prob::SciMLBase.AbstractSciMLProblem, alg::FieldAlgorithm)
+function field_report(io::IO, prob::SciMLBase.AbstractSciMLProblem, alg::AbstractFieldAlgorithm; dt = nothing)
     fp = prob isa FieldProblem ? prob : field_problem(prob)
     println(io, "Field report: problem under ", _headtext(alg), " (the policy at the problem's parameters; nothing bound)")
     _problem_lines(io, fp)
@@ -479,7 +481,7 @@ function field_report(io::IO, prob::SciMLBase.AbstractSciMLProblem, alg::FieldAl
         alg_family(a) == fp.kind || throw(ArgumentError(string("field_report: a ", fp.kind == :map ?
             "map program is stepped by ExplicitMap()" : "rate program is stepped by a rate algorithm", "; got ", _algtext(a))))
     end
-    _groups_lines(io, fp, alg, nothing)
+    _groups_lines(io, fp, alg, nothing; dt)
     return nothing
 end
 
@@ -520,10 +522,9 @@ function field_report(io::IO, integ::FieldIntegrator)
         _countertext(f), integ.syncs > 0 ? string(integ.syncs, " host syncs") : ""))
     _problem_lines(io, prob)
     pp = _raw_params(integ)
-    clock = _clock(prob)
     one = length(rts) == 1
     for (i, rt) in enumerate(rts)
-        group_report(io, rt, pp; title = string("group ", i, " of ", length(rts)), dt = _window(rt.alg, clock),
+        group_report(io, rt, pp; title = string("group ", i, " of ", length(rts)), dt = _iwindow(integ),
             spec = prob.group.spec, stability = one ? prob.stability : rt.stability)
     end
     for rt in integ.starts
@@ -583,7 +584,7 @@ function _owned_solution(io, sol, m::LatticeMetadata)
     _line(io, "counters", _clauses(string("substep counts ", _namedcounts([ks for (_, ks) in _groups(fp, sol.alg)], st.counts)),
         _countertext(st)))
     _problem_lines(io, fp)
-    _groups_lines(io, fp, sol.alg, st.counts; facts = st.implicit)
+    _groups_lines(io, fp, sol.alg, st.counts; facts = st.implicit, dt = st.dt)
     return nothing
 end
 function field_report(io::IO, sol::FieldSolution)
@@ -598,7 +599,7 @@ end
 # the groups of a solution or of a problem under an algorithm: the policy at its parameters
 # (a bound that reads the time over the first window), the counts its run used (`counts`, or
 # `nothing`: the policy's) and the facts resolved at its bind (`facts`, or `nothing`: as given)
-function _groups_lines(io, fp::FieldProblem, alg, counts; facts = nothing)
+function _groups_lines(io, fp::FieldProblem, alg, counts; facts = nothing, dt = nothing)
     groups = _groups(fp, alg)
     pp = _raw_params(fp)
     clock = _clock(fp)
@@ -606,13 +607,13 @@ function _groups_lines(io, fp::FieldProblem, alg, counts; facts = nothing)
     E = eltype(fp)
     for (i, (a, ks)) in enumerate(groups)
         stab = one ? fp.stability : restrict_bound(fp.stability, ks)
-        dt = _window(a, clock)
+        w = _window(a, dt, clock)
         f = facts === nothing || i > length(facts) ? nothing : facts[i]
-        group_report(io, fp.group, a, pp; title = string("group ", i, " of ", length(groups)), dt,
+        group_report(io, fp.group, a, pp; title = string("group ", i, " of ", length(groups)), dt = w,
             n = counts === nothing ? nothing : i <= length(counts) ? counts[i] : 0, facts = f, fields = ks, stability = stab, E,
             t0 = fp.tspan[1])
     end
     fp.kind == :map || _coupling_lines(io, fp.stability, [collect(String, ks) for (_, ks) in groups], [a for (a, _) in groups], pp,
-        _window(first(groups[1]), clock))
+        _window(first(groups[1]), dt, clock))
     return nothing
 end

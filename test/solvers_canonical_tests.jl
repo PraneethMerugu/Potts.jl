@@ -148,36 +148,36 @@ end
         LP = Potts.LatticePDE
 
         # Canonical solver-spec generator: omitted defaults == explicit defaults, keyword order
-        # invariance, dt exclusion, and sensitivity to every semantic knob.
+        # invariance and sensitivity to every semantic knob.
         for (a, b, diff) in (
                 (
-                    ExplicitEuler(), ExplicitEuler(; substeps = nothing, lower = nothing, init = nothing, compute_T = :auto, dt = 0.25),
+                    ExplicitEuler(), ExplicitEuler(; substeps = nothing, lower_bound = nothing, init = nothing, compute_type = :auto),
                     ExplicitEuler(; substeps = 3),
                 ),
                 (
-                    ExplicitEuler(; substeps = 2, lower = 0.0), ExplicitEuler(; lower = 0.0, substeps = 2, dt = 0.5),
-                    ExplicitEuler(; substeps = 2, lower = 1.0e-6),
+                    ExplicitEuler(; substeps = 2, lower_bound = 0.0), ExplicitEuler(; lower_bound = 0.0, substeps = 2),
+                    ExplicitEuler(; substeps = 2, lower_bound = 1.0e-6),
                 ),
-                (ExplicitMap(), ExplicitMap(; compute_T = :auto), ExplicitMap(; compute_T = Float32)),
+                (ExplicitMap(), ExplicitMap(; compute_type = :auto), ExplicitMap(; compute_type = Float32)),
                 (
-                    BackwardEuler(), BackwardEuler(; dt = 0.5, inner = :auto, solver_T = :auto, init = nothing, compute_T = :auto),
+                    BackwardEuler(), BackwardEuler(; linsolve = :auto, solver_type = :auto, init = nothing, compute_type = :auto),
                     BackwardEuler(; newton = 4),
                 ),
                 (
-                    CrankNicolson(; inner = LFS.DevicePCG(; rtol = 1.0e-8)), CrankNicolson(; dt = 0.2, inner = LFS.DevicePCG(; rtol = 1.0e-8)),
-                    CrankNicolson(; inner = LFS.Multigrid(; cycle = LFS.V(1, 1))),
+                    CrankNicolson(; linsolve = LFS.DevicePCG(; reltol = 1.0e-8)), CrankNicolson(; linsolve = LFS.DevicePCG(; reltol = 1.0e-8)),
+                    CrankNicolson(; linsolve = LFS.Multigrid(; cycle = LFS.VCycle(1, 1))),
                 ),
                 (
-                    BDF2(; solver_T = Float64), BDF2(; solver_T = Float64, init = nothing, dt = 1.0),
-                    BDF2(; solver_T = Float32),
+                    BDF2(; solver_type = Float64), BDF2(; solver_type = Float64, init = nothing),
+                    BDF2(; solver_type = Float32),
                 ),
                 (
-                    QuasiSteady(), QuasiSteady(; dt = 2.0, newton = nothing, inner = :auto),
+                    QuasiSteady(), QuasiSteady(; newton = nothing, linsolve = :auto),
                     QuasiSteady(; init = :steady),
                 ),
                 (
                     FieldGroups(:c => BackwardEuler(); default = ExplicitEuler()),
-                    FieldGroups(:c => BackwardEuler(; dt = 0.5); default = ExplicitEuler(; dt = 0.5)),
+                    FieldGroups(:c => BackwardEuler(); default = ExplicitEuler()),
                     FieldGroups(:c => CrankNicolson(); default = ExplicitEuler()),
                 ),
                 (
@@ -197,24 +197,24 @@ end
                 const CorePotts = Potts.CorePotts
                 const LatticeFields = Potts.LatticeFields
                 using Potts.LatticeFields.Problems: ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady
-                using Potts.LatticeFields.Solvers: DevicePCG, Multigrid, V
-                using Potts.LatticePDE: LatticeMG
+                using Potts.LatticeFields.Solvers: DevicePCG, Multigrid, VCycle
+                using Potts.LatticePDE: LatticeMultigrid
             end
         )
         roundtrip(x) = Core.eval(rt_mod, Meta.parse(repr(x)))
 
         for x in (
                 ExplicitEuler(),
-                ExplicitEuler(; substeps = 4, lower = 0.0),
+                ExplicitEuler(; substeps = 4, lower_bound = 0.0),
                 ExplicitMap(),
                 BackwardEuler(),
-                BackwardEuler(; newton = 3, inner = LFS.DevicePCG(; rtol = 1.0e-8)),
+                BackwardEuler(; newton = 3, linsolve = LFS.DevicePCG(; reltol = 1.0e-8)),
                 CrankNicolson(; substeps = 2),
                 BDF2(),
                 QuasiSteady(; init = :steady),
                 RK4(),
                 RK4(; substeps = 3),
-                LFS.V(2, 2),
+                LFS.VCycle(2, 2),
                 SequentialCPM(),
                 CheckerboardCPM(; parts = 2),
                 VonNeumann(1),
@@ -225,7 +225,7 @@ end
             )
             @test roundtrip(x) == x
         end
-        let x = LP.LatticeMG(), y = roundtrip(x)
+        let x = LP.LatticeMultigrid(), y = roundtrip(x)
             @test typeof(y) === typeof(x)
             @test repr(y) == repr(x)
         end

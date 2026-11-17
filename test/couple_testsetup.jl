@@ -143,13 +143,12 @@ function cp_replay(m, sys, ins, alg; op = cp_op(), k = 12, seed = 3, fs = Explic
         step!(integ)
         σ = Array(current_state(integ).σ)
         skip(σ0, σ) && continue
-        o = LP.solve(LP.remake(prob; u0, tspan = (0.0, 1.0), inputs = ins(σ, Array(current_state(integ).cell.kind))), alg).u[end]
+        o = LP.solve(LP.remake(prob; u0, tspan = (0.0, 1.0), inputs = ins(σ, Array(current_state(integ).cell.kind))), alg; dt = 1.0).u[end]
         err, n = max(err, maximum(abs, o .- state())), n + 1
     end
     return err, n
 end
 
-cp_own(fs) = typeof(fs)((n === :dt ? 1.0 : getfield(fs, n) for n in fieldnames(typeof(fs)))...)
 cp_tol(::ExplicitEuler) = 0.0
 cp_tol(::BackwardEuler) = 1e-9
 

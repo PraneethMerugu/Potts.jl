@@ -204,7 +204,7 @@ end
 end
 const P60O_OP_FIELD = [ownership => (s = zeros(Int32, 16, 16); s[:, 1] .= 1; s[4:6, 4:6] .= 2; s[10:12, 10:12] .= 3; s),
     kind => [:wall, :dark, :light]]
-const P60O_EULER = (; field_solver = ExplicitEuler(substeps = 2, lower = 0.0))
+const P60O_EULER = (; field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0))
 
 # divisions, an on-copy write, a site variable, model folds and a constraint
 @potts_model P60oLife begin

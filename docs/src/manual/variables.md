@@ -36,11 +36,11 @@ Options go in brackets after the default. The field options (`bounds`, `lattice_
   with `ReturnCode.Unstable`, since its substep count holds only inside the bounds. Under the
   implicit solvers the run goes on, since the bounds set only the solve's counts and the
   solve checks its own steps (the Newton check, the shift clamp; both warn). `CrankNicolson` and `BDF2` can undershoot a bound
-  by a few percent; `lower = lo`, the low end of the bounds, clips each substep there.
+  by a few percent; `lower_bound = lo`, the low end of the bounds, clips each substep there.
 - `[lattice_storage = Float16 | Float32 | Float64]` (fields): the field's own array type,
   whatever the state type `T` of the problem. Its kernels compute in the field solver's
-  `compute_T` (default: `T`) and round once at each store. A Float32 problem with
-  `c(..) = 0.0 [lattice_storage = Float64]` and `field_solver = ExplicitEuler(; compute_T = Float64)`
+  `compute_type` (default: `T`) and round once at each store. A Float32 problem with
+  `c(..) = 0.0 [lattice_storage = Float64]` and `field_solver = ExplicitEuler(; compute_type = Float64)`
   steps `c` exactly as a Float64 problem does, while the CPM stays in Float32. A Float16 field
   takes every field solver; an implicit solver solves it in `T` and rounds each update to
   Float16.

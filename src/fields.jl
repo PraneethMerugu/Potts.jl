@@ -733,7 +733,7 @@ end
 # the MCS as the window) and its terms in the model's words (`_user_text`). A warning is given
 # once per group, term and cause in a session (the group's fingerprint text with the policy's
 # value-free reason).
-struct _PottsTexts <: LatticeFields.Problems.PolicyTexts
+struct _PottsTexts <: LatticeFields.Problems.AbstractPolicyTexts
     names::Vector{Symbol}
     cv::NamedTuple                 # the generated inputs (`filled`), to print a term in the model's words
 end
@@ -993,7 +993,7 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
         # parameters, mapped by name (a parameter the group does not read is `NaN`: no cross
         # coefficient of its rows reads it; the read graph is the structure, so it needs no value).
         # An implicit group's fingerprint is its residual program's (the program it runs)
-        fp = solver isa LatticeFields.Problems.ImplicitAlgorithm ?
+        fp = solver isa LatticeFields.Problems.AbstractImplicitFieldAlgorithm ?
              LatticeFields.Compile.fingerprint_text(LatticeFields.Compile.fuse_residual(gspec.rate,
                  LatticeFields.Problems.residual_rule(solver); widen16 = true); T) :
              LatticeFields.Compile.fingerprint_text(fused; T)
@@ -1033,7 +1033,7 @@ end
 # The group of a model whose only fields are aux fields `K ~ rhs` (F3 design §3.12): no state
 # field, only `aux:` kernels; its phase evaluates them once per MCS (`_AuxSteps`: 0 substeps)
 # The compile options of a field group (planned on the host for every backend): Float64 in its
-# kernels only for a Float64 state, or when the group declares it (FE-17: a `compute_T` or a
+# kernels only for a Float64 state, or when the group declares it (FE-17: a `compute_type` or a
 # field's `lattice_storage` of Float64), and then its kernels are registered as declared Float64
 # (the D-157 carve-out of the device scan). Cartesian indexing: the host loop hands each site
 # its coordinates (a linear launch decodes them with an integer division per site, about 3x
@@ -1117,7 +1117,7 @@ function _field_phases(c::CompiledPottsSystem, T, spec::SolverSpec)
         # mask, the aux fields evaluated at t0, so the first sweep reads `rhs`, not the declared
         # value (§3.12, F3 review S1): a group with no state takes its own step (0 substeps); a
         # rate group with state its `aux:` kernels alone, which never write the state (review r2
-        # N1: no update rule, no `lower` clip); a map group none (it would apply the map)
+        # N1: no update rule, no `lower_bound` clip); a map group none (it would apply the map)
         mcs = Float64(_p(getfield(c, :sys), :sweep).mcs_duration)
         start = LatticeFields.Problems.starts_steady(g.alg)
         if !isempty(g.masks.launches) || g.substeps isa _AuxSteps
@@ -1127,7 +1127,7 @@ function _field_phases(c::CompiledPottsSystem, T, spec::SolverSpec)
         # `QuasiSteady` on the step's arrays, after the clamp (the masked values hold), then its
         # aux fields evaluated from it
         if start
-            qa = LatticeFields.Problems.steady_start(g.alg, dt)
+            qa = LatticeFields.Problems.steady_start(g.alg)
             rule = LatticeFields.Problems.StartSubsteps(LatticeFields.Problems.GroupSubsteps(g.group.spec, qa, dt;
                 key = g.fingerprint, texts = g.substeps.texts), String[string(n) for n in g.names])
             push!(clamps, CorePotts.FieldPhase{Symbol(:__fields, j, :_start)}(g.group, qa, g.arrays; g.tables, g.params,

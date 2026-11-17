@@ -15,9 +15,9 @@ value type from their state (`eltype(u0)`) and refuse an explicit `T` that diffe
 `clock`: the parameter slot of the clock's step index (`clock__tick`, F2 design §2.6), or 0
 for none: a kernel that reads it derives its parameters again at each launch, with the step
 index written into the slot (`derive(Praw, c, t, k)`). `S`: the value type the state lanes
-hold under `lanes = :state` (`nothing`: `T`); a group's `compute_T` wider than its storage
+hold under `lanes = :state` (`nothing`: `T`); a group's `compute_type` wider than its storage
 compiles in `T` and loads and stores through `lanecast` (FE-17). `declared`: the group
-declared its Float64 (`compute_T`, `lattice_storage`): a kernel that computes in or touches
+declared its Float64 (`compute_type`, `lattice_storage`): a kernel that computes in or touches
 Float64 is registered in Exec's D-157 registry ([`Exec.register_float64!`](@ref)).
 """
 Base.@kwdef struct CompileOptions
@@ -44,7 +44,7 @@ a Float64 lane is a build error naming the fields when the backend has no Float6
 """
 function check_types(p::Program, k::Kernel, o::CompileOptions)
     o.float64_ok && return nothing
-    V = valtype(something(o.T, Float32))
+    V = value_type(something(o.T, Float32))
     V <: Union{Float16, Float32} || irerror("kernel `", k.key, "` (fields ",
         join(unique(p.fields[s.access.field].key for s in k.stores), ", "), "): compute value type ",
         V, " (from ", o.T, ") on a backend without Float64")

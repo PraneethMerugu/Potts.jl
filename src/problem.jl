@@ -92,16 +92,16 @@ type of the generated code and state: by default `Float64`, or the default float
 `backend` when one is given (`Float32` on a device, `LatticeFields.Exec.default_float`; pass
 the same backend to `init`/`solve`). A field declared `@variables c(..) = 0.5 [lattice_storage = S]` in its PDESystem
 (`Float16`, `Float32` or `Float64`) is stored in `S` and computed in its field solver's
-`compute_T` (default `T`). The generated code is `Potts.generated_code(sys; T)`.
+`compute_type` (default `T`). The generated code is `Potts.generated_code(sys; T)`.
 
 How fields and ODEs are integrated is part of the problem, compiled into its code:
-- `field_solver = ExplicitEuler(; substeps, lower)` integrates the fields, and is an error
+- `field_solver = ExplicitEuler(; substeps, lower_bound)` integrates the fields, and is an error
   when the model has none. The default is `ExplicitEuler()`: the automatic substep count
   from the stability bound, no clip. A published model's docstring gives the paper's value
-  (e.g. `ExplicitEuler(substeps = 2, lower = 0.0)` for `MerksVasculogenesis`).
+  (e.g. `ExplicitEuler(substeps = 2, lower_bound = 0.0)` for `MerksVasculogenesis`).
   It steps each field over one MCS in `substeps` explicit Euler steps, clipping each result
-  at `lower` if given (legacy Potts clips concentrations at 0); `dt` is refused (the window
-  is the MCS). `substeps = nothing` takes the smallest count `n` with
+  at `lower_bound` if given (legacy Potts clips concentrations at 0); the window
+  is the MCS. `substeps = nothing` takes the smallest count `n` with
   `mcs_duration / n · ρ ≤ 1.8`, where `ρ` is the field compiler's Gershgorin bound on the
   spectral radius of the discrete right-hand side at the current parameters (diffusion
   `D · Σ_d 4/h_d²`, a kind-table or kind-set multiplier at its largest, plus the size of each
@@ -1110,7 +1110,7 @@ end
 # can embed the whole problem's type: several KB; batch 5 review S4)
 function _valtext(v)
     T = typeof(v)
-    V = LatticeFields.Compile.valtype(T)
+    V = LatticeFields.Compile.value_type(T)
     T <: Real && V !== T && return string("a ForwardDiff `Dual` of ", V, " (value ", LatticeFields.Compile.primal(v), ")")
     return string(v, " (a ", T, ")")
 end

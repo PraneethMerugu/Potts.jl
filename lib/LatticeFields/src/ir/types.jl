@@ -216,7 +216,7 @@ args(k::Kernel, n::Node) = view(k.operands, n.args)
 args(k::Kernel, i::Integer) = args(k, k.nodes[i])
 
 # ---- boundary rules (v3 §3.5) ----------------------------------------------------------
-abstract type BRule end
+abstract type AbstractBoundaryRule end
 
 """
 A coefficient `value`, times parameter `param` when `param > 0` (boundary values are
@@ -237,7 +237,7 @@ coefficient `g` (a kernel of the program computes the field at the step's time).
 `bfield` (0: none) do the same for `α` and `β` (F4-12b): a Robin coefficient that varies by
 site or in time is that field's value at the boundary site times the coefficient.
 """
-struct FaceRule <: BRule
+struct FaceRule <: AbstractBoundaryRule
     field::Int32
     axis::Int8
     side::Int8
@@ -276,7 +276,7 @@ site outside it, takes the rule's value (`:mirror`: the site's own value). `mask
 domain's mask on the field's own level (a coarse field's: the domain folded onto its grid);
 0 is `Grid.domain`.
 """
-struct DomainEdgeRule <: BRule
+struct DomainEdgeRule <: AbstractBoundaryRule
     field::Int32
     kind::Symbol
     mask::Int32
@@ -285,7 +285,7 @@ DomainEdgeRule(field::Integer, kind::Symbol) = DomainEdgeRule(Int32(field), kind
 """
 Reads across mask `mask` (into masked sites): `:zero_flux` mirrors the center value.
 """
-struct ImmersedRule <: BRule
+struct ImmersedRule <: AbstractBoundaryRule
     field::Int32
     mask::Int32
     kind::Symbol
@@ -296,7 +296,7 @@ a field holding the value at each site (a value that reads the time, the coordin
 input, F3-07): the value is then that field's value times the coefficient `value` (the mask's
 kernel computes the field with the mask).
 """
-struct NodeValueRule <: BRule
+struct NodeValueRule <: AbstractBoundaryRule
     field::Int32
     mask::Int32
     value::Coef
@@ -311,7 +311,7 @@ struct Program{N}
     tables::Vector{TableDecl}
     masks::Vector{MaskDecl}
     flags::Vector{FlagDecl}
-    rules::Vector{BRule}
+    rules::Vector{AbstractBoundaryRule}
     kernels::Vector{Kernel{N}}
     periodic::NTuple{N, Bool}
     spacing::NTuple{N, Float64}

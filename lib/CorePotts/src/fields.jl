@@ -688,7 +688,7 @@ function _shadow!(run::TangentRun, ph::FieldPhase{K}, st, prt) where {K}
         a[2] === nothing || (run.names[_part_name(ph, a[1], st)] = run.twins[a[1]])
     end
     # an implicit group's tangent on its primal runtime's cache: the stores share the slot parity
-    shared = ph.alg isa Problems.ImplicitAlgorithm && !ph.aux_only && prt.cache isa Problems.ImplicitCache
+    shared = ph.alg isa Problems.AbstractImplicitFieldAlgorithm && !ph.aux_only && prt.cache isa Problems.ImplicitCache
     store = Problems.FieldStore(backend, bufs, shared ? prt.store.cur : ones(Int, length(bufs)), prt.store.tables)
     trt = Problems.bind_group(ph.group, ph.alg, store, _praw(ph, run.p); n = prt.n, dt = ph.dt, c = zero(E),
         ends_in = :slot1, backend, options = ph.options, V = ph.T, host = nothing,

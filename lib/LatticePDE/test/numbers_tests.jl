@@ -38,30 +38,30 @@ end
     using .LP_numbers: fd
     @testset "AD vs FD: owned path (∂J/∂D, ∂J/∂k, ∂J/∂g)" begin
         prob = owned(nsys(), 8, 4)
-        alg = ExplicitEuler(; dt = 0.01)
+        alg = ExplicitEuler()
         for s in (Dn, kn, gn)
             i = pidx(prob, s)
-            Jo(v) = sum(solve(remake(prob; p = withp(prob.p, i, v)), alg).u[end])
+            Jo(v) = sum(solve(remake(prob; p = withp(prob.p, i, v)), alg; dt = 0.01).u[end])
             v0 = prob.p[i]
             d = ForwardDiff.derivative(Jo, v0)
             @test d isa Float64 && isapprox(d, fd(Jo, v0); rtol = 1.0e-6)
             @test d != 0
             # pairs form promotes the vector too
-            Jp(v) = sum(solve(remake(prob; p = [s => v]), alg).u[end])
+            Jp(v) = sum(solve(remake(prob; p = [s => v]), alg; dt = 0.01).u[end])
             @test ForwardDiff.derivative(Jp, v0) ≈ d
         end
         # negative control: a remake that drops the derivative parts gives 0
         i = pidx(prob, Dn)
-        Jdrop(v) = sum(solve(remake(prob; p = withp(prob.p, i, ForwardDiff.value(v))), alg).u[end])
+        Jdrop(v) = sum(solve(remake(prob; p = withp(prob.p, i, ForwardDiff.value(v))), alg; dt = 0.01).u[end])
         @test ForwardDiff.derivative(Jdrop, prob.p[i]) == 0
         # Float32 state: the derivative in Dual{Float32} agrees to Float32 accuracy
         p32 = owned(nsys(), 8, 4; T = Float32)
-        J32(v) = sum(solve(remake(p32; p = withp(p32.p, i, v)), alg).u[end])
-        J64(v) = sum(solve(remake(prob; p = withp(prob.p, i, v)), alg).u[end])
+        J32(v) = sum(solve(remake(p32; p = withp(p32.p, i, v)), alg; dt = 0.01).u[end])
+        J64(v) = sum(solve(remake(prob; p = withp(prob.p, i, v)), alg; dt = 0.01).u[end])
         @test isapprox(ForwardDiff.derivative(J32, p32.p[i]), ForwardDiff.derivative(J64, prob.p[i]); rtol = 1.0e-3)
         # the substep count is a policy on the primal values: unchanged under Duals
-        @test substep_counts(solve(remake(prob; p = withp(prob.p, i, ForwardDiff.Dual(prob.p[i], 1.0))), alg)) ==
-            substep_counts(solve(prob, alg))
+        @test substep_counts(solve(remake(prob; p = withp(prob.p, i, ForwardDiff.Dual(prob.p[i], 1.0))), alg; dt = 0.01)) ==
+            substep_counts(solve(prob, alg; dt = 0.01))
     end
 end
 
@@ -122,13 +122,13 @@ end
     using .LP_numbers: fd
     @testset "BigFloat reference (host)" begin
         sys = nsys()
-        alg = ExplicitEuler(; dt = 0.01)
+        alg = ExplicitEuler()
         p64, pb, p32 = owned(sys, 8, 4), owned(sys, 8, 4; T = BigFloat), owned(sys, 8, 4; T = Float32)
         @test eltype(pb) == BigFloat && eltype(pb.u0) == BigFloat
-        ib = init(pb, alg)
+        ib = init(pb, alg; dt = 0.01)
         @test all(a -> eltype(a) == BigFloat, ib.store.flat)
         @test all(b -> all(a -> !(eltype(a) <: AbstractFloat) || eltype(a) == BigFloat, b), ib.store.bufs)
-        sb, s64, s32 = solve!(ib), solve(p64, alg), solve(p32, alg)
+        sb, s64, s32 = solve!(ib), solve(p64, alg; dt = 0.01), solve(p32, alg; dt = 0.01)
         @test eltype(sb.u[end]) == BigFloat
         err(a) = maximum(abs, Float64.(a.u[end]) .- s64.u[end]) / maximum(abs, s64.u[end])
         @test err(sb) <= 1.0e-12
@@ -136,7 +136,7 @@ end
         # a BigFloat `p` is kept, not cut to Float64; it is rounded once to the compute type
         rb = remake(p64; p = big.(p64.p))
         @test eltype(rb.p) == BigFloat && eltype(rb) == Float64
-        @test isapprox(solve(rb, alg).u[end], s64.u[end]; rtol = 1.0e-14)
+        @test isapprox(solve(rb, alg; dt = 0.01).u[end], s64.u[end]; rtol = 1.0e-14)
         # an unsupported state type is refused by name
         @test_throws ["ArgumentError", "state type", "Int"] owned(sys, 8, 4; T = Int)
     end
@@ -146,12 +146,12 @@ end
     using .LP_numbers: fd
     @testset "promotion and plan reuse" begin
         sys = nsys()
-        alg = ExplicitEuler(; dt = 0.01)
+        alg = ExplicitEuler()
         p32, p64 = owned(sys, 8, 4; T = Float32), owned(sys, 8, 4; T = Float64)
         up = remake(p32; u0 = Float64.(p32.u0))
         @test eltype(up) == Float64 && up.step !== p32.step
-        @test isapprox(solve(up, alg).u[end], solve(p64, alg).u[end]; rtol = 1.0e-12)
-        @test maximum(abs, solve(p32, alg).u[end] .- solve(p64, alg).u[end]) > 1.0e-9   # control
+        @test isapprox(solve(up, alg; dt = 0.01).u[end], solve(p64, alg; dt = 0.01).u[end]; rtol = 1.0e-12)
+        @test maximum(abs, solve(p32, alg; dt = 0.01).u[end] .- solve(p64, alg; dt = 0.01).u[end]) > 1.0e-9   # control
         # value-only remakes reuse the plans (no emission, no compile); a type comes back cached
         @test remake(p32; p = 2 .* p32.p).step === p32.step
         @test remake(p32; u0 = Float64.(p32.u0)).step === up.step
@@ -173,7 +173,7 @@ end
         @test SciMLStructures.isscimlstructure(prob.p)
         v, re, _ = SciMLStructures.canonicalize(Tunable(), prob.p)
         @test v == prob.p
-        Jθ(θ) = sum(solve(remake(prob; p = SciMLStructures.replace(Tunable(), prob.p, θ)), ExplicitEuler(; dt = 0.01)).u[end])
+        Jθ(θ) = sum(solve(remake(prob; p = SciMLStructures.replace(Tunable(), prob.p, θ)), ExplicitEuler(); dt = 0.01).u[end])
         g = ForwardDiff.gradient(Jθ, v)
         i = pidx(prob, kn)
         @test isapprox(g[i], fd(x -> Jθ(withp(v, i, x)), v[i]); rtol = 1.0e-6)
@@ -188,9 +188,9 @@ end
             [D(ce) ~ sin(ωn * t)], [c(T0, x, y) ~ 0.0, c(t, x, 0) ~ c(t, x, 1), c(t, 0, y) ~ c(t, 1, y)],
             [t ∈ Interval(T0, T0 + 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [ce], [ωn]; name = :tt
         )
-        alg = ExplicitEuler(; dt = 0.01)
-        a = solve(owned(sys, 4, 4; T = Float32), alg).u[end][1]
-        b = solve(owned(sys, 4, 4; T = Float64), alg).u[end][1]
+        alg = ExplicitEuler()
+        a = solve(owned(sys, 4, 4; T = Float32), alg; dt = 0.01).u[end][1]
+        b = solve(owned(sys, 4, 4; T = Float64), alg; dt = 0.01).u[end][1]
         @test abs(a - b) <= 1.0e-6
         # control: `sin(ω t)` evaluated with `t` in Float32 is off by more than 1e-3 at these times
         @test abs(sin(3.0f0 * Float32(T0 + 0.01)) - sin(3.0 * (T0 + 0.01))) > 1.0e-3
@@ -208,7 +208,7 @@ end
         tsys = ssys([D(ce) ~ Dq * Δ(ce) - at(Dt, qe) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dq, Dt])
         K = Int32[i <= 2 ? 1 : 2 for i in 1:4, j in 1:4]
         p = sown(tsys; inputs = [qe => K])
-        alg = ExplicitEuler(; dt = 0.1)
+        alg = ExplicitEuler()
         third = big"1" / 3
         @testset "a BigFloat table survives remake" begin
             # base: the table became a Vector{Float64} (Float64(1/3))
@@ -216,14 +216,14 @@ end
             @test eltype(last(only(rb.tables))) == BigFloat && last(only(rb.tables))[1] == third
             @test getp(rb, Dt)(rb)[1] == third
             @test eltype(rb) == Float64                   # rounded once to the compute type of a Float64 state
-            @test isapprox(solve(rb, alg).u[end], solve(remake(p; p = [Dt => [1 / 3, 1.0]]), alg).u[end]; rtol = 1.0e-14)
+            @test isapprox(solve(rb, alg; dt = 0.1).u[end], solve(remake(p; p = [Dt => [1 / 3, 1.0]]), alg; dt = 0.1).u[end]; rtol = 1.0e-14)
             # on a BigFloat state the store's table holds the value exactly (base: Float64(1/3))
             pb = discretize(tsys, LatticeDiscretization(Grid((4, 4)); T = BigFloat); inputs = [qe => K])
-            ib = init(remake(pb; p = [Dt => [third, big"1.0"]]), alg)
+            ib = init(remake(pb; p = [Dt => [third, big"1.0"]]), alg; dt = 0.1)
             @test eltype(ib.store.tables[1]) == BigFloat && ib.store.tables[1][1] == third
             @test ib.ps[Dt][1] == third                      # the integrator's own copy keeps it
             # an integrator table write converts into the integrator's table type
-            ig = init(p, alg)
+            ig = init(p, alg; dt = 0.1)
             ig.ps[Dt] = [third, 1]
             @test ig.ps[Dt] == [Float64(third), 1.0] && eltype(ig.ps[Dt]) == Float64
         end
@@ -232,16 +232,16 @@ end
             dv = ForwardDiff.Dual(0.5, 1.0)
             rd = remake(p; p = [Dt => [dv, one(dv)]])
             @test eltype(rd) <: ForwardDiff.Dual && eltype(last(only(rd.tables))) <: ForwardDiff.Dual
-            J(v) = sum(solve(remake(p; p = [Dt => [v, one(v)]]), alg).u[end])
+            J(v) = sum(solve(remake(p; p = [Dt => [v, one(v)]]), alg; dt = 0.1).u[end])
             d = ForwardDiff.derivative(J, 0.5)
             @test d isa Float64 && d != 0 && isapprox(d, fd(J, 0.5); rtol = 1.0e-6)
             # control: the derivative of the entry that no site reads is 0
-            J2(v) = sum(solve(remake(p; p = [Dt => [0.5, v]]), alg).u[end])
+            J2(v) = sum(solve(remake(p; p = [Dt => [0.5, v]]), alg; dt = 0.1).u[end])
             @test ForwardDiff.derivative(J2, 1.0) != 0                       # kind 2 is read
-            Jn(v) = sum(solve(remake(sown(tsys; inputs = [qe => fill(Int32(1), 4, 4)]); p = [Dt => [0.5, v]]), alg).u[end])
+            Jn(v) = sum(solve(remake(sown(tsys; inputs = [qe => fill(Int32(1), 4, 4)]); p = [Dt => [0.5, v]]), alg; dt = 0.1).u[end])
             @test ForwardDiff.derivative(Jn, 1.0) == 0                       # no site of kind 2
             # a Dual written into a Float64 integrator's table is refused with the route
-            ig = init(p, alg)
+            ig = init(p, alg; dt = 0.1)
             err = emsg(() -> (ig.ps[Dt] = [dv, one(dv)]))
             @test occursin("`Dt` of this integrator holds Float64", err) && occursin("remake(prob; p = [Dt => values])", err)
             @test ig.ps[Dt] == [0.5, 1.0]                                       # unchanged
@@ -250,12 +250,12 @@ end
             # base: a `UInt8` array (`any`/`count` threw a non-boolean TypeError, `.!` a MethodError)
             dsys = ssys([D(ce) ~ 1.0], [c(0, x, y) ~ 0.0], [ce, de], Num[])
             half = [i <= 2 for i in 1:4, j in 1:4]
-            ig = init(sown(dsys; domain = dm, inputs = [dm => half]), alg)
+            ig = init(sown(dsys; domain = dm, inputs = [dm => half]), alg; dt = 0.1)
             m = ig[dm]
             @test eltype(m) == Bool && m == half
             @test any(m) && !all(m) && count(m) == 8 && (.!m) == .!half
             # an integer input keeps its type
-            @test eltype(init(p, alg)[qe]) == Int32
+            @test eltype(init(p, alg; dt = 0.1)[qe]) == Int32
         end
         @testset "a pair-keyed remake infers" begin
             # base: an abstract `FieldProblem` (`rest = Pair[]`, a promotion over the values)
@@ -275,7 +275,7 @@ end
             bsys = ssys([D(ce) ~ Db * Δ(ce)], [c(0, x, y) ~ 1.0], [ce], [Db])
             pbb = discretize(bsys, LatticeDiscretization(Grid((4, 4)); T = BigFloat))
             @test eltype(pbb.p) == BigFloat && pbb.p.values[1] == big"1" / 3
-            @test eltype(solve(pbb, ExplicitEuler(; dt = 0.01)).u[end]) == BigFloat
+            @test eltype(solve(pbb, ExplicitEuler(); dt = 0.01).u[end]) == BigFloat
             # Float64 defaults stay a Float64 vector
             @test eltype(sown(tsys; inputs = [qe => K]).p) == Float64
         end
@@ -300,10 +300,10 @@ end
             [wue, wKe, whe], [kw]; name = :w
         )
         wd(T) = discretize(wsys, LatticeDiscretization(Grid((16, 16)); T))
-        run(T, alg) = (i = init(wd(T), alg); step!(i); i)
+        run(T, alg; dt) = (i = init(wd(T), alg; dt); step!(i); i)
         # the stores have the declared types: the state in T, the aux fields in their own
         for T in (Float32, Float64)
-            i = run(T, ExplicitEuler(; dt = 0.05))
+            i = run(T, ExplicitEuler(); dt = 0.05)
             @test eltype(i[wue]) == T && eltype(i[wKe]) == Float64 && eltype(i[whe]) == Float16
         end
         # a state field whose declared storage differs from T keeps it on the owned path (batch 5
@@ -312,8 +312,8 @@ end
         csys = PDESystem([D(wce) ~ 0.0625 * Δ(wce) - 0.125 * wce], [wc(0, x, y) ~ x], wdom, [t, x, y], [wce], Any[]; name = :w)
         c32 = solve(
             discretize(csys, LatticeDiscretization(Grid((8, 8)); T = Float32)),
-            ExplicitEuler(; dt = 0.05, compute_T = Float64)
-        )
+            ExplicitEuler(; compute_type = Float64)
+        ; dt = 0.05)
         @variables wc64(..)
         c64 = solve(
             discretize(
@@ -322,8 +322,8 @@ end
                     wdom, [t, x, y], [wc64(t, x, y)], Any[]; name = :w
                 ), LatticeDiscretization(Grid((8, 8)); T = Float64)
             ),
-            ExplicitEuler(; dt = 0.05)
-        )
+            ExplicitEuler()
+        ; dt = 0.05)
         @test eltype(c32.u[end]) == Float64 && c32.u[end] == c64.u[end]
         msys = PDESystem(
             [
@@ -333,17 +333,17 @@ end
             [wue, whe, wce], Any[]; name = :m
         )
         pm = discretize(msys, LatticeDiscretization(Grid((8, 8)); T = Float32))
-        im = init(pm, ExplicitEuler(; dt = 0.05))
+        im = init(pm, ExplicitEuler(); dt = 0.05)
         step!(im)
         @test eltype(im[wue]) == Float32 && eltype(im[whe]) == Float16 && eltype(im[wce]) == Float64
-        sm = solve(pm, BackwardEuler(; dt = 0.05))
+        sm = solve(pm, BackwardEuler(); dt = 0.05)
         @test SciMLBase.successful_retcode(sm.retcode) && eltype(sm.u[end]) == Float64     # (the saves: their promotion)
-        @test sm[wce, end] ≈ solve(remake(pm), ExplicitEuler(; dt = 0.05))[wce, end] rtol = 1.0e-2
+        @test sm[wce, end] ≈ solve(remake(pm), ExplicitEuler(); dt = 0.05)[wce, end] rtol = 1.0e-2
         # a write and `reinit!` reach each field in its own type
         im[wce] = fill(0.25, 8, 8)
         @test im[wce] == fill(0.25, 8, 8) && eltype(im[wce]) == Float64
         SciMLBase.reinit!(im)
-        i0 = init(pm, ExplicitEuler(; dt = 0.05))
+        i0 = init(pm, ExplicitEuler(); dt = 0.05)
         @test im[whe] == i0[whe] && im[wce] == i0[wce] && im[wue] == i0[wue]
         # an OrdinaryDiffEq solver's state is one vector of T: refused there, with the route (F4-01:
         # at the solve, the field algorithms take the same problem)
@@ -362,10 +362,10 @@ end
         @variables zu(..)
         zue = zu(t, x, y)
         zsys = PDESystem([D(zue) ~ max(za, zue) - zb], [zu(0, x, y) ~ 0.0], wdom, [t, x, y], [zue], [za, zb]; name = :z)
-        zrun(T, alg) = (i = init(discretize(zsys, LatticeDiscretization(Grid((4, 4)); T)), alg); step!(i); i[zue])
+        zrun(T, alg) = (i = init(discretize(zsys, LatticeDiscretization(Grid((4, 4)); T)), alg; dt = 0.5); step!(i); i[zue])
         for (a32, a64) in (
-                (ExplicitEuler(; dt = 0.5), ExplicitEuler(; dt = 0.5, compute_T = Float64)),
-                (BackwardEuler(; dt = 0.5), BackwardEuler(; dt = 0.5, compute_T = Float64, solver_T = Float64)),
+                (ExplicitEuler(), ExplicitEuler(; compute_type = Float64)),
+                (BackwardEuler(), BackwardEuler(; compute_type = Float64, solver_type = Float64)),
             )
             ref = zrun(Float64, a32)
             lo, hi = zrun(Float32, a32), zrun(Float32, a64)
@@ -373,7 +373,7 @@ end
             @test all(>(0), ref) && maximum(abs, Float64.(hi) .- ref) <= 1.0e-7 * maximum(ref)
         end
         # solver_T: the solver's own type, whatever compute_T
-        ig = init(wd(Float32), BackwardEuler(; dt = 0.05, solver_T = Float64))
+        ig = init(wd(Float32), BackwardEuler(; solver_type = Float64); dt = 0.05)
         @test only(only(ig.runtimes).cache.rows).solver.T == Float64
         # Duals flow through a declared storage: an aux field stored in Float32 on a Float64
         # problem holds Dual{…, Float32} under a Dual parameter, and ∂J/∂k agrees with differences
@@ -392,46 +392,46 @@ end
                 [wue, wK64e], [kw]; name = :d
             ), LatticeDiscretization(Grid((8, 8)); T = Float64)
         )
-        J(q, v) = sum(solve(remake(q; p = [kw => v]), ExplicitEuler(; dt = 0.05)).u[end])
+        J(q, v) = sum(solve(remake(q; p = [kw => v]), ExplicitEuler(); dt = 0.05).u[end])
         d, dref = ForwardDiff.derivative(v -> J(pd, v), 0.25), ForwardDiff.derivative(v -> J(pr, v), 0.25)
         @test d != 0 && d != dref && isapprox(d, dref; rtol = 1.0e-5)     # (the aux field's Float32 rounding)
-        iz = init(remake(pd; p = [kw => ForwardDiff.Dual(0.25, 1.0)]), ExplicitEuler(; dt = 0.05))
+        iz = init(remake(pd; p = [kw => ForwardDiff.Dual(0.25, 1.0)]), ExplicitEuler(); dt = 0.05)
         @test ForwardDiff.valtype(eltype(iz[wK32e])) == Float32
-        # the canonical text: `compute_T = :auto` is left out, a type is printed
+        # the canonical text: `compute_type = :auto` is left out, a type is printed
         LFP = LatticePDE.Problems
-        @test occursin("compute_T=Float64", LFP.canonical(BackwardEuler(; compute_T = Float64))) &&
-            !occursin("compute_T", LFP.canonical(BackwardEuler()))
-        @test LFP.canonical(ExplicitEuler(; compute_T = Float64)) != LFP.canonical(ExplicitEuler())
+        @test occursin("compute_type=Float64", LFP.canonical(BackwardEuler(; compute_type = Float64))) &&
+            !occursin("compute_type", LFP.canonical(BackwardEuler()))
+        @test LFP.canonical(ExplicitEuler(; compute_type = Float64)) != LFP.canonical(ExplicitEuler())
         # the cache key: independently built equal algorithms print one canonical text, a difference in
         # any field shows, and the key is not the display form (the key names every field, `repr` leaves
         # a default out). Each row: two separately built objects, a third that differs in one field, and
         # whether a default exists to leave out of the display
         canon_cases = Any[
             (ExplicitEuler(), ExplicitEuler(), ExplicitEuler(; substeps = 3), true),
-            (ExplicitMap(), ExplicitMap(), ExplicitMap(; compute_T = Float64), false),
+            (ExplicitMap(), ExplicitMap(), ExplicitMap(; compute_type = Float64), false),
             (BackwardEuler(), BackwardEuler(), BackwardEuler(; substeps = 2), true),
             (CrankNicolson(), CrankNicolson(), CrankNicolson(; newton = 2), true),
             (BDF2(), BDF2(), BDF2(; substeps = 2), true),
-            (QuasiSteady(), QuasiSteady(), QuasiSteady(; inner = DeviceGMRES()), true),
-            (DevicePCG(), DevicePCG(), DevicePCG(; budget = 3), true),
+            (QuasiSteady(), QuasiSteady(), QuasiSteady(; linsolve = DeviceGMRES()), true),
+            (DevicePCG(), DevicePCG(), DevicePCG(; maxiters = 3), true),
             (Multigrid(), Multigrid(), Multigrid(; cycles = 3), true),
-            (DeviceGMRES(), DeviceGMRES(), DeviceGMRES(; restart = 8), true),
+            (DeviceGMRES(), DeviceGMRES(), DeviceGMRES(; gmres_restart = 8), true),
         ]
         for (a, b, c, hasdefaults) in canon_cases
             @test isequal(a, b) && LFP.canonical(a) == LFP.canonical(b)
             @test !isequal(a, c) && LFP.canonical(a) != LFP.canonical(c)
             hasdefaults && @test LFP.canonical(a) != repr(a)
         end
-        @test LFP.canonical(LatticePDE.V(2, 2)) == LFP.canonical(LatticePDE.V(2, 2)) &&
-            LFP.canonical(LatticePDE.V(2, 2)) != LFP.canonical(LatticePDE.V(3, 3))
+        @test LFP.canonical(LatticePDE.VCycle(2, 2)) == LFP.canonical(LatticePDE.VCycle(2, 2)) &&
+            LFP.canonical(LatticePDE.VCycle(2, 2)) != LFP.canonical(LatticePDE.VCycle(3, 3))
         # a compute type that is not one is refused, naming the keyword
         e = try
-            ExplicitEuler(; compute_T = Int)
+            ExplicitEuler(; compute_type = Int)
             ""
         catch err
             sprint(showerror, err)
         end
-        @test occursin("`compute_T` takes `:auto` (the problem's value type), `Float32` or `Float64`", e)
+        @test occursin("`compute_type` takes `:auto` (the problem's value type), `Float32` or `Float64`", e)
     end
 end
 
@@ -454,22 +454,22 @@ end
                 ), LatticeDiscretization(Grid((16, 16)); T)
             )
         )
-        ref = solve(mk(s64e, Float64), BackwardEuler(; dt = 0.1)).u[end]
+        ref = solve(mk(s64e, Float64), BackwardEuler(); dt = 0.1).u[end]
         for T in (Float32, Float64), alg in (
-                    BackwardEuler(; dt = 0.1), BackwardEuler(; dt = 0.1, compute_T = Float64),
-                    CrankNicolson(; dt = 0.1), BDF2(; dt = 0.1),
+                    BackwardEuler(), BackwardEuler(; compute_type = Float64),
+                    CrankNicolson(), BDF2(),
                 )
-            T == Float64 && alg isa BackwardEuler && alg.compute_T === Float64 && continue
-            s = solve(mk(she, T), alg)
+            T == Float64 && alg isa BackwardEuler && alg.compute_type === Float64 && continue
+            s = solve(mk(she, T), alg; dt = 0.1)
             @test SciMLBase.successful_retcode(s.retcode) && eltype(s.u[end]) == Float16
-            r = alg isa BackwardEuler ? ref : solve(mk(s64e, Float64), typeof(alg).name.wrapper(; dt = 0.1)).u[end]
+            r = alg isa BackwardEuler ? ref : solve(mk(s64e, Float64), typeof(alg).name.wrapper(); dt = 0.1).u[end]
             @test maximum(abs, Float64.(s.u[end]) .- r) <= 4.0e-3 * maximum(abs, r)      # (Float16: eps 9.8e-4)
         end
-        @test SciMLBase.successful_retcode(solve(mk(she, Float32), QuasiSteady(; dt = 0.1)).retcode)
+        @test SciMLBase.successful_retcode(solve(mk(she, Float32), QuasiSteady(); dt = 0.1).retcode)
         # a Dual state under an implicit solve (F3-21a: refused before): ∂ sum(u(t))/∂s of the start
         # `s u0` runs, the tangent against central differences
         pr = mk(s64e, Float64)
-        Js(v) = sum(solve(remake(pr; u0 = v .* pr.u0), BackwardEuler(; dt = 0.1)).u[end])
+        Js(v) = sum(solve(remake(pr; u0 = v .* pr.u0), BackwardEuler(); dt = 0.1).u[end])
         @test isapprox(ForwardDiff.derivative(Js, 1.0), fd(Js, 1.0); rtol = 1.0e-7)
     end
 end
@@ -479,19 +479,19 @@ end
     @testset "F3-21a: ∂u/∂k through BackwardEuler, CrankNicolson, BDF2 and QuasiSteady" begin
         bcs = [c(0, x, y) ~ x * y, c(t, 0, y) ~ gt]
         lin = town(tsys([D(ce) ~ Dt * Δ(ce) - kt * ce + gt * x], bcs))
-        for alg in (BackwardEuler(; dt = 0.1, inner = TTIGHT), CrankNicolson(; dt = 0.1, inner = TTIGHT), BDF2(; dt = 0.1, inner = TTIGHT))
+        for alg in (BackwardEuler(; linsolve = TTIGHT), CrankNicolson(; linsolve = TTIGHT), BDF2(; linsolve = TTIGHT))
             for s in (kt, Dt, gt)
-                @test tok(tad(lin, alg, s)...)
+                @test tok(tad(lin, alg, s; dt = 0.1)...)
             end
         end
         qs = town(tsys([0 ~ Dt * Δ(ce) - kt * ce + gt * x], bcs))
         for s in (kt, Dt, gt)
-            @test tok(tad(qs, QuasiSteady(; dt = 0.1, inner = TTIGHT), s)...)
+            @test tok(tad(qs, QuasiSteady(; linsolve = TTIGHT), s; dt = 0.1)...)
         end
         # the values of a Dual run are the primal run's, bit for bit (the primal solve is the run's)
         i = pidx(lin, Dt)
-        sd = solve(remake(lin; p = withp(lin.p, i, ForwardDiff.Dual(lin.p[i], 1.0))), BackwardEuler(; dt = 0.1))
-        @test ForwardDiff.value.(sd.u[end]) == solve(lin, BackwardEuler(; dt = 0.1)).u[end]
+        sd = solve(remake(lin; p = withp(lin.p, i, ForwardDiff.Dual(lin.p[i], 1.0))), BackwardEuler(); dt = 0.1)
+        @test ForwardDiff.value.(sd.u[end]) == solve(lin, BackwardEuler(); dt = 0.1).u[end]
     end
 end
 
@@ -508,31 +508,31 @@ end
             ), (10, 10)
         )
         for s in (kt, Dt, gt)
-            @test tok(tad(mr, BackwardEuler(; dt = 0.1, inner = TTIGHT), s)...)
+            @test tok(tad(mr, BackwardEuler(; linsolve = TTIGHT), s; dt = 0.1)...)
         end
         # `−k c²`: with `newton = k` the run converges each stage, and its derivatives are the tangent's;
         # by default one unchecked Newton step does not solve the stage, which is warned
         nl = town(tsys([D(ce) ~ Dt * Δ(ce) - kt * ce^2 + gt], [c(0, x, y) ~ 0.2 + x]), (10, 10))
         for s in (kt, Dt)
-            @test tok(tad(nl, BackwardEuler(; dt = 0.1, inner = TTIGHT, newton = 8), s)...)
+            @test tok(tad(nl, BackwardEuler(; linsolve = TTIGHT, newton = 8), s; dt = 0.1)...)
         end
         i = pidx(nl, kt)
         @test_logs (:warn, r"derivative parts are those of each stage's solution") match_mode = :any solve(
-            remake(nl; p = withp(nl.p, i, ForwardDiff.Dual(nl.p[i], 1.0))), BackwardEuler(; dt = 0.1)
-        )
+            remake(nl; p = withp(nl.p, i, ForwardDiff.Dual(nl.p[i], 1.0))), BackwardEuler()
+        ; dt = 0.1)
         hx = town(
             tsys([D(ce) ~ Dt * Δ(ce) - kt * ce + gt * x], [c(0, x, y) ~ x * y, c(t, 0, y) ~ gt]), (8, 8);
             geometry = LatticeFields.IR.HEX
         )
         for s in (kt, Dt)
-            @test tok(tad(hx, BackwardEuler(; dt = 0.1, inner = TTIGHT), s)...)
+            @test tok(tad(hx, BackwardEuler(; linsolve = TTIGHT), s; dt = 0.1)...)
         end
         # r1 M1: a write to the parameter a mask's value reads (`2k`), then windows: equal to a restart
         # at the write, and the tangent after it against central differences. Base (79af8c69): the
         # implicit update kept the old value (Σu off), and the tangent disagreed with the run
         function wrun(v)
             i = pidx(mr, Dt)
-            ig = init(remake(mr; p = withp(mr.p, i, v)), BackwardEuler(; dt = 0.1, inner = TTIGHT))
+            ig = init(remake(mr; p = withp(mr.p, i, v)), BackwardEuler(; linsolve = TTIGHT); dt = 0.1)
             step!(ig)
             u1 = copy(vec(ig[ce]))
             ig.ps[kt] = 0.8
@@ -540,7 +540,7 @@ end
             return vec(ig[ce]), u1
         end
         uw, u1 = wrun(mr.p[pidx(mr, Dt)])
-        ir = init(remake(mr; u0 = u1, p = withp(mr.p, pidx(mr, kt), 0.8)), BackwardEuler(; dt = 0.1, inner = TTIGHT))
+        ir = init(remake(mr; u0 = u1, p = withp(mr.p, pidx(mr, kt), 0.8)), BackwardEuler(; linsolve = TTIGHT); dt = 0.1)
         step!(ir); step!(ir)
         @test any(==(1.6), uw) && maximum(abs, uw .- vec(ir[ce])) < 1.0e-12
         Jw(v) = sum(first(wrun(v)))
@@ -553,7 +553,7 @@ end
             )
         )
         for s in (kt, Dt, gt)
-            @test tok(tad(cp, QuasiSteady(; dt = 0.1, inner = DeviceGMRES(; rtol = 1.0e-12)), s; out = sol -> sol[tae, end] .^ 2)...)   # (a sum of `a` alone does not see D: zero flux)
+            @test tok(tad(cp, QuasiSteady(; linsolve = DeviceGMRES(; reltol = 1.0e-12)), s; out = sol -> sol[tae, end] .^ 2, dt = 0.1)...)   # (a sum of `a` alone does not see D: zero flux)
         end
     end
 end
@@ -575,9 +575,9 @@ end
             ), LatticeDiscretization(Grid((8, 8)); T)
         )
         for (f, S, T, tol) in ((sfr32, Float32, Float64, 1.0e-5), (sfr16, Float16, Float32, 4.0e-3), (sfr64, Float64, Float32, 1.0e-5))
-            for alg in (BackwardEuler(; dt = 0.05), CrankNicolson(; dt = 0.05), BDF2(; dt = 0.05), QuasiSteady(; dt = 0.05))
-                r = solve(mk(sfr, Float64), alg)[sfr(t, x, y), 2]
-                s = solve(mk(f, T), alg)
+            for alg in (BackwardEuler(), CrankNicolson(), BDF2(), QuasiSteady())
+                r = solve(mk(sfr, Float64), alg; dt = 0.05)[sfr(t, x, y), 2]
+                s = solve(mk(f, T), alg; dt = 0.05)
                 @test SciMLBase.successful_retcode(s.retcode) && eltype(s[f(t, x, y), 2]) == S
                 @test maximum(abs, Float64.(s[f(t, x, y), 2]) .- r) <= tol * maximum(abs, r)
             end
@@ -609,10 +609,10 @@ end
         m = emsg(() -> LFP.check_backend_float64(LFP.field_problem(pw).program, ExplicitEuler(), nb, Float32; fields = ["nw"]))
         @test occursin("field `nw`: the field `nw` is declared `lattice_storage = Float64`, which needs Float64 on the device", m) &&
             occursin("`lattice_storage = Float32`", m)
-        m = emsg(() -> LFP.check_backend_float64(LFP.field_problem(pv).program, BackwardEuler(; compute_T = Float64), nb, Float32; fields = ["nv"]))
-        @test occursin("`compute_T = Float64` needs Float64 on the device", m) && occursin("give `compute_T = Float32`", m)
-        m = emsg(() -> LFP.check_backend_float64(LFP.field_problem(pv).program, BackwardEuler(; solver_T = Float64), nb, Float32; fields = ["nv"]))
-        @test occursin("`solver_T = Float64` needs Float64 on the device", m)
+        m = emsg(() -> LFP.check_backend_float64(LFP.field_problem(pv).program, BackwardEuler(; compute_type = Float64), nb, Float32; fields = ["nv"]))
+        @test occursin("`compute_type = Float64` needs Float64 on the device", m) && occursin("give `compute_type = Float32`", m)
+        m = emsg(() -> LFP.check_backend_float64(LFP.field_problem(pv).program, BackwardEuler(; solver_type = Float64), nb, Float32; fields = ["nv"]))
+        @test occursin("`solver_type = Float64` needs Float64 on the device", m)
         # nothing declared, or a backend with Float64: no refusal
         @test LFP.check_backend_float64(LFP.field_problem(pv).program, BackwardEuler(), nb, Float32; fields = ["nv"]) === nothing
         @test LFP.check_backend_float64(LFP.field_problem(pw).program, ExplicitEuler(), LatticeFields.Exec.KernelAbstractions.CPU(), Float32) === nothing

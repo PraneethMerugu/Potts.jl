@@ -57,7 +57,7 @@
 # 6. Number types. `supports(exec, S)`: can the executor's device run arithmetic and hold
 #    arrays of number type `S`? An executor declares what it supports by adding methods;
 #    the default is conservative: Float32 only (Metal has no Float64). Callers ask only when
-#    a choice depends on the answer (the solvers' `solver_T = :auto`, an explicit type).
+#    a choice depends on the answer (the solvers' `solver_type = :auto`, an explicit type).
 """
     supports(exec, ::Type{S})
 

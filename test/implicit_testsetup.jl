@@ -352,13 +352,13 @@ function fi_runA(M, op, k; field_solver = BackwardEuler(), kw...)
     return [(step!(integ); copy(Array(current_state(integ).site.c))) for _ in 1:k], integ
 end
 
-function fi_runB(M, dims, k; u0, inputs = [:kind => fi_kin(dims)], alg = BackwardEuler(; dt = 1.0))
+function fi_runB(M, dims, k; u0, inputs = [:kind => fi_kin(dims)], alg = BackwardEuler())
     bp = Potts.LatticePDE.discretize(
         Potts.fields(M(; name = :f)),
         Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(dims); T = Float64);
         u0, tspan = (0, k), inputs
     )
-    return (s -> [s[:c, i] for i in 2:length(s.t)])(Potts.LatticePDE.solve(bp, alg; saveat = 1.0))
+    return (s -> [s[:c, i] for i in 2:length(s.t)])(Potts.LatticePDE.solve(bp, alg; dt = 1.0, saveat = 1.0))
 end
 
 fi_warm(integ) = (step!(integ); @allocated step!(integ))
@@ -371,7 +371,7 @@ function fi_check_table_rows(rows)
         a, integ = fi_runA(M, fi_op(dims), k; field_solver = fs)
         u0 = [nm => zeros(dims) for nm in u0_names]
         inputs = has_kind ? [:kind => fi_kin(dims)] : []
-        alg = fs isa QuasiSteady ? QuasiSteady(; dt = 1.0) : remake(fs; dt = 1.0)
+        alg = fs isa QuasiSteady ? QuasiSteady() : fs
         b = fi_runB(M, dims, k; u0, inputs, alg)
         @test a == b
         @test integ.retcode == FiRC.Default || integ.retcode == FiRC.Success
@@ -457,7 +457,7 @@ function fc_runB(M, k, names; alg, kw...)
     bp = Potts.LatticePDE.discretize(Potts.fields(M(; name = :f)),
         Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((12, 10)); T = Float64);
         u0 = [n => zeros(12, 10) for n in names], tspan = (0, k), inputs = [:kind => fi_kin((12, 10))], kw...)
-    s = Potts.LatticePDE.solve(bp, alg; saveat = 1.0)
+    s = Potts.LatticePDE.solve(bp, alg; dt = 1.0, saveat = 1.0)
     return [[s[n, i] for n in names] for i in 2:(k + 1)], s
 end
 

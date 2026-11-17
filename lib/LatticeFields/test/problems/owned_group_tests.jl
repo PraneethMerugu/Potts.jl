@@ -23,8 +23,8 @@ end
     u0 = rand(Xoshiro(5), Float32, prod(dims))
     ix = LatticeIndex(; variables = [:u => FieldSlot(1:prod(dims), dims)], parameters = [:D => 1])
     prob = FieldProblem(euler2(dims), Float64.(u0), (0.0, 0.1), [0.5]; state = ["u"], kind = :rate, index = ix)
-    alg = ExplicitEuler(; dt = 0.05, substeps = 3)
-    a, b = init(prob, alg), init(prob, alg)
+    alg = ExplicitEuler(; substeps = 3)
+    a, b = init(prob, alg; dt = 0.05), init(prob, alg; dt = 0.05)
     ra = only(a.runtimes)
     @test ra.ends_in === :parity && ra.n == 3
     # a runtime bound to `b`'s store, ending in slot 1

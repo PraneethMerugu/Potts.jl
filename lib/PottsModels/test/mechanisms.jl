@@ -14,8 +14,8 @@ include("akeeb_metrics.jl")
 const CP = CorePotts
 # Merks' field solver (its docstring: the paper's 15 substeps per MCS; a `PottsProblem`
 # keyword, D-075), and a two-substep one for the field-step recomputation below
-const MERKS_SOLVER = ExplicitEuler(substeps = 15, lower = 0.0)
-const MERKS_TWO_SUBSTEPS = ExplicitEuler(substeps = 2, lower = 0.0)
+const MERKS_SOLVER = ExplicitEuler(substeps = 15, lower_bound = 0.0)
+const MERKS_TWO_SUBSTEPS = ExplicitEuler(substeps = 2, lower_bound = 0.0)
 
 """Interface proposals (source and target owned differently) on states along a trajectory of
 `prob`, up to `n` per state, evenly spread: a vector of (u, prop, ctx)."""

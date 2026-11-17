@@ -22,7 +22,7 @@ launches through `Schedule.workgroups!`.
 """
 struct DevExec end
 Solvers.alloc(::DevExec, ::Type{T}, n) where {T} = KAd.zeros(DEV, T, max(n, 1))
-Solvers.fetch(::DevExec, A) = (KAd.synchronize(DEV); Array(A))
+Solvers.to_host(::DevExec, A) = (KAd.synchronize(DEV); Array(A))
 Schedule.supports(::DevExec, ::Type{Float64}) = gpu != "metal"
 KAd.@kernel function _sites!(body, S, P, G, n)
     i = KAd.@index(Global, Linear)

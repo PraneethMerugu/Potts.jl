@@ -55,13 +55,13 @@ function launch_parameters(ck::CompiledKernel, Praw, c = zero(ck.T), t = 0.0)
 end
 
 """
-    bind(backend, p, spec, S, P, rt; R = spec.kernel.T) -> Exec.Launch
+    bind_program(backend, p, spec, S, P, rt; R = spec.kernel.T) -> Exec.Launch
 
 The prebuilt launch of `spec` with arrays `S`, parameters `P` and `rt = (t, dt)` in `R`: a static
 ndrange when `spec.static`, the workgroup of the spec, the Cartesian wrapper for Cartesian
 bodies. `n` is `G.n`.
 """
-function bind(backend, p::Program{N}, spec::LaunchSpec{N}, S::Tuple, P::Tuple, rt;
+function bind_program(backend, p::Program{N}, spec::LaunchSpec{N}, S::Tuple, P::Tuple, rt;
         R::Type = spec.kernel.T, wrap::W = identity) where {N, W}
     ck = spec.kernel
     G = launch_geometry(p, ck, rt; R)

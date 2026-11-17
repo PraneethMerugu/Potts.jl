@@ -47,14 +47,14 @@ end
         ref = solve(prob, Tsit5(); abstol = 1.0e-12, reltol = 1.0e-12).u[end]
 
         dts = [0.04, 0.02, 0.01]
-        for (label, mkalg, target_order, tol) in (
-                ("ExplicitEuler", dt -> ExplicitEuler(; dt, substeps = 1), 1.0, 0.15),
-                ("BackwardEuler", dt -> BackwardEuler(; dt, inner = BTIGHT), 1.0, 0.15),
-                ("CrankNicolson", dt -> CrankNicolson(; dt, inner = BTIGHT), 2.0, 0.15),
-                ("BDF2", dt -> BDF2(; dt, inner = BTIGHT), 2.0, 0.15),
+        for (label, alg, target_order, tol) in (
+                ("ExplicitEuler", ExplicitEuler(; substeps = 1), 1.0, 0.15),
+                ("BackwardEuler", BackwardEuler(; linsolve = BTIGHT), 1.0, 0.15),
+                ("CrankNicolson", CrankNicolson(; linsolve = BTIGHT), 2.0, 0.15),
+                ("BDF2", BDF2(; linsolve = BTIGHT), 2.0, 0.15),
             )
             @testset "$label" begin
-                errs = [maximum(abs, solve(prob, mkalg(dt)).u[end] .- ref) for dt in dts]
+                errs = [maximum(abs, solve(prob, alg; dt).u[end] .- ref) for dt in dts]
                 orders = observed_orders(dts, errs)
                 @test all(o -> abs(o - target_order) < tol, orders)
                 @test abs(observed_order(dts, errs) - target_order) < tol
@@ -79,10 +79,10 @@ end
                 maximum(
                     abs, solve(
                         iprob, FieldGroups(
-                            ue => ExplicitEuler(; dt, substeps = 1),
-                            ve => BackwardEuler(; dt, inner = BTIGHT)
+                            ue => ExplicitEuler(; substeps = 1),
+                            ve => BackwardEuler(; linsolve = BTIGHT)
                         )
-                    ).u[end] .- iref
+                    ; dt).u[end] .- iref
                 ) for dt in idts
             ]
             orders = observed_orders(idts, errs)

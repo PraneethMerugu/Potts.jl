@@ -1813,7 +1813,7 @@ The SciML problem of `pdesys` on the lattice (F4 design §3.2): one problem, whi
 algorithm takes.
 - Rate equations `D(c) ~ rhs` (with aux fields `K ~ rhs`, masked conditions and steady rows
   `0 ~ rhs`) give an `ODEProblem`. The field algorithms step it, `solve(prob,
-  BackwardEuler(; dt))` (`ExplicitEuler`, `CrankNicolson`, `BDF2`, `QuasiSteady`,
+  BackwardEuler(); dt)` (`ExplicitEuler`, `CrankNicolson`, `BDF2`, `QuasiSteady`,
   `FieldGroups`), and so do OrdinaryDiffEq's solvers, `solve(prob, Rodas5P())`, through its
   compiled right side, which is built at their first call (a problem only field algorithms
   step never builds it).
@@ -1837,14 +1837,14 @@ fields), for a mass-matrix solver (`Rodas5P()`, `FBDF()`).
 **Steady rows** (F3-12b). `0 ~ rhs` is solved for the field it determines: a state field with
 no other equation that the row reads, preferably under a spatial operator (`0 ~ D * Δ(c) - k * c
 + s` is `c`'s); see `steady_rows`. Its group takes `QuasiSteady` only, by default too:
-`solve(prob, BackwardEuler(; dt))` steps the other fields with `BackwardEuler` and the steady
+`solve(prob, BackwardEuler(); dt)` steps the other fields with `BackwardEuler` and the steady
 ones with `QuasiSteady` at the same window, solved first in each window. A steady field with no
 initial value starts at 0.
 
 **Systems with no time** (F3-12b). A system whose variables are the axes only (`[x, y]`, every
 row `0 ~ rhs` or an aux field) is a steady system, and
 `solve(prob)` (or `solve(prob, QuasiSteady(; inner, newton))`) solves it once from the cold
-`u0`, with the inner solver to `rtol = 1e-6` within 64 iterations unless `inner` is given. It
+`u0`, with the inner solver to `reltol = 1e-6` within 64 iterations unless `linsolve` is given. It
 returns a one-state solution at t = 0, read by the time-free symbol (`sol[c(x, y)]`). The
 problem is a `LinearProblem` when every row is linear (`A` a `LatticeOperator`, which applies
 the compiled right side, and `b` the constant part: `A u = b` is the steady state; building it
@@ -1888,7 +1888,7 @@ start and at the end of each window, as a callback that writes `integ.ps[q] = v(
 would, and the value holds over the window: a time-varying input is first order in time on
 the owned path, implicit algorithms included (use an OrdinaryDiffEq solver, or a smaller `dt`,
 for a higher order). An OrdinaryDiffEq solver's right side evaluates
-`v` at the time of every call (each stage, the Jacobian-vector product, `LatticeMG`), so the
+`v` at the time of every call (each stage, the Jacobian-vector product, `LatticeMultigrid`), so the
 solver sees the input at its own times; under a Rosenbrock solver (`Rodas5P`) the time
 derivative `∂f/∂t` does not see the input's own change in time. The masks follow on both; on an OrdinaryDiffEq solver
 a masked value jumps where the input switches (written after the step), so a mask that reads
@@ -2076,7 +2076,7 @@ function _check_fusion(rate::Program, sys::PDESystem, disc)
     get(ENV, "LATTICEPDE_CHECK_FUSION", "") == "1" || return nothing
     any(k -> startswith(k.key, "map:"), rate.kernels) && return nothing
     for lower in (nothing, 0.0)
-        alg = ExplicitEuler(; lower)
+        alg = ExplicitEuler(; lower_bound = lower)
         sym = symbolic_discretize(sys, disc; update = (kb, c, r) -> (v = euler_update(kb, c, r);
                                                                         lower === nothing ? v : max(v, lower))).program
         pass = fuse_update(rate, Problems.update_rule(alg))

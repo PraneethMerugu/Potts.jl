@@ -59,7 +59,7 @@ function spec(case)
         return () -> WortelAct(; name = :w, lattice = (100, 100)), [ownership => σ, kind => [:cell]], (;)
     elseif case == "merks_100"
         return () -> MerksVasculogenesis(; name = :m, lattice = (100, 100)), merks_state(; lattice = (100, 100), n = 25),
-            (; field_solver = ExplicitEuler(substeps = 15, lower = 0.0))
+            (; field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0))
     elseif case == "openvt_monolayer_100"
         return () -> OpenVTGrowingMonolayer(; name = :o, lattice = (100, 100), τ = 1e6),
             openvt_monolayer_state(; lattice = (100, 100)), (; capacity = 64)

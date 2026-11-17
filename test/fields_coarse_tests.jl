@@ -133,13 +133,13 @@ function fc_runA(k; field_solver = BackwardEuler())
     return out, integ
 end
 
-function fc_runB(k; alg = BackwardEuler(; dt = 1.0))
+function fc_runB(k; alg = BackwardEuler())
     bp = Potts.LatticePDE.discretize(
         Potts.fields(FcMix(; name = :f)),
         Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((16, 12)); T = Float64);
         u0 = [:c => zeros(4, 3), :e => zeros(16, 12)], tspan = (0, k), inputs = [:kind => fc_kin()]
     )
-    s = Potts.LatticePDE.solve(bp, alg; saveat = 1.0)
+    s = Potts.LatticePDE.solve(bp, alg; dt = 1.0, saveat = 1.0)
     return [s[:c, i] for i in 2:length(s.t)], [s[:e, i] for i in 2:length(s.t)]
 end
 
@@ -238,7 +238,7 @@ end
     @testset "TS1-1: coarse grid and domain coupled models equal LatticePDE owned run" begin
         # 1. Coarse(4) with BackwardEuler and ExplicitEuler
         k = 4
-        for (fs, alg) in ((BackwardEuler(), BackwardEuler(; dt = 1.0)), (ExplicitEuler(), ExplicitEuler(; dt = 1.0)))
+        for (fs, alg) in ((BackwardEuler(), BackwardEuler()), (ExplicitEuler(), ExplicitEuler()))
             a, _ = fc_runA(k; field_solver = fs)
             bc, be = fc_runB(k; alg)
             @test size(a[1][1]) == (4, 3) && size(a[1][2]) == (16, 12)
@@ -263,7 +263,7 @@ end
             ); u0 = [:c => zeros(4, 3)], tspan = (0, 3),
             inputs = [:kind => Int32.(σ), :domain__in => dm]
         )
-        @test ad == (s -> [s[:c, i] for i in 2:length(s.t)])(Potts.LatticePDE.solve(bp, BackwardEuler(; dt = 1.0); saveat = 1.0))
+        @test ad == (s -> [s[:c, i] for i in 2:length(s.t)])(Potts.LatticePDE.solve(bp, BackwardEuler(); dt = 1.0, saveat = 1.0))
         out = [count(dm[(I[1] - 1) * 4 .+ (1:4), (I[2] - 1) * 4 .+ (1:4)]) <= 8 for I in CartesianIndices((4, 3))]
         @test any(out) && all(ad[end][out] .== 0.0) && all(ad[end][.!out] .> 0.0)
     end
@@ -272,19 +272,19 @@ end
 @testitem "TS1-1: cross-grid operator coupled models equal LatticePDE owned run" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
     @testset "TS1-1: cross-grid operator coupled models equal LatticePDE owned run" begin
         # Cross-grid operators (`FcXd`, `FcXr`, `FcCut`, `FcCutBcs`)
-        tight = DevicePCG(; rtol = 1.0e-12, budget = 64)
-        for fs in (ExplicitEuler(; substeps = 40), BackwardEuler(; inner = tight), CrankNicolson(; inner = tight))
+        tight = DevicePCG(; reltol = 1.0e-12, maxiters = 64)
+        for fs in (ExplicitEuler(; substeps = 40), BackwardEuler(; linsolve = tight), CrankNicolson(; linsolve = tight))
             ax, rx = fx_run(FcXd, 3, fs), fx_run(FcXr, 3, fs)
             @test ax == rx && all(maximum(abs, ax[end][i]) > 0 for i in 1:3)
             @test size(ax[1][1]) == (4, 3) && size(ax[1][2]) == (16, 12)
         end
         st = current_state(init(PottsProblem(FcXd(; name = :x), fc_op(), (0, 1); field_solver = BackwardEuler()), SequentialCPM())).site
         @test !any(k -> occursin('(', string(k)), keys(st))
-        fa = FieldGroups(:u => BackwardEuler(; inner = tight); default = ExplicitEuler(; substeps = 40))
-        fb = FieldGroups(:u => BackwardEuler(; dt = 1.0, inner = tight); default = ExplicitEuler(; dt = 1.0, substeps = 40))
+        fa = FieldGroups(:u => BackwardEuler(; linsolve = tight); default = ExplicitEuler(; substeps = 40))
+        fb = FieldGroups(:u => BackwardEuler(; linsolve = tight); default = ExplicitEuler(; substeps = 40))
         for (M, fsA, fsB, tol) in (
-                (FcXd, BackwardEuler(), BackwardEuler(; dt = 1.0), 0.0),
-                (FcXd, ExplicitEuler(; substeps = 40), ExplicitEuler(; dt = 1.0, substeps = 40), 0.0),
+                (FcXd, BackwardEuler(), BackwardEuler(), 0.0),
+                (FcXd, ExplicitEuler(; substeps = 40), ExplicitEuler(; substeps = 40), 0.0),
                 (FcCut, fa, fb, 1.0e-10),
                 (FcCutBcs, fa, fb, 1.0e-10),
             )
@@ -294,7 +294,7 @@ end
                 Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((16, 12)); T = Float64),
                 ; u0 = [:c => zeros(4, 3), :v => zeros(16, 12), :u => zeros(16, 12)], tspan = (0, 3), inputs = [:kind => fc_kin()]
             )
-            sm = Potts.LatticePDE.solve(bpm, fsB; saveat = 1.0)
+            sm = Potts.LatticePDE.solve(bpm, fsB; dt = 1.0, saveat = 1.0)
             @test [x[1] for x in am] == [sm[:c, i] for i in 2:length(sm.t)]
             @test [x[2] for x in am] == [sm[:v, i] for i in 2:length(sm.t)]
             if tol == 0.0
@@ -426,11 +426,11 @@ end
 
 @testitem "F3-22: a Dual runs through a cross-grid term in a model (against central differences)" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
     @testset "F3-22: a Dual runs through a cross-grid term in a model (against central differences)" begin
-        tight = DevicePCG(; rtol = 1.0e-11, budget = 60)
+        tight = DevicePCG(; reltol = 1.0e-11, maxiters = 60)
         W = [0.01 * (i + 2j) for i in 1:16, j in 1:12]
         q(sol) = sum(W .* sol.u[end].site.u)
         drun(fs, p) = solve(PottsProblem(FcXd(; name = :x), [fc_op(); :Dc => p], (0, 6); field_solver = fs, seed = 3), SequentialCPM(); saveat = 0:2:6)
-        for fs in (ExplicitEuler(; substeps = 40), BackwardEuler(; inner = tight))
+        for fs in (ExplicitEuler(; substeps = 40), BackwardEuler(; linsolve = tight))
             d = drun(fs, ForwardDiff.Dual(0.4, 1.0))
             h = 1.0e-4 * 0.4
             fd = (q(drun(fs, 0.4 + h)) - q(drun(fs, 0.4 - h))) / 2h

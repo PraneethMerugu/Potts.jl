@@ -20,7 +20,7 @@ end
             [ownership => two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:cell, :cell]], (0, 5); seed = 11)),
         ("MerksVasculogenesis", () -> PottsProblem(MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
             [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 5);
-            seed = 11, field_solver = ExplicitEuler(substeps = 2, lower = 0.0))),
+            seed = 11, field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0))),
         ("OpenVTGrowingMonolayer", () -> PottsProblem(OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)),
             openvt_monolayer_state(; lattice = (24, 24)), (0, 5); capacity = 64, seed = 11)),
     )
@@ -128,7 +128,7 @@ end
 
     # Canonical solver strings must be free of session/address/gensym/path leaks
     solvers = (
-        ExplicitEuler(substeps = 2, lower = 0.0),
+        ExplicitEuler(substeps = 2, lower_bound = 0.0),
         RK4(; substeps = 4),
         Potts.BackwardEuler(),
         Potts.CrankNicolson(),
@@ -144,7 +144,7 @@ end
         PottsProblem(GranerGlazier(; name = :gg), [ownership => s_gg[1], kind => s_gg[2]], (0, 2)),
         PottsProblem(MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
             [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 2);
-            field_solver = ExplicitEuler(substeps = 2, lower = 0.0)),
+            field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0)),
     )
     for p in probs
             @test !has_leak(string(getfield(p.f.sys.csys, :sys)))

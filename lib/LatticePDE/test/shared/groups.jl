@@ -6,8 +6,7 @@ using LatticeFields.Compile: fingerprint_text, fuse_update
 
 # a stub algorithm: Euler with three substeps, three buffers and a counting cache that fails at
 # step `fail_at` (0: never)
-struct GStub <: LFP.FieldAlgorithm
-    dt::Float64
+struct GStub <: LFP.AbstractFieldAlgorithm
     fail_at::Int
 end
 mutable struct GStubCache
@@ -21,7 +20,7 @@ LFP.update_rule(::GStub) = LFP.update_rule(ExplicitEuler())
 LFP.alg_cache(a::GStub, group, store) = GStubCache(0, 0, a.fail_at)
 LFP.reset_cache!(c::GStubCache) = (c.resets += 1; nothing)
 LFP.step_retcode!(c::GStubCache, rt) = (c.steps += 1; c.steps == c.fail_at ? ReturnCode.ConvergenceFailure : ReturnCode.Success)
-LFP.substeps(::LFP.FieldProblem, ::GStub, p = nothing; tables = nothing, inputs = nothing) = 3
+LFP.substeps(::LFP.FieldProblem, ::GStub, p = nothing; tables = nothing, inputs = nothing, dt = nothing) = 3
 
 @parameters ga = 0.3 gb = 0.2
 @variables gc(..) go(..)
@@ -101,14 +100,13 @@ using LatticeFields.IR: FaceRule as GFaceRule
 # window, a linear budget hit per window when `need > budget`, and code `code` from window `at`
 # (sticky, with the window and a cause bit). B reads the word on the host after every step,
 # and at the saves and the end. Base (f8510fe8): no reader; the run ended `Success`.
-struct WStub <: LFP.FieldAlgorithm
-    dt::Float64
+struct WStub <: LFP.AbstractFieldAlgorithm
     code::UInt32
     at::Int
     need::Int
     budget::Int
 end
-WStub(dt; code = 0, at = 0, need = 0, budget = 8) = WStub(dt, UInt32(code), at, need, budget)
+WStub(; code = 0, at = 0, need = 0, budget = 8) = WStub(UInt32(code), at, need, budget)
 mutable struct WStubCache{W}
     word::W
     steps::Int
@@ -120,7 +118,7 @@ LFP.update_rule(::WStub) = LFP.update_rule(ExplicitEuler())
 LFP.alg_cache(a::WStub, group, store) = WStubCache(fill!(similar(store.flat[1], UInt32, 8), 0), 0, a)
 LFP.status_word(c::WStubCache) = c.word
 LFP.reset_cache!(::WStubCache) = nothing                  # (no history; a write keeps the word)
-LFP.substeps(::LFP.FieldProblem, ::WStub, p = nothing; tables = nothing, inputs = nothing) = 1
+LFP.substeps(::LFP.FieldProblem, ::WStub, p = nothing; tables = nothing, inputs = nothing, dt = nothing) = 1
 wbump!(w, i, x) = (v = view(w, i:i); v .+= UInt32(x); nothing)
 wset!(w, i, x) = (v = view(w, i:i); v .= UInt32(x); nothing)
 function LFP.step_retcode!(c::WStubCache, rt)

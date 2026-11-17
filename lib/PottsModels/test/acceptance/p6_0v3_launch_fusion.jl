@@ -82,7 +82,7 @@ function p60v3_gate_cases(T)
             PottsProblem(WortelAct(; name = :w, lattice = (100, 100)), [ownership => σ, kind => [:cell]], (0, 10^6); T)),
         "merks_100" => () -> PottsProblem(MerksVasculogenesis(; name = :m, lattice = (100, 100)),
             merks_state(; lattice = (100, 100), n = 25), (0, 10^6); T,
-            field_solver = ExplicitEuler(substeps = 15, lower = 0.0)),
+            field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0)),
         "openvt_monolayer_100" => () -> PottsProblem(OpenVTGrowingMonolayer(; name = :o, lattice = (100, 100), τ = 1e6),
             openvt_monolayer_state(; lattice = (100, 100)), (0, 10^6); T, capacity = 64),
         "akeeb_99x60" => () -> PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60)),
@@ -168,7 +168,7 @@ p60v3_pair_oracle(T, nmcs) = T.(isodd(nmcs) ? reverse(collect(P60V3_Y0)) : colle
 # Merks at a small size with the paper's 15 substeps (or `substeps`), a fixed seed.
 p60v3_merks_problem(; T = Float64, substeps = 15, seed = 7, nmcs = 6) =
     PottsProblem(MerksVasculogenesis(; name = :m, lattice = (32, 32)), merks_state(; lattice = (32, 32), n = 6, side = 7),
-        (0, nmcs); T, seed, field_solver = ExplicitEuler(; substeps, lower = 0.0))
+        (0, nmcs); T, seed, field_solver = ExplicitEuler(; substeps, lower_bound = 0.0))
 
 # Two adaptive-ODE phases in one MCS: a cell ODE and a model ODE, both `Adaptive`
 # (y(t) = exp(−k t), g(t) = exp(−k t)). The control model has the cell ODE only.

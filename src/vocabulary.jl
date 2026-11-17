@@ -356,7 +356,7 @@ function variable(x, scope::Symbol; default = _NO_VALUE, unit = nothing, guess =
             throw(ArgumentError("variable `$name`: `clear_on_ownership_change` applies to site variables"))
         # `[lattice_storage = Float16 | Float32 | Float64]` (P5 role model, FE-17): a field's own
         # storage type, narrower or wider than the state type `T` (its kernels compute in the
-        # group's `compute_T`, and each store rounds once to the storage)
+        # group's `compute_type`, and each store rounds once to the storage)
         k === :lattice_storage && !(scope === :field && v in (Float16, Float32, Float64)) &&
             throw(
             ArgumentError(

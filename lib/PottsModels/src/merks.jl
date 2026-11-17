@@ -77,11 +77,11 @@ Differences from the paper:
 
 The field solver is a problem keyword with no default; this model's is the paper's
 schedule of 15 explicit Euler substeps per MCS (`Δt = 2 s`),
-`field_solver = ExplicitEuler(substeps = 15, lower = 0.0)`:
+`field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0)`:
 
 ```julia
 prob = PottsProblem(MerksVasculogenesis(; name = :merks), merks_state(), (0, 10_000);
-    field_solver = ExplicitEuler(substeps = 15, lower = 0.0))
+    field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0))
 ```
 """
 @potts_model MerksVasculogenesis begin

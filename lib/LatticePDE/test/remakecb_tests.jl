@@ -36,7 +36,7 @@ end
     cnt = SciMLBase.DiscreteCallback((u, t, i) -> true, i -> (n[] += 1; SciMLBase.derivative_discontinuity!(i, false));
         save_positions = (false, false))
     q = remake(p; callback = cnt)
-    solve(q, ExplicitEuler(; dt = 0.125))
+    solve(q, ExplicitEuler(); dt = 0.125)
     @test n[] == 8
     @test count(LFP._builtin, (q.kwargs[:callback].discrete_callbacks..., q.kwargs[:callback].continuous_callbacks...)) ==
           count(LFP._builtin, (p.kwargs[:callback].discrete_callbacks..., p.kwargs[:callback].continuous_callbacks...))
@@ -45,7 +45,7 @@ end
     ms = PDESystem([D(rce) ~ rD * Δ(rce) - rce], [rc(0, x, y) ~ 0.0, rce ~ masked((t > 0.3) & (rqe == 1), 2.0)],
         rdom(1.0), [t, x, y], [rce, rqe], [rD]; name = :rm)
     pm = discretize(ms, LatticeDiscretization(Grid((4, 3)); T = Float64); inputs = [rqe => K])
-    o = solve(pm, ExplicitEuler(; dt = 1e-4)).u[end]
+    o = solve(pm, ExplicitEuler(); dt = 1e-4).u[end]
     b = solve(remake(pm; callback = nop()), Tsit5(); tol...).u[end]
     @test unique(b[vec(K .== 1)]) == [2.0] && maximum(abs, b .- o) < 1e-3
 end
@@ -55,8 +55,8 @@ end
 @testset "review b2 #5: dense = false; a warm window with callbacks allocates nothing" begin
     gs = PDESystem([D(rce) ~ rD * Δ(rce) - rce], [rc(0, x, y) ~ x * y], rdom(0.2), [t, x, y], [rce], [rD]; name = :rw)
     p = discretize(gs, LatticeDiscretization(Grid((16, 16)); T = Float64))
-    @test !solve(p, ExplicitEuler(; dt = 0.01); saveat = 0.1, dense = false).dense
-    @test solve(p, ExplicitEuler(; dt = 0.01); saveat = 0.1).dense
+    @test !solve(p, ExplicitEuler(); dt = 0.01, saveat = 0.1, dense = false).dense
+    @test solve(p, ExplicitEuler(); dt = 0.01, saveat = 0.1).dense
     warm(i) = (for _ in 1:5; step!(i); end; @allocated(step!(i)); @allocated(step!(i)))
     for cb in (SciMLBase.DiscreteCallback((u, t, i) -> false, i -> nothing),
             SciMLBase.ContinuousCallback((u, t, i) -> u[1] - 10.0, i -> nothing),
@@ -64,7 +64,7 @@ end
                 SciMLBase.VectorContinuousCallback((out, u, t, i) -> (out[1] = u[1] - 10.0; out[2] = u[2] - 10.0; nothing),
                     (i, k) -> nothing, 2),
                 SciMLBase.DiscreteCallback((u, t, i) -> false, i -> nothing)))
-            i = init(remake(p; tspan = (0.0, 100.0)), ExplicitEuler(; dt = 1.0e-3); callback = cb, save_everystep = false)
+            i = init(remake(p; tspan = (0.0, 100.0)), ExplicitEuler(); dt = 1.0e-3, callback = cb, save_everystep = false)
         @test warm(i) == 0 || (println("b2 #5 warm ", typeof(cb).name.name, " ", warm(i)); false)
     end
 end

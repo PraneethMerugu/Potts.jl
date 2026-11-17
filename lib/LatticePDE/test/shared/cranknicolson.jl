@@ -13,12 +13,12 @@ mf_src(xx, yy, tt) = -exp(-tt) * sin(π * xx) * sin(π * yy) + 1 + 2π^2 * 0.1 *
 mf_faces(tt) = Dict((a, s) => (:dir, tt) for a in 1:2, s in (-1, 1))
 # the hand rate `(L, b)` of the manufactured system on BDIMS at time `tt`
 mf_rate(tt) = hand_rate(; K = (x, y) -> 0.1, f = (xx, yy) -> mf_src(xx, yy, tt), faces = mf_faces(tt))
-# the errors and orders of `alg(dt)` against the semi-discrete solution (the `:ode` path, Tsit5
+# the errors and orders of `alg` at each window `dt` against the semi-discrete solution (the `:ode` path, Tsit5
 # at 1e-12), `m²` sites
 function mf_orders(alg, dts; m = 32)
     ref = solve(mf_problem((m, m)), Tsit5(); reltol = 1e-12, abstol = 1e-12).u[end]
     pm = mf_problem((m, m))
-    es = [maximum(abs, vec(blast(solve(pm, alg(dt)))) .- ref) for dt in dts]
+    es = [maximum(abs, vec(blast(solve(pm, alg; dt))) .- ref) for dt in dts]
     return es, log2.(es[1:(end - 1)] ./ es[2:end])
 end
 # the heat eigenmode `sin(πx) sin(πy)` with Dirichlet 0 faces (`n²` sites): the semi-discrete
@@ -47,7 +47,7 @@ function robin_sys(v)
         [crb]; name = :crob), crb
 end
 # `p`'s state after each of `k` windows of `alg`
-function windows(p, alg, k)
-    ig = init(p, alg; save_everystep = false)
+function windows(p, alg, k; dt)
+    ig = init(p, alg; dt, save_everystep = false)
     return [(step!(ig); copy(vec(ig[bce]))) for _ in 1:k], ig
 end

@@ -91,7 +91,7 @@ SciMLBase.wrap_sol(sol, ::LatticeMetadata) = sol
 The default start of a problem with steady rows `0 ~ rhs` on an OrdinaryDiffEq solver (its
 `DefaultInit`; review R2): the steady fields of `u` are solved at `t` from the other fields of
 `u`, by the owned `QuasiSteady` solve of those rows on the lattice (sparse: the operator of the
-rows, `DevicePCG` to `rtol = 1e-10`), so the solver starts on the algebraic constraint. The
+rows, `DevicePCG` to `reltol = 1e-10`), so the solver starts on the algebraic constraint. The
 other fields are kept. `initializealg = BrownFullBasicInit()` or `CheckInit()` given to `solve`
 takes the place of this.
 """
@@ -108,9 +108,9 @@ function steady_start!(u, prob, p, t)
     g = _field_problem(fp.program, fp.state, u isa Vector ? copy(u) : Array(u), (Float64(primal(t)), Float64(primal(t)) + δ),
         collect(p.values), p.tables, p.inputs, fp.backend, fp.index, fp.faces, fp.stability, fp.kind, fp.initkeys,
         fp.options, fp.group)
-    inner = Solvers.DevicePCG(; rtol = 1e-10, budget = 400)
-    alg = FieldGroups((k => QuasiSteady(; dt = δ, inner) for k in st)...; default = ExplicitEuler(; dt = δ))
-    ig = CommonSolve.init(g, alg; save_start = false)
+    inner = Solvers.DevicePCG(; reltol = 1e-10, maxiters = 400)
+    alg = FieldGroups((k => QuasiSteady(; linsolve = inner) for k in st)...; default = ExplicitEuler())
+    ig = CommonSolve.init(g, alg; dt = δ, save_start = false)
     CommonSolve.step!(ig)          # (the steady rows are solved first, from the fields at `t`)
     s = fp.program
     slots = state_layout(s, Int[fieldid(s, k) for k in fp.state])
@@ -209,8 +209,8 @@ function _build_rhs(m::LatticeMetadata, u, p, t)
     _check_eltype(E, fp.backend)
     for k in fp.state                            # the solver's state is one vector of the state type
         f = s.fields[fieldid(s, k)]
-        f.fixed && juliatype(f.storage) !== valtype(E) && throw(ArgumentError(string("field `", k,
-            "`: `lattice_storage = ", juliatype(f.storage), "` differs from the state's number type ", valtype(E),
+        f.fixed && juliatype(f.storage) !== value_type(E) && throw(ArgumentError(string("field `", k,
+            "`: `lattice_storage = ", juliatype(f.storage), "` differs from the state's number type ", value_type(E),
             "; an OrdinaryDiffEq solver's state is one vector of that type, so its fields are stored in it. Discretize ",
             "with T = ", juliatype(f.storage), ", or solve with a field algorithm (each field stored in its own type)")))
     end
@@ -283,11 +283,11 @@ function _mass_matrix(fp::FieldProblem, ::Type{E}) where {E}
     isempty(st) && return LinearAlgebra.I
     s = fp.program
     slots = state_layout(s, Int[fieldid(s, k) for k in fp.state])
-    m = ones(valtype(E), length(fp.u0))
+    m = ones(value_type(E), length(fp.u0))
     for k in fp.state
         k in st && (m[slots[fieldid(s, k)]] .= 0)
     end
-    return LinearAlgebra.Diagonal(copyto!(KA.allocate(fp.backend, valtype(E), length(m)), m))
+    return LinearAlgebra.Diagonal(copyto!(KA.allocate(fp.backend, value_type(E), length(m)), m))
 end
 
 # the built-in callbacks of `fp`'s SciML problem: the clock's step index when the group reads
@@ -369,7 +369,7 @@ function _callback(c::InputRefresh)
             "an input given as a function of the time (", join(("`$k`" for (k, _) in integ.p.fns if k in c.masks), ", "),
             "): its masked values are written after each accepted step, and over a quiet state an adaptive step can ",
             "pass a switch. Bound the step (`dtmax`) or give `tstops` at the input's changes, or solve with a field ",
-            "algorithm (`ExplicitEuler(; dt)`)")))
+            "algorithm (`solve(prob, ExplicitEuler(); dt)`)")))
         refresh_inputs!(integ)
         return nothing
     end
@@ -515,7 +515,7 @@ function _callback(c::MaskSync)
             "or a coordinate, an equality, or a bare `t`): over a quiet state an adaptive step can pass the switch, ",
             "and the mask is never applied. Bound the step (`dtmax`) or give `tstops` at the switch, write the ",
             "switch as a comparison of `t` with parameters and constants (`t > t0`: located exactly), or solve ",
-            "with a field algorithm (`ExplicitEuler(; dt)`)")))
+            "with a field algorithm (`solve(prob, ExplicitEuler(); dt)`)")))
         mask_sync!(integ; all = true) || return SciMLBase.derivative_discontinuity!(integ, false)
         sol = integ.sol
         !isempty(sol.t) && sol.t[end] == t && length(sol.u[end]) == length(integ.u) && copyto!(sol.u[end], integ.u)
@@ -639,7 +639,7 @@ function _clamp_masks!(U, m::LatticeMetadata, lp::LatticeParameters, t = m.probl
     E = eltype(U)
     (isbitstype(E) || Exec.ishost(fp.backend)) || return U
     s = _sem(m)
-    ip, _ = lock(() -> _plans!(m.plans, s, fp.initkeys, _rhs_options(fp), valtype(E), fp.backend), _PLANS_LOCK)
+    ip, _ = lock(() -> _plans!(m.plans, s, fp.initkeys, _rhs_options(fp), value_type(E), fp.backend), _PLANS_LOCK)
     st = FieldStore(fp.backend, s; E, TE = _tabeltype(lp.tables))
     foreach(((k, v),) -> settable!(st, s, k, v), lp.tables)
     foreach(((k, v),) -> _set_input!(st, s, k, v), lp.inputs)
@@ -1096,7 +1096,7 @@ function _variant(f::LatticeRHS, ::Type{C}) where {C}
     ctx = f.ctx
     v = get(f.variants, C, nothing)
     if v === nothing
-        V = valtype(C)
+        V = value_type(C)
         V <: Union{Float16, Float32} || Exec.supports(ctx.backend, Float64) || throw(ArgumentError(
             string("the solver passed values of type ", C, " (SciMLBase promotes u0 to the ",
                 "parameters' value type for ForwardDiff); this backend has no Float64: ",
@@ -1147,7 +1147,7 @@ end
 function _lattice_rhs(ctx::RHSContext, ::Type{E}, base, Pinit = nothing, inputs = ();
         shared::Symbol = :all) where {E}
     s, backend = ctx.program, ctx.backend
-    ip, sp = lock(() -> _plans!(ctx.plans, s, ctx.initkeys, ctx.options, valtype(E), backend), _PLANS_LOCK)
+    ip, sp = lock(() -> _plans!(ctx.plans, s, ctx.initkeys, ctx.options, value_type(E), backend), _PLANS_LOCK)
     ids = Int[fieldid(s, k) for k in ctx.state]
     # a rate program writes each rate into a scratch field (one buffer per field); a map program
     # writes the next value of each state field (its `:next` role: the solver's `du`)
@@ -1189,7 +1189,7 @@ function _lattice_rhs(ctx::RHSContext, ::Type{E}, base, Pinit = nothing, inputs 
         S = map(lane -> map(a -> _resolve(a, U, dU), lane), S0)
         np = s.nparams
         P = launch_parameters(l.kernel, ntuple(_ -> zero(E), np), c)
-        RHSLaunch(bind(backend, s, l, S, P, (0.0, 0.0); R = E), S0, derive_function(l.kernel),
+        RHSLaunch(bind_program(backend, s, l, S, P, (0.0, 0.0); R = E), S0, derive_function(l.kernel),
             Val(np), c)
     end
     Exec.compile_all!(backend, [r.launch for r in ls])
@@ -1529,14 +1529,14 @@ end
 # A field solver or a linear solver given to an `ODEProblem` that `discretize` did not build
 # (its right side has no group to step): the route to an OrdinaryDiffEq solver
 function _ode_refusal(alg)
-    name = alg isa LinearSolver ? string("`", repr(alg), "` is a linear solver, the `inner` of an implicit field solver") :
+    name = alg isa LinearSolver ? string("`", repr(alg), "` is a linear solver, the `linsolve` of an implicit field solver") :
            string("`", _algtext(alg), "` is a field solver: it steps the problem of a discretized system")
     return ArgumentError(string("`solve`/`init` of an `ODEProblem`: ", name, ". This `ODEProblem` was not built by ",
         "`LatticePDE.discretize` (it has no field groups to step): give it an OrdinaryDiffEq solver (`ImplicitEuler()` ",
         "is Backward Euler), or solve the problem `discretize` returns"))
 end
-CommonSolve.solve(::SciMLBase.AbstractODEProblem, alg::Union{FieldAlgorithm, LinearSolver}; kw...) = throw(_ode_refusal(alg))
-CommonSolve.init(::SciMLBase.AbstractODEProblem, alg::Union{FieldAlgorithm, LinearSolver}; kw...) = throw(_ode_refusal(alg))
+CommonSolve.solve(::SciMLBase.AbstractODEProblem, alg::Union{AbstractFieldAlgorithm, LinearSolver}; kw...) = throw(_ode_refusal(alg))
+CommonSolve.init(::SciMLBase.AbstractODEProblem, alg::Union{AbstractFieldAlgorithm, LinearSolver}; kw...) = throw(_ode_refusal(alg))
 
 # The problems `discretize` returns (F4-01): one problem, many algorithms. A field algorithm
 # (or no algorithm: the default of the group's kind, Q1) steps the owned problem built from the
@@ -1604,9 +1604,9 @@ function _remake_kw(prob, kw)
     cb = u === nothing ? SciMLBase.CallbackSet(b...) : SciMLBase.CallbackSet(b..., u)
     return merge(NamedTuple(kw), (; callback = cb))
 end
-CommonSolve.init(prob::LatticeProblem, alg::FieldAlgorithm; kw...) = _owned_init(_owned_or_refuse(prob, alg), alg, prob; kw...)
+CommonSolve.init(prob::LatticeProblem, alg::AbstractFieldAlgorithm; kw...) = _owned_init(_owned_or_refuse(prob, alg), alg, prob; kw...)
 CommonSolve.init(prob::LatticeProblem, alg::LinearSolver; kw...) = CommonSolve.init(_owned_or_refuse(prob, alg), alg; kw...)
-CommonSolve.solve(prob::LatticeProblem, alg::FieldAlgorithm; kw...) = CommonSolve.solve!(CommonSolve.init(prob, alg; kw...))
+CommonSolve.solve(prob::LatticeProblem, alg::AbstractFieldAlgorithm; kw...) = CommonSolve.solve!(CommonSolve.init(prob, alg; kw...))
 CommonSolve.solve(prob::LatticeProblem, alg::LinearSolver; kw...) = CommonSolve.solve(_owned_or_refuse(prob, alg), alg; kw...)
 # With no algorithm (D-287 R7): a problem whose window is fixed, by a clock (`Shift`, sampled
 # inputs) or by the map's step (a map: `ExplicitMap`, SciML's `FunctionMap`), runs the owned
@@ -1628,7 +1628,7 @@ _check_default_alg() = hasmethod(CommonSolve.solve, Tuple{SciMLBase.AbstractDEPr
     ArgumentError(
         string(
             "`solve(prob)` with no algorithm uses DiffEqBase's default algorithm, and no package that provides it is loaded: ",
-            "give an algorithm, `solve(prob, ExplicitEuler(; dt))` or `solve(prob, Tsit5())`, or load OrdinaryDiffEq"
+            "give an algorithm, `solve(prob, ExplicitEuler(); dt)` or `solve(prob, Tsit5())`, or load OrdinaryDiffEq"
         )
     )
 )
@@ -1639,7 +1639,7 @@ const LatticeLinearProblem = typewith(SciMLBase.LinearProblem, :A, LatticeOperat
 const LatticeResidualProblem = typewith(SciMLBase.NonlinearProblem, :f,
                                          typewith(SciMLBase.NonlinearFunction, :f, LatticeFunction))
 const LatticeTimeFreeProblem = Union{LatticeLinearProblem, LatticeResidualProblem}
-CommonSolve.solve(prob::LatticeTimeFreeProblem, alg::Union{FieldAlgorithm, LinearSolver}; kw...) =
+CommonSolve.solve(prob::LatticeTimeFreeProblem, alg::Union{AbstractFieldAlgorithm, LinearSolver}; kw...) =
     CommonSolve.solve(field_problem(prob), alg; kw...)
 CommonSolve.solve(prob::LatticeTimeFreeProblem; kw...) = CommonSolve.solve(field_problem(prob); kw...)
 # a remake builds the problem again at the new values (`A` and `b` are the parameters')

@@ -25,7 +25,7 @@ parameter that is NaN (no value) is an error at `init`.
 **Number types** (P5 role model). The element type `E` of the problem is `eltype(u0)`,
 promoted with the parameters only when they carry derivative parts (Dual `p` gives a Dual
 state; a plain Float64 `p` leaves a Float32 state Float32; a BigFloat `p` is kept as given and
-rounded once to the compute type). The bodies are emitted for the value type `valtype(E)`
+rounded once to the compute type). The bodies are emitted for the value type `value_type(E)`
 (`eltype(u0)` decides; an explicit `options.T` that differs is refused); a new value type plans and emits once per
 problem family, and a value-only change never recompiles. `tspan` stays Float64 on the host.
 A non-isbits `E` (BigFloat) runs on the host only; Float64 values on a backend without
@@ -56,7 +56,7 @@ end
 function FieldProblem(prog::Program, u0, tspan, p; state, kind::Symbol,
         init = String[], index = LatticeIndex(), tables = Pair{String, Vector{Float64}}[],
         inputs = Pair[], backend = KA.CPU(), options::CompileOptions = CompileOptions(),
-        stability = p -> NaN, route = "ExplicitEuler(; dt, substeps = n)", terms = String[], linearity = nothing)
+        stability = p -> NaN, route = "ExplicitEuler(; substeps = n)", terms = String[], linearity = nothing)
     kind in (:rate, :map) ||
         throw(ArgumentError("kind must be :rate or :map; got $(repr(kind))"))
     # the group's description (F2 design §2.2): B's problem is one group of every state field
@@ -130,13 +130,13 @@ _tabeltype(tables) = isempty(tables) ? Float64 : _tabeltype(_table_list(tables))
 # the options a problem keeps: an explicit `T` must be the state's value type (`eltype(u0)`
 # decides); it is then dropped, so a `remake` to another value type plans for that type
 function _state_options(o::CompileOptions, ::Type{E}) where {E}
-    o.T === nothing || o.T == valtype(E) || throw(ArgumentError(string("options.T = ", o.T,
-        " differs from the state's value type ", valtype(E), " (from ", E, "): the eltype of ",
+    o.T === nothing || o.T == value_type(E) || throw(ArgumentError(string("options.T = ", o.T,
+        " differs from the state's value type ", value_type(E), " (from ", E, "): the eltype of ",
         "u0 decides; pass u0 in ", o.T, " or leave T out of the options")))
     return CompileOptions(nothing, o.I, o.float64_ok, o.debug, o.index, o.lanes, o.clock, o.S, o.declared)
 end
 
-# the compile options of value type `V` on `backend`; `C`: the compute type (`compute_T`,
+# the compile options of value type `V` on `backend`; `C`: the compute type (`compute_type`,
 # FE-17; the state lanes hold `V`); `s`: the program, whose fields with a declared Float64
 # storage (`fixed`) need Float64 on the device too. A declared Float64 on a device whose
 # default float is Float32 registers its kernels (D-157 carve-out, `declared`; a front end that
@@ -167,7 +167,7 @@ function _plans!(plans, s::Program, initkeys, o::CompileOptions, ::Type{V}, back
 end
 
 function _check_eltype(::Type{E}, backend) where {E}
-    V = valtype(E)
+    V = value_type(E)
     V <: AbstractFloat ||
         throw(ArgumentError("the state value type must be a float type; got $V (from $E)"))
     isbitstype(E) || Exec.ishost(backend) || throw(ArgumentError(string("element type ", E,
@@ -184,7 +184,7 @@ function _field_problem(s::Program, state, u0, tspan, p, tables, inputs, backend
     E = problem_eltype(u0, p, tables)
     _check_eltype(E, backend)
     # the plans cache is shared by a problem's remakes, which threads may build at once
-    ip, sp = group_plans(group, kind == :map ? ExplicitMap() : ExplicitEuler(), valtype(E), backend, options)
+    ip, sp = group_plans(group, kind == :map ? ExplicitMap() : ExplicitEuler(), value_type(E), backend, options)
     return FieldProblem{_ndims(s), typeof(backend), typeof(index),
         typeof(stability), typeof(u0), typeof(p), E, typeof(tables)}(s, ip, sp, state, u0,
         (Float64(tspan[1]), Float64(tspan[2])), p, tables, inputs, backend, index, faces, stability,
@@ -474,9 +474,10 @@ end
 
 
 """
-    substeps(prob, alg, p = prob.p) -> Int
+    substeps(prob, alg, p = prob.p; dt = nothing) -> Int
 
-The substep count of `alg` on `prob` at parameters `p`: `⌈dt ρ(p) / 1.8⌉`; with a user
+The substep count of `alg` on `prob` at parameters `p` over the window `dt` (the `solve`
+keyword; `nothing`: the clock's period): `⌈dt ρ(p) / 1.8⌉`; with a user
 count `n`, the larger of `n` and the count of the bound over the terms the bound sees
 ([`seen_bound`](@ref)), or `n` when that is not finite; when the full bound is unknown the
 count is the user's for the terms it does not cover, and a warning names them, once per
@@ -487,7 +488,8 @@ terms the bound cannot see. A problem with no state (aux fields `K ~ rhs` only, 
 both front ends, [`substeps`](@ref)`(spec, alg, dt, pp)` of the problem's group, in front end
 B's words ([`ProblemTexts`](@ref)).
 """
-substeps(::FieldProblem, ::ExplicitMap, p = nothing; tables = nothing, inputs = nothing, stability = nothing, fields = nothing) = 1
+substeps(::FieldProblem, ::ExplicitMap, p = nothing; tables = nothing, inputs = nothing, stability = nothing, fields = nothing,
+    dt = nothing) = 1
 
 # the host values of the inputs the stability bound reads in an index (`bound_inputs`), each
 # shaped by site (a number stays a number): from the problem, or from an integrator's store
@@ -509,9 +511,9 @@ function _bound_inputs(i::FieldIntegrator; set = nothing)
 end
 # the warning's once-key: the program (its printed text, hashed) and the value-free reason
 _warn_key(prob::FieldProblem, why) = string(hash(sprint(print_program, prob.program)); base = 16) * "|" * string(why)
-function substeps(prob::FieldProblem, alg::Union{ExplicitEuler, ImplicitAlgorithm}, p = prob.p; tables = prob.tables,
-        inputs = _bound_inputs(prob), stability = prob.stability, fields = prob.group.spec.state)
-    dt = _window(alg, _clock(prob))
+function substeps(prob::FieldProblem, alg::Union{ExplicitEuler, AbstractImplicitFieldAlgorithm}, p = prob.p; tables = prob.tables,
+        inputs = _bound_inputs(prob), stability = prob.stability, fields = prob.group.spec.state, dt = nothing)
+    dt = _window(alg, dt, _clock(prob))
     isempty(prob.state) && return 0                 # aux fields only: one evaluation per window
     pp = with_tables(map(primal, p), tables; inputs)        # a policy: on the primal values
     # the one policy of both front ends (F3-01), in front end B's words
@@ -527,10 +529,12 @@ function _count(span, dt, what; window = string("dt = ", dt), route = "")
         window, ")", route)))
     return round(Int, span / dt)
 end
-# the window of `alg` in messages: its `dt` as given, or the clock's period when `dt` is left out
-_wtext(::ExplicitMap, clock, dt) = "one map step, 1"
-_wtext(a::FieldAlgorithm, clock, dt) = a.dt === nothing ? string("the window ", dt, ": the clock's period, no `dt` given") :
-                                       string("dt = ", dt)
+# the window of integrator `i` as `init` set it: `i.dt`, or the clock's period over the windows
+# per period (a window that divides the period exactly, as `_per` checks it)
+_iwindow(i) = (c = _clock(i.prob); c === nothing || i.per == 0 ? i.dt : Float64(c) / i.per)
+# the window of `alg` in messages
+_wtext(::ExplicitMap, dt) = "one map step, 1"
+_wtext(::AbstractFieldAlgorithm, dt) = string("dt = ", dt)
 # the largest `clock / n` (n ≤ 10⁴) that divides `span`, else `nothing`: a `dt` that lands on
 # both (a route in the messages)
 function _divider(span, clock)
@@ -545,7 +549,7 @@ function _count_route(alg, clock, dt, span, what)
     alg isa ExplicitMap && return string("; give ", what, " a whole number of map steps")
     d = clock === nothing ? nothing : _divider(span, clock)
     give = d === nothing ? string(what, " a multiple of ", dt) :
-           string(what, " a multiple of ", dt, ", or `", nameof(typeof(alg)), "(; dt = ", d, ")` (it divides both ", what,
+           string(what, " a multiple of ", dt, ", or `solve(prob, alg; dt = ", d, ")` (it divides both ", what,
                   " and the clock's period ", clock, ")")
     return string("; give ", give)
 end
@@ -554,25 +558,24 @@ end
 # and each kind in state order (F3 design §3.5: a steady field is solved before the transient
 # fields that read it, from their window-start values). A single algorithm steps every state
 # field, except the steady rows `0 ~ rhs` (F3-12b), which take `QuasiSteady` at its window
-function _groups(prob::FieldProblem, alg::FieldAlgorithm)
+function _groups(prob::FieldProblem, alg::AbstractFieldAlgorithm)
     st = prob.group.spec.steady
-    (isempty(st) || alg isa QuasiSteady) && return Tuple{FieldAlgorithm, Vector{String}}[(alg, prob.state)]
+    (isempty(st) || alg isa QuasiSteady) && return Tuple{AbstractFieldAlgorithm, Vector{String}}[(alg, prob.state)]
     rest = String[k for k in prob.state if !(k in st)]
     isempty(rest) && throw(ArgumentError(string(_algtext(alg), ": every field of the problem has a steady equation ",
         "`0 ~ rhs` (", join(("`$k`" for k in st), ", "), "), which `QuasiSteady` solves (a steady row's one algorithm); ",
-        "solve it with `QuasiSteady(; dt)`, or write the rows as rates `D(c) ~ rhs` to step them")))
-    return Tuple{FieldAlgorithm, Vector{String}}[(steady_alg(alg), String[k for k in prob.state if k in st]), (alg, rest)]
+        "solve it with `QuasiSteady()`, or write the rows as rates `D(c) ~ rhs` to step them")))
+    return Tuple{AbstractFieldAlgorithm, Vector{String}}[(steady_alg(alg), String[k for k in prob.state if k in st]), (alg, rest)]
 end
-_alg_dt(a::FieldAlgorithm) = hasproperty(a, :dt) ? getproperty(a, :dt) : nothing
 """
     steady_alg(alg) -> QuasiSteady
 
 The algorithm of a steady row `0 ~ rhs` that no pair names, beside `alg` (F3-12b, both front
-ends): `QuasiSteady` at `alg`'s window, with its `inner` and `solver_T` when it has them.
+ends): `QuasiSteady`, with its `linsolve` and `solver_type` when it has them.
 """
 steady_alg(a) = a isa QuasiSteady ? a :
-                QuasiSteady(; dt = _alg_dt(a), inner = a isa ImplicitAlgorithm ? a.inner : :auto,
-                    solver_T = a isa ImplicitAlgorithm ? a.solver_T : :auto, init = starts_steady(a) ? :steady : nothing)
+                QuasiSteady(; linsolve = a isa AbstractImplicitFieldAlgorithm ? a.linsolve : :auto,
+                    solver_type = a isa AbstractImplicitFieldAlgorithm ? a.solver_type : :auto, init = starts_steady(a) ? :steady : nothing)
 """
     starts_steady(alg) -> Bool
 
@@ -595,27 +598,24 @@ function _groups(prob::FieldProblem, g::FieldGroups)
         why = "the problem has no state field (its fields are aux fields `K ~ rhs`, evaluated once per window)"
         for (k, _) in g.pairs
             throw(ArgumentError(string("FieldGroups: `", _symtext(k), "` is not a state field: ", why,
-                "; give only `default`, an algorithm whose `dt` sets the window")))
+                "; give only `default`")))
         end
-        g.default === nothing && throw(ArgumentError(string("FieldGroups: ", why,
-            "; give `default`, an algorithm whose `dt` sets the window")))
-        return Tuple{FieldAlgorithm, Vector{String}}[(g.default, String[])]
+        g.default === nothing && throw(ArgumentError(string("FieldGroups: ", why, "; give `default`")))
+        return Tuple{AbstractFieldAlgorithm, Vector{String}}[(g.default, String[])]
     end
-    assigned = Dict{String, FieldAlgorithm}()
+    assigned = Dict{String, AbstractFieldAlgorithm}()
     for (k, a) in g.pairs
         key = _state_key(prob, k)
         haskey(assigned, key) && throw(ArgumentError("FieldGroups: the field `$key` has two algorithms"))
         assigned[key] = a
     end
-    out = Tuple{FieldAlgorithm, Vector{String}}[]
+    out = Tuple{AbstractFieldAlgorithm, Vector{String}}[]
     st = prob.group.spec.steady
     for (k, a) in assigned
         k in st && _check_steady(prob, k, a)
     end
-    # a steady field with no pair takes `QuasiSteady` beside the default (or, with none, at the
-    # window of the pairs)
-    wdt = something((_alg_dt(a) for (_, a) in g.pairs)..., Some(nothing))
-    sa = g.default === nothing ? QuasiSteady(; dt = wdt) : steady_alg(g.default)
+    # a steady field with no pair takes `QuasiSteady` beside the default
+    sa = g.default === nothing ? QuasiSteady() : steady_alg(g.default)
     for k in prob.state
         a = haskey(assigned, k) ? assigned[k] : k in st ? sa : g.default
         a === nothing && throw(ArgumentError(string("FieldGroups: the field `", k, "` has no algorithm; ",
@@ -626,11 +626,6 @@ function _groups(prob::FieldProblem, g::FieldGroups)
     length(unique(alg_family(a) for (a, _) in out)) == 1 || throw(ArgumentError(string(
         "FieldGroups: a rate algorithm and a map algorithm are never mixed in one problem ",
         "(split stepping is planned); got ", join((_algtext(a) for (a, _) in out), ", "))))
-    ws = [(a, _window(a, _clock(prob))) for (a, _) in out]
-    dts = unique(last.(ws))
-    length(dts) == 1 || throw(ArgumentError(string("FieldGroups: every group steps the same window; ",
-        "the algorithms give ", join(unique(_wtext(a, _clock(prob), d) for (a, d) in ws), ", "),
-        ": give every algorithm one `dt`, such as `dt = ", minimum(dts), "`")))
     return _qs_first(out)
 end
 # the state key of field `k` (a symbol of the index, or the key itself)
@@ -650,7 +645,7 @@ function _state_key(prob::FieldProblem, k)
 end
 
 CommonSolve.init(::FieldProblem, alg::LinearSolver; kw...) =
-    throw(linear_solver_refusal("`solve`/`init`", alg, "`solve(prob, ExplicitEuler(; dt))`"))
+    throw(linear_solver_refusal("`solve`/`init`", alg, "`solve(prob, ExplicitEuler(); dt)`"))
 
 # the save times (F4-05), sorted, one per time within `1e-9 dt` (concrete arguments: cached by
 # the precompile workload, whatever the problem)
@@ -697,42 +692,43 @@ const LARGE_SAVE_BYTES = 2^31
 end
 # a map saves whole steps only
 _map_saveat(sat, t0, dt, a1, clock) = foreach(s -> _whole(s - t0, dt) || _count(s - t0, dt, "a saveat time";
-    window = _wtext(a1, clock, dt), route = _count_route(a1, clock, dt, s - t0, "the saveat times")), sat)
+    window = _wtext(a1, dt), route = _count_route(a1, clock, dt, s - t0, "the saveat times")), sat)
 
-function CommonSolve.init(prob::FieldProblem, alg::FieldAlgorithm; verbose::Bool = true, kw...)
+function CommonSolve.init(prob::FieldProblem, alg::AbstractFieldAlgorithm; verbose::Bool = true, kw...)
     verbose && return _init(prob, alg, verbose; kw...)
     return Base.ScopedValues.with(() -> _init(prob, alg, verbose; kw...), Exec.VERBOSE => false)
 end
 function _init(
-        prob::FieldProblem, alg::FieldAlgorithm, verbose::Bool; saveat = (), save_start::Bool = true,
+        prob::FieldProblem, alg::AbstractFieldAlgorithm, verbose::Bool; dt = nothing, saveat = (), save_start::Bool = true,
         save_end::Bool = true, save_everystep::Bool = isempty(saveat), save_on::Bool = true, save_idxs = nothing,
-        callback = nothing, tstops = (), maxiters::Integer = typemax(Int), alias_u0::Bool = false,
+        callback = nothing, tstops = (), maxiters::Integer = typemax(Int),
+        alias::Union{Nothing, SciMLBase.ODEAliasSpecifier} = nothing,
         dense::Bool = true, _sciml = nothing, kw...)
     isempty(kw) || throw(ArgumentError(string("`solve`/`init` with ", _algtext(alg), ": the keyword",
         length(kw) == 1 ? " " : "s ", join(("`$k`" for k in keys(kw)), ", "), length(kw) == 1 ? " is" : " are",
         " not one of a field algorithm's (it steps fixed windows of `dt`): `saveat`, `save_start`, `save_end`, ",
-        "`save_everystep`, `save_on`, `save_idxs`, `callback`, `tstops`, `maxiters`, `verbose`, `alias_u0`, `dense`")))
+        "`save_everystep`, `save_on`, `save_idxs`, `callback`, `tstops`, `maxiters`, `verbose`, `alias`, `dense`, `dt`")))
     prob.group.spec.timefree && prob.tspan == (0.0, 0.0) && throw(ArgumentError(string("`init`: the system has no time ",
         "(a steady system), so there is nothing to step; `solve(prob)` solves it once")))
     groups = _groups(prob, alg)
     for (a, _) in groups
         alg_family(a) == prob.kind || throw(ArgumentError(string(
             "a ", prob.kind == :map ? "map program is stepped by ExplicitMap()" :
-                  "rate program is stepped by ExplicitEuler(; dt)",
+                  "rate program is stepped by `solve(prob, ExplicitEuler(); dt)`",
             "; got ",
             _algtext(a))))
-        _window(a, _clock(prob))
+        _window(a, dt, _clock(prob))
     end
     check_faces(prob.faces, prob.p)
     check_values(prob.p, prob.index)
     check_parameters(prob.stability, with_tables(map(primal, prob.p), prob.tables; inputs = _bound_inputs(prob)))
     t0, tf = prob.tspan
     a1, clock = first(groups[1]), _clock(prob)
-    w = _window(a1, clock)
+    w = _window(a1, dt, clock)
     # a time span that is not a whole number of windows ends with one shortened window (F4-03)
     whole = _whole(tf - t0, w)
     # (a map steps whole steps only: no shortened step)
-    whole || prob.kind != :map || _count(tf - t0, w, "the time span"; window = _wtext(a1, clock, w),
+    whole || prob.kind != :map || _count(tf - t0, w, "the time span"; window = _wtext(a1, w),
         route = _count_route(a1, clock, w, tf - t0, "the time span"))
     nsteps = whole ? round(Int, (tf - t0) / w) : floor(Int, (tf - t0) / w)
     dt = whole && nsteps > 0 ? (tf - t0) / nsteps : Float64(w)     # (whole: the step that lands on tf exactly)
@@ -751,20 +747,20 @@ function _init(
     _load_state!(st, prob.u0)
     # each group's count from the bound of its own rows (`restrict_bound`; one group: the
     # problem's bound)
-    ms = [length(groups) == 1 ? substeps(prob, a) :
+    ms = [length(groups) == 1 ? substeps(prob, a; dt = w) :
           substeps(prob, a, prob.p; tables = prob.tables, inputs = _bound_inputs(prob),
-              stability = restrict_bound(prob.stability, ks), fields = ks) for (a, ks) in groups]
+              stability = restrict_bound(prob.stability, ks), fields = ks, dt = w) for (a, ks) in groups]
     _check_coupling(prob, groups, prob.p; dt)
     run_step!(prob.backend, prob.program, prob.init, st, prob.p; rt = (t0, dt, 0), c = zero(E))
     pgood = copy(prob.p)
     # one group steps in alternating slots; several end each step in slot 1, so the next
     # group reads current values
     ends_in = length(groups) == 1 ? :parity : :slot1
-    # (`groups` holds abstract `FieldAlgorithm`s: through the barrier each group binds at its
+    # (`groups` holds abstract `AbstractFieldAlgorithm`s: through the barrier each group binds at its
     # own algorithm's type, and inference of an explicit `init` does not walk `bind_cache`'s
     # implicit method, the operator build and the solver; F3 review round 2)
     rts = Tuple(Base.inferencebarrier(bind_group)(prob.group, a, st, pgood; fields = ks, n = m, dt,
-                    c = zero(E), ends_in, backend = prob.backend, options = prob.options, V = valtype(E))
+                    c = zero(E), ends_in, backend = prob.backend, options = prob.options, V = value_type(E))
                 for ((a, ks), m) in zip(groups, ms))
     foreach(clamp_now!, rts)                        # the saved t0 state holds the mask values
     foreach(rt -> compile!(prob.backend, rt), rts)
@@ -828,13 +824,13 @@ function _steady_starts!(integ::FieldIntegrator, groups)
     empty!(integ.starts)
     for (a, ks) in groups
         starts_steady(a) || continue
-        qa = steady_start(a, integ.dt)
+        qa = steady_start(a)
         rt = _start_bind(ks) do
             # (the steady refusals first: a growth, no unique steady state)
             substeps(prob, qa, integ.pgood; tables = integ.tables, inputs = _bound_inputs(integ),
-                stability = restrict_bound(prob.stability, ks), fields = ks)
+                stability = restrict_bound(prob.stability, ks), fields = ks, dt = _iwindow(integ))
             Base.inferencebarrier(bind_group)(prob.group, qa, st, integ.pgood; fields = ks, n = 1,
-                dt = integ.dt, c = zero(E), ends_in = :slot1, backend = prob.backend, options = prob.options, V = valtype(E))
+                dt = integ.dt, c = zero(E), ends_in = :slot1, backend = prob.backend, options = prob.options, V = value_type(E))
         end
         rt.totals.where = StartText()
         compile!(prob.backend, rt)
@@ -846,16 +842,16 @@ function _steady_starts!(integ::FieldIntegrator, groups)
     return nothing
 end
 """
-    steady_start(alg, dt) -> QuasiSteady
+    steady_start(alg) -> QuasiSteady
 
-The steady solve of `alg`'s `init = :steady` (F3-12c, both front ends): `QuasiSteady` at the
-window `dt` with `alg`'s `inner` and `solver_T` (and `newton` for a `QuasiSteady` group);
-`inner = :auto` takes `DevicePCG` to `rtol = 1e-6` within 64 iterations (`STEADY_INNER`), the
+The steady solve of `alg`'s `init = :steady` (F3-12c, both front ends): `QuasiSteady` with
+`alg`'s `linsolve` and `solver_type` (and `newton` for a `QuasiSteady` group);
+`linsolve = :auto` takes `DevicePCG` to `reltol = 1e-6` within 64 iterations (`STEADY_INNER`), the
 host-checked steady solve of a system with no time.
 """
-steady_start(a, dt) = QuasiSteady(; dt, newton = a isa QuasiSteady ? a.newton : nothing,
-    inner = a isa ImplicitAlgorithm && a.inner !== :auto ? a.inner : STEADY_INNER,
-    solver_T = a isa ImplicitAlgorithm ? a.solver_T : :auto)
+steady_start(a) = QuasiSteady(; newton = a isa QuasiSteady ? a.newton : nothing,
+    linsolve = a isa AbstractImplicitFieldAlgorithm && a.linsolve !== :auto ? a.linsolve : STEADY_INNER,
+    solver_type = a isa AbstractImplicitFieldAlgorithm ? a.solver_type : :auto)
 """
     StartSubsteps(rule, keys)
 
@@ -894,7 +890,7 @@ function _bind_aux(prob::FieldProblem, st::FieldStore, p)
     ids = [i for (i, k) in enumerate(s.kernels) if startswith(k.key, "aux:")]
     isempty(ids) && return nothing
     E = eltype(prob)
-    _, sp = group_plans(prob.group, _default_alg(prob), valtype(E), prob.backend, prob.options; kernels = (Int[], ids))
+    _, sp = group_plans(prob.group, _default_alg(prob), value_type(E), prob.backend, prob.options; kernels = (Int[], ids))
     return _bind_steps(prob.backend, s, sp, st, p, prob.step.swaps, true, zero(E))
 end
 # evaluate the aux fields now, from the current state at the current time and step index
@@ -1198,7 +1194,7 @@ function _respan!(integ::FieldIntegrator, t0::Float64, tf::Float64, saveopts = g
     whole = _whole(tf - t0, dt)
     a1, clock = integ.runtimes[1].alg, _clock(integ.prob)
     whole || integ.prob.kind != :map || _count(
-        tf - t0, dt, "the time span"; window = _wtext(a1, clock, dt),
+        tf - t0, dt, "the time span"; window = _wtext(a1, dt),
         route = _count_route(a1, clock, dt, tf - t0, "the time span")
     )
     integ.t0, integ.tend = t0, tf
@@ -1346,7 +1342,7 @@ function _default_alg(prob::FieldProblem)
 end
 CommonSolve.init(prob::FieldProblem; kw...) = CommonSolve.init(prob, _default_alg(prob); kw...)
 CommonSolve.solve(prob::FieldProblem; kw...) = CommonSolve.solve(prob, _default_alg(prob); kw...)
-function CommonSolve.solve(prob::FieldProblem, alg::FieldAlgorithm; kw...)
+function CommonSolve.solve(prob::FieldProblem, alg::AbstractFieldAlgorithm; kw...)
     prob.group.spec.timefree && return _steady_solve(prob, alg; kw...)
     CommonSolve.solve!(
         CommonSolve.init(prob, alg; kw...))
@@ -1368,19 +1364,17 @@ function Base.show(io::IO, ::MIME"text/plain", prob::FieldProblem)
 end
 
 # A system with no time (F3 design §3.5, F3-12b): one steady solve from the cold `u0`, the
-# host-checked path of `init = :steady` (the inner solver to `rtol = 1e-6` within 64
-# iterations unless `inner` is given), returned as a one-state solution at t = 0
-const STEADY_INNER = Solvers.DevicePCG(; budget = 64)
-function _steady_solve(prob::FieldProblem, alg::FieldAlgorithm; kw...)
+# host-checked path of `init = :steady` (the inner solver to `reltol = 1e-6` within 64
+# iterations unless `linsolve` is given), returned as a one-state solution at t = 0
+const STEADY_INNER = Solvers.DevicePCG(; maxiters = 64)
+function _steady_solve(prob::FieldProblem, alg::AbstractFieldAlgorithm; kw...)
     alg isa QuasiSteady || throw(ArgumentError(string(_algtext(alg), ": the system has no time (a steady system, ",
-        "solved once by `QuasiSteady`): `solve(prob)` or `solve(prob, QuasiSteady(; inner, newton))`")))
-    alg.dt === nothing || throw(ArgumentError(string("QuasiSteady(; dt = ", alg.dt, "): the system has no time, ",
-        "so there is no window; leave `dt` out")))
+        "solved once by `QuasiSteady`): `solve(prob)` or `solve(prob, QuasiSteady(; linsolve, newton))`")))
     isempty(kw) || throw(ArgumentError(string("`solve` of a system with no time takes no ",
         join(("`$k`" for k in keys(kw)), ", "), ": it is solved once and returns that one state")))
-    a = QuasiSteady(; dt = 1.0, newton = alg.newton, inner = alg.inner === :auto ? STEADY_INNER : alg.inner,
-        solver_T = alg.solver_T)
-    s = finish!(CommonSolve.init(SciMLBase.remake(prob; tspan = (0.0, 1.0)), a; save_start = false))
+    a = QuasiSteady(; newton = alg.newton, linsolve = alg.linsolve === :auto ? STEADY_INNER : alg.linsolve,
+        solver_type = alg.solver_type)
+    s = finish!(CommonSolve.init(SciMLBase.remake(prob; tspan = (0.0, 1.0)), a; dt = 1.0, save_start = false))
     return FieldSolution(
         prob, [0.0], s.us[end:end], s.retcode, s.substeps, substep_counts(s),
         isempty(s.auxu) ? s.auxu : s.auxu[end:end], field_stats(s)
@@ -1871,7 +1865,7 @@ end
 # derivative parts into a table without them are refused with the route (the problem's type
 # is fixed for its integrator)
 function _table_value(::Type{T}, t, x) where {T}
-    valtype(typeof(x)) === typeof(x) || valtype(T) !== T || throw(ArgumentError(string("the table `", t,
+    value_type(typeof(x)) === typeof(x) || value_type(T) !== T || throw(ArgumentError(string("the table `", t,
         "` of this integrator holds ", T, " values; a value with derivative parts (", typeof(x), ") needs a problem ",
         "whose table holds them: `remake(prob; p = [", t, " => values])`, then `init`")))
     return convert(T, x)
@@ -1897,8 +1891,9 @@ function _counts(i::FieldIntegrator, p; tables, inputs)
     return _counts_all(i, p; tables, inputs)
 end
 function _counts_all(i::FieldIntegrator, p; tables, inputs)
-    ms = map(rt -> rt.all_state ? substeps(i.prob, rt.alg, p; tables, inputs) :
-                   substeps(i.prob, rt.alg, p; tables, inputs, stability = rt.stability, fields = rt.keys), i.runtimes)
+    ms = map(rt -> rt.all_state ? substeps(i.prob, rt.alg, p; tables, inputs, dt = _iwindow(i)) :
+                   substeps(i.prob, rt.alg, p; tables, inputs, stability = rt.stability, fields = rt.keys, dt = _iwindow(i)),
+             i.runtimes)
     _check_coupling(i.prob, [(rt.alg, rt.keys) for rt in i.runtimes], p; tables, inputs, dt = i.dt)
     return ms
 end
@@ -1924,7 +1919,7 @@ as the stability bound of the group's own rows needs at the current parameters, 
 `setp`, input and table writes. `integ.substeps` and `sol.substeps` are the first group's.
 
 ```julia
-ig = init(prob, FieldGroups(o => ExplicitEuler(; dt = 0.01); default = ExplicitEuler(; dt = 0.01, substeps = 1)))
+ig = init(prob, FieldGroups(o => ExplicitEuler(); default = ExplicitEuler(; substeps = 1)); dt = 0.01)
 substep_counts(ig)        # [1, 4]: c takes 1, o (diffusion) 4
 ```
 """

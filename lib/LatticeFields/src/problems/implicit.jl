@@ -34,10 +34,10 @@ and the stage's right side `cn`: `(cn − c)/(γh) + r`, `γh = G.rt[2]` (the la
 argument: `h` for Backward Euler, `h/2` for Crank–Nicolson, `2h/3` for BDF2). One residual for
 every implicit algorithm; they differ in `cn` and `γ` (the runtime's stages).
 """
-residual_rule(::ImplicitAlgorithm) = BERule()
+residual_rule(::AbstractImplicitFieldAlgorithm) = BERule()
 struct BERule end
 (::BERule)(kb, c, r, cn) = (cn - c) / Ex(kb, runtime!(kb, RT_DT)) + r
-residual_key(::ImplicitAlgorithm) = :be
+residual_key(::AbstractImplicitFieldAlgorithm) = :be
 # Crank–Nicolson's right side `q = uⁿ + (h/2) r(uⁿ)` (`G.rt[2] = h/2`, the iterate `c` the
 # substep's start `uⁿ`, at its start time `tⁿ`): one program for the group's rows at once
 struct QRule end
@@ -48,11 +48,11 @@ _gamma(::CrankNicolson) = 0.5
 _gamma(::BDF2) = 2 / 3
 _gamma(::QuasiSteady) = Inf             # (no time-step term: `1/(γh) = 0`)
 # … of its operator at a start (BDF2's Backward Euler substep)
-_gamma_start(a::ImplicitAlgorithm) = _gamma(a)
+_gamma_start(a::AbstractImplicitFieldAlgorithm) = _gamma(a)
 _gamma_start(::BDF2) = 1.0
 # … of the automatic counts (the substeps' rules 1 and 2 and the Newton count), which hold for
 # every stage: BDF2 counts as its Backward Euler start
-_gamma_count(a::ImplicitAlgorithm) = max(_gamma(a), _gamma_start(a))
+_gamma_count(a::AbstractImplicitFieldAlgorithm) = max(_gamma(a), _gamma_start(a))
 _algname(a) = string(nameof(typeof(a)))
 
 """
@@ -61,7 +61,7 @@ _algname(a) = string(nameof(typeof(a)))
 The semantic residual program of group `g` for implicit algorithm `alg` (`fuse_residual` of
 its rate program, once per residual key; thread-safe).
 """
-residual_program(g::FieldGroup, alg::ImplicitAlgorithm) =
+residual_program(g::FieldGroup, alg::AbstractImplicitFieldAlgorithm) =
     lock(() -> get!(() -> semantic(fuse_residual(g.spec.rate, residual_rule(alg); widen16 = true)), g.programs,
         (:residual, residual_key(alg))),
         _PLANS_LOCK)
@@ -390,7 +390,7 @@ function _implicit_eltype(u, key, alg, V)
         "Give the field `lattice_storage = Float32` or Float64, or step it with `ExplicitEuler`")))
 end
 # a number type in messages: a ForwardDiff Dual by its value type, not its full tag (batch 5 review S4)
-_typetext(T::Type) = (T <: Real && T !== valtype(T)) ? string("ForwardDiff Duals of ", valtype(T)) : string(T)
+_typetext(T::Type) = (T <: Real && T !== value_type(T)) ? string("ForwardDiff Duals of ", value_type(T)) : string(T)
 
 # the face conditions of field `id` of program `s` on axis `a` side `k` (1 low, 2 high), at
 # parameters `p`, in the solver's homogeneous form: `(:none,)`, `(:dirichlet,)`,
@@ -580,7 +580,7 @@ end
 
 # The `ImplicitCache` of the implicit algorithm `alg` for the fields `fields` of group `g` on
 # store `st` at raw parameters `p`, `n` substeps of `dt / n`
-function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fields, n, dt, c, backend, options, V,
+function bind_cache(alg::AbstractImplicitFieldAlgorithm, g::FieldGroup, st::FieldStore, p; fields, n, dt, c, backend, options, V,
         shared = nothing)
     s = group_program(g, alg)                       # the stepped program: the store's
     # a state with derivative parts (Dual parameters or a Dual start): the primal solve on a
@@ -670,7 +670,7 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
         mask = nv === nothing ? nothing : array(st, s.masks[s.rules[nv].mask].field, :cur)
         mval = nv === nothing ? zero(T) : T(_coefval(s.rules[nv].value, p))
         mvf = nv === nothing || s.rules[nv].vfield == 0 ? nothing : array(st, s.rules[nv].vfield, :cur)
-        lo = alg.lower === nothing ? nothing : T(alg.lower)
+        lo = alg.lower_bound === nothing ? nothing : T(alg.lower_bound)
         jarr(k) = haskey(own, "jac:$key.$k") ? own["jac:$key.$k"][1] : nothing
         nsite = length(u[1])
         part, hist = _zeros(st.backend, T, 3 * cld(nsite, NB)), _zeros(st.backend, T, 3)
@@ -686,7 +686,7 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
             continue
         end
         inner = _row_inner(alg, coupled)
-        solver_T = alg.solver_T === :auto ? T : alg.solver_T
+        solver_T = alg.solver_type === :auto ? T : alg.solver_type
         if !r.field
             numeric, _ = _numeric_operator(s, r, id, p, hγ, 1.0, mask !== nothing; coupled)
             ins = mask === nothing ? ("in.f" => resarr,) : ("in.f" => resarr, "mask" => mask)
@@ -750,7 +750,7 @@ function bind_cache(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fi
     iterate = any(r -> r.op.iterate, rows)
     smin = _steady_shift(op, keys, p)
     # (behind a barrier: a group that is not coupled compiles none of it, r1 M1)
-    cs = coupled ? Base.inferencebarrier(_bind_coupled)(rows, _krylov(alg.inner), st, s, rs, rst, sps, rcurss, swaps, keys,
+    cs = coupled ? Base.inferencebarrier(_bind_coupled)(rows, _krylov(alg.linsolve), st, s, rs, rst, sps, rcurss, swaps, keys,
         g.spec.init, backend, p, c, op, alg) : nothing
     newton = alg.newton !== nothing ? alg.newton : coupled ? _coupled_newton(alg, cs.linear, switch) :
              _auto_newton(alg, exact, switch, iterate, seen, ρin, h, b.θ, smin)
@@ -834,7 +834,7 @@ const NEWTON_CAP_THETA = 26
 # on the device; a host executor stops at the tolerance.
 const QS_NEWTON = 8
 const QS_NEWTON_CAP = 40
-_auto_newton(alg::ImplicitAlgorithm, exact, switch, iterate, seen, ρin, h, θ, smin) =
+_auto_newton(alg::AbstractImplicitFieldAlgorithm, exact, switch, iterate, seen, ρin, h, θ, smin) =
     _newton_count(exact, switch, seen, ρin, _gamma_count(alg), h, θ)
 function _auto_newton(::QuasiSteady, exact, switch, iterate, seen, ρin, h, θ, smin)
     exact && return switch || iterate ? QS_NEWTON : 1
@@ -855,7 +855,7 @@ _steady_shift(op::OperatorSpec, keys, p) =
     minimum((r.field ? NaN : max(-_coefsum(r.jloc, p), 0.0) for r in op.rows if r.key in keys); init = Inf)
 # whether the automatic count's second iteration is a switch's flip pass (no budget hit): the
 # time steppers' exact switch groups; a steady solve's iterations are all checked
-_flips(alg::ImplicitAlgorithm, exact, switch) = alg.newton === nothing && exact && switch
+_flips(alg::AbstractImplicitFieldAlgorithm, exact, switch) = alg.newton === nothing && exact && switch
 _flips(::QuasiSteady, exact, switch) = false
 function _newton_count(exact::Bool, switch::Bool, seen::Bool, ρin::Float64, γ::Float64, h::Float64, θ::Float64 = 0.0)
     exact && return switch ? 2 : 1
@@ -1237,7 +1237,7 @@ end
 # a rebind (new parameter values): the residual and operator launches bound again, the numeric
 # rows' coefficients set (`set_coefficients!`, no recompile); the hierarchy rebuilds at the
 # next window. In two parts as `rebind_launches`/`install_launches!`: the first may throw.
-function rebind_launches(rt::GroupRuntime{<:FieldStore, <:ImplicitAlgorithm}, p)
+function rebind_launches(rt::GroupRuntime{<:FieldStore, <:AbstractImplicitFieldAlgorithm}, p)
     steps = (_bind_steps(rt.backend, rt.program, rt.step, rt.store, p, rt.swaps, rt.all_state, rt.c),
         _bind_masks(rt.backend, rt.program, rt.init, rt.store, p, rt.swaps, rt.all_state, rt.c,
             Set(fieldid(rt.program, k) for k in rt.keys)))
@@ -1262,7 +1262,7 @@ function _row_mval(s::Program, r::ImplicitRow, p)
     nv = findfirst(x -> x isa NodeValueRule && x.field == fieldid(s, r.key), s.rules)
     return nv === nothing ? r.mval : convert(typeof(r.mval), _coefval(s.rules[nv].value, p))
 end
-function install_launches!(rt::GroupRuntime{<:FieldStore, <:ImplicitAlgorithm}, (steps, masks, payload))
+function install_launches!(rt::GroupRuntime{<:FieldStore, <:AbstractImplicitFieldAlgorithm}, (steps, masks, payload))
     rt.steps, rt.masks = steps, masks
     c = rt.cache
     c isa ImplicitCache ? _install_cache!(c, rt, rt.store, payload) : Base.inferencebarrier(_tangent_install!)(c, rt, payload)
@@ -1305,7 +1305,7 @@ function _install_cache!(c::ImplicitCache, rt::GroupRuntime, store::FieldStore, 
 end
 
 """
-    substeps(spec::GroupSpec, alg::ImplicitAlgorithm, dt, pp; fields = spec.state, stability = spec.stability,
+    substeps(spec::GroupSpec, alg::AbstractImplicitFieldAlgorithm, dt, pp; fields = spec.state, stability = spec.stability,
              key = identity, texts = ProblemTexts(spec.texts.route)) -> Int
 
 The substep count of an implicit algorithm (F3 design §3.7), the same policy as the explicit
@@ -1325,8 +1325,8 @@ or unknown, puts the term's Gershgorin bound in the sum instead). No stability b
 needed: an unknown bound is no refusal (the device check decides). When a rule raises the
 user's count, a warning says which, once per cause (`key`).
 """
-function substeps(spec::GroupSpec, alg::ImplicitAlgorithm, dt::Real, pp; fields = spec.state, stability = spec.stability,
-        key = identity, texts::PolicyTexts = ProblemTexts(spec.texts.route))
+function substeps(spec::GroupSpec, alg::AbstractImplicitFieldAlgorithm, dt::Real, pp; fields = spec.state, stability = spec.stability,
+        key = identity, texts::AbstractPolicyTexts = ProblemTexts(spec.texts.route))
     isempty(fields) && return 0
     dt = Float64(dt)
     r = bound_report(stability, pp)
@@ -1343,7 +1343,7 @@ end
 # the parts of the implicit count (`substeps`, and `field_report`'s cause): `m` the user's count
 # (or the least, `_least_count`), `n1` the growth rule (`g` the growth the operator sees), `n2`
 # the convergence rule of the terms out of the operator (`b` their bounds, `ρrob` the Robin part)
-function _implicit_rules(spec::GroupSpec, alg::ImplicitAlgorithm, dt::Float64, pp, fields)
+function _implicit_rules(spec::GroupSpec, alg::AbstractImplicitFieldAlgorithm, dt::Float64, pp, fields)
     op = _operator(spec, alg)
     keys = collect(String, fields)
     g = growth(op, keys, pp)
@@ -1372,11 +1372,11 @@ function _raise_text(op::OperatorSpec, keys, alg, n, rule, cycle, robin)
         "iterations, which converge only when the substep keeps their contraction at most 1/2; fewer substeps would ",
         "not converge")
 end
-substeps(g::FieldGroup, alg::ImplicitAlgorithm, dt::Real, pp; kw...) = substeps(g.spec, alg, dt, pp; kw...)
+substeps(g::FieldGroup, alg::AbstractImplicitFieldAlgorithm, dt::Real, pp; kw...) = substeps(g.spec, alg, dt, pp; kw...)
 # QuasiSteady: one solve per window (no count), after the parameter refusals and the steady
 # refusals (F3 design §3.5), at build and at every parameter write
 function substeps(spec::GroupSpec, alg::QuasiSteady, dt::Real, pp; fields = spec.state, stability = spec.stability,
-        key = identity, texts::PolicyTexts = ProblemTexts(spec.texts.route))
+        key = identity, texts::AbstractPolicyTexts = ProblemTexts(spec.texts.route))
     isempty(fields) && return 0
     r = bound_report(stability, pp)
     check_declared(stability, pp)
@@ -1536,5 +1536,5 @@ end
 # the least automatic count: 1; Crank–Nicolson on data that can jump every window takes 2, so
 # that each window has one Crank–Nicolson substep after its damped one (with one substep the
 # window is Backward Euler in two halves: first order at twice the cost, batch 4 review r1 S1)
-_least_count(spec::GroupSpec, alg::ImplicitAlgorithm, keys) = 1
+_least_count(spec::GroupSpec, alg::AbstractImplicitFieldAlgorithm, keys) = 1
 _least_count(spec::GroupSpec, alg::CrankNicolson, keys) = _jumps(spec.rate, spec.rate, keys, spec, true) ? 2 : 1
