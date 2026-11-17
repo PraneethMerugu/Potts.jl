@@ -248,7 +248,7 @@ function _pkernel!(deps, tdeps, s::Program{N}, k, n) where {N}
 end
 
 """
-    jacobian_sparsity(prob) -> SparseMatrixCSC{Bool, Int}
+    field_jacobian_sparsity(prob) -> SparseMatrixCSC{Bool, Int}
 
 The sparsity pattern of the Jacobian `∂f/∂u` of the right side of `prob` (an `ODEProblem`
 `discretize` returned), read off its IR (F4-07; F4 design §3.7): entry `(i, j)` is stored when
@@ -262,7 +262,7 @@ both. A masked site keeps its row, so a mask that moves with an input write stay
 A rate that reads a reduction of the state (a sum over the lattice) would make the rows
 dense: such a system is refused, with the route `jvp`.
 """
-jacobian_sparsity(prob) = _sparsity(lattice_metadata(prob)::LatticeMetadata)
+field_jacobian_sparsity(prob) = _sparsity(lattice_metadata(prob)::LatticeMetadata)
 function _sparsity(m::LatticeMetadata)
     fp = m.problem
     m.family == :ode || throw(ArgumentError("a map's problem (a `DiscreteProblem`) has no Jacobian"))

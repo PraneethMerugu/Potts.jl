@@ -25,7 +25,7 @@ using ForwardDiff: ForwardDiff
 dfdom = [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
 dfdisc() = LatticeDiscretization(Grid((8, 8)); T = Float64)
 # `dfc` decays and diffuses from its default; `dfa` is an aux field (its default is unused)
-dfsys(bcs = []; name = :df) = PDESystem([D(dfc(t, x, y)) ~ dfD * Δ(dfc(t, x, y)) - dfk * dfc(t, x, y) + 0.1 * x],
+dfsys(bcs = []; name = :df) = PDESystem([D(dfc(t, x, y)) ~ dfD * laplacian(dfc(t, x, y)) - dfk * dfc(t, x, y) + 0.1 * x],
     bcs, dfdom, [t, x, y], [dfc(t, x, y)], [dfD, dfk]; name)
 dfmsg(f) = try
     f()
@@ -48,7 +48,7 @@ end
     @test SciMLBase.successful_retcode(o1) && o1.u[end] == o2.u[end]
     @test maximum(abs, o1.u[end] .- a.u[end]) < 1e-3                         # the ODE path agrees
     # an aux field's default is not an initial value (it has none); the run is unchanged
-    sa = PDESystem([D(dfc(t, x, y)) ~ dfD * Δ(dfc(t, x, y)) - dfk * dfc(t, x, y) + 0.1 * dfa(t, x, y),
+    sa = PDESystem([D(dfc(t, x, y)) ~ dfD * laplacian(dfc(t, x, y)) - dfk * dfc(t, x, y) + 0.1 * dfa(t, x, y),
             dfa(t, x, y) ~ x], [], dfdom, [t, x, y], [dfc(t, x, y), dfa(t, x, y)], [dfD, dfk]; name = :dfa)
     pa = discretize(sa, dfdisc())
         @test pa.u0 == pd.u0 && isapprox(solve(pa, ExplicitEuler(); dt = 1.0e-3).u[end], a.u[end]; rtol = 1.0e-12)
@@ -58,13 +58,13 @@ end
 @testitem "F4-E3: with a default and a condition, the condition wins" setup = [LP_fielddefaults] tags = [:latticepde, :fielddefaults] begin
 @testset "F4-E3: with a default and a condition, the condition wins" begin
     p = discretize(dfsys([dfc(0, x, y) ~ x]), dfdisc())
-    q = discretize(PDESystem([D(dfn(t, x, y)) ~ dfD * Δ(dfn(t, x, y)) - dfk * dfn(t, x, y) + 0.1 * x],
+    q = discretize(PDESystem([D(dfn(t, x, y)) ~ dfD * laplacian(dfn(t, x, y)) - dfk * dfn(t, x, y) + 0.1 * x],
             [dfn(0, x, y) ~ x], dfdom, [t, x, y], [dfn(t, x, y)], [dfD, dfk]; name = :dfn), dfdisc())
     @test p.u0 == q.u0 && !any(==(0.3), p.u0)
         @test solve(p, ExplicitEuler(); dt = 1.0e-3).u[end] == solve(q, ExplicitEuler(); dt = 1.0e-3).u[end]
     @test solve(p, Tsit5(); abstol = 1e-10, reltol = 1e-10).u[end] == solve(q, Tsit5(); abstol = 1e-10, reltol = 1e-10).u[end]
     # `initial_conditions` over the default too
-    r = discretize(PDESystem([D(dfc(t, x, y)) ~ dfD * Δ(dfc(t, x, y)) - dfk * dfc(t, x, y) + 0.1 * x], [], dfdom,
+    r = discretize(PDESystem([D(dfc(t, x, y)) ~ dfD * laplacian(dfc(t, x, y)) - dfk * dfc(t, x, y) + 0.1 * x], [], dfdom,
             [t, x, y], [dfc(t, x, y)], [dfD, dfk]; name = :dfi, initial_conditions = Dict(dfc(t, x, y) => 0.9)), dfdisc())
     @test all(==(0.9), r.u0)
     # a field with no value at all is still refused by name
@@ -78,7 +78,7 @@ end
 @testset "F4-E3: a Dual default: the derivative against central differences" begin
     function J(v)
         @variables dfv(..) = v
-        s = PDESystem([D(dfv(t, x, y)) ~ dfD * Δ(dfv(t, x, y)) - dfk * dfv(t, x, y) * dfv(t, x, y)], [], dfdom, [t, x, y],
+        s = PDESystem([D(dfv(t, x, y)) ~ dfD * laplacian(dfv(t, x, y)) - dfk * dfv(t, x, y) * dfv(t, x, y)], [], dfdom, [t, x, y],
             [dfv(t, x, y)], [dfD, dfk]; name = :dfd)
             return sum(solve(discretize(s, dfdisc()), ExplicitEuler(; substeps = 1); dt = 1.0e-3).u[end])   # (a nonlinear decay: no bound)
     end

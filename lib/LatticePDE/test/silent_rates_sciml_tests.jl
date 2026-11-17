@@ -6,7 +6,7 @@
         # automatic substeps"); the count is within 10 % of the true one (8², every site kind 2)
         @parameters Da[1:2] = [1.0, 3.0] Db[1:2] = [0.5, 0.0]
         sys = ssys(
-            [D(ce) ~ (at(Da, qe) - at(Db, qe) + 2) * Δ(ce)], [c(0, x, y) ~ 1.0 + sin(1000x + 700y)], [ce, qe], [Da, Db];
+            [D(ce) ~ (value_at(Da, qe) - value_at(Db, qe) + 2) * laplacian(ce)], [c(0, x, y) ~ 1.0 + sin(1000x + 700y)], [ce, qe], [Da, Db];
             T = 0.02
         )
         K2 = fill(Int32(2), 8, 8)
@@ -26,8 +26,8 @@ end
         Kc = checker(8, 1, 2)
         grouped = ceil(Int, 0.01 * 1.0 * 4 * 2 * 64 / 1.8)
         for (name, rate) in (
-                ("DivKGrad", (1 / at(Dw, qe)) * DivKGrad(:arithmetic)(at(Dw, qe), ce)),
-                ("raw flux", (1 / at(Dw, qe)) * Dxs(at(Dw, qe) * Dxs(ce)) + (1 / at(Dw, qe)) * Dys(at(Dw, qe) * Dys(ce))),
+                ("DivKGrad", (1 / value_at(Dw, qe)) * DivKGrad(:arithmetic)(value_at(Dw, qe), ce)),
+                ("raw flux", (1 / value_at(Dw, qe)) * Dxs(value_at(Dw, qe) * Dxs(ce)) + (1 / value_at(Dw, qe)) * Dys(value_at(Dw, qe) * Dys(ce))),
             )
             sys = ssys([D(ce) ~ rate], [c(0, x, y) ~ 1.0 + sin(1000x + 700y)], [ce, qe], [Dw]; T = 0.02)
             ρt = sradius(sys, 8, [qe => Kc])
@@ -52,7 +52,7 @@ end
         # an explicit count under the bound is raised (bda31989: n = 2 kept, 1.7e75, Success), and
         # the solution stays within its initial range
         @parameters Dw3[1:3] = [0.01, 1.0, 1.0]
-        sys = ssys([D(ce) ~ (1 / at(Dw3, qb)) * Δ(ce)], [c(0, x, y) ~ 1.0 + sin(1000x + 700y)], [ce, qb], [Dw3])
+        sys = ssys([D(ce) ~ (1 / value_at(Dw3, qb)) * laplacian(ce)], [c(0, x, y) ~ 1.0 + sin(1000x + 700y)], [ce, qb], [Dw3])
         Kb = checker(4, 1, 2)
         p = sown(sys; inputs = [qb => Kb])
         sol = solve(p, ExplicitEuler(; substeps = 2); dt = 0.025)
@@ -65,7 +65,7 @@ end
         @test sgrew(solve!(ig)) && !sgrew(sol)
         # a negative entry is negative diffusion, refused
         @parameters Dwn[1:2] = [-0.01, 1.0]
-        sys = ssys([D(ce) ~ (1 / at(Dwn, qe)) * Δ(ce)], [c(0, x, y) ~ 1.0], [ce, qe], [Dwn])
+        sys = ssys([D(ce) ~ (1 / value_at(Dwn, qe)) * laplacian(ce)], [c(0, x, y) ~ 1.0], [ce, qe], [Dwn])
         @test occursin(
             "is negative at these parameters", emsg(
                 () -> solve(
@@ -79,13 +79,13 @@ end
         # its row (305be9ad: the diagonal took min m · min K against max m · max K, refused as
         # coupled whenever m varies); a constant multiplier is the control
         @parameters Dk2[1:2] = [0.01, 1.0]
-        for m in (at(Dk2, qe), 1.0)
-            sys = ssys([D(ce) ~ m * Δ(ce) - 0.2ce - 0.1oe, D(oe) ~ -oe], [c(0, x, y) ~ 1.0, o(0, x, y) ~ 1.0], [ce, oe, qe], [Dk2])
+        for m in (value_at(Dk2, qe), 1.0)
+            sys = ssys([D(ce) ~ m * laplacian(ce) - 0.2ce - 0.1oe, D(oe) ~ -oe], [c(0, x, y) ~ 1.0, o(0, x, y) ~ 1.0], [ce, oe, qe], [Dk2])
             @test sok(solve(sown(sys; inputs = [qe => checker(4, 1, 2)]), ExplicitEuler(); dt = 0.025))
         end
         # … and a row that is not dominant (the cross term outweighs the reaction) on a loop is still
         # refused (`o` reads `c` back; one way it is bounded since F3-25)
-        sys = ssys([D(ce) ~ at(Dk2, qe) * Δ(ce) - 0.05ce - 0.1oe, D(oe) ~ -oe + 0.1ce], [c(0, x, y) ~ 1.0, o(0, x, y) ~ 1.0], [ce, oe, qe], [Dk2])
+        sys = ssys([D(ce) ~ value_at(Dk2, qe) * laplacian(ce) - 0.05ce - 0.1oe, D(oe) ~ -oe + 0.1ce], [c(0, x, y) ~ 1.0, o(0, x, y) ~ 1.0], [ce, oe, qe], [Dk2])
         @test occursin("coupled", emsg(() -> solve(sown(sys; inputs = [qe => checker(4, 1, 2)]), ExplicitEuler(); dt = 0.025)))
     end
 end
@@ -108,8 +108,8 @@ end
         # refused at index 0); a wrong interval would read the zero entry `Dz4[1]`
         @parameters Dz4[1:3] = [0.0, 1.0, 2.0] Dy4[1:2] = [1.0, 2.0]
         for (rate, q, K, tab) in (
-                (-(1 / at(Dz4, 2qb)) * ce, qb, checker(4, 1, 2), Dz4),
-                (-(1 / at(Dy4, max(qe, 1))) * ce, qe, checker(4, 0, 2), Dy4),
+                (-(1 / value_at(Dz4, 2qb)) * ce, qb, checker(4, 1, 2), Dz4),
+                (-(1 / value_at(Dy4, max(qe, 1))) * ce, qe, checker(4, 0, 2), Dy4),
             )
             sys = ssys([D(ce) ~ rate], [c(0, x, y) ~ 1.0], [ce, q], [tab])
             sol = solve(sown(sys; inputs = [q => K]), ExplicitEuler(); dt = 0.025)
@@ -123,7 +123,7 @@ end
         # (h) the interval of an index is over the current input values: an undeclared index map
         # with no 0 takes an automatic count (bda31989: refused at index 0) …
         @parameters Tq[1:2] = [0.01, 1.0]
-        sys = ssys([D(ce) ~ -(1 / at(Tq, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Tq])
+        sys = ssys([D(ce) ~ -(1 / value_at(Tq, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Tq])
         p = sown(sys; inputs = [qe => checker(4, 1, 2)])
         sol = solve(p, ExplicitEuler(); dt = 0.025)
         @test substep_counts(sol)[1] == ceil(Int, 0.025 * 100 / 1.8) && sok(sol)
@@ -142,7 +142,7 @@ end
     @testset "F2 (h): `kb - 1` reaches index 0 where `kb` holds a 1" begin
         # `kb − 1` reaches index 0 where `kb` holds a 1, though `kb` never holds 0
         @parameters Tb[1:3] = [1.0, 1.0, 1.0]
-        sys = ssys([D(ce) ~ -(1 / at(Tb, qb - 1)) * ce], [c(0, x, y) ~ 1.0], [ce, qb], [Tb])
+        sys = ssys([D(ce) ~ -(1 / value_at(Tb, qb - 1)) * ce], [c(0, x, y) ~ 1.0], [ce, qb], [Tb])
         err = emsg(() -> solve(sown(sys; inputs = [qb => checker(4, 1, 2)]), ExplicitEuler(); dt = 0.025))
         @test occursin("index 0", err) && occursin("at site", err)
         p = sown(sys; inputs = [qb => checker(4, 2, 3)])                              # control: kb ≥ 2
@@ -153,7 +153,7 @@ end
         # an `ifelse` index is decided at the sites where the host values give it: with no kind 1,
         # `ifelse(k == 1, 0, k)` never reads index 0 (305be9ad: refused, no site named, by the hull)
         @parameters Tz[1:2] = [1.0, 1.0]
-        sys = ssys([D(ce) ~ -(1 / at(Tz, ifelse(qe == 1, 0, qe))) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Tz])
+        sys = ssys([D(ce) ~ -(1 / value_at(Tz, ifelse(qe == 1, 0, qe))) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Tz])
         @test sok(solve(sown(sys; inputs = [qe => fill(Int32(2), 4, 4)]), ExplicitEuler(); dt = 0.025))
         K1 = fill(Int32(2), 4, 4); K1[3, 2] = 1
         err = emsg(() -> solve(sown(sys; inputs = [qe => K1]), ExplicitEuler(); dt = 0.025))
@@ -166,7 +166,7 @@ end
         # (i) a coefficient that is not finite where the inputs reach is refused on every path:
         # the ODE form at discretize (bda31989: accepted, a rate of Inf) …
         @parameters Dz5[1:2] = [0.0, 1.0]
-        sys = ssys([D(ce) ~ -(1 / at(Dz5, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dz5])
+        sys = ssys([D(ce) ~ -(1 / value_at(Dz5, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dz5])
         # (F4-01: at the first call of the right side; base: at `discretize`)
         err = emsg(
             () -> solve(
@@ -187,13 +187,13 @@ end
     end
 end
 
-@testitem "F2 (l): the CPU `at2` reads as `at` does" setup = [LP_silent] tags = [:latticepde, :silent] begin
-    @testset "F2 (l): the CPU `at2` reads as `at` does" begin
-        # (l) the CPU `at2` reads as `at` does: index 0 reads 0, each index clamps into its axis
+@testitem "F2 (l): the CPU pair-table `value_at` reads as the kernel does" setup = [LP_silent] tags = [:latticepde, :silent] begin
+    @testset "F2 (l): the CPU pair-table `value_at` reads as the kernel does" begin
+        # (l) the CPU pair-table `value_at` reads as the kernel does: index 0 reads 0, each index clamps into its axis
         # (bda31989: BoundsError)
         J3 = reshape(collect(1.0:9.0), 3, 3)
-        @test at2(J3, 0, 1) == 0.0 && at2(J3, 1, 0) == 0.0 && at2(J3, 9, 1) == J3[end, 1] && at2(J3, -1, 9) == J3[1, end]
-        @test at2(J3, 2, 3) == J3[2, 3]                                                  # control
+        @test value_at(J3, 0, 1) == 0.0 && value_at(J3, 1, 0) == 0.0 && value_at(J3, 9, 1) == J3[end, 1] && value_at(J3, -1, 9) == J3[1, end]
+        @test value_at(J3, 2, 3) == J3[2, 3]                                                  # control
     end
 end
 
@@ -290,7 +290,7 @@ end
     @testset "F3-05: a linear solver where B takes a field algorithm" begin
         @parameters Dm1 = 0.1
         p = discretize(
-            psys([D(ce) ~ Dm1 * Δ(ce)], [c(0, x, y) ~ x], [Dm1]),
+            psys([D(ce) ~ Dm1 * laplacian(ce)], [c(0, x, y) ~ x], [Dm1]),
             LatticeDiscretization(Grid((8, 8)); T = Float32)
         )
         e(f) = try

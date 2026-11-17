@@ -168,7 +168,7 @@ const WARN = Base.CoreLogging.Warn
 r1tight() = DevicePCG(; reltol = 1.0e-13, maxiters = 200)
 r1rel(a, b) = maximum(abs, a .- b) / maximum(abs, b)
 
-# F3-20: a hexagonal lattice (axial coordinates; `Δ` is `2/(3h²) Σₙ (cₙ − c)` over the six
+# F3-20: a hexagonal lattice (axial coordinates; `laplacian` is `2/(3h²) Σₙ (cₙ − c)` over the six
 # neighbors ±e₁, ±e₂, ±(e₁ − e₂)): the implicit solve's operator has its three face directions.
 # The hand rate on `[0, 1]²` with `n × n` sites (`h = 1/n`, the site `(i, j)` at
 # `((i − ½)h, (j − ½)h)`): `r(u)_i = m_i D 2/(3h²) Σₙ (u_n − u_i) − k u_i + f_i`, a neighbor
@@ -215,8 +215,8 @@ hexdisc(sys; T = Float64, inputs = [bqe => HEXKIND], kw...) =
     LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((HEXN, HEXN); geometry = HEX); T, kw...); inputs))
 const HEXPER = [bc(t, 0, y) ~ bc(t, 1, y), bc(t, x, 0) ~ bc(t, x, 1)]
 
-# Review r3 N1: an operator of another field in a row (cross-diffusion `0.1 Δ(q)` in the rate of
+# Review r3 N1: an operator of another field in a row (cross-diffusion `0.1 laplacian(q)` in the rate of
 # `c`) stays in the residual, a defect term the Newton check covers (no bound sees it: newton 4,
 # warned with the term), so the owned implicit path solves what `:ode` lowers. Base (e7068add,
-# ~/lpwork/f3b6-nc-r3.log): "`Δ` is symbolic-only" from the cross term's bound.
+# ~/lpwork/f3b6-nc-r3.log): "`laplacian` is symbolic-only" from the cross term's bound.
 using OrdinaryDiffEqSDIRK: ImplicitEuler

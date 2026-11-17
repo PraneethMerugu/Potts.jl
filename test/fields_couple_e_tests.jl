@@ -15,7 +15,7 @@
 @testitem "F4-E1: a constant symbolic binding is a constant (mixed vectors, one binding)" setup = [CoupleSetup] tags = [:potts, :fields_couple_e] begin
     @testset "F4-E1: a constant symbolic binding is a constant (mixed vectors, one binding)" begin
         host = CpHost(; name = :m)
-        vol = Potts.at(Potts.B.volume, Potts.B.owner)
+        vol = Potts.value_at(Potts.B.volume, Potts.B.owner)
         # the mixed vector: Julia promotes the `false` (the real reason of the bug)
         b = [CpPDE.endo => Potts.kind == :A, CpPDE.vol => vol]
         @test last(eltype(b).parameters) === Potts.Num

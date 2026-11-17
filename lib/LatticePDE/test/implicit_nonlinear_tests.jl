@@ -4,25 +4,25 @@
     @testset "F3-09a: local nonlinear rows: one Newton step keeps order 1" begin
         dts = [0.02 / 2^k for k in 0:3]
         # logistic growth `3 c (1 − c)`
-        es, o, pb, _ = nl_orders(0.05 * Δ(bce) + 3 * bce * (1 - bce), NLIC; T = 0.5, dts)
+        es, o, pb, _ = nl_orders(0.05 * laplacian(bce) + 3 * bce * (1 - bce), NLIC; T = 0.5, dts)
         @test all(q -> abs(q - 1) < 0.1, o)                 # (measured 1.06, 1.03, 1.02)
         ig = init(pb, BackwardEuler(; linsolve = BTIGHT); dt = 0.02, save_everystep = false)
         c = only(ig.runtimes).cache
         @test c.newton == 1 && c.iterate && c.exact && only(c.rows).op.iterate && !only(c.rows).op.switch
         @test bwarm(ig) == 0
         # Michaelis–Menten uptake `−V c/(K + c)` with a time-dependent source (read at tⁿ⁺¹)
-        es, o, _, _ = nl_orders(0.05 * Δ(bce) - 2 * bce / (0.5 + bce) + 1 + 0.5 * sin(10t), NLIC; T = 0.5, dts)
+        es, o, _, _ = nl_orders(0.05 * laplacian(bce) - 2 * bce / (0.5 + bce) + 1 + 0.5 * sin(10t), NLIC; T = 0.5, dts)
         @test all(q -> abs(q - 1) < 0.1, o)                 # (measured 1.00, 1.00, 1.00)
         # … stiff: V/K = 1600, `h |∂f/∂c|` up to 32; the errors fall at least linearly and stay small
         # (without the derivative the uptake is explicit and unstable at these steps)
-        es, o, _, _ = nl_orders(0.05 * Δ(bce) - 40 * bce / (0.025 + bce) + 20 + 10 * sin(10t), NLIC; T = 0.3, dts)
+        es, o, _, _ = nl_orders(0.05 * laplacian(bce) - 40 * bce / (0.025 + bce) + 20 + 10 * sin(10t), NLIC; T = 0.3, dts)
         @test all(q -> q > 0.9, o) && maximum(es) < 1.0e-3     # (measured 5.7e-4 … 7.9e-7)
     end
 end
 
 @testitem "F3-09a: the switch: newton = 2 by default keeps order 1" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
     @testset "F3-09a: the switch: newton = 2 by default keeps order 1" begin
-        sw = 0.05 * Δ(bce) - 8 * max(bce - 0.4, 0) / 0.6 + 2 + 2 * sin(6t)
+        sw = 0.05 * laplacian(bce) - 8 * max(bce - 0.4, 0) / 0.6 + 2 + 2 * sin(6t)
         dts = [0.05 / 2^k for k in 0:3]
         e2, o2, pb, u2 = nl_orders(sw, NLIC; T = 0.3, dts)
         e1, o1, _, u1 = nl_orders(sw, NLIC; T = 0.3, dts, newton = 1)
@@ -44,7 +44,7 @@ end
         # default user sees no warning (base 2d213237, ~/lpwork/f3r1-nc-base.log: 2 hits and the
         # budget warning in Float32 and Float64); a given `newton = 2` checks as before
         sys = PDESystem(
-            [D(bce) ~ 0.05 * Δ(bce) - 8 * max(bce - 0.4, 0) / 0.6 + 2 + 2 * sin(6t)], [bc(0, x, y) ~ NLIC], bdom(3.0),
+            [D(bce) ~ 0.05 * laplacian(bce) - 8 * max(bce - 0.4, 0) / 0.6 + 2 + 2 * sin(6t)], [bc(0, x, y) ~ NLIC], bdom(3.0),
             [t, x, y], [bce], Any[]; name = :sw
         )
         for T in (Float32, Float64)
@@ -63,7 +63,7 @@ end
         # `20 c² − 20 c` from c = 0.75: `∂f/∂c = 10` at the start, `h = 0.1`: the shift `1/h − 10`
         # is clamped at `1/(2h)`; the rest stays in the residual and the field decays
         sys = PDESystem(
-            [D(bce) ~ 0.05 * Δ(bce) + 20 * bce^2 - 20 * bce], [bc(0, x, y) ~ 0.75], bdom(0.3), [t, x, y], [bce], Any[];
+            [D(bce) ~ 0.05 * laplacian(bce) + 20 * bce^2 - 20 * bce], [bc(0, x, y) ~ 0.75], bdom(0.3), [t, x, y], [bce], Any[];
             name = :clamp
         )
         pb = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64))
@@ -77,7 +77,7 @@ end
         # reads the time: no interval bounds it) warns too
         pg = discretize(
             PDESystem(
-                [D(bce) ~ 0.05 * Δ(bce) + 8 * (1 + x) * (1 + t) * bce], [bc(0, x, y) ~ 0.5], bdom(0.3), [t, x, y],
+                [D(bce) ~ 0.05 * laplacian(bce) + 8 * (1 + x) * (1 + t) * bce], [bc(0, x, y) ~ 0.5], bdom(0.3), [t, x, y],
                 [bce], Any[]; name = :sitegrowth
             ), LatticeDiscretization(Grid((8, 8)); T = Float64)
         )
@@ -89,7 +89,7 @@ end
         ig = init(
             discretize(
                 PDESystem(
-                    [D(bce) ~ 0.05 * Δ(bce) - 20 * bce], [bc(0, x, y) ~ 0.75], bdom(0.3), [t, x, y], [bce], Any[];
+                    [D(bce) ~ 0.05 * laplacian(bce) - 20 * bce], [bc(0, x, y) ~ 0.75], bdom(0.3), [t, x, y], [bce], Any[];
                     name = :noclamp
                 ), LatticeDiscretization(Grid((8, 8)); T = Float64)
             ), BackwardEuler()
@@ -103,7 +103,7 @@ end
 @testitem "F3-09b: advection at the rule-2 count; the Newton check (R2-M1)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
     @testset "F3-09b: advection at the rule-2 count; the Newton check (R2-M1)" begin
         # ρ_adv = 2 (1 + 0.5) · 16 = 48: n = ⌈2 · 0.25 · 48⌉ = 24 substeps, ρ_c = 1/2: newton = 10
-        sys = nlsys([D(bce) ~ 0.01 * Δ(bce) - Advect(Upwind1())([1.0, 0.5], bce) + 1 + sin(4t) * x], [bc(0, x, y) ~ x * y], [bce])
+        sys = nlsys([D(bce) ~ 0.01 * laplacian(bce) - Advect(Upwind1())([1.0, 0.5], bce) + 1 + sin(4t) * x], [bc(0, x, y) ~ x * y], [bce])
         p = nlown(sys)
         ig = init(p, BackwardEuler(; linsolve = BTIGHT); dt = 0.25)
         c = only(ig.runtimes).cache
@@ -124,7 +124,7 @@ end
         s3 = @test_logs min_level = WARN solve(p, BackwardEuler(; linsolve = BTIGHT, newton = 12); dt = 0.25)
         @test s3.stats.newton_budget == 0
         # a field that barely moves (an increment below the rounding of the field): no budget hit
-        still = nlown(nlsys([D(bce) ~ 0.01 * Δ(bce) - Advect(Upwind1())([0.0, 0.0], bce) + 1.0e-16 * x], [bc(0, x, y) ~ 1.0], [bce]))
+        still = nlown(nlsys([D(bce) ~ 0.01 * laplacian(bce) - Advect(Upwind1())([0.0, 0.0], bce) + 1.0e-16 * x], [bc(0, x, y) ~ 1.0], [bce]))
         ig = init(still, BackwardEuler(); dt = 0.25)
         @test only(ig.runtimes).cache.newton == 2
         solve!(ig)
@@ -136,7 +136,7 @@ end
     @testset "F3-09b: a cycle in a group converges by Gauss–Seidel (count rule 2)" begin
         # κ_in = 2 (the largest cross sum): n = ⌈2 · 0.5 · 2⌉ = 2, ρ_c = 0.25 · 2 = 1/2: newton = 10
         sys = nlsys(
-            [D(bce) ~ 0.1 * Δ(bce) - bce + 2 * boe, D(boe) ~ 0.1 * Δ(boe) - 3 * boe + 1.5 * bce + 1],
+            [D(bce) ~ 0.1 * laplacian(bce) - bce + 2 * boe, D(boe) ~ 0.1 * laplacian(boe) - 3 * boe + 1.5 * bce + 1],
             [bc(0, x, y) ~ x, bo(0, x, y) ~ y], [bce, boe]
         )
         p = nlown(sys; dims = BDIMS)
@@ -163,7 +163,7 @@ end
         # unseen, newton = 4 and the warning; ~/lpwork/f3b6r-nc-m3.log)
         p = nlown(
             nlsys(
-                [D(bce) ~ 0.1 * Δ(bce) - bce + 2.25 * max(boe - 0.5, 0), D(boe) ~ 0.1 * Δ(boe) - boe + x],
+                [D(bce) ~ 0.1 * laplacian(bce) - bce + 2.25 * max(boe - 0.5, 0), D(boe) ~ 0.1 * laplacian(boe) - boe + x],
                 [bc(0, x, y) ~ 0.0, bo(0, x, y) ~ y], [bce, boe]
             ); dims = BDIMS
         )
@@ -177,7 +177,7 @@ end
         # a cycle (o reads c back): the term stays unseen, newton = 4 and the warning
         pc = nlown(
             nlsys(
-                [D(bce) ~ 0.1 * Δ(bce) - bce + 2.75 * max(boe - 0.5, 0), D(boe) ~ 0.1 * Δ(boe) - boe + 0.5 * bce],
+                [D(bce) ~ 0.1 * laplacian(bce) - bce + 2.75 * max(boe - 0.5, 0), D(boe) ~ 0.1 * laplacian(boe) - boe + 0.5 * bce],
                 [bc(0, x, y) ~ 0.0, bo(0, x, y) ~ y], [bce, boe]
             ); dims = BDIMS
         )
@@ -194,7 +194,7 @@ end
     @testset "F3-09b: a term no bound sees warns once; a divergence ends the run" begin
         # a velocity that varies in time: no bound (the interval bound covers the coordinates, not
         # the time; F3-13 bounds `50(1 + x)`, below), one substep, newton = 4, checked on the device
-        p = nlown(nlsys([D(bce) ~ 0.01 * Δ(bce) - Advect(Upwind1())([50 * (1 + x) + t, 0.0], bce)], [bc(0, x, y) ~ x * y], [bce]; T = 2.0))
+        p = nlown(nlsys([D(bce) ~ 0.01 * laplacian(bce) - Advect(Upwind1())([50 * (1 + x) + t, 0.0], bce)], [bc(0, x, y) ~ x * y], [bce]; T = 2.0))
         s = @test_logs (:warn, r"field `bc`: `-Advect\(Upwind1\(\)\)\(\[.*t.*, 0\.0\], bc\)` \(in the rate of `bc`\) is not in the implicit operator and no bound sees it") (
             :warn,
             r"field `bc`: the solve failed in window 1 \(t = 0\.0\) \(the Newton iteration diverged\), `ReturnCode.ConvergenceFailure`",
@@ -216,7 +216,7 @@ end
         # `50(1 + x)` over the box and one spacing past it (16²: x ≤ 1 + 1/16): ρ_adv = 2 · 50 (2 + 1/16)
         # · 16 = 3300, n = ⌈2 · 0.01 · 3300⌉ = 66, ρ_c = 1/2: newton = 10, no warning, and the run is
         # the BE matrix's (base b41b73c1: one substep, newton = 4, the warning; at dt = 1 it diverged)
-        sys = nlsys([D(bce) ~ 0.01 * Δ(bce) - Advect(Upwind1())([50 * (1 + x), 0.0], bce)], [bc(0, x, y) ~ x * y], [bce]; T = 0.05)
+        sys = nlsys([D(bce) ~ 0.01 * laplacian(bce) - Advect(Upwind1())([50 * (1 + x), 0.0], bce)], [bc(0, x, y) ~ x * y], [bce]; T = 0.05)
         p = nlown(sys)
         ig = init(p, BackwardEuler(; linsolve = BTIGHT); dt = 0.01)
         c = only(ig.runtimes).cache
@@ -229,7 +229,7 @@ end
         # one spacing past it), no clamp and no warning, and the run is the BE matrix's (base
         # b41b73c1: one substep, the clamp warning)
         gsys = PDESystem(
-            [D(bce) ~ 0.05 * Δ(bce) + 8 * (1 + x) * bce], [bc(0, x, y) ~ 0.5], bdom(0.3), [t, x, y], [bce], Any[];
+            [D(bce) ~ 0.05 * laplacian(bce) + 8 * (1 + x) * bce], [bc(0, x, y) ~ 0.5], bdom(0.3), [t, x, y], [bce], Any[];
             name = :sitegrowth2
         )
         pg = discretize(gsys, LatticeDiscretization(Grid((8, 8)); T = Float64))
@@ -246,7 +246,7 @@ end
     @testset "r1 M1: an operator that reads the time is built at each substep's end time" begin
         # against BE with the matrix assembled at every substep's end time (base, ~/lpwork/f3r1-nc-base.log:
         # 6.6e-2, 1.6e-3, 1.6e-3 relative: every substep took the first substep's operator)
-        for rate in (0.1 * Δ(bce) - (1 + 20t) * bce + 1, DivKGrad(:harmonic)(1 + 5t, bce) - bce + 1, (1 + 5t) * Δ(bce) - bce + 1)
+        for rate in (0.1 * laplacian(bce) - (1 + 20t) * bce + 1, DivKGrad(:harmonic)(1 + 5t, bce) - bce + 1, (1 + 5t) * laplacian(bce) - bce + 1)
             sys = nlsys([D(bce) ~ rate], [bc(0, x, y) ~ x * y], [bce]; T = 0.4)
             p = nlown(sys; dims = (10, 8))
             s = @test_logs min_level = WARN solve(p, BackwardEuler(; substeps = 4, linsolve = r1tight()); dt = 0.2)
@@ -286,7 +286,7 @@ end
                     bdom(1.0), [t, x, y], [bce], [rb]; name = :rob
                 ), rb
         end
-        for rate in (0.3 * Δ(bce) - 2 * bce + 1, DivKGrad(:harmonic)(0.3 * (1 + x), bce) - 2 * bce + 1)   # numeric, field row
+        for rate in (0.3 * laplacian(bce) - 2 * bce + 1, DivKGrad(:harmonic)(0.3 * (1 + x), bce) - 2 * bce + 1)   # numeric, field row
             for (b0, b1) in ((-1.0, 1.0), (1.0, -1.0))
                 sys0, rb = robin(rate, b0)
                 ig = init(nlown(sys0; dims = (10, 8)), BackwardEuler(; linsolve = r1tight()); dt = 0.1)
@@ -307,7 +307,7 @@ end
         # `β = −1/h` in lattice units: `|d⁻| = 1.5/9.25`): rule 2 keeps one substep (`⌈2 · 0.1 · 4.86⌉`),
         # `newton` follows ρ_c = 0.49 (10); no budget hit, and the result is the converged step (base:
         # newton = 4 and budget hits with a warning)
-        p = nlown(first(robin(0.3 * Δ(bce) - 2 * bce + 1, 1.0)); dims = (10, 8))
+        p = nlown(first(robin(0.3 * laplacian(bce) - 2 * bce + 1, 1.0)); dims = (10, 8))
         ig = init(p, BackwardEuler(; linsolve = r1tight()); dt = 0.1)
         c = only(ig.runtimes).cache
         @test !c.exact && c.seen && c.ρin ≈ 30 * 1.5 / 9.25 && ig.substeps == 1 && c.newton == 10
@@ -354,9 +354,9 @@ end
         rqe = rq(t, x, y)
         kind = Int32[(i + j) % 2 + 1 for i in 1:16, j in 1:16]
         for (rate, out) in (
-                (at(rW, rqe) * Δ(bce) + 0.01 * DivKGrad(:harmonic)(1 + x, bce) - bce, "0.01DivKGrad(:harmonic)(1 + x, bc)"),
+                (value_at(rW, rqe) * laplacian(bce) + 0.01 * DivKGrad(:harmonic)(1 + x, bce) - bce, "0.01DivKGrad(:harmonic)(1 + x, bc)"),
                 # the reversed weights: the face coefficient's term is the stiff one
-                (0.0001 * at(rW, rqe) * Δ(bce) + 5 * DivKGrad(:harmonic)(1 + x, bce) - bce, "0.0001at(rW, rq)*Δ(bc)"),
+                (0.0001 * value_at(rW, rqe) * laplacian(bce) + 5 * DivKGrad(:harmonic)(1 + x, bce) - bce, "0.0001laplacian(bc)*value_at(rW, rq)"),
             )
             sys = PDESystem([D(bce) ~ rate], [bc(0, x, y) ~ x], bdom(0.2), [t, x, y], [bce, rqe], [rW]; name = :scaled)
             p = discretize(sys, LatticeDiscretization(Grid((16, 16)); T = Float64); inputs = [rqe => kind])

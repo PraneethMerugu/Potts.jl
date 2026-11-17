@@ -98,10 +98,10 @@ end
     # g2` … give `gs` a number"), equal to the number, and it follows its inputs
     @parameters g1 = 1.0 g2 = 2.0
     @parameters gs = g1 + g2
-    pg = sown(ssys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0, c(t, 0, y) ~ gs], [ce], [g1, g2, gs]))
+    pg = sown(ssys([D(ce) ~ laplacian(ce)], [c(0, x, y) ~ 0.0, c(t, 0, y) ~ gs], [ce], [g1, g2, gs]))
     @parameters g3 = 3.0 g4 = 5.0
-    p3 = sown(ssys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0, c(t, 0, y) ~ g3], [ce], [g3]))
-    p5 = sown(ssys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0, c(t, 0, y) ~ g4], [ce], [g4]))
+    p3 = sown(ssys([D(ce) ~ laplacian(ce)], [c(0, x, y) ~ 0.0, c(t, 0, y) ~ g3], [ce], [g3]))
+    p5 = sown(ssys([D(ce) ~ laplacian(ce)], [c(0, x, y) ~ 0.0, c(t, 0, y) ~ g4], [ce], [g4]))
         @test solve(pg, alg; dt = 0.01)[:c, end] == solve(p3, alg; dt = 0.01)[:c, end]
         @test solve(remake(pg; p = [g1 => 3.0]), alg; dt = 0.01)[:c, end] == solve(p5, alg; dt = 0.01)[:c, end]
     # the ODE integrator's `setp` of an input moves k2 at the next step (the right side derives it)
@@ -118,7 +118,7 @@ end
 @testset "SD-09: negative diffusion is refused, with the route" begin
     # base: Dn = −0.01 ran (1 substep, Success): anti-diffusion over the run
     @parameters Dn = -0.01
-    sys = ssys([D(ce) ~ Dn * Δ(ce)], [c(0, x, y) ~ x], [ce], [Dn])
+    sys = ssys([D(ce) ~ Dn * laplacian(ce)], [c(0, x, y) ~ x], [ce], [Dn])
     p = sown(sys)
         for alg in (ExplicitEuler(), ExplicitEuler(; substeps = 3))
             err = emsg(() -> solve(p, alg; dt = 0.1))
@@ -135,7 +135,7 @@ end
     # the ODE path checks every new parameter value, not only at `discretize` (base: remake to
     # −1.0 gave Success with values of ±1e22; NaN through remake and setp were accepted)
     @parameters Dp = 0.01
-    o = discretize(ssys([D(ce) ~ Dp * Δ(ce)], [c(0, x, y) ~ x], [ce], [Dp]; T = 0.1),
+    o = discretize(ssys([D(ce) ~ Dp * laplacian(ce)], [c(0, x, y) ~ x], [ce], [Dp]; T = 0.1),
         LatticeDiscretization(Grid((4, 4)); T = Float64))
     @test SciMLBase.solve(o, Tsit5()).retcode == SciMLBase.ReturnCode.Success          # control
     @test SciMLBase.solve(remake(o; p = [Dp => 0.02]), Tsit5()).retcode == SciMLBase.ReturnCode.Success
@@ -183,7 +183,7 @@ end
     # read that 0.0, so the neighbour of the masked site stayed 0.0 after step 1; an input
     # write kept the old values until the next step
     K = ones(Int32, 4, 4); K[1, 1] = 0
-    sys = ssys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0, ce ~ masked(qe == 0, 1.0)], [ce, qe], Num[])
+    sys = ssys([D(ce) ~ laplacian(ce)], [c(0, x, y) ~ 0.0, ce ~ masked(qe == 0, 1.0)], [ce, qe], Num[])
     p = sown(sys; inputs = [qe => K])
         alg = ExplicitEuler(; substeps = 1)
         s = solve(p, alg; dt = 0.001, saveat = 0.001)
@@ -198,7 +198,7 @@ end
     # a map program too (round 1: maps were not clamped: m(t0)[3, 3] = 0.0, its neighbours 0.0
     # after step 1, a newly masked site 0.0 after an input write)
     K3 = ones(Int32, 4, 4); K3[3, 3] = 0
-    msys = ssys([Shift(t, 1)(me) ~ me + 0.25Δ(me)],
+    msys = ssys([Shift(t, 1)(me) ~ me + 0.25 * laplacian(me)],
         [mm(0, x, y) ~ 0.0, mm(t, 0, y) ~ mm(t, 1, y), mm(t, x, 0) ~ mm(t, x, 1), me ~ masked(qe == 0, 1.0)],
         [me, qe], Num[]; T = 1.0)
     mp = sown(msys; inputs = [qe => K3])
@@ -214,14 +214,14 @@ end
     # the clamp at a step's start uses the parameters the steps are bound to (round 2: `integ.p`,
     # so a direct `integ.p[1] = v`, which the steps ignore, moved the masked value the fluxes read)
     @parameters mv = 1.0
-    sv = ssys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0, ce ~ masked(qe == 0, mv)], [ce, qe], [mv])
+    sv = ssys([D(ce) ~ laplacian(ce)], [c(0, x, y) ~ 0.0, ce ~ masked(qe == 0, mv)], [ce, qe], [mv])
     pv = sown(sv; inputs = [qe => K])
         ia, ib = init(pv, alg; dt = 0.001), init(pv, alg; dt = 0.001)
     ib.p[1] = 7.0
     step!(ia); step!(ib)
     @test ib[ce] == ia[ce] && ia[ce][2, 1] > 0
     # control: with no mask the field stays 0.0
-        s0 = solve(sown(ssys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0], [ce], Num[])), alg; dt = 0.001, saveat = 0.001)
+        s0 = solve(sown(ssys([D(ce) ~ laplacian(ce)], [c(0, x, y) ~ 0.0], [ce], Num[])), alg; dt = 0.001, saveat = 0.001)
     @test all(==(0.0), s0[:c, 2])
 end
 end
@@ -305,17 +305,17 @@ end
     # LP45: a system with no time is a steady system (F3-12b); this one (no decay, no fixed
     # value) has no unique steady state, which its solve names (base 6b6bf089: "no time …
     # not supported in this version")
-    st = PDESystem([0 ~ Δ(c(x, y))], Equation[], [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [x, y], [c(x, y)],
+    st = PDESystem([0 ~ laplacian(c(x, y))], Equation[], [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [x, y], [c(x, y)],
         Num[]; name = :st)
     err = emsg(() -> solve(discretize(st, LatticeDiscretization(Grid((4, 4))))))
     @test occursin("has no unique steady state", err) && !occursin("1 spatial variables", err)
     # LP41: a steady equation is solved by `QuasiSteady`, never sent to a "solver group" (F3-12b)
-    r = solve(discretize(ssys([0 ~ Δ(ce) - ce], [c(0, x, y) ~ 1.0], [ce], Num[]), LatticeDiscretization(Grid((4, 4)))),
+    r = solve(discretize(ssys([0 ~ laplacian(ce) - ce], [c(0, x, y) ~ 1.0], [ce], Num[]), LatticeDiscretization(Grid((4, 4)))),
             QuasiSteady(); dt = 0.1
         )
     @test r.retcode == SciMLBase.ReturnCode.Success
     # LF13: the substep refusal names the term the bound cannot see
-        err = emsg(() -> solve(sown(ssys([D(ce) ~ Δ(ce) - ce^3], [c(0, x, y) ~ 0.0], [ce], Num[])), ExplicitEuler(); dt = 0.01))
+        err = emsg(() -> solve(sown(ssys([D(ce) ~ laplacian(ce) - ce^3], [c(0, x, y) ~ 0.0], [ce], Num[])), ExplicitEuler(); dt = 0.01))
     @test occursin("^3", err) && occursin("cannot see", err)
     @test !occursin("`c: ", err) && !occursin("c(t, x, y)", err) && occursin("rate of `c`", err)   # (round 0: `c: -(c(t, x, y)^3)`)
     # an array input asks for each component (round 0: "`vel⋆` is not an input field")

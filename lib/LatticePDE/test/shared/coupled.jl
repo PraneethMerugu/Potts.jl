@@ -24,6 +24,6 @@ end
 # the q1 loop of batch 4 review r2 (with sources, so the steady state is not 0): `lhs` is `D`
 # (rate rows, which QuasiSteady solves as steady rows) or `0 ~` rows
 q1(δ, k; steady = false) = PDESystem(steady ?
-        [0 ~ 0.1 * Δ(cae) - δ * cae + k * cbe + x, 0 ~ 0.1 * Δ(cbe) - cbe - k * cae + y] :
-        [D(cae) ~ 0.1 * Δ(cae) - δ * cae + k * cbe + x, D(cbe) ~ 0.1 * Δ(cbe) - cbe - k * cae + y],
+        [0 ~ 0.1 * laplacian(cae) - δ * cae + k * cbe + x, 0 ~ 0.1 * laplacian(cbe) - cbe - k * cae + y] :
+        [D(cae) ~ 0.1 * laplacian(cae) - δ * cae + k * cbe + x, D(cbe) ~ 0.1 * laplacian(cbe) - cbe - k * cae + y],
     [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 1.0], bdom(0.2), [t, x, y], [cae, cbe], Any[]; name = :q1)

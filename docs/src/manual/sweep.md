@@ -93,13 +93,13 @@ then the fields over a quarter of the MCS, four times.
 ```@example sweep
 using Potts
 using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
-using Potts.LatticePDE: Δ, lattice_domain
+using Potts.LatticePDE: laplacian, lattice_domain
 
 t = Potts.t
 @parameters x y
 @variables c(..) = 0.0 incell(..)::Bool [input = true]
 C = c(t, x, y)
-signal = PDESystem([Differential(t)(C) ~ 0.2 * Δ(C) + 0.1 * incell(t, x, y) - 0.05 * C], [],
+signal = PDESystem([Differential(t)(C) ~ 0.2 * laplacian(C) + 0.1 * incell(t, x, y) - 0.05 * C], [],
     lattice_domain(t, (x, y), (20, 20)), [t, x, y], [C, incell(t, x, y)], []; name = :signal)
 
 @potts_model FieldFirst begin

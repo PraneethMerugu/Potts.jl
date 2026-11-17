@@ -3,7 +3,7 @@
 # lib/PottsModels/test/tutorial_models.jl checks that it compiles to the same problem as
 # `PottsModels.MerksVasculogenesis`.
 using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
-using Potts.LatticePDE: Δ, lattice_domain
+using Potts.LatticePDE: laplacian, lattice_domain
 
 #> equation
 function chemoattractant(lattice)
@@ -11,7 +11,7 @@ function chemoattractant(lattice)
     @parameters x y Dc = 0.75 σc = 5.4e-3 δc = 5.4e-3
     @variables c(..) cell(..)::Bool [input = true] ecm(..)::Bool [input = true]
     C = c(t, x, y)
-    eq = Differential(t)(C) ~ Dc * Δ(C) + σc * cell(t, x, y) - δc * C * ecm(t, x, y)
+    eq = Differential(t)(C) ~ Dc * laplacian(C) + σc * cell(t, x, y) - δc * C * ecm(t, x, y)
     return PDESystem([eq], [c(0, x, y) ~ 0.0], lattice_domain(t, (x, y), lattice), [t, x, y],
         [C, cell(t, x, y), ecm(t, x, y)], [Dc, σc, δc]; name = :merks_field)
 end

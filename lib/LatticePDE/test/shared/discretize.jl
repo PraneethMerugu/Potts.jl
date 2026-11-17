@@ -40,7 +40,7 @@ Dx, Dy = Differential(x), Differential(y)
 ce, oe, Ke, Ne, ke, ue = c(t, x, y), o(t, x, y), K(t, x, y), N(t, x, y), kindₛ(t, x, y), u(t, x, y)
 
 # a 2D rate system with periodic y (a 1D profile in x, 2 rows)
-function profile(bcs, n; rhs = Δ(ce), ps = [g0, h0], steps = 20000)
+function profile(bcs, n; rhs = laplacian(ce), ps = [g0, h0], steps = 20000)
     cf = lower64(pde([D(ce) ~ rhs], [bcs; c(t, x, 0) ~ c(t, x, 1)], [ce], ps), (n, 2))
     R = runner(cf)
     steps!(R, 0.2 / n^2, steps)

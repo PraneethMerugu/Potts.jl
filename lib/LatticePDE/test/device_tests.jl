@@ -53,7 +53,7 @@ end
 using .LP_device: fd, kron
 @testset "§7.4 on $pgpu" begin
     @parameters Dc7 = 1e-3 k7 = 0.1
-    rd = PDESystem(D(ce) ~ Dc7 * Δ(ce) - k7 * ce,
+    rd = PDESystem(D(ce) ~ Dc7 * laplacian(ce) - k7 * ce,
         [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)],
         [t ∈ Interval(0, 10), x ∈ Interval(0, 1), y ∈ Interval(0, 1)], [t, x, y], [ce], [Dc7, k7]; name = :rd)
     run(n, backend; T = 1.0) = solve(discretize(remake_t(rd, T), LatticeDiscretization(Grid((n, n)); T = Float32,
@@ -88,7 +88,7 @@ end
 using .LP_device: fd, kron
 @testset "F3-00: B evaluates the aux fields at the saves on $pgpu" begin
     @parameters Da7 = 0.1 ka7 = 1.0
-    sys = psys([D(ce) ~ Da7 * Δ(ce) - ka7 * ce, Ke ~ 2ce + t], [c(0, x, y) ~ 1.0 + x], [Da7, ka7]; dvs = [ce, Ke])
+    sys = psys([D(ce) ~ Da7 * laplacian(ce) - ka7 * ce, Ke ~ 2ce + t], [c(0, x, y) ~ 1.0 + x], [Da7, ka7]; dvs = [ce, Ke])
     mk(be) = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float32, backend = be))
         sd = solve(mk(PDEV), ExplicitEuler(); dt = 0.25f0, saveat = 0.5)
         sh = solve(mk(KernelAbstractions.CPU()), ExplicitEuler(); dt = 0.25f0, saveat = 0.5)
@@ -119,10 +119,10 @@ using .LP_device: fd, kron
     @test eltype(discretize(sys, LatticeDiscretization(Grid((8, 4)); backend = PDEV)).u0) == Float32
         @test_throws ["ArgumentError", "BigFloat", "not isbits", "host backend only"] discretize(sys, LatticeDiscretization(Grid((8, 4)); T = BigFloat, backend = PDEV))
     # Rodas5P on device arrays (Jacobian and time gradient through the right side)
-    ode = discretize(psys([D(ce) ~ Dn * Δ(ce) - kn * ce + 0.1 * sin(ωn * t)],
+    ode = discretize(psys([D(ce) ~ Dn * laplacian(ce) - kn * ce + 0.1 * sin(ωn * t)],
             [c(0, x, y) ~ 0.0, c(t, 0, y) ~ gn, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)],
             [Dn, kn, gn, ωn]), LatticeDiscretization(Grid((8, 4)); T = Float32, backend = PDEV))
-    host = discretize(psys([D(ce) ~ Dn * Δ(ce) - kn * ce + 0.1 * sin(ωn * t)],
+    host = discretize(psys([D(ce) ~ Dn * laplacian(ce) - kn * ce + 0.1 * sin(ωn * t)],
             [c(0, x, y) ~ 0.0, c(t, 0, y) ~ gn, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)],
             [Dn, kn, gn, ωn]), LatticeDiscretization(Grid((8, 4)); T = Float32))
     r = solve(ode, Rodas5P(); abstol = 1e-4, reltol = 1e-4)
@@ -238,9 +238,9 @@ using .LP_device: fd, kron
     @parameters Di = 0.05 ki = 1.0 vi = 0.5
     per = [c(t, x, 0) ~ c(t, x, 1), c(t, 0, y) ~ c(t, 1, y)]
     field = psys([D(ce) ~ DivKGrad(:harmonic)(Di * (1 + x), ce) - ki * ce + 1], [c(0, x, y) ~ x * y], [Di, ki])
-    adv = psys([D(ce) ~ Di * Δ(ce) - Advect(Upwind1())([vi, 0.0], ce) - ki * ce + 1], [c(0, x, y) ~ x * y; per], [Di, ki, vi])
-    sw = psys([D(ce) ~ Di * Δ(ce) - ki * max(ce - 0.3, 0) + 0.5], [c(0, x, y) ~ x * y], [Di, ki])
-    rob = psys([D(ce) ~ Di * Δ(ce) - ki * ce + 1], [c(0, x, y) ~ x * y, 1.5 * c(t, 1, y) + Differential(x)(c(t, 1, y)) ~ 0.2], [Di, ki])
+    adv = psys([D(ce) ~ Di * laplacian(ce) - Advect(Upwind1())([vi, 0.0], ce) - ki * ce + 1], [c(0, x, y) ~ x * y; per], [Di, ki, vi])
+    sw = psys([D(ce) ~ Di * laplacian(ce) - ki * max(ce - 0.3, 0) + 0.5], [c(0, x, y) ~ x * y], [Di, ki])
+    rob = psys([D(ce) ~ Di * laplacian(ce) - ki * ce + 1], [c(0, x, y) ~ x * y, 1.5 * c(t, 1, y) + Differential(x)(c(t, 1, y)) ~ 0.2], [Di, ki])
         cases = [
             ("BackwardEuler, field row", field, BackwardEuler(; newton = 1)),
             ("BackwardEuler, advection", adv, BackwardEuler(; newton = 6)),
@@ -277,7 +277,7 @@ end
 using .LP_device: fd, kron
 @testset "F3-15 (R1): the device stops correcting once every row converged ($pgpu)" begin
     @parameters Dg = 0.01
-    sys = psys([D(ce) ~ Dg * Δ(ce) - Advect(Upwind1())([2 * (1 + x), 0.0], ce)], [c(0, x, y) ~ x * y], [Dg]; T = 0.1)
+    sys = psys([D(ce) ~ Dg * laplacian(ce) - Advect(Upwind1())([2 * (1 + x), 0.0], ce)], [c(0, x, y) ~ x * y], [Dg]; T = 0.1)
     mk(be, n) = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float32, backend = be))
         alg = BackwardEuler()
         sd, sh = solve(mk(PDEV, 32), alg; dt = 0.05), solve(mk(KernelAbstractions.CPU(), 32), alg; dt = 0.05)
@@ -327,8 +327,8 @@ using .LP_device: fd, kron
     end
     cm = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables cmdev(..))), LatticePDE.LatticeLevel, Coarse(2)))
     um = first(@variables umdev(..))
-    sys = PDESystem([D(cm(t, x, y)) ~ 0.05 * Δ(cm(t, x, y)) - cm(t, x, y) + 0.7 * um(t, x, y),
-            D(um(t, x, y)) ~ 0.02 * Δ(um(t, x, y)) - um(t, x, y) + 0.4 * cm(t, x, y)],
+    sys = PDESystem([D(cm(t, x, y)) ~ 0.05 * laplacian(cm(t, x, y)) - cm(t, x, y) + 0.7 * um(t, x, y),
+            D(um(t, x, y)) ~ 0.02 * laplacian(um(t, x, y)) - um(t, x, y) + 0.4 * cm(t, x, y)],
         [cm(0, x, y) ~ x, um(0, x, y) ~ y], cdom(), [t, x, y], [cm(t, x, y), um(t, x, y)], Num[]; name = :mixdev)
         for (alg, dt) in ((ExplicitEuler(), 0.05), (BackwardEuler(), 0.1))
             sd = solve(cown(sys, (32, 32); T = Float32, backend = PDEV), alg; dt)
@@ -378,7 +378,7 @@ using .LP_device: fd, kron
     q = first(@variables q(..)::Int32 [input = true])
     @parameters cRd[1:4] = [0.0, 1.0, 0.5, 0.25]
     qe = q(t, x, y)
-    sys = PDESystem([D(cs(t, x, y)) ~ 0.05 * Δ(cs(t, x, y)) - cs(t, x, y) + at(cRd, qe + 1), K2(t, x, y) ~ at(cRd, qe + 1),
+    sys = PDESystem([D(cs(t, x, y)) ~ 0.05 * laplacian(cs(t, x, y)) - cs(t, x, y) + value_at(cRd, qe + 1), K2(t, x, y) ~ value_at(cRd, qe + 1),
             M0(t, x, y) ~ (qe == 0)], [cs(0, x, y) ~ 0.0], cdom(), [t, x, y], [cs(t, x, y), K2(t, x, y), M0(t, x, y), qe], [cRd];
         name = :pldev)
         for alg in (ExplicitEuler(), BackwardEuler())
@@ -431,7 +431,7 @@ using .LP_device: fd, kron
     # host's least-squares arithmetic shared, so device = host and a device rerun are bitwise.
     # Control: plain device arrays would reduce through rocBLAS, which differs from the host
     # (F3 design §5 F3-12d: 1e-15 in Float64)
-    nl = PDESystem([D(cae) ~ 0.1Δ(cae) - 2.0 * cae / (0.5 + cae) + cbe + x, D(cbe) ~ 0.1Δ(cbe) - cbe + 0.5 * cae^2],
+    nl = PDESystem([D(cae) ~ 0.1 * laplacian(cae) - 2.0 * cae / (0.5 + cae) + cbe + x, D(cbe) ~ 0.1 * laplacian(cbe) - cbe + 0.5 * cae^2],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.3), [t, x, y], [cae, cbe], Any[]; name = :nldev)
         for (lab, s, alg) in (("q1 QS", q1(0.1, 5.0; steady = true), QuasiSteady()), ("nonlinear QS", nl, QuasiSteady()))
         for T in (Float32, Float64)
@@ -453,10 +453,10 @@ using .LP_device: fd, kron
     # the six faces in the generated kernels, the bottom and the hex coarse build on the device:
     # BackwardEuler (numeric with a mask, a field row), CrankNicolson, BDF2, QuasiSteady and the
     # coupled steady solve, Float32 and Float64, against the host executor
-    loop = PDESystem([0 ~ 0.1Δ(cae) - 1.0 * cae + 2.0 * cbe + x, 0 ~ 0.2Δ(cbe) - 2.0 * cbe - 1.5 * cae + y],
+    loop = PDESystem([0 ~ 0.1 * laplacian(cae) - 1.0 * cae + 2.0 * cbe + x, 0 ~ 0.2 * laplacian(cbe) - 2.0 * cbe - 1.5 * cae + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.3), [t, x, y], [cae, cbe], Any[]; name = :hexdev)
-    num = bsys([D(bce) ~ bD * Δ(bce) - bk * bce + x], [bc(0, x, y) ~ x * y, bce ~ masked(bqe == 2, 1.5)], [bD, bk]; T = 0.3)
-    fld = bsys([D(bce) ~ (1 + x) * Δ(bce) - bk * bce + 1], [bc(0, x, y) ~ x * y], [bk]; T = 0.3)
+    num = bsys([D(bce) ~ bD * laplacian(bce) - bk * bce + x], [bc(0, x, y) ~ x * y, bce ~ masked(bqe == 2, 1.5)], [bD, bk]; T = 0.3)
+    fld = bsys([D(bce) ~ (1 + x) * laplacian(bce) - bk * bce + 1], [bc(0, x, y) ~ x * y], [bk]; T = 0.3)
     kind = Int32[(i + 2j) % 3 for i in 1:40, j in 1:40]
         cases = [
             ("BackwardEuler", num, BackwardEuler()), ("BackwardEuler, field row", fld, BackwardEuler()),
@@ -484,10 +484,10 @@ pgpu == "rocm" && @testset "F3-21a: Dual results on $pgpu equal the host's" begi
     @variables da(..) db(..)
     dae, dbe = da(t, x, y), db(t, x, y)
     ddom = [t ∈ Interval(0.0, 0.3), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-    mr = PDESystem([D(ce) ~ Dd * Δ(ce) - kd * ce + gd * x], [c(0, x, y) ~ x * y, c(t, 0, y) ~ gd,
+    mr = PDESystem([D(ce) ~ Dd * laplacian(ce) - kd * ce + gd * x], [c(0, x, y) ~ x * y, c(t, 0, y) ~ gd,
         ce ~ masked((x > 0.4) & (x < 0.6) & (y > 0.4) & (y < 0.6), 2 * kd), 1.5 * c(t, x, 0) - kd * Differential(y)(c(t, x, 0)) ~ 0.2],
         ddom, [t, x, y], [ce], [kd, Dd, gd]; name = :dm)
-    cp = PDESystem([0 ~ Dd * Δ(dae) - dae + kd * dbe + x, 0 ~ 0.1 * Δ(dbe) - dbe - gd * dae + y], [da(0, x, y) ~ 0.0, db(0, x, y) ~ 0.0],
+    cp = PDESystem([0 ~ Dd * laplacian(dae) - dae + kd * dbe + x, 0 ~ 0.1 * laplacian(dbe) - dbe - gd * dae + y], [da(0, x, y) ~ 0.0, db(0, x, y) ~ 0.0],
         ddom, [t, x, y], [dae, dbe], [kd, Dd, gd]; name = :dc)
         for (sys, alg, v) in (
                 (mr, BackwardEuler(), ce), (mr, CrankNicolson(), ce),
@@ -550,12 +550,12 @@ end
 using .LP_device: fd, kron
 @testset "F4-12b: per-site and time-varying Robin faces on $pgpu equal the host" begin
     @parameters Dr = 0.05 kr = 1.0
-    site = psys([D(ce) ~ Dr * Δ(ce) - kr * ce],
+    site = psys([D(ce) ~ Dr * laplacian(ce) - kr * ce],
         [c(0, x, y) ~ x * y, (1 + y) * c(t, 0, y) - Differential(x)(c(t, 0, y)) ~ 0.5,
             2.0 * c(t, x, 1) + (0.5 + x) * Differential(y)(c(t, x, 1)) ~ 1.0], [Dr, kr])
-    mixed = psys([D(ce) ~ Dr * Δ(ce) - kr * ce], [c(0, x, y) ~ x * y, (y - 0.4) * c(t, 0, y) + Differential(x)(c(t, 0, y)) ~ 0.5],
+    mixed = psys([D(ce) ~ Dr * laplacian(ce) - kr * ce], [c(0, x, y) ~ x * y, (y - 0.4) * c(t, 0, y) + Differential(x)(c(t, 0, y)) ~ 0.5],
         [Dr, kr])
-    timed = psys([D(ce) ~ Dr * Δ(ce) - kr * ce], [c(0, x, y) ~ x * y, (-1 - 4t) * c(t, 0, y) - Differential(x)(c(t, 0, y)) ~ 0.0],
+    timed = psys([D(ce) ~ Dr * laplacian(ce) - kr * ce], [c(0, x, y) ~ x * y, (-1 - 4t) * c(t, 0, y) - Differential(x)(c(t, 0, y)) ~ 0.0],
         [Dr, kr])
         cases = [
             ("per site, BackwardEuler", site, BackwardEuler(; newton = 1), 0.1),
@@ -584,7 +584,7 @@ using .LP_device: fd, kron
 @testset "F4-B1: an input as a function of t on $pgpu" begin
     @variables dq(..) [input = true]
     dqe = dq(t, x, y)
-    sys = PDESystem([D(ce) ~ 0.1 * Δ(ce) - ce + dqe], [c(0, x, y) ~ 0.0],
+    sys = PDESystem([D(ce) ~ 0.1 * laplacian(ce) - ce + dqe], [c(0, x, y) ~ 0.0],
         [t ∈ Interval(0.0, 0.5), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [ce, dqe], Any[]; name = :dq)
     Q(s) = [s > 0.05i ? 1.0 : 0.0 for i in 1:8, j in 1:8]
     mk(be) = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float32, backend = be); inputs = [dqe => Q])

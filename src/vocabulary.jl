@@ -3,8 +3,25 @@
 #
 # Every model quantity is an MTK symbol: parameters are `@parameters` (kind tables are array
 # parameters), built-ins are inputs `volume(t) [input = true]`, and each carries what it is in
-# the model under the `potts_entity` metadata key (LatticePDE's `PottsEntity`). Lowering
+# the model under the `potts_entity` metadata key (`PottsEntity`). Lowering
 # (`lower.jl`) maps entities to state reads.
+
+"""
+    PottsEntity
+
+Metadata key `potts_entity`: what a quantity is in a Potts model, an `Entity`
+(`kind(t) [input = true, potts_entity = Builtin(:kind)]`). `LatticePDE.pdesystem` refuses a
+model's built-ins by this tag (`LatticePDE.pdesystem_refusal`).
+"""
+struct PottsEntity end
+Symbolics.option_to_metadata_type(::Val{:potts_entity}) = PottsEntity
+
+"""
+    get_potts_entity(x)
+
+The `potts_entity` of `x` (an `Entity`), or `nothing`.
+"""
+get_potts_entity(x) = info(x)
 
 """
     Entity(role, name, default, options)
@@ -192,7 +209,7 @@ _bnum(x) = isinteger(x) && isfinite(x) ? string(Int(x)) : string(x)
 """
 `kind_parameter(name, values)`: a parameter indexed by kind (medium included), the array
 parameter `name[1:n]` or `name[1:n, 1:m]` of `values`' shape. It is read through LatticePDE's
-`at`/`at2` (`J[kind, kind′]` in a model), never MTK's `getindex`, which a compiled template
+`value_at` (`J[kind, kind′]` in a model), never MTK's `getindex`, which a compiled template
 cannot take with an input index (S-4).
 """
 function kind_parameter(name::Symbol, values; unit = nothing, tunable = true, bounds = nothing, description = nothing)
@@ -553,10 +570,10 @@ _lattice_dim() = (d = _build().dim) > 0 ? d :
     throw(ArgumentError("`centroid()` and `displacement(c)` need the model's @lattice declared before them"))
 
 # ---------------------------------------------------------------------------------------
-# Symbolic operations recognised by lowering (the field operator `Δ` is LatticePDE's)
+# Symbolic operations recognised by lowering (the field operator `laplacian` is LatticePDE's)
 
-# `x[i]` and `J[a, b]` in a model are LatticePDE's registered reads `at(x, i)` (an explicit
-# site or cell, `act[target]`, or a kind-table entry `Dk[kind]`) and `at2(J, a, b)`.
+# `x[i]` and `J[a, b]` in a model are LatticePDE's registered reads `value_at(x, i)` (an explicit
+# site or cell, `act[target]`, or a kind-table entry `Dk[kind]`) and `value_at(J, a, b)`.
 """`gather(n, anchor, body, cond)`: fold of `body` over relation neighbors `n` of `anchor`."""
 function gather end
 
@@ -666,9 +683,9 @@ function _integral_over(x, over)
         )
     )
     y = _unwrap(x isa Num ? x : Num(x))
-    sub = Dict{Any, Any}(_unwrap(B.volume) => _unwrap(at(B.volume, B.owner)))
+    sub = Dict{Any, Any}(_unwrap(B.volume) => _unwrap(value_at(B.volume, B.owner)))
     for v in _bare_vars(y)
-        info(v).role === :cell && (sub[v] = _unwrap(at(Symbolics.wrap(v), B.owner)))
+        info(v).role === :cell && (sub[v] = _unwrap(value_at(Symbolics.wrap(v), B.owner)))
     end
     y = Symbolics.substitute(y, sub; fold = Val(false), filterer = _pair_scope)
     return Symbolics.wrap(cluster_integral_sum(cell_integral(Symbolics.wrap(y))))
@@ -691,7 +708,7 @@ division conditions and rules, link rules.
 """
 _pre(x) = _builtin_now(ModelingToolkitBase.Pre(x))
 # MTK's `Pre` distributes over a call's arguments, and a built-in is a function of `t`, so
-# `Pre(w[new])` is `at(Pre(w), Pre(new))`. A built-in is an input the CPM supplies when the
+# `Pre(w[new])` is `value_at(Pre(w), Pre(new))`. A built-in is an input the CPM supplies when the
 # statement runs; it has no previous value: `Pre(new)` is `new`.
 function _builtin_now(x)
     u = _unwrap(x)
@@ -736,11 +753,11 @@ _rand() = random_uniform(Num(_next_number!()))
 
 """`x[i...]` inside a model: indexing of symbolic quantities, `getindex` otherwise."""
 # a Bool quantity (a node of a discrete component) read at a cell stays a Bool (P6.0k)
-_index(x::Num, i) = (_no_class_index(i); SymbolicUtils.symtype(Symbolics.unwrap(x)) === Bool ? _nonzero(at(x, i)) : at(x, i))
-_index(x::QuantityVector, i::Num) = Num[at(c, i) for c in x.components]   # the vector at a cell/site
+_index(x::Num, i) = (_no_class_index(i); SymbolicUtils.symtype(Symbolics.unwrap(x)) === Bool ? _nonzero(value_at(x, i)) : value_at(x, i))
+_index(x::QuantityVector, i::Num) = Num[value_at(c, i) for c in x.components]   # the vector at a cell/site
 _index(x::QuantityVector, i::Integer) = x.components[i]
-_index(x::Symbolics.Arr, i) = (_no_class_index(i); at(x, i))           # a kind table
-_index(x::Symbolics.Arr, i, j) = (_no_class_index(i, j); at2(x, i, j))
+_index(x::Symbolics.Arr, i) = (_no_class_index(i); value_at(x, i))           # a kind table
+_index(x::Symbolics.Arr, i, j) = (_no_class_index(i, j); value_at(x, i, j))
 _index(x, i...) = (_no_class_index(i...); getindex(x, i...))
 
 """
@@ -749,9 +766,9 @@ _index(x, i...) = (_no_class_index(i...); getindex(x, i...))
 """
 function _primed(x::Num)
     role(x) in (:site, :field) || throw(ArgumentError("`$(x)′`: only site and field variables have a value at `s′`"))
-    return at(x, B.site′)
+    return value_at(x, B.site′)
 end
-_primed(x::QuantityVector) = QuantityVector(Symbol(x.name, '′'), Num[at(c, B.site′) for c in x.components])
+_primed(x::QuantityVector) = QuantityVector(Symbol(x.name, '′'), Num[value_at(c, B.site′) for c in x.components])
 
 # `&&`, `||`, `!` in models become the symbolic `&`, `|`, `!` (operands are pure, so
 # non-short-circuit evaluation is equivalent).

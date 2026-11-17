@@ -34,12 +34,12 @@ function Problems.build_operator(d::DeferredOperator, spec::Problems.GroupSpec)
 end
 
 # a diffusion term `m Op(c)` in parts: the multiplier `m` (the operator replaced by 1), the face
-# coefficient `K` (1 for `Δ`), the axes it acts on (every axis for `Δ` and `DivKGrad`, its own
+# coefficient `K` (1 for `laplacian`), the axes it acts on (every axis for `laplacian` and `DivKGrad`, its own
 # for a raw `Dx(K Dx(c))`), the face mean and the term itself; `nothing` for more than one operator
 function _diffusion_parts(term, xs)
     reps, parts = Dict{Any, Any}(), Any[]
     walk(y) = iscall(y) && (f = operation(y);
-                            f === Δ ? (reps[y] = 1; push!(parts, (1, :all, :harmonic))) :
+                            f === laplacian ? (reps[y] = 1; push!(parts, (1, :all, :harmonic))) :
                             f isa DivKGrad ? (reps[y] = 1; push!(parts, (arguments(y)[1], :all, f.mean))) :
                             f isa Differential ? (r = _raw_flux(y); reps[y] = 1;
                                                   push!(parts, (r === nothing || r[1] === nothing ? 1 : r[1],
@@ -80,7 +80,7 @@ function _local_term(term, c, I, ivs, others)
         f = operation(u)
         _hit(cref, u) && return isequal(u, c)
         any(o -> isequal(f, o), I) && return isequal(collect(arguments(u)), collect(ivs))
-        (f === Δ || !(f isa Function)) && return false        # Δ, DivKGrad, Advect, Differential, Shift, …
+        (f === laplacian || !(f isa Function)) && return false        # Δ, DivKGrad, Advect, Differential, Shift, …
         return all(a -> ok(unwrap(a)), arguments(u))
     end
     return ok(unwrap(term))
@@ -139,7 +139,7 @@ function _advection_ibound(k, term, params, tabs, box, h)
     return out
 end
 # whether `u` applies a spatial operator to a read of `o`
-_operator_of(u, o) = iscall(u) && ((f = operation(u); (f === Δ || f isa DivKGrad || f isa Advect || f isa Differential) &&
+_operator_of(u, o) = iscall(u) && ((f = operation(u); (f === laplacian || f isa DivKGrad || f isa Advect || f isa Differential) &&
                                     _reads(u, (o,))) || any(a -> _operator_of(unwrap(a), o), arguments(u)))
 # a cross term `a · o` (`CrossLinear`, `o` another field) as (the field's key, `a` as a `Coef`
 # or `Coef(NaN)` when it is not a number or a number times a parameter, its text)
@@ -150,7 +150,7 @@ function _cross_bound(k, term, others, cf, params, bysite)
         (kk === nothing || length(kk) != 1) && return ("", Coef(NaN), _optext(k, term))
         c = nothing
         u = unwrap(term)
-        # an operator of the other field (`D Δ(o)`, cross-diffusion): no coefficient bounds it
+        # an operator of the other field (`D laplacian(o)`, cross-diffusion): no coefficient bounds it
         # here; it stays in the residual (a defect term the Newton check covers, r3 N1)
         _operator_of(u, o) && return (only(kk), Coef(NaN), _optext(k, term))
         # `a · o(t, x, y)`: the coefficient is the term with the read replaced by 1
@@ -217,7 +217,7 @@ function _interval(x, params::Dict{Any, Int}, tabs, box)
     end
     iscall(u) || return nothing
     f, a = operation(u), arguments(u)
-    if (f === at || f === getindex) && length(a) == 2 && haskey(tabs, unwrap(a[1]))
+    if (f === value_at || f === getindex) && length(a) == 2 && haskey(tabs, unwrap(a[1]))
         k = tabs[unwrap(a[1])]
         return pp -> begin
             pp isa Problems.ParamsTables || return (-Inf, Inf)
@@ -319,7 +319,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
         end
     end
     # a hexagonal lattice (F3-20): its Laplacian `2/(3h²) Σₙ (cₙ − c)` has three face directions,
-    # `+e₁`, `+e₂` and `+e₁ − e₂`, each with the face `2/(3h²)` (only `Δ` lowers there)
+    # `+e₁`, `+e₂` and `+e₁ − e₂`, each with the face `2/(3h²)` (only `laplacian` lowers there)
     hex = s.hierarchy[1].grid.geometry == HEX
     NF = hex ? 3 : N
     domain = s.hierarchy[1].grid.domain != 0
@@ -359,7 +359,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
                                                                !any(k -> k in states, cf.keys[_opof(v)])])]
     # the group's states each aux field reads, through the aux fields it reads in turn (a term
     # that reads an aux field is a cross term of those states, or a source when it reads none:
-    # `0.5 L` with `L ~ Δ(c)`, F3-22; the residual kernel of a row evaluates the aux kernels it
+    # `0.5 L` with `L ~ laplacian(c)`, F3-22; the residual kernel of a row evaluates the aux kernels it
     # reads at the stored values, so in solve order the term is exact in an acyclic group)
     auxdef = Tuple{Any, Any}[]                  # (aux field, its right side)
     for eq in sys.eqs
@@ -397,7 +397,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
         others = [o for o in allops if !isequal(o, _ref(c)) && !any(i -> isequal(i, o), inputops)]
         adv = Any[]                             # the advection bound (F3-09b, F3-13), per term and axis
         cross = Tuple{String, Coef, String}[]   # the cross terms: (field, coefficient, text)
-        crossfaces = Tuple{String, Vector{Vector{Coef}}}[]  # a cross diffusion `D Δ(o)`: (field, faces per axis)
+        crossfaces = Tuple{String, Vector{Vector{Coef}}}[]  # a cross diffusion `D laplacian(o)`: (field, faces per axis)
         unseen = String[]                       # terms out of the operator that no bound sees
         # linear in the group's state: every term's class is (F3-12d: the coupled solve's
         # directional difference is then exact at any step)
@@ -410,7 +410,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
                     push!(unseen, _optext(k, term))
                     continue
                 end
-                # a multiplier that reads the coordinates (`(1 + x) Δ(c)`, a `Diffusion` term) is a
+                # a multiplier that reads the coordinates (`(1 + x) laplacian(c)`, a `Diffusion` term) is a
                 # site multiplier as well: its Jacobian row is `m_i Σ_f K_f (c_n − c_i)`, not a
                 # symmetric face `m K` (F3-24), so the row is scaled by `1/m` as `SiteDiffusion`
                 (class == :SiteDiffusion || readsx(p.m)) && (scaled = true)
@@ -459,8 +459,8 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
                 push!(unseen, _optext(k, term))
             end
         end
-        # a scaled row (`m Δ(c)`): one face operator; terms with the same face coefficient
-        # combine (`m Δ(c) + D Δ(c)` is `(m + D) Δ(c)`). The face coefficient kept is the one
+        # a scaled row (`m laplacian(c)`): one face operator; terms with the same face coefficient
+        # combine (`m laplacian(c) + D laplacian(c)` is `(m + D) laplacian(c)`). The face coefficient kept is the one
         # whose terms have the largest bound at the defaults (a term with no bound counts as
         # the largest: no bound could cover it out of the operator); the others stay out with
         # their Gershgorin bound (count rule 2), or unseen when they have none (M3), and their
@@ -616,7 +616,7 @@ function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscret
         inside(o) = node!(kb, INSIDE_OP, BOOL, Int32[], access!(kb, Access{N}(id, Int8(0), Sel(Int16(1)),
             Sel(NTuple{N, Int16}(o)), Int8(0), INSIDE)))
         if !pl.local_only && hex
-            # a hexagonal lattice: the three faces `m · 2/(3h²)` (`Δ` alone lowers there, `K = 1`),
+            # a hexagonal lattice: the three faces `m · 2/(3h²)` (`laplacian` alone lowers there, `K = 1`),
             # 0 across the box or the domain's edge; the boundary diagonal `w d⁺` of each link that
             # leaves the box, with the condition of the face it leaves through (axis 1's for a
             # diagonal link that leaves along axis 1, else axis 2's: `_hexlap`, `Solvers._hexghost`)

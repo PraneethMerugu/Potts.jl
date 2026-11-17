@@ -2,11 +2,11 @@
 # through registered operators, so the classification is ours. Each additive term of a rate
 # right-hand side gets one class with respect to the equation's own field `c`:
 #
-#   Diffusion     Δ(c), DivKGrad(K, c), raw Dx(Dx(c)), Dx(K * Dx(c)), times a constant or
+#   Diffusion     laplacian(c), DivKGrad(K, c), raw Dx(Dx(c)), Dx(K * Dx(c)), times a constant or
 #                 parameter
 #   SiteDiffusion the same times a multiplier `m` that reads inputs only through table reads
-#                 (`at(T, k)`, `T[k]`, `at2`) and indicators (kind sets, comparisons):
-#                 `at(Dk, k) * Δ(c)`, `ifelse(k == 2, Da, Db) * Δ(c)`. `m A` is not
+#                 (`value_at(T, k)`, `T[k]`, `value_at`) and indicators (kind sets, comparisons):
+#                 `value_at(Dk, k) * laplacian(c)`, `ifelse(k == 2, Da, Db) * laplacian(c)`. `m A` is not
 #                 conservative (not symmetric), so it is not plain Diffusion; the stability
 #                 bound takes max|m| over the site and max K over the faces independently
 #   LinearLocal   coefficient × c
@@ -21,7 +21,7 @@
 # divisor, `K`, `u`, the switch's other terms) reads no unknown field of the system, only
 # constants, parameters and inputs. Unknowns are every non-input field, aux fields included
 # (`K ~ c^2` makes `DivKGrad(K, c)` Other), because the solve groups are not known here. A
-# multiplier of a diffusion or advection term must also read no input: `kind * Δ(c)` is not
+# multiplier of a diffusion or advection term must also read no input: `kind * laplacian(c)` is not
 # conservative (the one exception is SiteDiffusion, a diffusion multiplier that reads inputs
 # through table reads and indicators only). A term that reads an aux field at all is Other
 # (its dependence is hidden).
@@ -61,15 +61,15 @@ end
 # a field list's entry as a field: an operation, or a component read as its `_Comp`
 _asref(f) = f isa _Comp ? f : (u = unwrap(f); iscall(u) && operation(u) === getindex ? _ref(u) : f)
 _reads(x, ops) = (u = unwrap(x); iscall(u) && (any(o -> _hit(o, u), ops) || any(a -> _reads(a, ops), arguments(u))))
-# whether `x` reads the inputs `I` only inside a table read's index (`at(T, k)`, `T[k]`,
-# `at2(J, a, b)`) or an indicator (a comparison or `ismember`): a site factor whose values a
+# whether `x` reads the inputs `I` only inside a table read's index (`value_at(T, k)`, `T[k]`,
+# `value_at(J, a, b)`) or an indicator (a comparison or `ismember`): a site factor whose values a
 # table-aware bound can enumerate
 function _site_factor(x, I)
     function ok(u, inside)
         iscall(u) || return true
         f, a = operation(u), arguments(u)
         any(o -> isequal(o, f), I) && return inside
-        if f === at || f === getindex || f === at2
+        if f === value_at || f === getindex
             return ok(unwrap(a[1]), inside) && all(y -> ok(unwrap(y), true), a[2:end])
         elseif f === ismember || f in (==, <, <=, >, >=, !=)
             return all(y -> ok(unwrap(y), true), a)
@@ -100,7 +100,7 @@ function _linclass(u, op, S, I)
     _isread(u, op) && return :LinearLocal
     iscall(u) || return :Other
     f, a = operation(u), arguments(u)
-    if f === Δ || f isa DivKGrad
+    if f === laplacian || f isa DivKGrad
         return _isread(a[end], op) && all(free, a[1:(end - 1)]) ? :Diffusion : :Other
     elseif f isa Differential
         r = _raw_flux(u)

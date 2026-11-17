@@ -85,7 +85,7 @@
 # ```julia
 # function merks2006(lattice)            # in module MerksField
 #     @parameters Dc = 0.75 α = 5.4e-3 ε = 5.4e-3
-#     eq = Dt(C) ~ Dc * Δ(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)
+#     eq = Dt(C) ~ Dc * laplacian(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)
 #     return PDESystem([eq], [c(0, x, y) ~ 0.0, C ~ masked(frame(t, x, y), 0.0)], lattice_domain(t, (x, y), lattice),
 #         [t, x, y], [C, cell(t, x, y), ecm(t, x, y), frame(t, x, y)], [Dc, α, ε]; name = :merks_field)
 # end
@@ -240,7 +240,7 @@ nothing #hide
 # <<fragment equation>>
 #
 # `c(t, x, y)` is the chemoattractant at every lattice site; it starts at 0
-# (`c(0, x, y) ~ 0.0`). `Differential(t)` is the time derivative and `Δ` the lattice
+# (`c(0, x, y) ~ 0.0`). `Differential(t)` is the time derivative and `laplacian` the lattice
 # Laplacian. The `PDESystem` does not read the cells. It reads two *input fields*, `cell`
 # and `ecm`, which are 1 at an endothelial site and at a matrix site: this is Eq. (6) term
 # by term. `lattice_domain` gives the domain of the lattice, which a coupled `PDESystem`

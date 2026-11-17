@@ -77,7 +77,7 @@ public ClockTick, MaskSync, InputRefresh, refresh_inputs!, mask_sync!, sync_mask
 public LatticeMetadata, LatticeFunction, LatticeProblem, LatticeDiscreteProblem, lattice_metadata, lattice_problem,
        field_problem, rhs_build
 # the Jacobian of the ODE right side (F4-07)
-public jacobian_sparsity, column_colors, LatticeJacobian, LatticeJVP, JacobianOperator, colored_jacobian!, lattice_jvp!
+public field_jacobian_sparsity, column_colors, LatticeJacobian, LatticeJVP, JacobianOperator, colored_jacobian!, lattice_jvp!
 # the lattice multigrid as a LinearSolve preconditioner and algorithm (F4-08)
 public LatticeMultigrid, MGPreconditioner, LatticePCG
 # solutions (F4-04)

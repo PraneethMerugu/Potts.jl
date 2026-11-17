@@ -72,7 +72,7 @@ end
         @test all(isfinite, c) && maximum(c) <= 1 + 1.0e-12 && minimum(c) >= -1.0e-12     # a monotone step at n = 9
         err = audit_err(() -> PottsProblem(AuditVolumeDiffusion(; name = :k), op, (0, 1); field_solver = ExplicitEuler()))
         @test err isa ArgumentError && occursin("varies by site", err.msg) && occursin("volume[owner]", err.msg) &&
-            !occursin("LatticePDE.", err.msg) && !occursin("at(volume", err.msg)
+            !occursin("LatticePDE.", err.msg) && !occursin("value_at(volume", err.msg)
         err = audit_err(
             () -> PottsProblem(
                 AuditTableField(; name = :k, mode = :mcs_diff, d0 = 0.1, d1 = 0.2),
@@ -80,7 +80,7 @@ end
             )
         )
         @test err isa ArgumentError && occursin("δ[kind]", err.msg) && occursin("mcs", err.msg) &&
-            !occursin("at(δ", err.msg) && !occursin("(1 + t)", err.msg)
+            !occursin("value_at(δ", err.msg) && !occursin("(1 + t)", err.msg)
     end
 end
 

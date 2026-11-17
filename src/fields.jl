@@ -76,8 +76,8 @@ _field_bounds(sys, name) = (x = only(x for x in _p(sys, :variables) if info(x) !
 # call lowers in `@equations` exactly when it lowers in a PDESystem
 _field_op(f) = LatticePDE.lowers_call(f)
 # LatticePDE's spatial operators, passed through to the PDESystem (F2 design §2.11)
-_spatial_op(f) = f === Δ || f isa LatticePDE.DivKGrad || f isa LatticePDE.Advect || f isa Differential
-# whether `rate` applies a spatial operator to the field `n` (`Δ`, `DivKGrad`, `Advect`, a raw
+_spatial_op(f) = f === laplacian || f isa LatticePDE.DivKGrad || f isa LatticePDE.Advect || f isa Differential
+# whether `rate` applies a spatial operator to the field `n` (`laplacian`, `DivKGrad`, `Advect`, a raw
 # flux `Differential(x)(K * Differential(x)(c))`; F2 design §2.11): the operators whose ghost
 # values a face condition sets
 function _has_spatial_op(rate, n::Symbol)
@@ -154,10 +154,10 @@ function _field_term(x, cv)
         return _unwrap(f(map(conv, a)...))
     elseif f === ismember
         return _unwrap(ismember(Symbolics.wrap(_field_term(a[1], cv)), SymbolicUtils.unwrap_const(a[2])))
-    elseif f === at && info(a[1]) !== nothing && info(a[1]).role === :kindtable && length(a) == 2
+    elseif f === value_at && info(a[1]) !== nothing && info(a[1]).role === :kindtable && length(a) == 2
         # Potts kind tables include the medium at entry 1 (kind 0); the lattice table is 1-based
         push!(cv.params, _unwrap(a[1]))
-        return _unwrap(at(Symbolics.wrap(_unwrap(a[1])), Symbolics.wrap(_field_term(a[2], cv)) + 1))
+        return _unwrap(value_at(Symbolics.wrap(_unwrap(a[1])), Symbolics.wrap(_field_term(a[2], cv)) + 1))
     elseif _field_op(f)
         # an `ifelse` of CPM reads only (no field) that needs a filled input is filled whole:
         # the fill then evaluates only the taken branch (a neighbor fold under a kind test
@@ -175,7 +175,7 @@ function _field_term(x, cv)
 end
 _nopkg(x) = LatticePDE.as_written(replace(string(x), "LatticePDE." => ""))   # as the model writes it
 
-# The operand of a spatial operator (`Δ(c)`, `DivKGrad(K, c)`, `Advect(u, c)`, the inner end of a
+# The operand of a spatial operator (`laplacian(c)`, `DivKGrad(K, c)`, `Advect(u, c)`, the inner end of a
 # raw flux `Differential(x)(K * Differential(x)(c))`) is a field or site variable: an operator of
 # a value the CPM writes once per MCS (a CPM read, `volume`, or a kind expression, `kind == A`:
 # an input of the PDESystem bound to one is that value) is refused in the model's words, naming
@@ -232,7 +232,7 @@ function _has_cpm_fill(x)
     _spatial_op(f) && return any(_has_cpm_fill, a)
     f === SymbolicUtils.array_literal && return any(_has_cpm_fill, something(LatticePDE.velocity_terms(u), a))
     f === ismember && return _has_cpm_fill(a[1])
-    f === at && info(a[1]) !== nothing && info(a[1]).role === :kindtable && length(a) == 2 && return _has_cpm_fill(a[2])
+    f === value_at && info(a[1]) !== nothing && info(a[1]).role === :kindtable && length(a) == 2 && return _has_cpm_fill(a[2])
     return _field_op(f) ? any(_has_cpm_fill, a) : true
 end
 
@@ -242,7 +242,7 @@ function _filled_or_refuse(cv, u)
         "site update (`@after_mcs s ~ rand()`) and bind the input to that variable"))
     _reads_site_vars(u) && throw(ArgumentError(
         "the term `$(_builtin_text(string(u)))` of a field equation reads a field or site variable inside a CPM " *
-        "read (a gather, a cell read, …); the field compiler lowers fields only through arithmetic, `Δ`, " *
+        "read (a gather, a cell read, …); the field compiler lowers fields only through arithmetic, `laplacian`, " *
         "`ismember`, `ifelse` and kind tables: compute the CPM part in a site update and read the variable"))
     # the model-wide list (`known`) names each term once, so every group binds the same array
     k = findfirst(e -> isequal(e[2], u), cv.filled)
@@ -256,7 +256,7 @@ end
 
 function _filled_input!(cv, u, name, E)
     any(e -> e[1] === name, cv.filled) || push!(cv.filled, (name, u, E))
-    # a kind is never negative: a kind table read `at(δ, kind + 1)` never takes index 0 (which
+    # a kind is never negative: a kind table read `value_at(δ, kind + 1)` never takes index 0 (which
     # reads 0), and the stability bound leaves it out
     return get!(() -> _field_var(name, E === Bool ? Bool : E <: Integer ? Int32 : Real, cv.ivs; input = true,
             entity = Entity(:cpm_read, name, u, (;)), username = _input_word(name, u),
@@ -332,7 +332,7 @@ function _field_lhs(eq, sys = nothing)
 end
 _zero_lhs(eq) = (v = SymbolicUtils.unwrap_const(_unwrap(eq.lhs)); v isa Number && iszero(v))
 # The field variables a steady row reads (`all`), and those under a spatial operator (`ops`:
-# `Δ(c)`, the last argument of `DivKGrad` and `Advect`, a `Differential`)
+# `laplacian(c)`, the last argument of `DivKGrad` and `Advect`, a `Differential`)
 function _steady_reads(eq)
     all, ops = Any[], Any[]
     function walk(u, under)
@@ -374,7 +374,7 @@ function _steady_assign(sys::PottsSystem)
         throw(ArgumentError(string("`", rows[bad], "`: a steady row `0 ~ rhs` is solved for a field that it reads and that ",
             "has no other equation, and it reads none", isempty(left) ? " (every field has an equation)" :
             string(" of the fields with no equation (", join(("`$n`" for n in left), ", "), ")"),
-            "; write the field's operator into the row (`0 ~ D * Δ(c) - k * c + …` for `c`)")))
+            "; write the field's operator into the row (`0 ~ D * laplacian(c) - k * c + …` for `c`)")))
     end
     return Pair{Any, Any}[rows[q] => free[picks[q]] for q in eachindex(rows)]
 end
@@ -474,13 +474,13 @@ function _bcs_equation(sys, b, names, cv, core, ext, kinds, N, stepped)
             "the condition"))
     end
     # a face condition sets the ghost values of a spatial operator of `n`: with none in any
-    # field's equation (`D(u) ~ Δ(n)` reads the ghosts of `n` too, and so does an aux field
-    # `K ~ Δ(n)`) it would do nothing (F4-E14)
+    # field's equation (`D(u) ~ laplacian(n)` reads the ghosts of `n` too, and so does an aux field
+    # `K ~ laplacian(n)`) it would do nothing (F4-E14)
     if !periodic && !masked && !isempty(axes)
         any(f -> _has_spatial_op(f[2], n), _field_equations(sys)) || any(f -> _has_spatial_op(f[2], n), _field_aux(sys)) ||
             throw(ArgumentError(
             "@bcs: the condition $text sets a face of `$n`, which sets the ghost values of a spatial operator of `$n`, " *
-            "but the equation of `$n` has no `Δ($n)` nor another spatial operator of `$n` (`DivKGrad(…)(K, $n)`, " *
+            "but the equation of `$n` has no `laplacian($n)` nor another spatial operator of `$n` (`DivKGrad(…)(K, $n)`, " *
             "`Advect(…)(u, $n)`, a raw flux `Differential(x)(K * Differential(x)($n))`), and no other field's " *
             "equation or aux definition `K ~ …` has one; the condition would do nothing: drop it, or hold sites with a masked condition " *
             "`$n ~ masked(pred, v)`"))
@@ -558,7 +558,7 @@ function _field_system(sys::PottsSystem, names = Symbol[info(x).name for (x, _) 
     end
     core = core_lattice(lat)
     ext = ntuple(d -> lat.dims[d] * Float64(h[d]), N)
-    # another group's field that a spatial operator here reads (`Δ(v)`, v stepped elsewhere): an
+    # another group's field that a spatial operator here reads (`laplacian(v)`, v stepped elsewhere): an
     # input that carries its face conditions, so its ghost values are its own group's (F3-22 review r1).
     # A site variable or a field with no equation that an operator reads is such an input too, with
     # no face conditions: a closed face has no flux (F4-B6 review; before, LatticeFields refused it
@@ -616,7 +616,7 @@ function _masked_fields(sys::PottsSystem)
 end
 
 # The lattice of the fields: a hexagonal lattice is a hexagonal grid (LatticePDE's six-neighbor
-# `Δ`), and an irregular `domain` is the Bool input `domain__in` (written by the fill phase
+# `laplacian`), and an irregular `domain` is the Bool input `domain__in` (written by the fill phase
 # from the lattice's mask) with a zero-flux edge: as the old field path, a neighbor outside
 # the domain or a closed face reads the site itself.
 _has_domain(lat) = (m = core_lattice(lat).mask; m !== nothing && !all(m))
@@ -761,8 +761,8 @@ function LatticeFields.Problems.unbounded_text(t::_PottsTexts, c)
                "$(length(r.terms) == 1 ? "" : "s") $(join(("`$(_user_text(x, t.cv))`" for x in r.terms), ", ")), " *
                "which the stability bound cannot see: a nonlinear term or a coefficient that reads a field with no " *
                "finite declared `bounds`, an advection whose velocity reads the field it moves, a diffusion " *
-               "multiplier that varies by site through a CPM value read directly (`volume[owner] * Δ(c)`; a kind " *
-               "table `δ[kind] * Δ(c)` or a kind set `ismember(kind, g) * Δ(c)` is bounded), or a coefficient " *
+               "multiplier that varies by site through a CPM value read directly (`volume[owner] * laplacian(c)`; a kind " *
+               "table `δ[kind] * laplacian(c)` or a kind set `ismember(kind, g) * laplacian(c)` is bounded), or a coefficient " *
                "that reads `mcs`)" * _infinite_text(t) * "; declare finite `bounds = (lo, hi)` on a field whose " *
                "values stay in an interval (`@variables c(..) = 0.5 [bounds = (0, 1)]` in its PDESystem: the bound then sees its nonlinear " *
                "terms and coefficients), or give " * _A_ROUTE
@@ -797,7 +797,7 @@ function LatticeFields.Problems.refuse_parameters(t::_PottsTexts, c)
     isempty(r.negative) || throw(ArgumentError(
         "the diffusion coefficient of the field$(length(r.negative) == 1 ? "" : "s") $(_fieldlist(r.negative)) " *
         "is negative at the current parameters (anti-diffusion: an ill-posed equation, unstable at any step and " *
-        "with any solver); write the term with a coefficient ≥ 0 (`D * Δ(c)` with `D ≥ 0`; a decay is a reaction " *
+        "with any solver); write the term with a coefficient ≥ 0 (`D * laplacian(c)` with `D ≥ 0`; a decay is a reaction " *
         "term `-k * c`), or give the parameters values that make it ≥ 0"))
     throw(ArgumentError(LatticeFields.Problems.unbounded_text(_PottsTexts(t.names, t.cv), (; c..., r = (; r..., terms = String[],
         coupled = String[])))))
@@ -866,8 +866,8 @@ end
 # why a coefficient has no finite bound, in the model's words: a kind table entry `e` is
 # kind `e - 1` (entry 1 is the medium's), with the route
 function _nonfinite_text(text, w, cv; warning::Bool = false)
-    # a kind table read `at(τ, 1 + kind)` as the model writes it, `τ[kind]`
-    u = replace(_user_text(text, cv), r"at\((\w+), (?:1 \+ kind|kind \+ 1)\)" => s"\1[kind]")
+    # a kind table read `value_at(τ, 1 + kind)` as the model writes it, `τ[kind]`
+    u = replace(_user_text(text, cv), r"value_at\((\w+), (?:1 \+ kind|kind \+ 1)\)" => s"\1[kind]")
     # (a Robin face whose coefficients vary by site or in time, F4-12b: the face in words)
     w === :robin && return string("the Robin coefficients of ", u, " give the ghost value no finite bound (α/2 + β/h ",
         "may vanish at a site, or a coefficient grows without bound in time)")
@@ -902,12 +902,12 @@ function _user_text(term::AbstractString, cv)
         out = replace(out, Regex(string(name) * raw"\(t(, [xyz])*\)") => user)
     end
     out = replace(out, r"Potts\._intdiv\(([^,()]+), ([^()]+)\)" => s"(\1 ÷ \2)")   # the model's `÷`
-    out = LatticePDE.as_written(replace(out, "LatticePDE." => ""))    # `Δ(c)`, `at(δ, …)`, `[ux, uy]` as written
+    out = LatticePDE.as_written(replace(out, "LatticePDE." => ""))    # `laplacian(c)`, `value_at(δ, …)`, `[ux, uy]` as written
     out = replace(out, r"\bstep_index\(t\)" => "mcs", r"\bclock__tick\b" => "mcs")   # the clock's step index
     out = replace(out, r"(\w+)\(t(, [xyz])*\)" => s"\1")
-    # a kind table read `at(δ, 1 + kind)` as the model writes it, `δ[kind]`; the time `t` is `time`
-    out = replace(out, r"at\((\w+), (?:1 \+ kind|kind \+ 1)\)" => s"\1[kind]")
-    out = replace(out, r"at\((\w+), (\w+)\)" => s"\1[\2]")             # a CPM read `volume[owner]`
+    # a kind table read `value_at(δ, 1 + kind)` as the model writes it, `δ[kind]`; the time `t` is `time`
+    out = replace(out, r"value_at\((\w+), (?:1 \+ kind|kind \+ 1)\)" => s"\1[kind]")
+    out = replace(out, r"value_at\((\w+), (\w+)\)" => s"\1[\2]")             # a CPM read `volume[owner]`
     return replace(out, r"\bt\b" => "time")
 end
 
@@ -1047,7 +1047,7 @@ function _field_options(c::CompiledPottsSystem, T::Type, solver, rate)
     return LatticeFields.Compile.CompileOptions(; T, float64_ok = !narrow || wide, lanes = :state, index = :cartesian,
         declared = narrow && wide)
 end
-# an aux field that LatticePDE added for a spatial operator across `Coarse` grids (`Δ(c)`, F3-22):
+# an aux field that LatticePDE added for a spatial operator across `Coarse` grids (`laplacian(c)`, F3-22):
 # no model variable holds it, so the binding allocates it and its `aux:` kernel fills it every window
 _hidden_aux(k::AbstractString) = LatticePDE.is_crossgrid_key(k)
 function _aux_group(c::CompiledPottsSystem, T::Type, dt)

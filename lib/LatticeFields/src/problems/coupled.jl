@@ -313,7 +313,7 @@ end
 Whether the implicit group of the fields `keys` (its operator `op`, its stepped program `s`)
 takes the coupled solve (F3-12d): a `QuasiSteady` group with `linsolve = DeviceGMRES(…)` always, or
 when its rows read one another in a cycle, or a row reads another field of the group through a
-term the operator does not take as a source (a cross diffusion `D Δ(o)`, a nonlinear term such
+term the operator does not take as a source (a cross diffusion `D laplacian(o)`, a nonlinear term such
 as `c²`, a term that reads its own field and another): its steady rows are then solved together,
 the cross terms in the operator. Otherwise the rows are solved one by one in the order of their
 reads (exact for an acyclic group with linear cross terms).

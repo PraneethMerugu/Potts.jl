@@ -278,7 +278,7 @@ function _ode_reads_other_cells(c::CompiledPottsSystem)
             # an indexed read crosses cells through its variable, not its index (this cell's
             # expression; a read nested in it is visited on its own); a gather's body reads
             # this cell's unknowns unless indexed; a fold's body reads every cell's
-            hit[] = op in (at, at2) ? !_is_own_read(y) && reads(arguments(y)[1]) :
+            hit[] = op === value_at ? !_is_own_read(y) && reads(arguments(y)[1]) :
                     op === population && reads(y)
         end
     end
@@ -286,8 +286,8 @@ function _ode_reads_other_cells(c::CompiledPottsSystem)
 end
 
 """`x[id]`: the current cell's own `x`."""
-_own_read(x) = _unwrap(at(Symbolics.wrap(x), Symbolics.wrap(B.id)))
-_is_own_read(y) = operation(y) === at && isequal(arguments(y)[2], B.id)
+_own_read(x) = _unwrap(value_at(Symbolics.wrap(x), Symbolics.wrap(B.id)))
+_is_own_read(y) = (operation(y) === value_at && length(arguments(y)) == 2) && isequal(arguments(y)[2], B.id)
 _ode_scratch_name(n::Symbol) = Symbol(n, :__ode)
 
 # ---------------------------------------------------------------------------------------

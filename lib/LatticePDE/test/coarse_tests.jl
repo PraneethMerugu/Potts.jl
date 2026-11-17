@@ -139,7 +139,7 @@ end
         ch2 = first(@variables codeh(..))
         q, g = @variables q(..)::Int32 [input = true] g(..) [input = true]
         osys(c, k2, extra) = PDESystem(
-            [D(c(t, x, y)) ~ cD * Δ(c(t, x, y)) - ckd * c(t, x, y) * k2 + 0.05 * g(t, x, y)],
+            [D(c(t, x, y)) ~ cD * laplacian(c(t, x, y)) - ckd * c(t, x, y) * k2 + 0.05 * g(t, x, y)],
             [c(0, x, y) ~ x * y], cdom(), [t, x, y], [c(t, x, y), g(t, x, y), extra], [cD, ckd]; name = :os
         )
         oc = discretize(
@@ -199,14 +199,14 @@ end
     @testset "review r1 M2: a nonlinear fine read is restricted by the mean of the whole subterm" begin
         # `D(c) ~ f` on Coarse(4) over 16²: Σ c · k² after t = 1 is the fine Σ f (base cb20be97,
         # ~/lpwork/f3b6r-nc-m2.log: `f(mean g)`, off by −25% for g², −75% for max(g − 0.5, 0),
-        # −4% for exp(g), +2% for at(S, q) g, +25% for g/(0.2 + g))
+        # −4% for exp(g), +2% for value_at(S, q) g, +25% for g/(0.2 + g))
         q, g = @variables q(..)::Int32 [input = true] g(..) [input = true]
         G = rand(Xoshiro(5), 16, 16)
         S = Float64[1.0, 2.0, 5.0, 3.0]
         srcs = [
             (qe, ge) -> ge => sum(G), (qe, ge) -> max(ge - 0.5, 0) => sum(max.(G .- 0.5, 0)),
             (qe, ge) -> ge^2 => sum(G .^ 2), (qe, ge) -> exp(ge) => sum(exp.(G)),
-            (qe, ge) -> at(cSv, qe + 1) * ge => sum(S[CQ1 .+ 1] .* G), (qe, ge) -> ge / (0.2 + ge) => sum(G ./ (0.2 .+ G)),
+            (qe, ge) -> value_at(cSv, qe + 1) * ge => sum(S[CQ1 .+ 1] .* G), (qe, ge) -> ge / (0.2 + ge) => sum(G ./ (0.2 .+ G)),
         ]
         for (i, f) in enumerate(srcs)
             c = Symbolics.wrap(
@@ -249,7 +249,7 @@ end
         qe = q(t, x, y)
         sys = PDESystem(
             [
-                D(cs1(t, x, y)) ~ (qe == 1) + 0.5 * (qe == 2), K1(t, x, y) ~ (qe == 1) + 0.5 * (qe == 2), K2(t, x, y) ~ at(cR, qe + 1),
+                D(cs1(t, x, y)) ~ (qe == 1) + 0.5 * (qe == 2), K1(t, x, y) ~ (qe == 1) + 0.5 * (qe == 2), K2(t, x, y) ~ value_at(cR, qe + 1),
                 M0(t, x, y) ~ (qe == 0), M1(t, x, y) ~ (qe != 0),
             ], [cs1(0, x, y) ~ 0.0], cdom(), [t, x, y],
             [cs1(t, x, y), K1(t, x, y), K2(t, x, y), M0(t, x, y), M1(t, x, y), qe], [cR]; name = :s1
@@ -283,10 +283,10 @@ end
         Ki = 0.5 .+ rand(Xoshiro(41), 16, 16)
         @parameters cKv[1:4] = [1.0, 4.0, 0.25, 2.0]
         ki = first(@variables ki(..) [input = true])
-        # (the kind case: the twin reads the block means of `at(cKv, q + 1)` as the real input `ki`)
+        # (the kind case: the twin reads the block means of `value_at(cKv, q + 1)` as the real input `ki`)
         for (lab, K, insf, insc) in (
                 (
-                    "kind", qq -> at(cKv, qq + 1), [qe => Q, ki(t, x, y) => Ki],
+                    "kind", qq -> value_at(cKv, qq + 1), [qe => Q, ki(t, x, y) => Ki],
                     [qe => Q[1:4, 1:4], ki(t, x, y) => cmean([1.0, 4.0, 0.25, 2.0][Q .+ 1])],
                 ),
                 ("real", qq -> ki(t, x, y), [qe => Q, ki(t, x, y) => Ki], [qe => Q[1:4, 1:4], ki(t, x, y) => cmean(Ki)]),

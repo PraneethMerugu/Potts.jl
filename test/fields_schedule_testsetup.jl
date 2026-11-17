@@ -7,17 +7,17 @@ module FsSchedPDE
     using .FieldPDE
     @variables c(..) kA(..)::Bool [input = true]
     const C, KA = c(t, x, y), kA(t, x, y)
-    chemo() = (@parameters Dc = 0.2; pdesys([Dt(C) ~ Dc * Δ(C) + 0.5 * KA - 0.1 * C], [c(0, x, y) ~ 0.0], (24, 20), [C, KA], [Dc]))
-    source() = (@parameters Dc = 0.2 s = 0.05; pdesys([Dt(C) ~ Dc * Δ(C) + s * KA], [c(0, x, y) ~ 0.0], (12, 10), [C, KA], [Dc, s]))
+    chemo() = (@parameters Dc = 0.2; pdesys([Dt(C) ~ Dc * laplacian(C) + 0.5 * KA - 0.1 * C], [c(0, x, y) ~ 0.0], (24, 20), [C, KA], [Dc]))
+    source() = (@parameters Dc = 0.2 s = 0.05; pdesys([Dt(C) ~ Dc * laplacian(C) + s * KA], [c(0, x, y) ~ 0.0], (12, 10), [C, KA], [Dc, s]))
 end
 
 const FD_THREADS_RUN = raw"""
 using Potts
 using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
-using Potts.LatticePDE: Δ, lattice_domain
+using Potts.LatticePDE: laplacian, lattice_domain
 @parameters x y Dc = 0.2
 @variables c(..)
-const FD_BIG = PDESystem([Differential(Potts.t)(c(Potts.t, x, y)) ~ Dc * Δ(c(Potts.t, x, y))], [c(0, x, y) ~ 0.0],
+const FD_BIG = PDESystem([Differential(Potts.t)(c(Potts.t, x, y)) ~ Dc * laplacian(c(Potts.t, x, y))], [c(0, x, y) ~ 0.0],
     lattice_domain(Potts.t, (x, y), (120, 100)), [Potts.t, x, y], [c(Potts.t, x, y)], [Dc]; name = :fields)
 @potts_model FdBig begin
     @kinds medium A

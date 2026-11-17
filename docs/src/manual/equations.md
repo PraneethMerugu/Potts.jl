@@ -9,7 +9,7 @@ A model holds two kinds of equations:
 
 | Equation | Where | Meaning | Integrated by |
 |---|---|---|---|
-| `Dt(c) ~ Dc * Δ(c) + s * src - δ * c` | a `PDESystem` | a reaction–diffusion PDE on the lattice | `field_solver` |
+| `Dt(c) ~ Dc * laplacian(c) + s * src - δ * c` | a `PDESystem` | a reaction–diffusion PDE on the lattice | `field_solver` |
 | `Shift(t, 1)(m) ~ g * m + q` | a `PDESystem` | a map: one application per MCS | `field_solver` (`ExplicitMap()`) |
 | `K ~ K₀ * (1 + 0.05 * u)` | a `PDESystem` | an aux field: its value from the others at every substep | — |
 | `D(x) ~ k₁ - k₂ * x` | `@equations`, `x(cell)` | one ODE per live cell | `ode_solver` |
@@ -28,14 +28,14 @@ does not read the cells. It reads **input fields**, declared `[input = true]`, a
 ```@example equations
 using Potts
 using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
-using Potts.LatticePDE: Δ, lattice_domain
+using Potts.LatticePDE: laplacian, lattice_domain
 
 t = Potts.t
 Dt = Differential(t)
 @parameters x y Dc = 0.2 s = 0.5 kd = 0.1 av = 0.01
 @variables c(..) = 0.0 endo(..)::Bool [input = true] vol(..) [input = true]
 C = c(t, x, y)
-attractant = PDESystem([Dt(C) ~ Dc * Δ(C) + s * endo(t, x, y) - kd * C + av * vol(t, x, y)], [],
+attractant = PDESystem([Dt(C) ~ Dc * laplacian(C) + s * endo(t, x, y) - kd * C + av * vol(t, x, y)], [],
     lattice_domain(t, (x, y), (24, 20)), [t, x, y], [C, endo(t, x, y), vol(t, x, y)], [Dc, s, kd, av];
     name = :attractant)
 
@@ -104,7 +104,7 @@ in the substrate (Fortuna et al. 2020, Eq. 6) binds the input `edge` of its `PDE
 
 ```julia
 @variables F(..) = 0.0 edge(..) [input = true]
-actin = PDESystem([Dt(F(t, x, y)) ~ D_F * Δ(F(t, x, y)) - k_decay * F(t, x, y) + k_source * edge(t, x, y)], [],
+actin = PDESystem([Dt(F(t, x, y)) ~ D_F * laplacian(F(t, x, y)) - k_decay * F(t, x, y) + k_source * edge(t, x, y)], [],
     lattice_domain(t, (x, y), dims), [t, x, y], [F(t, x, y), edge(t, x, y)], [D_F, k_decay, k_source]; name = :actin)
 
 # in the model
@@ -216,7 +216,7 @@ using OrdinaryDiffEqTsit5: Tsit5
 
 @parameters Dc = 0.5
 @variables incell(..)::Bool [input = true]
-chemical = PDESystem([Dt(C) ~ Dc * Δ(C) + 0.1 * incell(t, x, y) - 0.05 * C], [],
+chemical = PDESystem([Dt(C) ~ Dc * laplacian(C) + 0.1 * incell(t, x, y) - 0.05 * C], [],
     lattice_domain(t, (x, y), (30, 30)), [t, x, y], [C, incell(t, x, y)], [Dc]; name = :chemical)
 
 @potts_model Chem begin
@@ -271,7 +271,7 @@ iteration keeps the method's order. A switch `−a max(c − c_T, 0)` takes two 
 by default: the second is a flip pass that takes the switch state at the first one's result,
 not a convergence test. Other terms, such as advection, fields of one group that read one
 another in a loop, or a second face coefficient next to a kind-dependent multiplier
-(`dk * Δ(c) + DivKGrad(K, c)` with `dk => δ[kind]`: the term with the larger bound is in the
+(`dk * laplacian(c) + DivKGrad(K, c)` with `dk => δ[kind]`: the term with the larger bound is in the
 solve), are
 corrected by more Newton iterations. Their substep count keeps the correction converging (for
 the sum of their bounds; advection with a constant velocity: `substeps ≥ 2 · mcs_duration ·
@@ -318,18 +318,18 @@ consumption field. A clip changes the equation solved slightly.
 
 `QuasiSteady()` solves a field's steady state `0 = rhs` in each MCS, at the cells of that
 MCS: a field that relaxes much faster than the cells move. Each MCS starts from the last
-solution. Write such a field's equation as a steady row, `0 ~ Dc * Δ(c) - kd * c + s`: it is
+solution. Write such a field's equation as a steady row, `0 ~ Dc * laplacian(c) - kd * c + s`: it is
 solved for a field it reads that has no other equation, the one under its operator first,
 with `QuasiSteady` by default (another solver for it is an error). Its sign does not matter:
-`0 ~ kd * c - Dc * Δ(c) - s` is the same row. A local row such as `0 ~ -2c + 0.5e`, with
+`0 ~ kd * c - Dc * laplacian(c) - s` is the same row. A local row such as `0 ~ -2c + 0.5e`, with
 `D(e) ~ …`, is `c`'s. Steady fields are solved first in each MCS, so the other fields read their
 values of that MCS. `QuasiSteady` also solves a rate row `D(c) ~ rhs` as `0 = rhs`. It takes `newton`, `linsolve` and `solver_type` with the meanings above, and has no
 `substeps` and no `lower_bound`. A linear field takes one linear solve per MCS; a nonlinear or
 switched one takes up to 8 Newton iterations, checked as above. When a term stays out of the
 operator (advection), the count comes from the bound on that term against the decay, from 8
 to at most 40 iterations; give `newton = k` if the warning says the budget is hit. Steady
-fields of one `QuasiSteady` that read one another (`0 ~ Δ(a) - a + 0.5b` and
-`0 ~ Δ(b) - b - 0.5a`, a cross diffusion `Δ(b)` in `a`'s row), and a row with a term the
+fields of one `QuasiSteady` that read one another (`0 ~ laplacian(a) - a + 0.5b` and
+`0 ~ laplacian(b) - b - 0.5a`, a cross diffusion `laplacian(b)` in `a`'s row), and a row with a term the
 operator does not see (`c²` in `0 ~ q - c^2`), are solved together: one Newton iteration
 solves all their rows with every cross term in the operator, by a restarted GMRES
 (`DeviceGMRES()`; a `DevicePCG` or `Multigrid` given as `linsolve` is its preconditioner). There
@@ -400,7 +400,7 @@ threads).
   by branch (the worst branch counts). The count is
   recomputed when parameters change; a number is a minimum. The bound also covers, over
   intervals (the interval bound):
-  - a coefficient that reads the coordinates (`(1 + x) * Δ(c)`, `DivKGrad(:harmonic)(1 + x, c)`,
+  - a coefficient that reads the coordinates (`(1 + x) * laplacian(c)`, `DivKGrad(:harmonic)(1 + x, c)`,
     `- k * (1 + x) * c`), over the lattice's cell centers and, for a velocity and for a face
     coefficient on an axis with a boundary value or flux, one half spacing past the faces;
   - a coefficient that reads a field with declared bounds (`c(..) = 0.5 [bounds = (0, 1)]`):
@@ -424,12 +424,12 @@ threads).
   needs `substeps`, and the problem throws an error naming the term without it: a
   reaction that is not linear in `c` (with no declared bounds), a coefficient that reads other
   state (a field with no declared bounds, `mcs`), and a diffusion multiplier that reads a
-  bound cell quantity (`vol * Δ(c)` with `vol => volume[owner]`). So do fields
-  that read each other in a loop (`- Dx * Δ(u)` in the rate of `c` and `Dx * Δ(c)` in the rate
+  bound cell quantity (`vol * laplacian(c)` with `vol => volume[owner]`). So do fields
+  that read each other in a loop (`- Dx * laplacian(u)` in the rate of `c` and `Dx * laplacian(c)` in the rate
   of `u`) when their rows of the Jacobian are not diagonally dominant. A field that reads
   another one way (`u` does not read `c` back) is bounded. A diffusion multiplier that varies
   by site through a kind table
-  or a kind set (`dk * Δ(c)` with `dk => δ[kind]`, `ismember(kind, g) * Δ(c)`) is bounded: the bound takes
+  or a kind set (`dk * laplacian(c)` with `dk => δ[kind]`, `ismember(kind, g) * laplacian(c)`) is bounded: the bound takes
   the largest multiplier times the largest diffusion coefficient. With `substeps = n` in the
   cases the bound cannot see, the count is the larger of
   `n` and the bound of the terms the bound sees (diffusion at least), and the problem warns
@@ -478,7 +478,7 @@ threads).
   Julia's `rand()`: it is evaluated once, when the equation is built, and the field reads
   that one number at every site and every step. For a random source, draw in a site update
   (`@after_mcs s ~ rand()`) and read `s` as an input.
-- On a hexagonal lattice, `Δ` is the only spatial operator. On a lattice with a `domain`,
+- On a hexagonal lattice, `laplacian` is the only spatial operator. On a lattice with a `domain`,
   the fields live in the domain: a site outside it keeps its value, and the domain's edge
   has zero flux. Face values still apply at the faces of the box.
 - A diffusion coefficient must not be negative: that is anti-diffusion, an ill-posed problem
@@ -526,7 +526,7 @@ low face of `x`, and `c(t, L, y)` the high face, with `L` the lattice's extent a
 using Potts.LatticePDE: masked
 @parameters Dd = 0.2 S = 1.0
 @variables wall(..)::Bool [input = true]
-absorbing = PDESystem([Dt(C) ~ Dd * Δ(C) + 0.1 * incell(t, x, y)],
+absorbing = PDESystem([Dt(C) ~ Dd * laplacian(C) + 0.1 * incell(t, x, y)],
     [c(t, 0, y) ~ S,                         # the low x face held at S
      Differential(x)(c(t, 30, y)) ~ 0,       # the high x face closed
      C ~ masked(wall(t, x, y), 0.0)],        # an absorbing obstacle
@@ -564,7 +564,7 @@ u = solve(prob, SequentialCPM(); save_everystep = false).u[end]
 
   On the high face the outward normal is `+x`: `Differential(x)(c(t, L, y)) ~ q` is
   `∂c/∂n = q`. A closed axis without a condition is zero flux. A site variable or a field
-  with no condition that a spatial operator reads (`Δ(v)`) also has zero-flux faces on each
+  with no condition that a spatial operator reads (`laplacian(v)`) also has zero-flux faces on each
   closed axis, and wraps on each periodic axis. A face coefficient that reads
   a field (`DivKGrad(:arithmetic)(c^3, c)`) takes the field's ghost value at the face: with
   `c(t, 0, y) ~ 1.0` and `c = 0` at the edge site, the face mean is `(0³ + 2³)/2`, so the
@@ -617,7 +617,7 @@ u = solve(prob, SequentialCPM(); save_everystep = false).u[end]
 - An initial condition (`c(0, x, y) ~ v`) is the field's initial value, not a boundary
   condition.
 
-`Δ` is a field operator: it appears in `PDESystem` equations, where it reads the faces. In
+`laplacian` is a field operator: it appears in `PDESystem` equations, where it reads the faces. In
 a model line (site updates, energies, drives, `@observed`) it is an error.
 `Potts.fields(model)` holds the conditions, so `discretize` runs them as written.
 
@@ -683,7 +683,7 @@ with the problem's `field_solver`, or by name in `FieldGroups(:drug₊c => Backw
 ```@example equations
 @parameters Dk = 0.5 kk = 0.1
 @variables kin(..)::Int32 [input = true, lattice_input_name = "kind"]
-pde = PDESystem([Dt(C) ~ Dk * Δ(C) - kk * C + (kin(t, x, y) == 1)], [],
+pde = PDESystem([Dt(C) ~ Dk * laplacian(C) - kk * C + (kin(t, x, y) == 1)], [],
     lattice_domain(t, (x, y), (30, 30)), [t, x, y], [C, kin(t, x, y)], [Dk, kk]; name = :drug)
 withdrug = compose(dosed, Potts.component(:drug, pde, dosed))
 s = solve(PottsProblem(withdrug, layout(Tiling((5, 5); region = (11:20, 11:20), kinds = [:cell]), withdrug), (0, 5)),
@@ -706,7 +706,7 @@ number, which `Potts.lookup(model, :A)` gives:
 end
 @named host = Host()
 @parameters Ds = 0.2 ss = 0.5 ks = 0.1
-source = PDESystem([Dt(C) ~ Ds * Δ(C) + ss * endo(t, x, y) - ks * C], [c(0, x, y) ~ 0.0],
+source = PDESystem([Dt(C) ~ Ds * laplacian(C) + ss * endo(t, x, y) - ks * C], [c(0, x, y) ~ 0.0],
     lattice_domain(t, (x, y), (24, 20)), [t, x, y], [C, endo(t, x, y)], [Ds, ss, ks]; name = :source)
 coupled = Potts.couple(host, source; inputs = [endo => Potts.kind == Potts.lookup(host, :A)])
 nothing # hide
@@ -765,7 +765,7 @@ switches on:
 @variables w(..) front(..) [input = true]
 we, fe = w(t, x, y), front(t, x, y)
 dom = lattice_domain(t, (x, y), (20, 10); spacing = 0.5, tspan = (0.0, 2.0))
-pulse = PDESystem([Dt(we) ~ Dw * Δ(we) - kw * we + fe], [w(0, x, y) ~ 0.0], dom,
+pulse = PDESystem([Dt(we) ~ Dw * laplacian(we) - kw * we + fe], [w(0, x, y) ~ 0.0], dom,
     [t, x, y], [we, fe], [Dw, kw]; name = :pulse)
 lit(t) = [i <= 10t ? 1.0 : 0.0 for i in 1:20, j in 1:10]   # columns 1 to 10t are on
 pprob = discretize(pulse, LatticeDiscretization(Grid((20, 10))); inputs = [fe => lit])

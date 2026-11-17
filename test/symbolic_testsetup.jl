@@ -20,14 +20,14 @@ module SyPDE
     using ..FieldPDE
     @variables c(..) src(..)::Bool [input = true]
     const C, S = c(t, x, y), src(t, x, y)
-    float() = pdesys([Dt(C) ~ 0.1 * Δ(C) - C / 10 + exp(-1) * S], [c(0, x, y) ~ 0.0], (16, 16), [C, S])
-    disk() = pdesys([Dt(C) ~ 0.2 * Δ(C) + 0.01 * S], [c(0, x, y) ~ 0.0], (40, 40), [C, S])
-    chemo(dims) = pdesys([Dt(C) ~ 0.1 * Δ(C) + 0.02 * S - 0.01 * C], [c(0, x, y) ~ 0.0], dims, [C, S])
+    float() = pdesys([Dt(C) ~ 0.1 * laplacian(C) - C / 10 + exp(-1) * S], [c(0, x, y) ~ 0.0], (16, 16), [C, S])
+    disk() = pdesys([Dt(C) ~ 0.2 * laplacian(C) + 0.01 * S], [c(0, x, y) ~ 0.0], (40, 40), [C, S])
+    chemo(dims) = pdesys([Dt(C) ~ 0.1 * laplacian(C) + 0.02 * S - 0.01 * C], [c(0, x, y) ~ 0.0], dims, [C, S])
     function sorting3d()
         C3, S3 = c(t, x, y, z), src(t, x, y, z)
-        return pdesys([Dt(C3) ~ 0.1 * Δ(C3) + 0.05 * S3 - 0.01 * C3], [c(0, x, y, z) ~ 0.0], (24, 24, 24), [C3, S3])
+        return pdesys([Dt(C3) ~ 0.1 * laplacian(C3) + 0.05 * S3 - 0.01 * C3], [c(0, x, y, z) ~ 0.0], (24, 24, 24), [C3, S3])
     end
-    hex() = (@parameters Dc = 0.1; pdesys([Dt(C) ~ Dc * Δ(C)], [c(0, x, y) ~ 0.0], (30, 30), [C], [Dc]))
+    hex() = (@parameters Dc = 0.1; pdesys([Dt(C) ~ Dc * laplacian(C)], [c(0, x, y) ~ 0.0], (30, 30), [C], [Dc]))
 end
 
 
@@ -874,7 +874,7 @@ Potts.ModelingToolkitBase.@variables k2X(_tc)::Bool = false k2Y(_tc)::Bool = fal
 
 const P60AH_TIE_SALT = Ref{UInt}(0)
 
-for f in (Potts.population, Potts.gather, Potts.at, Potts.at2, Potts.cell_integral)
+for f in (Potts.population, Potts.gather, Potts.value_at, Potts.cell_integral)
     @eval function Base.hash(g::typeof($f), h::UInt)
         P60AH_TIE_SALT[] == 0 && return invoke(hash, Tuple{Function, UInt}, g, h)
         return hash(P60AH_TIE_SALT[], hash(:p60ah_tie_salt, h))

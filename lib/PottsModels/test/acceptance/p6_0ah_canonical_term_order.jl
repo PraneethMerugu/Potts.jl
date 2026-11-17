@@ -2,7 +2,7 @@
 # Symbolics stores a sum or product as a dictionary of terms and hands its operands to
 # `lower` in that dictionary's order, which follows the terms' hashes. The hash of a term
 # includes the hash of its function, and the hash of a Potts-registered operator
-# (`population`, `gather`, `at`) is derived from its type, so it changes with each package
+# (`population`, `gather`, `value_at`) is derived from its type, so it changes with each package
 # build's module id. The generated arithmetic of a rate with several terms therefore changes
 # order between builds of identical source, and its floating-point result by a few ulp.
 # Base functions (`sin`, `exp`) hash stably across builds, but the same mechanism orders
@@ -52,7 +52,7 @@
 #     from the repository root (the worker processes take about 3.5 minutes, the whole file
 #     about 5; the temporary depots are deleted afterwards). Skipped by default (it compiles
 #     Potts twice).
-#  4. Salt invariance: the fingerprint of every fixture (including `P60ahAt`, gather, `at` and
+#  4. Salt invariance: the fingerprint of every fixture (including `P60ahAt`, gather, `value_at` and
 #     Base terms in a cell rate, and the multi-fold models `P60ahMix`, `P60ahModelPop`) is the
 #     same under every operator-hash salt (item 1). No fingerprint value is stored.
 using Test, Potts, PottsModels
@@ -66,7 +66,7 @@ const P60AH_SHARED = raw"""
 using OrdinaryDiffEqRosenbrock: Rodas5P
 
 # Two 4×4 cells side by side (x = 3:6 and 7:10, y = 3:6) on a 12×8 lattice.
-# Cell and model scope, population folds, a gather, an indexed read (`at`) and Base terms.
+# Cell and model scope, population folds, a gather, an indexed read (`value_at`) and Base terms.
 @potts_model P60ahMix begin
     @kinds medium A
     @variables y(cell) = 0.0 z(cell) = 1.0 g(model) = 0.5
@@ -209,7 +209,7 @@ include_string(@__MODULE__, P60AH_SHARED)
 
 const P60AH_SALT = Ref{UInt}(0)
 const P60AH_SALTED = Ref{Tuple}(())
-const P60AH_POTTS_OPS = (Potts.population, Potts.gather, Potts.at, Potts.at2)
+const P60AH_POTTS_OPS = (Potts.population, Potts.gather, Potts.value_at)
 const P60AH_BASE_OPS = (sin, cos, exp)
 for f in (P60AH_POTTS_OPS..., P60AH_BASE_OPS...)
     @eval function Base.hash(g::typeof($f), h::UInt)
@@ -265,7 +265,7 @@ end
     end
     Potts.Symbolics.@variables a b
     sx() = string.(Potts.SymbolicUtils.arguments(Potts.Symbolics.unwrap(Potts.population(a, b, true) + Potts.gather(a, b, a, b) +
-                                                                         Potts.at(a, b) + Potts.population(b, a, true) + sin(a))))
+                                                                         Potts.value_at(a, b) + Potts.population(b, a, true) + sin(a))))
     sx0 = sx()
     orders = [p60ah_salted(sx, P60AH_POTTS_OPS, s) for s in P60AH_SALTS]
     @test all(o -> sort(o) == sort(sx0), orders)       # the same terms

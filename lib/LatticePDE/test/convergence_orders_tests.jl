@@ -34,7 +34,7 @@ end
         Dcoef = 0.005
         src = (1.0 + 2.0 * Dcoef * pi^2) * exp(t) * sin(pi * x) * sin(pi * y)
         sys = PDESystem(
-            [D(ue) ~ Dcoef * Δ(ue) + src],
+            [D(ue) ~ Dcoef * laplacian(ue) + src],
             [
                 u(0, x, y) ~ sin(pi * x) * sin(pi * y),
                 u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0, u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
@@ -63,7 +63,7 @@ end
 
         @testset "IMEX FieldGroups (ExplicitEuler + BackwardEuler)" begin
             imex_sys = PDESystem(
-                [D(ue) ~ Dcoef * Δ(ue) - 0.5 * ve + src, D(ve) ~ 0.2 * Δ(ve) - ve + 0.5 * ue],
+                [D(ue) ~ Dcoef * laplacian(ue) - 0.5 * ve + src, D(ve) ~ 0.2 * laplacian(ve) - ve + 0.5 * ue],
                 [
                     u(0, x, y) ~ sin(pi * x) * sin(pi * y), v(0, x, y) ~ x * (1 - x) * y * (1 - y),
                     u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0, u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
@@ -153,7 +153,7 @@ end
             # Exact steady u(x, y) = x^2 + 1 on [0, 1]^2:
             # Δu = 2, -u_x(0, y) + 1.5 * u(0, y) = 1.5, u(1, y) = 2, u_y = 0 at y = 0, 1
             sys = PDESystem(
-                [0 ~ Δ(u(x, y)) - u(x, y) + (x^2 + 1 - 2)],
+                [0 ~ laplacian(u(x, y)) - u(x, y) + (x^2 + 1 - 2)],
                 [
                     1.5 * u(0, y) - Differential(x)(u(0, y)) ~ 1.5, u(1, y) ~ 2.0,
                     Differential(y)(u(x, 0)) ~ 0.0, Differential(y)(u(x, 1)) ~ 0.0,
@@ -178,7 +178,7 @@ end
         @testset "Hexagonal Laplacian spatial order O(h^2)" begin
             # Periodic 1D Helmholtz on axial Hex grid: Δ_hex u = (4/3) ∂_x^2 u for u(x, y) = sin(2πx)
             sys = PDESystem(
-                [0 ~ 0.75 * Δ(u(x, y)) - u(x, y) + (4 * pi^2 + 1) * sin(2 * pi * x)],
+                [0 ~ 0.75 * laplacian(u(x, y)) - u(x, y) + (4 * pi^2 + 1) * sin(2 * pi * x)],
                 [u(0, y) ~ u(1, y), u(x, 0) ~ u(x, 1)],
                 fdom, [x, y], [u(x, y)], Num[]; name = :hex_order
             )
@@ -206,7 +206,7 @@ end
         exact_fn(xx, yy) = sin(pi * xx) * sin(pi * yy)
         rhs = (0.3 * 2 * pi^2 + 2.0) * sin(pi * x) * sin(pi * y)
         sys = PDESystem(
-            [0 ~ 0.3 * Δ(w(x, y)) - 2.0 * w(x, y) + rhs],
+            [0 ~ 0.3 * laplacian(w(x, y)) - 2.0 * w(x, y) + rhs],
             [w(0, y) ~ 0.0, w(1, y) ~ 0.0, w(x, 0) ~ 0.0, w(x, 1) ~ 0.0],
             fdom, [x, y], [w(x, y)], Num[]; name = :mg_mesh_indep
         )

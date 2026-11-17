@@ -45,7 +45,7 @@ end
         err, n = cp_replay(CeAny(; name = :m), CeS.named_owned(), hand, ExplicitEuler())
         @test n == 12 && err <= 1e-14 || (println("CeAny: $err"); false)   # (measured 4.4e-16, 2026-11-10: one rounding)
         host = CpHost(; name = :m)
-        k, vol = Potts.kind, Potts.at(Potts.B.volume, Potts.B.owner)
+        k, vol = Potts.kind, Potts.value_at(Potts.B.volume, Potts.B.owner)
         # the other truth-valued forms couple; a numeric one is refused
         for b in ((k == 1) & (vol > 3.0), (k == 1) | (k == 0), !(k == 1), Potts.LatticePDE.ismember(k, (0, 1)))
             @test Potts.couple(host, CeS.named(); inputs = [CeS.a => b]) isa Potts.PottsSystem

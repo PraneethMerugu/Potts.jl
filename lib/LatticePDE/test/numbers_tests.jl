@@ -71,7 +71,7 @@ end
         @variables K(..)
         Kn = K(t, x, y)
         sys = psys(
-            [D(ce) ~ Dn * Δ(ce) - Kn * ce, Kn ~ K0n * (1 + gn)],
+            [D(ce) ~ Dn * laplacian(ce) - Kn * ce, Kn ~ K0n * (1 + gn)],
             [c(0, x, y) ~ 0.0, c(t, 0, y) ~ gn, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)],
             [Dn, gn, K0n]; dvs = [ce, Kn]
         )
@@ -103,7 +103,7 @@ end
     using .LP_numbers: fd
     @testset "Rodas5P (Jacobian and time gradient through the right side)" begin
         sys = psys(
-            [D(ce) ~ Dn * Δ(ce) - kn * ce + 0.1 * sin(ωn * t)],
+            [D(ce) ~ Dn * laplacian(ce) - kn * ce + 0.1 * sin(ωn * t)],
             [c(0, x, y) ~ 0.0, c(t, 0, y) ~ gn, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)],
             [Dn, kn, gn, ωn]
         )
@@ -205,7 +205,7 @@ end
     using .LP_numbers: fd
     @testset "F2-09: number types per role" begin
         @parameters Dt[1:2] = [0.5, 1.0] Dq = 0.1
-        tsys = ssys([D(ce) ~ Dq * Δ(ce) - at(Dt, qe) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dq, Dt])
+        tsys = ssys([D(ce) ~ Dq * laplacian(ce) - value_at(Dt, qe) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dq, Dt])
         K = Int32[i <= 2 ? 1 : 2 for i in 1:4, j in 1:4]
         p = sown(tsys; inputs = [qe => K])
         alg = ExplicitEuler()
@@ -272,7 +272,7 @@ end
         @testset "BigFloat defaults are kept (SD-03)" begin
             # base: `_default` returned Float64(v): p = [0.3333333333333333]
             @parameters Db = big"1" / 3
-            bsys = ssys([D(ce) ~ Db * Δ(ce)], [c(0, x, y) ~ 1.0], [ce], [Db])
+            bsys = ssys([D(ce) ~ Db * laplacian(ce)], [c(0, x, y) ~ 1.0], [ce], [Db])
             pbb = discretize(bsys, LatticeDiscretization(Grid((4, 4)); T = BigFloat))
             @test eltype(pbb.p) == BigFloat && pbb.p.values[1] == big"1" / 3
             @test eltype(solve(pbb, ExplicitEuler(); dt = 0.01).u[end]) == BigFloat
@@ -296,7 +296,7 @@ end
         wue, wKe, whe, wce = wu(t, x, y), wK(t, x, y), wh(t, x, y), wc(t, x, y)
         wdom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
         wsys = PDESystem(
-            [wKe ~ 2 * wue, whe ~ wue / 2, D(wue) ~ 0.0625 * Δ(wue) - kw * wKe], [wu(0, x, y) ~ x * y], wdom, [t, x, y],
+            [wKe ~ 2 * wue, whe ~ wue / 2, D(wue) ~ 0.0625 * laplacian(wue) - kw * wKe], [wu(0, x, y) ~ x * y], wdom, [t, x, y],
             [wue, wKe, whe], [kw]; name = :w
         )
         wd(T) = discretize(wsys, LatticeDiscretization(Grid((16, 16)); T))
@@ -309,7 +309,7 @@ end
         # a state field whose declared storage differs from T keeps it on the owned path (batch 5
         # review S2: each state field its own arrays, as A's), and equals the all-Float64 run: a
         # Float64 field on a Float32 problem; a Float16 and a Float64 field beside a T field
-        csys = PDESystem([D(wce) ~ 0.0625 * Δ(wce) - 0.125 * wce], [wc(0, x, y) ~ x], wdom, [t, x, y], [wce], Any[]; name = :w)
+        csys = PDESystem([D(wce) ~ 0.0625 * laplacian(wce) - 0.125 * wce], [wc(0, x, y) ~ x], wdom, [t, x, y], [wce], Any[]; name = :w)
         c32 = solve(
             discretize(csys, LatticeDiscretization(Grid((8, 8)); T = Float32)),
             ExplicitEuler(; compute_type = Float64)
@@ -319,7 +319,7 @@ end
         c64 = solve(
             discretize(
                 PDESystem(
-                    [D(wc64(t, x, y)) ~ 0.0625 * Δ(wc64(t, x, y)) - 0.125 * wc64(t, x, y)], [wc64(0, x, y) ~ x],
+                    [D(wc64(t, x, y)) ~ 0.0625 * laplacian(wc64(t, x, y)) - 0.125 * wc64(t, x, y)], [wc64(0, x, y) ~ x],
                     wdom, [t, x, y], [wc64(t, x, y)], Any[]; name = :w
                 ), LatticeDiscretization(Grid((8, 8)); T = Float64)
             ),
@@ -329,8 +329,8 @@ end
         @test eltype(c32.u[end]) == Float64 && c32.u[end] == c64.u[end]
         msys = PDESystem(
             [
-                D(wue) ~ 0.0625 * Δ(wue) - 0.5 * wue + 0.25 * wce, D(whe) ~ 0.0625 * Δ(whe) - 0.125 * whe,
-                D(wce) ~ 0.0625 * Δ(wce) - 0.125 * wce,
+                D(wue) ~ 0.0625 * laplacian(wue) - 0.5 * wue + 0.25 * wce, D(whe) ~ 0.0625 * laplacian(whe) - 0.125 * whe,
+                D(wce) ~ 0.0625 * laplacian(wce) - 0.125 * wce,
             ], [wu(0, x, y) ~ 0.0, wh(0, x, y) ~ x, wc(0, x, y) ~ y], wdom, [t, x, y],
             [wue, whe, wce], Any[]; name = :m
         )
@@ -382,7 +382,7 @@ end
         @variables wK32(..) [lattice_storage = Float32]
         wK32e = wK32(t, x, y)
         dsys = PDESystem(
-            [wK32e ~ 2 * wue, D(wue) ~ 0.0625 * Δ(wue) - kw * wK32e], [wu(0, x, y) ~ x * y], wdom, [t, x, y],
+            [wK32e ~ 2 * wue, D(wue) ~ 0.0625 * laplacian(wue) - kw * wK32e], [wu(0, x, y) ~ x * y], wdom, [t, x, y],
             [wue, wK32e], [kw]; name = :d
         )
         pd = discretize(dsys, LatticeDiscretization(Grid((8, 8)); T = Float64))
@@ -390,7 +390,7 @@ end
         wK64e = wK64(t, x, y)
         pr = discretize(
             PDESystem(
-                [wK64e ~ 2 * wue, D(wue) ~ 0.0625 * Δ(wue) - kw * wK64e], [wu(0, x, y) ~ x * y], wdom, [t, x, y],
+                [wK64e ~ 2 * wue, D(wue) ~ 0.0625 * laplacian(wue) - kw * wK64e], [wu(0, x, y) ~ x * y], wdom, [t, x, y],
                 [wue, wK64e], [kw]; name = :d
             ), LatticeDiscretization(Grid((8, 8)); T = Float64)
         )
@@ -451,7 +451,7 @@ end
             f = v === she ? sh : s64;
             discretize(
                 PDESystem(
-                    [D(v) ~ 0.0625 * Δ(v) - 0.5 * v], [f(0, x, y) ~ x * y + 0.5],
+                    [D(v) ~ 0.0625 * laplacian(v) - 0.5 * v], [f(0, x, y) ~ x * y + 0.5],
                     sdom, [t, x, y], [v], Any[]; name = :s
                 ), LatticeDiscretization(Grid((16, 16)); T)
             )
@@ -480,13 +480,13 @@ end
     using .LP_numbers: fd
     @testset "F3-21a: ∂u/∂k through BackwardEuler, CrankNicolson, BDF2 and QuasiSteady" begin
         bcs = [c(0, x, y) ~ x * y, c(t, 0, y) ~ gt]
-        lin = town(tsys([D(ce) ~ Dt * Δ(ce) - kt * ce + gt * x], bcs))
+        lin = town(tsys([D(ce) ~ Dt * laplacian(ce) - kt * ce + gt * x], bcs))
         for alg in (BackwardEuler(; linsolve = TTIGHT), CrankNicolson(; linsolve = TTIGHT), BDF2(; linsolve = TTIGHT))
             for s in (kt, Dt, gt)
                 @test tok(tad(lin, alg, s; dt = 0.1)...)
             end
         end
-        qs = town(tsys([0 ~ Dt * Δ(ce) - kt * ce + gt * x], bcs))
+        qs = town(tsys([0 ~ Dt * laplacian(ce) - kt * ce + gt * x], bcs))
         for s in (kt, Dt, gt)
             @test tok(tad(qs, QuasiSteady(; linsolve = TTIGHT), s; dt = 0.1)...)
         end
@@ -503,7 +503,7 @@ end
         # the mask's value and the Robin face's β read k
         mr = town(
             tsys(
-                [D(ce) ~ Dt * Δ(ce) - 0.5 * ce + gt], [
+                [D(ce) ~ Dt * laplacian(ce) - 0.5 * ce + gt], [
                     c(0, x, y) ~ 0.2 + x,
                     ce ~ masked((x > 0.4) & (x < 0.6) & (y > 0.4) & (y < 0.6), 2 * kt), 1.5 * c(t, x, 0) - kt * Differential(y)(c(t, x, 0)) ~ 0.2,
                 ]
@@ -514,7 +514,7 @@ end
         end
         # `−k c²`: with `newton = k` the run converges each stage, and its derivatives are the tangent's;
         # by default one unchecked Newton step does not solve the stage, which is warned
-        nl = town(tsys([D(ce) ~ Dt * Δ(ce) - kt * ce^2 + gt], [c(0, x, y) ~ 0.2 + x]), (10, 10))
+        nl = town(tsys([D(ce) ~ Dt * laplacian(ce) - kt * ce^2 + gt], [c(0, x, y) ~ 0.2 + x]), (10, 10))
         for s in (kt, Dt)
             @test tok(tad(nl, BackwardEuler(; linsolve = TTIGHT, newton = 8), s; dt = 0.1)...)
         end
@@ -524,7 +524,7 @@ end
             ; dt = 0.1
         )
         hx = town(
-            tsys([D(ce) ~ Dt * Δ(ce) - kt * ce + gt * x], [c(0, x, y) ~ x * y, c(t, 0, y) ~ gt]), (8, 8);
+            tsys([D(ce) ~ Dt * laplacian(ce) - kt * ce + gt * x], [c(0, x, y) ~ x * y, c(t, 0, y) ~ gt]), (8, 8);
             geometry = LatticeFields.IR.HEX
         )
         for s in (kt, Dt)
@@ -551,7 +551,7 @@ end
         # a coupled steady pair (F3-12d): one FGMRES per derivative part
         cp = town(
             tsys(
-                [0 ~ Dt * Δ(tae) - tae + kt * tbe + x, 0 ~ 0.1 * Δ(tbe) - tbe - gt * tae + y],
+                [0 ~ Dt * laplacian(tae) - tae + kt * tbe + x, 0 ~ 0.1 * laplacian(tbe) - tbe - gt * tae + y],
                 [ta(0, x, y) ~ 0.0, tb(0, x, y) ~ 0.0]; dvs = [tae, tbe]
             )
         )
@@ -601,11 +601,11 @@ end
             sprint(showerror, err)
         end
         pw = discretize(
-            PDESystem([D(nwe) ~ Δ(nwe)], [nw(0, x, y) ~ x], ndom, [t, x, y], [nwe], Any[]; name = :n),
+            PDESystem([D(nwe) ~ laplacian(nwe)], [nw(0, x, y) ~ x], ndom, [t, x, y], [nwe], Any[]; name = :n),
             LatticeDiscretization(Grid((8, 8)); T = Float32)
         )
         pv = discretize(
-            PDESystem([D(nve) ~ Δ(nve)], [nv(0, x, y) ~ x], ndom, [t, x, y], [nve], Any[]; name = :n),
+            PDESystem([D(nve) ~ laplacian(nve)], [nv(0, x, y) ~ x], ndom, [t, x, y], [nve], Any[]; name = :n),
             LatticeDiscretization(Grid((8, 8)); T = Float32)
         )
         nb = NoF64Backend()

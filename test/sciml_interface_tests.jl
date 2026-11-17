@@ -42,7 +42,7 @@ module IfacePDE
     using ..FieldPDE
     @variables c(..)
     const C = c(t, x, y)
-    decay(k = 0.5) = (@parameters Dc = 0.2 kc = k; pdesys([Dt(C) ~ Dc * Δ(C) - kc * C], [c(0, x, y) ~ 1.0 + x / 8], (8, 8), [C], [Dc, kc]))
+    decay(k = 0.5) = (@parameters Dc = 0.2 kc = k; pdesys([Dt(C) ~ Dc * laplacian(C) - kc * C], [c(0, x, y) ~ 1.0 + x / 8], (8, 8), [C], [Dc, kc]))
 end
 field_ode(k = 0.5) = LP.discretize(IfacePDE.decay(k), LP.LatticeDiscretization(LP.Grid((8, 8)); T = Float64))
 const DT = 0.1

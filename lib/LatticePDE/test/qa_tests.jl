@@ -41,7 +41,7 @@ end
         @parameters x y D = 0.01
         @variables u(..)
         sys = PDESystem(
-            [Differential(t)(u(t, x, y)) ~ D * Δ(u(t, x, y))],
+            [Differential(t)(u(t, x, y)) ~ D * laplacian(u(t, x, y))],
             [u(0, x, y) ~ 1.0],
             [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
             [t, x, y],

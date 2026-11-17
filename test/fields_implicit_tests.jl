@@ -388,7 +388,7 @@ end
         FieldPDE.@variables c_c(..)
         FieldPDE.@parameters Dc_c = 0.2 kd_c = 0.1
         FieldPDE.@variables endo_c(T_c, X_c, Y_c) [input = true]
-        csys = FieldPDE.pdesys([FieldPDE.Dt(c_c(T_c, X_c, Y_c)) ~ Dc_c * FieldPDE.Δ(c_c(T_c, X_c, Y_c)) - kd_c * c_c(T_c, X_c, Y_c) + 0.5 * endo_c],
+        csys = FieldPDE.pdesys([FieldPDE.Dt(c_c(T_c, X_c, Y_c)) ~ Dc_c * FieldPDE.laplacian(c_c(T_c, X_c, Y_c)) - kd_c * c_c(T_c, X_c, Y_c) + 0.5 * endo_c],
             [c_c(0, X_c, Y_c) ~ 0.0], (24, 20), [c_c(T_c, X_c, Y_c), endo_c], [Dc_c, kd_c])
         cm = Potts.couple(FiCoupleHost(; name = :m), csys; inputs = [endo_c => Potts.kind == 1])
         σ_c = zeros(Int32, 24, 20); σ_c[5:8, 5:8] .= 1

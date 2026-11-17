@@ -2,7 +2,7 @@
 # on another grid than its row. A fine field in a coarse row: the block mean of the fine operator
 # (the net flux through the faces of the block over its volume). A coarse field in a fine row:
 # the coarse operator at the node of the site's block. Both are the aux field of the manual route
-# (`L ~ Δ(c)` on the grid of `c`) that `crossgrid_form` adds, so the oracle is the route itself
+# (`L ~ laplacian(c)` on the grid of `c`) that `crossgrid_form` adds, so the oracle is the route itself
 # (bitwise), a hand computation, and a dense implicit step (the term is a cross term, exact in
 # solve order). Base 5316bf1c (~/lpwork/f322/nc-*.log): the direct form is refused ("a spatial
 # operator reads its field on that field's own grid"), so every testset here errors.
@@ -68,7 +68,7 @@ end
         # a fine field that does not move: the coarse row gets `dt a mean(Δv)` in one step
         v0 = [sin(7 * xctr(16)[i]) * cos(5 * xctr(16)[j]) for i in 1:16, j in 1:16]
         sys = PDESystem(
-            [D(xe(xv)) ~ 0, D(xe(xcc)) ~ 0.5 * Δ(xe(xv))], [xv(0, x, y) ~ sin(7x) * cos(5y), xcc(0, x, y) ~ 0.0],
+            [D(xe(xv)) ~ 0, D(xe(xcc)) ~ 0.5 * laplacian(xe(xv))], [xv(0, x, y) ~ sin(7x) * cos(5y), xcc(0, x, y) ~ 0.0],
             xdom(), [t, x, y], [xe(xv), xe(xcc)], Num[]; name = :xh1
         )
         c1 = solve(xown(sys, (16, 16)), alg; dt = XT, saveat = [XT])[xe(xcc), 2]
@@ -94,7 +94,7 @@ end
         # a coarse field that does not move: the fine row reads the coarse Laplacian at its block's node
         c0 = [xctr(4)[i]^2 + xctr(4)[j] for i in 1:4, j in 1:4]
         sys2 = PDESystem(
-            [D(xe(xcc)) ~ 0, D(xe(xu)) ~ 0.5 * Δ(xe(xcc))], [xcc(0, x, y) ~ x^2 + y, xu(0, x, y) ~ 0.0],
+            [D(xe(xcc)) ~ 0, D(xe(xu)) ~ 0.5 * laplacian(xe(xcc))], [xcc(0, x, y) ~ x^2 + y, xu(0, x, y) ~ 0.0],
             xdom(), [t, x, y], [xe(xcc), xe(xu)], Num[]; name = :xh2
         )
         u1 = solve(xown(sys2, (16, 16)), alg; dt = XT, saveat = [XT])[xe(xu), 2]
@@ -114,14 +114,14 @@ end
         e3(f) = f(t, x, y, z)
         ic = [c3(0, x, y, z) ~ x^2 + sin(3y) * z, w3(0, x, y, z) ~ 0.0]
         ic2 = [v3(0, x, y, z) ~ sin(7x) * cos(5y) * z, c3(0, x, y, z) ~ 0.0]
-        d1 = PDESystem([D(e3(c3)) ~ 0.01 * Δ(e3(c3)), D(e3(w3)) ~ 0.5 * Δ(e3(c3)) - e3(w3)], ic, dom3, [t, x, y, z], [e3(c3), e3(w3)], Num[]; name = :x3a)
+        d1 = PDESystem([D(e3(c3)) ~ 0.01 * laplacian(e3(c3)), D(e3(w3)) ~ 0.5 * laplacian(e3(c3)) - e3(w3)], ic, dom3, [t, x, y, z], [e3(c3), e3(w3)], Num[]; name = :x3a)
         r1 = PDESystem(
-            [D(e3(c3)) ~ 0.01 * Δ(e3(c3)), e3(L3) ~ Δ(e3(c3)), D(e3(w3)) ~ 0.5 * e3(L3) - e3(w3)], ic, dom3, [t, x, y, z],
+            [D(e3(c3)) ~ 0.01 * laplacian(e3(c3)), e3(L3) ~ laplacian(e3(c3)), D(e3(w3)) ~ 0.5 * e3(L3) - e3(w3)], ic, dom3, [t, x, y, z],
             [e3(c3), e3(L3), e3(w3)], Num[]; name = :x3b
         )
-        d2 = PDESystem([D(e3(v3)) ~ 0.01 * Δ(e3(v3)), D(e3(c3)) ~ 0.5 * Δ(e3(v3)) - e3(c3)], ic2, dom3, [t, x, y, z], [e3(v3), e3(c3)], Num[]; name = :x3c)
+        d2 = PDESystem([D(e3(v3)) ~ 0.01 * laplacian(e3(v3)), D(e3(c3)) ~ 0.5 * laplacian(e3(v3)) - e3(c3)], ic2, dom3, [t, x, y, z], [e3(v3), e3(c3)], Num[]; name = :x3c)
         r2 = PDESystem(
-            [D(e3(v3)) ~ 0.01 * Δ(e3(v3)), e3(X3) ~ Δ(e3(v3)), D(e3(c3)) ~ 0.5 * e3(X3) - e3(c3)], ic2, dom3, [t, x, y, z],
+            [D(e3(v3)) ~ 0.01 * laplacian(e3(v3)), e3(X3) ~ laplacian(e3(v3)), D(e3(c3)) ~ 0.5 * e3(X3) - e3(c3)], ic2, dom3, [t, x, y, z],
             [e3(v3), e3(X3), e3(c3)], Num[]; name = :x3d
         )
         own3(s) = discretize(s, LatticeDiscretization(Grid((8, 8, 8))))
@@ -133,7 +133,7 @@ end
         @test size(solve(own3(d2), alg; dt = XT, saveat = [0.01])[e3(c3), 2]) == (4, 4, 4)
         hx(s) = discretize(s, LatticeDiscretization(Grid((16, 16); geometry = HEX)))
         halg = ExplicitEuler(; substeps = 1)
-        p = xpair(c -> Δ(c))
+        p = xpair(c -> laplacian(c))
         for (pr, row) in ((p.cf, xu), (p.fc, xcc))
             sa, sb = solve(hx(pr.dir), halg; dt = 0.0005, saveat = [0.002]), solve(hx(pr.route), halg; dt = 0.0005, saveat = [0.002])
             @test sa[xe(row), 2] == sb[xe(row), 2] && maximum(abs, sa[xe(row), 2]) > 0
@@ -145,7 +145,7 @@ end
 @testitem "F3-22: the :ode path: the direct form is the route" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
     using .LP_crossgrid: fd, kron
     @testset "the :ode path: the direct form is the route" begin
-        p = xpair(c -> Δ(c))
+        p = xpair(c -> laplacian(c))
         for (pr, row) in ((p.cf, xu), (p.fc, xcc))
             od(s) = discretize(s, LatticeDiscretization(Grid((16, 16))))
             sa = solve(od(pr.dir), Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10, saveat = [0.05])
@@ -168,20 +168,20 @@ end
         M1 = [0.01 * Lc zeros(16, 256); 0.5 * XP * Lc 0.2 * Lu - I]; x01 = [c0; zeros(256)]      # c (coarse) → u (fine)
         M2 = [0.01 * Lu zeros(256, 16); 0.5 * XR * Lu -I(16)]; x02 = [v0; zeros(16)]          # v (fine) → c (coarse)
         s1 = PDESystem(
-            [D(xe(xcc)) ~ 0.01 * Δ(xe(xcc)), D(xe(xu)) ~ 0.2 * Δ(xe(xu)) + 0.5 * Δ(xe(xcc)) - xe(xu)],
+            [D(xe(xcc)) ~ 0.01 * laplacian(xe(xcc)), D(xe(xu)) ~ 0.2 * laplacian(xe(xu)) + 0.5 * laplacian(xe(xcc)) - xe(xu)],
             [xcc(0, x, y) ~ x^2 + y, xu(0, x, y) ~ 0.0], xdom(), [t, x, y], [xe(xcc), xe(xu)], Num[]; name = :xi1
         )
         s2 = PDESystem(
-            [D(xe(xv)) ~ 0.01 * Δ(xe(xv)), D(xe(xcc)) ~ 0.5 * Δ(xe(xv)) - xe(xcc)],
+            [D(xe(xv)) ~ 0.01 * laplacian(xe(xv)), D(xe(xcc)) ~ 0.5 * laplacian(xe(xv)) - xe(xcc)],
             [xv(0, x, y) ~ sin(7x) * cos(5y), xcc(0, x, y) ~ 0.0], xdom(), [t, x, y], [xe(xv), xe(xcc)], Num[]; name = :xi2
         )
         # steady rows `0 ~ rhs` (under BackwardEuler: the window's start state of the other field, as for a same-grid cross term)
         s3 = PDESystem(
-            [D(xe(xcc)) ~ 0.01 * Δ(xe(xcc)), 0 ~ 0.2 * Δ(xe(xu)) + 0.5 * Δ(xe(xcc)) - xe(xu)],
+            [D(xe(xcc)) ~ 0.01 * laplacian(xe(xcc)), 0 ~ 0.2 * laplacian(xe(xu)) + 0.5 * laplacian(xe(xcc)) - xe(xu)],
             [xcc(0, x, y) ~ x^2 + y, xu(0, x, y) ~ 0.0], xdom(), [t, x, y], [xe(xcc), xe(xu)], Num[]; name = :xi3
         )
         s4 = PDESystem(
-            [D(xe(xv)) ~ 0.01 * Δ(xe(xv)), 0 ~ 0.2 * Δ(xe(xcc)) + 0.5 * Δ(xe(xv)) - xe(xcc)],
+            [D(xe(xv)) ~ 0.01 * laplacian(xe(xv)), 0 ~ 0.2 * laplacian(xe(xcc)) + 0.5 * laplacian(xe(xv)) - xe(xcc)],
             [xv(0, x, y) ~ sin(7x) * cos(5y), xcc(0, x, y) ~ 0.0], xdom(), [t, x, y], [xe(xv), xe(xcc)], Num[]; name = :xi4
         )
         xrun(sys, alg, n = 1) = Test.@test_logs(min_level = Base.CoreLogging.Warn, solve(xown(sys, (16, 16)), alg; dt, saveat = dt .* (1:n)))
@@ -205,11 +205,11 @@ end
         # QuasiSteady: every row steady, the second reads the first's new steady state (review r1 of F3-22)
         qs = QuasiSteady(; linsolve = tight)
         s5 = PDESystem(
-            [D(xe(xcc)) ~ 0.05 * Δ(xe(xcc)) - xe(xcc) + x + y, D(xe(xu)) ~ 0.2 * Δ(xe(xu)) + 0.5 * Δ(xe(xcc)) - xe(xu)],
+            [D(xe(xcc)) ~ 0.05 * laplacian(xe(xcc)) - xe(xcc) + x + y, D(xe(xu)) ~ 0.2 * laplacian(xe(xu)) + 0.5 * laplacian(xe(xcc)) - xe(xu)],
             [xcc(0, x, y) ~ 0.0, xu(0, x, y) ~ 0.0], xdom(), [t, x, y], [xe(xcc), xe(xu)], Num[]; name = :xi5
         )
         s6 = PDESystem(
-            [D(xe(xv)) ~ 0.05 * Δ(xe(xv)) - xe(xv) + sin(7x) * cos(5y), D(xe(xcc)) ~ 0.2 * Δ(xe(xcc)) + 0.5 * Δ(xe(xv)) - xe(xcc)],
+            [D(xe(xv)) ~ 0.05 * laplacian(xe(xv)) - xe(xv) + sin(7x) * cos(5y), D(xe(xcc)) ~ 0.2 * laplacian(xe(xcc)) + 0.5 * laplacian(xe(xv)) - xe(xcc)],
             [xv(0, x, y) ~ 0.0, xcc(0, x, y) ~ 0.0], xdom(), [t, x, y], [xe(xv), xe(xcc)], Num[]; name = :xi6
         )
         cq = (I - 0.05 * Lc) \ vec([xctr(4)[i] + xctr(4)[j] for i in 1:4, j in 1:4])
@@ -231,14 +231,14 @@ end
         M = [0.01 * Lc 0.1 * XR * Lu; 0.5 * XP * Lc 0.2 * Lu - I]
         ref = (I - dt * M) \ [c0; u0]
         sys = PDESystem(
-            [D(xe(xcc)) ~ 0.01 * Δ(xe(xcc)) + 0.1 * Δ(xe(xu)), D(xe(xu)) ~ 0.2 * Δ(xe(xu)) + 0.5 * Δ(xe(xcc)) - xe(xu)],
+            [D(xe(xcc)) ~ 0.01 * laplacian(xe(xcc)) + 0.1 * laplacian(xe(xu)), D(xe(xu)) ~ 0.2 * laplacian(xe(xu)) + 0.5 * laplacian(xe(xcc)) - xe(xu)],
             [xcc(0, x, y) ~ x^2 + y, xu(0, x, y) ~ sin(5x)], xdom(), [t, x, y], [xe(xcc), xe(xu)], Num[]; name = :xcy
         )
         err(nw) = (
             s = solve(xown(sys, (16, 16)), BackwardEuler(; substeps = 1, newton = nw, linsolve = tight); dt, saveat = [dt]);
             maximum(abs, [vec(s[xe(xcc), 2]); vec(s[xe(xu), 2])] .- ref)
         )
-        Test.@test_logs (:warn, r"`0\.1Δ\(xuu\)` \(in the rate of `xcc`\) is not in the implicit operator") match_mode = :any min_level = Base.CoreLogging.Warn begin
+        Test.@test_logs (:warn, r"`0\.1laplacian\(xuu\)` \(in the rate of `xcc`\) is not in the implicit operator") match_mode = :any min_level = Base.CoreLogging.Warn begin
             solve(xown(sys, (16, 16)), BackwardEuler(; substeps = 1, linsolve = tight); dt, saveat = [dt])
         end
         e4, e12 = Test.@test_logs(min_level = Base.CoreLogging.Error, (err(4), err(12)))
@@ -252,7 +252,7 @@ end
     @testset "same grid: a term of aux fields is a cross term in solve order (review r1 of F3-22)" begin
         # `L ~ b²` read by `a`, with `b` after `a` in state order: the row order follows the aux
         # kernel, and the term is a source of the new `b` (newton = 1, no warning). An aux chain
-        # `L2 ~ 2 L`, `L ~ Δ(b)` reads `b` through both. Base 33e960cf~1: unseen, `newton = 4` and a warning
+        # `L2 ~ 2 L`, `L ~ laplacian(b)` reads `b` through both. Base 33e960cf~1: unseen, `newton = 4` and a warning
         dt = 0.05
         tight = DevicePCG(; reltol = 1.0e-13, maxiters = 200)
         fa, fb, fL, fL2 = xfine(:xsa), xfine(:xsb), xfine(:xsL), xfine(:xsL2)
@@ -262,13 +262,13 @@ end
         b0 = vec([xctr(16)[i]^2 + xctr(16)[j] for i in 1:16, j in 1:16])
         ic = [fa(0, x, y) ~ sin(3x) * cos(2y), fb(0, x, y) ~ x^2 + y]
         sq = PDESystem(
-            [D(xe(fa)) ~ 0.1 * Δ(xe(fa)) - xe(fa) + 0.5 * xe(fL), xe(fL) ~ xe(fb)^2, D(xe(fb)) ~ 0.1 * Δ(xe(fb)) - xe(fb)],
+            [D(xe(fa)) ~ 0.1 * laplacian(xe(fa)) - xe(fa) + 0.5 * xe(fL), xe(fL) ~ xe(fb)^2, D(xe(fb)) ~ 0.1 * laplacian(xe(fb)) - xe(fb)],
             ic, xdom(), [t, x, y], [xe(fa), xe(fL), xe(fb)], Num[]; name = :xsq
         )
         ch = PDESystem(
             [
-                D(xe(fa)) ~ 0.1 * Δ(xe(fa)) - xe(fa) + 0.5 * xe(fL2), xe(fL2) ~ 2 * xe(fL), xe(fL) ~ Δ(xe(fb)),
-                D(xe(fb)) ~ 0.1 * Δ(xe(fb)) - xe(fb),
+                D(xe(fa)) ~ 0.1 * laplacian(xe(fa)) - xe(fa) + 0.5 * xe(fL2), xe(fL2) ~ 2 * xe(fL), xe(fL) ~ laplacian(xe(fb)),
+                D(xe(fb)) ~ 0.1 * laplacian(xe(fb)) - xe(fb),
             ], ic, xdom(), [t, x, y], [xe(fa), xe(fL2), xe(fL), xe(fb)], Num[]; name = :xsc
         )
         b1 = (Id - dt * Ma) \ b0
@@ -283,8 +283,8 @@ end
         # a cycle through the chain (`b` reads `a`): the chain's term is warned with its text
         cy = PDESystem(
             [
-                D(xe(fa)) ~ 0.1 * Δ(xe(fa)) - xe(fa) + 0.5 * xe(fL2), xe(fL2) ~ 2 * xe(fL), xe(fL) ~ Δ(xe(fb)),
-                D(xe(fb)) ~ 0.1 * Δ(xe(fb)) - xe(fb) + 0.2 * xe(fa),
+                D(xe(fa)) ~ 0.1 * laplacian(xe(fa)) - xe(fa) + 0.5 * xe(fL2), xe(fL2) ~ 2 * xe(fL), xe(fL) ~ laplacian(xe(fb)),
+                D(xe(fb)) ~ 0.1 * laplacian(xe(fb)) - xe(fb) + 0.2 * xe(fa),
             ], ic, xdom(), [t, x, y], [xe(fa), xe(fL2), xe(fL), xe(fb)], Num[]; name = :xsy
         )
         Test.@test_logs (:warn, r"`0\.5xsL2` \(in the rate of `xsa`\) is not in the implicit operator") match_mode = :any min_level = Base.CoreLogging.Warn begin
@@ -301,7 +301,7 @@ end
         kc, ku = xlev(:xkc, 4), xfine(:xku)
         sys = PDESystem(
             [
-                D(xe(kc)) ~ 0.01 * Δ(xe(kc)) + 0.1 * Δ(xe(ku)),
+                D(xe(kc)) ~ 0.01 * laplacian(xe(kc)) + 0.1 * laplacian(xe(ku)),
                 D(xe(ku)) ~ DivKGrad(:harmonic)(1 + x, xe(kc)) + DivKGrad(:arithmetic)(1 + y, xe(kc)) - xe(ku),
             ],
             [kc(0, x, y) ~ x^2 + y, ku(0, x, y) ~ sin(5x)], xdom(), [t, x, y], [xe(kc), xe(ku)], Num[]; name = :xk2
@@ -323,7 +323,7 @@ end
         # (review r1: the rows read one way, so the Jacobian is block triangular and the dominance
         # test does not apply; D-C7a item 2 amended. Base 9afaac05: "no automatic substeps")
         one = PDESystem(
-            [D(xe(xcc)) ~ 0.01 * Δ(xe(xcc)), D(xe(xu)) ~ 0.2 * Δ(xe(xu)) + 0.5 * Δ(xe(xcc)) - xe(xu)],
+            [D(xe(xcc)) ~ 0.01 * laplacian(xe(xcc)), D(xe(xu)) ~ 0.2 * laplacian(xe(xu)) + 0.5 * laplacian(xe(xcc)) - xe(xu)],
             [xcc(0, x, y) ~ x^2 + y, xu(0, x, y) ~ 0.0], xdom(), [t, x, y], [xe(xcc), xe(xu)], Num[]; name = :xe1
         )
         p = xown(one, (16, 16))
@@ -334,7 +334,7 @@ end
         @test substep_counts(s)[1] == n && s[xe(xu), 2] == solve(p, ExplicitEuler(; substeps = n); dt = 0.05, saveat = [0.05])[xe(xu), 2]
         # a loop across the grids: refused, naming both rows
         loop = PDESystem(
-            [D(xe(xcc)) ~ 0.01 * Δ(xe(xcc)) + 0.1 * Δ(xe(xu)), D(xe(xu)) ~ 0.2 * Δ(xe(xu)) + 0.5 * Δ(xe(xcc)) - xe(xu)],
+            [D(xe(xcc)) ~ 0.01 * laplacian(xe(xcc)) + 0.1 * laplacian(xe(xu)), D(xe(xu)) ~ 0.2 * laplacian(xe(xu)) + 0.5 * laplacian(xe(xcc)) - xe(xu)],
             [xcc(0, x, y) ~ x^2 + y, xu(0, x, y) ~ 0.0], xdom(), [t, x, y], [xe(xcc), xe(xu)], Num[]; name = :xe2
         )
         m = try
@@ -354,11 +354,11 @@ end
         pidx(prob, s) = LatticePDE.Problems.SII.parameter_index(prob, s)
         withp(p, i, val) = (q = collect(promote_type(eltype(p), typeof(val)), p); q[i] = val; q)
         s1 = PDESystem(
-            [D(xe(xcc)) ~ xDq * Δ(xe(xcc)), D(xe(xu)) ~ 0.2 * Δ(xe(xu)) + xaq * Δ(xe(xcc)) - xe(xu)],
+            [D(xe(xcc)) ~ xDq * laplacian(xe(xcc)), D(xe(xu)) ~ 0.2 * laplacian(xe(xu)) + xaq * laplacian(xe(xcc)) - xe(xu)],
             [xcc(0, x, y) ~ x^2 + y, xu(0, x, y) ~ 0.0], xdom(), [t, x, y], [xe(xcc), xe(xu)], [xDq, xaq]; name = :xdu1
         )
         s2 = PDESystem(
-            [D(xe(xv)) ~ xDq * Δ(xe(xv)), D(xe(xcc)) ~ xaq * Δ(xe(xv)) - xe(xcc)],
+            [D(xe(xv)) ~ xDq * laplacian(xe(xv)), D(xe(xcc)) ~ xaq * laplacian(xe(xv)) - xe(xcc)],
             [xv(0, x, y) ~ sin(7x) * cos(5y), xcc(0, x, y) ~ 0.0], xdom(), [t, x, y], [xe(xv), xe(xcc)], [xDq, xaq]; name = :xdu2
         )
         for (sys, fld) in ((s1, xu), (s2, xcc)), (alg, dt) in ((ExplicitEuler(; substeps = 1), XT), (BackwardEuler(; substeps = 1, linsolve = tight), 0.01))

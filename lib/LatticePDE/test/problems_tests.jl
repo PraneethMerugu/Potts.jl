@@ -23,7 +23,7 @@ end
     @testset "Fourier mode decay through solve (owned and ODE)" begin
         n, m, kx, ky = 16, 8, 1, 2
         per = [c(t, x, 0) ~ c(t, x, 1), c(t, 0, y) ~ c(t, 1, y)]
-        sys = psys([D(ce) ~ Dr * Δ(ce) - kr * ce], [c(0, x, y) ~ cos(2π * kx * x) * cos(2π * ky * y); per], [Dr, kr])
+        sys = psys([D(ce) ~ Dr * laplacian(ce) - kr * ce], [c(0, x, y) ~ cos(2π * kx * x) * cos(2π * ky * y); per], [Dr, kr])
         prob = owned(sys, n, m)
         @test prob isa LFP.FieldProblem && prob.stability(prob.p) ≈ 4 * (n^2 + m^2)            # D Σ 4/h² + |k|
         xc, yc = ((1:n) .- 0.5) ./ n, ((1:m) .- 0.5) ./ m
@@ -56,13 +56,13 @@ end
     @testset "steady profiles and conservation through solve" begin
         n = 8
         # linear steady profile between two Dirichlet faces (y periodic): cell-centered FV is exact
-        lin = psys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0, c(t, 1, y) ~ gr, c(t, x, 0) ~ c(t, x, 1)], [gr]; T = 4.0)
+        lin = psys([D(ce) ~ laplacian(ce)], [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0, c(t, 1, y) ~ gr, c(t, x, 0) ~ c(t, x, 1)], [gr]; T = 4.0)
         sol = solve(owned(lin, n, 2), ExplicitEuler(); dt = 1 / 4n^2 / 2)
         xc = ((1:n) .- 0.5) ./ n
         @test maximum(abs, sol[c(t, x, y), end][:, 1] .- (1 .- xc)) < 1.0e-9
         # the reaction-diffusion steady state D c″ = k c with c(0) = 1, c′(1) = 0 (discrete oracle)
         rd = psys(
-            [D(ce) ~ Dr * Δ(ce) - kr * ce],
+            [D(ce) ~ Dr * laplacian(ce) - kr * ce],
             [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)], [Dr, kr]; T = 6.0
         )
         pr = remake(owned(rd, n, 2); p = [kr => 4.0])
@@ -81,7 +81,7 @@ end
         # conservation: periodic and no-flux faces keep Σ c to roundoff; a Dirichlet face does not
         cons(bcs) = (
             s = solve(
-                owned(psys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ x + y^2; bcs], Num[]; T = 0.05), 8, 6),
+                owned(psys([D(ce) ~ laplacian(ce)], [c(0, x, y) ~ x + y^2; bcs], Num[]; T = 0.05), 8, 6),
                 ExplicitEuler()
                 ; dt = 1.0e-3
             ); (sum(s[:c, 1]), sum(s[:c, end]))
@@ -98,7 +98,7 @@ end
         n = 32
         S = LatticePDE.Problems.substeps
         sys = psys(
-            [D(ce) ~ Dr * Δ(ce) - kr * ce], [
+            [D(ce) ~ Dr * laplacian(ce) - kr * ce], [
                 c(0, x, y) ~ 1.0; c(t, 0, y) ~ 0.0; c(t, 1, y) ~ 0.0;
                 c(t, x, 0) ~ c(t, x, 1)
             ], [Dr, kr]; T = 0.1
@@ -136,13 +136,13 @@ end
         @test bad.t[end] < 4.0                                        # the solve stopped there
         # a parameter without a value: no bound, so automatic substeps are refused until it has one
         @parameters Dn
-        nd = owned(psys([D(ce) ~ Dn * Δ(ce)], [c(0, x, y) ~ 1.0; c(t, 0, y) ~ 0.0; c(t, x, 0) ~ c(t, x, 1)], [Dn]; T = 0.1), 16)
+        nd = owned(psys([D(ce) ~ Dn * laplacian(ce)], [c(0, x, y) ~ 1.0; c(t, 0, y) ~ 0.0; c(t, x, 0) ~ c(t, x, 1)], [Dn]; T = 0.1), 16)
         @test isnan(nd.stability(nd.p))
         @test_throws ["ArgumentError", "parameter", "Dn", "has no value"] solve(nd, ExplicitEuler(); dt = 0.01)
         snd = solve(remake(nd; p = [Dn => 1.0]), ExplicitEuler(); dt = 0.01)
         @test first(substep_counts(snd)) == ceil(Int, 0.01 * 8 * 16^2 / 1.8) && all(isfinite, snd[:c, end])
         # rate terms the bound cannot see (nonlinear, advection) need a user count
-        nl = owned(psys([D(ce) ~ Δ(ce) - ce^3], [c(0, x, y) ~ 0.0], Num[]), 8)
+        nl = owned(psys([D(ce) ~ laplacian(ce) - ce^3], [c(0, x, y) ~ 0.0], Num[]), 8)
         @test isnan(nl.stability(nl.p))
         @test_throws ["ArgumentError", "no automatic substeps"] solve(nl, ExplicitEuler(); dt = 0.01)
         @test SciMLBase.successful_retcode(solve(nl, ExplicitEuler(; substeps = 4); dt = 0.01))
@@ -171,7 +171,7 @@ end
         for gate in (ismember(ke, (1,)), ke == 1)
             g = owned(
                 psys(
-                    [D(ce) ~ Dr * Δ(ce) + α * ismember(ke, (2,)) - ε * ce * gate], [c(0, x, y) ~ 1.0; per],
+                    [D(ce) ~ Dr * laplacian(ce) + α * ismember(ke, (2,)) - ε * ce * gate], [c(0, x, y) ~ 1.0; per],
                     [Dr, ε, α]; T = 0.1, dvs = [ce, ke]
                 ), n; inputs = [ke => 0]
             )
@@ -181,7 +181,7 @@ end
         # negative control: a decay rate that reads a second state field is nonlinear, so refused
         nl = owned(
             psys(
-                [D(ce) ~ Dr * Δ(ce) - ε * ce * oe, D(oe) ~ Δ(oe)], [c(0, x, y) ~ 1.0; o(0, x, y) ~ 1.0; per2],
+                [D(ce) ~ Dr * laplacian(ce) - ε * ce * oe, D(oe) ~ laplacian(oe)], [c(0, x, y) ~ 1.0; o(0, x, y) ~ 1.0; per2],
                 [Dr, ε]; T = 0.1, dvs = [ce, oe]
             ), n
         )
@@ -192,7 +192,7 @@ end
         # dominance test (F3-22 review r1, D-C7a item 2 amended; base 9afaac05: refused)
         x1 = owned(
             psys(
-                [D(ce) ~ Dr * Δ(ce) + D2 * Δ(oe), D(oe) ~ Δ(oe)], [c(0, x, y) ~ 1.0; o(0, x, y) ~ cos(2π * x); per2],
+                [D(ce) ~ Dr * laplacian(ce) + D2 * laplacian(oe), D(oe) ~ laplacian(oe)], [c(0, x, y) ~ 1.0; o(0, x, y) ~ cos(2π * x); per2],
                 [Dr, D2]; T = 0.1, dvs = [ce, oe]
             ), n
         )
@@ -203,7 +203,7 @@ end
         # diagonally dominant, so automatic substeps are refused and a user count runs
         xd = owned(
             psys(
-                [D(ce) ~ Dr * Δ(ce) + D2 * Δ(oe), D(oe) ~ Δ(oe) + 0.1 * Δ(ce)], [c(0, x, y) ~ 1.0; o(0, x, y) ~ cos(2π * x); per2],
+                [D(ce) ~ Dr * laplacian(ce) + D2 * laplacian(oe), D(oe) ~ laplacian(oe) + 0.1 * laplacian(ce)], [c(0, x, y) ~ 1.0; o(0, x, y) ~ cos(2π * x); per2],
                 [Dr, D2]; T = 0.1, dvs = [ce, oe]
             ), n
         )
@@ -219,7 +219,7 @@ end
         # (a loop: `o` reads `c` back through a small reaction it dominates by its decay)
         xk = owned(
             psys(
-                [D(ce) ~ Dr * Δ(ce) + D2 * Δ(oe) - kc * ce, D(oe) ~ Δ(oe) - kc * oe + 0.5 * ce],
+                [D(ce) ~ Dr * laplacian(ce) + D2 * laplacian(oe) - kc * ce, D(oe) ~ laplacian(oe) - kc * oe + 0.5 * ce],
                 [c(0, x, y) ~ 1.0; o(0, x, y) ~ cos(2π * x); per2], [Dr, D2, kc]; T = 0.1, dvs = [ce, oe]
             ), n
         )
@@ -255,10 +255,10 @@ end
         # round 3): kind = 0 everywhere makes `1 − χ` = 1, so the rate is k = 1000 on every site
         @parameters kk = 1000.0 bb = 990.0 ee = 1000.0
         for (rhs, ρ) in (
-                (Dr * Δ(ce) - kk * (1 - ismember(ke, (1,))) * ce, 512 + 1000),
-                (Dr * Δ(ce) - (kk - bb * ismember(ke, (1,))) * ce, 512 + 1000),
-                (Dr * Δ(ce) - (kk - bb * (ke == 1)) * ce, 512 + 1000),
-                (Dr * Δ(ce) - kk * ce, 512 + 1000),
+                (Dr * laplacian(ce) - kk * (1 - ismember(ke, (1,))) * ce, 512 + 1000),
+                (Dr * laplacian(ce) - (kk - bb * ismember(ke, (1,))) * ce, 512 + 1000),
+                (Dr * laplacian(ce) - (kk - bb * (ke == 1)) * ce, 512 + 1000),
+                (Dr * laplacian(ce) - kk * ce, 512 + 1000),
             )                 # control: no indicator
             g = owned(psys([D(ce) ~ rhs], [c(0, x, y) ~ 1.0; per], [Dr, kk, bb]; T = 0.1, dvs = [ce, ke]), 8; inputs = [ke => 0])
             @test g.stability(g.p) ≈ ρ
@@ -305,14 +305,14 @@ end
         # (the bound is checked on the symbolic form; the owned problem reads K of another field.
         # Before F3-02 an owned `K ~ −1000 c` read in c's rate was refused as a read cycle)
         sa = psys(
-            [D(ce) ~ Dr * Δ(ce) + ifelse(t >= t0, Ke, 0.0), Ke ~ -1000 * ce], [c(0, x, y) ~ 1.0; per], [Dr, t0];
+            [D(ce) ~ Dr * laplacian(ce) + ifelse(t >= t0, Ke, 0.0), Ke ~ -1000 * ce], [c(0, x, y) ~ 1.0; per], [Dr, t0];
             T = 0.1, dvs = [ce, Ke]
         )
         cfa = symbolic_discretize(sa, LatticeDiscretization(Grid((4, 4)); T = Float64); update = LatticePDE.euler_update)
         @test stability_bound(cfa, sa)([1.0, 0.0]) ≈ 4 * 2 * 16 + 1000
         ga = owned(
             psys(
-                [D(ce) ~ Dr * Δ(ce) + ifelse(t >= t0, Ke, 0.0), D(oe) ~ -oe, Ke ~ -1000 * oe],
+                [D(ce) ~ Dr * laplacian(ce) + ifelse(t >= t0, Ke, 0.0), D(oe) ~ -oe, Ke ~ -1000 * oe],
                 [c(0, x, y) ~ 1.0; o(0, x, y) ~ 1.0; per2], [Dr, t0]; T = 0.1, dvs = [ce, oe, Ke]
             ), 4
         )
@@ -326,14 +326,14 @@ end
         # its arms only (0): ρ = Dr·Σ4/h² + 1 (base b41b73c1: no bound)
         gc = owned(
             psys(
-                [D(ce) ~ Dr * Δ(ce) + ifelse(Ke >= 0, -ce, 0.0), D(oe) ~ -oe, Ke ~ oe - 1],
+                [D(ce) ~ Dr * laplacian(ce) + ifelse(Ke >= 0, -ce, 0.0), D(oe) ~ -oe, Ke ~ oe - 1],
                 [c(0, x, y) ~ 1.0; o(0, x, y) ~ 1.0; per2], [Dr]; T = 0.1, dvs = [ce, oe, Ke]
             ), 4
         )
         @test gc.stability(gc.p) ≈ 4 * 2 * 16 + 1
         # an array-element coefficient is bounded at its entry (F1 round 6; it was refused):
         # ρ = Dk[2] · 4 Σ_d 1/h² = 2 · 512 on 8×8 (h = 1/8); with no tables given there is no bound
-        ae = owned(psys([D(ce) ~ Dk[2] * Δ(ce)], [c(0, x, y) ~ 1.0; per], [Dk]; T = 0.1), 8)
+        ae = owned(psys([D(ce) ~ Dk[2] * laplacian(ce)], [c(0, x, y) ~ 1.0; per], [Dk]; T = 0.1), 8)
         @test ae.stability(LatticePDE.Problems.with_tables(ae.p, ae.tables)) ≈ 1024
         @test isnan(ae.stability(ae.p))
         s_ae = solve(ae, ExplicitEuler(); dt = 0.01)                     # the automatic count
@@ -344,7 +344,7 @@ end
 @testitem "setp is atomic; init checks the faces (review round 2)" setup = [LP_problems] tags = [:latticepde, :problems] begin
     @testset "setp is atomic; init checks the faces (review round 2)" begin
         per = [c(t, x, 0) ~ c(t, x, 1), c(t, 0, y) ~ c(t, 1, y)]
-        prob = owned(psys([D(ce) ~ Dr * Δ(ce)], [c(0, x, y) ~ cos(2π * x); per], [Dr]; T = 0.1), 32)
+        prob = owned(psys([D(ce) ~ Dr * laplacian(ce)], [c(0, x, y) ~ cos(2π * x); per], [Dr]; T = 0.1), 32)
         integ = init(prob, ExplicitEuler(); dt = 0.01)
         m = integ.substeps
         @test_throws ["ArgumentError", "`Dr` has no value", "NaN"] setp(integ, Dr)(integ, NaN)        # no bound at NaN
@@ -358,7 +358,7 @@ end
         @test s2[:c][end] == s2[:c, end] && s2[:c][end] ≈ s[:c, end]     # (the last grid, both spellings: Q18)
         # a degenerate face on a problem set through setp: refused at init with the face message
         rsys = psys(
-            [D(ce) ~ Δ(ce)], [
+            [D(ce) ~ laplacian(ce)], [
                 c(0, x, y) ~ 0.0, c(t, 0, y) + βr * Differential(x)(c(t, 0, y)) ~ 1.0,
                 c(t, x, 0) ~ c(t, x, 1),
             ], [βr]
@@ -380,7 +380,7 @@ end
 @testitem "symbolic indexing: solutions, integrators, problems" setup = [LP_problems] tags = [:latticepde, :problems] begin
     @testset "symbolic indexing: solutions, integrators, problems" begin
         n, m = 6, 4
-        sys = psys([D(ce) ~ Dr * Δ(ce) - kr * ce], [c(0, x, y) ~ x; c(t, x, 0) ~ c(t, x, 1)], [Dr, kr]; T = 0.01)
+        sys = psys([D(ce) ~ Dr * laplacian(ce) - kr * ce], [c(0, x, y) ~ x; c(t, x, 0) ~ c(t, x, 1)], [Dr, kr]; T = 0.01)
         prob = owned(sys, n, m)
         sol = solve(prob, ExplicitEuler(); dt = 1.0e-3, saveat = 5.0e-3)
         @test sol.t ≈ [0.0, 0.005, 0.01]
@@ -405,7 +405,7 @@ end
     @testset "parameter updates re-check degenerate Robin faces" begin
         n = 4                                                         # h = 1/4: β = −h/2 at the low face
         sys = psys(
-            [D(ce) ~ Δ(ce)], [
+            [D(ce) ~ laplacian(ce)], [
                 c(0, x, y) ~ 0.0, c(t, 0, y) + βr * Differential(x)(c(t, 0, y)) ~ 1.0,
                 c(t, x, 0) ~ c(t, x, 1),
             ], [βr]
@@ -457,17 +457,17 @@ end
 
 @testitem "refusals" setup = [LP_problems] tags = [:latticepde, :problems] begin
     @testset "refusals" begin
-        sys = psys([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0], Num[])
+        sys = psys([D(ce) ~ laplacian(ce)], [c(0, x, y) ~ 0.0], Num[])
         @test_throws ["ArgumentError", "LatticeDiscretization", "got `problem`"] LatticeDiscretization(Grid((4, 4)); problem = :linear)
         # (F4-03) a span that is not a whole number of windows ends by one shortened window
         s3 = solve(owned(sys, 4), ExplicitEuler(); dt = 0.3)
         @test s3.retcode == SciMLBase.ReturnCode.Success && s3.t[end] ≈ 1.0
         @test_throws ["ArgumentError", "rate program is stepped by `solve(prob, ExplicitEuler(); dt)`"] solve(owned(sys, 4), ExplicitMap())
-        @test_throws ["ArgumentError", "no initial condition"] owned(psys([D(ce) ~ Δ(ce)], Equation[], Num[]), 4)  # no initial value
+        @test_throws ["ArgumentError", "no initial condition"] owned(psys([D(ce) ~ laplacian(ce)], Equation[], Num[]), 4)  # no initial value
         # (F4-01: a masked condition discretizes to the one problem; base, with `problem = :ode`: refused)
         @test discretize(
             psys(
-                [D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0, ce ~ masked(ke == 3, 0.0)], Num[];
+                [D(ce) ~ laplacian(ce)], [c(0, x, y) ~ 0.0, ce ~ masked(ke == 3, 0.0)], Num[];
                 dvs = [ce, ke]
             ), LatticeDiscretization(Grid((4, 4)); T = Float64)
         ) isa SciMLBase.ODEProblem
@@ -486,7 +486,7 @@ end
             )
             @test LatticePDE.lowers_call(f)
         end
-        @test !any(LatticePDE.lowers_call, (Δ, at, ismember, masked, sum, getindex))       # control: terms of their own
+        @test !any(LatticePDE.lowers_call, (laplacian, value_at, ismember, masked, sum, getindex))       # control: terms of their own
         @parameters uxv = 0.3
         vsys = psys([D(ce) ~ -Advect(Upwind1())([uxv, 0.0], ce)], [c(0, x, y) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)], [uxv])
         asys = psys([D(ce) ~ -Advect(Upwind1())(ve, ce)], [c(0, x, y) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)], Num[]; dvs = [ce, ve])
@@ -517,7 +517,7 @@ end
         end
         @parameters kd = 1.0 Dd = 0.1
         @parameters Td[1:2] = [0.5, 1.0]
-        sys = psys([D(ce) ~ Dd * Δ(ce) - kd * ce - at(Td, ke) * ce], [c(0, x, y) ~ 1.0], [kd, Dd, Td]; dvs = [ce, ke])
+        sys = psys([D(ce) ~ Dd * laplacian(ce) - kd * ce - value_at(Td, ke) * ce], [c(0, x, y) ~ 1.0], [kd, Dd, Td]; dvs = [ce, ke])
         K = fill(Int32(1), 4, 4)
         # (F4-01: one problem; the field algorithm and an OrdinaryDiffEq solver both step it)
         disc = LatticeDiscretization(Grid((4, 4)); T = Float64)
@@ -604,7 +604,7 @@ end
         @test occursin("FieldGroups: `K", emsg(() -> solve(p, FieldGroups(Ke => ExplicitEuler()); dt = 0.25)))
         # with states: `K ~ 2c + t` is saved from the saved state at the save time (two substeps per
         # window, so the substep's own aux value, computed from the state before it, would lag)
-        sys2 = psys([D(ce) ~ Da * Δ(ce) - ka * ce, Ke ~ 2ce + t], [c(0, x, y) ~ 1.0 + x], [Da, ka]; dvs = [ce, Ke])
+        sys2 = psys([D(ce) ~ Da * laplacian(ce) - ka * ce, Ke ~ 2ce + t], [c(0, x, y) ~ 1.0 + x], [Da, ka]; dvs = [ce, Ke])
         p2 = owned(sys2, 4)
         s2 = solve(p2, ExplicitEuler(); dt = 0.25, saveat = 0.5)
         @test first(substep_counts(s2)) == 2 && s2.t == [0.0, 0.5, 1.0]

@@ -81,9 +81,9 @@ end
     @testset "F4-E14: a face condition on a field with no spatial operator is refused" begin
         op = [ownership => zeros(Int32, 8, 6), kind => Symbol[]]
         e = cp_msg(() -> PottsProblem(CeFaceB(; name = :f), op, (0, 1)))
-        @test occursin("the PDESystem `nolap`", e) && occursin("has no `Δ(c)`", e) && occursin("would do nothing", e) ||
+        @test occursin("the PDESystem `nolap`", e) && occursin("has no `laplacian(c)`", e) && occursin("would do nothing", e) ||
               (println(e); false)
-        @test PottsProblem(CeFaceLapB(; name = :f), op, (0, 1)) isa PottsProblem          # control: with `Δ(c)`
+        @test PottsProblem(CeFaceLapB(; name = :f), op, (0, 1)) isa PottsProblem          # control: with `laplacian(c)`
     end
 end
 

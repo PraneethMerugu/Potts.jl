@@ -33,9 +33,9 @@ const TI_N = 8
 tiQ(s) = [s > 0.08i ? 1.0 : 0.0 for i in 1:TI_N, j in 1:TI_N]
 tidom() = [t ∈ Interval(0.0, 0.5), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
 # a source that reads the input, and a mask that reads it
-tisrc() = PDESystem([D(tice) ~ tiD * Δ(tice) - 0.5 * tice + tiqe], [tic(0, x, y) ~ 0.0], tidom(), [t, x, y],
+tisrc() = PDESystem([D(tice) ~ tiD * laplacian(tice) - 0.5 * tice + tiqe], [tic(0, x, y) ~ 0.0], tidom(), [t, x, y],
     [tice, tiqe], [tiD]; name = :tisrc)
-timask() = PDESystem([D(tice) ~ tiD * Δ(tice) - 0.5 * tice], [tic(0, x, y) ~ 0.0, tice ~ masked(tiqe > 0.5, 2.0)],
+timask() = PDESystem([D(tice) ~ tiD * laplacian(tice) - 0.5 * tice], [tic(0, x, y) ~ 0.0, tice ~ masked(tiqe > 0.5, 2.0)],
     tidom(), [t, x, y], [tice, tiqe], [tiD]; name = :timask)
 tidisc() = LatticeDiscretization(Grid((TI_N, TI_N)); T = Float64)
 # the reference: the input's values at the start, written by a callback after each window or step
@@ -48,7 +48,7 @@ tiode(prob) = tiwarm(init(prob, Tsit5(); adaptive = false, dt = 0.01, save_every
 @variables tik(..)::Int32 [input = true]
 tike = tik(t, x, y)
 tiK(v) = s -> Int32[s > v * i ? 1 : 0 for i in 1:TI_N, j in 1:TI_N]
-tiint() = PDESystem([D(tice) ~ tiD * Δ(tice) - 0.5 * tice + ifelse(tike == 1, 1.0, 0.0)], [tic(0, x, y) ~ 0.0],
+tiint() = PDESystem([D(tice) ~ tiD * laplacian(tice) - 0.5 * tice + ifelse(tike == 1, 1.0, 0.0)], [tic(0, x, y) ~ 0.0],
     tidom(), [t, x, y], [tice, tike], [tiD]; name = :tiint)
 
 # On an OrdinaryDiffEq solver the right side evaluates the function at every call (ruling Q19),
@@ -61,7 +61,7 @@ tifine(sys) = tifn(sys, ExplicitEuler(); dt = 1.0e-4, saveat = 0.1)
 # alone, Crank–Nicolson and BDF2 equal their constant-input runs bit for bit, and with a smooth
 # source `sin(6t)` in the equation they stay second order (a reset every window made BDF2
 # Backward Euler and CN two half steps)
-tismooth() = PDESystem([D(tice) ~ tiD * Δ(tice) - 0.5 * tice + sin(6t) * tiqe], [tic(0, x, y) ~ x], tidom(), [t, x, y],
+tismooth() = PDESystem([D(tice) ~ tiD * laplacian(tice) - 0.5 * tice + sin(6t) * tiqe], [tic(0, x, y) ~ x], tidom(), [t, x, y],
     [tice, tiqe], [tiD]; name = :tismooth)
 include("shared/export_all.jl")
 end

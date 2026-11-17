@@ -386,9 +386,9 @@ function _input_names(sys::PottsSystem)
     end
     return out
 end
-# a CPM read as the model writes it: `volume[owner]`, not `LatticePDE.at(volume, owner)`
+# a CPM read as the model writes it: `volume[owner]`, not `LatticePDE.value_at(volume, owner)`
 _cpm_read_text(ex) = (s = LatticePDE.as_written(replace(_builtin_text(string(ex)), "LatticePDE." => ""));
-                      replace(replace(s, r"(\w+)\(t\)" => s"\1"), r"at\((\w+), (\w+)\)" => s"\1[\2]"))
+                      replace(replace(s, r"(\w+)\(t\)" => s"\1"), r"value_at\((\w+), (\w+)\)" => s"\1[\2]"))
 
 # the PDESystem `f` of a model's fields with the model's defaults added to its
 # `initial_conditions` (a value already there is kept): the initial value of each field

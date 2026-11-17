@@ -24,9 +24,9 @@ end
 # site, and the coefficient is not monotone in it (`k (1 − χ)` is largest at χ = 0), so each
 # assignment is evaluated. A table read is evaluated at every index it can read, as the
 # kernel reads it: index 0 reads 0 and any other index is clamped into `1:length` (the
-# table's last entry above it, its first below 1). `Dk[2]` and `at(Dk, 2)` read their own
-# entry; the `at` reads with one index expression `k` (the same site's kind) take one index
-# together, `0` and `1:L` with `L` the longest table of the group (`at(Da, k) - at(Db, k)`
+# table's last entry above it, its first below 1). `Dk[2]` and `value_at(Dk, 2)` read their own
+# entry; the `value_at` reads with one index expression `k` (the same site's kind) take one index
+# together, `0` and `1:L` with `L` the longest table of the group (`value_at(Da, k) - value_at(Db, k)`
 # per kind), and a read that appears twice is one read. A group takes the indices of the
 # integer interval of its index expression (`+ − * min max abs`, `ifelse` as the hull of its
 # arms, parameters at their values), over the declared bounds of its inputs (`bounds = (lo,
@@ -35,13 +35,13 @@ end
 # interval holds 0 and, where it does, the index's values at the sites (when the host arrays
 # give them) say whether a site reaches it; the entries are those the nonzero values clamp
 # to (F2 records (h), (m)). This covers every value the coefficient takes at a site, for any expression of
-# the reads (`at(Dq, k) (20 − at(Dq, k))`, `sin(at(Ds, k))`, `1 / at(Dv, k)`), with the
+# the reads (`value_at(Dq, k) (20 − value_at(Dq, k))`, `sin(value_at(Ds, k))`, `1 / value_at(Dv, k)`), with the
 # indicators taken independently of the entries (a superset). A non-finite value (`1 / 0`)
 # gives a non-finite bound, which is no bound. `c(p)` is the largest magnitude, `_hi`/`_lo`
 # the largest and smallest signed values; `p` carries the tables (`Problems.ParamsTables`),
 # and with table reads but no tables the values are `NaN`. `nothing` when the expression
 # reads anything but scalar parameters and tables, keeps a call that is not plain arithmetic
-# (a registered operator such as `Δ`), or has more than `_MAXIND` distinct indicators; more
+# (a registered operator such as `laplacian`), or has more than `_MAXIND` distinct indicators; more
 # than `_MAXEVALS` evaluations (assignments × indices) give `NaN`, no bound.
 struct CoefBound
     fs::Vector{Any}                         # one compiled function of the parameters per assignment
@@ -298,14 +298,14 @@ const _PLAIN = (+, -, *, /, ^, inv, abs, sqrt, cbrt, exp, log, sin, cos, tan, ta
 _plainop(f) = any(g -> f === g, _PLAIN)
 function _coef_bound(x, params, tabs = Dict{Any, String}(), ivars = (); box = ())
     u0 = unwrap(x)
-    # the table reads, each a fresh variable; the `at` reads grouped by index expression: a
+    # the table reads, each a fresh variable; the `value_at` reads grouped by index expression: a
     # group takes one index for all its reads
     reads, tvars, reps = Tuple{String, Int, Int}[], Any[], Dict{Any, Any}()
     gkeys = Any[]
     function walkt(y)
         iscall(y) || return nothing
         f, a = operation(y), arguments(y)
-        if (f === getindex || f === at) && length(a) == 2 && haskey(tabs, unwrap(a[1]))
+        if (f === getindex || f === value_at) && length(a) == 2 && haskey(tabs, unwrap(a[1]))
             any(k -> isequal(k, y), keys(reps)) && return nothing
             k = tabs[unwrap(a[1])]
             i = unwrap_const(unwrap(a[2]))
@@ -387,7 +387,7 @@ end
 function _diffusion_coefficient(term)
     reps = Dict{Any, Any}()
     walk(y) = iscall(y) && (f = operation(y);
-                            f === Δ ? (reps[y] = 1) :
+                            f === laplacian ? (reps[y] = 1) :
                             f isa DivKGrad ? (reps[y] = arguments(y)[1]) :
                             f isa Differential ? (r = _raw_flux(y); reps[y] = r === nothing || r[1] === nothing ? 1 : r[1]) :
                             foreach(walk, arguments(y)))
@@ -397,11 +397,11 @@ end
 
 # a site-varying diffusion term `m Op(c)` (`:SiteDiffusion`): the center multiplier `m` (the
 # operator replaced by 1), read at the row's own site, and the face coefficient `K` (1 for
-# `Δ`, `K` of `DivKGrad(K, c)` or of `Dx(K Dx(c))`), read through face means of two sites
+# `laplacian`, `K` of `DivKGrad(K, c)` or of `Dx(K Dx(c))`), read through face means of two sites
 function _site_parts(term)
     reps, K = Dict{Any, Any}(), Any[]
     walk(y) = iscall(y) && (f = operation(y);
-                            f === Δ ? (reps[y] = 1; push!(K, 1)) :
+                            f === laplacian ? (reps[y] = 1; push!(K, 1)) :
                             f isa DivKGrad ? (reps[y] = 1; push!(K, arguments(y)[1])) :
                             f isa Differential ? (r = _raw_flux(y); reps[y] = 1;
                                                   push!(K, r === nothing || r[1] === nothing ? 1 : r[1])) :
@@ -448,18 +448,18 @@ table. Per rate field (one Jacobian row):
   `r = (α/2 − β)/(α/2 + β)` stiffens the boundary row);
 - `LinearLocal` terms (`k c`) add `|k|`;
 - `CrossLinear` terms add their off-diagonal row sum: `|k|` for `k o`, and
-  `|D₂| (Σ_d 4/h_d² + Robin terms of o)` for cross-diffusion `D₂ Δ(o)`.
+  `|D₂| (Σ_d 4/h_d² + Robin terms of o)` for cross-diffusion `D₂ laplacian(o)`.
 - `SiteDiffusion` terms `m Op(c)` (a multiplier `m` that reads inputs through table reads
   and indicators only, F2 record (g)) give `max|m| · max K` times `Σ_d 4/h_d²` (and the Robin
   terms): the center multiplier `m` is evaluated jointly over its reads (one site), the face
-  coefficient `K` (1 for `Δ`) independently, because a face mixes two sites' indices. For
+  coefficient `K` (1 for `laplacian`) independently, because a face mixes two sites' indices. For
   `M = diag(m) ≥ 0` and the symmetric `A`, `M A` is similar to `M^½ A M^½` on the rows with
   `m > 0`, so its spectrum is real and bounded by `max m · ρ(A)`.
 A coefficient with kind sets or comparisons (indicators, 0 or 1 per site) is evaluated at
 every 0/1 assignment of them: the largest magnitude enters `ρ`, the largest signed value
-the diagonal. An `ifelse` whose condition the indicators decide takes its arm. A coefficient that reads a table (`Dk[2] * Δ(c)`, `at(Dk, kind) * Δ(c)`) is
+the diagonal. An `ifelse` whose condition the indicators decide takes its arm. A coefficient that reads a table (`Dk[2] * laplacian(c)`, `value_at(Dk, kind) * laplacian(c)`) is
 evaluated at every index each read can take, as the kernel reads it (the entry itself for
-`Dk[2]`; for `at`, index 0, which reads 0 unless the index is an input declared never 0, and
+`Dk[2]`; for `value_at`, index 0, which reads 0 unless the index is an input declared never 0, and
 every entry, clamped into each table; reads with one index take one index together), from
 the tables `p` carries
 (`Problems.ParamsTables`): any expression of the reads is covered, a negative entry is
@@ -623,7 +623,7 @@ end
 
 # The lagged coupling of field groups (`Problems.lagged_coupling`; review of F2-06): per
 # group, the largest over its rows (and their switch arms) of Σ max|coefficient| over the
-# cross terms that read a field of another group (a cross diffusion `a Δ(o)` with its
+# cross terms that read a field of another group (a cross diffusion `a laplacian(o)` with its
 # `4 Σ 1/h²` and Robin parts, as in the row bound), with the worst term. A coefficient with no
 # finite bound makes the rate `NaN` (or `Inf`), kept over any finite row. The group read graph
 # (round 2): `reads`, the groups whose fields a seen cross term reads, whatever its value (the
@@ -632,7 +632,7 @@ end
 # an aux field, which may carry any state; round 3: a term on the row's own field alone, such
 # as `-a^3`, couples no group). `within` (round 3): per group, the groups whose reads the rate
 # sums (the group's loop); `nothing`, every other group.
-# `text` is the coefficient as the user wrote it (`at(Kt, q)`), `raw` the bound's text (front
+# `text` is the coefficient as the user wrote it (`value_at(Kt, q)`), `raw` the bound's text (front
 # end A prints it in the model's words).
 function Problems.lagged_coupling(b::StabilityBound, groups, p; within = nothing)
     gof = Dict{String, Int}(k => g for (g, ks) in enumerate(groups) for k in ks)
@@ -1108,9 +1108,9 @@ function _declared_bounds(v)
     return (Float64(b[1]), Float64(b[2]))
 end
 _fieldname(v) = (u = unwrap(v); iscall(u) ? string(nameof(operation(u))) : string(u))
-# the spatial operator call of a term `± m · Op(…) / d` (`Δ`, `DivKGrad`, `Advect`, a
+# the spatial operator call of a term `± m · Op(…) / d` (`laplacian`, `DivKGrad`, `Advect`, a
 # `Differential`), when it is the term's one operator and a factor of it; else nothing
-_isop(y) = iscall(y) && (f = operation(y); f === Δ || f isa DivKGrad || f isa Advect || f isa Differential)
+_isop(y) = iscall(y) && (f = operation(y); f === laplacian || f isa DivKGrad || f isa Advect || f isa Differential)
 _has_op(u) = iscall(u) && (_isop(u) || any(x -> _has_op(unwrap(x)), arguments(u)))
 function _op_factor(u)
     _isop(u) && return u
@@ -1129,19 +1129,19 @@ end
 # whether the operator call `opc` acts on the field read `c` (its operand)
 function _op_operand_is(opc, c)
     f, a, o = operation(opc), arguments(opc), _ref(c)
-    f === Δ && return _isread(a[1], o)
+    f === laplacian && return _isread(a[1], o)
     f isa DivKGrad && return _isread(a[end], o)
     f isa Advect && return _isread(a[2], o)
     r = _raw_flux(opc)
     return r !== nothing && _isread(r[2], o)
 end
-# whether a term reads anything away from its site: a spatial operator, a site read `at(c, i)`
+# whether a term reads anything away from its site: a spatial operator, a site read `value_at(c, i)`
 # of a field, a `Shift`
 function _has_spatial(u)
     iscall(u) || return false
     f = operation(u)
     f isa SymbolicUtils.BasicSymbolic && return false           # a field or input read at the site
-    (f === Δ || (f === at || f === at2) && iscall(unwrap(arguments(u)[1])) || !(f isa Function)) && return true
+    (f === laplacian || f === value_at && iscall(unwrap(arguments(u)[1])) || !(f isa Function)) && return true
     return any(x -> _has_spatial(unwrap(x)), arguments(u))
 end
 
@@ -1317,7 +1317,7 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
                 # a diffusion `m Op(K, c)` with `m` or `K` reading the coordinates or a field with a
                 # declared interval: the multiplier at the site and the face coefficient bounded
                 # independently (the face mean mixes two sites), as a site diffusion
-                K = f === Δ ? 1 : f isa DivKGrad ? arguments(opc)[1] : (r = _raw_flux(opc); r[1] === nothing ? 1 : r[1])
+                K = f === laplacian ? 1 : f isa DivKGrad ? arguments(opc)[1] : (r = _raw_flux(opc); r[1] === nothing ? 1 : r[1])
                 cm = _coef_bound(m, params, tabs, ivars; box = cbox)
                 cK = facecoef(K)
                 (cm === nothing || cK === nothing) && return false
@@ -1717,7 +1717,7 @@ function Problems.check_parameters(b::StabilityBound, p)
     isempty(neg) && return _check_finite(r)
     _dverr("the diffusion coefficient of the field$(length(neg) == 1 ? "" : "s") $(join(("`$k`" for k in neg), ", ")) " *
            "is negative at these parameters (anti-diffusion: an ill-posed equation, unstable at any step and with any " *
-           "solver); write the term with a coefficient ≥ 0 (`D * Δ(c)` with `D ≥ 0`; a decay is a reaction term `-k * c`)")
+           "solver); write the term with a coefficient ≥ 0 (`D * laplacian(c)` with `D ≥ 0`; a decay is a reaction term `-k * c`)")
 end
 # The declared intervals against the constant face and mask values (batch 5 review M2): a value
 # outside its field's declared bounds drives the field out of the interval the bound takes
@@ -1835,7 +1835,7 @@ the step index changes; steady rows `0 ~ rhs` give the problem a `mass_matrix` (
 fields), for a mass-matrix solver (`Rodas5P()`, `FBDF()`).
 
 **Steady rows** (F3-12b). `0 ~ rhs` is solved for the field it determines: a state field with
-no other equation that the row reads, preferably under a spatial operator (`0 ~ D * Δ(c) - k * c
+no other equation that the row reads, preferably under a spatial operator (`0 ~ D * laplacian(c) - k * c
 + s` is `c`'s); see `steady_rows`. Its group takes `QuasiSteady` only, by default too:
 `solve(prob, BackwardEuler(); dt)` steps the other fields with `BackwardEuler` and the steady
 ones with `QuasiSteady` at the same window, solved first in each window. A steady field with no
@@ -1867,7 +1867,7 @@ by symbol (`sol[c(t, x, y)]`, `sol[:c]`) as grid-shaped arrays.
   OrdinaryDiffEq solvers (F4-07). `jvp` is the Jacobian-vector product (one Dual evaluation),
   which Krylov linear solvers use (`linsolve = KrylovJL_GMRES()`); on a device it is also the
   `jac_prototype`, a matrix-free operator. `sparse = true` sets `jac_prototype` to the sparse
-  pattern the IR gives (`jacobian_sparsity`) and `colorvec` to its coloring, so `Rodas5P()` or
+  pattern the IR gives (`field_jacobian_sparsity`) and `colorvec` to its coloring, so `Rodas5P()` or
   `FBDF()` form the Jacobian with one evaluation per color (5 to 7 for a 5-point stencil)
   instead of a dense one. `jac = true` sets `jac` to the colored Dual Jacobian. Both are host
   only (no KernelAbstractions sparse matrix exists); a device takes `jvp`.

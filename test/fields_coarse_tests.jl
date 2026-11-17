@@ -30,21 +30,21 @@ module FcoPDE
         @parameters Dc = 0.4 kd = 0.3 s = 0.5
         C, E = c(X_...), e(X_...)
         return pdesys(
-            [Dt(C) ~ Dc * Δ(C) - kd * C + s * kA(X_...) + 0.2 * E + 0.01 * x, Dt(E) ~ 0.1 * Δ(E) - E + 0.5 * C],
+            [Dt(C) ~ Dc * laplacian(C) - kd * C + s * kA(X_...) + 0.2 * E + 0.01 * x, Dt(E) ~ 0.1 * laplacian(E) - E + 0.5 * C],
             [ics(c, e); C ~ masked(kB(X_...), 2.0)], D, [C, E, kA(X_...), kB(X_...)], [Dc, kd, s]
         )
     end
-    dom() = (C = c(X_...); pdesys([Dt(C) ~ 0.4 * Δ(C) - 0.3 * C * kA(X_...) + 1.0], ics(c), D, [C, kA(X_...)]))
+    dom() = (C = c(X_...); pdesys([Dt(C) ~ 0.4 * laplacian(C) - 0.3 * C * kA(X_...) + 1.0], ics(c), D, [C, kA(X_...)]))
     function on_copy()
         @variables c(..) [lattice_level = Coarse(2)]
         C = c(X_...)
-        return pdesys([Dt(C) ~ 0.1 * Δ(C) - C], ics(c), (8, 8), [C])
+        return pdesys([Dt(C) ~ 0.1 * laplacian(C) - C], ics(c), (8, 8), [C])
     end
     function where_()
         @variables c(..)
         C, U = c(X_...), u(X_...)
         return pdesys(
-            [Dt(C) ~ 0.1 * Δ(C) - C, Dt(U) ~ kA(X_...) - U + 0.1 * Δ(kn(X_...))], ics(c, u), (8, 8),
+            [Dt(C) ~ 0.1 * laplacian(C) - C, Dt(U) ~ kA(X_...) - U + 0.1 * laplacian(kn(X_...))], ics(c, u), (8, 8),
             [C, U, kA(X_...), kn(X_...)]
         )
     end
@@ -64,8 +64,8 @@ module FcoPDE
         C, V, U = c(X_...), v(X_...), u(X_...)
         return pdesys(
             [
-                Dt(V) ~ 0.1 * Δ(V) - V + 0.5 * kA(X_...), Dt(C) ~ Dc * Δ(C) - 0.3 * C + 0.5 * Δ(V),
-                Dt(U) ~ 0.2 * Δ(U) - U + 0.5 * Δ(C) + 0.1 * DivKGrad(:harmonic)(1 + x, C),
+                Dt(V) ~ 0.1 * laplacian(V) - V + 0.5 * kA(X_...), Dt(C) ~ Dc * laplacian(C) - 0.3 * C + 0.5 * laplacian(V),
+                Dt(U) ~ 0.2 * laplacian(U) - U + 0.5 * laplacian(C) + 0.1 * DivKGrad(:harmonic)(1 + x, C),
             ],
             ics(c, v, u), D, [C, V, U, kA(X_...)], [Dc]
         )
@@ -75,8 +75,8 @@ module FcoPDE
         C, V, U, Xa, La, Ma = c(X_...), v(X_...), u(X_...), X(X_...), L(X_...), M(X_...)
         return pdesys(
             [
-                Dt(V) ~ 0.1 * Δ(V) - V + 0.5 * kA(X_...), Xa ~ Δ(V), La ~ Δ(C), Ma ~ DivKGrad(:harmonic)(1 + x, C),
-                Dt(C) ~ Dc * Δ(C) - 0.3 * C + 0.5 * Xa, Dt(U) ~ 0.2 * Δ(U) - U + 0.5 * La + 0.1 * Ma,
+                Dt(V) ~ 0.1 * laplacian(V) - V + 0.5 * kA(X_...), Xa ~ laplacian(V), La ~ laplacian(C), Ma ~ DivKGrad(:harmonic)(1 + x, C),
+                Dt(C) ~ Dc * laplacian(C) - 0.3 * C + 0.5 * Xa, Dt(U) ~ 0.2 * laplacian(U) - U + 0.5 * La + 0.1 * Ma,
             ],
             ics(c, X, L, M, v, u), D, [C, Xa, La, Ma, V, U, kA(X_...)], [Dc]
         )
@@ -86,8 +86,8 @@ module FcoPDE
         C, V, U = c(X_...), v(X_...), u(X_...)
         return pdesys(
             [
-                Dt(V) ~ 0.1 * Δ(V) - V + 0.5 * kA(X_...), Dt(C) ~ 0.4 * Δ(C) - 0.3 * C + 0.2 * V,
-                Dt(U) ~ 0.2 * Δ(U) - U + 0.5 * Δ(V) + 0.3 * Δ(C),
+                Dt(V) ~ 0.1 * laplacian(V) - V + 0.5 * kA(X_...), Dt(C) ~ 0.4 * laplacian(C) - 0.3 * C + 0.2 * V,
+                Dt(U) ~ 0.2 * laplacian(U) - U + 0.5 * laplacian(V) + 0.3 * laplacian(C),
             ],
             [ics(c, v, u); face], D, [C, V, U, kA(X_...)]
         )
@@ -172,7 +172,7 @@ end
 
 # F3-22 (F3 design §5 F3-22): a spatial operator across grids in a model. `v` is fine, `c` is coarse:
 # the coarse row reads the block mean of the fine Laplacian, and the fine row `u` the coarse
-# `Δ(c)` at its block's node. The direct form is the aux field of the manual route (bitwise),
+# `laplacian(c)` at its block's node. The direct form is the aux field of the manual route (bitwise),
 # the model equals B (`Potts.fields`) bitwise, the added aux field is the binding's scratch (not in the
 # state), and a ForwardDiff Dual runs through it (F3-21b's shadow store). Base 5316bf1c
 # (~/lpwork/f322/nc-*.log): the direct form is refused ("a spatial operator reads its field on
@@ -394,7 +394,8 @@ end
         # ab34e226, ~/lpwork/f4BE/nc.log: `in @equations Differential(t, 1)(u(t)) ~ …`)
         err_w = fco_throws(
             ArgumentError,
-            ["\n  in the equation of `u` in the PDESystem `fields`: `Differential(t)(u(t, x, y)) ~ ", "(kind == A) - u(t, x, y)"],
+            ["\n  in the equation of `u` in the PDESystem `fields`: `Differential(t)(u(t, x, y)) ~ ", "(kind == A)", "0.1laplacian(kind)",
+                "- u(t, x, y)`"],
             () -> PottsProblem(_FcWhere(; name = :w), [ownership => σw, kind => [:A]], (0, 1))
         )
         @test !occursin("@equations", sprint(showerror, err_w))

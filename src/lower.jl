@@ -123,12 +123,12 @@ function lower(x, env::LowerEnv)
     end
     op = operation(x)
     args = arguments(x)
-    (op === at || op === at2) && return _lower_at(args, env)
+    op === value_at && return _lower_at(args, env)
     op === ismember && return lower(_ismember_or(Symbolics.wrap(args[1]), SymbolicUtils.unwrap_const(args[2])), env)
     op === gather && return _lower_gather(args, env)
     op === _connected && return _lower_connected(args, env)
     op === population && return _lower_population(args, env)
-    op === Δ && error("`Δ` is a field operator: the field compiler lowers it in a field's PDESystem (`@fields`, `Potts.couple`); " *
+    op === laplacian && error("`laplacian` is a field operator: the field compiler lowers it in a field's PDESystem (`@fields`, `Potts.couple`); " *
                       "it is not available in $(_MODE_NAMES[env.mode])")
     # cell references (R6, D-066 item 5): liveness, sources, the enclosing cell of a fold
     op === cell_alive && return :(Potts._alive_slot($(_refst(env)).cell.volume, $(lower(args[1], env))))
@@ -200,7 +200,7 @@ function lower(x, env::LowerEnv)
     end
     (op === random_normal || op === random_normal_above) && return _lower_normal(op, args, env)
     op isa ModelingToolkitBase.Pre && return lower(args[1], env)     # previous value
-    # `_nonzero(at(_nonzero(v), j))` (`grn.A[j]` of a Bool node): the read is already a Bool
+    # `_nonzero(value_at(_nonzero(v), j))` (`grn.A[j]` of a Bool node): the read is already a Bool
     op === _nonzero && _is_bool_node_read(args[1]) && return lower(args[1], env)
     op === ifelse && return :($(lower(args[1], env)) ? $(lower(args[2], env)) : $(lower(args[3], env)))
     if op === (^) && SymbolicUtils.isconst(_unwrap(args[2]))
@@ -470,9 +470,9 @@ end
 (the host hook)."""
 @inline _copy_mcs(ctx) = haskey(ctx, :mcs) ? ctx.mcs : 0
 
-# whether `x` is `at(position, s)`: the position of site `s` (indexed again by an axis)
+# whether `x` is `value_at(position, s)`: the position of site `s` (indexed again by an axis)
 function _is_site_position(x)
-    (x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === at) || return false
+    (x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === value_at && length(arguments(x)) == 2) || return false
     i = info(arguments(x)[1])
     return i !== nothing && i.role === :builtin && i.name === :position
 end
@@ -519,7 +519,7 @@ function _is_ref(x)
         end
         return true
     end
-    if op === at
+    if op === value_at && length(arguments(x)) == 2
         a = _unwrap(arguments(x)[1])
         iscall(a) && operation(a) isa ModelingToolkitBase.Pre && (a = _unwrap(arguments(a)[1]))
         return _is_ref_var(a)
@@ -542,7 +542,7 @@ function _is_cell_index(x)
     iscall(x) || return false
     op = operation(x)
     op === ifelse && return all(_is_cell_index, arguments(x)[2:3])
-    if op === at && length(arguments(x)) == 2
+    if op === value_at && length(arguments(x)) == 2
         a = info(_unwrap(arguments(x)[1]))
         return a !== nothing && a.role === :builtin && a.name in (:owner, :cluster)
     end
@@ -564,7 +564,7 @@ function _ref_reads!(out, y)
     # a population fold reads every cell's referents, as a fold reads every cell (snapshot
     # or not): its bound cells cannot be lowered outside it
     op === population && return out
-    r = op === at && length(arguments(y)) == 2 && _is_ref(arguments(y)[2]) ? arguments(y)[2] :
+    r = op === value_at && length(arguments(y)) == 2 && _is_ref(arguments(y)[2]) ? arguments(y)[2] :
         op === cell_alive ? arguments(y)[1] : nothing
     r === nothing || _push_ref!(out, r)
     foreach(a -> _ref_reads!(out, _unwrap(a)), arguments(y))
@@ -587,7 +587,7 @@ function _mentions_refs(x)
     _walk(x) do y
         iscall(y) || return
         op = operation(y)
-        ((op === at && length(arguments(y)) == 2 && _is_ref(arguments(y)[2])) || op === cell_alive) && (found[] = true)
+        ((op === value_at && length(arguments(y)) == 2 && _is_ref(arguments(y)[2])) || op === cell_alive) && (found[] = true)
     end
     return found[]
 end
@@ -710,24 +710,24 @@ function _sort(x)
         i.role === :builtin && return i.name in (:source, :target, :site, :site′) ? :site :
                i.name in (:old, :new, :owner, :owner′, :id, :a, :b) ? :cell : :unknown
     end
-    if x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === at
+    if x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === value_at && length(arguments(x)) == 2
         a = info(arguments(x)[1])
         a !== nothing && a.role === :builtin && a.name === :owner && return :cell
     end
     return :unknown
 end
 
-# whether `x` is `at(_nonzero(v), …)` (or `at(Pre(_nonzero(v)), …)`): a Bool node read at an
+# whether `x` is `value_at(_nonzero(v), …)` (or `value_at(Pre(_nonzero(v)), …)`): a Bool node read at an
 # index, which `_lower_at` lowers to a Bool already
 function _is_bool_node_read(x)
     x = _unwrap(x)
-    (x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === at) || return false
+    (x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === value_at && length(arguments(x)) == 2) || return false
     a = _unwrap(arguments(x)[1])
     iscall(a) && operation(a) isa ModelingToolkitBase.Pre && (a = _unwrap(arguments(a)[1]))
     return iscall(a) && operation(a) === _nonzero
 end
 
-# A field operator read in a model statement (`Δ(c)[target]` under `using Potts.Fields`): an
+# A field operator read in a model statement (`laplacian(c)[target]` under `using Potts.Fields`): an
 # operator is a term of the fields' PDESystem; the model reads its value through an aux field
 function _operator_read_text(x)
     o = _unwrap(arguments(x)[end])
@@ -740,7 +740,7 @@ end
 
 function _lower_at(args, env)
     x = _unwrap(args[1])
-    # `Pre(x[i])` arrives as `at(Pre(x), i)`: the previous value is the stored one
+    # `Pre(x[i])` arrives as `value_at(Pre(x), i)`: the previous value is the stored one
     iscall(x) && operation(x) isa ModelingToolkitBase.Pre && (x = _unwrap(arguments(x)[1]))
     # a Bool node of a discrete component (`grn.A[new]`): its slot there, read as a Bool
     iscall(x) && operation(x) === _nonzero && return :(Potts._nonzero($(_lower_at(Any[arguments(x)[1], args[2:end]...], env))))

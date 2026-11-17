@@ -252,7 +252,7 @@ function _be_shift_body!(i, s, j, d, m, smask, rmask, dom, ih, ih2, w, window)
 end
 _jat(::Nothing, i, ih) = zero(ih)
 _jat(j::AbstractArray, i, ih) = @inbounds j[i]                         # i ≤ length(j)
-# The right side of a scaled row (`m Δ(c)`): `G/m` where `m > 0`, and at a row with `m = 0`
+# The right side of a scaled row (`m laplacian(c)`): `G/m` where `m > 0`, and at a row with `m = 0`
 # (inside the domain, not masked) its own `δ = G/max(1/(γh) − J, 1/(2γh))` as the solver's
 # mask value (the two-stage solve, M3)
 function _be_rhs_body!(i, f, v, res, j, m, smask, rmask, dom, ih, ih2)
@@ -495,7 +495,7 @@ end
 
 # the fields kernel `i` of `s` reads, through the `aux:` kernels of the aux fields it reads (an
 # aux field is evaluated from its own reads in the row's residual, so the row depends on them:
-# `0.5 L` with `L ~ Δ(c)` reads `c`, F3-22)
+# `0.5 L` with `L ~ laplacian(c)` reads `c`, F3-22)
 function _reads_through_aux(s::Program, i)
     out, todo, seen = Int32[], Int[i], Set{Int}()
     while !isempty(todo)

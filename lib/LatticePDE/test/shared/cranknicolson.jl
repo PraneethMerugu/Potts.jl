@@ -6,7 +6,7 @@ using OrdinaryDiffEqSDIRK: Trapezoid
 function mf_problem(dims)
     src = -exp(-t) * sin(π * x) * sin(π * y) + 1 + 2π^2 * 0.1 * exp(-t) * sin(π * x) * sin(π * y)
     faces = [bc(t, 0, y) ~ t, bc(t, 1, y) ~ t, bc(t, x, 0) ~ t, bc(t, x, 1) ~ t]
-    ms = bsys([D(bce) ~ 0.1 * Δ(bce) + src], [bc(0, x, y) ~ sin(π * x) * sin(π * y); faces], Any[]; T = 1.0, dvs = [bce])
+    ms = bsys([D(bce) ~ 0.1 * laplacian(bce) + src], [bc(0, x, y) ~ sin(π * x) * sin(π * y); faces], Any[]; T = 1.0, dvs = [bce])
     return discretize(ms, LatticeDiscretization(Grid(dims); T = Float64))
 end
 mf_src(xx, yy, tt) = -exp(-tt) * sin(π * xx) * sin(π * yy) + 1 + 2π^2 * 0.1 * exp(-tt) * sin(π * xx) * sin(π * yy)
@@ -25,7 +25,7 @@ end
 # solution is `e^{D λ t} u0`, so the error is the time error alone
 function eig_problem(n; T = 0.4)
     dirs = [bc(t, 0, y) ~ 0.0, bc(t, 1, y) ~ 0.0, bc(t, x, 0) ~ 0.0, bc(t, x, 1) ~ 0.0]
-    sys = bsys([D(bce) ~ bD * Δ(bce)], [bc(0, x, y) ~ sin(π * x) * sin(π * y); dirs], [bD]; T, dvs = [bce])
+    sys = bsys([D(bce) ~ bD * laplacian(bce)], [bc(0, x, y) ~ sin(π * x) * sin(π * y); dirs], [bD]; T, dvs = [bce])
     p = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64))
     λ = 2 * (2cos(π / n) - 2) * n^2
     u0 = [sin(π * (i - 0.5) / n) * sin(π * (j - 0.5) / n) for i in 1:n, j in 1:n]
@@ -34,7 +34,7 @@ end
 # 1D step data on `n` sites with zero-flux faces, `k` windows of `h`
 @variables b1(..)
 function step1d(n, h; k = 10)
-    s = PDESystem([D(b1(t, x)) ~ Δ(b1(t, x))], [b1(0, x) ~ ifelse(x < 0.5, 1.0, 0.0)],
+    s = PDESystem([D(b1(t, x)) ~ laplacian(b1(t, x))], [b1(0, x) ~ ifelse(x < 0.5, 1.0, 0.0)],
         [t ∈ Interval(0.0, k * h), x ∈ Interval(0.0, 1.0)], [t, x], [b1(t, x)], Any[]; name = :s1)
     return discretize(s, LatticeDiscretization(Grid((n,)); T = Float64))
 end
@@ -42,7 +42,7 @@ tv1(u) = sum(abs, diff(vec(u)))
 # `1.5 c − rb ∂c/∂x = 0.2` at x = 1 (rb = −1: a positive diagonal, rb = +1 a negative one)
 function robin_sys(v)
     @parameters crb = v
-    return PDESystem([D(bce) ~ 0.3 * Δ(bce) - 2 * bce + 1],
+    return PDESystem([D(bce) ~ 0.3 * laplacian(bce) - 2 * bce + 1],
         [bc(0, x, y) ~ x * y, 1.5 * bc(t, 1, y) - crb * Differential(x)(bc(t, 1, y)) ~ 0.2], bdom(1.0), [t, x, y], [bce],
         [crb]; name = :crob), crb
 end

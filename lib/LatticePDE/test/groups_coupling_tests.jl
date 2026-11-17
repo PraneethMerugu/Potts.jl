@@ -24,7 +24,7 @@ end
 @testitem "F2-06 review: each group keeps its count through setp, an input write and a table write" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
 @testset "F2-06 review: each group keeps its count through setp, an input write and a table write" begin
     # c decays at a rate read through a kind table; o diffuses (its count is the larger)
-    sys = PDESystem([D(pce) ~ -gkc * at(gKt, pqe) * pce, D(poe) ~ gDo * Δ(poe)],
+    sys = PDESystem([D(pce) ~ -gkc * value_at(gKt, pqe) * pce, D(poe) ~ gDo * laplacian(poe)],
         [gpc(0, x, y) ~ 1.0, gpo(0, x, y) ~ x * y, gpo(t, 0, y) ~ gpo(t, 1, y), gpo(t, x, 0) ~ gpo(t, x, 1),
          gpc(t, 0, y) ~ gpc(t, 1, y), gpc(t, x, 0) ~ gpc(t, x, 1)],
         [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [pce, poe, pqe],
@@ -285,14 +285,14 @@ end
     @parameters gwKt[1:2] = [1.0, 2.0]
     @variables gwq(..)::Int32 [input = true, bounds = (1, 2)]
     qe = gwq(t, x, y)
-    sys = PDESystem([D(wce) ~ -at(gwKt, qe) * woe, D(woe) ~ 0.1 * wce], [gwc(0, x, y) ~ 1.0, gwo(0, x, y) ~ 0.0],
+    sys = PDESystem([D(wce) ~ -value_at(gwKt, qe) * woe, D(woe) ~ 0.1 * wce], [gwc(0, x, y) ~ 1.0, gwo(0, x, y) ~ 0.0],
         [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [wce, woe, qe], [gwKt];
         name = :tabtext)
     p = discretize(sys, gwdisc(); inputs = [qe => fill(Int32(1), 4, 4)])
     dt = 0.1 / 30
         ig = init(p, FieldGroups(wce => ExplicitEuler(; substeps = 1), woe => ExplicitEuler(; substeps = 2)); dt)
     e = gwerr(() -> (ig.ps[gwKt] = [500.0, 2.0]))
-    @test occursin("the coefficient `-at(gwKt, gwq)` of `gwo`", e) && !occursin("LatticePDE.", e) && !occursin("(t, x, y)", e)
+    @test occursin("the coefficient `-value_at(gwKt, gwq)` of `gwo`", e) && !occursin("LatticePDE.", e) && !occursin("(t, x, y)", e)
     @test occursin("dt = 0.00333333:", e)
     @test substep_counts(ig) == [1, 2]                            # exported from LatticePDE
 end

@@ -80,7 +80,7 @@ end
     @test all(k -> maximum(abs, s.u[k] .- e(s.t[k])) < 1e-13, eachindex(s.t))
     @test s(0.0225) ≈ (s.u[2] .+ s.u[3]) ./ 2
     # save_idxs: the field `c` of a two-field system only
-    q = discretize(bsys([D(bce) ~ bD * Δ(bce) - bk * bce, D(boe) ~ -boe], [bc(0, x, y) ~ x, bo(0, x, y) ~ 1.0], [bD, bk];
+    q = discretize(bsys([D(bce) ~ bD * laplacian(bce) - bk * bce, D(boe) ~ -boe], [bc(0, x, y) ~ x, bo(0, x, y) ~ 1.0], [bD, bk];
             T = 0.2, dvs = [bce, boe]), LatticeDiscretization(Grid((8, 8)); T = Float64))
         full = solve(q, ExplicitEuler(); dt = 0.01)
         sub = solve(q, ExplicitEuler(); dt = 0.01, save_idxs = [bce])

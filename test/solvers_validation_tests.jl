@@ -191,7 +191,7 @@ end
             ufn = (u1, u2, u3)[N]
             c = ufn(t, xs...)
             dom = LP.lattice_domain(t, xs, dims; spacing, tspan = (0.0, dtval))
-            sys = LP.PDESystem([Dt(c) ~ Dp * LP.Δ(c) - kp * c], [ufn(0, xs...) ~ 0.0], dom, [t; collect(xs)], [c], [Dp, kp]; name = :ss)
+            sys = LP.PDESystem([Dt(c) ~ Dp * LP.laplacian(c) - kp * c], [ufn(0, xs...) ~ 0.0], dom, [t; collect(xs)], [c], [Dp, kp]; name = :ss)
             return LP.discretize(sys, LP.LatticeDiscretization(LP.Grid(dims); T = Float64)), [Dp => Dval, kp => kval]
         end
 

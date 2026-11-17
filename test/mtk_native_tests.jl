@@ -1,4 +1,4 @@
-# MTK-native symbols, reads (`at`/`at2`), `ismember` AST parity and `SciMLStructures` on `PottsParameters`.
+# MTK-native symbols, reads (`value_at`), `ismember` AST parity and `SciMLStructures` on `PottsParameters`.
 
 @testitem "MTK-native: parameters are MTK parameters, kind tables array parameters" setup = [MTKNativeTests] tags = [:potts, :mtk_native] begin
     @testset "MTK-native: parameters are MTK parameters, kind tables array parameters" begin
@@ -21,7 +21,7 @@ end
     @testset "MTK-native: potts_entity metadata and input built-ins" begin
         sys = MNModel(; name = :mn)
         q = named(Potts.variables(sys), :q)
-        e = LatticePDE.get_potts_entity(q)
+        e = Potts.get_potts_entity(q)
         @test e isa Potts.Entity && e.role === :cell && e.name === :q
         @test e === Potts.info(q)                        # one record: the metadata key is LatticePDE's
         for n in (:volume, :kind, :kind′, :source, :target, :id)
@@ -29,30 +29,30 @@ end
             @test iscall(b) && isequal(only(arguments(b)), unwrap(Potts.t))      # `volume(t)`
             @test nameof(operation(b)) === n
             @test MTKB.isinput(b)
-            @test LatticePDE.get_potts_entity(b) == Potts.Builtin(n)
+            @test Potts.get_potts_entity(b) == Potts.Builtin(n)
         end
         # negative controls: parameters and declared variables are not inputs
         @test !any(MTKB.isinput, Potts.parameters(sys))
         @test !MTKB.isinput(q)
-        @test LatticePDE.get_potts_entity(Potts.t) === nothing
+        @test Potts.get_potts_entity(Potts.t) === nothing
         # a built-in has no previous value: `Pre(w[new])` keeps `Pre` on `w` only
         w = only(MTKB.@variables w(Potts.t))
         isPre(y) = iscall(y) && operation(y) isa MTKB.Pre
-        r = unwrap(Potts._pre(Potts.at(w, Potts.B.new)))
-        @test operation(r) === LatticePDE.at && isPre(arguments(r)[1]) && isequal(arguments(r)[2], unwrap(Potts.B.new))
-        @test isPre(arguments(unwrap(MTKB.Pre(Potts.at(w, Potts.B.new))))[2])     # negative control: MTK's own Pre
+        r = unwrap(Potts._pre(Potts.value_at(w, Potts.B.new)))
+        @test operation(r) === LatticePDE.value_at && isPre(arguments(r)[1]) && isequal(arguments(r)[2], unwrap(Potts.B.new))
+        @test isPre(arguments(unwrap(MTKB.Pre(Potts.value_at(w, Potts.B.new))))[2])     # negative control: MTK's own Pre
     end
 end
 
-@testitem "MTK-native: reads are LatticePDE's at/at2" setup = [MTKNativeTests] tags = [:potts, :mtk_native] begin
-    @testset "MTK-native: reads are LatticePDE's at/at2" begin
-        @test Potts.at === LatticePDE.at && Potts.at2 === LatticePDE.at2
-        @test parentmodule(Potts.at) === LatticePDE
+@testitem "MTK-native: reads are LatticePDE's value_at" setup = [MTKNativeTests] tags = [:potts, :mtk_native] begin
+    @testset "MTK-native: reads are LatticePDE's value_at" begin
+        @test Potts.value_at === LatticePDE.value_at
+        @test parentmodule(Potts.value_at) === LatticePDE
         sys = MNModel(; name = :mn)
         ops = Any[]
         walk(u) = (u = unwrap(u); iscall(u) && (push!(ops, operation(u)); foreach(walk, arguments(u))))
         foreach(p -> walk(p.second), Potts.hamiltonian(sys))
-        @test LatticePDE.at2 in ops
+        @test LatticePDE.value_at in ops
         csys = mtkcompile(sys)
         osys = Potts.ode_system(csys, :cell)
         @test length(MTKB.unknowns(osys)) == 1

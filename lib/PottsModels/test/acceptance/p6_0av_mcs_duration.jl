@@ -80,7 +80,7 @@ function p60av_field_pde()
     Potts.ModelingToolkitBase.@parameters x y
     Potts.ModelingToolkitBase.@variables c(..)
     C = c(t, x, y)
-    return Potts.ModelingToolkitBase.PDESystem([Potts.D(C) ~ 0.1 * L.Δ(C) - 0.05 * C], [c(0, x, y) ~ 0.0],
+    return Potts.ModelingToolkitBase.PDESystem([Potts.D(C) ~ 0.1 * L.laplacian(C) - 0.05 * C], [c(0, x, y) ~ 0.0],
         L.lattice_domain(t, (x, y), (12, 12)), [t, x, y], [C], Any[]; name = :p60av_field)
 end
 @potts_model P60avField begin

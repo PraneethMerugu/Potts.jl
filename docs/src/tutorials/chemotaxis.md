@@ -15,7 +15,7 @@ The models on this page are generic teaching models, not published ones.
 ```@example chemo
 using Potts, MakiePotts, CairoMakie
 using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
-using Potts.LatticePDE: Δ, lattice_domain
+using Potts.LatticePDE: laplacian, lattice_domain
 CairoMakie.activate!(type = "png") # hide
 nothing # hide
 ```
@@ -40,7 +40,7 @@ Dt = Differential(t)
 @parameters Dc = 1.0 s = 0.1 k = 0.001     # diffusion, production in the strip, decay
 @variables c(..) = 0.0
 C = c(t, x, y)
-strip = PDESystem([Dt(C) ~ Dc * Δ(C) + s * (x > 75) - k * C], [],
+strip = PDESystem([Dt(C) ~ Dc * laplacian(C) + s * (x > 75) - k * C], [],
     lattice_domain(t, (x, y), (80, 40)), [t, x, y], [C], [Dc, s, k]; name = :strip)
 nothing # hide
 ```
@@ -73,7 +73,7 @@ New pieces:
 
 - `@variables c(..) = 0.0` declares the field `c` with initial value 0. In the equation it
   is `c(t, x, y)`, a function of time and space.
-- `Dt(C)` is the time derivative and `Δ(C)` the lattice Laplacian. A comparison such as
+- `Dt(C)` is the time derivative and `laplacian(C)` the lattice Laplacian. A comparison such as
   `x > 75` counts as 1 or 0. The coordinates are site centers, from 0 at the low face:
   site `i` has `x = i - 0.5`, so `x > 75` holds at sites 76 to 80.
 - `lattice_domain(t, (x, y), (80, 40))` gives the domain of an 80 × 40 lattice. The domain
@@ -172,8 +172,8 @@ Print the model to see what `Chemotaxis(c; strength = χ)` expands to:
 gradient
 ```
 
-The printout is Potts's internal form of the model. `LatticePDE.at(c(t), target(t))` is the
-field at the target site, and `LatticePDE.at2(J, kind(t), kind′(t))` is the table entry. In the notation of
+The printout is Potts's internal form of the model. `LatticePDE.value_at(c(t), target(t))` is the
+field at the target site, and `LatticePDE.value_at(J, kind(t), kind′(t))` is the table entry. In the notation of
 `@potts_model` the drive line reads
 `copy => ifelse(new != 0, -χ * (c[target] - c[source]), 0.0)`. Here is the same model
 with that line in place of `Chemotaxis`:
@@ -224,7 +224,7 @@ owned by a cell now produces `c`. The `PDESystem` cannot see the cells. It reads
 ```@example chemo
 @parameters Dc = 1.0 s = 0.05 k = 0.005
 @variables secreting(..)::Bool [input = true]
-secretion = PDESystem([Dt(C) ~ Dc * Δ(C) + s * secreting(t, x, y) - k * C], [],
+secretion = PDESystem([Dt(C) ~ Dc * laplacian(C) + s * secreting(t, x, y) - k * C], [],
     lattice_domain(t, (x, y), (80, 80)), [t, x, y], [C, secreting(t, x, y)], [Dc, s, k]; name = :secretion)
 nothing # hide
 ```
@@ -314,7 +314,7 @@ clusters, and the clusters grow by collecting more cells.
 
 ## What you learned
 
-- A `PDESystem` on `lattice_domain(…)` gives a field's PDE with `Δ`.
+- A `PDESystem` on `lattice_domain(…)` gives a field's PDE with `laplacian`.
 - `@fields c = sys (input => expression)` couples it into a model and binds its inputs to
   the cells.
 - `PottsProblem(…; field_solver = ExplicitEuler(substeps = n, lower_bound = 0.0))` integrates it.

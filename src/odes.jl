@@ -56,10 +56,10 @@ _is_coupling(l) = l isa SymbolicUtils.BasicSymbolic && !SymbolicUtils.isconst(l)
 
 # Operations MTK sees inside a template: plain functions (arithmetic, `exp`, comparisons,
 # `ifelse`, registered user functions). Potts' own operations (`gather`, `population`,
-# `cell_integral`, …), LatticePDE's reads `at`/`at2` (a kind-table entry or a value at a
+# `cell_integral`, …), LatticePDE's reads `value_at` (a kind-table entry or a value at a
 # cell), operators (`Pre`) and `getindex` stand for a quantity MTK cannot express: the whole
 # call is an input (S-4: an input never indexes an array parameter inside a template).
-_template_op(op) = op isa Function && op !== getindex && op !== at && op !== at2 && parentmodule(op) !== (@__MODULE__) &&
+_template_op(op) = op isa Function && op !== getindex && op !== value_at && parentmodule(op) !== (@__MODULE__) &&
                    !(op isa Union{Differential, Pre, ModelingToolkitBase.Shift, ModelingToolkitBase.Sample, ModelingToolkitBase.Hold})
 
 """
@@ -297,7 +297,7 @@ function _check_algebraic(sys::PottsSystem, deqs, aeqs)
     # nothing writes an algebraic variable
     message(name, by) = "`$name` is defined by an algebraic equation (`$(alg[byname[name]].eq)`); it is not a stored " *
                         "variable, so $by cannot write it"
-    target(l) = (l = _unwrap(l); iscall(l) && (operation(l) === at || operation(l) === at2) ? _unwrap(arguments(l)[1]) : l)
+    target(l) = (l = _unwrap(l); iscall(l) && operation(l) === value_at ? _unwrap(arguments(l)[1]) : l)
     for u in _p(sys, :updates)
         i = info(target(u.eq.lhs))
         i !== nothing && haskey(byname, i.name) && _located(() -> throw(ArgumentError(message(i.name, "@$(u.phase)"))), sys, u)
@@ -311,7 +311,7 @@ function _check_algebraic(sys::PottsSystem, deqs, aeqs)
         _walk_all(x) do y
             iscall(y) || return
             op = operation(y)
-            (op === at || op === at2 || op === history_lag || op isa ModelingToolkitBase.Pre) || return
+            (op === value_at || op === history_lag || op isa ModelingToolkitBase.Pre) || return
             i = info(_unwrap(arguments(y)[1]))
             (i !== nothing && i.role in _ODE_SCOPES && haskey(byname, i.name)) || return
             throw(ArgumentError("`$(i.name)` is defined by an algebraic equation (`$(alg[byname[i.name]].eq)`) and is read " *

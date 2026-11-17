@@ -214,7 +214,7 @@ end
 const _HOIST_SAFE = (+, -, *, /, exp, max, min, abs, ifelse)
 
 # A pair-only expression: parameters, constants, the bond weight and site values at the two
-# sites (`at(x, site)`, `at(x, site′)`), combined by `_HOIST_SAFE` operations
+# sites (`value_at(x, site)`, `value_at(x, site′)`), combined by `_HOIST_SAFE` operations
 function _pair_only(x)
     x = _unwrap(x)
     x isa SymbolicUtils.BasicSymbolic || return true
@@ -226,7 +226,7 @@ function _pair_only(x)
     end
     issym(x) && return false
     op = operation(x)
-    if op === at
+    if op === value_at && length(arguments(x)) == 2
         v, w = arguments(x)
         return role(v) in (:site, :field) && _pair_only(w)
     end
@@ -276,7 +276,7 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
     append!(body, oc_vals)
     # contact pairs around the target: site values stay with the copy except those written
     # at the target, which the after-copy pairs read (`x[site]` at `site = target`)
-    contact_after = Dict{Any, Any}(_unwrap(at(Symbolics.wrap(x), B.site)) => v for (x, v) in after[:target])
+    contact_after = Dict{Any, Any}(_unwrap(value_at(Symbolics.wrap(x), B.site)) => v for (x, v) in after[:target])
     for (rel, E) in _sorted(getfield(c, :contact_terms))
         R = rel === :contact ? :(ctx.contact) : :(ctx.$rel)
         ctxname = rel === :contact ? :contact : rel
@@ -1304,8 +1304,8 @@ function _substitute_locals(rate, locals, scope = :cell)
     return _substitute_cell(rate, subs)
 end
 
-# The indexed reads `at(x, i)` outside population folds whose index `i` holds a local map
-# to `at(x, i′)` (`_index_reads!`); one substitution then applies them with the locals. A
+# The indexed reads `value_at(x, i)` outside population folds whose index `i` holds a local map
+# to `value_at(x, i′)` (`_index_reads!`); one substitution then applies them with the locals. A
 # rate without such reads substitutes exactly as before (same code).
 function _substitute_cell(x, subs)
     x = _unwrap(x)
@@ -1313,16 +1313,16 @@ function _substitute_cell(x, subs)
     return Symbolics.substitute(x, isempty(reads) ? subs : merge(subs, reads); fold = Val(false),
         filterer = _outside_populations)
 end
-_outside_populations(ex) = !(iscall(ex) && operation(ex) in (population, at)) &&
+_outside_populations(ex) = !(iscall(ex) && (operation(ex) === population || operation(ex) === value_at && length(arguments(ex)) == 2)) &&
                            SymbolicUtils.default_substitute_filter(ex)
 
 function _index_reads!(out, x, subs)
     (x isa SymbolicUtils.BasicSymbolic && iscall(x)) || return out
     (haskey(subs, x) || operation(x) === population) && return out
-    if operation(x) === at
+    if operation(x) === value_at && length(arguments(x)) == 2
         v, i = arguments(x)
         j = _substitute_cell(i, subs)
-        isequal(j, i) || (out[x] = _unwrap(at(Symbolics.wrap(v), Symbolics.wrap(j))))
+        isequal(j, i) || (out[x] = _unwrap(value_at(Symbolics.wrap(v), Symbolics.wrap(j))))
         return out
     end
     foreach(a -> _index_reads!(out, a, subs), arguments(x))
@@ -1392,7 +1392,7 @@ function _reads_other_cells_slots(c::CompiledPottsSystem)
         b.scope === :cell || continue
         _walk_all(x) do y
             hit[] && return
-            iscall(y) && operation(y) in (at, at2, gather, population) && reads_slot(y) && (hit[] = true)
+            iscall(y) && operation(y) in (value_at, gather, population) && reads_slot(y) && (hit[] = true)
         end
     end
     return hit[]
@@ -1845,7 +1845,7 @@ _term_label(c::CompiledPottsSystem, kinds) =
 function _update_label(u)
     l = _unwrap(u.eq.lhs)
     i = info(l)
-    i === nothing && iscall(l) && operation(l) === at && (i = info(arguments(l)[1]))     # `x[new]` on copy
+    i === nothing && iscall(l) && (operation(l) === value_at && length(arguments(l)) == 2) && (i = info(arguments(l)[1]))     # `x[new]` on copy
     return "update of `$(i === nothing ? l : i.name)`"
 end
 function _ref_count_labels(c::CompiledPottsSystem)

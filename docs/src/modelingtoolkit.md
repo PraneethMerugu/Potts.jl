@@ -33,7 +33,7 @@ initialization equation and a ModelingToolkit component in every cell:
 ```@example mtk
 using Potts
 using Potts.ModelingToolkitBase: System, PDESystem, Differential, @variables, @parameters
-using Potts.LatticePDE: Δ, lattice_domain
+using Potts.LatticePDE: laplacian, lattice_domain
 
 @variables y(Potts.t) = 1.0
 @parameters kc = 0.1
@@ -42,7 +42,7 @@ using Potts.LatticePDE: Δ, lattice_domain
 @parameters px py Dc = 0.1
 @variables c(..) = 0.0
 C = c(Potts.t, px, py)
-@named heat = PDESystem([Differential(Potts.t)(C) ~ Dc * Δ(C) - 0.1 * C], [],   # a field PDE, stepped by Potts
+@named heat = PDESystem([Differential(Potts.t)(C) ~ Dc * laplacian(C) - 0.1 * C], [],   # a field PDE, stepped by Potts
     lattice_domain(Potts.t, (px, py), (12, 8)), [Potts.t, px, py], [C], [Dc])
 
 @potts_model AllParts begin
@@ -107,7 +107,7 @@ Parameters are MTK parameters, and built-ins such as `kind` and `volume` are MTK
 cell variable, a built-in, …) is its `potts_entity` metadata:
 
 ```@example mtk
-(all(MTK.isparameter, MTK.parameters(sys)), MTK.isinput(kind), Potts.LatticePDE.get_potts_entity(kind))
+(all(MTK.isparameter, MTK.parameters(sys)), MTK.isinput(kind), Potts.get_potts_entity(kind))
 ```
 
 `MTK.unknowns`, `MTK.observed`, `MTK.initial_conditions` (each parameter's value),
@@ -163,7 +163,7 @@ that gives this route.
 `discretize` takes SciML's keywords `u0`, `p` and `tspan`, with the rule of `remake`: `discretize(Potts.fields(sys), disc; p = [:k => 2.0], u0 = [:c => 0.5],
 tspan = (0, 10))` builds the problem at those values, with no `remake`. It also takes the
 Jacobian keywords of an implicit OrdinaryDiffEq solver. `sparse = true` gives the problem the
-sparse pattern of its Jacobian, read off the compiled program (`jacobian_sparsity(prob)`), and
+sparse pattern of its Jacobian, read off the compiled program (`field_jacobian_sparsity(prob)`), and
 a coloring of it, so `Rodas5P()` forms the Jacobian with a few evaluations of the right side
 instead of a dense one. `jac = true` gives it the Jacobian itself (colored Duals). Both are
 host only. The Jacobian-vector product `prob.f.jvp` is always set, so a Krylov linear solver

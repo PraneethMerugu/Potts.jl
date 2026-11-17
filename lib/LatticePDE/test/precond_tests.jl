@@ -53,7 +53,7 @@ end
 @testitem "F4-08: LatticePCG solves a linear system with no time" setup = [LP_precond] tags = [:latticepde, :precond] begin
 @testset "F4-08: LatticePCG solves a linear system with no time" begin
     fdom = [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-    sl = PDESystem([0 ~ 0.3 * Δ(qw(x, y)) - 2.0 * qw(x, y) + x], [qw(0, y) ~ 1.0], fdom, [x, y], [qw(x, y)], Num[]; name = :ql)
+    sl = PDESystem([0 ~ 0.3 * laplacian(qw(x, y)) - 2.0 * qw(x, y) + x], [qw(0, y) ~ 1.0], fdom, [x, y], [qw(x, y)], Num[]; name = :ql)
     lp = discretize(sl, qdisc(32))
     want = LFP.lattice_matrix(lp.A) \ lp.b
     a = solve(lp, LatticePCG(); reltol = 1e-13, abstol = 0.0)

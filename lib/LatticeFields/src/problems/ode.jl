@@ -246,7 +246,7 @@ system's `NonlinearFunction`'s) Jacobian fields:
 - `jvp = true` (the default): `jvp` is a [`LatticeJVP`](@ref), one Dual evaluation of the right
   side, which Krylov linear solvers use; on a device it is also the `jac_prototype`, a
   matrix-free [`JacobianOperator`](@ref) (ruling Q7);
-- `sparse = true`: `jac_prototype` is the sparse pattern of [`jacobian_sparsity`](@ref) with
+- `sparse = true`: `jac_prototype` is the sparse pattern of [`field_jacobian_sparsity`](@ref) with
   its diagonal, and `colorvec` a distance-2 coloring of it ([`column_colors`](@ref)), so
   OrdinaryDiffEq forms the Jacobian with one colored evaluation per color (host only);
 - `jac = true`: `jac` is a [`LatticeJacobian`](@ref), the colored Dual Jacobian (host only).

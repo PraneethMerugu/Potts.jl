@@ -39,7 +39,7 @@
 #     minimum (robust to load from other processes). Up to 3 attempts; the check passes
 #     if one attempt is within 1.2× (noise can only spoil an attempt, never rescue a 22×).
 #  3. Names stay canonical (D-107). Under salted hashes of the Potts operators
-#     (`population`, `gather`, `at`, `at2`) and separately of `sin`, `cos`, `exp` (salts 1–4,
+#     (`population`, `gather`, `value_at`) and separately of `sin`, `cos`, `exp` (salts 1–4,
 #     the P6.0ah mechanism), the unfactored model's `generated_code` (line numbers
 #     stripped), its problem fingerprint and its state layout (the names of the cell and
 #     model columns, i.e. the integral trackers and any hoisted slots) are identical to the
@@ -191,7 +191,7 @@ if isdefined(@__MODULE__, :p60ah_salted) && isdefined(@__MODULE__, :P60AH_POTTS_
 else
     const P60AI_SALT = Ref{UInt}(0)
     const P60AI_SALTED = Ref{Tuple}(())
-    const P60AI_POTTS_OPS = (Potts.population, Potts.gather, Potts.at, Potts.at2)
+    const P60AI_POTTS_OPS = (Potts.population, Potts.gather, Potts.value_at)
     const P60AI_BASE_OPS = (sin, cos, exp)
     for f in (P60AI_POTTS_OPS..., P60AI_BASE_OPS...)
         @eval function Base.hash(g::typeof($f), h::UInt)

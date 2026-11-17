@@ -473,7 +473,7 @@ end
         err = fe(() -> LP.discretize(fsrc, disc; inputs = [:kd => K]))
         @test occursin("`kind`", err) && !occursin("__in", err)
         # (the input of a bound CPM read is named by the PDESystem's input bound to it, `volume`;
-        # F4-B6 review: before, by the expression text "LatticePDE.at(volume, owner)")
+        # F4-B6 review: before, by the expression text "LatticePDE.value_at(volume, owner)")
         fvol = Potts.fields(FdVolumeRead(; name = :f))
         V = fill(2.0, 6, 4)
         s = LP.solve(

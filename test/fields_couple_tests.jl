@@ -19,7 +19,7 @@
 @testitem "F4-B2: Potts.couple runs the PDESystem (owned oracle), under its own names" setup = [CoupleSetup] tags = [:potts, :fields_couple] begin
     @testset "F4-B2: Potts.couple runs the PDESystem (owned oracle), under its own names" begin
         T, X, Y = CpPDE.t, CpPDE.x, CpPDE.y
-        vol = Potts.at(Potts.B.volume, Potts.B.owner)
+        vol = Potts.value_at(Potts.B.volume, Potts.B.owner)
         # keys as the callable, the applied variable and the name
         for ins in ([CpPDE.endo => Potts.kind == 1, CpPDE.vol => vol],
                     [CpPDE.endo(T, X, Y) => Potts.kind == 1, :vol => vol])
@@ -130,7 +130,7 @@ end
 @testitem "F4-B2: refusals name the input and the PDESystem" setup = [CoupleSetup] tags = [:potts, :fields_couple] begin
     @testset "F4-B2: refusals name the input and the PDESystem" begin
         host = CpHost(; name = :m)
-        vol = Potts.at(Potts.B.volume, Potts.B.owner)
+        vol = Potts.value_at(Potts.B.volume, Potts.B.owner)
         e = cp_msg(() -> Potts.couple(host, CpPDE.sys(); inputs = [CpPDE.med => Potts.kind == 0]))
         @test occursin("`med` is not a dependent variable of the PDESystem `fields`", e) && occursin("`endo`, `vol`", e)
         e = cp_msg(() -> Potts.couple(host, CpPDE.sys(); inputs = [CpPDE.c => Potts.kind == 0]))
@@ -414,19 +414,19 @@ end
 
 @testitem "F4-B6: a name of a field's PDESystem in a model body points to using Potts.Fields" setup = [CoupleSetup] tags = [:potts, :fields_couple] begin
     @testset "F4-B6: a name of a field's PDESystem in a model body points to using Potts.Fields" begin
-        for s in (:Δ, :DivKGrad, :Advect, :Upwind1, :masked, :Differential, :Shift)
+        for s in (:laplacian, :Δ, :DivKGrad, :Advect, :Upwind1, :masked, :Differential, :Shift)
             e = cp_fresh_err(cp_a_model(:(@observed q ~ $s(1.0))))
             @test occursin("`$s` is not defined in the model body", e) && occursin("using Potts.Fields", e) &&
                   occursin("@fields", e) || (println(s, ": ", e); false)
         end
         # the A field line is refused at expansion with the same route
-        e = cp_fresh_err(cp_a_model(:(@equations D(c) ~ 0.1 * Δ(c))))
-        @test occursin("`Δ` is not defined in the model body", e) && occursin("@fields", e) || (println(e); false)
-        # control: a module that defines the name reads its own (`using Potts.Fields`: `Δ` is LatticePDE's
+        e = cp_fresh_err(cp_a_model(:(@equations D(c) ~ 0.1 * laplacian(c))))
+        @test occursin("`laplacian` is not defined in the model body", e) && occursin("@fields", e) || (println(e); false)
+        # control: a module that defines the name reads its own (`using Potts.Fields`: `laplacian` is LatticePDE's
         # operator, which a model statement refuses where it is lowered, naming the route)
         m = Module(:CpFreshFields)
-        Core.eval(m, :(using Potts; using Potts.Fields: Δ))
-        Core.eval(m, cp_a_model(:(@observed lap ~ Δ(c))))
+        Core.eval(m, :(using Potts; using Potts.Fields: laplacian))
+        Core.eval(m, cp_a_model(:(@observed lap ~ laplacian(c))))
         @test Base.invokelatest(() -> Core.eval(m, :(CpA(; name = :m)))) isa PottsSystem
     end
 end
@@ -479,7 +479,7 @@ end
 
     @testset "a coupled model's System holds no field; MTK's walkers answer" begin
         M, S = Potts.ModelingToolkitBase, Potts.Symbolics
-        vol = Potts.at(Potts.B.volume, Potts.B.owner)
+        vol = Potts.value_at(Potts.B.volume, Potts.B.owner)
         decay = Potts.couple(DecayHost(; name = :host), CpPDE.sys(); inputs = [CpPDE.endo => Potts.kind == 1, CpPDE.vol => vol])
         reader = FieldReadingHost(; name = :reader)
         # property: the free symbols of the equations are declared

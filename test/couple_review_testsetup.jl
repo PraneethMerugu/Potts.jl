@@ -7,7 +7,7 @@ module CrPDE
     const Interval = Potts.ModelingToolkitBase.DomainSets.Interval
     const t = Potts.t
     const Dt = Differential(t)
-    const Δ = Potts.LatticePDE.Δ
+    const laplacian = Potts.LatticePDE.laplacian
     const masked = Potts.LatticePDE.masked
     @parameters x y Dc = 0.2 s = 0.5 kd = 0.1 kq = 1.0
     @variables c(..) q(..) w(..) cc(..) [lattice_level = Potts.LatticePDE.Coarse(2)]
@@ -17,28 +17,28 @@ module CrPDE
     const DOM = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 24.0), y ∈ Interval(0.0, 20.0)]
     C, Q, W = c(t, x, y), q(t, x, y), w(t, x, y)
     rich() = PDESystem(
-        [Dt(C) ~ Dc * Δ(C) + s * endo(t, x, y) - kd * C + 0.01 * vol(t, x, y), 0 ~ 0.5 * Δ(Q) - kq * Q + C],
+        [Dt(C) ~ Dc * laplacian(C) + s * endo(t, x, y) - kd * C + 0.01 * vol(t, x, y), 0 ~ 0.5 * laplacian(Q) - kq * Q + C],
         [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 0.5, Differential(x)(c(t, 24, y)) ~ 0.0, C ~ masked(isB(t, x, y) == 1, 1.0)],
         DOM, [t, x, y], [C, Q, endo(t, x, y), isB(t, x, y), vol(t, x, y)], [Dc, s, kd, kq]; name = :rich
     )
     first_sys() = PDESystem(
-        [Dt(C) ~ Dc * Δ(C) + s * endo(t, x, y) - kd * C], [c(0, x, y) ~ 0.0], DOM, [t, x, y],
+        [Dt(C) ~ Dc * laplacian(C) + s * endo(t, x, y) - kd * C], [c(0, x, y) ~ 0.0], DOM, [t, x, y],
         [C, endo(t, x, y)], [Dc, s, kd]; name = :one
     )
     second_unbound() = PDESystem(
-        [Dt(W) ~ 0.3 * Δ(W) - W + 0.7 * cnm(t, x, y)], [w(0, x, y) ~ 0.0], DOM, [t, x, y],
+        [Dt(W) ~ 0.3 * laplacian(W) - W + 0.7 * cnm(t, x, y)], [w(0, x, y) ~ 0.0], DOM, [t, x, y],
         [W, cnm(t, x, y)], Any[]; name = :two
     )
     second_bound() = PDESystem(
-        [Dt(W) ~ 0.3 * Δ(W) - W + 0.7 * cin(t, x, y)], [w(0, x, y) ~ 0.0], DOM, [t, x, y],
+        [Dt(W) ~ 0.3 * laplacian(W) - W + 0.7 * cin(t, x, y)], [w(0, x, y) ~ 0.0], DOM, [t, x, y],
         [W, cin(t, x, y)], Any[]; name = :twob
     )
     coarse_sys() = PDESystem(
-        [Dt(cc(t, x, y)) ~ Dc * Δ(cc(t, x, y)) + s * endo(t, x, y) - kd * cc(t, x, y)], [cc(0, x, y) ~ 0.0],
+        [Dt(cc(t, x, y)) ~ Dc * laplacian(cc(t, x, y)) + s * endo(t, x, y) - kd * cc(t, x, y)], [cc(0, x, y) ~ 0.0],
         DOM, [t, x, y], [cc(t, x, y), endo(t, x, y)], [Dc, s, kd]; name = :crs
     )
     kind_real() = PDESystem(
-        [Dt(C) ~ Dc * Δ(C) + s * kr(t, x, y) - kd * C], [c(0, x, y) ~ 0.0], DOM, [t, x, y],
+        [Dt(C) ~ Dc * laplacian(C) + s * kr(t, x, y) - kd * C], [c(0, x, y) ~ 0.0], DOM, [t, x, y],
         [C, kr(t, x, y)], [Dc, s, kd]; name = :krs
     )
 end

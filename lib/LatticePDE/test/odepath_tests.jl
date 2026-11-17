@@ -82,7 +82,7 @@ end
 
 @testitem "F4-02: a steady row under Rodas5P equals the owned QuasiSteady run" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
 @testset "F4-02: a steady row under Rodas5P equals the owned QuasiSteady run" begin
-    ss = PDESystem([D(ode_c) ~ oD * Δ(ode_c) - ode_c + ode_v, 0 ~ 0.1 * Δ(ode_v) - ode_v + ode_c],
+    ss = PDESystem([D(ode_c) ~ oD * laplacian(ode_c) - ode_c + ode_v, 0 ~ 0.1 * laplacian(ode_v) - ode_v + ode_c],
         [oc(0, x, y) ~ x, oc(t, 0, y) ~ 1.0], odom(0.1), [t, x, y], [ode_c, ode_v], [oD]; name = :os)
     prob = discretize(ss, odisc())
     M = prob.f.mass_matrix
@@ -103,7 +103,7 @@ end
     fdom = [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
     @variables ow(..)
     owe = ow(x, y)
-    sl = PDESystem([0 ~ 0.3 * Δ(owe) - 2.0 * owe + x], [ow(0, y) ~ 1.0], fdom, [x, y], [owe], Num[]; name = :ol)
+    sl = PDESystem([0 ~ 0.3 * laplacian(owe) - 2.0 * owe + x], [ow(0, y) ~ 1.0], fdom, [x, y], [owe], Num[]; name = :ol)
     lp = discretize(sl, odisc())
     @test lp isa SciMLBase.LinearProblem && lp.A isa LFP.LatticeOperator
         q = solve(lp, QuasiSteady(; linsolve = DevicePCG(; reltol = 1.0e-14, maxiters = 400)))
@@ -114,7 +114,7 @@ end
     Am = reduce(hcat, (lp.A * [i == j ? 1.0 : 0.0 for i in 1:n]) for j in 1:n)
     @test maximum(abs, Am \ lp.b .- q.u[1]) < 1e-8
     # a nonlinear row gives a NonlinearProblem of the right side (zero at the steady state)
-    sn = PDESystem([0 ~ 0.3 * Δ(owe) - owe^3 - owe + x], [ow(0, y) ~ 1.0], fdom, [x, y], [owe], Num[]; name = :on)
+    sn = PDESystem([0 ~ 0.3 * laplacian(owe) - owe^3 - owe + x], [ow(0, y) ~ 1.0], fdom, [x, y], [owe], Num[]; name = :on)
     np = discretize(sn, odisc())
     @test np isa SciMLBase.NonlinearProblem
         r = solve(np, QuasiSteady(; linsolve = DevicePCG(; reltol = 1.0e-14, maxiters = 400)))
@@ -222,7 +222,7 @@ end
     @parameters ls = 1.0 la = 2.0
     @variables lw(..)
     lwe = lw(x, y)
-    sl = PDESystem([0 ~ 0.3 * Δ(lwe) - la * lwe + ls * x], [lw(0, y) ~ 1.0], [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
+    sl = PDESystem([0 ~ 0.3 * laplacian(lwe) - la * lwe + ls * x], [lw(0, y) ~ 1.0], [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
         [x, y], [lwe], [ls, la]; name = :pl)
     lp = discretize(sl, odisc())
         qs(p) = solve(p, QuasiSteady(; linsolve = DevicePCG(; reltol = 1.0e-14, maxiters = 400))).u[1]
@@ -249,7 +249,7 @@ end
 
 @testitem "F4-02 (R2): steady rows start from our QuasiSteady solve at t0; explicit inits stay" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
 @testset "F4-02 (R2): steady rows start from our QuasiSteady solve at t0; explicit inits stay" begin
-    ss = PDESystem([D(ode_c) ~ oD * Δ(ode_c) - ode_c + ode_v, 0 ~ 0.1 * Δ(ode_v) - ode_v + ode_c],
+    ss = PDESystem([D(ode_c) ~ oD * laplacian(ode_c) - ode_c + ode_v, 0 ~ 0.1 * laplacian(ode_v) - ode_v + ode_c],
         [oc(0, x, y) ~ x, oc(t, 0, y) ~ 1.0], odom(0.1), [t, x, y], [ode_c, ode_v], [oD]; name = :os2)
     prob = discretize(ss, odisc())
     ig = init(prob, Rodas5P(); OTOL...)                 # (no OrdinaryDiffEqNonlinearSolve needed)

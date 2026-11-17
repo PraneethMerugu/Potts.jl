@@ -1033,7 +1033,7 @@ function _numeric(x, who)
     end
     vals = map(a -> _numeric(a, who), args)
     any(a -> a === _PENDING, vals) && return _PENDING
-    (op === at || op === at2) && return _table_entry(who, vals...)
+    op === value_at && return _table_entry(who, vals...)
     try
         return op(vals...)
     catch e

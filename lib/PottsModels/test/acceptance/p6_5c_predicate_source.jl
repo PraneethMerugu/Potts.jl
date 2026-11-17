@@ -21,7 +21,7 @@
 #   if …) > 0`), site variables, `position`, and model-local helper functions of `site`. The
 #   field is a plain MTK PDESystem whose 0/1 inputs the `@fields` line binds to the predicate
 #   (F4-B5; formerly the field line of `@equations`):
-#       D(F) ~ D_F * Δ(F) - k_d * F + k_s * lam * src            (the PDESystem)
+#       D(F) ~ D_F * laplacian(F) - k_d * F + k_s * lam * src            (the PDESystem)
 #       @fields p65cb_pde() (:lam => kind == lam,
 #                            :src => any(kind[n] == substrate for n in VonNeumann(1)(site)))
 # - The predicate is evaluated on the σ the field phase sees at each substep (σ does not
@@ -89,7 +89,7 @@ function p65cb_pde(; diffusion = true, source = true)
     Potts.ModelingToolkitBase.@variables F(..) lam(..)::Bool [input = true] src(..) [input = true]
     X, LAM, SRC = F(t, x, y, z), lam(t, x, y, z), src(t, x, y, z)
     rate = -k_d * X + (source ? k_s * LAM * SRC : k_s * LAM)
-    diffusion && (rate = D_F * L.Δ(X) + rate)
+    diffusion && (rate = D_F * L.laplacian(X) + rate)
     return Potts.ModelingToolkitBase.PDESystem([Potts.D(X) ~ rate], [F(0, x, y, z) ~ 0.0],
         L.lattice_domain(t, (x, y, z), (6, 6, 4)), [t, x, y, z], source ? [X, LAM, SRC] : [X, LAM],
         diffusion ? [D_F, k_d, k_s] : [k_d, k_s]; name = :p65cb_field)

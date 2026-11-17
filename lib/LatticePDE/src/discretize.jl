@@ -21,12 +21,12 @@ default) means Float64 on the host and Float32 on a device. Any other type is re
 `discretize`, the eltype of `u0` (and Dual parameters) decide; see `remake`.
 
 A hexagonal grid (`Grid(dims; geometry = HEX)`, 2D, axial coordinates: the neighbors of
-`(q, r)` are `(q ± 1, r)`, `(q, r ± 1)`, `(q + 1, r − 1)` and `(q − 1, r + 1)`) lowers `Δ(c)` to
+`(q, r)` are `(q ± 1, r)`, `(q, r ± 1)`, `(q + 1, r − 1)` and `(q − 1, r + 1)`) lowers `laplacian(c)` to
 `2/(3h²) Σₙ (cₙ − c)` over the six neighbors (`h` the spacing of axis 1; the axes must have
 equal spacing). A neighbor outside the domain reads the site itself (zero flux); a neighbor
 outside the box reads the ghost of the face condition its link leaves through (a diagonal link
 `±(e₁ − e₂)` takes axis 1's face when it leaves along axis 1, else axis 2's), with the
-condition applied along the link in lattice units. Only `Δ` is defined there.
+condition applied along the link in lattice units. Only `laplacian` is defined there.
 
 `domain` names a `Bool` input field (the variable `dom`, or its key `"dom"` or `:dom`) that marks an
 irregular domain inside the box; give its values like any input (`discretize(…; inputs)`).
@@ -152,15 +152,15 @@ _clocktext(s::AbstractString) = as_written(replace(s, r"\bclock__tick\b" => "ste
     as_written(text) -> String
 
 A lowered term's text as the user wrote it: a velocity vector `[ux, uy]` (not its symbolic
-array literal), `Advect(Upwind1())` (not `LatticePDE.Advect{LatticePDE.Upwind1}(…)`) and `Δ(K)`
-(not `LatticePDE.Δ(K)`). For a
+array literal), `Advect(Upwind1())` (not `LatticePDE.Advect{LatticePDE.Upwind1}(…)`) and `laplacian(K)`
+(not `LatticePDE.laplacian(K)`). For a
 front end that prints lowered terms in its messages (Potts); LatticePDE's own messages print
 through it too.
 """
 function as_written(s::AbstractString)
     s = replace(s, r"(?:LatticePDE\.)?Advect\{[\w.]+\}\(" => "Advect(", r"LatticePDE\.Upwind1\(" => "Upwind1(")
-    s = replace(s, r"LatticePDE\.(Δ|DivKGrad)\(" => s"\1(")      # (`Δ(K)`, not `LatticePDE.Δ(K)`)
-    s = replace(s, r"var\"([^\"]+\))(?:#\d+)?\"\(t(, \w+)*\)" => s"\1")   # an aux field added for an operator across grids: `Δ(c)`, and `DivKGrad(c)#2` as `DivKGrad(c)` (F3-22)
+    s = replace(s, r"LatticePDE\.(laplacian|value_at|DivKGrad)\(" => s"\1(")      # (`laplacian(K)`, not `LatticePDE.laplacian(K)`)
+    s = replace(s, r"var\"([^\"]+\))(?:#\d+)?\"\(t(, \w+)*\)" => s"\1")   # an aux field added for an operator across grids: `laplacian(c)`, and `DivKGrad(c)#2` as `DivKGrad(c)` (F3-22)
     key = "SymbolicUtils.array_literal("
     while (r = findfirst(key, s)) !== nothing
         j = last(r)                                   # its `(`
@@ -756,7 +756,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     return CompiledField{N}(program(pb), keys, plist, defaults, tvals, initial, lin, sitecoefs, free, dompred)
 end
 
-# An aux field read at a neighbor site across a closed face (`Δ(K)`, F3-02 review S6) has no
+# An aux field read at a neighbor site across a closed face (`laplacian(K)`, F3-02 review S6) has no
 # value there: an aux field takes no face rule (its values follow its expression), so the IR
 # would find no ghost value. Refused at the build (`discretize`, `lower_group`; the symbolic
 # form stays readable) in the equation's words, with the route. A read that needs no ghost (a
@@ -781,19 +781,19 @@ function _check_aux_offsets(prog::Program{N}, sys::PDESystem) where {N}
             r === nothing ? "" : string(" (`", replace(as_written(string(r[1])), r"\(t(, \w+)*\)" => ""), "`)"),
             ": an aux field has no value beyond a ",
             "closed face (it takes no face condition). Write the term with the fields its expression reads (with ",
-            "`K ~ k * c`, `Δ(K)` is `k * Δ(c)`), or make the axis periodic"))
+            "`K ~ k * c`, `laplacian(K)` is `k * laplacian(c)`), or make the axis periodic"))
     end
     return nothing
 end
 
 # the first term of `x` that reads one of `ops` at neighbor sites across a closed axis, and that
-# axis: a spatial operator (`Δ`, `DivKGrad`, `Advect`: every axis; a `Differential` in a space
+# axis: a spatial operator (`laplacian`, `DivKGrad`, `Advect`: every axis; a `Differential` in a space
 # variable: its axis) whose arguments read it; else `nothing`
 function _neighbor_read(x, ops, ivs, periodic)
     u = unwrap(x)
     iscall(u) || return nothing
     f = operation(u)
-    d = if f === Δ || f isa DivKGrad || f isa Advect
+    d = if f === laplacian || f isa DivKGrad || f isa Advect
         findfirst(!, periodic)
     elseif f isa Differential
         j = findfirst(v -> isequal(unwrap(f.x), unwrap(v)), ivs)

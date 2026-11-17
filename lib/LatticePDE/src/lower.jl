@@ -5,7 +5,7 @@
 # rounded once to `T` at emission; `ifelse` is lazy (COND, D-014).
 #
 # Spatial operators lower to the face-flux form (§5.2): one per-axis second difference
-# `(1/h²) Σ± K_face (c± − c)`, summed over axes for `Δ` and `DivKGrad`. A raw `Dx(Dx(c))` or
+# `(1/h²) Σ± K_face (c± − c)`, summed over axes for `laplacian` and `DivKGrad`. A raw `Dx(Dx(c))` or
 # `Dx(K * Dx(c))` lowers through the same primitive, so it gives the same IR (P3-rev item 5).
 # Neighbor values of `c` are `RESOLVE` loads (pass 2 applies the face rules). A face
 # coefficient is evaluated at the neighbor with `RESOLVE` loads of the fields that have face
@@ -13,7 +13,7 @@
 # face rule gives the gradient; F3-ghost, user OK 2026-10-26) and `CLAMP` loads of the others
 # (an input or aux field takes the inner value).
 
-const RAW_HINT = "write a spatial operator as `Δ(c)`, `DivKGrad(:harmonic)(K, c)`, `Dx(Dx(c))` or `Dx(K * Dx(c))`"
+const RAW_HINT = "write a spatial operator as `laplacian(c)`, `DivKGrad(:harmonic)(K, c)`, `Dx(Dx(c))` or `Dx(K * Dx(c))`"
 
 """
 Everything a lowering needs. `fields` maps a dependent variable's operation to its field ids
@@ -172,8 +172,8 @@ end
 #   a whole by the mean over the children, each fine read at the child and each read of the
 #   term's own grid at the node. A sum is folded per summand and a product keeps its factors
 #   without fine reads outside the fold, so the coarse sum times the block size is the fine sum
-#   of the term (the restriction conserves mass: `max(g − gT, 0)`, `g/(K + g)`, `at(S, kind) g`,
-#   `kind == P` and `at(R, kind)` are restricted exactly). A condition used as a number (in a
+#   of the term (the restriction conserves mass: `max(g − gT, 0)`, `g/(K + g)`, `value_at(S, kind) g`,
+#   `kind == P` and `value_at(R, kind)` are restricted exactly). A condition used as a number (in a
 #   sum, a product, an operator coefficient, the right side itself) is a 0/1 value and folds by
 #   the mean too: `kind == P` on a block a third of whose sites are P is 1/3;
 # - in the equation (and the operator row) of a coarse field with a mask whose predicate reads
@@ -194,7 +194,7 @@ function _fold_kind(u, e::Env)
     _isbool_term(u) && return :mean
     f = operation(u)
     # a spatial operator runs on the term's grid: its coefficients fold at each face (`_secdiff`)
-    (f === Δ || f isa DivKGrad || f isa Advect || f isa Differential) && return nothing
+    (f === laplacian || f isa DivKGrad || f isa Advect || f isa Differential) && return nothing
     f === (*) && return :product
     (f === (+) || f === (-) || f === identity) && return nothing
     f === (/) && !_reads(arguments(u)[2], fine) && return nothing
@@ -316,7 +316,7 @@ function _same_level!(e::Env, u, what)
     _lerr(u, string(what, " reads `", operation(u), "` on ", lf == 0 ? "the fine grid" : "`Coarse($(2^lf))`", ", and the ",
         "term is evaluated on ", e.level == 0 ? "the fine grid" : "`Coarse($(2^e.level))`", "; a spatial operator reads its ",
         "field on that field's own grid; outside an equation (a face value, a mask) write it as an aux field on the ",
-        "grid of `", operation(u), "` (`L ~ Δ(", operation(u), ")` with `lattice_level` as `", operation(u), "`'s) and read `L`"))
+        "grid of `", operation(u), "` (`L ~ laplacian(", operation(u), ")` with `lattice_level` as `", operation(u), "`'s) and read `L`"))
 end
 _isfield(e::Env, u) = iscall(u) && haskey(e.fields, operation(u))
 _fieldarg(e::Env, u) = (u = unwrap(u);
@@ -462,7 +462,7 @@ Whether the lattice lowering takes a call of `f` inside a term: arithmetic (`+ -
 (SymbolicUtils keeps `π` and `ℯ` as `identity(π)`). It is the one
 allowlist of both front ends (F2 design §2.11): a front end that converts its own terms (Potts
 `@equations`) asks it, so a call lowers in one front end exactly when it lowers in the other.
-The operators (`Δ`, `DivKGrad`, `Advect`, `Differential`), the reads (`at`, `ismember`) and
+The operators (`laplacian`, `DivKGrad`, `Advect`, `Differential`), the reads (`value_at`, `ismember`) and
 the field reads are terms of their own, not calls in this sense.
 """
 lowers_call(f) = f === identity || any(g -> g === f, _OPS) || any(r -> r[1] === f, _CMP) || any(r -> r[1] === f, _UNARY) ||
@@ -506,9 +506,9 @@ function lower(x, e::Env{N}) where {N}
     (f isa Shift || f isa Hold || f isa Sample || f isa Pre) &&
         _lerr(u, "`$f` has no meaning on the right side; $SHIFT_HINT")
     e.hex && (f isa DivKGrad || f isa Differential || f isa Advect) &&
-        _lerr(u, "only `Δ(c)` is defined on a hexagonal grid")
-    f === Δ && e.hex && return _hexlap(e, a[1])
-    f === Δ && return _op(e, ADD, (_secdiff(e, d, nothing, a[1], :harmonic) for d in 1:N)...)
+        _lerr(u, "only `laplacian(c)` is defined on a hexagonal grid")
+    f === laplacian && e.hex && return _hexlap(e, a[1])
+    f === laplacian && return _op(e, ADD, (_secdiff(e, d, nothing, a[1], :harmonic) for d in 1:N)...)
     f isa DivKGrad && return _op(e, ADD, (_secdiff(e, d, a[1], a[2], f.mean) for d in 1:N)...)
     if f isa Differential
         r = _raw_flux(u)
@@ -522,9 +522,9 @@ function lower(x, e::Env{N}) where {N}
         eqs = Int32[_cmp(e, EQ, k, constant!(e.kb, v, I32)) for v in s]
         return length(eqs) == 1 ? eqs[1] : node!(e.kb, OR, BOOL, eqs)
     end
-    if f === at
+    if f === value_at && length(a) == 2
         haskey(e.tables, unwrap(a[1])) ||
-            _lerr(u, "`at(T, k)` reads an array parameter `T`; site and cell reads are CPM terms")
+            _lerr(u, "`value_at(T, k)` reads an array parameter `T`; site and cell reads are CPM terms")
         return table!(e.kb, e.tables[unwrap(a[1])]..., cast!(e.kb, _num(e, [lower(a[2], e)])[1], I32))
     end
     f === ifelse && return cond!(e.kb, _bool(e, lower(a[1], e)), _num(e, [lower(a[2], e), lower(a[3], e)])...)

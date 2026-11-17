@@ -11,11 +11,11 @@ using KernelAbstractions: KernelAbstractions as KA
 fam_u, fam_v, fam_N = fu(t, x, y), fv(t, x, y), fN(t, x, y)
 fam_dom = [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
 fam_faces = [fu(t, 0, y) ~ 1.0, fu(t, x, 0) ~ fu(t, x, 1)]
-fam_rate = PDESystem([D(fam_u) ~ fDc * Δ(fam_u) - fk * fam_u + x * y], [fu(0, x, y) ~ x; fam_faces], fam_dom, [t, x, y],
+fam_rate = PDESystem([D(fam_u) ~ fDc * laplacian(fam_u) - fk * fam_u + x * y], [fu(0, x, y) ~ x; fam_faces], fam_dom, [t, x, y],
     [fam_u], [fDc, fk]; name = :famr)
-fam_steady = PDESystem([D(fam_u) ~ fDc * Δ(fam_u) - fk * fam_u + fam_v, 0 ~ 0.1 * Δ(fam_v) - fam_v + fam_u],
+fam_steady = PDESystem([D(fam_u) ~ fDc * laplacian(fam_u) - fk * fam_u + fam_v, 0 ~ 0.1 * laplacian(fam_v) - fam_v + fam_u],
     [fu(0, x, y) ~ x; fam_faces; fv(t, x, 0) ~ fv(t, x, 1)], fam_dom, [t, x, y], [fam_u, fam_v], [fDc, fk]; name = :fams)
-fam_chain = PDESystem([D(fam_u) ~ fDc * Δ(fam_u) - fk * fam_u, D(fam_v) ~ 0.5 * Δ(fam_v) - fam_v + fam_u],
+fam_chain = PDESystem([D(fam_u) ~ fDc * laplacian(fam_u) - fk * fam_u, D(fam_v) ~ 0.5 * laplacian(fam_v) - fam_v + fam_u],
     [fu(0, x, y) ~ x; fv(0, x, y) ~ y; fam_faces; fv(t, x, 0) ~ fv(t, x, 1)], fam_dom, [t, x, y], [fam_u, fam_v], [fDc, fk]; name = :famc)
 fam_map = PDESystem([Shift(t, 1)(fam_N) ~ (fN(t, x + fdx, y) + fN(t, x - fdx, y)) / 2], [fN(0, x, y) ~ x],
     [t ∈ Interval(0.0, 3.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [fam_N], [fdx]; name = :famm)

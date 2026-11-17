@@ -99,7 +99,7 @@ end
     # a parameter write that changes the automatic count (the growth rule: n ≥ ⌈2 dt g⌉) restarts
     # too: the written run equals a fresh problem from the written state
     @parameters bg2 = 1.0
-    sg = bsys([D(bce) ~ bD * Δ(bce) + bg2 * bce], [bc(0, x, y) ~ x * y], [bD, bg2]; T = 2.0, dvs = [bce])
+    sg = bsys([D(bce) ~ bD * laplacian(bce) + bg2 * bce], [bc(0, x, y) ~ x * y], [bD, bg2]; T = 2.0, dvs = [bce])
     pg = discretize(sg, LatticeDiscretization(Grid(BDIMS); T = Float64))
         ig = init(pg, BDF2(; linsolve = BTIGHT); dt = 0.5)
     @test ig.substeps == 1
@@ -126,7 +126,7 @@ end
     @test bwarm(ig) == 0                                       # the warm window allocates nothing
     # a decay with h λ = 10 from a smooth start: the BDF2 right side `(4uⁿ − uⁿ⁻¹)/3` is negative
     # (reviewer probe (1): −0.028); `lower = 0` clips it
-    sd = bsys([D(bce) ~ 1e-6 * Δ(bce) - 100.0 * bce], [bc(0, x, y) ~ 1.0], Any[]; T = 0.4, dvs = [bce])
+    sd = bsys([D(bce) ~ 1e-6 * laplacian(bce) - 100.0 * bce], [bc(0, x, y) ~ 1.0], Any[]; T = 0.4, dvs = [bce])
     pd = discretize(sd, LatticeDiscretization(Grid((4, 4)); T = Float64))
         neg = solve(pd, BDF2(); dt = 0.1, saveat = 0.1)
     @test minimum(minimum.(neg.u)) < -0.02
@@ -135,7 +135,7 @@ end
         @test minimum(minimum.(solve(pd, BackwardEuler(); dt = 0.1).u)) >= 0      # (Backward Euler needs no clip)
     # SX-18: OrdinaryDiffEq's ABDF2 at a fixed step, whose first step is ImplicitEuler (its
     # `perform_step!` takes the Euler cache at `iter == 1`), as BDF2's start
-    sx = bsys([D(bce) ~ bD * Δ(bce) - bk * bce + sin(3t) * x], [bc(0, x, y) ~ x * y, bc(t, 0, y) ~ 1.0], [bD, bk];
+    sx = bsys([D(bce) ~ bD * laplacian(bce) - bk * bce + sin(3t) * x], [bc(0, x, y) ~ x * y, bc(t, 0, y) ~ 1.0], [bD, bk];
         T = 0.4, dvs = [bce])
     po = discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64))
     sa = solve(po, ABDF2(); dt = 0.05, adaptive = false, abstol = 1e-12, reltol = 1e-12)
@@ -148,9 +148,9 @@ end
 @testset "F3-11: components, parameter writes, messages" begin
     @variables bu(..)[1:2]
     bue = bu(t, x, y)
-    comp = nlsys([D(bue[1]) ~ 0.05 * Δ(bue[1]) - 40 * bue[1] / (0.025 + bue[1]) + 20, D(bue[2]) ~ 0.05 * Δ(bue[2]) - bue[2] + bue[1]],
+    comp = nlsys([D(bue[1]) ~ 0.05 * laplacian(bue[1]) - 40 * bue[1] / (0.025 + bue[1]) + 20, D(bue[2]) ~ 0.05 * laplacian(bue[2]) - bue[2] + bue[1]],
         [bu(0, x, y)[1] ~ 0.5, bu(0, x, y)[2] ~ 0.0], [bue]; T = 0.3)
-    scal = nlsys([D(bce) ~ 0.05 * Δ(bce) - 40 * bce / (0.025 + bce) + 20, D(boe) ~ 0.05 * Δ(boe) - boe + bce],
+    scal = nlsys([D(bce) ~ 0.05 * laplacian(bce) - 40 * bce / (0.025 + bce) + 20, D(boe) ~ 0.05 * laplacian(boe) - boe + bce],
         [bc(0, x, y) ~ 0.5, bo(0, x, y) ~ 0.0], [bce, boe]; T = 0.3)
         a = @test_logs min_level = WARN solve(nlown(comp), BDF2(); dt = 0.05)
         b = solve(nlown(scal), BDF2(); dt = 0.05)
@@ -178,7 +178,7 @@ end
         a = BDF2(; substeps = 3, lower_bound = 0.0)
     @test eval(Meta.parse(repr(a))) == a
     # the counts are those of the Backward Euler start: `+ g c` needs n ≥ ⌈2 dt g⌉
-    pg = bown(bsys([D(bce) ~ bD * Δ(bce) + bk * bce], [bc(0, x, y) ~ x], [bD, bk]))
+    pg = bown(bsys([D(bce) ~ bD * laplacian(bce) + bk * bce], [bc(0, x, y) ~ x], [bD, bk]))
         @test init(pg, BDF2(); dt = 0.5).substeps == 2
     ig = @test_logs (:warn, r"^BDF2\(substeps = 1\): field `bc` takes 2 substeps, more than the 1 requested: a local growth") init(pg,
             BDF2(; substeps = 1); dt = 0.5

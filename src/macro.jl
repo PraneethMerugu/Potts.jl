@@ -133,7 +133,7 @@ end
 # `Shift`) are not names of the model body: a field is a PDESystem written with `using
 # Potts.Fields` and coupled with `@fields`. A body that reads one the calling module does not
 # define meets this error at expansion (a module that defines one reads its own, as Julia does)
-const _FIELD_BODY_NAMES = (:Δ, :DivKGrad, :Advect, :Upwind1, :masked, :Differential, :Shift)
+const _FIELD_BODY_NAMES = (:laplacian, :Δ, :DivKGrad, :Advect, :Upwind1, :masked, :Differential, :Shift)
 function _check_field_body_names(name, body, parts)
     for s in _FIELD_BODY_NAMES
         (isdefined(parts.mod, s) || haskey(parts.declared, s) || s in parts.bound || any(p -> first(p) === s, parts.structural)) &&
@@ -143,7 +143,7 @@ function _check_field_body_names(name, body, parts)
             ArgumentError(
                 string(
                     "@potts_model ", name, ": `", s, "` is not defined in the model body; a field and its ",
-                    "operators (`Δ`, `DivKGrad`, `Advect`, `masked`, `Differential`, …) are written as a PDESystem with ",
+                    "operators (`laplacian`, `DivKGrad`, `Advect`, `masked`, `Differential`, …) are written as a PDESystem with ",
                     "`using Potts.Fields` and coupled into the model with `@fields c = pdesys (input => expression)`"
                 )
             )

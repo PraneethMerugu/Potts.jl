@@ -32,7 +32,7 @@ end
 @testset "F2-13: integ.ps reads and writes; integ[p] gives the route" begin
     @parameters Dp[1:2] = [1.0, 2.0] kp = 0.5 mvp = 1.0
     pdom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-    sys = PDESystem([D(ce) ~ Dp[1] * Δ(ce) - kp * ce], [c(0, x, y) ~ 1.0], pdom, [t, x, y], [ce], [Dp, kp]; name = :ps)
+    sys = PDESystem([D(ce) ~ Dp[1] * laplacian(ce) - kp * ce], [c(0, x, y) ~ 1.0], pdom, [t, x, y], [ce], [Dp, kp]; name = :ps)
     p = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64))
         ig = init(p, ExplicitEuler(; substeps = 1); dt = 0.01)
     # reads: a scalar (as a symbol too), a table, an entry
@@ -65,7 +65,7 @@ end
     ig[ce] = fill(0.5, 4, 4)
     @test all(==(0.5), ig[ce])
     K = Int32[i <= 2 ? 1 : 0 for i in 1:4, j in 1:4]
-    sv = PDESystem([D(ce) ~ Δ(ce)], [c(0, x, y) ~ 0.0, ce ~ masked(qe == 0, mvp)], pdom, [t, x, y], [ce, qe], [mvp]; name = :pm)
+    sv = PDESystem([D(ce) ~ laplacian(ce)], [c(0, x, y) ~ 0.0, ce ~ masked(qe == 0, mvp)], pdom, [t, x, y], [ce, qe], [mvp]; name = :pm)
     iv = init(discretize(sv, LatticeDiscretization(Grid((4, 4)); T = Float64); inputs = [qe => K]),
             ExplicitEuler(); dt = 0.001
         )

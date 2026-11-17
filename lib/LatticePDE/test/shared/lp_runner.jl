@@ -33,7 +33,7 @@ symzero(e) = (v = unwrap_const(unwrap(e)); v isa Number && iszero(v))   # Symbol
 ce, oe, Ke, ke, ve = c(t, x, y), o(t, x, y), K(t, x, y), kindₛ(t, x, y), vel(t, x, y)
 dom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
 
-eqs = [D(ce) ~ Dc * Δ(ce) + α * ismember(ke, (2,)) - ε * ce * ismember(ke, (1,)),
-    D(oe) ~ DivKGrad(:harmonic)(Ke, oe) - at(Dk, ke) * oe - Advect(Upwind1())(ve[1], oe),
-    Ke ~ K0 * (1 + ismember(ke, (2, 3))) + at2(J, ke, ke)]
+eqs = [D(ce) ~ Dc * laplacian(ce) + α * ismember(ke, (2,)) - ε * ce * ismember(ke, (1,)),
+    D(oe) ~ DivKGrad(:harmonic)(Ke, oe) - value_at(Dk, ke) * oe - Advect(Upwind1())(ve[1], oe),
+    Ke ~ K0 * (1 + ismember(ke, (2, 3))) + value_at(J, ke, ke)]
 bcs = [ce ~ masked(ke == 3, 0.0), oe ~ masked(ismember(ke, (2, 3)), 1.0)]

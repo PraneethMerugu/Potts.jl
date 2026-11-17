@@ -67,8 +67,8 @@ module SvPDE
     using ..FieldPDE
     @variables c(..)
     const C = c(t, x, y)
-    decay(dims, k, c0 = 0.0; D = 0.1) = pdesys([Dt(C) ~ D * Δ(C) - k * C], [c(0, x, y) ~ c0], dims, [C])
-    field() = (@parameters Dc = 0.1; pdesys([Dt(C) ~ Dc * Δ(C) - 0.05 * C], [c(0, x, y) ~ 0.0], (16, 16), [C], [Dc]))
+    decay(dims, k, c0 = 0.0; D = 0.1) = pdesys([Dt(C) ~ D * laplacian(C) - k * C], [c(0, x, y) ~ c0], dims, [C])
+    field() = (@parameters Dc = 0.1; pdesys([Dt(C) ~ Dc * laplacian(C) - 0.05 * C], [c(0, x, y) ~ 0.0], (16, 16), [C], [Dc]))
 end
 
 @potts_model SolverField begin

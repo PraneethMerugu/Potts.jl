@@ -26,7 +26,7 @@ LFP.substeps(::LFP.FieldProblem, ::GStub, p = nothing; tables = nothing, inputs 
 @variables gc(..) go(..)
 gce, goe = gc(t, x, y), go(t, x, y)
 # c diffuses and reads o; o decays and reads c
-gsys(; T = 0.1) = PDESystem([D(gce) ~ Δ(gce) + ga * goe, D(goe) ~ -gb * goe + 0.1 * gce],
+gsys(; T = 0.1) = PDESystem([D(gce) ~ laplacian(gce) + ga * goe, D(goe) ~ -gb * goe + 0.1 * gce],
     [gc(0, x, y) ~ x * y, go(0, x, y) ~ 1.0 + x, gc(t, 0, y) ~ gc(t, 1, y), gc(t, x, 0) ~ gc(t, x, 1),
      go(t, 0, y) ~ go(t, 1, y), go(t, x, 0) ~ go(t, x, 1)],
     [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [gce, goe], [ga, gb]; name = :g)
@@ -66,7 +66,7 @@ function g_ftcs(c0, D, h, dt, n; periodic, rate = (c, i, j) -> 0.0, lower = noth
     return c
 end
 
-# F3-22 review r1: a group that reads another group's field through a spatial operator (`Δ(o)` in
+# F3-22 review r1: a group that reads another group's field through a spatial operator (`laplacian(o)` in
 # `c`'s rate) keeps that field's face conditions in the cut, so the input `o` has the face rules
 # of the whole system (here a Dirichlet face on x = 0). Base 9afaac05: IRError "field `go` has no
 # boundary rule on axis 1".
@@ -80,8 +80,8 @@ using LatticeFields.IR: FaceRule as GFaceRule
 @parameters gk = 2ga
 @variables gin(..) [input = true, bounds = (0.0, 2.0)] gki(..)::Int32 [input = true]
 
-# F3-02 review r1 S6: an aux field read at neighbor sites by a rate (`K ~ k c`, `D(c) ~ Δ(K)`)
-# has no value beyond a closed face: refused in the equation's words with the route (`k Δ(c)`),
+# F3-02 review r1 S6: an aux field read at neighbor sites by a rate (`K ~ k c`, `D(c) ~ laplacian(K)`)
+# has no value beyond a closed face: refused in the equation's words with the route (`k laplacian(c)`),
 # which builds and gives the same run on a periodic box. A face condition on an aux field is
 # refused naming it. Base (8f658abd): "IRError: field `K` has no boundary rule on axis 1 side -";
 # a face on `K`: "face conditions apply to rate fields (a map's offset …)" (reviewer probe u3_b §5b).

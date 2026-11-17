@@ -1,7 +1,7 @@
 # Spatial operators across `Coarse` grids (F3-22; F3 design §5). A spatial operator reads its
 # operand on the operand's own grid, so one whose operand lives on another grid than the row
-# (`D(u) ~ 0.5 Δ(c)` with `c` on `Coarse(4)`, or the reverse) is written as the aux field of
-# the manual route: `X ~ Δ(c)` on the grid of `c`, and the row reads `X` as it reads any field
+# (`D(u) ~ 0.5 laplacian(c)` with `c` on `Coarse(4)`, or the reverse) is written as the aux field of
+# the manual route: `X ~ laplacian(c)` on the grid of `c`, and the row reads `X` as it reads any field
 # of another grid:
 # - a coarse operand in a fine row: the coarse operator read at the node of the site's block;
 # - a fine operand in a coarse row: the block mean of the fine operator, the net flux through
@@ -9,7 +9,7 @@
 # The pass runs before the equations are classified, so a hoisted term is an aux row for the
 # rest of the lowering, the solvers and both front ends.
 
-"""Whether the field key `k` is an aux field that `crossgrid_form` added (`Δ(c)`, `DivKGrad(c)`: a
+"""Whether the field key `k` is an aux field that `crossgrid_form` added (`laplacian(c)`, `DivKGrad(c)`: a
 call, which no field of a model is): a front end that stores its fields itself keeps it as scratch
 of the binding, not as state."""
 is_crossgrid_key(k::AbstractString) = occursin('(', k)
@@ -17,21 +17,21 @@ is_crossgrid_key(k::AbstractString) = occursin('(', k)
 # the operand of a spatial operator call `u`: a field read `c(t, x, y)` or `c(t, x, y)[i]`
 function _xg_operand(u)
     f, a = operation(u), arguments(u)
-    f === Δ && return a[1]
+    f === laplacian && return a[1]
     (f isa DivKGrad || f isa Advect) && return a[end]
     f isa Differential || return nothing
     r = _raw_flux(u)
     return r === nothing ? nothing : r[2]
 end
-_xg_isop(u) = iscall(u) && (operation(u) === Δ || operation(u) isa Union{DivKGrad, Advect, Differential})
-_xg_label(f) = f === Δ ? "Δ" : f isa DivKGrad ? "DivKGrad" : f isa Advect ? "Advect" : "flux"
+_xg_isop(u) = iscall(u) && (operation(u) === laplacian || operation(u) isa Union{DivKGrad, Advect, Differential})
+_xg_label(f) = f === laplacian ? "laplacian" : f isa DivKGrad ? "DivKGrad" : f isa Advect ? "Advect" : "flux"
 
 """
     crossgrid_form(sys) -> sys
 
 `sys` with every spatial operator whose operand lives on another `Coarse` level than its
 row's field hoisted into an aux field of the operand's level (`X ~ op(c)`, named as the
-term is written: `Δ(c)`, `DivKGrad(c)`, `Advect(c)`, `flux(c)`), the row reading it. The same term in several rows is one
+term is written: `laplacian(c)`, `DivKGrad(c)`, `Advect(c)`, `flux(c)`), the row reading it. The same term in several rows is one
 aux field. A system with no such term is returned as it is.
 """
 function crossgrid_form(sys::PDESystem)
@@ -90,7 +90,7 @@ function crossgrid_form(sys::PDESystem)
     end
     isempty(rules) && return sys
     # (a term reads its aux only in the rows of another grid than its operand's: the operand's
-    # own row keeps the operator on the grid, `D(c) ~ Δ(c)`)
+    # own row keeps the operator on the grid, `D(c) ~ laplacian(c)`)
     sub(x, l) = substitute(x, Dict{Any, Any}(k => v for (k, v, lo) in rules if lo != l); fold = Val(false))
     eqs = Equation[lhslevel(eq) === nothing ? eq : eq.lhs ~ sub(eq.rhs, lhslevel(eq)) for eq in sys.eqs]
     return PDESystem([eqs; auxeqs], sys.bcs, getfield(sys, :domain), sys.ivs, Any[sys.dvs; auxs], _params(sys);
@@ -101,7 +101,7 @@ end
     operand_reads(eqs, ops) -> Vector
 
 The fields of `ops` (operations, `c`) that a spatial operator in the right sides of `eqs` reads
-as its operand (`Δ(c)`, `DivKGrad(K, c)`, `Advect(v, c)`, a raw flux): its value past a face
+as its operand (`laplacian(c)`, `DivKGrad(K, c)`, `Advect(v, c)`, a raw flux): its value past a face
 needs the field's face conditions. A group that reads another group's field so marks it
 `LatticeCutField` (F3-22 review r1).
 """

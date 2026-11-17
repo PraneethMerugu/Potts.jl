@@ -45,7 +45,7 @@ end
     end
     # on a spaced lattice the discretization derives the spacing back: the same run as the
     # hand-written domain, bit for bit, and the site centers at (i − 1/2) h
-    sys(dom) = PDESystem([D(ldce) ~ ldD * Δ(ldce) - 0.5 * ldce], [ldc(0, x, y) ~ x + 2y], dom, [t, x, y], [ldce], [ldD];
+    sys(dom) = PDESystem([D(ldce) ~ ldD * laplacian(ldce) - 0.5 * ldce], [ldc(0, x, y) ~ x + 2y], dom, [t, x, y], [ldce], [ldD];
         name = :lds)
         run(dom) = solve(
             discretize(sys(dom), LatticeDiscretization(Grid((8, 4)); T = Float64)), ExplicitEuler(); dt = 0.01,

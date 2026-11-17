@@ -155,11 +155,11 @@ end
 
 @testitem "table coefficients in the bound; problems built from ours (F1 round 6)" setup = [LP_silent] tags = [:latticepde, :silent] begin
     @testset "table coefficients in the bound; problems built from ours (F1 round 6)" begin
-        # round 5: the bound could not see `Dn[1] * Δ(c)`: Dn[1] = −1 ran (discretize, remake and
+        # round 5: the bound could not see `Dn[1] * laplacian(c)`: Dn[1] = −1 ran (discretize, remake and
         # `ig[Dn] = …`), and `ig[Dn] = [1000, 2]` kept 1 substep (unstable, reported Success)
         @parameters Dn[1:2] = [1.0, 2.0] Dm[1:2] = [-1.0, 2.0]
-        sys = ssys([D(ce) ~ Dn[1] * Δ(ce)], [c(0, x, y) ~ 1.0], [ce], [Dn])
-        negsys = ssys([D(ce) ~ Dm[1] * Δ(ce)], [c(0, x, y) ~ 1.0], [ce], [Dm])
+        sys = ssys([D(ce) ~ Dn[1] * laplacian(ce)], [c(0, x, y) ~ 1.0], [ce], [Dn])
+        negsys = ssys([D(ce) ~ Dm[1] * laplacian(ce)], [c(0, x, y) ~ 1.0], [ce], [Dm])
         alg = ExplicitEuler(; substeps = 1)
         neg(err) = occursin("is negative at these parameters", err)
         # ODE: at the first call of the right side (F4-01; base: at `discretize`)
@@ -209,26 +209,26 @@ end
         # round 6: each read took only its smallest and largest entry, which under-bounds a
         # coefficient that is not affine in it: each run below was n = 1 and blew up with Success
         # (c(1) = 1.1e7, 1.2e24, 1.1e7); every site is kind 2 (entry 2), dt = 0.025. Index 0
-        # reads 0 (round 8): `1 / at(Dv, …)` takes an index declared never 0 (`kb`, bounds (1, 3))
+        # reads 0 (round 8): `1 / value_at(Dv, …)` takes an index declared never 0 (`kb`, bounds (1, 3))
         @parameters Dq[1:3] = [0.0, 10.0, 20.0] Ds[1:3] = [0.0, π / 2, π] Dv[1:3] = [-1.0, 0.01, 1.0]
         K = fill(Int32(2), 4, 4)
         for (rate, tab, k, q) in (
-                (-(at(Dq, qe) * (20 - at(Dq, qe))) * ce, Dq, 100.0, qe),   # values 0, 100, 0
-                (-(200 * sin(at(Ds, qe))) * ce, Ds, 200.0, qe),             # 0, 200, ≈0
-                (-(1 / at(Dv, qb)) * ce, Dv, 100.0, qb),
+                (-(value_at(Dq, qe) * (20 - value_at(Dq, qe))) * ce, Dq, 100.0, qe),   # values 0, 100, 0
+                (-(200 * sin(value_at(Ds, qe))) * ce, Ds, 200.0, qe),             # 0, 200, ≈0
+                (-(1 / value_at(Dv, qb)) * ce, Dv, 100.0, qb),
             )                     # 1, −100, −1
             sys = ssys([D(ce) ~ rate], [c(0, x, y) ~ 1.0], [ce, q], [tab])
             sol = solve(sown(sys; inputs = [q => K]), ExplicitEuler(); dt = 0.025)
             @test substep_counts(sol)[1] == ceil(Int, 0.025 * k / 1.8)
             @test SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 1.0e-20
         end
-        # a zero entry under `1 / at(…)` that the inputs reach (a kind 1 at site (3, 2)) is not
+        # a zero entry under `1 / value_at(…)` that the inputs reach (a kind 1 at site (3, 2)) is not
         # finite: refused, naming the entry and saying to fix it (round 7: only "give an explicit
         # count"; F2 record (i): refused with or without a count). The entries the inputs do not
         # reach are not read (F2 record (h)): with kind 2 everywhere it runs
         @parameters Dz[1:3] = [0.0, 0.01, 1.0]
         K1 = copy(K); K1[3, 2] = 1
-        sys = ssys([D(ce) ~ -(1 / at(Dz, qb)) * ce], [c(0, x, y) ~ 1.0], [ce, qb], [Dz])
+        sys = ssys([D(ce) ~ -(1 / value_at(Dz, qb)) * ce], [c(0, x, y) ~ 1.0], [ce, qb], [Dz])
         err = emsg(() -> solve(sown(sys; inputs = [qb => K1]), ExplicitEuler(); dt = 0.025))
         @test occursin("not finite where the inputs reach", err)
         @test occursin("`Dz[1]`", err) && occursin("make it nonzero", err) && !occursin("index 0", err)
@@ -236,14 +236,14 @@ end
         @test substep_counts(solve(sown(sys; inputs = [qb => K]), ExplicitEuler(); dt = 0.025))[1] == 2
         # … and with an index that is 0 at a site the message names both, with both routes
         # (49a986f1 named index 0 only and said "make the coefficient finite")
-        sys = ssys([D(ce) ~ -(1 / at(Dz, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dz])
+        sys = ssys([D(ce) ~ -(1 / value_at(Dz, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dz])
         K10 = copy(K1); K10[1, 1] = 0
         err = emsg(() -> solve(sown(sys; inputs = [qe => K10]), ExplicitEuler(); dt = 0.025))
         @test occursin("index 0", err) && occursin("`Dz[1]`", err) && occursin("make it nonzero", err) &&
             occursin("bounds = (1, n)", err) && occursin("index 0 reads 0", err)
         # a negative entry under `sqrt`: the route says so (round 8: "finite and nonzero")
         @parameters Dn9[1:3] = [-1.0, 1.0, 1.0]
-        sys = ssys([D(ce) ~ -sqrt(at(Dn9, qb)) * ce], [c(0, x, y) ~ 1.0], [ce, qb], [Dn9])
+        sys = ssys([D(ce) ~ -sqrt(value_at(Dn9, qb)) * ce], [c(0, x, y) ~ 1.0], [ce, qb], [Dn9])
         err = emsg(() -> solve(sown(sys; inputs = [qb => K1]), ExplicitEuler(); dt = 0.025))
         @test occursin("`Dn9[1]`", err) && occursin("≥ 0", err) && occursin("sqrt", err) && !occursin("nonzero", err)
     end
@@ -256,26 +256,26 @@ end
         # own range, so at k = 5 `Db` reads 100 and `Da` its last entry 0 (round 7: the group took
         # the shortest table's entries: n = 1, Success, max|c(1)| = 1.1e7; f8f98e43: n = 2)
         @parameters Da[1:3] = [0.0, 0.0, 0.0] Db[1:5] = [0.0, 0.0, 0.0, 0.0, 100.0]
-        sys = ssys([D(ce) ~ -(at(Db, qe) - at(Da, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Da, Db])
+        sys = ssys([D(ce) ~ -(value_at(Db, qe) - value_at(Da, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Da, Db])
         sol = solve(sown(sys; inputs = [qe => K5]), ExplicitEuler(); dt = 0.025)
         @test substep_counts(sol)[1] == 2 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 1.0e-20
-        # index 0 (an input value 0, or a literal 0) reads 0, so `100 − at(T3, k)` is 100 there
+        # index 0 (an input value 0, or a literal 0) reads 0, so `100 − value_at(T3, k)` is 100 there
         # (round 7 and f8f98e43: index 0 was not evaluated; n = 1, Success, max|c(1)| = 1.1e7 where
         # the exact value is exp(−100) = 3.7e-44)
         @parameters T3[1:3] = [100.0, 100.0, 100.0]
-        for (rate, ins) in ((-(100 - at(T3, qe)) * ce, [ce, qe]), (-(100 - at(T3, 0)) * ce, [ce]))
+        for (rate, ins) in ((-(100 - value_at(T3, qe)) * ce, [ce, qe]), (-(100 - value_at(T3, 0)) * ce, [ce]))
             sys = ssys([D(ce) ~ rate], [c(0, x, y) ~ 1.0], ins, [T3])
             sol = solve(sown(sys; inputs = length(ins) == 2 ? [qe => K0] : ()), ExplicitEuler(); dt = 0.025)
             @test substep_counts(sol)[1] == 2 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 1.0e-20
         end
-        # the CPU `at` reads as the kernel does (round 7: `T[Int(k)]`, a BoundsError at 0)
-        @test at([1.0, 2.0, 3.0], 0) == 0.0 && at([1.0, 2.0, 3.0], 5) == 3.0 && at([1.0, 2.0, 3.0], -1) == 1.0
-        @test at([1.0, 2.0, 3.0], 2) == 2.0                                           # control
-        # `1 / at(T, k)` with an index that is 0 at a site is not finite there: refused, saying so,
+        # the CPU `value_at` reads as the kernel does (round 7: `T[Int(k)]`, a BoundsError at 0)
+        @test value_at([1.0, 2.0, 3.0], 0) == 0.0 && value_at([1.0, 2.0, 3.0], 5) == 3.0 && value_at([1.0, 2.0, 3.0], -1) == 1.0
+        @test value_at([1.0, 2.0, 3.0], 2) == 2.0                                           # control
+        # `1 / value_at(T, k)` with an index that is 0 at a site is not finite there: refused, saying so,
         # with the route (keep 0 out of the index); a count does not help (F2 record (i): 1fb097f2
         # ran a count). With no 0 in the map it takes an automatic count (F2 record (h))
         @parameters Dv8[1:3] = [-1.0, 0.01, 1.0]
-        sys = ssys([D(ce) ~ -(1 / at(Dv8, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dv8])
+        sys = ssys([D(ce) ~ -(1 / value_at(Dv8, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dv8])
         Kz = fill(Int32(2), 4, 4); Kz[3, 2] = 0
         for alg in (ExplicitEuler(), ExplicitEuler(; substeps = 2))
             err = emsg(() -> solve(sown(sys; inputs = [qe => Kz]), alg; dt = 0.025))
@@ -284,7 +284,7 @@ end
         sol = solve(sown(sys; inputs = [qe => fill(Int32(2), 4, 4)]), ExplicitEuler(); dt = 0.025)
         @test substep_counts(sol)[1] == 2 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 1.0e-20
         # a declared index range is checked: a 0 in a map declared (1, 3) is refused, naming the site
-        sys = ssys([D(ce) ~ -(1 / at(Dv8, qb)) * ce], [c(0, x, y) ~ 1.0], [ce, qb], [Dv8])
+        sys = ssys([D(ce) ~ -(1 / value_at(Dv8, qb)) * ce], [c(0, x, y) ~ 1.0], [ce, qb], [Dv8])
         err = emsg(() -> sown(sys; inputs = [qb => Kz]))
         @test occursin("bounds (1, 3)", err) && occursin("(3, 2)", err)
         p8 = sown(sys; inputs = [qb => fill(Int32(2), 4, 4)])                          # control
@@ -295,7 +295,7 @@ end
         # product, 16^16 == 0, passed the cap and the bound never finished). The index map holds
         # 0 … 15, so each read takes up to 16 entries
         @parameters T16[1:16] = collect(1.0:16.0)
-        rate = -sum(at(T16, qe + i) for i in 1:16) * ce
+        rate = -sum(value_at(T16, qe + i) for i in 1:16) * ce
         sys = ssys([D(ce) ~ rate], [c(0, x, y) ~ 1.0], [ce, qe], [T16]; T = 0.025)
         K015 = reshape(Int32.(0:15), 4, 4)
         err = emsg(() -> solve(sown(sys; inputs = [qe => K015]), ExplicitEuler(); dt = 0.025))
@@ -315,10 +315,10 @@ end
         # without a count (the new bound-coverage testset); over the cap is the case left
         K = fill(Int32(2), 4, 4)
         K16 = reshape(Int32.(mod.(0:255, 16)), 16, 16)               # index values 0 … 15
-        # P1: `1 / at(Dv, k)` at every entry 200 (1fb097f2: n = 2, Success, 1.2e14): raised to 3,
+        # P1: `1 / value_at(Dv, k)` at every entry 200 (1fb097f2: n = 2, Success, 1.2e14): raised to 3,
         # with no warning (no 0 in the map: the bound is finite, F2 record (h))
         @parameters Dv9[1:3] = fill(0.005, 3)
-        sys = ssys([D(ce) ~ -(1 / at(Dv9, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dv9])
+        sys = ssys([D(ce) ~ -(1 / value_at(Dv9, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dv9])
         sol = @test_logs solve(sown(sys; inputs = [qe => K]), ExplicitEuler(; substeps = 2); dt = 0.025)
         @test first(substep_counts(sol)) == 3 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 1.0e-20
         @test first(substep_counts(solve(sown(sys; inputs = [qe => K]), ExplicitEuler(); dt = 0.025))) == 3
@@ -326,7 +326,7 @@ end
         # (1fb097f2: 5.2e30)
         @parameters Dd9 = 0.125 Tw9[1:16] = zeros(16)
         sys = ssys(
-            [D(ce) ~ Dd9 * Δ(ce), D(oe) ~ -sum(at(Tw9, qe + i) for i in 1:4) * oe],
+            [D(ce) ~ Dd9 * laplacian(ce), D(oe) ~ -sum(value_at(Tw9, qe + i) for i in 1:4) * oe],
             [c(0, x, y) ~ 1.0 + sin(1000x + 700y), o(0, x, y) ~ 1.0], [ce, oe, qe], [Dd9, Tw9]
         )
         sol = @test_logs (:warn, r"4096") match_mode = :any solve(
@@ -337,7 +337,7 @@ end
         @test first(substep_counts(sol)) == 4 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 3
         # P2: over the cap, the diffusion still raises the count (1fb097f2: n = 2, 5.2e30)
         @parameters Tz9[1:16] = zeros(16)
-        sys = ssys([D(ce) ~ Dd9 * Δ(ce) - sum(at(Tz9, qe + i) for i in 1:4) * ce], [c(0, x, y) ~ 1.0 + sin(1000x + 700y)], [ce, qe], [Dd9, Tz9])
+        sys = ssys([D(ce) ~ Dd9 * laplacian(ce) - sum(value_at(Tz9, qe + i) for i in 1:4) * ce], [c(0, x, y) ~ 1.0 + sin(1000x + 700y)], [ce, qe], [Dd9, Tz9])
         sol = @test_logs (:warn, r"4096") match_mode = :any solve(
             sown(sys; n = 16, inputs = [qe => K16]),
             ExplicitEuler(; substeps = 2)
@@ -355,7 +355,7 @@ end
         # the key is the program, the term and the cause, never a value
         K1 = fill(Int32(1), 4, 4)
         @parameters Ds2[1:3] = [-1.0, 1.0, 1.0]
-        sys = ssys([D(ce) ~ -sqrt(at(Ds2, qb)) * ce], [c(0, x, y) ~ 1.0], [ce, qb], [Ds2])
+        sys = ssys([D(ce) ~ -sqrt(value_at(Ds2, qb)) * ce], [c(0, x, y) ~ 1.0], [ce, qb], [Ds2])
         prob = sown(sys; inputs = [qb => K1])
         @test all(
             v -> occursin(
@@ -369,7 +369,7 @@ end
             ), (-1.0, -2.0, -3.0)
         )
         @parameters Dd2 = 0.125 Tc2[1:16] = zeros(16)
-        sys = ssys([D(ce) ~ Dd2 * Δ(ce) - sum(at(Tc2, qe + i) for i in 1:4) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dd2, Tc2])
+        sys = ssys([D(ce) ~ Dd2 * laplacian(ce) - sum(value_at(Tc2, qe + i) for i in 1:4) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dd2, Tc2])
         prob = sown(sys; inputs = [qe => reshape(Int32.(0:15), 4, 4)])
         logs, _ = Test.collect_test_logs() do
             for v in (0.125, 0.25, 0.5)
@@ -381,12 +381,12 @@ end
         # (bda31989: only the unseen term `-(c^3)`). A coefficient not finite where the inputs
         # reach is refused before (F2 record (i)); past the cap is the cause left here
         @parameters Tz2[1:16] = zeros(16)
-        sys = ssys([D(ce) ~ -ce^3 - sum(at(Tz2, qe + i) for i in 1:4) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Tz2])
+        sys = ssys([D(ce) ~ -ce^3 - sum(value_at(Tz2, qe + i) for i in 1:4) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Tz2])
         err = emsg(() -> solve(sown(sys; inputs = [qe => reshape(Int32.(0:15), 4, 4)]), ExplicitEuler(); dt = 0.025))
         @test occursin("c^3", err) && occursin("4096", err) && occursin("Tz2", err)
         # (e) index 0 is an input value 0, not a "kind map" value (a LatticePDE input is any map)
         @parameters Dz3[1:3] = [1.0, 1.0, 1.0]
-        sys = ssys([D(ce) ~ -(1 / at(Dz3, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dz3])
+        sys = ssys([D(ce) ~ -(1 / value_at(Dz3, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dz3])
         Ke0 = fill(Int32(2), 4, 4); Ke0[2, 2] = 0
         err = emsg(() -> solve(sown(sys; inputs = [qe => Ke0]), ExplicitEuler(); dt = 0.025))
         @test occursin("index 0 reads 0 (an input value 0", err) && !occursin("kind map", err)

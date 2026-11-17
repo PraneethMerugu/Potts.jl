@@ -90,10 +90,10 @@ end
         @test occursin("`bounds` is a pair `(lo, hi)` of numbers with lo ≤ hi", e)
         # an aux field through its definition: ρ = 0.1 · 8 + k, n = ⌈2.8/1.8⌉ = 2 (base: refused)
         @test acount(FbIvAux) == [2] ==
-            [bcount([Ke ~ k * ue, DD(ue) ~ 0.1 * LP.Δ(ue) - Ke], [ue, Ke], Any[k], [u(0, x, y) ~ 0.5])]
+            [bcount([Ke ~ k * ue, DD(ue) ~ 0.1 * LP.laplacian(ue) - Ke], [ue, Ke], Any[k], [u(0, x, y) ~ 0.5])]
         # a velocity that varies by site: ρ = 0.8 + 2 max|0.05 (1 + x)| over x ∈ [−0.5, 16.5], n = 2
         @test acount(FbIvAdvect) == [2] ==
-            [bcount([DD(ue) ~ 0.1 * LP.Δ(ue) - LP.Advect(LP.Upwind1())([0.05 * (1 + x), 0.0], ue)], [ue], Any[], [u(0, x, y) ~ 0.5])]
+            [bcount([DD(ue) ~ 0.1 * LP.laplacian(ue) - LP.Advect(LP.Upwind1())([0.05 * (1 + x), 0.0], ue)], [ue], Any[], [u(0, x, y) ~ 0.5])]
     end
 end
 

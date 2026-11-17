@@ -24,43 +24,43 @@ module FpPDE
     p_mixed() = pdesys([Dt(C) ~ -C, Shift(t, 1)(M) ~ M + 1], [ic(c), ic(m)], (6, 4), [C, M])
     p_z() = (C3 = c(t, x, y, z); pdesys([Dt(C3) ~ 0.1 * z], [c(0, x, y, z) ~ 0.0], (4, 4, 3), [C3]))
     p_map_repeat() = pdesys([Shift(t, 1)(M) ~ 0.5 * M + 1], [ic(m)], (6, 4), [M])
-    advect_short() = field1(-Advect(Upwind1())([0.3], C) + 0.1 * Δ(C), (8, 6))
+    advect_short() = field1(-Advect(Upwind1())([0.3], C) + 0.1 * laplacian(C), (8, 6))
     z2d() = field1(Differential(z)(Differential(z)(C)), (6, 4))
-    b_dc(bcs = []; dims = (8, 6)) = (@parameters Dc = 0.5; field1(Dc * Δ(C), dims, [Dc]; bcs))
+    b_dc(bcs = []; dims = (8, 6)) = (@parameters Dc = 0.5; field1(Dc * laplacian(C), dims, [Dc]; bcs))
     b_none() = b_dc()
     b_bcs_face() = b_dc([c(t, 0, y) ~ 1.0])
     function b_flux_robin_bcs()
         @parameters Dc = 0.5 q = 0.2 αr = 2.0 βr = 1.0 gr = 0.5
-        return field1(Dc * Δ(C), (8, 6), [Dc, q, αr, βr, gr]; bcs = [Dx(c(t, 0, y)) ~ -q, αr * c(t, 8, y) + βr * Dx(c(t, 8, y)) ~ gr])
+        return field1(Dc * laplacian(C), (8, 6), [Dc, q, αr, βr, gr]; bcs = [Dx(c(t, 0, y)) ~ -q, αr * c(t, 8, y) + βr * Dx(c(t, 8, y)) ~ gr])
     end
     function b_bcs_nr()
         @parameters Dc = 0.5 q = 0.2 αr = 2.0 βr = 1.0 gr = 0.5
-        return field1(Dc * Δ(C), (8, 6), [Dc, q, αr, βr, gr]; bcs = [Dx(c(t, 8, y)) ~ q, αr * c(t, x, 0) - βr * Dy(c(t, x, 0)) ~ gr])
+        return field1(Dc * laplacian(C), (8, 6), [Dc, q, αr, βr, gr]; bcs = [Dx(c(t, 8, y)) ~ q, αr * c(t, x, 0) - βr * Dy(c(t, x, 0)) ~ gr])
     end
     b_self_mask(rate) = (@parameters Dc = 0.5; field1(rate(Dc), (8, 6), [Dc]; bcs = [C ~ masked(C >= 0.8, 0.8)]))
     b_self_mask_bcs() = b_self_mask(Dc -> 0.1)
-    b_self_mask_diff_bcs() = b_self_mask(Dc -> Dc * Δ(C) + 0.1)
-    b_mask_later_bcs() = pdesys([Dt(C) ~ 0.5 * Δ(C), Dt(E) ~ 0.1], [ic(c), ic(e), C ~ masked(E >= 0.5, 0.8)], (8, 6), [C, E])
+    b_self_mask_diff_bcs() = b_self_mask(Dc -> Dc * laplacian(C) + 0.1)
+    b_mask_later_bcs() = pdesys([Dt(C) ~ 0.5 * laplacian(C), Dt(E) ~ 0.1], [ic(c), ic(e), C ~ masked(E >= 0.5, 0.8)], (8, 6), [C, E])
     interior() = b_dc([c(t, 3, y) ~ 1.0, c(t, 8, y) ~ 0.0])
     periodic_bcs() = b_dc([c(t, x, 0) ~ c(t, x, 6)])
-    b_mask_earlier() = pdesys([Dt(C) ~ 0.5 * Δ(C) - 0.2 * C, Dt(E) ~ 0.1], [ic(c), ic(e), E ~ masked(C >= 0.5, 0.0)], (8, 6), [C, E])
+    b_mask_earlier() = pdesys([Dt(C) ~ 0.5 * laplacian(C) - 0.2 * C, Dt(E) ~ 0.1], [ic(c), ic(e), E ~ masked(C >= 0.5, 0.0)], (8, 6), [C, E])
     function b_flux_robin2()
         @parameters Dc = 0.5 q = 0.2 αr = 3.0 βr = 1.0 gr = 0.5
         return field1(
-            Dc * Δ(C), (8, 6), [Dc, q, αr, βr, gr]; spacing = 2.0,
+            Dc * laplacian(C), (8, 6), [Dc, q, αr, βr, gr]; spacing = 2.0,
             bcs = [
                 Dx(c(t, 0, y)) ~ -q, αr * c(t, 16, y) + βr * Dx(c(t, 16, y)) ~ gr,
                 Dy(c(t, x, 0)) ~ -q, αr * c(t, x, 12) + βr * Dy(c(t, x, 12)) ~ gr,
             ]
         )
     end
-    a_state() = pdesys([Dt(C) ~ 0.1 * Δ(C) - 0.2 * C, KK ~ 2C + 1], [ic(c, 1.0), ic(K, -5.0)], (8, 8), [C, KK])
-    a_lower() = pdesys([Dt(C) ~ 0.1 * Δ(C) + 0.2 * KA, KK ~ 2C + 1], [ic(c, -1.0), ic(K, 7.0)], (8, 8), [C, KK, KA])
+    a_state() = pdesys([Dt(C) ~ 0.1 * laplacian(C) - 0.2 * C, KK ~ 2C + 1], [ic(c, 1.0), ic(K, -5.0)], (8, 8), [C, KK])
+    a_lower() = pdesys([Dt(C) ~ 0.1 * laplacian(C) + 0.2 * KA, KK ~ 2C + 1], [ic(c, -1.0), ic(K, 7.0)], (8, 8), [C, KK, KA])
     a_one() = (CF = cfield(X...); pdesys([CF ~ 1.0], [ic(cfield)], (12, 8), [CF]))
     a_clock() = pdesys([KK ~ MCS + 0.5 * t], [ic(K, -1.0)], (6, 4), [KK])
     a_kind() = pdesys([KK ~ KA], [ic(K)], (12, 12), [KK, KA])
     a_block() = (@parameters m0 = 0.0; pdesys([KK ~ ifelse(MCS >= m0, 1.0, 0.0)], [ic(K)], (12, 12), [KK], [m0]))
-    w_nonlinear() = (@parameters Dc = 0.1 kw = 0.5; field1(Dc * Δ(C) - kw * C^2, (8, 8), [Dc, kw]))
+    w_nonlinear() = (@parameters Dc = 0.1 kw = 0.5; field1(Dc * laplacian(C) - kw * C^2, (8, 8), [Dc, kw]))
     x_loop() = (
         @parameters kx = 1.0;
         pdesys([KK ~ C, Dt(W) ~ -kx * KK, Dt(C) ~ kx * W], [ic(w, 1.0), ic(c), ic(K)], (6, 4), [W, C, KK], [kx])

@@ -17,8 +17,8 @@ function _precompile_workload()
     c = only(Symbolics.@variables c(..))
     ce = c(t, x, y)
     dom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-    forms = ((D(ce) ~ Dc * Δ(ce) - k * ce + x, [c(0, x, y) ~ x * y, c(t, 0, y) ~ 1.0]),
-        (D(ce) ~ Dc * Δ(ce) - k * ce,
+    forms = ((D(ce) ~ Dc * laplacian(ce) - k * ce + x, [c(0, x, y) ~ x * y, c(t, 0, y) ~ 1.0]),
+        (D(ce) ~ Dc * laplacian(ce) - k * ce,
             [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)]))
     for (eq, bc) in forms, T in (Float64, Float32)
         sys = PDESystem([eq], bc, dom, [t, x, y], [ce], [Dc, k]; name = :precompile)

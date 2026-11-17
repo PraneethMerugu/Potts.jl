@@ -31,7 +31,7 @@
         Potts.ModelingToolkitBase.@variables c(..)
         ce = c(tt, x, y)
         bsys = MTKB.PDESystem(
-            [DD(ce) ~ Dc * LP.Δ(ce)],
+            [DD(ce) ~ Dc * LP.laplacian(ce)],
             [c(0, x, y) ~ 0.0, MTKB.Differential(x)(c(tt, 8, y)) ~ q, αr * c(tt, x, 0) - βr * MTKB.Differential(y)(c(tt, x, 0)) ~ gr],
             [tt ∈ LP.Interval(0.0, 2.0), x ∈ LP.Interval(0.0, 8.0), y ∈ LP.Interval(0.0, 6.0)], [tt, x, y], [ce],
             [Dc, q, αr, βr, gr]; name = :b

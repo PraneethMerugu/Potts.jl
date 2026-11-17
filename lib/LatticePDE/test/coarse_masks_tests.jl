@@ -106,7 +106,7 @@
         cod, hod = lvl(:cb15ode), first(@variables hb15ode(..))
         kq = first(@variables kq(..) [input = true, bounds = (0, 1)])
         osys(c, k1, mq, dvs) = PDESystem(
-            [D(c(t, x, y)) ~ 0.02 * Δ(c(t, x, y)) - c(t, x, y) * k1 + 0.3 * k1],
+            [D(c(t, x, y)) ~ 0.02 * laplacian(c(t, x, y)) - c(t, x, y) * k1 + 0.3 * k1],
             [c(0, x, y) ~ x * y, c(t, x, y) ~ masked(mq == 0, 0.5)], cdom(), [t, x, y], [c(t, x, y); dvs], Num[]; name = :b15o
         )
         oc = discretize(osys(cod, qe == 2, qe, [qe]), LatticeDiscretization(Grid(CDIMS)); inputs = [qe => Q])
@@ -304,8 +304,8 @@ end
         @parameters ka = 0.7 kb = 0.4
         sys = PDESystem(
             [
-                D(c(t, x, y)) ~ 0.05 * Δ(c(t, x, y)) - c(t, x, y) + ka * u(t, x, y),
-                D(u(t, x, y)) ~ 0.02 * Δ(u(t, x, y)) - u(t, x, y) + kb * c(t, x, y),
+                D(c(t, x, y)) ~ 0.05 * laplacian(c(t, x, y)) - c(t, x, y) + ka * u(t, x, y),
+                D(u(t, x, y)) ~ 0.02 * laplacian(u(t, x, y)) - u(t, x, y) + kb * c(t, x, y),
             ],
             [c(0, x, y) ~ x, u(0, x, y) ~ y], cdom(), [t, x, y], [c(t, x, y), u(t, x, y)], [ka, kb]; name = :mix
         )
@@ -367,7 +367,7 @@ end
         function dsys(c; hand = false)
             k2, k1 = hand ? (cf2(t, x, y), cf1(t, x, y)) : (ismember(q(t, x, y), (2,)), q(t, x, y) == 1)
             PDESystem(
-                [D(c(t, x, y)) ~ 0.02 * Δ(c(t, x, y)) - c(t, x, y) * k2 + 0.5 * k1 + 0.05 * g(t, x, y)],
+                [D(c(t, x, y)) ~ 0.02 * laplacian(c(t, x, y)) - c(t, x, y) * k2 + 0.5 * k1 + 0.05 * g(t, x, y)],
                 [c(0, x, y) ~ x + y, c(t, x, y) ~ masked(q(t, x, y) == 3, 1.0)], cdom(), [t, x, y],
                 [[c(t, x, y), cdm(t, x, y), q(t, x, y), g(t, x, y)]; hand ? [cf1(t, x, y), cf2(t, x, y)] : Num[]], Num[]; name = :dm
             )
@@ -398,13 +398,13 @@ end
         ug = first(@variables udomg(..))
         cdg = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables cdomg(..))), LatticePDE.LatticeLevel, Coarse(4)))
         gsys = PDESystem(
-            [D(cdg(t, x, y)) ~ 0.02 * Δ(cdg(t, x, y)) + 0.5 * (q(t, x, y) == 1), D(ug(t, x, y)) ~ 0.1 * Δ(ug(t, x, y)) - ug(t, x, y)],
+            [D(cdg(t, x, y)) ~ 0.02 * laplacian(cdg(t, x, y)) + 0.5 * (q(t, x, y) == 1), D(ug(t, x, y)) ~ 0.1 * laplacian(ug(t, x, y)) - ug(t, x, y)],
             [cdg(0, x, y) ~ x + y, ug(0, x, y) ~ x], cdom(), [t, x, y], [cdg(t, x, y), ug(t, x, y), cdm(t, x, y), q(t, x, y)], Num[]; name = :dg
         )
         pg = cown(gsys, CDIMS; domain = cdm, ins = [cdm(t, x, y) => Df, q(t, x, y) => CQ1])
         sg = solve(pg, FieldGroups(cdg(t, x, y) => BackwardEuler(), ug(t, x, y) => ExplicitEuler()); dt = 0.05)
         csys1 = PDESystem(
-            [D(cdg(t, x, y)) ~ 0.02 * Δ(cdg(t, x, y)) + 0.5 * (q(t, x, y) == 1)], [cdg(0, x, y) ~ x + y], cdom(),
+            [D(cdg(t, x, y)) ~ 0.02 * laplacian(cdg(t, x, y)) + 0.5 * (q(t, x, y) == 1)], [cdg(0, x, y) ~ x + y], cdom(),
             [t, x, y], [cdg(t, x, y), cdm(t, x, y), q(t, x, y)], Num[]; name = :d1
         )
         s1 = solve(cown(csys1, CDIMS; domain = cdm, ins = [cdm(t, x, y) => Df, q(t, x, y) => CQ1]), BackwardEuler(); dt = 0.05)
@@ -420,7 +420,7 @@ end
         q = first(@variables q(..)::Int32 [input = true])
         mk(c; n = (16, 16)) = cown(
             PDESystem(
-                [D(c(t, x, y)) ~ 0.01 * Δ(c(t, x, y)) - c(t, x, y) * ismember(q(t, x, y), (2,))],
+                [D(c(t, x, y)) ~ 0.01 * laplacian(c(t, x, y)) - c(t, x, y) * ismember(q(t, x, y), (2,))],
                 [c(0, x, y) ~ 1.0], cdom(), [t, x, y], [c(t, x, y), q(t, x, y)], Num[]; name = :r
             ), n;
             ins = [q(t, x, y) => zeros(Int32, n)]
@@ -440,11 +440,11 @@ end
         u = first(@variables uref(..))
         L = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables Lref(..))), LatticePDE.LatticeLevel, Coarse(4)))
         direct = PDESystem(
-            [D(cc(t, x, y)) ~ 0.01 * Δ(cc(t, x, y)), D(u(t, x, y)) ~ Δ(cc(t, x, y))],
+            [D(cc(t, x, y)) ~ 0.01 * laplacian(cc(t, x, y)), D(u(t, x, y)) ~ laplacian(cc(t, x, y))],
             [cc(0, x, y) ~ x^2, u(0, x, y) ~ 0.0], cdom(), [t, x, y], [cc(t, x, y), u(t, x, y)], Num[]; name = :b
         )
         good = PDESystem(
-            [D(cc(t, x, y)) ~ 0.01 * Δ(cc(t, x, y)), L(t, x, y) ~ Δ(cc(t, x, y)), D(u(t, x, y)) ~ L(t, x, y)],
+            [D(cc(t, x, y)) ~ 0.01 * laplacian(cc(t, x, y)), L(t, x, y) ~ laplacian(cc(t, x, y)), D(u(t, x, y)) ~ L(t, x, y)],
             [cc(0, x, y) ~ x^2, u(0, x, y) ~ 0.0], cdom(), [t, x, y], [cc(t, x, y), L(t, x, y), u(t, x, y)], Num[]; name = :g
         )
         sg = solve(cown(good, (16, 16)), ExplicitEuler(; substeps = 1); dt = 0.01, saveat = [0.01])
@@ -454,7 +454,7 @@ end
         # a mask on an aux field: refused (D-F4-15b Limits (4): an aux field follows its
         # expression), with the route (mask a rate field)
         am = PDESystem(
-            [D(cc(t, x, y)) ~ 0.01 * Δ(cc(t, x, y)), L(t, x, y) ~ Δ(cc(t, x, y))],
+            [D(cc(t, x, y)) ~ 0.01 * laplacian(cc(t, x, y)), L(t, x, y) ~ laplacian(cc(t, x, y))],
             [cc(0, x, y) ~ x^2, L(t, x, y) ~ masked(q(t, x, y) == 3, 1.0)], cdom(),
             [t, x, y], [cc(t, x, y), L(t, x, y), q(t, x, y)], Num[]; name = :am
         )

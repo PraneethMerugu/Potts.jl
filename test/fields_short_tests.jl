@@ -52,7 +52,7 @@ end
         a, l = cp_run(ma, ExplicitEuler()), cp_run(ml, ExplicitEuler())
         @test cp_same(a, l) && maximum(a.u[end].site.c) > 0.1
         # in a mixed vector with a numeric binding (the E1 situation): a test, not a constant
-        vol = Potts.at(Potts.B.volume, Potts.B.owner)
+        vol = Potts.value_at(Potts.B.volume, Potts.B.owner)
         mv = Potts.couple(host, CpPDE.sys(); inputs = [CpPDE.endo => Potts.is_kind(host, :A), CpPDE.vol => vol])
         @test count(==(1), Potts.field_inputs(PottsProblem(mv, cp_op(), (0, 1)))[:kind]) == 32   # (the kind numbers, F4-B6 review)
         # several kinds: a membership test, bitwise against `ismember`

@@ -44,7 +44,7 @@
 # amplification check, and (M), (K), (C) are checked on n.
 #
 # Testsets:
-#  1. Pure diffusion (`D(c) ~ Dc Δ(c)`, no reaction term), 1D/2D/3D periodic square lattices,
+#  1. Pure diffusion (`D(c) ~ Dc laplacian(c)`, no reaction term), 1D/2D/3D periodic square lattices,
 #     spacing h ∈ {1, 0.5}, dt ∈ {1, 0.5, 2} (mcs_duration), D over a grid that hits today's
 #     edge (dt·D·Σ2/h² whole) and points between: (M) and (C). Fails today at every edge
 #     point (ρ = 2).
@@ -83,7 +83,7 @@ function p60y_field_pde(dims, h, reaction)
     Potts.ModelingToolkitBase.@variables c(..) medium(..)::Bool [input = true]
     xs = (x, y, z)[1:length(dims)]
     C, M = c(t, xs...), medium(t, xs...)
-    rate = reaction === :uniform ? Dc * L.Δ(C) - k * C : reaction === :offcell ? Dc * L.Δ(C) - k * C * M : Dc * L.Δ(C)
+    rate = reaction === :uniform ? Dc * L.laplacian(C) - k * C : reaction === :offcell ? Dc * L.laplacian(C) - k * C * M : Dc * L.laplacian(C)
     return Potts.ModelingToolkitBase.PDESystem([Potts.D(C) ~ rate], [c(0, xs...) ~ 0.0],
         L.lattice_domain(t, xs, dims; spacing = h), [t, xs...], reaction === :offcell ? [C, M] : [C], [Dc, k];
         name = :p60y_field)

@@ -32,7 +32,7 @@ end
         @variables sc(..)
         sce = sc(t, x, y)
         sys = PDESystem(
-            [D(sce) ~ sD * Δ(sce) - sk * sce],
+            [D(sce) ~ sD * laplacian(sce) - sk * sce],
             [sc(0, x, y) ~ 1.0 + x * y, sc(t, 0, y) ~ 0.0, sc(t, 1, y) ~ 0.0, sc(t, x, 0) ~ 0.0, sc(t, x, 1) ~ 0.0],
             [t ∈ Interval(0.0, 0.4), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
             [t, x, y], [sce], [sD, sk]; name = :sciml_conf

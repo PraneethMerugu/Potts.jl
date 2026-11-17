@@ -20,14 +20,14 @@ backend: CairoMakie for files and notebooks, GLMakie for interactive windows.
 ```@example plotting
 using Potts, MakiePotts, CairoMakie
 using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
-using Potts.LatticePDE: Δ, lattice_domain
+using Potts.LatticePDE: laplacian, lattice_domain
 CairoMakie.activate!(type = "png") # hide
 
 t = Potts.t
 @parameters x y
 @variables c(..) = 0.0 isdark(..)::Bool [input = true]
 C = c(t, x, y)
-dye = PDESystem([Differential(t)(C) ~ 0.2 * Δ(C) + 0.05 * isdark(t, x, y) - 0.01 * C], [],
+dye = PDESystem([Differential(t)(C) ~ 0.2 * laplacian(C) + 0.05 * isdark(t, x, y) - 0.01 * C], [],
     lattice_domain(t, (x, y), (40, 40)), [t, x, y], [C, isdark(t, x, y)], []; name = :dye)
 
 @potts_model Mix begin

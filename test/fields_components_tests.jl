@@ -31,18 +31,18 @@ zz() = System([Dt(zq) ~ -zq], t; name = :zz)
 # `D(u) ~ Dd Δu − kd u` with the conditions `bcs` (review fixups: names, start values, ivs)
 const DOM = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 12.0), y ∈ Interval(0.0, 10.0)]
 plain(bcs; name = :drug, ivs = [t, x, y], ps = [Dd, kd], dom = DOM) =
-    PDESystem([Dt(u(t, x, y)) ~ Dd * Potts.LatticePDE.Δ(u(t, x, y)) - kd * u(t, x, y)], bcs, dom, ivs, [u(t, x, y)], ps; name)
+    PDESystem([Dt(u(t, x, y)) ~ Dd * Potts.LatticePDE.laplacian(u(t, x, y)) - kd * u(t, x, y)], bcs, dom, ivs, [u(t, x, y)], ps; name)
 const Dx = Differential(x)
 # `D(u) ~ Dd Δu − kd u + [kind = 1]`, `u = 1` on the low x face, zero flux on the others
 function drug(L; name = :drug, extra = Equation[], dvs = [u(t, x, y), kin(t, x, y)],
-        rhs = Dd * Potts.LatticePDE.Δ(u(t, x, y)) - kd * u(t, x, y) + ifelse(kin(t, x, y) == 1, 1.0, 0.0))
+        rhs = Dd * Potts.LatticePDE.laplacian(u(t, x, y)) - kd * u(t, x, y) + ifelse(kin(t, x, y) == 1, 1.0, 0.0))
     return PDESystem([Dt(u(t, x, y)) ~ rhs], [u(0, x, y) ~ 0.0; u(t, 0, y) ~ 1.0; extra],
         [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, L[1]), y ∈ Interval(0.0, L[2])], [t, x, y], dvs, [Dd, kd]; name)
 end
 # the references, coupled with `@fields` (F4-B4t): `drug` with the kind as the bound input `kA`
 @variables kA(..)::Bool [input = true]
 ref(L) = drug(L; name = :fields, dvs = [u(t, x, y), kA(t, x, y)],
-    rhs = Dd * Potts.LatticePDE.Δ(u(t, x, y)) - kd * u(t, x, y) + ifelse(kA(t, x, y), 1.0, 0.0))
+    rhs = Dd * Potts.LatticePDE.laplacian(u(t, x, y)) - kd * u(t, x, y) + ifelse(kA(t, x, y), 1.0, 0.0))
 # a host field `zz` with its own `kd`, and a host field `u`
 function hostk()
     @parameters kd = 0.9
@@ -236,7 +236,7 @@ end
         # an input with no `lattice_input_name` goes by its own name: `kind`
         T, X, Y, kd = FcPDE.t, FcPDE.x, FcPDE.y, FcPDE.kd
         pk = FcPDE.drug((12, 10); dvs = [FcPDE.u(T, X, Y), FcPDE.kind(T, X, Y)],
-            rhs = FcPDE.Dd * Potts.LatticePDE.Δ(FcPDE.u(T, X, Y)) - kd * FcPDE.u(T, X, Y) + ifelse(FcPDE.kind(T, X, Y) == 1, 1.0, 0.0))
+            rhs = FcPDE.Dd * Potts.LatticePDE.laplacian(FcPDE.u(T, X, Y)) - kd * FcPDE.u(T, X, Y) + ifelse(FcPDE.kind(T, X, Y) == 1, 1.0, 0.0))
         @test fc_run(compose(host, Potts.component(:drug, pk, host)), :drug₊u, 3) == fc_run(FcRef(; name = :m), :u, 3)
         # the PDESystem's name is the component's (as `Potts.wrap`)
         @test occursin("must agree", fc_msg(() -> Potts.component(:other, FcPDE.drug((12, 10)), host)))

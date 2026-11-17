@@ -145,9 +145,9 @@ function _init_defs(eq::Equation, defs)
 end
 _init_substitute(x, sub) = (u = _unwrap(x); u isa SymbolicUtils.BasicSymbolic ? Symbolics.substitute(u, sub; fold = Val(false)) : u)
 
-# a read of a kind table at the cell's own kind (`g[kind]`, lowered to `at(g, kind)`)
+# a read of a kind table at the cell's own kind (`g[kind]`, lowered to `value_at(g, kind)`)
 function _kind_read(y)
-    (iscall(y) && (operation(y) === at || operation(y) === at2)) || return false
+    (iscall(y) && operation(y) === value_at) || return false
     i = info(_unwrap(arguments(y)[1]))
     return i !== nothing && i.role === :kindtable
 end
@@ -202,7 +202,7 @@ function _check_init_reads(x, what)
             op isa Function || throw(ArgumentError(
                 "$what reads `$y`, which is not a cell or model variable of the model (a component's variables are " *
                 "initialized by the component); $(_INIT_LOCAL)"))
-            if op === at || op === at2
+            if op === value_at
                 v = info(_unwrap(arguments(y)[1]))
                 n = v === nothing ? string(arguments(y)[1]) : string(v.name)
                 throw(ArgumentError("$what reads `$n` of another cell (`$y`); $(_INIT_LOCAL). Cross-entity " *

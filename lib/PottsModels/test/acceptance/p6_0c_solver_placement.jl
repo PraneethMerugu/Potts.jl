@@ -54,7 +54,7 @@ function p60c_field_pde(dims = (20, 20); decay = true)
     Potts.ModelingToolkitBase.@parameters x y Dc = 0.05 δ = 0.1
     Potts.ModelingToolkitBase.@variables c(..)
     C = c(t, x, y)
-    rate, ps = decay ? (Dc * L.Δ(C) - δ * C, [Dc, δ]) : (0.1 * L.Δ(C), Any[])
+    rate, ps = decay ? (Dc * L.laplacian(C) - δ * C, [Dc, δ]) : (0.1 * L.laplacian(C), Any[])
     return Potts.ModelingToolkitBase.PDESystem([Potts.D(C) ~ rate], [c(0, x, y) ~ 0.0],
         L.lattice_domain(t, (x, y), dims), [t, x, y], [C], ps; name = :p60c_field)
 end

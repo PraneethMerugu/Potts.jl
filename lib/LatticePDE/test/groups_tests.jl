@@ -114,7 +114,7 @@ end
         @variables gw(..) gwk(..)::Int32 [input = true]
         we, wk = gw(t, x, y), gwk(t, x, y)
         sys = PDESystem(
-            [D(we) ~ Δ(we)], [gw(0, x, y) ~ 0.0, we ~ masked((t > 0.0015) & (wk == 0), 1.0)],
+            [D(we) ~ laplacian(we)], [gw(0, x, y) ~ 0.0, we ~ masked((t > 0.0015) & (wk == 0), 1.0)],
             [t ∈ Interval(0.0, 0.003), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [we, wk], Num[]; name = :w
         )
         K = ones(Int32, 4, 4)
@@ -153,11 +153,11 @@ end
         systems = [
             gsys(),                                                       # coupled, periodic
             PDESystem(
-                [D(gme) ~ at(Dg, gke) * Δ(gme) - 0.1gme], [gm(0, x, y) ~ x, gme ~ masked(gke == 2, 1.0)],
+                [D(gme) ~ value_at(Dg, gke) * laplacian(gme) - 0.1gme], [gm(0, x, y) ~ x, gme ~ masked(gke == 2, 1.0)],
                 dom, [t, x, y], [gme, gke], [Dg]; name = :m
             ),             # a masked condition, a site multiplier
             PDESystem(
-                [D(gme) ~ Δ(gme)], [gm(0, x, y) ~ x * y, gm(t, 0, y) + gr * Differential(x)(gm(t, 0, y)) ~ 1.0],
+                [D(gme) ~ laplacian(gme)], [gm(0, x, y) ~ x * y, gm(t, 0, y) + gr * Differential(x)(gm(t, 0, y)) ~ 1.0],
                 dom, [t, x, y], [gme], [gr]; name = :r
             ),                  # a Robin face
         ]
@@ -166,7 +166,7 @@ end
             LatticeDiscretization(Grid((8, 8)); T = Float64),
         ]
         # an irregular domain (`select(inside, …)` around the update)
-        push!(systems, PDESystem([D(gme) ~ Δ(gme) - gme], [gm(0, x, y) ~ x], dom, [t, x, y], [gme, gde], Num[]; name = :d))
+        push!(systems, PDESystem([D(gme) ~ laplacian(gme) - gme], [gm(0, x, y) ~ x], dom, [t, x, y], [gme, gde], Num[]; name = :d))
         push!(discs, LatticeDiscretization(Grid((8, 8)); T = Float64, domain = gd))
         for (sys, disc) in zip(systems, discs), lower in (nothing, 0.0), T in (Float64, Float32)
             rate = symbolic_discretize(sys, disc).program
@@ -193,7 +193,7 @@ end
         gqe = gq(t, x, y)
         n = 8
         sys = PDESystem(
-            [D(gqe) ~ Δ(gqe) - 3.0], [gq(0, x, y) ~ x * y, gq(t, 0, y) ~ gq(t, 1, y), gq(t, x, 0) ~ gq(t, x, 1)],
+            [D(gqe) ~ laplacian(gqe) - 3.0], [gq(0, x, y) ~ x * y, gq(t, 0, y) ~ gq(t, 1, y), gq(t, x, 0) ~ gq(t, x, 1)],
             [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [gqe], Num[]; name = :q
         )
         p = gown(sys; n)
@@ -245,7 +245,7 @@ end
     @testset "F3-22 review r1: lower_group's cut keeps the faces of a field an operator reads" begin
         ce, oe = gc(t, x, y), go(t, x, y)
         sys = PDESystem(
-            [D(ce) ~ 0.1 * Δ(ce) + 0.5 * Δ(oe) - ce, D(oe) ~ 0.2 * Δ(oe) - oe],
+            [D(ce) ~ 0.1 * laplacian(ce) + 0.5 * laplacian(oe) - ce, D(oe) ~ 0.2 * laplacian(oe) - oe],
             [gc(0, x, y) ~ 0.0, go(0, x, y) ~ x, go(t, 0, y) ~ 2.0, oe ~ masked(x < 0.3, 1.0)],
             [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [ce, oe], Num[]; name = :gcut
         )
@@ -262,7 +262,7 @@ end
         @test any(r -> r[1] == 1 && r[2] == -1 && r[5].value == 2.0, rules(cut, "go"))    # the Dirichlet face came along
         @test !any(k -> startswith(k.key, "mask:go"), cut.kernels)                       # its mask stays with its group
         # a field read pointwise only (`0.5 o`) keeps no face (the program as before)
-        pt = PDESystem([D(ce) ~ 0.1 * Δ(ce) + 0.5 * oe - ce, D(oe) ~ 0.2 * Δ(oe) - oe], sys.bcs, sys.domain, [t, x, y], [ce, oe], Num[]; name = :gpt)
+        pt = PDESystem([D(ce) ~ 0.1 * laplacian(ce) + 0.5 * oe - ce, D(oe) ~ 0.2 * laplacian(oe) - oe], sys.bcs, sys.domain, [t, x, y], [ce, oe], Num[]; name = :gpt)
         @test isempty(rules(LatticePDE.lower_group(pt, disc; fields = [ce]).rate, "go"))
     end
 end
@@ -280,7 +280,7 @@ end
         # inputs: element type, declared bounds; none filled in B, the keys a front end names filled
         gie, gke = gin(t, x, y), gki(t, x, y)
         isys = PDESystem(
-            [D(gce) ~ Δ(gce) + ga * gie + gb * gke], [gc(0, x, y) ~ 0.0, gc(t, 0, y) ~ gc(t, 1, y), gc(t, x, 0) ~ gc(t, x, 1)],
+            [D(gce) ~ laplacian(gce) + ga * gie + gb * gke], [gc(0, x, y) ~ 0.0, gc(t, 0, y) ~ gc(t, 1, y), gc(t, x, 0) ~ gc(t, x, 1)],
             [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [gce, gie, gke], [ga, gb]; name = :gi
         )
         ispec = LatticePDE.lower_group(isys, disc)
@@ -292,7 +292,7 @@ end
         @test [i.filled for i in fspec.inputs] == [i.key == ki.key for i in fspec.inputs]
         # a computed default: its role and expression; a table keeps its values
         csys = PDESystem(
-            [D(gce) ~ Δ(gce) - gk * gce + Dk[2] * gce], [gc(0, x, y) ~ 0.0, gc(t, 0, y) ~ gc(t, 1, y), gc(t, x, 0) ~ gc(t, x, 1)],
+            [D(gce) ~ laplacian(gce) - gk * gce + Dk[2] * gce], [gc(0, x, y) ~ 0.0, gc(t, 0, y) ~ gc(t, 1, y), gc(t, x, 0) ~ gc(t, x, 1)],
             [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [gce], [ga, gk, Dk]; name = :gk
         )
         cspec = LatticePDE.lower_group(csys, disc)
@@ -315,22 +315,22 @@ end
             Differential(x)(gsc(t, 0, y)) ~ 0.0, Differential(x)(gsc(t, 1, y)) ~ 0.0,
             Differential(y)(gsc(t, x, 0)) ~ 0.0, Differential(y)(gsc(t, x, 1)) ~ 0.0,
         ]
-        e = gerr(() -> gown(mk(Δ(Ke), nf); n = 4))
-        @test occursin("the rate of `gsc` reads the aux field `gsK` at a neighbor site across a closed face of axis 1 (`Δ(gsK)`)", e)
-        @test occursin("`Δ(K)` is `k * Δ(c)`", e) && !occursin("IRError", e) && !occursin("LatticePDE.", e)
+        e = gerr(() -> gown(mk(laplacian(Ke), nf); n = 4))
+        @test occursin("the rate of `gsc` reads the aux field `gsK` at a neighbor site across a closed face of axis 1 (`laplacian(gsK)`)", e)
+        @test occursin("`laplacian(K)` is `k * laplacian(c)`", e) && !occursin("IRError", e) && !occursin("LatticePDE.", e)
         # a face condition on the aux field names it
-        e = gerr(() -> gown(mk(0.5 * Δ(ce), [nf; Differential(x)(gsK(t, 0, y)) ~ 0.0]); n = 4))
+        e = gerr(() -> gown(mk(0.5 * laplacian(ce), [nf; Differential(x)(gsK(t, 0, y)) ~ 0.0]); n = 4))
         @test occursin("`gsK` is an aux field", e) && occursin("takes no face condition", e)
         # an aux field as a `DivKGrad` coefficient needs no value beyond the face: it builds (control)
         @test gown(mk(DivKGrad(:harmonic)(Ke, ce), nf); n = 4) isa LFP.FieldProblem
         # the route builds and runs
-        s = solve(gown(mk(0.5 * Δ(ce), nf); n = 4), ExplicitEuler(; substeps = 1); dt = 0.01)
+        s = solve(gown(mk(0.5 * laplacian(ce), nf); n = 4), ExplicitEuler(; substeps = 1); dt = 0.01)
         @test s.retcode == ReturnCode.Success
         @test s[Ke, end] ≈ 0.5 .* s[ce, end] rtol = 1.0e-14
-        # periodic: no face, so `Δ(K)` runs (with an explicit count) and equals the route
+        # periodic: no face, so `laplacian(K)` runs (with an explicit count) and equals the route
         per = [gsc(t, 0, y) ~ gsc(t, 1, y), gsc(t, x, 0) ~ gsc(t, x, 1)]
-        a = solve(gown(mk(Δ(Ke), per); n = 4), ExplicitEuler(; substeps = 1); dt = 0.01)
-        b = solve(gown(mk(0.5 * Δ(ce), per); n = 4), ExplicitEuler(; substeps = 1); dt = 0.01)
+        a = solve(gown(mk(laplacian(Ke), per); n = 4), ExplicitEuler(; substeps = 1); dt = 0.01)
+        b = solve(gown(mk(0.5 * laplacian(ce), per); n = 4), ExplicitEuler(; substeps = 1); dt = 0.01)
         @test a.retcode == ReturnCode.Success
         @test a[ce, end] ≈ b[ce, end] rtol = 1.0e-12
     end

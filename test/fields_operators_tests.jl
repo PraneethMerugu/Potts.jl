@@ -117,7 +117,7 @@ end
             end
         )
         # R3: a wrong-length velocity prints the vector and the operators as written (base:
-        # `SymbolicUtils.array_literal((1,), 0.3)`, `LatticePDE.Advect{…}`, `LatticePDE.Δ`)
+        # `SymbolicUtils.array_literal((1,), 0.3)`, `LatticePDE.Advect{…}`, `LatticePDE.laplacian`)
         err = something(fd_err(() -> mtkcompile(FpAdvectShort(; name = :f))), "")
         @test occursin("cannot lower `[0.3]`", err) && occursin("got 1", err) || (println("R3: ", err); false)
         @test !occursin("array_literal", err) && !occursin("LatticePDE.", err)
@@ -284,7 +284,7 @@ end
         ce = c(MTKB.t_nounits, x, y)
         dom = [MTKB.t_nounits ∈ LP.Interval(0.0, 1.0), x ∈ LP.Interval(0.0, 8.0), y ∈ LP.Interval(0.0, 8.0)]
         sys = MTKB.PDESystem(
-            [MTKB.D_nounits(ce) ~ Dc * LP.Δ(ce) - kw * ce^2], [c(0, x, y) ~ 0.0], dom, [MTKB.t_nounits, x, y],
+            [MTKB.D_nounits(ce) ~ Dc * LP.laplacian(ce) - kw * ce^2], [c(0, x, y) ~ 0.0], dom, [MTKB.t_nounits, x, y],
             [ce], [Dc, kw]; name = :w
         )
         bp = LP.discretize(sys, LP.LatticeDiscretization(LP.Grid((8, 8)); T = Float64))

@@ -20,7 +20,7 @@ Jacobian that the linear solve sees:
   coefficients `jac:<key>.w<a>`, the local Jacobian `jac:<key>.j`, the boundary diagonal of the
   face conditions `jac:<key>.d` (`K w d⁺` per boundary face, the Dirichlet `d = 2`), and with
   `scaled` the multiplier `jac:<key>.m`, with `domain` the domain indicator `jac:<key>.dom`;
-- `scaled`: a site multiplier `m Δ(c)` (`SiteDiffusion`): the row is scaled by `1/m` (faces
+- `scaled`: a site multiplier `m laplacian(c)` (`SiteDiffusion`): the row is scaled by `1/m` (faces
   stay symmetric), and a row with `m = 0` is solved on its own, `δ = G/(1/h − J_loc)` (the
   two-stage solve, M3);
 - `local_only`: the row has no diffusion: each site is solved on its own, `δ = G/(1/h − J_loc)`;
@@ -58,7 +58,7 @@ Jacobian that the linear solve sees:
 - `linear`: every term of the row is linear in the group's state (diffusion, linear local,
   advection, cross-linear terms and sources; F3-12d: a coupled solve's directional difference
   of the residual is then exact at any step, and one Newton step is the solve);
-- `crossfaces`: the row's cross diffusion terms `D Δ(o)` with a numeric coefficient, each the
+- `crossfaces`: the row's cross diffusion terms `D laplacian(o)` with a numeric coefficient, each the
   other field's key and its faces per axis `D/h_a²` as `Coef`s (the coupled steady system's
   modes, F3-12d);
 - `msign`: the row's diffusion multipliers that read the coordinates (F3-24), each

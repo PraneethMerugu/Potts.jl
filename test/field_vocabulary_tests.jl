@@ -24,8 +24,8 @@ end
 @testitem "F4-E4: using Potts.Fields" setup = [FieldVocabularySetup] tags = [:potts, :field_vocabulary] begin
     @testset "F4-E4: using Potts.Fields" begin
         ex = fv_exports()
-        @test issetequal(ex, [:PDESystem, :Differential, Symbol("@variables"), Symbol("@parameters"), :Interval, :Δ, :DivKGrad,
-            :Advect, :Upwind1, :at, :at2, :ismember, :masked, :step_index, :lattice_domain, :pdesystem, :t, :x, :y, :z])
+        @test issetequal(ex, [:PDESystem, :Differential, Symbol("@variables"), Symbol("@parameters"), :Interval, :laplacian, :Δ, :DivKGrad,
+            :Advect, :Upwind1, :value_at, :ismember, :masked, :step_index, :lattice_domain, :pdesystem, :t, :x, :y, :z])
         # no ambiguity with Potts, and with LatticePDE as well
         @test isempty(fv_ambiguous([:Potts], [:Potts, :Fields])) || (println(fv_ambiguous([:Potts], [:Potts, :Fields])); false)
         @test isempty(fv_ambiguous([:Potts], [:Potts, :Fields], [:Potts, :LatticePDE]))
@@ -35,7 +35,7 @@ end
         @test all(n -> getfield(Potts.Fields, n) === getfield(Potts.FIELD_NAMES, n), (:x, :y, :z))
         @test Potts.Fields.PDESystem === MB.PDESystem && Potts.Fields.Differential === MB.Differential
         @test all(n -> getfield(Potts.Fields, n) === getfield(LP, n),
-            (:Interval, :Δ, :DivKGrad, :Advect, :Upwind1, :at, :at2, :ismember, :masked, :step_index, :lattice_domain, :pdesystem))
+            (:Interval, :laplacian, :Δ, :DivKGrad, :Advect, :Upwind1, :value_at, :ismember, :masked, :step_index, :lattice_domain, :pdesystem))
         # the names clash check: a name another package exports is the same binding. ModelingToolkit
         # and OrdinaryDiffEq are not in this environment; a one-off check with both loaded found no
         # clash and no ambiguity (2026-11-10, ~/lpwork/f4E/e4-mtk.jl and e4-mtk.log)

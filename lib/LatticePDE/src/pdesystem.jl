@@ -22,7 +22,7 @@ independent variables, dependent variables and parameters worked out from them:
 ```julia
 @parameters x y Dc = 1.0 k = 0.1
 @variables c(..) = 0.0 src(..)::Bool [input = true]
-sys = pdesystem([Differential(t)(c(t, x, y)) ~ Dc * Δ(c(t, x, y)) + src(t, x, y) - k * c(t, x, y)]; name = :sys)
+sys = pdesystem([Differential(t)(c(t, x, y)) ~ Dc * laplacian(c(t, x, y)) + src(t, x, y) - k * c(t, x, y)]; name = :sys)
 # the same as PDESystem(eqs, [], [], [t, x, y], [c(t, x, y), src(t, x, y)], [Dc, k]; name = :sys)
 ```
 
@@ -31,9 +31,9 @@ sys = pdesystem([Differential(t)(c(t, x, y)) ~ Dc * Δ(c(t, x, y)) + src(t, x, y
 (`lattice_domain(t, (x, y), dims)`). Other keywords (`initial_conditions`, …) go to
 `PDESystem`.
 
-A variable that a front end tags with `potts_entity` metadata is refused when
-[`pdesystem_refusal`](@ref) gives a reason (a model's cell quantities, which a PDESystem
-cannot read).
+A variable is refused when [`pdesystem_refusal`](@ref) gives a reason for one of its metadata
+values (a front end's tag on quantities that a PDESystem cannot read, such as a model's cell
+quantities).
 """
 function pdesystem(eqs, bcs = Equation[]; name, domain = Any[], kwargs...)
     eqs isa AbstractVector || (eqs = [eqs])
@@ -45,8 +45,13 @@ function pdesystem(eqs, bcs = Equation[]; name, domain = Any[], kwargs...)
         u = unwrap(x)
         u isa SymbolicUtils.BasicSymbolic || return
         SymbolicUtils.isconst(u) && return
-        e = get_potts_entity(u)
-        e === nothing || (msg = pdesystem_refusal(e, u); msg === nothing || throw(ArgumentError("pdesystem: " * msg)))
+        meta = TermInterface.metadata(u)
+        if meta isa AbstractDict
+            for (_, value) in meta
+                msg = pdesystem_refusal(value, u)
+                msg === nothing || throw(ArgumentError("pdesystem: " * msg))
+            end
+        end
         if iscall(u)
             op = operation(u)
             if op isa SymbolicUtils.BasicSymbolic          # `c(t, x, y)`, `c(0, x, y)`
@@ -100,11 +105,11 @@ function pdesystem(eqs, bcs = Equation[]; name, domain = Any[], kwargs...)
 end
 
 """
-    pdesystem_refusal(entity, x) -> String or nothing
+    pdesystem_refusal(value, x) -> String or nothing
 
-Why [`pdesystem`](@ref) refuses the variable `x`, which carries the `potts_entity` metadata
-`entity`, or `nothing` (the default: accepted). A front end that tags its own quantities
-defines a method for its entity type, so that a quantity a PDESystem cannot read (a CPM's
-cell quantities) is named with the route.
+Why [`pdesystem`](@ref) refuses the variable `x`, which carries the metadata value `value`,
+or `nothing` (the default: accepted). A front end that tags its own quantities defines a
+method for the type of its tag, so that a quantity a PDESystem cannot read (a CPM's cell
+quantities) is named with the route.
 """
-pdesystem_refusal(entity, x) = nothing
+pdesystem_refusal(value, x) = nothing

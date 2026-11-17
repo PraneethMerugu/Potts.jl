@@ -21,7 +21,7 @@ using LatticeFields: LatticeFields
 using LatticeFields.Problems: ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, AbstractFieldAlgorithm,
                              substep_counts, steady_fields, field_series, field_report
 using LatticeFields.Solvers: DevicePCG, DeviceGMRES, Multigrid, VCycle
-using LatticePDE: LatticePDE, PottsEntity, Δ, at, at2, ismember, Coarse
+using LatticePDE: LatticePDE, laplacian, value_at, ismember, Coarse
 using LinearAlgebra: Symmetric, eigen, svdvals
 using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile, complete, compose, extend
 using PrecompileTools: PrecompileTools
@@ -110,6 +110,8 @@ public inner, fields, part, component, wrap, PottsPart, FieldBinding, resolve
 # a plain PDESystem as the model's fields, its inputs bound to CPM expressions (F4-B2); the
 # current values of those inputs, for SciML solvers of the PDESystem
 public couple, field_inputs, is_kind
+# the metadata key a model quantity carries (`[potts_entity = …]`) and its reader
+public PottsEntity, get_potts_entity
 # the model's cell and model ODEs as the MTK systems `mtkcompile` produced
 public ode_system
 # the model's cell and model initialization as MTK systems (`@initialization_equations`, D-170)

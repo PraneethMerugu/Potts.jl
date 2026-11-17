@@ -78,7 +78,7 @@ end
             fam_v => BackwardEuler(; linsolve = FAM_INNER)
         )
         sg = solve(discretize(fam_chain, fam_disc()), fg; dt = 0.05)
-    uonly = PDESystem([D(fam_u) ~ fDc * Δ(fam_u) - fk * fam_u], [fu(0, x, y) ~ x; fam_faces], fam_dom, [t, x, y],
+    uonly = PDESystem([D(fam_u) ~ fDc * laplacian(fam_u) - fk * fam_u], [fu(0, x, y) ~ x; fam_faces], fam_dom, [t, x, y],
         [fam_u], [fDc, fk]; name = :famu)
         su = solve(discretize(uonly, fam_disc()), ExplicitEuler(; substeps = 2); dt = 0.05)
     @test length(su.t) == length(sg.t) && su.t == sg.t
@@ -115,7 +115,7 @@ end
 # `Δu (Dc + 0.1 - 0.1 Dc Δ) = 0`, that is `Δu = 0`. So `u` is constant, `u = v`, and the face
 # `u(t, 0, y) = 1.0` fixes `u = v = 1`. The transient has no closed form, so the case is checked
 # where it has one: the same run continued must sit on that state. The bound is derived, not chosen.
-# A mode with `Δ` eigenvalue `-μ` decays at `-0.3μ` for small `μ`; the smallest nonzero `μ` of an 8²
+# A mode with `laplacian` eigenvalue `-μ` decays at `-0.3μ` for small `μ`; the smallest nonzero `μ` of an 8²
 # lattice is at least 0.03, so over t = 2000 every mode is damped by at least e^-18; the initial
 # profile lies in [0, 1], so its mode amplitudes are at most 1; and the inner solve runs at rtol 1e-12
 # (`FAM_INNER`), three orders below the deviation. The 1e-6 asserted is one order above the derived

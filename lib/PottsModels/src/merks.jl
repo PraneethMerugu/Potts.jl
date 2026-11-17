@@ -4,7 +4,7 @@
 # The parameters keep the names and defaults of the models.
 module MerksField
 using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters, t_nounits
-using Potts.LatticePDE: Δ, masked, step_index, lattice_domain
+using Potts.LatticePDE: laplacian, masked, step_index, lattice_domain
 const t = t_nounits                     # the time of every Potts model (`Potts.t`)
 const Dt = Differential(t)
 @parameters x y
@@ -14,7 +14,7 @@ const C = c(t, x, y)
 # `∂c/∂t = D Δc + α δ_cell − ε c (1 − δ_cell)` (2006 Eq. 6) with zero flux at the lattice faces
 function vasculogenesis(lattice)
     @parameters Dc = 0.75 σc = 5.4e-3 δc = 5.4e-3
-    eq = Dt(C) ~ Dc * Δ(C) + σc * cell(t, x, y) - δc * C * ecm(t, x, y)
+    eq = Dt(C) ~ Dc * laplacian(C) + σc * cell(t, x, y) - δc * C * ecm(t, x, y)
     return PDESystem([eq], [c(0, x, y) ~ 0.0], lattice_domain(t, (x, y), lattice), [t, x, y],
         [C, cell(t, x, y), ecm(t, x, y)], [Dc, σc, δc]; name = :merks_field)
 end
@@ -22,7 +22,7 @@ end
 # the same equation, held at `c = 0` on the border sites after every substep
 function merks2006(lattice)
     @parameters Dc = 0.75 α = 5.4e-3 ε = 5.4e-3
-    eq = Dt(C) ~ Dc * Δ(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)
+    eq = Dt(C) ~ Dc * laplacian(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)
     return PDESystem([eq], [c(0, x, y) ~ 0.0, C ~ masked(frame(t, x, y), 0.0)], lattice_domain(t, (x, y), lattice),
         [t, x, y], [C, cell(t, x, y), ecm(t, x, y), frame(t, x, y)], [Dc, α, ε]; name = :merks_field)
 end
@@ -30,7 +30,7 @@ end
 # 2008 Eq. 1: as `merks2006`, but off for the first `t_relax` MCS (`step_index(t)` is the MCS)
 function merks2008(lattice)
     @parameters Dc = 0.75 α = 0.03 ε = 0.03 t_relax = 100.0
-    rate = Dc * Δ(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)
+    rate = Dc * laplacian(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)
     eq = Dt(C) ~ ifelse(step_index(t) >= t_relax, rate, 0.0)
     return PDESystem([eq], [c(0, x, y) ~ 0.0, C ~ masked(frame(t, x, y), 0.0)], lattice_domain(t, (x, y), lattice),
         [t, x, y], [C, cell(t, x, y), ecm(t, x, y), frame(t, x, y)], [Dc, α, ε, t_relax]; name = :merks_field)
@@ -220,7 +220,7 @@ Kinds `medium`, `endothelial` and `border[frozen]`; start it with
   TST's threshold shift, D-140); `rule = :hard` vetoes those copies instead.
 - A frozen border (`Frame(:border)`, one site thick) with `J(c,B) = 100`, `J(M,B) = 0`
   (D-050 M4).
-- The field (Eq. 6, D-050 M5): `∂c/∂t = D Δc + α[endothelial] − ε c [medium]`, 5-point `Δ`,
+- The field (Eq. 6, D-050 M5): `∂c/∂t = D Δc + α[endothelial] − ε c [medium]`, 5-point `laplacian`,
   held at `c = 0` on the border after every substep (the masked condition
   `c ~ masked(frame, 0.0)`), stepped before the sweep of each MCS (`@schedule fields, sweep`).
   The field is a plain MTK `PDESystem`, coupled with `@fields`.
@@ -294,7 +294,7 @@ start it with [`merks2008_sprout`](@ref) (Figs. 4–11) or [`merks2008_denovo`](
   :extension_only` (Eq. 4) drops the term when the source is the medium (a retraction).
 - A frozen border (`Frame(:border; width = 2)`; the authors' 1-site frame on 200², whose
   20-site stencil reaches one site further, P6.3e) with `J(c,B) = 100`, `J(M,B) = 0`.
-- The field (Eq. 1): `∂c/∂t = D Δc + α[endothelial] − ε c [medium]`, 5-point `Δ`, `c = 0`
+- The field (Eq. 1): `∂c/∂t = D Δc + α[endothelial] − ε c [medium]`, 5-point `laplacian`, `c = 0`
   on the border after every substep, stepped before the sweep of each MCS. As in the
   released code the field is off for the first `t_relax` MCS (MCS 0 to `t_relax − 1`, the
   files' `relaxation`, D-050 M6), so chemotaxis starts after it.

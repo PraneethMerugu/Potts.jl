@@ -265,7 +265,7 @@ The raw parameters `p` with the problem's tables (`key => values`) and the curre
 values of the inputs the bound reads in an index (`key => array shaped by site`, or a
 number; [`bound_inputs`](@ref)), as the stability hooks receive them ([`with_tables`](@ref)):
 indexed like `p`, so a bound that reads only scalars needs no change; a front end's bound
-reads the table values from `tables` (a coefficient `Dk[i]` or `at(Dk, kind)`) and the index
+reads the table values from `tables` (a coefficient `Dk[i]` or `value_at(Dk, kind)`) and the index
 values from `inputs`. An input the front end fills on the device every step is not passed
 (its declared bounds hold).
 """

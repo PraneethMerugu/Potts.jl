@@ -183,7 +183,7 @@ function p60o_field_pde()
     Potts.ModelingToolkitBase.@parameters x y
     Potts.ModelingToolkitBase.@variables c(..) dark(..)::Bool [input = true]
     C = c(t, x, y)
-    return Potts.ModelingToolkitBase.PDESystem([Potts.D(C) ~ 0.1 * L.Δ(C) + 0.02 * dark(t, x, y) - 0.01 * C],
+    return Potts.ModelingToolkitBase.PDESystem([Potts.D(C) ~ 0.1 * L.laplacian(C) + 0.02 * dark(t, x, y) - 0.01 * C],
         [c(0, x, y) ~ 0.0], L.lattice_domain(t, (x, y), (16, 16)), [t, x, y], [C, dark(t, x, y)], Any[]; name = :p60o_field)
 end
 @potts_model P60oField begin

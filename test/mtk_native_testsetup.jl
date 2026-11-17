@@ -91,8 +91,8 @@ module MnPDE
     using ..FieldPDE
     @variables c(..) e(..)::Bool [input = true]
     const C, E = c(t, x, y), e(t, x, y)
-    reaction(k) = pdesys([Dt(C) ~ 0.1 * Δ(C) - k * C * E], [c(0, x, y) ~ 0.0], (12, 12), [C, E])
-    diffusion() = pdesys([Dt(C) ~ 0.1 * E * Δ(C)], [c(0, x, y) ~ 0.0], (12, 12), [C, E])
+    reaction(k) = pdesys([Dt(C) ~ 0.1 * laplacian(C) - k * C * E], [c(0, x, y) ~ 0.0], (12, 12), [C, E])
+    diffusion() = pdesys([Dt(C) ~ 0.1 * E * laplacian(C)], [c(0, x, y) ~ 0.0], (12, 12), [C, E])
 end
 
 

@@ -52,7 +52,7 @@ nothing #hide
 # # and `frame` are bound to kind tests where the model couples it with `@fields`
 # function merks2006(lattice)
 #     @parameters Dc = 0.75 α = 5.4e-3 ε = 5.4e-3  # diffusion, secretion, decay
-#     eq = Dt(C) ~ Dc * Δ(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)  # Eq. 6
+#     eq = Dt(C) ~ Dc * laplacian(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)  # Eq. 6
 #     return PDESystem([eq], [c(0, x, y) ~ 0.0, C ~ masked(frame(t, x, y), 0.0)],  # absorbing ring, as in the authors' code
 #         lattice_domain(t, (x, y), lattice), [t, x, y], [C, cell(t, x, y), ecm(t, x, y), frame(t, x, y)], [Dc, α, ε];
 #         name = :merks_field)
@@ -565,7 +565,7 @@ $(join([full_deviation_rows; b01_deviation_rows], "\n"))
 # | extension-only chemotaxis (01b Eq. 4) | — | `mode = :extension_only` |
 # | connectivity penalty E₀ on ring-breaking copies of the losing cell (01a p.49; ca.cpp:442-448, :1166-1226) | `@drive copy => E₀ * <TST ring test>`, E₀ = 5000; `rule = :hard` vetoes instead | — (`conn_diss = 0`) |
 # | frozen border B, J(c,B) = 100 (01a p.48; 01b p.11), J(M,B) = 0 (ca.cpp:236-238) | `border[frozen]`, 1-site `Frame` | 2-site `Frame` on 202² (TST's stencil reaches the off-lattice ring) |
-# | ∂c/∂t = α[cell] − ε c[ECM] + D∇²c (01b Eq. 1; 01a Eq. 6 as prose, A-4) | `Dt(C) ~ Dc * Δ(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)`, `cell => kind == endothelial`, `ecm => kind == medium` | the same, off for the first `t_relax` MCS |
+# | ∂c/∂t = α[cell] − ε c[ECM] + D∇²c (01b Eq. 1; 01a Eq. 6 as prose, A-4) | `Dt(C) ~ Dc * laplacian(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)`, `cell => kind == endothelial`, `ecm => kind == medium` | the same, off for the first `t_relax` MCS |
 # | absorbing c = 0 ring, c₀ = 0 (pde.cpp:104-106, :189-194) | `C ~ masked(frame(t, x, y), 0.0)`, `frame => kind == border` | same |
 # | 15 diffusion steps of Δt = 2 s per MCS, before the CPM sweep (01a p.49; vessel.cpp:86-94) | `@schedule fields, sweep` and `field_solver = ExplicitEuler(substeps = 15)` | same |
 # | relaxation: 100 MCS without the field (Dataset S1 `relaxation = 100`; not in the paper) | — | `t_relax = 100` |

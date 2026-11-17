@@ -436,7 +436,7 @@ function _bare_cell_reads(e)
         end
         iscall(x) || return
         a = arguments(x)
-        if operation(x) === at && length(a) == 2
+        if operation(x) === value_at && length(a) == 2
             walk(a[2])                       # `volume[owner]`: the property read at a cell
         else
             foreach(walk, a)

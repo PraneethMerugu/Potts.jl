@@ -6,7 +6,7 @@ module CsPDE
 using ..FieldPDE
 @variables c(..) src(..)::Bool [input = true]
 const C = c(t, x, y)
-threshold() = pdesys([Dt(C) ~ 0.2 * Δ(C) + 0.05 * src(t, x, y) - 0.02 * C], [c(0, x, y) ~ 0.0], (200, 200), [C, src(t, x, y)])
+threshold() = pdesys([Dt(C) ~ 0.2 * laplacian(C) + 0.05 * src(t, x, y) - 0.02 * C], [c(0, x, y) ~ 0.0], (200, 200), [C, src(t, x, y)])
 end
 
 # Merks-like: cells secrete `c`, chemotaxis up its gradient, and the target volume moves when

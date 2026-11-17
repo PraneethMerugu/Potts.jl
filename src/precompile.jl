@@ -20,7 +20,7 @@ function _precompile_fields(N::Int)
     D_c = only(ModelingToolkitBase.@parameters D_c = 0.1)
     c, src = ModelingToolkitBase.@variables c(..) = 0.0 src(..)::Bool [input = true]
     C = c(t, xs...)
-    return LatticePDE.pdesystem([Differential(t)(C) ~ D_c * Δ(C) + src(t, xs...) - C]; name = :precompile_fields)
+    return LatticePDE.pdesystem([Differential(t)(C) ~ D_c * laplacian(C) + src(t, xs...) - C]; name = :precompile_fields)
 end
 @potts_model _PrecompileModel begin
     @structural_parameters begin
