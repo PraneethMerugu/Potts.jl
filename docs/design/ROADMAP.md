@@ -851,6 +851,10 @@ Goal (maintainer, 2026-11-11 and 2026-11-12): a fast test harness at SciML quali
 
 ## Next phase
 
+- [ ] **Asynchronous frame writer** (user, 2026-11-17; starts after the conformance batches) A callback for `PottsProblem` that writes state frames to disk while the run continues: an asynchronous device-to-host copy into two reused pinned host buffers, a writer task (`Threads.@spawn`) appending frames to a file (JLD2, HDF5 or Zarr; choose by measurement), and `save_positions = (false, false)`. It is an ordinary callback in the DiffEqCallbacks pattern (`FunctionCallingCallback`, `SavingCallback`), used with `save_everystep = false` or `saveat`; users can swap in their own writer. A lazy reader indexes and plots the written frames like a solution. R6 (D-287) stays: the default saves every MCS, as in SciML.
+  - Why: on ROCm, saving every MCS in memory costs 3.0× at 1008² (2.13 against 0.721 ms/MCS) and 3.6× at 2016² (6.62 against 1.815), and holds every state on the host (221 states of 2016², 3.5 GiB). Script and log: `~/lpwork/conf-b3/defsave/` on the PC.
+  - Accept: at 1008² and 2016² on ROCm, writing every 10 MCS costs at most 10% over `save_everystep = false`, and memory stays flat over the run. Also report the cost of writing every MCS. Read-back frames equal the in-memory saves.
+
 - [ ] **C11** (approved 2026-11-16, D-286; starts after F5 and C10) Move the paper models onto LatticePDE. Port each published model to native LatticePDE use: `PDESystem` fields and the solver its paper states. One model per commit, each with fidelity tests.
   - Accept: Fortuna 3D matches or beats 14 ms/step.
 - [ ] **Device libraries 7.0 put doubles in Potts kernels.** A fresh resolve (ROCmDeviceLibs_jll 6.2.1 to 7.0.2) adds `fpext float to double` and `llvm.frexp.f64` to 12 Potts LatticeFields kernels, and the device IR scan fails (`test/shared/device_ir_scan.jl`). CI's locked Manifest (D-272) is clean, so the next dependency update hits it. Find the Float32 call that now lowers through `frexp` and give it a Float32-only form.
