@@ -14,7 +14,7 @@ end
 # a device backend is loaded (here)
 @testitem "P6.0v: the frozen acceptance file on the device" setup = [GpuSetup] tags = [:potts, :gpu, :device] begin
     module P60vOnDevice
-    using Test, Potts, PottsModels
+    using Test, Potts, PottsModels, Potts.Layouts
     include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0v_transfer_counters.jl"))
     end
 end
@@ -22,7 +22,7 @@ end
 # P6.0v2: the frozen column-copy acceptance file (device testsets run only here)
 @testitem "P6.0v2: the frozen acceptance file on the device" setup = [GpuSetup] tags = [:potts, :gpu, :device] begin
     module P60v2OnDevice
-    using Test, Potts, PottsModels
+    using Test, Potts, PottsModels, Potts.Layouts
     include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0v2_column_copies.jl"))
     end
 end
@@ -30,7 +30,7 @@ end
 # P6.0v2b: the frozen custom-rule refresh acceptance file (device testsets run only here)
 @testitem "P6.0v2b: the frozen acceptance file on the device" setup = [GpuSetup] tags = [:potts, :gpu, :device] begin
     module P60v2bOnDevice
-    using Test, Potts, PottsModels
+    using Test, Potts, PottsModels, Potts.Layouts
     include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0v2b_frozen_refresh_bytes.jl"))
     end
 end
@@ -40,7 +40,7 @@ end
 # count; `transfer_counts.jl` below re-wraps it for its own.
 @testitem "P6.0v1: the frozen acceptance file on the device" setup = [GpuSetup] tags = [:potts, :gpu, :device] begin
     module P60v1OnDevice
-    using Test, Potts, PottsModels
+    using Test, Potts, PottsModels, Potts.Layouts
     include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0v1_device_lifecycle.jl"))
     end
 end
@@ -50,7 +50,7 @@ end
 # `Metal.wait_cmdbuf!` for its own wait count, and `transfer_counts.jl` below re-wraps it.
 @testitem "P6.0v3: the frozen acceptance file on the device" setup = [GpuSetup] tags = [:potts, :gpu, :device] begin
     module P60v3OnDevice
-    using Test, Potts, PottsModels
+    using Test, Potts, PottsModels, Potts.Layouts
     include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0v3_launch_fusion.jl"))
     end
 end
@@ -60,7 +60,7 @@ end
 # the read-point timing) run only where a device backend is loaded (here)
 @testitem "P6.0bw: the frozen acceptance file on the device" setup = [GpuSetup] tags = [:potts, :gpu, :device] begin
     module P60bwOnDevice
-    using Test, Potts, PottsModels
+    using Test, Potts, PottsModels, Potts.Layouts
     include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0bw_rocm_wait.jl"))
     end
 end
@@ -68,7 +68,7 @@ end
 # run only where a device backend is loaded (here).
 @testitem "P6.0ag: the frozen acceptance file on the device" setup = [GpuSetup] tags = [:potts, :gpu, :device] begin
     module P60agOnDevice
-    using Test, Potts, PottsModels
+    using Test, Potts, PottsModels, Potts.Layouts
     include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0ag_ode_expand_all.jl"))
     end
 end
@@ -76,7 +76,7 @@ end
 # P6.0af: the staged-form handover after the fused `before` ran (D-108); device testsets here
 @testitem "P6.0af: the frozen acceptance file on the device" setup = [GpuSetup] tags = [:potts, :gpu, :device] begin
     module P60afOnDevice
-    using Test, Potts, PottsModels
+    using Test, Potts, PottsModels, Potts.Layouts
     include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0af_lifecycle_followups.jl"))
     end
 end
@@ -85,7 +85,7 @@ end
 # the acceptance file's device testsets run only where a device backend is loaded (here)
 @testitem "P6.0q: the frozen acceptance file on the device" setup = [GpuSetup] tags = [:potts, :gpu, :device] begin
     module P60qOnDevice
-    using Test, Potts, PottsModels
+    using Test, Potts, PottsModels, Potts.Layouts
     include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0q_time_fold_metal.jl"))
     end
 end
@@ -94,7 +94,7 @@ end
 # the device and match the CPU run in Float32 (D-135)
 @testitem "P6.0g: the frozen acceptance file on the device" setup = [GpuSetup] tags = [:potts, :gpu, :device] begin
     module P60gOnDevice
-    using Test, Potts, PottsModels
+    using Test, Potts, PottsModels, Potts.Layouts
     const SingleDivisionFixture = parentmodule(@__MODULE__).SingleDivisionFixture  # test-only model (D-254); p6_0g uses it by name
     include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0g_kind_classes.jl"))
     end
@@ -104,7 +104,7 @@ end
 # Float32, no per-MCS sync) runs only where a device backend is loaded (here)
 @testitem "P6.3a: the frozen acceptance file on the device" setup = [GpuSetup] tags = [:potts, :gpu, :device] begin
     module P63aOnDevice
-    using Test, Potts, PottsModels
+    using Test, Potts, PottsModels, Potts.Layouts
     include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_3a_topology_track.jl"))
     end
 end
@@ -114,7 +114,7 @@ end
 # a device backend is loaded (here)
 @testitem "P6.15c: the frozen acceptance file on the device" setup = [GpuSetup] tags = [:potts, :gpu, :device] begin
     module P615cOnDevice
-    using Test, Potts, PottsModels
+    using Test, Potts, PottsModels, Potts.Layouts
     include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_15c_openvt_table_s1.jl"))
     end
 end
@@ -124,21 +124,21 @@ end
 # GPU group before D-157; they run only where a device backend is loaded (here)
 @testitem "P6.0n: the frozen acceptance file on the device" setup = [GpuSetup] tags = [:potts, :gpu, :device] begin
     module P60nOnDevice
-    using Test, Potts, PottsModels
+    using Test, Potts, PottsModels, Potts.Layouts
     include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0n_cell_ode_jacobi.jl"))
     end
 end
 
 @testitem "P6.0r: the frozen acceptance file on the device" setup = [GpuSetup] tags = [:potts, :gpu, :device] begin
     module P60rOnDevice
-    using Test, Potts, PottsModels
+    using Test, Potts, PottsModels, Potts.Layouts
     include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0r_killing_copy_energy.jl"))
     end
 end
 
 @testitem "P6.3b: the frozen acceptance file on the device" setup = [GpuSetup] tags = [:potts, :gpu, :device] begin
     module P63bOnDevice
-    using Test, Potts, PottsModels
+    using Test, Potts, PottsModels, Potts.Layouts
     include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_3b_boundary_schedule.jl"))
     end
 end
