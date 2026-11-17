@@ -65,7 +65,7 @@ end
 iscontrol(sig) = occursin("DeviceIRScan.gpu_scan_", sig) || occursin(r"DeviceIR(?:#\d+\")?\.gpu_devir_", sig)
 
 # The D-157 carve-out (F3 design §3.8, R-F3c): kernels whose Float64 a user declared (a group's
-# `compute_T` or `solver_T`, a field's `lattice_storage` of Float64) are registered in
+# `compute_type` or `solver_type`, a field's `lattice_storage` of Float64) are registered in
 # LatticeFields' Exec registry, and the scan skips exactly those
 function _exec()
     k = findfirst(id -> id.name == "LatticeFields", collect(keys(Base.loaded_modules)))

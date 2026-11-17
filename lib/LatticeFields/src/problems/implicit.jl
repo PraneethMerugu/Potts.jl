@@ -687,11 +687,11 @@ function bind_cache(
             continue
         end
         inner = _row_inner(alg, coupled)
-        solver_T = alg.solver_type === :auto ? T : alg.solver_type
+        solver_type = alg.solver_type === :auto ? T : alg.solver_type
         if !r.field
             numeric, _ = _numeric_operator(s, r, id, p, hγ, 1.0, mask !== nothing; coupled)
             ins = mask === nothing ? ("in.f" => resarr,) : ("in.f" => resarr, "mask" => mask)
-            sv = Solvers.FieldSolver(backend, numeric; inner, T, solver_T, inputs = ins)
+            sv = Solvers.FieldSolver(backend, numeric; linsolve = inner, T, solver_type, inputs = ins)
             smask, v, f, sh, jj, mm, dd, dm = nothing, nothing, nothing, numeric.shift, nothing, nothing, nothing, nothing
         else
             numeric = nothing
@@ -712,7 +712,7 @@ function bind_cache(
             end
             usemask && push!(ins, "mask" => smask)
             r.scaled && push!(ins, "v" => v)
-            sv = Solvers.FieldSolver(backend, cop; inner, T, solver_T, inputs = Tuple(ins))
+            sv = Solvers.FieldSolver(backend, cop; linsolve = inner, T, solver_type, inputs = Tuple(ins))
         end
         xid = Solvers.fid(sv, Solvers.solution_key(sv))
         xb = sv.bufs[xid]

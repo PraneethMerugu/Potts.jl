@@ -288,9 +288,9 @@ end
 # in words); `compute_T` compiles a group's kernels in a wider type than its storage; Duals
 # keep their partials through a declared storage. Base f5641ce1: `compute_T` is no keyword, a
 # declared Float64 storage holds the problem's Float32, so every test fails or errors.
-@testitem "F3-14: lattice_storage, compute_T and solver_T in B (FE-17)" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+@testitem "F3-14: lattice_storage, compute_type and solver_type in B (FE-17)" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
     using .LP_numbers: fd
-    @testset "F3-14: lattice_storage, compute_T and solver_T in B (FE-17)" begin
+    @testset "F3-14: lattice_storage, compute_type and solver_type in B (FE-17)" begin
         @parameters kw = 0.25
         @variables wu(..) wK(..) [lattice_storage = Float64] wh(..) [lattice_storage = Float16] wc(..) [lattice_storage = Float64]
         wue, wKe, whe, wce = wu(t, x, y), wK(t, x, y), wh(t, x, y), wc(t, x, y)
@@ -374,7 +374,7 @@ end
             @test all(iszero, lo) && eltype(hi) == Float32                 # the storage stays T
             @test all(>(0), ref) && maximum(abs, Float64.(hi) .- ref) <= 1.0e-7 * maximum(ref)
         end
-        # solver_T: the solver's own type, whatever compute_T
+        # solver_type: the solver's own type, whatever compute_type
         ig = init(wd(Float32), BackwardEuler(; solver_type = Float64); dt = 0.05)
         @test only(only(ig.runtimes).cache.rows).solver.T == Float64
         # Duals flow through a declared storage: an aux field stored in Float32 on a Float64

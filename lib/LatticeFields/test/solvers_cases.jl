@@ -55,9 +55,9 @@ end
 """
 A solver for a case with its inputs copied in.
 """
-function case_solver(case, T; inner = :auto, rule = RuleWeights(), kw...)
+function case_solver(case, T; linsolve = :auto, rule = RuleWeights(), kw...)
     op, inputs = case
-    sv = FieldSolver(HostExec(), op; T, inner, rule, kw...)
+    sv = FieldSolver(HostExec(), op; T, linsolve, rule, kw...)
     for (k, v) in inputs
         copyto!(field(sv, k), v)
     end
@@ -103,8 +103,8 @@ Iterations of PCG and stationary V(2,2) from zero (host-checked, at most `maxite
 undeflated by default, as in the reference implementation.
 """
 function counts(case, T; maxiter = 40, deflate = false)
-    (steady!(case_solver(case, T; inner = DevicePCG(), deflate); maxiter),
-        steady!(case_solver(case, T; inner = Multigrid()); maxiter))
+    (steady!(case_solver(case, T; linsolve = DevicePCG(), deflate); maxiter),
+        steady!(case_solver(case, T; linsolve = Multigrid()); maxiter))
 end
 
 """
@@ -117,14 +117,14 @@ function cycle_factor(case; rule = RuleWeights(), cycle = VCycle(2, 2), T = Floa
         op0.dims; periodic = op0.periodic, face = op0.face, shift = op0.shift,
         mask = op0.mask, value = 0.0,
         dirichlet = map(d -> map(g -> g === nothing ? nothing : 0.0, d), op0.dirichlet))
-    sv = case_solver((op, inputs), T; inner = Multigrid(; cycle), rule)
+    sv = case_solver((op, inputs), T; linsolve = Multigrid(; cycle), rule)
     rebuild!(sv)
     lift!(sv)
     act = field(sv, lkey(0, "active")) .!= 0
     copyto!(field(sv, lkey(0, "x")), T.(rand(Xoshiro(3), length(act)) .- 0.5) .* act)
     rs = Float64[]
     for _ in 1:30
-        solve!(sv; host = true, budget = 1)
+        solve!(sv; host = true, maxiters = 1)
         push!(rs, scalars(sv).rnorm)
     end
     return (rs[30] / rs[5])^(1 / 25)

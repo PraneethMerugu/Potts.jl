@@ -1,6 +1,6 @@
 # Constant-mode deflation on unanchored groups (provisional D-C7b) and the stop statuses: the
 # mean coefficient, the zero-mean solve, the warm start, s = 0, the Float32 floor and the
-# Float64 solver of unanchored weak-reaction groups (`solver_T`), a slow solve that is not a
+# Float64 solver of unanchored weak-reaction groups (`solver_type`), a slow solve that is not a
 # floor, and
 # divergence (stationary only).
 
@@ -66,8 +66,8 @@ end
 include("../shared/export_all.jl")
 end
 
-@testitem "inner = :auto: PCG with deflation on unanchored groups" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
-@testset "inner = :auto: PCG with deflation on unanchored groups" begin
+@testitem "linsolve = :auto: PCG with deflation on unanchored groups" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
+@testset "linsolve = :auto: PCG with deflation on unanchored groups" begin
     per, disk = periodic_case(64, 64; s = 1e-3), named_case("disk128", 0.022)
     @test resolve_inner(per[1], :auto) isa DevicePCG && deflatable(per[1])
     @test !deflatable(disk[1]) && !deflatable(named_case("box128", 5.5e-6)[1])
@@ -97,8 +97,8 @@ end
 end
 end
 
-@testitem "solver_T = :auto: Float64 solver for unanchored weak-reaction groups" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
-@testset "solver_T = :auto: Float64 solver for unanchored weak-reaction groups" begin
+@testitem "solver_type = :auto: Float64 solver for unanchored weak-reaction groups" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
+@testset "solver_type = :auto: Float64 solver for unanchored weak-reaction groups" begin
     # Float32 state; the solver runs in Float64 and reaches 1e-6 at weak reaction; the
     # caller-facing arrays stay Float32 (converted at the boundary)
     for case in (named_case("per256", 5.5e-6), named_case("per300", 5.5e-6),
@@ -116,7 +116,7 @@ end
         @test !sentinel(sv)
     end
     # negative control: the Neumann-x group with a Float32 solver floors (measured 1.1e-4)
-    sv = case_solver(neumann_x_case(), Float32; solver_T = Float32)
+    sv = case_solver(neumann_x_case(), Float32; solver_type = Float32)
     steady!(sv)
     @test sv.T == Float32 && scalars(sv).status === :floor
     # strong reaction (s ≥ FLOOR_SHIFT) and anchored groups stay in the state type
@@ -126,16 +126,16 @@ end
     @test case_solver(named_case("box128", 5.5e-6), Float32).T == Float32
     # explicit types: Float32 keeps (the floor testset below); Float64 forces, the solution
     # stays in the state type (`out.u`)
-    @test case_solver(named_case("per128", 0.022), Float32; solver_T = Float32).T == Float32
-    sv = case_solver(named_case("disk128", 0.022), Float32; solver_T = Float64)
+    @test case_solver(named_case("per128", 0.022), Float32; solver_type = Float32).T == Float32
+    sv = case_solver(named_case("disk128", 0.022), Float32; solver_type = Float64)
     steady!(sv)
     @test sv.T == Float64 && solution_key(sv) == "out.u" && scalars(sv).done
     @test field(sv, "out.u") == Float32.(solver_solution(sv))
 end
 end
 
-@testitem "solver_T: backends and number types" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
-@testset "solver_T: backends and number types" begin
+@testitem "solver_type: backends and number types" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
+@testset "solver_type: backends and number types" begin
     op, inputs = named_case("per256", 5.5e-6)
     # a backend without Float64 (Metal): documented Float32 fallback under :auto
     sv = FieldSolver(HostExec(false), op)
@@ -144,17 +144,17 @@ end
     @test sv.T == Float32 && scalars(sv).status === :floor
     @test (@test_logs (:warn, r"Float32 floor of an unanchored group") sentinel(sv))
     # explicit Float64 there is refused, naming the type
-    @test_throws r"Float64 \(solver_T\) is not supported" FieldSolver(HostExec(false), op;
-        solver_T = Float64)
+    @test_throws r"Float64 \(solver_type\) is not supported" FieldSolver(HostExec(false), op;
+        solver_type = Float64)
     @test_throws r"Float64 \(state\) is not supported" FieldSolver(HostExec(false), op;
         T = Float64)
     # types the solver does not lower: a clear error, not a MethodError
-    @test_throws r"BigFloat \(solver_T\) is not lowered" FieldSolver(HostExec(), op;
-        solver_T = BigFloat)
+    @test_throws r"BigFloat \(solver_type\) is not lowered" FieldSolver(HostExec(), op;
+        solver_type = BigFloat)
     @test_throws r"Float16 \(state\) is not lowered" FieldSolver(HostExec(), op;
         T = Float16)
-    @test_throws r"solver_T expects :auto or a number type; got :fast" FieldSolver(
-        HostExec(), op; solver_T = :fast)
+    @test_throws r"solver_type expects :auto or a number type; got :fast" FieldSolver(
+        HostExec(), op; solver_type = :fast)
     # an executor without `supports` methods: the conservative default (Float32 only),
     # asked only when the choice depends on it
     disk = named_case("disk128", 0.022)
@@ -162,7 +162,7 @@ end
     foreach(((k, v),) -> copyto!(field(sv, k), v), disk[2])
     @test steady!(sv) <= 12 && scalars(sv).done && sv.T == Float32
     @test FieldSolver(MinExec(), op).T == Float32           # :auto falls back
-    @test_throws r"not supported" FieldSolver(MinExec(), op; solver_T = Float64)
+    @test_throws r"not supported" FieldSolver(MinExec(), op; solver_type = Float64)
 end
 end
 
@@ -184,24 +184,24 @@ end
 
 @testitem "warm re-solve keeps the zero-mean part (Float32)" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
 @testset "warm re-solve keeps the zero-mean part (Float32)" begin
-    sv = case_solver(named_case("per300", 1.0), Float32; solver_T = Float32)
+    sv = case_solver(named_case("per300", 1.0), Float32; solver_type = Float32)
     @test steady!(sv) <= 12 && scalars(sv).done
     @test solve!(sv; host = true) == 0 && scalars(sv).done     # converged warm start
     @test abs(sum(field(sv, "pcg.x"))) / length(field(sv, "pcg.x")) < 1e-3
 end
 end
 
-@testitem "Float32 floor: status :floor, never :done (solver_T = Float32)" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
-@testset "Float32 floor: status :floor, never :done (solver_T = Float32)" begin
+@testitem "Float32 floor: status :floor, never :done (solver_type = Float32)" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
+@testset "Float32 floor: status :floor, never :done (solver_type = Float32)" begin
     case = named_case("per256", 5.5e-6)                # ‖x̃‖∞ ≈ 1e3: floor ≈ ε‖A‖‖x̃‖/‖b‖
-    sv = case_solver(case, Float32; solver_T = Float32)
+    sv = case_solver(case, Float32; solver_type = Float32)
     steady!(sv)
     sc = scalars(sv)
     @test sc.status === :floor && !sc.done && sc.warn
     @test sc.best / sc.bnorm < 3e-4                    # measured 1.0e-4
     @test sc.best <= Solvers.FLOOR_ULPS * eps(Float32) * sc.scale   # measured 0.11 ε·scale
     @test (@test_logs (:warn, r"stagnated") sentinel(sv))
-    ref = case_solver(case, Float32; deflate = false, solver_T = Float32)   # no deflation
+    ref = case_solver(case, Float32; deflate = false, solver_type = Float32)   # no deflation
     steady!(ref)
     @test scalars(ref).status === :floor
     @test maximum(abs, true_residual(ref)) / scalars(ref).bnorm > 1e-2   # offset in F32
@@ -226,7 +226,7 @@ end
 @testset "divergence is reported as :diverged, transient growth is not" begin
     # stationary V(1,1) on the 512² disk diverges (‖r‖/‖b‖ 0.46 → 0.93 by cycle 10)
     sv = case_solver(named_case("disk512", 5.5e-6), Float64;
-            inner = Multigrid(cycle = VCycle(1, 1))
+            linsolve = Multigrid(cycle = VCycle(1, 1))
         )
     k = steady!(sv; maxiter = 30)
     sc = scalars(sv)
@@ -235,7 +235,7 @@ end
     @test (@test_logs (:warn, r"diverged") sentinel(sv))
     # negative control: V(2,2) on the jumpy field grows 27 → 41 over ten cycles, then falls;
     # the growth counter reaches 3 (rn stays below 2·best), the solve runs to its budget
-    sv = case_solver(jumpy_case(), Float64; inner = Multigrid())
+    sv = case_solver(jumpy_case(), Float64; linsolve = Multigrid())
     rebuild!(sv)
     lift!(sv)
     scal = sv.tables[Solvers.tid(sv, "solve.scal")]
@@ -270,15 +270,15 @@ end
 end
 end
 
-@testitem "solver_T = :auto: the floor regime is s relative to the faces" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
-@testset "solver_T = :auto: the floor regime is s relative to the faces" begin
+@testitem "solver_type = :auto: the floor regime is s relative to the faces" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
+@testset "solver_type = :auto: the floor regime is s relative to the faces" begin
     n = 256
     f = zeros(n, n)
     f[1:(n ÷ 2), :] .= 1
     per(w, s) = (CellOperator((n, n); periodic = (true, true), shift = s, face = (w, w)),
         ("in.f" => vec(f),))
     # face = 100, s = 1: s/face = 0.01, floors in Float32 (measured 4.8e-6), Float64 :done
-    sv = case_solver(per(100.0, 1.0), Float32; solver_T = Float32)
+    sv = case_solver(per(100.0, 1.0), Float32; solver_type = Float32)
     steady!(sv)
     @test scalars(sv).status === :floor
     sv = case_solver(per(100.0, 1.0), Float32)
@@ -293,8 +293,8 @@ end
 end
 end
 
-@testitem "coefficients are validated; set_coefficients! warns once about solver_T" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
-@testset "coefficients are validated; set_coefficients! warns once about solver_T" begin
+@testitem "coefficients are validated; set_coefficients! warns once about solver_type" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
+@testset "coefficients are validated; set_coefficients! warns once about solver_type" begin
     # refusals in the user's words (F3-05): an ArgumentError naming the field and the axis
     E(f) = try
         f(); ""
@@ -324,11 +324,11 @@ end
         op.dirichlet, op.robin, op.name, op.axes, op.robin_full, op.diag)    # bypasses the constructor
     @test_throws r"shift .* must be ≥ 0" Solvers.set_coefficients!(sv, bad)
     weak = CellOperator(op.dims; periodic = op.periodic, shift = 1e-3)
-    @test_logs (:warn, r"solver_T = :auto would now resolve to Float64") Solvers.set_coefficients!(
+    @test_logs (:warn, r"solver_type = :auto would now resolve to Float64") Solvers.set_coefficients!(
         sv, weak)
     @test sv.T == Float32 && sv.op.shift == 1e-3         # not re-resolved, not refused
     @test_logs Solvers.set_coefficients!(sv, weak)       # once per solver
-    sv = case_solver((op, inputs), Float32; solver_T = Float32)   # explicit: no warning
+    sv = case_solver((op, inputs), Float32; solver_type = Float32)   # explicit: no warning
     @test_logs Solvers.set_coefficients!(sv, weak)
 end
 end

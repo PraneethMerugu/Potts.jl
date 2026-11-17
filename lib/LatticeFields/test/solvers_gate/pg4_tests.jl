@@ -1,10 +1,10 @@
 # PG-4 sweep (opt-in group `solvers_gate`). Per reference case:
 #   - Float64, undeflated PCG and stationary V(2,2): equal to the reference counts (D-048);
-#   - PG-4(a), the group's solver under `inner = :auto` (PCG, deflated when unanchored), in
+#   - PG-4(a), the group's solver under `linsolve = :auto` (PCG, deflated when unanchored), in
 #     Float64 and Float32: ≤ 8 iterations (9 on the 512² disk at s = 5.5e-6; ≤ 12 on odd
 #     periodic axes, user ruling), `done`. Float32 periodic rows run a Float64 solver
-#     (`solver_T = :auto` on unanchored weak-reaction groups, user ruling);
-#   - with `solver_T = Float32`, Float32 periodic rows at s = 5.5e-6 stop at the Float32 floor
+#     (`solver_type = :auto` on unanchored weak-reaction groups, user ruling);
+#   - with `solver_type = Float32`, Float32 periodic rows at s = 5.5e-6 stop at the Float32 floor
 #     (`:floor`, never `:done`): the best true residual against its measured bound;
 #   - PG-4(d), depth: measured Float32 stationary counts grow ≤ 2 from the 128² to the 512² box.
 # per300 (odd coarse axes) needs 11 (3D per45: 12, in solvers/deflation.jl).
@@ -31,7 +31,7 @@ end
         f64 = counts(case, Float64)
         k64, s64 = auto_run(case, Float64)
         k32, s32 = auto_run(case, Float32)
-        mg = steady!(case_solver(case, Float32; inner = Multigrid(), solver_T = Float32);
+        mg = steady!(case_solver(case, Float32; linsolve = Multigrid(), solver_type = Float32);
             maxiter = 40)
         s == 5.5e-6 && (mg32[name] = mg)
         println(rpad(name, 12), " s=", rpad(s, 8), " ref ", ref, "  F64 ", f64,
@@ -41,7 +41,7 @@ end
         @test k64 <= 12 && s64.done && s64.rnorm <= 1e-6 * s64.bnorm
         @test k32 <= 12 && s32.done && s32.rnorm <= 1e-6 * s32.bnorm
         if startswith(name, "per")
-            _, f32 = auto_run(case, Float32; solver_T = Float32)
+            _, f32 = auto_run(case, Float32; solver_type = Float32)
             @test f32.status === :floor                # never :done above the tolerance
             @test f32.best / f32.bnorm <= PG4_FLOOR[name]
         end

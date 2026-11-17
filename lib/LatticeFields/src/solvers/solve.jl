@@ -344,7 +344,7 @@ mutable struct FieldSolver{N, E}
     deflate::Bool
     prog::Program{N}
     ctx::Any
-    T::Type                               # solver_T: the solver's number type
+    T::Type                               # solver_type: the solver's number type
     state::Type                           # T: the caller-facing arrays' number type
     rule::RuleWeights
     bufs::Dict{Int32, Vector{Any}}
@@ -354,12 +354,12 @@ mutable struct FieldSolver{N, E}
     plans::Dict{Tuple{Symbol, Int, UInt64}, SolvePlan}   # (kind, budget or flag, rotation)
     rot::Vector{Int32}                    # the two-buffer fields, in id order (the rotation)
     vals::Tuple                           # the coefficient slot values the bodies hold
-    auto::Bool                            # solver_T was :auto
-    warned::Bool                          # the set_coefficients! solver_T warning was given
+    auto::Bool                            # solver_type was :auto
+    warned::Bool                          # the set_coefficients! solver_type warning was given
 end
 
 """
-    FieldSolver(exec, op::CellOperator; inner = :auto, T = Float32, solver_T = :auto,
+    FieldSolver(exec, op::CellOperator; linsolve = :auto, T = Float32, solver_type = :auto,
         rule = RULE_M, stages, deflate = :auto, inputs = ())
 
 Build the solver group of `op`: the program, its compiled bodies and its arrays on `exec`.
@@ -372,12 +372,12 @@ lattice's linear order (axis 1 fastest; a `Vector` or an array of size `op.dims`
 state type `T` (`UInt8` for the mask), on the executor's device. An input not bound is
 allocated by the solver (zeros) and reached by `field(sv, key)`.
 
-Number types, one per role (`*_T`, `:auto` by default; a later `precond_T` would join them):
+Number types, one per role (`T` and `solver_type`; a later `precond_type` would join them):
 
   - `T`, the state type: the element type of the caller-facing arrays, the inputs
     (`"in.f"`, input coefficient fields) and the solution (`solution_key`). It never
-    depends on `solver_T`; the solver converts at the boundary.
-  - `solver_T`, the solver's arithmetic and working arrays (vectors, hierarchy,
+    depends on `solver_type`; the solver converts at the boundary.
+  - `solver_type`, the solver's arithmetic and working arrays (vectors, hierarchy,
     reductions, deflation, device scalars), `sv.T`. `:auto` (`resolve_solver_T`): Float64
     for a group in the Float32 floor regime (`floor_regime`: unanchored, reaction below
     `FLOOR_SHIFT`) when `supports(exec, Float64)`, else `T`. A type uses that type.
@@ -390,18 +390,18 @@ solution `pcg.x − mean(pcg.x) + c` is written to `pcg.u` after every solve.
 true residual (upper bound `eps(Float32)·|c|·‖A‖∞` relative to ‖b‖∞, D-C7b), whatever the
 solver precision.
 """
-function FieldSolver(exec, op::CellOperator{N}; inner = :auto, T = Float32,
-        solver_T = :auto, rule::RuleWeights = RULE_M, stages = LOWERING,
+function FieldSolver(exec, op::CellOperator{N}; linsolve = :auto, T = Float32,
+        solver_type = :auto, rule::RuleWeights = RULE_M, stages = LOWERING,
         deflate = :auto, inputs = ()) where {N}
     state = lowered_type(exec, T, "state"; op)
-    T = resolve_solver_T(exec, op, state, solver_T)
-    alg = resolve_inner(op, inner)
+    T = resolve_solver_T(exec, op, state, solver_type)
+    alg = resolve_inner(op, linsolve)
     dfl = deflate === :auto ? alg isa DevicePCG && deflatable(op) : Bool(deflate)
     lane(t) = t == Float64 ? F64 : F32
     p, ctx = solver_program(op, alg isa DevicePCG; lane = lane(T), state = lane(state),
         deflate = dfl)
     s = semantic(p)
-    # a Float64 solver on a device whose default float is Float32 (an explicit `solver_T`, or
+    # a Float64 solver on a device whose default float is Float32 (an explicit `solver_type`, or
     # `:auto` in the floor regime, D-C7b): its kernels are registered (D-157 carve-out, R-F3c)
     declared = T === Float64 && Exec.default_float(exec) !== Float64
     # (a solver launch passes the linear site index: a hexagonal lattice's diagonal reads would
@@ -431,7 +431,7 @@ function FieldSolver(exec, op::CellOperator{N}; inner = :auto, T = Float32,
     return FieldSolver{N, typeof(exec)}(
         exec, op, alg, dfl, s, ctx, T, state, rule, bufs, slot, tables, bodies,
         Dict{Tuple{Symbol, Int, UInt64}, SolvePlan}(), _rotation_fields(bufs), praw,
-        solver_T === :auto, false)
+        solver_type === :auto, false)
 end
 
 function _rotation_fields(bufs)
@@ -486,7 +486,7 @@ for types other than Float32), else an error naming `S`.
 function lowered_type(exec, S, role; op = nothing)
     who = op === nothing ? "the solver group" : _who(op)
     bad(msg...) = throw(ArgumentError(string(who, ": ", msg...)))
-    S isa Type || bad(role, " expects ", role == "solver_T" ? ":auto or " : "",
+    S isa Type || bad(role, " expects ", role == "solver_type" ? ":auto or " : "",
         "a number type; got ", repr(S))
     S in LOWERED_TYPES ||
         bad("number type ", S, " (", role, ") is not lowered for this solver; ",
@@ -499,15 +499,15 @@ function lowered_type(exec, S, role; op = nothing)
 end
 
 """
-    resolve_solver_T(exec, op, state, solver_T)
+    resolve_solver_T(exec, op, state, solver_type)
 
 The solver's number type (provisional D-C7b): `:auto` is Float64 for a group in the
 Float32 floor regime (`floor_regime(op)`) when `supports(exec, Float64)` (asked only
 then), else the state type; on a backend without Float64 such a group stays in Float32,
 ends `:floor` and the sentinel names it. A type is checked by `lowered_type`.
 """
-function resolve_solver_T(exec, op::CellOperator, state::Type, solver_T)
-    solver_T === :auto || return lowered_type(exec, solver_T, "solver_T"; op)
+function resolve_solver_T(exec, op::CellOperator, state::Type, solver_type)
+    solver_type === :auto || return lowered_type(exec, solver_type, "solver_type"; op)
     state === Float32 && floor_regime(op) && supports(exec, Float64) && return Float64
     return state
 end
@@ -553,7 +553,7 @@ those of `op`, which must have the same structure (dims, periodicity, mask, fiel
 same coefficients numeric): new parameter values for every body, no recompile. The held
 plans are dropped and rebuilt at their next use (the set keeps its size: one plan per
 kind, budget and rotation); the next `rebuild!`/`lift!` (or `steady!`) uses the new values. The solver
-number type (`solver_T = :auto`) stays as resolved at build.
+number type (`solver_type = :auto`) stays as resolved at build.
 """
 function set_coefficients!(sv::FieldSolver, op::CellOperator)
     o = sv.op
@@ -571,9 +571,9 @@ function set_coefficients!(sv::FieldSolver, op::CellOperator)
     if sv.auto && !sv.warned && resolve_solver_T(sv.exec, op, sv.state, :auto) != sv.T
         sv.warned = true
         Exec.VERBOSE[] && @warn string(
-            _who(op), ": set_coefficients!: solver_T = :auto would now resolve to ",
+            _who(op), ": set_coefficients!: solver_type = :auto would now resolve to ",
             resolve_solver_T(sv.exec, op, sv.state, :auto), ", but the group keeps ", sv.T,
-            " (resolved at build; changing it recompiles). Pass solver_T explicitly or ",
+            " (resolved at build; changing it recompiles). Pass solver_type explicitly or ",
             "rebuild the FieldSolver to change it.")
     end
     return _set_values!(sv, op)          # drops the held plans (`_set_raw!`)
@@ -1084,15 +1084,16 @@ function lift_plan(sv)
 end
 
 """
-    solve!(sv; host = false, budget)
+    solve!(sv; host = false, maxiters)
 
-The inner solve from the current solution. Device mode enqueues the whole budgeted plan
-(no sync). Host mode stops at `done` and returns the iteration count.
+The inner solve from the current solution, at most `maxiters` iterations (default the
+algorithm's). Device mode enqueues the whole plan (no sync). Host mode stops at `done` and
+returns the iteration count.
 """
 function solve!(sv::FieldSolver; host::Bool = false,
-        budget::Int = sv.alg.maxiters
+        maxiters::Int = sv.alg.maxiters
     )
-    sp = _plan(s -> solve_plan(s, budget), sv, (:solve, budget))
+    sp = _plan(s -> solve_plan(s, maxiters), sv, (:solve, maxiters))
     run!(sv, sp; host)
     return host ? iterations(sv) : nothing
 end
@@ -1131,7 +1132,7 @@ function sentinel(sv::FieldSolver)
     hint = sv.alg isa Multigrid ? " Stationary multigrid: use DevicePCG (linsolve = :auto)." :
            s.status === :floor && sv.T == Float32 && floor_regime(sv.op) ?
            " Float32 floor of an unanchored group at weak reaction: solve in Float64 " *
-           "(solver_T; a backend with Float64)." :
+           "(solver_type; a backend with Float64)." :
            ""
     what = s.status === :floor ? "stagnated (floor)" :
            s.status === :diverged ? "diverged" : "ended"
@@ -1167,11 +1168,11 @@ Returns the total inner iteration count.
 function _defect_solve!(sv::FieldSolver, maxiter::Int)
     fixed = sv.alg isa Multigrid && sv.alg.cycles !== nothing
     budget = fixed ? sv.alg.cycles : maxiter
-    k = solve!(sv; host = true, budget)
+    k = solve!(sv; host = true, maxiters = budget)
     has_defect(sv.op) || return k
     for _ in 1:maxiter
         _run_one!(sv, "robin.b")
-        j = solve!(sv; host = true, budget)
+        j = solve!(sv; host = true, maxiters = budget)
         k += j
         (j == 0 && scalars(sv).done) && return k
     end

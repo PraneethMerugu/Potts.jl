@@ -234,16 +234,16 @@ function _operator_text(f)
 end
 function _fact_lines(io, alg, f)
     auto = alg.linsolve === :auto ? " (`linsolve = :auto`)" : ""
-    inner = f.coupled ? string("coupled solve ", repr(f.krylov), isempty(f.inner) ? "" :
-                                                                 string(", each field preconditioned by ", join(repr.(f.inner), ", "))) :
-            isempty(f.inner) ? "none: every row is local (solved site by site)" : join(repr.(f.inner), ", ")
+    inner = f.coupled ? string("coupled solve ", repr(f.krylov), isempty(f.linsolve) ? "" :
+                                                                 string(", each field preconditioned by ", join(repr.(f.linsolve), ", "))) :
+            isempty(f.linsolve) ? "none: every row is local (solved site by site)" : join(repr.(f.linsolve), ", ")
     _line(io, "linsolve", string(inner, auto, isempty(f.levels) ? "" : string(", multigrid levels ", join(f.levels, ", "))))
     _line(io, "newton", _newton_text(alg, f))
     _line(io, "operator", _operator_text(f))
     return nothing
 end
-_solvertext(alg, f) = f === nothing || isempty(f.solver_T) ? string("solver ", canonical(alg.solver_type), " (set when bound)") :
-    string("solver ", join(f.solver_T, ", "), alg.solver_type === :auto ? " (`solver_type = :auto`)" : "")
+_solvertext(alg, f) = f === nothing || isempty(f.solver_type) ? string("solver ", canonical(alg.solver_type), " (set when bound)") :
+    string("solver ", join(f.solver_type, ", "), alg.solver_type === :auto ? " (`solver_type = :auto`)" : "")
 # … and an implicit group with no bound runtime (`field_report(prob, alg)`): as given
 function _given_lines(io, spec::GroupSpec, g::FieldGroup, alg::AbstractImplicitFieldAlgorithm, keys)
     op = _operator(spec, alg)
