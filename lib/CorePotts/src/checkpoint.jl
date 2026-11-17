@@ -87,13 +87,20 @@ function _copy_state!(dst::CPMState, src::CPMState)
 end
 
 """
-    reinit!(integ, u0 = integ.prob.u0; t0 = integ.prob.tspan[1])
+    reinit!(integ, u0 = integ.prob.u0; t0 = integ.prob.tspan[1], tf = integ.prob.tspan[2],
+            erase_sol = true, reinit_callbacks = true)
 
-Reset the integrator in place to state `u0` at MCS `t0` (arrays are reused; no
-allocation of device storage), clearing saved values, statistics and the return code.
+Reset the integrator in place to state `u0` at MCS `t0`, to run to MCS `tf` (arrays are
+reused; no allocation of device storage), clearing the statistics and the return code and
+restoring the run's `tstops`. `erase_sol = false` keeps the saved states (the new run's saves
+follow them); `reinit_callbacks = false` does not run the callbacks' `initialize` again.
 """
-function SciMLBase.reinit!(integ::PottsIntegrator, u0 = integ.prob.u0;
-        t0::Integer = integ.prob.tspan[1])
+function SciMLBase.reinit!(
+        integ::PottsIntegrator, u0 = integ.prob.u0;
+        t0::Integer = integ.prob.tspan[1], tf::Integer = integ.prob.tspan[2], erase_sol::Bool = true,
+        reinit_callbacks::Bool = true
+    )
+    t0 <= tf || throw(ArgumentError("reinit!: t0 = $t0 is after tf = $tf"))
     _sync!(_stats(integ), integ.backend)            # reset below with the statistics
     fresh = u0 === integ.prob.u0                    # (the problem's own state: its derivative parts, F3-21b)
     # symbolic maps; a state is laid out for the model's functions (e.g. Potts' ODE scratch)
@@ -105,8 +112,14 @@ function SciMLBase.reinit!(integ::PottsIntegrator, u0 = integ.prob.u0;
     _copy_state!(integ.state, u0)
     refresh_frozen!(integ)          # the frozen mask of the new state (static masks: nothing to do)
     integ.t = t0
+    integ.tstop = tf
+    integ.iter = 0
+    integ.finished = false
     integ.retcode = SciMLBase.ReturnCode.Default
-    empty!(integ.saved_t); empty!(integ.saved_u)
+    ts = integ.opts.tstops
+    empty!(ts)
+    append!(ts, filter(t -> t > t0, integ.opts.tstops0))
+    erase_sol && (empty!(integ.saved_t); empty!(integ.saved_u))
     _restore_stats!(_stats(integ), _initial_stats(integ.f))      # `accepted_ΔH`: 0.0 when tracked
     _reset_cache!(integ.cache, integ)
     _clear_field_status!(integ.ctx)          # a new run: the field groups' failures and counters go
@@ -114,8 +127,8 @@ function SciMLBase.reinit!(integ::PottsIntegrator, u0 = integ.prob.u0;
     _stats(integ).launches += _run_phases(integ.f.phases.at_init, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, _stats(integ))
     _start_failed!(integ)
-    _each(cb -> cb.initialize(cb, integ.state, integ.t, integ), integ.callbacks)
-    integ.save_start && _save!(integ)
+    reinit_callbacks && _each(cb -> cb.initialize(cb, integ.state, integ.t, integ), integ.callbacks)
+    integ.opts.save_start && (isempty(integ.saved_t) || last(integ.saved_t) != integ.t) && _save!(integ)
     return integ
 end
 

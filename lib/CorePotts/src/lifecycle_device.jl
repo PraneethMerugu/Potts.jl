@@ -22,7 +22,7 @@
 #              follows the state
 #
 # Lifecycle statistics and the mask counts accumulate on the device and are folded into
-# `integ.stats` only at host read points (saves, `integ.u`, `checkpoint`, the end of
+# `integ.stats` only at host read points (saves, `current_state`, `checkpoint`, the end of
 # `solve!`), which synchronize anyway (`_fold_lifecycle!`).
 
 # Items of the planner's (and the fused form's) single workgroup. Fewer cost time on a

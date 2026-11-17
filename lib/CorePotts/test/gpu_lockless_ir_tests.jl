@@ -153,7 +153,7 @@ end
         integ = init(fk_problem(fk_flip(S); kind = fk_swap, T = Float32), CheckerboardCPM(); backend)
         @test integ.ctx.mobility.sites === nothing && integ.nmobile == 900 - 36
         # D-089: the counts of a refresh after an event MCS stay on the device until a host
-        # read point (here `integ.u`), which corrects the MCS that ran with the old count
+        # read point (here `current_state(integ)`), which corrects the MCS that ran with the old count
         rm2(st, p, ctx, key, mcs, c) = mcs == S && c == 2 ? EVENT_REMOVE : EVENT_NONE
         integ = init(fk_problem(rm2; T = Float32), CheckerboardCPM(); backend, save_start = false)
         for _ in 0:S
@@ -163,7 +163,7 @@ end
         @test count(!, Array(integ.ctx.mobility.frozen)) == 900
         step!(integ)                                                  # MCS S+1: no read-back …
         @test integ.nmobile == 900 - 36 && integ.stats.lifecycle.removals == 0
-        integ.u                                                       # … until a host read point
+        current_state(integ)                                                       # … until a host read point
         @test integ.nmobile == 900 && integ.stats.lifecycle.removals == 1
         # D-253: the Int64 width (forced; it is the width above 2³¹ − 1 sites) on the device.
         # With 64-bit atomic adds the counted run equals its Int32 run; without them (Metal)

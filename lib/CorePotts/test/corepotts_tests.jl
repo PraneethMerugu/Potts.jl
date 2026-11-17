@@ -434,10 +434,10 @@ end
 
 @testitem "warm step allocation and recompilation" setup = [CP_corepotts] tags = [:corepotts, :core, :timing] begin
     @testset "warm step allocation and recompilation" begin
-        integ = init(prob, SequentialCPM(); save_start = false)
+        integ = init(prob, SequentialCPM(); save_start = false, save_everystep = false)
         step!(integ)
         @test @allocated(step!(integ)) == 0
-        integ = init(prob, CheckerboardCPM(); save_start = false)
+        integ = init(prob, CheckerboardCPM(); save_start = false, save_everystep = false)
         step!(integ); step!(integ)
         @test @allocated(step!(integ)) == 0                # the host executor (PG-13)
         # (a `p` other than `prob.p`: the first remake that changes the parameters compiles the

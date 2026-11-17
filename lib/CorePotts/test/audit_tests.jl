@@ -219,7 +219,7 @@ end
     σ, kinds = blocks((48, 48), 6)
     prob = PottsProblem(GG, initial_state(σ, kinds), L, (0, 20), gg_params())
     # a small checkerboard phase runs inline on the CPU: a warm step allocates nothing
-    a = init(prob, CheckerboardCPM(; proposal = Moore(1)))
+    a = init(prob, CheckerboardCPM(; proposal = Moore(1)); save_everystep = false)
     @test a.cache.inline
     @test minimum(_ -> (step!(a); @allocated step!(a)), 1:3) == 0
 end

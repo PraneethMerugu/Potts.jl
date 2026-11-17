@@ -3,7 +3,7 @@
 # and relationship tests below check its kernels (scan-based id allocation, deferral,
 # cluster units and planes, links, trackers, the P6.0d mask counts) without a GPU, against
 # the same oracles as the host planner. By design (D-089), the device planner's statistics
-# are exact only at host read points (saves, `integ.u`, `checkpoint`, the end of `solve!`).
+# are exact only at host read points (saves, `current_state(integ)`, `checkpoint`, the end of `solve!`).
 
 @testsetup module CP_lifecycle_device
 using Test, CorePotts, StaticArrays, Statistics, Random
@@ -51,7 +51,7 @@ end
     try
         # the planner is really the device one (negative control: off by default)
             prob = ld_base_prob().prob
-        integ = init(prob, CheckerboardCPM(); save_start = false, save_end = false)
+        integ = init(prob, CheckerboardCPM(); save_start = false, save_end = false, save_everystep = false)
         @test integ.lcache.device isa CorePotts.DeviceLifecycle
         @test integ.lcache.device.fused! !== nothing                 # small: one fused launch
         CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
@@ -61,9 +61,9 @@ end
         step!(integ); step!(integ)                             # MCS 1: the division
         @test count(>(0), Array(integ.state.cell.volume)) == 2  # applied at once …
         @test integ.stats.lifecycle.divisions == 0             # … counted at the next read
-        u = integ.u
+        u = current_state(integ)
         @test integ.stats.lifecycle.divisions == 1 && count(>(0), u.cell.volume) == 2
-        integ.u                                                # folding twice adds nothing
+        current_state(integ)                                                # folding twice adds nothing
         @test integ.stats.lifecycle.divisions == 1
         # deterministic: two runs of a growing population agree exactly (random planes)
             pg = ld_growing_prob()
@@ -297,21 +297,21 @@ end
                 )
                 probs = PottsProblem(fs, sts, latS, (0, 3), gg_params())
                 CorePotts._SCRATCH_LIMIT[] = 20                  # the two large cells exceed it
-                integ = init(probs, CheckerboardCPM(); save_start = false, save_end = false)
+                integ = init(probs, CheckerboardCPM(); save_start = false, save_end = false, save_everystep = false)
                 step!(integ); step!(integ); step!(integ)
-                u = @test_logs (:warn, r"Int32 scratch") integ.u
+                u = @test_logs (:warn, r"Int32 scratch") current_state(integ)
                 @test integ.stats.lifecycle.divisions == 0
                 @test integ.stats.lifecycle.deferred == 2         # cell 1 and cluster 2
                 @test u.σ == σs && u.cell.volume[1:3] == Int32[48, 4, 48]
                 @test u.cell.m1[:, 1:3] == cells.m1 && u.cell.m2[:, 1:3] == cells.m2
-                @test_logs integ.u                                # reported once
+                @test_logs current_state(integ)                                # reported once
                 reinit!(integ)
                 @test integ.stats.lifecycle.deferred == 0
                 # control: within the bound, both divide (cell 1 alone, the cluster as a unit)
                 CorePotts._SCRATCH_LIMIT[] = typemax(Int32)
-                integ = init(probs, CheckerboardCPM(); save_start = false, save_end = false)
+                integ = init(probs, CheckerboardCPM(); save_start = false, save_end = false, save_everystep = false)
                 step!(integ); step!(integ); step!(integ)
-                u = integ.u
+                u = current_state(integ)
                 @test integ.stats.lifecycle.divisions == 3 && integ.stats.lifecycle.deferred == 0
                 @test u.cell.volume == Int32[count(==(c), u.σ) for c in 1:8]
                 @test same_moments(u, latS, 8, CheckerboardCPM())

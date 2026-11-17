@@ -11,6 +11,7 @@ using Adapt: Adapt
 using Atomix: Atomix
 using CommonSolve: CommonSolve, init, solve, solve!, step!
 using KernelAbstractions: KernelAbstractions, @kernel, @index, @localmem, @synchronize, CPU
+using Logging: @logmsg, LogLevel
 using LatticeFields: LatticeFields, Exec, Problems
 using SciMLBase: SciMLBase, remake, reinit!, derivative_discontinuity!, EnsembleProblem, EnsembleSerial, EnsembleThreads,
     DiscreteCallback, CallbackSet, terminate!
