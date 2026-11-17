@@ -1624,9 +1624,14 @@ function CommonSolve.solve(prob::LatticeProblem; kw...)
     _check_default_alg()
     return invoke(CommonSolve.solve, Tuple{SciMLBase.AbstractDEProblem, Vararg{Any}}, prob; kw...)
 end
-_check_default_alg() = hasmethod(CommonSolve.solve, Tuple{SciMLBase.AbstractDEProblem}) || throw(ArgumentError(string(
-    "`solve(prob)` with no algorithm uses DiffEqBase's default algorithm, and no package that provides it is loaded: ",
-    "give an algorithm, `solve(prob, ExplicitEuler(; dt))` or `solve(prob, Tsit5())`, or load OrdinaryDiffEq")))
+_check_default_alg() = hasmethod(CommonSolve.solve, Tuple{SciMLBase.AbstractDEProblem}) || throw(
+    ArgumentError(
+        string(
+            "`solve(prob)` with no algorithm uses DiffEqBase's default algorithm, and no package that provides it is loaded: ",
+            "give an algorithm, `solve(prob, ExplicitEuler(; dt))` or `solve(prob, Tsit5())`, or load OrdinaryDiffEq"
+        )
+    )
+)
 
 # A system with no time (F4-02): its `LinearProblem` or `NonlinearProblem`; a field algorithm
 # (or none: `QuasiSteady()`) solves the owned problem once

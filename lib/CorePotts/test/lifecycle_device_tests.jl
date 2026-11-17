@@ -51,7 +51,7 @@ end
     try
         # the planner is really the device one (negative control: off by default)
             prob = ld_base_prob().prob
-        integ = init(prob, CheckerboardCPM(); save_start = false, save_end = false, save_everystep = false)
+            integ = init(prob, CheckerboardCPM(); save_start = false, save_end = false, save_everystep = false)
         @test integ.lcache.device isa CorePotts.DeviceLifecycle
         @test integ.lcache.device.fused! !== nothing                 # small: one fused launch
         CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
@@ -61,9 +61,9 @@ end
         step!(integ); step!(integ)                             # MCS 1: the division
         @test count(>(0), Array(integ.state.cell.volume)) == 2  # applied at once …
         @test integ.stats.lifecycle.divisions == 0             # … counted at the next read
-        u = current_state(integ)
+            u = current_state(integ)
         @test integ.stats.lifecycle.divisions == 1 && count(>(0), u.cell.volume) == 2
-        current_state(integ)                                                # folding twice adds nothing
+            current_state(integ)                                                # folding twice adds nothing
         @test integ.stats.lifecycle.divisions == 1
         # deterministic: two runs of a growing population agree exactly (random planes)
             pg = ld_growing_prob()

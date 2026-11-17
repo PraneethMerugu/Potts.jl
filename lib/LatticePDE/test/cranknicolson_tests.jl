@@ -129,7 +129,7 @@ end
         [bc(0, x, y) ~ 0.5, bo(0, x, y) ~ 0.0], [bce, boe]; T = 0.3)
     a = @test_logs min_level = WARN solve(nlown(comp), CrankNicolson(; dt = 0.05))
     b = solve(nlown(scal), CrankNicolson(; dt = 0.05))
-    @test LatticePDE.Problems.field_stats(a) == LatticePDE.Problems.field_stats(b) && a.stats.solves > 0
+        @test LatticePDE.Problems.field_stats(a) == LatticePDE.Problems.field_stats(b) && a.stats.solves > 0
     @test a[bue[1], length(a.t)] == b[bce, length(b.t)] && a[bue[2], length(a.t)] == b[boe, length(b.t)]
     # a parameter write reclassifies as a fresh problem (a Robin face's sign; the count) and
     # restarts (damped), so the written run equals the fresh one

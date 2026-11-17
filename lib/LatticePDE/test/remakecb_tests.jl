@@ -64,7 +64,7 @@ end
                 SciMLBase.VectorContinuousCallback((out, u, t, i) -> (out[1] = u[1] - 10.0; out[2] = u[2] - 10.0; nothing),
                     (i, k) -> nothing, 2),
                 SciMLBase.DiscreteCallback((u, t, i) -> false, i -> nothing)))
-        i = init(remake(p; tspan = (0.0, 100.0)), ExplicitEuler(; dt = 1e-3); callback = cb, save_everystep = false)
+            i = init(remake(p; tspan = (0.0, 100.0)), ExplicitEuler(; dt = 1.0e-3); callback = cb, save_everystep = false)
         @test warm(i) == 0 || (println("b2 #5 warm ", typeof(cb).name.name, " ", warm(i)); false)
     end
 end

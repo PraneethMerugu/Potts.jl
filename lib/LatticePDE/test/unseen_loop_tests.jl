@@ -60,7 +60,7 @@ using .LP_unseen_loop: fd
     # never refused, and the run is the run it was (the warning changes nothing)
     s2 = solve(p, alg)
     @test s1.retcode == ReturnCode.Success && s1.u == s2.u
-    @test swarm(init(p, alg; save_everystep = false)) == 0
+        @test swarm(init(p, alg; save_everystep = false)) == 0
     # the report's κ line says what the warning says
     rep = sprint(field_report, s1)
     @test occursin("group 1: loop [1, 2], κ = dt · rate = 1.0 × 0.0 = 0.0 (≤ 1); κ covers only the cross terms the bound " *

@@ -56,7 +56,7 @@ end
     save_checkpoint(path, checkpoint(integ))
     ck = load_checkpoint(path)
     @test ck.t == 12
-    rest = solve!(init(prob, alg; checkpoint = ck, save_everystep = false))
+        rest = solve!(init(prob, alg; checkpoint = ck, save_everystep = false))
     a, b = whole.u[end], rest.u[end]
     @test whole.stats.lifecycle.divisions >= 1
     @test a.σ == b.σ

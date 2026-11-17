@@ -28,7 +28,7 @@ Any other keyword (`saveat`, `callback`, …) is a `solve` keyword kept in `prob
 and `init` merge them with their own, which take precedence (a `callback` of both runs both).
 """
 mutable struct PottsProblem{F <: CPMFunction, S <: CPMState, L <: Lattice, R, Q, RS, H, FZ, P, TG, K} <:
-               SciMLBase.AbstractSciMLProblem
+    SciMLBase.AbstractSciMLProblem
     const f::F
     const u0::S
     const lattice::L
@@ -60,7 +60,8 @@ PottsProblem(
 Base.@nospecializeinfer function _problem(@nospecialize(f::CPMFunction), @nospecialize(u0::CPMState),
         @nospecialize(lattice::Lattice), @nospecialize(tspan), @nospecialize(p), @nospecialize(contact),
         @nospecialize(proposal), @nospecialize(relations), @nospecialize(spacing), @nospecialize(frozen), seed, replica,
-        repeat, @nospecialize(tangent), @nospecialize(kwargs::NamedTuple))
+        repeat, @nospecialize(tangent), @nospecialize(kwargs::NamedTuple)
+    )
     size(u0.σ) == lattice.dims ||
         throw(ArgumentError("state size $(size(u0.σ)) ≠ lattice $(lattice.dims)"))
     t0, t1 = Int.(tspan)
@@ -542,7 +543,7 @@ function _options(@nospecialize(prob::PottsProblem), o::NamedTuple)
     t0, t1 = prob.tspan
     # SciML convention: a number means "every Δ MCS" from t0 (t0 itself is `save_start`)
     saveat = o.saveat isa Number ? collect((t0 + _mcs(o.saveat, "saveat")):_mcs(o.saveat, "saveat"):t1) :
-             sort!(Int[_mcs(s, "saveat") for s in o.saveat])
+        sort!(Int[_mcs(s, "saveat") for s in o.saveat])
     outside = filter(t -> !(t0 <= t <= t1), saveat)
     isempty(outside) || !o.verbose || @warn "saveat times outside tspan $(prob.tspan) are never reached: $outside"
     tstops = sort!(unique!(Int[_mcs(s, "tstops") for s in (o.tstops isa Number ? (o.tstops,) : o.tstops)]))
@@ -677,7 +678,8 @@ end
 # per run; `step!` and the kernels stay fully specialized). Specialized on the model, this
 # body was 0.3–0.9 s of inference for every model (TS-R1 §1.1b).
 Base.@nospecializeinfer function _init(@nospecialize(prob::PottsProblem), @nospecialize(alg::CPMAlgorithm), fresh::Bool,
-        backend, opts::PottsOptions, @nospecialize(callback))
+        backend, opts::PottsOptions, @nospecialize(callback)
+    )
     alg isa SequentialCPM && !(backend isa CPU) &&
         throw(ArgumentError("SequentialCPM runs on the host; use CheckerboardCPM on $(typeof(backend))"))
     lat = prob.lattice
@@ -710,7 +712,8 @@ Base.@nospecializeinfer function _init(@nospecialize(prob::PottsProblem), @nospe
     integ = PottsIntegrator(prob, alg, _device_law(_law(alg, prob.f), backend), state, cache, lcache, prob.f, device_functions(prob.f), p, ctx, backend, key,
         prob.tspan[1], prob.tspan[2], opts, Int[], Any[], SciMLBase.ReturnCode.Default, _initial_stats(prob.f),
         _callbacks(callback), prob.frozen === nothing ? nsites(lat) : count(!, prob.frozen),
-        _mobility_scratch(backend, prob, ctx.mobility), 0, false)
+        _mobility_scratch(backend, prob, ctx.mobility), 0, false
+    )
     # compile the handler of each MCS entry before `step!` is compiled: if `step!` is inferred while
     # a field-step entry's handler is still in an inference cycle, the call stays dynamic and
     # boxes the entry (16 B per MCS, Merks Float32 under CheckerboardCPM, P6.0bl)
@@ -1505,7 +1508,8 @@ function SciMLBase.__solve(prob::SciMLBase.AbstractEnsembleProblem, alg::CPMAlgo
         ensemble::SciMLBase.BasicEnsembleAlgorithm; kwargs...)
     seeded = haskey(kwargs, :seed) || haskey(kwargs, :rng)
     generic() = invoke(SciMLBase.__solve, Tuple{SciMLBase.AbstractEnsembleProblem, Any, SciMLBase.BasicEnsembleAlgorithm},
-        prob, alg, ensemble; kwargs..., _rng_seeds = seeded)
+        prob, alg, ensemble; kwargs..., _rng_seeds = seeded
+    )
     ensemble isa EnsembleSerial && return generic()
     return @with IN_THREADED_ENSEMBLE => true generic()
 end

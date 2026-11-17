@@ -29,7 +29,7 @@ end
     so = solve(p, ExplicitEuler(; dt = 0.01); saveat = 0.1)
     st = solve(p, Tsit5(); saveat = 0.1, abstol = 1e-10, reltol = 1e-10)
     sf = solve(LFP.field_problem(p), ExplicitEuler(; dt = 0.01); saveat = 0.1)
-    @test sf isa SciMLBase.ODESolution && so isa SciMLBase.ODESolution
+        @test sf isa SciMLBase.ODESolution && so isa SciMLBase.ODESolution
     for s in (so, st, sf)
         v = s[qce]
         last = reshape(s.u[end], 6, 4)

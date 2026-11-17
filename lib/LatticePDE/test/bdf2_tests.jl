@@ -119,7 +119,7 @@ end
     p, _, _ = eig_problem(16)
     s = solve(p, BDF2(; dt = 0.05); saveat = 0.1)
     @test all(u -> length(u) == length(p.u0), s.u)
-    ig = init(p, BDF2(; dt = 0.05); save_everystep = false)
+        ig = init(p, BDF2(; dt = 0.05); save_everystep = false)
     step!(ig)
     @test length(ig.store.bufs[fieldid(LFP.field_problem(p).program, "bc")]) == 2                 # (c, c__next): no third buffer
     @test only(ig.runtimes).cache.rows[1].prev isa Vector{Float64}
@@ -154,7 +154,7 @@ end
         [bc(0, x, y) ~ 0.5, bo(0, x, y) ~ 0.0], [bce, boe]; T = 0.3)
     a = @test_logs min_level = WARN solve(nlown(comp), BDF2(; dt = 0.05))
     b = solve(nlown(scal), BDF2(; dt = 0.05))
-    @test LatticePDE.Problems.field_stats(a) == LatticePDE.Problems.field_stats(b) && a.stats.solves > 0
+        @test LatticePDE.Problems.field_stats(a) == LatticePDE.Problems.field_stats(b) && a.stats.solves > 0
     @test a[bue[1], length(a.t)] == b[bce, length(b.t)] && a[bue[2], length(a.t)] == b[boe, length(b.t)]
     for (v0, v1) in ((-1.0, 1.0), (1.0, -1.0))
         alg = BDF2(; dt = 0.1, inner = BTIGHT)

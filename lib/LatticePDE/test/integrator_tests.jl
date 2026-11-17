@@ -52,7 +52,7 @@ end
     step!(fine, 0.005, true)
     @test maximum(abs, ig.u .- fine.u) < 1e-12
     # a time span that is not a whole number of windows ends with a shortened window
-    s = solve(remake(p; tspan = (0.0, 0.395)), ExplicitEuler(; dt = 0.01); save_everystep = false)
+        s = solve(remake(p; tspan = (0.0, 0.395)), ExplicitEuler(; dt = 0.01); save_everystep = false)
     f = solve(remake(p; tspan = (0.0, 0.395)), ExplicitEuler(; dt = 0.005))
     @test s.t == [0.0, 0.395] && maximum(abs, s.u[end] .- f.u[end]) < 1e-12
 end
@@ -84,7 +84,7 @@ end
 @testitem "F4-03: derivative_discontinuity! re-damps Crank–Nicolson; terminate!, add_tstop!, savevalues!" setup = [LP_integrator] tags = [:latticepde, :integrator] begin
 @testset "F4-03: derivative_discontinuity! re-damps Crank–Nicolson; terminate!, add_tstop!, savevalues!" begin
     pe, _, _ = eig_problem(16)
-    ig = init(pe, CrankNicolson(; dt = 0.05, inner = BTIGHT); save_everystep = false)
+        ig = init(pe, CrankNicolson(; dt = 0.05, inner = BTIGHT); save_everystep = false)
     step!(ig)
     step!(ig)
     @test !only(ig.runtimes).cache.start

@@ -173,9 +173,9 @@ end
                       buf[i, j] = s > 0.08i ? 1.0 : 0.0
                   end; buf)
     for a in (ExplicitEuler(; dt = 0.01), BackwardEuler(; dt = 0.05))
-        @test tiwarm(init(cp, a; save_everystep = false)) == 0
-        @test tiwarm(init(remake(cp; inputs = [tiqe => inplace]), a; save_everystep = false)) == 0
-        @test tiwarm(init(remake(cp; inputs = [tiqe => s -> sin(s)]), a; save_everystep = false)) == 0
+            @test tiwarm(init(cp, a; save_everystep = false)) == 0
+            @test tiwarm(init(remake(cp; inputs = [tiqe => inplace]), a; save_everystep = false)) == 0
+            @test tiwarm(init(remake(cp; inputs = [tiqe => s -> sin(s)]), a; save_everystep = false)) == 0
         @test tiwarm(init(fp, a)) > 0                     # (control: `tiQ` returns a new array)
     end
     # the same on the ODE path (a step whose callback writes the input)
@@ -234,7 +234,7 @@ end
                       buf[i, j] = s > 0.08i ? 1.0 : 0.0
                   end; buf)
     mp = discretize(timask(), tidisc(); inputs = [tiqe => inplace])
-    @test tiwarm(init(mp, ExplicitEuler(; dt = 0.01); save_everystep = false)) == 0
+        @test tiwarm(init(mp, ExplicitEuler(; dt = 0.01); save_everystep = false)) == 0
     o = tiode(mp)                          # (`adaptive = false`: not refused)
     o = tiode(mp)
     @test o <= 4096 || (println("F4-B1 ODE mask step bytes: ", o); false)

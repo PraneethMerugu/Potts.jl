@@ -295,8 +295,14 @@ function _u0_vector(prob::FieldProblem, u0::Union{AbstractVector{<:Pair}, Tuple{
         if v isa Number
             out[r] .= v
         else
-            length(v) == length(r) || throw(ArgumentError(string("remake: the state field `", _symtext(k), "` has ",
-                length(r), " values; got ", length(v))))
+            length(v) == length(r) || throw(
+                ArgumentError(
+                    string(
+                        "remake: the state field `", _symtext(k), "` has ",
+                        length(r), " values; got ", length(v)
+                    )
+                )
+            )
             out[r] .= vec(collect(v))
         end
     end
@@ -306,8 +312,14 @@ function _state_range(prob::FieldProblem, k)
     ix = prob.index
     slot = ix isa LatticeIndex ? get(ix.vars, ix.key(k), nothing) : nothing
     slot isa FieldSlot && return slot.range
-    throw(ArgumentError(string("remake: `", _symtext(k), "` is not a state field of the problem; its fields: ",
-        join(("`$s`" for s in prob.state), ", "))))
+    throw(
+        ArgumentError(
+            string(
+                "remake: `", _symtext(k), "` is not a state field of the problem; its fields: ",
+                join(("`$s`" for s in prob.state), ", ")
+            )
+        )
+    )
 end
 _parameter_vector(::FieldProblem, p::AbstractVector{<:Real}) = collect(p)
 _parameter_vector(prob::FieldProblem, p) = _pairs_vector(prob, p)
@@ -672,8 +684,10 @@ const LARGE_SAVE_BYTES = 2^31
 @noinline function _warn_large_saves(integ::FieldIntegrator)
     idx = getfield(integ, :saveidxs)
     n = (integ.nsteps + 2) * (idx === nothing ? length(integ.prob.u0) : length(idx)) * sizeof(_savetype(integ))
-    n > LARGE_SAVE_BYTES && @warn string("`solve`/`init` saves every window (no `saveat` given): about ", n ÷ 2^20,
-        " MiB of saved states. Give `saveat` or `save_everystep = false` to save less") maxlog = 1
+    n > LARGE_SAVE_BYTES && @warn string(
+        "`solve`/`init` saves every window (no `saveat` given): about ", n ÷ 2^20,
+        " MiB of saved states. Give `saveat` or `save_everystep = false` to save less"
+    ) maxlog = 1
     return nothing
 end
 # a map saves whole steps only
@@ -1123,14 +1137,18 @@ whole number of windows ends with one shortened window; a map steps whole steps 
 `saveat` and `tstops` of `init` apply again, those in the new span. `erase_sol = false` keeps
 the saves so far; `reinit_callbacks = false` does not run the callbacks' `initialize` again.
 """
-function SciMLBase.reinit!(integ::FieldIntegrator, u0 = integ.prob.u0; t0 = getfield(integ, :t0),
-        tf = getfield(integ, :tend), erase_sol::Bool = true, reinit_callbacks::Bool = true)
+function SciMLBase.reinit!(
+        integ::FieldIntegrator, u0 = integ.prob.u0; t0 = getfield(integ, :t0),
+        tf = getfield(integ, :tend), erase_sol::Bool = true, reinit_callbacks::Bool = true
+    )
     f = i -> _reinit!(i, u0, Float64(t0), Float64(tf), erase_sol, reinit_callbacks)
     getfield(integ, :verbose) || return Base.inferencebarrier(_quietly)(f, integ)
     return f(integ)
 end
-function _reinit!(integ::FieldIntegrator, u0, t0::Float64 = integ.t0, tf::Float64 = integ.tend, erase_sol::Bool = true,
-        reinit_callbacks::Bool = true)
+function _reinit!(
+        integ::FieldIntegrator, u0, t0::Float64 = integ.t0, tf::Float64 = integ.tend, erase_sol::Bool = true,
+        reinit_callbacks::Bool = true
+    )
     length(u0) == length(integ.prob.u0) ||
         throw(ArgumentError("u0 has $(length(u0)) values; the state has $(length(integ.prob.u0))"))
     u0 === integ.prob.u0 || check_declared_state(integ.prob, u0, eachindex(u0), "starts at")
@@ -1145,7 +1163,7 @@ function _reinit!(integ::FieldIntegrator, u0, t0::Float64 = integ.t0, tf::Float6
     integ.windows = 0
     integ.prevu = nothing
     empty!(integ.tstops)
-    append!(integ.tstops, filter(t -> t0 < t <= tf + 1e-9 * integ.dt, getfield(integ, :tstops0)))
+    append!(integ.tstops, filter(t -> t0 < t <= tf + 1.0e-9 * integ.dt, getfield(integ, :tstops0)))
     if erase_sol
         empty!(integ.ts)
         empty!(integ.us)
@@ -1167,8 +1185,10 @@ function _respan!(integ::FieldIntegrator, t0::Float64, tf::Float64)
     dt = integ.dt
     whole = _whole(tf - t0, dt)
     a1, clock = integ.runtimes[1].alg, _clock(integ.prob)
-    whole || integ.prob.kind != :map || _count(tf - t0, dt, "the time span"; window = _wtext(a1, clock, dt),
-        route = _count_route(a1, clock, dt, tf - t0, "the time span"))
+    whole || integ.prob.kind != :map || _count(
+        tf - t0, dt, "the time span"; window = _wtext(a1, clock, dt),
+        route = _count_route(a1, clock, dt, tf - t0, "the time span")
+    )
     integ.t0, integ.tend = t0, tf
     integ.nsteps = whole ? round(Int, (tf - t0) / dt) : floor(Int, (tf - t0) / dt)
     integ.save = _save_list(integ.prob, getfield(integ, :saveopts), t0, tf, dt, a1, clock)
@@ -1349,8 +1369,10 @@ function _steady_solve(prob::FieldProblem, alg::FieldAlgorithm; kw...)
     a = QuasiSteady(; dt = 1.0, newton = alg.newton, inner = alg.inner === :auto ? STEADY_INNER : alg.inner,
         solver_T = alg.solver_T)
     s = finish!(CommonSolve.init(SciMLBase.remake(prob; tspan = (0.0, 1.0)), a; save_start = false))
-    return FieldSolution(prob, [0.0], s.us[end:end], s.retcode, s.substeps, substep_counts(s),
-        isempty(s.auxu) ? s.auxu : s.auxu[end:end], field_stats(s))
+    return FieldSolution(
+        prob, [0.0], s.us[end:end], s.retcode, s.substeps, substep_counts(s),
+        isempty(s.auxu) ? s.auxu : s.auxu[end:end], field_stats(s)
+    )
 end
 
 SII.symbolic_container(i::FieldIntegrator) = i.prob.index
@@ -1574,8 +1596,10 @@ function Base.getproperty(i::FieldIntegrator, f::Symbol)
     f === :u && return SII.state_values(i)
     f === :sol && return Base.inferencebarrier(_solution)(i)
     f === :tdir && return 1.0
-    f === :opts && return (; maxiters = getfield(i, :maxiters), tstops = getfield(i, :tstops),
-        save_everystep = getfield(i, :everystep), verbose = getfield(i, :verbose))
+    f === :opts && return (;
+        maxiters = getfield(i, :maxiters), tstops = getfield(i, :tstops),
+        save_everystep = getfield(i, :everystep), verbose = getfield(i, :verbose),
+    )
     f === :stats && return Base.inferencebarrier(LatticeStats)(i)
     return getfield(i, f)
 end

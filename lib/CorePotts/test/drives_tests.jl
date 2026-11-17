@@ -221,8 +221,10 @@ end
         @test abs(se.stats.accepted_ΔH - (H(u) - H(u0))) > 1
         # warm steps allocate nothing, tracked or not (the checkerboard reduces only at read points)
         for f in (off, on)
-            integ = init(PottsProblem(f, initial_state(σ, kinds), lat, (0, 15), pb), alg; save_start = false,
-                save_everystep = false)
+                integ = init(
+                    PottsProblem(f, initial_state(σ, kinds), lat, (0, 15), pb), alg; save_start = false,
+                    save_everystep = false
+                )
             step!(integ); step!(integ)
             @test minimum(_ -> @allocated(step!(integ)), 1:3) == 0
         end

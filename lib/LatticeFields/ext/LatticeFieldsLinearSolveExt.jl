@@ -46,7 +46,7 @@ function SciMLBase.solve!(cache::LinearSolve.LinearCache, alg::LatticePCGAlgorit
     # (not converged: `MaxIters` at the iteration limit, else `ConvergenceFailure`, as LinearSolve's
     # Krylov methods report it)
     retcode = stats.solved ? SciMLBase.ReturnCode.Success :
-              stats.niter >= cache.maxiters ? SciMLBase.ReturnCode.MaxIters : SciMLBase.ReturnCode.ConvergenceFailure
+        stats.niter >= cache.maxiters ? SciMLBase.ReturnCode.MaxIters : SciMLBase.ReturnCode.ConvergenceFailure
     return SciMLBase.build_linear_solution(alg, cache.u, nothing, cache; retcode, iters = stats.niter, stats)
 end
 

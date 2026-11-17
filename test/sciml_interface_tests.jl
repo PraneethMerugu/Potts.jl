@@ -46,8 +46,12 @@ module IfacePDE
 end
 field_ode(k = 0.5) = LP.discretize(IfacePDE.decay(k), LP.LatticeDiscretization(LP.Grid((8, 8)); T = Float64))
 const DT = 0.1
-const KC = only(filter(p -> Potts.ModelingToolkitBase.getname(p) == :kc,
-    Potts.ModelingToolkitBase.parameters(IfacePDE.decay())))
+const KC = only(
+    filter(
+        p -> Potts.ModelingToolkitBase.getname(p) == :kc,
+        Potts.ModelingToolkitBase.parameters(IfacePDE.decay())
+    )
+)
 
 """The three paths: `(name, problem, algorithm, h, the windows in the time span, the time span's end)`."""
 function iface_cases()

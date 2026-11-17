@@ -139,7 +139,7 @@ end
             phases = Phases(after_mcs = (CS_SUM,)))
         prob = PottsProblem(f, cs_state(σ2, v2, 2; T = Float32), Lattice((4, 4)), (0, 2), gg_params())
         msg = r"the cell sum `x` \(`integral`, `CellReduce`\) exceeded floatmax\(Float32\) = 3.4028235e38 by MCS 2 and is stored as ±Inf; build the problem in Float64 \(`PottsProblem\(…; T = Float64\)`\) or rescale the summed expression"
-        sol = @test_logs (:warn, msg) solve(prob, SequentialCPM(); save_start = false, save_everystep = false)
+            sol = @test_logs (:warn, msg) solve(prob, SequentialCPM(); save_start = false, save_everystep = false)
         @test sol.retcode == ReturnCode.Success && sol.u[end].cell.x[1] == Inf32
         # a finite run does not warn
         ok = PottsProblem(f, cs_state(σ2, fill(1.0f0, 4, 4), 2; T = Float32), Lattice((4, 4)), (0, 2), gg_params())

@@ -36,7 +36,7 @@ end
     p = cbprob()
     for alg in (ExplicitEuler(; dt = 0.01), BackwardEuler(; dt = 0.01, inner = BTIGHT))
         cb = SciMLBase.DiscreteCallback((u, t, i) -> t == 0.5, i -> (i.ps[bk] = 3.0); save_positions = (false, false))
-        s = solve(p, alg; callback = cb, tstops = [0.5], save_everystep = false)
+            s = solve(p, alg; callback = cb, tstops = [0.5], save_everystep = false)
         a = solve(remake(p; tspan = (0.0, 0.5)), alg)
         b = solve(remake(p; u0 = a.u[end], tspan = (0.5, 1.0), p = [bk => 3.0]), alg)
         @test s.t == [0.0, 1.0] && maximum(abs, s.u[end] .- b.u[end]) < 1e-12 && s.ps[bk] == 3.0
