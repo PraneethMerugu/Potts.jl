@@ -328,7 +328,8 @@ the density that matched `SequentialCPM` kinetics in 2D and 3D (P6.0bl).
 default_parts(N::Int) = max(2, round(Int, 64^(1 / N)))
 
 function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, proposal; region = nothing, parts = nothing,
-        switches = 1, threads = :auto, inline_max_blocks = _INLINE_MAX_BLOCKS, min_read = 0, cell) where {N}
+        switches = 1, threads = :auto, inline_max_blocks = _INLINE_MAX_BLOCKS, min_read = 0, cell
+    ) where {N}
     r, w = reach(f.footprint, proposal)
     r = max(r, min_read, _window(f.connectivity))
     need = max(r + w, 1)
@@ -361,7 +362,7 @@ function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, proposal; r
     # fifteen positional fields are easy to permute (two defects of that shape on this branch): read
     # back the ones a swap would corrupt, once per `init`
     @assert c.layout === layout && c.switches == switches && c.reach == need && c.serial === sl &&
-            c.inline == _block_inline(backend, n, threads, inline_max_blocks)
+        c.inline == _block_inline(backend, n, threads, inline_max_blocks)
     return c
 end
 

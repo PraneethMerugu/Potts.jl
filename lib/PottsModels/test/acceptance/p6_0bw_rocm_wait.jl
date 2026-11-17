@@ -196,7 +196,8 @@ end
 # 2026-11-04), so runs cannot be compared bitwise. A stale or torn read still shows: every
 # saved state, and the state stepped with no wait, must be consistent in itself (each cell's
 # tracked volume equals its site count in σ), at the save times asked for, and the state moves.
-p60bw_consistent(u) = (σ = Array(u.ownership); v = Array(u.cell.volume);
+p60bw_consistent(u) = (
+    σ = Array(u.ownership); v = Array(u.cell.volume);
                        all(c -> v[c] == count(==(c), σ), eachindex(v)))
 function p60bw_saves_consistent(prob, alg, backend)
     prob = remake(prob; tspan = (0, P60BW_N))

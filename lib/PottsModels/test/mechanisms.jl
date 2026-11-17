@@ -105,7 +105,11 @@ blockstate(dims, blocks...) = (s = zeros(Int32, dims); foreach(((k, b),) -> s[b.
     end
     h0 = hetero(σ)
     sorted(J) = [hetero(solve(PottsProblem(GranerGlazier(; name = :gg), [ownership => σ, kind => k, :J => J],
-        (0, 300); seed), SequentialCPM(; proposal = Moore(1))).u[end].ownership) for seed in 1:3]
+                    (0, 300); seed
+                ), SequentialCPM(; proposal = Moore(1))
+            ).u[end].ownership
+        ) for seed in 1:3
+    ]
     # differential adhesion sorts; equal adhesion does not; reversed adhesion mixes
     @test all(<(h0 - 0.1), sorted([0 16 16; 16 2 11; 16 11 14]))
     @test all(h -> abs(h - h0) < 0.05, sorted([0 16 16; 16 11 11; 16 11 11]))
@@ -250,7 +254,12 @@ end
     end
     h0 = hetero(σ)
     run(J) = [hetero(Array(solve(PottsProblem(GranerGlazier(; name = :gg, lattice = size(σ)),
-        [ownership => σ, kind => k, :J => J], (0, 300); seed), SequentialCPM(; proposal = Moore(1))).u[end].ownership)) for seed in 1:2]
+                        [ownership => σ, kind => k, :J => J], (0, 300); seed
+                    ), SequentialCPM(; proposal = Moore(1))
+                ).u[end].ownership
+            )
+        ) for seed in 1:2
+    ]
     @test all(<(h0 - 0.1), run([0 16 16; 16 2 11; 16 11 14]))
     @test all(h -> abs(h - h0) < 0.05, run([0 16 16; 16 11 11; 16 11 11]))
 end
@@ -333,12 +342,13 @@ end
         isapprox(drive(ci, u, prop, ctx), want; atol = 1e-9)
     end
     @test all(((u, prop, ctx),) -> prob.f.constraint(u, p, prop, ctx) ==
-                                   (prop.old == 0 || cc3d_local(u.ownership, prop.x, prop.old, prop.new, (false, false))), props)
+            (prop.old == 0 || cc3d_local(u.ownership, prop.x, prop.old, prop.new, (false, false))), props
+    )
     # the energy change is that of J adhesion, the area and the length constraint, with the
     # cell length recomputed from σ (Eq. 5)
     @test all(props) do (u, prop, ctx)
         a = copy(u.ownership); a[prop.target] = prop.new
-        isapprox(energy_change(prob, u, prop), merks_energy(a, p) - merks_energy(u.ownership, p); rtol = 1e-9, atol = 1e-6)
+        isapprox(energy_change(prob, u, prop), merks_energy(a, p) - merks_energy(u.ownership, p); rtol = 1.0e-9, atol = 1.0e-6)
     end
 
     # the field: after each sweep, two explicit Euler substeps of D Δc + α·[cell] − ε c·[medium]
@@ -355,7 +365,7 @@ end
         return c
     end
     sol = solve(prob, SequentialCPM(); saveat = 0:10)
-    @test all(k -> isapprox(sol.u[k + 1].site.c, euler2(sol.u[k].site.c, sol.u[k + 1].ownership); atol = 1e-12), 1:10)
+    @test all(k -> isapprox(sol.u[k + 1].site.c, euler2(sol.u[k].site.c, sol.u[k + 1].ownership); atol = 1.0e-12), 1:10)
 
     # an explicit substep count is a minimum: the paper's diffusion constant (D = 0.75 per
     # MCS, the default) takes 4 automatic substeps (dt·(D·8 + δc)/n ≤ 1.8), and 2 would
@@ -418,7 +428,8 @@ end
         own = u.ownership[i]
         own == 0 && return 0.0
         vals = [u.site.act[mod1(x[1] + dx, X), mod1(x[2] + dy, Y)] for dx in -1:1, dy in -1:1
-                if u.ownership[mod1(x[1] + dx, X), mod1(x[2] + dy, Y)] == own]
+                if u.ownership[mod1(x[1] + dx, X), mod1(x[2] + dy, Y)] == own
+        ]
         return prod(vals)^(1 / length(vals))
     end
     props = sampled_proposals(prob)
@@ -438,7 +449,8 @@ end
     cprob = PottsProblem(WortelAct(; name = :w, lattice = (L, L), connected = true),
         [ownership => σ0, kind => [:cell, :cell], :λ => 5.0, :V₀ => 16.0, :λₛ => 0.5, :S₀ => 24.0, :λ_act => 20.0], (0, 10))
     @test all(((u, prop, ctx),) -> cprob.f.constraint(u, cprob.p, prop, ctx) ==
-                                   (prop.old == 0 || ring_rule(u.ownership, prop.x, prop.old, (true, true))), sampled_proposals(cprob))
+            (prop.old == 0 || ring_rule(u.ownership, prop.x, prop.old, (true, true))), sampled_proposals(cprob)
+    )
     # on copy: every site a cell gains is fully active, a site the medium takes inactive;
     # nothing else changes
     @test all(props) do (u, prop, ctx)

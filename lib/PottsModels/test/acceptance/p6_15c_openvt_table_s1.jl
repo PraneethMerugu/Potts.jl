@@ -164,18 +164,18 @@ p615c_define(:P615cFold, :(@potts_model P615cFold begin
     end
     @energy begin
         cells(A, B) => 1.0 * (volume - A_t)^2
-        contacts => J[kind, neighbor_kind]
+                contacts => J[kind, neighbor_kind]
     end
     @before_mcs begin
-        mb ~ count(neighbor_kind == medium for _ in contacts)
+                mb ~ count(neighbor_kind == medium for _ in contacts)
         ub ~ count(true for _ in contacts)
-        bb ~ count(neighbor_kind == B for _ in contacts)
-        vb ~ count(neighbor_kind == medium for _ in contacts(vn))
+                bb ~ count(neighbor_kind == B for _ in contacts)
+                vb ~ count(neighbor_kind == medium for _ in contacts(vn))
         sb ~ surface
     end
     @after_mcs begin
         A_t ~ Pre(A_t) + g
-        ma ~ count(neighbor_kind == medium for _ in contacts)
+                ma ~ count(neighbor_kind == medium for _ in contacts)
         ua ~ count(true for _ in contacts)
     end
     @divide cells(A, B) when = volume >= 40, along = RandomPlane(), A_t => 20.0
@@ -194,14 +194,15 @@ p615c_define(:P615cFig4, :(@potts_model P615cFig4 begin
     @relations proposal = Moore(1)
     @energy cells(cell) => 1.0 * (volume - 10)^2
     @before_mcs begin
-        m ~ count(neighbor_kind == medium for _ in contacts)
+                m ~ count(neighbor_kind == medium for _ in contacts)
         u ~ count(true for _ in contacts)
     end
     @sweep Metropolis(; temperature = T)
 end))
 
 # G1 cost: the same model reading the fold (CostFold) or the existing `surface` (CostSurf)
-for (name, rhs) in ((:P615cCostFold, :(count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts))),
+for (name, rhs) in (
+        (:P615cCostFold, :(count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts))),
                     (:P615cCostSurf, :(surface / (surface + 1.0))))
     p615c_define(name, :(@potts_model $name begin
         @kinds medium cell
@@ -218,7 +219,7 @@ for (name, rhs) in ((:P615cCostFold, :(count(neighbor_kind == medium for _ in co
         @relations proposal = Moore(1)
         @energy begin
             cells(cell) => 2.0 * (volume - A_star)^2
-            contacts => J[kind, neighbor_kind]
+                    contacts => J[kind, neighbor_kind]
         end
         @after_mcs begin
             f ~ $rhs
@@ -247,7 +248,7 @@ p615c_define(:P615cDraws, :(@potts_model P615cDraws begin
     @relations proposal = Moore(1)
     @energy begin
         cells(A) => 1.0 * (volume - 16)^2
-        contacts => J[kind, neighbor_kind]
+                contacts => J[kind, neighbor_kind]
     end
     @before_mcs begin
         z ~ randn()

@@ -115,7 +115,7 @@ function p65bo_own_src(name, schedule)
         :(@lattice Lattice((24, 24); boundary = Closed(), neighborhood = Moore(1))),
         :(@energy begin
             cells => (volume - V_target)^2 + 0.1 * surface
-            contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 1.0, 3.0)
+                contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 1.0, 3.0)
         end),
         :(@constraint mobile > 0.5),
         :(@on_copy act[target] ~ 5.0),
@@ -378,7 +378,9 @@ end
         alg = CheckerboardCPM(; proposal = Moore(1))
         # O1 on CPU and device, Float32: the same cells (kind, site set, V_target) and the
         # same hook results, up to a relabelling of the slots the CPU uses (as P6.0v1)
-        sig(u) = sort([(Int(p65bo_col(u, :kind)[c]), sort(findall(==(c), vec(Array(u.ownership)))), Float64(p65bo_col(u, :V_target)[c]))
+        sig(u) = sort(
+            [
+                (Int(p65bo_col(u, :kind)[c]), sort(findall(==(c), vec(Array(u.ownership)))), Float64(p65bo_col(u, :V_target)[c]))
                        for c in p65bo_alive(u)])
         for name in (:P65boOwn, :P65boOwnLate)
             cpu = solve(p65bo_own_problem(name; T = Float32), SequentialCPM()).u[end]

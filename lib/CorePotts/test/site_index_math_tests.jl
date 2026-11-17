@@ -30,7 +30,7 @@ end
         lo, i1, i2 = 10, 2^31 + 10, 2^32 + 10              # i2 ≡ lo (mod 2³²): an Int32 index wraps onto it
         # cell 1 is entity 1, converting into slot 2, allocated this pass (`new`)
         function pass(sites)
-            st = (; ownership = sparse_sites(Int32, n, (i => Int32(1) for i in sites)...))
+                st = (; ownership = sparse_sites(Int32, n, (i => Int32(1) for i in sites)...))
             sc = (; src = Int32[1, 0], to = Int32[2, 0], from = Int32[1, 0], new = Int32[1, 0], n = Int32[0, 0],
                 first = fill(typemax(Int64), 2), flag = zeros(Int64, 4), site = sparse_sites(Int32, n))
             ctx = (; lattice = lat)

@@ -147,7 +147,8 @@ end
     @testset "F4-11: a component that carries a PDESystem composes" begin
         # (before F4-11: "has a PDESystem; a component's fields are not compiled")
         host = FcHost(; name = :m)
-        w = Potts.wrap_system(:drug, FcPDE.System(FcPDE.Equation[], FcPDE.t; name = :drug), FcPDE.drug((12, 10)),
+        w = Potts.wrap_system(
+            :drug, FcPDE.System(FcPDE.Equation[], FcPDE.t; name = :drug), FcPDE.drug((12, 10)),
             Potts.part(Potts.component(:zz, FcPDE.zz(), host)))
         e = fc_msg(() -> fc_run(compose(host, w), :drug₊u, 3))
         @test e == "built" || (println(e); false)

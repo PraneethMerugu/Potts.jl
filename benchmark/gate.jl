@@ -89,7 +89,8 @@ function cases(T)
         "merks_100" =>
             () -> PottsProblem(MerksVasculogenesis(; name = :m, lattice = (100, 100)),
                 merks_state(; lattice = (100, 100), n = 25), (0, 10^6); T,          # 10² cells, ≈ 25 % cover
-                field_solver = clamped_euler(15, 0.0)),
+            field_solver = clamped_euler(15, 0.0)
+        ),
         "openvt_monolayer_100" =>
             () -> PottsProblem(
                 OpenVTGrowingMonolayer(; name = :o, lattice = (100, 100), τ = 1e6),
@@ -110,12 +111,12 @@ function cases(T)
         # (20 neighbours, 2-site frame) with the field on from MCS 0 (t_relax = 0)
         "merks2006_100" =>
             () -> PottsProblem(Merks2006(; name = :m6, lattice = (100, 100)),
-                Potts.layout(merks2006_layout(; lattice = (100, 100), n = 25), (100, 100)), (
+            Potts.layout(merks2006_layout(; lattice = (100, 100), n = 25), (100, 100)), (
                     0, 10^6); T,
                 field_solver = ExplicitEuler(substeps = 15)),
         "merks2008_202" =>
             () -> PottsProblem(Merks2008(; name = :m8),
-                [Potts.layout(merks2008_sprout(), (202, 202)); :t_relax => 0.0], (0, 10^6); T,
+            [Potts.layout(merks2008_sprout(), (202, 202)); :t_relax => 0.0], (0, 10^6); T,
                 field_solver = ExplicitEuler(substeps = 15))
     ]
 end

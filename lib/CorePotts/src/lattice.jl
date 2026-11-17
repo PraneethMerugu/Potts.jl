@@ -323,7 +323,7 @@ _candidates(spec::Hex, N, ::Square) = throw(ArgumentError("`Hex(k)` needs a hexa
 _candidates(spec::Union{Hex, Moore, VonNeumann}, N, ::Hexagonal) = [o for o in _box(2, spec.k) if _hexdist(o) <= spec.k]
 _candidates(spec::Stencil, N, ::Hexagonal) = _candidates(spec, N)
 _hexsq(o) = (x = o[1] + o[2] / 2; y = o[2] * sqrt(3) / 2; x^2 + y^2)
-_candidates(spec::EuclideanBall, N, ::Hexagonal) = [o for o in _box(2, ceil(Int, 2spec.r / sqrt(3))) if _hexsq(o) <= spec.r^2 + 1e-9]
+_candidates(spec::EuclideanBall, N, ::Hexagonal) = [o for o in _box(2, ceil(Int, 2spec.r / sqrt(3))) if _hexsq(o) <= spec.r^2 + 1.0e-9]
 function _candidates(spec::NeighborOrder, N, ::Hexagonal)
     box = _box(2, 2spec.k)
     shells = sort!(unique(round(_hexsq(o); digits = 9) for o in box if _hexsq(o) > 0))

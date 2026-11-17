@@ -176,7 +176,7 @@ function p64a1_probe_expr(name::Symbol, lattice::Expr, nd::Int)
         @lattice $lattice
         @energy begin
             cells => (volume - 4.0)^2
-            contacts => 2.0 * (kind != neighbor_kind)
+                contacts => 2.0 * (kind != neighbor_kind)
         end
         @drive copy => $drive
         @sweep Metropolis(; temperature = 1.0)
@@ -261,7 +261,8 @@ function p64a1_pairs(prob, dims, periodic)
     return out
 end
 
-p64a1_prop(prob, xt, xs; dir = 1) = (lat = prob.lattice; σ = prob.u0.ownership;
+p64a1_prop(prob, xt, xs; dir = 1) = (
+    lat = prob.lattice; σ = prob.u0.ownership;
     CorePotts.Proposal(CorePotts.linear_index(lat, xt), CorePotts.linear_index(lat, xs), xt, dir, σ[xt...], σ[xs...]))
 
 @testset "P6.4a1: the hand oracle (no production code)" begin
@@ -369,7 +370,7 @@ p64a1_define(:P64a1Dir, :(@potts_model P64a1Dir begin
     @lattice Lattice((24, 16); boundary = (Periodic(), Closed()))
     @energy begin
         cells => (volume - 25.0)^2
-        contacts => 4.0 * (kind != neighbor_kind)
+                contacts => 4.0 * (kind != neighbor_kind)
     end
     @drive copy => γ0 * ifelse(mode > 0.5, sin(ω * mcs), ifelse(mcs < K, 1.0, -0.5)) * (position[target][2] - y0) *
                    direction[1] + η * direction[2] + u * direction[1]

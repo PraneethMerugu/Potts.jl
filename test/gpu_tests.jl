@@ -131,7 +131,8 @@
         # model-scope ODEs and a model component (single-item kernel)
         σs2 = zeros(Int32, 20, 20); σs2[2:4, 2:4] .= 1; σs2[10:12, 10:12] .= 2; σs2[15:17, 3:5] .= 3
         us = solve(PottsProblem(Systemic(; name = :s), [ownership => σs2, kind => [1, 1, 1]], (0, 10); T = Float32,
-                ode_solver = Potts.RK4(substeps = 4)),
+                ode_solver = Potts.RK4(substeps = 4)
+            ),
             CheckerboardCPM(); backend).u[end]
         @test Array(us.model.pk₊drug_c)[1] ≈ 3 / 0.2 * (1 - exp(-0.2 * 10)) rtol = 1e-4
         # adaptive host ODEs with a device state (copied once per MCS)
@@ -369,8 +370,10 @@ end
         backend = PottsDevices.device_backend()
         sys = SolverTriple(; name = :t)
         v(n) = solver_var(sys, n)
-        for kw in ((; solvers = [v(:s) => Potts.RK4(), v(:h) => Potts.RK4()]),
-                   (; solvers = [v(:s) => Potts.RK4(), v(:w) => Adaptive(Tsit5(); reltol = 1e-6)]))
+        for kw in (
+                (; solvers = [v(:s) => Potts.RK4(), v(:h) => Potts.RK4()]),
+                (; solvers = [v(:s) => Potts.RK4(), v(:w) => Adaptive(Tsit5(); reltol = 1.0e-6)]),
+            )
             prob = PottsProblem(sys, solver_op(), (0, 5); T = Float32, kw...)
             @test haskey(prob.u0.cell, :s__ode)
             cpu = solve(prob, CheckerboardCPM()).u[end]

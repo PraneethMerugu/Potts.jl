@@ -371,17 +371,17 @@ end
         a = (k ./ L) .^ (-α / 2)
         S = P64B2.power_spectrum(p64b2_synth(L, a, ϕ))
         @test S.S[k] ≈ L .* a .^ 2 ./ 4 rtol = 1e-6
-        @test P64B2.spectral_exponent(S.f, S.S, (1e-3, 1e-1)) ≈ α atol = 1e-6
+        @test P64B2.spectral_exponent(S.f, S.S, (1.0e-3, 1.0e-1)) ≈ α atol = 1.0e-6
     end
     # white noise is flat; its running sum (a random walk) is f^−2 (the V13 exclusion)
     w = randn(StableRNG(3), 2^14)
     Sw = P64B2.power_spectrum(w)
-    @test abs(P64B2.spectral_exponent(Sw.f, Sw.S, (1e-3, 0.5))) < 0.1
+    @test abs(P64B2.spectral_exponent(Sw.f, Sw.S, (1.0e-3, 0.5))) < 0.1
     Sr = P64B2.power_spectrum(cumsum(w))
-    @test 1.8 < P64B2.spectral_exponent(Sr.f, Sr.S, (1e-3, 1e-1)) < 2.2
+    @test 1.8 < P64B2.spectral_exponent(Sr.f, Sr.S, (1.0e-3, 1.0e-1)) < 2.2
     # the fit uses only the bins in range: a tone outside it does not move α
     Sp = P64B2.power_spectrum(p64b2_synth(L, (k ./ L) .^ (-0.5), ϕ) .+ 100 .* cos.(2π * 1500 .* t ./ L))
-    @test P64B2.spectral_exponent(Sp.f, Sp.S, (1e-3, 1e-1)) ≈ 1 atol = 1e-6
+    @test P64B2.spectral_exponent(Sp.f, Sp.S, (1.0e-3, 1.0e-1)) ≈ 1 atol = 1.0e-6
     @test_throws ArgumentError P64B2.spectral_exponent(P.f, P.S, (0.3, 0.30001))
 end
 

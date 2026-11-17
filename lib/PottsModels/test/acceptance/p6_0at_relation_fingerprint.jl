@@ -285,7 +285,9 @@ end
 @testset "P6.0at: named and inline gather relations are in the fingerprint" begin
     for T in (Float64, Float32)
         @testset "contacts(far), square 2D, $T" begin
-            p60at_distinct(["sq contacts far=EuclideanBall(2.0)", "sq contacts far=EuclideanBall(3.0)", "sq contacts far=Moore(2)",
+            p60at_distinct(
+                [
+                    "sq contacts far=EuclideanBall(2.0)", "sq contacts far=EuclideanBall(3.0)", "sq contacts far=Moore(2)",
                 "sq contacts far=VonNeumann(1)", "sq contacts far=Moore(1)"]; T)
         end
         @testset "contacts(far) weights, square 2D, $T" begin
@@ -358,8 +360,10 @@ end
             pr("sq contacts far=Weighted(Moore(1), 3)"); alg = CheckerboardCPM())
     end
     @testset "a named fold in an energy" begin
-        p60at_checkpoint(pr("sq energy far(40) far=EuclideanBall(3.0)"), pr("sq energy far(40) far=EuclideanBall(2.0)"),
-            pr("sq energy far(40) far=EuclideanBall(3.0)"))
+        p60at_checkpoint(
+            pr("sq energy far(40) far=EuclideanBall(3.0)"), pr("sq energy far(40) far=EuclideanBall(2.0)"),
+            pr("sq energy far(40) far=EuclideanBall(3.0)")
+        )
     end
     @testset "an inline gather in an energy" begin
         p60at_checkpoint(pr("sq energy Moore(1)(40)"), pr("sq energy Moore(2)(40)"), pr("sq energy Moore(1)(40)"))

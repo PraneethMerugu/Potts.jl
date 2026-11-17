@@ -409,7 +409,8 @@ function LifecycleCache(backend, N::Int, capacity::Int, st = nothing, device::Bo
         KernelAbstractions.zeros(backend, Bool, capacity),
         KernelAbstractions.zeros(backend, T, N, capacity),
         KernelAbstractions.zeros(backend, T, capacity),
-        device ? DeviceLifecycle(backend, N, capacity, st; fused_limits...) : nothing)
+        device ? DeviceLifecycle(backend, N, capacity, st; fused_limits...) : nothing
+    )
 end
 
 Base.@kwdef mutable struct LifecycleStats
@@ -543,7 +544,9 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
         launches += 1
     end
     n = length(st.ownership)
-    Exec.launch!(backend, _partition_body!, n, (st.ownership, cache.daughter, cache.normals, cache.bias, cache.removed,
+    Exec.launch!(
+        backend, _partition_body!, n, (
+            st.ownership, cache.daughter, cache.normals, cache.bias, cache.removed,
         st.cell, ctx.lattice, lc.owner_changed, st))
     launches += 1
 

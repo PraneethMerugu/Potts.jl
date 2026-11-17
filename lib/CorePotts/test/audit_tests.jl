@@ -47,7 +47,7 @@ end
     lat = Lattice((12, 12))
     σ, kinds = blocks((12, 12), 4)
     st = with_capacity(initial_state(σ, kinds), 50)
-    st = CPMState(st.ownership, st.cell, st.site, st.model, (; vh = history_buffer(zeros(Int32, 50), 3)))
+        st = CPMState(st.ownership, st.cell, st.site, st.model, (; vh = history_buffer(zeros(Int32, 50), 3)))
     f = CPMFunction(gg_delta_H; temperature = gg_temperature,
         phases = Phases(; end_mcs = (HistoryPush(:vh => (:cell, :volume)),)))
     sol = solve(PottsProblem(f, st, lat, (0, 3), gg_params()), SequentialCPM())
@@ -77,14 +77,14 @@ end
     v = Float64[x[1] for x in CartesianIndices(σ)]
     st = initial_state(σ, [1]; cell = merge((; vsum = recompute_site_sum(σ, v, 1)), init_moments(σ, lat, 1)))
     st = with_capacity(st, 4)
-    rebuild!(st, p, ctx, backend) = copyto!(st.cell.vsum, recompute_site_sum(Array(st.ownership), v, length(st.cell.kind)))
+        rebuild!(st, p, ctx, backend) = copyto!(st.cell.vsum, recompute_site_sum(Array(st.ownership), v, length(st.cell.kind)))
     lc = Lifecycle((st, p, ctx, key, mcs, c) -> (mcs == 0 && c == 1) ? EVENT_DIVIDE : EVENT_NONE; rebuild!)
     commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop);
         commit_site_sum!(st.cell.vsum, prop, @inbounds v[prop.target]))
     f = CPMFunction(gg_delta_H; commit!, temperature = (a...) -> 0.0, lifecycle = lc)
     u = solve(PottsProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM()).u[end]
     @test u.cell.volume[2] > 0
-    @test u.cell.vsum ≈ recompute_site_sum(u.ownership, v, 4)
+        @test u.cell.vsum ≈ recompute_site_sum(u.ownership, v, 4)
 end
 end
 
@@ -96,7 +96,7 @@ end
     sol = solve(prob, SequentialCPM(); saveat = 2)
     @test sol.t == [0, 2, 4, 6, 8, 10]
     @test sol[end] === sol.u[end]
-    @test sol[1].ownership == σ
+        @test sol[1].ownership == σ
     @test occursin("6 saved states", sprint(show, MIME"text/plain"(), sol))
     @test occursin("PottsSolution", sprint(show, sol))
 end
@@ -168,7 +168,7 @@ end
     σ, kinds = blocks((24, 24), 4)
     prob = PottsProblem(GG, initial_state(σ, kinds), L, (0, 3), gg_params())
     u = solve(prob, CheckerboardCPM(; proposal = Moore(2))).u[end]
-    @test u.cell.volume == [count(==(c), u.ownership) for c in eachindex(u.cell.volume)]
+        @test u.cell.volume == [count(==(c), u.ownership) for c in eachindex(u.cell.volume)]
 end
 end
 
@@ -177,7 +177,7 @@ end
     lat = Lattice((40,))
     σ = zeros(Int32, 40); σ[5:20] .= 1
     st = with_capacity(initial_state(σ, [1]; cell = init_moments(σ, lat, 1)), 4)
-    st = CPMState(st.ownership, merge(st.cell, init_moments(σ, lat, 4)), st.site, st.model, st.history)
+        st = CPMState(st.ownership, merge(st.cell, init_moments(σ, lat, 4)), st.site, st.model, st.history)
     lc = Lifecycle((st, p, ctx, key, mcs, c) -> (mcs == 0 && c == 1) ? EVENT_DIVIDE : EVENT_NONE)
     f = CPMFunction(gg_delta_H; temperature = (a...) -> 0.0, lifecycle = lc)
     u = solve(PottsProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM(; proposal = VonNeumann(1))).u[end]

@@ -99,12 +99,12 @@ these names into scope; each is also reachable as `Potts.name`.
 """
 module Layouts
 
-using ..Potts: AbstractLayout, Tiling, Scattered, Frame, InsertUntil, overlay, layout, HyperSphere, Circle,
-    Sphere, Point, Center, RandomPoints, Voronoi, Eden, Splits, Interior, Fill, Objects, Group
+    using ..Potts: AbstractLayout, Tiling, Scattered, Frame, InsertUntil, overlay, layout, HyperSphere, Circle,
+        Sphere, Point, Center, RandomPoints, Voronoi, Eden, Splits, Interior, Fill, Objects, Group
 
-export AbstractLayout, Tiling, Scattered, Frame, InsertUntil, overlay, layout
-export HyperSphere, Circle, Sphere, Point, Center, RandomPoints, Voronoi
-export Eden, Splits
+    export AbstractLayout, Tiling, Scattered, Frame, InsertUntil, overlay, layout
+    export HyperSphere, Circle, Sphere, Point, Center, RandomPoints, Voronoi
+    export Eden, Splits
 export Interior, Fill, Objects, Group
 
 end

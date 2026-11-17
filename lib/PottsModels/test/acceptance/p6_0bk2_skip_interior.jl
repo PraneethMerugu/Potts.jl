@@ -163,7 +163,8 @@ function p60bk2_trajectory(prob, alg)
         SHA.update!(ctx, reinterpret(UInt8, vec(Array{Int32}(u.ownership))))
     end
     lc = sol.stats.lifecycle
-    return (; ownership = bytes2hex(SHA.digest!(ctx)), accepted = sol.stats.accepted, attempts = sol.stats.attempts,
+    return (;
+        ownership = bytes2hex(SHA.digest!(ctx)), accepted = sol.stats.accepted, attempts = sol.stats.attempts,
         divisions = lc === nothing ? 0 : lc.divisions, retcode = Symbol(sol.retcode))
 end
 

@@ -28,7 +28,7 @@ function _assert_checkpoint_accepted(base_prob, eq_prob)
     integ = init(base_prob, SequentialCPM(); save_start = false)
     ck = checkpoint(integ)
     loaded = init(eq_prob, SequentialCPM(); checkpoint = ck)
-    @test loaded.state.ownership == integ.state.ownership
+    return @test loaded.state.ownership == integ.state.ownership
 end
 
 """

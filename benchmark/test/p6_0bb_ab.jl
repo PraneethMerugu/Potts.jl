@@ -419,7 +419,7 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
             end
             SequentialCPM(; skip_interior = false) = SequentialCPM(skip_interior)
             struct CheckerboardCPM end
-            cases(T) = ["fake" => () -> (; u0 = (; ownership = zeros(T, 10)))]
+            cases(T) = ["fake" => () -> (; u0 = (; σ = zeros(T, 10)))]
             fresh_integrator(prob, alg, backend) = nothing
             timed_step!(i, backend) = (t = time_ns(); while time_ns() - t < 500_000 end; nothing)    # busy wait: sleep allocates a Timer and yields
             """)

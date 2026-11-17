@@ -59,7 +59,7 @@ end
         rest = solve!(init(prob, alg; checkpoint = ck, save_everystep = false))
     a, b = whole.u[end], rest.u[end]
     @test whole.stats.lifecycle.divisions >= 1
-    @test a.ownership == b.ownership
+        @test a.ownership == b.ownership
     @test a.cell == b.cell
     @test a.site == b.site
     @test whole.stats.attempts == rest.stats.attempts
@@ -73,7 +73,7 @@ end
     solve!(integ)
     reinit!(integ)
     @test integ.t == 0 && integ.retcode == SciMLBase.ReturnCode.Default
-    @test solve!(integ).u[end].ownership == a.ownership
+        @test solve!(integ).u[end].ownership == a.ownership
 end
 end
 

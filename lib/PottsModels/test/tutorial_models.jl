@@ -14,7 +14,7 @@ end
 function same_problem(a, b)
     return a.f.fingerprint == b.f.fingerprint && a.p == b.p && a.lattice == b.lattice && a.contact == b.contact &&
            a.proposal == b.proposal && a.relations == b.relations && a.spacing == b.spacing &&
-           a.frozen == b.frozen && a.u0.ownership == b.u0.ownership && a.u0.cell == b.u0.cell && a.u0.site == b.u0.site &&
+        a.frozen == b.frozen && a.u0.ownership == b.u0.ownership && a.u0.cell == b.u0.cell && a.u0.site == b.u0.site &&
            a.u0.model == b.u0.model
 end
 

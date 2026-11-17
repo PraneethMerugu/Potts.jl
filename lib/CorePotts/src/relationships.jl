@@ -314,8 +314,9 @@ end
 _check_declared(::Nothing, st) = nothing
 function _check_declared(names, st)
     for n in names
-        n === :ownership || haskey(st.cell, n) || throw(ArgumentError(
-            "HostPhase declares `$n`, which is neither `:ownership` nor a cell column of the state " *
+        n === :ownership || haskey(st.cell, n) || throw(
+            ArgumentError(
+                "HostPhase declares `$n`, which is neither `:ownership` nor a cell column of the state " *
             "(cell columns: $(join(keys(st.cell), ", ")))"))
     end
     return nothing

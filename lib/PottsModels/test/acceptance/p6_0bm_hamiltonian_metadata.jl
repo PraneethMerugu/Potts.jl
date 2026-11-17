@@ -76,9 +76,11 @@ function p60bm_eval(e, vals::AbstractDict{Symbol})
 end
 # the DSL's built-in names (AUTHORING; `Potts.DSL`): the only non-declared symbols an
 # energy may read
-const P60BM_BUILTINS = Set([:volume, :surface, :kind, :neighbor_kind, :owner, :neighbor_owner, :id, :generation,
+const P60BM_BUILTINS = Set(
+    [
+        :volume, :surface, :kind, :neighbor_kind, :owner, :neighbor_owner, :id, :generation,
     :weight, :source, :target, :old, :new, :mcs, :position, :a, :b, :distance, :cluster,
-    :cluster_volume, :cluster_surface, :time, :site, :neighbor_site, :major_length, :local_components,
+        :cluster_volume, :cluster_surface, :time, :site, :neighbor_site, :major_length, :local_components,
     :ring_arcs, :ring_cells, :ring_medium])
 
 # ---------------------------------------------------------------------------------------

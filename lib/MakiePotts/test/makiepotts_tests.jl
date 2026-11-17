@@ -70,8 +70,8 @@ end
         end
         frame = PottsRenderFrame(rand(rng, 0:10_000), owners, cells)
         @test assert_render_frame_conformance(frame) === frame
-        @test size(encode_frame(frame, CellTypeEncoding()).values) == dims
-        @test size(encode_frame(frame, CellIdentityEncoding()).values) == dims
+            @test size(encode_frame(frame, CellTypeEncoding()).values) == dims
+            @test size(encode_frame(frame, CellIdentityEncoding()).values) == dims
     end
 end
 end
@@ -85,7 +85,8 @@ end
     @test frame_geometry(frame).source_axes == (1, 2)
     @test frame_geometry(frame).spacing == (1.0, 1.0)
     @test owner_at(frame, CartesianIndex(1, 1)).kind === MediumSite
-    @test size(encode_frame(
+        @test size(
+            encode_frame(
         renderframe(fixture.state),
         CellIdentityEncoding()).values) == (5, 4, 3)
 
@@ -108,19 +109,19 @@ end
     frame = PottsRenderFrame(2, owners, cells;
         channels = (RenderChannel(key, values; label = "Signal", units = "a.u."),))
 
-    types = encode_frame(frame, CellTypeEncoding())
+        types = encode_frame(frame, CellTypeEncoding())
     @test encoding_kind(types.encoding) === CategoricalEncoding
     @test length(legend_entries(types)) == 3
     @test types.values[1, 1] == 1
 
-    signal = encode_frame(frame, ChannelEncoding(key))
+        signal = encode_frame(frame, ChannelEncoding(key))
     @test encoding_kind(signal.encoding) === ContinuousEncoding
     @test signal.values[2, 1] == 0.25
     @test isnan(signal.values[1, 2])
     @test signal.finite_range == (-0.25, 0.75)
     @test occursin("Cell 1", inspection_label(frame, ChannelEncoding(key),
         CartesianIndex(2, 1)))
-    @test_throws MakiePotts.MissingRenderChannelError encode_frame(
+        @test_throws MakiePotts.MissingRenderChannelError encode_frame(
         frame, ChannelEncoding(CellChannelKey(:absent, Float64)))
 end
 end

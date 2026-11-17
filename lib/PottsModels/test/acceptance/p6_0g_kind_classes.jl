@@ -145,7 +145,8 @@ end
 p60g_ctx(prob) = (; lattice = prob.lattice, contact = prob.contact, prob.relations...)
 p60g_prop(prob, u, t::NTuple{2, Int}, s::NTuple{2, Int}) = (lat = prob.lattice;
     ti = CorePotts.linear_index(lat, t); si = CorePotts.linear_index(lat, s);
-    CorePotts.Proposal(ti, si, t, 1, u.ownership[ti], u.ownership[si]))
+    CorePotts.Proposal(ti, si, t, 1, u.ownership[ti], u.ownership[si])
+)
 """The drive part of ΔH for one proposal: ΔH − ΔE."""
 p60g_drive(prob, u, prop) = prob.f.delta_H(u, prob.p, prop, p60g_ctx(prob)) - energy_change(prob, u, prop)
 p60g_allowed(prob, u, prop) = Bool(prob.f.constraint(u, prob.p, prop, p60g_ctx(prob)))
@@ -197,7 +198,7 @@ p60g_define(:P60gC, :(@potts_model P60gC begin
     @energy begin
         cells(endothelial) => 2.0 * (volume - 16)^2
         cells(ecm) => 0.02 * (volume - tgt)^2
-        contacts => J[kind, neighbor_kind] + 3.0 * (kind ∈ endothelial) * (neighbor_kind ∈ ecm)
+                contacts => J[kind, neighbor_kind] + 3.0 * (kind ∈ endothelial) * (neighbor_kind ∈ ecm)
         sites => -0.5 * V * (kind ∈ endothelial)
     end
     @drive begin
@@ -303,7 +304,7 @@ p60g_define(:P60gCTip, :(@potts_model P60gCTip begin
     @energy begin
         cells(endothelial) => 2.0 * (volume - 16)^2
         cells(ecm) => 0.02 * (volume - tgt)^2
-        contacts => J[kind, neighbor_kind] + 3.0 * (kind ∈ endothelial) * (neighbor_kind ∈ ecm)
+                contacts => J[kind, neighbor_kind] + 3.0 * (kind ∈ endothelial) * (neighbor_kind ∈ ecm)
         sites => -0.5 * V * (kind ∈ endothelial)
     end
     @drive begin
@@ -345,7 +346,7 @@ p60g_define(:P60gXSpare, :(@potts_model P60gXSpare begin
     @energy begin
         cells(tip, stalk) => 2.0 * (volume - 16)^2
         cells(fluid, matrix) => 0.02 * (volume - tgt)^2
-        contacts => J[kind, neighbor_kind] + 3.0 * ((kind == tip) || (kind == stalk)) * ((neighbor_kind == fluid) || (neighbor_kind == matrix))
+                contacts => J[kind, neighbor_kind] + 3.0 * ((kind == tip) || (kind == stalk)) * ((neighbor_kind == fluid) || (neighbor_kind == matrix))
         sites => -0.5 * V * ((kind == tip) || (kind == stalk))
     end
     @drive begin
@@ -442,7 +443,7 @@ p60g_define(:P60gLifeC, :(@potts_model P60gLifeC begin
     @lattice Lattice((32, 24); neighborhood = Moore(1))
     @energy begin
         cells(endothelial) => 1.0 * (volume - V₀[kind])^2
-        contacts => J[kind, neighbor_kind]
+                contacts => J[kind, neighbor_kind]
         edges(bond) => 0.05 * (distance - 5.0)^2
     end
     @divide cells(endothelial) when = (mcs == 1) && (volume >= 26)
@@ -488,7 +489,7 @@ p60g_define(:P60gClusterC, :(@potts_model P60gClusterC begin
     @parameters J[kind, kind] = [0 0 0 0; 0 4 8 8; 0 8 3 3; 0 8 3 3]
     @lattice Lattice((20, 16); neighborhood = Moore(1))
     @energy begin
-        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 1.0, J[kind, neighbor_kind])
+                contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 1.0, J[kind, neighbor_kind])
         clusters(endothelial) => 0.5 * (cluster_volume - 30)^2
     end
     @sweep Metropolis(; temperature = 3.0)
@@ -552,7 +553,7 @@ p60g_define(:P60gBaseC, :(@potts_model P60gBaseC begin
     @energy begin
         cells(endothelial) => 1.5 * (volume - 12)^2
         Surface(endothelial; target = 14.0, strength = 0.1)
-        contacts => 4.0 * (kind != neighbor_kind) + 1.0
+                contacts => 4.0 * (kind != neighbor_kind) + 1.0
     end
     @sweep Metropolis(; temperature = 3.0)
 end))
@@ -686,7 +687,7 @@ end
     for alg in P60G_ALGS
         sol = solve(prob, alg; saveat = 0:8)
         for u in sol.u
-            @test total_energy(prob, u) ≈ p60g_energy(Array(u.ownership), Array(u.cell.kind), Array(u.cell.tgt)) atol = 1e-9
+            @test total_energy(prob, u) ≈ p60g_energy(Array(u.ownership), Array(u.cell.kind), Array(u.cell.tgt)) atol = 1.0e-9
         end
     end
     # negative control: without stalk in the class, stalks leave the volume, contact and
@@ -807,7 +808,7 @@ end
     for alg in P60G_ALGS
         sol = solve(prob, alg; saveat = 0:6)
         for u in sol.u
-            @test total_energy(prob, u) ≈ p60g_cluster_energy(Array(u.ownership), Array(u.cell.kind), Array(u.cell.cluster)) atol = 1e-9
+            @test total_energy(prob, u) ≈ p60g_cluster_energy(Array(u.ownership), Array(u.cell.kind), Array(u.cell.cluster)) atol = 1.0e-9
         end
     end
 end
@@ -908,7 +909,7 @@ const P60G_REJECTED = (
         @kinds medium fluid tip stalk endothelial = (tip, stalk)
         @parameters J[kind, kind] = [0 1 1 1; 1 1 1 1; 1 1 1 1; 1 1 1 1]
         @lattice Lattice((12, 12))
-        @energy contacts => J[endothelial, neighbor_kind]
+                @energy contacts => J[endothelial, neighbor_kind]
         @sweep Metropolis(; temperature = 2.0)
     end)),
     ("a class indexing a 1-D kind table", ["endothelial", "kind class"], :P60gIndex1, :(@potts_model P60gIndex1 begin

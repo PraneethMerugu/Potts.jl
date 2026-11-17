@@ -283,7 +283,9 @@ end
         a = p60r_apply(prob, u, p)
         @test p60r_vol(a)[3] == 0
         # independent oracle: H of the same σ built with cells 1, 2 only (and their link)
-        fresh = PottsProblem(P60rLinked(; name = :p60r), [ownership => Array(a.ownership), kind => [:blob, :blob],
+        fresh = PottsProblem(
+            P60rLinked(; name = :p60r), [
+                ownership => Array(a.ownership), kind => [:blob, :blob],
                 :bond => [(1, 2)]], (0, 10))
         @test total_energy(prob, a) ≈ total_energy(fresh) atol = 1e-8                           # DEFECT CHECK (currently + λV₀²)
         # D-066 item 4 self-check: the cell credit only (no edge credit)
@@ -363,7 +365,9 @@ end
         # the survivor keeps moving after the death, and H (host, Float32 problem) is finite
         @test isfinite(total_energy(prob, sol.u[end]))
         # the P6.0l trajectory fixture on Metal: the partner dies by copies, the run ends
-        pp = PottsProblem(P60rLinked(; name = :p60r), [ownership => Array(p60r_pair().u0.ownership), kind => [:blob, :doomed],
+        pp = PottsProblem(
+            P60rLinked(; name = :p60r), [
+                ownership => Array(p60r_pair().u0.ownership), kind => [:blob, :doomed],
                 :bond => [(1, 2)]], (0, 30); T = Float32)
         solp = solve(pp, CheckerboardCPM(; proposal = Moore(1)); backend, saveat = 1)
         @test Symbol(solp.retcode) === :Success

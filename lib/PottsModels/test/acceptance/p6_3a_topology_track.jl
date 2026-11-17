@@ -209,8 +209,10 @@ end
             isempty(ys) && continue
             prop = p63a_prop(prob.lattice, x, first(ys), σ)
             want = p63a_ring_oracle(σ, x, geom; periodic)
-            direct = (CorePotts.ring_arcs(u.ownership, ctx, prop), CorePotts.ring_cells(u.ownership, ctx, prop),
-                CorePotts.ring_medium(u.ownership, ctx, prop))
+            direct = (
+                CorePotts.ring_arcs(u.ownership, ctx, prop), CorePotts.ring_cells(u.ownership, ctx, prop),
+                CorePotts.ring_medium(u.ownership, ctx, prop),
+            )
             lc = CorePotts.local_components(u.ownership, ctx, prop)
             d = round(Int, prob.f.delta_H(u, prob.p, prop, ctx) - energy_change(prob, u, prop))
             compiled = (d % 100, (d ÷ 100) % 100, d ÷ 10000)
@@ -674,7 +676,8 @@ end
     s2 = solve(p63a_track_problem(; track = (:energy_change,), seed = 9), SequentialCPM()).stats
     @test merge(solve(on, SequentialCPM()).stats, s2).accepted_energy_change == full + s2.accepted_energy_change
     @test merge(solve(p63a_track_problem(), SequentialCPM()).stats,
-        solve(p63a_track_problem(; seed = 9), SequentialCPM()).stats).accepted_energy_change === nothing
+        solve(p63a_track_problem(; seed = 9), SequentialCPM()).stats
+    ).accepted_energy_change === nothing
 end
 
 # ---------------------------------------------------------------------------------------

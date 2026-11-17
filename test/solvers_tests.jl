@@ -24,7 +24,9 @@
         # three cell groups (one adaptive) and two model groups: every rate reads the pre-step state
         sys = SolverTriple(; name = :t)
         v(n) = solver_var(sys, n)
-        prob = PottsProblem(sys, solver_op(), (0, 3); solvers = [v(:s) => Potts.RK4(), v(:h) => Potts.RK4(),
+        prob = PottsProblem(
+            sys, solver_op(), (0, 3); solvers = [
+                v(:s) => Potts.RK4(), v(:h) => Potts.RK4(),
             v(:w) => Adaptive(Tsit5(); reltol = 1e-12, abstol = 1e-14)])
         y, s, w, g, h = 1.0, 0.0, 0.5, 1.0, 0.0
         for _ in 1:3

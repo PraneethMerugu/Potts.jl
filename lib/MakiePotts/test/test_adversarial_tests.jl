@@ -42,7 +42,7 @@ end
         fill(RenderOwner(MediumSite, 1), 1, 1),
         RenderCellMetadata[]; geometry = one_geometry)
     @test Base.isvalid(render_frame_conformance(one_medium))
-    @test encode_frame(one_medium, CellTypeEncoding()).values == fill(1.0, 1, 1)
+        @test encode_frame(one_medium, CellTypeEncoding()).values == fill(1.0, 1, 1)
 
     figure, _, one_plot = Makie.plot(one_medium; boundaries = true)
     @test Makie.data_limits(one_plot) == Makie.Rect3d(
@@ -121,9 +121,9 @@ end
         RenderChannel(medium_key, Dict(UInt32(1) => 2.0)),
     )
     frame = PottsRenderFrame(0, owners, cells; channels)
-    @test count(isnan, encode_frame(frame, ChannelEncoding(site_key)).values) == 2
-    @test count(isnan, encode_frame(frame, ChannelEncoding(cell_key)).values) == 4
-    medium_values = encode_frame(frame, ChannelEncoding(medium_key)).values
+        @test count(isnan, encode_frame(frame, ChannelEncoding(site_key)).values) == 2
+        @test count(isnan, encode_frame(frame, ChannelEncoding(cell_key)).values) == 4
+        medium_values = encode_frame(frame, ChannelEncoding(medium_key)).values
     @test medium_values[1, 1] == 2.0
     @test isnan(medium_values[2, 1])
     @test isnan(medium_values[1, 2])
@@ -206,7 +206,7 @@ end
         fill(RenderOwner(MediumSite, 1), 2, 2), RenderCellMetadata[];
         channels = (RenderChannel(available_key, zeros(2, 2)),))
     missing_error = try
-        frame_channel(available_frame, absent_key)
+            frame_channel(available_frame, absent_key)
         nothing
     catch error
         error
@@ -262,9 +262,9 @@ end
 
     @test owner_at(frame, CartesianIndex(1, 1)) == RenderOwner(CellSite, 1)
     @test cell_metadata(frame, identity) == metadata
-    @test frame_channel(frame, site_key).values == [1.0 2.0; 3.0 4.0]
-    @test frame_channel(frame, cell_key).values[identity] == 5.0
-    @test frame_channel(frame, medium_key).values[UInt32(1)] == 6.0
+        @test frame_channel(frame, site_key).values == [1.0 2.0; 3.0 4.0]
+        @test frame_channel(frame, cell_key).values[identity] == 5.0
+        @test frame_channel(frame, medium_key).values[UInt32(1)] == 6.0
 
     fixture = render_fixture()
     ownership_before = copy(CorePotts.ownership(fixture.state))

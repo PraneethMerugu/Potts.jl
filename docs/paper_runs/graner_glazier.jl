@@ -44,8 +44,10 @@ alg = SequentialCPM(; proposal = Moore(1))
 
 ## T = 0 annealed copy for display (reproduction 09's `annealed`)
 function annealed(u)
-    q = PottsProblem(GranerGlazier(; name = :anneal, lattice = size(u.ownership)),
-        [ownership => Array(u.ownership), kind => k0, :T => 0.0], (0, 2PAPER_MCS); seed = 1)
+    q = PottsProblem(
+        GranerGlazier(; name = :anneal, lattice = size(u.ownership)),
+        [ownership => Array(u.ownership), kind => k0, :T => 0.0], (0, 2PAPER_MCS); seed = 1
+    )
     return solve(q, SequentialCPM(; proposal = Moore(1)); saveat = 2PAPER_MCS).u[end]
 end
 const ANNEALED = Dict{Int, Any}()

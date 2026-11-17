@@ -162,7 +162,7 @@ p60v2_xy!(cell, st, p, ctx, mcs) = (for c in eachindex(cell.y)
     cell.y[c] += cell.x[c]
 end; nothing)
 p60v2_sigma!(cell, st, p, ctx, mcs) = (for c in 1:2
-    cell.y[c] = count(==(Int32(c)), st.ownership)
+        cell.y[c] = count(==(Int32(c)), st.ownership)
 end; nothing)
 function p60v2_hostphase(body; bad = false)
     body === :none && return CorePotts.HostPhase(p60v2_xy!)

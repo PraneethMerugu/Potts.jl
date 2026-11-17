@@ -100,7 +100,8 @@ end
 
 const P60V3_FDIMS = (16, 16)
 p60v3_field_rate(st, p, ctx, key, mcs, i, c) = (n = length(c); l = i == 1 ? n : i - 1; r = i == n ? 1 : i + 1;
-    p.D * (c[l] + c[r] - 2 * c[i]) + p.s * (st.ownership[i] != 0) - p.k * c[i])
+    p.D * (c[l] + c[r] - 2 * c[i]) + p.s * (st.ownership[i] != 0) - p.k * c[i]
+)
 """One explicit-Euler substep of length `h` into `c__next`, clipped below at 0."""
 struct P60v3FieldSubstep{T}
     h::T

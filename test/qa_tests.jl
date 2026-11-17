@@ -326,7 +326,10 @@ end
             ("integrals", () -> (σ = zeros(Int32, 20, 20); σ[3:6, 3:6] .= 1;
                 PottsProblem(Integrals(; name = :i), [ownership => σ, kind => [1]], (0, 5)))),
             ("systemic", () -> (σ = zeros(Int32, 20, 20); σ[2:4, 2:4] .= 1;
-                PottsProblem(Systemic(; name = :s), [ownership => σ, kind => [1]], (0, 5); ode_solver = Potts.RK4(substeps = 4)))))
+                    PottsProblem(Systemic(; name = :s), [ownership => σ, kind => [1]], (0, 5); ode_solver = Potts.RK4(substeps = 4))
+                ),
+            ),
+        )
         prob = make()
         integ = init(prob, SequentialCPM(; proposal = Moore(1)); save_start = false)
         step!(integ)

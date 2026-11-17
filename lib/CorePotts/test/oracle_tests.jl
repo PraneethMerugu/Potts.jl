@@ -58,7 +58,7 @@ end
         mutant = remake(ORA_CLOSED_PROB; p = merge(ORA_P, (; T = 5.0)))
     counts = Dict{Vector{Int8}, Int}()
         for seed in 1:ORA_R
-        σ = vec(Int8.(solve(remake(mutant; seed), CheckerboardCPM()).u[end].ownership))
+            σ = vec(Int8.(solve(remake(mutant; seed), CheckerboardCPM()).u[end].ownership))
         counts[σ] = get(counts, σ, 0) + 1
     end
         z = Oracle.chi2_z(ex, counts, ORA_R)

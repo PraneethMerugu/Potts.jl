@@ -59,8 +59,9 @@ function _fold_predicate(p)
     _walk(p) do y
         i = info(y)
         if i !== nothing
-            (i.role === :builtin && i.name === :neighbor_kind) || throw(ArgumentError(
-                "`count(pred for _ in contacts)`: the predicate may read only `neighbor_kind` (the partner's kind; " *
+            (i.role === :builtin && i.name === :neighbor_kind) || throw(
+                ArgumentError(
+                    "`count(pred for _ in contacts)`: the predicate may read only `neighbor_kind` (the partner's kind; " *
                 "the medium for owner 0) and constants, not `$(i.name)`"))
         elseif SymbolicUtils.issym(y)
             throw(ArgumentError("`count(pred for _ in contacts)`: the predicate reads `$y`; it may read only `neighbor_kind` and constants"))
@@ -149,7 +150,10 @@ end
 
 """The per-copy updates of the model's contact counts (generated `commit!`)."""
 _contact_count_commits(c::CompiledPottsSystem) =
-    Any[:(CorePotts.commit_contact_count!(st.cell.$n, st.ownership, st.cell.kind, $(r === :contact ? :(ctx.contact) : :(ctx.$r)),
+    Any[
+    :(
+        CorePotts.commit_contact_count!(
+            st.cell.$n, st.ownership, st.cell.kind, $(r === :contact ? :(ctx.contact) : :(ctx.$r)),
               $m, ctx.lattice, prop)) for (n, r, m) in _contact_trackers(c)]
 
 """The initial count columns (`Int32`) of the model's folds, from σ."""

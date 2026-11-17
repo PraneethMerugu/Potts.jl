@@ -57,14 +57,14 @@ end
     cell = merge(init_moments(σ, lat, length(kinds)),
         (; surface = recompute_surface(σ, lat, relation(sspec, lat), length(kinds); T = Float32)))
     commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx);
-        commit_surface!(st.cell.surface, prop, surface_change(st.ownership, ctx, prop; T = Float32));
+            commit_surface!(st.cell.surface, prop, surface_change(st.ownership, ctx, prop; T = Float32));
         commit_moments!(st.cell, ctx, prop))
     function delta_H(st, p, prop, ctx)
         J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
         E(v, c) = p.λ * (v - p.V0)^2
         S(s, c) = p.λs * (s - p.S0)^2
-        return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
-               surface_delta(st.cell.surface, prop, surface_change(st.ownership, ctx, prop; T = Float32), S)
+            return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
+                surface_delta(st.cell.surface, prop, surface_change(st.ownership, ctx, prop; T = Float32), S)
     end
     f = CPMFunction(delta_H; commit!, temperature = gg_temperature)
     p = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0,
@@ -74,10 +74,10 @@ end
     sol = solve(prob, CheckerboardCPM(); backend)
     @test sol.retcode == ReturnCode.Success
     u = sol.u[end]
-    @test u.ownership != σ
-    @test u.cell.volume == [count(==(c), u.ownership) for c in eachindex(kinds)]
-    @test u.cell.surface ≈ recompute_surface(u.ownership, lat, relation(sspec, lat), length(kinds); T = Float64) rtol = 1e-4
-    ref = init_moments(u.ownership, lat, length(kinds))
+        @test u.ownership != σ
+        @test u.cell.volume == [count(==(c), u.ownership) for c in eachindex(kinds)]
+        @test u.cell.surface ≈ recompute_surface(u.ownership, lat, relation(sspec, lat), length(kinds); T = Float64) rtol = 1.0e-4
+        ref = init_moments(u.ownership, lat, length(kinds))
     for c in eachindex(kinds)
         @test all(isapprox.(centroid(u.cell, lat, c), centroid(merge(ref, (; volume = u.cell.volume)), lat, c); atol = 1e-9))
     end

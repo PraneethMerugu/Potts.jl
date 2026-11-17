@@ -101,7 +101,9 @@ nb = length(last(u0).second)
 prob = PottsProblem(ShearedFoam(; name = :foam), u0, (0, 10); seed = 1)
 alg = SequentialCPM(; skip_interior = true)
 annealed = solve(remake(prob; p = [:T => 3.0]), alg; save_everystep = false).u[end]                       # 10 MCS at T = 3
-relaxed = solve(remake(prob; u0 = [ownership => Array(annealed.ownership), kind => fill(:bubble, nb), :A => fill(256.0, nb)],
+relaxed = solve(
+    remake(
+        prob; u0 = [ownership => Array(annealed.ownership), kind => fill(:bubble, nb), :A => fill(256.0, nb)],
         tspan = (0, 1000)
     ), alg; save_everystep = false
 ).u[end]                                                 # 1000 MCS at T → 0⁺

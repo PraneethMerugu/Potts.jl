@@ -366,7 +366,8 @@ function p63f1b_run(seed, set, saves; track = false)
     tend = maximum(saves)
     prob = PottsProblem(Merks2008(; name = :m8b, lattice = set.lattice, mode = set.mode),
         [op; set.p...], (0, tend);
-        field_solver = P63F1B_SOLVER, seed, track = track ? (:energy_change,) : ())
+        field_solver = P63F1B_SOLVER, seed, track = track ? (:energy_change,) : ()
+    )
     integ = init(prob, SequentialCPM(); save_start = false, save_end = false)
     out = Dict{Int, Tuple{Float64, Union{Nothing, Float64}}}()
     record!(t) = (out[t] = (p63f1b_compactness(Array(current_state(integ).ownership)), integ.stats.accepted_energy_change))

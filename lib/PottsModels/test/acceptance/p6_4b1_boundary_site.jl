@@ -845,7 +845,7 @@ end
             walls_seen = true
             # a frozen cell is present: ignoring the frozen flag gives another set
             @test Set(p64b1_boundary(integ.state.ownership, integ.state.cell.kind, P64B1_MOORE; frozen_kinds = (2,))) !=
-                  Set(p64b1_boundary(integ.state.ownership, integ.state.cell.kind, P64B1_MOORE))
+                Set(p64b1_boundary(integ.state.ownership, integ.state.cell.kind, P64B1_MOORE))
         end
     end
     l = integ.stats.lifecycle
@@ -854,7 +854,7 @@ end
     @test Set(p64b1_boundary(integ.state.ownership, integ.state.cell.kind, P64B1_MOORE; frozen_kinds = (2,))) != B0  # a stale set fails
     # VonNeumann and Moore sets differ on the same state (the proposal matters)
     @test Set(p64b1_boundary(integ.state.ownership, integ.state.cell.kind, P64B1_VN)) !=
-          Set(p64b1_boundary(integ.state.ownership, integ.state.cell.kind, P64B1_MOORE))
+        Set(p64b1_boundary(integ.state.ownership, integ.state.cell.kind, P64B1_MOORE))
 end
 
 @testset "P6.4b1: the boundary set after copies, divisions, removals and frozen transitions" begin

@@ -152,12 +152,14 @@ p60al_find(xs, n) = only(filter(x -> Potts.info(x).name === n, xs))
         @test p60al_rejection(() -> extend(var, base), "gain", "parameter", "variable") === :ok
         @test p60al_rejection(() -> extend(base, var), "gain", "parameter", "variable") === :ok
         @test p60al_rejection(() -> Potts.PottsSystem(; name = :p, kinds = getfield(getfield(base, :part), :kinds), lattice = Potts.lattice(base),
-            sweep = getfield(getfield(base, :part), :sweep), parameters = Any[Potts.declared_parameters(base)...], variables = Any[Potts.declared_variables(var)...]),
+                sweep = getfield(getfield(base, :part), :sweep), parameters = Any[Potts.declared_parameters(base)...], variables = Any[Potts.declared_variables(var)...]
+            ),
             "gain", "parameter", "variable") === :ok
         # control: the same parts without the clash
         @test Potts.PottsSystem(; name = :p, kinds = getfield(getfield(base, :part), :kinds), lattice = Potts.lattice(base), sweep = getfield(getfield(base, :part), :sweep),
             parameters = Any[filter(p -> Potts.info(p).name !== :gain, Potts.declared_parameters(base))...],
-            variables = Any[Potts.declared_variables(var)...]) isa Potts.PottsSystem
+            variables = Any[Potts.declared_variables(var)...]
+        ) isa Potts.PottsSystem
         @test extend(P60alBase(; name = :b2), base) isa Potts.PottsSystem
     end
 

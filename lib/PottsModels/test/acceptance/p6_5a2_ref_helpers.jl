@@ -284,7 +284,7 @@ p65a2_define(:P65a2Refs, quote
         @lattice Lattice((20, 12); boundary = (Periodic(), Closed()), neighborhood = Moore(1))
         @energy begin
             cells => λ * (volume - Vt)^2
-            contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 0.5, 1.0)
+                contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 0.5, 1.0)
         end
         @after_mcs begin
             wcx ~ centroid(sibling(nucleus), 1)
@@ -458,7 +458,7 @@ p65a2_bad_expr(name::Symbol; energy = :((volume - 9.0)^2), update = :(w ~ 0.0)) 
     @lattice Lattice((20, 12); boundary = (Periodic(), Closed()), neighborhood = Moore(1))
     @energy begin
         cells => $energy
-        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 0.5, 1.0)
+            contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 0.5, 1.0)
     end
     @after_mcs $update
     @sweep Metropolis(; temperature = 1.0)

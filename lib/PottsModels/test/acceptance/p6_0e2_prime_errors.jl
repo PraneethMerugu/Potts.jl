@@ -71,7 +71,7 @@ end
 
 @testset "P6.0e2: primes of non-site variables" begin
     @testset "`m′` of a cell variable is rejected where it is written ($where)" for (where, stmt) in [
-        "contact energy" => :(@energy contacts => J[kind, neighbor_kind] + m′),
+            "contact energy" => :(@energy contacts => J[kind, neighbor_kind] + m′),
         "cell energy" => :(@energy cells(A) => m′ * volume),
         "drive" => :(@drive copy => m′),
         "constraint" => :(@constraint cells(A) => m′ < 2),
@@ -84,7 +84,8 @@ end
     end
 
     @testset "`g′` of a model variable is rejected" begin
-        @test p60e2_rejection(() -> mtkcompile(p60e2_model(:(@energy contacts => J[kind, neighbor_kind] + g′))),
+        @test p60e2_rejection(
+            () -> mtkcompile(p60e2_model(:(@energy contacts => J[kind, neighbor_kind] + g′))),
             "g′", P60E2_PHRASE) === :ok
         @test p60e2_rejection(() -> mtkcompile(p60e2_model(:(@after_mcs g ~ g′ + 1))), "g′", P60E2_PHRASE) === :ok
     end

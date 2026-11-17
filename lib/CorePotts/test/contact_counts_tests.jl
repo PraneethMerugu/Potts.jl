@@ -20,8 +20,8 @@ end
     @testset "recompute equals the unweighted surface for every kind" begin
         prob = cc_problem()
         st = prob.u0
-        all3 = recompute_contact_count(st.ownership, st.cell.kind, lat, Moore(1), 0b111, length(st.cell.kind))
-        @test all3 == recompute_surface(st.ownership, lat, relation(Moore(1), lat), length(st.cell.kind); T = Int32)
+            all3 = recompute_contact_count(st.ownership, st.cell.kind, lat, Moore(1), 0b111, length(st.cell.kind))
+            @test all3 == recompute_surface(st.ownership, lat, relation(Moore(1), lat), length(st.cell.kind); T = Int32)
         @test st.cell.n_med != all3[1:end] && any(>(0), st.cell.n_two)          # the masks select
         @test CorePotts.radius(CorePotts.relation(prob.relations.contact_counts, lat)) == 1
         # masks hold kinds 0–63: more kinds, or a mask beyond the model's kinds, are errors (review F5)
@@ -40,27 +40,27 @@ end
             relations = (; vn = VonNeumann(1)), seed = 7)
         @test cc_bad(solve(bare, alg; saveat = 1), lat) > 0
     end
-    @testset "device planner on the CPU backend ($form)" for (form, sites) in (("fused", CheckerboardCPM().fused_lifecycle_max_sites), ("staged", 0))
-        CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
+        @testset "device planner on the CPU backend ($form)" for (form, sites) in (("fused", CheckerboardCPM().fused_lifecycle_max_sites), ("staged", 0))
+            CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
         try
-            integ = init(cc_problem(), CheckerboardCPM(; fused_lifecycle_max_sites = sites); saveat = 1)
+                integ = init(cc_problem(), CheckerboardCPM(; fused_lifecycle_max_sites = sites); saveat = 1)
             @test integ.lcache.device isa CorePotts.DeviceLifecycle
             @test (integ.lcache.device.fused! === nothing) == (form == "staged")
             sol = solve!(integ)
             @test sol.stats.lifecycle.divisions >= 3 && sol.stats.lifecycle.transitions >= 1
             @test cc_bad(sol, lat) == 0
-        finally
+            finally
             CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
         end
     end
     @testset "rebuild_trackers! after a host edit" begin
         prob = cc_problem(; lifecycle = false)
         st = deepcopy(prob.u0)
-        st.ownership[5:9, 12:16] .= 0                                  # cell 4 removed by hand
+            st.ownership[5:9, 12:16] .= 0                                  # cell 4 removed by hand
         ctx = (; lattice = lat, contact = prob.contact, prob.relations...)
         rebuild_trackers!(st, ctx, CPU())
-        @test st.cell.n_med == cc_brute(st.ownership, st.cell.kind, lat, relation(Moore(1), lat), (0,), length(st.cell.kind))
-        @test st.cell.n_two == cc_brute(st.ownership, st.cell.kind, lat, relation(VonNeumann(1), lat), (2,), length(st.cell.kind))
+            @test st.cell.n_med == cc_brute(st.ownership, st.cell.kind, lat, relation(Moore(1), lat), (0,), length(st.cell.kind))
+            @test st.cell.n_two == cc_brute(st.ownership, st.cell.kind, lat, relation(VonNeumann(1), lat), (2,), length(st.cell.kind))
     end
 end
 end

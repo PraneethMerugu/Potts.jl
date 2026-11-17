@@ -267,7 +267,7 @@ const SIBLINGS = Dict(
         p = PottsProblem(ActArithmetic(; name = :a), [ownership => block((24, 24), (8:12, 8:12)), kind => [:cell]], (0, 30))
         @test selfcheck(p) < 1e-9
         u = solve(p, SequentialCPM()).u[end]
-        @test any(>(0), u.site.act) && count(==(1), u.ownership) > 0
+            return @test any(>(0), u.site.act) && count(==(1), u.ownership) > 0
     end),
     :MerksVasculogenesis => ("saturating chemotaxis", function ()
         cue = [0.05 * x for x in 1:40, y in 1:40]
@@ -276,7 +276,7 @@ const SIBLINGS = Dict(
                 kind => [:cell], :c => copy(cue)], (0, 150); seed)
             seed == 1 && @test selfcheck(p) < 1e-9
             u = solve(p, SequentialCPM()).u[end]
-            mean(i[1] for i in findall(==(1), u.ownership)) - 20.5
+                mean(i[1] for i in findall(==(1), u.ownership)) - 20.5
         end
         @test mean(drift) > 3
     end),
@@ -286,7 +286,8 @@ const SIBLINGS = Dict(
                               (0, 300); seed);
                           seed == 1 && λ_L > 0 && @test(selfcheck(p) < 1e-9);
                           u = solve(p, SequentialCPM()).u[end];
-                          mean(c -> sib_length(u.ownership, c), 1:4))
+                mean(c -> sib_length(u.ownership, c), 1:4)
+            )
         # seeds 1–3 at 300 MCS: 11.5–12.2 with λ_L = 5, 7.3–8.1 with λ_L = 0 (6.8 as squares)
         el, ro = mean(s -> len(5.0, s), 1:2), mean(s -> len(0.0, s), 1:2)
         @test el > 10 && el > ro + 2.5                        # cells stretch towards L = 16
@@ -298,7 +299,7 @@ const SIBLINGS = Dict(
                 kind => [:cell], :c => copy(cue), :χ => χ], (0, 150); seed)
             seed == 1 && χ > 0 && @test selfcheck(p) < 1e-9
             u = solve(p, SequentialCPM()).u[end]
-            mean(i[1] for i in findall(==(1), u.ownership)) - 20.0
+                mean(i[1] for i in findall(==(1), u.ownership)) - 20.0
         end
         @test mean(drift(300.0)) > 3 && abs(mean(drift(0.0))) < 2.5     # extensions alone carry the cell up the cue
     end),
@@ -309,8 +310,8 @@ const SIBLINGS = Dict(
             :cue => cue], (0, 60))
         @test selfcheck(p) < 1e-9
         u = solve(p, SequentialCPM(; proposal = VonNeumann(1))).u[end]
-        @test split_cells(u.ownership, (false, false)) == 0                     # the penalty keeps cells whole
-        @test mean(i[2] for i in findall(==(1), u.ownership)) > 7                # the leader climbs the cue
+            @test split_cells(u.ownership, (false, false)) == 0                     # the penalty keeps cells whole
+            return @test mean(i[2] for i in findall(==(1), u.ownership)) > 7                # the leader climbs the cue
     end),
     :OpenVTGrowingMonolayer => ("major-axis division", function ()
         p = PottsProblem(MajorAxisGrowth(; name = :g), [ownership => block((40, 40), (18:21, 18:21)), kind => [:cell]], (0, 120);
@@ -333,10 +334,10 @@ const SIBLINGS = Dict(
             count(>(0), u.cell.volume) == count(>(0), v.cell.volume) || continue    # quiet MCS only
             for c in findall(>(0), u.cell.volume)
                 n = m = 0
-                for I in findall(==(c), u.ownership), o in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                    for I in findall(==(c), u.ownership), o in ((1, 0), (-1, 0), (0, 1), (0, -1))
                     J = Tuple(I) .+ o
-                    all(1 .<= J .<= size(u.ownership)) || continue
-                    q = u.ownership[J...]
+                        all(1 .<= J .<= size(u.ownership)) || continue
+                        q = u.ownership[J...]
                     q == c && continue
                     n += 1
                     m += q == 0 || u.cell.kind[q] == u.cell.kind[c]
@@ -355,7 +356,7 @@ const SIBLINGS = Dict(
                 (0, 150); seed)
             seed == 1 && λx != 0 && @test selfcheck(p) < 1e-9
             u = solve(p, SequentialCPM()).u[end]
-            mean(i[1] for i in findall(>(0), u.ownership)) - 16.0
+                mean(i[1] for i in findall(>(0), u.ownership)) - 16.0
         end
         @test mean(drift(-2.0)) > 4 && abs(mean(drift(0.0))) < 2.5    # λx < 0 pushes the cells +x
     end),
@@ -364,7 +365,7 @@ const SIBLINGS = Dict(
         p = PottsProblem(ScheduledRelease(; name = :r), [ownership => σ, kind => fill(:cell, 6)], (0, 300); seed = 3)
         @test selfcheck(p) < 1e-9
         sol = solve(p, SequentialCPM(; proposal = Moore(1)); saveat = [20, 300], save_start = false)
-        span(u) = (x = [c[1] for c in PottsModels.Analysis.centroids(u.ownership)]; maximum(x) - minimum(x))
+            span(u) = (x = [c[1] for c in PottsModels.Analysis.centroids(u.ownership)]; maximum(x) - minimum(x))
         @test sol.u[1].cell.V_target == fill(16.0, 6) && sol.u[2].cell.V_target == fill(32.0, 6)
         @test span(sol.u[1]) < 24 && span(sol.u[2]) > 32                  # the chain lengthens after the release
     end),

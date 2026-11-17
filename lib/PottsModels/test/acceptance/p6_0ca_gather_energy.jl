@@ -118,15 +118,18 @@ append!(P60CA_REFUSED, [
     # the P6.0ba copy-step edge fixture, named and inline
     "edges(bond) owner[n] == a/b, far(40)" => (P60CA_FAR, [P60CA_BOND,
         :(@energy edges(bond) => 0.1 * (count(owner[n] == a for n in far(40)) + count(owner[n] == b for n in far(40))))], "edges(bond)"),
-    "edges(bond) owner[n] == a/b, EuclideanBall(2.0)(40)" => (nothing, [P60CA_BOND,
-        :(@energy edges(bond) => 0.1 * (count(owner[n] == a for n in EuclideanBall(2.0)(40)) + count(owner[n] == b for n in EuclideanBall(2.0)(40))))],
+        "edges(bond) owner[n] == a/b, EuclideanBall(2.0)(40)" => (
+            nothing, [
+                P60CA_BOND,
+                :(@energy edges(bond) => 0.1 * (count(owner[n] == a for n in EuclideanBall(2.0)(40)) + count(owner[n] == b for n in EuclideanBall(2.0)(40))))
+            ],
         "edges(bond)"),
     "edges(bond) kind[n]" => (nothing, [P60CA_BOND, :(@energy edges(bond) => 0.1 * count(kind[n] == A for n in Moore(1)(40)))], "edges(bond)"),
     "edges(bond) y[owner[n]]" => (nothing, [P60CA_BOND, :(@energy edges(bond) => 0.1 * sum(y[owner[n]] for n in Moore(1)(40)))], "edges(bond)"),
-    # contacts (today an accidental "cannot index `neighbor_owner`" at PottsProblem)
+        # contacts (today an accidental "cannot index `neighbor_owner`" at PottsProblem)
     "contacts owner[n] == owner, far(40)" => (P60CA_FAR, [:(@energy contacts => 0.1 * count(owner[n] == owner for n in far(40)))], "contacts"),
     "contacts owner[n] == 1, far(40)" => (P60CA_FAR, [:(@energy contacts => 0.1 * count(owner[n] == 1 for n in far(40)))], "contacts"),
-    "contacts owner[n] == 1, EuclideanBall(2.0)(40)" => (nothing, [:(@energy contacts => 0.1 * count(owner[n] == 1 for n in EuclideanBall(2.0)(40)))], "contacts"),
+        "contacts owner[n] == 1, EuclideanBall(2.0)(40)" => (nothing, [:(@energy contacts => 0.1 * count(owner[n] == 1 for n in EuclideanBall(2.0)(40)))], "contacts"),
 ])
 
 # accepted static gathers: label => (@relations body or nothing, statements, relation name read by ΔH or nothing)
@@ -180,8 +183,10 @@ const P60CA_WIDE = [
 ]
 # controls of the widening: accepted, ΔH exact. label => (@relations body or nothing, statements, nothing)
 const P60CA_WIDE_OK = [
-    "control contacts bare owner, neighbor_owner, kind, neighbor_kind" => (nothing,
-        [:(@energy contacts => 0.1 * ((owner == 1) + (neighbor_owner == 1)) + 0.2 * (kind == neighbor_kind) + 0.3 * (neighbor_kind == A))], nothing),
+    "control contacts bare owner, neighbor_owner, kind, neighbor_kind" => (
+        nothing,
+        [:(@energy contacts => 0.1 * ((owner == 1) + (neighbor_owner == 1)) + 0.2 * (kind == neighbor_kind) + 0.3 * (neighbor_kind == A))], nothing,
+    ),
     "control y[id], y static" => (nothing, [p60ca_cells(:(volume * y[id]))], nothing),
     "control y[id] in a gather, y static" => (P60CA_FAR, [p60ca_cells(:(volume * sum(y[id] * q[n] for n in far(40))))], nothing),
     "control y[id], y written @after_mcs" => (nothing, [:(@after_mcs y ~ y + 1.0), p60ca_cells(:(volume * y[id]))], nothing),

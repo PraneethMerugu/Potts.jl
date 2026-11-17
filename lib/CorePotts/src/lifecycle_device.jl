@@ -107,13 +107,16 @@ end
 const _FUSED_LIFECYCLE_MAX_SITES = 1 << 16
 const _FUSED_LIFECYCLE_MAX_CELLS = 1 << 13
 
-function DeviceLifecycle(backend, N::Int, cap::Int, st; max_sites::Int = _FUSED_LIFECYCLE_MAX_SITES,
-        max_cells::Int = _FUSED_LIFECYCLE_MAX_CELLS)
+function DeviceLifecycle(
+        backend, N::Int, cap::Int, st; max_sites::Int = _FUSED_LIFECYCLE_MAX_SITES,
+        max_cells::Int = _FUSED_LIFECYCLE_MAX_CELLS
+    )
     names = keys(st.cell)
     cols = Tuple(getfield(st.cell, k) for k in names if !(k in _LIFECYCLE_OWNED) && !_is_link_data(k) && !_is_scratch_column(k))
     links = Tuple(getfield(st.cell, k) for k in names if _is_adjacency(k))
     fused = !_FORCE_STAGED_LIFECYCLE[] && length(st.ownership) <= max_sites && cap <= max_cells ? _fused_kernel!(backend, PLAN_WG) : nothing
-    return DeviceLifecycle(_device_scratch(backend, N, cap, length(st.ownership)), cols, links, _plan_kernel!(backend, PLAN_WG), fused,
+    return DeviceLifecycle(
+        _device_scratch(backend, N, cap, length(st.ownership)), cols, links, _plan_kernel!(backend, PLAN_WG), fused,
         Ref(fused === nothing ? _FORM_STAGED : _FORM_FUSED), Ref(false), Ref(false), Ref(0), Ref(0),
         zeros(Int32, _NACC), zeros(Int32, _NACC), zeros(Int64, 3), zeros(Int64, 3))
 end
@@ -851,9 +854,9 @@ function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backe
                 st.cell.cluster_surface : nothing,
         rel = haskey(ctx, :surface) ? ctx.surface : nothing, refresh,
         su = haskey(st.cell, :surface) && haskey(ctx, :surface) ?
-             _units_for(eltype(st.cell.surface), ctx.surface, length(st.ownership), backend) : nothing,
+            _units_for(eltype(st.cell.surface), ctx.surface, length(st.ownership), backend) : nothing,
         cu = _has_clusters(st) && haskey(st.cell, :cluster_surface) && haskey(ctx, :surface) ?
-             _units_for(eltype(st.cell.cluster_surface), ctx.surface, length(st.ownership), backend) : nothing,
+            _units_for(eltype(st.cell.cluster_surface), ctx.surface, length(st.ownership), backend) : nothing,
         cc = _contact_counts(ctx), ccols = _count_columns(st, _contact_counts(ctx)), eul = _euler_columns(st.cell),
         births = _births(st))
     CL = Val(_has_clusters(st))
@@ -994,7 +997,8 @@ function _run_staged!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, 
     _stage_plan!(mode, D, backend, (buf.events, buf.daughter, buf.removed, buf.normals, buf.bias, dv, par, round,
         fns.normal, fns.cnormal, ruled, st, p, ctx, key, mcs, CL, surf, opt.births))
     _stage!(mode, _dpartition_body!, backend, n,
-        (dv, par, st.ownership, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, lat, fns.owner_changed, st))
+        (dv, par, st.ownership, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, lat, fns.owner_changed, st)
+    )
     _stage!(mode, _dcopies_body!, backend, cap, (dv, par, buf.events, buf.daughter, buf.removed, D.cols, D.links, st,
         ruled, CL, fns.release, opt.births))
     _stage!(mode, _drules_body!, backend, cap, (dv, par, buf.events, buf.daughter, fns.kind, fns.divide!,
@@ -1101,8 +1105,10 @@ end
     _plan_h!(th, buf.events, buf.daughter, dv, par, ruled, opt.surf)
     @synchronize
     tp = @index(Local, Linear)
-    _each_on!(_dpartition_body!, tp, length(st.ownership),
-        (dv, par, st.ownership, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, ctx.lattice, fns.owner_changed, st))
+    _each_on!(
+        _dpartition_body!, tp, length(st.ownership),
+        (dv, par, st.ownership, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, ctx.lattice, fns.owner_changed, st)
+    )
     @synchronize
     tq = @index(Local, Linear)
     _each_on!(_dcopies_body!, tq, length(buf.events), (dv, par, buf.events, buf.daughter, buf.removed, cols, links,
@@ -1131,8 +1137,10 @@ end
     @synchronize
     tm = @index(Local, Linear)
     _each_if!(_dcluster_volume_body!, tm, length(buf.events), opt.cvol, (dv, par, st.cell, opt.cvol))
-    _each_if!(_dcluster_surface_body!, tm, length(st.ownership), opt.csurf,
-        (dv, par, st.ownership, st.cell, opt.csurf, opt.rel, ctx.lattice, opt.cu))
+    _each_if!(
+        _dcluster_surface_body!, tm, length(st.ownership), opt.csurf,
+        (dv, par, st.ownership, st.cell, opt.csurf, opt.rel, ctx.lattice, opt.cu)
+    )
     _refresh_each!(_dfrozen_body!, tm, length(st.ownership), opt.refresh, dv, par, st, ctx.lattice)
     @synchronize
     tr = @index(Local, Linear)

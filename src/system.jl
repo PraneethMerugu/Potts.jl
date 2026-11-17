@@ -440,7 +440,8 @@ flattens it and keeps the hierarchy as its parent). A complete system that still
 subsystems (`compose(complete(a), …)`) is an `ArgumentError`, and so is a name of `sys` or
 `fields` other than `name`. The inner System carries the `Potts.PottsSweepSpec` metadata.
 """
-function wrap_system(name::Symbol, sys::ModelingToolkitBase.System, fields::Union{Nothing, ModelingToolkitBase.PDESystem},
+function wrap_system(
+        name::Symbol, sys::ModelingToolkitBase.System, fields::Union{Nothing, ModelingToolkitBase.PDESystem},
         part::PottsPart)
     nameof(sys) === name || throw(ArgumentError("wrap_system: the System is named `$(nameof(sys))`, the model `$name`; they must agree"))
     fields === nothing || nameof(fields) === name ||
@@ -448,7 +449,9 @@ function wrap_system(name::Symbol, sys::ModelingToolkitBase.System, fields::Unio
     ModelingToolkitBase.iscomplete(sys) || (sys = complete(sys; allow_parameter_eqs = true))
     isempty(ModelingToolkitBase.get_systems(sys)) || throw(ArgumentError(
         "wrap: `$name` is complete but not flattened (it still has subsystems: a completed system was composed); " *
-        "compose the uncompleted systems, then wrap them"))
+                "compose the uncompleted systems, then wrap them"
+        )
+    )
     w = PottsSystem(_Wrap(), name, sys, fields, part)
     return PottsSystem(_Wrap(), name, SymbolicUtils.setmetadata(sys, PottsSweepSpec, _sweep_spec(w)), fields, part)
 end

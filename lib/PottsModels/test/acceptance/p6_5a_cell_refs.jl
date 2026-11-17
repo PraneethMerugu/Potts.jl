@@ -212,7 +212,7 @@ p65a_define(:P65aClusters, quote
         @lattice Lattice((24, 24); boundary = Closed(), neighborhood = Moore(1))
         @energy begin
             cells => λ * (volume - V₀[kind])^2
-            contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 0.5, 1.0)
+                contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 0.5, 1.0)
         end
         @after_mcs begin
             nuc ~ sibling(nucleus)
@@ -309,7 +309,7 @@ p65a_define(:P65aEnergy, quote
         @energy begin
             cells => λ * (volume - V₀ - q[partner])^2 + μ[kind, kind[partner]] * volume +
                      ifelse(alive(partner), ν, 0.0) * volume
-            contacts => J[kind, neighbor_kind]
+                contacts => J[kind, neighbor_kind]
         end
         @observed pal(cell) ~ ifelse(alive(partner), 1.0, 0.0)
         @sweep Metropolis(; temperature = T)
@@ -424,7 +424,7 @@ p65a_define(:P65aLife, quote
         @energy begin
             cells(blob) => λ * (volume - V₀)^2
             cells(doomed) => λd * volume^2
-            contacts => J[kind, neighbor_kind]
+                contacts => J[kind, neighbor_kind]
         end
         @divide cells(blob) when = mcs == 20, along = (1.0, 0.0), tq => q[partner] + 1.0
         @observed begin
@@ -498,7 +498,7 @@ p65a_define(:P65aPair, quote
         @lattice Lattice((16, 31); boundary = Closed(), neighborhood = Moore(1))
         @energy begin
             cells(cell) => λ * (volume - V₀)^2
-            contacts => J[kind, neighbor_kind]
+                contacts => J[kind, neighbor_kind]
         end
         @drive copy => ifelse(kind[old] == cell, κ * (1 - 2 * (volume[old] - volume[partner[old]])), 0.0) +
                        ifelse(kind[new] == cell, κ * (1 + 2 * (volume[new] - volume[partner[new]])), 0.0)

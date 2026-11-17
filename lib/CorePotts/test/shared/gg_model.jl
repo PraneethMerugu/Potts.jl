@@ -57,12 +57,14 @@ function gs_delta_H(st, p, prop, ctx)
     S(s, c) = p.λs * (s - p.S0)^2
     return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
            surface_delta(st.cell.surface, prop,
-               surface_change(st.ownership, ctx, prop; T = eltype(st.cell.surface)), S)
+        surface_change(st.ownership, ctx, prop; T = eltype(st.cell.surface)), S
+    )
 end
 function gs_commit!(st, p, prop, ctx)
     commit_volume!(st, p, prop, ctx)
     commit_surface!(st.cell.surface, prop,
-        surface_change(st.ownership, ctx, prop; T = eltype(st.cell.surface)))
+        surface_change(st.ownership, ctx, prop; T = eltype(st.cell.surface))
+    )
 end
 const GS = CPMFunction(gs_delta_H; commit! = gs_commit!, temperature = gg_temperature)
 gs_params() = merge(gg_params(), (; λs = 0.5, S0 = 20.0))

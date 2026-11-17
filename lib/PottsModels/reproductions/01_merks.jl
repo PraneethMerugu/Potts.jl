@@ -881,7 +881,8 @@ function record_field(file, sol; title, figsize, every = 1)
     field(i) = Float64.(Array(sol.u[i].site.c))
     ## endothelial sites by kind (every cell that is not of the frame's kind); NaN is transparent
     frame_kind = sol.u[1].cell.kind[Array(sol.u[1].ownership)[1, 1]]         # the corner site is the frozen frame
-    cells(i) = (σ = Array(sol.u[i].ownership); kd = sol.u[i].cell.kind;
+    cells(i) = (
+        σ = Array(sol.u[i].ownership); kd = sol.u[i].cell.kind;
                 [c != 0 && kd[c] != frame_kind ? 1.0 : NaN for c in σ])
     nx, ny = frame_size(frames[1])
     ox, oy = frame_geometry(frames[1]).origin

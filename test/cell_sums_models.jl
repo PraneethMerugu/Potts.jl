@@ -183,8 +183,10 @@ function cs_r1_digests(backend = CorePotts.CPU(); ctl::Bool = false, mcs = 80, h
     try
         # Pin `threads = false` so the 1-thread vs 4-thread comparison stays deterministic
         # regardless of `inline_max_blocks`.
-        run(m, op, t; kw...) = solve(PottsProblem(m, op, (0, t); T = Float32, seed = 7, capacity = 2000),
-            CheckerboardCPM(; threads = false, kw...); backend, save_start = false)
+        run(m, op, t; kw...) = solve(
+            PottsProblem(m, op, (0, t); T = Float32, seed = 7, capacity = 2000),
+            CheckerboardCPM(; threads = false, kw...); backend, save_start = false
+        )
         # the weighted surface in the staged device lifecycle (one kernel per stage), the
         # compartments in the fused one (one workgroup: `fused_lifecycle_max_sites`)
         sw = run(CsWSurf(; name = :w), cs_wsurf_op(), mcs; fused_lifecycle_max_sites = 0)

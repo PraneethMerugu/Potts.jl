@@ -226,7 +226,7 @@ function p65b_body(; convert = P65B_CONVERT, schedule = nothing, refs = true)
         :(@lattice Lattice((20, 20); boundary = Closed(), neighborhood = Moore(1))),
         :(@energy begin
             cells => λ * (volume - V_target)^2 + 0.25 * surface
-            contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 1.0, 3.0)
+                contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 1.0, 3.0)
         end),
         # the sweep is frozen unless `mobile > 0.5`: only the pass moves sites
         :(@constraint mobile > 0.5),
@@ -525,7 +525,8 @@ end
     for seed in 1:4
         a = solve(p65b_problem(; seed), SequentialCPM(); saveat = 1)
         b = solve(p65b_problem(; seed), CheckerboardCPM(); saveat = 1)
-        @test all(i -> Array(a.u[i].ownership) == Array(b.u[i].ownership) && p65b_col(a.u[i], :V_target) == p65b_col(b.u[i], :V_target),
+        @test all(
+            i -> Array(a.u[i].ownership) == Array(b.u[i].ownership) && p65b_col(a.u[i], :V_target) == p65b_col(b.u[i], :V_target),
             eachindex(a.u))
     end
 end
@@ -856,7 +857,7 @@ end
                     :sub => s, :V_target => [40.0, 4.0, 10.0, 2.0, 16.0]], (0, 4); seed, capacity = 8)
                 for alg in (SequentialCPM(), CheckerboardCPM())
                     sol = solve(prob, alg; saveat = 1)
-                    push!(out, [(Array(u.ownership), Array(u.cell.V_target), Array(u.cell.birth)) for u in sol.u])
+                                push!(out, [(Array(u.ownership), Array(u.cell.V_target), Array(u.cell.birth)) for u in sol.u])
                 end
             end
             serialize(ARGS[1], out)

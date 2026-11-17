@@ -201,7 +201,8 @@ function Base.show(io::IO, a::CheckerboardCPM)
     kw = String[]
     for (k, d) in ((:acceptance, nothing), (:proposal, nothing), (:region, nothing), (:parts, nothing),
             (:switches, 1), (:threads, :auto), (:inline_max_blocks, _INLINE_MAX_BLOCKS),
-            (:fused_lifecycle_max_sites, _FUSED_LIFECYCLE_MAX_SITES), (:fused_lifecycle_max_cells, _FUSED_LIFECYCLE_MAX_CELLS))
+            (:fused_lifecycle_max_sites, _FUSED_LIFECYCLE_MAX_SITES), (:fused_lifecycle_max_cells, _FUSED_LIFECYCLE_MAX_CELLS),
+        )
         v = getfield(a, k)
         v == d || push!(kw, "$k = " * repr(v; context = io))
     end

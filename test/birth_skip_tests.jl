@@ -28,7 +28,8 @@ function bs_with_serials(prob)
     n = Int(maximum(Array(st.ownership)))
     birth = zeros(Int32, length(st.cell.kind))
     birth[1:n] .= Int32.(1:n)
-    stb = CorePotts.CPMState(st.ownership, merge(st.cell, (; birth)), st.site,
+    stb = CorePotts.CPMState(
+        st.ownership, merge(st.cell, (; birth)), st.site,
         merge(st.model, NamedTuple{(CorePotts.NEXT_BIRTH,)}((Int32[n + 1],))), st.history)
     return CorePotts.PottsProblem(prob.f, stb, prob.lattice, prob.tspan, prob.p; prob.contact, prob.proposal,
         prob.relations, prob.spacing, prob.frozen, prob.seed, prob.replica, prob.repeat)

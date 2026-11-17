@@ -175,10 +175,13 @@ function _frozen_reads(@nospecialize(sys), @nospecialize(st))
     reads = frozen_reads(sys)
     reads === nothing && return nothing
     (reads isa Tuple && all(n -> n isa Symbol, reads)) || throw(ArgumentError(
-        "`frozen_reads` must be `nothing` or a tuple of Symbols (`:ownership` or cell column names); got $(repr(reads))"))
+            "`frozen_reads` must be `nothing` or a tuple of Symbols (`:ownership` or cell column names); got $(repr(reads))"
+        )
+    )
     for n in reads
-        n === :ownership || haskey(st.cell, n) || throw(ArgumentError(
-            "`frozen_reads` declares `$n`, which is neither `:ownership` nor a cell column of the state " *
+        n === :ownership || haskey(st.cell, n) || throw(
+            ArgumentError(
+                "`frozen_reads` declares `$n`, which is neither `:ownership` nor a cell column of the state " *
             "(cell columns: $(join(keys(st.cell), ", ")))"))
     end
     allunique(reads) || throw(ArgumentError(
@@ -539,8 +542,9 @@ function _init_run(prob, alg, backend, checkpoint, callback, o)
         prob = _from_checkpoint(prob, checkpoint)
         # the accumulator continues only into an equally tracked run (a hand-written model
         # may keep fingerprint 0 whatever its track, so this is checked here too)
-        (checkpoint.stats.accepted_energy_change === nothing) == (prob.f.track === nothing) || throw(ArgumentError(
-            "checkpoint was taken with tracking $(checkpoint.stats.accepted_energy_change === nothing ? "off" : "on") " *
+        (checkpoint.stats.accepted_energy_change === nothing) == (prob.f.track === nothing) || throw(
+            ArgumentError(
+                "checkpoint was taken with tracking $(checkpoint.stats.accepted_energy_change === nothing ? "off" : "on") " *
             "but the problem has tracking $(prob.f.track === nothing ? "off" : "on"); continue it in a problem " *
             "with the same `track`"))
         # a restored state is no fresh one: its at-init phases skip the field clamps (D-145)
@@ -701,7 +705,8 @@ end
 # dynamic dispatch that compiles only that callee for the model's types (the setup runs once
 # per run; `step!` and the kernels stay fully specialized). Specialized on the model, this
 # body was 0.3–0.9 s of inference for every model (TS-R1 §1.1b).
-Base.@nospecializeinfer function _init(@nospecialize(prob::PottsProblem), @nospecialize(alg::AbstractCPMAlgorithm), fresh::Bool,
+Base.@nospecializeinfer function _init(
+        @nospecialize(prob::PottsProblem), @nospecialize(alg::AbstractCPMAlgorithm), fresh::Bool,
         backend, opts::PottsOptions, @nospecialize(callback)
     )
     alg isa SequentialCPM && !(backend isa CPU) &&
@@ -727,13 +732,14 @@ Base.@nospecializeinfer function _init(@nospecialize(prob::PottsProblem), @nospe
     ctx = with_tangent(ctx, prob.tangent, prob.f.phases, state, p, backend, fresh)
     cache = alg isa CheckerboardCPM ?
             CheckerboardCache(backend, lat, prob.f, relation(_proposal(alg, prob), lat); alg.region, alg.parts, alg.switches,
-                alg.threads, alg.inline_max_blocks, min_read = _copy_step_reach(prob, ctx), cell = state.cell) :
-            _skips_interior(alg) ? BoundaryCache(state.ownership, ctx.mobility, ctx.lattice, ctx.proposal) : nothing
+            alg.threads, alg.inline_max_blocks, min_read = _copy_step_reach(prob, ctx), cell = state.cell
+        ) :
+        _skips_interior(alg) ? BoundaryCache(state.ownership, ctx.mobility, ctx.lattice, ctx.proposal) : nothing
     _check_repeat(prob.f.phases, alg, cache)
     key = RNGKey(prob.seed, prob.replica, prob.repeat)
     fused_limits = _fused_lifecycle_limits(alg)
     lcache = prob.f.lifecycle === nothing ? nothing :
-             LifecycleCache(backend, ndims(lat), ncells(prob.u0), state, _device_planned(backend, alg, prob.f); fused_limits)
+        LifecycleCache(backend, ndims(lat), ncells(prob.u0), state, _device_planned(backend, alg, prob.f); fused_limits)
     integ = PottsIntegrator(prob, alg, _device_law(_law(alg, prob.f), backend), state, cache, lcache, prob.f, device_functions(prob.f), p, ctx, backend, key,
         prob.tspan[1], prob.tspan[2], opts, Int[], Any[], SciMLBase.ReturnCode.Default, _initial_stats(prob.f),
         _callbacks(callback), prob.frozen === nothing ? nsites(lat) : count(!, prob.frozen),
@@ -1144,8 +1150,11 @@ const _FORCE_STAGED_LIFECYCLE = Ref(false)
 _fused_lifecycle_limits(alg) = (;)
 function _fused_lifecycle_limits(alg::CheckerboardCPM)
     s, c = alg.fused_lifecycle_max_sites, alg.fused_lifecycle_max_cells
-    s >= 0 && c >= 0 || throw(ArgumentError(
-        "CheckerboardCPM(; fused_lifecycle_max_sites = $s, fused_lifecycle_max_cells = $c): use at least 0"))
+    s >= 0 && c >= 0 || throw(
+        ArgumentError(
+            "CheckerboardCPM(; fused_lifecycle_max_sites = $s, fused_lifecycle_max_cells = $c): use at least 0"
+        )
+    )
     return (; max_sites = s, max_cells = c)
 end
 
@@ -1166,14 +1175,15 @@ end
 function _check_convert_atomics(backend, u0)
     haskey(u0.model, CONVERT_FLAGS) || return nothing
     (eltype(getfield(u0.model, CONVERT_FLAGS)) === Int64 && !_atomic64(backend)) && throw(ArgumentError(
-        "this lattice has $(length(u0.ownership)) sites and an @convert pass: it keeps site indices in Int64 atomics, " *
+            "this lattice has $(length(u0.ownership)) sites and an @convert pass: it keeps site indices in Int64 atomics, " *
         "which $(nameof(typeof(backend))) does not have (D-253); run it on the CPU or on ROCm or CUDA"))
     return nothing
 end
 
 # Statistics of a new run: `accepted_energy_change` is 0.0 when `f` tracks, else `nothing`;
 # `connectivity_deferred` is 0 when the model uses `Global`, else `nothing`.
-_initial_stats(f) = PottsStats(; accepted_energy_change = f.track === nothing ? nothing : 0.0,
+_initial_stats(f) = PottsStats(;
+    accepted_energy_change = f.track === nothing ? nothing : 0.0,
     connectivity_deferred = (f.connectivity === nothing || !f.connectivity.uses_global) ? nothing : 0)
 
 # Whole-cell connectivity on a device (P6.9a): a device lifecycle does not maintain the
@@ -1245,8 +1255,10 @@ end
 function _refresh_frozen!(integ, m::MaskMobility, kinds::Tuple)
     sc = integ.mscratch
     _flush_counts!(integ)                           # earlier device refreshes first
-    Exec.launch!(integ.backend, _frozen_body!, length(integ.state.ownership),
-        (m.frozen, sc.device, integ.state.ownership, integ.state.cell.kind, kinds, integ.ctx.lattice))
+    Exec.launch!(
+        integ.backend, _frozen_body!, length(integ.state.ownership),
+        (m.frozen, sc.device, integ.state.ownership, integ.state.cell.kind, kinds, integ.ctx.lattice)
+    )
     _stats(integ).launches += 1
     _copy!(_stats(integ), sc.host, sc.device)         # synchronizes (a no-op copy on the CPU)
     fill!(sc.device, zero(eltype(sc.host)))
@@ -1543,7 +1555,8 @@ SciMLBase.__solve(prob::SciMLBase.AbstractEnsembleProblem, alg::AbstractCPMAlgor
 # a parallel ensemble's trajectories run with `IN_THREADED_ENSEMBLE` set (the tasks inherit it).
 # SciMLBase hands every trajectory an `rng`; it seeds the trajectories only when the ensemble
 # itself got a `seed` or an `rng`, else trajectory `i` keeps replica `i` of the problem's seed.
-function SciMLBase.__solve(prob::SciMLBase.AbstractEnsembleProblem, alg::AbstractCPMAlgorithm,
+function SciMLBase.__solve(
+        prob::SciMLBase.AbstractEnsembleProblem, alg::AbstractCPMAlgorithm,
         ensemble::SciMLBase.BasicEnsembleAlgorithm; kwargs...)
     seeded = haskey(kwargs, :seed) || haskey(kwargs, :rng)
     generic() = invoke(SciMLBase.__solve, Tuple{SciMLBase.AbstractEnsembleProblem, Any, SciMLBase.BasicEnsembleAlgorithm},

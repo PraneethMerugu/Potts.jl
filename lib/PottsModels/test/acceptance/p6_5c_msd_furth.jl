@@ -250,8 +250,8 @@ end
         @test ρ2 ≈ τ .- (1 - S) .* (1 .- exp.(-τ)) rtol = 1e-12  # Eq. 2
     end
     # the limits: ballistic for Δt ≪ P (MSD ≈ (D/P)Δt² + 2D_fast Δt), diffusive for Δt ≫ P
-    @test p65cc_furth_msd([1e-3], 0.0, 0.5, 100.0)[1] ≈ 0.5 / 100 * 1e-6 rtol = 1e-4
-    @test p65cc_furth_msd([1e6], 0.0, 0.5, 100.0)[1] ≈ 2 * 0.5 * (1e6 - 100) rtol = 1e-12
+    @test p65cc_furth_msd([1.0e-3], 0.0, 0.5, 100.0)[1] ≈ 0.5 / 100 * 1.0e-6 rtol = 1.0e-4
+    @test p65cc_furth_msd([1.0e6], 0.0, 0.5, 100.0)[1] ≈ 2 * 0.5 * (1.0e6 - 100) rtol = 1.0e-12
     for bad in ((; S = 1.0, D = 0.5, P = 100.0), (; S = -0.1, D = 0.5, P = 100.0), (; S = 0.1, D = -0.5, P = 100.0),
             (; S = 0.1, D = 0.5, P = 0.0))
         @test_throws ArgumentError p65cc_furth_msd(Δt, bad...)

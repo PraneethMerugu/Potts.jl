@@ -468,7 +468,13 @@ function p60v1_check_divide(sol)
     u = p60v1_host(sol.u[end])
     @test p60v1_live(u) == 1:5                                   # daughters in the lowest free slots 4, 5
     for (c, (r, k)) in enumerate(P60V1_CELLS[1:2])               # parents keep the low-x half
-        @test p60v1_sites(u, c) == findall(vec(let m = falses(size(u.ownership)); m[r[1:2], k] .= true; m end))
+        @test p60v1_sites(u, c) == findall(
+            vec(
+                let m = falses(size(u.ownership))
+                    m[r[1:2], k] .= true; m
+                end
+            )
+        )
     end
     @test p60v1_sites(u, 3) == p60v1_sites(p60v1_host(sol.u[1]), 3)   # kind B never divides
     d = Dict(c => only(unique(u.ownership[r[3:4], k])) for (c, (r, k)) in enumerate(P60V1_CELLS[1:2]))

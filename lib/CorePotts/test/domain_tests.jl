@@ -34,9 +34,9 @@ end
         prob = PottsProblem(GG, st, lat, (0, 30), gg_params(); seed = 2)
         @test count(prob.frozen) == count(!, lat.mask)
         u = solve(prob, alg).u[end]
-        @test all(u.ownership[.!lat.mask] .== 0)                             # nothing crosses the edge
-        @test u.cell.volume == [count(==(c), u.ownership) for c in eachindex(kinds)]
-        @test u.ownership != σ
+            @test all(u.ownership[.!lat.mask] .== 0)                             # nothing crosses the edge
+            @test u.cell.volume == [count(==(c), u.ownership) for c in eachindex(kinds)]
+            @test u.ownership != σ
     end
 
     # ΔH equals the brute-force energy difference next to the domain edge
@@ -50,9 +50,9 @@ end
         ins, y = shift(lat, x, off)
         ins || continue
         s = linear_index(lat, y)
-        st.ownership[i] == st.ownership[s] && continue
-        prop = Proposal(i, s, x, 1, st.ownership[i], st.ownership[s])
-        a = deepcopy(st); a.ownership[i] = prop.new; commit_volume!(a, gg_params(), prop, ctx)
+            st.ownership[i] == st.ownership[s] && continue
+            prop = Proposal(i, s, x, 1, st.ownership[i], st.ownership[s])
+            a = deepcopy(st); a.ownership[i] = prop.new; commit_volume!(a, gg_params(), prop, ctx)
         worst = max(worst, abs(gg_delta_H(st, gg_params(), prop, ctx) -
                                (total_H(a, lat, prob.contact, gg_params()) - total_H(st, lat, prob.contact, gg_params()))))
     end

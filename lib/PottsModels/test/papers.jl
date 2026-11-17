@@ -27,7 +27,9 @@ using LinearAlgebra: Symmetric, eigen, dot
     # annealed for 2 paper MCS (32 here) at T = 0 under the run's own Hamiltonian (`pars`,
     # PRE §II D2; D-059), the simulation itself untouched (p.2134)
     anneal(σ, pars = []; seed = 1) = solve(PottsProblem(GranerGlazier(; name = :gg),
-        [ownership => copy(σ), kind => k, pars..., :T => 0.0], (0, 32); seed), SequentialCPM(); saveat = 32).u[end].ownership
+            [ownership => copy(σ), kind => k, pars..., :T => 0.0], (0, 32); seed
+        ), SequentialCPM(); saveat = 32
+    ).u[end].ownership
     medium_fraction(σ, key, pars = []) = (n = bonds(anneal(σ, pars)); n[key] / sum(values(n)))
     hetero(σ, pars = []) = (n = bonds(anneal(σ, pars)); n[:dl] / sum(values(n)))
     function radius_ratio(σ)                 # mean distance to the aggregate centroid, dark / light

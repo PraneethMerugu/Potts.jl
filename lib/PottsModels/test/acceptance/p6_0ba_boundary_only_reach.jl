@@ -147,7 +147,9 @@ const P60BA_FIXTURES = [
     "after Moore(1)" => (:apart, nothing, p60ba_after(:(Moore(1)))),
     # several boundary sites at once, and a boundary-only far relation beside a copy-step
     # read within the footprint (a Moore(1) constraint around the target)
-    "boundary all far=EuclideanBall(2.0)" => (:touch, P60BA_FAR, [P60BA_BOND, P60BA_STATIC,
+    "boundary all far=EuclideanBall(2.0)" => (
+        :touch, P60BA_FAR, [
+            P60BA_BOND, P60BA_STATIC,
         :(@divide cells(A) when = (y == 0.0) & (mcs * $(p60ba_g(:far)) >= 12), y => mcs + 1.0),
         :(@link bond when = new_contact(a, b) && (mcs * $(p60ba_pair(:far)) >= 24)),
         :(@after_mcs z ~ $(p60ba_g(:far))), :(@observed o(cell) ~ $(p60ba_g(:far)))]),
@@ -159,16 +161,24 @@ const P60BA_FIXTURES = [
     "constraint EuclideanBall(2.0)" => (:apart, nothing, p60ba_constraint(P60BA_B2)),
     "drive far=EuclideanBall(2.0)" => (:apart, P60BA_FAR, p60ba_drive(:far)),
     # 3. mixed: one relation read in the copy step (edge energy) and at the boundary
-    "mixed far=EuclideanBall(2.0)" => (:touch, P60BA_FAR, [p60ba_edge(:far)...,
+    "mixed far=EuclideanBall(2.0)" => (
+        :touch, P60BA_FAR, [
+            p60ba_edge(:far)...,
         :(@divide cells(A) when = (y == 0.0) & (mcs * $(p60ba_g(:far)) >= 12), y => mcs + 1.0)]),
-    "mixed EuclideanBall(2.0)" => (:touch, nothing, [p60ba_edge(P60BA_B2)...,
+    "mixed EuclideanBall(2.0)" => (
+        :touch, nothing, [
+            p60ba_edge(P60BA_B2)...,
         :(@divide cells(A) when = (y == 0.0) & (mcs * $(p60ba_g(P60BA_B2)) >= 12), y => mcs + 1.0)]),
     "mixed after+edge far=EuclideanBall(2.0)" => (:touch, P60BA_FAR, [p60ba_edge(:far)..., :(@after_mcs z ~ $(p60ba_g(:far)))]),
     # 5. copy dynamics (no veto), accepted by CheckerboardCPM on the base
-    "pin constraint EuclideanBall(2.0) + div Moore(1)" => (:touch, nothing, [p60ba_constraint(P60BA_B2)...,
+    "pin constraint EuclideanBall(2.0) + div Moore(1)" => (
+        :touch, nothing, [
+            p60ba_constraint(P60BA_B2)...,
         :(@divide cells(A) when = (y == 0.0) & ($(p60ba_g(:(Moore(1)))) >= 3), y => mcs + 1.0),
         :(@after_mcs z ~ $(p60ba_g(:(Moore(1)))))]),
-    "pin drive far=EuclideanBall(2.0)" => (:touch, P60BA_FAR, [p60ba_drive(:far)...,
+    "pin drive far=EuclideanBall(2.0)" => (
+        :touch, P60BA_FAR, [
+            p60ba_drive(:far)...,
         :(@energy contacts => 2.0)]),
 ]
 const P60BA_MODELS = Dict{String, Any}()
@@ -412,8 +422,10 @@ end
             @test f(sol) == expected
         end
     end
-    for label in ("edge far=EuclideanBall(2.0)", "edge EuclideanBall(2.0)", "mixed far=EuclideanBall(2.0)", "mixed EuclideanBall(2.0)",
-        "mixed after+edge far=EuclideanBall(2.0)", "constraint far=EuclideanBall(2.0)", "drive far=EuclideanBall(2.0)", "boundary all far=EuclideanBall(2.0)")
+    for label in (
+            "edge far=EuclideanBall(2.0)", "edge EuclideanBall(2.0)", "mixed far=EuclideanBall(2.0)", "mixed EuclideanBall(2.0)",
+            "mixed after+edge far=EuclideanBall(2.0)", "constraint far=EuclideanBall(2.0)", "drive far=EuclideanBall(2.0)", "boundary all far=EuclideanBall(2.0)",
+        )
         @testset "$label" begin
             @test Symbol(p60ba_solve(label; alg = SequentialCPM(), links = startswith(label, "mixed") || startswith(label, "edge")).retcode) === :Success
         end

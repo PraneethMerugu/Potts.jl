@@ -87,7 +87,9 @@ _cluster_env(T, r, relname; δ = nothing) =
         :id => r, :__cell => r, (δ === nothing ? () : (:δcluster_surface => δ,))...), relname)
 
 _site_env(T, i, relname; mcs = nothing, key = nothing) =
-    LowerEnv(T, :site, Dict{Symbol, Any}(_draws(key, mcs, i)..., :owner => :(@inbounds st.ownership[$i]),
+    LowerEnv(
+    T, :site, Dict{Symbol, Any}(
+        _draws(key, mcs, i)..., :owner => :(@inbounds st.ownership[$i]),
         :kind => :(CorePotts.owner_kind(st, $i)), :__site => i,
         :position => :(Potts._position($T, ctx, $i)), :site => i,
         (mcs === nothing ? () : (:mcs => mcs,))...), relname)
@@ -115,19 +117,23 @@ _pieces_column(name::Symbol) = !_PIECES_HEX[] ? name : name === :pieces_full ? :
 
 _proposal_env(T, relname) = LowerEnv(T, :proposal, Dict{Symbol, Any}(:source => :source,
     :target => :target, :old => :old, :new => :new, :__kind_of => (:old => :k_old, :new => :k_new),
-    :local_components => :(Int32(CorePotts.local_components(st.ownership, ctx, prop))),
-    :ring_arcs => :(Int32(CorePotts.ring_arcs(st.ownership, ctx, prop))),
-    :ring_cells => :(Int32(CorePotts.ring_cells(st.ownership, ctx, prop))),
-    :ring_medium => :(Int32(CorePotts.ring_medium(st.ownership, ctx, prop))),
+        :local_components => :(Int32(CorePotts.local_components(st.ownership, ctx, prop))),
+        :ring_arcs => :(Int32(CorePotts.ring_arcs(st.ownership, ctx, prop))),
+        :ring_cells => :(Int32(CorePotts.ring_cells(st.ownership, ctx, prop))),
+        :ring_medium => :(Int32(CorePotts.ring_medium(st.ownership, ctx, prop))),
     # P6.4a1 (D-188): functions of (source, target) and of the sweep's MCS alone; code is
     # emitted only where a model reads them (`direction[k]`, `position[s][k]`, `mcs`)
     :direction => :(Potts._direction($T, ctx, source, target)), :mcs => :(Potts._copy_mcs(ctx))), relname)
 
 # a contact pair (s, s′): owners `a`, `n`, their kinds, the relation weight, and the sites
 # (site variables `x ≡ x[site]`, `x′ ≡ x[neighbor_site]`)
-_contact_env(T, a, ka, n, kn, w, site, neighbor_site, relname; extra = ()) = LowerEnv(T, :contact,
-    Dict{Symbol, Any}(:kind => ka, :neighbor_kind => kn, :owner => a, :neighbor_owner => n, :weight => w,
-        :__site => site, :site => site, :neighbor_site => neighbor_site, :__cell => a, extra...), relname)
+_contact_env(T, a, ka, n, kn, w, site, neighbor_site, relname; extra = ()) = LowerEnv(
+    T, :contact,
+    Dict{Symbol, Any}(
+        :kind => ka, :neighbor_kind => kn, :owner => a, :neighbor_owner => n, :weight => w,
+        :__site => site, :site => site, :neighbor_site => neighbor_site, :__cell => a, extra...
+    ), relname
+)
 
 _edge_env(T, a, b, k, d, relname; mcs = nothing, mode = :edge) = LowerEnv(T, mode,
     Dict{Symbol, Any}(:a => a, :b => b, :distance => d, :__edge => (k, a),
@@ -179,7 +185,7 @@ function _shell_quantity!(acc, x::Expr)
 end
 _is_shell_call(x) = x isa Expr && x.head === :call && length(x.args) >= 4 && x.args[1] isa Expr &&
                     x.args[1].head === :. && x.args[1].args[1] === :CorePotts &&
-                    x.args[1].args[2] in QuoteNode.(_SHELL_KERNELS) && x.args[2] == :(st.ownership)
+    x.args[1].args[2] in QuoteNode.(_SHELL_KERNELS) && x.args[2] == :(st.ownership)
 _count_shell_calls(x) = x isa Expr ? Int(_is_shell_call(x)) + sum(_count_shell_calls, x.args; init = 0) : 0
 _on_shell(x) = x isa Expr ? (_is_shell_call(x) ? Expr(:call, x.args[1], :shell_read, map(_on_shell, x.args[3:end])...) :
                              Expr(x.head, map(_on_shell, x.args)...)) : x
@@ -303,7 +309,7 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
             for kk in 1:length($R)
                 ins, sn = CorePotts.neighbor_index(ctx.lattice, prop.x, prop.target, $R, kk, $inner)
                 if ins
-                    n = @inbounds st.ownership[sn]
+                        n = @inbounds st.ownership[sn]
                     w = CorePotts.weight($R, kk)
                     k_n = Potts._cellkind(st, n)
                     $(pairbinds...)
@@ -389,7 +395,10 @@ function _pieces_prelude(c::CompiledPottsSystem)
     for (full, slot) in _pieces_slots(c)
         P, L = full ? (:pieces_full, :largest_piece_full) : (:pieces, :largest_piece)
         vars = full ? (:pf_old, :lf_old, :pf_new, :lf_new) : (:pa_old, :la_old, :pa_new, :la_new)
-        push!(out, :($(Expr(:tuple, vars...)) = CorePotts.pieces_after!(st.ownership, ctx, prop, st.cell.$P, st.cell.$L,
+        push!(
+            out, :(
+                $(Expr(:tuple, vars...)) = CorePotts.pieces_after!(
+                    st.ownership, ctx, prop, st.cell.$P, st.cell.$L,
             st.cell.volume, Val($full), $slot)))
     end
     return out
@@ -412,7 +421,8 @@ function _cluster_delta_code(c::CompiledPottsSystem, T)
     body = Any[:(cl_old = CorePotts.cluster_of(st.cell, old)), :(cl_new = CorePotts.cluster_of(st.cell, new))]
     getfield(c, :uses_cluster_surface) && push!(
         body,
-        :(δc = CorePotts.cluster_surface_change(st.ownership, st.cell, ctx, prop; T = eltype(st.cell.cluster_surface))))
+        :(δc = CorePotts.cluster_surface_change(st.ownership, st.cell, ctx, prop; T = eltype(st.cell.cluster_surface)))
+    )
     sides = Any[]
     for (side, dv, δ) in ((:cl_old, -1, :(δc[1])), (:cl_new, +1, :(δc[2])))
         terms = Any[]
@@ -517,7 +527,8 @@ function _commit_expr(c::CompiledPottsSystem, T)
     getfield(c, :uses_euler) && push!(body, :(CorePotts.commit_euler!(st.cell.euler, prop, CorePotts.euler_change(st.ownership, ctx, prop, Val(:face)))))
     getfield(c, :uses_euler_full) && push!(
         body,
-        :(CorePotts.commit_euler!(st.cell.euler_full, prop, CorePotts.euler_change(st.ownership, ctx, prop, Val(:full)))))
+        :(CorePotts.commit_euler!(st.cell.euler_full, prop, CorePotts.euler_change(st.ownership, ctx, prop, Val(:full))))
+    )
     for (full, slot) in _pieces_slots(c)            # the after-values ΔH stored (P6.9a)
         P, L = full ? (:pieces_full, :largest_piece_full) : (:pieces, :largest_piece)
         push!(body, :(CorePotts.commit_pieces!(st.cell.$P, st.cell.$L, prop, ctx, $slot)))
@@ -527,7 +538,10 @@ function _commit_expr(c::CompiledPottsSystem, T)
         body, :(
             CorePotts.commit_cluster_surface!(
                 st.cell, prop,
-        CorePotts.cluster_surface_change(st.ownership, st.cell, ctx, prop; T = eltype(st.cell.cluster_surface)))))
+                CorePotts.cluster_surface_change(st.ownership, st.cell, ctx, prop; T = eltype(st.cell.cluster_surface))
+            )
+        )
+    )
     getfield(c, :uses_clusters) && push!(body, :(CorePotts.commit_cluster_volume!(st.cell, prop)))
     # `clear_on_ownership_change`: the target's value resets to the default, before the
     # on-copy writes (which may set it again)
@@ -617,13 +631,17 @@ function _post_expr(c::CompiledPottsSystem, T)
     body = Any[_PROP_LOCALS, :(code = Int32(0))]
     for k in vetoes                                      # the gaining side first: local and exact
         g = _global_rule(_connectivity_code(k))
-        push!(body, :(new != 0 && $(_kindtest(:k_new, k.kinds)) && !CorePotts.global_gains(st.ownership, ctx, prop, $(_global_adj(g))) &&
+        push!(
+            body, :(
+                new != 0 && $(_kindtest(:k_new, k.kinds)) && !CorePotts.global_gains(st.ownership, ctx, prop, $(_global_adj(g))) &&
                       return Int32(2)))
     end
     for k in vetoes
         g = _global_rule(_connectivity_code(k))
         push!(body, :(old != 0 && $(_kindtest(:k_old, k.kinds)) &&
-                      (code = max(code, CorePotts.global_keeps(st.ownership, ctx, prop, $(_global_vals(g)...), stage)))))
+                    (code = max(code, CorePotts.global_keeps(st.ownership, ctx, prop, $(_global_vals(g)...), stage)))
+            )
+        )
     end
     push!(body, :(return code))
     return :((st, p, prop, ctx, stage) -> $(Expr(:block, body...)))
@@ -1262,7 +1280,7 @@ function _adaptive_host_state(ph::_AdaptiveODE, stats, backend, st)
     isempty(fresh) && return host
     bufs(nt) = merge(nt, NamedTuple{fresh}(map(n -> CorePotts._host_buffer(getfield(nt, n)), fresh)))
     return ph.scope === :cell ? CorePotts.CPMState(host.ownership, bufs(host.cell), host.site, host.model, host.history) :
-           CorePotts.CPMState(host.ownership, host.cell, host.site, bufs(host.model), host.history)
+        CorePotts.CPMState(host.ownership, host.cell, host.site, bufs(host.model), host.history)
 end
 
 function _cached_integrator(cache, owner)
@@ -1510,7 +1528,7 @@ function _link_phases(c::CompiledPottsSystem, T)
         writes = (CorePotts.adjacency_name(r.relationship), (Symbol(:link_, info(x).name) for x in getfield(c, :edge_vars)[r.relationship])...)
         rd = _state_reads((body,); alias = :cell)
         reads = rd === nothing || !all(isempty, (rd.site, rd.model, rd.history)) ? nothing :
-                Tuple(n for n in ((rd.ownership ? (:ownership,) : ())..., rd.cell...) if !(n in writes))
+            Tuple(n for n in ((rd.ownership ? (:ownership,) : ())..., rd.cell...) if !(n in writes))
         push!(out, CorePotts.HostPhase(f; every = r.every, reads, writes))
     end
     return out
@@ -1984,15 +2002,15 @@ function _total_energy_expr(c::CompiledPottsSystem, T)
         R = rel === :contact ? :(ctx.contact) : :(ctx.$rel)
         e = lower(E, _contact_env(T, :a, :ka, :n, :kn, :w, :i, :j, rn))
         push!(body, quote
-            for i in 1:length(st.ownership)
-                a = st.ownership[i]
+                for i in 1:length(st.ownership)
+                    a = st.ownership[i]
                 ka = Potts._cellkind(st, a)
                 x = CorePotts.coordinates(ctx.lattice, i)
                 for kk in 1:length($R)
                     ins, y = CorePotts.shift(ctx.lattice, x, $R.offsets[kk])
                     ins || continue
                     j = CorePotts.linear_index(ctx.lattice, y)
-                    n = st.ownership[j]
+                        n = st.ownership[j]
                     n == a && continue
                     w = CorePotts.weight($R, kk)
                     kn = Potts._cellkind(st, n)
@@ -2016,7 +2034,9 @@ function _total_energy_expr(c::CompiledPottsSystem, T)
     end
     for E in getfield(c, :site_terms)
         e = lower(E, _site_env(T, :i, rn))
-        push!(body, :(for i in 1:length(st.ownership)
+        push!(
+            body, :(
+                for i in 1:length(st.ownership)
             H += $e
         end))
     end

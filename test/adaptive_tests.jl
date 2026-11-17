@@ -74,7 +74,8 @@ function _sentinel_state(st, ph; drop = nothing)
     r = ph.reads
     cell = setdiff((r.cell..., (ph.scope === :cell ? (ph.names..., :volume) : ())...), (drop,))
     model = setdiff((r.model..., (ph.scope === :model ? ph.names : ())...), (drop,))
-    return CorePotts.CPMState(r.ownership && drop !== :ownership ? deepcopy(st.ownership) : _sentinel(st.ownership), _keep_only(st.cell, cell),
+    return CorePotts.CPMState(
+        r.ownership && drop !== :ownership ? deepcopy(st.ownership) : _sentinel(st.ownership), _keep_only(st.cell, cell),
         _keep_only(st.site, setdiff(r.site, (drop,))), _keep_only(st.model, model), _keep_only(st.history, r.history))
 end
 

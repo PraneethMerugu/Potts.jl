@@ -576,7 +576,9 @@ function (ph::ContactPhase{R})(st, p, ctx, key, mcs, backend) where {R}
     _device_fill!(backend, c.contact_nbr, 0); _device_fill!(backend, c.contact_measure, 0)
     _device_fill!(backend, c.contact_medium, 0); _device_fill!(backend, c.contact_overflow, 0)
     Exec.launch!(backend, _contact_body!, n, (c.contact_nbr, c.contact_measure, c.contact_medium,
-        c.contact_overflow, st.ownership, ctx.lattice, rel, u, sc))
+            c.contact_overflow, st.ownership, ctx.lattice, rel, u, sc,
+        )
+    )
     u === nothing && return 5
     Exec.launch!(backend, _contact_fold_body!, size(c.contact_measure, 2), (c.contact_measure, c.contact_medium, sc, u))
     return 6

@@ -112,7 +112,7 @@ p60ab_J(x) = [0 x x; x 2 x-5; x x-5 14]
     @test total_energy(lit) == total_energy(prob)
     s1 = solve(prob, SequentialCPM())
     s2 = solve(lit, SequentialCPM())
-    @test s1.u[end].ownership == s2.u[end].ownership
+        @test s1.u[end].ownership == s2.u[end].ownership
     @test total_energy(prob, s1.u[end]) == total_energy(lit, s2.u[end])
 
     # remake with new inputs re-derives both tables (as `V_big = 2A₀` does)

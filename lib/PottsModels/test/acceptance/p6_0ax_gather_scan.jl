@@ -147,10 +147,11 @@ const P60AX_FIXTURES = [
     "energy Moore(1) + obs Moore(1)" => (:p60at, nothing, [:(@energy cells => 0.1 * $(p60ax_s(:(Moore(1))))), p60ax_obs(:(Moore(1)))...]),
     # several sites, several specs
     "all apart" => (:apart, nothing, [P60AX_STATIC, :(@energy cells => 0.01 * $(p60ax_s(:(Moore(2))))),
-        :(@divide cells(A) when = (y == 0.0) & (mcs * $(p60ax_g(:(EuclideanBall(2.0)))) >= 12),
+            :(
+                @divide cells(A) when = (y == 0.0) & (mcs * $(p60ax_g(:(EuclideanBall(2.0)))) >= 12),
             y => mcs + 1.0 + 100 * $(p60ax_g(:(VonNeumann(1)), 2; site = 29)))]),
     "all touch" => (:touch, nothing, [P60AX_BOND, P60AX_STATIC, :(@energy cells => 0.01 * $(p60ax_s(:(Moore(1))))),
-        :(@link bond when = new_contact(a, b) && (mcs * $(p60ax_pair(:(EuclideanBall(3.0)))) >= 24)),
+            :(@link bond when = new_contact(a, b) && (mcs * $(p60ax_pair(:(EuclideanBall(3.0)))) >= 24)),
         :(@energy edges(bond) => 0.1 * $(p60ax_spair(:(Moore(2)))))]),
     # dynamic: inline and named twins
     "dyn div EuclideanBall(2.0)" => (:p60at, nothing, p60ax_dyn_div(:(EuclideanBall(2.0)))),
@@ -279,7 +280,8 @@ end
     @test LinearIndices((12, 12))[4, 4] == 40 && LinearIndices((12, 12))[5, 3] == 29 && LinearIndices((12, 12))[11, 12] == 143
     # the oracle's shapes are the relations' (sizes on the lattice)
     lat = p60ax_problem("sq").lattice
-    for (spec, k) in ((EuclideanBall(2.0), "EuclideanBall(2.0)"), (EuclideanBall(3.0), "EuclideanBall(3.0)"), (Moore(1), "Moore(1)"), (Moore(2), "Moore(2)"),
+    for (spec, k) in (
+            (EuclideanBall(2.0), "EuclideanBall(2.0)"), (EuclideanBall(3.0), "EuclideanBall(3.0)"), (Moore(1), "Moore(1)"), (Moore(2), "Moore(2)"),
         (VonNeumann(1), "VonNeumann(1)"))
         @test length(CorePotts.relation(spec, lat)) == count(S[k](dx, dy) for dx in -5:5, dy in -5:5 if (dx, dy) != (0, 0))
     end
@@ -312,7 +314,8 @@ end
 # 2. Each missed site builds and runs, with hand-checked values
 
 @testset "P6.0ax: an inline gather in a division `when`" begin
-    for (label, y) in ("divwhen EuclideanBall(2.0)" => [4.0, 13.0, 4.0, 13.0], "divwhen EuclideanBall(3.0)" => [3.0, 4.0, 3.0, 4.0],
+    for (label, y) in (
+            "divwhen EuclideanBall(2.0)" => [4.0, 13.0, 4.0, 13.0], "divwhen EuclideanBall(3.0)" => [3.0, 4.0, 3.0, 4.0],
         "divwhen Moore(1)" => [5.0, 0.0, 5.0, 0.0], "divwhen NeighborOrder(2)" => [5.0, 0.0, 5.0, 0.0])
         @testset "$label" begin
             sol = p60ax_solve(label)
@@ -360,7 +363,7 @@ end
         end
     end
     @test p60ax_link_times(p60ax_solve("unlink EuclideanBall(2.0)"; links = true)) ==
-          p60ax_link_times(p60ax_solve("unlink far=EuclideanBall(2.0)"; links = true))
+        p60ax_link_times(p60ax_solve("unlink far=EuclideanBall(2.0)"; links = true))
 end
 
 @testset "P6.0ax: an inline gather in an `edges(rel)` energy" begin
@@ -410,7 +413,8 @@ end
 @testset "P6.0ax: inline and named forms run alike under copies (same seed)" begin
     # CheckerboardCPM refuses any relation in the run context that reaches beyond the
     # declared footprint (read = 1), named or inline alike, so its twins read Moore(1)
-    for (alg, inline, named) in ((SequentialCPM(), "dyn div EuclideanBall(2.0)", "dyn div far=EuclideanBall(2.0)"),
+    for (alg, inline, named) in (
+            (SequentialCPM(), "dyn div EuclideanBall(2.0)", "dyn div far=EuclideanBall(2.0)"),
         (SequentialCPM(), "dyn div Moore(1)", "dyn div far=Moore(1)"), (CheckerboardCPM(), "dyn div Moore(1)", "dyn div far=Moore(1)"))
         @testset "$inline, $(nameof(typeof(alg)))" begin
             a = p60ax_solve(inline; alg, tspan = (0, 20))

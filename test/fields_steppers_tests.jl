@@ -28,7 +28,8 @@ end
         σ = zeros(Int32, 24, 24); σ[5:8, 5:8] .= 1; σ[14:17, 12:15] .= 2
         op = [ownership => σ, kind => [:A, :A]]
         run(fs) = (s = solve(PottsProblem(FiMove(; name = :f), op, (0, 12); field_solver = fs, seed = 7), SequentialCPM());
-                   (Array(s.u[end].site.c), s.u[end].ownership))
+            (Array(s.u[end].site.c), s.u[end].ownership)
+        )
         (ref, σr), (be, σb), (cn, σc) = run(BackwardEuler(; substeps = 20)), run(BackwardEuler()), run(CrankNicolson())
         @test σr == σb == σc                                       # (the field does not steer the CPM)
         eb, ec = maximum(abs, be .- ref), maximum(abs, cn .- ref)

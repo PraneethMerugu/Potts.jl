@@ -60,7 +60,7 @@ function wortel_delta_H(st, p, prop, ctx)
     m(site, owner) = neighborhood_mean(st.site.act, st.ownership, ctx, site, owner; relation = ctx.act)
     act = -(p.λact / p.maxact) * (m(prop.source, prop.new) - m(prop.target, prop.old))   # every copy
     return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
-           surface_delta(st.cell.surface, prop, surface_change(st.ownership, ctx, prop), S) + act
+        surface_delta(st.cell.surface, prop, surface_change(st.ownership, ctx, prop), S) + act
 end
 function wortel_commit!(st, p, prop, ctx)
     commit_volume!(st, p, prop, ctx)

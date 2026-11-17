@@ -239,7 +239,8 @@ end
 # of its grid: the site reads the node whose block holds it
 _site_read(i::Entity, j) = (L = get(i.options, :lattice_level, nothing);
                             L === nothing ? :(@inbounds st.site.$(i.name)[$j]) :
-                            :(@inbounds st.site.$(i.name)[Potts._coarse_site($j, size(st.ownership), $(trailing_zeros(L.k)))]))
+        :(@inbounds st.site.$(i.name)[Potts._coarse_site($j, size(st.ownership), $(trailing_zeros(L.k)))])
+)
 """
     _coarse_site(j, dims, s) -> Int
 
@@ -709,7 +710,7 @@ function _sort(x)
         i.role in (:bound, :bound_site) && return :site
         i.role === :bound_cell && return :cell
         i.role === :builtin && return i.name in (:source, :target, :site, :neighbor_site) ? :site :
-               i.name in (:old, :new, :owner, :neighbor_owner, :id, :a, :b) ? :cell : :unknown
+            i.name in (:old, :new, :owner, :neighbor_owner, :id, :a, :b) ? :cell : :unknown
     end
     if x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === value_at && length(arguments(x)) == 2
         a = info(arguments(x)[1])
@@ -840,7 +841,9 @@ function _lower_population(args, env)
         range = :(1:length(st.cell.kind))
         skip = :((@inbounds st.cell.volume[$nsym]) > 0 && $(_kindtest(:(Potts._cellkind(st, $nsym)), ni.options.kinds)))
     else
-        merge!(bind, Dict{Symbol, Any}(:owner => :(@inbounds st.ownership[$nsym]), :kind => :(CorePotts.owner_kind(st, $nsym)),
+        merge!(
+            bind, Dict{Symbol, Any}(
+                :owner => :(@inbounds st.ownership[$nsym]), :kind => :(CorePotts.owner_kind(st, $nsym)),
             :__site => nsym, :position => :(Potts._position($T, ctx, $nsym)), :site => nsym))
         range = :(1:length(st.ownership))
         skip = :(CorePotts.in_domain(ctx.lattice, $nsym))
@@ -972,7 +975,7 @@ end
 # `Global` (P6.9a) inline, in a drive or a constraint: exact on the host algorithms, in the
 # window on the checkerboard (an undecided copy reads `false`); the gaining side is local
 _lower_global(who, g) = who === :new ? :(CorePotts.global_gains(st.ownership, ctx, prop, $(_global_adj(g)))) :
-                        :(CorePotts.global_keeps(st.ownership, ctx, prop, $(_global_vals(g)...), CorePotts.GlobalSearch()) == Int32(0))
+    :(CorePotts.global_keeps(st.ownership, ctx, prop, $(_global_vals(g)...), CorePotts.GlobalSearch()) == Int32(0))
 # `Val(full)` (hex has one adjacency: `:face`), and with it `Val(window)`, `Val(box capacity)`
 _global_adj(g) = :(Val($(g.adjacency === :full && !_PIECES_HEX[])))
 function _global_vals(g)

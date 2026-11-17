@@ -34,7 +34,7 @@ end
             s1 = solve(p1, alg; save_start = false)
             s2 = solve(p2, alg; save_start = false)
             u1, u2 = s1.u[end], s2.u[end]
-            @test u1.ownership == u2.ownership
+                @test u1.ownership == u2.ownership
             for col in propertynames(u1.cell)
                 @test getproperty(u1.cell, col) == getproperty(u2.cell, col)
             end
@@ -50,7 +50,7 @@ end
     p_gg = PottsProblem(GranerGlazier(; name = :gg), [ownership => s_gg[1], kind => s_gg[2]], (0, 3); seed = 5)
     sol_gg = solve(p_gg, SequentialCPM(); save_start = false)
     parent_gg_fp = p_gg.f.fingerprint
-    parent_gg_digest = hash(sol_gg.u[end].ownership)
+        parent_gg_digest = hash(sol_gg.u[end].ownership)
 
     # D2: fresh subprocess computes identical fingerprint and CPU run digest
     d2_code = """
@@ -58,7 +58,7 @@ end
     s = graner_glazier_state()
     p = PottsProblem(GranerGlazier(; name = :gg), [ownership => s[1], kind => s[2]], (0, 3); seed = 5)
     sol = solve(p, SequentialCPM(); save_start = false)
-    println(repr(p.f.fingerprint), " ", repr(hash(sol.u[end].ownership)))
+            println(repr(p.f.fingerprint), " ", repr(hash(sol.u[end].ownership)))
     """
     out = strip(read(`$(Base.julia_cmd()) --startup-file=no --project=$proj -e $d2_code`, String))
     parts = split(out)
@@ -83,7 +83,7 @@ end
         @parameters J[3, 3] = [0.0 4.0 6.0; 4.0 2.0 8.0; 6.0 8.0 2.0] λ = 1.0 V₀ = 9.0 T = 1.0
         @lattice Lattice((10, 10))
         @energy begin
-            contacts => J[kind, neighbor_kind]
+                    contacts => J[kind, neighbor_kind]
             cells => λ * (volume - V₀)^2
         end
         @sweep Metropolis(; temperature = T)
@@ -131,7 +131,7 @@ end
     # Canonical solver strings must be free of session/address/gensym/path leaks
     solvers = (
             ExplicitEuler(substeps = 2, lower_bound = 0.0),
-        Potts.RK4(; substeps = 4),
+            Potts.RK4(; substeps = 4),
         Potts.BackwardEuler(),
         Potts.CrankNicolson(),
     )

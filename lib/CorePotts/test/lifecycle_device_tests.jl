@@ -69,7 +69,7 @@ end
             pg = ld_growing_prob()
         g, h = (solve(pg, CheckerboardCPM(); saveat = 5) for _ in 1:2)
         @test g.stats.lifecycle.divisions == h.stats.lifecycle.divisions >= 2
-        @test all(i -> g.u[i].ownership == h.u[i].ownership && g.u[i].cell == h.u[i].cell, eachindex(g.u))
+            @test all(i -> g.u[i].ownership == h.u[i].ownership && g.u[i].cell == h.u[i].cell, eachindex(g.u))
         finally
             CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
         end
@@ -350,7 +350,7 @@ end
                 # one launch fewer per checked MCS where the device lifecycle runs it
                 fault == 0 && @test sol.stats.launches == ref.stats.launches - (device ? cld(9, every) : 0)
         end
-    finally
+        finally
             CorePotts._LAUNCH_FAULT[] = 0
         CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
     end

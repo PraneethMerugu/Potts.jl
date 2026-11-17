@@ -573,8 +573,10 @@ end
     r > 0 || return nothing
     t = @inbounds sc.to[r]
     t > 0 || return nothing
-    _ownership_delta!(st.cell, sc, surf, rel, ctx.lattice, st.ownership, i, @inbounds(st.ownership[i]), t,
-        _ConvertAfter(st.ownership, sc.site, sc.to), u)
+    _ownership_delta!(
+        st.cell, sc, surf, rel, ctx.lattice, st.ownership, i, @inbounds(st.ownership[i]), t,
+        _ConvertAfter(st.ownership, sc.site, sc.to), u
+    )
     _owner_changed!(hook, st, i)
     return nothing
 end
@@ -660,7 +662,9 @@ function (ph::ConvertPass)(st, p, ctx, key, mcs, backend)
         if csurf !== nothing
             cu = _units_for(eltype(csurf), ctx.surface, n, backend)
             Exec.launch!(backend, _dcluster_surface_body!, n, (
-                dv, par, st.ownership, st.cell, csurf, ctx.surface, lat, cu))
+                    dv, par, st.ownership, st.cell, csurf, ctx.surface, lat, cu,
+                )
+            )
             launches += 1
             if cu !== nothing
                 Exec.launch!(backend, _dcluster_surface_fold_body!, cap, (dv, par, csurf, cu))

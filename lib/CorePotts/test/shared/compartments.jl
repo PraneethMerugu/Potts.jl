@@ -22,7 +22,7 @@ function compartment_model(; λc = 1.0, Vc = 64.0, λs = 0.0, Sc = 32.0, Jint = 
         ES(s, k) = p.λs * (s - p.Sc)^2
         return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
                cluster_volume_delta(st.cell, prop, EC) +
-               cluster_surface_delta(st.cell, prop, cluster_surface_change(st.ownership, st.cell, ctx, prop), ES)
+            cluster_surface_delta(st.cell, prop, cluster_surface_change(st.ownership, st.cell, ctx, prop), ES)
     end
     function commit!(st, p, prop, ctx)
         δ = cluster_surface_change(st.ownership, st.cell, ctx, prop)

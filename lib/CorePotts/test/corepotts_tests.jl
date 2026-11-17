@@ -398,7 +398,7 @@ end
         @test sol.retcode == ReturnCode.Success
         u = sol.u[end]
         @test u.ownership != σ
-        @test u.cell.surface ≈ brute_surface(u.ownership, lat, relation(sspec, lat), length(kinds)) rtol = 1e-12
+        @test u.cell.surface ≈ brute_surface(u.ownership, lat, relation(sspec, lat), length(kinds)) rtol = 1.0e-12
         bad = PottsProblem(GS, sprob.u0, lat, (0, 1), gs_params();
             relations = (; surface = Moore(1; include_self = true)))
         @test_throws ["ArgumentError", "surface relation", "must not include the origin", "VonNeumann"] init(bad, alg)

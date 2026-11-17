@@ -17,7 +17,7 @@ end
     @test relation(Moore(1), L) == relation(Hex(1), L) && relation(VonNeumann(2), L) == relation(Hex(2), L)
     @test length(relation(NeighborOrder(1), L)) == 6 && length(relation(NeighborOrder(2), L)) == 12 &&
           length(relation(NeighborOrder(3), L)) == 18
-    @test length(relation(EuclideanBall(1.0), L)) == 6 && length(relation(EuclideanBall(sqrt(3)), L)) == 12
+        @test length(relation(EuclideanBall(1.0), L)) == 6 && length(relation(EuclideanBall(sqrt(3)), L)) == 12
     @test all(o -> abs(hypot(embed(L, Float64.(o))...) - 1) < 1e-12, relation(Hex(1), L).offsets)   # unit distance
         @test_throws ["ArgumentError", "Hex(k)", "hexagonal lattice"] relation(Hex(1), Lattice((8, 8)))
         @test_throws ["ArgumentError", "hexagonal lattices are 2D", "3D dims", "Square()"] Lattice((4, 4, 4); geometry = Hexagonal())
@@ -31,11 +31,11 @@ end
     @test count(==(1), σ) == 61                                  # 1 + 6·(1 + 2 + 3 + 4)
     cell = merge((; volume = [count(==(1), σ)]), init_moments(σ, L, 1))
     @test all(centroid_position(Float64, cell, L, 1) .≈ embed(L, (12.0, 12.0)))
-    sh = cell_shape(Float64, cell, L, 1)
+        sh = cell_shape(Float64, cell, L, 1)
     @test sh.elongation ≈ 1 atol = 1e-12                         # isotropic in the embedding
     sq = zeros(Int32, 24, 24); sq[8:16, 10:14] .= 1              # a lattice-coordinate box is a rhombus
     cs = merge((; volume = [count(==(1), sq)]), init_moments(sq, L, 1))
-    @test cell_shape(Float64, cs, L, 1).elongation > 1.2
+        @test cell_shape(Float64, cs, L, 1).elongation > 1.2
     @test abs(hypot(principal_axis(Float64, cs, L, 1, 2)...) - 1) < 1e-12
     # division through the embedded centroid: a Cartesian plane x = const splits the disc evenly
     ellipse = zeros(Int32, 24, 24)
@@ -44,7 +44,7 @@ end
         (e[1] / 6)^2 + (e[2] / 3)^2 <= 1 && (ellipse[x] = 1)
     end
     u = run_lifecycle(ellipse, [1], L, Lifecycle(divide_at(0); normal = along_minor_axis)).u[end]   # plane across the long x axis
-    halves = [[embed(L, Float64.(Tuple(x)))[1] for x in CartesianIndices(u.ownership) if u.ownership[x] == c] for c in 1:2]
+        halves = [[embed(L, Float64.(Tuple(x)))[1] for x in CartesianIndices(u.ownership) if u.ownership[x] == c] for c in 1:2]
     onplane = count(x -> ellipse[x] == 1 && abs(embed(L, Float64.(Tuple(x) .- centre))[1]) < 1e-9, CartesianIndices(ellipse))
     @test u.cell.volume[1] - u.cell.volume[2] == onplane               # sites on the plane stay with the parent
     @test maximum(halves[1]) < minimum(halves[2]) || maximum(halves[2]) < minimum(halves[1])   # separated along x

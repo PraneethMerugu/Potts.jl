@@ -328,7 +328,8 @@ function p64r_problem(st, tend; shear = false, J = P64R_J, Γ = P64R_Γ, T = P64
     p = Pair{Symbol, Float64}[:J => J, :Γ => Γ, :T => T]
     shear && append!(p, [:γ0 => γ0, :β => β, :bulk => Float64(bulk), :periodic => Float64(periodic), :ω => ω,
         :ytop => Float64(L[2]), :ymid => (L[2] + 1) / 2])
-    return remake(P64R_TEMPLATES[(shear, L)]; u0 = Pair[ownership => st.ownership, kind => fill(:bubble, n), :A => st.A], p,
+    return remake(
+        P64R_TEMPLATES[(shear, L)]; u0 = Pair[ownership => st.ownership, kind => fill(:bubble, n), :A => st.A], p,
         tspan = (0, tend), seed)
 end
 
@@ -438,11 +439,13 @@ function p64r_foam(f::Symbol, k; seedf = t -> p64r_prep_seed(f, k, t))
     end
     m = P64R_AN.topology_moments(st.ownership, p64r_lat(size(st.ownership)))
     n = length(st.A)
-    row = Dict{String, Any}("foam" => string(f), "k" => k, "seed" => seedf(t), "try" => t, "ly" => size(st.ownership, 2),
+    row = Dict{String, Any}(
+        "foam" => string(f), "k" => k, "seed" => seedf(t), "try" => t, "ly" => size(st.ownership, 2),
         "target" => spec.target, "mu2n" => m.mu2_n, "mu2a" => m.mu2_a, "nbub" => count(>(0), p64r_cells(st.ownership, n).cnt),
         "hex" => p64r_hexfrac(st.ownership, n), "area_frac" => p64r_area_frac(st.ownership, Float64.(p64r_cells(st.ownership, n).cnt), st.A),
         "stop" => st.stop, "ok" => f === :ordered || abs(m.mu2_n - spec.target) <= P64R_PREP_TOL,
-        "ubar" => p64r_ubar(st.ownership))
+        "ubar" => p64r_ubar(st.ownership)
+    )
     return (; ownership = st.ownership, A = st.A), row
 end
 
@@ -917,7 +920,8 @@ function p64r_verdicts(R)
     h1, h2 = α("d165", 0.005, "phi"; hi = 1e-3), α("d165", 0.005, "phi"; lo = 1e-3)
     add!("V13b", :row, (h1, h2), "both ∈ [0.5, 1.2]", p64r_in(h1, 0.5, 1.2) && p64r_in(h2, 0.5, 1.2))
     # V14
-    nbar(foam, β) = mean(P64R_AN.mean_t1([r["t1_total"]], r["nbub"], β * r["mcs"])
+    nbar(foam, β) = mean(
+        P64R_AN.mean_t1([r["t1_total"]], r["nbub"], β * r["mcs"])
                          for r in p64r_sel(R["bulk"]; set = "v14", foam, beta = β))
     N14 = Dict((f, β) => nbar(f, β) for f in ("d165", "d172", "d107", "d095") for β in P64R_BETAS14)
     r1 = [N14[(f, 1e-4)] / N14[(f, 1e-3)] for f in ("d165", "d172", "d107", "d095")]
