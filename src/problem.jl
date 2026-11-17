@@ -33,7 +33,7 @@ function CorePotts.copy_step_relations(mi::PottsModelInfo, f)
     f.delta_H === g.delta_H && f.commit! === g.commit! && f.constraint === g.constraint &&
         f.connectivity === g.connectivity &&
         _same_temperature(f.temperature, g.temperature) && f.bias === CorePotts.no_bias &&
-        (f.track === nothing || f.track isa CorePotts.TrackDeltaH) || return nothing
+        (f.track === nothing || f.track isa CorePotts.TrackEnergyChange) || return nothing
     return mi.copy_relations
 end
 _same_temperature(t, g) = t === g      # (and `anneal`'s `_ZeroTemperature`, analysis.jl)
@@ -113,7 +113,7 @@ How fields and ODEs are integrated is part of the problem, compiled into its cod
   term and cause) names the others. A negative diffusion coefficient, or a coefficient that
   is not finite at a kind table entry, is an `ArgumentError`;
 - `ode_solver` integrates the cell and model ODEs (`D(x) ~ …`, components): `ExplicitEuler(;
-  substeps)` (the default, one step per MCS), `RK4(; substeps)` or `Adaptive(alg; reltol, …)`;
+  substeps)` (the default, one step per MCS), `Potts.RK4(; substeps)` or `Adaptive(alg; reltol, …)`;
 - `solvers = [x => solver, …]`, keyed by integrated variables (or a component: all its
   unknowns), overrides them for those variables only (a stiff ODE under
   `Adaptive(Rodas5P())` beside explicit ones). Every ODE step reads the state at the start
@@ -123,8 +123,8 @@ How fields and ODEs are integrated is part of the problem, compiled into its cod
 it names and keeps the others, `u0`, `p` and the seed; the problem fingerprint hashes a
 canonical form of the resolved solvers, so a checkpoint loads only into an equally
 discretized problem.
-`track = (:ΔH,)` accumulates the ΔH of every committed copy (energy plus every drive, as
-`prob.f.delta_H` returns it; not the acceptance law's offset) into `sol.stats.accepted_ΔH`
+`track = (:energy_change,)` accumulates the ΔH of every committed copy (energy plus every drive, as
+`prob.f.delta_H` returns it; not the acceptance law's offset) into `sol.stats.accepted_energy_change`
 (a `Float64`; `nothing` with the default `track = ()`). Under `SequentialCPM` it is exact
 after every step; under `CheckerboardCPM` it is brought up to date at the host read points
 (a save, `current_state`, `checkpoint`, the end of `solve!`). Tracking changes nothing else
@@ -513,7 +513,7 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
         phases, lifecycle, acceptance = _acceptance(_p(sys, :sweep), T),
         footprint = getfield(c, :footprint), fingerprint = _code_hash(generated, h),
         sys = PottsModelInfo(c, T, fns.total, fns.delta_E, hctx, cache, spec, copy_relations, copy_fns),
-        track = :ΔH in track ? CorePotts.TrackDeltaH{T}() : nothing, fns.connectivity
+        track = :energy_change in track ? CorePotts.TrackEnergyChange{T}() : nothing, fns.connectivity
     )
 end
 
@@ -575,13 +575,13 @@ function CorePotts.remake_function(
     return f, _track_layout(_ode_layout(prob.u0, c, spec), c, track)
 end
 
-# `track` (D-140): the quantities a run accumulates into its statistics. Only `:ΔH` (each
-# committed copy's ΔH → `stats.accepted_ΔH`) for now; per-term names wait for R18.
-const _TRACKABLE = (:ΔH, :references)
+# `track` (D-140): the quantities a run accumulates into its statistics. Only `:energy_change` (each
+# committed copy's ΔH → `stats.accepted_energy_change`) for now; per-term names wait for R18.
+const _TRACKABLE = (:energy_change, :references)
 function _track(track)
     (track isa Union{Tuple, AbstractVector} && all(x -> x isa Symbol, track)) || throw(
         ArgumentError(
-            "`track` must be a tuple of names, e.g. `track = (:ΔH,)`; got $(repr(track))"
+            "`track` must be a tuple of names, e.g. `track = (:energy_change,)`; got $(repr(track))"
         )
     )
     for x in track
@@ -590,7 +590,7 @@ function _track(track)
     allunique(track) || throw(ArgumentError("`track`: a name is given twice in $(repr(track))"))
     return Tuple(track)
 end
-_track_names(f::CorePotts.CPMFunction) = f.track === nothing ? () : (:ΔH,)
+_track_names(f::CorePotts.CPMFunction) = f.track === nothing ? () : (:energy_change,)
 _track_names(prob::CorePotts.PottsProblem) =
     (_track_names(prob.f)..., (haskey(prob.u0.model, REF_COUNTS) ? (:references,) : ())...)
 
@@ -601,7 +601,7 @@ function _track_layout(st::CorePotts.CPMState, c::CompiledPottsSystem, track)
     on == haskey(st.model, REF_COUNTS) && return st
     model = on ? merge(st.model, NamedTuple{(REF_COUNTS,)}((fill!(similar(st.cell.kind, UInt32, length(_ref_count_labels(c))), 0),))) :
         NamedTuple(k => v for (k, v) in pairs(st.model) if k !== REF_COUNTS)
-    return CorePotts.CPMState(st.σ, st.cell, st.site, model, st.history)
+    return CorePotts.CPMState(st.ownership, st.cell, st.site, model, st.history)
 end
 
 # After a solve (E4/E5): one warning with the counts of a tracked problem, which are then reset
@@ -638,7 +638,7 @@ function _ode_layout(@nospecialize(st), c::CompiledPottsSystem, spec::SolverSpec
     cell = add(scratchless(st.cell), :cell, getfield(c, :cell_odes))
     model = add(scratchless(st.model), :model, getfield(c, :model_odes))
     keys(cell) == keys(st.cell) && keys(model) == keys(st.model) && return st
-    return CorePotts.CPMState(st.σ, cell, st.site, model, st.history)
+    return CorePotts.CPMState(st.ownership, cell, st.site, model, st.history)
 end
 
 # Kind tables are indexed by kind (medium first) along every axis.
@@ -1302,21 +1302,21 @@ _substitute_kind(v, k) = Symbolics.substitute(v, Dict(_unwrap(B.kind) => k))
 function _convert_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
     isempty(_p(getfield(c, :sys), :converts)) && return st
     J = maximum(v -> length(v.writes), _p(getfield(c, :sys), :converts))
-    sc = CorePotts.convert_scratch(size(st.σ), length(st.cell.kind), ndims(st.σ); writes = J)
+    sc = CorePotts.convert_scratch(size(st.ownership), length(st.cell.kind), ndims(st.ownership); writes = J)
     # every scratch array is constant (zeros, or `typemax` for the minima): filled where the
     # state lives, so a device state gets device scratch with no host transfer
-    dev(a) = isempty(a) ? similar(st.σ, eltype(a), size(a)) : fill!(similar(st.σ, eltype(a), size(a)), first(a))
+    dev(a) = isempty(a) ? similar(st.ownership, eltype(a), size(a)) : fill!(similar(st.ownership, eltype(a), size(a)), first(a))
     if haskey(st.model, CorePotts.CONVERT_FLAGS)
         fits(n, a) = haskey(st.cell, n) && size(getfield(st.cell, n))[1:(end - 1)] == size(a)[1:(end - 1)]
         add = [(n, a) for (n, a) in sc.cell if !fits(n, a)]
         isempty(add) && return st
         return CorePotts.CPMState(
-            st.σ, merge(st.cell, NamedTuple(n => dev(a) for (n, a) in add)), st.site, st.model,
+            st.ownership, merge(st.cell, NamedTuple(n => dev(a) for (n, a) in add)), st.site, st.model,
             st.history
         )
     end
     return CorePotts.CPMState(
-        st.σ, merge(st.cell, NamedTuple(n => dev(a) for (n, a) in sc.cell)),
+        st.ownership, merge(st.cell, NamedTuple(n => dev(a) for (n, a) in sc.cell)),
         merge(st.site, NamedTuple(n => dev(a) for (n, a) in sc.site)),
         merge(st.model, NamedTuple(n => dev(a) for (n, a) in sc.model)), st.history
     )
@@ -1328,9 +1328,9 @@ end
 function _reduce_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
     (isempty(_integrals(getfield(c, :sys))) || haskey(st.model, CorePotts.REDUCE_STATUS)) && return st
     sc = CorePotts.reduce_scratch(length(st.cell.kind))
-    dev(a) = fill!(similar(st.σ, eltype(a), size(a)), zero(eltype(a)))     # zeros, where the state lives
+    dev(a) = fill!(similar(st.ownership, eltype(a), size(a)), zero(eltype(a)))     # zeros, where the state lives
     return CorePotts.CPMState(
-        st.σ, merge(st.cell, map(dev, sc.cell)), st.site, merge(st.model, map(dev, sc.model)),
+        st.ownership, merge(st.cell, map(dev, sc.cell)), st.site, merge(st.model, map(dev, sc.model)),
         st.history
     )
 end
@@ -1408,7 +1408,7 @@ _cluster_kinds(c::CompiledPottsSystem) = Tuple(
 function _frozen_mask(sys::PottsSystem, st)
     isempty(_p(sys, :frozen_kinds)) && return nothing
     kinds = st.cell.kind
-    return map(s -> s != 0 && Int(kinds[s]) in _p(sys, :frozen_kinds), st.σ)
+    return map(s -> s != 0 && Int(kinds[s]) in _p(sys, :frozen_kinds), st.ownership)
 end
 
 _kind_number(k) = Int(k)

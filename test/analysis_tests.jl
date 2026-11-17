@@ -62,7 +62,7 @@ const AN_LATTICES = (
     @kinds medium A B
     @parameters J[kind, kind] = [0.0 3.0 5.0; 3.0 7.0 11.0; 5.0 11.0 13.0]
     @lattice lat()
-    @energy contacts => J[kind, kind′]
+    @energy contacts => J[kind, neighbor_kind]
     @sweep Metropolis(; temperature = 4.0)
 end
 
@@ -101,7 +101,7 @@ end
     @variables ticks(cell) = 0.0
     @lattice Lattice((8, 8); boundary = Periodic(), neighborhood = Moore(1))
     @relations proposal = Moore(1)
-    @energy contacts => J[kind, kind′]
+    @energy contacts => J[kind, neighbor_kind]
     @drive copy => -μ
     @after_mcs ticks ~ Pre(ticks) + 1
     @sweep Metropolis(; temperature = T)
@@ -112,7 +112,7 @@ end
     @parameters J[kind, kind] = [0.0 0.0 0.0; 0.0 0.0 1.0; 0.0 1.0 0.0]
     @lattice Lattice((8, 8); boundary = Periodic(), neighborhood = Moore(1))
     @relations proposal = Moore(1)
-    @energy contacts => J[kind, kind′]
+    @energy contacts => J[kind, neighbor_kind]
     @sweep Barker(; temperature = 5.0, offset = 3.0)
 end
 
@@ -134,7 +134,7 @@ an_stripes(sys; kw...) = PottsProblem(sys, [ownership => copy(AN_STRIPES), kind 
     @relations proposal = Moore(1)
     @energy begin
         cells(cell) => λ * (volume - 2A₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @divide cells(cell) when = volume >= 2A₀, along = major_axis()
     @sweep Metropolis(; temperature = T)
@@ -186,7 +186,7 @@ end
 @testitem "boundary_lengths against the all-pairs oracle" setup = [AnalysisSetup] tags = [:potts, :analysis] begin
     @testset "boundary_lengths against the all-pairs oracle" begin
         relations = Dict(:sq_periodic => (nothing, VonNeumann(2), Moore(2), Weighted(Moore(1), o -> 1 / sqrt(sum(abs2, o)))),
-            :sq_disk => (nothing, Ball(2), Weighted(NeighborOrder(2), o -> 2.0 + abs(o[1]))),
+            :sq_disk => (nothing, EuclideanBall(2), Weighted(NeighborOrder(2), o -> 2.0 + abs(o[1]))),
             :hex_periodic => (nothing, Hex(2)),
             :cube_mixed => (nothing, VonNeumann(1), NeighborOrder(2)))
         for key in keys(AN_LATTICES), seed in 1:2, rel in relations[key]
@@ -196,7 +196,7 @@ end
             # the initial state and a state the run has moved
             for u in (prob.u0, solve(prob, SequentialCPM(; proposal = Moore(1))).u[end])
                 L = Potts.boundary_lengths(prob, u; relation = rel)
-                want = an_boundary_oracle(u.σ, kinds, lat, r)
+                want = an_boundary_oracle(u.ownership, kinds, lat, r)
                 @test Set(keys(L)) == Set(keys(want))
                 @test all(isapprox(L[k], want[k]; rtol = 1.0e-12) for k in keys(want))
                 @test sum(values(want)) > 0                         # the fixture has boundaries
@@ -204,10 +204,10 @@ end
             end
             # negative control: one site given to the medium changes the counts, and both agree
             u = deepcopy(prob.u0)
-            u.σ[findfirst(!iszero, u.σ)] = 0
+            u.ownership[findfirst(!iszero, u.ownership)] = 0
             L1 = Potts.boundary_lengths(prob, u; relation = rel)
             @test L1 != Potts.boundary_lengths(prob; relation = rel)
-            want1 = an_boundary_oracle(u.σ, kinds, lat, r)
+            want1 = an_boundary_oracle(u.ownership, kinds, lat, r)
             @test all(isapprox(L1[k], want1[k]; rtol = 1.0e-12) for k in keys(want1))
         end
         # the energy identity on every lattice (contact energy only)
@@ -224,7 +224,7 @@ end
         prob, kinds = an_random_problem(:sq_periodic, 3)
         # a two-offset stencil counts the horizontal bonds only, once each
         h = Potts.boundary_lengths(prob; relation = Stencil([[1, 0], [-1, 0]]))
-        @test h == an_boundary_oracle(prob.u0.σ, kinds, prob.lattice, CorePotts.relation(Stencil([[1, 0], [-1, 0]]), prob.lattice))
+        @test h == an_boundary_oracle(prob.u0.ownership, kinds, prob.lattice, CorePotts.relation(Stencil([[1, 0], [-1, 0]]), prob.lattice))
         v = Potts.boundary_lengths(prob; relation = Stencil([[0, 1], [0, -1]]))
         @test Dict(k => h[k] + v[k] for k in keys(h)) == Potts.boundary_lengths(prob; relation = VonNeumann(1))
         # an asymmetric relation has no unordered bonds, and non-model problems are refused
@@ -247,9 +247,9 @@ end
             () -> Potts.boundary_lengths(non_potts)
         )
         # the input is not modified
-        σ0 = copy(prob.u0.σ)
+        σ0 = copy(prob.u0.ownership)
         Potts.boundary_lengths(prob)
-        @test prob.u0.σ == σ0
+        @test prob.u0.ownership == σ0
     end
 end
 
@@ -258,26 +258,26 @@ end
         prob = an_stripes(AnStripes(; name = :an_s); seed = 4)
         for alg in (SequentialCPM(), CheckerboardCPM())
             # the stripes are a T = 0 local minimum: the annealed copy is the input
-            @test Potts.anneal(prob; mcs = 10, seed = 1, alg).σ == AN_STRIPES
+            @test Potts.anneal(prob, 10; seed = 1, alg).ownership == AN_STRIPES
             # negative control: the run itself (T = 5) roughens the interface
-            @test solve(prob, alg).u[end].σ != AN_STRIPES
+            @test solve(prob, alg).u[end].ownership != AN_STRIPES
             # the drive is part of ΔH: μ = 3 makes every interface copy downhill
             driven = remake(prob; p = [:μ => 3.0])
-            @test Potts.anneal(driven; mcs = 2, seed = 1, alg).σ != AN_STRIPES
+            @test Potts.anneal(driven, 2; seed = 1, alg).ownership != AN_STRIPES
             # oracle: the same copies as a run of the problem with T = 0 and the same seed (its
             # after-MCS update does not feed ΔH); negative control: the run at T = 5 differs
             for s in 1:3
-                a = Potts.anneal(driven; mcs = 3, seed = s, alg)
-                @test a.σ == solve(remake(driven; p = [:T => 0.0], seed = s, tspan = (0, 3)), alg).u[end].σ
-                @test a.σ != solve(remake(driven; seed = s, tspan = (0, 3)), alg).u[end].σ
+                a = Potts.anneal(driven, 3; seed = s, alg)
+                @test a.ownership == solve(remake(driven; p = [:T => 0.0], seed = s, tspan = (0, 3)), alg).u[end].ownership
+                @test a.ownership != solve(remake(driven; seed = s, tspan = (0, 3)), alg).u[end].ownership
             end
         end
         # the model's acceptance law: offset 3 > ΔH = 2, so interface copies pass at T = 0 ...
         off = an_stripes(AnStripesOffset(; name = :an_o); seed = 4)
-        @test Potts.anneal(off; mcs = 2, seed = 1).σ != AN_STRIPES
+        @test Potts.anneal(off, 2; seed = 1).ownership != AN_STRIPES
         # ... and the algorithm's law overrides it as in a run (offset 0: none pass)
-        @test Potts.anneal(off; mcs = 10, seed = 1, alg = SequentialCPM(; acceptance = Barker())).σ == AN_STRIPES
-        @test Potts.anneal(off; mcs = 2, seed = 1, alg = SequentialCPM(; acceptance = Metropolis(; offset = 3.0))).σ != AN_STRIPES
+        @test Potts.anneal(off, 10; seed = 1, alg = SequentialCPM(; acceptance = Barker())).ownership == AN_STRIPES
+        @test Potts.anneal(off, 2; seed = 1, alg = SequentialCPM(; acceptance = Metropolis(; offset = 3.0))).ownership != AN_STRIPES
     end
 end
 
@@ -285,14 +285,14 @@ end
     @testset "anneal: copy attempts only" begin
         prob = an_stripes(AnStripes(; name = :an_t); seed = 2)
         driven = remake(prob; p = [:μ => 3.0])
-        a = Potts.anneal(driven; mcs = 5, seed = 1)
-        @test a.σ != AN_STRIPES                                  # copies ran ...
+        a = Potts.anneal(driven, 5; seed = 1)
+        @test a.ownership != AN_STRIPES                                  # copies ran ...
         @test all(iszero, a.cell.ticks)                          # ... the after-MCS update did not
-        @test a.cell.volume == [count(==(c), a.σ) for c in 1:2]  # the copy's own bookkeeping did
+        @test a.cell.volume == [count(==(c), a.ownership) for c in 1:2]  # the copy's own bookkeeping did
         @test all(==(8.0), solve(driven, SequentialCPM()).u[end].cell.ticks)   # negative control
         # a state with ticks set keeps them
         u = solve(prob, SequentialCPM()).u[end]
-        @test Potts.anneal(prob, u; mcs = 3, seed = 1).cell.ticks == u.cell.ticks
+        @test Potts.anneal(prob, u, 3; seed = 1).cell.ticks == u.cell.ticks
     end
 end
 
@@ -303,8 +303,8 @@ end
         prob = PottsProblem(AnDividing(; name = :an_d), [ownership => σ, kind => [:cell]], (0, 4); capacity = 8, seed = 1)
         sol = solve(prob, SequentialCPM())
         @test sol.stats.lifecycle.divisions >= 1                 # negative control
-        a = Potts.anneal(prob; mcs = 4, seed = 1)
-        @test maximum(a.σ) == 1 && count(>(0), a.cell.volume) == 1
+        a = Potts.anneal(prob, 4; seed = 1)
+        @test maximum(a.ownership) == 1 && count(>(0), a.cell.volume) == 1
     end
 end
 
@@ -315,21 +315,21 @@ end
         driven = remake(prob; p = [:μ => 3.0])
         f, u0, p0 = driven.f, deepcopy(driven.u0), deepcopy(driven.p)
         for alg in (SequentialCPM(), CheckerboardCPM())
-            a = Potts.anneal(driven; mcs = 3, seed = 5, alg)
-            @test a.σ == Potts.anneal(driven; mcs = 3, seed = 5, alg).σ
-            @test a.σ != Potts.anneal(driven; mcs = 3, seed = 6, alg).σ   # the seed is used
-            @test driven.f === f && driven.u0.σ == u0.σ && driven.u0.cell.volume == u0.cell.volume && driven.p == p0
+            a = Potts.anneal(driven, 3; seed = 5, alg)
+            @test a.ownership == Potts.anneal(driven, 3; seed = 5, alg).ownership
+            @test a.ownership != Potts.anneal(driven, 3; seed = 6, alg).ownership   # the seed is used
+            @test driven.f === f && driven.u0.ownership == u0.ownership && driven.u0.cell.volume == u0.cell.volume && driven.p == p0
         end
         # the problem's own seed does not enter (only `seed`)
-        @test Potts.anneal(driven; mcs = 3, seed = 5).σ == Potts.anneal(remake(driven; seed = 99); mcs = 3, seed = 5).σ
-        z = Potts.anneal(driven; mcs = 0)
-        @test z !== driven.u0 && z.σ == σ && z.σ !== driven.u0.σ
+        @test Potts.anneal(driven, 3; seed = 5).ownership == Potts.anneal(remake(driven; seed = 99), 3; seed = 5).ownership
+        z = Potts.anneal(driven, 0)
+        @test z !== driven.u0 && z.ownership == σ && z.ownership !== driven.u0.ownership
         an_throws(
             ArgumentError, ["`mcs` must be non-negative", "pass `mcs >= 0`"],
-            () -> Potts.anneal(driven; mcs = -1)
+            () -> Potts.anneal(driven, -1)
         )
         # an annealed state can be annealed again and measured
-        @test valtype(Potts.boundary_lengths(driven, Potts.anneal(driven, z; mcs = 1))) === Int
+        @test valtype(Potts.boundary_lengths(driven, Potts.anneal(driven, z, 1))) === Int
     end
 end
 
@@ -349,9 +349,9 @@ end
             differs = 0
             for s in 1:3
                 run0 = solve(remake(prob; p = [:T => 0.0], seed = s, tspan = (0, 6)), alg).u[end]
-                @test Potts.anneal(prob; mcs = 6, seed = s, alg).σ == run0.σ
+                @test Potts.anneal(prob, 6; seed = s, alg).ownership == run0.ownership
                 stale = solve(remake(prob; f = frozen, seed = s, tspan = (0, 6)), alg; save_start = false).u[end]
-                differs += stale.σ != run0.σ
+                differs += stale.ownership != run0.ownership
             end
             @test differs >= 1
         end
@@ -367,17 +367,17 @@ end
         for alg in (SequentialCPM(), CheckerboardCPM())
             an_throws(
                 ErrorException, ["stopped with retcode", "inspect the energy terms"],
-                () -> Potts.anneal(prob; mcs = 5, seed = 1, alg)
+                () -> Potts.anneal(prob, 5; seed = 1, alg)
             )
         end
         # negative control: away from volume 8 the same model anneals
         σ2 = zeros(Int32, 16, 16)
         σ2[3:6, 3:6] .= 1                                        # volume 16: T = 0 grows it, ΔH finite
         ok = PottsProblem(AnBlowup(; name = :an_b2), [ownership => σ2, kind => [:A]], (0, 5); seed = 1)
-        @test Potts.anneal(ok; mcs = 2, seed = 1).cell.volume[1] > 16
+        @test Potts.anneal(ok, 2; seed = 1).cell.volume[1] > 16
         an_throws(
             ArgumentError, ["`seed` must be non-negative", "pass `seed >= 0`"],
-            () -> Potts.anneal(ok; mcs = 1, seed = -1)
+            () -> Potts.anneal(ok, 1; seed = -1)
         )
     end
 end

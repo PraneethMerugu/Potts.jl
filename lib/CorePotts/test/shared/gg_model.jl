@@ -10,7 +10,7 @@ kindidx(st, c) = c == 0 ? 1 : Int(@inbounds st.cell.kind[c]) + 1
 function gg_delta_H(st, p, prop, ctx)
     J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
     E(v, c) = p.λ * (v - p.V0)^2
-    return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E)
+    return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E)
 end
 gg_temperature(st, p, prop, ctx) = p.T
 const GG = CPMFunction(gg_delta_H; temperature = gg_temperature)
@@ -39,12 +39,12 @@ function total_H(st, lat, contact, p)
         for off in contact.offsets
             inside, y = shift(lat, x, off)
             inside || continue
-            a, b = st.σ[i], st.σ[linear_index(lat, y)]
+            a, b = st.ownership[i], st.ownership[linear_index(lat, y)]
             a != b && (H += p.J[k(a), k(b)] / 2)
         end
     end
     vol = zeros(Int, length(st.cell.kind))
-    for s in st.σ
+    for s in st.ownership
         s > 0 && (vol[s] += 1)
     end
     return H + sum(p.λ * (v - p.V0)^2 for v in vol)
@@ -55,14 +55,14 @@ function gs_delta_H(st, p, prop, ctx)
     J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
     E(v, c) = p.λ * (v - p.V0)^2
     S(s, c) = p.λs * (s - p.S0)^2
-    return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
+    return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
            surface_delta(st.cell.surface, prop,
-               surface_change(st.σ, ctx, prop; T = eltype(st.cell.surface)), S)
+               surface_change(st.ownership, ctx, prop; T = eltype(st.cell.surface)), S)
 end
 function gs_commit!(st, p, prop, ctx)
     commit_volume!(st, p, prop, ctx)
     commit_surface!(st.cell.surface, prop,
-        surface_change(st.σ, ctx, prop; T = eltype(st.cell.surface)))
+        surface_change(st.ownership, ctx, prop; T = eltype(st.cell.surface)))
 end
 const GS = CPMFunction(gs_delta_H; commit! = gs_commit!, temperature = gg_temperature)
 gs_params() = merge(gg_params(), (; λs = 0.5, S0 = 20.0))
@@ -84,13 +84,13 @@ function total_H_surface(st, lat, ctx, p)
     for i in 1:nsites(lat), (j, off) in enumerate(r.offsets)
         inside, y = shift(lat, coordinates(lat, i), off)
         inside || continue
-        a, b = st.σ[i], st.σ[linear_index(lat, y)]
+        a, b = st.ownership[i], st.ownership[linear_index(lat, y)]
         w = r.weights === nothing ? 1.0 : Float64(r.weights[j])
         a != b && (H += w * p.J[k(a), k(b)] / 2)
     end
     n = length(st.cell.kind)
-    vol = [count(==(c), st.σ) for c in 1:n]
-    S = brute_surface(st.σ, lat, ctx.surface, n)
+    vol = [count(==(c), st.ownership) for c in 1:n]
+    S = brute_surface(st.ownership, lat, ctx.surface, n)
     return H + sum(p.λ * (v - p.V0)^2 for v in vol) + sum(p.λs * (s - p.S0)^2 for s in S)
 end
 surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;

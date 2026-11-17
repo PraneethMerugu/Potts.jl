@@ -45,7 +45,7 @@ using Test, Potts, PottsModels
     @lattice Lattice((12, 12); neighborhood = VonNeumann(1))
     @energy begin
         cells(A, B) => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
         cells(A, B) => x * volume
     end
     @sweep Metropolis(; temperature = 10.0)
@@ -159,7 +159,7 @@ p60am_value(m, k) = p60am_try(() -> (v = getp(p60am_problem(m), k)(p60am_problem
 default does not convert)."""
 p60am_default(m, k) = p60am_try(() -> (d = Potts.info(Potts.lookup(m, k)).default;
     d isa AbstractArray ? Matrix{Float64}(d) : Float64(d)))
-p60am_count(m, k) = count(p -> Potts.info(p).name === k, Potts.parameters(m))
+p60am_count(m, k) = count(p -> Potts.info(p).name === k, Potts.declared_parameters(m))
 p60am_build(F; kws...) = p60am_try(() -> F(; name = :ext, kws...))
 
 const P60AM_J0 = [0 2 2; 2 1 4; 2 4 1]
@@ -223,7 +223,7 @@ const P60AM_M = [0 1 1; 1 0 2; 1 2 0]    # contacts 9 + 11 + 6 = 26
 
     @testset "a bound variable redeclared" begin
         m = p60am_build(P60amVar)
-        @test count(v -> Potts.info(v).name === :x, Potts.variables(m)) == 1
+        @test count(v -> Potts.info(v).name === :x, Potts.declared_variables(m)) == 1
         @test p60am_default(m, :x) == 2.0
         @test p60am_default(m, :λ) == 1.0
         @test p60am_energy(m) == 103.0                         # 9 + 52 + 42

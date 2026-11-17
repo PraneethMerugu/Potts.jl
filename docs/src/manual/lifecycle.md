@@ -23,6 +23,7 @@ so.
 
 ```@example lifecycle
 using Potts
+using Potts.Layouts
 
 @potts_model Divider begin
     @kinds medium cell
@@ -34,7 +35,7 @@ using Potts
     @lattice Lattice((40, 40); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         cells(cell) => 2.0 * (volume - V₀ * (1 + clock / 50))^2
-        contacts => 8.0 * (kind != kind′)
+        contacts => 8.0 * (kind != neighbor_kind)
     end
     @after_mcs clock += 1
     @divide cells(cell) Every(5) when = (clock >= 50) && (rand() < 0.5), along = principal_axis(),
@@ -79,7 +80,7 @@ rule that empties the cell. The usual way is to set its target volume to zero:
     @lattice Lattice((40, 40); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         cells(cell) => 2.0 * (volume - V_target)^2
-        contacts => 8.0 * (kind != kind′)
+        contacts => 8.0 * (kind != neighbor_kind)
     end
     @after_mcs begin
         doomed ~ ifelse((Pre(doomed) > 0) || ((mcs == 20) && (id <= 2)), 1.0, 0.0)

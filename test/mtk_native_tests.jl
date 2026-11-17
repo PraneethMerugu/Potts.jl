@@ -3,14 +3,14 @@
 @testitem "MTK-native: parameters are MTK parameters, kind tables array parameters" setup = [MTKNativeTests] tags = [:potts, :mtk_native] begin
     @testset "MTK-native: parameters are MTK parameters, kind tables array parameters" begin
         sys = MNModel(; name = :mn)
-        ps = Potts.parameters(sys)
+        ps = Potts.declared_parameters(sys)
         @test all(MTKB.isparameter, ps)
         λ, J, Dk = named(ps, :λ), named(ps, :J), named(ps, :Dk)
         @test J isa Symbolics.Arr && size(J) == (3, 3) && size(Dk) == (3,)
         @test !(λ isa Symbolics.Arr)
         @test Potts.info(J).role === :kindtable && Potts.info(λ).role === :param
         # negative control: a variable is not a parameter
-        q = named(Potts.variables(sys), :q)
+        q = named(Potts.declared_variables(sys), :q)
         @test !MTKB.isparameter(q)
         # a kind table's shape is its default's: a scalar default is refused when the model is built
         @test has(mn_error(() -> MNScalarTable(; name = :m)), "kind table `J` takes a vector", "or a matrix")
@@ -20,11 +20,11 @@ end
 @testitem "MTK-native: potts_entity metadata and input built-ins" setup = [MTKNativeTests] tags = [:potts, :mtk_native] begin
     @testset "MTK-native: potts_entity metadata and input built-ins" begin
         sys = MNModel(; name = :mn)
-        q = named(Potts.variables(sys), :q)
+        q = named(Potts.declared_variables(sys), :q)
         e = Potts.get_potts_entity(q)
         @test e isa Potts.Entity && e.role === :cell && e.name === :q
         @test e === Potts.info(q)                        # one record: the metadata key is LatticePDE's
-        for n in (:volume, :kind, :kind′, :source, :target, :id)
+        for n in (:volume, :kind, :neighbor_kind, :source, :target, :id)
             b = unwrap(getfield(Potts.B, n))
             @test iscall(b) && isequal(only(arguments(b)), unwrap(Potts.t))      # `volume(t)`
             @test nameof(operation(b)) === n
@@ -32,7 +32,7 @@ end
             @test Potts.get_potts_entity(b) == Potts.Builtin(n)
         end
         # negative controls: parameters and declared variables are not inputs
-        @test !any(MTKB.isinput, Potts.parameters(sys))
+        @test !any(MTKB.isinput, Potts.declared_parameters(sys))
         @test !MTKB.isinput(q)
         @test Potts.get_potts_entity(Potts.t) === nothing
         # a built-in has no previous value: `Pre(w[new])` keeps `Pre` on `w` only
@@ -108,7 +108,7 @@ end
 @testitem "MTK-native: descriptions and errors name built-ins as written" setup = [MTKNativeTests] tags = [:potts, :mtk_native] begin
     @testset "MTK-native: descriptions and errors name built-ins as written" begin
         @test Potts._describe(Potts.divide(Potts.cells(1); when = Potts.B.volume >= 4)) == "@divide cells(1) when = volume >= 4"
-        @test Potts._builtin_text("kind′(t) == 0 and cluster_volume(t) and x(t)") == "kind′ == 0 and cluster_volume and x(t)"
+        @test Potts._builtin_text("neighbor_kind(t) == 0 and cluster_volume(t) and x(t)") == "neighbor_kind == 0 and cluster_volume and x(t)"
     end
 end
 

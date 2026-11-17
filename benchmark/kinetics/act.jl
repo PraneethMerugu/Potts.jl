@@ -9,15 +9,13 @@
 # Each run is one task, its checkerboard phases inline (CPU): the device kinetics follow the
 # same phase law.
 using Potts, PottsModels, Random, Printf
-using Potts: CorePotts
 using Statistics: mean, std, quantile
 const NRUN = parse(Int, ARGS[1])
 const NMCS = parse(Int, get(ARGS, 2, "1500"))
 const OUT = expanduser(get(ARGS, 3, "~/lpwork/cbk/act-2026-11-05.tsv"))
 const BURN, LAG, L = 100, 10, 200
 const LAMBDAS = (100.0, 200.0, 300.0)
-const ALGS = (("seq", SequentialCPM(; proposal = Moore(1))), ("cb", CheckerboardCPM(; proposal = Moore(1))))
-CorePotts.BLOCK_GRAIN[] = typemax(Int)
+const ALGS = (("seq", SequentialCPM(; proposal = Moore(1))), ("cb", CheckerboardCPM(; proposal = Moore(1), threads = false)))
 
 function problem(λ_act, seed)
     σ = zeros(Int32, L, L)
@@ -44,11 +42,11 @@ minimage(d) = d - L * round(d / L)
 function run(alg, λ_act, seed)
     integ = init(problem(λ_act, seed), alg; save_start = false, save_end = false, save_everystep = false)
     x = zeros(2, NMCS)
-    prev = centroid(Array(integ.state.σ))
+    prev = centroid(Array(integ.state.ownership))
     pos = copy(prev)
     for t in 1:NMCS
         step!(integ)
-        c = centroid(Array(integ.state.σ))
+        c = centroid(Array(integ.state.ownership))
         pos .+= minimage.(c .- prev)
         prev = c
         x[:, t] = pos

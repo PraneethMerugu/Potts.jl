@@ -26,7 +26,7 @@ const LFP = Potts.LatticeFields.Problems
     @lattice Lattice((30, 30); boundary = Periodic(), neighborhood = Moore(1))
     @energy begin
         cells(dark, light) => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = T)
 end
@@ -65,7 +65,7 @@ end
 fix_tspan(c) = c.name == "FieldProblem" ? merge(c, (; prob = remake(c.prob; tspan = (0.0, 1.0)))) : c
 
 """A copy of the state an integrator holds now (the lattice of a Potts run), comparable across runs."""
-state_copy(integ::CorePotts.PottsIntegrator) = copy(current_state(integ).σ)
+state_copy(integ::CorePotts.PottsIntegrator) = copy(current_state(integ).ownership)
 state_copy(integ) = copy(Array(integ.u))
 
 """Write into the live state `integ.u`: a cell's kind (Potts: it changes its contact energies) or the field's values."""
@@ -170,15 +170,15 @@ end
     # remake with a map equals construction with the value
     r = solve(remake(prob; p = [:T => 4.0]), alg; save_everystep = false)
     d = solve(potts_problem([:T => 4.0]), alg; save_everystep = false)
-    @test r.u[end].σ == d.u[end].σ
+    @test r.u[end].ownership == d.u[end].ownership
 
     # the solve keywords: seed, maxiters, save_idxs, verbose, tstops; problem keywords merge
-    @test solve(prob, alg; seed = 9, save_everystep = false).u[end].σ == solve(remake(prob; seed = 9), alg; save_everystep = false).u[end].σ
-    @test solve(prob, alg; seed = 9, save_everystep = false).u[end].σ != solve(prob, alg; save_everystep = false).u[end].σ
+    @test solve(prob, alg; seed = 9, save_everystep = false).u[end].ownership == solve(remake(prob; seed = 9), alg; save_everystep = false).u[end].ownership
+    @test solve(prob, alg; seed = 9, save_everystep = false).u[end].ownership != solve(prob, alg; save_everystep = false).u[end].ownership
     m = @test_logs (:warn, r"maxiters") solve(prob, alg; maxiters = 4, save_everystep = false)
     @test m.retcode == ReturnCode.MaxIters && m.t[end] == 4
     @test_logs solve(prob, alg; maxiters = 4, save_everystep = false, verbose = false)
-    @test keys(solve(prob, alg; save_idxs = [:σ]).u[end].cell) == ()
+    @test keys(solve(prob, alg; save_idxs = [:ownership]).u[end].cell) == ()
     @test potts_problem(; saveat = [7]).kwargs == (; saveat = [7])
     @test solve(potts_problem(; saveat = [5]), alg).t == [0, 5, 7]
 
@@ -199,7 +199,7 @@ end
 
     # ensembles: reproducible by replica, and by `seed`
     ens = EnsembleProblem(prob)
-    run(; kw...) = [s.u[end].σ for s in solve(ens, alg, EnsembleSerial(); trajectories = 2, save_everystep = false, kw...).u]
+    run(; kw...) = [s.u[end].ownership for s in solve(ens, alg, EnsembleSerial(); trajectories = 2, save_everystep = false, kw...).u]
     a, b = run(), run()
     @test a == b && a[1] != a[2]
     @test run(; seed = 1) == run(; seed = 1) && run(; seed = 1) != a

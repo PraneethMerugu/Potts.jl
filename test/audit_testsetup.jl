@@ -334,7 +334,7 @@ end
     @lattice Lattice((20, 20))
     @energy begin
         cells => (volume - 9)^2
-        contacts => x[owner] + x[owner′]
+        contacts => x[owner] + x[neighbor_owner]
     end
     @on_copy x[new] ~ x[new] + 1
     @sweep Metropolis(; temperature = 5.0)
@@ -354,7 +354,7 @@ end
     @lattice Lattice((12, 12))
     @energy begin
         cells => (volume - V2 / 2)^2 + pb * 0
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = 5.0)
 end
@@ -433,7 +433,7 @@ end
     @lattice Lattice(lattice; geometry)
     @energy begin
         cells(A) => (volume - 12)^2 + λ_L * (major_length - L)^2
-        contacts => 1.0 * (kind != kind′)
+        contacts => 1.0 * (kind != neighbor_kind)
     end
     @observed len(cell) ~ major_length
     @sweep Metropolis(; temperature = 4.0)

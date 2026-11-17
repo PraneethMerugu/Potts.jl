@@ -28,7 +28,7 @@ end
         σ = zeros(Int32, 24, 24); σ[5:8, 5:8] .= 1; σ[14:17, 12:15] .= 2
         op = [ownership => σ, kind => [:A, :A]]
         run(fs) = (s = solve(PottsProblem(FiMove(; name = :f), op, (0, 12); field_solver = fs, seed = 7), SequentialCPM());
-                   (Array(s.u[end].site.c), s.u[end].σ))
+                   (Array(s.u[end].site.c), s.u[end].ownership))
         (ref, σr), (be, σb), (cn, σc) = run(BackwardEuler(; substeps = 20)), run(BackwardEuler()), run(CrankNicolson())
         @test σr == σb == σc                                       # (the field does not steer the CPM)
         eb, ec = maximum(abs, be .- ref), maximum(abs, cn .- ref)
@@ -52,7 +52,7 @@ end
         function run(fs)
             i = init(PottsProblem(FiSecrete(; name = :f), op, (0, 6); field_solver = fs, seed = 3), SequentialCPM())
             foreach(_ -> step!(i), 1:6)
-            return fi_c(i), copy(Array(current_state(i).σ)), i
+            return fi_c(i), copy(Array(current_state(i).ownership)), i
         end
         ref, σr, _ = run(CrankNicolson(; substeps = 128))
         err(fs) = ((c, σ, i) = run(fs); @test σ == σr; (maximum(abs, c .- ref), i))
@@ -105,10 +105,10 @@ end
             SequentialCPM(); save_start = false)
         step!(integ)
         rt = fi_rt(integ)
-        σs = [copy(Array(current_state(integ).σ))]
+        σs = [copy(Array(current_state(integ).ownership))]
         for _ in 2:6
             step!(integ)
-            push!(σs, copy(Array(current_state(integ).σ)))
+            push!(σs, copy(Array(current_state(integ).ownership)))
             @test !rt.cache.start && rt.cache.γ == 2 / 3          # no restart: BDF2 steps every MCS
         end
         @test length(unique(σs)) > 1                              # (σ moved)
@@ -382,11 +382,11 @@ end
         integ = init(PottsProblem(FiMoving(; name = :f), [ownership => σ, kind => [:A, :A]], (0, 20);
             field_solver = QuasiSteady(), seed = 3), SequentialCPM(); save_start = false)
         foreach(_ -> step!(integ), 1:3)
-        c3, σ3 = copy(Array(current_state(integ).site.c)), copy(Array(current_state(integ).σ))
+        c3, σ3 = copy(Array(current_state(integ).site.c)), copy(Array(current_state(integ).ownership))
         step!(integ)
         st = current_state(integ)
-        @test Array(st.σ) != σ3
-        K4 = Int32.(Array(st.σ) .!= 0)
+        @test Array(st.ownership) != σ3
+        K4 = Int32.(Array(st.ownership) .!= 0)
         @test Array(st.site.c) == fi_runB(FiMoving, (16, 16), 1; u0 = [:c => c3], inputs = [:kind => K4], alg = QuasiSteady())[1]
         @test Array(st.site.c) != fi_runB(FiMoving, (16, 16), 1; u0 = [:c => c3], inputs = [:kind => Int32.(σ3 .!= 0)],
             alg = QuasiSteady()

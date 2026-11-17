@@ -26,7 +26,7 @@ once, at MCS 0, when their area has reached the target, splitting a cell mass va
     @lattice Lattice(lattice; boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         cells(epithelial) => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @divide cells(epithelial) when = (mcs == 0) && (volume >= V₀), along = (1.0, 0.0), mass => Split()
     @sweep Metropolis(; temperature = T)

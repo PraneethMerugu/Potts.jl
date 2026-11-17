@@ -1,6 +1,7 @@
 # Layouts (P6.3c, D-141): Eden, RandomPoints(replace = true), shortfall and Splits.
 
 @testitem "layouts: Eden fills its connected component, and only it" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: Eden fills its connected component, and only it" begin
         # enough rounds fill every site reachable from the seed: one cell owning the lattice
         σ = _op(layout(Eden(Center(); rounds = 400, kinds = [:a], seed = 1), (15, 15)), ownership)
@@ -18,6 +19,7 @@
 end
 
 @testitem "layouts: Eden's neighbourhood sets its reach" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: Eden's neighbourhood sets its reach" begin
         # growth moves one neighbourhood step per round: within R of the seed in the graph metric
         # of the growth neighbourhood (L1 for VonNeumann(1), Chebyshev for Moore(1))
@@ -43,6 +45,7 @@ end
 end
 
 @testitem "layouts: Splits passes on a strip (recursive oracle)" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: Splits passes on a strip (recursive oracle)" begin
         for (n, k) in ((16, 4), (13, 3), (7, 5), (1, 2))
             op, rep = layout(Splits(Tiling((n, 1); kinds = [:a]), k; shortfall = :allow), (n, 1); report = true)
@@ -57,6 +60,7 @@ end
 end
 
 @testitem "layouts: Splits cuts across the long axis (eigen oracle, name)" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: Splits cuts across the long axis (eigen oracle, $name)" for (name, target, emb) in (
             ("square", (40, 40), x -> Float64.(x)),
             ("hex", Lattice((40, 40); geometry = Hexagonal(), boundary = Closed()), x -> (x[1] + x[2] / 2, x[2] * sqrt(3) / 2)),
@@ -74,6 +78,7 @@ end
 end
 
 @testitem "layouts: Splits delegates one report row" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: Splits delegates one report row" begin
         # an overlay inside Splits paints into the Splits row: 2 boxes, 2 passes → 8 cells
         inner = overlay(Tiling((4, 4); region = (1:4, 1:4), kinds = [:a]), Tiling((4, 4); region = (6:9, 1:4), kinds = [:b]))
@@ -94,6 +99,7 @@ end
 end
 
 @testitem "layouts: RandomPoints(replace = true) with Voronoi and Eden" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: RandomPoints(replace = true) with Voronoi and Eden" begin
         # coinciding generators: the later one ties every site to the lower one and is dropped
         p = RandomPoints(12; region = (2:4, 2:4), replace = true, seed = 5)
@@ -113,6 +119,7 @@ end
 end
 
 @testitem "layouts: Splits keeps sites on the plane with the mother (exact oracle)" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: Splits keeps sites on the plane with the mother (exact oracle)" begin
         # the review's reproducer: (4, 4) lies exactly on the plane, the inexact centroid
         # (23/5, 19/5) and axis would put it at ±1e-16
@@ -145,6 +152,7 @@ end
 end
 
 @testitem "layouts: Splits names the cell by its id in the result" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: Splits names the cell by its id in the result" begin
         # the review's reproducer: on a periodic 10 × 3 lattice the cell spans more than half of x,
         # so it is unwrapped about (9, 1) and torn; an earlier one-site cell is painted over and

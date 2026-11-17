@@ -24,7 +24,7 @@
 #      host planner rerunning `before` would do) differs from the fused + fault run, so the
 #      comparison detects a double application.
 #      CPU: the device planner forced on the CPU backend (`_FORCE_DEVICE_LIFECYCLE`, as the
-#      CorePotts tests do), `FUSE_SITES[] = 0` so the staged form is the one that runs.
+#      CorePotts tests do), `CheckerboardCPM(; fused_lifecycle_max_sites = 0)` so the staged form is the one that runs.
 #      Metal (POTTS_GPU=metal with Metal loaded, Float32): the same comparisons.
 #  (b) `generated_code(sys)` shows the lifecycle as Potts builds it. Contract: the result
 #      has a field `lifecycle`, `nothing` for a model without divisions, else a NamedTuple
@@ -150,18 +150,18 @@ end
 
 const P60AF_TRACKERS = (:anchor, :m1, :m2)
 p60af_same(a, b) = length(a.u) == length(b.u) &&
-    all(i -> a.u[i].σ == b.u[i].σ && a.u[i].cell == b.u[i].cell && a.u[i].model == b.u[i].model, eachindex(a.u))
+    all(i -> a.u[i].ownership == b.u[i].ownership && a.u[i].cell == b.u[i].cell && a.u[i].model == b.u[i].model, eachindex(a.u))
 p60af_same_but_trackers(a, b) = length(a.u) == length(b.u) && all(eachindex(a.u)) do i
     x, y = a.u[i], b.u[i]
-    x.σ == y.σ && x.model == y.model && keys(x.cell) == keys(y.cell) &&
+    x.ownership == y.ownership && x.model == y.model && keys(x.cell) == keys(y.cell) &&
         all(k -> k in P60AF_TRACKERS || getfield(x.cell, k) == getfield(y.cell, k), keys(x.cell))
 end
 # trackers of every save equal a recount from σ (centroid and covariance of each live cell)
 function p60af_trackers_exact(sol, lat::CorePotts.Lattice{N}) where {N}
     all(sol.u) do u
         cap = length(u.cell.volume)
-        m = CorePotts.init_moments(u.σ, lat, cap)
-        ref = merge(m, (; volume = Int32[count(==(c), u.σ) for c in 1:cap]))
+        m = CorePotts.init_moments(u.ownership, lat, cap)
+        ref = merge(m, (; volume = Int32[count(==(c), u.ownership) for c in 1:cap]))
         u.cell.volume == ref.volume && all(1:cap) do c
             ref.volume[c] == 0 && return true
             all(isapprox.(CorePotts.centroid(u.cell, lat, c), CorePotts.centroid(ref, lat, c); atol = 1e-9)) &&
@@ -187,13 +187,12 @@ end
 # Solve with the staged form forced and the fault at kernel `k` (0: none); returns the
 # solution, the final form and the MCS at which the form changed (or -1)
 function p60af_run(prob, k; backend = nothing, device_on_cpu = backend === nothing)
-    fuse, force = CorePotts.FUSE_SITES[], CorePotts._FORCE_DEVICE_LIFECYCLE[]
-    CorePotts.FUSE_SITES[] = 0
+    force = CorePotts._FORCE_DEVICE_LIFECYCLE[]
     CorePotts._FORCE_DEVICE_LIFECYCLE[] = device_on_cpu
     P60AF_HOOK && (CorePotts._STAGED_FAULT_AFTER[] = k)
     try
         kw = backend === nothing ? (;) : (; backend)
-        integ = init(prob, CheckerboardCPM(); saveat = 1, kw...)
+        integ = init(prob, CheckerboardCPM(; fused_lifecycle_max_sites = 0); saveat = 1, kw...)
         D = integ.lcache.device
         @assert D isa CorePotts.DeviceLifecycle && D.fused! === nothing
         handover = -1
@@ -204,7 +203,6 @@ function p60af_run(prob, k; backend = nothing, device_on_cpu = backend === nothi
         end
         return solve!(integ), D.form[], handover
     finally
-        CorePotts.FUSE_SITES[] = fuse
         CorePotts._FORCE_DEVICE_LIFECYCLE[] = force
         P60AF_HOOK && (CorePotts._STAGED_FAULT_AFTER[] = 0)
     end

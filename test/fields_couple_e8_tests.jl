@@ -15,7 +15,7 @@
             n8, w8 = cp_run(CeNamed(; name = :m, s = 0.8), fs), cp_run(CeWork(; name = :m, s = 0.8), fs)
             @test cp_same(n8, w8) && n8.u[end].site.c != n.u[end].site.c
         end
-        @test count(==(:s), [Potts.info(p).name for p in Potts.parameters(CeNamed(; name = :m))]) == 1
+        @test count(==(:s), [Potts.info(p).name for p in Potts.declared_parameters(CeNamed(; name = :m))]) == 1
         # a name that is neither a field nor a parameter: the refusal lists both
         e = cp_build_err(quote
             @potts_model CeNoName begin

@@ -70,7 +70,7 @@ The paint so far, handed to `paint!(op::LayoutState, l, lat)`. Opaque: use
 [`ncells`](@ref) and [`record!`](@ref).
 """
 mutable struct LayoutState{N}
-    const σ::Array{Int32, N}
+    const ownership::Array{Int32, N}
     const kinds::Vector{Any}
     const cutby::Vector{Int32}       # per cell before the current leaf: 0, the one cutter, or -1 (several)
     const cutwarn::Vector{Bool}      # … some cutter has `splits = :warn`
@@ -138,7 +138,7 @@ function _cut!(op::LayoutState, o::Int32)
 end
 
 function _assign_site!(op::LayoutState, i::CartesianIndex, id::Int32)
-    σ = op.σ
+    σ = op.ownership
     o = σ[i]
     0 < o <= op.base && o != id && _cut!(op, o)
     σ[i] = id
@@ -147,14 +147,14 @@ end
 
 function _assign_box!(op::LayoutState, R::CartesianIndices, id::Int32)
     if op.base == 0                          # no cell before this leaf: nothing to cut
-        op.σ[R] .= id
+        op.ownership[R] .= id
     else
         _assign_box_cut!(op, R, id)
     end
     return length(R)
 end
 @noinline function _assign_box_cut!(op::LayoutState, R::CartesianIndices, id::Int32)
-    σ, base = op.σ, op.base
+    σ, base = op.ownership, op.base
     checkbounds(σ, R)
     for i in R
         o = @inbounds σ[i]                   # inbounds: checkbounds(σ, R) above
@@ -170,8 +170,8 @@ end
 The cell owning site `x` (a tuple of integers or a `CartesianIndex`) in the paint so far;
 0 is the medium.
 """
-owner(op::LayoutState{N}, x::NTuple{N, Integer}) where {N} = op.σ[x...]
-owner(op::LayoutState{N}, x::CartesianIndex{N}) where {N} = op.σ[x]
+owner(op::LayoutState{N}, x::NTuple{N, Integer}) where {N} = op.ownership[x...]
+owner(op::LayoutState{N}, x::CartesianIndex{N}) where {N} = op.ownership[x]
 
 """
     kindof(op::LayoutState, id)
@@ -1313,7 +1313,7 @@ function Eden(points; rounds::Integer, region = nothing, kinds, seed::Integer, n
         shortfall::Symbol = :error, splits::Symbol = :warn)
     rounds >= 0 || throw(ArgumentError("Eden: rounds must be non-negative, got $rounds"))
     _check_seed(seed, "Eden")
-    (neighborhood === nothing || neighborhood isa CorePotts.RelationSpec) ||
+    (neighborhood === nothing || neighborhood isa CorePotts.AbstractRelationSpec) ||
         throw(ArgumentError("Eden: `neighborhood` must be a relation spec such as Moore(1), got $(repr(neighborhood))"))
     return Eden(_pattern_arg(points, "Eden"), _place_arg(region, "Eden"), Int(rounds), _kinds_arg(kinds, "Eden"),
         UInt64(seed), neighborhood, _shortfall_arg(shortfall, "Eden"), _splits_arg(splits, "Eden"))
@@ -1334,7 +1334,7 @@ function _eden!(op::LayoutState{N}, l::Eden, lat::LatticeSpec{N}, region::Vector
         pts::Vector{NTuple{N, Float64}}) where {N}
     dims = size(lat)
     per = _periodic(lat)
-    σ = op.σ
+    σ = op.ownership
     allowed = falses(dims)                       # region ∩ domain
     for x in region
         allowed[x] = true
@@ -1360,7 +1360,7 @@ end
 
 # `rounds` synchronous growth rounds of the cells `lo:ncells(op)` under the offsets `offs`.
 function _eden_grow!(op::LayoutState{N}, l::Eden, clat, offs, allowed, lo) where {N}
-    σ = op.σ
+    σ = op.ownership
     back = map(o -> map(-, o), offs)             # x with shift(x, o) = s is shift(s, -o)
     K = length(offs)
     rng = layer_rng(l.seed, :eden)
@@ -1484,8 +1484,8 @@ function paint!(op::LayoutState{N}, l::Splits, lat::LatticeSpec{N}) where {N}
     paint!(op, l.layer, lat)                     # into this row (a delegating layer, D-091)
     clipped = op.rows[op.layer].clipped
     sites = [CartesianIndex{N}[] for _ in lo:ncells(op)]
-    for x in CartesianIndices(op.σ)
-        c = op.σ[x]
+    for x in CartesianIndices(op.ownership)
+        c = op.ownership[x]
         c >= lo && push!(sites[c - lo + 1], x)
     end
     m = count(!isempty, sites)
@@ -1516,7 +1516,7 @@ function paint!(op::LayoutState{N}, l::Splits, lat::LatticeSpec{N}) where {N}
     # an inner Splits shares this row: its findings for these cells are superseded
     filter!(q -> q[1] < lo, op.pieces)
     warn, row = l.splits === :warn, op.layer
-    _disconnected(op.σ, check, lat) do c
+    _disconnected(op.ownership, check, lat) do c
         push!(op.pieces, (c, row, warn))         # counted and warned by `layout` (final ids)
     end
     record!(op; requested, painted, misses = requested - painted, clipped)
@@ -1924,7 +1924,7 @@ function _check_splits!(op::LayoutState, lat::LatticeSpec, counts, report::Bool)
         check[c] = cutby[c] != 0 && counts[c] > 0 && (cutwarn[c] || (report && cutby[c] > 0))
     end
     any(check) || return warned
-    _disconnected(op.σ, check, lat) do c
+    _disconnected(op.ownership, check, lat) do c
         if cutwarn[c]
             warned[c] = true
             @warn "layout: later layers split cell $(_final_id(counts, c)) (kind $(op.kinds[c])) into disconnected pieces"
@@ -1948,7 +1948,7 @@ function _report_pieces!(op::LayoutState, lat::LatticeSpec, counts, warned)
         check[c] = warn && counts[c] > 0 && !warned[c]
     end
     any(check) || return nothing
-    _disconnected(op.σ, check, lat) do c
+    _disconnected(op.ownership, check, lat) do c
         @warn "layout: cell $(_final_id(counts, c)) (kind $(op.kinds[c])) of a Splits layer is not one piece " *
               "(pass `splits = :allow` to that Splits to accept it)"
     end
@@ -2008,7 +2008,7 @@ function layout(l::AbstractLayout, x::_LayoutTarget; report::Bool = false)
     _check_layout_kinds(x, _layer_kinds(l))                # before painting: `into` is never painted
     op = LayoutState(lat.dims)
     _paint_leaf!(op, l, lat)
-    σ, kinds = op.σ, op.kinds
+    σ, kinds = op.ownership, op.kinds
     _check_layout_kinds(x, kinds)                          # custom layers' kinds
     counts = zeros(Int, length(kinds))
     for s in σ

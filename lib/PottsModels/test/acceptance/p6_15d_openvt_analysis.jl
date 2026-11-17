@@ -44,7 +44,7 @@
 #       `ostream <<` prints it (C `%g`, precision 6; NaN → `nan`).
 #   PottsModels.openvt_neighbor_histogram(n) → (; n = 0:nmax as a Vector{Int}, p)
 #       p = (100·count)/N, in percent, as metrics.cpp:225-246.
-#   PottsModels.openvt_inhibition_code(a, f; β, γ)::Int
+#   PottsModels.openvt_inhibition_code(a, f; beta = β, gamma = γ)::Int
 #       M p.2 code: 0 growing, 1 type 1 only, 2 type 2 only, 3 both. Type 1 inhibited iff
 #       NOT a ≥ β; type 2 inhibited iff NOT f ≥ γ (spec C9: M's ≥ wins over the schema's >).
 #   PottsModels.openvt_inhibition_fractions(i) → (; uninhibited, type1, type2, both)

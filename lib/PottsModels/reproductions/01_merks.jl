@@ -31,6 +31,7 @@
 # paper's figure (D-200), from the record's stored snapshots without new runs.
 
 using Potts, PottsModels
+using Potts.Layouts
 using MakiePotts, CairoMakie
 using Statistics: mean, std
 using Markdown
@@ -77,7 +78,7 @@ nothing #hide
 #     @relations proposal = Moore(1)
 #     @energy begin                           # Eqs. 1, 4, 5
 #         cells(endothelial) => λ * (volume - A)^2 + λ_L * (major_length - L)^2
-#         contacts => J[kind, kind′]
+#         contacts => J[kind, neighbor_kind]
 #     end
 #     # chemotaxis (Eq. 2), f(c) = c / (1 + s c), at every copy
 #     @drive copy => -ifelse((old == 0) | (new == 0), χcM, χcc) *
@@ -110,7 +111,7 @@ nothing #hide
 #     @relations proposal = NeighborOrder(4)
 #     @energy begin                           # no length term
 #         cells(endothelial) => λ * (volume - A)^2
-#         contacts => J[kind, kind′]
+#         contacts => J[kind, neighbor_kind]
 #     end
 #     if mode === :extension_retraction       # 01b Eq. 3
 #         @drive copy => -ifelse((old == 0) | (new == 0), χcM, χcc) *
@@ -175,7 +176,7 @@ function field_mcs(c, σ, p; split)
     return c
 end
 dev_u = sol.u[end]
-dev_c, dev_σ = Float64.(Array(dev_u.site.c)), Int.(Array(dev_u.σ))
+dev_c, dev_σ = Float64.(Array(dev_u.site.c)), Int.(Array(dev_u.ownership))
 dev_p = (; α = getp(prob, :α)(prob), ε = getp(prob, :ε)(prob), Dc = getp(prob, :Dc)(prob))
 split_rel = maximum(abs, field_mcs(dev_c, dev_σ, dev_p; split = true) .- field_mcs(dev_c, dev_σ, dev_p; split = false)) /
             maximum(dev_c)
@@ -558,7 +559,7 @@ $(join([full_deviation_rows; b01_deviation_rows], "\n"))
 #
 # | Source | `Merks2006` (Variant E) | `Merks2008` (Variant CI) |
 # |---|---|---|
-# | adhesion Σ J(1 − δ) (01a Eq. 1; 01b Eq. 2) over "the eight second-order neighbors" (01a p.47) / "twenty, first- to fourth-nearest neighbors" (01b p.11) | `contacts => J[kind, kind′]` on `Moore(1)` | `contacts => J[kind, kind′]` on `NeighborOrder(4)` |
+# | adhesion Σ J(1 − δ) (01a Eq. 1; 01b Eq. 2) over "the eight second-order neighbors" (01a p.47) / "twenty, first- to fourth-nearest neighbors" (01b p.11) | `contacts => J[kind, neighbor_kind]` on `Moore(1)` | `contacts => J[kind, neighbor_kind]` on `NeighborOrder(4)` |
 # | area λ(a − A)² (01a Eq. 1; 01b Eq. 2) | `cells(endothelial) => λ * (volume - A)^2` | same |
 # | length λ_L(l − L)², l = 4√(λ_max/a) (01a Eq. 4, Eq. 5, p.48–49) | `+ λ_L * (major_length - L)^2` | — (no length term, Dataset S1 `lambda2 = 0`) |
 # | chemotaxis −χ(f(c(x′)) − f(c(x))), f(c) = c/(1 + s c) (01a Eq. 2; 01b Eq. 3) | χ(c,M) = χ(c,c) = γ = 1000: every copy (spec A-7) | χ(c,M) = 500 at cell–medium copies, χ(c,c) = 0 (contact inhibition) |
@@ -722,7 +723,7 @@ function network(σ)
     return (; share = maximum(occ) / sum(occ), lacunae = count(k -> !touch[k] && med[k] >= 10, eachindex(med)))
 end
 isnetwork(r) = r.share >= 0.9 && r.lacunae >= 3
-σs(sol) = [Int.(Array(u.σ)) for u in sol.u]
+σs(sol) = [Int.(Array(u.ownership)) for u in sol.u]
 nothing #hide
 
 # ### Ensembles
@@ -741,7 +742,7 @@ function run06(seed, saves; lattice = (500, 500), n = 282, p = Pair[])
     prob = PottsProblem(Merks2006(; name = :m6, lattice), [layout(merks2006_layout(; lattice, n, seed), lattice); p...],
         (0, maximum(saves)); field_solver = SOLVER, seed)
     sol = solve(prob, SequentialCPM(); saveat = saves)
-    return Dict(Int(t) => Int.(Array(u.σ)) for (t, u) in zip(sol.t, sol.u))
+    return Dict(Int(t) => Int.(Array(u.ownership)) for (t, u) in zip(sol.t, sol.u))
 end
 function run08(seed, saves; p = Pair[], mode = :extension_retraction, denovo = false)
     lattice = denovo ? (502, 502) : (202, 202)
@@ -749,7 +750,7 @@ function run08(seed, saves; p = Pair[], mode = :extension_retraction, denovo = f
     prob = PottsProblem(Merks2008(; name = :m8, lattice, mode), [layout(l, lattice); p...], (0, maximum(saves));
         field_solver = SOLVER, seed)
     sol = solve(prob, SequentialCPM(); saveat = saves)
-    return Dict(Int(t) => Int.(Array(u.σ)) for (t, u) in zip(sol.t, sol.u))
+    return Dict(Int(t) => Int.(Array(u.ownership)) for (t, u) in zip(sol.t, sol.u))
 end
 function anisotropy(σs)
     par = perp = 0.0
@@ -879,8 +880,8 @@ function record_field(file, sol; title, figsize, every = 1)
     frames = renderframes(sol, RenderRequest())
     field(i) = Float64.(Array(sol.u[i].site.c))
     ## endothelial sites by kind (every cell that is not of the frame's kind); NaN is transparent
-    frame_kind = sol.u[1].cell.kind[Array(sol.u[1].σ)[1, 1]]         # the corner site is the frozen frame
-    cells(i) = (σ = Array(sol.u[i].σ); kd = sol.u[i].cell.kind;
+    frame_kind = sol.u[1].cell.kind[Array(sol.u[1].ownership)[1, 1]]         # the corner site is the frozen frame
+    cells(i) = (σ = Array(sol.u[i].ownership); kd = sol.u[i].cell.kind;
                 [c != 0 && kd[c] != frame_kind ? 1.0 : NaN for c in σ])
     nx, ny = frame_size(frames[1])
     ox, oy = frame_geometry(frames[1]).origin

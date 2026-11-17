@@ -262,15 +262,15 @@ end
 
 """One scan run: steady bulk shear at model β = βm from state st, cap `cap` paper MCS."""
 function p64kb_run(st, βm, cap, seed, τ)
-    lat = p64r_lat(size(st.σ))
+    lat = p64r_lat(size(st.ownership))
     T = p64r_ours(cap, τ)
     w = round(Int, 100τ)
     integ = init(p64r_problem(st, T; shear = true, β = βm, bulk = true, seed), P64R_ALG)
-    g = P64R_AN.cell_graph(st.σ, lat)
+    g = P64R_AN.cell_graph(st.ownership, lat)
     N = zeros(T)
     for m in 1:T
         step!(integ)
-        g2 = P64R_AN.cell_graph(current_state(integ).σ, lat)
+        g2 = P64R_AN.cell_graph(current_state(integ).ownership, lat)
         N[m] = P64R_AN.t1_events(g, g2; unit = :t1)
         g = g2
         (m % w == 0 || m == T) || continue

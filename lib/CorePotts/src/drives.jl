@@ -26,13 +26,13 @@ saturating(s) = c -> c / (s + c)
 saturating_linear(s) = c -> c / (s * c + 1)
 
 """Folds for [`neighborhood_mean`](@ref)."""
-abstract type MeanFold end
+abstract type AbstractNeighborhoodMean end
 """Arithmetic mean."""
-struct ArithmeticMean <: MeanFold end
+struct ArithmeticMean <: AbstractNeighborhoodMean end
 """Geometric mean, zero if any value is zero."""
-struct GeometricMean <: MeanFold end
+struct GeometricMean <: AbstractNeighborhoodMean end
 """`exp(mean(log1p(max(x, 0)))) − 1`."""
-struct Log1pGeometricMean <: MeanFold end
+struct Log1pGeometricMean <: AbstractNeighborhoodMean end
 
 @inline _fold_term(::ArithmeticMean, a) = a
 @inline _fold_term(::GeometricMean, a) = a > 0 ? log(a) : zero(a)
@@ -48,7 +48,7 @@ Mean of `x` over `site` (if `owner` owns it) and its `relation` neighbors owned 
 `owner`. Zero for the medium or an empty set. The neighborhood-memory drive of the Act
 family is `−(λ/max)(mean(source, new) − mean(target, old))`.
 """
-@inline function neighborhood_mean(x, σ, ctx, site, owner; relation, fold::M = GeometricMean()) where {M <: MeanFold}
+@inline function neighborhood_mean(x, σ, ctx, site, owner; relation, fold::M = GeometricMean()) where {M <: AbstractNeighborhoodMean}
     T = eltype(x)
     owner == 0 && return zero(T)
     lat = ctx.lattice

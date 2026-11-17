@@ -10,7 +10,7 @@ that the chain relaxes toward its rest length. The time a chain of 11 cells take
 
 - Kinds `medium`, `compressed` and `relaxed`. A compressed cell has the area target `A_c`,
   a relaxed cell `A`: energies `λ (volume − A_c)²` and `λ (volume − A)²`.
-- Adhesion `J[kind, kind′]`: cell–cell 20, cell–medium 10 (Table S1).
+- Adhesion `J[kind, neighbor_kind]`: cell–cell 20, cell–medium 10 (Table S1).
 - `T = 20`, `A = 50` (one cell diameter CD = 10 sites times the 5-row strip), `A_c = 25`.
 - The lattice is periodic on both axes with Moore(1) neighbors, and proposals are
   Moore(1). On a 5-row strip each cell spans the strip, so the chain is one-dimensional.
@@ -25,7 +25,7 @@ sys = OpenVTChain(; name = :chain, λ = 2.0)
 prob = PottsProblem(sys, openvt_chain(11), (0, 100 + 775); seed = 1)
 sol = solve(prob, SequentialCPM(; proposal = Moore(1)); callback = openvt_release(100),
     saveat = 100:875)
-w = [PottsModels.Analysis.chain_width(u.σ) for u in sol.u]    # w[1] = 5 CD at t = 0
+w = [PottsModels.Analysis.chain_width(u.ownership) for u in sol.u]    # w[1] = 5 CD at t = 0
 ```
 """
 @potts_model OpenVTChain begin
@@ -45,7 +45,7 @@ w = [PottsModels.Analysis.chain_width(u.σ) for u in sol.u]    # w[1] = 5 CD at 
     @energy begin
         cells(compressed) => λ * (volume - A_c)^2
         cells(relaxed) => λ * (volume - A)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = T)
 end

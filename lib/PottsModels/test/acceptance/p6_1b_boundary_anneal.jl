@@ -7,7 +7,7 @@
 #   Potts.boundary_lengths(prob, u = prob.u0; relation = nothing)
 #           -> AbstractDict{Tuple{Symbol, Symbol}, <:Real}                  (public in Potts)
 #       The boundary length of state `u` decomposed by kind pair. A bond is an unordered pair
-#       of sites {i, j} with j = i + o for an offset o of `relation` (a RelationSpec resolved
+#       of sites {i, j} with j = i + o for an offset o of `relation` (a AbstractRelationSpec resolved
 #       on the problem's lattice; `nothing` = the problem's contact relation), j inside the
 #       lattice and its domain (periodic axes wrap, closed axes and the domain edge do not),
 #       and σ[i] ≠ σ[j]. Each bond is counted ONCE, with the relation's weight (1 when
@@ -16,12 +16,12 @@
 #       `(kind_a, kind_b)` with kind_a declared no later than kind_b, by the names of
 #       `@kinds` (classes are not kinds); EVERY such pair is a key, zeros included
 #       (`(medium, medium)` is always 0). Two distinct cells of one kind count under
-#       `(k, k)`. So, for a model whose only energy is `contacts => J[kind, kind′]`
+#       `(k, k)`. So, for a model whose only energy is `contacts => J[kind, neighbor_kind]`
 #       (times `weight` for a weighted relation),
 #           Σ_{(a, b)} J[a, b] · L[(a, b)] == total_energy(prob, u).
 #       Square, hexagonal and 3D lattices; host only.
 #
-#   Potts.anneal(prob, u = prob.u0; mcs, seed = 0, alg = SequentialCPM()) -> state
+#   Potts.anneal(prob, [u = prob.u0,] mcs; seed = 0, alg = SequentialCPM()) -> state
 #                                                                         (public in Potts)
 #       The annealed copy of PRE p. 2134 ("we anneal the displayed data only"): a new state,
 #       `u` after `mcs` MCS of `prob`'s copy dynamics with the copy temperature 0 for every
@@ -29,7 +29,7 @@
 #       own: parameters `prob.p`, lattice, relations, proposal, acceptance law and ΔH. `u`
 #       and `prob` are not modified. Deterministic in (prob, u, mcs, seed, alg). `mcs = 0`
 #       returns an equal copy; `mcs < 0` is an ArgumentError. The measurement is any
-#       function of the result, e.g. `boundary_lengths(prob, anneal(prob, u; mcs = 32))`.
+#       function of the result, e.g. `boundary_lengths(prob, anneal(prob, u, 32))`.
 #
 # Every count below is derived by hand in the comments (bonds listed one by one) and was
 # cross-checked with an independent brute-force count over all site pairs.
@@ -71,7 +71,7 @@ for (i, (key, lat)) in enumerate(sort!(collect(P61B_LATTICES); by = first))
             @parameters J[kind, kind] = [0.0 1.0 1.0e3; 1.0 1.0e6 1.0e9; 1.0e3 1.0e9 1.0e12]
             @lattice $lat
             @relations contact = Weighted(Moore(1), o -> 1 / sqrt(sum(abs2, o)))
-            @energy contacts => weight * J[kind, kind′]
+            @energy contacts => weight * J[kind, neighbor_kind]
             @sweep Metropolis(; temperature = 1.0)
         end
     else
@@ -79,7 +79,7 @@ for (i, (key, lat)) in enumerate(sort!(collect(P61B_LATTICES); by = first))
             @kinds medium A B
             @parameters J[kind, kind] = [0.0 1.0 1.0e3; 1.0 1.0e6 1.0e9; 1.0e3 1.0e9 1.0e12]
             @lattice $lat
-            @energy contacts => J[kind, kind′]
+            @energy contacts => J[kind, neighbor_kind]
             @sweep Metropolis(; temperature = 1.0)
         end
     end
@@ -287,7 +287,7 @@ const P61B_FILLED = Int32[x <= 4 ? 1 : 2 for x in 1:8, y in 1:8]
     @relations proposal = Moore(1)
     @energy begin
         cells(A, B) => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = 3θ)
 end
@@ -298,16 +298,16 @@ p61b_hole_gg() = PottsProblem(GranerGlazier(; name = :p61b_hole, lattice = (8, 8
 @testset "P6.1b: anneal fills the hole and nothing else (T = 0, the run's energies)" begin
     prob = p61b_hole_gg()
     for s in 1:5
-        a = Potts.anneal(prob, prob.u0; mcs = 32, seed = s)
+        a = Potts.anneal(prob, prob.u0, 32; seed = s)
         @test ownership(a) == P61B_FILLED
         @test a.cell.volume[1:2] == [32, 32]
     end
-    @test ownership(Potts.anneal(prob; mcs = 32, seed = 1)) == P61B_FILLED   # u defaults to prob.u0
-    @test ownership(Potts.anneal(prob, prob.u0; mcs = 4, seed = 2, alg = CheckerboardCPM())) == P61B_FILLED
+    @test ownership(Potts.anneal(prob, 32; seed = 1)) == P61B_FILLED   # u defaults to prob.u0
+    @test ownership(Potts.anneal(prob, prob.u0, 4; seed = 2, alg = CheckerboardCPM())) == P61B_FILLED
     # the temperature is zeroed whatever its expression (here 3θ, not a parameter `T`)
     hot = PottsProblem(P61bHot(; name = :p61b_hot), [ownership => copy(P61B_HOLE), kind => [:A, :B]], (0, 32); seed = 3)
     for s in 1:3
-        @test ownership(Potts.anneal(hot, hot.u0; mcs = 32, seed = s)) == P61B_FILLED
+        @test ownership(Potts.anneal(hot, hot.u0, 32; seed = s)) == P61B_FILLED
     end
     # negative control: the run itself (T = 10, and 3θ = 30) moves more than the hole
     @test ownership(solve(prob, SequentialCPM()).u[end]) != P61B_FILLED
@@ -318,18 +318,18 @@ p61b_hole_gg() = PottsProblem(GranerGlazier(; name = :p61b_hole, lattice = (8, 8
     # annealed copy is the input
     stiff = remake(prob; p = [:λ => 200.0, :V₀ => 31.0])
     for s in 1:3
-        @test ownership(Potts.anneal(stiff, stiff.u0; mcs = 32, seed = s)) == P61B_HOLE
+        @test ownership(Potts.anneal(stiff, stiff.u0, 32; seed = s)) == P61B_HOLE
     end
 end
 
 @testset "P6.1b: anneal is a copy, deterministic, and validates mcs" begin
     prob = p61b_hole_gg()
-    σ0 = copy(prob.u0.σ)
+    σ0 = copy(prob.u0.ownership)
     v0 = copy(prob.u0.cell.volume)
     p0 = deepcopy(prob.p)
-    a = Potts.anneal(prob, prob.u0; mcs = 32, seed = 1)
+    a = Potts.anneal(prob, prob.u0, 32; seed = 1)
     @test a !== prob.u0
-    @test prob.u0.σ == σ0 && prob.u0.cell.volume == v0      # the input state is unchanged
+    @test prob.u0.ownership == σ0 && prob.u0.cell.volume == v0      # the input state is unchanged
     @test prob.p == p0 && prob.tspan == (0, 32) && prob.seed == 3
     # it can be measured like any state
     @test Dict(Potts.boundary_lengths(prob, a)) == Dict((:medium, :medium) => 0, (:medium, :dark) => 0,
@@ -338,10 +338,10 @@ end
     # deterministic in the seed; mcs = 0 is a copy of u
     σ, k = graner_glazier_state()
     gg = PottsProblem(GranerGlazier(; name = :p61b_ggdet), [ownership => σ, kind => k], (0, 64); seed = 5)
-    @test ownership(Potts.anneal(gg, gg.u0; mcs = 32, seed = 7)) == ownership(Potts.anneal(gg, gg.u0; mcs = 32, seed = 7))
-    z = Potts.anneal(gg, gg.u0; mcs = 0, seed = 7)
+    @test ownership(Potts.anneal(gg, gg.u0, 32; seed = 7)) == ownership(Potts.anneal(gg, gg.u0, 32; seed = 7))
+    z = Potts.anneal(gg, gg.u0, 0; seed = 7)
     @test z !== gg.u0 && ownership(z) == σ
-    @test_throws ArgumentError Potts.anneal(gg, gg.u0; mcs = -1)
+    @test_throws ArgumentError Potts.anneal(gg, gg.u0, -1)
 end
 
 @testset "P6.1b: annealing lowers the energy; the run at T raises it again" begin
@@ -349,7 +349,7 @@ end
     prob = PottsProblem(GranerGlazier(; name = :p61b_ggH), [ownership => σ, kind => k], (0, 32); seed = 11)
     H0 = total_energy(prob)
     for s in 1:3
-        a = Potts.anneal(prob, prob.u0; mcs = 32, seed = s)
+        a = Potts.anneal(prob, prob.u0, 32; seed = s)
         # every accepted T = 0 copy has ΔH ≤ 0 (a killing one lowers H by more), so H falls
         @test total_energy(prob, a) < H0
         @test sum(values(Potts.boundary_lengths(prob, a))) < sum(values(Potts.boundary_lengths(prob)))
@@ -368,7 +368,7 @@ end
     run = PottsProblem(GranerGlazier(; name = :p61b_gg09a), [ownership => σ, kind => k], (0, 64); seed = 2)
     u = solve(run, SequentialCPM()).u[end]
     σu = ownership(u)
-    ours = [p61b_as09(Potts.boundary_lengths(run, Potts.anneal(run, u; mcs = 32, seed = s))) for s in 1:8]
+    ours = [p61b_as09(Potts.boundary_lengths(run, Potts.anneal(run, u, 32; seed = s))) for s in 1:8]
     ref = [p61b_bond_counts_09(p61b_annealed_09(σu, k, run; seed = s), k) for s in 1:8]
     fo, fr = p61b_hetero.(ours), p61b_hetero.(ref)
     no, nr = [sum(values(n)) for n in ours], [sum(values(n)) for n in ref]

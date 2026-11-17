@@ -137,7 +137,7 @@ end
         whole = solve(prob, SequentialCPM()).u[end]
         integ = init(prob, SequentialCPM()); foreach(_ -> step!(integ), 1:2)
         rest = solve!(init(prob, SequentialCPM(); checkpoint = checkpoint(integ))).u[end]
-        @test rest.σ == whole.σ && rest.site.c == whole.site.c
+        @test rest.ownership == whole.ownership && rest.site.c == whole.site.c
         # a new value through `remake` rebinds the mask value
         @test all(==(7.0), solve(remake(prob; p = [:v => 7.0]), SequentialCPM()).u[end].site.c[wall])
     end
@@ -172,7 +172,7 @@ end
         @test fd_n(integ) == 2                               # the step's count, not the clamp's one substep
         foreach(_ -> step!(integ), 1:3)
         u, w = current_state(integ), current_state(fresh)
-        @test Array(u.σ) == Array(w.σ) && Array(u.site.c) == Array(w.site.c)
+        @test Array(u.ownership) == Array(w.ownership) && Array(u.site.c) == Array(w.site.c)
         @test sum(u.site.c[σ .== 0]) > 0                     # control: the field evolves
     end
 end
@@ -315,7 +315,7 @@ end
                 fd_err(
                     () -> PottsProblem(
                         FdClosed(; name = :f), fd_empty((12, 10)), (0, 1);
-                        field_solver = RK4()
+                        field_solver = Potts.RK4()
                     )
                 ), ""
             )

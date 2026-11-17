@@ -10,10 +10,10 @@
 # host code), so it declares it:
 #     CorePotts.frozen_reads(sys)   # default `nothing`
 # A tuple of Symbols naming the state leaves `remake_frozen(sys, prob, u)` reads at a
-# refresh: `:σ` (the labels) or a cell column name, as `HostPhase(...; reads)` (D-092).
+# refresh: `:ownership` (the labels) or a cell column name, as `HostPhase(...; reads)` (D-092).
 # `nothing` (the default) keeps today's behaviour: the whole state is copied to the host
 # at every custom-rule refresh. With a declaration, what the rule sees in undeclared leaves
-# is unspecified. A name that is neither `:σ` nor a cell column of the state is an
+# is unspecified. A name that is neither `:ownership` nor a cell column of the state is an
 # `ArgumentError` by the first refresh (at `init` or at `refresh_frozen!`), on every
 # backend, so a typo never reads a stale or device leaf silently. Public, not exported,
 # beside `frozen_varies`/`frozen_kinds`. The standard rule (`frozen_kinds`) ignores it.
@@ -25,7 +25,7 @@
 # > 1/2; it reads σ and `stiff` only. Each fixture comes as a twin pair that differs ONLY
 # by quantities the rule does not read: extra cell columns z1 (Float), z2 (Int32), z3 (a
 # 3 × 32 matrix), a model quantity q and a site field h. Systems:
-#   P60v2bDeclared    custom rule, `frozen_reads = (:σ, :stiff)`
+#   P60v2bDeclared    custom rule, `frozen_reads = (:ownership, :stiff)`
 #   P60v2bUndeclared  the same rule, no declaration (the whole-state fallback)
 #   P60v2bBad         the same rule, declares a column that does not exist
 #   P60v2bStandard    the standard rule, `frozen_kinds = (2,)` (cell 2 has kind 2)
@@ -80,7 +80,7 @@ p60v2b_stiff(T, cells) = (s = zeros(T, P60V2B_NCELL); foreach(c -> s[c] = T(1), 
 
 # the custom rule: sites of cells whose `stiff` > 1/2; reads σ and `stiff` only
 function p60v2b_rule(u)
-    σ = Array(u.σ)
+    σ = Array(u.ownership)
     stiff = Array(u.cell.stiff)
     return map(c -> c != 0 && stiff[c] > 0.5, σ)
 end
@@ -96,8 +96,8 @@ end
 CorePotts.frozen_kinds(::P60v2bStandard) = (Int32(2),)
 const P60V2B_HOOK = isdefined(CorePotts, :frozen_reads)
 if P60V2B_HOOK          # today the hook does not exist: the declared systems use the fallback
-    @eval CorePotts.frozen_reads(::P60v2bDeclared) = (:σ, :stiff)
-    @eval CorePotts.frozen_reads(::P60v2bBad) = (:σ, :stiff, :nonexistent)
+    @eval CorePotts.frozen_reads(::P60v2bDeclared) = (:ownership, :stiff)
+    @eval CorePotts.frozen_reads(::P60v2bBad) = (:ownership, :stiff, :nonexistent)
 end
 
 function p60v2b_problem(sys; wide = false, T = Float64)
@@ -148,7 +148,7 @@ function p60v2b_refreshes(sys, alg; backend = CPU(), wide = false, T = Float64)
     end
     return (; deltas, masks, nmobile, integ, prob)
 end
-p60v2b_bound(prob) = sizeof(prob.u0.σ) + sizeof(prob.u0.cell.stiff) + prod(P60V2B_DIMS) + P60V2B_SLACK
+p60v2b_bound(prob) = sizeof(prob.u0.ownership) + sizeof(prob.u0.cell.stiff) + prod(P60V2B_DIMS) + P60V2B_SLACK
 
 # ---------------------------------------------------------------------------------------
 
@@ -157,7 +157,7 @@ p60v2b_bound(prob) = sizeof(prob.u0.σ) + sizeof(prob.u0.cell.stiff) + prod(P60V
     @test issubset(keys(a.u0.cell), keys(b.u0.cell)) && length(keys(b.u0.cell)) == length(keys(a.u0.cell)) + 3
     @test haskey(b.u0.model, :q) && haskey(b.u0.site, :h) && !haskey(a.u0.site, :h)
     @test all(c -> sizeof(getfield(b.u0.cell, c)) >= 8 * P60V2B_SLACK, keys(b.u0.cell))   # slack < any column
-    @test a.u0.σ == b.u0.σ && a.u0.cell.stiff == b.u0.cell.stiff
+    @test a.u0.ownership == b.u0.ownership && a.u0.cell.stiff == b.u0.cell.stiff
     @test a.frozen == b.frozen == p60v2b_expected(P60V2B_STIFF0)
     @test count(a.frozen) == 16
     @test p60v2b_problem(P60v2bStandard()).frozen == p60v2b_expected(P60V2B_STIFF0)
@@ -169,7 +169,7 @@ end
     if P60V2B_HOOK
         @test CorePotts.frozen_reads(P60v2bUndeclared()) === nothing         # the default
         @test CorePotts.frozen_reads(P60v2bStandard()) === nothing
-        @test CorePotts.frozen_reads(P60v2bDeclared()) == (:σ, :stiff)
+        @test CorePotts.frozen_reads(P60v2bDeclared()) == (:ownership, :stiff)
         @test Base.ispublic(CorePotts, :frozen_reads)
     end
     for alg in (SequentialCPM(), CheckerboardCPM())
@@ -192,7 +192,7 @@ end
             @test r.nmobile == [N - 16, N - 32, N - 32]
             @test r.masks[end] == frozen_sites(r.prob, r.integ.state)
             @test all(==((0, 0, 0)), r.deltas)                              # nothing counted on the CPU
-            @test r.integ.state.σ == r.prob.u0.σ                            # σ fixed (T = 0)
+            @test r.integ.state.ownership == r.prob.u0.ownership                            # σ fixed (T = 0)
             @test r.integ.stats.refreshes == 3
         end
         std = p60v2b_refreshes(P60v2bStandard(), alg; wide)
@@ -227,7 +227,7 @@ end
             @test r.masks == [m0, m1, m1]                                   # the rule ran on the new stiff
             @test r.nmobile == [N - 16, N - 32, N - 32]
             @test r.integ.stats.refreshes == 3
-            @test Array(r.integ.state.σ) == r.prob.u0.σ
+            @test Array(r.integ.state.ownership) == r.prob.u0.ownership
         end
         # negative control: the undeclared fallback (whole state) sees the unused quantities
         fn = p60v2b_refreshes(P60v2bUndeclared(), alg; backend, T)

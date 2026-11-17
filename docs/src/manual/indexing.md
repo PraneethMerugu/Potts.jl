@@ -36,6 +36,7 @@ model uses, such as `:surface`). Built-ins and observed quantities are read-only
 
 ```@example indexing
 using Potts
+using Potts.Layouts
 
 @potts_model Indexed begin
     @kinds medium cell
@@ -48,7 +49,7 @@ using Potts
     @lattice Lattice((30, 30); neighborhood = Moore(1))
     @energy begin
         cells(cell) => λ * (volume - 25.0)^2
-        contacts => 8.0 * (kind != kind′)
+        contacts => 8.0 * (kind != neighbor_kind)
     end
     @after_mcs begin
         age += 1

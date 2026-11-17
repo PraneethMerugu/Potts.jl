@@ -165,7 +165,7 @@ _has_clusters(st) = haskey(st.cell, :cluster)
 # make free slots their own cluster. Host arrays.
 function _fix_clusters!(stats, st)
     cl = _to_host(stats, st.cell.cluster)
-    _normalize_clusters!(cl, _live(_to_host(stats, st.σ), length(cl)); kind = _to_host(stats, st.cell.kind))
+    _normalize_clusters!(cl, _live(_to_host(stats, st.ownership), length(cl)); kind = _to_host(stats, st.cell.kind))
     _copy!(stats, st.cell.cluster, cl)
     return nothing
 end
@@ -192,14 +192,14 @@ function _cluster_planes!(stats, normals, bias, lc, st, p, ctx, key, mcs, roots,
     ctx = merge(ctx, (; lattice = lat))
     N = ndims(lat)
     T = eltype(normals)
-    σ = _to_host(stats, st.σ)
+    σ = _to_host(stats, st.ownership)
     cl = _to_host(stats, st.cell.cluster)
     cap = length(cl)
     σK = map(s -> s == 0 ? Int32(0) : cl[s], σ)
     mK = init_moments(σK, lat, cap)
     cellK = merge(mK, (; volume = recompute_cluster_volume(σ, cl),
         generation = _to_host(stats, st.cell.generation), kind = _to_host(stats, st.cell.kind), cluster = cl))
-    stK = (; σ = σK, cell = cellK)
+    stK = (; ownership = σK, cell = cellK)
     cell = (; volume = _to_host(stats, st.cell.volume), anchor = _to_host(stats, st.cell.anchor),
         m1 = _to_host(stats, st.cell.m1))
     nh = zeros(T, N, cap); bh = zeros(T, cap)

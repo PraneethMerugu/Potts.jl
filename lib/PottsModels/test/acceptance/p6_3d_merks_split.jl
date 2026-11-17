@@ -163,7 +163,7 @@ state `u` under the offsets `offs`: a vector of (prop, ctx)."""
 function p63d_proposals(prob, u, offs)
     lat = prob.lattice
     ctx = (; lattice = lat, contact = prob.contact, prob.relations...)
-    σ = Array(u.σ)
+    σ = Array(u.ownership)
     X, Y = size(σ)
     out = []
     for x in 1:X, y in 1:Y, (dx, dy) in offs
@@ -290,9 +290,9 @@ end
             field_solver = P63D_SOLVER, seed = 4)
         sol = solve(prob, SequentialCPM(); saveat = 1)
         frame = σ0 .== 1
-        @test all(u -> Array(u.σ)[frame] == σ0[frame] && !any(==(1), Array(u.σ)[.!frame]), sol.u)
+        @test all(u -> Array(u.ownership)[frame] == σ0[frame] && !any(==(1), Array(u.ownership)[.!frame]), sol.u)
         @test all(u -> all(==(0.0), p63d_c(u)[frame]), sol.u[2:end])
-        @test any(u -> Array(u.σ) != σ0, sol.u)                                     # control: cells moved
+        @test any(u -> Array(u.ownership) != σ0, sol.u)                                     # control: cells moved
     end
 end
 
@@ -310,10 +310,10 @@ end
     kind8(c) = c == 0 ? 0 : c == 1 ? 2 : 1
     props8 = p63d_proposals(prob8, u8, P63D_N20)
     @test length(props8) > 300
-    H8 = p63d_energy(Array(u8.σ), kind8, prob8.p, P63D_N20)
+    H8 = p63d_energy(Array(u8.ownership), kind8, prob8.p, P63D_N20)
     worst8 = 0.0
     for (prop, ctx) in props8
-        a = Array(u8.σ); a[prop.target] = prop.new
+        a = Array(u8.ownership); a[prop.target] = prop.new
         dE = p63d_energy(a, kind8, prob8.p, P63D_N20) - H8
         worst8 = max(worst8, abs(energy_change(prob8, u8, prop) - dE),
             abs(prob8.f.delta_H(u8, prob8.p, prop, ctx) - (dE + p63d_chemo(prop, p63d_c(u8), prob8.p))))
@@ -330,7 +330,7 @@ end
     prob6 = PottsProblem(Merks2006(; name = :m6, lattice = (14, 14)), [p63d_op(σ6); :c => c6], (0, 1);
         field_solver = P63D_SOLVER)
     u6 = p63d_first(prob6)
-    σu = Array(u6.σ)
+    σu = Array(u6.ownership)
     props6 = p63d_proposals(prob6, u6, P63D_N8)
     @test length(props6) > 150
     H6 = p63d_energy(σu, kind8, prob6.p, P63D_N8; length_term = true)
@@ -430,15 +430,15 @@ end
         u, u′ = sol.u[k], sol.u[k + 1]
         c, c′ = p63d_c(u), p63d_c(u′)
         @test all(==(0.0), c′[frame])
-        right = max(right, maximum(abs, c′ .- p63d_field(c, Array(u.σ), kd, p)))
-        wrong = max(wrong, maximum(abs, c′ .- p63d_field(c, Array(u′.σ), kd, p)))      # sweep first
-        noclamp = max(noclamp, maximum(abs, c′ .- p63d_field(c, Array(u.σ), kd, p; clamp = false)))
-        fewer = max(fewer, maximum(abs, c′ .- p63d_field(c, Array(u.σ), kd, p; n = 14)))
-        nine = max(nine, maximum(abs, c′ .- p63d_field(c, Array(u.σ), kd, p; stencil = :nine)))
+        right = max(right, maximum(abs, c′ .- p63d_field(c, Array(u.ownership), kd, p)))
+        wrong = max(wrong, maximum(abs, c′ .- p63d_field(c, Array(u′.ownership), kd, p)))      # sweep first
+        noclamp = max(noclamp, maximum(abs, c′ .- p63d_field(c, Array(u.ownership), kd, p; clamp = false)))
+        fewer = max(fewer, maximum(abs, c′ .- p63d_field(c, Array(u.ownership), kd, p; n = 14)))
+        nine = max(nine, maximum(abs, c′ .- p63d_field(c, Array(u.ownership), kd, p; stencil = :nine)))
     end
     @test right < 1e-12
     @test wrong > 1e-4 && noclamp > 1e-6 && fewer > 1e-9 && nine > 1e-6          # negative controls
-    @test any(k -> Array(sol.u[k].σ) != Array(sol.u[k + 1].σ), 1:5)               # control: cells moved
+    @test any(k -> Array(sol.u[k].ownership) != Array(sol.u[k + 1].ownership), 1:5)               # control: cells moved
 end
 
 # =======================================================================================
@@ -453,7 +453,7 @@ end
     @test sol.t[101] == 100 && sol.t[102] == 101
     kd(c) = c == 0 ? 0 : c == 1 ? 2 : 1
     @test all(u -> all(==(0.0), p63d_c(u)), sol.u[1:101])                          # MCS 0–99: no field
-    c100, σ100, c101 = p63d_c(sol.u[101]), Array(sol.u[101].σ), p63d_c(sol.u[102])
+    c100, σ100, c101 = p63d_c(sol.u[101]), Array(sol.u[101].ownership), p63d_c(sol.u[102])
     @test maximum(abs, c101 .- p63d_field(c100, σ100, kd, prob.p)) < 1e-12         # MCS 100: the field
     @test minimum(c101[σ100 .>= 2]) > 0
     # negative control: t_relax = 0 starts the field in MCS 0

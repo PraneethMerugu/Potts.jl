@@ -1,6 +1,6 @@
 # P6.3a (ROADMAP Phase 6, step 3): R4 topology values dispatched on geometry, the soft E₀
 # drive, the `Global()` placeholder, and the opt-in accepted-ΔH accumulator
-# `track = (:ΔH,)` → `stats.accepted_ΔH` (D-075; 01 F9, model-spec 01 §7.7 / D-17).
+# `track = (:energy_change,)` → `stats.accepted_energy_change` (D-075; 01 F9, model-spec 01 §7.7 / D-17).
 # Decision: D-140.
 #
 # Semantics pinned here:
@@ -40,11 +40,11 @@
 #    (Re-frozen under D-189 ruling 6: `components(old; scope = Global()) > 1` is gone, with
 #    no alias; its meaning, "old is in more than one piece", is now `!connected(old; rule = …)`.)
 #    Control: the same model with `local_components` builds.
-# 5. `PottsProblem(sys, op, tspan; track = (:ΔH,))` accumulates Σ ΔH over the ACCEPTED
-#    (committed) copies of every sweep into `sol.stats.accepted_ΔH::Float64`; ΔH is the
+# 5. `PottsProblem(sys, op, tspan; track = (:energy_change,))` accumulates Σ ΔH over the ACCEPTED
+#    (committed) copies of every sweep into `sol.stats.accepted_energy_change::Float64`; ΔH is the
 #    model's copy ΔH, energy plus every drive (what `prob.f.delta_H` returns), without the
-#    acceptance law's offset. `track = ()` (the default) gives `stats.accepted_ΔH === nothing`.
-#    Only `:ΔH` is a valid name for now; any other is an `ArgumentError`.
+#    acceptance law's offset. `track = ()` (the default) gives `stats.accepted_energy_change === nothing`.
+#    Only `:energy_change` is a valid name for now; any other is an `ArgumentError`.
 #    Oracle: with integer-valued energies and a drive that is the copy difference of a state
 #    function G(σ) = μ Σ_x w[x]·[σ(x) ≠ 0], Σ accepted ΔH == Φ(end) − Φ(start), with
 #    Φ = total_energy + G, exactly (Float64, integers). `no_extinction` keeps every copy
@@ -151,7 +151,7 @@ for ((geom, periodic), lat) in P63A_LATTICES
         @lattice $lat
         @energy begin
             cells => (volume - 9)^2
-            contacts => J[kind, kind′]
+            contacts => J[kind, neighbor_kind]
         end
         @drive copy => E₀ * ((kind[old] == A) & !((ring_arcs <= 1) | ((ring_cells == 2) & (ring_medium == 0))))
         @sweep Metropolis(; temperature = 4.0)
@@ -209,9 +209,9 @@ end
             isempty(ys) && continue
             prop = p63a_prop(prob.lattice, x, first(ys), σ)
             want = p63a_ring_oracle(σ, x, geom; periodic)
-            direct = (CorePotts.ring_arcs(u.σ, ctx, prop), CorePotts.ring_cells(u.σ, ctx, prop),
-                CorePotts.ring_medium(u.σ, ctx, prop))
-            lc = CorePotts.local_components(u.σ, ctx, prop)
+            direct = (CorePotts.ring_arcs(u.ownership, ctx, prop), CorePotts.ring_cells(u.ownership, ctx, prop),
+                CorePotts.ring_medium(u.ownership, ctx, prop))
+            lc = CorePotts.local_components(u.ownership, ctx, prop)
             d = round(Int, prob.f.delta_H(u, prob.p, prop, ctx) - energy_change(prob, u, prop))
             compiled = (d % 100, (d ÷ 100) % 100, d ÷ 10000)
             ntotal += 1
@@ -381,7 +381,7 @@ end
             prop = p63a_prop(prob.lattice, x, y, σ)
             old = prop.old
             (old != 0 && u.cell.volume[old] == 1) && continue           # no killing copies here
-            a = deepcopy(u); a.σ[prop.target] = prop.new
+            a = deepcopy(u); a.ownership[prop.target] = prop.new
             prob.f.commit!(a, prob.p, prop, ctx)
             brk = old != 0 && kinds[old] === :A && p63a_breaks(p63a_ring_oracle(σ, x, geom; periodic))
             want = total_energy(prob, a) - total_energy(prob, u) + E₀ * brk
@@ -412,7 +412,7 @@ end
             sol = solve(prob, alg)
             @test Symbol(sol.retcode) === :Success
             u = sol.u[end]
-            @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(u.cell.volume)]
+            @test u.cell.volume == [count(==(c), u.ownership) for c in eachindex(u.cell.volume)]
         end
     end
 end
@@ -433,7 +433,7 @@ end
     @lattice Lattice((12, 12, 12); boundary = Periodic(), neighborhood = Moore(1))
     @energy begin
         cells(A) => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @drive copy => E₀ * ((kind[old] == A) & !((ring_arcs <= 1) | ((ring_cells == 2) & (ring_medium == 0))))
     @sweep Metropolis(; temperature = T)
@@ -471,7 +471,7 @@ end
             prob = PottsProblem(P63aSoftSibling3D(; name = :s), [ownership => σ, kind => fill(:A, k)], (0, 40); seed)
             E == 0.0 && (prob = remake(prob; p = [:E₀ => 0.0]))
             sol = solve(prob, SequentialCPM(); saveat = 10:10:40)
-            n += sum(p63a_split3(u.σ) for u in sol.u)      # the initial cubes are whole
+            n += sum(p63a_split3(u.ownership) for u in sol.u)      # the initial cubes are whole
         end
         nsplit[E] = n
     end
@@ -537,7 +537,7 @@ end
 end
 
 # ---------------------------------------------------------------------------------------
-# track = (:ΔH,) → stats.accepted_ΔH
+# track = (:energy_change,) → stats.accepted_energy_change
 
 @potts_model P63aTrack begin
     @kinds medium A
@@ -552,7 +552,7 @@ end
     @lattice Lattice((24, 24); boundary = Periodic(), neighborhood = Moore(1))
     @energy begin
         cells => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @drive copy => μ * w[target] * (ifelse(new == 0, 0.0, 1.0) - ifelse(old == 0, 0.0, 1.0))
     @constraint no_extinction
@@ -571,7 +571,7 @@ end
     @lattice Lattice((24, 24); boundary = Periodic(), neighborhood = Moore(1))
     @energy begin
         cells => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @drive copy => μ * w[target] * (ifelse(new == 0, 0.0, 1.0) - ifelse(old == 0, 0.0, 1.0))
     @constraint no_extinction
@@ -590,37 +590,37 @@ p63a_track_problem(M = P63aTrack; T = Float64, tspan = (0, 12), seed = 5, kw...)
     PottsProblem(M(; name = :tr), [ownership => p63a_track_σ(), kind => fill(:A, 9), :w => copy(P63A_W)], tspan;
         T, seed, kw...)
 """Φ = H + G: the state function whose difference the accepted ΔH must equal."""
-p63a_Φ(prob, u) = total_energy(prob, u) + 3.0 * sum(P63A_W[i] for i in eachindex(P63A_W) if u.σ[i] != 0)
-p63a_G(u) = 3.0 * sum(P63A_W[i] for i in eachindex(P63A_W) if u.σ[i] != 0)
-p63a_same(u, v) = u.σ == v.σ && u.cell == v.cell && u.site == v.site && u.model == v.model
+p63a_Φ(prob, u) = total_energy(prob, u) + 3.0 * sum(P63A_W[i] for i in eachindex(P63A_W) if u.ownership[i] != 0)
+p63a_G(u) = 3.0 * sum(P63A_W[i] for i in eachindex(P63A_W) if u.ownership[i] != 0)
+p63a_same(u, v) = u.ownership == v.ownership && u.cell == v.cell && u.site == v.site && u.model == v.model
 
 @testset "P6.3a: track keyword, off by default" begin
     prob = p63a_track_problem()
     @test p63a_track_problem(; track = ()).f.fingerprint == prob.f.fingerprint   # off by default
     @test :track in fieldnames(CorePotts.CPMFunction)                   # the CorePotts hook
     @test prob.f.track === nothing                                      # off: nothing compiled
-    on = p63a_track_problem(; track = (:ΔH,))
+    on = p63a_track_problem(; track = (:energy_change,))
     @test on.f.track !== nothing
     @test on.f.fingerprint != prob.f.fingerprint                        # D-075: track is hashed
     for alg in (SequentialCPM(), CheckerboardCPM())
-        @test solve(prob, alg).stats.accepted_ΔH === nothing
-        @test solve(p63a_track_problem(; track = ()), alg).stats.accepted_ΔH === nothing
+        @test solve(prob, alg).stats.accepted_energy_change === nothing
+        @test solve(p63a_track_problem(; track = ()), alg).stats.accepted_energy_change === nothing
     end
     @test_throws ArgumentError p63a_track_problem(; track = (:chemo,))
-    @test_throws ArgumentError p63a_track_problem(; track = (:ΔH, :foo))
+    @test_throws ArgumentError p63a_track_problem(; track = (:energy_change, :foo))
     # remake switches it both ways and lands on the same fingerprints
-    @test remake(prob; track = (:ΔH,)).f.fingerprint == on.f.fingerprint
+    @test remake(prob; track = (:energy_change,)).f.fingerprint == on.f.fingerprint
     @test remake(on; track = ()).f.fingerprint == prob.f.fingerprint
     @test remake(on; track = ()).f.track === nothing
 end
 
-@testset "P6.3a: accepted_ΔH = Φ(end) − Φ(start) ($(nameof(typeof(alg))), $(M === P63aTrack ? "offset 0" : "offset 3"))" for
+@testset "P6.3a: accepted_energy_change = Φ(end) − Φ(start) ($(nameof(typeof(alg))), $(M === P63aTrack ? "offset 0" : "offset 3"))" for
         alg in (SequentialCPM(), CheckerboardCPM()), M in (P63aTrack, P63aTrackOffset)
     off = p63a_track_problem(M)
-    on = p63a_track_problem(M; track = (:ΔH,))
+    on = p63a_track_problem(M; track = (:energy_change,))
     a, b = solve(off, alg), solve(on, alg)
     u0, u = on.u0, b.u[end]
-    acc = b.stats.accepted_ΔH
+    acc = b.stats.accepted_energy_change
     @test acc isa Float64
     @test acc == p63a_Φ(on, u) - p63a_Φ(on, u0)                         # exact: integer-valued
     # non-vacuous: the energy and the drive both move, so leaving out the drive would fail
@@ -632,49 +632,49 @@ end
     @test a.stats.attempts == b.stats.attempts && a.stats.accepted == b.stats.accepted
     @test a.t == b.t
     # a remade problem tracks the same run
-    @test solve(remake(off; track = (:ΔH,)), alg).stats.accepted_ΔH == acc
+    @test solve(remake(off; track = (:energy_change,)), alg).stats.accepted_energy_change == acc
 end
 
-@testset "P6.3a: accepted_ΔH at every step (SequentialCPM) and at checkpoints (CheckerboardCPM)" begin
-    on = p63a_track_problem(; track = (:ΔH,))
+@testset "P6.3a: accepted_energy_change at every step (SequentialCPM) and at checkpoints (CheckerboardCPM)" begin
+    on = p63a_track_problem(; track = (:energy_change,))
     Φ0 = p63a_Φ(on, on.u0)
     integ = init(on, SequentialCPM(); save_start = false, save_everystep = false, save_end = false)
     for _ in 1:6
         step!(integ)
-        @test integ.stats.accepted_ΔH == p63a_Φ(on, current_state(integ)) - Φ0
+        @test integ.stats.accepted_energy_change == p63a_Φ(on, current_state(integ)) - Φ0
     end
     integ = init(on, CheckerboardCPM(); save_start = false, save_everystep = false, save_end = false)
     for _ in 1:3
         step!(integ); step!(integ)
         ck = checkpoint(integ)
-        @test ck.stats.accepted_ΔH == p63a_Φ(on, ck.state) - Φ0
+        @test ck.stats.accepted_energy_change == p63a_Φ(on, ck.state) - Φ0
     end
 end
 
-@testset "P6.3a: accepted_ΔH across checkpoint, reinit! and merge" begin
-    on = p63a_track_problem(; track = (:ΔH,))
-    full = solve(on, SequentialCPM()).stats.accepted_ΔH
+@testset "P6.3a: accepted_energy_change across checkpoint, reinit! and merge" begin
+    on = p63a_track_problem(; track = (:energy_change,))
+    full = solve(on, SequentialCPM()).stats.accepted_energy_change
     integ = init(on, SequentialCPM())
     for _ in 1:5
         step!(integ)
     end
     ck = checkpoint(integ)
     i2 = init(on, SequentialCPM(); checkpoint = ck)
-    @test solve!(i2).stats.accepted_ΔH == full                     # cumulative across the restart
+    @test solve!(i2).stats.accepted_energy_change == full                     # cumulative across the restart
     # a checkpoint of the untracked problem does not load into the tracked one (fingerprint)
     ioff = init(p63a_track_problem(), SequentialCPM()); step!(ioff)
     @test_throws ArgumentError init(on, SequentialCPM(); checkpoint = checkpoint(ioff))
     # reinit! clears it: the same run again gives the same sum
     integ = init(on, SequentialCPM())
-    s1 = solve!(integ).stats.accepted_ΔH
+    s1 = solve!(integ).stats.accepted_energy_change
     reinit!(integ)
-    @test integ.stats.accepted_ΔH == 0.0
-    @test solve!(integ).stats.accepted_ΔH == s1 == full
+    @test integ.stats.accepted_energy_change == 0.0
+    @test solve!(integ).stats.accepted_energy_change == s1 == full
     # ensemble totals add; untracked stays nothing
-    s2 = solve(p63a_track_problem(; track = (:ΔH,), seed = 9), SequentialCPM()).stats
-    @test merge(solve(on, SequentialCPM()).stats, s2).accepted_ΔH == full + s2.accepted_ΔH
+    s2 = solve(p63a_track_problem(; track = (:energy_change,), seed = 9), SequentialCPM()).stats
+    @test merge(solve(on, SequentialCPM()).stats, s2).accepted_energy_change == full + s2.accepted_energy_change
     @test merge(solve(p63a_track_problem(), SequentialCPM()).stats,
-        solve(p63a_track_problem(; seed = 9), SequentialCPM()).stats).accepted_ΔH === nothing
+        solve(p63a_track_problem(; seed = 9), SequentialCPM()).stats).accepted_energy_change === nothing
 end
 
 # ---------------------------------------------------------------------------------------
@@ -687,14 +687,14 @@ const P63A_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_de
         backend = Main.PottsDevices.device_backend()
         alg = CheckerboardCPM()
         off = p63a_track_problem(; T = Float32)
-        on = p63a_track_problem(; T = Float32, track = (:ΔH,))
+        on = p63a_track_problem(; T = Float32, track = (:energy_change,))
         a, b = solve(off, alg; backend), solve(on, alg; backend)
         Φ0 = p63a_Φ(on, on.u0)
-        @test b.stats.accepted_ΔH isa Float64
-        @test isapprox(b.stats.accepted_ΔH, p63a_Φ(on, b.u[end]) - Φ0; atol = 0.5)
+        @test b.stats.accepted_energy_change isa Float64
+        @test isapprox(b.stats.accepted_energy_change, p63a_Φ(on, b.u[end]) - Φ0; atol = 0.5)
         @test p63a_same(a.u[end], b.u[end])
         @test a.stats.attempts == b.stats.attempts
-        @test solve(off, alg; backend).stats.accepted_ΔH === nothing
+        @test solve(off, alg; backend).stats.accepted_energy_change === nothing
         # no per-MCS sync: a quiet MCS costs 0 syncs and 0 transfers, tracked or not
         for prob in (off, on)
             integ = init(prob, alg; backend, save_start = false, save_everystep = false, save_end = false)
@@ -706,7 +706,7 @@ const P63A_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_de
             end
             if prob === on                                       # exact at the read point
                 ck = checkpoint(integ)
-                @test isapprox(ck.stats.accepted_ΔH, p63a_Φ(on, ck.state) - Φ0; atol = 0.5)
+                @test isapprox(ck.stats.accepted_energy_change, p63a_Φ(on, ck.state) - Φ0; atol = 0.5)
             end
         end
     else

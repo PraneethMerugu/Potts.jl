@@ -12,9 +12,9 @@
         )
         st = initial_state(σ, kinds; cell = init_clusters(σ, cluster, lat; relation = Moore(1), T = Float32))
         u = solve(PottsProblem(f, st, lat, (0, 60), p; relations = (; surface = Moore(1))), CheckerboardCPM(); backend).u[end]
-        @test u.σ != σ
-        @test u.cell.cluster_volume == recompute_cluster_volume(u.σ, u.cell.cluster)
-        @test u.cell.cluster_surface ≈ recompute_cluster_surface(u.σ, u.cell.cluster, lat, Moore(1)) rtol = 1.0e-5
+        @test u.ownership != σ
+        @test u.cell.cluster_volume == recompute_cluster_volume(u.ownership, u.cell.cluster)
+        @test u.cell.cluster_surface ≈ recompute_cluster_surface(u.ownership, u.cell.cluster, lat, Moore(1)) rtol = 1.0e-5
 
         # a cluster divides as a unit on the device
         σd = zeros(Int32, 40, 40); σd[11:30, 15:22] .= 1; σd[18:23, 17:20] .= 2
@@ -51,8 +51,8 @@
         @test Array(um.cell.volume)[1:6] == Int32[68, 12, 24, 68, 12, 24]
         @test Array(um.cell.cluster)[1:6] == Int32[1, 1, 3, 4, 4, 6]
         @test Array(um.cell.tag)[1:6] == Float32[2, 2, 1, 2, 2, 1]
-        @test Array(um.cell.volume) == Int32[count(==(c), Array(um.σ)) for c in 1:8]
-        @test Array(um.cell.cluster_volume) == recompute_cluster_volume(Array(um.σ), Array(um.cell.cluster))
+        @test Array(um.cell.volume) == Int32[count(==(c), Array(um.ownership)) for c in 1:8]
+        @test Array(um.cell.cluster_volume) == recompute_cluster_volume(Array(um.ownership), Array(um.cell.cluster))
     end
 
 end
@@ -69,8 +69,8 @@ end
         st = with_capacity(initial_state(σ, Int32[1, 2]; cell = init_moments(σ, lat, 2)), 4)
         p = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 60.0f0, T = 10.0f0)
         u = solve(PottsProblem(f, st, lat, (0, 40), p), CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
-        @test all(u.σ[.!lat.mask] .== 0)
-        @test u.cell.volume == [count(==(c), u.σ) for c in 1:4] && u.cell.volume[3] > 0
+        @test all(u.ownership[.!lat.mask] .== 0)
+        @test u.cell.volume == [count(==(c), u.ownership) for c in 1:4] && u.cell.volume[3] > 0
     end
 end
 
@@ -92,7 +92,7 @@ end
             E(v, c) = p.λ * (v - p.V0)^2
             S1(a, b, k, d) = p.k * (d - st.cell.link_rest[k, a])^2
             S2(a, b, k, d) = p.k * (d - st.cell.link_len[k, a])^2
-            return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
+            return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
                 link_delta(Float32, st.cell, (; links = st.cell.links__bond), ctx, prop, S1) +
                 link_delta(Float32, st.cell, (; links = st.cell.links__tether), ctx, prop, S2)
         end
@@ -103,14 +103,14 @@ end
         dist(u) = (centroid_distance(Float64, u.cell, latR, 1, 2), centroid_distance(Float64, u.cell, latR, 2, 3))
         runs(k, dev, seeds) = map(seeds) do seed
             integ = init(prob(f, k, seed), CheckerboardCPM(); save_start = false, (dev ? (; backend) : (;))...)
-            dev && @test integ.state.σ isa PottsDevices.device_arraytype() && integ.state.cell.links__bond isa PottsDevices.device_arraytype()
+            dev && @test integ.state.ownership isa PottsDevices.device_arraytype() && integ.state.cell.links__bond isa PottsDevices.device_arraytype()
             sol = solve!(integ)
             @test sol.retcode == ReturnCode.Success
             sol.u[end]
         end
         us = runs(2, true, 1:4)
         for u in us
-            σu = Array(u.σ)
+            σu = Array(u.ownership)
             @test u.cell.volume == [count(==(c), σu) for c in 1:3]
             ref = merge(init_moments(σu, latR, 3), (; volume = u.cell.volume))
             @test all(c -> all(isapprox.(centroid(u.cell, latR, c), centroid(ref, latR, c); atol = 1.0e-3)), 1:3)
@@ -190,7 +190,7 @@ end
         # removal of the frozen cell: the mobile-site count grows by the device count
         sol = solve(fk_problem(rm2; T = Float32), CheckerboardCPM(); backend)
         @test sol.stats.attempts == (S + 1) * (900 - 36) + (30 - S - 1) * 900
-        @test sol.u[end].cell.volume[1:2] == [count(==(c), sol.u[end].σ) for c in 1:2]
+        @test sol.u[end].cell.volume[1:2] == [count(==(c), sol.u[end].ownership) for c in 1:2]
         # negative control: a static mask does not follow the transition
         ctl = solve(fk_problem(fk_flip(S); kind = fk_swap, sys = nothing, T = Float32), CheckerboardCPM(); backend, saveat = 1)
         @test fk_moved(ctl, 1, (S + 3):31) >= 9 && ctl.stats.refreshes == 0
@@ -199,7 +199,7 @@ end
         sol = solve(dp, CheckerboardCPM(); backend)
         @test sol.stats.lifecycle.divisions == 1 && sol.stats.refreshes == 0
         @test sol.stats.attempts == 8 * count(dp.lattice.mask)
-        @test all(sol.u[end].σ[.!dp.lattice.mask] .== 0)
+        @test all(sol.u[end].ownership[.!dp.lattice.mask] .== 0)
     end
 
 end
@@ -210,31 +210,31 @@ end
         # the arc-or-pair rule on the 26-site shell compiles for the device
         lat3 = Lattice((18, 18, 18))
         σ3, k3 = blocks((18, 18, 18), 4; gap = 1)
-        ok3(st, p, prop, ctx) = ring_arcs(st.σ, ctx, prop) <= 1 ||
-            (ring_cells(st.σ, ctx, prop) == 2 && ring_medium(st.σ, ctx, prop) == 0)
+        ok3(st, p, prop, ctx) = ring_arcs(st.ownership, ctx, prop) <= 1 ||
+            (ring_cells(st.ownership, ctx, prop) == 2 && ring_medium(st.ownership, ctx, prop) == 0)
         f3 = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = ok3)
         p3 = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 64.0f0, T = 12.0f0)
         u3 = solve(
             PottsProblem(f3, initial_state(σ3, k3), lat3, (0, 10), p3; contact = Moore(1)),
             CheckerboardCPM(); backend
         ).u[end]
-        @test u3.σ != σ3
-        @test u3.cell.volume == [count(==(c), u3.σ) for c in eachindex(k3)]
-        @test all(c -> components(u3.σ, lat3, c) == 1, eachindex(k3))
+        @test u3.ownership != σ3
+        @test u3.cell.volume == [count(==(c), u3.ownership) for c in eachindex(k3)]
+        @test all(c -> components(u3.ownership, lat3, c) == 1, eachindex(k3))
         # the track: Float32 per-site sums reduced at the read points, 0 syncs per quiet MCS
         σt, kt = blocks((48, 48), 5)
         latt = Lattice((48, 48))
         pt = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 25.0f0, T = 10.0f0)
-        on = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackDeltaH{Float32}())
+        on = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackEnergyChange{Float32}())
         off = CPMFunction(gg_delta_H; temperature = gg_temperature)
         mk(f) = PottsProblem(f, initial_state(σt, kt), latt, (0, 20), pt)
         a, b = solve(mk(off), CheckerboardCPM(); backend), solve(mk(on), CheckerboardCPM(); backend)
         H(u) = total_H(u, latt, mk(on).contact, pt)
-        @test a.stats.accepted_ΔH === nothing
-        @test b.stats.accepted_ΔH isa Float64
+        @test a.stats.accepted_energy_change === nothing
+        @test b.stats.accepted_energy_change isa Float64
         # concurrent copies of one cell each take ΔH against its totals before the other's commit
         # (lockless, P6.0bl), so on a device the track is the energy change to within that
-        @test isapprox(b.stats.accepted_ΔH, H(b.u[end]) - H(b.u[1]); rtol = 0.01)
+        @test isapprox(b.stats.accepted_energy_change, H(b.u[end]) - H(b.u[1]); rtol = 0.01)
         @test abs(H(b.u[end]) - H(b.u[1])) > 100
         for f in (off, on)
             integ = init(mk(f), CheckerboardCPM(); backend, save_start = false, save_everystep = false, save_end = false)
@@ -246,7 +246,7 @@ end
     end
 end
 
-# The device lifecycle's staged form (one kernel per stage; what problems above FUSE_SITES
+# The device lifecycle's staged form (one kernel per stage; what problems above `fused_lifecycle_max_sites`
 # use) with the optional stages: the surface tracker, contact counts, cluster volume and
 # surface, and the frozen-mask refresh. The fixtures above are small, so they run fused;
 # here they run staged, against the same oracles (and the full no-`double` scan below then
@@ -254,9 +254,8 @@ end
 @testitem "the staged device lifecycle on the device (surface, contact counts, clusters, frozen mask)" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
     @testset "the staged device lifecycle on the device (surface, contact counts, clusters, frozen mask)" begin
         backend = PottsDevices.device_backend()
-        fuse = CorePotts.FUSE_SITES[]
-        CorePotts.FUSE_SITES[] = 0
-        try
+        staged = CheckerboardCPM(; fused_lifecycle_max_sites = 0)
+        begin
             # a cluster divides as a unit; cell surface and cluster surface tracked (Moore(1))
             σd = zeros(Int32, 40, 40); σd[11:30, 15:22] .= 1; σd[18:23, 17:20] .= 2
             latd = Lattice((40, 40))
@@ -273,10 +272,10 @@ end
             )
             pd = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 40.0f0, T = 10.0f0)
             prob = PottsProblem(fd, std, latd, (0, 1), pd; relations = (; surface = Moore(1)))
-            integ = init(prob, CheckerboardCPM(); backend)
+            integ = init(prob, staged; backend)
             @test integ.lcache.device.fused! === nothing                     # control: staged
             u = solve!(integ).u[end]
-            σu, cl = Array(u.σ), Array(u.cell.cluster)
+            σu, cl = Array(u.ownership), Array(u.cell.cluster)
             @test Array(u.cell.volume)[1:4] == Int32[68, 12, 68, 12]
             @test cl[1:4] == Int32[1, 1, 3, 3]
             @test Array(u.cell.volume) == Int32[count(==(c), σu) for c in eachindex(cl)]
@@ -285,7 +284,7 @@ end
             @test Array(u.cell.surface) ≈ brute_surface(σu, latd, rel, length(cl))
             # contact counts through divisions and a kind change (contact_counts.jl's fixture)
             cp = remake(cc_problem(); p = merge(gg_params(Float32), (; V0 = 36.0f0, T = 8.0f0)))
-            integ = init(cp, CheckerboardCPM(); backend, saveat = 1)
+            integ = init(cp, staged; backend, saveat = 1)
             @test integ.lcache.device.fused! === nothing
             sol = solve!(integ)
             @test sol.stats.lifecycle.divisions >= 3 && sol.stats.lifecycle.transitions >= 1
@@ -294,20 +293,18 @@ end
             S = 10
             rm2(st, p, ctx, key, mcs, c) = mcs == S && c == 2 ? EVENT_REMOVE : EVENT_NONE
             fp = fk_problem(rm2; T = Float32)
-            integ = init(fp, CheckerboardCPM(); backend)
+            integ = init(fp, staged; backend)
             @test integ.lcache.device.fused! === nothing
             sol = solve!(integ)
             @test sol.stats.attempts == (S + 1) * (900 - 36) + (30 - S - 1) * 900
-            @test sol.u[end].cell.volume[1:2] == [count(==(c), sol.u[end].σ) for c in 1:2]
+            @test sol.u[end].cell.volume[1:2] == [count(==(c), sol.u[end].ownership) for c in 1:2]
             # the Euler columns through divisions (euler.jl's fixture): zeroed and summed from σ
             ep = remake(eu_problem(); p = merge(gg_params(Float32), (; V0 = 30.0f0, T = 8.0f0)))
-            integ = init(ep, CheckerboardCPM(); backend, saveat = 1)
+            integ = init(ep, staged; backend, saveat = 1)
             @test integ.lcache.device.fused! === nothing
             sol = solve!(integ)
             @test sol.stats.lifecycle.divisions >= 2
-            @test sum(u -> eu_bad(map(Array, u.cell), Array(u.σ), ep.lattice), sol.u) == 0
-        finally
-            CorePotts.FUSE_SITES[] = fuse
+            @test sum(u -> eu_bad(map(Array, u.cell), Array(u.ownership), ep.lattice), sol.u) == 0
         end
     end
 end
@@ -337,13 +334,13 @@ end
             up = 0
             for _ in 1:8
                 step!(integ)
-                now = first(recompute_pieces(Array(integ.state.σ), lat, Val(false), length(kinds)))
+                now = first(recompute_pieces(Array(integ.state.ownership), lat, Val(false), length(kinds)))
                 up += count(now .> prev)
                 prev = now
             end
             @test integ.retcode == ReturnCode.Default
             splits || @test up == 0                       # the veto: no cell's pieces increase
-            @test current_state(integ).cell.volume == [count(==(c), Array(integ.state.σ)) for c in eachindex(kinds)]
+            @test current_state(integ).cell.volume == [count(==(c), Array(integ.state.ownership)) for c in eachindex(kinds)]
             @test integ.stats.connectivity_deferred isa Int
         end
     end
@@ -359,7 +356,7 @@ end
         σ, kinds = blocks((96, 96), 6)
         n = length(kinds)
         pf = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0)
-        recount(u) = [count(==(c), u.σ) for c in 1:n]
+        recount(u) = [count(==(c), u.ownership) for c in 1:n]
         prob = PottsProblem(CPMFunction(gg_delta_H; temperature = gg_temperature), initial_state(σ, kinds), lat, (0, 30), pf)
         for kw in ((;), (; region = 3), (; region = 4, switches = 4), (; region = 1, parts = 4))
             alg = CheckerboardCPM(; proposal = Moore(1), kw...)
@@ -394,13 +391,13 @@ end
         @test u.cell.volume == recount(u)
         @test u.cell.gain .- u.cell.loss == u.cell.volume .- u0.cell.volume
         @test sum(u.cell.gain) > 1000
-        ref = merge(init_moments(u.σ, lat, n), (; volume = u.cell.volume))
+        ref = merge(init_moments(u.ownership, lat, n), (; volume = u.cell.volume))
         @test all(c -> all(isapprox.(centroid(u.cell, lat, c), centroid(ref, lat, c); atol = 1.0e-6)), 1:n)
         # a `Global` veto: exact (the serial pass) and in a window of 2 (searched in the phase)
-        post_w(st, p, prop, ctx, stage) = CorePotts.global_gains(st.σ, ctx, prop, Val(false)) ?
-            CorePotts.global_keeps(st.σ, ctx, prop, Val(false), Val(2), Val(25), stage) : Int32(2)
-        post_x(st, p, prop, ctx, stage) = CorePotts.global_gains(st.σ, ctx, prop, Val(false)) ?
-            CorePotts.global_keeps(st.σ, ctx, prop, Val(false), Val(nothing), Val(0), stage) : Int32(2)
+        post_w(st, p, prop, ctx, stage) = CorePotts.global_gains(st.ownership, ctx, prop, Val(false)) ?
+            CorePotts.global_keeps(st.ownership, ctx, prop, Val(false), Val(2), Val(25), stage) : Int32(2)
+        post_x(st, p, prop, ctx, stage) = CorePotts.global_gains(st.ownership, ctx, prop, Val(false)) ?
+            CorePotts.global_keeps(st.ownership, ctx, prop, Val(false), Val(nothing), Val(0), stage) : Int32(2)
         pieces0 = first(CorePotts.recompute_pieces(σ, lat, Val(false), n))
         for hooks in (
                 CorePotts.ConnectivityHooks(; post = post_x, uses_global = true, exact_veto = true),
@@ -413,7 +410,7 @@ end
             sol = solve(cprob, CheckerboardCPM(; proposal = Moore(1)); backend)
             uc = sol.u[end]
             @test uc.cell.volume == recount(uc)
-            @test all(first(CorePotts.recompute_pieces(uc.σ, lat, Val(false), n)) .<= pieces0)   # no cell splits
+            @test all(first(CorePotts.recompute_pieces(uc.ownership, lat, Val(false), n)) .<= pieces0)   # no cell splits
             @test sol.stats.committed > 1000
             @test sol.stats.connectivity_deferred isa Int
         end
@@ -422,9 +419,9 @@ end
         alg = CheckerboardCPM(; proposal = Moore(1))
         runs = fetch.([Threads.@spawn(solve(remake(prob; seed = 20 + k), alg; backend)) for k in 1:4])
         @test all(s -> s.u[end].cell.volume == recount(s.u[end]) && s.stats.committed == s.stats.accepted > 0, runs)
-        @test allunique([s.u[end].σ for s in runs])
+        @test allunique([s.u[end].ownership for s in runs])
         ens = solve(EnsembleProblem(prob), alg; backend, trajectories = 3)    # EnsembleThreads by default
-        @test all(s -> s.u[end].cell.volume == recount(s.u[end]), ens.u) && allunique([s.u[end].σ for s in ens.u])
+        @test all(s -> s.u[end].cell.volume == recount(s.u[end]), ens.u) && allunique([s.u[end].ownership for s in ens.u])
     end
 end
 

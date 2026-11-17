@@ -30,10 +30,10 @@ The `potts_entity` metadata value of a model quantity (`[potts_entity = Builtin(
 what it is in the model, its name, its default and options.
 
 - `:param`: scalar parameter (an MTK `@parameters` symbol, `default` value)
-- `:kindtable`: kind-indexed array parameter (`J[1:nk, 1:nk]`, read `J[kind, kind′]`),
+- `:kindtable`: kind-indexed array parameter (`J[1:nk, 1:nk]`, read `J[kind, neighbor_kind]`),
   `default` an array over kinds including the medium
 - `:site`, `:cell`, `:model`, `:field`, `:edge`: scoped state variables `x(t)`
-- `:builtin`: names bound by domains (`volume`, `kind′`, `source`, …), MTK inputs `x(t)`
+- `:builtin`: names bound by domains (`volume`, `neighbor_kind`, `source`, …), MTK inputs `x(t)`
 - `:bound`: the iteration variable of a relation gather (`options.relation`, `options.op`)
 """
 struct Entity
@@ -55,9 +55,9 @@ _sym(name::Symbol) = Symbolics.unwrap(only(Symbolics.@variables $name))
 # Built-in names
 
 const BUILTIN_NAMES = (
-    :volume, :surface, :kind, :kind′, :owner, :owner′, :id, :generation,
+    :volume, :surface, :kind, :neighbor_kind, :owner, :neighbor_owner, :id, :generation,
     :weight, :source, :target, :old, :new, :mcs, :position, :a, :b, :distance, :cluster,
-    :cluster_volume, :cluster_surface, :time, :site, :site′, :major_length, :local_components, :ring_arcs,
+    :cluster_volume, :cluster_surface, :time, :site, :neighbor_site, :major_length, :local_components, :ring_arcs,
     :ring_cells, :ring_medium, :direction, :euler, :euler_full, :pieces, :pieces_full, :largest_piece,
     :largest_piece_full, :birth,
 )
@@ -209,7 +209,7 @@ _bnum(x) = isinteger(x) && isfinite(x) ? string(Int(x)) : string(x)
 """
 `kind_parameter(name, values)`: a parameter indexed by kind (medium included), the array
 parameter `name[1:n]` or `name[1:n, 1:m]` of `values`' shape. It is read through LatticePDE's
-`value_at` (`J[kind, kind′]` in a model), never MTK's `getindex`, which a compiled template
+`value_at` (`J[kind, neighbor_kind]` in a model), never MTK's `getindex`, which a compiled template
 cannot take with an input index (S-4).
 """
 function kind_parameter(name::Symbol, values; unit = nothing, tunable = true, bounds = nothing, description = nothing)
@@ -761,14 +761,14 @@ _index(x::Symbolics.Arr, i, j) = (_no_class_index(i, j); value_at(x, i, j))
 _index(x, i...) = (_no_class_index(i...); getindex(x, i...))
 
 """
-`x′` of a site (or field) variable `x`: its value at the other site `s′` of a contact pair
-(`x′ ≡ x[site′]`; a bare `x` in a contact term is `x[site]`, the pair's first site).
+`neighbor(x)` (alias `x′`) of a site (or field) variable `x`: its value at the other site of a
+contact pair (`x[neighbor_site]`; a bare `x` in a contact term is `x[site]`, the pair's first site).
 """
 function _primed(x::Num)
-    role(x) in (:site, :field) || throw(ArgumentError("`$(x)′`: only site and field variables have a value at `s′`"))
-    return value_at(x, B.site′)
+    role(x) in (:site, :field) || throw(ArgumentError("`neighbor($(x))`: only site and field variables have a value at the other site of a contact pair"))
+    return value_at(x, B.neighbor_site)
 end
-_primed(x::QuantityVector) = QuantityVector(Symbol(x.name, '′'), Num[value_at(c, B.site′) for c in x.components])
+_primed(x::QuantityVector) = QuantityVector(Symbol(x.name, '′'), Num[value_at(c, B.neighbor_site) for c in x.components])
 
 # `&&`, `||`, `!` in models become the symbolic `&`, `|`, `!` (operands are pure, so
 # non-short-circuit evaluation is equivalent).
@@ -804,7 +804,7 @@ _around(spec, anchor) = Around(spec, anchor)
 fold for `cells(k)`, else plain Julia."""
 function _fold_or_gather(fold, body, R, s, cond; kws...)
     R isa ShellRelation && return _shell_fold(fold, body, Around(R, s), cond; kws...)
-    R isa Union{CorePotts.RelationSpec, RelationRef} && return _gather(fold, body, Around(R, s), cond; kws...)
+    R isa Union{CorePotts.AbstractRelationSpec, RelationRef} && return _gather(fold, body, Around(R, s), cond; kws...)
     isempty(kws) || return cond === nothing ? fold((body(n) for n in R(s)); kws...) : fold((body(n) for n in R(s) if cond(n)); kws...)
     R isa ContactDomain && return _contact_fold(fold, body, R(s), cond)          # `contacts(rel)` (D-150)
     R === cells && return _population(fold, body, cells(s), cond)
@@ -906,7 +906,7 @@ or earlier classes, flattened in order). A class is usable wherever a list of ki
 `Chemotaxis(…; kinds = g)`, mixed with kinds (`cells(g, k)`). On a symbolic kind,
 `kind[x] ∈ g` is `(kind[x] == k₁) | … | (kind[x] == kₙ)` in member order and `kind[x] ∉ g`
 its negation, so a class costs nothing at run time. `∈ g` is meant for kind-valued
-expressions (`kind`, `kind′`, `kind[new]`, `kind[c]`, …): on any other quantity it compares
+expressions (`kind`, `neighbor_kind`, `kind[new]`, `kind[c]`, …): on any other quantity it compares
 that value with the kind numbers. `kind == g` is an error (a kind is never equal to a
 set of kinds). A class is not an index into a kind table, and operating points and layouts
 take kinds, not classes.
@@ -991,7 +991,7 @@ function _no_class_index(is...)
         i isa KindClass && throw(
             ArgumentError(
                 "`$(i.name)` is a kind class and cannot index a kind table; " *
-                    "index by a kind (e.g. `J[kind, kind′]`) and gate with `kind ∈ $(i.name)`"
+                    "index by a kind (e.g. `J[kind, neighbor_kind]`) and gate with `kind ∈ $(i.name)`"
             )
         )
     end
@@ -1716,8 +1716,8 @@ end
 Volume(kinds::_KindArg...; target, strength = 1) = cells(kinds...) => strength * (B.volume - target)^2
 """`Surface(kinds...; target, strength)` ≡ `cells(kinds...) => strength * (surface - target)^2`."""
 Surface(kinds::_KindArg...; target, strength = 1) = cells(kinds...) => strength * (B.surface - target)^2
-"""`Adhesion(J)` ≡ `contacts => J[kind, kind′]` for a kind table `J`."""
-Adhesion(J) = contacts => _index(J, B.kind, B.kind′)
+"""`Adhesion(J)` ≡ `contacts => J[kind, neighbor_kind]` for a kind table `J`."""
+Adhesion(J) = contacts => _index(J, B.kind, B.neighbor_kind)
 """
     Chemotaxis(c; strength, response = identity, kinds = (), when = new != 0)
 
@@ -2140,7 +2140,7 @@ const DSL = (;
     centroid = _centroid, displacement = _displacement, integral = _integral,
     dot = _dot, norm = _norm, normalize = _normalize, geomean, log1p_geomean, mean,
     CellRef, alive, sibling, root, members, Fresh, created = CONVERT_CREATED, transfer,
-    Pairs, minimum_image = _minimum_image, separation = _separation, ismember,
+    Pairs, minimum_image = _minimum_image, separation = _separation, ismember, neighbor = _primed,
 )
 
 # ---------------------------------------------------------------------------------------

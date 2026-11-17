@@ -449,12 +449,12 @@ function fi_check_dual_fd(fs, params)
     base = fi_drun(fs, Pair[])
     for (name, v) in params
         d = fi_drun(fs, [name => ForwardDiff.Dual(v, 1.0)])
-        @test all(d.u[i].σ == base.u[i].σ for i in eachindex(base.u))
+        @test all(d.u[i].ownership == base.u[i].ownership for i in eachindex(base.u))
         @test all(ForwardDiff.value.(d.u[i].site.c) == base.u[i].site.c for i in eachindex(base.u))
         @test eltype(d.u[end].site.c) <: ForwardDiff.Dual && eltype(d.u[end].site.c__next) === Float64
         h = 1.0e-4 * v
         rp, rm = fi_drun(fs, [name => v + h]), fi_drun(fs, [name => v - h])
-        @test all(rp.u[i].σ == base.u[i].σ == rm.u[i].σ for i in eachindex(base.u))
+        @test all(rp.u[i].ownership == base.u[i].ownership == rm.u[i].ownership for i in eachindex(base.u))
         fd = (fi_dq(rp) - fi_dq(rm)) / 2h
         @test abs(fd) > 1.0e-6
         @test ForwardDiff.partials(fi_dq(d), 1) ≈ fd rtol = 1.0e-6

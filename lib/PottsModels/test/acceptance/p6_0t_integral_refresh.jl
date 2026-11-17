@@ -236,7 +236,7 @@ const P60T_ALGS = (SequentialCPM(), CheckerboardCPM())
 function p60t_phases(M)
     c = mtkcompile(M(; name = :m))
     return c, Potts._phases(
-            c, Float64, Dict{Any, Any}(Potts._unwrap(x) => Potts.info(x).default for x in Potts.parameters(getfield(c, :sys))),
+            c, Float64, Dict{Any, Any}(Potts._unwrap(x) => Potts.info(x).default for x in Potts.declared_parameters(getfield(c, :sys))),
         Potts._resolve_solvers(c))
 end
 
@@ -249,7 +249,7 @@ p60t_tuples(ph) = (ph.before_mcs, ph.after_mcs, ph.end_mcs, ph.at_init)
 
 """Column name of `integral(f(vars...))` for the model's variables named `names`."""
 function p60t_iname(c, f, names...)
-    vs = [only(filter(x -> Potts.info(x).name === n, Potts.variables(getfield(c, :sys)))) for n in names]
+    vs = [only(filter(x -> Potts.info(x).name === n, Potts.declared_variables(getfield(c, :sys)))) for n in names]
     return Potts._integral_name(Potts._unwrap(f(vs...)))
 end
 
@@ -344,7 +344,7 @@ end
     K = 8
     prob = p60t_problem(P60tReaders, K)
     sol = solve(prob, alg; saveat = 0:K)
-    σs = [Array(u.σ) for u in sol.u]
+    σs = [Array(u.ownership) for u in sol.u]
     ws = [Array(u.site.w) for u in sol.u]
     # the saved state: w = w0 + k after MCS k, u and y untouched, v ≡ 1
     @test all(k -> ws[k + 1] == P60T_W0 .+ k, 0:K)
@@ -374,16 +374,16 @@ end
     @test Array(observe(prob, :oq)) ≈ oq[1]
     @test Array(observe(prob, :oc)) ≈ oc[1]
     # querying leaves the solution as it was (the observed integrals are computed on the side)
-    @test [Array(u.σ) for u in sol.u] == σs && [Array(u.site.w) for u in sol.u] == ws
+    @test [Array(u.ownership) for u in sol.u] == σs && [Array(u.site.w) for u in sol.u] == ws
     # temperature: the same trajectory as the twin reading the volume without an integral
     twin = solve(p60t_problem(P60tReadersTwin, K), alg; saveat = 0:K)
-    @test [Array(u.σ) for u in twin.u] == σs
+    @test [Array(u.ownership) for u in twin.u] == σs
     for x in (:sb, :sy, :sa, :ay)
         @test p60t_cell(twin, x) == p60t_cell(sol, x)
     end
     # control: the trajectory depends on the temperature
     flat = solve(p60t_problem(P60tReadersConstT, K), alg; saveat = 0:K)
-    @test [Array(u.σ) for u in flat.u] != σs
+    @test [Array(u.ownership) for u in flat.u] != σs
 end
 
 @testset "P6.0t: warm steps allocate nothing" begin

@@ -22,11 +22,9 @@ below first.
     - Functions with a `!` at the end (`solve!`, `step!`) change their argument.
     - Macros start with `@` (`@potts_model`, `@named`). They transform the code you write
       before it runs.
-    - Unicode names such as `λ`, `V₀` and `kind′` are ordinary names. To type them in the
-      REPL:
+    - Unicode names such as `λ` and `V₀` are ordinary names. To type them in the REPL:
         - `λ`: type `\lambda`, then press Tab.
         - `V₀`: type `V\_0`, then press Tab.
-        - `kind′`: type `kind\prime`, then press Tab.
     - `?solve` in the REPL shows the documentation of `solve`.
 
 ## What is a cellular Potts model?
@@ -85,7 +83,7 @@ model of Graner and Glazier (1992), with the parameters of the paper:
     @relations proposal = Moore(1)
     @energy begin
         cells(dark, light) => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = T)
 end
@@ -110,8 +108,8 @@ Line by line:
 - `@energy` lists the terms of ``H``, each as `domain => expression`:
   - `cells(dark, light) => λ * (volume - V₀)^2` sums over every dark and light cell.
     `volume` is the number of sites of the cell.
-  - `contacts => J[kind, kind′]` sums over every pair of neighboring sites owned by
-    different cells. `kind` and `kind′` are the kinds on the two sides.
+  - `contacts => J[kind, neighbor_kind]` sums over every pair of neighboring sites owned by
+    different cells. `kind` and `neighbor_kind` are the kinds on the two sides.
 - `@sweep Metropolis(; temperature = T)` sets the acceptance rule.
 
 `@potts_model` defines a constructor function, `CellSorting`. Calling it makes the model
@@ -234,13 +232,13 @@ using Statistics: mean
 mean(volumes[end][kinds .== 1])
 ```
 
-A saved state also holds the raw arrays. `u.σ` is the matrix of cell numbers, and `u.cell`
+A saved state also holds the raw arrays. `u.ownership` is the matrix of cell numbers, and `u.cell`
 holds the per-cell arrays. The function below counts the dark–light contacts between
 neighboring sites. This count measures how mixed the aggregate is:
 
 ```@example start
 function mixed_contacts(u)
-    σ, k = u.σ, u.cell.kind
+    σ, k = u.ownership, u.cell.kind
     n = 0
     for x in CartesianIndices(σ), step in ((1, 0), (0, 1))
         y = CartesianIndex(mod1.(Tuple(x) .+ step, size(σ)))   # neighbor, wrapping around

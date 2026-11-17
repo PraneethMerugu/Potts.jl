@@ -132,7 +132,7 @@ end
 
 function Makie.plot!(plot::PottsPlot)
     validated_frame = Makie.lift(assert_render_frame_conformance, plot.frame)
-    encoded = Makie.lift(encode, validated_frame, plot.encoding)
+    encoded = Makie.lift(encode_frame, validated_frame, plot.encoding)
     coordinates = Makie.lift(_image_extents ∘ frame_geometry, validated_frame)
     image_xs = Makie.lift(first, coordinates)
     image_ys = Makie.lift(last, coordinates)
@@ -221,7 +221,7 @@ end
 Construct a native Makie `Legend` for a categorical `PottsPlot`.
 """
 function potts_legend(position, plot::PottsPlot; title = nothing, kwargs...)
-    encoded = encode(plot.frame[], plot.encoding[])
+    encoded = encode_frame(plot.frame[], plot.encoding[])
     encoding_kind(encoded.encoding) === CategoricalEncoding ||
         throw(ArgumentError("continuous Potts encodings use `Colorbar(position, plot)`"))
     elements, labels = _legend_elements(
@@ -257,7 +257,7 @@ end
 
 function Makie.plot!(plot::PottsVolume)
     validated_frame = Makie.lift(assert_render_frame_conformance, plot.frame)
-    encoded = Makie.lift(encode, validated_frame, plot.encoding)
+    encoded = Makie.lift(encode_frame, validated_frame, plot.encoding)
     values = Makie.lift(item -> item.values, encoded)
     colormap = Makie.lift(
         _resolved_colormap, encoded, plot.colormap,

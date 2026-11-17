@@ -69,7 +69,7 @@ end
         σ = zeros(Int32, 16, 16); σ[4:7, 4:7] .= 1; σ[10:13, 10:13] .= 2
         p = PottsProblem(AuditClear(; name = :c), [ownership => σ, kind => [1, 1], :act => 5.0, :tag => 5.0], (0, 5))
         u = solve(p, SequentialCPM()).u[end]
-        changed = u.σ .!= σ
+        changed = u.ownership .!= σ
         @test any(changed)
         @test all(iszero, u.site.act[changed]) && count(==(5), u.site.act) > 0   # changed back: also cleared
         @test all(==(5), u.site.tag)
@@ -151,7 +151,7 @@ end
         # A-15: reinit! validates shapes, takes symbolic maps, reruns callback initialization
         σ2 = zeros(Int32, 12, 12); σ2[6:8, 6:8] .= 1
         reinit!(integ, [ownership => σ2, kind => [1]])
-        @test current_state(integ).σ == σ2
+        @test current_state(integ).ownership == σ2
         bad_u0 = PottsProblem(
             AuditDerived(; name = :d),
             [ownership => (s = zeros(Int32, 12, 12); s[1:2, 1:2] .= 1; s[5:6, 5:6] .= 2; s), kind => [1, 1]], (0, 2);
@@ -263,7 +263,7 @@ end
             # ΔH equals the difference of the brute-force energy along a trajectory
             worst = 0.0
             for (u, prop) in proposal_states(p; mcs = (0, 10, 20), n = 150)
-                a = deepcopy(u); a.σ[prop.target] = prop.new
+                a = deepcopy(u); a.ownership[prop.target] = prop.new
                 p.f.commit!(a, p.p, prop, (; lattice = p.lattice, contact = p.contact, p.relations...))
                 worst = max(worst, abs(energy_change(p, u, prop) - (total_energy(p, a) - total_energy(p, u) + Potts._killing_credit(p, u, prop, a))))
             end
@@ -271,7 +271,7 @@ end
             # the built-in is the CorePotts shape descriptor
             sol = solve(p, SequentialCPM())
             u = sol.u[end]
-            @test sol[:len][end] ≈ [CorePotts.shape(u.cell, p.lattice, c).major_length for c in 1:n]
+            @test sol[:len][end] ≈ [CorePotts.cell_shape(u.cell, p.lattice, c).major_length for c in 1:n]
         end
     end
 end

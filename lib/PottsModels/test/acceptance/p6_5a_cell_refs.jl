@@ -162,7 +162,7 @@ p65a_ctx(prob) = Potts._host_ctx(prob)
 function p65a_props(prob, u; touching = nothing)
     lat = prob.lattice
     moore = CorePotts.relation(Moore(1), lat)
-    σ = Array(u.σ)
+    σ = Array(u.ownership)
     out = CorePotts.Proposal{2}[]
     for t in eachindex(σ)
         x = CorePotts.coordinates(lat, t)
@@ -181,7 +181,7 @@ end
 # the state after `prop`, as the self-check helpers apply a copy
 function p65a_apply(prob, u, prop)
     a = deepcopy(u)
-    a.σ[prop.target] = prop.new
+    a.ownership[prop.target] = prop.new
     prob.f.commit!(a, prob.p, prop, p65a_ctx(prob))
     return a
 end
@@ -212,7 +212,7 @@ p65a_define(:P65aClusters, quote
         @lattice Lattice((24, 24); boundary = Closed(), neighborhood = Moore(1))
         @energy begin
             cells => λ * (volume - V₀[kind])^2
-            contacts => ifelse(cluster[owner] == cluster[owner′], 0.5, 1.0)
+            contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 0.5, 1.0)
         end
         @after_mcs begin
             nuc ~ sibling(nucleus)
@@ -309,7 +309,7 @@ p65a_define(:P65aEnergy, quote
         @energy begin
             cells => λ * (volume - V₀ - q[partner])^2 + μ[kind, kind[partner]] * volume +
                      ifelse(alive(partner), ν, 0.0) * volume
-            contacts => J[kind, kind′]
+            contacts => J[kind, neighbor_kind]
         end
         @observed pal(cell) ~ ifelse(alive(partner), 1.0, 0.0)
         @sweep Metropolis(; temperature = T)
@@ -324,7 +324,7 @@ end)
         J[kind, kind] = [0 8 8; 8 2 4; 8 4 2]
     end
     @lattice Lattice((20, 20); boundary = Closed(), neighborhood = Moore(1))
-    @energy contacts => J[kind, kind′]
+    @energy contacts => J[kind, neighbor_kind]
     @sweep Metropolis(; temperature = T)
 end
 
@@ -350,7 +350,7 @@ p65a_energy_problem(; tspan = (0, 4), seed = 1, partner = P65A_E_PARTNER, q = P6
             :partner => partner, :q => q], tspan; seed, T, capacity = 8)
 # (alive cells relabelled 1:n, kinds kept: the contact energy depends only on site kinds)
 function p65a_contact_energy(u)
-    σ = Array(u.σ)
+    σ = Array(u.ownership)
     kd = p65a_col(u, :kind)
     ids = sort!(filter(>(0), unique(σ)))
     relabel = Dict(c => Int32(i) for (i, c) in enumerate(ids))
@@ -424,7 +424,7 @@ p65a_define(:P65aLife, quote
         @energy begin
             cells(blob) => λ * (volume - V₀)^2
             cells(doomed) => λd * volume^2
-            contacts => J[kind, kind′]
+            contacts => J[kind, neighbor_kind]
         end
         @divide cells(blob) when = mcs == 20, along = (1.0, 0.0), tq => q[partner] + 1.0
         @observed begin
@@ -498,7 +498,7 @@ p65a_define(:P65aPair, quote
         @lattice Lattice((16, 31); boundary = Closed(), neighborhood = Moore(1))
         @energy begin
             cells(cell) => λ * (volume - V₀)^2
-            contacts => J[kind, kind′]
+            contacts => J[kind, neighbor_kind]
         end
         @drive copy => ifelse(kind[old] == cell, κ * (1 - 2 * (volume[old] - volume[partner[old]])), 0.0) +
                        ifelse(kind[new] == cell, κ * (1 + 2 * (volume[new] - volume[partner[new]])), 0.0)
@@ -802,7 +802,7 @@ end
     save_checkpoint(path, ck)
     rest = solve!(init(prob, alg; checkpoint = load_checkpoint(path)))
     u = rest.u[end]
-    @test Array(u.σ) == Array(full.u[end].σ)
+    @test Array(u.ownership) == Array(full.u[end].ownership)
     @test observe(prob, :bth, u) == observe(prob, :bth, full.u[end])
     @test p65a_col(u, :partner) == p65a_col(full.u[end], :partner)
     p65a_post_event_checks(prob, u)                              # serials 4, 5: not max(alive) + 1 = 3

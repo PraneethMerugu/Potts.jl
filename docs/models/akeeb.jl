@@ -48,6 +48,7 @@
 # The rest of this page builds the model and runs it at a size that takes seconds.
 
 using Potts, PottsModels
+using Potts.Layouts
 
 # ## Step 1: the lattice
 #
@@ -205,12 +206,12 @@ nothing #hide
 #
 # ## Measuring the invasion
 #
-# Each saved state holds the owner array `u.σ` and each cell's kind `u.cell.kind`
+# Each saved state holds the owner array `u.ownership` and each cell's kind `u.cell.kind`
 # (1 leader, 2 follower). The mean height of each kind's sites shows leaders moving ahead
 # of the followers:
 
 using Statistics: mean
-mean_height(u, k) = mean(I[2] for I in CartesianIndices(u.σ) if u.σ[I] > 0 && u.cell.kind[u.σ[I]] == k)
+mean_height(u, k) = mean(I[2] for I in CartesianIndices(u.ownership) if u.ownership[I] > 0 && u.cell.kind[u.ownership[I]] == k)
 CairoMakie.activate!(type = "png")
 fig = Figure(size = (520, 340))
 ax = Axis(fig[1, 1]; xlabel = "MCS (the authors' count)", ylabel = "mean height (sites)")

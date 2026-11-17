@@ -19,10 +19,10 @@ end
 @testset "checkerboard (P6.0bl)" begin
     lat = Lattice((30, 30))
     σ, kinds = blocks((30, 30), 5)
-    tracked = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackDeltaH{Float64}())
+    tracked = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackEnergyChange{Float64}())
     prob = PottsProblem(tracked, initial_state(σ, kinds), lat, (0, 20), gg_params())
     H(u) = total_H(u, lat, prob.contact, gg_params())
-    recount(u) = [count(==(c), u.σ) for c in eachindex(kinds)]
+    recount(u) = [count(==(c), u.ownership) for c in eachindex(kinds)]
 
     @testset "exact ΔH on the CPU" begin
         for kw in ((;), (; region = 3), (; region = 4), (; region = 5, switches = 5), (; region = 3, switches = 3),
@@ -30,13 +30,13 @@ end
             seed in 1:2
             sol = solve(remake(prob; seed), CheckerboardCPM(; proposal = Moore(1), kw...))
             u0, u = sol.u[1], sol.u[end]
-            @test sol.stats.accepted_ΔH ≈ H(u) - H(u0) atol = 1e-6
+            @test sol.stats.accepted_energy_change ≈ H(u) - H(u0) atol = 1e-6
             @test abs(H(u) - H(u0)) > 100
             @test u.cell.volume == recount(u)
         end
         a = solve(remake(prob; seed = 4), CheckerboardCPM(; region = 3)).u[end]
         b = solve(remake(prob; seed = 4), CheckerboardCPM(; region = 3)).u[end]
-        @test a.σ == b.σ                                   # the CPU is deterministic
+        @test a.ownership == b.ownership                                   # the CPU is deterministic
     end
 
     @testset "defaults: about 64 phases per MCS" begin
@@ -112,15 +112,15 @@ end
     end
 
     # a `Global` veto: the gaining side local, the losing side searched in a window of 2 or exactly
-    post_w(st, p, prop, ctx, stage) = CorePotts.global_gains(st.σ, ctx, prop, Val(false)) ?
-        CorePotts.global_keeps(st.σ, ctx, prop, Val(false), Val(2), Val(25), stage) : Int32(2)
-    post_x(st, p, prop, ctx, stage) = CorePotts.global_gains(st.σ, ctx, prop, Val(false)) ?
-        CorePotts.global_keeps(st.σ, ctx, prop, Val(false), Val(nothing), Val(0), stage) : Int32(2)
+    post_w(st, p, prop, ctx, stage) = CorePotts.global_gains(st.ownership, ctx, prop, Val(false)) ?
+        CorePotts.global_keeps(st.ownership, ctx, prop, Val(false), Val(2), Val(25), stage) : Int32(2)
+    post_x(st, p, prop, ctx, stage) = CorePotts.global_gains(st.ownership, ctx, prop, Val(false)) ?
+        CorePotts.global_keeps(st.ownership, ctx, prop, Val(false), Val(nothing), Val(0), stage) : Int32(2)
     vetoes = (("window 2", CorePotts.ConnectivityHooks(; post = post_w, uses_global = true, window = 2)),
         ("exact", CorePotts.ConnectivityHooks(; post = post_x, uses_global = true, exact_veto = true)))
 
     @testset "Global veto ($label)" for (label, hooks) in vetoes
-        fc = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackDeltaH{Float64}(),
+        fc = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackEnergyChange{Float64}(),
             connectivity = hooks)
         cprob = PottsProblem(fc, initial_state(σ, kinds), lat, (0, 15), gg_params(); seed = 4)
         integ = init(cprob, CheckerboardCPM(; proposal = Moore(1)); save_start = false)
@@ -134,9 +134,9 @@ end
             step!(integ)
         end
         u = current_state(integ)
-        @test integ.stats.accepted_ΔH ≈ H(u) - H(u0) atol = 1e-6
+        @test integ.stats.accepted_energy_change ≈ H(u) - H(u0) atol = 1e-6
         @test abs(H(u) - H(u0)) > 100
-        @test all(first(CorePotts.recompute_pieces(u.σ, lat, Val(false), length(kinds))) .<= pieces0)   # no cell splits
+        @test all(first(CorePotts.recompute_pieces(u.ownership, lat, Val(false), length(kinds))) .<= pieces0)   # no cell splits
         @test u.cell.volume == recount(u)
         @test integ.stats.committed > 0
     end
@@ -151,7 +151,7 @@ end
         for _ in 1:10
             step!(integ)
             u = current_state(integ)
-            ref = init_moments(Array(u.σ), lat, length(kinds))
+            ref = init_moments(Array(u.ownership), lat, length(kinds))
             for c in eachindex(kinds)
                 @test all(isapprox.(centroid(u.cell, lat, c), centroid(merge(ref, (; volume = u.cell.volume)), lat, c);
                     atol = 1e-9))
@@ -177,7 +177,7 @@ end
         u = current_state(integ)
         @test u.cell.volume == recount(u)
         @test integ.stats.committed == integ.stats.accepted > 0
-        Threads.nthreads() == 1 && @test integ.stats.accepted_ΔH ≈ H(u) - H(u0) atol = 1e-6   # one task: in order
+        Threads.nthreads() == 1 && @test integ.stats.accepted_energy_change ≈ H(u) - H(u0) atol = 1e-6   # one task: in order
         fc = CPMFunction(gg_delta_H; temperature = gg_temperature, connectivity = vetoes[2][2])
         ci = init(PottsProblem(fc, initial_state(σ, kinds), lat, (0, 15), gg_params(); seed = 4),
             CheckerboardCPM(; proposal = Moore(1), threads = true); save_start = false)
@@ -186,23 +186,18 @@ end
             step!(ci)
         end
         uc = current_state(ci)
-        @test all(first(CorePotts.recompute_pieces(uc.σ, lat, Val(false), length(kinds))) .<= pieces0)
+        @test all(first(CorePotts.recompute_pieces(uc.ownership, lat, Val(false), length(kinds))) .<= pieces0)
         @test uc.cell.volume == recount(uc) && all(iszero, ci.cache.serial.count)
         # `:auto` in a threaded ensemble runs inline (its trajectories hold the threads); in a
-        # serial ensemble or a plain run the size rule decides (here: threaded, grain 0)
-        grain = CorePotts.BLOCK_GRAIN[]
-        CorePotts.BLOCK_GRAIN[] = 0
-        try
-            seen = Channel{Bool}(Inf)
-            cb = DiscreteCallback((u, t, i) -> t == 1, i -> put!(seen, i.cache.inline); save_positions = (false, false))
-            inline_in(e) = (solve(EnsembleProblem(remake(prob; tspan = (0, 2))), CheckerboardCPM(), e; trajectories = 3,
-                callback = cb); [take!(seen) for _ in 1:3])
-            @test all(inline_in(EnsembleThreads()))
-            @test inline_in(EnsembleSerial()) == fill(Threads.nthreads() == 1, 3)
-            @test init(prob, CheckerboardCPM()).cache.inline == (Threads.nthreads() == 1)
-        finally
-            CorePotts.BLOCK_GRAIN[] = grain
-        end
+        # serial ensemble or a plain run the size rule decides (here: threaded, `inline_max_blocks = 0`)
+        threaded = CheckerboardCPM(; inline_max_blocks = 0)
+        seen = Channel{Bool}(Inf)
+        cb = DiscreteCallback((u, t, i) -> t == 1, i -> put!(seen, i.cache.inline); save_positions = (false, false))
+        inline_in(e) = (solve(EnsembleProblem(remake(prob; tspan = (0, 2))), threaded, e; trajectories = 3,
+            callback = cb); [take!(seen) for _ in 1:3])
+        @test all(inline_in(EnsembleThreads()))
+        @test inline_in(EnsembleSerial()) == fill(Threads.nthreads() == 1, 3)
+        @test init(prob, threaded).cache.inline == (Threads.nthreads() == 1)
     end
 
     @testset "on-copy cell writes" begin
@@ -221,4 +216,26 @@ end
         @test b == [false, true]
     end
 end
+end
+
+@testitem "checkerboard: the tuning keywords" setup = [CP_checkerboard_passes] tags = [:corepotts, :checkerboard_passes] begin
+    @testset "checkerboard: the tuning keywords" begin
+        lat = Lattice((30, 30))
+        σ, kinds = blocks((30, 30), 5)
+        prob = PottsProblem(GG, initial_state(σ, kinds), lat, (0, 2), gg_params())
+        alg = CheckerboardCPM()
+        @test alg.inline_max_blocks > 0 && alg.fused_lifecycle_max_sites > 0 && alg.fused_lifecycle_max_cells > 0
+        # printed as the keyword call that rebuilds it, defaults left out
+        @test repr(alg) == "CheckerboardCPM()"
+        tuned = CheckerboardCPM(; inline_max_blocks = 7, fused_lifecycle_max_cells = 3)
+        @test repr(tuned) == "CheckerboardCPM(; inline_max_blocks = 7, fused_lifecycle_max_cells = 3)"
+        @test eval(Meta.parse(repr(tuned))) == tuned
+        # a phase with at most `inline_max_blocks` work items runs inline; 0 sends every phase
+        # to the threads (one thread runs everything inline)
+        @test init(prob, CheckerboardCPM(; inline_max_blocks = 10^6)).cache.inline
+        @test init(prob, CheckerboardCPM(; inline_max_blocks = 0)).cache.inline == (Threads.nthreads() == 1)
+        for kw in ((; inline_max_blocks = -1), (; fused_lifecycle_max_sites = -1), (; fused_lifecycle_max_cells = -1))
+            @test_throws ArgumentError init(prob, CheckerboardCPM(; kw...))
+        end
+    end
 end

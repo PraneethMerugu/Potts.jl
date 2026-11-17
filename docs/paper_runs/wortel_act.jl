@@ -27,7 +27,7 @@ panels = [Panel("cell"; plot = (; category_palette = [:orangered3], medium_color
     Panel("actin activity (act)"; encoding = ChannelEncoding(act_key),
         plot = (; colormap = :inferno, colorrange = (0, 20), nan_color = :white),
         # medium sites (always 0) are left blank so the cell's inactive body shows dark
-        channels = u -> (RenderChannel(act_key, ifelse.(u.σ .== 0, NaN, Float64.(u.site.act))),),
+        channels = u -> (RenderChannel(act_key, ifelse.(u.ownership .== 0, NaN, Float64.(u.site.act))),),
         colorbar = ("act", :inferno, (0, 20)))]
 paper_run("wortel_act"; prob, alg, saveat = EVERY, title, framerate = 30, panels, size = (1300, 720),
     meta = Dict{String, Any}("model" => "WortelAct",

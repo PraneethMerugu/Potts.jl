@@ -2,8 +2,8 @@
     @testset "fields: two solver groups; a later group reads the earlier field's array" begin
         op = fd_source_op((12, 10))
         sys = FdTwo(; name = :t)
-        cvar = only(filter(x -> string(x) in ("c", "c(t)"), Potts.variables(sys)))
-        uvar = only(filter(x -> string(x) in ("u", "u(t)"), Potts.variables(sys)))
+        cvar = only(filter(x -> string(x) in ("c", "c(t)"), Potts.declared_variables(sys)))
+        uvar = only(filter(x -> string(x) in ("u", "u(t)"), Potts.declared_variables(sys)))
         prob = PottsProblem(
             sys, op, (0, 2); field_solver = ExplicitEuler(substeps = 2),
             solvers = [uvar => ExplicitEuler(substeps = 3)]
@@ -34,7 +34,7 @@ end
 @testitem "fields: the coupling between solver groups is bounded (F2-06 review, K-unsafe)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
     @testset "fields: the coupling between solver groups is bounded (F2-06 review, K-unsafe)" begin
         sys = FdRot(; name = :r)
-        ovar = only(filter(x -> string(x) in ("o", "o(t)"), Potts.variables(sys)))
+        ovar = only(filter(x -> string(x) in ("o", "o(t)"), Potts.declared_variables(sys)))
         two(k; n = 1) = PottsProblem(
             sys, [fd_empty((6, 6)); :k => k], (0, 4); field_solver = ExplicitEuler(substeps = n),
             solvers = [ovar => ExplicitEuler(substeps = 2)]
@@ -226,7 +226,7 @@ end
         integ = init(prob, SequentialCPM())
         foreach(_ -> step!(integ), 1:3)
         st = current_state(integ)
-        @test Array(st.σ) == σ0 && fd_n(integ, 1) == 2 && fd_n(integ, 2) == 3
+        @test Array(st.ownership) == σ0 && fd_n(integ, 1) == 2 && fd_n(integ, 2) == 3
         # the model's field system in front end B: zero initial values, the time span of 3 MCS
         pdesys, _ = Potts._field_system(sys; T = Float64)
         ivs = pdesys.ivs
@@ -265,7 +265,7 @@ end
         )
         ig = init(pw, SequentialCPM())
         step!(ig)
-        snap(i) = (i.t, copy(Array(current_state(i).σ)), copy(Array(current_state(i).site.c)), copy(Array(current_state(i).site.o)))
+        snap(i) = (i.t, copy(Array(current_state(i).ownership)), copy(Array(current_state(i).site.c)), copy(Array(current_state(i).site.o)))
         s1, p1 = snap(ig), ig.p
         for (what, write) in (
                 ("setp", () -> setp(ig, :k)(ig, 3.0)), ("integ.ps", () -> (ig.ps[:k] = 3.0)),
@@ -398,7 +398,7 @@ end
         for _ in 1:30                                   # until the cell reaches a site that does not hold `v`
             c0 = copy(Array(current_state(integ).site.c))
             step!(integ)
-            m = Array(current_state(integ).σ) .!= 0
+            m = Array(current_state(integ).ownership) .!= 0
             moved = any(m .& (c0 .!= 1.0))
             moved && break
         end
@@ -492,7 +492,7 @@ end
     @testset "F3-02: InputSpec.filled: a model's CPM inputs are filled, another group's field is not" begin
         op = fd_source_op((12, 10))
         sys = FdTwo(; name = :t)
-        uvar = only(filter(x -> string(x) in ("u", "u(t)"), Potts.variables(sys)))
+        uvar = only(filter(x -> string(x) in ("u", "u(t)"), Potts.declared_variables(sys)))
         prob = PottsProblem(sys, op, (0, 2); field_solver = ExplicitEuler(substeps = 2), solvers = [uvar => ExplicitEuler(substeps = 3)])
         phs = [ph for ph in prob.f.phases.after_mcs if ph isa CorePotts.FieldPhase]
         cin, uin = (ph.group.spec.inputs for ph in phs)
@@ -518,8 +518,8 @@ end
         end
         op = fd_source_op((12, 10))
         sys = FdTwo(; name = :t)
-        cvar = only(filter(x -> string(x) in ("c", "c(t)"), Potts.variables(sys)))
-        uvar = only(filter(x -> string(x) in ("u", "u(t)"), Potts.variables(sys)))
+        cvar = only(filter(x -> string(x) in ("c", "c(t)"), Potts.declared_variables(sys)))
+        uvar = only(filter(x -> string(x) in ("u", "u(t)"), Potts.declared_variables(sys)))
         fg = PottsProblem(sys, op, (0, 2); field_solver = FieldGroups(uvar => ExplicitEuler(substeps = 3); default = ExplicitEuler(substeps = 2)))
         sp = PottsProblem(sys, op, (0, 2); field_solver = ExplicitEuler(substeps = 2), solvers = [uvar => ExplicitEuler(substeps = 3)])
         @test fg.f.fingerprint == sp.f.fingerprint

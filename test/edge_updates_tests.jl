@@ -190,7 +190,7 @@ end
         prob = PottsProblem(EUTwo(; name = :two), eu_two_op(), (0, 5))
         for alg in (SequentialCPM(), CheckerboardCPM())
             sol = solve(prob, alg; saveat = 1)
-            @test all(u -> u.σ == eu_state(), sol.u)
+            @test all(u -> u.ownership == eu_state(), sol.u)
             for (i, t) in enumerate(sol.t)
                 c = sol.u[i].cell
                 # rest gains Pre(age) = t′ at step t′ (0, 1, …, t − 1) and s·m = 0.5 each MCS

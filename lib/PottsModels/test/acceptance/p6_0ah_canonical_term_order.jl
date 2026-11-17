@@ -34,7 +34,7 @@
 #
 # Pinned here:
 #  1. Generated code is independent of operator hashes. For each fixture, each solver
-#     (`ExplicitEuler()`, `RK4()`, `Adaptive(Rodas5P())`) and T ∈ {Float64, Float32}, every
+#     (`ExplicitEuler()`, `Potts.RK4()`, `Adaptive(Rodas5P())`) and T ∈ {Float64, Float32}, every
 #     expression of `Potts.generated_code` (line numbers stripped) under salts 1–4 of the
 #     Potts operators, and separately of `sin`/`cos`/`exp`, is identical to the unsalted
 #     one; the problem fingerprint and the final state (σ and every cell and model column,
@@ -174,7 +174,7 @@ p60ah_word(x) = repr(x)
 
 # The final state as text, bit for bit: σ and every numeric cell and model column.
 function p60ah_digest(u)
-    out = ["σ=" * join(p60ah_word.(vec(Array(u.σ))), ",")]
+    out = ["σ=" * join(p60ah_word.(vec(Array(u.ownership))), ",")]
     for part in (:cell, :model)
         cols = getproperty(u, part)
         for n in propertynames(cols)

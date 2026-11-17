@@ -21,8 +21,8 @@ const CC_TWO = UInt64(0b100)          # partner is of kind 2
 function cc_commit!(st, p, prop, ctx)
     commit_volume!(st, p, prop, ctx)
     commit_moments!(st.cell, ctx, prop)
-    commit_contact_count!(st.cell.n_med, st.σ, st.cell.kind, ctx.contact, CC_MED, ctx.lattice, prop)
-    commit_contact_count!(st.cell.n_two, st.σ, st.cell.kind, ctx.vn, CC_TWO, ctx.lattice, prop)
+    commit_contact_count!(st.cell.n_med, st.ownership, st.cell.kind, ctx.contact, CC_MED, ctx.lattice, prop)
+    commit_contact_count!(st.cell.n_two, st.ownership, st.cell.kind, ctx.vn, CC_TWO, ctx.lattice, prop)
     return nothing
 end
 # divisions of large cells every other MCS, and cell 1 changes kind at MCS 4
@@ -53,8 +53,8 @@ end
 function cc_bad(sol, lat)
     bad = 0
     for u in sol.u
-        m = cc_brute(u.σ, u.cell.kind, lat, relation(Moore(1), lat), (0,), length(u.cell.kind))
-        t = cc_brute(u.σ, u.cell.kind, lat, relation(VonNeumann(1), lat), (2,), length(u.cell.kind))
+        m = cc_brute(u.ownership, u.cell.kind, lat, relation(Moore(1), lat), (0,), length(u.cell.kind))
+        t = cc_brute(u.ownership, u.cell.kind, lat, relation(VonNeumann(1), lat), (2,), length(u.cell.kind))
         bad += (u.cell.n_med != m) + (u.cell.n_two != t)
     end
     return bad

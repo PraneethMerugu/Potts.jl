@@ -11,7 +11,7 @@
             @variables age(edge) = 0.0
             @relationship bond(cell, cell) capacity = 8
             @lattice Lattice((30, 30); neighborhood = Moore(1))
-            @energy contacts => J[kind, kind′]
+            @energy contacts => J[kind, neighbor_kind]
             @link bond when = new_contact(a, b) && (kind[a] == leader), every = 100
             @unlink bond when = distance > 100.0
             @sweep Metropolis(; temperature = T)
@@ -23,7 +23,7 @@
         # self-check with edge energies (partner centroids move with the copy)
         worst = 0.0
         for (u, prop) in proposal_states(remake(prob; tspan = (0, 5)); mcs = (0, 5), n = 300)
-            a = deepcopy(u); a.σ[prop.target] = prop.new
+            a = deepcopy(u); a.ownership[prop.target] = prop.new
             prob.f.commit!(a, prob.p, prop, ctx_of(prob))
             worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u) + Potts._killing_credit(prob, u, prop, a))))
         end
@@ -42,11 +42,11 @@
         kinds = [isodd(c) ? :leader : :follower for c in 1:n]
         tp = PottsProblem(Tissue(; name = :tissue), [ownership => σb, kind => kinds], (0, 1))
         u = solve(tp, SequentialCPM()).u[end]            # the rule ran once, after MCS 0's sweep
-        g = CorePotts.contact_graph(u.σ, tp.lattice, tp.contact, n)
+        g = CorePotts.contact_graph(u.ownership, tp.lattice, tp.contact, n)
         nlinks = 0
         bonds = CorePotts.link_store(u.cell, :bond)
         for a in 1:n, b in (a + 1):n
-            touching = b in CorePotts.neighbors(g, a)
+            touching = b in CorePotts.contact_neighbors(g, a)
             led = isodd(a) || isodd(b)
             @test CorePotts.linked(bonds, a, b) == (touching && led)
             nlinks += CorePotts.linked(bonds, a, b)
@@ -82,7 +82,7 @@ end
             @lattice Lattice((36, 16); boundary = Closed(), neighborhood = Moore(1))
             @energy begin
                 cells => (volume - 36)^2
-                contacts => J[kind, kind′]
+                contacts => J[kind, neighbor_kind]
             end
             @sweep Metropolis(; temperature = 8.0)
         end
@@ -94,13 +94,13 @@ end
             rng = Xoshiro(7)
             worst = 0.0; linked_pairs = 0
             for u in sol.u, _ in 1:n
-                t = rand(rng, 1:length(u.σ)); x = CorePotts.coordinates(lat, t)
+                t = rand(rng, 1:length(u.ownership)); x = CorePotts.coordinates(lat, t)
                 ins, y = CorePotts.shift(lat, x, R.offsets[rand(rng, 1:length(R))])
                 ins || continue
                 s = CorePotts.linear_index(lat, y)
-                u.σ[t] == u.σ[s] && continue
-                prop = CorePotts.Proposal(t, s, x, 1, u.σ[t], u.σ[s])
-                a = deepcopy(u); a.σ[t] = prop.new
+                u.ownership[t] == u.ownership[s] && continue
+                prop = CorePotts.Proposal(t, s, x, 1, u.ownership[t], u.ownership[s])
+                a = deepcopy(u); a.ownership[t] = prop.new
                 prob.f.commit!(a, prob.p, prop, ctx_of(prob))
                 worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u) + Potts._killing_credit(prob, u, prop, a))))
                 linked_pairs += any(r -> CorePotts.linked(CorePotts.link_store(u.cell, r), prop.old, prop.new), (:bond, :tether))
@@ -151,7 +151,7 @@ end
         Y = CorePotts.Proposal(target(3), site(3), CorePotts.coordinates(lat, target(3)), 1, Int32(3), Int32(0))
         # X's ΔH depends on cell 3, its tether partner: committing Y first changes it
         dX = energy_change(prob, u, X)
-        v = deepcopy(u); v.σ[Y.target] = Y.new; prob.f.commit!(v, prob.p, Y, ctx)
+        v = deepcopy(u); v.ownership[Y.target] = Y.new; prob.f.commit!(v, prob.p, Y, ctx)
         @test abs(energy_change(prob, v, X) - dX) > 1.0e-3
     end
 end
@@ -169,7 +169,7 @@ end
             @relationship bond(cell, cell) capacity = 8
             @relationship tether(cell, cell) capacity = 8
             @lattice Lattice((30, 30); neighborhood = Moore(1))
-            @energy contacts => J[kind, kind′]
+            @energy contacts => J[kind, neighbor_kind]
             @link bond when = new_contact(a, b) && kind[a] == leader && kind[b] == leader
             @link tether when = new_contact(a, b) && kind[a] == follower && kind[b] == follower, every = 2
             @unlink tether when = strength > 1.5, every = 3
@@ -184,11 +184,11 @@ end
         kinds = [isodd(c) ? :leader : :follower for c in 1:n]
         tp = PottsProblem(TwoRules(; name = :two), [ownership => σb, kind => kinds], (0, 1))
         u = solve(tp, SequentialCPM()).u[end]            # after MCS 0: every rule ran once
-        g = CorePotts.contact_graph(u.σ, tp.lattice, tp.contact, n)
+        g = CorePotts.contact_graph(u.ownership, tp.lattice, tp.contact, n)
         B, Tt = CorePotts.link_store(u.cell, :bond), CorePotts.link_store(u.cell, :tether)
         nb = nt = 0
         for a in 1:n, b in (a + 1):n
-            touching = b in CorePotts.neighbors(g, a)
+            touching = b in CorePotts.contact_neighbors(g, a)
             @test CorePotts.linked(B, a, b) == (touching && isodd(a) && isodd(b))
             @test !CorePotts.linked(Tt, a, b)             # linked, then unlinked (strength 2 > 1.5) at MCS 0
             nb += CorePotts.linked(B, a, b)
@@ -197,9 +197,9 @@ end
         # the tether rule on its own: at MCS 2 the link rule runs, the unlink rule does not (every 3)
         u2 = solve(remake(tp; tspan = (0, 3)), SequentialCPM()).u[end]
         T2 = CorePotts.link_store(u2.cell, :tether)
-        g2 = CorePotts.contact_graph(u2.σ, tp.lattice, tp.contact, n)
+        g2 = CorePotts.contact_graph(u2.ownership, tp.lattice, tp.contact, n)
         for a in 1:n, b in (a + 1):n
-            touching = b in CorePotts.neighbors(g2, a)
+            touching = b in CorePotts.contact_neighbors(g2, a)
             CorePotts.linked(T2, a, b) && (nt += 1; @test iseven(a) && iseven(b))
         end
         @test nt > 5 && all(==(2.0), u2.cell.link_strength[T2.links .!= 0])
@@ -298,10 +298,10 @@ end
         # the mark of an implicit binding is not code: settling it keeps the fingerprint
         settled = Potts.PottsSystem(;
             name = nameof(body), (f => Potts._p(body, f) for f in fieldnames(Potts.PottsPart))...,
-            variables = map(Potts._settle_edge_scope, Potts.variables(body))
+            variables = map(Potts._settle_edge_scope, Potts.declared_variables(body))
         )
-        @test any(x -> haskey(Potts.info(x).options, :implicit_relationship), Potts.variables(body))
-        @test !any(x -> haskey(Potts.info(x).options, :implicit_relationship), Potts.variables(settled))
+        @test any(x -> haskey(Potts.info(x).options, :implicit_relationship), Potts.declared_variables(body))
+        @test !any(x -> haskey(Potts.info(x).options, :implicit_relationship), Potts.declared_variables(settled))
         bop = [ownership => σ, kind => [:blob, :blob, :blob], :tether => [(2, 3)]]
         @test PottsProblem(body, bop, (0, 5)).f.fingerprint == PottsProblem(settled, bop, (0, 5)).f.fingerprint
         sys = extend(EdgeBody(; name = :x), Spring(; name = :s))
@@ -402,7 +402,7 @@ end
                 lattice = Potts.lattice(c), relationships = [Potts.relationship(:bond), Potts.relationship(:bond)], sweep = Potts._p(c, :sweep)
             )
         )
-        @test isequal(getfield(mtkcompile(Spring(; name = :s)), :edge_vars)[:bond], Potts.variables(Spring(; name = :s)))   # `rest(edge)`: the only one
+        @test isequal(getfield(mtkcompile(Spring(; name = :s)), :edge_vars)[:bond], Potts.declared_variables(Spring(; name = :s)))   # `rest(edge)`: the only one
         @test_throws "is a variable scope" mtkcompile(CellRelationship(; name = :cr))
     end
 end
@@ -422,8 +422,8 @@ end
             @relations near = Moore(1)
             @energy begin
                 cells(A, B) => λ * (volume - 25)^2 + 0.3 * (surface - 20)^2
-                contacts => J[kind, kind′] + x                      # bare cell variable: x[owner]
-                contacts(near) => 0.5 * x[owner] * x[owner′]
+                contacts => J[kind, neighbor_kind] + x                      # bare cell variable: x[owner]
+                contacts(near) => 0.5 * x[owner] * x[neighbor_owner]
             end
             @sweep Metropolis(; temperature = T)
         end
@@ -434,7 +434,7 @@ end
         prob = PottsProblem(
             CellVarContacts(; name = :cv), [
                 ownership => σ, kind => kinds,
-                first(filter(v -> Potts.info(v).name === :x, Potts.variables(CellVarContacts(; name = :cv)))) => xs,
+                first(filter(v -> Potts.info(v).name === :x, Potts.declared_variables(CellVarContacts(; name = :cv)))) => xs,
             ], (0, 3)
         )
         @test selfcheck(prob) < 1.0e-9           # cell variables mirrored; surface δ fused once

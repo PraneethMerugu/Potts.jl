@@ -14,6 +14,7 @@ The models on this page are generic teaching models, not published ones.
 
 ```@example chemo
 using Potts, MakiePotts, CairoMakie
+using Potts.Layouts
 using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
 using Potts.LatticePDE: laplacian, lattice_domain
 CairoMakie.activate!(type = "png") # hide
@@ -60,7 +61,7 @@ Then couple it into the model with `@fields`:
     @lattice Lattice((80, 40); boundary = (Closed(), Periodic()), neighborhood = Moore(1))
     @energy begin
         cells(cell) => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @fields c = strip
     @drive Chemotaxis(c; strength = χ)
@@ -148,7 +149,7 @@ The cells crawl towards the source at the right. The mean x-coordinate of their 
 shows it. `sol[:position]` is not needed, because the saved states hold the cell numbers:
 
 ```@example chemo
-mean_x(u) = sum(x[1] for x in CartesianIndices(u.σ) if u.σ[x] != 0) / count(!=(0), u.σ)
+mean_x(u) = sum(x[1] for x in CartesianIndices(u.ownership) if u.ownership[x] != 0) / count(!=(0), u.ownership)
 fig = Figure(size = (600, 300))
 ax = Axis(fig[1, 1]; xlabel = "MCS", ylabel = "mean x of the cells")
 lines!(ax, sol.t, mean_x.(sol.u); label = "χ = 0")
@@ -173,7 +174,7 @@ gradient
 ```
 
 The printout is Potts's internal form of the model. `LatticePDE.value_at(c(t), target(t))` is the
-field at the target site, and `LatticePDE.value_at(J, kind(t), kind′(t))` is the table entry. In the notation of
+field at the target site, and `LatticePDE.value_at(J, kind(t), neighbor_kind(t))` is the table entry. In the notation of
 `@potts_model` the drive line reads
 `copy => ifelse(new != 0, -χ * (c[target] - c[source]), 0.0)`. Here is the same model
 with that line in place of `Chemotaxis`:
@@ -191,7 +192,7 @@ with that line in place of `Chemotaxis`:
     @lattice Lattice((80, 40); boundary = (Closed(), Periodic()), neighborhood = Moore(1))
     @energy begin
         cells(cell) => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @fields c = strip
     @drive copy => ifelse(new != 0, -χ * (c[target] - c[source]), 0.0)
@@ -204,7 +205,7 @@ function short(sys)
     prob = PottsProblem(sys, start, (0, 100); field_solver = ExplicitEuler(substeps = 8, lower_bound = 0.0), seed = 1)
     return solve(remake(prob; p = [:χ => 300.0]), SequentialCPM(); save_everystep = false)
 end
-short(by_hand).u[end].σ == short(gradient).u[end].σ
+short(by_hand).u[end].ownership == short(gradient).u[end].ownership
 ```
 
 The result is `true`. With the same seed both runs make the same copies, so the drive is
@@ -245,7 +246,7 @@ fills it at every site once per MCS, before the field steps:
     @lattice Lattice((80, 80); boundary = Periodic(), neighborhood = Moore(1))
     @energy begin
         cells(cell) => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @fields c = secretion (secreting => kind == cell)
     @drive Chemotaxis(c; strength = χ)
@@ -270,7 +271,7 @@ To show the field, follow these steps:
 key = SiteChannelKey(:c, Float64)
 frames = [renderframe(u; mcs = t, channels = (RenderChannel(key, u.site.c; label = "c"),))
           for (u, t) in zip(sol.u, sol.t)]
-cellfill(u) = [c != 0 ? 1.0 : NaN for c in Array(u.σ)]      # cell sites; NaN is transparent
+cellfill(u) = [c != 0 ? 1.0 : NaN for c in Array(u.ownership)]      # cell sites; NaN is transparent
 nx, ny = frame_size(frames[1])
 ox, oy = frame_geometry(frames[1]).origin
 k = Observable(1)

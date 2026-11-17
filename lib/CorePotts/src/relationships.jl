@@ -251,7 +251,7 @@ MCS (`cell` is `st.cell`), e.g. relationship creation/removal/retuning from the 
 graph. Host-shaped and rare by design. `ctx.lattice` is a host copy (made once per run: the
 domain mask never changes); `p` is the live parameter object, as given to the integrator.
 
-`reads` and `writes` declare what the body touches, as tuples of `:σ` (the labels) and cell
+`reads` and `writes` declare what the body touches, as tuples of `:ownership` (the labels) and cell
 column names, so that on a device only those leaves cross:
 - `reads`: copied to the host before the body;
 - `writes`: copied to the host before the body (bodies update them in place) and back after
@@ -263,7 +263,7 @@ column names, so that on a device only those leaves cross:
 `reads` columns are read-only. Writing a `reads`-only or undeclared leaf is undefined: on
 the host the change persists (the body runs on the live arrays), on a device it is dropped
 (only `writes` go back). What the body sees in leaves it does not declare is unspecified (on
-a device it is the device array, which must not be read on the host). A name that is neither `:σ` nor a cell
+a device it is the device array, which must not be read on the host). A name that is neither `:ownership` nor a cell
 column of the state is an `ArgumentError` the first time the phase runs, on every backend.
 Model, site and history quantities are not declarable: a body that reads them leaves
 `reads = nothing`; it never writes them back.
@@ -284,7 +284,7 @@ _declared(::Nothing) = nothing
 _declared(s::Symbol) = (s,)
 function _declared(names)
     t = Tuple(names)
-    all(n -> n isa Symbol, t) || throw(ArgumentError("HostPhase `reads`/`writes` take Symbols (`:σ` or cell column names); got $(repr(names))"))
+    all(n -> n isa Symbol, t) || throw(ArgumentError("HostPhase `reads`/`writes` take Symbols (`:ownership` or cell column names); got $(repr(names))"))
     return t
 end
 
@@ -304,7 +304,7 @@ function _run_phase(ph::HostPhase{F}, st, p, ctx, key, mcs, backend, stats) wher
         end
     else
         foreach(ph.writes) do name
-            name === :σ ? _write_back!(stats, st.σ, host.σ) :
+            name === :ownership ? _write_back!(stats, st.ownership, host.ownership) :
             _write_back!(stats, getfield(st.cell, name), getfield(host.cell, name))
         end
     end
@@ -314,8 +314,8 @@ end
 _check_declared(::Nothing, st) = nothing
 function _check_declared(names, st)
     for n in names
-        n === :σ || haskey(st.cell, n) || throw(ArgumentError(
-            "HostPhase declares `$n`, which is neither `:σ` nor a cell column of the state " *
+        n === :ownership || haskey(st.cell, n) || throw(ArgumentError(
+            "HostPhase declares `$n`, which is neither `:ownership` nor a cell column of the state " *
             "(cell columns: $(join(keys(st.cell), ", ")))"))
     end
     return nothing
@@ -327,8 +327,8 @@ end
 function _host_state(ph::HostPhase, stats, backend, st)
     ph.reads === nothing && return _snapshot(stats, backend, st)
     used = ph.writes === nothing ? (ph.reads..., keys(st.cell)...) : (ph.reads..., ph.writes...)
-    cell = unique(n for n in used if n !== :σ)
-    return _host_leaves(stats, st; σ = :σ in used, cell)
+    cell = unique(n for n in used if n !== :ownership)
+    return _host_leaves(stats, st; ownership = :ownership in used, cell)
 end
 
 # a host copy back to its live array (nothing when the body ran on the live array itself)

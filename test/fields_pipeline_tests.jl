@@ -41,7 +41,7 @@
                 prob = PottsProblem(build(), op, (0, 5); T, seed = 7, kw...)
                 cpu = solve(prob, CheckerboardCPM()).u[end]
                 dev_sol = solve(prob, CheckerboardCPM(); backend).u[end]
-                ok = Array(dev_sol.σ) == Array(cpu.σ)
+                ok = Array(dev_sol.ownership) == Array(cpu.ownership)
                 tol = T === Float32 ? 1e-5 : 1e-12
                 for k in keys(cpu.site)
                     a, b = Float64.(Array(getproperty(cpu.site, k))), Float64.(Array(getproperty(dev_sol.site, k)))

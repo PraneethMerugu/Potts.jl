@@ -691,7 +691,7 @@ end
     @lattice Lattice((10, 10); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         cells(cyto, nuc) => (volume - V_target)^2
-        contacts => ifelse(cluster[owner] == cluster[owner′], 1.0, 3.0)
+        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 1.0, 3.0)
     end
     @sweep Metropolis(; temperature = 1.0)
 end
@@ -855,7 +855,7 @@ end
     @lattice Lattice((80, 80, 21); boundary = (Periodic(), Periodic(), Closed()), neighborhood = Moore(1))
     @energy begin
         cells(cytoplasm, lamellipodium, nucleus) => (volume - V_target)^2
-        contacts => ifelse(cluster[owner] == cluster[owner′], 1.0, 3.0)
+        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 1.0, 3.0)
     end
     @sweep Metropolis(; temperature = 1.0)
 end

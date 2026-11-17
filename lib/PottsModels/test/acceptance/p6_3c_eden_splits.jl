@@ -47,7 +47,7 @@
 #       (points placed), `misses` = requested − painted, `counted` = painted, `clipped` =
 #       D-138's region rule (0 for the whole lattice), `dropped`/`splits` as for every layer.
 #       `ArgumentError`: rounds < 0, empty `kinds`, a seed outside 0:typemax(UInt64), a bad
-#       `shortfall` or `splits`, a `neighborhood` that is not a `CorePotts.RelationSpec`, an
+#       `shortfall` or `splits`, a `neighborhood` that is not a `CorePotts.AbstractRelationSpec`, an
 #       empty point list, a point or shape of another dimension (at layout).
 #       `remake(e; rounds = …)` works.
 #

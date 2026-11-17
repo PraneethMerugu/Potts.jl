@@ -179,8 +179,8 @@ end
                 CheckerboardCPM(); backend = b, save_start = false
             ).u[end]
             a, b = merks(), merks()
-            @test Array(a.σ) == Array(b.σ) && bits(a.cell.cavg) == bits(b.cell.cavg)
-            @test Array(a.σ) != cs_threshold_op()[1][2]                      # the cells moved
+            @test Array(a.ownership) == Array(b.ownership) && bits(a.cell.cavg) == bits(b.cell.cavg)
+            @test Array(a.ownership) != cs_threshold_op()[1][2]                      # the cells moved
             ja, jb = jiang(), jiang()
             @test bits(ja.cell.ocell) == bits(jb.cell.ocell) && bits(ja.site.o) == bits(jb.site.o)
             host = site(CPU())
@@ -191,7 +191,7 @@ end
                 @test bits(site(backend).cell.havg) != bits(host0.cell.havg)
                 a0, b0 = merks(), merks()
                 ja0, jb0 = jiang(), jiang()
-                @info "F3-23 negative control (float atomics): two ROCm runs" merks_cavg_equal = bits(a0.cell.cavg) == bits(b0.cell.cavg) merks_σ_equal = Array(a0.σ) == Array(b0.σ) jiang_ocell_equal = bits(ja0.cell.ocell) == bits(jb0.cell.ocell)
+                @info "F3-23 negative control (float atomics): two ROCm runs" merks_cavg_equal = bits(a0.cell.cavg) == bits(b0.cell.cavg) merks_σ_equal = Array(a0.ownership) == Array(b0.ownership) jiang_ocell_equal = bits(ja0.cell.ocell) == bits(jb0.cell.ocell)
             finally
                 CorePotts._FLOAT_ATOMICS[] = false
             end
@@ -225,19 +225,13 @@ end
             # the weighted surface against a recount from `σ`, on the run `a[2]` comes from (CsWSurf,
             # 80 MCS, the staged device lifecycle): copies add the float weights and divisions their
             # integer units, so the tracker and the recount differ in the last bits
-            fs = CorePotts.FUSE_SITES[]
-            CorePotts.FUSE_SITES[] = 0
             pw_w = PottsProblem(CsWSurf(; name = :w), cs_wsurf_op(), (0, 80); T = Float32, seed = 7, capacity = 2000)
-            sw_w = try
-                solve(pw_w, CheckerboardCPM(); backend, save_start = false)
-            finally
-                CorePotts.FUSE_SITES[] = fs
-            end
+            sw_w = solve(pw_w, CheckerboardCPM(; fused_lifecycle_max_sites = 0); backend, save_start = false)
             w_end = sw_w.u[end]
             @test sw_w.stats.lifecycle.divisions > 100
             @test Array(w_end.cell.surface) ≈
                 CorePotts.recompute_surface(
-                Array(w_end.σ), pw_w.lattice, CorePotts.relation(CS_W, pw_w.lattice),
+                Array(w_end.ownership), pw_w.lattice, CorePotts.relation(CS_W, pw_w.lattice),
                 length(w_end.cell.volume)
             ) rtol = 1.0e-5
             # two device runs: the integer-unit sums agree bitwise where the lockless `σ` agrees
@@ -251,18 +245,12 @@ end
             same_conv_σ && @test allequal(conv)
             # the compartments in the staged device lifecycle too (its cluster-surface fold launch),
             # against a recount from `σ`; the bits are the fused form's where the lockless `σ` agrees
-            fs = CorePotts.FUSE_SITES[]
-            CorePotts.FUSE_SITES[] = 0
             pc_w = PottsProblem(CsWComp(; name = :c), cs_wcomp_op(), (0, 40); T = Float32, seed = 7, capacity = 2000)
-            staged = try
-                solve(pc_w, CheckerboardCPM(); backend, save_start = false).u[end]
-            finally
-                CorePotts.FUSE_SITES[] = fs
-            end
+            staged = solve(pc_w, CheckerboardCPM(; fused_lifecycle_max_sites = 0); backend, save_start = false).u[end]
             @test Array(staged.cell.cluster_surface) ≈
-                CorePotts.recompute_cluster_surface(Array(staged.σ), Array(staged.cell.cluster), pc_w.lattice, CS_W) rtol = 1.0e-5
-            cs_digest(staged.σ) == a[3] || @info "F3-23 r1: the staged compartments' σ differs from the fused run's (D-271)" staged = cs_digest(staged.σ) fused = a[3]
-            cs_digest(staged.σ) == a[3] && @test cs_bits(staged.cell.cluster_surface) == a[4]
+                CorePotts.recompute_cluster_surface(Array(staged.ownership), Array(staged.cell.cluster), pc_w.lattice, CS_W) rtol = 1.0e-5
+            cs_digest(staged.ownership) == a[3] || @info "F3-23 r1: the staged compartments' σ differs from the fused run's (D-271)" staged = cs_digest(staged.ownership) fused = a[3]
+            cs_digest(staged.ownership) == a[3] && @test cs_bits(staged.cell.cluster_surface) == a[4]
             # the CPU: σ of each model ([1, 3, 5]) and, where σ is equal, its sums
             h, _ = cs_r1_digests(CorePotts.CPU())
             same = (h[1] == a[1], h[3] == a[3], h[5] == a[5])

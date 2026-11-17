@@ -295,7 +295,7 @@ end
 """The drive readback of `prob` for target `x`, source `y` in state `u` (an integer)."""
 function p63g_read(prob, u, ctx, x, y)
     lat = prob.lattice
-    prop = CorePotts.Proposal(CorePotts.linear_index(lat, x), CorePotts.linear_index(lat, y), x, 1, u.σ[x...], u.σ[y...])
+    prop = CorePotts.Proposal(CorePotts.linear_index(lat, x), CorePotts.linear_index(lat, y), x, 1, u.ownership[x...], u.ownership[y...])
     d = prob.f.delta_H(u, prob.p, prop, ctx) - energy_change(prob, u, prop)
     return round(Int, d)
 end
@@ -376,7 +376,7 @@ function p63g_enumerate(geom, periodic, x, prefixes)
         own = fill(-1, length(shellsites))
         own[inpos] .= cfg
         for (m, (_, oracle)) in enumerate(prefixes)
-            σ = us[m].σ
+            σ = us[m].ownership
             σ[x...] = old
             σ[y...] = new
             for (k, i) in enumerate(inpos)
@@ -642,7 +642,7 @@ end
         end
         X[y...] = adding                      # the source holds `new`: cell 1 when adding
         X[x...] = !adding
-        σ = u.σ
+        σ = u.ownership
         σ .= ifelse.(X, Int32(1), Int32(0))
         b = p63g_read(prob, u, ctx, x, y)
         for (bit, adj) in ((6, :face), (7, :full))
@@ -791,16 +791,16 @@ end
     per = (true, false)                                  # (Periodic(), Closed())
     n = agree = vacuous = 0
     nrefuse = 0
-    for I in CartesianIndices(u.σ), d in ((1, 0), (-1, 0), (0, 1), (0, -1))
+    for I in CartesianIndices(u.ownership), d in ((1, 0), (-1, 0), (0, 1), (0, -1))
         x = Tuple(I)
         y = (mod1(x[1] + d[1], 99), x[2] + d[2])
         1 <= y[2] <= 60 || continue
-        old, new = Int(u.σ[x...]), Int(u.σ[y...])
+        old, new = Int(u.ownership[x...]), Int(u.ownership[y...])
         old == new && continue
-        own = p63g_owners(u.σ, x, :square, per)
+        own = p63g_owners(u.ownership, x, :square, per)
         # Local() with the defaults, every cell constrained, plus no_extinction
         want = old == 0 || (p63g_local(:square, own, old, new) && u.cell.volume[old] > 1)
-        prop = CorePotts.Proposal(CorePotts.linear_index(lat, x), CorePotts.linear_index(lat, y), x, 1, u.σ[x...], u.σ[y...])
+        prop = CorePotts.Proposal(CorePotts.linear_index(lat, x), CorePotts.linear_index(lat, y), x, 1, u.ownership[x...], u.ownership[y...])
         n += 1
         agree += prob.f.constraint(u, prob.p, prop, ctx) == want
         # the old rule (gain off, full shell accepted) decides the same
@@ -852,7 +852,7 @@ for (name, rule) in ((:P63gNcLocal, :(Local())), (:P63gNcNoGain, :(Local(; gain 
         @lattice Lattice((24, 24); boundary = Closed(), neighborhood = Moore(1))
         @energy begin
             cells => (volume - V)^2
-            contacts => J[kind, kind′]
+            contacts => J[kind, neighbor_kind]
         end
         @constraint connectivity(A; rule = $rule)
         @sweep Metropolis(; temperature = T)
@@ -868,7 +868,7 @@ p63g_tissue() = (σ = zeros(Int32, 24, 24); k = 0;
         for seed in 1:3
             p = PottsProblem(M(; name = :t), [ownership => p63g_tissue(), kind => fill(:A, 16)], (0, 100); seed)
             sol = solve(p, SequentialCPM(; proposal = prop); saveat = 10:10:100)
-            s += count(u -> any(c -> p63g_split(u.σ, c), 1:16), sol.u)
+            s += count(u -> any(c -> p63g_split(u.ownership, c), 1:16), sol.u)
         end
         splits[label] = s
     end
@@ -881,12 +881,12 @@ end
     runs(M) = [solve(remake(PottsProblem(M(; name = :h), [ownership => σ0, kind => [:A]], (0, 100); seed),
                            p = [:T => 6.0, :V => 64.0, :J => [0.0 -1.0; -1.0 4.0]]),
                     SequentialCPM(; proposal = prop); saveat = 10:10:100) for seed in 1:3]
-    holes_local = sum(count(u -> p63g_holes(u.σ, 1) > 0, sol.u) for sol in runs(P63gNcLocal))
+    holes_local = sum(count(u -> p63g_holes(u.ownership, 1) > 0, sol.u) for sol in runs(P63gNcLocal))
     @test holes_local >= 10            # control: Local() lets holes form (measured 30 and 29 of 30)
     for (M, eight) in ((P63gNcSimple, false), (P63gNcSimpleFull, true))
         sols = runs(M)
-        @test sum(count(u -> p63g_holes(u.σ, 1; eight) > 0, sol.u) for sol in sols) == 0
-        @test sum(count(u -> p63g_split(u.σ, 1; eight), sol.u) for sol in sols) == 0
-        @test all(sol -> sol.u[end].σ != σ0, sols)        # non-vacuous: the cell moved
+        @test sum(count(u -> p63g_holes(u.ownership, 1; eight) > 0, sol.u) for sol in sols) == 0
+        @test sum(count(u -> p63g_split(u.ownership, 1; eight), sol.u) for sol in sols) == 0
+        @test all(sol -> sol.u[end].ownership != σ0, sols)        # non-vacuous: the cell moved
     end
 end

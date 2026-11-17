@@ -28,12 +28,12 @@ end
     @test !(CorePotts.PottsProblem <: p60m2_SciMLBase.AbstractDEProblem)
 
     σ = zeros(Int32, 12, 12); σ[4:6, 4:6] .= 1
-    prob = PottsProblem(P60m2Model(), [CorePotts.ownership => σ, kind => [:A]], (0, 5))
+    prob = PottsProblem(P60m2Model(; name = :m), [CorePotts.ownership => σ, kind => [:A]], (0, 5))
     @test prob isa CorePotts.PottsProblem
     for alg in (SequentialCPM(), CheckerboardCPM())
         @test p60m2_SciMLBase.isdiscrete(alg)
         sol = solve(prob, alg)
         @test sol.t[end] == 5
-        @test count(!iszero, Array(sol.u[end].σ)) > 0
+        @test count(!iszero, Array(sol.u[end].ownership)) > 0
     end
 end

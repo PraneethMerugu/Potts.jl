@@ -177,14 +177,14 @@ _adapt_host_cached(stats, x) = Adapt.adapt(_CachedHostCopy(stats), x)
 _host_buffer(a::AbstractArray) = Array{eltype(a)}(undef, size(a))
 
 """
-Host state for host code that touches only some leaves of `st`: `σ` (when `σ`) and the
+Host state for host code that touches only some leaves of `st`: `ownership` (when `ownership`) and the
 leaves named in `cell`, `site`, `model` and `history` are host copies (counted on a device;
 the live arrays themselves on the host); every other leaf is the live array, which on a
 device must not be read on the host.
 """
-function _host_leaves(stats, st::CPMState; σ::Bool = false, cell = (), site = (), model = (), history = ())
+function _host_leaves(stats, st::CPMState; ownership::Bool = false, cell = (), site = (), model = (), history = ())
     part(nt, names) = isempty(names) ? nt :
                       merge(nt, NamedTuple{Tuple(names)}(map(n -> _adapt_host(stats, getfield(nt, n)), Tuple(names))))
-    return CPMState(σ ? _adapt_host(stats, st.σ) : st.σ, part(st.cell, cell), part(st.site, site),
+    return CPMState(ownership ? _adapt_host(stats, st.ownership) : st.ownership, part(st.cell, cell), part(st.site, site),
         part(st.model, model), part(st.history, history))
 end

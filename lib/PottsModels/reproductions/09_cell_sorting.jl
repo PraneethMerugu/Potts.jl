@@ -54,7 +54,7 @@ const SEED = 1                          # base seed of every ensemble on this pa
     @relations proposal = Moore(1)                    # copy from one of the 8 neighbors (PRE p.2130)
     @energy begin
         cells(dark, light) => λ * (volume - V₀)^2     # area term; the medium is exempt
-        contacts => J[kind, kind′]                    # contact term over unlike neighboring sites
+        contacts => J[kind, neighbor_kind]                    # contact term over unlike neighboring sites
     end
     @sweep Metropolis(; temperature = T)              # Metropolis acceptance at T (PRE Eq. (3))
 end
@@ -406,7 +406,7 @@ Markdown.parse(deviations_md) #hide
 #
 # | Paper | `GranerGlazier` statement |
 # |---|---|
-# | contact term over the next-nearest-neighbor (8) set (PRL p.2014; PRE p.2129) | `contacts => J[kind, kind′]` on `Lattice(...; neighborhood = Moore(1))` |
+# | contact term over the next-nearest-neighbor (8) set (PRL p.2014; PRE p.2129) | `contacts => J[kind, neighbor_kind]` on `Lattice(...; neighborhood = Moore(1))` |
 # | area term, medium exempt through ``\theta(A_M < 0)`` (PRE p.2130) | `cells(dark, light) => λ * (volume - V₀)^2` |
 # | copy from "one of the eight neighboring sites" (PRE p.2130) | `@relations proposal = Moore(1)` |
 # | Metropolis at temperature T, Eq. (3) (PRE p.2130) | `@sweep Metropolis(; temperature = T)` |

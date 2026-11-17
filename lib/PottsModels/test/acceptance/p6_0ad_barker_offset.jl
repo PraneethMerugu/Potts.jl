@@ -31,7 +31,7 @@
 #   `offset = 0` reproduces today's Barker bit for bit.
 #
 # Oracles. The trajectories are compared, bit for bit, with runs under test-defined
-# acceptance laws (`P60adRef`), subtypes of `CorePotts.AcceptanceLaw` implementing the
+# acceptance laws (`P60adRef`), subtypes of `CorePotts.AbstractAcceptanceLaw` implementing the
 # formula above (and, with δ = 0, today's Barker formula verbatim), passed through the
 # algorithm's `acceptance` keyword. They are independent of `CorePotts.Barker`, so a law
 # that ignores δ, or applies it with the wrong sign, fails the comparison.
@@ -51,7 +51,7 @@ using Potts: CorePotts
 # Reference acceptance law (independent of CorePotts.Barker)
 # ---------------------------------------------------------------------------------------------
 
-struct P60adRef{F} <: CorePotts.AcceptanceLaw
+struct P60adRef{F} <: CorePotts.AbstractAcceptanceLaw
     offset::F
 end
 @inline function CorePotts.accept(law::P60adRef, dH::T, temperature::T, u::T) where {T}
@@ -60,7 +60,7 @@ end
     return u < inv(one(T) + exp(x / temperature))
 end
 # Today's Barker, verbatim (lib/CorePotts/src/algorithms.jl at 416e9285).
-struct P60adLegacy <: CorePotts.AcceptanceLaw end
+struct P60adLegacy <: CorePotts.AbstractAcceptanceLaw end
 @inline function CorePotts.accept(::P60adLegacy, dH::T, temperature::T, u::T) where {T}
     temperature <= zero(T) && return dH < zero(T) || (dH == zero(T) && u < T(0.5))
     return u < inv(one(T) + exp(dH / temperature))
@@ -101,7 +101,7 @@ function p60ad_problem(model; seed = 7, tspan = (0, 20))
 end
 
 p60ad_run(prob, alg) = (sol = solve(prob, alg; saveat = 1);
-                        (; σs = [copy(u.σ) for u in sol.u], accepted = sol.stats.accepted, attempts = sol.stats.attempts))
+                        (; σs = [copy(u.ownership) for u in sol.u], accepted = sol.stats.accepted, attempts = sol.stats.attempts))
 p60ad_same(a, b) = a.σs == b.σs && a.accepted == b.accepted && a.attempts == b.attempts
 # Activity: sites changed between consecutive saved states (CheckerboardCPM does not count
 # acceptances in `sol.stats`, so the direction check uses this for both algorithms).
@@ -118,7 +118,7 @@ const P60AD_ALGS = (("SequentialCPM", acc -> SequentialCPM(; acceptance = acc)),
     @test CorePotts.Barker().offset == 0
     @test CorePotts.Barker(; offset = 1.5).offset == 1.5
     @test CorePotts.Barker(1.5).offset == 1.5
-    @test CorePotts.Barker(; offset = 1.5) isa CorePotts.AcceptanceLaw
+    @test CorePotts.Barker(; offset = 1.5) isa CorePotts.AbstractAcceptanceLaw
 
     # T > 0: accepted iff u < p = 1/(1 + e^{(ΔH − δ)/T}), at the exact threshold
     for (dH, T, δ) in ((0.0, 1.0, 0.0), (0.0, 1.0, 1.0), (2.0, 1.0, 2.0), (3.0, 2.0, 1.0),

@@ -125,7 +125,7 @@ end
         for alg in (SequentialCPM(), CheckerboardCPM())
             a = solve(prob, alg; saveat = 1)
             b = wide(() -> solve(prob, alg; saveat = 1))
-            @test all(i -> a.u[i].σ == b.u[i].σ, eachindex(a.u))
+            @test all(i -> a.u[i].ownership == b.u[i].ownership, eachindex(a.u))
             @test a.stats.accepted == b.stats.accepted && a.stats.connectivity_deferred == b.stats.connectivity_deferred
             @test eltype(wide(() -> init(prob, alg)).ctx.flood.stack) === Int64
             @test eltype(init(prob, alg).ctx.flood.stack) === Int32

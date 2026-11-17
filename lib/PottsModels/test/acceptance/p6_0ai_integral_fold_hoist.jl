@@ -131,13 +131,13 @@ p60ai_relerr(a, b) = maximum(abs.(a .- b) ./ max.(abs.(b), 1e-300))
     su = solve(p60ai_problem(P60aiUnfactored, 200), alg; saveat = 0:10)
     sf = solve(p60ai_problem(P60aiFactored, 200), alg; saveat = 0:10)
     @test length(su.u) == length(sf.u) == 11
-    @test all(Array(a.σ) == Array(b.σ) for (a, b) in zip(su.u, sf.u))      # precondition
+    @test all(Array(a.ownership) == Array(b.ownership) for (a, b) in zip(su.u, sf.u))      # precondition
     for k in 2:11
         a, b = su.u[k], sf.u[k]
         @test p60ai_relerr(Array(a.cell.s), Array(b.cell.s)) <= 1e-12
         @test p60ai_relerr(Array(a.cell.r), Array(b.cell.r)) <= 1e-12
         # oracle from the saved state
-        σ, w = Array(a.σ), Array(a.site.w)
+        σ, w = Array(a.ownership), Array(a.site.w)
         V, S = Array(a.cell.volume), Array(a.cell.surface)
         live = V .> 0
         @test count(live) == 400                       # nobody dies at this temperature
@@ -148,7 +148,7 @@ p60ai_relerr(a, b) = maximum(abs.(a .- b) ./ max.(abs.(b), 1e-300))
         @test p60ai_relerr(Array(a.cell.s)[1:400], s_or) <= 1e-12
         @test p60ai_relerr(Array(a.cell.r)[1:400], r_or) <= 1e-12
     end
-    @test Array(su.u[end].σ) != p60ai_sigma(200)       # the cells moved: the check is live
+    @test Array(su.u[end].ownership) != p60ai_sigma(200)       # the cells moved: the check is live
 end
 
 # ---------------------------------------------------------------------------------------
@@ -260,9 +260,9 @@ end
 @testset "P6.0ai: folds that read the site are not hoisted ($(nameof(typeof(alg))))" for alg in P60AI_ALGS
     sol = solve(p60ai_problem(P60aiSiteFold, 40; n = 4), alg; saveat = 0:4)
     @test length(sol.u) == 5
-    @test Array(sol.u[end].σ) != p60ai_sigma(40)
+    @test Array(sol.u[end].ownership) != p60ai_sigma(40)
     for u in sol.u[2:end]
-        σ, w = Array(u.σ), Array(u.site.w)
+        σ, w = Array(u.ownership), Array(u.site.w)
         V, S = Array(u.cell.volume), Array(u.cell.surface)
         live = findall(>(0), V)
         @test length(live) == 16

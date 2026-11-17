@@ -47,7 +47,7 @@ end
         #> shape
         cells(endothelial) => λ * (volume - V₀)^2 + λ_L * (major_length - L)^2
         #> contacts
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
         #<
     end
     #> drive

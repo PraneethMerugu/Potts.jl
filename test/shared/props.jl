@@ -28,7 +28,7 @@ function _assert_checkpoint_accepted(base_prob, eq_prob)
     integ = init(base_prob, SequentialCPM(); save_start = false)
     ck = checkpoint(integ)
     loaded = init(eq_prob, SequentialCPM(); checkpoint = ck)
-    @test loaded.state.σ == integ.state.σ
+    @test loaded.state.ownership == integ.state.ownership
 end
 
 """
@@ -74,7 +74,7 @@ function fp_props(make_base;
     if check_algorithms
         ck = checkpoint(init(base, SequentialCPM(); save_start = false))
         cb = init(base, CheckerboardCPM(); checkpoint = ck)
-        @test cb.state.σ == ck.state.σ
+        @test cb.state.ownership == ck.state.ownership
     end
 
     if subprocess_expr !== nothing
@@ -91,7 +91,7 @@ end
 function tiny_oracle_sample(prob, alg, R::Integer)
     counts = Dict{Vector{Int8}, Int}()
     for seed in 1:R
-        σ = vec(Int8.(solve(remake(prob; seed), alg; save_start = false).u[end].σ))
+        σ = vec(Int8.(solve(remake(prob; seed), alg; save_start = false).u[end].ownership))
         counts[σ] = get(counts, σ, 0) + 1
     end
     return counts

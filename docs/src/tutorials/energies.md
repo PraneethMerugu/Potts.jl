@@ -12,6 +12,7 @@ You will learn:
 
 ```@example energies
 using Potts, MakiePotts, CairoMakie
+using Potts.Layouts
 CairoMakie.activate!(type = "png") # hide
 nothing # hide
 ```
@@ -35,7 +36,7 @@ the medium:
     @lattice Lattice((30, 30); boundary = Periodic(), neighborhood = Moore(1))
     @energy begin
         cells(cell) => λ * (volume - V₀)^2 + λₛ * (surface - S₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = T)
 end
@@ -133,7 +134,7 @@ the `GranerGlazier` constructor.
     @lattice Lattice((50, 50); boundary = Periodic(), neighborhood = Moore(1))
     @energy begin
         cells(dark, light) => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = T)
 end
@@ -201,7 +202,7 @@ This model is `TwoKinds`, written with them:
     @lattice Lattice((50, 50); boundary = Periodic(), neighborhood = Moore(1))
     @energy begin
         Volume(dark, light; target = V₀, strength = λ)   # cells(dark, light) => λ * (volume - V₀)^2
-        Adhesion(J)                                      # contacts => J[kind, kind′]
+        Adhesion(J)                                      # contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = T)
 end
@@ -231,7 +232,7 @@ that of light cells. `V₀[kind]` is a vector with one entry per kind, medium fi
     @lattice Lattice((50, 50); boundary = Periodic(), neighborhood = Moore(1))
     @energy begin
         cells(dark, light) => λ * (volume - V₀[kind])^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = 10.0)
 end

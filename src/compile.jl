@@ -145,7 +145,7 @@ const _PIECES_NAMES = (:pieces, :largest_piece, :pieces_full, :largest_piece_ful
 # they are readable here but not in cell energies)
 const _CELL_BUILTINS = (_CELL_ENERGY_BUILTINS..., :mcs, :cluster_volume, :cluster_surface)
 const _CLUSTER_BUILTINS = (:cluster_volume, :cluster_surface, :kind, :id)
-const _CONTACT_BUILTINS = (:kind, :kind′, :owner, :owner′, :weight, :site′)   # `site′`: from `x′`
+const _CONTACT_BUILTINS = (:kind, :neighbor_kind, :owner, :neighbor_owner, :weight, :neighbor_site)   # `neighbor_site`: from `x′`
 const _SITE_BUILTINS = (:owner, :kind, :position, :site, :mcs)
 # `direction`, `position[s][k]` and `mcs` (P6.4a1, D-188): the copy's source→target offset,
 # a site's position, and the number of completed MCS
@@ -182,8 +182,8 @@ end
 
 const _INDEXABLE = (:owner, :kind, :volume, :surface, :generation, :cluster, :euler, :euler_full, _PIECES_NAMES..., :birth)
 
-# names a user can write (`site′` only arises from `x′`)
-_visible(names) = filter(n -> !(n in (:site′, :euler_full, :pieces_full, :largest_piece_full)), collect(names))
+# names a user can write (`neighbor_site` only arises from `x′`)
+_visible(names) = filter(n -> !(n in (:neighbor_site, :euler_full, :pieces_full, :largest_piece_full)), collect(names))
 
 # `between_copies`: `x` is evaluated between copy attempts (updates, divisions, equations),
 # not inside ΔH, so population bodies may read cluster trackers.
@@ -205,7 +205,7 @@ function _check_names(x, allowed, what; between_copies::Bool = false)
         _check_names(cond, (allowed..., inner...), what; between_copies)
     end
     for n in _bare_builtins(x)
-        n === :site′ && !(n in allowed) &&
+        n === :neighbor_site && !(n in allowed) &&
             throw(ArgumentError("a primed site variable `x′` (its value at the pair's other site) is only available in contact terms, not in $what"))
         n in allowed || throw(ArgumentError("`$n` is not available in $what (available: $(join(_visible(allowed), ", ")); index `owner`, `kind`, `volume` explicitly, e.g. `kind[new]`)"))
     end
@@ -1083,11 +1083,11 @@ _is_sigma_at(y) = iscall(y) && (operation(y) === value_at && length(arguments(y)
 _reads_sigma(x) = (found = Ref(false); _walk(y -> (_is_sigma_at(y) && (found[] = true)), x); found[])
 # cell builtins a copy changes, which ΔH substitutes only when read bare
 const _COPY_VARYING_INDEXED = (:volume, :surface, :euler, :euler_full, _PIECES_NAMES...)
-# an explicit site index: not a pair's own site (`x′` is `x[site′]`), not a bound variable
+# an explicit site index: not a pair's own site (`x′` is `x[neighbor_site]`), not a bound variable
 _explicit_index(i) = (
     r = info(i); r === nothing || !(
         r.role in (:bound, :bound_cell, :bound_site) ||
-            (r.role === :builtin && r.name in (:site, :site′))
+            (r.role === :builtin && r.name in (:site, :neighbor_site))
     )
 )
 
@@ -1171,7 +1171,7 @@ end
 # D-209: refuse a term of domain `d` that reads something a copy changes beyond what ΔH applies
 function _check_copy_reads(E, d, sites, cells)
     # σ at an explicit site, anywhere in the term (cell and edge terms have no site of their
-    # own; a contact term's pair is the bare `owner`, `owner′`, `kind`, `kind′`), indexed
+    # own; a contact term's pair is the bare `owner`, `neighbor_owner`, `kind`, `neighbor_kind`), indexed
     # copy-varying cell quantities in cell terms, and
     # copy-written site variables at an explicit site, in every domain (a contact term's bare
     # `x`, `x′` read the pair and stay allowed)
@@ -1246,8 +1246,8 @@ function _ref_valued(x)
 end
 
 # In a contact term a bare cell variable means its value at the owner (`x[owner]`) and a
-# bare site variable its value at the pair's first site (`x[site]`; `x′` is `x[site′]`), so
-# that mirroring (owner ↔ owner′, site ↔ site′) sees them.
+# bare site variable its value at the pair's first site (`x[site]`; `x′` is `x[neighbor_site]`), so
+# that mirroring (owner ↔ neighbor_owner, site ↔ neighbor_site) sees them.
 function _cellvars_at_owner(E)
     sub = Dict{Any, Any}()
     for x in _bare_vars(E)
@@ -1289,14 +1289,14 @@ function _leaves(x)
 end
 
 # Contact energies are summed over unordered pairs; an asymmetric expression is averaged
-# with its mirror (kind ↔ kind′, owner ↔ owner′, site ↔ site′).
+# with its mirror (kind ↔ neighbor_kind, owner ↔ neighbor_owner, site ↔ neighbor_site).
 # Kind tables used in contact terms must be symmetric (checked against their values when the
 # problem is built), so their entries are compared up to index order.
 function _symmetrize(E)
     swap = Dict(
-        _unwrap(B.kind) => _unwrap(B.kind′), _unwrap(B.kind′) => _unwrap(B.kind),
-        _unwrap(B.owner) => _unwrap(B.owner′), _unwrap(B.owner′) => _unwrap(B.owner),
-        _unwrap(B.site) => _unwrap(B.site′), _unwrap(B.site′) => _unwrap(B.site)
+        _unwrap(B.kind) => _unwrap(B.neighbor_kind), _unwrap(B.neighbor_kind) => _unwrap(B.kind),
+        _unwrap(B.owner) => _unwrap(B.neighbor_owner), _unwrap(B.neighbor_owner) => _unwrap(B.owner),
+        _unwrap(B.site) => _unwrap(B.neighbor_site), _unwrap(B.neighbor_site) => _unwrap(B.site)
     )
     M = Symbolics.substitute(E, swap; fold = Val(false), filterer = _outside_population)
     flips = Dict{Any, Any}()

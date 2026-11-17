@@ -61,7 +61,7 @@ the authors' metric code does.
     @relations proposal = VonNeumann(1)     # CC3D Potts NeighborOrder 1
     @energy begin
         cells => λᵥ * (volume - V_target)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @drive copy => ifelse((kind[new] == leader) || (kind[old] == leader), -μ * (cue[target] - cue[source]), 0.0)
     @constraint connectivity(leader, follower)   # `Local()`: CC3D's Connectivity plugin (D-191)
@@ -176,7 +176,7 @@ The invasion metrics of one state as the authors' analysis code computes them (A
 Marcus & Jiang 2026; spec 10 §5.3.3, O1–O8), so they compare directly with the released
 data. `σ` is a 2-D state with `x` (the first index) periodic and `y` (the second) closed;
 cell `c` is σ's value `c` and `kinds[c]` its kind, `:leader` or `:follower`. An id that owns
-no site is not a cell: it counts nothing and its kind is not read. The second method reads `u.σ` and the kinds of a
+no site is not a cell: it counts nothing and its kind is not read. The second method reads `u.ownership` and the kinds of a
 state of [`AkeebInvasion`](@ref) (kind 1 is the leader).
 
 - **Adjacency.** Two cells are neighbors when they own von Neumann-adjacent sites
@@ -201,7 +201,7 @@ state of [`AkeebInvasion`](@ref) (kind 1 is the leader).
 
 Throws an `ArgumentError` when no cell owns a site in the seed row (the authors' code has no
 main tumor to measure then). Built from [`PottsModels.Analysis`](@ref): `cell_graph`,
-`reachable`, `components`, `centroids`, `column_tops`, `trapz`, `find_peaks` and
+`reachable`, `components`, `centroids`, `column_tops`, `trapezoid_integral`, `find_peaks` and
 `merge_peaks`.
 
 ```julia
@@ -245,15 +245,15 @@ function akeeb_observables(σ::AbstractMatrix{<:Integer}, kinds::AbstractVector{
     kept = [x for x in 1:X if top_main[x] > 0 && top_out[x] > 0]
     main = top_main[kept]
     base = minimum(main)
-    invasive = A.trapz(kept, main .- base)                             # O4
-    infiltrative = A.trapz(kept, top_out[kept] .- base)
+    invasive = A.trapezoid_integral(kept, main .- base)                             # O4
+    infiltrative = A.trapezoid_integral(kept, top_out[kept] .- base)
     fingers = length(A.merge_peaks(A.find_peaks(main; prominence = 10, distance = 10, width = 5), 15))  # O5
     return (; invasive, infiltrative, singles, fingers, detached, clusters = length(counted),
         cluster_leaders = [count(leader, k) for k in counted], cluster_followers = [count(!leader, k) for k in counted])
 end
 
 function akeeb_observables(u)
-    σ = Array(u.σ)
+    σ = Array(u.ownership)
     codes = Array(u.cell.kind)
     n = Int(maximum(σ; init = 0))
     return akeeb_observables(σ, [codes[c] == 1 ? :leader : :follower for c in 1:n])

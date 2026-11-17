@@ -130,7 +130,7 @@ end
     @test t != sortperm(v)                                   # negative control: not stable
 end
 
-@testset "Analysis: merge_peaks, column_tops and trapz" begin
+@testset "Analysis: merge_peaks, column_tops and trapezoid_integral" begin
     rng = MersenneTwister(3)
     for rep in 1:50
         pk = sort!(unique(rand(rng, 1:300, 20)))
@@ -144,11 +144,11 @@ end
     @test AN.column_tops(pred, σ) == [maximum((y for y in 1:7 if σ[x, y] != 0 && pred(σ[x, y])); init = 0) for x in 1:9]
     @test AN.column_tops(σ) == [maximum((y for y in 1:7 if σ[x, y] != 0); init = 0) for x in 1:9]
     @test AN.column_tops(zeros(Int, 3, 2)) == [0, 0, 0]
-    # trapz is exact for piecewise-linear data on uneven samples: ∫₀⁵ (2t + 1) dt = 30
+    # trapezoid_integral is exact for piecewise-linear data on uneven samples: ∫₀⁵ (2t + 1) dt = 30
     xs = [0, 0.5, 2, 3.25, 5]
-    @test AN.trapz(xs, 2 .* xs .+ 1) == 30
-    @test AN.trapz(1:4, [1, 1, 1, 1]) == 3.0
-    @test_throws ArgumentError AN.trapz(1:3, 1:2)
+    @test AN.trapezoid_integral(xs, 2 .* xs .+ 1) == 30
+    @test AN.trapezoid_integral(1:4, [1, 1, 1, 1]) == 3.0
+    @test_throws ArgumentError AN.trapezoid_integral(1:3, 1:2)
 end
 
 # Brute-force contact graph: every pair of lattice-neighbour sites, per axis wrap.

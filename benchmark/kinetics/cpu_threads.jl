@@ -1,7 +1,7 @@
 #     julia --project=benchmark -t <threads> benchmark/kinetics/cpu_threads.jl [<nmcs>]
 # CheckerboardCPM on the CPU (P6.0bl): MCS per second of SequentialCPM, the checkerboard with its
 # phases inline (one after another) and with each phase one threaded KA launch, on
-# Graner–Glazier tiles in 2D and cubes in 3D. Measures `CorePotts.BLOCK_GRAIN` (the phase size
+# Graner–Glazier tiles in 2D and cubes in 3D. Measures `inline_max_blocks` of `CheckerboardCPM` (the phase size
 # below which `threads = :auto` runs a phase inline).
 using CorePotts, Printf
 include(joinpath(@__DIR__, "..", "models.jl"))
@@ -36,5 +36,5 @@ for (label, prob) in [("2D 144²", graner_problem(; scale = 2)), ("2D 288²", gr
     i, integ = rate(prob, CheckerboardCPM(; proposal = Moore(1), threads = false))
     t, _ = rate(prob, CheckerboardCPM(; proposal = Moore(1), threads = true))
     nb = CorePotts.nblocks(integ.cache.layout)
-    @printf("%-14s %9d %8d %10.1f %10.1f %10.1f %7.2fx\n", label, length(prob.u0.σ), nb, s, i, t, t / i)
+    @printf("%-14s %9d %8d %10.1f %10.1f %10.1f %7.2fx\n", label, length(prob.u0.ownership), nb, s, i, t, t / i)
 end

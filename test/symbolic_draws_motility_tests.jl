@@ -201,7 +201,7 @@ end
             end
             @energy begin
                 Volume(A; target = 25.0, strength = 2.0)
-                contacts => 4 * (kind != kind′)
+                contacts => 4 * (kind != neighbor_kind)
             end
             @drive copy => -μ * (dot(pol[new], displacement(new)) + dot(pol[old], displacement(old)))
             @after_mcs begin
@@ -216,7 +216,7 @@ end
         for μ in (0.0, 1000.0)
             a = solve(PottsProblem(Persistent(; name = :a, μ), [ownership => σ, kind => [1]], (0, 30); seed = 5), SequentialCPM())
             b = solve(PottsProblem(PersistentVec(; name = :b, μ), [ownership => σ, kind => [1]], (0, 30); seed = 5), SequentialCPM())
-            @test a.u[end].σ == b.u[end].σ                                          # same model, same run
+            @test a.u[end].ownership == b.u[end].ownership                                          # same model, same run
             @test a.u[end].cell.px ≈ b.u[end].cell.pol_1 && a.u[end].cell.cy ≈ b.u[end].cell.c_2
             @test b[:speed][end] ≈ hypot.(b.u[end].cell.pol_1, b.u[end].cell.pol_2)
         end
@@ -350,7 +350,7 @@ end
             @lattice Lattice((16, 16); boundary = (Periodic(), Closed()))
             @energy begin
                 cells(A) => (volume - 20.0)^2
-                contacts => 2.0 * (kind != kind′)
+                contacts => 2.0 * (kind != neighbor_kind)
             end
             @drive copy => w * mcs * direction[1] * position[source][2]
             @on_copy m[target] ~ mcs
@@ -381,7 +381,7 @@ end
         t, s = (8, 5), (7, 5)
         prop = Potts.CorePotts.Proposal(
             Potts.CorePotts.linear_index(lat, t), Potts.CorePotts.linear_index(lat, s), t, 1,
-            prob.u0.σ[t...], prob.u0.σ[s...]
+            prob.u0.ownership[t...], prob.u0.ownership[s...]
         )
         @test prob.f.delta_H(prob.u0, prob.p, prop, Potts._host_ctx(prob)) == energy_change(prob, prob.u0, prop)
     end

@@ -41,7 +41,7 @@
 #     kinds `medium, compressed, relaxed`; parameters λ = 2, T = 20, A = 50, A_c = 25 and
 #     J[kind, kind] with cell–cell 20, cell–medium 10 (Table S1, P3); energies
 #     `cells(compressed) => λ (volume − A_c)²`, `cells(relaxed) => λ (volume − A)²` and
-#     `contacts => J[kind, kind′]`; lattice periodic on both axes with Moore(1) (P1, P4);
+#     `contacts => J[kind, neighbor_kind]`; lattice periodic on both axes with Moore(1) (P1, P4);
 #     proposals Moore(1); Metropolis at T; no growth and no division.
 #   openvt_chain(n) -> [ownership => σ, kind => kinds]   (PottsModels, exported)
 #     n = 11: 11 compressed 5 × 5 cells packed edge to edge on 150 × 5 at x ∈ 49:103;
@@ -194,12 +194,12 @@ function p615b_runs(n, λ, seeds; tmax, release = true)
             callback = release ? openvt_release(P615B_BURNIN) : nothing)
         @assert collect(sol.t) == collect(saves)
         for (k, u) in enumerate(sol.u)
-            xs = P615B_A.chain_centroids(u.σ)
+            xs = P615B_A.chain_centroids(u.ownership)
             W[k, j] = (maximum(xs) - minimum(xs)) / P615B_CD
             n == 21 && (In[k, j] = (xs[16] - xs[6]) / P615B_CD)
         end
         for (r, u) in ((1, sol.u[1]), (2, sol.u[end]))
-            area[r, j] = mean(count(==(c), u.σ) for c in comp)
+            area[r, j] = mean(count(==(c), u.ownership) for c in comp)
         end
     end
     return (; t = collect(0:tmax), W, In, area)
@@ -303,15 +303,15 @@ end
         step!(integ)
     end
     @test integ.t == 99 && integ.ps[:A_c] == 25.0
-    σ99 = copy(current_state(integ).σ)
+    σ99 = copy(current_state(integ).ownership)
     step!(integ)
     @test integ.t == 100 && integ.ps[:A_c] == 50.0 && integ.ps[:A] == 50.0
     # the callback changes the parameter only: the t = 0 state is the burn-in's end
-    σ100 = copy(current_state(integ).σ)
+    σ100 = copy(current_state(integ).ownership)
     step!(integ)
     @test integ.ps[:A_c] == 50.0
     @test integ.saved_t == [99, 100, 101]
-    @test integ.saved_u[1].σ == σ99 && integ.saved_u[2].σ == σ100
+    @test integ.saved_u[1].ownership == σ99 && integ.saved_u[2].ownership == σ100
     # a different release time moves the switch
     integ2 = init(prob, P615B_ALG; callback = openvt_release(3))
     step!(integ2); step!(integ2)

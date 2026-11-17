@@ -156,6 +156,7 @@ built, before the first MCS:
 
 ```@example vars
 using Potts
+using Potts.Layouts
 
 @potts_model Initialized begin
     @kinds medium cell
@@ -203,7 +204,7 @@ What a name means depends on where it is read:
   field variable is the value at the current site, `kind` the kind of its owner.
 - In a **copy** context (drives, constraints, on-copy updates), sites are `source` and
   `target` and cells `new` and `old`: `c[target]`, `x[new]`, `kind[old]`.
-- In a **contact** term, `x` and `x′` are a site variable's values on the two sides of the
+- In a **contact** term, `x` and `neighbor(x)` are a site variable's values on the two sides of the
   pair.
 
 ```@example vars
@@ -220,7 +221,7 @@ using Potts
     @lattice Lattice((30, 30); neighborhood = Moore(1))
     @energy begin
         cells(cell) => (volume - 25.0)^2
-        contacts => 8.0 * (kind != kind′)
+        contacts => 8.0 * (kind != neighbor_kind)
     end
     @on_copy mark[target] ~ 1.0                       # copy scope: a site written
     @after_mcs begin
@@ -254,7 +255,7 @@ These names are always available where they make sense:
 | `centroid(c, k)`, `separation(a, b)` | another cell's centroid; the minimum-image centroid difference (see [Cell references](@ref manual-references)) | between sweeps (not energies, drives, constraints or on-copy updates) |
 | `minimum_image(d, k)` | `d` wrapped to the image nearest 0 on axis `k` | everywhere (square lattices) |
 | `owner`, `kind`, `position` | owner, its kind, coordinates (`position[1]`) of a site | site |
-| `kind′`, `owner′`, `weight` | the other side of a contact pair, the relation weight | contacts |
+| `neighbor_kind`, `neighbor_owner`, `weight` | the other side of a contact pair, the relation weight | contacts |
 | `source`, `target`, `new`, `old` | the sites and cells of a copy | drives, constraints, on-copy |
 | `direction[k]`, `position[target][k]` | the copy's source→target offset (minimum image on periodic axes), a copy site's coordinates | drives, constraints, on-copy |
 | `displacement(c, k)` | shift of cell `c`'s centroid along `k` if the copy is accepted | drives |

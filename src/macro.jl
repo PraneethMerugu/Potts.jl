@@ -23,12 +23,12 @@ const SECTIONS = (
         @lattice Lattice(lattice; boundary = Periodic(), neighborhood = Moore(1))
         @energy begin
             cells(dark, light) => λ * (volume - V₀)^2
-            contacts           => J[kind, kind′]
+            contacts           => J[kind, neighbor_kind]
         end
         @sweep Metropolis(; temperature = T)
     end
 
-Define a model constructor `Name(; name = :Name, kwargs...)`; keyword arguments override
+Define a model constructor `Name(; name, kwargs...)` (`@named m = Name()` passes `name`); keyword arguments override
 structural parameters and parameter defaults. See `docs/design/AUTHORING.md`.
 """
 macro potts_model(name, body)
@@ -70,16 +70,18 @@ _kw_local(k::Symbol) = Symbol("##kw#", k)
 
 # Names the constructor binds itself: a declaration of one would be silently rebound.
 const _BOUND_BUILTINS = (
-    :volume, :surface, :kind, :kind′, :owner, :owner′, :id, :generation, :weight,
+    :volume, :surface, :kind, :neighbor_kind, :owner, :neighbor_owner, :id, :generation, :weight,
     :source, :target, :old, :new, :mcs, :position, :distance, :cluster, :cluster_volume, :cluster_surface,
     :time, :site, :major_length, :local_components, :ring_arcs, :ring_cells, :ring_medium, :direction, :euler,
     :largest_piece, :birth,
 )
+# Primed spellings of `neighbor_kind` and `neighbor_owner`, bound as aliases in model bodies
+const _PRIMED_ALIASES = (Symbol("kind′") => :neighbor_kind, Symbol("owner′") => :neighbor_owner)
 # `euler_full`, `pieces_full`, `largest_piece_full` are the columns of the `adjacency = :full`
 # forms: reserved, not bound
 _reserved_names() = Set{Symbol}(
     [
-        _BOUND_BUILTINS..., keys(DSL)..., :t, :D, :Pre, :name, :euler_full, :pieces_full,
+        _BOUND_BUILTINS..., first.(_PRIMED_ALIASES)..., keys(DSL)..., :t, :D, :Pre, :name, :euler_full, :pieces_full,
         :largest_piece_full,
     ]
 )
@@ -271,7 +273,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
     _warn_coordinate_globals(name, body, parts)
     _check_field_body_names(name, body, parts)
     _check_fields_placement(body)
-    kws = Any[Expr(:kw, :name, QuoteNode(name))]
+    kws = Any[:name]                              # required, as in MTK (`@named m = Model()`)
     for (k, v) in parts.structural
         k in parts.params && throw(ArgumentError("`$k` is both a structural parameter and a parameter"))
         push!(kws, Expr(:kw, k, v))
@@ -297,6 +299,8 @@ function _potts_model(name::Symbol, body::Expr, mod)
         # each parameter keyword, kept before `@extend` may rebind its name (D-114)
         $([:($(_kw_local(k)) = $k) for k in parts.params]...)
         $(Expr(:(=), Expr(:tuple, Expr(:parameters, _BOUND_BUILTINS...)), :($P.B)))
+        # the primed spellings of the contact-pair built-ins (aliases inside the DSL only)
+        $([:($a = $b) for (a, b) in _PRIMED_ALIASES]...)
         # gather variables and draws are numbered per build (`_in_build`); a base built by
         # `@extend` inside another model continues the outer numbering (no collisions)
         $P._set_dim!(0)                           # set by @lattice (vector builtins)
@@ -517,7 +521,7 @@ function _prime_error(e, targets::Dict{Symbol, String}, bases)
     what = get(targets, x, nothing)
     what === nothing && (what = _base_description(bases, x))
     what === nothing && return nothing
-    hint = what == "a cell variable" ? "; in a contact term, `$x[owner′]` reads it for the cell on the other side" : ""
+    hint = what == "a cell variable" ? "; in a contact term, `$x[neighbor_owner]` reads it for the cell on the other side" : ""
     throw(
         ArgumentError(
             "`$n`: primes exist only for site/field variables (`y′` is the value of a site or " *

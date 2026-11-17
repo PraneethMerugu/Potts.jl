@@ -14,7 +14,7 @@
                 y(cell) = 0.0
             end
             @lattice Lattice((24, 24); neighborhood = Moore(1))
-            @energy contacts => J[kind, kind′]
+            @energy contacts => J[kind, neighbor_kind]
             @on_copy y[new] ~ 1.0                     # new may be the medium: nothing to write
             @divide cells(A) when = mcs == 0, m => Split()
             @divide cells(B) when = mcs == 1000, q => 0.0
@@ -50,9 +50,9 @@ end
             E(v, c) = (v - (48.0, 16.0)[st.cell.kind[c]])^2
             EC(v, k) = st.cell.kind[k] == 1 ? (v - 64.0)^2 : 0.0
             ES(s, k) = st.cell.kind[k] == 1 ? 0.1 * (s - 32.0)^2 : 0.0
-            return CorePotts.contact_delta(st.σ, ctx, prop, J) + CorePotts.volume_delta(st.cell.volume, prop, E) +
+            return CorePotts.contact_delta(st.ownership, ctx, prop, J) + CorePotts.volume_delta(st.cell.volume, prop, E) +
                 CorePotts.cluster_volume_delta(st.cell, prop, EC) +
-                CorePotts.cluster_surface_delta(st.cell, prop, CorePotts.cluster_surface_change(st.σ, st.cell, ctx, prop), ES)
+                CorePotts.cluster_surface_delta(st.cell, prop, CorePotts.cluster_surface_change(st.ownership, st.cell, ctx, prop), ES)
         end
         ctx = ctx_of(prob)
         states = proposal_states(remake(prob; tspan = (0, 1)); mcs = (0, 1), n = 400)
@@ -61,8 +61,8 @@ end
         # trackers stay exact through a run
         u = solve(prob, SequentialCPM(; proposal = Moore(1))).u[end]
         cl = Array(u.cell.cluster)
-        @test Array(u.cell.cluster_volume) == CorePotts.recompute_cluster_volume(Array(u.σ), cl)
-        @test Array(u.cell.cluster_surface) ≈ CorePotts.recompute_cluster_surface(Array(u.σ), cl, prob.lattice, Moore(1))
+        @test Array(u.cell.cluster_volume) == CorePotts.recompute_cluster_volume(Array(u.ownership), cl)
+        @test Array(u.cell.cluster_surface) ≈ CorePotts.recompute_cluster_surface(Array(u.ownership), cl, prob.lattice, Moore(1))
         # a cluster divides as a unit: both daughters keep a nucleus and a cytoplasm
         sol = solve(remake(prob; tspan = (0, 4)), SequentialCPM(; proposal = Moore(1)))
         v = sol.u[end]
@@ -219,7 +219,7 @@ end
         @test count(prob.frozen) == count(!, mask)
         @test selfcheck(prob) < 1.0e-9
         u = solve(prob, CheckerboardCPM(; proposal = Moore(1))).u[end]
-        @test all(u.σ[.!mask] .== 0) && all(u.site.c[.!mask] .== 0)
+        @test all(u.ownership[.!mask] .== 0) && all(u.site.c[.!mask] .== 0)
         @test sum(u.site.c) > 0
         σbad = copy(σd); σbad[1, 1] = 1
         @test_throws ArgumentError PottsProblem(sys, [ownership => σbad, kind => kinds], (0, 1); field_solver = ExplicitEuler())
@@ -246,7 +246,7 @@ end
             )
             @energy begin
                 cells(dark, light) => λ * (volume - V₀)^2 + λₛ * (surface - S₀)^2
-                contacts => J[kind, kind′]
+                contacts => J[kind, neighbor_kind]
             end
             @fields c = SyPDE.sorting3d() (SyPDE.src => kind == dark)
             @drive copy => -2.0 * (c[target] - c[source]) * (kind[new] == dark)
@@ -268,13 +268,13 @@ end
             u = solve(prob, alg).u[end]
             live = findall(>(0), u.cell.volume)
             @test length(live) > n                                                      # dark cells divided in 3D
-            @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(u.cell.volume)]
+            @test u.cell.volume == [count(==(c), u.ownership) for c in eachindex(u.cell.volume)]
             @test u.cell.surface ≈ CorePotts.recompute_surface(
-                u.σ, prob.lattice, prob.relations.surface, length(u.cell.volume);
+                u.ownership, prob.lattice, prob.relations.surface, length(u.cell.volume);
                 T = eltype(u.cell.surface)
             )
             @test sum(u.cell.mass[live]) ≈ n
-            @test all(u.σ[.!prob.lattice.mask] .== 0)
+            @test all(u.ownership[.!prob.lattice.mask] .== 0)
         end
     end
 end
@@ -297,12 +297,12 @@ end
         @test p.lattice.geometry isa Hexagonal && length(p.contact) == 18
         for alg in (SequentialCPM(proposal = Hex(1)), CheckerboardCPM(proposal = Hex(1)))
             u = solve(p, alg).u[end]
-            @test u.cell.volume == [count(==(k), u.σ) for k in 1:n]
-            @test u.cell.surface ≈ CorePotts.recompute_surface(u.σ, p.lattice, p.relations.surface, n)
+            @test u.cell.volume == [count(==(k), u.ownership) for k in 1:n]
+            @test u.cell.surface ≈ CorePotts.recompute_surface(u.ownership, p.lattice, p.relations.surface, n)
             @test sum(u.site.c) ≈ 100                                          # zero-sum 6-point Laplacian
-            pos = [embed(p.lattice, Float64.(Tuple(x))) for x in CartesianIndices(u.σ)]
+            pos = [embed(p.lattice, Float64.(Tuple(x))) for x in CartesianIndices(u.ownership)]
             k = findfirst(>(0), u.cell.volume)
-            mine = pos[u.σ .== k]
+            mine = pos[u.ownership .== k]
             @test u.cell.cx[k] ≈ sum(first, mine) / length(mine) atol = 1.0e-9   # centroid() is Cartesian (no wrap here)
         end
     end

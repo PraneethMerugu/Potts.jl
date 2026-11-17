@@ -18,7 +18,7 @@ using Statistics: mean
     @lattice Lattice((48, 24); boundary = Periodic(), neighborhood = Moore(1))
     @energy begin
         cells(dark, light) => λ * (volume - V₀)^2
-        contacts => J[kind, kind′] + β * (kind != kind′) * (owner != 0) * (owner′ != 0) * (cue + cue′) / 2
+        contacts => J[kind, neighbor_kind] + β * (kind != neighbor_kind) * (owner != 0) * (neighbor_owner != 0) * (cue + cue′) / 2
     end
     @sweep Metropolis(; temperature = T)
 end
@@ -54,7 +54,7 @@ end
     for alg in (SequentialCPM(), CheckerboardCPM())
         f = map(1:3) do seed
             u = solve(remake(prob; seed), alg).u[end]
-            σ, kd = Array(u.σ), Array(u.cell.kind)
+            σ, kd = Array(u.ownership), Array(u.cell.kind)
             (unlike_fraction(σ, kd, 1:24), unlike_fraction(σ, kd, 25:48))
         end
         left, right = mean(first.(f)), mean(last.(f))

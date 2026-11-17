@@ -43,7 +43,7 @@ using Test, Potts, PottsModels
     @lattice Lattice((12, 12); neighborhood = VonNeumann(1))
     @energy begin
         cells(P, Q) => λ * (volume - V₀[kind])^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = 10.0)
 end

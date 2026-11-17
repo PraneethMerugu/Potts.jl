@@ -83,7 +83,7 @@ end
     @relations proposal = VonNeumann(1)
     @energy begin
         cells => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @constraint no_extinction
     @sweep Metropolis(; temperature = T)
@@ -101,7 +101,7 @@ end
     @relations proposal = Moore(1)
     @energy begin
         cells(A) => λ * (volume - 16.0)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @constraint no_extinction
     @sweep Metropolis(; temperature = T)
@@ -160,10 +160,10 @@ function p60bk2_trajectory(prob, alg)
     sol = solve(prob, alg; saveat = 1)
     ctx = SHA.SHA256_CTX()
     for u in sol.u
-        SHA.update!(ctx, reinterpret(UInt8, vec(Array{Int32}(u.σ))))
+        SHA.update!(ctx, reinterpret(UInt8, vec(Array{Int32}(u.ownership))))
     end
     lc = sol.stats.lifecycle
-    return (; σ = bytes2hex(SHA.digest!(ctx)), accepted = sol.stats.accepted, attempts = sol.stats.attempts,
+    return (; ownership = bytes2hex(SHA.digest!(ctx)), accepted = sol.stats.accepted, attempts = sol.stats.attempts,
         divisions = lc === nothing ? 0 : lc.divisions, retcode = Symbol(sol.retcode))
 end
 
@@ -172,7 +172,7 @@ end
 
 @testset "P6.0bk2: SequentialCPM(; skip_interior) replaces BoundarySiteCPM, with no alias" begin
     a = SequentialCPM(; skip_interior = true)
-    @test a isa SequentialCPM && a isa CorePotts.CPMAlgorithm
+    @test a isa SequentialCPM && a isa CorePotts.AbstractCPMAlgorithm
     @test a.skip_interior === true
     @test a.acceptance === nothing && a.proposal === nothing
     @test SequentialCPM().skip_interior === false

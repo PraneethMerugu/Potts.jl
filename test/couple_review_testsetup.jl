@@ -49,7 +49,7 @@ end
     @lattice Lattice((24, 20); boundary = Closed())
     @energy begin
         cells => 4.0 * (volume - V_target)^2
-        contacts => 2.0 * (kind != kind′)
+        contacts => 2.0 * (kind != neighbor_kind)
     end
     @fields CrPDE.rich() (CrPDE.endo => kind == A, CrPDE.isB => kind == B, CrPDE.vol => volume[owner])
     @divide cells(A) when = volume >= 30

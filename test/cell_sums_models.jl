@@ -53,7 +53,7 @@ function cs_digests1(ctl::Bool; run = CorePotts._CR_RUN_HOST[])
         foreach(_ -> step!(j), 1:2)
         m = solve(PottsProblem(CsThreshold(; name = :m), cs_threshold_op(), (0, 8); seed = 7), SequentialCPM();
             save_start = false).u[end]
-        return [cs_digest(current_state(j).cell.ocell), cs_digest(m.σ), cs_digest(m.cell.cavg)]
+        return [cs_digest(current_state(j).cell.ocell), cs_digest(m.ownership), cs_digest(m.cell.cavg)]
     finally
         CorePotts._FLOAT_ATOMICS[] = false
         CorePotts._CR_RUN_HOST[] = r0
@@ -90,7 +90,7 @@ const CS_W = Weighted(Moore(1), o -> 1 / sqrt(sum(abs2, o)))
     @relations contact = CS_W
     @energy begin
         cells => (volume - 40.0)^2 + 0.2 * (surface - 70.0)^2
-        contacts => 3.0 * weight * (kind != kind′)
+        contacts => 3.0 * weight * (kind != neighbor_kind)
     end
     @divide cells(A) when = volume >= 34
     @sweep Metropolis(; temperature = 6.0)
@@ -115,7 +115,7 @@ end
     @lattice Lattice((60, 60); boundary = Periodic(), neighborhood = CS_W)
     @energy begin
         cells => (volume - V₀[kind])^2
-        contacts => ifelse(cluster[owner] == cluster[owner′], 2.0, J[kind, kind′])
+        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 2.0, J[kind, neighbor_kind])
         clusters(cytoplasm) => 0.1 * (cluster_surface - 30.0)^2
     end
     @divide clusters(cytoplasm) when = cluster_volume >= 60, along = (1.0, 0.0)
@@ -148,7 +148,7 @@ end
     @lattice Lattice((64, 64); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         cells(cytoplasm, lamellipodium) => (volume - V_target)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @convert protrusion clusters(cytoplasm) begin
         to = sibling(lamellipodium)
@@ -182,22 +182,16 @@ function cs_r1_digests(backend = CorePotts.CPU(); ctl::Bool = false, mcs = 80, h
     CorePotts._FORCE_DEVICE_LIFECYCLE[] = !host
     try
         # Pin `threads = false` so the 1-thread vs 4-thread comparison stays deterministic
-        # regardless of `BLOCK_GRAIN`.
-        run(m, op, t) = solve(PottsProblem(m, op, (0, t); T = Float32, seed = 7, capacity = 2000),
-            CheckerboardCPM(; threads = false); backend, save_start = false)
+        # regardless of `inline_max_blocks`.
+        run(m, op, t; kw...) = solve(PottsProblem(m, op, (0, t); T = Float32, seed = 7, capacity = 2000),
+            CheckerboardCPM(; threads = false, kw...); backend, save_start = false)
         # the weighted surface in the staged device lifecycle (one kernel per stage), the
-        # compartments in the fused one (one workgroup: `FUSE_SITES`)
-        fs = CorePotts.FUSE_SITES[]
-        CorePotts.FUSE_SITES[] = 0
-        sw = try
-            run(CsWSurf(; name = :w), cs_wsurf_op(), mcs)
-        finally
-            CorePotts.FUSE_SITES[] = fs
-        end
+        # compartments in the fused one (one workgroup: `fused_lifecycle_max_sites`)
+        sw = run(CsWSurf(; name = :w), cs_wsurf_op(), mcs; fused_lifecycle_max_sites = 0)
         sc = run(CsWComp(; name = :c), cs_wcomp_op(), 40)
         sv = run(CsConv(; name = :v), cs_conv_op(), 30)
         w, c, v = sw.u[end], sc.u[end], sv.u[end]
-        d = [cs_digest(w.σ), cs_bits(w.cell.surface), cs_digest(c.σ), cs_bits(c.cell.cluster_surface), cs_digest(v.σ), cs_bits(v.model.tot), cs_bits(v.cell.V_target)]
+        d = [cs_digest(w.ownership), cs_bits(w.cell.surface), cs_digest(c.ownership), cs_bits(c.cell.cluster_surface), cs_digest(v.ownership), cs_bits(v.model.tot), cs_bits(v.cell.V_target)]
         return d, (sw.stats.lifecycle.divisions, sc.stats.lifecycle.divisions)
     finally
         CorePotts._FLOAT_ATOMICS[] = false
@@ -211,7 +205,7 @@ function cs_conv_digests(backend = CorePotts.CPU(); ctl::Bool = false)
         # Pin `threads = false` so `:auto` does not switch to threaded execution under `-t 4`.
         v = solve(PottsProblem(CsConv(; name = :v), cs_conv_op(), (0, 30); T = Float32, seed = 7, capacity = 8),
             CheckerboardCPM(; threads = false); backend, save_start = false).u[end]
-        return [cs_digest(v.σ), cs_bits(v.model.tot), cs_bits(v.cell.V_target)]
+        return [cs_digest(v.ownership), cs_bits(v.model.tot), cs_bits(v.cell.V_target)]
     finally
         CorePotts._FLOAT_ATOMICS[] = false
     end
@@ -241,14 +235,14 @@ function cs_threaded_cb_invariants()
     nblocks_pass = prod(cld.(lay.nblocks, lay.k))
     sol = solve!(integ)
     u = sol.u[end]
-    σ_arr = Array(u.σ)
+    σ_arr = Array(u.ownership)
     vol_recount = [count(==(c), σ_arr) for c in 1:length(u.cell.volume)]
     vol_ok = all(u.cell.volume .== vol_recount)
     surf_recount = CorePotts.recompute_surface(σ_arr, prob.lattice, prob.relations.surface, length(u.cell.volume))
     surf_ok = Array(u.cell.surface) == surf_recount
     attempts_ok = sol.stats.attempts == 2 * length(σ_arr)
     committed_ok = sol.stats.accepted >= sol.stats.committed > 0
-    return (id > 0 && nblocks_pass > CorePotts.BLOCK_GRAIN[], vol_ok, surf_ok, attempts_ok, committed_ok)
+    return (id > 0 && nblocks_pass > alg.inline_max_blocks, vol_ok, surf_ok, attempts_ok, committed_ok)
 end
 
 @potts_model CsThreadedCBGlobalVeto begin
@@ -283,7 +277,7 @@ function cs_threaded_cb_global_veto_check(M; threads::Bool = true)
     nblocks_pass = prod(cld.(lay.nblocks, lay.k))
     sol = solve!(integ)
     u = sol.u[end]
-    σ_arr = Array(u.σ)
+    σ_arr = Array(u.ownership)
     vol_recount = [count(==(c), σ_arr) for c in 1:length(u.cell.volume)]
     vol_ok = all(u.cell.volume .== vol_recount)
     pieces, _ = CorePotts.recompute_pieces(σ_arr, prob.lattice, Val(false), length(u.cell.volume))
@@ -291,7 +285,7 @@ function cs_threaded_cb_global_veto_check(M; threads::Bool = true)
     one_piece_ok = !isempty(live) && all(==(1), pieces[live])
     return (;
         nonzero_cells = id > 0, committed = sol.stats.committed, nblocks_pass,
-        over_grain = nblocks_pass > CorePotts.BLOCK_GRAIN[],
+        over_grain = nblocks_pass > alg.inline_max_blocks,
         vol_ok, one_piece_ok, deferred = sol.stats.connectivity_deferred,
         max_pieces = isempty(live) ? 0 : maximum(pieces[live]),
     )

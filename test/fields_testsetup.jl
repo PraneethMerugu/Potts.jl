@@ -118,7 +118,7 @@ catch e
     sprint(showerror, e)
 end
 fd_n(integ, j = 1) = CorePotts._runtime(getfield(integ.ctx, Symbol(:__fields, j))).n
-fdvar(sys, n) = only(filter(x -> string(x) in (n, n * "(t)"), Potts.variables(sys)))
+fdvar(sys, n) = only(filter(x -> string(x) in (n, n * "(t)"), Potts.declared_variables(sys)))
 fdargerr(f) = try
     f(); ""
 catch err

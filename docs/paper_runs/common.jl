@@ -1,6 +1,7 @@
 # Shared helpers for the paper-run scripts (included by each `docs/paper_runs/<model>.jl`).
 # Not part of the docs build: these scripts are run offline and their outputs committed.
 using Potts, CorePotts, PottsModels, MakiePotts, CairoMakie
+using Potts.Layouts
 using Dates: now
 import TOML
 
@@ -92,7 +93,7 @@ function paper_run(name; prob, alg, saveat, title, panels, framerate = 30, size 
     reencode(mp4)
     info = merge(run_info(name; wall, rec, mp4), Dict{String, Any}(
             "title" => title,
-            "lattice" => collect(Base.size(sol.u[1].σ)),
+            "lattice" => collect(Base.size(sol.u[1].ownership)),
             "tspan" => [t0, t1],
             "frames" => length(idx),
             "recorded_mcs" => [sol.t[first(idx)], sol.t[last(idx)]],

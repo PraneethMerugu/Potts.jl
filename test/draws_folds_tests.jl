@@ -101,10 +101,10 @@ end
     @testset "D-150: the contact fold's scope and predicate" begin
         # fine: cell updates, division conditions, cell observed, a population over cells
         c = _df_build(
-            :(@after_mcs x ~ count(kind′ == medium for _ in contacts) + count(kind′ == B for _ in contacts(vn))),
+            :(@after_mcs x ~ count(neighbor_kind == medium for _ in contacts) + count(neighbor_kind == B for _ in contacts(vn))),
             :(@divide cells(A) when = count(true for _ in contacts) > 100, along = RandomPlane()),
             :(@after_mcs z ~ sum(count(true for _ in contacts) for c in cells(A))),
-            :(@observed m ~ count(kind′ == medium for _ in contacts(big))); extra = true
+            :(@observed m ~ count(neighbor_kind == medium for _ in contacts(big))); extra = true
         )
         @test length(Potts._contact_folds(getfield(c, :sys))) == 4
         @test Set(r for (_, r, _) in Potts._contact_folds(getfield(c, :sys))) == Set([:contact, :vn, :big])
@@ -116,8 +116,8 @@ end
         # `cond` folds into the kind set, and equal kind sets written alike share one tracker
         a = _df_build(
             :(
-                @after_mcs x ~ count(kind′ == B for _ in contacts) + count(true for _ in contacts if kind′ == B) +
-                    count((kind′ == A) | (kind′ == medium) for _ in contacts(vn))
+                @after_mcs x ~ count(neighbor_kind == B for _ in contacts) + count(true for _ in contacts if neighbor_kind == B) +
+                    count((neighbor_kind == A) | (neighbor_kind == medium) for _ in contacts(vn))
             )
         )
         @test length(Potts._contact_folds(getfield(a, :sys))) == 2
@@ -128,8 +128,8 @@ end
                 ((:(@drive copy => count(true for _ in contacts)),), "not available in a drive"),
                 ((:(@after_mcs z ~ count(true for _ in contacts)),), "not available in a model update"),
                 ((:(@after_mcs y ~ count(true for _ in contacts)),), "not available in a site update"),
-                ((:(@after_mcs x ~ count(kind′ == q for _ in contacts)),), "may read only `kind′`"),
-                ((:(@after_mcs x ~ count(kind == A for _ in contacts)),), "may read only `kind′`"),
+                ((:(@after_mcs x ~ count(neighbor_kind == q for _ in contacts)),), "may read only `neighbor_kind`"),
+                ((:(@after_mcs x ~ count(kind == A for _ in contacts)),), "may read only `neighbor_kind`"),
                 ((:(@after_mcs x ~ sum(1.0 for _ in contacts)),), "only `count(pred for _ in contacts)`"),
                 ((:(@after_mcs x ~ count(true for _ in contacts(nowhere))),), "nowhere"),
                 ((:(@after_mcs x ~ count(true for _ in contacts(half))),), "not symmetric")

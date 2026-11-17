@@ -16,7 +16,7 @@
 @testitem "F4-E5: an axis a coupled PDESystem leaves out takes the lattice's interval" setup = [CoupleSetup] tags = [:potts, :fields_short] begin
     @testset "F4-E5: an axis a coupled PDESystem leaves out takes the lattice's interval" begin
         ref = fs_run(FsMerksLong(; name = :m))
-        @test maximum(ref.u[end].site.c) > 0 && ref.u[end].σ != ref.u[1].σ
+        @test maximum(ref.u[end].site.c) > 0 && ref.u[end].ownership != ref.u[1].ownership
         @test cp_same(fs_run(FsMerksNoDom(; name = :m)), ref)                       # bitwise
         @test cp_same(fs_run(FsMerksShort(; name = :m)), ref)
         # another lattice size: the function form follows it, the short form needs no change

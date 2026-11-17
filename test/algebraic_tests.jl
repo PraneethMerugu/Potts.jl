@@ -152,7 +152,7 @@ end
         for solver in (ExplicitEuler(), Potts.RK4(substeps = 2))
             s = solve(PottsProblem(AlgCross(; name = :a), alg_op(), (0, 6); seed = 3, ode_solver = solver), SequentialCPM(); saveat = 1)
             h = solve(PottsProblem(AlgCrossHand(; name = :h), alg_op(), (0, 6); seed = 3, ode_solver = solver), SequentialCPM(); saveat = 1)
-            @test [u.σ for u in s.u] == [u.σ for u in h.u]
+            @test [u.ownership for u in s.u] == [u.ownership for u in h.u]
             @test all(isapprox.(s[:x], h[:x]; rtol = 1e-12)) && all(isapprox.(s[:seen], h[:seen]; rtol = 1e-12))
             @test all(isapprox.(s[:half], s[:m] ./ 2; rtol = 1e-12))
             @test all(isapprox.(s[:twice], 2 .* s[:drive]; rtol = 1e-12))

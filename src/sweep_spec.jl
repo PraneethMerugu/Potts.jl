@@ -16,7 +16,7 @@ before `@components` are lowered).
 `domain` is the DSL domain value (`cells(k…)`, `clusters(k…)`, `contacts`, `contacts(r)`,
 `sites`, `edges(r)`); `expr` is the term's energy density (a number for a constant term), a Symbolics expression over the
 declared parameters and variables (the declared symbols, as `sys.x`) and the DSL
-built-ins (`volume`, `kind′`, …). The energy of a state is the sum of each density over its
+built-ins (`volume`, `neighbor_kind`, …). The energy of a state is the sum of each density over its
 domain (cells of the term's kinds, unordered pairs of the relation with different owners,
 …), with the conventions of `total_energy`. Drives ([`Potts.drives`](@ref)), constraints
 (the `PottsSweepSpec` payload's `constraints`) and the temperature are not terms. An algebraic
@@ -114,7 +114,7 @@ end
 
 The lattice sweep of a Potts model as typed system metadata (D-160): both the metadata key
 and the value type. It is metadata of the model's inner System (`Potts.inner(sys)`), set when
-the model is built (`Potts.wrap`), so generic code that holds the System detects a Potts model
+the model is built (`Potts.wrap_system`), so generic code that holds the System detects a Potts model
 with MTK's metadata API:
 
 ```julia
@@ -170,7 +170,7 @@ function Base.show(io::IO, ::MIME"text/plain", s::PottsSweepSpec)
     print(io, "  proposal ", s.proposal)
 end
 
-# MTK's typed metadata (D-137): the payload is the inner System's (`Potts.wrap` sets it). A
+# MTK's typed metadata (D-137): the payload is the inner System's (`Potts.wrap_system` sets it). A
 # `CompiledPottsSystem` reads every key from the authored model's inner System; it is read-only.
 SymbolicUtils.getmetadata(c::CompiledPottsSystem, k::DataType, default) = SymbolicUtils.getmetadata(inner(getfield(c, :authored)), k, default)
 SymbolicUtils.hasmetadata(c::CompiledPottsSystem, k::DataType) = SymbolicUtils.hasmetadata(inner(getfield(c, :authored)), k)

@@ -100,7 +100,7 @@ end
 
 const P60V3_FDIMS = (16, 16)
 p60v3_field_rate(st, p, ctx, key, mcs, i, c) = (n = length(c); l = i == 1 ? n : i - 1; r = i == n ? 1 : i + 1;
-    p.D * (c[l] + c[r] - 2 * c[i]) + p.s * (st.σ[i] != 0) - p.k * c[i])
+    p.D * (c[l] + c[r] - 2 * c[i]) + p.s * (st.ownership[i] != 0) - p.k * c[i])
 """One explicit-Euler substep of length `h` into `c__next`, clipped below at 0."""
 struct P60v3FieldSubstep{T}
     h::T
@@ -299,7 +299,7 @@ const P60V3_ALGS = (SequentialCPM(), CheckerboardCPM())
 @testset "P6.0v3: the fixtures (CPU)" begin
     # the field fixture's σ is frozen, so the oracle's source term is exact
     sol = solve(p60v3_field_problem(; N = 3), CheckerboardCPM())
-    @test all(u -> u.σ == p60v3_field_σ(), sol.u)
+    @test all(u -> u.ownership == p60v3_field_σ(), sol.u)
     # the CopyPhase fixture publishes a scratch through a CopyPhase (what (2) measures)
     prob = p60v3_pair_problem()
     @test any(ph -> ph isa CorePotts.CopyPhase, prob.f.phases.after_mcs)
@@ -468,9 +468,9 @@ end
         c = solve(p60v3_merks_problem(; T = Float32), alg; save_start = false).u[end]
         # the device checkerboard is not reproducible (D-271, user ruling 2026-11-04): it runs and
         # keeps the model's invariants (labels in range, every cell alive, a finite field)
-        σm = Array(m.σ)
-        @test size(σm) == size(c.σ) && all(v -> 0 <= v <= maximum(c.σ), σm)
-        @test Set(filter(!=(0), unique(σm))) == Set(filter(!=(0), unique(c.σ)))
+        σm = Array(m.ownership)
+        @test size(σm) == size(c.ownership) && all(v -> 0 <= v <= maximum(c.ownership), σm)
+        @test Set(filter(!=(0), unique(σm))) == Set(filter(!=(0), unique(c.ownership)))
         @test all(isfinite, Array(m.site.c))
     else
         @test_skip "device (POTTS_GPU=metal|rocm)"

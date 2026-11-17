@@ -6,7 +6,7 @@
 # in its run context (`ctx`), built when an integrator is created (`phase_context`).
 
 """Kind of the cell owning site `i` (`0` for the medium)."""
-@inline owner_kind(st, i) = (c = @inbounds st.σ[i]; c == 0 ? Int32(0) : @inbounds st.cell.kind[c])
+@inline owner_kind(st, i) = (c = @inbounds st.ownership[i]; c == 0 ? Int32(0) : @inbounds st.cell.kind[c])
 
 """
     FieldPhase{K}(group, alg, arrays; tables, params, substeps, dt, period = dt, options, T, init = false, aux_only = false,
@@ -723,7 +723,7 @@ function _tangent_snapshot(::Val{true}, stats, ctx, snap::CPMState)
         v = getfield(snap.site, k)
         reshape(map((d, x) -> LatticeFields.Compile.dreplace(d, x), vec(tw), vec(v)), size(v))
     end
-    return CPMState(snap.σ, snap.cell, merge(snap.site, NamedTuple{ks}(vs)), snap.model, snap.history)
+    return CPMState(snap.ownership, snap.cell, merge(snap.site, NamedTuple{ks}(vs)), snap.model, snap.history)
 end
 
 _tpart_body!(i, tw, src, j) = (@inbounds tw[i] = LatticeFields.Compile.dsetpartial(tw[i], j, LatticeFields.Compile.dpartial(src[i], j)); nothing)

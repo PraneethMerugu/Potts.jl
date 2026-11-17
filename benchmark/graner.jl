@@ -35,8 +35,8 @@ integ2 = init(remake(prob; p = merge(graner_params(T), (; λ = T(2))), seed = 1)
 step!(integ2); current_state(integ2)
 const REMAKE = time() - t
 
-nsite = length(st.σ)
-println(rpad("$which $(size(st.σ)) $T $(Threads.nthreads())t", 30),
+nsite = length(st.ownership)
+println(rpad("$which $(size(st.ownership)) $T $(Threads.nthreads())t", 30),
     " load=", round(LOAD; digits = 2), "s build=", round(BUILD; digits = 3),
     "s first_mcs=", round(FIRST; digits = 2), "s remake_first=", round(REMAKE; digits = 3),
     "s warm=", round((nmcs - 1) / WARM; digits = 1), " MCS/s (",

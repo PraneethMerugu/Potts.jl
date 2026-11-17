@@ -14,6 +14,7 @@ of a relationship (see [Relationships](@ref manual-relationships)), depending on
 
 ```@example updates
 using Potts
+using Potts.Layouts
 
 @potts_model Clocks begin
     @kinds medium cell
@@ -28,7 +29,7 @@ using Potts
     @lattice Lattice((30, 30); neighborhood = Moore(1))
     @energy begin
         Volume(cell; target = 25.0, strength = 1.0)
-        contacts => 8.0 * (kind != kind′)
+        contacts => 8.0 * (kind != neighbor_kind)
     end
     @on_copy hits[target] += 1                         # count accepted copies per site
     @after_mcs begin
@@ -76,9 +77,9 @@ sol = solve(PottsProblem(clocks, op, (0, 20); seed = 1), SequentialCPM(); saveat
   cell's contact pairs (s, s′), s in the cell and s′ a neighbor of s (inside the lattice)
   owned by another cell or the medium, for which `pred` holds; `contacts(rel)` uses a
   relation declared in `@relations` instead of the contact neighborhood. `pred` reads the
-  partner's kind `kind′` (`medium` for the medium) and constants: `count(true for _ in
+  partner's kind `neighbor_kind` (`medium` for the medium) and constants: `count(true for _ in
   contacts)` is the unweighted `surface` over the contact relation, and the free-surface
-  fraction `count(kind′ == medium for _ in contacts) / count(true for _ in contacts)` is
+  fraction `count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts)` is
   the share of a cell's contacts with the medium. Each count is a tracker kept exact by
   every accepted copy and every division, removal and kind change, so reading it costs
   nothing per MCS; it is not available in energies, drives or constraints.
@@ -93,11 +94,11 @@ sol = solve(PottsProblem(clocks, op, (0, 20); seed = 1), SequentialCPM(); saveat
       @lattice Lattice((30, 30); boundary = Closed(), neighborhood = Moore(1))
       @energy begin
           Volume(A, B; target = 25.0, strength = 1.0)
-          contacts => 8.0 * (kind != kind′)
+          contacts => 8.0 * (kind != neighbor_kind)
       end
       @after_mcs begin
-          free ~ count(kind′ == medium for _ in contacts) / count(true for _ in contacts)
-          touching_b ~ count(kind′ == B for _ in contacts)
+          free ~ count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts)
+          touching_b ~ count(neighbor_kind == B for _ in contacts)
       end
       @sweep Metropolis(; temperature = 8.0)
   end

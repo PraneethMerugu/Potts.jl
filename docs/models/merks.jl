@@ -107,7 +107,7 @@
 #     @relations proposal = Moore(1)
 #     @energy begin
 #         cells(endothelial) => λ * (volume - A)^2 + λ_L * (major_length - L)^2
-#         contacts => J[kind, kind′]
+#         contacts => J[kind, neighbor_kind]
 #     end
 #     @drive copy => -ifelse((old == 0) | (new == 0), χcM, χcc) *
 #                    (c[target] / (1 + s * c[target]) - c[source] / (1 + s * c[source]))
@@ -132,6 +132,7 @@
 # quickly. `merks2006_layout` places the cells and the one-site frozen border:
 
 using Potts, PottsModels
+using Potts.Layouts
 using MakiePotts, CairoMakie
 mkpath("merks") #hide
 

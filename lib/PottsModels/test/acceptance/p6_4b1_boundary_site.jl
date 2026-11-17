@@ -24,13 +24,13 @@
 #
 # What is pinned (one testset group per item of the P6.4b1 dispatch).
 #  1. API. `BoundarySiteCPM(; acceptance = nothing, proposal = nothing)` is a
-#     `CorePotts.CPMAlgorithm`, exported by CorePotts and Potts, with SequentialCPM's two
+#     `CorePotts.AbstractCPMAlgorithm`, exported by CorePotts and Potts, with SequentialCPM's two
 #     keywords and defaults (`nothing` = the model's law / the problem's proposal);
 #     `BoundarySiteCPM(; proposal = Moore(1))` overrides as for SequentialCPM. It is
 #     accepted wherever SequentialCPM is: `solve` (with `saveat`, callbacks), `init` +
 #     `step!`, `reinit!`, `EnsembleProblem` (serial and threads), `checkpoint` continuation,
 #     `Potts.anneal(…; alg)`, models with a lifecycle, a frozen kind, a tracked ΔH
-#     (`track = (:ΔH,)`: `stats.accepted_ΔH` exact after every step, as under SequentialCPM).
+#     (`track = (:energy_change,)`: `stats.accepted_energy_change` exact after every step, as under SequentialCPM).
 #     SequentialCPM is unchanged: its fields, and two recorded bitwise results of our own
 #     code (D-158) recorded on the freeze base (5f69e790): Graner–Glazier 72², 25 MCS, and
 #     the OpenVT reference model on 60² with divisions, 1600 MCS. Its other pins stay where
@@ -61,7 +61,7 @@
 #     the test's from-scratch B(σ) (computed here from σ, the kinds' frozen flags and the
 #     proposal offsets; no production code) after `init`, after every `step!` (copies,
 #     divisions, removals, a transition to a frozen kind, the removal of a frozen cell),
-#     after `reinit!`, and after a direct write to `integ.state.σ` followed by
+#     after `reinit!`, and after a direct write to `integ.state.ownership` followed by
 #     `derivative_discontinuity!(integ, true)`. On a periodic lattice (Graner–Glazier 72²), on the
 #     OpenVT reference model with divisions, and with a proposal that differs from the
 #     contact neighbourhood (`BoundarySiteCPM(; proposal = VonNeumann(1))` on a Moore(1)
@@ -370,7 +370,7 @@ end # module P64b1Oracle
     @relations proposal = Moore(1)
     @energy begin
         cells => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @constraint no_extinction
     @sweep Metropolis(; temperature = T)
@@ -399,7 +399,7 @@ p64b1_tiny_problem(σ = P64B1_σ0, tspan = (0, 2)) = PottsProblem(P64b1Tiny(; na
     @relations proposal = Moore(1)
     @energy begin
         cells => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @constraint no_extinction
     @sweep Metropolis(; temperature = T)
@@ -448,7 +448,7 @@ end
     @relations proposal = Moore(1)
     @energy begin
         cells(A) => λ * (volume - V_target)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @constraint no_extinction
     @divide cells(A) when = volume >= 10000
@@ -516,7 +516,7 @@ end
 """The integrator's boundary set equals the recompute, with no duplicate index."""
 function p64b1_boundary_ok(integ, offsets; kw...)
     got = collect(Int, CorePotts._boundary_sites(integ))
-    want = p64b1_boundary(integ.state.σ, integ.state.cell.kind, offsets; kw...)
+    want = p64b1_boundary(integ.state.ownership, integ.state.cell.kind, offsets; kw...)
     return allunique(got) && Set(got) == Set(want)
 end
 
@@ -550,7 +550,7 @@ function p64b1_warm_ns(prob, alg; samples = 30)
         step!(integ)
         best = min(best, time_ns() - t0)
     end
-    return best / length(integ.state.σ)
+    return best / length(integ.state.ownership)
 end
 
 # Two-sample statistics (item 3).
@@ -569,7 +569,7 @@ end
     @test !isdefined(Potts, :BoundarySiteCPM) && !Base.isexported(Potts, :BoundarySiteCPM)
     @test !isdefined(PottsModels, :BoundarySiteCPM)
     a = p64b1_bs()
-    @test a isa CorePotts.CPMAlgorithm
+    @test a isa CorePotts.AbstractCPMAlgorithm
     @test Potts.SciMLBase.isdiscrete(a)
     @test a isa SequentialCPM && a.skip_interior === true
     @test a.acceptance === nothing && a.proposal === nothing
@@ -593,13 +593,13 @@ end
     @test sol.stats.mcs == 6 && sol.stats.attempts == 6N          # N attempts per MCS, over all sites
     @test sol.stats.accepted > 0                                    # counted (not −1, the checkerboard's)
     u = sol.u[end]
-    @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(u.cell.volume)]
+    @test u.cell.volume == [count(==(c), u.ownership) for c in eachindex(u.cell.volume)]
     # init + step! = solve, bitwise (free determinism, D-158)
     integ = init(prob, p64b1_bs(); save_start = false)
     for _ in 1:6
         step!(integ)
     end
-    @test integ.state.σ == u.σ && integ.stats.accepted == sol.stats.accepted && integ.stats.attempts == 6N
+    @test integ.state.ownership == u.ownership && integ.stats.accepted == sol.stats.accepted && integ.stats.attempts == 6N
     # the proposal keyword overrides the problem's, as for SequentialCPM
     @test Symbol(solve(prob, p64b1_bs(; proposal = VonNeumann(1))).retcode) === :Success
     @test Symbol(solve(prob, p64b1_bs(; acceptance = Barker())).retcode) === :Success
@@ -608,7 +608,7 @@ end
     for _ in 1:6
         step!(integ)
     end
-    @test integ.state.σ == u.σ && integ.stats.accepted == sol.stats.accepted
+    @test integ.state.ownership == u.ownership && integ.stats.accepted == sol.stats.accepted
     # EnsembleProblem
     ens = solve(EnsembleProblem(prob; prob_func = (q, ctx) -> q), p64b1_bs(), EnsembleSerial(); trajectories = 2)
     @test length(ens.u) == 2 && all(s -> Symbol(s.retcode) === :Success, ens.u)
@@ -623,10 +623,10 @@ end
     end
     @test i3.stats.attempts == 6N
     v = i3.u
-    @test v.cell.volume == [count(==(c), v.σ) for c in eachindex(v.cell.volume)]
+    @test v.cell.volume == [count(==(c), v.ownership) for c in eachindex(v.cell.volume)]
     # anneal
-    w = Potts.anneal(prob; mcs = 3, alg = p64b1_bs())
-    @test w.cell.volume == [count(==(c), w.σ) for c in eachindex(w.cell.volume)]
+    w = Potts.anneal(prob, 3; alg = p64b1_bs())
+    @test w.cell.volume == [count(==(c), w.ownership) for c in eachindex(w.cell.volume)]
     @test total_energy(prob, w) <= total_energy(prob, prob.u0)      # T = 0: no uphill copy
     # a model with a lifecycle and a frozen kind
     lsol = solve(p64b1_life_problem(), p64b1_bs())
@@ -639,13 +639,13 @@ end
 
 @testset "P6.4b1: tracked ΔH is exact after every step under BoundarySiteCPM" begin
     # integer energies, no drive, `no_extinction` (no killing credit): Σ accepted ΔH = H(t) − H(0)
-    prob = p64b1_free_problem(; tspan = (0, 8), seed = 12, track = (:ΔH,))
+    prob = p64b1_free_problem(; tspan = (0, 8), seed = 12, track = (:energy_change,))
     integ = init(prob, p64b1_bs(); save_start = false)
     H0 = total_energy(prob, current_state(integ))
     ok = true
     for _ in 1:8
         step!(integ)
-        ok &= integ.stats.accepted_ΔH == total_energy(prob, current_state(integ)) - H0
+        ok &= integ.stats.accepted_energy_change == total_energy(prob, current_state(integ)) - H0
     end
     @test ok
     @test integ.stats.accepted > 0
@@ -654,14 +654,14 @@ end
     for _ in 1:8
         step!(is)
     end
-    @test is.stats.accepted_ΔH == total_energy(prob, is.u) - H0
+    @test is.stats.accepted_energy_change == total_energy(prob, is.u) - H0
 end
 
 @testset "P6.4b1: SequentialCPM runs the same problem twice alike" begin
     prob = p64b1_gg_problem(; tspan = (0, 25), seed = 177)
     a = solve(prob, SequentialCPM(); save_start = false)
     b = solve(prob, SequentialCPM(); save_start = false)
-    @test p64b1_sha(a.u[end].σ) == p64b1_sha(b.u[end].σ) && a.stats.accepted == b.stats.accepted
+    @test p64b1_sha(a.u[end].ownership) == p64b1_sha(b.u[end].ownership) && a.stats.accepted == b.stats.accepted
 end
 
 # ---------------------------------------------------------------------------------------
@@ -731,7 +731,7 @@ function p64b1_stationary_counts(alg, seed0)
         for _ in 1:mult[s]
             j += 1
             sol = solve(remake(ps; seed = seed0 + j), alg; save_start = false)
-            counts[p64b1_bin(index, sol.u[end].σ)] += 1
+            counts[p64b1_bin(index, sol.u[end].ownership)] += 1
         end
     end
     return counts
@@ -745,8 +745,8 @@ function p64b1_finite_counts(alg, seed0)
     for j in 1:P64B1_R
         sol = solve(remake(base; seed = seed0 + j), alg; saveat = [1, 2], save_start = false)
         @assert sol.t == [1, 2]
-        c1[p64b1_bin(index, sol.u[1].σ)] += 1
-        c2[p64b1_bin(index, sol.u[2].σ)] += 1
+        c1[p64b1_bin(index, sol.u[1].ownership)] += 1
+        c2[p64b1_bin(index, sol.u[2].ownership)] += 1
     end
     return c1, c2
 end
@@ -790,13 +790,13 @@ function p64b1_time_samples(alg, seed0; marks = (10,))
     attempts_ok = true
     for j in 1:P64B1_N_RUNS
         integ = init(remake(prob; seed = seed0 + j), alg; save_start = false, save_end = false, save_everystep = false)
-        c0 = p64b1_centroids(integ.state.σ, 4)
+        c0 = p64b1_centroids(integ.state.ownership, 4)
         for t in 1:maximum(marks)
             step!(integ)
             t == 1 && push!(acc1, integ.stats.accepted)
             if t in marks
                 push!(acc[t], integ.stats.accepted)
-                c = p64b1_centroids(integ.state.σ, 4)
+                c = p64b1_centroids(integ.state.ownership, 4)
                 push!(msd[t], mean(sum(abs2, c[i] .- c0[i]) for i in 1:4))
             end
         end
@@ -837,24 +837,24 @@ end
 @testset "P6.4b1: the recompute's own controls (no BoundarySiteCPM)" begin
     # the fixture's events fire under SequentialCPM, and the recompute sees them
     integ = init(p64b1_life_problem(), SequentialCPM(); save_start = false)
-    B0 = Set(p64b1_boundary(integ.state.σ, integ.state.cell.kind, P64B1_MOORE; frozen_kinds = (2,)))
+    B0 = Set(p64b1_boundary(integ.state.ownership, integ.state.cell.kind, P64B1_MOORE; frozen_kinds = (2,)))
     walls_seen = false
     while integ.t < 10
         step!(integ)
         if any(==(2), integ.state.cell.kind[c] for c in eachindex(integ.state.cell.volume) if integ.state.cell.volume[c] > 0)
             walls_seen = true
             # a frozen cell is present: ignoring the frozen flag gives another set
-            @test Set(p64b1_boundary(integ.state.σ, integ.state.cell.kind, P64B1_MOORE; frozen_kinds = (2,))) !=
-                  Set(p64b1_boundary(integ.state.σ, integ.state.cell.kind, P64B1_MOORE))
+            @test Set(p64b1_boundary(integ.state.ownership, integ.state.cell.kind, P64B1_MOORE; frozen_kinds = (2,))) !=
+                  Set(p64b1_boundary(integ.state.ownership, integ.state.cell.kind, P64B1_MOORE))
         end
     end
     l = integ.stats.lifecycle
     @test walls_seen
     @test l.divisions == 2 && l.removals == 2 && l.transitions == 1
-    @test Set(p64b1_boundary(integ.state.σ, integ.state.cell.kind, P64B1_MOORE; frozen_kinds = (2,))) != B0  # a stale set fails
+    @test Set(p64b1_boundary(integ.state.ownership, integ.state.cell.kind, P64B1_MOORE; frozen_kinds = (2,))) != B0  # a stale set fails
     # VonNeumann and Moore sets differ on the same state (the proposal matters)
-    @test Set(p64b1_boundary(integ.state.σ, integ.state.cell.kind, P64B1_VN)) !=
-          Set(p64b1_boundary(integ.state.σ, integ.state.cell.kind, P64B1_MOORE))
+    @test Set(p64b1_boundary(integ.state.ownership, integ.state.cell.kind, P64B1_VN)) !=
+          Set(p64b1_boundary(integ.state.ownership, integ.state.cell.kind, P64B1_MOORE))
 end
 
 @testset "P6.4b1: the boundary set after copies, divisions, removals and frozen transitions" begin
@@ -871,7 +871,7 @@ end
     reinit!(integ)
     @test p64b1_boundary_ok(integ, P64B1_MOORE; frozen_kinds = (2,))
     step!(integ)
-    integ.state.σ[12, 12] = 1                    # an isolated site of cell 1 in the medium
+    integ.state.ownership[12, 12] = 1                    # an isolated site of cell 1 in the medium
     derivative_discontinuity!(integ, true)
     @test p64b1_boundary_ok(integ, P64B1_MOORE; frozen_kinds = (2,))
 end
@@ -913,7 +913,7 @@ function p64b1_growth(prob, alg, seed, tmax)
         step!(integ)
         N[t + 1] = count(>(0), integ.state.cell.volume)
     end
-    σ = integ.state.σ
+    σ = integ.state.ownership
     clear = all(==(0), σ[1:5, :]) && all(==(0), σ[(end - 4):end, :]) && all(==(0), σ[:, 1:5]) && all(==(0), σ[:, (end - 4):end])
     return N, clear
 end
@@ -1023,7 +1023,7 @@ end
 
 @testset "P6.4b1: speed-up on a mostly-medium lattice (400², 169 cells of 7×7, 5.2 % cover)" begin
     prob = p64b1_free_problem(; L = 400, side = 7, first = 15, spacing = 30, tspan = (0, 10^6))
-    @test count(!=(0), prob.u0.σ) == 169 * 49
+    @test count(!=(0), prob.u0.ownership) == 169 * 49
     seq = p64b1_warm_ns(prob, SequentialCPM())
     bsn = p64b1_warm_ns(prob, p64b1_bs())
     ratio = seq / bsn
@@ -1043,18 +1043,18 @@ end
     prob = p64b1_free_problem(; tspan = (0, 12), seed = 21)
     a = solve(prob, p64b1_bs(); save_start = false)
     b = solve(prob, p64b1_bs(); save_start = false)
-    @test a.u[end].σ == b.u[end].σ && a.u[end].cell == b.u[end].cell
+    @test a.u[end].ownership == b.u[end].ownership && a.u[end].cell == b.u[end].cell
     @test a.stats.accepted == b.stats.accepted && a.stats.attempts == b.stats.attempts
     c = solve(remake(prob; seed = 22), p64b1_bs(); save_start = false)
-    @test c.u[end].σ != a.u[end].σ                                    # control: seeds matter
+    @test c.u[end].ownership != a.u[end].ownership                                    # control: seeds matter
     # EnsembleSerial = EnsembleThreads, trajectory by trajectory (no shared scratch)
     pf(q, ctx) = remake(q; seed = 300 + ctx.sim_id)
     es = solve(EnsembleProblem(prob; prob_func = pf), p64b1_bs(), EnsembleSerial(); trajectories = 4)
     et = solve(EnsembleProblem(prob; prob_func = pf), p64b1_bs(), EnsembleThreads(); trajectories = 4)
-    @test all(i -> es.u[i].u[end].σ == et.u[i].u[end].σ, 1:4)
-    @test es.u[1].u[end].σ != es.u[2].u[end].σ
+    @test all(i -> es.u[i].u[end].ownership == et.u[i].u[end].ownership, 1:4)
+    @test es.u[1].u[end].ownership != es.u[2].u[end].ownership
     # with a lifecycle (division planes and removals)
     l1 = solve(p64b1_life_problem(), p64b1_bs(); save_start = false)
     l2 = solve(p64b1_life_problem(), p64b1_bs(); save_start = false)
-    @test l1.u[end].σ == l2.u[end].σ && l1.u[end].cell == l2.u[end].cell
+    @test l1.u[end].ownership == l2.u[end].ownership && l1.u[end].cell == l2.u[end].cell
 end

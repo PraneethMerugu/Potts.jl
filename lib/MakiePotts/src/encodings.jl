@@ -69,7 +69,7 @@ function _cell_identity(frame, owner::RenderOwner)
 end
 
 """Materialize semantic numeric values and legend metadata from a render frame."""
-function encode(frame::AbstractPottsRenderFrame, encoding::CellTypeEncoding)
+function encode_frame(frame::AbstractPottsRenderFrame, encoding::CellTypeEncoding)
     type_ids = UInt32[]
     for site in CartesianIndices(frame_size(frame))
         owner = owner_at(frame, site)
@@ -93,7 +93,7 @@ function encode(frame::AbstractPottsRenderFrame, encoding::CellTypeEncoding)
         encoding.label, nothing, nothing)
 end
 
-function encode(frame::AbstractPottsRenderFrame, encoding::CellIdentityEncoding)
+function encode_frame(frame::AbstractPottsRenderFrame, encoding::CellIdentityEncoding)
     identities = RenderCellIdentity[]
     for site in CartesianIndices(frame_size(frame))
         owner = owner_at(frame, site)
@@ -128,8 +128,8 @@ function _finite_range(values)
     return extrema_values
 end
 
-function encode(frame::AbstractPottsRenderFrame, encoding::ChannelEncoding)
-    item = channel(frame, encoding.key)
+function encode_frame(frame::AbstractPottsRenderFrame, encoding::ChannelEncoding)
+    item = frame_channel(frame, encoding.key)
     values = fill(NaN, frame_size(frame))
     if encoding.key isa RenderChannelKey{SiteChannelScope}
         for site in eachindex(values, item.values)
@@ -160,7 +160,7 @@ end
 """Return a copy of the semantic legend entries produced by an encoding."""
 legend_entries(encoded::EncodedPottsFrame) = copy(encoded.categories)
 legend_entries(frame::AbstractPottsRenderFrame, encoding::AbstractPottsEncoding) =
-    legend_entries(encode(frame, encoding))
+    legend_entries(encode_frame(frame, encoding))
 
 function _hsv_rgb(h::Float64, s::Float64 = 0.62, v::Float64 = 0.88)
     sector = 6h

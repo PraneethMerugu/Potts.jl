@@ -30,7 +30,7 @@
         #> shape
         cells(cell) => λ * (volume - V₀)^2 + λₛ * (surface - S₀)^2
         #> contacts
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
         #<
     end
     #> drive

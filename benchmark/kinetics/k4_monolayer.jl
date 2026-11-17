@@ -29,7 +29,7 @@ function k4_run(prob, seed, c; backend = cb_backend())
     sol = solve!(integ)
     cb_sync()
     u = sol.u[end]
-    fr = PottsModels.openvt_frame(u; β = c.beta, γ = c.gamma)
+    fr = PottsModels.openvt_frame(u; beta = c.beta, gamma = c.gamma)
     o1 = (; n_mean = mean(fr.n), n_sd = std(fr.n), n6 = mean(fr.n .== 6), i0 = mean(fr.i .== 0), cells = length(fr.n))
     return (; retcode = Symbol(sol.retcode), mcs = Int(sol.t[end]), rec, divisions = sol.stats.lifecycle.divisions,
         live = count(>(0), Array(u.cell.volume)), o1, committed = sol.stats.committed)

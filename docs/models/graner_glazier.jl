@@ -51,6 +51,7 @@
 # The rest of this page builds the model and runs it at a size that takes seconds.
 
 using Potts, PottsModels
+using Potts.Layouts
 
 # ## Step 1: the lattice
 #
@@ -114,7 +115,7 @@ J_dd < (J_dd + J_ll) / 2 < J_dl < J_ll < J_M
 # The domain `contacts` sums over pairs of neighboring sites (in the lattice's `Moore(1)`
 # neighborhood) that belong to different cells: the factor
 # ``(1 - \delta_{\sigma_i \sigma_j})`` of Eq. (2). `kind` is the kind of one site's cell
-# and `kind′` that of its neighbor's, so `J[kind, kind′]` is
+# and `neighbor_kind` that of its neighbor's, so `J[kind, neighbor_kind]` is
 # ``J(\tau(\sigma_i), \tau(\sigma_j))``.
 #
 # You never write the energy *change* of a copy: the compiler derives ``\Delta H`` from
@@ -197,12 +198,12 @@ nothing #hide
 # ## Measuring sorting
 #
 # The paper measures sorting by the share of cell–cell boundary that is heterotypic
-# (dark–light). Each saved state `u` holds the owner array `u.σ`, and `u.cell.kind` gives
+# (dark–light). Each saved state `u` holds the owner array `u.ownership`, and `u.cell.kind` gives
 # each cell's kind (1 dark, 2 light). We count every Moore bond once, through the periodic
 # edges:
 
 function heterotypic_fraction(u)
-    σ, k = u.σ, u.cell.kind
+    σ, k = u.ownership, u.cell.kind
     nx, ny = size(σ)
     hetero = homo = 0
     for y in 1:ny, x in 1:nx, (dx, dy) in ((1, 0), (0, 1), (1, 1), (1, -1))

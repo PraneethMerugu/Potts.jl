@@ -42,7 +42,7 @@ The defaults are the amoeboid cell of Niculescu et al. (Methods; Fig. 6) on a 20
     @relations proposal = Moore(1)
     @energy begin
         cells(cell) => λ * (volume - V₀)^2 + λₛ * (surface - S₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     act_mean(s) = geomean(act[n] for n in Moore(1; include_self = true)(s) if owner[n] == owner[s])
     @drive copy => -(λ_act / max_act) * (act_mean(source) - act_mean(target))

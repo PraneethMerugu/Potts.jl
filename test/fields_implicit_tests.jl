@@ -102,11 +102,11 @@ end
         prog = rt.program
         kin = only(f.key for f in prog.fields if f.role === :input)
         @test pointer(rt.store.bufs[fieldid(prog, kin)][1]) == pointer(getfield(integ.state.site, Symbol(kin)))
-        c3, σ3 = copy(Array(st.site.c)), copy(Array(st.σ))
+        c3, σ3 = copy(Array(st.site.c)), copy(Array(st.ownership))
         step!(integ)
         st = current_state(integ)
-        @test Array(st.σ) != σ3                                   # σ moved in MCS 4's sweep
-        K4 = Int32.(Array(st.σ) .!= 0)
+        @test Array(st.ownership) != σ3                                   # σ moved in MCS 4's sweep
+        K4 = Int32.(Array(st.ownership) .!= 0)
         want = fi_runB(FiMoving, dims, 1; u0 = [:c => c3], inputs = [:kind => K4])[1]
         @test Array(st.site.c) == want                            # the window read the moved σ
         @test Array(st.site.c) != fi_runB(FiMoving, dims, 1; u0 = [:c => c3], inputs = [:kind => Int32.(σ3 .!= 0)])[1]

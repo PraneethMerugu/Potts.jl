@@ -182,7 +182,7 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     # monorepo, path source, co-versioned); the symbolic layer generates code against its
     # internal hooks.
     :AbstractBoundary,    # boundary supertype, dispatch in `layouts.jl`
-    :RelationSpec,        # relation dispatch in the `Around` vocabulary
+    :AbstractRelationSpec,        # relation dispatch in the `Around` vocabulary
     :_run_phases,         # runs the `at_init` phases when a problem is initialised
     :link_frame,          # the generated link energy, inline over these two (TS1c)
     :link_at,
@@ -326,7 +326,7 @@ end
             ("integrals", () -> (σ = zeros(Int32, 20, 20); σ[3:6, 3:6] .= 1;
                 PottsProblem(Integrals(; name = :i), [ownership => σ, kind => [1]], (0, 5)))),
             ("systemic", () -> (σ = zeros(Int32, 20, 20); σ[2:4, 2:4] .= 1;
-                PottsProblem(Systemic(; name = :s), [ownership => σ, kind => [1]], (0, 5); ode_solver = RK4(substeps = 4)))))
+                PottsProblem(Systemic(; name = :s), [ownership => σ, kind => [1]], (0, 5); ode_solver = Potts.RK4(substeps = 4)))))
         prob = make()
         integ = init(prob, SequentialCPM(; proposal = Moore(1)); save_start = false)
         step!(integ)
@@ -367,7 +367,7 @@ end
         st, p, ctx = integ.state, integ.p, integ.ctx
         args = (st, integ.kf, p, ctx, integ.law, integ.key, 1)
         @test isempty(check_allocs(CorePotts.sequential_mcs!, typeof.(args)))
-        N = ndims(st.σ)
+        N = ndims(st.ownership)
         prop = CorePotts.Proposal{N}(1, 2, ntuple(_ -> 1, N), 1, Int32(1), Int32(0))
         for fn in (prob.f.delta_H, prob.f.commit!, prob.f.temperature, prob.f.constraint)
             @test isempty(check_allocs(fn, typeof.((st, p, prop, ctx))))

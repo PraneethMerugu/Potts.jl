@@ -1,7 +1,7 @@
 module DownstreamFixture
 
 using MakiePotts
-import MakiePotts: available_channels, cell_metadata, channel, encode
+import MakiePotts: available_channels, cell_metadata, frame_channel, encode_frame, LegendEntry
 import MakiePotts: encoding_kind, encoding_label, frame_geometry, frame_mcs
 import MakiePotts: frame_provenance, frame_size
 import MakiePotts: owner_at, required_channels
@@ -32,7 +32,7 @@ cell_metadata(frame::ColumnarFrame, identity::RenderCellIdentity) =
 cell_metadata(frame::ColumnarFrame, owner::RenderOwner) =
     frame.owner_records[owner.id]
 available_channels(frame::ColumnarFrame) = Tuple(keys(frame.stream_records))
-channel(frame::ColumnarFrame, key::RenderChannelKey) = frame.stream_records[key]
+frame_channel(frame::ColumnarFrame, key::RenderChannelKey) = frame.stream_records[key]
 frame_provenance(frame::ColumnarFrame) = frame.lineage
 
 function columnar_frame(phase::Integer = 0)
@@ -85,8 +85,8 @@ encoding_kind(::RootSignalEncoding) = ContinuousEncoding
 required_channels(encoding::RootSignalEncoding) = (encoding.key,)
 encoding_label(::RootSignalEncoding) = "Square-root signal"
 
-function encode(frame::AbstractPottsRenderFrame, encoding::RootSignalEncoding)
-    source = channel(frame, encoding.key)
+function encode_frame(frame::AbstractPottsRenderFrame, encoding::RootSignalEncoding)
+    source = frame_channel(frame, encoding.key)
     values = map(source.values) do value
         ismissing(value) || !isfinite(value) ? NaN : sqrt(Float64(value))
     end

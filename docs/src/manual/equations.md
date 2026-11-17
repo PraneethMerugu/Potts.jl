@@ -27,6 +27,7 @@ does not read the cells. It reads **input fields**, declared `[input = true]`, a
 
 ```@example equations
 using Potts
+using Potts.Layouts
 using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
 using Potts.LatticePDE: laplacian, lattice_domain
 
@@ -228,7 +229,7 @@ chemical = PDESystem([Dt(C) ~ Dc * laplacian(C) + 0.1 * incell(t, x, y) - 0.05 *
     @lattice Lattice((30, 30); neighborhood = Moore(1))
     @energy begin
         Volume(cell; target = 25.0, strength = 1.0)
-        contacts => 8.0 * (kind != kind′)
+        contacts => 8.0 * (kind != neighbor_kind)
     end
     @fields c = chemical (incell => kind == cell)
     @equations begin
@@ -248,7 +249,7 @@ sol[:q][end], sol[:g][end]
 | Keyword | Values | Default |
 |---|---|---|
 | `field_solver` | `ExplicitEuler(; substeps, lower_bound)`: `substeps` explicit steps per MCS, values clipped at `lower_bound`; `BackwardEuler(; substeps, newton, lower_bound, linsolve, solver_type)`: implicit steps, each a linear solve with `linsolve`; `CrankNicolson(…)`, `BDF2(…)`: second-order implicit steps, the same keywords; `QuasiSteady(; newton, linsolve, solver_type)`: the steady state in each MCS; each takes `init = :steady` (a steady start) and `compute_type` (`Float32` or `Float64`: the number type its kernels compute in; default the problem's `T`) | `ExplicitEuler()`: the automatic count, no clip |
-| `ode_solver` | `ExplicitEuler(; substeps)`, `RK4(; substeps)`, `Adaptive(alg; kwargs...)` | `ExplicitEuler()`, one step per MCS |
+| `ode_solver` | `ExplicitEuler(; substeps)`, `Potts.RK4(; substeps)`, `Adaptive(alg; kwargs...)` | `ExplicitEuler()`, one step per MCS |
 | `solvers` | `[x => solver, …]`, per variable or component | — |
 
 The linear solvers `DevicePCG(; maxiters, reltol, precond)`, `Multigrid(; cycle = (2, 2), cycles, reltol, maxiters)`
@@ -498,7 +499,7 @@ threads).
   state, parameters and seed.
 
 ```@example equations
-prob2 = remake(prob; ode_solver = Adaptive(Tsit5(); reltol = 1e-8), solvers = [:g => RK4(substeps = 4)])
+prob2 = remake(prob; ode_solver = Adaptive(Tsit5(); reltol = 1e-8), solvers = [:g => Potts.RK4(substeps = 4)])
 solve(prob2, SequentialCPM(); save_everystep = false).retcode
 ```
 
@@ -538,7 +539,7 @@ absorbing = PDESystem([Dt(C) ~ Dd * laplacian(C) + 0.1 * incell(t, x, y)],
     @lattice Lattice((30, 20); boundary = (Closed(), Periodic()), neighborhood = Moore(1))
     @energy begin
         Volume(cell; target = 25.0, strength = 1.0)
-        contacts => 8.0 * (kind != kind′)
+        contacts => 8.0 * (kind != neighbor_kind)
     end
     @fields absorbing (incell => kind == cell, wall => kind == border)
     @sweep Metropolis(; temperature = 8.0)
@@ -652,7 +653,7 @@ using Potts.ModelingToolkitBase: System, @variables, @parameters
     @lattice Lattice((30, 30); neighborhood = Moore(1))
     @energy begin
         Volume(cell; target = 25.0, strength = 1.0)
-        contacts => 8.0 * (kind != kind′)
+        contacts => 8.0 * (kind != neighbor_kind)
     end
     @sweep Metropolis(; temperature = 8.0)
 end

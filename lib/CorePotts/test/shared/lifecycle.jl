@@ -27,7 +27,7 @@ struct HostFrozen
 end
 CorePotts.frozen_varies(::HostFrozen) = true                # required with a custom rule
 struct OnlyRemake end                                       # … which this one forgets
-fk_mask(u, k) = (kinds = Array(u.cell.kind); map(c -> c != 0 && kinds[c] == k, Array(u.σ)))
+fk_mask(u, k) = (kinds = Array(u.cell.kind); map(c -> c != 0 && kinds[c] == k, Array(u.ownership)))
 CorePotts.remake_frozen(s::HostFrozen, prob, u) = fk_mask(u, s.k)
 CorePotts.remake_frozen(::OnlyRemake, prob, u) = fk_mask(u, 2)
 
@@ -42,7 +42,7 @@ function fk_problem(trigger = nothing; kind = nothing, sys = FrozenKind(2), T = 
     f = CPMFunction(gg_delta_H; temperature = gg_temperature, lifecycle = lc, sys)
     return PottsProblem(f, st, lat, tspan, gg_params(T); seed, frozen = fk_mask(st, 2))
 end
-fk_sites(u, c) = Array(u.σ) .== c
+fk_sites(u, c) = Array(u.ownership) .== c
 # saved states i-1 → i in which cell c's site set changed
 fk_moved(sol, c, is) = count(i -> fk_sites(sol.u[i], c) != fk_sites(sol.u[i - 1], c), is)
 fk_flip(S) = (st, p, ctx, key, mcs, c) -> mcs == S ? EVENT_TRANSITION : EVENT_NONE

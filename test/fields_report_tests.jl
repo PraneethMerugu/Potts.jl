@@ -233,7 +233,7 @@ end
             for _ in 1:6
                 step!(plain)
             end
-            @test ref.u.site.c == plain.u.site.c && ref.u.σ == plain.u.σ
+            @test ref.u.site.c == plain.u.site.c && ref.u.ownership == plain.u.ownership
         end
     end
 end

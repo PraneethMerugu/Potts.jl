@@ -24,8 +24,8 @@
         for ins in ([CpPDE.endo => Potts.kind == 1, CpPDE.vol => vol],
                     [CpPDE.endo(T, X, Y) => Potts.kind == 1, :vol => vol])
             m = Potts.couple(CpHost(; name = :m), CpPDE.sys(); inputs = ins)
-            @test any(x -> Potts.info(x).name === :c, Potts.variables(m))                 # `c`, not `fields₊c`
-            @test Set(Potts.info(q).name for q in Potts.parameters(m)) == Set([:Dc, :s, :kd, :av])
+            @test any(x -> Potts.info(x).name === :c, Potts.declared_variables(m))                 # `c`, not `fields₊c`
+            @test Set(Potts.info(q).name for q in Potts.declared_parameters(m)) == Set([:Dc, :s, :kd, :av])
             for fs in (ExplicitEuler(), BackwardEuler())
                 err, n = cp_replay(m, CpPDE.sys(), cp_hand, fs; fs)
                 @test n == 12 && err <= cp_tol(fs) || (println("couple $fs: $err"); false)
@@ -54,7 +54,7 @@ end
             err, n = cp_replay(CpDrive(; name = :m), CpPDE.sys2(), cp_hand2, fs; fs)
             @test n == 12 && err <= cp_tol(fs) || (println("CpDrive $fs: $err"); false)
             # (control: the drive moves the path)
-            @test cp_run(CpDrive(; name = :m), fs).u[end].σ != cp_run(CpFields2(; name = :m), fs).u[end].σ
+            @test cp_run(CpDrive(; name = :m), fs).u[end].ownership != cp_run(CpFields2(; name = :m), fs).u[end].ownership
         end
         # the operating point reaches the coupled parameters as any others
         k = cp_run(CpFields(; name = :m), ExplicitEuler(); op = [cp_op(); :kd => 0.3]).u[end].site.c
@@ -75,14 +75,14 @@ end
             # the drive in the same body: bitwise the `@extend` route (whose field the owned oracle checks)
             a, d = cp_run(CpSame(; name = :m), fs), cp_run(CpDrive(; name = :m), fs)
             @test cp_same(d, a)
-            @test a.u[end].σ != cp_run(CpFields2(; name = :m), fs).u[end].σ             # (control: the drive moves the path)
+            @test a.u[end].ownership != cp_run(CpFields2(; name = :m), fs).u[end].ownership             # (control: the drive moves the path)
             # a list of names; one name with the other field reached by name: both fields run the PDESystem
             for M in (CpList, CpOne)
                 err, n = cp_replay(M(; name = :m), CpPDE.sys3(), cp_hand2, fs; fs, fields = (:c, :u))
                 @test n == 12 && err <= cp_tol(fs) || (println("$M $fs: $err"); false)
             end
             o = cp_run(CpOne(; name = :m), fs)
-            @test maximum(o[:u][end]) > 0 && o.u[end].σ != cp_run(CpList(; name = :m), fs).u[end].σ   # (the drives read other fields)
+            @test maximum(o[:u][end]) > 0 && o.u[end].ownership != cp_run(CpList(; name = :m), fs).u[end].ownership   # (the drives read other fields)
         end
         # control: a wrong binding is caught by the oracles
         @test cp_run(CpWrong(; name = :m), ExplicitEuler()).u[end].site.c != cp_run(CpFields(; name = :m), ExplicitEuler()).u[end].site.c
@@ -178,13 +178,13 @@ end
             base = cp_run(M(; name = :m), fs)
             for (name, v) in ((:s, 0.5), (:kd, 0.1), (:Dc, 0.2))
                 d = cp_run(M(; name = :m), fs; op = [cp_op(); name => ForwardDiff.Dual(v, 1.0)])
-                @test all(d.u[i].σ == base.u[i].σ for i in eachindex(base.u))
+                @test all(d.u[i].ownership == base.u[i].ownership for i in eachindex(base.u))
                 @test all(ForwardDiff.value.(d.u[i].site.c) == base.u[i].site.c for i in eachindex(base.u))
                 @test eltype(d.u[end].site.c) <: ForwardDiff.Dual
                 h = 1e-4 * v
                 rp = cp_run(M(; name = :m), fs; op = [cp_op(); name => v + h])
                 rm = cp_run(M(; name = :m), fs; op = [cp_op(); name => v - h])
-                @test all(rp.u[i].σ == base.u[i].σ == rm.u[i].σ for i in eachindex(base.u))   # the path is fixed
+                @test all(rp.u[i].ownership == base.u[i].ownership == rm.u[i].ownership for i in eachindex(base.u))   # the path is fixed
                 fd = (cp_q(rp) - cp_q(rm)) / 2h
                 @test ForwardDiff.partials(cp_q(d), 1) ≈ fd rtol = 1e-6
                 @test abs(fd) > 1e-6                                                          # (not a zero derivative)
@@ -207,7 +207,7 @@ end
             step!(integ)
         end
         inp = Potts.field_inputs(integ)
-        σ = Array(current_state(integ).σ)
+        σ = Array(current_state(integ).ownership)
         k = Array(current_state(integ).cell.kind)
         V = [count(==(j), σ) for j in 1:length(k)]
         # (the inputs of `Potts.fields`: the binding `endo => kind == A` is written in as `kind == 1`,
@@ -245,8 +245,8 @@ end
         for fs in (ExplicitEuler(), FieldGroups(:c => BackwardEuler(), :q => QuasiSteady()))
             b = cr_run(CrLife(; name = :m), fs, 20; op = cr_rich_op())
             # (the run divides cells and kills cell 2)
-            live = [length(setdiff(unique(u.σ), 0)) for u in b.u]
-            @test live[end] > live[1] && any(u -> count(==(2), u.σ) == 0, b.u)
+            live = [length(setdiff(unique(u.ownership), 0)) for u in b.u]
+            @test live[end] > live[1] && any(u -> count(==(2), u.ownership) == 0, b.u)
             fs isa FieldGroups && continue
             err, n = cp_replay(
                 CrLife(; name = :m), CpRev.rich(), cr_hand, fs; fs, k = 20, op = cr_rich_op(), seed = 5,
@@ -275,7 +275,7 @@ end
             # the coarse field against LatticePDE's run of the raw PDESystem, with `endo` filled by hand
             c = cr_run(CrCrs(; name = :m), fs)
             @test size(c.u[end].site.cc) == (12, 10)
-            @test all(u -> cr_partial(u.σ, 2) > 0, c.u)
+            @test all(u -> cr_partial(u.ownership, 2) > 0, c.u)
             err, n = cp_replay(CrCrs(; name = :m), CpRev.coarse_sys(), (σ, kind) -> [:endo => [s != 0 && kind[s] == 1 for s in σ]],
                 fs; fs, k = 10, seed = 5, fields = (:cc,)
             )

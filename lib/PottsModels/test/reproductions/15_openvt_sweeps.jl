@@ -405,7 +405,7 @@ end
 # the O5 rows of a final state (Fig 7)
 function p615g_o5(u; β, γ)
     o = PottsModels.openvt_snapshot(u)
-    fr = PottsModels.openvt_frame(u; β, γ)
+    fr = PottsModels.openvt_frame(u; beta = β, gamma = γ)
     return (; x_pos = o.x, y_pos = o.y, radius_i = o.r, inhibited = Int.(fr.i .> 0))
 end
 
@@ -547,7 +547,7 @@ if !P615G_FULL
         @test cap.capped && cap.t == Inf && cap.mcs == 1500 && cap.N < 250 && cap.retcode === :Success
         # same seed, same run
         again = p615g_job(prob, :beta, 10_300, 1; cells = 250, cap = 1500)
-        @test again.N == cap.N && Array(again.u.σ) == Array(cap.u.σ)
+        @test again.N == cap.N && Array(again.u.ownership) == Array(cap.u.ownership)
         # O5 rows: the uninhibited colony grows everywhere; γ = 1e-4 arrests the interior
         o_free = p615g_o5(free.u; β = 0.0, γ = 0.0)
         o_jump = p615g_o5(jump.u; β = 0.0, γ = 1e-4)

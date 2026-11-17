@@ -58,7 +58,7 @@ const P60L_ELL = 12.0
     @energy begin
         cells(blob) => λ * (volume - V₀)^2
         cells(doomed) => λd * volume^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
         edges(bond) => k * (distance - ℓ)^2
     end
     @sweep Metropolis(; temperature = T)
@@ -81,7 +81,7 @@ end
     @energy begin
         cells(blob) => λ * (volume - V₀)^2
         cells(doomed) => λd * volume^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
         edges(bond) => k * (distance - ℓ)^2
     end
     @unlink bond when = distance > 1000.0
@@ -105,7 +105,7 @@ end
     @energy begin
         cells(blob) => λ * (volume - V₀)^2
         cells(doomed) => λd * volume^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
         edges(bond) => k * (distance - ℓ)^2
     end
     @link bond when = distance < 0.0
@@ -129,7 +129,7 @@ function p60l_unlinked(u)                                        # u with cell 2
     remove_incident!(p60l_bond(v), 2)
     return v
 end
-p60l_mask(u, c) = Array(u.σ) .== c
+p60l_mask(u, c) = Array(u.ownership) .== c
 
 # independent oracle: centroid of cell c from σ (closed lattice: the plain mean)
 function p60l_centroid(σ, c)
@@ -143,7 +143,7 @@ p60l_edge(σ) = P60L_K * (p60l_dist(σ, 1, 2) - P60L_ELL)^2
 function p60l_props(prob, u, c)
     lat = prob.lattice
     moore = CorePotts.relation(Moore(1), lat)
-    σ = Array(u.σ)
+    σ = Array(u.ownership)
     out = CorePotts.Proposal{2}[]
     for t in eachindex(σ)
         x = CorePotts.coordinates(lat, t)
@@ -165,7 +165,7 @@ end
 @testset "P6.0l: a live link's energy acts (negative control)" begin
     prob = p60l_problem(P60lPair)
     u = prob.u0
-    σ = Array(u.σ)
+    σ = Array(u.ownership)
     @test linked(p60l_bond(u), 1, 2)
     @test p60l_edge(σ) ≈ 8.0
     # H share of the link: H(linked) − H(unlinked) == k (d − ℓ)²

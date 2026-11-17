@@ -114,22 +114,19 @@ end
         prob = eu_problem()
         sol = solve(prob, SequentialCPM(); saveat = 1)
         @test sol.stats.lifecycle.divisions >= 2
-        @test sum(u -> eu_bad(u.cell, u.σ, prob.lattice), sol.u) == 0
+        @test sum(u -> eu_bad(u.cell, u.ownership, prob.lattice), sol.u) == 0
     end
-    @testset "device lifecycle on the CPU backend ($form)" for (form, sites) in (("fused", CorePotts.FUSE_SITES[]), ("staged", 0))
-        fuse = CorePotts.FUSE_SITES[]
+    @testset "device lifecycle on the CPU backend ($form)" for (form, sites) in (("fused", CheckerboardCPM().fused_lifecycle_max_sites), ("staged", 0))
         CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
-        CorePotts.FUSE_SITES[] = sites
         try
             prob = eu_problem()
-            integ = init(prob, CheckerboardCPM(); saveat = 1)
+            integ = init(prob, CheckerboardCPM(; fused_lifecycle_max_sites = sites); saveat = 1)
             @test integ.lcache.device isa CorePotts.DeviceLifecycle
             @test (integ.lcache.device.fused! === nothing) == (form == "staged")
             sol = solve!(integ)
             @test sol.stats.lifecycle.divisions >= 2
-            @test sum(u -> eu_bad(u.cell, u.σ, prob.lattice), sol.u) == 0
+            @test sum(u -> eu_bad(u.cell, u.ownership, prob.lattice), sol.u) == 0
         finally
-            CorePotts.FUSE_SITES[] = fuse
             CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
         end
     end

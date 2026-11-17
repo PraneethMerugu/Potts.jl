@@ -245,8 +245,8 @@ end
         # S1: the components read integral(h) over the σ the sweep just left: Δy = Σ h over it
         hx = Float64[i for i in 1:20, j in 1:20]
         sol = solve(PottsProblem(BSIntS1(; name = :s), [ownership => σ, kind => [:A], :h => hx], (0, 6)), SequentialCPM(); saveat = 1)
-        @test any(k -> sol.u[k].σ != sol.u[k + 1].σ, 1:6)
-        @test all(k -> sol.u[k + 1].cell.y[1] - sol.u[k].cell.y[1] == sum(hx[sol.u[k + 1].σ .== 1]), 1:6)
+        @test any(k -> sol.u[k].ownership != sol.u[k + 1].ownership, 1:6)
+        @test all(k -> sol.u[k + 1].cell.y[1] - sol.u[k].cell.y[1] == sum(hx[sol.u[k + 1].ownership .== 1]), 1:6)
         # S2: the before block sets h = 2, so the lifecycle reads integral(h) = 16·2 = 32 > 20 and
         # divides in MCS 0 (stale, 16·1 = 16 would wait a step); no copy is accepted after
         sol = solve(PottsProblem(BSIntS2(; name = :s), [ownership => σ, kind => [:A]], (0, 3); capacity = 8), SequentialCPM(); saveat = 1)
@@ -271,12 +271,12 @@ end
             integ = init(prob, alg; save_start = false, save_end = false)
             foreach(_ -> step!(integ), 1:4)
             sol = solve!(init(prob, alg; checkpoint = checkpoint(integ)))
-            @test sol.u[end].σ == full.u[end].σ
+            @test sol.u[end].ownership == full.u[end].ownership
             @test sol.u[end].site.c == full.u[end].site.c
         end
         # `anneal` runs the derived refreshes only: the field (not stepped) is left as given
         u = deepcopy(prob.u0); u.site.c .= 0.1
-        @test Potts.anneal(prob, u; mcs = 2).site.c == u.site.c
+        @test Potts.anneal(prob, u, 2).site.c == u.site.c
     end
 end
 

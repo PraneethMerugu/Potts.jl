@@ -59,9 +59,9 @@ end
 using .WLiteModels: xv, a, excess, volume, decay, inner_all, inner_empty
 
 
-const W_all = Potts.wrap(:allparts, complete(inner_all), WLiteModels.pde(:allparts), WLiteModels.part())
+const W_all = Potts.wrap_system(:allparts, complete(inner_all), WLiteModels.pde(:allparts), WLiteModels.part())
 
-const W_empty = Potts.wrap(:gg, complete(inner_empty), nothing, WLiteModels.part())
+const W_empty = Potts.wrap_system(:gg, complete(inner_empty), nothing, WLiteModels.part())
 
 
 # W and inner agree: the same value, or the same exception type

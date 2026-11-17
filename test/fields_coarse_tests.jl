@@ -359,7 +359,7 @@ end
         # a state given as such skips those checks: the binding asserts each array's length
         p = PottsProblem(FcMix(; name = :f), fc_op(), (0, 1))
         st = p.u0
-        bad = CorePotts.CPMState(st.σ, st.cell, merge(st.site, (; e = zeros(8, 6))), st.model, st.history)
+        bad = CorePotts.CPMState(st.ownership, st.cell, merge(st.site, (; e = zeros(8, 6))), st.model, st.history)
         fco_throws(
             ArgumentError, ["field array `e` has 48 values; its grid has 192 sites"],
             () -> init(remake(p; u0 = bad), SequentialCPM())

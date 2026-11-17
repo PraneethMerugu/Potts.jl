@@ -226,13 +226,13 @@ end
         s2[2:5, 2:5] .= 1
         s2[7:10, 7:10] .= 2
         integ = init(PottsProblem(FaKind(; name = :a), [ownership => s2, kind => [:A, :B]], (0, 4); seed = 3), SequentialCPM())
-        owner(s) = (σ = Array(s.σ); [i == 0 ? 0 : (i == 1 ? 1 : 2) for i in σ])
+        owner(s) = (σ = Array(s.ownership); [i == 0 ? 0 : (i == 1 ? 1 : 2) for i in σ])
         @test Array(st(integ).site.K) == Float64.(owner(st(integ)) .== 2)
         moved = false
         for _ in 1:4
-            σb = Array(st(integ).σ)
+            σb = Array(st(integ).ownership)
             step!(integ)
-            moved |= Array(st(integ).σ) != σb
+            moved |= Array(st(integ).ownership) != σb
             @test Array(st(integ).site.K) == Float64.(owner(st(integ)) .== 2)
         end
         @test moved                                     # the sweep moved the cells
@@ -246,7 +246,7 @@ end
                 PottsProblem(FaBlock(; name = :a), [ownership => s3, kind => [:A], :m0 => m0], (0, n); seed = 5),
                 SequentialCPM()
             );
-            [(step!(ig); Array(st(ig).σ)) for _ in 1:n]
+            [(step!(ig); Array(st(ig).ownership)) for _ in 1:n]
         )
         @test all(==(s3), run(0.0, 2))
         late = run(2.0, 5)
@@ -310,7 +310,7 @@ end
         σ[2:3, 2:3] .= 1
         op = [ownership => σ, kind => [:A]]
         sys = FxLoop(; name = :x)
-        cv = only(filter(x -> string(x) in ("c", "c(t)"), Potts.variables(sys)))
+        cv = only(filter(x -> string(x) in ("c", "c(t)"), Potts.declared_variables(sys)))
         s = solve(PottsProblem(sys, op, (0, 3); field_solver = ExplicitEuler(substeps = 2)), SequentialCPM())
         w, c = 1.0, 0.0
         for _ in 1:6

@@ -48,21 +48,21 @@ end
     )
 
     full = renderframe(state; channels)
-    @test channel(full, site_key).values == site_values
-    @test channel(full, site_key).values !== site_values
-    @test channel(full, cell_key).values == cell_values
-    @test channel(full, cell_key).values !== cell_values
-    @test channel(full, medium_key).values == medium_values
-    @test channel(full, medium_key).values !== medium_values
+    @test frame_channel(full, site_key).values == site_values
+    @test frame_channel(full, site_key).values !== site_values
+    @test frame_channel(full, cell_key).values == cell_values
+    @test frame_channel(full, cell_key).values !== cell_values
+    @test frame_channel(full, medium_key).values == medium_values
+    @test frame_channel(full, medium_key).values !== medium_values
 
     for axis in 1:3, index in (1, size(CorePotts.ownership(state), axis))
         request = RenderRequest(extent = OrthogonalSlice(axis, index))
         frame = renderframe(state, request; channels)
         expected = _site_slice_oracle(site_values, axis, index)
-        @test channel(frame, site_key).values == expected
+        @test frame_channel(frame, site_key).values == expected
         @test frame_size(frame) == size(expected)
-        @test channel(frame, cell_key).values == cell_values
-        @test channel(frame, medium_key).values == medium_values
+        @test frame_channel(frame, cell_key).values == cell_values
+        @test frame_channel(frame, medium_key).values == medium_values
     end
 
     site_before = copy(site_values)
@@ -70,12 +70,12 @@ end
     medium_before = copy(medium_values)
     first_frame = renderframe(state; channels)
     second_frame = renderframe(state; channels)
-    fill!(channel(first_frame, site_key).values, -1f0)
-    channel(first_frame, cell_key).values[first(active_identities)] = -1.0
-    channel(first_frame, medium_key).values[UInt32(1)] = -1.0
-    @test channel(second_frame, site_key).values == site_before
-    @test channel(second_frame, cell_key).values == cell_before
-    @test channel(second_frame, medium_key).values == medium_before
+    fill!(frame_channel(first_frame, site_key).values, -1f0)
+    frame_channel(first_frame, cell_key).values[first(active_identities)] = -1.0
+    frame_channel(first_frame, medium_key).values[UInt32(1)] = -1.0
+    @test frame_channel(second_frame, site_key).values == site_before
+    @test frame_channel(second_frame, cell_key).values == cell_before
+    @test frame_channel(second_frame, medium_key).values == medium_before
     @test site_values == site_before
     @test cell_values == cell_before
     @test medium_values == medium_before
@@ -91,7 +91,7 @@ end
         index = firstindex(solution.u),
         channels = (RenderChannel(site_key, solution_values),),
     )
-    @test channel(from_solution, site_key).values == solution_values
+    @test frame_channel(from_solution, site_key).values == solution_values
 end
 end
 
@@ -143,7 +143,7 @@ end
     kindidx(st, c) = c == 0 ? 1 : Int(@inbounds st.cell.kind[c]) + 1
     function dH(st, p, prop, ctx)
         J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
-        return CorePotts.contact_delta(st.σ, ctx, prop, J) +
+        return CorePotts.contact_delta(st.ownership, ctx, prop, J) +
                CorePotts.volume_delta(st.cell.volume, prop, (v, c) -> p.λ * (v - p.V0)^2)
     end
     lat = CorePotts.Lattice((30, 30))

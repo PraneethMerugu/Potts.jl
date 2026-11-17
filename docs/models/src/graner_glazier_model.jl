@@ -23,7 +23,7 @@
         #> area
         cells(dark, light) => λ * (volume - V₀)^2
         #> contacts
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
         #<
     end
     #> sweep

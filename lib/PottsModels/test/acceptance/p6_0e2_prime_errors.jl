@@ -71,7 +71,7 @@ end
 
 @testset "P6.0e2: primes of non-site variables" begin
     @testset "`m′` of a cell variable is rejected where it is written ($where)" for (where, stmt) in [
-        "contact energy" => :(@energy contacts => J[kind, kind′] + m′),
+        "contact energy" => :(@energy contacts => J[kind, neighbor_kind] + m′),
         "cell energy" => :(@energy cells(A) => m′ * volume),
         "drive" => :(@drive copy => m′),
         "constraint" => :(@constraint cells(A) => m′ < 2),
@@ -84,7 +84,7 @@ end
     end
 
     @testset "`g′` of a model variable is rejected" begin
-        @test p60e2_rejection(() -> mtkcompile(p60e2_model(:(@energy contacts => J[kind, kind′] + g′))),
+        @test p60e2_rejection(() -> mtkcompile(p60e2_model(:(@energy contacts => J[kind, neighbor_kind] + g′))),
             "g′", P60E2_PHRASE) === :ok
         @test p60e2_rejection(() -> mtkcompile(p60e2_model(:(@after_mcs g ~ g′ + 1))), "g′", P60E2_PHRASE) === :ok
     end
@@ -96,7 +96,7 @@ end
         cprime = Potts.variable(only(Potts.Symbolics.@variables c′(t)), :cell)
         @test p60e2_rejection("c′") do
             sys = PottsSystem(; name = :p60e2prog, kinds = getfield(getfield(base, :part), :kinds), lattice = Potts.lattice(base),
-                parameters = Potts.parameters(base), variables = [Potts.variables(base); cprime],
+                parameters = Potts.declared_parameters(base), variables = [Potts.declared_variables(base); cprime],
                 energies = getfield(getfield(base, :part), :energies), sweep = getfield(getfield(base, :part), :sweep))
             mtkcompile(sys)
         end === :ok
@@ -104,13 +104,13 @@ end
         pprime = Potts.parameter(Symbol("c′"), 1.0)
         @test p60e2_rejection("c′") do
             sys = PottsSystem(; name = :p60e2prog, kinds = getfield(getfield(base, :part), :kinds), lattice = Potts.lattice(base),
-                parameters = [Potts.parameters(base); pprime], variables = Potts.variables(base),
+                parameters = [Potts.declared_parameters(base); pprime], variables = Potts.declared_variables(base),
                 energies = getfield(getfield(base, :part), :energies), sweep = getfield(getfield(base, :part), :sweep))
             mtkcompile(sys)
         end === :ok
         # control: the same programmatic rebuild without the clash builds and runs
         ok = PottsSystem(; name = :p60e2prog, kinds = getfield(getfield(base, :part), :kinds), lattice = Potts.lattice(base),
-            parameters = Potts.parameters(base), variables = Potts.variables(base),
+            parameters = Potts.declared_parameters(base), variables = Potts.declared_variables(base),
             energies = getfield(getfield(base, :part), :energies), sweep = getfield(getfield(base, :part), :sweep))
         @test p60e2_runs(ok)
     end
@@ -121,7 +121,7 @@ end
 
     @testset "negative controls" begin
         # D-061: `c′` of a site variable in a contact energy still builds and runs
-        @test p60e2_runs(p60e2_model(:(@energy contacts => J[kind, kind′] + (c + c′) / 2)))
+        @test p60e2_runs(p60e2_model(:(@energy contacts => J[kind, neighbor_kind] + (c + c′) / 2)))
         # an unprimed cell variable still works in energies and updates
         @test p60e2_runs(p60e2_model(:(@energy cells(A) => 0.1 * m * volume)))
         @test p60e2_runs(p60e2_model(:(@after_mcs m ~ m + 1)))

@@ -4,7 +4,7 @@
 # equation and each condition a condition of the payload (`bcs`). The fields then compile,
 # group and run as the fields of `@fields` in `@potts_model`. A component's quantities are namespaced,
 # `name₊c` and `name₊k`, as those of an MTK component are. A model wrapped with its own
-# PDESystem (`Potts.wrap(name, sys, pdesys, part)`) has its fields moved the same way at
+# PDESystem (`Potts.wrap_system(name, sys, pdesys, part)`) has its fields moved the same way at
 # `mtkcompile`, under their own names.
 
 # The model a PDESystem's fields join: a `PottsSystem`, or (for `@fields`, while the model is
@@ -647,7 +647,7 @@ _with_field_inputs(md, ins, origins = (), coupled = ()) =
             origins), coupled)
 
 # payload metadata key (F4-B6): the names of the fields that coupled PDESystems brought (`@fields`,
-# `Potts.couple`, `compose`, `Potts.wrap`). Their equations are the model's field equations;
+# `Potts.couple`, `compose`, `Potts.wrap_system`). Their equations are the model's field equations;
 # any other equation of a field is refused (`_check_field_lines`). An extension keeps its bases'
 # entries (`_merged_metadata`).
 struct _CoupledFields end

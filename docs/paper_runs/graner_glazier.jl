@@ -36,7 +36,7 @@ gg = GranerGlazier(; name = :gg, lattice = size(σv))
 ncell = length(k0)
 relax = PottsProblem(gg, [ownership => σv, kind => fill(:light, ncell),
         :J => [0 8 8; 8 2 2; 8 2 2], :T => 5.0, :λ => 1.0, :V₀ => 40.0], (0, T_RELAX); seed = SEED)
-relax_wall = @elapsed σ0 = Array(solve(relax, SequentialCPM(; proposal = Moore(1)); saveat = T_RELAX).u[end].σ)
+relax_wall = @elapsed σ0 = Array(solve(relax, SequentialCPM(; proposal = Moore(1)); saveat = T_RELAX).u[end].ownership)
 @assert all(>(0), [count(==(c), σ0) for c in 1:ncell]) "a cell vanished during relaxation"
 
 prob = PottsProblem(gg, [ownership => σ0, kind => k0], (0, T_END); seed = SEED)
@@ -44,8 +44,8 @@ alg = SequentialCPM(; proposal = Moore(1))
 
 ## T = 0 annealed copy for display (reproduction 09's `annealed`)
 function annealed(u)
-    q = PottsProblem(GranerGlazier(; name = :anneal, lattice = size(u.σ)),
-        [ownership => Array(u.σ), kind => k0, :T => 0.0], (0, 2PAPER_MCS); seed = 1)
+    q = PottsProblem(GranerGlazier(; name = :anneal, lattice = size(u.ownership)),
+        [ownership => Array(u.ownership), kind => k0, :T => 0.0], (0, 2PAPER_MCS); seed = 1)
     return solve(q, SequentialCPM(; proposal = Moore(1)); saveat = 2PAPER_MCS).u[end]
 end
 const ANNEALED = Dict{Int, Any}()

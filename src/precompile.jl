@@ -47,7 +47,7 @@ end
     @fields c = Potts._precompile_fields(length(lattice)) (src => kind == cell)
     @energy begin
         cells(cell) => λ * (volume - V_target)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @drive copy => -λ * (c[target] - c[source])
     @equations begin
@@ -74,7 +74,7 @@ end
 # The workload: also run by the AMDGPU extension (PottsAMDGPUExt), since loading AMDGPU
 # invalidates much of this cache (Symbolics, GPUArrays and BFloat16s methods; PG-11)
 function _precompile_workload()
-    (; volume, surface, kind, kind′, owner, source, target, old, new) = B
+    (; volume, surface, kind, neighbor_kind, owner, source, target, old, new) = B
     λ = parameter(:λ, 1.0)
     V₀ = parameter(:V₀, 20.0)
     T = parameter(:T, 10.0)
@@ -84,7 +84,7 @@ function _precompile_workload()
         lattice = lattice_spec((16, 16); neighborhood = Moore(1)), parameters = Any[λ, V₀, T, J],
         variables = Any[mark],
         energies = [energy(cells(1) => λ * (volume - V₀)^2 + λ * (surface - V₀)^2),
-            energy(contacts => _index(J, kind, kind′))],
+            energy(contacts => _index(J, kind, neighbor_kind))],
         drives = [drive(COPY => ifelse(_index(kind, new) == 1, -λ * (_index(mark, target) - _index(mark, source)), 0.0))],
         constraints = [connectivity(1)],
         updates = [update(:after_mcs, mark ~ max(Pre(mark) - 1, 0)), update(:on_copy, _index(mark, target) ~ λ)],

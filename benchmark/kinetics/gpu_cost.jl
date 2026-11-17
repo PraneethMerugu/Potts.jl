@@ -7,7 +7,7 @@ kindidx(st, c) = c == 0 ? 1 : Int(@inbounds st.cell.kind[c]) + 1
 function graner_delta_H(st, p, prop, ctx)
     J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
     E(v, c) = p.λ * (v - p.V0)^2
-    return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E)
+    return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E)
 end
 graner_temperature(st, p, prop, ctx) = p.T
 const GRANER = CPMFunction(graner_delta_H; temperature = graner_temperature)

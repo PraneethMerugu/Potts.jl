@@ -265,7 +265,7 @@ end
         @test Statistics.mean(xs) < total_energy(prob, prob.u0) - 100           # the runs relax: the statistic is not trivial
         p32 = site_contact_problem(SiteContacts(; name = :sq), (24, 24); T = Float32)
         @test eltype(p32.u0.site.cue) === Float32
-        σ, kinds = p32.u0.σ, p32.u0.cell.kind
+        σ, kinds = p32.u0.ownership, p32.u0.cell.kind
         prop = CorePotts.Proposal(5 + 24 * 3, 6 + 24 * 3, (5, 4), 1, σ[5, 4], σ[6, 4])
         io = IOBuffer()
         code_llvm(io, p32.f.delta_H, typeof.((p32.u0, p32.p, prop, ctx_of(p32))); debuginfo = :none)
@@ -290,12 +290,12 @@ end
 
         prob = site_contact_problem(SiteContactsFold(; name = :f), (24, 24))
         u, lat = prob.u0, prob.lattice
-        m = sum(u.site.cue[i] for i in eachindex(u.σ) if u.σ[i] > 0 && u.cell.kind[u.σ[i]] == 1) / 100
+        m = sum(u.site.cue[i] for i in eachindex(u.ownership) if u.ownership[i] > 0 && u.cell.kind[u.ownership[i]] == 1) / 100
         H = 0.0
-        for i in eachindex(u.σ), o in prob.contact.offsets
+        for i in eachindex(u.ownership), o in prob.contact.offsets
             ins, y = CorePotts.shift(lat, CorePotts.coordinates(lat, i), o)
             j = CorePotts.linear_index(lat, y)
-            ins && u.σ[i] != u.σ[j] && (H += u.site.cue[i] * u.site.cue[j] * m / 2)
+            ins && u.ownership[i] != u.ownership[j] && (H += u.site.cue[i] * u.site.cue[j] * m / 2)
         end
         E0 = sum((u.cell.volume[c] - 16)^2 for c in eachindex(u.cell.volume))
         @test total_energy(prob, u) ≈ H + E0 rtol = 1.0e-12
@@ -347,7 +347,7 @@ end
         prob = PottsProblem(TwoSiteTermsOnCopy(; name = :t), [ownership => σ, kind => fill(:A, length(kinds)), :mark => cue], (0, 4))
         @test site_selfcheck(prob, Moore(1)) < 1.0e-9
         # names a user cannot write stay out of the error text
-        @test_throws r"^(?!.*site′).*not available in a contact term"s mtkcompile(
+        @test_throws r"^(?!.*neighbor_site).*not available in a contact term"s mtkcompile(
             Potts.PottsSystem(;
                 name = :bad,
                 kinds = [:medium, :A], lattice = Potts.lattice_spec((8, 8)), energies = [Potts.energy(Potts.contacts => Potts.B.target)],
@@ -426,9 +426,9 @@ end
             elseif case == 5
                 @energy cells(A) => (; m′ = 2.0).m′ * volume
             elseif case == 6
-                @energy contacts => J[kind, kind′] + m′
+                @energy contacts => J[kind, neighbor_kind] + m′
             elseif case == 7
-                @energy contacts => J[kind, kind′] + λ′
+                @energy contacts => J[kind, neighbor_kind] + λ′
             elseif case == 8
                 @observed q ~ 1.0
                 @energy cells(A) => q′
@@ -448,7 +448,7 @@ end
         end
         @potts_model PrimeExtSiteOk begin
             @extend c, J = b = PrimeBase()
-            @energy contacts => J[kind, kind′] + c′
+            @energy contacts => J[kind, neighbor_kind] + c′
         end
         @potts_model PrimeExtParamBad begin
             @parameters q = 1.0
@@ -467,7 +467,7 @@ end
             @test mtkcompile(PrimeProbeLocal(; name = :pp, case)) isa CompiledPottsSystem
         end
         # declared non-site quantities, with the right description
-        @test rejects(() -> PrimeProbeLocal(; name = :pp, case = 6), "m′", "`m` is a cell variable; in a contact term, `m[owner′]`")
+        @test rejects(() -> PrimeProbeLocal(; name = :pp, case = 6), "m′", "`m` is a cell variable; in a contact term, `m[neighbor_owner]`")
         @test rejects(() -> PrimeProbeLocal(; name = :pp, case = 7), "λ′", "`λ` is a parameter")
         @test rejects(() -> PrimeProbeLocal(; name = :pp, case = 8), "q′", "`q` is an observed quantity")
         # inherited through @extend, named or not
@@ -524,7 +524,7 @@ end
             (prob, solve(prob, SequentialCPM(); saveat = 1))
         )
         (pi, si), (pn, sn) = run(OnCopyIndexInline), run(OnCopyIndexNamed)
-        @test [u.σ for u in si.u] == [u.σ for u in sn.u]
+        @test [u.ownership for u in si.u] == [u.ownership for u in sn.u]
         @test [u.cell.y for u in si.u] == [u.cell.y for u in sn.u]
         @test sum(si.u[end].cell.y) > 0                       # the update ran
         # the index's relation sets the read reach (Moore(3) → 3); the plain index stays at 1

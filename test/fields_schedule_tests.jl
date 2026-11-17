@@ -25,10 +25,10 @@ end
             run(M) = solve(PottsProblem(M(; name = :m), fd_chemo_op(), (0, 3); field_solver = ExplicitEuler(substeps = 2)), alg)
             plain, split, inter = run(FdChemoPlain), run(FdChemoSplit), run(FdChemoInter)
             # oracle: with nothing between the passes the copies are exactly one sweep's
-            @test split.u[end].σ == plain.u[end].σ && split.u[end].site.c == plain.u[end].site.c
+            @test split.u[end].ownership == plain.u[end].ownership && split.u[end].site.c == plain.u[end].site.c
             @test split.stats.attempts == plain.stats.attempts
             # control: the field stepped between the passes changes the copies
-            @test inter.u[end].σ != plain.u[end].σ
+            @test inter.u[end].ownership != plain.u[end].ownership
         end
         p = PottsProblem(FdChemoSplit(; name = :m), fd_chemo_op(), (0, 1); field_solver = ExplicitEuler(substeps = 2))
         @test any(e -> e isa CorePotts.Repeat && e.n == 4, p.f.phases.mcs)
@@ -56,7 +56,7 @@ end
         @test sol_plain.stats.connectivity_deferred > 0
         @test sol_split.stats.connectivity_deferred == sol_plain.stats.connectivity_deferred
         @test sol_split.stats.attempts == sol_plain.stats.attempts
-        @test sol_split.u[end].σ == sol_plain.u[end].σ
+        @test sol_split.u[end].ownership == sol_plain.u[end].ownership
         @test sol_split.u[end].cell.anchor == sol_plain.u[end].cell.anchor
         @test sol_split.u[end].cell.x0 == sol_plain.u[end].cell.x0
     end
@@ -114,7 +114,7 @@ end
         for (M, alg) in ((FdChemo, SequentialCPM()), (FdChemo, CheckerboardCPM()), (FdChemoInter, SequentialCPM()))
             prob = PottsProblem(M(; name = :c), fd_chemo_op(), (0, 6); field_solver = ExplicitEuler())
             whole = solve(prob, alg).u[end]
-            same(u) = Array(u.σ) == Array(whole.σ) && Array(u.site.c) == Array(whole.site.c)
+            same(u) = Array(u.ownership) == Array(whole.ownership) && Array(u.site.c) == Array(whole.site.c)
             # a checkpoint taken mid-run, written, read back and continued: the uninterrupted run
             a = init(prob, alg); foreach(_ -> step!(a), 1:3)
             path = tempname()
@@ -145,7 +145,7 @@ end
         sim = solve(EnsembleProblem(prob), SequentialCPM(); trajectories = 3)
         for i in 1:3
             one = solve(remake(prob; replica = prob.replica + UInt32(i)), SequentialCPM()).u[end]
-            @test sim.u[i].u[end].σ == one.σ && sim.u[i].u[end].site.c == one.site.c
+            @test sim.u[i].u[end].ownership == one.ownership && sim.u[i].u[end].site.c == one.site.c
         end
         @test sim.u[1].u[end].site.c != sim.u[2].u[end].site.c                         # independent trajectories
     end

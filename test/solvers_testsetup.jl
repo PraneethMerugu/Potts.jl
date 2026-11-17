@@ -7,7 +7,7 @@ isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "d
 using PottsModels: GranerGlazier, OpenVTGrowingMonolayer
 using OrdinaryDiffEqTsit5: Tsit5
 
-# y' = −s, s' = y − s, listed in both orders. With `s => RK4()` and y under explicit Euler
+# y' = −s, s' = y − s, listed in both orders. With `s => Potts.RK4()` and y under explicit Euler
 # the two run in separate groups; Jacobi means each step reads (y, s) at its start.
 @potts_model SolverPairYS begin
     @kinds medium A
@@ -81,7 +81,7 @@ end
 
 solver_sigma() = (σ = zeros(Int32, 16, 16); σ[5:8, 5:8] .= 1; σ)
 solver_op() = [ownership => solver_sigma(), kind => [:A]]
-solver_var(sys, n) = only(filter(x -> string(x) in (string(n), string(n, "(t)")), variables(sys)))
+solver_var(sys, n) = only(filter(x -> string(x) in (string(n), string(n, "(t)")), Potts.declared_variables(sys)))
 
 solver_err(f) = try
     f(); nothing
@@ -252,7 +252,7 @@ end
     @kinds medium A
     @variables z(cell) = 0.0
     @lattice Lattice((12, 12))
-    @relations far = Ball(2.0)
+    @relations far = EuclideanBall(2.0)
     @energy cells => (volume - 9.0)^2
     @after_mcs z ~ count(owner[n] == id for n in far(40))
     @sweep Metropolis(; temperature = 2.0)

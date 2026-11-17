@@ -111,20 +111,20 @@ function run_one(case, arm, seed)
     st = integ.state
     ncell = length(kinds)
     L1, L2 = size(σ0)
-    prev = copy(st.σ)
-    _, het0, cen = snapshot(st.σ, kinds, ncell)
+    prev = copy(st.ownership)
+    _, het0, cen = snapshot(st.ownership, kinds, ncell)
     pos = (copy(cen[1]), copy(cen[2]))         # unwrapped centroids
     vols, pers, xs, ys, hets = Vector{Int32}[], Vector{Int}[], Vector{Float64}[], Vector{Float64}[], Int[]
     changed, counted = 0, 0
     wall = @elapsed for k in 1:nmcs
-        copyto!(prev, st.σ)
+        copyto!(prev, st.ownership)
         step!(integ)
         if k > BURN * f
-            changed += nchanged(st.σ, prev)
+            changed += nchanged(st.ownership, prev)
             counted += 1
         end
         if k % every == 0
-            per, het, c = snapshot(st.σ, kinds, ncell)
+            per, het, c = snapshot(st.ownership, kinds, ncell)
             for a in 1:2
                 pos[a] .+= minimage.(c[a] .- cen[a], a == 1 ? L1 : L2)
                 cen[a] .= c[a]

@@ -338,7 +338,7 @@ end
 @inline function _cv_decide_body!(i, decide::D, st, p, ctx, key, mcs, sc, fresh) where {D}
     @inbounds sc.site[i] = Int32(0)
     in_domain(ctx.lattice, i) || return nothing
-    c = @inbounds st.σ[i]
+    c = @inbounds st.ownership[i]
     c > 0 || return nothing
     r = @inbounds sc.src[c]
     r > 0 || return nothing
@@ -528,7 +528,7 @@ end
 
 function _cv_writes!(ph::ConvertPass, st, p, ctx, key, mcs, sc, backend)
     dsts = map(P -> P(st), ph.wcols)
-    n = length(st.σ)
+    n = length(st.ownership)
     cap = length(st.cell.kind)
     if !all(d -> _wfloat(eltype(d)) || eltype(d) <: Integer, dsts)
         Exec.ishost(backend) || throw(ArgumentError(string(
@@ -562,9 +562,9 @@ struct _ConvertAfter{S, A, B}
 end
 @inline function (a::_ConvertAfter)(j)
     r = @inbounds a.site[j]
-    r > 0 || return @inbounds a.σ[j]
+    r > 0 || return @inbounds a.ownership[j]
     t = @inbounds a.to[r]
-    return t > 0 ? t : @inbounds(a.σ[j])
+    return t > 0 ? t : @inbounds(a.ownership[j])
 end
 
 @inline function _cv_paint_body!(i, st, ctx, sc, surf, rel, hook::H, u) where {H}
@@ -573,8 +573,8 @@ end
     r > 0 || return nothing
     t = @inbounds sc.to[r]
     t > 0 || return nothing
-    _ownership_delta!(st.cell, sc, surf, rel, ctx.lattice, st.σ, i, @inbounds(st.σ[i]), t,
-        _ConvertAfter(st.σ, sc.site, sc.to), u)
+    _ownership_delta!(st.cell, sc, surf, rel, ctx.lattice, st.ownership, i, @inbounds(st.ownership[i]), t,
+        _ConvertAfter(st.ownership, sc.site, sc.to), u)
     _owner_changed!(hook, st, i)
     return nothing
 end
@@ -602,7 +602,7 @@ _quiet(::KernelAbstractions.CPU, flag, j) = @inbounds(flag[j]) == 0
 function (ph::ConvertPass)(st, p, ctx, key, mcs, backend)
     sc = _cv(st)
     cap = length(st.cell.kind)
-    n = length(st.σ)
+    n = length(st.ownership)
     lat = ctx.lattice
     CL = Val(_has_clusters(st))
     Exec.launch!(backend, _cv_reset_body!, cap, (sc,))
@@ -627,7 +627,7 @@ function (ph::ConvertPass)(st, p, ctx, key, mcs, backend)
         launches += _cv_writes!(ph, st, p, ctx, key, mcs, sc, backend)
     end
     Exec.launch!(backend, _cv_paint_body!, n, (st, ctx, sc, surf, rel, ph.owner_changed, su))
-    Exec.launch!(backend, _cv_write_sigma_body!, n, (st.σ, sc))
+    Exec.launch!(backend, _cv_write_sigma_body!, n, (st.ownership, sc))
     Exec.launch!(backend, _cv_finalize_body!, cap, (st.cell, sc, lat, surf, su))
     launches += 3
     # the trackers rebuilt from σ, as the device lifecycle rebuilds them (`lifecycle_device.jl`)
@@ -637,13 +637,13 @@ function (ph::ConvertPass)(st, p, ctx, key, mcs, backend)
     if cc !== nothing
         cols = _count_columns(st, cc)
         Exec.launch!(backend, _dcount_zero_body!, cap, (dv, par, cols))
-        Exec.launch!(backend, _dcount_body!, n, (dv, par, st.σ, st.cell.kind, cc, cols, lat))
+        Exec.launch!(backend, _dcount_body!, n, (dv, par, st.ownership, st.cell.kind, cc, cols, lat))
         launches += 2
     end
     eul = _euler_columns(st.cell)
     if eul !== nothing
         Exec.launch!(backend, _deuler_zero_body!, cap, (dv, par, eul))
-        Exec.launch!(backend, _deuler_body!, _euler_anchors(lat), (dv, par, st.σ, eul, lat))
+        Exec.launch!(backend, _deuler_body!, _euler_anchors(lat), (dv, par, st.ownership, eul, lat))
         launches += 2
     end
     if _has_clusters(st)
@@ -660,7 +660,7 @@ function (ph::ConvertPass)(st, p, ctx, key, mcs, backend)
         if csurf !== nothing
             cu = _units_for(eltype(csurf), ctx.surface, n, backend)
             Exec.launch!(backend, _dcluster_surface_body!, n, (
-                dv, par, st.σ, st.cell, csurf, ctx.surface, lat, cu))
+                dv, par, st.ownership, st.cell, csurf, ctx.surface, lat, cu))
             launches += 1
             if cu !== nothing
                 Exec.launch!(backend, _dcluster_surface_fold_body!, cap, (dv, par, csurf, cu))

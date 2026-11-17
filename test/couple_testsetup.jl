@@ -137,15 +137,15 @@ cp_hand2(σ, kind) = cp_hand(σ, kind)[1:1]
 function cp_replay(m, sys, ins, alg; op = cp_op(), k = 12, seed = 3, fs = ExplicitEuler(), fields = (:c,),
                    skip = (σ0, σ) -> false, p = nothing)
     integ = init(PottsProblem(m, op, (0, k); field_solver = fs, seed), SequentialCPM())
-    σ = Array(current_state(integ).σ)
+    σ = Array(current_state(integ).ownership)
     prob = LP.discretize(sys, LP.LatticeDiscretization(LP.Grid(size(σ)); T = Float64); inputs = ins(σ, Array(current_state(integ).cell.kind)))
     p === nothing || (prob = LP.remake(prob; p))
     state() = reduce(vcat, (vec(Array(getproperty(current_state(integ).site, f))) for f in fields))
     err, n = 0.0, 0
     for _ in 1:k
-        σ0, u0 = Array(current_state(integ).σ), state()
+        σ0, u0 = Array(current_state(integ).ownership), state()
         step!(integ)
-        σ = Array(current_state(integ).σ)
+        σ = Array(current_state(integ).ownership)
         skip(σ0, σ) && continue
         o = LP.solve(LP.remake(prob; u0, tspan = (0.0, 1.0), inputs = ins(σ, Array(current_state(integ).cell.kind))), alg; dt = 1.0).u[end]
         err, n = max(err, maximum(abs, o .- state())), n + 1
@@ -156,7 +156,7 @@ end
 cp_tol(::ExplicitEuler) = 0.0
 cp_tol(::BackwardEuler) = 1e-9
 
-cp_same(r, a) = all(r.u[i].σ == a.u[i].σ for i in eachindex(r.u)) &&
+cp_same(r, a) = all(r.u[i].ownership == a.u[i].ownership for i in eachindex(r.u)) &&
                 all(r.u[i].site == a.u[i].site for i in eachindex(r.u))
 
 cp_build_err(ex) = try

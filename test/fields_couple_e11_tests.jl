@@ -72,7 +72,7 @@ end
                 field_solver = ExplicitEuler(substeps = 1))
             @test hasproperty(prob.u0.cell, :anchor)
             u = solve(prob, SequentialCPM()).u[end]
-            @test Array(u.σ) == ce_mask_sigma() && Array(u.site.c) == 7.0 .* (ce_mask_sigma() .== 1)
+            @test Array(u.ownership) == ce_mask_sigma() && Array(u.site.c) == 7.0 .* (ce_mask_sigma() .== 1)
         end
     end
 end

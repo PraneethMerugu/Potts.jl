@@ -62,8 +62,8 @@ Base.@nospecializeinfer function _problem(@nospecialize(f::CPMFunction), @nospec
         @nospecialize(proposal), @nospecialize(relations), @nospecialize(spacing), @nospecialize(frozen), seed, replica,
         repeat, @nospecialize(tangent), @nospecialize(kwargs::NamedTuple)
     )
-    size(u0.σ) == lattice.dims ||
-        throw(ArgumentError("state size $(size(u0.σ)) ≠ lattice $(lattice.dims)"))
+    size(u0.ownership) == lattice.dims ||
+        throw(ArgumentError("state size $(size(u0.ownership)) ≠ lattice $(lattice.dims)"))
     t0, t1 = Int.(tspan)
     0 <= t0 <= t1 <= typemax(UInt32) ||
         throw(ArgumentError("tspan must satisfy 0 ≤ t0 ≤ t1 ≤ 2^32 - 1"))
@@ -86,7 +86,7 @@ Base.@nospecializeinfer function _problem(@nospecialize(f::CPMFunction), @nospec
         frozen = rule
     end
     if lattice.mask !== nothing                     # outside the domain: medium, never mobile
-        all(i -> lattice.mask[i] || u0.σ[i] == 0, eachindex(u0.σ)) ||
+        all(i -> lattice.mask[i] || u0.ownership[i] == 0, eachindex(u0.ownership)) ||
             throw(ArgumentError("sites outside the lattice domain must belong to the medium (0)"))
         frozen = frozen === nothing ? .!lattice.mask : (frozen .| .!lattice.mask)
     end
@@ -148,11 +148,11 @@ remake_frozen(sys, prob, u0) = (k = frozen_kinds(sys)) === nothing ? prob.frozen
     frozen_reads(sys)
 
 The state leaves a custom `remake_frozen` rule reads at a refresh, as a tuple of `Symbol`s:
-`:σ` (the labels) or cell column names, each at most once. On a device, a refresh then
+`:ownership` (the labels) or cell column names, each at most once. On a device, a refresh then
 copies only these leaves to the host before running the rule; every other leaf is the live
 device array: do not read it on the host (scalar indexing errors; `Array(...)` works but is
 an uncounted transfer). `nothing` (the default) copies the whole state. A rule that reads model, site
-or history quantities keeps the default. A name that is neither `:σ` nor a cell column of
+or history quantities keeps the default. A name that is neither `:ownership` nor a cell column of
 the state, or that is repeated, is an `ArgumentError` at `init` (and at every refresh), on every backend. The
 standard rule (`frozen_kinds`) runs on the integrator's backend and ignores this hook.
 """
@@ -169,16 +169,16 @@ function _check_frozen_hooks(@nospecialize(sys))         # (host, once per `init
     return nothing
 end
 
-# The declared reads of a custom rule (D-128): `nothing`, or a tuple of distinct `:σ` and
+# The declared reads of a custom rule (D-128): `nothing`, or a tuple of distinct `:ownership` and
 # cell column names of `st`; checked at `init` and at every custom-rule refresh.
 function _frozen_reads(@nospecialize(sys), @nospecialize(st))
     reads = frozen_reads(sys)
     reads === nothing && return nothing
     (reads isa Tuple && all(n -> n isa Symbol, reads)) || throw(ArgumentError(
-        "`frozen_reads` must be `nothing` or a tuple of Symbols (`:σ` or cell column names); got $(repr(reads))"))
+        "`frozen_reads` must be `nothing` or a tuple of Symbols (`:ownership` or cell column names); got $(repr(reads))"))
     for n in reads
-        n === :σ || haskey(st.cell, n) || throw(ArgumentError(
-            "`frozen_reads` declares `$n`, which is neither `:σ` nor a cell column of the state " *
+        n === :ownership || haskey(st.cell, n) || throw(ArgumentError(
+            "`frozen_reads` declares `$n`, which is neither `:ownership` nor a cell column of the state " *
             "(cell columns: $(join(keys(st.cell), ", ")))"))
     end
     allunique(reads) || throw(ArgumentError(
@@ -190,7 +190,7 @@ _custom_frozen(@nospecialize(sys)) = frozen_varies(sys) && frozen_kinds(sys) ===
 # the standard rule on a host state (without the domain, which `PottsProblem` adds)
 function _standard_frozen(kinds, u)
     k = Array(u.cell.kind)
-    return map(s -> s != 0 && _in_kinds(k[s], kinds), Array(u.σ))
+    return map(s -> s != 0 && _in_kinds(k[s], kinds), Array(u.ownership))
 end
 # `remake` keywords beyond the fixed ones (a symbolic layer's problem-construction keywords,
 # e.g. Potts' solvers): `(f, u0)`, a new `f` built from them and `prob.u0` re-laid out for it
@@ -285,10 +285,10 @@ Base.@kwdef mutable struct PottsStats
     transfer_bytes::Int = 0
     lifecycle::LifecycleStats = LifecycleStats()
     fields::FieldStats = FieldStats()       # the field solvers' counters (status words, F3)
-    # Σ `f.track` over the committed copies (`CPMFunction(…; track)`, Potts `track = (:ΔH,)`):
+    # Σ `f.track` over the committed copies (`CPMFunction(…; track)`, Potts `track = (:energy_change,)`):
     # `nothing` without a track. Exact after every step under `SequentialCPM`; under
     # `CheckerboardCPM` brought up to date at the host read points (D-140)
-    accepted_ΔH::Union{Nothing, Float64} = nothing
+    accepted_energy_change::Union{Nothing, Float64} = nothing
     # copies the `Global` veto refused only for want of window (P6.9a, D-197): `nothing` for
     # a model without `Global`, else an `Int` (always 0 on SequentialCPM, with or without
     # `skip_interior`, and without a window); under `CheckerboardCPM` brought up to date at
@@ -400,7 +400,7 @@ function Base.merge(a::PottsStats, b::PottsStats)
         launches = a.launches + b.launches, refreshes = a.refreshes + b.refreshes,
         syncs = a.syncs + b.syncs, transfers = a.transfers + b.transfers,
         transfer_bytes = a.transfer_bytes + b.transfer_bytes, lifecycle = l, fields = fs,
-        accepted_ΔH = (a.accepted_ΔH === nothing || b.accepted_ΔH === nothing) ? nothing : a.accepted_ΔH + b.accepted_ΔH,
+        accepted_energy_change = (a.accepted_energy_change === nothing || b.accepted_energy_change === nothing) ? nothing : a.accepted_energy_change + b.accepted_energy_change,
         connectivity_deferred = (a.connectivity_deferred === nothing || b.connectivity_deferred === nothing) ? nothing :
                                 a.connectivity_deferred + b.connectivity_deferred)
 end
@@ -452,12 +452,12 @@ function _check_keywords(kw::NamedTuple)
 end
 
 """
-    init(prob::PottsProblem, alg::CPMAlgorithm; backend = CPU(), saveat = [], save_start = true,
+    init(prob::PottsProblem, alg::AbstractCPMAlgorithm; backend = CPU(), saveat = [], save_start = true,
          save_end = true, save_everystep = isempty(saveat), save_idxs = nothing, tstops = [],
          maxiters = typemax(Int), callback = nothing, checkpoint = nothing, seed = nothing,
          rng = nothing, verbose = true, progress = false, progress_steps = 1000,
          progress_name = "CPM", progress_id = :CorePotts, alias = nothing, dense = false)
-    solve(prob::PottsProblem, alg::CPMAlgorithm; kwargs...)
+    solve(prob::PottsProblem, alg::AbstractCPMAlgorithm; kwargs...)
 
 The integrator (or the solution) of a Potts run, with SciML's common keywords on the MCS
 clock:
@@ -466,7 +466,7 @@ clock:
   `save_end`, `save_everystep` (every MCS; by default when `saveat` is empty, as SciML).
   A saved state is a host copy of the whole state, so a run whose saves would hold more than
   2 GiB warns: give `saveat`, `save_everystep = false` or `save_idxs`. `save_idxs` names the
-  state leaves to save (`:σ`, cell, site or model array names, or the model's state
+  state leaves to save (`:ownership`, cell, site or model array names, or the model's state
   variables); the saved states hold only those.
 - `tstops`: MCS the run must stop at (each MCS is a stop already; `step!(integ, n, true)`
   and DiffEqCallbacks' timed callbacks add them). Only the stops `t0 < t ≤ tf` are kept, as
@@ -486,14 +486,14 @@ clock:
 Any other keyword is an `ArgumentError` listing these (`SOLVE_KEYWORDS`). The
 problem's `kwargs` are merged in first.
 """
-function CommonSolve.init(prob::PottsProblem, alg::CPMAlgorithm; kwargs...)
+function CommonSolve.init(prob::PottsProblem, alg::AbstractCPMAlgorithm; kwargs...)
     kw = _merge_kwargs(prob.kwargs, NamedTuple(kwargs))
     _check_keywords(kw)
     return _init_kw(prob, alg; kw...)
 end
 
 function _init_kw(
-        prob::PottsProblem, alg::CPMAlgorithm; backend = CPU(), saveat = Int[], save_start::Bool = true,
+        prob::PottsProblem, alg::AbstractCPMAlgorithm; backend = CPU(), saveat = Int[], save_start::Bool = true,
         save_end::Bool = true, save_everystep::Union{Nothing, Bool} = nothing, save_idxs = nothing, tstops = Int[],
         maxiters::Integer = typemax(Int), callback = nothing, checkpoint = nothing, seed = nothing, rng = nothing,
         verbose::Bool = true, progress::Bool = false, progress_steps::Integer = 1000, progress_name = "CPM",
@@ -539,8 +539,8 @@ function _init_run(prob, alg, backend, checkpoint, callback, o)
         prob = _from_checkpoint(prob, checkpoint)
         # the accumulator continues only into an equally tracked run (a hand-written model
         # may keep fingerprint 0 whatever its track, so this is checked here too)
-        (checkpoint.stats.accepted_ΔH === nothing) == (prob.f.track === nothing) || throw(ArgumentError(
-            "checkpoint was taken with tracking $(checkpoint.stats.accepted_ΔH === nothing ? "off" : "on") " *
+        (checkpoint.stats.accepted_energy_change === nothing) == (prob.f.track === nothing) || throw(ArgumentError(
+            "checkpoint was taken with tracking $(checkpoint.stats.accepted_energy_change === nothing ? "off" : "on") " *
             "but the problem has tracking $(prob.f.track === nothing ? "off" : "on"); continue it in a problem " *
             "with the same `track`"))
         # a restored state is no fresh one: its at-init phases skip the field clamps (D-145)
@@ -595,7 +595,7 @@ function _saved_leaves(prob, idxs)
     σ, cell, site, model = false, Symbol[], Symbol[], Symbol[]
     for x in (idxs isa Union{AbstractVector, Tuple} ? idxs : (idxs,))
         i = _leaf(prob, x)
-        if i === :σ
+        if i === :ownership
             σ = true
         else
             push!(i.scope === :cell ? cell : i.scope === :site ? site : model, i.name)
@@ -603,10 +603,10 @@ function _saved_leaves(prob, idxs)
     end
     return SavedLeaves(σ, unique!(cell), unique!(site), unique!(model))
 end
-# one entry of `save_idxs`: `:σ`, a `StateIndex`, an array name of the state, or a state
+# one entry of `save_idxs`: `:ownership`, a `StateIndex`, an array name of the state, or a state
 # variable of the model
 function _leaf(prob, x)
-    x === :σ && return :σ
+    x === :ownership && return :ownership
     x isa StateIndex && return x
     u = prob.u0
     if x isa Symbol
@@ -618,7 +618,7 @@ function _leaf(prob, x)
     end
     throw(
         ArgumentError(
-            "save_idxs: `$x` is not a state leaf of the problem; give `:σ`, a cell, site or model array name " *
+            "save_idxs: `$x` is not a state leaf of the problem; give `:ownership`, a cell, site or model array name " *
                 "($(join(Iterators.flatten((keys(u.cell), keys(u.site), keys(u.model))), ", "))) or a state variable"
         )
     )
@@ -627,7 +627,7 @@ end
 # a host copy of the leaves `l` of the host state `u` (all of it for `nothing`)
 _select(u, ::Nothing) = u
 _select(u, l::SavedLeaves) = CPMState(
-    l.σ ? u.σ : nothing, _pick(u.cell, l.cell), _pick(u.site, l.site), _pick(u.model, l.model), (;)
+    l.ownership ? u.ownership : nothing, _pick(u.cell, l.cell), _pick(u.site, l.site), _pick(u.model, l.model), (;)
 )
 _pick(nt::NamedTuple, names::Vector{Symbol}) = NamedTuple{Tuple(names)}(map(n -> getfield(nt, n), Tuple(names)))
 
@@ -701,7 +701,7 @@ end
 # dynamic dispatch that compiles only that callee for the model's types (the setup runs once
 # per run; `step!` and the kernels stay fully specialized). Specialized on the model, this
 # body was 0.3–0.9 s of inference for every model (TS-R1 §1.1b).
-Base.@nospecializeinfer function _init(@nospecialize(prob::PottsProblem), @nospecialize(alg::CPMAlgorithm), fresh::Bool,
+Base.@nospecializeinfer function _init(@nospecialize(prob::PottsProblem), @nospecialize(alg::AbstractCPMAlgorithm), fresh::Bool,
         backend, opts::PottsOptions, @nospecialize(callback)
     )
     alg isa SequentialCPM && !(backend isa CPU) &&
@@ -727,12 +727,13 @@ Base.@nospecializeinfer function _init(@nospecialize(prob::PottsProblem), @nospe
     ctx = with_tangent(ctx, prob.tangent, prob.f.phases, state, p, backend, fresh)
     cache = alg isa CheckerboardCPM ?
             CheckerboardCache(backend, lat, prob.f, relation(_proposal(alg, prob), lat); alg.region, alg.parts, alg.switches,
-                alg.threads, min_read = _copy_step_reach(prob, ctx), cell = state.cell) :
-            _skips_interior(alg) ? BoundaryCache(state.σ, ctx.mobility, ctx.lattice, ctx.proposal) : nothing
+                alg.threads, alg.inline_max_blocks, min_read = _copy_step_reach(prob, ctx), cell = state.cell) :
+            _skips_interior(alg) ? BoundaryCache(state.ownership, ctx.mobility, ctx.lattice, ctx.proposal) : nothing
     _check_repeat(prob.f.phases, alg, cache)
     key = RNGKey(prob.seed, prob.replica, prob.repeat)
+    fused_limits = _fused_lifecycle_limits(alg)
     lcache = prob.f.lifecycle === nothing ? nothing :
-             LifecycleCache(backend, ndims(lat), ncells(prob.u0), state, _device_planned(backend, alg, prob.f))
+             LifecycleCache(backend, ndims(lat), ncells(prob.u0), state, _device_planned(backend, alg, prob.f); fused_limits)
     integ = PottsIntegrator(prob, alg, _device_law(_law(alg, prob.f), backend), state, cache, lcache, prob.f, device_functions(prob.f), p, ctx, backend, key,
         prob.tspan[1], prob.tspan[2], opts, Int[], Any[], SciMLBase.ReturnCode.Default, _initial_stats(prob.f),
         _callbacks(callback), prob.frozen === nothing ? nsites(lat) : count(!, prob.frozen),
@@ -823,7 +824,7 @@ declared footprint and everything the copy step reads, `_copy_step_reach`: the c
 neighborhood and the relations the copy-step functions read, `copy_step_relations`, every
 relation by default. A relation read only at the MCS boundary does not count.)
 """
-function _preflight(prob::PottsProblem, alg::CPMAlgorithm, ctx)
+function _preflight(prob::PottsProblem, alg::AbstractCPMAlgorithm, ctx)
     prob.f.lifecycle === nothing || haskey(prob.u0.cell, :m1) ||
         throw(ArgumentError("a lifecycle needs the moment trackers: add `init_moments(σ, lattice, capacity)` to the cell state"))
     haskey(ctx, :surface) && has_origin(ctx.surface) &&
@@ -1029,7 +1030,7 @@ function _sequential_sweep!(integ::PottsIntegrator, ctx, part::NTuple{2, Int})
             integ.law, integ.key, integ.t, integ.f.track, part)
     end
     _stats(integ).accepted = max(_stats(integ).accepted, 0) + acc
-    tracked === nothing || (_stats(integ).accepted_ΔH += tracked)
+    tracked === nothing || (_stats(integ).accepted_energy_change += tracked)
     status != 0 && (integ.retcode = _status_code(status))
     return nothing
 end
@@ -1136,6 +1137,17 @@ function _device_planned(backend, alg, f::CPMFunction)
     return !_custom_frozen(f.sys)
 end
 const _FORCE_DEVICE_LIFECYCLE = Ref(false)
+# tests: the device lifecycle runs staged whatever the `CheckerboardCPM` limits (for test files
+# that build their own algorithms)
+const _FORCE_STAGED_LIFECYCLE = Ref(false)
+# the sizes up to which the device lifecycle runs fused (`CheckerboardCPM` keywords; validated here)
+_fused_lifecycle_limits(alg) = (;)
+function _fused_lifecycle_limits(alg::CheckerboardCPM)
+    s, c = alg.fused_lifecycle_max_sites, alg.fused_lifecycle_max_cells
+    s >= 0 && c >= 0 || throw(ArgumentError(
+        "CheckerboardCPM(; fused_lifecycle_max_sites = $s, fused_lifecycle_max_cells = $c): use at least 0"))
+    return (; max_sites = s, max_cells = c)
+end
 
 # counters for the standard-rule refresh: only when the mask can change by the standard rule
 _mobility_scratch(backend, prob, ::AllMobile) = nothing
@@ -1154,14 +1166,14 @@ end
 function _check_convert_atomics(backend, u0)
     haskey(u0.model, CONVERT_FLAGS) || return nothing
     (eltype(getfield(u0.model, CONVERT_FLAGS)) === Int64 && !_atomic64(backend)) && throw(ArgumentError(
-        "this lattice has $(length(u0.σ)) sites and an @convert pass: it keeps site indices in Int64 atomics, " *
+        "this lattice has $(length(u0.ownership)) sites and an @convert pass: it keeps site indices in Int64 atomics, " *
         "which $(nameof(typeof(backend))) does not have (D-253); run it on the CPU or on ROCm or CUDA"))
     return nothing
 end
 
-# Statistics of a new run: `accepted_ΔH` is 0.0 when `f` tracks, else `nothing`;
+# Statistics of a new run: `accepted_energy_change` is 0.0 when `f` tracks, else `nothing`;
 # `connectivity_deferred` is 0 when the model uses `Global`, else `nothing`.
-_initial_stats(f) = PottsStats(; accepted_ΔH = f.track === nothing ? nothing : 0.0,
+_initial_stats(f) = PottsStats(; accepted_energy_change = f.track === nothing ? nothing : 0.0,
     connectivity_deferred = (f.connectivity === nothing || !f.connectivity.uses_global) ? nothing : 0)
 
 # Whole-cell connectivity on a device (P6.9a): a device lifecycle does not maintain the
@@ -1177,7 +1189,7 @@ function _check_connectivity(prob, alg, ctx)
 end
 
 # Read point of the checkerboard track (D-140, the D-089 pattern): the per-site accumulator
-# is reduced into `stats.accepted_ΔH` (Float64; one counted copy on a device) and zeroed.
+# is reduced into `stats.accepted_energy_change` (Float64; one counted copy on a device) and zeroed.
 # Nothing without a track or under `SequentialCPM` (with or without `skip_interior`),
 # which adds into the stats every step.
 _fold_track!(integ) = _fold_track!(_stats(integ), integ.cache)
@@ -1186,7 +1198,7 @@ _fold_track!(stats, ::BoundaryCache) = nothing
 function _fold_track!(stats, tk::NamedTuple)
     acc = tk.acc
     h = _ondevice(acc) ? _to_host(stats, acc) : acc
-    stats.accepted_ΔH += sum(Float64, h)
+    stats.accepted_energy_change += sum(Float64, h)
     fill!(acc, zero(eltype(acc)))
     return nothing
 end
@@ -1233,8 +1245,8 @@ end
 function _refresh_frozen!(integ, m::MaskMobility, kinds::Tuple)
     sc = integ.mscratch
     _flush_counts!(integ)                           # earlier device refreshes first
-    Exec.launch!(integ.backend, _frozen_body!, length(integ.state.σ),
-        (m.frozen, sc.device, integ.state.σ, integ.state.cell.kind, kinds, integ.ctx.lattice))
+    Exec.launch!(integ.backend, _frozen_body!, length(integ.state.ownership),
+        (m.frozen, sc.device, integ.state.ownership, integ.state.cell.kind, kinds, integ.ctx.lattice))
     _stats(integ).launches += 1
     _copy!(_stats(integ), sc.host, sc.device)         # synchronizes (a no-op copy on the CPU)
     fill!(sc.device, zero(eltype(sc.host)))
@@ -1249,7 +1261,7 @@ function _refresh_frozen!(integ, m::MaskMobility, ::Nothing)
     _sync!(_stats(integ), integ.backend)
     u = integ.backend isa CPU ? integ.state :
         reads === nothing ? _snapshot(_stats(integ), integ.backend, integ.state) :
-        _host_leaves(_stats(integ), integ.state; σ = :σ in reads, cell = filter(n -> n !== :σ, reads))
+        _host_leaves(_stats(integ), integ.state; ownership = :ownership in reads, cell = filter(n -> n !== :ownership, reads))
     fz = frozen_sites(integ.prob, u)
     _set_mobility!(_stats(integ), m, fz)
     integ.nmobile = count(!, fz)
@@ -1465,7 +1477,7 @@ end
 Base.Array(::PottsSolution) = throw(
     ArgumentError(
         "`Array(sol)`: a Potts state is a label lattice and cell tables, not one array (D-287 X9); read a " *
-            "quantity by name (`sol[x]`) or a saved state's arrays (`sol.u[i].σ`)"
+            "quantity by name (`sol[x]`) or a saved state's arrays (`sol.u[i].ownership`)"
     )
 )
 Base.getindex(::PottsSolution, j::Int, i::Int) = throw(
@@ -1480,7 +1492,7 @@ function _restore_stats!(dst::PottsStats, src::PottsStats)
     dst.committed = src.committed
     dst.refreshes = src.refreshes
     dst.syncs, dst.transfers, dst.transfer_bytes = src.syncs, src.transfers, src.transfer_bytes
-    dst.accepted_ΔH = src.accepted_ΔH
+    dst.accepted_energy_change = src.accepted_energy_change
     dst.connectivity_deferred = src.connectivity_deferred
     for f in fieldnames(LifecycleStats)
         setfield!(dst.lifecycle, f, getfield(src.lifecycle, f))
@@ -1515,7 +1527,7 @@ function SciMLBase.EnsembleProblem(prob::PottsProblem; prob_func = SciMLBase.DEF
 end
 
 """
-    solve(ens::EnsembleProblem, alg::CPMAlgorithm; backend = CPU(), trajectories, …)
+    solve(ens::EnsembleProblem, alg::AbstractCPMAlgorithm; backend = CPU(), trajectories, …)
 
 An ensemble solved without an ensemble algorithm runs `EnsembleThreads()`, with `backend`
 forwarded to every trajectory's `solve`: as many trajectories run at once as Julia has
@@ -1525,13 +1537,13 @@ once). A waiting trajectory spins on its CPU thread, so start Julia with no more
 free CPUs. `EnsembleSerial()` runs them one after another. Each trajectory has its own
 random stream, whichever ensemble runs it.
 """
-SciMLBase.__solve(prob::SciMLBase.AbstractEnsembleProblem, alg::CPMAlgorithm; backend = CPU(), kwargs...) =
+SciMLBase.__solve(prob::SciMLBase.AbstractEnsembleProblem, alg::AbstractCPMAlgorithm; backend = CPU(), kwargs...) =
     SciMLBase.__solve(prob, alg, EnsembleThreads(); backend, kwargs...)
 
 # a parallel ensemble's trajectories run with `IN_THREADED_ENSEMBLE` set (the tasks inherit it).
 # SciMLBase hands every trajectory an `rng`; it seeds the trajectories only when the ensemble
 # itself got a `seed` or an `rng`, else trajectory `i` keeps replica `i` of the problem's seed.
-function SciMLBase.__solve(prob::SciMLBase.AbstractEnsembleProblem, alg::CPMAlgorithm,
+function SciMLBase.__solve(prob::SciMLBase.AbstractEnsembleProblem, alg::AbstractCPMAlgorithm,
         ensemble::SciMLBase.BasicEnsembleAlgorithm; kwargs...)
     seeded = haskey(kwargs, :seed) || haskey(kwargs, :rng)
     generic() = invoke(SciMLBase.__solve, Tuple{SciMLBase.AbstractEnsembleProblem, Any, SciMLBase.BasicEnsembleAlgorithm},
@@ -1878,7 +1890,7 @@ SymbolicIndexingInterface.is_time_dependent(::PottsProblem) = true
 # a problem's state is updated in place; `solve(prob; seed)` and `solve(prob; rng)` choose the
 # random stream (an ensemble hands each trajectory its own `rng`)
 SciMLBase.isinplace(::PottsProblem) = true
-SciMLBase.supports_solve_rng(::PottsProblem, ::Union{Nothing, CPMAlgorithm}) = true
+SciMLBase.supports_solve_rng(::PottsProblem, ::Union{Nothing, AbstractCPMAlgorithm}) = true
 
 # Field phases on an integrator (fields.jl): the parameter check before a write, and the
 # per-group substep counts

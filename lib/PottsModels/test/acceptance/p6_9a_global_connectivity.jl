@@ -259,7 +259,7 @@ function p69a_replay_mcs!(integ, mcs, ok; order = :pre, extra = nothing)
     law = integ.law
     key = integ.key
     ctx = CorePotts.sweep_ctx(integ.ctx, mcs)
-    σ = st.σ
+    σ = st.ownership
     lat = ctx.lattice
     mob = ctx.mobility
     nsite = CorePotts.nmobile(mob, lat)
@@ -313,7 +313,7 @@ function p69a_replay(prob, n, ok; kw...)
         st, r, _ = p69a_replay_mcs!(integ, t, ok; kw...)
         refused += r
         st == 0 || error("replay: status $st")
-        push!(out, copy(Array(integ.state.σ)))
+        push!(out, copy(Array(integ.state.ownership)))
     end
     return out, refused
 end
@@ -324,7 +324,7 @@ function p69a_run(prob, alg, n)
     out = Array{Int32}[]
     for _ in 1:n
         step!(integ)
-        push!(out, copy(Array(integ.state.σ)))
+        push!(out, copy(Array(integ.state.ownership)))
     end
     return out, integ
 end
@@ -709,20 +709,20 @@ end
         open = p69a_loop(dims, W + 1)
         shut = p69a_loop(dims, W + 2)
         sol = solve(PottsProblem(M(; name = :l), [ownership => open, kind => [:A]], (0, 10); seed = 3), CheckerboardCPM())
-        @test count(==(1), sol.u[end].σ) < count(==(1), open)                # s = W + 1 opens
+        @test count(==(1), sol.u[end].ownership) < count(==(1), open)                # s = W + 1 opens
         sol = solve(PottsProblem(M(; name = :l), [ownership => shut, kind => [:A]], (0, 10); seed = 3), CheckerboardCPM())
-        @test Array(sol.u[end].σ) == shut                                    # s = W + 2 never does
+        @test Array(sol.u[end].ownership) == shut                                    # s = W + 2 never does
         @test sol.stats.connectivity_deferred isa Int && sol.stats.connectivity_deferred > 0
         # SequentialCPM is exact: the window is ignored and nothing is counted
         sol = solve(PottsProblem(M(; name = :l), [ownership => shut, kind => [:A]], (0, 10); seed = 3), SequentialCPM())
-        @test count(==(1), sol.u[end].σ) < count(==(1), shut)
+        @test count(==(1), sol.u[end].ownership) < count(==(1), shut)
         @test sol.stats.connectivity_deferred == 0
     end
     # no window: exact on the checkerboard
     M = getfield(@__MODULE__, p69a_loopname(nothing, geom, periodic))
     shut = p69a_loop(dims, 5)
     sol = solve(PottsProblem(M(; name = :l), [ownership => shut, kind => [:A]], (0, 10); seed = 3), CheckerboardCPM())
-    @test count(==(1), sol.u[end].σ) < count(==(1), shut)
+    @test count(==(1), sol.u[end].ownership) < count(==(1), shut)
     @test sol.stats.connectivity_deferred == 0
 end
 
@@ -746,7 +746,7 @@ end
     prob = PottsProblem(P69aThin(; name = :t), [ownership => shut, kind => [:A]], (0, 30); seed = 11)
     full = solve(remake(prob; p = [:δ => -0.0625]), CheckerboardCPM())          # ΔH = 0: always accepted
     half = solve(remake(prob; p = [:δ => log(2.0) - 0.0625]), CheckerboardCPM())  # accepted with probability ½
-    @test Array(full.u[end].σ) == shut && Array(half.u[end].σ) == shut
+    @test Array(full.u[end].ownership) == shut && Array(half.u[end].ownership) == shut
     n1, nh = full.stats.connectivity_deferred, half.stats.connectivity_deferred
     @test n1 >= 60
     @test nh < n1
@@ -820,7 +820,7 @@ p69a_drive(σ, old, new, geom; periodic) =
 
 """Every `step`-th copy of `u` (state of `prob`) checked against brute force; returns counts."""
 function p69a_check_dh(prob, u, geom; periodic, step = 3, tol = 0.0)
-    σ = Array(u.σ)
+    σ = Array(u.ownership)
     dims = size(σ)
     ctx = Potts._host_ctx(prob)
     E0 = p69a_energy(σ, geom; periodic)
@@ -856,13 +856,13 @@ end
     full = geom === :hex ? :face : :full
     # t = 0 (the initial rebuild)
     u = prob.u0
-    @test getu(prob, :np)(prob)[1:3] == first.(p69a_cellvals(Array(u.σ), 3, geom, :face; periodic))
+    @test getu(prob, :np)(prob)[1:3] == first.(p69a_cellvals(Array(u.ownership), 3, geom, :face; periodic))
     integ = init(prob, alg; save_start = false, save_end = false, save_everystep = false)
     bad = 0
     seen = Set{Int}()
     for _ in 1:10
         step!(integ)
-        σ = Array(integ.state.σ)
+        σ = Array(integ.state.ownership)
         face = p69a_cellvals(σ, 3, geom, :face; periodic)
         fv = p69a_cellvals(σ, 3, geom, full; periodic)
         bad += collect(integ[:np])[1:3] != first.(face)
@@ -1022,11 +1022,11 @@ const P69A_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_de
             M = getfield(@__MODULE__, p69a_loopname(W, :square, false))
             sol = solve(PottsProblem(M(; name = :l), [ownership => p69a_loop((12, 12), W + 1), kind => [:A]], (0, 10); seed = 3, T = Float32),
                 CheckerboardCPM(); backend)
-            @test count(==(1), Array(sol.u[end].σ)) < 4W
+            @test count(==(1), Array(sol.u[end].ownership)) < 4W
             shut = p69a_loop((12, 12), W + 2)
             sol = solve(PottsProblem(M(; name = :l), [ownership => shut, kind => [:A]], (0, 10); seed = 3, T = Float32),
                 CheckerboardCPM(); backend)
-            @test Array(sol.u[end].σ) == shut
+            @test Array(sol.u[end].ownership) == shut
             @test sol.stats.connectivity_deferred > 0
         end
         # the invariant and the cell-scope values, square / hex / cubic
@@ -1039,7 +1039,7 @@ const P69A_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_de
             up = 0
             for _ in 1:10
                 step!(integ)
-                now = p69a_counts(Array(current_state(integ).σ), geom, :face; periodic)
+                now = p69a_counts(Array(current_state(integ).ownership), geom, :face; periodic)
                 up += (now[1] > prev[1]) + (now[3] > prev[3])
                 prev = now
             end
@@ -1049,7 +1049,7 @@ const P69A_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_de
             bad = 0
             for _ in 1:10
                 step!(integ)
-                face = p69a_cellvals(Array(current_state(integ).σ), 3, geom, :face; periodic)
+                face = p69a_cellvals(Array(current_state(integ).ownership), 3, geom, :face; periodic)
                 bad += collect(integ[:np])[1:3] != first.(face)
                 bad += collect(integ[:lp])[1:3] != last.(face)
             end

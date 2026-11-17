@@ -19,7 +19,7 @@ const ORACLE_σ33 = Int8[1, 1, 0, 2, 2, 0, 0, 0, 0]
 function oracle_sample(prob, alg)
     counts = Dict{Vector{Int8}, Int}()
     for seed in 1:ORACLE_R
-        σ = vec(Int8.(solve(remake(prob; seed), alg; save_start = false).u[end].σ))
+        σ = vec(Int8.(solve(remake(prob; seed), alg; save_start = false).u[end].ownership))
         counts[σ] = get(counts, σ, 0) + 1
     end
     return counts
@@ -52,7 +52,7 @@ end
     @lattice Lattice(dims; boundary, neighborhood = VonNeumann(1))
     @relations proposal = VonNeumann(1)
     @energy begin
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
         cells => λ * (volume - V₀)^2
     end
     if with_drive

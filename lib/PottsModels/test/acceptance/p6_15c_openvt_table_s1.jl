@@ -13,7 +13,7 @@
 #   axes, dropped across a closed edge), owner(s′) ≠ owner(s), for which `pred` holds.
 #   R is the contact relation (the lattice neighbourhood unless declared otherwise);
 #   `contacts(rel)` folds over a relation declared in `@relations`. `pred` may read the
-#   partner's `kind′` (`kind′ == medium`, `kind′ == B`; `medium` is the kind of owner 0)
+#   partner's `neighbor_kind` (`neighbor_kind == medium`, `neighbor_kind == B`; `medium` is the kind of owner 0)
 #   and constants; `true` counts every unlike pair, so `count(true for _ in contacts)` ==
 #   `surface` when the surface relation is the contact relation (cross-checked below).
 #   The value is EXACT after every accepted copy and every lifecycle event (it is read
@@ -22,7 +22,7 @@
 #   accepted copy, not per site per MCS (cost backstop below: ≤ 1.5× the same model reading
 #   the existing `surface` tracker; a whole-lattice recomputation, the only form today,
 #   measures ≈ 2.7×). M's free-surface fraction (Fig 4, spec §2.4, TST "method 3") is
-#   f = count(kind′ == medium for _ in contacts) / count(true for _ in contacts) on Moore(1).
+#   f = count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts) on Moore(1).
 #
 # G2 (Potts DSL, general):
 #   `randn()`: a standard normal draw with `rand()`'s contract (vocabulary.jl:299): its
@@ -48,7 +48,7 @@
 #       J_cc = 20).
 #     Cell variables: A_star (A*_i; starts at A₀), X (X_i), f (the free-surface fraction
 #     the growth rule read at the last MCS, after the sweep, G1 on Moore(1)).
-#     Energy λ (volume − A_star)² + contacts J[kind, kind′].
+#     Energy λ (volume − A_star)² + contacts J[kind, neighbor_kind].
 #     Growth, once per MCS after the sweep (spec §2.1): A_star += α iff
 #       (volume / A_star ≥ β) && (f ≥ γ)       (C9: ≥; a_i = A_i / A*_i, the current A*)
 #     else unchanged.
@@ -57,11 +57,11 @@
 #       a fresh X ~ N(μ_X, σ_X) redrawn while ≤ 0 (C3), at birth. The first cell's X is
 #       drawn the same way (from the run's seed) before the first division check.
 #       σ_X = 0 is the deterministic mode X ≡ μ_X = 2 (case (f)).
-#   openvt_reference_state(; lattice = (1400, 1400), A₀ = 50) -> [ownership => σ, kind => [:cell]]
+#   openvt_reference_state(; lattice = (1400, 1400), area0 = 50) -> [ownership => σ, kind => [:cell]]
 #     (exported; G5) one disc: the sites whose centres lie within R = √(A₀/π) of the
 #     lattice centre point ((size .+ 1) ./ 2, the layouts' `Center()`), id 1 — Morpheus'
 #     `Sphere radius="R"` at the centre. 52 sites on even lattices, 45 on odd ones (A₀ = 50).
-#   openvt_snapshot(u; A₀ = 50.0, center = (size(u.σ) .+ 1) ./ 2) -> (; x, y, r, f, a)
+#   openvt_snapshot(u; area0 = 50.0, center = (size(u.ownership) .+ 1) ./ 2) -> (; x, y, r, f, a)
 #     (PottsModels; G11's O2 row data, spec §3.1) live cells (volume > 0) in id order;
 #     x, y = (centroid − center) / R in R units (centroid = mean site index, closed
 #     lattice); r = √(A_star/π) / R; f = medium pairs / unlike pairs over Moore(1)
@@ -164,18 +164,18 @@ p615c_define(:P615cFold, :(@potts_model P615cFold begin
     end
     @energy begin
         cells(A, B) => 1.0 * (volume - A_t)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @before_mcs begin
-        mb ~ count(kind′ == medium for _ in contacts)
+        mb ~ count(neighbor_kind == medium for _ in contacts)
         ub ~ count(true for _ in contacts)
-        bb ~ count(kind′ == B for _ in contacts)
-        vb ~ count(kind′ == medium for _ in contacts(vn))
+        bb ~ count(neighbor_kind == B for _ in contacts)
+        vb ~ count(neighbor_kind == medium for _ in contacts(vn))
         sb ~ surface
     end
     @after_mcs begin
         A_t ~ Pre(A_t) + g
-        ma ~ count(kind′ == medium for _ in contacts)
+        ma ~ count(neighbor_kind == medium for _ in contacts)
         ua ~ count(true for _ in contacts)
     end
     @divide cells(A, B) when = volume >= 40, along = RandomPlane(), A_t => 20.0
@@ -194,14 +194,14 @@ p615c_define(:P615cFig4, :(@potts_model P615cFig4 begin
     @relations proposal = Moore(1)
     @energy cells(cell) => 1.0 * (volume - 10)^2
     @before_mcs begin
-        m ~ count(kind′ == medium for _ in contacts)
+        m ~ count(neighbor_kind == medium for _ in contacts)
         u ~ count(true for _ in contacts)
     end
     @sweep Metropolis(; temperature = T)
 end))
 
 # G1 cost: the same model reading the fold (CostFold) or the existing `surface` (CostSurf)
-for (name, rhs) in ((:P615cCostFold, :(count(kind′ == medium for _ in contacts) / count(true for _ in contacts))),
+for (name, rhs) in ((:P615cCostFold, :(count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts))),
                     (:P615cCostSurf, :(surface / (surface + 1.0))))
     p615c_define(name, :(@potts_model $name begin
         @kinds medium cell
@@ -218,7 +218,7 @@ for (name, rhs) in ((:P615cCostFold, :(count(kind′ == medium for _ in contacts
         @relations proposal = Moore(1)
         @energy begin
             cells(cell) => 2.0 * (volume - A_star)^2
-            contacts => J[kind, kind′]
+            contacts => J[kind, neighbor_kind]
         end
         @after_mcs begin
             f ~ $rhs
@@ -247,7 +247,7 @@ p615c_define(:P615cDraws, :(@potts_model P615cDraws begin
     @relations proposal = Moore(1)
     @energy begin
         cells(A) => 1.0 * (volume - 16)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @before_mcs begin
         z ~ randn()
@@ -293,7 +293,7 @@ function p615c_contacts(σ, offs; periodic = (false, false), kindof = nothing, t
 end
 p615c_live(u) = findall(>(0), Array(u.cell.volume))
 """A host copy of a saved state (σ and every cell column), so device states index alike."""
-p615c_host(u) = (; σ = Array(u.σ), cell = map(Array, u.cell))
+p615c_host(u) = (; ownership = Array(u.ownership), cell = map(Array, u.cell))
 p615c_hosts(sol) = [p615c_host(u) for u in sol.u]
 p615c_state_σ(st) = Array(only(p.second for p in st if p.first === ownership))
 p615c_state_kinds(st) = collect(only(p.second for p in st if p.first === kind))
@@ -305,7 +305,7 @@ function p615c_fnv(bytes)
     end
     return h
 end
-p615c_digest(u) = p615c_fnv(vcat(reinterpret(UInt8, vec(Array(u.σ))), reinterpret(UInt8, Array(u.cell.V_target))))
+p615c_digest(u) = p615c_fnv(vcat(reinterpret(UInt8, vec(Array(u.ownership))), reinterpret(UInt8, Array(u.cell.V_target))))
 p615c_par(prob, x) = getp(prob, x)(prob)
 
 # The F4 lattice: σ[x + 1, y + 1] is the tikz pixel (x, y); cell i = 1, i−1 = 2, i+1 = 3, i+2 = 4
@@ -400,7 +400,7 @@ function p615c_check_fold(sol)
     us = p615c_hosts(sol)
     for i in 2:length(us)
         prev, cur = us[i - 1], us[i]
-        σp, σc = prev.σ, cur.σ
+        σp, σc = prev.ownership, cur.ownership
         kp = prev.cell.kind
         n = length(prev.cell.volume)
         bp = p615c_contacts(σp, P615C_MOORE; periodic = (true, false), kindof = kp, toward = 2, n)
@@ -549,7 +549,7 @@ end
             @test all(i -> Array(a.u[i].cell.w)[1:800] == Array(b.u[i].cell.w)[1:800], 3:7)   # rand(): positive control (today)
             @test all(i -> Array(a.u[i].cell.z)[1:800] == Array(b.u[i].cell.z)[1:800], 3:7)
             @test Array(a.u[2].cell.d)[1:800] == Array(b.u[2].cell.d)[1:800]
-            @test Array(a.u[2].σ) != Array(b.u[2].σ)                     # control: the sweeps differ
+            @test Array(a.u[2].ownership) != Array(b.u[2].ownership)                     # control: the sweeps differ
         end
         # reproducible under the seed; another seed draws otherwise
         again = solve(prob, first(P615C_ALGS); saveat = 1)
@@ -601,7 +601,7 @@ end
         @test p615c_state_σ(PottsModels.openvt_reference_state()) ==
               p615c_state_σ(PottsModels.openvt_reference_state(; lattice = (1400, 1400)))
         # the radius follows A₀
-        σ = p615c_state_σ(PottsModels.openvt_reference_state(; lattice = (100, 100), A₀ = 100))
+        σ = p615c_state_σ(PottsModels.openvt_reference_state(; lattice = (100, 100), area0 = 100))
         @test count(==(1), σ) == count(I -> hypot(I[1] - 50.5, I[2] - 50.5) <= sqrt(100 / π), CartesianIndices(σ))
         @test abs(count(==(1), σ) - 100) <= 10
         # negative control: the 2024 state is a 5 × 5 square, not a disc
@@ -621,11 +621,11 @@ end
             for i in 2:length(us)
                 u = us[i]
                 live = p615c_live(u)
-                bad_v += u.cell.volume[live] != [count(==(c), u.σ) for c in live]
+                bad_v += u.cell.volume[live] != [count(==(c), u.ownership) for c in live]
                 badX += count(c -> !(u.cell.X[c] > 0), live)
                 if p615c_quiet(us, i)
                     quiet += 1
-                    bf = p615c_contacts(u.σ, P615C_MOORE; n = length(u.cell.volume))
+                    bf = p615c_contacts(u.ownership, P615C_MOORE; n = length(u.cell.volume))
                     bad_f += count(c -> u.cell.f[c] != bf.med[c] / bf.unlike[c], live)
                     bad_g += count(c -> abs(u.cell.A_star[c] - us[i - 1].cell.A_star[c] - α) > 1e-9, live)
                 else
@@ -660,7 +660,7 @@ end
             for i in 2:length(us)
                 prev, u = us[i - 1], us[i]
                 lost += p615c_live(u) != 1:k                                 # no division, no loss
-                bf = p615c_contacts(u.σ, P615C_MOORE; n = length(u.cell.volume))
+                bf = p615c_contacts(u.ownership, P615C_MOORE; n = length(u.cell.volume))
                 for c in 1:k
                     A0, A1, v = prev.cell.A_star[c], u.cell.A_star[c], u.cell.volume[c]
                     f = bf.med[c] / bf.unlike[c]
@@ -692,7 +692,7 @@ end
             p = [:λ => 1e6, :T => 1e-3, :A₀ => Float64(v), :β => β, :γ => γ, :σ_X => 0.0]
             sol = solve(p615c_prob(; tspan = (0, 1), op = [st; :A_star => [Float64(v)]], p), first(P615C_ALGS); saveat = 1)
             u = sol.u[end]
-            @test Array(u.σ) == σ0                                   # a = 1 and f = 1 exactly
+            @test Array(u.ownership) == σ0                                   # a = 1 and f = 1 exactly
             @test u.cell.f[1] == 1.0
             @test u.cell.A_star[1] == (grows ? v + 50 / 775 : Float64(v))
         end
@@ -785,7 +785,7 @@ end
             a = solve(remake(prob; seed), P615C_ALGS[1]; saveat = 1).u[end]
             b = solve(remake(prob; seed), P615C_ALGS[2]; saveat = 1).u[end]
             c = solve(remake(prob; seed), P615C_ALGS[1]; saveat = 1).u[end]
-            @test a.cell.X[1] == c.cell.X[1] && Array(a.σ) == Array(c.σ)
+            @test a.cell.X[1] == c.cell.X[1] && Array(a.ownership) == Array(c.ownership)
             p615c_live(a) == p615c_live(b) == [1] && @test a.cell.X[1] == b.cell.X[1]
         end
     end
@@ -850,13 +850,13 @@ end
         prob = p615c_prob(; tspan = (0, 400), seed = 153_041, p = [:α => 2.0])
         free = solve(prob, first(P615C_ALGS); saveat = 1)
         @test Symbol(free.retcode) === :Success                         # control: no guard, it runs on
-        hit = findfirst(u -> ne(Array(u.σ), 12), free.u)
+        hit = findfirst(u -> ne(Array(u.ownership), 12), free.u)
         @test hit !== nothing && hit > 2
         @test_throws DomainError solve(prob, first(P615C_ALGS); callback = PottsModels.edge_guard(12))
         sol = solve(prob, first(P615C_ALGS); saveat = 1, callback = PottsModels.edge_guard(12; terminate = true))
         @test sol.retcode == ReturnCode.Failure
-        @test sol.t[end] == free.t[hit] && Array(sol.u[end].σ) == Array(free.u[hit].σ)
-        @test !ne(Array(sol.u[end - 1].σ), 12)
+        @test sol.t[end] == free.t[hit] && Array(sol.u[end].ownership) == Array(free.u[hit].ownership)
+        @test !ne(Array(sol.u[end - 1].ownership), 12)
         # control: a margin the run never reaches
         quiet = solve(remake(prob; tspan = (0, 100)), first(P615C_ALGS); callback = PottsModels.edge_guard(3))
         @test Symbol(quiet.retcode) === :Success
@@ -900,7 +900,7 @@ end
             @test first8 !== nothing && N[first8 - 1] < 8
             sol = solve(prob, first(P615C_ALGS); saveat = 1, callback = PottsModels.stop_at_cells(8))
             @test sol.retcode == ReturnCode.Terminated
-            @test sol.t[end] == ref.t[first8] && Array(sol.u[end].σ) == Array(ref.u[first8].σ)
+            @test sol.t[end] == ref.t[first8] && Array(sol.u[end].ownership) == Array(ref.u[first8].ownership)
         end
     end
 end
@@ -919,7 +919,7 @@ end
         u = sol.u[end]
         s = snap(u)
         live = p615c_live(u)
-        σ = Array(u.σ)
+        σ = Array(u.ownership)
         bf = p615c_contacts(σ, P615C_MOORE; n = length(u.cell.volume))
         cx = [mean(I[1] for I in findall(==(c), σ)) for c in live]
         cy = [mean(I[2] for I in findall(==(c), σ)) for c in live]
@@ -979,7 +979,7 @@ end
                 badX += count(c -> !(u.cell.X[c] > 0), p615c_live(u))
                 p615c_quiet(us, i) || continue
                 quiet += 1
-                bf = p615c_contacts(u.σ, P615C_MOORE; n = length(u.cell.volume))
+                bf = p615c_contacts(u.ownership, P615C_MOORE; n = length(u.cell.volume))
                 bad += count(c -> abs(u.cell.f[c] - bf.med[c] / bf.unlike[c]) > eps(Float32), p615c_live(u))
             end
             @test bad == 0 && badX == 0 && quiet >= 200

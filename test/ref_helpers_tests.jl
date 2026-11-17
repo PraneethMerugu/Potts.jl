@@ -28,7 +28,7 @@ end
     @lattice Lattice((10, 10); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         cells => (volume - 6.0)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = 3.0)
 end
@@ -42,7 +42,7 @@ end
     @lattice Lattice((10, 10); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         cells => (volume - 6.0)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = 3.0)
 end
@@ -140,7 +140,7 @@ end
     @lattice Lattice((16, 16); geometry = geom, boundary = Periodic(), neighborhood = nbh)
     @energy begin
         cells => 5.0 * (volume - 6.0)^2
-        contacts => ifelse(cluster[owner] == cluster[owner′], 0.5, 2.0)
+        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 0.5, 2.0)
     end
     @after_mcs begin
         wc ~ centroid(sibling(kb), 1)
@@ -255,7 +255,7 @@ end
 
 # the converted sites: the cytoplasm's sites with Q > 0 (x = 1, 2, 3), when S > 0
 function rh_conv_check(u, nx; converted)
-    σ = Array(u.σ)
+    σ = Array(u.ownership)
     want = rh_q_sigma(nx)
     converted && (want[1:3, 3:4] .= 3)                         # slot 3, the allocated lamellipodium
     return (σ == want, Array(u.model.nconv)[1], Array(u.cell.kind)[3])
@@ -447,7 +447,7 @@ end
                         end
                         @parameters J[kind, kind] = Pairs(default = 0.0, (medium, both) => 1.0)
                         @lattice Lattice((6, 6); boundary = Closed(), neighborhood = Moore(1))
-                        @energy contacts => J[kind, kind′]
+                        @energy contacts => J[kind, neighbor_kind]
                         @sweep Metropolis(; temperature = 1.0)
                     end
                 )
@@ -553,7 +553,7 @@ end
     @testset "E7 helpers in a field equation, a site update and a site @observed" begin
         prob = rh_field_problem(4)
         u = solve(prob, SequentialCPM()).u[end]
-        @test Array(u.σ) == rh_q_sigma(4)                          # control: σ held through the sweep
+        @test Array(u.ownership) == rh_q_sigma(4)                          # control: σ held through the sweep
         o = rh_q_oracle(3.5)
         @test Array(u.site.qs) == o                                # the after-MCS site update
         @test observe(prob, :oq, u) == o                           # the site-scope observed quantity
@@ -577,7 +577,7 @@ end
             ok, n, _ = rh_conv_check(solve(rh_conv_problem(17; T = Float32), alg; backend).u[end], 17; converted = false)
             @test ok && n == 0
             u = solve(rh_field_problem(4; T = Float32), alg; backend).u[end]
-            @test Array(u.σ) == rh_q_sigma(4)
+            @test Array(u.ownership) == rh_q_sigma(4)
             @test Array(u.site.qs) == Float32.(rh_q_oracle(3.5))      # dyadic values: exact in Float32
             @test Array(u.site.qf) == Float32.(rh_q_oracle(3.5))
             @test Array(u.cell.qc)[1:2] == Float32[-3.5, 0.0]
@@ -628,7 +628,7 @@ end
         prob = rh_mask_problem()
         @test hasproperty(prob.u0.cell, :anchor)                   # the moment trackers are allocated
         u = solve(prob, SequentialCPM()).u[end]
-        @test Array(u.σ) == rh_mask_sigma()                        # control: σ held
+        @test Array(u.ownership) == rh_mask_sigma()                        # control: σ held
         @test Array(u.site.c) == 7.0 .* (rh_mask_sigma() .== 1)    # cell 1 clamped; cell 2 (centroid 2) and the medium not
         if isdefined(@__MODULE__, :PottsDevices) && PottsDevices.on_device()
             backend = PottsDevices.device_backend()

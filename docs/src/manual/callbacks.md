@@ -21,6 +21,7 @@ matters on large lattices, where each saved state is a copy of the lattice.
 
 ```@example callbacks
 using Potts
+using Potts.Layouts
 
 @potts_model Quench begin
     @kinds medium cell
@@ -29,7 +30,7 @@ using Potts
     @lattice Lattice((30, 30); neighborhood = Moore(1))
     @energy begin
         Volume(cell; target = 25.0, strength = 1.0)
-        contacts => 8.0 * (kind != kind′)
+        contacts => 8.0 * (kind != neighbor_kind)
     end
     @sweep Metropolis(; temperature = T)
 end

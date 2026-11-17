@@ -24,13 +24,13 @@
 #   `@components`, population folds `for c in cells(g)`), `clusters(g)`, `connectivity(g)`,
 #   `Volume(g; …)`, `Surface(g; …)`, `Chemotaxis(…; kinds = g)`, mixed with kinds
 #   (`cells(ecm, tip)`).
-# - `kind[x] ∈ g` (and `kind ∈ g`, `kind′ ∈ g`, `kind[c] ∈ g`, `kind[n] ∈ g`, `x ∉ g`) is
+# - `kind[x] ∈ g` (and `kind ∈ g`, `neighbor_kind ∈ g`, `kind[c] ∈ g`, `kind[n] ∈ g`, `x ∉ g`) is
 #   exactly `(kind[x] == k₁) | (kind[x] == k₂) | …` in member order: constant kind numbers
 #   in the generated code, no allocation, no `Set`/`Vector` on the device. So a model
 #   written with classes generates the same code, and has the same fingerprint, as the same
 #   model written with explicit `||` chains in member order. A declared class that no
 #   statement reads changes nothing.
-# - A class is not an index: `J[g, kind′]` / `γ[g]` is an `ArgumentError` naming the class.
+# - A class is not an index: `J[g, neighbor_kind]` / `γ[g]` is an `ArgumentError` naming the class.
 # - Rejected at build (`ArgumentError`): an empty class; a member listed twice (also after
 #   flattening); the medium as a member; a member that is not a kind or an earlier class; a
 #   class named like another declaration (D-113); a reserved name. Misspelt names (a class
@@ -107,7 +107,7 @@ p60g_build_error(ex::Expr, M::Symbol) = p60g_error(() -> (Core.eval(@__MODULE__,
 
 """Every leaf of a saved state, as host arrays."""
 function p60g_leaves(u)
-    out = Pair{String, Any}["σ" => Array(u.σ)]
+    out = Pair{String, Any}["σ" => Array(u.ownership)]
     for f in (:cell, :site, :model, :history)
         nt = getfield(u, f)
         for k in keys(nt)
@@ -129,13 +129,13 @@ function p60g_selfcheck(prob; n = 200)
     moore = CorePotts.relation(Moore(1), lat)
     worst = 0.0
     for u in sol.u, i in 1:n
-        t = mod1(i * 7919, length(u.σ)); x = CorePotts.coordinates(lat, t)
+        t = mod1(i * 7919, length(u.ownership)); x = CorePotts.coordinates(lat, t)
         ins, y = CorePotts.shift(lat, x, moore.offsets[mod1(i, length(moore))])
         ins || continue
         s = CorePotts.linear_index(lat, y)
-        u.σ[t] == u.σ[s] && continue
-        prop = CorePotts.Proposal(t, s, x, 1, u.σ[t], u.σ[s])
-        a = deepcopy(u); a.σ[t] = prop.new
+        u.ownership[t] == u.ownership[s] && continue
+        prop = CorePotts.Proposal(t, s, x, 1, u.ownership[t], u.ownership[s])
+        a = deepcopy(u); a.ownership[t] = prop.new
         prob.f.commit!(a, prob.p, prop, ctx)
         worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u) + Potts._killing_credit(prob, u, prop, a))))
     end
@@ -145,7 +145,7 @@ end
 p60g_ctx(prob) = (; lattice = prob.lattice, contact = prob.contact, prob.relations...)
 p60g_prop(prob, u, t::NTuple{2, Int}, s::NTuple{2, Int}) = (lat = prob.lattice;
     ti = CorePotts.linear_index(lat, t); si = CorePotts.linear_index(lat, s);
-    CorePotts.Proposal(ti, si, t, 1, u.σ[ti], u.σ[si]))
+    CorePotts.Proposal(ti, si, t, 1, u.ownership[ti], u.ownership[si]))
 """The drive part of ΔH for one proposal: ΔH − ΔE."""
 p60g_drive(prob, u, prop) = prob.f.delta_H(u, prob.p, prop, p60g_ctx(prob)) - energy_change(prob, u, prop)
 p60g_allowed(prob, u, prop) = Bool(prob.f.constraint(u, prob.p, prop, p60g_ctx(prob)))
@@ -197,7 +197,7 @@ p60g_define(:P60gC, :(@potts_model P60gC begin
     @energy begin
         cells(endothelial) => 2.0 * (volume - 16)^2
         cells(ecm) => 0.02 * (volume - tgt)^2
-        contacts => J[kind, kind′] + 3.0 * (kind ∈ endothelial) * (kind′ ∈ ecm)
+        contacts => J[kind, neighbor_kind] + 3.0 * (kind ∈ endothelial) * (neighbor_kind ∈ ecm)
         sites => -0.5 * V * (kind ∈ endothelial)
     end
     @drive begin
@@ -245,7 +245,7 @@ end))
     @energy begin
         cells(tip, stalk) => 2.0 * (volume - 16)^2
         cells(fluid, matrix) => 0.02 * (volume - tgt)^2
-        contacts => J[kind, kind′] + 3.0 * ((kind == tip) || (kind == stalk)) * ((kind′ == fluid) || (kind′ == matrix))
+        contacts => J[kind, neighbor_kind] + 3.0 * ((kind == tip) || (kind == stalk)) * ((neighbor_kind == fluid) || (neighbor_kind == matrix))
         sites => -0.5 * V * ((kind == tip) || (kind == stalk))
     end
     @drive begin
@@ -303,7 +303,7 @@ p60g_define(:P60gCTip, :(@potts_model P60gCTip begin
     @energy begin
         cells(endothelial) => 2.0 * (volume - 16)^2
         cells(ecm) => 0.02 * (volume - tgt)^2
-        contacts => J[kind, kind′] + 3.0 * (kind ∈ endothelial) * (kind′ ∈ ecm)
+        contacts => J[kind, neighbor_kind] + 3.0 * (kind ∈ endothelial) * (neighbor_kind ∈ ecm)
         sites => -0.5 * V * (kind ∈ endothelial)
     end
     @drive begin
@@ -345,7 +345,7 @@ p60g_define(:P60gXSpare, :(@potts_model P60gXSpare begin
     @energy begin
         cells(tip, stalk) => 2.0 * (volume - 16)^2
         cells(fluid, matrix) => 0.02 * (volume - tgt)^2
-        contacts => J[kind, kind′] + 3.0 * ((kind == tip) || (kind == stalk)) * ((kind′ == fluid) || (kind′ == matrix))
+        contacts => J[kind, neighbor_kind] + 3.0 * ((kind == tip) || (kind == stalk)) * ((neighbor_kind == fluid) || (neighbor_kind == matrix))
         sites => -0.5 * V * ((kind == tip) || (kind == stalk))
     end
     @drive begin
@@ -442,7 +442,7 @@ p60g_define(:P60gLifeC, :(@potts_model P60gLifeC begin
     @lattice Lattice((32, 24); neighborhood = Moore(1))
     @energy begin
         cells(endothelial) => 1.0 * (volume - V₀[kind])^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
         edges(bond) => 0.05 * (distance - 5.0)^2
     end
     @divide cells(endothelial) when = (mcs == 1) && (volume >= 26)
@@ -460,7 +460,7 @@ end))
     @lattice Lattice((32, 24); neighborhood = Moore(1))
     @energy begin
         cells(tip, stalk) => 1.0 * (volume - V₀[kind])^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
         edges(bond) => 0.05 * (distance - 5.0)^2
     end
     @divide cells(tip, stalk) when = (mcs == 1) && (volume >= 26)
@@ -488,7 +488,7 @@ p60g_define(:P60gClusterC, :(@potts_model P60gClusterC begin
     @parameters J[kind, kind] = [0 0 0 0; 0 4 8 8; 0 8 3 3; 0 8 3 3]
     @lattice Lattice((20, 16); neighborhood = Moore(1))
     @energy begin
-        contacts => ifelse(cluster[owner] == cluster[owner′], 1.0, J[kind, kind′])
+        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 1.0, J[kind, neighbor_kind])
         clusters(endothelial) => 0.5 * (cluster_volume - 30)^2
     end
     @sweep Metropolis(; temperature = 3.0)
@@ -499,7 +499,7 @@ end))
     @parameters J[kind, kind] = [0 0 0 0; 0 4 8 8; 0 8 3 3; 0 8 3 3]
     @lattice Lattice((20, 16); neighborhood = Moore(1))
     @energy begin
-        contacts => ifelse(cluster[owner] == cluster[owner′], 1.0, J[kind, kind′])
+        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 1.0, J[kind, neighbor_kind])
         clusters(tip, stalk) => 0.5 * (cluster_volume - 30)^2
     end
     @sweep Metropolis(; temperature = 3.0)
@@ -552,7 +552,7 @@ p60g_define(:P60gBaseC, :(@potts_model P60gBaseC begin
     @energy begin
         cells(endothelial) => 1.5 * (volume - 12)^2
         Surface(endothelial; target = 14.0, strength = 0.1)
-        contacts => 4.0 * (kind != kind′) + 1.0
+        contacts => 4.0 * (kind != neighbor_kind) + 1.0
     end
     @sweep Metropolis(; temperature = 3.0)
 end))
@@ -583,7 +583,7 @@ end))
     @energy begin
         cells(tip, stalk) => 1.5 * (volume - 12)^2
         Surface(tip, stalk; target = 14.0, strength = 0.1)
-        contacts => 4.0 * (kind != kind′) + 1.0
+        contacts => 4.0 * (kind != neighbor_kind) + 1.0
     end
     @sweep Metropolis(; temperature = 3.0)
 end
@@ -664,7 +664,7 @@ end
     b = solve(p60g_problem(P60gX, K; T), alg; saveat = 0:K)
     @test Symbol(a.retcode) === :Success
     @test p60g_same(a, b)
-    @test a.u[end].σ != a.u[1].σ                                          # the run moves
+    @test a.u[end].ownership != a.u[1].ownership                                          # the run moves
     for o in (:nec, :vecm, :nmix, :nmix2, :nnot)
         @test observe(a, o) == observe(b, o)
     end
@@ -686,7 +686,7 @@ end
     for alg in P60G_ALGS
         sol = solve(prob, alg; saveat = 0:8)
         for u in sol.u
-            @test total_energy(prob, u) ≈ p60g_energy(Array(u.σ), Array(u.cell.kind), Array(u.cell.tgt)) atol = 1e-9
+            @test total_energy(prob, u) ≈ p60g_energy(Array(u.ownership), Array(u.cell.kind), Array(u.cell.tgt)) atol = 1e-9
         end
     end
     # negative control: without stalk in the class, stalks leave the volume, contact and
@@ -730,7 +730,7 @@ end
     # in a run, no site ever passes from an ECM cell to another ECM cell between saves
     sol = solve(prob, SequentialCPM(); saveat = 0:8)
     for k in 1:8
-        a, c = Array(sol.u[k].σ), Array(sol.u[k + 1].σ)
+        a, c = Array(sol.u[k].ownership), Array(sol.u[k + 1].ownership)
         @test !any(i -> a[i] != c[i] && a[i] in (1, 2, 3) && c[i] in (1, 2, 3), eachindex(a))
     end
 end
@@ -739,7 +739,7 @@ end
     prob = p60g_problem(p60g_model(:P60gC)); u = prob.u0; ctx = p60g_ctx(prob)
     for (t, s, expect) in (((8, 4), (7, 4), 1.0), ((3, 13), (4, 13), 1.0), ((7, 4), (8, 4), 0.0))
         prop = p60g_prop(prob, u, t, s)
-        a = deepcopy(u); a.σ[prop.target] = prop.new
+        a = deepcopy(u); a.ownership[prop.target] = prop.new
         prob.f.commit!(a, prob.p, prop, ctx)
         @test a.site.gain[prop.target] == expect
     end
@@ -747,7 +747,7 @@ end
     sol = solve(prob, SequentialCPM(); saveat = 0:8)
     kd = Array(sol.u[1].cell.kind)
     for k in 1:8
-        a, c = Array(sol.u[k].σ), Array(sol.u[k + 1].σ)
+        a, c = Array(sol.u[k].ownership), Array(sol.u[k + 1].ownership)
         ga, gc = Array(sol.u[k].site.gain), Array(sol.u[k + 1].site.gain)
         @test all(i -> !(a[i] != c[i] && p60g_isec(kd[c[i]])) || gc[i] >= ga[i] + 1, eachindex(a))
     end
@@ -761,7 +761,7 @@ end
     ec = [p60g_isec(k) for k in kd]
     for k in 0:K
         u = sol.u[k + 1]
-        σ = Array(u.σ)
+        σ = Array(u.ownership)
         @test Array(u.cell.age) == [e ? Float64(k) : 0.0 for e in ec]         # @after_mcs cell update
         @test Array(u.cell.g) ≈ [e ? 0.5k : 0.0 for e in ec]                  # cell ODE (Euler, exact)
         k > 0 && @test only(Array(u.model.n_ec)) == 3                         # @before_mcs model fold
@@ -770,12 +770,12 @@ end
     # the field gains 0.25 per MCS on the sites ECs own after the sweep, nothing elsewhere
     for k in 1:K
         dq = Array(sol.u[k + 1].site.q) .- Array(sol.u[k].site.q)
-        m1 = p60g_ecmask(Array(sol.u[k + 1].σ), kd)
+        m1 = p60g_ecmask(Array(sol.u[k + 1].ownership), kd)
         @test dq == 0.25 .* m1
         @test count(m1) >= 30                                              # ≈ 3 × 14 EC sites
     end
     @test all(==(3), observe(sol, :nec))
-    @test observe(sol, :vecm) == [Float64(count(c -> c != 0 && p60g_isecm(kd[c]), Array(u.σ))) for u in sol.u]
+    @test observe(sol, :vecm) == [Float64(count(c -> c != 0 && p60g_isecm(kd[c]), Array(u.ownership))) for u in sol.u]
     @test all(==(4), observe(sol, :nmix))                                  # fluid, 2 matrix, tip
     @test all(==(4), observe(sol, :nmix2))
     @test all(==(3), observe(sol, :nnot))                                  # fluid, 2 matrix
@@ -807,7 +807,7 @@ end
     for alg in P60G_ALGS
         sol = solve(prob, alg; saveat = 0:6)
         for u in sol.u
-            @test total_energy(prob, u) ≈ p60g_cluster_energy(Array(u.σ), Array(u.cell.kind), Array(u.cell.cluster)) atol = 1e-9
+            @test total_energy(prob, u) ≈ p60g_cluster_energy(Array(u.ownership), Array(u.cell.kind), Array(u.cell.cluster)) atol = 1e-9
         end
     end
 end
@@ -908,7 +908,7 @@ const P60G_REJECTED = (
         @kinds medium fluid tip stalk endothelial = (tip, stalk)
         @parameters J[kind, kind] = [0 1 1 1; 1 1 1 1; 1 1 1 1; 1 1 1 1]
         @lattice Lattice((12, 12))
-        @energy contacts => J[endothelial, kind′]
+        @energy contacts => J[endothelial, neighbor_kind]
         @sweep Metropolis(; temperature = 2.0)
     end)),
     ("a class indexing a 1-D kind table", ["endothelial", "kind class"], :P60gIndex1, :(@potts_model P60gIndex1 begin
@@ -966,7 +966,7 @@ const P60G_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_de
             gpu = solve(prob, alg; backend, saveat = 0:4)
             @test Symbol(gpu.retcode) === :Success
             @test p60g_same(cpu, gpu)
-            p60g_same(cpu, gpu) || @info "P6.0g device $label" cpu = Array(cpu.u[end].σ) == Array(gpu.u[end].σ)
+            p60g_same(cpu, gpu) || @info "P6.0g device $label" cpu = Array(cpu.u[end].ownership) == Array(gpu.u[end].ownership)
         end
     else
         @test_skip "device (POTTS_GPU=metal|rocm)"

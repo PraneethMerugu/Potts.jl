@@ -198,7 +198,7 @@ end
         step!(integ); c0 = p60v_counts(integ.stats)
         current_state(integ)
         d = p60v_counts(integ.stats) .- c0
-        @test d[1] >= 1 && d[2] >= 1 + length(integ.state.cell) && d[3] >= sizeof(integ.state.σ)
+        @test d[1] >= 1 && d[2] >= 1 + length(integ.state.cell) && d[3] >= sizeof(integ.state.ownership)
     else
         @test_skip "device (POTTS_GPU=metal|rocm)"
     end

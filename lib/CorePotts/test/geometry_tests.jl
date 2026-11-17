@@ -31,10 +31,10 @@ end
         p = merge(gg_params(), (; V0 = length(dims) == 2 ? 36.0 : 64.0))
         mprob = PottsProblem(GM, moment_state(σ, kinds, lat), lat, (0, 40), p)
         u = solve(mprob, alg).u[end]
-        @test u.σ != σ
+        @test u.ownership != σ
         for c in eachindex(kinds)
             u.cell.volume[c] > 0 || continue
-            μ, C = brute_geometry(u.σ, lat, c)
+            μ, C = brute_geometry(u.ownership, lat, c)
             @test all(isapprox.(centroid(u.cell, lat, c), μ; atol = 1e-9))
             @test all(isapprox.(covariance(Float64, u.cell, c, Val(length(dims))),
                 upper(C, length(dims)); atol = 1e-9))
@@ -50,23 +50,23 @@ end
         σ = zeros(Int32, 60, 60)
         σ[11:30, 21:25] .= 1                                   # 20 × 5 rectangle
         cell = merge(init_moments(σ, lat, 1), (; volume = Int32[100]))
-        s = shape(cell, lat, 1)
+        s = cell_shape(cell, lat, 1)
         @test covariance(Float64, cell, 1, Val(2)) == ((20^2 - 1) / 12, 0.0, (5^2 - 1) / 12)
         @test s.elongation ≈ sqrt((20^2 - 1) / (5^2 - 1))
         @test s.major_length ≈ 4sqrt((20^2 - 1) / 12)
         @test abs(s.orientation) < 1e-12                       # along x
-        @test shape(merge(cell, (; anchor = cell.anchor)), lat, 1).eccentricity ≈
+        @test cell_shape(merge(cell, (; anchor = cell.anchor)), lat, 1).eccentricity ≈
               sqrt(1 - (5^2 - 1) / (20^2 - 1))
         σ2 = permutedims(σ)                                    # along y
         cell2 = merge(init_moments(σ2, lat, 1), (; volume = Int32[100]))
-        @test shape(cell2, lat, 1).orientation ≈ π / 2
+        @test cell_shape(cell2, lat, 1).orientation ≈ π / 2
         # 3D box a × b × c: semiaxes √(5(n²−1)/12)
         l3 = Lattice((30, 30, 30))
         σ3 = zeros(Int32, 30, 30, 30)
         σ3[1:12, 1:6, 1:3] .= 1                                # straddles nothing, closed-free
         σ3 = circshift(σ3, (-4, -2, -1))                       # now straddles every seam
         cell3 = merge(init_moments(σ3, l3, 1), (; volume = Int32[216]))
-        s3 = shape(cell3, l3, 1)
+        s3 = cell_shape(cell3, l3, 1)
         @test all(isapprox.(s3.semiaxes, sqrt.(5 .* ((12, 6, 3) .^ 2 .- 1) ./ 12)))
         @test major_length(Float64, cell3, l3, 1) ≈ s3.major_length
         @test s3.elongation ≈ sqrt((12^2 - 1) / (3^2 - 1))
@@ -109,13 +109,13 @@ end
         for t in 1:nsites(lat), dir in 1:4
             inside, y = shift(lat, coordinates(lat, t), ctx.proposal.offsets[dir])
             s = linear_index(lat, y)
-            a, b = st.σ[t], st.σ[s]
+            a, b = st.ownership[t], st.ownership[s]
             (a != b && a != 0 && b != 0) || continue
             prop = Proposal(t, s, coordinates(lat, t), dir, a, b)
             δa = centroid_shift(Float64, st.cell, lat, a, prop.x, -1)
             δb = centroid_shift(Float64, st.cell, lat, b, prop.x, +1)
             ca, cb = centroid(st.cell, lat, a), centroid(st.cell, lat, b)
-            after = deepcopy(st); after.σ[t] = b
+            after = deepcopy(st); after.ownership[t] = b
             gm_commit!(after, nothing, prop, ctx)
             wrapdiff(u, v) = map((x, y, m) -> mod(x - y + m / 2, m) - m / 2, u, v, lat.dims)
             @test all(isapprox.(wrapdiff(centroid(after.cell, lat, a), ca), δa; atol = 1e-12))
@@ -138,11 +138,11 @@ end
             commit_site_min!(st.cell.vmin, st.cell.stale, prop, v[prop.target]))
         f = CPMFunction(gg_delta_H; commit!, temperature = gg_temperature)
         u = solve(PottsProblem(f, st, lat, (0, 10), gg_params()), SequentialCPM()).u[end]
-        @test u.cell.vsum ≈ recompute_site_sum(u.σ, v, length(kinds))
-        truth = recompute_site_min!(fill(Inf, length(kinds)), falses(length(kinds)), u.σ, v; all = true)
+        @test u.cell.vsum ≈ recompute_site_sum(u.ownership, v, length(kinds))
+        truth = recompute_site_min!(fill(Inf, length(kinds)), falses(length(kinds)), u.ownership, v; all = true)
         @test all(u.cell.vmin[.!u.cell.stale] .== truth[.!u.cell.stale])   # exact unless stale
         @test all(u.cell.vmin .<= truth)                                    # stale ⇒ lower bound
-        recompute_site_min!(u.cell.vmin, u.cell.stale, u.σ, v)
+        recompute_site_min!(u.cell.vmin, u.cell.stale, u.ownership, v)
         @test u.cell.vmin == truth
 
         # structured (vector-valued) owner sums use the same tracker with any additive type
@@ -152,7 +152,7 @@ end
             commit_site_sum!(st.cell.wsum, prop, w[prop.target]))
         f2 = CPMFunction(gg_delta_H; commit! = c2!, temperature = gg_temperature)
         u2 = solve(PottsProblem(f2, st2, lat, (0, 10), gg_params()), CheckerboardCPM()).u[end]
-        @test u2.cell.wsum ≈ recompute_site_sum(u2.σ, w, length(kinds))
+        @test u2.cell.wsum ≈ recompute_site_sum(u2.ownership, w, length(kinds))
         @test getindex.(u2.cell.wsum, 3) == u2.cell.volume
     end
 end

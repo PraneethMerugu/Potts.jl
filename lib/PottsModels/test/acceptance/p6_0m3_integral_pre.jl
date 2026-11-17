@@ -137,7 +137,7 @@ p60m3_solve(M, alg, σ, K; kw...) = solve(PottsProblem(M(; name = :m), [ownershi
     @testset "Pre only, $order" for (M, order) in ((P60m3WriterFirst, "writer first"), (P60m3ReaderFirst, "reader first"))
         sol = p60m3_solve(M, alg, σ, K)                                     # DEFECT CHECK (FieldError)
         @test p60m3_cell(sol, :volume) == fill(16, K + 1)
-        @test [sum(Array(u.site.w)[Array(u.σ) .== 1]) for u in sol.u] == new   # w itself is right
+        @test [sum(Array(u.site.w)[Array(u.ownership) .== 1]) for u in sol.u] == new   # w itself is right
         @test p60m3_cell(sol, :s) == pre                                       # DEFECT CHECK
     end
     @testset "Pre and fresh, $order" for (M, order) in ((P60m3MixedWriterFirst, "writer first"),
@@ -181,7 +181,7 @@ end
     w0 = [Float64(i) for i in 1:12, j in 1:12]
     K = 6
     sol = solve(PottsProblem(P60m3Moving(; name = :m), [ownership => σ, kind => [:A], :w => w0], (0, K)), alg; saveat = 0:K)
-    σs = [Array(u.σ) for u in sol.u]
+    σs = [Array(u.ownership) for u in sol.u]
     # negative control: the cell moved, so pre-sweep and post-sweep σ give different folds
     @test any(k -> p60m3_fold(σs[k + 1], k - 1) != p60m3_fold(σs[k], k - 1), 1:K)
     @test all(k -> Array(sol.u[k + 1].site.w) == w0 .+ k, 0:K)

@@ -390,7 +390,7 @@ end
         @test all(u -> u.eq isa P60BP_S.Equation, U)
         # every symbol is a parameter or unknown of the system (MTK's accessors) or a built-in
         declared = Set{Symbol}(p60bp_name(x) for x in [P60BP_M.parameters(sys); P60BP_M.unknowns(sys)])
-        builtins = Set([:volume, :surface, :kind, :kind′, :owner, :owner′, :target, :source, :new, :old,
+        builtins = Set([:volume, :surface, :kind, :neighbor_kind, :owner, :neighbor_owner, :target, :source, :new, :old,
             :mcs, :medium, :cell, :leader, :follower])
         for u in U
             extra = setdiff(union(p60bp_names(u.eq.lhs), p60bp_names(u.eq.rhs)), declared, builtins)

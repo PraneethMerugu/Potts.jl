@@ -42,7 +42,7 @@
 #           authors' merge, gap = 15; the first peak is always kept)
 #       column_tops([pred,] σ) -> Vector{Int}    per x = σ's first index: the largest y (second
 #           index) whose owner c ≠ 0 satisfies pred(c) (default: any cell); 0 if none
-#       trapz(x, y)                              trapezoid rule, as numpy.trapz(y, x)
+#       trapezoid_integral(x, y)                              trapezoid rule, as numpy.trapz(y, x)
 #       cell_graph(σ; periodic = (false, …), neighborhood = VonNeumann(1)) -> Vector{Vector{Int}}
 #           g[c] = sorted distinct cells sharing a lattice-neighbour site pair with cell c
 #           (c in 1:maximum(σ); medium is not a cell). An adjacency-list view of
@@ -283,7 +283,7 @@ const P62A_LEADER = [false, true, false, false, true, true, false, false, true, 
 end
 
 @testset "P6.2a: per-column profiles and areas (O3, O4)" begin
-    (; cell_graph, reachable, column_tops, trapz) = PottsModels.Analysis
+    (; cell_graph, reachable, column_tops, trapezoid_integral) = PottsModels.Analysis
     σ = p62a_lattice(P62A_ROWS)
     M = reachable(cell_graph(σ; periodic = (true, false)), [1, 4])
     # top_main(x): highest site of a cell in M = {1,2,3,4}; 0 where there is none
@@ -298,13 +298,13 @@ end
     keep = findall(x -> main[x] > 0 && out[x] > 0, 1:10)
     @test keep == [2, 3, 4, 6, 7]
     base = minimum(main[keep])
-    # invasive: trapz over x = [2,3,4,6,7] of [0,3,3,0,0] = 1.5 + 3 + 2·(3+0)/2 + 0 = 7.5
+    # invasive: trapezoid_integral over x = [2,3,4,6,7] of [0,3,3,0,0] = 1.5 + 3 + 2·(3+0)/2 + 0 = 7.5
     # infiltrative: [0,3,3,4,0] -> 1.5 + 3 + 2·(3+4)/2 + (4+0)/2 = 13.5
     # (by array index instead of x the gap 4 → 6 would give 6.0 and 10.0)
-    @test trapz(keep, main[keep] .- base) == 7.5
-    @test trapz(keep, out[keep] .- base) == 13.5
-    @test trapz([0.0, 1.0], [2.0, 4.0]) == 3.0
-    @test trapz([3], [5]) == 0 && trapz(Int[], Int[]) == 0
+    @test trapezoid_integral(keep, main[keep] .- base) == 7.5
+    @test trapezoid_integral(keep, out[keep] .- base) == 13.5
+    @test trapezoid_integral([0.0, 1.0], [2.0, 4.0]) == 3.0
+    @test trapezoid_integral([3], [5]) == 0 && trapezoid_integral(Int[], Int[]) == 0
 end
 
 # ---------------------------------------------------------------------------------------------
@@ -458,7 +458,7 @@ const P62A_SAMPLES = joinpath(get(ENV, "POTTS_REFERENCES", joinpath(@__DIR__, ".
     if !isdir(P62A_SAMPLES)
         @test_skip isdir(P62A_SAMPLES)
     else
-        (; find_peaks, merge_peaks, trapz) = PottsModels.Analysis
+        (; find_peaks, merge_peaks, trapezoid_integral) = PottsModels.Analysis
         for (dir, tag) in runs
             rows = [parse.(Int, split(l, ',')) for l in readlines(joinpath(P62A_SAMPLES, dir, "PositionData_$tag",
                 "BoundaryData_$tag.csv"))[2:end]]
@@ -470,8 +470,8 @@ const P62A_SAMPLES = joinpath(get(ENV, "POTTS_REFERENCES", joinpath(@__DIR__, ".
             base = minimum(main)
             @test all(r -> r[4] == base, rows)
             @test length(merge_peaks(find_peaks(main; prominence = 10, distance = 10, width = 5), 15)) == fingers
-            @test trapz(xs, main .- base) == invasive
-            @test trapz(xs, out .- base) == infiltrative
+            @test trapezoid_integral(xs, main .- base) == invasive
+            @test trapezoid_integral(xs, out .- base) == infiltrative
         end
     end
 end

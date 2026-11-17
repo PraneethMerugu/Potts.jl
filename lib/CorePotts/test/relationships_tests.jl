@@ -59,14 +59,14 @@ end
         for t in 1:nsites(lat), dir in 1:4
             inside, y = shift(lat, coordinates(lat, t), ctx.proposal.offsets[dir])
             s = linear_index(lat, y)
-            a, b = st.σ[t], st.σ[s]
+            a, b = st.ownership[t], st.ownership[s]
             (a != b && (link_count(st.cell, a) > 0 || link_count(st.cell, b) > 0)) || continue
             prop = Proposal(t, s, coordinates(lat, t), dir, a, b)
-            before = brute_link_energy(st.σ, lat, st.cell, E)
+            before = brute_link_energy(st.ownership, lat, st.cell, E)
             dH = link_delta(Float64, st.cell, ctx, prop, E)
-            after = deepcopy(st); after.σ[t] = b
+            after = deepcopy(st); after.ownership[t] = b
             commit_volume!(after, nothing, prop, ctx); commit_moments!(after.cell, lat, prop)
-            @test dH ≈ brute_link_energy(after.σ, lat, after.cell, E) - before atol = 1.0e-9
+            @test dH ≈ brute_link_energy(after.ownership, lat, after.cell, E) - before atol = 1.0e-9
             checked += 1; pair_checked += linked(st.cell, a, b)
             checked >= 200 && break
         end
@@ -95,7 +95,7 @@ end
                 inside, y = shift(lat, coordinates(lat, t), ctx.proposal.offsets[dir])
                 inside || continue
                 s = linear_index(lat, y)
-                a, b = st.σ[t], st.σ[s]
+                a, b = st.ownership[t], st.ownership[s]
                 (a != b && (a == 1 || b == 1)) || continue
                 prop = Proposal(t, s, coordinates(lat, t), dir, a, b)
                 dH = link_delta(T, st.cell, ctx, prop, E)
@@ -123,7 +123,7 @@ end
             J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
             E(v, c) = p.λ * (v - p.V0)^2
             S(a, b, k, d) = p.k * (d - st.cell.link_rest[k, a])^2
-            return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
+            return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
                 link_delta(Float64, st.cell, ctx, prop, S)
         end
         commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
@@ -152,8 +152,8 @@ end
         n = length(kinds)
         vn = relation(VonNeumann(1), lat)
         function link_touching!(cell, st, p, ctx, mcs)
-            g = contact_graph(st.σ, ctx.lattice, vn, length(cell.kind))
-            for a in eachindex(cell.kind), b in neighbors(g, a)
+            g = contact_graph(st.ownership, ctx.lattice, vn, length(cell.kind))
+            for a in eachindex(cell.kind), b in contact_neighbors(g, a)
                 a < b && add_link!(cell, a, b; age = Int32(mcs))
             end
         end
@@ -172,7 +172,7 @@ end
         )
         u = solve(PottsProblem(f, st, lat, (0, 2), gg_params()), SequentialCPM()).u[end]
         g0 = contact_graph(σ, lat, vn, n)
-        for a in 3:n, b in neighbors(g0, a)                    # untouched pairs stay linked
+        for a in 3:n, b in contact_neighbors(g0, a)                    # untouched pairs stay linked
             (b == 1 || b == 2) && continue
             @test linked(u.cell, a, b)
         end
@@ -230,20 +230,20 @@ end
         st = initial_state(σ, kinds; cell)
         E1(a, b, k, d) = 0.7 * (d - st.cell.link_rest[k, a])^2
         E2(a, b, k, d) = 1.3 * (d - st.cell.link_len[k, a])^2
-        brute(u) = brute_link_energy(u.σ, lat, CorePotts.link_store(u.cell, :bond), E1) +
-            brute_link_energy(u.σ, lat, CorePotts.link_store(u.cell, :tether), E2)
+        brute(u) = brute_link_energy(u.ownership, lat, CorePotts.link_store(u.cell, :bond), E1) +
+            brute_link_energy(u.ownership, lat, CorePotts.link_store(u.cell, :tether), E2)
         ctx = (; lattice = lat, proposal = relation(VonNeumann(1), lat))
         checked = 0; both = 0; one_store_off = 0
         for t in 1:nsites(lat), dir in 1:4
             inside, y = shift(lat, coordinates(lat, t), ctx.proposal.offsets[dir])
             s = linear_index(lat, y)
-            a, b = st.σ[t], st.σ[s]
+            a, b = st.ownership[t], st.ownership[s]
             a != b || continue
             (link_count(B, a) + link_count(B, b) > 0 && link_count(Tt, a) + link_count(Tt, b) > 0) || continue
             prop = Proposal(t, s, coordinates(lat, t), dir, a, b)
             dB = link_delta(Float64, st.cell, CorePotts.link_store(st.cell, :bond), ctx, prop, E1)
             dT = link_delta(Float64, st.cell, CorePotts.link_store(st.cell, :tether), ctx, prop, E2)
-            after = deepcopy(st); after.σ[t] = b
+            after = deepcopy(st); after.ownership[t] = b
             commit_volume!(after, nothing, prop, ctx); commit_moments!(after.cell, lat, prop)
             truth = brute(after) - brute(st)
             @test dB + dT ≈ truth atol = 1.0e-9
@@ -271,7 +271,7 @@ end
             E(v, c) = p.λ * (v - p.V0)^2
             S1(a, b, k, d) = p.k * (d - st.cell.link_rest[k, a])^2
             S2(a, b, k, d) = p.k * (d - st.cell.link_len[k, a])^2
-            return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
+            return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
                 link_delta(Float64, st.cell, (; links = st.cell.links__bond), ctx, prop, S1) +
                 link_delta(Float64, st.cell, (; links = st.cell.links__tether), ctx, prop, S2)
         end
@@ -298,8 +298,8 @@ end
         n = length(kinds)
         vn = relation(VonNeumann(1), lat)
         function link_both!(cell, st, p, ctx, mcs)
-            g = contact_graph(st.σ, ctx.lattice, vn, length(cell.kind))
-            for a in eachindex(cell.kind), b in neighbors(g, a)
+            g = contact_graph(st.ownership, ctx.lattice, vn, length(cell.kind))
+            for a in eachindex(cell.kind), b in contact_neighbors(g, a)
                 a < b || continue
                 add_link!(CorePotts.link_store(cell, :bond), a, b)
                 add_link!(CorePotts.link_store(cell, :tether), a, b)

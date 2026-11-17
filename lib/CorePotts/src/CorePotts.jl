@@ -20,7 +20,7 @@ using Serialization: Serialization
 using StaticArrays: MVector
 using SymbolicIndexingInterface: SymbolicIndexingInterface, getu, setu, getp, setp
 
-export Lattice, Periodic, Closed, nsites, Moore, VonNeumann, NeighborOrder, Ball, Stencil,
+export Lattice, Periodic, Closed, nsites, Moore, VonNeumann, NeighborOrder, EuclideanBall, Stencil,
     Square, Hexagonal, Hex, embed, embed_covariance, centroid_position,
     Weighted, OnIndices, relation, AllMobile, MaskMobility, is_mobile, in_domain, host_lattice
 export CPMState, ownership, cell_kinds, cell_generations, volumes, initial_state, Proposal, Footprint, CPMFunction, commit_volume!,
@@ -30,15 +30,15 @@ export euler_change, commit_euler!, recompute_euler
 export recompute_pieces
 export ContactCount, ContactCounts, commit_contact_count!, recompute_contact_count
 export init_moments, commit_moments!, centroid, centroid_shift, covariance,
-    principal_moments, shape, major_length, major_length_after, min_image
+    principal_moments, cell_shape, major_length, major_length_after, min_image
 export commit_site_sum!, recompute_site_sum, commit_site_min!, recompute_site_min!
 export Phases, SweepPhase, LifecyclePhase, Repeat, SitePhase, CellPhase, ModelPhase, CopyPhase, HistoryPush, history_buffer, history_slot,
     clear_on_copy!
 export is_extension, is_retraction, chemotaxis_delta, saturating, saturating_linear,
-    neighborhood_mean, MeanFold, ArithmeticMean, GeometricMean, Log1pGeometricMean,
+    neighborhood_mean, AbstractNeighborhoodMean, ArithmeticMean, GeometricMean, Log1pGeometricMean,
     local_components, locally_connected, ring_arcs, ring_cells, ring_medium, forbid_extinction
 export is_boundary_site, count_neighbors, CellReduce, ContactGraph, contact_graph,
-    neighbors, contact, empty_contacts, ContactPhase, contact_slot, contact_measure
+    contact_neighbors, empty_contacts, ContactPhase, contact_slot, contact_measure
 export Lifecycle, EVENT_NONE, EVENT_DIVIDE, EVENT_DIVIDE_CLUSTER, EVENT_REMOVE, EVENT_TRANSITION, AlongMinorAxis,
     AlongMajorAxis, RandomPlane, along_minor_axis, along_major_axis, random_plane,
     principal_axis, rebuild_trackers!, with_capacity
@@ -59,7 +59,7 @@ export read_piff, write_piff
 # and generated code, and the frozen-mask hooks a model system extends (ExplicitImports
 # checks qualified accesses against this list).
 public CHECKPOINT_FORMAT, Part, BindingScratch, coordinates, shift, interior, neighbor_index, linear_index, draw, cell_entity, uniform, normal, bounded_normal, radius, weight, RNGKey, frozen_varies, frozen_kinds, frozen_reads,
-    TrackDeltaH, track_eltype, phase_context, phase_contexts, field_clamp,
+    TrackEnergyChange, track_eltype, phase_context, phase_contexts, field_clamp,
     shell_offsets, shell_owners, shell_mask, shell_pieces, local_rule, arc_or_pair, simple_point, ShellRead, read_shell, check_shell_lattice,
     ConnectivityHooks, GlobalExact, GlobalBoard, GlobalLocal, GlobalSearch, global_keeps, global_gains, global_defer,
     pieces_after!, pieces_defer, commit_pieces!, connectivity_ctx, NEXT_BIRTH, oncopy_cell!,

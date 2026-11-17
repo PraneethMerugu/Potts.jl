@@ -71,12 +71,12 @@
 #     @relations proposal = Moore(1)
 #     @energy begin
 #         cells(cell) => λ * (volume - A_star)^2
-#         contacts => J[kind, kind′]
+#         contacts => J[kind, neighbor_kind]
 #     end
 #     @before_mcs X ~ ifelse(Pre(X) > 0, Pre(X), randn(μ_X, σ_X; lower = 0.0))
 #     @after_mcs begin
 #         f ~ ifelse(count(true for _ in contacts) > 0,
-#             count(kind′ == medium for _ in contacts) / count(true for _ in contacts), 1.0)
+#             count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts), 1.0)
 #         A_star ~ ifelse((volume / Pre(A_star) >= β) && (f >= γ), Pre(A_star) + α, Pre(A_star))
 #     end
 #     @divide cells(cell) when = volume >= X * A₀, along = RandomPlane(), A_star => Split(),
@@ -86,6 +86,7 @@
 # ```
 #
 using Potts, PottsModels
+using Potts.Layouts
 using MakiePotts, CairoMakie
 mkpath("openvt") #hide
 
@@ -93,7 +94,7 @@ mkpath("openvt") #hide
 # exact by every copy (see [Updates](@ref manual-updates)):
 #
 # ```julia
-# f ~ count(kind′ == medium for _ in contacts) / count(true for _ in contacts)
+# f ~ count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts)
 # ```
 #
 # and the division threshold is a truncated normal draw, made separately by each daughter
@@ -136,7 +137,7 @@ snap = PottsModels.openvt_snapshot(sol_ref.u[end])
 # inhibition code at given thresholds β and γ, and the number of distinct neighboring cells
 # on `Moore(1)`. `write_openvt(path, :O1, frame)` writes them.
 
-frame = PottsModels.openvt_frame(sol_ref.u[end]; β = 0.0, γ = 0.0)
+frame = PottsModels.openvt_frame(sol_ref.u[end]; beta = 0.0, gamma = 0.0)
 (n = length(frame.x), mean_neighbours = sum(frame.n) / length(frame.n), growing = count(==(0), frame.i))
 
 # ```@docs
@@ -317,7 +318,7 @@ slope = sum((sol.t[half] .- tm) .* log2.(ncells[half])) / sum(abs2, sol.t[half] 
 
 using PottsModels.Analysis: centroids, concave_hull
 R = sqrt(25 / π)
-cs = filter(c -> !isnan(c[1]), centroids(sol.u[end].σ))
+cs = filter(c -> !isnan(c[1]), centroids(sol.u[end].ownership))
 x = [(c[1] - 200) / R for c in cs]
 y = [(c[2] - 200) / R for c in cs]
 m = openvt_metrics(x, y, ones(Int, length(cs)))   # β = 0: every cell grows

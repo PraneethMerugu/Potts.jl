@@ -19,7 +19,7 @@ function _track_points(points, ::Val{N}, what) where {N}
 end
 
 """
-    unwrap_track(points, dims; periodic) -> Vector{NTuple{N, Float64}}
+    unwrap_track(points, dims, periodic) -> Vector{NTuple{N, Float64}}
 
 The track of `points` (tuples or vectors of N reals, one per sample, as
 [`centroids`](@ref) returns per cell) with the jumps through periodic edges removed:
@@ -36,7 +36,7 @@ to that sample and every later one on its axis.
 Throws an `ArgumentError` for an empty track, points of mixed dimensions, `dims` or
 `periodic` of another length than the points, and a non-positive period.
 """
-function unwrap_track(points, dims; periodic)
+function unwrap_track(points, dims, periodic)
     isempty(points) && throw(ArgumentError("unwrap_track: the track is empty"))
     N = length(first(points))
     return _unwrap_track(points, dims, periodic, Val(N))
@@ -66,7 +66,7 @@ _is_point(p) = p isa Tuple || (p isa AbstractVector && eltype(p) <: Real) ||
                (p isa AbstractVector && !isempty(p) && first(p) isa Real)
 
 """
-    msd(tracks; lags = 1:(n − 1)) -> Vector{Float64}
+    mean_squared_displacement(tracks; lags = 1:(n − 1)) -> Vector{Float64}
 
 The mean squared displacement at each lag ℓ of `lags` (in samples): for one track
 `x₁ … xₙ` (a vector of points, tuples or vectors of reals),
@@ -85,16 +85,16 @@ not detected: they propagate to every lag whose windows contain them.
 Throws an `ArgumentError` for a lag outside `1:(n − 1)`, tracks of unequal lengths, no
 track, and points of mixed dimensions.
 """
-function msd(tracks; lags = nothing)
-    isempty(tracks) && throw(ArgumentError("msd: no track"))
+function mean_squared_displacement(tracks; lags = nothing)
+    isempty(tracks) && throw(ArgumentError("mean_squared_displacement: no track"))
     trs = _is_point(first(tracks)) ? [tracks] : collect(tracks)
-    any(isempty, trs) && throw(ArgumentError("msd: a track is empty"))
+    any(isempty, trs) && throw(ArgumentError("mean_squared_displacement: a track is empty"))
     n = length(first(trs))
     all(t -> length(t) == n, trs) ||
-        throw(ArgumentError("msd: the tracks have unequal lengths $(unique(length.(trs)))"))
+        throw(ArgumentError("mean_squared_displacement: the tracks have unequal lengths $(unique(length.(trs)))"))
     ls = lags === nothing ? (1:(n - 1)) : lags
     for l in ls
-        1 <= l < n || throw(ArgumentError("msd: lag $l is outside 1:$(n - 1) (the tracks have $n samples)"))
+        1 <= l < n || throw(ArgumentError("mean_squared_displacement: lag $l is outside 1:$(n - 1) (the tracks have $n samples)"))
     end
     N = length(first(first(trs)))
     return _msd(trs, collect(Int, ls), Val(N))
@@ -102,7 +102,7 @@ end
 function _msd(trs, ls::Vector{Int}, ::Val{N}) where {N}
     out = zeros(length(ls))
     for t in trs
-        x = _track_points(t, Val(N), "msd")
+        x = _track_points(t, Val(N), "mean_squared_displacement")
         n = length(x)
         for (j, l) in enumerate(ls)
             s = 0.0
@@ -131,7 +131,7 @@ function _furth_params(S, D, P, what)
 end
 
 """
-    furth_msd(Δt; S, D, P)
+    furth_mean_squared_displacement(Δt, S, D, P)
 
 The modified Fürth MSD (Fortuna et al. 2020, Eq. 1) at the times `Δt`, elementwise:
 
@@ -141,8 +141,8 @@ The modified Fürth MSD (Fortuna et al. 2020, Eq. 1) at the times `Δt`, element
 (`0 ≤ S < 1`) the weight of the fast, uncorrelated part, whose diffusion constant is
 `D_fast = DS/(1 − S)`. Throws an `ArgumentError` unless `0 ≤ S < 1`, `D ≥ 0` and `P > 0`.
 """
-function furth_msd(Δt; S, D, P)
-    _furth_params(S, D, P, "furth_msd")
+function furth_mean_squared_displacement(Δt, S, D, P)
+    _furth_params(S, D, P, "furth_mean_squared_displacement")
     return [2D * _furth_g(t, P) + 2D * S / (1 - S) * t for t in Δt]
 end
 
@@ -165,7 +165,7 @@ end
     furth_fit(Δt, m; method = :paper, range = nothing, short = nothing, offset = true)
         -> (; S, D, P, D_fast, D_slow, v_eff, offset, method)
 
-Fit the modified Fürth model ([`furth_msd`](@ref)) to an MSD `m` at the times `Δt`
+Fit the modified Fürth model ([`furth_mean_squared_displacement`](@ref)) to an MSD `m` at the times `Δt`
 (positive, strictly increasing, at least 4 of them). The derived fields are
 `D_fast = DS/(1 − S)`, `D_slow = D + D_fast = D/(1 − S)` and the effective speed
 `v_eff = √(D/P)/(1 − S)`; `offset` is the fitted constant (the localisation error), 0 when
@@ -176,7 +176,7 @@ Fit the modified Fürth model ([`furth_msd`](@ref)) to an MSD `m` at the times `
   the interior times (those in `range = (lo, hi)`, default all) that are positive are fitted
   by ordinary least squares to `log dᵢ = c₀ + c₁Δtᵢ`, the logarithm of Eq. 1's second
   derivative `(2D/P)e^{−Δt/P}`, which gives `P = −1/c₁` and `D = e^{c₀}P/2`. The residual
-  `m − furth_msd(Δt; S = 0, D, P)` at the short times (`short = (lo, hi)`, default `Δt ≤ P`,
+  `m − furth_mean_squared_displacement(Δt, 0, D, P)` at the short times (`short = (lo, hi)`, default `Δt ≤ P`,
   or the first two times when fewer than two qualify) is then fitted by the line
   `2D_fast·Δt + offset`, and `S = D_fast/(D_fast + D)`. `D_fast` is not clamped, so noise
   can make it, and `S`, negative. With fewer than 3 positive second differences, or a

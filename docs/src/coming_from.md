@@ -27,8 +27,8 @@ are not available yet are on the [Roadmap](@ref roadmap).
 | `<Plugin Name="CellType">`, `Freeze` | `@kinds medium a b wall[frozen]` |
 | `<Plugin Name="Volume">` `TargetVolume`, `LambdaVolume` | `cells(k) => λ * (volume - V₀)^2`, or per type `V₀[kind]` |
 | `<Plugin Name="Surface">` | `cells(k) => λₛ * (surface - S₀)^2` |
-| `<Plugin Name="Contact">` `Energy Type1 Type2` | `contacts => J[kind, kind′]` with `J[kind, kind]` |
-| `<Plugin Name="ContactInternal">`, compartments | `contacts => ifelse(cluster[owner] == cluster[owner′], Jint, J[kind, kind′])`, `cluster =>` in the operating point |
+| `<Plugin Name="Contact">` `Energy Type1 Type2` | `contacts => J[kind, neighbor_kind]` with `J[kind, kind]` |
+| `<Plugin Name="ContactInternal">`, compartments | `contacts => ifelse(cluster[owner] == cluster[neighbor_owner], Jint, J[kind, neighbor_kind])`, `cluster =>` in the operating point |
 | `<Plugin Name="Connectivity">` | `@constraint connectivity(k)`, or the penalty form `@drive connectivity(k; penalty = P)` ([Connectivity](@ref manual-connectivity)) |
 | `<Plugin Name="LengthConstraint">` (2D) | `cells(k) => λL * (major_length - L)^2` |
 | `<Plugin Name="Chemotaxis">` `Lambda`, `SaturationCoef` | `@drive Chemotaxis(c; strength = λ, response = saturating(s), kinds = (k,))` |
@@ -72,7 +72,7 @@ are not available yet are on the [Roadmap](@ref roadmap).
 | `CellType class="biological"` / `"medium"` | `@kinds medium a b`; the medium comes first |
 | `VolumeConstraint target strength` | `cells(k) => strength * (volume - target)^2` |
 | `SurfaceConstraint mode="surface"` | `cells(k) => strength * (surface - target)^2` |
-| `CPM Interaction Contact type1 type2 value` | `contacts => J[kind, kind′]` (divide by `boundaryLengthScaling`) |
+| `CPM Interaction Contact type1 type2 value` | `contacts => J[kind, neighbor_kind]` (divide by `boundaryLengthScaling`) |
 | `MetropolisKinetics temperature` | `@sweep Metropolis(; temperature = T)` |
 | `MetropolisKinetics yield = Y` | `@sweep Metropolis(; temperature = T, offset = -Y)` |
 | `MonteCarloSampler MCSDuration` | `@sweep Metropolis(; …, mcs_duration = Δt)` |

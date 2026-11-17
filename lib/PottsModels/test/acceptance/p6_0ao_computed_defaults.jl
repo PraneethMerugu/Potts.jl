@@ -78,7 +78,7 @@ Symbolics.@register_symbolic p60ao_twice_plus_one(x)
     @lattice Lattice((12, 12); neighborhood = VonNeumann(1))
     @energy begin
         cells(P, Q) => λ * (volume - V₁[kind])^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = 10.0)
 end

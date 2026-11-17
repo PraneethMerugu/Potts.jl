@@ -106,7 +106,7 @@ prob = PottsProblem(MerksVasculogenesis(; name = :merks), merks_state(), (0, 10_
     @relations proposal = Moore(1)
     @energy begin
         cells(endothelial) => λ * (volume - V₀)^2 + λ_L * (major_length - L)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     if contact_inhibited
         @drive copy => ifelse((old == 0) && (kind[new] == endothelial), -χ * (c[target] - c[source]), 0.0)
@@ -262,7 +262,7 @@ prob = PottsProblem(Merks2006(; name = :m), layout(merks2006_layout(), (500, 500
     @relations proposal = Moore(1)
     @energy begin
         cells(endothelial) => λ * (volume - A)^2 + λ_L * (major_length - L)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @drive copy => -ifelse((old == 0) | (new == 0), χcM, χcc) *
                    (c[target] / (1 + s * c[target]) - c[source] / (1 + s * c[source]))
@@ -331,7 +331,7 @@ prob = PottsProblem(Merks2008(; name = :m), layout(merks2008_sprout(), (202, 202
     @relations proposal = NeighborOrder(4)
     @energy begin
         cells(endothelial) => λ * (volume - A)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     if _merks_choice(mode, (:extension_retraction, :extension_only), "Merks2008", :mode) === :extension_retraction
         @drive copy => -ifelse((old == 0) | (new == 0), χcM, χcc) *

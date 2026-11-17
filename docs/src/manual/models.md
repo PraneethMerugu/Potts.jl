@@ -48,7 +48,7 @@ using Potts
     @lattice Lattice((n, n); boundary = Periodic(), neighborhood = Moore(1))
     @energy begin
         cells(blob) => λ * (volume - V₀)^2
-        contacts => 10.0 * (kind != kind′)
+        contacts => 10.0 * (kind != neighbor_kind)
     end
     @sweep Metropolis(; temperature = T)
 end
@@ -82,7 +82,7 @@ parameter can switch statements on or off:
     @lattice Lattice((40, 40); neighborhood = Moore(1))
     @energy begin
         cells(blob) => (volume - 30.0)^2
-        contacts => 10.0 * (kind != kind′)
+        contacts => 10.0 * (kind != neighbor_kind)
     end
     if connected
         @constraint connectivity(blob)
@@ -128,18 +128,18 @@ end
 
 ## Inspecting a model
 
-Printing a model lists its parts. `parameters(sys)` and `variables(sys)` return the
-declared symbols, and `Potts.lookup(sys, :λ)` finds a quantity by name.
+Printing a model lists its parts. `Potts.declared_parameters(sys)` and
+`Potts.declared_variables(sys)` return the declared symbols, and `Potts.lookup(sys, :λ)` finds a quantity by name.
 `generated_code(sys)` returns the code Potts generates (the energy change of a copy,
 updates, and so on) as Julia expressions, for the curious.
 
 ```@example models
-parameters(sticky)
+Potts.declared_parameters(sticky)
 ```
 
 ## Names
 
-Some names are built in (`volume`, `surface`, `kind`, `kind′`, `owner`, `source`,
+Some names are built in (`volume`, `surface`, `kind`, `neighbor_kind`, `owner`, `source`,
 `target`, `new`, `old`, `mcs`, `position`, `distance`, `id`, …) and cannot be declared. `a`
 and `b` are reserved for the two cells of a link. `t` and `D` are the time variable and
 derivative of ModelingToolkit. Declaring any of these is an error that names the clash.

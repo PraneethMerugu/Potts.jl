@@ -17,7 +17,7 @@ using Potts: CorePotts
     @lattice Lattice((40, 30); neighborhood = Moore(1))
     @energy begin
         cells => λ * (volume - V₀[kind])^2
-        contacts => ifelse(cluster[owner] == cluster[owner′], Jint, J[kind, kind′])
+        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], Jint, J[kind, neighbor_kind])
         clusters(cytoplasm) => λc * (cluster_volume - Vc)^2
     end
     @constraint no_extinction
@@ -63,7 +63,7 @@ end
         @test all(c -> cl[c] == c, free)                           # free daughters are singletons
         @test sort(Array(v.cell.mass)[live]) == fill(1.0, 42)      # every divided cell split its mass
         # trackers stay exact through both kinds of division
-        @test Array(v.cell.cluster_volume) == CorePotts.recompute_cluster_volume(Array(v.σ), cl)
+        @test Array(v.cell.cluster_volume) == CorePotts.recompute_cluster_volume(Array(v.ownership), cl)
     end
 end
 

@@ -76,7 +76,7 @@ function m06_final(seed; old = false)
         )
     end
     prob = PottsProblem(sys, op, (0, M06_T); seed, field_solver = solver)
-    return solve(prob, SequentialCPM(); saveat = M06_T).u[end].σ
+    return solve(prob, SequentialCPM(); saveat = M06_T).u[end].ownership
 end
 
 @testset "Merks 2006 defaults: the paper's parameter set" begin

@@ -48,7 +48,7 @@ const P60D_T1 = 60                      # tspan (0, 60): MCS 0 … 59, states sa
     @lattice Lattice((30, 30); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         cells => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @divide cells(cell) when = volume >= 10000    # never fires: a lifecycle needs the moments
     @sweep Metropolis(; temperature = T)
@@ -93,7 +93,7 @@ function p60d_problem(moves::Pair{Int32, Int32}...; seed = 1)
     return remake(prob; f = g)
 end
 
-p60d_sites(u, c) = Array(u.σ) .== c
+p60d_sites(u, c) = Array(u.ownership) .== c
 # saved states i-1 → i in which cell c's site set changed
 p60d_moved(sol, c, is) = count(i -> p60d_sites(sol.u[i], c) != p60d_sites(sol.u[i - 1], c), is)
 

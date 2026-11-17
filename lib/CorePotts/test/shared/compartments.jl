@@ -20,12 +20,12 @@ function compartment_model(; λc = 1.0, Vc = 64.0, λs = 0.0, Sc = 32.0, Jint = 
         E(v, c) = p.λ * (v - @inbounds(p.V0[st.cell.kind[c]]))^2
         EC(v, k) = p.λc * (v - p.Vc)^2
         ES(s, k) = p.λs * (s - p.Sc)^2
-        return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
+        return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
                cluster_volume_delta(st.cell, prop, EC) +
-               cluster_surface_delta(st.cell, prop, cluster_surface_change(st.σ, st.cell, ctx, prop), ES)
+               cluster_surface_delta(st.cell, prop, cluster_surface_change(st.ownership, st.cell, ctx, prop), ES)
     end
     function commit!(st, p, prop, ctx)
-        δ = cluster_surface_change(st.σ, st.cell, ctx, prop)
+        δ = cluster_surface_change(st.ownership, st.cell, ctx, prop)
         commit_volume!(st, p, prop, ctx)
         commit_cluster_volume!(st.cell, prop)
         commit_cluster_surface!(st.cell, prop, δ)
@@ -43,10 +43,10 @@ end
 planner (D-089), which keeps the parent's anchor for a daughter (a representation choice),
 the same centroid and covariance of every live cell as the recount."""
 function same_moments(u, lat::Lattice{N}, cap, alg) where {N}
-    m = init_moments(u.σ, lat, cap)
+    m = init_moments(u.ownership, lat, cap)
     device = CorePotts._FORCE_DEVICE_LIFECYCLE[] && alg isa CheckerboardCPM
     device || return u.cell.m1 == m.m1 && u.cell.m2 == m.m2
-    ref = merge(m, (; volume = Int32[count(==(c), u.σ) for c in 1:cap]))
+    ref = merge(m, (; volume = Int32[count(==(c), u.ownership) for c in 1:cap]))
     return all(1:cap) do c
         ref.volume[c] == 0 && return u.cell.volume[c] == 0
         all(isapprox.(centroid(u.cell, lat, c), centroid(ref, lat, c); atol = 1e-9)) &&

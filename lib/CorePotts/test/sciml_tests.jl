@@ -35,18 +35,18 @@ end
         @testset "ensembles: trajectory i is replica i" begin
             ens = solve(EnsembleProblem(prob), alg, EnsembleSerial(); trajectories = 3)
             @test length(ens.u) == 3
-            @test ens.u[1].u[end].σ != ens.u[2].u[end].σ
-            @test ens.u[2].u[end].σ == solve(remake(prob; replica = 2), alg).u[end].σ
+            @test ens.u[1].u[end].ownership != ens.u[2].u[end].ownership
+            @test ens.u[2].u[end].ownership == solve(remake(prob; replica = 2), alg).u[end].ownership
             thr = solve(EnsembleProblem(prob), alg, EnsembleThreads(); trajectories = 3)
-            @test all(i -> thr.u[i].u[end].σ == ens.u[i].u[end].σ, 1:3)        # reproducible, any scheduler
+            @test all(i -> thr.u[i].u[end].ownership == ens.u[i].u[end].ownership, 1:3)        # reproducible, any scheduler
             # a prob_func that changes parameters still gets distinct replicas
             pf(q, ctx) = remake(q; p = merge(q.p, (; T = 5.0)))
             e2 = solve(EnsembleProblem(prob; prob_func = pf), alg, EnsembleSerial(); trajectories = 2)
-            @test e2.u[1].u[end].σ != e2.u[2].u[end].σ && e2.u[1].prob.p.T == 5.0
+            @test e2.u[1].u[end].ownership != e2.u[2].u[end].ownership && e2.u[1].prob.p.T == 5.0
             # … unless it chooses the seed or replica itself
             pinned(q, ctx) = remake(q; replica = 7)
             e3 = solve(EnsembleProblem(prob; prob_func = pinned), alg, EnsembleSerial(); trajectories = 2)
-            @test e3.u[1].u[end].σ == e3.u[2].u[end].σ
+            @test e3.u[1].u[end].ownership == e3.u[2].u[end].ownership
         end
 
         @testset "DiscreteCallback at MCS boundaries" begin
@@ -188,7 +188,7 @@ end
     @testset "default algorithm (D-009)" begin
         σ, kinds = blocks((20, 20), 5)
         prob = PottsProblem(GG, initial_state(σ, kinds), Lattice((20, 20)), (0, 4), gg_params(); seed = 3)
-        @test solve(prob).u[end].σ == solve(prob, SequentialCPM()).u[end].σ
+        @test solve(prob).u[end].ownership == solve(prob, SequentialCPM()).u[end].ownership
         @test init(prob).alg isa SequentialCPM
         err = try
             solve(prob; backend = P60ccDevice()); nothing
@@ -211,7 +211,7 @@ end
                 s_init = solve!(init(prob, alg; saveat = 2))
                 @test SciMLBase.successful_retcode(s_direct)
                 @test s_direct.t == s_init.t
-                @test s_direct.u[end].σ == s_init.u[end].σ
+                @test s_direct.u[end].ownership == s_init.u[end].ownership
 
                 integ = init(prob, alg)
                 @test SII.current_time(integ) == 0
@@ -219,24 +219,24 @@ end
                 @test SII.current_time(integ) == 1
                 reinit!(integ)
                 @test SII.current_time(integ) == 0
-                @test integ.state.σ == prob.u0.σ
+                @test integ.state.ownership == prob.u0.ownership
                 s_re = solve!(integ)
-                @test s_re.u[end].σ == s_direct.u[end].σ
+                @test s_re.u[end].ownership == s_direct.u[end].ownership
 
                 # reinit! with new state u0
                 σ_alt = copy(σ)
                 σ_alt[1:4, 1:4] .= 0
                 st_alt = initial_state(σ_alt, kinds)
                 reinit!(integ, st_alt)
-                @test integ.state.σ == st_alt.σ
+                @test integ.state.ownership == st_alt.ownership
                 s_alt = solve!(integ)
-                @test s_alt.u[end].σ == solve(remake(prob; u0 = st_alt), alg).u[end].σ
+                @test s_alt.u[end].ownership == solve(remake(prob; u0 = st_alt), alg).u[end].ownership
 
                 # remake matches fresh PottsProblem
                 p2 = merge(gg_params(), (; T = 12.0))
                 r_prob = remake(prob; p = p2, tspan = (0, 4), seed = 22)
                 f_prob = PottsProblem(GG, initial_state(σ, kinds), lat, (0, 4), p2; seed = 22)
-                @test solve(r_prob, alg).u[end].σ == solve(f_prob, alg).u[end].σ
+                @test solve(r_prob, alg).u[end].ownership == solve(f_prob, alg).u[end].ownership
             end
         end
 
@@ -278,13 +278,13 @@ end
     @testset "TS2-7 (Q7): CorePotts ForwardDiff.Dual refusal messages" begin
         # 1. Passing Dual parameters into a plain PottsProblem/SequentialCPM: CorePotts keeps CPM on
         #    concrete floats (derivative parts run through fields only); Dual in cell/temperature
-        #    arithmetic or TrackDeltaH is rejected cleanly.
+        #    arithmetic or TrackEnergyChange is rejected cleanly.
         σ, kinds = blocks((16, 16), 3)
         lat = Lattice((16, 16))
         dT = Dual{Nothing}(10.0, 1.0)
 
         # Dual temperature on plain CPMFunction: refused by uniform(::Type{Float...}, ::UInt32)
-        f_track = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackDeltaH{Float64}())
+        f_track = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackEnergyChange{Float64}())
         p_dual_T = PottsProblem(f_track, initial_state(σ, kinds), lat, (0, 2), merge(gg_params(), (; T = dT)))
         err_cpm = try
             solve(p_dual_T, SequentialCPM()); ""
@@ -344,7 +344,7 @@ end
             # the saved state is the run's state at MCS 3 (the affect changes nothing; same seed)
             ref = solve(prob, alg; saveat = [3], save_start = false, save_end = false)
             s = solve_at3((true, true), [6])
-            @test s.u[1].σ == ref.u[1].σ && s.u[2].σ == ref.u[1].σ
+            @test s.u[1].ownership == ref.u[1].ownership && s.u[2].ownership == ref.u[1].ownership
         end
     end
 end

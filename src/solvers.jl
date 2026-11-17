@@ -125,7 +125,7 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
                                      "`field_solver`"; map = !isempty(maps))
     end
     ode_solver isa _ODESolver || throw(ArgumentError(
-        "`ode_solver` takes `ExplicitEuler(; substeps)`, `RK4(; substeps)` or `Adaptive(alg; …)`; got $(repr(ode_solver))"))
+        "`ode_solver` takes `ExplicitEuler(; substeps)`, `Potts.RK4(; substeps)` or `Adaptive(alg; …)`; got $(repr(ode_solver))"))
     _check_ode_init(ode_solver, "`ode_solver`")
     resolved = Dict{Symbol, Any}()
     if !isempty(fields) && all(n -> n in steady, fields) && field_solver !== nothing &&
@@ -169,7 +169,7 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
             steady_only(n, s, "`solvers`")
         elseif n in odes
             s isa _ODESolver || throw(ArgumentError(
-                "`solvers`: `$n` takes `ExplicitEuler(; substeps)`, `RK4(; substeps)` or `Adaptive(alg; …)`; got $(repr(s))"))
+                "`solvers`: `$n` takes `ExplicitEuler(; substeps)`, `Potts.RK4(; substeps)` or `Adaptive(alg; …)`; got $(repr(s))"))
             _check_ode_init(s, "`solvers`: `$n`")
         else
             throw(ArgumentError("`solvers`: `$n` is not integrated (no `D($n) ~ …` equation); the keys are the " *
@@ -225,7 +225,7 @@ function _check_adaptive_draws(c::CompiledPottsSystem, resolved)
         get(resolved, _solver_name(arguments(lhs)[1]), nothing) isa Adaptive || continue
         _has_op(eq.rhs, random_uniform) && _located(getfield(c, :sys), eq) do
             throw(ArgumentError("`rand()` in an equation integrated by `Adaptive(…)`: the solver re-evaluates " *
-                                "the rate at trial steps; use `RK4`/`ExplicitEuler`, or draw in an update"))
+                                "the rate at trial steps; use `Potts.RK4`/`ExplicitEuler`, or draw in an update"))
         end
     end
     return nothing

@@ -21,7 +21,7 @@ using Potts: CorePotts
     @lattice Lattice((12, 12))
     @energy begin
         cells => λ * (volume - 16.0)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @equations D(y) ~ -0.1 * y
     @sweep Metropolis(; temperature = T)
@@ -45,14 +45,14 @@ end
         for alg in (SequentialCPM(), CheckerboardCPM())
             sol_solve = solve(prob, alg)
             sol_init = solve!(init(prob, alg))
-            @test sol_solve.u[end].σ == sol_init.u[end].σ
+            @test sol_solve.u[end].ownership == sol_init.u[end].ownership
             @test sol_solve.u[end].cell.y == sol_init.u[end].cell.y
 
             integ = init(prob, alg)
             step!(integ)
             reinit!(integ)
             sol_reinit = solve!(integ)
-            @test sol_reinit.u[end].σ == sol_solve.u[end].σ
+            @test sol_reinit.u[end].ownership == sol_solve.u[end].ownership
             @test sol_reinit.u[end].cell.y == sol_solve.u[end].cell.y
 
             integ_step = init(prob, alg)
@@ -65,7 +65,7 @@ end
 
         prob_rm = remake(prob; p = [:λ => 5.0])
         prob_fresh = PottsProblem(ScimlConforming(; name = :sc), sciml_op([:λ => 5.0]), (0, 6); seed = 11)
-        @test solve(prob_rm, SequentialCPM()).u[end].σ == solve(prob_fresh, SequentialCPM()).u[end].σ
+        @test solve(prob_rm, SequentialCPM()).u[end].ownership == solve(prob_fresh, SequentialCPM()).u[end].ownership
 
         @test SS.isscimlstructure(prob.p)
         vals, repack, _ = SS.canonicalize(SS.Tunable(), prob.p)

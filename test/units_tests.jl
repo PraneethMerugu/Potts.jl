@@ -24,7 +24,7 @@ using DynamicQuantities: @u_str
     @lattice Lattice((16, 16))
     @energy begin
         cells => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @after_mcs m ~ Pre(m) + integral(c)
     @observed total ~ sum(m for n in cells)

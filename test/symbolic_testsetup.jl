@@ -38,13 +38,13 @@ function proposal_states(prob; mcs = (0, 5, 20), n = 400, rng = Xoshiro(11))
     moore = CorePotts.relation(Moore(1), lat)
     out = Tuple{Any, Any}[]
     for u in sol.u, _ in 1:n
-        t = rand(rng, 1:length(u.σ)); x = CorePotts.coordinates(lat, t)
+        t = rand(rng, 1:length(u.ownership)); x = CorePotts.coordinates(lat, t)
         d = rand(rng, 1:length(moore))
         ins, y = CorePotts.shift(lat, x, moore.offsets[d])
         ins || continue
         s = CorePotts.linear_index(lat, y)
-        u.σ[t] == u.σ[s] && continue
-        push!(out, (u, CorePotts.Proposal(t, s, x, d, u.σ[t], u.σ[s])))
+        u.ownership[t] == u.ownership[s] && continue
+        push!(out, (u, CorePotts.Proposal(t, s, x, d, u.ownership[t], u.ownership[s])))
     end
     return out
 end
@@ -70,7 +70,7 @@ ctx_of(prob) = (;
     @lattice Lattice((60, 30); neighborhood = Moore(1))
     @energy begin
         cells(blob) => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
         edges(bond) => k * (distance - rest)^2
     end
     @sweep Metropolis(; temperature = T)
@@ -83,7 +83,7 @@ end
 function selfcheck(prob; n = 300)
     worst = 0.0
     for (u, prop) in proposal_states(remake(prob; tspan = (0, 3)); mcs = (0, 3), n)
-        a = deepcopy(u); a.σ[prop.target] = prop.new
+        a = deepcopy(u); a.ownership[prop.target] = prop.new
         prob.f.commit!(a, prob.p, prop, ctx_of(prob))
         worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u) + Potts._killing_credit(prob, u, prop, a))))
     end
@@ -110,7 +110,7 @@ end
     @lattice Lattice((36, 16); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         cells => (volume - 36)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
         edges(bond) => k₁ * (distance - rest)^2
         edges(tether) => k₂ * (distance - len)^2
     end
@@ -188,7 +188,7 @@ end
     @lattice Lattice((24, 24); neighborhood = Moore(1))
     @energy begin
         cells(dark, light) => λ * (volume - 25)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @on_copy act[target] ~ 1.0
     @after_mcs begin
@@ -240,7 +240,7 @@ end
     @lattice Lattice((30, 30); neighborhood = Moore(1))
     @energy begin
         cells => λ * (volume - V₀[kind])^2
-        contacts => ifelse(cluster[owner] == cluster[owner′], Jint, J[kind, kind′])
+        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], Jint, J[kind, neighbor_kind])
         clusters(cytoplasm) => λc * (cluster_volume - Vc)^2 + λs * (cluster_surface - Sc)^2
     end
     @constraint no_extinction
@@ -284,7 +284,7 @@ end
     @lattice Lattice((30, 30); neighborhood = Moore(1))
     @energy begin
         cells => λ * (volume - V₀[kind])^2
-        contacts => ifelse(cluster[owner] == cluster[owner′], Jint, J[kind, kind′])
+        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], Jint, J[kind, neighbor_kind])
         clusters(cytoplasm) => λc * (cluster_volume - Vc)^2
     end
     @constraint no_extinction
@@ -304,8 +304,8 @@ function check_nucleus_division(v)
     @test all(==(1), Array(v.cell.mass)[live])                    # Split once, by the cluster rule
     cnt = Array(v.cell.ndiv)
     @test all(c -> cnt[c] == (kd[c] == 2 ? 1 : 0), live)           # the cell rule once, nuclei only
-    @test Array(v.cell.cluster_volume) == CorePotts.recompute_cluster_volume(Array(v.σ), cl)
-    @test Array(v.cell.volume) == [count(==(c), Array(v.σ)) for c in eachindex(kd)]
+    @test Array(v.cell.cluster_volume) == CorePotts.recompute_cluster_volume(Array(v.ownership), cl)
+    @test Array(v.cell.volume) == [count(==(c), Array(v.ownership)) for c in eachindex(kd)]
 end
 
 
@@ -409,7 +409,7 @@ end
     @lattice Lattice((48, 48); neighborhood = Moore(1))
     @energy begin
         Volume(A; target = 25.0, strength = 2.0)
-        contacts => 4 * (kind != kind′)
+        contacts => 4 * (kind != neighbor_kind)
     end
     @drive copy => -μ * (
         px[new] * displacement(new, 1) + py[new] * displacement(new, 2) +
@@ -563,7 +563,7 @@ end
     @lattice Lattice((30, 30); geometry = Hexagonal(), neighborhood = Hex(2))
     @energy begin
         cells => (volume - 19)^2 + 0.2 * (surface - 60)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @fields SyPDE.hex()
     @after_mcs cx ~ centroid(1)
@@ -598,8 +598,8 @@ using Statistics: Statistics
     @energy begin
         cells(A, B) => λ * (volume - 16)^2
         # asymmetric in s/s′ and in the kinds: the compiler averages it with its mirror
-        contacts => J[kind, kind′] + β * cue * (1 + cue′)^2 * (kind == A)
-        contacts(wide) => weight * γ * (cue - 2 * cue′) * (owner′ != 0)
+        contacts => J[kind, neighbor_kind] + β * cue * (1 + cue′)^2 * (kind == A)
+        contacts(wide) => weight * γ * (cue - 2 * cue′) * (neighbor_owner != 0)
     end
     @sweep Metropolis(; temperature = T)
 end
@@ -632,13 +632,13 @@ function site_selfcheck(prob, rel; n = 400, dH = (u, prop) -> energy_change(prob
     rng = Xoshiro(5)
     worst = 0.0
     for u in sol.u, _ in 1:n
-        t = rand(rng, 1:length(u.σ)); x = CorePotts.coordinates(lat, t)
+        t = rand(rng, 1:length(u.ownership)); x = CorePotts.coordinates(lat, t)
         ins, y = CorePotts.shift(lat, x, R.offsets[rand(rng, 1:length(R))])
         ins || continue
         s = CorePotts.linear_index(lat, y)
-        u.σ[t] == u.σ[s] && continue
-        prop = CorePotts.Proposal(t, s, x, 1, u.σ[t], u.σ[s])
-        a = deepcopy(u); a.σ[t] = prop.new
+        u.ownership[t] == u.ownership[s] && continue
+        prop = CorePotts.Proposal(t, s, x, 1, u.ownership[t], u.ownership[s])
+        a = deepcopy(u); a.ownership[t] = prop.new
         prob.f.commit!(a, prob.p, prop, ctx_of(prob))
         worst = max(worst, abs(dH(u, prop) - (total_energy(prob, a) - total_energy(prob, u) + Potts._killing_credit(prob, u, prop, a))))
     end
@@ -671,7 +671,7 @@ end
     @lattice Lattice((20, 20); neighborhood = Moore(1))
     @energy begin
         cells(A) => (volume - 16)^2
-        contacts => J[kind, kind′] + β * mark * (1 + mark′) * (owner != 0) + γ * (tag - tag′)^2
+        contacts => J[kind, neighbor_kind] + β * mark * (1 + mark′) * (owner != 0) + γ * (tag - tag′)^2
         sites => 0.3 * mark * (kind == A)
     end
     if write
@@ -696,7 +696,7 @@ end
     @lattice Lattice((24, 24); neighborhood = Moore(1))
     @energy begin
         cells(A, B) => (volume - 16)^2
-        contacts => J[kind, kind′] + cue * cue′ + v[1] * v′[2]
+        contacts => J[kind, neighbor_kind] + cue * cue′ + v[1] * v′[2]
     end
     @sweep Metropolis(; temperature = 6.0)
 end
@@ -807,7 +807,7 @@ end
     @lattice Lattice((30, 30); neighborhood = Moore(1))
     @energy begin
         cells => (volume - V₀[kind])^2
-        contacts => ifelse(cluster[owner] == cluster[owner′], 2.0, J[kind, kind′])
+        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 2.0, J[kind, neighbor_kind])
         clusters(cytoplasm) => (cluster_volume - 64.0)^2
     end
     @constraint no_extinction

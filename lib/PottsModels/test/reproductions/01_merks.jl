@@ -193,7 +193,7 @@ function p63d_run06(seed, saves; lattice = (500, 500), n = 282, p = Pair[])
     op = layout(merks2006_layout(; lattice, n, seed), lattice)
     prob = PottsProblem(Merks2006(; name = :m6, lattice), [op; p...], (0, maximum(saves)); field_solver = P63D_RSOLVER, seed)
     sol = solve(prob, SequentialCPM(); saveat = saves)
-    return Dict(Int(t) => Array(u.σ) for (t, u) in zip(sol.t, sol.u))
+    return Dict(Int(t) => Array(u.ownership) for (t, u) in zip(sol.t, sol.u))
 end
 """One 2008 sprout run (or the paper de novo start): σ's at the save times (MCS)."""
 function p63d_run08(seed, saves; p = Pair[], mode = :extension_retraction, denovo = false)
@@ -202,7 +202,7 @@ function p63d_run08(seed, saves; p = Pair[], mode = :extension_retraction, denov
     op = layout(l, lattice)
     prob = PottsProblem(Merks2008(; name = :m8, lattice, mode), [op; p...], (0, maximum(saves)); field_solver = P63D_RSOLVER, seed)
     sol = solve(prob, SequentialCPM(); saveat = saves)
-    return Dict(Int(t) => Array(u.σ) for (t, u) in zip(sol.t, sol.u))
+    return Dict(Int(t) => Array(u.ownership) for (t, u) in zip(sol.t, sol.u))
 end
 """O6 of isolated cells without chemotaxis (9 cells of 10² over 120² of a framed 160²)."""
 function p63d_walk(seed; p = Pair[], tend = 2000)
@@ -211,7 +211,7 @@ function p63d_walk(seed; p = Pair[], tend = 2000)
     prob = PottsProblem(Merks2006(; name = :m6, lattice = G), [op; :χcM => 0.0; :χcc => 0.0; p...], (0, tend);
         field_solver = P63D_RSOLVER, seed)
     sol = solve(prob, SequentialCPM(); saveat = 200:10:tend)          # the first 200 MCS relax the squares
-    par, perp = p63d_anisotropy([Array(u.σ) for u in sol.u])
+    par, perp = p63d_anisotropy([Array(u.ownership) for u in sol.u])
     return par / perp
 end
 # a crossing of y(x) through `level` by linear interpolation, the first one (nothing if none)

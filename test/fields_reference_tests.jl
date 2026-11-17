@@ -228,7 +228,7 @@ end
 
         # With T = 1e-12 and σ already at target volume 4, σ stays fixed; cell reads integral(c)
         # from the previous MCS step (2 MCS = 8 substeps, dt = 2.0).
-        @test sol.u[end].σ == σ
+        @test sol.u[end].ownership == σ
         ref_c = ref_step_euler(rhs_coupled, C_sym, lap_sym, c0; nsteps = 12, dt = 3.0,
             bc_x = :neumann0, bc_y = :neumann0,
             extra_subs = (i, j) -> (D_sym => 0.1, k_sym => 0.2, alpha_sym => 0.4,

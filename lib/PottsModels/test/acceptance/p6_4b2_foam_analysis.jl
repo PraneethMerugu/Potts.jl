@@ -44,11 +44,11 @@
 #       k = 1:L÷2 (cycles per MCS for dt = 1 MCS; Nyquist 0.5, spec §2.8). The f = 0 bin is
 #       left out (so a constant offset does not change S); no window (the paper's low-f
 #       ringing, Fig. 8, is a raw-periodogram artefact).
-#   spectral_exponent(f, S; range) -> α
+#   spectral_exponent(f, S, range) -> α
 #       S ∝ f^−α: α = −(ordinary least-squares slope of log10 S on log10 f) over the bins
 #       with range[1] ≤ f ≤ range[2] (V10–V13 fit over 10⁻⁴–10⁻²). Fewer than 2 bins in
 #       range is an ArgumentError.
-#   mean_t1(N; bubbles, strain)
+#   mean_t1(N, bubbles, strain)
 #       N̄ (04b p.5829, Fig. 9), "the average number of T1 events per bubble per unit
 #       shear": sum(N) / (bubbles · strain). The strain is the caller's (A-9); N is in the
 #       caller's counting unit (A-15). bubbles ≤ 0 or strain ≤ 0 is an ArgumentError.
@@ -371,18 +371,18 @@ end
         a = (k ./ L) .^ (-α / 2)
         S = P64B2.power_spectrum(p64b2_synth(L, a, ϕ))
         @test S.S[k] ≈ L .* a .^ 2 ./ 4 rtol = 1e-6
-        @test P64B2.spectral_exponent(S.f, S.S; range = (1e-3, 1e-1)) ≈ α atol = 1e-6
+        @test P64B2.spectral_exponent(S.f, S.S, (1e-3, 1e-1)) ≈ α atol = 1e-6
     end
     # white noise is flat; its running sum (a random walk) is f^−2 (the V13 exclusion)
     w = randn(StableRNG(3), 2^14)
     Sw = P64B2.power_spectrum(w)
-    @test abs(P64B2.spectral_exponent(Sw.f, Sw.S; range = (1e-3, 0.5))) < 0.1
+    @test abs(P64B2.spectral_exponent(Sw.f, Sw.S, (1e-3, 0.5))) < 0.1
     Sr = P64B2.power_spectrum(cumsum(w))
-    @test 1.8 < P64B2.spectral_exponent(Sr.f, Sr.S; range = (1e-3, 1e-1)) < 2.2
+    @test 1.8 < P64B2.spectral_exponent(Sr.f, Sr.S, (1e-3, 1e-1)) < 2.2
     # the fit uses only the bins in range: a tone outside it does not move α
     Sp = P64B2.power_spectrum(p64b2_synth(L, (k ./ L) .^ (-0.5), ϕ) .+ 100 .* cos.(2π * 1500 .* t ./ L))
-    @test P64B2.spectral_exponent(Sp.f, Sp.S; range = (1e-3, 1e-1)) ≈ 1 atol = 1e-6
-    @test_throws ArgumentError P64B2.spectral_exponent(P.f, P.S; range = (0.3, 0.30001))
+    @test P64B2.spectral_exponent(Sp.f, Sp.S, (1e-3, 1e-1)) ≈ 1 atol = 1e-6
+    @test_throws ArgumentError P64B2.spectral_exponent(P.f, P.S, (0.3, 0.30001))
 end
 
 # ---------------------------------------------------------------------------------------
@@ -390,11 +390,11 @@ end
 # ---------------------------------------------------------------------------------------
 
 @testset "P6.4b2: N̄, T1s per bubble per unit shear" begin
-    @test P64B2.mean_t1([0, 2, 0, 4]; bubbles = 4, strain = 0.5) == 3.0      # 6 / (4 · 0.5)
-    @test P64B2.mean_t1(zeros(Int, 10); bubbles = 256, strain = 2) == 0
-    @test P64B2.mean_t1([0.5, 1.5]; bubbles = 2, strain = 1) == 1.0          # :t1 halves
-    @test_throws ArgumentError P64B2.mean_t1([1]; bubbles = 0, strain = 1)
-    @test_throws ArgumentError P64B2.mean_t1([1]; bubbles = 4, strain = 0)
+    @test P64B2.mean_t1([0, 2, 0, 4], 4, 0.5) == 3.0      # 6 / (4 · 0.5)
+    @test P64B2.mean_t1(zeros(Int, 10), 256, 2) == 0
+    @test P64B2.mean_t1([0.5, 1.5], 2, 1) == 1.0          # :t1 halves
+    @test_throws ArgumentError P64B2.mean_t1([1], 0, 1)
+    @test_throws ArgumentError P64B2.mean_t1([1], 4, 0)
 end
 
 @testset "P6.4b2: yield strain, the first T1 avalanche" begin

@@ -18,7 +18,7 @@
 
         ext = ChemoSorting(; name = :chemo)
         @test Potts._p(ext, :kinds) == [:medium, :dark, :light]
-        @test Set(Potts.info(x).name for x in Potts.parameters(ext)) == Set([:λ, :V₀, :T, :J, :χ])
+        @test Set(Potts.info(x).name for x in Potts.declared_parameters(ext)) == Set([:λ, :V₀, :T, :J, :χ])
         @test length(Potts._p(ext, :energies)) == 2 && length(Potts._p(ext, :drives)) == 1 && Potts.lattice(ext) == Potts.lattice(getfield(SORTING, :sys))
         σ, kinds = graner_state()
         a = symbolic_graner_problem(; nmcs = 5)
@@ -33,7 +33,7 @@
         # an added frozen kind and a redeclared (wider) contact table; base overrides by keyword
         w = WalledSorting(; name = :walled)
         @test Potts._p(w, :kinds) == [:medium, :dark, :light, :wall] && Potts._p(w, :frozen_kinds) == [3]
-        @test count(x -> Potts.info(x).name === :J, Potts.parameters(w)) == 1 && size(Potts.info(only(filter(x -> Potts.info(x).name === :J, Potts.parameters(w)))).default) == (4, 4)
+        @test count(x -> Potts.info(x).name === :J, Potts.declared_parameters(w)) == 1 && size(Potts.info(only(filter(x -> Potts.info(x).name === :J, Potts.declared_parameters(w)))).default) == (4, 4)
         @test Potts.lattice(w).dims == (40, 40)
         σw = zeros(Int32, 40, 40); σw[:, 1] .= 1; σw[10:15, 10:15] .= 2; σw[20:25, 20:25] .= 3
         pw = PottsProblem(w, [ownership => σw, kind => [:wall, :dark, :light]], (0, 10))
@@ -63,7 +63,7 @@ end
             @lattice Lattice((12, 12); neighborhood = VonNeumann(1))
             @energy begin
                 cells(A, B) => λ * (volume - V₀)^2
-                contacts => J[kind, kind′]
+                contacts => J[kind, neighbor_kind]
                 cells(A, B) => x * volume
                 cells(A) => d[1] * volume
                 cells(B) => d[2] * volume
@@ -283,7 +283,7 @@ end
         @test rejection(
             () -> Potts.PottsSystem(;
                 name = :p, kinds = Potts._p(base, :kinds), lattice = Potts.lattice(base), sweep = Potts._p(base, :sweep),
-                parameters = Any[Potts.parameters(base)...], variables = Any[Potts.variables(var)...]
+                parameters = Any[Potts.declared_parameters(base)...], variables = Any[Potts.declared_variables(var)...]
             ), "`vb_1`", vec
         ) === :ok
         # the label reads `parameter `vb_2` (a component of the vector `vb`)`
@@ -299,8 +299,8 @@ end
         @test rejection(() -> NVObsClash(; name = :ext), "already declared as an observed quantity") === :ok
         # controls: a vector override replaces the base's vector whole; other names are free
         m = NVValidVec(; name = :ext)
-        @test sort([Potts.info(p).name for p in Potts.parameters(m)]) == [:vb_1, :vb_2, :vb_3] &&
-            all(p -> Potts.info(p).default == 3.0 + Potts.info(p).options.index, Potts.parameters(m))
+        @test sort([Potts.info(p).name for p in Potts.declared_parameters(m)]) == [:vb_1, :vb_2, :vb_3] &&
+            all(p -> Potts.info(p).default == 3.0 + Potts.info(p).options.index, Potts.declared_parameters(m))
         m = NVValidOther(; name = :ext)
         @test Potts.info(Potts.lookup(m, :vb_3)).role === :cell && mtkcompile(m) isa Potts.CompiledPottsSystem
     end
@@ -345,12 +345,12 @@ end
         sol = solve(p1, SequentialCPM())
         @test sol[ns.total] == sol[sys.total] && sol[ns.g] == sol[sys.g]
         # solvers keys
-        fp(k) = PottsProblem(sys, ns_op(), (0, 1); solvers = [k => RK4()]).f.fingerprint
+        fp(k) = PottsProblem(sys, ns_op(), (0, 1); solvers = [k => Potts.RK4()]).f.fingerprint
         @test fp(ns.x) == fp(sys.x) == fp(:x) != PottsProblem(sys, ns_op(), (0, 1)).f.fingerprint
         # components: `sys.dc.y` is the flattened `dc₊y`
         comp = NsComp(; name = :pc)
         @test PottsProblem(comp, [ns_op(); comp.dc.y => 2.0], (0, 1)).u0.cell.dc₊y == [2.0, 2.0]
-        cfp(k) = PottsProblem(comp, ns_op(), (0, 1); solvers = [k => RK4()]).f.fingerprint
+        cfp(k) = PottsProblem(comp, ns_op(), (0, 1); solvers = [k => Potts.RK4()]).f.fingerprint
         @test cfp(comp.dc.y) == cfp(M.toggle_namespacing(Potts.inner(comp), true).dc.y)
         # negative controls: a key namespaced by another model names nothing here
         other = M.toggle_namespacing(Potts.inner(NsCell(; name = :other)), true)
@@ -369,7 +369,7 @@ end
         # and inside an expression
         for f in (
                 () -> Potts.SymbolicIndexingInterface.getp(p1, other.λ)(p1), () -> p1.ps[other.λ],
-                () -> PottsProblem(sys, ns_op(), (0, 1); solvers = [other.x => RK4()]), () -> p1[sys.total + other.λ],
+                () -> PottsProblem(sys, ns_op(), (0, 1); solvers = [other.x => Potts.RK4()]), () -> p1[sys.total + other.λ],
                 () -> observe(p1, sys.total + other.λ),
             )
             e = try

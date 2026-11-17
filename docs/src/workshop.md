@@ -9,6 +9,7 @@ Start every session with:
 
 ```@example workshop
 using Potts, PottsModels, MakiePotts, CairoMakie
+using Potts.Layouts
 using Statistics: mean
 CairoMakie.activate!(type = "png") # hide
 nothing # hide
@@ -51,7 +52,7 @@ Main.paper_run("graner_glazier", "../") # hide
 
     ```@example workshop
     function heterotypic_fraction(u)
-        σ, k = u.σ, u.cell.kind
+        σ, k = u.ownership, u.cell.kind
         mixed = total = 0
         for x in CartesianIndices(σ), step in ((1, 0), (0, 1), (1, 1), (1, -1))
             y = CartesianIndex(mod1.(Tuple(x) .+ step, size(σ)))
@@ -118,7 +119,7 @@ Runs are random, so compare 3 seeds.
     @lattice Lattice((80, 40); boundary = (Closed(), Periodic()), neighborhood = Moore(1))
     @energy begin
         Volume(leader, follower; target = 25.0, strength = 2.0)
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = 8.0)
 end
@@ -138,7 +139,7 @@ nothing # hide
     op = layout(Scattered(12, (5, 5); region = (10:30, 1:40), kinds = [:leader, :follower], seed = 1), twochemo)
     c0 = [x / 80 for x in 1:80, y in 1:40]
     function mean_x(u, k)
-        xs = [x[1] for x in CartesianIndices(u.σ) if u.σ[x] != 0 && u.cell.kind[u.σ[x]] == k]
+        xs = [x[1] for x in CartesianIndices(u.ownership) if u.ownership[x] != 0 && u.cell.kind[u.ownership[x]] == k]
         return mean(xs)
     end
     chemo = PottsProblem(twochemo, [op; :c => c0; :χ => 400.0], (0, 600); seed = 1)

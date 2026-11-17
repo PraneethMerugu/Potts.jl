@@ -239,7 +239,7 @@ end
 # of its grid: the site reads the node whose block holds it
 _site_read(i::Entity, j) = (L = get(i.options, :lattice_level, nothing);
                             L === nothing ? :(@inbounds st.site.$(i.name)[$j]) :
-                            :(@inbounds st.site.$(i.name)[Potts._coarse_site($j, size(st.σ), $(trailing_zeros(L.k)))]))
+                            :(@inbounds st.site.$(i.name)[Potts._coarse_site($j, size(st.ownership), $(trailing_zeros(L.k)))]))
 """
     _coarse_site(j, dims, s) -> Int
 
@@ -261,7 +261,7 @@ end
 function _lower_named(x, i::Entity, env::LowerEnv)
     r = i.role
     r === :param && return :(p.$(i.name))
-    r === :kindtable && error("kind table `$(i.name)` must be indexed by kinds, e.g. `$(i.name)[kind, kind′]`")
+    r === :kindtable && error("kind table `$(i.name)` must be indexed by kinds, e.g. `$(i.name)[kind, neighbor_kind]`")
     if r === :builtin || r === :delta
         r === :builtin && i.name === :direction &&
             error("`direction` is a vector: write its component `direction[k]` (k = 1, …, N)")
@@ -528,10 +528,10 @@ function _is_ref(x)
     return false
 end
 
-# A cell index: a reference, a cell-valued built-in (`old`, `new`, `id`, `owner`, `owner′`,
+# A cell index: a reference, a cell-valued built-in (`old`, `new`, `id`, `owner`, `neighbor_owner`,
 # `cluster`), `owner[s]` or `cluster[c]`, a nested `ifelse` of cell indices, or the integer 0
 # (none). Site indices (`target`, `source`, `site`) and numbers other than 0 are not.
-const _CELL_INDEX_BUILTINS = (:old, :new, :id, :owner, :owner′, :cluster)
+const _CELL_INDEX_BUILTINS = (:old, :new, :id, :owner, :neighbor_owner, :cluster)
 function _is_cell_index(x)
     x = _unwrap(x)
     SymbolicUtils.isconst(x) && (x = SymbolicUtils.unwrap_const(x))
@@ -708,8 +708,8 @@ function _sort(x)
     if i !== nothing
         i.role in (:bound, :bound_site) && return :site
         i.role === :bound_cell && return :cell
-        i.role === :builtin && return i.name in (:source, :target, :site, :site′) ? :site :
-               i.name in (:old, :new, :owner, :owner′, :id, :a, :b) ? :cell : :unknown
+        i.role === :builtin && return i.name in (:source, :target, :site, :neighbor_site) ? :site :
+               i.name in (:old, :new, :owner, :neighbor_owner, :id, :a, :b) ? :cell : :unknown
     end
     if x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === value_at && length(arguments(x)) == 2
         a = info(arguments(x)[1])
@@ -769,7 +769,7 @@ function _lower_at(args, env)
         s === :site && error("cell variable `$(i.name)` indexed by a site; use `$(i.name)[owner[s]]`")
         return :(Potts._cellval(st.cell.$(i.name), $j))
     elseif i.role === :builtin
-        i.name === :owner && return :(@inbounds st.σ[$j])
+        i.name === :owner && return :(@inbounds st.ownership[$j])
         if i.name === :position
             s === :site && error("`position[$(args[2])]` is a vector: write its component `position[$(args[2])][k]`")
             if !haskey(env.bind, :position)
@@ -840,9 +840,9 @@ function _lower_population(args, env)
         range = :(1:length(st.cell.kind))
         skip = :((@inbounds st.cell.volume[$nsym]) > 0 && $(_kindtest(:(Potts._cellkind(st, $nsym)), ni.options.kinds)))
     else
-        merge!(bind, Dict{Symbol, Any}(:owner => :(@inbounds st.σ[$nsym]), :kind => :(CorePotts.owner_kind(st, $nsym)),
+        merge!(bind, Dict{Symbol, Any}(:owner => :(@inbounds st.ownership[$nsym]), :kind => :(CorePotts.owner_kind(st, $nsym)),
             :__site => nsym, :position => :(Potts._position($T, ctx, $nsym)), :site => nsym))
-        range = :(1:length(st.σ))
+        range = :(1:length(st.ownership))
         skip = :(CorePotts.in_domain(ctx.lattice, $nsym))
     end
     bind[:__outer] = env                 # `members(cluster)`: the enclosing cell's `cluster`
@@ -964,15 +964,15 @@ function _lower_connected(args, env)
     code = Int(SymbolicUtils.unwrap_const(_unwrap(args[2])))
     g = _global_rule(code)
     g === nothing || return _lower_global(who, g)
-    code <= 3 && return :(CorePotts.local_rule(st.σ, ctx, prop, $(isodd(code)), $(code >= 2)))
-    code == 4 && return :(CorePotts.arc_or_pair(st.σ, ctx, prop))
-    return :(CorePotts.simple_point(st.σ, ctx, prop, $who, $(code == 6)))
+    code <= 3 && return :(CorePotts.local_rule(st.ownership, ctx, prop, $(isodd(code)), $(code >= 2)))
+    code == 4 && return :(CorePotts.arc_or_pair(st.ownership, ctx, prop))
+    return :(CorePotts.simple_point(st.ownership, ctx, prop, $who, $(code == 6)))
 end
 
 # `Global` (P6.9a) inline, in a drive or a constraint: exact on the host algorithms, in the
 # window on the checkerboard (an undecided copy reads `false`); the gaining side is local
-_lower_global(who, g) = who === :new ? :(CorePotts.global_gains(st.σ, ctx, prop, $(_global_adj(g)))) :
-                        :(CorePotts.global_keeps(st.σ, ctx, prop, $(_global_vals(g)...), CorePotts.GlobalSearch()) == Int32(0))
+_lower_global(who, g) = who === :new ? :(CorePotts.global_gains(st.ownership, ctx, prop, $(_global_adj(g)))) :
+                        :(CorePotts.global_keeps(st.ownership, ctx, prop, $(_global_vals(g)...), CorePotts.GlobalSearch()) == Int32(0))
 # `Val(full)` (hex has one adjacency: `:face`), and with it `Val(window)`, `Val(box capacity)`
 _global_adj(g) = :(Val($(g.adjacency === :full && !_PIECES_HEX[])))
 function _global_vals(g)

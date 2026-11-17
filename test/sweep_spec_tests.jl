@@ -100,7 +100,7 @@ end
         sys = OpenVTReferenceMonolayer(; name = :ref, lattice = (24, 24))
         U = Potts.updates(sys)
         declared = Set{Symbol}(Potts.SymbolicIndexingInterface.getname(x) for x in [M.parameters(sys); M.unknowns(sys)])
-        allowed = union(declared, Set(Potts.BUILTIN_NAMES), Set([:kind′, :contact_partner]))
+        allowed = union(declared, Set(Potts.BUILTIN_NAMES), Set([:neighbor_kind, :contact_partner]))
         for u in U
             @test isempty(setdiff(ss_eq_names(u.eq), allowed))
             @test !any(n -> startswith(string(n), "contacts_"), ss_eq_names(u.eq))
@@ -108,7 +108,7 @@ end
         # the fold update reads `count_contacts` (the cell's contacts, all and with the medium)
         f = only(filter(u -> :f in ss_names(u.eq.lhs), U))
         @test occursin("count_contacts(contact_partner, true, contact)", string(f.eq.rhs))
-        @test occursin("count_contacts(contact_partner, kind′(t) == 0, contact)", string(f.eq.rhs))
+        @test occursin("count_contacts(contact_partner, neighbor_kind(t) == 0, contact)", string(f.eq.rhs))
         # isequal-stable across the plain and compiled forms
         for V in (Potts.updates(mtkcompile(sys)), Potts.updates(sys))
             @test length(V) == length(U) && all(i -> isequal(V[i].eq, U[i].eq), eachindex(U, V))

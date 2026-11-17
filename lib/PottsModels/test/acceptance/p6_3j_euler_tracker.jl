@@ -502,7 +502,7 @@ p63j_col(u, adj) = Array(adj === :face ? u.cell.euler : u.cell.euler_full)
 
 """Tracked vs oracle (a) for every cell and adjacency; returns (mismatches, checks, values seen)."""
 function p63j_compare(u, geom, adjs; periodic)
-    σ = Array(u.σ)
+    σ = Array(u.ownership)
     # every cell up to the last live one (dead cells read 0; unused capacity is not read)
     n = something(findlast(>(0), Array(u.cell.volume)), 0)
     bad = checks = 0
@@ -732,7 +732,7 @@ const P63J_DH_ROWS = [[(g, p, Float64) for ((g, p), _) in P63J_GEOMS]; [(g, fals
             nE += isapprox(ΔE, dE; atol = tol)
             nD += isapprox(ΔH - ΔE, drive; atol = tol)
             # commit! moves both columns to the oracle values of the new state
-            a = deepcopy(u); a.σ[x...] = new
+            a = deepcopy(u); a.ownership[x...] = new
             prob.f.commit!(a, prob.p, prop, ctx)
             for adj in p63j_adjs(geom)
                 commit_bad += p63j_col(a, adj) != p63j_oracle_all(σ1, 3, geom, adj; periodic)[1]

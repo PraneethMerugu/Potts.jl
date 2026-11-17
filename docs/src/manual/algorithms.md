@@ -149,13 +149,14 @@ agree exactly; the accepted counts are random, with the same expected value.
 
 ```@example boundary
 using Potts
+using Potts.Layouts
 
 @potts_model Dilute begin
     @kinds medium cell
     @lattice Lattice((60, 60); neighborhood = Moore(1))
     @energy begin
         Volume(cell; target = 25.0, strength = 1.0)
-        contacts => 8.0 * (kind != kind′)
+        contacts => 8.0 * (kind != neighbor_kind)
     end
     @sweep Metropolis(; temperature = 8.0)
 end

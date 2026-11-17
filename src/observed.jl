@@ -94,7 +94,7 @@ _CellValues{T}(f::F) where {T, F} = _CellValues{T, F}(f)
 struct _SiteValues{F}
     f::F
 end
-(o::_SiteValues)(st, p, ctx, t) = reshape([o.f(st, p, ctx, t, i) for i in 1:length(st.σ)], size(st.σ))
+(o::_SiteValues)(st, p, ctx, t) = reshape([o.f(st, p, ctx, t, i) for i in 1:length(st.ownership)], size(st.ownership))
 
 function _observed_build(info::PottsModelInfo, c, T, x)
     e = _expand_observed(c, _unwrap(x))
@@ -141,7 +141,7 @@ function _fresh_integrals(::Type{T}, u, p, ctx, t, phases, names) where {T}
                 if startswith(String(n), "__ifold_")
         ), sc.model
     )
-    st = CorePotts.CPMState(u.σ, cell, u.site, model, u.history)
+    st = CorePotts.CPMState(u.ownership, cell, u.site, model, u.history)
     foreach(ph -> ph(st, p, ctx, CorePotts.RNGKey(0), Int(t), CorePotts.CPU()), phases)
     return st
 end
@@ -463,7 +463,7 @@ function _field_inputs_at(info::PottsModelInfo, u, p, t, ins)
             f(u, p, info.ctx, t)
         elseif how === :domain
             m = core_lattice(_p(getfield(c, :sys), :lattice)).mask
-            m === nothing ? trues(size(u.σ)) : collect(m)
+            m === nothing ? trues(size(u.ownership)) : collect(m)
         else
             collect(getproperty(u.site, ex))
         end

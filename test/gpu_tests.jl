@@ -9,7 +9,7 @@
         σ, kinds = graner_state()
         prob = symbolic_graner_problem(; nmcs = 40, T = Float32)
         u = solve(prob, CheckerboardCPM(); backend).u[end]
-        @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(kinds)]
+        @test u.cell.volume == [count(==(c), u.ownership) for c in eachindex(kinds)]
         n_gg = max(8, required_n(sqrt(2) * 220.0, 800.0; alpha = 1.0e-3, power = 0.9))
         xs = [total_energy(prob, solve(remake(prob; seed), CheckerboardCPM(); save_start = false).u[end]) for seed in 1:n_gg]
         ys = [total_energy(prob, solve(remake(prob; seed), CheckerboardCPM(); backend, save_start = false).u[end]) for seed in 11:(10 + n_gg)]
@@ -29,7 +29,7 @@
                 ("openvt", PottsProblem(MONOLAYER, [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [1]], (0, 10);
                     T = Float32, capacity = 8)))
             v = solve(p, CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
-            @test v.cell.volume == [count(==(c), v.σ) for c in eachindex(v.cell.volume)]
+            @test v.cell.volume == [count(==(c), v.ownership) for c in eachindex(v.cell.volume)]
         end
         # F3-08: Merks with `BackwardEuler` on the device (the implicit runtime's launches, the
         # status word read at the saves), 20 MCS
@@ -72,8 +72,8 @@
         kp = PottsProblem(Compartments(; name = :comp), [ownership => σk, kind => kk, cluster => gk], (0, 4); T = Float32)
         uk = solve(kp, CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
         cl = Array(uk.cell.cluster)
-        @test Array(uk.cell.cluster_volume) == CorePotts.recompute_cluster_volume(Array(uk.σ), cl)
-        @test Array(uk.cell.cluster_surface) ≈ CorePotts.recompute_cluster_surface(Array(uk.σ), cl, kp.lattice, Moore(1); T = Float32)
+        @test Array(uk.cell.cluster_volume) == CorePotts.recompute_cluster_volume(Array(uk.ownership), cl)
+        @test Array(uk.cell.cluster_surface) ≈ CorePotts.recompute_cluster_surface(Array(uk.ownership), cl, kp.lattice, Moore(1); T = Float32)
         @test count(>(0), Array(uk.cell.volume)) == 36
         # components: the batched RK4 cell-ODE kernel in Float32 on the device
         σo = zeros(Int32, 20, 20); σo[3:7, 3:7] .= 1; σo[12:16, 12:16] .= 2
@@ -89,7 +89,7 @@
         um = solve(pm, CheckerboardCPM(); backend).u[end]
         cm = CorePotts.centroid(Float64, map(Array, um.cell), pm.lattice, 1)
         @test Array(um.cell.cx)[1] ≈ cm[1] && Array(um.cell.cy)[1] ≈ cm[2]
-        @test Array(um.cell.volume)[1] == count(==(1), Array(um.σ))
+        @test Array(um.cell.volume)[1] == count(==(1), Array(um.ownership))
         # setters write through to device memory
         im = init(pm, CheckerboardCPM(); backend)
         im[:px] = [0.25]; im.ps[:μ] = 0.0
@@ -98,7 +98,7 @@
         CorePotts.SymbolicIndexingInterface.setsym(im, [:μ, :px])(im, [2.0, [0.5]])
         @test Array(im.state.cell.px) == Float32[0.5] && im.p.μ === 2.0f0
         step!(im)
-        @test im.t == 1 && Array(im.state.cell.volume)[1] == count(==(1), Array(im.state.σ))
+        @test im.t == 1 && Array(im.state.cell.volume)[1] == count(==(1), Array(im.state.ownership))
         # history rings: pushed and read on the device
         σl = zeros(Int32, 8, 8); σl[3:5, 3:5] .= 1
         ul = solve(PottsProblem(Lags(; name = :l), [ownership => σl, kind => [1]], (0, 7); T = Float32),
@@ -109,7 +109,7 @@
         wi = [Float32(i + j) / 40 for i in 1:20, j in 1:20]
         ui = solve(PottsProblem(Integrals(; name = :i), [ownership => σi, kind => [1, 1], :w => wi], (0, 5); T = Float32),
             CheckerboardCPM(); backend).u[end]
-        σh = Array(ui.σ)
+        σh = Array(ui.ownership)
         @test Array(ui.cell.mass) ≈ [sum(wi[σh .== k]) for k in 1:2]
         # integral(x) with site-independent folds: computed once into model slots on the device
         σf, wf = p60ai_init((16, 16))
@@ -117,7 +117,7 @@
         solf = solve(PottsProblem(P60aiRefresh(; name = :x), [ownership => σf, kind => [:A, :A], :w => wf], (0, 3);
                 T = Float32, seed = 5), CheckerboardCPM(); backend)
         uf = solf.u[end]
-        σh, Vf = Array(uf.σ), Array(uf.cell.volume)
+        σh, Vf = Array(uf.ownership), Array(uf.cell.volume)
         perf(f) = [sum((f(i) for i in findall(==(k), σh)); init = 0.0) for k in eachindex(Vf)]
         vf = sum(Array(uf.cell.v)[Vf .> 0])
         @test vf == 6
@@ -131,7 +131,7 @@
         # model-scope ODEs and a model component (single-item kernel)
         σs2 = zeros(Int32, 20, 20); σs2[2:4, 2:4] .= 1; σs2[10:12, 10:12] .= 2; σs2[15:17, 3:5] .= 3
         us = solve(PottsProblem(Systemic(; name = :s), [ownership => σs2, kind => [1, 1, 1]], (0, 10); T = Float32,
-                ode_solver = RK4(substeps = 4)),
+                ode_solver = Potts.RK4(substeps = 4)),
             CheckerboardCPM(); backend).u[end]
         @test Array(us.model.pk₊drug_c)[1] ≈ 3 / 0.2 * (1 - exp(-0.2 * 10)) rtol = 1e-4
         # adaptive host ODEs with a device state (copied once per MCS)
@@ -151,7 +151,7 @@
         ph = PottsProblem(HexSorting(; name = :h), [ownership => σh, kind => [isodd(k) ? :dark : :light for k in 1:nh]], (0, 20); T = Float32,
             field_solver = ExplicitEuler())
         uh = solve(ph, CheckerboardCPM(proposal = Hex(1)); backend).u[end]
-        σhh = Array(uh.σ)
+        σhh = Array(uh.ownership)
         @test Array(uh.cell.volume) == [count(==(k), σhh) for k in 1:nh]
         @test Array(uh.cell.surface) ≈ CorePotts.recompute_surface(σhh, ph.lattice, ph.relations.surface, nh; T = Float32)
         # the hexagonal field equals the host run (Float32)
@@ -164,7 +164,7 @@
         @test eltype(pd.u0.site.c) == Float32
         ud = solve(pd, CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
         uc = solve(pd, CheckerboardCPM(; proposal = Moore(1))).u[end]
-        @test Array(ud.σ) == uc.σ && Array(ud.site.c) == uc.site.c && sum(uc.site.c) > 0
+        @test Array(ud.ownership) == uc.ownership && Array(ud.site.c) == uc.site.c && sum(uc.site.c) > 0
         # a copy taken before the first step, while the field kernels still compile on a host task
         # in the run context: each integrator steps its own launches, both equal the plain run
         hold = Base.Event()
@@ -181,7 +181,7 @@
         foreach(_ -> step!(i2), 1:10)
         foreach(_ -> step!(i1), 1:10)
         for i in (i1, i2)
-            @test Array(current_state(i).σ) == Array(ud.σ) && Array(current_state(i).site.c) == Array(ud.site.c)
+            @test Array(current_state(i).ownership) == Array(ud.ownership) && Array(current_state(i).site.c) == Array(ud.site.c)
         end
     end
 end
@@ -196,7 +196,7 @@ end
         n_ms = max(16, required_n(1.5, 1.9; alpha = 1.0e-3, power = 0.9))
         d = map(1:n_ms) do seed
             u = solve(remake(mp; seed), CheckerboardCPM(); backend).u[end]
-            @test Array(u.cell.volume) == [count(==(c), Array(u.σ)) for c in 1:3]
+            @test Array(u.cell.volume) == [count(==(c), Array(u.ownership)) for c in 1:3]
             @test Array(u.cell.links__bond) == mp.u0.cell.links__bond          # sweeps never touch links
             (CorePotts.centroid_distance(Float64, u.cell, mp.lattice, 1, 2),
                 CorePotts.centroid_distance(Float64, u.cell, mp.lattice, 2, 3))
@@ -217,7 +217,7 @@ end
             op = PottsModels.akeeb_state(; lattice = lat, seed)
             prob = PottsProblem(PottsModels.AkeebInvasion(; name = :a, lattice = lat), op, (0, 150); capacity = 1000, seed, T)
             u = solve(prob, CheckerboardCPM(; proposal = VonNeumann(1)); backend).u[end]
-            σ = Array(u.σ); kinds = Array(u.cell.kind); vol = Array(u.cell.volume)
+            σ = Array(u.ownership); kinds = Array(u.cell.kind); vol = Array(u.cell.volume)
             @test vol == [count(==(c), σ) for c in eachindex(vol)]
             @test all(>(0), vol[1:length(op[2].second)])                    # no extinction
             ys = [i[2] for i in CartesianIndices(σ) if σ[i] > 0 && kinds[σ[i]] == 1]
@@ -242,7 +242,7 @@ end
         p32 = site_contact_problem(sys, (24, 24); tspan = (0, 60), T = Float32)
         u = solve(p32, CheckerboardCPM(); backend).u[end]
         @test eltype(u.site.cue) === Float32 && Array(u.site.cue) == p32.u0.site.cue       # site values stay put
-        @test Array(u.cell.volume) == [count(==(c), Array(u.σ)) for c in eachindex(Array(u.cell.volume))]
+        @test Array(u.cell.volume) == [count(==(c), Array(u.ownership)) for c in eachindex(Array(u.cell.volume))]
         n_sc = max(12, required_n(sqrt(2) * 150.0, 300.0; alpha = 1.0e-3, power = 0.9))
         xs = [total_energy(p64, solve(remake(p64; seed), CheckerboardCPM(); save_start = false).u[end]) for seed in 1:n_sc]
         ys = [total_energy(p64, solve(remake(p32; seed), CheckerboardCPM(); backend, save_start = false).u[end]) for seed in 101:(100 + n_sc)]
@@ -256,7 +256,7 @@ end
         oc = PottsProblem(SiteContactsOnCopy(; name = :oc), [ownership => σ, kind => fill(:A, length(kinds)), :mark => cue,
             :tag => 2 .* cue], (0, 20); T = Float32)
         v = solve(oc, CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
-        @test Array(v.cell.volume) == [count(==(c), Array(v.σ)) for c in eachindex(Array(v.cell.volume))]
+        @test Array(v.cell.volume) == [count(==(c), Array(v.ownership)) for c in eachindex(Array(v.cell.volume))]
         @test any(!=(0.5f0), Array(v.site.tag)) && count(==(0.5f0), Array(v.site.tag)) > 0   # copies cleared tags
     end
 end
@@ -269,7 +269,7 @@ end
             prob = PottsProblem(RuleCadences(; name = :rc, na, nb), [ownership => σ, kind => kinds], (0, 5); T = Float32, capacity = 128)
             u = solve(prob, CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
             @test live_kinds(u) == (cadence_oracle(na, 5), cadence_oracle(nb, 5))
-            @test Array(u.cell.volume) == [count(==(c), Array(u.σ)) for c in eachindex(Array(u.cell.volume))]
+            @test Array(u.cell.volume) == [count(==(c), Array(u.ownership)) for c in eachindex(Array(u.cell.volume))]
         end
     end
 end
@@ -296,7 +296,7 @@ end
             u = solve(remake(cp; tspan), CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
             live = findall(>(0), Array(u.cell.volume))
             @test unique(Array(u.cell.mass)[live]) == [mass]
-            @test Array(u.cell.volume) == [count(==(c), Array(u.σ)) for c in eachindex(Array(u.cell.volume))]
+            @test Array(u.cell.volume) == [count(==(c), Array(u.ownership)) for c in eachindex(Array(u.cell.volume))]
         end
     end
 end
@@ -369,13 +369,13 @@ end
         backend = PottsDevices.device_backend()
         sys = SolverTriple(; name = :t)
         v(n) = solver_var(sys, n)
-        for kw in ((; solvers = [v(:s) => RK4(), v(:h) => RK4()]),
-                   (; solvers = [v(:s) => RK4(), v(:w) => Adaptive(Tsit5(); reltol = 1e-6)]))
+        for kw in ((; solvers = [v(:s) => Potts.RK4(), v(:h) => Potts.RK4()]),
+                   (; solvers = [v(:s) => Potts.RK4(), v(:w) => Adaptive(Tsit5(); reltol = 1e-6)]))
             prob = PottsProblem(sys, solver_op(), (0, 5); T = Float32, kw...)
             @test haskey(prob.u0.cell, :s__ode)
             cpu = solve(prob, CheckerboardCPM()).u[end]
             gpu = solve(prob, CheckerboardCPM(); backend).u[end]
-            @test Array(gpu.σ) == Array(cpu.σ)
+            @test Array(gpu.ownership) == Array(cpu.ownership)
             for n in (:y, :s, :w)
                 @test Array(getproperty(gpu.cell, n)) ≈ Array(getproperty(cpu.cell, n)) rtol = 1e-5
             end
@@ -415,7 +415,7 @@ end
         @test M.p60d_moved(sol, 2, M.P60D_BEFORE) == 0
         @test M.p60d_moved(sol, 1, M.P60D_AFTER) == 0                       # frozen after the transition
         @test M.p60d_moved(sol, 2, M.P60D_AFTER) >= length(M.P60D_AFTER) ÷ 2   # released
-        @test frozen_sites(prob, sol.u[end]) == (Array(sol.u[end].σ) .== 1)
+        @test frozen_sites(prob, sol.u[end]) == (Array(sol.u[end].ownership) .== 1)
         # negative control: the transition into a free kind keeps moving
         ctl = solve(device_problem(M.P60D_CELL => M.P60D_OTHER), CheckerboardCPM(); backend, saveat = 1)
         @test M.p60d_moved(ctl, 1, M.P60D_AFTER) >= length(M.P60D_AFTER) ÷ 2

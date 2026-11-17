@@ -4,7 +4,7 @@ using CorePotts, StaticArrays
 
 endo(st, c) = c != 0 && @inbounds(st.cell.kind[c]) == 1
 one_arc_connectivity(st, p, prop, ctx) =
-    endo(st, prop.old) ? locally_connected(st.σ, ctx, prop) : true
+    endo(st, prop.old) ? locally_connected(st.ownership, ctx, prop) : true
 
 # --- Merks et al. (2006) vasculogenesis (D-049), 12×12 closed ----------------------------
 function merks_delta_H(st, p, prop, ctx)
@@ -14,7 +14,7 @@ function merks_delta_H(st, p, prop, ctx)
     ℓ(c, s) = c == 0 ? zero(Tf) :
               p.λL * ((major_length_after(Tf, st.cell, ctx.lattice, c, prop.x, s) - p.L)^2 -
                       (major_length(Tf, st.cell, ctx.lattice, c) - p.L)^2)
-    return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
+    return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
            ℓ(prop.old, -1) + ℓ(prop.new, 1) + chemotaxis_delta(st.site.c, prop, p.χ)   # every copy
 end
 function merks_commit!(st, p, prop, ctx)
@@ -57,14 +57,14 @@ function wortel_delta_H(st, p, prop, ctx)
     J(a, b) = @inbounds p.J[a == 0 ? 1 : 2, b == 0 ? 1 : 2]
     E(v, c) = p.λ * (v - p.V0)^2
     S(s, c) = p.λs * (s - p.S0)^2
-    m(site, owner) = neighborhood_mean(st.site.act, st.σ, ctx, site, owner; relation = ctx.act)
+    m(site, owner) = neighborhood_mean(st.site.act, st.ownership, ctx, site, owner; relation = ctx.act)
     act = -(p.λact / p.maxact) * (m(prop.source, prop.new) - m(prop.target, prop.old))   # every copy
-    return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
-           surface_delta(st.cell.surface, prop, surface_change(st.σ, ctx, prop), S) + act
+    return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
+           surface_delta(st.cell.surface, prop, surface_change(st.ownership, ctx, prop), S) + act
 end
 function wortel_commit!(st, p, prop, ctx)
     commit_volume!(st, p, prop, ctx)
-    commit_surface!(st.cell.surface, prop, surface_change(st.σ, ctx, prop))
+    commit_surface!(st.cell.surface, prop, surface_change(st.ownership, ctx, prop))
     @inbounds st.site.act[prop.target] = prop.new != 0 ? p.maxact : zero(p.maxact)
     return nothing
 end
@@ -94,7 +94,7 @@ openvt_split!(st, p, ctx, key, mcs, parent, daughter) =
 function openvt_delta_H(st, p, prop, ctx)
     J(a, b) = (a == 0 || b == 0) ? p.Jm : p.Jt
     E(v, c) = p.λ * (v - p.V0)^2
-    return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E)
+    return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E)
 end
 function openvt_commit!(st, p, prop, ctx)
     commit_volume!(st, p, prop, ctx)

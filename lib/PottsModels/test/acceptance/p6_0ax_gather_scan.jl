@@ -53,14 +53,14 @@
 #   :touch  cell 1 = [2:4, 2:4], cell 2 = [5:7, 2:4]   (they touch: `new_contact`)
 #   :p60at  cell 1 = [2:4, 2:4], cell 2 = [7:9, 7:9]   (the P6.0at layout)
 # Site 40 = (4, 4) (a corner of cell 1), 29 = (5, 3) (the gap / the boundary), 143 = (11, 12)
-# (no cell within reach). Ball(r): 0 < d² ≤ r²; Moore(k): Chebyshev 1..k; VonNeumann(1):
+# (no cell within reach). EuclideanBall(r): 0 < d² ≤ r²; Moore(k): Chebyshev 1..k; VonNeumann(1):
 # the four axis neighbours. Counts by hand (checked against a brute-force oracle below):
-#   around 40, :apart   Ball(2.0)  c1 5 [(2,4),(3,4),(4,2),(4,3),(3,3)]  c2 1 [(6,4)]
-#                       Ball(3.0)  c1 8                                   c2 4 [(6,2),(6,3),(6,4),(7,4)]
+#   around 40, :apart   EuclideanBall(2.0)  c1 5 [(2,4),(3,4),(4,2),(4,3),(3,3)]  c2 1 [(6,4)]
+#                       EuclideanBall(3.0)  c1 8                                   c2 4 [(6,2),(6,3),(6,4),(7,4)]
 #                       Moore(1)   c1 3                                   c2 0
 #                       Moore(2)   c1 8                                   c2 3 [(6,2),(6,3),(6,4)]
-#   around 40, :touch   Ball(2.0)  c1 5  c2 3 [(5,3),(5,4),(6,4)]           sum  8
-#                       Ball(3.0)  c1 8  c2 7 [+ (5,2),(6,3),(6,2),(7,4)]   sum 15
+#   around 40, :touch   EuclideanBall(2.0)  c1 5  c2 3 [(5,3),(5,4),(6,4)]           sum  8
+#                       EuclideanBall(3.0)  c1 8  c2 7 [+ (5,2),(6,3),(6,2),(7,4)]   sum 15
 #                       Moore(1)   c1 3  c2 2 [(5,3),(5,4)]                 sum  5
 #                       Moore(2)   c1 8  c2 6 [(5..6, 2..4)]                sum 14
 #                       VonNeumann(1) c1 2 c2 1                             sum  3
@@ -68,9 +68,9 @@
 #   around 40, :p60at   Moore(1) c1 3, Moore(2) c1 8, VonNeumann(1) c1 2 (c2 0 for all)
 # Division `when = (y == 0) & (mcs * count(owner[n] == id for n in R(40)) >= 12)` with
 # `y => mcs + 1` fires for a cell at the first MCS m with m·count ≥ 12 and records m + 1:
-# Ball(2.0) c1 m = 3, c2 m = 12; Ball(3.0) c1 m = 2, c2 m = 3; Moore(1) c1 m = 4, c2 never.
+# EuclideanBall(2.0) c1 m = 3, c2 m = 12; EuclideanBall(3.0) c1 m = 2, c2 m = 3; Moore(1) c1 m = 4, c2 never.
 # Link `when = new_contact(a, b) && mcs * (count_a + count_b) >= 24` (and the same `@unlink`
-# on a linked pair) fires at m = 3 (Ball(2.0), 8), 2 (Ball(3.0), 15), 5 (Moore(1), 5).
+# on a linked pair) fires at m = 3 (EuclideanBall(2.0), 8), 2 (EuclideanBall(3.0), 15), 5 (Moore(1), 5).
 using Potts: CorePotts
 
 # ---------------------------------------------------------------------------------------
@@ -108,13 +108,13 @@ p60ax_dyn_link(r) = [P60AX_BOND, :(@link bond when = new_contact(a, b) && ($(p60
 const P60AX_FIXTURES = [
     "sq" => (:p60at, nothing, []),
     # division when
-    "divwhen Ball(2.0)" => (:apart, nothing, p60ax_divwhen(:(Ball(2.0)))),
-    "divwhen Ball(3.0)" => (:apart, nothing, p60ax_divwhen(:(Ball(3.0)))),
+    "divwhen EuclideanBall(2.0)" => (:apart, nothing, p60ax_divwhen(:(EuclideanBall(2.0)))),
+    "divwhen EuclideanBall(3.0)" => (:apart, nothing, p60ax_divwhen(:(EuclideanBall(3.0)))),
     "divwhen Moore(1)" => (:apart, nothing, p60ax_divwhen(:(Moore(1)))),
     "divwhen NeighborOrder(2)" => (:apart, nothing, p60ax_divwhen(:(NeighborOrder(2)))),
-    "divwhen Ball(2.0) empty" => (:apart, nothing, p60ax_divwhen(:(Ball(2.0)); site = 143)),
-    "divwhen far=Ball(2.0)" => (:apart, :(far = Ball(2.0)), p60ax_divwhen(:far)),
-    "divwhen far=Ball(3.0)" => (:apart, :(far = Ball(3.0)), p60ax_divwhen(:far)),
+    "divwhen EuclideanBall(2.0) empty" => (:apart, nothing, p60ax_divwhen(:(EuclideanBall(2.0)); site = 143)),
+    "divwhen far=EuclideanBall(2.0)" => (:apart, :(far = EuclideanBall(2.0)), p60ax_divwhen(:far)),
+    "divwhen far=EuclideanBall(3.0)" => (:apart, :(far = EuclideanBall(3.0)), p60ax_divwhen(:far)),
     "divwhen gather-free" => (:apart, nothing, [P60AX_STATIC,
         :(@divide cells(A) when = (y == 0.0) & (mcs * volume >= 27), y => mcs + 1.0)]),
     # division state rule
@@ -123,15 +123,15 @@ const P60AX_FIXTURES = [
     "divrule Moore(2)" => (:apart, nothing, p60ax_divrule(:(Moore(2)))),
     "divrule far=Moore(1)" => (:apart, :(far = Moore(1)), p60ax_divrule(:far)),
     # link / unlink when
-    "link Ball(2.0)" => (:touch, nothing, p60ax_link(:(Ball(2.0)))),
-    "link Ball(3.0)" => (:touch, nothing, p60ax_link(:(Ball(3.0)))),
+    "link EuclideanBall(2.0)" => (:touch, nothing, p60ax_link(:(EuclideanBall(2.0)))),
+    "link EuclideanBall(3.0)" => (:touch, nothing, p60ax_link(:(EuclideanBall(3.0)))),
     "link Moore(1)" => (:touch, nothing, p60ax_link(:(Moore(1)))),
-    "link Ball(2.0) empty" => (:touch, nothing, p60ax_link(:(Ball(2.0)); site = 143)),
-    "link far=Ball(2.0)" => (:touch, :(far = Ball(2.0)), p60ax_link(:far)),
-    "link far=Ball(3.0)" => (:touch, :(far = Ball(3.0)), p60ax_link(:far)),
-    "unlink Ball(2.0)" => (:touch, nothing, p60ax_unlink(:(Ball(2.0)))),
-    "unlink Ball(3.0)" => (:touch, nothing, p60ax_unlink(:(Ball(3.0)))),
-    "unlink far=Ball(2.0)" => (:touch, :(far = Ball(2.0)), p60ax_unlink(:far)),
+    "link EuclideanBall(2.0) empty" => (:touch, nothing, p60ax_link(:(EuclideanBall(2.0)); site = 143)),
+    "link far=EuclideanBall(2.0)" => (:touch, :(far = EuclideanBall(2.0)), p60ax_link(:far)),
+    "link far=EuclideanBall(3.0)" => (:touch, :(far = EuclideanBall(3.0)), p60ax_link(:far)),
+    "unlink EuclideanBall(2.0)" => (:touch, nothing, p60ax_unlink(:(EuclideanBall(2.0)))),
+    "unlink EuclideanBall(3.0)" => (:touch, nothing, p60ax_unlink(:(EuclideanBall(3.0)))),
+    "unlink far=EuclideanBall(2.0)" => (:touch, :(far = EuclideanBall(2.0)), p60ax_unlink(:far)),
     # edge energy
     "edge Moore(1)" => (:touch, nothing, p60ax_edge(:(Moore(1)))),
     "edge Moore(2)" => (:touch, nothing, p60ax_edge(:(Moore(2)))),
@@ -147,14 +147,14 @@ const P60AX_FIXTURES = [
     "energy Moore(1) + obs Moore(1)" => (:p60at, nothing, [:(@energy cells => 0.1 * $(p60ax_s(:(Moore(1))))), p60ax_obs(:(Moore(1)))...]),
     # several sites, several specs
     "all apart" => (:apart, nothing, [P60AX_STATIC, :(@energy cells => 0.01 * $(p60ax_s(:(Moore(2))))),
-        :(@divide cells(A) when = (y == 0.0) & (mcs * $(p60ax_g(:(Ball(2.0)))) >= 12),
+        :(@divide cells(A) when = (y == 0.0) & (mcs * $(p60ax_g(:(EuclideanBall(2.0)))) >= 12),
             y => mcs + 1.0 + 100 * $(p60ax_g(:(VonNeumann(1)), 2; site = 29)))]),
     "all touch" => (:touch, nothing, [P60AX_BOND, P60AX_STATIC, :(@energy cells => 0.01 * $(p60ax_s(:(Moore(1))))),
-        :(@link bond when = new_contact(a, b) && (mcs * $(p60ax_pair(:(Ball(3.0)))) >= 24)),
+        :(@link bond when = new_contact(a, b) && (mcs * $(p60ax_pair(:(EuclideanBall(3.0)))) >= 24)),
         :(@energy edges(bond) => 0.1 * $(p60ax_spair(:(Moore(2)))))]),
     # dynamic: inline and named twins
-    "dyn div Ball(2.0)" => (:p60at, nothing, p60ax_dyn_div(:(Ball(2.0)))),
-    "dyn div far=Ball(2.0)" => (:p60at, :(far = Ball(2.0)), p60ax_dyn_div(:far)),
+    "dyn div EuclideanBall(2.0)" => (:p60at, nothing, p60ax_dyn_div(:(EuclideanBall(2.0)))),
+    "dyn div far=EuclideanBall(2.0)" => (:p60at, :(far = EuclideanBall(2.0)), p60ax_dyn_div(:far)),
     "dyn div Moore(1)" => (:p60at, nothing, p60ax_dyn_div(:(Moore(1)))),
     "dyn div far=Moore(1)" => (:p60at, :(far = Moore(1)), p60ax_dyn_div(:far)),
     "dyn link Moore(1)" => (:touch, nothing, p60ax_dyn_link(:(Moore(1)))),
@@ -216,8 +216,8 @@ function p60ax_oracle(σ, c, who, inside)
     return n
 end
 const P60AX_SHAPES = Dict(
-    "Ball(2.0)" => (dx, dy) -> dx^2 + dy^2 <= 4,
-    "Ball(3.0)" => (dx, dy) -> dx^2 + dy^2 <= 9,
+    "EuclideanBall(2.0)" => (dx, dy) -> dx^2 + dy^2 <= 4,
+    "EuclideanBall(3.0)" => (dx, dy) -> dx^2 + dy^2 <= 9,
     "Moore(1)" => (dx, dy) -> max(abs(dx), abs(dy)) <= 1,
     "Moore(2)" => (dx, dy) -> max(abs(dx), abs(dy)) <= 2,
     "VonNeumann(1)" => (dx, dy) -> abs(dx) + abs(dy) <= 1,
@@ -255,7 +255,7 @@ function p60ax_checkpoint(pa, pb, pa2; k = 3, alg = SequentialCPM())
         pb === nothing || @test_throws ArgumentError init(pb, alg; checkpoint = c)
         i2 = init(pa2, alg; checkpoint = c)
         @test i2.t == k
-        @test i2.u.σ == ck.state.σ
+        @test i2.u.ownership == ck.state.ownership
     end
 end
 
@@ -266,20 +266,20 @@ end
     S = P60AX_SHAPES
     ap, to, at = p60ax_sigma(:apart), p60ax_sigma(:touch), p60ax_sigma(:p60at)
     c40, c29, c143 = (4, 4), (5, 3), (11, 12)
-    @test [p60ax_oracle(ap, c40, w, S["Ball(2.0)"]) for w in 1:2] == [5, 1]
-    @test [p60ax_oracle(ap, c40, w, S["Ball(3.0)"]) for w in 1:2] == [8, 4]
+    @test [p60ax_oracle(ap, c40, w, S["EuclideanBall(2.0)"]) for w in 1:2] == [5, 1]
+    @test [p60ax_oracle(ap, c40, w, S["EuclideanBall(3.0)"]) for w in 1:2] == [8, 4]
     @test [p60ax_oracle(ap, c40, w, S["Moore(1)"]) for w in 1:2] == [3, 0]
     @test [p60ax_oracle(ap, c40, w, S["Moore(2)"]) for w in 1:2] == [8, 3]
     @test [p60ax_oracle(ap, c29, 2, S[k]) for k in ("Moore(1)", "VonNeumann(1)", "Moore(2)")] == [3, 1, 6]
-    @test [sum(p60ax_oracle(to, c40, w, S[k]) for w in 1:2) for k in ("Ball(2.0)", "Ball(3.0)", "Moore(1)", "Moore(2)", "VonNeumann(1)")] ==
+    @test [sum(p60ax_oracle(to, c40, w, S[k]) for w in 1:2) for k in ("EuclideanBall(2.0)", "EuclideanBall(3.0)", "Moore(1)", "Moore(2)", "VonNeumann(1)")] ==
           [8, 15, 5, 14, 3]
     @test [p60ax_oracle(at, c40, 1, S[k]) for k in ("Moore(1)", "Moore(2)", "VonNeumann(1)")] == [3, 8, 2]
-    @test all(p60ax_oracle(σ, c143, w, S["Ball(2.0)"]) == 0 for σ in (ap, to), w in 1:2)
+    @test all(p60ax_oracle(σ, c143, w, S["EuclideanBall(2.0)"]) == 0 for σ in (ap, to), w in 1:2)
     # the linear indices name those sites (column-major, 12×12)
     @test LinearIndices((12, 12))[4, 4] == 40 && LinearIndices((12, 12))[5, 3] == 29 && LinearIndices((12, 12))[11, 12] == 143
     # the oracle's shapes are the relations' (sizes on the lattice)
     lat = p60ax_problem("sq").lattice
-    for (spec, k) in ((Ball(2.0), "Ball(2.0)"), (Ball(3.0), "Ball(3.0)"), (Moore(1), "Moore(1)"), (Moore(2), "Moore(2)"),
+    for (spec, k) in ((EuclideanBall(2.0), "EuclideanBall(2.0)"), (EuclideanBall(3.0), "EuclideanBall(3.0)"), (Moore(1), "Moore(1)"), (Moore(2), "Moore(2)"),
         (VonNeumann(1), "VonNeumann(1)"))
         @test length(CorePotts.relation(spec, lat)) == count(S[k](dx, dy) for dx in -5:5, dy in -5:5 if (dx, dy) != (0, 0))
     end
@@ -289,16 +289,16 @@ end
     # the veto: nothing moves without a lifecycle event
     sol = p60ax_solve("divwhen gather-free")
     @test sol.t == 0:16
-    @test all(u.σ == p60ax_sigma(:apart) for u in sol.u[1:4])         # mcs·9 ≥ 27 first at m = 3, seen at t = 4
+    @test all(u.ownership == p60ax_sigma(:apart) for u in sol.u[1:4])         # mcs·9 ≥ 27 first at m = 3, seen at t = 4
     @test sol.stats.lifecycle.divisions == 2
     @test sol.u[end].cell.y[1:4] == [4.0, 4.0, 4.0, 4.0]
     # the named twins: division when, rule, link, unlink, edge energy, observed
-    @test p60ax_solve("divwhen far=Ball(2.0)").u[end].cell.y[1:4] == [4.0, 13.0, 4.0, 13.0]
-    @test p60ax_solve("divwhen far=Ball(3.0)").u[end].cell.y[1:4] == [3.0, 4.0, 3.0, 4.0]
+    @test p60ax_solve("divwhen far=EuclideanBall(2.0)").u[end].cell.y[1:4] == [4.0, 13.0, 4.0, 13.0]
+    @test p60ax_solve("divwhen far=EuclideanBall(3.0)").u[end].cell.y[1:4] == [3.0, 4.0, 3.0, 4.0]
     @test p60ax_solve("divrule far=Moore(1)").u[end].cell.y[1:3] == [4.0, 0.0, 4.0]
-    @test first(p60ax_link_times(p60ax_solve("link far=Ball(2.0)"))) == 4
-    @test first(p60ax_link_times(p60ax_solve("link far=Ball(3.0)"))) == 3
-    s = p60ax_solve("unlink far=Ball(2.0)"; links = true)
+    @test first(p60ax_link_times(p60ax_solve("link far=EuclideanBall(2.0)"))) == 4
+    @test first(p60ax_link_times(p60ax_solve("link far=EuclideanBall(3.0)"))) == 3
+    s = p60ax_solve("unlink far=EuclideanBall(2.0)"; links = true)
     @test p60ax_link_times(s) == [0, 1, 2, 3]
     p = p60ax_problem("edge far=Moore(1)"; links = true)
     @test total_energy(p, p.u0) ≈ 0.5
@@ -312,7 +312,7 @@ end
 # 2. Each missed site builds and runs, with hand-checked values
 
 @testset "P6.0ax: an inline gather in a division `when`" begin
-    for (label, y) in ("divwhen Ball(2.0)" => [4.0, 13.0, 4.0, 13.0], "divwhen Ball(3.0)" => [3.0, 4.0, 3.0, 4.0],
+    for (label, y) in ("divwhen EuclideanBall(2.0)" => [4.0, 13.0, 4.0, 13.0], "divwhen EuclideanBall(3.0)" => [3.0, 4.0, 3.0, 4.0],
         "divwhen Moore(1)" => [5.0, 0.0, 5.0, 0.0], "divwhen NeighborOrder(2)" => [5.0, 0.0, 5.0, 0.0])
         @testset "$label" begin
             sol = p60ax_solve(label)
@@ -322,11 +322,11 @@ end
         end
     end
     # the inline and the named form: the same division times and trajectory
-    a, b = p60ax_solve("divwhen Ball(2.0)"), p60ax_solve("divwhen far=Ball(2.0)")
-    @test [u.σ for u in a.u] == [u.σ for u in b.u]
+    a, b = p60ax_solve("divwhen EuclideanBall(2.0)"), p60ax_solve("divwhen far=EuclideanBall(2.0)")
+    @test [u.ownership for u in a.u] == [u.ownership for u in b.u]
     @test [u.cell.y for u in a.u] == [u.cell.y for u in b.u]
     # negative control: no cell within reach of the gather, no division
-    sol = p60ax_solve("divwhen Ball(2.0) empty")
+    sol = p60ax_solve("divwhen EuclideanBall(2.0) empty")
     @test sol.stats.lifecycle.divisions == 0
     @test all(==(0.0), sol.u[end].cell.y)
 end
@@ -340,27 +340,27 @@ end
         end
     end
     a, b = p60ax_solve("divrule Moore(1)"), p60ax_solve("divrule far=Moore(1)")
-    @test [u.σ for u in a.u] == [u.σ for u in b.u] && [u.cell.y for u in a.u] == [u.cell.y for u in b.u]
+    @test [u.ownership for u in a.u] == [u.ownership for u in b.u] && [u.cell.y for u in a.u] == [u.cell.y for u in b.u]
 end
 
 @testset "P6.0ax: an inline gather in a `@link` and an `@unlink` `when`" begin
     # first saved time with the link: the rule fires at MCS m, seen at t = m + 1
-    for (label, m) in ("link Ball(2.0)" => 3, "link Ball(3.0)" => 2, "link Moore(1)" => 5)
+    for (label, m) in ("link EuclideanBall(2.0)" => 3, "link EuclideanBall(3.0)" => 2, "link Moore(1)" => 5)
         @testset "$label" begin
             sol = p60ax_solve(label)
             @test Symbol(sol.retcode) === :Success
             @test p60ax_link_times(sol) == collect((m + 1):16)
         end
     end
-    @test p60ax_link_times(p60ax_solve("link Ball(2.0) empty")) == Int[]      # negative control
-    @test p60ax_link_times(p60ax_solve("link Ball(2.0)")) == p60ax_link_times(p60ax_solve("link far=Ball(2.0)"))
-    for (label, m) in ("unlink Ball(2.0)" => 3, "unlink Ball(3.0)" => 2)
+    @test p60ax_link_times(p60ax_solve("link EuclideanBall(2.0) empty")) == Int[]      # negative control
+    @test p60ax_link_times(p60ax_solve("link EuclideanBall(2.0)")) == p60ax_link_times(p60ax_solve("link far=EuclideanBall(2.0)"))
+    for (label, m) in ("unlink EuclideanBall(2.0)" => 3, "unlink EuclideanBall(3.0)" => 2)
         @testset "$label" begin
             @test p60ax_link_times(p60ax_solve(label; links = true)) == collect(0:m)
         end
     end
-    @test p60ax_link_times(p60ax_solve("unlink Ball(2.0)"; links = true)) ==
-          p60ax_link_times(p60ax_solve("unlink far=Ball(2.0)"; links = true))
+    @test p60ax_link_times(p60ax_solve("unlink EuclideanBall(2.0)"; links = true)) ==
+          p60ax_link_times(p60ax_solve("unlink far=EuclideanBall(2.0)"; links = true))
 end
 
 @testset "P6.0ax: an inline gather in an `edges(rel)` energy" begin
@@ -387,22 +387,22 @@ end
 # 3. Several sites, several specs: distinct relations, each read by its own site
 
 @testset "P6.0ax: distinct numbering across sites" begin
-    @testset "energy Moore(2), division when Ball(2.0), division rule VonNeumann(1)" begin
+    @testset "energy Moore(2), division when EuclideanBall(2.0), division rule VonNeumann(1)" begin
         p = p60ax_problem("all apart"; tspan = (0, 8))
         @test length(p.relations) == 3 && all(k -> startswith(string(k), "gather"), keys(p.relations))
         @test sort([length(CorePotts.relation(r, p.lattice)) for r in values(p.relations)]) == [4, 12, 24]
         @test total_energy(p, p.u0) ≈ 0.01 * (8 + 3)
         sol = solve(p, SequentialCPM())
         @test sol.stats.lifecycle.divisions == 1                         # cell 2 would need m = 12
-        @test sol.u[end].cell.y[1:3] == [104.0, 0.0, 104.0]              # m = 3 (Ball(2.0): 5), + 100·1 (VonNeumann(1))
+        @test sol.u[end].cell.y[1:3] == [104.0, 0.0, 104.0]              # m = 3 (EuclideanBall(2.0): 5), + 100·1 (VonNeumann(1))
     end
-    @testset "energy Moore(1), link when Ball(3.0), edge energy Moore(2)" begin
+    @testset "energy Moore(1), link when EuclideanBall(3.0), edge energy Moore(2)" begin
         p = p60ax_problem("all touch"; tspan = (0, 6))
         @test length(p.relations) == 3
         @test sort([length(CorePotts.relation(r, p.lattice)) for r in values(p.relations)]) == [8, 24, 28]
         @test total_energy(p, p.u0) ≈ 0.05
         sol = solve(p, SequentialCPM(); saveat = 1)
-        @test p60ax_link_times(sol) == collect(3:6)                       # m = 2 (Ball(3.0): 15)
+        @test p60ax_link_times(sol) == collect(3:6)                       # m = 2 (EuclideanBall(3.0): 15)
         @test total_energy(p, sol.u[end]) ≈ 0.05 + 1.4                   # the edge reads Moore(2): 14
     end
 end
@@ -410,14 +410,14 @@ end
 @testset "P6.0ax: inline and named forms run alike under copies (same seed)" begin
     # CheckerboardCPM refuses any relation in the run context that reaches beyond the
     # declared footprint (read = 1), named or inline alike, so its twins read Moore(1)
-    for (alg, inline, named) in ((SequentialCPM(), "dyn div Ball(2.0)", "dyn div far=Ball(2.0)"),
+    for (alg, inline, named) in ((SequentialCPM(), "dyn div EuclideanBall(2.0)", "dyn div far=EuclideanBall(2.0)"),
         (SequentialCPM(), "dyn div Moore(1)", "dyn div far=Moore(1)"), (CheckerboardCPM(), "dyn div Moore(1)", "dyn div far=Moore(1)"))
         @testset "$inline, $(nameof(typeof(alg)))" begin
             a = p60ax_solve(inline; alg, tspan = (0, 20))
             b = p60ax_solve(named; alg, tspan = (0, 20))
             @test a.stats.lifecycle.divisions >= 1                       # the fixture divides
             @test a.stats.lifecycle.divisions == b.stats.lifecycle.divisions
-            @test [u.σ for u in a.u] == [u.σ for u in b.u]
+            @test [u.ownership for u in a.u] == [u.ownership for u in b.u]
             @test [u.cell.y for u in a.u] == [u.cell.y for u in b.u]
         end
     end
@@ -426,7 +426,7 @@ end
             c = p60ax_solve("dyn link Moore(1)"; alg, tspan = (0, 20))
             d = p60ax_solve("dyn link far=Moore(1)"; alg, tspan = (0, 20))
             @test !isempty(p60ax_link_times(c))                           # the fixture links
-            @test [u.σ for u in c.u] == [u.σ for u in d.u]
+            @test [u.ownership for u in c.u] == [u.ownership for u in d.u]
             @test [u.cell.links__bond for u in c.u] == [u.cell.links__bond for u in d.u]
         end
     end
@@ -438,14 +438,14 @@ end
 @testset "P6.0ax: gathers at the new sites are fingerprinted" begin
     for T in (Float64, Float32)
         @testset "division when, $T" begin
-            p60ax_distinct(["divwhen Ball(2.0)", "divwhen Ball(3.0)", "divwhen Moore(1)", "divwhen gather-free"]; T)
+            p60ax_distinct(["divwhen EuclideanBall(2.0)", "divwhen EuclideanBall(3.0)", "divwhen Moore(1)", "divwhen gather-free"]; T)
         end
         @testset "division rule, $T" begin
             p60ax_distinct(["divrule Moore(1)", "divrule VonNeumann(1)", "divrule Moore(2)"]; T)
         end
         @testset "link and unlink when, $T" begin
-            p60ax_distinct(["link Ball(2.0)", "link Ball(3.0)", "link Moore(1)"]; T)
-            p60ax_distinct(["unlink Ball(2.0)", "unlink Ball(3.0)"]; T)
+            p60ax_distinct(["link EuclideanBall(2.0)", "link EuclideanBall(3.0)", "link Moore(1)"]; T)
+            p60ax_distinct(["unlink EuclideanBall(2.0)", "unlink EuclideanBall(3.0)"]; T)
         end
         @testset "edge energy, $T" begin
             p60ax_distinct(["edge Moore(1)", "edge Moore(2)", "edge VonNeumann(1)"]; T)
@@ -462,8 +462,8 @@ end
 end
 
 @testset "P6.0ax: named twins at the new sites (controls, pass on the base)" begin
-    p60ax_distinct(["divwhen far=Ball(2.0)", "divwhen far=Ball(3.0)"])
-    p60ax_distinct(["link far=Ball(2.0)", "link far=Ball(3.0)"])
+    p60ax_distinct(["divwhen far=EuclideanBall(2.0)", "divwhen far=EuclideanBall(3.0)"])
+    p60ax_distinct(["link far=EuclideanBall(2.0)", "link far=EuclideanBall(3.0)"])
 end
 
 @testset "P6.0ax: `@observed` gathers are not fingerprinted and renumber nothing" begin
@@ -474,8 +474,8 @@ end
 
 @testset "P6.0ax: a checkpoint does not load across a gather at the new sites" begin
     pr = p60ax_problem
-    p60ax_checkpoint(pr("divwhen Ball(2.0)"), pr("divwhen Ball(3.0)"), pr("divwhen Ball(2.0)"))
-    p60ax_checkpoint(pr("link Ball(3.0)"), pr("link Ball(2.0)"), pr("link Ball(3.0)"))
+    p60ax_checkpoint(pr("divwhen EuclideanBall(2.0)"), pr("divwhen EuclideanBall(3.0)"), pr("divwhen EuclideanBall(2.0)"))
+    p60ax_checkpoint(pr("link EuclideanBall(3.0)"), pr("link EuclideanBall(2.0)"), pr("link EuclideanBall(3.0)"))
     p60ax_checkpoint(pr("edge Moore(2)"; links = true), pr("edge Moore(1)"; links = true), pr("edge Moore(2)"; links = true))
     # (radius-1 specs: CheckerboardCPM refuses a radius-2 relation at init, which would pass vacuously)
     p60ax_checkpoint(pr("divrule Moore(1)"), pr("divrule VonNeumann(1)"), pr("divrule Moore(1)"); alg = CheckerboardCPM())

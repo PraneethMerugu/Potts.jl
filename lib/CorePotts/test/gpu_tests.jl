@@ -28,13 +28,13 @@ include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "props.jl"))
 # deferred kernel), the exact veto (the serial deferred kernel) and an inline exact search
 # (the serial kernel over the flood scratch). Compiles every connectivity kernel (D-157).
 # both cells: the gaining one locally, the losing one by the search
-p69_post_window(st, p, prop, ctx, stage) = CorePotts.global_gains(st.σ, ctx, prop, Val(false)) ?
-    CorePotts.global_keeps(st.σ, ctx, prop, Val(false), Val(2), Val(25), stage) : Int32(2)
-p69_post_exact(st, p, prop, ctx, stage) = CorePotts.global_gains(st.σ, ctx, prop, Val(false)) ?
-    CorePotts.global_keeps(st.σ, ctx, prop, Val(false), Val(nothing), Val(0), stage) : Int32(2)
-p69_defer(st, p, prop, ctx) = CorePotts.global_defer(st.σ, ctx, prop, Val(false))
+p69_post_window(st, p, prop, ctx, stage) = CorePotts.global_gains(st.ownership, ctx, prop, Val(false)) ?
+    CorePotts.global_keeps(st.ownership, ctx, prop, Val(false), Val(2), Val(25), stage) : Int32(2)
+p69_post_exact(st, p, prop, ctx, stage) = CorePotts.global_gains(st.ownership, ctx, prop, Val(false)) ?
+    CorePotts.global_keeps(st.ownership, ctx, prop, Val(false), Val(nothing), Val(0), stage) : Int32(2)
+p69_defer(st, p, prop, ctx) = CorePotts.global_defer(st.ownership, ctx, prop, Val(false))
 p69_penalty_dH(st, p, prop, ctx) = gg_delta_H(st, p, prop, ctx) +
-    40.0f0 * (CorePotts.global_keeps(st.σ, ctx, prop, Val(false), Val(nothing), Val(0), CorePotts.GlobalSearch()) != Int32(0))
+    40.0f0 * (CorePotts.global_keeps(st.ownership, ctx, prop, Val(false), Val(nothing), Val(0), CorePotts.GlobalSearch()) != Int32(0))
 
 # ROCm, last: no `double` in any kernel this suite compiled (full scan of the kernel cache,
 # D-157); the scan lives with the monorepo's shared test helpers
@@ -57,14 +57,14 @@ end
     cell = merge(init_moments(σ, lat, length(kinds)),
         (; surface = recompute_surface(σ, lat, relation(sspec, lat), length(kinds); T = Float32)))
     commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx);
-        commit_surface!(st.cell.surface, prop, surface_change(st.σ, ctx, prop; T = Float32));
+        commit_surface!(st.cell.surface, prop, surface_change(st.ownership, ctx, prop; T = Float32));
         commit_moments!(st.cell, ctx, prop))
     function delta_H(st, p, prop, ctx)
         J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
         E(v, c) = p.λ * (v - p.V0)^2
         S(s, c) = p.λs * (s - p.S0)^2
-        return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
-               surface_delta(st.cell.surface, prop, surface_change(st.σ, ctx, prop; T = Float32), S)
+        return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
+               surface_delta(st.cell.surface, prop, surface_change(st.ownership, ctx, prop; T = Float32), S)
     end
     f = CPMFunction(delta_H; commit!, temperature = gg_temperature)
     p = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0,
@@ -74,10 +74,10 @@ end
     sol = solve(prob, CheckerboardCPM(); backend)
     @test sol.retcode == ReturnCode.Success
     u = sol.u[end]
-    @test u.σ != σ
-    @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(kinds)]
-    @test u.cell.surface ≈ recompute_surface(u.σ, lat, relation(sspec, lat), length(kinds); T = Float64) rtol = 1e-4
-    ref = init_moments(u.σ, lat, length(kinds))
+    @test u.ownership != σ
+    @test u.cell.volume == [count(==(c), u.ownership) for c in eachindex(kinds)]
+    @test u.cell.surface ≈ recompute_surface(u.ownership, lat, relation(sspec, lat), length(kinds); T = Float64) rtol = 1e-4
+    ref = init_moments(u.ownership, lat, length(kinds))
     for c in eachindex(kinds)
         @test all(isapprox.(centroid(u.cell, lat, c), centroid(merge(ref, (; volume = u.cell.volume)), lat, c); atol = 1e-9))
     end
@@ -145,9 +145,9 @@ end
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, phases = ph)
         pz = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 25.0f0, T = 20.0f0)
         u = solve(PottsProblem(f, st, latz, (0, 10), pz; frozen), CheckerboardCPM(); backend).u[end]
-        @test u.σ[frozen] == σz[frozen]
+        @test u.ownership[frozen] == σz[frozen]
         for c in 1:n
-            owned = findall(==(c), u.σ)
+            owned = findall(==(c), u.ownership)
             isempty(owned) && continue
             @test u.cell.vsum[c] ≈ sum(v[owned]) rtol = 1.0e-5
             @test u.cell.vmax[c] == maximum(v[owned])
@@ -168,7 +168,7 @@ end
         function dH(st, p, prop, ctx)
             J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
             E(v, c) = p.λ * (v - @inbounds(st.cell.target[c]))^2
-            return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E)
+            return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E)
         end
         commitD!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
         st = with_capacity(initial_state(σd, [1]; cell = merge(init_moments(σd, latd, 1), (; target = Float32[64]))), 64)
@@ -181,8 +181,8 @@ end
         sol = solve(PottsProblem(f, st, latd, (0, 120), pd), CheckerboardCPM(); backend)
         u = sol.u[end]
         @test sol.stats.lifecycle.divisions >= 3
-        @test u.cell.volume == [count(==(c), u.σ) for c in 1:64]
-        ref = init_moments(u.σ, latd, 64)
+        @test u.cell.volume == [count(==(c), u.ownership) for c in 1:64]
+        ref = init_moments(u.ownership, latd, 64)
         for c in findall(>(0), u.cell.volume)
             @test all(isapprox.(centroid(u.cell, latd, c), centroid(merge(ref, (; volume = u.cell.volume)), latd, c); atol = 1.0e-9))
         end
@@ -200,17 +200,17 @@ end
         function dHA(st, p, prop, ctx)
             J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
             E(v, c) = p.λ * (v - p.V0)^2
-            m(site, owner) = neighborhood_mean(st.site.act, st.σ, ctx, site, owner; relation = ctx.act)
+            m(site, owner) = neighborhood_mean(st.site.act, st.ownership, ctx, site, owner; relation = ctx.act)
             act = -(p.λact / p.maxact) * (m(prop.source, prop.new) - m(prop.target, prop.old))
             chem = is_extension(prop) ? chemotaxis_delta(st.site.c, prop, p.χ) : 0.0f0
-            return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) + act + chem
+            return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) + act + chem
         end
         commitA!(st, p, prop, ctx) = (
             commit_volume!(st, p, prop, ctx);
             @inbounds st.site.act[prop.target] = prop.new == 0 ? 0.0f0 : p.maxact; nothing
         )
         decay!(st, p, ctx, key, mcs, i) = (@inbounds st.site.act[i] = max(st.site.act[i] - 1.0f0, 0.0f0); nothing)
-        okA(st, p, prop, ctx) = locally_connected(st.σ, ctx, prop) && forbid_extinction(st.cell.volume, prop)
+        okA(st, p, prop, ctx) = locally_connected(st.ownership, ctx, prop) && forbid_extinction(st.cell.volume, prop)
         biasA(st, p, prop, ctx) = is_extension(prop) ? 0.05f0 : 0.0f0
         fA = CPMFunction(
             dHA; commit! = commitA!, temperature = gg_temperature, constraint = okA,
@@ -223,12 +223,12 @@ end
         stA = initial_state(σA, kA; site = (; act = zeros(Float32, 64, 64), c = grad))
         probA = PottsProblem(fA, stA, latA, (0, 60), pA; contact = Moore(1), relations = (; act = Moore(1)))
         uA = solve(probA, CheckerboardCPM(); backend).u[end]
-        @test uA.cell.volume == [count(==(c), uA.σ) for c in 1:nA]
-        @test all(c -> components(uA.σ, latA, c) == 1, 1:nA)
+        @test uA.cell.volume == [count(==(c), uA.ownership) for c in 1:nA]
+        @test all(c -> components(uA.ownership, latA, c) == 1, 1:nA)
         @test all(>(0), uA.cell.volume)
         @test any(>(0), uA.site.act)
         # chemotaxis moves mass up the gradient; CPU and the device agree on how far
-        drift(u) = sum(i -> u.σ[i] != 0 ? grad[i] : 0.0f0, eachindex(u.σ)) / count(!=(0), u.σ)
+        drift(u) = sum(i -> u.ownership[i] != 0 ? grad[i] : 0.0f0, eachindex(u.ownership)) / count(!=(0), u.ownership)
         d0 = drift(stA)
         n_act = max(16, required_n(sqrt(2) * 0.02, 0.03; alpha = 1.0e-3, power = 0.9))
         xs = [drift(solve(remake(probA; seed), CheckerboardCPM(); save_start = false).u[end]) - d0 for seed in 1:n_act]
@@ -247,14 +247,14 @@ end
     @testset "ring connectivity rule and Barker on the device" begin
         σM, kM = blocks((48, 48), 5; gap = 1)
         latM = Lattice((48, 48))
-        okM(st, p, prop, ctx) = ring_arcs(st.σ, ctx, prop) <= 1 ||
-            (ring_cells(st.σ, ctx, prop) == 2 && ring_medium(st.σ, ctx, prop) == 0)
+        okM(st, p, prop, ctx) = ring_arcs(st.ownership, ctx, prop) <= 1 ||
+            (ring_cells(st.ownership, ctx, prop) == 2 && ring_medium(st.ownership, ctx, prop) == 0)
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = okM)
         pM = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 25.0f0, T = 12.0f0)
         prob = PottsProblem(f, initial_state(σM, kM), latM, (0, 40), pM; contact = Moore(1))
         u = solve(prob, CheckerboardCPM(acceptance = Barker()); backend).u[end]
-        @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(kM)]
-        @test u.σ != σM
+        @test u.cell.volume == [count(==(c), u.ownership) for c in eachindex(kM)]
+        @test u.ownership != σM
         n_bk = max(16, required_n(sqrt(2) * 1.2, 2.0; alpha = 1.0e-3, power = 0.9))
         xs = [mean(solve(remake(prob; seed), CheckerboardCPM(acceptance = Barker()); save_start = false).u[end].cell.volume) for seed in 1:n_bk]
         ys = [mean(solve(remake(prob; seed), CheckerboardCPM(acceptance = Barker()); backend, save_start = false).u[end].cell.volume) for seed in 101:(100 + n_bk)]
@@ -277,15 +277,15 @@ end
         )
         commit3!(st, p, prop, ctx) = (
             commit_volume!(st, p, prop, ctx);
-            commit_surface!(st.cell.surface, prop, surface_change(st.σ, ctx, prop; T = Float32));
+            commit_surface!(st.cell.surface, prop, surface_change(st.ownership, ctx, prop; T = Float32));
             commit_moments!(st.cell, ctx, prop)
         )
         function dH3(st, p, prop, ctx)
             J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
             E(v, c) = p.λ * (v - p.V0)^2
             S(s, c) = p.λs * (s - p.S0)^2
-            return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
-                surface_delta(st.cell.surface, prop, surface_change(st.σ, ctx, prop; T = Float32), S)
+            return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
+                surface_delta(st.cell.surface, prop, surface_change(st.ownership, ctx, prop; T = Float32), S)
         end
         f = CPMFunction(dH3; commit! = commit3!, temperature = gg_temperature)
         p3 = (;
@@ -297,10 +297,10 @@ end
             contact = NeighborOrder(2), relations = (; surface = sspec)
         )
         u = solve(prob, CheckerboardCPM(); backend).u[end]
-        @test u.σ != σ3
-        @test u.cell.volume == [count(==(c), u.σ) for c in 1:n3]
-        @test u.cell.surface ≈ recompute_surface(u.σ, lat3, relation(sspec, lat3), n3; T = Float64) rtol = 1.0e-4
-        ref = merge(init_moments(u.σ, lat3, n3), (; volume = u.cell.volume))
+        @test u.ownership != σ3
+        @test u.cell.volume == [count(==(c), u.ownership) for c in 1:n3]
+        @test u.cell.surface ≈ recompute_surface(u.ownership, lat3, relation(sspec, lat3), n3; T = Float64) rtol = 1.0e-4
+        ref = merge(init_moments(u.ownership, lat3, n3), (; volume = u.cell.volume))
         @test all(c -> all(isapprox.(centroid(u.cell, lat3, c), centroid(ref, lat3, c); atol = 1.0e-9)), 1:n3)
     end
 
@@ -317,7 +317,7 @@ end
             J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
             E(v, c) = p.λ * (v - p.V0)^2
             S(a, b, k, d) = p.k * (d - st.cell.link_rest[k, a])^2
-            return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
+            return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
                 link_delta(Float32, st.cell, ctx, prop, S)
         end
         commitL!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
@@ -338,8 +338,8 @@ end
         n = length(kinds)
         vn = relation(VonNeumann(1), lat)
         function link_touching!(cell, st, p, ctx, mcs)
-            g = contact_graph(st.σ, ctx.lattice, vn, length(cell.kind))
-            for a in eachindex(cell.kind), b in neighbors(g, a)
+            g = contact_graph(st.ownership, ctx.lattice, vn, length(cell.kind))
+            for a in eachindex(cell.kind), b in contact_neighbors(g, a)
                 a < b && add_link!(cell, a, b; age = Int32(mcs))
             end
         end
@@ -351,12 +351,12 @@ end
         pH = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 25.0f0, T = 10.0f0)
         u = solve(PottsProblem(fH, st, lat, (0, 3), pH; contact = VonNeumann(1)), CheckerboardCPM(); backend).u[end]
         g0 = contact_graph(σ, lat, vn, n)
-        @test all(a -> all(b -> linked(u.cell, a, b), neighbors(g0, a)), 1:n)
-        g = contact_graph(u.σ, lat, vn, n)
+        @test all(a -> all(b -> linked(u.cell, a, b), contact_neighbors(g0, a)), 1:n)
+        g = contact_graph(u.ownership, lat, vn, n)
         @test all(iszero, u.cell.contact_overflow)
         for a in 1:n
-            @test sort(filter(!=(0), u.cell.contact_nbr[:, a])) == collect(neighbors(g, a))
-            @test all(b -> contact_measure(u.cell, a, b) == contact(g, a, b), neighbors(g, a))
+            @test sort(filter(!=(0), u.cell.contact_nbr[:, a])) == collect(contact_neighbors(g, a))
+            @test all(b -> contact_measure(u.cell, a, b) == contact_measure(g, a, b), contact_neighbors(g, a))
         end
     end
 
@@ -375,7 +375,7 @@ end
             J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
             E(v, c) = p.λ * (v - p.V0)^2
             S(a, b, k, d) = p.k * (d - st.cell.link_rest[k, a])^2
-            return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
+            return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
                 link_delta(Float32, st.cell, ctx, prop, S)
         end
         commitD!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
@@ -387,7 +387,7 @@ end
             sol = solve(PottsProblem(f, st0, latD, (0, 1000), pD; seed), CheckerboardCPM(); backend)
             @test sol.retcode == ReturnCode.Success                 # a NaN ΔH would fail the run
             u = sol.u[end]
-            @test u.σ != σD && u.cell.volume[3] == 0
+            @test u.ownership != σD && u.cell.volume[3] == 0
             @test linked(u.cell, 1, 3)                              # no boundary here: the skip suffices
             centroid_distance(Float64, u.cell, latD, 1, 2)
         end
@@ -409,7 +409,7 @@ end
             J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
             E(v, c) = @inbounds(st.cell.kind[c]) == 2 ? p.λd * v * (v - 2) : p.λ * (v - p.V0)^2
             S(a, b, k, d) = p.k * (d - st.cell.link_rest[k, a])^2
-            return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
+            return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
                 link_delta(Float32, st.cell, ctx, prop, S)
         end
         commitK!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
@@ -459,9 +459,9 @@ end
         ck = checkpoint(integ)
         u8 = current_state(integ)
         cont = init(prob, CheckerboardCPM(); backend, checkpoint = ck)
-        @test Array(current_state(cont).σ) == Array(u8.σ) && cont.t == integ.t
+        @test Array(current_state(cont).ownership) == Array(u8.ownership) && cont.t == integ.t
         rest = solve!(cont).u[end]
-        @test rest.cell.volume == [count(==(c), rest.σ) for c in eachindex(kc)]
+        @test rest.cell.volume == [count(==(c), rest.ownership) for c in eachindex(kc)]
     end
 
 end
@@ -489,8 +489,8 @@ end
         st = CorePotts._to_backend(backend, initial_state(Int32[1 0; 0 2], Int32[1, 1]))
         before = counts()
         snap = CorePotts._snapshot(stats, backend, st)
-        leaves = (st.σ, values(st.cell)...)
-        @test snap.σ isa Array && snap.σ == Array(st.σ)
+        leaves = (st.ownership, values(st.cell)...)
+        @test snap.ownership isa Array && snap.ownership == Array(st.ownership)
         @test counts() .- before == (0, length(leaves), sum(sizeof, leaves))
         # a lattice domain mask on the device: one transfer
         ml = CorePotts._to_backend(backend, Lattice((4, 4); domain = trues(4, 4)))

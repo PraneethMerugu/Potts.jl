@@ -129,7 +129,7 @@ function p60aq_checkpoint_refused(pa, pb, pa2; k = 3, alg = SequentialCPM(), alg
         pb === nothing || @test_throws ArgumentError init(pb, alg; checkpoint = c)
         i2 = init(pa2, alg2; checkpoint = c)          # control: the same law and offset load
         @test i2.t == k
-        @test i2.u.σ == ck.state.σ
+        @test i2.u.ownership == ck.state.ownership
     end
 end
 
