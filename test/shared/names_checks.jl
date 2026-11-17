@@ -9,7 +9,8 @@ using TOML: TOML
 const CLASH_PACKAGES = [
     "ModelingToolkitBase", "Symbolics", "SymbolicUtils", "SciMLBase", "DiffEqBase",
     "LinearSolve", "NonlinearSolve", "OrdinaryDiffEqCore", "JumpProcesses", "Graphs", "StatsBase",
-    "Distributions", "KernelAbstractions", "SymbolicIndexingInterface", "DomainSets",
+    "Distributions", "KernelAbstractions", "SymbolicIndexingInterface", "DomainSets", "FillArrays",
+    "Makie",
 ]
 
 # the module of the package `name` in the workspace manifest, loaded by UUID

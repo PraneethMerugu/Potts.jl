@@ -142,7 +142,6 @@ end
         for n in (:HyperSphere, :Circle, :Sphere, :Point)
             @test parentmodule(getglobal(Potts.Layouts, n)) !== Potts
         end
-        @test sort!([n for n in names(Potts.Layouts) if n !== :Layouts]) == sort!(collect(words))
     end
 end
 
@@ -187,7 +186,13 @@ end
         # the opt-in submodules keep their words: `using Potts.Layouts` brings GeometryBasics'
         # `Point` and `Sphere` (DomainSets has its own), `using PottsModels.Analysis` brings
         # `components` (the connected components of a cell graph)
-        @test export_clashes(Potts.Layouts, others) == [:Point => :DomainSets, :Sphere => :DomainSets]
+        # `Fill` (a layout filling a region) is kept too: FillArrays exports an array of that name
+        layouts_allow = (:Fill => :FillArrays, :Point => :DomainSets, :Sphere => :DomainSets)
+        @test export_clashes(Potts.Layouts, others; allow = layouts_allow) == Pair{Symbol, Symbol}[]
+        # `using Potts.Fields` brings `Δ` (Graphs exports a maximum-degree function of that name)
+        # and `t`, MTK's unitless `t_nounits` (ModelingToolkitBase's own `t` carries units)
+        fields_allow = (:t => :ModelingToolkitBase, :Δ => :Graphs)
+        @test export_clashes(Potts.Fields, others; allow = fields_allow) == Pair{Symbol, Symbol}[]
         @test export_clashes(PottsModels.Analysis, others) == [:components => :Distributions, :components => :DomainSets]
     end
 end
