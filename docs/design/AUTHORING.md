@@ -604,7 +604,7 @@ next sweep at once, and its counts stay on the device until the next host read.
 `stats.attempts` is the sum over MCS of the number of mobile sites at that MCS's sweep,
 which may reach zero mid-run (the MCS then makes no attempt). On the CPU it is exact after
 every `step!`. On a device it, `stats.lifecycle` and `stats.refreshes` are exact at the
-host read points: a save, `integrator.u` (`current_state`), `checkpoint`, the end of
+host read points: a save, `current_state(integrator)`, `checkpoint`, the end of
 `solve!`, and after `refresh_frozen!`/`reinit!`. Between those they may lag (the device
 counts are folded in at the next read point, exactly).
 

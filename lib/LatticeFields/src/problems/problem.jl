@@ -678,8 +678,13 @@ function _save_list(prob::FieldProblem, o, t0::Float64, tf::Float64, dt::Float64
     prob.kind == :map && !isempty(sat) && Base.inferencebarrier(_map_saveat)(sat, t0, dt, a1, clock)
     return _save_times(t0, tf, dt, o.save_start, o.save_end, sat)
 end
-# `save_everystep` (the default when no `saveat` is given, as in SciML) keeps every window's
-# state on the host: a warning when that passes `LARGE_SAVE_BYTES`
+"""
+    LARGE_SAVE_BYTES
+
+The saved size (bytes) above which `init` of a field run or a Potts run warns (2 GiB). With
+SciML's default, `save_everystep = isempty(saveat)`, every step's state is kept on the host,
+and a long run of a large lattice then holds more states than memory.
+"""
 const LARGE_SAVE_BYTES = 2^31
 @noinline function _warn_large_saves(integ::FieldIntegrator)
     idx = getfield(integ, :saveidxs)
@@ -1127,33 +1132,38 @@ end
 
 """
     reinit!(integ, u0 = integ.prob.u0; t0 = integ.t0, tf = integ.tend, erase_sol = true,
-            reinit_callbacks = true)
+            saveat = nothing, tstops = nothing, reinit_callbacks = true, reinit_retcode = true)
 
 Start `integ` again from the flat state `u0` at `t0` (by default the start of its time span),
-to end at `tf`, with its current parameters, tables and inputs: the masks and the clamp run
-again, every group's algorithm history is dropped ([`reset!`](@ref)) and the start state is
-saved when the save times include it. The window `dt` is that of `init` (a span that is not a
-whole number of windows ends with one shortened window; a map steps whole steps only), and the
-`saveat` and `tstops` of `init` apply again, those in the new span. `erase_sol = false` keeps
-the saves so far; `reinit_callbacks = false` does not run the callbacks' `initialize` again.
+to end at `tf` (`t0 ≤ tf`), with its current parameters, tables and inputs: the masks and the
+clamp run again, every group's algorithm history is dropped ([`reset!`](@ref)) and the start
+state is saved when the save times include it. The window `dt` is that of `init` (a span that
+is not a whole number of windows ends with one shortened window; a map steps whole steps
+only). The `saveat` and `tstops` of `init` apply again, those in the new span, unless `saveat`
+or `tstops` replace them for the new run. `erase_sol = false` keeps the saves so far;
+`reinit_callbacks = false` does not run the callbacks' `initialize` again;
+`reinit_retcode = false` keeps the return code.
 """
 function SciMLBase.reinit!(
         integ::FieldIntegrator, u0 = integ.prob.u0; t0 = getfield(integ, :t0),
-        tf = getfield(integ, :tend), erase_sol::Bool = true, reinit_callbacks::Bool = true
+        tf = getfield(integ, :tend), erase_sol::Bool = true, saveat = nothing, tstops = nothing,
+        reinit_callbacks::Bool = true, reinit_retcode::Bool = true
     )
-    f = i -> _reinit!(i, u0, Float64(t0), Float64(tf), erase_sol, reinit_callbacks)
+    f = i -> _reinit!(i, u0, Float64(t0), Float64(tf), erase_sol, reinit_callbacks, saveat, tstops, reinit_retcode)
     getfield(integ, :verbose) || return Base.inferencebarrier(_quietly)(f, integ)
     return f(integ)
 end
 function _reinit!(
         integ::FieldIntegrator, u0, t0::Float64 = integ.t0, tf::Float64 = integ.tend, erase_sol::Bool = true,
-        reinit_callbacks::Bool = true
+        reinit_callbacks::Bool = true, saveat = nothing, tstops = nothing, reinit_retcode::Bool = true
     )
     length(u0) == length(integ.prob.u0) ||
         throw(ArgumentError("u0 has $(length(u0)) values; the state has $(length(integ.prob.u0))"))
     u0 === integ.prob.u0 || check_declared_state(integ.prob, u0, eachindex(u0), "starts at")
-    tf > t0 || throw(ArgumentError(string("reinit!: tf = ", tf, " is not after t0 = ", t0)))
-    (t0 == integ.t0 && tf == integ.tend) || _respan!(integ, t0, tf)
+    t0 <= tf || throw(ArgumentError(string("reinit!: t0 = ", t0, " is after tf = ", tf)))
+    saveopts = saveat === nothing ? getfield(integ, :saveopts) :
+        merge(getfield(integ, :saveopts), (; saveat = saveat isa Real ? Float64(saveat) : Float64[s for s in saveat]))
+    _respan!(integ, t0, tf, saveopts)               # (the save times of `init` again, or `saveat`)
     st = integ.store
     foreach(f -> st.cur[f] = 1, integ.prob.step.swaps)
     _load_state!(st, u0)
@@ -1163,13 +1173,14 @@ function _reinit!(
     integ.windows = 0
     integ.prevu = nothing
     empty!(integ.tstops)
-    append!(integ.tstops, filter(t -> t0 < t <= tf + 1.0e-9 * integ.dt, getfield(integ, :tstops0)))
+    stops = tstops === nothing ? getfield(integ, :tstops0) : Float64[s for s in tstops]
+    append!(integ.tstops, sort!(filter(t -> t0 < t <= tf + 1.0e-9 * integ.dt, stops)))
     if erase_sol
         empty!(integ.ts)
         empty!(integ.us)
         empty!(integ.auxu)
     end
-    integ.retcode = SciMLBase.ReturnCode.Default
+    reinit_retcode && (integ.retcode = SciMLBase.ReturnCode.Default)
     integ.inputfns === nothing || Base.inferencebarrier(_refresh_inputs!)(integ)
     _rerun_init!(integ, integ.pgood)
     foreach(reset!, integ.runtimes)
@@ -1180,8 +1191,9 @@ function _reinit!(
     reinit_callbacks && getfield(integ, :cbs) !== nothing && Base.inferencebarrier(_initialize_callbacks!)(integ)
     return integ
 end
-# a new time span for `reinit!`: the windows and the save times over it, at the window of `init`
-function _respan!(integ::FieldIntegrator, t0::Float64, tf::Float64)
+# a new time span for `reinit!`: the windows and the save times (`saveopts`) over it, at the
+# window of `init`
+function _respan!(integ::FieldIntegrator, t0::Float64, tf::Float64, saveopts = getfield(integ, :saveopts))
     dt = integ.dt
     whole = _whole(tf - t0, dt)
     a1, clock = integ.runtimes[1].alg, _clock(integ.prob)
@@ -1191,7 +1203,7 @@ function _respan!(integ::FieldIntegrator, t0::Float64, tf::Float64)
     )
     integ.t0, integ.tend = t0, tf
     integ.nsteps = whole ? round(Int, (tf - t0) / dt) : floor(Int, (tf - t0) / dt)
-    integ.save = _save_list(integ.prob, getfield(integ, :saveopts), t0, tf, dt, a1, clock)
+    integ.save = _save_list(integ.prob, saveopts, t0, tf, dt, a1, clock)
     return nothing
 end
 

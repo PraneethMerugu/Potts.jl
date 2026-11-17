@@ -196,8 +196,9 @@ for each MCS:
   boundary (`end_mcs`).
 
 - **No host synchronization inside the loop.** Everything is enqueued; the integrator
-  synchronizes only at save points, on `integrator.u` access, at the end, or when a
-  callback needs host state.
+  synchronizes only at save points, on a host read (`current_state(integrator)`), at the
+  end, or when a callback needs host state. `integrator.u` is the live state (on a device,
+  its device arrays) and does not synchronize.
 - A device `status` word (UInt32 bitflags) records non-finite ΔH, invariant
   violations and deferred creations. It is read at every synchronization; a nonzero status ends the solve with
   `ReturnCode.Failure` and the MCS index. Phases validate before they write, so a

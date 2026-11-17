@@ -314,10 +314,11 @@ end
 
 The options of a Potts run, `integ.opts`: the save times `saveat`, `save_start`, `save_end`,
 `save_everystep`, the saved leaves `save_idxs` (a [`SavedLeaves`](@ref) or `nothing`: the whole
-state), `maxiters` (the most MCS one `solve!` takes), `verbose` (the run's warnings),
-`progress` (a progress log every `progress_steps` MCS under `progress_name` and `progress_id`),
-the pending stops `tstops` (sorted MCS, [`add_tstop!`](@ref SciMLBase.add_tstop!)) and the
-stops the run starts with, `tstops0` (`reinit!` restores them).
+state), `maxiters` (the most MCS one `solve!` takes, counted from `init` or `reinit!`), `verbose`
+(the run's warnings), `progress` (a progress log every `progress_steps` MCS under
+`progress_name` and `progress_id`), the pending stops `tstops` (sorted MCS,
+[`add_tstop!`](@ref SciMLBase.add_tstop!)), and the save times and stops given to `init`,
+`saveat0` and `tstops0` (`reinit!` restores them, those in its time span).
 """
 struct PottsOptions
     saveat::Vector{Int}
@@ -332,6 +333,7 @@ struct PottsOptions
     progress_name::String
     progress_id::Symbol
     tstops::Vector{Int}
+    saveat0::Vector{Int}
     tstops0::Vector{Int}
 end
 
@@ -345,6 +347,11 @@ from the next MCS; after one, call `derivative_discontinuity!(integrator, true)`
 frozen mask and the field groups follow it. `step!` enqueues one MCS without synchronizing;
 `step!(integrator, n, true)` lands on MCS `t + n`. `integrator.sol` is the solution so far,
 `integrator.opts` the run's [`PottsOptions`](@ref) and `integrator.iter` the MCS this run took.
+
+`check_error(integrator)` is the cheap read of the run's health inside a callback: `Success`
+while the run goes on, else the code that ended it. It reads a host field and does not
+synchronize; a device failure is found at the next synchronization (a save, a host read, the
+end of the run).
 """
 mutable struct PottsIntegrator{Alg, Law, P, S, C, LCC, F, KF, Pa, Ctx, B, CB, MS} <: SciMLBase.DEIntegrator{Alg, true, S, Int}
     const prob::P
@@ -462,9 +469,11 @@ clock:
   state leaves to save (`:σ`, cell, site or model array names, or the model's state
   variables); the saved states hold only those.
 - `tstops`: MCS the run must stop at (each MCS is a stop already; `step!(integ, n, true)`
-  and DiffEqCallbacks' timed callbacks add them). A stop past the end of the time span makes
-  `solve!` run on to it.
-- `maxiters`: the most MCS one `solve!` takes before it ends with `ReturnCode.MaxIters`.
+  and DiffEqCallbacks' timed callbacks add them). Only the stops `t0 < t ≤ tf` are kept, as
+  in OrdinaryDiffEq; a stop added during the run with `add_tstop!` may lie past `tf`, and
+  `solve!` then runs on to it.
+- `maxiters`: the most MCS one `solve!` takes before it ends with `ReturnCode.MaxIters`,
+  counted from `init` (or `reinit!`).
 - `seed` replaces `prob.seed` for this run; `rng` draws the run's seed from it
   (`SciMLBase.supports_solve_rng` is true).
 - `verbose = false` silences the warnings of `init` and `solve!`; `progress = true` logs the
@@ -485,7 +494,7 @@ end
 
 function _init_kw(
         prob::PottsProblem, alg::CPMAlgorithm; backend = CPU(), saveat = Int[], save_start::Bool = true,
-        save_end::Bool = true, save_everystep::Bool = isempty(saveat), save_idxs = nothing, tstops = Int[],
+        save_end::Bool = true, save_everystep::Union{Nothing, Bool} = nothing, save_idxs = nothing, tstops = Int[],
         maxiters::Integer = typemax(Int), callback = nothing, checkpoint = nothing, seed = nothing, rng = nothing,
         verbose::Bool = true, progress::Bool = false, progress_steps::Integer = 1000, progress_name = "CPM",
         progress_id = :CorePotts, alias = nothing, dense::Bool = false, _rng_seeds::Bool = true
@@ -505,6 +514,10 @@ function _init_kw(
     maxiters > 0 || throw(ArgumentError("`maxiters` must be positive; got $maxiters"))
     progress_steps > 0 || throw(ArgumentError("`progress_steps` must be positive; got $progress_steps"))
     rng !== nothing && _rng_seeds && (seed = rand(rng, UInt64))
+    if save_everystep === nothing
+        save_everystep = isempty(saveat)            # SciML's default
+        save_everystep && verbose && !(backend isa CPU) && _hint_device_saves()
+    end
     if seed !== nothing
         checkpoint === nothing || throw(
             ArgumentError("a checkpoint continues its own random stream: give `seed` or `rng`, or `checkpoint`, not both")
@@ -542,18 +555,30 @@ end
 function _options(@nospecialize(prob::PottsProblem), o::NamedTuple)
     t0, t1 = prob.tspan
     # SciML convention: a number means "every Δ MCS" from t0 (t0 itself is `save_start`)
-    saveat = o.saveat isa Number ? collect((t0 + _mcs(o.saveat, "saveat")):_mcs(o.saveat, "saveat"):t1) :
-        sort!(Int[_mcs(s, "saveat") for s in o.saveat])
+    saveat = _saveat_list(o.saveat, t0, t1)
     outside = filter(t -> !(t0 <= t <= t1), saveat)
     isempty(outside) || !o.verbose || @warn "saveat times outside tspan $(prob.tspan) are never reached: $outside"
-    tstops = sort!(unique!(Int[_mcs(s, "tstops") for s in (o.tstops isa Number ? (o.tstops,) : o.tstops)]))
+    tstops = _tstops_list(o.tstops)
     leaves = _saved_leaves(prob, o.save_idxs)
     o.verbose && _warn_large_saves(prob, saveat, o.save_start, o.save_end, o.save_everystep, leaves)
     return PottsOptions(
         saveat, o.save_start, o.save_end, o.save_everystep, leaves, o.maxiters, o.verbose, o.progress,
-        o.progress_steps, o.progress_name, o.progress_id, filter(t -> t > t0, tstops), tstops
+        o.progress_steps, o.progress_name, o.progress_id, _in_span(tstops, t0, t1), copy(saveat), tstops
     )
 end
+
+# the save times of `saveat` over `t0..t1`: a number means "every Δ MCS" from t0, as in SciML
+# (t0 itself is `save_start`)
+function _saveat_list(saveat, t0, t1)
+    saveat isa Number || return sort!(Int[_mcs(s, "saveat") for s in saveat])
+    Δ = _mcs(saveat, "saveat")
+    Δ > 0 || throw(ArgumentError("`saveat`: a step of $Δ MCS; give a positive number of MCS"))
+    return collect((t0 + Δ):Δ:t1)
+end
+# the stops given, sorted and once each
+_tstops_list(tstops) = sort!(unique!(Int[_mcs(s, "tstops") for s in (tstops isa Number ? (tstops,) : tstops)]))
+# the stops of a run over `t0..t1`: those with `t0 < t ≤ t1` (OrdinaryDiffEq's rule)
+_in_span(tstops, t0, t1) = filter(t -> t0 < t <= t1, tstops)
 
 # a time on the MCS clock: an integer (or an integer-valued number)
 function _mcs(t, what)
@@ -606,19 +631,18 @@ _select(u, l::SavedLeaves) = CPMState(
 )
 _pick(nt::NamedTuple, names::Vector{Symbol}) = NamedTuple{Tuple(names)}(map(n -> getfield(nt, n), Tuple(names)))
 
-"""
-    LARGE_SAVE_BYTES
-
-The saved size (bytes) above which `init` of a Potts run warns (2 GiB): with SciML's default,
-every MCS is saved, and a long run of a large lattice then holds more states than memory.
-"""
-const LARGE_SAVE_BYTES = 2^31
+# a device run that saves every MCS by default copies the whole state to the host after each
+# MCS: a hint, once per session
+@noinline _hint_device_saves() = @info string(
+    "this device run saves every MCS (`save_everystep` defaults to `isempty(saveat)`, as in SciML), ",
+    "a host copy of the state each time; pass `saveat` or `save_everystep = false` to save less"
+) maxlog = 1
 function _warn_large_saves(prob, saveat, save_start, save_end, everystep, leaves)
     t0, t1 = prob.tspan
     n = everystep ? t1 - t0 + save_start : count(t -> t0 <= t <= t1, saveat) + save_start + save_end
     n <= 2 && return false
     bytes = n * Base.summarysize(_select(prob.u0, leaves))
-    bytes > LARGE_SAVE_BYTES || return false
+    bytes > Problems.LARGE_SAVE_BYTES || return false
     @warn string(
         "this run saves ", n, " states, about ", round(bytes / 2^30; digits = 1), " GiB on the host",
         everystep ? " (every MCS: `save_everystep` is true when `saveat` is empty, as in SciML)" : "",
@@ -1306,12 +1330,13 @@ end
 """
     add_tstop!(integ::PottsIntegrator, t)
 
-Make `integ` stop at MCS `t` (a whole number after `integ.t`). Each MCS is a step, so a stop
-inside the time span changes no state; a stop past its end makes `solve!` run on to it.
+Make `integ` stop at MCS `t` (a whole number, not before `integ.t`; a stop at `integ.t` is
+reached already, as in OrdinaryDiffEq). Each MCS is a step, so a stop inside the time span
+changes no state; a stop past its end makes `solve!` run on to it.
 """
 function SciMLBase.add_tstop!(integ::PottsIntegrator, t)
     m = _mcs(t, "add_tstop!")
-    m > integ.t || throw(ArgumentError("add_tstop!: MCS $t is not after the integrator's MCS $(integ.t)"))
+    m >= integ.t || throw(ArgumentError("add_tstop!: MCS $t is before the integrator's MCS $(integ.t)"))
     ts = integ.opts.tstops
     k = searchsortedfirst(ts, m)
     (k <= length(ts) && ts[k] == m) || insert!(ts, k, m)
@@ -1324,10 +1349,12 @@ SciMLBase.pop_tstop!(integ::PottsIntegrator) = popfirst!(integ.opts.tstops)
 """
     savevalues!(integ::PottsIntegrator, force_save = false) -> (saved, savedexactly)
 
-Save the state at the current MCS now (once per MCS).
+Save the state at the current MCS (once per MCS) when the run saves it: with `force_save`,
+`save_everystep`, or when the MCS is one of the `saveat` times, as in OrdinaryDiffEq.
 """
 function SciMLBase.savevalues!(integ::PottsIntegrator, force_save = false)
-    (isempty(integ.saved_t) || last(integ.saved_t) != integ.t) || return (false, false)
+    unsaved = isempty(integ.saved_t) || last(integ.saved_t) != integ.t
+    (force_save ? unsaved : _save_due(integ)) || return (false, false)
     _check_status!(integ)
     _save!(integ)
     return (true, true)

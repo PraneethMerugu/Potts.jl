@@ -239,3 +239,70 @@ end
     # no algorithm and no clock: DiffEqBase's default decides (it needs DifferentialEquations)
     @test_throws SciMLBase.NoDefaultAlgorithmError solve(ode)
 end
+
+@testitem "SciMLBase interface: Potts reinit!, tstops and savevalues!" setup = [SciMLInterfaceSetup] tags = [:potts, :sciml_interface] begin
+    alg = SequentialCPM()
+    prob = potts_problem()                                              # tspan (0, 7)
+
+    # stops given to `init` are kept only in t0 < t ≤ tf; a runtime `add_tstop!` extends the run
+    @test solve(prob, alg; tstops = [3, 12], save_everystep = false).t == [0, 7]
+    integ = init(prob, alg; tstops = [0, 3, 12], save_everystep = false)
+    @test SciMLBase.first_tstop(integ) == 3
+    SciMLBase.pop_tstop!(integ)
+    @test !SciMLBase.has_tstop(integ)
+    add_tstop!(integ, 9)
+    @test solve!(integ).t == [0, 9]
+
+    # `add_tstop!` at the current MCS is accepted (reached already); before it is an error
+    integ = init(prob, alg; save_everystep = false)
+    step!(integ, 2)
+    add_tstop!(integ, 2)
+    @test_throws ArgumentError add_tstop!(integ, 1)
+
+    # `savevalues!` saves with `force_save`, `save_everystep` or at a `saveat` time
+    integ = init(prob, alg; saveat = [4], save_everystep = false)
+    step!(integ, 2)
+    @test SciMLBase.savevalues!(integ) == (false, false)
+    @test SciMLBase.savevalues!(integ, true) == (true, true)
+    @test SciMLBase.savevalues!(integ, true) == (false, false)          # once per MCS
+    every = init(prob, alg)
+    step!(every, 2)
+    @test SciMLBase.savevalues!(every) == (false, false)                # saved by the step already
+    @test solve!(integ).t == [0, 2, 4, 7]
+
+    # reinit!: a new span, iter and tstops restored, the saves erased or kept
+    starts = Ref(0)
+    cb = DiscreteCallback((u, t, i) -> false, i -> nothing; initialize = (c, u, t, i) -> (starts[] += 1; nothing))
+    integ = init(prob, alg; tstops = [5], save_everystep = false, callback = cb)
+    solve!(integ)
+    @test starts[] == 1 && integ.iter == 7
+    SciMLBase.reinit!(integ; t0 = 2, tf = 6)
+    @test integ.t == 2 && integ.iter == 0 && integ.retcode == ReturnCode.Default
+    @test starts[] == 2 && SciMLBase.first_tstop(integ) == 5
+    @test solve!(integ).t == [2, 6]
+    SciMLBase.reinit!(integ; erase_sol = false, reinit_callbacks = false)
+    @test starts[] == 2
+    @test solve!(integ).t == [2, 6, 0, 7]                               # the earlier saves are kept
+
+    # reinit! takes `saveat`, `tstops` and `reinit_retcode`; stops past `tf` are dropped
+    SciMLBase.reinit!(integ; saveat = 3, tstops = [4, 20])
+    @test SciMLBase.first_tstop(integ) == 4
+    SciMLBase.pop_tstop!(integ)
+    @test !SciMLBase.has_tstop(integ)
+    @test solve!(integ).t == [0, 3, 6, 7]
+    SciMLBase.reinit!(integ)                                            # the save times of `init` again
+    @test solve!(integ).t == [0, 7]
+    SciMLBase.terminate!(integ)
+    SciMLBase.reinit!(integ; reinit_retcode = false)
+    @test integ.retcode == ReturnCode.Terminated
+
+    # a span of no MCS is a valid run on both paths; one that runs backward is an error
+    SciMLBase.reinit!(integ; t0 = 4, tf = 4)
+    @test solve!(integ).t == [4]
+    @test_throws ArgumentError SciMLBase.reinit!(integ; t0 = 5, tf = 4)
+    fp = remake(LFP.field_problem(field_ode()); tspan = (0.0, 1.0))
+    finteg = init(fp, LP.ExplicitEuler(; dt = DT); save_everystep = false)
+    SciMLBase.reinit!(finteg; t0 = 0.5, tf = 0.5)
+    @test solve!(finteg).t ≈ [0.5]
+    @test_throws ArgumentError SciMLBase.reinit!(finteg; t0 = 0.5, tf = 0.25)
+end

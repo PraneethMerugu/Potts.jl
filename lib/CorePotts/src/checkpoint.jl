@@ -88,19 +88,26 @@ end
 
 """
     reinit!(integ, u0 = integ.prob.u0; t0 = integ.prob.tspan[1], tf = integ.prob.tspan[2],
-            erase_sol = true, reinit_callbacks = true)
+            erase_sol = true, saveat = integ.opts.saveat0, tstops = integ.opts.tstops0,
+            reinit_callbacks = true, reinit_retcode = true)
 
-Reset the integrator in place to state `u0` at MCS `t0`, to run to MCS `tf` (arrays are
-reused; no allocation of device storage), clearing the statistics and the return code and
-restoring the run's `tstops`. `erase_sol = false` keeps the saved states (the new run's saves
-follow them); `reinit_callbacks = false` does not run the callbacks' `initialize` again.
+Reset the integrator in place to state `u0` at MCS `t0`, to run to MCS `tf` (`t0 ≤ tf`;
+arrays are reused, no device storage is allocated), clearing the statistics and the MCS
+count `iter`. By default the save times and stops are those given to `init`; `saveat` and
+`tstops` replace them for the new run (a number `saveat` is every that many MCS from `t0`).
+Only the stops `t0 < t ≤ tf` are kept. `erase_sol = false` keeps the saved states (the new
+run's saves follow them); `reinit_callbacks = false` does not run the callbacks' `initialize`
+again; `reinit_retcode = false` keeps the return code.
 """
 function SciMLBase.reinit!(
         integ::PottsIntegrator, u0 = integ.prob.u0;
         t0::Integer = integ.prob.tspan[1], tf::Integer = integ.prob.tspan[2], erase_sol::Bool = true,
-        reinit_callbacks::Bool = true
+        saveat = integ.opts.saveat0, tstops = integ.opts.tstops0, reinit_callbacks::Bool = true,
+        reinit_retcode::Bool = true
     )
     t0 <= tf || throw(ArgumentError("reinit!: t0 = $t0 is after tf = $tf"))
+    saves = _saveat_list(saveat, t0, tf)            # (checked before the state changes)
+    stops = _in_span(_tstops_list(tstops), t0, tf)
     _sync!(_stats(integ), integ.backend)            # reset below with the statistics
     fresh = u0 === integ.prob.u0                    # (the problem's own state: its derivative parts, F3-21b)
     # symbolic maps; a state is laid out for the model's functions (e.g. Potts' ODE scratch)
@@ -115,10 +122,9 @@ function SciMLBase.reinit!(
     integ.tstop = tf
     integ.iter = 0
     integ.finished = false
-    integ.retcode = SciMLBase.ReturnCode.Default
-    ts = integ.opts.tstops
-    empty!(ts)
-    append!(ts, filter(t -> t > t0, integ.opts.tstops0))
+    reinit_retcode && (integ.retcode = SciMLBase.ReturnCode.Default)
+    append!(empty!(integ.opts.saveat), saves)
+    append!(empty!(integ.opts.tstops), stops)
     erase_sol && (empty!(integ.saved_t); empty!(integ.saved_u))
     _restore_stats!(_stats(integ), _initial_stats(integ.f))      # `accepted_ΔH`: 0.0 when tracked
     _reset_cache!(integ.cache, integ)
