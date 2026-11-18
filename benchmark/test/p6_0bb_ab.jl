@@ -426,21 +426,28 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
     end
 
     @testset "parallel compile READY/GO/DONE protocol" begin
+        lockdir = joinpath(sb, "lockroot", "potts-exclusive.lock")
         par_stub = joinpath(sb, "par_stub.jl")
-        write(par_stub, raw"""
+        par_stub_src = raw"""
         let
             sd = ENV["STUB_DIR"]
             me = basename(pwd())
+            lockdir = joinpath(@__DIR__, "lockroot", "potts-exclusive.lock")
             "--prepare" in ARGS || error("expected --prepare")
+            write(joinpath(sd, me * ".pid"), string(getpid()))
             fail = get(ENV, "PAR_FAIL", "")
             hang = get(ENV, "PAR_HANG", "")
+            crash_ready = get(ENV, "PAR_CRASH_AFTER_READY", "")
+            crash_go = get(ENV, "PAR_CRASH_DURING_GO", "")
             fail == me && exit(2)
             hang == me && sleep(30)
             p0 = time()
             sleep(0.5)
             p1 = time()
+            prep_locked = isdir(lockdir) ? 1 : 0
             println("READY ", getpid())
             flush(stdout)
+            crash_ready == me && exit(2)
             line = strip(readline(stdin))
             isempty(line) && exit(1)
             fs = split(line)
@@ -448,11 +455,13 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
             cpu = fs[2]
             excl = length(fs) >= 3 ? fs[3] : "-"
             g0 = time()
+            go_locked = isdir(lockdir) ? 1 : 0
+            crash_go == me && exit(2)
             sleep(0.1)
             g1 = time()
             open(ENV["STUB_LOG"], "a") do io
-                println(io, "prep ", me, " ", getpid(), " ", p0, " ", p1)
-                println(io, "go ", me, " ", getpid(), " ", cpu, " ", excl, " ", g0, " ", g1)
+                println(io, "prep ", me, " ", getpid(), " ", p0, " ", p1, " ", prep_locked)
+                println(io, "go ", me, " ", getpid(), " ", cpu, " ", excl, " ", g0, " ", g1, " ", go_locked)
             end
             println("TC 500000 1048576")
             pos = filter(a -> !startswith(a, "--"), ARGS)
@@ -464,16 +473,20 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
             println("DONE")
             flush(stdout)
         end
-        """)
+        """
+        write(par_stub, par_stub_src)
         root, b, c, sd = checkouts()
         st, out, ev = run_ab(sb, sd, [
             b, c, "gg", "cpu", "--rounds=2", "--no-warm", "--parallel",
             "--child=$par_stub", "--wait=none", "--alg=sequential"])
         @test st == 0 && occursin("verdict (paired): pass", out) &&
               occursin("parallel compile", out)
+        @test !isdir(lockdir)
         preps = [e for e in ev if e[1] == "prep"]
         gos = [e for e in ev if e[1] == "go"]
         @test length(preps) == 8 && length(gos) == 8
+        @test all(e -> e[6] == "0", preps)     # prepare runs outside the lock
+        @test all(e -> e[8] == "1", gos)       # GO is sent only while the lock is held
         @test [e[2] for e in gos] == ["base", "cand", "base-abctl", "cand-abctl",
             "cand", "base-abctl", "cand-abctl", "base"]
         # Within each round: all prepare/READY finish before first GO, GO intervals are disjoint (locked)
@@ -511,6 +524,42 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
                 `$(jl()) $(joinpath(sb, "benchmark", "ab.jl")) $b $c gg cpu --rounds=1 --no-warm --parallel --child=$par_stub --wait=none --alg=sequential --ready-timeout=1.5`,
                 env_h; dir = sb)); stdout = out_h, stderr = out_h))
         @test ph.exitcode == 4 && occursin("timed out", String(take!(out_h)))
+        # A child that crashes after READY or during GO fails (exit 4), releases the lock, and stops siblings
+        for (var, pat) in (
+                ("PAR_CRASH_AFTER_READY", r"harness error"),
+                ("PAR_CRASH_DURING_GO", r"failed \(exit 2\)"),
+            )
+            root, b, c, sd = checkouts()
+            out_c = IOBuffer()
+            env_c = merge(
+                ENV,
+                Dict(
+                    "STUB_LOG" => joinpath(sd, "log"), "STUB_DIR" => sd,
+                    "POTTS_MACHINE" => "test-machine", var => "cand"
+                )
+            )
+            pc = run(
+                pipeline(
+                    ignorestatus(
+                        setenv(
+                            `$(jl()) $(joinpath(sb, "benchmark", "ab.jl")) $b $c gg cpu --rounds=1 --no-warm --parallel --child=$par_stub --wait=none --alg=sequential`,
+                            env_c; dir = sb
+                        )
+                    ); stdout = out_c, stderr = out_c
+                )
+            )
+            msg = String(take!(out_c))
+            @test pc.exitcode == 4 && occursin(pat, msg)
+            @test !isdir(lockdir)
+            pids = [
+                parse(Int, strip(read(joinpath(sd, s * ".pid"), String)))
+                    for s in ("base", "cand", "base-abctl", "cand-abctl")
+            ]
+            @test length(unique(pids)) == 4
+            if Sys.isunix()
+                @test all(pid -> !success(ignorestatus(`kill -0 $pid`)), pids)
+            end
+        end
     end
 
     @testset "same-commit control checkout" begin
