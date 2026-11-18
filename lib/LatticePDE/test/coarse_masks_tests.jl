@@ -338,7 +338,8 @@ end
             u0 = copy(p.u0)
             want = alg isa BackwardEuler ? (I - h * A) \ u0 : foldl((v, _) -> v + (h / 200) * A * v, 1:200; init = u0)
             got = [vec(ig[c(t, x, y)]); vec(ig[u(t, x, y)])]
-            @test got ≈ want rtol = alg isa BackwardEuler ? 1.0e-9 : 1.0e-12
+            # `LatticeNewton` stops early at `NEWTON_EPS = 1e-3`, leaving ~2e-8 cross-grid residual instead of running 30 unchecked sweeps.
+            @test got ≈ want rtol = alg isa BackwardEuler ? 1.0e-7 : 1.0e-12
         end
     end
 

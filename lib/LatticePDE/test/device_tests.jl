@@ -249,7 +249,7 @@ using .LP_device: fd, kron
         cases = [
             ("BackwardEuler, field row", field, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 1))),
             ("BackwardEuler, advection", adv, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 6))),
-            ("BackwardEuler, switch", sw, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 2))),
+            ("BackwardEuler, switch", sw, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 6))),
             ("BackwardEuler, Robin face", rob, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 1))),
             ("CrankNicolson", field, CrankNicolson(; nlsolve = LatticeNewton(; max_iter = 1))),
             ("BDF2", field, BDF2(; nlsolve = LatticeNewton(; max_iter = 1))),
@@ -267,8 +267,8 @@ using .LP_device: fd, kron
         @test rel <= 1e-12
     end
     # control: the comparison sees a change of one Newton iteration (the advection case)
-        sd = solve(mk(adv, PDEV), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 5)); dt = 0.1, saveat = 0.5)
-        sh = solve(mk(adv, KernelAbstractions.CPU()), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 6)); dt = 0.1, saveat = 0.5)
+        sd = solve(mk(adv, PDEV), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 4)); dt = 0.1, saveat = 0.5)
+        sh = solve(mk(adv, KernelAbstractions.CPU()), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 5)); dt = 0.1, saveat = 0.5)
     @test maximum(abs, Array(sd[ce, end]) .- sh[ce, end]) / maximum(abs, sh[ce, end]) > 1e-12
 end
 end
@@ -579,7 +579,7 @@ using .LP_device: fd, kron
             ("per site, BackwardEuler", site, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 1)), 0.1),
             ("per site, ExplicitEuler", site, ExplicitEuler(), 0.05),
             ("mixed sign, BackwardEuler", mixed, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 4)), 0.1),
-            ("time, BackwardEuler", timed, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 3)), 0.1),
+            ("time, BackwardEuler", timed, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 10)), 0.1),
             ("time, ExplicitEuler (re-bounded)", timed, ExplicitEuler(), 0.05),
         ]
     mk(sys, be) = discretize(sys, LatticeDiscretization(Grid((32, 32)); T = Float32, backend = be))
