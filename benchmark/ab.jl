@@ -15,14 +15,17 @@
 #    checkouts of one commit read up to 16 % apart unseeded on Metal (P6.2b), so the
 #    controls show what the A/B can resolve.
 #  - Type cache seeding. Every timed process fills the global Tuple type cache to the same
-#    number of entries before it builds anything (`machine.jl`, D-145).
+#    number of entries before it builds anything (`machine.jl`, D-145; except ROCm
+#    `--prepare`, which builds problems before AMDGPU loads and seeds after `GO` so the
+#    parallel build can run without opening KFD).
 #  - Interleaving. Each round runs every side once, each in a fresh process, and the order
-#    rotates from round to round, so each side runs first equally often (8 rounds for the 4
-#    sides). By default, all sides in a round start concurrently on distinct non-benchmark
-#    cores (`machine.jl` `compile_cpus`), load, seed the type cache, build and compile every
-#    case (on ROCm, AMDGPU loading and GPU kernel compile stay after `GO` so no sibling holds
-#    a KFD handle during timing), print `READY <pid>`, and block on stdin. Prepare runs
-#    outside the lock (only one A/B runs in the `ab` lane; peak memory 4 × 8G). Once all
+#    rotates from round to round, so each side runs first equally often (default 16 rounds on
+#    cpu, 8 on rocm/metal, for the 4 sides). By default, all sides in a round start
+#    concurrently on distinct non-benchmark cores (`machine.jl` `compile_cpus`), load, seed
+#    the type cache, build and compile every case (on ROCm, problems are built before READY,
+#    while AMDGPU loading, Tuple cache seeding, and GPU kernel compile stay after `GO` so no
+#    sibling holds a KFD handle during timing), print `READY <pid>`, and block on stdin.
+#    Prepare runs outside the lock (only one A/B runs in the `ab` lane; peak memory 4 × 8G). Once all
 #    are READY, the parent lets parallel-compile heat settle (2 s),
 #    acquires `tools/exclusive.sh` and, in the round's rotated order, waits idle, moves each
 #    child (all its threads, `taskset -a -cp`) to the benchmark core, sends
@@ -80,7 +83,8 @@
 #
 # Options:
 #   --alg=<sequential|checkerboard|boundary,…>  CPU algorithms (default sequential,checkerboard)
-#   --rounds=<n>        rounds (default 8; also the optional positional [rounds])
+#   --rounds=<n>        rounds (default 16 for cpu, 8 for rocm/metal; also the optional
+#                       positional [rounds])
 #   --stat=<paired|fastest>  the verdict statistic (default paired; fastest for metal)
 #   --tolerance=<x>     regression tolerance (default 0.05)
 #   --no-control        no controls (and an in-process run builds none)
@@ -156,8 +160,9 @@ function parse_ab(args)
                 (isabspath(child) && same_file(child, CHILD)))
     ready_timeout = parse(Float64, get(opts, "ready-timeout", "600"))
     ready_timeout > 0 || error("--ready-timeout must be positive")
+    default_rounds = backend == "cpu" ? "16" : "8"
     return (; inprocess, pos, backend, variants = backend == "cpu" ? algs : backend,
-        rounds = parse(Int, get(opts, "rounds", length(pos) > n ? pos[n + 1] : "8")),
+        rounds = parse(Int, get(opts, "rounds", length(pos) > n ? pos[n + 1] : default_rounds)),
         machine = m, seed, pin, cpu, stat, wait, parallel, ready_timeout,
         tolerance = parse(Float64, get(opts, "tolerance", "0.05")),
         control = !haskey(opts, "no-control"),
@@ -532,9 +537,11 @@ function record_side!(R, D, skipped, r, side, dir, res, skips, dist, tcs)
     union!(skipped, skips)
     record!(R, side, res)
     isempty(dist) || push!(D, "round $r $side: " * join(dist, "; "))
-    println(@sprintf("   %-9s Tuple cache %s  ", side, join(tcs, " → ")),
+    println(
+        @sprintf("   %-9s Tuple cache (post-seed → end) %s  ", side, join(tcs, " → ")),
         join([@sprintf("%s %.2f", k, v[1]) for (k, v) in res], "  "),
-        isempty(dist) ? "" : "  DISTURBED: " * join(dist, "; "))
+        isempty(dist) ? "" : "  DISTURBED: " * join(dist, "; ")
+    )
     flush(stdout)
     return nothing
 end
@@ -609,8 +616,11 @@ function rounds_inprocess!(R, D, dir, file, o, deadline)
         record!(R, String(side), [String(key) => v])
     end
     isempty(dist) || push!(D, "in-process run: " * join(dist, "; "))
-    println("   Tuple cache ", join(tcs, " → "), isempty(dist) ? "" :
-                                                 "  DISTURBED: " * join(dist, "; "))
+    println(
+        "   Tuple cache (post-seed → end) ",
+        join(tcs, " → "),
+        isempty(dist) ? "" : "  DISTURBED: " * join(dist, "; ")
+    )
     return R
 end
 

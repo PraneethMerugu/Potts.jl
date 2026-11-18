@@ -211,7 +211,7 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
                     @test getpid() in ex
                     @test !(getpid(sp) in ex)
                     @test sort(BenchMachine.gpu_users(; exclude = ex, dir = kfd)) ==
-                          sort([103, getpid(sp)])
+                        sort([103, getpid(sp)])
                     ex_go = BenchMachine._default_gpu_exclude([101, 102, getpid(sp)])
                     @test sort(BenchMachine.gpu_users(; exclude = ex_go, dir = kfd)) == [103]
                 end
@@ -253,11 +253,17 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
     @testset "arguments" begin
         @test_throws ErrorException parse_ab(["b", "c", "gg"])        # the 3-argument form errors
         o = withenv(() -> parse_ab(["b", "c", "all", "cpu"]), "POTTS_MACHINE" => "nucbox")
-        @test o.variants == "sequential,checkerboard" && o.rounds == 8 && o.control &&
+        @test o.variants == "sequential,checkerboard" && o.rounds == 16 && o.control &&
               o.seed == BenchMachine.SEED_ENTRIES
         @test o.tolerance == 0.05 && o.warm && o.wait == "all" && o.maxwait == 4 * 3600
         @test o.pin == (Sys.islinux() && Sys.which("taskset") !== nothing)
         @test o.stat == "paired" && parse_ab(["b", "c", "gg", "metal"]).stat == "fastest"
+        @test parse_ab(["b", "c", "gg", "rocm"]).rounds == 8
+        @test parse_ab(["b", "c", "gg", "metal"]).rounds == 8
+        @test parse_ab(["b", "c", "gg", "cpu", "4"]).rounds == 4
+        @test parse_ab(["b", "c", "gg", "cpu", "4", "--rounds=6"]).rounds == 6
+        @test parse_ab(["--inprocess", "d", "v.jl", "cpu"]).rounds == 16
+        @test parse_ab(["--inprocess", "d", "v.jl", "rocm"]).rounds == 8
         @test parse_ab(["b", "c", "gg", "metal", "3"]).rounds == 3
         @test parse_ab(["b", "c", "gg", "cpu", "--stat=fastest"]).stat == "fastest"
         @test parse_ab(["b", "c", "gg", "cpu", "--wait=gpu", "--max-wait=0.5"]).maxwait ==

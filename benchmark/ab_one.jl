@@ -11,15 +11,16 @@
 # In `--prepare` mode (used by `ab.jl`'s parallel-compile path), the process:
 #  1. loads the packages, seeds the Tuple type cache (on CPU/Metal), builds all problems,
 #     compiles kernels via one untimed `fresh_integrator` + `timed_step!` per case/variant
-#     (except on ROCm, where loading AMDGPU/KFD and GPU kernel compile stay after `GO` so no
-#     sibling holds a KFD context during timing), and runs `GC.gc()` (`ab.jl` handles
-#     waiting in the parent before spawning and inside the lock before each `GO`);
+#     (except on ROCm, where problems are built before READY while loading AMDGPU/KFD,
+#     seeding the Tuple type cache, and GPU kernel compile stay after `GO` so no sibling
+#     holds a KFD context during timing), and runs `GC.gc()` (`ab.jl` handles waiting in
+#     the parent before spawning and inside the lock before each `GO`);
 #  2. prints `READY <pid>`, flushes stdout, and blocks reading stdin for
 #     `GO <cpu> [<exclude_pids>]`;
 #  3. once `GO` arrives (already re-pinned by the parent to `<cpu>` while the parent holds
 #     `tools/exclusive.sh`), checks start disturbances (excluding live sibling PIDs), runs
 #     a 1.5 s fixed burn-in on the benchmark core so boost clocks settle before the first
-#     sample, prints `TC <entries> <capacity>`, runs the timed trials (`ABR`/`ABSKIP` lines),
+#     sample, prints the post-seed `TC <entries> <capacity>`, runs the timed trials (`ABR`/`ABSKIP` lines),
 #     checks end disturbances, prints `DISTURBED`, final `TC`, and `DONE`, and waits for
 #     stdin EOF so the parent can re-pin it off the benchmark core before heap teardown.
 #
@@ -30,7 +31,9 @@
 # Options:
 #   --prepare        build and compile all cases first, print `READY <pid>`, wait for `GO`
 #   --seed=<n>       seed the Tuple type cache to n entries (default BenchMachine.SEED_ENTRIES;
-#                    0 = no seeding). Seeding runs after the packages load, before any build.
+#                    0 = no seeding). Seeding runs after the packages load, before any build
+#                    (except ROCm `--prepare`, where problems build first and seeding runs
+#                    after `GO` once AMDGPU loads).
 #   --samples=<n>    samples per measurement (default 60), --seconds=<s> (default 40)
 #   --gctrial, --no-gctrial  BenchmarkTools' GC scrub (`gctrial`: three full collections
 #                    once per trial, before its first sample). Default (D-252): off for the CPU
