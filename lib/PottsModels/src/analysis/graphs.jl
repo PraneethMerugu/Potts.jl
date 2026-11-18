@@ -21,7 +21,7 @@ function cell_graph(σ::AbstractArray, lat::Lattice; neighborhood = VonNeumann(1
     size(σ) == lat.dims || throw(ArgumentError("cell_graph: σ has size $(size(σ)), the lattice $(lat.dims)"))
     n = Int(maximum(σ; init = 0))
     cg = contact_graph(σ, lat, relation(neighborhood, lat), n)
-    return [Vector{Int}(neighbors(cg, c)) for c in 1:n]
+    return [Vector{Int}(contact_neighbors(cg, c)) for c in 1:n]
 end
 
 """

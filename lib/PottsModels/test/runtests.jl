@@ -1,6 +1,7 @@
 # PottsModels: every model builds, compiles and runs, and its derived ΔH matches the brute-
 # force energy difference; mechanism tests (mechanisms.jl) check what each model is for.
 using Test, Potts, PottsModels, Aqua, TOML
+using Potts.Layouts
 using Potts: CorePotts
 using Statistics: mean
 
@@ -70,13 +71,13 @@ function selfcheck(prob; n = 200)
     moore = CorePotts.relation(Moore(1), lat)
     worst = 0.0
     for u in sol.u, i in 1:n
-        t = mod1(i * 7919, length(u.σ)); x = CorePotts.coordinates(lat, t)
+        t = mod1(i * 7919, length(u.ownership)); x = CorePotts.coordinates(lat, t)
         ins, y = CorePotts.shift(lat, x, moore.offsets[mod1(i, length(moore))])
         ins || continue
         s = CorePotts.linear_index(lat, y)
-        u.σ[t] == u.σ[s] && continue
-        prop = CorePotts.Proposal(t, s, x, 1, u.σ[t], u.σ[s])
-        a = deepcopy(u); a.σ[t] = prop.new
+        u.ownership[t] == u.ownership[s] && continue
+        prop = CorePotts.Proposal(t, s, x, 1, u.ownership[t], u.ownership[s])
+        a = deepcopy(u); a.ownership[t] = prop.new
         prob.f.commit!(a, prob.p, prop, ctx)
         worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u) + Potts._killing_credit(prob, u, prop, a))))
     end
@@ -104,7 +105,8 @@ const POTTSMODELS_FIRST_SHARD = POTTSMODELS_SHARD[1] == 1
         ("Wortel Act (connected)", WortelAct(; name = :act, lattice = (8, 8), connected = true),
             [ownership => two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:cell, :cell]]),
         ("Merks", MerksVasculogenesis(; name = :merks, lattice = (8, 8)), [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]],
-            (; field_solver = ExplicitEuler(substeps = 2, lower = 0.0))),
+            (; field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0)),
+        ),
         ("Merks 2006", Merks2006(; name = :m6, lattice = (16, 16)),
             layout(merks2006_layout(; lattice = (16, 16), n = 3, side = 4), (16, 16)), (; field_solver = ExplicitEuler(substeps = 15))),
         ("Merks 2006 (hard connectivity)", Merks2006(; name = :m6, lattice = (16, 16), rule = :hard),
@@ -128,7 +130,7 @@ const POTTSMODELS_FIRST_SHARD = POTTSMODELS_SHARD[1] == 1
         sol = solve(prob, SequentialCPM(; proposal = Moore(1)))
         @test Symbol(sol.retcode) === :Success
         u = sol.u[end]
-        @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(u.cell.volume)]
+        @test u.cell.volume == [count(==(c), u.ownership) for c in eachindex(u.cell.volume)]
     end
     @testset "Akeeb invasion (99×60)" begin
         op = akeeb_state(; lattice = (99, 60))
@@ -269,7 +271,7 @@ const PM_SKIP = (:eval, :include, :Base, :Core, :Main, :PMFiles, :PM_MODULES, :P
 _pm_names(m, skip = ()) = [n => getglobal(m, n) for n in names(m; all = true, imported = true)
                            if !startswith(string(n), '#') && !(n in PM_SKIP) && !(n in skip) && n !== nameof(m) && isdefined(m, n)]
 const PM_RUNNER = _pm_names(@__MODULE__)
-const PM_RUNNER_USINGS = :(using Test, Potts, PottsModels, Aqua, TOML; using Potts: CorePotts; using Statistics: mean)
+const PM_RUNNER_USINGS = :(using Test, Potts, PottsModels, Aqua, TOML; using Potts.Layouts; using Potts: CorePotts; using Statistics: mean)
 # Frozen files whose recorded fingerprints and checkpoints hold their own definitions as
 # `Main.<name>` (the generated code names them): they run in Main, as before, until T2 replaces
 # those pins (R3). Main sees the earlier files' names through a module of their bindings.

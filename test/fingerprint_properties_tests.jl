@@ -42,7 +42,7 @@ end
             end
             @lattice Lattice(dims; boundary)
             @energy begin
-                contacts => J[kind, kind′]
+                contacts => J[kind, neighbor_kind]
                 cells => energy_scale * λ * (volume - V₀)^2
             end
             @equations begin
@@ -83,7 +83,7 @@ end
             @lattice Lattice((12, 12); boundary = Periodic())
             @energy begin
                 cells => λ * (volume - V₀)^2
-                contacts => J[kind, kind′]
+                contacts => J[kind, neighbor_kind]
             end
             @equations begin
                 D(y) ~ -k * y
@@ -103,7 +103,7 @@ end
         make_base(; sys = FPBase(; name = :fp), dims = (12, 12), kw...) =
             PottsProblem(
             sys, base_state(dims), (0, 4);
-            ode_solver = ExplicitEuler(substeps = 2, lower = 0.0), kw...
+            ode_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0), kw...
         )
 
         res = fp_props(
@@ -112,7 +112,7 @@ end
                 (:lattice_dims, () -> make_base(; sys = FPBase(; name = :fp, dims = (14, 14)), dims = (14, 14))),
                 (:lattice_boundary, () -> make_base(; sys = FPBase(; name = :fp, boundary = Closed()))),
                 (:compute_type, () -> make_base(; T = Float32)),
-                (:ode_solver, () -> make_base(; ode_solver = RK4())),
+                (:ode_solver, () -> make_base(; ode_solver = Potts.RK4())),
                 (:phase_cadence_every, () -> make_base(; sys = FPBase(; name = :fp, divide_every = 2))),
                 (:schedule_order, () -> make_base(; sys = FPBase(; name = :fp, sched_order = :fields_first))),
                 (:mcs_duration, () -> make_base(; sys = FPBase(; name = :fp, mcs_dur = 2.0))),
@@ -129,7 +129,7 @@ end
                     :parameter_value, () -> PottsProblem(
                         FPBase(; name = :fp),
                         vcat(base_state(), Any[:k => 0.7]), (0, 4);
-                        ode_solver = ExplicitEuler(substeps = 2, lower = 0.0)
+                        ode_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0)
                     ),
                 ),
                 (:term_and_param_order_and_omitted_default_schedule, () -> make_base(; sys = FPEqTermOrder(; name = :fp))),
@@ -137,7 +137,7 @@ end
                 (
                     :solver_kw_order, () -> PottsProblem(
                         FPBase(; name = :fp), base_state(), (0, 4);
-                        ode_solver = ExplicitEuler(lower = 0.0, substeps = 2)
+                        ode_solver = ExplicitEuler(lower_bound = 0.0, substeps = 2)
                     ),
                 ),
             ),
@@ -153,11 +153,11 @@ end
             m_sys = MerksVasculogenesis(; name = :m, lattice = (8, 8))
             p_fs2 = PottsProblem(
                 m_sys, [ownership => s_m, kind => [:endothelial]], (0, 2);
-                field_solver = ExplicitEuler(substeps = 2, lower = 0.0)
+                field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0)
             )
             p_fs4 = PottsProblem(
                 m_sys, [ownership => s_m, kind => [:endothelial]], (0, 2);
-                field_solver = ExplicitEuler(substeps = 4, lower = 0.0)
+                field_solver = ExplicitEuler(substeps = 4, lower_bound = 0.0)
             )
             @test p_fs2.f.fingerprint != p_fs4.f.fingerprint
         end
@@ -185,6 +185,7 @@ end
 end
 
 @testitem "fingerprint invariance across published PottsModels and fixtures" setup = [FPPropsSetup] tags = [:potts, :fingerprint] begin
+    using Potts.Layouts
     @testset "fingerprint invariance across published PottsModels and fixtures" begin
         two(dims, a, b) = (s = zeros(Int32, dims); s[a...] .= 1; s[b...] .= 2; s)
         models = (
@@ -210,7 +211,7 @@ end
                 "MerksVasculogenesis", name -> PottsProblem(
                     MerksVasculogenesis(; name, lattice = (8, 8)),
                     [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 2);
-                    field_solver = ExplicitEuler(substeps = 2, lower = 0.0)
+                    field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0)
                 ),
             ),
             (
@@ -318,7 +319,7 @@ end
         naive_no_law(sys) = hash(
             (
                 nameof(sys),
-                string.(Potts.parameters(sys)),
+                string.(Potts.declared_parameters(sys)),
                 Potts.part(sys).kinds,
                 string(Potts.part(sys).lattice),
                 string.(Potts.part(sys).energies),
@@ -335,7 +336,7 @@ end
         naive_no_prop(sys) = hash(
             (
                 nameof(sys),
-                string.(Potts.parameters(sys)),
+                string.(Potts.declared_parameters(sys)),
                 Potts.part(sys).kinds,
                 string(Potts.part(sys).lattice),
                 string.(Potts.part(sys).energies),
@@ -351,8 +352,8 @@ end
         # P6.0c2: closure session token binding (distinct closure values get distinct fingerprints)
         f1 = x -> x + 1.0
         f2 = x -> x + 2.0
-        c1 = Potts._canonical(Adaptive(RK4(); fn = f1))
-        c2 = Potts._canonical(Adaptive(RK4(); fn = f2))
+        c1 = Potts._canonical(Adaptive(Potts.RK4(); fn = f1))
+        c2 = Potts._canonical(Adaptive(Potts.RK4(); fn = f2))
         @test c1 != c2
         @test occursin("var\"#", c1)
         # Two anonymous closures capturing different constants must not produce identical
@@ -370,8 +371,8 @@ end
         b1, b2 = make_biased(1.0), make_biased(2.0)
         @test hash(b1) != hash(b2)
         @test string(typeof(b1).name.name) == string(typeof(b2).name.name)  # negative control: type name alone drops captured state
-        fp_a1 = PottsProblem(NCAdapt(; name = :m), op, (0, 2); ode_solver = Adaptive(RK4(); fn = b1)).f.fingerprint
-        fp_a2 = PottsProblem(NCAdapt(; name = :m), op, (0, 2); ode_solver = Adaptive(RK4(); fn = b2)).f.fingerprint
+        fp_a1 = PottsProblem(NCAdapt(; name = :m), op, (0, 2); ode_solver = Adaptive(Potts.RK4(); fn = b1)).f.fingerprint
+        fp_a2 = PottsProblem(NCAdapt(; name = :m), op, (0, 2); ode_solver = Adaptive(Potts.RK4(); fn = b2)).f.fingerprint
         @test fp_a1 != fp_a2
 
         # F4-E15: anonymous neighborhood weight functions with different bodies produce distinct

@@ -8,8 +8,8 @@ rsys(eqs, bcs, ps; T = 1.0) = PDESystem(eqs, bcs, bdom(T), [t, x, y], [bce], ps;
 rsxs() = [(i - 0.5) / RSD[1] for i in 1:RSD[1], j in 1:RSD[2]]
 rsys0() = [(j - 0.5) / RSD[2] for i in 1:RSD[1], j in 1:RSD[2]]
 # one window of `alg` from the start state `x y`
-function rs_window(prob, alg)
-    ig = init(prob, alg)
+function rs_window(prob, alg; dt)
+    ig = init(prob, alg; dt)
     u0 = copy(vec(ig[bce]))
     step!(ig)
     return ig, u0, vec(ig[bce])

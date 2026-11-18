@@ -24,9 +24,9 @@ end
 frame = benchmark_frame()
 
 suite = BenchmarkGroup()
-suite["encode"]["cell_type"] = @benchmarkable encode(
+suite["encode"]["cell_type"] = @benchmarkable encode_frame(
     $frame, CellTypeEncoding())
-suite["encode"]["identity"] = @benchmarkable encode(
+suite["encode"]["identity"] = @benchmarkable encode_frame(
     $frame, CellIdentityEncoding())
 suite["geometry"]["boundaries"] = @benchmarkable MakiePotts._boundary_segments(
     $frame)

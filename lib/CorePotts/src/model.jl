@@ -1,33 +1,34 @@
 # The numerical model interface: state, proposals, and the functions a model supplies.
 
 """
-    CPMState(σ, cell; site = (;), model = (;), history = (;))
+    CPMState(ownership, cell; site = (;), model = (;), history = (;))
 
 Structure-of-arrays model state.
 
-- `σ`: site → cell id (`Int32`, `0` = medium), an `N`-dimensional array.
+- `ownership`: site → cell id (`Int32`, `0` = medium), an `N`-dimensional array (the
+  usual symbol is σ).
 - `cell`: `NamedTuple` of per-cell arrays (last dimension = cell id); must contain
   `kind::Vector{Int32}` and `volume::Vector{Int32}`; may contain any other tracked or
   authored cell quantity.
-- `site`: per-site arrays shaped like `σ`. `model`: model-level quantities as 1-element
+- `site`: per-site arrays shaped like `ownership`. `model`: model-level quantities as 1-element
   arrays (medium properties live here). `history`: ring buffers (`history_buffer`).
 """
 struct CPMState{A, C, S, M, H}
-    σ::A
+    ownership::A
     cell::C
     site::S
     model::M
     history::H
 end
-CPMState(σ, cell; site = (;), model = (;), history = (;)) =
-    CPMState(σ, cell, site, model, history)
+CPMState(ownership, cell; site = (;), model = (;), history = (;)) =
+    CPMState(ownership, cell, site, model, history)
 Adapt.@adapt_structure CPMState
 
 ncells(st::CPMState) = length(st.cell.kind)
 
 # Saved-state accessors: the arrays of a state by name.
 """Site → cell id array (`0` = medium)."""
-ownership(st::CPMState) = st.σ
+ownership(st::CPMState) = st.ownership
 """Kind of every cell slot (cells are kinds `1…`, the medium is `0`)."""
 cell_kinds(st::CPMState) = st.cell.kind
 """Generation of every cell slot (incremented when an id is reused)."""
@@ -129,8 +130,8 @@ The model, as plain Julia functions (the numerical analogue of `ODEFunction`). E
   unless the algorithm sets one; `nothing` means `Metropolis()`
 - `track` → `nothing` (the default: nothing is accumulated, nothing is compiled), or a
   callable `track(st, p, prop, ctx, dH)` whose value, for every committed copy, is summed
-  into `stats.accepted_ΔH` (`dH` is `delta_H`'s value, without the bias and the acceptance
-  law's offset). [`TrackDeltaH`](@ref) sums `dH` itself (`Potts`: `track = (:ΔH,)`). A
+  into `stats.accepted_energy_change` (`dH` is `delta_H`'s value, without the bias and the acceptance
+  law's offset). [`TrackEnergyChange`](@ref) sums `dH` itself (`Potts`: `track = (:energy_change,)`). A
   custom callable must also define [`track_eltype`](@ref)`(track)` (the scalar type of its
   values, `Float32` on Metal) to run under `CheckerboardCPM`, which accumulates per site in
   that type; `SequentialCPM` adds into a `Float64` and does not need it.
@@ -170,18 +171,18 @@ function CPMFunction(delta_H; commit! = commit_volume!, constraint = always,
 end
 
 """
-    TrackDeltaH{T}()
+    TrackEnergyChange{T}()
 
-The `track` of `CPMFunction` that sums each committed copy's ΔH (`track = (:ΔH,)` in
+The `track` of `CPMFunction` that sums each committed copy's ΔH (`track = (:energy_change,)` in
 Potts). `T` is the model's scalar type: the checkerboard accumulates per site in `T` (on
 the device) between the host read points, which reduce into the `Float64`
-`stats.accepted_ΔH`; `SequentialCPM` adds into a `Float64` directly. On a device the
+`stats.accepted_energy_change`; `SequentialCPM` adds into a `Float64` directly. On a device the
 checkerboard's copies of one cell can be in flight together, each with ΔH taken against the
 cell's totals before the other's commit, so the sum can differ slightly from the change of
 the energy (0.1 % over 20 MCS of a 48² test monolayer); on the CPU it is exact.
 """
-struct TrackDeltaH{T} end
-@inline (::TrackDeltaH)(st, p, prop, ctx, dH) = dH
+struct TrackEnergyChange{T} end
+@inline (::TrackEnergyChange)(st, p, prop, ctx, dH) = dH
 """
     track_eltype(track) -> Type
 
@@ -189,7 +190,7 @@ The scalar type of a `track` callable's values (`CPMFunction(…; track)`): `Che
 accumulates them per site in this type between host read points. Define it for a custom
 track (`CorePotts.track_eltype(::MyTrack) = Float64`; `Float32` on Metal).
 """
-track_eltype(::TrackDeltaH{T}) where {T} = T
+track_eltype(::TrackEnergyChange{T}) where {T} = T
 track_eltype(track) = throw(ArgumentError(
     "CheckerboardCPM needs the scalar type of the custom track $(typeof(track)): define " *
     "`CorePotts.track_eltype(::$(typeof(track))) = Float64` (Float32 on a device)"))
@@ -270,7 +271,7 @@ end
 """
     contact_delta(σ, ctx, prop, J; relation = ctx.contact)
 
-Change of `Σ_{unordered pairs} w·J(owner, owner′)` over a (possibly weighted) relation when
+Change of `Σ_{unordered pairs} w·J(owner, neighbor_owner)` over a (possibly weighted) relation when
 `prop` is accepted. `J(a, b)` takes cell ids (`0` = medium) and is only evaluated for
 `a ≠ b`.
 """

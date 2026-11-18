@@ -32,7 +32,7 @@ and radius against time.
     @relations proposal = Moore(1)
     @energy begin
         cells(cell) => λ * (volume - V_target)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @after_mcs V_target ~ ifelse(volume >= β * Pre(V_target), Pre(V_target) + A₀ / τ, Pre(V_target))
     @divide cells(cell) when = volume >= 2A₀, along = RandomPlane(), V_target => A₀
@@ -40,13 +40,13 @@ and radius against time.
 end
 
 """
-    openvt_monolayer_state(; lattice = (400, 400), A₀ = 25)
+    openvt_monolayer_state(; lattice = (400, 400), area0 = 25)
 
-One square cell of area ≈ `A₀` at the lattice center: `[ownership => σ, kind => [:cell]]`.
+One square cell of area ≈ `area0` (the model's A₀) at the lattice center: `[ownership => σ, kind => [:cell]]`.
 """
-function openvt_monolayer_state(; lattice = (400, 400), A₀ = 25)
+function openvt_monolayer_state(; lattice = (400, 400), area0 = 25)
     σ = zeros(Int32, lattice)
-    s = round(Int, sqrt(A₀))
+    s = round(Int, sqrt(area0))
     lo = lattice .÷ 2 .- s ÷ 2
     σ[lo[1]:(lo[1] + s - 1), lo[2]:(lo[2] + s - 1)] .= 1
     return [ownership => σ, kind => [:cell]]

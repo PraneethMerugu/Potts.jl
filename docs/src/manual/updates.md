@@ -14,6 +14,7 @@ of a relationship (see [Relationships](@ref manual-relationships)), depending on
 
 ```@example updates
 using Potts
+using Potts.Layouts
 
 @potts_model Clocks begin
     @kinds medium cell
@@ -28,7 +29,7 @@ using Potts
     @lattice Lattice((30, 30); neighborhood = Moore(1))
     @energy begin
         Volume(cell; target = 25.0, strength = 1.0)
-        contacts => 8.0 * (kind != kind′)
+        contacts => 8.0 * (kind != neighbor_kind)
     end
     @on_copy hits[target] += 1                         # count accepted copies per site
     @after_mcs begin
@@ -60,8 +61,8 @@ sol = solve(PottsProblem(clocks, op, (0, 20); seed = 1), SequentialCPM(); saveat
 - **Randomness.** `rand()` is a uniform number in (0, 1), drawn fresh for every cell or site
   and every MCS from the problem's seed; runs are reproducible, on any backend. `randn()`
   is a standard normal number with the same contract, `randn(μ, σ)` is `μ + σ * randn()`,
-  and `randn(μ, σ; lower)` is redrawn while it is `≤ lower` (a truncated normal; after 64
-  draws all `≤ lower` the value is NaN and the run fails with `ReturnCode.Failure`, which
+  and `randn(μ, σ; lower_bound)` is redrawn while it is `≤ lower_bound` (a truncated normal; after 64
+  draws all `≤ lower_bound` the value is NaN and the run fails with `ReturnCode.Failure`, which
   for a bound below `μ + 2σ` does not happen in practice). Each draw depends only on the
   seed, the MCS, the cell or site and the draw's place in the model, so it is the same on
   every algorithm and thread count. Other random functions (`rand(1:6)`, `randn(3)`,
@@ -76,9 +77,9 @@ sol = solve(PottsProblem(clocks, op, (0, 20); seed = 1), SequentialCPM(); saveat
   cell's contact pairs (s, s′), s in the cell and s′ a neighbor of s (inside the lattice)
   owned by another cell or the medium, for which `pred` holds; `contacts(rel)` uses a
   relation declared in `@relations` instead of the contact neighborhood. `pred` reads the
-  partner's kind `kind′` (`medium` for the medium) and constants: `count(true for _ in
+  partner's kind `neighbor_kind` (`medium` for the medium) and constants: `count(true for _ in
   contacts)` is the unweighted `surface` over the contact relation, and the free-surface
-  fraction `count(kind′ == medium for _ in contacts) / count(true for _ in contacts)` is
+  fraction `count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts)` is
   the share of a cell's contacts with the medium. Each count is a tracker kept exact by
   every accepted copy and every division, removal and kind change, so reading it costs
   nothing per MCS; it is not available in energies, drives or constraints.
@@ -93,11 +94,11 @@ sol = solve(PottsProblem(clocks, op, (0, 20); seed = 1), SequentialCPM(); saveat
       @lattice Lattice((30, 30); boundary = Closed(), neighborhood = Moore(1))
       @energy begin
           Volume(A, B; target = 25.0, strength = 1.0)
-          contacts => 8.0 * (kind != kind′)
+          contacts => 8.0 * (kind != neighbor_kind)
       end
       @after_mcs begin
-          free ~ count(kind′ == medium for _ in contacts) / count(true for _ in contacts)
-          touching_b ~ count(kind′ == B for _ in contacts)
+          free ~ count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts)
+          touching_b ~ count(neighbor_kind == B for _ in contacts)
       end
       @sweep Metropolis(; temperature = 8.0)
   end

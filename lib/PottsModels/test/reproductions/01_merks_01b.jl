@@ -19,7 +19,7 @@
 # reading: its curves change during the first ≈ 100 MCS, before any chemoattractant exists.
 # Sweeps also record N + 100 (the relaxation-end clock, D-156), not gating.
 # Observable: O1 compactness (as `p63d_compactness`), and for Fig 13 Σ ΔH over the accepted
-# copies, `track = (:ΔH,)` (energy plus the chemotaxis drive, as TST's SumDH; D-17).
+# copies, `track = (:energy_change,)` (energy plus the chemotaxis drive, as TST's SumDH; D-17).
 #
 # | Fig | Curves (paper → ours) | Lattice, start | Grid (targets) | n per point | N (MCS) | Seeds |
 # |---|---|---|---|---|---|---|
@@ -366,10 +366,11 @@ function p63f1b_run(seed, set, saves; track = false)
     tend = maximum(saves)
     prob = PottsProblem(Merks2008(; name = :m8b, lattice = set.lattice, mode = set.mode),
         [op; set.p...], (0, tend);
-        field_solver = P63F1B_SOLVER, seed, track = track ? (:ΔH,) : ())
+        field_solver = P63F1B_SOLVER, seed, track = track ? (:energy_change,) : ()
+    )
     integ = init(prob, SequentialCPM(); save_start = false, save_end = false)
     out = Dict{Int, Tuple{Float64, Union{Nothing, Float64}}}()
-    record!(t) = (out[t] = (p63f1b_compactness(Array(current_state(integ).σ)), integ.stats.accepted_ΔH))
+    record!(t) = (out[t] = (p63f1b_compactness(Array(current_state(integ).ownership)), integ.stats.accepted_energy_change))
     0 in saves && record!(0)
     while integ.t < tend
         step!(integ)

@@ -69,6 +69,13 @@ Potts.Fields.y
 Potts.Fields.z
 ```
 
+`using Potts.Layouts` brings the initial-state vocabulary (`layout`, its layers, shapes and
+point patterns) into scope (see [Layouts](@ref manual-layouts)):
+
+```@docs
+Potts.Layouts
+```
+
 ```@autodocs
 Modules = [Potts]
 Private = false

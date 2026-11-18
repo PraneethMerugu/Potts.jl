@@ -56,7 +56,7 @@ using Potts: CorePotts
     @lattice Lattice((12, 12); neighborhood = VonNeumann(1))
     @energy begin
         cells(P, Q) => λ * (volume - V₀[kind])^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = 10.0)
 end
@@ -252,7 +252,7 @@ const P60AN_HW = CorePotts.CPMFunction(p60an_hw_dH; temperature = p60an_hw_T)
         b = remake(prob; u0 = [:ownership => σB, :kind => [:P, :Q]])     # control: pairs
         @test total_energy(b) == 384 + 1                        # 385
         q = remake(prob; u0 = (ownership = σB, kind = [:P, :Q]))
-        @test Array(q.u0.σ) == σB
+        @test Array(q.u0.ownership) == σB
         @test Array(q.u0.cell.kind)[1:2] == Array(b.u0.cell.kind)[1:2]
         @test total_energy(q) == 385.0
         q2 = remake(prob; u0 = (ownership = p60an_sigma(), kind = [:Q, :P]))
@@ -268,7 +268,7 @@ const P60AN_HW = CorePotts.CPMFunction(p60an_hw_dH; temperature = p60an_hw_T)
         integ = init(prob, SequentialCPM())
         step!(integ)
         reinit!(integ, (ownership = p60an_sigma(; apart = true), kind = [:Q, :P]))
-        @test Array(integ.state.σ) == p60an_sigma(; apart = true)
+        @test Array(integ.state.ownership) == p60an_sigma(; apart = true)
         @test Array(integ.state.cell.kind)[1:2] == Int32[2, 1]
         @test integ.t == 0
         # a problem remade with a NamedTuple, then run and changed by setters
@@ -291,7 +291,7 @@ const P60AN_HW = CorePotts.CPMFunction(p60an_hw_dH; temperature = p60an_hw_T)
             v = p60an_vals(s.prob)
             @test v.λ == 3.0 && v.J == p60an_Jf(16.0) && v.V₀ == [0.0, 9.0, 8.0]
         end
-        @test ens.u[1].u[end].σ != ens.u[2].u[end].σ             # still distinct replicas
+        @test ens.u[1].u[end].ownership != ens.u[2].u[end].ownership             # still distinct replicas
         pj(q, ctx) = remake(q; p = (Jx = 20.0,))
         e2 = solve(EnsembleProblem(prob; prob_func = pj), SequentialCPM(), EnsembleSerial();
             trajectories = 2)

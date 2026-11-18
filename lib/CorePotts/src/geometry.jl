@@ -236,7 +236,7 @@ end
 end
 
 """
-    shape(T, cell, lattice, c)
+    cell_shape(T, cell, lattice, c)
 
 CompuCell3D shape descriptors of cell `c` from the covariance eigenvalues `λ₁ ≥ λ₂ (≥ λ₃)`:
 
@@ -246,7 +246,7 @@ CompuCell3D shape descriptors of cell `c` from the covariance eigenvalues `λ₁
   `minor_length = 2√(5λ₃)`, `eccentricity = √(1 − λ₃/λ₁)`.
 - `elongation = major_length / minor_length`.
 """
-@inline function shape(::Type{T}, cell, l::Lattice{2}, c) where {T}
+@inline function cell_shape(::Type{T}, cell, l::Lattice{2}, c) where {T}
     C = embed_covariance(l, covariance(T, cell, c, Val(2)))
     λ1, λ2 = principal_moments(C)
     λ2 = max(λ2, zero(T))
@@ -255,14 +255,14 @@ CompuCell3D shape descriptors of cell `c` from the covariance eigenvalues `λ₁
     return (; major_length = major, minor_length = minor, elongation = major / minor,
         eccentricity = λ1 > 0 ? sqrt(1 - λ2 / λ1) : zero(T), orientation)
 end
-@inline function shape(::Type{T}, cell, l::Lattice{3}, c) where {T}
+@inline function cell_shape(::Type{T}, cell, l::Lattice{3}, c) where {T}
     λ = map(v -> max(v, zero(T)), principal_moments(covariance(T, cell, c, Val(3))))
     semiaxes = map(v -> sqrt(5v), λ)
     major, minor = 2semiaxes[1], 2semiaxes[3]
     return (; major_length = major, minor_length = minor, semiaxes,
         elongation = major / minor, eccentricity = λ[1] > 0 ? sqrt(1 - λ[3] / λ[1]) : zero(T))
 end
-shape(cell, l::Lattice, c) = shape(Float64, cell, l, c)
+cell_shape(cell, l::Lattice, c) = cell_shape(Float64, cell, l, c)
 
 # Major length from the covariance upper triangle (square-lattice axes), as in `shape`
 @inline _major_length(l::Lattice{2}, C::NTuple{3, T}) where {T} =
@@ -273,7 +273,7 @@ shape(cell, l::Lattice, c) = shape(Float64, cell, l, c)
 """
     major_length(T, cell, lattice, c)
 
-`shape(T, cell, lattice, c).major_length` alone: `4√λ₁` of the covariance in 2D (Merks et
+`cell_shape(T, cell, lattice, c).major_length` alone: `4√λ₁` of the covariance in 2D (Merks et
 al. 2006, Eq. 5: `4√(λ_max(I)/a)`), `2√(5λ₁)` in 3D. Zero for an empty cell.
 """
 @inline function major_length(::Type{T}, cell, l::Lattice{N}, c) where {T, N}

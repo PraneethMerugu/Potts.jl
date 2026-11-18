@@ -1,6 +1,6 @@
 # Acceptance laws and algorithms.
 
-abstract type AcceptanceLaw end
+abstract type AbstractAcceptanceLaw end
 
 """
     Metropolis(; offset = 0)
@@ -10,7 +10,7 @@ ties (`ΔH == offset`) are accepted with probability ½ (CompuCell3D convention)
 Morpheus yield `Y` corresponds to `offset = -Y`. On GPU backends without Float64 (Metal)
 a floating-point offset is stored as `Float32`.
 """
-struct Metropolis{T} <: AcceptanceLaw
+struct Metropolis{T} <: AbstractAcceptanceLaw
     offset::T
 end
 Metropolis(; offset = 0) = Metropolis(offset)
@@ -32,7 +32,7 @@ shifts ΔH exactly as in `Metropolis`, so at `T ≤ 0` the two laws coincide: ac
 if `ΔH < offset`, and ties (`ΔH == offset`) with probability ½. On GPU backends without
 Float64 (Metal) a floating-point offset is stored as `Float32`.
 """
-struct Barker{T} <: AcceptanceLaw
+struct Barker{T} <: AbstractAcceptanceLaw
     offset::T
 end
 Barker(; offset = 0) = Barker(offset)
@@ -54,12 +54,12 @@ end
     return u < inv(one(T) + exp(x / temperature))
 end
 
-abstract type CPMAlgorithm <: SciMLBase.AbstractSciMLAlgorithm end
+abstract type AbstractCPMAlgorithm <: SciMLBase.AbstractSciMLAlgorithm end
 
 # Potts dynamics advance in whole MCS: a discrete-time algorithm (D-075 Q2). Keep this
 # method when the planned `AbstractPottsAlgorithm <: AbstractDEAlgorithm` lands: it
 # overrides SciMLBase's default `false`.
-SciMLBase.isdiscrete(::CPMAlgorithm) = true
+SciMLBase.isdiscrete(::AbstractCPMAlgorithm) = true
 
 """
     SequentialCPM(; acceptance = nothing, proposal = nothing, skip_interior = false)
@@ -81,7 +81,7 @@ equal in distribution, not bitwise. Fast on mostly-medium lattices; each MCS als
 O(N) pass comparing the state with the boundary set's shadow copy (a few percent of the
 sweep at typical cover, more on nearly empty lattices).
 """
-struct SequentialCPM{A, R, S} <: CPMAlgorithm
+struct SequentialCPM{A, R, S} <: AbstractCPMAlgorithm
     acceptance::A
     proposal::R
     skip_interior::Bool
@@ -109,7 +109,8 @@ end
 
 """
     CheckerboardCPM(; acceptance = nothing, proposal = nothing, parts = nothing, region = nothing,
-        switches = 1, threads = :auto)
+        switches = 1, threads = :auto, inline_max_blocks = 512, fused_lifecycle_max_sites = 65536,
+        fused_lifecycle_max_cells = 8192)
 
 Parallel dynamics on the CPU or a GPU (KernelAbstractions), lockless (after Sultan et al.,
 arXiv 2312.09317). The lattice is cut into blocks; each block has `parts` sub-regions along
@@ -128,9 +129,14 @@ at random, so every site is attempted once per MCS on average, as with `Sequenti
 - `switches`: phases per sub-region per MCS (default 1); each phase makes 1/`switches` of
   the sub-region's attempts.
 - `threads` (CPU only): `:auto` runs a phase with one Julia thread, or with at most
-  `CorePotts.BLOCK_GRAIN[]` (512) blocks, or as a trajectory of a threaded ensemble,
+  `inline_max_blocks` blocks, or as a trajectory of a threaded ensemble,
   inline, else threaded; `false` always inline;
   `true` always threaded. `integ.cache.inline` says which.
+- `inline_max_blocks` (CPU only, default 512): with `threads = :auto`, a phase with at most
+  this many blocks runs inline (`0` threads every phase).
+- `fused_lifecycle_max_sites`, `fused_lifecycle_max_cells` (devices only, defaults 65536 and
+  8192): up to this many sites and cell slots the device lifecycle runs as one launch; a
+  larger problem launches one kernel per stage (`0` always does).
 
 `stats.accepted` and `stats.committed` count the copies (equal: a copy commits when it is
 accepted), brought up to date at the host read points.
@@ -162,12 +168,12 @@ So threading survives on small-cell geometries and is gone on the wide-cell ones
 ones the default layout produces: 10 × 10 cells are wider than the 8-site spacing the default
 `parts = 8, region = 1` gives. The trade at 400 × 400 with 1600 cells is the four-thread gain such a
 geometry had before this rule, about 1.4× (2.76 ms to 1.96 ms per MCS); the 3.3–3.7× recorded for
-`BLOCK_GRAIN` is a 5000-block measurement and does not describe it.
+`inline_max_blocks` is a 5000-block measurement and does not describe it.
 
 Cell trackers stay exact: moments add atomically and re-center once per MCS, pieces trackers add
 their changes, and an `@on_copy` write that reads its own cell value adds the difference. (A
 float-valued column accumulated by concurrent commits can differ in its last bits by thread
-count: an integer column is exact.) `stats.accepted_ΔH` sums the accepted copies' ΔH and
+count: an integer column is exact.) `stats.accepted_energy_change` sums the accepted copies' ΔH and
 reconciles with the trajectory's energy change, since no two work items act on one cell unless
 they run one after another. A copy whose decision needs a whole-cell search (a `Global` veto
 without window, pieces off their local fast path) is decided after its phase by one work item,
@@ -178,20 +184,41 @@ The kinetics match `SequentialCPM` within the statistical resolution of the P6.0
 Act cell's persistence); the Act cell moves up to 6 % faster at weak activity. See
 `docs/design/research/checkerboard-kinetics.md`.
 """
-Base.@kwdef struct CheckerboardCPM{A, R} <: CPMAlgorithm
+Base.@kwdef struct CheckerboardCPM{A, R} <: AbstractCPMAlgorithm
     acceptance::A = nothing
     proposal::R = nothing
     region::Union{Nothing, Int} = nothing
     parts::Union{Nothing, Int} = nothing
     switches::Int = 1
     threads::Union{Symbol, Bool} = :auto
+    inline_max_blocks::Int = _INLINE_MAX_BLOCKS
+    fused_lifecycle_max_sites::Int = _FUSED_LIFECYCLE_MAX_SITES
+    fused_lifecycle_max_cells::Int = _FUSED_LIFECYCLE_MAX_CELLS
+    function CheckerboardCPM{A, R}(
+            acceptance, proposal, region, parts, switches, threads, inline_max_blocks,
+            fused_lifecycle_max_sites, fused_lifecycle_max_cells
+        ) where {A, R}
+        for (k, v) in (
+                (:inline_max_blocks, inline_max_blocks), (:fused_lifecycle_max_sites, fused_lifecycle_max_sites),
+                (:fused_lifecycle_max_cells, fused_lifecycle_max_cells),
+            )
+            v >= 0 || throw(ArgumentError("CheckerboardCPM(; $k = $v): use at least 0"))
+        end
+        return new{A, R}(
+            acceptance, proposal, region, parts, switches, threads, inline_max_blocks,
+            fused_lifecycle_max_sites, fused_lifecycle_max_cells
+        )
+    end
 end
+CheckerboardCPM(acceptance::A, proposal::R, args...) where {A, R} = CheckerboardCPM{A, R}(acceptance, proposal, args...)
 
 # printed as the keyword call that rebuilds it; keywords at their defaults are left out
 function Base.show(io::IO, a::CheckerboardCPM)
     kw = String[]
     for (k, d) in ((:acceptance, nothing), (:proposal, nothing), (:region, nothing), (:parts, nothing),
-            (:switches, 1), (:threads, :auto))
+            (:switches, 1), (:threads, :auto), (:inline_max_blocks, _INLINE_MAX_BLOCKS),
+            (:fused_lifecycle_max_sites, _FUSED_LIFECYCLE_MAX_SITES), (:fused_lifecycle_max_cells, _FUSED_LIFECYCLE_MAX_CELLS),
+        )
         v = getfield(a, k)
         v == d || push!(kw, "$k = " * repr(v; context = io))
     end
@@ -200,5 +227,5 @@ function Base.show(io::IO, a::CheckerboardCPM)
 end
 
 # The boundary-site sweep (`SequentialCPM(; skip_interior = true)`), known from the type.
-_skips_interior(::CPMAlgorithm) = false
+_skips_interior(::AbstractCPMAlgorithm) = false
 _skips_interior(::SequentialCPM{A, R, S}) where {A, R, S} = S

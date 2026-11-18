@@ -1,6 +1,6 @@
 # LatticePCG (F4-08; F4 design §3.7): a LinearSolve algorithm for a symmetric `W`, conjugate
 # gradients on `−W` (positive definite for a diffusion–reaction system) preconditioned by the
-# lattice multigrid's V-cycles (`LatticeMG`, positive definite on `−W` too), matrix-free.
+# lattice multigrid's V-cycles (`LatticeMultigrid`, positive definite on `−W` too), matrix-free.
 module LatticeFieldsLinearSolveExt
 
 using LatticeFields: Problems
@@ -12,7 +12,7 @@ using LinearAlgebra: LinearAlgebra
 struct LatticePCGAlgorithm{P} <: LinearSolve.AbstractKrylovSubspaceMethod
     precs::P
 end
-Problems.LatticePCG(; precs = Problems.LatticeMG()) = LatticePCGAlgorithm(precs)
+Problems.LatticePCG(; precs = Problems.LatticeMultigrid()) = LatticePCGAlgorithm(precs)
 Base.show(io::IO, a::LatticePCGAlgorithm) = print(io, "LatticePCG(; precs = ", a.precs, ")")
 
 LinearSolve.needs_concrete_A(::LatticePCGAlgorithm) = false

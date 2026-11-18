@@ -46,6 +46,7 @@ relationship is an error: each edge variable belongs to one relationship.
 
 ```@example rel
 using Potts
+using Potts.Layouts
 using Potts: CorePotts
 
 @potts_model Tethers begin
@@ -57,7 +58,7 @@ using Potts: CorePotts
     @lattice Lattice((50, 50); neighborhood = Moore(1))
     @energy begin
         Volume(leader, follower; target = 25.0, strength = 1.0)
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
         edges(tether) => 1.0 * (distance - len)^2
         edges(touch) => 0.5 * (distance - 5.0)^2
     end

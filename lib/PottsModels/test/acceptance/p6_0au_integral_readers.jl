@@ -153,7 +153,7 @@ const P60AU_REJECTED = (
     @lattice Lattice((16, 16))
     @energy begin
         cells => 2.0 * (volume - 20)^2
-        contacts => 2.0 * (kind != kind′)
+        contacts => 2.0 * (kind != neighbor_kind)
     end
     @before_mcs s ~ integral(u)
     @constraint s[new] < θ
@@ -170,7 +170,7 @@ end
     @lattice Lattice((16, 16))
     @energy begin
         cells => 2.0 * (volume - 20)^2
-        contacts => 2.0 * (kind != kind′)
+        contacts => 2.0 * (kind != neighbor_kind)
     end
     @before_mcs s ~ integral(u)
     @drive copy => ifelse(s[new] > θ, 1e9, 0.0)
@@ -189,7 +189,7 @@ end
     @lattice Lattice((16, 16))
     @energy begin
         cells => 0.5 * (volume - 16)^2
-        contacts => 2.0 * (kind != kind′)
+        contacts => 2.0 * (kind != neighbor_kind)
     end
     @before_mcs sb ~ integral(u)
     @after_mcs sa ~ integral(u)
@@ -275,7 +275,7 @@ end
     K = 12
     for M in (P60auWorkConstraint, P60auWorkDrive)
         sol = solve(p60au_problem(M, K), alg; saveat = 0:K)
-        σs = [Array(u.σ) for u in sol.u]
+        σs = [Array(u.ownership) for u in sol.u]
         @test all(u -> Array(u.site.u) == P60AU_U0, sol.u)
         # s after MCS k: the fold over σ at the end of MCS k - 1 (the before block)
         @test p60au_cell(sol, :s)[2:end] ≈ [p60au_fold(σs[k], P60AU_U0) for k in 1:K]
@@ -289,7 +289,7 @@ end
         @test p60au_gained(σs, 2)
         # control: without the veto (θ above every s) cell 1 grows too
         free = solve(p60au_problem(M, K; extra = (:θ => 1e9,)), alg; saveat = 0:K)
-        @test p60au_gained([Array(u.σ) for u in free.u], 1)
+        @test p60au_gained([Array(u.ownership) for u in free.u], 1)
     end
 end
 
@@ -301,7 +301,7 @@ end
     prob = p60au_problem(P60auElsewhere, K)
     sol = solve(prob, alg; saveat = 0:K)
     @test Symbol(sol.retcode) === :Success
-    σs = [Array(u.σ) for u in sol.u]
+    σs = [Array(u.ownership) for u in sol.u]
     @test any(k -> σs[k] != σs[k + 1], 1:K)                                    # the cells move
     @test p60au_cell(sol, :sb)[2:end] ≈ [p60au_fold(σs[k], P60AU_U0) for k in 1:K]
     @test p60au_cell(sol, :sa)[2:end] ≈ [p60au_fold(σs[k + 1], P60AU_U0) for k in 1:K]
@@ -321,6 +321,6 @@ end
     K = 6
     sol = solve(p60au_problem(P60auFoldNoIntegral, K), alg; saveat = 0:K)
     @test Symbol(sol.retcode) === :Success
-    σs = [Array(u.σ) for u in sol.u]
+    σs = [Array(u.ownership) for u in sol.u]
     @test p60au_cell(sol, :s)[2:end] ≈ [p60au_fold(σs[k], P60AU_U0) for k in 1:K]
 end

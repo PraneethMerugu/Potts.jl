@@ -56,6 +56,7 @@
 # The rest of this page builds the model and runs it at a size that takes seconds.
 
 using Potts, PottsModels
+using Potts.Layouts
 
 # ## Step 1: the lattice
 #
@@ -162,7 +163,7 @@ still = solve(remake(prob; p = [:λ_act => 0.0]), SequentialCPM(); saveat = 0:10
 
 using Statistics: mean
 function centre(u)
-    sites = findall(==(1), u.σ)
+    sites = findall(==(1), u.ownership)
     return map(1:2) do d
         θ = [2π * (I[d] - 1) / L for I in sites]
         mod(atan(mean(sin.(θ)), mean(cos.(θ))) * L / 2π, L)
@@ -170,7 +171,7 @@ function centre(u)
 end
 acts = sol[:act]
 function act_window(i)            # activity inside the cell, centered on it, 80 × 80 sites
-    a = [s == 1 ? x : NaN for (x, s) in zip(acts[i], sol.u[i].σ)]
+    a = [s == 1 ? x : NaN for (x, s) in zip(acts[i], sol.u[i].ownership)]
     c = round.(Int, centre(sol.u[i]))
     return circshift(a, (L ÷ 2 - c[1], L ÷ 2 - c[2]))[61:140, 61:140]
 end

@@ -134,11 +134,11 @@ nonpublic_accesses(src::AbstractString) = nonpublic_accesses(Meta.parseall(src))
         const alg = SequentialCPM(); f(x) = Potts.layout(x)"""))
 end
 
-@testset "every model builds from `using Potts` alone" begin
+@testset "every model builds from `using Potts` and `using Potts.Layouts` alone" begin
     src = joinpath(@__DIR__, "..", "src")
     for f in sort(filter(f -> f != "PottsModels.jl" && endswith(f, ".jl"), readdir(src)))
         m = Module(Symbol(:Sandbox_, splitext(f)[1]))
-        Core.eval(m, :(using Potts; using DelimitedFiles: readdlm; using Random: MersenneTwister))
+        Core.eval(m, :(using Potts; using Potts.Layouts; using DelimitedFiles: readdlm; using Random: MersenneTwister))
         Base.include(m, joinpath(src, f))
         ctors = filter(n -> isdefined(m, n) && isuppercase(first(string(n))) && getfield(m, n) isa Function,
             names(m; all = true))

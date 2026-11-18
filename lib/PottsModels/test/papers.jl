@@ -27,7 +27,9 @@ using LinearAlgebra: Symmetric, eigen, dot
     # annealed for 2 paper MCS (32 here) at T = 0 under the run's own Hamiltonian (`pars`,
     # PRE §II D2; D-059), the simulation itself untouched (p.2134)
     anneal(σ, pars = []; seed = 1) = solve(PottsProblem(GranerGlazier(; name = :gg),
-        [ownership => copy(σ), kind => k, pars..., :T => 0.0], (0, 32); seed), SequentialCPM(); saveat = 32).u[end].σ
+            [ownership => copy(σ), kind => k, pars..., :T => 0.0], (0, 32); seed
+        ), SequentialCPM(); saveat = 32
+    ).u[end].ownership
     medium_fraction(σ, key, pars = []) = (n = bonds(anneal(σ, pars)); n[key] / sum(values(n)))
     hetero(σ, pars = []) = (n = bonds(anneal(σ, pars)); n[:dl] / sum(values(n)))
     function radius_ratio(σ)                 # mean distance to the aggregate centroid, dark / light
@@ -39,17 +41,17 @@ using LinearAlgebra: Symmetric, eigen, dot
     # light cells engulf the dark ones: dark–medium boundary below 0.003 by 10³ paper MCS
     # (PRE Fig. 13b; PRL Fig. 2b)
     for seed in 1:3
-        σ = sim([], 16_000; seed).u[end].σ
+        σ = sim([], 16_000; seed).u[end].ownership
         @test medium_fraction(σ, :dM) < 0.003 && radius_ratio(σ) < 0.75
     end
     # partial sorting (PRE §III E: J_ll = 11, J_dl = 14, T = 5) never forms the monolayer:
     # dark cells keep a share of the surface (≈ 5%, against ≤ 1% under engulfment)
     partial = [:J => [0 16 16; 16 2 14; 16 14 11], :T => 5.0]
-    @test all(s -> medium_fraction(sim(partial, 10_000; seed = s).u[end].σ, :dM, partial) > 0.03, 1:3)
+    @test all(s -> medium_fraction(sim(partial, 10_000; seed = s).u[end].ownership, :dM, partial) > 0.03, 1:3)
     # checkerboard when heterotypic bonds are cheapest (PRE §III A, Fig. 8b): about half of
     # all boundaries (medium included) are heterotypic, twice the sorting run's share
     checker = [:J => [0 12 12; 12 8 6; 12 6 10]]
-    @test all(s -> hetero(sim(checker, 1000; seed = s).u[end].σ, checker) > 0.45, 1:3)
+    @test all(s -> hetero(sim(checker, 1000; seed = s).u[end].ownership, checker) > 0.45, 1:3)
     # sorting is logarithmic in time (PRL Fig. 2a): heterotypic fraction linear in ln t over
     # 4–512 paper MCS (our 64-cell aggregate levels off near 0.18 after that; the paper's
     # 1000 cells keep sorting to 10⁴)
@@ -57,29 +59,29 @@ using LinearAlgebra: Symmetric, eigen, dot
     H = zeros(length(ts))
     for seed in 1:4
         sol = sim([], ts[end]; seed, saveat = ts)
-        H .+= [hetero(sol.u[findfirst(==(t), sol.t)].σ) for t in ts] ./ 4
+        H .+= [hetero(sol.u[findfirst(==(t), sol.t)].ownership) for t in ts] ./ 4
     end
     x = log.(ts)
     @test cor(x, H)^2 > 0.95 && cov(x, H) / var(x) < -0.02
     # … and frozen at T = 0 (PRE §III B4)
     sol = sim([:T => 0.0], 1000; saveat = [100, 1000])
-    @test abs(hetero(sol.u[end].σ) - hetero(sol.u[1].σ)) < 0.02
+    @test abs(hetero(sol.u[end].ownership) - hetero(sol.u[1].ownership)) < 0.02
     # the area constraint's strength decides survival (PRE §III B5, Table III, Fig. 16, T = 5):
     # by 800 paper MCS λ = 0.1 loses every cell, λ = 0.2 every light cell, λ = 0.5 at most a
     # few light cells. Survival classes only; our 64-cell aggregate is not timed like the paper's
     nd, nl = count(==(1), k), count(==(2), k)
     alive(σ) = (v = [count(==(c), σ) for c in eachindex(k)]; (count(>(0), v[k .== 1]), count(>(0), v[k .== 2])))
-    a1, a2, a5 = [alive(sim([:λ => λ, :T => 5.0], 12_800).u[end].σ) for λ in (0.1, 0.2, 0.5)]
+    a1, a2, a5 = [alive(sim([:λ => λ, :T => 5.0], 12_800).u[end].ownership) for λ in (0.1, 0.2, 0.5)]
     @test a1 == (0, 0) && a2 == (nd, 0)
     @test a5[1] == nd && nl - 4 <= a5[2] <= nl
     # light cells are slightly smaller (PRL p. 2014); not with symmetric self-adhesion
     Δarea(σ) = (v = [count(==(c), σ) for c in eachindex(k)]; mean(v[k .== 1]) - mean(v[k .== 2]))
-    @test Δarea(sim([], 1000).u[end].σ) > 1
-    @test abs(Δarea(sim([:J => [0 16 16; 16 8 11; 16 11 8]], 1000).u[end].σ)) < 0.5
+    @test Δarea(sim([], 1000).u[end].ownership) > 1
+    @test abs(Δarea(sim([:J => [0 16 16; 16 8 11; 16 11 8]], 1000).u[end].ownership)) < 0.5
     # expensive light–medium bonds reverse the layers: dark cells outside (PRE §III D, Fig. 20)
     reversed = [:J => [0 16 30; 16 2 11; 30 11 14]]
     rev = map(1:3) do seed
-        σ = sim(reversed, 4000; seed).u[end].σ
+        σ = sim(reversed, 4000; seed).u[end].ownership
         (medium_fraction(σ, :lM, reversed), radius_ratio(σ))
     end
     @test all(r -> r[1] < 0.005 && r[2] > 1.15, rev) && mean(last, rev) > 1.3
@@ -96,7 +98,7 @@ end
             base, pars), (0, nmcs); seed), SequentialCPM(; proposal = Moore(1)); saveat = 0:5:nmcs)
     end
     function track(sol; burn = 20)                                      # steps every 5 MCS
-        cs = [(circ(u.σ, 1), circ(u.σ, 2)) for u in sol.u]
+        cs = [(circ(u.ownership, 1), circ(u.ownership, 2)) for u in sol.u]
         st = [(mi(cs[j + 1][1] - cs[j][1]), mi(cs[j + 1][2] - cs[j][2])) for j in 1:(length(cs) - 1)][(burn + 1):end]
         u = [hypot(s...) > 0 ? s ./ hypot(s...) : (0.0, 0.0) for s in st]
         speed = mean(hypot(s...) for s in st) / 5
@@ -115,7 +117,7 @@ end
     @test all(seed -> track(sim([:λ_act => 10.0, :max_act => 20.0], 1500; seed))[3] < 10, 1:4)
     # amoeboid (max_act 20) moves along its long axis; keratocyte-like (max_act 80) is wider
     # than long in the direction of motion (Niculescu Figs. 4A, 5C)
-    function shape(σ)
+    function cell_shape(σ)
         c = (circ(σ, 1), circ(σ, 2))
         ps = [(mi(i[1] - 1 - c[1]), mi(i[2] - 1 - c[2])) for i in findall(==(1), σ)]
         M = [mean(p[1]^2 for p in ps) mean(p[1] * p[2] for p in ps); mean(p[1] * p[2] for p in ps) mean(p[2]^2 for p in ps)]
@@ -123,7 +125,7 @@ end
         return c, e.vectors[:, 2], sqrt(e.values[2] / max(e.values[1], 1e-9))
     end
     function orientation(sol; lag = 4, burn = 20)                       # lag 20 MCS
-        sh = [shape(u.σ) for u in sol.u]
+        sh = [cell_shape(u.ownership) for u in sol.u]
         angs = Float64[]; elong = Float64[]
         for j in burn:lag:(length(sh) - lag)
             d = (mi(sh[j + lag][1][1] - sh[j][1][1]), mi(sh[j + lag][1][2] - sh[j][1][2]))
@@ -144,7 +146,7 @@ end
         o = akeeb_state(; lattice = (W, H), pp, seed)
         u = solve(PottsProblem(AkeebInvasion(; name = :a, lattice = (W, H)), [o; :μ => μ; :J => akeeb_contacts(jlf)],
             (0, nmcs); capacity, seed), SequentialCPM(; proposal = VonNeumann(1))).u[end]
-        return merge(akeeb_metrics(u.σ, u.cell.kind .== 1, length(o[2].second)), core_singles(u.σ))
+        return merge(akeeb_metrics(u.ownership, u.cell.kind .== 1, length(o[2].second)), core_singles(u.ownership))
     end
     # motility grades the invasion (the strongest correlate of invasive area in the paper)
     for seed in 1:3

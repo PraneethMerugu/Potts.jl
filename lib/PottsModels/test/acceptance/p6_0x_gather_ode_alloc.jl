@@ -6,7 +6,7 @@
 #  1. Zero warm allocations per `step!` (after two warm-up steps, every one of five further
 #     steps allocates 0 bytes) for a cell ODE whose rate contains a gather, under
 #     `SequentialCPM` and `CheckerboardCPM`, `T = Float64` and `Float32`, with the default
-#     solver (`ExplicitEuler()`, one step per MCS), `ExplicitEuler(substeps = 4)` and `RK4()`.
+#     solver (`ExplicitEuler()`, one step per MCS), `ExplicitEuler(substeps = 4)` and `Potts.RK4()`.
 #     Three gather shapes over a site neighbourhood (the DSL has no cell-neighbour gather;
 #     `neighbors(c)` is a roadmap idea, not vocabulary):
 #       - `XVol`: a sum of a non-ODE cell variable over `owner[n]` of a literal site's Moore
@@ -158,7 +158,7 @@ end
 function p60x_rodas_ref(M, sol)
     u = Float64.(Array(sol.u[1].cell.y))
     for k in 0:(p60x_N - 1)
-        σ = Array(sol.u[k + 2].σ)
+        σ = Array(sol.u[k + 2].ownership)
         v = (Float64(count(==(1), σ)), Float64(count(==(2), σ)))
         # Site 42 on 12x8 column-major is (6, 4); Moore(1) neighbors wrap periodically.
         moore42 = [σ[mod1(6 + dx, 12), mod1(4 + dy, 8)] for dx in -1:1 for dy in -1:1 if !(dx == 0 && dy == 0)]

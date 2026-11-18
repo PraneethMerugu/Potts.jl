@@ -123,12 +123,13 @@ function lower(x, env::LowerEnv)
     end
     op = operation(x)
     args = arguments(x)
-    (op === at || op === at2) && return _lower_at(args, env)
+    op === value_at && return _lower_at(args, env)
     op === ismember && return lower(_ismember_or(Symbolics.wrap(args[1]), SymbolicUtils.unwrap_const(args[2])), env)
     op === gather && return _lower_gather(args, env)
     op === _connected && return _lower_connected(args, env)
     op === population && return _lower_population(args, env)
-    op === Δ && error("`Δ` is a field operator: the field compiler lowers it in a field's PDESystem (`@fields`, `Potts.couple`); " *
+    op === laplacian && error(
+        "`laplacian` is a field operator: the field compiler lowers it in a field's PDESystem (`@fields`, `Potts.couple`); " *
                       "it is not available in $(_MODE_NAMES[env.mode])")
     # cell references (R6, D-066 item 5): liveness, sources, the enclosing cell of a fold
     op === cell_alive && return :(Potts._alive_slot($(_refst(env)).cell.volume, $(lower(args[1], env))))
@@ -200,7 +201,7 @@ function lower(x, env::LowerEnv)
     end
     (op === random_normal || op === random_normal_above) && return _lower_normal(op, args, env)
     op isa ModelingToolkitBase.Pre && return lower(args[1], env)     # previous value
-    # `_nonzero(at(_nonzero(v), j))` (`grn.A[j]` of a Bool node): the read is already a Bool
+    # `_nonzero(value_at(_nonzero(v), j))` (`grn.A[j]` of a Bool node): the read is already a Bool
     op === _nonzero && _is_bool_node_read(args[1]) && return lower(args[1], env)
     op === ifelse && return :($(lower(args[1], env)) ? $(lower(args[2], env)) : $(lower(args[3], env)))
     if op === (^) && SymbolicUtils.isconst(_unwrap(args[2]))
@@ -238,7 +239,8 @@ end
 # of its grid: the site reads the node whose block holds it
 _site_read(i::Entity, j) = (L = get(i.options, :lattice_level, nothing);
                             L === nothing ? :(@inbounds st.site.$(i.name)[$j]) :
-                            :(@inbounds st.site.$(i.name)[Potts._coarse_site($j, size(st.σ), $(trailing_zeros(L.k)))]))
+        :(@inbounds st.site.$(i.name)[Potts._coarse_site($j, size(st.ownership), $(trailing_zeros(L.k)))])
+)
 """
     _coarse_site(j, dims, s) -> Int
 
@@ -260,7 +262,7 @@ end
 function _lower_named(x, i::Entity, env::LowerEnv)
     r = i.role
     r === :param && return :(p.$(i.name))
-    r === :kindtable && error("kind table `$(i.name)` must be indexed by kinds, e.g. `$(i.name)[kind, kind′]`")
+    r === :kindtable && error("kind table `$(i.name)` must be indexed by kinds, e.g. `$(i.name)[kind, neighbor_kind]`")
     if r === :builtin || r === :delta
         r === :builtin && i.name === :direction &&
             error("`direction` is a vector: write its component `direction[k]` (k = 1, …, N)")
@@ -470,9 +472,9 @@ end
 (the host hook)."""
 @inline _copy_mcs(ctx) = haskey(ctx, :mcs) ? ctx.mcs : 0
 
-# whether `x` is `at(position, s)`: the position of site `s` (indexed again by an axis)
+# whether `x` is `value_at(position, s)`: the position of site `s` (indexed again by an axis)
 function _is_site_position(x)
-    (x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === at) || return false
+    (x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === value_at && length(arguments(x)) == 2) || return false
     i = info(arguments(x)[1])
     return i !== nothing && i.role === :builtin && i.name === :position
 end
@@ -519,7 +521,7 @@ function _is_ref(x)
         end
         return true
     end
-    if op === at
+    if op === value_at && length(arguments(x)) == 2
         a = _unwrap(arguments(x)[1])
         iscall(a) && operation(a) isa ModelingToolkitBase.Pre && (a = _unwrap(arguments(a)[1]))
         return _is_ref_var(a)
@@ -527,10 +529,10 @@ function _is_ref(x)
     return false
 end
 
-# A cell index: a reference, a cell-valued built-in (`old`, `new`, `id`, `owner`, `owner′`,
+# A cell index: a reference, a cell-valued built-in (`old`, `new`, `id`, `owner`, `neighbor_owner`,
 # `cluster`), `owner[s]` or `cluster[c]`, a nested `ifelse` of cell indices, or the integer 0
 # (none). Site indices (`target`, `source`, `site`) and numbers other than 0 are not.
-const _CELL_INDEX_BUILTINS = (:old, :new, :id, :owner, :owner′, :cluster)
+const _CELL_INDEX_BUILTINS = (:old, :new, :id, :owner, :neighbor_owner, :cluster)
 function _is_cell_index(x)
     x = _unwrap(x)
     SymbolicUtils.isconst(x) && (x = SymbolicUtils.unwrap_const(x))
@@ -542,7 +544,7 @@ function _is_cell_index(x)
     iscall(x) || return false
     op = operation(x)
     op === ifelse && return all(_is_cell_index, arguments(x)[2:3])
-    if op === at && length(arguments(x)) == 2
+    if op === value_at && length(arguments(x)) == 2
         a = info(_unwrap(arguments(x)[1]))
         return a !== nothing && a.role === :builtin && a.name in (:owner, :cluster)
     end
@@ -564,7 +566,7 @@ function _ref_reads!(out, y)
     # a population fold reads every cell's referents, as a fold reads every cell (snapshot
     # or not): its bound cells cannot be lowered outside it
     op === population && return out
-    r = op === at && length(arguments(y)) == 2 && _is_ref(arguments(y)[2]) ? arguments(y)[2] :
+    r = op === value_at && length(arguments(y)) == 2 && _is_ref(arguments(y)[2]) ? arguments(y)[2] :
         op === cell_alive ? arguments(y)[1] : nothing
     r === nothing || _push_ref!(out, r)
     foreach(a -> _ref_reads!(out, _unwrap(a)), arguments(y))
@@ -587,7 +589,7 @@ function _mentions_refs(x)
     _walk(x) do y
         iscall(y) || return
         op = operation(y)
-        ((op === at && length(arguments(y)) == 2 && _is_ref(arguments(y)[2])) || op === cell_alive) && (found[] = true)
+        ((op === value_at && length(arguments(y)) == 2 && _is_ref(arguments(y)[2])) || op === cell_alive) && (found[] = true)
     end
     return found[]
 end
@@ -707,27 +709,27 @@ function _sort(x)
     if i !== nothing
         i.role in (:bound, :bound_site) && return :site
         i.role === :bound_cell && return :cell
-        i.role === :builtin && return i.name in (:source, :target, :site, :site′) ? :site :
-               i.name in (:old, :new, :owner, :owner′, :id, :a, :b) ? :cell : :unknown
+        i.role === :builtin && return i.name in (:source, :target, :site, :neighbor_site) ? :site :
+            i.name in (:old, :new, :owner, :neighbor_owner, :id, :a, :b) ? :cell : :unknown
     end
-    if x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === at
+    if x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === value_at && length(arguments(x)) == 2
         a = info(arguments(x)[1])
         a !== nothing && a.role === :builtin && a.name === :owner && return :cell
     end
     return :unknown
 end
 
-# whether `x` is `at(_nonzero(v), …)` (or `at(Pre(_nonzero(v)), …)`): a Bool node read at an
+# whether `x` is `value_at(_nonzero(v), …)` (or `value_at(Pre(_nonzero(v)), …)`): a Bool node read at an
 # index, which `_lower_at` lowers to a Bool already
 function _is_bool_node_read(x)
     x = _unwrap(x)
-    (x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === at) || return false
+    (x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === value_at && length(arguments(x)) == 2) || return false
     a = _unwrap(arguments(x)[1])
     iscall(a) && operation(a) isa ModelingToolkitBase.Pre && (a = _unwrap(arguments(a)[1]))
     return iscall(a) && operation(a) === _nonzero
 end
 
-# A field operator read in a model statement (`Δ(c)[target]` under `using Potts.Fields`): an
+# A field operator read in a model statement (`laplacian(c)[target]` under `using Potts.Fields`): an
 # operator is a term of the fields' PDESystem; the model reads its value through an aux field
 function _operator_read_text(x)
     o = _unwrap(arguments(x)[end])
@@ -740,7 +742,7 @@ end
 
 function _lower_at(args, env)
     x = _unwrap(args[1])
-    # `Pre(x[i])` arrives as `at(Pre(x), i)`: the previous value is the stored one
+    # `Pre(x[i])` arrives as `value_at(Pre(x), i)`: the previous value is the stored one
     iscall(x) && operation(x) isa ModelingToolkitBase.Pre && (x = _unwrap(arguments(x)[1]))
     # a Bool node of a discrete component (`grn.A[new]`): its slot there, read as a Bool
     iscall(x) && operation(x) === _nonzero && return :(Potts._nonzero($(_lower_at(Any[arguments(x)[1], args[2:end]...], env))))
@@ -768,7 +770,7 @@ function _lower_at(args, env)
         s === :site && error("cell variable `$(i.name)` indexed by a site; use `$(i.name)[owner[s]]`")
         return :(Potts._cellval(st.cell.$(i.name), $j))
     elseif i.role === :builtin
-        i.name === :owner && return :(@inbounds st.σ[$j])
+        i.name === :owner && return :(@inbounds st.ownership[$j])
         if i.name === :position
             s === :site && error("`position[$(args[2])]` is a vector: write its component `position[$(args[2])][k]`")
             if !haskey(env.bind, :position)
@@ -839,9 +841,11 @@ function _lower_population(args, env)
         range = :(1:length(st.cell.kind))
         skip = :((@inbounds st.cell.volume[$nsym]) > 0 && $(_kindtest(:(Potts._cellkind(st, $nsym)), ni.options.kinds)))
     else
-        merge!(bind, Dict{Symbol, Any}(:owner => :(@inbounds st.σ[$nsym]), :kind => :(CorePotts.owner_kind(st, $nsym)),
+        merge!(
+            bind, Dict{Symbol, Any}(
+                :owner => :(@inbounds st.ownership[$nsym]), :kind => :(CorePotts.owner_kind(st, $nsym)),
             :__site => nsym, :position => :(Potts._position($T, ctx, $nsym)), :site => nsym))
-        range = :(1:length(st.σ))
+        range = :(1:length(st.ownership))
         skip = :(CorePotts.in_domain(ctx.lattice, $nsym))
     end
     bind[:__outer] = env                 # `members(cluster)`: the enclosing cell's `cluster`
@@ -963,15 +967,15 @@ function _lower_connected(args, env)
     code = Int(SymbolicUtils.unwrap_const(_unwrap(args[2])))
     g = _global_rule(code)
     g === nothing || return _lower_global(who, g)
-    code <= 3 && return :(CorePotts.local_rule(st.σ, ctx, prop, $(isodd(code)), $(code >= 2)))
-    code == 4 && return :(CorePotts.arc_or_pair(st.σ, ctx, prop))
-    return :(CorePotts.simple_point(st.σ, ctx, prop, $who, $(code == 6)))
+    code <= 3 && return :(CorePotts.local_rule(st.ownership, ctx, prop, $(isodd(code)), $(code >= 2)))
+    code == 4 && return :(CorePotts.arc_or_pair(st.ownership, ctx, prop))
+    return :(CorePotts.simple_point(st.ownership, ctx, prop, $who, $(code == 6)))
 end
 
 # `Global` (P6.9a) inline, in a drive or a constraint: exact on the host algorithms, in the
 # window on the checkerboard (an undecided copy reads `false`); the gaining side is local
-_lower_global(who, g) = who === :new ? :(CorePotts.global_gains(st.σ, ctx, prop, $(_global_adj(g)))) :
-                        :(CorePotts.global_keeps(st.σ, ctx, prop, $(_global_vals(g)...), CorePotts.GlobalSearch()) == Int32(0))
+_lower_global(who, g) = who === :new ? :(CorePotts.global_gains(st.ownership, ctx, prop, $(_global_adj(g)))) :
+    :(CorePotts.global_keeps(st.ownership, ctx, prop, $(_global_vals(g)...), CorePotts.GlobalSearch()) == Int32(0))
 # `Val(full)` (hex has one adjacency: `:face`), and with it `Val(window)`, `Val(box capacity)`
 _global_adj(g) = :(Val($(g.adjacency === :full && !_PIECES_HEX[])))
 function _global_vals(g)

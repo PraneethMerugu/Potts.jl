@@ -37,7 +37,7 @@
 # colouring and runs threaded. Nothing is snapshotted: a colouring phase's items share no cell and
 # write only their own sites, so the live columns they read cannot be changed under them.
 #
-# The CPU. A phase with few work items (at most `BLOCK_GRAIN`), or a process with one thread,
+# The CPU. A phase with few work items (at most `inline_max_blocks`), or a process with one thread,
 # runs them inline, one after another, so each attempt sees every earlier one, as in
 # `SequentialCPM`, and the run is reproducible. A larger phase is one KA launch with one
 # workgroup per thread (KA's CPU backend spawns one task per thread and launch, so more
@@ -136,8 +136,8 @@ end
     (inside && is_mobile(ctx.mobility, t)) || return nothing
     s = linear_index(lat, y)
     is_mobile(ctx.mobility, s) || return nothing
-    a = @inbounds st.σ[t]
-    b = @inbounds st.σ[s]
+    a = @inbounds st.ownership[t]
+    b = @inbounds st.ownership[s]
     a == b && return nothing
     prop = Proposal(t, s, x, dir, a, b)
     if !SERIAL && has_defer(f) && _defer(f)(st, p, prop, ctx)
@@ -170,7 +170,7 @@ end
     end
     # t ≤ nsites: the track has one writer per site at a time
     tk === nothing || (@inbounds tk.acc[t] += tk.track(st, p, prop, ctx, dH0))
-    @inbounds st.σ[t] = b
+    @inbounds st.ownership[t] = b
     f.commit!(st, p, prop, ctx)
     _count!(cnt, blk)
     return nothing
@@ -239,7 +239,7 @@ end
 # spacing keeps two active sites (k - 1)·region + 1 apart, which does not keep them out of one cell
 # when the cell is wider than that, and a cell is not a lattice distance the spacing could cover.
 # In such a phase one work item's decision can be invalidated by another's commit, so the sum of the
-# accepted ΔH stops being the energy change of the trajectory (`stats.accepted_ΔH`); the phase runs
+# accepted ΔH stops being the energy change of the trajectory (`stats.accepted_energy_change`); the phase runs
 # inline instead, one work item after another in block order, which is exact and independent of any
 # scheduling. Every other phase is a colouring: its items share no cell and only their own sites,
 # so whether they run inline or threaded they reach the same decisions. A cell column is read for
@@ -270,7 +270,7 @@ function _phase_conflict!(st, claim::NamedTuple, reach::Int, lat::Lattice{N}, la
     tok += 1
     claim.token[] = UInt32(tok)
     hi = tok << 32
-    stamp, σ = claim.stamp, st.σ
+    stamp, σ = claim.stamp, st.ownership
     box = CartesianIndices(ntuple(_ -> -reach:reach, Val(N)))
     for I in CartesianIndices(layout.nblocks)
         bc = map(i -> i - 1, Tuple(I))
@@ -295,26 +295,27 @@ function _phase_conflict!(st, claim::NamedTuple, reach::Int, lat::Lattice{N}, la
     return false
 end
 
-# A CPU phase of at most this many work items runs inline. Measured on the PC
+# The default `inline_max_blocks` of `CheckerboardCPM`: a CPU phase of at most this many work
+# items runs inline. Measured on the PC
 # (`benchmark/kinetics/cpu_threads.jl`, 2026-11-05): threads gain under 1.3× at 324 blocks and
 # 1.5–2× from 1000 blocks; 4 threads reach 3.3–3.7× at 5000 blocks and above. That 3.3–3.7× is a
 # 5000-block measurement: at 2500 blocks over 1600 cells of 10 × 10 the four-thread gain is about
 # 1.4× (2.76 ms to 1.96 ms per MCS, best of two runs), and that is the gain a wide-cell geometry
 # loses to `_phase_conflict!` (see the docstring's threading note). Each phase ends at a barrier,
 # so a thread per busy core stalls on any other process: leave the OS a spare CPU.
-const BLOCK_GRAIN = Ref(512)
+const _INLINE_MAX_BLOCKS = 512
 # true while the trajectories of a parallel ensemble run (set by the ensemble `solve`; the
 # trajectory tasks inherit it): threaded phases would wait at each barrier on threads that
 # other trajectories hold
 const IN_THREADED_ENSEMBLE = ScopedValue(false)
 # fewer work items per phase than this leave a GPU mostly idle (a warning, not a refusal)
 const DEVICE_MIN_BLOCKS = 256
-# `threads`: `:auto` (inline with one thread, at most BLOCK_GRAIN work items, or inside a threaded
+# `threads`: `:auto` (inline with one thread, at most `max_blocks` work items, or inside a threaded
 # ensemble, whose trajectories already hold the threads), `false` (always inline:
 # reproducible), `true` (always the threaded launch)
-_block_inline(backend, n, threads) = false
-_block_inline(::KernelAbstractions.CPU, n, threads) =
-    threads === :auto ? (Threads.nthreads() == 1 || n <= BLOCK_GRAIN[] || IN_THREADED_ENSEMBLE[]) : !threads
+_block_inline(backend, n, threads, max_blocks) = false
+_block_inline(::KernelAbstractions.CPU, n, threads, max_blocks) =
+    threads === :auto ? (Threads.nthreads() == 1 || n <= max_blocks || IN_THREADED_ENSEMBLE[]) : !threads
 # CPU: one workgroup per thread, the grid of blocks split along its last axis
 _block_groupsize(backend, nb) = nothing
 _block_groupsize(::KernelAbstractions.CPU, nb::NTuple{N, Int}) where {N} =
@@ -327,7 +328,8 @@ the density that matched `SequentialCPM` kinetics in 2D and 3D (P6.0bl).
 default_parts(N::Int) = max(2, round(Int, 64^(1 / N)))
 
 function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, proposal; region = nothing, parts = nothing,
-        switches = 1, threads = :auto, min_read = 0, cell) where {N}
+        switches = 1, threads = :auto, inline_max_blocks = _INLINE_MAX_BLOCKS, min_read = 0, cell
+    ) where {N}
     r, w = reach(f.footprint, proposal)
     r = max(r, min_read, _window(f.connectivity))
     need = max(r + w, 1)
@@ -340,6 +342,7 @@ function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, proposal; r
     nbox = boxsize(layout)
     switches >= 1 || throw(ArgumentError("CheckerboardCPM(; switches = $switches): use at least 1"))
     threads in (:auto, true, false) || throw(ArgumentError("CheckerboardCPM(; threads = $(repr(threads))): use :auto, true or false"))
+    inline_max_blocks >= 0 || throw(ArgumentError("CheckerboardCPM(; inline_max_blocks = $inline_max_blocks): use at least 0"))
     P = k^N * switches
     (nbox < 2^16 && P < 2^16) || throw(ArgumentError(
         "CheckerboardCPM(; region = $b, parts = $k, switches = $switches): at most 2^16 - 1 sites per sub-region and phases per MCS"))
@@ -354,12 +357,12 @@ function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, proposal; r
         @warn "CheckerboardCPM on a device: $n work items per phase (blocks $(layout.nblocks)) leave the GPU mostly idle; a lattice this small runs as fast or faster on the CPU" maxlog = 1
     claims = _claim_columns(backend, cell)
     c = CheckerboardCache(layout, switches, zeros(Int, P), z(UInt32, 1), tk, cnt, sl, need, claims, block_kernel!(backend),
-        serial_kernel!(backend), recenter_kernel!(backend), _block_groupsize(backend, layout.nblocks), _block_inline(backend, n, threads),
+        serial_kernel!(backend), recenter_kernel!(backend), _block_groupsize(backend, layout.nblocks), _block_inline(backend, n, threads, inline_max_blocks),
         backend isa KernelAbstractions.CPU)
     # fifteen positional fields are easy to permute (two defects of that shape on this branch): read
     # back the ones a swap would corrupt, once per `init`
     @assert c.layout === layout && c.switches == switches && c.reach == need && c.serial === sl &&
-            c.inline == _block_inline(backend, n, threads)
+        c.inline == _block_inline(backend, n, threads, inline_max_blocks)
     return c
 end
 

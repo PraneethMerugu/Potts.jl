@@ -411,7 +411,7 @@ if !P615K_FULL
         @test r.retcode === :Terminated && r.N >= 250 && !r.capped
         o = p615k_o5(r)
         @test length(o.x_pos) == r.N && all(in((0, 1)), o.inhibited)
-        @test all(<=(1), PottsModels.openvt_frame(r.u; β = r.β, γ = 0.0).i)   # γ = 0: area inhibition only
+        @test all(<=(1), PottsModels.openvt_frame(r.u; beta = r.β, gamma = 0.0).i)   # γ = 0: area inhibition only
         @test count(==(1), o.inhibited) > 0                                   # inhibition is present …
         @test all(==(0), p615k_o5((; u = free.u, β = 0.0)).inhibited)         # … and absent at β = 0
         tmp = mktempdir()
@@ -424,7 +424,7 @@ if !P615K_FULL
         @test length(h) >= 3 && p615k_crel(o.x_pos, o.y_pos, o.inhibited) >= 1
         # same seed, same run (the replay premise)
         again = p615k_job(prob, 0.9375; cells = 250, cap = 20_000)
-        @test again.mcs == r.mcs && Array(again.u.σ) == Array(r.u.σ)
+        @test again.mcs == r.mcs && Array(again.u.ownership) == Array(r.u.ownership)
     end
 end
 

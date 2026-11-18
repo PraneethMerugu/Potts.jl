@@ -16,28 +16,28 @@ end
 
 @testitem "operators are positional registered terms" setup = [LP_latticepde] tags = [:latticepde, :vocabulary] begin
     @testset "operators are positional registered terms" begin
-        @test opof(Δ(ce)) === Δ
+        @test opof(laplacian(ce)) === laplacian
         @test opof(DivKGrad(:harmonic)(Ke, ce)) == DivKGrad(:harmonic)
         @test opof(DivKGrad(:arithmetic)(Ke, ce)).mean === :arithmetic
         @test opof(Advect(Upwind1())(ve[1], ce)) isa Advect{Upwind1}
         @test opof(Advect(Upwind1())(ve, ce)) isa Advect{Upwind1}           # velocity array
         @test contains_var(Advect(Upwind1())(ve, ce), ce)
-        @test opof(at(Dk, ke)) === at
-        @test opof(at(ce, ke)) === at                                       # a site read
-        @test opof(at2(J, ke, ke)) === at2
+        @test opof(value_at(Dk, ke)) === value_at
+        @test opof(value_at(ce, ke)) === value_at                                     # a site read
+        @test opof(value_at(J, ke, ke)) === value_at
         @test opof(ismember(ke, (2, 3))) === ismember
         @test opof(masked(ke == 3, 0.0)) === masked
         # options are struct fields, never keywords (S-3)
         @test_throws MethodError DivKGrad(; mean = :harmonic)
         @test_throws MethodError Advect(; scheme = Upwind1())
         @test_throws ArgumentError DivKGrad(:geometric)                     # negative control: the mean is checked
-        @test_throws MethodError Advect(:upwind)                            # a scheme is an AdvectionScheme
+        @test_throws MethodError Advect(:upwind)                            # a scheme is an AbstractAdvectionScheme
         # the field operators never evaluate; the CPM reads do
-        @test_throws ["`Δ` is symbolic-only", "PDESystem", "LatticePDE.discretize"] Δ(1.0)
+        @test_throws ["`laplacian` is symbolic-only", "PDESystem", "LatticePDE.discretize"] laplacian(1.0)
         @test_throws ["`DivKGrad(:harmonic)` is symbolic-only", "PDESystem", "LatticePDE.discretize"] DivKGrad(:harmonic)(1.0, 2.0)
         @test_throws ["`Advect` is symbolic-only", "PDESystem", "LatticePDE.discretize"] Advect(Upwind1())(1.0, 2.0)
-        @test at([10.0, 20.0, 30.0], 2.0) == 20.0
-        @test at2(reshape(collect(1.0:9.0), 3, 3), 2, 3) == 8.0
+        @test value_at([10.0, 20.0, 30.0], 2.0) == 20.0
+        @test value_at(reshape(collect(1.0:9.0), 3, 3), 2, 3) == 8.0
         @test ismember(Int32(3), (2, 3)) && !ismember(1.0, (2, 3))
     end
 end
@@ -48,16 +48,16 @@ end
         isread(e, f, n) = opof(e) === f && length(arguments(unwrap(e))) == n
         # literal kind codes into symbolic tables (the medium is 0): a term, not a symbolic
         # array indexed by the literal (negative control: the numeric method still evaluates)
-        @test isread(at(Dk, 0), at, 2) && unwrap_const(arguments(unwrap(at(Dk, 0)))[2]) == 0
-        @test isread(at2(J, 0, 1), at2, 3) && isread(at2(J, ke, 0), at2, 3) && isread(at2(J, 0, ke), at2, 3)
-        @test at([10.0, 20.0, 30.0], 1) == 10.0
+        @test isread(value_at(Dk, 0), value_at, 2) && unwrap_const(arguments(unwrap(value_at(Dk, 0)))[2]) == 0
+        @test isread(value_at(J, 0, 1), value_at, 3) && isread(value_at(J, ke, 0), value_at, 3) && isread(value_at(J, 0, ke), value_at, 3)
+        @test value_at([10.0, 20.0, 30.0], 1) == 10.0
         # a site or cell value at a literal, at a Real-typed input, and a Bool-typed value
-        @test isread(at(cv, 3), at, 2) && isread(at(cv, owner), at, 2) && isread(at(flag, owner), at, 2)
-        @test isread(at2(J, owner, cv), at2, 3)
+        @test isread(value_at(cv, 3), value_at, 2) && isread(value_at(cv, owner), value_at, 2) && isread(value_at(flag, owner), value_at, 2)
+        @test isread(value_at(J, owner, cv), value_at, 3)
         # unwrapped terms (as a compiler walking a term tree holds them) build the same read
-        @test isequal(at(unwrap(cv), unwrap(owner)), unwrap(at(cv, owner)))
-        @test isequal(at2(unwrap(J), unwrap(owner), unwrap(cv)), unwrap(at2(J, owner, cv)))
-        @test contains_var(at(cv, owner), owner) && contains_var(at2(J, owner, 0), J)
+        @test isequal(value_at(unwrap(cv), unwrap(owner)), unwrap(value_at(cv, owner)))
+        @test isequal(value_at(unwrap(J), unwrap(owner), unwrap(cv)), unwrap(value_at(J, owner, cv)))
+        @test contains_var(value_at(cv, owner), owner) && contains_var(value_at(J, owner, 0), J)
     end
 end
 
@@ -65,13 +65,13 @@ end
     @testset "operators inside a PDESystem" begin
         pd = PDESystem(eqs, bcs, dom, [t, x, y], [ce, oe, Ke, ke, ve], [Dc, α, ε, Dk, K0, J]; name = :ops)
         @test length(pd.eqs) == 3 && length(pd.bcs) == 2
-        @test has_op(pd.eqs[1].rhs, Δ) && has_op(pd.eqs[1].rhs, ismember)
-        @test has_op(pd.eqs[2].rhs, DivKGrad) && has_op(pd.eqs[2].rhs, Advect) && has_op(pd.eqs[2].rhs, at)
-        @test has_op(pd.eqs[3].rhs, at2)
+        @test has_op(pd.eqs[1].rhs, laplacian) && has_op(pd.eqs[1].rhs, ismember)
+        @test has_op(pd.eqs[2].rhs, DivKGrad) && has_op(pd.eqs[2].rhs, Advect) && has_op(pd.eqs[2].rhs, value_at)
+        @test has_op(pd.eqs[3].rhs, value_at)
         @test has_op(pd.bcs[1].rhs, masked) && has_op(pd.bcs[2].rhs, ismember)
         # get_variables sees every symbolic argument of an operator
         @test all(v -> contains_var(eqs[2].rhs, v), (Ke, oe, ke, Dk))
-        @test contains_var(at2(J, ke, ke), J)
+        @test contains_var(value_at(J, ke, ke), J)
     end
 end
 
@@ -79,14 +79,14 @@ end
     @testset "operators survive substitute and simplify" begin
         e2 = eqs[2].rhs
         s1 = substitute(e2, Dict(Dk => [5.0, 6.0, 7.0]))
-        @test has_op(s1, DivKGrad) && has_op(s1, at) && dkg(s1).mean === :harmonic
+        @test has_op(s1, DivKGrad) && has_op(s1, value_at) && dkg(s1).mean === :harmonic
         s2 = substitute(e2, Dict(oe => ce))                                 # field rename
         @test has_op(s2, Advect) && contains_var(s2, ce) && !contains_var(s2, oe)
         s3 = simplify(e2)
-        @test has_op(s3, DivKGrad) && has_op(s3, Advect) && has_op(s3, at) && dkg(s3).mean === :harmonic
-        s4 = simplify(Δ(ce) + Δ(ce))
-        @test has_op(s4, Δ)
-        @test symzero(simplify(Δ(ce) - Δ(ce)))                          # one term, not two opaque ones
+        @test has_op(s3, DivKGrad) && has_op(s3, Advect) && has_op(s3, value_at) && dkg(s3).mean === :harmonic
+        s4 = simplify(laplacian(ce) + laplacian(ce))
+        @test has_op(s4, laplacian)
+        @test symzero(simplify(laplacian(ce) - laplacian(ce)))                          # one term, not two opaque ones
         s5 = simplify(DivKGrad(:arithmetic)(Ke, ce) * 1)
         @test dkg(s5).mean === :arithmetic
         s6 = simplify(substitute(masked(ke == 3, α), Dict(α => 0.0)))
@@ -95,12 +95,12 @@ end
         r = eqs[1].rhs
         @test has_op(substitute(r, Dict(ke => 2)), ismember)
         folded = substitute(r, Dict(ke => 2); fold = Val(true))
-        @test !has_op(folded, ismember) && symzero(simplify(folded - (α + Dc * Δ(ce))))
+        @test !has_op(folded, ismember) && symzero(simplify(folded - (α + Dc * laplacian(ce))))
     end
 end
 
-@testitem "mtkcompile(; inputs) with at / at2 / ismember (F-5)" setup = [LP_latticepde] tags = [:latticepde, :vocabulary] begin
-    @testset "mtkcompile(; inputs) with at / at2 / ismember (F-5)" begin
+@testitem "mtkcompile(; inputs) with value_at / ismember (F-5)" setup = [LP_latticepde] tags = [:latticepde, :vocabulary] begin
+    @testset "mtkcompile(; inputs) with value_at / ismember (F-5)" begin
         @variables q(t) = 1.0 kc(t)::Int [input = true] kcp(t)::Int [input = true]
         @parameters Jk[1:3] = [10.0, 20.0, 30.0] J2[1:3, 1:3] = reshape(collect(1.0:9.0), 3, 3)
         du(prob) = (u = copy(prob.u0); d = similar(u); prob.f(d, u, prob.p, 0.0); d)
@@ -115,8 +115,9 @@ end
                 return mtkcompile(sys; inputs = reverse(ins))
             end
         end
-        cases = [(D(q) ~ -q + at(Jk, kc), [kc], [kc => 2], 19.0, Jk),
-            (D(q) ~ -q + at2(J2, kc, kcp), [kc, kcp], [kc => 2, kcp => 3], 7.0, J2),
+        cases = [
+            (D(q) ~ -q + value_at(Jk, kc), [kc], [kc => 2], 19.0, Jk),
+            (D(q) ~ -q + value_at(J2, kc, kcp), [kc, kcp], [kc => 2, kcp => 3], 7.0, J2),
             (D(q) ~ -q + 5 * ismember(kc, (2, 3)), [kc], [kc => 3], 4.0, nothing)]
         for (eq, ins, iv, expect, table) in cases
             sys = System([eq], t; name = :cell)
@@ -140,9 +141,10 @@ end
     @testset "operators refuse symbolic differentiation" begin
         Dx = Differential(x)
         # a kind-table read: Symbolics refuses differentiation through the array argument itself
-        @test_throws ["Differentiation with array expressions"] Symbolics.expand_derivatives(Dx(at(Dk, ke)))
-        @test_throws ["Differentiation with array expressions"] Symbolics.expand_derivatives(Dx(at2(J, ke, ke)))
-        for term in (Δ(ce), DivKGrad(:harmonic)(Ke, ce), Advect(Upwind1())(ve[1], ce), at(ce, ke),
+        @test_throws ["Differentiation with array expressions"] Symbolics.expand_derivatives(Dx(value_at(Dk, ke)))
+        @test_throws ["Differentiation with array expressions"] Symbolics.expand_derivatives(Dx(value_at(J, ke, ke)))
+        for term in (
+                laplacian(ce), DivKGrad(:harmonic)(Ke, ce), Advect(Upwind1())(ve[1], ce), value_at(ce, ke),
             ismember(ke, (2, 3)), masked(ke == 3, ce))
             err = try
                 Symbolics.expand_derivatives(Dx(term))
@@ -152,7 +154,7 @@ end
             @test err isa ArgumentError && occursin("opaque to symbolic differentiation", err.msg)
         end
         # negative control: an operator that does not depend on the variable differentiates to 0
-        @test symzero(Symbolics.expand_derivatives(Differential(α)(Δ(ce))))
+        @test symzero(Symbolics.expand_derivatives(Differential(α)(laplacian(ce))))
         @test symzero(Symbolics.expand_derivatives(Dx(α * Dc)))
     end
 end
@@ -179,23 +181,26 @@ end
     @testset "metadata keys" begin
         @parameters dx [lattice_spacing = 1] dy [lattice_spacing = 2] h
         @variables u(..) [lattice_placement = :node, lattice_storage = :dense, lattice_level = 2] w(..)
-        @variables kd(..)::Int32 [input = true, potts_entity = :site_kind]
+        @variables kd(..)::Int32 [input = true, lattice_input_name = "kind"]
         @test get_lattice_spacing(dx) == 1 && get_lattice_spacing(dy) == 2
         @test get_lattice_spacing(h) === nothing                            # untagged: the name does not count
         ue, we, kde = u(t, x, y), w(t, x, y), kd(t, x, y)
         @test get_lattice_placement(ue) === :node
         @test get_lattice_storage(ue) === :dense
         @test get_lattice_level(ue) == 2
-        @test get_potts_entity(kde) === :site_kind && MTKB.isinput(kde)
+        @test get_lattice_input_name(kde) == "kind" && MTKB.isinput(kde)
         @test all(f -> f(we) === nothing, (get_lattice_placement, get_lattice_storage, get_lattice_level,
-            get_potts_entity))
+                get_lattice_input_name,
+            )
+        )
         # the keys read back from the stored dependent variables
-        pd = PDESystem([D(ue) ~ Δ(ue) + kde, D(we) ~ Δ(we)], Equation[], dom, [t, x, y], [ue, we, kde], Num[];
+        pd = PDESystem(
+            [D(ue) ~ laplacian(ue) + kde, D(we) ~ laplacian(we)], Equation[], dom, [t, x, y], [ue, we, kde], Num[];
             name = :meta)
-        @test get_lattice_placement(pd.dvs[1]) === :node && get_potts_entity(pd.dvs[3]) === :site_kind
+        @test get_lattice_placement(pd.dvs[1]) === :node && get_lattice_input_name(pd.dvs[3]) == "kind"
         @test get_lattice_placement(pd.dvs[2]) === nothing
         # and survive an offset read and a substitution
-        @test get_potts_entity(kd(t, x + dx, y)) === :site_kind
+        @test get_lattice_input_name(kd(t, x + dx, y)) == "kind"
         @test get_lattice_spacing(only(filter(v -> isequal(v, unwrap(dx)),
             collect(vars(substitute(ue + dx * h, Dict(h => 2.0))))))) == 1
     end
@@ -249,21 +254,21 @@ end
         bad = D(ce) ~ α * (ke ∈ [2, 3]) - ε * ce
         @test opof(ke ∈ [2, 3]) === in
         @test has(vocabulary_issues([bad]), "`in` term")
-        @test has(vocabulary_issues([D(ce) ~ Δ(ce) * (ke ∈ [2, 3])]), "ismember(")
+        @test has(vocabulary_issues([D(ce) ~ laplacian(ce) * (ke ∈ [2, 3])]), "ismember(")
         @test isempty(vocabulary_issues([D(ce) ~ α * ismember(ke, (2, 3)) - ε * ce]))
 
         # ShiftIndex arguments: `N(k + 1)` on the callable builds a garbage term silently
         g = N(k + 1)
         @test unwrap_const(only(arguments(unwrap(g)))) isa ShiftIndex
         @test has(vocabulary_issues([g ~ Ne]), "Shift(t, 1)(c(t, x, y))")
-        @test has(vocabulary_issues([Shift(t, 1)(Ne) ~ Δ(N(k + 1))]), "ShiftIndex")   # nested in an operator
+        @test has(vocabulary_issues([Shift(t, 1)(Ne) ~ laplacian(N(k + 1))]), "ShiftIndex")   # nested in an operator
         @test_throws ["Cannot shift an expression with multiple independent variables"] Ne(k + 1)                                    # MTK refuses the applied form itself
-        @test isempty(vocabulary_issues([Shift(t, 1)(Ne) ~ Δ(Ne)]))
+        @test isempty(vocabulary_issues([Shift(t, 1)(Ne) ~ laplacian(Ne)]))
 
         # Pre: the callback previous value
         @test has(vocabulary_issues([D(ce) ~ Pre(ce) - ce]), "`Pre`")
         @test has(vocabulary_issues(Equation[], [Equation([ce, Pre(ce)], [0.0, 0.0])]), "`Pre`")   # array side
-        @test isempty(vocabulary_issues([D(ce) ~ Δ(ce) - ce]))
+        @test isempty(vocabulary_issues([D(ce) ~ laplacian(ce) - ce]))
 
         # check_vocabulary lists every issue and names the fix
         err = try

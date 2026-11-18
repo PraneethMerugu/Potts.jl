@@ -530,7 +530,7 @@ end
 @testitem "initialization: no value written changes nothing else" setup = [InitializationSetup] tags = [:potts, :initialization] begin
     @testset "initialization: no value written changes nothing else" begin
         a, b = IniBare(; name = :n), IniZero(; name = :n)
-        @test !Potts._written(only(Potts.variables(a))) && Potts._written(only(Potts.variables(b)))
+        @test !Potts._written(only(Potts.declared_variables(a))) && Potts._written(only(Potts.declared_variables(b)))
         strip_expr(x) = x isa Expr ? Base.remove_linenums!(deepcopy(x)) :
             x isa Tuple ? map(strip_expr, x) : x
         ga, gb = generated_code(a), generated_code(b)

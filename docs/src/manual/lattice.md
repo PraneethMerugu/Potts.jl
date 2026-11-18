@@ -19,6 +19,7 @@ A closed boundary has no copies across it; fields have zero flux there. Sites ou
 
 ```@example lattice
 using Potts, MakiePotts, CairoMakie
+using Potts.Layouts
 CairoMakie.activate!(type = "png") # hide
 
 @potts_model InADisk begin
@@ -27,7 +28,7 @@ CairoMakie.activate!(type = "png") # hide
         domain = x -> (x[1] - 25.5)^2 + (x[2] - 25.5)^2 <= 23^2)
     @energy begin
         Volume(cell; target = 25.0, strength = 1.0)
-        contacts => 6.0 * (kind != kind′)
+        contacts => 6.0 * (kind != neighbor_kind)
     end
     @sweep Metropolis(; temperature = 8.0)
 end
@@ -50,7 +51,7 @@ in axial coordinates. `Hex(k)` is the ball of hex distance `k` (6, 18, 36 neighb
 `Moore(k)` and `VonNeumann(k)` mean `Hex(k)` on this geometry. The 12 *second-nearest*
 neighbors of a hexagonal site (in Euclidean distance shells) are `NeighborOrder(2)`, not
 `Hex(2)`, which has 18. Centroids and distances are Cartesian. On a hexagonal lattice,
-`Δ(c)` is the six-neighbor Laplacian `2/(3h²) Σ (cₙ − c)`. A missing neighbor reads the
+`laplacian(c)` is the six-neighbor Laplacian `2/(3h²) Σ (cₙ − c)`. A missing neighbor reads the
 site itself (zero flux). The face conditions of a `PDESystem` are an error there.
 
 ```@example lattice
@@ -61,7 +62,7 @@ site itself (zero flux). The face conditions of a `PDESystem` are an error there
     @relations proposal = Hex(1)
     @energy begin
         cells(dark, light) => (volume - 19)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = 8.0)
 end
@@ -86,7 +87,7 @@ A neighborhood (a **relation**) is a set of offsets:
 | `VonNeumann(k)` | Manhattan distance ≤ k | 4 (k = 1) | 6 |
 | `Moore(k)` | Chebyshev distance ≤ k | 8 (k = 1), 24 (k = 2) | 26 |
 | `NeighborOrder(k)` | the first `k` distance shells (CompuCell3D) | 4, 8, 12, 20, … | 6, 18, 26, … |
-| `Ball(r)` | Euclidean distance ≤ r | | |
+| `EuclideanBall(r)` | Euclidean distance ≤ r | | |
 | `Hex(k)` | hex distance ≤ k (hexagonal lattices) | 6, 18, 36 | |
 | `Stencil([(1, 0), (-1, 0), …])` | explicit offsets | | |
 
@@ -110,12 +111,12 @@ A model uses relations in three roles:
     @lattice Lattice((40, 40); neighborhood = Moore(1))
     @relations begin
         proposal = Moore(1)           # copy from any of the 8 neighbors
-        far = Ball(3.0)               # a named relation
+        far = EuclideanBall(3.0)               # a named relation
     end
     @energy begin
         Volume(cell; target = 25.0, strength = 1.0)
-        contacts => 6.0 * (kind != kind′)
-        contacts(far) => 0.2 * (kind != kind′)
+        contacts => 6.0 * (kind != neighbor_kind)
+        contacts(far) => 0.2 * (kind != neighbor_kind)
     end
     @sweep Metropolis(; temperature = 8.0)
 end

@@ -59,9 +59,9 @@ end
 using .WLiteModels: xv, a, excess, volume, decay, inner_all, inner_empty
 
 
-const W_all = Potts.wrap(:allparts, complete(inner_all), WLiteModels.pde(:allparts), WLiteModels.part())
+const W_all = Potts.wrap_system(:allparts, complete(inner_all), WLiteModels.pde(:allparts), WLiteModels.part())
 
-const W_empty = Potts.wrap(:gg, complete(inner_empty), nothing, WLiteModels.part())
+const W_empty = Potts.wrap_system(:gg, complete(inner_empty), nothing, WLiteModels.part())
 
 
 # W and inner agree: the same value, or the same exception type
@@ -129,7 +129,7 @@ module WLitePDE
     using Potts.Fields
     @parameters Dc = 1.0
     @variables c(..) = 0.0 border(..)::Bool [input = true]
-    sys() = pdesystem([Differential(t)(c(t, x, y)) ~ Dc * Δ(c(t, x, y))], [c(t, x, y) ~ masked(border(t, x, y), 5.0)]; name = :wl)
+    sys() = pdesystem([Differential(t)(c(t, x, y)) ~ Dc * laplacian(c(t, x, y))], [c(t, x, y) ~ masked(border(t, x, y), 5.0)]; name = :wl)
 end
 
 
@@ -195,7 +195,7 @@ isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field
 module WlPDE
     using ..FieldPDE
     @variables c(..)
-    diffusion() = (@parameters Dc = 0.1; C = c(t, x, y); pdesys([Dt(C) ~ Dc * Δ(C)], [c(0, x, y) ~ 0.0], (8, 8), [C], [Dc]))
+    diffusion() = (@parameters Dc = 0.1; C = c(t, x, y); pdesys([Dt(C) ~ Dc * laplacian(C)], [c(0, x, y) ~ 0.0], (8, 8), [C], [Dc]))
 end
 
 

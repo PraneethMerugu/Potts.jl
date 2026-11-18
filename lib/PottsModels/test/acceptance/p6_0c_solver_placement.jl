@@ -20,8 +20,8 @@
 #     (closed-form oracles of the discrete schemes, the analytic solution for Rodas5P). A key
 #     that is a parameter, not an integrated variable, is an `ArgumentError`.
 #  5. Merks: a bare `PottsProblem(MerksVasculogenesis(…), …)` throws; with
-#     `field_solver = ExplicitEuler(substeps = 2, lower = 0.0)` it builds and runs, and in a
-#     configuration where they bind (c(0) = −0.05), `lower = 0.0` keeps the field ≥ 0 while
+#     `field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0)` it builds and runs, and in a
+#     configuration where they bind (c(0) = −0.05), `lower_bound = 0.0` keeps the field ≥ 0 while
 #     `ExplicitEuler()` does not. Bitwise equality with the pre-change (`@sweep`-placed)
 #     result is checked by the coordinator at merge, not frozen here (digests would pin
 #     floating-point operand order, which shifts with unrelated codegen edits; D-070). The
@@ -54,7 +54,7 @@ function p60c_field_pde(dims = (20, 20); decay = true)
     Potts.ModelingToolkitBase.@parameters x y Dc = 0.05 δ = 0.1
     Potts.ModelingToolkitBase.@variables c(..)
     C = c(t, x, y)
-    rate, ps = decay ? (Dc * L.Δ(C) - δ * C, [Dc, δ]) : (0.1 * L.Δ(C), Any[])
+    rate, ps = decay ? (Dc * L.laplacian(C) - δ * C, [Dc, δ]) : (0.1 * L.laplacian(C), Any[])
     return Potts.ModelingToolkitBase.PDESystem([Potts.D(C) ~ rate], [c(0, x, y) ~ 0.0],
         L.lattice_domain(t, (x, y), dims), [t, x, y], [C], ps; name = :p60c_field)
 end
@@ -133,12 +133,12 @@ function p60c_field_oracle(m, n; Dc = 0.05, δ = 0.1)
     return (1 - h * δ)^(n * m) .+ 0.5 * (1 + h * (Dc * μ - δ))^(n * m) .* p60c_mode()
 end
 p60c_euler_decay(k, n) = (1 - k)^n                                  # ExplicitEuler(), 1 step/MCS
-p60c_rk4_decay(k, n) = (1 - k + k^2 / 2 - k^3 / 6 + k^4 / 24)^n    # RK4(), 1 step/MCS
+p60c_rk4_decay(k, n) = (1 - k + k^2 / 2 - k^3 / 6 + k^4 / 24)^n    # Potts.RK4(), 1 step/MCS
 # s' = −1000 (s − cos t), s(0) = 0
 p60c_stiff(t) = (1000 * (1000 * cos(t) + sin(t)) - 1000^2 * exp(-1000t)) / (1000^2 + 1)
 
 p60c_rodas(; reltol = 1e-8) = p60c_Adaptive(Rodas5P(); reltol, abstol = 1e-10)
-p60c_var(sys, n) = only(filter(x -> string(x) in (string(n), string(n, "(t)")), variables(sys)))
+p60c_var(sys, n) = only(filter(x -> string(x) in (string(n), string(n, "(t)")), Potts.declared_variables(sys)))
 
 function p60c_error(f)
     try
@@ -154,9 +154,9 @@ end
 p60c_message(e) = e === nothing ? "" : sprint(showerror, e)
 
 p60c_final(prob, alg = SequentialCPM()) = solve(prob, alg).u[end]
-p60c_same(a, b) = Array(a.σ) == Array(b.σ) && a.site == b.site && a.cell == b.cell && a.model == b.model
+p60c_same(a, b) = Array(a.ownership) == Array(b.ownership) && a.site == b.site && a.cell == b.cell && a.model == b.model
 
-const p60c_MERKS_SOLVER = p60c_EE(substeps = 2, lower = 0.0)
+const p60c_MERKS_SOLVER = p60c_EE(substeps = 2, lower_bound = 0.0)
 p60c_merks() = MerksVasculogenesis(; name = :m, lattice = (100, 100))
 p60c_merks_op() = merks_state(; lattice = (100, 100), n = 50, side = 7)    # 7² seeds (D-098)
 p60c_merks_sensitive_op() = [p60c_merks_op(); :Dc => 0.01; :c => fill(-0.05, 100, 100)]
@@ -230,7 +230,7 @@ end
     end
     # lower: a field driven below zero is clipped at 0 after every substep
     neg = [ownership => p60c_sigma(), kind => [:A], :c => fill(-0.5, p60c_N, p60c_N)]
-    clip = p60c_final(PottsProblem(sys, neg, (0, 2); field_solver = p60c_EE(substeps = 2, lower = 0.0)))
+    clip = p60c_final(PottsProblem(sys, neg, (0, 2); field_solver = p60c_EE(substeps = 2, lower_bound = 0.0)))
     free = p60c_final(PottsProblem(sys, neg, (0, 2); field_solver = p60c_EE(substeps = 2)))
     @test all(iszero, clip.site.c)
     @test free.site.c ≈ fill(-0.5 * (1 - 0.1 / 2)^4, p60c_N, p60c_N) rtol = 1e-12
@@ -263,7 +263,7 @@ end
     end
     # a key that is not an integrated variable
     sys = P60cMixed(; name = :m)
-    k = only(filter(x -> string(x) == "k", parameters(sys)))
+    k = only(filter(x -> string(x) == "k", Potts.declared_parameters(sys)))
     e = p60c_error(() -> PottsProblem(sys, p60c_op(), (0, 2); field_solver = p60c_EE(), solvers = [k => rodas]))
     @test e isa ArgumentError
 end
@@ -274,9 +274,9 @@ end
     prob = PottsProblem(p60c_merks(), p60c_merks_op(), (0, 10); field_solver = p60c_MERKS_SOLVER)
     for alg in (SequentialCPM(), CheckerboardCPM())
         u = p60c_final(prob, alg)
-        @test all(isfinite, Array(u.site.c)) && maximum(Array(u.σ)) > 0
+        @test all(isfinite, Array(u.site.c)) && maximum(Array(u.ownership)) > 0
         sens = PottsProblem(p60c_merks(), p60c_merks_sensitive_op(), (0, 10); field_solver = p60c_MERKS_SOLVER)
-        @test minimum(Array(p60c_final(sens, alg).site.c)) >= 0                  # lower = 0.0 binds
+        @test minimum(Array(p60c_final(sens, alg).site.c)) >= 0                  # lower_bound = 0.0 binds
         dflt = PottsProblem(p60c_merks(), p60c_merks_sensitive_op(), (0, 10); field_solver = p60c_EE())
         @test minimum(Array(p60c_final(dflt, alg).site.c)) < 0                   # no clip without it
     end
@@ -291,7 +291,7 @@ end
     @test a.f.fingerprint == a′.f.fingerprint
     others = [
         mk(sys -> (; field_solver = p60c_EE(substeps = 3), solvers = sv(sys, p60c_rodas()))),
-        mk(sys -> (; field_solver = p60c_EE(substeps = 2, lower = 0.0), solvers = sv(sys, p60c_rodas()))),
+        mk(sys -> (; field_solver = p60c_EE(substeps = 2, lower_bound = 0.0), solvers = sv(sys, p60c_rodas()))),
         mk(sys -> (; field_solver = p60c_EE(substeps = 2), solvers = sv(sys, p60c_rodas(; reltol = 1e-6)))),
         mk(sys -> (; field_solver = p60c_EE(substeps = 2))),
         mk(sys -> (; field_solver = p60c_EE(substeps = 2), ode_solver = p60c_RK4(), solvers = sv(sys, p60c_rodas()))),
@@ -338,7 +338,7 @@ end
         @test r.f.fingerprint == d.f.fingerprint
         @test r.seed == d.seed == 11
         @test r.p == d.p && r.p.k == 0.2
-        @test p60c_same(r.u0, d.u0) && Array(r.u0.σ) == p60c_sigma(9) && r.u0.site.c == c2
+        @test p60c_same(r.u0, d.u0) && Array(r.u0.ownership) == p60c_sigma(9) && r.u0.site.c == c2
         @test p60c_same(p60c_final(r), p60c_final(d))
     end
     # remake of the same spec matches the original problem
@@ -354,7 +354,7 @@ end
     finals(sol) = [x.u[end] for x in sol.u]
     serial = finals(solve(ens, alg, EnsembleSerial(); trajectories = 3))
     @test length(serial) == 3
-    @test Array(serial[1].σ) != Array(serial[2].σ)                          # independent replicas
+    @test Array(serial[1].ownership) != Array(serial[2].ownership)                          # independent replicas
     @test all(u -> isapprox(u.cell.s[1], p60c_stiff(3); rtol = 1e-4), serial)
     for other in (finals(solve(ens, alg, EnsembleThreads(); trajectories = 3)),
                   finals(solve(ens, alg; trajectories = 3)),

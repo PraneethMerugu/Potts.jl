@@ -16,11 +16,13 @@ function jiang(dims; coarsemask = false)
     X = (t, x, y, z)
     O, G, L, GF, INH = o(X...), g(X...), l(X...), gf(X...), inh(X...)
     PQ, P, Q, N, M = pq(X...), kP(X...), kQ(X...), kN(X...), (coarsemask ? medc(X...) : med(X...))
-    eqs = [Dt(O) ~ Do * Δ(O) - a0 * max(O - oT, 0) / (oO - oT) * PQ,
-        Dt(G) ~ Dg * Δ(G) - b0 * max(G - gT, 0) / (gO - gT) * PQ,
-        Dt(L) ~ Dl * Δ(L) + C0 * (max(O - oT, 0) / (oO - oT) + max(G - gT, 0) / (gO - gT)) / 2 * PQ,
-        Dt(GF) ~ Df * Δ(GF) - df * GF * (P + 0.5 * Q),
-        Dt(INH) ~ Di * Δ(INH) + ei * (Q + 2 * N)]
+        eqs = [
+            Dt(O) ~ Do * laplacian(O) - a0 * max(O - oT, 0) / (oO - oT) * PQ,
+            Dt(G) ~ Dg * laplacian(G) - b0 * max(G - gT, 0) / (gO - gT) * PQ,
+            Dt(L) ~ Dl * laplacian(L) + C0 * (max(O - oT, 0) / (oO - oT) + max(G - gT, 0) / (gO - gT)) / 2 * PQ,
+            Dt(GF) ~ Df * laplacian(GF) - df * GF * (P + 0.5 * Q),
+            Dt(INH) ~ Di * laplacian(INH) + ei * (Q + 2 * N),
+        ]
     bcs = [o(0, x, y, z) ~ 0.0, g(0, x, y, z) ~ 0.0, l(0, x, y, z) ~ 0.0, gf(0, x, y, z) ~ 0.0, inh(0, x, y, z) ~ 0.0,
         O ~ masked(M, o0), G ~ masked(M, g0), L ~ masked(M, 0.0), GF ~ masked(M, 1.0), INH ~ masked(M, 0.0)]
     return pdesys(eqs, bcs, dims, [O, G, L, GF, INH, PQ, P, Q, N, M],

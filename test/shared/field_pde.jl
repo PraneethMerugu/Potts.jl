@@ -6,7 +6,7 @@
 module FieldPDE
 using Potts: Potts
 using Potts.ModelingToolkitBase: PDESystem, Differential, Shift, @variables, @parameters
-using Potts.LatticePDE: Δ, masked, lattice_domain, pdesystem, DivKGrad, Advect, Upwind1, Coarse, step_index, ismember
+using Potts.LatticePDE: laplacian, masked, lattice_domain, pdesystem, DivKGrad, Advect, Upwind1, Coarse, step_index, ismember
 const t = Potts.t
 const Dt = Differential(t)
 @parameters x y z
@@ -22,6 +22,6 @@ function pdesys(eqs, bcs, dims, dvs, ps = Any[]; spacing = 1, name = :fields)
     return PDESystem(eqs, bcs, lattice_domain(t, xs, dims; spacing), [t; collect(xs)], dvs, ps; name)
 end
 
-export PDESystem, Differential, Shift, @variables, @parameters, Δ, masked, lattice_domain, pdesystem, DivKGrad, Advect, Upwind1,
+export PDESystem, Differential, Shift, @variables, @parameters, laplacian, masked, lattice_domain, pdesystem, DivKGrad, Advect, Upwind1,
        Coarse, step_index, ismember, t, Dt, x, y, z, pdesys
 end

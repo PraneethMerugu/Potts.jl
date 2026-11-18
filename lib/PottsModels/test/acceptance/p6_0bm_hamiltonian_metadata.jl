@@ -16,7 +16,7 @@
 #     term, in declaration order (`@extend` merged), on a `PottsSystem` and on a
 #     `CompiledPottsSystem`. `expr` is the term's energy density as written: a
 #     Symbolics expression in the declared parameter, variable and built-in symbols (`volume`,
-#     `kind′`, …). Drives, constraints and the temperature are not Hamiltonian terms. The
+#     `neighbor_kind`, …). Drives, constraints and the temperature are not Hamiltonian terms. The
 #     domain (`first`) is the DSL domain value; its type is not pinned.
 #     - Oracle 1 (symbolic, as written): each fixture term has exactly the symbols written
 #       and equals the hand-written density at fixed points (substitution of numbers by
@@ -76,9 +76,11 @@ function p60bm_eval(e, vals::AbstractDict{Symbol})
 end
 # the DSL's built-in names (AUTHORING; `Potts.DSL`): the only non-declared symbols an
 # energy may read
-const P60BM_BUILTINS = Set([:volume, :surface, :kind, :kind′, :owner, :owner′, :id, :generation,
+const P60BM_BUILTINS = Set(
+    [
+        :volume, :surface, :kind, :neighbor_kind, :owner, :neighbor_owner, :id, :generation,
     :weight, :source, :target, :old, :new, :mcs, :position, :a, :b, :distance, :cluster,
-    :cluster_volume, :cluster_surface, :time, :site, :site′, :major_length, :local_components,
+        :cluster_volume, :cluster_surface, :time, :site, :neighbor_site, :major_length, :local_components,
     :ring_arcs, :ring_cells, :ring_medium])
 
 # ---------------------------------------------------------------------------------------
@@ -158,7 +160,7 @@ function p60bm_hand_H(σ, kinds, v)
     return H + v[:Jc] * length(p60bm_bonds(σ))
 end
 # H of the same state from `hamiltonian(sys)` by substitution: term 1 over dark cells, term 2
-# over light cells, term 3 over the bonds (kind/kind′ bound per bond if the term reads them)
+# over light cells, term 3 over the bonds (kind/neighbor_kind bound per bond if the term reads them)
 function p60bm_substituted_H(terms, σ, kinds, v)
     kindnum(c) = c == 0 ? 0 : (kinds[c] === :dark ? 1 : 2)
     H = 0.0
@@ -167,7 +169,7 @@ function p60bm_substituted_H(terms, σ, kinds, v)
         H += p60bm_eval(last(t), merge(v, Dict(:volume => Float64(count(==(c), σ)))))
     end
     for (p, q) in p60bm_bonds(σ)
-        H += p60bm_eval(last(terms[3]), merge(v, Dict(:kind => kindnum(p), :kind′ => kindnum(q))))
+        H += p60bm_eval(last(terms[3]), merge(v, Dict(:kind => kindnum(p), :neighbor_kind => kindnum(q))))
     end
     return H
 end
@@ -292,10 +294,10 @@ end
         end
         @test length(Potts.hamiltonian(mtkcompile(sys))) == nterms
     end
-    # Graner–Glazier as written: λ(volume − V₀)² and J[kind, kind′]; T is not an energy
+    # Graner–Glazier as written: λ(volume − V₀)² and J[kind, neighbor_kind]; T is not an energy
     H = Potts.hamiltonian(GranerGlazier(; name = :gg))
     @test p60bm_names(last(H[1])) == Set([:λ, :V₀, :volume])
-    @test p60bm_names(last(H[2])) == Set([:J, :kind, :kind′])
+    @test p60bm_names(last(H[2])) == Set([:J, :kind, :neighbor_kind])
     @test p60bm_eval(last(H[1]), Dict(:λ => 1.0, :V₀ => 40.0, :volume => 37.0)) == 9.0
     # Wortel: the act drive is not in H
     Hw = Potts.hamiltonian(WortelAct(; name = :act, lattice = (8, 8)))
@@ -370,7 +372,7 @@ end
         @test spec isa Potts.PottsSweepSpec
         @test p60bm_same_terms(spec.hamiltonian, Potts.hamiltonian(sys)) && length(spec.hamiltonian) == nterms
         @test length(spec.drives) == length(Potts.drives(sys))
-        @test spec.proposal isa CorePotts.RelationSpec
+        @test spec.proposal isa CorePotts.AbstractRelationSpec
     end
     gg = GranerGlazier(; name = :gg)
     @test isequal(P60BM_S.unwrap(p60bm_spec(gg).temperature), P60BM_S.unwrap(gg.T))

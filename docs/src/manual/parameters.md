@@ -18,12 +18,13 @@ callback) and per trajectory of an ensemble, without regenerating code.
 
 Every parameter is a ModelingToolkit parameter (`ModelingToolkitBase.isparameter` is true). A
 kind table is an array parameter, `J[1:n, 1:n]` for `n` kinds with the medium. A model reads a
-table entry `J[kind, kind′]` as LatticePDE's registered read `at2(J, kind, kind′)` (`at` for a
+table entry `J[kind, neighbor_kind]` as LatticePDE's registered read `value_at(J, kind, neighbor_kind)` (`value_at` for a
 one-kind table). It never uses ModelingToolkit's own indexing, because a compiled cell template
 cannot take an input as an index.
 
 ```@example params
 using Potts
+using Potts.Layouts
 
 @potts_model Params begin
     @kinds medium dark light
@@ -38,7 +39,7 @@ using Potts
     @lattice Lattice((40, 40); neighborhood = Moore(1))
     @energy begin
         cells(dark, light) => λ * (volume - V₀[kind])^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = 10.0)
 end
@@ -103,7 +104,7 @@ the values, such as `sqrt` of a negative number. A call on literal numbers only,
 `÷`, since in a model these are integer division.
 
 The inputs of a computed default must be declared before it in `@parameters`. A contact
-table (`J[kind, kind′]`) must be symmetric for the values it takes; an asymmetric one is an
+table (`J[kind, neighbor_kind]`) must be symmetric for the values it takes; an asymmetric one is an
 `ArgumentError`.
 
 Values are converted to the problem's number type (`Float64`, or `Float32` for GPU

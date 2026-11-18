@@ -146,14 +146,15 @@ function openvt_neighbor_histogram(n::AbstractVector{<:Integer})
 end
 
 """
-    openvt_inhibition_code(a, f; β, γ) -> Int
+    openvt_inhibition_code(a, f; beta, gamma) -> Int
 
 The benchmark's per-cell inhibition code (the `i` of an O1 file): 0 growing, 1 inhibited by
 type 1 only, 2 by type 2 only, 3 by both. Type 1 (area) inhibits a cell with relative area
-`a` unless `a ≥ β`; type 2 (free surface) inhibits a cell with free-surface fraction `f`
-unless `f ≥ γ`. The comparisons are the benchmark text's `≥` (spec C9), so `a = β` grows.
+`a` unless `a ≥ beta` (the model's β); type 2 (free surface) inhibits a cell with free-surface
+fraction `f` unless `f ≥ gamma` (γ). The comparisons are the benchmark text's `≥` (spec C9), so
+`a = beta` grows.
 """
-openvt_inhibition_code(a::Real, f::Real; β::Real, γ::Real) = (a >= β ? 0 : 1) + (f >= γ ? 0 : 2)
+openvt_inhibition_code(a::Real, f::Real; beta::Real, gamma::Real) = (a >= beta ? 0 : 1) + (f >= gamma ? 0 : 2)
 
 """
     openvt_inhibition_fractions(i) -> (; uninhibited, type1, type2, both)

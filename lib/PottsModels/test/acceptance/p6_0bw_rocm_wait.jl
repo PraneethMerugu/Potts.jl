@@ -138,7 +138,8 @@ function p60bw_cases(T, tspan)
         "merks_100" =>
             () -> PottsProblem(MerksVasculogenesis(; name = :m, lattice = (100, 100)),
                 merks_state(; lattice = (100, 100), n = 25), tspan; T,
-                field_solver = ExplicitEuler(substeps = 15, lower = 0.0)),
+            field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0)
+        ),
         "openvt_monolayer_100" =>
             () -> PottsProblem(OpenVTGrowingMonolayer(; name = :o, lattice = (100, 100), τ = 1e6),
                 openvt_monolayer_state(; lattice = (100, 100)), tspan; T, capacity = 64),
@@ -195,7 +196,8 @@ end
 # 2026-11-04), so runs cannot be compared bitwise. A stale or torn read still shows: every
 # saved state, and the state stepped with no wait, must be consistent in itself (each cell's
 # tracked volume equals its site count in σ), at the save times asked for, and the state moves.
-p60bw_consistent(u) = (σ = Array(u.σ); v = Array(u.cell.volume);
+p60bw_consistent(u) = (
+    σ = Array(u.ownership); v = Array(u.cell.volume);
                        all(c -> v[c] == count(==(c), σ), eachindex(v)))
 function p60bw_saves_consistent(prob, alg, backend)
     prob = remake(prob; tspan = (0, P60BW_N))

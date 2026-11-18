@@ -10,7 +10,7 @@
 # for n in far(40))` 81 wrong ΔH (worst 0.1); `kind[n]` 59 (0.2); a static body filtered by
 # `if owner[n] == id` 35 (0.2); `edges(bond) => 0.1·count(owner[n] == a for n in far(40))`
 # 64 (0.1). `volume[owner[n]]` fails at `PottsProblem` with "cannot index `-1 + volume`"; a
-# contact-scope gather fails at `PottsProblem` with "cannot index `owner′`" (ErrorException);
+# contact-scope gather fails at `PottsProblem` with "cannot index `neighbor_owner`" (ErrorException);
 # an `@on_copy`-written site variable read by a cell gather is already an ArgumentError at
 # `mtkcompile`, but with the D-045 wording.
 #
@@ -57,7 +57,7 @@
 #     (outside and inside a gather). These messages must also name the bare form, in
 #     backticks (`volume`, `surface`, `y`).
 # Controls (section 6, accepted, ΔH oracle exact over 3000 attempts): contact terms reading
-# the bare pair names `owner`, `owner′`, `kind`, `kind′`; `y[id]` with y static (outside and
+# the bare pair names `owner`, `neighbor_owner`, `kind`, `neighbor_kind`; `y[id]` with y static (outside and
 # inside a gather) and with y written `@after_mcs`.
 # On 6b06747c (implementation in): sections 0–4 and 6 pass (160 + 24); section 5 fails 69 of
 # 92, every failure the missing widened refusal. Most forms compile; `kind[40]` in cells and
@@ -87,7 +87,7 @@ using SHA: sha256
 # from the operating point to the initial owner map; `bond` links cells 1 and 2.
 
 const P60CA_FRAGMENT = "a copy changes"
-const P60CA_FAR = :(far = Ball(2.0))
+const P60CA_FAR = :(far = EuclideanBall(2.0))
 const P60CA_BOND = :(@relationship bond(cell, cell) capacity = 1)
 p60ca_cells(body) = :(@energy cells => 0.1 * $body)
 # the σ-dependent bodies, around site 40 = (4, 4)
@@ -97,7 +97,7 @@ const P60CA_BODIES = [
     "kind[n]" => r -> :(count(kind[n] == A for n in $r(40))),
     "y[owner[n]]" => r -> :(sum(y[owner[n]] for n in $r(40))),
 ]
-const P60CA_RELS = ["far(40)" => (P60CA_FAR, :far), "Ball(2.0)(40)" => (nothing, :(Ball(2.0))), "Moore(1)(40)" => (nothing, :(Moore(1)))]
+const P60CA_RELS = ["far(40)" => (P60CA_FAR, :far), "EuclideanBall(2.0)(40)" => (nothing, :(EuclideanBall(2.0))), "Moore(1)(40)" => (nothing, :(Moore(1)))]
 
 # label => (@relations body or nothing, statements, the refused statement's domain as printed)
 const P60CA_REFUSED = Any[]
@@ -118,21 +118,24 @@ append!(P60CA_REFUSED, [
     # the P6.0ba copy-step edge fixture, named and inline
     "edges(bond) owner[n] == a/b, far(40)" => (P60CA_FAR, [P60CA_BOND,
         :(@energy edges(bond) => 0.1 * (count(owner[n] == a for n in far(40)) + count(owner[n] == b for n in far(40))))], "edges(bond)"),
-    "edges(bond) owner[n] == a/b, Ball(2.0)(40)" => (nothing, [P60CA_BOND,
-        :(@energy edges(bond) => 0.1 * (count(owner[n] == a for n in Ball(2.0)(40)) + count(owner[n] == b for n in Ball(2.0)(40))))],
+        "edges(bond) owner[n] == a/b, EuclideanBall(2.0)(40)" => (
+            nothing, [
+                P60CA_BOND,
+                :(@energy edges(bond) => 0.1 * (count(owner[n] == a for n in EuclideanBall(2.0)(40)) + count(owner[n] == b for n in EuclideanBall(2.0)(40))))
+            ],
         "edges(bond)"),
     "edges(bond) kind[n]" => (nothing, [P60CA_BOND, :(@energy edges(bond) => 0.1 * count(kind[n] == A for n in Moore(1)(40)))], "edges(bond)"),
     "edges(bond) y[owner[n]]" => (nothing, [P60CA_BOND, :(@energy edges(bond) => 0.1 * sum(y[owner[n]] for n in Moore(1)(40)))], "edges(bond)"),
-    # contacts (today an accidental "cannot index `owner′`" at PottsProblem)
+        # contacts (today an accidental "cannot index `neighbor_owner`" at PottsProblem)
     "contacts owner[n] == owner, far(40)" => (P60CA_FAR, [:(@energy contacts => 0.1 * count(owner[n] == owner for n in far(40)))], "contacts"),
     "contacts owner[n] == 1, far(40)" => (P60CA_FAR, [:(@energy contacts => 0.1 * count(owner[n] == 1 for n in far(40)))], "contacts"),
-    "contacts owner[n] == 1, Ball(2.0)(40)" => (nothing, [:(@energy contacts => 0.1 * count(owner[n] == 1 for n in Ball(2.0)(40)))], "contacts"),
+        "contacts owner[n] == 1, EuclideanBall(2.0)(40)" => (nothing, [:(@energy contacts => 0.1 * count(owner[n] == 1 for n in EuclideanBall(2.0)(40)))], "contacts"),
 ])
 
 # accepted static gathers: label => (@relations body or nothing, statements, relation name read by ΔH or nothing)
 const P60CA_ACCEPTED = [
     "cells volume·Σq, far(40)" => (P60CA_FAR, [:(@energy cells => 0.01 * volume * sum(q[n] for n in far(40)))], :far),
-    "cells volume·Σq, Ball(2.0)(40)" => (nothing, [:(@energy cells => 0.01 * volume * sum(q[n] for n in Ball(2.0)(40)))], :gather1),
+    "cells volume·Σq, EuclideanBall(2.0)(40)" => (nothing, [:(@energy cells => 0.01 * volume * sum(q[n] for n in EuclideanBall(2.0)(40)))], :gather1),
     "cells count(q[n] == id), Moore(2)(40)" => (nothing, [p60ca_cells(:(count(q[n] == id for n in Moore(2)(40))))], nothing),
     "cells parameter and static filter, far(40)" => (P60CA_FAR, [:(@parameters w = 0.5),
         :(@energy cells => 0.01 * volume * sum(w * q[n] for n in far(40) if q[n] > 0))], :far),
@@ -180,8 +183,10 @@ const P60CA_WIDE = [
 ]
 # controls of the widening: accepted, ΔH exact. label => (@relations body or nothing, statements, nothing)
 const P60CA_WIDE_OK = [
-    "control contacts bare owner, owner′, kind, kind′" => (nothing,
-        [:(@energy contacts => 0.1 * ((owner == 1) + (owner′ == 1)) + 0.2 * (kind == kind′) + 0.3 * (kind′ == A))], nothing),
+    "control contacts bare owner, neighbor_owner, kind, neighbor_kind" => (
+        nothing,
+        [:(@energy contacts => 0.1 * ((owner == 1) + (neighbor_owner == 1)) + 0.2 * (kind == neighbor_kind) + 0.3 * (neighbor_kind == A))], nothing,
+    ),
     "control y[id], y static" => (nothing, [p60ca_cells(:(volume * y[id]))], nothing),
     "control y[id] in a gather, y static" => (P60CA_FAR, [p60ca_cells(:(volume * sum(y[id] * q[n] for n in far(40))))], nothing),
     "control y[id], y written @after_mcs" => (nothing, [:(@after_mcs y ~ y + 1.0), p60ca_cells(:(volume * y[id]))], nothing),
@@ -277,16 +282,16 @@ function p60ca_oracle(prob; nsteps = 3000, rng = Xoshiro(7), Tm = 2.0, dH = prob
     worst = 0.0
     while n < nsteps && tries < 1000 * nsteps
         tries += 1
-        t = rand(rng, 1:length(u.σ))
+        t = rand(rng, 1:length(u.ownership))
         x = CorePotts.coordinates(lat, t)
         ins, y = CorePotts.shift(lat, x, moore.offsets[rand(rng, 1:length(moore))])
         ins || continue
         s = CorePotts.linear_index(lat, y)
-        u.σ[t] == u.σ[s] && continue
-        prop = CorePotts.Proposal(t, s, x, 1, u.σ[t], u.σ[s])
+        u.ownership[t] == u.ownership[s] && continue
+        prop = CorePotts.Proposal(t, s, x, 1, u.ownership[t], u.ownership[s])
         d = dH(u, p, prop, ctx)
         a = deepcopy(u)
-        a.σ[t] = prop.new
+        a.ownership[t] = prop.new
         prob.f.commit!(a, p, prop, ctx)
         dtrue = total_energy(prob, a) - total_energy(prob, u) + Potts._killing_credit(prob, u, prop, a)
         err = abs(d - dtrue)
@@ -357,7 +362,7 @@ end
         end
     end
     # the static gather is what it claims: hand values on the initial state
-    # (q = the initial owner map; far = Ball(2.0) around (4, 4) holds 5 sites of cell 1 and 3 of cell 2)
+    # (q = the initial owner map; far = EuclideanBall(2.0) around (4, 4) holds 5 sites of cell 1 and 3 of cell 2)
     p = p60ca_problem("cells volume·Σq, far(40)")
     @test total_energy(p, p.u0) ≈ 2 * 0.01 * 9 * (5 * 1 + 3 * 2)
     p = p60ca_problem("edges(bond) distance·count(q[n] == a/b), far(40)")
@@ -392,7 +397,7 @@ function p60ca_digest(prob)
     sol = solve(prob, SequentialCPM(); saveat = 1)
     io = IOBuffer()
     for u in sol.u
-        write(io, htol.(vec(u.σ)))
+        write(io, htol.(vec(u.ownership)))
         write(io, htol.(Int64.(u.cell.volume)))
     end
     write(io, htol(Int64(sol.stats.attempts)), htol(Int64(length(sol.u))))

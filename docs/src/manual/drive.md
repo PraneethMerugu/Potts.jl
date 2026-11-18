@@ -34,8 +34,8 @@ soft constraint, e.g. the `E₀` connectivity threshold of Merks et al.:
 `@drive connectivity(A; rule = ArcOrPair(), penalty = E₀)` (see
 [Connectivity](@ref manual-connectivity)).
 
-`PottsProblem(…; track = (:ΔH,))` sums the ΔH of every committed copy, energy plus drives
-(without the acceptance law's offset), into `sol.stats.accepted_ΔH`. When the drives are
+`PottsProblem(…; track = (:energy_change,))` sums the ΔH of every committed copy, energy plus drives
+(without the acceptance law's offset), into `sol.stats.accepted_energy_change`. When the drives are
 copy differences of a state function ``G``, that sum is ``Φ(\text{end}) − Φ(\text{start})``
 with ``Φ = H + G``, a check of a run's bookkeeping. The identity holds with no lifecycle
 events or killing copies (a killing copy also pays its cell's empty-state energy, D-083).
@@ -45,6 +45,7 @@ problem passes a new `f` (`CPMFunction(…; track)`).
 
 ```@example drive
 using Potts
+using Potts.Layouts
 
 @potts_model Drives begin
     @kinds medium cell
@@ -56,7 +57,7 @@ using Potts
     @lattice Lattice((60, 30); neighborhood = Moore(1))
     @energy begin
         Volume(cell; target = 25.0, strength = 1.0)
-        contacts => 8.0 * (kind != kind′)
+        contacts => 8.0 * (kind != neighbor_kind)
     end
     @drive begin
         Chemotaxis(c; strength = χ)                                   # up the gradient of c
@@ -69,7 +70,7 @@ end
 c0 = [x / 60 for x in 1:60, y in 1:30]                               # a fixed linear gradient
 op = layout(Tiling((5, 5); region = (6:10, 13:17), kinds = [:cell]), drives)
 sol = solve(PottsProblem(drives, [op; :c => c0], (0, 200); seed = 1), SequentialCPM(); saveat = 50)
-[sum(x[1] for x in CartesianIndices(u.σ) if u.σ[x] == 1) / count(==(1), u.σ) for u in sol.u]   # centroid x
+[sum(x[1] for x in CartesianIndices(u.ownership) if u.ownership[x] == 1) / count(==(1), u.ownership) for u in sol.u]   # centroid x
 ```
 
 ## Chemotaxis
@@ -103,7 +104,7 @@ the source and the target:
     @lattice Lattice((40, 40); neighborhood = Moore(1))
     @energy begin
         cells(cell) => 5.0 * (volume - 200.0)^2
-        contacts => 20.0 * (kind != kind′)
+        contacts => 20.0 * (kind != neighbor_kind)
     end
     act_mean(s) = geomean(act[n] for n in Moore(1; include_self = true)(s) if owner[n] == owner[s])
     @drive copy => -(λ_act / max_act) * (act_mean(source) - act_mean(target))

@@ -11,7 +11,7 @@
 #         `time`), so it reads the cells' ODE state inside the ODE kernel.
 #  2. Another cell's state is held at its start-of-step value over the whole step, as a
 #     different solver group's state already is (D-078): the cell's own unknowns advance
-#     through the solver's stages and substeps, the other cells' do not. With `RK4()` or
+#     through the solver's stages and substeps, the other cells' do not. With `Potts.RK4()` or
 #     `Adaptive(…)` the oracle is the cell's own ODE with that held forcing.
 #  3. Several solver groups in one scope, one of them `Adaptive`, combined with cross-cell
 #     reads both within a group and across groups: the same Jacobi result.
@@ -20,7 +20,7 @@
 #  5. Zero warm allocations for fixed-step cross-cell ODEs, with one or several groups.
 #  6. An empty cell slot (volume 0) does not integrate, and a live cell that reads it reads
 #     its unchanged value.
-# Every fixture uses `mcs_duration = 1` and one step per MCS (`ExplicitEuler()`, `RK4()`),
+# Every fixture uses `mcs_duration = 1` and one step per MCS (`ExplicitEuler()`, `Potts.RK4()`),
 # so the synchronous explicit-Euler oracles are exact in small integers. Each oracle comes
 # with a Gauss–Seidel (ascending cell order) counterpart that differs from it, so the
 # fixtures can tell the two apart (negative control, D-048).

@@ -60,7 +60,7 @@ p60v1_counts(s) = (s.syncs, s.transfers, s.transfer_bytes)
 p60v1_lifecycle(s) = NamedTuple{fieldnames(typeof(s.lifecycle))}(getfield.(Ref(s.lifecycle), fieldnames(typeof(s.lifecycle))))
 p60v1_lifecycle_total(s::NamedTuple) = sum(values(s))
 p60v1_lifecycle_total(s) = p60v1_lifecycle_total(p60v1_lifecycle(s))
-p60v1_host(u) = (; σ = Array(u.σ), cell = map(Array, u.cell))
+p60v1_host(u) = (; ownership = Array(u.ownership), cell = map(Array, u.cell))
 
 # ---------------------------------------------------------------------------------------
 # Fixture F1: plain divisions at MCS P60V1_S, scaled in lattice size and cell quantities.
@@ -114,7 +114,7 @@ end
     @lattice Lattice(lattice; boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         cells => 100 * (volume - V_target)^2 + 0.01 * surface
-        contacts => ifelse(cluster[owner] == cluster[owner′], 0.01, 0.02)
+        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 0.01, 0.02)
         clusters(cyto) => 0.001 * cluster_volume
     end
     @divide clusters(cyto) when = mcs == 1, along = (1.0, 0.0), V_target => Split()
@@ -220,7 +220,7 @@ p60v1_attempts(t, t0 = 0) = sum(p60v1_mobile, t0:(t - 1); init = 0)   # the MCS 
 """Every built-in tracker of host state `u` against a recount from σ (closed lattice,
 Moore(1) unweighted surface). Returns the worst absolute error (0 when exact)."""
 function p60v1_tracker_error(u)
-    σ, cell = u.σ, u.cell
+    σ, cell = u.ownership, u.cell
     cap = length(cell.volume)
     err = 0.0
     vol = [count(==(c), σ) for c in 1:cap]
@@ -253,8 +253,8 @@ function p60v1_tracker_error(u)
     return err
 end
 
-p60v1_live(u) = sort!(unique(filter(>(0), vec(u.σ))))
-p60v1_sites(u, c) = findall(==(c), vec(u.σ))
+p60v1_live(u) = sort!(unique(filter(>(0), vec(u.ownership))))
+p60v1_sites(u, c) = findall(==(c), vec(u.ownership))
 
 """Host state `u` with its cell ids relabelled by first site (a canonical form that forgets
 which free slot each daughter took). Non-tracker columns, kinds, generations, clusters
@@ -263,7 +263,7 @@ function p60v1_canon(u)
     live = p60v1_live(u)
     order = sort(live; by = c -> first(p60v1_sites(u, c)))
     new = Dict(c => i for (i, c) in enumerate(order))
-    σ = map(s -> s == 0 ? 0 : new[s], u.σ)
+    σ = map(s -> s == 0 ? 0 : new[s], u.ownership)
     skip = (:volume, :surface, :anchor, :m1, :m2, :cluster, :cluster_volume, :cluster_surface)
     cols = Dict(k => [Float64.(collect(selectdim(v, ndims(v), c))) for c in order]
         for (k, v) in pairs(u.cell) if !(k in skip) && !startswith(String(k), "link"))
@@ -271,11 +271,11 @@ function p60v1_canon(u)
          [sort([new[m] for m in live if u.cell.cluster[m] == u.cell.cluster[c]]) for c in order] : nothing
     bonds = haskey(u.cell, :links__bond) ?
             [sort([new[a] for a in u.cell.links__bond[:, c] if a != 0]) for c in order] : nothing
-    return (; σ, cols, cl, bonds)
+    return (; ownership = σ, cols, cl, bonds)
 end
 function p60v1_same_canon(a, b)
     ca, cb = p60v1_canon(a), p60v1_canon(b)
-    ca.σ == cb.σ && ca.cl == cb.cl && ca.bonds == cb.bonds || return false
+    ca.ownership == cb.ownership && ca.cl == cb.cl && ca.bonds == cb.bonds || return false
     keys(ca.cols) == keys(cb.cols) || return false
     return all(k -> all(i -> isapprox(ca.cols[k][i], cb.cols[k][i]; rtol = 1e-6), eachindex(ca.cols[k])), keys(ca.cols))
 end
@@ -295,7 +295,8 @@ function p60v1_published(T)
         :GranerGlazier => () -> PottsProblem(GranerGlazier(; name = :gg), [ownership => gg[1], kind => gg[2]], (0, 8); T),
         :WortelAct => () -> PottsProblem(WortelAct(; name = :w, lattice = (32, 32)), [ownership => w, kind => [:cell]], (0, 8); T),
         :MerksVasculogenesis => () -> PottsProblem(MerksVasculogenesis(; name = :m, lattice = (32, 32)),
-            merks_state(; lattice = (32, 32), n = 6, side = 7), (0, 8); T, field_solver = ExplicitEuler(substeps = 2, lower = 0.0)),
+            merks_state(; lattice = (32, 32), n = 6, side = 7), (0, 8); T, field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0)
+        ),
         :OpenVTGrowingMonolayer => () -> PottsProblem(OpenVTGrowingMonolayer(; name = :o, lattice = (24, 24), τ = 1e6),
             openvt_monolayer_state(; lattice = (24, 24)), (0, 8); T, capacity = 64),
         :AkeebInvasion => () -> PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60)),
@@ -413,7 +414,7 @@ const P60V1_VARIANTS = (
     end
     # control: the variants really differ in what the D-035 path copies
     u = Dict(k => p60v1_divide_problem(; kw...).u0 for (k, kw) in pairs(P60V1_VARIANTS))
-    @test sizeof(u[:lattice].σ) == 16 * sizeof(u[:base].σ)
+    @test sizeof(u[:lattice].ownership) == 16 * sizeof(u[:base].ownership)
     @test length(u[:quantities].cell) == length(u[:base].cell) + 7
     @test length(u[:capacity].cell.kind) == 10 * length(u[:base].cell.kind)
     # F2 and F3 on 64×64: the same events as on 16×16
@@ -432,7 +433,7 @@ end
             prob = p60v1_divide_problem(; T = Float32, kw...)
             deltas, l0, l1, ckd = p60v1_window(prob, CheckerboardCPM(); backend, nwarm = P60V1_S, nstep = 1)
             @test l0.divisions == 0 && l1.divisions == 2         # control: the measured MCS is the event MCS
-            @test ckd[2] >= 1 && ckd[3] >= sizeof(prob.u0.σ)     # control: the counters see a state copy
+            @test ckd[2] >= 1 && ckd[3] >= sizeof(prob.u0.ownership)     # control: the counters see a state copy
             ev[label] = only(deltas)
         end
         for label in (:lattice, :quantities, :capacity)
@@ -467,10 +468,16 @@ function p60v1_check_divide(sol)
     u = p60v1_host(sol.u[end])
     @test p60v1_live(u) == 1:5                                   # daughters in the lowest free slots 4, 5
     for (c, (r, k)) in enumerate(P60V1_CELLS[1:2])               # parents keep the low-x half
-        @test p60v1_sites(u, c) == findall(vec(let m = falses(size(u.σ)); m[r[1:2], k] .= true; m end))
+        @test p60v1_sites(u, c) == findall(
+            vec(
+                let m = falses(size(u.ownership))
+                    m[r[1:2], k] .= true; m
+                end
+            )
+        )
     end
     @test p60v1_sites(u, 3) == p60v1_sites(p60v1_host(sol.u[1]), 3)   # kind B never divides
-    d = Dict(c => only(unique(u.σ[r[3:4], k])) for (c, (r, k)) in enumerate(P60V1_CELLS[1:2]))
+    d = Dict(c => only(unique(u.ownership[r[3:4], k])) for (c, (r, k)) in enumerate(P60V1_CELLS[1:2]))
     @test sort(collect(values(d))) == [4, 5]
     @test u.cell.kind[1:5] == Int32[1, 1, 2, 1, 1]
     @test u.cell.generation[1:6] == Int32[1, 1, 1, 1, 1, 0]      # a fresh slot: 0 → 1
@@ -486,7 +493,7 @@ end
 function p60v1_check_cluster(sol)
     @test [length(p60v1_live(u)) for u in sol.u] == [t <= 1 ? 5 : 10 for t in sol.t]
     u = p60v1_host(sol.u[end])
-    cl, σ = u.cell.cluster, u.σ
+    cl, σ = u.cell.cluster, u.ownership
     # parent => a site of its daughter (the +x half of each cluster, the +y half of cell 5)
     d = Dict(1 => σ[7, 2], 2 => σ[6, 3], 3 => σ[7, 9], 4 => σ[6, 10], 5 => σ[12, 5])
     @test sort(collect(values(d))) == 6:10                       # the lowest free slots

@@ -531,7 +531,7 @@ end
     @test p60bo_close(p60bo_u0(p2, :Vt), 2 .* [12.0, 16.0] .+ P60BO_ID)                             # [25, 34]
     sol = solve(prob, SequentialCPM(; proposal = Moore(1)))
     final = sol.u[end]
-    vols = [Float64(count(==(c), final.σ)) for c in 1:2]
+    vols = [Float64(count(==(c), final.ownership)) for c in 1:2]
     @test vols != P60BO_VOL                                          # the sweep moved the cells
     p3 = remake(prob; u0 = final)
     @test p60bo_u0(p3, :Vt) == Vector{Float64}(Array(final.cell.Vt))

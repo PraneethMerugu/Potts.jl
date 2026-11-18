@@ -76,7 +76,7 @@ using Potts, PottsModels, MakiePotts, CairoMakie
     @relations proposal = Moore(1)                       # copy from any of the 8 neighbors
     @energy begin
         cells(dark, light) => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = T)
 end

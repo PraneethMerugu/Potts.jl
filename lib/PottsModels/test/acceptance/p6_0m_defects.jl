@@ -308,7 +308,7 @@ end
     for (M, which) in ((IntSplitBlocks, "split (control)"), (IntSameBlock, "same block"))
         sol = solve(PottsProblem(M(; name = :i), [ownership => σ, kind => [:A]], (0, 3)), alg; saveat = 0:3)
         @test [Array(u.cell.volume)[1] for u in sol.u] == fill(16, 4)
-        @test [sum(Array(u.site.w)[Array(u.σ) .== 1]) for u in sol.u] == truth
+        @test [sum(Array(u.site.w)[Array(u.ownership) .== 1]) for u in sol.u] == truth
         @test [Array(u.cell.s)[1] for u in sol.u] == truth   # DEFECT CHECK for "same block"
     end
 end

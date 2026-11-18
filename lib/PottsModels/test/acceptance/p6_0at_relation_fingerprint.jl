@@ -2,14 +2,14 @@
 # fingerprint. Decision: D-124 (amends D-016, after D-122).
 #
 # The defect (P6.0ar test author, D-122 "Follow-up"). A named relation (`@relations far =
-# Ball(2.0)`, read by `contacts(far)` or a fold `for n in far(site)`) and an inline gather
+# EuclideanBall(2.0)`, read by `contacts(far)` or a fold `for n in far(site)`) and an inline gather
 # relation (`for n in Moore(1)(42)`) reach the generated code only as a field of the run
 # context (`ctx.far`, `ctx.gather1`: the compiler numbers inline gathers `gather1`, `gather2`,
 # … in statement order, D-107); their resolved offsets and weights are runtime data, not
 # constants in the kernels. So the code hash sees the NAME a statement reads and which
 # statement reads which gather, but not the relation itself. Measured on e4b6ab51 with the
 # fixtures below (12×12 periodic, Moore(1) lattice neighbourhood): `contacts(far)` with far
-# = Ball(2.0) vs Ball(3.0) (energies 112 vs 360 on the same state), a cell-energy fold
+# = EuclideanBall(2.0) vs EuclideanBall(3.0) (energies 112 vs 360 on the same state), a cell-energy fold
 # `far(40)` (0.5 vs 0.8), an inline gather `Moore(1)(40)` vs `Moore(2)(40)` in a cell energy
 # (0.3 vs 0.8), in a cell ODE, in a `@drive`, a named relation in a cell ODE or a `@drive`,
 # and `Weighted(Moore(1), 2)` vs `3` all fingerprint alike pairwise, so a checkpoint loads
@@ -43,7 +43,7 @@
 # canonically ordered offsets, weights by value) and keyed by its context name (the relation's
 # name, or the `gatherN` the compiler gives the inline spec; the code ties that name to its
 # use sites). There is no default to skip. Specs that resolve alike fingerprint alike
-# (`Ball(1.5)`, `Moore(1)` and a permuted Moore(1) `Stencil` on a square lattice; `Hex(1)`
+# (`EuclideanBall(1.5)`, `Moore(1)` and a permuted Moore(1) `Stencil` on a square lattice; `Hex(1)`
 # and `Moore(1)` on a hexagonal one; `NeighborOrder(2)` and `Moore(1)` inline; a permuted
 # inline `Stencil`). A checkpoint does not load across problems that differ in one
 # (`ArgumentError`). The proposal and contact neighbourhoods keep their D-122 rule.
@@ -79,17 +79,17 @@ p60at_drive(rs, rt) = :(@drive copy => 0.1 * (count(owner[n] == 1 for n in $rs(s
 const P60AT_FIXTURES = [
     # relation-free and declared-but-unused
     "sq" => (:sq, nothing, []),
-    "sq far unused" => (:sq, :(far = Ball(2.0)), []),
+    "sq far unused" => (:sq, :(far = EuclideanBall(2.0)), []),
     "sq proposal=Moore(1)" => (:sq, :(proposal = Moore(1)), []),
     # contacts(far)
-    "sq contacts far=Ball(2.0)" => (:sq, :(far = Ball(2.0)), [:(@energy contacts(far) => 1.0)]),
-    "sq contacts far=Ball(3.0)" => (:sq, :(far = Ball(3.0)), [:(@energy contacts(far) => 1.0)]),
+    "sq contacts far=EuclideanBall(2.0)" => (:sq, :(far = EuclideanBall(2.0)), [:(@energy contacts(far) => 1.0)]),
+    "sq contacts far=EuclideanBall(3.0)" => (:sq, :(far = EuclideanBall(3.0)), [:(@energy contacts(far) => 1.0)]),
     "sq contacts far=Moore(2)" => (:sq, :(far = Moore(2)), [:(@energy contacts(far) => 1.0)]),
     "sq contacts far=VonNeumann(1)" => (:sq, :(far = VonNeumann(1)), [:(@energy contacts(far) => 1.0)]),
-    "sq contacts near=Ball(2.0)" => (:sq, :(near = Ball(2.0)), [:(@energy contacts(near) => 1.0)]),
+    "sq contacts near=EuclideanBall(2.0)" => (:sq, :(near = EuclideanBall(2.0)), [:(@energy contacts(near) => 1.0)]),
     # contacts(far), specs that resolve to Moore(1)
     "sq contacts far=Moore(1)" => (:sq, :(far = Moore(1)), [:(@energy contacts(far) => 1.0)]),
-    "sq contacts far=Ball(1.5)" => (:sq, :(far = Ball(1.5)), [:(@energy contacts(far) => 1.0)]),
+    "sq contacts far=EuclideanBall(1.5)" => (:sq, :(far = EuclideanBall(1.5)), [:(@energy contacts(far) => 1.0)]),
     "sq contacts far=Stencil(Moore1 permuted)" => (:sq,
         :(far = Stencil([[1, 1], [0, 1], [-1, 1], [1, 0], [-1, 0], [1, -1], [0, -1], [-1, -1]])),
         [:(@energy contacts(far) => 1.0)]),
@@ -98,8 +98,8 @@ const P60AT_FIXTURES = [
     "sq contacts far=Weighted(Moore(1), 2) again" => (:sq, :(far = Weighted(Moore(1), o -> 2.0)), [:(@energy contacts(far) => 1.0 * weight)]),
     "sq contacts far=Weighted(Moore(1), 3)" => (:sq, :(far = Weighted(Moore(1), o -> 3.0)), [:(@energy contacts(far) => 1.0 * weight)]),
     # a named fold in a cell energy
-    "sq energy far(40) far=Ball(2.0)" => (:sq, :(far = Ball(2.0)), [:(@energy cells => 0.1 * volume * $(p60at_static(:far)))]),
-    "sq energy far(40) far=Ball(3.0)" => (:sq, :(far = Ball(3.0)), [:(@energy cells => 0.1 * volume * $(p60at_static(:far)))]),
+    "sq energy far(40) far=EuclideanBall(2.0)" => (:sq, :(far = EuclideanBall(2.0)), [:(@energy cells => 0.1 * volume * $(p60at_static(:far)))]),
+    "sq energy far(40) far=EuclideanBall(3.0)" => (:sq, :(far = EuclideanBall(3.0)), [:(@energy cells => 0.1 * volume * $(p60at_static(:far)))]),
     # an inline gather in a cell energy
     "sq energy Moore(1)(40)" => (:sq, nothing, [:(@energy cells => 0.1 * volume * $(p60at_static(:(Moore(1)))))]),
     "sq energy Moore(2)(40)" => (:sq, nothing, [:(@energy cells => 0.1 * volume * $(p60at_static(:(Moore(2)))))]),
@@ -110,11 +110,11 @@ const P60AT_FIXTURES = [
     # a cell ODE: inline gather and named relation
     "sq ode Moore(1)(40)" => (:sq, nothing, [:(@equations D(y) ~ 0.1 * $(p60at_count(:(Moore(1)))) - 0.1y)]),
     "sq ode Moore(2)(40)" => (:sq, nothing, [:(@equations D(y) ~ 0.1 * $(p60at_count(:(Moore(2)))) - 0.1y)]),
-    "sq ode far(40) far=Ball(2.0)" => (:sq, :(far = Ball(2.0)), [:(@equations D(y) ~ 0.1 * $(p60at_count(:far)) - 0.1y)]),
-    "sq ode far(40) far=Ball(3.0)" => (:sq, :(far = Ball(3.0)), [:(@equations D(y) ~ 0.1 * $(p60at_count(:far)) - 0.1y)]),
+    "sq ode far(40) far=EuclideanBall(2.0)" => (:sq, :(far = EuclideanBall(2.0)), [:(@equations D(y) ~ 0.1 * $(p60at_count(:far)) - 0.1y)]),
+    "sq ode far(40) far=EuclideanBall(3.0)" => (:sq, :(far = EuclideanBall(3.0)), [:(@equations D(y) ~ 0.1 * $(p60at_count(:far)) - 0.1y)]),
     # a copy drive: named and inline, and the use-site assignment of two inline gathers
-    "sq drive far far=Ball(2.0)" => (:sq, :(far = Ball(2.0)), [p60at_drive(:far, :far)]),
-    "sq drive far far=Ball(3.0)" => (:sq, :(far = Ball(3.0)), [p60at_drive(:far, :far)]),
+    "sq drive far far=EuclideanBall(2.0)" => (:sq, :(far = EuclideanBall(2.0)), [p60at_drive(:far, :far)]),
+    "sq drive far far=EuclideanBall(3.0)" => (:sq, :(far = EuclideanBall(3.0)), [p60at_drive(:far, :far)]),
     "sq drive Moore(1)/Moore(1)" => (:sq, nothing, [p60at_drive(:(Moore(1)), :(Moore(1)))]),
     "sq drive Moore(2)/Moore(2)" => (:sq, nothing, [p60at_drive(:(Moore(2)), :(Moore(2)))]),
     "sq drive Moore(2)/Moore(1)" => (:sq, nothing, [p60at_drive(:(Moore(2)), :(Moore(1)))]),
@@ -123,8 +123,8 @@ const P60AT_FIXTURES = [
     "sq update Moore(1)(40)" => (:sq, nothing, [:(@after_mcs q ~ 0.1 * $(p60at_count(:(Moore(1)), 1)))]),
     "sq update Moore(2)(40)" => (:sq, nothing, [:(@after_mcs q ~ 0.1 * $(p60at_count(:(Moore(2)), 1)))]),
     # read only by an observed quantity
-    "sq observed far(40) far=Ball(2.0)" => (:sq, :(far = Ball(2.0)), [:(@observed o(cell) ~ $(p60at_count(:far)))]),
-    "sq observed far(40) far=Ball(3.0)" => (:sq, :(far = Ball(3.0)), [:(@observed o(cell) ~ $(p60at_count(:far)))]),
+    "sq observed far(40) far=EuclideanBall(2.0)" => (:sq, :(far = EuclideanBall(2.0)), [:(@observed o(cell) ~ $(p60at_count(:far)))]),
+    "sq observed far(40) far=EuclideanBall(3.0)" => (:sq, :(far = EuclideanBall(3.0)), [:(@observed o(cell) ~ $(p60at_count(:far)))]),
     # hexagonal
     "hex" => (:hex, nothing, []),
     "hex contacts far=Hex(2)" => (:hex, :(far = Hex(2)), [:(@energy contacts(far) => 1.0)]),
@@ -217,7 +217,7 @@ function p60at_checkpoint(pa, pb, pa2; k = 3, alg = SequentialCPM())
         pb === nothing || @test_throws ArgumentError init(pb, alg; checkpoint = c)
         i2 = init(pa2, alg; checkpoint = c)
         @test i2.t == k
-        @test i2.u.σ == ck.state.σ
+        @test i2.u.ownership == ck.state.ownership
     end
 end
 
@@ -225,10 +225,10 @@ end
 # 1. Controls (pass on the base)
 
 @testset "P6.0at: controls — the fixtures read the relations they declare" begin
-    p = p60at_problem("sq contacts far=Ball(2.0)")
+    p = p60at_problem("sq contacts far=EuclideanBall(2.0)")
     @test haskey(p.relations, :far) && length(CorePotts.relation(p.relations.far, p.lattice)) == 12
-    @test length(CorePotts.relation(p60at_problem("sq contacts far=Ball(3.0)").relations.far, p.lattice)) == 28
-    @test length(CorePotts.relation(p60at_problem("sq contacts far=Ball(1.5)").relations.far, p.lattice)) == 8
+    @test length(CorePotts.relation(p60at_problem("sq contacts far=EuclideanBall(3.0)").relations.far, p.lattice)) == 28
+    @test length(CorePotts.relation(p60at_problem("sq contacts far=EuclideanBall(1.5)").relations.far, p.lattice)) == 8
     g1 = p60at_problem("sq energy Moore(1)(40)")
     g2 = p60at_problem("sq energy Moore(2)(40)")
     @test keys(g1.relations) == keys(g2.relations) == (:gather1,)          # one inline gather, same name
@@ -247,10 +247,10 @@ end
 
 @testset "P6.0at: controls — the relations change the model" begin
     E = p60at_energy
-    @test E("sq contacts far=Ball(2.0)") != E("sq contacts far=Ball(3.0)")
-    @test E("sq contacts far=Ball(2.0)") != E("sq contacts far=Moore(2)")
+    @test E("sq contacts far=EuclideanBall(2.0)") != E("sq contacts far=EuclideanBall(3.0)")
+    @test E("sq contacts far=EuclideanBall(2.0)") != E("sq contacts far=Moore(2)")
     @test E("sq contacts far=Weighted(Moore(1), 2)") != E("sq contacts far=Weighted(Moore(1), 3)")
-    @test E("sq energy far(40) far=Ball(2.0)") != E("sq energy far(40) far=Ball(3.0)")
+    @test E("sq energy far(40) far=EuclideanBall(2.0)") != E("sq energy far(40) far=EuclideanBall(3.0)")
     @test E("sq energy Moore(1)(40)") != E("sq energy Moore(2)(40)")
     @test E("sq energy Stencil(+x,+y)(40)") != E("sq energy Stencil(+x,-y)(40)")
     @test E("hex contacts far=Hex(2)") != E("hex contacts far=Hex(3)")
@@ -258,12 +258,12 @@ end
     @test E("cube contacts far=Moore(1)") != E("cube contacts far=NeighborOrder(2)")
     @test E("cube energy NeighborOrder(1)(74)") != E("cube energy NeighborOrder(2)(74)")
     # specs that resolve alike give the same energy
-    @test E("sq contacts far=Ball(1.5)") == E("sq contacts far=Moore(1)") == E("sq contacts far=Stencil(Moore1 permuted)")
+    @test E("sq contacts far=EuclideanBall(1.5)") == E("sq contacts far=Moore(1)") == E("sq contacts far=Stencil(Moore1 permuted)")
     @test E("sq energy NeighborOrder(2)(40)") == E("sq energy Moore(1)(40)")
     # the ODE rates read their relations: different cell values after a few MCS (same seed)
     y(label) = solve(p60at_problem(label; tspan = (0, 4)), SequentialCPM()).u[end].cell.y
     @test y("sq ode Moore(1)(40)") != y("sq ode Moore(2)(40)")
-    @test y("sq ode far(40) far=Ball(2.0)") != y("sq ode far(40) far=Ball(3.0)")
+    @test y("sq ode far(40) far=EuclideanBall(2.0)") != y("sq ode far(40) far=EuclideanBall(3.0)")
     # the site update reads its relation
     q(label) = solve(p60at_problem(label; tspan = (0, 2)), SequentialCPM()).u[end].site.q
     @test q("sq update Moore(1)(40)") != q("sq update Moore(2)(40)")
@@ -271,12 +271,12 @@ end
 
 @testset "P6.0at: controls — what the generated code already tells apart" begin
     # negative control: the fingerprint is not constant
-    @test p60at_fp("sq contacts far=Ball(2.0)") != p60at_fp("sq")
+    @test p60at_fp("sq contacts far=EuclideanBall(2.0)") != p60at_fp("sq")
     @test p60at_fp("hex") != p60at_fp("sq")
     # the name of a named relation, and the use site of an inline gather, are in the code
-    p60at_distinct(["sq contacts far=Ball(2.0)", "sq contacts near=Ball(2.0)"])
+    p60at_distinct(["sq contacts far=EuclideanBall(2.0)", "sq contacts near=EuclideanBall(2.0)"])
     p60at_distinct(["sq drive Moore(2)/Moore(1)", "sq drive Moore(1)/Moore(2)"])
-    p60at_distinct(["sq contacts far=Ball(2.0)", "sq contacts near=Ball(2.0)"]; T = Float32)
+    p60at_distinct(["sq contacts far=EuclideanBall(2.0)", "sq contacts near=EuclideanBall(2.0)"]; T = Float32)
 end
 
 # ---------------------------------------------------------------------------------------
@@ -285,14 +285,16 @@ end
 @testset "P6.0at: named and inline gather relations are in the fingerprint" begin
     for T in (Float64, Float32)
         @testset "contacts(far), square 2D, $T" begin
-            p60at_distinct(["sq contacts far=Ball(2.0)", "sq contacts far=Ball(3.0)", "sq contacts far=Moore(2)",
+            p60at_distinct(
+                [
+                    "sq contacts far=EuclideanBall(2.0)", "sq contacts far=EuclideanBall(3.0)", "sq contacts far=Moore(2)",
                 "sq contacts far=VonNeumann(1)", "sq contacts far=Moore(1)"]; T)
         end
         @testset "contacts(far) weights, square 2D, $T" begin
             p60at_distinct(["sq contacts far=Weighted(Moore(1), 2)", "sq contacts far=Weighted(Moore(1), 3)"]; T)
         end
         @testset "a named fold in an energy, $T" begin
-            p60at_distinct(["sq energy far(40) far=Ball(2.0)", "sq energy far(40) far=Ball(3.0)"]; T)
+            p60at_distinct(["sq energy far(40) far=EuclideanBall(2.0)", "sq energy far(40) far=EuclideanBall(3.0)"]; T)
         end
         @testset "an inline gather in an energy, $T" begin
             p60at_distinct(["sq energy Moore(1)(40)", "sq energy Moore(2)(40)", "sq energy Stencil(+x,+y)(40)",
@@ -300,10 +302,10 @@ end
         end
         @testset "a cell ODE, $T" begin
             p60at_distinct(["sq ode Moore(1)(40)", "sq ode Moore(2)(40)"]; T)
-            p60at_distinct(["sq ode far(40) far=Ball(2.0)", "sq ode far(40) far=Ball(3.0)"]; T)
+            p60at_distinct(["sq ode far(40) far=EuclideanBall(2.0)", "sq ode far(40) far=EuclideanBall(3.0)"]; T)
         end
         @testset "a copy drive, $T" begin
-            p60at_distinct(["sq drive far far=Ball(2.0)", "sq drive far far=Ball(3.0)"]; T)
+            p60at_distinct(["sq drive far far=EuclideanBall(2.0)", "sq drive far far=EuclideanBall(3.0)"]; T)
             p60at_distinct(["sq drive Moore(1)/Moore(1)", "sq drive Moore(2)/Moore(2)", "sq drive Moore(2)/Moore(1)",
                 "sq drive Moore(1)/Moore(2)"]; T)
         end
@@ -328,7 +330,7 @@ end
 
 @testset "P6.0at: relations that resolve alike fingerprint alike" begin
     for T in (Float64, Float32)
-        p60at_like("sq contacts far=Moore(1)", ["sq contacts far=Ball(1.5)", "sq contacts far=Stencil(Moore1 permuted)"]; T)
+        p60at_like("sq contacts far=Moore(1)", ["sq contacts far=EuclideanBall(1.5)", "sq contacts far=Stencil(Moore1 permuted)"]; T)
         p60at_like("sq energy Moore(1)(40)", ["sq energy NeighborOrder(2)(40)"]; T)
         p60at_like("sq energy Stencil(+x,+y)(40)", ["sq energy Stencil(+y,+x)(40)"]; T)
     end
@@ -341,7 +343,7 @@ end
 @testset "P6.0at: relations no generated code reads are not in the fingerprint" begin
     for T in (Float64, Float32)
         p60at_like("sq", ["sq far unused"]; T)
-        p60at_like("sq observed far(40) far=Ball(2.0)", ["sq observed far(40) far=Ball(3.0)"]; T)
+        p60at_like("sq observed far(40) far=EuclideanBall(2.0)", ["sq observed far(40) far=EuclideanBall(3.0)"]; T)
     end
 end
 
@@ -350,16 +352,18 @@ end
 
 @testset "P6.0at: a checkpoint does not load under another relation" begin
     pr = p60at_problem
-    @testset "contacts(far) Ball(2.0) → Ball(3.0)" begin
-        p60at_checkpoint(pr("sq contacts far=Ball(2.0)"), pr("sq contacts far=Ball(3.0)"), pr("sq contacts far=Ball(2.0)"))
+    @testset "contacts(far) EuclideanBall(2.0) → EuclideanBall(3.0)" begin
+        p60at_checkpoint(pr("sq contacts far=EuclideanBall(2.0)"), pr("sq contacts far=EuclideanBall(3.0)"), pr("sq contacts far=EuclideanBall(2.0)"))
     end
     @testset "contacts(far) weights 3 → 2, CheckerboardCPM" begin
         p60at_checkpoint(pr("sq contacts far=Weighted(Moore(1), 3)"), pr("sq contacts far=Weighted(Moore(1), 2)"),
             pr("sq contacts far=Weighted(Moore(1), 3)"); alg = CheckerboardCPM())
     end
     @testset "a named fold in an energy" begin
-        p60at_checkpoint(pr("sq energy far(40) far=Ball(3.0)"), pr("sq energy far(40) far=Ball(2.0)"),
-            pr("sq energy far(40) far=Ball(3.0)"))
+        p60at_checkpoint(
+            pr("sq energy far(40) far=EuclideanBall(3.0)"), pr("sq energy far(40) far=EuclideanBall(2.0)"),
+            pr("sq energy far(40) far=EuclideanBall(3.0)")
+        )
     end
     @testset "an inline gather in an energy" begin
         p60at_checkpoint(pr("sq energy Moore(1)(40)"), pr("sq energy Moore(2)(40)"), pr("sq energy Moore(1)(40)"))
@@ -368,10 +372,10 @@ end
         p60at_checkpoint(pr("sq ode Moore(2)(40)"), pr("sq ode Moore(1)(40)"), pr("sq ode Moore(2)(40)"))
     end
     @testset "a named relation in a cell ODE" begin
-        p60at_checkpoint(pr("sq ode far(40) far=Ball(2.0)"), pr("sq ode far(40) far=Ball(3.0)"), pr("sq ode far(40) far=Ball(2.0)"))
+        p60at_checkpoint(pr("sq ode far(40) far=EuclideanBall(2.0)"), pr("sq ode far(40) far=EuclideanBall(3.0)"), pr("sq ode far(40) far=EuclideanBall(2.0)"))
     end
     @testset "a copy drive" begin
-        p60at_checkpoint(pr("sq drive far far=Ball(2.0)"), pr("sq drive far far=Ball(3.0)"), pr("sq drive far far=Ball(2.0)"))
+        p60at_checkpoint(pr("sq drive far far=EuclideanBall(2.0)"), pr("sq drive far far=EuclideanBall(3.0)"), pr("sq drive far far=EuclideanBall(2.0)"))
         p60at_checkpoint(pr("sq drive Moore(1)/Moore(1)"), pr("sq drive Moore(2)/Moore(2)"), pr("sq drive Moore(1)/Moore(1)"))
     end
     @testset "a site update" begin
@@ -391,11 +395,11 @@ end
 
 @testset "P6.0at: a checkpoint loads across relations that resolve alike or are not read" begin
     pr = p60at_problem
-    p60at_checkpoint(pr("sq contacts far=Ball(1.5)"), nothing, pr("sq contacts far=Moore(1)"))
+    p60at_checkpoint(pr("sq contacts far=EuclideanBall(1.5)"), nothing, pr("sq contacts far=Moore(1)"))
     p60at_checkpoint(pr("sq energy NeighborOrder(2)(40)"), nothing, pr("sq energy Moore(1)(40)"))
     p60at_checkpoint(pr("hex contacts far=Moore(1)"), nothing, pr("hex contacts far=Hex(1)"))
     p60at_checkpoint(pr("sq far unused"), nothing, pr("sq"))
-    p60at_checkpoint(pr("sq observed far(40) far=Ball(2.0)"), nothing, pr("sq observed far(40) far=Ball(3.0)"))
+    p60at_checkpoint(pr("sq observed far(40) far=EuclideanBall(2.0)"), nothing, pr("sq observed far(40) far=EuclideanBall(3.0)"))
 end
 
 # ---------------------------------------------------------------------------------------
@@ -444,7 +448,7 @@ p60at_moved() = (
 @testset "P6.0at: an unused or observed-only relation does not move the fingerprint" begin
     base = p60at_problem("sq").f.fingerprint
     @test p60at_problem("sq far unused").f.fingerprint == base
-    @test p60at_problem("sq observed far(40) far=Ball(2.0)").f.fingerprint == base
+    @test p60at_problem("sq observed far(40) far=EuclideanBall(2.0)").f.fingerprint == base
     @test p60at_problem("sq proposal=Moore(1)").f.fingerprint != base       # D-124: a proposal is hashed
     @test p60at_problem("sq"; T = Float32).f.fingerprint != base            # the compute type is hashed
 end

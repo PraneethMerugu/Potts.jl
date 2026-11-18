@@ -129,7 +129,7 @@ function p60aq_checkpoint_refused(pa, pb, pa2; k = 3, alg = SequentialCPM(), alg
         pb === nothing || @test_throws ArgumentError init(pb, alg; checkpoint = c)
         i2 = init(pa2, alg2; checkpoint = c)          # control: the same law and offset load
         @test i2.t == k
-        @test i2.u.σ == ck.state.σ
+        @test i2.u.ownership == ck.state.ownership
     end
 end
 
@@ -235,7 +235,8 @@ p60aq_unchanged() = (
     "WortelAct connected" => () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8), connected = true), p60aq_two_wortel(), (0, 10)),
     "MerksVasculogenesis" => () -> PottsProblem(MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
         [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 10);
-        field_solver = Potts.ExplicitEuler(substeps = 2, lower = 0.0)),
+        field_solver = Potts.ExplicitEuler(substeps = 2, lower_bound = 0.0)
+    ),
     "SingleDivisionFixture" => () -> PottsProblem(SingleDivisionFixture(; name = :fixture),
         [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [:epithelial]], (0, 10)),
     "OpenVTGrowingMonolayer" => () -> PottsProblem(OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)),

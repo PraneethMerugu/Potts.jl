@@ -8,9 +8,10 @@ keywords override structural parameters and parameter defaults, and `@extend` bu
 """
 module PottsModels
 
-using Potts: Potts, @potts_model, Center, Circle, Closed, DiscreteCallback, Eden, Frame, Lattice, Metropolis, Moore,
-    NeighborOrder, Periodic, Point, RandomPlane, RandomPoints, Scattered, Splits, VonNeumann, Voronoi, kind, layout,
-    major_length, ownership, overlay, InsertUntil, Tiling, terminate!
+using Potts: Potts, @potts_model, Closed, DiscreteCallback, Lattice, Metropolis, Moore, NeighborOrder, Periodic,
+    RandomPlane, VonNeumann, kind, major_length, ownership, terminate!
+using Potts.Layouts: Center, Circle, Eden, Frame, InsertUntil, Point, RandomPoints, Scattered, Splits, Tiling, Voronoi,
+    layout, overlay
 # for the compile workload (end of this file)
 using Potts: CheckerboardCPM, ExplicitEuler, PottsProblem, SequentialCPM, init, mtkcompile, step!
 using DelimitedFiles: readdlm
@@ -140,11 +141,13 @@ function _precompile_workload()
     _first_mcs(mtkcompile(GranerGlazier(; name = :gg)), [ownership => gg[1], kind => gg[2]])
     _first_mcs(mtkcompile(WortelAct(; name = :w, lattice = (24, 24))), [ownership => σ, kind => [:cell]])
     _first_mcs(mtkcompile(MerksVasculogenesis(; name = :m, lattice = (24, 24))),
-        merks_state(; lattice = (24, 24), n = 2, side = 5); field_solver = ExplicitEuler(substeps = 15, lower = 0.0))
+        merks_state(; lattice = (24, 24), n = 2, side = 5); field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0)
+    )
     # Float32 under CheckerboardCPM: the configuration of a device run (PG-11)
     _first_mcs(mtkcompile(MerksVasculogenesis(; name = :m, lattice = (24, 24))),
         merks_state(; lattice = (24, 24), n = 2, side = 5), CheckerboardCPM(); T = Float32,
-        field_solver = ExplicitEuler(substeps = 15, lower = 0.0))
+        field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0)
+    )
     _first_mcs(mtkcompile(Merks2006(; name = :m6, lattice = (24, 24))),
         layout(merks2006_layout(; lattice = (24, 24), n = 2, side = 5), (24, 24)); field_solver = ExplicitEuler(substeps = 15))
     _first_mcs(mtkcompile(Merks2008(; name = :m8, lattice = (24, 24))),

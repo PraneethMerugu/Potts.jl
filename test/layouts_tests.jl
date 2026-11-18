@@ -2,6 +2,7 @@
 
 
 @testitem "layouts: Tiling" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: Tiling" begin
         # counts, volumes and bounds, checked against the arithmetic of whole boxes
         for (sz, sp, reg, dims) in (((3, 2), (1, 0), (2:19, 4:11), (20, 12)), ((4, 4), (2, 2), (1:17, 1:17), (17, 17)),
@@ -25,6 +26,7 @@
 end
 
 @testitem "layouts: invalid arguments" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: invalid arguments" begin
         err(f) = try
             f(); ""
@@ -51,6 +53,7 @@ end
 end
 
 @testitem "layouts: Frame and overlay precedence" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: Frame and overlay precedence" begin
         for (dims, w) in (((9, 7), 1), ((10, 12), 2), ((6, 7, 8), 1))
             σ = _op(layout(Frame(:w; width = w), dims), ownership)
@@ -87,6 +90,7 @@ end
 end
 
 @testitem "layouts: Scattered" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: Scattered" begin
         # 3D, gap 2: every pair of cells is more than two sites apart, volumes by counting
         for seed in 1:3
@@ -129,6 +133,7 @@ end
 end
 
 @testitem "layouts: wrap-aware area bound" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: wrap-aware area bound" begin
         msg(dims) = try
             layout(Scattered(10, (3, 3); kinds = [:cell], seed = 1), dims); ""
@@ -152,6 +157,7 @@ end
 end
 
 @testitem "layouts: periodic lattices" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: periodic lattices" begin
         sys = PeriodicLayoutProbe(; name = :p)
         per = (true, true)
@@ -178,6 +184,7 @@ end
 end
 
 @testitem "layouts: lattices, systems and problems" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: lattices, systems and problems" begin
         # hexagonal lattice: indices are axial, dims come from the lattice
         sys = HexLayoutProbe(; name = :h)
@@ -190,8 +197,8 @@ end
         prob = PottsProblem(sys, op, (0, 5))
         @test prob.lattice.geometry isa Hexagonal
         u = solve(prob, SequentialCPM(proposal = Hex(1))).u[end]
-        @test Array(u.σ)[σ .== 1] == σ[σ .== 1]                            # the frozen frame stays
-        @test u.cell.volume == [count(==(c), u.σ) for c in 1:maximum(σ)]
+        @test Array(u.ownership)[σ .== 1] == σ[σ .== 1]                            # the frozen frame stays
+        @test u.cell.volume == [count(==(c), u.ownership) for c in 1:maximum(σ)]
         # a lattice domain: cells must lie inside it
         lat = Lattice((10, 10); domain = OnIndices(x -> x[1] <= 5))
         @test _op(layout(Tiling((2, 2); region = (1:5, 1:10), kinds = [:a]), lat), ownership)[6:end, :] == zeros(Int32, 5, 10)
@@ -207,6 +214,7 @@ end
 end
 
 @testitem "layouts: Frame on a lattice domain (P6.1a2)" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: Frame on a lattice domain (P6.1a2)" begin
         sys = DiskFrameProbe(; name = :disk)
         mask = Potts.lattice(sys).domain
@@ -270,18 +278,19 @@ end
         @test maximum(σ0) == 1 + 9
         for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
             u = solve(PottsProblem(sys, op, (0, 20)), alg).u[end]
-            σ = Array(u.σ)
+            σ = Array(u.ownership)
             @test (σ .== 1) == (σ0 .== 1)                                       # the frame stays
             @test σ != σ0 && all(σ[.!mask] .== 0)                               # cells move, never leave the disk
             @test u.cell.volume[1:maximum(σ0)] == [count(==(c), σ) for c in 1:maximum(σ0)]
         end
         # negative control: the same frame with a mobile wall kind moves
         u = solve(PottsProblem(DiskMobileWallProbe(; name = :mob), op, (0, 20)), SequentialCPM(; proposal = Moore(1))).u[end]
-        @test (Array(u.σ) .== 1) != (σ0 .== 1)
+        @test (Array(u.ownership) .== 1) != (σ0 .== 1)
     end
 end
 
 @testitem "layouts: extension API and split warnings" setup = [LayoutsSetup] tags = [:potts, :layouts, :timing] begin
+    using Potts.Layouts
     @testset "layouts: extension API and split warnings" begin
         @test all(((m, n),) -> Base.ispublic(m, n), ScratchLayouts.QUALIFIED)
         @test !Base.ispublic(Potts, :_disconnected)                        # control: internals are not
@@ -332,6 +341,7 @@ end
 end
 
 @testitem "layouts reproduce an existing state's geometry" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts reproduce an existing state's geometry" begin
         # the follower slab of `akeeb_state` is a 3×3 Tiling of the rows `y ≤ slab`; its
         # leaders then overwrite single follower sites

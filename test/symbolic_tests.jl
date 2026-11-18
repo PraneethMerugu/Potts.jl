@@ -18,7 +18,7 @@
             agree_c &= sp.f.constraint(u, sp.p, prop, ctx) == hp.f.constraint(u, hp.p, prop, ctx)
             # commit: both applied to copies after the ownership write
             a = deepcopy(u); b = deepcopy(u)
-            a.σ[prop.target] = prop.new; b.σ[prop.target] = prop.new
+            a.ownership[prop.target] = prop.new; b.ownership[prop.target] = prop.new
             sp.f.commit!(a, sp.p, prop, ctx); hp.f.commit!(b, hp.p, prop, ctx)
             agree_commit &= all(k -> getfield(a.cell, k) == getfield(b.cell, k), intersect(keys(a.cell), keys(b.cell))) &&
                 all(k -> getfield(a.site, k) == getfield(b.site, k), intersect(keys(a.site), keys(b.site)))
@@ -35,7 +35,7 @@
         tspan = (0, 15)
         us = solve(remake(sp; tspan, seed = 5), SequentialCPM(; proposal = Moore(1))).u[end]
         uh = solve(remake(hp; tspan, seed = 5), SequentialCPM(; proposal = Moore(1))).u[end]
-        @test us.σ == uh.σ
+        @test us.ownership == uh.ownership
     end
 end
 
@@ -53,7 +53,7 @@ end
         @test_throws ArgumentError PottsProblem(
             SORTING, [
                 ownership => zeros(Int32, 72, 72), kind => Int[],
-                first(filter(x -> Potts.info(x).name === :J, Potts.parameters(getfield(SORTING, :sys)))) => [0 1 1; 2 0 1; 1 1 0],
+                first(filter(x -> Potts.info(x).name === :J, Potts.declared_parameters(getfield(SORTING, :sys)))) => [0 1 1; 2 0 1; 1 1 0],
             ], (0, 1)
         )
     end
@@ -73,14 +73,14 @@ end
 @testitem "remake with symbolic maps; the sweep law" setup = [SymbolicSetup, PortsSetup] tags = [:potts, :symbolic] begin
     @testset "remake with symbolic maps; the sweep law" begin
         prob = symbolic_graner_problem(; nmcs = 5)
-        λ = first(filter(x -> Potts.info(x).name === :λ, Potts.parameters(getfield(SORTING, :sys))))
+        λ = first(filter(x -> Potts.info(x).name === :λ, Potts.declared_parameters(getfield(SORTING, :sys))))
         q = remake(prob; p = [λ => 3.0])
         @test q.p.λ == 3.0 && q.p.V₀ == prob.p.V₀ && q.f === prob.f
         @test remake(prob; p = Dict(:T => 2)).p.T === 2.0              # converted to the scalar type
         @test_throws ArgumentError remake(prob; p = [:nope => 1.0])
         σ, kinds = graner_state()
         r = remake(prob; u0 = [ownership => circshift(σ, (3, 0)), kind => kinds])
-        @test r.u0.σ == circshift(σ, (3, 0)) && r.u0.cell.volume == prob.u0.cell.volume
+        @test r.u0.ownership == circshift(σ, (3, 0)) && r.u0.cell.volume == prob.u0.cell.volume
         @test prob.f.acceptance === Metropolis()
     end
 end
@@ -112,12 +112,12 @@ end
         # SciML keep sentinels
         @test remake(q; p = missing).p === q.p
         @test remake(q; p = nothing).p === q.p
-        @test remake(prob; u0 = nothing).u0.σ == prob.u0.σ
+        @test remake(prob; u0 = nothing).u0.ownership == prob.u0.ownership
         @test remake(prob; u0 = missing).u0.cell.volume == prob.u0.cell.volume
         integ = init(prob, SequentialCPM())
         step!(integ)
         reinit!(integ, nothing)
-        @test integ.state.σ == prob.u0.σ && integ.t == 0
+        @test integ.state.ownership == prob.u0.ownership && integ.t == 0
         # non-states and non-maps: ArgumentErrors, not MethodErrors or silent replacement
         @test_throws ArgumentError remake(prob; u0 = 3.0)
         @test_throws ArgumentError remake(prob; u0 = [1, 2])
@@ -174,10 +174,10 @@ end
         end
 
         sys = Helpers(; name = :h)
-        vals = Dict(Potts.info(p).name => Potts.info(p).default for p in Potts.parameters(sys))
+        vals = Dict(Potts.info(p).name => Potts.info(p).default for p in Potts.declared_parameters(sys))
         @test vals[:λ] == 6.0 && vals[:T] == 5.0
         sys2 = Helpers(; name = :h, λ = 2.0)
-        @test Potts.info(first(Potts.parameters(sys2))).default == 2.0
+        @test Potts.info(first(Potts.declared_parameters(sys2))).default == 2.0
         # constructing a model twice yields the same generated code (gathers numbered per model)
         σ = zeros(Int32, 8, 8); σ[2:3, 2:3] .= 1
         a = PottsProblem(WortelAct(; name = :w, lattice = (8, 8)), [ownership => σ, kind => [1]], (0, 1))
@@ -193,7 +193,7 @@ end
         sys = Census(; name = :census)
         prob = PottsProblem(sys, [ownership => σ, kind => kinds], (0, 6))
         sol = solve(prob, SequentialCPM(; proposal = Moore(1)); saveat = [2, 4, 6])
-        named(n) = only(filter(x -> Potts.info(x).name === n, vcat(Potts.variables(sys), [o.lhs for o in Potts._p(sys, :observed)], Potts.parameters(sys))))
+        named(n) = only(filter(x -> Potts.info(x).name === n, vcat(Potts.declared_variables(sys), [o.lhs for o in Potts._p(sys, :observed)], Potts.declared_parameters(sys))))
         live(u) = findall(>(0), u.cell.volume)
         @test sol[named(:total)] == [sum(u.site.act) for u in sol.u]
         @test sol[named(:ndark)][2:end] == [count(c -> kinds[c] == 1, live(u)) for u in sol.u[2:end]]   # t = 0: default
@@ -252,8 +252,8 @@ end
         @test Tof(dark_cell, light_cell) == 5.0 && Tof(light_cell, dark_cell) == 5.0     # min of the two
         @test Tof(0, light_cell) == 20.0 && Tof(dark_cell, 0) == 5.0                     # medium never contributes
         u = solve(prob, SequentialCPM(; proposal = Moore(1))).u[end]
-        @test u.σ[:, 1:2] == σk[:, 1:2] && u.cell.volume[1] == 48                       # the wall never moves
-        @test u.σ != σk
+        @test u.ownership[:, 1:2] == σk[:, 1:2] && u.cell.volume[1] == 48                       # the wall never moves
+        @test u.ownership != σk
     end
 end
 
@@ -430,7 +430,7 @@ end
         @test total_energy(remake(prob; p = [:n => 4.0])) == oracle([9, 4], 4.0)
         worst = 0.0
         for (u, prop) in proposal_states(prob; mcs = (0, 5), n = 300)
-            a = deepcopy(u); a.σ[prop.target] = prop.new
+            a = deepcopy(u); a.ownership[prop.target] = prop.new
             prob.f.commit!(a, prob.p, prop, ctx_of(prob))
             worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u) + Potts._killing_credit(prob, u, prop, a))))
         end

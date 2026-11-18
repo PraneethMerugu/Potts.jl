@@ -88,8 +88,8 @@
 #         in every order (including an unlisted after_mcs under `fields, sweep`).
 #     (b) a Merks-shaped model (secreting cells, decay in the medium, chemotaxis, an absorbing
 #         frozen frame): with `fields, sweep` the field step of MCS k sees σ(k) (the saved state
-#         before the MCS), so u[k+1].c equals the explicit-Euler oracle on (u[k].c, u[k].σ);
-#         with `sweep, fields` it equals the oracle on (u[k].c, u[k+1].σ). Each order FAILS the
+#         before the MCS), so u[k+1].c equals the explicit-Euler oracle on (u[k].c, u[k].ownership);
+#         with `sweep, fields` it equals the oracle on (u[k].c, u[k+1].ownership). Each order FAILS the
 #         other's oracle by > 1e-3 (negative control: swapping the order changes the result).
 #     Both on SequentialCPM and CheckerboardCPM.
 #  6. Listing the default relative order (`sweep, fields`; the full canonical list) equals no
@@ -208,7 +208,7 @@ p63b_body(base::Expr, extra...) = (b = copy(base); foreach(e -> push!(b.args, e)
 # `@parameters`, `@variables`) and returns `p63b_system(…)`.
 p63b_system(eq, bcs, dims, xs, dvs, ps) = Potts.ModelingToolkitBase.PDESystem([eq], bcs,
     Potts.LatticePDE.lattice_domain(Potts.t, Tuple(xs), dims), [Potts.t; xs], dvs, ps; name = :p63b_field)
-const p63b_Δ = Potts.LatticePDE.Δ
+const p63b_laplacian = Potts.LatticePDE.laplacian
 const p63b_masked = Potts.LatticePDE.masked
 
 # --- 1. the 2D absorbing ring ---------------------------------------------------------------
@@ -223,7 +223,8 @@ function p63b_ring_pde(; clamp)
     Potts.ModelingToolkitBase.@parameters x y Dc = 0.2 s = 0.05 cb = 0.0
     Potts.ModelingToolkitBase.@variables c(..) mask(..)::Bool [input = true]
     C, M = c(Potts.t, x, y), mask(Potts.t, x, y)
-    return p63b_system(Potts.D(C) ~ Dc * p63b_Δ(C) + s, [c(0, x, y) ~ 0.0; clamp ? [C ~ p63b_masked(M, cb)] : []],
+    return p63b_system(
+        Potts.D(C) ~ Dc * p63b_laplacian(C) + s, [c(0, x, y) ~ 0.0; clamp ? [C ~ p63b_masked(M, cb)] : []],
         (14, 12), [x, y], clamp ? [C, M] : [C], [Dc, s, cb])
 end
 P63B_SRC[:P63bRing] = p63b_body(P63B_RING_BASE, :(@fields p63b_ring_pde(; clamp = true) (:mask => kind == border)))
@@ -245,7 +246,8 @@ function p63b_sink_pde()
     Potts.ModelingToolkitBase.@parameters x y Dc = 0.2 s = 0.05
     Potts.ModelingToolkitBase.@variables c(..) mask(..)::Bool [input = true]
     C, M = c(Potts.t, x, y), mask(Potts.t, x, y)
-    return p63b_system(Potts.D(C) ~ Dc * p63b_Δ(C) + s, [c(0, x, y) ~ 0.0, C ~ p63b_masked(M, 0.0)], (16, 16), [x, y],
+    return p63b_system(
+        Potts.D(C) ~ Dc * p63b_laplacian(C) + s, [c(0, x, y) ~ 0.0, C ~ p63b_masked(M, 0.0)], (16, 16), [x, y],
         [C, M], [Dc, s])
 end
 P63B_SRC[:P63bSink] = quote
@@ -275,7 +277,8 @@ function p63b_face2_pde(; dirichlet = false)
     Potts.ModelingToolkitBase.@parameters x y Dc = 0.2
     Potts.ModelingToolkitBase.@variables c(..)
     C = c(Potts.t, x, y)
-    return p63b_system(Potts.D(C) ~ Dc * p63b_Δ(C), [c(0, x, y) ~ 0.0; dirichlet ? [c(Potts.t, 0, y) ~ 0.0] : []],
+    return p63b_system(
+        Potts.D(C) ~ Dc * p63b_laplacian(C), [c(0, x, y) ~ 0.0; dirichlet ? [c(Potts.t, 0, y) ~ 0.0] : []],
         (16, 10), [x, y], [C], [Dc])
 end
 P63B_SRC[:P63bFace2] = p63b_body(P63B_FACE2_BASE, :(@fields p63b_face2_pde(; dirichlet = true)))
@@ -291,7 +294,7 @@ function p63b_face3_pde()
     Potts.ModelingToolkitBase.@variables c(..) mask(..)::Bool [input = true]
     C, M, t = c(Potts.t, x, y, z), mask(Potts.t, x, y, z), Potts.t
     bcs = [c(0, x, y, z) ~ 0.0, c(t, 0, y, z) ~ 1.0, c(t, 7, y, z) ~ 0.0, c(t, x, 6, z) ~ S, C ~ p63b_masked(M, 0.0)]
-    return p63b_system(Potts.D(C) ~ Dc * p63b_Δ(C), bcs, (7, 6, 5), [x, y, z], [C, M], [Dc, S])
+    return p63b_system(Potts.D(C) ~ Dc * p63b_laplacian(C), bcs, (7, 6, 5), [x, y, z], [C, M], [Dc, S])
 end
 P63B_SRC[:P63bFace3] = quote
     @kinds medium border[frozen]
@@ -398,7 +401,8 @@ function p63b_merks_pde()
     Potts.ModelingToolkitBase.@parameters x y Dc = 0.2 σc = 0.3 δc = 0.05
     Potts.ModelingToolkitBase.@variables c(..) a(..)::Bool [input = true] med(..)::Bool [input = true] mask(..)::Bool [input = true]
     C, X, Y, M = c(Potts.t, x, y), a(Potts.t, x, y), med(Potts.t, x, y), mask(Potts.t, x, y)
-    return p63b_system(Potts.D(C) ~ Dc * p63b_Δ(C) + σc * X - δc * C * Y, [c(0, x, y) ~ 0.0, C ~ p63b_masked(M, 0.0)],
+    return p63b_system(
+        Potts.D(C) ~ Dc * p63b_laplacian(C) + σc * X - δc * C * Y, [c(0, x, y) ~ 0.0, C ~ p63b_masked(M, 0.0)],
         (16, 16), [x, y], [C, X, Y, M], [Dc, σc, δc])
 end
 const P63B_MERKS_BASE = quote
@@ -438,7 +442,8 @@ function p63b_host_pde()
     Potts.ModelingToolkitBase.@parameters x y Dc = 0.1
     Potts.ModelingToolkitBase.@variables c(..) a(..)::Bool [input = true]
     C = c(Potts.t, x, y)
-    return p63b_system(Potts.D(C) ~ Dc * p63b_Δ(C) + a(Potts.t, x, y), [c(0, x, y) ~ 0.0], (16, 16), [x, y],
+    return p63b_system(
+        Potts.D(C) ~ Dc * p63b_laplacian(C) + a(Potts.t, x, y), [c(0, x, y) ~ 0.0], (16, 16), [x, y],
         [C, a(Potts.t, x, y)], [Dc])
 end
 const P63B_HOST_BASE = quote
@@ -465,7 +470,7 @@ end
 # helpers
 # =======================================================================================
 const P63B_ALGS = (SequentialCPM(), CheckerboardCPM())
-p63b_same(u, v) = Array(u.σ) == Array(v.σ) && u.site == v.site && u.cell == v.cell && u.model == v.model
+p63b_same(u, v) = Array(u.ownership) == Array(v.ownership) && u.site == v.site && u.cell == v.cell && u.model == v.model
 p63b_c(u) = Float64.(Array(u.site.c))
 p63b_mass(u) = sum(p63b_c(u))
 
@@ -575,7 +580,7 @@ end
             @test all(==(0.0), c[ring])                                             # exactly
             @test maximum(abs, c .- p63b_ring_oracle(c0, n, k)) < 1e-12             # every substep
         end
-        @test Array(sol.u[end].σ) == op[1].second                                  # the frame is frozen
+        @test Array(sol.u[end].ownership) == op[1].second                                  # the frame is frozen
     end
     # a parameter value: remake keeps the generated code, and the clamp follows it
     op, c0 = p63b_ring_op(; cb = 0.5)
@@ -595,11 +600,11 @@ end
     prob = p63b_problem(:P63bSink, op, (0, 10); field_solver = ExplicitEuler(substeps = 2), seed = 5)
     sol = solve(prob, alg; saveat = 1)
     for u in sol.u[2:end]
-        σ, c = Array(u.σ), p63b_c(u)
+        σ, c = Array(u.ownership), p63b_c(u)
         @test all(==(0.0), c[σ .== 1])
         @test all(>(0.0), c[σ .== 0])
     end
-    @test any(u -> Array(u.σ) != op[1].second, sol.u)                              # control: the sink moved
+    @test any(u -> Array(u.ownership) != op[1].second, sol.u)                              # control: the sink moved
 end
 
 # =======================================================================================
@@ -653,11 +658,11 @@ end
             @test all(==(Float64(ex.wa(k))), Array(u.site.wa))
         end
         # after_mcs follows the sweep in every order (listed or not)
-        @test all(u -> Array(u.site.occ) == Float64.(Array(u.σ) .== 1), sol.u[2:end])
-        @test (Array(sol.u[2].σ) != σ0) == ex.moves0
+        @test all(u -> Array(u.site.occ) == Float64.(Array(u.ownership) .== 1), sol.u[2:end])
+        @test (Array(sol.u[2].ownership) != σ0) == ex.moves0
     end
     # negative control: swapping `fields` and `sweep` changes the trajectory
-    @test Array(sols[:fields_sweep].u[2].σ) != Array(sols[:sweep_fields].u[2].σ)
+    @test Array(sols[:fields_sweep].u[2].ownership) != Array(sols[:sweep_fields].u[2].ownership)
     # listing the default relative order is no schedule, bit for bit
     for v in (:sweep_fields, :canonical)
         @test all(i -> p63b_same(sols[v].u[i], sols[:none].u[i]), eachindex(sols[:none].u))
@@ -674,15 +679,15 @@ end
             u, u′ = sol.u[k], sol.u[k + 1]
             @test all(==(0.0), p63b_c(u′)[ring])
             # fields first: the field step of MCS k sees σ(k); sweep first: it sees σ(k + 1)
-            a = p63b_merks_step(p63b_c(u), fieldsfirst ? u.σ : u′.σ)
-            b = p63b_merks_step(p63b_c(u), fieldsfirst ? u′.σ : u.σ)
+            a = p63b_merks_step(p63b_c(u), fieldsfirst ? u.ownership : u′.ownership)
+            b = p63b_merks_step(p63b_c(u), fieldsfirst ? u′.ownership : u.ownership)
             right = max(right, maximum(abs, p63b_c(u′) .- a))
             wrong = max(wrong, maximum(abs, p63b_c(u′) .- b))
         end
         @test right < 1e-12
         @test wrong > 1e-3                          # negative control: the other order's oracle fails
     end
-    @test any(k -> Array(fs.u[k].σ) != Array(fs.u[k + 1].σ), 1:6)                   # control: cells moved
+    @test any(k -> Array(fs.u[k].ownership) != Array(fs.u[k + 1].ownership), 1:6)                   # control: cells moved
 end
 
 # =======================================================================================
@@ -695,7 +700,7 @@ end
     @test all(i -> p63b_same(listed.u[i], none.u[i]), eachindex(none.u))
     for (sol, after) in ((none, false), (lifefirst, true))
         u = sol.u[2]
-        σ, c, vol = Array(u.σ), p63b_c(u), Array(u.cell.volume)
+        σ, c, vol = Array(u.ownership), p63b_c(u), Array(u.cell.volume)
         @test count(>(0), vol) == 2                                                 # control: it divided
         @test all(i -> c[i] == (σ[i] == 0 ? 0.0 : after ? Float64(vol[σ[i]]) : 16.0), eachindex(σ))
     end
@@ -713,11 +718,11 @@ function p63b_face2_bad(which)
     Potts.ModelingToolkitBase.@variables c(..)
     if which === :periodic
         C = c(Potts.t, x, y)
-        return p63b_system(Potts.D(C) ~ Dc * p63b_Δ(C), [c(0, x, y) ~ 0.0, c(Potts.t, x, 0) ~ 0.0], (16, 10), [x, y], [C], [Dc])
+        return p63b_system(Potts.D(C) ~ Dc * p63b_laplacian(C), [c(0, x, y) ~ 0.0, c(Potts.t, x, 0) ~ 0.0], (16, 10), [x, y], [C], [Dc])
     end
     C = c(Potts.t, x, y, z)
     zface = Potts.ModelingToolkitBase.Differential(z)(c(Potts.t, x, y, 0)) ~ 0.0
-    return p63b_system(Potts.D(C) ~ Dc * p63b_Δ(C), [c(0, x, y, z) ~ 0.0, zface], (16, 10, 4), [x, y, z], [C], [Dc])
+    return p63b_system(Potts.D(C) ~ Dc * p63b_laplacian(C), [c(0, x, y, z) ~ 0.0, zface], (16, 10, 4), [x, y, z], [C], [Dc])
 end
 function p63b_wb_bad()
     Potts.ModelingToolkitBase.@parameters x y
@@ -804,12 +809,12 @@ end
         # the moving mask
         sol = solve(p63b_problem(:P63bSink, p63b_sink_op(), (0, 10); T = Float32, field_solver = ExplicitEuler(substeps = 2),
             seed = 5), alg; backend, saveat = 1)
-        @test all(u -> all(==(0.0), p63b_c(u)[Array(u.σ) .== 1]) && all(>(0.0), p63b_c(u)[Array(u.σ) .== 0]), sol.u[2:end])
+        @test all(u -> all(==(0.0), p63b_c(u)[Array(u.ownership) .== 1]) && all(>(0.0), p63b_c(u)[Array(u.ownership) .== 0]), sol.u[2:end])
         # the order: gated drive and the Merks-shaped oracle
         for v in (:sweep_fields, :fields_sweep)
             sol = solve(p63b_order_problem(v; T = Float32), alg; backend, saveat = 1)
             ex = P63B_ORDER_EXPECT[v]
-            @test (Array(sol.u[2].σ) != p63b_order_σ()) == ex.moves0
+            @test (Array(sol.u[2].ownership) != p63b_order_σ()) == ex.moves0
             @test all(k -> all(==(Float32(ex.wa(k))), Array(sol.u[k + 1].site.wa)), 1:3)
         end
         for (v, fieldsfirst) in ((:fields_sweep, true), (:sweep_fields, false))
@@ -817,8 +822,8 @@ end
             right = wrong = 0.0
             for k in 1:6
                 u, u′ = sol.u[k], sol.u[k + 1]
-                right = max(right, maximum(abs, p63b_c(u′) .- p63b_merks_step(p63b_c(u), fieldsfirst ? u.σ : u′.σ)))
-                wrong = max(wrong, maximum(abs, p63b_c(u′) .- p63b_merks_step(p63b_c(u), fieldsfirst ? u′.σ : u.σ)))
+                right = max(right, maximum(abs, p63b_c(u′) .- p63b_merks_step(p63b_c(u), fieldsfirst ? u.ownership : u′.ownership)))
+                wrong = max(wrong, maximum(abs, p63b_c(u′) .- p63b_merks_step(p63b_c(u), fieldsfirst ? u′.ownership : u.ownership)))
             end
             @test right < 1e-4
             @test wrong > 1e-3

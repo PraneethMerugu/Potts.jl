@@ -31,8 +31,8 @@ end
             )
             sys = component_model()
             cs = mtkcompile(sys)
-            @test Set(Potts.info(v).name for v in Potts.variables(getfield(cs, :sys))) == Set([:decay₊y_c, :clock₊m_c])
-            @test Set(Potts.info(v).name for v in Potts.parameters(getfield(cs, :sys))) == Set([:T, :decay₊k_c, :clock₊τ_c])   # r_c is coupled
+            @test Set(Potts.info(v).name for v in Potts.declared_variables(getfield(cs, :sys))) == Set([:decay₊y_c, :clock₊m_c])
+            @test Set(Potts.info(v).name for v in Potts.declared_parameters(getfield(cs, :sys))) == Set([:T, :decay₊k_c, :clock₊τ_c])   # r_c is coupled
             # no copies (T = 0 and frozen cells) so the volume coupling is exact
             prob = remake(PottsProblem(cs, op, (0, 10); ode_solver = solver); p = [:T => 1.0e-9])
             sol = solve(prob, SequentialCPM(); saveat = 0:10)
@@ -126,7 +126,7 @@ end
         @test p1.f.fingerprint == p2.f.fingerprint && Potts.lattice(DiskSorting(; name = :a)) == Potts.lattice(DiskSorting(; name = :b))
         integ = init(p1, SequentialCPM()); foreach(_ -> step!(integ), 1:3)
         ck = checkpoint(integ)
-        @test solve!(init(p2, SequentialCPM(); checkpoint = ck)).u[end].σ == solve(p1, SequentialCPM()).u[end].σ
+        @test solve!(init(p2, SequentialCPM(); checkpoint = ck)).u[end].ownership == solve(p1, SequentialCPM()).u[end].ownership
         # site populations stay inside the domain
         @test observe(p1, Potts._fold_iter(count, s -> true, Potts.sites, nothing)) == count(Potts.lattice(DiskSorting(; name = :d)).domain)
     end
@@ -147,7 +147,7 @@ end
 @testitem "model-scope ODEs and components" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
     @testset "model-scope ODEs and components" begin
         σ = zeros(Int32, 20, 20); σ[2:4, 2:4] .= 1; σ[10:12, 10:12] .= 2; σ[15:17, 3:5] .= 3
-        p = PottsProblem(Systemic(; name = :s), [ownership => σ, kind => [1, 1, 1]], (0, 10); ode_solver = RK4(substeps = 4))
+        p = PottsProblem(Systemic(; name = :s), [ownership => σ, kind => [1, 1, 1]], (0, 10); ode_solver = Potts.RK4(substeps = 4))
         @test :pk₊drug_c in propertynames(p.u0.model) && :pk₊drug_k in propertynames(p.p)
         for alg in (SequentialCPM(), CheckerboardCPM())
             u = solve(p, alg).u[end]

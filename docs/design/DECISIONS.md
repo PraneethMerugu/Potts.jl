@@ -5439,3 +5439,13 @@ Review fixes (F4-B6 review, 2026-11-11; tests in test/fields_couple_b6.jl, negat
 - **R12.** F5-07 rides with B5. F5-03 rides with the LatticePDE rename commit in B4. F5-08 and F5-09 go to C10. F5-05 (`at2`) and F5-06 (per-field periodicity) are a feature batch after B8. F5-10 and F5-13 stay optional, with an `ab` window. F5-12 is a probe test in B7.
 - **Follow-ups.**
   1. A time-free steady field solve (`solve` on a `LatticeProblem` with no time span) still returns `FieldSolution`. SciML returns a `SteadyStateSolution` there. B3 keeps the current form for now (coordinator ruling 2026-11-16).
+
+## D-288 Conformance renames: the rulings on the name table (2026-11-17; user rulings 2026-11-17 in `research/conformance/SUMMARY.md`, "B4 rulings")
+
+- **The name table.** `research/conformance/B4-renames.md` is approved with its recommendations. The renames are plain renames (D-254, D-286): every caller changes in the same commit, with no aliases or deprecations, except the DSL math aliases below.
+- **DSL Unicode.** ASCII names are primary: `laplacian` and ASCII primes. `Δ` and `′` stay as aliases inside the DSL only. This amends D-254 for math symbols. Model parameter symbols stay as the papers write them.
+- **`u.σ` becomes `u.ownership`.**
+- **Layout words move** to an opt-in `Potts.Layouts` submodule, as `Potts.Fields` holds `t`, `x`, `y`, `z`.
+- **Checkerboard keywords** are `inline_max_blocks`, `fused_lifecycle_max_sites` and `fused_lifecycle_max_cells`.
+- **C-87 is closed as conforming.** Only F5-03 remains of it: `PottsEntity`, `get_potts_entity` and the `potts_entity` option move from LatticePDE to Potts.
+- **Solver keywords.** `inner` becomes `linsolve`, `rtol` becomes `reltol`, `budget` becomes `maxiters` and `restart` becomes `gmres_restart`. `precond` and `newton` are not renamed here. A later "solver composition" batch makes the device solvers LinearSolve algorithms, moves the preconditioner to LinearSolve's `precs` contract, and gives `nlsolve` a Newton object whose keywords mean what OrdinaryDiffEq's `NLNewton` keywords mean. It starts with a design check of the current OrdinaryDiffEq and NonlinearSolve interfaces and needs an A/B window.

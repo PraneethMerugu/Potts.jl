@@ -139,30 +139,14 @@ end
             ArgumentError, ["`substeps = 0` is not a count", "leave `substeps` out"],
             () -> ExplicitEuler(; substeps = 0)
         )
-        sv_throws(ArgumentError, ["ExplicitEuler", "must be finite and > 0"], () -> ExplicitEuler(; dt = -1.0))
-        sv_throws(ArgumentError, ["ExplicitEuler", "must be finite and > 0"], () -> ExplicitEuler(; dt = Inf))
-        @test ExplicitEuler(; substeps = 3).substeps == 3 && ExplicitEuler().dt === nothing   # control
-        # a `PottsProblem` steps over the MCS window: a `dt` is refused, naming it, for a field and
-        # for an ODE; a rate field refuses `ExplicitMap` by name
+        # the window is a keyword of `solve`, not of the algorithm: `dt` is no constructor keyword
+        sv_throws(ArgumentError, ["ExplicitEuler", "keyword of `solve`"], () -> ExplicitEuler(; dt = 0.5))
+        @test ExplicitEuler(; substeps = 3).substeps == 3 && !hasproperty(ExplicitEuler(), :dt)   # control
+        # a `PottsProblem` steps over the MCS window; a rate field refuses `ExplicitMap` by name
         op = [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:A]]
-        sv_throws(
-            ArgumentError, ["dt = 0.5", "MCS window", "leave `dt` out"],
-            () -> PottsProblem(SolverOneField(; name = :f), op, (0, 1); field_solver = ExplicitEuler(; dt = 0.5))
-        )
-        sv_throws(
-            ArgumentError, ["the field `c`", "MCS window", "leave `dt` out"],
-            () -> PottsProblem(
-                SolverOneField(; name = :f), op, (0, 1); field_solver = ExplicitEuler(),
-                solvers = [:c => ExplicitEuler(; dt = 0.5)]
-            )
-        )
         sv_throws(
             ArgumentError, ["`ExplicitMap()` steps discrete maps"],
             () -> PottsProblem(SolverOneField(; name = :f), op, (0, 1); field_solver = ExplicitMap())
-        )
-        sv_throws(
-            ArgumentError, ["`ode_solver`", "MCS window", "leave `dt` out"],
-            () -> PottsProblem(SolverPairYS(; name = :p), solver_op(), (0, 1); ode_solver = ExplicitEuler(; dt = 0.5))
         )
         @test PottsProblem(SolverOneField(; name = :f), op, (0, 1); field_solver = ExplicitEuler()) isa PottsProblem   # control
         # an ODE's `substeps = nothing` is one step, keyword-built
@@ -207,7 +191,7 @@ end
             ufn = (u1, u2, u3)[N]
             c = ufn(t, xs...)
             dom = LP.lattice_domain(t, xs, dims; spacing, tspan = (0.0, dtval))
-            sys = LP.PDESystem([Dt(c) ~ Dp * LP.Δ(c) - kp * c], [ufn(0, xs...) ~ 0.0], dom, [t; collect(xs)], [c], [Dp, kp]; name = :ss)
+            sys = LP.PDESystem([Dt(c) ~ Dp * LP.laplacian(c) - kp * c], [ufn(0, xs...) ~ 0.0], dom, [t; collect(xs)], [c], [Dp, kp]; name = :ss)
             return LP.discretize(sys, LP.LatticeDiscretization(LP.Grid(dims); T = Float64)), [Dp => Dval, kp => kval]
         end
 
@@ -230,7 +214,7 @@ end
         for (dims, spacing, Dval, kval, dtval) in rows
             prob, ps = build_field_prob(dims, spacing, Dval, kval, dtval)
             pr = remake(prob; p = ps)
-            n = LFP.substeps(pr.problem_type.problem, ExplicitEuler(; dt = dtval), pr.p.values)
+            n = LFP.substeps(pr.problem_type.problem, ExplicitEuler(), pr.p.values; dt = dtval)
             rho = Dval * sum(4.0 / h^2 for h in spacing) + kval
             expected_n = max(1, ceil(Int, dtval * rho / 1.8))
             @test n == expected_n

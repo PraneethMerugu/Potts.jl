@@ -27,7 +27,6 @@ function b6_build_err(ex)
     end
 end
 
-b6_own(fs) = typeof(fs)((n === :dt ? 1.0 : getfield(fs, n) for n in fieldnames(typeof(fs)))...)
 b6_tol(::ExplicitEuler) = 0.0
 b6_tol(::BackwardEuler) = 1.0e-9
 
@@ -38,30 +37,30 @@ module B6
     @variables c(..) = 0.0 L(..) = 0.0 u(..) = 0.0 sec(..)::Bool [input = true] vol(..) [input = true] w(..) [input = true]
     @variables cc(..) [lattice_level = Potts.LatticePDE.Coarse(2)] v(..) [input = true]
     const C, CC = c(t, x, y), cc(t, x, y)
-    att() = pdesystem([Differential(t)(C) ~ Dc * Δ(C) + s * sec(t, x, y) * vol(t, x, y) / 16 - kd * C]; name = :att)
-    scaled() = pdesystem([Differential(t)(C) ~ Dc * Δ(C) + s * w(t, x, y) - kd * C]; name = :scaled)
-    coarse() = pdesystem([Differential(t)(CC) ~ Dc * Δ(CC) + s * sec(t, x, y) - kd * CC]; name = :crs)
-    conserve() = pdesystem([Differential(t)(CC) ~ Dc * Δ(CC) + s * sec(t, x, y)]; name = :cons)
-    lapin() = pdesystem([Differential(t)(C) ~ 0.1 * Δ(C) + 0.1 * Δ(sec(t, x, y))]; name = :lapin)
-    lapsite() = pdesystem([Differential(t)(C) ~ 0.1 * Δ(C) + 0.1 * Δ(v(t, x, y))]; name = :lapsite)
+    att() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) + s * sec(t, x, y) * vol(t, x, y) / 16 - kd * C]; name = :att)
+    scaled() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) + s * w(t, x, y) - kd * C]; name = :scaled)
+    coarse() = pdesystem([Differential(t)(CC) ~ Dc * laplacian(CC) + s * sec(t, x, y) - kd * CC]; name = :crs)
+    conserve() = pdesystem([Differential(t)(CC) ~ Dc * laplacian(CC) + s * sec(t, x, y)]; name = :cons)
+    lapin() = pdesystem([Differential(t)(C) ~ 0.1 * laplacian(C) + 0.1 * laplacian(sec(t, x, y))]; name = :lapin)
+    lapsite() = pdesystem([Differential(t)(C) ~ 0.1 * laplacian(C) + 0.1 * laplacian(v(t, x, y))]; name = :lapsite)
     faces() = pdesystem(
-        [Differential(t)(C) ~ 0.3 * Δ(C) - 0.2 * C + 0.05 * x],
+        [Differential(t)(C) ~ 0.3 * laplacian(C) - 0.2 * C + 0.05 * x],
         [c(0, x, y) ~ 1.0, c(t, 0, y) ~ 0.0, ra * c(t, x, 0) + rb * Differential(y)(c(t, x, 0)) ~ g]; name = :faces
     )
     faces_owned() = pdesystem(
-        [Differential(t)(C) ~ 0.3 * Δ(C) - 0.2 * C + 0.05 * x],
+        [Differential(t)(C) ~ 0.3 * laplacian(C) - 0.2 * C + 0.05 * x],
         [c(0, x, y) ~ 1.0, c(t, 0, y) ~ 0.0, ra * c(t, x, 0) + rb * Differential(y)(c(t, x, 0)) ~ g]; name = :faces,
         domain = lattice_domain(t, (x, y), (8, 8))
     )
     xflux() = pdesystem([Differential(t)(C) ~ 0.1 * Differential(x)(Differential(x)(C)) + 0.01 * x]; name = :xflux)
     zflux() = pdesystem([Differential(t)(C) ~ 0.1 * Differential(z)(Differential(z)(C))]; name = :zflux)
-    auxlap() = pdesystem([Differential(t)(C) ~ Dc * Δ(C) - 0.1 * C + 0.1, L(t, x, y) ~ Δ(C)]; name = :auxlap)
-    plain() = pdesystem([Differential(t)(C) ~ Dc * Δ(C) - 0.1 * C + 0.1]; name = :plain)
+    auxlap() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) - 0.1 * C + 0.1, L(t, x, y) ~ laplacian(C)]; name = :auxlap)
+    plain() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) - 0.1 * C + 0.1]; name = :plain)
     robinu(a = u(t, x, y)) = pdesystem(
-        [Differential(t)(C) ~ Dc * Δ(C), Differential(t)(u(t, x, y)) ~ -0.1 * u(t, x, y)],
+        [Differential(t)(C) ~ Dc * laplacian(C), Differential(t)(u(t, x, y)) ~ -0.1 * u(t, x, y)],
         [(1 + a) * c(t, 0, y) - Differential(x)(c(t, 0, y)) ~ 0.3]; name = :fac
     )
-    nonlin() = pdesystem([Differential(t)(C) ~ Dc * Δ(C) - 0.1 * C^3]; name = :nonlin)
+    nonlin() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) - 0.1 * C^3]; name = :nonlin)
 end
 
 b6_op(dims = (24, 20)) = (σ = zeros(Int32, dims); σ[5:8, 5:8] .= 1; σ[14:17, 10:13] .= 2; [ownership => σ, kind => [:A, :A]])
@@ -152,7 +151,7 @@ function b6_round_trip(m, fs, f)
     F = Potts.fields(m)
     prob = B6_LP.discretize(F, B6_LP.LatticeDiscretization(B6_LP.Grid((24, 20)); T = Float64); inputs = collect(Potts.field_inputs(integ)))
     u0 = vec(Array(getproperty(current_state(integ).site, f)))
-    o = B6_LP.solve(B6_LP.remake(prob; u0, tspan = (0.0, 1.0)), b6_own(fs)).u[end]
+    o = B6_LP.solve(B6_LP.remake(prob; u0, tspan = (0.0, 1.0)), fs; dt = 1.0).u[end]
     step!(integ)
     return maximum(abs, o .- vec(Array(getproperty(current_state(integ).site, f)))), integ
 end
@@ -183,7 +182,7 @@ function b6_pde_round_trip(m, pde, fs, f; op = b6_op())
         b6_owned(pde), B6_LP.LatticeDiscretization(B6_LP.Grid((24, 20)); T = Float64); inputs = collect(fi),
         u0 = [f => Array(getproperty(current_state(integ).site, f))], tspan = (0.0, 1.0)
     )
-    o = B6_LP.solve(prob, b6_own(fs)).u[end]
+    o = B6_LP.solve(prob, fs; dt = 1.0).u[end]
     step!(integ)
     return maximum(abs, o .- vec(Array(getproperty(current_state(integ).site, f)))), fi, integ
 end

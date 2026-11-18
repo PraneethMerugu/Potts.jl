@@ -21,17 +21,19 @@ using Potts: Potts
 using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
 const t = Potts.t
 const Dt = Differential(t)
-const Δ = Potts.LatticePDE.Δ
+    const laplacian = Potts.LatticePDE.laplacian
 const lattice_domain = Potts.LatticePDE.lattice_domain
 @parameters x y Do = 50.0 sc = 0.01 ec = 0.05 Du = 0.2 ka = 0.3 kb = 0.2
 @variables c(..) = 0.0 u(..) = 0.0 endo(..)::Bool [input = true]
 const C, U, E = c(t, x, y), u(t, x, y), endo(t, x, y)
 # Merks' VEGF: secreted by the endothelial cells, decaying in the medium, `Do = 50` (the audit's
 # case: ⌈8 Do / 1.8⌉ = 223 substeps per MCS, 2026-10-18 usability audit, item 12)
-vegf() = PDESystem([Dt(C) ~ Do * Δ(C) + sc * E - ec * (1 - E) * C], [], lattice_domain(t, (x, y), (24, 20)), [t, x, y],
+    vegf() = PDESystem(
+        [Dt(C) ~ Do * laplacian(C) + sc * E - ec * (1 - E) * C], [], lattice_domain(t, (x, y), (24, 20)), [t, x, y],
     [C, E], [Do, sc, ec]; name = :vegf)
 # two fields that read each other (a loop of two groups under `solvers`)
-loop() = PDESystem([Dt(C) ~ Du * Δ(C) + ka * U - 0.1 * C + sc * E, Dt(U) ~ -kb * U + 0.1 * C], [],
+    loop() = PDESystem(
+        [Dt(C) ~ Du * laplacian(C) + ka * U - 0.1 * C + sc * E, Dt(U) ~ -kb * U + 0.1 * C], [],
     lattice_domain(t, (x, y), (24, 20)), [t, x, y], [C, U, E], [Du, ka, kb, sc]; name = :loop)
 end
 
@@ -127,7 +129,7 @@ end
         # base ab34e226 (~/lpwork/f4BE/nc.log): the solution prints the policy as given (`newton
         # automatic (set when the group is bound)`, no substep counts) and no backend
         m = FrMerks(; name = :m)
-        for fs in (ExplicitEuler(), BackwardEuler(; inner = Multigrid()))
+        for fs in (ExplicitEuler(), BackwardEuler(; linsolve = Multigrid()))
             prob = fr_prob(m; field_solver = fs)
             sol = solve(prob, SequentialCPM())
             integ = init(prob, SequentialCPM())
@@ -142,34 +144,34 @@ end
             @test sol.stats.fields.counts == substep_counts(integ)
             @test (sol.stats.fields.implicit[1] === nothing) == (fs isa ExplicitEuler)
         end
-        rs = sprint(field_report, solve(fr_prob(m; field_solver = BackwardEuler(; inner = Multigrid())), SequentialCPM()))
+        rs = sprint(field_report, solve(fr_prob(m; field_solver = BackwardEuler(; linsolve = Multigrid())), SequentialCPM()))
         @test fr_line(rs, "newton") == "  newton     1, automatic: the operator is exact"
-        @test fr_line(rs, "inner") == "  inner      Multigrid(; budget = 12), multigrid levels 5"
+        @test fr_line(rs, "linsolve") == "  linsolve   Multigrid(; maxiters = 12), multigrid levels 5"
     end
 end
 
 @testitem "F4-13: field_report of a BackwardEuler group: inner, multigrid levels, the Newton count" setup = [FieldsReportSetup] tags = [:potts, :fields_report] begin
     @testset "F4-13: field_report of a BackwardEuler group: inner, multigrid levels, the Newton count" begin
         m = FrMerks(; name = :m)
-        integ = init(fr_prob(m; field_solver = BackwardEuler(; inner = Multigrid())), SequentialCPM())
+        integ = init(fr_prob(m; field_solver = BackwardEuler(; linsolve = Multigrid())), SequentialCPM())
         step!(integ)
         rep = sprint(field_report, integ)
-        @test occursin("group 1 of 1: c (BackwardEuler(; inner = Multigrid()))", rep)
+        @test occursin("group 1 of 1: c (BackwardEuler(; linsolve = Multigrid()))", rep)
         @test fr_line(rep, "window") == "  window     dt = 1.0, 1 substep (h = 1.0)"
         @test endswith(fr_line(rep, "substeps"), "[least]")
-        @test fr_line(rep, "inner") == "  inner      Multigrid(; budget = 12), multigrid levels 5"
+        @test fr_line(rep, "linsolve") == "  linsolve   Multigrid(; maxiters = 12), multigrid levels 5"
         @test fr_line(rep, "newton") == "  newton     1, automatic: the operator is exact"
         @test fr_line(rep, "operator") == "  operator   J̃ exact"
-        @test fr_line(rep, "numbers") == "  numbers    state Float64, compute Float64, solver Float64 (`solver_T = :auto`)"
+        @test fr_line(rep, "numbers") == "  numbers    state Float64, compute Float64, solver Float64 (`solver_type = :auto`)"
         @test fr_line(rep, "counters") == "  counters   substep counts c 1; 1 solve; code Success"
         @test fr_line(rep, "run") == "  run        1 window; 1 solve; status Success"
-        # a given Newton count and `inner = :auto`
+        # a given Newton count and `linsolve = :auto`
         r = sprint(field_report, init(fr_prob(m; field_solver = BackwardEuler(; newton = 3)), SequentialCPM()))
         @test fr_line(r, "newton") == "  newton     3: given (`newton = 3`)"
-        @test startswith(fr_line(r, "inner"), "  inner      DevicePCG() (`inner = :auto`), multigrid levels ")
+        @test startswith(fr_line(r, "linsolve"), "  linsolve   DevicePCG() (`linsolve = :auto`), multigrid levels ")
         # a problem: `inner` and the Newton count as given (resolved when the group is bound)
-        rp = sprint(field_report, fr_prob(m; field_solver = BackwardEuler(; inner = Multigrid())))
-        @test fr_line(rp, "inner") == "  inner      Multigrid()"
+        rp = sprint(field_report, fr_prob(m; field_solver = BackwardEuler(; linsolve = Multigrid())))
+        @test fr_line(rp, "linsolve") == "  linsolve   Multigrid()"
         @test fr_line(rp, "newton") == "  newton     automatic (set when the group is bound)"
     end
 end
@@ -177,10 +179,13 @@ end
 @testitem "F4-13: a coupled model and its bare PDESystem print the same group lines" setup = [FieldsReportSetup] tags = [:potts, :fields_report] begin
     @testset "F4-13: a coupled model and its bare PDESystem print the same group lines" begin
         LP = Potts.LatticePDE
-        cases = ((FrMerks(; name = :m), ExplicitEuler(), ExplicitEuler(; dt = 1.0), 1),
-            (FrMerks(; name = :m), BackwardEuler(; inner = Multigrid()), BackwardEuler(; dt = 1.0, inner = Multigrid()), 1),
+        cases = (
+            (FrMerks(; name = :m), ExplicitEuler(), ExplicitEuler(), 1),
+            (FrMerks(; name = :m), BackwardEuler(; linsolve = Multigrid()), BackwardEuler(; linsolve = Multigrid()), 1),
             (FrLoop(; name = :m), FieldGroups(:u => ExplicitEuler(; substeps = 4); default = ExplicitEuler()),
-                FieldGroups(:u => ExplicitEuler(; dt = 1.0, substeps = 4); default = ExplicitEuler(; dt = 1.0)), 2))
+                FieldGroups(:u => ExplicitEuler(; substeps = 4); default = ExplicitEuler()), 2,
+            ),
+        )
         # the owned algorithms also give their window (`dt = 1.0`), which a Potts problem takes from
         # the MCS: the headers differ by it alone
         nodt(s) = replace(s, "(; dt = 1.0)" => "()", "dt = 1.0, " => "", ", dt = 1.0" => "")
@@ -188,7 +193,7 @@ end
             integ = init(fr_prob(m; field_solver = fs), SequentialCPM())
             bare = LP.discretize(Potts.fields(m), LP.LatticeDiscretization(LP.Grid((24, 20)); T = Float64);
                 inputs = collect(Potts.field_inputs(integ)))
-            oi = init(bare, own)
+            oi = init(bare, own; dt = 1.0)
             step!(integ)
             step!(oi)
             a, b = fr_groups(sprint(field_report, integ)), fr_groups(sprint(field_report, oi))
@@ -210,7 +215,7 @@ end
 @testitem "F4-13: a report adds nothing to a run (a warm step! allocates 0 B after it)" setup = [FieldsReportSetup] tags = [:potts, :fields_report] begin
     @testset "F4-13: a report adds nothing to a run (a warm step! allocates 0 B after it)" begin
         m = FrMerks(; name = :m)
-        for fs in (ExplicitEuler(), BackwardEuler(; inner = Multigrid()))
+        for fs in (ExplicitEuler(), BackwardEuler(; linsolve = Multigrid()))
             integ = init(PottsProblem(m, fr_op(), (0, 20); seed = 3, field_solver = fs), SequentialCPM(); save_everystep = false)
             @test fr_warm(integ) == 0
             field_report(devnull, integ)
@@ -228,7 +233,7 @@ end
             for _ in 1:6
                 step!(plain)
             end
-            @test ref.u.site.c == plain.u.site.c && ref.u.σ == plain.u.σ
+            @test ref.u.site.c == plain.u.site.c && ref.u.ownership == plain.u.ownership
         end
     end
 end

@@ -16,27 +16,27 @@ const ShiftT = Shift(t, 1)
 
 function diff_decay_periodic(dims; Dc = 0.12, kc = 0.25)
     @parameters D = Dc k = kc
-    return pdesys([Dt(C) ~ D * Δ(C) - k * C], [c(0, x, y) ~ 0.0], dims, [C], [D, k])
+        return pdesys([Dt(C) ~ D * laplacian(C) - k * C], [c(0, x, y) ~ 0.0], dims, [C], [D, k])
 end
 
 function diff_decay_dirichlet(dims, spacing; Dc = 0.08, kc = 0.15)
     @parameters D = Dc k = kc
     nx = dims[1] * spacing
     return pdesys(
-        [Dt(C) ~ D * Δ(C) - k * C],
+            [Dt(C) ~ D * laplacian(C) - k * C],
         [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0, c(t, nx, y) ~ 0.0],
         dims, [C], [D, k]; spacing)
 end
 
 function map_step(dims)
-    return pdesys([ShiftT(C) ~ 0.8 * C + 0.05 * Δ(C) + 0.1], [c(0, x, y) ~ 0.0], dims, [C])
+        return pdesys([ShiftT(C) ~ 0.8 * C + 0.05 * laplacian(C) + 0.1], [c(0, x, y) ~ 0.0], dims, [C])
 end
 
 function coupled_source(dims)
     @parameters D = 0.1 alpha = 0.4 k = 0.2
     @variables mem(t, x, y) [input = true]
     return pdesys(
-        [Dt(C) ~ D * Δ(C) - k * C + alpha * mem],
+            [Dt(C) ~ D * laplacian(C) - k * C + alpha * mem],
         [c(0, x, y) ~ 0.0],
         dims, [C, mem], [D, alpha, k])
 end
@@ -228,7 +228,7 @@ end
 
         # With T = 1e-12 and σ already at target volume 4, σ stays fixed; cell reads integral(c)
         # from the previous MCS step (2 MCS = 8 substeps, dt = 2.0).
-        @test sol.u[end].σ == σ
+        @test sol.u[end].ownership == σ
         ref_c = ref_step_euler(rhs_coupled, C_sym, lap_sym, c0; nsteps = 12, dt = 3.0,
             bc_x = :neumann0, bc_y = :neumann0,
             extra_subs = (i, j) -> (D_sym => 0.1, k_sym => 0.2, alpha_sym => 0.4,

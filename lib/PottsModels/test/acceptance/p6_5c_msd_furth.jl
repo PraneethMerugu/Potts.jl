@@ -17,19 +17,19 @@
 # A point is an `NTuple{N, <:Real}` (what `centroids` returns) or an `AbstractVector` of
 # length N. Floats are Float64.
 #
-# C1. `unwrap_track(points, dims; periodic) -> Vector{NTuple{N, Float64}}`.
+# C1. `unwrap_track(points, dims, periodic) -> Vector{NTuple{N, Float64}}`.
 #     out[1] = points[1]; out[k] = out[k−1] + w(points[k] − points[k−1]), w the identity on
 #     non-periodic axes and, on a periodic axis d, the minimum image in [−dims[d]/2,
 #     dims[d]/2) (ties to the lower image, D-141). `periodic`: one Bool per axis or one Bool
 #     for all. Precondition (documented, not detected): true displacements between samples
 #     are below half the period. `ArgumentError`s: an empty track, mixed point dimensions,
 #     length(dims) or length(periodic) ≠ N, a non-positive period.
-# C2. `msd(tracks; lags = 1:(n − 1)) -> Vector{Float64}`. `tracks` is one track (a vector of
+# C2. `mean_squared_displacement(tracks; lags = 1:(n − 1)) -> Vector{Float64}`. `tracks` is one track (a vector of
 #     points) or a vector of tracks of equal length n. MSD(ℓ) = the mean over tracks of
 #     (1/(n − ℓ)) Σ_{i=1}^{n−ℓ} |x_{i+ℓ} − x_i|² (all components summed): OVERLAPPING windows,
 #     replicas averaged with EQUAL weight (brief Q-4). `ArgumentError`s: ℓ < 1 or ℓ ≥ n,
 #     unequal track lengths, no track, mixed dimensions.
-# C3. `furth_msd(Δt; S, D, P)`, Eq. 1 elementwise:
+# C3. `furth_mean_squared_displacement(Δt, S, D, P)`, Eq. 1 elementwise:
 #         MSD(Δt) = 2D(Δt − P(1 − e^{−Δt/P})) + (2DS/(1−S))Δt.
 #     `ArgumentError` unless 0 ≤ S < 1, D ≥ 0, P > 0.
 # C4. `natural_units(Δt, m, fit) -> (τ, ρ²)`: τ = Δt/P, ρ² = m/(2DP/(1−S)) (Eq. 2); `fit`
@@ -42,7 +42,7 @@
 #       interior lags (`range` a (lo, hi) of Δt values, default all); keep d_i > 0; OLS of
 #       log d_i = c₀ + c₁Δt_i gives P = −1/c₁, D = e^{c₀}P/2; fewer than 3 positive d_i or
 #       c₁ ≥ 0 is the `ArgumentError` "furth_fit: no decaying second derivative (persistence
-#       not resolved); try method = :lsq"; the residual r = m − furth_msd(Δt; S = 0, D, P)
+#       not resolved); try method = :lsq"; the residual r = m − furth_mean_squared_displacement(Δt, 0, D, P)
 #       over `short` (default Δt ≤ P with at least 2 points, else the first 2 lags); OLS
 #       r = 2D_fast·Δt + c (c = 0 when `offset = false`), D_fast unclamped, `offset = c`;
 #       S = D_fast/(D_fast + D), D_slow = D + D_fast, v_eff = √(D/P)/(1−S).
@@ -73,7 +73,7 @@
 # `:paper` scheme (stub: `:lsq` +0.1 %, −0.6 %, −0.0006; `:paper` −1.3 %, −0.6 %, +0.0046);
 # every one of the 16 seeds meets every target. Light tier: about 10 s.
 #
-# Sections: 1 names; 2 `unwrap_track`; 3 `msd` by hand; 4 Eq. 1/2 and the noise-free fits;
+# Sections: 1 names; 2 `unwrap_track`; 3 `mean_squared_displacement` by hand; 4 Eq. 1/2 and the noise-free fits;
 # 5 the stochastic oracle; 6 input validation; 7 the paper's Table 2 sanity; 8 docs.
 using Test, Potts, PottsModels
 using StableRNGs: StableRNG
@@ -85,8 +85,8 @@ const P65CC_A = PottsModels.Analysis
 # needs them fails with the DEFECT CHECK below and errors at its first call)
 p65cc_has(n) = isdefined(P65CC_A, n)
 p65cc_unwrap_track(args...; kw...) = getfield(P65CC_A, :unwrap_track)(args...; kw...)
-p65cc_msd(args...; kw...) = getfield(P65CC_A, :msd)(args...; kw...)
-p65cc_furth_msd(args...; kw...) = getfield(P65CC_A, :furth_msd)(args...; kw...)
+p65cc_msd(args...; kw...) = getfield(P65CC_A, :mean_squared_displacement)(args...; kw...)
+p65cc_furth_msd(args...; kw...) = getfield(P65CC_A, :furth_mean_squared_displacement)(args...; kw...)
 p65cc_furth_fit(args...; kw...) = getfield(P65CC_A, :furth_fit)(args...; kw...)
 p65cc_natural_units(args...; kw...) = getfield(P65CC_A, :natural_units)(args...; kw...)
 
@@ -131,11 +131,11 @@ const P65CC_KEYS = (:S, :D, :P, :D_fast, :D_slow, :v_eff, :offset, :method)
 # 1. Names
 
 @testset "P6.5c MSD/Fürth: the functions are exported from PottsModels.Analysis" begin
-    for n in (:unwrap_track, :msd, :furth_fit, :furth_msd, :natural_units)
+    for n in (:unwrap_track, :mean_squared_displacement, :furth_fit, :furth_mean_squared_displacement, :natural_units)
         @test Base.isexported(P65CC_A, n)                        # DEFECT CHECK
     end
     @test Base.isexported(P65CC_A, :centroids)                   # control
-    @test !isdefined(Potts, :msd) && !isdefined(Potts, :furth_fit)   # analysis-only: nothing in Potts (control today)
+    @test !isdefined(Potts, :mean_squared_displacement) && !isdefined(Potts, :furth_fit)   # analysis-only: nothing in Potts (control today)
 end
 
 # ---------------------------------------------------------------------------------------
@@ -144,38 +144,38 @@ end
 @testset "P6.5c MSD/Fürth: unwrap_track by hand" begin
     @test p65cc_has(:unwrap_track)                               # DEFECT CHECK
     pts = [(8.0, 3.0), (9.0, 3.0), (10.0, 3.0), (1.0, 3.0), (2.0, 3.0)]
-    out = p65cc_unwrap_track(pts, (10, 10); periodic = (true, false))
+    out = p65cc_unwrap_track(pts, (10, 10), (true, false))
     @test out == [(8.0, 3.0), (9.0, 3.0), (10.0, 3.0), (11.0, 3.0), (12.0, 3.0)]
     @test out isa Vector{NTuple{2, Float64}}
     # the non-periodic axis is unchanged, even across a jump of more than half its width
-    out2 = p65cc_unwrap_track([(8.0, 1.0), (9.0, 9.0), (10.0, 2.0)], (10, 10); periodic = (true, false))
+    out2 = p65cc_unwrap_track([(8.0, 1.0), (9.0, 9.0), (10.0, 2.0)], (10, 10), (true, false))
     @test [p[2] for p in out2] == [1.0, 9.0, 2.0]
     # negative control: periodic = false leaves the wrap in
-    @test p65cc_unwrap_track(pts, (10, 10); periodic = false) == pts
+    @test p65cc_unwrap_track(pts, (10, 10), false) == pts
     # one Bool for all axes
-    @test p65cc_unwrap_track(pts, (10, 10); periodic = true) == out
+    @test p65cc_unwrap_track(pts, (10, 10), true) == out
     # the [−L/2, L/2) convention: +5 on width 10 maps to −5; −5 stays −5
-    @test p65cc_unwrap_track([(1.0, 0.0), (6.0, 0.0)], (10, 10); periodic = true) == [(1.0, 0.0), (-4.0, 0.0)]
-    @test p65cc_unwrap_track([(6.0, 0.0), (1.0, 0.0)], (10, 10); periodic = true) == [(6.0, 0.0), (1.0, 0.0)]
+    @test p65cc_unwrap_track([(1.0, 0.0), (6.0, 0.0)], (10, 10), true) == [(1.0, 0.0), (-4.0, 0.0)]
+    @test p65cc_unwrap_track([(6.0, 0.0), (1.0, 0.0)], (10, 10), true) == [(6.0, 0.0), (1.0, 0.0)]
     # a jump of 4.9 is kept, of 5.1 is wrapped
-    @test p65cc_unwrap_track([(1.0, 0.0), (5.9, 0.0)], (10, 10); periodic = true)[2][1] ≈ 5.9
-    @test p65cc_unwrap_track([(1.0, 0.0), (6.1, 0.0)], (10, 10); periodic = true)[2][1] ≈ -3.9
+    @test p65cc_unwrap_track([(1.0, 0.0), (5.9, 0.0)], (10, 10), true)[2][1] ≈ 5.9
+    @test p65cc_unwrap_track([(1.0, 0.0), (6.1, 0.0)], (10, 10), true)[2][1] ≈ -3.9
     # vector points, 3D, a non-integer period
-    out3 = p65cc_unwrap_track([[0.5, 0.0, 0.0], [7.0, 0.0, 0.0], [7.5, 0.0, 0.0]], (7.5, 4, 4); periodic = (true, false, false))
+    out3 = p65cc_unwrap_track([[0.5, 0.0, 0.0], [7.0, 0.0, 0.0], [7.5, 0.0, 0.0]], (7.5, 4, 4), (true, false, false))
     @test out3 isa Vector{NTuple{3, Float64}}
     @test [p[1] for p in out3] ≈ [0.5, -0.5, 0.0]
     # a single point
-    @test p65cc_unwrap_track([(3, 4)], (10, 10); periodic = true) == [(3.0, 4.0)]
+    @test p65cc_unwrap_track([(3, 4)], (10, 10), true) == [(3.0, 4.0)]
 end
 
 @testset "P6.5c MSD/Fürth: unwrap_track errors" begin
     @test p65cc_has(:unwrap_track)                               # DEFECT CHECK
-    @test_throws ArgumentError p65cc_unwrap_track(NTuple{2, Float64}[], (10, 10); periodic = true)
-    @test_throws ArgumentError p65cc_unwrap_track(Any[(1.0, 2.0), (1.0, 2.0, 3.0)], (10, 10); periodic = true)
-    @test_throws ArgumentError p65cc_unwrap_track([(1.0, 2.0)], (10, 10, 10); periodic = true)
-    @test_throws ArgumentError p65cc_unwrap_track([(1.0, 2.0)], (10, 10); periodic = (true, false, true))
-    @test_throws ArgumentError p65cc_unwrap_track([(1.0, 2.0)], (10, 0); periodic = true)
-    @test_throws ArgumentError p65cc_unwrap_track([(1.0, 2.0)], (-3, 10); periodic = (true, false))
+    @test_throws ArgumentError p65cc_unwrap_track(NTuple{2, Float64}[], (10, 10), true)
+    @test_throws ArgumentError p65cc_unwrap_track(Any[(1.0, 2.0), (1.0, 2.0, 3.0)], (10, 10), true)
+    @test_throws ArgumentError p65cc_unwrap_track([(1.0, 2.0)], (10, 10, 10), true)
+    @test_throws ArgumentError p65cc_unwrap_track([(1.0, 2.0)], (10, 10), (true, false, true))
+    @test_throws ArgumentError p65cc_unwrap_track([(1.0, 2.0)], (10, 0), true)
+    @test_throws ArgumentError p65cc_unwrap_track([(1.0, 2.0)], (-3, 10), (true, false))
 end
 
 @testset "P6.5c MSD/Fürth: unwrap_track after centroids (a box crossing a periodic edge)" begin
@@ -192,17 +192,17 @@ end
     @test cs[1] == (2.5, 3.5)                                    # control
     @test any(t -> cs[t + 1][1] < cs[t][1], 1:15)                # control: the raw track jumps back
     @test p65cc_has(:unwrap_track)                               # DEFECT CHECK
-    u = p65cc_unwrap_track(cs, (10, 6); periodic = (true, false))
+    u = p65cc_unwrap_track(cs, (10, 6), (true, false))
     @test u[end][1] - u[1][1] == 15.0
     @test all(t -> u[t + 1][1] - u[t][1] == 1.0, 1:15)
     @test all(p -> p[2] == 3.5, u)
 end
 
 # ---------------------------------------------------------------------------------------
-# 3. `msd` by hand (brief §4.C2)
+# 3. `mean_squared_displacement` by hand (brief §4.C2)
 
-@testset "P6.5c MSD/Fürth: msd by hand (overlapping windows, equal-weight replicas)" begin
-    @test p65cc_has(:msd)                                        # DEFECT CHECK
+@testset "P6.5c MSD/Fürth: mean_squared_displacement by hand (overlapping windows, equal-weight replicas)" begin
+    @test p65cc_has(:mean_squared_displacement)                                        # DEFECT CHECK
     tr = [(0.0, 0.0), (1.0, 0.0), (3.0, 0.0), (6.0, 0.0)]
     m = p65cc_msd(tr)
     @test m ≈ [14 / 3, 17.0, 36.0] rtol = 1e-14                  # (1 + 4 + 9)/3, (9 + 25)/2, 36
@@ -226,8 +226,8 @@ end
     @test p65cc_msd([[p...] for p in tr]; lags = 2:2) ≈ [17.0] rtol = 1e-14
 end
 
-@testset "P6.5c MSD/Fürth: msd errors" begin
-    @test p65cc_has(:msd)                                        # DEFECT CHECK
+@testset "P6.5c MSD/Fürth: mean_squared_displacement errors" begin
+    @test p65cc_has(:mean_squared_displacement)                                        # DEFECT CHECK
     tr = [(0.0, 0.0), (1.0, 0.0), (3.0, 0.0), (6.0, 0.0)]
     @test_throws ArgumentError p65cc_msd(tr; lags = 0:2)              # ℓ = 0
     @test_throws ArgumentError p65cc_msd(tr; lags = [4])              # ℓ = n
@@ -239,22 +239,22 @@ end
 # ---------------------------------------------------------------------------------------
 # 4. Eq. 1/2 and the noise-free fits (brief §4.C3, C4)
 
-@testset "P6.5c MSD/Fürth: furth_msd and natural_units (Eq. 1, Eq. 2)" begin
-    @test p65cc_has(:furth_msd) && p65cc_has(:natural_units)     # DEFECT CHECK
+@testset "P6.5c MSD/Fürth: furth_mean_squared_displacement and natural_units (Eq. 1, Eq. 2)" begin
+    @test p65cc_has(:furth_mean_squared_displacement) && p65cc_has(:natural_units)     # DEFECT CHECK
     Δt = collect(1.0:2000.0)
     for (S, D, P) in ((0.1, 0.5, 100.0), (0.0, 2.0, 3.0), (0.9, 1e-3, 5000.0))
-        m = p65cc_furth_msd(Δt; S, D, P)
+        m = p65cc_furth_msd(Δt, S, D, P)
         @test m ≈ p65cc_eq1.(Δt; S, D, P) rtol = 1e-12
         τ, ρ2 = p65cc_natural_units(Δt, m, (; S, D, P))
         @test τ ≈ Δt ./ P rtol = 1e-14
         @test ρ2 ≈ τ .- (1 - S) .* (1 .- exp.(-τ)) rtol = 1e-12  # Eq. 2
     end
     # the limits: ballistic for Δt ≪ P (MSD ≈ (D/P)Δt² + 2D_fast Δt), diffusive for Δt ≫ P
-    @test p65cc_furth_msd([1e-3]; S = 0.0, D = 0.5, P = 100.0)[1] ≈ 0.5 / 100 * 1e-6 rtol = 1e-4
-    @test p65cc_furth_msd([1e6]; S = 0.0, D = 0.5, P = 100.0)[1] ≈ 2 * 0.5 * (1e6 - 100) rtol = 1e-12
+    @test p65cc_furth_msd([1.0e-3], 0.0, 0.5, 100.0)[1] ≈ 0.5 / 100 * 1.0e-6 rtol = 1.0e-4
+    @test p65cc_furth_msd([1.0e6], 0.0, 0.5, 100.0)[1] ≈ 2 * 0.5 * (1.0e6 - 100) rtol = 1.0e-12
     for bad in ((; S = 1.0, D = 0.5, P = 100.0), (; S = -0.1, D = 0.5, P = 100.0), (; S = 0.1, D = -0.5, P = 100.0),
             (; S = 0.1, D = 0.5, P = 0.0))
-        @test_throws ArgumentError p65cc_furth_msd(Δt; bad...)
+        @test_throws ArgumentError p65cc_furth_msd(Δt, bad...)
     end
 end
 
@@ -325,7 +325,7 @@ end
 const P65CC_SEED = 14
 
 @testset "P6.5c MSD/Fürth: OU + Brownian tracks recover (S, D, P)" begin
-    @test p65cc_has(:msd) && p65cc_has(:furth_fit)              # DEFECT CHECK
+    @test p65cc_has(:mean_squared_displacement) && p65cc_has(:furth_fit)              # DEFECT CHECK
     lags = 1:400
     Δt = Float64.(lags)
     tracks = p65cc_tracks(StableRNG(P65CC_SEED); S = 0.1, D = 0.5, P = 100.0, n = 20_000, ntracks = 64)
@@ -402,8 +402,8 @@ end
 # ---------------------------------------------------------------------------------------
 # 8. Docs (brief §4.D)
 
-@testset "P6.5c MSD/Fürth: the analysis manual names msd and furth_fit" begin
+@testset "P6.5c MSD/Fürth: the analysis manual names mean_squared_displacement and furth_fit" begin
     md = read(joinpath(@__DIR__, "..", "..", "..", "..", "docs", "src", "manual", "analysis.md"), String)
     @test occursin("centroids", md) || occursin("Analysis", md)   # control: the page exists
-    @test occursin("msd", md) && occursin("furth_fit", md)        # DEFECT CHECK
+    @test occursin("mean_squared_displacement", md) && occursin("furth_fit", md)        # DEFECT CHECK
 end

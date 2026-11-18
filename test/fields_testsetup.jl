@@ -24,41 +24,41 @@ module FdPDE
     const MCS = step_index(t)
     ic(f, v = 0.0) = f(0, x, y) ~ v
     field1(rate, dims, ps = []; bcs = [], c0 = 0.0, dvs = [C], kw...) = pdesys([Dt(C) ~ rate], [ic(c, c0); bcs], dims, dvs, ps; kw...)
-    diffusion(dims, Dc0 = 1.0; h = 1) = (@parameters Dc = Dc0; field1(Dc * Δ(C), dims, [Dc]; spacing = h))
+    diffusion(dims, Dc0 = 1.0; h = 1) = (@parameters Dc = Dc0; field1(Dc * laplacian(C), dims, [Dc]; spacing = h))
     periodic() = diffusion((16, 8); h = 2.0)
-    closed() = (@parameters Dc = 1.0 k = 0.0; field1(Dc * Δ(C) - k * C, (12, 10), [Dc, k]))
-    defaults() = (@parameters Dc = 1.0 k = 0.5; field1(Dc * Δ(C) - k * C, (6, 4), [Dc, k]; c0 = 2.0))
-    computed_rate() = (@parameters Dc = 1.0 k = 0.5 k2 = 2k; field1(Dc * Δ(C) - k2 * C, (6, 4), [Dc, k, k2]; c0 = 1.0))
+    closed() = (@parameters Dc = 1.0 k = 0.0; field1(Dc * laplacian(C) - k * C, (12, 10), [Dc, k]))
+    defaults() = (@parameters Dc = 1.0 k = 0.5; field1(Dc * laplacian(C) - k * C, (6, 4), [Dc, k]; c0 = 2.0))
+    computed_rate() = (@parameters Dc = 1.0 k = 0.5 k2 = 2k; field1(Dc * laplacian(C) - k2 * C, (6, 4), [Dc, k, k2]; c0 = 1.0))
     volume_read() = field1(0.01 * VOL, (6, 4); dvs = [C, VOL])
-    source(dims = (12, 10)) = (@parameters Dc = 0.2 s = 0.05; field1(Dc * Δ(C) + s * KA, dims, [Dc, s]; dvs = [C, KA]))
-    two() = pdesys([Dt(C) ~ 0.2 * Δ(C) + 0.05 * KA, Dt(U) ~ 0.1 * Δ(U) + 0.5 * C], [ic(c), ic(u)], (12, 10), [C, U, KA])
+    source(dims = (12, 10)) = (@parameters Dc = 0.2 s = 0.05; field1(Dc * laplacian(C) + s * KA, dims, [Dc, s]; dvs = [C, KA]))
+    two() = pdesys([Dt(C) ~ 0.2 * laplacian(C) + 0.05 * KA, Dt(U) ~ 0.1 * laplacian(U) + 0.5 * C], [ic(c), ic(u)], (12, 10), [C, U, KA])
     decay() = field1(-2.0, (6, 6); c0 = 1.0)
-    mask() = (@parameters v = 3.0; field1(0.2 * Δ(C), (10, 8), [v]; bcs = [C ~ masked(KA, v)], dvs = [C, KA]))
+    mask() = (@parameters v = 3.0; field1(0.2 * laplacian(C), (10, 8), [v]; bcs = [C ~ masked(KA, v)], dvs = [C, KA]))
     hex(dims) = diffusion(dims, 0.1)
-    function half(dims = (12, 10), rate = (C, ps) -> ps[1] * Δ(C); ps = (@parameters Dc = 1.0))
+    function half(dims = (12, 10), rate = (C, ps) -> ps[1] * laplacian(C); ps = (@parameters Dc = 1.0))
         @variables c(..) [lattice_storage = Float16]
         Ch = c(X...)
         return pdesys([Dt(Ch) ~ rate(Ch, ps)], [ic(c)], dims, [Ch], collect(ps))
     end
-    stripe() = field1(0.1 * Δ(C), (9, 9); bcs = [c(t, 0, y) ~ 0.0, c(t, 9, y) ~ 100.0])
-    rand_rate() = field1(0.1 * Δ(C) + 0.01 * RND, (8, 6); dvs = [C, RND])
-    domain_word() = (DW = domain(X...); pdesys([Dt(DW) ~ 0.1 * Δ(DW)], [ic(domain)], (9, 9), [DW]))
-    tab() = (@parameters Dc = 0.2; field1(Dc * Δ(C) - DK * C, (10, 8), [Dc]; c0 = 1.0, dvs = [C, DK]))
-    gate() = (@parameters Dc = 1.0 t0 = 1.0; field1(ifelse(MCS >= t0, Dc * Δ(C), 0.0), (12, 10), [Dc, t0]))
+    stripe() = field1(0.1 * laplacian(C), (9, 9); bcs = [c(t, 0, y) ~ 0.0, c(t, 9, y) ~ 100.0])
+    rand_rate() = field1(0.1 * laplacian(C) + 0.01 * RND, (8, 6); dvs = [C, RND])
+    domain_word() = (DW = domain(X...); pdesys([Dt(DW) ~ 0.1 * laplacian(DW)], [ic(domain)], (9, 9), [DW]))
+    tab() = (@parameters Dc = 0.2; field1(Dc * laplacian(C) - DK * C, (10, 8), [Dc]; c0 = 1.0, dvs = [C, DK]))
+    gate() = (@parameters Dc = 1.0 t0 = 1.0; field1(ifelse(MCS >= t0, Dc * laplacian(C), 0.0), (12, 10), [Dc, t0]))
     computed_face() = (
         @parameters Dc = 0.2 g1 = 1.0 g2 = 2.0 g = g1 + g2;
-        field1(Dc * Δ(C), (8, 8), [Dc, g1, g2, g]; bcs = [c(t, 0, y) ~ g])
+        field1(Dc * laplacian(C), (8, 8), [Dc, g1, g2, g]; bcs = [c(t, 0, y) ~ g])
     )
-    expr_face() = (@parameters Dc = 0.2 g1 = 1.0 g2 = 2.0; field1(Dc * Δ(C), (8, 8), [Dc, g1, g2]; bcs = [c(t, 0, y) ~ g1 + g2]))
-    kind_nonlinear() = (@parameters Dc = 0.2; field1(Dc * Δ(C) - C^2 * ifelse(K1, 1.0, 0.0), (8, 8), [Dc]; dvs = [C, K1]))
+    expr_face() = (@parameters Dc = 0.2 g1 = 1.0 g2 = 2.0; field1(Dc * laplacian(C), (8, 8), [Dc, g1, g2]; bcs = [c(t, 0, y) ~ g1 + g2]))
+    kind_nonlinear() = (@parameters Dc = 0.2; field1(Dc * laplacian(C) - C^2 * ifelse(K1, 1.0, 0.0), (8, 8), [Dc]; dvs = [C, K1]))
     divk() = (@parameters Dc = 0.2; field1(DivKGrad(:harmonic)(Dc, C), (8, 8), [Dc]))
-    moving_mask() = (@parameters v = 1.0; field1(0.2 * Δ(C), (12, 12), [v]; bcs = [C ~ masked(KA, v)], dvs = [C, KA]))
-    chain_k() = (@parameters α = 0.1 β = 2α γ = β + 0.05 Dc = 0.2; field1(Dc * Δ(C) - γ * C, (8, 6), [α, β, γ, Dc]; c0 = 1.0))
+    moving_mask() = (@parameters v = 1.0; field1(0.2 * laplacian(C), (12, 12), [v]; bcs = [C ~ masked(KA, v)], dvs = [C, KA]))
+    chain_k() = (@parameters α = 0.1 β = 2α γ = β + 0.05 Dc = 0.2; field1(Dc * laplacian(C) - γ * C, (8, 6), [α, β, γ, Dc]; c0 = 1.0))
     function w_wide()
         @parameters Dc = 0.25
         @variables c(..) [lattice_storage = Float64]
         Cr = c(X...)
-        return pdesys([Dt(Cr) ~ Dc * Δ(Cr) - 0.125 * Cr, Dt(U) ~ Dc * Δ(U) + 0.5 * Cr], [ic(c), ic(u)], (12, 10), [Cr, U], [Dc])
+        return pdesys([Dt(Cr) ~ Dc * laplacian(Cr) - 0.125 * Cr, Dt(U) ~ Dc * laplacian(U) + 0.5 * Cr], [ic(c), ic(u)], (12, 10), [Cr, U], [Dc])
     end
 end
 
@@ -118,7 +118,7 @@ catch e
     sprint(showerror, e)
 end
 fd_n(integ, j = 1) = CorePotts._runtime(getfield(integ.ctx, Symbol(:__fields, j))).n
-fdvar(sys, n) = only(filter(x -> string(x) in (n, n * "(t)"), Potts.variables(sys)))
+fdvar(sys, n) = only(filter(x -> string(x) in (n, n * "(t)"), Potts.declared_variables(sys)))
 fdargerr(f) = try
     f(); ""
 catch err

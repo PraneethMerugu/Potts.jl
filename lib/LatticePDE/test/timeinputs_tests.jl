@@ -33,9 +33,11 @@ const TI_N = 8
 tiQ(s) = [s > 0.08i ? 1.0 : 0.0 for i in 1:TI_N, j in 1:TI_N]
 tidom() = [t ∈ Interval(0.0, 0.5), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
 # a source that reads the input, and a mask that reads it
-tisrc() = PDESystem([D(tice) ~ tiD * Δ(tice) - 0.5 * tice + tiqe], [tic(0, x, y) ~ 0.0], tidom(), [t, x, y],
+tisrc() = PDESystem(
+    [D(tice) ~ tiD * laplacian(tice) - 0.5 * tice + tiqe], [tic(0, x, y) ~ 0.0], tidom(), [t, x, y],
     [tice, tiqe], [tiD]; name = :tisrc)
-timask() = PDESystem([D(tice) ~ tiD * Δ(tice) - 0.5 * tice], [tic(0, x, y) ~ 0.0, tice ~ masked(tiqe > 0.5, 2.0)],
+timask() = PDESystem(
+    [D(tice) ~ tiD * laplacian(tice) - 0.5 * tice], [tic(0, x, y) ~ 0.0, tice ~ masked(tiqe > 0.5, 2.0)],
     tidom(), [t, x, y], [tice, tiqe], [tiD]; name = :timask)
 tidisc() = LatticeDiscretization(Grid((TI_N, TI_N)); T = Float64)
 # the reference: the input's values at the start, written by a callback after each window or step
@@ -48,35 +50,37 @@ tiode(prob) = tiwarm(init(prob, Tsit5(); adaptive = false, dt = 0.01, save_every
 @variables tik(..)::Int32 [input = true]
 tike = tik(t, x, y)
 tiK(v) = s -> Int32[s > v * i ? 1 : 0 for i in 1:TI_N, j in 1:TI_N]
-tiint() = PDESystem([D(tice) ~ tiD * Δ(tice) - 0.5 * tice + ifelse(tike == 1, 1.0, 0.0)], [tic(0, x, y) ~ 0.0],
+tiint() = PDESystem(
+    [D(tice) ~ tiD * laplacian(tice) - 0.5 * tice + ifelse(tike == 1, 1.0, 0.0)], [tic(0, x, y) ~ 0.0],
     tidom(), [t, x, y], [tice, tike], [tiD]; name = :tiint)
 
 # On an OrdinaryDiffEq solver the right side evaluates the function at every call (ruling Q19),
 # so an adaptive solver sees the front at its own stage times: Tsit5 and Rodas5P with no `dtmax`
 # match a fine owned run (whose input holds over windows of 1e-4)
 const TI_ODE = (; saveat = 0.1, abstol = 1e-8, reltol = 1e-8)
-tifine(sys) = tifn(sys, ExplicitEuler(; dt = 1e-4); saveat = 0.1)
+tifine(sys) = tifn(sys, ExplicitEuler(); dt = 1.0e-4, saveat = 0.1)
 
 # Review B1 #1: a refresh keeps what the input does not touch. With `t -> 1.0` read by the rates
 # alone, Crank–Nicolson and BDF2 equal their constant-input runs bit for bit, and with a smooth
 # source `sin(6t)` in the equation they stay second order (a reset every window made BDF2
 # Backward Euler and CN two half steps)
-tismooth() = PDESystem([D(tice) ~ tiD * Δ(tice) - 0.5 * tice + sin(6t) * tiqe], [tic(0, x, y) ~ x], tidom(), [t, x, y],
+tismooth() = PDESystem(
+    [D(tice) ~ tiD * laplacian(tice) - 0.5 * tice + sin(6t) * tiqe], [tic(0, x, y) ~ x], tidom(), [t, x, y],
     [tice, tiqe], [tiD]; name = :tismooth)
 include("shared/export_all.jl")
 end
 
 @testitem "F4-B1: an input as a function of t, owned path (nameof(typeof(alg)))" setup = [LP_timeinputs] tags = [:latticepde, :timeinputs] begin
-@testset "F4-B1: an input as a function of t, owned path ($(nameof(typeof(alg))))" for alg in
-                                                                                          (ExplicitEuler(; dt = 0.01), BackwardEuler(; dt = 0.05))
-    a = tifn(tisrc(), alg; saveat = 0.1)
-    b = tiref(tisrc(), alg; saveat = 0.1)
+    @testset "F4-B1: an input as a function of t, owned path ($(nameof(typeof(alg))))" for (alg, dt) in
+        ((ExplicitEuler(), 0.01), (BackwardEuler(), 0.05))
+        a = tifn(tisrc(), alg; dt, saveat = 0.1)
+        b = tiref(tisrc(), alg; dt, saveat = 0.1)
     @test a.t == b.t && a.u == b.u
     # (control: the function is read, not only its value at the start)
-    c = solve(discretize(tisrc(), tidisc(); inputs = [tiqe => tiQ(0.0)]), alg; saveat = 0.1)
+        c = solve(discretize(tisrc(), tidisc(); inputs = [tiqe => tiQ(0.0)]), alg; dt, saveat = 0.1)
     @test c.u[end] != a.u[end] && maximum(a.u[end]) > 0.05
     # an integrator steps it as `solve` does, and reads the input at its time
-    ig = init(discretize(tisrc(), tidisc(); inputs = [tiqe => tiQ]), alg)
+        ig = init(discretize(tisrc(), tidisc(); inputs = [tiqe => tiQ]), alg; dt)
     step!(ig, 0.3, true)
     @test ig.t == 0.3 && ig[tiqe] == tiQ(ig.t) && ig.u == a.u[4]
 end
@@ -101,10 +105,10 @@ end
 
 @testitem "F4-B1: a mask that reads a function input moves (nameof(typeof(alg)))" setup = [LP_timeinputs] tags = [:latticepde, :timeinputs] begin
 @testset "F4-B1: a mask that reads a function input moves ($(nameof(typeof(alg))))" for alg in
-                                                                                     (ExplicitEuler(; dt = 0.01), Tsit5())
+        (ExplicitEuler(), Tsit5())
     # (on an OrdinaryDiffEq solver a masked value jumps where the input switches, written after
     # the step: the step is bounded, as for a mask whose switch has no event)
-    kw = alg isa ExplicitEuler ? (; saveat = 0.1) : (; TI_ODE..., dtmax = 0.01)
+        kw = alg isa ExplicitEuler ? (; dt = 0.01, saveat = 0.1) : (; TI_ODE..., dtmax = 0.01)
     a = tifn(timask(), alg; kw...)
     if alg isa ExplicitEuler
         b = tiref(timask(), alg; kw...)
@@ -135,26 +139,26 @@ end
 @testset "F4-B1: remake, refusals and allocations of function inputs" begin
     fp = discretize(tisrc(), tidisc(); inputs = [tiqe => tiQ])
     cp = discretize(tisrc(), tidisc(); inputs = [tiqe => tiQ(0.0)])
-    alg = ExplicitEuler(; dt = 0.01)
+        alg = ExplicitEuler()
     # a value makes the input constant again; a function makes it follow the time
-    @test solve(remake(fp; inputs = [tiqe => tiQ(0.0)]), alg).u == solve(cp, alg).u
-    @test solve(remake(cp; inputs = [tiqe => tiQ]), alg).u == solve(fp, alg).u
-    @test solve(remake(cp; p = [tiqe => tiQ]), alg).u == solve(fp, alg).u
+        @test solve(remake(fp; inputs = [tiqe => tiQ(0.0)]), alg; dt = 0.01).u == solve(cp, alg; dt = 0.01).u
+        @test solve(remake(cp; inputs = [tiqe => tiQ]), alg; dt = 0.01).u == solve(fp, alg; dt = 0.01).u
+        @test solve(remake(cp; p = [tiqe => tiQ]), alg; dt = 0.01).u == solve(fp, alg; dt = 0.01).u
     # a new time span starts the function at its own start
-    @test solve(remake(fp; tspan = (0.1, 0.5)), alg).u ==
-          solve(remake(cp; tspan = (0.1, 0.5), inputs = [tiqe => tiQ(0.1)]), alg; callback = tiwrite()).u
+        @test solve(remake(fp; tspan = (0.1, 0.5)), alg; dt = 0.01).u ==
+            solve(remake(cp; tspan = (0.1, 0.5), inputs = [tiqe => tiQ(0.1)]), alg; dt = 0.01, callback = tiwrite()).u
     msg(f) = try
         f(); ""
     catch e
         e isa ArgumentError ? e.msg : sprint(showerror, e)
     end
-    ig = init(fp, alg)
+        ig = init(fp, alg; dt = 0.01)
     @test occursin("function of the time", msg(() -> (ig.ps[tiqe] = tiQ)))
     @test occursin("takes no time argument", msg(() -> discretize(tisrc(), tidisc(); inputs = [tiqe => () -> 1.0])))
     @test occursin("has 4 values", msg(() -> discretize(tisrc(), tidisc(); inputs = [tiqe => s -> zeros(2, 2)])))
-    @test occursin("has 4 values", msg(() -> solve(discretize(tisrc(), tidisc(); inputs = [tiqe => s -> s < 0.1 ? zeros(8, 8) : zeros(2, 2)]), alg)))
+        @test occursin("has 4 values", msg(() -> solve(discretize(tisrc(), tidisc(); inputs = [tiqe => s -> s < 0.1 ? zeros(8, 8) : zeros(2, 2)]), alg; dt = 0.01)))
     # a write of an input a function gives is refused on both paths, naming `remake` (review B1 #4)
-    for ig in (init(fp, alg), init(fp, Tsit5()))
+        for ig in (init(fp, alg; dt = 0.01), init(fp, Tsit5()))
         step!(ig)
         @test occursin("remake(prob; inputs = [:tiq => K])", msg(() -> (ig.ps[tiqe] = fill(7.0, TI_N, TI_N))))
     end
@@ -172,11 +176,11 @@ end
     inplace(s) = (for j in 1:TI_N, i in 1:TI_N
                       buf[i, j] = s > 0.08i ? 1.0 : 0.0
                   end; buf)
-    for a in (ExplicitEuler(; dt = 0.01), BackwardEuler(; dt = 0.05))
-            @test tiwarm(init(cp, a; save_everystep = false)) == 0
-            @test tiwarm(init(remake(cp; inputs = [tiqe => inplace]), a; save_everystep = false)) == 0
-            @test tiwarm(init(remake(cp; inputs = [tiqe => s -> sin(s)]), a; save_everystep = false)) == 0
-        @test tiwarm(init(fp, a)) > 0                     # (control: `tiQ` returns a new array)
+        for (a, dt) in ((ExplicitEuler(), 0.01), (BackwardEuler(), 0.05))
+            @test tiwarm(init(cp, a; dt, save_everystep = false)) == 0
+            @test tiwarm(init(remake(cp; inputs = [tiqe => inplace]), a; dt, save_everystep = false)) == 0
+            @test tiwarm(init(remake(cp; inputs = [tiqe => s -> sin(s)]), a; dt, save_everystep = false)) == 0
+            @test tiwarm(init(fp, a; dt)) > 0                     # (control: `tiQ` returns a new array)
     end
     # the same on the ODE path (a step whose callback writes the input)
     for g in (nothing, inplace, s -> sin(s))
@@ -196,32 +200,32 @@ end
 # shared integer input races); the owned path already equal there.
 @testitem "F4-B1: function inputs under EnsembleThreads equal EnsembleSerial (nameof(typeof(alg)))" setup = [LP_timeinputs] tags = [:latticepde, :timeinputs] begin
 @testset "F4-B1: function inputs under EnsembleThreads equal EnsembleSerial ($(nameof(typeof(alg))))" for alg in
-                                                                                                    (Tsit5(), ExplicitEuler(; dt = 0.01))
+        (Tsit5(), ExplicitEuler())
     Threads.nthreads() > 1 || @warn "F4-B1 ensemble test: one thread (run under `julia -t 4`)"
     base = discretize(tiint(), tidisc(); inputs = [tike => tiK(0.05)])
     pf = (prob, ctx) -> remake(prob; inputs = [tike => tiK(0.01 + 0.005 * ctx.sim_id)])
     ep = SciMLBase.EnsembleProblem(base; prob_func = pf, safetycopy = false)
     kw = alg isa Tsit5 ? (; abstol = 1e-8, reltol = 1e-8, saveat = 0.1) : (; saveat = 0.1)
-    s = solve(ep, alg, SciMLBase.EnsembleSerial(); trajectories = 24, kw...)
+        s = solve(ep, alg, SciMLBase.EnsembleSerial(); dt = 0.01, trajectories = 24, kw...)
     @test s.u[1].u[end] != s.u[24].u[end]                 # (the trajectories differ)
     for _ in 1:3
-        th = solve(ep, alg, SciMLBase.EnsembleThreads(); trajectories = 24, kw...)
+            th = solve(ep, alg, SciMLBase.EnsembleThreads(); dt = 0.01, trajectories = 24, kw...)
         bad = count(i -> th.u[i].u != s.u[i].u, 1:24)
         @test bad == 0 || (println("F4-B1 ensemble ", nameof(typeof(alg)), ": ", bad, " of 24 trajectories differ"); false)
     end
 end
 end
 
-@testitem "F4-B1: a refresh keeps the history of nameof(typeof(alg(0.1)))" setup = [LP_timeinputs] tags = [:latticepde, :timeinputs] begin
-@testset "F4-B1: a refresh keeps the history of $(nameof(typeof(alg(0.1))))" for alg in
-                                                                               (h -> CrankNicolson(; dt = h), h -> BDF2(; dt = h))
+@testitem "F4-B1: a refresh keeps the history of nameof(typeof(alg))" setup = [LP_timeinputs] tags = [:latticepde, :timeinputs] begin
+    @testset "F4-B1: a refresh keeps the history of $(nameof(typeof(alg)))" for alg in
+        (CrankNicolson(), BDF2())
     sys = tismooth()
     cst = discretize(sys, tidisc(); inputs = [tiqe => 1.0])
     fun = discretize(sys, tidisc(); inputs = [tiqe => s -> 1.0])
-    @test solve(fun, alg(0.05)).u == solve(cst, alg(0.05)).u
-    ref = solve(fun, alg(0.05 / 64)).u[end]
-    e1, e2 = (maximum(abs, solve(fun, alg(h)).u[end] .- ref) for h in (0.05, 0.025))
-    @test log2(e1 / e2) > 1.8 || (println("F4-B1 order ", nameof(typeof(alg(0.1))), ": ", log2(e1 / e2)); false)
+        @test solve(fun, alg; dt = 0.05).u == solve(cst, alg; dt = 0.05).u
+        ref = solve(fun, alg; dt = 0.05 / 64).u[end]
+        e1, e2 = (maximum(abs, solve(fun, alg; dt = h).u[end] .- ref) for h in (0.05, 0.025))
+        @test log2(e1 / e2) > 1.8 || (println("F4-B1 order ", nameof(typeof(alg)), ": ", log2(e1 / e2)); false)
 end
 end
 
@@ -234,7 +238,7 @@ end
                       buf[i, j] = s > 0.08i ? 1.0 : 0.0
                   end; buf)
     mp = discretize(timask(), tidisc(); inputs = [tiqe => inplace])
-        @test tiwarm(init(mp, ExplicitEuler(; dt = 0.01); save_everystep = false)) == 0
+        @test tiwarm(init(mp, ExplicitEuler(); dt = 0.01, save_everystep = false)) == 0
     o = tiode(mp)                          # (`adaptive = false`: not refused)
     o = tiode(mp)
     @test o <= 4096 || (println("F4-B1 ODE mask step bytes: ", o); false)

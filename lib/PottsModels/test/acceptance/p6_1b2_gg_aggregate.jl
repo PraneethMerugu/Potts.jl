@@ -50,5 +50,5 @@ end
     @test graner_glazier_aggregate(n; seed = 1)[1] == σ                # deterministic
     @test graner_glazier_aggregate(n; seed = 2)[1] != σ
     prob = PottsProblem(GranerGlazier(; name = :gg, lattice = size(σ)), [ownership => σ, kind => k], (0, 2))
-    @test maximum(Array(solve(prob, SequentialCPM()).u[end].σ)) == n
+    @test maximum(Array(solve(prob, SequentialCPM()).u[end].ownership)) == n
 end

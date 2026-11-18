@@ -41,7 +41,7 @@ _strip_ast(x) = x
     @lattice Lattice((12, 12))
     @energy begin
         cells => λ * (volume - 9)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @equations D(q) ~ Dk[kind] - 0.1 * q
     @sweep Metropolis(; temperature = 2.0)
@@ -52,7 +52,7 @@ end
     @kinds medium cell
     @parameters J[kind, kind] = 3.0
     @lattice Lattice((8, 8))
-    @energy contacts => J[kind, kind′]
+    @energy contacts => J[kind, neighbor_kind]
     @sweep Metropolis(; temperature = 1.0)
 end
 
@@ -91,8 +91,8 @@ module MnPDE
     using ..FieldPDE
     @variables c(..) e(..)::Bool [input = true]
     const C, E = c(t, x, y), e(t, x, y)
-    reaction(k) = pdesys([Dt(C) ~ 0.1 * Δ(C) - k * C * E], [c(0, x, y) ~ 0.0], (12, 12), [C, E])
-    diffusion() = pdesys([Dt(C) ~ 0.1 * E * Δ(C)], [c(0, x, y) ~ 0.0], (12, 12), [C, E])
+    reaction(k) = pdesys([Dt(C) ~ 0.1 * laplacian(C) - k * C * E], [c(0, x, y) ~ 0.0], (12, 12), [C, E])
+    diffusion() = pdesys([Dt(C) ~ 0.1 * E * laplacian(C)], [c(0, x, y) ~ 0.0], (12, 12), [C, E])
 end
 
 

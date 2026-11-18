@@ -25,10 +25,11 @@ isdefined(@__MODULE__, :SingleDivisionFixture) ||
 # the problem `prob` with the serial layout (initial cells 1:n, the counter at n + 1)
 function bs_with_serials(prob)
     st = prob.u0
-    n = Int(maximum(Array(st.σ)))
+    n = Int(maximum(Array(st.ownership)))
     birth = zeros(Int32, length(st.cell.kind))
     birth[1:n] .= Int32.(1:n)
-    stb = CorePotts.CPMState(st.σ, merge(st.cell, (; birth)), st.site,
+    stb = CorePotts.CPMState(
+        st.ownership, merge(st.cell, (; birth)), st.site,
         merge(st.model, NamedTuple{(CorePotts.NEXT_BIRTH,)}((Int32[n + 1],))), st.history)
     return CorePotts.PottsProblem(prob.f, stb, prob.lattice, prob.tspan, prob.p; prob.contact, prob.proposal,
         prob.relations, prob.spacing, prob.frozen, prob.seed, prob.replica, prob.repeat)
@@ -50,7 +51,7 @@ bs_openvt(; T = Float64, tspan = (0, 60), seed = 0) = PottsProblem(
 function bs_same(a, b)
     length(a.u) == length(b.u) || return false
     for (x, y) in zip(a.u, b.u)
-        Array(x.σ) == Array(y.σ) || return false
+        Array(x.ownership) == Array(y.ownership) || return false
         for k in keys(x.cell)
             k === :birth && continue
             Array(getfield(x.cell, k)) == Array(getfield(y.cell, k)) || return false
@@ -94,7 +95,7 @@ end
     @lattice Lattice((24, 24); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         cells => 2.0 * (volume - 16)^2
-        contacts => ifelse(cluster[owner] == cluster[owner′], 0.5, 1.0)
+        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 0.5, 1.0)
     end
     @after_mcs sib ~ sibling(blob)
     @divide cells(blob) when = volume >= 14, along = RandomPlane()
@@ -108,7 +109,7 @@ end
     @lattice Lattice((24, 24); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         cells => 2.0 * (volume - 16)^2
-        contacts => ifelse(cluster[owner] == cluster[owner′], 0.5, 1.0)
+        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 0.5, 1.0)
     end
     @after_mcs q ~ sum(volume[m] for m in members(cluster)) + kind[root(cluster)]
     @divide cells(blob) when = volume >= 14, along = RandomPlane()
@@ -291,7 +292,7 @@ end
         @test err isa ArgumentError && occursin("model `a`", err.msg) && occursin("`birth` cell column", err.msg)
         integ = init(prob, SequentialCPM())
         @test_throws ArgumentError reinit!(integ, with.u0)
-        lone = CorePotts.CPMState(with.u0.σ, prob.u0.cell, with.u0.site, with.u0.model, with.u0.history)
+        lone = CorePotts.CPMState(with.u0.ownership, prob.u0.cell, with.u0.site, with.u0.model, with.u0.history)
         @test haskey(lone.model, CorePotts.NEXT_BIRTH)
         @test_throws ArgumentError remake(prob; u0 = lone)                 # the counter alone
         @test keys(remake(prob; u0 = deepcopy(prob.u0)).u0.cell) == keys(prob.u0.cell)   # control: its own layout

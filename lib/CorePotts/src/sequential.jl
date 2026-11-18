@@ -8,7 +8,7 @@
 # `(j-1)·N÷n+1 : j·N÷n` of the MCS (the whole MCS is `(1, 1)`)
 function sequential_mcs!(st, f::F, p, ctx, law::L, key::RNGKey, mcs::Integer, track::TK = nothing,
         part::NTuple{2, Int} = (1, 1)) where {F, L, TK}
-    σ = st.σ
+    σ = st.ownership
     lat = ctx.lattice
     mob = ctx.mobility
     nsite = nmobile(mob, lat)

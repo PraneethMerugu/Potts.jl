@@ -18,10 +18,10 @@ module FbrPDE
     iv_divk() = bounded(c -> DivKGrad(:harmonic)(c, c))
     iv_no_bounds() = field1(DivKGrad(:harmonic)(C, C), (16, 16); c0 = 0.5)
     iv_out() = bounded(c -> DivKGrad(:harmonic)(c, c), 1.5)
-    iv_aux() = (@parameters k = 2.0; pdesys([KK ~ k * C, Dt(C) ~ 0.1 * Δ(C) - KK], [ic(c, 0.5), ic(K)], (16, 16), [C, KK], [k]))
+    iv_aux() = (@parameters k = 2.0; pdesys([KK ~ k * C, Dt(C) ~ 0.1 * laplacian(C) - KK], [ic(c, 0.5), ic(K)], (16, 16), [C, KK], [k]))
     dir3() = bounded(c -> DivKGrad(:harmonic)(c, c); bcs = [c(t, 16, y) ~ 3.0])
     burgers() = bounded(c -> -Advect(Upwind1())([c, 0.0], c); dims = (32, 32))
-    iv_advect() = field1(0.1 * Δ(C) - Advect(Upwind1())([0.05 * (1 + x), 0.0], C), (16, 16); c0 = 0.5)
+    iv_advect() = field1(0.1 * laplacian(C) - Advect(Upwind1())([0.05 * (1 + x), 0.0], C), (16, 16); c0 = 0.5)
     drift() = (
         @parameters Dc = 0.2 s = 1.0 k = 0.05;
         bounded(c -> DivKGrad(:harmonic)(Dc * (1 + c), c) + s - k * c, 0.0; b = (0, 3), ps = [Dc, s, k])
@@ -32,8 +32,8 @@ module FbrPDE
         Cr, H, Sr = c(X...), h(X...), s(X...)
         return pdesys(
             [
-                Dt(Cr) ~ Dc * Δ(Cr) - 0.125 * Cr, Dt(H) ~ Dc * Δ(H) - 0.125 * H, Dt(Sr) ~ Dc * Δ(Sr) - 0.125 * Sr,
-                Dt(U) ~ Dc * Δ(U) + 0.5 * Cr,
+                Dt(Cr) ~ Dc * laplacian(Cr) - 0.125 * Cr, Dt(H) ~ Dc * laplacian(H) - 0.125 * H, Dt(Sr) ~ Dc * laplacian(Sr) - 0.125 * Sr,
+                Dt(U) ~ Dc * laplacian(U) + 0.5 * Cr,
             ], [ic(c), ic(h), ic(s), ic(u)], (12, 10), [Cr, H, Sr, U], [Dc]
         )
     end
@@ -42,9 +42,9 @@ module FbrPDE
         @parameters Dc = 0.2 s = 0.1 k = 0.05
         @variables c(..) [lattice_storage = Float16]
         Ch = c(X...)
-        return pdesys([Dt(Ch) ~ Dc * Δ(Ch) + s - k * Ch], [ic(c)], (16, 16), [Ch], [Dc, s, k])
+        return pdesys([Dt(Ch) ~ Dc * laplacian(Ch) + s - k * Ch], [ic(c)], (16, 16), [Ch], [Dc, s, k])
     end
-    b_full() = (@parameters Dc = 0.2 s = 0.1 k = 0.05; field1(Dc * Δ(C) + s - k * C, (16, 16), [Dc, s, k]))
+    b_full() = (@parameters Dc = 0.2 s = 0.1 k = 0.05; field1(Dc * laplacian(C) + s - k * C, (16, 16), [Dc, s, k]))
 end
 
 @potts_model _Fb16x16 begin

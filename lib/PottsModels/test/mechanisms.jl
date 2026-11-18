@@ -14,8 +14,8 @@ include("akeeb_metrics.jl")
 const CP = CorePotts
 # Merks' field solver (its docstring: the paper's 15 substeps per MCS; a `PottsProblem`
 # keyword, D-075), and a two-substep one for the field-step recomputation below
-const MERKS_SOLVER = ExplicitEuler(substeps = 15, lower = 0.0)
-const MERKS_TWO_SUBSTEPS = ExplicitEuler(substeps = 2, lower = 0.0)
+const MERKS_SOLVER = ExplicitEuler(substeps = 15, lower_bound = 0.0)
+const MERKS_TWO_SUBSTEPS = ExplicitEuler(substeps = 2, lower_bound = 0.0)
 
 """Interface proposals (source and target owned differently) on states along a trajectory of
 `prob`, up to `n` per state, evenly spread: a vector of (u, prop, ctx)."""
@@ -27,12 +27,12 @@ function sampled_proposals(prob; nmcs = 6, n = 300, proposal = Moore(1))
     out = []
     for u in sol.u
         all_ = []
-        for t in eachindex(u.σ), o in moore.offsets
+        for t in eachindex(u.ownership), o in moore.offsets
             x = CP.coordinates(lat, t)
             inside, y = CP.shift(lat, x, o)
             inside || continue
             s = CP.linear_index(lat, y)
-            u.σ[t] == u.σ[s] || push!(all_, (u, CP.Proposal(t, s, x, 1, u.σ[t], u.σ[s]), ctx))
+            u.ownership[t] == u.ownership[s] || push!(all_, (u, CP.Proposal(t, s, x, 1, u.ownership[t], u.ownership[s]), ctx))
         end
         append!(out, all_[round.(Int, range(1, length(all_); length = min(n, length(all_))))])
     end
@@ -105,7 +105,11 @@ blockstate(dims, blocks...) = (s = zeros(Int32, dims); foreach(((k, b),) -> s[b.
     end
     h0 = hetero(σ)
     sorted(J) = [hetero(solve(PottsProblem(GranerGlazier(; name = :gg), [ownership => σ, kind => k, :J => J],
-        (0, 300); seed), SequentialCPM(; proposal = Moore(1))).u[end].σ) for seed in 1:3]
+                    (0, 300); seed
+                ), SequentialCPM(; proposal = Moore(1))
+            ).u[end].ownership
+        ) for seed in 1:3
+    ]
     # differential adhesion sorts; equal adhesion does not; reversed adhesion mixes
     @test all(<(h0 - 0.1), sorted([0 16 16; 16 2 11; 16 11 14]))
     @test all(h -> abs(h - h0) < 0.05, sorted([0 16 16; 16 11 11; 16 11 11]))
@@ -250,7 +254,12 @@ end
     end
     h0 = hetero(σ)
     run(J) = [hetero(Array(solve(PottsProblem(GranerGlazier(; name = :gg, lattice = size(σ)),
-        [ownership => σ, kind => k, :J => J], (0, 300); seed), SequentialCPM(; proposal = Moore(1))).u[end].σ)) for seed in 1:2]
+                        [ownership => σ, kind => k, :J => J], (0, 300); seed
+                    ), SequentialCPM(; proposal = Moore(1))
+                ).u[end].ownership
+            )
+        ) for seed in 1:2
+    ]
     @test all(<(h0 - 0.1), run([0 16 16; 16 2 11; 16 11 14]))
     @test all(h -> abs(h - h0) < 0.05, run([0 16 16; 16 11 11; 16 11 11]))
 end
@@ -333,12 +342,13 @@ end
         isapprox(drive(ci, u, prop, ctx), want; atol = 1e-9)
     end
     @test all(((u, prop, ctx),) -> prob.f.constraint(u, p, prop, ctx) ==
-                                   (prop.old == 0 || cc3d_local(u.σ, prop.x, prop.old, prop.new, (false, false))), props)
+            (prop.old == 0 || cc3d_local(u.ownership, prop.x, prop.old, prop.new, (false, false))), props
+    )
     # the energy change is that of J adhesion, the area and the length constraint, with the
     # cell length recomputed from σ (Eq. 5)
     @test all(props) do (u, prop, ctx)
-        a = copy(u.σ); a[prop.target] = prop.new
-        isapprox(energy_change(prob, u, prop), merks_energy(a, p) - merks_energy(u.σ, p); rtol = 1e-9, atol = 1e-6)
+        a = copy(u.ownership); a[prop.target] = prop.new
+        isapprox(energy_change(prob, u, prop), merks_energy(a, p) - merks_energy(u.ownership, p); rtol = 1.0e-9, atol = 1.0e-6)
     end
 
     # the field: after each sweep, two explicit Euler substeps of D Δc + α·[cell] − ε c·[medium]
@@ -355,7 +365,7 @@ end
         return c
     end
     sol = solve(prob, SequentialCPM(); saveat = 0:10)
-    @test all(k -> isapprox(sol.u[k + 1].site.c, euler2(sol.u[k].site.c, sol.u[k + 1].σ); atol = 1e-12), 1:10)
+    @test all(k -> isapprox(sol.u[k + 1].site.c, euler2(sol.u[k].site.c, sol.u[k + 1].ownership); atol = 1.0e-12), 1:10)
 
     # an explicit substep count is a minimum: the paper's diffusion constant (D = 0.75 per
     # MCS, the default) takes 4 automatic substeps (dt·(D·8 + δc)/n ≤ 1.8), and 2 would
@@ -376,7 +386,7 @@ end
              :χ => χ, :V₀ => 36.0, :λ => 1.0, :λ_L => 0.0, :T => 6.0, :J => zeros(2, 2)], (0, 200); seed,
             field_solver = MERKS_SOLVER),
             SequentialCPM()).u[end]
-        mean(i[1] for i in findall(==(1), u.σ)) - 20.5
+        mean(i[1] for i in findall(==(1), u.ownership)) - 20.5
     end
     @test mean(drift(100.0)) > 10
     @test abs(mean(drift(0.0))) < 4
@@ -394,8 +404,8 @@ end
         u = solve(PottsProblem(MerksVasculogenesis(; name = :m, lattice = (140, 140)),
             [merks_state(; lattice = (140, 140), n = 49, seed); :λ_L => λ_L], (0, 1500); seed, field_solver = MERKS_SOLVER),
             SequentialCPM(); saveat = 1500).u[end]
-        el = map(c -> (s = CP.shape(u.cell, CP.Lattice((140, 140)), c); s.elongation), 1:49)
-        return (; compact = compactness(u.σ), largest = maximum(components(u.σ .!= 0)[1]), elongation = mean(el))
+        el = map(c -> (s = CP.cell_shape(u.cell, CP.Lattice((140, 140)), c); s.elongation), 1:49)
+        return (; compact = compactness(u.ownership), largest = maximum(components(u.ownership .!= 0)[1]), elongation = mean(el))
     end
     net, isl = [vasculo(5.0, s) for s in 1:3], [vasculo(0.0, s) for s in 1:3]
     @test mean(r -> r.compact, net) < 0.35 && mean(r -> r.compact, isl) > 1.5 * mean(r -> r.compact, net)
@@ -414,11 +424,12 @@ end
     # geometric mean of act over s and its Moore(1) sites owned like s (0 if any is 0; the
     # medium's is 0)
     function GM(u, i)
-        X, Y = size(u.σ); x = CP.coordinates(prob.lattice, i)
-        own = u.σ[i]
+        X, Y = size(u.ownership); x = CP.coordinates(prob.lattice, i)
+        own = u.ownership[i]
         own == 0 && return 0.0
         vals = [u.site.act[mod1(x[1] + dx, X), mod1(x[2] + dy, Y)] for dx in -1:1, dy in -1:1
-                if u.σ[mod1(x[1] + dx, X), mod1(x[2] + dy, Y)] == own]
+                if u.ownership[mod1(x[1] + dx, X), mod1(x[2] + dy, Y)] == own
+        ]
         return prod(vals)^(1 / length(vals))
     end
     props = sampled_proposals(prob)
@@ -438,11 +449,12 @@ end
     cprob = PottsProblem(WortelAct(; name = :w, lattice = (L, L), connected = true),
         [ownership => σ0, kind => [:cell, :cell], :λ => 5.0, :V₀ => 16.0, :λₛ => 0.5, :S₀ => 24.0, :λ_act => 20.0], (0, 10))
     @test all(((u, prop, ctx),) -> cprob.f.constraint(u, cprob.p, prop, ctx) ==
-                                   (prop.old == 0 || ring_rule(u.σ, prop.x, prop.old, (true, true))), sampled_proposals(cprob))
+            (prop.old == 0 || ring_rule(u.ownership, prop.x, prop.old, (true, true))), sampled_proposals(cprob)
+    )
     # on copy: every site a cell gains is fully active, a site the medium takes inactive;
     # nothing else changes
     @test all(props) do (u, prop, ctx)
-        a = deepcopy(u); a.σ[prop.target] = prop.new
+        a = deepcopy(u); a.ownership[prop.target] = prop.new
         prob.f.commit!(a, p, prop, ctx)
         want = copy(u.site.act); want[prop.target] = prop.new != 0 ? p.max_act : 0.0
         a.site.act == want
@@ -453,7 +465,7 @@ end
     frozen = PottsProblem(WortelAct(; name = :w, lattice = (L, L)),
         [ownership => σ0, kind => [:cell, :cell], :act => act0, :λ => 1e6, :V₀ => 16.0, :λ_act => 1.0], (0, 4))
     sol = solve(frozen, SequentialCPM(); saveat = 0:4)
-    @test all(k -> sol.u[k + 1].σ == σ0 && sol.u[k + 1].site.act == max.(act0 .- k, 0.0), 0:4)
+    @test all(k -> sol.u[k + 1].ownership == σ0 && sol.u[k + 1].site.act == max.(act0 .- k, 0.0), 0:4)
 
     # mechanism: Act makes a cell migrate persistently; without it the cell only jitters
     G = 80
@@ -466,7 +478,7 @@ end
                 [ownership => s, kind => [:cell], :J => [0.0 20.0; 20.0 0.0], :λ => 5.0, :V₀ => 100.0,
                  :λₛ => 0.5, :S₀ => 150.0, :T => 20.0, :λ_act => λ_act, :max_act => 40.0], (0, 300); seed),
                 SequentialCPM(); saveat = 0:10:300)
-            cs = [(circ(u.σ, 1), circ(u.σ, 2)) for u in sol.u]
+            cs = [(circ(u.ownership, 1), circ(u.ownership, 2)) for u in sol.u]
             hypot(sum(k -> mi(cs[k + 1][1] - cs[k][1]), 1:(length(cs) - 1)),
                   sum(k -> mi(cs[k + 1][2] - cs[k][2]), 1:(length(cs) - 1)))
         end
@@ -486,8 +498,8 @@ end
         SequentialCPM(; proposal = Moore(1))).u[end]
     u = run(8.0)
     d = only(filter(c -> c != 1 && u.cell.volume[c] > 0, eachindex(u.cell.volume)))
-    @test findall(==(1), u.σ) == findall(!iszero, blockstate((12, 8), (5:6, 4:5)))
-    @test findall(==(d), u.σ) == findall(!iszero, blockstate((12, 8), (7:8, 4:5)))
+    @test findall(==(1), u.ownership) == findall(!iszero, blockstate((12, 8), (5:6, 4:5)))
+    @test findall(==(d), u.ownership) == findall(!iszero, blockstate((12, 8), (7:8, 4:5)))
     @test u.cell.mass[1] == u.cell.mass[d] == 4.0
     # under the normal dynamics the trigger reads the area after MCS 0's sweep, which is
     # what MCS 1 shows: one cell iff that area was below V₀, else two summing to it
@@ -548,7 +560,7 @@ end
         while live(integ.state) < 2
             step!(integ)
         end
-        σ, v = integ.state.σ, integ.state.cell.volume
+        σ, v = integ.state.ownership, integ.state.cell.volume
         m = [(x = findall(==(c), σ); (mean(i[1] for i in x), mean(i[2] for i in x))) for c in findall(>(0), v)]
         d = m[2] .- m[1]
         2atan(d[2], d[1])
@@ -572,7 +584,7 @@ end
         isapprox(drive(prob, u, prop, ctx), want; atol = 1e-9)
     end
     @test all(props) do (u, prop, ctx)
-        want = prop.old == 0 || (u.cell.volume[prop.old] > 1 && cc3d_local(u.σ, prop.x, prop.old, prop.new, (true, false)))
+        want = prop.old == 0 || (u.cell.volume[prop.old] > 1 && cc3d_local(u.ownership, prop.x, prop.old, prop.new, (true, false)))
         prob.f.constraint(u, p, prop, ctx) == want
     end
     # after each MCS: running clocks tick, target volumes grow by `rate` below V_max; no
@@ -589,7 +601,7 @@ end
             o = akeeb_state(; lattice = (99, 60), pp, seed)
             u = solve(PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60)), [o; :μ => μ], (0, nmcs);
                 capacity = 1000, seed), SequentialCPM(; proposal = VonNeumann(1))).u[end]
-            akeeb_metrics(u.σ, u.cell.kind .== 1, length(o[2].second))
+            akeeb_metrics(u.ownership, u.cell.kind .== 1, length(o[2].second))
         end
     end
     on, off = invade(30.0), invade(0.0)
@@ -601,7 +613,7 @@ end
         o = akeeb_state(; lattice = (99, 60), seed, pp = 0.0)
         u = solve(PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60)), o, (0, 200); capacity = 1000, seed),
             SequentialCPM(; proposal = VonNeumann(1))).u[end]
-        @test split_cells(u.σ, (true, false)) == 0
+        @test split_cells(u.ownership, (true, false)) == 0
     end
     # with clocks, every cell that becomes split does so in an MCS where it took part in a
     # division. The lifecycle runs after the sweep and `@divide` resets both clocks to 0
@@ -617,12 +629,12 @@ end
         n = 0
         for t in 2:length(sol.u)
             a, b = sol.u[t - 1], sol.u[t]
-            was = Set(split_ids(a.σ, (true, false)))
+            was = Set(split_ids(a.ownership, (true, false)))
             born = [d for d in eachindex(b.cell.volume) if b.cell.volume[d] > 0 &&
                     (d > length(a.cell.volume) || a.cell.volume[d] == 0)]
             divided = Set(c for c in eachindex(b.cell.volume) if b.cell.volume[c] > 0 && b.cell.clock[c] == 0)
             @test issubset(born, divided) && length(divided) == 2 * length(born)
-            for c in split_ids(b.σ, (true, false))
+            for c in split_ids(b.ownership, (true, false))
                 c in was && continue
                 n += 1
                 @test c in divided

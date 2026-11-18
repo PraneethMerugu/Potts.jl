@@ -17,7 +17,7 @@ end
 @testitem "F4-E14 review: a face condition that an aux field's operator reads runs" setup = [CoupleSetup] tags = [:potts, :fields_couple_w2] begin
     @testset "F4-E14 review: a face condition that an aux field's operator reads runs" begin
         # the aux kernel reads the ghosts the condition sets: the run equals the inlined one
-        # (`D(u) ~ 0.5 * Δ(c) - 0.1 * u`, W2FaceW) and the hand value, and differs from the run without
+        # (`D(u) ~ 0.5 * laplacian(c) - 0.1 * u`, W2FaceW) and the hand value, and differs from the run without
         # the condition
         ua, ui = w2_u(W2AuxBcs), w2_u(W2FaceW)
         @test ua == ui || (println("aux vs inlined maxdiff ", maximum(abs, ua .- ui)); false)

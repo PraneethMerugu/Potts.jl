@@ -92,14 +92,15 @@ then the fields over a quarter of the MCS, four times.
 
 ```@example sweep
 using Potts
+using Potts.Layouts
 using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
-using Potts.LatticePDE: Δ, lattice_domain
+using Potts.LatticePDE: laplacian, lattice_domain
 
 t = Potts.t
 @parameters x y
 @variables c(..) = 0.0 incell(..)::Bool [input = true]
 C = c(t, x, y)
-signal = PDESystem([Differential(t)(C) ~ 0.2 * Δ(C) + 0.1 * incell(t, x, y) - 0.05 * C], [],
+signal = PDESystem([Differential(t)(C) ~ 0.2 * laplacian(C) + 0.1 * incell(t, x, y) - 0.05 * C], [],
     lattice_domain(t, (x, y), (20, 20)), [t, x, y], [C, incell(t, x, y)], []; name = :signal)
 
 @potts_model FieldFirst begin
@@ -173,7 +174,7 @@ copy set the temperature.
     @lattice Lattice((40, 40); neighborhood = Moore(1))
     @energy begin
         Volume(calm, busy; target = 25.0, strength = 1.0)
-        contacts => 8.0 * (kind != kind′)
+        contacts => 8.0 * (kind != neighbor_kind)
     end
     @sweep Metropolis(; temperature = Tk[kind], combine = max)
 end
@@ -203,7 +204,7 @@ where −1 means "use the type's value":
     @lattice Lattice((40, 40); neighborhood = Moore(1))
     @energy begin
         Volume(stem, mature; target = 25.0, strength = 1.0)
-        contacts => 8.0 * (kind != kind′)
+        contacts => 8.0 * (kind != neighbor_kind)
     end
     @after_mcs T_cell ~ ifelse(kind == mature && mcs >= 25, 0.0, T_cell)
     @sweep Metropolis(; temperature = ifelse(T_cell >= 0, T_cell, Tk[kind]))

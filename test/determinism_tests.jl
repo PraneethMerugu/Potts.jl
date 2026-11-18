@@ -20,7 +20,9 @@ end
             [ownership => two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:cell, :cell]], (0, 5); seed = 11)),
         ("MerksVasculogenesis", () -> PottsProblem(MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
             [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 5);
-            seed = 11, field_solver = ExplicitEuler(substeps = 2, lower = 0.0))),
+                    seed = 11, field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0)
+                ),
+            ),
         ("OpenVTGrowingMonolayer", () -> PottsProblem(OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)),
             openvt_monolayer_state(; lattice = (24, 24)), (0, 5); capacity = 64, seed = 11)),
     )
@@ -32,7 +34,7 @@ end
             s1 = solve(p1, alg; save_start = false)
             s2 = solve(p2, alg; save_start = false)
             u1, u2 = s1.u[end], s2.u[end]
-            @test u1.σ == u2.σ
+                @test u1.ownership == u2.ownership
             for col in propertynames(u1.cell)
                 @test getproperty(u1.cell, col) == getproperty(u2.cell, col)
             end
@@ -48,16 +50,18 @@ end
     p_gg = PottsProblem(GranerGlazier(; name = :gg), [ownership => s_gg[1], kind => s_gg[2]], (0, 3); seed = 5)
     sol_gg = solve(p_gg, SequentialCPM(); save_start = false)
     parent_gg_fp = p_gg.f.fingerprint
-    parent_gg_digest = hash(sol_gg.u[end].σ)
+        parent_gg_digest = hash(sol_gg.u[end].ownership)
 
     # D2: fresh subprocess computes identical fingerprint and CPU run digest
+        # runic: off
     d2_code = """
     using Potts, PottsModels
     s = graner_glazier_state()
     p = PottsProblem(GranerGlazier(; name = :gg), [ownership => s[1], kind => s[2]], (0, 3); seed = 5)
     sol = solve(p, SequentialCPM(); save_start = false)
-    println(repr(p.f.fingerprint), " ", repr(hash(sol.u[end].σ)))
+    println(repr(p.f.fingerprint), " ", repr(hash(sol.u[end].ownership)))
     """
+        # runic: on
     out = strip(read(`$(Base.julia_cmd()) --startup-file=no --project=$proj -e $d2_code`, String))
     parts = split(out)
     @test length(parts) == 2
@@ -128,8 +132,8 @@ end
 
     # Canonical solver strings must be free of session/address/gensym/path leaks
     solvers = (
-        ExplicitEuler(substeps = 2, lower = 0.0),
-        RK4(; substeps = 4),
+            ExplicitEuler(substeps = 2, lower_bound = 0.0),
+            Potts.RK4(; substeps = 4),
         Potts.BackwardEuler(),
         Potts.CrankNicolson(),
     )
@@ -144,7 +148,8 @@ end
         PottsProblem(GranerGlazier(; name = :gg), [ownership => s_gg[1], kind => s_gg[2]], (0, 2)),
         PottsProblem(MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
             [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 2);
-            field_solver = ExplicitEuler(substeps = 2, lower = 0.0)),
+                field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0)
+            ),
     )
     for p in probs
             @test !has_leak(string(getfield(p.f.sys.csys, :sys)))

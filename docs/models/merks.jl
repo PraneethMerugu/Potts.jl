@@ -85,7 +85,7 @@
 # ```julia
 # function merks2006(lattice)            # in module MerksField
 #     @parameters Dc = 0.75 α = 5.4e-3 ε = 5.4e-3
-#     eq = Dt(C) ~ Dc * Δ(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)
+#     eq = Dt(C) ~ Dc * laplacian(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)
 #     return PDESystem([eq], [c(0, x, y) ~ 0.0, C ~ masked(frame(t, x, y), 0.0)], lattice_domain(t, (x, y), lattice),
 #         [t, x, y], [C, cell(t, x, y), ecm(t, x, y), frame(t, x, y)], [Dc, α, ε]; name = :merks_field)
 # end
@@ -107,7 +107,7 @@
 #     @relations proposal = Moore(1)
 #     @energy begin
 #         cells(endothelial) => λ * (volume - A)^2 + λ_L * (major_length - L)^2
-#         contacts => J[kind, kind′]
+#         contacts => J[kind, neighbor_kind]
 #     end
 #     @drive copy => -ifelse((old == 0) | (new == 0), χcM, χcc) *
 #                    (c[target] / (1 + s * c[target]) - c[source] / (1 + s * c[source]))
@@ -132,6 +132,7 @@
 # quickly. `merks2006_layout` places the cells and the one-site frozen border:
 
 using Potts, PottsModels
+using Potts.Layouts
 using MakiePotts, CairoMakie
 mkpath("merks") #hide
 
@@ -240,7 +241,7 @@ nothing #hide
 # <<fragment equation>>
 #
 # `c(t, x, y)` is the chemoattractant at every lattice site; it starts at 0
-# (`c(0, x, y) ~ 0.0`). `Differential(t)` is the time derivative and `Δ` the lattice
+# (`c(0, x, y) ~ 0.0`). `Differential(t)` is the time derivative and `laplacian` the lattice
 # Laplacian. The `PDESystem` does not read the cells. It reads two *input fields*, `cell`
 # and `ecm`, which are 1 at an endothelial site and at a matrix site: this is Eq. (6) term
 # by term. `lattice_domain` gives the domain of the lattice, which a coupled `PDESystem`
@@ -320,10 +321,10 @@ length(u0[2].second)
 #
 # A model with a field needs a *field solver*, chosen when the problem is built. The paper
 # integrates the field with 15 explicit Euler steps per MCS (2 s each); `substeps = 15`
-# does the same, and `lower = 0.0` clips the concentration at zero. One MCS is 30 s, so
+# does the same, and `lower_bound = 0.0` clips the concentration at zero. One MCS is 30 s, so
 # 1000 MCS are about 8 hours (paper: 50 hours; here: 1000 MCS, to keep the build short):
 
-prob = PottsProblem(vasc, u0, (0, 1000); seed = 1, field_solver = ExplicitEuler(substeps = 15, lower = 0.0))
+prob = PottsProblem(vasc, u0, (0, 1000); seed = 1, field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0))
 sol = solve(prob, SequentialCPM(); saveat = 0:10:1000)
 
 # The paper's central claim is that elongation makes the network. `remake` builds the same

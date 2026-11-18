@@ -17,19 +17,21 @@ function _precompile_workload()
     c = only(Symbolics.@variables c(..))
     ce = c(t, x, y)
     dom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-    forms = ((D(ce) ~ Dc * Δ(ce) - k * ce + x, [c(0, x, y) ~ x * y, c(t, 0, y) ~ 1.0]),
-        (D(ce) ~ Dc * Δ(ce) - k * ce,
+    forms = (
+        (D(ce) ~ Dc * laplacian(ce) - k * ce + x, [c(0, x, y) ~ x * y, c(t, 0, y) ~ 1.0]),
+        (
+            D(ce) ~ Dc * laplacian(ce) - k * ce,
             [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)]))
     for (eq, bc) in forms, T in (Float64, Float32)
         sys = PDESystem([eq], bc, dom, [t, x, y], [ce], [Dc, k]; name = :precompile)
         prob = discretize(sys, LatticeDiscretization(Grid((8, 8)); T))
         du = similar(prob.u0)
         prob.f(du, prob.u0, prob.p, zero(T))                         # the ODE right side
-        for alg in (ExplicitEuler(; dt = T(0.01)), BackwardEuler(; dt = T(0.01)))
-            integ = init(prob, alg)
+        for alg in (ExplicitEuler(), BackwardEuler())
+            integ = init(prob, alg; dt = T(0.01))
             step!(integ)
             integ[ce]
-            sol = solve(prob, alg; saveat = T(0.5))
+            sol = solve(prob, alg; dt = T(0.01), saveat = T(0.5))
             sol[ce]
             field_report(devnull, sol)
         end

@@ -57,7 +57,7 @@ one transfer of the `Int32` accumulators), the fold of the checkerboard's copy c
 transfer of its per-block `Int32` counters, `nblocks`), and the snapshot (one transfer per
 array leaf of the state, `sizeof` bytes each). `u0` is the problem's host state."""
 function p60vx_read_counts(u0, nblocks)
-    leaves = Any[u0.σ, values(u0.cell)..., values(u0.site)..., values(u0.model)..., values(u0.history)...]
+    leaves = Any[u0.ownership, values(u0.cell)..., values(u0.site)..., values(u0.model)..., values(u0.history)...]
     return (1, 2 + length(leaves), (CorePotts._NACC + nblocks) * sizeof(Int32) + sum(sizeof, leaves))
 end
 
@@ -77,7 +77,7 @@ end
 """`HostPhase` (relationships.jl): 1 sync; the snapshot (σ and every cell column) down;
 every cell column up. (1, 11, 656) for this fixture with Float32."""
 p60vx_hostphase_counts(u0) =
-    (1, 1 + 2 * length(u0.cell), sizeof(u0.σ) + 2 * sum(sizeof, values(u0.cell)))
+    (1, 1 + 2 * length(u0.cell), sizeof(u0.ownership) + 2 * sum(sizeof, values(u0.cell)))
 
 
 # Declared HostPhase on a domain-masked lattice (P6.0v2, D-092): y += x, reads (:x,),

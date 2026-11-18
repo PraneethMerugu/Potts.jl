@@ -35,7 +35,7 @@ end
         bp = Potts.LatticePDE.discretize(Potts.fields(JiangLike(; name = :j)),
             Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(JG_DIMS); T = Float64);
             u0 = [n => zeros(JG_DIMS .÷ 4) for n in names], tspan = (0, k), inputs = [:kind => kmap])
-        sb = Potts.LatticePDE.solve(bp, BackwardEuler(; dt = 0.25); saveat = 1.0)
+        sb = Potts.LatticePDE.solve(bp, BackwardEuler(); dt = 0.25, saveat = 1.0)
         for n in names
             @test [x[n] for x in a] == [sb[n, i] for i in 2:length(sb.t)]
         end
@@ -74,7 +74,7 @@ end
         prob = Potts.LatticePDE.discretize(pde, Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(JG_DIMS); T = Float64);
             inputs = collect(fi), u0 = [n => copy(Array(getproperty(current_state(integ).site, n))) for n in names], tspan = (0.0, 1.0)
         )
-        s = Potts.LatticePDE.solve(prob, BackwardEuler(; dt = 0.25))
+        s = Potts.LatticePDE.solve(prob, BackwardEuler(); dt = 0.25)
         # F4-15 review should-fix 2 and F4-15b: an oracle independent of the lowering. The inhibitor's
         # rate at u = 0 is its source 3 (Q + 2N), folded over each block's free children (the
         # mask is the medium), so the free volume times the rate, summed over the nodes, is 3 times
@@ -87,7 +87,7 @@ end
         p0 = Potts.LatticePDE.discretize(pde, Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(JG_DIMS); T = Float64);
             inputs = collect(fi), u0 = [n => zeros(JG_DIMS .÷ 4) for n in names], tspan = (0.0, 1e-6))
         # (one window: the bound cannot see the `max(· − ·, 0)` switches, so the count is explicit)
-        s0 = Potts.LatticePDE.solve(p0, ExplicitEuler(; dt = 1e-6, substeps = 1))
+        s0 = Potts.LatticePDE.solve(p0, ExplicitEuler(; substeps = 1); dt = 1.0e-6)
         @test sum(nfree .* s0[:inh, length(s0.t)]) / 1e-6 ≈ 3 * nq rtol = 1e-8
         step!(integ)
         for n in names
@@ -123,14 +123,14 @@ end
             u0 = [n => zeros(JG_DIMS .÷ 4) for n in names], tspan = (0, 2), inputs = [:kind => kmap])
         shifted = [circshift(kmap, (s, 0, 0)) for s in 0:3]
         function run(alg)
-            ig = init(bp, alg)
+            ig = init(bp, alg; dt = 0.25)
             for w in 1:8
                 ig[:kind] = shifted[mod1(w, 4)]
                 step!(ig)
             end
             return ig
         end
-        a = @test_logs min_level = Base.CoreLogging.Warn run(BackwardEuler(; dt = 0.25))
+        a = @test_logs min_level = Base.CoreLogging.Warn run(BackwardEuler())
         c = only(a.runtimes).cache
         @test c.newton == 2 && c.exact && !c.cyclic
         @test Potts.LatticeFields.Problems.field_stats(a).newton_budget == 0
@@ -138,12 +138,12 @@ end
         # NEWTON_EPS relative to the field's scale, so the tight-inner two-step solve and the
         # 12-step reference agree to that accepted defect (the assertion and its derivation are
         # below; the measured residual is ~1e-15 on 1.12.6, 6.4e-8 under 1.13.3)
-        tight = Potts.LatticePDE.DevicePCG(; rtol = 1e-12, budget = 64)
-        a2 = @test_logs min_level = Base.CoreLogging.Warn run(BackwardEuler(; dt = 0.25, inner = tight))
+        tight = Potts.LatticePDE.DevicePCG(; reltol = 1.0e-12, maxiters = 64)
+        a2 = @test_logs min_level = Base.CoreLogging.Warn run(BackwardEuler(; linsolve = tight))
         @test only(a2.runtimes).cache.newton == 2
         @test Potts.SciMLBase.check_error(a2) == Potts.SciMLBase.ReturnCode.Success   # healthy, in progress
         @test Potts.LatticeFields.Problems.field_stats(a2).newton_budget == 0
-        b = run(BackwardEuler(; dt = 0.25, newton = 12, inner = tight))
+        b = run(BackwardEuler(; newton = 12, linsolve = tight))
         # F4-15b (review; user ruling 2026-11-13): the acceptance is
         # `dk <= NEWTON_EPS * ||u_k - u^n|| + 10 eps(T) ||u_k||` (implicit.jl), relative to the step
         # increment; the distance from the two-step iterate to the 12-step reference is the remaining
@@ -195,8 +195,8 @@ end
         pmaj = Potts.LatticePDE.discretize(JgPDE.jiang(JG_DIMS; coarsemask = true), disc;
             inputs = vcat([k2 => v2 for (k2, v2) in collect(fi) if k2 != :med], [:medc => medm]),
             u0 = u0, tspan = (0.0, 1e-6))
-        inew = init(pnew, ExplicitEuler(; dt = 1e-6, substeps = 1)); step!(inew)
-        imaj = init(pmaj, ExplicitEuler(; dt = 1e-6, substeps = 1)); step!(imaj)
+        inew = init(pnew, ExplicitEuler(; substeps = 1); dt = 1.0e-6); step!(inew)
+        imaj = init(pmaj, ExplicitEuler(; substeps = 1); dt = 1.0e-6); step!(imaj)
         # (one explicit step: its value difference is the support of the rate difference; no diffusion
         # solve spreads it, and h = 1e-6 keeps Do, Dg and Dl stable)
         function nbhd(J)

@@ -24,9 +24,11 @@ end
 function allocation_measurements(frame = allocation_frame())
     return (
         cell_type = _minimum_allocated(
-            () -> encode(frame, CellTypeEncoding())),
+            () -> encode_frame(frame, CellTypeEncoding())
+        ),
         identity = _minimum_allocated(
-            () -> encode(frame, CellIdentityEncoding())),
+            () -> encode_frame(frame, CellIdentityEncoding())
+        ),
         boundaries = _minimum_allocated(
             () -> MakiePotts._boundary_segments(frame)),
         conformance = _minimum_allocated(

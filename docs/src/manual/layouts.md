@@ -1,7 +1,8 @@
 # [Layouts](@id manual-layouts)
 
 A layout builds an initial state from layers. [Tutorial 4](@ref tutorial-layouts) walks
-through them; this page is the reference.
+through them; this page is the reference. The names on this page come from
+`using Potts.Layouts`.
 
 ## Turning layers into an operating point
 
@@ -90,6 +91,7 @@ the layout asks for `shortfall = :allow`; its report row says how many cells it 
 
 ```@example mlayouts
 using Potts
+using Potts.Layouts
 denovo = overlay(Frame(:border),
     Eden(RandomPoints(360; region = (2:199, 2:199), replace = true, seed = 1);
         rounds = 10, kinds = [:endothelial], seed = 1, shortfall = :allow))
@@ -132,7 +134,7 @@ elsewhere on the sphere.
 ### [Compartment cells](@id manual-layouts-groups)
 
 A `Group` puts every cell its layers create into one cluster, for a model with
-compartments (a `cluster[owner] == cluster[owner′]` contact term). `layout` returns
+compartments (a `cluster[owner] == cluster[neighbor_owner]` contact term). `layout` returns
 `cluster => ids` beside `ownership` and `kind`, and `PottsProblem` takes it as it is, so no
 cluster is written by hand. Fortuna et al.'s nucleus-migration start is a cytoplasm ball
 tangent to the substrate, a 6 × 6 × 6 nucleus at its center, and frozen substrate and lid
@@ -165,8 +167,8 @@ A `Group` is the top-level layout or a member of a top-level `overlay`, never in
 
 !!! note "DomainSets"
     DomainSets (which ModelingToolkit loads) exports its own `Sphere` and `Point`. After
-    `using Potts, DomainSets` both names are ambiguous: write `Potts.Sphere` and
-    `Potts.Point`, or import the ones you need (`using Potts: Sphere, Point`).
+    `using Potts.Layouts, DomainSets` both names are ambiguous: write `Potts.Layouts.Sphere`
+    and `Potts.Layouts.Point`, or import the ones you need (`using Potts.Layouts: Sphere, Point`).
 
 ## Writing a layer
 

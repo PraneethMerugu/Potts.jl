@@ -99,11 +99,11 @@ end
         try
             pw = PottsProblem(CsWSurf(; name = :w), cs_wsurf_op(), (0, 80); T = Float32, seed = 7, capacity = 2000)
             u = solve(pw, CheckerboardCPM(); save_start = false).u[end]
-            S = CorePotts.recompute_surface(Array(u.σ), pw.lattice, CorePotts.relation(CS_W, pw.lattice), length(u.cell.volume))
+            S = CorePotts.recompute_surface(Array(u.ownership), pw.lattice, CorePotts.relation(CS_W, pw.lattice), length(u.cell.volume))
             @test Array(u.cell.surface) ≈ S rtol = 1e-5
             pc = PottsProblem(CsWComp(; name = :c), cs_wcomp_op(), (0, 40); T = Float32, seed = 7, capacity = 2000)
             c = solve(pc, CheckerboardCPM(); save_start = false).u[end]
-            @test Array(c.cell.cluster_surface) ≈ CorePotts.recompute_cluster_surface(Array(c.σ), Array(c.cell.cluster), pc.lattice, CS_W) rtol = 1e-5
+            @test Array(c.cell.cluster_surface) ≈ CorePotts.recompute_cluster_surface(Array(c.ownership), Array(c.cell.cluster), pc.lattice, CS_W) rtol = 1.0e-5
         finally
             CorePotts._FORCE_DEVICE_LIFECYCLE[] = f0
         end
@@ -111,7 +111,8 @@ end
         # runs after `remake`, which adds them; its result equals the fresh problem's
         pv = PottsProblem(CsConv(; name = :v), cs_conv_op(), (0, 30); T = Float32, seed = 7, capacity = 8)
         u0 = pv.u0
-        old = CorePotts.CPMState(u0.σ, NamedTuple(k => v for (k, v) in pairs(u0.cell) if !startswith(String(k), "#cv_w")),
+        old = CorePotts.CPMState(
+            u0.ownership, NamedTuple(k => v for (k, v) in pairs(u0.cell) if !startswith(String(k), "#cv_w")),
             u0.site, u0.model, u0.history)
         @test !haskey(old.cell, Symbol("#cv_wsum"))
         qv = remake(pv; u0 = old)
@@ -122,7 +123,8 @@ end
         # so (it said "cell capacity 8, got 8"); a capacity that differs keeps its words
         integ = init(pv, CheckerboardCPM())
         ks = collect(keys(u0.cell))
-        swapped = CorePotts.CPMState(u0.σ, NamedTuple(k => u0.cell[k] for k in [ks[2]; ks[1]; ks[3:end]]), u0.site, u0.model,
+        swapped = CorePotts.CPMState(
+            u0.ownership, NamedTuple(k => u0.cell[k] for k in [ks[2]; ks[1]; ks[3:end]]), u0.site, u0.model,
             u0.history)
         err = try
             reinit!(integ, swapped); ""

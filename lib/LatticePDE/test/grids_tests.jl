@@ -26,9 +26,9 @@ end
 @testitem "Q18: sol[c] is one grid per save on the owned, Tsit5 and FieldProblem paths" setup = [LP_grids] tags = [:latticepde, :grids] begin
 @testset "Q18: sol[c] is one grid per save on the owned, Tsit5 and FieldProblem paths" begin
     p = discretize(qsys(), LatticeDiscretization(Grid((6, 4)); T = Float64))
-    so = solve(p, ExplicitEuler(; dt = 0.01); saveat = 0.1)
+        so = solve(p, ExplicitEuler(); dt = 0.01, saveat = 0.1)
     st = solve(p, Tsit5(); saveat = 0.1, abstol = 1e-10, reltol = 1e-10)
-    sf = solve(LFP.field_problem(p), ExplicitEuler(; dt = 0.01); saveat = 0.1)
+        sf = solve(LFP.field_problem(p), ExplicitEuler(); dt = 0.01, saveat = 0.1)
         @test sf isa SciMLBase.ODESolution && so isa SciMLBase.ODESolution
     for s in (so, st, sf)
         v = s[qce]
@@ -57,12 +57,12 @@ end
         sprint(showerror, e)
     end
     # a field saved whole: its grids, on both paths
-    for alg in (ExplicitEuler(; dt = 0.01), Tsit5())
-        s = solve(p, alg; saveat = 0.1, save_idxs = qce)
+        for alg in (ExplicitEuler(), Tsit5())
+            s = solve(p, alg; dt = 0.01, saveat = 0.1, save_idxs = qce)
         @test length(s.u[1]) == 24 && size(s[qce][end]) == (6, 4) && s[qce][end] == reshape(s.u[end], 6, 4)
     end
     # part of a field: the read names `save_idxs` and the routes
-    s = solve(p, ExplicitEuler(; dt = 0.01); saveat = 0.1, save_idxs = [2, 3])
+        s = solve(p, ExplicitEuler(); dt = 0.01, saveat = 0.1, save_idxs = [2, 3])
     @test length(s.u[1]) == 2 && occursin("is not saved whole", msg(() -> s[qce]))
     @test occursin("save_idxs = ", msg(() -> s[qce]))
 end

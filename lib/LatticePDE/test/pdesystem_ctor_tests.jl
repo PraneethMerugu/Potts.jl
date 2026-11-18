@@ -41,8 +41,10 @@ psdom = [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0,
 const PS_K = Bool[(i + 2j) % 3 == 0 for i in 1:8, j in 1:8]
 const PS_M = Int32[1 + (i > 4) for i in 1:8, j in 1:8]
 psdisc() = LatticeDiscretization(Grid((8, 8)); T = Float64)
-pseq() = [D(psc(t, x, y)) ~ psD * Δ(psc(t, x, y)) + 0.5 * psin(t, x, y) - psk * psc(t, x, y),
-    D(psu(t, x, y)) ~ 0.2 * Δ(psu(t, x, y)) + at(psJ, psm(t, x, y)) * psc(t, x, y) - psu(t, x, y)]
+pseq() = [
+    D(psc(t, x, y)) ~ psD * laplacian(psc(t, x, y)) + 0.5 * psin(t, x, y) - psk * psc(t, x, y),
+    D(psu(t, x, y)) ~ 0.2 * laplacian(psu(t, x, y)) + value_at(psJ, psm(t, x, y)) * psc(t, x, y) - psu(t, x, y),
+]
 psbc() = [psc(0, x, y) ~ x, psu(0, x, y) ~ 0.0, psc(t, 0, y) ~ 1.0]
 pslen(s) = (length(s.ivs), length(s.dvs), length(s.ps))
 psmsg(f) = try
@@ -75,18 +77,18 @@ using .LP_pdesystem_ctor: fd
     ins = [psin => PS_K, psm => PS_M]
     pa, pb = discretize(a, psdisc(); inputs = ins), discretize(b, psdisc(); inputs = ins)
     @test pa.u0 == pb.u0 && isequal(pa.p.values, pb.p.values)
-    ra, rb = solve(pa, ExplicitEuler(; dt = 1e-3)), solve(pb, ExplicitEuler(; dt = 1e-3))
+        ra, rb = solve(pa, ExplicitEuler(); dt = 1.0e-3), solve(pb, ExplicitEuler(); dt = 1.0e-3)
     @test ra.u[end] == rb.u[end] && maximum(abs, ra.u[end] .- ra.u[1]) > 1e-3
     # and the hand-built one in the written order (the lists are the same as sets)
     c = PDESystem(pseq(), psbc(), psdom, [t, x, y], [psc(t, x, y), psu(t, x, y), psin(t, x, y), psm(t, x, y)],
         [psD, psk, psJ]; name = :ps)
-    @test solve(discretize(c, psdisc(); inputs = ins), ExplicitEuler(; dt = 1e-3)).u[end] == ra.u[end]
+        @test solve(discretize(c, psdisc(); inputs = ins), ExplicitEuler(); dt = 1.0e-3).u[end] == ra.u[end]
     # keywords go to PDESystem; no parameters gives an empty list
     i = LatticePDE.pdesystem([D(psc(t, x, y)) ~ -psc(t, x, y)]; name = :pi, domain = psdom,
         initial_conditions = Dict(psc(t, x, y) => 0.25))
     @test pslen(i) == (3, 1, 0) && all(==(0.25), discretize(i, psdisc()).u0)
     # a steady system (no time): the coordinates only
-    s = LatticePDE.pdesystem([0 ~ Δ(psu(x, y)) - psu(x, y) + 1.0]; name = :pss)
+        s = LatticePDE.pdesystem([0 ~ laplacian(psu(x, y)) - psu(x, y) + 1.0]; name = :pss)
     @test isequal(collect(s.ivs), [x, y]) && pslen(s) == (2, 1, 0)
 end
 end
@@ -114,7 +116,7 @@ using .LP_pdesystem_ctor: fd
     # two fields keep the order of their equations, before the inputs
     s = LatticePDE.pdesystem([D(psu(t, x, y)) ~ psz(t, x, y) + psa(t, x, y), D(psc(t, x, y)) ~ psu(t, x, y)]; name = :pso)
     @test dvnames(s) == ["psu", "psc", "psa", "psz"] || (println(dvnames(s)); false)
-    # a front end's refusal hook: nothing by default (a variable tagged `potts_entity` is accepted)
+        # a front end's refusal hook: nothing by default (any metadata value is accepted)
     @test LatticePDE.pdesystem_refusal(:any, psc(t, x, y)) === nothing
 end
 end

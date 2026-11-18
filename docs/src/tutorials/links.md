@@ -12,6 +12,7 @@ The models on this page are generic teaching models.
 
 ```@example links
 using Potts, MakiePotts, CairoMakie
+using Potts.Layouts
 using PottsModels.Analysis: centroids
 CairoMakie.activate!(type = "png") # hide
 nothing # hide
@@ -34,7 +35,7 @@ length of 6 is shorter than the distance between the cells, so the chain contrac
     @lattice Lattice((80, 40); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         Volume(cell; target = 25.0, strength = 2.0)
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
         edges(bond) => k * (distance - rest)^2
     end
     @sweep Metropolis(; temperature = 10.0)
@@ -88,7 +89,7 @@ To draw the links, connect the centroids of linked cells. `centroids` from
 ```@example links
 function draw_links!(ax, u, name)
     store = CorePotts.link_store(u.cell, name)
-    xy = centroids(u.σ)
+    xy = centroids(u.ownership)
     for a in eachindex(xy), b in (a + 1):length(xy)
         CorePotts.linked(store, a, b) || continue
         lines!(ax, [xy[a][1], xy[b][1]] .- 0.5, [xy[a][2], xy[b][2]] .- 0.5; color = :white, linewidth = 2)
@@ -126,7 +127,7 @@ Here motile cells stick together when they meet. A link breaks when it stretches
     @lattice Lattice((60, 60); boundary = Periodic(), neighborhood = Moore(1))
     @energy begin
         Volume(cell; target = 25.0, strength = 2.0)
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
         edges(bond) => k * (distance - ℓ₀)^2
     end
     @link bond when = new_contact(a, b)

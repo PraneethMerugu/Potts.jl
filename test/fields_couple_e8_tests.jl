@@ -15,7 +15,7 @@
             n8, w8 = cp_run(CeNamed(; name = :m, s = 0.8), fs), cp_run(CeWork(; name = :m, s = 0.8), fs)
             @test cp_same(n8, w8) && n8.u[end].site.c != n.u[end].site.c
         end
-        @test count(==(:s), [Potts.info(p).name for p in Potts.parameters(CeNamed(; name = :m))]) == 1
+        @test count(==(:s), [Potts.info(p).name for p in Potts.declared_parameters(CeNamed(; name = :m))]) == 1
         # a name that is neither a field nor a parameter: the refusal lists both
         e = cp_build_err(quote
             @potts_model CeNoName begin
@@ -42,10 +42,10 @@ end
         hand(σ, kind) = [:a => [any(1 <= i + di <= size(σ, 1) && 1 <= j + dj <= size(σ, 2) && σ[i + di, j + dj] != 0 &&
                                     kind[σ[i + di, j + dj]] == 1 for (di, dj) in ((1, 0), (-1, 0), (0, 1), (0, -1)))
                                 for i in axes(σ, 1), j in axes(σ, 2)]]
-        err, n = cp_replay(CeAny(; name = :m), CeS.named_owned(), hand, cp_own(ExplicitEuler()))
+        err, n = cp_replay(CeAny(; name = :m), CeS.named_owned(), hand, ExplicitEuler())
         @test n == 12 && err <= 1e-14 || (println("CeAny: $err"); false)   # (measured 4.4e-16, 2026-11-10: one rounding)
         host = CpHost(; name = :m)
-        k, vol = Potts.kind, Potts.at(Potts.B.volume, Potts.B.owner)
+        k, vol = Potts.kind, Potts.value_at(Potts.B.volume, Potts.B.owner)
         # the other truth-valued forms couple; a numeric one is refused
         for b in ((k == 1) & (vol > 3.0), (k == 1) | (k == 0), !(k == 1), Potts.LatticePDE.ismember(k, (0, 1)))
             @test Potts.couple(host, CeS.named(); inputs = [CeS.a => b]) isa Potts.PottsSystem

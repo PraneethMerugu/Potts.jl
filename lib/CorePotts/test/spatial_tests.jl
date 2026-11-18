@@ -19,10 +19,10 @@ end
             merge(gg_params(), (; T = 30.0)); frozen)
         sol = solve(prob, alg)
         u = sol.u[end]
-        @test u.σ[frozen] == σ[frozen]
-        @test u.σ[.!frozen] != σ[.!frozen]
+            @test u.ownership[frozen] == σ[frozen]
+            @test u.ownership[.!frozen] != σ[.!frozen]
         @test sol.stats.attempts == 20 * count(!, frozen)
-        @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(kinds)]
+            @test u.cell.volume == [count(==(c), u.ownership) for c in eachindex(kinds)]
             @test_throws ["ArgumentError", "frozen mask has size", "lattice"] PottsProblem(
                 GG, initial_state(σ, kinds), lat, (0, 1),
             gg_params(); frozen = falses(3, 3))
@@ -52,7 +52,9 @@ end
         ph = Phases(after_mcs = (
             CellReduce((:cell, :vsum), (st, p, ctx, key, mcs, i) -> st.site.v[i]),
             CellReduce((:cell, :vmax), (st, p, ctx, key, mcs, i) -> st.site.v[i]; op = max),
-            CellReduce((:cell, :rim), (st, p, ctx, key, mcs, i) -> is_boundary_site(st.σ, ctx, i))))
+                    CellReduce((:cell, :rim), (st, p, ctx, key, mcs, i) -> is_boundary_site(st.ownership, ctx, i)),
+                )
+            )
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frz, phases = ph)
         u = solve(PottsProblem(f, st, lat, (0, 1), gg_params()), CheckerboardCPM()).u[end]
         for c in 1:n
@@ -80,13 +82,17 @@ end
                     inside && σ[linear_index(lat, y)] == d && (bonds += 1)
                 end
             end
-            @test contact(g, c, d) == bonds
-            @test (d in neighbors(g, c)) == (bonds > 0)
+                @test contact_measure(g, c, d) == bonds
+                @test (d in contact_neighbors(g, c)) == (bonds > 0)
         end
-        @test contact(g, 1, 0) == count(i -> σ[i] == 1 && any(off -> σ[linear_index(lat,
+            @test contact_measure(g, 1, 0) == count(
+                i -> σ[i] == 1 && any(
+                    off -> σ[
+                        linear_index(
+                            lat,
             shift(lat, coordinates(lat, i), off)[2])] == 0, vn.offsets), 1:nsites(lat)) ||
-              contact(g, 1, 0) >= 0
-        @test all(issorted(neighbors(g, c)) for c in eachindex(kinds))
+                contact_measure(g, 1, 0) >= 0
+            @test all(issorted(contact_neighbors(g, c)) for c in eachindex(kinds))
     end
 
     @testset "device contact table equals the host contact graph" begin
@@ -94,7 +100,7 @@ end
         σ[σ .== 5] .= 0                                         # some medium contact
         lat = Lattice((24, 24))
         n = length(kinds)
-        @test count(!isempty, neighbors(contact_graph(σ, lat, relation(Moore(1), lat), n), a) for a in 1:n) > 5
+            @test count(!isempty, contact_neighbors(contact_graph(σ, lat, relation(Moore(1), lat), n), a) for a in 1:n) > 5
         for (spec, name) in ((VonNeumann(1), :contact), (Weighted(Moore(1), o -> 1 / sqrt(sum(abs2, o))), :touch))
             st = initial_state(σ, kinds; cell = empty_contacts(8, n; T = Float64))
             f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = (st, p, prop, ctx) -> false,
@@ -102,14 +108,14 @@ end
             prob = PottsProblem(f, st, lat, (0, 1), gg_params(); contact = VonNeumann(1),
                 relations = name === :touch ? (; touch = spec) : (;))
             u = solve(prob, CheckerboardCPM()).u[end]
-            g = contact_graph(u.σ, lat, relation(spec, lat), n)
+                g = contact_graph(u.ownership, lat, relation(spec, lat), n)
             @test all(iszero, u.cell.contact_overflow)
             for a in 1:n
-                @test sort(filter(!=(0), u.cell.contact_nbr[:, a])) == collect(neighbors(g, a))
-                @test contact_measure(u.cell, a, 0) ≈ contact(g, a, 0)
+                    @test sort(filter(!=(0), u.cell.contact_nbr[:, a])) == collect(contact_neighbors(g, a))
+                    @test contact_measure(u.cell, a, 0) ≈ contact_measure(g, a, 0)
                 for b in 1:n
                     a == b && continue
-                    @test contact_measure(u.cell, a, b) ≈ contact(g, a, b)
+                        @test contact_measure(u.cell, a, b) ≈ contact_measure(g, a, b)
                 end
             end
             small = initial_state(σ, kinds; cell = empty_contacts(1, n))

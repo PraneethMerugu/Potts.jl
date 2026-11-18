@@ -2,7 +2,7 @@
     LatticeFields.Problems
 
 Running compiled programs (v3 §8): the arrays of a program on a backend (`FieldStore`), the
-binding of a step plan's launch descriptions to `Exec` launches (`bind`, `BoundStep`), the
+binding of a step plan's launch descriptions to `Exec` launches (`bind_program`, `BoundStep`), the
 owned `FieldProblem` with its steppers (`ExplicitEuler`, `ExplicitMap`, the implicit ones), the SciML
 `ODEProblem` of a program's ODE form (`ode_problem`, `LatticeRHS`), and symbolic indexing of
 problems, solutions and integrators (`LatticeIndex`, `FieldSlot`).
@@ -25,7 +25,7 @@ using ..Exec: Exec
 using ..IR: IR, CLAMP, INSIDE, Coef, DomainEdgeRule, HEX, Ex, FaceRule, sitecoefs, NodeValueRule, Program, RUNTIME, PARAM, LOAD, fieldid, print_program, isfloat, juliatype, leveldims, ncomp, nsites,
             runtime!, degenerate, FACE_RTOL, F64, F16, U8, I32, U32
 using ..Compile: CompiledKernel, CompileOptions, body_function, derive_function, lanecast, lanetype,
-                 primal, promote_dual, semantic, valtype, withvaltype, writes, fuse_update, fuse_residual,
+    primal, promote_dual, semantic, value_type, withvaltype, writes, fuse_update, fuse_residual,
                  npartials, dvalue, dpartial, dsetpartial, dreplace
 using ..Schedule: LaunchSpec, StepPlan, plan, fusion_report
 using ..Solvers: Solvers
@@ -33,11 +33,11 @@ using ..Solvers: Solvers
 RuntimeGeneratedFunctions.init(@__MODULE__)
 rgf(ex::Expr) = drop_expr(RuntimeGeneratedFunction(@__MODULE__, @__MODULE__, ex))
 
-public Geom, RT_T, RT_DT, launch_geometry, launch_parameters, bind, rebind, retime, each,
+public Geom, RT_T, RT_DT, launch_geometry, launch_parameters, bind_program, rebind, retime, each,
        FieldStore,
        array, current, settable!, launch_arrays, state_layout, BoundStep, compile!, swap!,
        run_step!, FaceCheck, face_checks, degenerate_face, check_faces, face_ratio, FieldSlot,
-       LatticeIndex, FieldAlgorithm, LinearSolver, linear_solver_refusal, ExplicitEuler, ExplicitMap, nbuffers, FieldProblem,
+    LatticeIndex, AbstractFieldAlgorithm, LinearSolver, linear_solver_refusal, ExplicitEuler, ExplicitMap, nbuffers, FieldProblem,
        FieldGroups, update_key, update_rule, EulerRule, alg_family, alg_cache, reset_cache!, step_retcode!, GroupSpec, FieldGroup,
        ParamSlot, TableSpec, InputSpec, canonical, check_status!, check_declared!, check_declared_state, check_backend_float64, status_word, status_route, StatusTotals, STATUS_CODE,
        STATUS_WINDOW, STATUS_CAUSE, STATUS_SOLVES, STATUS_BUDGET, STATUS_FLOOR, STATUS_NEWTON_BUDGET, STATUS_CAUSES, field_stats,
@@ -77,9 +77,9 @@ public ClockTick, MaskSync, InputRefresh, refresh_inputs!, mask_sync!, sync_mask
 public LatticeMetadata, LatticeFunction, LatticeProblem, LatticeDiscreteProblem, lattice_metadata, lattice_problem,
        field_problem, rhs_build
 # the Jacobian of the ODE right side (F4-07)
-public jacobian_sparsity, column_colors, LatticeJacobian, LatticeJVP, JacobianOperator, colored_jacobian!, lattice_jvp!
+public field_jacobian_sparsity, column_colors, LatticeJacobian, LatticeJVP, JacobianOperator, colored_jacobian!, lattice_jvp!
 # the lattice multigrid as a LinearSolve preconditioner and algorithm (F4-08)
-public LatticeMG, MGPreconditioner, LatticePCG
+public LatticeMultigrid, MGPreconditioner, LatticePCG
 # solutions (F4-04)
 public FieldSeries, field_series, LatticeStats, LatticeSolution, finish!
 # the saved size above which a run that saves every step warns (field runs and Potts runs)
@@ -87,13 +87,13 @@ public LARGE_SAVE_BYTES
 # the coupling between field groups and the per-group counts (review of F2-06)
 public compute_type, substep_counts, lagged_coupling, group_loops, steady_loop_rates, steady_start, starts_steady, StartText, StartSubsteps
 # the one substep policy of both front ends and its words (F3-01)
-public PolicyTexts, ProblemTexts, GroupSubsteps, check_coupling, bound_report, unbounded_text, uncovered_text,
+public AbstractPolicyTexts, ProblemTexts, GroupSubsteps, check_coupling, bound_report, unbounded_text, uncovered_text,
        refuse_parameters, coupling_unknown_text, coupling_unbounded_text, loop_text, steady_loop_text, steady_gain_text,
        steady_why_text, steady_gain_words, rows0_route, reads_time, bound_window!, bound_window, bound_params!, bound_params
 # the field report (F4-13, AF-09)
 public field_report, group_report, coupling_report, substep_cause, implicit_facts, ImplicitFacts, coupling_unseen_text, unseen_reads, unseen_loop, cover_text
 # the implicit algorithms (F3-07)
-public ImplicitAlgorithm, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, OperatorSpec, RowOperator, operator_spec, build_operator, growth, inexact_bounds, ImplicitCache,
+public AbstractImplicitFieldAlgorithm, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, OperatorSpec, RowOperator, operator_spec, build_operator, growth, inexact_bounds, ImplicitCache,
        ImplicitRow, bind_cache, residual_program, residual_rule
 # steady rows `0 ~ rhs` (F3-12b)
 public steady_alg, steady_fields

@@ -81,7 +81,7 @@
 #
 # E6 (docs for cell references) is prose and is not in this file: no frozen test asserts
 # documentation text. The `kind[old] == medium` form that E6 asks the docs to use already
-# compiles (the OpenVT model uses `kind′ == medium`) and is not re-pinned here.
+# compiles (the OpenVT model uses `neighbor_kind == medium`) and is not re-pinned here.
 #
 # Open choices (the test author's conservative readings, flagged for the spec owner):
 #   O1 (ruled; superseded 2026-10-14 by the maintainer) the spelling is `integral(x; over =
@@ -166,7 +166,7 @@ p65a2_msg(e) = e === nothing ? "" : sprint(showerror, e)
 function p65a2_props(prob, u)
     lat = prob.lattice
     moore = CorePotts.relation(Moore(1), lat)
-    σ = Array(u.σ)
+    σ = Array(u.ownership)
     out = CorePotts.Proposal{2}[]
     for t in eachindex(σ)
         x = CorePotts.coordinates(lat, t)
@@ -183,7 +183,7 @@ end
 p65a2_prop(prob, u, old, new) = first(filter(p -> p.old == old && p.new == new, p65a2_props(prob, u)))
 function p65a2_apply(prob, u, prop)
     a = deepcopy(u)
-    a.σ[prop.target] = prop.new
+    a.ownership[prop.target] = prop.new
     prob.f.commit!(a, prob.p, prop, p65a2_ctx(prob))
     return a
 end
@@ -212,7 +212,7 @@ function p65a2_oracle_sibling(u, c, k)
     return isempty(ms) ? 0 : ms[1]
 end
 function p65a2_oracle_cluster_sum(u, F, c)
-    σ = Array(u.σ); cl = p65a2_col(u, :cluster)
+    σ = Array(u.ownership); cl = p65a2_col(u, :cluster)
     return sum((F[I] for I in CartesianIndices(σ) if σ[I] != 0 && cl[σ[I]] == cl[c]); init = 0.0)
 end
 
@@ -224,7 +224,7 @@ const P65A2_PAIRS_BODY = quote
     @lattice Lattice((12, 12); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         cells => (volume - 9.0)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = T)
 end
@@ -284,7 +284,7 @@ p65a2_define(:P65a2Refs, quote
         @lattice Lattice((20, 12); boundary = (Periodic(), Closed()), neighborhood = Moore(1))
         @energy begin
             cells => λ * (volume - Vt)^2
-            contacts => ifelse(cluster[owner] == cluster[owner′], 0.5, 1.0)
+                contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 0.5, 1.0)
         end
         @after_mcs begin
             wcx ~ centroid(sibling(nucleus), 1)
@@ -458,7 +458,7 @@ p65a2_bad_expr(name::Symbol; energy = :((volume - 9.0)^2), update = :(w ~ 0.0)) 
     @lattice Lattice((20, 12); boundary = (Periodic(), Closed()), neighborhood = Moore(1))
     @energy begin
         cells => $energy
-        contacts => ifelse(cluster[owner] == cluster[owner′], 0.5, 1.0)
+            contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 0.5, 1.0)
     end
     @after_mcs $update
     @sweep Metropolis(; temperature = 1.0)
@@ -508,7 +508,7 @@ end
     @test getp(pr, :J)(pr)[3, 4] == 11.0 && getp(pr, :J)(pr)[4, 3] == 11.0
     # and the same trajectory as the matrix form
     sp, sm = solve(pp, SequentialCPM(); saveat = 1), solve(pm, SequentialCPM(); saveat = 1)
-    @test all(i -> Array(sp.u[i].σ) == Array(sm.u[i].σ), eachindex(sm.u))
+    @test all(i -> Array(sp.u[i].ownership) == Array(sm.u[i].ownership), eachindex(sm.u))
 end
 
 @testset "P6.5a2: Pairs refuses unknown names, non-kinds and pairs given twice (E2)" begin
@@ -665,7 +665,7 @@ end
 # 5. After-MCS writes: the same values as `@observed`, and an independent oracle
 
 function p65a2_check_writes(prob, u; atol)
-    σ = Array(u.σ)
+    σ = Array(u.ownership)
     v = p65a2_vol(u)
     alive = [c for c in 1:6 if v[c] > 0]
     # the writes (after the last sweep) equal the observed values on the saved state
@@ -708,7 +708,7 @@ end
     # CONTROL (negative): without the wrap the twin's trajectory changes, so equality pins it
     rr = solve(pr, SequentialCPM(); saveat = 1)
     rn = solve(p65a2_wrapref_problem(; Lw = 1e6), SequentialCPM(); saveat = 1)
-    @test any(i -> Array(rr.u[i].σ) != Array(rn.u[i].σ), eachindex(rr.u))
+    @test any(i -> Array(rr.u[i].ownership) != Array(rn.u[i].ownership), eachindex(rr.u))
     pw = p65a2_wrap_problem()                                    # DEFECT CHECK (the rest)
     @test total_energy(pw, pw.u0) == total_energy(pr, pr.u0)
     ctxw, ctxr = p65a2_ctx(pw), p65a2_ctx(pr)
@@ -718,7 +718,7 @@ end
     for alg in (SequentialCPM(), CheckerboardCPM())
         sw = solve(pw, alg; saveat = 1)
         sr = solve(pr, alg; saveat = 1)
-        @test all(i -> Array(sw.u[i].σ) == Array(sr.u[i].σ), eachindex(sr.u))
+        @test all(i -> Array(sw.u[i].ownership) == Array(sr.u[i].ownership), eachindex(sr.u))
     end
 end
 
@@ -791,12 +791,12 @@ end
         sw = solve(p65a2_wrap_problem(; T = Float32), alg; backend, saveat = 1)
         sr = solve(p65a2_wrapref_problem(; T = Float32), alg; backend, saveat = 1)
         @test Symbol(sw.retcode) === :Success
-        @test all(i -> Array(sw.u[i].σ) == Array(sr.u[i].σ), eachindex(sr.u))
+        @test all(i -> Array(sw.u[i].ownership) == Array(sr.u[i].ownership), eachindex(sr.u))
         # named pairs on the device: the same trajectory as the matrix form
         pp = PottsProblem(p65a2_system(:P65a2Pairs; sysname = :pr), P65A2_PAIRS_OP, (0, 3); seed = 1, T = Float32)
         pm = PottsProblem(p65a2_system(:P65a2PairsMatrix; sysname = :pr), P65A2_PAIRS_OP, (0, 3); seed = 1, T = Float32)
         sp, sm = solve(pp, alg; backend, saveat = 1), solve(pm, alg; backend, saveat = 1)
-        @test all(i -> Array(sp.u[i].σ) == Array(sm.u[i].σ), eachindex(sm.u))
+        @test all(i -> Array(sp.u[i].ownership) == Array(sm.u[i].ownership), eachindex(sm.u))
     else
         @test_skip "device (POTTS_GPU=metal|rocm)"
     end

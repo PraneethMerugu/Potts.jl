@@ -120,7 +120,7 @@ struct GroupSpec{N}
 end
 function GroupSpec(rate::Program{N}; state, external = String[], params = String[], tables = String[],
         inputs = String[], init = String[], kind::Symbol, clock = nothing, stability = p -> NaN,
-        route = "ExplicitEuler(; dt, substeps = n)", terms = String[], linearity = nothing, operator = nothing,
+        route = "ExplicitEuler(; substeps = n)", terms = String[], linearity = nothing, operator = nothing,
         steady = String[], timefree::Bool = false) where {N}
     kind in (:rate, :map) || throw(ArgumentError("kind must be :rate or :map; got $(repr(kind))"))
     return GroupSpec{N}(rate, collect(String, state), collect(String, external), ParamSlot[ParamSlot(q) for q in params],
@@ -136,7 +136,7 @@ The numerical group of `spec`: for each algorithm, the semantic program of its u
 into `spec.rate` ([`group_program`](@ref): `fuse_update(spec.rate, update_rule(alg))`, an IR
 pass with no symbolic step, made once per [`update_key`](@ref)), and its plans, planned and
 emitted once per `(update_key(alg), value type, kernels)` and shared by every problem and
-runtime made from it (the plans of `ExplicitEuler(; dt = 0.1)` and `ExplicitEuler(; dt = 0.2)`
+runtime made from it (the plans of `ExplicitEuler()` at `dt = 0.1` and at `dt = 0.2`
 are one). `program` is the program of `alg` (the default algorithm of the group's kind:
 `ExplicitEuler()` for rates, `ExplicitMap()` for maps); every algorithm's program has the
 same fields, kernels and rules, so one store serves them all.
@@ -308,11 +308,11 @@ end
 # The substep policy (F3 design §1.2 item 1, §3.6, §3.7; F3-01): one function for both front
 # ends. Its decisions (the count, when a count is refused or warned, the coupling limit
 # between groups, the once-keys of the warnings) are made here; the front end gives only the
-# words of its messages (`PolicyTexts`: its route and how it prints a term), so each front end
+# words of its messages (`AbstractPolicyTexts`: its route and how it prints a term), so each front end
 # keeps its messages.
 
 """
-    PolicyTexts
+    AbstractPolicyTexts
 
 The words of a front end's substep and coupling messages (F3 design §3.7). The policy
 ([`substeps`](@ref), [`check_coupling`](@ref)) decides; a front end's texts word the decision
@@ -321,17 +321,17 @@ own. A subtype defines `unbounded_text`, `uncovered_text`, `refuse_parameters`,
 `coupling_unknown_text`, `coupling_unbounded_text`, `loop_text` and `steady_loop_text`, each of a context
 `NamedTuple` of the decision's facts.
 """
-abstract type PolicyTexts end
+abstract type AbstractPolicyTexts end
 
 """
-    ProblemTexts(route = "ExplicitEuler(; dt, substeps = n)")
+    ProblemTexts(route = "ExplicitEuler(; substeps = n)")
 
 Front end B's words (a `FieldProblem`): `route` is how a count is given.
 """
-struct ProblemTexts <: PolicyTexts
+struct ProblemTexts <: AbstractPolicyTexts
     route::String
 end
-ProblemTexts() = ProblemTexts("ExplicitEuler(; dt, substeps = n)")
+ProblemTexts() = ProblemTexts("ExplicitEuler(; substeps = n)")
 
 # the warnings of the policy, once per key in a session (the key holds no value: a sweep warns
 # once), for both front ends
@@ -363,7 +363,8 @@ inputs: [`with_tables`](@ref), primal values). The one policy of both front ends
 text, hashed; front end A: the group's fingerprint text); `texts` words the messages.
 """
 function substeps(spec::GroupSpec, alg::ExplicitEuler, dt::Real, pp; fields = spec.state, stability = spec.stability,
-        key = identity, texts::PolicyTexts = ProblemTexts(spec.texts.route), span = nothing)
+        key = identity, texts::AbstractPolicyTexts = ProblemTexts(spec.texts.route), span = nothing
+    )
     isempty(fields) && return 0                     # aux fields only: one evaluation per window
     dt = Float64(dt)
     # (a bound that reads the time, F4-12b: its windows are counted again at these parameters,
@@ -419,7 +420,8 @@ the cross terms is the same for every group. `span` is the time span (front end 
 loop whose gain the rule does not bound is refused (`steady_loop_text`).
 """
 function check_coupling(stability, groups, explicit, pp, dt::Real; check = eachindex(groups), key = identity,
-        texts::PolicyTexts = ProblemTexts(), span = nothing, steady = nothing, rows0 = String[])
+        texts::AbstractPolicyTexts = ProblemTexts(), span = nothing, steady = nothing, rows0 = String[]
+    )
     length(groups) > 1 || return nothing
     keys = [collect(String, ks) for ks in groups]
     parts = lagged_coupling(stability, keys, pp)
@@ -538,9 +540,9 @@ The warning of a loop of groups that meets terms the stability bound cannot see 
 loop is checked as one only because an unseen term counts as reading every group. It names the
 loop's fields, the unseen terms (`c.terms`), what κ covers, and the routes (the loop's fields in
 one group; declared intervals for the state fields the terms read, `c.fields`). One text for
-both front ends (a `PolicyTexts` may define its own).
+both front ends (a `AbstractPolicyTexts` may define its own).
 """
-function coupling_unseen_text(::PolicyTexts, c)
+function coupling_unseen_text(::AbstractPolicyTexts, c)
     head = c.kind === :conservative ?
            string("a term the bound cannot see (", join(c.terms, ", "), ") counts as reading every group, so ", _fieldlist(c.lf),
                " are checked as a loop; κ = dt · rate = ", _num(c.κ), " covers only the seen terms") :
@@ -562,7 +564,7 @@ check of group `index` ([`check_coupling`](@ref)) at `whole(pp)`, the parameters
 field system. Front end A's field phases hold one (a host function, evaluated at build and
 when the parameters change, never per MCS). `key` is the group's once-key text.
 """
-struct GroupSubsteps{S, A <: FieldAlgorithm, T, C}
+struct GroupSubsteps{S, A <: AbstractFieldAlgorithm, T, C}
     spec::S
     alg::A
     dt::Float64
@@ -570,7 +572,7 @@ struct GroupSubsteps{S, A <: FieldAlgorithm, T, C}
     texts::T
     coupling::C
 end
-GroupSubsteps(spec::GroupSpec, alg::FieldAlgorithm, dt::Real; key::AbstractString, texts::PolicyTexts, coupling = nothing) =
+GroupSubsteps(spec::GroupSpec, alg::AbstractFieldAlgorithm, dt::Real; key::AbstractString, texts::AbstractPolicyTexts, coupling = nothing) =
     GroupSubsteps(spec, alg, Float64(dt), String(key), texts, coupling)
 # a group's once-key for one cause `why` (a type, not a closure per call)
 struct _OnceKey
@@ -820,23 +822,24 @@ iterations nor a larger linear budget does). `coupled`: the group is solved toge
 a `QuasiSteady` group only), so its linear budget is the `DeviceGMRES`'s.
 """
 function status_route(alg, which::Symbol, cause::Integer = 0; coupled::Bool = false)
-    which === :budget && return "a larger linear budget (`inner = DevicePCG(; budget = n)`)"
+    which === :budget && return "a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`)"
     which === :newton_budget && return "more Newton iterations (a larger `newton = k`) or more substeps (`substeps = n`)"
-    cause & 0x1 != 0 && return "more substeps (`substeps = n`) or a larger linear budget (`inner = DevicePCG(; budget = n)`)"
+    cause & 0x01 != 0 && return "more substeps (`substeps = n`) or a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`)"
     cause & 0x6 != 0 && return "more substeps (`substeps = n`): a smaller step brings the Newton iteration into its contraction"
-    return "more substeps (`substeps = n`) or a larger linear budget (`inner = DevicePCG(; budget = n)`)"
+    return "more substeps (`substeps = n`) or a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`)"
 end
 # a steady solve has no substeps: its routes are the budgets, a fixed value or decay, or a
 # transient solver
 function status_route(::QuasiSteady, which::Symbol, cause::Integer = 0; coupled::Bool = false)
-    which === :budget && return coupled ? "a larger linear budget (`inner = DeviceGMRES(; budget = n)`)" :
-                                "a larger linear budget (`inner = DevicePCG(; budget = n)`)"
+    which === :budget && return coupled ? "a larger linear budget (`linsolve = DeviceGMRES(; maxiters = n)`)" :
+        "a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`)"
     which === :newton_budget && return "more Newton iterations (a larger `newton = k`)"
     cause & 0xc0 != 0 && return string("step the fields with `BackwardEuler` (a transient solve needs no unique steady ",
-        "state), or give the coupled solve a larger budget (`inner = DeviceGMRES(; budget = n)`)")
+        "state), or give the coupled solve a larger budget (`linsolve = DeviceGMRES(; maxiters = n)`)"
+    )
     cause & 0x20 != 0 && return "step the field with `BackwardEuler`, or give each region a decay or a fixed value"
     cause & 0x10 != 0 && return "give that region a decay or a fixed value, or step the field with `BackwardEuler`"
-    cause & 0x1 != 0 && return "a larger linear budget (`inner = DevicePCG(; budget = n)`), or step the field with `BackwardEuler`"
+    cause & 0x01 != 0 && return "a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`), or step the field with `BackwardEuler`"
     return "step the field with `BackwardEuler` (a transient solve converges where the steady Newton iteration does not)"
 end
 
@@ -972,8 +975,8 @@ end
     check_backend_float64(prog, alg, backend, V; fields)
 
 A group that declares Float64 on a backend without it (`Exec.supports(backend, Float64)` false:
-Metal) is refused at the bind, in the user's words (batch 5 review S3): a `compute_T` or
-`solver_T` of Float64, or a field of its program declared `lattice_storage = Float64` (the
+Metal) is refused at the bind, in the user's words (batch 5 review S3): a `compute_type` or
+`solver_type` of Float64, or a field of its program declared `lattice_storage = Float64` (the
 group's own, or one it reads). Without the check the kernel compiler would refuse it in its own
 terms. A Float64 state type `V` is the front ends' own check.
 """
@@ -982,11 +985,23 @@ function check_backend_float64(prog, alg, backend, V::Type; fields = String[])
     fs = join(("`$k`" for k in fields), ", ")
     head = string("field", length(fields) == 1 ? " " : "s ", fs, ": ")
     tail = " needs Float64 on the device, and this backend has no Float64 (`supports_float64` is false: Metal)"
-    compute_type(alg, V) === Float64 && valtype(V) !== Float64 && throw(ArgumentError(string(head, _algtext(alg),
-        ": `compute_T = Float64`", tail, "; leave `compute_T` out (`:auto`, the problem's type) or give `compute_T = Float32`")))
-    hasfield(typeof(alg), :solver_T) && getfield(alg, :solver_T) === Float64 && valtype(V) !== Float64 &&
-        throw(ArgumentError(string(head, _algtext(alg), ": `solver_T = Float64`", tail, "; leave `solver_T` out (`:auto`) ",
-            "or give `solver_T = Float32`")))
+    compute_type(alg, V) === Float64 && value_type(V) !== Float64 && throw(
+        ArgumentError(
+            string(
+                head, _algtext(alg),
+                ": `compute_type = Float64`", tail, "; leave `compute_type` out (`:auto`, the problem's type) or give `compute_type = Float32`"
+            )
+        )
+    )
+    hasfield(typeof(alg), :solver_type) && getfield(alg, :solver_type) === Float64 && value_type(V) !== Float64 &&
+        throw(
+        ArgumentError(
+            string(
+                head, _algtext(alg), ": `solver_type = Float64`", tail, "; leave `solver_type` out (`:auto`) ",
+                "or give `solver_type = Float32`"
+            )
+        )
+    )
     for f in prog.fields
         f.fixed && f.storage == F64 || continue
         throw(ArgumentError(string(head, "the field `", f.key, "` is declared `lattice_storage = Float64`, which", tail,
@@ -1026,7 +1041,7 @@ growth past what they saw is caught by the solve's own checks. With `newton > 1`
 check of every substep (the host stop, the device check) counts an iteration that does not
 converge (a budget hit, warned and counted in `field_stats`) or a divergence
 (`ConvergenceFailure`); with one Newton step (an exact local Jacobian) the shift clamp records a
-growth above `1/(2h)` in the status word and warns. Its warning leads with `lower = lo`, since
+growth above `1/(2h)` in the status word and warns. Its warning leads with `lower_bound = lo`, since
 CrankNicolson and BDF2 undershoot by a few percent near a bound. A value that is not finite
 stops every group. Returns `rt.status`.
 """
@@ -1069,10 +1084,11 @@ end
     head = string("field `", x.key, "` left its declared bounds (", x.lo, ", ", x.hi, "): it holds ", v, " at site ",
         site, " by the end of ", window_text(rt, w), ". ")
     # an implicit group goes on: the interval sets only its Newton count, which the Newton check verifies
-    if rt.alg isa ImplicitAlgorithm && isfinite(v)
+    if rt.alg isa AbstractImplicitFieldAlgorithm && isfinite(v)
         below = v < x.lo
         route = below && !(rt.alg isa QuasiSteady) ?
-                string("Give `lower = ", x.lo, "` to the algorithm (it clips each substep at ", x.lo, ": ",
+            string(
+                "Give `lower_bound = ", x.lo, "` to the algorithm (it clips each substep at ", x.lo, ": ",
             _algname(rt.alg), " does not keep the values inside the bounds by itself), or widen `bounds`") :
                 "Widen `bounds` in the field's declaration to the range the field takes"
         Exec.VERBOSE[] && @warn string(

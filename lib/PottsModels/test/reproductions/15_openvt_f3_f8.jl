@@ -73,11 +73,11 @@
 #
 # Cases (b) and control are P6.15e's protocol and seeds with a recorder added (information:
 # their stopping MCS can be compared with the F5 record; not asserted). The O1 rows of a
-# state (spec §3.1: x, y, i, n) come from `PottsModels.openvt_frame(u; β, γ)`, pre-registered
+# state (spec §3.1: x, y, i, n) come from `PottsModels.openvt_frame(u; beta = β, gamma = γ)`, pre-registered
 # here: the same live cells, order and x, y as `openvt_snapshot`, i = `openvt_inhibition_code`
 # of the snapshot's a, f, and n = the number of distinct cells (medium and the cell itself
 # excluded) among the Moore(1) neighbours of the cell's sites (spec §2.4), on the closed
-# lattice. It takes any `u` with `u.σ`, `u.cell.volume`, `u.cell.A_star`, as the snapshot does.
+# lattice. It takes any `u` with `u.ownership`, `u.cell.volume`, `u.cell.A_star`, as the snapshot does.
 #
 # Tiers.
 # - always: the rules on synthetic series with known answers; `openvt_frame` against a
@@ -252,7 +252,7 @@ p615f_gstop(runs) = mean(s.g[end] for s in runs)
 
 function p615f_row(u, t; beta, gamma)
     o = PottsModels.openvt_snapshot(u)
-    i = [openvt_inhibition_code(o.a[j], o.f[j]; β = beta, γ = gamma) for j in eachindex(o.a)]
+    i = [openvt_inhibition_code(o.a[j], o.f[j]; beta = beta, gamma = gamma) for j in eachindex(o.a)]
     m = openvt_metrics(o.x, o.y, Float64.(i .== 0))
     return (; mcs = Int(t), N = length(o.x), m.r, m.A, m.C, m.w, m.g)
 end
@@ -465,7 +465,7 @@ function p615f_frame_fixture()
     σ[11:12, 9:10] .= 5       # cell 5: isolated, at the lattice corner
     vol = Float64[count(==(c), σ) for c in 1:6]                     # id 6: dead (volume 0)
     A = [9.0, 12.0, 4.0, 10.0, 4.0, 50.0]
-    return (; σ, cell = (; volume = vol, A_star = A))
+    return (; ownership = σ, cell = (; volume = vol, A_star = A))
 end
 # brute-force n: distinct other cells among the Moore(1) neighbours of the cell's sites
 function p615f_n_oracle(σ, c)
@@ -485,16 +485,16 @@ end
 @testset "P6.15f O1 rows: openvt_frame against an oracle" begin
     u = p615f_frame_fixture()
     o = PottsModels.openvt_snapshot(u)
-    fr = PottsModels.openvt_frame(u; β = 0.95, γ = 0.3)
+    fr = PottsModels.openvt_frame(u; beta = 0.95, gamma = 0.3)
     @test keys(fr) == (:x, :y, :i, :n)
     @test length(fr.x) == 5                                         # live cells only
     @test fr.x == o.x && fr.y == o.y
-    @test fr.n == [p615f_n_oracle(u.σ, c) for c in 1:5] == [2, 3, 1, 2, 0]
-    @test fr.i == [openvt_inhibition_code(o.a[j], o.f[j]; β = 0.95, γ = 0.3) for j in 1:5]
+    @test fr.n == [p615f_n_oracle(u.ownership, c) for c in 1:5] == [2, 3, 1, 2, 0]
+    @test fr.i == [openvt_inhibition_code(o.a[j], o.f[j]; beta = 0.95, gamma = 0.3) for j in 1:5]
     @test fr.i[2] in (1, 3) && fr.i[5] in (0, 1)                     # a = 9/12 < 0.95; isolated: f = 1
     @test all(in(0:3), fr.i)
     # at β = γ = 0 every cell grows
-    @test PottsModels.openvt_frame(u; β = 0.0, γ = 0.0).i == zeros(Int, 5)
+    @test PottsModels.openvt_frame(u; beta = 0.0, gamma = 0.0).i == zeros(Int, 5)
     # the O1 writer takes it as is
     io = IOBuffer()
     write_openvt(io, :O1, fr)
@@ -540,7 +540,7 @@ if !P615F_FULL
     end
     @testset "P6.15f SMOKE: O1 rows of the SMOKE states" begin
         for (name, r) in P615F_SMOKE
-            c = name == "control" ? (β = 0.0, γ = P615F_GAMMA_CTL) : (β = 0.0, γ = 0.0)
+            c = name == "control" ? (beta = 0.0, gamma = P615F_GAMMA_CTL) : (beta = 0.0, gamma = 0.0)
             fr = PottsModels.openvt_frame(r.u; c...)
             o = PottsModels.openvt_snapshot(r.u)
             @test fr.x == o.x && fr.y == o.y && length(fr.n) == r.series.N[end]
@@ -666,7 +666,7 @@ if P615F_FULL
             @test all(r -> r.retcode === :Terminated && r.series.N[end] >= c.cells, out)
             S[string(case)] = [p615f_cut(r.series, c.cells) for r in out]
             if case === :a
-                n = reduce(vcat, [PottsModels.openvt_frame(r.u; β = c.beta, γ = c.gamma).n for r in out])
+                n = reduce(vcat, [PottsModels.openvt_frame(r.u; beta = c.beta, gamma = c.gamma).n for r in out])
                 nn = sort(unique(n))
                 nb_a = (; n = nn, count = [count(==(k), n) for k in nn])
             end

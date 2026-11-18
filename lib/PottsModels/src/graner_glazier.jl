@@ -37,7 +37,7 @@ Differences from the paper (Glazier & Graner, Phys. Rev. E 47, 2128, 1993):
     @relations proposal = Moore(1)          # the paper copies from the 8 neighbours
     @energy begin
         cells(dark, light) => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = T)
 end

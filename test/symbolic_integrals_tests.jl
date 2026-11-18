@@ -44,12 +44,12 @@ end
         @test p[:cmass] ≈ [sum(w0[σ .== k]) for k in 1:2] && p[:occupied] == [16, 16]   # valid at t0
         sol = solve(p, SequentialCPM(); saveat = 0:5)
         for u in sol.u[2:end]
-            @test u.cell.mass ≈ [sum(w0[u.σ .== k]) for k in 1:2]
-            @test u.cell.hot ≈ [count(>(0.5), w0[u.σ .== k]) / count(==(k), u.σ) for k in 1:2]
+            @test u.cell.mass ≈ [sum(w0[u.ownership .== k]) for k in 1:2]
+            @test u.cell.hot ≈ [count(>(0.5), w0[u.ownership .== k]) / count(==(k), u.ownership) for k in 1:2]
         end
         @test sol[:occupied][end] == sol.u[end].cell.volume                              # integral(1) == volume
         uc = solve(p, CheckerboardCPM()).u[end]
-        @test uc.cell.mass ≈ [sum(w0[uc.σ .== k]) for k in 1:2]
+        @test uc.cell.mass ≈ [sum(w0[uc.ownership .== k]) for k in 1:2]
         @potts_model _BadIntegral begin
             @structural_parameters case = 1
             @kinds medium A
@@ -89,7 +89,7 @@ end
         σ = zeros(Int32, 16, 16); σ[3:8, 3:8] .= 1
         p = PottsProblem(Fresh(; name = :f), [ownership => σ, kind => [1]], (0, 4); capacity = 8)
         sol = solve(p, SequentialCPM(); saveat = 0:4)
-        brute(u, x) = [sum(x[u.σ .== c]; init = 0.0) for c in eachindex(u.cell.volume)]
+        brute(u, x) = [sum(x[u.ownership .== c]; init = 0.0) for c in eachindex(u.cell.volume)]
         names = [Potts._integral_name(x) for x in Potts._integrals(getfield(p.f.sys.csys, :sys))]
         for (t, u) in zip(sol.t, sol.u)
             @test sol[:cmass][t + 1] ≈ brute(u, u.site.w)                 # observed: the saved state itself
@@ -154,7 +154,7 @@ end
         # u once before `sa` (which also serves the ODE); 2u gated with its reader; w once before `sb`
         c = mtkcompile(FreshIntegrals(; name = :f))
         ph = Potts._phases(
-            c, Float64, Dict{Any, Any}(Potts._unwrap(x) => Potts.info(x).default for x in Potts.parameters(getfield(c, :sys))),
+            c, Float64, Dict{Any, Any}(Potts._unwrap(x) => Potts.info(x).default for x in Potts.declared_parameters(getfield(c, :sys))),
             Potts._resolve_solvers(c)
         )
         reduces(t) = count(x -> x isa CorePotts.CellReduce || (x isa Potts._Gated && x.phase isa CorePotts.CellReduce), t)
@@ -198,7 +198,7 @@ end
         @test !any(t -> last(t) === :v, getfield(c, :pre_snapshots)[:after_mcs])       # `v` read only in an integral
         @test isempty(getfield(c, :pre_snapshots)[:before_mcs])
         # a snapshotted `Pre(w)` both outside and inside an integral: only the outside one is rewritten
-        w = only(filter(x -> Potts.info(x).name === :w, Potts.variables(getfield(c, :sys))))
+        w = only(filter(x -> Potts.info(x).name === :w, Potts.declared_variables(getfield(c, :sys))))
         snap = Dict{Symbol, Any}(:w => Potts._standin(:site, :w__pre))
         iw = Potts._unwrap(Potts._integral(Potts.Pre(w)))
         @test isequal(Potts._to_snapshots(Potts._unwrap(Potts.Pre(w) + iw), snap, _ -> false), Potts._unwrap(snap[:w] + iw))
@@ -317,7 +317,7 @@ end
             base = p60ah_tie_code(M, solver)
             @test all(s -> p60ah_tie_salted(() -> p60ah_tie_code(M, solver), s) == base, 1:4)
         end
-        state(u) = (Array(u.σ), map(Array, u.cell), map(Array, u.site), map(Array, u.model))
+        state(u) = (Array(u.ownership), map(Array, u.cell), map(Array, u.site), map(Array, u.model))
         for M in (P60ahTieModel, P60ahTieCell, P60ahTieUpd, P60ahTieIntegral)
             prob = p60ah_tie_problem(M)
             u = state(solve(prob, SequentialCPM()).u[end])
@@ -392,7 +392,7 @@ end
         @test count(n -> startswith(String(n), "__ifold_"), propertynames(prob.u0.model)) == 4
         @test !hasproperty(prob.u0.cell, Potts._integral_name(last(xs)))   # (o has its fold slot, no column)
         live(u) = findall(>(0), Array(u.cell.volume))
-        per(u, f) = [sum((f(i) for i in findall(==(k), Array(u.σ))); init = 0.0) for k in eachindex(u.cell.volume)]
+        per(u, f) = [sum((f(i) for i in findall(==(k), Array(u.ownership))); init = 0.0) for k in eachindex(u.cell.volume)]
         obs(u) = (V = Array(u.cell.volume); L = live(u); mv = sum(V[L]) / length(L); per(u, i -> w0[i] * mv))
         @test prob[:o] ≈ obs(prob.u0)                                         # at init
         sol = solve(prob, alg; saveat = 0:4)
@@ -432,7 +432,7 @@ end
         alg in (SequentialCPM(), CheckerboardCPM())
         σ0, w0 = p60ai_init((16, 16))
         prob = PottsProblem(P60aiRefresh(; name = :x), [ownership => σ0, kind => [:A, :A], :w => w0], (0, 4); seed = 5)
-        per(u, f) = [sum((f(i) for i in findall(==(k), Array(u.σ))); init = 0.0) for k in eachindex(u.cell.volume)]
+        per(u, f) = [sum((f(i) for i in findall(==(k), Array(u.ownership))); init = 0.0) for k in eachindex(u.cell.volume)]
         vsum(u) = sum(Array(u.cell.v)[Array(u.cell.volume) .> 0])
         # at init: the stored tracker of the before-MCS operand, and its reader in MCS 1
         names = [Potts._integral_name(x) for x in Potts._integrals(getfield(mtkcompile(P60aiRefresh(; name = :x)), :sys))]
@@ -454,7 +454,7 @@ end
         integ = init(prob, alg)
         foreach(_ -> step!(integ), 1:2)
         rest = solve!(init(prob, alg; checkpoint = checkpoint(integ))).u[end]
-        @test rest.σ == sol.u[end].σ
+        @test rest.ownership == sol.u[end].ownership
         @test all(n -> getfield(rest.cell, n) == getfield(sol.u[end].cell, n), propertynames(rest.cell))
         @test all(n -> getfield(rest.model, n) == getfield(sol.u[end].model, n), propertynames(rest.model))
     end
@@ -472,7 +472,7 @@ end
             all(n -> getfield(u.cell, n) == getfield(cell, n), propertynames(cell))
         oracle(u) = (
             V = u.cell.volume; L = V .> 0; mv = sum(V[L]) / count(L);
-            [sum((w0[i] * mv for i in findall(==(k), u.σ)); init = 0.0) for k in eachindex(V)]
+            [sum((w0[i] * mv for i in findall(==(k), u.ownership)); init = 0.0) for k in eachindex(V)]
         )
         mark!(prob.u0); c0 = deepcopy(prob.u0.cell)
         @test prob[:o] ≈ oracle(prob.u0)

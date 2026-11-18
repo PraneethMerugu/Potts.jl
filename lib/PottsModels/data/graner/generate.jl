@@ -65,7 +65,7 @@ end
 function annealed(σ, n)
     q = PottsProblem(GranerGlazier(; name = :anneal), [ownership => copy(σ), kind => fill(:light, n),
             :J => [0 8 8; 8 2 2; 8 2 2], :T => 0.0, :λ => 1.0, :V₀ => 40.0], (0, 160); seed = SEED + 2)
-    return solve(q, SequentialCPM(); saveat = 160).u[end].σ
+    return solve(q, SequentialCPM(); saveat = 160).u[end].ownership
 end
 
 # relative drift of a window: |mean of the last 4 − mean of the first 4| / window mean
@@ -78,13 +78,13 @@ function generate(outdir)
     relax = PottsProblem(GranerGlazier(; name = :relax), [ownership => σ0, kind => fill(:light, n),
             :J => [0 8 8; 8 2 2; 8 2 2], :T => 5.0, :λ => 1.0, :V₀ => 40.0], (0, 6400); seed = SEED)
     sol = solve(relax, SequentialCPM(); saveat = 0:100:6400)
-    σ = sol.u[end].σ
+    σ = sol.u[end].ownership
     all(c -> any(==(c), σ), 1:n) || error("a cell vanished during relaxation")
     # equilibrated (Fig. 5; spec 09 §9.1 V-PRE16): over the last 100 paper MCS (17 saves,
     # one every 6.25 paper MCS) neither the total boundary nor the cell–medium fraction
     # drifts by more than 2% (|mean of the last 4 − mean of the first 4| ≤ 2% of the window
     # mean), each measured on a copy annealed 10 paper MCS (160 here) at T = 0
-    late = [boundary(annealed(u.σ, n)) for u in sol.u[(end - 16):end]]
+    late = [boundary(annealed(u.ownership, n)) for u in sol.u[(end - 16):end]]
     drift_total, drift_medium = drift_of(first.(late)), drift_of(last.(late))
     @info "equilibrated (annealed copies, last 100 paper MCS)" drift_total drift_medium
     drift_total <= 0.02 || error("not equilibrated: total boundary drifts by $drift_total of its mean")

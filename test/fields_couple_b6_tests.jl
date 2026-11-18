@@ -72,11 +72,11 @@ end
             end
             Potts.mtkcompile(B6Lap(; name = :m))
         end)
-        @test occursin("applies `Δ` to `kind == A`, a CPM value", e) && occursin("an input of the PDESystem bound to `kind == A`", e) &&
+        @test occursin("applies `laplacian` to `kind == A`, a CPM value", e) && occursin("an input of the PDESystem bound to `kind == A`", e) &&
               occursin("`@after_mcs v ~ kind == A`", e) && !occursin("kind__in", e) && !occursin("cannot lower", e) ||
             (println(e); false)
         @test occursin("\n  in the equation of `c` in the PDESystem `lapin`: `Differential(t)(c(t, x, y)) ~ ", e) &&
-            occursin("Δ(c(t, x, y))", e) && !occursin("@equations", e) && !occursin("c(t))", e) || (println(e); false)
+            occursin("laplacian(c(t, x, y))", e) && !occursin("@equations", e) && !occursin("c(t))", e) || (println(e); false)
         σ = zeros(Int32, 8, 8); σ[1:3, 3:5] .= 1
         integ = init(
             PottsProblem(
@@ -128,12 +128,12 @@ end
         for _ in 1:3
             u0 = vec(Array(current_state(integ).site.c))
             step!(integ)
-            o = B6_LP.solve(B6_LP.remake(prob; u0, tspan = (0.0, 1.0)), ExplicitEuler(; dt = 1.0, substeps = 4)).u[end]
+            o = B6_LP.solve(B6_LP.remake(prob; u0, tspan = (0.0, 1.0)), ExplicitEuler(; substeps = 4); dt = 1.0).u[end]
             err = max(err, maximum(abs, o .- vec(Array(current_state(integ).site.c))))
         end
         @test err == 0 || (println("hex faces: $err"); false)
         h = 2.0^-10
-        one = B6_LP.solve(B6_LP.remake(prob; u0 = ones(64), tspan = (0.0, h)), ExplicitEuler(; dt = h, substeps = 1)).u[end]
+        one = B6_LP.solve(B6_LP.remake(prob; u0 = ones(64), tspan = (0.0, h)), ExplicitEuler(; substeps = 1); dt = h).u[end]
         hand = 0.3 * 2 / 3 * (2 * (-1 - 1)) - 0.2 + 0.05 * 0.5
         @test abs((one[1 + 3 * 8] - 1) / h - hand) <= 1e-12 || (println("hex rate: ", (one[1 + 3 * 8] - 1) / h, " vs ", hand); false)
     end
@@ -170,13 +170,13 @@ end
                     @lattice Lattice((20, 20); boundary = Closed())
                     @energy cells(A) => (volume - 16.0)^2
                     @fields c = B6.plain()
-                    @drive copy => -1.0 * (Δ(c)[target] - Δ(c)[source])
+                    @drive copy => -1.0 * (laplacian(c)[target] - laplacian(c)[source])
                     @sweep Metropolis(; temperature = 4.0)
                 end
                 Potts.mtkcompile(B6DriveLap(; name = :m))
             end
         )
-        @test occursin("`Δ(c)` is a field operator", e) && occursin("aux field `L(t, x, y) ~ Δ(c(t, x, y))`", e) &&
+        @test occursin("`laplacian(c)` is a field operator", e) && occursin("aux field `L(t, x, y) ~ laplacian(c(t, x, y))`", e) &&
               occursin("read `L[target]`", e) && !occursin("cannot index", e) || (println(e); false)
         σ = zeros(Int32, 20, 20); σ[8:11, 8:11] .= 1
         @test string(solve(PottsProblem(B6Aux(; name = :m), [ownership => σ, kind => [:A]], (0, 2)), SequentialCPM()).retcode) == "Success"

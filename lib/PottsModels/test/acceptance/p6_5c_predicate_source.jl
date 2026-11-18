@@ -21,7 +21,7 @@
 #   if …) > 0`), site variables, `position`, and model-local helper functions of `site`. The
 #   field is a plain MTK PDESystem whose 0/1 inputs the `@fields` line binds to the predicate
 #   (F4-B5; formerly the field line of `@equations`):
-#       D(F) ~ D_F * Δ(F) - k_d * F + k_s * lam * src            (the PDESystem)
+#       D(F) ~ D_F * laplacian(F) - k_d * F + k_s * lam * src            (the PDESystem)
 #       @fields p65cb_pde() (:lam => kind == lam,
 #                            :src => any(kind[n] == substrate for n in VonNeumann(1)(site)))
 # - The predicate is evaluated on the σ the field phase sees at each substep (σ does not
@@ -89,7 +89,7 @@ function p65cb_pde(; diffusion = true, source = true)
     Potts.ModelingToolkitBase.@variables F(..) lam(..)::Bool [input = true] src(..) [input = true]
     X, LAM, SRC = F(t, x, y, z), lam(t, x, y, z), src(t, x, y, z)
     rate = -k_d * X + (source ? k_s * LAM * SRC : k_s * LAM)
-    diffusion && (rate = D_F * L.Δ(X) + rate)
+    diffusion && (rate = D_F * L.laplacian(X) + rate)
     return Potts.ModelingToolkitBase.PDESystem([Potts.D(X) ~ rate], [F(0, x, y, z) ~ 0.0],
         L.lattice_domain(t, (x, y, z), (6, 6, 4)), [t, x, y, z], source ? [X, LAM, SRC] : [X, LAM],
         diffusion ? [D_F, k_d, k_s] : [k_d, k_s]; name = :p65cb_field)
@@ -326,7 +326,7 @@ const P65CB_CONVERT_BODY = quote
     @parameters mobile = 0.0
     @energy begin
         cells(cyto, lam) => (volume - 8.0)^2
-        contacts => ifelse(cluster[owner] == cluster[owner′], 1.0, 3.0)
+        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 1.0, 3.0)
     end
     @constraint mobile > 0.5
     @convert protrusion clusters(cyto) begin
@@ -356,8 +356,8 @@ end
 @testset "P6.5c predicate source: fields run before @convert (default schedule)" begin
     sol = p65cb_convert_run(:P65cbConvert)
     conv = [CartesianIndex(x, y, 2) for x in 4:5, y in 2:3]
-    @test all(I -> Array(sol.u[1].σ)[I] == 2, conv)              # control: cyto at t = 0
-    @test all(I -> Array(sol.u[2].σ)[I] == 3, conv)              # control: converted to lam in MCS 1
+    @test all(I -> Array(sol.u[1].ownership)[I] == 2, conv)              # control: cyto at t = 0
+    @test all(I -> Array(sol.u[2].ownership)[I] == 3, conv)              # control: converted to lam in MCS 1
     @test Array(sol.u[2].cell.volume)[2:3] == [4, 12]            # control
     F1, F2 = Array(sol.u[2].site.F), Array(sol.u[3].site.F)
     # in the converting MCS the field ran on the old σ (the sites were cyto): F = 0 there
@@ -369,7 +369,7 @@ end
     # negative control: the convert listed before `fields` (D-145 placement) gives 0.5 in
     # the converting MCS
     early = p65cb_convert_run(:P65cbConvertFirst)
-    @test all(I -> Array(early.u[2].σ)[I] == 3, conv)            # control
+    @test all(I -> Array(early.u[2].ownership)[I] == 3, conv)            # control
     @test all(I -> Array(early.u[2].site.F)[I] == 0.5, conv)     # control
 end
 
@@ -391,7 +391,7 @@ end
             @test Symbol(dev.retcode) === :Success
             @test length(dev.u) == 6
             @test all(i -> Array(cpu.u[i].site.F) == Array(dev.u[i].site.F), eachindex(cpu.u))   # control on Metal (freeze base); ROCm unverified
-            @test all(i -> Array(cpu.u[i].σ) == Array(dev.u[i].σ), eachindex(cpu.u))
+            @test all(i -> Array(cpu.u[i].ownership) == Array(dev.u[i].ownership), eachindex(cpu.u))
         end
         # the CPU Float32 run equals the Float32 oracle (exact binary values)
         cpu = p65cb_fields(solve(p65cb_problem(; T = Float32, p = (:D_F => 0.0625,)), SequentialCPM(); saveat = 1))

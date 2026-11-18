@@ -20,7 +20,7 @@ using Statistics: mean
     @lattice Lattice((64, 30); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         cells(blob) => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
         edges(bond) => k₁ * (distance - ℓ₁)^2
         edges(tether) => k₂ * (distance - ℓ₂)^2
     end

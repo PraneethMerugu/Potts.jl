@@ -31,18 +31,20 @@ zz() = System([Dt(zq) ~ -zq], t; name = :zz)
 # `D(u) ~ Dd Δu − kd u` with the conditions `bcs` (review fixups: names, start values, ivs)
 const DOM = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 12.0), y ∈ Interval(0.0, 10.0)]
 plain(bcs; name = :drug, ivs = [t, x, y], ps = [Dd, kd], dom = DOM) =
-    PDESystem([Dt(u(t, x, y)) ~ Dd * Potts.LatticePDE.Δ(u(t, x, y)) - kd * u(t, x, y)], bcs, dom, ivs, [u(t, x, y)], ps; name)
+        PDESystem([Dt(u(t, x, y)) ~ Dd * Potts.LatticePDE.laplacian(u(t, x, y)) - kd * u(t, x, y)], bcs, dom, ivs, [u(t, x, y)], ps; name)
 const Dx = Differential(x)
 # `D(u) ~ Dd Δu − kd u + [kind = 1]`, `u = 1` on the low x face, zero flux on the others
 function drug(L; name = :drug, extra = Equation[], dvs = [u(t, x, y), kin(t, x, y)],
-        rhs = Dd * Potts.LatticePDE.Δ(u(t, x, y)) - kd * u(t, x, y) + ifelse(kin(t, x, y) == 1, 1.0, 0.0))
+            rhs = Dd * Potts.LatticePDE.laplacian(u(t, x, y)) - kd * u(t, x, y) + ifelse(kin(t, x, y) == 1, 1.0, 0.0)
+        )
     return PDESystem([Dt(u(t, x, y)) ~ rhs], [u(0, x, y) ~ 0.0; u(t, 0, y) ~ 1.0; extra],
         [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, L[1]), y ∈ Interval(0.0, L[2])], [t, x, y], dvs, [Dd, kd]; name)
 end
 # the references, coupled with `@fields` (F4-B4t): `drug` with the kind as the bound input `kA`
 @variables kA(..)::Bool [input = true]
 ref(L) = drug(L; name = :fields, dvs = [u(t, x, y), kA(t, x, y)],
-    rhs = Dd * Potts.LatticePDE.Δ(u(t, x, y)) - kd * u(t, x, y) + ifelse(kA(t, x, y), 1.0, 0.0))
+        rhs = Dd * Potts.LatticePDE.laplacian(u(t, x, y)) - kd * u(t, x, y) + ifelse(kA(t, x, y), 1.0, 0.0)
+    )
 # a host field `zz` with its own `kd`, and a host field `u`
 function hostk()
     @parameters kd = 0.9
@@ -145,7 +147,8 @@ end
     @testset "F4-11: a component that carries a PDESystem composes" begin
         # (before F4-11: "has a PDESystem; a component's fields are not compiled")
         host = FcHost(; name = :m)
-        w = Potts.wrap(:drug, FcPDE.System(FcPDE.Equation[], FcPDE.t; name = :drug), FcPDE.drug((12, 10)),
+        w = Potts.wrap_system(
+            :drug, FcPDE.System(FcPDE.Equation[], FcPDE.t; name = :drug), FcPDE.drug((12, 10)),
             Potts.part(Potts.component(:zz, FcPDE.zz(), host)))
         e = fc_msg(() -> fc_run(compose(host, w), :drug₊u, 3))
         @test e == "built" || (println(e); false)
@@ -157,8 +160,8 @@ end
         host = FcHost(; name = :m)
         comp = Potts.component(:drug, FcPDE.drug((12, 10)), host)
         m = compose(host, comp)
-        @test any(x -> Potts.info(x).name === :drug₊u, Potts.variables(m))
-        @test Set(Potts.info(q).name for q in Potts.parameters(m)) == Set([:drug₊Dd, :drug₊kd])
+        @test any(x -> Potts.info(x).name === :drug₊u, Potts.declared_variables(m))
+        @test Set(Potts.info(q).name for q in Potts.declared_parameters(m)) == Set([:drug₊Dd, :drug₊kd])
         ref = FcRef(; name = :m)
         for fs in (ExplicitEuler(), BackwardEuler())
             a = fc_run(m, :drug₊u, 6; field_solver = fs)
@@ -174,7 +177,7 @@ end
         @test length(getfield(Potts.fields(m), :eqs)) == 1 && length(getfield(Potts.fields(m), :bcs)) == 1
         # a model wrapped with its own PDESystem compiles it under its own names (the refusal of a
         # PDESystem its payload does not build is gone)
-        hw = Potts.wrap(:m, Potts.inner(host), FcPDE.drug((12, 10); name = :m), Potts.part(host))
+        hw = Potts.wrap_system(:m, Potts.inner(host), FcPDE.drug((12, 10); name = :m), Potts.part(host))
         @test fc_run(hw, :u, 6; field_solver = ExplicitEuler()) == fc_run(ref, :u, 6; field_solver = ExplicitEuler())
         # composed with an MTK component in one call, in either order
         m2 = compose(host, Potts.component(:zz, FcPDE.zz(), host), comp)
@@ -236,15 +239,16 @@ end
         # an input with no `lattice_input_name` goes by its own name: `kind`
         T, X, Y, kd = FcPDE.t, FcPDE.x, FcPDE.y, FcPDE.kd
         pk = FcPDE.drug((12, 10); dvs = [FcPDE.u(T, X, Y), FcPDE.kind(T, X, Y)],
-            rhs = FcPDE.Dd * Potts.LatticePDE.Δ(FcPDE.u(T, X, Y)) - kd * FcPDE.u(T, X, Y) + ifelse(FcPDE.kind(T, X, Y) == 1, 1.0, 0.0))
+            rhs = FcPDE.Dd * Potts.LatticePDE.laplacian(FcPDE.u(T, X, Y)) - kd * FcPDE.u(T, X, Y) + ifelse(FcPDE.kind(T, X, Y) == 1, 1.0, 0.0)
+        )
         @test fc_run(compose(host, Potts.component(:drug, pk, host)), :drug₊u, 3) == fc_run(FcRef(; name = :m), :u, 3)
-        # the PDESystem's name is the component's (as `Potts.wrap`)
+        # the PDESystem's name is the component's (as `Potts.wrap_system`)
         @test occursin("must agree", fc_msg(() -> Potts.component(:other, FcPDE.drug((12, 10)), host)))
         # a component's CPM statements are still refused
         @test occursin(
             "has energies", fc_msg(
                 () -> compose(
-                    host, Potts.wrap(
+                    host, Potts.wrap_system(
                         :drug,
             FcPDE.System(FcPDE.Equation[], FcPDE.t; name = :drug), FcPDE.drug((12, 10)), Potts.part(host)))))
     end
@@ -272,10 +276,10 @@ end
         host = FcHost(; name = :m)
         # a parameter or field name the model has already (a hand-wrapped PDESystem keeps its names)
         hk, hu = FcHostK(; name = :m), FcHostU(; name = :m)
-        pk = fc_msg(() -> Potts.ModelingToolkitBase.mtkcompile(Potts.wrap(:m, Potts.inner(hk), FcPDE.plain([u(0, X, Y) ~ 0.7]; name = :m), Potts.part(hk))))
+        pk = fc_msg(() -> Potts.ModelingToolkitBase.mtkcompile(Potts.wrap_system(:m, Potts.inner(hk), FcPDE.plain([u(0, X, Y) ~ 0.7]; name = :m), Potts.part(hk))))
         @test occursin("the PDESystem `m` declares the parameter `kd`", pk) && occursin("a parameter `kd`", pk) &&
               occursin("Potts.component", pk)
-        pu = fc_msg(() -> Potts.ModelingToolkitBase.mtkcompile(Potts.wrap(:m, Potts.inner(hu), FcPDE.plain([u(0, X, Y) ~ 0.7]; name = :m), Potts.part(hu))))
+        pu = fc_msg(() -> Potts.ModelingToolkitBase.mtkcompile(Potts.wrap_system(:m, Potts.inner(hu), FcPDE.plain([u(0, X, Y) ~ 0.7]; name = :m), Potts.part(hu))))
         @test occursin("the PDESystem `m` declares the field `u`", pu) && occursin("a field `u`", pu)
         # (namespaced as a component, the same PDESystem composes)
         @test fc_msg(() -> compose(hk, Potts.component(:drug, FcPDE.plain([u(0, X, Y) ~ 0.7]), hk))) == "built"

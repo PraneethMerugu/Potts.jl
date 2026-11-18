@@ -309,7 +309,7 @@ const P60BN_SOLVERS = (("ExplicitEuler()", (;)), ("RK4(substeps = 4)", (; ode_so
 p60bn_solve(M, op, alg, kw) = solve(PottsProblem(M(; name = :x), op, (0, P60BN_N); seed = 7, kw...), alg; saveat = 1)
 p60bn_cells(sol, n) = [Vector{Float64}(Array(getproperty(u.cell, n))) for u in sol.u]
 p60bn_series(sol, n) = [Vector{Float64}(Array(v)) for v in sol[n]]
-p60bn_volumes(sol) = [[Float64(count(==(c), u.σ)) for c in 1:2] for u in sol.u]
+p60bn_volumes(sol) = [[Float64(count(==(c), u.ownership)) for c in 1:2] for u in sol.u]
 p60bn_close(a, b; rtol = 1e-12) = length(a) == length(b) && all(i -> isapprox(a[i], b[i]; rtol), eachindex(a, b))
 
 """Bytes allocated by each of five warm `step!`s (after two warm-up steps)."""
@@ -468,7 +468,7 @@ end
         @testset "$alab, $slab" begin
             si = p60bn_solve(P60bnInputs, op, alg, kw)
             sh = p60bn_solve(P60bnInputsHand, op, alg, kw)
-            @test [u.σ for u in si.u] == [u.σ for u in sh.u]                  # the same sweep
+            @test [u.ownership for u in si.u] == [u.ownership for u in sh.u]                  # the same sweep
             @test p60bn_close(p60bn_cells(si, :y), p60bn_cells(sh, :y))
             vols = p60bn_volumes(si)
             @test p60bn_series(si, :w) == vols                                  # w ~ volume, counted

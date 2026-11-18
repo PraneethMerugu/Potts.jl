@@ -65,14 +65,14 @@ end
         end
         m = n ÷ 2
         function internal_fraction(u)       # nuclei's interface shared with their own cytoplasm
-            g = contact_graph(u.σ, lat, relation(VonNeumann(1), lat), n)
-            internal = sum(c -> contact(g, c, c - m), (m + 1):n)
-            total = sum(c -> contact(g, c, 0) + sum(b -> contact(g, c, b), neighbors(g, c); init = 0), (m + 1):n)
+                g = contact_graph(u.ownership, lat, relation(VonNeumann(1), lat), n)
+                internal = sum(c -> contact_measure(g, c, c - m), (m + 1):n)
+                total = sum(c -> contact_measure(g, c, 0) + sum(b -> contact_measure(g, c, b), contact_neighbors(g, c); init = 0), (m + 1):n)
             return internal / total
         end
         u = run(2.0)
-        @test u.cell.cluster_volume == recompute_cluster_volume(u.σ, u.cell.cluster)
-        @test u.cell.cluster_surface ≈ recompute_cluster_surface(u.σ, u.cell.cluster, lat, Moore(1))
+            @test u.cell.cluster_volume == recompute_cluster_volume(u.ownership, u.cell.cluster)
+            @test u.cell.cluster_surface ≈ recompute_cluster_surface(u.ownership, u.cell.cluster, lat, Moore(1))
         control = run(14.0)                 # internal contacts no better than homotypic ones
         @info "nucleus interface with its own cytoplasm" alg internal = internal_fraction(u) control = internal_fraction(control)
         @test internal_fraction(u) > 0.9
@@ -98,7 +98,7 @@ end
         @test u.cell.cluster[1:4] == Int32[1, 1, 3, 3]                 # daughters form cluster 3
         @test u.cell.cluster_volume[[1, 3]] == Int32[80, 80]
         @test u.cell.mass[1:4] == [4.0, 1.0, 4.0, 1.0]
-        side(c) = unique(coordinates(lat, i)[1] > 20.5 for i in 1:nsites(lat) if u.σ[i] == c)
+            side(c) = unique(coordinates(lat, i)[1] > 20.5 for i in 1:nsites(lat) if u.ownership[i] == c)
         @test length(side(3)) == 1 && side(3) == side(4) != side(1) == side(2)
 
         # `EVENT_DIVIDE`: compartments divide on their own and daughters stay in the cluster
@@ -169,14 +169,14 @@ end
         @test u.cell.cluster[1:9] == Int32[1, 1, 3, 4, 4, 6, 6, 8, 4]
         @test u.cell.volume[[1, 2, 6, 7]] == Int32[68, 12, 68, 12]         # one plane (x) through the cluster
         @test u.cell.volume[[3, 8, 5, 9]] == Int32[24, 24, 12, 12]         # each cell along its own (y) plane
-        ys(c) = unique(coordinates(lat, i)[2] for i in 1:nsites(lat) if u.σ[i] == c)
+            ys(c) = unique(coordinates(lat, i)[2] for i in 1:nsites(lat) if u.ownership[i] == c)
         @test maximum(ys(3)) < minimum(ys(8)) && maximum(ys(5)) < minimum(ys(9))
         # each division ran its own domain's rule
         @test findall(==(1.0), u.cell.alone) == [3, 5, 8, 9]
         @test findall(==(1.0), u.cell.together) == [1, 2, 6, 7]
         # trackers exact after the mixed division (brute force from σ)
-        @test u.cell.volume == Int32[count(==(c), u.σ) for c in 1:10]
-        @test u.cell.cluster_volume == recompute_cluster_volume(u.σ, u.cell.cluster)
+            @test u.cell.volume == Int32[count(==(c), u.ownership) for c in 1:10]
+            @test u.cell.cluster_volume == recompute_cluster_volume(u.ownership, u.cell.cluster)
         @test same_moments(u, lat, 10, alg)
 
         # negative controls: a non-root's EVENT_DIVIDE_CLUSTER (5) is ignored; without its
@@ -208,7 +208,7 @@ end
                     cluster_normal = (st, p, ctx, key, mcs, c) -> (0.0, 1.0)))
             solve(PottsProblem(f, st, lat, (0, 1), gg_params()), alg)
         end
-        brute(u, cap) = Int32[count(==(c), u.σ) for c in 1:cap]
+            brute(u, cap) = Int32[count(==(c), u.ownership) for c in 1:cap]
 
         # 2 free slots < 3 members: only the root's event is deferred; nuclei 2 and 3 take
         # the slots (2 → 5, 3 → 6) and stay in cluster 1; lone cell 4 finds none and waits
@@ -218,10 +218,10 @@ end
         @test sol.stats.lifecycle.deferred == 2                           # root 1 and lone cell 4
         @test u.cell.volume == Int32[208, 18, 18, 48, 18, 18]
         @test u.cell.cluster == Int32[1, 1, 1, 4, 1, 1]
-        ys(c) = unique(coordinates(lat, i)[2] for i in 1:nsites(lat) if u.σ[i] == c)
+            ys(c) = unique(coordinates(lat, i)[2] for i in 1:nsites(lat) if u.ownership[i] == c)
         @test maximum(ys(2)) < minimum(ys(5)) && maximum(ys(3)) < minimum(ys(6))   # their own (y) planes
         @test u.cell.volume == brute(u, 6)
-        @test u.cell.cluster_volume == recompute_cluster_volume(u.σ, u.cell.cluster)
+            @test u.cell.cluster_volume == recompute_cluster_volume(u.ownership, u.cell.cluster)
         @test u.cell.cluster_volume[1] == 280
         @test same_moments(u, lat, 6, alg)
 
@@ -234,7 +234,7 @@ end
         @test uc.cell.volume == Int32[104, 18, 18, 48, 104, 18, 18]
         @test uc.cell.cluster == Int32[1, 1, 1, 4, 5, 5, 5]
         @test uc.cell.volume == brute(uc, 7)
-        @test uc.cell.cluster_volume == recompute_cluster_volume(uc.σ, uc.cell.cluster)
+            @test uc.cell.cluster_volume == recompute_cluster_volume(uc.ownership, uc.cell.cluster)
     end
 
     @testset "EVENT_DIVIDE_CLUSTER needs cluster state" begin

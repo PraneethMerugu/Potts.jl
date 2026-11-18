@@ -8,7 +8,7 @@
 # discrete component is `dt / mcs_duration`, and the fingerprint hashes it. For the cell ODE
 # `D(y) ~ -y`, y(0) = 1, 3 MCS:
 #   - NaN or ±Inf: the model builds and `PottsProblem` accepts it; `Adaptive(Rodas5P())`
-#     throws `SciMLBase.NaNTspanError` at the first solve, `ExplicitEuler()` and `RK4()`
+#     throws `SciMLBase.NaNTspanError` at the first solve, `ExplicitEuler()` and `Potts.RK4()`
 #     return retcode Success with y = NaN; the auto-substep field step throws
 #     `InexactError: Int64(NaN)`; a `Clock(1.0)` component is refused at `PottsProblem` with
 #     a message about the clock period, not about `mcs_duration`.
@@ -80,7 +80,8 @@ function p60av_field_pde()
     Potts.ModelingToolkitBase.@parameters x y
     Potts.ModelingToolkitBase.@variables c(..)
     C = c(t, x, y)
-    return Potts.ModelingToolkitBase.PDESystem([Potts.D(C) ~ 0.1 * L.Δ(C) - 0.05 * C], [c(0, x, y) ~ 0.0],
+    return Potts.ModelingToolkitBase.PDESystem(
+        [Potts.D(C) ~ 0.1 * L.laplacian(C) - 0.05 * C], [c(0, x, y) ~ 0.0],
         L.lattice_domain(t, (x, y), (12, 12)), [t, x, y], [C], Any[]; name = :p60av_field)
 end
 @potts_model P60avField begin
@@ -258,7 +259,7 @@ end
     #   ExplicitEuler (one step per MCS): (1 - h)³ = 0.125
     @test p60av_y(sys) == 0.125
     #   RK4: (1 - h + h²/2 - h³/6 + h⁴/24)³ = (0.60677083…)³ = 0.22339533…
-    @test p60av_y(sys; ode_solver = RK4()) ≈ (1 - 0.5 + 0.125 - 0.5^3 / 6 + 0.5^4 / 24)^3 rtol = 1e-12
+    @test p60av_y(sys; ode_solver = Potts.RK4()) ≈ (1 - 0.5 + 0.125 - 0.5^3 / 6 + 0.5^4 / 24)^3 rtol = 1.0e-12
     #   Adaptive: e^{-1.5}
     @test p60av_y(sys; ode_solver = Adaptive(Rodas5P(); reltol = 1e-10, abstol = 1e-12)) ≈ exp(-1.5) rtol = 1e-6
     # the same Float64 by another type gives the same run
@@ -322,7 +323,8 @@ p60av_unchanged() = (
     "WortelAct connected" => () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8), connected = true), p60av_two_wortel(), (0, 10)),
     "MerksVasculogenesis" => () -> PottsProblem(MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
         [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 10);
-        field_solver = Potts.ExplicitEuler(substeps = 2, lower = 0.0)),
+        field_solver = Potts.ExplicitEuler(substeps = 2, lower_bound = 0.0)
+    ),
     "SingleDivisionFixture" => () -> PottsProblem(SingleDivisionFixture(; name = :fixture),
         [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [:epithelial]], (0, 10)),
     "OpenVTGrowingMonolayer" => () -> PottsProblem(OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)),

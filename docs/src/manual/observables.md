@@ -9,6 +9,7 @@ per cell, a fold over cells one number).
 
 ```@example observables
 using Potts
+using Potts.Layouts
 
 @potts_model Census begin
     @kinds medium dark light
@@ -16,7 +17,7 @@ using Potts
     @lattice Lattice((40, 40); neighborhood = Moore(1))
     @energy begin
         Volume(dark, light; target = 25.0, strength = 1.0)
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @observed begin
         ndark ~ count(true for c in cells(dark))
@@ -55,13 +56,13 @@ total_energy.(Ref(prob), sol.u)
 `PottsModels.Analysis` has plain-Julia functions for saved states: `centroids(σ)` of every
 cell (`periodic = (true, …)` takes each cell's minimum image on periodic axes), the cell
 adjacency graph `cell_graph(σ)` with `components` and `reachable`, profile helpers
-`column_tops` and `trapz`, peak finding (`find_peaks`, `peak_prominences`, `peak_widths`),
+`column_tops` and `trapezoid_integral`, peak finding (`find_peaks`, `peak_prominences`, `peak_widths`),
 and chains of cells along a periodic axis with their relaxation curves (`chain_centroids`,
 `chain_width`, `crossing_time`, `relaxation_mse`). See the [API](@ref api).
 
 ```@example observables
 using PottsModels.Analysis: centroids, cell_graph, components
-σ = sol.u[end].σ
+σ = sol.u[end].ownership
 g = cell_graph(σ)
 length(centroids(σ)), length(components(g, findall(==(1), sol[:kind][end])))   # dark cells' clusters
 ```

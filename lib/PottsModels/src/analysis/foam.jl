@@ -300,14 +300,14 @@ function power_spectrum(x::AbstractVector{<:Real}; dt::Real = 1)
 end
 
 """
-    spectral_exponent(f, S; range) -> Float64
+    spectral_exponent(f, S, range) -> Float64
 
 The exponent α of a power law S ∝ f^−α (spec 04 §2.8; the f^−α guides of Figs. 8 and 10):
 `α = −` the ordinary least-squares slope of `log10(S)` on `log10(f)` over the bins with
 `range[1] ≤ f ≤ range[2]` and `S > 0`. Fewer than two such bins, or bins that all share one
 frequency (no slope to fit), is an `ArgumentError`.
 """
-function spectral_exponent(f::AbstractVector{<:Real}, S::AbstractVector{<:Real}; range)
+function spectral_exponent(f::AbstractVector{<:Real}, S::AbstractVector{<:Real}, range)
     length(f) == length(S) ||
         throw(DimensionMismatch("spectral_exponent: f and S have lengths $(length(f)) and $(length(S))"))
     lo, hi = range[1], range[2]
@@ -340,14 +340,14 @@ end
 # N̄ and the yield strain
 
 """
-    mean_t1(N; bubbles, strain) -> Float64
+    mean_t1(N, bubbles, strain) -> Float64
 
 N̄ (04b p.5829, Fig. 9; spec 04 §2.8), "the average number of T1 events per bubble per unit
 shear": `sum(N) / (bubbles · strain)`. `N` is a T1 series in the caller's counting unit (see
 [`t1_events`](@ref), A-15) and `strain` the total strain it spans, as the caller measures it
 (A-9). `bubbles ≤ 0` or `strain ≤ 0` is an `ArgumentError`.
 """
-function mean_t1(N::AbstractVector{<:Real}; bubbles::Real, strain::Real)
+function mean_t1(N::AbstractVector{<:Real}, bubbles::Real, strain::Real)
     bubbles > 0 || throw(ArgumentError("mean_t1: bubbles must be positive, got $bubbles"))
     strain > 0 || throw(ArgumentError("mean_t1: strain must be positive, got $strain"))
     return sum(N; init = 0.0) / (bubbles * strain)

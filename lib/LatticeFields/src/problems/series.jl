@@ -170,8 +170,8 @@ end
     ImplicitFacts
 
 The resolved implicit facts of one field group ([`implicit_facts`](@ref)), as data (the report
-words them): `keys` its fields; `inner` its solvers as resolved and `krylov` the coupled solve's
-Krylov solver (or `nothing`); `levels` and `solver_T` per solver; `newton` the Newton count and
+words them): `keys` its fields; `linsolve` its solvers as resolved and `krylov` the coupled solve's
+Krylov solver (or `nothing`); `levels` and `solver_type` per solver; `newton` the Newton count and
 `given` whether the user gave it; `coupled`, `linear` (a coupled solve, linear in its state),
 `exact` (the operator `J̃` is exact at the bound parameters), `exact0` (exact apart from the
 signs of the Robin faces and multipliers), `switch`, `iterate`, `seen` (every term out of the
@@ -179,7 +179,8 @@ operator has a bound), `cyclic`; `h` the substep, `ρin` the bound of the terms 
 operator, `θ`, `smin` (the decay); `terms` the terms out of the operator and `unseen` those no
 bound sees.
 """
-const ImplicitFacts = @NamedTuple{keys::Vector{String}, inner::Vector{Any}, krylov::Any, levels::Vector{Int}, solver_T::Vector{Type},
+const ImplicitFacts = @NamedTuple{
+    keys::Vector{String}, linsolve::Vector{Any}, krylov::Any, levels::Vector{Int}, solver_type::Vector{Type},
                                   newton::Int, given::Bool, coupled::Bool, linear::Bool, exact::Bool, exact0::Bool, switch::Bool,
                                   iterate::Bool, seen::Bool, cyclic::Bool, h::Float64, ρin::Float64, θ::Float64, smin::Float64,
                                   terms::Vector{String}, unseen::Vector{String}}
@@ -192,7 +193,7 @@ too), `nsolve` the implicit solves, `counts` the substep count of each field gro
 ([`field_stats`](@ref)): `solves`, `budget`, `floor`, `newton_budget`; `syncs` the host copies of a
 device state that callbacks and interpolated saves took (0 with none, F4-05); `implicit` the
 resolved implicit facts of each group, `nothing` for an explicit one ([`implicit_facts`](@ref):
-`inner`, the multigrid levels, `solver_T`, the Newton count and its rule, the operator's
+`linsolve`, the multigrid levels, `solver_type`, the Newton count and its rule, the operator's
 exactness), taken when the solution is built.
 """
 struct LatticeStats
@@ -205,11 +206,13 @@ struct LatticeStats
     newton_budget::Int64
     syncs::Int
     implicit::Vector{Union{Nothing, ImplicitFacts}}
+    dt::Float64                         # the window
 end
 function LatticeStats(integ::FieldIntegrator)
     f = field_stats(integ)
     return LatticeStats(integ.windows, f.solves, substep_counts(integ), f.solves, f.budget, f.floor, f.newton_budget,
-        integ.syncs, Union{Nothing, ImplicitFacts}[implicit_facts(rt) for rt in integ.runtimes])
+        integ.syncs, Union{Nothing, ImplicitFacts}[implicit_facts(rt) for rt in integ.runtimes], _iwindow(integ)
+    )
 end
 function Base.show(io::IO, s::LatticeStats)
     ni = count(!isnothing, s.implicit)
@@ -315,7 +318,8 @@ function _multilinear(g, ranges, pt)
 end
 # (an ensemble's statistics: the sums; the counts of the first)
 Base.merge(a::LatticeStats, b::LatticeStats) = LatticeStats(a.nf + b.nf, a.nsolve + b.nsolve, a.counts, a.solves + b.solves,
-    a.budget + b.budget, a.floor + b.floor, a.newton_budget + b.newton_budget, a.syncs + b.syncs, a.implicit)
+    a.budget + b.budget, a.floor + b.floor, a.newton_budget + b.newton_budget, a.syncs + b.syncs, a.implicit, a.dt
+)
 Base.:(==)(a::LatticeStats, b::LatticeStats) = all(f -> getfield(a, f) == getfield(b, f), fieldnames(LatticeStats))
 Base.isequal(a::LatticeStats, b::LatticeStats) = all(f -> isequal(getfield(a, f), getfield(b, f)), fieldnames(LatticeStats))
 Base.hash(s::LatticeStats, h::UInt) = foldl((h, f) -> hash(getfield(s, f), h), fieldnames(LatticeStats); init = hash(:LatticeStats, h))

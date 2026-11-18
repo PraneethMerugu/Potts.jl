@@ -13,14 +13,14 @@
 #     `inner`, `fields`, `part`; the inner System is complete and flat and carries the model
 #     name. The keyword constructor takes `checks` (default true): `checks = false` skips the
 #     construction checks (a reserved kind name `a` is accepted), `checks = true` runs them;
-#     both rebuild a model with the same fingerprint, and so does `Potts.wrap`. MTK's
+#     both rebuild a model with the same fingerprint, and so does `Potts.wrap_system`. MTK's
 #     `T(fields...; checks)` rebuild renames the model (MTK's `@set sys.name`).
 #  A. Accessors (ModelingToolkitBase's generic functions), checked against Potts' own lists:
 #     `equations` (the `@equations` as written, plus each component's equations flattened,
-#     `dc₊y`), `unknowns` (`Potts.variables(sys)` in declaration order, plus each component's
+#     `dc₊y`), `unknowns` (`Potts.declared_variables(sys)` in declaration order, plus each component's
 #     unknowns, a discrete component's nodes among them; never the lattice ownership, kinds or
 #     built-in cell properties; the compiled model's PottsSystem lists the same names once),
-#     `parameters` (`Potts.parameters(sys)`, plus each component's), `observed` (one
+#     `parameters` (`Potts.declared_parameters(sys)`, plus each component's), `observed` (one
 #     `name ~ expr` per `@observed` quantity; `observe(prob, lhs) == observe(prob, rhs)`),
 #     `nameof`. The sweep payload is the inner System's metadata; MTK's metadata functions on
 #     the container read and set it. The `PottsSystem` docstring names the accessors and `Potts.inner`.
@@ -77,7 +77,7 @@ const P60O_OP12 = [ownership => p60o_two((12, 12), (2:4, 2:4), (7:9, 7:9)), kind
     @lattice Lattice((12, 12); neighborhood = Moore(1))
     @energy begin
         cells(host) => λ * (volume - 9.0)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @equations D(x) ~ -0.1 * x
     @after_mcs g ~ g + 1.0
@@ -183,7 +183,8 @@ function p60o_field_pde()
     Potts.ModelingToolkitBase.@parameters x y
     Potts.ModelingToolkitBase.@variables c(..) dark(..)::Bool [input = true]
     C = c(t, x, y)
-    return Potts.ModelingToolkitBase.PDESystem([Potts.D(C) ~ 0.1 * L.Δ(C) + 0.02 * dark(t, x, y) - 0.01 * C],
+    return Potts.ModelingToolkitBase.PDESystem(
+        [Potts.D(C) ~ 0.1 * L.laplacian(C) + 0.02 * dark(t, x, y) - 0.01 * C],
         [c(0, x, y) ~ 0.0], L.lattice_domain(t, (x, y), (16, 16)), [t, x, y], [C, dark(t, x, y)], Any[]; name = :p60o_field)
 end
 @potts_model P60oField begin
@@ -204,7 +205,7 @@ end
 end
 const P60O_OP_FIELD = [ownership => (s = zeros(Int32, 16, 16); s[:, 1] .= 1; s[4:6, 4:6] .= 2; s[10:12, 10:12] .= 3; s),
     kind => [:wall, :dark, :light]]
-const P60O_EULER = (; field_solver = ExplicitEuler(substeps = 2, lower = 0.0))
+const P60O_EULER = (; field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0))
 
 # divisions, an on-copy write, a site variable, model folds and a constraint
 @potts_model P60oLife begin
@@ -222,7 +223,7 @@ const P60O_EULER = (; field_solver = ExplicitEuler(substeps = 2, lower = 0.0))
     @lattice Lattice((24, 24); neighborhood = Moore(1))
     @energy begin
         cells(A, B) => (volume - 9.0)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @on_copy act[target] ~ 1.0
     @after_mcs total ~ sum(act[s] for s in sites)
@@ -334,10 +335,10 @@ struct P60oOtherKey end
     @test PottsSystem(; name = :pr, bad..., checks = false) isa PottsSystem
     @test_throws ArgumentError PottsSystem(; name = :pr, bad..., checks = true)
     @test_throws ArgumentError PottsSystem(; name = :pr, bad...)
-    # `Potts.wrap` with the same parts gives the same model
-    w = Potts.wrap(:pr, inner, nothing, part)
+    # `Potts.wrap_system` with the same parts gives the same model
+    w = Potts.wrap_system(:pr, inner, nothing, part)
     @test p60o_fp(w, P60O_OP12, (;)) == p60o_fp(sys, P60O_OP12, (;))
-    @test_throws ArgumentError Potts.wrap(:other, inner, nothing, part)
+    @test_throws ArgumentError Potts.wrap_system(:other, inner, nothing, part)
     # MTK rebuilds a system as `T(fields...; checks)` (`@set sys.name = …`): the same model,
     # renamed when the name differs
     fs = [getfield(sys, f) for f in fieldnames(PottsSystem)]
@@ -358,12 +359,12 @@ end
     @test O(gg) isa AbstractVector{P60O_M.Equation} && isempty(O(gg))
     # the declared ones, in every scope
     sys = P60oCell(; name = :pr)
-    x = p60o_named(Potts.variables(sys), :x)
+    x = p60o_named(Potts.declared_variables(sys), :x)
     @test length(E(sys)) == 1 && isequal(only(E(sys)), Potts.D(x) ~ -0.1 * x)
     @test p60o_names(U(sys)) == [:x, :g]
-    @test all(isequal.(U(sys), Potts.variables(sys)))
+    @test all(isequal.(U(sys), Potts.declared_variables(sys)))
     @test Set(p60o_names(P(sys))) == Set([:λ, :T, :J]) && length(P(sys)) == 3
-    @test all(isequal.(P(sys), Potts.parameters(sys)))
+    @test all(isequal.(P(sys), Potts.declared_parameters(sys)))
     obs = O(sys)
     @test obs isa AbstractVector{P60O_M.Equation} && length(obs) == 1 && p60o_name(only(obs).lhs) === :total
     prob = p60o_problem(sys, P60O_OP12, (;))
@@ -391,7 +392,7 @@ end
     # the compiled model's PottsSystem has the components bound: the same names, once
     cs = getfield(mtkcompile(sys), :sys)
     @test Set(p60o_names(U(cs))) == Set(p60o_names(U(sys))) && length(U(cs)) == length(U(sys))
-    @test Set(p60o_names(U(cs))) == Set(Potts.info(v).name for v in Potts.variables(cs))
+    @test Set(p60o_names(U(cs))) == Set(Potts.info(v).name for v in Potts.declared_variables(cs))
     # a discrete component's nodes and parameter
     net = P60oNet(; name = :net)
     @test issubset([:input, :grn₊A, :grn₊B, :grn₊C], p60o_names(U(net)))
@@ -400,8 +401,8 @@ end
     # fields are in `Potts.fields`)
     for (label, build, _, _) in P60O_CASES[1:8]
         m = build()
-        @test Set(p60o_names(U(m))) == Set(Potts.info(v).name for v in Potts.variables(m) if Potts.info(v).role !== :field)
-        @test Set(p60o_names(P(m))) == Set(Potts.info(v).name for v in Potts.parameters(m))
+        @test Set(p60o_names(U(m))) == Set(Potts.info(v).name for v in Potts.declared_variables(m) if Potts.info(v).role !== :field)
+        @test Set(p60o_names(P(m))) == Set(Potts.info(v).name for v in Potts.declared_parameters(m))
     end
 end
 
@@ -429,7 +430,7 @@ end
     for n in (:λ, :J, :x, :g, :total)
         @test p60o_name(getproperty(sys, n)) === n
     end
-    @test isequal(sys.λ, p60o_named(Potts.parameters(sys), :λ)) && isequal(sys.x, p60o_named(Potts.variables(sys), :x))
+    @test isequal(sys.λ, p60o_named(Potts.declared_parameters(sys), :λ)) && isequal(sys.x, p60o_named(Potts.declared_variables(sys), :x))
     @test p60o_name(GranerGlazier(; name = :gg).V₀) === :V₀
     @test p60o_name(P60oLife(; name = :life).act) === :act
     @test p60o_name(P60oField(; name = :fld).c) === :c

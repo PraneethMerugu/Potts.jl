@@ -278,7 +278,7 @@ end
         @test R(:(st.cell.g[c] >= 3), :g)
         @test R(:(@inbounds(st.cell.g[c]) >= 3), :g)
         @test R(:(Potts._cellval(st.cell.g, c) >= 3), :g)
-        @test R(:(st.cell.volume[d] > 0 && st.σ[1] == 0 && p.a * st.model.m[1] > 0), :g)   # unwritten values: any
+        @test R(:(st.cell.volume[d] > 0 && st.ownership[1] == 0 && p.a * st.model.m[1] > 0), :g)   # unwritten values: any
         @test R(:(Potts._cellkind(st, c) == 1), :g)
         @test R(:(CorePotts.centroid(st.cell, c)), :g)
         # negative controls: another cell's value, the whole column, cell or state

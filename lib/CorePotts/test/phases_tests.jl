@@ -57,7 +57,7 @@ end
         function dH(st, p, prop, ctx)
             J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
             E(v, c) = p.λ * (v - @inbounds(st.cell.target[c]))^2
-            return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E)
+                return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E)
         end
         st = initial_state(σ, kinds; cell = (; target = fill(16.0, length(kinds))))
         f = CPMFunction(dH; temperature = gg_temperature,
@@ -96,7 +96,7 @@ end
         @test any(n .> 0) && any(n .== 0)
         @test all(a[n .== 0] .== 8)                        # never copied: aged every MCS
         @test all(1 .<= a[n .> 0] .<= 8)                   # cleared in a sweep, aged after it
-        changed_last = sol.u[end - 1].σ .!= u.σ
+            changed_last = sol.u[end - 1].ownership .!= u.ownership
         @test any(changed_last) && all(a[changed_last] .== 1)
     end
 end
@@ -128,7 +128,7 @@ end
         st = initial_state(σ, kinds; site = (; age = zeros(Int32, 24, 24)))
         f = CPMFunction(gg_delta_H; commit!, temperature = gg_temperature, phases)
         sol = solve(PottsProblem(f, st, lat, (0, 8), gg_params()), SequentialCPM(); saveat = 0:8)
-        changed = sol.u[end - 1].σ .!= sol.u[end].σ
+            changed = sol.u[end - 1].ownership .!= sol.u[end].ownership
         @test any(changed) && all(sol.u[end].site.age[changed] .== fresh)
     end
 end
@@ -146,7 +146,7 @@ end
     @test CorePotts._readback(s, h) == 1
     st = initial_state(Int32[1 0; 0 2], Int32[1, 1])
     snap = CorePotts._snapshot(s, CorePotts.CPU(), st)
-    @test snap.σ == st.σ && snap.σ !== st.σ                   # independent (deepcopy)
+        @test snap.ownership == st.ownership && snap.ownership !== st.ownership                   # independent (deepcopy)
     @test CorePotts._adapt_host(s, (; a = h)).a === h         # host leaves kept, as `adapt(Array, …)`
     CorePotts._sync!(s, CorePotts.CPU())
     @test (s.syncs, s.transfers, s.transfer_bytes) == (0, 0, 0)

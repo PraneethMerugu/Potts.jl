@@ -9,7 +9,7 @@
 # build fails with "parameter `w` = `π + sqrt(4.0)` does not reduce to numbers"; the same
 # for `exp`, `log`, `abs`, `min`/`max`, `ifelse` (and `c ? a : b`), `floor`, `mod`, `rem`,
 # a user function registered with `@register_symbolic`, a kind-table entry `V₀[2]`
-# (`Potts.at(V₀, 2)`) or `J[P, Q]` (`Potts.at2`), and a kind table whose entries call
+# (`Potts.value_at(V₀, 2)`) or `J[P, Q]` (`Potts.value_at(J, P, Q)`), and a kind table whose entries call
 # functions (`J[kind, kind] = [0 sqrt(Jx) …]`). `div(a₀, 2)` / `a₀ ÷ 2` throw a MethodError
 # on `Num` when the model is built, and a table entry reading another table
 # (`V₁[kind] = [0.0, V₀[1] - 1]`) silently drops the index (the literal is not rewritten).
@@ -78,7 +78,7 @@ Symbolics.@register_symbolic p60ao_twice_plus_one(x)
     @lattice Lattice((12, 12); neighborhood = VonNeumann(1))
     @energy begin
         cells(P, Q) => λ * (volume - V₁[kind])^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = 10.0)
 end

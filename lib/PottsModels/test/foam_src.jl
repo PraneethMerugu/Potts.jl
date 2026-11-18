@@ -41,7 +41,7 @@ end
     theirs(; kw...) = F.P64RShearedFoam(; name = :foam, lattice = L, kw...)
     problem(sys, op, tend = 1; kw...) = PottsProblem(sys, op, (0, tend); kw...)
     same(a, b) = a.f.fingerprint == b.f.fingerprint && a.p == b.p && a.lattice == b.lattice && a.contact == b.contact &&
-                 a.proposal == b.proposal && a.relations == b.relations && a.frozen == b.frozen && a.u0.σ == b.u0.σ &&
+        a.proposal == b.proposal && a.relations == b.relations && a.frozen == b.frozen && a.u0.ownership == b.u0.ownership &&
                  a.u0.cell == b.u0.cell && a.u0.model == b.u0.model
     a, b = problem(ours(), op), problem(theirs(), op)
     @test a.f.fingerprint == b.f.fingerprint
@@ -51,7 +51,7 @@ end
         problem(F.P64RShearedFoam(; name = :foam), sheared_foam_state()))
 
     # bitwise trajectories: 30 MCS at T = 1 from the brick wall, one seed, every shear form
-    σ_end(sys, p; seed = 7) = Array(solve(problem(sys, [op; p], 30; seed), alg).u[end].σ)
+    σ_end(sys, p; seed = 7) = Array(solve(problem(sys, [op; p], 30; seed), alg).u[end].ownership)
     shears = [
         ("steady boundary", [:γ0 => 4.0]),
         ("periodic boundary", [:γ0 => 4.0, :periodic => 1.0, :ω => 2π / 20]),
@@ -67,7 +67,7 @@ end
     # without shear, the frozen test's unsheared P64RFoam
     plain = [sheared_foam_state(; lattice = L); :T => 1.0]
     @test σ_end(ours(), [:T => 1.0]) ==
-          Array(solve(problem(F.P64RFoam(; name = :foam, lattice = L), plain, 30; seed = 7), alg).u[end].σ)
+        Array(solve(problem(F.P64RFoam(; name = :foam, lattice = L), plain, 30; seed = 7), alg).u[end].ownership)
 
     # negative controls
     # a changed parameter default: same code, so the same fingerprint, but another problem

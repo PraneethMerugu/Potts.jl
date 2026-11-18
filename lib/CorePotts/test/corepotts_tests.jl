@@ -32,7 +32,7 @@ end
         # aliasing on small periodic axes is rejected; closed axes are fine
         @test_throws ["ArgumentError", "alias on lattice"] relation(Moore(1), Lattice((2, 10)))
         @test length(relation(Moore(1), Lattice((2, 10); boundary = Closed()))) == 8
-        @test length(relation(Ball(1.5), l2)) == 8
+        @test length(relation(EuclideanBall(1.5), l2)) == 8
         @test length(relation(Stencil([(1, 0), (0, 1)]), l2)) == 2
     end
 end
@@ -197,7 +197,7 @@ end
         # end to end, forced on a small lattice: trackers and the tracked ΔH stay exact
         σ, kinds = blocks((30, 30), 5)
         lat = Lattice((30, 30))
-        on = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackDeltaH{Float64}())
+        on = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackEnergyChange{Float64}())
         prob = PottsProblem(on, initial_state(σ, kinds), lat, (0, 15), gg_params())
         H(u) = total_H(u, lat, prob.contact, gg_params())
         for alg in (SequentialCPM(), SequentialCPM(; skip_interior = true))
@@ -210,9 +210,9 @@ end
             end
             for sol in wide[1:4]
                 u0, u = sol.u[1], sol.u[end]
-                @test sol.stats.accepted_ΔH == H(u) - H(u0) && abs(H(u) - H(u0)) > 100
+                @test sol.stats.accepted_energy_change == H(u) - H(u0) && abs(H(u) - H(u0)) > 100
                 vol = zeros(Int32, length(kinds))
-                foreach(s -> s > 0 && (vol[s] += 1), u.σ)
+                foreach(s -> s > 0 && (vol[s] += 1), u.ownership)
                 @test vol == u.cell.volume
             end
             base_acc = Float64[s.stats.accepted for s in base]
@@ -221,7 +221,7 @@ end
             # negative control: a colder temperature T = 5.0 drops accepted copies outside margin
             cold = [solve(remake(prob; seed, p = merge(gg_params(), (; T = 5.0))), alg).stats.accepted for seed in 1:12]
             @test !stat_accept(Float64.(cold) .- base_acc; mu0 = 0.0, margin = 0.05 * mean(base_acc), alpha = 1.0e-3).pass
-            @test solve(remake(prob; seed = 1), alg).u[end].σ == base[1].u[end].σ  # unforced: unchanged
+            @test solve(remake(prob; seed = 1), alg).u[end].ownership == base[1].u[end].ownership  # unforced: unchanged
         end
         # the hook reaches the caller's choice of regime, which is the sweep context's type:
         # marked contexts take two words, others one, and each method is its map
@@ -334,13 +334,13 @@ end
             x = coordinates(lat, t)
             inside, y = shift(lat, x, ctx.proposal.offsets[dir])
             s = linear_index(lat, y)
-            a, b = st.σ[t], st.σ[s]
+            a, b = st.ownership[t], st.ownership[s]
             (inside && a != b) || continue
             prop = Proposal(t, s, x, dir, a, b)
             before = total_H(st, lat, ctx.contact, p)
             dH = gg_delta_H(st, p, prop, ctx)
             after_state = deepcopy(st)
-            after_state.σ[t] = b
+            after_state.ownership[t] = b
             CorePotts.commit_volume!(after_state, p, prop, ctx)
             @test dH ≈ total_H(after_state, lat, ctx.contact, p) - before atol = 1e-9
             checked += 1
@@ -363,21 +363,21 @@ end
         p = gs_params()
         ctx = (; lattice = lat, proposal = relation(VonNeumann(1), lat),
             contact = relation(cspec, lat), surface = relation(sspec, lat))
-        @test st.cell.surface ≈ brute_surface(st.σ, lat, ctx.surface, length(kinds))
+        @test st.cell.surface ≈ brute_surface(st.ownership, lat, ctx.surface, length(kinds))
         st32 = surface_state(σ, kinds, lat, sspec; T = Float32)
         checked = 0
         for t in 1:7:nsites(lat), dir in 1:length(ctx.proposal)
             inside, y = shift(lat, coordinates(lat, t), ctx.proposal.offsets[dir])
             s = linear_index(lat, y)
-            (inside && st.σ[t] != st.σ[s]) || continue
-            prop = Proposal(t, s, coordinates(lat, t), dir, st.σ[t], st.σ[s])
+            (inside && st.ownership[t] != st.ownership[s]) || continue
+            prop = Proposal(t, s, coordinates(lat, t), dir, st.ownership[t], st.ownership[s])
             before = total_H_surface(st, lat, ctx, p)
             dH = gs_delta_H(st, p, prop, ctx)
             after = deepcopy(st)
-            after.σ[t] = prop.new
+            after.ownership[t] = prop.new
             gs_commit!(after, p, prop, ctx)          # after the write, as the algorithms do
             @test dH ≈ total_H_surface(after, lat, ctx, p) - before atol = 1e-6
-            @test after.cell.surface ≈ brute_surface(after.σ, lat, ctx.surface, length(kinds))
+            @test after.cell.surface ≈ brute_surface(after.ownership, lat, ctx.surface, length(kinds))
             @test gs_delta_H(st32, p, prop, ctx) ≈ dH rtol = 1e-5 atol = 1e-2   # Float32 tracker
             checked += 1
             checked >= 150 && break
@@ -397,8 +397,8 @@ end
         sol = solve(sprob, alg)
         @test sol.retcode == ReturnCode.Success
         u = sol.u[end]
-        @test u.σ != σ
-        @test u.cell.surface ≈ brute_surface(u.σ, lat, relation(sspec, lat), length(kinds)) rtol = 1e-12
+        @test u.ownership != σ
+        @test u.cell.surface ≈ brute_surface(u.ownership, lat, relation(sspec, lat), length(kinds)) rtol = 1.0e-12
         bad = PottsProblem(GS, sprob.u0, lat, (0, 1), gs_params();
             relations = (; surface = Moore(1; include_self = true)))
         @test_throws ["ArgumentError", "surface relation", "must not include the origin", "VonNeumann"] init(bad, alg)
@@ -412,17 +412,17 @@ end
             @test sol.retcode == ReturnCode.Success
             @test sol.t == [0, 5, 10, 20]
             last_state = sol.u[end]
-            @test last_state.σ != σ0
+            @test last_state.ownership != σ0
             vol = zeros(Int32, length(kinds0))
-            for s in last_state.σ
+            for s in last_state.ownership
                 s > 0 && (vol[s] += 1)
             end
             @test vol == last_state.cell.volume            # tracker == recomputation
-            @test solve(prob, alg).u[end].σ == last_state.σ             # same seed, same run
-            @test solve(remake(prob; seed = 8), alg).u[end].σ != last_state.σ
-            @test sol(10).σ == sol.u[3].σ
-            @test sol.u[1].σ == σ0 && sol.u[2].σ != sol.u[end].σ     # snapshots, not aliases
-            @test sol.u[1].σ !== sol.u[end].σ
+            @test solve(prob, alg).u[end].ownership == last_state.ownership             # same seed, same run
+            @test solve(remake(prob; seed = 8), alg).u[end].ownership != last_state.ownership
+            @test sol(10).ownership == sol.u[3].ownership
+            @test sol.u[1].ownership == σ0 && sol.u[2].ownership != sol.u[end].ownership     # snapshots, not aliases
+            @test sol.u[1].ownership !== sol.u[end].ownership
             @test_throws ["ArgumentError", "MCS 11 was not saved"] sol(11)
             @test sol.stats.attempts == 20 * nsites(lat)
             integ = init(prob, alg)
@@ -470,7 +470,7 @@ end
             u = c = 0
             for i in 1:nsites(lat), off in relation(Moore(1), lat).offsets
                 inside, y = shift(lat, coordinates(lat, i), off)
-                a, b = st.σ[i], st.σ[linear_index(lat, y)]
+                a, b = st.ownership[i], st.ownership[linear_index(lat, y)]
                 (a == b || a == 0 || b == 0) && continue
                 c += 1; u += st.cell.kind[a] != st.cell.kind[b]
             end

@@ -7,7 +7,7 @@
         oy, os = pair_oracle(n)
         for M in (SolverPairYS, SolverPairSY), alg in (SequentialCPM(), CheckerboardCPM())
             sys = M(; name = :p)
-            prob = PottsProblem(sys, solver_op(), (0, n); solvers = [solver_var(sys, :s) => RK4()])
+            prob = PottsProblem(sys, solver_op(), (0, n); solvers = [solver_var(sys, :s) => Potts.RK4()])
             @test haskey(prob.u0.cell, :y__ode) && haskey(prob.u0.cell, :s__ode)          # two groups: scratch
             u = solve(prob, alg).u[end]
             @test u.cell.y[1] ≈ oy rtol = 1e-12
@@ -24,7 +24,9 @@
         # three cell groups (one adaptive) and two model groups: every rate reads the pre-step state
         sys = SolverTriple(; name = :t)
         v(n) = solver_var(sys, n)
-        prob = PottsProblem(sys, solver_op(), (0, 3); solvers = [v(:s) => RK4(), v(:h) => RK4(),
+        prob = PottsProblem(
+            sys, solver_op(), (0, 3); solvers = [
+                v(:s) => Potts.RK4(), v(:h) => Potts.RK4(),
             v(:w) => Adaptive(Tsit5(); reltol = 1e-12, abstol = 1e-14)])
         y, s, w, g, h = 1.0, 0.0, 0.5, 1.0, 0.0
         for _ in 1:3
@@ -45,23 +47,23 @@ end
     @testset "solver groups: zero warm allocations, remake re-lays out the scratch" begin
         sys = SolverTriple(; name = :t)
         v(n) = solver_var(sys, n)
-        prob = PottsProblem(sys, solver_op(), (0, 100); solvers = [v(:s) => RK4(), v(:h) => RK4()])
+        prob = PottsProblem(sys, solver_op(), (0, 100); solvers = [v(:s) => Potts.RK4(), v(:h) => Potts.RK4()])
         for alg in (SequentialCPM(), CheckerboardCPM())
             integ = init(prob, alg; save_start = false, save_end = false, save_everystep = false)
             @test minimum(solver_warm(integ) for _ in 1:5) == 0
         end
         # one group → two groups → one group: the state gains and loses its scratch, values kept
         base = PottsProblem(sys, solver_op(), (0, 3))
-        split = remake(base; solvers = [v(:s) => RK4()])
+        split = remake(base; solvers = [v(:s) => Potts.RK4()])
         @test haskey(split.u0.cell, :s__ode) && !haskey(split.u0.model, :g__ode)
         @test split.u0.cell.s == base.u0.cell.s
-        direct = PottsProblem(sys, solver_op(), (0, 3); solvers = [v(:s) => RK4()])
+        direct = PottsProblem(sys, solver_op(), (0, 3); solvers = [v(:s) => Potts.RK4()])
         @test split.f.fingerprint == direct.f.fingerprint
         @test solve(split, SequentialCPM()).u[end].cell == solve(direct, SequentialCPM()).u[end].cell
         back = remake(split; solvers = [])
         @test keys(back.u0.cell) == keys(base.u0.cell) && back.f.fingerprint == base.f.fingerprint
         # remake with u0 and solvers together lays out the new state for the new solvers
-        both = remake(base; solvers = [v(:s) => RK4()], u0 = [ownership => solver_sigma(), kind => [:A], :y => 2.0])
+        both = remake(base; solvers = [v(:s) => Potts.RK4()], u0 = [ownership => solver_sigma(), kind => [:A], :y => 2.0])
         @test haskey(both.u0.cell, :s__ode) && both.u0.cell.y[1] == 2.0
     end
 end
@@ -69,15 +71,15 @@ end
 @testitem "solvers keys: names, fields, components; errors" setup = [SolversSetup, SymbolicSetup] tags = [:potts, :solvers] begin
     @testset "solvers keys: names, fields, components; errors" begin
         sys = SolverPairYS(; name = :p)
-        bysym = PottsProblem(sys, solver_op(), (0, 2); solvers = [:s => RK4()])
-        byvar = PottsProblem(sys, solver_op(), (0, 2); solvers = [solver_var(sys, :s) => RK4()])
+        bysym = PottsProblem(sys, solver_op(), (0, 2); solvers = [:s => Potts.RK4()])
+        byvar = PottsProblem(sys, solver_op(), (0, 2); solvers = [solver_var(sys, :s) => Potts.RK4()])
         @test bysym.f.fingerprint == byvar.f.fingerprint
-        @test solver_err(() -> PottsProblem(sys, solver_op(), (0, 2); solvers = [:nope => RK4()])) isa ArgumentError
-        @test solver_err(() -> PottsProblem(sys, solver_op(), (0, 2); solvers = [:s => RK4(), :s => RK4()])) isa ArgumentError
+        @test solver_err(() -> PottsProblem(sys, solver_op(), (0, 2); solvers = [:nope => Potts.RK4()])) isa ArgumentError
+        @test solver_err(() -> PottsProblem(sys, solver_op(), (0, 2); solvers = [:s => Potts.RK4(), :s => Potts.RK4()])) isa ArgumentError
         # a field key takes an ExplicitEuler, which overrides `field_solver` for that field
         fs = SolverField(; name = :f)
         op = [ownership => solver_sigma(), kind => [:A], :c => [Float64(x + y) for x in 1:16, y in 1:16]]
-        e = solver_err(() -> PottsProblem(fs, op, (0, 2); field_solver = ExplicitEuler(), solvers = [:c => RK4()]))
+        e = solver_err(() -> PottsProblem(fs, op, (0, 2); field_solver = ExplicitEuler(), solvers = [:c => Potts.RK4()]))
         @test e isa ArgumentError && occursin("ExplicitEuler", sprint(showerror, e))
         keyed = PottsProblem(fs, op, (0, 3); field_solver = ExplicitEuler(substeps = 2), solvers = [:c => ExplicitEuler(substeps = 5)])
         plain = PottsProblem(fs, op, (0, 3); field_solver = ExplicitEuler(substeps = 5))
@@ -92,29 +94,29 @@ end
         cs = component_model()
         cop = [ownership => (σ = zeros(Int32, 20, 20); σ[3:7, 3:7] .= 1; σ[12:16, 12:16] .= 2; σ), kind => [:A, :B]]
         fp(kw) = PottsProblem(cs, cop, (0, 2); solvers = kw).f.fingerprint
-        @test fp([decay => RK4()]) == fp([decay.y_c => RK4()]) == fp([Symbol("decay₊y_c") => RK4()])
-        @test fp([clock => RK4()]) == fp([clock.m_c => RK4()]) != fp([decay => RK4()])
-        @test fp([decay => RK4()]) != PottsProblem(cs, cop, (0, 2)).f.fingerprint
+        @test fp([decay => Potts.RK4()]) == fp([decay.y_c => Potts.RK4()]) == fp([Symbol("decay₊y_c") => Potts.RK4()])
+        @test fp([clock => Potts.RK4()]) == fp([clock.m_c => Potts.RK4()]) != fp([decay => Potts.RK4()])
+        @test fp([decay => Potts.RK4()]) != PottsProblem(cs, cop, (0, 2)).f.fingerprint
         @named lonely = System([Potts.D(y_c) ~ -y_c], _tc)
-        e = solver_err(() -> PottsProblem(cs, cop, (0, 2); solvers = [lonely => RK4()]))
+        e = solver_err(() -> PottsProblem(cs, cop, (0, 2); solvers = [lonely => Potts.RK4()]))
         @test e isa ArgumentError && occursin("`lonely`", sprint(showerror, e)) && length(sprint(showerror, e)) < 300
         # a PottsSystem is an AbstractSystem too (D-137), never a component key
-        e = solver_err(() -> PottsProblem(cs, cop, (0, 2); solvers = [cs => RK4()]))
+        e = solver_err(() -> PottsProblem(cs, cop, (0, 2); solvers = [cs => Potts.RK4()]))
         @test e isa ArgumentError && occursin("Potts model", sprint(showerror, e))
         # unknown keywords: `@sweep`, `remake`; `f` together with a solver keyword
         @test solver_err(() -> Potts.sweep_spec(:metropolis; temperature = 1.0, substeps = 2)) isa ArgumentError
-        e = solver_err(() -> Potts.sweep_spec(:metropolis; temperature = 1.0, ode_solver = RK4()))
+        e = solver_err(() -> Potts.sweep_spec(:metropolis; temperature = 1.0, ode_solver = Potts.RK4()))
         @test e isa ArgumentError && occursin("ode_solver", sprint(showerror, e))
         e = solver_err(() -> remake(bysym; nope = 1))
         @test e isa ArgumentError && occursin("nope", sprint(showerror, e))
-        @test solver_err(() -> remake(bysym; f = byvar.f, ode_solver = RK4())) isa ArgumentError
+        @test solver_err(() -> remake(bysym; f = byvar.f, ode_solver = Potts.RK4())) isa ArgumentError
     end
 end
 
 @testitem "states given as such are laid out for the scratch (remake, reinit!)" setup = [SolversSetup] tags = [:potts, :solvers] begin
     @testset "states given as such are laid out for the scratch (remake, reinit!)" begin
         sys = SolverPairYS(; name = :p)
-        multi = PottsProblem(sys, solver_op(), (0, 4); solvers = [:s => RK4()])
+        multi = PottsProblem(sys, solver_op(), (0, 4); solvers = [:s => Potts.RK4()])
         single = PottsProblem(sys, solver_op(), (0, 4))
         plain = solve(single, SequentialCPM()).u[end]                     # a state without scratch
         @test !haskey(plain.cell, :s__ode)
@@ -127,7 +129,7 @@ end
         reinit!(integ, plain)
         @test current_state(integ).cell.y == plain.cell.y && haskey(current_state(integ).cell, :s__ode)
         # R3: a solver remake together with a state
-        r3 = remake(single; solvers = [:s => RK4()], u0 = plain)
+        r3 = remake(single; solvers = [:s => Potts.RK4()], u0 = plain)
         @test haskey(r3.u0.cell, :s__ode) && r3.f.fingerprint == multi.f.fingerprint
         @test solve(r3, SequentialCPM()).u[end].cell.s == solve(remake(multi; u0 = plain), SequentialCPM()).u[end].cell.s
         # and back: a scratch state into a single-group problem loses the scratch
@@ -143,8 +145,8 @@ end
         op(y) = [ownership => p60n_two(), kind => [:A, :A], :y => y]
         rk4 = 1 - 1 + 1 / 2 - 1 / 6 + 1 / 24                     # one RK4 step of y' = −y, h = 1
         for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
-            own = PottsProblem(P60nOwnIndex(; name = :o), op([1.0, 2.0]), (0, 2); ode_solver = RK4())
-            plain = PottsProblem(P60nOwnPlain(; name = :o), op([1.0, 2.0]), (0, 2); ode_solver = RK4())
+            own = PottsProblem(P60nOwnIndex(; name = :o), op([1.0, 2.0]), (0, 2); ode_solver = Potts.RK4())
+            plain = PottsProblem(P60nOwnPlain(; name = :o), op([1.0, 2.0]), (0, 2); ode_solver = Potts.RK4())
             @test !haskey(own.u0.cell, :y__ode)                   # an own read needs no scratch
             u = solve(own, alg).u[end].cell.y
             @test u == solve(plain, alg).u[end].cell.y
@@ -189,7 +191,7 @@ end
         spacing(q) = (l = init(q, CheckerboardCPM(; parts = 2)).cache.layout; (l.k - 1) * minimum(l.base))
         @test spacing(prob) == 1                                              # `far` is not a copy-step read
         # `anneal` (zero temperature around the generated one) keeps the generated reads
-        @test Potts.anneal(prob; mcs = 2, alg = CheckerboardCPM()) isa Potts.CorePotts.CPMState
+        @test Potts.anneal(prob, 2; alg = CheckerboardCPM()) isa Potts.CorePotts.CPMState
         # a bias reading `far` (reach 2) against footprint 1: the spacing widens to cover it (D-271)
         farbias = (st, p, prop, ctx) -> length(ctx.far) < 0
         biased = Potts.CorePotts.CPMFunction(f.delta_H; f.commit!, f.constraint, f.temperature,

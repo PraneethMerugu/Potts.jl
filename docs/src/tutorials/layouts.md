@@ -12,6 +12,7 @@ state as a stack of simple layers. You will learn:
 
 ```@example layouts
 using Potts, PottsModels, MakiePotts, CairoMakie
+using Potts.Layouts
 CairoMakie.activate!(type = "png") # hide
 nothing # hide
 ```

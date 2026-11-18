@@ -14,6 +14,7 @@ The models on this page are generic teaching models.
 
 ```@example odes
 using Potts, MakiePotts, CairoMakie
+using Potts.Layouts
 CairoMakie.activate!(type = "png") # hide
 nothing # hide
 ```
@@ -50,7 +51,7 @@ this system. Inside the model, `cycle.m` is the cell's phase and `cycle.r` its r
     @lattice Lattice((60, 60); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         cells(cell) => λ * (volume - V₀ * (1 + cycle.m))^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @equations begin
         cycle.r ~ volume / V₀           # squeezed cells cycle more slowly
@@ -110,11 +111,11 @@ For example, `remake(prob; p = [:cycle₊τ => 30.0])` halves the cycle time.
 ## Choosing the ODE solver
 
 The problem, not the model, chooses how to integrate the ODEs. The default,
-`ode_solver = ExplicitEuler()`, takes one Euler time step per MCS. `RK4(substeps = n)` is the
+`ode_solver = ExplicitEuler()`, takes one Euler time step per MCS. `Potts.RK4(substeps = n)` is the
 classic fourth-order Runge–Kutta method with `n` time steps per MCS:
 
 ```@example odes
-prob_rk4 = remake(prob; ode_solver = RK4(substeps = 2))
+prob_rk4 = remake(prob; ode_solver = Potts.RK4(substeps = 2))
 sol_rk4 = solve(prob_rk4, SequentialCPM(); save_everystep = false)
 count(>(0), sol_rk4[:volume][end])
 ```
@@ -129,7 +130,7 @@ sol_adaptive = solve(prob_adaptive, SequentialCPM(); save_everystep = false)
 count(>(0), sol_adaptive[:volume][end])
 ```
 
-`solvers = [p => RK4(substeps = 4)]` gives one variable (or one component, `cycle`) its
+`solvers = [p => Potts.RK4(substeps = 4)]` gives one variable (or one component, `cycle`) its
 own solver. The rest use `ode_solver`. Changing a solver regenerates the code, which takes
 a moment. Changing parameters does not regenerate the code.
 
@@ -186,7 +187,7 @@ k = ShiftIndex(Potts.t, 0)
     @lattice Lattice((30, 30); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         cells(cell) => (volume - 25.0)^2
-        contacts => 10 * (kind != kind′)
+        contacts => 10 * (kind != neighbor_kind)
     end
     @equations grn.on ~ signal > 0.5
     @after_mcs signal ~ ifelse(mcs > 5, 1.0, 0.0)
@@ -208,7 +209,7 @@ Potts.jl stores the network nodes as 0/1 cell variables. A node can trigger divi
   `model` variable.
 - `@components cells(k) name = sys` puts a ModelingToolkit system in every cell. Couple it
   with `name.param ~ expression` and read it as `name.var`.
-- The problem chooses the integrator: `ode_solver = ExplicitEuler()`, `RK4(substeps = n)` or
+- The problem chooses the integrator: `ode_solver = ExplicitEuler()`, `Potts.RK4(substeps = n)` or
   `Adaptive(alg)`, and `solvers = [...]` per variable.
 
 Next, [Tutorial 6](@ref tutorial-links) links cells together.

@@ -162,7 +162,7 @@ const P60AW_REJECTED = (
     @lattice Lattice((16, 16))
     @energy begin
         cells => 2.0 * (volume - 20)^2
-        contacts => 2.0 * (kind != kind′)
+        contacts => 2.0 * (kind != neighbor_kind)
     end
     @before_mcs s ~ integral(u)
     @on_copy begin
@@ -186,7 +186,7 @@ end
     @lattice Lattice((16, 16))
     @energy begin
         cells => 2.0 * (volume - 20)^2
-        contacts => 2.0 * (kind != kind′)
+        contacts => 2.0 * (kind != neighbor_kind)
     end
     @on_copy begin
         hits[target] += 1
@@ -241,7 +241,7 @@ end
     K = 12
     sol = solve(p60aw_problem(P60awWork, K), alg; saveat = 0:K)
     @test Symbol(sol.retcode) === :Success
-    σs = [Array(u.σ) for u in sol.u]
+    σs = [Array(u.ownership) for u in sol.u]
     ws = [Array(u.site.w) for u in sol.u]
     ys = [Array(u.cell.y) for u in sol.u]
     @test all(u -> Array(u.site.u) == P60AW_U0, sol.u)
@@ -286,7 +286,7 @@ end
     K = 8
     sol = solve(p60aw_problem(P60awNoIntegral, K), alg; saveat = 0:K)
     @test Symbol(sol.retcode) === :Success
-    σs = [Array(u.σ) for u in sol.u]
+    σs = [Array(u.ownership) for u in sol.u]
     hs = [Array(u.site.hits) for u in sol.u]
     @test any(k -> σs[k] != σs[k + 1], 1:K)                                    # the cells move
     for k in 1:K

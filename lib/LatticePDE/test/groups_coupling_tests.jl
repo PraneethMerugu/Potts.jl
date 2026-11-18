@@ -24,18 +24,19 @@ end
 @testitem "F2-06 review: each group keeps its count through setp, an input write and a table write" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
 @testset "F2-06 review: each group keeps its count through setp, an input write and a table write" begin
     # c decays at a rate read through a kind table; o diffuses (its count is the larger)
-    sys = PDESystem([D(pce) ~ -gkc * at(gKt, pqe) * pce, D(poe) ~ gDo * Δ(poe)],
+        sys = PDESystem(
+            [D(pce) ~ -gkc * value_at(gKt, pqe) * pce, D(poe) ~ gDo * laplacian(poe)],
         [gpc(0, x, y) ~ 1.0, gpo(0, x, y) ~ x * y, gpo(t, 0, y) ~ gpo(t, 1, y), gpo(t, x, 0) ~ gpo(t, x, 1),
          gpc(t, 0, y) ~ gpc(t, 1, y), gpc(t, x, 0) ~ gpc(t, x, 1)],
         [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [pce, poe, pqe],
         [gkc, gDo, gKt]; name = :pp)
     p = discretize(sys, LatticeDiscretization(Grid((16, 16)); T = Float64);
         inputs = [pqe => fill(Int32(1), 16, 16)])
-    alg = FieldGroups(pce => ExplicitEuler(; dt = 0.01, substeps = 1), poe => ExplicitEuler(; dt = 0.01))
-    ig = init(p, alg)
+        alg = FieldGroups(pce => ExplicitEuler(; substeps = 1), poe => ExplicitEuler())
+        ig = init(p, alg; dt = 0.01)
     c0 = LFP.substep_counts(ig)
     @test c0 == [1, 4]                                            # o: ⌈0.01 · 0.3 · 2048 / 1.8⌉ = 4
-    @test LFP.substep_counts(init(remake(p; p = [gkc => 0.2]), alg)) == c0     # a fresh init
+        @test LFP.substep_counts(init(remake(p; p = [gkc => 0.2]), alg; dt = 0.01)) == c0     # a fresh init
     setp(ig, gkc)(ig, 0.2)                                        # (base: [1, 1], o unstable)
     @test LFP.substep_counts(ig) == c0 && ig.substeps == 1
     ig[pqe] = fill(Int32(2), 16, 16)                              # a bound input
@@ -46,7 +47,7 @@ end
         step!(ig)
     end
     @test maximum(abs, ig[poe]) <= 1.0                            # o stays bounded (diffusion of x y)
-    s = solve(p, alg)
+        s = solve(p, alg; dt = 0.01)
     @test LFP.substep_counts(s) == c0 && substep_counts(s)[1] == 1
 end
 end
@@ -55,16 +56,24 @@ end
 @testset "F2-06 review: the coupling between groups is bounded (K-unsafe: refused with the routes)" begin
     rp = discretize(rsys(), LatticeDiscretization(Grid((4, 4)); T = Float64))
     # k dt = 3 in two groups (base: counts [1, 1], Success at 3.3e41)
-    e = gerr(() -> init(rp, rtwo(1)))
+        e = gerr(() -> init(rp, rtwo(1); dt = 0.01))
     @test occursin("dt · Σ max|coefficient| = 3.0 > 1", e) && occursin("`gr1`", e) && occursin("`gr2`", e) &&
           occursin("in one group", e) && occursin("dt ≤ 0.003333", e)
-    @test occursin("dt · Σ max|coefficient| = 3.0", gerr(() -> init(rp, rtwo(50))))     # no count reaches it
-    @test occursin("dt · Σ max|coefficient| = 3.0", gerr(() -> solve(rp, FieldGroups(r1e => ExplicitEuler(; dt = 0.01);
-        default = ExplicitEuler(; dt = 0.01, substeps = 1)))))                        # an automatic count too
-    @test occursin("no automatic substeps", gerr(() -> init(rp, ExplicitEuler(; dt = 0.01))))   # one group: refused
+        @test occursin("dt · Σ max|coefficient| = 3.0", gerr(() -> init(rp, rtwo(50); dt = 0.01)))     # no count reaches it
+        @test occursin(
+            "dt · Σ max|coefficient| = 3.0", gerr(
+                () -> solve(
+                    rp, FieldGroups(
+                        r1e => ExplicitEuler();
+                        default = ExplicitEuler(; substeps = 1)
+                    ); dt = 0.01
+                )
+            )
+        )                        # an automatic count too
+        @test occursin("no automatic substeps", gerr(() -> init(rp, ExplicitEuler(); dt = 0.01)))   # one group: refused
     # weak coupling (k dt = 0.05): accepted, and the run is the groups stepped one after the other
     wp = remake(rp; p = [gk => 5.0])
-    ig = init(wp, rtwo(1))
+        ig = init(wp, rtwo(1); dt = 0.01)
     sol = solve!(ig)
     @test sol.retcode == ReturnCode.Success
     c, o = 1.0, 0.0
@@ -77,25 +86,25 @@ end
     # a parameter change past the limit is refused, atomically
     @test occursin("dt · Σ max|coefficient| = 3.0", gerr(() -> setp(ig, gk)(ig, 300.0)))
     @test getp(ig, gk)(ig) == 5.0
-    @test occursin("dt · Σ max|coefficient|", gerr(() -> init(remake(wp; p = [gk => 300.0]), rtwo(1))))   # remake
+        @test occursin("dt · Σ max|coefficient|", gerr(() -> init(remake(wp; p = [gk => 300.0]), rtwo(1); dt = 0.01)))   # remake
 end
 end
 
 @testitem "F2-06 review: setu drops the history; FieldGroups and clip messages" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
 @testset "F2-06 review: setu drops the history; FieldGroups and clip messages" begin
     p = gown(gsys())
-    ig = init(p, GStub(0.01, 0))
+        ig = init(p, GStub(0); dt = 0.01)
     c = only(ig.runtimes).cache
     setu(ig, gce)(ig, fill(2.0, 8, 8))                            # (base: no reset)
     @test c.resets == 1 && ig[gce] == fill(2.0, 8, 8)
     # the rate/map mix names the algorithms in their keyword form
-    e = gerr(() -> init(p, FieldGroups(gce => ExplicitEuler(; dt = 0.01), goe => ExplicitMap())))
-    @test occursin("ExplicitEuler(; dt = 0.01)", e) && !occursin("nothing", e)
+        e = gerr(() -> init(p, FieldGroups(gce => ExplicitEuler(; substeps = 2), goe => ExplicitMap()); dt = 0.01))
+        @test occursin("ExplicitEuler(; substeps = 2)", e) && !occursin("nothing", e)
     # a clip that is not finite
     for v in (NaN, Inf, -Inf)
-        @test occursin("must be a finite number", gerr(() -> ExplicitEuler(; dt = 0.01, lower = v)))
+            @test occursin("must be a finite number", gerr(() -> ExplicitEuler(; lower_bound = v)))
     end
-    @test ExplicitEuler(; dt = 0.01, lower = -1.0).lower == -1.0                  # control
+        @test ExplicitEuler(; lower_bound = -1.0).lower_bound == -1.0                  # control
 end
 end
 
@@ -108,8 +117,8 @@ end
             [t, x, y], [wce, re], [gwk]; name = :oneway)
         p = discretize(sys, gwdisc())
         for k in (300.0, 3000.0)                                  # k dt = 3 and 30 (refused before round 2)
-            alg = FieldGroups(wce => ExplicitEuler(; dt = 0.01, substeps = 2), re => ExplicitEuler(; dt = 0.01, substeps = 3))
-            ig = init(remake(p; p = [gwk => k]), alg)
+                alg = FieldGroups(wce => ExplicitEuler(; substeps = 2), re => ExplicitEuler(; substeps = 3))
+                ig = init(remake(p; p = [gwk => k]), alg; dt = 0.01)
             @test [rt.keys for rt in ig.runtimes] == (cfirst ? [["gwc"], [rk]] : [[rk], ["gwc"]])
             sol = solve!(ig)
             @test sol.retcode == ReturnCode.Success
@@ -141,22 +150,26 @@ end
     sys3 = PDESystem([D(wce) ~ -gwk * woe, D(woe) ~ -gwk * wve, D(wve) ~ gwk * wce],
         [gwc(0, x, y) ~ 1.0, gwo(0, x, y) ~ 0.0, gwv(0, x, y) ~ 0.0], GW_DOM, [t, x, y], [wce, woe, wve], [gwk]; name = :loop3)
     p3 = discretize(sys3, gwdisc())
-    three = FieldGroups(wce => ExplicitEuler(; dt = 0.01, substeps = 1), woe => ExplicitEuler(; dt = 0.01, substeps = 2),
-        wve => ExplicitEuler(; dt = 0.01, substeps = 3))
-    e = gwerr(() -> init(p3, three))
+        three = FieldGroups(
+            wce => ExplicitEuler(; substeps = 1), woe => ExplicitEuler(; substeps = 2),
+            wve => ExplicitEuler(; substeps = 3)
+        )
+        e = gwerr(() -> init(p3, three; dt = 0.01))
     @test occursin("read one another in a loop", e) && occursin("`gwc`, `gwo`, `gwv`", e) &&
           occursin("dt · Σ max|coefficient| = 3.0 > 1", e)
-    @test solve(remake(p3; p = [gwk => 5.0]), three).retcode == ReturnCode.Success          # k dt = 0.05
+        @test solve(remake(p3; p = [gwk => 5.0]), three; dt = 0.01).retcode == ReturnCode.Success          # k dt = 0.05
     # a loop (c, o: the rotation at gwr) and a chain out of it (u reads c at gwk)
     sysc = PDESystem([D(wce) ~ -gwr * woe, D(woe) ~ gwr * wce, D(wue) ~ gwk * wce - wue],
         [gwc(0, x, y) ~ 1.0, gwo(0, x, y) ~ 0.0, gwu(0, x, y) ~ 0.0], GW_DOM, [t, x, y], [wce, woe, wue], [gwk, gwr];
         name = :loopchain)
     pc = discretize(sysc, gwdisc())
-    algc = FieldGroups(wce => ExplicitEuler(; dt = 0.01, substeps = 1), woe => ExplicitEuler(; dt = 0.01, substeps = 2),
-        wue => ExplicitEuler(; dt = 0.01, substeps = 3))
+        algc = FieldGroups(
+            wce => ExplicitEuler(; substeps = 1), woe => ExplicitEuler(; substeps = 2),
+            wue => ExplicitEuler(; substeps = 3)
+        )
     # u's κ = 3 (not in the loop), the loop's 0.05: accepted
-    @test solve(pc, algc).retcode == ReturnCode.Success
-    ig = init(pc, algc)
+        @test solve(pc, algc; dt = 0.01).retcode == ReturnCode.Success
+        ig = init(pc, algc; dt = 0.01)
     setp(ig, gwk)(ig, 3000.0)                                     # u's κ = 30: still accepted
     @test getp(ig, gwk)(ig) == 3000.0
     # the loop past the limit (gwr dt = 3): refused, naming the loop's fields only
@@ -175,12 +188,14 @@ end
         [gwc(0, x, y) ~ 1.0, gwo(0, x, y) ~ 1.0, gwu(0, x, y) ~ 0.0], GW_DOM, [t, x, y], [wce, woe, wue], [gwk];
         name = :unseen)
     p = discretize(sys, gwdisc())
-    alg = FieldGroups(wce => ExplicitEuler(; dt = 0.01, substeps = 2), woe => ExplicitEuler(; dt = 0.01, substeps = 1),
-        wue => ExplicitEuler(; dt = 0.01, substeps = 3))
-    e = gwerr(() -> init(p, alg))
+        alg = FieldGroups(
+            wce => ExplicitEuler(; substeps = 2), woe => ExplicitEuler(; substeps = 1),
+            wue => ExplicitEuler(; substeps = 3)
+        )
+        e = gwerr(() -> init(p, alg; dt = 0.01))
     @test occursin("the groups of `gwc`, `gwu` read one another in a loop", e) && occursin("dt · Σ max|coefficient| = 3.0", e) &&
           occursin("the terms of `gwc` that the bound cannot see and that read another field count as reading every other group", e)
-    @test solve(remake(p; p = [gwk => 50.0]), alg).retcode == ReturnCode.Success          # κ = 0.5
+        @test solve(remake(p; p = [gwk => 50.0]), alg; dt = 0.01).retcode == ReturnCode.Success          # κ = 0.5
 end
 end
 
@@ -192,9 +207,11 @@ end
             [gwa(0, x, y) ~ 1.0, gwo(0, x, y) ~ 1.0, gwc(0, x, y) ~ 0.0], GW_DOM, [t, x, y], [wae, woe, wce], [gwk];
             name = :selfsrc)
         p = discretize(sys, gwdisc())
-        alg = FieldGroups(wae => ExplicitEuler(; dt = 0.01, substeps = 2), woe => ExplicitEuler(; dt = 0.01, substeps = 1),
-            wce => ExplicitEuler(; dt = 0.01, substeps = 3))
-        sol = solve(p, alg)
+            alg = FieldGroups(
+                wae => ExplicitEuler(; substeps = 2), woe => ExplicitEuler(; substeps = 1),
+                wce => ExplicitEuler(; substeps = 3)
+            )
+            sol = solve(p, alg; dt = 0.01)
         @test sol.retcode == ReturnCode.Success
         @test 0 < sol[:gwc, end][1] < 300 * 0.1                    # bounded by k t max a
     end
@@ -210,9 +227,11 @@ end
     sys = PDESystem([D(xa) ~ -xa, D(xb) ~ gxk * xa - gxw * xc, D(xc) ~ gxw * xb],
         [gxa(0, x, y) ~ 1.0, gxb(0, x, y) ~ 0.0, gxc(0, x, y) ~ 0.0], GW_DOM, [t, x, y], [xa, xb, xc], [gxk, gxw]; name = :chainloop)
     p = discretize(sys, gwdisc())
-    alg = FieldGroups(xa => ExplicitEuler(; dt = 0.01, substeps = 1), xb => ExplicitEuler(; dt = 0.01, substeps = 2),
-        xc => ExplicitEuler(; dt = 0.01, substeps = 3))
-    sol = solve(p, alg)
+        alg = FieldGroups(
+            xa => ExplicitEuler(; substeps = 1), xb => ExplicitEuler(; substeps = 2),
+            xc => ExplicitEuler(; substeps = 3)
+        )
+        sol = solve(p, alg; dt = 0.01)
     @test sol.retcode == ReturnCode.Success && substep_counts(sol) == [1, 2, 3]
     a, b, c = 1.0, 0.0, 0.0                                       # the groups in state order, by hand
     for _ in 1:10
@@ -223,7 +242,7 @@ end
     @test all(≈(a; rtol = 1e-12), sol[:gxa, end]) && all(≈(b; rtol = 1e-12), sol[:gxb, end]) &&
           all(≈(c; rtol = 1e-12), sol[:gxc, end])
     # a strong loop (w dt = 3) is still refused: κ is the loop's own 3.0 (not 3 + 3), naming b and c only
-    e = gwerr(() -> init(remake(p; p = [gxw => 300.0]), alg))
+        e = gwerr(() -> init(remake(p; p = [gxw => 300.0]), alg; dt = 0.01))
     @test occursin("the groups of `gxb`, `gxc` read one another in a loop", e) &&
           occursin("dt · Σ max|coefficient| = 3.0 >", e) && occursin("the coefficient `-gxw` of `gxc`", e) && !occursin("gxa", e)
 end
@@ -234,30 +253,31 @@ end
     rp = discretize(rsys(), LatticeDiscretization(Grid((4, 4)); T = Float64))
     for k in (150.0, 1 / 0.0033335, 300.0, 7.0e3 / 3, 1234.5)
         pk = remake(rp; p = [gk => k])
-        e = gwerr(() -> init(pk, rtwo(1)))
+            e = gwerr(() -> init(pk, rtwo(1); dt = 0.01))
         @test occursin("> 1", e)
         # the limit, verbatim (rounded down), with a time span it divides
         lim = gwnum(e, "dt ≤")
         @test lim * k <= 1
         @test init(remake(pk; tspan = (0.0, 10lim)),
-            FieldGroups(r1e => ExplicitEuler(; dt = lim, substeps = 1), r2e => ExplicitEuler(; dt = lim, substeps = 2))) isa
+                FieldGroups(r1e => ExplicitEuler(; substeps = 1), r2e => ExplicitEuler(; substeps = 2)); dt = lim
+            ) isa
               LFP.FieldIntegrator
         # a dt that divides the time span, verbatim (`dt = 0.1/30`)
         m = match(r"such as dt = ([0-9.]+)/([0-9]+)", e)
         dt = parse(Float64, m.captures[1]) / parse(Int, m.captures[2])
-        sol = solve(pk, FieldGroups(r1e => ExplicitEuler(; dt, substeps = 1), r2e => ExplicitEuler(; dt, substeps = 2)))
+            sol = solve(pk, FieldGroups(r1e => ExplicitEuler(; substeps = 1), r2e => ExplicitEuler(; substeps = 2)); dt)
         @test sol.retcode == ReturnCode.Success
         # route 1: the rotation's rows are not dominant, so the message asks for an explicit count, which runs
         @test occursin("in one group with an explicit count", e)
-        @test init(pk, ExplicitEuler(; dt = 0.01, substeps = 400)) isa LFP.FieldIntegrator
+            @test init(pk, ExplicitEuler(; substeps = 400); dt = 0.01) isa LFP.FieldIntegrator
     end
     # route 1 when the merged rows are dominant: the count can be automatic, and it is
     sysd = PDESystem([D(r1e) ~ -10gk * r1e - gk * r2e, D(r2e) ~ gk * r1e - 10gk * r2e], [gr1(0, x, y) ~ 1.0, gr2(0, x, y) ~ 0.0],
         GW_DOM, [t, x, y], [r1e, r2e], [gk]; name = :dom)
     pd = discretize(sysd, LatticeDiscretization(Grid((4, 4)); T = Float64))
-    e = gwerr(() -> init(pd, rtwo(1)))
+        e = gwerr(() -> init(pd, rtwo(1); dt = 0.01))
     @test occursin("in one group (one algorithm; its count can be automatic)", e)
-    @test solve(pd, ExplicitEuler(; dt = 0.01)).retcode == ReturnCode.Success
+        @test solve(pd, ExplicitEuler(); dt = 0.01).retcode == ReturnCode.Success
 end
 end
 
@@ -266,14 +286,15 @@ end
     @parameters gwKt[1:2] = [1.0, 2.0]
     @variables gwq(..)::Int32 [input = true, bounds = (1, 2)]
     qe = gwq(t, x, y)
-    sys = PDESystem([D(wce) ~ -at(gwKt, qe) * woe, D(woe) ~ 0.1 * wce], [gwc(0, x, y) ~ 1.0, gwo(0, x, y) ~ 0.0],
+        sys = PDESystem(
+            [D(wce) ~ -value_at(gwKt, qe) * woe, D(woe) ~ 0.1 * wce], [gwc(0, x, y) ~ 1.0, gwo(0, x, y) ~ 0.0],
         [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [wce, woe, qe], [gwKt];
         name = :tabtext)
     p = discretize(sys, gwdisc(); inputs = [qe => fill(Int32(1), 4, 4)])
     dt = 0.1 / 30
-    ig = init(p, FieldGroups(wce => ExplicitEuler(; dt, substeps = 1), woe => ExplicitEuler(; dt, substeps = 2)))
+        ig = init(p, FieldGroups(wce => ExplicitEuler(; substeps = 1), woe => ExplicitEuler(; substeps = 2)); dt)
     e = gwerr(() -> (ig.ps[gwKt] = [500.0, 2.0]))
-    @test occursin("the coefficient `-at(gwKt, gwq)` of `gwo`", e) && !occursin("LatticePDE.", e) && !occursin("(t, x, y)", e)
+        @test occursin("the coefficient `-value_at(gwKt, gwq)` of `gwo`", e) && !occursin("LatticePDE.", e) && !occursin("(t, x, y)", e)
     @test occursin("dt = 0.00333333:", e)
     @test substep_counts(ig) == [1, 2]                            # exported from LatticePDE
 end

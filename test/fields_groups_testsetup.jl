@@ -28,10 +28,10 @@ module FgPDE
     chain_loop() = (@parameters k = 3.0 w = 0.05; ode([-0.1 * S1, k * S1 - w * C, w * S2], (s1, s2, c), [1.0, 0.0, 0.5], [k, w]))
     rot_cells() = (
         @parameters k = 0.5 Dc = 0.1;
-        pdesys([Dt(C) ~ Dc * Δ(C) - k * O - DK * O, Dt(O) ~ k * C], [ic(c, 1.0), ic(o)], (6, 6), [C, O, DK], [k, Dc])
+        pdesys([Dt(C) ~ Dc * laplacian(C) - k * O - DK * O, Dt(O) ~ k * C], [ic(c, 1.0), ic(o)], (6, 6), [C, O, DK], [k, Dc])
     )
     mcs_source() = (@parameters η = 0.5; field1(-C + η * MCS, (6, 6), [η]; c0 = 1.0))
-    mcs_diff() = (@parameters ε = 0.5; field1((1 + ε * MCS) * Δ(C), (6, 6), [ε]))
+    mcs_diff() = (@parameters ε = 0.5; field1((1 + ε * MCS) * laplacian(C), (6, 6), [ε]))
     clock_repeat() = ode([MCS, t], (c, u), [0.0, 0.0]; dims = (4, 4))
     time_read() = field1(-C + sin(t), (4, 4); c0 = 0.3)
     clock_half() = (@parameters η = 0.5; ode([MCS, t, -W + η * MCS], (c, u, w), [0.0, 0.0, 1.0], [η]; dims = (4, 4)))
@@ -111,7 +111,7 @@ FdClockRepeat(; name = :FdClockRepeat, kw...) = _Fg4x4(; variant = :clock_repeat
 FdTimeRead(; name = :FdTimeRead, kw...) = _Fg4x4(; variant = :time_read, name, kw...)
 FdClockHalf(; name = :FdClockHalf, kw...) = _Fg4x4(; variant = :clock_half, name, kw...)
 
-struct AStub <: Potts.LatticeFields.Problems.FieldAlgorithm
+struct AStub <: Potts.LatticeFields.Problems.AbstractFieldAlgorithm
     code::UInt32
     at::Int
     need::Int

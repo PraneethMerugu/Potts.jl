@@ -46,7 +46,7 @@ function _reads!(out, x, pre::Bool = false, nonlocal::Bool = false, inint::Bool 
     op = operation(x)
     op === history_lag && return out                  # reads the ring, not the variable
     p = pre || op isa ModelingToolkitBase.Pre
-    nl = nonlocal || op === gather || op === population || op === at || op === at2 || op === Δ
+    nl = nonlocal || op === gather || op === population || op === value_at || op === laplacian
     ii = inint || op === cell_integral
     foreach(a -> _reads!(out, a, p, nl, ii; integral_pre), arguments(x))
     return out
@@ -211,7 +211,7 @@ end
 _update_scope(u::Update) = (r = role(_written(u)); r === :field ? :site : r)
 function _written(u::Update)
     x = _unwrap(u.eq.lhs)
-    return u.phase === :on_copy && iscall(x) && operation(x) === at ? arguments(x)[1] : x
+    return u.phase === :on_copy && iscall(x) && operation(x) === value_at ? arguments(x)[1] : x
 end
 _update_name(u::Update) = info(_unwrap(u.eq.lhs)).name
 

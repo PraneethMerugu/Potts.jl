@@ -49,7 +49,7 @@ end
         narrow = forced(() -> solve(p, alg; saveat = 1), false; device)
         wide = forced(() -> solve(p, alg; saveat = 1), true; device)
         @test narrow.retcode == ReturnCode.Success && wide.retcode == ReturnCode.Success
-        @test all(i -> wide.u[i].σ == narrow.u[i].σ && wide.u[i].cell.kind == narrow.u[i].cell.kind, eachindex(narrow.u))
+            @test all(i -> wide.u[i].ownership == narrow.u[i].ownership && wide.u[i].cell.kind == narrow.u[i].cell.kind, eachindex(narrow.u))
         @test wide.stats.attempts == narrow.stats.attempts && wide.stats.accepted == narrow.stats.accepted
         @test wide.stats.refreshes == narrow.stats.refreshes
         # the widths reach every list and counter the run has; unforced, they stay Int32

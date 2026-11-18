@@ -38,7 +38,7 @@ isdefined(@__MODULE__, :stat_accept) || include(joinpath(@__DIR__, "shared", "st
     @lattice Lattice((64, 30); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         cells(blob) => (volume - 36)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
         edges(bond) => k₁ * (distance - rest)^2
         edges(tether) => k₂ * (distance - len)^2
     end

@@ -145,7 +145,7 @@ const _PIECES_NAMES = (:pieces, :largest_piece, :pieces_full, :largest_piece_ful
 # they are readable here but not in cell energies)
 const _CELL_BUILTINS = (_CELL_ENERGY_BUILTINS..., :mcs, :cluster_volume, :cluster_surface)
 const _CLUSTER_BUILTINS = (:cluster_volume, :cluster_surface, :kind, :id)
-const _CONTACT_BUILTINS = (:kind, :kind′, :owner, :owner′, :weight, :site′)   # `site′`: from `x′`
+const _CONTACT_BUILTINS = (:kind, :neighbor_kind, :owner, :neighbor_owner, :weight, :neighbor_site)   # `neighbor_site`: from `x′`
 const _SITE_BUILTINS = (:owner, :kind, :position, :site, :mcs)
 # `direction`, `position[s][k]` and `mcs` (P6.4a1, D-188): the copy's source→target offset,
 # a site's position, and the number of completed MCS
@@ -172,7 +172,7 @@ function _bare_builtins(x, out = Set{Symbol}())
     i !== nothing && i.role === :builtin && push!(out, i.name)
     if iscall(x) && !_is_quantity_call(i)
         args = arguments(x)
-        skip = operation(x) === at || operation(x) === at2
+        skip = operation(x) === value_at
         for (j, a) in enumerate(args)
             (skip && j == 1) || _bare_builtins(a, out)
         end
@@ -182,8 +182,8 @@ end
 
 const _INDEXABLE = (:owner, :kind, :volume, :surface, :generation, :cluster, :euler, :euler_full, _PIECES_NAMES..., :birth)
 
-# names a user can write (`site′` only arises from `x′`)
-_visible(names) = filter(n -> !(n in (:site′, :euler_full, :pieces_full, :largest_piece_full)), collect(names))
+# names a user can write (`neighbor_site` only arises from `x′`)
+_visible(names) = filter(n -> !(n in (:neighbor_site, :euler_full, :pieces_full, :largest_piece_full)), collect(names))
 
 # `between_copies`: `x` is evaluated between copy attempts (updates, divisions, equations),
 # not inside ΔH, so population bodies may read cluster trackers.
@@ -205,7 +205,7 @@ function _check_names(x, allowed, what; between_copies::Bool = false)
         _check_names(cond, (allowed..., inner...), what; between_copies)
     end
     for n in _bare_builtins(x)
-        n === :site′ && !(n in allowed) &&
+        n === :neighbor_site && !(n in allowed) &&
             throw(ArgumentError("a primed site variable `x′` (its value at the pair's other site) is only available in contact terms, not in $what"))
         n in allowed || throw(ArgumentError("`$n` is not available in $what (available: $(join(_visible(allowed), ", ")); index `owner`, `kind`, `volume` explicitly, e.g. `kind[new]`)"))
     end
@@ -387,7 +387,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     for u in _p(sys, :updates)
         u.phase === :on_copy || continue
         lhs = _unwrap(u.eq.lhs)
-        (iscall(lhs) && operation(lhs) === at) || continue
+        (iscall(lhs) && (operation(lhs) === value_at && length(arguments(lhs)) == 2)) || continue
         x, idx = arguments(lhs)
         i = info(x)
         i === nothing && continue
@@ -429,7 +429,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         lhs = _unwrap(u.eq.lhs)
         scope = _located(sys, u) do
             if u.phase === :on_copy
-                (iscall(lhs) && operation(lhs) === at) || throw(ArgumentError("@on_copy updates assign at a site or cell, e.g. `act[target] ~ …`"))
+                (iscall(lhs) && (operation(lhs) === value_at && length(arguments(lhs)) == 2)) || throw(ArgumentError("@on_copy updates assign at a site or cell, e.g. `act[target] ~ …`"))
                 u.every == 1 || throw(ArgumentError("`Every` does not apply to @on_copy updates: they run at every accepted copy"))
                 _check_names(u.eq.rhs, _PROPOSAL_BUILTINS, "an on-copy update")
                 _check_ref_sources(u.eq.rhs, "on-copy updates")
@@ -876,7 +876,7 @@ function _check_converts(sys::PottsSystem)
                     )
                 else
                     (
-                        iscall(lhs) && operation(lhs) === at && (
+                        iscall(lhs) && (operation(lhs) === value_at && length(arguments(lhs)) == 2) && (
                             xi = info(arguments(lhs)[1]); xi !== nothing && xi.role === :cell &&
                                 get(xi.options, :reference, false) !== true
                         )
@@ -1014,7 +1014,7 @@ function _check_discrete_slots(sys)
     slots = Dict{Symbol, Symbol}(info(x).name => b.name for b in _p(sys, :discrete) for x in b.slots)
     target(lhs) = (
         x = _standin_var(lhs);
-        iscall(x) && (operation(x) === at || operation(x) isa Differential) ? _standin_var(arguments(x)[1]) : x
+        iscall(x) && ((operation(x) === value_at && length(arguments(x)) == 2) || operation(x) isa Differential) ? _standin_var(arguments(x)[1]) : x
     )
     for s in Iterators.flatten((_p(sys, :updates), _p(sys, :equations)))
         lhs = _unwrap(s isa Update ? s.eq.lhs : s.lhs)
@@ -1064,7 +1064,7 @@ function _copy_written_vars(sys::PottsSystem)
     for u in _p(sys, :updates)
         u.phase === :on_copy || continue
         lhs = _unwrap(u.eq.lhs)
-        (iscall(lhs) && operation(lhs) === at) || continue
+        (iscall(lhs) && (operation(lhs) === value_at && length(arguments(lhs)) == 2)) || continue
         i = info(arguments(lhs)[1])
         i === nothing && continue
         i.role in (:site, :field) && push!(sites, i.name)
@@ -1078,16 +1078,16 @@ end
 _pop_bound(x) = (i = info(x); i !== nothing && i.role in (:bound_cell, :bound_site))
 # `owner[…]` or `kind[…]`: σ at a site (not at a population fold's bound variable)
 # (`kind[ref]` reads the referent's kind column, not σ: R6)
-_is_sigma_at(y) = iscall(y) && operation(y) === at && !_pop_bound(arguments(y)[2]) && !_is_ref(arguments(y)[2]) &&
+_is_sigma_at(y) = iscall(y) && (operation(y) === value_at && length(arguments(y)) == 2) && !_pop_bound(arguments(y)[2]) && !_is_ref(arguments(y)[2]) &&
     (i = info(arguments(y)[1]); i !== nothing && i.role === :builtin && i.name in (:owner, :kind))
 _reads_sigma(x) = (found = Ref(false); _walk(y -> (_is_sigma_at(y) && (found[] = true)), x); found[])
 # cell builtins a copy changes, which ΔH substitutes only when read bare
 const _COPY_VARYING_INDEXED = (:volume, :surface, :euler, :euler_full, _PIECES_NAMES...)
-# an explicit site index: not a pair's own site (`x′` is `x[site′]`), not a bound variable
+# an explicit site index: not a pair's own site (`x′` is `x[neighbor_site]`), not a bound variable
 _explicit_index(i) = (
     r = info(i); r === nothing || !(
         r.role in (:bound, :bound_cell, :bound_site) ||
-            (r.role === :builtin && r.name in (:site, :site′))
+            (r.role === :builtin && r.name in (:site, :neighbor_site))
     )
 )
 
@@ -1101,7 +1101,7 @@ function _copy_varying_read(x, sites, cells; mode = :all)
     bare = Ref{Any}(nothing)
     _walk(x) do y
         hit[] === nothing || return
-        if iscall(y) && operation(y) === at
+        if iscall(y) && (operation(y) === value_at && length(arguments(y)) == 2)
             a = arguments(y)
             i = info(a[1])
             if _is_sigma_at(y) || _reads_sigma(a[2])
@@ -1117,7 +1117,7 @@ function _copy_varying_read(x, sites, cells; mode = :all)
                 hit[] = y                                 # `volume[id]`, `y[id]` with `@on_copy y[…]`
                 bare[] = _is_ref(a[2]) ? :reference : _authored_name(i)     # `volume[partner]` (R6)
             end
-        elseif iscall(y) && operation(y) === at2 && any(_reads_sigma, arguments(y)[2:end])
+        elseif iscall(y) && operation(y) === value_at && length(arguments(y)) == 3 && any(_reads_sigma, arguments(y)[2:end])
             hit[] = y                                     # `J[kind[n], …]`
         elseif sites !== nothing && mode === :all
             i = info(y)
@@ -1139,7 +1139,7 @@ end
 # `x[i]`, `J[i, j]` as authored (not `Potts.at(x(t), i)`)
 function _indexed_string(x)
     x = _unwrap(x)
-    if x isa SymbolicUtils.BasicSymbolic && iscall(x) && (operation(x) === at || operation(x) === at2)
+    if x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === value_at
         a = arguments(x)
         return string(_indexed_string(a[1]), "[", join(map(_indexed_string, a[2:end]), ", "), "]")
     end
@@ -1171,7 +1171,7 @@ end
 # D-209: refuse a term of domain `d` that reads something a copy changes beyond what ΔH applies
 function _check_copy_reads(E, d, sites, cells)
     # σ at an explicit site, anywhere in the term (cell and edge terms have no site of their
-    # own; a contact term's pair is the bare `owner`, `owner′`, `kind`, `kind′`), indexed
+    # own; a contact term's pair is the bare `owner`, `neighbor_owner`, `kind`, `neighbor_kind`), indexed
     # copy-varying cell quantities in cell terms, and
     # copy-written site variables at an explicit site, in every domain (a contact term's bare
     # `x`, `x′` read the pair and stay allowed)
@@ -1238,7 +1238,7 @@ function _ref_valued(x)
     op = operation(x)
     op isa ModelingToolkitBase.Pre && return _ref_valued(arguments(x)[1])
     op === ifelse && return _ref_valued(arguments(x)[2]) && _ref_valued(arguments(x)[3])
-    if op === at                                      # `cluster[c]`, `owner[s]`
+    if op === value_at && length(arguments(x)) == 2                                      # `cluster[c]`, `owner[s]`
         a = info(arguments(x)[1])
         return a !== nothing && a.role === :builtin && a.name in (:cluster, :owner)
     end
@@ -1246,19 +1246,19 @@ function _ref_valued(x)
 end
 
 # In a contact term a bare cell variable means its value at the owner (`x[owner]`) and a
-# bare site variable its value at the pair's first site (`x[site]`; `x′` is `x[site′]`), so
-# that mirroring (owner ↔ owner′, site ↔ site′) sees them.
+# bare site variable its value at the pair's first site (`x[site]`; `x′` is `x[neighbor_site]`), so
+# that mirroring (owner ↔ neighbor_owner, site ↔ neighbor_site) sees them.
 function _cellvars_at_owner(E)
     sub = Dict{Any, Any}()
     for x in _bare_vars(E)
         i = info(x)
-        i.role === :cell && (sub[x] = _unwrap(at(Symbolics.wrap(x), B.owner)))
-        i.role in (:site, :field) && (sub[x] = _unwrap(at(Symbolics.wrap(x), B.site)))
+        i.role === :cell && (sub[x] = _unwrap(value_at(Symbolics.wrap(x), B.owner)))
+        i.role in (:site, :field) && (sub[x] = _unwrap(value_at(Symbolics.wrap(x), B.site)))
     end
     isempty(sub) && return E
     return Symbolics.substitute(E, sub; fold = Val(false), filterer = _pair_scope)
 end
-_not_indexed(ex) = !(iscall(ex) && (operation(ex) === at || operation(ex) === at2)) &&
+_not_indexed(ex) = !(iscall(ex) && operation(ex) === value_at) &&
     SymbolicUtils.default_substitute_filter(ex)
 # the pair's names, not inside a population fold (its body reads the bound cell or site)
 _outside_population(ex) = !(iscall(ex) && operation(ex) === population) && SymbolicUtils.default_substitute_filter(ex)
@@ -1274,7 +1274,7 @@ function _bare_vars(x, out = Set{Any}())
         return out
     end
     if iscall(x)
-        skip = operation(x) === at || operation(x) === at2
+        skip = operation(x) === value_at
         for (j, a) in enumerate(arguments(x))
             (skip && j == 1) || _bare_vars(a, out)
         end
@@ -1289,21 +1289,21 @@ function _leaves(x)
 end
 
 # Contact energies are summed over unordered pairs; an asymmetric expression is averaged
-# with its mirror (kind ↔ kind′, owner ↔ owner′, site ↔ site′).
+# with its mirror (kind ↔ neighbor_kind, owner ↔ neighbor_owner, site ↔ neighbor_site).
 # Kind tables used in contact terms must be symmetric (checked against their values when the
 # problem is built), so their entries are compared up to index order.
 function _symmetrize(E)
     swap = Dict(
-        _unwrap(B.kind) => _unwrap(B.kind′), _unwrap(B.kind′) => _unwrap(B.kind),
-        _unwrap(B.owner) => _unwrap(B.owner′), _unwrap(B.owner′) => _unwrap(B.owner),
-        _unwrap(B.site) => _unwrap(B.site′), _unwrap(B.site′) => _unwrap(B.site)
+        _unwrap(B.kind) => _unwrap(B.neighbor_kind), _unwrap(B.neighbor_kind) => _unwrap(B.kind),
+        _unwrap(B.owner) => _unwrap(B.neighbor_owner), _unwrap(B.neighbor_owner) => _unwrap(B.owner),
+        _unwrap(B.site) => _unwrap(B.neighbor_site), _unwrap(B.neighbor_site) => _unwrap(B.site)
     )
     M = Symbolics.substitute(E, swap; fold = Val(false), filterer = _outside_population)
     flips = Dict{Any, Any}()
     _walk(M) do y
-        if iscall(y) && operation(y) === at2 && role(arguments(y)[1]) === :kindtable
+        if iscall(y) && operation(y) === value_at && length(arguments(y)) == 3 && role(arguments(y)[1]) === :kindtable
             J, a, b = arguments(y)
-            flips[y] = _unwrap(at2(Symbolics.wrap(J), Symbolics.wrap(b), Symbolics.wrap(a)))
+            flips[y] = _unwrap(value_at(Symbolics.wrap(J), Symbolics.wrap(b), Symbolics.wrap(a)))
         end
     end
     M = isempty(flips) ? M : Symbolics.substitute(M, flips; fold = Val(false))
@@ -1423,7 +1423,7 @@ _describe_text(b::_BcsLine, kinds = nothing) =
 
 # descriptions are built only when reporting (printing symbolic expressions is slow); a
 # built-in shows as written (`volume`, not the input `volume(t)`), and an operator of the field
-# compiler as the model writes it (`Δ(c)`, `Advect(Upwind1())`, `[ux, 0.0]`; review R3)
+# compiler as the model writes it (`laplacian(c)`, `Advect(Upwind1())`, `[ux, 0.0]`; review R3)
 _describe(x, kinds...) = _nopkg(_builtin_text(_describe_text(x, kinds...)))
 _describe_text(e::EnergyTerm, kinds = nothing) = "@energy $(_domain_string(e.domain, kinds)) => $(e.expr)"
 _describe_text(d::Drive) = "@drive copy => $(d.expr)"
@@ -1668,7 +1668,7 @@ function _check_geometry(x, N; energy = false, hex = false)
             )
             return
         end
-        if op === at                     # `direction[k]`, `position[s][k]` (D-188): an axis
+        if op === value_at && length(arguments(y)) == 2                     # `direction[k]`, `position[s][k]` (D-188): an axis
             a = _unwrap(arguments(y)[1])
             ai = info(a)
             name = ai !== nothing && ai.role === :builtin && ai.name === :direction ? "direction[k]" :

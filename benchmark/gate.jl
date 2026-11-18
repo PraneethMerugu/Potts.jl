@@ -71,6 +71,11 @@ const BASELINE_HEADER = """
     # Written by `gate.jl ... update`; machines are defined in machine.jl. A slowdown is decided by ab.jl, not by these.
     """
 
+# ExplicitEuler with a lower clamp (the keyword is `lower` in older checkouts: an A/B base may be one)
+# The old name is accepted only so an A/B can run against a base older than the renames; drop it once no base predates them.
+clamped_euler(n, lo) = :lower_bound in fieldnames(ExplicitEuler) ? ExplicitEuler(; substeps = n, lower_bound = lo) :
+    ExplicitEuler(; substeps = n, lower = lo)
+
 function cases(T)
     gg = graner_glazier_state()
     return [
@@ -85,7 +90,8 @@ function cases(T)
         "merks_100" =>
             () -> PottsProblem(MerksVasculogenesis(; name = :m, lattice = (100, 100)),
                 merks_state(; lattice = (100, 100), n = 25), (0, 10^6); T,          # 10² cells, ≈ 25 % cover
-                field_solver = ExplicitEuler(substeps = 15, lower = 0.0)),
+            field_solver = clamped_euler(15, 0.0)
+        ),
         "openvt_monolayer_100" =>
             () -> PottsProblem(
                 OpenVTGrowingMonolayer(; name = :o, lattice = (100, 100), τ = 1e6),
@@ -106,12 +112,12 @@ function cases(T)
         # (20 neighbours, 2-site frame) with the field on from MCS 0 (t_relax = 0)
         "merks2006_100" =>
             () -> PottsProblem(Merks2006(; name = :m6, lattice = (100, 100)),
-                layout(merks2006_layout(; lattice = (100, 100), n = 25), (100, 100)), (
+            Potts.layout(merks2006_layout(; lattice = (100, 100), n = 25), (100, 100)), (
                     0, 10^6); T,
                 field_solver = ExplicitEuler(substeps = 15)),
         "merks2008_202" =>
             () -> PottsProblem(Merks2008(; name = :m8),
-                [layout(merks2008_sprout(), (202, 202)); :t_relax => 0.0], (0, 10^6); T,
+            [Potts.layout(merks2008_sprout(), (202, 202)); :t_relax => 0.0], (0, 10^6); T,
                 field_solver = ExplicitEuler(substeps = 15))
     ]
 end
@@ -184,7 +190,8 @@ function measure(make, alg; backend = nothing)
     timed_step!(integ, backend)
     allocs = backend === nothing ? warm_allocs(integ) : 0
     b = run(@benchmarkable timed_step!(i, $backend) setup=(i=fresh_integrator($prob, $alg, $backend)) evals=1 samples=40 seconds=30)
-    n = length(integ.state.σ)
+    # `σ` is accepted only so an A/B can run against a base older than the renames; drop it once no base predates them
+    n = length(hasproperty(integ.state, :ownership) ? integ.state.ownership : integ.state.σ)
     return minimum(b).time / n, allocs
 end
 

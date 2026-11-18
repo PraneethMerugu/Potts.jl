@@ -232,7 +232,7 @@
 #   (the callback's `initialize`), every MCS with t % 39 == 0, and the stopping MCS (first MCS
 #   with ≥ cells live cells). Same callback, so the O1 stamps are the timeseries.tsv saves by
 #   construction. At each save, after `p615f_row`:
-#     fr = PottsModels.openvt_frame(current_state(integ); β = c.beta, γ = c.gamma)       # x, y in R, i, n
+#     fr = PottsModels.openvt_frame(current_state(integ); beta = c.beta, gamma = c.gamma)       # x, y in R, i, n
 #     write_openvt(joinpath(stage, "centroids", case,
 #                  openvt_filename(:O1; case, seed, mcs = Int(integ.t))), :O1, fr)
 #   (`openvt_frame` takes the centroids from `openvt_snapshot`, as `p615f_row` does, so

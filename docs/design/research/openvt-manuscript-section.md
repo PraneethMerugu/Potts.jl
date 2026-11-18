@@ -60,14 +60,14 @@ The monolayer reference model is a direct transcription of the schema and Table 
         cells(cell) => λ * (volume - A_star)^2
         contacts => J[kind, kind′]
     end
-    @before_mcs X ~ ifelse(Pre(X) > 0, Pre(X), randn(μ_X, σ_X; lower = 0.0))
+    @before_mcs X ~ ifelse(Pre(X) > 0, Pre(X), randn(μ_X, σ_X; lower_bound = 0.0))
     @after_mcs begin
         f ~ ifelse(count(true for _ in contacts) > 0,
             count(kind′ == medium for _ in contacts) / count(true for _ in contacts), 1.0)
         A_star ~ ifelse((volume / Pre(A_star) >= β) && (f >= γ), Pre(A_star) + α, Pre(A_star))
     end
     @divide cells(cell) when = volume >= X * A₀, along = RandomPlane(), A_star => Split(),
-        X => randn(μ_X, σ_X; lower = 0.0)
+        X => randn(μ_X, σ_X; lower_bound = 0.0)
     @sweep Metropolis(; temperature = T)
 end
 ```

@@ -13,7 +13,7 @@
 # declares the footprint from the copy step only (energies, drives, expression constraints,
 # `@on_copy` updates, the temperature: `src/compile.jl`), so a relation read only at an MCS
 # boundary is refused although no copy reads it. Measured on 746f5e99 (12×12 periodic, a fold
-# `count(owner[n] == id for n in R(40))`, R = `far = Ball(2.0)` or inline `Ball(2.0)`): the
+# `count(owner[n] == id for n in R(40))`, R = `far = EuclideanBall(2.0)` or inline `EuclideanBall(2.0)`): the
 # compiler declares Footprint(read = 1) and `solve(prob, CheckerboardCPM())` throws
 #   ArgumentError: CheckerboardCPM: the model declares Footprint(read = 1) but its proposal,
 #   contact and named relations reach distance 2; …
@@ -59,22 +59,22 @@
 # divisions and links and every value below is exact, under either algorithm:
 #   :apart  cell 1 = [2:4, 2:4], cell 2 = [6:8, 2:4]   (a gap column x = 5)
 #   :touch  cell 1 = [2:4, 2:4], cell 2 = [5:7, 2:4]   (they touch: `new_contact`)
-# Site 40 = (4, 4) (a corner of cell 1), 29 = (5, 3) (the gap). Ball(r): 0 < d² ≤ r²;
+# Site 40 = (4, 4) (a corner of cell 1), 29 = (5, 3) (the gap). EuclideanBall(r): 0 < d² ≤ r²;
 # Moore(1): Chebyshev 1. Counts by hand (checked against a brute-force oracle below):
-#   around 40, :apart  Ball(2.0) c1 5 c2 1 | Ball(3.0) c1 8 c2 4 | Moore(1) c1 3 c2 0
-#   around 29, owner 2, :apart  Ball(2.0) 4 [(6,2),(6,3),(6,4),(7,3)] | Ball(3.0) 7 | Moore(1) 3
-#   around 40, :touch, c1 + c2  Ball(2.0) 8 | Ball(3.0) 15 | Moore(1) 5
+#   around 40, :apart  EuclideanBall(2.0) c1 5 c2 1 | EuclideanBall(3.0) c1 8 c2 4 | Moore(1) c1 3 c2 0
+#   around 29, owner 2, :apart  EuclideanBall(2.0) 4 [(6,2),(6,3),(6,4),(7,3)] | EuclideanBall(3.0) 7 | Moore(1) 3
+#   around 40, :touch, c1 + c2  EuclideanBall(2.0) 8 | EuclideanBall(3.0) 15 | Moore(1) 5
 # The values that need reach 2 (Moore(1), reach 1, gives the other):
 #   division `when = (y == 0) & (mcs * c >= 12)`, `y => mcs + 1`: y[1:4] = [4, 13, 4, 13]
-#     (Ball(2.0)), [3, 4, 3, 4] (Ball(3.0)), [5, 0, 5, 0] (Moore(1): cell 2 never divides)
-#   division rule `y => 1 + c29` at MCS 2 for cell 1: y[1:3] = [5, 0, 5] (Ball(2.0)), [8, 0, 8]
-#     (Ball(3.0)), [4, 0, 4] (Moore(1))
+#     (EuclideanBall(2.0)), [3, 4, 3, 4] (EuclideanBall(3.0)), [5, 0, 5, 0] (Moore(1): cell 2 never divides)
+#   division rule `y => 1 + c29` at MCS 2 for cell 1: y[1:3] = [5, 0, 5] (EuclideanBall(2.0)), [8, 0, 8]
+#     (EuclideanBall(3.0)), [4, 0, 4] (Moore(1))
 #   `@link when = new_contact(a, b) && mcs * (c1 + c2) >= 24`: first linked at t = 4
-#     (Ball(2.0), m = 3), t = 6 (Moore(1), m = 5); `@unlink` on an initial link: linked at
-#     t = 0:3 (Ball(2.0))
+#     (EuclideanBall(2.0), m = 3), t = 6 (Moore(1), m = 5); `@unlink` on an initial link: linked at
+#     t = 0:3 (EuclideanBall(2.0))
 #   `@after_mcs z ~ c`, `@before_mcs z ~ c`, `D(w) ~ c - w` (Euler, one MCS: w = c) and
-#   `@observed o(cell) ~ c`: [5, 1] (Ball(2.0)), [8, 4] (Ball(3.0)), [3, 0] (Moore(1))
-#   :touch with all of them on `far = Ball(2.0)` (c1 5, c2 3): y[1:2] = [4, 5], first link
+#   `@observed o(cell) ~ c`: [5, 1] (EuclideanBall(2.0)), [8, 4] (EuclideanBall(3.0)), [3, 0] (Moore(1))
+#   :touch with all of them on `far = EuclideanBall(2.0)` (c1 5, c2 3): y[1:2] = [4, 5], first link
 #     t = 4, z = o = [5, 3] before any division
 # Every value was checked under SequentialCPM on the base (section 4 passes there).
 #
@@ -113,33 +113,33 @@ p60ba_edge(r) = [P60BA_BOND, P60BA_STATIC, P60BA_Q, :(@energy edges(bond) => 0.1
 p60ba_constraint(r) = [:(@constraint count(owner[n] == new for n in $r(target)) >= 0)]
 p60ba_drive(r) = [:(@drive copy => 0.1 * count(owner[n] == 1 for n in $r(target)))]
 
-const P60BA_FAR = :(far = Ball(2.0))
-const P60BA_B2 = :(Ball(2.0))
+const P60BA_FAR = :(far = EuclideanBall(2.0))
+const P60BA_B2 = :(EuclideanBall(2.0))
 # label => (layout, @relations body or nothing, statements after the volume energy)
 const P60BA_FIXTURES = [
-    # 1. boundary-only reach 2 (named `far = Ball(2.0)` and inline `Ball(2.0)`)
-    "divwhen far=Ball(2.0)" => (:apart, P60BA_FAR, p60ba_divwhen(:far)),
-    "divwhen Ball(2.0)" => (:apart, nothing, p60ba_divwhen(P60BA_B2)),
-    "divrule far=Ball(2.0)" => (:apart, P60BA_FAR, p60ba_divrule(:far)),
-    "divrule Ball(2.0)" => (:apart, nothing, p60ba_divrule(P60BA_B2)),
-    "link far=Ball(2.0)" => (:touch, P60BA_FAR, p60ba_link(:far)),
-    "link Ball(2.0)" => (:touch, nothing, p60ba_link(P60BA_B2)),
-    "unlink far=Ball(2.0)" => (:touch, P60BA_FAR, p60ba_unlink(:far)),
-    "unlink Ball(2.0)" => (:touch, nothing, p60ba_unlink(P60BA_B2)),
-    "after far=Ball(2.0)" => (:apart, P60BA_FAR, p60ba_after(:far)),
-    "after Ball(2.0)" => (:apart, nothing, p60ba_after(P60BA_B2)),
-    "before far=Ball(2.0)" => (:apart, P60BA_FAR, p60ba_before(:far)),
-    "before Ball(2.0)" => (:apart, nothing, p60ba_before(P60BA_B2)),
-    "ode far=Ball(2.0)" => (:apart, P60BA_FAR, p60ba_ode(:far)),
-    "ode Ball(2.0)" => (:apart, nothing, p60ba_ode(P60BA_B2)),
-    "obs far=Ball(2.0)" => (:apart, P60BA_FAR, p60ba_obs(:far)),
-    "obs Ball(2.0)" => (:apart, nothing, p60ba_obs(P60BA_B2)),
+    # 1. boundary-only reach 2 (named `far = EuclideanBall(2.0)` and inline `EuclideanBall(2.0)`)
+    "divwhen far=EuclideanBall(2.0)" => (:apart, P60BA_FAR, p60ba_divwhen(:far)),
+    "divwhen EuclideanBall(2.0)" => (:apart, nothing, p60ba_divwhen(P60BA_B2)),
+    "divrule far=EuclideanBall(2.0)" => (:apart, P60BA_FAR, p60ba_divrule(:far)),
+    "divrule EuclideanBall(2.0)" => (:apart, nothing, p60ba_divrule(P60BA_B2)),
+    "link far=EuclideanBall(2.0)" => (:touch, P60BA_FAR, p60ba_link(:far)),
+    "link EuclideanBall(2.0)" => (:touch, nothing, p60ba_link(P60BA_B2)),
+    "unlink far=EuclideanBall(2.0)" => (:touch, P60BA_FAR, p60ba_unlink(:far)),
+    "unlink EuclideanBall(2.0)" => (:touch, nothing, p60ba_unlink(P60BA_B2)),
+    "after far=EuclideanBall(2.0)" => (:apart, P60BA_FAR, p60ba_after(:far)),
+    "after EuclideanBall(2.0)" => (:apart, nothing, p60ba_after(P60BA_B2)),
+    "before far=EuclideanBall(2.0)" => (:apart, P60BA_FAR, p60ba_before(:far)),
+    "before EuclideanBall(2.0)" => (:apart, nothing, p60ba_before(P60BA_B2)),
+    "ode far=EuclideanBall(2.0)" => (:apart, P60BA_FAR, p60ba_ode(:far)),
+    "ode EuclideanBall(2.0)" => (:apart, nothing, p60ba_ode(P60BA_B2)),
+    "obs far=EuclideanBall(2.0)" => (:apart, P60BA_FAR, p60ba_obs(:far)),
+    "obs EuclideanBall(2.0)" => (:apart, nothing, p60ba_obs(P60BA_B2)),
     # farther reach (3)
-    "divwhen far=Ball(3.0)" => (:apart, :(far = Ball(3.0)), p60ba_divwhen(:far)),
-    "divwhen Ball(3.0)" => (:apart, nothing, p60ba_divwhen(:(Ball(3.0)))),
-    "divrule Ball(3.0)" => (:apart, nothing, p60ba_divrule(:(Ball(3.0)))),
-    "after Ball(3.0)" => (:apart, nothing, p60ba_after(:(Ball(3.0)))),
-    "obs far=Ball(3.0)" => (:apart, :(far = Ball(3.0)), p60ba_obs(:far)),
+    "divwhen far=EuclideanBall(3.0)" => (:apart, :(far = EuclideanBall(3.0)), p60ba_divwhen(:far)),
+    "divwhen EuclideanBall(3.0)" => (:apart, nothing, p60ba_divwhen(:(EuclideanBall(3.0)))),
+    "divrule EuclideanBall(3.0)" => (:apart, nothing, p60ba_divrule(:(EuclideanBall(3.0)))),
+    "after EuclideanBall(3.0)" => (:apart, nothing, p60ba_after(:(EuclideanBall(3.0)))),
+    "obs far=EuclideanBall(3.0)" => (:apart, :(far = EuclideanBall(3.0)), p60ba_obs(:far)),
     # reach-1 controls (accepted on the base: the values differ from reach 2)
     "divwhen Moore(1)" => (:apart, nothing, p60ba_divwhen(:(Moore(1)))),
     "divrule Moore(1)" => (:apart, nothing, p60ba_divrule(:(Moore(1)))),
@@ -147,28 +147,38 @@ const P60BA_FIXTURES = [
     "after Moore(1)" => (:apart, nothing, p60ba_after(:(Moore(1)))),
     # several boundary sites at once, and a boundary-only far relation beside a copy-step
     # read within the footprint (a Moore(1) constraint around the target)
-    "boundary all far=Ball(2.0)" => (:touch, P60BA_FAR, [P60BA_BOND, P60BA_STATIC,
+    "boundary all far=EuclideanBall(2.0)" => (
+        :touch, P60BA_FAR, [
+            P60BA_BOND, P60BA_STATIC,
         :(@divide cells(A) when = (y == 0.0) & (mcs * $(p60ba_g(:far)) >= 12), y => mcs + 1.0),
         :(@link bond when = new_contact(a, b) && (mcs * $(p60ba_pair(:far)) >= 24)),
         :(@after_mcs z ~ $(p60ba_g(:far))), :(@observed o(cell) ~ $(p60ba_g(:far)))]),
     "boundary far + copy Moore(1)" => (:apart, P60BA_FAR, [p60ba_constraint(:(Moore(1)))..., p60ba_divwhen(:far)...]),
     # 2. copy-step reads
-    "edge far=Ball(2.0)" => (:touch, P60BA_FAR, p60ba_edge(:far)),
-    "edge Ball(2.0)" => (:touch, nothing, p60ba_edge(P60BA_B2)),
-    "constraint far=Ball(2.0)" => (:apart, P60BA_FAR, p60ba_constraint(:far)),
-    "constraint Ball(2.0)" => (:apart, nothing, p60ba_constraint(P60BA_B2)),
-    "drive far=Ball(2.0)" => (:apart, P60BA_FAR, p60ba_drive(:far)),
+    "edge far=EuclideanBall(2.0)" => (:touch, P60BA_FAR, p60ba_edge(:far)),
+    "edge EuclideanBall(2.0)" => (:touch, nothing, p60ba_edge(P60BA_B2)),
+    "constraint far=EuclideanBall(2.0)" => (:apart, P60BA_FAR, p60ba_constraint(:far)),
+    "constraint EuclideanBall(2.0)" => (:apart, nothing, p60ba_constraint(P60BA_B2)),
+    "drive far=EuclideanBall(2.0)" => (:apart, P60BA_FAR, p60ba_drive(:far)),
     # 3. mixed: one relation read in the copy step (edge energy) and at the boundary
-    "mixed far=Ball(2.0)" => (:touch, P60BA_FAR, [p60ba_edge(:far)...,
+    "mixed far=EuclideanBall(2.0)" => (
+        :touch, P60BA_FAR, [
+            p60ba_edge(:far)...,
         :(@divide cells(A) when = (y == 0.0) & (mcs * $(p60ba_g(:far)) >= 12), y => mcs + 1.0)]),
-    "mixed Ball(2.0)" => (:touch, nothing, [p60ba_edge(P60BA_B2)...,
+    "mixed EuclideanBall(2.0)" => (
+        :touch, nothing, [
+            p60ba_edge(P60BA_B2)...,
         :(@divide cells(A) when = (y == 0.0) & (mcs * $(p60ba_g(P60BA_B2)) >= 12), y => mcs + 1.0)]),
-    "mixed after+edge far=Ball(2.0)" => (:touch, P60BA_FAR, [p60ba_edge(:far)..., :(@after_mcs z ~ $(p60ba_g(:far)))]),
+    "mixed after+edge far=EuclideanBall(2.0)" => (:touch, P60BA_FAR, [p60ba_edge(:far)..., :(@after_mcs z ~ $(p60ba_g(:far)))]),
     # 5. copy dynamics (no veto), accepted by CheckerboardCPM on the base
-    "pin constraint Ball(2.0) + div Moore(1)" => (:touch, nothing, [p60ba_constraint(P60BA_B2)...,
+    "pin constraint EuclideanBall(2.0) + div Moore(1)" => (
+        :touch, nothing, [
+            p60ba_constraint(P60BA_B2)...,
         :(@divide cells(A) when = (y == 0.0) & ($(p60ba_g(:(Moore(1)))) >= 3), y => mcs + 1.0),
         :(@after_mcs z ~ $(p60ba_g(:(Moore(1)))))]),
-    "pin drive far=Ball(2.0)" => (:touch, P60BA_FAR, [p60ba_drive(:far)...,
+    "pin drive far=EuclideanBall(2.0)" => (
+        :touch, P60BA_FAR, [
+            p60ba_drive(:far)...,
         :(@energy contacts => 2.0)]),
 ]
 const P60BA_MODELS = Dict{String, Any}()
@@ -239,8 +249,8 @@ function p60ba_oracle(σ, c, who, inside)
     return n
 end
 const P60BA_SHAPES = Dict(
-    "Ball(2.0)" => (dx, dy) -> dx^2 + dy^2 <= 4,
-    "Ball(3.0)" => (dx, dy) -> dx^2 + dy^2 <= 9,
+    "EuclideanBall(2.0)" => (dx, dy) -> dx^2 + dy^2 <= 4,
+    "EuclideanBall(3.0)" => (dx, dy) -> dx^2 + dy^2 <= 9,
     "Moore(1)" => (dx, dy) -> max(abs(dx), abs(dy)) <= 1,
 )
 
@@ -248,27 +258,27 @@ const P60BA_SHAPES = Dict(
 # either algorithm; the expected value needs the fixture's reach). `links`: start linked.
 const P60BA_BOUNDARY = [
     # label, links, (solution -> observed value), expected
-    ("divwhen far=Ball(2.0)", false, s -> s.u[end].cell.y[1:4], [4.0, 13.0, 4.0, 13.0]),
-    ("divwhen Ball(2.0)", false, s -> s.u[end].cell.y[1:4], [4.0, 13.0, 4.0, 13.0]),
-    ("divwhen far=Ball(3.0)", false, s -> s.u[end].cell.y[1:4], [3.0, 4.0, 3.0, 4.0]),
-    ("divwhen Ball(3.0)", false, s -> s.u[end].cell.y[1:4], [3.0, 4.0, 3.0, 4.0]),
-    ("divrule far=Ball(2.0)", false, s -> s.u[end].cell.y[1:3], [5.0, 0.0, 5.0]),
-    ("divrule Ball(2.0)", false, s -> s.u[end].cell.y[1:3], [5.0, 0.0, 5.0]),
-    ("divrule Ball(3.0)", false, s -> s.u[end].cell.y[1:3], [8.0, 0.0, 8.0]),
-    ("link far=Ball(2.0)", false, p60ba_link_times, collect(4:16)),
-    ("link Ball(2.0)", false, p60ba_link_times, collect(4:16)),
-    ("unlink far=Ball(2.0)", true, p60ba_link_times, collect(0:3)),
-    ("unlink Ball(2.0)", true, p60ba_link_times, collect(0:3)),
-    ("after far=Ball(2.0)", false, s -> s.u[end].cell.z[1:2], [5.0, 1.0]),
-    ("after Ball(2.0)", false, s -> s.u[end].cell.z[1:2], [5.0, 1.0]),
-    ("after Ball(3.0)", false, s -> s.u[end].cell.z[1:2], [8.0, 4.0]),
-    ("before far=Ball(2.0)", false, s -> s.u[end].cell.z[1:2], [5.0, 1.0]),
-    ("before Ball(2.0)", false, s -> s.u[end].cell.z[1:2], [5.0, 1.0]),
-    ("ode far=Ball(2.0)", false, s -> s.u[end].cell.w[1:2], [5.0, 1.0]),
-    ("ode Ball(2.0)", false, s -> s.u[end].cell.w[1:2], [5.0, 1.0]),
-    ("obs far=Ball(2.0)", false, s -> observe(s, :o)[end][1:2], [5, 1]),
-    ("obs Ball(2.0)", false, s -> observe(s, :o)[end][1:2], [5, 1]),
-    ("obs far=Ball(3.0)", false, s -> observe(s, :o)[end][1:2], [8, 4]),
+    ("divwhen far=EuclideanBall(2.0)", false, s -> s.u[end].cell.y[1:4], [4.0, 13.0, 4.0, 13.0]),
+    ("divwhen EuclideanBall(2.0)", false, s -> s.u[end].cell.y[1:4], [4.0, 13.0, 4.0, 13.0]),
+    ("divwhen far=EuclideanBall(3.0)", false, s -> s.u[end].cell.y[1:4], [3.0, 4.0, 3.0, 4.0]),
+    ("divwhen EuclideanBall(3.0)", false, s -> s.u[end].cell.y[1:4], [3.0, 4.0, 3.0, 4.0]),
+    ("divrule far=EuclideanBall(2.0)", false, s -> s.u[end].cell.y[1:3], [5.0, 0.0, 5.0]),
+    ("divrule EuclideanBall(2.0)", false, s -> s.u[end].cell.y[1:3], [5.0, 0.0, 5.0]),
+    ("divrule EuclideanBall(3.0)", false, s -> s.u[end].cell.y[1:3], [8.0, 0.0, 8.0]),
+    ("link far=EuclideanBall(2.0)", false, p60ba_link_times, collect(4:16)),
+    ("link EuclideanBall(2.0)", false, p60ba_link_times, collect(4:16)),
+    ("unlink far=EuclideanBall(2.0)", true, p60ba_link_times, collect(0:3)),
+    ("unlink EuclideanBall(2.0)", true, p60ba_link_times, collect(0:3)),
+    ("after far=EuclideanBall(2.0)", false, s -> s.u[end].cell.z[1:2], [5.0, 1.0]),
+    ("after EuclideanBall(2.0)", false, s -> s.u[end].cell.z[1:2], [5.0, 1.0]),
+    ("after EuclideanBall(3.0)", false, s -> s.u[end].cell.z[1:2], [8.0, 4.0]),
+    ("before far=EuclideanBall(2.0)", false, s -> s.u[end].cell.z[1:2], [5.0, 1.0]),
+    ("before EuclideanBall(2.0)", false, s -> s.u[end].cell.z[1:2], [5.0, 1.0]),
+    ("ode far=EuclideanBall(2.0)", false, s -> s.u[end].cell.w[1:2], [5.0, 1.0]),
+    ("ode EuclideanBall(2.0)", false, s -> s.u[end].cell.w[1:2], [5.0, 1.0]),
+    ("obs far=EuclideanBall(2.0)", false, s -> observe(s, :o)[end][1:2], [5, 1]),
+    ("obs EuclideanBall(2.0)", false, s -> observe(s, :o)[end][1:2], [5, 1]),
+    ("obs far=EuclideanBall(3.0)", false, s -> observe(s, :o)[end][1:2], [8, 4]),
 ]
 # the reach-1 controls: the same observables, other values
 const P60BA_REACH1 = [
@@ -284,14 +294,14 @@ const P60BA_REACH1 = [
 @testset "P6.0ba: controls — the hand counts and the reach of each spec" begin
     S = P60BA_SHAPES
     ap, to = p60ba_sigma(:apart), p60ba_sigma(:touch)
-    @test [p60ba_oracle(ap, (4, 4), w, S["Ball(2.0)"]) for w in 1:2] == [5, 1]
-    @test [p60ba_oracle(ap, (4, 4), w, S["Ball(3.0)"]) for w in 1:2] == [8, 4]
+    @test [p60ba_oracle(ap, (4, 4), w, S["EuclideanBall(2.0)"]) for w in 1:2] == [5, 1]
+    @test [p60ba_oracle(ap, (4, 4), w, S["EuclideanBall(3.0)"]) for w in 1:2] == [8, 4]
     @test [p60ba_oracle(ap, (4, 4), w, S["Moore(1)"]) for w in 1:2] == [3, 0]
-    @test [p60ba_oracle(ap, (5, 3), 2, S[k]) for k in ("Ball(2.0)", "Ball(3.0)", "Moore(1)")] == [4, 7, 3]
-    @test [sum(p60ba_oracle(to, (4, 4), w, S[k]) for w in 1:2) for k in ("Ball(2.0)", "Ball(3.0)", "Moore(1)")] == [8, 15, 5]
+    @test [p60ba_oracle(ap, (5, 3), 2, S[k]) for k in ("EuclideanBall(2.0)", "EuclideanBall(3.0)", "Moore(1)")] == [4, 7, 3]
+    @test [sum(p60ba_oracle(to, (4, 4), w, S[k]) for w in 1:2) for k in ("EuclideanBall(2.0)", "EuclideanBall(3.0)", "Moore(1)")] == [8, 15, 5]
     @test LinearIndices((12, 12))[4, 4] == 40 && LinearIndices((12, 12))[5, 3] == 29
     lat = p60ba_problem("divwhen Moore(1)").lattice
-    for (spec, k, r) in ((Ball(2.0), "Ball(2.0)", 2), (Ball(3.0), "Ball(3.0)", 3), (Moore(1), "Moore(1)", 1))
+    for (spec, k, r) in ((EuclideanBall(2.0), "EuclideanBall(2.0)", 2), (EuclideanBall(3.0), "EuclideanBall(3.0)", 3), (Moore(1), "Moore(1)", 1))
         rel = CorePotts.relation(spec, lat)
         @test length(rel) == count(S[k](dx, dy) for dx in -5:5, dy in -5:5 if (dx, dy) != (0, 0))
         @test CorePotts.radius(rel) == r
@@ -300,13 +310,13 @@ end
 
 @testset "P6.0ba: controls — the compiler declares the copy-step footprint only" begin
     # boundary-only fixtures: the relation is in the run context, the footprint stays 1
-    for label in ("divwhen far=Ball(2.0)", "divwhen Ball(2.0)", "obs Ball(2.0)", "link far=Ball(2.0)", "edge far=Ball(2.0)")
+    for label in ("divwhen far=EuclideanBall(2.0)", "divwhen EuclideanBall(2.0)", "obs EuclideanBall(2.0)", "link far=EuclideanBall(2.0)", "edge far=EuclideanBall(2.0)")
         p = p60ba_problem(label)
         @test p.f.footprint.read == 1
         @test maximum(r -> CorePotts.radius(r), values(p.relations)) == 2
     end
     # a copy-step read around the target: the compiler declares read = 2
-    for label in ("constraint far=Ball(2.0)", "constraint Ball(2.0)", "drive far=Ball(2.0)", "pin constraint Ball(2.0) + div Moore(1)")
+    for label in ("constraint far=EuclideanBall(2.0)", "constraint EuclideanBall(2.0)", "drive far=EuclideanBall(2.0)", "pin constraint EuclideanBall(2.0) + div Moore(1)")
         @test p60ba_problem(label).f.footprint.read == 2
     end
     # the reach-1 controls run under CheckerboardCPM on the base
@@ -333,11 +343,11 @@ end
         end
     end
     # several boundary sites reading one far relation
-    @testset "boundary all far=Ball(2.0)" begin
-        msg = p60ba_refusal("boundary all far=Ball(2.0)")
+    @testset "boundary all far=EuclideanBall(2.0)" begin
+        msg = p60ba_refusal("boundary all far=EuclideanBall(2.0)")
         @test msg === nothing
         if msg === nothing
-            sol = p60ba_solve("boundary all far=Ball(2.0)"; alg = CheckerboardCPM())
+            sol = p60ba_solve("boundary all far=EuclideanBall(2.0)"; alg = CheckerboardCPM())
             @test sol.u[end].cell.y[1:2] == [4.0, 5.0]                    # :touch, c1 5 → m 3; c2 3 → m 4
             @test first(p60ba_link_times(sol)) == 4                      # c1 + c2 = 8 → m 3
             @test sol.u[3].cell.z[1:2] == [5.0, 3.0]                     # t = 2, before any division
@@ -369,10 +379,10 @@ end
 # 2. A copy-step read still counts
 
 @testset "P6.0ba: a copy-step read beyond the footprint widens the spacing (D-271)" begin
-    for label in ("edge far=Ball(2.0)", "edge Ball(2.0)")
+    for label in ("edge far=EuclideanBall(2.0)", "edge EuclideanBall(2.0)")
         @testset "$label" begin
             p = p60ba_problem(label; links = true)
-            @test total_energy(p, p.u0) ≈ 2.4                            # the edge energy reads Ball(2.0): 0.1 · 8 · distance 3
+            @test total_energy(p, p.u0) ≈ 2.4                            # the edge energy reads EuclideanBall(2.0): 0.1 · 8 · distance 3
             @test p.f.footprint.read == 1                                # under-declared
             @test Symbol(solve(p, CheckerboardCPM()).retcode) === :Success
             @test p60ba_spacing(label; links = true) >= 2
@@ -380,7 +390,7 @@ end
         end
     end
     # copy-step reads the compiler declares (read = 2): accepted, as on the base
-    for label in ("constraint far=Ball(2.0)", "constraint Ball(2.0)", "drive far=Ball(2.0)")
+    for label in ("constraint far=EuclideanBall(2.0)", "constraint EuclideanBall(2.0)", "drive far=EuclideanBall(2.0)")
         @testset "$label" begin
             @test p60ba_refusal(label) === nothing
         end
@@ -391,7 +401,7 @@ end
 # 3. A relation read in the copy step and at the boundary still counts
 
 @testset "P6.0ba: a mixed copy-step and boundary read widens the spacing (D-271)" begin
-    for label in ("mixed far=Ball(2.0)", "mixed Ball(2.0)", "mixed after+edge far=Ball(2.0)")
+    for label in ("mixed far=EuclideanBall(2.0)", "mixed EuclideanBall(2.0)", "mixed after+edge far=EuclideanBall(2.0)")
         @testset "$label" begin
             p = p60ba_problem(label; links = true)
             @test length(p.relations) == 1                               # one relation, read at both
@@ -412,8 +422,10 @@ end
             @test f(sol) == expected
         end
     end
-    for label in ("edge far=Ball(2.0)", "edge Ball(2.0)", "mixed far=Ball(2.0)", "mixed Ball(2.0)",
-        "mixed after+edge far=Ball(2.0)", "constraint far=Ball(2.0)", "drive far=Ball(2.0)", "boundary all far=Ball(2.0)")
+    for label in (
+            "edge far=EuclideanBall(2.0)", "edge EuclideanBall(2.0)", "mixed far=EuclideanBall(2.0)", "mixed EuclideanBall(2.0)",
+            "mixed after+edge far=EuclideanBall(2.0)", "constraint far=EuclideanBall(2.0)", "drive far=EuclideanBall(2.0)", "boundary all far=EuclideanBall(2.0)",
+        )
         @testset "$label" begin
             @test Symbol(p60ba_solve(label; alg = SequentialCPM(), links = startswith(label, "mixed") || startswith(label, "edge")).retcode) === :Success
         end
@@ -424,14 +436,14 @@ end
 # 5. The copy-step trajectory of a model CheckerboardCPM already accepted is unchanged
 
 @testset "P6.0ba: CheckerboardCPM accepts a model SequentialCPM refuses (seed 1)" begin
-    for label in ("pin constraint Ball(2.0) + div Moore(1)", "pin drive far=Ball(2.0)", "divwhen Moore(1)")
+    for label in ("pin constraint EuclideanBall(2.0) + div Moore(1)", "pin drive far=EuclideanBall(2.0)", "divwhen Moore(1)")
         @testset "$label" begin
             @test p60ba_refusal(label) === nothing
         end
     end
     # the fixtures move: copies happen and, where ruled, divisions
-    s = p60ba_solve("pin constraint Ball(2.0) + div Moore(1)"; alg = CheckerboardCPM(), tspan = (0, 20))
-    @test s.u[end].σ != s.u[1].σ
+    s = p60ba_solve("pin constraint EuclideanBall(2.0) + div Moore(1)"; alg = CheckerboardCPM(), tspan = (0, 20))
+    @test s.u[end].ownership != s.u[1].ownership
     @test s.stats.lifecycle.divisions >= 1
-    @test p60ba_solve("pin drive far=Ball(2.0)"; alg = CheckerboardCPM(), tspan = (0, 20)).u[end].σ != p60ba_sigma(:touch)
+    @test p60ba_solve("pin drive far=EuclideanBall(2.0)"; alg = CheckerboardCPM(), tspan = (0, 20)).u[end].ownership != p60ba_sigma(:touch)
 end

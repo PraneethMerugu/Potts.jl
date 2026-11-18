@@ -39,7 +39,7 @@ A class goes wherever a list of kinds does, alone or mixed with kinds:
 @energy begin
     cells(endothelial) => 2.0 * (volume - 16)^2
     Surface(ecm; target = 40.0, strength = 0.1)
-    contacts => J[kind, kind′] + 3.0 * (kind ∈ endothelial) * (kind′ ∈ ecm)
+    contacts => J[kind, neighbor_kind] + 3.0 * (kind ∈ endothelial) * (neighbor_kind ∈ ecm)
 end
 @drive Chemotaxis(V; strength = 1.5, kinds = endothelial)
 @constraint connectivity(endothelial)
@@ -47,7 +47,7 @@ end
 @divide cells(endothelial) when = volume >= 30
 ```
 
-`kind[x] ∈ g` tests membership of a symbolic kind (`kind`, `kind′`, `kind[new]`,
+`kind[x] ∈ g` tests membership of a symbolic kind (`kind`, `neighbor_kind`, `kind[new]`,
 `kind[old]`, `kind[c]`, `kind[n]`), and `kind[x] ∉ g` its negation. In `@equations` (cell
 and model equations, which are ModelingToolkit equations) and in a binding of `@fields`, write
 the term `ismember(kind, g)` instead; there `∈` is an error that shows this form, because
@@ -63,8 +63,8 @@ Some things a class is not:
   (`kind => [:tip, :stalk]`, `Tiling(…; kinds = [:tip])`, `InsertUntil(:tip; into =
   [:stalk])`), never a class name. `kind == endothelial` is an error too: write
   `kind ∈ endothelial`.
-- **Not an index.** Kind tables are indexed by kind (`J[kind, kind′]`); `J[endothelial,
-  kind′]` is an error. Gate the term instead: `J[kind, kind′] * (kind ∈ endothelial)`.
+- **Not an index.** Kind tables are indexed by kind (`J[kind, neighbor_kind]`); `J[endothelial,
+  neighbor_kind]` is an error. Gate the term instead: `J[kind, neighbor_kind] * (kind ∈ endothelial)`.
 - **Not the medium.** The medium is not a cell kind and cannot be a member; write
   `kind[x] == medium || kind[x] ∈ g`.
 
@@ -81,6 +81,7 @@ neighbors. Use it for walls, obstacles and substrates. The medium cannot be froz
 
 ```@example kinds
 using Potts, MakiePotts, CairoMakie
+using Potts.Layouts
 CairoMakie.activate!(type = "png") # hide
 
 @potts_model Obstacles begin

@@ -51,7 +51,7 @@ using Test, Potts, PottsModels
     @lattice Lattice((12, 12); neighborhood = VonNeumann(1))
     @energy begin
         cells(A, B) => λ * (volume - V₀[kind])^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = 10.0)
 end
@@ -67,7 +67,7 @@ end
     @lattice Lattice((12, 12); neighborhood = VonNeumann(1))
     @energy begin
         cells(A, B) => λ * (volume - V₀[kind])^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = 10.0)
 end
@@ -81,7 +81,7 @@ end
         J[kind, kind] = [0 Jx Jy; Jx 2 11; Jx 11 14]
     end
     @lattice Lattice((12, 12); neighborhood = VonNeumann(1))
-    @energy contacts => J[kind, kind′]
+    @energy contacts => J[kind, neighbor_kind]
     @sweep Metropolis(; temperature = 10.0)
 end
 
@@ -112,7 +112,7 @@ p60ab_J(x) = [0 x x; x 2 x-5; x x-5 14]
     @test total_energy(lit) == total_energy(prob)
     s1 = solve(prob, SequentialCPM())
     s2 = solve(lit, SequentialCPM())
-    @test s1.u[end].σ == s2.u[end].σ
+        @test s1.u[end].ownership == s2.u[end].ownership
     @test total_energy(prob, s1.u[end]) == total_energy(lit, s2.u[end])
 
     # remake with new inputs re-derives both tables (as `V_big = 2A₀` does)

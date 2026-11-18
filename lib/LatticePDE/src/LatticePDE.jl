@@ -31,12 +31,12 @@ using LatticeFields.IR: F16, Grid, Program, ProgramBuilder, Coef, FaceRule, Node
 using CommonSolve: solve, init, step!, solve!
 using KernelAbstractions: KernelAbstractions
 using LatticeFields: Exec, Problems
-using LatticeFields.Solvers: DevicePCG, DeviceGMRES, Multigrid, V
+using LatticeFields.Solvers: DevicePCG, DeviceGMRES, Multigrid, VCycle
 using LatticeFields.Compile: CompileOptions, fingerprint_text, fuse_update, promote_dual, primal
 using LatticeFields.IR: fieldid, RESOLVE, degenerate, leveldims, sitecoefs
 using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
                               ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, RT_DT,
-                              substep_counts, steady_fields, field_series, jacobian_sparsity, LatticeMG, LatticePCG,
+    substep_counts, steady_fields, field_series, field_jacobian_sparsity, LatticeMultigrid, LatticePCG,
                               field_report
 using ModelingToolkitBase: ModelingToolkitBase, PDESystem, Pre, ShiftIndex, Shift, Hold, Sample
 using SciMLBase: AbstractDiscretization, NullParameters, remake
@@ -46,32 +46,42 @@ using Symbolics: Symbolics, Differential, Equation, Num, VarDomainPairing, @regi
                  unwrap, substitute
 using SymbolicUtils: SymbolicUtils, arguments, iscall, operation, unwrap_const
 using SymbolicUtils.Code: toexpr
+using TermInterface: TermInterface
 
-public pdesystem, pdesystem_refusal, is_crossgrid_key, operand_reads, LatticeCutField, euler_update, bound_parts, StabilityBound, lower_group, DeferredBound, DeferredOperator, OPERATOR_BUILDS, resolve_bound, lowers_call, check_one_kind, velocity_terms, as_written,
-       derivation, V, steady_rows, steady_form, steady_choice, steady_sign
-export Δ, DivKGrad, Advect, AdvectionScheme, Upwind1, at, at2, ismember, masked, step_index
-export LatticePlacement, LatticeStorage, LatticeLevel, Coarse, LatticeSpacing, PottsEntity, LatticeInputName
+public Δ, pdesystem, pdesystem_refusal, is_crossgrid_key, operand_reads, LatticeCutField, euler_update, bound_parts, StabilityBound, lower_group, DeferredBound, DeferredOperator, OPERATOR_BUILDS, resolve_bound, lowers_call, check_one_kind, velocity_terms, as_written,
+    derivation, VCycle, steady_rows, steady_form, steady_choice, steady_sign
+export laplacian, DivKGrad, Advect, AbstractAdvectionScheme, Upwind1, value_at, ismember, masked, step_index
+export LatticePlacement, LatticeStorage, LatticeLevel, Coarse, LatticeSpacing, LatticeInputName
 export get_lattice_placement, get_lattice_storage, get_lattice_level, get_lattice_spacing,
-       get_potts_entity, get_lattice_input_name
+    get_lattice_input_name
 export vocabulary_issues, check_vocabulary
 export LatticeDiscretization, FiniteVolume, CompiledField, discretize, symbolic_discretize,
        parse_bcs, linearity, Grid, HEX, Interval, lattice_domain
 export ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, solve, init, step!, solve!, stability_bound,
        substep_counts, steady_fields, field_series, field_report
-export DevicePCG, DeviceGMRES, Multigrid    # the inner solvers (`inner = …`); `V` is public
-export jacobian_sparsity, LatticeMG, LatticePCG   # the Jacobian's pattern, the preconditioner and the linear solver of SciML's implicit solvers (F4-07, F4-08)
+export DevicePCG, DeviceGMRES, Multigrid    # the linear solvers (`linsolve = …`); `VCycle` is public
+export field_jacobian_sparsity, LatticeMultigrid, LatticePCG   # the Jacobian's pattern, the preconditioner and the linear solver of SciML's implicit solvers (F4-07, F4-08)
 export remake, getp, getu, setp            # the routes its messages give (SciMLBase, SymbolicIndexingInterface)
 
 # ---------------------------------------------------------------------------------------
 # Field operators: opaque terms, lowered by the discretizer and never evaluated here
 
 """
-`Δ(c)`: the lattice Laplacian of field `c` (zero flux at closed boundaries). In the
-finite-volume lowering it is `DivKGrad` with `K ≡ 1`.
+    laplacian(c)
+
+The lattice Laplacian of field `c` (zero flux at closed boundaries). In the finite-volume
+lowering it is `DivKGrad` with `K ≡ 1`. `Δ` is the same function, for equations written in
+mathematical notation (public, not exported).
 """
-function Δ end
-Δ(x) = error("`Δ` is symbolic-only: apply it inside a `PDESystem` equation and discretize with `LatticePDE.discretize`")
-@register_symbolic Δ(x)
+function laplacian end
+laplacian(x) = error("`laplacian` is symbolic-only: apply it inside a `PDESystem` equation and discretize with `LatticePDE.discretize`")
+@register_symbolic laplacian(x)
+"""
+    Δ
+
+The same function as [`laplacian`](@ref): `Δ(c) === laplacian(c)`.
+"""
+const Δ = laplacian
 
 const FACE_MEANS = (:harmonic, :arithmetic)
 
@@ -95,17 +105,17 @@ end
 @register_symbolic (op::DivKGrad)(K, c)
 
 """Discretization scheme of an [`Advect`](@ref) term."""
-abstract type AdvectionScheme end
+abstract type AbstractAdvectionScheme end
 """`Upwind1()`: first-order upwind advection."""
-struct Upwind1 <: AdvectionScheme end
+struct Upwind1 <: AbstractAdvectionScheme end
 
 """
     Advect(scheme)
 
 `Advect(scheme)(u, c)` is the advection term of field `c` by velocity `u` (a velocity
-component, or the velocity array). `scheme` is an [`AdvectionScheme`](@ref).
+component, or the velocity array). `scheme` is an [`AbstractAdvectionScheme`](@ref).
 """
-struct Advect{S <: AdvectionScheme}
+struct Advect{S <: AbstractAdvectionScheme}
     scheme::S
 end
 (op::Advect)(u, c) = error("`Advect` is symbolic-only: apply it inside a `PDESystem` equation and discretize with `LatticePDE.discretize`")
@@ -119,8 +129,11 @@ end
 # evaluate (a kind arrives as a Real after `mtkcompile(; inputs)`)
 
 """
-`at(T, k)`: entry `k` of the kind table `T` (`at(Dk, kindₛ)`), or the value of `c` at an
-explicit site or cell `s` (`at(c, target)`). Never index an array parameter with a symbolic
+    value_at(T, k)
+    value_at(J, a, b)
+
+`value_at(T, k)`: entry `k` of the kind table `T` (`value_at(Dk, kindₛ)`), or the value of `c` at an
+explicit site or cell `s` (`value_at(c, target)`). Never index an array parameter with a symbolic
 input (`Dk[kindₛ]`): `mtkcompile(; inputs)` then keeps the input as an unknown.
 
 A table read follows the lattice kernel: index 0 reads 0 (an input value 0 reads no entry),
@@ -131,38 +144,37 @@ interval of the index expression over the declared bounds of its inputs
 input the host writes (`discretize(…; inputs)`, `remake(prob; inputs)`, `integ[k] = K`),
 over its current values. Index 0 is evaluated only when that interval holds 0.
 
-With two or more integer inputs (for example the two kinds of [`at2`](@ref)),
+`value_at(J, a, b)`: entry `(a, b)` of the pair table `J` (`value_at(J, kindₛ, kindₛ′)`). It reads
+as the two-argument form does along each axis: index 0 in either argument reads 0, and each
+index is clamped into its axis (`1:size(J, 1)`, `1:size(J, 2)`).
+
+With two or more integer inputs (for example the two kinds of a pair table read),
 `mtkcompile(sys; inputs = [a, b])` can fail with `AssertionError: last_idx <= idx` in
 ModelingToolkitBase `complete` (FR-36, MTKBase 1.77): it requires the inputs in its own
 parameter order, which is hash order and so depends on the names and the machine. Give the
 inputs in the reverse order (`inputs = [b, a]`).
 """
-at(T::AbstractArray{<:Union{Integer, AbstractFloat}}, k::Union{Integer, AbstractFloat}) =
+value_at(T::AbstractArray{<:Union{Integer, AbstractFloat}}, k::Union{Integer, AbstractFloat}) =
     k == 0 ? zero(eltype(T)) : T[clamp(Int(k), 1, length(T))]
 # One registration for the table and the site forms (see `Advect`). The index is any `Real`
 # term: a kind or a cell id may be a `Real`-typed input (a CPM built-in), and an integer
-# literal reads that entry (`at(Dk, 2)`; `at(Dk, 0)` reads 0, as in the kernel).
-@register_symbolic at(T::Union{Real, AbstractVector}, k::Real)
+# literal reads that entry (`value_at(Dk, 2)`; `value_at(Dk, 0)` reads 0, as in the kernel).
+@register_symbolic value_at(T::Union{Real, AbstractVector}, k::Real)
 # literal indices into symbolic tables and site values (the registration covers a symbolic
 # index only)
-at(T::Union{Num, Symbolics.Arr}, k::Union{Integer, AbstractFloat}) = at(T, Num(k))
+value_at(T::Union{Num, Symbolics.Arr}, k::Union{Integer, AbstractFloat}) = value_at(T, Num(k))
 
-"""
-`at2(J, a, b)`: entry `(a, b)` of the pair table `J` (`at2(J, kindₛ, kindₛ′)`). It reads as
-[`at`](@ref) does along each axis: index 0 in either argument reads 0, and each index is
-clamped into its axis (`1:size(J, 1)`, `1:size(J, 2)`).
-
-The two kinds are two integer inputs, so `mtkcompile(sys; inputs = [kindₛ, kindₛ′])` can
-fail with `AssertionError: last_idx <= idx` (FR-36, see [`at`](@ref)); then give
-`inputs = [kindₛ′, kindₛ]`.
-"""
-at2(T::AbstractArray{<:Union{Integer, AbstractFloat}}, k::Union{Integer, AbstractFloat}, kp::Union{Integer, AbstractFloat}) =
+# the pair table form
+value_at(T::AbstractArray{<:Union{Integer, AbstractFloat}}, k::Union{Integer, AbstractFloat}, kp::Union{Integer, AbstractFloat}) =
     k == 0 || kp == 0 ? zero(eltype(T)) : T[clamp(Int(k), 1, size(T, 1)), clamp(Int(kp), 1, size(T, 2))]
-@register_symbolic at2(T::AbstractMatrix, k::Real, kp::Real)
-at2(T::Symbolics.Arr, k::Union{Integer, AbstractFloat}, kp::Union{Integer, AbstractFloat}) = at2(T, Num(k), Num(kp))
+# (`false`: the first registration's shape rule covers every arity; a second would overwrite
+# it, so the result type of this arity is declared here)
+@register_symbolic value_at(T::AbstractMatrix, k::Real, kp::Real) false
+SymbolicUtils.promote_symtype(::typeof(value_at), ::Type, ::Type, ::Type) = Real
+value_at(T::Symbolics.Arr, k::Union{Integer, AbstractFloat}, kp::Union{Integer, AbstractFloat}) = value_at(T, Num(k), Num(kp))
 
-# unit inference (MTK `get_unit`): a read has the unit of what it reads, `Δ(c)` that of `c`
-ModelingToolkitBase.get_unit(::Union{typeof(at), typeof(at2), typeof(Δ)}, args) = ModelingToolkitBase.get_unit(args[1])
+# unit inference (MTK `get_unit`): a read has the unit of what it reads, `laplacian(c)` that of `c`
+ModelingToolkitBase.get_unit(::Union{typeof(value_at), typeof(laplacian)}, args) = ModelingToolkitBase.get_unit(args[1])
 
 """
 `ismember(k, s)`: whether the integer `k` (a kind) is one of the tuple `s` of integer
@@ -193,7 +205,7 @@ span; a Potts model's `mcs` is the absolute MCS number instead: a span `(2, 5)` 
 first). The owned steppers keep `k` as an integer and never step
 across a clock boundary, so `k` does not depend on `dt` or on the save times. A gate such as
 `ifelse(step_index(t) >= 3, a, b)` is bounded through both arms; a factor that reads it
-(`(1 + ε * step_index(t)) * Δ(c)`) is a term the stability bound cannot see (give
+(`(1 + ε * step_index(t)) * laplacian(c)`) is a term the stability bound cannot see (give
 `ExplicitEuler(; substeps = n)`). Refused without a declared clock. An OrdinaryDiffEq solver
 lands on every boundary of the clock (a `tstop` at each, where the step index changes).
 
@@ -202,7 +214,7 @@ lands on every boundary of the clock (a `tstop` at each, where the step index ch
 @variables c(..)
 eqs = [D(c(t, x, y)) ~ -c(t, x, y) + 0.1 * step_index(t)]
 prob = discretize(sys, LatticeDiscretization(Grid((16, 16)); clock = 1.0))   # `sys`: a PDESystem of `eqs`
-sol = solve(prob, ExplicitEuler(; dt = 0.25))       # 4 windows per step index
+sol = solve(prob, ExplicitEuler(); dt = 0.25)       # 4 windows per step index
 ```
 """
 step_index(t::Real) = throw(ArgumentError("`step_index(t)` is the step index of a discretization's clock: it has a " *
@@ -216,22 +228,22 @@ step_index(t::Real) = throw(ArgumentError("`step_index(t)` is the step index of 
 _no_derivative(op) = throw(ArgumentError("LatticePDE operators are opaque to symbolic differentiation; " *
                                          "`$op` has no derivative rule (differentiate the field before applying " *
                                          "the operator, or keep the derivative outside it)"))
-Symbolics.@register_derivative Δ(x) I _no_derivative(Δ)
+Symbolics.@register_derivative laplacian(x) I _no_derivative(laplacian)
 Symbolics.@register_derivative (op::DivKGrad)(K, c) I _no_derivative(op)
 Symbolics.@register_derivative (op::Advect)(u, c) I _no_derivative(op)
-Symbolics.@register_derivative at(T, k) I _no_derivative(at)
-Symbolics.@register_derivative at2(T, k, kp) I _no_derivative(at2)
+Symbolics.@register_derivative value_at(T, k) I _no_derivative(value_at)
+Symbolics.@register_derivative value_at(T, k, kp) I _no_derivative(value_at)
 Symbolics.@register_derivative ismember(k, s) I _no_derivative(ismember)
 Symbolics.@register_derivative masked(p, v) I _no_derivative(masked)
 Symbolics.@register_derivative step_index(t) I _no_derivative(step_index)
 
 # the registered operators of this vocabulary (the scans check their arguments)
-_isvocabulary(f) = f === Δ || f isa DivKGrad || f isa Advect || f === at || f === at2 || f === ismember ||
+_isvocabulary(f) = f === laplacian || f isa DivKGrad || f isa Advect || f === value_at || f === ismember ||
                    f === masked
 
 # ---------------------------------------------------------------------------------------
 # Metadata keys (`@variables c(..) [lattice_placement = …]`). MTK's own `tunable` is reused;
-# these are ours, so they carry the `lattice_` and `potts_` prefixes.
+# these are ours, so they carry the `lattice_` prefix.
 
 """Metadata key `lattice_placement`: where a field's values live on the lattice."""
 struct LatticePlacement end
@@ -254,10 +266,10 @@ inputs, a field of the lattice) are folded over each node's block:
     replaced by its mean over the block, with the fine reads at each site of the block. A sum
     is folded per term, and the factors of a product that read no fine field stay outside. The
     coarse field then receives the fine integral of the term: `max(g - gT, 0)`, `g / (K + g)`,
-    `at(S, kind) * g`, `kind == P` and `at(R, kind)` are restricted exactly. A condition used as
+    `value_at(S, kind) * g`, `kind == P` and `value_at(R, kind)` are restricted exactly. A condition used as
     a number (in a sum, a product, a coefficient, the right side itself) is a 0/1 value and
     folds by its mean: on a block a quarter of whose sites are of kind P, `kind == P` is 0.25,
-    so `(kind == P) + 0.5 (kind == Q)` and `at(R, kind)` agree, and `kind == 0` and `kind != 0`
+    so `(kind == P) + 0.5 (kind == Q)` and `value_at(R, kind)` agree, and `kind == 0` and `kind != 0`
     sum to 1. A spatial operator of the coarse field is not folded; its coefficient is, at
     each face (at a face of the box, the node's own block). A fine coefficient is the
     arithmetic mean of its fine values over the block, not a homogenized coefficient (the
@@ -274,8 +286,8 @@ inputs, a field of the lattice) are folded over each node's block:
 
 A term of a fine
 field that reads a coarse one reads the node whose block holds the site. A spatial operator
-(`Δ`, `DivKGrad`, `Advect`, a raw flux `Dx(K * Dx(c))`) acts on its operand's own grid. In a row of
-another grid it is an aux field of the operand's grid that LatticePDE adds (named `Δ(c)`), and the row
+(`laplacian`, `DivKGrad`, `Advect`, a raw flux `Dx(K * Dx(c))`) acts on its operand's own grid. In a row of
+another grid it is an aux field of the operand's grid that LatticePDE adds (named `laplacian(c)`), and the row
 reads it as it reads any field of that grid. The Laplacian of a coarse field in a fine row
 is the coarse Laplacian at the node of the site's block. The Laplacian of a fine field in a coarse
 row is the block mean of the fine Laplacian: the net flux through the faces of the block over its
@@ -301,11 +313,6 @@ grid; the tag, not the name, marks it.
 """
 struct LatticeSpacing end
 """
-Metadata key `potts_entity`: what a coupling input of a field system reads from the CPM
-(`kindₛ(t, x, y)::Int32 [input = true, potts_entity = …]`).
-"""
-struct PottsEntity end
-"""
 Metadata key `lattice_input_name`: the name a user gives an input field by
 (`kind__in(t, x, y)::Int32 [input = true, lattice_input_name = "kind"]`). `discretize(…;
 inputs = [:kind => K])` takes it as well as the variable, and messages print it; a front end
@@ -324,7 +331,6 @@ Symbolics.option_to_metadata_type(::Val{:lattice_placement}) = LatticePlacement
 Symbolics.option_to_metadata_type(::Val{:lattice_storage}) = LatticeStorage
 Symbolics.option_to_metadata_type(::Val{:lattice_level}) = LatticeLevel
 Symbolics.option_to_metadata_type(::Val{:lattice_spacing}) = LatticeSpacing
-Symbolics.option_to_metadata_type(::Val{:potts_entity}) = PottsEntity
 Symbolics.option_to_metadata_type(::Val{:lattice_input_name}) = LatticeInputName
 
 _meta(x, key) = Symbolics.getmetadata(Symbolics.unwrap(x), key, nothing)
@@ -336,8 +342,6 @@ get_lattice_storage(x) = _meta(x, LatticeStorage)
 get_lattice_level(x) = _meta(x, LatticeLevel)
 """`get_lattice_spacing(x)`: the axis of the spacing parameter `x`, or `nothing`."""
 get_lattice_spacing(x) = _meta(x, LatticeSpacing)
-"""`get_potts_entity(x)`: the `potts_entity` of `x`, or `nothing`."""
-get_potts_entity(x) = _meta(x, PottsEntity)
 """`get_lattice_input_name(x)`: the `lattice_input_name` of the input `x` (or of its operation), or `nothing`."""
 function get_lattice_input_name(x)
     n = _meta(x, LatticeInputName)

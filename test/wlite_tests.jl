@@ -254,7 +254,7 @@ end
         @test cw isa CompiledPottsSystem
         σ = zeros(Int32, 8, 8); σ[3:5, 3:5] .= 1
         prob = PottsProblem(
-            cw, [ownership => σ, kind => [1]], (0, 2); ode_solver = RK4(substeps = 4),
+            cw, [ownership => σ, kind => [1]], (0, 2); ode_solver = Potts.RK4(substeps = 4),
             field_solver = ExplicitEuler()
         )
         @test :inner in propertynames(prob.u0.model) && :fields₊yd in propertynames(prob.u0.model) && :part in propertynames(prob.p)

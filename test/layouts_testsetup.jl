@@ -2,6 +2,7 @@
 
 @testsetup module LayoutsSetup
 using Potts, Test
+using Potts.Layouts
 using Potts: CorePotts
 isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "devices.jl"))
 using PottsModels: akeeb_state
@@ -34,7 +35,7 @@ _separated(σ, gap) = (
     @lattice Lattice((18, 14); boundary = Closed(), geometry = Hexagonal(), neighborhood = Hex(1))
     @energy begin
         cells(cell) => (volume - 9)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = 4.0)
 end
@@ -74,7 +75,7 @@ end
     @lattice Lattice((24, 24); boundary = Closed(), domain = x -> (x[1] - 12.5)^2 + (x[2] - 12.5)^2 <= 10.5^2)
     @energy begin
         cells(cell) => (volume - 9)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = 4.0)
 end
@@ -88,7 +89,7 @@ end
     @lattice Lattice((24, 24); boundary = Closed(), domain = x -> (x[1] - 12.5)^2 + (x[2] - 12.5)^2 <= 10.5^2)
     @energy begin
         cells(cell) => (volume - 9)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = 4.0)
 end
@@ -164,7 +165,7 @@ _warnings(f) = [r.message for r in Test.collect_test_logs(f; min_level = Base.Co
     @energy begin
         cells(host) => (volume - 16)^2
         cells(guest) => (volume - 4)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = 4.0)
 end

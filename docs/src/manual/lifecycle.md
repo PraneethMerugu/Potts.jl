@@ -11,7 +11,7 @@ x => rule, …`:
 | `Every(n)` or `every = n` | check the rule only at MCS where `mcs % n == 0` (default: every MCS) |
 | `when` | a cell-scope condition: `volume`, cell variables, component variables, `mcs`, `rand()` |
 | `along` | the division plane: `RandomPlane()` (uniformly random), `principal_axis()` (across the long axis, the default), `major_axis()`, `minor_axis()` (the same plane as `principal_axis()`), or a fixed normal `(1.0, 0.0)` |
-| `x => value` | set `x` in both daughters (an expression of the parent's state); a value that draws (`rand()`, `randn()`, `randn(μ, σ; lower)`) is drawn separately for each daughter |
+| `x => value` | set `x` in both daughters (an expression of the parent's state); a value that draws (`rand()`, `randn()`, `randn(μ, σ; lower_bound)`) is drawn separately for each daughter |
 | `x => Split()` | halve the parent's `x` between the daughters |
 
 Rules run at the end of the MCS. The daughter takes a new cell number and its sites are
@@ -23,6 +23,7 @@ so.
 
 ```@example lifecycle
 using Potts
+using Potts.Layouts
 
 @potts_model Divider begin
     @kinds medium cell
@@ -34,7 +35,7 @@ using Potts
     @lattice Lattice((40, 40); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         cells(cell) => 2.0 * (volume - V₀ * (1 + clock / 50))^2
-        contacts => 8.0 * (kind != kind′)
+        contacts => 8.0 * (kind != neighbor_kind)
     end
     @after_mcs clock += 1
     @divide cells(cell) Every(5) when = (clock >= 50) && (rand() < 0.5), along = principal_axis(),
@@ -52,7 +53,7 @@ alive = sol[:volume][end] .> 0
 The total mass stays 4: `Split()` conserves it.
 
 A rule whose value draws gives each daughter its own draw: with
-`@divide cells(cell) when = volume >= X * A₀, along = RandomPlane(), X => randn(2.0, 0.4; lower = 0.0)`
+`@divide cells(cell) when = volume >= X * A₀, along = RandomPlane(), X => randn(2.0, 0.4; lower_bound = 0.0)`
 both daughters of a division draw a new size threshold `X` from a normal distribution
 truncated at 0 (the parent's draw is keyed by its cell number, the daughter's by hers). A
 rule without a draw sets the same value in both.
@@ -79,7 +80,7 @@ rule that empties the cell. The usual way is to set its target volume to zero:
     @lattice Lattice((40, 40); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         cells(cell) => 2.0 * (volume - V_target)^2
-        contacts => 8.0 * (kind != kind′)
+        contacts => 8.0 * (kind != neighbor_kind)
     end
     @after_mcs begin
         doomed ~ ifelse((Pre(doomed) > 0) || ((mcs == 20) && (id <= 2)), 1.0, 0.0)

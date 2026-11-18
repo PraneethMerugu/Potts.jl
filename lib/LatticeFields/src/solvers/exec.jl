@@ -4,10 +4,10 @@
 # workgroup launches through `Schedule.host_workgroups!` or `Schedule.workgroups!`.
 
 alloc(b::KA.Backend, ::Type{T}, n) where {T} = fill!(KA.allocate(b, T, max(n, 1)), zero(T))
-fetch(b::KA.Backend, A) = Exec.ishost(b) ? copy(A) : (KA.synchronize(b); Array(A))
+to_host(b::KA.Backend, A) = Exec.ishost(b) ? copy(A) : (KA.synchronize(b); Array(A))
 
 # capability, not policy (P5 C2-1): a Float64 solver group runs where the hardware has
-# Float64 (ROCm, CUDA, the host), so `solver_T = :auto` keeps its Float64 path on ROCm
+# Float64 (ROCm, CUDA, the host), so `solver_type = :auto` keeps its Float64 path on ROCm
 Schedule.supports(b::KA.Backend, ::Type{S}) where {S} = Exec.supports(b, S)
 
 _solver_site!(i, body::F, S, P, G) where {F} = (body(oftype(G.n, i), S, P, G); nothing)

@@ -44,7 +44,7 @@
 # amplification check, and (M), (K), (C) are checked on n.
 #
 # Testsets:
-#  1. Pure diffusion (`D(c) ~ Dc Δ(c)`, no reaction term), 1D/2D/3D periodic square lattices,
+#  1. Pure diffusion (`D(c) ~ Dc laplacian(c)`, no reaction term), 1D/2D/3D periodic square lattices,
 #     spacing h ∈ {1, 0.5}, dt ∈ {1, 0.5, 2} (mcs_duration), D over a grid that hits today's
 #     edge (dt·D·Σ2/h² whole) and points between: (M) and (C). Fails today at every edge
 #     point (ρ = 2).
@@ -62,7 +62,7 @@
 #     reference to 1e-13 (which pins n without depending on operand order). Fingerprints are
 #     NOT pinned: they hash the generated substep function, which the fix rewrites.
 #  4. Merks (`MerksVasculogenesis`) with its recommended `ExplicitEuler(substeps = 15,
-#     lower = 0.0)`, zero cells (all matrix, so decay δc everywhere and no secretion), closed
+#     lower_bound = 0.0)`, zero cells (all matrix, so decay δc everywhere and no secretion), closed
 #     (zero-flux) boundary: values after 3 MCS bitwise as recorded, plus the FTCS reference
 #     with 15 substeps. (15 ≥ (C)'s cap ceil(0.75·8 + 0.0054) = 7, so any compliant fix
 #     keeps 15.)
@@ -83,7 +83,7 @@ function p60y_field_pde(dims, h, reaction)
     Potts.ModelingToolkitBase.@variables c(..) medium(..)::Bool [input = true]
     xs = (x, y, z)[1:length(dims)]
     C, M = c(t, xs...), medium(t, xs...)
-    rate = reaction === :uniform ? Dc * L.Δ(C) - k * C : reaction === :offcell ? Dc * L.Δ(C) - k * C * M : Dc * L.Δ(C)
+    rate = reaction === :uniform ? Dc * L.laplacian(C) - k * C : reaction === :offcell ? Dc * L.laplacian(C) - k * C * M : Dc * L.laplacian(C)
     return Potts.ModelingToolkitBase.PDESystem([Potts.D(C) ~ rate], [c(0, xs...) ~ 0.0],
         L.lattice_domain(t, xs, dims; spacing = h), [t, xs...], reaction === :offcell ? [C, M] : [C], [Dc, k];
         name = :p60y_field)
@@ -250,13 +250,13 @@ const p60y_EXPLICIT = [(0.1, 0.1, 3), (0.1, 0.1, 5), (0.5, 0.2, 6)]
     end
 end
 
-@testset "P6.0y: Merks with ExplicitEuler(substeps = 15, lower = 0.0) matches the FTCS oracle" begin
+@testset "P6.0y: Merks with ExplicitEuler(substeps = 15, lower_bound = 0.0) matches the FTCS oracle" begin
     N = 8
     sys = MerksVasculogenesis(; name = :m, lattice = (N, N))
     v(m, x) = cos(π * m * (x - 0.5) / N)                   # zero-flux eigenvectors
     c0 = [1.0 + 0.4 * v(N - 1, x) * v(N - 1, y) + 0.3 * v(1, x) + 0.05 * sin(1.3x + 0.7y^2) for x in 1:N, y in 1:N]
     op = [ownership => zeros(Int32, N, N), kind => Symbol[], :c => c0]
-    prob = PottsProblem(sys, op, (0, 3); field_solver = p60y_EE(substeps = 15, lower = 0.0))
+    prob = PottsProblem(sys, op, (0, 3); field_solver = p60y_EE(substeps = 15, lower_bound = 0.0))
     c = Array(solve(prob, SequentialCPM(); saveat = 1).u[end].site.c)
     @test c ≈ p60y_ftcs(c0, 0.75, 5.4e-3, 1.0, 1.0, 15, 3; periodic = false, lower = 0.0) rtol = 1e-13
 end

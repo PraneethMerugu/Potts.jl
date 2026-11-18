@@ -42,7 +42,7 @@ activity_key = SiteChannelKey(:activity, Float32)
 frame = renderframe(solution;
     channels=(RenderChannel(activity_key, activity; label="Activity"),))
 
-encoded = encode(frame, ChannelEncoding(activity_key))
+encoded = encode_frame(frame, ChannelEncoding(activity_key))
 figure, axis, plot = CairoMakie.plot(
     frame; encoding=ChannelEncoding(activity_key),
 )

@@ -115,7 +115,7 @@ function p65bo_own_src(name, schedule)
         :(@lattice Lattice((24, 24); boundary = Closed(), neighborhood = Moore(1))),
         :(@energy begin
             cells => (volume - V_target)^2 + 0.1 * surface
-            contacts => ifelse(cluster[owner] == cluster[owner′], 1.0, 3.0)
+                contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 1.0, 3.0)
         end),
         :(@constraint mobile > 0.5),
         :(@on_copy act[target] ~ 5.0),
@@ -175,7 +175,7 @@ end
     @lattice Lattice((24, 24); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         cells => (volume - 16)^2
-        contacts => ifelse(cluster[owner] == cluster[owner′], 1.0, 3.0)
+        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 1.0, 3.0)
     end
     @constraint mobile > 0.5
     @divide clusters(cyto) when = volume >= 100000, along = (0.0, 1.0)     # never fires (it builds the cluster machinery)
@@ -264,7 +264,7 @@ end
     roots = unique(cl[a])
     @test length(roots) == 2
     @test all(r -> sort(kd[filter(c -> cl[c] == r, a)]) == [1, 2, 3], roots)
-    @test p65bo_col(u, :cluster_volume) == CorePotts.recompute_cluster_volume(Array(u.σ), cl)
+    @test p65bo_col(u, :cluster_volume) == CorePotts.recompute_cluster_volume(Array(u.ownership), cl)
     # reversed: the cluster divides first; then each half converts its own 4 candidates
     probl = p65bo_own_problem(:P65boOwnLate)
     w = solve(probl, alg).u[end]
@@ -288,7 +288,7 @@ end
                                                                                                                      (:P65boOwn, :P65boOwnLate)
     prob = p65bo_own_problem(name)
     u = solve(prob, SequentialCPM()).u[end]
-    σ0, σ1 = p65bo_sigma(), Array(u.σ)
+    σ0, σ1 = p65bo_sigma(), Array(u.ownership)
     changed = σ0 .!= σ1
     # fixture: the 8 conversions, the daughter cytoplasm's 26 and nucleus's 2 (either order:
     # default, the lamellipodium's daughter half is among the 8; reversed, the daughter
@@ -313,7 +313,7 @@ end
     # and frozen with no event: nothing changes, nothing is cleared
     prob0 = p65bo_own_problem(; dv = 0.0, c = 0.0)
     u0 = solve(prob0, SequentialCPM()).u[end]
-    @test Array(u0.σ) == p65bo_sigma()
+    @test Array(u0.ownership) == p65bo_sigma()
     @test all(==(7.0), Array(u0.site.act))
 end
 
@@ -364,7 +364,7 @@ end
     u = sol.u[end]
     @test sol.stats.lifecycle.removals == 1 && sol.stats.lifecycle.divisions == 1
     @test p65bo_vol(u)[2] == 0                                   # removed, not divided
-    @test all(==(0), Array(u.σ)[8:9, 8:9])                       # its sites went to the medium
+    @test all(==(0), Array(u.ownership)[8:9, 8:9])                       # its sites went to the medium
     @test p65bo_cells(u; skip = (3,)) == [(1, 10.0, 1.0), (1, 10.0, 1.0)]
     @test !any(==(2), p65bo_col(u, :kind)[p65bo_alive(u)])
 end
@@ -378,7 +378,9 @@ end
         alg = CheckerboardCPM(; proposal = Moore(1))
         # O1 on CPU and device, Float32: the same cells (kind, site set, V_target) and the
         # same hook results, up to a relabelling of the slots the CPU uses (as P6.0v1)
-        sig(u) = sort([(Int(p65bo_col(u, :kind)[c]), sort(findall(==(c), vec(Array(u.σ)))), Float64(p65bo_col(u, :V_target)[c]))
+        sig(u) = sort(
+            [
+                (Int(p65bo_col(u, :kind)[c]), sort(findall(==(c), vec(Array(u.ownership)))), Float64(p65bo_col(u, :V_target)[c]))
                        for c in p65bo_alive(u)])
         for name in (:P65boOwn, :P65boOwnLate)
             cpu = solve(p65bo_own_problem(name; T = Float32), SequentialCPM()).u[end]

@@ -7,7 +7,7 @@ isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "d
 using PottsModels: GranerGlazier, OpenVTGrowingMonolayer
 using OrdinaryDiffEqTsit5: Tsit5
 
-# y' = −s, s' = y − s, listed in both orders. With `s => RK4()` and y under explicit Euler
+# y' = −s, s' = y − s, listed in both orders. With `s => Potts.RK4()` and y under explicit Euler
 # the two run in separate groups; Jacobi means each step reads (y, s) at its start.
 @potts_model SolverPairYS begin
     @kinds medium A
@@ -67,8 +67,8 @@ module SvPDE
     using ..FieldPDE
     @variables c(..)
     const C = c(t, x, y)
-    decay(dims, k, c0 = 0.0; D = 0.1) = pdesys([Dt(C) ~ D * Δ(C) - k * C], [c(0, x, y) ~ c0], dims, [C])
-    field() = (@parameters Dc = 0.1; pdesys([Dt(C) ~ Dc * Δ(C) - 0.05 * C], [c(0, x, y) ~ 0.0], (16, 16), [C], [Dc]))
+    decay(dims, k, c0 = 0.0; D = 0.1) = pdesys([Dt(C) ~ D * laplacian(C) - k * C], [c(0, x, y) ~ c0], dims, [C])
+    field() = (@parameters Dc = 0.1; pdesys([Dt(C) ~ Dc * laplacian(C) - 0.05 * C], [c(0, x, y) ~ 0.0], (16, 16), [C], [Dc]))
 end
 
 @potts_model SolverField begin
@@ -81,7 +81,7 @@ end
 
 solver_sigma() = (σ = zeros(Int32, 16, 16); σ[5:8, 5:8] .= 1; σ)
 solver_op() = [ownership => solver_sigma(), kind => [:A]]
-solver_var(sys, n) = only(filter(x -> string(x) in (string(n), string(n, "(t)")), variables(sys)))
+solver_var(sys, n) = only(filter(x -> string(x) in (string(n), string(n, "(t)")), Potts.declared_variables(sys)))
 
 solver_err(f) = try
     f(); nothing
@@ -252,7 +252,7 @@ end
     @kinds medium A
     @variables z(cell) = 0.0
     @lattice Lattice((12, 12))
-    @relations far = Ball(2.0)
+    @relations far = EuclideanBall(2.0)
     @energy cells => (volume - 9.0)^2
     @after_mcs z ~ count(owner[n] == id for n in far(40))
     @sweep Metropolis(; temperature = 2.0)

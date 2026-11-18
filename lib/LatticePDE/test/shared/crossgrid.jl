@@ -16,19 +16,24 @@ xown(sys, dims; kw...) = LFP.field_problem(discretize(sys, LatticeDiscretization
 const XT = 0.002
 @parameters xDq = 0.01 xaq = 0.5
 # the operators of the cross-grid path (a coordinate coefficient makes the face coefficient vary)
-const XOPS = (("Δ", c -> Δ(c)), ("DivKGrad harmonic", c -> DivKGrad(:harmonic)(1 + x, c)),
+const XOPS = (
+    ("Δ", c -> laplacian(c)), ("DivKGrad harmonic", c -> DivKGrad(:harmonic)(1 + x, c)),
               ("DivKGrad arithmetic", c -> DivKGrad(:arithmetic)(1 + x + y, c)),
               ("Advect", c -> Advect(Upwind1())([0.3, -0.2], c)), ("raw Dx(Dx(c))", c -> Differential(x)(Differential(x)(c))),
               ("raw Dy(K Dy(c))", c -> Differential(y)((1 + x) * Differential(y)(c))))
 # the two directions as the direct system and the manual route, for the operator `op`
 function xpair(op; ps = Num[], a = 0.5, D1 = 0.01)
     ic1 = [xcc(0, x, y) ~ x^2 + sin(3y), xu(0, x, y) ~ 0.0]
-    cf = (dir = PDESystem([D(xe(xcc)) ~ D1 * Δ(xe(xcc)), D(xe(xu)) ~ a * op(xe(xcc)) - xe(xu)], ic1, xdom(), [t, x, y], [xe(xcc), xe(xu)], ps; name = :xd1),
-          route = PDESystem([D(xe(xcc)) ~ D1 * Δ(xe(xcc)), xe(xLc) ~ op(xe(xcc)), D(xe(xu)) ~ a * xe(xLc) - xe(xu)], ic1, xdom(), [t, x, y],
+    cf = (
+        dir = PDESystem([D(xe(xcc)) ~ D1 * laplacian(xe(xcc)), D(xe(xu)) ~ a * op(xe(xcc)) - xe(xu)], ic1, xdom(), [t, x, y], [xe(xcc), xe(xu)], ps; name = :xd1),
+        route = PDESystem(
+            [D(xe(xcc)) ~ D1 * laplacian(xe(xcc)), xe(xLc) ~ op(xe(xcc)), D(xe(xu)) ~ a * xe(xLc) - xe(xu)], ic1, xdom(), [t, x, y],
                             [xe(xcc), xe(xLc), xe(xu)], ps; name = :xr1), row = xu)
     ic2 = [xv(0, x, y) ~ sin(7x) * cos(5y), xcc(0, x, y) ~ 0.0]
-    fc = (dir = PDESystem([D(xe(xv)) ~ D1 * Δ(xe(xv)), D(xe(xcc)) ~ a * op(xe(xv)) - xe(xcc)], ic2, xdom(), [t, x, y], [xe(xv), xe(xcc)], ps; name = :xd2),
-          route = PDESystem([D(xe(xv)) ~ D1 * Δ(xe(xv)), xe(xX) ~ op(xe(xv)), D(xe(xcc)) ~ a * xe(xX) - xe(xcc)], ic2, xdom(), [t, x, y],
+    fc = (
+        dir = PDESystem([D(xe(xv)) ~ D1 * laplacian(xe(xv)), D(xe(xcc)) ~ a * op(xe(xv)) - xe(xcc)], ic2, xdom(), [t, x, y], [xe(xv), xe(xcc)], ps; name = :xd2),
+        route = PDESystem(
+            [D(xe(xv)) ~ D1 * laplacian(xe(xv)), xe(xX) ~ op(xe(xv)), D(xe(xcc)) ~ a * xe(xX) - xe(xcc)], ic2, xdom(), [t, x, y],
                             [xe(xv), xe(xX), xe(xcc)], ps; name = :xr2), row = xcc)
     return (; cf, fc)
 end

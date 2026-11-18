@@ -98,10 +98,15 @@ function ab_variant(v)
     return alg, dev ? device_backend() : nothing, dev ? Float32 : Float64
 end
 
+# the number of sites of a state (the ownership array is `σ` in older checkouts: an A/B base
+# may be one)
+# The old name is accepted only so an A/B can run against a base older than the renames; drop it once no base predates them.
+nsites(u) = length(hasproperty(u, :ownership) ? u.ownership : u.σ)
+
 function ab_time(prob, alg, backend; samples, seconds, gctrial = backend !== nothing)
     fresh_integrator(prob, alg, backend)
     b = run(@benchmarkable timed_step!(i, $backend) setup=(i=fresh_integrator($prob, $alg, $backend)) evals=1 samples=samples seconds=seconds gctrial=gctrial)
-    n = length(prob.u0.σ)
+    n = nsites(prob.u0)
     # the largest per-sample GC time, and the allocations and bytes (BenchmarkTools keeps the
     # minimum over samples, so these only show allocation in every sample; the GC field is the check)
     return median(b).time / n, minimum(b).time / n, length(b.times), maximum(b.gctimes), b.allocs, b.memory

@@ -181,7 +181,7 @@ function _boundary_sites(integ)
     B = integ.cache
     B isa BoundaryCache || throw(ArgumentError(
         "_boundary_sites: the integrator runs $(integ.alg), not SequentialCPM(; skip_interior = true)"))
-    _sync_boundary!(B, integ.state.σ, integ.ctx.mobility, integ.ctx.lattice, integ.ctx.proposal.offsets)
+    _sync_boundary!(B, integ.state.ownership, integ.ctx.mobility, integ.ctx.lattice, integ.ctx.proposal.offsets)
     return view(B.list, 1:B.n)
 end
 
@@ -189,7 +189,7 @@ end
 # j-th boundary pick) gives the skip, the site in B, the direction and the acceptance.
 function boundary_site_mcs!(st, f::F, p, ctx, law::L, key::RNGKey, mcs::Integer, B::BoundaryCache,
         track::TK = nothing) where {F, L, TK}
-    σ = st.σ
+    σ = st.ownership
     lat = ctx.lattice
     mob = ctx.mobility
     offsets = ctx.proposal.offsets

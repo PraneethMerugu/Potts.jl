@@ -16,7 +16,7 @@
 #     `mcs` fold is hoisted and the `time` fold is not. (Checked through the presence of the
 #     model slot `__odepop1`, the name `_hoist_populations` gives it.)
 #  2. The values on the CPU, `T = Float64` and `Float32`, `SequentialCPM` and
-#     `CheckerboardCPM`, `ExplicitEuler()`, `ExplicitEuler(substeps = 4)` and `RK4()`, equal a
+#     `CheckerboardCPM`, `ExplicitEuler()`, `ExplicitEuler(substeps = 4)` and `Potts.RK4()`, equal a
 #     Jacobi oracle: every cell's fold reads the cells' ODE state at the start of the MCS's
 #     ODE step (D-086), held over the stages and substeps, while the cell's own `-2y` term
 #     advances. Within the step of MCS n (1-based), `mcs` is n − 1 and `time` is the stage
@@ -220,7 +220,7 @@ end
             gpu = solve(prob, alg; backend, saveat = 0:P60Q_M)
             a, b = p60q_traj(cpu), p60q_traj(gpu)
             @info "P6.0q $name, $sname: CPU vs device (Float32)" cpu = a[end] device = b[end] ulps = p60q_ulps(a, b)
-            @test Array(gpu.u[end].σ) == Array(cpu.u[end].σ)
+            @test Array(gpu.u[end].ownership) == Array(cpu.u[end].ownership)
             @test p60q_ulps(a, b) <= P60Q_ULPS
             @test p60q_close(b, p60q_oracle(ε, η, P60Q_M; solver, substeps), Float32)
         end

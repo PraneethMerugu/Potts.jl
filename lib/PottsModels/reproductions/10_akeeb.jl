@@ -29,6 +29,7 @@
 # read as sampling in the reference value).
 
 using Potts, PottsModels
+using Potts.Layouts
 using MakiePotts, CairoMakie
 using Statistics: mean, std
 using Markdown
@@ -69,7 +70,7 @@ nothing #hide
     @relations proposal = VonNeumann(1)
     @energy begin
         cells => λᵥ * (volume - V_target)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     ## CompuCell3D's chemotaxis: any copy that a leader gains or loses climbs the cue
     @drive copy => ifelse((kind[new] == leader) || (kind[old] == leader), -μ * (cue[target] - cue[source]), 0.0)
@@ -357,7 +358,7 @@ Markdown.parse(join(dev_rows, "\n")) #hide
 #
 # | Paper / code | `AkeebInvasion` statement |
 # |---|---|
-# | contact term, 8 neighbors (`<NeighborOrder>2</NeighborOrder>`, X:59) | `contacts => J[kind, kind′]` on `Lattice((500, 300); boundary = (Periodic(), Closed()), neighborhood = Moore(1))` |
+# | contact term, 8 neighbors (`<NeighborOrder>2</NeighborOrder>`, X:59) | `contacts => J[kind, neighbor_kind]` on `Lattice((500, 300); boundary = (Periodic(), Closed()), neighborhood = Moore(1))` |
 # | volume term, λ_V = 2, target 10 (S:86–88) | `cells => λᵥ * (volume - V_target)^2` |
 # | chemotaxis: ΔH = −λ[c(target) − c(source)] when the copying or the replaced cell is a leader (CC3D 4.6.0 `ChemotaxisPlugin`, X:66–73) | `@drive copy => ifelse((kind[new] == leader) \|\| (kind[old] == leader), -μ * (cue[target] - cue[source]), 0.0)` |
 # | static cue c(x, y) = y (S:78–83; p.6) | the per-site variable `cue`, set to `y − 1` by `akeeb_state` (1-based) |
@@ -576,11 +577,11 @@ function ensemble(point, seeds; tmax = 701, saves = SAVES)
         L = findall(==(:leader), kinds0)
         lc = u0.cell.kind[first(L)]
         alive1 = falses(length(u1.cell.kind))
-        for c in u1.σ
+        for c in u1.ownership
             c > 0 && (alive1[c] = true)
         end
         (; obs = Dict(Int(t) - 1 => akeeb_observables(sol.u[findfirst(==(t), sol.t)]) for t in saves),
-            divisions = sol.stats.lifecycle.divisions, live0 = length(unique(filter(>(0), vec(u0.σ)))),
+            divisions = sol.stats.lifecycle.divisions, live0 = length(unique(filter(>(0), vec(u0.ownership)))),
             live1 = count(alive1), ncells0 = length(kinds0), painted = length(L),
             leaders_kept = all(c -> u0.cell.kind[c] == lc && alive1[c], L) &&
                            count(c -> alive1[c] && u1.cell.kind[c] == lc, eachindex(alive1)) == length(L),

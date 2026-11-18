@@ -24,7 +24,7 @@ end
             @test u.cell.generation[2] == 1 && u.cell.kind[2] == 1
             @test sol.stats.lifecycle.divisions == 1
             for c in 1:2                                    # each half is a clean box
-                μ, C = brute_geometry(u.σ, lat, c)
+                    μ, C = brute_geometry(u.ownership, lat, c)
                 @test all(isapprox.(centroid(u.cell, lat, c), μ; atol = 1e-9))
             end
         end
@@ -38,7 +38,7 @@ end
         u = run_lifecycle(σ, [1], lat, Lifecycle(divide_at(0))).u[end]
         @test u.cell.volume[1:2] == [216, 216]
         halves = (Set(CartesianIndices((3:8, 5:10, 5:10))), Set(CartesianIndices((9:14, 5:10, 5:10))))
-        @test Set(Set(findall(==(c), u.σ)) for c in 1:2) == Set(halves)
+            @test Set(Set(findall(==(c), u.ownership)) for c in 1:2) == Set(halves)
     end
 
     @testset "removal and transition" begin
@@ -47,7 +47,7 @@ end
         remove2(st, p, ctx, key, mcs, c) = mcs == 2 && st.cell.kind[c] == 2 ? EVENT_REMOVE : EVENT_NONE
         u = run_lifecycle(σ, kinds, lat, Lifecycle(remove2); tspan = (0, 4)).u[end]
         @test all(u.cell.volume[i] == 0 for i in eachindex(kinds) if kinds[i] == 2)
-        @test all(u.σ[i] == 0 || kinds[u.σ[i]] == 1 for i in eachindex(u.σ))
+            @test all(u.ownership[i] == 0 || kinds[u.ownership[i]] == 1 for i in eachindex(u.ownership))
         flip(st, p, ctx, key, mcs, c) = mcs == 1 ? EVENT_TRANSITION : EVENT_NONE
         u = run_lifecycle(σ, kinds, lat, Lifecycle(flip; kind = (st, p, ctx, key, mcs, c) -> Int32(3 - st.cell.kind[c])); tspan = (0, 2)).u[end]
         @test u.cell.kind[1:length(kinds)] == 3 .- kinds
@@ -72,7 +72,7 @@ end
         # no free id: the division is deferred and counted
         sol = run_lifecycle(σ, [1, 2], lat, Lifecycle(divide_at(0)); capacity = 2)
         @test sol.stats.lifecycle.deferred == 2 && sol.stats.lifecycle.divisions == 0
-        @test sol.u[end].σ == σ
+            @test sol.u[end].ownership == σ
     end
 
     @testset "growth and division keep every tracker exact ($(nameof(typeof(alg))))" for alg in (
@@ -86,7 +86,7 @@ end
         function dH(st, p, prop, ctx)
             J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
             E(v, c) = p.λ * (v - @inbounds(st.cell.target[c]))^2
-            return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E)
+                return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E)
         end
         commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
         st = lc_state(σ, [1], lat; capacity = 64, cell = (; target = [64.0]))
@@ -98,9 +98,9 @@ end
         live = findall(>(0), u.cell.volume)
         @test length(live) >= 4
         @test sol.stats.lifecycle.divisions >= 3
-        @test u.cell.volume == [count(==(c), u.σ) for c in 1:64]
+            @test u.cell.volume == [count(==(c), u.ownership) for c in 1:64]
         for c in live
-            μ, C = brute_geometry(u.σ, lat, c)
+                μ, C = brute_geometry(u.ownership, lat, c)
             @test all(isapprox.(centroid(u.cell, lat, c), μ; atol = 1e-9))
         end
     end
@@ -182,7 +182,7 @@ end
         sol = solve(PottsProblem(f, st, lat, (0, 8), gg_params(); frozen = fk_mask(st, 2)), alg; saveat = 1)
         @test sol.retcode == ReturnCode.Success
         @test sol.stats.attempts == 4 * 50                       # sweeps 0 … 3, then none
-        @test all(i -> sol.u[i].σ == sol.u[5].σ, 5:9)            # nothing moves from t = 4 on
+            @test all(i -> sol.u[i].ownership == sol.u[5].ownership, 5:9)            # nothing moves from t = 4 on
         # at construction a fully frozen lattice is still an error
         @test_throws "every site is frozen" init(PottsProblem(GG, st, lat, (0, 1), gg_params(); frozen = trues(10, 10)), alg)
     end
@@ -193,7 +193,7 @@ end
         @test sol.stats.lifecycle.divisions == 1
         @test sol.stats.refreshes == 0
         @test sol.stats.attempts == 8 * count(prob.lattice.mask)
-        @test all(Array(sol.u[end].σ)[.!prob.lattice.mask] .== 0)
+            @test all(Array(sol.u[end].ownership)[.!prob.lattice.mask] .== 0)
         @test frozen_sites(prob, sol.u[end]) == .!prob.lattice.mask
     end
 
@@ -267,7 +267,7 @@ end
         u2 = deepcopy(prob.u0); u2.cell.kind[1] = 2                # both cells frozen
         reinit!(integ, u2)
         sol = solve!(integ)
-        @test sol.u[end].σ == u2.σ                                 # nothing mobile moves into a cell
+            @test sol.u[end].ownership == u2.ownership                                 # nothing mobile moves into a cell
         @test sol.stats.attempts == 10 * (900 - 72)
         reinit!(integ, prob.u0)                                    # and back
         sol = solve!(integ)
@@ -286,13 +286,13 @@ end
     @test CorePotts.frozen_reads(HostFrozen(2)) === nothing && CorePotts.frozen_reads(FrozenKind(2)) === nothing
     S = 10
     for alg in (SequentialCPM(), CheckerboardCPM())
-        dec = solve(fk_problem(fk_flip(S); kind = fk_swap, sys = DeclaredFrozen(2, (:σ, :kind))), alg; saveat = 1)
+            dec = solve(fk_problem(fk_flip(S); kind = fk_swap, sys = DeclaredFrozen(2, (:ownership, :kind))), alg; saveat = 1)
         ref = solve(fk_problem(fk_flip(S); kind = fk_swap, sys = HostFrozen(2)), alg; saveat = 1)
         @test dec.stats.refreshes == ref.stats.refreshes == 1
-        @test [u.σ for u in dec.u] == [u.σ for u in ref.u]       # same masks, same run
+            @test [u.ownership for u in dec.u] == [u.ownership for u in ref.u]       # same masks, same run
         @test fk_moved(dec, 1, (S + 3):31) == 0                   # frozen after the transition
         # checkpoint resume and reinit! refresh by the declared rule
-        prob = fk_problem(fk_flip(S); kind = fk_swap, sys = DeclaredFrozen(2, (:σ, :kind)), tspan = (0, 20))
+            prob = fk_problem(fk_flip(S); kind = fk_swap, sys = DeclaredFrozen(2, (:ownership, :kind)), tspan = (0, 20))
         integ = init(prob, alg)
         for _ in 1:15
             step!(integ)
@@ -301,11 +301,11 @@ end
         @test init(prob, alg; checkpoint = ck).ctx.mobility.frozen == fk_mask(ck.state, 2) != fk_mask(prob.u0, 2)
         reinit!(integ, prob.u0)
         @test integ.ctx.mobility.frozen == fk_mask(prob.u0, 2)
-        # a name that is not `:σ` or a cell column, or not a tuple of Symbols: rejected at init
-        for bad in ((:σ, :knd), (:σ, :q), [:σ], (:σ, "kind"), (:σ, :kind, :kind), (:σ, :σ))
+            # a name that is not `:ownership` or a cell column, or not a tuple of Symbols: rejected at init
+            for bad in ((:ownership, :knd), (:ownership, :q), [:ownership], (:ownership, "kind"), (:ownership, :kind, :kind), (:ownership, :ownership))
             @test_throws ArgumentError init(fk_problem(; sys = DeclaredFrozen(2, bad)), alg)
         end
-        @test_throws r"`kind` more than once" init(fk_problem(; sys = DeclaredFrozen(2, (:σ, :kind, :kind))), alg)
+            @test_throws r"`kind` more than once" init(fk_problem(; sys = DeclaredFrozen(2, (:ownership, :kind, :kind))), alg)
         # negative control: the standard rule ignores the hook (not even checked)
         integ = init(fk_problem(; sys = KindsBadReads()), alg)
         @test refresh_frozen!(integ).ctx.mobility.frozen == fk_mask(prob.u0, 2)
@@ -323,7 +323,7 @@ end
     B = integ.cache
     n0, N0 = length(CorePotts._boundary_sites(integ)), integ.nmobile
     CorePotts._skip_lq!(B, n0, N0)                           # cached for (n0, N0)
-    integ.state.σ[integ.state.σ .== 2] .= 0                  # the frozen cell 2 is removed
+        integ.state.ownership[integ.state.ownership .== 2] .= 0                  # the frozen cell 2 is removed
         SciMLBase.derivative_discontinuity!(integ, true)
     @test integ.nmobile == N0 + 36
     n = length(CorePotts._boundary_sites(integ))

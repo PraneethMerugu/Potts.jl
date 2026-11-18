@@ -82,12 +82,12 @@
 # side; the next rows sit at 40). t_first = `yield_strain((1:T)/τ, N; threshold = 1,
 # window = 100τ)` on the per-MCS T1 series N (the first T1 avalanche, paper MCS; none → −1).
 # ε_y = β_paper·t_first (A-9: only ratios are targets; c ≈ 0.023 of spec §3.2 is info).
-# N̄ = `mean_t1([total]; bubbles = live bubbles at t = 0, strain = β_paper·T_run)` (A-9:
+# N̄ = `mean_t1([total], live bubbles at t = 0, β_paper·T_run)` (A-9:
 # unit shear = β·t, as spec §3.2 and claim 14 read it). Spectra: `power_spectrum` of the
 # per-MCS series (T1 events, φ̂) over 2^17 paper MCS (f to 0.5, lowest 7.6e-6, as Fig. 8),
 # averaged into 20 log bins per decade (edges 10^(−5.2:0.05:−0.3); bin f = geometric mean
 # of its f_k, S = mean of its S_k), then averaged over replicates; α =
-# `spectral_exponent(f_bin, S_bin; range)` over [1e-4, 1e-2] unless stated; bins with S ≤ 0
+# `spectral_exponent(f_bin, S_bin, range)` over [1e-4, 1e-2] unless stated; bins with S ≤ 0
 # are dropped and fewer than 2 bins give NaN (the row fails). Window α: every
 # [f_b, 10 f_b] with f_b a bin frequency inside the row's span. Peak (V7 iii): the raw T1
 # periodogram smoothed by a centred 5-point mean; f* = its argmax over [2e-4, 5e-3];
@@ -319,16 +319,17 @@ function p64r_template(shear::Bool, L)
         PottsProblem(sys, op, (0, 1); seed = 1)
     end
 end
-"""A problem from a state (; σ, A) for `tend` MCS. Every parameter is set explicitly."""
+"""A problem from a state (; ownership = σ, A) for `tend` MCS. Every parameter is set explicitly."""
 function p64r_problem(st, tend; shear = false, J = P64R_J, Γ = P64R_Γ, T = P64R_T0, γ0 = 0.0, β = 0.0,
         bulk = false, periodic = false, ω = 2π / P64R_PERIOD, seed)
-    L = size(st.σ)
+    L = size(st.ownership)
     n = length(st.A)
-    n == maximum(st.σ) || throw(ArgumentError("p64r_problem: A has $n entries, the largest id is $(maximum(st.σ))"))
+    n == maximum(st.ownership) || throw(ArgumentError("p64r_problem: A has $n entries, the largest id is $(maximum(st.ownership))"))
     p = Pair{Symbol, Float64}[:J => J, :Γ => Γ, :T => T]
     shear && append!(p, [:γ0 => γ0, :β => β, :bulk => Float64(bulk), :periodic => Float64(periodic), :ω => ω,
         :ytop => Float64(L[2]), :ymid => (L[2] + 1) / 2])
-    return remake(P64R_TEMPLATES[(shear, L)]; u0 = Pair[ownership => st.σ, kind => fill(:bubble, n), :A => st.A], p,
+    return remake(
+        P64R_TEMPLATES[(shear, L)]; u0 = Pair[ownership => st.ownership, kind => fill(:bubble, n), :A => st.A], p,
         tspan = (0, tend), seed)
 end
 
@@ -406,9 +407,9 @@ function p64r_ordered(seed; L = P64R_L)
     σ0 = p64r_brick(L)
     n = Int(maximum(σ0))
     A = fill(Float64(P64R_BRICK^2), n)
-    u = solve(p64r_problem((; σ = σ0, A), P64R_NA; T = P64R_TA, seed), P64R_ALG).u[end]
-    u = solve(p64r_problem((; σ = Array(u.σ), A), P64R_NR; seed), P64R_ALG).u[end]
-    return (; σ = Array(u.σ), A, stop = 0)
+    u = solve(p64r_problem((; ownership = σ0, A), P64R_NA; T = P64R_TA, seed), P64R_ALG).u[end]
+    u = solve(p64r_problem((; ownership = Array(u.ownership), A), P64R_NR; seed), P64R_ALG).u[end]
+    return (; ownership = Array(u.ownership), A, stop = 0)
 end
 function p64r_disordered(target, seed; L = P64R_L)
     o = p64r_ordered(seed; L)
@@ -420,12 +421,12 @@ function p64r_disordered(target, seed; L = P64R_L)
             step!(integ)
         end
         m += P64R_CHECK
-        p64r_mu2n(Array(current_state(integ).σ)) >= target && break
+        p64r_mu2n(Array(current_state(integ).ownership)) >= target && break
     end
-    σc = Array(current_state(integ).σ)
+    σc = Array(current_state(integ).ownership)
     A = p64r_vol(current_state(integ), n)[1:Int(maximum(σc))]                # ids above the largest survivor are dropped
-    u = solve(p64r_problem((; σ = σc, A), P64R_NR; seed), P64R_ALG).u[end]
-    return (; σ = Array(u.σ), A, stop = m)
+    u = solve(p64r_problem((; ownership = σc, A), P64R_NR; seed), P64R_ALG).u[end]
+    return (; ownership = Array(u.ownership), A, stop = m)
 end
 """Foam k of kind f with its PREP row (tries until accepted, at most P64R_TRIES)."""
 function p64r_foam(f::Symbol, k; seedf = t -> p64r_prep_seed(f, k, t))
@@ -433,17 +434,19 @@ function p64r_foam(f::Symbol, k; seedf = t -> p64r_prep_seed(f, k, t))
     local st, mu, t
     for outer t in 0:(P64R_TRIES - 1)
         st = f === :ordered ? p64r_ordered(seedf(t); spec.L) : p64r_disordered(spec.target, seedf(t); spec.L)
-        mu = p64r_mu2n(st.σ)
+        mu = p64r_mu2n(st.ownership)
         (f === :ordered || abs(mu - spec.target) <= P64R_PREP_TOL) && break
     end
-    m = P64R_AN.topology_moments(st.σ, p64r_lat(size(st.σ)))
+    m = P64R_AN.topology_moments(st.ownership, p64r_lat(size(st.ownership)))
     n = length(st.A)
-    row = Dict{String, Any}("foam" => string(f), "k" => k, "seed" => seedf(t), "try" => t, "ly" => size(st.σ, 2),
-        "target" => spec.target, "mu2n" => m.mu2_n, "mu2a" => m.mu2_a, "nbub" => count(>(0), p64r_cells(st.σ, n).cnt),
-        "hex" => p64r_hexfrac(st.σ, n), "area_frac" => p64r_area_frac(st.σ, Float64.(p64r_cells(st.σ, n).cnt), st.A),
+    row = Dict{String, Any}(
+        "foam" => string(f), "k" => k, "seed" => seedf(t), "try" => t, "ly" => size(st.ownership, 2),
+        "target" => spec.target, "mu2n" => m.mu2_n, "mu2a" => m.mu2_a, "nbub" => count(>(0), p64r_cells(st.ownership, n).cnt),
+        "hex" => p64r_hexfrac(st.ownership, n), "area_frac" => p64r_area_frac(st.ownership, Float64.(p64r_cells(st.ownership, n).cnt), st.A),
         "stop" => st.stop, "ok" => f === :ordered || abs(m.mu2_n - spec.target) <= P64R_PREP_TOL,
-        "ubar" => p64r_ubar(st.σ))
-    return (; σ = st.σ, A = st.A), row
+        "ubar" => p64r_ubar(st.ownership)
+    )
+    return (; ownership = st.ownership, A = st.A), row
 end
 
 # ---------------------------------------------------------------------------------------------
@@ -533,7 +536,7 @@ end
 function p64r_alpha(fb, Sb, lo, hi)
     k = findall(i -> lo <= fb[i] <= hi && Sb[i] > 0, eachindex(fb))
     length(k) < 2 && return NaN
-    return P64R_AN.spectral_exponent(fb[k], Sb[k]; range = (lo, hi))
+    return P64R_AN.spectral_exponent(fb[k], Sb[k], (lo, hi))
 end
 """Largest α over the 1-decade windows [f_b, 10 f_b], lo ≤ f_b ≤ hi (and 10 f_b ≤ 0.5); NaN
 if any window has no α (an empty spectrum cannot pass a "no power law" row)."""
@@ -561,19 +564,19 @@ p64r_ours(tp, τ) = ceil(Int, tp * τ)
 
 """Periodic boundary shear, 10 periods of 4000 paper MCS (V3–V6, the calibration and the scan)."""
 function p64r_loop(st, J, γ0m, T, seed, τ)
-    lat = p64r_lat(size(st.σ))
+    lat = p64r_lat(size(st.ownership))
     P = p64r_ours(P64R_PERIOD, τ)                                # one period in our MCS
     integ = init(p64r_problem(st, P64R_CYCLES * P; shear = true, J, T, γ0 = γ0m, periodic = true, ω = 2π / P, seed),
         P64R_ALG)
-    φ0 = P64R_AN.stored_energy(st.σ, lat)
-    g = P64R_AN.cell_graph(st.σ, lat)
+    φ0 = P64R_AN.stored_energy(st.ownership, lat)
+    g = P64R_AN.cell_graph(st.ownership, lat)
     t1 = zeros(P64R_CYCLES)
     acc = zeros(P64R_CYCLES, P64R_NBIN)
     cnt = zeros(Int, P64R_CYCLES, P64R_NBIN)
     all = Float64[]
     for m in 1:(P64R_CYCLES * P)
         step!(integ)
-        σ = current_state(integ).σ
+        σ = current_state(integ).ownership
         g2 = P64R_AN.cell_graph(σ, lat)
         c = (m - 1) ÷ P + 1
         t1[c] += P64R_AN.t1_events(g, g2; unit = :t1)
@@ -595,12 +598,12 @@ end
 """Steady boundary shear for `tp` paper MCS (V2, V9): 50-MCS bins of T1s, φ̂ and frames."""
 function p64r_steady(st, γ0m, tp, seed, τ)
     n = length(st.A)
-    lat = p64r_lat(size(st.σ))
+    lat = p64r_lat(size(st.ownership))
     T = p64r_ours(tp, τ)
     nb = tp ÷ 50
     integ = init(p64r_problem(st, T; shear = true, γ0 = γ0m, seed), P64R_ALG)
-    φ0 = P64R_AN.stored_energy(st.σ, lat)
-    g = P64R_AN.cell_graph(st.σ, lat)
+    φ0 = P64R_AN.stored_energy(st.ownership, lat)
+    g = P64R_AN.cell_graph(st.ownership, lat)
     N = zeros(T)
     t1 = zeros(nb)
     phi = fill(NaN, nb)
@@ -609,7 +612,7 @@ function p64r_steady(st, γ0m, tp, seed, τ)
     cmax = 0.0
     for m in 1:T
         step!(integ)
-        σ = current_state(integ).σ
+        σ = current_state(integ).ownership
         g2 = P64R_AN.cell_graph(σ, lat)
         N[m] = P64R_AN.t1_events(g, g2; unit = :t1)
         cc = P64R_AN.contact_changes(g, g2)
@@ -639,13 +642,13 @@ end
 (spectral runs) the binned spectra in cycles per paper MCS."""
 function p64r_bulk(st, βp, κ, tp, seed, τ; spectra = false)
     n = length(st.A)
-    lat = p64r_lat(size(st.σ))
+    lat = p64r_lat(size(st.ownership))
     T = p64r_ours(tp, τ)
     nw = tp ÷ 100
     integ = init(p64r_problem(st, T; shear = true, β = κ * βp, bulk = true, seed), P64R_ALG)
-    φ0 = P64R_AN.stored_energy(st.σ, lat)
-    g = P64R_AN.cell_graph(st.σ, lat)
-    nb0 = count(>(0), p64r_cells(st.σ, n).cnt)
+    φ0 = P64R_AN.stored_energy(st.ownership, lat)
+    g = P64R_AN.cell_graph(st.ownership, lat)
+    nb0 = count(>(0), p64r_cells(st.ownership, n).cnt)
     N = zeros(T)
     Φ = spectra ? zeros(T) : Float64[]
     W = Dict{String, Any}[]
@@ -653,7 +656,7 @@ function p64r_bulk(st, βp, κ, tp, seed, τ; spectra = false)
     tw = 0.0
     for m in 1:T
         step!(integ)
-        σ = current_state(integ).σ
+        σ = current_state(integ).ownership
         g2 = P64R_AN.cell_graph(σ, lat)
         N[m] = P64R_AN.t1_events(g, g2; unit = :t1)
         cc = P64R_AN.contact_changes(g, g2)
@@ -677,7 +680,7 @@ function p64r_bulk(st, βp, κ, tp, seed, τ; spectra = false)
     end
     tf = P64R_AN.yield_strain(collect(1:T) ./ τ, N; threshold = 1, window = round(Int, 100τ))
     run = Dict{String, Any}("beta" => βp, "beta_model" => κ * βp, "seed" => seed, "mcs" => tp, "nbub" => nb0,
-        "mu2n0" => p64r_mu2n(st.σ), "t1_total" => sum(N), "t_first" => tf === nothing ? -1 : round(Int, tf),
+        "mu2n0" => p64r_mu2n(st.ownership), "t1_total" => sum(N), "t_first" => tf === nothing ? -1 : round(Int, tf),
         "peak_f" => NaN, "peak_prom" => NaN)
     spec = Dict{String, Any}[]
     if spectra
@@ -917,7 +920,8 @@ function p64r_verdicts(R)
     h1, h2 = α("d165", 0.005, "phi"; hi = 1e-3), α("d165", 0.005, "phi"; lo = 1e-3)
     add!("V13b", :row, (h1, h2), "both ∈ [0.5, 1.2]", p64r_in(h1, 0.5, 1.2) && p64r_in(h2, 0.5, 1.2))
     # V14
-    nbar(foam, β) = mean(P64R_AN.mean_t1([r["t1_total"]]; bubbles = r["nbub"], strain = β * r["mcs"])
+    nbar(foam, β) = mean(
+        P64R_AN.mean_t1([r["t1_total"]], r["nbub"], β * r["mcs"])
                          for r in p64r_sel(R["bulk"]; set = "v14", foam, beta = β))
     N14 = Dict((f, β) => nbar(f, β) for f in ("d165", "d172", "d107", "d095") for β in P64R_BETAS14)
     r1 = [N14[(f, 1e-4)] / N14[(f, 1e-3)] for f in ("d165", "d172", "d107", "d095")]
@@ -1081,9 +1085,9 @@ if !P64R_FULL
             @test p64r_in(row["mu2n"], 0.3, 0.6)                             # V1b
             @test row["area_frac"] < 5e-3                                    # V19 (relaxed)
             # the library's φ and n on a simulated state, against the oracles
-            @test P64R_AN.stored_energy(st.σ, p64r_lat(P64R_L)) == p64r_phi_oracle(st.σ)
-            @test p64r_sides(st.σ, p64r_lat(P64R_L), 256) == p64r_sides_oracle(st.σ, 256)
-            @test P64R_AN.stored_energy(st.σ, p64r_lat(P64R_L)) < P64R_AN.stored_energy(p64r_brick(P64R_L), p64r_lat(P64R_L))
+            @test P64R_AN.stored_energy(st.ownership, p64r_lat(P64R_L)) == p64r_phi_oracle(st.ownership)
+            @test p64r_sides(st.ownership, p64r_lat(P64R_L), 256) == p64r_sides_oracle(st.ownership, 256)
+            @test P64R_AN.stored_energy(st.ownership, p64r_lat(P64R_L)) < P64R_AN.stored_energy(p64r_brick(P64R_L), p64r_lat(P64R_L))
         end
     end
     @testset "04 SMOKE: PREP and C-V1 — one d081 foam" begin
@@ -1118,27 +1122,27 @@ top (start centroid y ≥ 192) and bottom (≤ 64) bubbles over `mcs` MCS of bul
 model β; the T1 events; the final area fraction."""
 function p64r_drift(st, βm, mcs, seed)
     n = length(st.A)
-    X = size(st.σ, 1)
-    lat = p64r_lat(size(st.σ))
+    X = size(st.ownership, 1)
+    lat = p64r_lat(size(st.ownership))
     integ = init(p64r_problem(st, mcs; shear = true, β = βm, bulk = true, seed), P64R_ALG)
-    cy = p64r_cells(st.σ, n).cy
-    x0 = p64r_cx(st.σ, n)
+    cy = p64r_cells(st.ownership, n).cy
+    x0 = p64r_cx(st.ownership, n)
     d = zeros(n)
-    g = P64R_AN.cell_graph(st.σ, lat)
+    g = P64R_AN.cell_graph(st.ownership, lat)
     t1 = 0.0
     for m in 1:mcs
         step!(integ)
-        g2 = P64R_AN.cell_graph(current_state(integ).σ, lat)
+        g2 = P64R_AN.cell_graph(current_state(integ).ownership, lat)
         t1 += P64R_AN.t1_events(g, g2; unit = :t1)
         g = g2
         if m % 10 == 0
-            x1 = p64r_cx(current_state(integ).σ, n)
+            x1 = p64r_cx(current_state(integ).ownership, n)
             d .+= mod.(x1 .- x0 .+ X / 2, X) .- X / 2
             x0 = x1
         end
     end
     return (; top = mean(d[cy .>= 192]), bottom = mean(d[cy .<= 64]), t1,
-        area = p64r_area_frac(current_state(integ).σ, p64r_vol(current_state(integ), n), st.A),
+        area = p64r_area_frac(current_state(integ).ownership, p64r_vol(current_state(integ), n), st.A),
     )
 end
 

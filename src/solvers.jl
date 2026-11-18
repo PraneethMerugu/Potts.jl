@@ -26,13 +26,13 @@ _solver_name(x) = info(x).name
 
 # The field solvers (one place, cutover C8): a field takes a LatticeFields field algorithm as
 # its `field_solver` or `solvers` entry, lowered by the field compiler (`_field_groups`); a new
-# `FieldAlgorithm` (the implicit steppers) joins with no edit here. A rate field takes a rate
+# `AbstractFieldAlgorithm` (the implicit steppers) joins with no edit here. A rate field takes a rate
 # algorithm (`ExplicitEuler`), a map field (`Shift(t, 1)(m) ~ rhs`) `ExplicitMap()`; each refuses
 # the other family by name.
-_is_field_solver(s) = s isa FieldAlgorithm
+_is_field_solver(s) = s isa AbstractFieldAlgorithm
 _field_solver_names() = "`ExplicitEuler(…)`, `BackwardEuler(…)`, `CrankNicolson(…)`, `BDF2(…)`, `QuasiSteady(…)`, or `ExplicitMap()` for a map"
-# A field solver as given: the window of a `PottsProblem` is the MCS (`mcs_duration`), so a
-# `dt` is refused; a rate field refuses `ExplicitMap` (F2-04), a map field (`map = true`) a
+# A field solver as given: the window of a `PottsProblem` is the MCS (`mcs_duration`); a rate
+# field refuses `ExplicitMap` (F2-04), a map field (`map = true`) a
 # rate algorithm (F2-10)
 function _check_field_solver(s, what; map::Bool = false)
     map && !(s isa ExplicitMap) && !(s isa LatticeFields.Problems.FieldGroups) && throw(ArgumentError(string(
@@ -43,18 +43,14 @@ function _check_field_solver(s, what; map::Bool = false)
         "default = …)`, or give this field one algorithm")))
     s isa ExplicitMap && !map && throw(ArgumentError(
         "$what: `ExplicitMap()` steps discrete maps `Shift(t, 1)(m) ~ rhs`; a rate field `D(c) ~ rhs` is stepped by " *
-        "`ExplicitEuler(…)`, `BackwardEuler(…)`, `CrankNicolson(…)`, `BDF2(…)` or `QuasiSteady(…)`"))
-    s isa Union{ExplicitEuler, LatticeFields.Problems.ImplicitAlgorithm} && s.dt !== nothing && throw(ArgumentError(string(
-        "$what: `", nameof(typeof(s)), "(; dt = ", s.dt, ")`: a `PottsProblem` field steps over the MCS window (`mcs_duration`",
-        s isa LatticeFields.Problems.QuasiSteady ? "" : ", split into `substeps`", "); leave `dt` out")))
+                "`ExplicitEuler(…)`, `BackwardEuler(…)`, `CrankNicolson(…)`, `BDF2(…)` or `QuasiSteady(…)`"
+        )
+    )
     return s
 end
-# an ODE's explicit Euler steps over the MCS window too: a `dt` is refused; `init = :steady`
-# is a field group's steady start (F3-12c): an ODE starts from its initial values
-function _check_ode_dt(s, what)
-    s isa ExplicitEuler && s.dt !== nothing && throw(ArgumentError(string(
-        "$what: `ExplicitEuler(; dt = ", s.dt, ")`: an ODE steps over the MCS window (`mcs_duration`, split into ",
-        "`substeps`); leave `dt` out")))
+# an ODE's explicit Euler steps over the MCS window too; `init = :steady` is a field group's
+# steady start (F3-12c): an ODE starts from its initial values
+function _check_ode_init(s, what)
     s isa ExplicitEuler && s.init !== nothing && throw(ArgumentError(string(
         "$what: `ExplicitEuler(; init = ", repr(s.init), ")`: `init = :steady` starts a field group at its steady state; ",
         "an ODE starts from its initial values (`@variables x(t) = x0`); leave `init` out")))
@@ -74,7 +70,7 @@ Resolve the solver keywords against compiled model `c`:
 - `solvers = [x => solver, …]` keys integrated variables (the Potts variable, the MTK
   component variable `comp.x`, or the name `:x`/`Symbol("comp₊x")`), or a component
   system (all its integrated unknowns): an ODE unknown takes any `ode_solver`, a field one
-  field solver (a LatticeFields `FieldAlgorithm`: `ExplicitEuler`).
+  field solver (a LatticeFields `AbstractFieldAlgorithm`: `ExplicitEuler`).
 
 An ODE's `ExplicitEuler(substeps = nothing)` is one step, the same as `substeps = 1`
 (`_ode_solver`): both resolve, group and fingerprint alike.
@@ -120,15 +116,19 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
         fsolver === nothing && (fsolver = isempty(maps) ? ExplicitEuler() : ExplicitMap())
         fsolver isa LatticeFields.Problems.LinearSolver && throw(LatticeFields.Problems.linear_solver_refusal(
             "`field_solver`", fsolver, "`field_solver = ExplicitEuler()` (or `ExplicitMap()` for a map)";
-            implicit = "`field_solver = BackwardEuler(; inner = $(repr(fsolver)))`"))
+                implicit = "`field_solver = BackwardEuler(; linsolve = $(repr(fsolver)))`"
+            )
+        )
         _is_field_solver(fsolver) || throw(ArgumentError(
             "`field_solver` takes a field solver ($(_field_solver_names())); got $(repr(fsolver))"))
         _check_field_solver(fsolver, field_solver isa LatticeFields.Problems.FieldGroups ? "`FieldGroups`: `default`" :
                                      "`field_solver`"; map = !isempty(maps))
     end
     ode_solver isa _ODESolver || throw(ArgumentError(
-        "`ode_solver` takes `ExplicitEuler(; substeps)`, `RK4(; substeps)` or `Adaptive(alg; …)`; got $(repr(ode_solver))"))
-    _check_ode_dt(ode_solver, "`ode_solver`")
+            "`ode_solver` takes `ExplicitEuler(; substeps)`, `Potts.RK4(; substeps)` or `Adaptive(alg; …)`; got $(repr(ode_solver))"
+        )
+    )
+    _check_ode_init(ode_solver, "`ode_solver`")
     resolved = Dict{Symbol, Any}()
     if !isempty(fields) && all(n -> n in steady, fields) && field_solver !== nothing &&
        !(field_solver isa LatticeFields.Problems.FieldGroups) && !(fsolver isa QS)
@@ -162,15 +162,19 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
         if n in fields
             s isa LatticeFields.Problems.LinearSolver && throw(LatticeFields.Problems.linear_solver_refusal(
                 "`solvers`: the field `$n`", s, "`solvers = [$n => ExplicitEuler()]`";
-                implicit = "`solvers = [$n => BackwardEuler(; inner = $(repr(s)))]`"))
+                    implicit = "`solvers = [$n => BackwardEuler(; linsolve = $(repr(s)))]`"
+                )
+            )
             _is_field_solver(s) || throw(ArgumentError(
                 "`solvers`: the field `$n` takes a field solver ($(_field_solver_names())); got $(repr(s))"))
             _check_field_solver(s, "`solvers`: the field `$n`"; map = n in maps)
             steady_only(n, s, "`solvers`")
         elseif n in odes
             s isa _ODESolver || throw(ArgumentError(
-                "`solvers`: `$n` takes `ExplicitEuler(; substeps)`, `RK4(; substeps)` or `Adaptive(alg; …)`; got $(repr(s))"))
-            _check_ode_dt(s, "`solvers`: `$n`")
+                    "`solvers`: `$n` takes `ExplicitEuler(; substeps)`, `Potts.RK4(; substeps)` or `Adaptive(alg; …)`; got $(repr(s))"
+                )
+            )
+            _check_ode_init(s, "`solvers`: `$n`")
         else
             throw(ArgumentError("`solvers`: `$n` is not integrated (no `D($n) ~ …` equation); the keys are the " *
                                 "integrated variables $(join(("`$m`" for m in sort!([fields; odes])), ", "))"))
@@ -184,7 +188,7 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
 end
 
 # As an ODE solver, explicit Euler with `substeps = nothing` is one step per MCS.
-_ode_solver(s) = s isa ExplicitEuler && s.substeps === nothing ? ExplicitEuler(; substeps = 1, lower = s.lower) : s
+_ode_solver(s) = s isa ExplicitEuler && s.substeps === nothing ? ExplicitEuler(; substeps = 1, lower_bound = s.lower_bound) : s
 
 # The variable names a `solvers` key stands for: a name, a Potts variable, an MTK component
 # variable (`comp.x`, the cell variable `comp₊x`), or a component system (its integrated
@@ -225,7 +229,9 @@ function _check_adaptive_draws(c::CompiledPottsSystem, resolved)
         get(resolved, _solver_name(arguments(lhs)[1]), nothing) isa Adaptive || continue
         _has_op(eq.rhs, random_uniform) && _located(getfield(c, :sys), eq) do
             throw(ArgumentError("`rand()` in an equation integrated by `Adaptive(…)`: the solver re-evaluates " *
-                                "the rate at trial steps; use `RK4`/`ExplicitEuler`, or draw in an update"))
+                        "the rate at trial steps; use `Potts.RK4`/`ExplicitEuler`, or draw in an update"
+                )
+            )
         end
     end
     return nothing
@@ -278,7 +284,7 @@ function _ode_reads_other_cells(c::CompiledPottsSystem)
             # an indexed read crosses cells through its variable, not its index (this cell's
             # expression; a read nested in it is visited on its own); a gather's body reads
             # this cell's unknowns unless indexed; a fold's body reads every cell's
-            hit[] = op in (at, at2) ? !_is_own_read(y) && reads(arguments(y)[1]) :
+            hit[] = op === value_at ? !_is_own_read(y) && reads(arguments(y)[1]) :
                     op === population && reads(y)
         end
     end
@@ -286,8 +292,8 @@ function _ode_reads_other_cells(c::CompiledPottsSystem)
 end
 
 """`x[id]`: the current cell's own `x`."""
-_own_read(x) = _unwrap(at(Symbolics.wrap(x), Symbolics.wrap(B.id)))
-_is_own_read(y) = operation(y) === at && isequal(arguments(y)[2], B.id)
+_own_read(x) = _unwrap(value_at(Symbolics.wrap(x), Symbolics.wrap(B.id)))
+_is_own_read(y) = (operation(y) === value_at && length(arguments(y)) == 2) && isequal(arguments(y)[2], B.id)
 _ode_scratch_name(n::Symbol) = Symbol(n, :__ode)
 
 # ---------------------------------------------------------------------------------------
@@ -296,7 +302,7 @@ _ode_scratch_name(n::Symbol) = Symbol(n, :__ode)
 # qualified (independent of what the session has imported); keyword bundles are sorted.
 
 # a field algorithm (and explicit Euler as an ODE solver): LatticeFields' one canonical text
-_canonical(s::FieldAlgorithm) = LatticeFields.Problems.canonical(s)
+_canonical(s::AbstractFieldAlgorithm) = LatticeFields.Problems.canonical(s)
 _canonical(s::RK4) = "RK4(substeps=$(s.substeps))"
 function _canonical(s::Adaptive)
     alg = _canonical_solver_part(s.alg, "the algorithm")

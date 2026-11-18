@@ -12,7 +12,7 @@ The names for cells and sites depend on where an expression is evaluated:
 | Name | Means | Where |
 |---|---|---|
 | `id` | the current cell | cell scope (updates, `@observed`, cell energies) |
-| `owner`, `owner′` | the cell at a site, at the other site of a contact pair | site scope, contact terms |
+| `owner`, `neighbor_owner` | the cell at a site, at the other site of a contact pair | site scope, contact terms |
 | `source`, `target` | the sites of a copy: `source` spreads into `target` | drives, constraints, on-copy updates |
 | `new`, `old` | the cells of a copy: `new` owns `source` and gains `target`, `old` loses it | drives, constraints, on-copy updates |
 | a `CellRef` variable, `sibling(…)`, `root(…)` | another cell, by reference | see below |

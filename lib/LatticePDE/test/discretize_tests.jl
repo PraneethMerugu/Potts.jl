@@ -19,7 +19,7 @@ include("shared/discretize.jl")
 # Salted operator hashes: another package build's hashes, in this process (the D-107 pattern
 # of `p6_0ah_canonical_term_order.jl`, extended to field terms). Inert at salt 0.
 const SALT = Ref{UInt}(0)
-for f in (Δ, at, ismember, sin, cos, exp)
+for f in (laplacian, value_at, ismember, sin, cos, exp)
     @eval function Base.hash(g::typeof($f), h::UInt)
         SALT[] == 0 && return invoke(hash, Tuple{Function, UInt}, g, h)
         return hash(SALT[], hash(:lattice_salt, h))
@@ -68,7 +68,7 @@ end
 
 @testitem "keys by operation, refusals, wrong bcs" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "keys by operation, refusals, wrong bcs" begin
-    eq = [D(ce) ~ Dc * Δ(ce)]
+        eq = [D(ce) ~ Dc * laplacian(ce)]
     sys = pde(eq, [c(t, x, 0) ~ c(t, x, 1)], [ce], [Dc])
     g = Grid((4, 4))
     base = ir(symbolic_discretize(sys, LatticeDiscretization(g)))
@@ -85,12 +85,13 @@ end
     # wrong bcs are detected: a face of a periodic axis; periodicity for one field only
     @test throws_with(() -> symbolic_discretize(pde(eq, [c(t, x, 0) ~ c(t, x, 1), c(t, x, 0) ~ 1.0], [ce], [Dc]),
                                        LatticeDiscretization(g)), "periodic pair makes periodic")
-    two = pde([eq; D(oe) ~ Δ(oe)], [c(t, x, 0) ~ c(t, x, 1)], [ce, oe], [Dc])
+        two = pde([eq; D(oe) ~ laplacian(oe)], [c(t, x, 0) ~ c(t, x, 1)], [ce, oe], [Dc])
     @test throws_with(() -> symbolic_discretize(two, LatticeDiscretization(g)), "periodicity is per axis")
     # the vocabulary scans run first
         @test_throws ["ArgumentError", "LatticePDE refuses", "`Pre`"] symbolic_discretize(pde([D(ce) ~ Pre(ce)], Equation[], [ce], [Dc]), LatticeDiscretization(g))
     # spellings with no lattice meaning
-    for (rhs, msg) in [Dx(ce) => "flux form", Dx(Dx(ce) * Dy(ce)) => "flux form", at(ce, ke) => "array parameter",
+        for (rhs, msg) in [
+                Dx(ce) => "flux form", Dx(Dx(ce) * Dy(ce)) => "flux form", value_at(ce, ke) => "array parameter",
         ce^cT => "", Symbolics.Num(unwrap(z)) => "not a declared"]
         f = () -> symbolic_discretize(pde([D(ce) ~ rhs], Equation[], [ce, ke], [Dc, cT]), LatticeDiscretization(g))
         msg == "" ? (@test f() isa CompiledField) : (@test throws_with(f, msg))
@@ -101,15 +102,17 @@ end
 @testitem "linearity table" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "linearity table" begin
     states = [operation(unwrap(v)) for v in (ce, oe, Ke)]
-    table = [Dc * Δ(ce) - k * ce => Set([:Diffusion, :LinearLocal]),
-        DivKGrad(:harmonic)(at(Dk, ke), ce) - at(Dk, ke) * ce => Set([:Diffusion, :LinearLocal]),
+        table = [
+            Dc * laplacian(ce) - k * ce => Set([:Diffusion, :LinearLocal]),
+            DivKGrad(:harmonic)(value_at(Dk, ke), ce) - value_at(Dk, ke) * ce => Set([:Diffusion, :LinearLocal]),
         Advect(Upwind1())(vel(t, x, y), ce) + cT * ismember(ke, (2,)) => Set([:Advection, :Source]),
-        ce * Δ(ce) => Set([:Other]), DivKGrad(:harmonic)(ce, ce) => Set([:Other]),
+            ce * laplacian(ce) => Set([:Other]), DivKGrad(:harmonic)(ce, ce) => Set([:Other]),
         -k * max(ce - cT, 0) * ismember(ke, (2,)) => Set([:LaggedSwitch]),
         k * ifelse(cT > ce, cT - ce, 0) => Set([:LaggedSwitch]), k * ifelse(oe > ce, oe - ce, 0) => Set([:Other]),
-        Dc * Δ(ce) + k * oe => Set([:Diffusion, :CrossLinear]), ce^2 => Set([:Other]), ce * oe^2 => Set([:Other]), at(Dk, ke) * ce => Set([:LinearLocal]),
+            Dc * laplacian(ce) + k * oe => Set([:Diffusion, :CrossLinear]), ce^2 => Set([:Other]), ce * oe^2 => Set([:Other]), value_at(Dk, ke) * ce => Set([:LinearLocal]),
         Dx(Dx(ce)) + Dy(Dy(ce)) => Set([:Diffusion]), Dx(Ke * Dx(ce)) => Set([:Other]), Dx(K0 * Dx(ce)) => Set([:Diffusion]),
-        Dx(ce * Dx(ce)) => Set([:Other]), Dc * Δ(oe) => Set([:CrossLinear]), oe * Ke => Set([:Other])]
+            Dx(ce * Dx(ce)) => Set([:Other]), Dc * laplacian(oe) => Set([:CrossLinear]), oe * Ke => Set([:Other]),
+        ]
     inputs = [operation(unwrap(ke))]
     for (rhs, want) in table, form in (identity, simplify, Symbolics.expand)
         @test Set(last.(LatticePDE.linearity(form(rhs), ce, states; inputs))) == want
@@ -117,14 +120,15 @@ end
     # the conservative rule (review): a coefficient that reads an unknown field makes the term
     # Other, and a diffusion multiplier reads no field at all
     for (rhs, want) in [DivKGrad(:harmonic)(Ke, ce) => :Other,    # K ~ c^2 would make it nonlinear
-        Ke * ce => :Other, ce * oe => :Other, oe * Δ(ce) => :Other,
-        ifelse(ke == 2, Δ(ce), 0) => :Other, Dc * Δ(ce) => :Diffusion, ismember(ke, (2,)) * ce => :LinearLocal,
+                Ke * ce => :Other, ce * oe => :Other, oe * laplacian(ce) => :Other,
+                ifelse(ke == 2, laplacian(ce), 0) => :Other, Dc * laplacian(ce) => :Diffusion, ismember(ke, (2,)) * ce => :LinearLocal,
         # a multiplier that reads inputs through table reads and indicators only varies by
         # site and is bounded (F2 record (g)); one that reads an input directly is Other
-        at(Dk, ke) * Δ(ce) => :SiteDiffusion, ismember(ke, (2,)) * Δ(ce) => :SiteDiffusion,
-        (at(Dk, ke) - at(Dk, ke + 1) + 2) * Δ(ce) => :SiteDiffusion,
-        (1 / at(Dk, ke)) * DivKGrad(:arithmetic)(at(Dk, ke), ce) => :SiteDiffusion,
-        ifelse(ke == 2, Dc, 2Dc) * Δ(ce) => :SiteDiffusion, ke * Δ(ce) => :Other, (ke + at(Dk, ke)) * Δ(ce) => :Other]
+                value_at(Dk, ke) * laplacian(ce) => :SiteDiffusion, ismember(ke, (2,)) * laplacian(ce) => :SiteDiffusion,
+                (value_at(Dk, ke) - value_at(Dk, ke + 1) + 2) * laplacian(ce) => :SiteDiffusion,
+                (1 / value_at(Dk, ke)) * DivKGrad(:arithmetic)(value_at(Dk, ke), ce) => :SiteDiffusion,
+                ifelse(ke == 2, Dc, 2Dc) * laplacian(ce) => :SiteDiffusion, ke * laplacian(ce) => :Other, (ke + value_at(Dk, ke)) * laplacian(ce) => :Other,
+            ]
         @test only(last.(LatticePDE.linearity(rhs, ce, states; inputs))) == want
     end
     # the system table uses the same rule: an aux coefficient that depends on c
@@ -132,7 +136,7 @@ end
                     LatticeDiscretization(Grid((4, 4))))
     @test Set(last.(cf.linearity["c"])) == Set([:Other])
     # Symbolics' own expansion is blind to the registered operators (FR-27): the reason for the table
-    @test !Symbolics.linear_expansion(Dc * Δ(ce) - k * ce, ce)[3]
+        @test !Symbolics.linear_expansion(Dc * laplacian(ce) - k * ce, ce)[3]
 end
 end
 
@@ -143,12 +147,12 @@ end
     aux = [Ke ~ K0 + x]
     low(rhs; e = Equation[]) = ir(symbolic_discretize(pde([D(ce) ~ rhs; e], bc, isempty(e) ? [ce] : [ce, Ke], [Dc, h0, g0, K0]),
                                              LatticeDiscretization(g)))
-    @test low(Dc * (Dx(Dx(ce)) + Dy(Dy(ce)))) == low(Dc * Δ(ce))
+        @test low(Dc * (Dx(Dx(ce)) + Dy(Dy(ce)))) == low(Dc * laplacian(ce))
     @test low(Dx(Ke * Dx(ce)) + Dy(Ke * Dy(ce)); e = aux) == low(DivKGrad(:harmonic)(Ke, ce); e = aux)
     # negative controls: an axis missing, the arithmetic face mean, a doubled axis
-    @test low(Dc * Dx(Dx(ce))) != low(Dc * Δ(ce))
+        @test low(Dc * Dx(Dx(ce))) != low(Dc * laplacian(ce))
     @test low(DivKGrad(:arithmetic)(Ke, ce); e = aux) != low(DivKGrad(:harmonic)(Ke, ce); e = aux)
-    @test low(Dc * (Dx(Dx(ce)) + Dx(Dx(ce)))) != low(Dc * Δ(ce))
+        @test low(Dc * (Dx(Dx(ce)) + Dx(Dx(ce)))) != low(Dc * laplacian(ce))
 end
 end
 
@@ -194,11 +198,11 @@ end
         return reshape(field(R, "c"), n, m)
     end
     oracle = (1 + dt * D_ * λ)^nsteps .* mode                 # the discrete eigenvector, exactly
-    @test maximum(abs, run(Dc * Δ(ce)) .- oracle) < 1e-12
+        @test maximum(abs, run(Dc * laplacian(ce)) .- oracle) < 1.0e-12
     @test maximum(abs, run(Dc * (Dx(Dx(ce)) + Dy(Dy(ce)))) .- oracle) < 1e-12
     T = dt * nsteps                                             # and the continuum rate, to O(h²)
     @test maximum(abs, oracle .- exp(-D_ * 4π^2 * (kx^2 + (ky / 2)^2) * T) .* mode) < 0.02
-    @test maximum(abs, run(-Dc * Δ(ce)) .- oracle) > 0.1        # negative control: flipped sign
+        @test maximum(abs, run(-Dc * laplacian(ce)) .- oracle) > 0.1        # negative control: flipped sign
     @test maximum(abs, run(Dc * Dx(Dx(ce)) + Dc * Dx(Dx(ce))) .- oracle) > 1e-4   # an axis wrong
 end
 end
@@ -206,7 +210,7 @@ end
 @testitem "no-flux mass conservation" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "no-flux mass conservation" begin
     n, m = 12, 9
-    mk(bcs) = lower64(pde([D(ce) ~ Dc * Δ(ce) + Dc * Dx(Dx(ce))], bcs, [ce], [Dc]), (n, m))
+        mk(bcs) = lower64(pde([D(ce) ~ Dc * laplacian(ce) + Dc * Dx(Dx(ce))], bcs, [ce], [Dc]), (n, m))
     function mass(bcs)
         R = runner(mk(bcs))
         u0 = rand(MersenneTwister(3), n * m)
@@ -226,7 +230,7 @@ end
 @testitem "masked interior Dirichlet" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "masked interior Dirichlet" begin
     n, j = 16, 12                                               # mask column j holds 1
-    sys(bcs) = pde([D(ce) ~ Δ(ce)], [bcs; c(t, 0, y) ~ 0.0; c(t, x, 0) ~ c(t, x, 1)], [ce, ke], Num[])
+        sys(bcs) = pde([D(ce) ~ laplacian(ce)], [bcs; c(t, 0, y) ~ 0.0; c(t, x, 0) ~ c(t, x, 1)], [ce, ke], Num[])
     function solve(bcs)
         cf = lower64(sys(bcs), (n, 2))
         R = runner(cf)
@@ -253,7 +257,7 @@ end
     d3 = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 3.0), y ∈ Interval(0.0, 1.0), z ∈ Interval(0.0, 2.0)]
     e = c(t, x, y, z)
     function step(zbcs)
-        sys = PDESystem([D(e) ~ Dc * Δ(e)], [c(t, 0, y, z) ~ c(t, 3, y, z); zbcs], d3, [t, x, y, z], [e], [Dc, g1]; name = :f)
+            sys = PDESystem([D(e) ~ Dc * laplacian(e)], [c(t, 0, y, z) ~ c(t, 3, y, z); zbcs], d3, [t, x, y, z], [e], [Dc, g1]; name = :f)
         R = runner(lower64(sys, dims))
         u0 = rand(MersenneTwister(1), prod(dims))
         copyto!(field(R, "c"), u0)
@@ -276,9 +280,9 @@ end
 end
 end
 
-@testitem "kind table source at(Dk, kindₛ)" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
-@testset "kind table source at(Dk, kindₛ)" begin
-    cf = lower64(pde([D(ce) ~ at(Dk, ke)], Equation[], [ce, ke], [Dk]), (4, 2))
+@testitem "kind table source value_at(Dk, kindₛ)" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
+    @testset "kind table source value_at(Dk, kindₛ)" begin
+        cf = lower64(pde([D(ce) ~ value_at(Dk, ke)], Equation[], [ce, ke], [Dk]), (4, 2))
     @test cf.tables == ["Dk" => [1.0, 2.0, 3.0]]
     R = runner(cf)
     R.st.tables[Int32(1)] = [1.0, 2.0, 3.0]
@@ -350,7 +354,8 @@ end
     @test abs((sum(got_c) - sum(Float64.(N0))) - Float64(sum(want_c) - sum(N0))) < 1e-12
     @test maximum(abs, got_c .- Float64.(want)) > 1e-3          # the two lattices differ at the edges
     # negative control: a flux-form rate step of the same field misses the exact map
-    flux = symbolic_discretize(pde([D(Ne) ~ Δ(Ne)], per, [Ne], Num[]),
+        flux = symbolic_discretize(
+            pde([D(Ne) ~ laplacian(Ne)], per, [Ne], Num[]),
                       LatticeDiscretization(Grid((n, n)); T = Float64); update = euler)
     R = runner(flux)
     copyto!(field(R, "N"), Float64.(vec(N0)))
@@ -371,15 +376,22 @@ end
 @testitem "D-107: lowered IR independent of operator hashes" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "D-107: lowered IR independent of operator hashes" begin
     function build()
-        rhs = Dc * Δ(ce) - k * ce + K0 * sin(ce) + cT * exp(-oe) + g0 * cos(oe) + h0 * ismember(ke, (2, 3)) +
+            rhs = Dc * laplacian(ce) - k * ce + K0 * sin(ce) + cT * exp(-oe) + g0 * cos(oe) + h0 * ismember(ke, (2, 3)) +
               DivKGrad(:harmonic)(Ke, ce) + k * Dx(Dx(ce)) + max(ce - cT, 0) * ismember(ke, (1,)) +
-              at(Dk, ke) * Δ(oe)
-        sys = pde([D(ce) ~ rhs, D(oe) ~ Δ(oe) + ce * oe + sin(ce) + cos(oe), Ke ~ K0 + exp(ce)],
+                value_at(Dk, ke) * laplacian(oe)
+            sys = pde(
+                [D(ce) ~ rhs, D(oe) ~ laplacian(oe) + ce * oe + sin(ce) + cos(oe), Ke ~ K0 + exp(ce)],
                   Equation[], [ce, oe, Ke, ke], [Dc, k, K0, cT, g0, h0, Dk])
         return ir(symbolic_discretize(sys, LatticeDiscretization(Grid((4, 3)))))
     end
-    order() = string.(arguments(unwrap(Dc * Δ(ce) + K0 * Δ(oe) + h0 * ismember(ke, (2,)) + k * sin(ce) +
-                                       cT * exp(oe) + g0 * cos(ce) + Δ(Ke))))
+        order() = string.(
+            arguments(
+                unwrap(
+                    Dc * laplacian(ce) + K0 * laplacian(oe) + h0 * ismember(ke, (2,)) + k * sin(ce) +
+                        cT * exp(oe) + g0 * cos(ce) + laplacian(Ke)
+                )
+            )
+        )
     base, base_order = build(), order()
     @test all(s -> salted(build, s) == base, 1:4)
     @test build() == base                                       # and over repeated builds
@@ -458,9 +470,9 @@ end
 
 @testitem "periodicity covers map fields" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "periodicity covers map fields" begin
-    sys = pde([D(ce) ~ Δ(ce), Shift(t, 1)(Ne) ~ Ne], [c(t, x, 0) ~ c(t, x, 1)], [ce, Ne], Num[])
+        sys = pde([D(ce) ~ laplacian(ce), Shift(t, 1)(Ne) ~ Ne], [c(t, x, 0) ~ c(t, x, 1)], [ce, Ne], Num[])
     @test throws_with(() -> symbolic_discretize(sys, LatticeDiscretization(Grid((4, 4)))), "periodicity is per axis")
-    ok = pde([D(ce) ~ Δ(ce), Shift(t, 1)(Ne) ~ Ne], [c(t, x, 0) ~ c(t, x, 1), N(t, x, 0) ~ N(t, x, 1)], [ce, Ne], Num[])
+        ok = pde([D(ce) ~ laplacian(ce), Shift(t, 1)(Ne) ~ Ne], [c(t, x, 0) ~ c(t, x, 1), N(t, x, 0) ~ N(t, x, 1)], [ce, Ne], Num[])
     @test symbolic_discretize(ok, LatticeDiscretization(Grid((4, 4)))) isa CompiledField
 end
 end
@@ -468,7 +480,8 @@ end
 @testitem "array state end to end (two components)" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "array state end to end (two components)" begin
     n, m = 6, 4
-    sys = pde([D(ue[1]) ~ Dc * Δ(ue[1]) - k * ue[2], D(ue[2]) ~ Δ(ue[2]) + k * ue[1]],
+        sys = pde(
+            [D(ue[1]) ~ Dc * laplacian(ue[1]) - k * ue[2], D(ue[2]) ~ laplacian(ue[2]) + k * ue[1]],
               [u(t, 0, y)[1] ~ 1.0, u(t, x, 0)[1] ~ u(t, x, 1)[1], u(t, x, 0)[2] ~ u(t, x, 1)[2],
                ue[2] ~ masked(ke == 3, 0.5)], [ue, ke], [Dc, k])
     cf = lower64(sys, (n, m))
@@ -515,12 +528,13 @@ end
     mem = [ismember(kindₛ(t, x + a * dx, y + b * dy), (1,)) for (a, b) in offs]
     maprhs = ifelse(sum(mem) > 0, Dc * sum(m * N(t, x + a * dx, y + b * dy) for (m, (a, b)) in zip(mem, offs)) / sum(mem), Ne)
     systems = [
-        pde([D(ce) ~ Dc * Δ(ce) - k * ce], [c(t, 0, y) ~ 1.0, Dx(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)], [ce], [Dc, k]),
+            pde([D(ce) ~ Dc * laplacian(ce) - k * ce], [c(t, 0, y) ~ 1.0, Dx(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)], [ce], [Dc, k]),
         pde([Shift(t, 1)(Ne) ~ maprhs], Equation[], [Ne, ke], [Dc, dx, dy]),
-        pde([D(ce) ~ Δ(ce)], [ce ~ masked(ismember(ke, (2, 3)), g0), c(t, 0, y) ~ 0.0], [ce, ke], [g0]),
-        pde([D(ce) ~ at(Dk, ke) + DivKGrad(:harmonic)(Ke, ce), Ke ~ K0 + sin(x)], Equation[], [ce, Ke, ke], [Dk, K0]),
+            pde([D(ce) ~ laplacian(ce)], [ce ~ masked(ismember(ke, (2, 3)), g0), c(t, 0, y) ~ 0.0], [ce, ke], [g0]),
+            pde([D(ce) ~ value_at(Dk, ke) + DivKGrad(:harmonic)(Ke, ce), Ke ~ K0 + sin(x)], Equation[], [ce, Ke, ke], [Dk, K0]),
         pde([D(ce) ~ -Advect(Upwind1())(vel(t, x, y), ce)], Equation[], [ce, vel(t, x, y)], Num[]),
-        pde([D(ue[1]) ~ Δ(ue[1]) - k * ue[2], D(ue[2]) ~ Δ(ue[2])], [ue[2] ~ masked(ke == 3, 0.5)], [ue, ke], [k])]
+            pde([D(ue[1]) ~ laplacian(ue[1]) - k * ue[2], D(ue[2]) ~ laplacian(ue[2])], [ue[2] ~ masked(ke == 3, 0.5)], [ue, ke], [k]),
+        ]
     for sys in systems
         @test check32(f32(sys, (16, 8)); tables = Dict{Int32, Any}(Int32(1) => Float32[1, 2, 3])) >= 1
     end
@@ -541,7 +555,7 @@ end
     # 5. initial conditions are `c(0, x, y) ~ value`
     @test throws_with(() -> parse(2 * c(0, x, y) ~ 1.0), "initial condition")
     @test only(parse(c(0, x, y) ~ 1.0)).kind == :initial
-    sysb(bcs) = pde([D(ce) ~ Δ(ce)], bcs, [ce, ke], Num[])
+        sysb(bcs) = pde([D(ce) ~ laplacian(ce)], bcs, [ce, ke], Num[])
     # 2. one condition per face, mask and start
     for bcs in ([c(t, 0, y) ~ 1.0, Dx(c(t, 0, y)) ~ 0.0], [ce ~ masked(ke == 3, 1.0), ce ~ masked(ke == 2, 0.0)],
                 [c(0, x, y) ~ 0.0, c(0, x, y) ~ 1.0])
@@ -549,8 +563,9 @@ end
     end
     @test symbolic_discretize(sysb([c(t, 0, y) ~ 1.0, Dx(c(t, 1, y)) ~ 0.0]), g) isa CompiledField
     # 3. the left side: a time operator on the plain field read
-    for (e, msg) in [[Dx(ce) ~ Δ(ce)] => "time rate", [Shift(x, 1)(Ne) ~ 2 * Ne] => "in time",
-                     [D(c(t, 0, y)) ~ Δ(ce)] => "time rate", [Shift(t, 1)(N(t, x + dx, y)) ~ 2 * Ne] => "Shift(t, 1)(c(t, x, y))",
+        for (e, msg) in [
+                [Dx(ce) ~ laplacian(ce)] => "time rate", [Shift(x, 1)(Ne) ~ 2 * Ne] => "in time",
+                [D(c(t, 0, y)) ~ laplacian(ce)] => "time rate", [Shift(t, 1)(N(t, x + dx, y)) ~ 2 * Ne] => "Shift(t, 1)(c(t, x, y))",
                      [c(t, 0, y) ~ 1.0] => "field read"]
         @test throws_with(() -> symbolic_discretize(pde(e, Equation[], [ce, Ne], [dx]), g), msg)
     end
@@ -574,22 +589,27 @@ end
     @test map(N(t, x - 2dx, y))() isa CompiledField
     # 2. a term that reads an aux field is Other (its dependence on c is hidden)
     lin(eqs, ps = Num[]) = Set(last.(symbolic_discretize(pde(eqs, Equation[], [ce, Ke], ps), g).linearity["c"]))
-    @test lin([D(ce) ~ Δ(ce) + Ke, Ke ~ ce^2]) == Set([:Diffusion, :Other])
-    @test lin([D(ce) ~ Δ(ce) + Dc * Δ(Ke), Ke ~ ce^2], [Dc]) == Set([:Diffusion, :Other])
+        @test lin([D(ce) ~ laplacian(ce) + Ke, Ke ~ ce^2]) == Set([:Diffusion, :Other])
+        @test lin([D(ce) ~ laplacian(ce) + Dc * laplacian(Ke), Ke ~ ce^2], [Dc]) == Set([:Diffusion, :Other])
     # 3. initial conditions: state fields only, values read no field
-    @test throws_with(() -> symbolic_discretize(pde([D(ce) ~ Δ(ce), Ke ~ ce], [K(0, x, y) ~ 3.0], [ce, Ke], Num[]), g),
+        @test throws_with(
+            () -> symbolic_discretize(pde([D(ce) ~ laplacian(ce), Ke ~ ce], [K(0, x, y) ~ 3.0], [ce, Ke], Num[]), g),
                       "only rate and map fields")
-    @test throws_with(() -> symbolic_discretize(pde([D(ce) ~ Δ(ce)], [c(0, x, y) ~ c(0, x, y) + 1], [ce], Num[]), g),
+        @test throws_with(
+            () -> symbolic_discretize(pde([D(ce) ~ laplacian(ce)], [c(0, x, y) ~ c(0, x, y) + 1], [ce], Num[]), g),
                       "cannot read a field")
-    @test throws_with(() -> symbolic_discretize(pde([D(ce) ~ Δ(ce), D(oe) ~ Δ(oe)], [c(0, x, y) ~ o(0, x, y)], [ce, oe], Num[]), g),
+        @test throws_with(
+            () -> symbolic_discretize(pde([D(ce) ~ laplacian(ce), D(oe) ~ laplacian(oe)], [c(0, x, y) ~ o(0, x, y)], [ce, oe], Num[]), g),
                       "")                                       # refused by the parser (a field on each side)
-    @test symbolic_discretize(pde([D(ce) ~ Δ(ce)], [c(0, x, y) ~ sin(x)], [ce], Num[]), g) isa CompiledField
+        @test symbolic_discretize(pde([D(ce) ~ laplacian(ce)], [c(0, x, y) ~ sin(x)], [ce], Num[]), g) isa CompiledField
     # 4. an aux equation that reads its own field
-    @test throws_with(() -> symbolic_discretize(pde([D(ce) ~ Δ(ce), Ke ~ Ke + ce], Equation[], [ce, Ke], Num[]), g),
+        @test throws_with(
+            () -> symbolic_discretize(pde([D(ce) ~ laplacian(ce), Ke ~ Ke + ce], Equation[], [ce, Ke], Num[]), g),
                       "cannot read itself")
     # 5. the Robin check with a parameter coefficient (default 1/8 = h/2 at the low face)
     @parameters βr = 0.125
-    @test throws_with(() -> symbolic_discretize(pde([D(ce) ~ Δ(ce)], [c(t, 0, y) + βr * Dx(c(t, 0, y)) ~ 1.0], [ce], [βr]), g),
+        @test throws_with(
+            () -> symbolic_discretize(pde([D(ce) ~ laplacian(ce)], [c(t, 0, y) + βr * Dx(c(t, 0, y)) ~ 1.0], [ce], [βr]), g),
                       "ghost value")
     # and an input multiplier of advection is Other, as of diffusion
     st, inp = [operation(unwrap(ce))], [operation(unwrap(ke)), operation(unwrap(vel(t, x, y)))]
@@ -600,7 +620,7 @@ end
 
 @testitem "state type: lanes per T, default by backend, refusals (P5 C6-1, C6-3)" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
 @testset "state type: lanes per T, default by backend, refusals (P5 C6-1, C6-3)" begin
-    sys = pde([D(ce) ~ Dc * Δ(ce) - k * ce], [c(t, 0, y) ~ 1.0, Dx(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)], [ce], [Dc, k])
+        sys = pde([D(ce) ~ Dc * laplacian(ce) - k * ce], [c(t, 0, y) ~ 1.0, Dx(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)], [ce], [Dc, k])
     lanes(T) = [f.storage for f in symbolic_discretize(sys, LatticeDiscretization(Grid((8, 4)); T); update = euler).program.fields
                 if f.key == "c"]
     @test lanes(Float32) == [F32] && lanes(Float64) == [F64] && lanes(Float16) == [F16]
@@ -623,7 +643,7 @@ end
 @testset "F4-12a: a Robin coefficient of parameters" begin
     @parameters g1 = 1.0 g2 = 2.0 ar = g1 + g2
     g = LatticeDiscretization(Grid((8, 8)); T = Float64)
-    sysr(bc, ps) = pde([D(ce) ~ Dc * Δ(ce)], [c(0, x, y) ~ 0.0, bc], [ce], [Dc; ps])
+        sysr(bc, ps) = pde([D(ce) ~ Dc * laplacian(ce)], [c(0, x, y) ~ 0.0, bc], [ce], [Dc; ps])
     rhs(o) = (du = similar(o.u0); o.f(du, fill(0.5, length(o.u0)), o.p, 0.0); du)
     ref = discretize(sysr(ar * c(t, 0, y) - Dx(c(t, 0, y)) ~ 1.0, [g1, g2, ar]), g)
     ex = discretize(sysr((g1 + g2) * c(t, 0, y) - Dx(c(t, 0, y)) ~ 1.0, [g1, g2]), g)

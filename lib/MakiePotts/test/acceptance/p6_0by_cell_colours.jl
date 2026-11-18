@@ -12,7 +12,7 @@
 # collapses; near id 4·10⁹ every cell gets the same colour.
 #
 # Pinned at the colour level (no rendering), through the path every recipe and legend
-# uses: a `PottsRenderFrame` → `encode(frame, CellIdentityEncoding())` → the automatic
+# uses: a `PottsRenderFrame` → `encode_frame(frame, CellIdentityEncoding())` → the automatic
 # palette (`MakiePotts._categorical_colors(entries, Makie.automatic, medium)`). The colour
 # key, hash and palette are free: the measure is perceptual (CIE Lab ΔE*76 from the sRGB
 # colour), so any saturation, value or palette works.

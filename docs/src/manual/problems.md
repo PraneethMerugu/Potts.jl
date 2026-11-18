@@ -39,6 +39,7 @@ Which one to use, and what `skip_interior = true` does exactly, is on [Choosing 
 
 ```@example problems
 using Potts
+using Potts.Layouts
 
 @potts_model Simple begin
     @kinds medium cell
@@ -47,7 +48,7 @@ using Potts
     @lattice Lattice((30, 30); neighborhood = Moore(1))
     @energy begin
         Volume(cell; target = 25.0, strength = 1.0)
-        contacts => 8.0 * (kind != kind′)
+        contacts => 8.0 * (kind != neighbor_kind)
     end
     @after_mcs age += 1
     @sweep Metropolis(; temperature = T)
@@ -88,7 +89,7 @@ sol2.t
 
 ## A saved state
 
-A state holds plain arrays: `u.σ` (cell numbers), `u.cell` (per-cell arrays: `kind`,
+A state holds plain arrays: `u.ownership` (cell numbers), `u.cell` (per-cell arrays: `kind`,
 `volume`, declared cell variables, …), `u.site` (site and field variables, as arrays over
 the lattice) and `u.model`. Prefer `sol[:name]` (see [Symbolic indexing](@ref
 manual-indexing)), which works for every quantity, derived ones included.
@@ -114,9 +115,9 @@ rules, `mcs_duration`, the `@sweep` law (`Metropolis` or `Barker`) and its `offs
 `@relations proposal` and `@relations contact` neighborhoods (resolved on the lattice) are part
 of the check. A neighborhood that resolves to its default (`VonNeumann(1)` for the proposal,
 the lattice's `neighborhood` for contact) checks like omitting it. Named relations
-(`@relations far = Ball(2.0)`, read by `contacts(far)` or a fold `for n in far(site)`) and
+(`@relations far = EuclideanBall(2.0)`, read by `contacts(far)` or a fold `for n in far(site)`) and
 inline relations (`Moore(1)(42)`) are part of the check too, each resolved on the lattice:
-specs that resolve to the same offsets and weights (`Ball(1.5)` and `Moore(1)` on a square
+specs that resolve to the same offsets and weights (`EuclideanBall(1.5)` and `Moore(1)` on a square
 lattice) check alike, and a relation nothing reads, or one read only by `@observed`
 quantities, is not checked. The algorithm's `proposal` keyword (`SequentialCPM(; proposal)`)
 is a run choice and is not checked.

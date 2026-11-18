@@ -27,14 +27,14 @@ are not available yet are on the [Roadmap](@ref roadmap).
 | `<Plugin Name="CellType">`, `Freeze` | `@kinds medium a b wall[frozen]` |
 | `<Plugin Name="Volume">` `TargetVolume`, `LambdaVolume` | `cells(k) => λ * (volume - V₀)^2`, or per type `V₀[kind]` |
 | `<Plugin Name="Surface">` | `cells(k) => λₛ * (surface - S₀)^2` |
-| `<Plugin Name="Contact">` `Energy Type1 Type2` | `contacts => J[kind, kind′]` with `J[kind, kind]` |
-| `<Plugin Name="ContactInternal">`, compartments | `contacts => ifelse(cluster[owner] == cluster[owner′], Jint, J[kind, kind′])`, `cluster =>` in the operating point |
+| `<Plugin Name="Contact">` `Energy Type1 Type2` | `contacts => J[kind, neighbor_kind]` with `J[kind, kind]` |
+| `<Plugin Name="ContactInternal">`, compartments | `contacts => ifelse(cluster[owner] == cluster[neighbor_owner], Jint, J[kind, neighbor_kind])`, `cluster =>` in the operating point |
 | `<Plugin Name="Connectivity">` | `@constraint connectivity(k)`, or the penalty form `@drive connectivity(k; penalty = P)` ([Connectivity](@ref manual-connectivity)) |
 | `<Plugin Name="LengthConstraint">` (2D) | `cells(k) => λL * (major_length - L)^2` |
 | `<Plugin Name="Chemotaxis">` `Lambda`, `SaturationCoef` | `@drive Chemotaxis(c; strength = λ, response = saturating(s), kinds = (k,))` |
 | `ChemotactTowards` (only into medium) | `Chemotaxis(c; strength = λ, when = old == 0)` |
 | `<Plugin Name="FocalPointPlasticity">` | `@relationship fpp(cell, cell) capacity = n`, `edges(fpp) => λ * (distance - L)^2`, `@link` / `@unlink` |
-| `<Steppable Type="DiffusionSolverFE">` | a `PDESystem` with `Dt(c) ~ Dc * Δ(c) - δ * c + …`, `@fields c = sys (…)`, `field_solver = ExplicitEuler(substeps = n)` |
+| `<Steppable Type="DiffusionSolverFE">` | a `PDESystem` with `Dt(c) ~ Dc * laplacian(c) - δ * c + …`, `@fields c = sys (…)`, `field_solver = ExplicitEuler(substeps = n)` |
 | `SecretionData` (inside cells of a type) | `+ s * src` in the field equation, with the input bound as `src => kind == k` |
 | `UniformInitializer`, `BlobInitializer` | `Tiling`, `Scattered`, or your own layer (see [layouts](@ref tutorial-layouts)) |
 | PIF initializer / PIF dumper | `read_piff`, `write_piff` |
@@ -72,13 +72,13 @@ are not available yet are on the [Roadmap](@ref roadmap).
 | `CellType class="biological"` / `"medium"` | `@kinds medium a b`; the medium comes first |
 | `VolumeConstraint target strength` | `cells(k) => strength * (volume - target)^2` |
 | `SurfaceConstraint mode="surface"` | `cells(k) => strength * (surface - target)^2` |
-| `CPM Interaction Contact type1 type2 value` | `contacts => J[kind, kind′]` (divide by `boundaryLengthScaling`) |
+| `CPM Interaction Contact type1 type2 value` | `contacts => J[kind, neighbor_kind]` (divide by `boundaryLengthScaling`) |
 | `MetropolisKinetics temperature` | `@sweep Metropolis(; temperature = T)` |
 | `MetropolisKinetics yield = Y` | `@sweep Metropolis(; temperature = T, offset = -Y)` |
 | `MonteCarloSampler MCSDuration` | `@sweep Metropolis(; …, mcs_duration = Δt)` |
 | `MCS Neighborhood` (copy neighborhood) | `@relations proposal = …` |
 | `Property` (cell scope) | `@variables x(cell) = x₀` |
-| `Field` with `Diffusion rate` | a `PDESystem` field `c` with `Dt(c) ~ rate * Δ(c) + …`, coupled by `@fields` |
+| `Field` with `Diffusion rate` | a `PDESystem` field `c` with `Dt(c) ~ rate * laplacian(c) + …`, coupled by `@fields` |
 | `System` with `DiffEqn` (cell scope) | `@equations D(x) ~ …` for a cell variable, or a `System` in `@components` |
 | `System` with `Rule` / `Equation` | `@after_mcs x ~ …` |
 | `Event` with `Condition` | an `ifelse` in an update, or a `DiscreteCallback` |

@@ -39,10 +39,10 @@
 # HostPhase API (proposed surface; ruling for the coordinator). `HostPhase` today declares
 # nothing (it gets `f!` and `every`), so it cannot know its columns. This file uses
 #     HostPhase(f!; every = 1, reads = nothing, writes = nothing)
-# `reads` / `writes`: tuples of Symbols naming the state leaves the body touches: `:σ` (the
+# `reads` / `writes`: tuples of Symbols naming the state leaves the body touches: `:ownership` (the
 # labels) or a cell column name. `nothing` (the default) keeps today's behaviour: the whole
 # state down, every cell column up. Columns in `writes` are copied down too (bodies update
-# them in place) and are the only columns copied back. A name that is not `:σ` or a cell
+# them in place) and are the only columns copied back. A name that is not `:ownership` or a cell
 # column of the state is an `ArgumentError` by the first MCS the phase runs (on every
 # backend, so a typo never silently reads a stale host copy). What `f!` sees in undeclared
 # leaves is unspecified. Potts fills the declarations in for its generated `@link`/`@unlink`
@@ -152,7 +152,7 @@ p60v2_g_exact(t) = exp(-P60V2_K * t)
 # HostPhase fixtures (CorePotts level). 32 cell slots (2 live cells, so every Float32 or
 # Int32 column is 128 B), a domain-masked lattice. Bodies:
 #   :xy    y[c] += x[c] for every slot           reads (:x,), writes (:y,)
-#   :sigma y[c] = count(==(c), σ) for c = 1, 2   reads (:σ,), writes (:y,)
+#   :sigma y[c] = count(==(c), σ) for c = 1, 2   reads (:ownership,), writes (:y,)
 #   :none  the :xy body with no declarations (today's whole-state path)
 # The wide member adds cell columns z1 (Float), z2 (Int32), z3 (3 × capacity), a model
 # quantity q, a site field h and a parameter table Q.
@@ -162,12 +162,12 @@ p60v2_xy!(cell, st, p, ctx, mcs) = (for c in eachindex(cell.y)
     cell.y[c] += cell.x[c]
 end; nothing)
 p60v2_sigma!(cell, st, p, ctx, mcs) = (for c in 1:2
-    cell.y[c] = count(==(Int32(c)), st.σ)
+        cell.y[c] = count(==(Int32(c)), st.ownership)
 end; nothing)
 function p60v2_hostphase(body; bad = false)
     body === :none && return CorePotts.HostPhase(p60v2_xy!)
     body === :xy && return CorePotts.HostPhase(p60v2_xy!; reads = bad ? (:x, :nonexistent) : (:x,), writes = (:y,))
-    body === :sigma && return CorePotts.HostPhase(p60v2_sigma!; reads = (:σ,), writes = (:y,))
+    body === :sigma && return CorePotts.HostPhase(p60v2_sigma!; reads = (:ownership,), writes = (:y,))
     error("unknown body $body")
 end
 function p60v2_host_problem(; body = :xy, wide = false, dims = (12, 12), T = Float64, bad = false, nmcs = 4)
@@ -197,7 +197,7 @@ and up."""
 function p60v2_host_bound(u0, body)
     y = sizeof(u0.cell.y)
     body === :xy && return sizeof(u0.cell.x) + 2y + P60V2_SLACK
-    body === :sigma && return sizeof(u0.σ) + 2y + P60V2_SLACK
+    body === :sigma && return sizeof(u0.ownership) + 2y + P60V2_SLACK
     error("no bound for $body")
 end
 
@@ -246,7 +246,7 @@ function p60v2_link_bound(u0)
     cell = u0.cell
     rel = [getfield(cell, n) for n in keys(cell) if _p60v2_linkcol(n)]
     reads = [getfield(cell, n) for n in (:kind, :volume, :anchor, :m1, :m2) if haskey(cell, n)]
-    return sizeof(u0.σ) + p60v2_bytes(reads) + 2 * p60v2_bytes(rel) + P60V2_SLACK
+    return sizeof(u0.ownership) + p60v2_bytes(reads) + 2 * p60v2_bytes(rel) + P60V2_SLACK
 end
 p60v2_bond(cell) = CorePotts.link_store(cell, :bond)
 
@@ -270,7 +270,7 @@ end
         @test ua.cell.y[1:2] ≈ p60v2_y_exact(n) rtol = 1e-6
         @test ua.model.g[1] ≈ p60v2_g_exact(n) rtol = 1e-6
         @test ub.cell.y[1:2] == ua.cell.y[1:2] && ub.model.g == ua.model.g
-        @test ub.σ == ua.σ                                          # the extras change nothing else
+        @test ub.ownership == ua.ownership                                          # the extras change nothing else
         @test ub.cell.z1[1:2] == fill(2.0 + n, 2)                   # the extra rule ran
     end
 end
@@ -282,7 +282,7 @@ end
         for wide in (false, true)
             u = solve(p60v2_host_problem(; body = :xy, wide, nmcs = n), alg).u[end]
             @test u.cell.y == ref.cell.y                            # same effect as undeclared
-            @test u.σ == ref.σ
+            @test u.ownership == ref.ownership
             @test u.cell.y ≈ n .* u.cell.x                          # the body ran every MCS
             u = solve(p60v2_host_problem(; body = :sigma, wide, nmcs = n), alg).u[end]
             @test u.cell.y[1:2] == Float64.(u.cell.volume[1:2])     # σ was read
@@ -302,7 +302,7 @@ end
         A, B = p60v2_bond(ua.cell), p60v2_bond(ub.cell)
         @test CorePotts.linked(A, 1, 2) && !CorePotts.linked(A, 1, 3) && !CorePotts.linked(A, 2, 3)
         @test A.links == B.links && ua.cell.link_rest == ub.cell.link_rest
-        @test ua.σ == ub.σ
+        @test ua.ownership == ub.ownership
     end
 end
 
@@ -357,9 +357,9 @@ end
                 end
                 _, iref = p60v2_deltas(p60v2_host_problem(; body = :none, T = Float32), alg; backend)
                 @test host(ia.state.cell.y) == host(iref.state.cell.y)
-                @test host(ia.state.σ) == host(iref.state.σ)
+                @test host(ia.state.ownership) == host(iref.state.ownership)
             else
-                @test all(d -> d[3] >= sizeof(nar.u0.σ), da)       # σ declared: it comes down
+                @test all(d -> d[3] >= sizeof(nar.u0.ownership), da)       # σ declared: it comes down
                 for integ in (ia, ib)
                     @test host(integ.state.cell.y)[1:2] == Float32.(host(integ.state.cell.volume)[1:2])
                     @test all(iszero, host(integ.state.cell.y)[3:end])

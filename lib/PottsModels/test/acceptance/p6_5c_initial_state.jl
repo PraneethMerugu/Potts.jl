@@ -221,7 +221,7 @@ end
 
 @testset "P6.5c initial state: the new names are exported, `set_column!` is public" begin
     for n in (:Interior, :Fill, :Objects, :Group)
-        @test Base.isexported(Potts, n)                          # DEFECT CHECK
+        @test Base.isexported(Potts.Layouts, n)                  # DEFECT CHECK
     end
     @test Base.ispublic(Potts, :set_column!)                     # DEFECT CHECK
     @test !Base.isexported(Potts, :set_column!)                  # public, not exported (control today: absent)
@@ -229,7 +229,7 @@ end
     for n in (:Plane, :Spheres, :Rect)
         @test !isdefined(Potts, n)                               # control
     end
-    @test Base.isexported(Potts, :Sphere) && Base.isexported(Potts, :Circle)   # control (D-138)
+    @test Base.isexported(Potts.Layouts, :Sphere) && Base.isexported(Potts.Layouts, :Circle)   # control (D-138)
 end
 
 # ---------------------------------------------------------------------------------------
@@ -691,7 +691,7 @@ end
     @lattice Lattice((10, 10); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         cells(cyto, nuc) => (volume - V_target)^2
-        contacts => ifelse(cluster[owner] == cluster[owner′], 1.0, 3.0)
+        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 1.0, 3.0)
     end
     @sweep Metropolis(; temperature = 1.0)
 end
@@ -855,7 +855,7 @@ end
     @lattice Lattice((80, 80, 21); boundary = (Periodic(), Periodic(), Closed()), neighborhood = Moore(1))
     @energy begin
         cells(cytoplasm, lamellipodium, nucleus) => (volume - V_target)^2
-        contacts => ifelse(cluster[owner] == cluster[owner′], 1.0, 3.0)
+        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 1.0, 3.0)
     end
     @sweep Metropolis(; temperature = 1.0)
 end

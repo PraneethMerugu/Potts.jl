@@ -34,7 +34,7 @@
 # equal weight closures (two anonymous functions) fingerprint alike.
 #
 # OUT OF SCOPE (reported to the coordinator, not frozen here): named relations (`@relations
-# far = Ball(2.0)` used by `contacts(far)` or a fold `for n in far(site)`) and inline gather
+# far = EuclideanBall(2.0)` used by `contacts(far)` or a fold `for n in far(site)`) and inline gather
 # relations (`for n in Moore(1)(42)` vs `Moore(2)(42)`) reach the run as `ctx` data too and
 # collide the same way on f137f929; they have no default, so hashing them moves the pins of
 # every fixture that uses one.
@@ -79,7 +79,7 @@ const P60AR_FIXTURES = [
     # square 2D: non-default contacts
     "sq contact=VonNeumann(1)" => (:sq, :(contact = VonNeumann(1))),
     "sq contact=Moore(2)" => (:sq, :(contact = Moore(2))),
-    "sq contact=Ball(3.0)" => (:sq, :(contact = Ball(3.0))),
+    "sq contact=EuclideanBall(3.0)" => (:sq, :(contact = EuclideanBall(3.0))),
     # weighted contacts, with a contact energy that reads the weight (`contacts => weight`)
     "sq contact=Weighted(Moore(1), 2)" => (:sq, :(contact = Weighted(Moore(1), o -> 2.0)), :weight),
     "sq contact=Weighted(Moore(1), 2) again" => (:sq, :(contact = Weighted(Moore(1), o -> 2.0)), :weight),
@@ -188,7 +188,7 @@ function p60ar_checkpoint(pa, pb, pa2; k = 3, alg = SequentialCPM(), alg2 = alg)
         pb === nothing || @test_throws ArgumentError init(pb, alg; checkpoint = c)
         i2 = init(pa2, alg2; checkpoint = c)
         @test i2.t == k
-        @test i2.u.σ == ck.state.σ
+        @test i2.u.ownership == ck.state.ownership
     end
 end
 
@@ -232,7 +232,7 @@ end
 # 2. A different proposal or contact neighbourhood, a different fingerprint
 
 const P60AR_SQ_DISTINCT = ["sq", "sq proposal=Moore(1)", "sq proposal=Moore(2)", "sq proposal=NeighborOrder(3)",
-    "sq proposal=Stencil(±x)", "sq contact=VonNeumann(1)", "sq contact=Moore(2)", "sq contact=Ball(3.0)",
+    "sq proposal=Stencil(±x)", "sq contact=VonNeumann(1)", "sq contact=Moore(2)", "sq contact=EuclideanBall(3.0)",
     "sq contact=Weighted(Moore(1), 2)", "sq contact=Weighted(Moore(1), 3)", "sq proposal=Moore(1) contact=VonNeumann(1)"]
 const P60AR_SQVN_DISTINCT = ["sqvn", "sqvn contact=Moore(1)"]
 const P60AR_HEX_DISTINCT = ["hex", "hex proposal=Hex(2)", "hex contact=Hex(2)"]
@@ -345,7 +345,8 @@ p60ar_gg() = (s = graner_glazier_state(); PottsProblem(GranerGlazier(; name = :g
 p60ar_wortel(; kw...) = PottsProblem(WortelAct(; name = :act, lattice = (8, 8), kw...), p60ar_two_wortel(), (0, 10))
 p60ar_merks() = PottsProblem(MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
     [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 10);
-    field_solver = Potts.ExplicitEuler(substeps = 2, lower = 0.0))
+    field_solver = Potts.ExplicitEuler(substeps = 2, lower_bound = 0.0)
+)
 p60ar_openvt() = PottsProblem(OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)),
     openvt_monolayer_state(; lattice = (24, 24)), (0, 10); capacity = 64)
 

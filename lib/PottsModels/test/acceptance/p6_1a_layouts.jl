@@ -26,7 +26,7 @@ opget(op, key) = only(last(p) for p in op if isequal(first(p), key))
     @lattice Lattice((30, 30); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         cells(dark, light) => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = T)
 end
@@ -49,7 +49,7 @@ end
     # the operating point drives a problem; the frame is frozen
     prob = PottsProblem(FramedSorting(; name = :fs), op, (0, 5))
     u = solve(prob, SequentialCPM()).u[end]
-    @test Array(u.σ)[border] == σ[border]
+    @test Array(u.ownership)[border] == σ[border]
 end
 
 @testset "P6.1a: Scattered" begin

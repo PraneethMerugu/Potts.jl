@@ -23,7 +23,7 @@ export AbstractPottsRenderFrame, PottsRenderFrame
 export RenderOwner, RenderOwnerKind, CellSite, MediumSite, ObstacleSite
 export RenderCellIdentity, RenderCellMetadata, RenderGeometry, RenderProvenance
 export frame_mcs, frame_size, frame_geometry, owner_at, cell_metadata
-export available_channels, channel, frame_provenance
+export available_channels, frame_channel, frame_provenance
 export RenderFrameConformance, render_frame_conformance
 export assert_render_frame_conformance
 
@@ -34,8 +34,10 @@ export RenderRequest, renderframe, renderframes
 
 export AbstractPottsEncoding, CellTypeEncoding, CellIdentityEncoding, ChannelEncoding
 export EncodingKind, CategoricalEncoding, ContinuousEncoding
-export encoding_kind, required_channels, encoding_label, encode
-export EncodedPottsFrame, LegendEntry, legend_entries
+export encoding_kind, required_channels, encoding_label, encode_frame
+export EncodedPottsFrame, legend_entries
+# `LegendEntry` clashes with Makie's: public only
+public LegendEntry
 
 export PottsPlot, pottsplot, pottsplot!
 export PottsBoundaries, pottsboundaries, pottsboundaries!

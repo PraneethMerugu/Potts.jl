@@ -176,7 +176,7 @@ function p64a1_probe_expr(name::Symbol, lattice::Expr, nd::Int)
         @lattice $lattice
         @energy begin
             cells => (volume - 4.0)^2
-            contacts => 2.0 * (kind != kind′)
+                contacts => 2.0 * (kind != neighbor_kind)
         end
         @drive copy => $drive
         @sweep Metropolis(; temperature = 1.0)
@@ -249,7 +249,7 @@ Every unlike scripted copy on the probe problem, as (target coords, source coord
 `wrapped` when the source was reached across a periodic seam.
 """
 function p64a1_pairs(prob, dims, periodic)
-    σ = prob.u0.σ
+    σ = prob.u0.ownership
     out = Tuple{NTuple{length(dims), Int}, NTuple{length(dims), Int}, Bool}[]
     for I in CartesianIndices(σ), o in p64a1_offsets(length(dims))
         xt = Tuple(I)
@@ -261,7 +261,8 @@ function p64a1_pairs(prob, dims, periodic)
     return out
 end
 
-p64a1_prop(prob, xt, xs; dir = 1) = (lat = prob.lattice; σ = prob.u0.σ;
+p64a1_prop(prob, xt, xs; dir = 1) = (
+    lat = prob.lattice; σ = prob.u0.ownership;
     CorePotts.Proposal(CorePotts.linear_index(lat, xt), CorePotts.linear_index(lat, xs), xt, dir, σ[xt...], σ[xs...]))
 
 @testset "P6.4a1: the hand oracle (no production code)" begin
@@ -369,7 +370,7 @@ p64a1_define(:P64a1Dir, :(@potts_model P64a1Dir begin
     @lattice Lattice((24, 16); boundary = (Periodic(), Closed()))
     @energy begin
         cells => (volume - 25.0)^2
-        contacts => 4.0 * (kind != kind′)
+                contacts => 4.0 * (kind != neighbor_kind)
     end
     @drive copy => γ0 * ifelse(mode > 0.5, sin(ω * mcs), ifelse(mcs < K, 1.0, -0.5)) * (position[target][2] - y0) *
                    direction[1] + η * direction[2] + u * direction[1]
@@ -398,7 +399,7 @@ end))
     @lattice Lattice((24, 16); boundary = (Periodic(), Closed()))
     @energy begin
         cells => (volume - 25.0)^2
-        contacts => 4.0 * (kind != kind′)
+        contacts => 4.0 * (kind != neighbor_kind)
     end
     @before_mcs G ~ ifelse(mode > 0.5, sin(ω * mcs), ifelse(mcs < K, 1.0, -0.5))
     @drive copy => γ0 * G * (py[target] - y0) *
@@ -433,7 +434,7 @@ end
 """σ at every MCS and the accepted count."""
 function p64a1_traj(prob, alg; kw...)
     sol = solve(prob, alg; saveat = 1, kw...)
-    return ([Array(u.σ) for u in sol.u], sol.stats.accepted)
+    return ([Array(u.ownership) for u in sol.u], sol.stats.accepted)
 end
 
 const P64A1_ALGS = [
@@ -505,11 +506,11 @@ end
 """Net x drift of the cell over M MCS: the sum of minimum-image centroid increments."""
 function p64a1_drift(prob, M)
     integ = init(prob, SequentialCPM(; proposal = Moore(1)); save_start = false, save_end = false, save_everystep = false)
-    c = p64a1_cx(current_state(integ).σ)
+    c = p64a1_cx(current_state(integ).ownership)
     D = 0.0
     for _ in 1:M
         step!(integ)
-        c2 = p64a1_cx(current_state(integ).σ)
+        c2 = p64a1_cx(current_state(integ).ownership)
         D += c2 - c - P64A1_LAT[1] * round((c2 - c) / P64A1_LAT[1])
         c = c2
     end

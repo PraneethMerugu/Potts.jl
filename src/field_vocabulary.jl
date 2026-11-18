@@ -4,7 +4,7 @@
 The vocabulary for writing a field as a plain ModelingToolkit `PDESystem` that couples into a
 model (`@fields`, `Potts.couple`): MTK's `PDESystem`, `Differential`, `@variables` and
 `@parameters` (the ModelingToolkitBase bindings), `Interval` (DomainSets'), LatticePDE's
-operators (`Δ`, `DivKGrad`, `Advect`, `Upwind1`, `at`, `at2`, `ismember`, `masked`,
+operators (`laplacian`, `DivKGrad`, `Advect`, `Upwind1`, `value_at`, `ismember`, `masked`,
 `step_index`), `lattice_domain` and `pdesystem`, the time `t` (`Potts.t`, which is MTK's
 `t_nounits`) and the lattice coordinates `x`, `y`, `z` (`Potts`' own, which a binding may read).
 
@@ -15,7 +15,7 @@ name for a diffusion coefficient).
 module Fields
 
 using ..Potts: Potts
-using LatticePDE: Interval, Δ, DivKGrad, Advect, Upwind1, at, at2, ismember, masked, step_index, lattice_domain, pdesystem
+using LatticePDE: Interval, laplacian, Δ, DivKGrad, Advect, Upwind1, value_at, ismember, masked, step_index, lattice_domain, pdesystem
 using ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
 
 """Independent time variable (`Potts.t`, ModelingToolkitBase's unitless `t_nounits`)."""
@@ -28,7 +28,7 @@ const y = Potts.FIELD_NAMES.y
 const z = Potts.FIELD_NAMES.z
 
 export PDESystem, Differential, @variables, @parameters, Interval
-export Δ, DivKGrad, Advect, Upwind1, at, at2, ismember, masked, step_index, lattice_domain, pdesystem
+export laplacian, Δ, DivKGrad, Advect, Upwind1, value_at, ismember, masked, step_index, lattice_domain, pdesystem
 export t, x, y, z
 
 end

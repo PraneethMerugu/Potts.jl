@@ -22,7 +22,7 @@
             foreach(_ -> step!(integ), 1:k)
             a = Array(current_state(integ).site.c)
             bp = LP.discretize(bsys[name], LP.LatticeDiscretization(LP.Grid(dims); T = Float64))
-            bb = LP.solve(LP.remake(bp; u0 = vec(c0)), LP.ExplicitEuler(; dt = 1.0, substeps = n))[:c, end]
+            bb = LP.solve(LP.remake(bp; u0 = vec(c0)), LP.ExplicitEuler(; substeps = n); dt = 1.0)[:c, end]
             @test a == bb
             @test maximum(abs, a .- c0) > 1.0e-3                 # the operator moved the field
         end
@@ -117,7 +117,7 @@ end
             end
         )
         # R3: a wrong-length velocity prints the vector and the operators as written (base:
-        # `SymbolicUtils.array_literal((1,), 0.3)`, `LatticePDE.Advect{…}`, `LatticePDE.Δ`)
+        # `SymbolicUtils.array_literal((1,), 0.3)`, `LatticePDE.Advect{…}`, `LatticePDE.laplacian`)
         err = something(fd_err(() -> mtkcompile(FpAdvectShort(; name = :f))), "")
         @test occursin("cannot lower `[0.3]`", err) && occursin("got 1", err) || (println("R3: ", err); false)
         @test !occursin("array_literal", err) && !occursin("LatticePDE.", err)
@@ -178,11 +178,11 @@ end
         @test Array(st0.site.c) == c0                                   # the zero-length step moves no state
         @test Array(st0.site.K) ≈ 2 .* c0 .+ 1 rtol = 1.0e-14
         @test Array(integ.saved_u[1].site.K) ≈ 2 .* c0 .+ 1 rtol = 1.0e-14  # the saved start
-        # N1: `c` keeps its initial value bitwise under `lower = 0.0`; `K = rhs(u0)`
+        # N1: `c` keeps its initial value bitwise under `lower_bound = 0.0`; `K = rhs(u0)`
         ig = init(
             PottsProblem(
                 FaLower(; name = :l), [ownership => σ0, kind => [:A]], (0, 2);
-                field_solver = ExplicitEuler(substeps = 2, lower = 0.0)
+                field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0)
             ), SequentialCPM()
         )
         sl = CorePotts.current_state(ig)
@@ -226,13 +226,13 @@ end
         s2[2:5, 2:5] .= 1
         s2[7:10, 7:10] .= 2
         integ = init(PottsProblem(FaKind(; name = :a), [ownership => s2, kind => [:A, :B]], (0, 4); seed = 3), SequentialCPM())
-        owner(s) = (σ = Array(s.σ); [i == 0 ? 0 : (i == 1 ? 1 : 2) for i in σ])
+        owner(s) = (σ = Array(s.ownership); [i == 0 ? 0 : (i == 1 ? 1 : 2) for i in σ])
         @test Array(st(integ).site.K) == Float64.(owner(st(integ)) .== 2)
         moved = false
         for _ in 1:4
-            σb = Array(st(integ).σ)
+            σb = Array(st(integ).ownership)
             step!(integ)
-            moved |= Array(st(integ).σ) != σb
+            moved |= Array(st(integ).ownership) != σb
             @test Array(st(integ).site.K) == Float64.(owner(st(integ)) .== 2)
         end
         @test moved                                     # the sweep moved the cells
@@ -246,7 +246,7 @@ end
                 PottsProblem(FaBlock(; name = :a), [ownership => s3, kind => [:A], :m0 => m0], (0, n); seed = 5),
                 SequentialCPM()
             );
-            [(step!(ig); Array(st(ig).σ)) for _ in 1:n]
+            [(step!(ig); Array(st(ig).ownership)) for _ in 1:n]
         )
         @test all(==(s3), run(0.0, 2))
         late = run(2.0, 5)
@@ -284,12 +284,12 @@ end
         ce = c(MTKB.t_nounits, x, y)
         dom = [MTKB.t_nounits ∈ LP.Interval(0.0, 1.0), x ∈ LP.Interval(0.0, 8.0), y ∈ LP.Interval(0.0, 8.0)]
         sys = MTKB.PDESystem(
-            [MTKB.D_nounits(ce) ~ Dc * LP.Δ(ce) - kw * ce^2], [c(0, x, y) ~ 0.0], dom, [MTKB.t_nounits, x, y],
+            [MTKB.D_nounits(ce) ~ Dc * LP.laplacian(ce) - kw * ce^2], [c(0, x, y) ~ 0.0], dom, [MTKB.t_nounits, x, y],
             [ce], [Dc, kw]; name = :w
         )
         bp = LP.discretize(sys, LP.LatticeDiscretization(LP.Grid((8, 8)); T = Float64))
         logs, _ = Test.collect_test_logs() do
-            [LP.init(LP.remake(bp; p = [kw => k]), LP.ExplicitEuler(; dt = 1.0, substeps = 4)) for k in (0.5, 0.7, 0.9)]
+            [LP.init(LP.remake(bp; p = [kw => k]), LP.ExplicitEuler(; substeps = 4); dt = 1.0) for k in (0.5, 0.7, 0.9)]
         end
         @test warns(logs) == 1 && occursin("ExplicitEuler(substeps = 4): 4 substeps", string(logs[end].message))
         @test length(LFP._SEEN_WARNED) == n0 + 2
@@ -310,7 +310,7 @@ end
         σ[2:3, 2:3] .= 1
         op = [ownership => σ, kind => [:A]]
         sys = FxLoop(; name = :x)
-        cv = only(filter(x -> string(x) in ("c", "c(t)"), Potts.variables(sys)))
+        cv = only(filter(x -> string(x) in ("c", "c(t)"), Potts.declared_variables(sys)))
         s = solve(PottsProblem(sys, op, (0, 3); field_solver = ExplicitEuler(substeps = 2)), SequentialCPM())
         w, c = 1.0, 0.0
         for _ in 1:6

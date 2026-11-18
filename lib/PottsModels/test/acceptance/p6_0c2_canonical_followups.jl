@@ -133,7 +133,7 @@ function p60c2_rejection(f, words...)
 end
 
 p60c2_adaptive_phases(prob) = count(ph -> ph isa Potts._AdaptiveODE, prob.f.phases.after_mcs)
-p60c2_var(sys, n) = only(filter(x -> string(x) in (string(n), string(n, "(t)")), variables(sys)))
+p60c2_var(sys, n) = only(filter(x -> string(x) in (string(n), string(n, "(t)")), Potts.declared_variables(sys)))
 """The pair model with `y => a` and `s => b` through `solvers`."""
 function p60c2_split(a, b)
     sys = P60c2Pair(; name = :pair)
@@ -355,7 +355,7 @@ end
     step!(integ)
     ck = checkpoint(integ)
     again = init(p60c2_closure_problem(), SequentialCPM(); checkpoint = ck)
-    @test again.t == 2 && again.u.σ == ck.state.σ
+    @test again.t == 2 && again.u.ownership == ck.state.ownership
     mktempdir() do dir
         path = joinpath(dir, "closure.jls")
         save_checkpoint(path, ck)
@@ -465,7 +465,7 @@ end
                 ck = load_checkpoint(r["ck " * label])
                 integ = init(here, SequentialCPM(); checkpoint = ck)
                 @test integ.t == 2
-                @test current_state(integ).σ == ck.state.σ
+                @test current_state(integ).ownership == ck.state.ownership
             end
         end
         # negative controls: another solver's fingerprint differs and its checkpoint is refused

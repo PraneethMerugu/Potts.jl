@@ -34,7 +34,7 @@ end
     s = solve(prob, Tsit5(); OTOL..., saveat = 0.02)
     @test SciMLBase.successful_retcode(s) && length(s.t) == 11
     @test all(u -> all(==(2.0), reshape(u, 8, 8)[OK1 .== 1]), s.u)         # every save, the first too
-    o = solve(prob, ExplicitEuler(; dt = 1e-5); saveat = 0.2)
+        o = solve(prob, ExplicitEuler(); dt = 1.0e-5, saveat = 0.2)
     @test maximum(abs, s.u[end] .- o.u[end]) < 1e-4 || (println("F4-02 masked vs owned ", maximum(abs, s.u[end] .- o.u[end])); false)
     @test maximum(abs, reshape(s.u[end], 8, 8)[OK1 .== 0] .- 2.0) > 0.1    # control: the other sites move
 end
@@ -62,7 +62,7 @@ end
     prob = discretize(sk, odisc(; clock = 0.25))
     s = solve(prob, Tsit5(); OTOL...)
     @test SciMLBase.successful_retcode(s) && all(b -> b in s.t, (0.25, 0.5, 0.75))
-    o = solve(prob, ExplicitEuler(; dt = 1e-5); saveat = 1.0)
+        o = solve(prob, ExplicitEuler(); dt = 1.0e-5, saveat = 1.0)
     @test maximum(abs, s.u[end] .- o.u[end]) < 1e-5 || (println("F4-02 step_index vs owned ", maximum(abs, s.u[end] .- o.u[end])); false)
     # the exact value at t = 1 (a piecewise decay to 0.1 k on each period)
     u = collect(prob.u0)
@@ -82,14 +82,15 @@ end
 
 @testitem "F4-02: a steady row under Rodas5P equals the owned QuasiSteady run" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
 @testset "F4-02: a steady row under Rodas5P equals the owned QuasiSteady run" begin
-    ss = PDESystem([D(ode_c) ~ oD * Δ(ode_c) - ode_c + ode_v, 0 ~ 0.1 * Δ(ode_v) - ode_v + ode_c],
+        ss = PDESystem(
+            [D(ode_c) ~ oD * laplacian(ode_c) - ode_c + ode_v, 0 ~ 0.1 * laplacian(ode_v) - ode_v + ode_c],
         [oc(0, x, y) ~ x, oc(t, 0, y) ~ 1.0], odom(0.1), [t, x, y], [ode_c, ode_v], [oD]; name = :os)
     prob = discretize(ss, odisc())
     M = prob.f.mass_matrix
     @test M isa Diagonal && count(iszero, M.diag) == 64 && count(isone, M.diag) == 64
     s = solve(prob, Rodas5P(); OTOL...)
     @test SciMLBase.successful_retcode(s)
-    o = solve(prob, BackwardEuler(; dt = 1e-5, inner = DevicePCG(; rtol = 1e-12, budget = 64)); saveat = 0.1)
+        o = solve(prob, BackwardEuler(; linsolve = DevicePCG(; reltol = 1.0e-12, maxiters = 64)); dt = 1.0e-5, saveat = 0.1)
     @test maximum(abs, s.u[end] .- o.u[end]) < 1e-4 || (println("F4-02 steady vs owned ", maximum(abs, s.u[end] .- o.u[end])); false)
     # the steady rows hold at the end (the residual of `v`'s row is 0)
     du = similar(s.u[end])
@@ -103,10 +104,10 @@ end
     fdom = [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
     @variables ow(..)
     owe = ow(x, y)
-    sl = PDESystem([0 ~ 0.3 * Δ(owe) - 2.0 * owe + x], [ow(0, y) ~ 1.0], fdom, [x, y], [owe], Num[]; name = :ol)
+        sl = PDESystem([0 ~ 0.3 * laplacian(owe) - 2.0 * owe + x], [ow(0, y) ~ 1.0], fdom, [x, y], [owe], Num[]; name = :ol)
     lp = discretize(sl, odisc())
     @test lp isa SciMLBase.LinearProblem && lp.A isa LFP.LatticeOperator
-    q = solve(lp, QuasiSteady(; inner = DevicePCG(; rtol = 1e-14, budget = 400)))
+        q = solve(lp, QuasiSteady(; linsolve = DevicePCG(; reltol = 1.0e-14, maxiters = 400)))
     @test maximum(abs, lp.A * q.u[1] .- lp.b) < 1e-8 * maximum(abs, lp.b)
     @test solve(lp).retcode == SciMLBase.ReturnCode.Success                  # (the default: QuasiSteady)
     # A against the matrix of its columns: the same operator as the right side's Jacobian
@@ -114,10 +115,10 @@ end
     Am = reduce(hcat, (lp.A * [i == j ? 1.0 : 0.0 for i in 1:n]) for j in 1:n)
     @test maximum(abs, Am \ lp.b .- q.u[1]) < 1e-8
     # a nonlinear row gives a NonlinearProblem of the right side (zero at the steady state)
-    sn = PDESystem([0 ~ 0.3 * Δ(owe) - owe^3 - owe + x], [ow(0, y) ~ 1.0], fdom, [x, y], [owe], Num[]; name = :on)
+        sn = PDESystem([0 ~ 0.3 * laplacian(owe) - owe^3 - owe + x], [ow(0, y) ~ 1.0], fdom, [x, y], [owe], Num[]; name = :on)
     np = discretize(sn, odisc())
     @test np isa SciMLBase.NonlinearProblem
-    r = solve(np, QuasiSteady(; inner = DevicePCG(; rtol = 1e-14, budget = 400)))
+        r = solve(np, QuasiSteady(; linsolve = DevicePCG(; reltol = 1.0e-14, maxiters = 400)))
     du = similar(r.u[1])
     np.f(du, r.u[1], np.p)
     @test maximum(abs, du) < 1e-6                                            # (QuasiSteady's Newton tolerance)
@@ -129,8 +130,8 @@ end
 @testset "F4-02 (R1): a mask value that reads t moves at its rate ∂v/∂t, at the solver's order" begin
     prob = discretize(qsys(1.0 + sin(10 * t)), LatticeDiscretization(Grid((16, 16)); T = Float64); inputs = [qke => QK])
     # the owned reference: ExplicitEuler at dt and 2dt, extrapolated (Richardson, order 2)
-    r1 = solve(prob, ExplicitEuler(; dt = 1e-5); saveat = [0.5, 1.0])
-    r2 = solve(prob, ExplicitEuler(; dt = 2e-5); saveat = [0.5, 1.0])
+        r1 = solve(prob, ExplicitEuler(); dt = 1.0e-5, saveat = [0.5, 1.0])
+        r2 = solve(prob, ExplicitEuler(); dt = 2.0e-5, saveat = [0.5, 1.0])
     ref = 2 .* r1.u[end] .- r2.u[end]
     for alg in (Tsit5(), Rodas5P())
         s = solve(prob, alg; abstol = 1e-9, reltol = 1e-9, saveat = [0.5, 1.0])
@@ -154,7 +155,7 @@ end
     # (9d30a15a: 1.0 at every save; the other sites off by 2.19)
     prob = discretize(rrsys(1.0 + step_index(t)), odisc(; clock = 0.25); inputs = [rrke => RRK, rrqe => zeros(8, 8)])
     s = solve(prob, Tsit5(); abstol = 1e-9, reltol = 1e-9, saveat = [0.2, 0.6, 0.9])
-    o = solve(prob, ExplicitEuler(; dt = 1e-5); saveat = [0.2, 0.6, 0.9])
+        o = solve(prob, ExplicitEuler(); dt = 1.0e-5, saveat = [0.2, 0.6, 0.9])
     @test [unique(u[RRM]) for u in s.u] == [[1.0], [3.0], [4.0]] ||
           (println("E1 masked ", [unique(u[RRM]) for u in s.u]); false)
     e1 = maximum(abs, s.u[end] .- o.u[findfirst(τ -> abs(τ - 0.9) < 1e-9, o.t)])    # (the owned saves hold t0 and the end too)
@@ -181,7 +182,7 @@ end
     dual(a) = (q = collect(ForwardDiff.Dual{Nothing, Float64, 1}, prob.p.values); q[i] = ForwardDiff.Dual(a, 1.0); q)
     flt(a) = (q = copy(prob.p.values); q[i] = a; q)
     w = vec(RRK .== 0) .* (1:64)                          # a weighted sum of the free sites
-    for (alg, kw, tol) in ((ExplicitEuler(; dt = 1e-3), (;), 1e-6), (Tsit5(), (; abstol = 1e-11, reltol = 1e-11), 1e-5))
+        for (alg, kw, tol) in ((ExplicitEuler(), (; dt = 1.0e-3), 1.0e-6), (Tsit5(), (; abstol = 1.0e-11, reltol = 1.0e-11), 1.0e-5))
         g(q) = sum(w .* solve(remake(prob; p = q), alg; kw...).u[end])
         r = remake(prob; p = dual(1.2))
         @test eltype(r.u0) <: ForwardDiff.Dual && all(==(ForwardDiff.Dual{Nothing}(2.4, 2.0)), r.u0[RRM])
@@ -222,10 +223,11 @@ end
     @parameters ls = 1.0 la = 2.0
     @variables lw(..)
     lwe = lw(x, y)
-    sl = PDESystem([0 ~ 0.3 * Δ(lwe) - la * lwe + ls * x], [lw(0, y) ~ 1.0], [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
+        sl = PDESystem(
+            [0 ~ 0.3 * laplacian(lwe) - la * lwe + ls * x], [lw(0, y) ~ 1.0], [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
         [x, y], [lwe], [ls, la]; name = :pl)
     lp = discretize(sl, odisc())
-    qs(p) = solve(p, QuasiSteady(; inner = DevicePCG(; rtol = 1e-14, budget = 400))).u[1]
+        qs(p) = solve(p, QuasiSteady(; linsolve = DevicePCG(; reltol = 1.0e-14, maxiters = 400))).u[1]
     lp.ps[ls] = 3.0                                     # (0a182a0e: "objects of type Nothing are not callable")
     setp(lp, la)(lp, 5.0)
     q = qs(lp)
@@ -249,7 +251,8 @@ end
 
 @testitem "F4-02 (R2): steady rows start from our QuasiSteady solve at t0; explicit inits stay" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
 @testset "F4-02 (R2): steady rows start from our QuasiSteady solve at t0; explicit inits stay" begin
-    ss = PDESystem([D(ode_c) ~ oD * Δ(ode_c) - ode_c + ode_v, 0 ~ 0.1 * Δ(ode_v) - ode_v + ode_c],
+        ss = PDESystem(
+            [D(ode_c) ~ oD * laplacian(ode_c) - ode_c + ode_v, 0 ~ 0.1 * laplacian(ode_v) - ode_v + ode_c],
         [oc(0, x, y) ~ x, oc(t, 0, y) ~ 1.0], odom(0.1), [t, x, y], [ode_c, ode_v], [oD]; name = :os2)
     prob = discretize(ss, odisc())
     ig = init(prob, Rodas5P(); OTOL...)                 # (no OrdinaryDiffEqNonlinearSolve needed)

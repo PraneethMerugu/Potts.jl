@@ -32,7 +32,7 @@ end
         @variables sc(..)
         sce = sc(t, x, y)
         sys = PDESystem(
-            [D(sce) ~ sD * Δ(sce) - sk * sce],
+            [D(sce) ~ sD * laplacian(sce) - sk * sce],
             [sc(0, x, y) ~ 1.0 + x * y, sc(t, 0, y) ~ 0.0, sc(t, 1, y) ~ 0.0, sc(t, x, 0) ~ 0.0, sc(t, x, 1) ~ 0.0],
             [t ∈ Interval(0.0, 0.4), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
             [t, x, y], [sce], [sD, sk]; name = :sciml_conf
@@ -44,8 +44,8 @@ end
 
         @testset "solve vs solve!(init), step!, reinit!, remake on both paths" begin
             for (label, prob, alg, kw) in (
-                    ("FieldProblem ExplicitEuler", fp, ExplicitEuler(; dt = 0.02, substeps = 1), (;)),
-                    ("FieldProblem BackwardEuler", fp, BackwardEuler(; dt = 0.02, inner = BTIGHT), (;)),
+                    ("FieldProblem ExplicitEuler", fp, ExplicitEuler(; substeps = 1), (; dt = 0.02)),
+                    ("FieldProblem BackwardEuler", fp, BackwardEuler(; linsolve = BTIGHT), (; dt = 0.02)),
                     ("ODEProblem Tsit5", ode, Tsit5(), (; abstol = 1.0e-10, reltol = 1.0e-10)),
                 )
                 @testset "$label" begin
@@ -83,7 +83,7 @@ end
 
         @testset "parameter-mutating DiscreteCallback parity across FieldProblem and ODEProblem" begin
             cb = DiscreteCallback((u, t, i) -> t == 0.2, i -> (i.ps[sk] = 4.0; nothing); save_positions = (false, false))
-            s_fp = solve(remake(fp; p = [sk => 1.0]), ExplicitEuler(; dt = 5.0e-5, substeps = 1); callback = cb, tstops = [0.2])
+            s_fp = solve(remake(fp; p = [sk => 1.0]), ExplicitEuler(; substeps = 1); dt = 5.0e-5, callback = cb, tstops = [0.2])
             s_ode = solve(remake(ode; p = [sk => 1.0]), Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10, callback = cb, tstops = [0.2])
             @test maximum(abs, s_fp.u[end] .- s_ode.u[end]) < 1.0e-4
             # Compare against two chained solves on the ODE path
@@ -101,7 +101,7 @@ end
             @test SII.current_time(ode) == 0.0
             @test SII.getp(ode, sk)(ode) == 1.0
 
-            ig_fp = init(fp, ExplicitEuler(; dt = 0.02))
+            ig_fp = init(fp, ExplicitEuler(); dt = 0.02)
             @test_throws ["ArgumentError", "u0 has 3 values"] reinit!(ig_fp, zeros(3))
             @test_throws ["ArgumentError", "step!(integ, dt)", "does not step back"] step!(ig_fp, -0.02)
             @test_throws ["ArgumentError", "nonexistent_param", "not a parameter"] remake(fp; p = [:nonexistent_param => 1.0])

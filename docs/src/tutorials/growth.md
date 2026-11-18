@@ -10,6 +10,7 @@ divide. They shrink because cells die. You will learn:
 
 ```@example growth
 using Potts, PottsModels, MakiePotts, CairoMakie
+using Potts.Layouts
 CairoMakie.activate!(type = "png") # hide
 nothing # hide
 ```
@@ -42,7 +43,7 @@ lighter teaching example. The benchmark's reference model is `OpenVTReferenceMon
     @relations proposal = Moore(1)
     @energy begin
         cells(cell) => λ * (volume - V_target)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @after_mcs V_target ~ ifelse(volume >= β * Pre(V_target), Pre(V_target) + A₀ / τ, Pre(V_target))
     @divide cells(cell) when = volume >= 2A₀, along = RandomPlane(), V_target => A₀
@@ -85,7 +86,7 @@ site. The result `true` below shows it.
 ```@example growth
 shipped = OpenVTGrowingMonolayer(; name = :openvt, lattice = (80, 80))
 sol_shipped = solve(PottsProblem(shipped, start, (0, 420); seed = 1, capacity = 200), SequentialCPM(); save_everystep = false)
-sol_shipped.u[end].σ == sol.u[end].σ
+sol_shipped.u[end].ownership == sol.u[end].ownership
 ```
 
 ## Counting cells

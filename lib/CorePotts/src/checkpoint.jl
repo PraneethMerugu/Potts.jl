@@ -8,7 +8,7 @@
     PottsCheckpoint
 
 Host copy of the state at MCS `t`, with the RNG key tuple, parameters, statistics (with
-`accepted_ΔH`, exact here) and the model fingerprint. Continue with `init(prob, alg; checkpoint = ck)`; the continuation uses
+`accepted_energy_change`, exact here) and the model fingerprint. Continue with `init(prob, alg; checkpoint = ck)`; the continuation uses
 the problem's `p` (so parameters may change at a restart; `ck.p` records the old ones).
 
 `format` is the checkpoint format ([`CHECKPOINT_FORMAT`](@ref) when written). A checkpoint
@@ -126,7 +126,7 @@ function SciMLBase.reinit!(
     append!(empty!(integ.opts.saveat), saves)
     append!(empty!(integ.opts.tstops), stops)
     erase_sol && (empty!(integ.saved_t); empty!(integ.saved_u))
-    _restore_stats!(_stats(integ), _initial_stats(integ.f))      # `accepted_ΔH`: 0.0 when tracked
+    _restore_stats!(_stats(integ), _initial_stats(integ.f))      # `accepted_energy_change`: 0.0 when tracked
     _reset_cache!(integ.cache, integ)
     _clear_field_status!(integ.ctx)          # a new run: the field groups' failures and counters go
     tangent_reinit!(integ.ctx, fresh ? integ.prob.tangent : nothing)   # (and the derivative parts, F3-21b)
@@ -160,7 +160,7 @@ function _reset_cache!(cache::CheckerboardCache, integ)
     return nothing
 end
 _reset_cache!(B::BoundaryCache, integ) =
-    (_rebuild_boundary!(B, integ.state.σ, integ.ctx.mobility, integ.ctx.lattice, integ.ctx.proposal.offsets); nothing)
+    (_rebuild_boundary!(B, integ.state.ownership, integ.ctx.mobility, integ.ctx.lattice, integ.ctx.proposal.offsets); nothing)
 
 function _key_difference(a::CPMState, b::CPMState)
     parts = String[]

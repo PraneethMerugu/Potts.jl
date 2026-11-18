@@ -9,7 +9,7 @@
 #   AkeebInvasion(; name, …) has the default μ = 24 (D-050 A5, confirmed by D-142).
 #
 #   akeeb_observables(σ::AbstractMatrix{<:Integer}, kinds::AbstractVector{Symbol}) -> NamedTuple
-#   akeeb_observables(u) = akeeb_observables(u.σ, <kinds of u's cells as :leader / :follower>)
+#   akeeb_observables(u) = akeeb_observables(u.ownership, <kinds of u's cells as :leader / :follower>)
 #                                                            (PottsModels, exported)
 #     The authors' metric code at one state, spec 10 §5.3.3 O1–O8, on a 2-D lattice with x
 #     (first index) periodic and y (second index) closed. Cell c is σ's value c, kinds[c]
@@ -22,7 +22,7 @@
 #       O3 profiles: top_main(x) = largest y with σ ∈ M, top_out(x) = largest y with
 #          σ ≠ 0; keep the columns where both exist, in x order; base = min of the kept
 #          top_main.
-#       O4 invasive = trapz(x_kept, top_main − base), infiltrative = trapz(x_kept,
+#       O4 invasive = trapezoid_integral(x_kept, top_main − base), infiltrative = trapezoid_integral(x_kept,
 #          top_out − base), Float64, px², not periodic.
 #       O5 fingers = length(merge_peaks(find_peaks(top_main_kept; prominence = 10,
 #          distance = 10, width = 5), 15)) (PottsModels.Analysis; on the kept-column array
@@ -179,12 +179,12 @@ function p62b_run(point, seeds; tmax = 701, saves = P62B_SAVES)
         L = findall(==(:leader), kinds0)
         lc = u0.cell.kind[first(L)]                         # the leader kind's code
         alive1 = falses(length(u1.cell.kind))
-        for c in u1.σ
+        for c in u1.ownership
             c > 0 && (alive1[c] = true)
         end
         (; obs = Dict(Int(t) - 1 => akeeb_observables(sol.u[findfirst(==(t), sol.t)]) for t in saves),
             divisions = sol.stats.lifecycle.divisions,
-            live0 = length(unique(filter(>(0), vec(u0.σ)))), live1 = count(alive1), ncells0 = length(kinds0),
+            live0 = length(unique(filter(>(0), vec(u0.ownership)))), live1 = count(alive1), ncells0 = length(kinds0),
             leaders_same_code = all(c -> u0.cell.kind[c] == lc, L),
             leaders_alive = all(c -> alive1[c], L),
             leader_cells1 = count(c -> alive1[c] && u1.cell.kind[c] == lc, eachindex(alive1)), painted = length(L))
@@ -239,8 +239,8 @@ p62b_lattice(rows) = (Y = length(rows); [rows[Y - y + 1][x] for x in eachindex(r
     @test o.clusters == 2
     @test o.cluster_leaders == [1, 0] && o.cluster_followers == [1, 2]
     # O3/O4: top_main = 2, 3, 2, 2 at x = 2:5 (0 elsewhere); top_out = 7, 2, 3, 2, 7, 3, 6,
-    # 1, 5, 5, 5, 7. Kept x = 2:5, base 2: invasive trapz([0,1,0,0]) = 1.0, infiltrative
-    # trapz([0,1,0,5]) = 0.5 + 0.5 + 2.5 = 3.5. Seeding row y = 1 instead would put 3 in M
+    # 1, 5, 5, 5, 7. Kept x = 2:5, base 2: invasive trapezoid_integral([0,1,0,0]) = 1.0, infiltrative
+    # trapezoid_integral([0,1,0,5]) = 0.5 + 0.5 + 2.5 = 3.5. Seeding row y = 1 instead would put 3 in M
     # and keep x = 8: base 1, invasive 5.5.
     @test o.invasive === 1.0 && o.infiltrative === 3.5
     @test o.fingers == 0
@@ -274,7 +274,7 @@ end
     @test PottsModels.Analysis.find_peaks(h; prominence = 10, distance = 10, width = 5) == [10, 30, 44]
     @test o.fingers == 2
     # O4, base 3: Σ(h − 3) = A 113 + (B ∪ C) 225 + D 18 + E 15 = 371 (zero at both ends, so
-    # trapz is the sum); top_out − top_main is 17 at x = 75, 76: + 34.
+    # trapezoid_integral is the sum); top_out − top_main is 17 at x = 75, 76: + 34.
     @test o.invasive === 371.0 && o.infiltrative === 405.0
     # cell 2: outside M, yCOM 20 above M's yCOM; one cell, so no cluster; a follower, so
     # not a single

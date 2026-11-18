@@ -19,7 +19,7 @@ The keys are `(a, b)`, with kind `a` declared no later than `b` in `@kinds`. Eve
 a key, zeros included, and `(medium, medium)` is always 0. Two cells of one kind count
 under `(k, k)`. Kind classes are not keys.
 
-For a model whose only energy is `contacts => J[kind, kind′]` (times `weight` for a
+For a model whose only energy is `contacts => J[kind, neighbor_kind]` (times `weight` for a
 weighted relation), `Σ J[a, b] · L[(a, b)] == total_energy(prob, u)`.
 
 Square, hexagonal and 3D lattices; `u` must be a host state.
@@ -37,7 +37,7 @@ function boundary_lengths(prob::CorePotts.PottsProblem, u = prob.u0; relation = 
     )
     # each unordered pair once: the offsets whose first non-zero component is positive
     forward = [k for k in 1:length(r) if _is_forward(r.offsets[k])]
-    acc = _bond_lengths(u.σ, u.cell.kind, prob.lattice, r, forward, length(names))
+    acc = _bond_lengths(u.ownership, u.cell.kind, prob.lattice, r, forward, length(names))
     return Dict((names[a], names[b]) => acc[a, b] for a in eachindex(names) for b in a:length(names))
 end
 
@@ -73,7 +73,7 @@ end
 _same_temperature(t::_ZeroTemperature, g) = t.temperature === g
 
 """
-    Potts.anneal(prob, u = prob.u0; mcs, seed = 0, alg = SequentialCPM())
+    Potts.anneal(prob, [u = prob.u0,] mcs; seed = 0, alg = SequentialCPM())
 
 The annealed copy of state `u`: a new state, `u` after `mcs` MCS of `prob`'s copy dynamics
 with the copy temperature 0 for every proposal, whatever the model's temperature expression.
@@ -93,10 +93,10 @@ sees it frozen at `u`'s value.
 `u` and `prob` are not modified. The result is deterministic in `(prob, u, mcs, seed, alg)`.
 `mcs = 0` returns an equal copy of `u`; `mcs < 0` or `seed < 0` is an `ArgumentError`. A
 non-finite ΔH stops the dynamics, as in a run, and is an error here. Measure the result
-like any state, e.g. `boundary_lengths(prob, anneal(prob, u; mcs = 32))`.
+like any state, e.g. `boundary_lengths(prob, anneal(prob, u, 32))`.
 """
-function anneal(prob::CorePotts.PottsProblem, u = prob.u0; mcs::Integer, seed::Integer = 0,
-        alg = CorePotts.SequentialCPM())
+anneal(prob::CorePotts.PottsProblem, mcs::Integer; kwargs...) = anneal(prob, prob.u0, mcs; kwargs...)
+function anneal(prob::CorePotts.PottsProblem, u, mcs::Integer; seed::Integer = 0, alg = CorePotts.SequentialCPM())
     mcs >= 0 || throw(ArgumentError("anneal: `mcs` must be non-negative, got $mcs; pass `mcs >= 0`"))
     seed >= 0 || throw(ArgumentError("anneal: `seed` must be non-negative, got $seed; pass `seed >= 0`"))
     f = prob.f

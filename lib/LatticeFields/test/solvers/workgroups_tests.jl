@@ -14,7 +14,7 @@ A test executor: workgroup launches through the device wrapper on the KA CPU bac
 """
 struct KAExec end
 Solvers.alloc(::KAExec, ::Type{T}, n) where {T} = zeros(T, n)
-Solvers.fetch(::KAExec, A) = (KA.synchronize(KA.CPU()); copy(A))
+Solvers.to_host(::KAExec, A) = (KA.synchronize(KA.CPU()); copy(A))
 Schedule.supports(::KAExec, ::Type{Float64}) = true
 function Solvers.launch!(::KAExec, l::Solvers.Launch)
     if l.wg == 0
@@ -42,7 +42,8 @@ end
 @testset "workgroup launches: reversed items give the same bits" begin
     for (case, kw) in ((named_case("sphere42", 0.022), (;)),
         (named_case("per256", 0.022), (;)),
-        (named_case("disk128", 1.9e-3), (; inner = Multigrid())))
+                (named_case("disk128", 1.9e-3), (; linsolve = Multigrid())),
+            )
         a = solved(case, HostExec(); kw...)
         HOST_REVERSE[] = true
         b = try

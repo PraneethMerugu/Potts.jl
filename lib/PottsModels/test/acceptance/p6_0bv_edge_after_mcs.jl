@@ -209,7 +209,7 @@ end
     @testset "$(nameof(typeof(alg)))" for alg in (SequentialCPM(), CheckerboardCPM())
         sol = solve(prob, alg; saveat = 1)
         @test Symbol(sol.retcode) === :Success && sol.t == 0:6
-        @test all(u -> u.σ == p60bv_state(), sol.u)                           # frozen: distances fixed
+        @test all(u -> u.ownership == p60bv_state(), sol.u)                           # frozen: distances fixed
         for (i, t) in enumerate(sol.t), ((a, b), d) in P60BV_D
             c = sol.u[i].cell
             @test p60bv_payload(c, :rest, a, b) ≈ p60bv_rest(d, t) rtol = 1e-12
@@ -279,7 +279,7 @@ end
           [(:after_mcs, :cell, Potts.Every(1))]
     for alg in (SequentialCPM(), CheckerboardCPM())
         sol = solve(prob, alg; saveat = 1)
-        @test all(u -> u.σ == p60bv_state(), sol.u)
+        @test all(u -> u.ownership == p60bv_state(), sol.u)
         c = sol.u[end].cell
         for (a, b) in keys(P60BV_D)
             @test p60bv_payload(c, :rest, a, b) == 12.0 && p60bv_payload(c, :rest, b, a) == 12.0

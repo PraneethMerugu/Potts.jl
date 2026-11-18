@@ -142,7 +142,7 @@ Both kinds of division can happen in one MCS:
   cluster's volume and moments at the root's index), and every live member splits along that plane
   through the cluster centroid; `cluster_divide!` runs for each member. A portable
   `cluster_normal` reads `st.cell.volume`, `anchor`, `m1`, `m2` only at the root's index,
-  any other cell column only as `generation`, `kind` or `cluster`, and not `st.σ`: the host
+  any other cell column only as `generation`, `kind` or `cluster`, and not `st.ownership`: the host
   planner passes a cluster-labeled `σ` and cluster moments at every root, the device planner
   the cell-labeled `σ`, the full cell columns, and the cluster's volume and moments
   at every index. The daughters form
@@ -401,7 +401,7 @@ struct LifecycleCache{E, C, D, R, NM, B, DL}
     device::DL
 end
 
-function LifecycleCache(backend, N::Int, capacity::Int, st = nothing, device::Bool = false)
+function LifecycleCache(backend, N::Int, capacity::Int, st = nothing, device::Bool = false; fused_limits = (;))
     T = Exec.default_float(backend)
     return LifecycleCache(KernelAbstractions.zeros(backend, Int32, capacity),
         KernelAbstractions.zeros(backend, Int32, 2), zeros(Int32, 1), Ref(0),
@@ -409,7 +409,8 @@ function LifecycleCache(backend, N::Int, capacity::Int, st = nothing, device::Bo
         KernelAbstractions.zeros(backend, Bool, capacity),
         KernelAbstractions.zeros(backend, T, N, capacity),
         KernelAbstractions.zeros(backend, T, capacity),
-        device ? DeviceLifecycle(backend, N, capacity, st) : nothing)
+        device ? DeviceLifecycle(backend, N, capacity, st; fused_limits...) : nothing
+    )
 end
 
 Base.@kwdef mutable struct LifecycleStats
@@ -542,8 +543,10 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
             ctx, key, mcs, lc.rules))
         launches += 1
     end
-    n = length(st.σ)
-    Exec.launch!(backend, _partition_body!, n, (st.σ, cache.daughter, cache.normals, cache.bias, cache.removed,
+    n = length(st.ownership)
+    Exec.launch!(
+        backend, _partition_body!, n, (
+            st.ownership, cache.daughter, cache.normals, cache.bias, cache.removed,
         st.cell, ctx.lattice, lc.owner_changed, st))
     launches += 1
 
@@ -621,7 +624,7 @@ rebuild_trackers!(st, ctx, backend) = _rebuild_trackers!(nothing, st, ctx, backe
 # for every other tracker) the trackers are recomputed from σ
 function _rebuild_trackers!(stats, st, ctx, backend; division = nothing)
     _sync!(stats, backend)
-    σ = _to_host(stats, st.σ)
+    σ = _to_host(stats, st.ownership)
     lat = _host_lattice(stats, ctx.lattice)
     ctx = merge(ctx, (; lattice = lat))
     cap = length(st.cell.kind)
@@ -709,7 +712,7 @@ function with_capacity(st::CPMState, capacity::Integer)
     cell = map(grow, st.cell)
     cell.kind[(n + 1):end] .= Int32(1)
     haskey(cell, :cluster) && (cell.cluster[(n + 1):end] .= Int32.((n + 1):capacity))
-    return CPMState(st.σ, cell, st.site, st.model, st.history)
+    return CPMState(st.ownership, cell, st.site, st.model, st.history)
 end
 
 _is_link_data(name::Symbol) = _is_adjacency(name) || startswith(String(name), "link_")

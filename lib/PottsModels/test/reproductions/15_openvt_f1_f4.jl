@@ -157,7 +157,7 @@ end
 function p615h_state(σ)
     n = Int(maximum(σ))
     vol = Float64[count(==(c), σ) for c in 1:n]
-    return (; σ, cell = (; volume = vol, A_star = fill(50.0, n)))
+    return (; ownership = σ, cell = (; volume = vol, A_star = fill(50.0, n)))
 end
 
 # ---------------------------------------------------------------------------------------------

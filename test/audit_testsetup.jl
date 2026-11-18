@@ -14,16 +14,16 @@ module AuPDE
     const C, U, DK = c(t, x, y), u(t, x, y), dk(t, x, y)
     const D8 = (16, 16)
     dup() = pdesys([Dt(C) ~ -C / 10, Dt(C) ~ -C / 10], [c(0, x, y) ~ 1.0], (8, 8), [C])
-    diffusion() = (@parameters Dc = 0.1; pdesys([Dt(C) ~ Dc * Δ(C)], [c(0, x, y) ~ 0.0], D8, [C], [Dc]))
-    nonlinear() = (@parameters Dc = 0.1 k = 0.5; pdesys([Dt(C) ~ Dc * Δ(C) - k * C^2], [c(0, x, y) ~ 0.0], D8, [C], [Dc, k]))
-    bounded() = (@parameters Dc = 1.0; pdesys([Dt(C) ~ Dc * Δ(C) - DK * C], [c(0, x, y) ~ 0.0], D8, [C, DK], [Dc]))
-    kind_diffusion() = pdesys([Dt(C) ~ DK * Δ(C)], [c(0, x, y) ~ 0.0], D8, [C, DK])
-    volume_diffusion() = pdesys([Dt(C) ~ 0.01 * DK * Δ(C)], [c(0, x, y) ~ 0.0], D8, [C, DK])
-    mcs_diffusion() = pdesys([Dt(C) ~ DK * (1 + step_index(t)) * Δ(C)], [c(0, x, y) ~ 0.0], D8, [C, DK])
-    inv_table() = (@parameters Dc = 0.1; pdesys([Dt(C) ~ Dc * Δ(C) - (1 / DK) * C], [c(0, x, y) ~ 0.0], D8, [C, DK], [Dc]))
+    diffusion() = (@parameters Dc = 0.1; pdesys([Dt(C) ~ Dc * laplacian(C)], [c(0, x, y) ~ 0.0], D8, [C], [Dc]))
+    nonlinear() = (@parameters Dc = 0.1 k = 0.5; pdesys([Dt(C) ~ Dc * laplacian(C) - k * C^2], [c(0, x, y) ~ 0.0], D8, [C], [Dc, k]))
+    bounded() = (@parameters Dc = 1.0; pdesys([Dt(C) ~ Dc * laplacian(C) - DK * C], [c(0, x, y) ~ 0.0], D8, [C, DK], [Dc]))
+    kind_diffusion() = pdesys([Dt(C) ~ DK * laplacian(C)], [c(0, x, y) ~ 0.0], D8, [C, DK])
+    volume_diffusion() = pdesys([Dt(C) ~ 0.01 * DK * laplacian(C)], [c(0, x, y) ~ 0.0], D8, [C, DK])
+    mcs_diffusion() = pdesys([Dt(C) ~ DK * (1 + step_index(t)) * laplacian(C)], [c(0, x, y) ~ 0.0], D8, [C, DK])
+    inv_table() = (@parameters Dc = 0.1; pdesys([Dt(C) ~ Dc * laplacian(C) - (1 / DK) * C], [c(0, x, y) ~ 0.0], D8, [C, DK], [Dc]))
     int_div() = (
         @parameters Dc = 0.25; Cx = c(t, x);
-        pdesys([Dt(Cx) ~ Dc * Δ(Cx) - dk(t, x) * Cx], [c(0, x) ~ 0.0], (16,), [Cx, dk(t, x)], [Dc])
+        pdesys([Dt(Cx) ~ Dc * laplacian(Cx) - dk(t, x) * Cx], [c(0, x) ~ 0.0], (16,), [Cx, dk(t, x)], [Dc])
     )
     two(e1, e2) = (
         @parameters Dc = 0.5 Dx = 0.5; pdesys(
@@ -31,10 +31,10 @@ module AuPDE
             [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0], (8, 8), [C, U], [Dc, Dx]
         )
     )
-    cross_field() = two((Dc, Dx) -> Dc * Δ(C) - Dx * Δ(U), (Dc, Dx) -> Dc * Δ(U))
-    cross_linear() = two((Dc, Dx) -> Dc * Δ(C) - Dx * U, (Dc, Dx) -> Dc * Δ(U))
-    cross_loop() = two((Dc, Dx) -> Dc * Δ(C) - Dx * Δ(U), (Dc, Dx) -> Dc * Δ(U) + Dx * Δ(C))
-    field1() = (@parameters Dc = 0.5; pdesys([Dt(C) ~ Dc * Δ(C)], [c(0, x, y) ~ 0.0], (8, 8), [C], [Dc]))
+    cross_field() = two((Dc, Dx) -> Dc * laplacian(C) - Dx * laplacian(U), (Dc, Dx) -> Dc * laplacian(U))
+    cross_linear() = two((Dc, Dx) -> Dc * laplacian(C) - Dx * U, (Dc, Dx) -> Dc * laplacian(U))
+    cross_loop() = two((Dc, Dx) -> Dc * laplacian(C) - Dx * laplacian(U), (Dc, Dx) -> Dc * laplacian(U) + Dx * laplacian(C))
+    field1() = (@parameters Dc = 0.5; pdesys([Dt(C) ~ Dc * laplacian(C)], [c(0, x, y) ~ 0.0], (8, 8), [C], [Dc]))
     const MCS = step_index(t)
     gate_rotation() = (
         @parameters t0 = 1000.0 k = 4.0;
@@ -334,7 +334,7 @@ end
     @lattice Lattice((20, 20))
     @energy begin
         cells => (volume - 9)^2
-        contacts => x[owner] + x[owner′]
+        contacts => x[owner] + x[neighbor_owner]
     end
     @on_copy x[new] ~ x[new] + 1
     @sweep Metropolis(; temperature = 5.0)
@@ -354,7 +354,7 @@ end
     @lattice Lattice((12, 12))
     @energy begin
         cells => (volume - V2 / 2)^2 + pb * 0
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = 5.0)
 end
@@ -433,7 +433,7 @@ end
     @lattice Lattice(lattice; geometry)
     @energy begin
         cells(A) => (volume - 12)^2 + λ_L * (major_length - L)^2
-        contacts => 1.0 * (kind != kind′)
+        contacts => 1.0 * (kind != neighbor_kind)
     end
     @observed len(cell) ~ major_length
     @sweep Metropolis(; temperature = 4.0)

@@ -131,6 +131,7 @@ end
 end
 
 @testitem "kind classes: layouts against a model take kinds" setup = [KindClassTests] tags = [:potts, :kind_classes] begin
+    using Potts.Layouts
     @testset "kind classes: layouts against a model take kinds" begin
         sys = KCBase(; name = :m)
         tiles = Tiling((3, 3); kinds = [:tip, :stalk])

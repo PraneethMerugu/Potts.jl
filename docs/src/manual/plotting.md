@@ -19,15 +19,16 @@ backend: CairoMakie for files and notebooks, GLMakie for interactive windows.
 
 ```@example plotting
 using Potts, MakiePotts, CairoMakie
+using Potts.Layouts
 using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
-using Potts.LatticePDE: Δ, lattice_domain
+using Potts.LatticePDE: laplacian, lattice_domain
 CairoMakie.activate!(type = "png") # hide
 
 t = Potts.t
 @parameters x y
 @variables c(..) = 0.0 isdark(..)::Bool [input = true]
 C = c(t, x, y)
-dye = PDESystem([Differential(t)(C) ~ 0.2 * Δ(C) + 0.05 * isdark(t, x, y) - 0.01 * C], [],
+dye = PDESystem([Differential(t)(C) ~ 0.2 * laplacian(C) + 0.05 * isdark(t, x, y) - 0.01 * C], [],
     lattice_domain(t, (x, y), (40, 40)), [t, x, y], [C, isdark(t, x, y)], []; name = :dye)
 
 @potts_model Mix begin
@@ -36,7 +37,7 @@ dye = PDESystem([Differential(t)(C) ~ 0.2 * Δ(C) + 0.05 * isdark(t, x, y) - 0.0
     @lattice Lattice((40, 40); neighborhood = Moore(1))
     @energy begin
         Volume(dark, light; target = 25.0, strength = 1.0)
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @fields dye (isdark => kind == dark)
     @sweep Metropolis(; temperature = 10.0)
@@ -57,7 +58,7 @@ for (i, enc) in enumerate((CellTypeEncoding(), CellIdentityEncoding(), ChannelEn
     if enc isa ChannelEncoding       # show the cells over the field as a translucent fill, not outlines
         nx, ny = frame_size(frame)
         ox, oy = frame_geometry(frame).origin
-        heatmap!(ax, ox .+ (0:nx), oy .+ (0:ny), [c != 0 ? 1.0 : NaN for c in Array(u.σ)];
+        heatmap!(ax, ox .+ (0:nx), oy .+ (0:ny), [c != 0 ? 1.0 : NaN for c in Array(u.ownership)];
             colormap = [(:white, 0.35), (:white, 0.35)], colorrange = (0, 1), nan_color = :transparent)
     end
 end

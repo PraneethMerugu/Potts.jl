@@ -6,15 +6,15 @@ The OpenVT growing monolayer with contact inhibition as the benchmark manuscript
 colony on a closed lattice, large enough that the colony stays away from the edge (guard it
 with [`edge_guard`](@ref PottsModels.edge_guard)):
 
-- area constraint `λ (volume − A_star)²`, adhesion `J[kind, kind′]` on `Moore(1)` with
+- area constraint `λ (volume − A_star)²`, adhesion `J[kind, neighbor_kind]` on `Moore(1)` with
   `J_cm = 10`, `J_cc = 20` (no net adhesion), Metropolis at `T`;
 - growth once per MCS after the sweep: `A_star += α` iff `volume / A_star ≥ β` (type 1)
   and `f ≥ γ` (type 2), where `f` is the free-surface fraction, the cell's medium contact
   pairs over its unlike contact pairs on `Moore(1)` (M's Fig 4, TST's "method 3"), read
-  with the contact fold `count(kind′ == medium for _ in contacts) / count(true for _ in contacts)`;
+  with the contact fold `count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts)`;
 - division at `volume ≥ X · A₀` along a random plane. Both daughters take half the
   mother's `A_star` and draw their own `X ~ N(μ_X, σ_X)`, redrawn while `X ≤ 0`
-  (`randn(μ_X, σ_X; lower = 0)`); the first cell draws its `X` the same way before the first
+  (`randn(μ_X, σ_X; lower_bound = 0)`); the first cell draws its `X` the same way before the first
   division check. `σ_X = 0` is the deterministic mode `X ≡ μ_X`.
 
 Parameters (Table S1): `A₀ = 50` (A\\*(0), px), `λ = 2`, `T = 20`, `α = 50/775` px/MCS (a
@@ -51,30 +51,31 @@ the variant [`OpenVTGrowingMonolayer`](@ref).
     @relations proposal = Moore(1)
     @energy begin
         cells(cell) => λ * (volume - A_star)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
-    @before_mcs X ~ ifelse(Pre(X) > 0, Pre(X), randn(μ_X, σ_X; lower = 0.0))
+    @before_mcs X ~ ifelse(Pre(X) > 0, Pre(X), randn(μ_X, σ_X; lower_bound = 0.0))
     @after_mcs begin
         f ~ ifelse(count(true for _ in contacts) > 0,
-            count(kind′ == medium for _ in contacts) / count(true for _ in contacts), 1.0)
+            count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts), 1.0
+        )
         A_star ~ ifelse((volume / Pre(A_star) >= β) && (f >= γ), Pre(A_star) + α, Pre(A_star))
     end
     @divide cells(cell) when = volume >= X * A₀, along = RandomPlane(), A_star => Split(),
-        X => randn(μ_X, σ_X; lower = 0.0)
+        X => randn(μ_X, σ_X; lower_bound = 0.0)
     @sweep Metropolis(; temperature = T)
 end
 
 """
-    openvt_reference_state(; lattice = (1400, 1400), A₀ = 50)
+    openvt_reference_state(; lattice = (1400, 1400), area0 = 50)
 
 One disc-shaped cell at the lattice center: the sites whose centers lie within
-`R = √(A₀/π)` of the center point `(size .+ 1) ./ 2` (Morpheus' `Sphere radius = R`), id 1,
-as `[ownership => σ, kind => [:cell]]`. For `A₀ = 50` that is 52 sites on an even lattice
+`R = √(area0/π)` of the center point `(size .+ 1) ./ 2` (Morpheus' `Sphere radius = R`), id 1,
+as `[ownership => σ, kind => [:cell]]` (`area0` is the model's A₀). For `area0 = 50` that is 52 sites on an even lattice
 and 45 on an odd one.
 """
-function openvt_reference_state(; lattice = (1400, 1400), A₀ = 50)
+function openvt_reference_state(; lattice = (1400, 1400), area0 = 50)
     σ = zeros(Int32, lattice)
-    R = sqrt(A₀ / π)
+    R = sqrt(area0 / π)
     c = (Tuple(lattice) .+ 1) ./ 2
     for I in CartesianIndices(σ)
         sqrt(sum(abs2, Tuple(I) .- c)) <= R && (σ[I] = 1)
@@ -83,18 +84,18 @@ function openvt_reference_state(; lattice = (1400, 1400), A₀ = 50)
 end
 
 """
-    openvt_snapshot(u; A₀ = 50.0, center = (size(u.σ) .+ 1) ./ 2) -> (; x, y, r, f, a)
+    openvt_snapshot(u; area0 = 50.0, center = (size(u.ownership) .+ 1) ./ 2) -> (; x, y, r, f, a)
 
 The O2 rows of a saved state `u` of [`OpenVTReferenceMonolayer`](@ref) (spec §3.1): one per
-live cell (volume > 0), in id order, lengths in units of `R = √(A₀/π)`:
+live cell (volume > 0), in id order, lengths in units of `R = √(area0/π)` (`area0` is the model's A₀):
 
 - `x`, `y`: the centroid (mean site index; the lattice is closed) minus `center`, over `R`;
 - `r = √(A_star/π) / R`, the radius of the cell's reference area;
 - `f`: the free-surface fraction, medium pairs over unlike pairs on `Moore(1)`, from σ;
 - `a = volume / A_star`.
 """
-function openvt_snapshot(u; A₀ = 50.0, center = (size(u.σ) .+ 1) ./ 2)
-    σ = Array(u.σ)
+function openvt_snapshot(u; area0 = 50.0, center = (size(u.ownership) .+ 1) ./ 2)
+    σ = Array(u.ownership)
     ndims(σ) == 2 || throw(ArgumentError("openvt_snapshot: a 2D state is required, got $(ndims(σ))D"))
     volume = Array(u.cell.volume)
     A = Array(u.cell.A_star)
@@ -116,7 +117,7 @@ function openvt_snapshot(u; A₀ = 50.0, center = (size(u.σ) .+ 1) ./ 2)
         end
     end
     live = findall(>(0), volume)
-    R = sqrt(A₀ / π)
+    R = sqrt(area0 / π)
     x = [(sx[c] / volume[c] - center[1]) / R for c in live]
     y = [(sy[c] / volume[c] - center[2]) / R for c in live]
     r = [sqrt(Float64(A[c]) / π) / R for c in live]
@@ -126,16 +127,16 @@ function openvt_snapshot(u; A₀ = 50.0, center = (size(u.σ) .+ 1) ./ 2)
 end
 
 """
-    openvt_frame(u; β, γ, A₀ = 50.0, center = (size(u.σ) .+ 1) ./ 2) -> (; x, y, i, n)
+    openvt_frame(u; beta, gamma, area0 = 50.0, center = (size(u.ownership) .+ 1) ./ 2) -> (; x, y, i, n)
 
 The O1 rows of a saved state `u` of [`OpenVTReferenceMonolayer`](@ref) (spec §3.1, M's
 DATA COLLECTION time series): one per live cell (volume > 0), in id order, ready for
 `write_openvt(dest, :O1, frame)`:
 
-- `x`, `y`: the centroid in units of `R = √(A₀/π)` from `center`, exactly as
+- `x`, `y`: the centroid in units of `R = √(area0/π)` from `center`, exactly as
   [`openvt_snapshot`](@ref PottsModels.openvt_snapshot) gives them;
 - `i`: the inhibition code [`openvt_inhibition_code`](@ref) of the snapshot's `a` and `f` at
-  the thresholds `β` (type 1, area) and `γ` (type 2, free surface): 0 growing, 1, 2 or 3.
+  the thresholds `beta` (the model's β; type 1, area) and `gamma` (γ; type 2, free surface): 0 growing, 1, 2 or 3.
   The code is computed on the saved state, after that MCS's growth increment: `a` is
   `volume / A_star` with the grown `A_star`, while the model decided growth on the
   pre-growth `volume / Pre(A_star)`. The two differ only for a cell whose target area is
@@ -144,15 +145,15 @@ DATA COLLECTION time series): one per live cell (volume > 0), in id order, ready
 - `n`: the number of distinct other cells (medium and the cell itself excluded) among the
   `Moore(1)` neighbors of the cell's sites (spec §2.4), on the closed lattice (no wrap).
 
-Like `openvt_snapshot`, it takes any `u` with `u.σ` (2D), `u.cell.volume` and
+Like `openvt_snapshot`, it takes any `u` with `u.ownership` (2D), `u.cell.volume` and
 `u.cell.A_star`, on the host or a device. `σ` and the volumes are copied to the host twice,
 once by the snapshot and once for the neighbor count.
 """
-function openvt_frame(u; β::Real, γ::Real, A₀ = 50.0, center = (size(u.σ) .+ 1) ./ 2)
-    o = openvt_snapshot(u; A₀, center)
-    σ = Array(u.σ)
+function openvt_frame(u; beta::Real, gamma::Real, area0 = 50.0, center = (size(u.ownership) .+ 1) ./ 2)
+    o = openvt_snapshot(u; area0, center)
+    σ = Array(u.ownership)
     live = findall(>(0), Array(u.cell.volume))
-    i = [openvt_inhibition_code(o.a[j], o.f[j]; β, γ) for j in eachindex(o.a)]
+    i = [openvt_inhibition_code(o.a[j], o.f[j]; beta, gamma) for j in eachindex(o.a)]
     deg = _moore_degrees(σ, length(u.cell.volume))
     return (; o.x, o.y, i, n = deg[live])
 end
@@ -214,7 +215,7 @@ host read (a masked reduction over σ), a declared host pass (D-145).
 function edge_guard(margin::Integer; terminate::Bool = false, every::Integer = 1)
     every >= 1 || throw(ArgumentError("edge_guard: `every` must be ≥ 1, got $every"))
     g = _EdgeGuard(Int(margin), Ref{Any}(nothing))
-    condition(u, t, integ) = t % every == 0 && g(u.σ)
+    condition(u, t, integ) = t % every == 0 && g(u.ownership)
     affect!(integ) = terminate ? terminate!(integ, ReturnCode.Failure) :
                      throw(DomainError(margin, "edge_guard: a cell came within $margin sites of the lattice edge " *
                                                "at MCS $(integ.t); use a larger lattice"))

@@ -68,18 +68,21 @@ function m06_final(seed; old = false)
     G = (M06_G, M06_G)
     sys, op, solver = if old
         (MerksVasculogenesis(; name = :m, lattice = G, V₀ = 50.0, λ = 25.0, L = 30.0, λ_L = 5.0),
-            merks_state(; lattice = G, n = M06_N, side = 7, seed), ExplicitEuler(substeps = 2, lower = 0.0))
+            merks_state(; lattice = G, n = M06_N, side = 7, seed), ExplicitEuler(substeps = 2, lower_bound = 0.0),
+        )
     else
         (MerksVasculogenesis(; name = :m, lattice = G), merks_state(; lattice = G, n = M06_N, seed),
-            ExplicitEuler(substeps = 15, lower = 0.0))
+            ExplicitEuler(substeps = 15, lower_bound = 0.0),
+        )
     end
     prob = PottsProblem(sys, op, (0, M06_T); seed, field_solver = solver)
-    return solve(prob, SequentialCPM(); saveat = M06_T).u[end].σ
+    return solve(prob, SequentialCPM(); saveat = M06_T).u[end].ownership
 end
 
 @testset "Merks 2006 defaults: the paper's parameter set" begin
     prob = PottsProblem(MerksVasculogenesis(; name = :m, lattice = (20, 20)), merks_state(; lattice = (20, 20), n = 1),
-        (0, 1); field_solver = ExplicitEuler(substeps = 15, lower = 0.0))
+        (0, 1); field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0)
+    )
     p = prob.p
     @test p.V₀ == 100.0 && p.λ == 50.0
     @test p.λ_L == 5.0 && p.L == 50.0
@@ -96,7 +99,7 @@ end
     @test all(I -> 84 <= I[1] <= 417 && 84 <= I[2] <= 417, occupied)    # within the central 333²
 
     doc = string(@doc MerksVasculogenesis)
-    @test occursin("ExplicitEuler(substeps = 15, lower = 0.0)", doc)
+    @test occursin("ExplicitEuler(substeps = 15, lower_bound = 0.0)", doc)
     @test !occursin("substeps = 2", doc)
 end
 

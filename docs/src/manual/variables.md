@@ -36,11 +36,11 @@ Options go in brackets after the default. The field options (`bounds`, `lattice_
   with `ReturnCode.Unstable`, since its substep count holds only inside the bounds. Under the
   implicit solvers the run goes on, since the bounds set only the solve's counts and the
   solve checks its own steps (the Newton check, the shift clamp; both warn). `CrankNicolson` and `BDF2` can undershoot a bound
-  by a few percent; `lower = lo`, the low end of the bounds, clips each substep there.
+  by a few percent; `lower_bound = lo`, the low end of the bounds, clips each substep there.
 - `[lattice_storage = Float16 | Float32 | Float64]` (fields): the field's own array type,
   whatever the state type `T` of the problem. Its kernels compute in the field solver's
-  `compute_T` (default: `T`) and round once at each store. A Float32 problem with
-  `c(..) = 0.0 [lattice_storage = Float64]` and `field_solver = ExplicitEuler(; compute_T = Float64)`
+  `compute_type` (default: `T`) and round once at each store. A Float32 problem with
+  `c(..) = 0.0 [lattice_storage = Float64]` and `field_solver = ExplicitEuler(; compute_type = Float64)`
   steps `c` exactly as a Float64 problem does, while the CPM stays in Float32. A Float16 field
   takes every field solver; an implicit solver solves it in `T` and rounds each update to
   Float16.
@@ -86,11 +86,11 @@ Options go in brackets after the default. The field options (`bounds`, `lattice_
     each fine value at its own site. The coarse field then receives the fine integral of the
     term.
   - A spatial operator reads its operand on the operand's own grid. In a row of another grid
-    it still works: `D(u) ~ Δ(c)` with a coarse `c` and a fine `u` reads the coarse Laplacian
-    at the node of each site's block, and `D(c) ~ Δ(g)` with a fine `g` and a coarse `c` reads
+    it still works: `D(u) ~ laplacian(c)` with a coarse `c` and a fine `u` reads the coarse Laplacian
+    at the node of each site's block, and `D(c) ~ laplacian(g)` with a fine `g` and a coarse `c` reads
     the block mean of the fine Laplacian, the net flux through the faces of the block over its
-    volume. It holds for `Δ`, `DivKGrad` and `Advect`, in 2D, 3D and on a hexagonal lattice.
-    Potts adds the aux field `L ~ Δ(c)` on the grid of the operand for you, and the term is
+    volume. It holds for `laplacian`, `DivKGrad` and `Advect`, in 2D, 3D and on a hexagonal lattice.
+    Potts adds the aux field `L ~ laplacian(c)` on the grid of the operand for you, and the term is
     the same as writing it. Under an implicit solver it is a cross term: exact when the fields
     do not read each other in a loop, and warned, with the term as written, when they do.
 - `[guess = g]` (cell and model variables): the starting point when
@@ -156,6 +156,7 @@ built, before the first MCS:
 
 ```@example vars
 using Potts
+using Potts.Layouts
 
 @potts_model Initialized begin
     @kinds medium cell
@@ -203,7 +204,7 @@ What a name means depends on where it is read:
   field variable is the value at the current site, `kind` the kind of its owner.
 - In a **copy** context (drives, constraints, on-copy updates), sites are `source` and
   `target` and cells `new` and `old`: `c[target]`, `x[new]`, `kind[old]`.
-- In a **contact** term, `x` and `x′` are a site variable's values on the two sides of the
+- In a **contact** term, `x` and `neighbor(x)` are a site variable's values on the two sides of the
   pair.
 
 ```@example vars
@@ -220,7 +221,7 @@ using Potts
     @lattice Lattice((30, 30); neighborhood = Moore(1))
     @energy begin
         cells(cell) => (volume - 25.0)^2
-        contacts => 8.0 * (kind != kind′)
+        contacts => 8.0 * (kind != neighbor_kind)
     end
     @on_copy mark[target] ~ 1.0                       # copy scope: a site written
     @after_mcs begin
@@ -254,7 +255,7 @@ These names are always available where they make sense:
 | `centroid(c, k)`, `separation(a, b)` | another cell's centroid; the minimum-image centroid difference (see [Cell references](@ref manual-references)) | between sweeps (not energies, drives, constraints or on-copy updates) |
 | `minimum_image(d, k)` | `d` wrapped to the image nearest 0 on axis `k` | everywhere (square lattices) |
 | `owner`, `kind`, `position` | owner, its kind, coordinates (`position[1]`) of a site | site |
-| `kind′`, `owner′`, `weight` | the other side of a contact pair, the relation weight | contacts |
+| `neighbor_kind`, `neighbor_owner`, `weight` | the other side of a contact pair, the relation weight | contacts |
 | `source`, `target`, `new`, `old` | the sites and cells of a copy | drives, constraints, on-copy |
 | `direction[k]`, `position[target][k]` | the copy's source→target offset (minimum image on periodic axes), a copy site's coordinates | drives, constraints, on-copy |
 | `displacement(c, k)` | shift of cell `c`'s centroid along `k` if the copy is accepted | drives |

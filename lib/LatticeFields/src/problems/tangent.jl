@@ -15,7 +15,7 @@
 # one level of derivative parts with a float value type (nested Duals and Float16 values are
 # refused in words)
 function _tangent_eltype(E, key, alg)
-    V = valtype(E)
+    V = value_type(E)
     (npartials(V) == 0 && V in (Float32, Float64) && dvalue(zero(E)) isa V) && return V
     throw(ArgumentError(string(_algname(alg), ": the field `", key, "` holds ", _typetext(E), "; the implicit solve ",
         "takes derivative parts of Float32 or Float64 values, one level of them (no nested Duals: take one derivative ",
@@ -130,7 +130,8 @@ function _tqcur(prog::Program, s::Program, swaps, all_state, stcur, par)
     return cur
 end
 
-function _bind_tangent(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p; fields, n, dt, c, backend, options, V,
+function _bind_tangent(
+        alg::AbstractImplicitFieldAlgorithm, g::FieldGroup, st::FieldStore, p; fields, n, dt, c, backend, options, V,
         shared = nothing)
     s = group_program(g, alg)
     keys = collect(String, fields)
@@ -143,7 +144,7 @@ function _bind_tangent(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p;
     # parity vector is shared, so the primal cache's swaps are the store's), the others alias
     syncs = Tuple{Any, Any}[]
     if shared === nothing
-        twin(a) = _isdual(a) ? (b = _zeros(st.backend, valtype(eltype(a)), length(a)); push!(syncs, (a, b)); b) : a
+        twin(a) = _isdual(a) ? (b = _zeros(st.backend, value_type(eltype(a)), length(a)); push!(syncs, (a, b)); b) : a
         pbufs = Vector{Any}[Any[twin(a) for a in b] for b in st.bufs]
         ptabs = Any[twin(a) for a in st.tables]
         pst = FieldStore(st.backend, pbufs, st.cur, ptabs)
@@ -177,7 +178,7 @@ function _bind_tangent(alg::ImplicitAlgorithm, g::FieldGroup, st::FieldStore, p;
     sps = [_implicit_plan(g, rs, (:residual, residual_key(alg), k), _row_kernels(rs, k, g.spec.init), V, backend, options; C)
            for k in order]
     mkres = q -> [ntuple(i -> BoundStep(backend, rs, sps[ri], rst, q; cur = curs[i], c), 2) for ri in eachindex(order)]
-    lo = alg.lower === nothing ? nothing : valtype(E)(alg.lower)
+    lo = alg.lower_bound === nothing ? nothing : value_type(E)(alg.lower_bound)
     function mkrows(q, res)
         rows = Any[]
         for (ri, key) in enumerate(order)

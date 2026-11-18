@@ -184,20 +184,20 @@ end
 # ---------------------------------------------------------------------------------------------
 
 @testset "P6.1a5: surface (exports, public names, GeometryBasics bindings)" begin
-    for n in P61A5_NEW_EXPORTS
-        @test Base.isexported(Potts, n)
+    for n in P61A5_NEW_EXPORTS                               # the opt-in layout vocabulary
+        @test Base.isexported(Potts.Layouts, n)
     end
     for n in P61A5_NEW_PUBLIC
         @test Base.ispublic(Potts, n) && !Base.isexported(Potts, n)
     end
-    GB = parentmodule(Potts.HyperSphere)
+    GB = parentmodule(HyperSphere)
     @test nameof(GB) === :GeometryBasics
     for n in (:HyperSphere, :Circle, :Sphere, :Point)
-        @test getfield(Potts, n) === getfield(GB, n)          # the same binding as GeometryBasics' (and Makie's)
+        @test getfield(Potts.Layouts, n) === getfield(GB, n)  # the same binding as GeometryBasics' (and Makie's)
     end
-    @test Potts.Circle === Potts.HyperSphere{2} && Potts.Sphere === Potts.HyperSphere{3}
+    @test Circle === HyperSphere{2} && Sphere === HyperSphere{3}
     for n in P61A5_GB_KEPT_OUT                               # index boxes stay ranges; no clashing GB names
-        @test !Base.isexported(Potts, n)
+        @test !Base.isexported(Potts, n) && !Base.isexported(Potts.Layouts, n)
         @test !(isdefined(Potts, n) && isdefined(GB, n) && getfield(Potts, n) === getfield(GB, n))
     end
     # no package of the D-056 list (Makie, SciMLBase, ModelingToolkit, Graphs; plus Symbolics
@@ -207,8 +207,8 @@ end
     d056 = [m for m in Base.loaded_modules_array() if nameof(m) in
             (:Makie, :CairoMakie, :SciMLBase, :ModelingToolkit, :ModelingToolkitBase, :Graphs, :Symbolics, :GeometryBasics)]
     @test length(d056) >= 3                                  # SciMLBase, ModelingToolkitBase, GeometryBasics at least
-    @test isempty(p61a5_clashes(Potts, P61A5_NEW_EXPORTS, d056))
-    @test p61a5_clashes(Potts, (:Center,), [P61A5Clash]) == [(P61A5Clash, :Center)]
+    @test isempty(p61a5_clashes(Potts.Layouts, P61A5_NEW_EXPORTS, d056))
+    @test p61a5_clashes(Potts.Layouts, (:Center,), [P61A5Clash]) == [(P61A5Clash, :Center)]
     # no DSL name: layouts are problem data (D-057)
     @test !any(n -> n in keys(Potts.DSL), (P61A5_NEW_EXPORTS..., P61A5_NEW_PUBLIC...))
     # VoronoiBall is gone (Q3: Voronoi reproduces it), with no alias (D-028)
@@ -269,22 +269,22 @@ function p61a5_region(region, target, m)
 end
 
 @testset "P6.1a5: closed membership in Cartesian coordinates" begin
-    c2 = Potts.Point(10.0, 10.0)
+    c2 = Point(10.0, 10.0)
     # r = 3 on the square lattice. Lattice points with dx² + dy² ≤ 9: dx = 0: 7; dx = ±1: 2·5;
     # dx = ±2: 2·5; dx = ±3: 2·1 → 29. An open or half-open rule drops the 4 axis points
     # at distance exactly 3 → 25.
-    disk = p61a5_region(Potts.Circle(c2, 3.0), (20, 20), 29)
+    disk = p61a5_region(Circle(c2, 3.0), (20, 20), 29)
     @test length(disk) == 29 && (13.0, 10.0) in disk && (10.0, 7.0) in disk && !((12.0, 13.0) in disk)
     @test Set(Tuple(Float64.(Tuple(x))) for x in p61a5_ballsites((10.0, 10.0), 3.0, (20, 20))) == disk
     # 3D, r = 2: 1 + 6 (|v|² = 1) + 12 (2) + 8 (3) + 6 (4) = 33
-    ball = p61a5_region(Potts.Sphere(Potts.Point(5.0, 5.0, 5.0), 2.0), (9, 9, 9), 33)
+    ball = p61a5_region(Sphere(Point(5.0, 5.0, 5.0), 2.0), (9, 9, 9), 33)
     @test (7.0, 5.0, 5.0) in ball && !((6.0, 6.0, 7.0) in ball)
     # hexagonal: round in the embedding. |embed(dq, dr)|² = dq² + dq·dr + dr²: 1 for the 6
     # neighbours, 3 for the next 6, 4 beyond. Centre (10, 10) is Cartesian (15, 5√3).
     hexl = Lattice((20, 20); geometry = Hexagonal(), boundary = Closed())
-    hc = Potts.Point(15.0, 10 * sqrt(3) / 2)
-    h1 = p61a5_region(Potts.Circle(hc, 1.5), hexl, 7)        # centre + 6 neighbours
-    h2 = p61a5_region(Potts.Circle(hc, 1.8), hexl, 13)       # + the 6 at distance √3
+    hc = Point(15.0, 10 * sqrt(3) / 2)
+    h1 = p61a5_region(Circle(hc, 1.5), hexl, 7)        # centre + 6 neighbours
+    h2 = p61a5_region(Circle(hc, 1.8), hexl, 13)       # + the 6 at distance √3
     @test issubset(h1, h2)
     @test Set(Tuple(p61a5_cart(Tuple(x), true)) for x in p61a5_ballsites(Tuple(hc), 1.8, hexl)) == h2
     # in axial indices the same radius would be a different set (control: the embedding matters)
@@ -293,7 +293,7 @@ end
 
 @testset "P6.1a5: shapes clip at closed edges and the domain, wrap through periodic ones" begin
     # quarter disk at the corner: dx, dy ≥ 0 of the 29: 4 + 3 + 3 + 1 = 11
-    corner = Potts.Circle(Potts.Point(1.0, 1.0), 3.0)
+    corner = Circle(Point(1.0, 1.0), 3.0)
     @test length(p61a5_region(corner, (20, 20), 11)) == 11
     # periodic on both axes: the whole disk, wrapped (29 sites, some at x or y near 20)
     wr = p61a5_region(corner, Lattice((20, 20)), 29)
@@ -302,11 +302,11 @@ end
     @test length(p61a5_region(corner, Lattice((20, 20); boundary = (Periodic(), Closed())), 18)) == 18
     # the domain x ≤ 10 keeps dx ≤ 0 of the disk at (10, 10): 7 + 5 + 5 + 1 = 18
     dom = Lattice((20, 20); boundary = Closed(), domain = x -> x[1] <= 10)
-    @test all(p -> p[1] <= 10, p61a5_region(Potts.Circle(Potts.Point(10.0, 10.0), 3.0), dom, 18))
+    @test all(p -> p[1] <= 10, p61a5_region(Circle(Point(10.0, 10.0), 3.0), dom, 18))
     # a shape with no site on the lattice
-    @test_throws ArgumentError Potts.points(RandomPoints(1; region = Potts.Circle(Potts.Point(-50.0, -50.0), 1.0), seed = 1), (20, 20))
+    @test_throws ArgumentError Potts.points(RandomPoints(1; region = Circle(Point(-50.0, -50.0), 1.0), seed = 1), (20, 20))
     # a shape of the wrong dimension
-    @test_throws ArgumentError Potts.points(RandomPoints(1; region = Potts.Sphere(Potts.Point(5.0, 5.0, 5.0), 2.0), seed = 1), (20, 20))
+    @test_throws ArgumentError Potts.points(RandomPoints(1; region = Sphere(Point(5.0, 5.0, 5.0), 2.0), seed = 1), (20, 20))
 end
 
 # ---------------------------------------------------------------------------------------------
@@ -331,13 +331,13 @@ end
 
 @testset "P6.1a5: RandomPoints draws distinct in-domain region sites (VoronoiBall's rule)" begin
     cases = [
-        ((30, 30), Potts.Circle(Potts.Point(15.0, 14.0), 9.0), 40, false),
+        ((30, 30), Circle(Point(15.0, 14.0), 9.0), 40, false),
         ((30, 30), (5:20, 3:9), 25, false),
         ((30, 30), nothing, 50, false),
-        (p61a5_hex((24, 24); boundary = Closed()), Potts.Circle(Potts.Point(18.0, 10.0), 6.0), 30, true),
-        ((12, 12, 12), Potts.Sphere(Potts.Point(6.0, 6.5, 6.0), 4.0), 60, false),
+        (p61a5_hex((24, 24); boundary = Closed()), Circle(Point(18.0, 10.0), 6.0), 30, true),
+        ((12, 12, 12), Sphere(Point(6.0, 6.5, 6.0), 4.0), 60, false),
         (Lattice((30, 30); boundary = Closed(), domain = x -> (x[1] - 15)^2 + (x[2] - 15)^2 <= 100), nothing, 40, false),
-        (Lattice((30, 30)), Potts.Circle(Potts.Point(2.0, 29.0), 5.0), 30, false),      # wraps
+        (Lattice((30, 30)), Circle(Point(2.0, 29.0), 5.0), 30, false),      # wraps
     ]
     for (target, region, n, hex) in cases, seed in (1, 2, 99)
         dims, per, _, mask = p61a5_meta(target)
@@ -345,7 +345,7 @@ end
                 region isa Tuple ? [x for x in CartesianIndices(region) if mask === nothing || mask[x]] :
                 p61a5_ballsites(Tuple(region.center), region.r, target)
         pts = Potts.points(RandomPoints(n; region, seed), target)
-        @test pts isa Vector{<:Potts.Point} && eltype(pts) === Potts.Point{length(dims), Float64}
+        @test pts isa Vector{<:Point} && eltype(pts) === Point{length(dims), Float64}
         @test [Tuple(p) for p in pts] == [p61a5_cart(Tuple(x), hex) for x in p61a5_draws(sites, n, seed)]
         @test allunique(pts)
         @test Potts.points(RandomPoints(n; region, seed), target) == pts                # deterministic
@@ -361,11 +361,11 @@ end
 end
 
 @testset "P6.1a5: Center() is the lattice centre (Cartesian)" begin
-    @test Potts.points(Center(), (40, 42)) == [Potts.Point(20.5, 21.5)]
-    @test Potts.points(Center(), (19, 19, 19)) == [Potts.Point(10.0, 10.0, 10.0)]
+    @test Potts.points(Center(), (40, 42)) == [Point(20.5, 21.5)]
+    @test Potts.points(Center(), (19, 19, 19)) == [Point(10.0, 10.0, 10.0)]
     hx = only(Potts.points(Center(), p61a5_hex((30, 30))))
     @test all(isapprox.(Tuple(hx), (15.5 + 15.5 / 2, 15.5 * sqrt(3) / 2); atol = 1e-12))
-    @test Potts.points([Center(), Potts.Point(1.0, 2.0)], (10, 10)) == [Potts.Point(5.5, 5.5), Potts.Point(1.0, 2.0)]
+    @test Potts.points([Center(), Point(1.0, 2.0)], (10, 10)) == [Point(5.5, 5.5), Point(1.0, 2.0)]
 end
 
 # ---------------------------------------------------------------------------------------------
@@ -375,7 +375,7 @@ end
 function p61a5_as_voronoi(n, r, c, kinds, it, target, seed; lloyd = it)
     dims, _, hex, _ = p61a5_meta(target)
     ci = c === nothing ? map(d -> (d + 1) / 2, dims) : Float64.(Tuple(c))
-    ball = Potts.HyperSphere(Potts.Point(p61a5_cart(ci, hex)), Float64(r))
+    ball = HyperSphere(Point(p61a5_cart(ci, hex)), Float64(r))
     return Voronoi(RandomPoints(n; region = ball, seed); region = ball, lloyd, kinds)
 end
 
@@ -443,7 +443,7 @@ end
         @test dig(1; lloyd = 0) != dig(1)
     end
     # explicit closed and periodic Lloyd geometric oracle (1 and 3 iterations)
-    P = Potts.Point
+    P = Point
     for (target, gens) in (
         ((20, 16), [P(3.0, 4.0), P(16.0, 5.0), P(8.0, 13.0), P(17.0, 14.0)]),
         (Lattice((20, 16)), [P(2.0, 3.0), P(11.0, 9.0), P(19.0, 14.0)]),
@@ -460,7 +460,7 @@ end
 # ---------------------------------------------------------------------------------------------
 
 @testset "P6.1a5: nearest generator, minimum image, ties to the lowest (2D, 3D, periodic)" begin
-    P = Potts.Point
+    P = Point
     fixtures = [
         ("square closed", (20, 16), [P(4.0, 4.0), P(15.0, 5.0), P(9.0, 12.0), P(17.0, 14.0)], P61A5_SQ2),
         ("square periodic", Lattice((20, 16)), [P(2.0, 3.0), P(11.0, 9.0), P(19.0, 14.0)], P61A5_SQ2),
@@ -490,7 +490,7 @@ end
 @testset "P6.1a5: hexagonal Voronoi is nearest in the embedding" begin
     hexl = p61a5_hex((16, 16); boundary = Closed())
     hexp = p61a5_hex((16, 16))
-    gens = [Potts.Point(6.3, 3.1), Potts.Point(17.0, 4.2), Potts.Point(12.2, 10.9), Potts.Point(20.6, 12.0)]
+    gens = [Point(6.3, 3.1), Point(17.0, 4.2), Point(12.2, 10.9), Point(20.6, 12.0)]
     for target in (hexl, hexp)
         dims, per, _, _ = p61a5_meta(target)
         σ = p61a5_σ(layout(Voronoi(gens; kinds = [:a]), target))
@@ -509,9 +509,9 @@ end
 # ---------------------------------------------------------------------------------------------
 
 @testset "P6.1a5: every cell is one piece (2D, hex, 3D; closed and periodic)" begin
-    sq = Potts.Circle(Potts.Point(12.5, 12.5), 10.3)
-    hb = Potts.Circle(Potts.Point(p61a5_cart((10, 15), true)), 10.3)
-    cb = Potts.Sphere(Potts.Point(10.0, 10.0, 10.0), 8.2)
+    sq = Circle(Point(12.5, 12.5), 10.3)
+    hb = Circle(Point(p61a5_cart((10, 15), true)), 10.3)
+    cb = Sphere(Point(10.0, 10.0, 10.0), 8.2)
     cases = [
         ((24, 24), sq, 60, P61A5_SQ2),
         (p61a5_hex((30, 30); boundary = Closed()), hb, 150, P61A5_HEX1),
@@ -574,7 +574,7 @@ end
 # ---------------------------------------------------------------------------------------------
 
 @testset "P6.1a5: Voronoi fills medium only (an earlier layer is never cut)" begin
-    disk = Potts.Circle(Potts.Point(10.5, 10.5), 8.0)
+    disk = Circle(Point(10.5, 10.5), 8.0)
     block = Tiling((4, 4); region = (9:12, 9:12), kinds = [:block])
     vor = Voronoi(RandomPoints(10; region = disk, seed = 1); region = disk, kinds = [:v])
     op, rep = p61a5_quiet(() -> layout(overlay(block, vor), (20, 20); report = true))
@@ -589,8 +589,8 @@ end
 end
 
 @testset "P6.1a5: report rows carry clipped" begin
-    P = Potts.Point
-    corner = Potts.Circle(P(1.0, 1.0), 3.0)
+    P = Point
+    corner = Circle(P(1.0, 1.0), 3.0)
     g2 = [P(1.0, 1.0), P(3.0, 2.0)]
     r(l, t) = only(last(layout(l, t; report = true)))
     # closed corner: 29 disk points, 11 on the lattice → 18 clipped
@@ -602,20 +602,20 @@ end
     @test only(rep).clipped == 0 && count(!=(0), p61a5_σ(op)) == 29
     # domain x ≤ 10 at (10, 10): 18 of 29 in the domain → 11 clipped
     dom = Lattice((20, 20); boundary = Closed(), domain = x -> x[1] <= 10)
-    @test r(Voronoi([P(9.0, 10.0)]; region = Potts.Circle(P(10.0, 10.0), 3.0), kinds = [:a]), dom).clipped == 11
+    @test r(Voronoi([P(9.0, 10.0)]; region = Circle(P(10.0, 10.0), 3.0), kinds = [:a]), dom).clipped == 11
     # hex corner, r = 1.8 at index (1, 1): 13 points (|v|² ∈ {0, 1, 3}); offsets with
     # dq, dr ≥ 0 on the lattice: (0,0), (1,0), (0,1), (1,1) → 4 painted, 9 clipped
     hexl = p61a5_hex((20, 20); boundary = Closed())
-    hc = Potts.Circle(P(p61a5_cart((1, 1), true)), 1.8)
+    hc = Circle(P(p61a5_cart((1, 1), true)), 1.8)
     op, rep = layout(Voronoi([P(p61a5_cart((1, 1), true))]; region = hc, kinds = [:a]), hexl; report = true)
     @test only(rep).clipped == 9 && count(!=(0), p61a5_σ(op)) == 4
     # 3D corner, r = 2 at (1, 1, 1): offsets ≥ 0 of the 33: 1 + 3 + 3 + 1 + 3 = 11 → 22 clipped
-    op, rep = layout(Voronoi([P(1.0, 1.0, 1.0)]; region = Potts.Sphere(P(1.0, 1.0, 1.0), 2.0), kinds = [:a]), (9, 9, 9); report = true)
+    op, rep = layout(Voronoi([P(1.0, 1.0, 1.0)]; region = Sphere(P(1.0, 1.0, 1.0), 2.0), kinds = [:a]), (9, 9, 9); report = true)
     @test only(rep).clipped == 22 && count(!=(0), p61a5_σ(op)) == 11
     # a shape inside the lattice clips nothing
-    @test r(Voronoi(g2; region = Potts.Circle(P(10.0, 10.0), 3.0), kinds = [:a]), (20, 20)).clipped == 0
+    @test r(Voronoi(g2; region = Circle(P(10.0, 10.0), 3.0), kinds = [:a]), (20, 20)).clipped == 0
     # a generator with no site is dropped: every site of the small disk is nearer (1, 1)
-    row = r(Voronoi([P(1.0, 1.0), P(15.0, 15.0)]; region = Potts.Circle(P(3.0, 3.0), 2.0), kinds = [:a]), (20, 20))
+    row = r(Voronoi([P(1.0, 1.0), P(15.0, 15.0)]; region = Circle(P(3.0, 3.0), 2.0), kinds = [:a]), (20, 20))
     @test (row.requested, row.painted, row.dropped) == (2, 2, 1)
     # the other built-in layers report clipped = 0
     rows = last(layout(overlay(Tiling((3, 3); region = (1:9, 1:9), kinds = [:t]),
@@ -644,14 +644,14 @@ Potts.paint!(op::Potts.LayoutState, ::P61A5Silent, lat) = (Potts.assign!(op, (3:
 end
 
 @testset "P6.1a5: kinds, ids, Center() generators" begin
-    P = Potts.Point
+    P = Point
     gens = [P(2.0, 2.0), P(18.0, 2.0), P(10.0, 18.0)]
     op = layout(Voronoi(gens; kinds = [:a, :b]), (20, 20))
     σ = p61a5_σ(op)
     @test p61a5_kinds(op) == [:a, :b, :a]
     @test σ[2, 2] == 1 && σ[18, 2] == 2 && σ[10, 18] == 3          # ids in generator order
     # Center() as a generator: one cell at the lattice centre owns a disk around it
-    disk = Potts.Circle(P(10.5, 10.5), 4.0)
+    disk = Circle(P(10.5, 10.5), 4.0)
     σc = p61a5_σ(layout(Voronoi([Center(), P(1.0, 1.0)]; region = disk, kinds = [:c]), (20, 20)))
     @test σc[10, 10] == 1 && σc[11, 11] == 1 && count(==(1), σc) == length(p61a5_ballsites((10.5, 10.5), 4.0, (20, 20)))
     @test p61a5_σ(layout(Voronoi(Center(); region = disk, kinds = [:c]), (20, 20))) == σc
@@ -661,7 +661,7 @@ end
 end
 
 @testset "P6.1a5: errors and remake" begin
-    P = Potts.Point
+    P = Point
     g = [P(2.0, 2.0), P(8.0, 8.0)]
     @test_throws ArgumentError Voronoi(g; lloyd = -1, kinds = [:a])
     @test_throws ArgumentError Voronoi(g; kinds = Symbol[])
@@ -669,9 +669,11 @@ end
     @test Voronoi(g; kinds = [:a], splits = :allow) isa AbstractLayout
     @test_throws ArgumentError layout(Voronoi(P{2, Float64}[]; kinds = [:a]), (10, 10))           # no generator
     @test_throws ArgumentError layout(Voronoi([P(1.0, 2.0, 3.0)]; kinds = [:a]), (10, 10))        # 3D point, 2D lattice
-    @test_throws ArgumentError layout(Voronoi(g; region = Potts.Sphere(P(5.0, 5.0, 5.0), 2.0), kinds = [:a]), (10, 10))
-    @test_throws ArgumentError layout(Voronoi(RandomPoints(200; region = Potts.Circle(P(5.0, 5.0), 3.0), seed = 1);
-        kinds = [:a]), (10, 10))                                                                  # 29 sites < 200
+    @test_throws ArgumentError layout(Voronoi(g; region = Sphere(P(5.0, 5.0, 5.0), 2.0), kinds = [:a]), (10, 10))
+    # 29 sites < 200
+    @test_throws ArgumentError layout(
+        Voronoi(RandomPoints(200; region = Circle(P(5.0, 5.0), 3.0), seed = 1); kinds = [:a]), (10, 10)
+    )
     v = Voronoi(RandomPoints(12; seed = 3); kinds = [:a, :b])
     @test p61a5_σ(layout(remake(v; lloyd = 5), (20, 20))) == p61a5_σ(layout(Voronoi(RandomPoints(12; seed = 3); lloyd = 5, kinds = [:a, :b]), (20, 20)))
     @test p61a5_σ(layout(remake(v; lloyd = 5), (20, 20))) != p61a5_σ(layout(v, (20, 20)))

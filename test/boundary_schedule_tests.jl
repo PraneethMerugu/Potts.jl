@@ -21,7 +21,7 @@ module BsPDE
     base() = (
         @parameters Dc = 0.2 S = 1.0;
         pdesys(
-            [Dt(C) ~ Dc * Δ(C)], [
+            [Dt(C) ~ Dc * laplacian(C)], [
                 c(0, x, y) ~ 0.0, c(t, 0, y) ~ S, Differential(x)(c(t, 12, y)) ~ 0.0,
                 C ~ masked(wall(X...), 0.0),
             ], (12, 10), [C, wall(X...)], [Dc, S]
@@ -30,11 +30,11 @@ module BsPDE
     relax() = pdesys([Dt(C) ~ 1.0 - C], [c(0, x, y) ~ 0.0], (8, 8), [C])
     clamp_ck() = (
         @parameters Dc = 0.2 s = 0.05;
-        pdesys([Dt(C) ~ Dc * Δ(C) + s], [c(0, x, y) ~ 0.0, C ~ masked(sink(X...), 0.0)], (16, 16), [C, sink(X...)], [Dc, s])
+        pdesys([Dt(C) ~ Dc * laplacian(C) + s], [c(0, x, y) ~ 0.0, C ~ masked(sink(X...), 0.0)], (16, 16), [C, sink(X...)], [Dc, s])
     )
-    face_obs() = pdesys([Dt(C) ~ 0.1 * Δ(C)], [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0], (8, 4), [C])
-    mask_self() = pdesys([Dt(C) ~ 0.1 * Δ(C)], [c(0, x, y) ~ 0.0, C ~ masked(C > 0.5, 0.0)], (8, 8), [C])
-    two(mask) = pdesys([Dt(C) ~ 0.1 * Δ(C), Dt(U) ~ 0.1 * Δ(U)], [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0, mask], (8, 8), [C, U])
+    face_obs() = pdesys([Dt(C) ~ 0.1 * laplacian(C)], [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0], (8, 4), [C])
+    mask_self() = pdesys([Dt(C) ~ 0.1 * laplacian(C)], [c(0, x, y) ~ 0.0, C ~ masked(C > 0.5, 0.0)], (8, 8), [C])
+    two(mask) = pdesys([Dt(C) ~ 0.1 * laplacian(C), Dt(U) ~ 0.1 * laplacian(U)], [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0, mask], (8, 8), [C, U])
     mask_later() = two(C ~ masked(U > 0.5, 0.0))
     mask_earlier() = two(U ~ masked(C > 0.5, 0.0))
 end
@@ -160,14 +160,14 @@ end
 end
 
 
-# `Δ` is lowered by the field compiler in field equations only (cutover C8); a model body
+# `laplacian` is lowered by the field compiler in field equations only (cutover C8); a model body
 # reaches it qualified (the bare name points to `using Potts.Fields`, F4-B6)
 @potts_model BSFaceObs begin
     @kinds medium A
     @lattice Lattice((8, 4); boundary = (Closed(), Periodic()))
     @energy cells => 0.0 * volume
     @fields c = BsPDE.face_obs()
-    @observed lap ~ Potts.LatticePDE.Δ(c)
+    @observed lap ~ Potts.LatticePDE.laplacian(c)
     @sweep Metropolis(; temperature = 1.0)
 end
 
@@ -245,8 +245,8 @@ end
         # S1: the components read integral(h) over the σ the sweep just left: Δy = Σ h over it
         hx = Float64[i for i in 1:20, j in 1:20]
         sol = solve(PottsProblem(BSIntS1(; name = :s), [ownership => σ, kind => [:A], :h => hx], (0, 6)), SequentialCPM(); saveat = 1)
-        @test any(k -> sol.u[k].σ != sol.u[k + 1].σ, 1:6)
-        @test all(k -> sol.u[k + 1].cell.y[1] - sol.u[k].cell.y[1] == sum(hx[sol.u[k + 1].σ .== 1]), 1:6)
+        @test any(k -> sol.u[k].ownership != sol.u[k + 1].ownership, 1:6)
+        @test all(k -> sol.u[k + 1].cell.y[1] - sol.u[k].cell.y[1] == sum(hx[sol.u[k + 1].ownership .== 1]), 1:6)
         # S2: the before block sets h = 2, so the lifecycle reads integral(h) = 16·2 = 32 > 20 and
         # divides in MCS 0 (stale, 16·1 = 16 would wait a step); no copy is accepted after
         sol = solve(PottsProblem(BSIntS2(; name = :s), [ownership => σ, kind => [:A]], (0, 3); capacity = 8), SequentialCPM(); saveat = 1)
@@ -271,12 +271,12 @@ end
             integ = init(prob, alg; save_start = false, save_end = false)
             foreach(_ -> step!(integ), 1:4)
             sol = solve!(init(prob, alg; checkpoint = checkpoint(integ)))
-            @test sol.u[end].σ == full.u[end].σ
+            @test sol.u[end].ownership == full.u[end].ownership
             @test sol.u[end].site.c == full.u[end].site.c
         end
         # `anneal` runs the derived refreshes only: the field (not stepped) is left as given
         u = deepcopy(prob.u0); u.site.c .= 0.1
-        @test Potts.anneal(prob, u; mcs = 2).site.c == u.site.c
+        @test Potts.anneal(prob, u, 2).site.c == u.site.c
     end
 end
 
@@ -287,7 +287,7 @@ end
             field_solver = ExplicitEuler(substeps = 1)
         )
         err = bs_error(() -> solve(prob, SequentialCPM())[:lap])
-        @test occursin("`Δ` is a field operator", something(err, ""))
+        @test occursin("`laplacian` is a field operator", something(err, ""))
     end
 end
 

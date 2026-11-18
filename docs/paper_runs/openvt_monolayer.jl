@@ -47,7 +47,7 @@ function rec(integ)
     rec_wall[] += @elapsed begin
         u = integ.u
         frame[] = renderframe(u; mcs = integ.t)
-        I = findall(!=(0), u.σ)
+        I = findall(!=(0), u.ownership)
         ext = maximum(max(abs(J[1] - mid), abs(J[2] - mid)) for J in I)
         half[] = max(half[], 1.15ext + 10)
         limits!(ax, mid - half[], mid + half[], mid - half[], mid + half[])

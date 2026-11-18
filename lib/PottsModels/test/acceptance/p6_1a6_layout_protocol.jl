@@ -516,7 +516,7 @@ end
     end
     # VoronoiBall's successor paints (on the new protocol; D-138: `VoronoiBall(n; radius, kinds, seed)`
     # is `Voronoi(RandomPoints(n; region = ball, seed); region = ball, lloyd = 30, kinds)`)
-    ball = Potts.Circle(Potts.Point(12.5, 12.5), 8.0)
+    ball = Circle(Point(12.5, 12.5), 8.0)
     op = layout(Potts.Voronoi(Potts.RandomPoints(4; region = ball, seed = 1); region = ball, lloyd = 30, kinds = Int32[1, 2]), (24, 24))
     @test sort(unique(p61a6_σ(op))) == 0:4 && length(p61a6_kinds(op)) == 4
 end

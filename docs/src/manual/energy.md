@@ -7,13 +7,14 @@ the energy change ``\Delta H`` of every copy from these terms; you never write `
 | Domain | Sum over | Names in scope |
 |---|---|---|
 | `cells(k₁, k₂, …)`, `cells` | every live cell of those kinds (all kinds) | `volume`, `surface`, `major_length`, `kind`, `id`, cell variables (`x`, or `x[c]`) |
-| `contacts`, `contacts(rel)` | every unordered pair of neighboring sites with different owners, once | `kind`, `kind′`, `owner`, `owner′`, `weight`; site and field variables as `x` and `x′`; cell variables of both sides as `y[owner]`, `y[owner′]` |
+| `contacts`, `contacts(rel)` | every unordered pair of neighboring sites with different owners, once | `kind`, `neighbor_kind`, `owner`, `neighbor_owner`, `weight`; site and field variables as `x` and `neighbor(x)`; cell variables of both sides as `y[owner]`, `y[neighbor_owner]` |
 | `sites` | every lattice site | `kind`, `owner`, `position`, site and field variables |
 | `edges(rel)` | every link of a relationship | `a`, `b`, `distance`, edge variables |
 | `clusters(k…)` | every compartment cluster whose root cell is of kind `k` | `cluster_volume`, `cluster_surface` |
 
 ```@example energy
 using Potts
+using Potts.Layouts
 
 @potts_model AllTerms begin
     @kinds medium dark light
@@ -32,7 +33,7 @@ using Potts
         cells(dark, light) => λ * (volume - V₀)^2                  # area
         cells(dark) => λₛ * (surface - S₀)^2                       # perimeter, dark cells only
         cells(light) => λL * (major_length - 8.0)^2                # elongation of light cells
-        contacts => J[kind, kind′] + 2.0 * (cue + cue′) / 2        # adhesion, modulated by a site cue
+        contacts => J[kind, neighbor_kind] + 2.0 * (cue + neighbor(cue)) / 2        # adhesion, modulated by a site cue
         sites => μ * position[1] * (kind == dark)                  # an external potential on dark cells
     end
     @sweep Metropolis(; temperature = 10.0)
@@ -47,16 +48,18 @@ total_energy(prob), total_energy(prob, solve(prob, SequentialCPM(); save_everyst
 Notes:
 
 - A contact pair is counted once (CompuCell3D's convention). An asymmetric contact
-  expression is averaged with its mirror (`kind ↔ kind′`, `x ↔ x′`).
-- `x′` exists only for site and field variables; the neighboring cell's value of a cell
-  variable is `y[owner′]`.
+  expression is averaged with its mirror (`kind ↔ neighbor_kind`, `x ↔ neighbor(x)`).
+- Inside `@potts_model`, the primed forms `kind′`, `owner′` and `x′` are aliases of
+  `neighbor_kind`, `neighbor_owner` and `neighbor(x)`.
+- `neighbor(x)` exists only for site and field variables; the neighboring cell's value of a cell
+  variable is `y[neighbor_owner]`.
 - `centroid`, `integral` and `rand()` are not allowed in energies: their change by a copy
   is not local, or not an energy. Use a drive with `displacement(c, k)` for centroid-based
   motility.
 - A fold over a relation inside an energy (`volume * sum(q[n] for n in far(40))`) may read
   only values a copy does not change: static site variables, parameters, constants, `id`,
   and the bare cell quantities (`volume`, cell variables), inside the fold or outside it; in
-  contact terms also `owner`, `owner′`, `kind`, `kind′`. Its anchor must be static. Potts
+  contact terms also `owner`, `neighbor_owner`, `kind`, `neighbor_kind`. Its anchor must be static. Potts
   computes ``\Delta H`` only where the copy acts, so `owner[n]`, `kind[n]`,
   `volume[owner[n]]`, σ at an explicit site (`owner[40]`), an indexed `volume[id]`, or an
   explicit-site read (`act[40]`) of a site variable that `@on_copy` writes is refused at
@@ -70,7 +73,7 @@ Notes:
 Cells can form **clusters**, for example a nucleus and its cytoplasm. Give each cell a
 cluster id in the operating point (`cluster => groups`, equal ids form one cluster). A
 cluster is named by its lowest live member, the root. Contact terms can read
-`cluster[owner] == cluster[owner′]`, and `clusters(k) => …` terms read the cluster's total
+`cluster[owner] == cluster[neighbor_owner]`, and `clusters(k) => …` terms read the cluster's total
 `cluster_volume` and `cluster_surface`:
 
 ```@example energy
@@ -83,7 +86,7 @@ cluster is named by its lowest live member, the root. Contact terms can read
     @lattice Lattice((30, 30); neighborhood = Moore(1))
     @energy begin
         cells => (volume - V₀[kind])^2
-        contacts => ifelse(cluster[owner] == cluster[owner′], 2.0, J[kind, kind′])
+        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 2.0, J[kind, neighbor_kind])
         clusters(cytoplasm) => (cluster_volume - 64.0)^2
     end
     @sweep Metropolis(; temperature = 10.0)

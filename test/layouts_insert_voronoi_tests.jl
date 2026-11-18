@@ -1,6 +1,7 @@
 # Layouts (P6.1a5, P6.2a, D-138): InsertUntil, layer_rng, point patterns and Voronoi.
 
 @testitem "layouts: InsertUntil stop rules (hand-derived counts)" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: InsertUntil stop rules (hand-derived counts)" begin
         # 16 hosts of 1 site and 4 guests of 9 sites. fraction 1/2 of guests, inserting guests into
         # hosts: every hit kills a host, so N + counted stays 20 and the rule 4 + c ≥ 10 needs 6
@@ -43,6 +44,7 @@
 end
 
 @testitem "layouts: InsertUntil draws uniformly over the region" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: InsertUntil draws uniformly over the region" begin
         # 4 one-site hosts in a 2 × 2 region; one insertion per seed lands on each about 1/4 of the time
         hosts = Tiling((1, 1); region = (3:4, 3:4), kinds = [:host])
@@ -74,6 +76,7 @@ end
 end
 
 @testitem "layouts: InsertUntil on hex, 3D and domain lattices" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: InsertUntil on hex, 3D and domain lattices" begin
         # hex: axial indices, as every layer
         hexlat = Lattice((12, 12); boundary = Closed(), geometry = Hexagonal())
@@ -131,6 +134,7 @@ end
 # hand counts, the VoronoiBall pins and the brute-force oracle
 # ---------------------------------------------------------------------------------------------
 @testitem "layouts: layer_rng" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: layer_rng" begin
         @test rand(Potts.layer_rng(5), 3) == rand(Potts.layer_rng(UInt8(5)), 3)
         @test rand(Potts.layer_rng(5, :a), 3) != rand(Potts.layer_rng(5, :b), 3)
@@ -147,8 +151,9 @@ end
 end
 
 @testitem "layouts: Voronoi is equivariant under periodic translation" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: Voronoi is equivariant under periodic translation" begin
-        P = Potts.Point
+        P = Point
         gens = [P(3.3, 4.1), P(14.2, 7.7), P(8.6, 15.4), P(18.1, 17.9), P(1.2, 12.6)]
         lat = Lattice((20, 20))
         for lloyd in (0, 5)
@@ -169,10 +174,11 @@ end
 end
 
 @testitem "layouts: shapes on periodic 3D lattices and boxes on domains" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: shapes on periodic 3D lattices and boxes on domains" begin
         # a sphere through the corner of a periodic cube wraps into all 8 corners, clips nothing
         op, rep = layout(
-            Voronoi(Center(); region = Potts.Sphere(Potts.Point(1.0, 1.0, 1.0), 2.0), kinds = [:a]),
+            Voronoi(Center(); region = Sphere(Point(1.0, 1.0, 1.0), 2.0), kinds = [:a]),
             Lattice((10, 10, 10)); report = true
         )
         σ = _op(op, ownership)
@@ -182,7 +188,7 @@ end
         @test only(
             last(
                 layout(
-                    Voronoi(Center(); region = Potts.Sphere(Potts.Point(1.0, 1.0, 1.0), 2.0), kinds = [:a]),
+                    Voronoi(Center(); region = Sphere(Point(1.0, 1.0, 1.0), 2.0), kinds = [:a]),
                     (10, 10, 10); report = true
                 )
             )
@@ -192,24 +198,26 @@ end
         op, rep = layout(Voronoi(Center(); region = (3:8, 1:2), kinds = [:a]), dom; report = true)
         @test count(!=(0), _op(op, ownership)) == 6 && only(rep).clipped == 6
         # a single Point is a one-generator pattern
-        @test Potts.points(Potts.Point(2, 3), (5, 5)) == [Potts.Point(2.0, 3.0)]
+        @test Potts.points(Point(2, 3), (5, 5)) == [Point(2.0, 3.0)]
     end
 end
 
 @testitem "layouts: Voronoi repair leaves a piece cut off by the domain" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: Voronoi repair leaves a piece cut off by the domain" begin
         # the domain splits the lattice into two strips; one generator: its cell is everything,
         # in two pieces with no neighbouring cell, and the repair leaves it so
         dom = Lattice((12, 6); boundary = Closed(), domain = x -> x[1] <= 4 || x[1] >= 8)
-        σ = _op(layout(Voronoi([Potts.Point(2.0, 3.0)]; kinds = [:a]), dom), ownership)
+        σ = _op(layout(Voronoi([Point(2.0, 3.0)]; kinds = [:a]), dom), ownership)
         @test count(==(1), σ) == 4 * 6 + 5 * 6
         # two generators, one per strip: one piece each, nothing moves
-        σ2 = _op(layout(Voronoi([Potts.Point(2.0, 3.0), Potts.Point(10.0, 3.0)]; kinds = [:a]), dom), ownership)
+        σ2 = _op(layout(Voronoi([Point(2.0, 3.0), Point(10.0, 3.0)]; kinds = [:a]), dom), ownership)
         @test all(==(1), σ2[1:4, :]) && all(==(2), σ2[8:12, :])
     end
 end
 
 @testitem "layouts: Voronoi arguments and remake" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: Voronoi arguments and remake" begin
         ly_throws(
             ArgumentError, ["a point list holds `Point`s and `Center()`s"],
@@ -218,11 +226,11 @@ end
         ly_throws(ArgumentError, ["is not a point pattern"], () -> Voronoi(:nope; kinds = [:a]))
         ly_throws(
             ArgumentError, ["finite center and a finite, non-negative radius"],
-            () -> Voronoi(Center(); region = Potts.Circle(Potts.Point(1.0, 1.0), -1.0), kinds = [:a])
+            () -> Voronoi(Center(); region = Circle(Point(1.0, 1.0), -1.0), kinds = [:a])
         )
         ly_throws(
             ArgumentError, ["finite center and a finite, non-negative radius"],
-            () -> Voronoi(Center(); region = Potts.Circle(Potts.Point(NaN, 1.0), 1.0), kinds = [:a])
+            () -> Voronoi(Center(); region = Circle(Point(NaN, 1.0), 1.0), kinds = [:a])
         )
         ly_throws(
             ArgumentError, ["is empty", "pass non-empty ranges"],
@@ -241,31 +249,33 @@ end
 end
 
 @testitem "layouts: shape membership is closed up to rounding (site-centred discs)" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: shape membership is closed up to rounding (site-centred discs)" begin
         hexpos(x) = (x[1] + x[2] / 2, x[2] * sqrt(3) / 2)
         hexl = Lattice((24, 24); geometry = Hexagonal(), boundary = Closed())
         # exact oracle: the axial offset (a, b) has squared Cartesian length a² + ab + b², an integer
         for (r2, n) in ((1, 7), (3, 13), (4, 19), (7, 31)), c in ((12, 12), (9, 14), (15, 10))
-            disc = Potts.Circle(Potts.Point(hexpos(c)), sqrt(r2))
-            σ = _op(layout(Voronoi([Potts.Point(hexpos(c))]; region = disc, kinds = [:a]), hexl), ownership)
+            disc = Circle(Point(hexpos(c)), sqrt(r2))
+            σ = _op(layout(Voronoi([Point(hexpos(c))]; region = disc, kinds = [:a]), hexl), ownership)
             exact = Set(x for x in CartesianIndices((24, 24)) if (a = x[1] - c[1]; b = x[2] - c[2]; a^2 + a * b + b^2 <= r2))
             @test length(exact) == n
             @test Set(findall(!=(0), σ)) == exact
         end
         # square and 3D: integer distances are exact, so nothing changes (29 and 33 points)
-        σs = _op(layout(Voronoi([Potts.Point(10.0, 10.0)]; region = Potts.Circle(Potts.Point(10.0, 10.0), 3.0), kinds = [:a]), (20, 20)), ownership)
+        σs = _op(layout(Voronoi([Point(10.0, 10.0)]; region = Circle(Point(10.0, 10.0), 3.0), kinds = [:a]), (20, 20)), ownership)
         @test count(!=(0), σs) == 29
-        σ3 = _op(layout(Voronoi([Potts.Point(5.0, 5.0, 5.0)]; region = Potts.Sphere(Potts.Point(5.0, 5.0, 5.0), 2.0), kinds = [:a]), (9, 9, 9)), ownership)
+        σ3 = _op(layout(Voronoi([Point(5.0, 5.0, 5.0)]; region = Sphere(Point(5.0, 5.0, 5.0), 2.0), kinds = [:a]), (9, 9, 9)), ownership)
         @test count(!=(0), σ3) == 33
         # control: the tolerance is relative and tiny, a radius just below the ring excludes it
-        disc = Potts.Circle(Potts.Point(hexpos((12, 12))), 1 - 1.0e-9)
-        @test count(!=(0), _op(layout(Voronoi([Potts.Point(hexpos((12, 12)))]; region = disc, kinds = [:a]), hexl), ownership)) == 1
+        disc = Circle(Point(hexpos((12, 12))), 1 - 1.0e-9)
+        @test count(!=(0), _op(layout(Voronoi([Point(hexpos((12, 12)))]; region = disc, kinds = [:a]), hexl), ownership)) == 1
     end
 end
 
 @testitem "layouts: generator points must be finite" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: generator points must be finite" begin
-        for bad in (Potts.Point(NaN, 1.0), Potts.Point(Inf, 1.0), Potts.Point(1.0e300, 1.0))
+        for bad in (Point(NaN, 1.0), Point(Inf, 1.0), Point(1.0e300, 1.0))
             ly_throws(ArgumentError, ["point coordinates must be finite and below 1e15"], () -> Voronoi([bad]; kinds = [:a]))
             ly_throws(ArgumentError, ["point coordinates must be finite and below 1e15"], () -> Voronoi(bad; kinds = [:a]))
             ly_throws(ArgumentError, ["point coordinates must be finite and below 1e15"], () -> Potts.points([bad], (10, 10)))

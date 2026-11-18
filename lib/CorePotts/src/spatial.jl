@@ -68,7 +68,7 @@ _identity(::typeof(max), T) = typemin(T)
 _identity(::typeof(min), T) = typemax(T)
 
 @inline function _cell_reduce_body!(i, f, op, dst, st, p, ctx, key, mcs)
-    c = @inbounds st.σ[i]
+    c = @inbounds st.ownership[i]
     if c != 0
         v = convert(eltype(dst), f(st, p, ctx, key, mcs, i))
         _atomic!(op, dst, c, v)
@@ -101,7 +101,7 @@ _cell_reduce!(::typeof(+), f::F, dst::AbstractArray{<:Integer}, ::Type, st, p, c
     _cell_reduce_atomic!(+, f, dst, st, p, ctx, key, mcs, backend)
 function _cell_reduce_atomic!(op::O, f::F, dst, st, p, ctx, key, mcs, backend) where {O, F}
     _device_fill!(backend, dst, _identity(op, eltype(dst)))
-    Exec.launch!(backend, _cell_reduce_body!, length(st.σ), (f, op, dst, st, p, ctx, key, mcs))
+    Exec.launch!(backend, _cell_reduce_body!, length(st.ownership), (f, op, dst, st, p, ctx, key, mcs))
     return 2
 end
 
@@ -211,7 +211,7 @@ _cr_run_length(backend) = Exec.ishost(backend) ? _CR_RUN_HOST[] : _CR_RUN_DEVICE
     return nothing
 end
 @inline function _cr_exp_body!(j, k, f::F, dst, sc, st, p, ctx, key, mcs) where {F}
-    σ = st.σ
+    σ = st.ownership
     cur = zero(eltype(σ))
     b = Int32(0)
     for i in _cr_run(j, length(σ), k)                       # i ≤ length(σ)
@@ -248,7 +248,7 @@ end
 end
 
 @inline function _cr_sum_body!(j, k, f::F, dst, L, sc, st, p, ctx, key, mcs, paired::Val) where {F}
-    σ = st.σ
+    σ = st.ownership
     W = _cr_work(eltype(dst))
     cur = zero(eltype(σ))
     q = Int64(0)
@@ -298,7 +298,7 @@ function _cell_reduce!(::typeof(+), f::F, dst::AbstractArray{T}, ::Type{D}, st, 
         "state: merge `sc = CorePotts.reduce_scratch(ncell)` into it (`initial_state(σ, kinds; cell = (; …, sc.cell...), ",
         "model = sc.model)`)")))
     sc = _cr(st)
-    n = length(st.σ)
+    n = length(st.ownership)
     L = _reduce_bits(n)
     ncap = length(dst)
     col = UInt32(something(findfirst(==(_part_name(D)), keys(st.cell)), 0))   # for the range warning
@@ -323,7 +323,7 @@ function _cell_reduce!(::typeof(+), f::F, dst::AbstractArray{T}, ::Type{D}, st, 
         "only, because a device has no atomics for ", T,
         (T <: AbstractFloat ? "; or use a Float32 or Float64 column" : ""))))
     fill!(dst, zero(T))
-    σ = st.σ
+    σ = st.ownership
     for i in eachindex(σ)
         c = σ[i]
         c != 0 && (dst[c] += convert(T, f(st, p, ctx, key, mcs, i)))
@@ -464,9 +464,9 @@ function contact_graph(σ, lat::Lattice, r::Relation, ncell::Integer)
 end
 
 """Neighboring cells of `c` (sorted ids)."""
-neighbors(g::ContactGraph, c) = view(g.col, g.row_ptr[c]:(g.row_ptr[c + 1] - 1))
+contact_neighbors(g::ContactGraph, c) = view(g.col, g.row_ptr[c]:(g.row_ptr[c + 1] - 1))
 """Shared interface measure of cells `c` and `n` (zero if they do not touch)."""
-function contact(g::ContactGraph{T}, c, n) where {T}
+function contact_measure(g::ContactGraph{T}, c, n) where {T}
     n == 0 && return g.medium[c]
     r = g.row_ptr[c]:(g.row_ptr[c + 1] - 1)
     j = searchsortedfirst(view(g.col, r), n)
@@ -567,7 +567,7 @@ end
 function (ph::ContactPhase{R})(st, p, ctx, key, mcs, backend) where {R}
     c = st.cell
     rel = getfield(ctx, R)
-    n = length(st.σ)
+    n = length(st.ownership)
     u = _units_for(eltype(c.contact_measure), rel, n, backend)
     u === nothing || haskey(c, _CT_ACC) || throw(ArgumentError(string(
         "the contact table (`ContactPhase`) over the weighted relation `", R, "` needs the `#ct_` scratch columns ",
@@ -576,7 +576,9 @@ function (ph::ContactPhase{R})(st, p, ctx, key, mcs, backend) where {R}
     _device_fill!(backend, c.contact_nbr, 0); _device_fill!(backend, c.contact_measure, 0)
     _device_fill!(backend, c.contact_medium, 0); _device_fill!(backend, c.contact_overflow, 0)
     Exec.launch!(backend, _contact_body!, n, (c.contact_nbr, c.contact_measure, c.contact_medium,
-        c.contact_overflow, st.σ, ctx.lattice, rel, u, sc))
+            c.contact_overflow, st.ownership, ctx.lattice, rel, u, sc,
+        )
+    )
     u === nothing && return 5
     Exec.launch!(backend, _contact_fold_body!, size(c.contact_measure, 2), (c.contact_measure, c.contact_medium, sc, u))
     return 6

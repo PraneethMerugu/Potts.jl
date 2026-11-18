@@ -15,7 +15,7 @@ function everything_problem()
     function dH(st, p, prop, ctx)
         J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
         E(v, c) = p.λ * (v - @inbounds(st.cell.target[c]))^2
-        return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
+        return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
                (is_extension(prop) ? chemotaxis_delta(st.site.c, prop, 3.0) : 0.0)
     end
     commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
@@ -59,7 +59,7 @@ end
         rest = solve!(init(prob, alg; checkpoint = ck, save_everystep = false))
     a, b = whole.u[end], rest.u[end]
     @test whole.stats.lifecycle.divisions >= 1
-    @test a.σ == b.σ
+        @test a.ownership == b.ownership
     @test a.cell == b.cell
     @test a.site == b.site
     @test whole.stats.attempts == rest.stats.attempts
@@ -73,7 +73,7 @@ end
     solve!(integ)
     reinit!(integ)
     @test integ.t == 0 && integ.retcode == SciMLBase.ReturnCode.Default
-    @test solve!(integ).u[end].σ == a.σ
+        @test solve!(integ).u[end].ownership == a.ownership
 end
 end
 

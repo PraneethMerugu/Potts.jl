@@ -113,18 +113,18 @@ end
             (40, 40), (14, 14, 14))
         σ, kinds = blocks(dims, length(dims) == 2 ? 6 : 4)
         lat = Lattice(dims)
-        connected(st, p, prop, ctx) = locally_connected(st.σ, ctx, prop)
+            connected(st, p, prop, ctx) = locally_connected(st.ownership, ctx, prop)
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = connected)
         hot = merge(gg_params(), (; T = 40.0, V0 = length(dims) == 2 ? 36.0 : 64.0))
         for alg in (SequentialCPM(), CheckerboardCPM())
             u = solve(PottsProblem(f, initial_state(σ, kinds), lat, (0, 30), hot), alg).u[end]
-            @test u.σ != σ
-            @test all(c -> u.cell.volume[c] == 0 || components(u.σ, lat, c) == 1, eachindex(kinds))
+                @test u.ownership != σ
+                @test all(c -> u.cell.volume[c] == 0 || components(u.ownership, lat, c) == 1, eachindex(kinds))
         end
         # without the constraint, hot cells fragment
         f0 = CPMFunction(gg_delta_H; temperature = gg_temperature)
         u0 = solve(PottsProblem(f0, initial_state(σ, kinds), lat, (0, 30), hot), SequentialCPM()).u[end]
-        @test any(c -> components(u0.σ, lat, c) > 1, eachindex(kinds))
+            @test any(c -> components(u0.ownership, lat, c) > 1, eachindex(kinds))
     end
 
     @testset "forbid extinction" begin
@@ -151,7 +151,7 @@ end
         for alg in (SequentialCPM(), CheckerboardCPM())
             ub = solve(PottsProblem(fb, initial_state(σ, kinds), lat, (0, 10), pb), alg).u[end]
             ue = solve(PottsProblem(fe, initial_state(σ, kinds), lat, (0, 10), pb), alg).u[end]
-            @test ub.σ == ue.σ
+                @test ub.ownership == ue.ownership
         end
     end
 
@@ -203,22 +203,22 @@ end
         prob = PottsProblem(GG, initial_state(σ, kinds), lat, (0, 15), gg_params())
         b(st, p, prop, ctx) = p.b * (prop.new == 0 ? -1.0 : 1.0)
         pb = merge(gg_params(), (; b = 0.4))
-        on = CPMFunction(gg_delta_H; temperature = gg_temperature, bias = b, track = CorePotts.TrackDeltaH{Float64}())
+            on = CPMFunction(gg_delta_H; temperature = gg_temperature, bias = b, track = CorePotts.TrackEnergyChange{Float64}())
         off = CPMFunction(gg_delta_H; temperature = gg_temperature, bias = b)
         a = solve(PottsProblem(off, initial_state(σ, kinds), lat, (0, 15), pb), alg)
         sol = solve(PottsProblem(on, initial_state(σ, kinds), lat, (0, 15), pb), alg)
         u0, u = sol.u[1], sol.u[end]
         H(u) = total_H(u, lat, prob.contact, gg_params())
         # the bias is not part of ΔH: integer energies, so the sum is exact
-        @test sol.stats.accepted_ΔH == H(u) - H(u0)
+            @test sol.stats.accepted_energy_change == H(u) - H(u0)
         @test abs(H(u) - H(u0)) > 100                      # non-vacuous
-        @test a.stats.accepted_ΔH === nothing
-        @test a.u[end].σ == u.σ && a.stats.accepted == sol.stats.accepted   # nothing else changes
+            @test a.stats.accepted_energy_change === nothing
+            @test a.u[end].ownership == u.ownership && a.stats.accepted == sol.stats.accepted   # nothing else changes
         # negative control: a track of the effective ΔH (bias included) misses the oracle
         eff = CPMFunction(gg_delta_H; temperature = gg_temperature, bias = b, track = EffectiveTrack())
         se = solve(PottsProblem(eff, initial_state(σ, kinds), lat, (0, 15), pb), alg)
-        @test se.u[end].σ == u.σ
-        @test abs(se.stats.accepted_ΔH - (H(u) - H(u0))) > 1
+            @test se.u[end].ownership == u.ownership
+            @test abs(se.stats.accepted_energy_change - (H(u) - H(u0))) > 1
         # warm steps allocate nothing, tracked or not (the checkerboard reduces only at read points)
         for f in (off, on)
                 integ = init(
@@ -230,11 +230,11 @@ end
         end
         # a custom track: sums on both algorithms (here the effective one, `track_eltype`
         # given); without `track_eltype` only the checkerboard refuses, naming it
-        @test se.stats.accepted_ΔH isa Float64
+            @test se.stats.accepted_energy_change isa Float64
         un = PottsProblem(CPMFunction(gg_delta_H; temperature = gg_temperature, bias = b, track = UntypedTrack()),
             initial_state(σ, kinds), lat, (0, 15), pb)
         if alg isa SequentialCPM
-            @test solve(un, alg).stats.accepted_ΔH == sol.stats.accepted_ΔH
+                @test solve(un, alg).stats.accepted_energy_change == sol.stats.accepted_energy_change
         else
             e = try
                 solve(un, alg); nothing
@@ -259,10 +259,10 @@ end
             @test e isa ArgumentError && occursin("tracking", sprint(showerror, e))
         end
         i = init(pon, alg); step!(i); step!(i)                  # control: the same track continues
-        @test solve!(init(pon, alg; checkpoint = checkpoint(i))).stats.accepted_ΔH == sol.stats.accepted_ΔH
+            @test solve!(init(pon, alg; checkpoint = checkpoint(i))).stats.accepted_energy_change == sol.stats.accepted_energy_change
         # merge adds; `nothing` wins
-        @test merge(sol.stats, sol.stats).accepted_ΔH == 2 * sol.stats.accepted_ΔH
-        @test merge(sol.stats, a.stats).accepted_ΔH === nothing
+            @test merge(sol.stats, sol.stats).accepted_energy_change == 2 * sol.stats.accepted_energy_change
+            @test merge(sol.stats, a.stats).accepted_energy_change === nothing
     end
 end
 end

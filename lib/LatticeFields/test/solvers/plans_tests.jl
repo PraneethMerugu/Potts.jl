@@ -1,5 +1,5 @@
 # Plans and device control: preconditioner symmetry (§4.5), Krylov symmetry of the eliminated
-# operator (T-3), the budget skip with its pass-through, the sentinel, `inner = :auto`,
+# operator (T-3), the budget skip with its pass-through, the sentinel, `linsolve = :auto`,
 # launch counts (PG-5) and Float32/allocation hygiene of every launch.
 
 @testsetup module LF_solvers_plans
@@ -41,8 +41,8 @@ end
     for case in (named_case("sphere42", 0.022), named_case("box300x192", 5.5e-6))
         @test symmetry_defect(case_solver(case, Float64)) < 1e-12
     end
-    v21 = Multigrid(cycle = V(2, 1))       # negative control (DevicePCG refuses it)
-    @test symmetry_defect(case_solver(named_case("sphere42", 0.022), Float64; inner = v21)) >
+        v21 = Multigrid(cycle = VCycle(2, 1))       # negative control (DevicePCG refuses it)
+        @test symmetry_defect(case_solver(named_case("sphere42", 0.022), Float64; linsolve = v21)) >
           1e-3
 end
 end
@@ -93,29 +93,29 @@ end
 @testitem "budget skip keeps the pass-through (odd flips per cycle)" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
 @testset "budget skip keeps the pass-through (odd flips per cycle)" begin
     case = named_case("disk128", 0.022)
-    v21 = Multigrid(cycle = V(2, 1))
-    sv = case_solver(case, Float32; inner = v21)
+        v21 = Multigrid(cycle = VCycle(2, 1))
+        sv = case_solver(case, Float32; linsolve = v21)
     k = steady!(sv)
     want = copy(field(sv, lkey(0, "x")))
     for (stages, same) in ((LOWERING, true), (
         merge(LOWERING, (; passthrough = c -> Any[])), false))
-        sv = case_solver(case, Float32; inner = v21, stages)
+            sv = case_solver(case, Float32; linsolve = v21, stages)
         rebuild!(sv)
         lift!(sv)
-        solve!(sv; budget = k + 1)                     # device mode: one gated cycle
+            solve!(sv; maxiters = k + 1)                     # device mode: one gated cycle
         @test scalars(sv).iter == k
         @test (field(sv, lkey(0, "x")) == want) == same
     end
 end
 end
 
-@testitem "sentinel and inner = :auto" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
-@testset "sentinel and inner = :auto" begin
+@testitem "sentinel and linsolve = :auto" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
+    @testset "sentinel and linsolve = :auto" begin
     disk, per = named_case("disk512", 1.9e-3), periodic_case(128, 128; s = 1.0)
     @test resolve_inner(disk[1], :auto) isa DevicePCG
-    @test resolve_inner(disk[1], Multigrid()).budget == 12
-    @test resolve_inner(per[1], :auto).budget == 8
-    sv = case_solver(disk, Float32; inner = Multigrid())   # stationary budget 12 needs 17
+        @test resolve_inner(disk[1], Multigrid()).maxiters == 12
+        @test resolve_inner(per[1], :auto).maxiters == 8
+        sv = case_solver(disk, Float32; linsolve = Multigrid())   # stationary budget 12 needs 17
     rebuild!(sv)
     lift!(sv)
     solve!(sv)
@@ -131,20 +131,21 @@ end
 @testitem "sentinel uses the plan's budget; DevicePCG validation" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
 @testset "sentinel uses the plan's budget; DevicePCG validation" begin
     case = named_case("disk128", 5.5e-6)
-    sv = case_solver(case, Float64; inner = DevicePCG(budget = 4))
+        sv = case_solver(case, Float64; linsolve = DevicePCG(maxiters = 4))
     @test steady!(sv) > 4                    # past the algorithm budget, converged
     @test scalars(sv).done && !scalars(sv).warn && !sentinel(sv)
-    sv = case_solver(case, Float64; inner = DevicePCG(budget = 30))
+        sv = case_solver(case, Float64; linsolve = DevicePCG(maxiters = 30))
     rebuild!(sv)
     lift!(sv)
-    @test solve!(sv; host = true, budget = 3) == 3   # plan budget below the algorithm's
+        @test solve!(sv; host = true, maxiters = 3) == 3   # plan budget below the algorithm's
     sc = scalars(sv)
     @test !sc.done && sc.warn
     @test sc.rnorm ≈ maximum(abs, true_residual(sv)) rtol = 1e-6   # final true residual
     @test (@test_logs (:warn, r"tolerance") sentinel(sv))
         @test_throws ["ArgumentError", "DevicePCG", "symmetric preconditioner cycle"] resolve_inner(
             case[1],
-        DevicePCG(precond = Multigrid(cycle = V(2, 1))))
+            DevicePCG(precond = Multigrid(cycle = VCycle(2, 1)))
+        )
         @test_throws ["ArgumentError", "DevicePCG", "one preconditioner cycle per iteration", "cycles = 2"] resolve_inner(
             case[1],
         DevicePCG(precond = Multigrid(cycles = 2)))
@@ -154,7 +155,7 @@ end
 @testitem "launches per cycle and iteration (PG-5 ≤ 25)" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
 @testset "launches per cycle and iteration (PG-5 ≤ 25)" begin
     per = periodic_case(256, 256; s = 0.022)
-    sv = case_solver(per, Float32; inner = Multigrid())
+        sv = case_solver(per, Float32; linsolve = Multigrid())
     @test nlaunches(solve_plan(sv, 2), 2) == 13        # 2 levels × 5 + bottom + norm + finish
     sv = case_solver(per, Float32)                     # deflated PCG: no extra launches
     @test sv.deflate &&
@@ -173,9 +174,11 @@ end
     # Every launch body, hand-written (finish!, bottom!, gershgorin!, build_site!) or
     # generated, with every callee: no Float64 value in the typed code, and none in the
     # arguments. Deflated and undeflated PCG, stationary multigrid, 2D and 3D.
-    for (c, kw) in (("disk128", (;)), ("disk128", (; inner = Multigrid())),
-        ("per128", (; solver_T = Float32)), (
-        "per128", (; deflate = false, solver_T = Float32)),
+        for (c, kw) in (
+                ("disk128", (;)), ("disk128", (; linsolve = Multigrid())),
+                ("per128", (; solver_type = Float32)), (
+                    "per128", (; deflate = false, solver_type = Float32),
+                ),
         ("sphere42", (;)))
         sv = case_solver(named_case(c, 0.022), Float32; kw...)
         @test sv.T == Float32
@@ -223,7 +226,7 @@ end
 @testitem "the time slot is reserved: no solver kernel reads G.rt[TIME_SLOT]" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
 @testset "the time slot is reserved: no solver kernel reads G.rt[TIME_SLOT]" begin
     TS = LatticeFields.Compile.TIME_SLOT
-    for (c, kw) in (("disk128", (;)), ("disk128", (; inner = Multigrid())), ("per128", (;)))
+        for (c, kw) in (("disk128", (;)), ("disk128", (; linsolve = Multigrid())), ("per128", (;)))
         sv = case_solver(named_case(c, 0.022), Float32; kw...)
         @test all(k -> all(n -> !(n.op == IR.RUNTIME && n.imm == TS), k.nodes),
             sv.prog.kernels)

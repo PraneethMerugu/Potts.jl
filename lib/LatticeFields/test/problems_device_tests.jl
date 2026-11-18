@@ -66,12 +66,12 @@ using .LF_problems_device: instances
     dev = FieldProblem(args...; state = ["u"], kind = :rate, index = ix, backend = DEV,
         options = devopts())
     host = FieldProblem(args...; state = ["u"], kind = :rate, index = ix)
-    sd = solve(dev, ExplicitEuler(; dt = 0.05, substeps = 1); saveat = 0.1)
-    sh = solve(host, ExplicitEuler(; dt = 0.05, substeps = 1); saveat = 0.1)
+        sd = solve(dev, ExplicitEuler(; substeps = 1); dt = 0.05, saveat = 0.1)
+        sh = solve(host, ExplicitEuler(; substeps = 1); dt = 0.05, saveat = 0.1)
     @test sd.t == sh.t && all(i -> sd[:u, i] == sh[:u, i], eachindex(sd.t))   # bit for bit
     @test sd[:u][end] != sd[:u][1]
-    integ, hi = init(dev, ExplicitEuler(; dt = 0.05, substeps = 1)),
-    init(host, ExplicitEuler(; dt = 0.05, substeps = 1))
+        integ, hi = init(dev, ExplicitEuler(; substeps = 1); dt = 0.05),
+            init(host, ExplicitEuler(; substeps = 1); dt = 0.05)
     step!(integ)
     step!(hi)
     KA.synchronize(DEV)
@@ -102,8 +102,8 @@ using .LF_problems_device: instances
     ix = LatticeIndex(; variables = [:u => FieldSlot(1:prod(dims), dims)], parameters = [:D => 1])
     mk(backend) = FieldProblem(euler2(dims), u0, (0.0, 0.2), [0.05]; state = ["u"], kind = :rate,
         index = ix, backend)
-    alg = ExplicitEuler(; dt = 0.05, substeps = 1)
-    Jdev(prob) = D -> sum(abs2, Array(solve(SciMLBase.remake(prob; p = [D]), alg).u[end]))
+        alg = ExplicitEuler(; substeps = 1)
+        Jdev(prob) = D -> sum(abs2, Array(solve(SciMLBase.remake(prob; p = [D]), alg; dt = 0.05).u[end]))
     dd, dh = ForwardDiff.derivative(Jdev(mk(DEV)), 0.05), ForwardDiff.derivative(Jdev(mk(KA.CPU())), 0.05)
     @test dd isa Float32 && isapprox(dd, dh; rtol = 1e-5) && dd != 0
     # Float64 values are refused on a backend without Float64 hardware (Metal); where the
@@ -114,7 +114,7 @@ using .LF_problems_device: instances
     if Exec.supports(DEV, Float64)
         p64(backend) = FieldProblem(euler2(dims), Float64.(u0), (0.0, 0.2), [0.05]; state = ["u"],
             kind = :rate, index = ix, backend)
-        ud, uh = Array(solve(p64(DEV), alg).u[end]), solve(p64(KA.CPU()), alg).u[end]
+            ud, uh = Array(solve(p64(DEV), alg; dt = 0.05).u[end]), solve(p64(KA.CPU()), alg; dt = 0.05).u[end]
         @test eltype(ud) == Float64 && isapprox(ud, uh; rtol = 1e-13)
     end
 end

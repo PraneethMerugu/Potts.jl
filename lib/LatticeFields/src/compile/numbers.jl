@@ -40,12 +40,12 @@ nonzero value ties. A leaf primitive of emitted bodies.
 end
 
 """
-    valtype(T)
+    value_type(T)
 
 The value type of number type `T`: `T` itself for a plain number, `V` for `Dual{tag, V, N}`
 (recursively, extension).
 """
-valtype(::Type{T}) where {T} = T
+value_type(::Type{T}) where {T} = T
 
 """
     primal(x)

@@ -90,7 +90,8 @@ end
 @testitem "fault: wrong Dirichlet ghost is invisible to the differential, caught by the oracle" setup = [LF_compile_faults] tags = [:latticefields, :compile] begin
 @testset "fault: wrong Dirichlet ghost is invisible to the differential, caught by the oracle" begin
     function bad_boundary(p::Program)
-        rules = IR.BRule[r isa FaceRule && r.beta.value == 0 ?
+            rules = IR.AbstractBoundaryRule[
+                r isa FaceRule && r.beta.value == 0 ?
                          FaceRule(r.field, r.axis, r.side, Coef(2.0),
                              r.beta, r.g) : r for r in p.rules]
         q = Program(p.hierarchy, p.fields, p.tables, p.masks, p.flags, rules, p.kernels,

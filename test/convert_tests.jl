@@ -34,7 +34,7 @@ isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "d
     @energy begin
         cells(cytoplasm, lamellipodium) => (volume - V_target)^2
         cells(doomed) => 50.0 * volume^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @convert protrusion clusters(cytoplasm) begin
         to = sibling(lamellipodium)
@@ -241,7 +241,7 @@ end
             sol = solve(prob, alg; saveat = 1)
             ref = solve(cv_device_problem(), alg; saveat = 1)                    # the Int32 run
             @test cv_device_summary(sol.u[end]) == CV_EXPECTED                  # births == 1
-            @test all(i -> sol.u[i].σ == ref.u[i].σ, eachindex(sol.u))
+            @test all(i -> sol.u[i].ownership == ref.u[i].ownership, eachindex(sol.u))
         end
     end
 end
@@ -282,11 +282,11 @@ end
         sol = @test_logs (:warn, r"1 allocation\(s\) deferred") match_mode = :any solve(prob, SequentialCPM())
         u = sol.u[end]
         @test u.cell.kind[4:5] == [2, 2] && u.cell.cluster[4:5] == [1, 2]       # entity 1 → slot 4, entity 2 → slot 5
-        @test u.σ[3, 3] == 4 && u.σ[3, 11] == 5 && u.σ[3, 19] == 3            # entity 3: deferred, nothing converted
+        @test u.ownership[3, 3] == 4 && u.ownership[3, 11] == 5 && u.ownership[3, 19] == 3            # entity 3: deferred, nothing converted
         @test u.model.births[1] == 2
         # control: with room for all three, nothing is deferred (and nothing is reported)
         @test_logs solve(cv_many_problem(; capacity = 6), SequentialCPM())
-        @test solve(cv_many_problem(; capacity = 6), SequentialCPM()).u[end].σ[3, 19] == 6
+        @test solve(cv_many_problem(; capacity = 6), SequentialCPM()).u[end].ownership[3, 19] == 6
     end
 end
 
@@ -296,17 +296,17 @@ end
         # allocation for entity 1 skips slot 2 (held) and takes slot 4
         prob = cv_many_problem(; capacity = 4, σ3 = 3)
         u = deepcopy(prob.u0)
-        u.σ[u.σ .== 2] .= 0
+        u.ownership[u.ownership .== 2] .= 0
         u.cell.volume[2] = 0
         u.cell.cluster[2:3] .= 2
         p = remake(prob; u0 = u)
         sol = solve(p, SequentialCPM())
         v = sol.u[end]
-        @test v.cell.volume[2] == 0 && v.σ[3, 3] == 4 && v.cell.kind[4] == 2 && v.cell.cluster[4] == 1
+        @test v.cell.volume[2] == 0 && v.ownership[3, 3] == 4 && v.cell.kind[4] == 2 && v.cell.cluster[4] == 1
         # control: when no live cell names cluster 2, slot 2 is free and is taken first
         u2 = deepcopy(u)
         u2.cell.cluster[3] = 3
-        @test solve(remake(prob; u0 = u2), SequentialCPM()).u[end].σ[3, 3] == 2
+        @test solve(remake(prob; u0 = u2), SequentialCPM()).u[end].ownership[3, 3] == 2
     end
 end
 
@@ -317,12 +317,12 @@ end
             CorePotts._SCRATCH_LIMIT[] = 8                  # cell 1 (4×4): m2 = 20 per axis > 8 ÷ 4
             prob = cv_many_problem(CVLarge)
             sol = @test_logs (:warn, r"entity pass\(es\) skipped") match_mode = :any solve(prob, SequentialCPM())
-            @test sol.u[end].σ == prob.u0.σ
+            @test sol.u[end].ownership == prob.u0.ownership
         finally
             CorePotts._SCRATCH_LIMIT[] = old
         end
         prob = cv_many_problem(CVLarge; capacity = 6)      # control: the default bound
-        @test solve(prob, SequentialCPM()).u[end].σ[3, 3] == 4
+        @test solve(prob, SequentialCPM()).u[end].ownership[3, 3] == 4
     end
 end
 

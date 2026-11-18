@@ -84,14 +84,14 @@ cown(sys, dims; T = Float64, ins = (), kw...) = LFP.field_problem(discretize(sys
 # whose value reads the coordinates, a face value that reads an input (a field face), a table at
 # the kind and a source from a real input. With `hand` (the twin), the kind expressions are real
 # inputs that hold their block means: `cf2` for `ismember(q, (2,))`, `cf1` for `q == 1`, `csv` for
-# `at(cSv, q + 1)` (F4-15: a kind expression folds by its mean, as a real input does). The names are
+# `value_at(cSv, q + 1)` (F4-15: a kind expression folds by its mean, as a real input does). The names are
 # unique to this file: SymbolicUtils interns an applied term `sv(t, x, y)` whatever its function's
 # metadata, and unseen_loop.jl's plain `sv` (included before device.jl) drops `input = true`
 @parameters cD = 0.02 ckd = 3.0 cs = 0.5 cSv[1:4] = [1.0, 2.0, 5.0, 3.0]
 @variables cf1(..) [input = true, bounds = (0, 1)] cf2(..) [input = true, bounds = (0, 1)] csv(..) [input = true, bounds = (1, 5)]
 function csys(c, q, g; steady = false, hand = false)
     ce, qe, ge = c(t, x, y), q(t, x, y), g(t, x, y)
-    k2, k1, tv = hand ? (cf2(t, x, y), cf1(t, x, y), csv(t, x, y)) : (ismember(qe, (2,)), qe == 1, at(cSv, qe + 1))
+    k2, k1, tv = hand ? (cf2(t, x, y), cf1(t, x, y), csv(t, x, y)) : (ismember(qe, (2,)), qe == 1, value_at(cSv, qe + 1))
     rhs = cD * DivKGrad(:harmonic)(1 + x, ce) - ckd * ce * k2 + cs * k1 + 0.1 * tv + 0.05 * ge
     eqs = steady ? [0 ~ rhs] : [D(ce) ~ rhs]
     bcs = [ce ~ masked(qe == 3, 1.0), 0.5 * c(t, 0, y) - 0.1 * Differential(x)(c(t, 0, y)) ~ 0.3,

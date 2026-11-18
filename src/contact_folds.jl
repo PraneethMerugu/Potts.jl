@@ -1,7 +1,7 @@
 # The cell-scope contact fold (D-150 G1): `count(pred for _ in contacts)` and
 # `count(pred for _ in contacts(rel))` in cell scope are the cell's contact pairs (s, s′),
 # s in the cell, s′ ∈ R(s) inside the lattice and owned by another cell or the medium, for
-# which `pred` holds. `pred` reads the partner's kind `kind′` (the medium is kind 0) and
+# which `pred` holds. `pred` reads the partner's kind `neighbor_kind` (the medium is kind 0) and
 # constants, so it is a kind set fixed when the model is built.
 #
 # Each distinct fold (relation, kind set) is a CorePotts contact-count tracker: an `Int32`
@@ -20,7 +20,7 @@ A contact fold as [`Potts.updates`](@ref), [`Potts.hamiltonian`](@ref) and
 [`Potts.drives`](@ref) print it: `count(pred for _ in contacts(relation))` in cell scope,
 the number of the cell's contact pairs over `relation` whose partner satisfies `pred`.
 `contact_partner` is the fold's bound variable, `pred` is `true` or an expression of the
-partner's kind `kind′`, and `relation` is the relation's name (`:contact` for `contacts`).
+partner's kind `neighbor_kind`, and `relation` is the relation's name (`:contact` for `contacts`).
 Symbolic only: it describes the fold and is never called.
 """
 count_contacts(n, pred, rel) = error("`count_contacts` is symbolic-only")
@@ -34,7 +34,7 @@ _fold_description(i::Entity) = _unwrap(count_contacts(_CONTACT_PARTNER, i.option
     _contact_fold(fold, body, d::ContactDomain, cond)
 
 `fold(body(_) for _ in contacts(d.relation) if cond(_))` in cell scope: only `count`. The
-predicate may read `kind′` and constants; the result is the cell quantity of the tracker.
+predicate may read `neighbor_kind` and constants; the result is the cell quantity of the tracker.
 """
 function _contact_fold(fold, body, d::ContactDomain, cond)
     nameof(fold) === :count || throw(ArgumentError(
@@ -51,7 +51,7 @@ function _contact_fold(fold, body, d::ContactDomain, cond)
     return Symbolics.wrap(_tag(_sym(name), Entity(:contact_count, name, nothing, (; relation = rel, pred))))
 end
 
-# A predicate of a contact fold: `Bool` or a symbolic expression of `kind′` and constants
+# A predicate of a contact fold: `Bool` or a symbolic expression of `neighbor_kind` and constants
 function _fold_predicate(p)
     p isa Bool && return p
     p isa Num || p isa SymbolicUtils.BasicSymbolic || throw(ArgumentError(
@@ -59,11 +59,12 @@ function _fold_predicate(p)
     _walk(p) do y
         i = info(y)
         if i !== nothing
-            (i.role === :builtin && i.name === :kind′) || throw(ArgumentError(
-                "`count(pred for _ in contacts)`: the predicate may read only `kind′` (the partner's kind; " *
+            (i.role === :builtin && i.name === :neighbor_kind) || throw(
+                ArgumentError(
+                    "`count(pred for _ in contacts)`: the predicate may read only `neighbor_kind` (the partner's kind; " *
                 "the medium for owner 0) and constants, not `$(i.name)`"))
         elseif SymbolicUtils.issym(y)
-            throw(ArgumentError("`count(pred for _ in contacts)`: the predicate reads `$y`; it may read only `kind′` and constants"))
+            throw(ArgumentError("`count(pred for _ in contacts)`: the predicate reads `$y`; it may read only `neighbor_kind` and constants"))
         end
     end
     return _unwrap(p)
@@ -74,7 +75,7 @@ function _fold_mask(pred, nk::Integer, name)
     nk <= 64 || throw(ArgumentError("`count(… for _ in contacts)` supports models with at most 63 cell kinds"))
     m = UInt64(0)
     for k in 0:(nk - 1)
-        v = pred isa Bool ? pred : _unwrap(Symbolics.substitute(pred, Dict{Any, Any}(_unwrap(B.kind′) => k); fold = Val(true)))
+        v = pred isa Bool ? pred : _unwrap(Symbolics.substitute(pred, Dict{Any, Any}(_unwrap(B.neighbor_kind) => k); fold = Val(true)))
         v isa SymbolicUtils.BasicSymbolic && SymbolicUtils.isconst(v) && (v = SymbolicUtils.unwrap_const(v))
         v isa Bool || throw(ArgumentError("`count(pred for _ in contacts)` (`$name`): the predicate is not true or " *
                                           "false for partner kind $k (it gives `$v`)"))
@@ -149,7 +150,10 @@ end
 
 """The per-copy updates of the model's contact counts (generated `commit!`)."""
 _contact_count_commits(c::CompiledPottsSystem) =
-    Any[:(CorePotts.commit_contact_count!(st.cell.$n, st.σ, st.cell.kind, $(r === :contact ? :(ctx.contact) : :(ctx.$r)),
+    Any[
+    :(
+        CorePotts.commit_contact_count!(
+            st.cell.$n, st.ownership, st.cell.kind, $(r === :contact ? :(ctx.contact) : :(ctx.$r)),
               $m, ctx.lattice, prop)) for (n, r, m) in _contact_trackers(c)]
 
 """The initial count columns (`Int32`) of the model's folds, from σ."""
@@ -190,10 +194,10 @@ end
 
 _is_one_of(op, ops::Vector{Any}) = any(o -> o === op, ops)
 
-"""Whether `x` draws (`rand()`, `randn()`, `randn(μ, σ; lower)`)."""
+"""Whether `x` draws (`rand()`, `randn()`, `randn(μ, σ; lower_bound)`)."""
 _has_draw(x) = _has_any_op(x, _DRAW_OPS)
 
-"""Whether the model has a bounded draw (`randn(μ, σ; lower)`): its state carries a status word."""
+"""Whether the model has a bounded draw (`randn(μ, σ; lower_bound)`): its state carries a status word."""
 function _has_bounded_draw(sys::PottsSystem)
     _may_have(sys, :bounded) || return false
     hit(x) = _has_any_op(x, _BOUNDED_DRAW_OPS)

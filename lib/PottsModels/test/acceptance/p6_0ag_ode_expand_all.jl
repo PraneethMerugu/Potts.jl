@@ -23,7 +23,7 @@
 #  1. Zero warm allocations per `step!` (after two warm-up steps, every one of five further
 #     steps allocates 0 bytes) for each shape, `SequentialCPM` and `CheckerboardCPM`,
 #     `T = Float64` and `Float32`, `ExplicitEuler()` (default), `ExplicitEuler(substeps = 4)`
-#     and `RK4()`. Controls (zero today): a plain cell rate, a plain model fold rate, and a
+#     and `Potts.RK4()`. Controls (zero today): a plain cell rate, a plain model fold rate, and a
 #     gather rate (expanded since D-103).
 #  2. Metal (POTTS_GPU=metal with Metal loaded; Float32, `CheckerboardCPM(; proposal =
 #     Moore(1))`): every shape compiles and runs for each fixed-step solver, its σ equals the
@@ -241,9 +241,9 @@ end
 `σ` trajectory of `sol`, computing cell volumes by hand from each post-sweep `σ`."""
 function p60ag_rodas_ref(M, sol)
     u = Float64.(p60ag_values(M, sol.u[1]))
-    nsites = Float64(length(sol.u[1].σ))
+    nsites = Float64(length(sol.u[1].ownership))
     for k in 0:(p60ag_N - 1)
-        σ = Array(sol.u[k + 2].σ)
+        σ = Array(sol.u[k + 2].ownership)
         v1 = Float64(count(==(1), σ))
         v2 = Float64(count(==(2), σ))
         rhs = if M === P60agHill
@@ -383,7 +383,7 @@ end
                 @info "P6.0ag device: $(nameof(M)) $label does not run" error = first(s, 300) opaque_closure = occursin("opaque_closure", s)
                 continue
             end
-            @test Array(gpu.σ) == Array(cpu.σ)
+            @test Array(gpu.ownership) == Array(cpu.ownership)
             c, g = Float32.(p60ag_values(M, cpu)), Float32.(p60ag_values(M, gpu))
             if M in P60AG_HILLS
                 @test maximum(p60ag_ulps.(c, g)) <= P60AG_HILL_ULPS
@@ -403,7 +403,7 @@ end
             cpu, gpu = p60ag_cpu_metal(M, kw)
             @test !(gpu isa Exception)
             gpu isa Exception && (@info "P6.0ag device: $(nameof(M)) $label does not run" error = first(sprint(showerror, gpu), 300); continue)
-            @test Array(gpu.σ) == Array(cpu.σ)
+            @test Array(gpu.ownership) == Array(cpu.ownership)
             @test p60ag_values(M, gpu) == p60ag_values(M, cpu)
         end
     else

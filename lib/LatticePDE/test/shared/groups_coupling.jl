@@ -12,7 +12,7 @@ r1e, r2e = gr1(t, x, y), gr2(t, x, y)
 rsys() = PDESystem([D(r1e) ~ -gk * r2e, D(r2e) ~ gk * r1e], [gr1(0, x, y) ~ 1.0, gr2(0, x, y) ~ 0.0],
     [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [r1e, r2e], [gk]; name = :rot)
 # two groups (two algorithms: equal ones would be one group)
-rtwo(n) = FieldGroups(r1e => ExplicitEuler(; dt = 0.01, substeps = n), r2e => ExplicitEuler(; dt = 0.01, substeps = n + 1))
+rtwo(n) = FieldGroups(r1e => ExplicitEuler(; substeps = n), r2e => ExplicitEuler(; substeps = n + 1))
 
 # Round 2 of the F2-06 review: only groups in a loop of the group read graph are limited.
 @parameters gwk = 300.0 gwr = 5.0

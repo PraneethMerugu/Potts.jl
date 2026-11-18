@@ -265,14 +265,15 @@ function pg10()
     # a parameter change does not recompile: remake + init + steps add no kernel instance
     @parameters t x y Dc = 1e-3 k = 0.1
     @variables c(..)
-    rd = PDESystem(Differential(t)(c(t, x, y)) ~ Dc * Δ(c(t, x, y)) - k * c(t, x, y),
+    rd = PDESystem(
+        Differential(t)(c(t, x, y)) ~ Dc * laplacian(c(t, x, y)) - k * c(t, x, y),
         [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0, c(t, x, 0) ~ c(t, x, 1)],
         [t ∈ Interval(0, 1), x ∈ Interval(0, 1), y ∈ Interval(0, 1)], [t, x, y], [c(t, x, y)], [Dc, k]; name = :rd)
     prob = discretize(rd, LatticeDiscretization(Grid((64, 64)); T = Float32, backend = DEV))
-    solve(prob, ExplicitEuler(dt = 0.1f0))   # the bound is known (Dc, k)
+    solve(prob, ExplicitEuler(); dt = 0.1f0)   # the bound is known (Dc, k)
     devsync()
     n0 = ninstances()
-    solve(LatticePDE.Problems.SciMLBase.remake(prob; p = [2e-3, 0.3]), ExplicitEuler(dt = 0.1f0))
+    solve(LatticePDE.Problems.SciMLBase.remake(prob; p = [2.0e-3, 0.3]), ExplicitEuler(); dt = 0.1f0)
     devsync()
     @printf("PG-10 parameter change: %d new kernel instances (gate 0)\n", ninstances() - n0)
 end
@@ -281,7 +282,8 @@ end
 function pg14()
     @parameters t x y Dc = 1e-3 k = 0.1
     @variables c(..)
-    rd = PDESystem(Differential(t)(c(t, x, y)) ~ Dc * Δ(c(t, x, y)) - k * c(t, x, y),
+    rd = PDESystem(
+        Differential(t)(c(t, x, y)) ~ Dc * laplacian(c(t, x, y)) - k * c(t, x, y),
         [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)],
         [t ∈ Interval(0, 10), x ∈ Interval(0, 1), y ∈ Interval(0, 1)], [t, x, y], [c(t, x, y)], [Dc, k]; name = :rd)
     # the build: lowering, semantic passes, plan, binding and compile (site counts are runtime
@@ -299,7 +301,8 @@ function pg14()
         devsync()
     end
     state(n) = (prob = discretize(rd, LatticeDiscretization(Grid((n, n)); T = Float32, backend = DEV));
-        init(prob, ExplicitEuler(dt = 1.0f-2)); devsync())
+        init(prob, ExplicitEuler(); dt = 1.0f-2); devsync()
+    )
     big = SMOKE ? 512 : 4096
     build(64); build(big); state(64); state(big)            # warm: compile and first-call costs
     t64, tbig = (minimum(@elapsed(build(n)) for _ in 1:3) for n in (64, big))

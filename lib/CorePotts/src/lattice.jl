@@ -229,17 +229,17 @@ end
 end
 
 
-abstract type RelationSpec end
+abstract type AbstractRelationSpec end
 
 """Chebyshev ball: all offsets with `maximum(abs, o) ≤ k` (order 1 = 8 in 2D, 26 in 3D)."""
-struct Moore <: RelationSpec
+struct Moore <: AbstractRelationSpec
     k::Int
     include_self::Bool
 end
 Moore(k::Integer = 1; include_self = false) = Moore(k, include_self)
 
 """Manhattan ball: all offsets with `sum(abs, o) ≤ k` (order 1 = 4 in 2D, 6 in 3D)."""
-struct VonNeumann <: RelationSpec
+struct VonNeumann <: AbstractRelationSpec
     k::Int
     include_self::Bool
 end
@@ -251,18 +251,18 @@ VonNeumann(k::Integer = 1; include_self = false) = VonNeumann(k, include_self)
 All offsets in the first `k` distinct Euclidean distance shells, cumulative (CompuCell3D
 `NeighborOrder`; counts 4, 8, 12, 20, 24, 28 in 2D and 6, 18, 26, 32, 56, 80 in 3D).
 """
-struct NeighborOrder <: RelationSpec
+struct NeighborOrder <: AbstractRelationSpec
     k::Int
     include_self::Bool
 end
 NeighborOrder(k::Integer = 1; include_self = false) = NeighborOrder(k, include_self)
 
 """Euclidean ball: all offsets with `‖o‖ ≤ r` (lattice units)."""
-struct Ball <: RelationSpec
+struct EuclideanBall <: AbstractRelationSpec
     r::Float64
     include_self::Bool
 end
-Ball(r::Real; include_self = false) = Ball(r, include_self)
+EuclideanBall(r::Real; include_self = false) = EuclideanBall(r, include_self)
 
 """
     Weighted(spec, weight)
@@ -271,13 +271,13 @@ Ball(r::Real; include_self = false) = Ball(r, include_self)
 `o -> 1 / sqrt(sum(abs2, o))` for distance-weighted contact; `OnIndices(f)` receives lattice
 offsets instead). Weights are stored as `Float32`.
 """
-struct Weighted{S <: RelationSpec, F} <: RelationSpec
+struct Weighted{S <: AbstractRelationSpec, F} <: AbstractRelationSpec
     spec::S
     weight::F
 end
 
 """Explicit offsets."""
-struct Stencil <: RelationSpec
+struct Stencil <: AbstractRelationSpec
     offsets::Vector{Vector{Int}}
     Stencil(offsets) = new([collect(Int, o) for o in offsets])
 end
@@ -289,7 +289,7 @@ function _candidates(spec::Moore, N)
     return [o for o in _box(N, spec.k)]
 end
 _candidates(spec::VonNeumann, N) = [o for o in _box(N, spec.k) if sum(abs, o) <= spec.k]
-_candidates(spec::Ball, N) = [o for o in _box(N, floor(Int, spec.r)) if _sq(o) <= spec.r^2]
+_candidates(spec::EuclideanBall, N) = [o for o in _box(N, floor(Int, spec.r)) if _sq(o) <= spec.r^2]
 function _candidates(spec::NeighborOrder, N)
     box = _box(N, spec.k)
     shells = sort!(unique(_sq(o) for o in box if _sq(o) > 0))
@@ -309,7 +309,7 @@ _include_self(spec::Stencil) = any(o -> all(iszero, o), spec.offsets)
 Hexagonal ball of hex distance ≤ `k` (order 1 = 6 neighbors, 2 = 18, 3 = 36) on a
 hexagonal lattice (axial offsets).
 """
-struct Hex <: RelationSpec
+struct Hex <: AbstractRelationSpec
     k::Int
     include_self::Bool
 end
@@ -323,7 +323,7 @@ _candidates(spec::Hex, N, ::Square) = throw(ArgumentError("`Hex(k)` needs a hexa
 _candidates(spec::Union{Hex, Moore, VonNeumann}, N, ::Hexagonal) = [o for o in _box(2, spec.k) if _hexdist(o) <= spec.k]
 _candidates(spec::Stencil, N, ::Hexagonal) = _candidates(spec, N)
 _hexsq(o) = (x = o[1] + o[2] / 2; y = o[2] * sqrt(3) / 2; x^2 + y^2)
-_candidates(spec::Ball, N, ::Hexagonal) = [o for o in _box(2, ceil(Int, 2spec.r / sqrt(3))) if _hexsq(o) <= spec.r^2 + 1e-9]
+_candidates(spec::EuclideanBall, N, ::Hexagonal) = [o for o in _box(2, ceil(Int, 2spec.r / sqrt(3))) if _hexsq(o) <= spec.r^2 + 1.0e-9]
 function _candidates(spec::NeighborOrder, N, ::Hexagonal)
     box = _box(2, 2spec.k)
     shells = sort!(unique(round(_hexsq(o); digits = 9) for o in box if _hexsq(o) > 0))
@@ -341,7 +341,7 @@ Resolve a neighborhood for `lattice`. Offsets are canonically ordered. Stencils 
 under a small periodic axis (two offsets reaching the same site, or an offset reaching
 the origin) are rejected.
 """
-function relation(spec::RelationSpec, l::Lattice{N}) where {N}
+function relation(spec::AbstractRelationSpec, l::Lattice{N}) where {N}
     offs = _offsets(spec, l)
     return Relation{N, length(offs)}(Tuple(map(o -> Int32.(o), offs)))
 end
@@ -355,7 +355,7 @@ end
 _weight(f, g, o) = f(_embed(g, Tuple(o)))
 _weight(f::OnIndices, g, o) = f.f(Tuple(o))
 
-function _offsets(spec::RelationSpec, l::Lattice{N}) where {N}
+function _offsets(spec::AbstractRelationSpec, l::Lattice{N}) where {N}
     offs = unique(_candidates(spec, N, l.geometry))
     filter!(o -> _include_self(spec) || !all(iszero, o), offs)
     sort!(offs; by = o -> (_ordersq(l.geometry, o), o))

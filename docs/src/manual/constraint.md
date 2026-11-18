@@ -22,6 +22,7 @@ the [Connectivity](@ref manual-connectivity) page, with a mapping from other fra
 
 ```@example constraint
 using Potts
+using Potts.Layouts
 
 @potts_model Fragile begin
     @structural_parameters begin
@@ -31,7 +32,7 @@ using Potts
     @lattice Lattice((40, 40); neighborhood = Moore(1))
     @energy begin
         cells(cell) => 0.2 * (volume - 60.0)^2
-        contacts => 2.0 * (kind != kind′)
+        contacts => 2.0 * (kind != neighbor_kind)
     end
     if connected
         @constraint connectivity(cell)
@@ -58,7 +59,7 @@ end
 
 op = layout(Tiling((8, 8); region = (17:24, 17:24), kinds = [:cell]), Fragile(; name = :f))
 [npieces(solve(PottsProblem(Fragile(; name = :f, connected = c), op, (0, 100); seed = 1),
-              SequentialCPM(); save_everystep = false).u[end].σ, 1) for c in (true, false)]
+              SequentialCPM(); save_everystep = false).u[end].ownership, 1) for c in (true, false)]
 ```
 
 At this high temperature the unconstrained cell breaks into pieces; with

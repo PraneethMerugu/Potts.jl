@@ -14,7 +14,7 @@ end
 function same_problem(a, b)
     return a.f.fingerprint == b.f.fingerprint && a.p == b.p && a.lattice == b.lattice && a.contact == b.contact &&
            a.proposal == b.proposal && a.relations == b.relations && a.spacing == b.spacing &&
-           a.frozen == b.frozen && a.u0.σ == b.u0.σ && a.u0.cell == b.u0.cell && a.u0.site == b.u0.site &&
+        a.frozen == b.frozen && a.u0.ownership == b.u0.ownership && a.u0.cell == b.u0.cell && a.u0.site == b.u0.site &&
            a.u0.model == b.u0.model
 end
 
@@ -25,7 +25,7 @@ end
     gg = [ownership => σg, kind => kg]
     merks = [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]]
     act = [ownership => two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:cell, :cell]]
-    euler = (; field_solver = ExplicitEuler(substeps = 2, lower = 0.0))
+    euler = (; field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0))
     cases = [
         ("Graner–Glazier", T.CellSorting(; name = :m), GranerGlazier(; name = :m), gg, (;)),
         ("Graner–Glazier, keywords", T.CellSorting(; name = :m, lattice = (144, 144), T = 5.0),

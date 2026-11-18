@@ -1,6 +1,6 @@
 # Steady rows and time-free systems (F3-12b; F3 design §3.5). A steady equation `0 ~ rhs` is
 # solved for the field it determines: a state field with no other equation that the row
-# reads, preferably under a spatial operator (`Δ`, `DivKGrad`, `Advect`, `Differential`). The
+# reads, preferably under a spatial operator (`laplacian`, `DivKGrad`, `Advect`, `Differential`). The
 # pass rewrites each such row as the rate `D(c) ~ rhs` of its field, so the rest of the lowering
 # is the rate form, and returns the steady field keys: their groups take `QuasiSteady` only
 # (which solves `0 = rhs` each window, the meaning of `QuasiSteady` for a rate row too). A
@@ -36,7 +36,7 @@ function _slot_reads(x, isin)
             return nothing
         end
         f, a = operation(u), arguments(u)
-        if f === Δ || f isa Differential
+        if f === laplacian || f isa Differential
             foreach(y -> walk(y, true), a)
         elseif f isa DivKGrad || f isa Advect
             foreach(y -> walk(y, under), a[1:(end - 1)])
@@ -88,7 +88,9 @@ function steady_rows(sys::PDESystem)
         _dverr(string("equation `", eq, "`: a steady equation `0 ~ rhs` is solved for a field that it reads and that ",
             "has no other equation, and it reads none", isempty(left) ? " (every field has an equation)" :
             string(" of the fields with no equation (", join(("`$(_slotkey(f))`" for f in left), ", "), ")"),
-            "; write the field's operator into the row (`0 ~ D * Δ(c) - k * c + s` for `c`)"))
+                "; write the field's operator into the row (`0 ~ D * laplacian(c) - k * c + s` for `c`)"
+            )
+        )
     end
     pick = Dict{Int, Tuple{Any, Int}}(q => free[picks[q]] for q in eachindex(rows))
     term(s) = (v = sys.dvs[findfirst(v -> isequal(_opof(v), s[1]), sys.dvs)]; s[2] == 0 ? v : Symbolics.wrap(v)[s[2]])
@@ -154,9 +156,9 @@ end
     steady_sign(rhs, c) -> ±1
 
 The sign that writes the steady row `0 ~ rhs` of field `c` with its operator a diffusion (a
-positive coefficient of `Δ(c)`, of `K` in `DivKGrad(K, c)`) or, with no operator on `c`, its
-local derivative `∂rhs/∂c` negative (a decay): `0 ~ k c − D Δ(c) − s` and `0 ~ q − c²` (for `q`)
-are the rows `0 ~ D Δ(c) − k c + s` and `0 ~ c² − q` (r3 S3). The coefficients are judged at 1
+positive coefficient of `laplacian(c)`, of `K` in `DivKGrad(K, c)`) or, with no operator on `c`, its
+local derivative `∂rhs/∂c` negative (a decay): `0 ~ k c − D laplacian(c) − s` and `0 ~ q − c²` (for `q`)
+are the rows `0 ~ D laplacian(c) − k c + s` and `0 ~ c² − q` (r3 S3). The coefficients are judged at 1
 for every parameter, coordinate and other field; a sign that this does not settle is left as
 written (then the steady refusals judge the row at its values).
 """
@@ -167,14 +169,15 @@ function steady_sign(rhs, c)
         u = unwrap(u)
         iscall(u) || return nothing
         f, a = operation(u), arguments(u)
-        if (f === Δ && isequal(unwrap(a[1]), c)) || (f isa Differential && iscall(unwrap(a[1])) &&
+        if (f === laplacian && isequal(unwrap(a[1]), c)) || (
+                f isa Differential && iscall(unwrap(a[1])) &&
                                                      operation(unwrap(a[1])) isa Differential && isequal(unwrap(arguments(unwrap(a[1]))[1]), c))
             ops[u] = z
             return nothing
         elseif (f isa DivKGrad) && isequal(unwrap(a[end]), c)
             ops[u] = z * a[1]
             return nothing
-        elseif f === Δ || f isa DivKGrad || f isa Advect || f isa Differential
+        elseif f === laplacian || f isa DivKGrad || f isa Advect || f isa Differential
             ops[u] = 0
             return nothing
         end

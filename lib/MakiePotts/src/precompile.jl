@@ -8,9 +8,9 @@ PrecompileTools.@setup_workload begin
         channels = (RenderChannel(key, values),))
 
     PrecompileTools.@compile_workload begin
-        encode(frame, CellTypeEncoding())
-        encode(frame, CellIdentityEncoding())
-        encode(frame, ChannelEncoding(key))
+        encode_frame(frame, CellTypeEncoding())
+        encode_frame(frame, CellIdentityEncoding())
+        encode_frame(frame, ChannelEncoding(key))
         _boundary_segments(frame)
         inspection_label(frame, CellTypeEncoding(), CartesianIndex(2, 2))
         render_frame_conformance(frame)

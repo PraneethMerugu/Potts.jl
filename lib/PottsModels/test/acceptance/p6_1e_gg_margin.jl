@@ -65,7 +65,7 @@ function p61e_run(σ, k)
     prob = PottsProblem(GranerGlazier(; name = :gg, lattice = size(σ)), [ownership => σ, kind => k],
         (0, P61E_RUN.mcs); seed = P61E_RUN.run_seed)
     sol = solve(prob, SequentialCPM(); saveat = P61E_RUN.every)
-    frames = [Array(u.σ) for u in sol.u]
+    frames = [Array(u.ownership) for u in sol.u]
     return (; edge = minimum(p61e_edge, frames), gap = minimum(p61e_imagegap, frames),
         frames = length(frames), cells = maximum(frames[end]))
 end

@@ -63,7 +63,7 @@ using Potts: CorePotts
     @energy begin
         cells(blob) => λ * (volume - V₀)^2
         cells(doomed) => λd * volume^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
         edges(bond) => k * (distance - ℓ)^2
     end
     @sweep Metropolis(; temperature = T)
@@ -88,7 +88,7 @@ end
     @energy begin
         cells(blob) => λ * (volume - V₀)^2
         cells(doomed) => λd * volume * (volume - 2)
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
         edges(bond) => k * (distance - ℓ)^2
     end
     @sweep Metropolis(; temperature = T)
@@ -108,7 +108,7 @@ end
     @lattice Lattice((30, 30); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         cells => λ * (volume - V₀[kind])^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
         clusters(cytoplasm) => λc * (cluster_volume - Vc)^2
     end
     @sweep Metropolis(; temperature = T)
@@ -158,7 +158,7 @@ p60r_vol(u) = Array(u.cell.volume)
 function p60r_props(prob, u; touching = nothing)
     lat = prob.lattice
     moore = CorePotts.relation(Moore(1), lat)
-    σ = Array(u.σ)
+    σ = Array(u.ownership)
     out = CorePotts.Proposal{2}[]
     for t in eachindex(σ)
         x = CorePotts.coordinates(lat, t)
@@ -177,7 +177,7 @@ end
 # the state after `prop` (as the self-check helpers apply a copy)
 function p60r_apply(prob, u, prop)
     a = deepcopy(u)
-    a.σ[prop.target] = prop.new
+    a.ownership[prop.target] = prop.new
     prob.f.commit!(a, prob.p, prop, p60r_ctx(prob))
     return a
 end
@@ -222,7 +222,7 @@ end
     @test maximum(abs, gaps) < 1e-9                              # every copy
     # the killing copy's ΔH removes both of cell 3's edges at their pre-copy energy
     # (independent oracle on σ): ΔH(kill by medium) = contact + cell change − E₁₃ − E₂₃
-    σ = Array(u.σ)
+    σ = Array(u.ownership)
     edges3 = p60r_edge(σ, 1, 3) + p60r_edge(σ, 2, 3)
     @test edges3 > 1.0                                           # both live links carry energy
     pm = first(filter(p -> p.new == 0, kills))
@@ -259,7 +259,7 @@ end
             p60r_kills(u, p) && (nkill += 1; @test abs(g) < 1e-9)   # DEFECT CHECK (currently the edge credit)
             worst = max(worst, abs(g))
         end
-        t = minimum(findall(==(2), vec(Array(u.σ))))
+        t = minimum(findall(==(2), vec(Array(u.ownership))))
         step = first(filter(p -> p.target == t && p.old == 2, props))
         u = p60r_apply(prob, u, step)
     end
@@ -283,7 +283,9 @@ end
         a = p60r_apply(prob, u, p)
         @test p60r_vol(a)[3] == 0
         # independent oracle: H of the same σ built with cells 1, 2 only (and their link)
-        fresh = PottsProblem(P60rLinked(; name = :p60r), [ownership => Array(a.σ), kind => [:blob, :blob],
+        fresh = PottsProblem(
+            P60rLinked(; name = :p60r), [
+                ownership => Array(a.ownership), kind => [:blob, :blob],
                 :bond => [(1, 2)]], (0, 10))
         @test total_energy(prob, a) ≈ total_energy(fresh) atol = 1e-8                           # DEFECT CHECK (currently + λV₀²)
         # D-066 item 4 self-check: the cell credit only (no edge credit)
@@ -350,7 +352,7 @@ end
     @test maximum(p -> abs(p60r_gap(prob, u, p)), props) < 1e-9  # DEFECT CHECK
     p60r_snap_check(solve(prob, alg; saveat = 1))
     # negative control: without the link the cell is never killed
-    free = PottsProblem(P60rSnap(; name = :p60rsnap), [ownership => Array(u.σ), kind => [:blob, :doomed]], (0, 20); seed = 1)
+    free = PottsProblem(P60rSnap(; name = :p60rsnap), [ownership => Array(u.ownership), kind => [:blob, :doomed]], (0, 20); seed = 1)
     @test all(u -> p60r_vol(u)[2] == 1, solve(free, alg; saveat = 1).u)
 end
 
@@ -363,7 +365,9 @@ end
         # the survivor keeps moving after the death, and H (host, Float32 problem) is finite
         @test isfinite(total_energy(prob, sol.u[end]))
         # the P6.0l trajectory fixture on Metal: the partner dies by copies, the run ends
-        pp = PottsProblem(P60rLinked(; name = :p60r), [ownership => Array(p60r_pair().u0.σ), kind => [:blob, :doomed],
+        pp = PottsProblem(
+            P60rLinked(; name = :p60r), [
+                ownership => Array(p60r_pair().u0.ownership), kind => [:blob, :doomed],
                 :bond => [(1, 2)]], (0, 30); T = Float32)
         solp = solve(pp, CheckerboardCPM(; proposal = Moore(1)); backend, saveat = 1)
         @test Symbol(solp.retcode) === :Success
@@ -380,7 +384,7 @@ end
 @testset "P6.0r: the check is sensitive (negative controls)" begin
     prob = p60r_small()
     u = prob.u0
-    σ = Array(u.σ)
+    σ = Array(u.ownership)
     # non-killing copies of blob 1 change its edges (oracle on σ) and still match exactly
     props = filter(p -> !p60r_kills(u, p) && (p.old == 1 || p.new == 1), p60r_props(prob, u))
     shifts = map(props) do p

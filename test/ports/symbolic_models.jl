@@ -13,7 +13,7 @@ const Monolayer = SingleDivisionFixture
 const SORTING = mtkcompile(Sorting(; name = :sorting))
 const WORTEL = mtkcompile(WortelAct(; name = :wortel, lattice = (16, 16)))
 const MERKS = mtkcompile(Merks(; name = :merks, lattice = (12, 12)))
-const MERKS_SOLVER = ExplicitEuler(substeps = 2, lower = 0.0)     # Merks' field solver (D-075)
+const MERKS_SOLVER = ExplicitEuler(substeps = 2, lower_bound = 0.0)     # Merks' field solver (D-075)
 const MONOLAYER = mtkcompile(Monolayer(; name = :monolayer))
 
 function symbolic_graner_problem(; nmcs = 100, seed = 97329219, T = Float64)

@@ -29,7 +29,7 @@ function inspection_label(frame::AbstractPottsRenderFrame{2},
     coordinates = Tuple(site)
     base = "Site $(coordinates) · source axes $(source_axes)\n" *
            _owner_label(frame, owner)
-    encoded = encode(frame, encoding)
+    encoded = encode_frame(frame, encoding)
     if encoding_kind(encoded.encoding) === ContinuousEncoding
         value = encoded.values[site]
         suffix = isfinite(value) ? string(value) : "missing"

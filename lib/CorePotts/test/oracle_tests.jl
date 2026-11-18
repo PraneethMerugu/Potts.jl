@@ -39,7 +39,7 @@ end
         @test sum(values(ex)) ≈ 1
         counts = Dict{Vector{Int8}, Int}()
             for seed in 1:ORA_R
-                σ = vec(Int8.(solve(remake(ORA_CLOSED_PROB; seed), alg; save_start = false).u[end].σ))
+                σ = vec(Int8.(solve(remake(ORA_CLOSED_PROB; seed), alg; save_start = false).u[end].ownership))
             counts[σ] = get(counts, σ, 0) + 1
         end
             d, noise = Oracle.tv(ex, counts, ORA_R)
@@ -58,7 +58,7 @@ end
         mutant = remake(ORA_CLOSED_PROB; p = merge(ORA_P, (; T = 5.0)))
     counts = Dict{Vector{Int8}, Int}()
         for seed in 1:ORA_R
-        σ = vec(Int8.(solve(remake(mutant; seed), CheckerboardCPM()).u[end].σ))
+            σ = vec(Int8.(solve(remake(mutant; seed), CheckerboardCPM()).u[end].ownership))
         counts[σ] = get(counts, σ, 0) + 1
     end
         z = Oracle.chi2_z(ex, counts, ORA_R)
@@ -87,7 +87,7 @@ end
             ex_p = Oracle.exact(p_tiny, p_σ0, 1, step)
             cnt_p = Dict{Vector{Int8}, Int}()
             for seed in 1:ORA_R
-                σ = vec(Int8.(solve(remake(p_prob; seed), alg; save_start = false).u[end].σ))
+                σ = vec(Int8.(solve(remake(p_prob; seed), alg; save_start = false).u[end].ownership))
                 cnt_p[σ] = get(cnt_p, σ, 0) + 1
             end
             d_p, noise_p = Oracle.tv(ex_p, cnt_p, ORA_R)
@@ -114,7 +114,7 @@ end
         ex_mb = Oracle.exact(mb_tiny, mb_σ0, 1, (m, d) -> Oracle.layout_mcs(m, d, 2, 1))
         cnt_mb = Dict{Vector{Int8}, Int}()
         for seed in 1:ORA_R
-            σ = vec(Int8.(solve(remake(mb_prob; seed), mb_alg; save_start = false).u[end].σ))
+            σ = vec(Int8.(solve(remake(mb_prob; seed), mb_alg; save_start = false).u[end].ownership))
             cnt_mb[σ] = get(cnt_mb, σ, 0) + 1
         end
         d_mb, noise_mb = Oracle.tv(ex_mb, cnt_mb, ORA_R)
@@ -124,7 +124,7 @@ end
         mb_mut = remake(mb_prob; p = merge(ORA_P, (; T = 5.0)))
         cnt_mb_m = Dict{Vector{Int8}, Int}()
         for seed in 1:ORA_R
-            σ = vec(Int8.(solve(remake(mb_mut; seed), mb_alg; save_start = false).u[end].σ))
+            σ = vec(Int8.(solve(remake(mb_mut; seed), mb_alg; save_start = false).u[end].ownership))
             cnt_mb_m[σ] = get(cnt_mb_m, σ, 0) + 1
         end
         @test Oracle.chi2_z(ex_mb, cnt_mb_m, ORA_R) > 4.5
@@ -144,7 +144,7 @@ end
         ex_bx = Oracle.exact(bx_tiny, ORA_CLOSED_SIGMA0, 1, (m, d) -> Oracle.layout_mcs(m, d, 2, 1))
         cnt_bx = Dict{Vector{Int8}, Int}()
         for seed in 1:ORA_R
-            σ = vec(Int8.(solve(remake(bx_prob; seed), bx_alg; save_start = false).u[end].σ))
+            σ = vec(Int8.(solve(remake(bx_prob; seed), bx_alg; save_start = false).u[end].ownership))
             cnt_bx[σ] = get(cnt_bx, σ, 0) + 1
         end
         d_bx, noise_bx = Oracle.tv(ex_bx, cnt_bx, ORA_R)
@@ -169,7 +169,7 @@ end
         ex_dir = Oracle.exact(dir_tiny, ORA_CLOSED_SIGMA0, 1, Oracle.sequential_mcs)
         cnt_dir = Dict{Vector{Int8}, Int}()
         for seed in 1:ORA_R
-            σ = vec(Int8.(solve(remake(dir_prob; seed), SequentialCPM(); save_start = false).u[end].σ))
+            σ = vec(Int8.(solve(remake(dir_prob; seed), SequentialCPM(); save_start = false).u[end].ownership))
             cnt_dir[σ] = get(cnt_dir, σ, 0) + 1
         end
         d_dir, noise_dir = Oracle.tv(ex_dir, cnt_dir, ORA_R)
@@ -179,7 +179,7 @@ end
         dir_mut = remake(dir_prob; p = merge(ORA_P, (; α = -2.0)))
         cnt_dir_m = Dict{Vector{Int8}, Int}()
         for seed in 1:ORA_R
-            σ = vec(Int8.(solve(remake(dir_mut; seed), SequentialCPM(); save_start = false).u[end].σ))
+            σ = vec(Int8.(solve(remake(dir_mut; seed), SequentialCPM(); save_start = false).u[end].ownership))
             cnt_dir_m[σ] = get(cnt_dir_m, σ, 0) + 1
     end
         @test Oracle.chi2_z(ex_dir, cnt_dir_m, ORA_R) > 4.5

@@ -29,7 +29,7 @@ ODEs. It differentiates only the fields' response to the parameters along the pa
 - An implicit field solver gives the derivative of each converged stage. For a nonlinear term,
   give `newton = k` (k ≥ 2), so that the run converges too; a warning names the case.
 - Central differences of the run agree with it at the same seed, as long as the ± runs keep the
-  same path. Check that `sol.u[i].σ` is equal across them.
+  same path. Check that `sol.u[i].ownership` is equal across them.
 
 ## Seeding and reading
 

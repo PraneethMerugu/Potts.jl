@@ -14,8 +14,9 @@ The models on this page are generic teaching models, not published ones.
 
 ```@example chemo
 using Potts, MakiePotts, CairoMakie
+using Potts.Layouts
 using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
-using Potts.LatticePDE: Δ, lattice_domain
+using Potts.LatticePDE: laplacian, lattice_domain
 CairoMakie.activate!(type = "png") # hide
 nothing # hide
 ```
@@ -40,7 +41,7 @@ Dt = Differential(t)
 @parameters Dc = 1.0 s = 0.1 k = 0.001     # diffusion, production in the strip, decay
 @variables c(..) = 0.0
 C = c(t, x, y)
-strip = PDESystem([Dt(C) ~ Dc * Δ(C) + s * (x > 75) - k * C], [],
+strip = PDESystem([Dt(C) ~ Dc * laplacian(C) + s * (x > 75) - k * C], [],
     lattice_domain(t, (x, y), (80, 40)), [t, x, y], [C], [Dc, s, k]; name = :strip)
 nothing # hide
 ```
@@ -60,7 +61,7 @@ Then couple it into the model with `@fields`:
     @lattice Lattice((80, 40); boundary = (Closed(), Periodic()), neighborhood = Moore(1))
     @energy begin
         cells(cell) => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @fields c = strip
     @drive Chemotaxis(c; strength = χ)
@@ -73,7 +74,7 @@ New pieces:
 
 - `@variables c(..) = 0.0` declares the field `c` with initial value 0. In the equation it
   is `c(t, x, y)`, a function of time and space.
-- `Dt(C)` is the time derivative and `Δ(C)` the lattice Laplacian. A comparison such as
+- `Dt(C)` is the time derivative and `laplacian(C)` the lattice Laplacian. A comparison such as
   `x > 75` counts as 1 or 0. The coordinates are site centers, from 0 at the low face:
   site `i` has `x = i - 0.5`, so `x > 75` holds at sites 76 to 80.
 - `lattice_domain(t, (x, y), (80, 40))` gives the domain of an 80 × 40 lattice. The domain
@@ -84,13 +85,13 @@ New pieces:
 - `@drive Chemotaxis(c; strength = χ)` biases copies towards higher `c` (more below).
 - The periodic `y` axis is the lattice's: every field takes the lattice's boundary.
 
-The problem must say how to integrate the field. `ExplicitEuler(substeps = 8, lower = 0.0)`
+The problem must say how to integrate the field. `ExplicitEuler(substeps = 8, lower_bound = 0.0)`
 takes 8 explicit Euler time steps per MCS (Monte Carlo step). It clips negative values:
 
 ```@example chemo
 @named gradient = Gradient()
 start = layout(Scattered(12, (5, 5); region = (8:30, 1:40), kinds = [:cell], seed = 1), gradient)
-prob = PottsProblem(gradient, start, (0, 1500); field_solver = ExplicitEuler(substeps = 8, lower = 0.0), seed = 1)
+prob = PottsProblem(gradient, start, (0, 1500); field_solver = ExplicitEuler(substeps = 8, lower_bound = 0.0), seed = 1)
 sol = solve(prob, SequentialCPM(); saveat = 25)
 nothing # hide
 ```
@@ -148,7 +149,7 @@ The cells crawl towards the source at the right. The mean x-coordinate of their 
 shows it. `sol[:position]` is not needed, because the saved states hold the cell numbers:
 
 ```@example chemo
-mean_x(u) = sum(x[1] for x in CartesianIndices(u.σ) if u.σ[x] != 0) / count(!=(0), u.σ)
+mean_x(u) = sum(x[1] for x in CartesianIndices(u.ownership) if u.ownership[x] != 0) / count(!=(0), u.ownership)
 fig = Figure(size = (600, 300))
 ax = Axis(fig[1, 1]; xlabel = "MCS", ylabel = "mean x of the cells")
 lines!(ax, sol.t, mean_x.(sol.u); label = "χ = 0")
@@ -172,8 +173,8 @@ Print the model to see what `Chemotaxis(c; strength = χ)` expands to:
 gradient
 ```
 
-The printout is Potts's internal form of the model. `LatticePDE.at(c(t), target(t))` is the
-field at the target site, and `LatticePDE.at2(J, kind(t), kind′(t))` is the table entry. In the notation of
+The printout is Potts's internal form of the model. `LatticePDE.value_at(c(t), target(t))` is the
+field at the target site, and `LatticePDE.value_at(J, kind(t), neighbor_kind(t))` is the table entry. In the notation of
 `@potts_model` the drive line reads
 `copy => ifelse(new != 0, -χ * (c[target] - c[source]), 0.0)`. Here is the same model
 with that line in place of `Chemotaxis`:
@@ -191,7 +192,7 @@ with that line in place of `Chemotaxis`:
     @lattice Lattice((80, 40); boundary = (Closed(), Periodic()), neighborhood = Moore(1))
     @energy begin
         cells(cell) => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @fields c = strip
     @drive copy => ifelse(new != 0, -χ * (c[target] - c[source]), 0.0)
@@ -201,10 +202,10 @@ end
 @named by_hand = GradientByHand()
 function short(sys)
     start = layout(Scattered(12, (5, 5); region = (8:30, 1:40), kinds = [:cell], seed = 1), sys)
-    prob = PottsProblem(sys, start, (0, 100); field_solver = ExplicitEuler(substeps = 8, lower = 0.0), seed = 1)
+    prob = PottsProblem(sys, start, (0, 100); field_solver = ExplicitEuler(substeps = 8, lower_bound = 0.0), seed = 1)
     return solve(remake(prob; p = [:χ => 300.0]), SequentialCPM(); save_everystep = false)
 end
-short(by_hand).u[end].σ == short(gradient).u[end].σ
+short(by_hand).u[end].ownership == short(gradient).u[end].ownership
 ```
 
 The result is `true`. With the same seed both runs make the same copies, so the drive is
@@ -224,7 +225,7 @@ owned by a cell now produces `c`. The `PDESystem` cannot see the cells. It reads
 ```@example chemo
 @parameters Dc = 1.0 s = 0.05 k = 0.005
 @variables secreting(..)::Bool [input = true]
-secretion = PDESystem([Dt(C) ~ Dc * Δ(C) + s * secreting(t, x, y) - k * C], [],
+secretion = PDESystem([Dt(C) ~ Dc * laplacian(C) + s * secreting(t, x, y) - k * C], [],
     lattice_domain(t, (x, y), (80, 80)), [t, x, y], [C, secreting(t, x, y)], [Dc, s, k]; name = :secretion)
 nothing # hide
 ```
@@ -245,7 +246,7 @@ fills it at every site once per MCS, before the field steps:
     @lattice Lattice((80, 80); boundary = Periodic(), neighborhood = Moore(1))
     @energy begin
         cells(cell) => λ * (volume - V₀)^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @fields c = secretion (secreting => kind == cell)
     @drive Chemotaxis(c; strength = χ)
@@ -254,7 +255,7 @@ end
 
 @named aggregation = Aggregation()
 start = layout(Scattered(60, (5, 5); kinds = [:cell], seed = 1, gap = 2), aggregation)
-prob = PottsProblem(aggregation, start, (0, 2000); field_solver = ExplicitEuler(substeps = 8, lower = 0.0), seed = 1)
+prob = PottsProblem(aggregation, start, (0, 2000); field_solver = ExplicitEuler(substeps = 8, lower_bound = 0.0), seed = 1)
 sol = solve(prob, SequentialCPM(); saveat = 30)
 nothing # hide
 ```
@@ -270,7 +271,7 @@ To show the field, follow these steps:
 key = SiteChannelKey(:c, Float64)
 frames = [renderframe(u; mcs = t, channels = (RenderChannel(key, u.site.c; label = "c"),))
           for (u, t) in zip(sol.u, sol.t)]
-cellfill(u) = [c != 0 ? 1.0 : NaN for c in Array(u.σ)]      # cell sites; NaN is transparent
+cellfill(u) = [c != 0 ? 1.0 : NaN for c in Array(u.ownership)]      # cell sites; NaN is transparent
 nx, ny = frame_size(frames[1])
 ox, oy = frame_geometry(frames[1]).origin
 k = Observable(1)
@@ -314,10 +315,10 @@ clusters, and the clusters grow by collecting more cells.
 
 ## What you learned
 
-- A `PDESystem` on `lattice_domain(…)` gives a field's PDE with `Δ`.
+- A `PDESystem` on `lattice_domain(…)` gives a field's PDE with `laplacian`.
 - `@fields c = sys (input => expression)` couples it into a model and binds its inputs to
   the cells.
-- `PottsProblem(…; field_solver = ExplicitEuler(substeps = n, lower = 0.0))` integrates it.
+- `PottsProblem(…; field_solver = ExplicitEuler(substeps = n, lower_bound = 0.0))` integrates it.
 - `Chemotaxis(c; strength)` or `@drive copy => …` biases copies along the field.
 - Fields can be recorded as videos through render-frame channels.
 

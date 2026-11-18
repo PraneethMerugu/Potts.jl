@@ -31,13 +31,13 @@
         Potts.ModelingToolkitBase.@variables c(..)
         ce = c(tt, x, y)
         bsys = MTKB.PDESystem(
-            [DD(ce) ~ Dc * LP.Δ(ce)],
+            [DD(ce) ~ Dc * LP.laplacian(ce)],
             [c(0, x, y) ~ 0.0, MTKB.Differential(x)(c(tt, 8, y)) ~ q, αr * c(tt, x, 0) - βr * MTKB.Differential(y)(c(tt, x, 0)) ~ gr],
             [tt ∈ LP.Interval(0.0, 2.0), x ∈ LP.Interval(0.0, 8.0), y ∈ LP.Interval(0.0, 6.0)], [tt, x, y], [ce],
             [Dc, q, αr, βr, gr]; name = :b
         )
         bp = LP.discretize(bsys, LP.LatticeDiscretization(LP.Grid(dims); T = Float64))
-        @test run(FbBcsNR) == LP.solve(LP.remake(bp; u0 = vec(c0)), LP.ExplicitEuler(; dt = 1.0, substeps = n))[:c, end]
+        @test run(FbBcsNR) == LP.solve(LP.remake(bp; u0 = vec(c0)), LP.ExplicitEuler(; substeps = n); dt = 1.0)[:c, end]
         # `Potts.fields` carries the conditions
         hasder(f) = any(b -> occursin("Differential(x", string(b)), getfield(f, :bcs))
         @test hasder(Potts.fields(FbFluxRobin(; name = :f))) && hasder(Potts.fields(FbFluxRobinBcs(; name = :f)))
@@ -154,7 +154,7 @@ end
             pf, LP.LatticeDiscretization(LP.Grid(dims); T = Float64);
             u0 = [:c => c0, :e => e0], tspan = (0, K)
         )
-        sbp = LP.solve(bp, LP.ExplicitEuler(; dt = 1.0, substeps = N); saveat = 1.0)
+        sbp = LP.solve(bp, LP.ExplicitEuler(; substeps = N); dt = 1.0, saveat = 1.0)
         b = [sbp[:c, i] for i in 2:length(sbp.t)]
         @test b == [x[1] for x in runA(FbMaskLaterBcs; one...)]
         # the mask on `e` from `c` at the window start or after `c`'s step

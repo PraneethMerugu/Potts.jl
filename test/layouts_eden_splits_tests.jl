@@ -1,37 +1,39 @@
 # Layouts (P6.3c, D-141): Eden, RandomPoints(replace = true), shortfall and Splits.
 
 @testitem "layouts: Eden fills its connected component, and only it" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: Eden fills its connected component, and only it" begin
         # enough rounds fill every site reachable from the seed: one cell owning the lattice
         σ = _op(layout(Eden(Center(); rounds = 400, kinds = [:a], seed = 1), (15, 15)), ownership)
         @test all(==(1), σ)
         # a domain of two strips (x ≤ 5, x ≥ 9): a seed in the left strip fills it, never the right
         dom = Lattice((14, 6); boundary = Closed(), domain = x -> x[1] <= 5 || x[1] >= 9)
-        σ = _op(layout(Eden(Potts.Point(2.0, 3.0); rounds = 400, kinds = [:a], seed = 2), dom), ownership)
+        σ = _op(layout(Eden(Point(2.0, 3.0); rounds = 400, kinds = [:a], seed = 2), dom), ownership)
         @test all(==(1), σ[1:5, :]) && all(==(0), σ[6:14, :])
         # control: on the full lattice the same seed reaches the right side
-        @test all(==(1), _op(layout(Eden(Potts.Point(2.0, 3.0); rounds = 400, kinds = [:a], seed = 2), (14, 6)), ownership))
+        @test all(==(1), _op(layout(Eden(Point(2.0, 3.0); rounds = 400, kinds = [:a], seed = 2), (14, 6)), ownership))
         # a periodic lattice: the blob crosses the edge from a seed at the corner
-        σ = _op(layout(Eden(Potts.Point(1.0, 1.0); rounds = 12, kinds = [:a], seed = 3), Lattice((20, 20))), ownership)
+        σ = _op(layout(Eden(Point(1.0, 1.0); rounds = 12, kinds = [:a], seed = 3), Lattice((20, 20))), ownership)
         @test σ[20, 20] == 1 || σ[20, 1] == 1 || σ[1, 20] == 1
     end
 end
 
 @testitem "layouts: Eden's neighbourhood sets its reach" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: Eden's neighbourhood sets its reach" begin
         # growth moves one neighbourhood step per round: within R of the seed in the graph metric
         # of the growth neighbourhood (L1 for VonNeumann(1), Chebyshev for Moore(1))
         R = 8
         seed_site = (20, 20)
         for s in 1:3
-            vn = _op(layout(Eden(Potts.Point(20.0, 20.0); rounds = R, kinds = [:a], seed = s, neighborhood = VonNeumann(1)), (40, 40)), ownership)
-            mo = _op(layout(Eden(Potts.Point(20.0, 20.0); rounds = R, kinds = [:a], seed = s), (40, 40)), ownership)
+            vn = _op(layout(Eden(Point(20.0, 20.0); rounds = R, kinds = [:a], seed = s, neighborhood = VonNeumann(1)), (40, 40)), ownership)
+            mo = _op(layout(Eden(Point(20.0, 20.0); rounds = R, kinds = [:a], seed = s), (40, 40)), ownership)
             @test all(x -> sum(abs.(Tuple(x) .- seed_site)) <= R, findall(==(1), vn))
             @test all(x -> maximum(abs.(Tuple(x) .- seed_site)) <= R, findall(==(1), mo))
         end
         # a diagonal domain (x = y): VonNeumann(1) has no step inside it, Moore(1) grows along it
         diag = Lattice((20, 20); boundary = Closed(), domain = x -> x[1] == x[2])
-        e = Eden(Potts.Point(10.0, 10.0); rounds = 60, kinds = [:a], seed = 1)
+        e = Eden(Point(10.0, 10.0); rounds = 60, kinds = [:a], seed = 1)
         @test count(==(1), _op(layout(remake(e; neighborhood = VonNeumann(1)), diag), ownership)) == 1
         @test count(==(1), _op(layout(e, diag), ownership)) > 5
         # a model's own neighbourhood is the default: Hex(1) on the hexagonal probe equals the keyword
@@ -43,6 +45,7 @@ end
 end
 
 @testitem "layouts: Splits passes on a strip (recursive oracle)" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: Splits passes on a strip (recursive oracle)" begin
         for (n, k) in ((16, 4), (13, 3), (7, 5), (1, 2))
             op, rep = layout(Splits(Tiling((n, 1); kinds = [:a]), k; shortfall = :allow), (n, 1); report = true)
@@ -57,6 +60,7 @@ end
 end
 
 @testitem "layouts: Splits cuts across the long axis (eigen oracle, name)" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: Splits cuts across the long axis (eigen oracle, $name)" for (name, target, emb) in (
             ("square", (40, 40), x -> Float64.(x)),
             ("hex", Lattice((40, 40); geometry = Hexagonal(), boundary = Closed()), x -> (x[1] + x[2] / 2, x[2] * sqrt(3) / 2)),
@@ -74,6 +78,7 @@ end
 end
 
 @testitem "layouts: Splits delegates one report row" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: Splits delegates one report row" begin
         # an overlay inside Splits paints into the Splits row: 2 boxes, 2 passes → 8 cells
         inner = overlay(Tiling((4, 4); region = (1:4, 1:4), kinds = [:a]), Tiling((4, 4); region = (6:9, 1:4), kinds = [:b]))
@@ -94,6 +99,7 @@ end
 end
 
 @testitem "layouts: RandomPoints(replace = true) with Voronoi and Eden" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: RandomPoints(replace = true) with Voronoi and Eden" begin
         # coinciding generators: the later one ties every site to the lower one and is dropped
         p = RandomPoints(12; region = (2:4, 2:4), replace = true, seed = 5)
@@ -113,6 +119,7 @@ end
 end
 
 @testitem "layouts: Splits keeps sites on the plane with the mother (exact oracle)" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: Splits keeps sites on the plane with the mother (exact oracle)" begin
         # the review's reproducer: (4, 4) lies exactly on the plane, the inexact centroid
         # (23/5, 19/5) and axis would put it at ±1e-16
@@ -145,6 +152,7 @@ end
 end
 
 @testitem "layouts: Splits names the cell by its id in the result" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+    using Potts.Layouts
     @testset "layouts: Splits names the cell by its id in the result" begin
         # the review's reproducer: on a periodic 10 × 3 lattice the cell spans more than half of x,
         # so it is unwrapped about (9, 1) and torn; an earlier one-site cell is painted over and

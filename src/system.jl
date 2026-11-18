@@ -95,7 +95,7 @@ A cellular Potts model: an MTK `AbstractSystem` that holds a complete ModelingTo
 …). Built by `@potts_model`, by the keyword constructor
 `PottsSystem(; name, kinds, lattice, sweep, parameters, variables, energies, …)` (the
 [`Potts.PottsPart`](@ref) fields; `checks = false` skips the construction checks), or by
-[`Potts.wrap`](@ref).
+[`Potts.wrap_system`](@ref).
 
 MTK's accessors read the inner System: `equations(sys)` (the `@equations` as written, plus
 each component's equations, namespaced `dc₊y`), `unknowns(sys)` (the declared variables of
@@ -120,7 +120,7 @@ quantity or component of the system is an `ArgumentError`. Either form, and the 
 for a model built by `@potts_model` or the keyword constructor. A model from
 `compose` compiles, solves
 and extends with each component as a model-scope component (`@components model c = system`);
-a `Potts.wrap` of a hand-built System does when its top-level content is its payload's and the
+a `Potts.wrap_system` of a hand-built System does when its top-level content is its payload's and the
 rest is subsystems (otherwise an `ArgumentError` naming the content).
 
 MTK's operations: `compose(sys, [components])` adds components,
@@ -132,7 +132,7 @@ Potts model inside a plain `System` (alone or among other systems), are `Argumen
 `JumpProblem`, …) is an `ArgumentError` naming `PottsProblem`; `mtkcompile(sys)` compiles the
 CPM ([`CompiledPottsSystem`](@ref)). Other MTKBase functions (`get_eqs`, …) are asked of
 `Potts.inner(sys)`. `Potts.lattice(sys)` is the model's lattice and
-`Potts.parameters(sys)`/`Potts.variables(sys)` its own declarations.
+`Potts.declared_parameters(sys)`/`Potts.declared_variables(sys)` its own declarations.
 """
 struct PottsSystem <: ModelingToolkitBase.AbstractSystem
     name::Symbol                                          # equals nameof(inner)
@@ -172,7 +172,7 @@ part(sys::PottsSystem) = getfield(sys, :part)
     Potts.component(name, sys::System, model::PottsSystem) -> PottsSystem
 
 The MTK `System` `sys` as a component of `model`, for `compose`: it is
-`Potts.wrap(name, sys, nothing, part)` with a payload that has the kinds, the lattice and the
+`Potts.wrap_system(name, sys, nothing, part)` with a payload that has the kinds, the lattice and the
 sweep of `model` and no statements (no energies, drives, constraints, …), which is what a
 composed component may carry. `sys` is named `name` (`@named`); a Catalyst reaction network
 `rn` is `Potts.component(name, Catalyst.ode_model(complete(rn)), model)`.
@@ -183,7 +183,7 @@ sys = compose(model, [Potts.component(:decay, decay, model)])
 ```
 """
 component(name::Symbol, sys::ModelingToolkitBase.System, model::PottsSystem) =
-    wrap(name, sys, nothing, _component_part(model))
+    wrap_system(name, sys, nothing, _component_part(model))
 
 """
     Potts.component(name, pdesys::PDESystem, model::PottsSystem) -> PottsSystem
@@ -204,7 +204,7 @@ own name): `"kind"` is the kind of each site (0 for the medium), and the name of
 or site variable of the model reads that variable.
 """
 component(name::Symbol, pdesys::ModelingToolkitBase.PDESystem, model::PottsSystem) =
-    wrap(name, ModelingToolkitBase.System(Equation[], _unwrap(t); name), pdesys, _component_part(model))
+    wrap_system(name, ModelingToolkitBase.System(Equation[], _unwrap(t); name), pdesys, _component_part(model))
 
 """
     Potts.couple(model::PottsSystem, pdesys::PDESystem; inputs = []) -> PottsSystem
@@ -304,7 +304,7 @@ solves the fields with any SciML solver at the CPM state of `integ` (by hand, `i
 [:kind => K, :vol => V]`, with `K` the kind number of each site, 0 for the medium). For a
 coupled PDESystem of your own, `Potts.field_inputs(integ, pdesys)` gives its inputs. Its
 conditions are those of the coupled PDESystems, as `discretize` takes them. A hand-wrapped
-PDESystem (`Potts.wrap`) is returned as given.
+PDESystem (`Potts.wrap_system`) is returned as given.
 """
 function fields(sys::PottsSystem)
     f = _stored_fields(sys)
@@ -386,9 +386,10 @@ function _input_names(sys::PottsSystem)
     end
     return out
 end
-# a CPM read as the model writes it: `volume[owner]`, not `LatticePDE.at(volume, owner)`
+# a CPM read as the model writes it: `volume[owner]`, not `LatticePDE.value_at(volume, owner)`
 _cpm_read_text(ex) = (s = LatticePDE.as_written(replace(_builtin_text(string(ex)), "LatticePDE." => ""));
-                      replace(replace(s, r"(\w+)\(t\)" => s"\1"), r"at\((\w+), (\w+)\)" => s"\1[\2]"))
+    replace(replace(s, r"(\w+)\(t\)" => s"\1"), r"value_at\((\w+), (\w+)\)" => s"\1[\2]")
+)
 
 # the PDESystem `f` of a model's fields with the model's defaults added to its
 # `initial_conditions` (a value already there is kept): the initial value of each field
@@ -431,7 +432,7 @@ end
 _stored_fields(sys::PottsSystem) = getfield(sys, :fields)
 
 """
-    Potts.wrap(name, sys::System, fields, part::PottsPart) -> PottsSystem
+    Potts.wrap_system(name, sys::System, fields, part::PottsPart) -> PottsSystem
 
 The `PottsSystem` holding `sys`, `fields` (a `PDESystem` or `nothing`) and the payload
 `part`. Compose first, then wrap: an uncompleted `sys` is completed here (`complete`
@@ -439,15 +440,18 @@ flattens it and keeps the hierarchy as its parent). A complete system that still
 subsystems (`compose(complete(a), …)`) is an `ArgumentError`, and so is a name of `sys` or
 `fields` other than `name`. The inner System carries the `Potts.PottsSweepSpec` metadata.
 """
-function wrap(name::Symbol, sys::ModelingToolkitBase.System, fields::Union{Nothing, ModelingToolkitBase.PDESystem},
+function wrap_system(
+        name::Symbol, sys::ModelingToolkitBase.System, fields::Union{Nothing, ModelingToolkitBase.PDESystem},
         part::PottsPart)
-    nameof(sys) === name || throw(ArgumentError("wrap: the System is named `$(nameof(sys))`, the model `$name`; they must agree"))
+    nameof(sys) === name || throw(ArgumentError("wrap_system: the System is named `$(nameof(sys))`, the model `$name`; they must agree"))
     fields === nothing || nameof(fields) === name ||
-        throw(ArgumentError("wrap: the PDESystem is named `$(nameof(fields))`, the model `$name`; they must agree"))
+        throw(ArgumentError("wrap_system: the PDESystem is named `$(nameof(fields))`, the model `$name`; they must agree"))
     ModelingToolkitBase.iscomplete(sys) || (sys = complete(sys; allow_parameter_eqs = true))
     isempty(ModelingToolkitBase.get_systems(sys)) || throw(ArgumentError(
         "wrap: `$name` is complete but not flattened (it still has subsystems: a completed system was composed); " *
-        "compose the uncompleted systems, then wrap"))
+                "compose the uncompleted systems, then wrap them"
+        )
+    )
     w = PottsSystem(_Wrap(), name, sys, fields, part)
     return PottsSystem(_Wrap(), name, SymbolicUtils.setmetadata(sys, PottsSweepSpec, _sweep_spec(w)), fields, part)
 end
@@ -639,7 +643,7 @@ function _inner_system(sys::PottsSystem)
 end
 
 # The compile pipeline and `extend` read the payload only. A model whose inner System
-# holds more than its payload builds (a `compose` result, a `Potts.wrap` of a hand-built
+# holds more than its payload builds (a `compose` result, a `Potts.wrap_system` of a hand-built
 # System with subsystems) is first lowered (`_lower_inner`): each subsystem the payload does
 # not declare becomes a model-scope component (`ComponentSpec(name, system, :model)`, as
 # `@components model name = system`), and the model is rebuilt from that payload. Content the
@@ -658,12 +662,12 @@ struct _FieldsFrom end
 # (as in `_merge_fields`)
 _pde_digest(f) = hash(Tuple(sort!(string.(collect(getfield(f, k)))) for k in (:eqs, :bcs, :domain, :ivs, :dvs, :ps)))
 
-"""`wrap(name, …)` of the inner System that `part` builds (marked as built from it)."""
+"""`wrap_system(name, …)` of the inner System that `part` builds (marked as built from it)."""
 function _wrap_payload(name::Symbol, fields, part::PottsPart)
     token = Ref{Any}(nothing)
     inner = SymbolicUtils.setmetadata(_inner_system(_staged(name, part)), _BuiltFrom, (part, token))
-    w = wrap(name, inner, fields, part)
-    token[] = getfield(w, :inner)       # after `wrap`, which adds metadata of its own
+    w = wrap_system(name, inner, fields, part)
+    token[] = getfield(w, :inner)       # after `wrap_system`, which adds metadata of its own
     return w
 end
 
@@ -855,7 +859,7 @@ function ModelingToolkitBase.compose(p::PottsSystem, systems::AbstractArray; nam
     end
     un(s) = ModelingToolkitBase.toggle_namespacing(something(ModelingToolkitBase.get_parent(inner(s)), inner(s)), true)
     sys = ModelingToolkitBase.compose(un(p), [un(c) for c in cs]; name)
-    return wrap(name, complete(sys; allow_parameter_eqs = true), _merge_fields(name, p, cs), _merge_part(p, cs))
+    return wrap_system(name, complete(sys; allow_parameter_eqs = true), _merge_fields(name, p, cs), _merge_part(p, cs))
 end
 
 # a component of `p` for `compose`: a Potts model as it is, an MTK system as `Potts.component`
@@ -1053,10 +1057,19 @@ end
 
 # `nameof` and `get_name` are MTK's (`getfield(sys, :name)`); defining them here only invalidated MTK code
 
-"""Parameter symbols of a model (scalars and kind tables), as declared."""
-parameters(sys::PottsSystem) = _p(sys, :parameters)
-"""Scoped state variables of a model, as declared."""
-variables(sys::PottsSystem) = _p(sys, :variables)
+"""
+    Potts.declared_parameters(sys::PottsSystem)
+
+The parameter symbols of a model (scalars and kind tables), as declared. MTK's
+`parameters(sys)` lists the parameters of the compiled system.
+"""
+declared_parameters(sys::PottsSystem) = _p(sys, :parameters)
+"""
+    Potts.declared_variables(sys::PottsSystem)
+
+The scoped state variables of a model, as declared.
+"""
+declared_variables(sys::PottsSystem) = _p(sys, :variables)
 
 """
     Potts.lattice(sys::PottsSystem)
@@ -1162,10 +1175,10 @@ _renamed_pde(f::ModelingToolkitBase.PDESystem, name::Symbol) = ModelingToolkitBa
 """
     PottsSystem(name, inner, fields, part; checks = false)
 
-The model `Potts.wrap(nameof(inner), inner, fields, part)` renamed `name`: MTK's rebuild of a
+The model `Potts.wrap_system(nameof(inner), inner, fields, part)` renamed `name`: MTK's rebuild of a
 system from its fields (`@set sys.name = name`, which `rename` and `@named models[1:n]` use).
 Only the name may change; build a model with `@potts_model`, the keyword constructor or
-[`Potts.wrap`](@ref).
+[`Potts.wrap_system`](@ref).
 """
 function PottsSystem(
         name::Symbol, I::ModelingToolkitBase.System, fields::Union{Nothing, ModelingToolkitBase.PDESystem},

@@ -33,7 +33,7 @@ end
     @test cell_metadata(
         foreign, RenderOwner(CellSite, 29)).identity == RenderCellIdentity(29, 8)
 
-    encoded = encode(foreign, DownstreamFixture.RootSignalEncoding())
+        encoded = encode_frame(foreign, DownstreamFixture.RootSignalEncoding())
     @test encoding_kind(encoded.encoding) === ContinuousEncoding
     @test encoded.label == "Square-root signal"
     @test encoded.units == "a.u."

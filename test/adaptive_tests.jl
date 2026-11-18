@@ -74,7 +74,8 @@ function _sentinel_state(st, ph; drop = nothing)
     r = ph.reads
     cell = setdiff((r.cell..., (ph.scope === :cell ? (ph.names..., :volume) : ())...), (drop,))
     model = setdiff((r.model..., (ph.scope === :model ? ph.names : ())...), (drop,))
-    return CorePotts.CPMState(r.σ && drop !== :σ ? deepcopy(st.σ) : _sentinel(st.σ), _keep_only(st.cell, cell),
+    return CorePotts.CPMState(
+        r.ownership && drop !== :ownership ? deepcopy(st.ownership) : _sentinel(st.ownership), _keep_only(st.cell, cell),
         _keep_only(st.site, setdiff(r.site, (drop,))), _keep_only(st.model, model), _keep_only(st.history, r.history))
 end
 
@@ -254,16 +255,16 @@ end
 @testitem "state reads of generated host code" setup = [AdaptiveSetup] tags = [:potts, :adaptive] begin
     @testset "state reads of generated host code" begin
         R = Potts._state_reads
-        @test R([:(st.cell.r[c] * p.k)]) == (; σ = false, cell = (:r,), site = (), model = (), history = ())
+        @test R([:(st.cell.r[c] * p.k)]) == (; ownership = false, cell = (:r,), site = (), model = (), history = ())
         @test R([:(Potts._cellkind(st, c) + st.model.g[1] + st.site.h[i])]).cell == (:kind,)
-        @test R([:(CorePotts.owner_kind(st, i))]) == (; σ = true, cell = (:kind,), site = (), model = (), history = ())
+        @test R([:(CorePotts.owner_kind(st, i))]) == (; ownership = true, cell = (:kind,), site = (), model = (), history = ())
         @test R([:(length(st.cell.kind) + size(cell.links, 1))]; alias = :cell).cell == ()        # shape only
         @test R([:(CorePotts.centroid_distance(T, cell, ctx.lattice, a, b))]; alias = :cell).cell == (:anchor, :m1, :volume)
         # uses the scan does not follow: everything (negative controls)
         @test R([:(f(st))]) === nothing
         @test R([:(f(st.cell))]) === nothing
         @test R([:(f(cell))]; alias = :cell) === nothing
-        @test R([:(f(cell))]) == (; σ = false, cell = (), site = (), model = (), history = ())      # `cell` is no alias here
+        @test R([:(f(cell))]) == (; ownership = false, cell = (), site = (), model = (), history = ())      # `cell` is no alias here
         # the adaptive phases of a model: the cell ODEs read nothing else; the model ODE's
         # population fold reads `volume` and `kind`
         σ = zeros(Int32, 20, 20); σ[3:6, 3:6] .= 1; σ[12:15, 12:15] .= 2
@@ -271,7 +272,7 @@ end
         phs = [ph for ph in p.f.phases.after_mcs if ph isa Potts._AdaptiveODE]
         @test Set(ph.scope for ph in phs) == Set([:cell, :model])
         for ph in phs
-            @test ph.reads !== nothing && !ph.reads.σ
+            @test ph.reads !== nothing && !ph.reads.ownership
             ph.scope === :model && @test issubset((:kind, :volume), ph.reads.cell)
         end
     end
@@ -283,7 +284,7 @@ end
         p = PottsProblem(DeclLink(; name = :d), [ownership => σ, kind => [:A, :A]], (0, 2))
         link, unlink = [ph for ph in p.f.phases.after_mcs if ph isa CorePotts.HostPhase]
         @test link.writes == unlink.writes == (:links__bond, :link_rest)
-        @test Set(link.reads) == Set([:σ, :volume, :anchor, :m1, :w])           # `w[a]` in `when`
+        @test Set(link.reads) == Set([:ownership, :volume, :anchor, :m1, :w])           # `w[a]` in `when`
         @test Set(unlink.reads) == Set([:volume, :anchor, :m1])                 # no contact graph: no σ
         u = solve(p, SequentialCPM()).u[end]
         @test CorePotts.linked(CorePotts.link_store(u.cell, :bond), 1, 2)
@@ -335,14 +336,14 @@ end
         end
         rs = Dict(ph.scope => ph.reads for (_, ph) in _sentinel_probe(pa))
         @test issubset((:anchor, :m1, :m2, :w, :surface, :kind, :volume), rs[:cell].cell) && rs[:cell].model == (:g,)
-        @test rs[:model].site == (:h,) && !rs[:model].σ
+        @test rs[:model].site == (:h,) && !rs[:model].ownership
         rs = Dict(ph.scope => ph.reads for (_, ph) in _sentinel_probe(pb))
-        @test rs[:cell].σ && issubset((:kind, :v), rs[:cell].cell)       # the owner gather
-        @test rs[:model].history == (:gm,) && rs[:model].σ                # `Pre(gm, 1)`; the site fold's kinds
+        @test rs[:cell].ownership && issubset((:kind, :v), rs[:cell].cell)       # the owner gather
+        @test rs[:model].history == (:gm,) && rs[:model].ownership                # `Pre(gm, 1)`; the site fold's kinds
         # negative controls: poisoning a leaf the scan lists changes the result
         @test !all(first, _sentinel_probe(pa; drop = :w))
         @test !all(first, _sentinel_probe(pa; drop = :m1))
-        @test !all(first, _sentinel_probe(pb; drop = :σ))
+        @test !all(first, _sentinel_probe(pb; drop = :ownership))
         @test !all(first, _sentinel_probe(pb; drop = :v))
     end
 end

@@ -265,7 +265,7 @@ end
 available_channels(frame::PottsRenderFrame) = map(item -> item.key, frame.channels)
 
 """Return the materialized channel matching `key`, or throw if absent."""
-function channel(frame::PottsRenderFrame, key::RenderChannelKey)
+function frame_channel(frame::PottsRenderFrame, key::RenderChannelKey)
     index = findfirst(item -> item.key == key, frame.channels)
     index === nothing && throw(MissingRenderChannelError(
         key, Any[available_channels(frame)...]))
@@ -373,7 +373,7 @@ function render_frame_conformance(frame::AbstractPottsRenderFrame{N}) where {N}
             push!(issues, "available_channels must contain RenderChannelKey values")
         key isa RenderChannelKey || continue
         item = try
-            channel(frame, key)
+            frame_channel(frame, key)
         catch error
             push!(issues, "channel failed: $(sprint(showerror, error))")
             nothing

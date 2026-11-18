@@ -27,7 +27,7 @@
         #> area
         cells(cell) => λ * (volume - V_target)^2
         #> contacts
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
         #<
     end
     #> growth

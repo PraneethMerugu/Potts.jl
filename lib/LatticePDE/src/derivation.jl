@@ -9,7 +9,7 @@ the base parameters `base` (names, in the order of the values the derivation tak
 (`k3 = 2k2`, `k2 = 3a`) evaluate in their order; a cycle is an `ArgumentError`. The rules are
 D-117's (`LatticeFields.Problems.Derivation`): the expression is compiled as written
 (Base and registered functions, `÷` as integer division, a lazy `ifelse`), and a kind-table
-read `at(t, k)` or `at2(t, k, l)` takes kind numbers (medium 0). Potts and `discretize` call
+read `value_at(t, k)` or `value_at(t, k, l)` takes kind numbers (medium 0). Potts and `discretize` call
 it; a front end that keeps computed values (Potts' parameter object, B's computed slots)
 evaluates it after every write of base values.
 """
@@ -44,7 +44,7 @@ end
 _isterm(e) = e isa Union{Num, SymbolicUtils.BasicSymbolic}
 _varname(v) = (u = unwrap(v); iscall(u) && operation(u) === getindex ? _varname(arguments(u)[1]) : Symbol(string(u)))
 _deftext(e) = e isa AbstractArray ? string(e) : replace(string(e), "LatticePDE." => "")
-# an entry or a scalar default as Julia code: `at`/`at2` read by kind number
+# an entry or a scalar default as Julia code: `value_at` read by kind number
 function _derive_expr(n, e)
     _isterm(e) || return e isa Number ? e : unwrap_const(e)
     u = unwrap(e)
@@ -54,7 +54,7 @@ end
 function _kind_reads(n, ex)
     ex isa Expr || return ex
     args = Any[_kind_reads(n, a) for a in ex.args]
-    if ex.head === :call && (args[1] === at || args[1] === at2)
+    if ex.head === :call && (args[1] === value_at)
         return Expr(:call, Problems.derive_at, QuoteNode(n), args[2:end]...)
     end
     return Expr(ex.head, args...)

@@ -47,8 +47,8 @@
         # conservation: the free volume times the rate is the fine source total (every source site
         # is free); the Majority fold lost the sources of the blocks with 9 or more medium sites
         @test sum(nf[I] * du[I] for I in eachindex(nf) if nf[I] > 0) ≈ S * count(==(1), Q) rtol = 1.0e-14
-        for alg in (ExplicitEuler(; dt = 0.25), BackwardEuler(; dt = 0.25))
-            ic = init(cown(sys(csrc, 0.5), CDIMS; ins = [qe => Q]), alg)
+        for alg in (ExplicitEuler(), BackwardEuler())
+            ic = init(cown(sys(csrc, 0.5), CDIMS; ins = [qe => Q]), alg; dt = 0.25)
             for _ in 1:4
                 step!(ic)
             end
@@ -97,7 +97,7 @@
                 [D(c(t, x, y)) ~ (qe == 1)], [c(0, x, y) ~ 0.0, c(t, x, y) ~ masked(pr, 9.0)], cdom(), [t, x, y],
                 [c(t, x, y), qe], Num[]; name = :b15h
             )
-            sl = solve(cown(hs, CDIMS; ins = [qe => Qh]), ExplicitEuler(; dt = 0.5))
+            sl = solve(cown(hs, CDIMS; ins = [qe => Qh]), ExplicitEuler(); dt = 0.5)
             v = sl[c(t, x, y), length(sl.t)]
             @test v[1, 1] == want                                           # (t = 1: the free part's mean source)
         end
@@ -106,7 +106,7 @@
         cod, hod = lvl(:cb15ode), first(@variables hb15ode(..))
         kq = first(@variables kq(..) [input = true, bounds = (0, 1)])
         osys(c, k1, mq, dvs) = PDESystem(
-            [D(c(t, x, y)) ~ 0.02 * Δ(c(t, x, y)) - c(t, x, y) * k1 + 0.3 * k1],
+            [D(c(t, x, y)) ~ 0.02 * laplacian(c(t, x, y)) - c(t, x, y) * k1 + 0.3 * k1],
             [c(0, x, y) ~ x * y, c(t, x, y) ~ masked(mq == 0, 0.5)], cdom(), [t, x, y], [c(t, x, y); dvs], Num[]; name = :b15o
         )
         oc = discretize(osys(cod, qe == 2, qe, [qe]), LatticeDiscretization(Grid(CDIMS)); inputs = [qe => Q])
@@ -159,7 +159,7 @@ end
         )
         p = cown(dsys(cdf), CDIMS; domain = dmd, ins = [dmd(t, x, y) => Dd, qd(t, x, y) => Qd, kd(t, x, y) => Kd])
         # (u0 = 0, one explicit window: the state is h times the rate)
-        s = solve(p, ExplicitEuler(; dt = 1.0e-6, substeps = 1))
+        s = solve(p, ExplicitEuler(; substeps = 1); dt = 1.0e-6)
         d = Array(s[cdf(t, x, y), length(s.t)]) ./ 1.0e-6
         @test isapprox(d[1, 1], 5.0; rtol = 1.0e-14) || (println("F4-15b domain case 1: ", d[1, 1], " (want 5: the in-domain children, not the free out-of-domain ones)"); false)
         @test isapprox(d[2, 1], 2.0; rtol = 1.0e-14) || (println("F4-15b domain case 2: ", d[2, 1], " (want 2: free ∩ in-domain)"); false)
@@ -203,7 +203,7 @@ end
             [c(t, x, y), dmd(t, x, y), qd(t, x, y), kd(t, x, y)], Num[]; name = :pr15
         )
         p = cown(dsys(cdf), CDIMS; domain = dmd, ins = [dmd(t, x, y) => Dd, qd(t, x, y) => Qd, kd(t, x, y) => Kd])
-        s = solve(p, ExplicitEuler(; dt = 1.0e-6, substeps = 1))
+        s = solve(p, ExplicitEuler(; substeps = 1); dt = 1.0e-6)
         d = Array(s[cdf(t, x, y), length(s.t)]) ./ 1.0e-6
         for (J, v) in want
             @test isapprox(d[J...], v; rtol = 1.0e-14) ||
@@ -283,8 +283,8 @@ end
                 )
         ]
         @test !isempty(strad)
-        for alg in (ExplicitEuler(; dt = 0.05), BackwardEuler(; dt = 0.05))
-            sc, sh = solve(pc, alg), solve(ph, alg)
+        for alg in (ExplicitEuler(), BackwardEuler())
+            sc, sh = solve(pc, alg; dt = 0.05), solve(ph, alg; dt = 0.05)
             @test sc.retcode == SciMLBase.ReturnCode.Success
             a, b = Array(sc[cq(t, x, y), length(sc.t)]), sh[ch(t, x, y), length(sh.t)]
             rt = alg isa ExplicitEuler ? 1.0e-13 : 1.0e-10
@@ -304,8 +304,8 @@ end
         @parameters ka = 0.7 kb = 0.4
         sys = PDESystem(
             [
-                D(c(t, x, y)) ~ 0.05 * Δ(c(t, x, y)) - c(t, x, y) + ka * u(t, x, y),
-                D(u(t, x, y)) ~ 0.02 * Δ(u(t, x, y)) - u(t, x, y) + kb * c(t, x, y),
+                D(c(t, x, y)) ~ 0.05 * laplacian(c(t, x, y)) - c(t, x, y) + ka * u(t, x, y),
+                D(u(t, x, y)) ~ 0.02 * laplacian(u(t, x, y)) - u(t, x, y) + kb * c(t, x, y),
             ],
             [c(0, x, y) ~ x, u(0, x, y) ~ y], cdom(), [t, x, y], [c(t, x, y), u(t, x, y)], [ka, kb]; name = :mix
         )
@@ -328,10 +328,10 @@ end
         A = [0.05 * lap(4, 0.25) - I 0.7 * R; 0.4 * P 0.02 * lap(8, 0.125) - I]
         h = 0.1
         for alg in (
-                BackwardEuler(; dt = h, inner = DevicePCG(; rtol = 1.0e-12, budget = 64), newton = 30),
-                ExplicitEuler(; dt = h / 200, substeps = 1),
+                BackwardEuler(; linsolve = DevicePCG(; reltol = 1.0e-12, maxiters = 64), newton = 30),
+                ExplicitEuler(; substeps = 1),
             )
-            ig = init(p, alg)
+            ig = init(p, alg; dt = alg isa BackwardEuler ? h : h / 200)
             for _ in 1:(alg isa BackwardEuler ? 1 : 200)
                 step!(ig)
             end
@@ -367,7 +367,7 @@ end
         function dsys(c; hand = false)
             k2, k1 = hand ? (cf2(t, x, y), cf1(t, x, y)) : (ismember(q(t, x, y), (2,)), q(t, x, y) == 1)
             PDESystem(
-                [D(c(t, x, y)) ~ 0.02 * Δ(c(t, x, y)) - c(t, x, y) * k2 + 0.5 * k1 + 0.05 * g(t, x, y)],
+                [D(c(t, x, y)) ~ 0.02 * laplacian(c(t, x, y)) - c(t, x, y) * k2 + 0.5 * k1 + 0.05 * g(t, x, y)],
                 [c(0, x, y) ~ x + y, c(t, x, y) ~ masked(q(t, x, y) == 3, 1.0)], cdom(), [t, x, y],
                 [[c(t, x, y), cdm(t, x, y), q(t, x, y), g(t, x, y)]; hand ? [cf1(t, x, y), cf2(t, x, y)] : Num[]], Num[]; name = :dm
             )
@@ -385,12 +385,12 @@ end
                 cf2(t, x, y) => cinfree(Float64.(CQ1 .== 2), CQ1 .== 3, Df),
             ]
         )
-        for alg in (ExplicitEuler(; dt = 0.05), BackwardEuler(; dt = 0.05), CrankNicolson(; dt = 0.05))
-            sc, sh = solve(pc, alg), solve(ph, alg)
+        for alg in (ExplicitEuler(), BackwardEuler(), CrankNicolson())
+            sc, sh = solve(pc, alg; dt = 0.05), solve(ph, alg; dt = 0.05)
             @test capprox(sc[cdo(t, x, y), length(sc.t)], sh[cdh(t, x, y), length(sh.t)]; rtol = alg isa ExplicitEuler ? 1.0e-13 : 1.0e-10)
         end
         # a node outside keeps its value (its block's majority is outside); nodes inside moved
-        sc = solve(pc, BackwardEuler(; dt = 0.05))
+        sc = solve(pc, BackwardEuler(); dt = 0.05)
         v0, v1 = sc[cdo(t, x, y), 1], sc[cdo(t, x, y), length(sc.t)]
         @test v1[.!Dc] == v0[.!Dc] && any(v1[Dc] .!= v0[Dc])
         # in a group of some fields only (FieldGroups): the group computes the domain of its
@@ -398,16 +398,16 @@ end
         ug = first(@variables udomg(..))
         cdg = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables cdomg(..))), LatticePDE.LatticeLevel, Coarse(4)))
         gsys = PDESystem(
-            [D(cdg(t, x, y)) ~ 0.02 * Δ(cdg(t, x, y)) + 0.5 * (q(t, x, y) == 1), D(ug(t, x, y)) ~ 0.1 * Δ(ug(t, x, y)) - ug(t, x, y)],
+            [D(cdg(t, x, y)) ~ 0.02 * laplacian(cdg(t, x, y)) + 0.5 * (q(t, x, y) == 1), D(ug(t, x, y)) ~ 0.1 * laplacian(ug(t, x, y)) - ug(t, x, y)],
             [cdg(0, x, y) ~ x + y, ug(0, x, y) ~ x], cdom(), [t, x, y], [cdg(t, x, y), ug(t, x, y), cdm(t, x, y), q(t, x, y)], Num[]; name = :dg
         )
         pg = cown(gsys, CDIMS; domain = cdm, ins = [cdm(t, x, y) => Df, q(t, x, y) => CQ1])
-        sg = solve(pg, FieldGroups(cdg(t, x, y) => BackwardEuler(; dt = 0.05), ug(t, x, y) => ExplicitEuler(; dt = 0.05)))
+        sg = solve(pg, FieldGroups(cdg(t, x, y) => BackwardEuler(), ug(t, x, y) => ExplicitEuler()); dt = 0.05)
         csys1 = PDESystem(
-            [D(cdg(t, x, y)) ~ 0.02 * Δ(cdg(t, x, y)) + 0.5 * (q(t, x, y) == 1)], [cdg(0, x, y) ~ x + y], cdom(),
+            [D(cdg(t, x, y)) ~ 0.02 * laplacian(cdg(t, x, y)) + 0.5 * (q(t, x, y) == 1)], [cdg(0, x, y) ~ x + y], cdom(),
             [t, x, y], [cdg(t, x, y), cdm(t, x, y), q(t, x, y)], Num[]; name = :d1
         )
-        s1 = solve(cown(csys1, CDIMS; domain = cdm, ins = [cdm(t, x, y) => Df, q(t, x, y) => CQ1]), BackwardEuler(; dt = 0.05))
+        s1 = solve(cown(csys1, CDIMS; domain = cdm, ins = [cdm(t, x, y) => Df, q(t, x, y) => CQ1]), BackwardEuler(); dt = 0.05)
         @test sg[cdg(t, x, y), length(sg.t)] ≈ s1[cdg(t, x, y), length(s1.t)] rtol = 1.0e-10
         @test sg[cdg(t, x, y), length(sg.t)][.!Dc] == sg[cdg(t, x, y), 1][.!Dc]
     end
@@ -420,7 +420,7 @@ end
         q = first(@variables q(..)::Int32 [input = true])
         mk(c; n = (16, 16)) = cown(
             PDESystem(
-                [D(c(t, x, y)) ~ 0.01 * Δ(c(t, x, y)) - c(t, x, y) * ismember(q(t, x, y), (2,))],
+                [D(c(t, x, y)) ~ 0.01 * laplacian(c(t, x, y)) - c(t, x, y) * ismember(q(t, x, y), (2,))],
                 [c(0, x, y) ~ 1.0], cdom(), [t, x, y], [c(t, x, y), q(t, x, y)], Num[]; name = :r
             ), n;
             ins = [q(t, x, y) => zeros(Int32, n)]
@@ -433,28 +433,28 @@ end
         cc = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables cref(..))), LatticePDE.LatticeLevel, Coarse(4)))
         m = cmsg(() -> mk(cc; n = (18, 16)))
         @test occursin("axis 1 (`x`) has 18 sites", m) && occursin("divisible by 4", m) && occursin("20 or 16", m)
-        @test solve(mk(cc; n = (20, 16)), ExplicitEuler(; dt = 0.1)).retcode == SciMLBase.ReturnCode.Success
-        @test solve(mk(cc; n = (16, 1)), ExplicitEuler(; dt = 0.1)).retcode == SciMLBase.ReturnCode.Success   # size 1: never coarsened
+        @test solve(mk(cc; n = (20, 16)), ExplicitEuler(); dt = 0.1).retcode == SciMLBase.ReturnCode.Success
+        @test solve(mk(cc; n = (16, 1)), ExplicitEuler(); dt = 0.1).retcode == SciMLBase.ReturnCode.Success   # size 1: never coarsened
         # a spatial operator of a coarse field in a fine row: the coarse operator at the node of
         # the block (F3-22: the direct form is the aux field of the route, which also works)
         u = first(@variables uref(..))
         L = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables Lref(..))), LatticePDE.LatticeLevel, Coarse(4)))
         direct = PDESystem(
-            [D(cc(t, x, y)) ~ 0.01 * Δ(cc(t, x, y)), D(u(t, x, y)) ~ Δ(cc(t, x, y))],
+            [D(cc(t, x, y)) ~ 0.01 * laplacian(cc(t, x, y)), D(u(t, x, y)) ~ laplacian(cc(t, x, y))],
             [cc(0, x, y) ~ x^2, u(0, x, y) ~ 0.0], cdom(), [t, x, y], [cc(t, x, y), u(t, x, y)], Num[]; name = :b
         )
         good = PDESystem(
-            [D(cc(t, x, y)) ~ 0.01 * Δ(cc(t, x, y)), L(t, x, y) ~ Δ(cc(t, x, y)), D(u(t, x, y)) ~ L(t, x, y)],
+            [D(cc(t, x, y)) ~ 0.01 * laplacian(cc(t, x, y)), L(t, x, y) ~ laplacian(cc(t, x, y)), D(u(t, x, y)) ~ L(t, x, y)],
             [cc(0, x, y) ~ x^2, u(0, x, y) ~ 0.0], cdom(), [t, x, y], [cc(t, x, y), L(t, x, y), u(t, x, y)], Num[]; name = :g
         )
-        sg = solve(cown(good, (16, 16)), ExplicitEuler(; dt = 0.01, substeps = 1); saveat = [0.01])
+        sg = solve(cown(good, (16, 16)), ExplicitEuler(; substeps = 1); dt = 0.01, saveat = [0.01])
         @test size(sg[L(t, x, y), 1]) == (4, 4) && size(sg[u(t, x, y), 2]) == (16, 16)
-        sdir = solve(cown(direct, (16, 16)), ExplicitEuler(; dt = 0.01, substeps = 1); saveat = [0.01])
+        sdir = solve(cown(direct, (16, 16)), ExplicitEuler(; substeps = 1); dt = 0.01, saveat = [0.01])
         @test sdir[u(t, x, y), 2] == sg[u(t, x, y), 2]
         # a mask on an aux field: refused (D-F4-15b Limits (4): an aux field follows its
         # expression), with the route (mask a rate field)
         am = PDESystem(
-            [D(cc(t, x, y)) ~ 0.01 * Δ(cc(t, x, y)), L(t, x, y) ~ Δ(cc(t, x, y))],
+            [D(cc(t, x, y)) ~ 0.01 * laplacian(cc(t, x, y)), L(t, x, y) ~ laplacian(cc(t, x, y))],
             [cc(0, x, y) ~ x^2, L(t, x, y) ~ masked(q(t, x, y) == 3, 1.0)], cdom(),
             [t, x, y], [cc(t, x, y), L(t, x, y), q(t, x, y)], Num[]; name = :am
         )

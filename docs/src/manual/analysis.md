@@ -44,7 +44,7 @@ annealed copy of each displayed state: the copy dynamics run at ``T = 0`` for a 
 which removes the roughness without moving cells past each other. The run itself continues
 from the unannealed state.
 
-`Potts.anneal(prob, u; mcs, seed = 0, alg = SequentialCPM())` returns that copy: `u` after
+`Potts.anneal(prob, u, mcs; seed = 0, alg = SequentialCPM())` returns that copy: `u` after
 `mcs` MCS of the problem's copy dynamics with the copy temperature 0 for every proposal,
 whatever the model's temperature expression (a parameter, `3θ`, a per-kind table). Everything
 else is the run's own: the parameters, the lattice and relations, the proposal, the
@@ -62,7 +62,7 @@ arguments give the same result. A non-finite ``\Delta H`` stops the dynamics, as
 and `anneal` then throws an error instead of returning a partial state.
 
 ```@example analysis
-annealed = [Potts.anneal(prob, u; mcs = 32, seed = s) for s in 1:4]
+annealed = [Potts.anneal(prob, u, 32; seed = s) for s in 1:4]
 (unannealed = sum(values(L)),
  annealed = [sum(values(Potts.boundary_lengths(prob, a))) for a in annealed],
  heterotypic = [fractions(Potts.boundary_lengths(prob, a))[(:dark, :light)] for a in annealed])
@@ -83,7 +83,7 @@ Glazier anneal for 2 of their MCS, which is 32 MCS of `GranerGlazier` (see its d
 ## The energy identity
 
 The boundary lengths are the exact decomposition of the contact term of `total_energy`.
-For a model whose only energy is `contacts => J[kind, kind′]`,
+For a model whose only energy is `contacts => J[kind, neighbor_kind]`,
 ``\sum_{(a, b)} J_{ab} L_{ab} = H``. This is a useful check of a measurement script:
 
 ```@example analysis
@@ -91,7 +91,7 @@ For a model whose only energy is `contacts => J[kind, kind′]`,
     @kinds medium A B
     @parameters J[kind, kind] = [0 16 16; 16 2 11; 16 11 14]
     @lattice Lattice((20, 20); boundary = Closed(), neighborhood = Moore(1))
-    @energy contacts => J[kind, kind′]
+    @energy contacts => J[kind, neighbor_kind]
     @sweep Metropolis(; temperature = 1.0)
 end
 
@@ -105,7 +105,7 @@ Lc = Potts.boundary_lengths(contact)
 ```
 
 With a weighted contact relation (`Weighted(Moore(1), w)` and
-`contacts => weight * J[kind, kind′]`), the lengths carry the weights and the identity
+`contacts => weight * J[kind, neighbor_kind]`), the lengths carry the weights and the identity
 still holds.
 
 ## Mean squared displacement and Fürth fits
@@ -113,19 +113,19 @@ still holds.
 `PottsModels.Analysis` measures cell motility from saved states. Take a tracked point per
 saved state (a cell's centroid from `centroids(σ; periodic)`, projected onto the axes of
 interest), remove the jumps through periodic edges with `unwrap_track`, and average with
-`msd`:
+`mean_squared_displacement`:
 
 ```julia
-using PottsModels.Analysis: centroids, unwrap_track, msd, furth_fit, natural_units
+using PottsModels.Analysis: centroids, unwrap_track, mean_squared_displacement, furth_fit, natural_units
 track = [centroids(σ; periodic = (true, true, false))[k][1:2] for σ in saved]   # cell k, xy
-x = unwrap_track(track, (L, L); periodic = true)
-m = msd([x, …])                    # overlapping windows; replicas of equal length, equal weights
+x = unwrap_track(track, (L, L), true)
+m = mean_squared_displacement([x, …])                    # overlapping windows; replicas of equal length, equal weights
 Δt = (1:length(m)) .* Δt_sample
 fit = furth_fit(Δt, m)             # (; S, D, P, D_fast, D_slow, v_eff, offset, method)
 ```
 
-`msd` averages over every window `i ≤ n − ℓ` of each track, then over the tracks with equal
-weights. `furth_msd(Δt; S, D, P)` is the modified Fürth model of Fortuna et al. (2020), Eq. 1,
+`mean_squared_displacement` averages over every window `i ≤ n − ℓ` of each track, then over the tracks with equal
+weights. `furth_mean_squared_displacement(Δt, S, D, P)` is the modified Fürth model of Fortuna et al. (2020), Eq. 1,
 
 ```math
 \mathrm{MSD}(\Delta t) = 2D\left(\Delta t - P\left(1 - e^{-\Delta t/P}\right)\right) + \frac{2DS}{1 - S}\,\Delta t,

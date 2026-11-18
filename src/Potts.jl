@@ -18,10 +18,10 @@ using CorePotts: Metropolis, RandomPlane
 using JumpProcesses: JumpProcesses
 using KernelAbstractions: KernelAbstractions
 using LatticeFields: LatticeFields
-using LatticeFields.Problems: ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, FieldAlgorithm,
+using LatticeFields.Problems: ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, AbstractFieldAlgorithm,
                              substep_counts, steady_fields, field_series, field_report
-using LatticeFields.Solvers: DevicePCG, DeviceGMRES, Multigrid, V
-using LatticePDE: LatticePDE, PottsEntity, Δ, at, at2, ismember, Coarse
+using LatticeFields.Solvers: DevicePCG, DeviceGMRES, Multigrid, VCycle
+using LatticePDE: LatticePDE, laplacian, value_at, ismember, Coarse
 using LinearAlgebra: Symmetric, eigen, svdvals
 using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile, complete, compose, extend
 using PrecompileTools: PrecompileTools
@@ -37,7 +37,7 @@ using SymbolicIndexingInterface: SymbolicIndexingInterface
 # Last, on purpose (D-138): GeometryBasics' `OffsetInteger` `convert` methods invalidate the
 # symbolic stack's cached code when GeometryBasics loads before it (`using Potts` 4.8 → 6.2 s;
 # 4.9 s from here). Later dependencies go above this line.
-using GeometryBasics: HyperSphere, Circle, Sphere, Point
+using GeometryBasics: HyperSphere, Point
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
@@ -48,9 +48,12 @@ for name in names(CorePotts)
     (name === :CorePotts || !Base.isexported(CorePotts, name)) || @eval export $name
 end
 export @potts_model, @named, PottsSystem, CompiledPottsSystem, mtkcompile, compose, extend,
-    total_energy, energy_change, generated_code, parameters, variables, observe, Adaptive, ExplicitEuler, ExplicitMap,
-    BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, RK4, substep_counts, steady_fields, field_series, field_report, DevicePCG, DeviceGMRES, Multigrid, Coarse
-public V                                   # `Multigrid(; cycle = V(ν₁, ν₂))` (not exported: a short name)
+    total_energy, energy_change, generated_code, observe, Adaptive, ExplicitEuler, ExplicitMap,
+    BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, substep_counts, steady_fields, field_series, field_report, DevicePCG, DeviceGMRES, Multigrid, Coarse
+public VCycle                               # `Multigrid(; cycle = VCycle(ν₁, ν₂))` (not exported: a short name)
+# the declared parameters and variables of a model (MTK's `parameters` lists the compiled ones);
+# `RK4` (OrdinaryDiffEq exports a different `RK4`)
+public declared_parameters, declared_variables, RK4
 
 include("seeds.jl")
 include("draws.jl")
@@ -82,15 +85,34 @@ const cluster = B.cluster
 export kind, cluster
 
 include("layouts.jl")
-export AbstractLayout, Tiling, Scattered, Frame, InsertUntil, overlay, layout
-# shapes and point patterns (D-138): GeometryBasics' round shapes and `Point` (the same
-# bindings Makie re-exports), the lattice center, random sites and the Voronoi layer
-export HyperSphere, Circle, Sphere, Point, Center, RandomPoints, Voronoi
-# TST-style seeding (D-141): seed-and-grow and host-side divisions
-export Eden, Splits
-# the initial-state vocabulary (P6.5c, D-087): strict shapes, filled regions, translated copies
-# and compartment groups; `set_column!` is the custom layer's seam for per-cell columns
-export Interior, Fill, Objects, Group
+# the initial-state vocabulary is opt-in: `using Potts.Layouts`
+public Layouts
+"""
+    Potts.Layouts
+
+The initial-state vocabulary: `layout` and its layers (`Tiling`, `Scattered`, `Frame`,
+`InsertUntil`, `overlay`), shapes and point patterns (GeometryBasics' `HyperSphere`, `Circle`,
+`Sphere` and `Point`, the lattice `Center`, `RandomPoints`, `Voronoi`), seed-and-grow and
+divisions (`Eden`, `Splits`), and strict shapes, filled regions, translated copies and
+compartment groups (`Interior`, `Fill`, `Objects`, `Group`). `using Potts.Layouts` brings
+these names into scope; each layout word is also public as `Potts.name`.
+"""
+module Layouts
+
+    using ..Potts: AbstractLayout, Tiling, Scattered, Frame, InsertUntil, overlay, layout, Center, RandomPoints,
+        Voronoi, Eden, Splits, Interior, Fill, Objects, Group
+    using GeometryBasics: HyperSphere, Circle, Sphere, Point
+
+    export AbstractLayout, Tiling, Scattered, Frame, InsertUntil, overlay, layout
+    export HyperSphere, Circle, Sphere, Point, Center, RandomPoints, Voronoi
+    export Eden, Splits
+    export Interior, Fill, Objects, Group
+
+end
+# the layout words, also public on Potts; `set_column!` is the custom layer's seam for
+# per-cell columns
+public AbstractLayout, Tiling, Scattered, Frame, InsertUntil, overlay, layout, Center, RandomPoints, Voronoi,
+    Eden, Splits, Interior, Fill, Objects, Group
 public set_column!
 public points, layer_rng
 # the layout extension API (D-091): `Potts.paint!(op::LayoutState, l, lat)`, the paint-state
@@ -104,12 +126,14 @@ public KindClass
 # the sweep as MTK-visible metadata (D-160): the Hamiltonian terms, the drives and the payload
 # read with `ModelingToolkitBase.getmetadata(Potts.inner(sys), Potts.PottsSweepSpec, default)`
 public hamiltonian, drives, PottsSweepSpec
-# the container (W-lite LA, v3 §7.1): the inner System, the field PDESystem, the payload; wrap
+# the container (W-lite LA, v3 §7.1): the inner System, the field PDESystem, the payload; wrap_system
 # and components (`compose` and `extend` are MTK's, exported above); the field bindings
-public inner, fields, part, component, wrap, PottsPart, FieldBinding, resolve
+public inner, fields, part, component, wrap_system, PottsPart, FieldBinding, resolve
 # a plain PDESystem as the model's fields, its inputs bound to CPM expressions (F4-B2); the
 # current values of those inputs, for SciML solvers of the PDESystem
 public couple, field_inputs, is_kind
+# the metadata key a model quantity carries (`[potts_entity = …]`) and its reader
+public PottsEntity, get_potts_entity
 # the model's cell and model ODEs as the MTK systems `mtkcompile` produced
 public ode_system
 # the model's cell and model initialization as MTK systems (`@initialization_equations`, D-170)

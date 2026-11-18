@@ -16,7 +16,7 @@ cr_ctx(prob) = Potts._host_ctx(prob)
 function cr_props(prob, u)
     lat = prob.lattice
     moore = CorePotts.relation(Moore(1), lat)
-    σ = Array(u.σ)
+    σ = Array(u.ownership)
     out = CorePotts.Proposal{2}[]
     for t in eachindex(σ)
         x = CorePotts.coordinates(lat, t)
@@ -33,7 +33,7 @@ end
 
 function cr_apply(prob, u, prop)
     a = deepcopy(u)
-    a.σ[prop.target] = prop.new
+    a.ownership[prop.target] = prop.new
     prob.f.commit!(a, prob.p, prop, cr_ctx(prob))
     return a
 end
@@ -160,7 +160,7 @@ end
 
 # a state of the dividing model without its serial column and counter: another layout
 cr_old_layout(st) = CorePotts.CPMState(
-    st.σ, Base.structdiff(st.cell, NamedTuple{(:birth,)}),
+    st.ownership, Base.structdiff(st.cell, NamedTuple{(:birth,)}),
     st.site, Base.structdiff(st.model, NamedTuple{(CorePotts.NEXT_BIRTH,)}), st.history
 )
 
@@ -180,7 +180,7 @@ cr_old_layout(st) = CorePotts.CPMState(
     @lattice Lattice((16, 16); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         cells => 4.0 * (volume - V₀[kind])^2
-        contacts => ifelse(cluster[owner] == cluster[owner′], 0.5, 1.0)
+        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 0.5, 1.0)
     end
     @after_mcs nuc ~ sibling(nucleus)
     @divide cells(cyto) when = mcs == 100000, along = (1.0, 0.0)
@@ -205,7 +205,7 @@ function cr_dead_problem(; track = ())
         CROnCopy(; name = :rb), [ownership => σ, :partner => [3, 3, 0], :q => [1.0, 2.0, 3.0]],
         (0, 2); capacity = 4, track
     )
-    u = deepcopy(p.u0); u.σ[9, 9] = 0; u.cell.volume[3] = 0        # cell 3 is dead: 1 and 2 read it
+    u = deepcopy(p.u0); u.ownership[9, 9] = 0; u.cell.volume[3] = 0        # cell 3 is dead: 1 and 2 read it
     return remake(p; u0 = u)
 end
 
@@ -226,7 +226,7 @@ end
     @energy begin
         cells(blob) => (volume - 36.0)^2
         cells(doomed) => 50.0 * volume^2
-        contacts => J[kind, kind′]
+        contacts => J[kind, neighbor_kind]
     end
     @divide cells(blob) when = mcs == 6, along = (1.0, 0.0)
     @sweep Metropolis(; temperature = 10.0)
@@ -306,7 +306,7 @@ end
             CRIfelse(; name = :c7), [ownership => CR_σ, :partner => [3, 3, 1], :q => [1.0, 2.0, 7.0]],
             (0, 1); capacity = 4
         )
-        v = deepcopy(p7.u0); v.σ[v.σ .== 3] .= 0; v.cell.volume[3] = 0
+        v = deepcopy(p7.u0); v.ownership[v.ownership .== 3] .= 0; v.cell.volume[3] = 0
         @test observe(p7, :viaif, v)[1:2] == [5.0, 5.0]       # a dead referent reads the default
         @test observe(p7, :viaif, p7.u0)[1:2] == [7.0, 7.0]
     end
@@ -388,7 +388,7 @@ end
         tracked = cr_dead_problem(; track = (:references,))
         # off: no counters, no counting code, no warning
         @test !haskey(plain.u0.model, Potts.REF_COUNTS)
-        σ0 = copy(plain.u0.σ); σ0[9, 9] = 3
+        σ0 = copy(plain.u0.ownership); σ0[9, 9] = 3
         @test plain.f.fingerprint == PottsProblem(
             CROnCopy(; name = :rb), [ownership => σ0, :partner => [3, 3, 0]],
             (0, 2); capacity = 4
@@ -404,7 +404,7 @@ end
         b = Base.CoreLogging.with_logger(Base.CoreLogging.NullLogger()) do
             solve(tracked, SequentialCPM()).u[end]
         end
-        @test a.σ == b.σ
+        @test a.ownership == b.ownership
         # `remake` switches it, and a state of the untracked problem fits the tracked one
         @test haskey(remake(plain; track = (:references,)).u0.model, Potts.REF_COUNTS)
         @test !haskey(remake(tracked; track = ()).u0.model, Potts.REF_COUNTS)

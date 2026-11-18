@@ -23,16 +23,16 @@ function column_tops(pred::F, σ::AbstractMatrix) where {F}
 end
 
 """
-    trapz(x, y)
+    trapezoid_integral(x, y)
 
 The trapezoid rule `Σᵢ (x[i+1] − x[i])·(y[i+1] + y[i])/2`, as `numpy.trapz(y, x)` (note the
 argument order: sample points first). Zero for fewer than two samples. The sum runs left to
 right; NumPy sums pairwise, so for non-integer data the two can differ in the last bits.
 """
-function trapz(x, y)
+function trapezoid_integral(x, y)
     x, y = collect(x), collect(y)
     length(x) == length(y) ||
-        throw(ArgumentError("trapz: x and y have different lengths ($(length(x)) and $(length(y)))"))
+        throw(ArgumentError("trapezoid_integral: x and y have different lengths ($(length(x)) and $(length(y)))"))
     s = 0.0
     for i in 1:(length(x) - 1)
         s += (x[i + 1] - x[i]) * (y[i + 1] + y[i]) / 2

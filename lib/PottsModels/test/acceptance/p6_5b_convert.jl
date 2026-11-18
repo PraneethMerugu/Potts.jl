@@ -226,7 +226,7 @@ function p65b_body(; convert = P65B_CONVERT, schedule = nothing, refs = true)
         :(@lattice Lattice((20, 20); boundary = Closed(), neighborhood = Moore(1))),
         :(@energy begin
             cells => λ * (volume - V_target)^2 + 0.25 * surface
-            contacts => ifelse(cluster[owner] == cluster[owner′], 1.0, 3.0)
+                contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 1.0, 3.0)
         end),
         # the sweep is frozen unless `mobile > 0.5`: only the pass moves sites
         :(@constraint mobile > 0.5),
@@ -320,7 +320,7 @@ p65b_u(seed, t, s, ::Type{T}) where {T} =
     CorePotts.uniform(T, CorePotts.draw(CorePotts.RNGKey(seed), t, s, CorePotts.stream_id(P65B_STREAM))[1])
 
 function p65b_oracle(u, t, seed; T = Float64, c = 1.0, Vt3 = 4.0, pfun = nothing)
-    σ = Array(u.σ); v = p65b_vol(u); kd = p65b_col(u, :kind); cl = p65b_col(u, :cluster)
+    σ = Array(u.ownership); v = p65b_vol(u); kd = p65b_col(u, :kind); cl = p65b_col(u, :cluster)
     sub = Array(u.site.sub)
     out = Dict{Int, Vector{Int}}()
     ps = Dict{Int, Float64}()
@@ -347,7 +347,7 @@ end
 # p recomputed after each conversion, candidates in index order. The negative control of the
 # start-of-pass rule.
 function p65b_sequential_count(u, t, seed; c = 1.0, Vt3 = 4.0, root = 1)
-    σ = Array(u.σ); sub = Array(u.site.sub)
+    σ = Array(u.ownership); sub = Array(u.site.sub)
     V3 = 0; n = 0
     for s in eachindex(σ)
         (σ[s] == root && sub[s] > 0.5) || continue
@@ -362,7 +362,7 @@ end
 function p65b_props(prob, u)
     lat = prob.lattice
     moore = CorePotts.relation(Moore(1), lat)
-    σ = Array(u.σ)
+    σ = Array(u.ownership)
     out = CorePotts.Proposal{2}[]
     for t in eachindex(σ)
         x = CorePotts.coordinates(lat, t)
@@ -378,7 +378,7 @@ function p65b_props(prob, u)
 end
 function p65b_apply(prob, u, prop)
     a = deepcopy(u)
-    a.σ[prop.target] = prop.new
+    a.ownership[prop.target] = prop.new
     prob.f.commit!(a, prob.p, prop, p65b_ctx(prob))
     return a
 end
@@ -391,7 +391,7 @@ end
 # A full recount (section B): the alive cells relabelled 1:n into a fresh convert-free
 # problem, whose trackers are computed from σ at construction.
 function p65b_recount(u)
-    σ = Array(u.σ); v = p65b_vol(u); kd = p65b_col(u, :kind); cl = p65b_col(u, :cluster)
+    σ = Array(u.ownership); v = p65b_vol(u); kd = p65b_col(u, :kind); cl = p65b_col(u, :cluster)
     ids = sort!(filter(>(0), unique(σ)))
     rl = Dict(c => i for (i, c) in enumerate(ids))
     σ2 = map(c -> c == 0 ? Int32(0) : Int32(rl[c]), σ)
@@ -406,12 +406,12 @@ function p65b_tracker_checks(prob, u)
     n = length(ids)
     @test p65b_vol(u)[ids] == p65b_vol(f0)[1:n]
     @test all(c -> p65b_vol(u)[c] == 0, setdiff(1:8, ids))
-    @test p65b_vol(u)[ids] == [count(==(c), Array(u.σ)) for c in ids]          # σ itself
+    @test p65b_vol(u)[ids] == [count(==(c), Array(u.ownership)) for c in ids]          # σ itself
     @test p65b_col(u, :surface)[ids] ≈ p65b_col(f0, :surface)[1:n] atol = 1e-9
     @test observe(prob, :cx, u)[ids] ≈ observe(fresh, :cx, f0)[1:n] atol = 1e-9
     @test observe(prob, :cy, u)[ids] ≈ observe(fresh, :cy, f0)[1:n] atol = 1e-9
     cl = p65b_col(u, :cluster)
-    @test p65b_col(u, :cluster_volume) == CorePotts.recompute_cluster_volume(Array(u.σ), cl)
+    @test p65b_col(u, :cluster_volume) == CorePotts.recompute_cluster_volume(Array(u.ownership), cl)
     @test total_energy(prob, u) ≈ total_energy(fresh, f0) atol = 1e-9
     return nothing
 end
@@ -438,7 +438,7 @@ end
     sol = solve(prob, SequentialCPM(); saveat = 1)
     @test Symbol(sol.retcode) === :Success
     u1 = sol.u[2]
-    σ0, σ1 = p65b_sigma(), Array(u1.σ)
+    σ0, σ1 = p65b_sigma(), Array(u1.ownership)
     v1 = p65b_vol(u1); kd = p65b_col(u1, :kind); cl = p65b_col(u1, :cluster)
     # cluster A: no lamellipodium, V₃ = 0, p = 1 for ALL 8 candidates (start of pass). Read
     # sequentially (p recomputed after each conversion) it could never pass V₃ = Vt3 = 4.
@@ -473,7 +473,7 @@ end
     u2 = sol.u[3]
     conv2, ps2 = p65b_oracle(u1, 1, 1)
     @test ps2[1] == -1.0 && isempty(conv2[1])
-    @test count(==(6), Array(u2.σ)) == 8
+    @test count(==(6), Array(u2.ownership)) == 8
     @test p65b_vol(u2)[4] == v1[4] + length(conv2[3])
     @test u2.model.births[1] == 1.0                              # no second creation for A
     # the other cells are untouched (frozen sweep)
@@ -493,7 +493,7 @@ end
         for t in 0:2
             u, w = sol.u[t + 1], sol.u[t + 2]
             conv, _ = p65b_oracle(u, t, seed)
-            σu, σw = Array(u.σ), Array(w.σ)
+            σu, σw = Array(u.ownership), Array(w.ownership)
             moved = findall(vec(σu .!= σw))
             @test Set(moved) == Set(reduce(vcat, values(conv); init = Int[]))   # DEFECT CHECK
             # every moved site went to its entity's lamellipodium
@@ -514,7 +514,7 @@ end
         end
         # the same seed gives the same trajectory (counter-addressed: nothing else enters)
         again = solve(p65b_problem(; seed, tspan = (0, 3)), alg; saveat = 1)
-        @test all(i -> Array(again.u[i].σ) == Array(sol.u[i].σ), eachindex(sol.u))
+        @test all(i -> Array(again.u[i].ownership) == Array(sol.u[i].ownership), eachindex(sol.u))
     end
     # the draws matter (the oracle is not vacuous): B's first-pass count varies over seeds
     @test length(unique(nB)) >= 3
@@ -525,7 +525,8 @@ end
     for seed in 1:4
         a = solve(p65b_problem(; seed), SequentialCPM(); saveat = 1)
         b = solve(p65b_problem(; seed), CheckerboardCPM(); saveat = 1)
-        @test all(i -> Array(a.u[i].σ) == Array(b.u[i].σ) && p65b_col(a.u[i], :V_target) == p65b_col(b.u[i], :V_target),
+        @test all(
+            i -> Array(a.u[i].ownership) == Array(b.u[i].ownership) && p65b_col(a.u[i], :V_target) == p65b_col(b.u[i], :V_target),
             eachindex(a.u))
     end
 end
@@ -539,7 +540,7 @@ end
     sol = solve(prob, SequentialCPM(); saveat = 1)
     @test Symbol(sol.retcode) === :Success
     u = sol.u[end]
-    @test Array(u.σ) == p65b_sigma()
+    @test Array(u.ownership) == p65b_sigma()
     @test p65b_vol(u)[6:8] == [0, 0, 0]                          # no cell, no slot used (X2)
     @test u.model.births[1] == 0.0 && u.model.nconv[1] == 0.0
     @test u.model[Symbol("#next_birth")][1] == 6                 # no serial consumed
@@ -548,7 +549,7 @@ end
     sol2 = solve(p65b_problem(; Vt3 = 2.0), SequentialCPM(); saveat = 1)
     u2 = sol2.u[end]
     @test p65b_vol(u2)[4] == 2 && p65b_vol(u2)[3] == 12          # DEFECT CHECK (control A below)
-    @test count(==(6), Array(u2.σ)) == 8
+    @test count(==(6), Array(u2.ownership)) == 8
     # Vt3 = 1: B's p = 1 − 2 < 0, clamped: nothing
     sol3 = solve(p65b_problem(; Vt3 = 1.0), SequentialCPM(); saveat = 1)
     @test p65b_vol(sol3.u[end])[4] == 2
@@ -594,7 +595,7 @@ end
     prob = p65b_problem(; seed = 1, tspan = (0, 2))
     sol = solve(prob, SequentialCPM(); saveat = 1)
     u1 = sol.u[2]
-    @test count(==(6), Array(u1.σ)) == 8                         # A's lamellipodium is born in slot 6
+    @test count(==(6), Array(u1.ownership)) == 8                         # A's lamellipodium is born in slot 6
     g1 = p65b_col(u1, :generation)[6]
     # the created cell is read through references (P6.5a): the after-MCS updates of MCS 2
     u2 = sol.u[3]
@@ -608,7 +609,7 @@ end
         a = p65b_apply(prob, a, pr)
     end
     @test p65b_vol(a)[6] == 0 && observe(prob, :la, a)[1] == 0.0  # dead: `sibling` reads 0
-    @test count(==(1), Array(a.σ)) == 44
+    @test count(==(1), Array(a.ownership)) == 44
     a.cell.keep[1] = 6                                           # a stale reference to the dead cell
     a.cell.keep[3] = 4                                           # a live one (B's lamellipodium), kept
     prob2 = remake(prob; u0 = a, tspan = (1, 2))
@@ -616,7 +617,7 @@ end
     @test Symbol(sol2.retcode) === :Success
     w = sol2.u[end]
     # p = 1 again (no lamellipodium): all 8 convert into a NEW cell in the lowest free slot, 6
-    @test count(==(6), Array(w.σ)) == 8                          # DEFECT CHECK
+    @test count(==(6), Array(w.ownership)) == 8                          # DEFECT CHECK
     @test p65b_col(w, :kind)[6] == P65B_LAMEL && p65b_col(w, :cluster)[6] == 1
     @test p65b_col(w, :generation)[6] == g1 + 1                  # a reused slot: a new generation
     @test observe(prob, :bth, w)[6] == 7                         # a new serial, never 6 again
@@ -641,7 +642,7 @@ end
     # lamellipodium yet; listed before `after_mcs`, it sees the 8 sites
     d = solve(p65b_problem(:P65bConvert; tspan = (0, 1)), SequentialCPM()).u[end]
     e = solve(p65b_problem(:P65bEarly; tspan = (0, 1)), SequentialCPM()).u[end]
-    @test count(==(6), Array(d.σ)) == 8 && count(==(6), Array(e.σ)) == 8
+    @test count(==(6), Array(d.ownership)) == 8 && count(==(6), Array(e.ownership)) == 8
     @test p65b_col(d, :seen)[1] == 0
     @test p65b_col(e, :seen)[1] == 8                             # DEFECT CHECK
     @test p65b_col(e, :lam)[1] == 6 && p65b_col(d, :lam)[1] == 0
@@ -652,7 +653,7 @@ end
     p65b_define(:P65bListed, p65b_src(:P65bListed; schedule = :(@schedule sweep, after_mcs, protrusion, lifecycle)))
     l = solve(p65b_problem(:P65bListed; tspan = (0, 3)), SequentialCPM(); saveat = 1)
     c = solve(p65b_problem(:P65bConvert; tspan = (0, 3)), SequentialCPM(); saveat = 1)
-    @test all(i -> Array(l.u[i].σ) == Array(c.u[i].σ) && p65b_col(l.u[i], :seen) == p65b_col(c.u[i], :seen), eachindex(c.u))
+    @test all(i -> Array(l.u[i].ownership) == Array(c.u[i].ownership) && p65b_col(l.u[i], :seen) == p65b_col(c.u[i], :seen), eachindex(c.u))
 end
 
 @testset "P6.5b convert: schedule and naming errors name the offender" begin
@@ -678,7 +679,7 @@ end
 @testset "P6.5b convert: @extend replaces the named pass; a site-dependent p" begin
     prob = p65b_problem(:P65bReplaced; replaced = true, tspan = (0, 1))
     u = solve(prob, SequentialCPM()).u[end]
-    σ0, σ = p65b_sigma(), Array(u.σ)
+    σ0, σ = p65b_sigma(), Array(u.ownership)
     # only the `sub = 2` candidates convert (p = 1 there, 0 elsewhere): A 4, B 2
     moved = findall(vec(σ0 .!= σ))
     @test Set(moved) == Set(vcat(LinearIndices(σ0)[8, 3:6], LinearIndices(σ0)[14, 3:4]))   # DEFECT CHECK
@@ -713,7 +714,7 @@ end
     for _ in 1:6
         step!(integ2)
     end
-    @test count(==(6), Array(current_state(integ2).σ)) == 8                  # control: the pass did convert
+    @test count(==(6), Array(current_state(integ2).ownership)) == 8                  # control: the pass did convert
     @test minimum(_ -> (@allocated step!(integ2)), 1:3) == 0
 end
 
@@ -742,7 +743,7 @@ const P65B_FORTUNA_BODY = quote
     touches_substrate(s) = count(true for n in VonNeumann(1)(s) if kind[n] == substrate) > 0
     @energy begin
         cells(cytoplasm, lamellipodium, nucleus) => λ * (volume - V_target)^2
-        contacts => ifelse(cluster[owner] == cluster[owner′], 1.0, 3.0)
+        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 1.0, 3.0)
     end
     @constraint mobile > 0.5
     @convert protrusion clusters(cytoplasm) begin
@@ -787,7 +788,7 @@ end
     sol = solve(prob, SequentialCPM(); saveat = 1)
     @test Symbol(sol.retcode) === :Success
     u1, u2, u3 = sol.u[2], sol.u[3], sol.u[4]
-    σ1 = Array(u1.σ)
+    σ1 = Array(u1.ownership)
     # pass 1: no lamellipodium (volume[to] = 0): p = c = 1, all 8 substrate-touching
     # cytoplasm sites convert into a lamellipodium allocated in slot 4 (implicit allocation)
     @test all(==(4), σ1[15, 4:11]) && count(==(4), σ1) == 8
@@ -797,17 +798,17 @@ end
     @test p65b_col(u1, :V_target)[1] == 32.0                     # no transfer in this block
     @test p65b_vol(u1)[1] == 36
     # pass 2: V₃ = 8 > V₃ᵗ = 4, p = 1 − 2 = −1, clamped to 0: nothing (and nothing later)
-    @test Array(u2.σ) == σ1 && Array(u3.σ) == σ1
+    @test Array(u2.ownership) == σ1 && Array(u3.ownership) == σ1
     # the explicit `| Fresh` form is the same pass
     pf = p65b_fortuna_problem(:P65bFortunaFresh)
     sf = solve(pf, SequentialCPM(); saveat = 1)
-    @test all(i -> Array(sf.u[i].σ) == Array(sol.u[i].σ), eachindex(sol.u))
+    @test all(i -> Array(sf.u[i].ownership) == Array(sol.u[i].ownership), eachindex(sol.u))
     # c = 1/2: by the draw oracle (8 candidates, p = 1/2 at the start of the pass)
     ph = remake(prob; p = [:c => 0.5])
     sh = solve(ph, SequentialCPM(); saveat = 1)
-    σ0 = Array(u0.σ)
+    σ0 = Array(u0.ownership)
     want = [s for s in LinearIndices(σ0)[15, 4:11] if p65b_u(1, 0, s, Float64) < 0.5]
-    @test Set(findall(vec(σ0 .!= Array(sh.u[2].σ)))) == Set(want)
+    @test Set(findall(vec(σ0 .!= Array(sh.u[2].ownership)))) == Set(want)
     # E1 on its own (no `@convert`): a kind-conditional default builds and compiles
     @test p65b_build_error(Expr(:macrocall, Symbol("@potts_model"), LineNumberNode(0, :p65b), :P65bE1Only,
         quote
@@ -829,9 +830,9 @@ end
         sol = solve(p65b_problem(; seed, c = 2.5, tspan = (0, 2)), SequentialCPM(); saveat = 1)
         u1 = sol.u[2]
         @test p65b_vol(u1)[4] == 6 && p65b_vol(u1)[3] == 8       # DEFECT CHECK: all 4 of B's
-        @test count(==(6), Array(u1.σ)) == 8
+        @test count(==(6), Array(u1.ownership)) == 8
         # pass 2: B's p = 2.5 · (1 − 6/4) < 0: nothing
-        @test Array(sol.u[3].σ) == Array(u1.σ)
+        @test Array(sol.u[3].ownership) == Array(u1.ownership)
     end
 end
 
@@ -844,6 +845,7 @@ end
         src = joinpath(dir, "model.jl")
         write(src, string(P65B_SRC[:P65bConvert]))
         script = joinpath(dir, "run.jl")
+        # runic: off
         write(script, """
             using Potts, PottsModels, Serialization
             include($(repr(src)))
@@ -856,11 +858,12 @@ end
                     :sub => s, :V_target => [40.0, 4.0, 10.0, 2.0, 16.0]], (0, 4); seed, capacity = 8)
                 for alg in (SequentialCPM(), CheckerboardCPM())
                     sol = solve(prob, alg; saveat = 1)
-                    push!(out, [(Array(u.σ), Array(u.cell.V_target), Array(u.cell.birth)) for u in sol.u])
+                    push!(out, [(Array(u.ownership), Array(u.cell.V_target), Array(u.cell.birth)) for u in sol.u])
                 end
             end
             serialize(ARGS[1], out)
             """)
+        # runic: on
         proj = dirname(Base.active_project())
         res = map((1, 4)) do nt
             path = joinpath(dir, "t$nt.jls")
@@ -890,7 +893,7 @@ end
             @test Symbol(dev.retcode) === :Success
             for i in eachindex(cpu.u)
                 a, b = cpu.u[i], dev.u[i]
-                @test Array(a.σ) == Array(b.σ)
+                @test Array(a.ownership) == Array(b.ownership)
                 for n in (:kind, :volume, :cluster, :generation, :birth, :V_target, :surface)
                     @test p65b_col(a, n) == p65b_col(b, n)
                 end
@@ -899,7 +902,7 @@ end
             # and the Float32 oracle
             for t in 0:2
                 conv, _ = p65b_oracle(dev.u[t + 1], t, seed; T = Float32)
-                moved = findall(vec(Array(dev.u[t + 1].σ) .!= Array(dev.u[t + 2].σ)))
+                moved = findall(vec(Array(dev.u[t + 1].ownership) .!= Array(dev.u[t + 2].ownership)))
                 @test Set(moved) == Set(reduce(vcat, values(conv); init = Int[]))
             end
         end
@@ -913,7 +916,7 @@ end
         end
         @test all(==((0, 0, 0)), counts)
         u = current_state(integ)                                              # control: the passes ran (a read point)
-        @test count(==(6), Array(u.σ)) == 8
+        @test count(==(6), Array(u.ownership)) == 8
         @test integ.stats.transfers > 0                          # control: the counters are live
     else
         @test_skip "device (POTTS_GPU=metal|rocm)"
