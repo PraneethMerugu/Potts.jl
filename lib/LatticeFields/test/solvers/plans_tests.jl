@@ -112,7 +112,7 @@ end
 @testitem "sentinel and linsolve = :auto" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
     @testset "sentinel and linsolve = :auto" begin
     disk, per = named_case("disk512", 1.9e-3), periodic_case(128, 128; s = 1.0)
-        @test resolve_inner(disk[1], :auto) isa LatticePCG
+        @test resolve_inner(disk[1], :auto) isa Solvers.FusedPCG
         @test resolve_inner(disk[1], Multigrid()).maxiters == 12
         @test resolve_inner(per[1], :auto).maxiters == 8
         sv = case_solver(disk, Float32; linsolve = Multigrid())   # stationary budget 12 needs 17

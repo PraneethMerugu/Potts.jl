@@ -173,7 +173,7 @@ function true_residual(sv, xs = field(sv, Solvers.solution_key(sv)))
     w = [Float64.(field(sv, lkey(0, "w$a"))) for a in 1:N]
     s = Float64.(field(sv, lkey(0, "s")) .+ field(sv, lkey(0, "sbox")) .+
                  field(sv, lkey(0, "sint")))
-    b = Float64.(field(sv, sv.alg isa LatticePCG ? "pcg.b" : lkey(0, "b")))
+    b = Float64.(field(sv, sv.alg isa Solvers.FusedPCG ? "pcg.b" : lkey(0, "b")))
     x = Float64.(xs)
     CI, LI = CartesianIndices(d), LinearIndices(d)
     r = Float64[]

@@ -25,7 +25,8 @@ const LF_NONPUBLIC = (
     :inferencebarrier,                     # Base's inference barrier (`init` binds each group at its own algorithm's type, F3 r2)
     :kdot, :knorm, :kaxpy!, :kaxpby!, :kcopy!, :kdivcopy!, :kfill!,  # Krylov.jl's vector functions, the documented hook of a custom vector type (F3-12d `CoupledVector`); no `public` (compat 0.10)
     :Tag,                                  # ForwardDiff's documented tag of a Dual (the extension's colored Jacobian and JVP, F4-07); no `public`
-    :AbstractKrylovSubspaceMethod, :init_cacheval, :needs_concrete_A, :LinearCache  # LinearSolve's documented hooks of a new algorithm (the extension's `LatticePCG`, F4-08); no `public`
+    :AbstractKrylovSubspaceMethod, :init_cacheval, :needs_concrete_A, :LinearCache,  # LinearSolve's documented hooks of a new algorithm
+    :SciMLLinearSolveAlgorithm, :default_alias_A, :default_alias_b, :update_tolerances_internal!,  # (`LatticePCG`, `LatticeGMRES`, `Multigrid`; `algorithm_interface_issues`); no `public`
 )
 include(joinpath(@__DIR__, "..", "..", "..", "..", "test", "shared", "qa_common.jl"))
 include("../shared/export_all.jl")
@@ -49,9 +50,6 @@ using OrdinaryDiffEqRosenbrock: OrdinaryDiffEqRosenbrock
     @test Base.get_extension(LatticeFields, :LatticeFieldsForwardDiffExt) !== nothing
     @test Base.get_extension(LatticeFields, :LatticeFieldsDiffEqBaseExt) !== nothing
     @test Base.get_extension(LatticeFields, :LatticeFieldsOrdinaryDiffEqCoreExt) !== nothing
-    if any(k -> k.name == "LinearSolve", keys(Base.loaded_modules))
-        @test Base.get_extension(LatticeFields, :LatticeFieldsLinearSolveExt) !== nothing
-    end
 end
 end
 
