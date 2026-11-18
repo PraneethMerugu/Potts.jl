@@ -420,7 +420,13 @@ end
                 @test maximum(abs, got32[bce, end] .- ref32[bce, end]) < 1.0e-5
             end
             @test_throws ArgumentError init(p32, BackwardEuler(; linsolve = KLUFactorization(), solver_type = Float32); dt = 0.05)
-            @test occursin("Float64", e(() -> init(p32, BackwardEuler(; linsolve = KLUFactorization(), solver_type = Float32); dt = 0.05)))
+            msg = try
+                init(p32, BackwardEuler(; linsolve = KLUFactorization(), solver_type = Float32); dt = 0.05)
+                ""
+            catch err
+                sprint(showerror, err)
+            end
+            @test occursin("Float64", msg)
         end
         # KrylovJL_CG with precs = LatticeMultigrid on a time-varying field reuses its held FieldSolver across rebuilds
         sys_t = bsys([D(bce) ~ (0.3 + 0.1 * sin(5t)) * laplacian(bce) - 2.0 * bce + x], [bc(0, x, y) ~ x * y], [])

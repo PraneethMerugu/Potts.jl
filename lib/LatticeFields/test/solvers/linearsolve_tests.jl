@@ -215,19 +215,20 @@ end
 end
 
 @testitem "FusedVCycle reuses held FieldSolver across precs refreshes" setup = [LF_solvers_linearsolve] tags = [:latticefields, :solvers] begin
+    using LinearAlgebra: ldiv!
     op, ins, b = homog_disk(Float64, 24)
     mg = LatticeMultigrid()
     A1 = BoundOperator(HostExec(), op; T = Float64, inputs = ins)
     P1, _ = mg(A1, nothing)
     y = similar(b)
-    LinearAlgebra.ldiv!(y, P1, b)
+    ldiv!(y, P1, b)
     sv1 = only(values(mg.engines))[]
     @test sv1 isa FieldSolver
     # Refresh with updated coefficients on the same operator structure and inputs: same FieldSolver reused
     op2 = CellOperator(op.dims; periodic = op.periodic, shift = 0.05, mask = op.mask, value = 0.0)
     A2 = BoundOperator(HostExec(), op2; T = Float64, inputs = ins)
     P2, _ = mg(A2, nothing)
-    LinearAlgebra.ldiv!(y, P2, b)
+    ldiv!(y, P2, b)
     sv2 = only(values(mg.engines))[]
     @test sv2 === sv1 && sv2.op.shift == 0.05
 end

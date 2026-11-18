@@ -705,7 +705,7 @@ function bind_cache(
             continue
         end
         inner = _row_inner(alg, coupled)
-        solver_type = (alg.solver_type === :auto && !LinearSolve.needs_concrete_A(inner)) ? T : alg.solver_type
+        solver_type = (alg.solver_type === :auto && !(inner isa LinearSolve.SciMLLinearSolveAlgorithm && LinearSolve.needs_concrete_A(inner))) ? T : alg.solver_type
         if !r.field
             numeric, _ = _numeric_operator(s, r, id, p, hγ, 1.0, mask !== nothing; coupled)
             ins = mask === nothing ? ("in.f" => resarr,) : ("in.f" => resarr, "mask" => mask)

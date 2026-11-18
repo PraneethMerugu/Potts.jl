@@ -982,7 +982,7 @@ function _gmres!(cache, alg::LatticeGMRES; owned_atol::Bool = false)
         ws, cache.A, cache.b; M, N, ldiv = true,
         restart = true, rtol = K(rtol), atol, itmax = budget, history = true, callback = NonFiniteStop()
     )
-    _set_u!(cache, ws.x)
+    owned_atol ? _set_u!(cache, ws.x) : copyto!(cache.u, ws.x)
     return budget
 end
 

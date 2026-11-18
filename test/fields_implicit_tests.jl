@@ -541,7 +541,7 @@ end
         for linsolve in (
                 LS.KLUFactorization(),
                 LS.KrylovJL_CG(; precs = LatticeMultigrid()),
-                LatticePCG(; precs = (A, p) -> (LA.I, LA.I); reltol = 1.0e-10, maxiters = 64),
+                LatticePCG(; precs = (A, p) -> (LA.I, LA.I), reltol = 1.0e-10, maxiters = 64),
             )
             prob = PottsProblem(FiStill(; name = :f), fi_op(dims), (0, 3); field_solver = BackwardEuler(; linsolve))
             sol = solve(prob, SequentialCPM())
@@ -549,11 +549,13 @@ end
             @test maximum(abs, sol.u[end].site.c .- ref) < 1.0e-8
         end
         # KLUFactorization and KrylovJL_CG(; precs = LatticeMultigrid()) are session-independent; closure precs is session-bound
-        p_klu = PottsProblem(FiStill(; name = :f), fi_op(dims), (0, 2); field_solver = BackwardEuler(; linsolve = LS.KLUFactorization()))
-        p_kcg = PottsProblem(FiStill(; name = :f), fi_op(dims), (0, 2); field_solver = BackwardEuler(; linsolve = LS.KrylovJL_CG(; precs = LatticeMultigrid())))
-        p_cls = PottsProblem(FiStill(; name = :f), fi_op(dims), (0, 2); field_solver = BackwardEuler(; linsolve = LatticePCG(; precs = (A, p) -> (LA.I, LA.I))))
-        @test !Potts._session_bound(p_klu.f.solvers) && !Potts._session_bound(p_kcg.f.solvers)
-        @test Potts._session_bound(p_cls.f.solvers)
+        cs = Potts.mtkcompile(FiStill(; name = :f))
+        @test !Potts._session_bound(Potts._resolve_solvers(cs; field_solver = BackwardEuler(; linsolve = LS.KLUFactorization())))
+        @test !Potts._session_bound(Potts._resolve_solvers(cs; field_solver = BackwardEuler(; linsolve = LS.KrylovJL_CG(; precs = LatticeMultigrid()))))
+        @test Potts._session_bound(Potts._resolve_solvers(cs; field_solver = BackwardEuler(; linsolve = LatticePCG(; precs = (A, p) -> (LA.I, LA.I)))))
+        p_klu1 = PottsProblem(FiStill(; name = :f), fi_op(dims), (0, 2); field_solver = BackwardEuler(; linsolve = LS.KLUFactorization()))
+        p_klu2 = PottsProblem(FiStill(; name = :f), fi_op(dims), (0, 2); field_solver = BackwardEuler(; linsolve = LS.KLUFactorization()))
+        @test p_klu1.f.fingerprint == p_klu2.f.fingerprint
         # Float32 state with KLUFactorization works out of the box (Float64 CSC assembly)
         p32 = PottsProblem(FiStill(; name = :f), fi_op(dims), (0, 2); T = Float32, field_solver = BackwardEuler(; linsolve = LS.KLUFactorization()))
         s32 = solve(p32, SequentialCPM())
