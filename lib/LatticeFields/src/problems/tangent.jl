@@ -132,7 +132,8 @@ end
 
 function _bind_tangent(
         alg::AbstractImplicitFieldAlgorithm, g::FieldGroup, st::FieldStore, p; fields, n, dt, c, backend, options, V,
-        shared = nothing)
+        shared = nothing, abstol = 1 // 10^6, reltol = 1 // 10^3
+    )
     s = group_program(g, alg)
     keys = collect(String, fields)
     E = eltype(st.bufs[fieldid(s, keys[1])][1])
@@ -150,7 +151,7 @@ function _bind_tangent(
         pst = FieldStore(st.backend, pbufs, st.cur, ptabs)
         _tsync!(syncs, st.backend)
         pp = _primal_params(p)
-        pc = bind_cache(alg, g, pst, pp; fields, n, dt, c = primal(c), backend, options, V)
+        pc = bind_cache(alg, g, pst, pp; fields, n, dt, c = primal(c), backend, options, V, abstol, reltol)
     else
         # (front end A, F3-21b r1 S3: the primal runtime's own cache and store, which solve each
         # stage once; the Dual store shares their slot parity `cur`, and the front end sets the

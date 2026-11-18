@@ -119,51 +119,56 @@ Base.hash(a::AbstractImplicitFieldAlgorithm, h::UInt) =
     foldl((h, f) -> hash(getfield(a, f), h), fieldnames(typeof(a)); init = hash(typeof(a), h))
 
 """
-    LatticeNewton(; max_iter = nothing, check_div = true)
+    LatticeNewton(; κ = 1 // 100, max_iter = 10, check_div = true)
 
 Nonlinear solver specification for the owned implicit field algorithms
 ([`BackwardEuler`](@ref), [`CrankNicolson`](@ref), [`BDF2`](@ref), [`QuasiSteady`](@ref)).
-Honors the subset of `NLNewton` keywords compatible with fixed-step no-wait device execution:
+Matches OrdinaryDiffEq's `NLNewton` convergence and divergence rules on fixed-step,
+no-wait CPU and device execution:
 
-- `max_iter`: maximum Newton iterations per step (`nothing`: automatic count determined by
-  operator exactness and contraction bounds). When an integer `k ≥ 1` is given, the solver
-  runs at most `k` iterations, stops early once every row meets the Newton tolerance, and ends
-  the run with `ReturnCode.ConvergenceFailure` at the window end if the budget is hit without
-  converging (for `k ≥ 2`).
+- `κ`: rate-scaled convergence threshold (`1 // 100` by default, finite positive real).
+- `max_iter`: maximum Newton iterations per step (`10` by default, integer ≥ 1). The solver
+  runs at most `max_iter` iterations, stops early once every row meets the stopping test,
+  and ends the run with `ReturnCode.ConvergenceFailure` at the window end if the budget is
+  hit without converging (for `max_iter ≥ 2`).
 - `check_div`: when `true` (default), abort with `ReturnCode.ConvergenceFailure` if the
-  iteration correction diverges or becomes non-finite; `false` disables the divergence growth
-  check (non-finite corrections still stop).
+  contraction rate diverges (`θ > 2`) or stalls above the tolerance floor (`θ ≈ 1` with
+  `ndz > 1`); `false` disables the divergence growth check (non-finite corrections still
+  stop).
 
-The Newton stop criterion is correction-based (not rate-scaled), in the working float type
-`T`:
+At each iteration `iter`, the scaled update norm `ndz` is the RMS norm over active
+(unmasked, in-domain) unknowns of `δ ./ (abstol .+ max.(abs.(uⁿ), abs.(u_{k+1})) .* reltol)`
+in the row's working float type `T`, where `abstol` and `reltol` come from the `solve`
+keywords (SciML defaults `1 // 10^6` and `1 // 10^3` if unset). On a coupled steady solve, one
+RMS norm is formed over all coupled unknowns. On `iter == 1`, convergence requires
+`ndz < 1e-5`. For `iter > 1`, `θ = prev_θ = max(0.3 * prev_θ, ndz / ndzprev)` (carried
+across steps and reset on state/parameter resets) and `η = θ / (1 - θ)`; convergence holds
+when `η >= 0 && η * ndz < κ` (or at the floating-point precision limit
+`|θ - 1| ≤ 100 * sqrt(eps(T))` when `ndz ≤ 1`).
 
-- Time-stepping algorithms (`BackwardEuler`, `CrankNicolson`, `BDF2`):
-  `‖δ_k‖∞ ≤ 1e-3 ‖u_k − uⁿ‖∞ + 10 eps(T) ‖u_k‖∞` (with `2 eps(Float16)` added to the
-  floor `10 eps(T)` when stored as `Float16`), where `uⁿ` is the substep start and
-  `δ_k = u_{k+1} − u_k` is the correction.
-- `QuasiSteady`: `‖δ_k‖∞ ≤ (1e-3 + 10 eps(T)) ‖u_k‖∞`.
-
-Unsupported `NLNewton` keywords (`κ`, `fast_convergence_cutoff`, `new_W_dt_cutoff`,
-`always_new`, `relax`, `predictor`) throw `ArgumentError` explaining why they are not honored.
+Unsupported `NLNewton` keywords (`fast_convergence_cutoff`, `new_W_dt_cutoff`,
+`always_new`, `relax`, `predictor`) throw `ArgumentError` explaining why they are not
+honored.
 """
-struct LatticeNewton
-    max_iter::Union{Nothing, Int}
+struct LatticeNewton{K}
+    κ::K
+    max_iter::Int
     check_div::Bool
-    function LatticeNewton(max_iter, check_div)
-        max_iter === nothing || (max_iter isa Integer && !(max_iter isa Bool) && max_iter >= 1) ||
-            throw(ArgumentError("LatticeNewton: max_iter = $(repr(max_iter)) is the most Newton iterations per step, an integer ≥ 1 (or `nothing`: automatic)"))
+    function LatticeNewton(κ, max_iter, check_div)
+        κ isa Real && !(κ isa Bool) && isfinite(κ) && κ > 0 ||
+            throw(ArgumentError("LatticeNewton: κ = $(repr(κ)) must be a finite positive number"))
+        max_iter isa Integer && !(max_iter isa Bool) && max_iter >= 1 ||
+            throw(ArgumentError("LatticeNewton: max_iter = $(repr(max_iter)) is the most Newton iterations per step, an integer ≥ 1 (leave `nlsolve = nothing` on the solver algorithm for the automatic count)"))
         check_div isa Bool ||
             throw(ArgumentError("LatticeNewton: check_div = $(repr(check_div)) must be a Bool (`true` or `false`)"))
-        return new(max_iter === nothing ? nothing : Int(max_iter), check_div)
+        return new{typeof(κ)}(κ, Int(max_iter), check_div)
     end
 end
-function LatticeNewton(; max_iter = nothing, check_div = true, kw...)
+function LatticeNewton(; κ = 1 // 100, max_iter = 10, check_div = true, kw...)
     if !isempty(kw)
         reasons = String[]
         for k in keys(kw)
-            if k === :κ
-                push!(reasons, "`κ` is defined on the integrator's error norm, which fixed-step owned steppers do not have")
-            elseif k in (:fast_convergence_cutoff, :new_W_dt_cutoff, :always_new, :relax, :predictor)
+            if k in (:fast_convergence_cutoff, :new_W_dt_cutoff, :always_new, :relax, :predictor)
                 push!(reasons, "`$k` drives OrdinaryDiffEq's adaptive host loop with host waits and step-size control, which no-wait fixed-step owned steppers do not use")
             else
                 push!(reasons, "unknown keyword `$k`")
@@ -174,16 +179,20 @@ function LatticeNewton(; max_iter = nothing, check_div = true, kw...)
                 string(
                     "LatticeNewton: unsupported keyword", length(kw) == 1 ? "" : "s", " ",
                     join(("`$k`" for k in keys(kw)), ", "), ": ", join(reasons, "; "),
-                    "; honored keywords are `max_iter` and `check_div`"
+                    "; honored keywords are `κ`, `max_iter`, and `check_div`"
                 )
             )
         )
     end
-    return LatticeNewton(max_iter, check_div)
+    return LatticeNewton(κ, max_iter, check_div)
 end
+Base.:(==)(a::LatticeNewton, b::LatticeNewton) =
+    a.κ == b.κ && a.max_iter == b.max_iter && a.check_div == b.check_div
+Base.hash(a::LatticeNewton, h::UInt) = hash((a.κ, a.max_iter, a.check_div), hash(:LatticeNewton, h))
 function Base.show(io::IO, n::LatticeNewton)
     kw = String[]
-    n.max_iter === nothing || push!(kw, string("max_iter = ", repr(n.max_iter)))
+    n.κ == 1 // 100 || push!(kw, string("κ = ", repr(n.κ)))
+    n.max_iter == 10 || push!(kw, string("max_iter = ", repr(n.max_iter)))
     n.check_div || push!(kw, "check_div = false")
     return isempty(kw) ? print(io, "LatticeNewton()") : print(io, "LatticeNewton(; ", join(kw, ", "), ")")
 end
@@ -214,9 +223,10 @@ the operator has the lattice's six faces.
   result; it is no convergence test, so it counts no budget hit), more when a term stays out
   of the operator (a defect correction, `OperatorSpec`: advection, a cycle among the group's
   fields, a Robin face whose diagonal is negative, a second face coefficient of a scaled row),
-  enough for the bound of those terms, 4 when no bound sees one. `LatticeNewton(; max_iter = k)`
-  runs at most `k` iterations per substep, stops early once every row meets the Newton tolerance,
-  and ends with `ReturnCode.ConvergenceFailure` at the window end on a budget hit.
+  enough for the bound of those terms, 4 when no bound sees one. `LatticeNewton(; κ, max_iter, check_div)`
+  runs at most `max_iter` iterations per substep, stops early once every row meets the
+  `NLNewton` rate-scaled criterion (weighted by `abstol` and `reltol` from `solve`), and ends
+  with `ReturnCode.ConvergenceFailure` at the window end on a budget hit.
 - `lower_bound`: the clip `max(v, lower_bound)` after each substep (a positivity route; Backward Euler
   keeps nonnegative data nonnegative on M-matrix rows, so it is rarely needed).
 - `linsolve`: the linear solver: `:auto` (`LatticePCG()` with one V(2,2) cycle, `maxiters = 8`),
@@ -266,7 +276,7 @@ function _implicit_keywords(w, substeps, nlsolve, lower_bound, linsolve, solver_
         throw(
         ArgumentError(
             string(
-                "$w: nlsolve = $(repr(nlsolve)) must be `nothing` (automatic) or a `LatticeNewton(; max_iter, check_div)`",
+                "$w: nlsolve = $(repr(nlsolve)) must be `nothing` (automatic) or a `LatticeNewton(; κ, max_iter, check_div)`",
                 nlsolve isa Integer && !(nlsolve isa Bool) ? "; give `nlsolve = LatticeNewton(; max_iter = $(Int(nlsolve)))`" : ""
             )
         )
@@ -429,8 +439,9 @@ this way follows the inputs at once, as a steady field does.
 - `nlsolve`: [`LatticeNewton`](@ref) or `nothing`. `nothing` keeps the automatic count: 1 for a
   linear group whose operator is exact (one linear solve is the steady state), else 8 (a
   nonlinear or switched row, a term out of the operator), each checked on the device.
-  `LatticeNewton(; max_iter = k)` runs at most `k` iterations per window, stops early on
-  tolerance, and ends with `ReturnCode.ConvergenceFailure` on a budget hit.
+  `LatticeNewton(; κ, max_iter, check_div)` runs at most `max_iter` iterations per window,
+  stops early on the `NLNewton` rate-scaled tolerance, and ends with
+  `ReturnCode.ConvergenceFailure` on a budget hit.
 - `linsolve`, `solver_type`, `compute_type`: as for [`BackwardEuler`](@ref).
 - `init = :steady`: the initial state too is the steady state (one more solve before the first
   window, as for [`BackwardEuler`](@ref)); without it the state at the start time is the initial
@@ -744,7 +755,7 @@ function canonical(m::LatticeMultigrid)
     )
 end
 canonical(b::LatticeBlockSolve) = string("LatticeBlockSolve(linsolve=", canonical(b.linsolve), ")")
-canonical(n::LatticeNewton) = string("LatticeNewton(max_iter=", canonical(n.max_iter), ",check_div=", n.check_div, ")")
+canonical(n::LatticeNewton) = string("LatticeNewton(κ=", canonical(n.κ), ",max_iter=", canonical(n.max_iter), ",check_div=", n.check_div, ")")
 canonical(s::Symbol) = repr(s)
 canonical(::Nothing) = "nothing"
 canonical(x::Union{Number, AbstractString}) = repr(x)

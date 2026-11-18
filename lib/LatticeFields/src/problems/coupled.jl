@@ -288,13 +288,15 @@ scalars (device), their host copy, the `budget`, `rtol`, whether the group is li
 state, `mkpres`, which binds the perturbed residual launches at new parameters (a rebind), and
 a nonlinear steady group's pending growth check (`pending`, `σ`, `keys`).
 """
-mutable struct CoupledKrylov{RS, WK, OP, PC, WS, A, S, H, L}
+mutable struct CoupledKrylov{RS, WK, OP, PC, WS, A, CT, S, H, L}
     rows::RS
     walk::WK
     A::OP
     P::PC
     ws::WS
     part::A
+    cnt::CT
+    hist::A
     nbt::Int
     scal::S
     hscal::H
@@ -366,7 +368,8 @@ const STEADY_GMRES = LatticeGMRES(; gmres_restart = 30, maxiters = 240)
 # `sps`, the slot sets `rcurs` per row), `kr` its `LatticeGMRES`
 function _bind_coupled(
         rows, kr::LatticeGMRES, st::FieldStore, s::Program, rs::Program, rst::FieldStore, sps, rcurss,
-        swaps, keys, init, backend, p, c, op::OperatorSpec, alg)
+        swaps, keys, init, backend, p, c, op::OperatorSpec, alg, auto_newton::Bool = true
+    )
     K = mapreduce(r -> eltype(r.resarr), promote_type, rows)
     for r in rows
         eltype(r.bufs[1]) === Float16 && throw(ArgumentError(string(_algname(alg), ": the fields ", join(("`$k`" for k in keys), ", "),
@@ -423,8 +426,10 @@ function _bind_coupled(
     lin = CommonSolve.init(SciMLBase.LinearProblem(A, b; u0), kr)
     P, ws = lin.Pr, lin.cacheval
     m = min(kr.gmres_restart, kr.maxiters)
+    hist = _zeros(st.backend, K, 4)
+    auto_newton || Exec.launch!(backend, _reset_hist_body!, 1, (hist,))
     return CoupledKrylov(
-        rws, walk, A, P, ws, _zeros(st.backend, K, off), off, scal, zeros(K, GM_SCALARS), m, kr.maxiters,
+        rws, walk, A, P, ws, _zeros(st.backend, K, off), _zeros(st.backend, UInt32, off), hist, off, scal, zeros(K, GM_SCALARS), m, kr.maxiters,
         kr.reltol, linear, mkpres, 0, 1.0, collect(String, keys), lin
     )
 end
@@ -486,7 +491,7 @@ end
 # masks and clip, and with `check` the Newton check of iteration `it` (a steady group: no real
 # reduction is cause 64)
 function (cr::CoupledRow)(o::_CsOp{:update})
-    (x, par, first, last, check, it, hits, window, steady, word, backend, checkdiv, failbudget, gate) = o.a
+    (x, par, first, last, check, it, hits, window, steady, word, backend, checkdiv, failbudget, gate, auto, part, cnt, atol, rtol) = o.a
     r = cr.row
     dst = r.bufs[3 - par]
     src = first ? r.bufs[par] : dst
@@ -495,13 +500,19 @@ function (cr::CoupledRow)(o::_CsOp{:update})
     Exec.launch!(backend, _be_update_body!, n, (dst, src, δ, nothing, nothing, nothing, nothing, r.mask, r.mval, r.mvf, r.lo, last, gate))
     check || return nothing
     nb = cld(n, NB)
-    T = eltype(r.part)
-    Exec.launch!(backend, _be_norms_body!, nb, (r.part, dst, r.bufs[par], δ, nothing, nothing, nothing, nothing, r.mask, n, gate))
-    fl = eltype(dst) === Float16 ? T(10 * eps(T) + 2 * eps(Float16)) : T(10 * eps(T))
-    Exec.launch!(backend, _be_newton_body!, 1, (word, r.part, Int32(nb), r.hist, Int32(it), hits, T(NEWTON_EPS), fl, window,
-            steady, UInt32(64), checkdiv, failbudget,
+    if auto
+        T = eltype(r.part)
+        Exec.launch!(backend, _be_norms_body!, nb, (r.part, dst, r.bufs[par], δ, nothing, nothing, nothing, nothing, r.mask, n, gate))
+        fl = eltype(dst) === Float16 ? T(10 * eps(T) + 2 * eps(Float16)) : T(10 * eps(T))
+        Exec.launch!(
+            backend, _be_newton_body!, 1, (
+                word, r.part, Int32(nb), r.hist, Int32(it), hits, T(NEWTON_EPS), fl, window,
+                steady, UInt32(64), checkdiv, failbudget,
+            )
         )
-    )
+    else
+        Exec.launch!(backend, _be_kappa_norms_body!, nb, (part, cnt, cr.off, dst, r.bufs[par], δ, nothing, nothing, nothing, nothing, r.mask, r.dom, atol, rtol, n, gate))
+    end
     return nothing
 end
 
@@ -533,7 +544,7 @@ struct _CsStop end
 # status, every row's update and check. `a` as the rows' iteration (`(par, first, t1, h, k, last,
 # window, backend, γ, word, it, check, hits, gate)`).
 function _coupled_iteration!(cs::CoupledKrylov, c, a)
-    par, first, t1, h, k, last, window, backend, _, word, it, check, hits, gate, checkdiv, failbudget = a
+    par, first, t1, h, k, last, window, backend, _, word, it, check, hits, gate, checkdiv, failbudget, auto, κ, abstol, reltol = a
     rows, walk, A, scal, ws = cs.rows, cs.walk, cs.A, cs.scal, cs.ws
     K = eltype(scal)
     steady = isinf(h)
@@ -568,7 +579,15 @@ function _coupled_iteration!(cs::CoupledKrylov, c, a)
         copyto!(scal, 1, hs, 1, _GM_TOL)
     end
     Exec.launch!(backend, _cs_status_body!, 1, (word, scal, Int32(window), steady, gate))
-    walk(rows, _csop(:update, (ws.x.a, par, first, last, check, it, hits, window, steady, word, backend, checkdiv, failbudget, gate)))
+    walk(rows, _csop(:update, (ws.x.a, par, first, last, check, it, hits, window, steady, word, backend, checkdiv, failbudget, gate, auto, cs.part, cs.cnt, K(abstol), K(reltol))))
+    if check && !auto
+        Exec.launch!(
+            backend, _be_kappa_newton_body!, 1, (
+                word, cs.part, cs.cnt, Int32(cs.nbt), cs.hist, Int32(it), hits, K(κ),
+                window, steady, UInt32(64), checkdiv, failbudget, gate, UInt32(length(rows)),
+            )
+        )
+    end
     return nothing
 end
 

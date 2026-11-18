@@ -947,7 +947,8 @@ at-init evaluation of the `aux:` kernels, `n = 0`); by default the fields' own k
 """
 function bind_group(g::FieldGroup, alg, st::FieldStore, p; fields = g.spec.state, n::Integer, dt::Real,
         c, ends_in::Symbol = :parity, backend, options::CompileOptions, V::Type, host = nothing, kernels = nothing,
-        shared = nothing)
+        shared = nothing, abstol = 1 // 10^6, reltol = 1 // 10^3
+    )
     ends_in in (:parity, :slot1) || throw(ArgumentError("ends_in must be :parity or :slot1; got $(repr(ends_in))"))
     prog = group_program(g, alg)
     check_backend_float64(prog, alg, backend, V; fields)
@@ -966,7 +967,8 @@ function bind_group(g::FieldGroup, alg, st::FieldStore, p; fields = g.spec.state
     return GroupRuntime(st, alg, ip, sp, steps, masks, clamps, stepclamps, swaps, copies, ends_in, all_state, collect(String, fields), Int(n),
         Float64(dt), stab, p, c, prog, backend,
         bind_cache(alg, g, st, p; fields = collect(String, fields), n, dt, c, backend, options, V,
-            (shared === nothing ? (;) : (; shared))...), SciMLBase.ReturnCode.Success,
+            abstol, reltol, (shared === nothing ? (;) : (; shared))...
+        ), SciMLBase.ReturnCode.Success,
         nothing, host,
         StatusTotals(), _declared_checks(stab, st, prog, fields),
         alg isa ExplicitEuler && reads_time(stab) ? g.spec : nothing)
