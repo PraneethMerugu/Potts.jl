@@ -271,9 +271,9 @@ end
     end
         p = bown(bsys([D(bce) ~ bD * laplacian(bce)], [bc(0, x, y) ~ x], [bD]))
         # M1: a linear solver where a field solver goes names `BackwardEuler(; linsolve = …)`, which works
-        m = e(() -> solve(p, DevicePCG(; maxiters = 12)))
-        @test occursin("give it to one, `BackwardEuler(; linsolve = DevicePCG(; maxiters = 12))`", m)
-        @test solve(p, BackwardEuler(; linsolve = DevicePCG(; maxiters = 12)); dt = 0.01).retcode == ReturnCode.Success
+        m = e(() -> solve(p, LatticePCG(; maxiters = 12)))
+        @test occursin("give it to one, `BackwardEuler(; linsolve = LatticePCG(; maxiters = 12))`", m)
+        @test solve(p, BackwardEuler(; linsolve = LatticePCG(; maxiters = 12)); dt = 0.01).retcode == ReturnCode.Success
         m = e(() -> ExplicitEuler(; linsolve = Multigrid()))
         @test occursin("give it to an implicit field solver, `BackwardEuler(; linsolve = Multigrid())`", m)
         @test solve(p, BackwardEuler(; linsolve = Multigrid()); dt = 0.01).retcode == ReturnCode.Success
@@ -281,8 +281,8 @@ end
         po = discretize(
             bsys([D(bce) ~ bD * laplacian(bce)], [bc(0, x, y) ~ x], [bD]; dvs = [bce]),
         LatticeDiscretization(Grid(BDIMS); T = Float64))
-    m = e(() -> solve(po, DevicePCG()))
-        @test occursin("give it to one, `BackwardEuler(; linsolve = DevicePCG())`", m)
+    m = e(() -> solve(po, LatticePCG()))
+        @test occursin("give it to one, `BackwardEuler(; linsolve = LatticePCG())`", m)
     # (F4-01: the field solvers step the problem `discretize` returns; base: refused, "discretize
     # with `LatticeDiscretization(…; problem = :owned)`")
         @test init(po, BackwardEuler(); dt = 0.1).sol.t == [0.0]
@@ -291,13 +291,13 @@ end
         for (f, want) in (
                 (() -> BackwardEuler(; newton = 0), "BackwardEuler: newton = 0 is the Newton iterations"),
             (() -> BackwardEuler(; substeps = true), "BackwardEuler: substeps = true must be an integer ≥ 1"),
-                (() -> BackwardEuler(; linsolve = :pcg), "BackwardEuler: `linsolve` takes `:auto`, a `DevicePCG(…)` or a `Multigrid(…)`"),
+                (() -> BackwardEuler(; linsolve = :pcg), "BackwardEuler: `linsolve` takes `:auto`, a `LatticePCG(…)` or a `Multigrid(…)`"),
                 (() -> BackwardEuler(; solver_type = BigFloat), "BackwardEuler: `solver_type` takes `:auto`"),
                 (() -> BackwardEuler(; theta = 1), "BackwardEuler: no keyword `theta`; its keywords are `substeps`, `newton`, `lower_bound`, `linsolve`, `solver_type`, `init` and `compute_type`"),
             )
         @test startswith(e(f), want) || (println("MSG: ", e(f)); false)
     end
-        a = BackwardEuler(; newton = 2, linsolve = DevicePCG(; maxiters = 12))
+        a = BackwardEuler(; newton = 2, linsolve = LatticePCG(; maxiters = 12))
     @test eval(Meta.parse(repr(a))) == a
     # a map group has no implicit operator
     pm = discretize(PDESystem([Shift(t, 1)(bce) ~ 0.5 * bce], [bc(0, x, y) ~ x], bdom(), [t, x, y], [bce], Any[]; name = :m),

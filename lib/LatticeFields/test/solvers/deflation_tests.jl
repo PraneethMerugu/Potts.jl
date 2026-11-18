@@ -69,7 +69,7 @@ end
 @testitem "linsolve = :auto: PCG with deflation on unanchored groups" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
     @testset "linsolve = :auto: PCG with deflation on unanchored groups" begin
     per, disk = periodic_case(64, 64; s = 1e-3), named_case("disk128", 0.022)
-    @test resolve_inner(per[1], :auto) isa DevicePCG && deflatable(per[1])
+    @test resolve_inner(per[1], :auto) isa LatticePCG && deflatable(per[1])
     @test !deflatable(disk[1]) && !deflatable(named_case("box128", 5.5e-6)[1])
     sv = case_solver(per, Float32)
     @test sv.deflate && solution_key(sv) == "pcg.u"

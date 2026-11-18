@@ -377,7 +377,7 @@ end
         s = solve(p, WStub(; code = 1, at = 3); dt = 0.01, saveat = 0.05)
         @test s.retcode == ReturnCode.StalledSuccess && s.t[end] ≈ 0.1
         # a linear budget count warns once with the route, stays `Success`; the route removes it
-        s = @test_logs (:warn, r"the linear solve reached its budget 1 time so far.*Success.*`linsolve = DevicePCG\(; maxiters = n\)`") solve(
+        s = @test_logs (:warn, r"the linear solve reached its budget 1 time so far.*Success.*`linsolve = LatticePCG\(; maxiters = n\)`") solve(
             p,
             WStub(; need = 10, budget = 8);
             dt = 0.01
@@ -427,7 +427,7 @@ end
         # `init` binds the groups behind a barrier (its return type is not inferred); the
         # integrator it returns steps and runs with inferred types, explicit and implicit (the
         # solution, SciML's `ODESolution`, is built behind a barrier: F4-04)
-        for alg in (a4, BackwardEuler(; newton = 30, linsolve = DevicePCG(; reltol = 1.0e-12, maxiters = 64)))
+        for alg in (a4, BackwardEuler(; newton = 30, linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64)))
             ig = init(p, alg; dt = 0.01)
             @inferred step!(ig)
             @test (@inferred LFP.finish!(ig)) === ig && solve!(ig).retcode == ReturnCode.Success

@@ -73,7 +73,7 @@ function hex_system(op::CellOperator{2}, inp)
     return A, b, cells
 end
 
-function hex_solver(op, inp; linsolve = DevicePCG(; maxiters = 64, reltol = 1.0e-12), T = Float64, kw...)
+function hex_solver(op, inp; linsolve = LatticePCG(; maxiters = 64, reltol = 1.0e-12), T = Float64, kw...)
     sv = FieldSolver(HostExec(), op; T, linsolve, kw...)
     for (k, v) in inp
         copyto!(field(sv, k), v)
@@ -142,7 +142,7 @@ using .LF_solvers_hex: fd
     # Float32: to the Float32 level
     op, inp = hex_case((16, 12))
     @test hex_vs_hand(op, Dict(k => (v isa Vector{Float64} ? Float32.(v) : v) for (k, v) in inp); T = Float32,
-            linsolve = DevicePCG(; reltol = 1.0e-6)
+            linsolve = LatticePCG(; reltol = 1.0e-6)
         )[1] < 1.0e-4
     # numbers on every face: an unmasked periodic group deflates its constant mode
     op = CellOperator((12, 10); hex = true, periodic = (true, true), face = (1.0, 2.0, 0.5), shift = 0.01)

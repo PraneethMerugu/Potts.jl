@@ -1,6 +1,6 @@
 # F3-12d: the coupled steady solve. A QuasiSteady group whose fields read one another (a cycle,
 # a cross diffusion `D laplacian(o)`, a nonlinear cross term such as `c²`) solves its rows together:
-# each Newton iteration is one restarted flexible GMRES solve (`DeviceGMRES`) of the whole
+# each Newton iteration is one restarted flexible GMRES solve (`LatticeGMRES`) of the whole
 # Jacobian of the group's residual, preconditioned by each field's own multigrid solve. Every
 # testset checks against an oracle that does not use the solver: the dense steady Jacobian of
 # the `:ode` rate (assembled by columns), an exact solution, or a dense split recursion.
@@ -8,7 +8,7 @@
 # `ConvergenceFailure` (block iteration ratio ≈ k/√(δμ) = 15.8, 1.6), the N5 rows warn
 # (`newton = 40`), the feedback loop is refused ("reads the steady field … of the loop"), the
 # indefinite pair is accepted (each row decays) and diverges, the strong `init = :steady` loop
-# fails at t = 0, and `DeviceGMRES` is not defined.
+# fails at t = 0, and `LatticeGMRES` is not defined.
 
 @testsetup module LP_coupled
 using Test, LatticePDE
@@ -62,21 +62,21 @@ end
         ig = init(cown(q1(0.1, 5.0)), QuasiSteady(); dt = 0.1, save_end = false, save_everystep = false)
     @test bwarm(ig) == 0
     # the solve's words: a budget hit names the GMRES budget; `show`, the keywords
-        r = @test_logs (:warn, r"the linear solve reached its budget .*`linsolve = DeviceGMRES\(; maxiters = n\)`") match_mode = :any solve(
-            cown(q1(0.1, 5.0)), QuasiSteady(; linsolve = DeviceGMRES(; maxiters = 2)); dt = 0.1
+        r = @test_logs (:warn, r"the linear solve reached its budget .*`linsolve = LatticeGMRES\(; maxiters = n\)`") match_mode = :any solve(
+            cown(q1(0.1, 5.0)), QuasiSteady(; linsolve = LatticeGMRES(; maxiters = 2)); dt = 0.1
         )
     @test r.retcode == ReturnCode.Success
-        g = DeviceGMRES(; gmres_restart = 8, maxiters = 40, reltol = 1.0e-8, precond = DevicePCG(; maxiters = 3))
+        g = LatticeGMRES(; gmres_restart = 8, maxiters = 40, reltol = 1.0e-8, precs = LatticeBlockSolve(LatticePCG(; maxiters = 3)))
     @test eval(Meta.parse(repr(g))) == g
-        @test !occursin("maxiters", repr(DeviceGMRES()))               # a default stays out of the display
-        @test startswith(cmsg(() -> DeviceGMRES(; gmres_restart = 1)), "`DeviceGMRES(; gmres_restart = 1)`: `gmres_restart` is the Krylov basis size")
-        @test startswith(cmsg(() -> DeviceGMRES(; maxiters = 0)), "`DeviceGMRES(; maxiters = 0)`: `maxiters` is the most GMRES iterations")
-        @test startswith(cmsg(() -> DeviceGMRES(; reltol = -1.0)), "`DeviceGMRES(; reltol = -1.0)`: `reltol` is the relative residual")
-    @test startswith(cmsg(() -> DeviceGMRES(; precond = :pcg)), "`DeviceGMRES(; precond = :pcg)`: `precond` is each field's solve")
+        @test !occursin("maxiters", repr(LatticeGMRES()))               # a default stays out of the display
+        @test startswith(cmsg(() -> LatticeGMRES(; gmres_restart = 1)), "`LatticeGMRES(; gmres_restart = 1)`: `gmres_restart` is the Krylov basis size")
+        @test startswith(cmsg(() -> LatticeGMRES(; maxiters = 0)), "`LatticeGMRES(; maxiters = 0)`: `maxiters` is the most GMRES iterations")
+        @test startswith(cmsg(() -> LatticeGMRES(; reltol = -1.0)), "`LatticeGMRES(; reltol = -1.0)`: `reltol` is the relative residual")
+    @test startswith(cmsg(() -> LatticeBlockSolve(:pcg)), "`LatticeBlockSolve(:pcg)`: the block preconditioner solves each field with")
     op = LSB.CellOperator((8, 8); shift = 1.0)
         @test occursin(
-            "solves an implicit group's fields together (F3-12d); a `FieldSolver` solves one field: give it the `DeviceGMRES`'s per-field solver, `linsolve = DevicePCG(; maxiters = 2)`",
-            cmsg(() -> LSB.FieldSolver(KernelAbstractions.CPU(), op; linsolve = DeviceGMRES()))
+            "solves an implicit group's fields together (F3-12d); a `FieldSolver` solves one field: give it the `LatticeGMRES`'s per-field solver, `linsolve = LatticePCG(; maxiters = 2)`",
+            cmsg(() -> LSB.FieldSolver(KernelAbstractions.CPU(), op; linsolve = LatticeGMRES()))
         )
 end
 end
@@ -244,17 +244,17 @@ end
 end
 end
 
-@testitem "F3-12d r1 (user ruling 2026-11-03): the time steppers refuse `linsolve = DeviceGMRES(…)`, with the default route" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
-    @testset "F3-12d r1 (user ruling 2026-11-03): the time steppers refuse `linsolve = DeviceGMRES(…)`, with the default route" begin
+@testitem "F3-12d r1 (user ruling 2026-11-03): the time steppers refuse `linsolve = LatticeGMRES(…)`, with the default route" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
+    @testset "F3-12d r1 (user ruling 2026-11-03): the time steppers refuse `linsolve = LatticeGMRES(…)`, with the default route" begin
         # it was slower than the default linear solver in every case measured (~/lpwork/f312d-g1.txt)
     for A in (BackwardEuler, CrankNicolson, BDF2)
-            m = cmsg(() -> A(; linsolve = DeviceGMRES()))
-            @test startswith(m, "$(nameof(A)): `linsolve = DeviceGMRES(") &&
+            m = cmsg(() -> A(; linsolve = LatticeGMRES()))
+            @test startswith(m, "$(nameof(A)): `linsolve = LatticeGMRES(") &&
               occursin("is the solver of a coupled steady group (`QuasiSteady`, whose fields read one another)", m) &&
-                endswith(m, "leave `linsolve` out, or give `linsolve = DevicePCG(; maxiters = n)`") || (println("r1 S2 ", m); false)
-            @test A(; linsolve = DevicePCG(; maxiters = 12)) isa A                  # (the route)
+                endswith(m, "leave `linsolve` out, or give `linsolve = LatticePCG(; maxiters = n)`") || (println("r1 S2 ", m); false)
+            @test A(; linsolve = LatticePCG(; maxiters = 12)) isa A                  # (the route)
     end
-        @test QuasiSteady(; linsolve = DeviceGMRES()).linsolve isa DeviceGMRES
+        @test QuasiSteady(; linsolve = LatticeGMRES()).linsolve isa LatticeGMRES
 end
 end
 

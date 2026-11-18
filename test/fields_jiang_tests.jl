@@ -138,7 +138,7 @@ end
         # NEWTON_EPS relative to the field's scale, so the tight-inner two-step solve and the
         # 12-step reference agree to that accepted defect (the assertion and its derivation are
         # below; the measured residual is ~1e-15 on 1.12.6, 6.4e-8 under 1.13.3)
-        tight = Potts.LatticePDE.DevicePCG(; reltol = 1.0e-12, maxiters = 64)
+        tight = Potts.LatticePDE.LatticePCG(; reltol = 1.0e-12, maxiters = 64)
         a2 = @test_logs min_level = Base.CoreLogging.Warn run(BackwardEuler(; linsolve = tight))
         @test only(a2.runtimes).cache.newton == 2
         @test Potts.SciMLBase.check_error(a2) == Potts.SciMLBase.ReturnCode.Success   # healthy, in progress

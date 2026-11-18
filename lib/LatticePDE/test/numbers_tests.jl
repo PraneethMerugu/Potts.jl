@@ -414,10 +414,10 @@ end
             (BackwardEuler(), BackwardEuler(), BackwardEuler(; substeps = 2), true),
             (CrankNicolson(), CrankNicolson(), CrankNicolson(; newton = 2), true),
             (BDF2(), BDF2(), BDF2(; substeps = 2), true),
-            (QuasiSteady(), QuasiSteady(), QuasiSteady(; linsolve = DeviceGMRES()), true),
-            (DevicePCG(), DevicePCG(), DevicePCG(; maxiters = 3), true),
+            (QuasiSteady(), QuasiSteady(), QuasiSteady(; linsolve = LatticeGMRES()), true),
+            (LatticePCG(), LatticePCG(), LatticePCG(; maxiters = 3), true),
             (Multigrid(), Multigrid(), Multigrid(; cycles = 3), true),
-            (DeviceGMRES(), DeviceGMRES(), DeviceGMRES(; gmres_restart = 8), true),
+            (LatticeGMRES(), LatticeGMRES(), LatticeGMRES(; gmres_restart = 8), true),
         ]
         for (a, b, c, hasdefaults) in canon_cases
             @test isequal(a, b) && LFP.canonical(a) == LFP.canonical(b)
@@ -556,7 +556,7 @@ end
             )
         )
         for s in (kt, Dt, gt)
-            @test tok(tad(cp, QuasiSteady(; linsolve = DeviceGMRES(; reltol = 1.0e-12)), s; out = sol -> sol[tae, end] .^ 2, dt = 0.1)...)   # (a sum of `a` alone does not see D: zero flux)
+            @test tok(tad(cp, QuasiSteady(; linsolve = LatticeGMRES(; reltol = 1.0e-12)), s; out = sol -> sol[tae, end] .^ 2, dt = 0.1)...)   # (a sum of `a` alone does not see D: zero flux)
         end
     end
 end

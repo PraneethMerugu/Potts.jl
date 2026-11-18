@@ -506,7 +506,7 @@ pgpu == "rocm" && @testset "F3-21a: Dual results on $pgpu equal the host's" begi
         ddom, [t, x, y], [dae, dbe], [kd, Dd, gd]; name = :dc)
         for (sys, alg, v) in (
                 (mr, BackwardEuler(), ce), (mr, CrankNicolson(), ce),
-                (cp, QuasiSteady(; linsolve = DeviceGMRES(; reltol = 1.0e-12)), dae),
+                (cp, QuasiSteady(; linsolve = LatticeGMRES(; reltol = 1.0e-12)), dae),
             )
         u = map((KernelAbstractions.CPU(), PDEV)) do be
             pr = discretize(sys, LatticeDiscretization(Grid((16, 16)); T = Float64, backend = be))
@@ -527,7 +527,7 @@ end
 @testitem "F3-22: cross-grid operators on pgpu equal the host" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
 using .LP_device: fd, kron
 @testset "F3-22: cross-grid operators on $pgpu equal the host" begin
-        tight = DevicePCG(; reltol = 1.0f-6, maxiters = 64)
+        tight = LatticePCG(; reltol = 1.0f-6, maxiters = 64)
     for (name, op) in (("Δ", XOPS[1][2]), ("DivKGrad harmonic", XOPS[2][2]), ("Advect", XOPS[4][2]))
         p = xpair(op)
             for (pr, row) in ((p.cf, xu), (p.fc, xcc)), (alg, dt) in ((ExplicitEuler(; substeps = 1), 2.0f-3), (BackwardEuler(; substeps = 1, linsolve = tight), 1.0f-2))

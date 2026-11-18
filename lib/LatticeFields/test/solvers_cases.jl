@@ -4,7 +4,7 @@
 # masked islands, and a periodic box. Face coefficients 1, shift `s` (scaled form).
 
 using Random
-using LatticeFields.Solvers: CellOperator, FieldSolver, DevicePCG, Multigrid, VCycle, steady!,
+using LatticeFields.Solvers: CellOperator, FieldSolver, LatticePCG, LatticeMultigrid, LatticeBlockSolve, Multigrid, VCycle, steady!,
                              field, scalars, rebuild!, lift!, solve!, lkey, RuleWeights,
                              solution_key
 
@@ -104,7 +104,7 @@ undeflated by default, as in the reference implementation.
 """
 function counts(case, T; maxiter = 40, deflate = false)
     return (
-        steady!(case_solver(case, T; linsolve = DevicePCG(), deflate); maxiter),
+        steady!(case_solver(case, T; linsolve = LatticePCG(), deflate); maxiter),
         steady!(case_solver(case, T; linsolve = Multigrid()); maxiter),
     )
 end
@@ -173,7 +173,7 @@ function true_residual(sv, xs = field(sv, Solvers.solution_key(sv)))
     w = [Float64.(field(sv, lkey(0, "w$a"))) for a in 1:N]
     s = Float64.(field(sv, lkey(0, "s")) .+ field(sv, lkey(0, "sbox")) .+
                  field(sv, lkey(0, "sint")))
-    b = Float64.(field(sv, sv.alg isa DevicePCG ? "pcg.b" : lkey(0, "b")))
+    b = Float64.(field(sv, sv.alg isa LatticePCG ? "pcg.b" : lkey(0, "b")))
     x = Float64.(xs)
     CI, LI = CartesianIndices(d), LinearIndices(d)
     r = Float64[]

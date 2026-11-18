@@ -146,9 +146,9 @@ the operator has the lattice's six faces (F3-20).
   bitwise. `k ≥ 1` runs exactly `k`.
 - `lower_bound`: the clip `max(v, lower_bound)` after each substep (a positivity route; Backward Euler
   keeps nonnegative data nonnegative on M-matrix rows, so it is rarely needed).
-- `linsolve`: the linear solver: `:auto` (`DevicePCG()` with one V(2,2) cycle, `maxiters = 8`), a
-  `DevicePCG(…)` or a `Multigrid(…)` (each row's own solve, the terms out of its operator
-  corrected by the Newton iterations). `DeviceGMRES(…)` is `QuasiSteady`'s only (the coupled
+- `linsolve`: the linear solver: `:auto` (`LatticePCG()` with one V(2,2) cycle, `maxiters = 8`), a
+  `LatticePCG(…)` or a `Multigrid(…)` (each row's own solve, the terms out of its operator
+  corrected by the Newton iterations). `LatticeGMRES(…)` is `QuasiSteady`'s only (the coupled
   steady solve); a time stepper refuses it.
 - `solver_type`: the solver's number type, `:auto` (the state's), `Float32` or `Float64`.
 - `compute_type`: the number type the group's kernels (rate, residual, operator, update) compute
@@ -160,7 +160,7 @@ the operator has the lattice's six faces (F3-20).
   `lattice_storage = Float64`), naming the field and the routes.
 - `init = :steady`: before the first window (at `init`, and again at `reinit!`), solve the
   group's steady state `0 = r(u)` once with [`QuasiSteady`](@ref), from the initial state at the
-  start time and with this algorithm's `linsolve` and `solver_type` (`:auto` takes `DevicePCG` to
+  start time and with this algorithm's `linsolve` and `solver_type` (`:auto` takes `LatticePCG` to
   `reltol = 1e-6` within 64 iterations), then step from it. The steady state must exist and be
   unique, as for `QuasiSteady` (a growth or a field with no decay and no fixed value is refused);
   a steady solve that fails ends the run with `ReturnCode.ConvergenceFailure`. Every field
@@ -199,22 +199,22 @@ function _implicit_keywords(w, substeps, newton, lower_bound, linsolve, solver_t
                 "clips nothing or every value; leave `lower_bound` out for no clip)"
         )
     )
-    # (`DeviceGMRES` is the coupled steady solve's: on a time stepper it was slower in every case
+    # (`LatticeGMRES` is the coupled steady solve's: on a time stepper it was slower in every case
     # measured, F3-12d r1, user ruling 2026-11-03)
-    linsolve isa Solvers.DeviceGMRES && w != "QuasiSteady" && throw(
+    linsolve isa Solvers.LatticeGMRES && w != "QuasiSteady" && throw(
         ArgumentError(
             string(
                 w, ": `linsolve = ", repr(linsolve),
         "` is the solver of a coupled steady group (`QuasiSteady`, whose fields read one another); a time stepper ",
-                "solves each field with `DevicePCG(…)` (the default) or `Multigrid(…)`: leave `linsolve` out, or give ",
-                "`linsolve = DevicePCG(; maxiters = n)`"
+                "solves each field with `LatticePCG(…)` (the default) or `Multigrid(…)`: leave `linsolve` out, or give ",
+                "`linsolve = LatticePCG(; maxiters = n)`"
             )
         )
     )
-    linsolve === :auto || linsolve isa Solvers.DevicePCG || linsolve isa Solvers.Multigrid || linsolve isa Solvers.DeviceGMRES ||
+    linsolve === :auto || linsolve isa Solvers.LatticePCG || linsolve isa Solvers.Multigrid || linsolve isa Solvers.LatticeGMRES ||
         throw(
         ArgumentError(
-            "$w: `linsolve` takes `:auto`, a `DevicePCG(…)`" * (w == "QuasiSteady" ? ", a `Multigrid(…)` or a `DeviceGMRES(…)`" : " or a `Multigrid(…)`") * " (the " *
+            "$w: `linsolve` takes `:auto`, a `LatticePCG(…)`" * (w == "QuasiSteady" ? ", a `Multigrid(…)` or a `LatticeGMRES(…)`" : " or a `Multigrid(…)`") * " (the " *
                 "linear solver of each implicit step); got $(repr(linsolve))"
         )
     )
@@ -360,8 +360,8 @@ this way follows the inputs at once, as a steady field does.
 Steady rows that read one another (a cycle in the group, a cross diffusion `Δ(b)` in a's row,
 or a term the operator does not see, such as `c²` in `0 ~ q − c²`) are solved together: one
 Newton iteration solves all of them with every cross term in the operator, by a restarted
-flexible GMRES (`linsolve = DeviceGMRES(; gmres_restart = 20, maxiters = 60, reltol = 1e-6)`
-under `:auto`; a `DevicePCG` or `Multigrid` given here is its preconditioner), with each
+flexible GMRES (`linsolve = LatticeGMRES(; gmres_restart = 20, maxiters = 60, reltol = 1e-6)`
+under `:auto`; a `LatticePCG` or `Multigrid` given here is its preconditioner), with each
 row's own solve as the preconditioner. There is no gain limit: two steady fields in one
 `QuasiSteady` may read each other as strongly as their steady state allows. Give the fields of
 such a loop one `QuasiSteady`: two steady groups that read each other are lagged by a window,
@@ -548,10 +548,10 @@ step_retcode!(::Nothing, rt) = SciMLBase.ReturnCode.Success
 
 
 """
-The linear solvers (`Solvers.DevicePCG`, `Solvers.Multigrid`, `Solvers.DeviceGMRES`): the `linsolve` of an implicit
+The linear solvers (`Solvers.LatticePCG`, `Solvers.Multigrid`, `Solvers.LatticeGMRES`): the `linsolve` of an implicit
 field solver, never a field algorithm themselves.
 """
-const LinearSolver = Union{Solvers.DevicePCG, Solvers.Multigrid, Solvers.DeviceGMRES}
+const LinearSolver = Union{Solvers.LatticePCG, Solvers.Multigrid, Solvers.LatticeGMRES}
 
 """
     linear_solver_refusal(what, s, route) -> ArgumentError
@@ -634,7 +634,7 @@ SciMLBase.alg_order(g::FieldGroups) =
 """
     canonical(alg) -> String
 
-The one canonical text of a field algorithm (or of a solver part: `DevicePCG`, `Multigrid`,
+The one canonical text of a field algorithm (or of a solver part: `LatticePCG`, `Multigrid`,
 `VCycle`, `:auto`, a number), the text both front ends' fingerprints hash (F3 design §3.7): what
 the algorithm is, not the host object, so equal specifications built afresh print alike.
 `ExplicitEuler` prints `ExplicitEuler(substeps=…,lower_bound=…)`; another algorithm prints
@@ -652,8 +652,10 @@ canonical(m::ExplicitMap) = m.compute_type === :auto ? "ExplicitMap()" : string(
 canonical(g::FieldGroups) = string("FieldGroups(", join((string(k, "=", canonical(a)) for (k, a) in g.pairs), ","),
     ";default=", g.default === nothing ? "nothing" : canonical(g.default), ")")
 canonical(a::AbstractFieldAlgorithm) = _canonical_fields(a)
-canonical(s::Union{Solvers.DevicePCG, Solvers.Multigrid, Solvers.DeviceGMRES}) = _canonical_fields(s)
+canonical(s::Union{Solvers.LatticePCG, Solvers.Multigrid, Solvers.LatticeGMRES}) = _canonical_fields(s)
 canonical(v::Solvers.VCycle) = "VCycle($(v.nu1),$(v.nu2))"
+canonical(m::LatticeMultigrid) = string("LatticeMultigrid(cycle=", canonical(m.cycle), ",cycles=", m.cycles, ")")
+canonical(b::LatticeBlockSolve) = _canonical_fields(b)
 canonical(s::Symbol) = repr(s)
 canonical(::Nothing) = "nothing"
 canonical(x::Union{Number, AbstractString}) = repr(x)

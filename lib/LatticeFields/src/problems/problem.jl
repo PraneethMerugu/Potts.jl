@@ -878,7 +878,7 @@ end
 
 The steady solve of `alg`'s `init = :steady` (F3-12c, both front ends): `QuasiSteady` with
 `alg`'s `linsolve` and `solver_type` (and `newton` for a `QuasiSteady` group);
-`linsolve = :auto` takes `DevicePCG` to `reltol = 1e-6` within 64 iterations (`STEADY_INNER`), the
+`linsolve = :auto` takes `LatticePCG` to `reltol = 1e-6` within 64 iterations (`STEADY_INNER`), the
 host-checked steady solve of a system with no time.
 """
 steady_start(a) = QuasiSteady(;
@@ -1400,7 +1400,7 @@ end
 # A system with no time (F3 design §3.5, F3-12b): one steady solve from the cold `u0`, the
 # host-checked path of `init = :steady` (the inner solver to `reltol = 1e-6` within 64
 # iterations unless `linsolve` is given), returned as a one-state solution at t = 0
-const STEADY_INNER = Solvers.DevicePCG(; maxiters = 64)
+const STEADY_INNER = Solvers.LatticePCG(; maxiters = 64)
 function _steady_solve(prob::FieldProblem, alg::AbstractFieldAlgorithm; kw...)
     alg isa QuasiSteady || throw(ArgumentError(string(_algtext(alg), ": the system has no time (a steady system, ",
                 "solved once by `QuasiSteady`): `solve(prob)` or `solve(prob, QuasiSteady(; linsolve, newton))`"

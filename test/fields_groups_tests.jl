@@ -578,12 +578,12 @@ end
 end
 
 # F3-05 (F3 design §3.2): the solvers' inner algorithms are the same objects in both front ends
-# (`LatticeFields.Solvers`, made public): `DevicePCG` and `Multigrid` exported, `V` public.
-# Base (1079c4ff): neither Potts nor LatticePDE binds them (`UndefVarError: DevicePCG`).
+# (`LatticeFields.Solvers`, made public): `LatticePCG` and `Multigrid` exported, `V` public.
+# Base (1079c4ff): neither Potts nor LatticePDE binds them (`UndefVarError: LatticePCG`).
 @testitem "F3-05: the inner solvers in a model and in B" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
     @testset "F3-05: the inner solvers in a model and in B" begin
         S, LP = Potts.LatticeFields.Solvers, Potts.LatticePDE
-        for n in (:DevicePCG, :Multigrid)
+        for n in (:LatticePCG, :Multigrid)
             @test getfield(Potts, n) === getfield(LP, n) === getfield(S, n)
             @test Base.isexported(Potts, n) && Base.isexported(LP, n) && Base.ispublic(S, n)
         end
@@ -598,7 +598,7 @@ end
 # `FieldGroups` is refused in A's words (a linear solver, the `linsolve` of an implicit field
 # solver) with a route that works when followed. Base (9db10886, ~/lpwork/f3b2r1-nc-a.log, 4 of 7 fail;
 # the 3 that pass are the followed routes):
-# "`field_solver` takes a field solver (…); got DevicePCG(Multigrid(LatticeFields.Solvers.V(2,
+# "`field_solver` takes a field solver (…); got LatticePCG(Multigrid(LatticeFields.Solvers.V(2,
 # 2), nothing, 1.0e-6, nothing, 1.0e-6), 8, 1.0e-6)", the same positional text for `solvers`,
 # "is not a field algorithm" for `FieldGroups`, and a MethodError for `ExplicitEuler(; inner)`.
 @testitem "F3-05: a linear solver where a model takes a field solver" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
@@ -611,17 +611,17 @@ end
             err isa ArgumentError ? err.msg : sprint(showerror, err)
         end
         lin = "is a linear solver: it is the `linsolve` of an implicit field solver, not a field solver"
-        m = e(() -> mk(; field_solver = DevicePCG()))
-        @test startswith(m, "`field_solver`: `DevicePCG()` " * lin) && occursin("give `field_solver = ExplicitEuler()`", m)
+        m = e(() -> mk(; field_solver = LatticePCG()))
+        @test startswith(m, "`field_solver`: `LatticePCG()` " * lin) && occursin("give `field_solver = ExplicitEuler()`", m)
         @test solve(mk(; field_solver = ExplicitEuler()), SequentialCPM()).retcode == Potts.SciMLBase.ReturnCode.Success
         m = e(() -> mk(; solvers = [:c => Multigrid()]))
         @test startswith(m, "`solvers`: the field `c`: `Multigrid()` " * lin) && occursin("give `solvers = [c => ExplicitEuler()]`", m)
         @test solve(mk(; solvers = [:c => ExplicitEuler()]), SequentialCPM()).retcode == Potts.SciMLBase.ReturnCode.Success
-        m = e(() -> mk(; field_solver = FieldGroups(:c => DevicePCG())))
-        @test startswith(m, "FieldGroups: the field `c`: `DevicePCG()` " * lin) && occursin("give `c => ExplicitEuler(…)`", m)
+        m = e(() -> mk(; field_solver = FieldGroups(:c => LatticePCG())))
+        @test startswith(m, "FieldGroups: the field `c`: `LatticePCG()` " * lin) && occursin("give `c => ExplicitEuler(…)`", m)
         @test solve(mk(; field_solver = FieldGroups(:c => ExplicitEuler())), SequentialCPM()).retcode == Potts.SciMLBase.ReturnCode.Success
-        m = e(() -> ExplicitEuler(; linsolve = DevicePCG()))
-        @test startswith(m, "ExplicitEuler: `linsolve = DevicePCG()`: `linsolve` is a keyword of the implicit field solvers") &&
+        m = e(() -> ExplicitEuler(; linsolve = LatticePCG()))
+        @test startswith(m, "ExplicitEuler: `linsolve = LatticePCG()`: `linsolve` is a keyword of the implicit field solvers") &&
             occursin("leave `linsolve` out", m)
     end
 end

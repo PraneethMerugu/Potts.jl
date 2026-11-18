@@ -160,7 +160,7 @@ end
     using .LP_crossgrid: fd, kron
     @testset "implicit methods: the cross-grid term is exact in the operator (a dense step, no warning)" begin
         dt = 0.05
-        tight = DevicePCG(; reltol = 1.0e-12, maxiters = 64)
+        tight = LatticePCG(; reltol = 1.0e-12, maxiters = 64)
         mk(A) = A(; substeps = 1, linsolve = tight)
         Lc, Lu = xL2(4), xL2(16)
         c0 = vec([xctr(4)[i]^2 + xctr(4)[j] for i in 1:4, j in 1:4])
@@ -224,7 +224,7 @@ end
     using .LP_crossgrid: fd, kron
     @testset "a cycle across the grids is not in the operator: warned with the term as written, converges with newton = k" begin
         dt = 0.05
-        tight = DevicePCG(; reltol = 1.0e-12, maxiters = 64)
+        tight = LatticePCG(; reltol = 1.0e-12, maxiters = 64)
         Lc, Lu = xL2(4), xL2(16)
         c0 = vec([xctr(4)[i]^2 + xctr(4)[j] for i in 1:4, j in 1:4])
         u0 = vec([sin(5 * xctr(16)[i]) for i in 1:16, j in 1:16])
@@ -254,7 +254,7 @@ end
         # kernel, and the term is a source of the new `b` (newton = 1, no warning). An aux chain
         # `L2 ~ 2 L`, `L ~ laplacian(b)` reads `b` through both. Base 33e960cf~1: unseen, `newton = 4` and a warning
         dt = 0.05
-        tight = DevicePCG(; reltol = 1.0e-13, maxiters = 200)
+        tight = LatticePCG(; reltol = 1.0e-13, maxiters = 200)
         fa, fb, fL, fL2 = xfine(:xsa), xfine(:xsb), xfine(:xsL), xfine(:xsL2)
         Lu, Id = xL2(16), Matrix(1.0I, 256, 256)
         Ma = 0.1 * Lu - Id
@@ -308,7 +308,7 @@ end
         )
         tl = Test.TestLogger(min_level = Base.CoreLogging.Warn)
         Base.CoreLogging.with_logger(tl) do
-            solve(xown(sys, (16, 16)), BackwardEuler(; substeps = 1, linsolve = DevicePCG(; reltol = 1.0e-12, maxiters = 64)); dt = 0.002, saveat = [0.002])
+            solve(xown(sys, (16, 16)), BackwardEuler(; substeps = 1, linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64)); dt = 0.002, saveat = [0.002])
         end
         msgs = [string(r.message) for r in tl.logs]
         @test (occursin("`DivKGrad(xkc)` (in the rate of `xku`)", join(msgs)) && !occursin("var\"", join(msgs)) && !occursin("#2", join(msgs))) ||
@@ -350,7 +350,7 @@ end
 @testitem "F3-22: Duals: ∂/∂p of a cross-grid run against finite differences" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
     using .LP_crossgrid: fd, kron
     @testset "Duals: ∂/∂p of a cross-grid run against finite differences" begin
-        tight = DevicePCG(; reltol = 1.0e-13, maxiters = 64)
+        tight = LatticePCG(; reltol = 1.0e-13, maxiters = 64)
         pidx(prob, s) = LatticePDE.Problems.SII.parameter_index(prob, s)
         withp(p, i, val) = (q = collect(promote_type(eltype(p), typeof(val)), p); q[i] = val; q)
         s1 = PDESystem(

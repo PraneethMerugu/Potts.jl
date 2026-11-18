@@ -13,7 +13,7 @@ function cjac(sys, dims)
 end
 # (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
 cown(sys; dims = (8, 8), T = Float64) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims); T)))
-const CTIGHT = DeviceGMRES(; reltol = 1.0e-12, maxiters = 200)
+const CTIGHT = LatticeGMRES(; reltol = 1.0e-12, maxiters = 200)
 @variables ca(..) cb(..) cq(..) cz(..)
 const cae, cbe, cqe, cze = ca(t, x, y), cb(t, x, y), cq(t, x, y), cz(t, x, y)
 cmsg(f) = try

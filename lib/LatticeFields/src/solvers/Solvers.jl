@@ -10,8 +10,10 @@ The public interface (F3-05; the front ends' `linsolve = …` vocabulary and the
 building block): the operator `CellOperator` (faces, shift, masks with a value or a value
 field, face-Dirichlet and Robin faces), the solver `FieldSolver` with `rebuild!`, `lift!`,
 `solve!`, `steady!`, `tangent!`, `set_coefficients!`, the readers `field`, `solution_key`,
-`solver_solution`, `scalars`, `iterations`, `sentinel`, and the inner solvers `DevicePCG`, `DeviceGMRES`,
-`Multigrid`, `VCycle` (re-exported by Potts and LatticePDE). Messages name the user's field
+`solver_solution`, `scalars`, `iterations`, `sentinel`, and the inner solvers, LinearSolve.jl algorithms, `LatticePCG`,
+`LatticeGMRES`, `Multigrid`, `VCycle`, with the `precs` functions `LatticeMultigrid` and
+`LatticeBlockSolve` (re-exported by Potts and LatticePDE), and `BoundOperator`, a field's
+operator as a `LinearProblem`'s `A`. Messages name the user's field
 (`CellOperator(…; name)`).
 """
 module Solvers
@@ -29,14 +31,22 @@ using ..Compile: LOWERING, TIME_SLOT, CompileOptions, body_function, compile_ker
 using ..Schedule: Schedule, REDUCE_PHASES, WG, reduce_lds, reduction_blocks, supports
 using ..Exec: Exec
 using KernelAbstractions: KernelAbstractions as KA
+using LinearSolve: LinearSolve
+using SciMLBase: SciMLBase
+using CommonSolve: CommonSolve
+using LinearAlgebra: LinearAlgebra
+using Krylov: Krylov
+using SciMLOperators: SciMLOperators
 
-public CellOperator, FieldSolver, DevicePCG, DeviceGMRES, Multigrid, VCycle, RuleWeights, robin_parts, rebuild!,
+public CellOperator, FieldSolver, LatticePCG, LatticeGMRES, LatticeMultigrid, LatticeBlockSolve, BoundOperator,
+       Multigrid, VCycle, RuleWeights, robin_parts, rebuild!,
        lift!, solve!, steady!, tangent!, set_coefficients!, field, solution_key, solver_solution,
        scalars, iterations, sentinel
 
 include("levels.jl")
 include("kernels.jl")
 include("solve.jl")
+include("linearsolve.jl")
 include("exec.jl")
 
 end # module Solvers

@@ -167,9 +167,9 @@ end
         catch err
             err isa ArgumentError ? err.msg : sprint(showerror, err)
         end
-        m = e(() -> mk(; field_solver = DevicePCG()))
-        @test occursin("give it to one, `field_solver = BackwardEuler(; linsolve = DevicePCG())`", m)
-        @test solve(mk(; field_solver = BackwardEuler(; linsolve = DevicePCG())), SequentialCPM()).retcode == FiRC.Success
+        m = e(() -> mk(; field_solver = LatticePCG()))
+        @test occursin("give it to one, `field_solver = BackwardEuler(; linsolve = LatticePCG())`", m)
+        @test solve(mk(; field_solver = BackwardEuler(; linsolve = LatticePCG())), SequentialCPM()).retcode == FiRC.Success
         m = e(() -> mk(; solvers = [:c => Multigrid()]))
         @test occursin("give it to one, `solvers = [c => BackwardEuler(; linsolve = Multigrid())]`", m)
         @test solve(mk(; solvers = [:c => BackwardEuler(; linsolve = Multigrid())]), SequentialCPM()).retcode == FiRC.Success
@@ -199,7 +199,7 @@ end
         dims = (12, 10)
         n1, n2 = dims
         lin(i, j) = i + (j - 1) * n1
-        tight = BackwardEuler(; linsolve = DevicePCG(; reltol = 1.0e-12, maxiters = 64))
+        tight = BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64))
         for (M, K) in ((FiSiteM, y -> 1.0), (FiSiteK, y -> 1 + 0.05 * y))
             a, integ = fi_runA(M, fi_op(dims), 1; field_solver = tight)
             L, b = zeros(n1 * n2, n1 * n2), zeros(n1 * n2)
@@ -228,7 +228,7 @@ end
         # one MCS of length 0.2 in 4 substeps: c = Π_j 1/(1 + h(1 + 20 t_j)) (base: 0.49638, the
         # first substep's operator at every substep)
         s = solve(PottsProblem(FiTimed(; name = :f), [ownership => zeros(Int32, 8, 8), kind => Symbol[]], (0, 1);
-                field_solver = BackwardEuler(; substeps = 4, linsolve = DevicePCG(; reltol = 1.0e-13, maxiters = 200))
+                field_solver = BackwardEuler(; substeps = 4, linsolve = LatticePCG(; reltol = 1.0e-13, maxiters = 200))
             ), SequentialCPM()
         )
         h = 0.05
@@ -260,12 +260,12 @@ end
         # a Dirichlet face (axis 1 low), a Robin face (axis 2 low); a link leaving the box takes its
         # face's ghost (a diagonal link axis 1's when it leaves along axis 1); base: refused at discretize
         dims, k = (12, 10), 1
-        tight = BackwardEuler(; linsolve = DevicePCG(; reltol = 1.0e-12, maxiters = 64))
+        tight = BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64))
         a, integ = fi_runA(FiHexFace, fi_op(dims), k; field_solver = tight)
         bp = Potts.LatticePDE.discretize(Potts.fields(FiHexFace(; name = :f)),
             Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(dims; geometry = Potts.LatticeFields.IR.HEX);
                 T = Float64); u0 = [:c => zeros(dims)], tspan = (0, k), inputs = [])
-        @test a == (s -> [s[:c, i] for i in 2:length(s.t)])(Potts.LatticePDE.solve(bp, BackwardEuler(; linsolve = DevicePCG(; reltol = 1.0e-12, maxiters = 64)); dt = 1.0, saveat = 1.0))
+        @test a == (s -> [s[:c, i] for i in 2:length(s.t)])(Potts.LatticePDE.solve(bp, BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64)); dt = 1.0, saveat = 1.0))
         # the hand BE matrix (h = 1, the site (i, j) at (i − ½, j − ½))
         n1, n2 = dims
         lin(i, j) = i + (j - 1) * n1
@@ -327,7 +327,7 @@ end
 
 @testitem "F3-21b: BackwardEuler field derivatives and ForwardDiff.gradient against central differences" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
     @testset "F3-21b: BackwardEuler field derivatives and ForwardDiff.gradient against central differences" begin
-        tight = DevicePCG(; reltol = 1.0e-11, maxiters = 60)
+        tight = LatticePCG(; reltol = 1.0e-11, maxiters = 60)
         fi_check_dual_fd(BackwardEuler(; linsolve = tight), ((:Dc, 0.2), (:s, 0.5), (:kd, 0.1)))
         # several derivative parts at once (one chunk: one run), the computed `Dh` through `Dc`
         q(x) = fi_dq(fi_drun(BackwardEuler(; linsolve = tight), [:Dc => x[1], :s => x[2], :kd => x[3]]))
@@ -345,7 +345,7 @@ end
 
 @testitem "F3-21b: ExplicitEuler, CrankNicolson, BDF2, QuasiSteady field derivatives against central differences" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
     @testset "F3-21b: ExplicitEuler, CrankNicolson, BDF2, QuasiSteady field derivatives against central differences" begin
-        tight = DevicePCG(; reltol = 1.0e-11, maxiters = 60)
+        tight = LatticePCG(; reltol = 1.0e-11, maxiters = 60)
         for fs in (ExplicitEuler(), CrankNicolson(; linsolve = tight), BDF2(; linsolve = tight), QuasiSteady(; linsolve = tight))
             fi_check_dual_fd(fs, ((:Dc, 0.2),))
         end
@@ -354,7 +354,7 @@ end
 
 @testitem "F3-21b: multi-group and masked field derivatives against central differences" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
     @testset "F3-21b: multi-group and masked field derivatives against central differences" begin
-        tight = DevicePCG(; reltol = 1.0e-11, maxiters = 60)
+        tight = LatticePCG(; reltol = 1.0e-11, maxiters = 60)
         # a group reading another group's field: ∂w/∂ra through `u`'s twin, ∂w/∂rb in `w`'s own group
         two(ps) = solve(PottsProblem(FiDualTwo(; name = :m), [fi_dop(); ps], (0, 12); field_solver = ExplicitEuler(),
                 solvers = [:w => BackwardEuler(; linsolve = tight)], seed = 3
@@ -442,7 +442,7 @@ end
 # evaluated in Duals; no rebind of the shadow after a write.
 @testitem "F3-21b r1: initial values, parameter writes and CPM reads against central differences" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
     @testset "F3-21b r1: initial values, parameter writes and CPM reads against central differences" begin
-        tight = DevicePCG(; reltol = 1.0e-11, maxiters = 60)
+        tight = LatticePCG(; reltol = 1.0e-11, maxiters = 60)
         σ = zeros(Int32, 12, 10); σ[4:6, 3:5] .= 1
         msum(sol) = sum(FI_DW[1:12, 1:10] .* sol.u[end].site.c)
         mrun(fs, ops) = solve(PottsProblem(FiDualMask(; name = :m), vcat([ownership => σ, kind => [:A]], ops), (0, 6); field_solver = fs),

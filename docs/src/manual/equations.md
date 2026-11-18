@@ -252,10 +252,10 @@ sol[:q][end], sol[:g][end]
 | `ode_solver` | `ExplicitEuler(; substeps)`, `Potts.RK4(; substeps)`, `Adaptive(alg; kwargs...)` | `ExplicitEuler()`, one step per MCS |
 | `solvers` | `[x => solver, …]`, per variable or component | — |
 
-The linear solvers `DevicePCG(; maxiters, reltol, precond)`, `Multigrid(; cycle = (2, 2), cycles, reltol, maxiters)`
-and `DeviceGMRES(; gmres_restart, maxiters, reltol, precond)` are the `LatticeFields.Solvers` objects, the same in Potts and LatticePDE. They are the
+The linear solvers `LatticePCG(; precs = LatticeMultigrid(), maxiters, reltol)`, `Multigrid(; cycle = (2, 2), cycles, reltol, maxiters)`
+and `LatticeGMRES(; gmres_restart, maxiters, reltol, precs = LatticeBlockSolve())` are the `LatticeFields.Solvers` objects, the same in Potts and LatticePDE. They are the
 `linsolve` linear solver of the implicit field solvers:
-`field_solver = BackwardEuler(; linsolve = DevicePCG(; maxiters = 12))`. They are not field
+`field_solver = BackwardEuler(; linsolve = LatticePCG(; maxiters = 12))`. They are not field
 solvers themselves: `field_solver`, `solvers` and `FieldGroups` refuse them and give that
 route.
 
@@ -280,7 +280,7 @@ the sum of their bounds; advection with a constant velocity: `substeps ≥ 2 · 
 diffusion term that is at most half the one in the solve, face by face (with a multiplier in
 the solve that is positive everywhere), needs no extra substeps at all, only a few more
 Newton iterations. When these rules raise a `substeps = n` you gave, a warning says which
-rule and which terms. `DeviceGMRES` is not a time stepper's `linsolve` (it is the coupled steady
+rule and which terms. `LatticeGMRES` is not a time stepper's `linsolve` (it is the coupled steady
 solve's, below): on BackwardEuler, CrankNicolson and BDF2 it was slower in every case measured,
 so they refuse it. Each substep
 checks the Newton correction: a correction that does not reach the tolerance in `newton`
@@ -333,7 +333,7 @@ fields of one `QuasiSteady` that read one another (`0 ~ laplacian(a) - a + 0.5b`
 `0 ~ laplacian(b) - b - 0.5a`, a cross diffusion `laplacian(b)` in `a`'s row), and a row with a term the
 operator does not see (`c²` in `0 ~ q - c^2`), are solved together: one Newton iteration
 solves all their rows with every cross term in the operator, by a restarted GMRES
-(`DeviceGMRES()`; a `DevicePCG` or `Multigrid` given as `linsolve` is its preconditioner). There
+(`LatticeGMRES()`; a `LatticePCG` or `Multigrid` given as `linsolve` is its preconditioner). There
 is no gain limit inside one group. On a GPU this solve waits for each dot product of its GMRES
 (about 100–250 waits per MCS for a strong pair), where every other field solver waits for none;
 a model whose fields are not coupled this way keeps a GPU step free of waits. A coupled steady system whose slowest mode grows or is

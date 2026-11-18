@@ -30,7 +30,7 @@ end
         P, S = LF.Problems, LF.Solvers
         ctors = (
             P.ExplicitEuler, P.ExplicitMap, P.BackwardEuler, P.CrankNicolson, P.BDF2, P.QuasiSteady, P.FieldGroups,
-            S.DevicePCG, S.DeviceGMRES, S.Multigrid, LP.LatticeDiscretization,
+            S.LatticePCG, S.LatticeGMRES, S.Multigrid, LP.LatticeDiscretization,
         )
         kwargs(f) = unique!(reduce(vcat, (Base.kwarg_decl(m) for m in methods(f)); init = Symbol[]))
         for f in ctors
@@ -40,8 +40,8 @@ end
         end
         # the solver keywords have their SciML names; the window `dt` is a keyword of `solve`
         @test :linsolve in kwargs(P.BackwardEuler)
-        @test :maxiters in kwargs(S.DevicePCG) && :reltol in kwargs(S.DevicePCG)
-        @test :gmres_restart in kwargs(S.DeviceGMRES)
+        @test :maxiters in kwargs(S.LatticePCG) && :reltol in kwargs(S.LatticePCG)
+        @test :gmres_restart in kwargs(S.LatticeGMRES)
         @test :dt ∉ kwargs(P.ExplicitEuler)
     end
 end

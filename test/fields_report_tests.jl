@@ -168,7 +168,7 @@ end
         # a given Newton count and `linsolve = :auto`
         r = sprint(field_report, init(fr_prob(m; field_solver = BackwardEuler(; newton = 3)), SequentialCPM()))
         @test fr_line(r, "newton") == "  newton     3: given (`newton = 3`)"
-        @test startswith(fr_line(r, "linsolve"), "  linsolve   DevicePCG() (`linsolve = :auto`), multigrid levels ")
+        @test startswith(fr_line(r, "linsolve"), "  linsolve   LatticePCG() (`linsolve = :auto`), multigrid levels ")
         # a problem: `inner` and the Newton count as given (resolved when the group is bound)
         rp = sprint(field_report, fr_prob(m; field_solver = BackwardEuler(; linsolve = Multigrid())))
         @test fr_line(rp, "linsolve") == "  linsolve   Multigrid()"

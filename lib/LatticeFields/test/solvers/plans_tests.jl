@@ -41,7 +41,7 @@ end
     for case in (named_case("sphere42", 0.022), named_case("box300x192", 5.5e-6))
         @test symmetry_defect(case_solver(case, Float64)) < 1e-12
     end
-        v21 = Multigrid(cycle = VCycle(2, 1))       # negative control (DevicePCG refuses it)
+        v21 = Multigrid(cycle = VCycle(2, 1))       # negative control (LatticePCG refuses it)
         @test symmetry_defect(case_solver(named_case("sphere42", 0.022), Float64; linsolve = v21)) >
           1e-3
 end
@@ -112,14 +112,14 @@ end
 @testitem "sentinel and linsolve = :auto" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
     @testset "sentinel and linsolve = :auto" begin
     disk, per = named_case("disk512", 1.9e-3), periodic_case(128, 128; s = 1.0)
-    @test resolve_inner(disk[1], :auto) isa DevicePCG
+    @test resolve_inner(disk[1], :auto) isa LatticePCG
         @test resolve_inner(disk[1], Multigrid()).maxiters == 12
         @test resolve_inner(per[1], :auto).maxiters == 8
         sv = case_solver(disk, Float32; linsolve = Multigrid())   # stationary budget 12 needs 17
     rebuild!(sv)
     lift!(sv)
     solve!(sv)
-    @test (@test_logs (:warn, r"use DevicePCG") sentinel(sv))
+    @test (@test_logs (:warn, r"use LatticePCG") sentinel(sv))
     sv = case_solver(per, Float32)
     rebuild!(sv)
     lift!(sv)
@@ -128,13 +128,13 @@ end
 end
 end
 
-@testitem "sentinel uses the plan's budget; DevicePCG validation" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
-@testset "sentinel uses the plan's budget; DevicePCG validation" begin
+@testitem "sentinel uses the plan's budget; LatticePCG validation" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
+@testset "sentinel uses the plan's budget; LatticePCG validation" begin
     case = named_case("disk128", 5.5e-6)
-        sv = case_solver(case, Float64; linsolve = DevicePCG(maxiters = 4))
+        sv = case_solver(case, Float64; linsolve = LatticePCG(maxiters = 4))
     @test steady!(sv) > 4                    # past the algorithm budget, converged
     @test scalars(sv).done && !scalars(sv).warn && !sentinel(sv)
-        sv = case_solver(case, Float64; linsolve = DevicePCG(maxiters = 30))
+        sv = case_solver(case, Float64; linsolve = LatticePCG(maxiters = 30))
     rebuild!(sv)
     lift!(sv)
         @test solve!(sv; host = true, maxiters = 3) == 3   # plan budget below the algorithm's
@@ -142,13 +142,13 @@ end
     @test !sc.done && sc.warn
     @test sc.rnorm ≈ maximum(abs, true_residual(sv)) rtol = 1e-6   # final true residual
     @test (@test_logs (:warn, r"tolerance") sentinel(sv))
-        @test_throws ["ArgumentError", "DevicePCG", "symmetric preconditioner cycle"] resolve_inner(
+        @test_throws ["ArgumentError", "LatticePCG", "symmetric preconditioner cycle"] resolve_inner(
             case[1],
-            DevicePCG(precond = Multigrid(cycle = VCycle(2, 1)))
+            LatticePCG(precs = LatticeMultigrid(cycle = VCycle(2, 1)))
         )
-        @test_throws ["ArgumentError", "DevicePCG", "one preconditioner cycle per iteration", "cycles = 2"] resolve_inner(
+        @test_throws ["ArgumentError", "LatticePCG", "one preconditioner cycle per iteration", "cycles = 2"] resolve_inner(
             case[1],
-        DevicePCG(precond = Multigrid(cycles = 2)))
+        LatticePCG(precs = LatticeMultigrid(cycles = 2)))
 end
 end
 

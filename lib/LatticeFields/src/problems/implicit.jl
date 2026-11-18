@@ -275,7 +275,7 @@ One row of an implicit runtime: its residual launches per slot parity and iterat
 state buffers, its solver (or `nothing`: a row with no diffusion, solved site by site) with
 the arrays its solve reads and writes, and its update's mask and clip.
 """
-mutable struct ImplicitRow{R, U, A, SV, X, W, SC, SM, V, S, MK, MV, MF, LO, F, J, M, D, RM, DM, P, Q, H}
+mutable struct ImplicitRow{R, U, A, SV, X, W, SC, SM, V, S, MK, MV, MF, LO, F, J, M, D, RM, DM, P, Q, H, LC}
     key::String
     res::NTuple{4, R}                   # (parity 1 first iteration, parity 2 first, parity 1 later, parity 2 later)
     bufs::NTuple{2, U}                  # the row's two state slots
@@ -304,7 +304,10 @@ mutable struct ImplicitRow{R, U, A, SV, X, W, SC, SM, V, S, MK, MV, MF, LO, F, J
     hist::P                             #   the last two correction norms and the first, in the state type
     q::Q                                # the stage's right side `c__n` (Crank–Nicolson, BDF2), or nothing (BE: `uⁿ`)
     prev::H                             # BDF2: the state one substep back, `uⁿ⁻¹` (not in the problem's state), or nothing
+    lin::LC                             # the solve as a LinearSolve cache (its `cacheval` is `solver`), or nothing
 end
+# a row's linear solve (`lift!` and the budgeted solve of its `FieldSolver`, through LinearSolve)
+_solve_cache!(c) = (SciMLBase.solve!(c); nothing)
 
 """
     ImplicitCache
@@ -682,7 +685,7 @@ function bind_cache(
             sh = r.field ? _zeros(st.backend, T, nsite) : T(max(1 / hγ - _coefsum(r.jloc, p), 1 / (2hγ)))
             row = ImplicitRow(key, res, (u[1], u[2]), resarr, nothing, (u[1], u[1]), Int32(0), typeof(u[1])[], nothing,
                 nothing, nothing, sh, mask, mval, mvf, lo, nothing, jarr("j"), nothing, nothing, nothing, r.field && r.domain ? jarr("dom") : nothing,
-                r, nothing, part, hist, q, prev)
+                r, nothing, part, hist, q, prev, nothing)
             push!(rows, row)
             continue
         end
@@ -691,7 +694,7 @@ function bind_cache(
         if !r.field
             numeric, _ = _numeric_operator(s, r, id, p, hγ, 1.0, mask !== nothing; coupled)
             ins = mask === nothing ? ("in.f" => resarr,) : ("in.f" => resarr, "mask" => mask)
-            sv = Solvers.FieldSolver(backend, numeric; linsolve = inner, T, solver_type, inputs = ins)
+            lin = Solvers.field_cache(backend, numeric, inner; T, solver_type, inputs = ins)
             smask, v, f, sh, jj, mm, dd, dm = nothing, nothing, nothing, numeric.shift, nothing, nothing, nothing, nothing
         else
             numeric = nothing
@@ -712,15 +715,16 @@ function bind_cache(
             end
             usemask && push!(ins, "mask" => smask)
             r.scaled && push!(ins, "v" => v)
-            sv = Solvers.FieldSolver(backend, cop; linsolve = inner, T, solver_type, inputs = Tuple(ins))
+            lin = Solvers.field_cache(backend, cop, inner; T, solver_type, inputs = Tuple(ins))
         end
+        sv = lin.cacheval
         xid = Solvers.fid(sv, Solvers.solution_key(sv))
         xb = sv.bufs[xid]
         wid = Solvers.fid(sv, Solvers.working_key(sv))
         work = [w for w in sv.bufs[wid]]
         row = ImplicitRow(key, res, (u[1], u[2]), resarr, sv, (xb[1], xb[end]), xid, work,
             sv.tables[Solvers.tid(sv, "solve.scal")], smask, v, sh, mask, mval, mvf, lo, f, jj, mm, dd, mask, dm, r, numeric,
-            part, hist, q, prev)
+            part, hist, q, prev, lin)
         push!(rows, row)
     end
     # Crank–Nicolson's right side `uⁿ + (h/2) r(uⁿ)` of every row at once, from the substep's
@@ -1056,8 +1060,7 @@ function _row_correction!(r::ImplicitRow, backend, γ, h)
     for w in r.work                             # δ from 0
         Exec.launch!(backend, _zero_body!, length(w), (w,))
     end
-    Solvers.lift!(sv)
-    Solvers.solve!(sv)
+    _solve_cache!(r.lin)
     return sv.slot[r.xid] == 1 ? r.xs[1] : r.xs[2]
 end
 struct _Clip{B}

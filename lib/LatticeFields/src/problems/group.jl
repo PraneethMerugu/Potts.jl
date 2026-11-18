@@ -819,27 +819,27 @@ whose route follows its `cause` bits ([`STATUS_CAUSES`](@ref)): a linear diverge
 substeps or a larger linear budget; a Newton divergence or a residual that is not finite takes
 more substeps only (a smaller step brings the iteration into its contraction; neither more
 iterations nor a larger linear budget does). `coupled`: the group is solved together (F3-12d:
-a `QuasiSteady` group only), so its linear budget is the `DeviceGMRES`'s.
+a `QuasiSteady` group only), so its linear budget is the `LatticeGMRES`'s.
 """
 function status_route(alg, which::Symbol, cause::Integer = 0; coupled::Bool = false)
-    which === :budget && return "a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`)"
+    which === :budget && return "a larger linear budget (`linsolve = LatticePCG(; maxiters = n)`)"
     which === :newton_budget && return "more Newton iterations (a larger `newton = k`) or more substeps (`substeps = n`)"
-    cause & 0x01 != 0 && return "more substeps (`substeps = n`) or a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`)"
+    cause & 0x01 != 0 && return "more substeps (`substeps = n`) or a larger linear budget (`linsolve = LatticePCG(; maxiters = n)`)"
     cause & 0x6 != 0 && return "more substeps (`substeps = n`): a smaller step brings the Newton iteration into its contraction"
-    return "more substeps (`substeps = n`) or a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`)"
+    return "more substeps (`substeps = n`) or a larger linear budget (`linsolve = LatticePCG(; maxiters = n)`)"
 end
 # a steady solve has no substeps: its routes are the budgets, a fixed value or decay, or a
 # transient solver
 function status_route(::QuasiSteady, which::Symbol, cause::Integer = 0; coupled::Bool = false)
-    which === :budget && return coupled ? "a larger linear budget (`linsolve = DeviceGMRES(; maxiters = n)`)" :
-        "a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`)"
+    which === :budget && return coupled ? "a larger linear budget (`linsolve = LatticeGMRES(; maxiters = n)`)" :
+        "a larger linear budget (`linsolve = LatticePCG(; maxiters = n)`)"
     which === :newton_budget && return "more Newton iterations (a larger `newton = k`)"
     cause & 0xc0 != 0 && return string("step the fields with `BackwardEuler` (a transient solve needs no unique steady ",
-        "state), or give the coupled solve a larger budget (`linsolve = DeviceGMRES(; maxiters = n)`)"
+        "state), or give the coupled solve a larger budget (`linsolve = LatticeGMRES(; maxiters = n)`)"
     )
     cause & 0x20 != 0 && return "step the field with `BackwardEuler`, or give each region a decay or a fixed value"
     cause & 0x10 != 0 && return "give that region a decay or a fixed value, or step the field with `BackwardEuler`"
-    cause & 0x01 != 0 && return "a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`), or step the field with `BackwardEuler`"
+    cause & 0x01 != 0 && return "a larger linear budget (`linsolve = LatticePCG(; maxiters = n)`), or step the field with `BackwardEuler`"
     return "step the field with `BackwardEuler` (a transient solve converges where the steady Newton iteration does not)"
 end
 

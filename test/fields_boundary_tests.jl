@@ -287,7 +287,7 @@ end
     @testset "F4-12b: per-site and time-varying Robin coefficients" begin
         run(M, k, fs; p = []) = Array(solve(PottsProblem(M(; name = :m), fb_op((16, 16), p), (0, k); field_solver = fs),
             SequentialCPM()).u[end].site.c)
-        tight = BackwardEuler(; linsolve = DevicePCG(; reltol = 1.0e-12, maxiters = 64))
+        tight = BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64))
         for fs in (ExplicitEuler(; substeps = 4), tight)
             a = run(FbSiteBcs, 3, fs)
             @test fb_same(a, fb_own(FbPDE.site(), (16, 16), 3, fs), fs) && maximum(a) > 0.1
@@ -318,7 +318,7 @@ end
                 b[r] += 0.2 * g / den
             end
         end
-        a = run(FbSiteBcs, 1, BackwardEuler(; substeps = 1, linsolve = DevicePCG(; reltol = 1.0e-12, maxiters = 64)))
+        a = run(FbSiteBcs, 1, BackwardEuler(; substeps = 1, linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64)))
         @test maximum(abs, vec(a) .- (Float64.((1:(n^2)) .== (1:(n^2))') - L) \ b) < 1e-10
     end
 end

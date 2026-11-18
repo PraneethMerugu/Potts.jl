@@ -253,7 +253,7 @@ function _given_lines(io, spec::GroupSpec, g::FieldGroup, alg::AbstractImplicitF
     rows = [r for r in op.rows if r.key in keys]
     inner = coupled ? string("coupled solve ", repr(_krylov(alg.linsolve))) :
             all(r -> r.local_only, rows) ? "none: every row is local (solved site by site)" :
-        alg.linsolve === :auto ? string(repr(Solvers.DevicePCG()), " (`linsolve = :auto`)") : repr(alg.linsolve)
+        alg.linsolve === :auto ? string(repr(Solvers.LatticePCG()), " (`linsolve = :auto`)") : repr(alg.linsolve)
     _line(io, "linsolve", inner)
     _line(io, "newton", alg.newton === nothing ? "automatic (set when the group is bound)" : string(alg.newton, ": given"))
     return nothing

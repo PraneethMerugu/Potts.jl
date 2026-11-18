@@ -28,7 +28,7 @@ using ..Compile: CompiledKernel, CompileOptions, body_function, derive_function,
     primal, promote_dual, semantic, value_type, withvaltype, writes, fuse_update, fuse_residual,
                  npartials, dvalue, dpartial, dsetpartial, dreplace
 using ..Schedule: LaunchSpec, StepPlan, plan, fusion_report
-using ..Solvers: Solvers
+using ..Solvers: Solvers, LatticeMultigrid, LatticePCG, LatticeGMRES, LatticeBlockSolve
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 rgf(ex::Expr) = drop_expr(RuntimeGeneratedFunction(@__MODULE__, @__MODULE__, ex))

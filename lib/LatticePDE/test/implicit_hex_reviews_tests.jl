@@ -203,7 +203,7 @@ end
 
 @testitem "F3-20: the coupled steady solve (F3-12d) on a hexagonal lattice" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
     @testset "F3-20: the coupled steady solve (F3-12d) on a hexagonal lattice" begin
-        # two steady rows that read each other: `DeviceGMRES` with the block preconditioner on the
+        # two steady rows that read each other: `LatticeGMRES` with the block preconditioner on the
         # hexagonal hierarchy equals the hand coupled solve
         operiodic = [bo(t, 0, y) ~ bo(t, 1, y), bo(t, x, 0) ~ bo(t, x, 1)]
         for per in (false, true)
@@ -213,7 +213,7 @@ end
                 name = :hexloop
             )
             p = discretize(lp, LatticeDiscretization(Grid((HEXN, HEXN); geometry = HEX); T = Float64))
-            s = solve(p, QuasiSteady(; linsolve = DeviceGMRES(; reltol = 1.0e-12, maxiters = 200)); dt = 0.1)
+            s = solve(p, QuasiSteady(; linsolve = LatticeGMRES(; reltol = 1.0e-12, maxiters = 200)); dt = 0.1)
             L1, b1 = hex_hand(; D = 0.1, k = 1.0, f = (x, y) -> x, periodic = per)
             L2, b2 = hex_hand(; D = 0.2, k = 2.0, f = (x, y) -> y, periodic = per)
             n2 = HEXN^2
@@ -297,7 +297,7 @@ end
         alg = BackwardEuler()
         @test LFB.status_route(alg, :failure, 0x02) == LFB.status_route(alg, :failure, 0x06) ==
             "more substeps (`substeps = n`): a smaller step brings the Newton iteration into its contraction"
-        @test LFB.status_route(alg, :failure, 0x01) == "more substeps (`substeps = n`) or a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`)"
+        @test LFB.status_route(alg, :failure, 0x01) == "more substeps (`substeps = n`) or a larger linear budget (`linsolve = LatticePCG(; maxiters = n)`)"
         # a Newton divergence in a run names that route (base: "… or a larger linear budget")
         p = nlown(nlsys([D(bce) ~ 0.01 * laplacian(bce) - Advect(Upwind1())([52 * (1 + x) + t, 0.0], bce)], [bc(0, x, y) ~ x * y], [bce]; T = 2.0))
         @test_logs (:warn, r"the Newton iteration diverged\), `ReturnCode.ConvergenceFailure`: the run stops; more substeps \(`substeps = n`\): a smaller step brings the Newton iteration into its contraction$") match_mode = :any solve(

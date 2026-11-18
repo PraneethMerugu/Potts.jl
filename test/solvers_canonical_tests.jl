@@ -164,7 +164,7 @@ end
                     BackwardEuler(; newton = 4),
                 ),
                 (
-                    CrankNicolson(; linsolve = LFS.DevicePCG(; reltol = 1.0e-8)), CrankNicolson(; linsolve = LFS.DevicePCG(; reltol = 1.0e-8)),
+                    CrankNicolson(; linsolve = LFS.LatticePCG(; reltol = 1.0e-8)), CrankNicolson(; linsolve = LFS.LatticePCG(; reltol = 1.0e-8)),
                     CrankNicolson(; linsolve = LFS.Multigrid(; cycle = LFS.VCycle(1, 1))),
                 ),
                 (
@@ -197,7 +197,7 @@ end
                 const CorePotts = Potts.CorePotts
                 const LatticeFields = Potts.LatticeFields
                 using Potts.LatticeFields.Problems: ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady
-                using Potts.LatticeFields.Solvers: DevicePCG, Multigrid, VCycle
+                using Potts.LatticeFields.Solvers: LatticePCG, Multigrid, VCycle
                 using Potts.LatticePDE: LatticeMultigrid
             end
         )
@@ -208,7 +208,7 @@ end
                 ExplicitEuler(; substeps = 4, lower_bound = 0.0),
                 ExplicitMap(),
                 BackwardEuler(),
-                BackwardEuler(; newton = 3, linsolve = LFS.DevicePCG(; reltol = 1.0e-8)),
+                BackwardEuler(; newton = 3, linsolve = LFS.LatticePCG(; reltol = 1.0e-8)),
                 CrankNicolson(; substeps = 2),
                 BDF2(),
                 QuasiSteady(; init = :steady),

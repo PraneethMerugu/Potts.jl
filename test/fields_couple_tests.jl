@@ -173,7 +173,7 @@ end
 # path stays primal, and the derivative matches central differences at the same seed
 @testitem "F4-B2: field derivatives of a coupled model against central differences" setup = [CoupleSetup] tags = [:potts, :fields_couple] begin
     @testset "F4-B2: field derivatives of a coupled model against central differences" begin
-        tight = DevicePCG(; reltol = 1.0e-11, maxiters = 60)
+        tight = LatticePCG(; reltol = 1.0e-11, maxiters = 60)
         for fs in (ExplicitEuler(), BackwardEuler(; linsolve = tight)), M in (CpFields2, CpDrive)
             base = cp_run(M(; name = :m), fs)
             for (name, v) in ((:s, 0.5), (:kd, 0.1), (:Dc, 0.2))

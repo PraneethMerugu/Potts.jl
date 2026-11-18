@@ -160,7 +160,7 @@ end
     @test startswith(e(() -> CrankNicolson(; newton = 0)), "CrankNicolson: newton = 0 is the Newton iterations")
     @test e(() -> CrankNicolson(; theta = 0.5)) ==
             "CrankNicolson: no keyword `theta`; its keywords are `substeps`, `newton`, `lower_bound`, `linsolve`, `solver_type`, `init` and `compute_type`"
-        a = CrankNicolson(; newton = 2, linsolve = DevicePCG(; maxiters = 12))
+        a = CrankNicolson(; newton = 2, linsolve = LatticePCG(; maxiters = 12))
     @test eval(Meta.parse(repr(a))) == a
         phex = discretize(
             bsys([D(bce) ~ bD * laplacian(bce)], [bc(0, x, y) ~ x], [bD]; dvs = [bce]),

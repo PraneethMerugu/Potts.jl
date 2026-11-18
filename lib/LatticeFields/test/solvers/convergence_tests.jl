@@ -28,7 +28,7 @@ end
         for s in ss
             case = named_case(name, s)
             for T in (Float64, Float32)
-                    sv_pcg = case_solver(case, T; linsolve = DevicePCG(), deflate = false)
+                    sv_pcg = case_solver(case, T; linsolve = LatticePCG(), deflate = false)
                 k_pcg = steady!(sv_pcg; maxiter = 40)
                 sc_pcg = scalars(sv_pcg)
                 @test sc_pcg.done && sc_pcg.status === :done && k_pcg <= 12
