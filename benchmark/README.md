@@ -55,19 +55,26 @@ By default it:
   worktrees of the same repository and moved there; both checkouts must be clean). Two
   checkouts of one commit read up to 16 % apart unseeded on Metal (P6.2b); the controls
   show how far apart they read here.
-- **interleaves**: every round runs each side once, each in a fresh process under the
-  machine lock, and the order rotates, so each side runs first equally often (8 rounds for
-  4 sides). When only the workload or the parameters change, `--inprocess` times both in
-  one process, with second copies of the base and the candidate as the controls:
-  `<variants.jl>` defines `AB_VARIANTS`, a vector of `label => T -> PottsProblem`, base
-  first (example: `ab_variants_akeeb_mu.jl`, P6.2b's μ = 30 vs 24).
+- **interleaves**: every round runs each side once, each in a fresh process, and the
+  order rotates, so each side runs first equally often (8 rounds for 4 sides). By default
+  (D-291), all sides in a round start concurrently on distinct physical non-benchmark cores
+  (`0-11` on the NucBox), load, seed the type cache, build and compile every case, print
+  `READY <pid>`, and block on stdin. Once all are READY, `ab.jl` takes `tools/exclusive.sh`
+  and, in the round's rotated order, moves each child (all its threads, `taskset -a -cp`)
+  to the benchmark core, sends `GO`, collects results until `DONE`, and waits for it to
+  exit before starting the next side (`--serial` keeps the one-at-a-time path). When only
+  the workload or the parameters change, `--inprocess` times both in one process, with
+  second copies of the base and the candidate as the controls: `<variants.jl>` defines
+  `AB_VARIANTS`, a vector of `label => T -> PottsProblem`, base first (example:
+  `ab_variants_akeeb_mu.jl`, P6.2b's μ = 30 vs 24).
 - **gives every side the same environment**: `--project=<side>/benchmark` with the side's
   test project stacked on JULIA_LOAD_PATH (the device packages come from there, for every
   side alike).
-- **waits inside the lock**: each timed child, once it holds `tools/exclusive.sh` and
-  before it loads a package, waits as above, until one overall deadline (`--max-wait`,
-  4 h). It then reports what disturbed it at its start or end (a CI job, another GPU
-  client, a busy SMT sibling, another busy reserved CPU); disturbed runs are listed.
+- **waits before loading**: each child waits before loading any package, until one overall
+  deadline (`--max-wait`, 4 h), excluding sibling A/B children in the same round. Just
+  before and after timing, it reports what disturbed it (a CI job, another GPU client
+  excluding sibling A/B children, a busy SMT sibling, another busy reserved CPU); disturbed
+  runs are listed.
 - **pins** on the NucBox, as above.
 
 The timed harness is this checkout's `ab_one.jl` and `gate.jl` for every side (its path and

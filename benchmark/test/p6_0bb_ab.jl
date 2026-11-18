@@ -175,8 +175,32 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
             # inside a CI job the runner's worker is an ancestor, and does not count
             @test BenchMachine.ci_job_running() isa Bool
         end
-        # disturbances with injected CPU load and topology
         sibs(c) = c < 16 ? [c + 16] : [c - 16]
+        withenv("POTTS_MACHINE" => "nucbox") do
+            m = BenchMachine.machine()
+            cc = BenchMachine.compile_cpus(m, 4; siblings = sibs)
+            @test length(cc) == 4 && all(in(0:11), cc) && length(unique(cc)) == 4
+            @test isempty(intersect(cc, vcat(m.bench, sibs.(m.bench)...)))
+            @test BenchMachine.compile_cpus(m, 4; bench = [0, 1], siblings = sibs) == [2, 3, 4, 5]
+        end
+        withenv("POTTS_MACHINE" => "elsewhere") do
+            m = BenchMachine.machine()
+            @test isempty(BenchMachine.compile_cpus(m, 4))
+            @test BenchMachine.repin!(getpid(), -1)
+        end
+        kfd = mktempdir(; cleanup = true)
+        foreach(p -> write(joinpath(kfd, p), ""), ("101", "102", "103"))
+        @test sort(BenchMachine.gpu_users(; exclude = [101, 102], dir = kfd)) == [103]
+        if Sys.islinux() && Sys.which("taskset") !== nothing
+            sp = run(`sleep 10`; wait = false)
+            try
+                @test BenchMachine.repin!(getpid(sp), 0)
+            finally
+                kill(sp)
+                wait(sp)
+            end
+        end
+        # disturbances with injected CPU load and topology
         dist(load; reasons = () -> String[]) = BenchMachine.disturbances(12, 12:15;
             busy = cpus -> Dict(k => get(load, k, 0.0) for k in cpus), siblings = sibs,
             linux = true, reasons)
@@ -228,7 +252,15 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
         o = parse_ab(["b", "c", "gg", "rocm", "8", "--no-pin"])
         @test o.variants == "rocm" && o.rounds == 8 && !o.pin
         o = parse_ab(["--inprocess", "d", "v.jl", "cpu", "--alg=checkerboard"])
-        @test o.inprocess && o.pos == ["d", "v.jl", "cpu"] && o.variants == "checkerboard"
+        @test o.inprocess && o.pos == ["d", "v.jl", "cpu"] && o.variants == "checkerboard" &&
+              !o.parallel
+        @test parse_ab(["b", "c", "gg", "cpu"]).parallel
+        @test !parse_ab(["b", "c", "gg", "cpu", "--serial"]).parallel
+        @test !parse_ab(["b", "c", "gg", "cpu", "--child=stub.jl"]).parallel
+        @test parse_ab(["b", "c", "gg", "cpu", "--child=stub.jl", "--parallel"]).parallel
+        @test parse_ab(["b", "c", "gg", "cpu", "--ready-timeout=120"]).ready_timeout == 120.0
+        @test_throws ErrorException parse_ab(["b", "c", "gg", "cpu", "--serial", "--parallel"])
+        @test_throws ErrorException parse_ab(["b", "c", "gg", "cpu", "--ready-timeout=0"])
         @test_throws ErrorException parse_ab(["b", "c", "gg", "cuda"])
         @test_throws ErrorException parse_ab(["b", "c", "gg", "sequential"])   # an algorithm is not a backend
         @test_throws ErrorException parse_ab(["b", "c", "gg", "cpu", "--alg=metal"])
@@ -367,6 +399,94 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
         @test st == 0 && "--no-control" in ev[1] && !occursin("base-ctl", out)
     end
 
+    @testset "parallel compile READY/GO/DONE protocol" begin
+        par_stub = joinpath(sb, "par_stub.jl")
+        write(par_stub, raw"""
+        let
+            sd = ENV["STUB_DIR"]
+            me = basename(pwd())
+            "--prepare" in ARGS || error("expected --prepare")
+            fail = get(ENV, "PAR_FAIL", "")
+            hang = get(ENV, "PAR_HANG", "")
+            fail == me && exit(2)
+            hang == me && sleep(30)
+            p0 = time()
+            sleep(0.8)
+            p1 = time()
+            open(io -> println(io, "prep ", me, " ", getpid(), " ", p0, " ", p1), ENV["STUB_LOG"], "a")
+            println("READY ", getpid())
+            flush(stdout)
+            line = strip(readline(stdin))
+            isempty(line) && exit(1)
+            fs = split(line)
+            fs[1] == "GO" || error("expected GO, got $line")
+            cpu = fs[2]
+            excl = length(fs) >= 3 ? fs[3] : "-"
+            g0 = time()
+            sleep(0.15)
+            g1 = time()
+            open(io -> println(io, "go ", me, " ", getpid(), " ", cpu, " ", excl, " ", g0, " ", g1),
+                ENV["STUB_LOG"], "a")
+            println("TC 500000 1048576")
+            pos = filter(a -> !startswith(a, "--"), ARGS)
+            f = let pf = joinpath(sd, me * ".txt"); isfile(pf) ? parse(Float64, strip(read(pf, String))) : 1.0 end
+            for v in split(pos[2], ','), c in split(pos[1], ',')
+                println("ABR $c.$v $(10f) $(9f) 60")
+            end
+            println("TC 500100 1048576")
+            println("DONE")
+            flush(stdout)
+        end
+        """)
+        root, b, c, sd = checkouts()
+        st, out, ev = run_ab(sb, sd, [
+            b, c, "gg", "cpu", "--rounds=2", "--no-warm", "--parallel",
+            "--child=$par_stub", "--wait=none", "--alg=sequential"])
+        @test st == 0 && occursin("verdict (paired): pass", out) &&
+              occursin("parallel compile", out)
+        preps = [e for e in ev if e[1] == "prep"]
+        gos = [e for e in ev if e[1] == "go"]
+        @test length(preps) == 8 && length(gos) == 8
+        @test [e[2] for e in gos] == ["base", "cand", "base-abctl", "cand-abctl",
+            "cand", "base-abctl", "cand-abctl", "base"]
+        # Within each round: prepare intervals overlap (concurrent), GO intervals are disjoint (locked)
+        for r in 1:2
+            rp = preps[(4r - 3):(4r)]
+            rg = gos[(4r - 3):(4r)]
+            p0s = parse.(Float64, getindex.(rp, 4))
+            p1s = parse.(Float64, getindex.(rp, 5))
+            @test maximum(p0s) < minimum(p1s)
+            g0s = parse.(Float64, getindex.(rg, 6))
+            g1s = parse.(Float64, getindex.(rg, 7))
+            @test all(g1s[k] <= g0s[k + 1] for k in 1:3)
+            pids = Set(e[3] for e in rg)
+            @test length(pids) == 4
+            for e in rg
+                excl = Set(split(e[5], ','))
+                @test !(e[3] in excl)
+                @test all(p -> p in excl, setdiff(pids, Set([e[3]])))
+            end
+        end
+        # A child that dies before READY fails the round loudly (exit 4)
+        root, b, c, sd = checkouts()
+        out_f = IOBuffer()
+        env_f = merge(ENV, Dict("STUB_LOG" => joinpath(sd, "log"), "STUB_DIR" => sd,
+            "POTTS_MACHINE" => "test-machine", "PAR_FAIL" => "cand"))
+        pf = run(pipeline(ignorestatus(setenv(
+                `$(jl()) $(joinpath(sb, "benchmark", "ab.jl")) $b $c gg cpu --rounds=1 --no-warm --parallel --child=$par_stub --wait=none --alg=sequential`,
+                env_f; dir = sb)); stdout = out_f, stderr = out_f))
+        @test pf.exitcode == 4 && occursin("exited before READY", String(take!(out_f)))
+        # A child that hangs before READY hits --ready-timeout and fails loudly (exit 4)
+        root, b, c, sd = checkouts()
+        out_h = IOBuffer()
+        env_h = merge(ENV, Dict("STUB_LOG" => joinpath(sd, "log"), "STUB_DIR" => sd,
+            "POTTS_MACHINE" => "test-machine", "PAR_HANG" => "cand"))
+        ph = run(pipeline(ignorestatus(setenv(
+                `$(jl()) $(joinpath(sb, "benchmark", "ab.jl")) $b $c gg cpu --rounds=1 --no-warm --parallel --child=$par_stub --wait=none --alg=sequential --ready-timeout=1.5`,
+                env_h; dir = sb)); stdout = out_h, stderr = out_h))
+        @test ph.exitcode == 4 && occursin("timed out", String(take!(out_h)))
+    end
+
     @testset "same-commit control checkout" begin
         root, base, cand, _ = checkouts()
         write(joinpath(base, "Manifest.toml"), "# manifest")          # untracked, copied over
@@ -446,6 +566,23 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
             ignorestatus(`$(jl()) --project=$proj $one nope sequential --wait=none --seed=0`);
             stdout = buf, stderr = buf))
         @test !success(p) && occursin("unknown case", String(take!(buf)))
+        # --prepare READY/GO/DONE handshake
+        inp = Base.BufferStream()
+        outp = Pipe()
+        pp = run(pipeline(`$(jl()) --project=$proj $one fake sequential,checkerboard --prepare --samples=3 --seconds=1 --wait=none --seed=0`;
+            stdin = inp, stdout = outp, stderr = outp); wait = false)
+        close(outp.in)
+        ready_line = readline(outp)
+        @test startswith(ready_line, "READY ")
+        println(inp, "GO -1 99999")
+        flush(inp)
+        close(inp)
+        pl = filter(!isempty, split(read(outp, String), '\n'))
+        wait(pp)
+        @test success(pp)
+        @test count(startswith("ABR fake.sequential "), pl) == 1
+        @test count(startswith("ABR fake.checkerboard "), pl) == 1
+        @test count(startswith("TC "), pl) == 2 && pl[end] == "DONE"
     end
 
     @testset "gate.jl with a mocked measure" begin
