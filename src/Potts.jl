@@ -18,7 +18,7 @@ using CorePotts: Metropolis, RandomPlane
 using JumpProcesses: JumpProcesses
 using KernelAbstractions: KernelAbstractions
 using LatticeFields: LatticeFields
-using LatticeFields.Problems: ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, AbstractFieldAlgorithm,
+using LatticeFields.Problems: ExplicitEuler, ExplicitMap, LatticeNewton, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, AbstractFieldAlgorithm,
                              substep_counts, steady_fields, field_series, field_report
 using LatticeFields.Solvers: LatticePCG, LatticeGMRES, LatticeMultigrid, LatticeBlockSolve, VCycle
 using LatticePDE: LatticePDE, laplacian, value_at, ismember, Coarse
@@ -49,7 +49,7 @@ for name in names(CorePotts)
 end
 export @potts_model, @named, PottsSystem, CompiledPottsSystem, mtkcompile, compose, extend,
     total_energy, energy_change, generated_code, observe, Adaptive, ExplicitEuler, ExplicitMap,
-    BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, substep_counts, steady_fields, field_series, field_report, LatticePCG, LatticeGMRES, LatticeMultigrid, LatticeBlockSolve, Coarse
+    BackwardEuler, CrankNicolson, BDF2, QuasiSteady, LatticeNewton, FieldGroups, substep_counts, steady_fields, field_series, field_report, LatticePCG, LatticeGMRES, LatticeMultigrid, LatticeBlockSolve, Coarse
 public VCycle                               # `LatticeMultigrid(; cycle = VCycle(ν₁, ν₂))` (not exported: a short name)
 # the declared parameters and variables of a model (MTK's `parameters` lists the compiled ones);
 # `RK4` (OrdinaryDiffEq exports a different `RK4`)

@@ -178,7 +178,7 @@ end
     # steady groups that read one another only (two `QuasiSteady` with other keywords): one
     # `QuasiSteady` is the route, and it solves
     pq = cown(q1(0.1, 5.0; steady = true))
-        m = cmsg(() -> init(pq, FieldGroups(cae => QuasiSteady(), cbe => QuasiSteady(; newton = 3)); dt = 0.1))
+        m = cmsg(() -> init(pq, FieldGroups(cae => QuasiSteady(), cbe => QuasiSteady(; nlsolve = LatticeNewton(; max_iter = 3))); dt = 0.1))
     @test occursin("every group of the loop is steady, so no window damps the lag between them", m) &&
           occursin("Give `ca`, `cb` one `QuasiSteady` (the same keywords: one group, whose steady rows are solved together)", m) ||
           (println("qs only ", m); false)

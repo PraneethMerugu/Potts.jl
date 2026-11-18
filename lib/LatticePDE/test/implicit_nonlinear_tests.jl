@@ -25,8 +25,8 @@ end
         sw = 0.05 * laplacian(bce) - 8 * max(bce - 0.4, 0) / 0.6 + 2 + 2 * sin(6t)
         dts = [0.05 / 2^k for k in 0:3]
         e2, o2, pb, u2 = nl_orders(sw, NLIC; T = 0.3, dts)
-        e1, o1, _, u1 = nl_orders(sw, NLIC; T = 0.3, dts, newton = 1)
-        _, _, _, u8 = nl_orders(sw, NLIC; T = 0.3, dts, newton = 8)
+        e1, o1, _, u1 = nl_orders(sw, NLIC; T = 0.3, dts, nlsolve = LatticeNewton(; max_iter = 1))
+        _, _, _, u8 = nl_orders(sw, NLIC; T = 0.3, dts, nlsolve = LatticeNewton(; max_iter = 8))
         c = only(init(pb, BackwardEuler(); dt = 0.05).runtimes).cache
         @test c.newton == 2 && c.exact && only(c.rows).op.switch
         # newton = 2 keeps order 1 (measured 1.02, 0.98, 0.99); one Newton step, the switch lagged
@@ -53,8 +53,8 @@ end
             @test s.retcode == ReturnCode.Success && s.stats.newton_budget == 0
         end
         p = discretize(sys, LatticeDiscretization(Grid((32, 32)); T = Float64))
-        s = @test_logs (:warn, r"the Newton iteration \(`newton = 2`\) reached its budget") solve(p, BackwardEuler(; newton = 2); dt = 0.05)
-        @test s.stats.newton_budget > 0
+        s = @test_logs (:warn, r"reached its budget.*ConvergenceFailure") solve(p, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 2)); dt = 0.05)
+        @test s.retcode == ReturnCode.ConvergenceFailure && s.stats.newton_budget > 0
     end
 end
 
@@ -70,7 +70,7 @@ end
         ig = init(pb, BackwardEuler(); dt = 0.1)
         # with one Newton step nothing else tells: a warning names the field, the window and the
         # route (review r1, S2; base 2d213237: no warning)
-        @test_logs (:warn, r"^field `bc`: the implicit shift was clamped in window 1 \(t = 0\.0\) .*a larger `newton = k` checks the step") solve!(ig)
+        @test_logs (:warn, r"^field `bc`: the implicit shift was clamped in window 1 \(t = 0\.0\) .*a larger `nlsolve = LatticeNewton\(; max_iter = k\)` checks the step") solve!(ig)
         rt = only(ig.runtimes)
         @test ig.retcode == ReturnCode.Success && rt.totals.cause & 0x08 != 0 && maximum(ig[bce]) < 1.0e-3
         # … once per run, and a site growth that the count rule cannot see (a field row whose growth
@@ -115,14 +115,14 @@ end
         @test maximum(abs, vec(blast(s)) .- ub) / maximum(abs, ub) < 1.0e-3       # (measured 3.7e-6)
         # a budget too small: counted, one warning with the count and the route (at the first read,
         # after the first window); the route works
-        s2 = @test_logs (:warn, r"field `bc`: the Newton iteration \(`newton = 2`\) reached its budget \d+ times.*a larger `newton = k`") solve(
+        s2 = @test_logs (:warn, r"field `bc`: the solve failed .*the Newton iteration .*reached its budget.*a larger `nlsolve = LatticeNewton\(; max_iter = k\)`") solve(
             p,
-            BackwardEuler(; linsolve = BTIGHT, newton = 2)
+            BackwardEuler(; linsolve = BTIGHT, nlsolve = LatticeNewton(; max_iter = 2))
             ; dt = 0.25
         )
-        @test s2.retcode == ReturnCode.Success && s2.stats.newton_budget == 96
-        s3 = @test_logs min_level = WARN solve(p, BackwardEuler(; linsolve = BTIGHT, newton = 12); dt = 0.25)
-        @test s3.stats.newton_budget == 0
+        @test s2.retcode == ReturnCode.ConvergenceFailure && s2.stats.newton_budget > 0
+        s3 = @test_logs min_level = WARN solve(p, BackwardEuler(; linsolve = BTIGHT, nlsolve = LatticeNewton(; max_iter = 12)); dt = 0.25)
+        @test s3.retcode == ReturnCode.Success && s3.stats.newton_budget == 0
         # a field that barely moves (an increment below the rounding of the field): no budget hit
         still = nlown(nlsys([D(bce) ~ 0.01 * laplacian(bce) - Advect(Upwind1())([0.0, 0.0], bce) + 1.0e-16 * x], [bc(0, x, y) ~ 1.0], [bce]))
         ig = init(still, BackwardEuler(); dt = 0.25)
@@ -147,12 +147,11 @@ end
         @test s.retcode == ReturnCode.Success && s.stats.newton_budget == 0
         # the converged block Gauss–Seidel (40 sweeps: the coupled BE step), to the Newton tolerance
         # (1e-3 of the substep's increment; the host stops there)
-        r = solve(p, BackwardEuler(; linsolve = BTIGHT, newton = 40); dt = 0.5)
+        r = solve(p, BackwardEuler(; linsolve = BTIGHT, nlsolve = LatticeNewton(; max_iter = 40)); dt = 0.5)
         rel(f) = maximum(abs, s[f, length(s.t)] .- r[f, length(r.t)]) / maximum(abs, r[f, length(r.t)])
         @test rel(bce) < 1.0e-3 && rel(boe) < 1.0e-3
-        # without the host stop (`newton = 10` given: ten sweeps) it is the coupled step to 1e-6
-        r10 = solve(p, BackwardEuler(; linsolve = BTIGHT, newton = 10); dt = 0.5)
-        @test maximum(abs, r10[bce, length(r10.t)] .- r[bce, length(r.t)]) < 1.0e-6
+        r10 = solve(p, BackwardEuler(; linsolve = BTIGHT, nlsolve = LatticeNewton(; max_iter = 10)); dt = 0.5)
+        @test r10.retcode == ReturnCode.Success && maximum(abs, r10[bce, length(r10.t)] .- r[bce, length(r.t)]) < 1.0e-6
     end
 end
 
@@ -171,7 +170,7 @@ end
         c = only(ig.runtimes).cache
         @test c.newton == 1 && c.exact && !c.cyclic && [r.key for r in c.rows] == ["bo", "bc"]
         s = solve(p, BackwardEuler(; linsolve = BTIGHT); dt = 0.5)
-        r = solve(p, BackwardEuler(; linsolve = BTIGHT, newton = 12); dt = 0.5)
+        r = solve(p, BackwardEuler(; linsolve = BTIGHT, nlsolve = LatticeNewton(; max_iter = 12)); dt = 0.5)
         @test s.retcode == ReturnCode.Success && s.stats.newton_budget == 0
         @test maximum(abs, s[bce, length(s.t)] .- r[bce, length(r.t)]) < 1.0e-10
         # a cycle (o reads c back): the term stays unseen, newton = 4 and the warning
@@ -313,7 +312,7 @@ end
         @test !c.exact && c.seen && c.ρin ≈ 30 * 1.5 / 9.25 && ig.substeps == 1 && c.newton == 10
         s = @test_logs min_level = WARN solve(p, BackwardEuler(; linsolve = r1tight()); dt = 0.1)
         @test s.retcode == ReturnCode.Success && s.stats.newton_budget == 0
-        r = solve(p, BackwardEuler(; linsolve = r1tight(), newton = 40); dt = 0.1)
+        r = solve(p, BackwardEuler(; linsolve = r1tight(), nlsolve = LatticeNewton(; max_iter = 40)); dt = 0.1)
         @test r1rel(vec(blast(s)), vec(blast(r))) < 1.0e-4                       # (measured 3.8e-5; base 2.1e-4)
         # R2-S1: a field row's negative face is bounded by its largest face coefficient over the
         # box and one spacing past it, `0.3 (1 + 1.1) / 0.1² = 63`: ρ_rob = 63 · 1.5/9.25, rule 2
@@ -325,7 +324,7 @@ end
         @test !c.exact && c.seen && c.ρin ≈ 0.3 * 2.1 / 0.01 * 1.5 / 9.25 && ig.substeps == 3 && c.newton > 4
         s = @test_logs min_level = WARN solve(pf, BackwardEuler(; linsolve = r1tight()); dt = 0.1)
         @test s.retcode == ReturnCode.Success && s.stats.newton_budget == 0
-        r = solve(pf, BackwardEuler(; substeps = 3, linsolve = r1tight(), newton = 40); dt = 0.1)
+        r = solve(pf, BackwardEuler(; substeps = 3, linsolve = r1tight(), nlsolve = LatticeNewton(; max_iter = 40)); dt = 0.1)
         @test r1rel(vec(blast(s)), vec(blast(r))) < 1.0e-4
         # … and a face coefficient no interval bounds (it reads an input field) is unseen: a warning
         # at `init` that names the face (base: none at `init`, only the budget warning later)

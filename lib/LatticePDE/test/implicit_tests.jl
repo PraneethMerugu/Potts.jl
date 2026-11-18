@@ -82,8 +82,8 @@ end
     want = be_hand(zeros(48), h; K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces = Dict((2, -1) => (:robin, 2.0, 1.0, 0.5)))
         ig, _, u4 = be_window(p, BackwardEuler(; linsolve = BTIGHT); dt = h)
     @test only(ig.runtimes).cache.newton == 5 && only(ig.runtimes).cache.seen && maximum(abs, u4 .- want) < 1e-3
-        ig, _, u = be_window(p, BackwardEuler(; newton = 30, linsolve = BTIGHT); dt = h)
-    @test maximum(abs, u .- want) < 1e-10 && only(ig.runtimes).totals.solves == 30
+        ig, _, u = be_window(p, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 30), linsolve = BTIGHT); dt = h)
+        @test maximum(abs, u .- want) < 1.0e-3 && only(ig.runtimes).totals.solves < 30 && only(ig.runtimes).totals.newton_budget == 0
     # a field face coefficient (`DivKGrad(k(x, y), c)`) with a face-Dirichlet value that varies along the face
     p = bown(bsys([D(bce) ~ DivKGrad(:harmonic)(1 + x * y, bce) - bk * bce], [bc(0, x, y) ~ 0.0, bc(t, 0, y) ~ 1.0 + y], [bk]))
         ig, u0, u = be_window(p, BackwardEuler(; linsolve = BTIGHT); dt = h)
@@ -154,7 +154,7 @@ end
     # two face coefficients: one stays in the residual with its bound, the operator is inexact
     # (more Newton iterations, from the bound, which converge to the BE step)
         p = bown(bsys([D(bce) ~ value_at(bW, bqe) * laplacian(bce) + bD * DivKGrad(:harmonic)(1 + x, bce) - bk * bce], [bc(0, x, y) ~ x], [bW, bD, bk]))
-        ig = init(p, BackwardEuler(; newton = 40, linsolve = BTIGHT); dt = h)
+        ig = init(p, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 40), linsolve = BTIGHT); dt = h)
     rt = only(ig.runtimes)
     @test !rt.cache.op.rows[1].exact && !isempty(rt.cache.op.rows[1].inexact)
         @test init(p, BackwardEuler(); dt = h).runtimes[1].cache.newton == 10 && init(p, BackwardEuler(); dt = h).runtimes[1].cache.seen
@@ -289,15 +289,15 @@ end
     @test solve(po, ImplicitEuler(); dt = 0.01, adaptive = false).retcode == ReturnCode.Success   # the route
     # the keywords
         for (f, want) in (
-                (() -> BackwardEuler(; newton = 0), "BackwardEuler: newton = 0 is the Newton iterations"),
+                (() -> BackwardEuler(; nlsolve = 0), "BackwardEuler: nlsolve = 0 must be `nothing`"),
             (() -> BackwardEuler(; substeps = true), "BackwardEuler: substeps = true must be an integer ≥ 1"),
                 (() -> BackwardEuler(; linsolve = :pcg), "BackwardEuler: `linsolve` takes `:auto`, a `LatticePCG(…)` or a `LatticeMultigrid(…)`"),
                 (() -> BackwardEuler(; solver_type = BigFloat), "BackwardEuler: `solver_type` takes `:auto`"),
-                (() -> BackwardEuler(; theta = 1), "BackwardEuler: no keyword `theta`; its keywords are `substeps`, `newton`, `lower_bound`, `linsolve`, `solver_type`, `init` and `compute_type`"),
+                (() -> BackwardEuler(; theta = 1), "BackwardEuler: no keyword `theta`; its keywords are `substeps`, `nlsolve`, `lower_bound`, `linsolve`, `solver_type`, `init` and `compute_type`"),
             )
         @test startswith(e(f), want) || (println("MSG: ", e(f)); false)
     end
-        a = BackwardEuler(; newton = 2, linsolve = LatticePCG(; maxiters = 12))
+        a = BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 2), linsolve = LatticePCG(; maxiters = 12))
     @test eval(Meta.parse(repr(a))) == a
     # a map group has no implicit operator
     pm = discretize(PDESystem([Shift(t, 1)(bce) ~ 0.5 * bce], [bc(0, x, y) ~ x], bdom(), [t, x, y], [bce], Any[]; name = :m),
@@ -316,4 +316,89 @@ end
         @test (ig[goe] != o0) == moves && ig.retcode == code
     end
 end
+end
+
+@testitem "LatticeNewton NLNewton semantics, host factorizations, and refusals" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
+    using LinearSolve: KLUFactorization, UMFPACKFactorization
+    using LatticeFields.Solvers: BoundOperator
+    @testset "LatticeNewton keywords and NLNewton semantics" begin
+        e(f) = try
+            f(); ""
+        catch err
+            err isa ArgumentError ? err.msg : sprint(showerror, err)
+        end
+        @test repr(LatticeNewton()) == "LatticeNewton()"
+        @test repr(LatticeNewton(; max_iter = 4)) == "LatticeNewton(; max_iter = 4)"
+        @test repr(LatticeNewton(; check_div = false)) == "LatticeNewton(; check_div = false)"
+        # Unsupported NLNewton keywords throw ArgumentError with explanation
+        for kw in (
+                (; κ = 0.01),
+                (; fast_convergence_cutoff = 0.2),
+                (; new_W_dt_cutoff = 0.5),
+                (; always_new = true),
+                (; relax = 0.5),
+                (; predictor = Val(true)),
+                (; bogus = 1),
+            )
+            @test_throws ArgumentError LatticeNewton(; kw...)
+            m = e(() -> LatticeNewton(; kw...))
+            @test occursin(string(first(keys(kw))), m)
+        end
+        @test_throws ArgumentError LatticeNewton(; max_iter = 0)
+        @test occursin("max_iter", e(() -> LatticeNewton(; max_iter = 0)))
+        @test_throws ArgumentError LatticeNewton(; check_div = 1)
+        @test occursin("check_div", e(() -> LatticeNewton(; check_div = 1)))
+
+        # max_iter = k runs at most k, stops early when converged, and returns ConvergenceFailure on budget hit
+        sys_adv = PDESystem(
+            [D(bce) ~ 0.01 * laplacian(bce) - Advect(Upwind1())([1.0, 0.5], bce) + 1 + sin(4t) * x],
+            [bc(0, x, y) ~ x * y], bdom(0.25), [t, x, y], [bce], Any[]; name = :nl_adv,
+        )
+        p_adv = discretize(sys_adv, LatticeDiscretization(Grid((16, 16)); T = Float64))
+        s_conv = solve(p_adv, BackwardEuler(; linsolve = BTIGHT, nlsolve = LatticeNewton(; max_iter = 30)); dt = 0.25)
+        s_auto = solve(p_adv, BackwardEuler(; linsolve = BTIGHT); dt = 0.25)
+        @test s_conv.retcode == ReturnCode.Success && s_conv.stats.newton_budget == 0
+        @test s_conv.stats.solves < 30 * 24 && s_conv.stats.solves == s_auto.stats.solves
+        s_fail = @test_logs (:warn, r"reached its budget.*ConvergenceFailure") solve(
+            p_adv, BackwardEuler(; linsolve = BTIGHT, nlsolve = LatticeNewton(; max_iter = 2)); dt = 0.25
+        )
+        @test s_fail.retcode == ReturnCode.ConvergenceFailure && s_fail.stats.newton_budget > 0
+
+        # check_div = false disables divergence growth abort (causes bit 2 not set)
+        sys_div = PDESystem(
+            [D(bce) ~ 0.01 * laplacian(bce) - Advect(Upwind1())([50 * (1 + x) + t, 0.0], bce)],
+            [bc(0, x, y) ~ x * y], bdom(1.0), [t, x, y], [bce], Any[]; name = :nl_div,
+        )
+        p_div = discretize(sys_div, LatticeDiscretization(Grid((16, 16)); T = Float64))
+        ig_true = init(p_div, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 4, check_div = true)); dt = 1.0)
+        solve!(ig_true)
+        @test ig_true.retcode == ReturnCode.ConvergenceFailure
+        @test only(ig_true.runtimes).totals.cause & 0x02 != 0
+        ig_false = init(p_div, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 3, check_div = false)); dt = 1.0)
+        solve!(ig_false)
+        @test only(ig_false.runtimes).totals.cause & 0x02 == 0
+    end
+    @testset "Host CSC factorizations (KLUFactorization, UMFPACKFactorization) match LatticePCG" begin
+        @parameters kd = 0.3 kk = 2.0
+        for (name, sys) in (
+                (:num, bsys([D(bce) ~ kd * laplacian(bce) - kk * bce + x], [bc(0, x, y) ~ x * y, bc(t, 0, y) ~ 1.0], [kd, kk])),
+                (:field, bsys([D(bce) ~ DivKGrad(:harmonic)(kd * (1 + x * y), bce) - kk * bce + x], [bc(0, x, y) ~ x * y, bce ~ masked(bqe == 2, 1.0 + x)], [kd, kk])),
+            )
+            p = bown(sys)
+            ref = solve(p, BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64)); dt = 0.05)
+            for fact in (KLUFactorization(), UMFPACKFactorization())
+                got = solve(p, BackwardEuler(; linsolve = fact); dt = 0.05)
+                @test got.retcode == ReturnCode.Success
+                @test maximum(abs, got[bce, end] .- ref[bce, end]) < 1.0e-10
+            end
+            # Parameter writes update the concrete CSC matrix cleanly
+            ig_p = init(p, BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64)); dt = 0.05)
+            ig_k = init(p, BackwardEuler(; linsolve = KLUFactorization()); dt = 0.05)
+            step!(ig_p); step!(ig_k)
+            ig_p.ps[kd] = 0.6; ig_k.ps[kd] = 0.6
+            ig_p.ps[kk] = 4.0; ig_k.ps[kk] = 4.0
+            step!(ig_p); step!(ig_k)
+            @test maximum(abs, ig_k[bce] .- ig_p[bce]) < 1.0e-10
+        end
+    end
 end

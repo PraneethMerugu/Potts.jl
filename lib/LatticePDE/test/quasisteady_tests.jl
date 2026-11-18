@@ -222,9 +222,9 @@ end
     # the keywords
     @test startswith(qmsg(() -> QuasiSteady(; substeps = 2)), "QuasiSteady: no keyword `substeps`: a steady field is solved once per window")
         @test startswith(qmsg(() -> QuasiSteady(; lower_bound = 0.0)), "QuasiSteady: no keyword `lower_bound`: a steady solve has no substep to clip")
-        @test qmsg(() -> QuasiSteady(; theta = 1)) == "QuasiSteady: no keyword `theta`; its keywords are `newton`, `linsolve`, `solver_type`, `init` and `compute_type`"
-    @test startswith(qmsg(() -> QuasiSteady(; newton = 0)), "QuasiSteady: newton = 0 is the Newton iterations per substep")
-        a = QuasiSteady(; newton = 3)
+        @test qmsg(() -> QuasiSteady(; theta = 1)) == "QuasiSteady: no keyword `theta`; its keywords are `nlsolve`, `linsolve`, `solver_type`, `init` and `compute_type`"
+        @test startswith(qmsg(() -> QuasiSteady(; nlsolve = 0)), "QuasiSteady: nlsolve = 0 must be `nothing`")
+        a = QuasiSteady(; nlsolve = LatticeNewton(; max_iter = 3))
     @test eval(Meta.parse(repr(a))) == a
 end
 end
@@ -436,7 +436,7 @@ end
     # (F3-12d: by default the steady rows of `qa`, `qc` are one QuasiSteady group, whose gains
     # compose, so the loop is accepted; as two steady groups it is refused, with the route of one)
         @test solve(cas(0.3), BackwardEuler(); dt = 0.1).retcode == ReturnCode.Success
-        two = FieldGroups(qae => QuasiSteady(), qce => QuasiSteady(; newton = 3); default = BackwardEuler())
+        two = FieldGroups(qae => QuasiSteady(), qce => QuasiSteady(; nlsolve = LatticeNewton(; max_iter = 3)); default = BackwardEuler())
         m = qmsg(() -> init(cas(0.3), two; dt = 0.1))
     @test startswith(m, "FieldGroups: the QuasiSteady groups of `qa`, `qc` are in a loop of groups that read one another") &&
           occursin("the steady row of `qc` reads the steady field `qa` of another steady group of the loop", m) &&

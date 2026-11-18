@@ -345,6 +345,14 @@ function _krylov(inner)
     inner isa LatticeGMRES && return inner
     inner === :auto && return LatticeGMRES()
     inner === STEADY_INNER && return STEADY_GMRES
+    LinearSolve.needs_concrete_A(inner) && throw(
+        ArgumentError(
+            string(
+                "QuasiSteady: coupled steady fields have no concrete sparse matrix; `", repr(inner),
+                "` cannot solve the coupled operator: leave `linsolve` out or give `linsolve = LatticeGMRES()`"
+            )
+        )
+    )
     return LatticeGMRES(; precs = LatticeBlockSolve(inner))
 end
 # the per-field solver of a row of a group (its preconditioner when the group is coupled)
@@ -478,7 +486,7 @@ end
 # masks and clip, and with `check` the Newton check of iteration `it` (a steady group: no real
 # reduction is cause 64)
 function (cr::CoupledRow)(o::_CsOp{:update})
-    (x, par, first, last, check, it, hits, window, steady, word, backend) = o.a
+    (x, par, first, last, check, it, hits, window, steady, word, backend, checkdiv, failbudget) = o.a
     r = cr.row
     dst = r.bufs[3 - par]
     src = first ? r.bufs[par] : dst
@@ -491,7 +499,9 @@ function (cr::CoupledRow)(o::_CsOp{:update})
     Exec.launch!(backend, _be_norms_body!, nb, (r.part, dst, r.bufs[par], δ, nothing, nothing, nothing, nothing, r.mask, n))
     fl = eltype(dst) === Float16 ? T(10 * eps(T) + 2 * eps(Float16)) : T(10 * eps(T))
     Exec.launch!(backend, _be_newton_body!, 1, (word, r.part, Int32(nb), r.hist, Int32(it), hits, T(NEWTON_EPS), fl, window,
-        steady, UInt32(64)))
+            steady, UInt32(64), checkdiv, failbudget,
+        )
+    )
     return nothing
 end
 
@@ -523,7 +533,7 @@ struct _CsStop end
 # status, every row's update and check. `a` as the rows' iteration (`(par, first, t1, h, k, last,
 # window, backend, γ, word, it, check, hits, gate)`).
 function _coupled_iteration!(cs::CoupledKrylov, c, a)
-    par, first, t1, h, k, last, window, backend, _, word, it, check, hits, gate = a
+    par, first, t1, h, k, last, window, backend, _, word, it, check, hits, gate, checkdiv, failbudget = a
     rows, walk, A, scal, ws = cs.rows, cs.walk, cs.A, cs.scal, cs.ws
     K = eltype(scal)
     steady = isinf(h)
@@ -558,7 +568,7 @@ function _coupled_iteration!(cs::CoupledKrylov, c, a)
         copyto!(scal, 1, hs, 1, _GM_TOL)
     end
     Exec.launch!(backend, _cs_status_body!, 1, (word, scal, Int32(window), steady, gate))
-    walk(rows, _csop(:update, (ws.x.a, par, first, last, check, it, hits, window, steady, word, backend)))
+    walk(rows, _csop(:update, (ws.x.a, par, first, last, check, it, hits, window, steady, word, backend, checkdiv, failbudget)))
     return nothing
 end
 

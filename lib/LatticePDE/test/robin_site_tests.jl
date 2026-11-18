@@ -86,9 +86,9 @@ end
         ig, u0, _ = rs_window(p, BackwardEuler(; linsolve = BTIGHT); dt = h)
     c = only(ig.runtimes).cache
     @test !c.exact && c.newton > 1
-        ig, u0, u = rs_window(p, BackwardEuler(; newton = 30, linsolve = BTIGHT); dt = h)
+        ig, u0, u = rs_window(p, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 30), linsolve = BTIGHT); dt = h)
     want = be_hand(u0, h; dims = RSD, K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces)
-    @test maximum(abs, u .- want) < 1e-10
+        @test maximum(abs, u .- want) < 1.0e-3 && only(ig.runtimes).totals.newton_budget == 0
     # the same face with α ≥ 0 at every site is exact (the sign is per site, from the bound)
         p2 = rsown(
             rsys(

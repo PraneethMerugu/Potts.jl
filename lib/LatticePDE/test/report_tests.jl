@@ -122,8 +122,8 @@ using .LP_report: fd
     @test rline(rep, "operator") == "  operator   J̃ exact"
     @test rline(rep, "run") == "  run        1 window; 1 solve; status Success"
     # a given count and inner print as given, in keyword form
-        r2 = sprint(field_report, init(p, BackwardEuler(; newton = 3, substeps = 2, linsolve = LatticeMultigrid(; cycles = 2)); dt = 0.01))
-    @test rline(r2, "newton") == "  newton     3: given (`newton = 3`)"
+        r2 = sprint(field_report, init(p, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 3), substeps = 2, linsolve = LatticeMultigrid(; cycles = 2)); dt = 0.01))
+        @test rline(r2, "newton") == "  newton     3: given (`nlsolve = LatticeNewton(; max_iter = 3)`)"
     # (as resolved: `cycles = k` sets the budget)
         @test startswith(rline(r2, "linsolve"), "  linsolve   LatticeMultigrid(; cycles = 2, maxiters = 2), multigrid levels") && !occursin("linsolve = :auto", r2)
     @test endswith(rline(r2, "substeps"), "[user]") && occursin("2 substeps", rline(r2, "window"))
@@ -205,7 +205,7 @@ using .LP_report: fd
     @test length(gq.plans) == n0 && LFP.lattice_metadata(q).builds[] == 0
         @test endswith(rline(rb, "substeps"), "[least]") && rline(rb, "linsolve") == "  linsolve   LatticePCG() (`linsolve = :auto`)"
     @test rline(rb, "newton") == "  newton     automatic (set when the group is bound)"
-        @test rline(sprint(io -> field_report(io, q, BackwardEuler(; newton = 3); dt = 0.01)), "newton") == "  newton     3: given"
+        @test rline(sprint(io -> field_report(io, q, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 3)); dt = 0.01)), "newton") == "  newton     3: given"
     # groups and the coupling rule, as the integrator prints them; local rows as `init` binds them (review S4)
     p2 = discretize(rsys2(), LatticeDiscretization(Grid((8, 8))))
         r2 = sprint(io -> field_report(io, p2, FieldGroups(rce => ExplicitEuler(), roe => BackwardEuler()); dt = 0.01))
@@ -239,9 +239,9 @@ using .LP_report: fd
     @test f == LFP.implicit_facts(only(ig.runtimes))
         @test solve(q, ExplicitEuler(); dt = 0.01).stats.implicit == [nothing]
     p2 = discretize(rsys2(), LatticeDiscretization(Grid((8, 8))))
-        s2 = solve(p2, FieldGroups(rce => ExplicitEuler(), roe => BackwardEuler(; newton = 2)); dt = 0.01)
+        s2 = solve(p2, FieldGroups(rce => ExplicitEuler(), roe => BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 2))); dt = 0.01)
     @test s2.stats.implicit[1] === nothing && s2.stats.implicit[2].newton == 2 && s2.stats.implicit[2].given
-    @test occursin("2: given (`newton = 2`)", sprint(field_report, s2))
+        @test occursin("2: given (`nlsolve = LatticeNewton(; max_iter = 2)`)", sprint(field_report, s2))
 end
 end
 

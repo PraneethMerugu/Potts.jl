@@ -143,7 +143,7 @@ end
         @test only(a2.runtimes).cache.newton == 2
         @test Potts.SciMLBase.check_error(a2) == Potts.SciMLBase.ReturnCode.Success   # healthy, in progress
         @test Potts.LatticeFields.Problems.field_stats(a2).newton_budget == 0
-        b = run(BackwardEuler(; newton = 12, linsolve = tight))
+        b = run(BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 12), linsolve = tight))
         # F4-15b (review; user ruling 2026-11-13): the acceptance is
         # `dk <= NEWTON_EPS * ||u_k - u^n|| + 10 eps(T) ||u_k||` (implicit.jl), relative to the step
         # increment; the distance from the two-step iterate to the 12-step reference is the remaining

@@ -11,11 +11,13 @@
 using Test, LatticeFields
 include("../host_runner.jl")
 include("../solvers_cases.jl")
+using KernelAbstractions: Backend
 using LatticeFields: Schedule
 using LatticeFields.Solvers: BoundOperator, LatticeGMRES, iterations
-using LinearSolve: LinearSolve, KrylovJL_CG, LinearProblem, init, reinit!, solve
+using LinearSolve: LinearSolve, KrylovJL_CG, KLUFactorization, UMFPACKFactorization, LinearProblem, init, reinit!, solve
 using SciMLBase: ReturnCode
 using LinearAlgebra: I, SymTridiagonal, mul!
+using SparseArrays: sparse
 # (the test executor's scalars are host memory: the solve reads its status for free;
 # `MockDevExec` delegates execution to `HostExec` with `host_scalars === false` for the device path)
 Solvers.host_scalars(::HostExec, scal) = scal isa Array
@@ -25,6 +27,7 @@ Schedule.supports(::MockDevExec, ::Type{Float64}) = true
 Solvers.to_host(::MockDevExec, A) = copy(A)
 Solvers.launch!(::MockDevExec, l::Solvers.Launch) = Solvers.launch!(HostExec(), l)
 Solvers.host_scalars(::MockDevExec, scal) = false
+struct MockGPUBackend <: Backend end
 
 # a masked disk with a random right-hand side (`homog_disk`: zero boundary data, linear `A * x = b`)
 function disk(T, n = 48; s = 0.02)
@@ -173,4 +176,29 @@ end
     @test occursin("gmres_restart", err_msg(() -> LatticeGMRES(; gmres_restart = 1)))
     @test_throws ArgumentError LatticeMultigrid(; cycles = 0)
     @test occursin("cycles", err_msg(() -> LatticeMultigrid(; cycles = 0)))
+end
+
+@testitem "BoundOperator CSC assembly, KLUFactorization / UMFPACKFactorization, and device backend refusal" setup = [LF_solvers_linearsolve] tags = [:latticefields, :solvers] begin
+    op, ins, b = homog_disk(Float64, 32)
+    A = BoundOperator(HostExec(), op; T = Float64, inputs = ins)
+    M = sparse(A)
+    x = rand(Xoshiro(7), length(b))
+    @test M * x ≈ A * x rtol = 1.0e-12
+    # Hex operator CSC matches mul! as well
+    op_hex = CellOperator((12, 10); periodic = (false, true), shift = 0.05, face = (0.3, 0.2, 0.15), dirichlet = ((0.0, 0.0), (nothing, nothing)), hex = true)
+    A_hex = BoundOperator(HostExec(), op_hex; T = Float64)
+    @test sparse(A_hex) * rand(Xoshiro(11), 120) ≈ A_hex * rand(Xoshiro(11), 120) rtol = 1.0e-12
+    # KLU and UMFPACK match LatticePCG on BoundOperator
+    sp = solve(LinearProblem(A, b), LatticePCG(); maxiters = 48, reltol = 1.0e-12)
+    for fact in (KLUFactorization(), UMFPACKFactorization())
+        sf = solve(LinearProblem(A, b), fact)
+        @test sf.u ≈ sp.u rtol = 1.0e-10
+    end
+    # Device backend refuses concrete-A factorizations with matrix-free route
+    @test_throws ArgumentError Solvers.field_cache(MockGPUBackend(), op, KLUFactorization(); T = Float64, inputs = ("in.f" => b, ins...))
+    msg = err_msg(() -> Solvers.field_cache(MockGPUBackend(), op, KLUFactorization(); T = Float64, inputs = ("in.f" => b, ins...)))
+    @test occursin("LatticePCG", msg)
+    Ag = BoundOperator(MockGPUBackend(), op; T = Float64, inputs = ins)
+    @test_throws ArgumentError convert(AbstractMatrix, Ag)
+    @test occursin("LatticePCG", err_msg(() -> convert(AbstractMatrix, Ag)))
 end

@@ -29,9 +29,33 @@ BoundOperator(exec, op::CellOperator; T = Float32, solver_type = :auto, inputs =
     BoundOperator(exec, op, T, solver_type, Tuple(inputs))
 Base.size(A::BoundOperator) = (n = prod(A.op.dims); (n, n))
 Base.size(A::BoundOperator, i::Integer) = size(A)[i]
+Base.copy(A::BoundOperator) = A
 SciMLOperators.islinear(::BoundOperator) = true
 SciMLOperators.has_mul(::BoundOperator) = true
 SciMLOperators.has_mul!(::BoundOperator) = true
+SciMLOperators.has_concretization(::BoundOperator) = true
+SparseArrays.sparse(A::BoundOperator) = sparse_operator(A)
+function Base.convert(::Type{AbstractMatrix}, A::BoundOperator)
+    _check_host_factorization(A.exec, BoundOperator)
+    return sparse_operator(A)
+end
+
+function _is_cpu_exec(exec)
+    exec isa KA.Backend && return exec isa KA.CPU
+    return true
+end
+function _check_host_factorization(exec, alg)
+    _is_cpu_exec(exec) && return nothing
+    name = alg isa Type ? nameof(alg) : nameof(typeof(alg))
+    throw(
+        ArgumentError(
+            string(
+                "`", name, "` needs a concrete sparse matrix on the host and is not supported on device backend ",
+                nameof(typeof(exec)), "; pass a matrix-free solver (`linsolve = LatticePCG()` or `linsolve = LatticeMultigrid()`)"
+            )
+        )
+    )
+end
 
 function _bound_input(A::BoundOperator, key)
     key isa String || return nothing
@@ -141,11 +165,18 @@ function _bound_mul_body!(i, S, P, G)
 end
 
 function LinearAlgebra.mul!(y::AbstractVector, A::BoundOperator{ET, N}, x::AbstractVector) where {ET, N}
-    op = A.op
-    n = prod(op.dims)
+    n = prod(A.op.dims)
     length(y) == n && length(x) == n ||
         throw(DimensionMismatch("BoundOperator has size ($n, $n); got y of length $(length(y)) and x of length $(length(x))"))
-    T = eltype(y)
+    _, mask, sh, fs, dims, strides, per, hex, s_scalar, f_scalars, dir, rob = _bound_stencil(A, eltype(y))
+    G = (; n = Int32(n), dims, strides, per, hex, shift = s_scalar, faces = f_scalars, dir, rob)
+    launch!(A.exec, Launch(_bound_mul_body!, n, (y, x, mask, sh, fs), (), G, "bound.mul"))
+    return y
+end
+
+function _bound_stencil(A::BoundOperator{ET, N}, ::Type{T}) where {ET, N, T}
+    op = A.op
+    n = prod(op.dims)
     mask = _bound_input(A, op.mask)
     sh = _bound_input(A, op.shift)
     fs = map(f -> _bound_input(A, f), faces(op))
@@ -153,14 +184,138 @@ function LinearAlgebra.mul!(y::AbstractVector, A::BoundOperator{ET, N}, x::Abstr
     strides = ntuple(a -> Int32(prod(op.dims[1:(a - 1)])), N)
     rob = ntuple(a -> ntuple(k -> (r = op.robin[a][k]; r === nothing ? zero(T) : T(_robin_slots(op, r)[1])), 2), N)
     dir = ntuple(a -> ntuple(k -> op.dirichlet[a][k] !== nothing, 2), N)
-    G = (;
-        n = Int32(n), dims, strides, per = op.periodic, hex = ishex(op),
-        shift = T(op.shift isa Real ? op.shift : 0),
-        faces = map(f -> T(f isa Real ? f : 0), faces(op)),
-        dir, rob,
-    )
-    launch!(A.exec, Launch(_bound_mul_body!, n, (y, x, mask, sh, fs), (), G, "bound.mul"))
-    return y
+    return n, mask, sh, fs, dims, strides, op.periodic, ishex(op),
+        T(op.shift isa Real ? op.shift : 0), map(f -> T(f isa Real ? f : 0), faces(op)), dir, rob
+end
+
+function _visit_bound_entries(emit!, A::BoundOperator{ET, N}, ::Type{T}) where {ET, N, T}
+    n, mask, sh, fs, dims, strides, per, hex, s_scalar, f_scalars, dir, rob = _bound_stencil(A, T)
+    @inbounds for idx in 1:n
+        if mask !== nothing && mask[idx] != 0
+            emit!(idx, idx, one(T))
+            coords = _bound_coords(idx, dims)
+            for a in 1:N
+                da = Int(dims[a])
+                da == 1 && continue
+                sa = Int(strides[a])
+                ca = coords[a]
+                if ca > 1
+                    emit!(idx, idx - sa, zero(T))
+                elseif per[a]
+                    emit!(idx, idx + (da - 1) * sa, zero(T))
+                end
+                if ca < da
+                    emit!(idx, idx + sa, zero(T))
+                elseif per[a]
+                    emit!(idx, idx - (da - 1) * sa, zero(T))
+                end
+            end
+            if hex && N == 2 && dims[1] > 1 && dims[2] > 1
+                d1, d2 = Int(dims[1]), Int(dims[2])
+                c1, c2 = coords[1], coords[2]
+                if (per[1] || c1 < d1) && (per[2] || c2 > 1)
+                    emit!(idx, mod1(c1 + 1, d1) + (mod1(c2 - 1, d2) - 1) * d1, zero(T))
+                end
+                if (per[1] || c1 > 1) && (per[2] || c2 < d2)
+                    emit!(idx, mod1(c1 - 1, d1) + (mod1(c2 + 1, d2) - 1) * d1, zero(T))
+                end
+            end
+            continue
+        end
+        diag = sh === nothing ? s_scalar : T(sh[idx])
+        coords = _bound_coords(idx, dims)
+        for a in 1:N
+            da = Int(dims[a])
+            da == 1 && continue
+            sa = Int(strides[a])
+            fa = fs[a]
+            wi = fa === nothing ? f_scalars[a] : T(fa[idx])
+            ca = coords[a]
+            if ca > 1 || per[a]
+                j = ca > 1 ? idx - sa : idx + (da - 1) * sa
+                wj = fa === nothing ? f_scalars[a] : T(fa[j])
+                diag += wj
+                emit!(idx, j, (mask !== nothing && mask[j] != 0) ? zero(T) : -wj)
+            elseif dir[a][1]
+                diag += T(2) * wi
+            elseif rob[a][1] != zero(T)
+                diag += rob[a][1] * wi
+            end
+            if ca < da || per[a]
+                j = ca < da ? idx + sa : idx - (da - 1) * sa
+                diag += wi
+                emit!(idx, j, (mask !== nothing && mask[j] != 0) ? zero(T) : -wi)
+            elseif dir[a][2]
+                diag += T(2) * wi
+            elseif rob[a][2] != zero(T)
+                diag += rob[a][2] * wi
+            end
+        end
+        if hex && N == 2 && dims[1] > 1 && dims[2] > 1
+            d1, d2 = Int(dims[1]), Int(dims[2])
+            c1, c2 = coords[1], coords[2]
+            f3 = fs[3]
+            w3i = f3 === nothing ? f_scalars[3] : T(f3[idx])
+            in1 = per[1] || c1 < d1
+            in2 = per[2] || c2 > 1
+            if in1 && in2
+                j = mod1(c1 + 1, d1) + (mod1(c2 - 1, d2) - 1) * d1
+                diag += w3i
+                emit!(idx, j, (mask !== nothing && mask[j] != 0) ? zero(T) : -w3i)
+            else
+                dg = !in1 ? (dir[1][2] ? T(2) : rob[1][2]) : (dir[2][1] ? T(2) : rob[2][1])
+                diag += dg * w3i
+            end
+            in1 = per[1] || c1 > 1
+            in2 = per[2] || c2 < d2
+            if in1 && in2
+                j = mod1(c1 - 1, d1) + (mod1(c2 + 1, d2) - 1) * d1
+                wj = f3 === nothing ? f_scalars[3] : T(f3[j])
+                diag += wj
+                emit!(idx, j, (mask !== nothing && mask[j] != 0) ? zero(T) : -wj)
+            else
+                dg = !in1 ? (dir[1][1] ? T(2) : rob[1][1]) : (dir[2][2] ? T(2) : rob[2][2])
+                diag += dg * w3i
+            end
+        end
+        emit!(idx, idx, diag)
+    end
+    return nothing
+end
+
+function sparse_operator(A::BoundOperator{ET}) where {ET}
+    _check_host_factorization(A.exec, BoundOperator)
+    n = size(A, 1)
+    I = Int[]
+    J = Int[]
+    V = ET[]
+    est = (2 * length(A.op.dims) + 3) * n
+    sizehint!(I, est)
+    sizehint!(J, est)
+    sizehint!(V, est)
+    _visit_bound_entries(A, ET) do i, j, v
+        push!(I, i)
+        push!(J, j)
+        push!(V, v)
+    end
+    return SparseArrays.sparse(I, J, V, n, n)
+end
+function _csc_add!(M::SparseArrays.SparseMatrixCSC{T}, i::Int, j::Int, v::T) where {T}
+    rv = SparseArrays.rowvals(M)
+    nz = SparseArrays.nonzeros(M)
+    lo = Int(M.colptr[j])
+    hi = Int(M.colptr[j + 1]) - 1
+    k = searchsortedfirst(rv, i, lo, hi, Base.Order.Forward)
+    @inbounds nz[k] += v
+    return nothing
+end
+function sparse_operator!(M::SparseArrays.SparseMatrixCSC{T}, A::BoundOperator) where {T}
+    _check_host_factorization(A.exec, BoundOperator)
+    fill!(SparseArrays.nonzeros(M), zero(T))
+    _visit_bound_entries(A, T) do i, j, v
+        _csc_add!(M, i, j, v)
+    end
+    return M
 end
 function LinearAlgebra.mul!(y::AbstractVector, A::BoundOperator, x::AbstractVector, α::Number, β::Number)
     if α == 1 && β == 0
@@ -465,7 +620,7 @@ of `inputs`, and `alg` `linsolve` (`:auto`: `LatticePCG()`) with the owned value
 [`FieldSolver`](@ref) on the fused path; the owner rebuilds its hierarchy (`rebuild!`), so the
 cache is not fresh.
 """
-function field_cache(exec, op::CellOperator, linsolve; T = Float32, solver_type = :auto, inputs = ())
+function bound_field_cache(exec, op::CellOperator, linsolve; T = Float32, solver_type = :auto, inputs = ())
     if linsolve === :auto || linsolve isa LatticeMultigrid ||
             (linsolve isa LatticePCG && linsolve.precs isa LatticeMultigrid) ||
             !(linsolve isa LinearSolve.SciMLLinearSolveAlgorithm)
@@ -475,10 +630,35 @@ function field_cache(exec, op::CellOperator, linsolve; T = Float32, solver_type 
     i = findfirst(p -> first(p) == "in.f", inputs)
     i === nothing && irerror("a field's linear solve needs its right-hand side `in.f` among the inputs")
     b = last(inputs[i])
-    A = BoundOperator(exec, op, T, solver_type, Tuple(inputs[j] for j in eachindex(inputs) if j != i))
+    ins = Tuple(inputs[j] for j in eachindex(inputs) if j != i)
+    if LinearSolve.needs_concrete_A(alg)
+        _check_host_factorization(exec, alg)
+        Aop = BoundOperator(exec, op, eltype(b), solver_type, ins)
+        M = sparse_operator(Aop)
+        c = CommonSolve.init(
+            SciMLBase.LinearProblem(M, b), alg;
+            alias = SciMLBase.LinearAliasSpecifier(alias_A = true, alias_b = true),
+        )
+        return c, Aop
+    end
+    A = BoundOperator(exec, op, T, solver_type, ins)
     c = CommonSolve.init(SciMLBase.LinearProblem(A, b), alg)
     c.isfresh = false
-    return c
+    return c, A
+end
+field_cache(exec, op::CellOperator, linsolve; T = Float32, solver_type = :auto, inputs = ()) =
+    first(bound_field_cache(exec, op, linsolve; T, solver_type, inputs))
+
+function update_linear_operator!(lin::LinearSolve.LinearCache, bop::BoundOperator)
+    if LinearSolve.needs_concrete_A(lin.alg)
+        sparse_operator!(lin.A, bop)
+        lin.isfresh = true
+    else
+        lin.A = bop
+        lin.isfresh = true
+        lin.precsisfresh = true
+    end
+    return nothing
 end
 
 function _check_fused_cap(m::Int)

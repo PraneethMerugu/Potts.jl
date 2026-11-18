@@ -112,12 +112,12 @@ LFP.substeps(::LFP.FieldProblem, ::StallStub, p = nothing; tables = nothing, inp
 # shift (`push!(jterms, dj)` dropped in LatticePDE's `_build_operator`; the row stays exact, one
 # Newton step) fails the stiff Michaelis–Menten case (an explicit `h ∂f/∂c` up to 32).
 # The orders against the semi-discrete solution (the `:ode` path, Tsit5 at 1e-12), `n²` sites
-function nl_orders(rhs, ic; T, dts, newton = nothing, n = 16)
+function nl_orders(rhs, ic; T, dts, nlsolve = nothing, n = 16)
     sys = PDESystem([D(bce) ~ rhs], [bc(0, x, y) ~ ic], bdom(T), [t, x, y], [bce], Any[]; name = :nl)
     ref = solve(discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64)), Tsit5();
         reltol = 1e-12, abstol = 1e-12).u[end]
     pb = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64))
-    us = [vec(blast(solve(pb, BackwardEuler(; linsolve = BTIGHT, newton); dt))) for dt in dts]
+    us = [vec(blast(solve(pb, BackwardEuler(; linsolve = BTIGHT, nlsolve); dt))) for dt in dts]
     es = [maximum(abs, u .- ref) for u in us]
     return es, log2.(es[1:(end - 1)] ./ es[2:end]), pb, us
 end

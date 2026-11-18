@@ -35,7 +35,7 @@ using LatticeFields.Solvers: LatticePCG, LatticeGMRES, LatticeMultigrid, Lattice
 using LatticeFields.Compile: CompileOptions, fingerprint_text, fuse_update, promote_dual, primal
 using LatticeFields.IR: fieldid, RESOLVE, degenerate, leveldims, sitecoefs
 using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
-                              ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, RT_DT,
+    ExplicitEuler, ExplicitMap, LatticeNewton, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, RT_DT,
     substep_counts, steady_fields, field_series, field_jacobian_sparsity,
                               field_report
 using ModelingToolkitBase: ModelingToolkitBase, PDESystem, Pre, ShiftIndex, Shift, Hold, Sample
@@ -57,7 +57,7 @@ export get_lattice_placement, get_lattice_storage, get_lattice_level, get_lattic
 export vocabulary_issues, check_vocabulary
 export LatticeDiscretization, FiniteVolume, CompiledField, discretize, symbolic_discretize,
        parse_bcs, linearity, Grid, HEX, Interval, lattice_domain
-export ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, solve, init, step!, solve!, stability_bound,
+export ExplicitEuler, ExplicitMap, LatticeNewton, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, solve, init, step!, solve!, stability_bound,
        substep_counts, steady_fields, field_series, field_report
 export LatticePCG, LatticeGMRES, LatticeMultigrid   # the linear solvers (LinearSolve algorithms; `linsolve = …`); `VCycle` is public
 export LatticeBlockSolve                          # coupled block preconditioner (LinearSolve `precs` function)

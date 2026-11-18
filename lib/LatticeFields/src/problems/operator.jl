@@ -31,7 +31,7 @@ Jacobian that the linear solve sees:
   `−∂f/∂c` at the iterate, or a switch): the `jac:` kernel runs at every Newton iteration
   (F3-09a);
 - `switch`: the row has a switch term `a max(c − c_T, 0)` (`LaggedSwitch`): its Jacobian
-  flips with the iterate, and a group with one takes `newton = 2` by default (S1);
+  flips with the iterate, and a group with one takes 2 Newton iterations automatically (S1);
 - `adv`: the bound of the row's advection terms (F3-09b): entries whose absolute values sum to
   the upwind bound `Σ_a 2 max|u_a| / h_a`, each a `Coef` (a velocity of numbers and
   parameters) or `(; f, text)`, `f` a function of the parameters (a velocity that varies by

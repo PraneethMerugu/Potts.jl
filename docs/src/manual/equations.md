@@ -248,7 +248,7 @@ sol[:q][end], sol[:g][end]
 
 | Keyword | Values | Default |
 |---|---|---|
-| `field_solver` | `ExplicitEuler(; substeps, lower_bound)`: `substeps` explicit steps per MCS, values clipped at `lower_bound`; `BackwardEuler(; substeps, newton, lower_bound, linsolve, solver_type)`: implicit steps, each a linear solve with `linsolve`; `CrankNicolson(…)`, `BDF2(…)`: second-order implicit steps, the same keywords; `QuasiSteady(; newton, linsolve, solver_type)`: the steady state in each MCS; each takes `init = :steady` (a steady start) and `compute_type` (`Float32` or `Float64`: the number type its kernels compute in; default the problem's `T`) | `ExplicitEuler()`: the automatic count, no clip |
+| `field_solver` | `ExplicitEuler(; substeps, lower_bound)`: `substeps` explicit steps per MCS, values clipped at `lower_bound`; `BackwardEuler(; substeps, nlsolve, lower_bound, linsolve, solver_type)`: implicit steps, each a linear solve with `linsolve`; `CrankNicolson(…)`, `BDF2(…)`: second-order implicit steps, the same keywords; `QuasiSteady(; nlsolve, linsolve, solver_type)`: the steady state in each MCS; each takes `init = :steady` (a steady start) and `compute_type` (`Float32` or `Float64`: the number type its kernels compute in; default the problem's `T`) | `ExplicitEuler()`: the automatic count, no clip |
 | `ode_solver` | `ExplicitEuler(; substeps)`, `Potts.RK4(; substeps)`, `Adaptive(alg; kwargs...)` | `ExplicitEuler()`, one step per MCS |
 | `solvers` | `[x => solver, …]`, per variable or component | — |
 
@@ -276,19 +276,19 @@ another in a loop, or a second face coefficient next to a kind-dependent multipl
 solve), are
 corrected by more Newton iterations. Their substep count keeps the correction converging (for
 the sum of their bounds; advection with a constant velocity: `substeps ≥ 2 · mcs_duration ·
-Σ_a 2|u_a|/h_a`), and `newton` defaults to the iterations that this bound needs. A second
+Σ_a 2|u_a|/h_a`), and `nlsolve = nothing` chooses the automatic Newton iteration count that this bound needs. A second
 diffusion term that is at most half the one in the solve, face by face (with a multiplier in
 the solve that is positive everywhere), needs no extra substeps at all, only a few more
 Newton iterations. When these rules raise a `substeps = n` you gave, a warning says which
 rule and which terms. `LatticeGMRES` is not a time stepper's `linsolve` (it is the coupled steady
 solve's, below): on BackwardEuler, CrankNicolson and BDF2 it was slower in every case measured,
 so they refuse it. Each substep
-checks the Newton correction: a correction that does not reach the tolerance in `newton`
-iterations is counted in `integ.stats` and warned once with the route (a larger `newton = k`,
-or more substeps). A correction that diverges ends the run with
+checks the Newton correction: under the automatic count (`nlsolve = nothing`), a correction that does not reach the tolerance
+is counted in `integ.stats` and warned once with the route (giving `nlsolve = LatticeNewton(; max_iter = k)`,
+or more substeps). Under an explicit `nlsolve = LatticeNewton(; max_iter = k)`, the iteration stops early once the correction meets the tolerance and ends with `ReturnCode.ConvergenceFailure` at the window end if the budget is hit. A correction that diverges (`check_div = true`, the default) ends the run with
 `ReturnCode.ConvergenceFailure`, and the warning gives more substeps as the route. Under the
 automatic count, a CPU run stops a substep's Newton iterations once the correction meets the
-tolerance; a GPU runs them all, so CPU and GPU results agree to the tolerance, not bitwise. On
+tolerance; a GPU stops via its convergence gate once all rows converge. On
 a hexagonal lattice every implicit solver runs on the six-neighbor Laplacian. A face condition
 there applies along each link that leaves the box: a diagonal link takes the condition of
 axis 1's face when it leaves along axis 1, else axis 2's. Explicit and implicit steps use the
@@ -324,11 +324,11 @@ solved for a field it reads that has no other equation, the one under its operat
 with `QuasiSteady` by default (another solver for it is an error). Its sign does not matter:
 `0 ~ kd * c - Dc * laplacian(c) - s` is the same row. A local row such as `0 ~ -2c + 0.5e`, with
 `D(e) ~ …`, is `c`'s. Steady fields are solved first in each MCS, so the other fields read their
-values of that MCS. `QuasiSteady` also solves a rate row `D(c) ~ rhs` as `0 = rhs`. It takes `newton`, `linsolve` and `solver_type` with the meanings above, and has no
+values of that MCS. `QuasiSteady` also solves a rate row `D(c) ~ rhs` as `0 = rhs`. It takes `nlsolve`, `linsolve` and `solver_type` with the meanings above, and has no
 `substeps` and no `lower_bound`. A linear field takes one linear solve per MCS; a nonlinear or
 switched one takes up to 8 Newton iterations, checked as above. When a term stays out of the
 operator (advection), the count comes from the bound on that term against the decay, from 8
-to at most 40 iterations; give `newton = k` if the warning says the budget is hit. Steady
+to at most 40 iterations; give `nlsolve = LatticeNewton(; max_iter = k)` if the warning says the budget is hit. Steady
 fields of one `QuasiSteady` that read one another (`0 ~ laplacian(a) - a + 0.5b` and
 `0 ~ laplacian(b) - b - 0.5a`, a cross diffusion `laplacian(b)` in `a`'s row), and a row with a term the
 operator does not see (`c²` in `0 ~ q - c^2`), are solved together: one Newton iteration

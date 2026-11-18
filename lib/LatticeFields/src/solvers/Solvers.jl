@@ -34,6 +34,7 @@ using LinearSolve: LinearSolve
 using SciMLBase: SciMLBase
 using CommonSolve: CommonSolve
 using LinearAlgebra: LinearAlgebra
+using SparseArrays: SparseArrays
 using Krylov: Krylov
 using SciMLOperators: SciMLOperators
 

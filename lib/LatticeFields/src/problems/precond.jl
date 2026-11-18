@@ -102,8 +102,8 @@ function _mg_engine(m::LatticeMetadata, lp::LatticeParameters, inner)
     )
     st = fp.group.spec.steady
     h = 1.0
-    be = BackwardEuler(; substeps = 1, newton = 1, linsolve = inner)
-    qs = QuasiSteady(; newton = 1, linsolve = inner)
+    be = BackwardEuler(; substeps = 1, nlsolve = LatticeNewton(; max_iter = 1), linsolve = inner)
+    qs = QuasiSteady(; nlsolve = LatticeNewton(; max_iter = 1), linsolve = inner)
     alg = fp.group.spec.timefree ? qs : isempty(st) ? be : FieldGroups((k => qs for k in st)...; default = be)
     integ = CommonSolve.init(g, alg; dt = h, save_start = false, save_end = false)
     s = fp.program

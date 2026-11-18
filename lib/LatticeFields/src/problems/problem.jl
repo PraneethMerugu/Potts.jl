@@ -876,13 +876,13 @@ end
 """
     steady_start(alg) -> QuasiSteady
 
-The steady solve of `alg`'s `init = :steady` (F3-12c, both front ends): `QuasiSteady` with
-`alg`'s `linsolve` and `solver_type` (and `newton` for a `QuasiSteady` group);
+The steady solve of `alg`'s `init = :steady` (both front ends): `QuasiSteady` with
+`alg`'s `linsolve` and `solver_type` (and `nlsolve` for a `QuasiSteady` group);
 `linsolve = :auto` takes `LatticePCG` to `reltol = 1e-6` within 64 iterations (`STEADY_INNER`), the
 host-checked steady solve of a system with no time.
 """
 steady_start(a) = QuasiSteady(;
-    newton = a isa QuasiSteady ? a.newton : nothing,
+    nlsolve = a isa QuasiSteady ? a.nlsolve : nothing,
     linsolve = a isa AbstractImplicitFieldAlgorithm && a.linsolve !== :auto ? a.linsolve : STEADY_INNER,
     solver_type = a isa AbstractImplicitFieldAlgorithm ? a.solver_type : :auto
 )
@@ -1403,14 +1403,14 @@ end
 const STEADY_INNER = Solvers.LatticePCG(; maxiters = 64)
 function _steady_solve(prob::FieldProblem, alg::AbstractFieldAlgorithm; kw...)
     alg isa QuasiSteady || throw(ArgumentError(string(_algtext(alg), ": the system has no time (a steady system, ",
-                "solved once by `QuasiSteady`): `solve(prob)` or `solve(prob, QuasiSteady(; linsolve, newton))`"
+                "solved once by `QuasiSteady`): `solve(prob)` or `solve(prob, QuasiSteady(; linsolve, nlsolve))`"
             )
         )
     )
     isempty(kw) || throw(ArgumentError(string("`solve` of a system with no time takes no ",
         join(("`$k`" for k in keys(kw)), ", "), ": it is solved once and returns that one state")))
     a = QuasiSteady(;
-        newton = alg.newton, linsolve = alg.linsolve === :auto ? STEADY_INNER : alg.linsolve,
+        nlsolve = alg.nlsolve, linsolve = alg.linsolve === :auto ? STEADY_INNER : alg.linsolve,
         solver_type = alg.solver_type
     )
     s = finish!(CommonSolve.init(SciMLBase.remake(prob; tspan = (0.0, 1.0)), a; dt = 1.0, save_start = false))

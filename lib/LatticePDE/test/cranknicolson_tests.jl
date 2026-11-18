@@ -157,10 +157,10 @@ end
     catch err
         err isa ArgumentError ? err.msg : sprint(showerror, err)
     end
-    @test startswith(e(() -> CrankNicolson(; newton = 0)), "CrankNicolson: newton = 0 is the Newton iterations")
+        @test startswith(e(() -> CrankNicolson(; nlsolve = 0)), "CrankNicolson: nlsolve = 0 must be `nothing`")
     @test e(() -> CrankNicolson(; theta = 0.5)) ==
-            "CrankNicolson: no keyword `theta`; its keywords are `substeps`, `newton`, `lower_bound`, `linsolve`, `solver_type`, `init` and `compute_type`"
-        a = CrankNicolson(; newton = 2, linsolve = LatticePCG(; maxiters = 12))
+            "CrankNicolson: no keyword `theta`; its keywords are `substeps`, `nlsolve`, `lower_bound`, `linsolve`, `solver_type`, `init` and `compute_type`"
+        a = CrankNicolson(; nlsolve = LatticeNewton(; max_iter = 2), linsolve = LatticePCG(; maxiters = 12))
     @test eval(Meta.parse(repr(a))) == a
         phex = discretize(
             bsys([D(bce) ~ bD * laplacian(bce)], [bc(0, x, y) ~ x], [bD]; dvs = [bce]),

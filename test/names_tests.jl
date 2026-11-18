@@ -29,7 +29,7 @@ end
     @testset "field libraries: the keywords of the algorithm constructors are ASCII" begin
         P, S = LF.Problems, LF.Solvers
         ctors = (
-            P.ExplicitEuler, P.ExplicitMap, P.BackwardEuler, P.CrankNicolson, P.BDF2, P.QuasiSteady, P.FieldGroups,
+            P.ExplicitEuler, P.ExplicitMap, P.LatticeNewton, P.BackwardEuler, P.CrankNicolson, P.BDF2, P.QuasiSteady, P.FieldGroups,
             S.LatticePCG, S.LatticeGMRES, S.LatticeMultigrid, LP.LatticeDiscretization,
         )
         kwargs(f) = unique!(reduce(vcat, (Base.kwarg_decl(m) for m in methods(f)); init = Symbol[]))

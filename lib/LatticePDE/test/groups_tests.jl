@@ -427,7 +427,7 @@ end
         # `init` binds the groups behind a barrier (its return type is not inferred); the
         # integrator it returns steps and runs with inferred types, explicit and implicit (the
         # solution, SciML's `ODESolution`, is built behind a barrier: F4-04)
-        for alg in (a4, BackwardEuler(; newton = 30, linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64)))
+        for alg in (a4, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 30), linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64)))
             ig = init(p, alg; dt = 0.01)
             @inferred step!(ig)
             @test (@inferred LFP.finish!(ig)) === ig && solve!(ig).retcode == ReturnCode.Success

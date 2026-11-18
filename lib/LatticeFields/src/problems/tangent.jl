@@ -227,7 +227,7 @@ function _warn_tangent_newton(pc::ImplicitCache, alg)
         ": the derivative parts are those of each stage's solution (the stage's equation solved), and the run takes ",
         pc.newton, " Newton iteration", pc.newton == 1 ? "" : "s", " per stage with no convergence check, which do",
         pc.newton == 1 ? "es" : "", " not solve a local nonlinear term or a switch exactly, so the derivatives differ from ",
-        "those of the run by the derivative of that defect; give `newton = k` (k ≥ 2: the run then iterates until the ",
+        "those of the run by the derivative of that defect; give `nlsolve = LatticeNewton(; max_iter = k)` (k ≥ 2: the run then iterates until the ",
         "correction meets the tolerance) for derivatives of the run")
     return nothing
 end
@@ -326,7 +326,7 @@ function _trow!(pr::ImplicitRow, tr::TangentRow, c::TangentCache, par, t1, hγ, 
     n = length(dst)
     for j in 1:(c.np)
         Exec.launch!(backend, _tpart_body!, n, (pr.resarr, tr.resarr, j))
-        if pr.solver === nothing
+        if pr.solver === nothing && pr.lin === nothing
             Exec.launch!(backend, _tupdate_body!, n, (dst, nothing, nothing, nothing, pr.resarr, pr.s, tr.mask, tr.mval,
                 tr.mvf, tr.lo, j))
         else

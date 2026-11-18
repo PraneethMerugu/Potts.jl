@@ -247,14 +247,14 @@ using .LP_device: fd, kron
         sw = psys([D(ce) ~ Di * laplacian(ce) - ki * max(ce - 0.3, 0) + 0.5], [c(0, x, y) ~ x * y], [Di, ki])
         rob = psys([D(ce) ~ Di * laplacian(ce) - ki * ce + 1], [c(0, x, y) ~ x * y, 1.5 * c(t, 1, y) + Differential(x)(c(t, 1, y)) ~ 0.2], [Di, ki])
         cases = [
-            ("BackwardEuler, field row", field, BackwardEuler(; newton = 1)),
-            ("BackwardEuler, advection", adv, BackwardEuler(; newton = 6)),
-            ("BackwardEuler, switch", sw, BackwardEuler(; newton = 2)),
-            ("BackwardEuler, Robin face", rob, BackwardEuler(; newton = 1)),
-            ("CrankNicolson", field, CrankNicolson(; newton = 1)),
-            ("BDF2", field, BDF2(; newton = 1)),
-            ("QuasiSteady", field, QuasiSteady(; newton = 1)),
-            ("BackwardEuler, steady start", field, BackwardEuler(; newton = 1, init = :steady)),
+            ("BackwardEuler, field row", field, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 1))),
+            ("BackwardEuler, advection", adv, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 6))),
+            ("BackwardEuler, switch", sw, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 2))),
+            ("BackwardEuler, Robin face", rob, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 1))),
+            ("CrankNicolson", field, CrankNicolson(; nlsolve = LatticeNewton(; max_iter = 1))),
+            ("BDF2", field, BDF2(; nlsolve = LatticeNewton(; max_iter = 1))),
+            ("QuasiSteady", field, QuasiSteady(; nlsolve = LatticeNewton(; max_iter = 1))),
+            ("BackwardEuler, steady start", field, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 1), init = :steady)),
         ]
     mk(sys, be) = discretize(sys, LatticeDiscretization(Grid((32, 32)); T = Float32, backend = be))
     for (name, sys, alg) in cases
@@ -267,8 +267,8 @@ using .LP_device: fd, kron
         @test rel <= 1e-12
     end
     # control: the comparison sees a change of one Newton iteration (the advection case)
-        sd = solve(mk(adv, PDEV), BackwardEuler(; newton = 5); dt = 0.1, saveat = 0.5)
-        sh = solve(mk(adv, KernelAbstractions.CPU()), BackwardEuler(; newton = 6); dt = 0.1, saveat = 0.5)
+        sd = solve(mk(adv, PDEV), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 5)); dt = 0.1, saveat = 0.5)
+        sh = solve(mk(adv, KernelAbstractions.CPU()), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 6)); dt = 0.1, saveat = 0.5)
     @test maximum(abs, Array(sd[ce, end]) .- sh[ce, end]) / maximum(abs, sh[ce, end]) > 1e-12
 end
 end
@@ -301,11 +301,11 @@ using .LP_device: fd, kron
         igd, igh = init(mk(PDEV, 32), alg; dt = 0.05), init(mk(KernelAbstractions.CPU(), 32), alg; dt = 0.05)
     foreach(_ -> (step!(igd); step!(igh)), 1:2)
     @test LatticeFields.Problems.field_stats(igd).solves == LatticeFields.Problems.field_stats(igh).solves > 0
-    # the time of two windows at 128² with the gate and with every iteration run (`newton = k`)
+        # the time of two windows at 128² with the gate (automatic vs explicit `max_iter = k`)
     p = mk(PDEV, 128)
         run(a) = (solve(p, a; dt = 0.05); KernelAbstractions.synchronize(PDEV); @elapsed (solve(p, a; dt = 0.05); KernelAbstractions.synchronize(PDEV)))
         k = only(init(p, alg; dt = 0.05).runtimes).cache.newton
-        tg, tk = minimum(_ -> run(alg), 1:3), minimum(_ -> run(BackwardEuler(; newton = k)), 1:3)
+        tg, tk = minimum(_ -> run(alg), 1:3), minimum(_ -> run(BackwardEuler(; nlsolve = LatticeNewton(; max_iter = k))), 1:3)
         @info "F3-15 R1 at 128² ($pgpu), $(init(p, alg; dt = 0.05).substeps) substeps per window: the gated run $(round(tg; digits = 3)) s, every iteration ($k) $(round(tk; digits = 3)) s"
 end
 end
@@ -320,7 +320,7 @@ using .LP_device: fd, kron
     cd4 = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables cdev(..))), LatticePDE.LatticeLevel, Coarse(4)))
     q, g = @variables q(..)::Int32 [input = true] g(..) [input = true]
     mk(be) = cown(csys(cd4, q, g), CDIMS; T = Float32, backend = be, ins = [q(t, x, y) => CQ1, g(t, x, y) => CG])
-        for alg in (ExplicitEuler(), BackwardEuler(; newton = 2))
+        for alg in (ExplicitEuler(), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 2)))
             id, ih = init(mk(PDEV), alg; dt = 0.05), init(mk(KernelAbstractions.CPU()), alg; dt = 0.05)
         for n in 1:6
             n == 4 && (id[q(t, x, y)] = CQ2; ih[q(t, x, y)] = CQ2)          # the mask moves
@@ -426,7 +426,7 @@ using .LP_device: fd, kron
         [dvc(t, x, y), dvq(t, x, y), dvk(t, x, y), dvm(t, x, y)], Num[]; name = :dv4)
     mk(be) = cown(dvsys, CDIMS; T = Float32, backend = be, domain = dvm,
         ins = [dvq(t, x, y) => dvQ, dvk(t, x, y) => dvK, dvm(t, x, y) => dvD])
-        for alg in (ExplicitEuler(), BackwardEuler(; newton = 2))
+        for alg in (ExplicitEuler(), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 2)))
             sd, sh = solve(mk(PDEV), alg; dt = 0.05), solve(mk(KernelAbstractions.CPU()), alg; dt = 0.05)
         a, b = Array(sd[dvc(t, x, y), end]), sh[dvc(t, x, y), end]
         @test size(a) == (4, 4) && maximum(abs, a .- b) / maximum(abs, b) <= 1e-6
@@ -576,10 +576,10 @@ using .LP_device: fd, kron
             [D(ce) ~ Dr * laplacian(ce) - kr * ce], [c(0, x, y) ~ x * y, (-1 - 4t) * c(t, 0, y) - Differential(x)(c(t, 0, y)) ~ 0.0],
         [Dr, kr])
         cases = [
-            ("per site, BackwardEuler", site, BackwardEuler(; newton = 1), 0.1),
+            ("per site, BackwardEuler", site, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 1)), 0.1),
             ("per site, ExplicitEuler", site, ExplicitEuler(), 0.05),
-            ("mixed sign, BackwardEuler", mixed, BackwardEuler(; newton = 4), 0.1),
-            ("time, BackwardEuler", timed, BackwardEuler(; newton = 3), 0.1),
+            ("mixed sign, BackwardEuler", mixed, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 4)), 0.1),
+            ("time, BackwardEuler", timed, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 3)), 0.1),
             ("time, ExplicitEuler (re-bounded)", timed, ExplicitEuler(), 0.05),
         ]
     mk(sys, be) = discretize(sys, LatticeDiscretization(Grid((32, 32)); T = Float32, backend = be))
