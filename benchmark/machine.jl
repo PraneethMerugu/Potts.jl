@@ -266,6 +266,22 @@ function gpu_users(; exclude = _default_gpu_exclude(), dir = "/sys/class/kfd/kfd
 end
 
 """
+Wait up to `timeout` s for exiting KFD clients (whose `/proc/<pid>` is already gone) to finish
+kernel teardown before declaring the GPU busy.
+"""
+function wait_kfd_clear(; exclude = _default_gpu_exclude(), timeout = 2.0)
+    Sys.islinux() || return true
+    t0 = time()
+    while true
+        u = gpu_users(; exclude)
+        isempty(u) && return true
+        any(p -> isdir("/proc/$p"), u) && return false
+        time() - t0 >= timeout && return false
+        sleep(0.05)
+    end
+end
+
+"""
 Wait until no CI job runs on this host (`ci`) and, with `gpu`, no other process holds the
 GPU, polling every `poll` s until `deadline` (a `time()` value). Returns `true` when the
 machine is idle, `false` when the deadline passed while it was still busy (the caller then
@@ -274,14 +290,18 @@ runner idle; a CI job's GPU group made a ROCm Graner–Glazier MCS read 2500 ins
 47 ns/site (2026-10-07). Off Linux it returns at once.
 """
 function wait_idle(; gpu = false, ci = true, poll = 30, deadline = time() + 4 * 3600,
-        exclude = Int[])
+        exclude = Int[], on_wait = msg -> (println("WAIT ", msg); flush(stdout)))
     Sys.islinux() || return true
     said = ""
     while true
         why = busy_reasons(; gpu, ci, exclude)
         isempty(why) && return true
+        if gpu && length(why) == 1 && startswith(why[1], "other GPU clients ") &&
+           wait_kfd_clear(; exclude = _default_gpu_exclude(exclude))
+            continue
+        end
         msg = join(why, " and ")
-        msg == said || (println("WAIT ", msg); flush(stdout); said = msg)
+        msg == said || (on_wait(msg); said = msg)
         time() > deadline && return false
         sleep(poll)
     end

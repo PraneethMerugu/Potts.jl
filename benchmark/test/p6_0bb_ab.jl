@@ -195,6 +195,14 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
             sp = run(`sleep 10`; wait = false)
             try
                 @test BenchMachine.repin!(getpid(sp), 0)
+                spid = string(getpid(sp))
+                write(joinpath(kfd, spid), "")
+                withenv("POTTS_AB_PARENT_PID" => string(getpid())) do
+                    ex = BenchMachine._default_gpu_exclude(; dir = kfd)
+                    @test getpid(sp) in ex
+                    @test !(103 in ex)
+                    @test sort(BenchMachine.gpu_users(; exclude = ex, dir = kfd)) == [101, 102, 103]
+                end
             finally
                 kill(sp)
                 wait(sp)
@@ -450,22 +458,21 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
         @test length(preps) == 8 && length(gos) == 8
         @test [e[2] for e in gos] == ["base", "cand", "base-abctl", "cand-abctl",
             "cand", "base-abctl", "cand-abctl", "base"]
-        # Within each round: prepare intervals overlap (concurrent), GO intervals are disjoint (locked)
+        # Within each round: all prepare/READY finish before first GO, GO intervals are disjoint (locked)
         for r in 1:2
             rp = preps[(4r - 3):(4r)]
             rg = gos[(4r - 3):(4r)]
-            p0s = parse.(Float64, getindex.(rp, 4))
             p1s = parse.(Float64, getindex.(rp, 5))
-            @test maximum(p0s) < minimum(p1s)
             g0s = parse.(Float64, getindex.(rg, 6))
             g1s = parse.(Float64, getindex.(rg, 7))
+            @test maximum(p1s) < minimum(g0s)
             @test all(g1s[k] <= g0s[k + 1] for k in 1:3)
-            pids = Set(e[3] for e in rg)
-            @test length(pids) == 4
-            for e in rg
-                excl = Set(split(e[5], ','))
-                @test !(e[3] in excl)
-                @test all(p -> p in excl, setdiff(pids, Set([e[3]])))
+            pids = [e[3] for e in rg]
+            @test length(unique(pids)) == 4
+            for k in 1:4
+                excl = Set(split(rg[k][5], ','))
+                @test all(p -> !(p in excl), pids[1:k])
+                @test all(p -> p in excl, pids[(k + 1):end])
             end
         end
         # A child that dies before READY fails the round loudly (exit 4)

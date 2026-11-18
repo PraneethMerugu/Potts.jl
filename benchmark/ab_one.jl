@@ -9,17 +9,18 @@
 # the device wait `device_sync` (D-090).
 #
 # In `--prepare` mode (used by `ab.jl`'s parallel-compile path), the process:
-#  1. waits, before loading any package, until the machine is idle (`--wait`, up to
-#     `--deadline`, excluding sibling A/B children under `POTTS_AB_PARENT_PID`), printing
-#     `WAIT <reason>` while it waits;
-#  2. loads the packages, seeds the Tuple type cache, and builds and compiles every
-#     case/variant (one untimed `fresh_integrator` + `timed_step!` each);
-#  3. prints `READY <pid>`, flushes stdout, and blocks reading stdin for
+#  1. loads the packages, seeds the Tuple type cache (on CPU/Metal), builds all problems,
+#     compiles kernels via one untimed `fresh_integrator` + `timed_step!` per case/variant
+#     (except on ROCm, where loading AMDGPU/KFD and GPU kernel compile stay after `GO` so no
+#     sibling holds a KFD context during timing), and runs `GC.gc()` (`ab.jl` handles
+#     waiting in the parent before spawning and inside the lock before each `GO`);
+#  2. prints `READY <pid>`, flushes stdout, and blocks reading stdin for
 #     `GO <cpu> [<exclude_pids>]`;
-#  4. once `GO` arrives (already re-pinned by the parent to `<cpu>` while the parent holds
-#     `tools/exclusive.sh`), checks start disturbances (excluding sibling PIDs), prints
-#     `TC <entries> <capacity>`, runs the timed trials (`ABR`/`ABSKIP` lines), checks end
-#     disturbances, and prints `DISTURBED`, final `TC`, and `DONE`.
+#  3. once `GO` arrives (already re-pinned by the parent to `<cpu>` while the parent holds
+#     `tools/exclusive.sh`), runs a short fixed burn-in on the benchmark core, checks start
+#     disturbances (excluding live sibling PIDs), prints `TC <entries> <capacity>`, runs the
+#     timed trials (`ABR`/`ABSKIP` lines), checks end disturbances, and prints `DISTURBED`,
+#     final `TC`, and `DONE`.
 #
 # Without `--prepare` (used by `--serial`, `--inprocess`, and direct runs), the process
 # runs steps 1–2 and times immediately in one pass without reading stdin or printing
@@ -65,6 +66,7 @@ end
 const AB_POS, AB_OPTS = ab_one_opts(ARGS)
 const AB_PREPARE = haskey(AB_OPTS, "prepare")
 const AB_GPU = any(v -> v in ("rocm", "metal"), split(join(AB_POS, ","), ','))
+const AB_ROCM_DEFER = AB_PREPARE && any(v -> v == "rocm", split(join(AB_POS, ","), ','))
 const AB_WAIT = get(AB_OPTS, "wait", "all")
 AB_WAIT in ("all", "gpu", "none") || error("--wait is all, gpu or none")
 
@@ -81,17 +83,16 @@ function ab_disturbances(; exclude = Int[])
         gpu = AB_GPU, ci = AB_WAIT == "all", exclude)
 end
 
-# 1. wait (before loading anything heavy, so a waiting child holds no GPU context)
-const AB_WAIT_DISTURBANCES = String[]
-if AB_WAIT != "none"
+# 1. wait (before loading anything heavy, so a waiting child holds no GPU context; in
+#    `--prepare` mode, the parent handles waiting before spawning and inside the lock)
+if !AB_PREPARE && AB_WAIT != "none"
     deadline = parse(Float64, get(AB_OPTS, "deadline", string(time() + 4 * 3600)))
-    if !BenchMachine.wait_idle(; gpu = AB_GPU, ci = AB_WAIT == "all", deadline)
-        msg = "waited until the deadline; timed while busy"
-        AB_PREPARE ? push!(AB_WAIT_DISTURBANCES, msg) : println("DISTURBED ", msg)
-    end
+    BenchMachine.wait_idle(; gpu = AB_GPU, ci = AB_WAIT == "all", deadline) ||
+        println("DISTURBED waited until the deadline; timed while busy")
 end
 const AB_START_DISTURBANCES = AB_PREPARE ? String[] : ab_disturbances()
 
+AB_ROCM_DEFER && (ENV["POTTS_DEFER_DEVICE"] = "1")
 include(joinpath(@__DIR__, "gate.jl"))
 using Statistics: median
 
@@ -101,12 +102,12 @@ const AB_ALGS = Dict("sequential" => (SequentialCPM(), false),
     "boundary" => (SequentialCPM(; skip_interior = true), false),
     "metal" => (CheckerboardCPM(), true), "rocm" => (CheckerboardCPM(), true))
 
-function ab_variant(v)
+function ab_variant(v; load_backend = true)
     haskey(AB_ALGS, v) ||
         error("unknown variant $(repr(v)); one of $(join(sort(collect(keys(AB_ALGS))), ", "))")
     alg, dev = AB_ALGS[v]
     dev && v != DEVICE && error("variant $v needs the $v backend loaded")
-    return alg, dev ? device_backend() : nothing, dev ? Float32 : Float64
+    return alg, load_backend && dev ? device_backend() : nothing, dev ? Float32 : Float64, dev
 end
 
 # the number of sites of a state (the ownership array is `σ` in older checkouts: an A/B base
@@ -133,13 +134,13 @@ function ab_check_gc!(label, backend, maxgc)
     return nothing
 end
 
-function ab_build_cases(pos)
+function ab_build_cases(pos; load_backend = true)
     length(pos) == 2 || error("usage: ab_one.jl <cases> <variants> [options]")
     allcases = first.(cases(Float64))
     names = pos[1] == "all" ? allcases : split(pos[1], ',')
     items = Any[]
     for v in split(pos[2], ',')
-        alg, backend, T = ab_variant(v)
+        alg, backend, T, dev = ab_variant(v; load_backend)
         mk = Dict(cases(T))
         for name in names
             haskey(mk, name) ||
@@ -152,7 +153,7 @@ function ab_build_cases(pos)
                 pos[1] == "all" && e isa UndefVarError || rethrow()
                 nothing
             end
-            push!(items, (; label = "$name.$v", prob, alg, backend))
+            push!(items, (; label = "$name.$v", prob, alg, backend, dev))
         end
     end
     return items
@@ -190,10 +191,44 @@ function ab_wait_go()
     return (; target_cpu, exclude_pids)
 end
 
+function ab_burnin!(prepared)
+    t0 = time_ns()
+    while time_ns() - t0 < 250_000_000
+    end
+    for item in prepared
+        item.prob === nothing && continue
+        integ = fresh_integrator(item.prob, item.alg, item.backend)
+        timed_step!(integ, item.backend)
+        break
+    end
+    return nothing
+end
+
+function ab_run_prepared!(prepared, tc_start, go, samples, seconds, gctrial_for;
+        resolve_dev = false)
+    items = resolve_dev ?
+            [(; item.label, item.prob, item.alg,
+                  backend = item.dev ? device_backend() : nothing) for item in prepared] :
+            prepared
+    ab_burnin!(items)
+    start_dist = ab_disturbances(; exclude = go.exclude_pids)
+    println("TC ", join(tc_start, " "))
+    flush(stdout)
+    for item in items
+        ab_time_item!(item; samples, seconds, gctrial = gctrial_for(item.backend))
+    end
+    end_dist = ab_disturbances(; exclude = go.exclude_pids)
+    for d in unique([start_dist; end_dist; AB_GC_DISTURBANCES])
+        println("DISTURBED ", d)
+    end
+    println("TC ", join(BenchMachine.type_cache_stats(), " "))
+    println("DONE")
+    flush(stdout)
+    return 0
+end
+
 function ab_one_main(pos, opts)
     seed = parse(Int, get(opts, "seed", string(BenchMachine.SEED_ENTRIES)))
-    seed > 0 && BenchMachine.seed_type_cache!(seed)
-    tc_start = BenchMachine.type_cache_stats()
     samples = parse(Int, get(opts, "samples", "60"))
     seconds = parse(Float64, get(opts, "seconds", "40"))
     # D-252: no scrub for the CPU variants; device variants keep it
@@ -201,6 +236,19 @@ function ab_one_main(pos, opts)
     gctrial_for(backend) = something(gctrial_opt, backend !== nothing)
     if AB_PREPARE
         haskey(opts, "variants") && error("--prepare cannot be combined with --variants")
+        if AB_ROCM_DEFER
+            prepared = ab_build_cases(pos; load_backend = false)
+            GC.gc()
+            go = ab_wait_go()
+            go === nothing && return 1
+            load_device!(DEVICE)
+            seed > 0 && BenchMachine.seed_type_cache!(seed)
+            tc_start = BenchMachine.type_cache_stats()
+            return Base.invokelatest(ab_run_prepared!, prepared, tc_start, go,
+                samples, seconds, gctrial_for; resolve_dev = true)
+        end
+        seed > 0 && BenchMachine.seed_type_cache!(seed)
+        tc_start = BenchMachine.type_cache_stats()
         prepared = ab_build_cases(pos)
         for item in prepared
             item.prob === nothing && continue
@@ -208,23 +256,13 @@ function ab_one_main(pos, opts)
             integ = fresh_integrator(item.prob, item.alg, item.backend)
             timed_step!(integ, item.backend)
         end
+        GC.gc()
         go = ab_wait_go()
         go === nothing && return 1
-        start_dist = ab_disturbances(; exclude = go.exclude_pids)
-        println("TC ", join(tc_start, " "))
-        flush(stdout)
-        for item in prepared
-            ab_time_item!(item; samples, seconds, gctrial = gctrial_for(item.backend))
-        end
-        end_dist = ab_disturbances(; exclude = go.exclude_pids)
-        for d in unique([AB_WAIT_DISTURBANCES; start_dist; end_dist; AB_GC_DISTURBANCES])
-            println("DISTURBED ", d)
-        end
-        println("TC ", join(BenchMachine.type_cache_stats(), " "))
-        println("DONE")
-        flush(stdout)
-        return 0
+        return ab_run_prepared!(prepared, tc_start, go, samples, seconds, gctrial_for)
     end
+    seed > 0 && BenchMachine.seed_type_cache!(seed)
+    tc_start = BenchMachine.type_cache_stats()
     println("TC ", join(tc_start, " "))
     if haskey(opts, "variants")
         Base.include(Main, opts["variants"])
@@ -232,7 +270,7 @@ function ab_one_main(pos, opts)
         length(vs) >= 2 || error("AB_VARIANTS needs a base and a candidate")
         rounds = parse(Int, get(opts, "rounds", "8"))
         for v in split(only(pos), ',')
-            alg, backend, T = ab_variant(v)
+            alg, backend, T, _ = ab_variant(v)
             sides = ["base" => vs[1][2](T), "candidate" => vs[2][2](T)]
             haskey(opts, "no-control") ||
                 append!(sides, ["base-ctl" => vs[1][2](T), "cand-ctl" => vs[2][2](T)])
@@ -245,8 +283,27 @@ function ab_one_main(pos, opts)
             end
         end
     else
-        for item in ab_build_cases(pos)
-            ab_time_item!(item; samples, seconds, gctrial = gctrial_for(item.backend))
+        length(pos) == 2 || error("usage: ab_one.jl <cases> <variants> [options]")
+        allcases = first.(cases(Float64))
+        names = pos[1] == "all" ? allcases : split(pos[1], ',')
+        for v in split(pos[2], ',')
+            alg, backend, T, _ = ab_variant(v)
+            mk = Dict(cases(T))
+            for name in names
+                haskey(mk, name) ||
+                    error("unknown case $(repr(name)); gate cases: $(join(allcases, ", "))")
+                # `all` against an older checkout: skip a case whose model it does not have
+                # (ab.jl accepts a skip only from the base and its control)
+                prob = try
+                    mk[name]()
+                catch e
+                    pos[1] == "all" && e isa UndefVarError || rethrow()
+                    println("ABSKIP $name.$v")
+                    continue
+                end
+                ab_time_item!((; label = "$name.$v", prob, alg, backend);
+                    samples, seconds, gctrial = gctrial_for(backend))
+            end
         end
     end
     for d in unique([AB_START_DISTURBANCES; ab_disturbances(); AB_GC_DISTURBANCES])
@@ -257,5 +314,7 @@ function ab_one_main(pos, opts)
 end
 
 let rc = ab_one_main(AB_POS, AB_OPTS)
-    rc == 0 || abspath(PROGRAM_FILE) != (@__FILE__) || exit(rc)
+    if abspath(PROGRAM_FILE) == (@__FILE__)
+        exit(rc)
+    end
 end
