@@ -535,9 +535,13 @@ end
         LS = Potts.LatticeFields.Problems.LinearSolve
         LA = Potts.LatticeFields.Problems.LinearAlgebra
         dims = (12, 10)
-        ref = solve(PottsProblem(FiStill(; name = :f), fi_op(dims), (0, 3);
-                field_solver = BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64))),
-            SequentialCPM()).u[end].site.c
+        ref = solve(
+            PottsProblem(
+                FiStill(; name = :f), fi_op(dims), (0, 3);
+                field_solver = BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64))
+            ),
+            SequentialCPM()
+        ).u[end].site.c
         for linsolve in (
                 LS.KLUFactorization(),
                 LS.KrylovJL_CG(; precs = LatticeMultigrid()),

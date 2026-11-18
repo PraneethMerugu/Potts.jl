@@ -592,12 +592,12 @@ using .LP_device: fd, kron
         @info "F4-12b $name: device vs host (Float32) max relative difference $rel"
         @test rel <= 1e-5
     end
-    # Robin-defect row with explicit max_iter enables the device gate and matches host solve count
-    ig_rob = init(mk(timed, PDEV), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 10)); dt = 0.1)
-    @test only(ig_rob.runtimes).cache.gate !== nothing
-    sd_rob = solve(mk(timed, PDEV), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 10)); dt = 0.1)
-    sh_rob = solve(mk(timed, KernelAbstractions.CPU()), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 10)); dt = 0.1)
-    @test sd_rob.stats.solves == sh_rob.stats.solves
+        # Robin-defect row with explicit max_iter enables the device gate and matches host solve count
+        ig_rob = init(mk(timed, PDEV), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 10)); dt = 0.1)
+        @test only(ig_rob.runtimes).cache.gate !== nothing
+        sd_rob = solve(mk(timed, PDEV), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 10)); dt = 0.1)
+        sh_rob = solve(mk(timed, KernelAbstractions.CPU()), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 10)); dt = 0.1)
+        @test sd_rob.stats.solves == sh_rob.stats.solves
 end
 end
 

@@ -1101,14 +1101,18 @@ function (r::ImplicitRow)(a)
     n = length(dst)
     if r.solver === nothing && r.lin === nothing
         Exec.launch!(backend, _be_update_body!, n, (dst, src, nothing, nothing, nothing, r.resarr, r.s, r.mask, r.mval,
-            r.mvf, r.lo, last, gate))
+                r.mvf, r.lo, last, gate,
+            )
+        )
         check && _newton_check!(r, backend, word, dst, r.bufs[par], nothing, it, hits, window, isinf(h), checkdiv, failbudget, gate)
         return nothing
     end
     x = _row_correction!(r, backend, γ, h; word, window, gate)
     r.scal === nothing || Exec.launch!(backend, _be_status_body!, 1, (word, r.scal, Int32(window), isinf(h), gate))
     Exec.launch!(backend, _be_update_body!, n, (dst, src, x, r.smask, r.v, nothing, nothing, r.mask, r.mval, r.mvf,
-        r.lo, last, gate))
+            r.lo, last, gate,
+        )
+    )
     check && _newton_check!(r, backend, word, dst, r.bufs[par], x, it, hits, window, isinf(h), checkdiv, failbudget, gate)
     return nothing
 end

@@ -73,7 +73,7 @@ end
     want = be_hand(u0, h; K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces = Dict((2, -1) => (:robin, 2.0, -1.0, 0.5)))
     @test maximum(abs, u .- want) < 1e-10 && only(ig.runtimes).cache.newton == 1
     # opposite signs: the negative part stays in the residual (a defect correction), so the
-    # automatic Newton count is more than one (from its bound `w |d⁻|`, S1: 5 here); `LatticeNewton`
+        # automatic Newton count is more than one (from its bound `w |d⁻|`, S1: 5 here); `LatticeNewton`
     # converges it to the hand matrix
         p = bown(
             bsys(
@@ -233,7 +233,7 @@ end
 end
 
 @testitem "F3-07: nlsolve = nothing, the operator built only for implicit groups (S12)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-@testset "F3-07: nlsolve = nothing, the operator built only for implicit groups (S12)" begin
+    @testset "F3-07: nlsolve = nothing, the operator built only for implicit groups (S12)" begin
         p = bown(bsys([D(bce) ~ bD * laplacian(bce) - bk * bce], [bc(0, x, y) ~ x], [bD, bk]))
     b0 = LatticePDE.OPERATOR_BUILDS[]
         solve(p, ExplicitEuler(); dt = 0.01)
