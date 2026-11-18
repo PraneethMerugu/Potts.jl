@@ -72,7 +72,7 @@ end
         @test startswith(cmsg(() -> LatticeGMRES(; gmres_restart = 1)), "`LatticeGMRES(; gmres_restart = 1)`: `gmres_restart` is the Krylov basis size")
         @test startswith(cmsg(() -> LatticeGMRES(; maxiters = 0)), "`LatticeGMRES(; maxiters = 0)`: `maxiters` is the most GMRES iterations")
         @test startswith(cmsg(() -> LatticeGMRES(; reltol = -1.0)), "`LatticeGMRES(; reltol = -1.0)`: `reltol` is the relative residual")
-    @test startswith(cmsg(() -> LatticeBlockSolve(:pcg)), "`LatticeBlockSolve(:pcg)`: the block preconditioner solves each field with")
+        @test startswith(cmsg(() -> LatticeBlockSolve(:pcg)), "`LatticeBlockSolve(:pcg)`: the block preconditioner solves each field with")
     op = LSB.CellOperator((8, 8); shift = 1.0)
         @test occursin(
             "solves an implicit group's fields together (F3-12d); a `FieldSolver` solves one field: give it the `LatticeGMRES`'s per-field solver, `linsolve = LatticePCG(; maxiters = 2)`",

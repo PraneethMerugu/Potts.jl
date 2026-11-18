@@ -304,25 +304,35 @@ function _field_solver(alg, A::BoundOperator, b, linsolve, bound)
         inputs = ("in.f" => b, A.inputs...), bound
     )
 end
-function LinearSolve.init_cacheval(alg::LatticePCG, A::BoundOperator, b, u, Pl, Pr, maxiters::Int, abstol, reltol, verbose,
-        assumptions::LinearSolve.OperatorAssumptions)
+function LinearSolve.init_cacheval(
+        alg::LatticePCG, A::BoundOperator, b, u, Pl, Pr, maxiters::Int, abstol, reltol, verbose,
+        assumptions::LinearSolve.OperatorAssumptions
+    )
     Pl isa FusedVCycle || _refuse(
         A.op, "a lattice field's `LatticePCG` applies the V-cycles of `precs = LatticeMultigrid(…)` inside its fused ",
         "iteration; its `precs` gave the preconditioner ", repr(Pl), ": leave `precs` out, or give ",
         "`precs = LatticeMultigrid(; cycle = (ν, ν))`"
     )
-    pcg = LatticePCG(LatticeMultigrid(; cycle = Pl.cycle, cycles = Pl.cycles), something(alg.maxiters, maxiters),
-        something(alg.reltol, Float64(reltol)))
+    pcg = LatticePCG(
+        LatticeMultigrid(; cycle = Pl.cycle, cycles = Pl.cycles), something(alg.maxiters, maxiters),
+        something(alg.reltol, Float64(reltol))
+    )
     return _field_solver(alg, A, b, pcg, A)
 end
-function LinearSolve.init_cacheval(alg::Multigrid, A::BoundOperator, b, u, Pl, Pr, maxiters::Int, abstol, reltol, verbose,
-        assumptions::LinearSolve.OperatorAssumptions)
+function LinearSolve.init_cacheval(
+        alg::Multigrid, A::BoundOperator, b, u, Pl, Pr, maxiters::Int, abstol, reltol, verbose,
+        assumptions::LinearSolve.OperatorAssumptions
+    )
     return _field_solver(alg, A, b, alg, A)
 end
-LinearSolve.init_cacheval(::LatticePCG, A, b, u, Pl, Pr, maxiters::Int, abstol, reltol, verbose,
-    assumptions::LinearSolve.OperatorAssumptions) = nothing
-LinearSolve.init_cacheval(::Multigrid, A, b, u, Pl, Pr, maxiters::Int, abstol, reltol, verbose,
-    assumptions::LinearSolve.OperatorAssumptions) = throw(
+LinearSolve.init_cacheval(
+    ::LatticePCG, A, b, u, Pl, Pr, maxiters::Int, abstol, reltol, verbose,
+    assumptions::LinearSolve.OperatorAssumptions
+) = nothing
+LinearSolve.init_cacheval(
+    ::Multigrid, A, b, u, Pl, Pr, maxiters::Int, abstol, reltol, verbose,
+    assumptions::LinearSolve.OperatorAssumptions
+) = throw(
     ArgumentError(
         string(
             "`Multigrid` solves a lattice field's operator (a `BoundOperator`); got a ", nameof(typeof(A)),
@@ -340,8 +350,10 @@ function _solve!(cache, alg, sv::FieldSolver)
     cache.precsisfresh && (cache.precsisfresh = false)   # (the V-cycle is the solver's own hierarchy)
     if cache.isfresh
         if cache.A !== sv.bound                          # a new operator: a new solver
-            sv = LinearSolve.init_cacheval(alg, cache.A, cache.b, cache.u, cache.Pl, cache.Pr, cache.maxiters,
-                cache.abstol, cache.reltol, nothing, LinearSolve.OperatorAssumptions(true))
+            sv = LinearSolve.init_cacheval(
+                alg, cache.A, cache.b, cache.u, cache.Pl, cache.Pr, cache.maxiters,
+                cache.abstol, cache.reltol, nothing, LinearSolve.OperatorAssumptions(true)
+            )
             cache.cacheval = sv
         end
         rebuild!(sv)
@@ -428,8 +440,10 @@ function _solve!(cache, alg::LatticePCG, ::Nothing)
 end
 
 # ---- LatticeGMRES: the FGMRES workspace as the cache ---------------------------------------------
-function LinearSolve.init_cacheval(alg::LatticeGMRES, A, b, u, Pl, Pr, maxiters::Int, abstol, reltol, verbose,
-        assumptions::LinearSolve.OperatorAssumptions)
+function LinearSolve.init_cacheval(
+        alg::LatticeGMRES, A, b, u, Pl, Pr, maxiters::Int, abstol, reltol, verbose,
+        assumptions::LinearSolve.OperatorAssumptions
+    )
     budget = something(alg.maxiters, maxiters)
     m = min(alg.gmres_restart, budget)
     ws = Krylov.FgmresWorkspace(Krylov.KrylovConstructor(b); memory = m)
@@ -453,8 +467,10 @@ function SciMLBase.solve!(cache::LinearSolve.LinearCache, alg::LatticeGMRES; kwa
     K = eltype(cache.b)
     rtol = something(alg.reltol, Float64(cache.reltol))
     budget = something(alg.maxiters, cache.maxiters)
-    Krylov.fgmres!(ws, cache.A, cache.b; M = _krylov_precond(cache.Pl), N = _krylov_precond(cache.Pr), ldiv = true,
-        restart = true, rtol = K(rtol), atol = K(rtol * FLOOR), itmax = budget, history = true, callback = NonFiniteStop())
+    Krylov.fgmres!(
+        ws, cache.A, cache.b; M = _krylov_precond(cache.Pl), N = _krylov_precond(cache.Pr), ldiv = true,
+        restart = true, rtol = K(rtol), atol = K(rtol * FLOOR), itmax = budget, history = true, callback = NonFiniteStop()
+    )
     _set_u!(cache, ws.x)
     st = ws.stats
     retcode = st.solved ? SciMLBase.ReturnCode.Success :

@@ -356,7 +356,8 @@ const STEADY_GMRES = LatticeGMRES(; gmres_restart = 30, maxiters = 240)
 # A coupled solve's arrays and launches for the rows `rows` (in solve order) of a group bound to
 # store `st` (stepped program `s`, residual program `rs`, its store `rst`, the residual plans
 # `sps`, the slot sets `rcurs` per row), `kr` its `LatticeGMRES`
-function _bind_coupled(rows, kr::LatticeGMRES, st::FieldStore, s::Program, rs::Program, rst::FieldStore, sps, rcurss,
+function _bind_coupled(
+        rows, kr::LatticeGMRES, st::FieldStore, s::Program, rs::Program, rst::FieldStore, sps, rcurss,
         swaps, keys, init, backend, p, c, op::OperatorSpec, alg)
     K = mapreduce(r -> eltype(r.resarr), promote_type, rows)
     for r in rows

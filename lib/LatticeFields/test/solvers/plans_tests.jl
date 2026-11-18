@@ -112,14 +112,14 @@ end
 @testitem "sentinel and linsolve = :auto" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
     @testset "sentinel and linsolve = :auto" begin
     disk, per = named_case("disk512", 1.9e-3), periodic_case(128, 128; s = 1.0)
-    @test resolve_inner(disk[1], :auto) isa LatticePCG
+        @test resolve_inner(disk[1], :auto) isa LatticePCG
         @test resolve_inner(disk[1], Multigrid()).maxiters == 12
         @test resolve_inner(per[1], :auto).maxiters == 8
         sv = case_solver(disk, Float32; linsolve = Multigrid())   # stationary budget 12 needs 17
     rebuild!(sv)
     lift!(sv)
     solve!(sv)
-    @test (@test_logs (:warn, r"use LatticePCG") sentinel(sv))
+        @test (@test_logs (:warn, r"use LatticePCG") sentinel(sv))
     sv = case_solver(per, Float32)
     rebuild!(sv)
     lift!(sv)
@@ -129,7 +129,7 @@ end
 end
 
 @testitem "sentinel uses the plan's budget; LatticePCG validation" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
-@testset "sentinel uses the plan's budget; LatticePCG validation" begin
+    @testset "sentinel uses the plan's budget; LatticePCG validation" begin
     case = named_case("disk128", 5.5e-6)
         sv = case_solver(case, Float64; linsolve = LatticePCG(maxiters = 4))
     @test steady!(sv) > 4                    # past the algorithm budget, converged
@@ -148,7 +148,8 @@ end
         )
         @test_throws ["ArgumentError", "LatticePCG", "one preconditioner cycle per iteration", "cycles = 2"] resolve_inner(
             case[1],
-        LatticePCG(precs = LatticeMultigrid(cycles = 2)))
+            LatticePCG(precs = LatticeMultigrid(cycles = 2))
+        )
 end
 end
 

@@ -39,7 +39,7 @@ using Krylov: Krylov
 using SciMLOperators: SciMLOperators
 
 public CellOperator, FieldSolver, LatticePCG, LatticeGMRES, LatticeMultigrid, LatticeBlockSolve, BoundOperator,
-       Multigrid, VCycle, RuleWeights, robin_parts, rebuild!,
+    Multigrid, VCycle, RuleWeights, robin_parts, rebuild!,
        lift!, solve!, steady!, tangent!, set_coefficients!, field, solution_key, solver_solution,
        scalars, iterations, sentinel
 

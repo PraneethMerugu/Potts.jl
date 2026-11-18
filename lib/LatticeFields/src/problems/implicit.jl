@@ -685,7 +685,8 @@ function bind_cache(
             sh = r.field ? _zeros(st.backend, T, nsite) : T(max(1 / hγ - _coefsum(r.jloc, p), 1 / (2hγ)))
             row = ImplicitRow(key, res, (u[1], u[2]), resarr, nothing, (u[1], u[1]), Int32(0), typeof(u[1])[], nothing,
                 nothing, nothing, sh, mask, mval, mvf, lo, nothing, jarr("j"), nothing, nothing, nothing, r.field && r.domain ? jarr("dom") : nothing,
-                r, nothing, part, hist, q, prev, nothing)
+                r, nothing, part, hist, q, prev, nothing
+            )
             push!(rows, row)
             continue
         end
@@ -724,7 +725,8 @@ function bind_cache(
         work = [w for w in sv.bufs[wid]]
         row = ImplicitRow(key, res, (u[1], u[2]), resarr, sv, (xb[1], xb[end]), xid, work,
             sv.tables[Solvers.tid(sv, "solve.scal")], smask, v, sh, mask, mval, mvf, lo, f, jj, mm, dd, mask, dm, r, numeric,
-            part, hist, q, prev, lin)
+            part, hist, q, prev, lin
+        )
         push!(rows, row)
     end
     # Crank–Nicolson's right side `uⁿ + (h/2) r(uⁿ)` of every row at once, from the substep's

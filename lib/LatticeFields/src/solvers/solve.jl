@@ -120,7 +120,7 @@ function Base.show(io::IO, d::FusedPCG)
     c.nu1 == 2 && c.nu2 == 2 || push!(kws, :precs => LatticeMultigrid(; cycle = c))
     d.maxiters == 8 || push!(kws, :maxiters => d.maxiters)
     d.reltol == 1.0e-6 || push!(kws, :reltol => d.reltol)
-    _show_kw(io, "LatticePCG", kws)
+    return _show_kw(io, "LatticePCG", kws)
 end
 
 """
@@ -143,13 +143,15 @@ function resolve_inner(op::CellOperator, inner)
             "fused iteration; got `precs = ", repr(c), "`: leave `precs` out, or give `precs = LatticeMultigrid(; cycle = (ν, ν))`"
         )
         c.cycle.nu1 == c.cycle.nu2 ||
-            _refuse(op, "`LatticePCG` needs a symmetric preconditioner cycle `(ν, ν)`; got `(",
-                c.cycle.nu1, ", ", c.cycle.nu2, ")`: use `LatticePCG(; precs = LatticeMultigrid(; cycle = (",
+            _refuse(
+            op, "`LatticePCG` needs a symmetric preconditioner cycle `(ν, ν)`; got `(",
+            c.cycle.nu1, ", ", c.cycle.nu2, ")`: use `LatticePCG(; precs = LatticeMultigrid(; cycle = (",
                 max(c.cycle.nu1, c.cycle.nu2), ", ", max(c.cycle.nu1, c.cycle.nu2),
                 ")))`, or the stationary `Multigrid(; cycle = (", c.cycle.nu1, ", ", c.cycle.nu2, "))`")
         c.cycles == 1 ||
-            _refuse(op, "`LatticePCG` applies one preconditioner cycle per iteration; got `cycles = ",
-                c.cycles, "` in its `precs`: drop `cycles`, or use the stationary `Multigrid(; cycles = ",
+            _refuse(
+            op, "`LatticePCG` applies one preconditioner cycle per iteration; got `cycles = ",
+            c.cycles, "` in its `precs`: drop `cycles`, or use the stationary `Multigrid(; cycles = ",
                 c.cycles, ")`")
         return FusedPCG(Multigrid(; cycle = c.cycle), something(inner.maxiters, 8), something(inner.reltol, 1.0e-6))
     end
@@ -311,13 +313,15 @@ solver precision.
 function FieldSolver(
         exec, op::CellOperator{N}; linsolve = :auto, T = Float32,
         solver_type = :auto, rule::RuleWeights = RULE_M, stages = LOWERING,
-        deflate = :auto, inputs = (), bound = nothing) where {N}
+        deflate = :auto, inputs = (), bound = nothing
+    ) where {N}
     state = lowered_type(exec, T, "state"; op)
     T = resolve_solver_T(exec, op, state, solver_type)
     alg = resolve_inner(op, linsolve)
     dfl = deflate === :auto ? alg isa FusedPCG && deflatable(op) : Bool(deflate)
     lane(t) = t == Float64 ? F64 : F32
-    p, ctx = solver_program(op, alg isa FusedPCG; lane = lane(T), state = lane(state),
+    p, ctx = solver_program(
+        op, alg isa FusedPCG; lane = lane(T), state = lane(state),
         deflate = dfl)
     s = semantic(p)
     # a Float64 solver on a device whose default float is Float32 (an explicit `solver_type`, or
@@ -463,7 +467,7 @@ solver type differs from the state type, else `pcg.x` under PCG or the finest le
 function solution_key(sv::FieldSolver)
     sv.deflate ? "pcg.u" :
     sv.T != sv.state ? "out.u" :
-    sv.alg isa FusedPCG ? "pcg.x" : lkey(0, "x")
+        sv.alg isa FusedPCG ? "pcg.x" : lkey(0, "x")
 end
 """
 The working field a solve starts from (`steady!` zeroes it).

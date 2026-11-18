@@ -268,12 +268,13 @@ end
     for (e, want) in (
                 (
                     msg(() -> FieldSolver(HostExec(), op; linsolve = LatticePCG(; precs = LatticeMultigrid(; cycle = VCycle(2, 1))))),
-            "`LatticePCG` needs a symmetric preconditioner cycle `(ν, ν)`; got `(2, 1)`: use `LatticePCG(; precs = LatticeMultigrid(; cycle = (2, 2)))`"),
+                    "`LatticePCG` needs a symmetric preconditioner cycle `(ν, ν)`; got `(2, 1)`: use `LatticePCG(; precs = LatticeMultigrid(; cycle = (2, 2)))`",
+                ),
                 (
                     msg(() -> FieldSolver(HostExec(), op; linsolve = LatticePCG(; precs = LatticeMultigrid(; cycles = 2)))),
             "applies one preconditioner cycle per iteration"),
                 (msg(() -> FieldSolver(HostExec(), op; linsolve = :pcg)), "`linsolve` takes `:auto`, a `LatticePCG(…)` or a `Multigrid(…)`; got :pcg"),
-        (msg(() -> FieldSolver(HostExec(), op; deflate = true)), "`deflate = true` needs `LatticePCG` on a group with no mask"),
+                (msg(() -> FieldSolver(HostExec(), op; deflate = true)), "`deflate = true` needs `LatticePCG` on a group with no mask"),
                 (msg(() -> FieldSolver(HostExec(), op; solver_type = BigFloat)), "BigFloat (solver_type) is not lowered"),
                 (msg(() -> FieldSolver(HostExec(false), op; solver_type = Float64)), "Float64 (solver_type) is not supported"),
         (msg(() -> FieldSolver(HostExec(), CellOperator((1, 1); NM...))), "the lattice (1, 1) has one site"),
@@ -367,7 +368,7 @@ end
         @test eval(Meta.parse(repr(s))) == s
     end
     # a default stays out of the display: an argument printed with no call is the empty call
-    @test !occursin("budget", repr(LatticePCG())) && !occursin("cycles", repr(Multigrid()))
+        @test !occursin("budget", repr(LatticePCG())) && !occursin("cycles", repr(Multigrid()))
 end
 end
 
@@ -394,7 +395,7 @@ end
                 (() -> VCycle(true, 2), "`VCycle(true, 2)`: a V-cycle (the `cycle` of a `Multigrid`) needs ν₁, ν₂ ≥ 1"),
                 (() -> Multigrid(; cycle = :w), "`Multigrid(; cycle = :w)`: `cycle` is the V-cycle's smoothing steps, `(ν₁, ν₂)` or `VCycle(ν₁, ν₂)`"),
                 (() -> Multigrid(; cycle = (2, 0)), "`VCycle(2, 0)`: a V-cycle"),
-        (() -> LatticeBlockSolve(:mg), "`LatticeBlockSolve(:mg)`: the block preconditioner solves each field with a `LatticePCG(…)` or a `Multigrid(…)`"),
+                (() -> LatticeBlockSolve(:mg), "`LatticeBlockSolve(:mg)`: the block preconditioner solves each field with a `LatticePCG(…)` or a `Multigrid(…)`"),
                 (() -> LatticePCG(; maxiters = true), "`LatticePCG(; maxiters = true)`: `maxiters` is the most CG iterations per solve, an integer ≥ 1"),
         (() -> Multigrid(; cycles = true), "`Multigrid(; cycles = true)`: `cycles`"),
                 (() -> Multigrid(; maxiters = false), "`Multigrid(; maxiters = false)`: `maxiters`"),

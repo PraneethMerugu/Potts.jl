@@ -281,7 +281,7 @@ end
         po = discretize(
             bsys([D(bce) ~ bD * laplacian(bce)], [bc(0, x, y) ~ x], [bD]; dvs = [bce]),
         LatticeDiscretization(Grid(BDIMS); T = Float64))
-    m = e(() -> solve(po, LatticePCG()))
+        m = e(() -> solve(po, LatticePCG()))
         @test occursin("give it to one, `BackwardEuler(; linsolve = LatticePCG())`", m)
     # (F4-01: the field solvers step the problem `discretize` returns; base: refused, "discretize
     # with `LatticeDiscretization(…; problem = :owned)`")
