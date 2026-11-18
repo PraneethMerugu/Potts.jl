@@ -55,19 +55,32 @@ By default it:
   worktrees of the same repository and moved there; both checkouts must be clean). Two
   checkouts of one commit read up to 16 % apart unseeded on Metal (P6.2b); the controls
   show how far apart they read here.
-- **interleaves**: every round runs each side once, each in a fresh process under the
-  machine lock, and the order rotates, so each side runs first equally often (8 rounds for
-  4 sides). When only the workload or the parameters change, `--inprocess` times both in
+- **interleaves**: every round runs each side once, each in a fresh process, and the
+  order rotates, so each side runs first equally often (default 16 rounds on CPU, 8 on
+  ROCm/Metal, for 4 sides). By default (D-291), all sides in a round start concurrently on
+  distinct physical non-benchmark cores (`0-11` on the NucBox), load, seed the type cache,
+  build and compile every case (on ROCm, problems are built before `READY`, while AMDGPU
+  loading, Tuple cache seeding, and GPU kernel compile stay after `GO` so no sibling holds
+  a KFD handle during timing), print `READY <pid>`, and block on stdin. Prepare runs
+  outside the lock (only one A/B runs in the `ab` lane; peak memory 4 × 8G). Once all are
+  READY, `ab.jl` lets parallel-compile heat settle, takes `tools/exclusive.sh` and, in the
+  round's rotated order, waits idle, moves each child (all its threads, `taskset -a -cp`) to
+  the benchmark core, sends `GO`, collects results until `DONE`, moves it off the benchmark
+  core before closing stdin so teardown runs elsewhere, and waits for it to exit inside the
+  lock before starting the next side (`--serial` keeps the one-at-a-time path, waiting
+  inside the lock before loading). When only the workload or the parameters change, `--inprocess` times both in
   one process, with second copies of the base and the candidate as the controls:
   `<variants.jl>` defines `AB_VARIANTS`, a vector of `label => T -> PottsProblem`, base
   first (example: `ab_variants_akeeb_mu.jl`, P6.2b's μ = 30 vs 24).
 - **gives every side the same environment**: `--project=<side>/benchmark` with the side's
   test project stacked on JULIA_LOAD_PATH (the device packages come from there, for every
   side alike).
-- **waits inside the lock**: each timed child, once it holds `tools/exclusive.sh` and
-  before it loads a package, waits as above, until one overall deadline (`--max-wait`,
-  4 h). It then reports what disturbed it at its start or end (a CI job, another GPU
-  client, a busy SMT sibling, another busy reserved CPU); disturbed runs are listed.
+- **waits before spawning and inside the lock**: `ab.jl` waits before launching a round
+  and inside the lock before each `GO` (or in `--serial`, each child waits inside the lock
+  before loading), until one overall deadline (`--max-wait`, 4 h), excluding live sibling
+  A/B children in the same round. Just before and after timing, each child reports what
+  disturbed it (a CI job, another GPU client excluding live sibling A/B children, a busy
+  SMT sibling, another busy reserved CPU); disturbed runs are listed.
 - **pins** on the NucBox, as above.
 
 The timed harness is this checkout's `ab_one.jl` and `gate.jl` for every side (its path and

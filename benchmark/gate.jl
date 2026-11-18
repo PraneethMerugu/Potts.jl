@@ -46,23 +46,48 @@ function requested_device(args)
     return isempty(d) ? "" : String(only(d))
 end
 const DEVICE = requested_device(ARGS)
-if !isempty(DEVICE)
-    ENV["POTTS_GPU"] = DEVICE
+const _DEVICE_LOADED = Ref(false)
+
+function load_device!(dev = DEVICE)
+    (isempty(dev) || _DEVICE_LOADED[]) && return nothing
+    ENV["POTTS_GPU"] = dev
     # The device packages are dependencies of the test projects (P6.0bg), not of the
     # benchmark project, so that every A/B side has the same environment (`ab.jl` stacks the
     # side's test project on JULIA_LOAD_PATH). Run directly, stack this checkout's.
-    let pkg = DEVICE == "metal" ? "Metal" : "AMDGPU"
+    let pkg = dev == "metal" ? "Metal" : "AMDGPU"
         Base.find_package(pkg) === nothing &&
             push!(LOAD_PATH, joinpath(@__DIR__, "..", "test"))
     end
     isdefined(@__MODULE__, :PottsDevices) ||
         include(joinpath(@__DIR__, "..", "test", "shared", "devices.jl"))
+    if dev == "rocm"
+        amdgpu = Base.invokelatest(PottsDevices.device_package)
+        @eval @__MODULE__() function device_sync(::$(amdgpu).ROCBackend)
+            s = $(amdgpu).stream()
+            t0 = time_ns()
+            k = 0
+            while !$(amdgpu).HIP.isdone(s)
+                ccall(:jl_cpu_pause, Cvoid, ())
+                ccall(:jl_gc_safepoint, Cvoid, ())
+                k += 1
+                if k & 0x3fff == 0
+                    yield()
+                    time_ns() - t0 > SPIN_TIMEOUT * 1e9 &&
+                        error("ROCm stream not done after $(SPIN_TIMEOUT) s")
+                end
+            end
+            $(amdgpu).synchronize(; blocking = true)
+            return nothing
+        end
+    end
+    _DEVICE_LOADED[] = true
+    return nothing
 end
 
 """
 The device backend object for `DEVICE` (`nothing` when none was named).
 """
-device_backend() = isempty(DEVICE) ? nothing : PottsDevices.device_backend()
+device_backend() = isempty(DEVICE) ? nothing : Base.invokelatest(PottsDevices.device_backend)
 
 const TOLERANCE = 0.05
 const BASELINE = joinpath(@__DIR__, "baseline.toml")
@@ -142,25 +167,8 @@ end
 # any kernel exception: GG reads 13.7 ns/site, the same as a steady run of 2000 MCS.
 const SPIN_TIMEOUT = 120.0
 device_sync(backend) = (KernelAbstractions.synchronize(backend); nothing)
-if DEVICE == "rocm"
-    const AMDGPU_PKG = PottsDevices.device_package()
-    function device_sync(::AMDGPU_PKG.ROCBackend)
-        s = AMDGPU_PKG.stream()
-        t0 = time_ns()
-        k = 0
-        while !AMDGPU_PKG.HIP.isdone(s)
-            ccall(:jl_cpu_pause, Cvoid, ())
-            ccall(:jl_gc_safepoint, Cvoid, ())
-            k += 1
-            if k & 0x3fff == 0
-                yield()
-                time_ns() - t0 > SPIN_TIMEOUT * 1e9 &&
-                    error("ROCm stream not done after $(SPIN_TIMEOUT) s")
-            end
-        end
-        AMDGPU_PKG.synchronize(; blocking = true)
-        return nothing
-    end
+if !isempty(DEVICE) && get(ENV, "POTTS_DEFER_DEVICE", "") != "1"
+    load_device!(DEVICE)
 end
 
 # Wait until all work queued on `backend` has finished; nothing to wait for on the CPU rows.
