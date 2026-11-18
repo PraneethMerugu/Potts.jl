@@ -411,9 +411,8 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
             fail == me && exit(2)
             hang == me && sleep(30)
             p0 = time()
-            sleep(0.8)
+            sleep(0.5)
             p1 = time()
-            open(io -> println(io, "prep ", me, " ", getpid(), " ", p0, " ", p1), ENV["STUB_LOG"], "a")
             println("READY ", getpid())
             flush(stdout)
             line = strip(readline(stdin))
@@ -423,10 +422,12 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
             cpu = fs[2]
             excl = length(fs) >= 3 ? fs[3] : "-"
             g0 = time()
-            sleep(0.15)
+            sleep(0.1)
             g1 = time()
-            open(io -> println(io, "go ", me, " ", getpid(), " ", cpu, " ", excl, " ", g0, " ", g1),
-                ENV["STUB_LOG"], "a")
+            open(ENV["STUB_LOG"], "a") do io
+                println(io, "prep ", me, " ", getpid(), " ", p0, " ", p1)
+                println(io, "go ", me, " ", getpid(), " ", cpu, " ", excl, " ", g0, " ", g1)
+            end
             println("TC 500000 1048576")
             pos = filter(a -> !startswith(a, "--"), ARGS)
             f = let pf = joinpath(sd, me * ".txt"); isfile(pf) ? parse(Float64, strip(read(pf, String))) : 1.0 end
@@ -567,10 +568,11 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
             stdout = buf, stderr = buf))
         @test !success(p) && occursin("unknown case", String(take!(buf)))
         # --prepare READY/GO/DONE handshake
-        inp = Base.BufferStream()
+        inp = Pipe()
         outp = Pipe()
         pp = run(pipeline(`$(jl()) --project=$proj $one fake sequential,checkerboard --prepare --samples=3 --seconds=1 --wait=none --seed=0`;
             stdin = inp, stdout = outp, stderr = outp); wait = false)
+        close(inp.out)
         close(outp.in)
         ready_line = readline(outp)
         @test startswith(ready_line, "READY ")

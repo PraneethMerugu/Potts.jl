@@ -309,11 +309,12 @@ end
 Run `f()` while holding the machine lock (`tools/exclusive.sh`).
 """
 function with_machine_lock(f)
-    inp = Base.BufferStream()
+    inp = Pipe()
     outp = Pipe()
     err_sink = stderr isa Union{Base.TTY, Base.PipeEndpoint, IOStream} ? stderr : devnull
     proc = run(pipeline(`$LOCK sh -c 'echo LOCKED; read _'`;
         stdin = inp, stdout = outp, stderr = err_sink); wait = false)
+    close(inp.out)
     close(outp.in)
     try
         line = try
@@ -337,12 +338,13 @@ function with_machine_lock(f)
 end
 
 function spawn_prepare_child(side, dir, cases, o, deadline, comp_cpu)
-    inp = Base.BufferStream()
+    inp = Pipe()
     outp = Pipe()
     cmd = child_cmd(dir, [cases, o.variants], o, deadline; pin_cpu = comp_cpu, prepare = true)
     env = merge(child_env(dir, o), Dict("POTTS_AB_PARENT_PID" => string(getpid())))
     proc = run(pipeline(ignorestatus(setenv(cmd, env; dir));
         stdin = inp, stdout = outp, stderr = outp); wait = false)
+    close(inp.out)
     close(outp.in)
     pid = try
         process_running(proc) ? getpid(proc) : -1
@@ -354,36 +356,36 @@ function spawn_prepare_child(side, dir, cases, o, deadline, comp_cpu)
         ch = Channel{String}(Inf), log = String[])
 end
 
+function _start_reader(c, ev)
+    return @async begin
+        try
+            for l in eachline(c.outp)
+                push!(c.log, l)
+                f = split(l)
+                if !c.is_ready[] && !isempty(f) && f[1] == "READY"
+                    c.is_ready[] = true
+                    if length(f) >= 2
+                        pid = tryparse(Int, f[2])
+                        pid !== nothing && (c.child_pid[] = pid)
+                    end
+                    put!(ev, (:ready, c))
+                elseif c.is_ready[]
+                    put!(c.ch, l)
+                elseif !isempty(f) && f[1] == "WAIT"
+                    println("   ", c.side, " waited: ", join(f[2:end], " "))
+                    flush(stdout)
+                end
+            end
+        finally
+            close(c.ch)
+            c.is_ready[] || put!(ev, (:died, c))
+        end
+    end
+end
+
 function wait_all_ready!(children, o)
     ev = Channel{Any}(length(children) + 1)
-    readers = Task[]
-    for c in children
-        t = @async begin
-            try
-                for l in eachline(c.outp)
-                    push!(c.log, l)
-                    f = split(l)
-                    if !c.is_ready[] && !isempty(f) && f[1] == "READY"
-                        c.is_ready[] = true
-                        if length(f) >= 2
-                            pid = tryparse(Int, f[2])
-                            pid !== nothing && (c.child_pid[] = pid)
-                        end
-                        put!(ev, (:ready, c))
-                    elseif c.is_ready[]
-                        put!(c.ch, l)
-                    elseif !isempty(f) && f[1] == "WAIT"
-                        println("   ", c.side, " waited: ", join(f[2:end], " "))
-                        flush(stdout)
-                    end
-                end
-            finally
-                close(c.ch)
-                c.is_ready[] || put!(ev, (:died, c))
-            end
-        end
-        push!(readers, t)
-    end
+    readers = [_start_reader(c, ev) for c in children]
     timer = Timer(o.ready_timeout) do _
         try
             put!(ev, (:timeout, nothing))
@@ -393,13 +395,17 @@ function wait_all_ready!(children, o)
     try
         ready_n = 0
         while ready_n < length(children)
-            kind, c = take!(ev)
+            kind, item = take!(ev)
             if kind === :ready
                 ready_n += 1
             elseif kind === :died
-                wait(c.proc)
-                isempty(c.log) || println(join(c.log, "\n"))
-                error("timed run in $(c.dir) ($(c.side)) exited before READY (exit $(c.proc.exitcode))")
+                try
+                    isopen(item.inp) && close(item.inp)
+                catch
+                end
+                wait(item.proc)
+                isempty(item.log) || println(join(item.log, "\n"))
+                error("timed run in $(item.dir) ($(item.side)) exited before READY (exit $(item.proc.exitcode))")
             elseif kind === :timeout
                 pending = [x for x in children if !x.is_ready[]]
                 for x in pending
