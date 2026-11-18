@@ -136,6 +136,47 @@ The prefix for untimed work (precompilation) on this machine (empty where it doe
 """
 work_cmd(m) = pins(m) && !isempty(m.work) ? `taskset -c $(m.work)` : ``
 
+"""
+`n` distinct physical CPUs from `m.work` (never benchmark cores `bench` or their SMT
+siblings), for parallel A/B preparation. Empty where the machine does not pin.
+"""
+function compile_cpus(m, n; bench = m.bench, siblings = siblings)
+    pins(m) && !isempty(m.work) && n > 0 || return Int[]
+    excl = Set{Int}(bench)
+    for b in bench
+        union!(excl, siblings(b))
+    end
+    out = Int[]
+    seen = Set{Int}()
+    for c in sort(cpulist(m.work))
+        c in excl && continue
+        sibs = siblings(c)
+        phys = isempty(sibs) ? c : min(c, minimum(sibs))
+        phys in seen && continue
+        push!(seen, phys)
+        push!(out, c)
+        length(out) == n && return out
+    end
+    isempty(out) && return Int[]
+    k = length(out)
+    while length(out) < n
+        push!(out, out[mod1(length(out) + 1, k)])
+    end
+    return out
+end
+
+"""
+Move running process `pid` (all its threads) to logical CPU `c`. Returns `true` on success
+(or where re-pinning does not apply).
+"""
+function repin!(pid::Integer, c::Integer)
+    Sys.islinux() && c >= 0 || return true
+    Sys.which("taskset") === nothing && return false
+    p = run(pipeline(ignorestatus(`taskset -a -cp $c $pid`);
+        stdout = devnull, stderr = devnull))
+    return success(p)
+end
+
 function _jiffies()
     d = Dict{Int, Tuple{Int, Int}}()
     for l in eachline("/proc/stat")
@@ -198,15 +239,41 @@ function ancestors(pid = getpid())
     return out
 end
 
+function _default_gpu_exclude(extra = Int[])
+    ex = Int[getpid(), Int(ccall(:getppid, Cint, ()))]
+    append!(ex, extra)
+    return ex
+end
+
 """
-PIDs of processes holding the AMD GPU (ROCm KFD clients), other than `exclude`: this
-process and its parent (a gate that re-ran itself pinned holds the GPU in the parent).
+PIDs of processes holding the AMD GPU (ROCm KFD clients), other than `exclude`: by default,
+this process, its parent (a gate that re-ran itself pinned holds the GPU in the parent), and
+any `extra` PIDs passed in (such as live sibling A/B children from `GO`).
 """
-function gpu_users(; exclude = (getpid(), Int(ccall(:getppid, Cint, ()))))
-    d = "/sys/class/kfd/kfd/proc"
-    isdir(d) || return Int[]
+function gpu_users(; exclude = _default_gpu_exclude(), dir = "/sys/class/kfd/kfd/proc")
+    isdir(dir) || return Int[]
     return [parse(Int, p)
-            for p in readdir(d) if all(isdigit, p) && !(parse(Int, p) in exclude)]
+            for p in readdir(dir) if all(isdigit, p) && !(parse(Int, p) in exclude)]
+end
+
+"""
+Wait up to `timeout` s for exiting KFD clients (whose `/proc/<pid>` is already gone) to finish
+kernel teardown before declaring the GPU busy.
+"""
+function wait_kfd_clear(;
+        exclude = _default_gpu_exclude(), timeout = 2.0,
+        dir = "/sys/class/kfd/kfd/proc"
+    )
+    Sys.islinux() || return true
+    t0 = time()
+    while true
+        u = gpu_users(; exclude, dir)
+        isempty(u) && return true
+        any(p -> isdir("/proc/$p"), u) && return false
+        time() - t0 >= timeout && return false
+        sleep(0.05)
+    end
+    return
 end
 
 """
@@ -217,14 +284,19 @@ times anyway and counts the run as disturbed). D-157: benchmarks on the NucBox r
 runner idle; a CI job's GPU group made a ROCm Graner–Glazier MCS read 2500 instead of
 47 ns/site (2026-10-07). Off Linux it returns at once.
 """
-function wait_idle(; gpu = false, ci = true, poll = 30, deadline = time() + 4 * 3600)
+function wait_idle(; gpu = false, ci = true, poll = 30, deadline = time() + 4 * 3600,
+        exclude = Int[], on_wait = msg -> (println("WAIT ", msg); flush(stdout)))
     Sys.islinux() || return true
     said = ""
     while true
-        why = busy_reasons(; gpu, ci)
+        why = busy_reasons(; gpu, ci, exclude)
         isempty(why) && return true
+        if gpu && length(why) == 1 && startswith(why[1], "other GPU clients ") &&
+           wait_kfd_clear(; exclude = _default_gpu_exclude(exclude))
+            continue
+        end
         msg = join(why, " and ")
-        msg == said || (println("WAIT ", msg); flush(stdout); said = msg)
+        msg == said || (on_wait(msg); said = msg)
         time() > deadline && return false
         sleep(poll)
     end
@@ -233,10 +305,13 @@ end
 """
 Why the machine is not idle for a timed run: a CI job (`ci`), other GPU clients (`gpu`).
 """
-function busy_reasons(; gpu = false, ci = true)
+function busy_reasons(; gpu = false, ci = true, exclude = Int[])
     why = String[]
     ci && ci_job_running() && push!(why, "a CI job (Runner.Worker) is running")
-    gpu && (u = gpu_users(); isempty(u) || push!(why, "other GPU clients $(u)"))
+    if gpu
+        u = gpu_users(; exclude = _default_gpu_exclude(exclude))
+        isempty(u) || push!(why, "other GPU clients $(u)")
+    end
     return why
 end
 
@@ -247,7 +322,8 @@ the L3 and the power budget). Empty when nothing does.
 """
 function disturbances(c, reserved; gpu = false, ci = true, dt = 0.5,
         busy = cpus -> cpu_busy(cpus; dt), siblings = siblings,
-        linux = Sys.islinux(), reasons = () -> busy_reasons(; gpu, ci))
+        linux = Sys.islinux(), exclude = Int[],
+        reasons = () -> busy_reasons(; gpu, ci, exclude))
     why = reasons()
     linux && c >= 0 || return why
     sib = siblings(c)

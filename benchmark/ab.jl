@@ -15,18 +15,35 @@
 #    checkouts of one commit read up to 16 % apart unseeded on Metal (P6.2b), so the
 #    controls show what the A/B can resolve.
 #  - Type cache seeding. Every timed process fills the global Tuple type cache to the same
-#    number of entries before it builds anything (`machine.jl`, D-145).
-#  - Interleaving. Each round runs every side once, each in a fresh process under the
-#    machine lock (`tools/exclusive.sh`), and the order rotates from round to round, so each
-#    side runs first equally often (8 rounds for the 4 sides).
+#    number of entries before it builds anything (`machine.jl`, D-145; except ROCm
+#    `--prepare`, which builds problems before AMDGPU loads and seeds after `GO` so the
+#    parallel build can run without opening KFD).
+#  - Interleaving. Each round runs every side once, each in a fresh process, and the order
+#    rotates from round to round, so each side runs first equally often (default 16 rounds on
+#    cpu, 8 on rocm/metal, for the 4 sides). By default, all sides in a round start
+#    concurrently on distinct non-benchmark cores (`machine.jl` `compile_cpus`), load, seed
+#    the type cache, build and compile every case (on ROCm, problems are built before READY,
+#    while AMDGPU loading, Tuple cache seeding, and GPU kernel compile stay after `GO` so no
+#    sibling holds a KFD handle during timing), print `READY <pid>`, and block on stdin.
+#    Prepare runs outside the lock (only one A/B runs in the `ab` lane; peak memory 4 × 8G). Once all
+#    are READY, the parent lets parallel-compile heat settle (2 s),
+#    acquires `tools/exclusive.sh` and, in the round's rotated order, waits idle, moves each
+#    child (all its threads, `taskset -a -cp`) to the benchmark core, sends
+#    `GO <cpu> <sibling_pids>`, collects results until `DONE`, moves the finished child off
+#    the benchmark core before closing stdin so heap teardown runs elsewhere, and waits for
+#    it to exit inside the lock before starting the next side (an uncatchable parent SIGKILL
+#    can still release the lock via stdin EOF). Pass `--serial` to run one child at a time under
+#    the lock from process start (waiting inside the lock before loading).
 #  - Identical environments. Every side runs `--project=<side>/benchmark` with its own test
 #    project stacked on JULIA_LOAD_PATH (where the device packages come from), so no side
 #    differs from another in what its environment provides.
-#  - Waiting. Each timed process, once it holds the lock and before it loads anything,
-#    waits while a CI job runs on the machine (for rocm also while another process holds
-#    the GPU), until one overall deadline (`--max-wait`, 4 h from the start). It then reports
-#    what disturbed it at its start or end (a CI job, another GPU client, a busy SMT sibling
-#    or another busy reserved CPU); disturbed runs are counted in the verdict.
+#  - Waiting. Before spawning a round and inside the lock before each `GO` (or in `--serial`,
+#    inside each child before loading), the harness waits while a CI job runs on the machine
+#    (for rocm also while another process holds the GPU, excluding live sibling A/B
+#    children), until one overall deadline (`--max-wait`, 4 h from the start). Just before
+#    and after timing, each child reports what disturbed it (a CI job, another GPU client
+#    excluding live sibling A/B children, a busy SMT sibling or another busy reserved CPU);
+#    disturbed runs are counted in the verdict.
 #  - Memory cap. On the NucBox every child runs under `systemd-run --user --scope -p
 #    MemoryMax=8G` (`POTTS_BENCH_MEMMAX` to change, 0 for none): the machine is shared.
 #  - Pinning. On a machine that pins (the NucBox, `machine.jl`), every timed process runs on
@@ -66,7 +83,8 @@
 #
 # Options:
 #   --alg=<sequential|checkerboard|boundary,…>  CPU algorithms (default sequential,checkerboard)
-#   --rounds=<n>        rounds (default 8; also the optional positional [rounds])
+#   --rounds=<n>        rounds (default 16 for cpu, 8 for rocm/metal; also the optional
+#                       positional [rounds])
 #   --stat=<paired|fastest>  the verdict statistic (default paired; fastest for metal)
 #   --tolerance=<x>     regression tolerance (default 0.05)
 #   --no-control        no controls (and an in-process run builds none)
@@ -79,6 +97,13 @@
 #   --wait=<all|gpu|none>  what each timed run waits for (default all: CI jobs and, for
 #                       rocm, other GPU clients; gpu: other GPU clients only)
 #   --max-wait=<hours>  the overall deadline for waiting (default 4)
+#   --serial            run each side serially under the machine lock (disable parallel
+#                       compile; also the default for custom `--child` scripts without
+#                       `--parallel`)
+#   --parallel          force the parallel-compile READY/GO/DONE protocol (e.g. for a custom
+#                       `--child` stub that implements it)
+#   --ready-timeout=<s> seconds to wait for all sides in a round to print READY (default 600;
+#                       passing `--no-warm` can make 4 single-core precompiles exceed 600 s)
 #   --no-warm           skip the untimed precompile run of each checkout
 #   --child=<file>      the timed child script (default: this checkout's `ab_one.jl`); a
 #                       relative path resolves in each side's checkout (the tests' stubs)
@@ -87,6 +112,8 @@ isdefined(Main, :BenchMachine) || include(joinpath(@__DIR__, "machine.jl"))
 
 const LOCK = joinpath(@__DIR__, "..", "tools", "exclusive.sh")
 const CHILD = joinpath(@__DIR__, "ab_one.jl")
+
+same_file(a, b) = isfile(a) && isfile(b) && realpath(a) == realpath(b)
 
 # ------------------------------------------------------------------- arguments
 function parse_ab(args)
@@ -119,21 +146,30 @@ function parse_ab(args)
     end
     wait = get(opts, "wait", "all")
     wait in ("all", "gpu", "none") || error("--wait is all, gpu or none")
+    haskey(opts, "serial") && haskey(opts, "parallel") &&
+        error("--serial and --parallel cannot both be set")
     m = BenchMachine.machine()
     seed = haskey(opts, "no-seed") ? 0 :
            parse(Int, get(opts, "seed", string(BenchMachine.SEED_ENTRIES)))
     pin = !haskey(opts, "no-pin") && BenchMachine.pins(m)
     cpu = pin ?
           (haskey(opts, "cpu") ? parse(Int, opts["cpu"]) : BenchMachine.bench_cpu(m)) : -1
+    child = get(opts, "child", CHILD)
+    parallel = !haskey(opts, "serial") && !inprocess &&
+               (haskey(opts, "parallel") || !haskey(opts, "child") ||
+                (isabspath(child) && same_file(child, CHILD)))
+    ready_timeout = parse(Float64, get(opts, "ready-timeout", "600"))
+    ready_timeout > 0 || error("--ready-timeout must be positive")
+    default_rounds = backend == "cpu" ? "16" : "8"
     return (; inprocess, pos, backend, variants = backend == "cpu" ? algs : backend,
-        rounds = parse(Int, get(opts, "rounds", length(pos) > n ? pos[n + 1] : "8")),
-        machine = m, seed, pin, cpu, stat, wait,
+        rounds = parse(Int, get(opts, "rounds", length(pos) > n ? pos[n + 1] : default_rounds)),
+        machine = m, seed, pin, cpu, stat, wait, parallel, ready_timeout,
         tolerance = parse(Float64, get(opts, "tolerance", "0.05")),
         control = !haskey(opts, "no-control"),
         maxwait = 3600 * parse(Float64, get(opts, "max-wait", "4")),
         samples = get(opts, "samples", "60"), seconds = get(opts, "seconds", "40"),
         gctrial = haskey(opts, "gctrial") ? true : haskey(opts, "no-gctrial") ? false : backend != "cpu",
-        warm = !haskey(opts, "no-warm"), child = get(opts, "child", CHILD))
+        warm = !haskey(opts, "no-warm"), child)
 end
 
 # ------------------------------------------------------------------- checkouts
@@ -236,16 +272,41 @@ function warm(dir, o)
 end
 
 # ------------------------------------------------------------------- runs
+function parse_child_line!(res, skips, dist, tcs, l)
+    f = split(l)
+    isempty(f) && return false
+    if f[1] == "ABR"
+        push!(res, String(f[2]) => (parse(Float64, f[3]), parse(Float64, f[4])))
+    elseif f[1] == "TC"
+        push!(tcs, join(f[2:end], "/"))
+    elseif f[1] == "ABSKIP"
+        push!(skips, String(f[2]))
+    elseif f[1] == "DISTURBED"
+        push!(dist, join(f[2:end], " "))
+    elseif f[1] == "WAIT"
+        println("   waited: ", join(f[2:end], " "))
+        flush(stdout)
+    end
+    return true
+end
+
+function child_cmd(dir, childargs, o, deadline; pin_cpu = o.cpu, prepare = false,
+        use_work = false)
+    pin = pin_cpu >= 0 ? BenchMachine.pin_cmd(o.machine, pin_cpu) :
+          (use_work ? BenchMachine.work_cmd(o.machine) : ``)
+    mem = BenchMachine.mem_cmd(o.machine)
+    proj = joinpath(dir, "benchmark")
+    prep = prepare ? ["--prepare"] : String[]
+    return `$mem $pin $(julia_bin()) --startup-file=no --project=$proj $(o.child) $childargs $prep --seed=$(o.seed) --samples=$(o.samples) --seconds=$(o.seconds) --wait=$(o.wait) --deadline=$deadline $(o.gctrial ? "--gctrial" : "--no-gctrial")`
+end
+
 """
 Run one timed child under the machine lock. Returns `(results, skips, disturbances, tc)`:
 `label => (median, minimum)` pairs, the skipped labels, the reasons the run was disturbed,
 and the child's Tuple-cache lines.
 """
 function child(dir, childargs, o, deadline)
-    pin = o.pin ? BenchMachine.pin_cmd(o.machine, o.cpu) : ``
-    mem = BenchMachine.mem_cmd(o.machine)
-    proj = joinpath(dir, "benchmark")
-    cmd = `$LOCK $mem $pin $(julia_bin()) --startup-file=no --project=$proj $(o.child) $childargs --seed=$(o.seed) --samples=$(o.samples) --seconds=$(o.seconds) --wait=$(o.wait) --deadline=$deadline $(o.gctrial ? "--gctrial" : "--no-gctrial")`
+    cmd = `$LOCK $(child_cmd(dir, childargs, o, deadline; pin_cpu = o.pin ? o.cpu : -1))`
     buf = IOBuffer()
     p = run(pipeline(ignorestatus(setenv(cmd, child_env(dir, o); dir)); stdout = buf, stderr = buf))
     out = String(take!(buf))
@@ -253,14 +314,202 @@ function child(dir, childargs, o, deadline)
     res = Pair{String, Tuple{Float64, Float64}}[]
     skips, dist, tcs = String[], String[], String[]
     for l in split(out, '\n')
+        parse_child_line!(res, skips, dist, tcs, l)
+    end
+    return res, skips, dist, tcs
+end
+
+"""
+Run `f()` while holding the machine lock (`tools/exclusive.sh`).
+"""
+function with_machine_lock(f)
+    inp = Pipe()
+    outp = Pipe()
+    errp = Pipe()
+    proc = run(pipeline(`$LOCK sh -c 'echo LOCKED; read _'`;
+        stdin = inp, stdout = outp, stderr = errp); wait = false)
+    close(inp.out)
+    close(outp.in)
+    close(errp.in)
+    err_task = @async try
+        s = read(errp, String)
+        isempty(s) || print(stderr, s)
+    catch
+    end
+    try
+        line = try
+            readline(outp)
+        catch
+            ""
+        end
+        strip(line) == "LOCKED" ||
+            error("failed to acquire machine lock via $LOCK (got $(repr(line)))")
+        return f()
+    finally
+        try
+            isopen(inp) && close(inp)
+        catch
+        end
+        try
+            wait(proc)
+        catch
+        end
+        try
+            wait(err_task)
+        catch
+        end
+    end
+end
+
+function spawn_prepare_child(side, dir, cases, o, deadline, comp_cpu)
+    inp = Pipe()
+    outp = Pipe()
+    cmd = child_cmd(dir, [cases, o.variants], o, deadline;
+        pin_cpu = comp_cpu, prepare = true, use_work = o.pin && comp_cpu < 0)
+    proc = run(
+        pipeline(
+            ignorestatus(setenv(cmd, child_env(dir, o); dir));
+            stdin = inp, stdout = outp, stderr = outp
+        ); wait = false
+    )
+    close(inp.out)
+    close(outp.in)
+    pid = try
+        process_running(proc) ? getpid(proc) : -1
+    catch
+        -1
+    end
+    return (; side, dir, inp, outp, proc,
+        child_pid = Ref(pid), is_ready = Ref(false), alive = Ref(true),
+        ch = Channel{String}(Inf), log = String[])
+end
+
+function _start_reader(c, ev)
+    return @async begin
+        try
+            for l in eachline(c.outp)
+                push!(c.log, l)
+                f = split(l)
+                if !c.is_ready[] && !isempty(f) && f[1] == "READY"
+                    c.is_ready[] = true
+                    if length(f) >= 2
+                        pid = tryparse(Int, f[2])
+                        pid !== nothing && (c.child_pid[] = pid)
+                    end
+                    put!(ev, (:ready, c))
+                elseif c.is_ready[]
+                    put!(c.ch, l)
+                elseif !isempty(f) && f[1] == "WAIT"
+                    println("   ", c.side, " waited: ", join(f[2:end], " "))
+                    flush(stdout)
+                end
+            end
+        finally
+            close(c.ch)
+            c.is_ready[] || put!(ev, (:died, c))
+        end
+    end
+end
+
+function wait_all_ready!(children, o)
+    ev = Channel{Any}(length(children) + 1)
+    readers = [_start_reader(c, ev) for c in children]
+    timer = Timer(o.ready_timeout) do _
+        try
+            put!(ev, (:timeout, nothing))
+        catch
+        end
+    end
+    try
+        ready_n = 0
+        while ready_n < length(children)
+            kind, item = take!(ev)
+            if kind === :ready
+                ready_n += 1
+            elseif kind === :died
+                try
+                    isopen(item.inp) && close(item.inp)
+                catch
+                end
+                wait(item.proc)
+                isempty(item.log) || println(join(item.log, "\n"))
+                error("timed run in $(item.dir) ($(item.side)) exited before READY (exit $(item.proc.exitcode))")
+            elseif kind === :timeout
+                pending = [x for x in children if !x.is_ready[]]
+                for x in pending
+                    isempty(x.log) ||
+                        println("--- output from $(x.side) ($(x.dir)) ---\n", join(x.log, "\n"))
+                end
+                error("timed out after $(o.ready_timeout) s waiting for READY from: " *
+                      join(["$(x.side) ($(x.dir))" for x in pending], ", "))
+            end
+        end
+    finally
+        close(timer)
+    end
+    return readers
+end
+
+function stop_child!(c)
+    try
+        isopen(c.inp) && close(c.inp)
+    catch
+    end
+    if process_running(c.proc)
+        t0 = time()
+        while process_running(c.proc) && time() - t0 < 2.0
+            sleep(0.05)
+        end
+        process_running(c.proc) && kill(c.proc)
+    end
+    try
+        wait(c.proc)
+    catch
+    end
+    c.alive[] = false
+    return nothing
+end
+
+function run_go_child!(c, reader, children, idx, o, deadline; off_cpu = -1)
+    live_siblings = [x.child_pid[]
+                     for (j, x) in enumerate(children)
+                     if j > idx && x.alive[] && x.child_pid[] > 0]
+    wait_dist = String[]
+    if o.wait != "none"
+        ok = BenchMachine.wait_idle(; gpu = o.backend == "rocm", ci = o.wait == "all",
+            deadline, exclude = live_siblings,
+            on_wait = msg -> (println("   waited: ", msg); flush(stdout)))
+        ok || push!(wait_dist, "waited until the deadline; timed while busy")
+    end
+    if o.pin && o.cpu >= 0
+        BenchMachine.repin!(c.child_pid[], o.cpu) ||
+            error("failed to re-pin $(c.side) (PID $(c.child_pid[])) to CPU $(o.cpu)")
+    end
+    excl = [live_siblings; getpid()]
+    go_msg = "GO $(o.cpu) $(join(excl, ','))"
+    println(c.inp, go_msg)
+    flush(c.inp)
+    res = Pair{String, Tuple{Float64, Float64}}[]
+    skips, dist, tcs = String[], String[], String[]
+    append!(dist, wait_dist)
+    got_done = false
+    for l in c.ch
         f = split(l)
-        isempty(f) && continue
-        f[1] == "ABR" &&
-            push!(res, String(f[2]) => (parse(Float64, f[3]), parse(Float64, f[4])))
-        f[1] == "TC" && push!(tcs, join(f[2:end], "/"))
-        f[1] == "ABSKIP" && push!(skips, String(f[2]))
-        f[1] == "DISTURBED" && push!(dist, join(f[2:end], " "))
-        f[1] == "WAIT" && (println("   waited: ", join(f[2:end], " ")); flush(stdout))
+        !isempty(f) && f[1] == "DONE" && (got_done = true; break)
+        parse_child_line!(res, skips, dist, tcs, l)
+    end
+    # Move the finished child off the benchmark core before it tears down its heap and exits.
+    off_cpu >= 0 && c.child_pid[] > 0 && BenchMachine.repin!(c.child_pid[], off_cpu)
+    close(c.inp)
+    wait(reader)
+    wait(c.proc)
+    c.alive[] = false
+    if o.backend == "rocm" && !BenchMachine.wait_kfd_clear(; exclude = Int[])
+        push!(dist, "KFD did not clear after exit")
+    end
+    if !got_done || !success(c.proc)
+        isempty(c.log) || println(join(c.log, "\n"))
+        error("timed run in $(c.dir) ($(c.side)) failed (exit $(c.proc.exitcode))")
     end
     return res, skips, dist, tcs
 end
@@ -281,24 +530,75 @@ end
 # the sides that may skip a case `all` names: the base and its control (an older checkout)
 const MAY_SKIP = ("base", "base-ctl")
 
+function record_side!(R, D, skipped, r, side, dir, res, skips, dist, tcs)
+    isempty(skips) || side in MAY_SKIP ||
+        error("the $side ($dir) skipped $(join(skips, ", ")): only the base and ",
+            "its control may lack a case")
+    union!(skipped, skips)
+    record!(R, side, res)
+    isempty(dist) || push!(D, "round $r $side: " * join(dist, "; "))
+    println(
+        @sprintf("   %-9s Tuple cache (post-seed → end) %s  ", side, join(tcs, " → ")),
+        join([@sprintf("%s %.2f", k, v[1]) for (k, v) in res], "  "),
+        isempty(dist) ? "" : "  DISTURBED: " * join(dist, "; ")
+    )
+    flush(stdout)
+    return nothing
+end
+
+function run_round_parallel!(R, D, skipped, r, order, cases, o, deadline)
+    o.wait != "none" &&
+        BenchMachine.wait_idle(; gpu = o.backend == "rocm", ci = o.wait == "all",
+            deadline, on_wait = msg -> (println("   waited: ", msg); flush(stdout)))
+    comp_cpus = if o.pin
+        cc = BenchMachine.compile_cpus(o.machine, length(order);
+            bench = unique([o.machine.bench; o.cpu]))
+        isempty(cc) && isempty(o.machine.work) &&
+            error("cannot pin compiling children: no non-benchmark cores in machine table")
+        cc
+    else
+        Int[]
+    end
+    children = [spawn_prepare_child(side, dir, cases, o, deadline,
+                    isempty(comp_cpus) ? -1 : comp_cpus[i])
+                for (i, (side, dir)) in enumerate(order)]
+    try
+        readers = wait_all_ready!(children, o)
+        # Let parallel-compile heat/boost settle before the first child runs on the benchmark core.
+        sleep(2.0)
+        with_machine_lock() do
+            for (i, (c, reader)) in enumerate(zip(children, readers))
+                try
+                    off_cpu = isempty(comp_cpus) ? -1 : comp_cpus[i]
+                    res, skips, dist, tcs = run_go_child!(c, reader, children, i, o,
+                        deadline; off_cpu)
+                    record_side!(R, D, skipped, r, c.side, c.dir, res, skips, dist, tcs)
+                finally
+                    stop_child!(c)
+                end
+            end
+        end
+    finally
+        for c in children
+            stop_child!(c)
+        end
+    end
+    return nothing
+end
+
 function rounds_checkouts!(R, D, sides, cases, o, deadline)
     skipped = Set{String}()
     for r in 1:(o.rounds)
         order = circshift(sides, -(r - 1))
         println("round $r: ", join(first.(order), ", "))
         flush(stdout)
-        for (side, dir) in order
-            res, skips, dist, tcs = child(dir, [cases, o.variants], o, deadline)
-            isempty(skips) || side in MAY_SKIP ||
-                error("the $side ($dir) skipped $(join(skips, ", ")): only the base and ",
-                    "its control may lack a case")
-            union!(skipped, skips)
-            record!(R, side, res)
-            isempty(dist) || push!(D, "round $r $side: " * join(dist, "; "))
-            println(@sprintf("   %-9s Tuple cache %s  ", side, join(tcs, " → ")),
-                join([@sprintf("%s %.2f", k, v[1]) for (k, v) in res], "  "),
-                isempty(dist) ? "" : "  DISTURBED: " * join(dist, "; "))
-            flush(stdout)
+        if o.parallel
+            run_round_parallel!(R, D, skipped, r, order, cases, o, deadline)
+        else
+            for (side, dir) in order
+                res, skips, dist, tcs = child(dir, [cases, o.variants], o, deadline)
+                record_side!(R, D, skipped, r, side, dir, res, skips, dist, tcs)
+            end
         end
     end
     isempty(skipped) ||
@@ -316,8 +616,11 @@ function rounds_inprocess!(R, D, dir, file, o, deadline)
         record!(R, String(side), [String(key) => v])
     end
     isempty(dist) || push!(D, "in-process run: " * join(dist, "; "))
-    println("   Tuple cache ", join(tcs, " → "), isempty(dist) ? "" :
-                                                 "  DISTURBED: " * join(dist, "; "))
+    println(
+        "   Tuple cache (post-seed → end) ",
+        join(tcs, " → "),
+        isempty(dist) ? "" : "  DISTURBED: " * join(dist, "; ")
+    )
     return R
 end
 
@@ -431,12 +734,13 @@ function ab_main(args)
     BenchMachine.pin_self_to_work!(m)     # the parent and the lock's keeper stay off 12–15
     harness = dirname(@__DIR__)
     deadline = time() + o.maxwait
-    @printf("machine %s (%s); backend %s (%s); %s; Tuple cache seeded to %s; %d rounds; wait %s%s\n",
+    mode = o.inprocess ? "; inprocess" : o.parallel ? "; parallel compile" : "; serial"
+    @printf("machine %s (%s); backend %s (%s); %s; Tuple cache seeded to %s; %d rounds; wait %s%s%s\n",
         m.key, BenchMachine.cpu_model(), o.backend, o.variants,
         o.pin ?
         "pinned to logical CPU $(o.cpu), siblings $(BenchMachine.siblings(o.cpu)) idle" :
         "not pinned", o.seed > 0 ? string(o.seed) : "– (off)", o.rounds, o.wait,
-        o.gctrial ? "; gctrial on" : "; gctrial off")
+        o.gctrial ? "; gctrial on" : "; gctrial off", mode)
     println("harness: $(o.child) (checkout $harness at $(describe(harness)))")
     R, D = Results(), String[]
     if o.inprocess
