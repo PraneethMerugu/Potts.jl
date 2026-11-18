@@ -4,7 +4,7 @@
 # masked islands, and a periodic box. Face coefficients 1, shift `s` (scaled form).
 
 using Random
-using LatticeFields.Solvers: CellOperator, FieldSolver, LatticePCG, LatticeMultigrid, LatticeBlockSolve, Multigrid, VCycle, steady!,
+using LatticeFields.Solvers: CellOperator, FieldSolver, LatticePCG, LatticeMultigrid, LatticeBlockSolve, VCycle, steady!,
                              field, scalars, rebuild!, lift!, solve!, lkey, RuleWeights,
                              solution_key
 
@@ -105,7 +105,7 @@ undeflated by default, as in the reference implementation.
 function counts(case, T; maxiter = 40, deflate = false)
     return (
         steady!(case_solver(case, T; linsolve = LatticePCG(), deflate); maxiter),
-        steady!(case_solver(case, T; linsolve = Multigrid()); maxiter),
+        steady!(case_solver(case, T; linsolve = LatticeMultigrid()); maxiter),
     )
 end
 
@@ -119,7 +119,7 @@ function cycle_factor(case; rule = RuleWeights(), cycle = VCycle(2, 2), T = Floa
         op0.dims; periodic = op0.periodic, face = op0.face, shift = op0.shift,
         mask = op0.mask, value = 0.0,
         dirichlet = map(d -> map(g -> g === nothing ? nothing : 0.0, d), op0.dirichlet))
-    sv = case_solver((op, inputs), T; linsolve = Multigrid(; cycle), rule)
+    sv = case_solver((op, inputs), T; linsolve = LatticeMultigrid(; cycle), rule)
     rebuild!(sv)
     lift!(sv)
     act = field(sv, lkey(0, "active")) .!= 0

@@ -718,13 +718,24 @@ function bind_cache(
             r.scaled && push!(ins, "v" => v)
             lin = Solvers.field_cache(backend, cop, inner; T, solver_type, inputs = Tuple(ins))
         end
-        sv = lin.cacheval
-        xid = Solvers.fid(sv, Solvers.solution_key(sv))
-        xb = sv.bufs[xid]
-        wid = Solvers.fid(sv, Solvers.working_key(sv))
-        work = [w for w in sv.bufs[wid]]
-        row = ImplicitRow(key, res, (u[1], u[2]), resarr, sv, (xb[1], xb[end]), xid, work,
-            sv.tables[Solvers.tid(sv, "solve.scal")], smask, v, sh, mask, mval, mvf, lo, f, jj, mm, dd, mask, dm, r, numeric,
+        cv = lin.cacheval
+        if cv isa Solvers.FieldSolver
+            sv = cv
+            xid = Solvers.fid(sv, Solvers.solution_key(sv))
+            xb = sv.bufs[xid]
+            wid = Solvers.fid(sv, Solvers.working_key(sv))
+            work = [w for w in sv.bufs[wid]]
+            scal = sv.tables[Solvers.tid(sv, "solve.scal")]
+            xs = (xb[1], xb[end])
+        else
+            sv = nothing
+            xid = Int32(0)
+            work = typeof(u[1])[]
+            scal = nothing
+            xs = (lin.u, lin.u)
+        end
+        row = ImplicitRow(key, res, (u[1], u[2]), resarr, sv, xs, xid, work,
+            scal, smask, v, sh, mask, mval, mvf, lo, f, jj, mm, dd, mask, dm, r, numeric,
             part, hist, q, prev, lin
         )
         push!(rows, row)
@@ -977,13 +988,18 @@ end
 group_program_of(rt::GroupRuntime) = rt.program
 # the shift of a row at the stage step `hγ = γh` (`1/hγ`)
 function _set_row_step!(r::ImplicitRow, s, p, hγ; coupled::Bool = false)
-    if r.solver === nothing
+    if r.solver === nothing && r.lin === nothing
         r.s isa Number && (r.s = oftype(r.s, max(1 / hγ - _coefsum(r.op.jloc, p), 1 / (2hγ))))
         return nothing
     end
     r.numeric === nothing && return nothing
     op, _ = _numeric_operator(s, r.op, fieldid(s, r.key), p, hγ, 1.0, r.mask !== nothing; coupled)
-    Solvers.set_coefficients!(r.solver, op)
+    r.solver === nothing || Solvers.set_coefficients!(r.solver, op)
+    if r.solver === nothing && r.lin !== nothing
+        r.lin.A = Solvers.BoundOperator(r.lin.A.exec, op, eltype(r.lin.A), r.lin.A.solver_type, r.lin.A.inputs)
+        r.lin.isfresh = true
+        r.lin.precsisfresh = true
+    end
     r.numeric = op
     r.s = op.shift
     return nothing
@@ -1022,7 +1038,28 @@ function _rebuild_row!(r::ImplicitRow, backend, h, γ, word, window)
         Exec.launch!(backend, _be_shift_body!, length(r.s), (r.s, r.j, r.d, r.m, r.smask, r.rmask, r.dom,
             T(1 / (γ * h)), T(1 / (2γ * h)), word, window))
     end
-    r.solver === nothing || Solvers.rebuild!(r.solver)
+    if r.solver !== nothing
+        Solvers.rebuild!(r.solver)
+    elseif r.lin !== nothing
+        r.lin.isfresh = true
+        r.lin.precsisfresh = true
+    end
+    return nothing
+end
+
+_zero_masked_body!(i, b, mask) = (@inbounds mask[i] != 0 && (b[i] = zero(eltype(b))); nothing)
+function _lin_status!(word, sol, window, gate)
+    (gate !== nothing && Array(gate)[1] != 0) && return nothing
+    w = word isa Array ? word : Array(word)
+    w[STATUS_SOLVES] += UInt32(1)
+    if sol.retcode == SciMLBase.ReturnCode.MaxIters
+        w[STATUS_BUDGET] += UInt32(1)
+    elseif sol.retcode != SciMLBase.ReturnCode.Success && sol.retcode != SciMLBase.ReturnCode.Default
+        w[STATUS_CODE] = UInt32(2)
+        w[STATUS_CAUSE] |= UInt32(1)
+        w[STATUS_WINDOW] == 0 && (w[STATUS_WINDOW] = UInt32(window))
+    end
+    word isa Array || copyto!(word, w)
     return nothing
 end
 
@@ -1036,14 +1073,14 @@ function (r::ImplicitRow)(a)
     dst = r.bufs[3 - par]
     src = first ? r.bufs[par] : dst
     n = length(dst)
-    if r.solver === nothing
+    if r.solver === nothing && r.lin === nothing
         Exec.launch!(backend, _be_update_body!, n, (dst, src, nothing, nothing, nothing, r.resarr, r.s, r.mask, r.mval,
             r.mvf, r.lo, last))
         check && _newton_check!(r, backend, word, dst, r.bufs[par], nothing, it, hits, window, isinf(h))
         return nothing
     end
-    x = _row_correction!(r, backend, γ, h)
-    Exec.launch!(backend, _be_status_body!, 1, (word, r.scal, Int32(window), isinf(h), gate))
+    x = _row_correction!(r, backend, γ, h; word, window, gate)
+    r.scal === nothing || Exec.launch!(backend, _be_status_body!, 1, (word, r.scal, Int32(window), isinf(h), gate))
     Exec.launch!(backend, _be_update_body!, n, (dst, src, x, r.smask, r.v, nothing, nothing, r.mask, r.mval, r.mvf,
         r.lo, last))
     check && _newton_check!(r, backend, word, dst, r.bufs[par], x, it, hits, window, isinf(h))
@@ -1052,12 +1089,23 @@ end
 # the solve of a row with a solver from its residual `resarr` (a scaled row: the right side `G/m`
 # and the own rows' δ first): the correction δ, the solver's solution array (also the tangent
 # steps' solve of one derivative part, F3-21a)
-function _row_correction!(r::ImplicitRow, backend, γ, h)
+function _row_correction!(r::ImplicitRow, backend, γ, h; word = nothing, window = Int32(0), gate = nothing)
     sv = r.solver
     if r.f !== nothing
         T = eltype(r.f)
         Exec.launch!(backend, _be_rhs_body!, length(r.f), (r.f, r.v, r.resarr, r.j, r.m, r.smask, r.rmask, r.dom, T(1 / (γ * h)),
             T(1 / (2γ * h))))
+    end
+    if sv === nothing
+        mk = r.smask !== nothing ? r.smask : r.mask
+        mk === nothing || Exec.launch!(backend, _zero_masked_body!, length(r.lin.b), (r.lin.b, mk))
+        if Exec.compiling()
+            LinearAlgebra.mul!(r.lin.u, r.lin.A, r.lin.b)
+            return r.lin.u
+        end
+        sol = SciMLBase.solve!(r.lin)
+        word === nothing || _lin_status!(word, sol, window, gate)
+        return r.lin.u
     end
     for w in r.work                             # δ from 0
         Exec.launch!(backend, _zero_body!, length(w), (w,))
@@ -1281,9 +1329,14 @@ function _install_cache!(c::ImplicitCache, rt::GroupRuntime, store::FieldStore, 
         r.res = res[i]
         r.mval = mvals[i]                       # (a coupled row's update reads its row's, F3-21a r1 M1)
         if ops[i] !== nothing
-            Solvers.set_coefficients!(r.solver, ops[i])
+            r.solver === nothing || Solvers.set_coefficients!(r.solver, ops[i])
             r.numeric = ops[i]
             r.s = ops[i].shift
+            if r.solver === nothing && r.lin !== nothing
+                r.lin.A = Solvers.BoundOperator(r.lin.A.exec, ops[i], eltype(r.lin.A), r.lin.A.solver_type, r.lin.A.inputs)
+                r.lin.isfresh = true
+                r.lin.precsisfresh = true
+            end
         end
         shifts[i] === nothing || (r.s = shifts[i])
     end

@@ -105,7 +105,7 @@ end
     rob = (((0.4, 0.25, 0.3), (2.0, 1.0, -0.1)), ((1.0, 0.6, 0.2), nothing))
     op = CellOperator((16, 16); shift = 0.05, robin = rob, NM...)
     @test !Solvers.has_defect(op) && Solvers.anchored(op) && !Solvers.deflatable(op)
-        for linsolve in (LatticePCG(; maxiters = 64, reltol = 1.0e-12), Multigrid(; maxiters = 64, reltol = 1.0e-12))
+        for linsolve in (LatticePCG(; maxiters = 64, reltol = 1.0e-12), LatticeMultigrid(; maxiters = 64, reltol = 1.0e-12))
             e, _ = solve_vs_hand(op, Dict("in.f" => f); linsolve)
         @test e <= 1e-10
     end
@@ -183,7 +183,7 @@ end
     inp = Dict("in.f" => rand(rng, 256), "in.wx" => 0.5 .+ rand(rng, 256), "in.wy" => 0.5 .+ rand(rng, 256))
     op = CellOperator((16, 16); shift = 0.02, face = ("in.wx", "in.wy"),
         dirichlet = ((0.2, 1.0), (nothing, nothing)), robin = ((nothing, nothing), ((1.0, 0.5, 0.3), nothing)), NM...)
-        for T in (Float64,), linsolve in (LatticePCG(; maxiters = 64, reltol = 1.0e-12), Multigrid(; maxiters = 64, reltol = 1.0e-12))
+        for T in (Float64,), linsolve in (LatticePCG(; maxiters = 64, reltol = 1.0e-12), LatticeMultigrid(; maxiters = 64, reltol = 1.0e-12))
             @test solve_vs_hand(op, inp; linsolve, T)[1] <= 1.0e-10
     end
     # a field shift and a mask on top
@@ -273,7 +273,7 @@ end
                 (
                     msg(() -> FieldSolver(HostExec(), op; linsolve = LatticePCG(; precs = LatticeMultigrid(; cycles = 2)))),
             "applies one preconditioner cycle per iteration"),
-                (msg(() -> FieldSolver(HostExec(), op; linsolve = :pcg)), "`linsolve` takes `:auto`, a `LatticePCG(…)` or a `Multigrid(…)`; got :pcg"),
+                (msg(() -> FieldSolver(HostExec(), op; linsolve = :pcg)), "`linsolve` takes `:auto`, a `LatticePCG(…)` or a `LatticeMultigrid(…)`; got :pcg"),
                 (msg(() -> FieldSolver(HostExec(), op; deflate = true)), "`deflate = true` needs `LatticePCG` on a group with no mask"),
                 (msg(() -> FieldSolver(HostExec(), op; solver_type = BigFloat)), "BigFloat (solver_type) is not lowered"),
                 (msg(() -> FieldSolver(HostExec(false), op; solver_type = Float64)), "Float64 (solver_type) is not supported"),
@@ -287,13 +287,13 @@ end
     end
     # the routes the messages give work when followed
         for kw in (
-                (; linsolve = LatticePCG(; precs = LatticeMultigrid(; cycle = VCycle(2, 2)))), (; linsolve = Multigrid(; cycle = VCycle(2, 1))),
-                (; linsolve = Multigrid(; cycles = 2)), (; deflate = :auto), (; solver_type = Float32),
+                (; linsolve = LatticePCG(; precs = LatticeMultigrid(; cycle = VCycle(2, 2)))), (; linsolve = LatticeMultigrid(; cycle = VCycle(2, 1))),
+                (; linsolve = LatticeMultigrid(; cycles = 2)), (; deflate = :auto), (; solver_type = Float32),
             )
         @test FieldSolver(HostExec(false), op; kw...) isa FieldSolver
     end
     # the sentinel names the field
-        sv = FieldSolver(HostExec(), CellOperator((64, 64); shift = 1.0e-3, mask = "in.mask", value = 1.0, NM...); T = Float32, linsolve = Multigrid(; maxiters = 1))
+        sv = FieldSolver(HostExec(), CellOperator((64, 64); shift = 1.0e-3, mask = "in.mask", value = 1.0, NM...); T = Float32, linsolve = LatticeMultigrid(; maxiters = 1))
     copyto!(field(sv, "in.mask"), UInt8.((1:4096) .% 7 .== 0))
     rebuild!(sv)
     lift!(sv)
@@ -330,9 +330,9 @@ end
 # F3-05 review r1 S1, N1: the inner solvers check their keywords when built, naming the keyword
 # and its range, and print by keyword without the module path. Base (9db10886,
 # ~/lpwork/f3b2r1-nc-lf.log: 17 of the
-# testset's checks fail there): `LatticePCG(; maxiters = 0)`, `LatticePCG(; reltol = -1.0)`,
-# `LatticePCG(; reltol = NaN)` and `Multigrid(; cycle = VCycle(0, 2))` construct; VCycle(0, 2) is refused
-# only by `FieldSolver`; `repr(LatticePCG())` is "LatticePCG(Multigrid(LatticeFields.Solvers.V(2,
+# testset's checks fail there): `DevicePCG(; maxiters = 0)`, `DevicePCG(; reltol = -1.0)`,
+# `DevicePCG(; reltol = NaN)` and `Multigrid(; cycle = VCycle(0, 2))` construct; VCycle(0, 2) is refused
+# only by `FieldSolver`; `repr(DevicePCG())` is "DevicePCG(Multigrid(LatticeFields.Solvers.V(2,
 # 2), nothing, 1.0e-6, nothing, 1.0e-6), 8, 1.0e-6)".
 @testitem "the inner solvers check their keywords when built" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin
 @testset "the inner solvers check their keywords when built" begin
@@ -348,36 +348,36 @@ end
                 (() -> LatticePCG(; reltol = 0.0), "`LatticePCG(; reltol = 0.0)`: `reltol`"),
                 (() -> LatticePCG(; reltol = NaN), "`LatticePCG(; reltol = NaN)`: `reltol`"),
                 (() -> LatticePCG(; reltol = Inf), "`LatticePCG(; reltol = Inf)`: `reltol`"),
-                (() -> Multigrid(; cycle = VCycle(0, 2)), "`VCycle(0, 2)`: a V-cycle (the `cycle` of a `Multigrid`) needs ν₁, ν₂ ≥ 1"),
+                (() -> LatticeMultigrid(; cycle = VCycle(0, 2)), "`VCycle(0, 2)`: a V-cycle (the `cycle` of a `LatticeMultigrid`) needs ν₁, ν₂ ≥ 1"),
                 (() -> VCycle(2, -1), "`VCycle(2, -1)`: a V-cycle"),
-        (() -> Multigrid(; cycles = 0), "`Multigrid(; cycles = 0)`: `cycles` is the exact number of cycles, an integer ≥ 1"),
-                (() -> Multigrid(; maxiters = 0), "`Multigrid(; maxiters = 0)`: `maxiters` is the most cycles per solve, an integer ≥ 1"),
-                (() -> Multigrid(; reltol = -1.0e-6), "`Multigrid(; reltol = -1.0e-6)`: `reltol`"),
-                (() -> Multigrid(; reltol = NaN), "`Multigrid(; reltol = NaN)`: `reltol`"),
-        (() -> Multigrid(; warn_tol = 0.0), "`Multigrid(; warn_tol = 0.0)`: `warn_tol`"))
+        (() -> LatticeMultigrid(; cycles = 0), "`LatticeMultigrid(; cycles = 0)`: `cycles` is the exact number of cycles, an integer ≥ 1"),
+                (() -> LatticeMultigrid(; maxiters = 0), "`LatticeMultigrid(; maxiters = 0)`: `maxiters` is the most cycles per solve, an integer ≥ 1"),
+                (() -> LatticeMultigrid(; reltol = -1.0e-6), "`LatticeMultigrid(; reltol = -1.0e-6)`: `reltol`"),
+                (() -> LatticeMultigrid(; reltol = NaN), "`LatticeMultigrid(; reltol = NaN)`: `reltol`"),
+        (() -> LatticeMultigrid(; warn_tol = 0.0), "`LatticeMultigrid(; warn_tol = 0.0)`: `warn_tol`"))
         m = e(f)
         @test startswith(m, want) || (println("MSG: ", m); false)
     end
     # the valid values the messages name build
-        @test LatticePCG(; maxiters = 1, reltol = 1.0e-12).maxiters == 1 && Multigrid(; cycle = VCycle(1, 1), cycles = 1, maxiters = 1).cycles == 1
+        @test LatticePCG(; maxiters = 1, reltol = 1.0e-12).maxiters == 1 && LatticeMultigrid(; cycle = VCycle(1, 1), cycles = 1, maxiters = 1).cycles == 1
     # the display round-trips
         for s in (
-                LatticePCG(), Multigrid(), VCycle(2, 3), LatticePCG(; precs = LatticeMultigrid(; cycle = VCycle(3, 3)), maxiters = 12),
-                Multigrid(; cycles = 3, reltol = 1.0e-8), Multigrid(; warn_tol = 0.5),
+                LatticePCG(), LatticeMultigrid(), VCycle(2, 3), LatticePCG(; precs = LatticeMultigrid(; cycle = VCycle(3, 3)), maxiters = 12),
+                LatticeMultigrid(; cycles = 3, reltol = 1.0e-8), LatticeMultigrid(; warn_tol = 0.5),
             )
         @test eval(Meta.parse(repr(s))) == s
     end
     # a default stays out of the display: an argument printed with no call is the empty call
-        @test !occursin("budget", repr(LatticePCG())) && !occursin("cycles", repr(Multigrid()))
+        @test !occursin("maxiters", repr(LatticePCG())) && !occursin("cycles", repr(LatticeMultigrid()))
 end
 end
 
 # F3-06 review nits (batch 2): a cycle prints as the pair `(ν₁, ν₂)`, so the display runs where
-# only `LatticePCG` and `Multigrid` are bound (`V` is public, not exported); a `V` of non-integers,
-# a `cycle` that is not a cycle, a block solve that is not a `LatticePCG` or a `Multigrid` and a `Bool` count each get
+# only `LatticePCG` and `LatticeMultigrid` are bound (`V` is public, not exported); a `V` of non-integers,
+# a `cycle` that is not a cycle, a block solve that is not a `LatticePCG` or a `LatticeMultigrid` and a `Bool` count each get
 # a message naming the keyword and a working value. Base (437a84ef, ~/lpwork/f3b3-nc-nits.log):
-# `repr` prints `cycle = VCycle(3, 3)` (an `UndefVarError` where `V` is not bound); `V(2.0, 2)` and
-# `Multigrid(; cycle = (2, 2))` are MethodErrors; a block solve of `:mg` builds; `budget = true` builds.
+# `repr` prints `cycle = V(3, 3)` (an `UndefVarError` where `V` is not bound); `V(2.0, 2)` and
+# `Multigrid(; cycle = (2, 2))` are MethodErrors; `precond = :mg` builds; `budget = true` builds.
 @testitem "inner solver keywords: cycles, preconditioners and Bool counts" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin
 @testset "inner solver keywords: cycles, preconditioners and Bool counts" begin
     e(f) = try
@@ -386,19 +386,19 @@ end
         err isa ArgumentError ? err.msg : sprint(showerror, err)
     end
     m = Module()
-        Core.eval(m, :(using LatticeFields.Solvers: LatticePCG, LatticeMultigrid, Multigrid))    # no `VCycle` in scope
+        Core.eval(m, :(using LatticeFields.Solvers: LatticePCG, LatticeMultigrid))    # no `VCycle` in scope
         s = LatticePCG(; precs = LatticeMultigrid(; cycle = VCycle(3, 3)), maxiters = 12)
     @test Core.eval(m, Meta.parse(repr(s))) == s
-        @test Multigrid(; cycle = (3, 1)) == Multigrid(; cycle = VCycle(3, 1))
+        @test LatticeMultigrid(; cycle = (3, 1)) == LatticeMultigrid(; cycle = VCycle(3, 1))
     for (f, want) in (
                 (() -> VCycle(2.0, 2), "`VCycle(2.0, 2)`: a V-cycle's smoothing steps ν₁, ν₂ (pre and post) are integers ≥ 1; for example `VCycle(2, 2)`"),
-                (() -> VCycle(true, 2), "`VCycle(true, 2)`: a V-cycle (the `cycle` of a `Multigrid`) needs ν₁, ν₂ ≥ 1"),
-                (() -> Multigrid(; cycle = :w), "`Multigrid(; cycle = :w)`: `cycle` is the V-cycle's smoothing steps, `(ν₁, ν₂)` or `VCycle(ν₁, ν₂)`"),
-                (() -> Multigrid(; cycle = (2, 0)), "`VCycle(2, 0)`: a V-cycle"),
-                (() -> LatticeBlockSolve(:mg), "`LatticeBlockSolve(:mg)`: the block preconditioner solves each field with a `LatticePCG(…)` or a `Multigrid(…)`"),
+                (() -> VCycle(true, 2), "`VCycle(true, 2)`: a V-cycle (the `cycle` of a `LatticeMultigrid`) needs ν₁, ν₂ ≥ 1"),
+                (() -> LatticeMultigrid(; cycle = :w), "`LatticeMultigrid(; cycle = :w)`: `cycle` is the V-cycle's smoothing steps, `(ν₁, ν₂)` or `VCycle(ν₁, ν₂)`"),
+                (() -> LatticeMultigrid(; cycle = (2, 0)), "`VCycle(2, 0)`: a V-cycle"),
+                (() -> LatticeBlockSolve(:mg), "`LatticeBlockSolve(:mg)`: the block preconditioner solves each field with a `LatticePCG(…)` or a `LatticeMultigrid(…)`"),
                 (() -> LatticePCG(; maxiters = true), "`LatticePCG(; maxiters = true)`: `maxiters` is the most CG iterations per solve, an integer ≥ 1"),
-        (() -> Multigrid(; cycles = true), "`Multigrid(; cycles = true)`: `cycles`"),
-                (() -> Multigrid(; maxiters = false), "`Multigrid(; maxiters = false)`: `maxiters`"),
+        (() -> LatticeMultigrid(; cycles = true), "`LatticeMultigrid(; cycles = true)`: `cycles`"),
+                (() -> LatticeMultigrid(; maxiters = false), "`LatticeMultigrid(; maxiters = false)`: `maxiters`"),
             )
         @test startswith(e(f), want) || (println("MSG: ", e(f)); false)
     end

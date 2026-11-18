@@ -165,7 +165,7 @@ end
                 ),
                 (
                     CrankNicolson(; linsolve = LFS.LatticePCG(; reltol = 1.0e-8)), CrankNicolson(; linsolve = LFS.LatticePCG(; reltol = 1.0e-8)),
-                    CrankNicolson(; linsolve = LFS.Multigrid(; cycle = LFS.VCycle(1, 1))),
+                    CrankNicolson(; linsolve = LFS.LatticeMultigrid(; cycle = LFS.VCycle(1, 1))),
                 ),
                 (
                     BDF2(; solver_type = Float64), BDF2(; solver_type = Float64, init = nothing),
@@ -197,8 +197,7 @@ end
                 const CorePotts = Potts.CorePotts
                 const LatticeFields = Potts.LatticeFields
                 using Potts.LatticeFields.Problems: ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady
-                using Potts.LatticeFields.Solvers: LatticePCG, Multigrid, VCycle
-                using Potts.LatticePDE: LatticeMultigrid
+                using Potts.LatticeFields.Solvers: LatticePCG, LatticeMultigrid, VCycle
             end
         )
         roundtrip(x) = Core.eval(rt_mod, Meta.parse(repr(x)))

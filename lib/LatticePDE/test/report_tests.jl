@@ -122,10 +122,10 @@ using .LP_report: fd
     @test rline(rep, "operator") == "  operator   J̃ exact"
     @test rline(rep, "run") == "  run        1 window; 1 solve; status Success"
     # a given count and inner print as given, in keyword form
-        r2 = sprint(field_report, init(p, BackwardEuler(; newton = 3, substeps = 2, linsolve = Multigrid(; cycles = 2)); dt = 0.01))
+        r2 = sprint(field_report, init(p, BackwardEuler(; newton = 3, substeps = 2, linsolve = LatticeMultigrid(; cycles = 2)); dt = 0.01))
     @test rline(r2, "newton") == "  newton     3: given (`newton = 3`)"
     # (as resolved: `cycles = k` sets the budget)
-        @test startswith(rline(r2, "linsolve"), "  linsolve   Multigrid(; cycles = 2, maxiters = 2), multigrid levels") && !occursin("linsolve = :auto", r2)
+        @test startswith(rline(r2, "linsolve"), "  linsolve   LatticeMultigrid(; cycles = 2, maxiters = 2), multigrid levels") && !occursin("linsolve = :auto", r2)
     @test endswith(rline(r2, "substeps"), "[user]") && occursin("2 substeps", rline(r2, "window"))
 end
 end

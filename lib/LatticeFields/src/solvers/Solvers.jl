@@ -6,15 +6,14 @@ the Any fold, the bottom V-cycle with a fixed-degree Chebyshev coarsest solve, P
 fixed V(2,2) Chebyshev cycle as preconditioner, the stationary budgeted path, the residual
 sentinel and `init = :steady`. Launch plans follow the Schedule/Exec contract.
 
-The public interface (F3-05; the front ends' `linsolve = …` vocabulary and the field solvers'
+The public interface (the front ends' `linsolve = …` vocabulary and the field solvers'
 building block): the operator `CellOperator` (faces, shift, masks with a value or a value
 field, face-Dirichlet and Robin faces), the solver `FieldSolver` with `rebuild!`, `lift!`,
 `solve!`, `steady!`, `tangent!`, `set_coefficients!`, the readers `field`, `solution_key`,
-`solver_solution`, `scalars`, `iterations`, `sentinel`, and the inner solvers, LinearSolve.jl algorithms, `LatticePCG`,
-`LatticeGMRES`, `Multigrid`, `VCycle`, with the `precs` functions `LatticeMultigrid` and
-`LatticeBlockSolve` (re-exported by Potts and LatticePDE), and `BoundOperator`, a field's
-operator as a `LinearProblem`'s `A`. Messages name the user's field
-(`CellOperator(…; name)`).
+`solver_solution`, `scalars`, `iterations`, `sentinel`, and the inner solvers, LinearSolve.jl
+algorithms `LatticePCG`, `LatticeGMRES`, `LatticeMultigrid` (stationary multigrid and `precs`
+preconditioner), `VCycle`, `LatticeBlockSolve`, and `BoundOperator`, a field's operator as a
+`LinearProblem`'s `A`. Messages name the user's field (`CellOperator(…; name)`).
 """
 module Solvers
 
@@ -39,7 +38,7 @@ using Krylov: Krylov
 using SciMLOperators: SciMLOperators
 
 public CellOperator, FieldSolver, LatticePCG, LatticeGMRES, LatticeMultigrid, LatticeBlockSolve, BoundOperator,
-    Multigrid, VCycle, RuleWeights, robin_parts, rebuild!,
+       VCycle, RuleWeights, robin_parts, rebuild!,
        lift!, solve!, steady!, tangent!, set_coefficients!, field, solution_key, solver_solution,
        scalars, iterations, sentinel
 

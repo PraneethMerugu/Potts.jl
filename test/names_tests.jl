@@ -30,7 +30,7 @@ end
         P, S = LF.Problems, LF.Solvers
         ctors = (
             P.ExplicitEuler, P.ExplicitMap, P.BackwardEuler, P.CrankNicolson, P.BDF2, P.QuasiSteady, P.FieldGroups,
-            S.LatticePCG, S.LatticeGMRES, S.Multigrid, LP.LatticeDiscretization,
+            S.LatticePCG, S.LatticeGMRES, S.LatticeMultigrid, LP.LatticeDiscretization,
         )
         kwargs(f) = unique!(reduce(vcat, (Base.kwarg_decl(m) for m in methods(f)); init = Symbol[]))
         for f in ctors
@@ -52,9 +52,9 @@ end
         removed = (
             LF.Problems => (:FieldAlgorithm, :ImplicitAlgorithm, :PolicyTexts, :LatticeMG),
             LF.IR => (:BRule,),
-            LF.Solvers => (:V,),
-            LP => (:at, :at2, :AdvectionScheme, :jacobian_sparsity, :LatticeMG, :PottsEntity, :get_potts_entity),
-            Potts => (:at, :at2),
+            LF.Solvers => (:V, :Multigrid),
+            LP => (:at, :at2, :AdvectionScheme, :jacobian_sparsity, :LatticeMG, :PottsEntity, :get_potts_entity, :Multigrid),
+            Potts => (:at, :at2, :Multigrid),
         )
         for (mod, ns) in removed, n in ns
             @test !isdefined(mod, n) || (println(mod, ".", n, " is still defined"); false)

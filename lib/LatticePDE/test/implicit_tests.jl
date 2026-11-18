@@ -274,9 +274,9 @@ end
         m = e(() -> solve(p, LatticePCG(; maxiters = 12)))
         @test occursin("give it to one, `BackwardEuler(; linsolve = LatticePCG(; maxiters = 12))`", m)
         @test solve(p, BackwardEuler(; linsolve = LatticePCG(; maxiters = 12)); dt = 0.01).retcode == ReturnCode.Success
-        m = e(() -> ExplicitEuler(; linsolve = Multigrid()))
-        @test occursin("give it to an implicit field solver, `BackwardEuler(; linsolve = Multigrid())`", m)
-        @test solve(p, BackwardEuler(; linsolve = Multigrid()); dt = 0.01).retcode == ReturnCode.Success
+        m = e(() -> ExplicitEuler(; linsolve = LatticeMultigrid()))
+        @test occursin("give it to an implicit field solver, `BackwardEuler(; linsolve = LatticeMultigrid())`", m)
+        @test solve(p, BackwardEuler(; linsolve = LatticeMultigrid()); dt = 0.01).retcode == ReturnCode.Success
     # the `:ode` path: a field or linear solver given to an `ODEProblem`
         po = discretize(
             bsys([D(bce) ~ bD * laplacian(bce)], [bc(0, x, y) ~ x], [bD]; dvs = [bce]),
@@ -291,7 +291,7 @@ end
         for (f, want) in (
                 (() -> BackwardEuler(; newton = 0), "BackwardEuler: newton = 0 is the Newton iterations"),
             (() -> BackwardEuler(; substeps = true), "BackwardEuler: substeps = true must be an integer ≥ 1"),
-                (() -> BackwardEuler(; linsolve = :pcg), "BackwardEuler: `linsolve` takes `:auto`, a `LatticePCG(…)` or a `Multigrid(…)`"),
+                (() -> BackwardEuler(; linsolve = :pcg), "BackwardEuler: `linsolve` takes `:auto`, a `LatticePCG(…)` or a `LatticeMultigrid(…)`"),
                 (() -> BackwardEuler(; solver_type = BigFloat), "BackwardEuler: `solver_type` takes `:auto`"),
                 (() -> BackwardEuler(; theta = 1), "BackwardEuler: no keyword `theta`; its keywords are `substeps`, `newton`, `lower_bound`, `linsolve`, `solver_type`, `init` and `compute_type`"),
             )

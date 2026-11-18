@@ -416,7 +416,7 @@ end
             (BDF2(), BDF2(), BDF2(; substeps = 2), true),
             (QuasiSteady(), QuasiSteady(), QuasiSteady(; linsolve = LatticeGMRES()), true),
             (LatticePCG(), LatticePCG(), LatticePCG(; maxiters = 3), true),
-            (Multigrid(), Multigrid(), Multigrid(; cycles = 3), true),
+            (LatticeMultigrid(), LatticeMultigrid(), LatticeMultigrid(; cycles = 3), true),
             (LatticeGMRES(), LatticeGMRES(), LatticeGMRES(; gmres_restart = 8), true),
         ]
         for (a, b, c, hasdefaults) in canon_cases

@@ -42,7 +42,7 @@ end
     @test k1 <= 6 && k0 >= 5k1 || (println("F4-08 iterations ", (k0, k1)); false)
     P = only(values(mg.engines))
     @test P isa LFP.MGPreconditioner && P.applies > 0 && isfinite(P.γ)
-        @test occursin("LatticeMultigrid(; cycle = (2, 2), cycles = 1)", repr(mg))
+    @test repr(mg) == "LatticeMultigrid()" && occursin("cycle = (3, 3)", repr(LatticeMultigrid(; cycle = (3, 3))))
     # the documented small memory (`gmres_restart = 10`): the same steps, W builds and iterations
         s2, k2 = qfbdf(prob; precs = LatticeMultigrid(), gmres_restart = 10)
     @test (s2.stats.naccept, s2.stats.nw, s2.stats.nsolve) == (s1.stats.naccept, s1.stats.nw, s1.stats.nsolve) && k2 == k1 ||
@@ -58,6 +58,8 @@ end
     want = LFP.lattice_matrix(lp.A) \ lp.b
     a = solve(lp, LatticePCG(); reltol = 1e-13, abstol = 0.0)
     @test SciMLBase.successful_retcode(a) && norm(a.u .- want) <= 1e-8 * norm(want)
+    g = solve(lp, LatticeGMRES(); reltol = 1e-12, abstol = 0.0)
+    @test SciMLBase.successful_retcode(g) && norm(g.u .- want) <= 1e-8 * norm(want)
     # Contraction rho <= 0.25 at rtol = 1e-13 bounds iterations <= ceil(log(1e-13)/log(0.25)) = 22
     @test a.iters <= 22 || (println("F4-08 LatticePCG iterations ", a.iters); false)
     d = solve(lp)                                        # (the default: the owned QuasiSteady)

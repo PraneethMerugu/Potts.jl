@@ -108,7 +108,7 @@ function hex_factor(dims; rule = RuleWeights(), masked = true, periodic = (false
         mask = masked ? "m" : nothing, value = 0.0,
         dirichlet = (periodic[1] ? (nothing, nothing) : (0.0, 0.0), (nothing, nothing)))
     inp = Dict(k => v for (k, v) in inp if !(k in ("in.f", "mv")) && (masked || k != "m"))
-    sv = hex_solver(op, inp; linsolve = Multigrid(), rule)
+    sv = hex_solver(op, inp; linsolve = LatticeMultigrid(), rule)
     rebuild!(sv)
     lift!(sv)
     act = field(sv, lkey(0, "active")) .!= 0
@@ -137,7 +137,7 @@ using .LF_solvers_hex: fd
         op, inp = hex_case((16, 12); periodic = per,
             robin = per[2] ? ((nothing, nothing), (nothing, nothing)) : ((nothing, nothing), (nothing, (2.0, 1.0, 0.3))))
         @test hex_vs_hand(op, inp)[1] < 1e-9
-            @test hex_vs_hand(op, inp; linsolve = Multigrid(; reltol = 1.0e-12, maxiters = 60))[1] < 1.0e-9
+            @test hex_vs_hand(op, inp; linsolve = LatticeMultigrid(; reltol = 1.0e-12, maxiters = 60))[1] < 1.0e-9
     end
     # Float32: to the Float32 level
     op, inp = hex_case((16, 12))

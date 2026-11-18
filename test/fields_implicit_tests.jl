@@ -170,9 +170,9 @@ end
         m = e(() -> mk(; field_solver = LatticePCG()))
         @test occursin("give it to one, `field_solver = BackwardEuler(; linsolve = LatticePCG())`", m)
         @test solve(mk(; field_solver = BackwardEuler(; linsolve = LatticePCG())), SequentialCPM()).retcode == FiRC.Success
-        m = e(() -> mk(; solvers = [:c => Multigrid()]))
-        @test occursin("give it to one, `solvers = [c => BackwardEuler(; linsolve = Multigrid())]`", m)
-        @test solve(mk(; solvers = [:c => BackwardEuler(; linsolve = Multigrid())]), SequentialCPM()).retcode == FiRC.Success
+        m = e(() -> mk(; solvers = [:c => LatticeMultigrid()]))
+        @test occursin("give it to one, `solvers = [c => BackwardEuler(; linsolve = LatticeMultigrid())]`", m)
+        @test solve(mk(; solvers = [:c => BackwardEuler(; linsolve = LatticeMultigrid())]), SequentialCPM()).retcode == FiRC.Success
     end
 end
 

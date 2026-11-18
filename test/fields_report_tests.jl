@@ -129,7 +129,7 @@ end
         # base ab34e226 (~/lpwork/f4BE/nc.log): the solution prints the policy as given (`newton
         # automatic (set when the group is bound)`, no substep counts) and no backend
         m = FrMerks(; name = :m)
-        for fs in (ExplicitEuler(), BackwardEuler(; linsolve = Multigrid()))
+        for fs in (ExplicitEuler(), BackwardEuler(; linsolve = LatticeMultigrid()))
             prob = fr_prob(m; field_solver = fs)
             sol = solve(prob, SequentialCPM())
             integ = init(prob, SequentialCPM())
@@ -144,22 +144,22 @@ end
             @test sol.stats.fields.counts == substep_counts(integ)
             @test (sol.stats.fields.implicit[1] === nothing) == (fs isa ExplicitEuler)
         end
-        rs = sprint(field_report, solve(fr_prob(m; field_solver = BackwardEuler(; linsolve = Multigrid())), SequentialCPM()))
+        rs = sprint(field_report, solve(fr_prob(m; field_solver = BackwardEuler(; linsolve = LatticeMultigrid())), SequentialCPM()))
         @test fr_line(rs, "newton") == "  newton     1, automatic: the operator is exact"
-        @test fr_line(rs, "linsolve") == "  linsolve   Multigrid(; maxiters = 12), multigrid levels 5"
+        @test fr_line(rs, "linsolve") == "  linsolve   LatticeMultigrid(; maxiters = 12), multigrid levels 5"
     end
 end
 
-@testitem "F4-13: field_report of a BackwardEuler group: inner, multigrid levels, the Newton count" setup = [FieldsReportSetup] tags = [:potts, :fields_report] begin
-    @testset "F4-13: field_report of a BackwardEuler group: inner, multigrid levels, the Newton count" begin
+@testitem "field_report of a BackwardEuler group: inner, multigrid levels, the Newton count" setup = [FieldsReportSetup] tags = [:potts, :fields_report] begin
+    @testset "field_report of a BackwardEuler group: inner, multigrid levels, the Newton count" begin
         m = FrMerks(; name = :m)
-        integ = init(fr_prob(m; field_solver = BackwardEuler(; linsolve = Multigrid())), SequentialCPM())
+        integ = init(fr_prob(m; field_solver = BackwardEuler(; linsolve = LatticeMultigrid())), SequentialCPM())
         step!(integ)
         rep = sprint(field_report, integ)
-        @test occursin("group 1 of 1: c (BackwardEuler(; linsolve = Multigrid()))", rep)
+        @test occursin("group 1 of 1: c (BackwardEuler(; linsolve = LatticeMultigrid()))", rep)
         @test fr_line(rep, "window") == "  window     dt = 1.0, 1 substep (h = 1.0)"
         @test endswith(fr_line(rep, "substeps"), "[least]")
-        @test fr_line(rep, "linsolve") == "  linsolve   Multigrid(; maxiters = 12), multigrid levels 5"
+        @test fr_line(rep, "linsolve") == "  linsolve   LatticeMultigrid(; maxiters = 12), multigrid levels 5"
         @test fr_line(rep, "newton") == "  newton     1, automatic: the operator is exact"
         @test fr_line(rep, "operator") == "  operator   J̃ exact"
         @test fr_line(rep, "numbers") == "  numbers    state Float64, compute Float64, solver Float64 (`solver_type = :auto`)"
@@ -170,8 +170,8 @@ end
         @test fr_line(r, "newton") == "  newton     3: given (`newton = 3`)"
         @test startswith(fr_line(r, "linsolve"), "  linsolve   LatticePCG() (`linsolve = :auto`), multigrid levels ")
         # a problem: `inner` and the Newton count as given (resolved when the group is bound)
-        rp = sprint(field_report, fr_prob(m; field_solver = BackwardEuler(; linsolve = Multigrid())))
-        @test fr_line(rp, "linsolve") == "  linsolve   Multigrid()"
+        rp = sprint(field_report, fr_prob(m; field_solver = BackwardEuler(; linsolve = LatticeMultigrid())))
+        @test fr_line(rp, "linsolve") == "  linsolve   LatticeMultigrid()"
         @test fr_line(rp, "newton") == "  newton     automatic (set when the group is bound)"
     end
 end
@@ -181,7 +181,7 @@ end
         LP = Potts.LatticePDE
         cases = (
             (FrMerks(; name = :m), ExplicitEuler(), ExplicitEuler(), 1),
-            (FrMerks(; name = :m), BackwardEuler(; linsolve = Multigrid()), BackwardEuler(; linsolve = Multigrid()), 1),
+            (FrMerks(; name = :m), BackwardEuler(; linsolve = LatticeMultigrid()), BackwardEuler(; linsolve = LatticeMultigrid()), 1),
             (FrLoop(; name = :m), FieldGroups(:u => ExplicitEuler(; substeps = 4); default = ExplicitEuler()),
                 FieldGroups(:u => ExplicitEuler(; substeps = 4); default = ExplicitEuler()), 2,
             ),
@@ -215,7 +215,7 @@ end
 @testitem "F4-13: a report adds nothing to a run (a warm step! allocates 0 B after it)" setup = [FieldsReportSetup] tags = [:potts, :fields_report] begin
     @testset "F4-13: a report adds nothing to a run (a warm step! allocates 0 B after it)" begin
         m = FrMerks(; name = :m)
-        for fs in (ExplicitEuler(), BackwardEuler(; linsolve = Multigrid()))
+        for fs in (ExplicitEuler(), BackwardEuler(; linsolve = LatticeMultigrid()))
             integ = init(PottsProblem(m, fr_op(), (0, 20); seed = 3, field_solver = fs), SequentialCPM(); save_everystep = false)
             @test fr_warm(integ) == 0
             field_report(devnull, integ)

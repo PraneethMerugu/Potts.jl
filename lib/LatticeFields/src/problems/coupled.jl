@@ -281,12 +281,12 @@ Base.size(P::CoupledPrecond) = (0, 0)
 """
     CoupledKrylov
 
-The coupled solve of a `QuasiSteady` group (F3-12d, [`Solvers.LatticeGMRES`](@ref
+The coupled solve of a `QuasiSteady` group ([`Solvers.LatticeGMRES`](@ref
 LatticeFields.Solvers.LatticeGMRES)): its rows ([`CoupledRow`](@ref)), the operator and the
 preconditioner, the Krylov.jl FGMRES workspace (restart `m`), the iterate's partials, the
 scalars (device), their host copy, the `budget`, `rtol`, whether the group is linear in its
 state, `mkpres`, which binds the perturbed residual launches at new parameters (a rebind), and
-a nonlinear steady group's pending growth check (`pending`, `σ`, `keys`; r2 M1).
+a nonlinear steady group's pending growth check (`pending`, `σ`, `keys`).
 """
 mutable struct CoupledKrylov{RS, WK, OP, PC, WS, A, S, H, L}
     rows::RS
@@ -313,7 +313,7 @@ end
     coupled_solve(alg, op, s, keys) -> Bool
 
 Whether the implicit group of the fields `keys` (its operator `op`, its stepped program `s`)
-takes the coupled solve (F3-12d): a `QuasiSteady` group with `linsolve = LatticeGMRES(…)` always, or
+takes the coupled solve: a `QuasiSteady` group with `linsolve = LatticeGMRES(…)` always, or
 when its rows read one another in a cycle, or a row reads another field of the group through a
 term the operator does not take as a source (a cross diffusion `D laplacian(o)`, a nonlinear term such
 as `c²`, a term that reads its own field and another): its steady rows are then solved together,
@@ -339,8 +339,8 @@ _primal_cache(c) = c
 coupled_solve(::Any) = false
 
 # the Krylov solver of a coupled group from its `linsolve`: a `LatticeGMRES` as given; `:auto` (and
-# the steady start's default) its defaults; a `LatticePCG` or `Multigrid` given for the group
-# becomes each field's preconditioner
+# the steady start's default) its defaults; a `LatticePCG` or `LatticeMultigrid` given for the
+# group becomes each field's preconditioner
 function _krylov(inner)
     inner isa LatticeGMRES && return inner
     inner === :auto && return LatticeGMRES()
@@ -403,9 +403,7 @@ function _bind_coupled(
     # the coupled solve as a LinearSolve cache: `LatticeGMRES` (its FGMRES workspace the cache),
     # its `precs` the block preconditioner `P` (a right preconditioner)
     kr = Solvers.owned(kr)
-    lin = CommonSolve.init(SciMLBase.LinearProblem(A, b; u0 = similar(b)), kr)
-    P, ws = lin.Pr, lin.cacheval
-    P isa CoupledPrecond || throw(
+    kr.precs isa LatticeBlockSolve || throw(
         ArgumentError(
             string(
                 _algname(alg), ": the coupled solve of ", join(("`$k`" for k in keys), ", "), " takes the block preconditioner ",
@@ -413,6 +411,9 @@ function _bind_coupled(
             )
         )
     )
+    u0 = _cvec(_zeros(st.backend, K, ntot), vpart, st.backend)
+    lin = CommonSolve.init(SciMLBase.LinearProblem(A, b; u0), kr)
+    P, ws = lin.Pr, lin.cacheval
     m = min(kr.gmres_restart, kr.maxiters)
     return CoupledKrylov(
         rws, walk, A, P, ws, _zeros(st.backend, K, off), off, scal, zeros(K, GM_SCALARS), m, kr.maxiters,

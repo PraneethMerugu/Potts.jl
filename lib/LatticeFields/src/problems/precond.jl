@@ -47,35 +47,58 @@ function (mg::LatticeMultigrid)(W, p)
         ArgumentError(
             string(
                 "`LatticeMultigrid()` preconditions the linear solves of a problem ",
-        "`discretize` returned (its `W = J − M/γ`, or the operator of a system with no time); got a ", nameof(typeof(W)))))
+                "`discretize` returned (its `W = J − M/γ`, or the operator of a system with no time); got a ", nameof(typeof(W)),
+            )
+        )
+    )
+    inner = Solvers.LatticeMultigrid(; cycle = mg.cycle, cycles = something(mg.cycles, 1))
+    P = _mg_bind_for!(mg.engines, mg.lock, m, W, p, inner)
+    return (P, LinearAlgebra.I)
+end
+
+function (bs::LatticeBlockSolve)(W, p)
+    m = _mg_meta(W)
+    m isa LatticeMetadata || throw(
+        ArgumentError(
+            string(
+                "`LatticeBlockSolve` preconditions the linear solves of a problem ",
+                "`LatticePDE.discretize` returned (its `W = J − M/γ`, or `LatticeOperator`); got a ", nameof(typeof(W)),
+                ": pass `precs = nothing` (or `precs = LatticeMultigrid()` on a discretized lattice problem)",
+            )
+        )
+    )
+    P = _mg_bind_for!(bs.engines, bs.lock, m, W, p, bs.linsolve)
+    return (LinearAlgebra.I, P)
+end
+
+function _mg_bind_for!(engines, lck, m::LatticeMetadata, W, p, inner)
     γ = _mg_gamma(W)
     fp = m.problem
     u, q, t = p isa Tuple && length(p) == 4 ? (p[2], p[3], p[4]) : (nothing, p, fp.tspan[1])
     lp = q isa LatticeParameters ? q : m.problem.p isa LatticeParameters ? m.problem.p :
          LatticeParameters(copy(fp.p), fp.tables, fp.inputs; fns = fp.inputfns)
-    P = lock(mg.lock) do
+    P = lock(lck) do
         key = (objectid(m), current_task())
-        e = get(mg.engines, key, nothing)
+        e = get(engines, key, nothing)
         if e === nothing || !_mg_current(e, lp)
-            e = _mg_engine(mg, m, lp)
-            mg.engines[key] = e
+            e = _mg_engine(m, lp, inner)
+            engines[key] = e
         end
         e
     end
     _mg_bind!(P, u === nothing ? fp.u0 : u, lp, Float64(primal(t)), γ)
-    return (P, LinearAlgebra.I)
+    return P
 end
 _mg_current(e::MGPreconditioner, lp::LatticeParameters) =
     e.p === lp && e.stamp == lp.stamp[] && e.values == Float64[primal(v) for v in lp.values]
 
 # the owned implicit runtime of `m`'s problem at the parameters `lp`
-function _mg_engine(mg::LatticeMultigrid, m::LatticeMetadata, lp::LatticeParameters)
+function _mg_engine(m::LatticeMetadata, lp::LatticeParameters, inner)
     fp = m.problem
     # (a system with no time: one window of a unit span, which `QuasiSteady` takes)
     span = fp.group.spec.timefree ? (0.0, 1.0) : fp.tspan
     g = _field_problem(fp.program, fp.state, Array(fp.u0), span, Vector{Float64}(map(primal, lp.values)), lp.tables,
         lp.inputs, fp.backend, fp.index, fp.faces, fp.stability, fp.kind, fp.initkeys, fp.options, fp.group)
-    inner = Solvers.Multigrid(; cycle = mg.cycle, cycles = mg.cycles)
     st = fp.group.spec.steady
     h = 1.0
     be = BackwardEuler(; substeps = 1, newton = 1, linsolve = inner)

@@ -1,26 +1,44 @@
-# The lattice solvers as LinearSolve.jl algorithms: `LatticePCG`, `LatticeGMRES` and `Multigrid`
-# pass LinearSolve's interface check; `solve(LinearProblem(A, b), alg)` on a lattice field's
-# operator (`BoundOperator`) gives the bits of the field solver driven directly (`rebuild!`,
-# `lift!`, `solve!`), at a first solve and after a new right-hand side; the generic path (any
-# other operator) is CG on `−A`; a `precs` the fused path cannot apply and a `Multigrid` on a
-# matrix are refused, naming the route.
+# The lattice solvers as LinearSolve.jl algorithms: `LatticePCG`, `LatticeGMRES` and
+# `LatticeMultigrid` pass LinearSolve's interface check; `solve(LinearProblem(A, b), alg)` on
+# a lattice field's operator (`BoundOperator`) gives the bits of the field solver driven
+# directly (`rebuild!`, `lift!`, `solve!`), at a first solve and after a new right-hand side;
+# `BoundOperator` supports `mul!`/`*` and `FusedVCycle` supports `ldiv!`, so `KrylovJL_CG(;
+# precs = LatticeMultigrid())` works on `BoundOperator`; non-fused `precs` (including `nothing`)
+# fall back to the generic CG path; `LatticeMultigrid` on a non-field matrix is refused, naming
+# the route.
 
 @testsetup module LF_solvers_linearsolve
 using Test, LatticeFields
 include("../host_runner.jl")
 include("../solvers_cases.jl")
+using LatticeFields: Schedule
 using LatticeFields.Solvers: BoundOperator, LatticeGMRES, iterations
-using LinearSolve: LinearSolve, LinearProblem, init, solve
+using LinearSolve: LinearSolve, KrylovJL_CG, LinearProblem, init, reinit!, solve
 using SciMLBase: ReturnCode
-using LinearAlgebra: I, SymTridiagonal
-# (the test executor's scalars are host memory: the solve reads its status for free)
+using LinearAlgebra: I, SymTridiagonal, mul!
+# (the test executor's scalars are host memory: the solve reads its status for free;
+# `MockDevExec` delegates execution to `HostExec` with `host_scalars === false` for the device path)
 Solvers.host_scalars(::HostExec, scal) = scal isa Array
+struct MockDevExec end
+Solvers.alloc(::MockDevExec, ::Type{T}, n) where {T} = zeros(T, n)
+Schedule.supports(::MockDevExec, ::Type{Float64}) = true
+Solvers.to_host(::MockDevExec, A) = copy(A)
+Solvers.launch!(::MockDevExec, l::Solvers.Launch) = Solvers.launch!(HostExec(), l)
+Solvers.host_scalars(::MockDevExec, scal) = false
 
-# a masked disk with a random right-hand side
+# a masked disk with a random right-hand side (`homog_disk`: zero boundary data, linear `A * x = b`)
 function disk(T, n = 48; s = 0.02)
     op, ins = ball_case((n, n); s)
     b = T.(rand(Xoshiro(3), n * n))
     return op, ins, b
+end
+function homog_disk(T, n = 48; s = 0.02)
+    op, ins = ball_case((n, n); s)
+    op0 = CellOperator(op.dims; periodic = op.periodic, shift = op.shift, mask = op.mask, value = 0.0)
+    b = T.(rand(Xoshiro(3), n * n))
+    mask = ins[1][2]
+    b[mask .!= 0] .= zero(T)
+    return op0, ins, b
 end
 # the field solver driven directly: its solution after `rebuild!`, `lift!` and `solve!`
 function direct(op, ins, b, T, linsolve; maxiters = nothing)
@@ -30,14 +48,25 @@ function direct(op, ins, b, T, linsolve; maxiters = nothing)
     maxiters === nothing ? solve!(sv) : solve!(sv; maxiters)
     return sv
 end
+function err_msg(f)
+    try
+        f()
+        return ""
+    catch err
+        return err isa ArgumentError ? err.msg : sprint(showerror, err)
+    end
+end
 include("../shared/export_all.jl")
 end
 
 @testitem "the lattice solvers pass LinearSolve's interface check" setup = [LF_solvers_linearsolve] tags = [:latticefields, :solvers] begin
-    for alg in (LatticePCG(), LatticeGMRES(), Multigrid(), LatticePCG(; precs = LatticeMultigrid(; cycle = (3, 3)), maxiters = 4))
+    for alg in (
+            LatticePCG(), LatticeGMRES(), LatticeMultigrid(),
+            LatticePCG(; precs = LatticeMultigrid(; cycle = (3, 3)), maxiters = 4),
+        )
         @test isempty(LinearSolve.algorithm_interface_issues(alg))
+        @test !LinearSolve.needs_concrete_A(alg)
     end
-    @test !LinearSolve.needs_concrete_A(LatticePCG()) && !LinearSolve.needs_concrete_A(Multigrid())
 end
 
 @testitem "solve(LinearProblem) on a field's operator gives the direct solve's bits" setup = [LF_solvers_linearsolve] tags = [:latticefields, :solvers] begin
@@ -50,19 +79,22 @@ end
         sol = solve(LinearProblem(A, b), LatticePCG(); maxiters = 8, reltol = 1.0e-6)
         @test sol.u == x
         @test sol.iters == iterations(sv) && sol.retcode == (scalars(sv).done ? ReturnCode.Success : ReturnCode.MaxIters)
-        # the same values given on the algorithm, and a non-default cycle
+        # the same values given on the algorithm, and an unset `maxiters` uses the fused default (8)
         @test solve(LinearProblem(A, b), LatticePCG(; maxiters = 8, reltol = 1.0e-6)).u == x
-        # (an unset `reltol` is the solve's: LinearSolve's default is √eps)
+        @test solve(LinearProblem(A, b), LatticePCG(; reltol = 1.0e-6)).u == x
+        # a non-default cycle
         alg = LatticePCG(; precs = LatticeMultigrid(; cycle = (3, 3)), maxiters = 5)
         sv3 = direct(op, ins, b, T, alg)
         @test solve(LinearProblem(A, b), alg; reltol = 1.0e-6).u == field(sv3, solution_key(sv3))
-        # stationary multigrid
-        mg = Multigrid(; cycles = 3)
+        # stationary multigrid (including LinearSolve reltol/maxiters overrides)
+        mg = LatticeMultigrid(; cycles = 3)
         svm = direct(op, ins, b, T, mg)
         solm = solve(LinearProblem(A, b), mg)
         @test solm.u == field(svm, solution_key(svm)) && solm.retcode == ReturnCode.Success
-        # a cache: a new right-hand side warm-starts from the last solution, as the direct
-        # solver does after a write into its `"in.f"`
+        svm2 = direct(op, ins, b, T, LatticeMultigrid(; maxiters = 4, reltol = 1.0e-5))
+        solm2 = solve(LinearProblem(A, b), LatticeMultigrid(); maxiters = 4, reltol = 1.0e-5)
+        @test solm2.u == field(svm2, solution_key(svm2))
+        # a cache: a new right-hand side warm-starts from the last solution
         c = init(LinearProblem(A, copy(b)), LatticePCG(; maxiters = 8, reltol = 1.0e-6))
         LinearSolve.solve!(c)
         b2 = T.(rand(Xoshiro(5), length(b)))
@@ -75,7 +107,31 @@ end
     end
 end
 
-@testitem "the generic path and the refusals" setup = [LF_solvers_linearsolve] tags = [:latticefields, :solvers] begin
+@testitem "BoundOperator mul!, KrylovJL_CG with LatticeMultigrid, and the device retcode" setup = [LF_solvers_linearsolve] tags = [:latticefields, :solvers] begin
+    for T in (Float32, Float64)
+        op, ins, b = homog_disk(T)
+        A = BoundOperator(HostExec(), op; T, inputs = ins)
+        sp = solve(LinearProblem(A, b), LatticePCG(); maxiters = 32, reltol = T == Float32 ? 1.0e-5 : 1.0e-10)
+        y = similar(b)
+        mul!(y, A, sp.u)
+        @test y == A * sp.u
+        @test isapprox(y, b; rtol = T == Float32 ? 1.0e-4 : 1.0e-8)
+        sk = solve(LinearProblem(A, b), KrylovJL_CG(; precs = LatticeMultigrid()); reltol = T == Float32 ? 1.0e-5 : 1.0e-10, abstol = zero(T), maxiters = 64)
+        @test sk.retcode == ReturnCode.Success
+        @test isapprox(sk.u, sp.u; rtol = T == Float32 ? 1.0e-4 : 1.0e-8)
+    end
+    # fused device path (`host_scalars === false`): returns `ReturnCode.Default` with `iters = 0` and the host solution's bits
+    op, ins, b = disk(Float64)
+    Ah = BoundOperator(HostExec(), op; T = Float64, inputs = ins)
+    Ad = BoundOperator(MockDevExec(), op; T = Float64, inputs = ins)
+    sh = solve(LinearProblem(Ah, b), LatticePCG(); maxiters = 8, reltol = 1.0e-6)
+    sd = solve(LinearProblem(Ad, b), LatticePCG(); maxiters = 8, reltol = 1.0e-6)
+    @test sd.u == sh.u && sd.retcode == ReturnCode.Default && sd.iters == 0
+    sdm = solve(LinearProblem(Ad, b), LatticeMultigrid(; cycles = 3))
+    @test sdm.retcode == ReturnCode.Default && sdm.iters == 0
+end
+
+@testitem "the generic path, cache refreshes with precs = nothing, and the refusals" setup = [LF_solvers_linearsolve] tags = [:latticefields, :solvers] begin
     # any other operator: CG on `−A` (negative definite here), `precs` LinearSolve's contract
     n = 40
     A = -SymTridiagonal(fill(2.5, n), fill(-1.0, n - 1))
@@ -83,14 +139,38 @@ end
     sol = solve(LinearProblem(A, b), LatticePCG(; precs = (A, p) -> (I, I)); reltol = 1.0e-12, maxiters = 200)
     @test sol.retcode == ReturnCode.Success && isapprox(sol.u, A \ b; rtol = 1.0e-9)
     @test solve(LinearProblem(A, b), LatticePCG(; precs = (A, p) -> (I, I), maxiters = 2); reltol = 1.0e-12).retcode == ReturnCode.MaxIters
-    # a field's operator takes `precs = LatticeMultigrid(…)` (fused); a stationary
-    # `Multigrid` solves a field's operator only
-    op, ins, bb = disk(Float64, 16)
+    # `LatticeGMRES` on a plain matrix with `precs = nothing`, plus `cache.A = ...` and `reinit!` refresh
+    A2 = -SymTridiagonal(fill(3.5, n), fill(-1.0, n - 1))
+    sg = solve(LinearProblem(A, b), LatticeGMRES(; precs = nothing); reltol = 1.0e-12, abstol = 0.0, maxiters = 100)
+    @test sg.retcode == ReturnCode.Success && isapprox(sg.u, A \ b; rtol = 1.0e-9)
+    for alg in (LatticePCG(; precs = nothing), LatticeGMRES(; precs = nothing))
+        c = init(LinearProblem(A, b), alg; reltol = 1.0e-12, abstol = 0.0, maxiters = 100)
+        @test isapprox(LinearSolve.solve!(c).u, A \ b; rtol = 1.0e-9)
+        c.A = A2
+        @test isapprox(LinearSolve.solve!(c).u, A2 \ b; rtol = 1.0e-9)
+        reinit!(c; A = A)
+        @test isapprox(LinearSolve.solve!(c).u, A \ b; rtol = 1.0e-9)
+    end
+    # generic CG path on a `BoundOperator`: `precs = (A, p) -> (I, I)` and `precs = nothing` (negative control: more iters than preconditioned)
+    op, ins, bb = homog_disk(Float64, 32)
     Bop = BoundOperator(HostExec(), op; T = Float64, inputs = ins)
-    @test_throws ["ArgumentError", "precs = LatticeMultigrid"] solve(LinearProblem(Bop, bb), LatticePCG(; precs = (A, p) -> (I, I)); maxiters = 4)
-    @test_throws ["ArgumentError", "`Multigrid` solves a lattice field's operator"] solve(LinearProblem(A, b), Multigrid())
-    # the keywords are checked, naming the keyword
-    @test_throws ["ArgumentError", "`LatticePCG(; maxiters = 0)`"] LatticePCG(; maxiters = 0)
-    @test_throws ["ArgumentError", "`LatticeGMRES(; gmres_restart = 1)`"] LatticeGMRES(; gmres_restart = 1)
-    @test_throws ["ArgumentError", "`LatticeMultigrid(; cycles = 0)`"] LatticeMultigrid(; cycles = 0)
+    sf = solve(LinearProblem(Bop, bb), LatticePCG(); reltol = 1.0e-8, maxiters = 64)
+    su = solve(LinearProblem(Bop, bb), LatticePCG(; precs = nothing); reltol = 1.0e-8, abstol = 0.0, maxiters = 200)
+    si = solve(LinearProblem(Bop, bb), LatticePCG(; precs = (M, p) -> (I, I)); reltol = 1.0e-8, abstol = 0.0, maxiters = 200)
+    @test su.retcode == ReturnCode.Success && si.retcode == ReturnCode.Success
+    @test isapprox(su.u, sf.u; rtol = 1.0e-6) && isapprox(si.u, sf.u; rtol = 1.0e-6)
+    @test su.iters > sf.iters
+    # refusals (typed ArgumentError plus message token)
+    @test_throws ArgumentError solve(LinearProblem(A, b), LatticeMultigrid())
+    @test occursin("lattice field", err_msg(() -> solve(LinearProblem(A, b), LatticeMultigrid())))
+    @test_throws ArgumentError solve(LinearProblem(A, b), LatticeGMRES())
+    @test occursin("precs = LatticeMultigrid()", err_msg(() -> solve(LinearProblem(A, b), LatticeGMRES())))
+    @test_throws ArgumentError solve(LinearProblem(Bop, bb), LatticePCG(); maxiters = 2000)
+    @test occursin("maxiters", err_msg(() -> solve(LinearProblem(Bop, bb), LatticePCG(); maxiters = 2000)))
+    @test_throws ArgumentError LatticePCG(; maxiters = 0)
+    @test occursin("maxiters", err_msg(() -> LatticePCG(; maxiters = 0)))
+    @test_throws ArgumentError LatticeGMRES(; gmres_restart = 1)
+    @test occursin("gmres_restart", err_msg(() -> LatticeGMRES(; gmres_restart = 1)))
+    @test_throws ArgumentError LatticeMultigrid(; cycles = 0)
+    @test occursin("cycles", err_msg(() -> LatticeMultigrid(; cycles = 0)))
 end

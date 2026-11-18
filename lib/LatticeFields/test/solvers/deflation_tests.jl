@@ -231,7 +231,7 @@ end
 @testset "divergence is reported as :diverged, transient growth is not" begin
     # stationary V(1,1) on the 512² disk diverges (‖r‖/‖b‖ 0.46 → 0.93 by cycle 10)
     sv = case_solver(named_case("disk512", 5.5e-6), Float64;
-            linsolve = Multigrid(cycle = VCycle(1, 1))
+            linsolve = LatticeMultigrid(cycle = VCycle(1, 1))
         )
     k = steady!(sv; maxiter = 30)
     sc = scalars(sv)
@@ -240,7 +240,7 @@ end
     @test (@test_logs (:warn, r"diverged") sentinel(sv))
     # negative control: V(2,2) on the jumpy field grows 27 → 41 over ten cycles, then falls;
     # the growth counter reaches 3 (rn stays below 2·best), the solve runs to its budget
-        sv = case_solver(jumpy_case(), Float64; linsolve = Multigrid())
+        sv = case_solver(jumpy_case(), Float64; linsolve = LatticeMultigrid())
     rebuild!(sv)
     lift!(sv)
     scal = sv.tables[Solvers.tid(sv, "solve.scal")]

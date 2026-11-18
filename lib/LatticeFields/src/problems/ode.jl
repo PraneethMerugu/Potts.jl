@@ -1652,8 +1652,8 @@ const LatticeTimeFreeProblem = Union{LatticeLinearProblem, LatticeResidualProble
 CommonSolve.solve(prob::LatticeTimeFreeProblem, alg::Union{AbstractFieldAlgorithm, LinearSolver}; kw...) =
     CommonSolve.solve(field_problem(prob), alg; kw...)
 CommonSolve.solve(prob::LatticeTimeFreeProblem; kw...) = CommonSolve.solve(field_problem(prob); kw...)
-# `LatticePCG` on the `LinearProblem` itself is LinearSolve's solve (CG on the operator's product)
-CommonSolve.solve(prob::LatticeLinearProblem, alg::Solvers.LatticePCG; kw...) =
+# `LatticePCG` and `LatticeGMRES` on the `LinearProblem` itself are LinearSolve solves
+CommonSolve.solve(prob::LatticeLinearProblem, alg::Union{Solvers.LatticePCG, Solvers.LatticeGMRES}; kw...) =
     CommonSolve.solve!(CommonSolve.init(prob, alg; kw...))
 # a remake builds the problem again at the new values (`A` and `b` are the parameters')
 function SciMLBase.remake(prob::LatticeLinearProblem; p = missing, u0 = missing, inputs = (), kw...)

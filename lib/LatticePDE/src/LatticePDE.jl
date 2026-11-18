@@ -31,7 +31,7 @@ using LatticeFields.IR: F16, Grid, Program, ProgramBuilder, Coef, FaceRule, Node
 using CommonSolve: solve, init, step!, solve!
 using KernelAbstractions: KernelAbstractions
 using LatticeFields: Exec, Problems
-using LatticeFields.Solvers: LatticePCG, LatticeGMRES, LatticeMultigrid, LatticeBlockSolve, Multigrid, VCycle
+using LatticeFields.Solvers: LatticePCG, LatticeGMRES, LatticeMultigrid, LatticeBlockSolve, VCycle
 using LatticeFields.Compile: CompileOptions, fingerprint_text, fuse_update, promote_dual, primal
 using LatticeFields.IR: fieldid, RESOLVE, degenerate, leveldims, sitecoefs
 using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
@@ -59,8 +59,8 @@ export LatticeDiscretization, FiniteVolume, CompiledField, discretize, symbolic_
        parse_bcs, linearity, Grid, HEX, Interval, lattice_domain
 export ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, solve, init, step!, solve!, stability_bound,
        substep_counts, steady_fields, field_series, field_report
-export LatticePCG, LatticeGMRES, Multigrid   # the linear solvers (LinearSolve algorithms; `linsolve = …`); `VCycle` is public
-export LatticeMultigrid, LatticeBlockSolve   # their preconditioners (LinearSolve `precs` functions)
+export LatticePCG, LatticeGMRES, LatticeMultigrid   # the linear solvers (LinearSolve algorithms; `linsolve = …`); `VCycle` is public
+export LatticeBlockSolve                          # coupled block preconditioner (LinearSolve `precs` function)
 export field_jacobian_sparsity              # the Jacobian's pattern
 export remake, getp, getu, setp            # the routes its messages give (SciMLBase, SymbolicIndexingInterface)
 

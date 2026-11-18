@@ -56,7 +56,7 @@ using .LF_solvers_device: instances
     for (name, s, kw) in (("disk128", 0.022, (;)), (
                     "per128", 0.022, (; solver_type = Float32),
                 ),
-                ("sphere42", 0.022, (;)), ("disk128", 1.9e-3, (; linsolve = Multigrid())),
+                ("sphere42", 0.022, (;)), ("disk128", 1.9e-3, (; linsolve = LatticeMultigrid())),
                 ("per256", 5.5e-6, (; solver_type = Float32)),
             )
         h = dev_solved(named_case(name, s), HostExec(); kw...)
@@ -73,7 +73,7 @@ end
 using .LF_solvers_device: instances
 @testset "no Float64 in device code: the walk on device argument types" begin
         for (c, kw) in (
-                ("disk128", (;)), ("disk128", (; linsolve = Multigrid())),
+                ("disk128", (;)), ("disk128", (; linsolve = LatticeMultigrid())),
                 ("per128", (; solver_type = Float32)), ("sphere42", (;)),
             )
         sv = FieldSolver(DevExec(), named_case(c, 0.022)[1]; T = Float32, kw...)

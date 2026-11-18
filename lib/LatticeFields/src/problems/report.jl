@@ -195,10 +195,11 @@ function _implicit_facts(alg, c, keys)
     c = _primal_cache(c)
     c isa ImplicitCache || return nothing
     sv = [r.solver for r in c.rows if r.solver !== nothing]
+    algs = unique(Any[r.solver !== nothing ? Solvers.public_form(r.solver.alg) : r.lin.alg for r in c.rows if r.solver !== nothing || r.lin !== nothing])
     rows = [r for r in c.op.rows if r.key in c.keys]
     return ImplicitFacts(
         (
-            collect(String, keys), unique(Any[Solvers.public_form(s.alg) for s in sv]), c.cs === nothing ? nothing : _krylov(alg.linsolve),
+            collect(String, keys), algs, c.cs === nothing ? nothing : _krylov(alg.linsolve),
         unique([length(s.prog.hierarchy) for s in sv]), unique(Type[s.T for s in sv]), c.newton, alg.newton !== nothing,
         c.cs !== nothing, c.cs !== nothing && c.cs.linear, c.exact, c.exact0, c.switch, c.iterate, c.seen, c.cyclic, c.h,
         c.ρin, c.θ, c.smin, unique([t for r in rows for t in r.inexact]), unique([t for r in rows for t in r.unseen])))

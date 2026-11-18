@@ -32,7 +32,7 @@ end
         k64, s64 = auto_run(case, Float64)
         k32, s32 = auto_run(case, Float32)
             mg = steady!(
-                case_solver(case, Float32; linsolve = Multigrid(), solver_type = Float32);
+                case_solver(case, Float32; linsolve = LatticeMultigrid(), solver_type = Float32);
             maxiter = 40)
         s == 5.5e-6 && (mg32[name] = mg)
         println(rpad(name, 12), " s=", rpad(s, 8), " ref ", ref, "  F64 ", f64,

@@ -74,7 +74,7 @@ using .LF_solvers_warm: fd
     append!(cases, [(n, c) for (n, c) in extra])
     for (name, case) in cases, T in (Float32, Float64)
         n = prod(case[1].dims)
-        inners = n <= 300 * 192 ? (:auto, Multigrid()) : (:auto,)
+        inners = n <= 300 * 192 ? (:auto, LatticeMultigrid()) : (:auto,)
             for linsolve in inners
             inp = (case[1], Tuple(k => (k == case[1].mask ? v : T.(v)) for (k, v) in case[2]))
                 ref = solved_on(HostExec(), inp, T; linsolve)
@@ -92,7 +92,7 @@ end
 using .LF_solvers_warm: fd
 @testset "a warm rebuild + lift + solve allocates nothing" begin
         for (case, kw) in (
-                (named_case("disk128", 0.022), (;)), (named_case("disk128", 0.022), (; linsolve = Multigrid())),
+                (named_case("disk128", 0.022), (;)), (named_case("disk128", 0.022), (; linsolve = LatticeMultigrid())),
         (named_case("sphere42", 0.022), (;)), (named_case("per128", 0.022), (;)),
         ((CellOperator((64, 64); shift = 0.05, robin = (((0.1, -1.0, 0.4), nothing), (nothing, nothing))), ()), (;)))
         for exec in (KA_.CPU(), HostExec())
@@ -141,7 +141,7 @@ using .LF_solvers_warm: fd
     mk(s, d = 1.0 + s) = CellOperator(op0.dims; periodic = op0.periodic, shift = s, mask = op0.mask, value = op0.value,
         dirichlet = ((0.0, d), (nothing, nothing)))
     rob(β, _ = nothing) = CellOperator((40, 24); shift = 0.05, robin = (((0.4, β, 0.3), (0.1, -1.0, 0.4)), (nothing, nothing)))
-        for exec in (HostExec(), KA_.CPU()), linsolve in (:auto, Multigrid()),
+        for exec in (HostExec(), KA_.CPU()), linsolve in (:auto, LatticeMultigrid()),
         (make, vals, coef) in ((mk, (0.01, 0.035, 0.02), :shift), (rob, (0.25, 0.6, 0.4), (:robin, 1, 1, :beta)))
         inp = make === mk ? inputs : ()
         function built(o)

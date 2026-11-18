@@ -66,7 +66,7 @@ end
             rsys(
                 [D(bce) ~ bD * laplacian(bce) - bk * bce],
         [bc(0, x, y) ~ x * y, ifelse(y < 2.0, bg, 0.0) * bc(t, 0, y) - Differential(x)(bc(t, 0, y)) ~ 1.0], [bD, bk, bg]))
-        for inner in (BTIGHT, Multigrid(; reltol = 1.0e-12, maxiters = 64))
+        for inner in (BTIGHT, LatticeMultigrid(; reltol = 1.0e-12, maxiters = 64))
             igu, _, uu = rs_window(uni, BackwardEuler(; linsolve = inner); dt = h)
             igs, _, us = rs_window(site, BackwardEuler(; linsolve = inner); dt = h)
         @test !only(igu.runtimes).cache.rows[1].op.field && only(igs.runtimes).cache.rows[1].op.field
