@@ -23,11 +23,13 @@
 #    case (on ROCm, AMDGPU loading and GPU kernel compile stay after `GO` so no sibling holds
 #    a KFD handle during timing), print `READY <pid>`, and block on stdin. Prepare runs
 #    outside the lock (only one A/B runs in the `ab` lane; peak memory 4 × 8G). Once all
-#    are READY, the parent acquires `tools/exclusive.sh` and, in the round's rotated order,
-#    waits idle, moves each child (all its threads, `taskset -a -cp`) to the benchmark core,
-#    sends `GO <cpu> <sibling_pids>`, collects results until `DONE`, and waits for it to
-#    exit inside the lock before starting the next side (an uncatchable parent SIGKILL can
-#    still release the lock via stdin EOF). Pass `--serial` to run one child at a time under
+#    are READY, the parent lets parallel-compile heat settle (when `--wait` is not `none`),
+#    acquires `tools/exclusive.sh` and, in the round's rotated order, waits idle, moves each
+#    child (all its threads, `taskset -a -cp`) to the benchmark core, sends
+#    `GO <cpu> <sibling_pids>`, collects results until `DONE`, moves the finished child off
+#    the benchmark core before closing stdin so heap teardown runs elsewhere, and waits for
+#    it to exit inside the lock before starting the next side (an uncatchable parent SIGKILL
+#    can still release the lock via stdin EOF). Pass `--serial` to run one child at a time under
 #    the lock from process start (waiting inside the lock before loading).
 #  - Identical environments. Every side runs `--project=<side>/benchmark` with its own test
 #    project stacked on JULIA_LOAD_PATH (where the device packages come from), so no side
@@ -460,7 +462,7 @@ function stop_child!(c)
     return nothing
 end
 
-function run_go_child!(c, reader, children, idx, o, deadline)
+function run_go_child!(c, reader, children, idx, o, deadline; off_cpu = -1)
     live_siblings = [x.child_pid[]
                      for (j, x) in enumerate(children)
                      if j > idx && x.alive[] && x.child_pid[] > 0]
@@ -488,6 +490,8 @@ function run_go_child!(c, reader, children, idx, o, deadline)
         !isempty(f) && f[1] == "DONE" && (got_done = true; break)
         parse_child_line!(res, skips, dist, tcs, l)
     end
+    # Move the finished child off the benchmark core before it tears down its heap and exits.
+    off_cpu >= 0 && c.child_pid[] > 0 && BenchMachine.repin!(c.child_pid[], off_cpu)
     close(c.inp)
     wait(reader)
     wait(c.proc)
@@ -548,10 +552,14 @@ function run_round_parallel!(R, D, skipped, r, order, cases, o, deadline)
                 for (i, (side, dir)) in enumerate(order)]
     try
         readers = wait_all_ready!(children, o)
+        # Let parallel-compile heat/boost settle before the first child runs on the benchmark core.
+        o.wait != "none" && sleep(2.0)
         with_machine_lock() do
             for (i, (c, reader)) in enumerate(zip(children, readers))
                 try
-                    res, skips, dist, tcs = run_go_child!(c, reader, children, i, o, deadline)
+                    off_cpu = isempty(comp_cpus) ? -1 : comp_cpus[i]
+                    res, skips, dist, tcs = run_go_child!(c, reader, children, i, o,
+                        deadline; off_cpu)
                     record_side!(R, D, skipped, r, c.side, c.dir, res, skips, dist, tcs)
                 finally
                     stop_child!(c)

@@ -17,10 +17,11 @@
 #  2. prints `READY <pid>`, flushes stdout, and blocks reading stdin for
 #     `GO <cpu> [<exclude_pids>]`;
 #  3. once `GO` arrives (already re-pinned by the parent to `<cpu>` while the parent holds
-#     `tools/exclusive.sh`), runs a short fixed burn-in on the benchmark core, checks start
-#     disturbances (excluding live sibling PIDs), prints `TC <entries> <capacity>`, runs the
-#     timed trials (`ABR`/`ABSKIP` lines), checks end disturbances, and prints `DISTURBED`,
-#     final `TC`, and `DONE`.
+#     `tools/exclusive.sh`), checks start disturbances (excluding live sibling PIDs), runs
+#     a 1.5 s fixed burn-in on the benchmark core so boost clocks settle before the first
+#     sample, prints `TC <entries> <capacity>`, runs the timed trials (`ABR`/`ABSKIP` lines),
+#     checks end disturbances, prints `DISTURBED`, final `TC`, and `DONE`, and waits for
+#     stdin EOF so the parent can re-pin it off the benchmark core before heap teardown.
 #
 # Without `--prepare` (used by `--serial`, `--inprocess`, and direct runs), the process
 # runs steps 1–2 and times immediately in one pass without reading stdin or printing
@@ -193,7 +194,7 @@ end
 
 function ab_burnin!(prepared)
     t0 = time_ns()
-    while time_ns() - t0 < 250_000_000
+    while time_ns() - t0 < 1_500_000_000
     end
     for item in prepared
         item.prob === nothing && continue
@@ -210,8 +211,8 @@ function ab_run_prepared!(prepared, tc_start, go, samples, seconds, gctrial_for;
             [(; item.label, item.prob, item.alg,
                   backend = item.dev ? device_backend() : nothing) for item in prepared] :
             prepared
-    ab_burnin!(items)
     start_dist = ab_disturbances(; exclude = go.exclude_pids)
+    ab_burnin!(items)
     println("TC ", join(tc_start, " "))
     flush(stdout)
     for item in items
@@ -224,6 +225,8 @@ function ab_run_prepared!(prepared, tc_start, go, samples, seconds, gctrial_for;
     println("TC ", join(BenchMachine.type_cache_stats(), " "))
     println("DONE")
     flush(stdout)
+    # Wait for parent to re-pin us off the benchmark core and close stdin before tearing down.
+    eof(stdin)
     return 0
 end
 

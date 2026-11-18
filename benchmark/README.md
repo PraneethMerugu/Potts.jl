@@ -62,10 +62,11 @@ By default it:
   ROCm, AMDGPU loading and GPU kernel compile stay after `GO` so no sibling holds a KFD
   handle during timing), print `READY <pid>`, and block on stdin. Prepare runs outside
   the lock (only one A/B runs in the `ab` lane; peak memory 4 × 8G). Once all are READY,
-  `ab.jl` takes `tools/exclusive.sh` and, in the round's rotated order, waits idle, moves
-  each child (all its threads, `taskset -a -cp`) to the benchmark core, sends `GO`,
-  collects results until `DONE`, and waits for it to exit inside the lock before starting
-  the next side (`--serial` keeps the one-at-a-time path, waiting inside the lock before
+  `ab.jl` lets parallel-compile heat settle, takes `tools/exclusive.sh` and, in the round's
+  rotated order, waits idle, moves each child (all its threads, `taskset -a -cp`) to the
+  benchmark core, sends `GO`, collects results until `DONE`, moves it off the benchmark core
+  before closing stdin so teardown runs elsewhere, and waits for it to exit inside the lock
+  before starting the next side (`--serial` keeps the one-at-a-time path, waiting inside
   loading). When only the workload or the parameters change, `--inprocess` times both in
   one process, with second copies of the base and the candidate as the controls:
   `<variants.jl>` defines `AB_VARIANTS`, a vector of `label => T -> PottsProblem`, base
