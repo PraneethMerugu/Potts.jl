@@ -23,7 +23,7 @@
 #    case (on ROCm, AMDGPU loading and GPU kernel compile stay after `GO` so no sibling holds
 #    a KFD handle during timing), print `READY <pid>`, and block on stdin. Prepare runs
 #    outside the lock (only one A/B runs in the `ab` lane; peak memory 4 × 8G). Once all
-#    are READY, the parent lets parallel-compile heat settle (when `--wait` is not `none`),
+#    are READY, the parent lets parallel-compile heat settle (2 s),
 #    acquires `tools/exclusive.sh` and, in the round's rotated order, waits idle, moves each
 #    child (all its threads, `taskset -a -cp`) to the benchmark core, sends
 #    `GO <cpu> <sibling_pids>`, collects results until `DONE`, moves the finished child off
@@ -499,7 +499,9 @@ function run_go_child!(c, reader, children, idx, o, deadline; off_cpu = -1)
     wait(reader)
     wait(c.proc)
     c.alive[] = false
-    o.backend == "rocm" && BenchMachine.wait_kfd_clear(; exclude = Int[])
+    if o.backend == "rocm" && !BenchMachine.wait_kfd_clear(; exclude = Int[])
+        push!(dist, "KFD did not clear after exit")
+    end
     if !got_done || !success(c.proc)
         isempty(c.log) || println(join(c.log, "\n"))
         error("timed run in $(c.dir) ($(c.side)) failed (exit $(c.proc.exitcode))")
@@ -556,7 +558,7 @@ function run_round_parallel!(R, D, skipped, r, order, cases, o, deadline)
     try
         readers = wait_all_ready!(children, o)
         # Let parallel-compile heat/boost settle before the first child runs on the benchmark core.
-        o.wait != "none" && sleep(2.0)
+        sleep(2.0)
         with_machine_lock() do
             for (i, (c, reader)) in enumerate(zip(children, readers))
                 try
