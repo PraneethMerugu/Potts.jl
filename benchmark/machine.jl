@@ -239,25 +239,16 @@ function ancestors(pid = getpid())
     return out
 end
 
-function _default_gpu_exclude(extra = Int[]; dir = "/sys/class/kfd/kfd/proc")
+function _default_gpu_exclude(extra = Int[])
     ex = Int[getpid(), Int(ccall(:getppid, Cint, ()))]
     append!(ex, extra)
-    pp = tryparse(Int, strip(get(ENV, "POTTS_AB_PARENT_PID", "")))
-    if pp !== nothing && Sys.islinux() && isdir(dir)
-        for p in readdir(dir)
-            all(isdigit, p) || continue
-            pid = parse(Int, p)
-            pid in ex && continue
-            pp in ancestors(pid) && push!(ex, pid)
-        end
-    end
     return ex
 end
 
 """
-PIDs of processes holding the AMD GPU (ROCm KFD clients), other than `exclude`: this
-process, its parent (a gate that re-ran itself pinned holds the GPU in the parent), and
-any sibling A/B children under `POTTS_AB_PARENT_PID`.
+PIDs of processes holding the AMD GPU (ROCm KFD clients), other than `exclude`: by default,
+this process, its parent (a gate that re-ran itself pinned holds the GPU in the parent), and
+any `extra` PIDs passed in (such as live sibling A/B children from `GO`).
 """
 function gpu_users(; exclude = _default_gpu_exclude(), dir = "/sys/class/kfd/kfd/proc")
     isdir(dir) || return Int[]
@@ -269,16 +260,20 @@ end
 Wait up to `timeout` s for exiting KFD clients (whose `/proc/<pid>` is already gone) to finish
 kernel teardown before declaring the GPU busy.
 """
-function wait_kfd_clear(; exclude = _default_gpu_exclude(), timeout = 2.0)
+function wait_kfd_clear(;
+        exclude = _default_gpu_exclude(), timeout = 2.0,
+        dir = "/sys/class/kfd/kfd/proc"
+    )
     Sys.islinux() || return true
     t0 = time()
     while true
-        u = gpu_users(; exclude)
+        u = gpu_users(; exclude, dir)
         isempty(u) && return true
         any(p -> isdir("/proc/$p"), u) && return false
         time() - t0 >= timeout && return false
         sleep(0.05)
     end
+    return
 end
 
 """

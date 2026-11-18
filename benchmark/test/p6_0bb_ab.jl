@@ -191,17 +191,29 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
         kfd = mktempdir(; cleanup = true)
         foreach(p -> write(joinpath(kfd, p), ""), ("101", "102", "103"))
         @test sort(BenchMachine.gpu_users(; exclude = [101, 102], dir = kfd)) == [103]
+        @test BenchMachine.wait_kfd_clear(; exclude = [101, 102, 103], dir = kfd)
+        if Sys.islinux()
+            # a fake KFD entry whose /proc/<pid> is absent triggers the timeout path
+            kfd_dead = mktempdir(; cleanup = true)
+            write(joinpath(kfd_dead, "99999999"), "")
+            @test !BenchMachine.wait_kfd_clear(; exclude = Int[], timeout = 0.1, dir = kfd_dead)
+            @test BenchMachine.wait_kfd_clear(; exclude = [99999999], timeout = 0.1, dir = kfd_dead)
+        end
         if Sys.islinux() && Sys.which("taskset") !== nothing
             sp = run(`sleep 10`; wait = false)
             try
                 @test BenchMachine.repin!(getpid(sp), 0)
                 spid = string(getpid(sp))
                 write(joinpath(kfd, spid), "")
+                # parent-PID ancestry does not exclude descendants; only explicit GO PIDs do
                 withenv("POTTS_AB_PARENT_PID" => string(getpid())) do
-                    ex = BenchMachine._default_gpu_exclude(; dir = kfd)
-                    @test getpid(sp) in ex
-                    @test !(103 in ex)
-                    @test sort(BenchMachine.gpu_users(; exclude = ex, dir = kfd)) == [101, 102, 103]
+                    ex = BenchMachine._default_gpu_exclude([101, 102])
+                    @test getpid() in ex
+                    @test !(getpid(sp) in ex)
+                    @test sort(BenchMachine.gpu_users(; exclude = ex, dir = kfd)) ==
+                          sort([103, getpid(sp)])
+                    ex_go = BenchMachine._default_gpu_exclude([101, 102, getpid(sp)])
+                    @test sort(BenchMachine.gpu_users(; exclude = ex_go, dir = kfd)) == [103]
                 end
             finally
                 kill(sp)

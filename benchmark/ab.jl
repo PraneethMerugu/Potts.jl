@@ -361,9 +361,12 @@ function spawn_prepare_child(side, dir, cases, o, deadline, comp_cpu)
     outp = Pipe()
     cmd = child_cmd(dir, [cases, o.variants], o, deadline;
         pin_cpu = comp_cpu, prepare = true, use_work = o.pin && comp_cpu < 0)
-    env = merge(child_env(dir, o), Dict("POTTS_AB_PARENT_PID" => string(getpid())))
-    proc = run(pipeline(ignorestatus(setenv(cmd, env; dir));
-        stdin = inp, stdout = outp, stderr = outp); wait = false)
+    proc = run(
+        pipeline(
+            ignorestatus(setenv(cmd, child_env(dir, o); dir));
+            stdin = inp, stdout = outp, stderr = outp
+        ); wait = false
+    )
     close(inp.out)
     close(outp.in)
     pid = try
