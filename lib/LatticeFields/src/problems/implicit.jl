@@ -124,18 +124,18 @@ _clip_body!(i, a, lower) = (@inbounds a[i] = max(a[i], lower); nothing)  # i ≤
 _bdf2_q_body!(i, q, un, prev) =
     (@inbounds q[i] = (4 * un[i] - prev[i]) / 3; nothing)
 
-# The Newton check (F3 design §3.4, M5, R2-M1): after each iteration's update, under
-# `nlsolve = nothing` (automatic mode), the norms of the row's correction ‖δ_k‖∞,
-# increment ‖u_k − uⁿ‖∞ and value ‖u_k‖∞ over its unmasked sites are reduced in `NB`-site
-# blocks (`_be_norms_body!`), then combined (`_be_newton_body!`). Under explicit
-# `LatticeNewton(; κ, max_iter, check_div)`, `_be_kappa_norms_body!` and
-# `_be_kappa_newton_body!` compute the `NLNewton` scaled RMS norm `ndz` (weighted by
-# `abstol + reltol * max(|uⁿ|, |u_{k+1}|)`), damped contraction rate `θ = max(0.3 prev_θ,
-# ndz / ndzprev)` carried across steps, multiplier `η = θ / (1 − θ)`, first-iteration rule
-# `ndz < 1e-5`, precision-limit check, divergence test (`check_div`), and `η * ndz < κ`.
-# A row that meets the tolerance adds 1 to entry [8]; a host executor stops early once every
-# row converges, and a device closes its convergence gate (`c.gate`, setting `δ := 0` and
-# skipping solves). A group with one Newton step runs neither.
+# The Newton check: after each iteration's update, under `nlsolve = nothing` (automatic mode),
+# the norms of the row's correction ‖δ_k‖∞, increment ‖u_k − uⁿ‖∞ and value ‖u_k‖∞ over its
+# unmasked sites are reduced in `NB`-site blocks (`_be_norms_body!`), then combined
+# (`_be_newton_body!`). Under `LatticeNewton(; κ, max_iter, check_div)`, `_be_kappa_norms_body!`
+# and `_be_kappa_newton_body!` compute the `NLNewton` scaled RMS norm `ndz` over all active
+# unknowns in the group (weighted by `abstol + reltol * max(|uⁿ|, |u_k|)` using the pre-update
+# iterate `u_k = dst - δ`), damped contraction rate `θ = max(0.3 prev_θ, ndz / ndzprev)`
+# carried across steps, multiplier `η = θ / (1 − θ)`, first-iteration rule `ndz < 1e-5`,
+# precision-limit check, divergence test (`check_div`), and `η * ndz < κ`. When every row
+# meets the tolerance, a host executor stops early and a device closes its convergence gate
+# (`c.gate`, setting `δ := 0` and skipping solves). Under automatic mode, a 1-step group runs
+# unchecked; under `LatticeNewton`, `max_iter = 1` runs the check.
 const NB = 256
 const NEWTON_EPS = 1e-3
 const STATUS_CONVERGED = 8
@@ -194,9 +194,9 @@ function _be_newton_body!(i, w, part, nb, hist, it, last, epsn, fl, window, stea
 end
 
 # Rate-scaled NLNewton norm and check (`LatticeNewton(; κ, max_iter, check_div)`): block sums of
-# `(δ_i / (abstol + max(|uⁿ_i|, |u_{k+1,i}|) * reltol))²` and active site counts, then the
-# single-item RMS norm, θ = max(0.3 prev_θ, ndz / ndzprev), η = θ / (1 − θ), precision-limit
-# check, divergence check, and `η * ndz < κ` test.
+# `(δ_i / (abstol + max(|uⁿ_i|, |u_{k,i}|) * reltol))²` (pre-update iterate `u_k = dst − δ`)
+# and active site counts, then the single-item RMS norm, θ = max(0.3 prev_θ, ndz / ndzprev),
+# η = θ / (1 − θ), precision-limit check, divergence check, and `η * ndz < κ` test.
 function _be_kappa_norms_body!(b, part, cnt, off, dst, un, x, smask, v, res, s, mask, dom, abstol, reltol, n, gate)
     @inbounds begin                             # b ≤ cld(n, NB), off + b ≤ length(part); every array has n sites
         T = eltype(part)
@@ -207,12 +207,12 @@ function _be_kappa_norms_body!(b, part, cnt, off, dst, un, x, smask, v, res, s, 
             ((mask !== nothing && mask[i] != 0) || (dom !== nothing && dom[i] == 0)) && continue
             c += UInt32(1)
             if !gated
-                δ = res !== nothing ? res[i] / _at(s, i) : (v !== nothing && smask[i] != 0) ? v[i] : x[i]
+                dv = T(res !== nothing ? res[i] / _at(s, i) : (v !== nothing && smask[i] != 0) ? v[i] : x[i])
                 u0 = abs(T(un[i]))
-                u1 = abs(T(dst[i]))
-                um = _nanmax(u0, u1)
+                uk = abs(T(dst[i]) - dv)
+                um = _nanmax(u0, uk)
                 denom = abstol + um * reltol
-                r = (δ == 0 && isfinite(um)) ? zero(T) : T(δ) / denom
+                r = (dv == 0 && isfinite(um)) ? zero(T) : dv / denom
                 ssq += r * r
             end
         end
@@ -221,7 +221,10 @@ function _be_kappa_norms_body!(b, part, cnt, off, dst, un, x, smask, v, res, s, 
     end
     return nothing
 end
-function _be_kappa_newton_body!(i, w, part, cnt, nb, hist, it, last, κ, window, steady, nobit, checkdiv, failbudget, gate, conv_inc)
+function _be_kappa_newton_body!(
+        i, w, part, cnt, nb, hist, it, last, κ, window, steady, nobit, checkdiv, failbudget, gate,
+        conv_inc, ndz1_tol, damp, eps_one,
+    )
     @inbounds begin                             # i = 1; nb ≤ length(part), hist has 4 entries, w 9
         if gate !== nothing && gate[1] != 0
             w[STATUS_CONVERGED] += conv_inc
@@ -250,8 +253,7 @@ function _be_kappa_newton_body!(i, w, part, cnt, nb, hist, it, last, κ, window,
         θ = prev_θ
         if it > 1
             ratio = (ndz == 0 && ndzprev == 0) ? zero(T) : ndz / ndzprev
-            θ = prev_θ = max((T(3) / T(10)) * prev_θ, ratio)
-            eps_one = T(100) * sqrt(eps(one(T)))
+            θ = prev_θ = max(damp * prev_θ, ratio)
             if abs(θ - one(T)) <= eps_one
                 if ndz <= one(T)
                     conv = true
@@ -265,7 +267,7 @@ function _be_kappa_newton_body!(i, w, part, cnt, nb, hist, it, last, κ, window,
         η = θ / (one(T) - θ)
         if !conv && fail == 0
             if it == 1
-                conv = ndz < T(1 // 10^5)
+                conv = ndz < ndz1_tol
             else
                 conv = (η >= zero(T)) && (η * ndz < κ)
             end
@@ -416,6 +418,7 @@ mutable struct ImplicitRow{R, U, A, SV, X, W, SC, SM, V, S, MK, MV, MF, LO, F, J
     numeric::Union{Nothing, Solvers.CellOperator}   # the numeric operator the solver holds (numeric rows)
     part::P                             # the Newton check's block partials and
     cnt::CT                             #   active site counts per block (UInt32) and
+    off::Int                            #   block offset in the group-wide LatticeNewton reduction
     hist::P                             #   history (`[d2, d1, d_first]` or `[ndzprev, prev_θ, ηold, ndz1]`)
     q::Q                                # the stage's right side `c__n` (Crank–Nicolson, BDF2), or nothing (BE: `uⁿ`)
     prev::H                             # BDF2: the state one substep back, `uⁿ⁻¹` (not in the problem's state), or nothing
@@ -443,7 +446,7 @@ iteration, at the iterate), Crank–Nicolson's right-side launches (`qres`, per 
 nothing), the status word, the operator spec and the coupled solve (`cs`: a [`CoupledKrylov`](@ref)
 when the group's rows are solved together, F3-12d; `nothing` when they are solved one by one).
 """
-mutable struct ImplicitCache{RS, WK, JL, W, BK, QL, GT, CS, KT, AT, RT}
+mutable struct ImplicitCache{RS, WK, JL, W, BK, QL, GT, CS, KT, AT, RT, GP, GC, GH}
     rows::RS
     walk::WK
     jac::JL
@@ -483,6 +486,10 @@ mutable struct ImplicitCache{RS, WK, JL, W, BK, QL, GT, CS, KT, AT, RT}
     qres::QL                            # Crank–Nicolson's right-side launches per slot parity, or nothing
     gate::GT                            # a device's convergence gate (batch 3 R1, F3-15), or nothing
     cs::CS                              # the coupled solve (F3-12d, `CoupledKrylov`), or nothing: row by row
+    gpart::GP                           # group-wide LatticeNewton partials, block counts, history, block count
+    gcnt::GC
+    ghist::GH
+    gnbt::Int
 end
 status_word(c::ImplicitCache) = c.word
 newton_count(c::ImplicitCache) = c.newton
@@ -493,6 +500,7 @@ function reset_cache!(c::ImplicitCache)
         for r in c.rows
             Exec.launch!(c.backend, _reset_hist_body!, 1, (r.hist,))
         end
+        c.ghist === nothing || Exec.launch!(c.backend, _reset_hist_body!, 1, (c.ghist,))
         c.cs === nothing || Exec.launch!(c.backend, _reset_hist_body!, 1, (c.cs.hist,))
     end
     return nothing
@@ -786,6 +794,7 @@ function bind_cache(
         end
         return cur
     end
+    goff = 0
     for (ri, key) in enumerate(order)
         r = op.rows[findfirst(x -> x.key == key, op.rows)]
         exact &= r.exact
@@ -810,6 +819,8 @@ function bind_cache(
         jarr(k) = haskey(own, "jac:$key.$k") ? own["jac:$key.$k"][1] : nothing
         nsite = length(u[1])
         nb = cld(nsite, NB)
+        row_off = goff
+        goff += nb
         part, cnt, hist = _zeros(st.backend, T, 3 * nb), _zeros(st.backend, UInt32, nb), _zeros(st.backend, T, 4)
         alg.nlsolve === nothing || Exec.launch!(backend, _reset_hist_body!, 1, (hist,))
         q = get(qs, key, nothing)
@@ -819,7 +830,7 @@ function bind_cache(
             sh = r.field ? _zeros(st.backend, T, nsite) : T(max(1 / hγ - _coefsum(r.jloc, p), 1 / (2hγ)))
             row = ImplicitRow(key, res, (u[1], u[2]), resarr, nothing, (u[1], u[1]), Int32(0), typeof(u[1])[], nothing,
                 nothing, nothing, sh, mask, mval, mvf, lo, nothing, jarr("j"), nothing, nothing, nothing, r.field && r.domain ? jarr("dom") : nothing,
-                r, nothing, part, cnt, hist, q, prev, nothing, nothing
+                r, nothing, part, cnt, row_off, hist, q, prev, nothing, nothing
             )
             push!(rows, row)
             continue
@@ -873,7 +884,7 @@ function bind_cache(
         row = ImplicitRow(
             key, res, (u[1], u[2]), resarr, sv, xs, xid, work,
             scal, smask, v, sh, mask, mval, mvf, lo, f, jj, mm, dd, mask, dm, r, numeric,
-            part, cnt, hist, q, prev, lin, row_bop
+            part, cnt, row_off, hist, q, prev, lin, row_bop
         )
         push!(rows, row)
     end
@@ -901,7 +912,7 @@ function bind_cache(
     ρin = b.ρ + b.κ + rb.ρ
     auto_newton = alg.nlsolve === nothing
     check_div = alg.nlsolve === nothing ? true : alg.nlsolve.check_div
-    fail_budget = !auto_newton
+    fail_budget = !auto_newton && check_div
     κ = alg.nlsolve === nothing ? (1 // 100) : alg.nlsolve.κ
     # (a coupled solve takes every term into its operator: no term is unseen)
     coupled || exact || seen || !auto_newton || _warn_unseen(keys, [b.unseen; rb.texts], alg)
@@ -917,6 +928,19 @@ function bind_cache(
             coupled ? _coupled_newton(alg, cs.linear, switch) :
             _auto_newton(alg, exact, switch, iterate, seen, ρin, h, b.θ, smin)
         ) : alg.nlsolve.max_iter::Int
+    check = !auto_newton || newton > 1
+    if !coupled && !auto_newton
+        if length(rows) == 1
+            gpart, gcnt, ghist, gnbt = rows[1].part, rows[1].cnt, rows[1].hist, cld(length(rows[1].bufs[1]), NB)
+        else
+            KT = mapreduce(r -> eltype(r.part), promote_type, rows)
+            gnbt = goff
+            gpart, gcnt, ghist = _zeros(st.backend, KT, gnbt), _zeros(st.backend, UInt32, gnbt), _zeros(st.backend, KT, 4)
+            Exec.launch!(backend, _reset_hist_body!, 1, (ghist,))
+        end
+    else
+        gpart, gcnt, ghist, gnbt = nothing, nothing, nothing, 0
+    end
     # the operator moves when it reads the time, the clock, a filled input or a field of the state
     # (rebuilt each window), or the solver reads a mask that moves
     moving = _jac_moving(jp, g.spec) || any(r -> r.mask !== nothing || r.dom !== nothing, rows) && _masks_moving(s, g.spec)
@@ -930,10 +954,10 @@ function bind_cache(
     # the device's convergence gate: once every row met the Newton tolerance, later iterations'
     # residuals are zeroed, their solves are skipped/done at setup, and the update adds 0 (including
     # Robin-defect rows and generic-path rows), so the field is the host's early-stop form.
-    gate = !Exec.ishost(backend) && newton > 1 ? _zeros(st.backend, UInt32, 1) : nothing
+    gate = !Exec.ishost(backend) && (newton > 1 || check) ? _zeros(st.backend, UInt32, 1) : nothing
     cache = ImplicitCache(rt, each(length(rt)), jac, newton, h, γ, true, true, jumps, moving, timed, word, op, exact0, exact,
-        iterate, newton > 1, _flips(alg, exact, switch), auto_newton, check_div, fail_budget, κ, abstol, reltol, switch, seen, ρin, b.θ, smin, keys,
-        cyclic, 0, rebind, backend, qres, gate, cs)
+        iterate, check, _flips(alg, exact, switch), auto_newton, check_div, fail_budget, κ, abstol, reltol, switch, seen, ρin, b.θ, smin, keys,
+        cyclic, 0, rebind, backend, qres, gate, cs, gpart, gcnt, ghist, gnbt)
     # a growing mode that the constant-coefficient check cannot see (r1 M2)
     cs === nothing || Base.inferencebarrier(_check_growth)(cs, alg, s, op, keys, p)
     return cache
@@ -1215,7 +1239,7 @@ end
 # it, check, hits)`, `hits`: the check counts a budget hit at this iteration): the residual at `tⁿ⁺¹`, the solve, the status, the update into the other slot,
 # and with `check` the Newton check of iteration `it`
 function (r::ImplicitRow)(a)
-    par, first, t1, h, k, last, window, backend, γ, word, it, check, hits, gate, checkdiv, failbudget, auto, κ, abstol, reltol = a
+    par, first, t1, h, k, last, window, backend, γ, word, it, check, hits, gate, checkdiv, failbudget, auto, κ, abstol, reltol, gpart, gcnt = a
     r.res[(first ? 0 : 2) + par]((t1, h, k))
     gate === nothing || Exec.launch!(backend, _be_gate_body!, length(r.resarr), (r.resarr, gate))
     dst = r.bufs[3 - par]
@@ -1226,7 +1250,10 @@ function (r::ImplicitRow)(a)
                 r.mvf, r.lo, last, gate,
             )
         )
-        check && _newton_check!(r, backend, word, dst, r.bufs[par], nothing, it, hits, window, isinf(h), checkdiv, failbudget, gate, auto, κ, abstol, reltol)
+        if check
+            auto ? _newton_check!(r, backend, word, dst, r.bufs[par], nothing, it, hits, window, isinf(h), checkdiv, failbudget, gate) :
+                   _kappa_row_norms!(r, backend, dst, r.bufs[par], nothing, gpart, gcnt, gate, abstol, reltol)
+        end
         return nothing
     end
     x = _row_correction!(r, backend, γ, h; word, window, gate)
@@ -1235,7 +1262,10 @@ function (r::ImplicitRow)(a)
             r.lo, last, gate,
         )
     )
-    check && _newton_check!(r, backend, word, dst, r.bufs[par], x, it, hits, window, isinf(h), checkdiv, failbudget, gate, auto, κ, abstol, reltol)
+    if check
+        auto ? _newton_check!(r, backend, word, dst, r.bufs[par], x, it, hits, window, isinf(h), checkdiv, failbudget, gate) :
+               _kappa_row_norms!(r, backend, dst, r.bufs[par], x, gpart, gcnt, gate, abstol, reltol)
+    end
     return nothing
 end
 # the solve of a row with a solver from its residual `resarr` (a scaled row: the right side `G/m`
@@ -1274,6 +1304,18 @@ function (r::ImplicitRow)(a::_Clip)
     Exec.launch!(a.backend, _clip_body!, length(dst), (dst, r.lo))
     return nothing
 end
+function _kappa_row_norms!(r::ImplicitRow, backend, dst, un, x, part, cnt, gate, abstol, reltol)
+    n = length(dst)
+    nb = cld(n, NB)
+    T = eltype(part)
+    atol, rtol = T(abstol), T(reltol)
+    if x === nothing
+        Exec.launch!(backend, _be_kappa_norms_body!, nb, (part, cnt, r.off, dst, un, nothing, nothing, nothing, r.resarr, r.s, r.mask, r.dom, atol, rtol, n, gate))
+    else
+        Exec.launch!(backend, _be_kappa_norms_body!, nb, (part, cnt, r.off, dst, un, x, r.smask, r.v, nothing, nothing, r.mask, r.dom, atol, rtol, n, gate))
+    end
+    return nothing
+end
 function _newton_check!(r::ImplicitRow, backend, word, dst, un, x, it, last, window, steady::Bool, checkdiv::Bool, failbudget::Bool, gate = nothing, auto::Bool = true, κ = 1 // 100, abstol = 1 // 10^6, reltol = 1 // 10^3)
     n = length(dst)
     nb = cld(n, NB)
@@ -1303,6 +1345,7 @@ function _newton_check!(r::ImplicitRow, backend, word, dst, un, x, it, last, win
             backend, _be_kappa_newton_body!, 1, (
                 word, r.part, r.cnt, Int32(nb), r.hist, Int32(it), last, T(κ),
                 window, steady, UInt32(16), checkdiv, failbudget, gate, UInt32(1),
+                T(1 // 10^5), T(3) / T(10), T(100) * sqrt(eps(one(T))),
             )
         )
     end
@@ -1406,7 +1449,7 @@ function _stage_iterations!(c::ImplicitCache, rt::GroupRuntime, t1::Float64, γ:
         c.gate === nothing ||
             Exec.launch!(c.backend, _be_gate_iter_body!, 1, (c.word, c.gate, UInt32(length(c.rows)), it == 1))
         _iterate!(c.cs, c, (par, it == 1, t1, hγ, k, it == c.newton, w, c.backend, 1.0, c.word, it, c.check,
-                it == c.newton && !c.flip, c.gate, c.check_div, c.fail_budget, c.auto, c.κ, c.abstol, c.reltol,
+                it == c.newton && !c.flip, c.gate, c.check_div, c.fail_budget, c.auto, c.κ, c.abstol, c.reltol, c.gpart, c.gcnt,
             )
         )
         # a host executor stops early once every row met tolerance or on failure (a plain read);
@@ -1420,7 +1463,20 @@ function _stage_iterations!(c::ImplicitCache, rt::GroupRuntime, t1::Float64, γ:
 end
 
 # one Newton iteration of the group's rows: one by one, or coupled (F3-12d)
-_iterate!(::Nothing, c::ImplicitCache, a) = c.walk(c.rows, a)
+function _iterate!(::Nothing, c::ImplicitCache, a)
+    c.walk(c.rows, a)
+    if !c.auto && a[12]
+        T = eltype(c.gpart)
+        Exec.launch!(
+            c.backend, _be_kappa_newton_body!, 1, (
+                c.word, c.gpart, c.gcnt, Int32(c.gnbt), c.ghist, Int32(a[11]), a[13], T(c.κ),
+                a[7], isinf(a[4]), UInt32(16), c.check_div, c.fail_budget, c.gate, UInt32(length(c.rows)),
+                T(1 // 10^5), T(3) / T(10), T(100) * sqrt(eps(one(T))),
+            )
+        )
+    end
+    return nothing
+end
 _iterate!(cs, c::ImplicitCache, a) = _coupled_iteration!(cs, c, a)
 
 """
@@ -1445,7 +1501,7 @@ function compile_cache!(c::ImplicitCache, rt::GroupRuntime)
             c.walk(c.rows, _Rebuild(c.backend, h, 1.0, c.word, false, w))
             c.gate === nothing || Exec.launch!(c.backend, _be_gate_iter_body!, 1, (c.word, c.gate, UInt32(length(c.rows)), true))
             for first in (true, false)
-                _iterate!(c.cs, c, (par, first, 0.0, h, 0, true, w, c.backend, 1.0, c.word, 1, c.check, false, c.gate, c.check_div, c.fail_budget, c.auto, c.κ, c.abstol, c.reltol))
+                _iterate!(c.cs, c, (par, first, 0.0, h, 0, true, w, c.backend, 1.0, c.word, 1, c.check, false, c.gate, c.check_div, c.fail_budget, c.auto, c.κ, c.abstol, c.reltol, c.gpart, c.gcnt))
             end
             c.walk(c.rows, _Clip(c.backend, par))
             if c.rows[1].q !== nothing
@@ -1458,6 +1514,7 @@ function compile_cache!(c::ImplicitCache, rt::GroupRuntime)
             for r in c.rows
                 Exec.launch!(c.backend, _reset_hist_body!, 1, (r.hist,))
             end
+            c.ghist === nothing || Exec.launch!(c.backend, _reset_hist_body!, 1, (c.ghist,))
             c.cs === nothing || Exec.launch!(c.backend, _reset_hist_body!, 1, (c.cs.hist,))
         end
     end

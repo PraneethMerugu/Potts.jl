@@ -127,24 +127,30 @@ Matches OrdinaryDiffEq's `NLNewton` convergence and divergence rules on fixed-st
 no-wait CPU and device execution:
 
 - `κ`: rate-scaled convergence threshold (`1 // 100` by default, finite positive real).
-- `max_iter`: maximum Newton iterations per step (`10` by default, integer ≥ 1). The solver
-  runs at most `max_iter` iterations, stops early once every row meets the stopping test,
-  and ends the run with `ReturnCode.ConvergenceFailure` at the window end if the budget is
-  hit without converging (for `max_iter ≥ 2`).
+- `max_iter`: maximum Newton iterations per step (`10` by default, integer ≥ 1). Unlike
+  automatic mode (`nlsolve = nothing`), even `max_iter = 1` is checked (`ndz < 1e-5`). The
+  solver runs at most `max_iter` iterations and stops early once the group meets the stopping
+  test.
 - `check_div`: when `true` (default), abort with `ReturnCode.ConvergenceFailure` if the
-  contraction rate diverges (`θ > 2`) or stalls above the tolerance floor (`θ ≈ 1` with
-  `ndz > 1`); `false` disables the divergence growth check (non-finite corrections still
-  stop).
+  contraction rate diverges (`θ > 2`), stalls above the tolerance floor (`θ ≈ 1` with
+  `ndz > 1`), or exhausts `max_iter` without converging; when `false`, disable divergence
+  growth checks and accept a `max_iter` budget hit as converged (`ReturnCode.Success`, still
+  counted in `stats.newton_budget` and warned; non-finite corrections still stop). Pass
+  `LatticeNewton(; max_iter = 1, check_div = false)` for an unchecked single sweep.
 
-At each iteration `iter`, the scaled update norm `ndz` is the RMS norm over active
-(unmasked, in-domain) unknowns of `δ ./ (abstol .+ max.(abs.(uⁿ), abs.(u_{k+1})) .* reltol)`
-in the row's working float type `T`, where `abstol` and `reltol` come from the `solve`
-keywords (SciML defaults `1 // 10^6` and `1 // 10^3` if unset). On a coupled steady solve, one
-RMS norm is formed over all coupled unknowns. On `iter == 1`, convergence requires
-`ndz < 1e-5`. For `iter > 1`, `θ = prev_θ = max(0.3 * prev_θ, ndz / ndzprev)` (carried
-across steps and reset on state/parameter resets) and `η = θ / (1 - θ)`; convergence holds
-when `η >= 0 && η * ndz < κ` (or at the floating-point precision limit
-`|θ - 1| ≤ 100 * sqrt(eps(T))` when `ndz ≤ 1`).
+At each iteration `iter`, the scaled update norm `ndz` is the single RMS norm over all active
+(unmasked, in-domain) unknowns in the group of `δ ./ (abstol .+ max.(abs.(uⁿ), abs.(u_k)) .* reltol)`
+in the working float type `T`, using the pre-update iterate `u_k` and `abstol`/`reltol` from
+the `solve` keywords (SciML defaults `1 // 10^6` and `1 // 10^3` if unset; refused when no
+group uses `LatticeNewton`, and ignored by automatic groups in mixed problems). Note that
+`NLNewton`'s defaults (`κ = 1 // 100`, `abstol = 1e-6`, `reltol = 1e-3`) are looser than
+automatic mode's `1e-3` step-increment test when steps are small; tighten `κ` or `reltol`
+for tighter Newton accuracy. On `iter == 1`, convergence requires `ndz < 1e-5`. For
+`iter > 1`, `θ = prev_θ = max(0.3 * prev_θ, ndz / ndzprev)` (carried across steps and reset
+on `reinit!` or parameter, table, or state writes) and `η = θ / (1 - θ)`; convergence holds
+when `η >= 0 && η * ndz < κ` or at the floating-point precision limit
+`|θ - 1| ≤ 100 * sqrt(eps(T))` when `ndz ≤ 1` (using type-faithful `eps(T)` rather than
+`Float64` promotion, and keeping the already-applied `ndz ≤ 1` update).
 
 Unsupported `NLNewton` keywords (`fast_convergence_cutoff`, `new_W_dt_cutoff`,
 `always_new`, `relax`, `predictor`) throw `ArgumentError` explaining why they are not
@@ -224,9 +230,10 @@ the operator has the lattice's six faces.
   of the operator (a defect correction, `OperatorSpec`: advection, a cycle among the group's
   fields, a Robin face whose diagonal is negative, a second face coefficient of a scaled row),
   enough for the bound of those terms, 4 when no bound sees one. `LatticeNewton(; κ, max_iter, check_div)`
-  runs at most `max_iter` iterations per substep, stops early once every row meets the
-  `NLNewton` rate-scaled criterion (weighted by `abstol` and `reltol` from `solve`), and ends
-  with `ReturnCode.ConvergenceFailure` at the window end on a budget hit.
+  runs at most `max_iter` iterations per substep, stops early once the group meets the
+  `NLNewton` rate-scaled criterion (weighted by `abstol` and `reltol` from `solve`), and
+  ends with `ReturnCode.ConvergenceFailure` at the window end on a budget hit when
+  `check_div = true` (or accepts as `ReturnCode.Success` when `check_div = false`).
 - `lower_bound`: the clip `max(v, lower_bound)` after each substep (a positivity route; Backward Euler
   keeps nonnegative data nonnegative on M-matrix rows, so it is rarely needed).
 - `linsolve`: the linear solver: `:auto` (`LatticePCG()` with one V(2,2) cycle, `maxiters = 8`),
@@ -441,7 +448,8 @@ this way follows the inputs at once, as a steady field does.
   nonlinear or switched row, a term out of the operator), each checked on the device.
   `LatticeNewton(; κ, max_iter, check_div)` runs at most `max_iter` iterations per window,
   stops early on the `NLNewton` rate-scaled tolerance, and ends with
-  `ReturnCode.ConvergenceFailure` on a budget hit.
+  `ReturnCode.ConvergenceFailure` on a budget hit when `check_div = true` (or accepts when
+  `check_div = false`).
 - `linsolve`, `solver_type`, `compute_type`: as for [`BackwardEuler`](@ref).
 - `init = :steady`: the initial state too is the steady state (one more solve before the first
   window, as for [`BackwardEuler`](@ref)); without it the state at the start time is the initial

@@ -544,7 +544,7 @@ struct _CsStop end
 # status, every row's update and check. `a` as the rows' iteration (`(par, first, t1, h, k, last,
 # window, backend, γ, word, it, check, hits, gate)`).
 function _coupled_iteration!(cs::CoupledKrylov, c, a)
-    par, first, t1, h, k, last, window, backend, _, word, it, check, hits, gate, checkdiv, failbudget, auto, κ, abstol, reltol = a
+    par, first, t1, h, k, last, window, backend, _, word, it, check, hits, gate, checkdiv, failbudget, auto, κ, abstol, reltol, _, _ = a
     rows, walk, A, scal, ws = cs.rows, cs.walk, cs.A, cs.scal, cs.ws
     K = eltype(scal)
     steady = isinf(h)
@@ -585,6 +585,7 @@ function _coupled_iteration!(cs::CoupledKrylov, c, a)
             backend, _be_kappa_newton_body!, 1, (
                 word, cs.part, cs.cnt, Int32(cs.nbt), cs.hist, Int32(it), hits, K(κ),
                 window, steady, UInt32(64), checkdiv, failbudget, gate, UInt32(length(rows)),
+                K(1 // 10^5), K(3) / K(10), K(100) * sqrt(eps(one(K))),
             )
         )
     end

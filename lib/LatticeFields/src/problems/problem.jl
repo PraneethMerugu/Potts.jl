@@ -750,18 +750,24 @@ function _init(
     prob.group.spec.timefree && prob.tspan == (0.0, 0.0) && throw(ArgumentError(string("`init`: the system has no time ",
         "(a steady system), so there is nothing to step; `solve(prob)` solves it once")))
     groups = _groups(prob, alg)
-    has_implicit = any(g -> g[1] isa AbstractImplicitFieldAlgorithm || starts_steady(g[1]), groups)
-    if !has_implicit && (abstol !== nothing || reltol !== nothing)
+    uses_ln = any(g -> g[1] isa AbstractImplicitFieldAlgorithm && g[1].nlsolve isa LatticeNewton, groups)
+    if !uses_ln && (abstol !== nothing || reltol !== nothing)
         bad = Symbol[]
         abstol === nothing || push!(bad, :abstol)
         reltol === nothing || push!(bad, :reltol)
+        has_implicit = any(g -> g[1] isa AbstractImplicitFieldAlgorithm, groups)
+        why = has_implicit ?
+              "automatic `nlsolve = nothing` uses its fixed 1e-3 ∞-norm test and ignores `abstol`/`reltol`; pass `nlsolve = LatticeNewton()` to use them" :
+              string(
+                  "not one of a field algorithm's (it steps fixed windows of `dt`): `saveat`, `save_start`, `save_end`, ",
+                  "`save_everystep`, `save_on`, `save_idxs`, `callback`, `tstops`, `maxiters`, `verbose`, `alias`, `dense`, `dt`"
+              )
         throw(
             ArgumentError(
                 string(
                     "`solve`/`init` with ", _algtext(alg), ": the keyword",
-                    length(bad) == 1 ? " " : "s ", join(("`$k`" for k in bad), ", "), length(bad) == 1 ? " is" : " are",
-                    " not one of a field algorithm's (it steps fixed windows of `dt`): `saveat`, `save_start`, `save_end`, ",
-                    "`save_everystep`, `save_on`, `save_idxs`, `callback`, `tstops`, `maxiters`, `verbose`, `alias`, `dense`, `dt`"
+                    length(bad) == 1 ? " " : "s ", join(("`$k`" for k in bad), ", "), length(bad) == 1 ? " is " : " are ",
+                    why,
                 )
             )
         )
@@ -1442,6 +1448,20 @@ function _steady_solve(prob::FieldProblem, alg::AbstractFieldAlgorithm; abstol =
     )
     isempty(kw) || throw(ArgumentError(string("`solve` of a system with no time takes no ",
         join(("`$k`" for k in keys(kw)), ", "), ": it is solved once and returns that one state")))
+    if !(alg.nlsolve isa LatticeNewton) && (abstol !== nothing || reltol !== nothing)
+        bad = Symbol[]
+        abstol === nothing || push!(bad, :abstol)
+        reltol === nothing || push!(bad, :reltol)
+        throw(
+            ArgumentError(
+                string(
+                    "`solve` with ", _algtext(alg), ": the keyword",
+                    length(bad) == 1 ? " " : "s ", join(("`$k`" for k in bad), ", "), length(bad) == 1 ? " is " : " are ",
+                    "ignored under automatic `nlsolve = nothing` (which uses a fixed 1e-3 ∞-norm test); pass `nlsolve = LatticeNewton()` to use `abstol`/`reltol`"
+                )
+            )
+        )
+    end
     _resolve_tols(abstol, reltol)
     a = QuasiSteady(;
         nlsolve = alg.nlsolve, linsolve = alg.linsolve === :auto ? STEADY_INNER : alg.linsolve,
