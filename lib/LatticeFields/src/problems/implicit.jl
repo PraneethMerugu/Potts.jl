@@ -957,7 +957,8 @@ function bind_cache(
     gate = !Exec.ishost(backend) && (newton > 1 || check) ? _zeros(st.backend, UInt32, 1) : nothing
     cache = ImplicitCache(rt, each(length(rt)), jac, newton, h, γ, true, true, jumps, moving, timed, word, op, exact0, exact,
         iterate, check, _flips(alg, exact, switch), auto_newton, check_div, fail_budget, κ, abstol, reltol, switch, seen, ρin, b.θ, smin, keys,
-        cyclic, 0, rebind, backend, qres, gate, cs, gpart, gcnt, ghist, gnbt)
+        cyclic, 0, rebind, backend, qres, gate, cs, gpart, gcnt, ghist, gnbt
+    )
     # a growing mode that the constant-coefficient check cannot see (r1 M2)
     cs === nothing || Base.inferencebarrier(_check_growth)(cs, alg, s, op, keys, p)
     return cache
@@ -1252,7 +1253,7 @@ function (r::ImplicitRow)(a)
         )
         if check
             auto ? _newton_check!(r, backend, word, dst, r.bufs[par], nothing, it, hits, window, isinf(h), checkdiv, failbudget, gate) :
-                   _kappa_row_norms!(r, backend, dst, r.bufs[par], nothing, gpart, gcnt, gate, abstol, reltol)
+                _kappa_row_norms!(r, backend, dst, r.bufs[par], nothing, gpart, gcnt, gate, abstol, reltol)
         end
         return nothing
     end
@@ -1264,7 +1265,7 @@ function (r::ImplicitRow)(a)
     )
     if check
         auto ? _newton_check!(r, backend, word, dst, r.bufs[par], x, it, hits, window, isinf(h), checkdiv, failbudget, gate) :
-               _kappa_row_norms!(r, backend, dst, r.bufs[par], x, gpart, gcnt, gate, abstol, reltol)
+            _kappa_row_norms!(r, backend, dst, r.bufs[par], x, gpart, gcnt, gate, abstol, reltol)
     end
     return nothing
 end

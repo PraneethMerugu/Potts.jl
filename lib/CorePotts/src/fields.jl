@@ -222,7 +222,8 @@ function _field_bind(ph::FieldPhase, st, p, backend; tables = nothing, abstol = 
     n = field_substeps(ph, p)
     host = FieldBinding(p, arrs, _bound_values(ph, p)...)
     return Problems.bind_group(ph.group, ph.alg, store, _praw(ph, p); n, dt = ph.dt, c = nothing, ends_in = :slot1,
-        backend, options = ph.options, V = ph.T, host, abstol, reltol, kernels = ph.aux_only ? (Int[], _aux_ids(ph)) : nothing)
+        backend, options = ph.options, V = ph.T, host, abstol, reltol, kernels = ph.aux_only ? (Int[], _aux_ids(ph)) : nothing
+    )
 end
 
 """

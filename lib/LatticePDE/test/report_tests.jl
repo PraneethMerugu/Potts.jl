@@ -205,9 +205,9 @@ using .LP_report: fd
     @test length(gq.plans) == n0 && LFP.lattice_metadata(q).builds[] == 0
         @test endswith(rline(rb, "substeps"), "[least]") && rline(rb, "linsolve") == "  linsolve   LatticePCG() (`linsolve = :auto`)"
     @test rline(rb, "newton") == "  newton     automatic (set when the group is bound)"
-    @test rline(sprint(io -> field_report(io, q, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 3)); dt = 0.01)), "newton") ==
-        "  newton     3: given (`nlsolve = LatticeNewton(; max_iter = 3)`)"
-    @test occursin("κ = 0.0001", rline(sprint(io -> field_report(io, q, BackwardEuler(; nlsolve = LatticeNewton(; κ = 1.0e-4, max_iter = 3)); dt = 0.01)), "newton"))
+        @test rline(sprint(io -> field_report(io, q, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 3)); dt = 0.01)), "newton") ==
+            "  newton     3: given (`nlsolve = LatticeNewton(; max_iter = 3)`)"
+        @test occursin("κ = 0.0001", rline(sprint(io -> field_report(io, q, BackwardEuler(; nlsolve = LatticeNewton(; κ = 1.0e-4, max_iter = 3)); dt = 0.01)), "newton"))
     # groups and the coupling rule, as the integrator prints them; local rows as `init` binds them (review S4)
     p2 = discretize(rsys2(), LatticeDiscretization(Grid((8, 8))))
         r2 = sprint(io -> field_report(io, p2, FieldGroups(rce => ExplicitEuler(), roe => BackwardEuler()); dt = 0.01))

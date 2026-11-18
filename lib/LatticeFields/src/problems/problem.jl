@@ -757,11 +757,11 @@ function _init(
         reltol === nothing || push!(bad, :reltol)
         has_implicit = any(g -> g[1] isa AbstractImplicitFieldAlgorithm, groups)
         why = has_implicit ?
-              "automatic `nlsolve = nothing` uses its fixed 1e-3 ∞-norm test and ignores `abstol`/`reltol`; pass `nlsolve = LatticeNewton()` to use them" :
-              string(
-                  "not one of a field algorithm's (it steps fixed windows of `dt`): `saveat`, `save_start`, `save_end`, ",
-                  "`save_everystep`, `save_on`, `save_idxs`, `callback`, `tstops`, `maxiters`, `verbose`, `alias`, `dense`, `dt`"
-              )
+            "automatic `nlsolve = nothing` uses its fixed 1e-3 ∞-norm test and ignores `abstol`/`reltol`; pass `nlsolve = LatticeNewton()` to use them" :
+            string(
+                "not one of a field algorithm's (it steps fixed windows of `dt`): `saveat`, `save_start`, `save_end`, ",
+                "`save_everystep`, `save_on`, `save_idxs`, `callback`, `tstops`, `maxiters`, `verbose`, `alias`, `dense`, `dt`"
+            )
         throw(
             ArgumentError(
                 string(
