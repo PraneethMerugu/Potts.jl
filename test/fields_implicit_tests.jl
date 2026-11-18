@@ -529,3 +529,34 @@ end
         end
     end
 end
+
+@testitem "PottsProblem accepts LinearSolve algorithms and function precs in BackwardEuler" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
+    @testset "PottsProblem accepts LinearSolve algorithms and function precs" begin
+        LS = Potts.LatticeFields.Problems.LinearSolve
+        LA = Potts.LatticeFields.Problems.LinearAlgebra
+        dims = (12, 10)
+        ref = solve(PottsProblem(FiStill(; name = :f), fi_op(dims), (0, 3);
+                field_solver = BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64))),
+            SequentialCPM()).u[end].site.c
+        for linsolve in (
+                LS.KLUFactorization(),
+                LS.KrylovJL_CG(; precs = LatticeMultigrid()),
+                LatticePCG(; precs = (A, p) -> (LA.I, LA.I); reltol = 1.0e-10, maxiters = 64),
+            )
+            prob = PottsProblem(FiStill(; name = :f), fi_op(dims), (0, 3); field_solver = BackwardEuler(; linsolve))
+            sol = solve(prob, SequentialCPM())
+            @test sol.retcode == FiRC.Success
+            @test maximum(abs, sol.u[end].site.c .- ref) < 1.0e-8
+        end
+        # KLUFactorization and KrylovJL_CG(; precs = LatticeMultigrid()) are session-independent; closure precs is session-bound
+        p_klu = PottsProblem(FiStill(; name = :f), fi_op(dims), (0, 2); field_solver = BackwardEuler(; linsolve = LS.KLUFactorization()))
+        p_kcg = PottsProblem(FiStill(; name = :f), fi_op(dims), (0, 2); field_solver = BackwardEuler(; linsolve = LS.KrylovJL_CG(; precs = LatticeMultigrid())))
+        p_cls = PottsProblem(FiStill(; name = :f), fi_op(dims), (0, 2); field_solver = BackwardEuler(; linsolve = LatticePCG(; precs = (A, p) -> (LA.I, LA.I))))
+        @test !Potts._session_bound(p_klu.f.solvers) && !Potts._session_bound(p_kcg.f.solvers)
+        @test Potts._session_bound(p_cls.f.solvers)
+        # Float32 state with KLUFactorization works out of the box (Float64 CSC assembly)
+        p32 = PottsProblem(FiStill(; name = :f), fi_op(dims), (0, 2); T = Float32, field_solver = BackwardEuler(; linsolve = LS.KLUFactorization()))
+        s32 = solve(p32, SequentialCPM())
+        @test s32.retcode == FiRC.Success && eltype(s32.u[end].site.c) == Float32
+    end
+end

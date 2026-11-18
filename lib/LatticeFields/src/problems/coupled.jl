@@ -486,17 +486,17 @@ end
 # masks and clip, and with `check` the Newton check of iteration `it` (a steady group: no real
 # reduction is cause 64)
 function (cr::CoupledRow)(o::_CsOp{:update})
-    (x, par, first, last, check, it, hits, window, steady, word, backend, checkdiv, failbudget) = o.a
+    (x, par, first, last, check, it, hits, window, steady, word, backend, checkdiv, failbudget, gate) = o.a
     r = cr.row
     dst = r.bufs[3 - par]
     src = first ? r.bufs[par] : dst
     n = cr.n
     δ = view(x, (cr.voff + 1):(cr.voff + n))
-    Exec.launch!(backend, _be_update_body!, n, (dst, src, δ, nothing, nothing, nothing, nothing, r.mask, r.mval, r.mvf, r.lo, last))
+    Exec.launch!(backend, _be_update_body!, n, (dst, src, δ, nothing, nothing, nothing, nothing, r.mask, r.mval, r.mvf, r.lo, last, gate))
     check || return nothing
     nb = cld(n, NB)
     T = eltype(r.part)
-    Exec.launch!(backend, _be_norms_body!, nb, (r.part, dst, r.bufs[par], δ, nothing, nothing, nothing, nothing, r.mask, n))
+    Exec.launch!(backend, _be_norms_body!, nb, (r.part, dst, r.bufs[par], δ, nothing, nothing, nothing, nothing, r.mask, n, gate))
     fl = eltype(dst) === Float16 ? T(10 * eps(T) + 2 * eps(Float16)) : T(10 * eps(T))
     Exec.launch!(backend, _be_newton_body!, 1, (word, r.part, Int32(nb), r.hist, Int32(it), hits, T(NEWTON_EPS), fl, window,
             steady, UInt32(64), checkdiv, failbudget,
@@ -568,7 +568,7 @@ function _coupled_iteration!(cs::CoupledKrylov, c, a)
         copyto!(scal, 1, hs, 1, _GM_TOL)
     end
     Exec.launch!(backend, _cs_status_body!, 1, (word, scal, Int32(window), steady, gate))
-    walk(rows, _csop(:update, (ws.x.a, par, first, last, check, it, hits, window, steady, word, backend, checkdiv, failbudget)))
+    walk(rows, _csop(:update, (ws.x.a, par, first, last, check, it, hits, window, steady, word, backend, checkdiv, failbudget, gate)))
     return nothing
 end
 

@@ -42,7 +42,7 @@ end
     @testset "F3-09a: the switch's flip pass counts no budget hit (review r1, M7)" begin
         # the default count's second iteration fixes the switch state: no convergence test, so a
         # default user sees no warning (base 2d213237, ~/lpwork/f3r1-nc-base.log: 2 hits and the
-        # budget warning in Float32 and Float64); a given `newton = 2` checks as before
+        # budget warning in Float32 and Float64); a given `nlsolve = LatticeNewton(; max_iter = 2)` checks as before
         sys = PDESystem(
             [D(bce) ~ 0.05 * laplacian(bce) - 8 * max(bce - 0.4, 0) / 0.6 + 2 + 2 * sin(6t)], [bc(0, x, y) ~ NLIC], bdom(3.0),
             [t, x, y], [bce], Any[]; name = :sw

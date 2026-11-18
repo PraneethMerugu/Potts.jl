@@ -513,7 +513,7 @@ end
         for s in (kt, Dt, gt)
             @test tok(tad(mr, BackwardEuler(; linsolve = TTIGHT), s; dt = 0.1)...)
         end
-        # `−k c²`: with `newton = k` the run converges each stage, and its derivatives are the tangent's;
+        # `−k c²`: with `nlsolve = LatticeNewton(; max_iter = 8)` the run converges each stage, and its derivatives are the tangent's;
         # by default one unchecked Newton step does not solve the stage, which is warned
         nl = town(tsys([D(ce) ~ Dt * laplacian(ce) - kt * ce^2 + gt], [c(0, x, y) ~ 0.2 + x]), (10, 10))
         for s in (kt, Dt)

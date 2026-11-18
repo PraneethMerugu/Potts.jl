@@ -220,9 +220,9 @@ end
 
 end
 
-@testitem "F3-22: a cycle across the grids is not in the operator: warned with the term as written, converges with newton = k" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
+@testitem "F3-22: a cycle across the grids is not in the operator: warned with the term as written, converges with LatticeNewton" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
     using .LP_crossgrid: fd, kron
-    @testset "a cycle across the grids is not in the operator: warned with the term as written, converges with newton = k" begin
+    @testset "a cycle across the grids is not in the operator: warned with the term as written, converges with LatticeNewton" begin
         dt = 0.05
         tight = LatticePCG(; reltol = 1.0e-12, maxiters = 64)
         Lc, Lu = xL2(4), xL2(16)
@@ -242,7 +242,7 @@ end
             solve(xown(sys, (16, 16)), BackwardEuler(; substeps = 1, linsolve = tight); dt, saveat = [dt])
         end
         e4, e12 = Test.@test_logs(min_level = Base.CoreLogging.Error, (err(4), err(12)))
-        # `LatticeNewton` stops early at `NEWTON_EPS = 1e-3`, so `max_iter = 12` finishes at the tolerance-converged iterate (~2.9e-5 off the unsplit step) rather than running extra unchecked sweeps.
+        # `LatticeNewton` stops early at `||δ_k||∞ <= 1e-3 ||u_k - u^n||∞ + 10 eps(T) ||u_k||∞`, so `max_iter = 12` finishes at the tolerance-converged iterate (~2.9e-5 off the unsplit step) rather than running extra unchecked sweeps.
         @test e12 < 1.0e-4 && e12 < e4 / 10
     end
 

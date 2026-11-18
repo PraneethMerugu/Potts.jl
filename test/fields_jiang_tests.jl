@@ -135,7 +135,7 @@ end
         @test c.newton == 2 && c.exact && !c.cyclic
         @test Potts.LatticeFields.Problems.field_stats(a).newton_budget == 0
         # the two Newton steps are the accepted BE step: the policy accepts a step within
-        # NEWTON_EPS relative to the field's scale, so the tight-inner two-step solve and the
+        # `1e-3 * ||u_k - u^n||∞ + 10 eps(T) ||u_k||∞`, so the tight-inner two-step solve and the
         # 12-step reference agree to that accepted defect (the assertion and its derivation are
         # below; the measured residual is ~1e-15 on 1.12.6, 6.4e-8 under 1.13.3)
         tight = Potts.LatticePDE.LatticePCG(; reltol = 1.0e-12, maxiters = 64)
@@ -145,7 +145,7 @@ end
         @test Potts.LatticeFields.Problems.field_stats(a2).newton_budget == 0
         b = run(BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 12), linsolve = tight))
         # F4-15b (review; user ruling 2026-11-13): the acceptance is
-        # `dk <= NEWTON_EPS * ||u_k - u^n|| + 10 eps(T) ||u_k||` (implicit.jl), relative to the step
+        # `||δ_k||∞ <= 1e-3 * ||u_k - u^n||∞ + 10 eps(T) ||u_k||∞` (implicit.jl), relative to the step
         # increment; the distance from the two-step iterate to the 12-step reference is the remaining
         # convergence error, not the accepted update. The bound 1e-5 * max(1, |b|) is the user's policy
         # scale for that error: the measured values are 6.4e-8 under 1.13.3 and ~1e-15 on 1.12.6, so

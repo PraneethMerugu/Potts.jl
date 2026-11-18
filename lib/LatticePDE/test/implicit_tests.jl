@@ -73,7 +73,7 @@ end
     want = be_hand(u0, h; K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces = Dict((2, -1) => (:robin, 2.0, -1.0, 0.5)))
     @test maximum(abs, u .- want) < 1e-10 && only(ig.runtimes).cache.newton == 1
     # opposite signs: the negative part stays in the residual (a defect correction), so the
-    # automatic Newton count is more than one (from its bound `w |d⁻|`, S1: 5 here); `newton = k`
+    # automatic Newton count is more than one (from its bound `w |d⁻|`, S1: 5 here); `LatticeNewton`
     # converges it to the hand matrix
         p = bown(
             bsys(
@@ -232,8 +232,8 @@ end
 end
 end
 
-@testitem "F3-07: newton = nothing, the operator built only for implicit groups (S12)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-@testset "F3-07: newton = nothing, the operator built only for implicit groups (S12)" begin
+@testitem "F3-07: nlsolve = nothing, the operator built only for implicit groups (S12)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
+@testset "F3-07: nlsolve = nothing, the operator built only for implicit groups (S12)" begin
         p = bown(bsys([D(bce) ~ bD * laplacian(bce) - bk * bce], [bc(0, x, y) ~ x], [bD, bk]))
     b0 = LatticePDE.OPERATOR_BUILDS[]
         solve(p, ExplicitEuler(); dt = 0.01)
@@ -357,12 +357,17 @@ end
         p_adv = discretize(sys_adv, LatticeDiscretization(Grid((16, 16)); T = Float64))
         s_conv = solve(p_adv, BackwardEuler(; linsolve = BTIGHT, nlsolve = LatticeNewton(; max_iter = 30)); dt = 0.25)
         s_auto = solve(p_adv, BackwardEuler(; linsolve = BTIGHT); dt = 0.25)
+        nsteps_conv = s_conv.stats.nf * only(s_conv.stats.counts)
         @test s_conv.retcode == ReturnCode.Success && s_conv.stats.newton_budget == 0
-        @test s_conv.stats.solves < 30 * 24 && s_conv.stats.solves == s_auto.stats.solves
+        @test s_conv.stats.solves < 30 * nsteps_conv && s_conv.stats.solves == s_auto.stats.solves
+        s_mid = solve(p_adv, BackwardEuler(; linsolve = BTIGHT, nlsolve = LatticeNewton(; max_iter = 10)); dt = 0.25)
+        @test s_mid.retcode == ReturnCode.Success && s_mid.stats.solves < 10 * nsteps_conv
         s_fail = @test_logs (:warn, r"reached its budget.*ConvergenceFailure") solve(
             p_adv, BackwardEuler(; linsolve = BTIGHT, nlsolve = LatticeNewton(; max_iter = 2)); dt = 0.25
         )
+        nsteps_fail = s_fail.stats.nf * only(s_fail.stats.counts)
         @test s_fail.retcode == ReturnCode.ConvergenceFailure && s_fail.stats.newton_budget > 0
+        @test s_fail.stats.solves <= 2 * nsteps_fail
 
         # check_div = false disables divergence growth abort (causes bit 2 not set)
         sys_div = PDESystem(
@@ -379,6 +384,7 @@ end
         @test only(ig_false.runtimes).totals.cause & 0x02 == 0
     end
     @testset "Host CSC factorizations (KLUFactorization, UMFPACKFactorization) match LatticePCG" begin
+        using LinearSolve: KrylovJL_CG, LUFactorization, PureKLUFactorization
         @parameters kd = 0.3 kk = 2.0
         for (name, sys) in (
                 (:num, bsys([D(bce) ~ kd * laplacian(bce) - kk * bce + x], [bc(0, x, y) ~ x * y, bc(t, 0, y) ~ 1.0], [kd, kk])),
@@ -399,6 +405,31 @@ end
             ig_p.ps[kk] = 4.0; ig_k.ps[kk] = 4.0
             step!(ig_p); step!(ig_k)
             @test maximum(abs, ig_k[bce] .- ig_p[bce]) < 1.0e-10
+            # Float32 state: Float64-only factorizations assemble Float64 CSC automatically under :auto and with solver_type = Float64
+            p32 = bown(sys; T = Float32)
+            ref32 = solve(p32, BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0e-7, maxiters = 64), solver_type = Float64); dt = 0.05)
+            for alg in (
+                    BackwardEuler(; linsolve = KLUFactorization()),
+                    BackwardEuler(; linsolve = KLUFactorization(), solver_type = Float64),
+                    BackwardEuler(; linsolve = UMFPACKFactorization()),
+                    BackwardEuler(; linsolve = LUFactorization()),
+                    BackwardEuler(; linsolve = PureKLUFactorization()),
+                )
+                got32 = solve(p32, alg; dt = 0.05)
+                @test got32.retcode == ReturnCode.Success && eltype(got32[bce, end]) == Float32
+                @test maximum(abs, got32[bce, end] .- ref32[bce, end]) < 1.0e-5
+            end
+            @test_throws ArgumentError init(p32, BackwardEuler(; linsolve = KLUFactorization(), solver_type = Float32); dt = 0.05)
+            @test occursin("Float64", e(() -> init(p32, BackwardEuler(; linsolve = KLUFactorization(), solver_type = Float32); dt = 0.05)))
         end
+        # KrylovJL_CG with precs = LatticeMultigrid on a time-varying field reuses its held FieldSolver across rebuilds
+        sys_t = bsys([D(bce) ~ (0.3 + 0.1 * sin(5t)) * laplacian(bce) - 2.0 * bce + x], [bc(0, x, y) ~ x * y], [])
+        pt = bown(sys_t)
+        mg = LatticeMultigrid()
+        ig_t = init(pt, BackwardEuler(; linsolve = KrylovJL_CG(; precs = mg)); dt = 0.05)
+        step!(ig_t)
+        sv1 = only(values(mg.engines))[]
+        step!(ig_t); step!(ig_t)
+        @test only(values(mg.engines))[] === sv1
     end
 end

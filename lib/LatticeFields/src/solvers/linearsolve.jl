@@ -342,10 +342,48 @@ struct FusedVCycle{A}
     cycles::Int
     op::A
     cache::Base.RefValue{Any}
+    dirty::Base.RefValue{Bool}
 end
-FusedVCycle(cycle::VCycle, cycles::Int, op = nothing) = FusedVCycle(cycle, cycles, op, Ref{Any}(nothing))
-(mg::LatticeMultigrid)(A::BoundOperator, p) =
-    (FusedVCycle(mg.cycle, something(mg.cycles, 1), A, Ref{Any}(nothing)), LinearAlgebra.I)
+FusedVCycle(cycle::VCycle, cycles::Int, op = nothing) = FusedVCycle(cycle, cycles, op, Ref{Any}(nothing), Ref(true))
+function _same_bound_structure(sv::FieldSolver, A::BoundOperator, h_op::CellOperator, h_ins::Tuple)
+    sv.exec == A.exec || return false
+    sv.state === eltype(A) || return false
+    (A.solver_type === :auto ? sv.auto : (!sv.auto && sv.T === A.solver_type)) || return false
+    o = sv.op
+    h_op.dims == o.dims && h_op.periodic == o.periodic && ishex(h_op) == ishex(o) &&
+        h_op.mask == o.mask && h_op.name == o.name && h_op.robin_full == o.robin_full &&
+        coef_slots(h_op) == coef_slots(o) || return false
+    all(map((x, y) -> x isa Real || x == y, faces(h_op), faces(o))) || return false
+    (h_op.shift isa Real || h_op.shift == o.shift) || return false
+    (h_op.value isa Real || h_op.value == o.value) || return false
+    for (k, v) in h_ins
+        id = findfirst(f -> f.key == String(k), sv.prog.fields)
+        id === nothing && return false
+        fid_ = Int32(id)
+        sv.bufs[fid_][sv.slot[fid_]] === v || return false
+    end
+    return true
+end
+function (mg::LatticeMultigrid)(A::BoundOperator, p)
+    h_op = _homog_op(A.op)
+    h_ins = _homog_inputs(A.op, A.inputs)
+    cycles = something(mg.cycles, 1)
+    in_ids = Tuple((String(k), objectid(v)) for (k, v) in h_ins)
+    key = (:bound, in_ids, A.op.name, A.op.dims, eltype(A), A.solver_type, mg.cycle.nu1, mg.cycle.nu2, cycles, current_task())
+    cache_ref = lock(mg.lock) do
+        r = get!(() -> Ref{Any}(nothing), mg.engines, key)
+        sv = r[]
+        if sv !== nothing
+            if _same_bound_structure(sv, A, h_op, h_ins)
+                coef_values(h_op) == coef_values(sv.op) || set_coefficients!(sv, h_op)
+            else
+                r[] = nothing
+            end
+        end
+        r
+    end
+    return (FusedVCycle(mg.cycle, cycles, A, cache_ref, Ref(true)), LinearAlgebra.I)
+end
 
 function _homog_op(op::CellOperator{N}) where {N}
     dir = ntuple(a -> ntuple(k -> op.dirichlet[a][k] === nothing ? nothing : 0.0, 2), N)
@@ -377,6 +415,10 @@ function LinearAlgebra.ldiv!(y::AbstractVector, P::FusedVCycle{<:BoundOperator},
         )
         rebuild!(sv)
         P.cache[] = sv
+        P.dirty[] = false
+    elseif P.dirty[]
+        rebuild!(sv)
+        P.dirty[] = false
     end
     copyto!(field(sv, "in.f"), r)
     wid = fid(sv, working_key(sv))
@@ -409,7 +451,9 @@ iteration. On a device the solve returns `ReturnCode.Default` with `iters = 0` (
 stays in the device's status word); a host executor returns `Success`, `MaxIters` or
 `ConvergenceFailure` with the iteration count. The iteration starts from the solver's last
 solution (zero at the first solve). The fused solve unrolls `maxiters` into its plan (cap
-`FUSED_MAXITERS_CAP`; default `8` when unset).
+`1024`; default `8` when unset; because LinearSolve defaults an unset `maxiters` to
+`length(b)`, `cache.maxiters == length(b)` is treated as unset, so pass `maxiters` on
+`LatticePCG` to request `length(b)` iterations explicitly).
 
 With `precs = nothing` or another preconditioner on a [`BoundOperator`](@ref), `LatticePCG`
 takes the generic CG path. On any other operator it is CG on `−A` (positive definite for a
@@ -620,6 +664,15 @@ of `inputs`, and `alg` `linsolve` (`:auto`: `LatticePCG()`) with the owned value
 [`FieldSolver`](@ref) on the fused path; the owner rebuilds its hierarchy (`rebuild!`), so the
 cache is not fresh.
 """
+# SuiteSparse / BLAS sparse factorizations in LinearSolve 5.18 require Float64/ComplexF64 CSC matrices.
+_needs_float64_csc(alg) = alg isa Union{
+    LinearSolve.KLUFactorization,
+    LinearSolve.UMFPACKFactorization,
+    LinearSolve.LUFactorization,
+    LinearSolve.CHOLMODFactorization,
+    LinearSolve.QRFactorization,
+}
+
 function bound_field_cache(exec, op::CellOperator, linsolve; T = Float32, solver_type = :auto, inputs = ())
     if linsolve === :auto || linsolve isa LatticeMultigrid ||
             (linsolve isa LatticePCG && linsolve.precs isa LatticeMultigrid) ||
@@ -633,16 +686,26 @@ function bound_field_cache(exec, op::CellOperator, linsolve; T = Float32, solver
     ins = Tuple(inputs[j] for j in eachindex(inputs) if j != i)
     if LinearSolve.needs_concrete_A(alg)
         _check_host_factorization(exec, alg)
-        Aop = BoundOperator(exec, op, eltype(b), solver_type, ins)
+        solver_type === Float32 && _needs_float64_csc(alg) && throw(
+            ArgumentError(
+                "`$(nameof(typeof(alg)))` only supports `Float64` sparse matrices; leave `solver_type` out (`:auto`) or pass `solver_type = Float64`"
+            )
+        )
+        S = solver_type === :auto ? (_needs_float64_csc(alg) ? Float64 : eltype(b)) : solver_type
+        Aop = BoundOperator(exec, op, S, solver_type, ins)
         M = sparse_operator(Aop)
+        b_buf = eltype(b) === S ? b : copyto!(Vector{S}(undef, length(b)), b)
         c = CommonSolve.init(
-            SciMLBase.LinearProblem(M, b), alg;
+            SciMLBase.LinearProblem(M, b_buf), alg;
             alias = SciMLBase.LinearAliasSpecifier(alias_A = true, alias_b = true),
         )
         return c, Aop
     end
     A = BoundOperator(exec, op, T, solver_type, ins)
-    c = CommonSolve.init(SciMLBase.LinearProblem(A, b), alg)
+    c = CommonSolve.init(
+        SciMLBase.LinearProblem(A, b), alg;
+        alias = SciMLBase.LinearAliasSpecifier(alias_A = true, alias_b = true),
+    )
     c.isfresh = false
     return c, A
 end
@@ -672,6 +735,8 @@ function _check_fused_cap(m::Int)
     )
     return m
 end
+# LinearSolve.init defaults an unset `maxiters` to `length(b)` with no separate unset flag,
+# so `cache_max == n` is treated as unset unless `alg.maxiters` was explicitly given.
 function _fused_budget(alg_max, cache_max::Int, n::Int, default_m::Int)
     alg_max !== nothing && return _check_fused_cap(alg_max)
     return cache_max == n ? default_m : _check_fused_cap(cache_max)

@@ -68,8 +68,10 @@ end
     # as an OrdinaryDiffEq linear solver for a symmetric `W`
     prob = discretize(qsys(0.02), qdisc(64))
     s = solve(prob, FBDF(; linsolve = LatticePCG()); abstol = 1e-8, reltol = 1e-8)
-        r = solve(prob, FBDF(; linsolve = KrylovJL_GMRES(; precs = LatticeMultigrid())); abstol = 1.0e-8, reltol = 1.0e-8)
+    sg = solve(prob, FBDF(; linsolve = LatticeGMRES()); abstol = 1.0e-8, reltol = 1.0e-8)
+    r = solve(prob, FBDF(; linsolve = KrylovJL_GMRES(; precs = LatticeMultigrid())); abstol = 1.0e-8, reltol = 1.0e-8)
     @test SciMLBase.successful_retcode(s) && maximum(abs, s.u[end] .- r.u[end]) < 1e-6
+    @test SciMLBase.successful_retcode(sg) && maximum(abs, sg.u[end] .- r.u[end]) < 1e-6
 end
 end
 

@@ -134,6 +134,15 @@ Honors the subset of `NLNewton` keywords compatible with fixed-step no-wait devi
   iteration correction diverges or becomes non-finite; `false` disables the divergence growth
   check (non-finite corrections still stop).
 
+The Newton stop criterion is correction-based (not rate-scaled), in the working float type
+`T`:
+
+- Time-stepping algorithms (`BackwardEuler`, `CrankNicolson`, `BDF2`):
+  `‖δ_k‖∞ ≤ 1e-3 ‖u_k − uⁿ‖∞ + 10 eps(T) ‖u_k‖∞` (with `2 eps(Float16)` added to the
+  floor `10 eps(T)` when stored as `Float16`), where `uⁿ` is the substep start and
+  `δ_k = u_{k+1} − u_k` is the correction.
+- `QuasiSteady`: `‖δ_k‖∞ ≤ (1e-3 + 10 eps(T)) ‖u_k‖∞`.
+
 Unsupported `NLNewton` keywords (`κ`, `fast_convergence_cutoff`, `new_W_dt_cutoff`,
 `always_new`, `relax`, `predictor`) throw `ArgumentError` explaining why they are not honored.
 """
@@ -740,8 +749,50 @@ canonical(s::Symbol) = repr(s)
 canonical(::Nothing) = "nothing"
 canonical(x::Union{Number, AbstractString}) = repr(x)
 canonical(::Type{T}) where {T} = string(T)
-canonical(x) = throw(ArgumentError("no canonical text for $(repr(x)) (a `$(typeof(x))`): a field algorithm's " *
-                                   "keywords are numbers, symbols, types or solver parts"))
+canonical(x) = _canonical_value(x, 0)
+
+const _CANONICAL_DEPTH = 8
+_canonical_type(T) = sprint(show, T; context = :module => Core)
+const _CanonicalKnown = Union{
+    AbstractFieldAlgorithm,
+    Solvers.LatticePCG,
+    Solvers.LatticeGMRES,
+    Solvers.VCycle,
+    LatticeMultigrid,
+    LatticeBlockSolve,
+    LatticeNewton,
+    Symbol,
+    Nothing,
+    Number,
+    AbstractString,
+    Type,
+}
+function _canonical_value(x, depth::Int)
+    x isa _CanonicalKnown && return canonical(x)
+    T = typeof(x)
+    (x isa Union{Enum, Missing, AbstractRange} || isprimitivetype(T)) &&
+        return string(_canonical_type(T), ":", repr(x))
+    container = x isa Union{AbstractDict, AbstractSet, Tuple, NamedTuple, AbstractArray}
+    !container && (!isstructtype(T) || fieldcount(T) == 0) && return _canonical_type(T)
+    depth > _CANONICAL_DEPTH && throw(
+        ArgumentError(
+            "no canonical text for $(repr(x)) (a `$T`): value nested deeper than $_CANONICAL_DEPTH levels or cyclic"
+        )
+    )
+    item(v) = _canonical_value(v, depth + 1)
+    x isa AbstractDict && return string(
+        _canonical_type(T), "{",
+        join(sort!([string(item(k), "=>", item(v)) for (k, v) in pairs(x)]), ","), "}"
+    )
+    x isa AbstractSet && return string(_canonical_type(T), "{", join(sort!([item(v) for v in x]), ","), "}")
+    container && return string(
+        _canonical_type(T), "[", join((string(k, "=", item(v)) for (k, v) in pairs(x)), ","), "]"
+    )
+    return string(
+        _canonical_type(T), "(",
+        join((string(f, "=", item(getfield(x, f))) for f in sort!(collect(fieldnames(T))) if isdefined(x, f)), ","), ")"
+    )
+end
 _canonical_fields(s) = string(nameof(typeof(s)), "(",
     join((string(f, "=", canonical(getfield(s, f))) for f in sort!(collect(fieldnames(typeof(s))))
                 if !(f === :init && getfield(s, f) === nothing) && !(f === :compute_type && getfield(s, f) === :auto)

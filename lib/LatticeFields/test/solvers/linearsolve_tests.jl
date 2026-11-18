@@ -201,4 +201,33 @@ end
     Ag = BoundOperator(MockGPUBackend(), op; T = Float64, inputs = ins)
     @test_throws ArgumentError convert(AbstractMatrix, Ag)
     @test occursin("LatticePCG", err_msg(() -> convert(AbstractMatrix, Ag)))
+
+    # Float32 state with KLUFactorization assembles a Float64 CSC under :auto and refuses explicit solver_type = Float32
+    op32, ins32, b32 = homog_disk(Float32, 24)
+    c32, _ = Solvers.bound_field_cache(HostExec(), op32, KLUFactorization(); T = Float32, solver_type = :auto, inputs = ("in.f" => b32, ins32...))
+    @test eltype(c32.A) == Float64 && eltype(c32.b) == Float64 && eltype(c32.u) == Float64
+    sol32 = LinearSolve.solve!(c32)
+    @test sol32.retcode == ReturnCode.Success
+    sp32 = solve(LinearProblem(BoundOperator(HostExec(), op32; T = Float32, solver_type = Float64, inputs = ins32), b32), LatticePCG(); maxiters = 48, reltol = 1.0e-7)
+    @test Float32.(sol32.u) ≈ sp32.u rtol = 1.0e-5
+    @test_throws ArgumentError Solvers.field_cache(HostExec(), op32, KLUFactorization(); T = Float32, solver_type = Float32, inputs = ("in.f" => b32, ins32...))
+    @test occursin("Float64", err_msg(() -> Solvers.field_cache(HostExec(), op32, KLUFactorization(); T = Float32, solver_type = Float32, inputs = ("in.f" => b32, ins32...))))
+end
+
+@testitem "FusedVCycle reuses held FieldSolver across precs refreshes" setup = [LF_solvers_linearsolve] tags = [:latticefields, :solvers] begin
+    op, ins, b = homog_disk(Float64, 24)
+    mg = LatticeMultigrid()
+    A1 = BoundOperator(HostExec(), op; T = Float64, inputs = ins)
+    P1, _ = mg(A1, nothing)
+    y = similar(b)
+    LinearAlgebra.ldiv!(y, P1, b)
+    sv1 = only(values(mg.engines))[]
+    @test sv1 isa FieldSolver
+    # Refresh with updated coefficients on the same operator structure and inputs: same FieldSolver reused
+    op2 = CellOperator(op.dims; periodic = op.periodic, shift = 0.05, mask = op.mask, value = 0.0)
+    A2 = BoundOperator(HostExec(), op2; T = Float64, inputs = ins)
+    P2, _ = mg(A2, nothing)
+    LinearAlgebra.ldiv!(y, P2, b)
+    sv2 = only(values(mg.engines))[]
+    @test sv2 === sv1 && sv2.op.shift == 0.05
 end

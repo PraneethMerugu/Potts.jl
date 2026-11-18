@@ -6,7 +6,7 @@
 # the `:ode` rate (assembled by columns), an exact solution, or a dense split recursion.
 # Base (c40a68f8, ~/lpwork/f312d/nc-base-lp.log): the q1 loops in one steady group end
 # `ConvergenceFailure` (block iteration ratio ≈ k/√(δμ) = 15.8, 1.6), the N5 rows warn
-# (`newton = 40`), the feedback loop is refused ("reads the steady field … of the loop"), the
+# (`nlsolve = LatticeNewton(; max_iter = 40)`), the feedback loop is refused ("reads the steady field … of the loop"), the
 # indefinite pair is accepted (each row decays) and diverges, the strong `init = :steady` loop
 # fails at t = 0, and `LatticeGMRES` is not defined.
 

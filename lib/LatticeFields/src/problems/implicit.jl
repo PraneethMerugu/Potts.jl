@@ -127,29 +127,34 @@ _bdf2_q_body!(i, q, un, prev) =
 # The Newton check (F3 design §3.4, M5, R2-M1): after each iteration's update, the norms of
 # the row's correction ‖δ_k‖∞, increment ‖u_k − uⁿ‖∞ and value ‖u_k‖∞ over its unmasked
 # sites, as partials of `NB`-site blocks (`_be_norms_body!`, one item per block), then one item
-# combines them and decides (`_be_newton_body!`): a correction that is not finite or that grew
-# by more than 2× in each of the last two iterations is a divergence (`ConvergenceFailure`,
-# cause bits 4 and 2); at the last iteration, ‖δ_k‖∞ > ε_N ‖u_k − uⁿ‖∞ + 10 eps(T) ‖u_k‖∞ (a
-# steady solve: ‖δ_k‖∞ > (ε_N + 10 eps(T)) ‖u_k‖∞, and with ‖δ_k‖∞ ≥ ‖δ_1‖∞/2 a failure, cause
-# bit `nobit`: no real reduction, 16 for a row's own solve, 64 for a coupled solve) is a Newton budget hit (counted, `Success`; not in the flip pass of a switch under the automatic
-# count, whose second iteration fixes the switch state and tests nothing, M7). A row that meets the tolerance adds 1 to the word's
-# entry [8], which a host executor reads after each iteration to stop early under the automatic
-# count (`newton = nothing`: every row converged, so the later iterations would change the
-# field by less than the tolerance; a given `newton = k` runs k). A group with one Newton step
-# runs neither.
+# combines them and decides (`_be_newton_body!`): a correction that is not finite or (when
+# `checkdiv`) that grew by more than 2× in each of the last two iterations is a divergence
+# (`ConvergenceFailure`, cause bits 4 and 2); at the last iteration,
+# `‖δ_k‖∞ > 1e-3 ‖u_k − uⁿ‖∞ + 10 eps(T) ‖u_k‖∞` (a steady solve:
+# `‖δ_k‖∞ > (1e-3 + 10 eps(T)) ‖u_k‖∞`, and with `‖δ_k‖∞ ≥ ‖δ_1‖∞/2` a failure, cause bit
+# `nobit`: no real reduction, 16 for a row's own solve, 64 for a coupled solve) is a Newton
+# budget hit (counted, `Success` under `nlsolve = nothing`, or `ConvergenceFailure` at window
+# end under explicit `LatticeNewton(; max_iter = k)`; not in the flip pass of a switch under
+# the automatic count, whose second iteration fixes the switch state and tests nothing, M7). A
+# row that meets the tolerance adds 1 to the word's entry [8]; a host executor reads this after
+# each iteration to stop early, and a device closes its convergence gate (`c.gate`, setting
+# `δ := 0` and skipping solves) once every row converged. A group with one Newton step runs
+# neither.
 const NB = 256
 const NEWTON_EPS = 1e-3
 const STATUS_CONVERGED = 8
 const STATUS_CLAMP = 9                  # the first window whose shift was clamped (0: none)
 # the larger of two norms; a NaN stays
 _nanmax(a, b) = (isnan(b) | (b > a)) ? b : a
-function _be_norms_body!(b, part, dst, un, x, smask, v, res, s, mask, n)
+function _be_norms_body!(b, part, dst, un, x, smask, v, res, s, mask, n, gate)
     @inbounds begin                             # b ≤ cld(n, NB), 3b ≤ length(part); every array has n sites
         T = eltype(part)
+        gated = gate !== nothing && gate[1] != 0
         dm, im, um = zero(T), zero(T), zero(T)
         for i in ((b - 1) * NB + 1):min(b * NB, n)
             (mask !== nothing && mask[i] != 0) && continue
-            δ = res !== nothing ? res[i] / _at(s, i) : (v !== nothing && smask[i] != 0) ? v[i] : x[i]
+            δ = gated ? zero(T) :
+                res !== nothing ? res[i] / _at(s, i) : (v !== nothing && smask[i] != 0) ? v[i] : x[i]
             dm = _nanmax(dm, abs(T(δ)))
             im = _nanmax(im, abs(T(dst[i] - un[i])))
             um = _nanmax(um, abs(T(dst[i])))
@@ -216,9 +221,11 @@ _at(::Nothing, i) = false
 # (or, at a row solved on its own, the value `v`; a row with no diffusion: `res/s`), `dst =
 # src + δ`; a masked site takes its value (`mval`, times its value field `mvf`), and the clip
 # `lower` (or `nothing`). Every array has one value per site (i ≤ length(dst)).
-function _be_update_body!(i, dst, src, x, smask, v, res, s, mask, mval, mvf, lower, clip)
+function _be_update_body!(i, dst, src, x, smask, v, res, s, mask, mval, mvf, lower, clip, gate)
     @inbounds begin
-        δ = res !== nothing ? res[i] / _at(s, i) :
+        gated = gate !== nothing && gate[1] != 0
+        δ = gated ? zero(eltype(dst)) :
+            res !== nothing ? res[i] / _at(s, i) :
             (v !== nothing && smask[i] != 0) ? v[i] : x[i]
         u = src[i] + δ
         if mask !== nothing && mask[i] != 0
@@ -698,7 +705,7 @@ function bind_cache(
             continue
         end
         inner = _row_inner(alg, coupled)
-        solver_type = alg.solver_type === :auto ? T : alg.solver_type
+        solver_type = (alg.solver_type === :auto && !LinearSolve.needs_concrete_A(inner)) ? T : alg.solver_type
         if !r.field
             numeric, _ = _numeric_operator(s, r, id, p, hγ, 1.0, mask !== nothing; coupled)
             ins = mask === nothing ? ("in.f" => resarr,) : ("in.f" => resarr, "mask" => mask)
@@ -799,10 +806,9 @@ function bind_cache(
     rebind = q -> ([m(q) for m in mkres], mkjac0(q), mkq(q), cs === nothing ? nothing : cs.mkpres(q))
     timed = jp !== nothing && _reads_time(jp)
     # the device's convergence gate: once every row met the Newton tolerance, later iterations'
-    # residuals are zeroed, so their solves are done at setup and the field is the host's
-    # early-stop form. Not with a Robin face's defect term (its right side is not the residual alone).
-    gate = !Exec.ishost(backend) && newton > 1 &&
-           (coupled || !any(r -> r.solver !== nothing && Solvers.has_robin(r.solver.op), rows)) ? _zeros(st.backend, UInt32, 1) : nothing
+    # residuals are zeroed, their solves are skipped/done at setup, and the update adds 0 (including
+    # Robin-defect rows and generic-path rows), so the field is the host's early-stop form.
+    gate = !Exec.ishost(backend) && newton > 1 ? _zeros(st.backend, UInt32, 1) : nothing
     cache = ImplicitCache(rt, each(length(rt)), jac, newton, h, γ, true, true, jumps, moving, timed, word, op, exact0, exact,
         iterate, newton > 1, _flips(alg, exact, switch), auto_newton, check_div, fail_budget, switch, seen, ρin, b.θ, smin, keys,
         cyclic, 0, rebind, backend, qres, gate, cs)
@@ -842,7 +848,7 @@ function _jumps(s::Program, rs::Program, keys, spec::GroupSpec, masked::Bool)
     return false
 end
 
-# The Newton count of `newton = nothing` (F3 design §3.4): 1 for an exact operator, 2 with a
+# The automatic Newton count (`nlsolve = nothing` or `max_iter = nothing`, F3 design §3.4): 1 for an exact operator, 2 with a
 # switch (one flip pass, S1); a defect correction whose terms have bounds takes
 # `clamp(⌈log ε_N / log ρ_c⌉ + [θ > 0], 2, cap)` from its contraction `ρ_c = γ h ρ_in + θ` (`θ`
 # the face-wise ratio of the diffusion left out of a scaled row, which no step size changes,
@@ -1095,15 +1101,15 @@ function (r::ImplicitRow)(a)
     n = length(dst)
     if r.solver === nothing && r.lin === nothing
         Exec.launch!(backend, _be_update_body!, n, (dst, src, nothing, nothing, nothing, r.resarr, r.s, r.mask, r.mval,
-            r.mvf, r.lo, last))
-        check && _newton_check!(r, backend, word, dst, r.bufs[par], nothing, it, hits, window, isinf(h), checkdiv, failbudget)
+            r.mvf, r.lo, last, gate))
+        check && _newton_check!(r, backend, word, dst, r.bufs[par], nothing, it, hits, window, isinf(h), checkdiv, failbudget, gate)
         return nothing
     end
     x = _row_correction!(r, backend, γ, h; word, window, gate)
     r.scal === nothing || Exec.launch!(backend, _be_status_body!, 1, (word, r.scal, Int32(window), isinf(h), gate))
     Exec.launch!(backend, _be_update_body!, n, (dst, src, x, r.smask, r.v, nothing, nothing, r.mask, r.mval, r.mvf,
-        r.lo, last))
-    check && _newton_check!(r, backend, word, dst, r.bufs[par], x, it, hits, window, isinf(h), checkdiv, failbudget)
+        r.lo, last, gate))
+    check && _newton_check!(r, backend, word, dst, r.bufs[par], x, it, hits, window, isinf(h), checkdiv, failbudget, gate)
     return nothing
 end
 # the solve of a row with a solver from its residual `resarr` (a scaled row: the right side `G/m`
@@ -1117,12 +1123,11 @@ function _row_correction!(r::ImplicitRow, backend, γ, h; word = nothing, window
             T(1 / (2γ * h))))
     end
     if sv === nothing
+        rhs = r.f !== nothing ? r.f : r.resarr
+        Exec.compiling() || r.lin.b === rhs || copyto!(r.lin.b, rhs)
         mk = r.smask !== nothing ? r.smask : r.mask
         mk === nothing || Exec.launch!(backend, _zero_masked_body!, length(r.lin.b), (r.lin.b, mk))
-        if Exec.compiling()
-            LinearAlgebra.mul!(r.lin.u, r.lin.A, r.lin.b)
-            return r.lin.u
-        end
+        Exec.compiling() && return r.lin.u
         sol = SciMLBase.solve!(r.lin)
         word === nothing || _lin_status!(word, sol, window, gate)
         return r.lin.u
@@ -1143,14 +1148,14 @@ function (r::ImplicitRow)(a::_Clip)
     Exec.launch!(a.backend, _clip_body!, length(dst), (dst, r.lo))
     return nothing
 end
-function _newton_check!(r::ImplicitRow, backend, word, dst, un, x, it, last, window, steady::Bool, checkdiv::Bool, failbudget::Bool)
+function _newton_check!(r::ImplicitRow, backend, word, dst, un, x, it, last, window, steady::Bool, checkdiv::Bool, failbudget::Bool, gate = nothing)
     n = length(dst)
     nb = cld(n, NB)
     T = eltype(r.part)
     if x === nothing
-        Exec.launch!(backend, _be_norms_body!, nb, (r.part, dst, un, nothing, nothing, nothing, r.resarr, r.s, r.mask, n))
+        Exec.launch!(backend, _be_norms_body!, nb, (r.part, dst, un, nothing, nothing, nothing, r.resarr, r.s, r.mask, n, gate))
     else
-        Exec.launch!(backend, _be_norms_body!, nb, (r.part, dst, un, x, r.smask, r.v, nothing, nothing, r.mask, n))
+        Exec.launch!(backend, _be_norms_body!, nb, (r.part, dst, un, x, r.smask, r.v, nothing, nothing, r.mask, n, gate))
     end
     # (a field stored in Float16: its rounding at each update is part of the floor, S1)
     fl = eltype(dst) === Float16 ? T(10 * eps(T) + 2 * eps(Float16)) : T(10 * eps(T))

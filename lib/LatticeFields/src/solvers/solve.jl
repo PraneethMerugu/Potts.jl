@@ -57,7 +57,10 @@ LinearSolve `precs` function (`precs(A, p) -> (Pl, Pr)`):
     exactly `k` cycles (no early exit; the sentinel warns above `warn_tol`, default `1e-3`).
     With `cycles = nothing`, cycles stop on device when `‖r‖∞ ≤ reltol * max(‖b‖∞, floor)`
     within `maxiters` (when unset: `reltol` and `maxiters` come from `solve`, or `1e-6` and
-    `8`/`12` on the owned steppers and unset standalone solves).
+    `8`/`12` on the owned steppers and unset standalone solves; because LinearSolve defaults
+    an unset `maxiters` to `length(b)`, `cache.maxiters == length(b)` is treated as unset, so
+    pass `maxiters` on `LatticeMultigrid` to request `length(b)` cycles explicitly). The
+    fused plan unrolls `cycles` or `maxiters` into segments (cap `1024`).
   - As a `precs` preconditioner (`precs = LatticeMultigrid(…)`):
     - Given a lattice field's operator (`BoundOperator`), it returns the V-cycle that
       [`LatticePCG`](@ref) fuses into its iteration (`cycle` symmetric, `cycles` unset or `1`)
