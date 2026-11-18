@@ -25,7 +25,7 @@ end
         sw = 0.05 * laplacian(bce) - 8 * max(bce - 0.4, 0) / 0.6 + 2 + 2 * sin(6t)
         dts = [0.05 / 2^k for k in 0:3]
         e2, o2, pb, u2 = nl_orders(sw, NLIC; T = 0.3, dts)
-        e1, o1, _, u1 = nl_orders(sw, NLIC; T = 0.3, dts, nlsolve = LatticeNewton(; max_iter = 1))
+        e1, o1, _, u1 = nl_orders(sw, NLIC; T = 0.3, dts, nlsolve = LatticeNewton(; max_iter = 1, check_div = false))
         _, _, _, u8 = nl_orders(sw, NLIC; T = 0.3, dts, nlsolve = LatticeNewton(; max_iter = 8))
         c = only(init(pb, BackwardEuler(); dt = 0.05).runtimes).cache
         @test c.newton == 2 && c.exact && only(c.rows).op.switch

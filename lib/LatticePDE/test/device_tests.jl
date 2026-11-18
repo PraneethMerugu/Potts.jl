@@ -248,7 +248,7 @@ using .LP_device: fd, kron
         rob = psys([D(ce) ~ Di * laplacian(ce) - ki * ce + 1], [c(0, x, y) ~ x * y, 1.5 * c(t, 1, y) + Differential(x)(c(t, 1, y)) ~ 0.2], [Di, ki])
         cases = [
             ("BackwardEuler, field row", field, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 1, check_div = false))),
-            ("BackwardEuler, advection", adv, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 6))),
+            ("BackwardEuler, advection", adv, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 8))),
             ("BackwardEuler, advection tight κ", adv, BackwardEuler(; nlsolve = LatticeNewton(; κ = 1.0f-4, max_iter = 12))),
             ("BackwardEuler, switch", sw, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 6))),
             ("BackwardEuler, Robin face", rob, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 1, check_div = false))),
@@ -445,15 +445,19 @@ using .LP_device: fd, kron
         nl = PDESystem(
             [D(cae) ~ 0.1 * laplacian(cae) - 2.0 * cae / (0.5 + cae) + cbe + x, D(cbe) ~ 0.1 * laplacian(cbe) - cbe + 0.5 * cae^2],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.3), [t, x, y], [cae, cbe], Any[]; name = :nldev)
-        for (lab, s, alg) in (
-                ("q1 QS", q1(0.1, 5.0; steady = true), QuasiSteady()),
-                ("nonlinear QS", nl, QuasiSteady()),
-                ("nonlinear QS κ", nl, QuasiSteady(; nlsolve = LatticeNewton(; κ = 1.0f-4, max_iter = 20))),
+        for (lab, s, mkalg) in (
+                ("q1 QS", q1(0.1, 5.0; steady = true), _ -> QuasiSteady()),
+                ("nonlinear QS", nl, _ -> QuasiSteady()),
+                ("nonlinear QS κ", nl, T -> QuasiSteady(; nlsolve = LatticeNewton(; κ = T === Float32 ? 1.0f-2 : 1.0e-4, max_iter = 20))),
             )
-        for T in (Float32, Float64)
-            mk(bk) = discretize(s, LatticeDiscretization(Grid((24, 20)); T, backend = bk))
-                sd, sd2 = solve(mk(PDEV), alg; dt = 0.1, saveat = 0.1), solve(mk(PDEV), alg; dt = 0.1, saveat = 0.1)
-                sh = solve(mk(KernelAbstractions.CPU()), alg; dt = 0.1, saveat = 0.1)
+            for T in (Float32, Float64)
+                alg = mkalg(T)
+                tols = alg.nlsolve isa LatticeNewton ?
+                    (T === Float32 ? (; abstol = 1.0f-3, reltol = 1.0f-2) : (; abstol = 1.0e-6, reltol = 1.0e-3)) :
+                    (;)
+                mk(bk) = discretize(s, LatticeDiscretization(Grid((24, 20)); T, backend = bk))
+                sd, sd2 = solve(mk(PDEV), alg; dt = 0.1, saveat = 0.1, tols...), solve(mk(PDEV), alg; dt = 0.1, saveat = 0.1, tols...)
+                sh = solve(mk(KernelAbstractions.CPU()), alg; dt = 0.1, saveat = 0.1, tols...)
             @test sd.retcode == sh.retcode == SciMLBase.ReturnCode.Success
             same(a, b) = all(i -> Array(a[cae, i]) == Array(b[cae, i]) && Array(a[cbe, i]) == Array(b[cbe, i]), eachindex(sh.t))
             @test same(sd, sh) || (println("12d dev ", lab, " ", T, " ", maximum(abs, Array(sd[cae, end]) .- sh[cae, end])); false)

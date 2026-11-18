@@ -526,7 +526,8 @@ end
         s_m3 = solve(p_m3, BackwardEuler(; linsolve = BTIGHT, nlsolve = LatticeNewton(; κ = 1.0e-3, max_iter = 20)); dt = 0.1)
         @test s_m3.retcode == ReturnCode.Success && s_m3.stats.newton_budget == 0 && maximum(abs, s_m3[bce, end]) == 0.0
 
-        # Precision-limit branch: Float32 run below machine precision converges on |θ - 1| <= 100 * sqrt(eps(T)), ndz <= 1
+        # Precision-limit branch: Float32 run converges when reachable rounding hits |θ - 1| <= 100 * sqrt(eps(T)), ndz <= 1,
+        # and diverges when tolerances lie below Float32 rounding (ndz > 1 at |θ - 1| <= 100 * sqrt(eps(T)))
         sys_pl = PDESystem(
             [D(bce) ~ 0.1f0 * laplacian(bce) - 0.5f0 * bce^2 + 0.2f0],
             [bc(0, x, y) ~ 0.5f0 + 0.2f0 * x], bdom(0.1), [t, x, y], [bce], Any[]; name = :nl_pl,
@@ -534,9 +535,14 @@ end
         p_pl = discretize(sys_pl, LatticeDiscretization(Grid((8, 8)); T = Float32))
         s_pl = solve(
             p_pl, BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0f-7, maxiters = 64), nlsolve = LatticeNewton(; κ = 1.0f-8, max_iter = 10));
-            dt = 0.1, abstol = 1.0f-12, reltol = 1.0f-12,
+            dt = 0.1, abstol = 1.0f-6, reltol = 1.0f-6,
         )
         @test s_pl.retcode == ReturnCode.Success && s_pl.stats.newton_budget == 0
+        s_pl_div = @test_logs (:warn, r"diverged") solve(
+            p_pl, BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0f-7, maxiters = 64), nlsolve = LatticeNewton(; κ = 1.0f-8, max_iter = 10));
+            dt = 0.1, abstol = 1.0f-12, reltol = 1.0f-12,
+        )
+        @test s_pl_div.retcode == ReturnCode.ConvergenceFailure
 
         # OrdinaryDiffEq NLNewton oracle on a 1D nonlinear reaction-diffusion problem (states and solve counts)
         @variables u1(..)
