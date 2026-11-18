@@ -283,16 +283,21 @@ Newton iterations. When these rules raise a `substeps = n` you gave, a warning s
 rule and which terms. `LatticeGMRES` is not a time stepper's `linsolve` (it is the coupled steady
 solve's, below): on BackwardEuler, CrankNicolson and BDF2 it was slower in every case measured,
 so they refuse it. Each substep checks the Newton correction `δ_k = u_{k+1} − u_k` in the working float type `T`.
-Time-stepped solvers test `‖δ_k‖∞ ≤ 1e-3 ‖u_k − uⁿ‖∞ + 10 eps(T) ‖u_k‖∞` (with `2 eps(Float16)`
-added to the floor for `Float16` storage). This criterion is correction-based, not rate-scaled.
-Under `nlsolve = nothing`, a missed tolerance counts in `integ.stats` and warns once with the
-route (`nlsolve = LatticeNewton(; max_iter = k)` or more substeps). Under
-`nlsolve = LatticeNewton(; max_iter = k)`, the loop stops early once every row meets the
-tolerance and returns `ReturnCode.ConvergenceFailure` at the window end on a budget hit. A
-diverging correction (`check_div = true`, the default) ends the run with
-`ReturnCode.ConvergenceFailure`, and the warning gives more substeps as the route. Under
-both modes, a CPU run stops early once the correction meets the tolerance; a GPU closes its
-convergence gate once all rows converge. On
+Under `nlsolve = nothing`, the automatic iteration count uses the contraction bound of any
+out-of-operator terms; a missed tolerance counts in `integ.stats` and warns once with the
+route (`nlsolve = LatticeNewton(; κ, max_iter)` or more substeps). Under
+`nlsolve = LatticeNewton(; κ = 1 // 100, max_iter = 10, check_div = true)`, the solver uses
+`NLNewton`'s rate-scaled RMS criterion: `ndz` is the RMS norm over active unknowns of
+`δ_k / (abstol + max(|uⁿ|, |u_{k+1}|) * reltol)` using the `abstol` and `reltol` `solve`
+keywords (SciML defaults `1e-6` and `1e-3` when unset), `θ = max(0.3 * prev_θ, ndz / ndzprev)`
+carries across steps, and `η = θ / (1 - θ)` tests `η * ndz < κ` after iteration 1
+(`ndz < 1e-5` on iteration 1, and `ndz ≤ 1` when `θ ≈ 1` at the floating-point precision
+limit). The loop stops early once every row converges and returns
+`ReturnCode.ConvergenceFailure` at the window end on a budget hit. A diverging correction
+(`check_div = true`, the default: `θ > 2`, precision stall above 1, or non-finite norm)
+ends the run with `ReturnCode.ConvergenceFailure`, and the warning gives more substeps as
+the route. Under both modes, a CPU run stops early once every row converges; a GPU closes
+its convergence gate once all rows converge. On
 a hexagonal lattice every implicit solver runs on the six-neighbor Laplacian. A face condition
 there applies along each link that leaves the box: a diagonal link takes the condition of
 axis 1's face when it leaves along axis 1, else axis 2's. Explicit and implicit steps use the
@@ -329,11 +334,12 @@ with `QuasiSteady` by default (another solver for it is an error). Its sign does
 `0 ~ kd * c - Dc * laplacian(c) - s` is the same row. A local row such as `0 ~ -2c + 0.5e`, with
 `D(e) ~ …`, is `c`'s. Steady fields are solved first in each MCS, so the other fields read their
 values of that MCS. `QuasiSteady` also solves a rate row `D(c) ~ rhs` as `0 = rhs`. It takes `nlsolve`, `linsolve` and `solver_type` with the meanings above, and has no
-`substeps` and no `lower_bound`. A linear field takes one linear solve per MCS. A nonlinear or
-switched field takes up to 8 Newton iterations, checked against the steady tolerance
-`‖δ_k‖∞ ≤ (1e-3 + 10 eps(T)) ‖u_k‖∞` (not rate-scaled). When a term stays out of the
-operator (advection), the count comes from the bound on that term against the decay, from 8
-to at most 40 iterations; give `nlsolve = LatticeNewton(; max_iter = k)` if the warning says the budget is hit. Steady
+`substeps` and no `lower_bound`. A linear field takes one linear solve per MCS. A nonlinear or switched field takes up to 8 Newton iterations by default, or up to
+`max_iter` with `nlsolve = LatticeNewton(; κ, max_iter, check_div)` using the rate-scaled
+`NLNewton` criterion above (with one RMS norm across all unknowns on a coupled steady
+solve). When a term stays out of the operator (advection), the automatic count comes from
+the bound on that term against the decay, from 8 to at most 40 iterations; give
+`nlsolve = LatticeNewton(; κ, max_iter)` if the warning says the budget is hit. Steady
 fields of one `QuasiSteady` that read one another (`0 ~ laplacian(a) - a + 0.5b` and
 `0 ~ laplacian(b) - b - 0.5a`, a cross diffusion `laplacian(b)` in `a`'s row), and a row with a term the
 operator does not see (`c²` in `0 ~ q - c^2`), are solved together: one Newton iteration
