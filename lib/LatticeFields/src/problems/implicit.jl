@@ -307,7 +307,7 @@ mutable struct ImplicitRow{R, U, A, SV, X, W, SC, SM, V, S, MK, MV, MF, LO, F, J
     lin::LC                             # the solve as a LinearSolve cache (its `cacheval` is `solver`), or nothing
 end
 # a row's linear solve (`lift!` and the budgeted solve of its `FieldSolver`, through LinearSolve)
-_solve_cache!(c) = (SciMLBase.solve!(c); nothing)
+_solve_cache!(c) = Solvers.solve_owned!(c)
 
 """
     ImplicitCache

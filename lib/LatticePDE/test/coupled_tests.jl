@@ -75,7 +75,7 @@ end
         @test startswith(cmsg(() -> LatticeBlockSolve(:pcg)), "`LatticeBlockSolve(:pcg)`: the block preconditioner solves each field with")
     op = LSB.CellOperator((8, 8); shift = 1.0)
         @test occursin(
-            "solves an implicit group's fields together (F3-12d); a `FieldSolver` solves one field: give it the `LatticeGMRES`'s per-field solver, `linsolve = LatticePCG(; maxiters = 2)`",
+            "solves an implicit group's fields together; a `FieldSolver` solves one field: give it the `LatticeGMRES`'s per-field solver, `linsolve = LatticePCG(; maxiters = 2)`",
             cmsg(() -> LSB.FieldSolver(KernelAbstractions.CPU(), op; linsolve = LatticeGMRES()))
         )
 end

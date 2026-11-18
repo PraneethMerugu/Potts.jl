@@ -49,7 +49,7 @@ using OrdinaryDiffEqRosenbrock: OrdinaryDiffEqRosenbrock
         qa_api_docs(LatticeFields; check_docs_blocks = false)
     @test Base.get_extension(LatticeFields, :LatticeFieldsForwardDiffExt) !== nothing
     @test Base.get_extension(LatticeFields, :LatticeFieldsDiffEqBaseExt) !== nothing
-    @test Base.get_extension(LatticeFields, :LatticeFieldsOrdinaryDiffEqCoreExt) !== nothing
+        @test Base.get_extension(LatticeFields, :LatticeFieldsOrdinaryDiffEqCoreExt) !== nothing
 end
 end
 

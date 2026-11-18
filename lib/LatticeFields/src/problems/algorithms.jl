@@ -113,6 +113,10 @@ The implicit field algorithms (F3 design §3.2): each substep solves the Newton 
 residual and `J̃` the symmetric operator its front end extracts (`OperatorSpec`).
 """
 abstract type AbstractImplicitFieldAlgorithm <: AbstractFieldAlgorithm end
+# (equal keywords: equal algorithms; a `linsolve` that holds a preconditioner's cache compares by value)
+Base.:(==)(a::A, b::A) where {A <: AbstractImplicitFieldAlgorithm} = all(f -> getfield(a, f) == getfield(b, f), fieldnames(A))
+Base.hash(a::AbstractImplicitFieldAlgorithm, h::UInt) =
+    foldl((h, f) -> hash(getfield(a, f), h), fieldnames(typeof(a)); init = hash(typeof(a), h))
 
 """
     BackwardEuler(; substeps = nothing, newton = nothing, lower_bound = nothing,
