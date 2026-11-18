@@ -78,6 +78,53 @@ println("TC 500100 1048576")
 end
 """
 
+const PAR_STUB = raw"""
+let
+    sd = ENV["STUB_DIR"]
+    me = basename(pwd())
+    lockdir = joinpath(@__DIR__, "lockroot", "potts-exclusive.lock")
+    "--prepare" in ARGS || error("expected --prepare")
+    write(joinpath(sd, me * ".pid"), string(getpid()))
+    fail = get(ENV, "PAR_FAIL", "")
+    hang = get(ENV, "PAR_HANG", "")
+    crash_ready = get(ENV, "PAR_CRASH_AFTER_READY", "")
+    crash_go = get(ENV, "PAR_CRASH_DURING_GO", "")
+    fail == me && exit(2)
+    hang == me && sleep(30)
+    p0 = time()
+    sleep(0.5)
+    p1 = time()
+    prep_locked = isdir(lockdir) ? 1 : 0
+    println("READY ", getpid())
+    flush(stdout)
+    crash_ready == me && exit(2)
+    line = strip(readline(stdin))
+    isempty(line) && exit(1)
+    fs = split(line)
+    fs[1] == "GO" || error("expected GO, got $line")
+    cpu = fs[2]
+    excl = length(fs) >= 3 ? fs[3] : "-"
+    g0 = time()
+    go_locked = isdir(lockdir) ? 1 : 0
+    crash_go == me && exit(2)
+    sleep(0.1)
+    g1 = time()
+    open(ENV["STUB_LOG"], "a") do io
+        println(io, "prep ", me, " ", getpid(), " ", p0, " ", p1, " ", prep_locked)
+        println(io, "go ", me, " ", getpid(), " ", cpu, " ", excl, " ", g0, " ", g1, " ", go_locked)
+    end
+    println("TC 500000 1048576")
+    pos = filter(a -> !startswith(a, "--"), ARGS)
+    f = let pf = joinpath(sd, me * ".txt"); isfile(pf) ? parse(Float64, strip(read(pf, String))) : 1.0 end
+    for v in split(pos[2], ','), c in split(pos[1], ',')
+        println("ABR $c.$v $(10f) $(9f) 60")
+    end
+    println("TC 500100 1048576")
+    println("DONE")
+    flush(stdout)
+end
+"""
+
 g(dir, args...) = run(`git -C $dir -c user.name=t -c user.email=t@t $args`)
 
 """
@@ -428,53 +475,7 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
     @testset "parallel compile READY/GO/DONE protocol" begin
         lockdir = joinpath(sb, "lockroot", "potts-exclusive.lock")
         par_stub = joinpath(sb, "par_stub.jl")
-        par_stub_src = raw"""
-        let
-            sd = ENV["STUB_DIR"]
-            me = basename(pwd())
-            lockdir = joinpath(@__DIR__, "lockroot", "potts-exclusive.lock")
-            "--prepare" in ARGS || error("expected --prepare")
-            write(joinpath(sd, me * ".pid"), string(getpid()))
-            fail = get(ENV, "PAR_FAIL", "")
-            hang = get(ENV, "PAR_HANG", "")
-            crash_ready = get(ENV, "PAR_CRASH_AFTER_READY", "")
-            crash_go = get(ENV, "PAR_CRASH_DURING_GO", "")
-            fail == me && exit(2)
-            hang == me && sleep(30)
-            p0 = time()
-            sleep(0.5)
-            p1 = time()
-            prep_locked = isdir(lockdir) ? 1 : 0
-            println("READY ", getpid())
-            flush(stdout)
-            crash_ready == me && exit(2)
-            line = strip(readline(stdin))
-            isempty(line) && exit(1)
-            fs = split(line)
-            fs[1] == "GO" || error("expected GO, got $line")
-            cpu = fs[2]
-            excl = length(fs) >= 3 ? fs[3] : "-"
-            g0 = time()
-            go_locked = isdir(lockdir) ? 1 : 0
-            crash_go == me && exit(2)
-            sleep(0.1)
-            g1 = time()
-            open(ENV["STUB_LOG"], "a") do io
-                println(io, "prep ", me, " ", getpid(), " ", p0, " ", p1, " ", prep_locked)
-                println(io, "go ", me, " ", getpid(), " ", cpu, " ", excl, " ", g0, " ", g1, " ", go_locked)
-            end
-            println("TC 500000 1048576")
-            pos = filter(a -> !startswith(a, "--"), ARGS)
-            f = let pf = joinpath(sd, me * ".txt"); isfile(pf) ? parse(Float64, strip(read(pf, String))) : 1.0 end
-            for v in split(pos[2], ','), c in split(pos[1], ',')
-                println("ABR $c.$v $(10f) $(9f) 60")
-            end
-            println("TC 500100 1048576")
-            println("DONE")
-            flush(stdout)
-        end
-        """
-        write(par_stub, par_stub_src)
+        write(par_stub, PAR_STUB)
         root, b, c, sd = checkouts()
         st, out, ev = run_ab(sb, sd, [
             b, c, "gg", "cpu", "--rounds=2", "--no-warm", "--parallel",
