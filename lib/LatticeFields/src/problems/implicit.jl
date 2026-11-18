@@ -175,7 +175,7 @@ function _be_newton_body!(i, w, part, nb, hist, it, last, epsn, fl, window, stea
         it == 1 && (hist[3] = dk)
         # a steady solve's budget hit whose correction did not halve from the first: no real
         # reduction (a singular region, S-a)
-        (fail == 0 && last && !conv && steady && !(dk < hist[3] / 2)) && (fail = nobit)
+        (fail == 0 && last && !conv && steady && it > 1 && !(dk < hist[3] / 2)) && (fail = nobit)
         if fail != 0
             w[STATUS_CODE] = UInt32(2)
             w[STATUS_CAUSE] |= fail
@@ -272,7 +272,7 @@ function _be_kappa_newton_body!(
                 conv = (η >= zero(T)) && (η * ndz < κ)
             end
         end
-        (fail == 0 && last && !conv && steady && !(ndz < hist[4] / T(2))) && (fail = nobit)
+        (fail == 0 && last && !conv && steady && it > 1 && !(ndz < hist[4] / T(2))) && (fail = nobit)
         if fail != 0
             w[STATUS_CODE] = UInt32(2)
             w[STATUS_CAUSE] |= fail

@@ -520,7 +520,7 @@ function _init_kw(
         verbose::Bool = true, progress::Bool = false, progress_steps::Integer = 1000, progress_name = "CPM",
         progress_id = :CorePotts, alias = nothing, dense::Bool = false, abstol = nothing, reltol = nothing, _rng_seeds::Bool = true
     )
-    atol, rtol = Problems._resolve_tols(abstol, reltol)
+    atol, rtol = Problems.resolve_tols(abstol, reltol)
     dense && throw(
         ArgumentError(
             "`dense = true`: a Potts solution has no interpolation between MCS (a label field has no " *

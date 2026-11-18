@@ -95,7 +95,7 @@ public AbstractPolicyTexts, ProblemTexts, GroupSubsteps, check_coupling, bound_r
 public field_report, group_report, coupling_report, substep_cause, implicit_facts, ImplicitFacts, coupling_unseen_text, unseen_reads, unseen_loop, cover_text
 # the implicit algorithms (F3-07)
 public AbstractImplicitFieldAlgorithm, LatticeNewton, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, OperatorSpec, RowOperator, operator_spec, build_operator, growth, inexact_bounds, ImplicitCache,
-       ImplicitRow, bind_cache, residual_program, residual_rule
+    ImplicitRow, bind_cache, residual_program, residual_rule, resolve_tols
 # steady rows `0 ~ rhs` (F3-12b)
 public steady_alg, steady_fields
 # the clock (F2-08c)

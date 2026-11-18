@@ -727,7 +727,14 @@ function _tol_keyword(name, v)
     v isa Real && !(v isa Bool) && isfinite(v) && v >= 0 && return v
     throw(ArgumentError("`solve`/`init`: `$name` must be a finite real number ≥ 0; got $(repr(v))"))
 end
-function _resolve_tols(abstol, reltol)
+"""
+    resolve_tols(abstol, reltol) -> (atol, rtol)
+
+Validate and resolve `abstol` and `reltol` `solve`/`init` keywords against the SciML
+defaults (`1 // 10^6` and `1 // 10^3`). Throws `ArgumentError` if negative, non-finite,
+non-real, or if both are zero.
+"""
+function resolve_tols(abstol, reltol)
     atol = abstol === nothing ? (1 // 10^6) : _tol_keyword("abstol", abstol)
     rtol = reltol === nothing ? (1 // 10^3) : _tol_keyword("reltol", reltol)
     (atol == 0 && rtol == 0) && throw(ArgumentError("`solve`/`init`: `abstol` and `reltol` cannot both be zero"))
@@ -772,7 +779,7 @@ function _init(
             )
         )
     end
-    atol, rtol = _resolve_tols(abstol, reltol)
+    atol, rtol = resolve_tols(abstol, reltol)
     for (a, _) in groups
         alg_family(a) == prob.kind || throw(ArgumentError(string(
             "a ", prob.kind == :map ? "map program is stepped by ExplicitMap()" :
@@ -1462,7 +1469,7 @@ function _steady_solve(prob::FieldProblem, alg::AbstractFieldAlgorithm; abstol =
             )
         )
     end
-    _resolve_tols(abstol, reltol)
+    resolve_tols(abstol, reltol)
     a = QuasiSteady(;
         nlsolve = alg.nlsolve, linsolve = alg.linsolve === :auto ? STEADY_INNER : alg.linsolve,
         solver_type = alg.solver_type
