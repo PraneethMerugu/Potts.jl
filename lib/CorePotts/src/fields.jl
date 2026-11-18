@@ -199,7 +199,7 @@ _stateless(ph::FieldPhase) = ph.aux_only || isempty(ph.group.spec.state)
 # odd count), with the step's substep count (also when `ph` is the at-init clamp, which runs
 # one substep of length zero from the same launches: the binding is the step's, D-C8 item 8).
 # `tables` reuses the device tables of an earlier binding when their contents are unchanged.
-function _field_bind(ph::FieldPhase, st, p, backend; tables = nothing)
+function _field_bind(ph::FieldPhase, st, p, backend; tables = nothing, abstol = 1 // 10^6, reltol = 1 // 10^3)
     s = ph.program
     arrs = _arrays(ph.arrays, st)
     # (a scratch field on its own level: a coarse field's face or masked value, F3-17)
@@ -222,7 +222,7 @@ function _field_bind(ph::FieldPhase, st, p, backend; tables = nothing)
     n = field_substeps(ph, p)
     host = FieldBinding(p, arrs, _bound_values(ph, p)...)
     return Problems.bind_group(ph.group, ph.alg, store, _praw(ph, p); n, dt = ph.dt, c = nothing, ends_in = :slot1,
-        backend, options = ph.options, V = ph.T, host, kernels = ph.aux_only ? (Int[], _aux_ids(ph)) : nothing)
+        backend, options = ph.options, V = ph.T, host, abstol, reltol, kernels = ph.aux_only ? (Int[], _aux_ids(ph)) : nothing)
 end
 
 """
@@ -234,9 +234,9 @@ group's runtime to the state's arrays and compiles its launches. Other phases ne
 (`(;)`).
 """
 phase_context(ph, st, p, backend) = (;)
-function phase_context(ph::FieldPhase{K}, st, p, backend) where {K}
+function phase_context(ph::FieldPhase{K}, st, p, backend; abstol = 1 // 10^6, reltol = 1 // 10^3) where {K}
     ph.init && return (;)
-    rt = _field_bind(ph, st, p, backend)
+    rt = _field_bind(ph, st, p, backend; abstol, reltol)
     # the status word's window in the front end's words: "MCS n" (a rate group takes `R` windows
     # per MCS in a sub-MCS `repeat(R, …)`; a map group and a group with no state take one)
     per = ph.alg isa Problems.ExplicitMap || _stateless(ph) ? 1 : max(round(Int, ph.period / ph.dt), 1)
@@ -262,18 +262,24 @@ function (m::_MCSWindow)(w::Integer, t1::Real)
 end
 
 """The merged [`phase_context`](@ref) of every phase of `phases` (each once)."""
-function phase_contexts(phases::Phases, st, p, backend)
+function phase_contexts(phases::Phases, st, p, backend; abstol = 1 // 10^6, reltol = 1 // 10^3)
     ctx = (;)
     for e in (phases.mcs..., phases.at_init)
         for t in (e isa Repeat ? e.entries : (e,))
             t isa Tuple || continue
             for ph in t
-                ctx = merge(ctx, phase_context(ph, st, p, backend))
+                c = ph isa FieldPhase ? phase_context(ph, st, p, backend; abstol, reltol) : phase_context(ph, st, p, backend)
+                ctx = merge(ctx, c)
             end
         end
     end
     return ctx
 end
+
+_has_implicit_field_phase(phases::Phases) =
+    any(ph -> !ph.aux_only && ph.alg isa Problems.AbstractImplicitFieldAlgorithm, _field_phases(phases))
+_uses_lattice_newton(phases::Phases) =
+    any(ph -> !ph.aux_only && ph.alg isa Problems.AbstractImplicitFieldAlgorithm && ph.alg.nlsolve isa Problems.LatticeNewton, _field_phases(phases))
 
 # every field phase of the MCS order of `phases` (the steps, not the at-init clamps), each once
 function _field_phases(phases::Phases)
@@ -355,7 +361,11 @@ function _rebind!(rt::Problems.GroupRuntime, ph::FieldPhase, st, p, backend)
         b.pvals, b.tvals = _bound_values(ph, p)
         return rt
     end
-    new = _field_bind(ph, st, p, backend; tables = same_tables ? rt.store.tables : nothing)
+    new = if rt.cache isa Problems.ImplicitCache
+        _field_bind(ph, st, p, backend; tables = same_tables ? rt.store.tables : nothing, abstol = rt.cache.abstol, reltol = rt.cache.reltol)
+    else
+        _field_bind(ph, st, p, backend; tables = same_tables ? rt.store.tables : nothing)
+    end
     # the status word's counts not read yet stay the run's (the new runtime's word starts there)
     wo, wn = Problems.status_word(rt.cache), Problems.status_word(new.cache)
     wo === nothing || wn === nothing || _bind_copy!(wn, wo)
@@ -690,9 +700,11 @@ function _shadow!(run::TangentRun, ph::FieldPhase{K}, st, prt) where {K}
     # an implicit group's tangent on its primal runtime's cache: the stores share the slot parity
     shared = ph.alg isa Problems.AbstractImplicitFieldAlgorithm && !ph.aux_only && prt.cache isa Problems.ImplicitCache
     store = Problems.FieldStore(backend, bufs, shared ? prt.store.cur : ones(Int, length(bufs)), prt.store.tables)
+    tols = shared ? (abstol = prt.cache.abstol, reltol = prt.cache.reltol) : (;)
     trt = Problems.bind_group(ph.group, ph.alg, store, _praw(ph, run.p); n = prt.n, dt = ph.dt, c = zero(E),
         ends_in = :slot1, backend, options = ph.options, V = ph.T, host = nothing,
         kernels = ph.aux_only ? (Int[], _aux_ids(ph)) : nothing,
+        tols...,
         (shared ? (; shared = (prt.cache, prt.store)) : (;))...)
     trt.totals.where = prt.totals.where
     Exec.ishost(backend) || Problems.compile!(backend, trt)
