@@ -319,7 +319,7 @@ end
 end
 
 @testitem "LatticeNewton NLNewton semantics, host factorizations, and refusals" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-    using LinearSolve: KLUFactorization, UMFPACKFactorization
+    using LinearSolve: KLUFactorization, LUFactorization, UMFPACKFactorization
     using LatticeFields.Solvers: BoundOperator
     @testset "LatticeNewton keywords and NLNewton semantics" begin
         e(f) = try
@@ -457,7 +457,8 @@ end
         s16 = solve(p16, BackwardEuler(; nlsolve = LatticeNewton(; κ = 1 // 100, max_iter = 10)); dt = 0.1)
         @test SciMLBase.successful_retcode(s16.retcode) && eltype(s16[bc16(t, x, y), end]) == Float16
 
-        # check_div stops a diverging solve early with ConvergenceFailure; check_div = false disables divergence growth abort
+        # check_div = true stops a diverging solve early with ConvergenceFailure;
+        # check_div = false disables divergence-growth aborts and accepts budget hits as Success (as NLNewton)
         sys_div = PDESystem(
             [D(bce) ~ 0.01 * laplacian(bce) - Advect(Upwind1())([50 * (1 + x) + t, 0.0], bce)],
             [bc(0, x, y) ~ x * y], bdom(1.0), [t, x, y], [bce], Any[]; name = :nl_div,
@@ -475,10 +476,95 @@ end
             p_div, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 3, check_div = false));
             dt = 1.0, abstol = 1.0, reltol = 1.0e-8,
         )
-        solve!(ig_false)
-        @test ig_false.retcode == ReturnCode.ConvergenceFailure
+        @test_logs (:warn, r"reached its budget") solve!(ig_false)
+        @test ig_false.retcode == ReturnCode.Success
+        @test ig_false.stats.newton_budget > 0
         @test only(ig_false.runtimes).totals.cause & 0x02 == 0
         @test ig_false.stats.solves == 3
+
+        # max_iter = 1 is checked under LatticeNewton (check_div = true fails unless ndz < 1e-5; check_div = false accepts)
+        s_one_fail = @test_logs (:warn, r"reached its budget") solve(
+            p_adv, BackwardEuler(; linsolve = BTIGHT, nlsolve = LatticeNewton(; max_iter = 1, check_div = true)); dt = 0.25,
+        )
+        @test s_one_fail.retcode == ReturnCode.ConvergenceFailure && s_one_fail.stats.newton_budget > 0
+        s_one_ok = @test_logs (:warn, r"reached its budget") solve(
+            p_adv, BackwardEuler(; linsolve = BTIGHT, nlsolve = LatticeNewton(; max_iter = 1, check_div = false)); dt = 0.25,
+        )
+        @test s_one_ok.retcode == ReturnCode.Success && s_one_ok.stats.newton_budget > 0
+
+        # Iteration-1 rule: a state already at its steady state finishes in 1 solve per substep
+        sys_ss = PDESystem(
+            [D(bce) ~ 0.1 * laplacian(bce) - bce^2 + 1.0],
+            [bc(0, x, y) ~ 1.0], bdom(0.2), [t, x, y], [bce], Any[]; name = :nl_ss,
+        )
+        p_ss = discretize(sys_ss, LatticeDiscretization(Grid((8, 8)); T = Float64))
+        s_ss = solve(p_ss, BackwardEuler(; substeps = 2, linsolve = BTIGHT, nlsolve = LatticeNewton(; κ = 1.0e-8, max_iter = 1)); dt = 0.1)
+        @test s_ss.retcode == ReturnCode.Success && s_ss.stats.newton_budget == 0 && s_ss.stats.solves == 4
+
+        # Automatic mode (nlsolve = nothing) refuses abstol/reltol and routes to LatticeNewton()
+        @test_throws ArgumentError init(p_adv, BackwardEuler(); dt = 0.25, abstol = 1.0e-8)
+        @test_throws ArgumentError init(p_adv, BackwardEuler(); dt = 0.25, reltol = 1.0e-6)
+        @test occursin("LatticeNewton()", e(() -> init(p_adv, BackwardEuler(); dt = 0.25, abstol = 1.0e-8)))
+        sys_qs_tf = PDESystem(
+            [0.0 ~ 0.1 * laplacian(bc(x, y)) - bc(x, y) + 1.0], Equation[],
+            [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [x, y], [bc(x, y)], Any[]; name = :qs_tf,
+        )
+        p_qs_tf = LFP.field_problem(discretize(sys_qs_tf, LatticeDiscretization(Grid((8, 8)); T = Float64)))
+        @test_throws ArgumentError solve(p_qs_tf, QuasiSteady(); abstol = 1.0e-8)
+        ig_opts = init(p_adv, BackwardEuler(; nlsolve = LatticeNewton()); dt = 0.25)
+        @test ig_opts.opts.abstol == 1 // 10^6 && ig_opts.opts.reltol == 1 // 10^3
+
+        # Non-coupled multi-row group (M3): one global group norm avoids spurious ndz/0 divergence when one field hits zero update
+        sys_m3 = PDESystem(
+            [
+                D(bce) ~ 0.1 * laplacian(bce) - bce,
+                D(boe) ~ 0.05 * laplacian(boe) - Advect(Upwind1())([0.8, 0.0], boe) - boe^2 + 0.5,
+            ],
+            [bc(0, x, y) ~ 0.0, bo(0, x, y) ~ 0.3 + 0.5 * x], bdom(0.2), [t, x, y], [bce, boe], Any[]; name = :m3_grp,
+        )
+        p_m3 = discretize(sys_m3, LatticeDiscretization(Grid((12, 12)); T = Float64))
+        s_m3 = solve(p_m3, BackwardEuler(; linsolve = BTIGHT, nlsolve = LatticeNewton(; κ = 1.0e-3, max_iter = 20)); dt = 0.1)
+        @test s_m3.retcode == ReturnCode.Success && s_m3.stats.newton_budget == 0 && maximum(abs, s_m3[bce, end]) == 0.0
+
+        # Precision-limit branch: Float32 run below machine precision converges on |θ - 1| <= 100 * sqrt(eps(T)), ndz <= 1
+        sys_pl = PDESystem(
+            [D(bce) ~ 0.1f0 * laplacian(bce) - 0.5f0 * bce^2 + 0.2f0],
+            [bc(0, x, y) ~ 0.5f0 + 0.2f0 * x], bdom(0.1), [t, x, y], [bce], Any[]; name = :nl_pl,
+        )
+        p_pl = discretize(sys_pl, LatticeDiscretization(Grid((8, 8)); T = Float32))
+        s_pl = solve(
+            p_pl, BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0f-7, maxiters = 64), nlsolve = LatticeNewton(; κ = 1.0f-8, max_iter = 10));
+            dt = 0.1, abstol = 1.0f-12, reltol = 1.0f-12,
+        )
+        @test s_pl.retcode == ReturnCode.Success && s_pl.stats.newton_budget == 0
+
+        # OrdinaryDiffEq NLNewton oracle on a 1D nonlinear reaction-diffusion problem (states and solve counts)
+        @variables u1(..)
+        u1e = u1(t, x)
+        for ic_zero in (false, true)
+            sys1d = PDESystem(
+                [D(u1e) ~ 0.05 * laplacian(u1e) - 0.5 * u1e^2 + 0.2],
+                [u1(0, x) ~ ic_zero ? 0.0 : 0.1 * sin(2π * x), u1(t, 0) ~ u1(t, 1)],
+                [t ∈ Interval(0.0, 0.5), x ∈ Interval(0.0, 1.0)], [t, x], [u1e], Any[]; name = ic_zero ? :ode1d0 : :ode1d,
+            )
+            p_ode = discretize(sys1d, LatticeDiscretization(Grid((16,)); T = Float64))
+            p_own = LFP.field_problem(p_ode)
+            for kv in (1.0e-1, 1.0e-2, 1.0e-5)
+                so = solve(
+                    p_ode,
+                    ImplicitEuler(; linsolve = LUFactorization(), nlsolve = OrdinaryDiffEqSDIRK.NLNewton(; κ = kv, always_new = true));
+                    dt = 0.05, adaptive = false, abstol = 1.0e-7, reltol = 1.0e-4,
+                )
+                sb = solve(
+                    p_own,
+                    BackwardEuler(; substeps = 1, linsolve = LUFactorization(), nlsolve = LatticeNewton(; κ = kv));
+                    dt = 0.05, abstol = 1.0e-7, reltol = 1.0e-4,
+                )
+                @test sb.retcode == ReturnCode.Success && so.retcode == ReturnCode.Success
+                @test vec(sb[u1e, end]) ≈ so.u[end] rtol = 1.0e-12 atol = 1.0e-12
+                @test sb.stats.solves == so.stats.nsolve
+            end
+        end
     end
     @testset "Host CSC factorizations (KLUFactorization, UMFPACKFactorization) match LatticePCG" begin
         using LinearSolve: KrylovJL_CG, LUFactorization, PureKLUFactorization

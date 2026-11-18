@@ -237,3 +237,24 @@ end
         end
     end
 end
+
+@testitem "PottsProblem forwards abstol and reltol when field_solver uses LatticeNewton" setup = [FieldsReportSetup] tags = [:potts, :fields_report] begin
+    @testset "PottsProblem abstol and reltol parity" begin
+        m = FrMerks(; name = :m)
+        auto_prob = PottsProblem(m, fr_op(), (0, 5); seed = 1, field_solver = BackwardEuler())
+        @test_throws ArgumentError solve(auto_prob, SequentialCPM(); abstol = 1.0e-8)
+        @test_throws ArgumentError solve(auto_prob, SequentialCPM(); reltol = 1.0e-6)
+        ln_alg = BackwardEuler(; nlsolve = LatticeNewton(; κ = 1.0e-5, max_iter = 12))
+        ln_prob = PottsProblem(m, fr_op(), (0, 5); seed = 1, field_solver = ln_alg)
+        ig = init(ln_prob, SequentialCPM(); abstol = 1.0e-9, reltol = 1.0e-7, save_everystep = false)
+        @test ig.opts.abstol == 1.0e-9 && ig.opts.reltol == 1.0e-7
+        rt = only(x for x in values(ig.ctx) if x isa CorePotts.FieldHandle)
+        @test rt.rt.cache.abstol == 1.0e-9 && rt.rt.cache.reltol == 1.0e-7
+        step!(ig)
+        ig.ps[:Do] = 40.0
+        step!(ig)
+        @test rt.rt.cache.abstol == 1.0e-9 && rt.rt.cache.reltol == 1.0e-7
+        sol = solve(remake(ln_prob; abstol = 1.0e-8, reltol = 1.0e-6), SequentialCPM(); save_everystep = false)
+        @test sol.retcode == SciMLBase.ReturnCode.Success && sol.stats.fields.newton_budget == 0
+    end
+end

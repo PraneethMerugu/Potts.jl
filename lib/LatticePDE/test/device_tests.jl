@@ -247,15 +247,15 @@ using .LP_device: fd, kron
         sw = psys([D(ce) ~ Di * laplacian(ce) - ki * max(ce - 0.3, 0) + 0.5], [c(0, x, y) ~ x * y], [Di, ki])
         rob = psys([D(ce) ~ Di * laplacian(ce) - ki * ce + 1], [c(0, x, y) ~ x * y, 1.5 * c(t, 1, y) + Differential(x)(c(t, 1, y)) ~ 0.2], [Di, ki])
         cases = [
-            ("BackwardEuler, field row", field, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 1))),
+            ("BackwardEuler, field row", field, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 1, check_div = false))),
             ("BackwardEuler, advection", adv, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 6))),
             ("BackwardEuler, advection tight κ", adv, BackwardEuler(; nlsolve = LatticeNewton(; κ = 1.0f-4, max_iter = 12))),
             ("BackwardEuler, switch", sw, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 6))),
-            ("BackwardEuler, Robin face", rob, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 1))),
-            ("CrankNicolson", field, CrankNicolson(; nlsolve = LatticeNewton(; max_iter = 1))),
-            ("BDF2", field, BDF2(; nlsolve = LatticeNewton(; max_iter = 1))),
-            ("QuasiSteady", field, QuasiSteady(; nlsolve = LatticeNewton(; max_iter = 1))),
-            ("BackwardEuler, steady start", field, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 1), init = :steady)),
+            ("BackwardEuler, Robin face", rob, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 1, check_div = false))),
+            ("CrankNicolson", field, CrankNicolson(; nlsolve = LatticeNewton(; max_iter = 1, check_div = false))),
+            ("BDF2", field, BDF2(; nlsolve = LatticeNewton(; max_iter = 1, check_div = false))),
+            ("QuasiSteady", field, QuasiSteady(; nlsolve = LatticeNewton(; max_iter = 1, check_div = false))),
+            ("BackwardEuler, steady start", field, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 1, check_div = false), init = :steady)),
         ]
     mk(sys, be) = discretize(sys, LatticeDiscretization(Grid((32, 32)); T = Float32, backend = be))
     for (name, sys, alg) in cases
@@ -445,7 +445,11 @@ using .LP_device: fd, kron
         nl = PDESystem(
             [D(cae) ~ 0.1 * laplacian(cae) - 2.0 * cae / (0.5 + cae) + cbe + x, D(cbe) ~ 0.1 * laplacian(cbe) - cbe + 0.5 * cae^2],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.3), [t, x, y], [cae, cbe], Any[]; name = :nldev)
-        for (lab, s, alg) in (("q1 QS", q1(0.1, 5.0; steady = true), QuasiSteady()), ("nonlinear QS", nl, QuasiSteady()))
+        for (lab, s, alg) in (
+                ("q1 QS", q1(0.1, 5.0; steady = true), QuasiSteady()),
+                ("nonlinear QS", nl, QuasiSteady()),
+                ("nonlinear QS κ", nl, QuasiSteady(; nlsolve = LatticeNewton(; κ = 1.0f-4, max_iter = 20))),
+            )
         for T in (Float32, Float64)
             mk(bk) = discretize(s, LatticeDiscretization(Grid((24, 20)); T, backend = bk))
                 sd, sd2 = solve(mk(PDEV), alg; dt = 0.1, saveat = 0.1), solve(mk(PDEV), alg; dt = 0.1, saveat = 0.1)
@@ -577,7 +581,7 @@ using .LP_device: fd, kron
             [D(ce) ~ Dr * laplacian(ce) - kr * ce], [c(0, x, y) ~ x * y, (-1 - 4t) * c(t, 0, y) - Differential(x)(c(t, 0, y)) ~ 0.0],
         [Dr, kr])
         cases = [
-            ("per site, BackwardEuler", site, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 1)), 0.1),
+            ("per site, BackwardEuler", site, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 1, check_div = false)), 0.1),
             ("per site, ExplicitEuler", site, ExplicitEuler(), 0.05),
             ("mixed sign, BackwardEuler", mixed, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 4)), 0.1),
             ("time, BackwardEuler", timed, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 10)), 0.1),
