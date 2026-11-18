@@ -387,7 +387,7 @@ function solver_program(op::CellOperator{N}, pcg::Bool; lane = F32, state = lane
         _refuse(
         op, "`deflate = true` needs `LatticePCG` on a group with no mask, no Dirichlet or ",
             "Robin face and a constant shift (the constant mode is then an eigenvector); this group ",
-            pcg ? "is anchored or has a field-valued shift" : "uses stationary `LatticeMultigrid`",
+        pcg ? "is anchored or has a field-valued shift" : "uses stationary `LatticeMultigrid`",
             ": use `deflate = :auto`")
     L, lb = depth(op)
     cs = coef_slots(op)

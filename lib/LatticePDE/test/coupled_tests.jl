@@ -38,7 +38,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "the q1 loops in one QuasiSteady group equal the dense steady solve" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
-@testset "the q1 loops in one QuasiSteady group equal the dense steady solve" begin
+    @testset "the q1 loops in one QuasiSteady group equal the dense steady solve" begin
     # every system is well posed (max Re λ < 0, reviewer probe s3); the block iteration's ratio
     # k/√(δμ) is 5, 15.8, 0.5 and 1.6: the coupled solve does not depend on it
     for (δ, k) in ((1.0, 5.0), (0.1, 5.0), (1.0, 0.5), (0.1, 0.5))
@@ -82,7 +82,7 @@ end
 end
 
 @testitem "a cross Δ in a steady row and `0 ~ q − c²`: no warning on a default run, equal to the oracle" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
-@testset "a cross Δ in a steady row and `0 ~ q − c²`: no warning on a default run, equal to the oracle" begin
+    @testset "a cross Δ in a steady row and `0 ~ q − c²`: no warning on a default run, equal to the oracle" begin
     # a cross Δ in a cycle and one way; both linear: the dense steady solve of their rate form
         for (eqs, rates) in (
                 (
@@ -259,7 +259,7 @@ end
 end
 
 @testitem "a site-varying coupled system with a growing mode is refused (estimated through the operator)" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
-@testset "a site-varying coupled system with a growing mode is refused (estimated through the operator)" begin
+    @testset "a site-varying coupled system with a growing mode is refused (estimated through the operator)" begin
     # the reviewer's case (~/lpwork/f3rev17/p1.jl): `(3 + 0.1x) b`, dense max Re λ = +2.03; the
     # constant-coefficient check cannot see it (a coefficient that varies by site). Base (51d1f386):
     # `Success` at the unstable steady state, no warning
@@ -354,7 +354,7 @@ end
 end
 
 @testitem "no coupled code compiles for one field; every Krylov.jl hook is ours" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
-@testset "no coupled code compiles for one field; every Krylov.jl hook is ours" begin
+    @testset "no coupled code compiles for one field; every Krylov.jl hook is ours" begin
     # M1: a single-field QuasiSteady `init` in a fresh process compiles no `coupled_modes` and no
     # `_bind_coupled` (both behind barriers). Base (51d1f386): coupled_modes compiled
         # runic: off

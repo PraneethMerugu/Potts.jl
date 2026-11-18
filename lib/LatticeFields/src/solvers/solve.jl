@@ -38,7 +38,10 @@ _count(x) = x isa Integer && !(x isa Bool) && x >= 1
 # a `cycle` keyword: a `VCycle`, or the pair `(ν₁, ν₂)`
 _cycle(c::VCycle) = c
 _cycle(c::Tuple{Any, Any}) = VCycle(c...)
-_cycle(c) = throw(ArgumentError(string("`LatticeMultigrid(; cycle = ", repr(c), ")`: `cycle` is the V-cycle's smoothing ",
+_cycle(c) = throw(
+    ArgumentError(
+        string(
+            "`LatticeMultigrid(; cycle = ", repr(c), ")`: `cycle` is the V-cycle's smoothing ",
             "steps, `(ν₁, ν₂)` or `VCycle(ν₁, ν₂)` (integers ≥ 1); for example `cycle = (2, 2)`"
         )
     )
@@ -177,7 +180,8 @@ function resolve_inner(op::CellOperator, inner)
             op, "`LatticePCG` needs a symmetric preconditioner cycle `(ν, ν)`; got `(",
             c.cycle.nu1, ", ", c.cycle.nu2, ")`: use `LatticePCG(; precs = LatticeMultigrid(; cycle = (",
                 max(c.cycle.nu1, c.cycle.nu2), ", ", max(c.cycle.nu1, c.cycle.nu2),
-                ")))`, or the stationary `LatticeMultigrid(; cycle = (", c.cycle.nu1, ", ", c.cycle.nu2, "))`")
+            ")))`, or the stationary `LatticeMultigrid(; cycle = (", c.cycle.nu1, ", ", c.cycle.nu2, "))`"
+        )
         (c.cycles === nothing || c.cycles == 1) ||
             _refuse(
             op, "`LatticePCG` applies one preconditioner cycle per iteration; got `cycles = ",
@@ -775,7 +779,8 @@ function fin!(pl::PlanBuilder, op)
         budget = Int32(budget), warn = T(warn),
         nsite = T(nsites(sv.prog, 0)), shift = T(sv.op.shift isa Real ? sv.op.shift : 0),
         deflate = sv.deflate, stall = !(alg isa LatticeMultigrid && alg.cycles !== nothing),
-        diverge = alg isa LatticeMultigrid)
+        diverge = alg isa LatticeMultigrid,
+    )
     push!(pl.segments[end],
         Launch(sv.exec, T, finish!, 1, S, (), G, "finish.$op"; phases = REDUCE_PHASES,
             ldslen = NCOMBO * WG, tree = true))

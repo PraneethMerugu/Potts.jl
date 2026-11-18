@@ -734,7 +734,8 @@ function bind_cache(
             scal = nothing
             xs = (lin.u, lin.u)
         end
-        row = ImplicitRow(key, res, (u[1], u[2]), resarr, sv, xs, xid, work,
+        row = ImplicitRow(
+            key, res, (u[1], u[2]), resarr, sv, xs, xid, work,
             scal, smask, v, sh, mask, mval, mvf, lo, f, jj, mm, dd, mask, dm, r, numeric,
             part, hist, q, prev, lin
         )

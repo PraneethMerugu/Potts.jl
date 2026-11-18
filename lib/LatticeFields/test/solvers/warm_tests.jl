@@ -74,7 +74,7 @@ using .LF_solvers_warm: fd
     append!(cases, [(n, c) for (n, c) in extra])
     for (name, case) in cases, T in (Float32, Float64)
         n = prod(case[1].dims)
-        inners = n <= 300 * 192 ? (:auto, LatticeMultigrid()) : (:auto,)
+            inners = n <= 300 * 192 ? (:auto, LatticeMultigrid()) : (:auto,)
             for linsolve in inners
             inp = (case[1], Tuple(k => (k == case[1].mask ? v : T.(v)) for (k, v) in case[2]))
                 ref = solved_on(HostExec(), inp, T; linsolve)

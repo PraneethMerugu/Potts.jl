@@ -350,11 +350,12 @@ end
                 (() -> LatticePCG(; reltol = Inf), "`LatticePCG(; reltol = Inf)`: `reltol`"),
                 (() -> LatticeMultigrid(; cycle = VCycle(0, 2)), "`VCycle(0, 2)`: a V-cycle (the `cycle` of a `LatticeMultigrid`) needs ν₁, ν₂ ≥ 1"),
                 (() -> VCycle(2, -1), "`VCycle(2, -1)`: a V-cycle"),
-        (() -> LatticeMultigrid(; cycles = 0), "`LatticeMultigrid(; cycles = 0)`: `cycles` is the exact number of cycles, an integer ≥ 1"),
+                (() -> LatticeMultigrid(; cycles = 0), "`LatticeMultigrid(; cycles = 0)`: `cycles` is the exact number of cycles, an integer ≥ 1"),
                 (() -> LatticeMultigrid(; maxiters = 0), "`LatticeMultigrid(; maxiters = 0)`: `maxiters` is the most cycles per solve, an integer ≥ 1"),
                 (() -> LatticeMultigrid(; reltol = -1.0e-6), "`LatticeMultigrid(; reltol = -1.0e-6)`: `reltol`"),
                 (() -> LatticeMultigrid(; reltol = NaN), "`LatticeMultigrid(; reltol = NaN)`: `reltol`"),
-        (() -> LatticeMultigrid(; warn_tol = 0.0), "`LatticeMultigrid(; warn_tol = 0.0)`: `warn_tol`"))
+                (() -> LatticeMultigrid(; warn_tol = 0.0), "`LatticeMultigrid(; warn_tol = 0.0)`: `warn_tol`"),
+            )
         m = e(f)
         @test startswith(m, want) || (println("MSG: ", m); false)
     end
@@ -397,7 +398,7 @@ end
                 (() -> LatticeMultigrid(; cycle = (2, 0)), "`VCycle(2, 0)`: a V-cycle"),
                 (() -> LatticeBlockSolve(:mg), "`LatticeBlockSolve(:mg)`: the block preconditioner solves each field with a `LatticePCG(…)` or a `LatticeMultigrid(…)`"),
                 (() -> LatticePCG(; maxiters = true), "`LatticePCG(; maxiters = true)`: `maxiters` is the most CG iterations per solve, an integer ≥ 1"),
-        (() -> LatticeMultigrid(; cycles = true), "`LatticeMultigrid(; cycles = true)`: `cycles`"),
+                (() -> LatticeMultigrid(; cycles = true), "`LatticeMultigrid(; cycles = true)`: `cycles`"),
                 (() -> LatticeMultigrid(; maxiters = false), "`LatticeMultigrid(; maxiters = false)`: `maxiters`"),
             )
         @test startswith(e(f), want) || (println("MSG: ", e(f)); false)

@@ -98,7 +98,8 @@ function _mg_engine(m::LatticeMetadata, lp::LatticeParameters, inner)
     # (a system with no time: one window of a unit span, which `QuasiSteady` takes)
     span = fp.group.spec.timefree ? (0.0, 1.0) : fp.tspan
     g = _field_problem(fp.program, fp.state, Array(fp.u0), span, Vector{Float64}(map(primal, lp.values)), lp.tables,
-        lp.inputs, fp.backend, fp.index, fp.faces, fp.stability, fp.kind, fp.initkeys, fp.options, fp.group)
+        lp.inputs, fp.backend, fp.index, fp.faces, fp.stability, fp.kind, fp.initkeys, fp.options, fp.group
+    )
     st = fp.group.spec.steady
     h = 1.0
     be = BackwardEuler(; substeps = 1, newton = 1, linsolve = inner)

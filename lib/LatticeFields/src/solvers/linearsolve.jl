@@ -467,8 +467,8 @@ cache is not fresh.
 """
 function field_cache(exec, op::CellOperator, linsolve; T = Float32, solver_type = :auto, inputs = ())
     if linsolve === :auto || linsolve isa LatticeMultigrid ||
-       (linsolve isa LatticePCG && linsolve.precs isa LatticeMultigrid) ||
-       !(linsolve isa LinearSolve.SciMLLinearSolveAlgorithm)
+            (linsolve isa LatticePCG && linsolve.precs isa LatticeMultigrid) ||
+            !(linsolve isa LinearSolve.SciMLLinearSolveAlgorithm)
         resolve_inner(op, linsolve)
     end
     alg = owned(linsolve === :auto ? LatticePCG() : linsolve, op)
@@ -594,7 +594,7 @@ function _budget!(sv::FieldSolver, alg::LatticeMultigrid, cache)
     r = something(alg.reltol, Float64(cache.reltol))
     w = something(alg.warn_tol, alg.cycles === nothing ? r : 1.0e-3)
     if (a.cycles === nothing && (r != a.reltol || w != a.warn_tol)) ||
-       (a.cycles !== nothing && w != a.warn_tol) || m != a.maxiters
+            (a.cycles !== nothing && w != a.warn_tol) || m != a.maxiters
         sv.alg = LatticeMultigrid(a.cycle, a.cycles, r, m, w, a.engines, a.lock)
         empty!(sv.plans)
     end
