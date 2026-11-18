@@ -328,11 +328,13 @@ end
             err isa ArgumentError ? err.msg : sprint(showerror, err)
         end
         @test repr(LatticeNewton()) == "LatticeNewton()"
+        @test repr(LatticeNewton(; κ = 1 // 100, max_iter = 10, check_div = true)) == "LatticeNewton()"
+        @test repr(LatticeNewton(; κ = 1.0e-4)) == "LatticeNewton(; κ = 0.0001)"
         @test repr(LatticeNewton(; max_iter = 4)) == "LatticeNewton(; max_iter = 4)"
         @test repr(LatticeNewton(; check_div = false)) == "LatticeNewton(; check_div = false)"
+        @test LatticeNewton().κ == 1 // 100 && LatticeNewton().max_iter == 10 && LatticeNewton().check_div
         # Unsupported NLNewton keywords throw ArgumentError with explanation
         for kw in (
-                (; κ = 0.01),
                 (; fast_convergence_cutoff = 0.2),
                 (; new_W_dt_cutoff = 0.5),
                 (; always_new = true),
@@ -344,8 +346,14 @@ end
             m = e(() -> LatticeNewton(; kw...))
             @test occursin(string(first(keys(kw))), m)
         end
-        @test_throws ArgumentError LatticeNewton(; max_iter = 0)
-        @test occursin("max_iter", e(() -> LatticeNewton(; max_iter = 0)))
+        for bad_k in (0, -0.1, NaN, Inf, true)
+            @test_throws ArgumentError LatticeNewton(; κ = bad_k)
+            @test occursin("κ", e(() -> LatticeNewton(; κ = bad_k)))
+        end
+        for bad_it in (0, nothing)
+            @test_throws ArgumentError LatticeNewton(; max_iter = bad_it)
+            @test occursin("max_iter", e(() -> LatticeNewton(; max_iter = bad_it)))
+        end
         @test_throws ArgumentError LatticeNewton(; check_div = 1)
         @test occursin("check_div", e(() -> LatticeNewton(; check_div = 1)))
 
@@ -356,10 +364,10 @@ end
         )
         p_adv = discretize(sys_adv, LatticeDiscretization(Grid((16, 16)); T = Float64))
         s_conv = solve(p_adv, BackwardEuler(; linsolve = BTIGHT, nlsolve = LatticeNewton(; max_iter = 30)); dt = 0.25)
-        s_auto = solve(p_adv, BackwardEuler(; linsolve = BTIGHT); dt = 0.25)
+        s_def = solve(p_adv, BackwardEuler(; linsolve = BTIGHT, nlsolve = LatticeNewton()); dt = 0.25)
         nsteps_conv = s_conv.stats.nf * only(s_conv.stats.counts)
         @test s_conv.retcode == ReturnCode.Success && s_conv.stats.newton_budget == 0
-        @test s_conv.stats.solves < 30 * nsteps_conv && s_conv.stats.solves == s_auto.stats.solves
+        @test s_conv.stats.solves < 30 * nsteps_conv && s_conv.stats.solves == s_def.stats.solves
         s_mid = solve(p_adv, BackwardEuler(; linsolve = BTIGHT, nlsolve = LatticeNewton(; max_iter = 10)); dt = 0.25)
         @test s_mid.retcode == ReturnCode.Success && s_mid.stats.solves < 10 * nsteps_conv
         s_fail = @test_logs (:warn, r"reached its budget.*ConvergenceFailure") solve(
@@ -369,19 +377,108 @@ end
         @test s_fail.retcode == ReturnCode.ConvergenceFailure && s_fail.stats.newton_budget > 0
         @test s_fail.stats.solves <= 2 * nsteps_fail
 
-        # check_div = false disables divergence growth abort (causes bit 2 not set)
+        # Smaller κ yields smaller error against exact unsplit Backward Euler step and monotone non-decreasing solves
+        u_ref = direct_be(sys_adv, (16, 16), 0.25, 0.25, 24)
+        kappas = (1.0e-1, 1.0e-2, 1.0e-4, 1.0e-6)
+        sols_k = [
+            solve(
+                p_adv,
+                BackwardEuler(; substeps = 24, linsolve = BTIGHT, nlsolve = LatticeNewton(; κ = kv, max_iter = 30));
+                dt = 0.25,
+            ) for kv in kappas
+        ]
+        errs_k = [maximum(abs, vec(s[bce, end]) .- u_ref) for s in sols_k]
+        solves_k = [s.stats.solves for s in sols_k]
+        @test all(s -> s.retcode == ReturnCode.Success && s.stats.newton_budget == 0, sols_k)
+        @test all(i -> errs_k[i + 1] <= errs_k[i] + 1.0e-14, 1:(length(kappas) - 1))
+        @test errs_k[end] < errs_k[1] / 100
+        @test all(i -> solves_k[i + 1] >= solves_k[i], 1:(length(kappas) - 1))
+        @test solves_k[end] > solves_k[1]
+
+        # abstol / reltol solve keywords control the scaled norm; invalid tolerances throw ArgumentError
+        s_loose_tol = solve(
+            p_adv, BackwardEuler(; substeps = 24, linsolve = BTIGHT, nlsolve = LatticeNewton(; max_iter = 30));
+            dt = 0.25, abstol = 1.0e-2, reltol = 1.0e-1,
+        )
+        s_tight_tol = solve(
+            p_adv, BackwardEuler(; substeps = 24, linsolve = BTIGHT, nlsolve = LatticeNewton(; max_iter = 30));
+            dt = 0.25, abstol = 1.0e-10, reltol = 1.0e-8,
+        )
+        @test s_tight_tol.retcode == ReturnCode.Success && s_loose_tol.retcode == ReturnCode.Success
+        @test s_tight_tol.stats.solves > s_loose_tol.stats.solves
+        @test maximum(abs, vec(s_tight_tol[bce, end]) .- u_ref) < maximum(abs, vec(s_loose_tol[bce, end]) .- u_ref) / 100
+        @test_throws ArgumentError solve(p_adv, BackwardEuler(; nlsolve = LatticeNewton()); dt = 0.25, abstol = 0.0, reltol = 0.0)
+        @test_throws ArgumentError solve(p_adv, BackwardEuler(; nlsolve = LatticeNewton()); dt = 0.25, reltol = -1.0e-3)
+
+        # Coupled QuasiSteady uses one global RMS norm over all coupled unknowns; smaller κ lowers error vs exact solution
+        sys_cpl = PDESystem(
+            [
+                D(bce) ~ 0.1 * laplacian(bce) - 2.0 * bce + 0.5 * boe + x,
+                D(boe) ~ 0.1 * laplacian(boe) - 2.0 * boe + 0.5 * bce - 0.5 * bce^2 + y,
+            ],
+            [bc(0, x, y) ~ 0.2 + x, bo(0, x, y) ~ 0.1 + y], bdom(0.1), [t, x, y], [bce, boe], Any[]; name = :nl_cpl,
+        )
+        p_cpl = discretize(sys_cpl, LatticeDiscretization(Grid((10, 10)); T = Float64))
+        s_cpl_ref = solve(
+            p_cpl,
+            QuasiSteady(; linsolve = LatticeGMRES(; reltol = 1.0e-13, maxiters = 200), nlsolve = LatticeNewton(; κ = 1.0e-4, max_iter = 30));
+            dt = 0.1, abstol = 1.0e-10, reltol = 1.0e-10,
+        )
+        @test s_cpl_ref.retcode == ReturnCode.Success
+        s_cpl_loose = solve(
+            p_cpl,
+            QuasiSteady(; linsolve = LatticeGMRES(; reltol = 1.0e-13, maxiters = 200), nlsolve = LatticeNewton(; κ = 1.0e-1, max_iter = 30));
+            dt = 0.1,
+        )
+        s_cpl_tight = solve(
+            p_cpl,
+            QuasiSteady(; linsolve = LatticeGMRES(; reltol = 1.0e-13, maxiters = 200), nlsolve = LatticeNewton(; κ = 1.0e-6, max_iter = 30));
+            dt = 0.1, abstol = 1.0e-8, reltol = 1.0e-6,
+        )
+        @test s_cpl_tight.retcode == ReturnCode.Success && s_cpl_loose.retcode == ReturnCode.Success
+        @test s_cpl_tight.stats.solves >= s_cpl_loose.stats.solves
+        @test maximum(abs, [vec(s_cpl_tight[bce, end]); vec(s_cpl_tight[boe, end])] .- [vec(s_cpl_ref[bce, end]); vec(s_cpl_ref[boe, end])]) <
+            maximum(abs, [vec(s_cpl_loose[bce, end]); vec(s_cpl_loose[boe, end])] .- [vec(s_cpl_ref[bce, end]); vec(s_cpl_ref[boe, end])])
+
+        # Generic number types: Float32 and Float16 storage with LatticeNewton(; κ)
+        p32_adv = discretize(sys_adv, LatticeDiscretization(Grid((16, 16)); T = Float32))
+        s32_adv = solve(
+            p32_adv,
+            BackwardEuler(; substeps = 24, linsolve = LatticePCG(; reltol = 1.0f-6, maxiters = 64), nlsolve = LatticeNewton(; κ = 1.0f-2, max_iter = 20));
+            dt = 0.25,
+        )
+        @test s32_adv.retcode == ReturnCode.Success && eltype(s32_adv[bce, end]) == Float32
+        @variables bc16(..) [lattice_storage = Float16]
+        sys16 = PDESystem(
+            [D(bc16(t, x, y)) ~ 0.05 * laplacian(bc16(t, x, y)) - bc16(t, x, y)^2 + 1],
+            [bc16(0, x, y) ~ 0.5 + 0.2 * x], bdom(0.1), [t, x, y], [bc16(t, x, y)], Any[]; name = :nl_f16,
+        )
+        p16 = discretize(sys16, LatticeDiscretization(Grid((8, 8)); T = Float32))
+        s16 = solve(p16, BackwardEuler(; nlsolve = LatticeNewton(; κ = 1 // 100, max_iter = 10)); dt = 0.1)
+        @test SciMLBase.successful_retcode(s16.retcode) && eltype(s16[bc16(t, x, y), end]) == Float16
+
+        # check_div stops a diverging solve early with ConvergenceFailure; check_div = false disables divergence growth abort
         sys_div = PDESystem(
             [D(bce) ~ 0.01 * laplacian(bce) - Advect(Upwind1())([50 * (1 + x) + t, 0.0], bce)],
             [bc(0, x, y) ~ x * y], bdom(1.0), [t, x, y], [bce], Any[]; name = :nl_div,
         )
         p_div = discretize(sys_div, LatticeDiscretization(Grid((16, 16)); T = Float64))
-        ig_true = init(p_div, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 4, check_div = true)); dt = 1.0)
-        solve!(ig_true)
+        ig_true = init(
+            p_div, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 10, check_div = true));
+            dt = 1.0, abstol = 1.0, reltol = 1.0e-8,
+        )
+        @test_logs (:warn, r"diverged") solve!(ig_true)
         @test ig_true.retcode == ReturnCode.ConvergenceFailure
         @test only(ig_true.runtimes).totals.cause & 0x02 != 0
-        ig_false = init(p_div, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 3, check_div = false)); dt = 1.0)
+        @test ig_true.stats.solves < 10
+        ig_false = init(
+            p_div, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 3, check_div = false));
+            dt = 1.0, abstol = 1.0, reltol = 1.0e-8,
+        )
         solve!(ig_false)
+        @test ig_false.retcode == ReturnCode.ConvergenceFailure
         @test only(ig_false.runtimes).totals.cause & 0x02 == 0
+        @test ig_false.stats.solves == 3
     end
     @testset "Host CSC factorizations (KLUFactorization, UMFPACKFactorization) match LatticePCG" begin
         using LinearSolve: KrylovJL_CG, LUFactorization, PureKLUFactorization

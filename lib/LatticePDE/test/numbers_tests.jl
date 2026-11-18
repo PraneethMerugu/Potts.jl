@@ -517,7 +517,10 @@ end
         # by default one unchecked Newton step does not solve the stage, which is warned
         nl = town(tsys([D(ce) ~ Dt * laplacian(ce) - kt * ce^2 + gt], [c(0, x, y) ~ 0.2 + x]), (10, 10))
         for s in (kt, Dt)
-            @test tok(tad(nl, BackwardEuler(; linsolve = TTIGHT, nlsolve = LatticeNewton(; max_iter = 8)), s; dt = 0.1)...)
+            let (ad_v, fd_v) = tad(nl, BackwardEuler(; linsolve = TTIGHT, nlsolve = LatticeNewton(; max_iter = 8)), s; dt = 0.1)
+                @test isapprox(ad_v, fd_v; rtol = 1.0e-5) && ad_v != 0
+            end
+            @test tok(tad(nl, BackwardEuler(; linsolve = TTIGHT, nlsolve = LatticeNewton(; κ = 1.0e-5, max_iter = 12)), s; dt = 0.1)...)
         end
         i = pidx(nl, kt)
         @test_logs (:warn, r"derivative parts are those of each stage's solution") match_mode = :any solve(

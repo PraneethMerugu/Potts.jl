@@ -36,10 +36,11 @@ end
         for f in ctors
             kws = kwargs(f)
             @test !isempty(kws) || f === P.ExplicitMap
-            @test all(k -> isascii(String(k)), kws) || (println(f, ": ", kws); false)
+            @test all(k -> isascii(String(k)) || (f === P.LatticeNewton && k === :κ), kws) || (println(f, ": ", kws); false)
         end
         # the solver keywords have their SciML names; the window `dt` is a keyword of `solve`
         @test :linsolve in kwargs(P.BackwardEuler)
+        @test :κ in kwargs(P.LatticeNewton) && :max_iter in kwargs(P.LatticeNewton) && :check_div in kwargs(P.LatticeNewton)
         @test :maxiters in kwargs(S.LatticePCG) && :reltol in kwargs(S.LatticePCG)
         @test :gmres_restart in kwargs(S.LatticeGMRES)
         @test :dt ∉ kwargs(P.ExplicitEuler)

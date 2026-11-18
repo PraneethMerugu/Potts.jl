@@ -178,4 +178,12 @@ end
         @test loud.u == quiet.u
         @test_logs step!(init(prob, alg; dt = 0.05, maxiters = 1, verbose = false))
     end
+    @testset "abstol and reltol solve keywords" begin
+        @test_throws ArgumentError init(prob, alg; dt = 0.05, abstol = 1.0e-6)
+        @test_throws ArgumentError init(prob, alg; dt = 0.05, reltol = 1.0e-3)
+        @test LP._resolve_tols(nothing, nothing) == (1 // 10^6, 1 // 10^3)
+        @test LP._resolve_tols(1.0e-8, 1.0e-5) == (1.0e-8, 1.0e-5)
+        @test_throws ArgumentError LP._resolve_tols(-1.0, 1.0e-3)
+        @test_throws ArgumentError LP._resolve_tols(0.0, 0.0)
+    end
 end

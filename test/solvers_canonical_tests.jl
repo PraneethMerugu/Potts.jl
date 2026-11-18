@@ -207,6 +207,7 @@ end
                 ExplicitEuler(; substeps = 4, lower_bound = 0.0),
                 ExplicitMap(),
                 LatticeNewton(),
+                LatticeNewton(; κ = 1.0e-4),
                 LatticeNewton(; max_iter = 3),
                 LatticeNewton(; check_div = false),
                 BackwardEuler(),

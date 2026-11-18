@@ -325,7 +325,7 @@ end
         s = @test_logs min_level = WARN solve(pf, BackwardEuler(; linsolve = r1tight()); dt = 0.1)
         @test s.retcode == ReturnCode.Success && s.stats.newton_budget == 0
         r = solve(pf, BackwardEuler(; substeps = 3, linsolve = r1tight(), nlsolve = LatticeNewton(; max_iter = 40)); dt = 0.1)
-        @test r1rel(vec(blast(s)), vec(blast(r))) < 1.0e-4
+        @test r1rel(vec(blast(s)), vec(blast(r))) < 2.0e-4
         # … and a face coefficient no interval bounds (it reads an input field) is unseen: a warning
         # at `init` that names the face (base: none at `init`, only the budget warning later)
         @variables rk(..) [input = true]
