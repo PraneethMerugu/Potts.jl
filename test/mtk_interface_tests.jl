@@ -48,6 +48,20 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
+"""A name that is not a type, so not a metadata key."""
+const MTKInterfaceNotAType = :key
+
+"""A model whose `@metadata` key is not a type."""
+@potts_model BadMetadataKey begin
+    @metadata begin
+        MTKInterfaceNotAType = 1
+    end
+    @kinds medium host
+    @lattice Lattice((8, 8); neighborhood = Moore(1))
+    @energy cells(host) => (volume - 9.0)^2
+    @sweep Metropolis(; temperature = 1.0)
+end
+
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
@@ -181,6 +195,8 @@ end
     @test M.description(m) == "One cell kind held near a target volume."
     @test M.getmetadata(m, MTKInterfaceKey, nothing) === :described
     @test M.description(FieldNamedQuantities(; name = :q)) == ""
+    @test M.description(mtkcompile(m)) == M.description(m)
+    @test_throws ArgumentError BadMetadataKey(; name = :b)
     # the model still runs
     σ = zeros(Int32, 8, 8)
     σ[3:5, 3:5] .= 1
@@ -210,5 +226,20 @@ end
     end
     @test length(sprint(show, MIME"text/plain"(), prob)) < 400
     @test length(sprint(show, MIME"text/plain"(), integ)) < 400
-    @test occursin("1 cell", sprint(show, prob.u0))
+    @test occursin("cell slot", sprint(show, prob.u0))
+    # a seed past `typemax(Int)` shows as it is
+    big = PottsProblem(m, [ownership => σ, kind => [:host]], (0, 2); seed = typemax(UInt64))
+    @test occursin(string(typemax(UInt64)), sprint(show, MIME"text/plain"(), big))
+end
+
+@testitem "JumpProblem of a Potts model is refused for MTK's argument shapes" setup = [MTKInterfaceSetup] tags = [:potts, :mtk_interface] begin
+    J = Potts.JumpProcesses.JumpProblem
+    m = DescribedModel(; name = :m)
+    σ = zeros(Int32, 8, 8)
+    for sys in (m, mtkcompile(m))
+        for args in (([ownership => σ], (0, 2)), ([ownership => σ], nothing), ([ownership => σ], [0, 2]),
+                     (Dict(ownership => σ), (0, 2)), ([ownership => σ],), (ownership => σ,), (nothing,), (1.0,))
+            @test_throws ArgumentError J(sys, args...)
+        end
+    end
 end

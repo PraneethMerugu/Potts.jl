@@ -131,6 +131,8 @@ Base.convert(::Type{ModelingToolkitBase.System}, c::CompiledPottsSystem) = throw
 )
 
 Base.show(io::IO, c::CompiledPottsSystem) = (print(io, "Compiled"); show(io, getfield(c, :authored)))
+# the authored model's `@description` (MTK's fallback would read the compiled container's)
+_MTKB.description(c::CompiledPottsSystem) = _MTKB.description(getfield(c, :authored))
 function Base.show(io::IO, ::MIME"text/plain", c::CompiledPottsSystem)
     print(io, "CompiledPottsSystem of ")
     return show(io, MIME"text/plain"(), getfield(c, :authored))

@@ -224,7 +224,7 @@ end
                 any(==(PottsSystem), Base.unwrap_unionall(m.sig).parameters)
         ]
         @test length(scanned) == 28 && all(m -> m in owned || m.name === :extend, scanned)
-        @test length(WLiteMatrix.refusal_methods()) == 50
+        @test length(WLiteMatrix.refusal_methods()) == 58
         @test isempty(filter(((a, b),) -> a.module === Potts || b.module === Potts, Test.detect_ambiguities(Potts; recursive = true)))
     end
 end

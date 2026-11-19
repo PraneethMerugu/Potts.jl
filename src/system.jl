@@ -1287,13 +1287,20 @@ end
 # Two disambiguations. SciMLBase's own `ODEProblem{iip, FunctionWrapperSpecialize}(f, u0,
 # tspan[, p])` meets the `{iip, spec}` refusal. JumpProcesses' `JumpProblem(prob, jumps…)` and
 # `JumpProblem(prob, aggregator, jumps…)` take any `prob`, so the plain `JumpProblem` refusals
-# are typed where a jump or an aggregator never is: MTK's `JumpProblem(sys, op, tspan)` with
-# `tspan` a tuple, and `JumpProblem(sys, op)` with `op` a collection
+# are typed where a jump set, a jump or an aggregator never is: MTK's `JumpProblem(sys, op,
+# tspan)` with `tspan` a tuple, `nothing` or a vector, and `JumpProblem(sys, op)` with `op` an
+# operating point (a collection, a pair, a number or `nothing`). One method per type, for both
+# system types (compose.jl).
 SciMLBase.ODEProblem{iip, SciMLBase.FunctionWrapperSpecialize}(::PottsSystem, args...; kw...) where {iip} =
     throw(ArgumentError(_problem_msg("ODEProblem")))
-JumpProcesses.JumpProblem(::PottsSystem, op, tspan::Tuple, args...; kw...) = throw(ArgumentError(_problem_msg("JumpProblem")))
-JumpProcesses.JumpProblem(::PottsSystem, op::Union{AbstractArray, AbstractDict, NamedTuple}; kw...) =
-    throw(ArgumentError(_problem_msg("JumpProblem")))
+const _JUMP_TSPANS = (:Tuple, :Nothing, :AbstractVector)
+const _JUMP_OPS = (:AbstractArray, :AbstractDict, :NamedTuple, :Tuple, :Pair, :Number, :Nothing)
+for T in _JUMP_TSPANS
+    @eval JumpProcesses.JumpProblem(::PottsSystem, op, tspan::$T, args...; kw...) = throw(ArgumentError(_problem_msg("JumpProblem")))
+end
+for T in _JUMP_OPS
+    @eval JumpProcesses.JumpProblem(::PottsSystem, op::$T; kw...) = throw(ArgumentError(_problem_msg("JumpProblem")))
+end
 # MTK's `extend` with a Potts model on one side and another system on the other (D-039): a
 # clear refusal naming the ways that work, not MTK's rebuild of the container.
 _extend_msg(a, b) = "extend($(nameof(a)), $(nameof(b))): a Potts model extends only a Potts model " *
@@ -1342,17 +1349,21 @@ function _foreign(sys::PottsSystem, k)
     return !haskey(_declared_quantities(sys), n)
 end
 
-# A coupled PDESystem's own variable, `c` or `c(t, x, y)` as its author wrote it, names the
-# model's field `c`: the field variable, or `nothing` for any other key
+# A coupled PDESystem's own variable, `c` or `c(t, x, y)` as its author wrote it (one of the
+# PDESystem's dependent variables, or its function), names the model's field `c`: the field
+# variable, or `nothing` for any other key (a foreign variable that only shares the name too)
 function _pde_variable_field(sys::PottsSystem, u, n)
     n isa Symbol || return nothing
     f = _field_named(sys, n)
     f === nothing && return nothing
     v = _unwrap(f)
     isequal(u, v) && return nothing
-    (issym(u) || all(a -> issym(_unwrap(a)), arguments(u))) || return nothing
+    pde = _stored_fields(sys)
+    pde === nothing && return nothing
+    any(d -> _is_variable_of(u, _unwrap(d)), _MTKB.get_dvs(pde)) || return nothing
     return v
 end
+_is_variable_of(u, d) = isequal(u, d) || (iscall(d) && isequal(u, operation(d)))
 
 """The key `k` with this model's namespace (`pr₊x`) removed: the declared quantity (or its
 name, for a `Symbol` key); in an expression, every such symbol. Other keys are returned as
