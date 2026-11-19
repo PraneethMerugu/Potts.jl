@@ -267,6 +267,7 @@ end
         # `persistent_tasks = false`: Makie/CairoMakie may hold background font/render tasks.
         qa_aqua(MakiePotts; persistent_tasks = false)
         qa_api_docs(MakiePotts; docs_dir = joinpath(@__DIR__, "..", "..", "..", "docs"))
+        qa_error_rules(pkgdir(MakiePotts))
 end
 end
 

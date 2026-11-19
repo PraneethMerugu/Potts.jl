@@ -37,7 +37,7 @@ export EncodingKind, CategoricalEncoding, ContinuousEncoding
 export encoding_kind, required_channels, encoding_label, encode_frame
 export EncodedPottsFrame, legend_entries
 # `LegendEntry` clashes with Makie's: public only
-public LegendEntry
+public LegendEntry, RecordingError
 
 export PottsPlot, pottsplot, pottsplot!
 export PottsBoundaries, pottsboundaries, pottsboundaries!

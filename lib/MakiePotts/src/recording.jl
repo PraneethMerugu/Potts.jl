@@ -41,7 +41,7 @@ function _atomic_record(write_recording::Function, filename::AbstractString)
         temporary = joinpath(directory, "makiepotts-recording$extension")
         write_recording(temporary)
         isfile(temporary) && filesize(temporary) > 0 ||
-            error("Makie recording completed without producing a nonempty artifact")
+            throw(RecordingError(destination))
         Base.Filesystem.rename(temporary, destination)
         destination
     end
